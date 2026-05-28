@@ -2,7 +2,9 @@
   "name": "repo0527",
   "private": true,
   "scripts": {
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "deps:check": "pnpm outdated -r",
+    "deps:update": "pnpm -r update"
   },
   "devEngines": {
     "packageManager": {
@@ -12,6 +14,6 @@
     }
   },
   "devDependencies": {
-    "typescript": "^6"
+    "typescript": "^6.0.3"
   }
 }
