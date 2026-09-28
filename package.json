@@ -4,16 +4,18 @@
   "scripts": {
     "build": "pnpm -r build",
     "deps:check": "pnpm outdated -r",
-    "deps:update": "pnpm -r update"
+    "deps:update:within-range": "pnpm -r update",
+    "deps:update:allow-major": "pnpm -r update --latest",
+    "pnpm:update:project:latest": "pnpm self-update && pnpm install --lockfile-only && node scripts/pnpm-major.mjs && pnpm install --lockfile-only"
   },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "^11",
+      "version": "^12",
       "onFail": "download"
     }
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   }
 }
