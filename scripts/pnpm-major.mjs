@@ -15,7 +15,9 @@ const versionMatch = /^\^?([1-9]\d*)(?:\.\d+\.\d+)?$/.exec(packageManager.versio
 if (!versionMatch) {
   throw new Error(`无法识别 pnpm 稳定版本：${packageManager.version}`);
 }
-const majorRange = `^${versionMatch[1]}`;
+// 正则结果首项为完整匹配，第二项为大版本号
+const [, majorVersion] = versionMatch;
+const majorRange = `^${majorVersion}`;
 
 if (packageManager.version !== majorRange) {
   // 仅替换唯一匹配的版本字段，遇到歧义时停止，避免修改其他字段
@@ -24,10 +26,12 @@ if (packageManager.version !== majorRange) {
   if (versionFields.length !== 1) {
     throw new Error('无法唯一定位 pnpm 版本字段，请检查 package.json');
   }
-  const field = versionFields[0];
-  const offset = field.index + field[0].length - field[1].length;
-  const updated = source.slice(0, offset) + JSON.stringify(majorRange)
-    + source.slice(offset + field[1].length);
+  // 解构匹配结果中的完整字段、版本文本及起始位置
+  const [field] = versionFields;
+  const [matchedField, quotedVersion] = field;
+  const { index } = field;
+  const offset = index + matchedField.length - quotedVersion.length;
+  const updated = source.slice(0, offset) + JSON.stringify(majorRange) + source.slice(offset + quotedVersion.length);
   writeFileSync(manifestPath, updated, 'utf8');
 }
 
