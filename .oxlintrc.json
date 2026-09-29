@@ -1,0 +1,155 @@
+{
+  // 规则取舍的理由见 docs/adr/0006-lint-rules-and-boundaries.md
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "import", "vue", "promise"],
+  "jsPlugins": ["eslint-plugin-boundaries"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error"
+  },
+  "options": {
+    "typeAware": true,
+    "denyWarnings": true,
+    "reportUnusedDisableDirectives": "error"
+  },
+  "settings": {
+    "import/resolver": {
+      "typescript": { "project": "apps/web/tsconfig.app.json" }
+    },
+    "boundaries/elements": [
+      { "type": "app", "pattern": "apps/web/src/app" },
+      { "type": "pages", "pattern": "apps/web/src/pages" },
+      { "type": "feature", "pattern": "apps/web/src/features/*", "capture": ["name"] },
+      { "type": "shared", "pattern": "apps/web/src/shared" },
+      { "type": "lib", "pattern": "apps/web/src/libs/*", "capture": ["name"] }
+    ]
+  },
+  "rules": {
+    // 会把 Vue 的 `String as PropType<...>`、`Object as SlotsType<...>` 误报为不安全断言
+    "typescript/no-unsafe-type-assertion": "off",
+    // 样式文件只能以副作用方式导入
+    "import/no-unassigned-import": ["error", { "allow": ["**/*.css", "**/*.scss"] }],
+
+    "eqeqeq": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "typescript/no-explicit-any": "error",
+    "no-console": ["error", { "allow": ["warn", "error"] }],
+    "import/no-cycle": "error",
+    "import/no-duplicates": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" }
+        ],
+        "patterns": [
+          { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" }
+        ]
+      }
+    ],
+
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/only-throw-error": "error",
+    "typescript/prefer-promise-reject-errors": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/no-deprecated": "error"
+  },
+  "overrides": [
+    {
+      // JS 文件没有类型标注，防止 any 泄漏的规则只对 TS 有意义
+      "files": ["**/*.{js,mjs,cjs}"],
+      "rules": {
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off"
+      }
+    },
+    {
+      // 命令行脚本通过 console 输出结果
+      "files": ["scripts/**"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      // 依赖方向只约束应用源码，分层见 ADR 0004
+      "files": ["apps/web/src/**"],
+      "rules": {
+        "boundaries/dependencies": [
+          "error",
+          {
+            "default": "disallow",
+            "checkAllOrigins": true,
+            "checkInternals": true,
+            "policies": [
+              { "allow": { "to": { "module": { "origin": "external" } } } },
+              // 单元内部只用相对路径；micromatch 会规范化 `./**`，所以写成 `.{,.}/**`
+              { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": ".{,.}/**" } } },
+              {
+                "from": { "element": { "type": "app" } },
+                "allow": { "to": { "element": { "types": { "anyOf": ["pages", "feature", "shared"] } } } }
+              },
+              {
+                "from": { "element": { "type": "pages" } },
+                "allow": { "to": { "element": { "types": { "anyOf": ["feature", "shared"] } } } }
+              },
+              {
+                "from": { "element": { "type": "feature" } },
+                "allow": { "to": { "element": { "type": "shared" } } }
+              },
+              // 引用 libs 只能写 `@yzt/<name>`
+              {
+                "from": { "element": { "types": { "anyOf": ["app", "pages", "feature", "shared"] } } },
+                "allow": { "to": { "element": { "type": "lib" } }, "dependency": { "source": "@yzt/*" } }
+              },
+              {
+                "from": { "element": { "type": "lib", "captured": { "name": "{ui,map-core,map-cesium,map-vue}" } } },
+                "allow": {
+                  "to": { "element": { "type": "lib", "captured": { "name": "utils" } } },
+                  "dependency": { "source": "@yzt/*" }
+                }
+              },
+              {
+                "from": { "element": { "type": "lib", "captured": { "name": "{map-cesium,map-vue}" } } },
+                "allow": {
+                  "to": { "element": { "type": "lib", "captured": { "name": "map-core" } } },
+                  "dependency": { "source": "@yzt/*" }
+                }
+              },
+              // map-vue 只能懒加载 map-cesium
+              {
+                "from": { "element": { "type": "lib", "captured": { "name": "map-vue" } } },
+                "allow": {
+                  "to": { "element": { "type": "lib", "captured": { "name": "map-cesium" } } },
+                  "dependency": { "source": "@yzt/*", "nodeKind": "dynamic-import" }
+                }
+              },
+              // 框架无关的 libs 不依赖 Vue 生态
+              {
+                "from": { "element": { "type": "lib", "captured": { "name": "{utils,map-core,map-cesium}" } } },
+                "disallow": {
+                  "to": {
+                    "module": {
+                      "source": ["vue", "vue-router", "pinia", "element-plus", "@vue/**", "@element-plus/**"]
+                    }
+                  }
+                }
+              },
+              // mapbox-gl 2.0 起为专有许可（ADR 0002）
+              { "disallow": { "to": { "module": { "source": "mapbox-gl" } } } }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

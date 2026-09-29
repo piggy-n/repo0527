@@ -4,5 +4,6 @@ packages:
 
 # 依赖的安装脚本默认不执行，逐个决定是否放行
 allowBuilds:
-  # 已有各平台预编译包，安装脚本只在缺少预编译时从源码构建
+  # 以下包已有各平台预编译包，安装脚本只在缺少预编译时补装或从源码构建
   "@parcel/watcher": false
+  "unrs-resolver": false
