@@ -62,7 +62,7 @@ apps/web/src/
 ### 格式
 
 以根目录 `.editorconfig` + WebStorm 格式化为准：UTF-8、2 空格缩进、120 列、单引号、语句末尾加分号、不加尾随逗号、`if` / `else` 必须带大括号。
-完整说明见 `docs/CODE_STYLE.md`。格式规则只交给一个工具负责，lint 不管格式。
+完整说明见 `docs/code-style.md`。格式规则只交给一个工具负责，lint 不管格式。
 
 ### lint（ADR 0006）
 
@@ -124,7 +124,7 @@ apps/web/src/
 
 - `docs/` 有意不纳入 git，新 clone 或 worktree 里可能没有；必须遵守的规则都写在本文件里
 - `docs/README.md`：文档索引、阅读顺序与维护约定
-- `docs/CODE_STYLE.md`：完整代码风格
+- `docs/code-style.md`：完整代码风格
 - `docs/adr/`：架构决策记录，编号递增，接受后不再修改；决策有变化时新写一份，并注明取代了哪一份
 - `docs/config/`：重要配置文件的逐项说明；修改配置文件时同步更新
 - `docs/commands.md`：常用命令说明；新增或修改脚本时同步更新
