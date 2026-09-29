@@ -19,6 +19,7 @@ import {
   ElTag
 } from 'element-plus';
 import { defineComponent, onMounted, ref } from 'vue';
+import { iconNames, SvgIcon } from '@/shared/icons/SvgIcon';
 import { SystemTitle } from '@/shared/system-title/SystemTitle';
 import styles from './ThemePreviewPage.module.scss';
 
@@ -178,6 +179,29 @@ export const ThemePreviewPage = defineComponent({
                 shadow-{size}
               </div>
             ))}
+          </div>
+        </section>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>图标</h2>
+          <div class={styles.icons}>
+            {iconNames.map(name => (
+              <div key={name} class={styles.iconItem}>
+                <SvgIcon name={name} size={24} />
+                <span class={styles.iconName}>{name}</span>
+              </div>
+            ))}
+          </div>
+          <div class={styles.row}>
+            <span class={styles.iconDemo}>
+              <SvgIcon name="toolbar-map" /> 默认 1em，跟随文字颜色
+            </span>
+            <span class={styles.iconDemoPrimary}>
+              <SvgIcon name="toolbar-map" size={20} /> 父元素 color 为主色
+            </span>
+            <SvgIcon name="toolbar-move" size={20} color="var(--color-danger)" title="平移" />
+            <SvgIcon name="bell-solid" size={20} rotate={30} />
+            <SvgIcon name="sample-pin-color" size={24} />
           </div>
         </section>
 

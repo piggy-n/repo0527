@@ -205,10 +205,10 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 ### scripts 允许 console
 
 ```json
-{ "files": ["scripts/**", "apps/web/tools/**"], "rules": { "no-console": "off" } }
+{ "files": ["scripts/**", "apps/web/tools/**", "packages/*/tools/**"], "rules": { "no-console": "off" } }
 ```
 
-命令行脚本本来就通过 console 输出结果。`apps/web/tools/` 是阶段二加入的 Node 工具脚本目录（例如 `pnpm title:generate`）。
+命令行脚本本来就通过 console 输出结果。`apps/web/tools/`、`packages/*/tools/` 是阶段二加入的 Node 工具目录（例如 `pnpm title:generate`、`yzt-icons`）。
 
 ### packages 的依赖方向
 
@@ -216,7 +216,9 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 { "files": ["packages/*/src/**", "packages/*/tools/**"], "rules": { "boundaries/dependencies": [ ... ] } }
 ```
 
-workspace 包只允许依赖外部模块和本包内部的相对路径，不能导入应用或其他单元的代码，保证包可以脱离应用单独使用。策略只有下文的 0、1 两条。阶段二用探针验证：`packages/icons` 导入 `apps/web/src/shared/...` 会报错。
+workspace 包只允许依赖外部模块、Node 内置模块和本包内部的相对路径，不能导入应用或其他单元的代码，保证包可以脱离应用单独使用。阶段二用探针验证：`packages/icons` 导入 `apps/web/src/shared/...` 会报错。
+
+策略比应用少：除了下文的 0（外部模块）、1（单元内部相对路径），还有一条放行 Node 内置模块（boundaries 把 `node:fs` 这类归为 `origin: "core"`），供 `tools/` 使用。浏览器端的 `src/` 不需要单独禁止内置模块：`tsconfig.lib.json` 没有加载 Node 类型，导入 `node:fs` 会直接类型报错。
 
 ### apps/web/src 的依赖方向
 

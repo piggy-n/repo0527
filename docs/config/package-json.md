@@ -119,7 +119,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
-    "title:generate": "node tools/system-title/cli.ts"
+    "title:generate": "node tools/system-title/cli.ts",
+    "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

@@ -24,7 +24,8 @@ docs/
 │  └─ env.md                  apps/web/.env（环境变量、类型与校验）
 ├─ modules/                   内部模块的用法与设计说明
 │  ├─ http.md                 shared/http：HTTP 客户端、ApiError、回调注入
-│  └─ system-title.md         系统名称的 SVG 轮廓：用法、自动生成、常见问题
+│  ├─ system-title.md         系统名称的 SVG 轮廓：用法、自动生成、常见问题
+│  └─ icons.md                图标：SvgIcon 用法、添加图标、规范化规则、自动化与检查
 ├─ design/                    设计规范与主题落地
 │  ├─ color-and-typography.md 系统配色与字体规范（原文）
 │  ├─ theme.md                设计令牌清单、Element Plus 映射与使用规则

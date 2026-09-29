@@ -13,26 +13,33 @@
 
 | 配置 | 值 | 说明 |
 |---|---|---|
-| `plugins` | `vueJsx()`、`systemTitlePlugin()` | 前者用 Babel 编译 Vue 的 TSX（ADR 0001）；后者按 `VITE_APP_TITLE` 同步系统名称的 SVG 轮廓，测试模式下不启用（ADR 0012，见 [modules/system-title.md](../modules/system-title.md)） |
+| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；后两个会改动源文件，统称 generators，测试模式下不启用：`systemTitlePlugin` 按 `VITE_APP_TITLE` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 来自 `@yzt/icons/tools`，自动规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)） |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `server.proxy` | `/backend/` → `PROXY_TARGET` | 同源代理，见下文 |
 | `test` | 见下文 | Vitest 的配置（ADR 0010） |
 
-### 系统名称插件
+### 生成类插件（generators）
 
 ```ts
-...(mode === 'test' ? [] : [systemTitlePlugin({ text: env.VITE_APP_TITLE, ...systemTitlePaths(process.cwd()) })])
+const generators =
+  mode === 'test'
+    ? []
+    : [
+        systemTitlePlugin({ text: env.VITE_APP_TITLE, ...systemTitlePaths(process.cwd()) }),
+        iconsPlugin(iconsPaths(process.cwd()))
+      ];
 ```
 
-- 在 `buildStart` 钩子中运行：开发服务器启动时、构建开始时各一次。修改 `.env` 后开发服务器会自动重启，所以改名称后轮廓会自动更新
-- 测试模式（`mode === 'test'`，即 Vitest）下不加入插件：测试检查已提交的结果，不在运行时改动源文件
-- 插件文件从 `./tools/system-title/vite-plugin.ts` 导入，带 `.ts` 扩展名，因为同一份代码也由 Node 直接运行
+- 两者都在 `buildStart` 钩子中运行：开发服务器启动时、构建开始时各一次。修改 `.env` 后开发服务器会自动重启，所以改名称后轮廓会自动更新；`iconsPlugin` 还会监听图标目录，放入或删除 SVG 时立即处理
+- 测试模式（`mode === 'test'`，即 Vitest）下不加入：测试检查已提交的结果，不在运行时改动源文件
+- `systemTitlePlugin` 从 `./tools/system-title/vite-plugin.ts` 导入，带 `.ts` 扩展名，因为同一份代码也由 Node 直接运行；`iconsPlugin` 从 workspace 包的 `@yzt/icons/tools` 入口导入
+- 同时开着多个开发服务器时，它们都会处理图标目录；`iconsPlugin` 对此做了容错，见 [modules/icons.md](../modules/icons.md)
 
 ### 测试
 
 | 字段 | 值 | 说明 |
 |---|---|---|
-| `include` | `['src/**/*.test.{ts,tsx}']` | 测试文件和源文件放在一起 |
+| `include` | `['src/**/*.test.{ts,tsx}', 'tools/**/*.test.ts']` | 测试文件和源文件放在一起；`tools/` 下是 Node 端的检查测试，例如图标是否已规范化 |
 | `environment` | `'jsdom'` | 在 Node 里模拟 DOM，挂载组件用 |
 | `unstubEnvs` | `true` | 每个用例结束后撤销 `vi.stubEnv`。已用对照实验验证：关掉后，一个用例修改的环境变量会泄漏到下一个用例 |
 

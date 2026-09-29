@@ -44,6 +44,8 @@ packages/icons/
 | 字段 | 说明 |
 |---|---|
 | `name` | `@yzt/<名字>`，和 `apps/web/src/libs` 的命名一致，将来从 libs 搬过来不用改导入 |
+| `exports` 的 `./tools` | 可选的第二个入口，放 Node 端代码（例如 `@yzt/icons/tools` 的规范化工具与 Vite 插件），和浏览器入口分开，保证 SVGO 这类依赖不会进入浏览器产物 |
+| `bin` | 可选的命令行，指向 `.ts` 文件，由 Node 直接运行（类型剥离）；使用方安装后在 `node_modules/.bin` 中出现，例如 `yzt-icons` |
 | `private: true` | 防止被误发布 |
 | `exports` | 只暴露入口。深层导入（如 `@yzt/icons/src/xxx`）在解析时就会失败 |
 | 没有 `build` 脚本 | 内部包不构建；根目录的 `pnpm -r build` 会跳过它 |
@@ -71,6 +73,15 @@ packages/icons/
 - 包只能依赖外部模块和包内部的相对路径（`packages` override）
 
 详见 [oxlintrc.md](oxlintrc.md)。
+
+## 踩过的坑
+
+**给已安装的包新增 `bin` 后，命令不会出现。** lockfile 没有变化时，`pnpm install` 直接跳过链接。处理办法：
+
+- 推荐：在使用方删掉再加回这个依赖，`pnpm --filter @yzt/web remove @yzt/icons`，然后 `pnpm --filter @yzt/web add "@yzt/icons@workspace:*"`
+- 或者 `pnpm install --force`，但**必须先停掉所有开发服务器、测试等正在运行的 Node 进程**。阶段二实测：开发服务器运行时，sass 的 `dart.exe` 占用着文件，强制重装中途失败，把 sass-embedded 平台包里的二进制文件删掉了，之后所有 SCSS 编译都会失败（报 `sass --embedded is unavailable in pure JS mode`）。停掉进程后再执行一次 `pnpm install --force` 可以恢复
+
+全新 clone 后的首次安装会正常链接（已在干净目录中验证）。
 
 ## 新建一个内部包的检查清单
 

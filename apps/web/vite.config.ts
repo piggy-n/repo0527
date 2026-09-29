@@ -1,7 +1,9 @@
 import vueJsx from '@vitejs/plugin-vue-jsx';
+import { iconsPlugin } from '@yzt/icons/tools';
 import { loadEnv } from 'vite';
 // 与 vite 的 defineConfig 相同，只是类型里多了 test 字段
 import { defineConfig } from 'vitest/config';
+import { iconsPaths } from './tools/icons/paths.ts';
 import { systemTitlePaths } from './tools/system-title/paths.ts';
 import { systemTitlePlugin } from './tools/system-title/vite-plugin.ts';
 
@@ -10,12 +12,17 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const apiBaseUrl = env.VITE_API_BASE_URL;
 
+  // 这两个插件会改动源文件（生成标题轮廓、规范化图标）；测试只检查已提交的结果，不启用
+  const generators =
+    mode === 'test'
+      ? []
+      : [
+          systemTitlePlugin({ text: env.VITE_APP_TITLE, ...systemTitlePaths(process.cwd()) }),
+          iconsPlugin(iconsPaths(process.cwd()))
+        ];
+
   return {
-    plugins: [
-      vueJsx(),
-      // 测试只检查已提交的标题轮廓，不在运行测试时改动源文件
-      ...(mode === 'test' ? [] : [systemTitlePlugin({ text: env.VITE_APP_TITLE, ...systemTitlePaths(process.cwd()) })])
-    ],
+    plugins: [vueJsx(), ...generators],
     resolve: {
       // 直接读取 tsconfig 的 paths，不再单独维护一份别名
       tsconfigPaths: true
@@ -31,7 +38,7 @@ export default defineConfig(({ mode }) => {
       }
     },
     test: {
-      include: ['src/**/*.test.{ts,tsx}'],
+      include: ['src/**/*.test.{ts,tsx}', 'tools/**/*.test.ts'],
       environment: 'jsdom',
       // 每个用例结束后撤销 vi.stubEnv，避免影响其他用例
       unstubEnvs: true

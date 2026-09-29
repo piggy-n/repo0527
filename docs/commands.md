@@ -134,6 +134,16 @@ pnpm add -Dw -E some-tool
 
 **注意事项**：需要本机有优设标题黑字体文件（不入库），缺少时退出码为 1；生成后记得提交 JSON。详见 [modules/system-title.md](modules/system-title.md)。
 
+### `pnpm --filter @yzt/web icons`
+
+**作用**：规范化 `src/assets/icons/` 中的全部 SVG（改名、去固定颜色等），并更新注册表 `src/shared/icons/icons.json`。
+
+**什么时候用**：放入新图标而开发服务器没有开着时；开着的话会自动处理。
+
+**执行了什么**：运行 `@yzt/icons` 提供的 `yzt-icons src/assets/icons src/shared/icons/icons.json`。加 `--check` 只检查不改动，有待处理的内容时退出码为 1。
+
+**注意事项**：中文文件名会报错，需要手动改名；处理后提交图标文件和 `icons.json`。详见 [modules/icons.md](modules/icons.md)。
+
 ---
 
 ## 三、质量检查
@@ -315,3 +325,5 @@ pnpm build
 | `ESLINT_PLUGIN_BOUNDARIES_DEBUG=1 pnpm lint` | 打印 boundaries 对每条依赖的判断依据（PowerShell 里先执行 `$env:ESLINT_PLUGIN_BOUNDARIES_DEBUG=1`） |
 | `pnpm why <包名>` | 查看某个依赖是被谁引入的 |
 | `pnpm peers check` | 检查 peer 依赖是否满足 |
+
+`pnpm install --force` 会重新链接全部依赖。执行前必须停掉开发服务器、测试等所有正在运行的 Node 进程：它们占用的文件（例如 sass 的 `dart.exe`）会让重装中途失败，并留下缺少文件的依赖（见 [config/internal-packages.md](config/internal-packages.md) 的"踩过的坑"）。
