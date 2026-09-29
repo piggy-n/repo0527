@@ -16,6 +16,7 @@
 | [0004](0004-module-boundaries.md) | 模块边界与拆包预留 | 已接受 |
 | [0005](0005-dependency-maintenance-and-ci.md) | 依赖维护与持续集成 | 已接受 |
 | [0006](0006-lint-rules-and-boundaries.md) | lint 规则与依赖方向检查 | 已接受 |
+| [0007](0007-vue-router-5-and-history-mode.md) | 路由使用 Vue Router 5 与 history 模式 | 已接受 |
 
 ## 模板
 

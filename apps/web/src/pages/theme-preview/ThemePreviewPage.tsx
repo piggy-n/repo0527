@@ -19,7 +19,7 @@ import {
   ElTag
 } from 'element-plus';
 import { defineComponent, onMounted, ref } from 'vue';
-import styles from './ThemePreview.module.scss';
+import styles from './ThemePreviewPage.module.scss';
 
 interface IndicatorRow {
   region: string;
@@ -96,8 +96,8 @@ async function confirmDelete() {
 }
 
 /** 主题预览：检查设计令牌与 Element Plus 主题映射的效果 */
-export const ThemePreview = defineComponent({
-  name: 'ThemePreview',
+export const ThemePreviewPage = defineComponent({
+  name: 'ThemePreviewPage',
   setup() {
     const resolvedColors = ref<Record<string, string>>({});
     const keyword = ref('');

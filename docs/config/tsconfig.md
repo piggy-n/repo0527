@@ -74,7 +74,7 @@ TS 6 起 `types` 默认值变成了 `[]`（以前会自动加载 `node_modules/@
 |---|---|---|
 | `module` | `esnext` | 按最新的 ES 模块语法检查 |
 | `moduleResolution` | `bundler` | 按打包工具的规则解析导入路径 |
-| `moduleDetection` | `force` | 每个文件都当作独立模块 |
+| `moduleDetection` | `force` | 每个文件都当作独立模块，即使没有 `import` / `export`（见下文） |
 | `verbatimModuleSyntax` | `true` | 导入导出按原样保留，只用于类型的导入必须写 `import type` |
 
 `moduleResolution` 的常见取值：
@@ -82,6 +82,8 @@ TS 6 起 `types` 默认值变成了 `[]`（以前会自动加载 `node_modules/@
 - `bundler`：认 `package.json` 的 `exports`，相对导入可以省略扩展名。适合 Vite 这类打包工具处理的代码
 - `nodenext`：严格按 Node 的规则，相对导入必须写 `.js` 扩展名。适合直接在 Node 里运行、不经过打包的代码
 - `node10` / `classic`：旧规则，TS 7 已移除
+
+`moduleDetection: force` 的一个实际影响（阶段二已验证）：给第三方库扩充类型时（例如 `shared/router/route-meta.ts` 中的 `declare module 'vue-router'`），文件里不需要再写 `export {}`。如果文件不被当作模块，`declare module` 就成了环境模块声明，会遮住整个库原有的类型。官方文档示例里的 `export {}` 就是为了避免这个问题，而在本项目里 `force` 已经保证了这一点。
 
 `verbatimModuleSyntax` 的意义：Vite 用的转译器（Babel、oxc、esbuild）每次只看一个文件，判断不出 `import { Foo }` 里的 `Foo` 是类型还是值。开启这个选项后，TS 强制要求类型导入写成 `import type`，转译器照着删掉就行，不会误删值、也不会残留类型导入。这也正好落实了 AGENTS.md 里"只用于类型的导入写 `import type`"的约定。
 
@@ -94,7 +96,10 @@ TS 6 起 `types` 默认值变成了 `[]`（以前会自动加载 `node_modules/@
 
 分工是：`tsc` 只做类型检查，JSX 的真正编译交给 `@vitejs/plugin-vue-jsx`（内部是 Babel + Vue 的 JSX 插件）。Vue 的 JSX 有 `v-model`、`v-slots` 等专有语义，通用的 JSX 编译不认识这些写法，所以不能交给 TS 编译。
 
-`jsxImportSource: 'vue'` 让 TS 使用 Vue 提供的 `JSX` 命名空间，因此组件的 props、emit 回调、原生元素属性都能被检查。已知局限：Vue 的 `JSX` 命名空间没有声明 `ElementChildrenAttribute`，所以插槽参数不会按 `SlotsType` 推断，写错插槽名也不报错，插槽函数的参数要手动标注类型（AGENTS.md 已有此规则）。
+`jsxImportSource: 'vue'` 让 TS 使用 Vue 提供的 `JSX` 命名空间，因此组件的 props、emit 回调、原生元素属性都能被检查。已知局限：
+
+- Vue 的 `JSX` 命名空间没有声明 `ElementChildrenAttribute`，所以插槽参数不会按 `SlotsType` 推断，写错插槽名也不报错，插槽函数的参数要手动标注类型（AGENTS.md 已有此规则）
+- `v-model` 的值不做类型检查（阶段二用探针验证）：TS 对属性名里带短横线的 JSX 属性（如 `data-*`、`v-model`）不拿去和 props 对照。`<ElInput v-model={boolRef.value} />` 不报错，而 `<ElInput modelValue={boolRef.value} />` 会报错。所以双向绑定统一写 `modelValue` + `onUpdate:modelValue`（AGENTS.md 规则）。事件名按组件声明的写法来，例如 `ElPagination` 声明的是 `update:current-page`，就要写 `onUpdate:current-page`
 
 ### 严格程度
 
