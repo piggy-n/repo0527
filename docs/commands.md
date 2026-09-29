@@ -150,14 +150,13 @@ pnpm build
 **执行了什么**：根目录的 `pnpm -r typecheck` 在每个包里执行 `typecheck` 脚本。目前只有 `apps/web`，执行的是 `tsc -b`：
 
 1. 读取 `tsconfig.json` 的 `references`
-2. 依次检查 `tsconfig.app.json`（`src/`）和 `tsconfig.node.json`（`vite.config.ts`）
-3. 根据 `node_modules/.tmp/*.tsbuildinfo` 跳过没有变化的项目
-4. 有错误时退出码非 0
+2. 依次全量检查 `tsconfig.app.json`（`src/`）和 `tsconfig.node.json`（`vite.config.ts`）
+3. 有错误时退出码非 0
 
 **注意事项**：
 
 - 只检查，不输出任何文件（`noEmit`）
-- 怀疑增量记录不准时，删除 `apps/web/node_modules/.tmp` 后重跑
+- 每次都是全量检查，目前约 1 秒。增量检查因 TS 7.0.2 的问题已关闭（ADR 0009）
 - 这里的 `tsc` 是 TS 7（Go 原生实现），速度很快；不要改用 vue-tsc（ADR 0003）
 
 ### `pnpm lint`

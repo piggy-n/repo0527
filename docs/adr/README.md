@@ -12,12 +12,13 @@
 |---|---|---|
 | [0001](0001-tsx-instead-of-sfc.md) | 组件使用 TSX，不使用 SFC | 已接受 |
 | [0002](0002-map-libraries.md) | 二维地图用 MapLibre，Cesium 精确锁版本 | 已接受 |
-| [0003](0003-typescript-7-toolchain.md) | TypeScript 7 与工具链 | 已接受 |
+| [0003](0003-typescript-7-toolchain.md) | TypeScript 7 与工具链 | 已接受（`incremental` 一条已被 0009 取代） |
 | [0004](0004-module-boundaries.md) | 模块边界与拆包预留 | 已接受 |
 | [0005](0005-dependency-maintenance-and-ci.md) | 依赖维护与持续集成 | 已接受 |
 | [0006](0006-lint-rules-and-boundaries.md) | lint 规则与依赖方向检查 | 已接受 |
 | [0007](0007-vue-router-5-and-history-mode.md) | 路由使用 Vue Router 5 与 history 模式 | 已接受 |
 | [0008](0008-same-origin-api-proxy.md) | 接口走同源的 /backend 代理 | 已接受 |
+| [0009](0009-disable-incremental-typecheck.md) | 关闭 tsc 的增量检查 | 已接受 |
 
 ## 模板
 

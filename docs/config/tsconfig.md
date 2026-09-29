@@ -34,14 +34,21 @@
 
 ## tsconfig.app.json 逐项说明
 
-### 增量检查
+### 增量检查（已关闭）
 
-| 选项 | 值 | 说明 |
-|---|---|---|
-| `incremental` | `true` | 记录上次检查的结果，文件没变就跳过 |
-| `tsBuildInfoFile` | `./node_modules/.tmp/tsconfig.app.tsbuildinfo` | 增量记录放在 `node_modules` 里，不进 git，删除依赖时一起清掉 |
+两份配置都**没有**开启 `incremental`，这是有意的（ADR 0009）。
 
-阶段一实测：在 `tsc -b` 下，如果只写 `noEmit` 而不开 `incremental`，TS 每次都会因为"找不到输出的 .js 文件"判定项目过期，然后全量重查。TS 6 也是这样，属于 build 模式本身的规则。
+阶段一曾开启 `incremental` 和 `tsBuildInfoFile`（增量记录放在 `node_modules/.tmp/`），让 `tsc -b` 跳过没有变化的文件。阶段一实测：在 `tsc -b` 下只写 `noEmit` 而不开 `incremental`，TS 每次都会因为"找不到输出的 .js 文件"判定项目过期，然后全量重查。TS 6 也是这样，属于 build 模式本身的规则。
+
+阶段二发现 TS 7.0.2 的增量检查有问题：`declare global` 文件变化后，它不会重新检查依赖这些全局类型的文件，既会误报也会漏报。全量检查只慢约 0.3 秒，所以关闭了增量，正好利用上面这条规则让 `tsc -b` 每次都全量检查。
+
+升级 TS 后想重新开启时，用下面的步骤复测：
+
+1. 两份配置加回 `"incremental": true` 和 `"tsBuildInfoFile"`
+2. 新建 `src/shared/config/probe.ts`，内容为 `export const probeTypo = import.meta.env.VITE_APP_TITEL;`，运行 `tsc -b`，应报错
+3. 删掉 `import-meta-env.ts` 中的 `ViteTypeOptions` 声明，再运行 `tsc -b`，应不报错
+4. 恢复 `ViteTypeOptions`，再运行 `tsc -b`，应报错
+5. 第 3、4 步都正确，才说明问题已修复；复测完删除探针文件
 
 ### 语言与运行环境
 
@@ -178,5 +185,5 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 
 - 改了 `paths`：同步检查 `vite.config.ts`、`.oxlintrc.json` 的 boundaries 元素定义，然后运行 `pnpm typecheck`、`pnpm lint`、`pnpm build`
 - 改了 `lib` 或 `target`：确认和 Vite 的浏览器目标一致
-- 新增 tsconfig：加进 `tsconfig.json` 的 `references`，并设置独立的 `tsBuildInfoFile`
-- 怀疑增量记录有问题：删除 `apps/web/node_modules/.tmp` 后重新运行 `pnpm typecheck`
+- 新增 tsconfig：加进 `tsconfig.json` 的 `references`；在 ADR 0009 被取代之前，不要开启 `incremental`
+- 升级 TS：按上文"增量检查"一节的步骤复测，决定是否恢复增量检查

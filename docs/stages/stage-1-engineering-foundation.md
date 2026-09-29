@@ -91,7 +91,7 @@ TS 7 用 Go 重写，不再提供传统的 JS API。阶段一要回答的问题�
 
 结论（ADR 0003 方案 1）：只用 TS 7；lint 用 oxlint；不引入依赖 TS JS API 的工具。
 
-同时确定了 tsconfig 的写法：solution 风格、显式写出 `types` 等选项、`incremental` 配合 `tsc -b`、Vite 用 `resolve.tsconfigPaths` 读取路径别名。详见 [config/tsconfig.md](../config/tsconfig.md)。
+同时确定了 tsconfig 的写法：solution 风格、显式写出 `types` 等选项、`incremental` 配合 `tsc -b`（阶段二因 TS 7 增量检查的问题关闭，见 ADR 0009）、Vite 用 `resolve.tsconfigPaths` 读取路径别名。详见 [config/tsconfig.md](../config/tsconfig.md)。
 
 ### 3. 接入 lint，定稿 ADR 0006
 
@@ -180,7 +180,7 @@ TS 7 用 Go 重写，不再提供传统的 JS API。阶段一要回答的问题�
 | `verbatimModuleSyntax` | 类型导入必须写 `import type`，让单文件转译器能安全地删除类型 |
 | `jsx: preserve` + `jsxImportSource` | TS 只检查不转换 JSX；类型从 `vue/jsx-runtime` 读取 |
 | project references + `tsc -b` | 按运行环境拆分配置，一条命令检查全部 |
-| `incremental` | 配合 `tsc -b` 跳过没变化的项目 |
+| `incremental` | 配合 `tsc -b` 跳过没变化的项目（阶段二已关闭，见 ADR 0009） |
 | `paths` | 路径别名；TS 7 移除了 `baseUrl`，路径相对于 tsconfig 所在目录 |
 
 ### 3. 类型检查只负责"类型"，编译交给别人
