@@ -1,0 +1,21 @@
+{
+  "name": "@yzt/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "vue": "^3.5.43"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "@vitejs/plugin-vue-jsx": "^5.1.6",
+    "sass-embedded": "^1.105.0",
+    "typescript": "7.0.2",
+    "vite": "^8.3.1"
+  }
+}
