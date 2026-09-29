@@ -46,6 +46,11 @@ export function isUpToDate(report: SyncReport): boolean {
   return !report.renamed.length && !report.normalized.length && !report.registryChanged && !report.errors.length;
 }
 
+// git 的 core.autocrlf 会在 Windows 上把检出的文件改成 CRLF，比较时统一成 LF，否则检查会误报
+function readText(fileSystem: IconFileSystem, path: string): string {
+  return fileSystem.readFileSync(path, 'utf8').replaceAll('\r\n', '\n');
+}
+
 function isMissingFile(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
@@ -68,7 +73,7 @@ function syncFile(dir: string, file: string, name: string, settings: Required<Sy
   }
 
   const targetPath = join(dir, write ? target : file);
-  if (fileSystem.readFileSync(targetPath, 'utf8') !== icon.svg) {
+  if (readText(fileSystem, targetPath) !== icon.svg) {
     if (write) {
       fileSystem.writeFileSync(targetPath, icon.svg);
     }
@@ -113,7 +118,7 @@ export function syncIcons({ dir, registryPath }: IconsOptions, settings: SyncSet
   // 按规范化后的名字排序，输出与原始文件名无关
   const sorted = Object.fromEntries(Object.entries(registry).toSorted(([a], [b]) => (a < b ? -1 : 1)));
   const content = `${JSON.stringify(sorted, null, 2)}\n`;
-  if (!fileSystem.existsSync(registryPath) || fileSystem.readFileSync(registryPath, 'utf8') !== content) {
+  if (!fileSystem.existsSync(registryPath) || readText(fileSystem, registryPath) !== content) {
     report.registryChanged = true;
     if (write) {
       fileSystem.writeFileSync(registryPath, content);

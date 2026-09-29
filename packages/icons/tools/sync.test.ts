@@ -71,6 +71,18 @@ describe('syncIcons', () => {
     expect(existsSync(registryPath)).toBe(false);
   });
 
+  it('文件被 git 检出为 CRLF 换行时，仍视为已是最新', () => {
+    addFiles({ 'arrow.svg': square('#333') });
+    syncIcons({ dir, registryPath }, { write: true });
+    for (const path of [join(dir, 'arrow.svg'), registryPath]) {
+      writeFileSync(path, readFileSync(path, 'utf8').replaceAll('\n', '\r\n'));
+    }
+
+    const report = syncIcons({ dir, registryPath }, { write: false });
+
+    expect(isUpToDate(report)).toBe(true);
+  });
+
   it('只改大小写时也能改名', () => {
     addFiles({ 'Arrow.svg': square('#333') });
 
