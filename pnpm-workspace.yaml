@@ -10,3 +10,5 @@ allowBuilds:
   # 以下包已有各平台预编译包，安装脚本只在缺少预编译时补装或从源码构建
   "@parcel/watcher": false
   "unrs-resolver": false
+  # 安装脚本只把浏览器端的 Service Worker 复制到 msw.workerDirectory；项目只在测试中用 msw/node
+  "msw": false

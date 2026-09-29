@@ -20,6 +20,7 @@
 | [0008](0008-same-origin-api-proxy.md) | 接口走同源的 /backend 代理 | 已接受 |
 | [0009](0009-disable-incremental-typecheck.md) | 关闭 tsc 的增量检查 | 已接受 |
 | [0010](0010-testing-with-vitest.md) | 测试使用 Vitest 与 jsdom | 已接受 |
+| [0011](0011-http-client-axios-zod-msw.md) | HTTP 客户端：axios + zod，测试用 MSW 模拟接口 | 已接受 |
 
 ## 模板
 

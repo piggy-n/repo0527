@@ -123,16 +123,19 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "@vue/devtools-api": "^8.2.1",
+    "axios": "^1.20.0",
     "element-plus": "^2.14.6",
     "pinia": "^4.0.3",
     "vue": "^3.5.43",
-    "vue-router": "^5.3.1"
+    "vue-router": "^5.3.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^24.19.0",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
     "@vue/test-utils": "^2.5.1",
     "jsdom": "^30.1.1",
+    "msw": "^2.15.0",
     "sass-embedded": "^1.105.0",
     "typescript": "7.0.2",
     "vite": "^8.3.1",
@@ -170,6 +173,9 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `vite` | 开发服务器与构建工具，8.x 内部使用 Rolldown 打包 | webpack、Rsbuild |
 | `@vitejs/plugin-vue-jsx` | 用 Babel 编译 Vue 的 TSX，支持 Vue 专有的 JSX 语义 | `@vitejs/plugin-vue`（SFC，ADR 0001 未采用） |
 | `sass-embedded` | 编译 `*.module.scss`；通过嵌入协议调用原生 Dart Sass，比纯 JS 版 `sass` 快 | `sass`、Less、原生 CSS |
+| `axios` | HTTP 请求，只在 `shared/http/client.ts` 中使用（ADR 0011） | ky、原生 fetch |
+| `zod` | 接口返回值的校验与类型推断（ADR 0011） | valibot、手写类型守卫 |
+| `msw` | 测试中在网络层模拟接口，只用 `msw/node`；安装脚本不放行（见 pnpm-workspace.md） | axios-mock-adapter |
 | `vitest` | 测试运行器，复用 `vite.config.ts`（ADR 0010） | Jest |
 | `@vue/test-utils` | Vue 官方的组件挂载与交互库 | — |
 | `jsdom` | 测试时在 Node 里模拟 DOM | happy-dom（ADR 0010 有实测对比） |

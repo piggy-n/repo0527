@@ -22,6 +22,7 @@ minimumReleaseAge: 4320
 allowBuilds:
   "@parcel/watcher": false
   "unrs-resolver": false
+  "msw": false
 ```
 
 ## packages
@@ -81,6 +82,7 @@ pnpm 从 10 开始默认**不执行**依赖包的安装脚本（`preinstall`、`
 |---|---|---|---|
 | `@parcel/watcher` | `false` | sass-embedded → sass | 已有各平台的预编译包（例如 `@parcel/watcher-win32-x64`），安装脚本只在缺少预编译包时才从源码构建 |
 | `unrs-resolver` | `false` | eslint-import-resolver-typescript | 已有各平台的预编译包（例如 `@unrs/resolver-binding-win32-x64-msvc`），安装脚本只在缺少时补装 |
+| `msw` | `false` | 直接依赖（测试用） | `postinstall` 只在项目 `package.json` 配置了 `msw.workerDirectory` 时，把浏览器端的 Service Worker 脚本复制过去；项目只在测试中用 `msw/node`，用不到这个脚本 |
 
 判断一个包要不要放行：
 

@@ -13,16 +13,19 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "@vue/devtools-api": "^8.2.1",
+    "axios": "^1.20.0",
     "element-plus": "^2.14.6",
     "pinia": "^4.0.3",
     "vue": "^3.5.43",
-    "vue-router": "^5.3.1"
+    "vue-router": "^5.3.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^24.19.0",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
     "@vue/test-utils": "^2.5.1",
     "jsdom": "^30.1.1",
+    "msw": "^2.15.0",
     "sass-embedded": "^1.105.0",
     "typescript": "7.0.2",
     "vite": "^8.3.1",
