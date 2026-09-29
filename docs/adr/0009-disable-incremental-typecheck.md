@@ -23,13 +23,15 @@ CI 每次从零检查，不受影响；受影响的是本地的 `pnpm typecheck`
 
 ## 候选方案
 
-1. 从 tsconfig 中去掉 `incremental` 和 `tsBuildInfoFile`：`tsc -b` 在 `noEmit` 下每次都全量检查，不管是通过脚本还是手动运行，结果都正确
+1. 从 tsconfig 中去掉 `incremental`：`tsc -b` 在 `noEmit` 下每次都全量检查，不管是通过脚本还是手动运行，结果都正确
 2. 保留 tsconfig，只把 `typecheck` 脚本改为 `tsc -b --force`：手动运行 `tsc -b` 时仍可能得到过期结果
 3. 保留增量检查，在文档里提醒修改 `declare global` 文件后手动 `--force`：依赖人记住，忘记时会漏报
 
 ## 决定
 
 选方案 1。暂不向 TypeScript 上报。
+
+`tsBuildInfoFile` 保留：不开 `incremental` 时，build 模式仍会写一份只含根文件和 `package.json` 列表的记录，用来判断项目是否需要重查，不包含逐个文件的检查信息。不指定位置时它会出现在 tsconfig 旁边，所以继续放在 `node_modules/.tmp/`。
 
 ## 后果
 
