@@ -10,6 +10,7 @@ docs/
 ├─ code-style.md              代码风格（格式、换行、注释）
 ├─ commands.md                常用命令：作用、时机、执行过程、注意事项
 ├─ deployment.md              部署要求（nginx 回退与接口转发）
+├─ migration.md               各模块的迁移基线与进度
 ├─ adr/                       架构决策记录
 │  ├─ README.md               ADR 索引与模板
 │  └─ NNNN-*.md
@@ -24,6 +25,7 @@ docs/
 │  └─ env.md                  apps/web/.env（环境变量、类型与校验）
 ├─ modules/                   内部模块的用法与设计说明
 │  ├─ http.md                 shared/http：HTTP 客户端、ApiError、回调注入
+│  ├─ auth.md                 鉴权：会话、角色、token 过期
 │  ├─ system-title.md         系统名称的 SVG 轮廓：用法、自动生成、常见问题
 │  └─ icons.md                图标：SvgIcon 用法、添加图标、规范化规则、自动化与检查
 ├─ design/                    设计规范与主题落地
