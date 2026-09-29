@@ -16,12 +16,13 @@
 
 - Vue 3 + TSX（`defineComponent`），不使用 `.vue` 单文件组件（ADR 0001）
 - TypeScript strict，Vite，Pinia，Vue Router，Element Plus，pnpm workspace
+- 只用 TypeScript 7 一个版本；不引入依赖 TS JS API 的工具（vue-tsc、typescript-eslint 等），lint 用 oxlint + oxlint-tsgolint（ADR 0003）
 - 二维地图用 MapLibre GL JS，大版本在地图阶段确定；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002）
 - 三维地图用 Cesium，精确锁定版本（ADR 0002）
 - 浏览器目标用 Vite 默认值，不兼容旧浏览器，不引入 `@vitejs/plugin-legacy`
 - CI 用 GitHub Actions，阶段 1 接入（ADR 0005）
 
-待定：TS 7 工具链（ADR 0003）、lint、测试、服务端状态、Mock、持久化（计划用 IndexedDB + idb-keyval）
+待定：lint 规则、测试、服务端状态、Mock、持久化（计划用 IndexedDB + idb-keyval）
 
 ## 目录结构
 
@@ -87,6 +88,8 @@ apps/web/src/
 - 组件用 `defineComponent` + TSX，样式用 `*.module.scss`
 - 不挂 `globalProperties`，不用 `getCurrentInstance().proxy`，不往 `window` 上挂对象，不使用 API 自动导入；依赖一律显式 `import` 或通过 provide / inject 获取
 - 跨组件通信按 props / emit → provide / inject → Pinia 的顺序选择，不使用无类型的字符串事件总线
+- TSX 中插槽函数的参数要手动标注类型：Vue 的 JSX 类型不会按组件的 `SlotsType` 推断插槽参数，也不检查插槽名（ADR 0003）
+- 路径别名只在 tsconfig 的 `paths` 中配置，Vite 通过 `resolve.tsconfigPaths` 读取，不另配 `resolve.alias`
 
 ## 迁移规则
 
@@ -103,6 +106,7 @@ apps/web/src/
 - 大版本：先读 Breaking Changes 和迁移指南再决定；等出过几个补丁版本再升；一次只升一个包，单独提交，并在提交说明里写明迁移内容
 - 每月手动检查一次（`pnpm deps:check`），接入 Renovate 后改为每周自动处理；安全告警随时处理
 - `pnpm-lock.yaml` 必须提交
+- 依赖的安装脚本默认不执行，是否放行在 `pnpm-workspace.yaml` 的 `allowBuilds` 中逐个决定
 
 ## 文档
 
@@ -115,4 +119,7 @@ apps/web/src/
 
 - `pnpm deps:check`：检查所有包的过期依赖
 - `pnpm deps:update:within-range`：在版本范围内更新依赖
-- 应用的开发、构建、测试命令在阶段 1 搭建后补充
+- `pnpm --filter @yzt/web dev`：启动开发服务器
+- `pnpm --filter @yzt/web typecheck`：类型检查（`tsc -b`）
+- `pnpm --filter @yzt/web build`：生产构建
+- lint、测试命令在接入后补充
