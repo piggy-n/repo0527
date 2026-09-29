@@ -1,5 +1,7 @@
 import vueJsx from '@vitejs/plugin-vue-jsx';
-import { defineConfig, loadEnv } from 'vite';
+import { loadEnv } from 'vite';
+// 与 vite 的 defineConfig 相同，只是类型里多了 test 字段
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig(({ mode }) => {
   // 前缀参数传空字符串，才能读到不带 VITE_ 前缀的 PROXY_TARGET；它只在这里使用，不会进入前端代码
@@ -21,6 +23,12 @@ export default defineConfig(({ mode }) => {
           rewrite: path => path.slice(apiBaseUrl.length)
         }
       }
+    },
+    test: {
+      include: ['src/**/*.test.{ts,tsx}'],
+      environment: 'jsdom',
+      // 每个用例结束后撤销 vi.stubEnv，避免影响其他用例
+      unstubEnvs: true
     }
   };
 });

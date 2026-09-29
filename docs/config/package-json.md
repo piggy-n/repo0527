@@ -34,6 +34,7 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 | `typecheck` | `pnpm -r typecheck` | 检查所有包的类型 |
 | `lint` | `oxlint` | 从根目录检查整个仓库 |
 | `lint:fix` | `oxlint --fix` | 自动修复可以安全修复的问题 |
+| `test` | `pnpm -r test` | 运行所有包的测试（ADR 0010） |
 | `deps:check` | `pnpm outdated -r --include-github-actions` | 检查过期的依赖和 GitHub Actions |
 | `deps:update:within-range` | `pnpm -r update --include-github-actions` | 在版本范围内更新 |
 | `deps:update:allow-major` | `pnpm update -r -i --latest --include-github-actions` | 交互式选择大版本升级 |
@@ -115,7 +116,9 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -128,9 +131,12 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
   "devDependencies": {
     "@types/node": "^24.19.0",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
+    "@vue/test-utils": "^2.5.1",
+    "jsdom": "^30.1.1",
     "sass-embedded": "^1.105.0",
     "typescript": "7.0.2",
-    "vite": "^8.3.1"
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
   }
 }
 ```
@@ -164,6 +170,9 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `vite` | 开发服务器与构建工具，8.x 内部使用 Rolldown 打包 | webpack、Rsbuild |
 | `@vitejs/plugin-vue-jsx` | 用 Babel 编译 Vue 的 TSX，支持 Vue 专有的 JSX 语义 | `@vitejs/plugin-vue`（SFC，ADR 0001 未采用） |
 | `sass-embedded` | 编译 `*.module.scss`；通过嵌入协议调用原生 Dart Sass，比纯 JS 版 `sass` 快 | `sass`、Less、原生 CSS |
+| `vitest` | 测试运行器，复用 `vite.config.ts`（ADR 0010） | Jest |
+| `@vue/test-utils` | Vue 官方的组件挂载与交互库 | — |
+| `jsdom` | 测试时在 Node 里模拟 DOM | happy-dom（ADR 0010 有实测对比） |
 | `@types/node` | 只给 `vite.config.ts` 提供 Node 类型 | — |
 | `typescript` | 提供 `tsc` 命令，和根目录保持同一精确版本 | — |
 

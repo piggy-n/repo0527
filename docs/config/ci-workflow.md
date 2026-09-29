@@ -93,6 +93,7 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 - run: pnpm install --frozen-lockfile
 - run: pnpm typecheck
 - run: pnpm lint
+- run: pnpm test
 - run: pnpm build
 ```
 
@@ -101,9 +102,8 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 | `pnpm install --frozen-lockfile` | 严格按 lockfile 安装；lockfile 和 `package.json` 对不上时直接失败，而不是悄悄改写 lockfile。同时会按 `minimumReleaseAge` 校验 lockfile |
 | `pnpm typecheck` | 所有包的 `tsc -b` |
 | `pnpm lint` | oxlint，包括类型感知规则和依赖方向检查 |
+| `pnpm test` | 所有包的 `vitest run`（ADR 0010）。GitHub Actions 会设置 `CI` 环境变量，Vitest 检测到后会拒绝带 `.only` 的测试，避免其他用例被悄悄跳过（已验证） |
 | `pnpm build` | 生产构建，确认能打出产物 |
-
-测试框架接入后，在 lint 和 build 之间加入测试步骤。
 
 ## Actions 为什么用 commit SHA 固定
 
@@ -138,7 +138,6 @@ uses: actions/checkout@v7
 ## 还没做的事
 
 - 在 GitHub 仓库设置中开启 Dependabot 安全告警（手动操作，只开告警，不开版本更新）
-- 接入测试后加入测试步骤
 - 以后改用 Pull Request 流程时，可以给 `main` 设置分支保护，要求 CI 通过才能合并
 
 ## 修改时的检查清单

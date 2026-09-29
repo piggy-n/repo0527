@@ -6,6 +6,7 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
+    "test": "pnpm -r test",
     "deps:check": "pnpm outdated -r --include-github-actions",
     "deps:update:within-range": "pnpm -r update --include-github-actions",
     "deps:update:allow-major": "pnpm update -r -i --latest --include-github-actions",

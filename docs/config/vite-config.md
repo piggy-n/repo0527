@@ -1,11 +1,13 @@
 # vite.config.ts 配置说明
 
 对应文件：`apps/web/vite.config.ts`
-相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）
+相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）
 
 ## 整体结构
 
-配置导出的是一个函数 `defineConfig(({ mode }) => ({ ... }))`，而不是对象。因为代理配置要读取 `.env` 中的变量，而读取哪些文件取决于运行模式（`development` / `production`）。
+配置导出的是一个函数 `defineConfig(({ mode }) => ({ ... }))`，而不是对象。因为代理配置要读取 `.env` 中的变量，而读取哪些文件取决于运行模式（`development` / `production` / `test`）。
+
+`defineConfig` 从 `vitest/config` 导入，而不是从 `vite`。两者是同一个函数，前者的类型多了 `test` 字段。这样开发、构建、测试共用一份配置，插件、别名、`.env` 只写一次。
 
 ## 各项配置
 
@@ -14,6 +16,17 @@
 | `plugins` | `vueJsx()` | 用 Babel 编译 Vue 的 TSX（ADR 0001） |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `server.proxy` | `/backend/` → `PROXY_TARGET` | 同源代理，见下文 |
+| `test` | 见下文 | Vitest 的配置（ADR 0010） |
+
+### 测试
+
+| 字段 | 值 | 说明 |
+|---|---|---|
+| `include` | `['src/**/*.test.{ts,tsx}']` | 测试文件和源文件放在一起 |
+| `environment` | `'jsdom'` | 在 Node 里模拟 DOM，挂载组件用 |
+| `unstubEnvs` | `true` | 每个用例结束后撤销 `vi.stubEnv`。已用对照实验验证：关掉后，一个用例修改的环境变量会泄漏到下一个用例 |
+
+没有开启 `globals`，测试文件显式导入 `describe`、`it`、`expect`，和 AGENTS.md"不使用自动导入"一致。Vitest 5 默认开启 `clearMocks`，每个用例之间会清空 mock 的调用记录。
 
 ### 读取环境变量
 
@@ -51,5 +64,5 @@ proxy: {
 ## 修改时的检查清单
 
 - 新增代理规则：同步更新 `docs/deployment.md` 中的 nginx 示例，保持开发和生产一致
-- 新增插件：确认它不依赖 TS 的 JS API（ADR 0003），并在本文登记
+- 新增插件：确认它不依赖 TS 的 JS API（ADR 0003），并在本文登记；插件对测试同样生效，改完运行 `pnpm test`
 - 改动路径别名：只改 tsconfig 的 `paths`，不要在这里加 `resolve.alias`

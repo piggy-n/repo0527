@@ -30,7 +30,7 @@ oxlint 允许在这个文件里写注释（JSONC），但本项目约定 JSON �
 ## plugins
 
 ```json
-"plugins": ["eslint", "typescript", "unicorn", "oxc", "import", "vue", "promise"]
+"plugins": ["eslint", "typescript", "unicorn", "oxc", "import", "vue", "promise", "vitest"]
 ```
 
 | 插件 | 内容 |
@@ -42,6 +42,7 @@ oxlint 允许在这个文件里写注释（JSONC），但本项目约定 JSON �
 | `import` | 导入导出相关，例如循环依赖 |
 | `vue` | Vue 组件规则；阶段一实测，对 TSX 里的 `defineComponent` 同样生效 |
 | `promise` | Promise 用法 |
+| `vitest` | 测试文件的规则（阶段二加入，ADR 0010）。例如 `no-focused-tests` 在本地就能拦住误提交的 `it.only`，否则其他用例会被悄悄跳过（已验证，且对现有代码无误报） |
 
 显式写出列表后，就只启用这些插件，不依赖 oxlint 的默认插件集。
 

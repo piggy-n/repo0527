@@ -19,6 +19,7 @@
 | [0007](0007-vue-router-5-and-history-mode.md) | 路由使用 Vue Router 5 与 history 模式 | 已接受 |
 | [0008](0008-same-origin-api-proxy.md) | 接口走同源的 /backend 代理 | 已接受 |
 | [0009](0009-disable-incremental-typecheck.md) | 关闭 tsc 的增量检查 | 已接受 |
+| [0010](0010-testing-with-vitest.md) | 测试使用 Vitest 与 jsdom | 已接受 |
 
 ## 模板
 

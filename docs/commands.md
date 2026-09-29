@@ -10,8 +10,9 @@
 |---|---|
 | 刚 clone / 切分支 / 拉代码后 | `pnpm install` |
 | 本地开发 | `pnpm --filter @yzt/web dev` |
-| 提交前（和 CI 相同） | `pnpm typecheck` → `pnpm lint` → `pnpm build` |
+| 提交前（和 CI 相同） | `pnpm typecheck` → `pnpm lint` → `pnpm test` → `pnpm build` |
 | 自动修复 lint 问题 | `pnpm lint:fix` |
+| 写代码时持续运行测试 | `pnpm --filter @yzt/web test:watch` |
 | 预览构建产物 | `pnpm --filter @yzt/web preview` |
 | 每月检查依赖 | `pnpm deps:check` |
 | 范围内升级 | `pnpm deps:update:within-range` |
@@ -190,6 +191,31 @@ pnpm build
 **执行了什么**：`oxlint --fix`，只应用标记为"安全"的修复。可能改变程序行为的建议（`--fix-suggestions`）和危险修复（`--fix-dangerously`）不会执行。
 
 **注意事项**：修复后看一下 diff 再提交；依赖方向、`any` 这类问题需要手动改。
+
+### `pnpm test`
+
+**作用**：运行所有包的测试一次。
+
+**什么时候用**：提交前；改了有测试覆盖的代码之后。
+
+**执行了什么**：根目录的 `pnpm -r test` 在 `apps/web` 里执行 `vitest run`：
+
+1. 读取 `vite.config.ts`（与开发、构建共用插件、别名和 `.env`，模式为 `test`）
+2. 运行 `src/**/*.test.{ts,tsx}`，DOM 环境是 jsdom
+3. 有失败时退出码非 0
+
+**注意事项**：
+
+- 测试文件和源文件放在一起，显式从 `vitest` 导入 `describe`、`it`、`expect`（不开 `globals`）
+- 只跑某个目录或文件：`pnpm --filter @yzt/web test -- src/app/router`
+- 本地 `it.only` 会让其他用例被跳过，lint 会报错；CI 中 Vitest 会直接拒绝运行
+- Vitest 只转译不做类型检查，测试文件的类型由 `pnpm typecheck` 检查
+
+### `pnpm --filter @yzt/web test:watch`
+
+**作用**：监听文件变化，自动重跑受影响的测试。
+
+**什么时候用**：写代码、写测试时开着。按 `q` 退出，按 `h` 查看快捷键。
 
 ### `pnpm build`
 

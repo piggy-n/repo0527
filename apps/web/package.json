@@ -6,7 +6,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -19,8 +21,11 @@
   "devDependencies": {
     "@types/node": "^24.19.0",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
+    "@vue/test-utils": "^2.5.1",
+    "jsdom": "^30.1.1",
     "sass-embedded": "^1.105.0",
     "typescript": "7.0.2",
-    "vite": "^8.3.1"
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
   }
 }
