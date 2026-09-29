@@ -73,6 +73,7 @@ apps/web/src/
 
 以根目录 `.editorconfig` + WebStorm 格式化为准：UTF-8、2 空格缩进、120 列、单引号、语句末尾加分号、不加尾随逗号、`if` / `else` 必须带大括号。
 完整说明见 `docs/code-style.md`。格式规则只交给一个工具负责，lint 不管格式。
+JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<ElButton type="primary" onClick={goHome}>`）；一旦换行，第一个属性从下一行开始，每个属性独占一行。
 
 ### lint（ADR 0006）
 

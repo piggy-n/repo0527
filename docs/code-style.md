@@ -100,11 +100,59 @@ WebStorm 对应设置为 Wrapping and Braces 中的 Chop down if long，函数�
 
 ## JSX / TSX
 
-- 短标签可以保持单行，例如 `<UIWrapper />`
-- 标签属性需要换行时，第一个属性从标签下一行开始，每个属性独占一行
+### 标签属性：短的保持单行，换行就按统一格式
+
+开始标签（从 `<` 到 `>`）能在一行内写清楚时，保持单行，不强制拆成多行：
+
+```tsx
+<ElButton type="primary" onClick={goHome}>
+  返回首页
+</ElButton>
+
+<ElResult icon="warning" title="404" subTitle="页面不存在">
+<ElTableColumn prop="region" label="行政区" />
+<path d={outline.path} fill="currentColor" />
+```
+
+同时满足以下条件时保持单行：
+
+- 整行不超过 120 列
+- 属性值都是简单表达式：字面量、变量、成员访问、函数引用（如 `onClick={goHome}`）
+- 属性不多，一眼能看完，一般不超过 3～4 个
+
+出现以下任一情况就换行：
+
+- 超过 120 列
+- 属性值是多行内容：带函数体的箭头函数、多行的对象字面量、嵌套的 JSX。写在一行的简短对象和单个表达式的箭头函数不算，例如 `style={{ fontWeight: weight }}`、`onClick={() => void confirmDelete()}`
+- 属性较多，写在一行难以阅读
+
+一旦决定换行，就按统一格式，不能只换一部分：
+
+- 第一个属性从标签下一行开始，每个属性独占一行
 - 多行开始标签的 `>` 或 `/>` 单独占一行，与 `<` 所在行的缩进一致
-- 单行自闭合标签的 `/` 前保留一个空格，不写成 `<UIWrapper/>`
 - 多行对象属性值以及 `{...rest}` 也属于属性布局的一部分，不挤在前一个属性后
+- 不要让第一个属性留在标签名后面、其余属性再换行，也不要把几个属性挤在同一行
+
+```tsx
+// 错误：第一个属性留在标签名后面
+<ElInput modelValue={keyword.value}
+  placeholder="请输入关键字"
+/>
+
+// 正确
+<ElInput
+  modelValue={keyword.value}
+  onUpdate:modelValue={(value: string) => {
+    keyword.value = value;
+  }}
+  placeholder="请输入关键字"
+/>
+```
+
+### 子元素与其他
+
+- 带属性的元素，文字子元素一般另起一行（如上面的 `ElButton`）；没有属性或很短的元素可以写在一行，例如 `<ElButton>默认</ElButton>`、`<ElTag type={type}>{type}</ElTag>`
+- 单行自闭合标签的 `/` 前保留一个空格，不写成 `<UIWrapper/>`
 - 多行 JSX 返回值使用 `return (`，JSX 从下一行开始，最后使用 `);`
 - JSX 条件表达式按下例保留清楚的层次；不要为了格式化改变文字节点或空白的实际含义
 
@@ -133,7 +181,20 @@ return (
 );
 ```
 
+上例中 `svg` 的属性值包含多行对象，所以换行；`use` 只有三个简单属性，写成单行 ``<use xlinkHref={`#ws-${name}`} fill={fill} style={useEleStyles} />`` 同样符合规范。
+
 WebStorm 的 JSX / TSX 标签属性排版复用 HTML Code Style：Wrap attributes、New line before first attribute、New line after last attribute 和 Space inside empty tag。因此 `.editorconfig` 中的 `ij_html_*` 设置仅作用于 JSX / TSX 文件。
+
+`.editorconfig` 中对应的设置和上面的规则一致，不需要修改：
+
+| 设置 | 值 | 含义 |
+|---|---|---|
+| `ij_html_attribute_wrap` | `on_every_item` | Chop down if long：超过 120 列才把属性拆成每行一个，短标签保持单行 |
+| `ij_html_new_line_before_first_attribute` | `when_multiline` | 只在属性拆行时，第一个属性才移到下一行 |
+| `ij_html_new_line_after_last_attribute` | `when_multiline` | 只在属性拆行时，`>` 才单独一行 |
+| `ij_html_keep_line_breaks` | `true` | 保留手动拆开的换行 |
+
+按这组设置，120 列以内"拆不拆"由人按上面的标准判断，格式化器不会强制拆开，也会保留手动拆开的换行。实际格式化结果仍以下文"自动格式化的已知边界"为准，格式化后需要复核。
 
 ## 优先使用有语义的解构
 

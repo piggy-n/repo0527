@@ -15,17 +15,10 @@ export const NotFoundPage = defineComponent({
 
     return () => (
       <div class={styles.root}>
-        <ElResult
-          icon="warning"
-          title="404"
-          subTitle="页面不存在"
-        >
+        <ElResult icon="warning" title="404" subTitle="页面不存在">
           {{
             extra: () => (
-              <ElButton
-                type="primary"
-                onClick={goHome}
-              >
+              <ElButton type="primary" onClick={goHome}>
                 返回首页
               </ElButton>
             )

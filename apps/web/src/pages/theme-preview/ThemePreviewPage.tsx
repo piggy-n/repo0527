@@ -135,21 +135,12 @@ export const ThemePreviewPage = defineComponent({
         <section class={styles.section}>
           <h2 class={styles.sectionTitle}>色板</h2>
           {colorGroups.map(group => (
-            <div
-              key={group.title}
-              class={styles.group}
-            >
+            <div key={group.title} class={styles.group}>
               <h3 class={styles.groupTitle}>{group.title}</h3>
               <div class={styles.swatches}>
                 {group.names.map(name => (
-                  <div
-                    key={name}
-                    class={styles.swatch}
-                  >
-                    <div
-                      class={styles.swatchColor}
-                      style={{ background: `var(--color-${name})` }}
-                    />
+                  <div key={name} class={styles.swatch}>
+                    <div class={styles.swatchColor} style={{ background: `var(--color-${name})` }} />
                     <div class={styles.swatchName}>{name}</div>
                     <div class={styles.swatchValue}>{resolvedColors.value[name]}</div>
                   </div>
@@ -172,11 +163,7 @@ export const ThemePreviewPage = defineComponent({
           ))}
           <div class={styles.row}>
             {fontWeights.map(({ weight, note }) => (
-              <span
-                key={weight}
-                data-weight={weight}
-                style={{ fontWeight: weight }}
-              >
+              <span key={weight} data-weight={weight} style={{ fontWeight: weight }}>
                 {weight} {note} 国土空间监测
               </span>
             ))}
@@ -187,11 +174,7 @@ export const ThemePreviewPage = defineComponent({
           <h2 class={styles.sectionTitle}>阴影</h2>
           <div class={styles.shadows}>
             {['sm', 'md', 'lg'].map(size => (
-              <div
-                key={size}
-                class={styles.shadowCard}
-                style={{ boxShadow: `var(--shadow-${size})` }}
-              >
+              <div key={size} class={styles.shadowCard} style={{ boxShadow: `var(--shadow-${size})` }}>
                 shadow-{size}
               </div>
             ))}
@@ -203,53 +186,26 @@ export const ThemePreviewPage = defineComponent({
           <div class={styles.row}>
             <ElButton>默认</ElButton>
             {buttonTypes.map(type => (
-              <ElButton
-                key={type}
-                type={type}
-              >
-                {type}
-              </ElButton>
+              <ElButton key={type} type={type}>{type}</ElButton>
             ))}
           </div>
           <div class={styles.row}>
             <ElButton plain>默认</ElButton>
             {buttonTypes.map(type => (
-              <ElButton
-                key={type}
-                type={type}
-                plain
-              >
-                {type}
-              </ElButton>
+              <ElButton key={type} type={type} plain>{type}</ElButton>
             ))}
           </div>
           <div class={styles.row}>
             <ElButton disabled>默认</ElButton>
             {buttonTypes.map(type => (
-              <ElButton
-                key={type}
-                type={type}
-                disabled
-              >
-                {type}
-              </ElButton>
+              <ElButton key={type} type={type} disabled>{type}</ElButton>
             ))}
           </div>
           <div class={styles.row}>
             {buttonTypes.map(type => (
-              <ElLink
-                key={type}
-                type={type}
-              >
-                链接 {type}
-              </ElLink>
+              <ElLink key={type} type={type}>链接 {type}</ElLink>
             ))}
-            <ElButton
-              type="primary"
-              text
-            >
-              文字按钮
-            </ElButton>
+            <ElButton type="primary" text>文字按钮</ElButton>
           </div>
         </section>
 
@@ -266,11 +222,7 @@ export const ThemePreviewPage = defineComponent({
               prefixIcon={Search}
               clearable
             />
-            <ElInput
-              class={styles.field}
-              modelValue="禁用状态"
-              disabled
-            />
+            <ElInput class={styles.field} modelValue="禁用状态" disabled />
             <ElSelect
               class={styles.field}
               modelValue={city.value}
@@ -280,11 +232,7 @@ export const ThemePreviewPage = defineComponent({
               placeholder="请选择行政区"
             >
               {tableRows.map(({ region }) => (
-                <ElOption
-                  key={region}
-                  label={region}
-                  value={region}
-                />
+                <ElOption key={region} label={region} value={region} />
               ))}
             </ElSelect>
             <ElDatePicker
@@ -328,72 +276,34 @@ export const ThemePreviewPage = defineComponent({
           <h2 class={styles.sectionTitle}>标签与提示</h2>
           <div class={styles.row}>
             {buttonTypes.map(type => (
-              <ElTag
-                key={type}
-                type={type}
-              >
-                {type}
-              </ElTag>
+              <ElTag key={type} type={type}>{type}</ElTag>
             ))}
           </div>
           <div class={styles.row}>
             {buttonTypes.map(type => (
-              <ElTag
-                key={type}
-                type={type}
-                effect="plain"
-              >
-                {type}
-              </ElTag>
+              <ElTag key={type} type={type} effect="plain">{type}</ElTag>
             ))}
           </div>
           <div class={styles.alerts}>
-            <ElAlert
-              title="计算完成"
-              type="success"
-              showIcon
-            />
-            <ElAlert
-              title="数据待计算"
-              type="info"
-              showIcon
-            />
-            <ElAlert
-              title="部分图层缺少数据"
-              type="warning"
-              showIcon
-            />
-            <ElAlert
-              title="计算失败"
-              type="error"
-              showIcon
-            />
+            <ElAlert title="计算完成" type="success" showIcon />
+            <ElAlert title="数据待计算" type="info" showIcon />
+            <ElAlert title="部分图层缺少数据" type="warning" showIcon />
+            <ElAlert title="计算失败" type="error" showIcon />
           </div>
           <div class={styles.row}>
             <ElButton onClick={() => ElMessage.success('保存成功')}>成功消息</ElButton>
             <ElButton onClick={() => ElMessage.warning('请先选择图层')}>警告消息</ElButton>
             <ElButton onClick={() => ElMessage.error('请求失败')}>错误消息</ElButton>
             <ElButton onClick={() => ElMessage.info('暂无数据')}>普通消息</ElButton>
-            <ElButton
-              type="danger"
-              onClick={() => void confirmDelete()}
-            >
-              确认框
-            </ElButton>
+            <ElButton type="danger" onClick={() => void confirmDelete()}>确认框</ElButton>
           </div>
         </section>
 
         <section class={styles.section}>
           <h2 class={styles.sectionTitle}>表格与分页</h2>
           <ElTable data={tableRows}>
-            <ElTableColumn
-              prop="region"
-              label="行政区"
-            />
-            <ElTableColumn
-              prop="indicator"
-              label="指标"
-            />
+            <ElTableColumn prop="region" label="行政区" />
+            <ElTableColumn prop="indicator" label="指标" />
             <ElTableColumn label="状态">
               {{
                 default: ({ row }: { row: IndicatorRow }) => (

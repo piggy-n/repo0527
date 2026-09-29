@@ -17,10 +17,7 @@ export const LoginPage = defineComponent({
     return () => (
       <div class={styles.root}>
         <ElEmpty description="登录页：待实现">
-          <ElButton
-            type="primary"
-            onClick={enter}
-          >
+          <ElButton type="primary" onClick={enter}>
             进入系统
           </ElButton>
         </ElEmpty>

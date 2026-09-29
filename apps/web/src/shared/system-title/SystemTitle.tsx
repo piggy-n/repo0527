@@ -7,16 +7,8 @@ export const SystemTitle = defineComponent({
   name: 'SystemTitle',
   setup() {
     return () => (
-      <svg
-        class={styles.root}
-        viewBox={outline.viewBox}
-        role="img"
-        aria-label={outline.text}
-      >
-        <path
-          d={outline.path}
-          fill="currentColor"
-        />
+      <svg class={styles.root} viewBox={outline.viewBox} role="img" aria-label={outline.text}>
+        <path d={outline.path} fill="currentColor" />
       </svg>
     );
   }
