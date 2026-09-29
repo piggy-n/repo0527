@@ -1,5 +1,3 @@
 .idea/
 node_modules/
 dist/
-/docs/
-/.claude/launch.json

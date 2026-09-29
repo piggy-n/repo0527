@@ -1,0 +1,54 @@
+# 项目文档
+
+本目录存放决策记录、配置说明和学习资料，和代码一起纳入 git。必须遵守的规则同步写在根目录的 `AGENTS.md` 里。
+
+## 目录
+
+```
+docs/
+├─ README.md                  本文：索引与维护约定
+├─ code-style.md              代码风格（格式、换行、注释）
+├─ commands.md                常用命令：作用、时机、执行过程、注意事项
+├─ adr/                       架构决策记录
+│  ├─ README.md               ADR 索引与模板
+│  └─ NNNN-*.md
+├─ config/                    重要配置文件的逐项说明
+│  ├─ package-json.md         根目录与 apps/web 的 package.json
+│  ├─ tsconfig.md             apps/web 的三份 tsconfig
+│  ├─ oxlintrc.md             .oxlintrc.json（lint 规则与依赖方向）
+│  ├─ pnpm-workspace.md       pnpm-workspace.yaml（workspace、冷却期、安装脚本）
+│  └─ ci-workflow.md          .github/workflows/ci.yml
+└─ stages/                    各阶段的总结与学习笔记
+   └─ stage-1-engineering-foundation.md
+```
+
+## 建议的阅读顺序
+
+第一次接触这个项目：
+
+1. 根目录 `AGENTS.md`：项目目标、技术栈、目录结构、必须遵守的规则
+2. [adr/README.md](adr/README.md)，然后按编号读 ADR：理解每个关键选择的理由
+3. [stages/stage-1-engineering-foundation.md](stages/stage-1-engineering-foundation.md)：阶段一做了什么、学到什么
+4. [commands.md](commands.md)：日常要用的命令
+
+想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。
+
+## 各类文档的分工
+
+| 文档 | 回答的问题 | 什么时候写 |
+|---|---|---|
+| `AGENTS.md` | 必须遵守什么 | 规则产生或变化时 |
+| `adr/` | 为什么这样决定 | 做出重要决策时；接受后不再修改 |
+| `config/` | 这个配置项是什么意思、改它要注意什么 | 配置文件新增或修改时 |
+| `commands.md` | 这条命令做什么、什么时候用 | 新增或修改脚本时 |
+| `stages/` | 这个阶段做了什么、能学到什么 | 每个阶段结束时 |
+| `code-style.md` | 代码写成什么样 | 风格规则变化时 |
+
+## 维护约定
+
+- JSON 配置文件不写注释（包括 `.oxlintrc.json` 这类允许 JSONC 的文件），解释写在 `config/` 下对应的文档里。YAML 文件可以保留简短注释，完整说明同样放在 `config/`
+- 修改配置文件时，同步更新 `config/` 下的说明，尤其是每篇末尾的"修改时的检查清单"
+- 新增或修改 `package.json` 里的脚本时，同步更新 `commands.md`
+- 每个阶段结束时，在 `stages/` 下新增一篇总结，格式参考阶段一：第一部分记录做了什么和目的，第二部分整理知识点、设计理由和替代方案
+- 文档里写的行为尽量先实测再写，并注明"已验证"；没有验证的内容要明确说明
+- 决策发生变化时写新的 ADR，而不是修改已接受的 ADR；`config/` 和 `stages/` 中引用旧决策的地方同步更新
