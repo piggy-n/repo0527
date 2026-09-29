@@ -10,7 +10,7 @@
 每次推送到 `main`，或者有 Pull Request 时，GitHub 会在一台干净的 Linux 机器上从零执行：
 
 ```
-检出代码 → 安装 pnpm → 安装 Node → pnpm install --frozen-lockfile → 类型检查 → lint → 构建
+检出代码 → 安装 pnpm → 安装 Node → pnpm install --frozen-lockfile → 类型检查 → lint → 测试 → 构建
 ```
 
 任何一步失败，这次运行就标红。它回答的问题是："在一台没有任何本地缓存和个人配置的机器上，这份代码还能不能通过所有检查？"
@@ -139,6 +139,97 @@ uses: actions/checkout@v7
 
 - 在 GitHub 仓库设置中开启 Dependabot 安全告警（手动操作，只开告警，不开版本更新）
 - 以后改用 Pull Request 流程时，可以给 `main` 设置分支保护，要求 CI 通过才能合并
+
+## 迁移到其他平台或停用 CI
+
+### 为什么迁移成本低
+
+真正做检查的只有"检查步骤"一节里的 5 条命令，它们都定义在 `package.json` 中，本地可以原样复现。和 GitHub 绑定的只是外层：怎么装 Node 和 pnpm、怎么缓存、什么时候触发。仓库里和 GitHub 相关的地方只有：
+
+| 位置 | 内容 |
+|---|---|
+| `.github/workflows/ci.yml` | 唯一真正依赖平台的文件 |
+| 根 `package.json` 的 `deps:check`、`deps:update:within-range`、`deps:update:allow-major` | `--include-github-actions` 参数，顺带检查 Actions 的版本 |
+| AGENTS.md、ADR 0005、本文、`commands.md` | 文字描述，以及"Actions 用 SHA 固定"的约定 |
+| GitHub 仓库设置 | Dependabot 安全告警 |
+
+保持迁移成本低的前提是继续遵守本文末尾的检查清单：新增检查步骤时，先在 `package.json` 里加脚本，CI 只负责调用。
+
+### 停用 CI
+
+1. 删除 `.github/workflows/ci.yml`，或者在 GitHub 仓库设置中禁用 Actions
+2. 去掉三个 `deps:*` 脚本中的 `--include-github-actions`
+3. 写一份新的 ADR 说明理由（取代 ADR 0005 中关于 CI 的部分），同步 AGENTS.md、本文和 `commands.md`
+
+停用后的代价：质量检查只能靠提交前手动运行那 5 条命令；也失去了"干净环境"这道保障，"依赖了没提交的文件""改了 `package.json` 没提交 lockfile"这类问题在本地发现不了。
+
+### 迁移到其他平台
+
+步骤：
+
+1. 按下面的对照表编写新平台的流水线文件，删除 `.github/workflows/`
+2. 去掉三个 `deps:*` 脚本中的 `--include-github-actions`；Docker 镜像等的更新检查改由新平台或 Renovate 负责
+3. 确认新平台会设置 `CI` 环境变量；如果不会，在流水线里显式设置 `CI=true`，保证 Vitest 仍然拒绝 `.only`
+4. 如果改用内网的 npm 源，按下文"内网 npm 源"一节实测冷却期
+5. 为安全告警找替代，例如在流水线中加 `pnpm audit`，或者使用平台自带的依赖扫描
+6. 写新的 ADR（取代 ADR 0005 中关于 CI 平台的部分），同步 AGENTS.md、本文和 `commands.md`
+7. 推一个分支验证每一步；再故意留一个 `it.only` 或类型错误，确认流水线会失败
+
+各平台的差异对照：
+
+| 事项 | GitHub Actions（现状） | GitLab CI | Gitee |
+|---|---|---|---|
+| 流水线文件 | `.github/workflows/ci.yml` | `.gitlab-ci.yml` | 自带的 Gitee Go 语法不同；也常配 Jenkins 或自建 runner |
+| Node 版本 | `setup-node` 读取 `devEngines.runtime` | 写在镜像名里（如 `node:24`），要和 `devEngines.runtime` 手动保持一致 | 同左，取决于所用的构建环境 |
+| pnpm 版本 | `pnpm/action-setup` 读取 `devEngines.packageManager` | 先装任意 pnpm，`onFail: download` 会自动切换到声明的版本 | 同左 |
+| 防篡改 | Actions 用 commit SHA 固定 | 用 digest 固定镜像（`node:24@sha256:...`） | 同左 |
+| 缓存 | `setup-node` 的 `cache: pnpm` | `cache` 按 `pnpm-lock.yaml` 缓存 pnpm 存储目录 | 取决于平台 |
+| 取消旧的运行 | `concurrency` | `interruptible: true`，并在项目设置中开启自动取消冗余流水线 | 取决于平台 |
+| `CI` 环境变量 | 自动设置 | 自动设置 | 未验证，不确定时显式设置 |
+
+### GitLab CI 参考写法（未验证）
+
+以下写法只是按 GitLab 的文档整理，**没有在真实的 GitLab 上运行过**，迁移时要逐项验证：
+
+```yaml
+# 行为对应 .github/workflows/ci.yml：推送到默认分支、合并请求时运行
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+ci:
+  # Node 大版本要和 package.json 的 devEngines.runtime 一致；需要防篡改时追加 @sha256:<digest>
+  image: node:24
+  interruptible: true
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+    paths:
+      - .pnpm-store
+  before_script:
+    # 装任意 12.x 的 pnpm 即可，devEngines.packageManager 的 onFail: download 会切换到声明的版本
+    - npm install -g pnpm@12
+  script:
+    # pnpm 存储放在项目目录内，才能被上面的 cache 缓存
+    - pnpm install --frozen-lockfile --store-dir .pnpm-store
+    - pnpm typecheck
+    - pnpm lint
+    - pnpm test
+    - pnpm build
+```
+
+和 GitHub 版相比少了两项：GitLab 的作业令牌权限在项目设置中管理，没有 `permissions` 字段；检出代码由 GitLab 自动完成，没有单独的检出步骤。
+
+### 内网 npm 源
+
+迁移到内网的 GitLab 或 Gitee 时，CI 可能访问不了 npm 官方源，需要改用 npmmirror 或公司内部的源（在仓库根目录加 `.npmrc` 的 `registry` 配置）：
+
+- lockfile 不受影响：它只记录校验和，不记录下载地址，阶段一已验证本机用 npmmirror、CI 用官方源可以共用一份 lockfile
+- **冷却期需要实测**：`minimumReleaseAge` 依赖源提供每个版本的发布时间。公司内部的源（Nexus、Verdaccio 等）不一定提供，可能导致冷却期检查报错或失效。换源后先在流水线里跑一次 `pnpm install --frozen-lockfile`，确认输出中仍有 `Lockfile passes supply-chain policies`
+
+另外，以后计划接入的 Renovate 支持 GitLab；是否支持 Gitee 没有确认，迁移前需要查证。
 
 ## 修改时的检查清单
 
