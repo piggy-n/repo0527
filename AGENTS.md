@@ -25,9 +25,10 @@
 - 二维地图用 MapLibre GL JS，大版本在地图阶段确定；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002）
 - 三维地图用 Cesium，精确锁定版本（ADR 0002）
 - 浏览器目标用 Vite 默认值，不兼容旧浏览器，不引入 `@vitejs/plugin-legacy`
-- CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 构建，测试接入后加入（ADR 0005）
+- 测试用 Vitest 5 + jsdom + `@vue/test-utils`，配置写在 `vite.config.ts` 的 `test` 字段（ADR 0010）
+- CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 测试 → 构建（ADR 0005）
 
-待定：测试、服务端状态、Mock、持久化（计划用 IndexedDB + idb-keyval）
+待定：服务端状态、Mock、持久化（计划用 IndexedDB + idb-keyval）
 
 ## 目录结构
 
@@ -108,6 +109,14 @@ apps/web/src/
 - 路由表在 `app/router/routes.ts`；路由名常量在 `shared/router/route-names.ts`，跳转写 `{ name: RouteName.xxx }`，不写路径字符串；页面级参数用路由的 `props` 传入，不放在 `meta` 里
 - 给组件传 `id` 等未声明的透传属性会报类型错误（组件只接受声明的 props 和 `class`、`style`），需要标记时用 `data-*`
 
+### 测试
+
+- 测试文件和源文件放在一起，命名 `*.test.ts` / `*.test.tsx`；显式从 `vitest` 导入 `describe`、`it`、`expect`，不开 `globals`
+- 工具函数、鉴权、HTTP 错误处理这类纯逻辑要写测试；页面和组件测试关键交互
+- 页面测试用 `createMemoryHistory()` 建只含所需路由的最小路由，不导入 `app` 的路由表（测试文件同样受依赖方向约束）
+- 模拟环境变量用 `vi.stubEnv`，用例结束后会自动撤销（`unstubEnvs`）
+- 不提交 `.only`：lint 的 `vitest/no-focused-tests` 会报错，CI 中 Vitest 也会拒绝运行
+
 ### Pinia
 
 - 只用 setup store：`defineStore('id', () => { ...; return { ... } })`；全部 state 都要 return，否则 devtools 和插件看不到；需要重置时自己写 `reset`
@@ -166,8 +175,8 @@ apps/web/src/
 - `pnpm typecheck`：所有包的类型检查（`tsc -b`）
 - `pnpm lint`：lint 检查（含类型感知规则与依赖方向）；`pnpm lint:fix` 自动修复可安全修复的问题
 - `pnpm build`：所有包的生产构建
-- CI（`.github/workflows/ci.yml`）依次运行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm lint`、`pnpm build`
+- `pnpm test`：所有包的测试（`vitest run`）；`pnpm --filter @yzt/web test:watch` 监听模式
+- CI（`.github/workflows/ci.yml`）依次运行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm lint`、`pnpm test`、`pnpm build`
 - `pnpm deps:check`：检查过期的依赖和 GitHub Actions
 - `pnpm deps:update:within-range`：在版本范围内更新依赖和 Actions
 - `pnpm deps:update:allow-major`：交互式选择要升级大版本的依赖和 Actions
-- 测试命令在接入后补充
