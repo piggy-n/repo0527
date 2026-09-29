@@ -8,9 +8,11 @@
 
 ### 构建前放入字体
 
-普惠体的字体文件按授权不能提交到公开仓库（ADR 0012），所以仓库和 CI 中都没有。用于部署的构建，要在构建前把两个 WOFF2 放进 `apps/web/public/fonts/`（文件名和来源见 [design/fonts.md](design/fonts.md)），构建时会被复制到 `dist/fonts/`。
+普惠体的字体文件按授权不能提交到公开仓库（ADR 0012），所以仓库和 CI 中都没有。用于部署的构建，要在构建前把字体放进 `apps/web/public/fonts/`（文件名和来源见 [design/fonts.md](design/fonts.md)），构建时整个目录会被复制到 `dist/fonts/`。
 
 构建完成后检查 `dist/fonts/` 下有 `AlibabaPuHuiTi-3-55-Regular.woff2` 和 `AlibabaPuHuiTi-3-75-SemiBold.woff2`。缺少时页面仍能正常使用，但正文会显示为微软雅黑。
+
+`dist/fonts/` 中还会有 `YouSheBiaoTiHei-2.ttf`：它只供生成系统名称轮廓使用，页面不加载（ADR 0013）。不希望对外提供时，用下面 nginx 配置中注释掉的 `location` 禁止访问。
 
 ## nginx 需要的配置
 
@@ -29,6 +31,11 @@ server {
     location / {
         try_files $uri $uri/ /index.html;
     }
+
+    # 可选：禁止下载只供构建工具使用的 TTF 字体（ADR 0013）
+    # location ~ ^/fonts/.*\.ttf$ {
+    #     return 404;
+    # }
 }
 ```
 

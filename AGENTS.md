@@ -48,7 +48,7 @@ apps/web/src/
 ```
 
 - `apps/web/tools/`：Node 直接运行的 TS 工具脚本（如 `pnpm title:generate`），相对导入写 `.ts` 扩展名，只用可剥离的语法（`erasableSyntaxOnly`）
-- `local-assets/`、`apps/web/public/fonts/`：不入库的本地文件（字体等），见 `docs/design/fonts.md`
+- `apps/web/public/fonts/`：唯一的字体目录，不入库（ADR 0013），见 `docs/design/fonts.md`
 
 ## 依赖方向
 

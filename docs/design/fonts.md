@@ -1,15 +1,17 @@
 # 字体
 
-相关决策：ADR 0012
+相关决策：ADR 0012、ADR 0013
 对应文件：`apps/web/src/app/styles/fonts.scss`、`apps/web/src/app/styles/tokens.scss`
 
 ## 总览
 
-| 用途 | 字体 | 实现方式 | 文件位置（都不入库） |
-|---|---|---|---|
-| 正文 | 阿里巴巴普惠体 3.0 | 网页字体，只声明 400、600 | `apps/web/public/fonts/` |
-| 系统名称 | 优设标题黑 | 生成 SVG 轮廓，见 [modules/system-title.md](../modules/system-title.md) | `local-assets/fonts/` |
-| 后备 | 微软雅黑等系统字体 | 字体文件缺失或下载完成前显示 | — |
+| 用途 | 字体 | 实现方式 |
+|---|---|---|
+| 正文 | 阿里巴巴普惠体 3.0（只用 3.x） | 网页字体，只声明 400、600 |
+| 系统名称 | 优设标题黑 | 生成 SVG 轮廓，页面不加载这款字体，见 [modules/system-title.md](../modules/system-title.md) |
+| 后备 | 微软雅黑等系统字体 | 字体文件缺失或下载完成前显示 |
+
+所有字体文件都放在 `apps/web/public/fonts/`，不入库。
 
 设计规范原文里的 `--font-family-title` 令牌已删除：标题字体不作为网页字体加载，用它写的文字只会显示后备字体。
 
@@ -28,15 +30,15 @@
 ## 目录约定
 
 ```
-local-assets/fonts/                 两个 TTF 原文件，生成系统名称轮廓时读取
-├─ YouSheBiaoTiHei-2.ttf            优设标题黑
-└─ ALiBaBaPuHuiTi2.0.ttf            普惠体 2.0 35 Thin，已被 3.0 取代，不使用
-apps/web/public/fonts/              运行时加载的网页字体，构建时被复制到 dist/fonts/
-├─ AlibabaPuHuiTi-3-55-Regular.woff2
-└─ AlibabaPuHuiTi-3-75-SemiBold.woff2
+apps/web/public/fonts/                   唯一的字体目录，在 .gitignore 中
+├─ AlibabaPuHuiTi-3-55-Regular.woff2     正文 400，页面加载
+├─ AlibabaPuHuiTi-3-75-SemiBold.woff2    正文 600，页面加载
+└─ YouSheBiaoTiHei-2.ttf                 优设标题黑，只供 pnpm title:generate 生成轮廓
 ```
 
-两个目录都在 `.gitignore` 中。新 clone 仓库后，从团队的共享位置取得字体包（官方下载的 `AlibabaPuHuiTi-3` 目录），按上面的位置放置：WOFF2 在各字重子目录中，文件名不变。
+新 clone 仓库后，从团队的共享位置取得这三个文件放进来，文件名不变。普惠体取自官方字体包 `AlibabaPuHuiTi-3` 中对应字重的子目录。普惠体 2.0 已删除，统一使用 3.x。
+
+`public/` 下的所有文件都会被原样复制到构建产物 `dist/fonts/` 中，所以优设标题黑的 TTF 也会被部署。页面不使用它，但它可以被直接下载；授权是否允许这样分发不明确。需要避免时，在 nginx 中禁止访问 `/fonts/*.ttf`（见 [deployment.md](../deployment.md)），或改为 ADR 0013 中的方案 2。
 
 缺少文件时的表现：
 

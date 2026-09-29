@@ -29,7 +29,7 @@ import { SystemTitle } from '@/shared/system-title/SystemTitle';
 
 ## 怎么修改系统名称
 
-1. 确认本机有 `local-assets/fonts/YouSheBiaoTiHei-2.ttf`（见 [design/fonts.md](../design/fonts.md)）
+1. 确认本机有 `apps/web/public/fonts/YouSheBiaoTiHei-2.ttf`（见 [design/fonts.md](../design/fonts.md)）
 2. 修改 `apps/web/.env` 中的 `VITE_APP_TITLE`
 3. 如果开发服务器开着：它会因为 `.env` 变化自动重启，插件随即重新生成轮廓，页面自动更新，终端会打印"已按……重新生成标题轮廓"
 4. 如果没开开发服务器：在 `apps/web` 下运行 `pnpm title:generate`，或者直接 `pnpm build`（构建开始时也会检查）
@@ -42,7 +42,7 @@ import { SystemTitle } from '@/shared/system-title/SystemTitle';
 ```
 .env 的 VITE_APP_TITLE ─────┐
                            ├─ syncTitleOutline()：文字与已生成的不同才生成
-优设标题黑（local-assets）──┘          ↓ opentype.js 解析字体，把文字转成路径
+优设标题黑（public/fonts）──┘          ↓ opentype.js 解析字体，把文字转成路径
                   src/shared/system-title/system-title-outline.json（提交）
                   { text, font, viewBox, path }
                                       ↓
@@ -84,6 +84,6 @@ opentype.js 的 `package.json` 没有 `exports`，只有 `main`（UMD）和 `mod
 | 现象 | 原因与处理 |
 |---|---|
 | 测试报"标题轮廓已过期" | 改了 `VITE_APP_TITLE` 但没有重新生成。放好字体后运行 `pnpm title:generate` 并提交 JSON |
-| 开发服务器打印"找不到字体……沿用已提交的轮廓" | 本机没有 `local-assets/fonts/YouSheBiaoTiHei-2.ttf` |
+| 开发服务器打印"找不到字体……沿用已提交的轮廓" | 本机没有 `apps/web/public/fonts/YouSheBiaoTiHei-2.ttf` |
 | 新名称里某个字显示为空白 | 优设标题黑只收录 GB2312 范围的 6763 个汉字，生僻字没有字形 |
 | 标题太大或太小 | 调整父元素的 `font-size`，不要直接给 SVG 设置宽高 |
