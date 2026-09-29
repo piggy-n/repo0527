@@ -8,6 +8,7 @@
 - 每一步先说明设计理由、替代方案和涉及的知识点，再动手
 - 一次推进一个小步骤，不擅自扩大范围；涉及选型的问题先讨论再决定
 - 重要决策写成 ADR（`docs/adr/`）；阶段结束时把新结论同步到本文件
+- 登录页等重要页面先按设计规范出设计稿，确认后再开发；主题与组件库层面的改动用预览页截图确认
 - 提交信息使用 Conventional Commits 格式（`feat` / `fix` / `refactor` / `docs` / `chore` 等）
 
 ## 技术栈
@@ -16,6 +17,7 @@
 
 - Vue 3 + TSX（`defineComponent`），不使用 `.vue` 单文件组件（ADR 0001）
 - TypeScript strict，Vite，Pinia，Vue Router，Element Plus，pnpm workspace
+- Element Plus 组件显式具名导入，样式全量引入 `element-plus/dist/index.css`，语言包用 `ElConfigProvider` 设置
 - 只用 TypeScript 7 一个版本；不引入依赖 TS JS API 的工具（vue-tsc、typescript-eslint 等），lint 用 oxlint + oxlint-tsgolint（ADR 0003），规则与依赖方向检查见 ADR 0006
 - 二维地图用 MapLibre GL JS，大版本在地图阶段确定；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002）
 - 三维地图用 Cesium，精确锁定版本（ADR 0002）
@@ -101,6 +103,13 @@ apps/web/src/
 - TSX 中插槽函数的参数要手动标注类型：Vue 的 JSX 类型不会按组件的 `SlotsType` 推断插槽参数，也不检查插槽名（ADR 0003）
 - 路径别名只在 tsconfig 的 `paths` 中配置，Vite 通过 `resolve.tsconfigPaths` 读取，不另配 `resolve.alias`
 
+### 样式与设计规范
+
+- 设计参考 `docs/design/color-and-typography.md`，落地方式见 `docs/design/theme.md`；规范和 Element Plus 的交互风格冲突时，优先和 Element 保持一致
+- 颜色、字号、字重、行高、阴影一律使用令牌（`var(--color-*)` 等 CSS 变量），不写死色值和字号；规范里没有的值先补进规范和 `app/styles/tokens.scss`
+- 字号只用双数
+- Element Plus 的外观只在 `app/styles/element-theme.scss` 统一调整，页面和组件不单独覆盖 `--el-*` 变量
+
 ## 迁移规则
 
 - 只迁移旧项目中实际在用的模块。不迁移：资源中心（含知识图谱）、资源共享、统计分析、旧版 resource-management、`views/sys` 与动态菜单路由、`/home` 测试页、mockjs、backend-switcher
@@ -127,6 +136,7 @@ apps/web/src/
 - `docs/code-style.md`：完整代码风格
 - `docs/adr/`：架构决策记录，编号递增，接受后不再修改；决策有变化时新写一份，并注明取代了哪一份
 - `docs/config/`：重要配置文件的逐项说明；修改配置文件时同步更新
+- `docs/design/`：设计规范原文与主题落地说明；修改令牌或 Element 映射时同步更新
 - `docs/commands.md`：常用命令说明；新增或修改脚本时同步更新
 - `docs/stages/`：各阶段总结与学习笔记，每个阶段结束时新增一篇
 - `docs/migration.md`：各模块的迁移基线与进度
