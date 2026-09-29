@@ -3,7 +3,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./tools": "./tools/index.ts"
+  },
+  "bin": {
+    "yzt-icons": "./tools/cli.ts"
   },
   "scripts": {
     "typecheck": "tsc -b",
@@ -22,5 +26,8 @@
   },
   "peerDependencies": {
     "vue": "^3.5.43"
+  },
+  "dependencies": {
+    "svgo": "^4.1.0"
   }
 }

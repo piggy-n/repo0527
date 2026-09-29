@@ -16,5 +16,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["vitest.config.ts"]
+  "include": ["tools", "vitest.config.ts"]
 }

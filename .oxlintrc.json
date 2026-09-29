@@ -74,7 +74,7 @@
       }
     },
     {
-      "files": ["scripts/**", "apps/web/tools/**"],
+      "files": ["scripts/**", "apps/web/tools/**", "packages/*/tools/**"],
       "rules": {
         "no-console": "off"
       }
@@ -90,6 +90,7 @@
             "checkInternals": true,
             "policies": [
               { "allow": { "to": { "module": { "origin": "external" } } } },
+              { "allow": { "to": { "module": { "origin": "core" } } } },
               { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": ".{,.}/**" } } }
             ]
           }
