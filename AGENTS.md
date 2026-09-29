@@ -47,6 +47,9 @@ apps/web/src/
    └─ map-vue/     @yzt/map-vue     地图与 Vue 的衔接
 ```
 
+- `apps/web/tools/`：Node 直接运行的 TS 工具脚本（如 `pnpm title:generate`），相对导入写 `.ts` 扩展名，只用可剥离的语法（`erasableSyntaxOnly`）
+- `local-assets/`、`apps/web/public/fonts/`：不入库的本地文件（字体等），见 `docs/design/fonts.md`
+
 ## 依赖方向
 
 - `pages → features → shared → libs`，`app` 可以依赖所有目录
@@ -143,6 +146,9 @@ apps/web/src/
 - shared/http 不依赖路由、UI 和鉴权，这些由 `app/http.ts` 通过 `configureHttp` 注入
 
 ### 样式与设计规范
+
+- 字体文件按授权不能提交到仓库（ADR 0012）；正文字体普惠体 3.0 只有 400、600 两个字重，改 `font-weight` 即可
+- 系统名称用 `shared/system-title` 的 `SystemTitle` 组件（SVG 轮廓，大小和颜色跟随 `font-size`、`color`），不要把优设标题黑作为网页字体加载；修改名称见 `docs/modules/system-title.md`
 
 - 设计参考 `docs/design/color-and-typography.md`，落地方式见 `docs/design/theme.md`；规范和 Element Plus 的交互风格冲突时，优先和 Element 保持一致
 - 颜色、字号、字重、行高、阴影一律使用令牌（`var(--color-*)` 等 CSS 变量），不写死色值和字号；规范里没有的值先补进规范和 `app/styles/tokens.scss`
