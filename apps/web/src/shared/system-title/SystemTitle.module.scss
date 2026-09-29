@@ -1,0 +1,9 @@
+.root {
+  display: inline-block;
+  // viewBox 纵向是字体的 em 框，高度 1em 时和同字号的文字一样大，宽度按比例计算
+  height: 1em;
+  width: auto;
+  // 个别笔画可能略微超出 em 框
+  overflow: visible;
+  vertical-align: middle;
+}

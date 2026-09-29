@@ -197,10 +197,10 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 ### scripts 允许 console
 
 ```json
-{ "files": ["scripts/**"], "rules": { "no-console": "off" } }
+{ "files": ["scripts/**", "apps/web/tools/**"], "rules": { "no-console": "off" } }
 ```
 
-命令行脚本本来就通过 console 输出结果。
+命令行脚本本来就通过 console 输出结果。`apps/web/tools/` 是阶段二加入的 Node 工具脚本目录（例如 `pnpm title:generate`）。
 
 ### apps/web/src 的依赖方向
 

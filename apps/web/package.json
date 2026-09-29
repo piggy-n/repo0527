@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "title:generate": "node tools/system-title/cli.ts"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -26,6 +27,7 @@
     "@vue/test-utils": "^2.5.1",
     "jsdom": "^30.1.1",
     "msw": "^2.15.0",
+    "opentype.js": "^2.0.0",
     "sass-embedded": "^1.105.0",
     "typescript": "7.0.2",
     "vite": "^8.3.1",

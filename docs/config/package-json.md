@@ -118,7 +118,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "title:generate": "node tools/system-title/cli.ts"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -136,6 +137,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "@vue/test-utils": "^2.5.1",
     "jsdom": "^30.1.1",
     "msw": "^2.15.0",
+    "opentype.js": "^2.0.0",
     "sass-embedded": "^1.105.0",
     "typescript": "7.0.2",
     "vite": "^8.3.1",
@@ -176,6 +178,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `axios` | HTTP 请求，只在 `shared/http/client.ts` 中使用（ADR 0011） | ky、原生 fetch |
 | `zod` | 接口返回值的校验与类型推断（ADR 0011） | valibot、手写类型守卫 |
 | `msw` | 测试中在网络层模拟接口，只用 `msw/node`；安装脚本不放行（见 pnpm-workspace.md） | axios-mock-adapter |
+| `opentype.js` | 解析字体、把系统名称转成 SVG 轮廓，只在 `tools/system-title/` 中使用（ADR 0012）；2.0 没有自带类型，用本地的最小声明 | fontkit、harfbuzzjs |
 | `vitest` | 测试运行器，复用 `vite.config.ts`（ADR 0010） | Jest |
 | `@vue/test-utils` | Vue 官方的组件挂载与交互库 | — |
 | `jsdom` | 测试时在 Node 里模拟 DOM | happy-dom（ADR 0010 有实测对比） |

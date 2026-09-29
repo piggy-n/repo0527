@@ -2,3 +2,5 @@
 node_modules/
 dist/
 *.local
+local-assets/
+apps/web/public/fonts/

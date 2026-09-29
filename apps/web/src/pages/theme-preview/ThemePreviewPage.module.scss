@@ -6,10 +6,9 @@
 
 .systemTitle {
   margin: 0 0 24px;
-  font-family: var(--font-family-title);
+  // SystemTitle 的大小和颜色跟随这里的 font-size、color
   font-size: var(--font-size-title);
-  font-weight: normal;
-  color: var(--color-text-title);
+  color: var(--color-primary);
 }
 
 .section {

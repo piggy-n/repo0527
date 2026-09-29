@@ -21,6 +21,7 @@
 | [0009](0009-disable-incremental-typecheck.md) | 关闭 tsc 的增量检查 | 已接受 |
 | [0010](0010-testing-with-vitest.md) | 测试使用 Vitest 与 jsdom | 已接受 |
 | [0011](0011-http-client-axios-zod-msw.md) | HTTP 客户端：axios + zod，测试用 MSW 模拟接口 | 已接受 |
+| [0012](0012-fonts-self-hosted-and-svg-title.md) | 字体：普惠体 3.0 自托管且不入库，系统名称用 SVG 轮廓 | 已接受 |
 
 ## 模板
 

@@ -145,7 +145,7 @@ CSS 目前没有 lint 检查，以上规则靠评审保证。需要强制检查�
 
 | 事项 | 说明 |
 |---|---|
-| 字体文件 | 在阶段二的字体步骤中接入；在此之前 `--font-family-base` 回退到微软雅黑 |
+| 字体 | 已接入，见 [fonts.md](fonts.md)。规范第 7 节的 `--font-family-title` 已删除，系统名称改用 SVG 轮廓 |
 | `--el-border-color` 的非表单用途 | 它除了输入框、选择器、按钮、复选框、单选框，还用于分隔线（`ElDivider`）、菜单边框、开关关闭态、卡片式标签页、上传组件，这些现在都会显示为 `primary-border`。规范的分隔线是 `divider` 色虚线，这些组件第一次使用时在 `element-theme.scss` 中单独处理 |
 | Element 写死的 13px | `ElCollapse` 的标题与内容、`ElInputNumber` 的加减按钮，第一次使用时处理 |
 | 表格的其他样式 | 旧项目资源管理列表（`views/resource-management-new/components/LayerTable.vue`）还改了：表头背景 `#EEF1F8`、16px 半粗、行高 52px；正文 `#4B5563`、首列 `#1F2937`、行高 56px；行悬停底色 `#F2F6FF`；边框 `#E8EBF2`。做第一个列表页时，决定哪些作为全局表格样式 |

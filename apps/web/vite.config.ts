@@ -2,6 +2,8 @@ import vueJsx from '@vitejs/plugin-vue-jsx';
 import { loadEnv } from 'vite';
 // 与 vite 的 defineConfig 相同，只是类型里多了 test 字段
 import { defineConfig } from 'vitest/config';
+import { systemTitlePaths } from './tools/system-title/paths.ts';
+import { systemTitlePlugin } from './tools/system-title/vite-plugin.ts';
 
 export default defineConfig(({ mode }) => {
   // 前缀参数传空字符串，才能读到不带 VITE_ 前缀的 PROXY_TARGET；它只在这里使用，不会进入前端代码
@@ -9,7 +11,11 @@ export default defineConfig(({ mode }) => {
   const apiBaseUrl = env.VITE_API_BASE_URL;
 
   return {
-    plugins: [vueJsx()],
+    plugins: [
+      vueJsx(),
+      // 测试只检查已提交的标题轮廓，不在运行测试时改动源文件
+      ...(mode === 'test' ? [] : [systemTitlePlugin({ text: env.VITE_APP_TITLE, ...systemTitlePaths(process.cwd()) })])
+    ],
     resolve: {
       // 直接读取 tsconfig 的 paths，不再单独维护一份别名
       tsconfigPaths: true

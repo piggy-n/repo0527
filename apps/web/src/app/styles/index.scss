@@ -1,4 +1,5 @@
 // 必须在 element-plus/dist/index.css 之后加载，同名的 :root 变量才能覆盖 Element 的默认值
+@use 'fonts';
 @use 'tokens';
 @use 'element-theme';
 @use 'base';

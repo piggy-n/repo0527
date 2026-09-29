@@ -19,7 +19,7 @@ import {
   ElTag
 } from 'element-plus';
 import { defineComponent, onMounted, ref } from 'vue';
-import { appConfig } from '@/shared/config/app-config';
+import { SystemTitle } from '@/shared/system-title/SystemTitle';
 import styles from './ThemePreviewPage.module.scss';
 
 interface IndicatorRow {
@@ -72,6 +72,14 @@ const fontSizes = [
   { name: 'xxs', usage: '极小文字', weight: 'regular' }
 ];
 
+// 只加载了 400 和 600 两个字重，500、700 按 CSS 字重匹配规则分别显示为 400、600
+const fontWeights = [
+  { weight: 400, note: '常规' },
+  { weight: 500, note: '按 400 显示' },
+  { weight: 600, note: '半粗' },
+  { weight: 700, note: '按 600 显示' }
+];
+
 const buttonTypes = ['primary', 'success', 'warning', 'danger', 'info'] as const;
 
 const tableRows: IndicatorRow[] = [
@@ -120,7 +128,9 @@ export const ThemePreviewPage = defineComponent({
 
     return () => (
       <div class={styles.root}>
-        <h1 class={styles.systemTitle}>{appConfig.title}</h1>
+        <h1 class={styles.systemTitle}>
+          <SystemTitle />
+        </h1>
 
         <section class={styles.section}>
           <h2 class={styles.sectionTitle}>色板</h2>
@@ -160,6 +170,17 @@ export const ThemePreviewPage = defineComponent({
               {name} · {usage} · 城市国土空间监测指标 1234
             </p>
           ))}
+          <div class={styles.row}>
+            {fontWeights.map(({ weight, note }) => (
+              <span
+                key={weight}
+                data-weight={weight}
+                style={{ fontWeight: weight }}
+              >
+                {weight} {note} 国土空间监测
+              </span>
+            ))}
+          </div>
         </section>
 
         <section class={styles.section}>

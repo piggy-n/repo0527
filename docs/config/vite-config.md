@@ -13,10 +13,20 @@
 
 | 配置 | 值 | 说明 |
 |---|---|---|
-| `plugins` | `vueJsx()` | 用 Babel 编译 Vue 的 TSX（ADR 0001） |
+| `plugins` | `vueJsx()`、`systemTitlePlugin()` | 前者用 Babel 编译 Vue 的 TSX（ADR 0001）；后者按 `VITE_APP_TITLE` 同步系统名称的 SVG 轮廓，测试模式下不启用（ADR 0012，见 [modules/system-title.md](../modules/system-title.md)） |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `server.proxy` | `/backend/` → `PROXY_TARGET` | 同源代理，见下文 |
 | `test` | 见下文 | Vitest 的配置（ADR 0010） |
+
+### 系统名称插件
+
+```ts
+...(mode === 'test' ? [] : [systemTitlePlugin({ text: env.VITE_APP_TITLE, ...systemTitlePaths(process.cwd()) })])
+```
+
+- 在 `buildStart` 钩子中运行：开发服务器启动时、构建开始时各一次。修改 `.env` 后开发服务器会自动重启，所以改名称后轮廓会自动更新
+- 测试模式（`mode === 'test'`，即 Vitest）下不加入插件：测试检查已提交的结果，不在运行时改动源文件
+- 插件文件从 `./tools/system-title/vite-plugin.ts` 导入，带 `.ts` 扩展名，因为同一份代码也由 Node 直接运行
 
 ### 测试
 

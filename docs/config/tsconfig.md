@@ -155,15 +155,17 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 
 ## tsconfig.node.json
 
-结构和 app 配置基本相同，区别只有三处：
+检查构建配置和 `tools/` 下的 Node 工具脚本（阶段二加入，见 [modules/system-title.md](../modules/system-title.md)）。结构和 app 配置基本相同，区别在于：
 
 | 选项 | 值 | 区别 |
 |---|---|---|
-| `lib` | `["es2023"]` | 没有 `dom`，配置文件运行在 Node 里 |
+| `lib` | `["es2023"]` | 没有 `dom`，代码运行在 Node 里 |
 | `types` | `["node"]` | 加载 `@types/node` |
-| `include` | `["vite.config.ts"]` | 只检查构建配置 |
+| `include` | `["vite.config.ts", "tools"]` | 构建配置和工具脚本 |
+| `allowImportingTsExtensions` | `true` | 允许 `import './sync.ts'`。Node 直接运行 TS 时要求写出扩展名；只能和 `noEmit` 一起用 |
+| `erasableSyntaxOnly` | `true` | 只允许"删掉类型标注就能运行"的语法。Node 24 运行 `.ts` 时只做类型剥离，不编译 `enum`、`namespace` 等语法；写了会报 TS1294（已验证） |
 
-它没有 JSX 和 `paths` 相关选项，因为 `vite.config.ts` 用不到。
+它没有 JSX 和 `paths` 相关选项，因为这些文件用不到。
 
 ## 有意没有开启的选项
 

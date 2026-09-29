@@ -60,7 +60,7 @@ $primary-alphas: (5, 10, 12, 14, 28, 32);
     --color-primary-alpha-#{$percent}: #{color.change(map.get($colors, 'primary'), $alpha: $percent * 0.01)};
   }
 
-  --font-family-title: 'YouSheBiaoTiHei', sans-serif;
+  // 标题字体（优设标题黑）不作为网页字体加载，系统名称用 SystemTitle 组件的 SVG 轮廓显示
   --font-family-base: 'Alibaba PuHuiTi', 'Microsoft YaHei', sans-serif;
 
   --font-size-display: 30px;
