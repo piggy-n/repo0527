@@ -26,9 +26,10 @@
 - 三维地图用 Cesium，精确锁定版本（ADR 0002）
 - 浏览器目标用 Vite 默认值，不兼容旧浏览器，不引入 `@vitejs/plugin-legacy`
 - 测试用 Vitest 5 + jsdom + `@vue/test-utils`，配置写在 `vite.config.ts` 的 `test` 字段（ADR 0010）
+- HTTP 用 axios + zod 4，测试中用 MSW 2.x 模拟接口（ADR 0011）
 - CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 测试 → 构建（ADR 0005）
 
-待定：服务端状态、Mock、持久化（计划用 IndexedDB + idb-keyval）
+待定：服务端状态、持久化（计划用 IndexedDB + idb-keyval）
 
 ## 目录结构
 
@@ -115,6 +116,8 @@ apps/web/src/
 - 工具函数、鉴权、HTTP 错误处理这类纯逻辑要写测试；页面和组件测试关键交互
 - 页面测试用 `createMemoryHistory()` 建只含所需路由的最小路由，不导入 `app` 的路由表（测试文件同样受依赖方向约束）
 - 模拟环境变量用 `vi.stubEnv`，用例结束后会自动撤销（`unstubEnvs`）
+- 模拟接口用 MSW 的 `setupServer()`，并设置 `onUnhandledRequest: 'error'`；不用 `vi.mock('axios')`
+- 测试写完后，故意改坏被测代码，确认测试会失败
 - 不提交 `.only`：lint 的 `vitest/no-focused-tests` 会报错，CI 中 Vitest 也会拒绝运行
 
 ### Pinia
@@ -130,6 +133,14 @@ apps/web/src/
 - 自定义环境变量只在 `shared/config/app-config.ts` 中读取和校验，其他代码使用 `appConfig`；Vite 内置的 `DEV`、`PROD`、`MODE`、`BASE_URL` 可以直接读取。新增变量要在 `shared/config/import-meta-env.ts` 中声明类型
 - `VITE_` 开头的变量会写进构建产物，不能放密钥；只给 `vite.config.ts` 用的变量不加 `VITE_` 前缀
 - 接口请求走同源的 `appConfig.apiBaseUrl`（`/backend`），由 Vite 或 nginx 转发到后端（ADR 0008）
+
+### 接口请求（ADR 0011，用法见 `docs/modules/http.md`）
+
+- 接口函数写在 `features/<域>/api.ts`，统一用 `shared/http/client.ts` 的 `http.get / post / put / delete`，不直接使用 axios
+- 每个请求都传 zod schema，返回值类型由 schema 推断（`z.infer`），不另外手写 interface；对象中可能缺失的字段写 `.optional()`（zod 4 中 `z.unknown()` 字段默认必填）
+- 失败时抛出 `ApiError`，按 `kind` 区分；接口函数里不弹提示，全局提示由 app 注入，需要自己处理时传 `silent: true`
+- 支持取消的场景把 `AbortSignal` 传给接口函数
+- shared/http 不依赖路由、UI 和鉴权，这些由 `app/http.ts` 通过 `configureHttp` 注入
 
 ### 样式与设计规范
 
@@ -165,6 +176,7 @@ apps/web/src/
 - `docs/adr/`：架构决策记录，编号递增，接受后不再修改；决策有变化时新写一份，并注明取代了哪一份
 - `docs/config/`：重要配置文件的逐项说明；修改配置文件时同步更新
 - `docs/design/`：设计规范原文与主题落地说明；修改令牌或 Element 映射时同步更新
+- `docs/modules/`：shared、libs 中模块的用法与设计说明；新增或修改这些模块时同步更新
 - `docs/commands.md`：常用命令说明；新增或修改脚本时同步更新
 - `docs/stages/`：各阶段总结与学习笔记，每个阶段结束时新增一篇
 - `docs/migration.md`：各模块的迁移基线与进度
