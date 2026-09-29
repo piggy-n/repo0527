@@ -9,6 +9,7 @@ docs/
 ├─ README.md                  本文：索引与维护约定
 ├─ code-style.md              代码风格（格式、换行、注释）
 ├─ commands.md                常用命令：作用、时机、执行过程、注意事项
+├─ deployment.md              部署要求（nginx 回退与接口转发）
 ├─ adr/                       架构决策记录
 │  ├─ README.md               ADR 索引与模板
 │  └─ NNNN-*.md
@@ -17,7 +18,9 @@ docs/
 │  ├─ tsconfig.md             apps/web 的三份 tsconfig
 │  ├─ oxlintrc.md             .oxlintrc.json（lint 规则与依赖方向）
 │  ├─ pnpm-workspace.md       pnpm-workspace.yaml（workspace、冷却期、安装脚本）
-│  └─ ci-workflow.md          .github/workflows/ci.yml
+│  ├─ ci-workflow.md          .github/workflows/ci.yml
+│  ├─ vite-config.md          apps/web/vite.config.ts（插件、别名、代理）
+│  └─ env.md                  apps/web/.env（环境变量、类型与校验）
 ├─ design/                    设计规范与主题落地
 │  ├─ color-and-typography.md 系统配色与字体规范（原文）
 │  └─ theme.md                设计令牌清单、Element Plus 映射与使用规则

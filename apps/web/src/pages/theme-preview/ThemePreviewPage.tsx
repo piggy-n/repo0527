@@ -19,6 +19,7 @@ import {
   ElTag
 } from 'element-plus';
 import { defineComponent, onMounted, ref } from 'vue';
+import { appConfig } from '@/shared/config/app-config';
 import styles from './ThemePreviewPage.module.scss';
 
 interface IndicatorRow {
@@ -119,7 +120,7 @@ export const ThemePreviewPage = defineComponent({
 
     return () => (
       <div class={styles.root}>
-        <h1 class={styles.systemTitle}>江苏省统一调查监测现状图</h1>
+        <h1 class={styles.systemTitle}>{appConfig.title}</h1>
 
         <section class={styles.section}>
           <h2 class={styles.sectionTitle}>色板</h2>

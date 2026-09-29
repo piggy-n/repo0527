@@ -83,7 +83,7 @@ TS 6 起 `types` 默认值变成了 `[]`（以前会自动加载 `node_modules/@
 - `nodenext`：严格按 Node 的规则，相对导入必须写 `.js` 扩展名。适合直接在 Node 里运行、不经过打包的代码
 - `node10` / `classic`：旧规则，TS 7 已移除
 
-`moduleDetection: force` 的一个实际影响（阶段二已验证）：给第三方库扩充类型时（例如 `shared/router/route-meta.ts` 中的 `declare module 'vue-router'`），文件里不需要再写 `export {}`。如果文件不被当作模块，`declare module` 就成了环境模块声明，会遮住整个库原有的类型。官方文档示例里的 `export {}` 就是为了避免这个问题，而在本项目里 `force` 已经保证了这一点。
+`moduleDetection: force` 的一个实际影响（阶段二已验证）：给第三方库扩充类型时（例如 `shared/router/route-meta.ts` 中的 `declare module 'vue-router'`），文件里不需要再写 `export {}`。如果文件不被当作模块，`declare module` 就成了环境模块声明，会遮住整个库原有的类型。官方文档示例里的 `export {}` 就是为了避免这个问题，而在本项目里 `force` 已经保证了这一点。反过来，要扩充全局接口（例如 `shared/config/import-meta-env.ts` 中的 `ImportMetaEnv`）时，必须写在 `declare global { ... }` 里，否则接口只在文件内部生效。
 
 `verbatimModuleSyntax` 的意义：Vite 用的转译器（Babel、oxc、esbuild）每次只看一个文件，判断不出 `import { Foo }` 里的 `Foo` 是类型还是值。开启这个选项后，TS 强制要求类型导入写成 `import type`，转译器照着删掉就行，不会误删值、也不会残留类型导入。这也正好落实了 AGENTS.md 里"只用于类型的导入写 `import type`"的约定。
 
