@@ -18,6 +18,9 @@ docs/
 │  ├─ oxlintrc.md             .oxlintrc.json（lint 规则与依赖方向）
 │  ├─ pnpm-workspace.md       pnpm-workspace.yaml（workspace、冷却期、安装脚本）
 │  └─ ci-workflow.md          .github/workflows/ci.yml
+├─ design/                    设计规范与主题落地
+│  ├─ color-and-typography.md 系统配色与字体规范（原文）
+│  └─ theme.md                设计令牌清单、Element Plus 映射与使用规则
 └─ stages/                    各阶段的总结与学习笔记
    └─ stage-1-engineering-foundation.md
 ```
@@ -31,7 +34,7 @@ docs/
 3. [stages/stage-1-engineering-foundation.md](stages/stage-1-engineering-foundation.md)：阶段一做了什么、学到什么
 4. [commands.md](commands.md)：日常要用的命令
 
-想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。
+想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明。
 
 ## 各类文档的分工
 
@@ -40,6 +43,7 @@ docs/
 | `AGENTS.md` | 必须遵守什么 | 规则产生或变化时 |
 | `adr/` | 为什么这样决定 | 做出重要决策时；接受后不再修改 |
 | `config/` | 这个配置项是什么意思、改它要注意什么 | 配置文件新增或修改时 |
+| `design/` | 界面应该长什么样、令牌怎么对应到 Element | 规范、令牌或 Element 映射变化时 |
 | `commands.md` | 这条命令做什么、什么时候用 | 新增或修改脚本时 |
 | `stages/` | 这个阶段做了什么、能学到什么 | 每个阶段结束时 |
 | `code-style.md` | 代码写成什么样 | 风格规则变化时 |

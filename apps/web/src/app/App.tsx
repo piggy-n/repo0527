@@ -1,9 +1,16 @@
+import { ElConfigProvider } from 'element-plus';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import { defineComponent } from 'vue';
-import styles from './App.module.scss';
+import { ThemePreview } from './ThemePreview';
 
 export const App = defineComponent({
   name: 'App',
   setup() {
-    return () => <div class={styles.root}>江苏省统一调查监测现状图</div>;
+    // 第一次挂载的 ElConfigProvider 同时成为全局默认配置，ElMessageBox 等函数式调用也会用中文
+    return () => (
+      <ElConfigProvider locale={zhCn}>
+        <ThemePreview />
+      </ElConfigProvider>
+    );
   }
 });

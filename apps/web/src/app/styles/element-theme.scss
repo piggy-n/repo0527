@@ -1,0 +1,86 @@
+// 把设计令牌映射到 Element Plus 的 CSS 变量，映射理由见 docs/design/theme.md
+@use 'sass:color';
+@use 'sass:map';
+@use 'sass:math';
+@use 'tokens';
+
+// 与 Element 相同的色阶算法：light-N 混入 N×10% 白色，dark-2 混入 20% 黑色
+@function mix-level($base, $mix-color, $level) {
+  $mixed: color.mix($mix-color, $base, $level * 10%);
+
+  @return rgb(
+    math.round(color.channel($mixed, 'red', $space: rgb)),
+    math.round(color.channel($mixed, 'green', $space: rgb)),
+    math.round(color.channel($mixed, 'blue', $space: rgb))
+  );
+}
+
+// 规范给出了该档位就用规范值，否则用公式计算的值
+@function pick($overrides, $key, $computed) {
+  @if map.has-key($overrides, $key) {
+    @return map.get($overrides, $key);
+  }
+
+  @return $computed;
+}
+
+// 输出一种类型的全部颜色变量
+@mixin color-type($type, $token, $overrides: ()) {
+  $base: map.get(tokens.$colors, $token);
+
+  --el-color-#{$type}: var(--color-#{$token});
+  --el-color-#{$type}-rgb: #{color.channel($base, 'red', $space: rgb)},
+    #{color.channel($base, 'green', $space: rgb)},
+    #{color.channel($base, 'blue', $space: rgb)};
+
+  @each $level in (3, 5, 7, 8, 9) {
+    --el-color-#{$type}-light-#{$level}: #{pick($overrides, 'light-#{$level}', mix-level($base, #fff, $level))};
+  }
+
+  --el-color-#{$type}-dark-2: #{pick($overrides, 'dark-2', mix-level($base, #000, 2))};
+}
+
+:root {
+  // 悬停、按下沿用 Element 的公式；light-7 实际用作悬停描边，常态描边已是浅蓝，公式值会让悬停看不出变化
+  @include color-type('primary', 'primary', (
+    'light-7': var(--color-primary-border-hover),
+    'light-9': var(--color-primary-bg)
+  ));
+  @include color-type('success', 'success', ('light-9': var(--color-success-bg-solid)));
+  @include color-type('warning', 'warning', ('light-9': var(--color-warning-bg)));
+  @include color-type('danger', 'danger', ('light-9': var(--color-danger-bg-solid)));
+  @include color-type('error', 'danger', ('light-9': var(--color-danger-bg-solid)));
+  // Element 的 info 是灰色语义，对应规范的 Neutral 而不是蓝色的 Info
+  @include color-type('info', 'neutral', ('light-9': var(--color-neutral-bg-light)));
+
+  // Element 的 primary 用于标题，regular 用于表格和表单正文，按用途而不是按名字对应
+  --el-text-color-primary: var(--color-text-strong);
+  --el-text-color-regular: var(--color-text-primary);
+  --el-text-color-secondary: var(--color-text-secondary);
+  --el-text-color-placeholder: var(--color-text-placeholder);
+  --el-text-color-disabled: var(--color-text-disabled);
+
+  --el-border-color: var(--color-primary-border);
+  --el-border-color-hover: var(--color-primary-border-hover);
+  --el-border-color-light: var(--color-border);
+  --el-border-color-lighter: var(--color-border-light);
+
+  --el-bg-color: var(--color-bg-container);
+  --el-bg-color-overlay: var(--color-bg-container);
+  --el-bg-color-page: var(--color-bg-page);
+
+  --el-font-family: var(--font-family-base);
+  --el-font-size-medium: var(--font-size-lg);
+  --el-font-size-base: var(--font-size-base);
+  // Element 默认 13px，字号只用双数
+  --el-font-size-small: var(--font-size-xs);
+  --el-font-size-extra-small: var(--font-size-xs);
+
+  --el-box-shadow-light: var(--shadow-md);
+  --el-box-shadow-lighter: var(--shadow-sm);
+}
+
+// 组件级变量由 Element 定义在组件自己的选择器上，要在同一选择器上覆盖
+.el-table {
+  --el-table-header-text-color: var(--color-text-title);
+}

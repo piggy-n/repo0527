@@ -1,0 +1,85 @@
+// 设计令牌：对应 docs/design/color-and-typography.md，清单与命名见 docs/design/theme.md
+@use 'sass:color';
+@use 'sass:map';
+
+// 色板同时供 element-theme.scss 计算 Element 色阶，所以用 Sass map 维护
+$colors: (
+  'primary': #597ef7,
+  'primary-hover': #4f74f0,
+  'primary-border': #c9d4fb,
+  'primary-border-hover': #9fb3ff,
+  'primary-bg': #eef3ff,
+  'primary-bg-light': #f3f6ff,
+  'primary-bg-lighter': #fbfcff,
+
+  'text-title': #1f2937,
+  'text-strong': #2f3a4f,
+  'text-primary': #333333,
+  'text-regular': #4b5563,
+  'text-secondary': #8a94a6,
+  'text-placeholder': #9aa5b8,
+  'text-disabled': #c7ced9,
+
+  'border': #e6ebf3,
+  'border-light': #edf1f7,
+  'border-dashed': #e0e6f0,
+  'divider': #e2e5ec,
+  'bg-page': #f5f7fb,
+  'bg-container': #ffffff,
+  'bg-mask': rgba(255, 255, 255, 0.96),
+
+  'info': #4f74f0,
+  'info-bg': rgba(89, 126, 247, 0.14),
+  'info-bg-solid': #eaf1ff,
+  'success': #1f9d57,
+  'success-text': #15803d,
+  'success-solid': #22c55e,
+  'success-bg': rgba(34, 168, 94, 0.16),
+  'success-bg-solid': #f0fdf4,
+  'success-bg-hover': #dcfce7,
+  'warning': #f0a020,
+  'warning-bg': #fff7e8,
+  'danger': #e64b4b,
+  'danger-text': #f04444,
+  'danger-bg': rgba(245, 108, 108, 0.16),
+  'danger-bg-solid': #ffecec,
+  'neutral': #8a94a6,
+  'neutral-bg': #eef1f5,
+  'neutral-bg-light': #f1f4f8
+);
+
+// 主色透明度梯度，键是百分比
+$primary-alphas: (5, 10, 12, 14, 28, 32);
+
+:root {
+  @each $name, $value in $colors {
+    --color-#{$name}: #{$value};
+  }
+
+  @each $percent in $primary-alphas {
+    --color-primary-alpha-#{$percent}: #{color.change(map.get($colors, 'primary'), $alpha: $percent * 0.01)};
+  }
+
+  --font-family-title: 'YouSheBiaoTiHei', sans-serif;
+  --font-family-base: 'Alibaba PuHuiTi', 'Microsoft YaHei', sans-serif;
+
+  --font-size-display: 30px;
+  --font-size-title: 28px;
+  --font-size-lg: 16px;
+  --font-size-base: 14px;
+  --font-size-xs: 12px;
+  --font-size-xxs: 10px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-base: 22px;
+  --line-height-compact: 18px;
+  --line-height-tag: 16px;
+
+  --shadow-sm: 0 4px 16px rgba(25, 55, 110, 0.08);
+  --shadow-md: 0 6px 18px rgba(20, 52, 105, 0.16);
+  --shadow-lg: 0 8px 24px rgba(20, 52, 105, 0.16);
+}

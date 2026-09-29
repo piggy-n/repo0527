@@ -118,6 +118,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "element-plus": "^2.14.6",
     "vue": "^3.5.43"
   },
   "devDependencies": {
@@ -151,6 +153,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 
 | 依赖 | 说明 | 常见替代 |
 |---|---|---|
+| `element-plus` | UI 组件库。组件显式具名导入，JS 由打包工具 tree-shake；样式全量引入 `dist/index.css`（约 345 KB，gzip 约 46 KB），主题映射见 [design/theme.md](../design/theme.md) | Naive UI、Ant Design Vue |
+| `@element-plus/icons-vue` | Element 的图标组件。它本来就是 element-plus 的依赖，但 pnpm 不允许 import 没有声明的包，所以要自己声明 | — |
 | `vite` | 开发服务器与构建工具，8.x 内部使用 Rolldown 打包 | webpack、Rsbuild |
 | `@vitejs/plugin-vue-jsx` | 用 Babel 编译 Vue 的 TSX，支持 Vue 专有的 JSX 语义 | `@vitejs/plugin-vue`（SFC，ADR 0001 未采用） |
 | `sass-embedded` | 编译 `*.module.scss`；通过嵌入协议调用原生 Dart Sass，比纯 JS 版 `sass` 快 | `sass`、Less、原生 CSS |
