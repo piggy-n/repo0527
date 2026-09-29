@@ -3,11 +3,12 @@
   "private": true,
   "scripts": {
     "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
-    "deps:check": "pnpm outdated -r",
-    "deps:update:within-range": "pnpm -r update",
-    "deps:update:allow-major": "pnpm -r update --latest",
+    "deps:check": "pnpm outdated -r --include-github-actions",
+    "deps:update:within-range": "pnpm -r update --include-github-actions",
+    "deps:update:allow-major": "pnpm update -r -i --latest --include-github-actions",
     "pnpm:update:project:latest": "pnpm self-update && pnpm install --lockfile-only && node scripts/pnpm-major.mjs && pnpm install --lockfile-only"
   },
   "devEngines": {
@@ -15,6 +16,11 @@
       "name": "pnpm",
       "version": "^12",
       "onFail": "download"
+    },
+    "runtime": {
+      "name": "node",
+      "version": "^24",
+      "onFail": "error"
     }
   },
   "devDependencies": {
@@ -22,6 +28,6 @@
     "eslint-plugin-boundaries": "^7.2.0",
     "oxlint": "1.85.0",
     "oxlint-tsgolint": "7.0.2003",
-    "typescript": "^7.0.2"
+    "typescript": "7.0.2"
   }
 }

@@ -179,7 +179,7 @@ importers:
         specifier: 7.0.2003
         version: 7.0.2003
       typescript:
-        specifier: ^7.0.2
+        specifier: 7.0.2
         version: 7.0.2
 
   apps/web:

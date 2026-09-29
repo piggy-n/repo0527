@@ -2,6 +2,9 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# 新版本发布满 3 天才允许安装，对应 npm 允许撤回版本的 72 小时窗口（ADR 0005）
+minimumReleaseAge: 4320
+
 # 依赖的安装脚本默认不执行，逐个决定是否放行
 allowBuilds:
   # 以下包已有各平台预编译包，安装脚本只在缺少预编译时补装或从源码构建
