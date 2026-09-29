@@ -47,6 +47,7 @@ apps/web/src/
    └─ map-vue/     @yzt/map-vue     地图与 Vue 的衔接
 ```
 
+- `packages/*`：workspace 内部包，`exports` 直接指向 `src/index.ts`，不单独构建（ADR 0014）；目前有 `@yzt/icons`（图标组件与 SVG 规范化工具）。新建包按 `docs/config/internal-packages.md`
 - `apps/web/tools/`：Node 直接运行的 TS 工具脚本（如 `pnpm title:generate`），相对导入写 `.ts` 扩展名，只用可剥离的语法（`erasableSyntaxOnly`）
 - `apps/web/public/fonts/`：唯一的字体目录，不入库（ADR 0013），见 `docs/design/fonts.md`
 
@@ -56,6 +57,7 @@ apps/web/src/
 - features 之间不互相导入，需要复用的内容上移到 shared 或 libs
 - libs 内部：`utils ← ui`，`utils ← map-core ← map-cesium`，`map-vue → map-core`；map-vue 只能用动态 `import()` 引用 map-cesium
 - `utils`、`map-core`、`map-cesium` 不依赖 vue、element-plus、pinia
+- 应用通过 `@yzt/<name>` 使用 `packages/*`，不用相对路径；包只能依赖外部模块和包内部文件，不能导入应用代码；包同样遵守下面"libs 的拆包规则"
 - 同一单元（一个 feature、一个 lib 模块、shared、pages、app）内部只用相对路径；跨单元只用别名，引用 libs 只写 `@yzt/<name>`
 - 以上规则由 lint 强制检查（根目录 `.oxlintrc.json` 的 `boundaries/dependencies`），分层有变化时同步修改（ADR 0006）
 

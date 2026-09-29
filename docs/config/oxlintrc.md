@@ -112,21 +112,27 @@ console.log(value);
 ```json
 "settings": {
   "import/resolver": {
-    "typescript": { "project": "apps/web/tsconfig.app.json" }
+    "typescript": {
+      "project": ["apps/web/tsconfig.app.json", "packages/*/tsconfig.lib.json"],
+      "noWarnOnMultipleProjects": true
+    }
   },
   "boundaries/elements": [
     { "type": "app", "pattern": "apps/web/src/app" },
     { "type": "pages", "pattern": "apps/web/src/pages" },
     { "type": "feature", "pattern": "apps/web/src/features/*", "capture": ["name"] },
     { "type": "shared", "pattern": "apps/web/src/shared" },
-    { "type": "lib", "pattern": "apps/web/src/libs/*", "capture": ["name"] }
+    { "type": "lib", "pattern": "apps/web/src/libs/*", "capture": ["name"] },
+    { "type": "package", "pattern": "packages/*", "capture": ["name"] }
   ]
 }
 ```
 
 ### import/resolver
 
-boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它属于哪一层。这里指定用 `eslint-import-resolver-typescript`，按 `tsconfig.app.json` 的 `paths` 解析别名。相对路径也会被解析成真实文件，所以 `../layer/store` 这种写法同样能被识别。
+boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它属于哪一层。这里指定用 `eslint-import-resolver-typescript`，按各 tsconfig 的 `paths` 解析别名。相对路径也会被解析成真实文件，所以 `../layer/store` 这种写法同样能被识别。
+
+`project` 是数组：应用和每个 workspace 包各有自己的 tsconfig（阶段二加入 `packages/icons` 后改为数组）。有多个项目时解析器会打印一条性能提示，`noWarnOnMultipleProjects` 用来关掉它。
 
 ### boundaries/elements
 
@@ -135,6 +141,8 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 - `type`：元素类型，对应 ADR 0004 的分层
 - `pattern`：匹配的目录。路径相对于仓库根目录，因为 lint 从根目录运行
 - `capture`：把 `*` 匹配到的部分记成变量。`features/*` 的 `name` 让每个 feature 成为独立元素，`features/map` 和 `features/layer` 因此被视为两个不同的单元
+
+`package` 元素对应 `packages/*` 下的 workspace 包（ADR 0014）。阶段二实测：没有这条定义时，`@yzt/icons` 经 `node_modules` 下的符号链接解析，被当作外部依赖放行，包内代码导入应用代码也不会报错；加上定义后，解析出的真实路径落在 `packages/icons` 中，被识别为 package 元素，双向的违规都能查出。
 
 ## rules
 
@@ -202,9 +210,17 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 
 命令行脚本本来就通过 console 输出结果。`apps/web/tools/` 是阶段二加入的 Node 工具脚本目录（例如 `pnpm title:generate`）。
 
+### packages 的依赖方向
+
+```json
+{ "files": ["packages/*/src/**", "packages/*/tools/**"], "rules": { "boundaries/dependencies": [ ... ] } }
+```
+
+workspace 包只允许依赖外部模块和本包内部的相对路径，不能导入应用或其他单元的代码，保证包可以脱离应用单独使用。策略只有下文的 0、1 两条。阶段二用探针验证：`packages/icons` 导入 `apps/web/src/shared/...` 会报错。
+
 ### apps/web/src 的依赖方向
 
-依赖方向只约束应用源码，所以 `boundaries/dependencies` 只在这个 override 里开启。
+应用源码的分层规则都在这个 override 里。
 
 ## boundaries/dependencies 详解
 
@@ -243,17 +259,18 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 | 3 | pages → feature、shared | 页面只负责组合 features |
 | 4 | feature → shared | feature 之间不互相导入 |
 | 5 | app、pages、feature、shared → lib，且写成 `@yzt/*` | 引用 libs 只能用包名，不能用 `@/libs/...` 或相对路径 |
-| 6 | ui、map-core、map-cesium、map-vue → utils，且写成 `@yzt/*` | libs 之间的依赖也只能用包名 |
-| 7 | map-cesium、map-vue → map-core，且写成 `@yzt/*` | 地图内核被三维和 Vue 衔接层使用 |
-| 8 | map-vue → map-cesium，且只能动态 `import()` | Cesium 体积大，只能懒加载 |
-| 9 | 禁止 utils、map-core、map-cesium 依赖 Vue 生态 | 这三个模块要保持框架无关 |
-| 10 | 全局禁止 `mapbox-gl` | 2.0 起为专有许可（ADR 0002） |
+| 6 | app、pages、feature、shared → package，且写成 `@yzt/*` | 引用 workspace 包只能用包名，不能用相对路径绕过包的入口（阶段二加入，已验证） |
+| 7 | ui、map-core、map-cesium、map-vue → utils，且写成 `@yzt/*` | libs 之间的依赖也只能用包名 |
+| 8 | map-cesium、map-vue → map-core，且写成 `@yzt/*` | 地图内核被三维和 Vue 衔接层使用 |
+| 9 | map-vue → map-cesium，且只能动态 `import()` | Cesium 体积大，只能懒加载 |
+| 10 | 禁止 utils、map-core、map-cesium 依赖 Vue 生态 | 这三个模块要保持框架无关 |
+| 11 | 全局禁止 `mapbox-gl` | 2.0 起为专有许可（ADR 0002） |
 
 几个写法细节：
 
 - **`".{,.}/**"`（策略 1）**：意思是"以 `./` 或 `../` 开头"。不能写成 `./**`，因为底层的 micromatch 会把 `./` 规范化掉，导致 `./store` 匹配不上。这是阶段一实测发现的
-- **`"@yzt/*"`（策略 5–8）**：micromatch 的 `*` 不跨越 `/`，所以 `@yzt/map-core/internal` 不匹配。不过这种深层导入在 tsconfig 那一关就已经解析失败了
-- **`"nodeKind": "dynamic-import"`（策略 8）**：boundaries 会区分静态 `import` 和动态 `import()`，前者的 `nodeKind` 是 `import`
+- **`"@yzt/*"`（策略 5–9）**：micromatch 的 `*` 不跨越 `/`，所以 `@yzt/map-core/internal` 不匹配。不过这种深层导入在 tsconfig 那一关就已经解析失败了
+- **`"nodeKind": "dynamic-import"`（策略 9）**：boundaries 会区分静态 `import` 和动态 `import()`，前者的 `nodeKind` 是 `import`
 - **`captured.name`**：用 `{a,b}` 花括号语法匹配多个模块名
 
 ### 能查什么、不能查什么
@@ -266,8 +283,10 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 | 单元内部使用别名 | 策略 1 |
 | 引用 libs 没写 `@yzt` | 策略 5 |
 | shared 依赖 feature、pages 依赖 app | 策略 2–4 |
-| utils 依赖 vue | 策略 9 |
-| 静态导入 map-cesium | 策略 8 |
+| utils 依赖 vue | 策略 10 |
+| 静态导入 map-cesium | 策略 9 |
+| 应用用相对路径导入 workspace 包的内部文件 | 策略 6（阶段二） |
+| workspace 包导入应用代码 | packages override（阶段二） |
 | lodash 默认导入、整包 lodash | `no-restricted-imports` |
 | 未处理的 Promise、`any`、`console.log`、`==` | 各自的规则 |
 

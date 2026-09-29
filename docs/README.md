@@ -20,6 +20,7 @@ docs/
 │  ├─ pnpm-workspace.md       pnpm-workspace.yaml（workspace、冷却期、安装脚本）
 │  ├─ ci-workflow.md          .github/workflows/ci.yml
 │  ├─ vite-config.md          apps/web/vite.config.ts（插件、别名、代理）
+│  ├─ internal-packages.md    packages/* 内部包的配置约定与新建清单
 │  └─ env.md                  apps/web/.env（环境变量、类型与校验）
 ├─ modules/                   内部模块的用法与设计说明
 │  ├─ http.md                 shared/http：HTTP 客户端、ApiError、回调注入

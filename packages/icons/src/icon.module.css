@@ -1,0 +1,9 @@
+/* 类选择器优先级低，使用方可以用自己的 class 覆盖 */
+.icon {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  transform-origin: center;
+}

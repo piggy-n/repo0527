@@ -14,14 +14,18 @@
   },
   "settings": {
     "import/resolver": {
-      "typescript": { "project": "apps/web/tsconfig.app.json" }
+      "typescript": {
+        "project": ["apps/web/tsconfig.app.json", "packages/*/tsconfig.lib.json"],
+        "noWarnOnMultipleProjects": true
+      }
     },
     "boundaries/elements": [
       { "type": "app", "pattern": "apps/web/src/app" },
       { "type": "pages", "pattern": "apps/web/src/pages" },
       { "type": "feature", "pattern": "apps/web/src/features/*", "capture": ["name"] },
       { "type": "shared", "pattern": "apps/web/src/shared" },
-      { "type": "lib", "pattern": "apps/web/src/libs/*", "capture": ["name"] }
+      { "type": "lib", "pattern": "apps/web/src/libs/*", "capture": ["name"] },
+      { "type": "package", "pattern": "packages/*", "capture": ["name"] }
     ]
   },
   "rules": {
@@ -76,6 +80,23 @@
       }
     },
     {
+      "files": ["packages/*/src/**", "packages/*/tools/**"],
+      "rules": {
+        "boundaries/dependencies": [
+          "error",
+          {
+            "default": "disallow",
+            "checkAllOrigins": true,
+            "checkInternals": true,
+            "policies": [
+              { "allow": { "to": { "module": { "origin": "external" } } } },
+              { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": ".{,.}/**" } } }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["apps/web/src/**"],
       "rules": {
         "boundaries/dependencies": [
@@ -102,6 +123,10 @@
               {
                 "from": { "element": { "types": { "anyOf": ["app", "pages", "feature", "shared"] } } },
                 "allow": { "to": { "element": { "type": "lib" } }, "dependency": { "source": "@yzt/*" } }
+              },
+              {
+                "from": { "element": { "types": { "anyOf": ["app", "pages", "feature", "shared"] } } },
+                "allow": { "to": { "element": { "type": "package" } }, "dependency": { "source": "@yzt/*" } }
               },
               {
                 "from": { "element": { "type": "lib", "captured": { "name": "{ui,map-core,map-cesium,map-vue}" } } },

@@ -27,7 +27,7 @@ allowBuilds:
 
 ## packages
 
-`apps/*` 下的每个目录（目前只有 `apps/web`）都是一个 workspace 包。`packages/*` 是为以后拆出的 `@yzt/*` 包预留的（ADR 0004），目前还没有这个目录。
+`apps/*` 下的每个目录（目前只有 `apps/web`）都是一个 workspace 包。`packages/*` 放可复用的 `@yzt/*` 包，第一个是阶段二的 `packages/icons`（ADR 0014），配置约定见 [internal-packages.md](internal-packages.md)。
 
 workspace 带来的能力：
 
