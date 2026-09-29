@@ -1,9 +1,11 @@
-# 鉴权（shared/auth）
+# 鉴权（shared/auth 与 features/auth）
 
 相关决策：ADR 0015
-对应目录：`apps/web/src/shared/auth/`
+对应目录：`apps/web/src/shared/auth/`、`apps/web/src/features/auth/`
 
-`shared/auth` 管理登录会话、角色和 token 过期判断。登录接口与表单逻辑在 `features/auth`，路由守卫和请求头在 `app`，完成后补充到本文。
+- `shared/auth`：登录会话、角色、token 过期判断，应用的各部分都会用到
+- `features/auth`：登录接口、密码加密，只有登录功能使用
+- 路由守卫、请求头和登录表单逻辑完成后补充到本文
 
 ## 会话怎么用
 
@@ -54,6 +56,40 @@ const { user, displayName } = storeToRefs(session);
 - `toRole(roleCode)`：缺失或无法识别时按 `user` 处理，与旧项目一致
 - `roleHome(role)`：角色登录后进入的页面（目前两种角色都是现状底图），也是访问无权限页面时的去处
 
+## 登录接口
+
+```ts
+import { login } from '@/features/auth/api';
+
+const session = await login({ loginName, password });   // 明文密码，函数内部加密
+useSessionStore().start(session);
+```
+
+- 请求 `POST /user/login`，请求体 `{ loginName, password }`，`password` 是 SM2 密文
+- 返回值已经转换成会话结构（`Session`），可以直接交给 `start()`：
+  - `roleCode` 经 `toRole` 转成 `role`
+  - 数字 `id` 转成字符串
+  - 响应没有 `loginName` 时依次用 `username`、输入的登录名
+  - `null` 字段去掉
+- 响应缺少 `token` 或 `roleCode` 时抛出 `invalid-response`：后端的约定变了应该尽早暴露，而不是把管理员当成普通用户
+- 请求设置了 `silent: true`：失败时不弹全局提示，由登录表单显示错误。401 不受 `silent` 影响，仍会调用 `onUnauthorized`；app 注入的回调在登录页上不做任何事
+
+### 待验证
+
+后端对"账号或密码错误"返回什么，要等登录页完成后用错误密码实测：
+
+- 如果是业务码（如 500）加 `msg`：`ApiError.message` 就是后端的文案，直接显示即可
+- 如果是 401：`resolveErrorMessage` 会把文案统一成"登录状态已过期，请重新登录"，在登录页上意思不对，届时要在登录表单里单独处理
+
+### 密码加密
+
+`password.ts` 的 `encryptPassword(password, publicKey)` 用 sm-crypto-v2 做 SM2 加密：
+
+- 密文按 C1C3C2 排列，是不带 `04` 前缀的小写十六进制，长度 = 128（C1）+ 64（C3）+ 明文字节数 × 2
+- 加密含随机数，同一密码每次的密文都不同
+- 公钥作为参数传入，函数没有外部依赖；`login` 传入 `appConfig.loginPublicKey`（环境变量 `VITE_LOGIN_PUBLIC_KEY`，见 [config/env.md](../config/env.md)）
+- 前端只有公钥，不保存私钥：旧项目把私钥写在前端代码里，等于公开了私钥（ADR 0015）
+
 ## 测试
 
 `testing.ts` 提供测试用的 JWT：
@@ -67,7 +103,12 @@ createTestJwtExpiringAt(Date.now() + 3_600_000);
 
 头和载荷是真实的 base64url 编码，签名是假的。测试过期逻辑时用 `vi.useFakeTimers({ now })` 固定当前时间。
 
-已验证：`shared/auth` 共 17 个用例；逐个改坏 9 处源码（去掉 30 秒提前量、`exp` 不换算毫秒、非 JWT 时抛错、不删除损坏数据、`start` 不写存储、`clear` 不删存储、`||` 改成 `??`、接受任意角色码、允许空 token），每处都有用例失败。
+密码加密的测试用 `sm2.generateKeyPairHex()` 临时生成密钥对，用私钥验证密文能被解密；登录接口的测试用 MSW 模拟，检查请求体里的密码是密文而不是明文。
+
+已验证：
+
+- `shared/auth` 共 17 个用例；逐个改坏 9 处源码（去掉 30 秒提前量、`exp` 不换算毫秒、非 JWT 时抛错、不删除损坏数据、`start` 不写存储、`clear` 不删存储、`||` 改成 `??`、接受任意角色码、允许空 token），每处都有用例失败
+- `features/auth` 共 10 个用例，`appConfig` 的公钥校验 3 个用例；逐个改坏 10 处（改成 C1C2C3、去掉 `silent`、明文提交密码、`||` 改成 `??`、`roleCode` 可缺失、角色写死、`id` 不转字符串、允许空 token、公钥长度放宽、不检查 `04` 前缀），每处都有用例失败
 
 ## 设计理由
 
@@ -76,3 +117,5 @@ createTestJwtExpiringAt(Date.now() + 3_600_000);
 - **显示名用 `||` 而不是 `??`**：后端可能返回空字符串的真实姓名，`??` 只在 `null` / `undefined` 时才取后者
 - **schema 同时用于校验和类型**：`Session` 类型由 `sessionSchema` 推断（`z.infer`），存储格式只有一处定义
 - **`roleHome` 用 `Record<Role, RouteName>`**：新增角色时如果漏配首页，类型检查会报错
+- **接口函数负责字段转换**：`login` 返回 `Session` 而不是后端的原始结构，后端改字段名时只需改 `api.ts`。这种在边界上隔离外部模型的做法叫"防腐层"（anti-corruption layer）
+- **加密放在接口函数里，而不是表单逻辑里**：怎么加密是和后端的约定，属于接口的一部分；表单只处理用户输入的明文

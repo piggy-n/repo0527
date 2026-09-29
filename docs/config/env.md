@@ -25,6 +25,7 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 |---|---|---|---|
 | `VITE_APP_TITLE` | `江苏省统一调查监测现状图` | `index.html`（`%VITE_APP_TITLE%`）、`appConfig.title` | 系统名称，只定义一次 |
 | `VITE_API_BASE_URL` | `/backend` | `vite.config.ts`（代理前缀）、`appConfig.apiBaseUrl` | 接口基础地址 |
+| `VITE_LOGIN_PUBLIC_KEY` | `04d2bf…fa83`（130 位） | `appConfig.loginPublicKey` | 登录密码加密用的 SM2 公钥，由后端提供（ADR 0015）。公钥本身是公开的，可以写进产物 |
 | `PROXY_TARGET` | `http://192.168.1.180:18010` | 只在 `vite.config.ts` | 开发服务器与 `vite preview` 的代理目标 |
 
 ## 两类变量
@@ -45,6 +46,8 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 - 变量声明为可选（`?: string`），因为 `.env` 文件里确实可能漏写
 
 `shared/config/app-config.ts` 集中读取并校验：缺失或为空时，在启动时抛出"缺少环境变量 XXX"，不带着空值继续运行（已验证）。其他代码只使用 `appConfig`。
+
+有固定格式的变量还会校验格式。`VITE_LOGIN_PUBLIC_KEY` 必须是 `04` 开头、共 130 位的十六进制（未压缩格式的 SM2 公钥），复制时少了字符会在启动时报错，而不是等到登录时才失败（已验证）。
 
 例外：Vite 内置的 `DEV`、`PROD`、`MODE`、`BASE_URL` 直接读取 `import.meta.env`。例如路由表靠 `import.meta.env.DEV` 的静态替换，在生产构建中删除开发路由。
 

@@ -130,6 +130,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "element-plus": "^2.14.6",
     "jwt-decode": "^4.0.0",
     "pinia": "^4.0.3",
+    "sm-crypto-v2": "^1.15.1",
     "vue": "^3.5.43",
     "vue-router": "^5.3.1",
     "zod": "^4.6.5"
@@ -182,6 +183,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `axios` | HTTP 请求，只在 `shared/http/client.ts` 中使用（ADR 0011） | ky、原生 fetch |
 | `zod` | 接口返回值的校验与类型推断（ADR 0011） | valibot、手写类型守卫 |
 | `jwt-decode` | 读取登录 token 的过期时间，只在 `shared/auth/token.ts` 中使用；不校验签名（ADR 0015） | 手写 base64url 解码 |
+| `sm-crypto-v2` | 登录密码的 SM2 加密，只在 `features/auth/password.ts` 中使用；底层是 `@noble/curves`，已与旧项目的 sm-crypto 交叉验证兼容（ADR 0015） | sm-crypto |
 | `msw` | 测试中在网络层模拟接口，只用 `msw/node`；安装脚本不放行（见 pnpm-workspace.md） | axios-mock-adapter |
 | `opentype.js` | 解析字体、把系统名称转成 SVG 轮廓，只在 `tools/system-title/` 中使用（ADR 0012）；2.0 没有自带类型，用本地的最小声明 | fontkit、harfbuzzjs |
 | `vitest` | 测试运行器，复用 `vite.config.ts`（ADR 0010） | Jest |
