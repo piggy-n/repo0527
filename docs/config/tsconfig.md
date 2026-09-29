@@ -100,6 +100,7 @@ TS 6 起 `types` 默认值变成了 `[]`（以前会自动加载 `node_modules/@
 
 - Vue 的 `JSX` 命名空间没有声明 `ElementChildrenAttribute`，所以插槽参数不会按 `SlotsType` 推断，写错插槽名也不报错，插槽函数的参数要手动标注类型（AGENTS.md 已有此规则）
 - `v-model` 的值不做类型检查（阶段二用探针验证）：TS 对属性名里带短横线的 JSX 属性（如 `data-*`、`v-model`）不拿去和 props 对照。`<ElInput v-model={boolRef.value} />` 不报错，而 `<ElInput modelValue={boolRef.value} />` 会报错。所以双向绑定统一写 `modelValue` + `onUpdate:modelValue`（AGENTS.md 规则）。事件名按组件声明的写法来，例如 `ElPagination` 声明的是 `update:current-page`，就要写 `onUpdate:current-page`
+- 组件上的透传属性只放行 `class`、`style`（阶段二验证）：`<ElButton id="x" />` 会报"属性 id 不存在"，因为组件的 props 类型里没有它。需要标记元素时用 `data-*`，它和 `v-model` 一样因为带短横线而不被检查
 
 ### 严格程度
 

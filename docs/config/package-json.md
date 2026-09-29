@@ -119,7 +119,9 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "@vue/devtools-api": "^8.2.1",
     "element-plus": "^2.14.6",
+    "pinia": "^4.0.3",
     "vue": "^3.5.43",
     "vue-router": "^5.3.1"
   },
@@ -156,6 +158,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 |---|---|---|
 | `element-plus` | UI 组件库。组件显式具名导入，JS 由打包工具 tree-shake；样式全量引入 `dist/index.css`（约 345 KB，gzip 约 46 KB），主题映射见 [design/theme.md](../design/theme.md) | Naive UI、Ant Design Vue |
 | `vue-router` | 路由，手写路由表、history 模式（ADR 0007）。5.x 把文件路由插件并进了核心包，所以会带来 unplugin、chokidar 等构建期依赖，本项目不启用文件路由，它们不会打进产物 | 4.6.x（旧版本线） |
+| `pinia` | 状态管理，只用 setup store（约定见 AGENTS.md）。4.x 只提供 ESM | 3.x（支持 CommonJS，本项目用不到） |
+| `@vue/devtools-api` | Pinia 4 的必需 peer 依赖，提供开发者工具集成。pnpm 会自动补装 peer，这里显式声明是为了让依赖关系一目了然；生产构建中不会用到 | — |
 | `@element-plus/icons-vue` | Element 的图标组件。它本来就是 element-plus 的依赖，但 pnpm 不允许 import 没有声明的包，所以要自己声明 | — |
 | `vite` | 开发服务器与构建工具，8.x 内部使用 Rolldown 打包 | webpack、Rsbuild |
 | `@vitejs/plugin-vue-jsx` | 用 Babel 编译 Vue 的 TSX，支持 Vue 专有的 JSX 语义 | `@vitejs/plugin-vue`（SFC，ADR 0001 未采用） |
