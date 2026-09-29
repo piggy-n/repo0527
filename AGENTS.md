@@ -16,13 +16,13 @@
 
 - Vue 3 + TSX（`defineComponent`），不使用 `.vue` 单文件组件（ADR 0001）
 - TypeScript strict，Vite，Pinia，Vue Router，Element Plus，pnpm workspace
-- 只用 TypeScript 7 一个版本；不引入依赖 TS JS API 的工具（vue-tsc、typescript-eslint 等），lint 用 oxlint + oxlint-tsgolint（ADR 0003）
+- 只用 TypeScript 7 一个版本；不引入依赖 TS JS API 的工具（vue-tsc、typescript-eslint 等），lint 用 oxlint + oxlint-tsgolint（ADR 0003），规则与依赖方向检查见 ADR 0006
 - 二维地图用 MapLibre GL JS，大版本在地图阶段确定；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002）
 - 三维地图用 Cesium，精确锁定版本（ADR 0002）
 - 浏览器目标用 Vite 默认值，不兼容旧浏览器，不引入 `@vitejs/plugin-legacy`
 - CI 用 GitHub Actions，阶段 1 接入（ADR 0005）
 
-待定：lint 规则、测试、服务端状态、Mock、持久化（计划用 IndexedDB + idb-keyval）
+待定：测试、服务端状态、Mock、持久化（计划用 IndexedDB + idb-keyval）
 
 ## 目录结构
 
@@ -44,8 +44,10 @@ apps/web/src/
 
 - `pages → features → shared → libs`，`app` 可以依赖所有目录
 - features 之间不互相导入，需要复用的内容上移到 shared 或 libs
-- libs 内部：`utils ← ui`，`utils ← map-core ← map-cesium`，`map-vue → map-core`（map-cesium 懒加载）
+- libs 内部：`utils ← ui`，`utils ← map-core ← map-cesium`，`map-vue → map-core`；map-vue 只能用动态 `import()` 引用 map-cesium
 - `utils`、`map-core`、`map-cesium` 不依赖 vue、element-plus、pinia
+- 同一单元（一个 feature、一个 lib 模块、shared、pages、app）内部只用相对路径；跨单元只用别名，引用 libs 只写 `@yzt/<name>`
+- 以上规则由 lint 强制检查（根目录 `.oxlintrc.json` 的 `boundaries/dependencies`），分层有变化时同步修改（ADR 0006）
 
 ## libs 的拆包规则（ADR 0004）
 
@@ -53,13 +55,20 @@ apps/web/src/
 - 模块内部只用相对路径，不使用 `@/`
 - 不读取 `import.meta.env`、store、router 或全局单例，需要的依赖通过构造参数或函数参数传入
 - 模块之间不能循环依赖
+- 创建第一个 libs 模块时，加上 `apps/web/tsconfig.libs.json`：只包含 `src/libs`，不加载 `vite/client` 类型，不配置 `@/*`，让读取 env 和使用 `@/` 在类型检查时报错（ADR 0006）
 
 ## 编码约定
 
 ### 格式
 
 以根目录 `.editorconfig` + WebStorm 格式化为准：UTF-8、2 空格缩进、120 列、单引号、语句末尾加分号、不加尾随逗号、`if` / `else` 必须带大括号。
-完整说明见 `docs/CODE_STYLE.md`。格式规则只交给一个工具负责，ESLint 不管格式。
+完整说明见 `docs/CODE_STYLE.md`。格式规则只交给一个工具负责，lint 不管格式。
+
+### lint（ADR 0006）
+
+- 规则只分 `error` 和 `off` 两级，不用 `warn`；提交前 `pnpm lint` 必须通过
+- 在代码里关闭规则要写明原因：`// oxlint-disable-next-line <规则> -- 原因`；不再需要的关闭注释会报错
+- 类的私有成员用 TS 的 `private` 或 `#`，不用下划线前缀
 
 ### 注释
 
@@ -99,7 +108,7 @@ apps/web/src/
 
 ## 依赖维护（ADR 0005）
 
-- 一般依赖用 `^`；不遵守语义化版本的包精确锁定：Cesium、TypeScript
+- 一般依赖用 `^`；不遵守语义化版本的包精确锁定：Cesium、TypeScript、oxlint（`jsPlugins` 处于 alpha 阶段）、oxlint-tsgolint（内置 TS）
 - 0.x 版本的包，小版本升级按大版本对待
 - 新版本要发布满 `minimumReleaseAge` 设定的时长才能安装（防止装到刚发布的恶意版本）
 - 小版本和补丁：CI 通过后合并
@@ -122,4 +131,5 @@ apps/web/src/
 - `pnpm --filter @yzt/web dev`：启动开发服务器
 - `pnpm --filter @yzt/web typecheck`：类型检查（`tsc -b`）
 - `pnpm --filter @yzt/web build`：生产构建
-- lint、测试命令在接入后补充
+- `pnpm lint`：lint 检查（含类型感知规则与依赖方向）；`pnpm lint:fix` 自动修复可安全修复的问题
+- 测试命令在接入后补充
