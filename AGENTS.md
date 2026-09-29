@@ -8,6 +8,7 @@
 - 每一步先说明设计理由、替代方案和涉及的知识点，再动手
 - 一次推进一个小步骤，不擅自扩大范围；涉及选型的问题先讨论再决定
 - 重要决策写成 ADR（`docs/adr/`）；阶段结束时把新结论同步到本文件
+- 提交信息使用 Conventional Commits 格式（`feat` / `fix` / `refactor` / `docs` / `chore` 等）
 
 ## 技术栈
 
@@ -16,8 +17,9 @@
 - Vue 3 + TSX（`defineComponent`），不使用 `.vue` 单文件组件（ADR 0001）
 - TypeScript strict，Vite，Pinia，Vue Router，Element Plus，pnpm workspace
 - 二维地图用 MapLibre GL JS，大版本在地图阶段确定；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002）
-- Cesium 精确锁定版本，不加 `^`；升级前先读它的 CHANGES.md（ADR 0002）
+- 三维地图用 Cesium，精确锁定版本（ADR 0002）
 - 浏览器目标用 Vite 默认值，不兼容旧浏览器，不引入 `@vitejs/plugin-legacy`
+- CI 用 GitHub Actions，阶段 1 接入（ADR 0005）
 
 待定：TS 7 工具链（ADR 0003）、lint、测试、服务端状态、Mock、持久化（计划用 IndexedDB + idb-keyval）
 
@@ -91,6 +93,16 @@ apps/web/src/
 - 只迁移旧项目中实际在用的模块。不迁移：资源中心（含知识图谱）、资源共享、统计分析、旧版 resource-management、`views/sys` 与动态菜单路由、`/home` 测试页、mockjs、backend-switcher
 - 先读懂旧模块的行为，再按新架构重写，不逐行照搬；类结构和算法有价值的，保留设计并补上类型
 - 开始迁移一个模块时，在 `docs/migration.md` 记下 yzt 的基线 commit，之后用 `git diff <基线>..HEAD -- <路径>` 同步旧仓库的新改动
+
+## 依赖维护（ADR 0005）
+
+- 一般依赖用 `^`；不遵守语义化版本的包精确锁定：Cesium、TypeScript
+- 0.x 版本的包，小版本升级按大版本对待
+- 新版本要发布满 `minimumReleaseAge` 设定的时长才能安装（防止装到刚发布的恶意版本）
+- 小版本和补丁：CI 通过后合并
+- 大版本：先读 Breaking Changes 和迁移指南再决定；等出过几个补丁版本再升；一次只升一个包，单独提交，并在提交说明里写明迁移内容
+- 每月手动检查一次（`pnpm deps:check`），接入 Renovate 后改为每周自动处理；安全告警随时处理
+- `pnpm-lock.yaml` 必须提交
 
 ## 文档
 
