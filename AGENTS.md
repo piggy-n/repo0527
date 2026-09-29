@@ -20,7 +20,7 @@
 - 二维地图用 MapLibre GL JS，大版本在地图阶段确定；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002）
 - 三维地图用 Cesium，精确锁定版本（ADR 0002）
 - 浏览器目标用 Vite 默认值，不兼容旧浏览器，不引入 `@vitejs/plugin-legacy`
-- CI 用 GitHub Actions，阶段 1 接入（ADR 0005）
+- CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 构建，测试接入后加入（ADR 0005）
 
 待定：测试、服务端状态、Mock、持久化（计划用 IndexedDB + idb-keyval）
 
@@ -110,7 +110,9 @@ apps/web/src/
 
 - 一般依赖用 `^`；不遵守语义化版本的包精确锁定：Cesium、TypeScript、oxlint（`jsPlugins` 处于 alpha 阶段）、oxlint-tsgolint（内置 TS）
 - 0.x 版本的包，小版本升级按大版本对待
-- 新版本要发布满 `minimumReleaseAge` 设定的时长才能安装（防止装到刚发布的恶意版本）
+- 新版本发布满 3 天（`minimumReleaseAge: 4320`）才能安装，防止装到刚发布的恶意版本；紧急安全补丁用 `minimumReleaseAgeExclude` 临时豁免该版本，冷却期过后删除豁免
+- Node 与 pnpm 的版本在根 `package.json` 的 `devEngines` 中声明，CI 从这里读取；`@types/node` 跟随 Node 的大版本，不随 latest 升级
+- workflow 中的 Actions 用 commit SHA 固定并注释版本号，随 `pnpm deps:check` 一起检查更新
 - 小版本和补丁：CI 通过后合并
 - 大版本：先读 Breaking Changes 和迁移指南再决定；等出过几个补丁版本再升；一次只升一个包，单独提交，并在提交说明里写明迁移内容
 - 每月手动检查一次（`pnpm deps:check`），接入 Renovate 后改为每周自动处理；安全告警随时处理
@@ -126,10 +128,12 @@ apps/web/src/
 
 ## 常用命令
 
-- `pnpm deps:check`：检查所有包的过期依赖
-- `pnpm deps:update:within-range`：在版本范围内更新依赖
 - `pnpm --filter @yzt/web dev`：启动开发服务器
-- `pnpm --filter @yzt/web typecheck`：类型检查（`tsc -b`）
-- `pnpm --filter @yzt/web build`：生产构建
+- `pnpm typecheck`：所有包的类型检查（`tsc -b`）
 - `pnpm lint`：lint 检查（含类型感知规则与依赖方向）；`pnpm lint:fix` 自动修复可安全修复的问题
+- `pnpm build`：所有包的生产构建
+- CI（`.github/workflows/ci.yml`）依次运行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm lint`、`pnpm build`
+- `pnpm deps:check`：检查过期的依赖和 GitHub Actions
+- `pnpm deps:update:within-range`：在版本范围内更新依赖和 Actions
+- `pnpm deps:update:allow-major`：交互式选择要升级大版本的依赖和 Actions
 - 测试命令在接入后补充
