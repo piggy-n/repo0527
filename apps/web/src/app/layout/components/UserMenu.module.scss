@@ -12,10 +12,7 @@
   font-size: var(--font-size-lg);
   cursor: pointer;
 
-  &:hover {
-    background-color: var(--color-inverse-hover);
-  }
-
+  // 不要悬停效果（2026-09-30 确认）；键盘聚焦时的轮廓线保留，供键盘操作的用户看清焦点
   &:focus-visible {
     outline: 2px solid var(--color-text-inverse);
     outline-offset: -2px;
@@ -28,10 +25,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.arrow {
-  font-size: var(--font-size-xs);
 }
 
 .avatar {

@@ -1,8 +1,9 @@
 import { Menu } from '@element-plus/icons-vue';
 import { ElDropdown, ElDropdownItem, ElDropdownMenu, ElIcon } from 'element-plus';
-import { computed, defineComponent, h } from 'vue';
+import { computed, defineComponent } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useSessionStore } from '@/shared/auth/session-store';
+import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { RouteName } from '@/shared/router/route-names';
 import { isNavItemActive, type NavLinkTarget, navItems, visibleNavItems } from '../menus';
 import styles from './HeaderNav.module.scss';
@@ -47,7 +48,7 @@ export const HeaderNav = defineComponent({
                 to={{ name: item.route }}
                 class={[styles.item, isNavItemActive(item, route.name) && styles.active]}
               >
-                <ElIcon class={styles.icon}>{h(item.icon)}</ElIcon>
+                <SvgIcon class={styles.icon} name={item.icon} size={20} />
                 {item.label}
               </RouterLink>
             ) : (

@@ -117,7 +117,7 @@ packages/icons/
 
 ## 样例图标
 
-当前目录中的图标是用来跑通流程的样例：`auth-lock`、`auth-user`、`bell-solid` 来自 fzjc 项目，`toolbar-map`、`toolbar-move` 来自旧项目的 Toolbar，`sample-pin-color` 是自制的多色样例。正式的图标到位后，按需替换或删除（删除后运行 `pnpm icons` 更新注册表）。
+顶部导航的 `nav-*` 是 UI 提供的正式图标（见 [layout.md](layout.md)）。其余是用来跑通流程的样例：`auth-lock`、`auth-user`、`bell-solid` 来自 fzjc 项目，`toolbar-map`、`toolbar-move` 来自旧项目的 Toolbar，`sample-pin-color` 是自制的多色样例。正式的图标到位后，按需替换或删除（删除后运行 `pnpm icons` 更新注册表）。
 
 ## 常见问题
 
@@ -127,4 +127,6 @@ packages/icons/
 | 构建失败，提示文件名无法转换 | 文件名含中文或特殊字符，手动改成英文 |
 | 图标显示为纯色块 | 本该保留原色的多色图标没有加 `-color` 后缀，颜色被改成了 `currentColor` |
 | 描边图标变成了实心 | 原文件的描边属性写在子元素上且依赖根元素的 `fill="none"`，检查注册表里的 `attrs` |
+| 单色图标中的某一部分看不见 | 原稿里这部分单独着色（例如白色图标上的一道浅蓝横条），规范化后和其他部分同色。设计意图通常是"透出背景"，在原稿上把它改成所在形状的镂空（加进同一条路径，`fill-rule="evenodd"`），再交给工具处理。实例：`nav-files` |
+| 图标看起来不居中 | 内容没有画在 `viewBox` 中央。在浏览器中对各个 `path` 调用 `getBBox()` 求出内容外框，把 `viewBox` 的起点平移到"外框中心减去半个宽高"。实例：`nav-resource` |
 | 新加的 `bin` 命令不存在 | 在已安装的依赖上新增 `bin` 后，`pnpm install` 不会重新链接，见 `docs/config/internal-packages.md` |

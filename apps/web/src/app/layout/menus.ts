@@ -1,7 +1,6 @@
-import { ChatDotRound, DataAnalysis, Download, Files, FolderOpened, MapLocation, Setting } from '@element-plus/icons-vue';
-import type { Component } from 'vue';
 import type { RouteRecordNameGeneric } from 'vue-router';
 import { canAccess, type Role } from '@/shared/auth/roles';
+import type { IconName } from '@/shared/icons/SvgIcon';
 import { RouteName } from '@/shared/router/route-names';
 
 export interface NavLinkTarget {
@@ -12,7 +11,7 @@ export interface NavLinkTarget {
 /** 点击后直接跳转的导航项 */
 export interface NavLink extends NavLinkTarget {
   kind: 'link';
-  icon: Component;
+  icon: IconName;
 }
 
 /** 两级下拉面板中的一组页面 */
@@ -25,21 +24,21 @@ export interface NavGroup {
 export interface NavDropdown {
   kind: 'dropdown';
   label: string;
-  icon: Component;
+  icon: IconName;
   groups: NavGroup[];
 }
 
 // kind 区分两种导航项，判断 kind 后 TS 会收窄到对应的类型
 export type NavItem = NavLink | NavDropdown;
 
-// 顶部导航，顺序沿用旧项目：按角色过滤后，正好是两种角色各自的顺序。图标是占位，UI 的 SVG 到位后换成 SvgIcon
+// 顶部导航，顺序沿用旧项目：按角色过滤后，正好是两种角色各自的顺序
 export const navItems: readonly NavItem[] = [
-  { kind: 'link', label: '资源管理', icon: Files, route: RouteName.resourceManagement },
-  { kind: 'link', label: '现状底图', icon: MapLocation, route: RouteName.currentMap },
+  { kind: 'link', label: '资源管理', icon: 'nav-resource', route: RouteName.resourceManagement },
+  { kind: 'link', label: '现状底图', icon: 'nav-current-map', route: RouteName.currentMap },
   {
     kind: 'dropdown',
     label: '查询统计',
-    icon: DataAnalysis,
+    icon: 'nav-query',
     groups: [
       {
         label: '数据查询',
@@ -59,10 +58,10 @@ export const navItems: readonly NavItem[] = [
       }
     ]
   },
-  { kind: 'link', label: '数据下载', icon: Download, route: RouteName.resourceApplication },
-  { kind: 'link', label: '文件管理', icon: FolderOpened, route: RouteName.fileManagement },
-  { kind: 'link', label: '系统管理', icon: Setting, route: RouteName.systemManagement },
-  { kind: 'link', label: 'AI对话', icon: ChatDotRound, route: RouteName.aiChat }
+  { kind: 'link', label: '数据下载', icon: 'nav-download', route: RouteName.resourceApplication },
+  { kind: 'link', label: '文件管理', icon: 'nav-files', route: RouteName.fileManagement },
+  { kind: 'link', label: '系统管理', icon: 'nav-system', route: RouteName.systemManagement },
+  { kind: 'link', label: 'AI对话', icon: 'nav-ai', route: RouteName.aiChat }
 ];
 
 /** 页面允许的角色，由调用方从路由的 meta.roles 取得 */

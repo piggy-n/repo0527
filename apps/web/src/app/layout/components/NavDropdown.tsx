@@ -1,7 +1,8 @@
-import { ArrowDown, ArrowRight } from '@element-plus/icons-vue';
+import { ArrowRight } from '@element-plus/icons-vue';
 import { ElIcon, ElPopover, type PopoverInstance } from 'element-plus';
-import { computed, defineComponent, h, type PropType, ref, watch } from 'vue';
+import { computed, defineComponent, type PropType, ref, watch } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
+import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { isNavItemActive, type NavDropdown as NavDropdownItem } from '../menus';
 import styles from './HeaderNav.module.scss';
 
@@ -44,11 +45,9 @@ export const NavDropdown = defineComponent({
               type="button"
               class={[styles.item, isNavItemActive(props.item, route.name) && styles.active]}
             >
-              <ElIcon class={styles.icon}>{h(props.item.icon)}</ElIcon>
+              <SvgIcon class={styles.icon} name={props.item.icon} size={20} />
               {props.item.label}
-              <ElIcon class={styles.arrow}>
-                <ArrowDown />
-              </ElIcon>
+              <SvgIcon name="nav-arrow-color" size={16} />
             </button>
           ),
           default: () => (

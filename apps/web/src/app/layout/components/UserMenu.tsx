@@ -1,5 +1,5 @@
-import { ArrowDown, SwitchButton } from '@element-plus/icons-vue';
-import { ElDropdown, ElDropdownItem, ElDropdownMenu, ElIcon, ElMessage, ElMessageBox } from 'element-plus';
+import { SwitchButton } from '@element-plus/icons-vue';
+import { ElDropdown, ElDropdownItem, ElDropdownMenu, ElMessage, ElMessageBox } from 'element-plus';
 import { storeToRefs } from 'pinia';
 import { defineComponent } from 'vue';
 import { useRouter } from 'vue-router';
@@ -37,9 +37,7 @@ export const UserMenu = defineComponent({
             default: () => (
               <button type="button" class={styles.trigger}>
                 <span class={styles.name}>{displayName.value}</span>
-                <ElIcon class={styles.arrow}>
-                  <ArrowDown />
-                </ElIcon>
+                <SvgIcon name="nav-arrow-color" size={16} />
                 <span class={styles.avatar}>
                   <SvgIcon name="auth-user" size={18} />
                 </span>
