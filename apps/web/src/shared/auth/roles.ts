@@ -17,6 +17,16 @@ export function toRole(roleCode: unknown): Role {
   return isRole(roleCode) ? roleCode : Role.user;
 }
 
+const roleLabels: Record<Role, string> = {
+  admin: '管理员',
+  user: '普通用户'
+};
+
+/** 角色的显示名 */
+export function roleLabel(role: Role): string {
+  return roleLabels[role];
+}
+
 /** 角色能否访问限定了 allowed 的页面或功能；allowed 为空表示不限角色 */
 export function canAccess(role: Role, allowed: readonly Role[] | undefined): boolean {
   return allowed === undefined || allowed.includes(role);

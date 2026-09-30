@@ -1,0 +1,148 @@
+@use '../breakpoints';
+
+.nav {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.desktop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// 导航项：RouterLink（a）和下拉项的按钮共用
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-inverse);
+  font: inherit;
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: var(--color-inverse-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-text-inverse);
+    outline-offset: -2px;
+  }
+}
+
+// 选中：左右渐隐的白色高亮条，沿用旧项目
+.active {
+  font-weight: var(--font-weight-semibold);
+  background-image: linear-gradient(90deg, transparent 0%, var(--color-inverse-active) 54%, transparent 100%);
+}
+
+.icon {
+  font-size: 20px;
+}
+
+.arrow {
+  font-size: var(--font-size-xs);
+}
+
+.compact {
+  display: none;
+}
+
+// 两级下拉面板，在 ElPopover 的弹层中
+.panel {
+  display: flex;
+  font-size: var(--font-size-base);
+}
+
+.groups,
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.groups {
+  width: 120px;
+  padding-right: 8px;
+  border-right: 1px solid var(--color-border-light);
+}
+
+.links {
+  min-width: 196px;
+  padding-left: 8px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg);
+    color: var(--color-primary);
+  }
+}
+
+.optionActive {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+// 窄屏菜单中的分组标题与当前页面
+.compactGroup {
+  padding: 8px 16px 4px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.compactActive {
+  color: var(--color-primary);
+}
+
+@media (max-width: #{breakpoints.$nav-icons - 1px}) {
+  .item {
+    padding: 0 14px;
+  }
+
+  .icon {
+    display: none;
+  }
+}
+
+@media (max-width: #{breakpoints.$compact - 1px}) {
+  .nav {
+    justify-content: flex-end;
+  }
+
+  .desktop {
+    display: none;
+  }
+
+  .compact {
+    display: block;
+  }
+}

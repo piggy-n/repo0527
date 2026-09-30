@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RouteName } from '../router/route-names';
-import { canAccess, Role, roleHome, toRole } from './roles';
+import { canAccess, Role, roleHome, roleLabel, toRole } from './roles';
 
 describe('toRole', () => {
   it('识别 admin 和 user', () => {
@@ -25,6 +25,13 @@ describe('canAccess', () => {
     expect(canAccess(Role.admin, [Role.admin])).toBe(true);
     expect(canAccess(Role.user, [Role.admin])).toBe(false);
     expect(canAccess(Role.admin, [])).toBe(false);
+  });
+});
+
+describe('roleLabel', () => {
+  it('返回角色的显示名', () => {
+    expect(roleLabel(Role.admin)).toBe('管理员');
+    expect(roleLabel(Role.user)).toBe('普通用户');
   });
 });
 

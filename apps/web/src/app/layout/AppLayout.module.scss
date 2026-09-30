@@ -1,0 +1,12 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+// 页面在内容区内滚动，顶部栏始终可见；地图等页面用 height: 100% 占满内容区
+.main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}

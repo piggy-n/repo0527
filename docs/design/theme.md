@@ -49,6 +49,7 @@ Element    --el-color-*、--el-text-color-* ……                  element-them
 | 极小文字 10px | `--font-size-xxs` | 第 5.2 节 |
 | 行高 22 / 18 / 16px | `--line-height-base`、`-compact`、`-tag` | 第 5.2 节 |
 | 登录卡片的蓝色投影 | `--shadow-primary-lg` | 第 6 节，2026-09-30 补充 |
+| 深色背景上的文字与状态 | `--color-text-inverse`、`--color-inverse-hover`、`--color-inverse-active` | 第 2 节，2026-09-30 补充 |
 
 未收录：第 4 节备注中的 `#4F73FF`，它和 `primary-hover`（`#4F74F0`）只差一位，看起来是旧实现里的笔误，需要时再确认。
 

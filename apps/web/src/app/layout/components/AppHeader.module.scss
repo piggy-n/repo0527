@@ -1,0 +1,45 @@
+@use '../breakpoints';
+
+// 背景、Logo 是旧项目素材的占位，UI 新素材到位后替换
+.root {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 75px;
+  padding-right: 20px;
+  background: url('../images/header-background.webp') center / cover no-repeat;
+  color: var(--color-text-inverse);
+}
+
+// 空间不够时（设计范围以外的窄屏）允许收缩，裁掉 Logo 右侧，保证导航和用户菜单可见
+.brand {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+// Logo 贴左、撑满头部高度，按比例缩放
+.logo {
+  height: 100%;
+  width: auto;
+}
+
+.title {
+  font-size: var(--font-size-title);
+  line-height: 1;
+}
+
+.user {
+  flex: none;
+  margin-left: 24px;
+}
+
+@media (max-width: #{breakpoints.$title - 1px}) {
+  .title {
+    display: none;
+  }
+}

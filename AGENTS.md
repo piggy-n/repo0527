@@ -115,6 +115,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - TSX 中双向绑定写 `modelValue` + `onUpdate:modelValue`，不用 `v-model`：`v-model` 的值不做类型检查
 - 路由表在 `app/router/routes.ts`；路由名常量在 `shared/router/route-names.ts`，跳转写 `{ name: RouteName.xxx }`，不写路径字符串；页面级参数用路由的 `props` 传入，不放在 `meta` 里
 - 页面权限写在路由 meta 上：不登录也能访问的页面加 `public: true`，限定角色写 `roles`；不另外维护路径清单。`routes.test.ts` 列出了全部公开页面和限定角色的页面，修改时同步更新（ADR 0015）
+- 顶部导航配置在 `app/layout/menus.ts`，导航项的权限从路由 meta 读取，不在菜单里另写角色；新增业务页时先加路由再加导航项
 - 登录会话只通过 `shared/auth` 的 `useSessionStore` 读写，不直接读写 localStorage 中的 token
 - 给组件传 `id` 等未声明的透传属性会报类型错误（组件只接受声明的 props 和 `class`、`style`），需要标记时用 `data-*`
 

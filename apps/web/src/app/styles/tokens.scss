@@ -19,6 +19,10 @@ $colors: (
   'text-secondary': #8a94a6,
   'text-placeholder': #9aa5b8,
   'text-disabled': #c7ced9,
+  // 规范补充：深色背景（顶部导航）上的文字与状态
+  'text-inverse': #ffffff,
+  'inverse-hover': rgba(255, 255, 255, 0.1),
+  'inverse-active': rgba(255, 255, 255, 0.3),
 
   'border': #e6ebf3,
   'border-light': #edf1f7,
