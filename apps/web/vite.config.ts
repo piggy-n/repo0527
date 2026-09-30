@@ -4,7 +4,7 @@ import { loadEnv } from 'vite';
 // 与 vite 的 defineConfig 相同，只是类型里多了 test 字段
 import { defineConfig } from 'vitest/config';
 import { iconsPaths } from './tools/icons/paths.ts';
-import { systemTitlePaths } from './tools/system-title/paths.ts';
+import { titleOutlineConfig } from './tools/system-title/paths.ts';
 import { systemTitlePlugin } from './tools/system-title/vite-plugin.ts';
 
 export default defineConfig(({ mode }) => {
@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
     mode === 'test'
       ? []
       : [
-          systemTitlePlugin({ text: env.VITE_APP_TITLE, ...systemTitlePaths(process.cwd()) }),
+          systemTitlePlugin(titleOutlineConfig(process.cwd(), env.VITE_APP_TITLE)),
           iconsPlugin(iconsPaths(process.cwd()))
         ];
 

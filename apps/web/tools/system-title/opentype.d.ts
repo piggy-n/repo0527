@@ -13,11 +13,16 @@ declare module 'opentype.js/dist/opentype.mjs' {
     toPathData(decimalPlaces?: number): string;
   }
 
+  interface RenderOptions {
+    /** 字间距，以 em 为单位 */
+    letterSpacing?: number;
+  }
+
   interface Font {
     unitsPerEm: number;
     tables: { os2: { sTypoAscender: number; sTypoDescender: number } };
-    getPath(text: string, x: number, y: number, fontSize: number): Path;
-    getAdvanceWidth(text: string, fontSize: number): number;
+    getPath(text: string, x: number, y: number, fontSize: number, options?: RenderOptions): Path;
+    getAdvanceWidth(text: string, fontSize: number, options?: RenderOptions): number;
   }
 
   export function parse(buffer: ArrayBuffer): Font;

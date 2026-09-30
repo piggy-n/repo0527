@@ -126,11 +126,11 @@ pnpm add -Dw -E some-tool
 
 ### `pnpm --filter @yzt/web title:generate`
 
-**作用**：按 `.env` 中的 `VITE_APP_TITLE` 重新生成系统名称的 SVG 轮廓。
+**作用**：重新生成系统名称（取自 `.env` 的 `VITE_APP_TITLE`）和登录页 `WELCOME!` 的 SVG 轮廓。
 
-**什么时候用**：修改了系统名称，而开发服务器没有开着时。开着的话，修改 `.env` 后开发服务器会自动重启并重新生成，不需要手动运行。
+**什么时候用**：修改了系统名称或 `tools/system-title/paths.ts` 中的文字清单，而开发服务器没有开着时。开着的话，开发服务器会因为 `.env` 或配置文件变化自动重启并重新生成，不需要手动运行。
 
-**执行了什么**：Node 直接运行 `tools/system-title/cli.ts`，读取 `public/fonts/YouSheBiaoTiHei-2.ttf`，文字变了才写入 `src/shared/system-title/system-title-outline.json`。
+**执行了什么**：Node 直接运行 `tools/system-title/cli.ts`，读取 `public/fonts/YouSheBiaoTiHei-2.ttf`，对清单中的每段文字，文字或字间距变了才写入 `src/shared/system-title/` 下对应的 JSON。
 
 **注意事项**：需要本机有优设标题黑字体文件（不入库），缺少时退出码为 1；生成后记得提交 JSON。详见 [modules/system-title.md](modules/system-title.md)。
 

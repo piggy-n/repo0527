@@ -25,12 +25,12 @@ const generators =
   mode === 'test'
     ? []
     : [
-        systemTitlePlugin({ text: env.VITE_APP_TITLE, ...systemTitlePaths(process.cwd()) }),
+        systemTitlePlugin(titleOutlineConfig(process.cwd(), env.VITE_APP_TITLE)),
         iconsPlugin(iconsPaths(process.cwd()))
       ];
 ```
 
-- 两者都在 `buildStart` 钩子中运行：开发服务器启动时、构建开始时各一次。修改 `.env` 后开发服务器会自动重启，所以改名称后轮廓会自动更新；`iconsPlugin` 还会监听图标目录，放入或删除 SVG 时立即处理
+- 两者都在 `buildStart` 钩子中运行：开发服务器启动时、构建开始时各一次。修改 `.env` 或 `vite.config.ts` 引用的文件（例如文字轮廓的清单 `paths.ts`）后开发服务器会自动重启，所以改名称后轮廓会自动更新；`iconsPlugin` 还会监听图标目录，放入或删除 SVG 时立即处理
 - 测试模式（`mode === 'test'`，即 Vitest）下不加入：测试检查已提交的结果，不在运行时改动源文件
 - `systemTitlePlugin` 从 `./tools/system-title/vite-plugin.ts` 导入，带 `.ts` 扩展名，因为同一份代码也由 Node 直接运行；`iconsPlugin` 从 workspace 包的 `@yzt/icons/tools` 入口导入
 - 同时开着多个开发服务器时，它们都会处理图标目录；`iconsPlugin` 对此做了容错，见 [modules/icons.md](../modules/icons.md)

@@ -27,37 +27,48 @@ import { SystemTitle } from '@/shared/system-title/SystemTitle';
 - 大小由父元素的 `font-size` 控制，颜色由 `color` 控制，和普通文字一样
 - SVG 带有 `role="img"` 和 `aria-label`，读屏软件会读出系统名称
 
+登录页的装饰文字 `WELCOME!` 用同样的方式生成，组件是 `WelcomeText`（`shared/system-title/WelcomeText`）。它带 0.125em 的字间距（旧页面 16px 字号下的 2px），SVG 设置了 `aria-hidden`，读屏软件会忽略它。
+
 ## 怎么修改系统名称
 
 1. 确认本机有 `apps/web/public/fonts/YouSheBiaoTiHei-2.ttf`（见 [design/fonts.md](../design/fonts.md)）
 2. 修改 `apps/web/.env` 中的 `VITE_APP_TITLE`
-3. 如果开发服务器开着：它会因为 `.env` 变化自动重启，插件随即重新生成轮廓，页面自动更新，终端会打印"已按……重新生成标题轮廓"
+3. 如果开发服务器开着：它会因为 `.env` 变化自动重启，插件随即重新生成轮廓，页面自动更新，终端会打印"已按……重新生成轮廓"
 4. 如果没开开发服务器：在 `apps/web` 下运行 `pnpm title:generate`，或者直接 `pnpm build`（构建开始时也会检查）
 5. 提交 `.env` 和 `src/shared/system-title/system-title-outline.json`
 
 `VITE_APP_TITLE` 同时用于 `index.html` 的标题、页面标题后缀和这里的轮廓，只在 `.env` 中定义一次。不要在 `.env.development` 等按模式区分的文件里另写一个不同的值，否则开发时和构建时会生成不同的轮廓。
 
+## 怎么增加或修改其他文字
+
+要生成轮廓的文字都列在 `tools/system-title/paths.ts` 的 `titleOutlineConfig` 中，每项是 `{ text, letterSpacing?, outputPath }`。修改后的步骤与修改系统名称相同：开发服务器开着时，它因为配置文件变化自动重启并重新生成（已验证）；否则运行 `pnpm title:generate`。然后提交 `paths.ts` 和生成的 JSON。
+
 ## 工作原理
 
 ```
-.env 的 VITE_APP_TITLE ─────┐
-                           ├─ syncTitleOutline()：文字与已生成的不同才生成
-优设标题黑（public/fonts）──┘          ↓ opentype.js 解析字体，把文字转成路径
-                  src/shared/system-title/system-title-outline.json（提交）
-                  { text, font, viewBox, path }
+paths.ts 的清单（系统名称取自 VITE_APP_TITLE）─┐
+                                             ├─ syncTitleOutline()：文字或字间距与已生成的不同才生成
+优设标题黑（public/fonts）────────────────────┘          ↓ opentype.js 解析字体，把文字转成路径
+                  src/shared/system-title/*.json（提交）
+                  { text, letterSpacing?, font, viewBox, path }
                                       ↓
-                  SystemTitle：<svg viewBox><path d fill="currentColor"/></svg>
+                  SystemTitle、WelcomeText：<svg viewBox><path d fill="currentColor"/></svg>
 ```
 
 | 文件 | 作用 |
 |---|---|
-| `tools/system-title/outline.ts` | 核心：用 opentype.js 把文字转成 `viewBox` 和 `path` |
-| `tools/system-title/sync.ts` | 比较文字，需要时生成并写入 JSON；缺少字体时不报错 |
-| `tools/system-title/vite-plugin.ts` | 开发服务器启动和构建开始时调用 `sync`；测试模式下不启用 |
+| `tools/system-title/outline.ts` | 核心：用 opentype.js 把文字转成 `viewBox` 和 `path`，支持字间距 |
+| `tools/system-title/sync.ts` | 比较文字和字间距，需要时生成并写入 JSON；缺少字体时不报错 |
+| `tools/system-title/vite-plugin.ts` | 开发服务器启动和构建开始时，对清单逐项调用 `sync`；测试模式下不启用 |
 | `tools/system-title/cli.ts` | `pnpm title:generate` 的入口 |
-| `tools/system-title/paths.ts` | 字体与输出文件的位置，插件和命令行共用 |
+| `tools/system-title/paths.ts` | 字体位置与要生成的文字清单，插件、命令行和检查测试共用 |
 | `tools/system-title/opentype.d.ts` | opentype.js 2.0 没有自带类型，只声明用到的部分 |
-| `src/shared/system-title/SystemTitle.test.tsx` | 检查轮廓文字与 `VITE_APP_TITLE` 一致 |
+| `tools/system-title/outlines.test.ts` | 检查每个 JSON 的文字和字间距与清单一致 |
+| `src/shared/system-title/SystemTitle.test.tsx` | 检查两个组件的渲染与无障碍属性 |
+
+### 字间距
+
+opentype.js 的 `letterSpacing` 以 em 为单位，在每个字形之后都加一份，包括最后一个：`WELCOME!` 不加字间距时总宽 5621，加 0.125em 后是 6621，正好多出 8 × 125。生成时去掉最后这一份，否则文字在 `viewBox` 里偏左，居中显示时整体偏左。系统名称的字间距为 0，JSON 中不写 `letterSpacing`，重构后重新生成的结果与原文件逐字节一致（已验证）。
 
 ### 尺寸为什么和文字一致
 
