@@ -48,6 +48,7 @@ Element    --el-color-*、--el-text-color-* ……                  element-them
 | Danger 深色文本 / 不透明浅底 | `--color-danger-text`、`--color-danger-bg-solid` | 第 3 节 |
 | 极小文字 10px | `--font-size-xxs` | 第 5.2 节 |
 | 行高 22 / 18 / 16px | `--line-height-base`、`-compact`、`-tag` | 第 5.2 节 |
+| 登录卡片的蓝色投影 | `--shadow-primary-lg` | 第 6 节，2026-09-30 补充 |
 
 未收录：第 4 节备注中的 `#4F73FF`，它和 `primary-hover`（`#4F74F0`）只差一位，看起来是旧实现里的笔误，需要时再确认。
 
@@ -132,11 +133,52 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 |---|---|---|---|
 | `ElTable` | `--el-table-header-text-color` | `text-title`（`#1F2937`） | Element 默认用 secondary 灰色；旧项目资源管理列表的表头是 `#1F2937`（2026-09-29 确认） |
 
+### 组件变体
+
+同一种组件需要另一种外观时，在 `element-theme.scss` 中定义变体 class，页面和组件只引用 class，不自己覆盖 `--el-*` 变量。变体选择器写成 `.el-xxx.变体名`，比 Element 自己的尺寸类（如 `.el-input--large`）优先级高，与加载顺序无关。
+
+| 变体 | 用法 | 外观 | 使用位置 |
+|---|---|---|---|
+| `input-filled` | `<ElInput class="input-filled">` | `primary-border` 浅蓝底、无边框；悬停 `primary-border-hover`、聚焦 `primary` 描边；48px 高、16px 字、8px 圆角；占位符和图标用 `primary` | 登录页 |
+| `button-xl` | `<ElButton class="button-xl">` | 48px 高、16px 半粗、8px 圆角；颜色沿用按钮的 `type` | 登录页 |
+
+`input-filled` 只修改 Element 已提供的 `--el-input-*` 变量，校验失败的红色描边、禁用状态等仍由 Element 处理。Element 的 `large` 尺寸把输入框字号写死为 14px，所以变体里还设置了 `font-size`。两个变体的各种状态可以在主题预览页（`/dev/theme`）查看。
+
+### 浏览器自动填充
+
+Chrome 用保存的账号密码自动填充时，浏览器自带样式表中有这样的规则：
+
+```css
+input:-internal-autofill-selected {
+  background-color: light-dark(#e8f0fe, ...) !important;
+  color: FieldText !important;
+}
+```
+
+浏览器样式表里的 `!important` 优先级高于页面样式表里的 `!important`，所以页面没法把背景色改回来。Element 的输入框底色画在外层的 `.el-input__wrapper` 上，里面的 `<input>` 是透明的，自动填充后 `<input>` 自己的区域变成浅蓝，看起来是输入框中间多了一块色块。
+
+`element-theme.scss` 中的处理：
+
+```scss
+.el-input__inner:autofill {
+  box-shadow: 0 0 0 1000px var(--el-input-bg-color, var(--el-fill-color-blank)) inset;
+  -webkit-text-fill-color: var(--el-input-text-color, var(--el-text-color-regular));
+  caret-color: var(--el-input-text-color, var(--el-text-color-regular));
+}
+```
+
+- 内阴影画在背景之上，用足够大的内阴影把背景盖住；颜色取 `--el-input-bg-color`，它由外层 `.el-input` 定义并继承下来，所以白底输入框和 `input-filled` 都适用，不需要为每种外观各写一条
+- `-webkit-text-fill-color` 决定文字实际显示的颜色，不受 `color` 上 `!important` 的影响，用来把文字改回输入框的颜色
+- 只写 `:autofill`，不和 `:-webkit-autofill` 写在同一个选择器列表里：列表中有一个选择器不被支持时，整条规则都会失效。Chrome、Edge、Firefox、Safari 当前版本都支持 `:autofill`
+- 没有用另一种常见写法（给 `background-color` 加很长的 `transition`，让它"一直没变过去"）：它依赖计时，利用的是浏览器实现上的细节
+
+验证：自动化工具不能触发浏览器的自动填充。已确认规则加载进了页面；在主题预览页给输入框加上带 `!important` 的 `#e8f0fe` 背景模拟自动填充，未加处理的出现与实际相同的色块，加了处理的与正常状态一致。真实的自动填充需要在 Chrome 中用保存的账号密码确认。
+
 ## 使用规则
 
 - 颜色、字号、字重、行高、阴影一律使用令牌，不在页面和组件里写死色值或字号
 - 字号只用双数
-- Element 的外观只在 `element-theme.scss` 中统一调整，页面不单独覆盖 `--el-*` 变量；某个组件需要全局微调时，也写在 `element-theme.scss` 里
+- Element 的外观只在 `element-theme.scss` 中统一调整，页面不单独覆盖 `--el-*` 变量；某个组件需要全局微调时，也写在 `element-theme.scss` 里；需要另一种外观时定义变体 class（见上文"组件变体"）
 - 规范里没有的颜色，先和设计确认、补进规范和 `tokens.scss`，再使用
 
 CSS 目前没有 lint 检查，以上规则靠评审保证。需要强制检查时可以引入 stylelint（不依赖 TS 的 JS API，与现有工具链不冲突）。

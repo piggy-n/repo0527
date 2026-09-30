@@ -150,6 +150,7 @@ body {
 | `shadow-sm` | `0 4px 16px rgba(25,55,110,0.08)` | 侧边栏、常驻容器 |
 | `shadow-md` | `0 6px 18px rgba(20,52,105,0.16)` | 图例、浮层面板 |
 | `shadow-lg` | `0 8px 24px rgba(20,52,105,0.16)` | 地图上的悬浮卡片 |
+| `shadow-primary-lg` | `0 16px 36px rgba(23,57,222,0.25)` | 登录卡片的蓝色投影（2026-09-30 补充，取自旧登录页） |
 
 ---
 
@@ -210,5 +211,6 @@ body {
   --shadow-sm: 0 4px 16px rgba(25, 55, 110, 0.08);
   --shadow-md: 0 6px 18px rgba(20, 52, 105, 0.16);
   --shadow-lg: 0 8px 24px rgba(20, 52, 105, 0.16);
+  --shadow-primary-lg: 0 16px 36px rgba(23, 57, 222, 0.25);
 }
 ```

@@ -4,6 +4,8 @@ import {
   ElButton,
   ElCheckbox,
   ElDatePicker,
+  ElForm,
+  ElFormItem,
   ElInput,
   ElLink,
   ElMessage,
@@ -174,7 +176,7 @@ export const ThemePreviewPage = defineComponent({
         <section class={styles.section}>
           <h2 class={styles.sectionTitle}>阴影</h2>
           <div class={styles.shadows}>
-            {['sm', 'md', 'lg'].map(size => (
+            {['sm', 'md', 'lg', 'primary-lg'].map(size => (
               <div key={size} class={styles.shadowCard} style={{ boxShadow: `var(--shadow-${size})` }}>
                 shadow-{size}
               </div>
@@ -293,6 +295,40 @@ export const ThemePreviewPage = defineComponent({
                 enabled.value = value === true;
               }}
             />
+          </div>
+        </section>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>填充输入框与加大号按钮（登录页）</h2>
+          <div class={styles.filledPanel}>
+            <ElForm class={styles.filledForm}>
+              <ElFormItem>
+                <ElInput class="input-filled" placeholder="请输入账号">
+                  {{ prefix: () => <SvgIcon name="auth-user" size={18} /> }}
+                </ElInput>
+              </ElFormItem>
+              <ElFormItem>
+                <ElInput class="input-filled" modelValue="admin">
+                  {{ prefix: () => <SvgIcon name="auth-user" size={18} /> }}
+                </ElInput>
+              </ElFormItem>
+              <ElFormItem>
+                <ElInput class="input-filled" modelValue="password" type="password" showPassword>
+                  {{ prefix: () => <SvgIcon name="auth-lock" size={18} /> }}
+                </ElInput>
+              </ElFormItem>
+              <ElFormItem error="请输入密码">
+                <ElInput class="input-filled" type="password" placeholder="校验失败">
+                  {{ prefix: () => <SvgIcon name="auth-lock" size={18} /> }}
+                </ElInput>
+              </ElFormItem>
+              <ElButton class="button-xl" type="primary" autoInsertSpace>
+                登录
+              </ElButton>
+              <ElButton class="button-xl" type="primary" loading>
+                登录中
+              </ElButton>
+            </ElForm>
           </div>
         </section>
 

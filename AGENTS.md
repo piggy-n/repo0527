@@ -159,7 +159,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 设计参考 `docs/design/color-and-typography.md`，落地方式见 `docs/design/theme.md`；规范和 Element Plus 的交互风格冲突时，优先和 Element 保持一致
 - 颜色、字号、字重、行高、阴影一律使用令牌（`var(--color-*)` 等 CSS 变量），不写死色值和字号；规范里没有的值先补进规范和 `app/styles/tokens.scss`
 - 字号只用双数
-- Element Plus 的外观只在 `app/styles/element-theme.scss` 统一调整，页面和组件不单独覆盖 `--el-*` 变量
+- Element Plus 的外观只在 `app/styles/element-theme.scss` 统一调整，页面和组件不单独覆盖 `--el-*` 变量；需要另一种外观时在其中定义变体 class（如 `input-filled`、`button-xl`），页面只引用 class，见 `docs/design/theme.md`
 
 ## 迁移规则
 

@@ -139,3 +139,22 @@
   font-size: var(--font-size-lg);
   color: var(--color-primary);
 }
+
+// 模拟登录卡片的底色，填充输入框放在这种底色上
+.filledPanel {
+  padding: 24px;
+  background-color: var(--color-primary-bg);
+  border-radius: 16px;
+}
+
+.filledForm {
+  display: grid;
+  gap: 8px;
+  width: 400px;
+  max-width: 100%;
+
+  // ElButton 相邻时 Element 会加左外边距
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}

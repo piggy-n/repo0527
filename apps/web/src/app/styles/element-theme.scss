@@ -84,3 +84,35 @@
 .el-table {
   --el-table-header-text-color: var(--color-text-title);
 }
+
+// 填充风格的输入框：浅蓝底、无边框、48px 高、16px 字，登录页使用；用法 <ElInput class="input-filled">
+.el-input.input-filled {
+  --el-input-height: 48px;
+  --el-input-border-radius: 8px;
+  --el-input-bg-color: var(--color-primary-border);
+  --el-input-border-color: transparent;
+  --el-input-hover-border-color: var(--color-primary-border-hover);
+  --el-input-focus-border-color: var(--color-primary);
+  --el-input-text-color: var(--color-text-title);
+  --el-input-placeholder-color: var(--color-primary);
+  --el-input-icon-color: var(--color-primary);
+
+  // Element 的 large 尺寸把字号写死为 14px，这里的选择器优先级更高
+  font-size: var(--font-size-lg);
+}
+
+// 加大号按钮：48px 高、16px 半粗、8px 圆角，与 input-filled 搭配；用法 <ElButton class="button-xl">
+.el-button.button-xl {
+  height: 48px;
+  border-radius: 8px;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+// 浏览器自动填充账号密码后，会用带 !important 的样式把输入框改成浅蓝底，页面样式无法直接改回；
+// 用与输入框同色的内阴影盖住它，文字颜色也改回输入框的颜色（原理见 docs/design/theme.md）
+.el-input__inner:autofill {
+  box-shadow: 0 0 0 1000px var(--el-input-bg-color, var(--el-fill-color-blank)) inset;
+  -webkit-text-fill-color: var(--el-input-text-color, var(--el-text-color-regular));
+  caret-color: var(--el-input-text-color, var(--el-text-color-regular));
+}
