@@ -91,7 +91,7 @@
             "policies": [
               { "allow": { "to": { "module": { "origin": "external" } } } },
               { "allow": { "to": { "module": { "origin": "core" } } } },
-              { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": ".{,.}/**" } } }
+              { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": "@(./|+(../))**" } } }
             ]
           }
         ]
@@ -108,7 +108,7 @@
             "checkInternals": true,
             "policies": [
               { "allow": { "to": { "module": { "origin": "external" } } } },
-              { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": ".{,.}/**" } } },
+              { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": "@(./|+(../))**" } } },
               {
                 "from": { "element": { "type": "app" } },
                 "allow": { "to": { "element": { "types": { "anyOf": ["pages", "feature", "shared"] } } } }
