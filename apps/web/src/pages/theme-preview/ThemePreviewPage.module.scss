@@ -135,6 +135,17 @@
   color: var(--color-text-primary);
 }
 
+// 下拉箭头是白到浅蓝的渐变，实际用在深色的顶部栏上，白底上看不清
+.iconDemoOnDark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
 .iconDemoPrimary {
   font-size: var(--font-size-lg);
   color: var(--color-primary);

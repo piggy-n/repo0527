@@ -196,14 +196,18 @@ export const ThemePreviewPage = defineComponent({
           </div>
           <div class={styles.row}>
             <span class={styles.iconDemo}>
-              <SvgIcon name="toolbar-map" /> 默认 1em，跟随文字颜色
+              <SvgIcon name="nav-current-map" /> 默认 1em，跟随文字颜色
             </span>
             <span class={styles.iconDemoPrimary}>
-              <SvgIcon name="toolbar-map" size={20} /> 父元素 color 为主色
+              <SvgIcon name="nav-current-map" size={20} /> 父元素 color 为主色
             </span>
-            <SvgIcon name="toolbar-move" size={20} color="var(--color-danger)" title="平移" />
-            <SvgIcon name="bell-solid" size={20} rotate={30} />
-            <SvgIcon name="sample-pin-color" size={24} />
+            <SvgIcon name="nav-files" size={20} color="var(--color-danger)" title="文件管理" />
+            <span class={styles.iconDemoOnDark}>
+              <SvgIcon name="nav-arrow-color" size={16} /> 多色，保留原色
+            </span>
+            <span class={styles.iconDemoOnDark}>
+              <SvgIcon name="nav-arrow-color" size={16} rotate={-90} /> rotate
+            </span>
           </div>
         </section>
 

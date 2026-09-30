@@ -8,11 +8,11 @@
 ```tsx
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 
-<SvgIcon name="toolbar-map" />                          // 大小 1em，颜色跟随父元素的 color
-<SvgIcon name="toolbar-map" size={20} />                // 数字按 px；也可以写字符串，如 "2em"
-<SvgIcon name="toolbar-move" color="var(--color-danger)" />
-<SvgIcon name="bell-solid" rotate={90} />               // 方向类图标可以复用
-<SvgIcon name="toolbar-move" title="平移" />             // 有 title 时 role="img"，读屏软件会读出；没有时 aria-hidden
+<SvgIcon name="nav-current-map" />                      // 大小 1em，颜色跟随父元素的 color
+<SvgIcon name="nav-current-map" size={20} />            // 数字按 px；也可以写字符串，如 "2em"
+<SvgIcon name="nav-files" color="var(--color-danger)" />
+<SvgIcon name="nav-arrow-color" rotate={-90} />         // 方向类图标可以复用
+<SvgIcon name="nav-files" title="文件管理" />            // 有 title 时 role="img"，读屏软件会读出；没有时 aria-hidden
 ```
 
 - `name` 的类型是全部图标名的联合类型，写错名字时类型检查报错
@@ -30,7 +30,7 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
    - `src/shared/icons/icons.json`（注册表）自动更新
 4. 提交图标文件和 `icons.json`
 
-需要保留原有颜色的多色图标（例如标志），文件名以 `-color` 结尾，例如 `brand-logo-color.svg`。
+需要保留原有颜色的多色图标（例如标志），文件名以 `-color` 结尾，例如 `brand-logo-color.svg`；项目中的实例是顶部导航的下拉箭头 `nav-arrow-color`（渐变）。
 
 中文文件名无法自动转换，会报错并提示手动改名。
 
@@ -111,13 +111,20 @@ packages/icons/
 
 - **工厂函数**：图标数据通过参数传入，包不依赖任何具体图标，可以在其他项目复用；同时 `name` 的类型来自注册表的键
 - **函数签名写法定义组件**：`defineComponent((props: IconProps<Name>) => ..., { props: [...] })`，props 的类型由参数决定，适合泛型组件，避免了 `PropType` 在泛型下的类型断言
-- **内联 `<svg>` 而不是雪碧图**：不需要把所有图标注入页面 DOM，也不依赖已不维护的 `vite-plugin-svg-icons`。所有注册的图标都会打进包里（6 个样例的注册表约 4.7 KB，gzip 后约 1.6 KB），几十个图标可以接受
+- **内联 `<svg>` 而不是雪碧图**：不需要把所有图标注入页面 DOM，也不依赖已不维护的 `vite-plugin-svg-icons`。所有注册的图标都会打进包里（2026-09-30 的 10 个图标，注册表约 14 KB，gzip 后约 5 KB），几十个图标可以接受；图标数量增长到上百个时，再考虑按需加载
 - **注册表是生成的 JSON**：TS 能从 JSON 推断出每个键，所以不需要生成 TS 代码，也避开了生成代码的格式和 lint 问题
 - **两个入口**：`@yzt/icons` 只含浏览器代码；SVGO 等 Node 代码在 `@yzt/icons/tools`，已验证生产产物中不含 SVGO
 
-## 样例图标
+## 当前的图标
 
-顶部导航的 `nav-*` 是 UI 提供的正式图标（见 [layout.md](layout.md)）。其余是用来跑通流程的样例：`auth-lock`、`auth-user`、`bell-solid` 来自 fzjc 项目，`toolbar-map`、`toolbar-move` 来自旧项目的 Toolbar，`sample-pin-color` 是自制的多色样例。正式的图标到位后，按需替换或删除（删除后运行 `pnpm icons` 更新注册表）。
+| 图标 | 来源 | 使用位置 |
+|---|---|---|
+| `nav-*`（7 个导航图标）、`nav-arrow-color` | UI 提供（2026-09-30） | 顶部导航、下拉箭头，见 [layout.md](layout.md) |
+| `auth-user`、`auth-lock` | fzjc 项目（最初作为样例引入） | 登录表单的输入框前缀、用户菜单的头像 |
+
+2026-09-30 清理了只在主题预览页演示中用到的样例：`bell-solid`（fzjc）、`toolbar-map`、`toolbar-move`（旧项目的 Toolbar）、`sample-pin-color`（自制的多色样例），主题预览页改用上面的正式图标演示。以后迁移地图工具栏、消息铃铛时，使用 UI 提供的图标。
+
+删除图标后，开发服务器开着时注册表会自动更新；没开时运行 `pnpm icons`。代码中引用了已删除的图标名时，类型检查会报错。
 
 ## 常见问题
 
