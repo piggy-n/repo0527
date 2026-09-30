@@ -41,7 +41,9 @@ export default defineConfig(({ mode }) => {
       include: ['src/**/*.test.{ts,tsx}', 'tools/**/*.test.ts'],
       environment: 'jsdom',
       // 每个用例结束后撤销 vi.stubEnv，避免影响其他用例
-      unstubEnvs: true
+      unstubEnvs: true,
+      // 交给 Node 直接加载时，element-plus 会拿到 CommonJS 版的 async-validator，表单校验在测试中永远通过（见 docs/config/vite-config.md）
+      server: { deps: { inline: ['element-plus'] } }
     }
   };
 });

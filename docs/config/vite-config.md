@@ -42,8 +42,24 @@ const generators =
 | `include` | `['src/**/*.test.{ts,tsx}', 'tools/**/*.test.ts']` | 测试文件和源文件放在一起；`tools/` 下是 Node 端的检查测试，例如图标是否已规范化 |
 | `environment` | `'jsdom'` | 在 Node 里模拟 DOM，挂载组件用 |
 | `unstubEnvs` | `true` | 每个用例结束后撤销 `vi.stubEnv`。已用对照实验验证：关掉后，一个用例修改的环境变量会泄漏到下一个用例 |
+| `server.deps.inline` | `['element-plus']` | 让 Vitest 处理 element-plus，而不是交给 Node 直接加载。不加的话，Element 表单的校验在测试中永远通过，见下文 |
 
 没有开启 `globals`，测试文件显式导入 `describe`、`it`、`expect`，和 AGENTS.md"不使用自动导入"一致。Vitest 5 默认开启 `clearMocks`，每个用例之间会清空 mock 的调用记录。
+
+#### 为什么要 inline element-plus
+
+阶段二写登录表单的测试时发现：表单什么都没填，`ElForm` 的 `validate()` 却返回 `true`。排查过程（均已实测）：
+
+1. Vitest 默认把 `node_modules` 里的包交给 Node 直接加载（externalize），不经过 Vite
+2. element-plus 的 ESM 代码 `import AsyncValidator from 'async-validator'`。async-validator 没有 `exports` 字段，Node 按 `main` 加载它的 CommonJS 版本，默认导出拿到的是整个 `module.exports`，也就是 `{ default: Schema }`，多包了一层
+3. `new AsyncValidator(...)` 因此抛出 `TypeError: AsyncValidator is not a constructor`。`ElFormItem` 把这个异常当作校验失败 reject，但 reject 的值是异常对象上并不存在的 `fields`，即 `undefined`
+4. `ElForm` 把各项 reject 的值展开合并成出错字段；展开 `undefined` 得到空对象，于是判定"没有出错的字段"，`validate()` 返回 `true`，控制台也没有任何输出
+
+浏览器中由 Vite 打包，走的是 async-validator 的 ESM 版本，不受影响。只在测试中出现，而且表现为"测试通过"，所以很隐蔽。
+
+加入 `server.deps.inline` 后，element-plus 由 Vitest 处理，它对 async-validator 的导入会经过 Vitest 的 CommonJS 兼容处理，校验恢复正常。去掉这一项，`useLoginForm` 的 3 个校验用例会失败（已验证）。
+
+代价：element-plus 每次运行都要重新转换，本机上全部测试从约 6 秒增加到约 20 秒。也试过依赖预构建（`deps.optimizer` 的 `client`、`ssr`，单独使用或与 inline 一起），校验仍然返回 `true`，没有采用。
 
 ### 读取环境变量
 
