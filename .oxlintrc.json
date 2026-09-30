@@ -111,15 +111,15 @@
               { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": "@(./|+(../))**" } } },
               {
                 "from": { "element": { "type": "app" } },
-                "allow": { "to": { "element": { "types": { "anyOf": ["pages", "feature", "shared"] } } } }
+                "allow": { "to": { "element": { "types": { "anyOf": ["pages", "feature", "shared"] } } }, "dependency": { "source": "@/**" } }
               },
               {
                 "from": { "element": { "type": "pages" } },
-                "allow": { "to": { "element": { "types": { "anyOf": ["feature", "shared"] } } } }
+                "allow": { "to": { "element": { "types": { "anyOf": ["feature", "shared"] } } }, "dependency": { "source": "@/**" } }
               },
               {
                 "from": { "element": { "type": "feature" } },
-                "allow": { "to": { "element": { "type": "shared" } } }
+                "allow": { "to": { "element": { "type": "shared" } }, "dependency": { "source": "@/**" } }
               },
               {
                 "from": { "element": { "types": { "anyOf": ["app", "pages", "feature", "shared"] } } },

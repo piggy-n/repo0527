@@ -257,9 +257,9 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 |---|---|---|
 | 0 | 放行所有外部包 | 任何单元都可以用 npm 依赖（后面的禁止策略会再收紧） |
 | 1 | 放行单元内部的相对导入 | 同一元素内部的导入必须写成相对路径，写成 `@/` 别名就不匹配，会被默认规则禁止 |
-| 2 | app → pages、feature、shared | 应用装配层可以组合下面所有层 |
-| 3 | pages → feature、shared | 页面只负责组合 features |
-| 4 | feature → shared | feature 之间不互相导入 |
+| 2 | app → pages、feature、shared，且写成 `@/` 别名 | 应用装配层可以组合下面所有层 |
+| 3 | pages → feature、shared，且写成 `@/` 别名 | 页面只负责组合 features |
+| 4 | feature → shared，且写成 `@/` 别名 | feature 之间不互相导入 |
 | 5 | app、pages、feature、shared → lib，且写成 `@yzt/*` | 引用 libs 只能用包名，不能用 `@/libs/...` 或相对路径 |
 | 6 | app、pages、feature、shared → package，且写成 `@yzt/*` | 引用 workspace 包只能用包名，不能用相对路径绕过包的入口（阶段二加入，已验证） |
 | 7 | ui、map-core、map-cesium、map-vue → utils，且写成 `@yzt/*` | libs 之间的依赖也只能用包名 |
@@ -273,6 +273,7 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 - **`"@(./|+(../))**"`（策略 1）**：意思是"以 `./` 开头，或以一个或多个 `../` 开头"。
   - 不能写成 `./**`：底层的 micromatch 会把 `./` 规范化掉，导致 `./store` 匹配不上（阶段一实测）
   - 阶段一原来写的是 `".{,.}/**"`（展开为 `./**`、`../**`），阶段二发现它匹配不了 `../../router/routes`：micromatch 的 `**` 不匹配以点开头的路径段，第二个 `..` 过不去，所以单元内部往上跨两层的相对导入被误报。改成现在的写法后，用 micromatch 4.0.8 实测：`./a`、`../a`、`../../a`、`../../../a` 都匹配，`@/app/x`、`vue` 不匹配；用 lint 实测：两层相对导入通过，单元内部改用 `@/` 别名仍然报错
+- **`"@/**"`（策略 2–4）**：跨单元导入必须写成 `@/` 别名（AGENTS.md"跨单元只用别名"）。阶段二之前这三条策略没有限制写法，用 `../../../shared/...` 这样的相对路径跨单元导入也会放行；2026-09-30 补上，用探针验证 app → shared、pages → feature、feature → shared 改用相对路径后各报 1 处，现有代码没有违规。`@/**` 不会误匹配 `@yzt/icons`、`@element-plus/...` 这类以 `@` 开头的包名（已用 micromatch 验证）
 - **`"@yzt/*"`（策略 5–9）**：micromatch 的 `*` 不跨越 `/`，所以 `@yzt/map-core/internal` 不匹配。不过这种深层导入在 tsconfig 那一关就已经解析失败了
 - **`"nodeKind": "dynamic-import"`（策略 9）**：boundaries 会区分静态 `import` 和动态 `import()`，前者的 `nodeKind` 是 `import`
 - **`captured.name`**：用 `{a,b}` 花括号语法匹配多个模块名
@@ -284,6 +285,7 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 | 违规 | 由谁拦截 |
 |---|---|
 | 跨 feature 导入（别名或相对路径） | 策略 4 |
+| 跨单元用相对路径（如 app 用 `../../shared/...`） | 策略 2–4（阶段二补充） |
 | 单元内部使用别名 | 策略 1 |
 | 引用 libs 没写 `@yzt` | 策略 5 |
 | shared 依赖 feature、pages 依赖 app | 策略 2–4 |
