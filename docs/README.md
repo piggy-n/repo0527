@@ -35,7 +35,8 @@ docs/
 │  ├─ theme.md                设计令牌清单、Element Plus 映射与使用规则
 │  └─ fonts.md                字体：来源、授权要点、存放位置、字重与性能
 └─ stages/                    各阶段的总结与学习笔记
-   └─ stage-1-engineering-foundation.md
+   ├─ stage-1-engineering-foundation.md  阶段一：工程基础
+   └─ stage-2-app-skeleton-and-auth.md   阶段二：应用骨架、数据层与鉴权
 ```
 
 ## 建议的阅读顺序
@@ -44,7 +45,9 @@ docs/
 
 1. 根目录 `AGENTS.md`：项目目标、技术栈、目录结构、必须遵守的规则
 2. [adr/README.md](adr/README.md)，然后按编号读 ADR：理解每个关键选择的理由
-3. [stages/stage-1-engineering-foundation.md](stages/stage-1-engineering-foundation.md)：阶段一做了什么、学到什么
+3. [stages/](stages/) 下的阶段总结，按顺序读：每个阶段做了什么、学到什么
+   - [阶段一：工程基础](stages/stage-1-engineering-foundation.md)
+   - [阶段二：应用骨架、数据层与鉴权](stages/stage-2-app-skeleton-and-auth.md)
 4. [commands.md](commands.md)：日常要用的命令
 
 想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明。
