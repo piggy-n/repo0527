@@ -3,7 +3,7 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { z } from 'zod';
 import { http } from './client';
-import { configureHttp } from './configure';
+import { configureHttp, type HttpHooks } from './configure';
 import { ApiError } from './errors';
 
 const server = setupServer();
@@ -37,7 +37,7 @@ async function catchApiError(promise: Promise<unknown>): Promise<ApiError> {
 function setupHooks() {
   const hooks = {
     onError: vi.fn<(error: ApiError) => void>(),
-    onUnauthorized: vi.fn<(error: ApiError) => void>()
+    onUnauthorized: vi.fn<NonNullable<HttpHooks['onUnauthorized']>>()
   };
   configureHttp(hooks);
   return hooks;
@@ -104,7 +104,7 @@ describe('http 失败', () => {
     const error = await catchApiError(http.get('/user', { schema: userSchema }));
 
     expect(error).toMatchObject({ kind: 'unauthorized', message: '登录状态已过期，请重新登录' });
-    expect(hooks.onUnauthorized).toHaveBeenCalledWith(error);
+    expect(hooks.onUnauthorized).toHaveBeenCalledWith(error, { headers: {} });
     expect(hooks.onError).not.toHaveBeenCalled();
   });
 
@@ -125,6 +125,24 @@ describe('http 失败', () => {
 
     expect(error).toMatchObject({ kind: 'unauthorized', status: 401 });
     expect(hooks.onUnauthorized).toHaveBeenCalledOnce();
+  });
+
+  it('onUnauthorized 收到的是请求发出时附加的请求头', async () => {
+    const hooks = setupHooks();
+    let token = 'old';
+    configureHttp({ ...hooks, getHeaders: () => ({ token }) });
+    server.use(
+      mock.get('/backend/user', async () => {
+        await delay(20);
+        return HttpResponse.json({ code: 401, msg: '用户未登录' });
+      })
+    );
+
+    const pending = catchApiError(http.get('/user', { schema: userSchema }));
+    token = 'new';
+    const error = await pending;
+
+    expect(hooks.onUnauthorized).toHaveBeenCalledWith(error, { headers: { token: 'old' } });
   });
 
   it('HTTP 状态码错误：http，没有 msg 时按状态码提示', async () => {

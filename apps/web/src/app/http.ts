@@ -12,8 +12,13 @@ export function setupHttp(router: Router): void {
       const token = useSessionStore().token;
       return token ? { token } : {};
     },
-    onUnauthorized: error => {
-      useSessionStore().clear();
+    onUnauthorized: (error, { headers }) => {
+      const session = useSessionStore();
+      // 旧会话发出的请求晚到的 401 不影响之后建立的会话；同一批请求的多个 401 也只处理第一个
+      if (headers.token !== session.token) {
+        return;
+      }
+      session.clear();
       // 已经在登录页时不再重复提示和跳转，登录失败的提示由登录表单负责
       if (router.currentRoute.value.name === RouteName.login) {
         return;

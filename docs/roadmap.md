@@ -42,6 +42,7 @@
 | 3 | 选定第一个列表页（候选：资源管理、文件管理、数据下载、消息中心） | 本文 |
 | 3 | 是否引入 TanStack Query 管理接口数据；请求的重试、去重、缓存 | ADR 0011、[modules/http.md](modules/http.md) |
 | 3 | 全局表格样式（旧项目资源管理列表的表头、行高、悬停色等） | [design/theme.md](design/theme.md) |
+| 3 | 会话结束的统一处理：取消请求、账号之间的数据隔离、清理缓存、错误提示由谁负责，协调逻辑放在 app；多标签页的会话同步 | [modules/auth.md](modules/auth.md) |
 | 3 之后 | 接入 Renovate 自动处理依赖更新 | ADR 0005 |
 | 3 之后 | 评估 Playwright 端到端测试；覆盖率与门槛 | ADR 0010 |
 | 4 | 第一个 libs 模块，同时加 `tsconfig.libs.json`；map-core 放 `libs/` 还是做成 `packages/` | AGENTS.md、ADR 0004、0006 |

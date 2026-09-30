@@ -65,7 +65,7 @@ http.get(url, options)
 |---|---|---|
 | `business` | HTTP 成功，但 `code` 不是 200 | `onError`（`silent` 时不调） |
 | `http` | HTTP 状态码不是 2xx（401 除外） | `onError`（`silent` 时不调） |
-| `unauthorized` | HTTP 401 或业务码 401 | 只调 `onUnauthorized`，不受 `silent` 影响 |
+| `unauthorized` | HTTP 401 或业务码 401 | 只调 `onUnauthorized(error, { headers })`，不受 `silent` 影响；`headers` 是请求发出时 `getHeaders()` 的返回值 |
 | `network` | 没有收到响应 | `onError`（`silent` 时不调） |
 | `timeout` | 超过 `timeout`（默认 60 秒） | `onError`（`silent` 时不调） |
 | `canceled` | 调用方的 `signal` 被中止 | 都不调 |
@@ -87,6 +87,7 @@ try {
 
 - **依赖倒置**：401 跳转要用 router，提示要用 `ElMessage`，它们属于 app 层。shared 不能依赖 app，所以 shared 只定义回调接口，由 app 在 `main.ts` 中调用 `setupHttp(router)` 注入。app 注入的内容（token 请求头、401 时清空会话）见 [auth.md](auth.md)
 - **避免循环依赖**：鉴权 store 要调用登录接口，而 http 要读 token。token 通过 `getHeaders()` 回调获取后，依赖只有一个方向
+- **401 带上发出时的请求头**：401 只说明发出请求时带的凭据无效。请求往返期间会话可能已经换过，回调要能分辨这是不是旧会话的请求（见 [auth.md](auth.md) 的"旧会话的 401"）；shared 不认识 token，所以原样交出请求头，由 app 判断
 - **超时自己实现**：MSW 的 XHR 拦截器模拟响应时不处理 `xhr.timeout`，axios 的超时在测试中测不到。改为 `AbortController` + `setTimeout`，和取消共用一套机制，中止原因是 `TIMEOUT_REASON` 时判为超时
 - **`isAxiosError<unknown>()` 而不是 `instanceof AxiosError`**：`instanceof` 收窄出的是 `AxiosError<any>`，响应体会变成 `any`，类型感知 lint 会报错
 

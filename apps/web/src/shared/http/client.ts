@@ -1,7 +1,7 @@
 import { type AxiosRequestConfig, create, isAxiosError, isCancel } from 'axios';
 import { z } from 'zod';
 import { appConfig } from '../config/app-config';
-import { getHttpHooks } from './configure';
+import { getHttpHooks, type SentRequest } from './configure';
 import { ApiError } from './errors';
 import {
   INVALID_RESPONSE_MESSAGE,
@@ -95,13 +95,13 @@ function toApiError(error: unknown, abortReason: unknown, url?: string): ApiErro
   return new ApiError({ kind: 'network', message: NETWORK_ERROR_MESSAGE, url, cause: error });
 }
 
-function notify(error: ApiError, silent: boolean): void {
+function notify(error: ApiError, silent: boolean, sent: SentRequest): void {
   const { onUnauthorized, onError } = getHttpHooks();
   if (error.kind === 'canceled') {
     return;
   }
   if (error.kind === 'unauthorized') {
-    onUnauthorized?.(error);
+    onUnauthorized?.(error, sent);
     return;
   }
   if (!silent) {
@@ -121,18 +121,19 @@ async function request<Schema extends z.ZodType>(
     abortByCaller();
   }
   signal?.addEventListener('abort', abortByCaller, { once: true });
+  const headers = getHttpHooks().getHeaders?.() ?? {};
 
   try {
     const response = await instance.request<unknown>({
       ...config,
       params: query,
       signal: controller.signal,
-      headers: getHttpHooks().getHeaders?.()
+      headers
     });
     return parseResponse(response.data, schema, config.url);
   } catch (error) {
     const apiError = toApiError(error, controller.signal.reason, config.url);
-    notify(apiError, silent);
+    notify(apiError, silent, { headers });
     throw apiError;
   } finally {
     clearTimeout(timer);

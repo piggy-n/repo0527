@@ -1,5 +1,5 @@
 import { ElMessage } from 'element-plus';
-import { HttpResponse, http as mock } from 'msw';
+import { delay, HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,6 +16,7 @@ import { setupHttp } from './http';
 const server = setupServer();
 const Empty = { render: () => null };
 const token = createTestJwtExpiringAt(Date.now() + 3_600_000);
+const otherToken = createTestJwtExpiringAt(Date.now() + 7_200_000);
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });
@@ -96,5 +97,35 @@ describe('setupHttp', () => {
     expect(useSessionStore().session).toBeNull();
     expect(router.currentRoute.value.name).toBe(RouteName.login);
     expect(warning).not.toHaveBeenCalled();
+  });
+
+  it('旧会话的请求晚到的 401 不影响之后建立的会话', async () => {
+    const warning = vi.spyOn(ElMessage, 'warning').mockReturnValue({ close: () => undefined });
+    signIn();
+    server.use(
+      mock.get('/backend/slow', async () => {
+        await delay(20);
+        return HttpResponse.json({ code: 401, msg: '用户未登录' }, { status: 401 });
+      })
+    );
+    const pending = http.get('/slow', { schema: z.unknown() }).catch(() => undefined);
+
+    // 请求返回前换账号登录；同一账号重新登录也会拿到新 token
+    useSessionStore().start({ token: otherToken, user: { loginName: 'lisi', role: Role.user } });
+    await pending;
+
+    expect(useSessionStore().token).toBe(otherToken);
+    expect(router.currentRoute.value.name).toBe(RouteName.currentMap);
+    expect(warning).not.toHaveBeenCalled();
+  });
+
+  it('同一会话的多个请求都收到 401 时，只提示一次', async () => {
+    const warning = vi.spyOn(ElMessage, 'warning').mockReturnValue({ close: () => undefined });
+    signIn();
+
+    await Promise.all([respondUnauthorized(), respondUnauthorized()]);
+
+    expect(useSessionStore().session).toBeNull();
+    expect(warning).toHaveBeenCalledOnce();
   });
 });
