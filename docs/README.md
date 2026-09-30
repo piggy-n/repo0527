@@ -10,6 +10,7 @@ docs/
 ├─ code-style.md              代码风格（格式、换行、注释）
 ├─ commands.md                常用命令：作用、时机、执行过程、注意事项
 ├─ deployment.md              部署要求（nginx 回退与接口转发）
+├─ roadmap.md                 阶段路线图：内容、学习点、状态与后续事项
 ├─ migration.md               各模块的迁移基线与进度
 ├─ adr/                       架构决策记录
 │  ├─ README.md               ADR 索引与模板
@@ -44,11 +45,12 @@ docs/
 第一次接触这个项目：
 
 1. 根目录 `AGENTS.md`：项目目标、技术栈、目录结构、必须遵守的规则
-2. [adr/README.md](adr/README.md)，然后按编号读 ADR：理解每个关键选择的理由
-3. [stages/](stages/) 下的阶段总结，按顺序读：每个阶段做了什么、学到什么
+2. [roadmap.md](roadmap.md)：整个重构分几个阶段、现在进行到哪里
+3. [adr/README.md](adr/README.md)，然后按编号读 ADR：理解每个关键选择的理由
+4. [stages/](stages/) 下的阶段总结，按顺序读：每个阶段做了什么、学到什么
    - [阶段一：工程基础](stages/stage-1-engineering-foundation.md)
    - [阶段二：应用骨架、数据层与鉴权](stages/stage-2-app-skeleton-and-auth.md)
-4. [commands.md](commands.md)：日常要用的命令
+5. [commands.md](commands.md)：日常要用的命令
 
 想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明。
 
