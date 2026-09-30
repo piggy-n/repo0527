@@ -34,6 +34,15 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
 
 中文文件名无法自动转换，会报错并提示手动改名。
 
+### 转换后重名
+
+不同的文件名可能转成同一个名字，例如 `MapLayer.svg`、`map_layer.svg` 和 `map-layer.svg` 都是 `map-layer`。处理方式：
+
+- 其中有一个已是规范名（`map-layer.svg`）时，它照常处理；其余文件报错、不改名，由人决定改成别的名字还是删掉
+- 都不是规范名时全部报错、跳过，工具不替人决定保留哪一个
+
+查重在改动任何文件之前完成。阶段二的实现是边改名边查重：目录里已有 `map-layer.svg` 时放进 `MapLayer.svg`，`MapLayer.svg` 按排序先被处理并改名为 `map-layer.svg`，`renameSync` 遇到已存在的目标会直接覆盖（Windows 上也一样），原有素材就被替换了，报错反而指向被覆盖的文件。阶段三开始前复现并修复，回归测试见 `sync.test.ts` 的"不覆盖已有文件"。
+
 ## 规范化做了什么
 
 由 `packages/icons/tools/normalize.ts` 用 SVGO 完成，重复运行结果不变：

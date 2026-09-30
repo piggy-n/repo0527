@@ -102,10 +102,28 @@ describe('syncIcons', () => {
 
     const report = syncIcons({ dir, registryPath }, { write: true });
 
-    expect(report.errors).toHaveLength(3);
+    expect(report.errors).toHaveLength(4);
     expect(report.errors.join('\n')).toMatch(/图层\.svg：文件名无法转换/);
-    expect(report.errors.join('\n')).toMatch(/map-layer 与其他文件重复/);
+    expect(report.errors.join('\n')).toMatch(/MapLayer\.svg：转换后的名字 map-layer 与 map_layer\.svg 重复/);
+    expect(report.errors.join('\n')).toMatch(/map_layer\.svg：转换后的名字 map-layer 与 MapLayer\.svg 重复/);
     expect(report.errors.join('\n')).toMatch(/broken：缺少 viewBox/);
-    expect(Object.keys(readRegistry())).toEqual(['map-layer', 'ok']);
+    // 重名的文件都不是规范名时，不替人决定保留哪一个
+    expect(readdirSync(dir)).toEqual(expect.arrayContaining(['map_layer.svg', 'MapLayer.svg']));
+    expect(Object.keys(readRegistry())).toEqual(['ok']);
+  });
+
+  it('转换后与已有的规范名文件重复时，不覆盖已有文件', () => {
+    addFiles({ 'map-layer.svg': square('#333') });
+    syncIcons({ dir, registryPath }, { write: true });
+    const existing = readFileSync(join(dir, 'map-layer.svg'), 'utf8');
+    addFiles({ 'MapLayer.svg': square('red') });
+
+    const report = syncIcons({ dir, registryPath }, { write: true });
+
+    expect(report.errors).toEqual(['MapLayer.svg：转换后的名字 map-layer 与 map-layer.svg 重复，请手动改名']);
+    expect(report.renamed).toEqual([]);
+    expect(readdirSync(dir).toSorted()).toEqual(['MapLayer.svg', 'map-layer.svg']);
+    expect(readFileSync(join(dir, 'map-layer.svg'), 'utf8')).toBe(existing);
+    expect(Object.keys(readRegistry())).toEqual(['map-layer']);
   });
 });

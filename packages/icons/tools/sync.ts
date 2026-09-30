@@ -1,3 +1,4 @@
+import { groupBy } from 'lodash-es';
 import * as fs from 'node:fs';
 import { basename, join } from 'node:path';
 import { isMulticolor, toIconName } from './naming.ts';
@@ -82,6 +83,21 @@ function syncFile(dir: string, file: string, name: string, settings: Required<Sy
   return icon;
 }
 
+// 同名的多个文件只处理已是规范名的那个，其余报错且不改名；都不是规范名时全部跳过，由人决定保留哪个
+function pickFile(name: string, files: string[], report: SyncReport): string | undefined {
+  if (files.length === 1) {
+    return files[0];
+  }
+  const kept = files.find(file => file === `${name}.svg`);
+  for (const file of files) {
+    if (file !== kept) {
+      const others = files.filter(other => other !== file).join('、');
+      report.errors.push(`${file}：转换后的名字 ${name} 与 ${others} 重复，请手动改名`);
+    }
+  }
+  return kept;
+}
+
 /** 规范化目录中的全部图标并生成注册表 */
 export function syncIcons({ dir, registryPath }: IconsOptions, settings: SyncSettings): SyncReport {
   const resolved: Required<SyncSettings> = { fileSystem: nodeFileSystem, ...settings };
@@ -93,14 +109,20 @@ export function syncIcons({ dir, registryPath }: IconsOptions, settings: SyncSet
     .filter(file => file.toLowerCase().endsWith('.svg'))
     .toSorted();
 
+  const named: { file: string; name: string }[] = [];
   for (const file of files) {
     const name = toIconName(basename(file, '.svg'));
-    if (!name) {
+    if (name) {
+      named.push({ file, name });
+    } else {
       report.errors.push(`${file}：文件名无法转换为短横线命名（含中文或特殊字符），请手动改名`);
-      continue;
     }
-    if (name in registry) {
-      report.errors.push(`${file}：转换后的名字 ${name} 与其他文件重复`);
+  }
+
+  // 先按转换后的名字分组查重，再改动文件：边改名边查重时，改名会覆盖排在后面的同名文件
+  for (const [name, group] of Object.entries(groupBy(named, entry => entry.name))) {
+    const file = pickFile(name, group.map(entry => entry.file), report);
+    if (!file) {
       continue;
     }
 
