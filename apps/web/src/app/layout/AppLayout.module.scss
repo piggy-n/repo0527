@@ -9,4 +9,6 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  // 从顶部栏延续下来的浅蓝渐变，在内容区高度的 25% 处过渡到页面底色
+  background: linear-gradient(180deg, var(--color-bg-page-top) 0%, var(--color-bg-page) 25%);
 }

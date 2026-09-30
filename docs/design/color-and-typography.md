@@ -59,6 +59,7 @@ rgba(89,126,247, 0.10) 标签底      0.14 标签底    0.32 滚动条滑块
 | `bg-neutral` | `#EEF1F5` | 中性标签底 |
 | `bg-neutral-light` | `#F1F4F8` | 中性标签底（浅） |
 | `bg-mask` | `rgba(255,255,255,0.96)` | 浮于地图之上的半透明面板 |
+| `bg-page-top` | `#AACEFD` | 内容区顶部渐变的起始色：`linear-gradient(180deg, bg-page-top 0%, bg-page 25%)`（2026-09-30 补充，取自设计稿） |
 
 ### 深色背景上的文字与状态（2026-09-30 补充，取自旧项目的顶部导航）
 
@@ -182,6 +183,7 @@ body {
   --color-text-secondary: #8a94a6;
   --color-text-placeholder: #9aa5b8;
   --color-text-disabled: #c7ced9;
+  --color-bg-page-top: #aacefd;
   --color-text-inverse: #ffffff;
   --color-inverse-hover: rgba(255, 255, 255, 0.1);
   --color-inverse-active: rgba(255, 255, 255, 0.3);

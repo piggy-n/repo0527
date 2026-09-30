@@ -104,15 +104,44 @@
   color: var(--color-primary);
 }
 
-// 窄屏菜单中的分组标题与当前页面
+// 窄屏菜单（CompactNav）：一级项的图标、下拉项的标题与分组名、缩进的子页面、分隔线
+// 一级项的文字从 16 + 16（图标）+ 8 = 40px 处开始，分组名和子页面缩进到同一位置
+.compactIcon {
+  flex: none;
+  margin-right: 8px;
+}
+
+.compactHeader {
+  display: flex;
+  align-items: center;
+  padding: 5px 16px;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-base);
+}
+
 .compactGroup {
-  padding: 8px 16px 4px;
+  padding: 6px 16px 2px 40px;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+// 覆盖 ElDropdownItem 的左内边距，只改缩进
+.compactNested {
+  padding-left: 40px;
 }
 
 .compactActive {
   color: var(--color-primary);
+}
+
+// 与 ElDropdownItem 的 divided 分隔线一致
+.compactDivider {
+  margin: 6px 0;
+  border-top: 1px solid var(--color-border-light);
+  list-style: none;
 }
 
 @media (max-width: #{breakpoints.$nav-icons - 1px}) {
