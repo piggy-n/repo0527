@@ -42,7 +42,7 @@ const { user, displayName } = storeToRefs(session);
 | `displayName` | 真实姓名；为空时用登录名 |
 | `isActive(now?)` | 已登录且 token 未过期 |
 | `start(session)` | 保存会话，同时写入 localStorage |
-| `clear()` | 清空会话和 localStorage |
+| `clear()` | 清空会话；localStorage 中的会话是本标签页的（token 相同）时才删除，见"会话结束的统一处理"中的多标签页 |
 
 ## 存储
 
@@ -138,7 +138,16 @@ placeholder('system-management', RouteName.systemManagement, '系统管理', [Ro
 
 协调逻辑放在 `app`：`app` 可以依赖所有目录，由它决定顺序、跳转和提示；`shared/auth` 只管会话本身，不反向依赖各 feature。
 
-多标签页（已确认，阶段二未处理）：session store 不监听 `storage` 事件，各标签页内存中的会话互不同步。标签页 1 用 A 登录，标签页 2 退出后用 B 登录：标签页 1 的请求仍带着 A 的 token；标签页 1 收到 401 时 `clear()` 会删掉 localStorage 中 B 的会话，标签页 2 刷新后也被退出。
+多标签页：session store 不监听 `storage` 事件，各标签页内存中的会话互不同步。标签页 1 用 A 登录，标签页 2 退出后用 B 登录，标签页 1 的请求仍带着 A 的 token。阶段三的设计：app 监听 `yzt.session` 的 `storage` 事件，其他标签页退出时结束本标签页的会话，换账号时重新加载页面（待实测后定）。
+
+已修复的部分（阶段三开始前）：阶段二的 `clear()` 总是删除 localStorage 中的会话，会删掉其他标签页刚登录的会话，例如：
+
+- 标签页 1 登录着 A，收到 401 或 token 过期时，删掉了标签页 2 用 B 登录的会话
+- 标签页 1 未登录、停在登录页，标签页 2 登录后，在标签页 1 点击业务页，路由守卫调用 `clear()`，同样删掉了会话
+
+标签页 2 刷新后就被退出。现在 `clear()` 只在存储中的 token 与本标签页相同时才删除（比较后删除），内存照常清空。这一步只在 `shared/auth` 内部，不依赖上面的统一设计；监听 `storage` 事件之后也需要它，因为事件到达之前仍有时间窗口。
+
+目前的限制：标签页 1 清空后回到登录页，不会接管存储中标签页 2 的会话，要重新登录或刷新页面；接管属于上面的会话同步设计。
 
 ## 登录表单
 
@@ -258,6 +267,7 @@ createTestJwtExpiringAt(Date.now() + 3_600_000);
 - `shared/auth` 共 17 个用例；逐个改坏 9 处源码（去掉 30 秒提前量、`exp` 不换算毫秒、非 JWT 时抛错、不删除损坏数据、`start` 不写存储、`clear` 不删存储、`||` 改成 `??`、接受任意角色码、允许空 token），每处都有用例失败
 - `features/auth` 共 10 个用例，`appConfig` 的公钥校验 3 个用例；逐个改坏 10 处（改成 C1C2C3、去掉 `silent`、明文提交密码、`||` 改成 `??`、`roleCode` 可缺失、角色写死、`id` 不转字符串、允许空 token、公钥长度放宽、不检查 `04` 前缀），每处都有用例失败
 - 路由守卫 8 个用例、`setupHttp` 3 个用例、路由表的权限 2 个用例、`canAccess` 2 个用例；逐个改坏 11 处（公开页面也要求登录、不检查过期、过期不清会话、已登录仍停在登录页、不检查角色、空数组视为不限角色、不带 token、401 不清会话、登录页上也提示并跳转、业务页误加 `public`、系统管理不限角色），每处都有用例失败
+- 多标签页的比较后删除（阶段三开始前修复）：session store 增加 2 个用例；改坏 2 处（比较条件写反、不删存储时也不清内存），每处都有用例失败。浏览器实测（开发服务器）：停在登录页时写入另一个会话，模拟其他标签页登录，再用客户端导航进入 `/current-map`；守卫把页面带回 `/login`，存储中的会话保留，刷新后进入 `/current-map`
 - 旧会话的 401（阶段三开始前修复）：`setupHttp` 增加到 5 个用例，`client.test.ts` 增加 1 个；改坏 2 处（去掉 token 比较，即修复前的逻辑；回调时重新读取请求头而不是用发出时的），新用例都因断言失败
 - `useLoginForm` 6 个用例（用只含 `ElForm` 的宿主组件运行）、`LoginForm` 3 个用例；逐个改坏 10 处（去掉 `vite.config.ts` 中 inline element-plus 的修复、去掉 `whitespace`、去掉提交中判断、账号不去空格、不保存会话、不清空上次错误、校验失败当成通过、选字回车也提交、失败不提示、成功不触发事件），每处都有用例失败
 - 写 `useLoginForm` 的测试时发现 Element 表单的校验在 Vitest 中永远通过，原因和修复见 [config/vite-config.md](../config/vite-config.md)

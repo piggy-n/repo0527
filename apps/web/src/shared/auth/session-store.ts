@@ -72,8 +72,11 @@ export const useSessionStore = defineStore('session', () => {
 
   /** 退出登录或登录过期时清空 */
   function clear(): void {
+    // 存储中的会话是其他标签页新登录的时不删除，只清空本标签页的内存
+    if (loadSession()?.token === session.value?.token) {
+      saveSession(null);
+    }
     session.value = null;
-    saveSession(null);
   }
 
   return { session, token, user, displayName, isActive, start, clear };
