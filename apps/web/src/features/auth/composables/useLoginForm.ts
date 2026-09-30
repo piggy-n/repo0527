@@ -1,5 +1,5 @@
 import type { FormInstance, FormRules } from 'element-plus';
-import { reactive, ref } from 'vue';
+import { onScopeDispose, reactive, ref } from 'vue';
 import { type Session, useSessionStore } from '@/shared/auth/session-store';
 import { ApiError } from '@/shared/http/errors';
 import { type LoginCredentials, login } from '../api';
@@ -21,6 +21,9 @@ export function useLoginForm() {
   };
   const submitting = ref(false);
   const errorMessage = ref('');
+  // 表单销毁时取消进行中的登录，晚到的结果不能再写入会话：此时可能已经建立了别的会话
+  const controller = new AbortController();
+  onScopeDispose(() => controller.abort());
 
   /** 校验并登录，成功时保存会话并返回它；校验未通过或登录失败时返回 undefined，失败原因见 errorMessage */
   async function submit(): Promise<Session | undefined> {
@@ -36,12 +39,20 @@ export function useLoginForm() {
       if (!valid) {
         return undefined;
       }
-      const result = await login({ loginName: model.loginName.trim(), password: model.password });
+      const { signal } = controller;
+      const result = await login({ loginName: model.loginName.trim(), password: model.password }, signal);
+      // 响应已收到、这里还没执行时表单被销毁，取消来不及生效
+      if (signal.aborted) {
+        return undefined;
+      }
       session.start(result);
       return result;
     } catch (error) {
       if (error instanceof ApiError) {
-        errorMessage.value = error.message;
+        // 表单销毁时取消的请求，不需要显示原因
+        if (error.kind !== 'canceled') {
+          errorMessage.value = error.message;
+        }
         return undefined;
       }
       throw error;

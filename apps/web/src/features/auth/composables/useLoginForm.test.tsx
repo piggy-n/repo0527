@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { ElForm, ElFormItem } from 'element-plus';
-import { HttpResponse, type JsonBodyType, http as mock } from 'msw';
+import { delay, HttpResponse, type JsonBodyType, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { createPinia, type Pinia, setActivePinia } from 'pinia';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -29,9 +29,10 @@ const Host = defineComponent({
 });
 
 function mountForm(loginName = '', password = '') {
-  mount(Host, { global: { plugins: [pinia] } });
+  const wrapper = mount(Host, { global: { plugins: [pinia] } });
   form.model.loginName = loginName;
   form.model.password = password;
+  return wrapper;
 }
 
 // 模拟登录接口，返回收到的请求体列表
@@ -44,6 +45,26 @@ function mockLogin(responseBody: JsonBodyType = SUCCESS) {
     })
   );
   return requests;
+}
+
+// 模拟一个挂起的登录接口：requestReceived 在请求到达时完成，调用 respond 后才返回成功
+function mockPendingLogin() {
+  let received: (() => void) | undefined;
+  const requestReceived = new Promise<void>(resolve => {
+    received = resolve;
+  });
+  let release: (() => void) | undefined;
+  const released = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  server.use(
+    mock.post('/backend/user/login', async () => {
+      received?.();
+      await released;
+      return HttpResponse.json(SUCCESS);
+    })
+  );
+  return { requestReceived, respond: () => release?.() };
 }
 
 beforeAll(() => {
@@ -127,5 +148,36 @@ describe('useLoginForm', () => {
     await first;
     expect(count).toBe(1);
     expect(form.submitting.value).toBe(false);
+  });
+
+  it('表单销毁后，晚到的登录结果不写入会话，也不显示错误', async () => {
+    const { requestReceived, respond } = mockPendingLogin();
+    const wrapper = mountForm('zhangsan', 'secret');
+    const pending = form.submit();
+    await requestReceived;
+
+    // 登录 A 未完成时表单销毁，随后建立了 B 的会话
+    wrapper.unmount();
+    const other = { token: 'other-token', user: { loginName: 'lisi', role: Role.user } };
+    useSessionStore().start(other);
+    respond();
+
+    await expect(pending).resolves.toBeUndefined();
+    expect(useSessionStore().session).toEqual(other);
+    expect(localStorage.getItem('yzt.session')).toBe(JSON.stringify(other));
+    expect(form.errorMessage.value).toBe('');
+  });
+
+  it('表单销毁时取消进行中的登录请求，不等响应返回', async () => {
+    const { requestReceived, respond } = mockPendingLogin();
+    const wrapper = mountForm('zhangsan', 'secret');
+    const pending = form.submit();
+    await requestReceived;
+
+    wrapper.unmount();
+    const outcome = await Promise.race([pending.then(() => 'settled'), delay(100).then(() => 'pending')]);
+    respond();
+
+    expect(outcome).toBe('settled');
   });
 });
