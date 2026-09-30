@@ -6,7 +6,17 @@
 - `shared/auth`：登录会话、角色、token 过期判断，应用的各部分都会用到
 - `features/auth`：登录接口、密码加密，只有登录功能使用
 - `app`：路由守卫（`app/router/auth-guard.ts`）、请求头与 401 处理（`app/http.ts`）
-- 登录表单逻辑完成后补充到本文
+- `pages/login`：登录页，组合登录表单并在成功后跳转
+
+登录这条链路按"逻辑 → 界面 → 页面"分三层，各层只做一件事：
+
+```
+pages/login/LoginPage.tsx                       布局；登录成功后进入角色首页、提示"登录成功"
+  └─ features/auth/components/LoginForm.tsx     表单界面；按回车提交；失败时弹出提示；成功时触发 success
+       └─ features/auth/composables/useLoginForm.ts   表单数据、校验规则、提交中状态、submit()；不渲染、不跳转、不提示
+            ├─ features/auth/api.ts             login()：加密、请求、字段转换
+            └─ shared/auth/session-store.ts     start()：保存会话
+```
 
 ## 会话怎么用
 
@@ -103,6 +113,38 @@ placeholder('system-management', RouteName.systemManagement, '系统管理', [Ro
 - 旧项目在每个请求发出前都先检查 token 是否过期；新项目不做这一步，由路由守卫在切换页面时检查，请求期间过期则由后端的 401 处理
 - `router` 由参数传入，而不是直接导入：测试时可以换成只含所需路由的内存路由
 
+## 登录表单
+
+### useLoginForm
+
+```ts
+const { formRef, model, rules, submitting, errorMessage, submit } = useLoginForm();
+
+<ElForm ref={formRef} model={model} rules={rules}>...</ElForm>
+
+const session = await submit();   // 成功时是会话，校验未通过或登录失败时是 undefined
+```
+
+| 返回值 | 说明 |
+|---|---|
+| `formRef` | 绑定到 `ElForm` 的 `ref`，`submit()` 通过它调用 `validate()` |
+| `model` | `{ loginName, password }`，reactive |
+| `rules` | 必填校验；账号只有空格也算未填写（`whitespace: true`） |
+| `submitting` | 提交中；用于按钮的 `loading` |
+| `errorMessage` | 最近一次登录失败的原因，每次提交前清空 |
+| `submit()` | 校验 → 登录 → `start()` 保存会话；账号去掉首尾空格，密码原样提交 |
+
+- 提交中再次调用 `submit()` 会被忽略。标志在第一个 `await` 之前设置，回车和点击同时触发也只发一次请求，所以不需要旧项目的 150ms 防抖
+- 只捕获 `ApiError` 并写入 `errorMessage`；其他异常（代码错误）照常抛出，不被吞掉
+- 不跳转、不弹提示：由使用它的组件决定怎么显示，同一套逻辑可以配不同的界面
+
+### LoginForm 与登录页
+
+- `LoginForm` 绑定 `useLoginForm`；登录失败时用 `ElMessage.error` 显示 `errorMessage`，成功时触发 `success` 事件并带上会话
+- 在输入框中按回车提交。输入法选字时按的回车（`event.isComposing`）不提交。没有监听表单的 `submit` 事件，因为 `ElForm` 的类型没有声明 `onSubmit`
+- `LoginPage` 收到 `success` 后 `router.replace` 到角色首页（按后退键不会回到登录页），再提示"登录成功"
+- 登录页目前是简单的卡片布局；背景图到位后按设计稿（方案 A）完成外观，只改 `LoginPage` 和 `LoginForm` 的样式，`useLoginForm` 不变
+
 ## 登录接口
 
 ```ts
@@ -157,7 +199,12 @@ createTestJwtExpiringAt(Date.now() + 3_600_000);
 - `shared/auth` 共 17 个用例；逐个改坏 9 处源码（去掉 30 秒提前量、`exp` 不换算毫秒、非 JWT 时抛错、不删除损坏数据、`start` 不写存储、`clear` 不删存储、`||` 改成 `??`、接受任意角色码、允许空 token），每处都有用例失败
 - `features/auth` 共 10 个用例，`appConfig` 的公钥校验 3 个用例；逐个改坏 10 处（改成 C1C2C3、去掉 `silent`、明文提交密码、`||` 改成 `??`、`roleCode` 可缺失、角色写死、`id` 不转字符串、允许空 token、公钥长度放宽、不检查 `04` 前缀），每处都有用例失败
 - 路由守卫 8 个用例、`setupHttp` 3 个用例、路由表的权限 2 个用例、`canAccess` 2 个用例；逐个改坏 11 处（公开页面也要求登录、不检查过期、过期不清会话、已登录仍停在登录页、不检查角色、空数组视为不限角色、不带 token、401 不清会话、登录页上也提示并跳转、业务页误加 `public`、系统管理不限角色），每处都有用例失败
+- `useLoginForm` 6 个用例（用只含 `ElForm` 的宿主组件运行）、`LoginForm` 3 个用例；逐个改坏 10 处（去掉 `vite.config.ts` 中 inline element-plus 的修复、去掉 `whitespace`、去掉提交中判断、账号不去空格、不保存会话、不清空上次错误、校验失败当成通过、选字回车也提交、失败不提示、成功不触发事件），每处都有用例失败
+- 写 `useLoginForm` 的测试时发现 Element 表单的校验在 Vitest 中永远通过，原因和修复见 [config/vite-config.md](../config/vite-config.md)
+- 构建产物：sm-crypto-v2 只出现在登录页的 chunk 中（174 KB，gzip 64 KB），首屏入口不引用它
 - 浏览器实测（开发服务器，真实后端）：
+  - 登录页空表单提交，两个输入框显示"请输入账号""请输入密码"，没有发出请求
+  - 在页面中调用 `encryptPassword`：密文长度 208（`admin123`），两次结果不同；浏览器提供 `crypto.getRandomValues`，sm-crypto-v2 不会用到 Node 的 `crypto`
   - 未登录访问 `/current-map` 被带到 `/login`
   - 在 localStorage 放入普通用户的测试会话后：访问 `/system-management` 回到 `/current-map`；`/resource-application` 能进入；`/login` 进入 `/current-map`；不存在的地址显示 404
   - 带着这个假 token 请求 `/system/upms/user/detail`：请求带有 `token` 请求头，后端返回 401；会话被清空，页面回到 `/login`，提示"登录状态已过期，请重新登录"

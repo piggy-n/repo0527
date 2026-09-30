@@ -1,6 +1,34 @@
+// 全局没有 box-sizing 重置，内边距要计入宽高，否则 100vh 加上内边距会出现滚动条
+.root,
+.card {
+  box-sizing: border-box;
+}
+
 .root {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  padding: 24px 16px;
+  background: var(--color-bg-page);
+}
+
+.card {
+  width: min(480px, 100%);
+  padding: 48px 40px;
+  border-radius: 16px;
+  background: var(--color-bg-container);
+  box-shadow: var(--shadow-lg);
+}
+
+.title {
+  margin: 0 0 40px;
+  text-align: center;
+  font-size: var(--font-size-display);
+  color: var(--color-text-title);
+
+  // 卡片较窄时按宽度缩小
+  svg {
+    max-width: 100%;
+  }
 }
