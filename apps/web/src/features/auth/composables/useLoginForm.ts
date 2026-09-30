@@ -11,10 +11,13 @@ export function useLoginForm() {
   // 绑定到 ElForm 的 ref，用来调用它的 validate()
   const formRef = ref<FormInstance>();
   const model = reactive<LoginCredentials>({ loginName: '', password: '' });
+  // blur：离开输入框时检查；change：ElInput 在值变化时触发，浏览器自动填充写入值时也会触发，
+  // 只写 blur 的话，未聚焦的输入框被自动填充后不会失焦，之前的错误提示会一直留着
+  const trigger = ['blur', 'change'];
   const rules: FormRules<LoginCredentials> = {
     // whitespace：只输入空格也视为未填写
-    loginName: [{ required: true, whitespace: true, message: '请输入账号', trigger: 'blur' }],
-    password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+    loginName: [{ required: true, whitespace: true, message: '请输入账号', trigger }],
+    password: [{ required: true, message: '请输入密码', trigger }]
   };
   const submitting = ref(false);
   const errorMessage = ref('');

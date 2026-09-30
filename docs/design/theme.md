@@ -144,6 +144,8 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 
 `input-filled` 只修改 Element 已提供的 `--el-input-*` 变量，校验失败的红色描边、禁用状态等仍由 Element 处理。Element 的 `large` 尺寸把输入框字号写死为 14px，所以变体里还设置了 `font-size`。两个变体的各种状态可以在主题预览页（`/dev/theme`）查看。
 
+`button-xl` 的加载状态：Element 在文字前插入 1em 的加载图标，文字再加 6px 左外边距，整组居中后文字会右移约 11px。变体给图标设置 `margin-left: calc(-1em - 6px)` 抵消这段宽度，文字位置不变，图标显示在文字左侧（已在预览页比对：加载前后文字的位置相同）。前提是按钮两侧留有一个图标的空间，宽按钮满足这个条件。另外，加载状态本身最好延迟显示，见 [modules/composables.md](../modules/composables.md) 的 `useDelayedFlag`。
+
 ### 浏览器自动填充
 
 Chrome 用保存的账号密码自动填充时，浏览器自带样式表中有这样的规则：
@@ -172,7 +174,24 @@ input:-internal-autofill-selected {
 - 只写 `:autofill`，不和 `:-webkit-autofill` 写在同一个选择器列表里：列表中有一个选择器不被支持时，整条规则都会失效。Chrome、Edge、Firefox、Safari 当前版本都支持 `:autofill`
 - 没有用另一种常见写法（给 `background-color` 加很长的 `transition`，让它"一直没变过去"）：它依赖计时，利用的是浏览器实现上的细节
 
-验证：自动化工具不能触发浏览器的自动填充。已确认规则加载进了页面；在主题预览页给输入框加上带 `!important` 的 `#e8f0fe` 背景模拟自动填充，未加处理的出现与实际相同的色块，加了处理的与正常状态一致。真实的自动填充需要在 Chrome 中用保存的账号密码确认。
+验证：自动化工具不能触发浏览器的自动填充。已确认规则加载进了页面；在主题预览页给输入框加上带 `!important` 的 `#e8f0fe` 背景模拟自动填充，未加处理的出现与实际相同的色块，加了处理的与正常状态一致。2026-09-30 在 Chrome 中用保存的账号密码实测，不再出现色块。
+
+#### 自动填充时的字体：浏览器限制，不处理
+
+页面加载时 Chrome 自动填上的账号密码，在用户和页面交互（点击、按键）之前只是"建议值"：显示在浏览器内部的 `::-internal-input-suggested` 伪元素里，页面的 JS 读不到，`input.value` 仍是空字符串。Chromium 的浏览器样式表（`third_party/blink/renderer/core/html/resources/html.css`）为它固定了字体：
+
+```css
+/* font: -webkit-small-control resolves to Arial on every platform. Ideally we'd keep Arial,
+   but a concrete family is matched against author @font-face, so a single-character
+   unicode-range could disclose the preview text; a generic family avoids that lookup. */
+input::-internal-input-suggested,
+textarea::-internal-input-suggested {
+  font: -webkit-small-control !important;
+  font-family: sans-serif !important;
+}
+```
+
+原因写在注释里：如果建议值使用页面的字体，页面可以为每个字符准备一个单独的字体文件（`unicode-range`），从浏览器下载了哪些字体文件反推出建议值的内容，比如密码。所以这里的字号、字体与正常输入不同，是浏览器有意为之，页面无法覆盖，也不应该覆盖。用户与页面交互后，建议值成为真正的值，字体恢复正常。
 
 ## 使用规则
 

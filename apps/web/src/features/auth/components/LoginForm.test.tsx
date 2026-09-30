@@ -4,6 +4,7 @@ import { HttpResponse, type JsonBodyType, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { createPinia, type Pinia, setActivePinia } from 'pinia';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 import { LoginForm } from './LoginForm';
 
 const server = setupServer();
@@ -76,5 +77,33 @@ describe('LoginForm', () => {
 
     await vi.waitFor(() => expect(error).toHaveBeenCalledWith('用户名或密码错误'));
     expect(wrapper.emitted('success')).toBeUndefined();
+  });
+
+  it('提交后不立即显示加载状态，很快完成的请求不会让按钮闪一下', async () => {
+    mockLogin();
+    const { wrapper } = await mountFilled();
+    const button = wrapper.find('button');
+
+    await button.trigger('click');
+    await nextTick();
+
+    expect(button.classes()).not.toContain('is-loading');
+    await vi.waitFor(() => expect(wrapper.emitted('success')).toHaveLength(1));
+  });
+
+  // 浏览器自动填充会同时写入两个输入框，未聚焦的那个不会触发 blur
+  it('显示校验错误后，值被自动填充写入（没有失焦）时错误随之消失', async () => {
+    const wrapper = mount(LoginForm, { global: { plugins: [pinia] }, attachTo: document.body });
+    const [loginName, password] = wrapper.findAll('input');
+    await loginName.trigger('focus');
+    await loginName.trigger('blur');
+    await password.trigger('focus');
+    await password.trigger('blur');
+    await vi.waitFor(() => expect(wrapper.findAll('.el-form-item__error')).toHaveLength(2));
+
+    await loginName.setValue('zhangsan');
+    await password.setValue('secret');
+
+    await vi.waitFor(() => expect(wrapper.findAll('.el-form-item__error')).toHaveLength(0));
   });
 });

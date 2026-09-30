@@ -107,6 +107,12 @@
   border-radius: 8px;
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
+
+  // 加载图标（1em）加上它与文字的 6px 间距会把文字往右推；用负外边距抵消，文字位置不变，图标显示在文字左侧。
+  // 按钮两侧要留出一个图标的空间，button-xl 用于宽按钮，满足这个条件
+  &.is-loading > .el-icon {
+    margin-left: calc(-1em - 6px);
+  }
 }
 
 // 浏览器自动填充账号密码后，会用带 !important 的样式把输入框改成浅蓝底，页面样式无法直接改回；

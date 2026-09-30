@@ -129,7 +129,7 @@ const session = await submit();   // 成功时是会话，校验未通过或登�
 |---|---|
 | `formRef` | 绑定到 `ElForm` 的 `ref`，`submit()` 通过它调用 `validate()` |
 | `model` | `{ loginName, password }`，reactive |
-| `rules` | 必填校验；账号只有空格也算未填写（`whitespace: true`） |
+| `rules` | 必填校验，在失焦和值变化时触发（`trigger: ['blur', 'change']`）；账号只有空格也算未填写（`whitespace: true`） |
 | `submitting` | 提交中；用于按钮的 `loading` |
 | `errorMessage` | 最近一次登录失败的原因，每次提交前清空 |
 | `submit()` | 校验 → 登录 → `start()` 保存会话；账号去掉首尾空格，密码原样提交 |
@@ -142,6 +142,13 @@ const session = await submit();   // 成功时是会话，校验未通过或登�
 
 - `LoginForm` 绑定 `useLoginForm`；登录失败时用 `ElMessage.error` 显示 `errorMessage`，成功时触发 `success` 事件并带上会话
 - 在输入框中按回车提交。输入法选字时按的回车（`event.isComposing`）不提交。没有监听表单的 `submit` 事件，因为 `ElForm` 的类型没有声明 `onSubmit`
+- 按钮的加载样式用 `useDelayedFlag(submitting)`：请求 300ms 内完成时不显示，显示后至少保持 400ms，避免按钮一闪（见 [composables.md](composables.md)）
+
+#### 校验为什么同时在 blur 和 change 时触发
+
+`ElInput` 在失焦时以 `blur` 触发表单项校验，在值变化时（`watch(modelValue)`）以 `change` 触发。只写 `trigger: 'blur'` 时，值变化这次没有匹配的规则，表单项什么也不做，已经显示的错误提示也不会清除。
+
+这在浏览器自动填充时会出问题：先清空输入框（失焦后显示"请输入账号"），再从下拉列表选择保存的账号，浏览器会同时写入账号和密码。聚焦的那个输入框之后失焦时会重新校验，错误消失；另一个没有聚焦，不会失焦，错误就一直留着，看起来像"有时只影响账号或密码，和当前聚焦的输入框有关"。加上 `change` 后，值一变化就重新校验。回归测试："显示校验错误后，值被自动填充写入（没有失焦）时错误随之消失"，修复前失败、修复后通过。
 - `LoginPage` 收到 `success` 后 `router.replace` 到角色首页（按后退键不会回到登录页），再提示"登录成功"
 - 输入框和按钮用主题变体 `input-filled`、`button-xl`（见 [design/theme.md](../design/theme.md)），按钮用 Element 的 `autoInsertSpace` 在"登录"两字之间加空格
 
@@ -189,12 +196,11 @@ useSessionStore().start(session);
 - 响应缺少 `token` 或 `roleCode` 时抛出 `invalid-response`：后端的约定变了应该尽早暴露，而不是把管理员当成普通用户
 - 请求设置了 `silent: true`：失败时不弹全局提示，由登录表单显示错误。401 不受 `silent` 影响，仍会调用 `onUnauthorized`；app 注入的回调在登录页上不做任何事
 
-### 待验证
+### 账号或密码错误时的提示
 
-后端对"账号或密码错误"返回什么，要等登录页完成后用错误密码实测：
+2026-09-30 用错误密码实测，登录页提示"密码错误"：后端返回的是业务码加 `msg`，不是 401，`ApiError.message` 就是后端的文案，直接显示。
 
-- 如果是业务码（如 500）加 `msg`：`ApiError.message` 就是后端的文案，直接显示即可
-- 如果是 401：`resolveErrorMessage` 会把文案统一成"登录状态已过期，请重新登录"，在登录页上意思不对，届时要在登录表单里单独处理
+如果以后后端改为返回 401，`resolveErrorMessage` 会把文案统一成"登录状态已过期，请重新登录"，在登录页上意思不对，需要在登录表单里单独处理。
 
 ### 密码加密
 

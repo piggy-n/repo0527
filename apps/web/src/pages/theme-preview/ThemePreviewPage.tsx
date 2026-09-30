@@ -325,8 +325,8 @@ export const ThemePreviewPage = defineComponent({
               <ElButton class="button-xl" type="primary" autoInsertSpace>
                 登录
               </ElButton>
-              <ElButton class="button-xl" type="primary" loading>
-                登录中
+              <ElButton class="button-xl" type="primary" loading autoInsertSpace>
+                登录
               </ElButton>
             </ElForm>
           </div>

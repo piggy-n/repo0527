@@ -1,6 +1,7 @@
 import { ElButton, ElForm, ElFormItem, ElInput, ElMessage } from 'element-plus';
 import { defineComponent } from 'vue';
 import type { Session } from '@/shared/auth/session-store';
+import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { useLoginForm } from '../composables/useLoginForm';
 import styles from './LoginForm.module.scss';
@@ -13,6 +14,8 @@ export const LoginForm = defineComponent({
   },
   setup(_, { emit }) {
     const { formRef, model, rules, submitting, errorMessage, submit } = useLoginForm();
+    // 请求很快完成时不显示加载状态，避免按钮一闪；防重复提交仍由 submitting 立即生效
+    const showLoading = useDelayedFlag(submitting);
 
     const handleSubmit = async () => {
       const session = await submit();
@@ -65,7 +68,7 @@ export const LoginForm = defineComponent({
         <ElButton
           class={['button-xl', styles.submit]}
           type="primary"
-          loading={submitting.value}
+          loading={showLoading.value}
           autoInsertSpace
           onClick={handleSubmit}
         >
