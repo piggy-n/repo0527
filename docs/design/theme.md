@@ -8,7 +8,8 @@
 ## 分层
 
 ```
-规范令牌   --color-*、--font-*、--line-height-*、--shadow-*    tokens.scss
+规范令牌   --color-*、--font-*、--line-height-*、--shadow-*、
+           --space-*、--radius-*                                tokens.scss
    ↓ 映射
 Element    --el-color-*、--el-text-color-* ……                  element-theme.scss
    ↓
@@ -51,6 +52,10 @@ Element    --el-color-*、--el-text-color-* ……                  element-them
 | 登录卡片的蓝色投影 | `--shadow-primary-lg` | 第 6 节，2026-09-30 补充 |
 | 内容区顶部渐变的起始色 | `--color-bg-page-top` | 第 2 节，2026-09-30 补充；色相 214° 取自顶部栏背景（212°），不属于主题色系（222～227°），对比后保留，见 [modules/layout.md](../modules/layout.md) |
 | 深色背景上的文字与状态 | `--color-text-inverse`、`--color-inverse-hover`、`--color-inverse-active` | 第 2 节，2026-09-30 补充 |
+| 间距 4 / 8 / 12 / 16 / 24 | `--space-xs`、`-sm`、`-md`、`-lg`、`-xl` | 第 6.1 节，2026-09-30 补充，见 [page-layout.md](page-layout.md) |
+| 圆角 4 / 8 | `--radius-sm`、`--radius-md` | 第 6.1 节，2026-09-30 补充 |
+
+间距、圆角按大小命名（`sm`、`md`、`lg`），与 `--font-size-*`、`--shadow-*` 一致。没有用数值命名（`--space-16`），名字等于值时改值就得改名；也没有按用途命名（`--panel-padding`），用途已经封装在 `libs/ui` 的布局组件里，页面不直接接触这些间距。
 
 未收录：第 4 节备注中的 `#4F73FF`，它和 `primary-hover`（`#4F74F0`）只差一位，看起来是旧实现里的笔误，需要时再确认。
 
@@ -141,8 +146,8 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 
 | 变体 | 用法 | 外观 | 使用位置 |
 |---|---|---|---|
-| `input-filled` | `<ElInput class="input-filled">` | `primary-border` 浅蓝底、无边框；悬停 `primary-border-hover`、聚焦 `primary` 描边；48px 高、16px 字、8px 圆角；占位符和图标用 `primary` | 登录页 |
-| `button-xl` | `<ElButton class="button-xl">` | 48px 高、16px 半粗、8px 圆角；颜色沿用按钮的 `type` | 登录页 |
+| `input-filled` | `<ElInput class="input-filled">` | `primary-border` 浅蓝底、无边框；悬停 `primary-border-hover`、聚焦 `primary` 描边；48px 高、16px 字、`--radius-md` 圆角；占位符和图标用 `primary` | 登录页 |
+| `button-xl` | `<ElButton class="button-xl">` | 48px 高、16px 半粗、`--radius-md` 圆角；颜色沿用按钮的 `type` | 登录页 |
 
 `input-filled` 只修改 Element 已提供的 `--el-input-*` 变量，校验失败的红色描边、禁用状态等仍由 Element 处理。Element 的 `large` 尺寸把输入框字号写死为 14px，所以变体里还设置了 `font-size`。两个变体的各种状态可以在主题预览页（`/dev/theme`）查看。
 
@@ -197,7 +202,8 @@ textarea::-internal-input-suggested {
 
 ## 使用规则
 
-- 颜色、字号、字重、行高、阴影一律使用令牌，不在页面和组件里写死色值或字号
+- 颜色、字号、字重、行高、阴影、圆角一律使用令牌，不在页面和组件里写死色值或字号
+- 间距在布局一级使用令牌：页面边距、面板之间、面板内边距、区块之间。组件内部的细小间距（如顶部导航项的 18px 内边距、2px 间隔）可以写数值，不为它们增加令牌，也不为了套令牌改变已确认的外观
 - 字号只用双数
 - Element 的外观只在 `element-theme.scss` 中统一调整，页面不单独覆盖 `--el-*` 变量；某个组件需要全局微调时，也写在 `element-theme.scss` 里；需要另一种外观时定义变体 class（见上文"组件变体"）
 - 规范里没有的颜色，先和设计确认、补进规范和 `tokens.scss`，再使用
@@ -213,6 +219,7 @@ CSS 目前没有 lint 检查，以上规则靠评审保证。需要强制检查�
 | Element 写死的 13px | `ElCollapse` 的标题与内容、`ElInputNumber` 的加减按钮，第一次使用时处理 |
 | 表格的其他样式 | 旧项目资源管理列表（`views/resource-management-new/components/LayerTable.vue`）还改了：表头背景 `#EEF1F8`、16px 半粗、行高 52px；正文 `#4B5563`、首列 `#1F2937`、行高 56px；行悬停底色 `#F2F6FF`；边框 `#E8EBF2`。做第一个列表页时，决定哪些作为全局表格样式 |
 | 其他组件级微调 | 对应组件第一次在页面中使用时处理 |
+| 已有代码中写死的圆角 | 圆角令牌在 2026-09-30 加入，之前的代码还写着数值：顶部导航、用户菜单、滚动条的 4px（等于 `--radius-sm`），登录卡片的 12px / 16px 和主题预览页的 6px / 16px（令牌中没有这些值） |
 | 暗色模式 | 规范未定义，不处理 |
 
 ## 修改时的检查清单

@@ -34,6 +34,7 @@ docs/
 ├─ design/                    设计规范与主题落地
 │  ├─ color-and-typography.md 系统配色与字体规范（原文）
 │  ├─ theme.md                设计令牌清单、Element Plus 映射与使用规则
+│  ├─ page-layout.md          页面布局规范：分栏型与画布型、面板、标题、窄屏抽屉
 │  └─ fonts.md                字体：来源、授权要点、存放位置、字重与性能
 └─ stages/                    各阶段的总结与学习笔记
    ├─ stage-1-engineering-foundation.md  阶段一：工程基础
@@ -61,7 +62,7 @@ docs/
 | `AGENTS.md` | 必须遵守什么 | 规则产生或变化时 |
 | `adr/` | 为什么这样决定 | 做出重要决策时；接受后不再修改 |
 | `config/` | 这个配置项是什么意思、改它要注意什么 | 配置文件新增或修改时 |
-| `design/` | 界面应该长什么样、令牌怎么对应到 Element | 规范、令牌或 Element 映射变化时 |
+| `design/` | 界面应该长什么样、页面怎么排布、令牌怎么对应到 Element | 规范、令牌、布局规则或 Element 映射变化时 |
 | `modules/` | 这个模块怎么用、为什么这样设计 | 新增或修改 shared、libs 中的模块时 |
 | `commands.md` | 这条命令做什么、什么时候用 | 新增或修改脚本时 |
 | `stages/` | 这个阶段做了什么、能学到什么 | 每个阶段结束时 |

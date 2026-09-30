@@ -42,7 +42,7 @@ apps/web/src/
 ├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables 与类型
 └─ libs/       将来可拆到 packages/* 的模块，统一用 @yzt/<name> 导入
    ├─ utils/       @yzt/utils       纯 TS 工具，不依赖框架
-   ├─ ui/          @yzt/ui          Mx* 通用组件
+   ├─ ui/          @yzt/ui          Mx* 通用组件（布局、面板、标题，ADR 0016）
    ├─ map-core/    @yzt/map-core    地图内核，不依赖 Vue
    ├─ map-cesium/  @yzt/map-cesium  Cesium 三维
    └─ map-vue/     @yzt/map-vue     地图与 Vue 的衔接
@@ -166,8 +166,11 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 系统名称用 `shared/system-title` 的 `SystemTitle` 组件（SVG 轮廓，大小和颜色跟随 `font-size`、`color`），不要把优设标题黑作为网页字体加载；修改名称见 `docs/modules/system-title.md`
 
 - 设计参考 `docs/design/color-and-typography.md`，落地方式见 `docs/design/theme.md`；规范和 Element Plus 的交互风格冲突时，优先和 Element 保持一致
-- 颜色、字号、字重、行高、阴影一律使用令牌（`var(--color-*)` 等 CSS 变量），不写死色值和字号；规范里没有的值先补进规范和 `app/styles/tokens.scss`
+- 颜色、字号、字重、行高、阴影、圆角一律使用令牌（`var(--color-*)`、`var(--radius-*)` 等 CSS 变量），不写死色值和字号；规范里没有的值先补进规范和 `app/styles/tokens.scss`
+- 间距在布局一级（页面边距、面板之间、面板内边距、区块之间）使用 `--space-*` 令牌；组件内部的细小间距可以写数值，不为它们增加令牌
 - 字号只用双数
+- 页面排布按 `docs/design/page-layout.md`：分栏型页面由 `libs/ui` 的布局、面板、标题组件组成（ADR 0016）；页面不设背景，侧栏宽度只用固定档位，高度靠布局占满、面板内部滚动，不写 `calc(100% - 32px)` 这类计算
+- `libs/ui` 的组件只通过 CSS 变量使用令牌，不 import app 的 SCSS；不能引用 `SvgIcon`，自定义图标由使用方通过插槽传入
 - Element Plus 的外观只在 `app/styles/element-theme.scss` 统一调整，页面和组件不单独覆盖 `--el-*` 变量；需要另一种外观时在其中定义变体 class（如 `input-filled`、`button-xl`），页面只引用 class，见 `docs/design/theme.md`
 
 ## 迁移规则
@@ -197,7 +200,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - `docs/code-style.md`：完整代码风格
 - `docs/adr/`：架构决策记录，编号递增，接受后不再修改；决策有变化时新写一份，并注明取代了哪一份
 - `docs/config/`：重要配置文件的逐项说明；修改配置文件时同步更新
-- `docs/design/`：设计规范原文与主题落地说明；修改令牌或 Element 映射时同步更新
+- `docs/design/`：设计规范原文、主题落地说明与页面布局规范；修改令牌、Element 映射或布局规则时同步更新
 - `docs/modules/`：shared、libs、packages 以及 app 中布局等模块的用法与设计说明；新增或修改这些模块时同步更新
 - `docs/commands.md`：常用命令说明；新增或修改脚本时同步更新
 - `docs/stages/`：各阶段总结与学习笔记，每个阶段结束时新增一篇

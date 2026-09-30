@@ -90,4 +90,15 @@ $primary-alphas: (5, 10, 12, 14, 28, 32);
   --shadow-lg: 0 8px 24px rgba(20, 52, 105, 0.16);
   // 规范补充：旧登录页卡片的蓝色投影
   --shadow-primary-lg: 0 16px 36px rgba(23, 57, 222, 0.25);
+
+  // 规范补充：间距与圆角，使用范围见 docs/design/page-layout.md
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+
+  // sm 与 Element 的输入框、按钮一致；md 用于面板、卡片
+  --radius-sm: 4px;
+  --radius-md: 8px;
 }
