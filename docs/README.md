@@ -26,6 +26,7 @@ docs/
 ├─ modules/                   内部模块的用法与设计说明
 │  ├─ http.md                 shared/http：HTTP 客户端、ApiError、回调注入
 │  ├─ auth.md                 鉴权：会话、角色、页面权限、路由守卫、登录接口与表单
+│  ├─ composables.md          通用组合式函数：useDelayedFlag（延迟显示的加载状态）
 │  ├─ system-title.md         系统名称的 SVG 轮廓：用法、自动生成、常见问题
 │  └─ icons.md                图标：SvgIcon 用法、添加图标、规范化规则、自动化与检查
 ├─ design/                    设计规范与主题落地
