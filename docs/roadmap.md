@@ -9,7 +9,7 @@
 | **0. 约定** | `AGENTS.md` 骨架（分层、依赖方向、命名），确认待定问题 | 架构分层、依赖倒置 | ✅ 完成（ADR 0001、0002、0004） |
 | **1. 工程基础** | `apps/web`：Vite 最新版 + `plugin-vue-jsx` + TS strict；tsconfig 分层；实测 TS 7 工具链；lint（只管正确性，格式交给 WebStorm）；Vitest | tsconfig 各项配置的含义、`jsxImportSource: 'vue'`、Vite 插件管线 | ✅ 完成（tag `stage-1`，[总结](stages/stage-1-engineering-foundation.md)） |
 | **2. 应用骨架** | 有类型的 HTTP 客户端和错误模型、鉴权、路由守卫（用模块扩充给 `RouteMeta` 加类型）、布局、存储适配器、MSW、Element Plus 主题、CSS Modules | 泛型、可辨识联合、模块扩充、Adapter 和 Strategy 模式 | ✅ 完成（tag `stage-2`，[总结](stages/stage-2-app-skeleton-and-auth.md)） |
-| **3. 第一个纵切** | 登录 + 布局 + 一个简单列表页，把 API、query、store、TSX 组件、测试整条链路跑通 | vue-query（TanStack Query），TSX 中 props、emits、slots 的类型写法 | ⏳ 下一步：登录和布局已在阶段二完成，只剩列表页 |
+| **3. 第一个纵切** | 登录 + 布局 + 一个简单列表页，把 API、query、store、TSX 组件、测试整条链路跑通 | vue-query（TanStack Query），TSX 中 props、emits、slots 的类型写法 | ⏳ 下一步：登录和布局已在阶段二完成。按 3.1 页面布局规范与设计稿 → 3.2 `libs/ui` 的布局、面板、标题组件（预览页截图确认）→ 3.3 列表页的顺序进行 |
 | **4. map-core** | 重新设计引擎抽象、Manager 体系、有类型的事件、有类型的 Worker 消息、资源释放 | 接口与抽象类的区别、Facade、Factory、Observer、`using` / Disposable | 未开始 |
 | **5. map-vue + 现状底图** | `MapProvider`、`useMap()`、图层面板 | provide / inject 的类型、响应式边界（`shallowRef`、`markRaw`） | 未开始 |
 | **6. 复杂业务** | 空间监测三件套、AI 流式对话、文件管理，以及其余业务模块 | 拆分巨型组件、流式读取与 SSE、取消请求 | 未开始 |
@@ -39,15 +39,17 @@
 
 | 阶段 | 事项 | 出处 |
 |---|---|---|
-| 3 | 选定第一个列表页（候选：资源管理、文件管理、数据下载、消息中心） | 本文 |
+| 3 | 选定第一个列表页：优先文件管理或资源管理（左右结构，能验证布局组件）；数据下载、消息中心为备选 | 本文 |
+| 3 | 页面布局规范：补间距、圆角令牌；分栏型页面的侧栏宽度档位、面板、标题、高度与滚动、窄屏处理；组件放在 `libs/ui`，它是第一个 libs 模块，`tsconfig.libs.json` 随之提前到阶段三，断点从 `app/layout` 下移到 `libs/ui` | 本文 |
 | 3 | 是否引入 TanStack Query 管理接口数据；请求的重试、去重、缓存 | ADR 0011、[modules/http.md](modules/http.md) |
 | 3 | 全局表格样式（旧项目资源管理列表的表头、行高、悬停色等） | [design/theme.md](design/theme.md) |
 | 3 | 会话结束的统一处理：取消请求、账号之间的数据隔离、清理缓存、错误提示由谁负责，协调逻辑放在 app（多标签页同步已在阶段三开始前完成，届时并入） | [modules/auth.md](modules/auth.md) |
 | 3 之后 | 接入 Renovate 自动处理依赖更新 | ADR 0005 |
 | 3 之后 | 评估 Playwright 端到端测试；覆盖率与门槛 | ADR 0010 |
-| 4 | 第一个 libs 模块，同时加 `tsconfig.libs.json`；map-core 放 `libs/` 还是做成 `packages/` | AGENTS.md、ADR 0004、0006 |
+| 4 | map-core 放 `libs/` 还是做成 `packages/`（第一个 libs 模块和 `tsconfig.libs.json` 已提前到阶段三的 `libs/ui`） | AGENTS.md、ADR 0004、0006 |
 | 4 | MapLibre 的大版本 | ADR 0002 |
 | 5 | 地图页的页面缓存（keep-alive） | [modules/layout.md](modules/layout.md) |
+| 5 | 画布型页面：地图铺满内容区，操作栏和面板悬浮；悬浮面板沿用面板规范；地图定位时的 padding 要避开悬浮面板 | 本文 |
 | 6 | AI 对话：AI 后端登录不再在前端写死账号密码 | ADR 0015 |
 | 6 | 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像、消息铃铛 | [modules/layout.md](modules/layout.md) |
 | 6 | 文件管理：上传、下载与进度 | ADR 0011 |
