@@ -17,7 +17,7 @@ docs/
 │  └─ NNNN-*.md
 ├─ config/                    重要配置文件的逐项说明
 │  ├─ package-json.md         根目录与 apps/web 的 package.json
-│  ├─ tsconfig.md             apps/web 的三份 tsconfig
+│  ├─ tsconfig.md             apps/web 的 tsconfig（app、libs、node）
 │  ├─ oxlintrc.md             .oxlintrc.json（lint 规则与依赖方向）
 │  ├─ pnpm-workspace.md       pnpm-workspace.yaml（workspace、冷却期、安装脚本）
 │  ├─ ci-workflow.md          .github/workflows/ci.yml
@@ -30,6 +30,7 @@ docs/
 │  ├─ composables.md          通用组合式函数：useDelayedFlag（延迟显示的加载状态）
 │  ├─ layout.md               布局：顶部导航、用户菜单、宽度适配
 │  ├─ system-title.md         系统名称的 SVG 轮廓：用法、自动生成、常见问题
+│  ├─ ui.md                   libs/ui：两个入口、窄屏断点、布局与面板组件
 │  └─ icons.md                图标：SvgIcon 用法、添加图标、规范化规则、自动化与检查
 ├─ design/                    设计规范与主题落地
 │  ├─ color-and-typography.md 系统配色与字体规范（原文）

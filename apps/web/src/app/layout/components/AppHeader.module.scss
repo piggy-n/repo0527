@@ -38,7 +38,7 @@
   margin-left: 24px;
 }
 
-@media (max-width: #{breakpoints.$title - 1px}) {
+@media (width < #{breakpoints.$title}) {
   .title {
     display: none;
   }

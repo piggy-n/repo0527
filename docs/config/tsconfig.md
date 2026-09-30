@@ -1,9 +1,9 @@
 # tsconfig 配置说明
 
-对应文件：`apps/web/tsconfig.json`、`apps/web/tsconfig.app.json`、`apps/web/tsconfig.node.json`
-相关决策：ADR 0003（TypeScript 7）、ADR 0004（模块边界）、ADR 0006（依赖方向检查）
+对应文件：`apps/web/tsconfig.json`、`apps/web/tsconfig.app.json`、`apps/web/tsconfig.libs.json`、`apps/web/tsconfig.node.json`
+相关决策：ADR 0003（TypeScript 7）、ADR 0004（模块边界）、ADR 0006（依赖方向检查）、ADR 0016（第一个 libs 模块）
 
-## 为什么拆成三个文件
+## 为什么拆成多个文件
 
 浏览器代码（`src/`）和构建配置（`vite.config.ts`）运行在不同环境：前者能用 DOM、`import.meta.env`，后者运行在 Node 里、要用 Node 的类型。放在一个 tsconfig 里，就会出现"浏览器代码能调用 `fs`""配置文件能访问 `document`"这类类型上允许、运行时却出错的情况。
 
@@ -11,7 +11,8 @@
 |---|---|---|
 | `tsconfig.json` | 不检查任何文件，只列出引用 | — |
 | `tsconfig.app.json` | `src/` | DOM + `vite/client` |
-| `tsconfig.node.json` | `vite.config.ts` | Node |
+| `tsconfig.libs.json` | `src/libs/`（不含测试） | DOM，不加载 `vite/client`，没有 `@/*` |
+| `tsconfig.node.json` | `vite.config.ts`、`tools/` | Node |
 
 这种写法叫 **solution 风格**：根 `tsconfig.json` 用 `"files": []` 表示自己不包含文件，再用 `references` 指向真正干活的配置。运行 `tsc -b`（build 模式）时，TS 会依次检查每个被引用的项目。
 
@@ -24,6 +25,7 @@
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.libs.json" },
     { "path": "./tsconfig.node.json" }
   ]
 }
@@ -178,15 +180,38 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 | `erasableSyntaxOnly` | 禁止 `enum`、`namespace`、构造函数参数属性 | 会限制 TS 的面向对象写法，项目还在学习阶段，暂不限制 |
 | `allowImportingTsExtensions` | 允许 `import './a.ts'` | 目前的导入都不写扩展名，用不到 |
 
-## 以后会新增的配置
+## tsconfig.libs.json
 
-创建第一个 libs 模块时，要加上 `tsconfig.libs.json`（ADR 0006）：
+阶段三创建第一个 libs 模块 `libs/ui` 时加入（ADR 0006、0016）。作用是在类型检查阶段拦住 libs 违反拆包规则（ADR 0004）的写法：
 
-- 只包含 `src/libs`
-- `types` 不加载 `vite/client`，libs 里读取 `import.meta.env` 就会报错
-- `paths` 里只有 `@yzt/*`，没有 `@/*`，libs 里使用 `@/` 导入就会报错
+```json
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.libs.tsbuildinfo",
+    "types": [],
+    "paths": {
+      "@yzt/*": ["./src/libs/*/index.ts"]
+    }
+  },
+  "include": ["src/libs"],
+  "exclude": ["src/libs/**/*.test.ts", "src/libs/**/*.test.tsx"]
+}
+```
 
-同时要把它加进 `tsconfig.json` 的 `references`。
+| 选项 | 值 | 说明 |
+|---|---|---|
+| `extends` | `./tsconfig.app.json` | 其余选项与 app 相同，只覆盖下面几项，两份配置不会逐渐不一致 |
+| `types` | `[]` | 不加载 `vite/client`，libs 里读取 `import.meta.env` 会报错 |
+| `paths` | 只有 `@yzt/*` | `paths` 整体覆盖而不是合并，没有 `@/*`，libs 里用 `@/` 导入会报错 |
+| `include` | `["src/libs"]` | 只检查 libs |
+| `exclude` | 测试文件 | 测试不打包进模块，可以用 Vite 的特性（如 `?raw` 导入），仍由 app 配置检查 |
+
+已验证：在 `src/libs/ui` 下放一个同时读取 `import.meta.env.VITE_APP_TITLE`、导入 `@/shared/config/app-config` 的探针文件，`tsc -b` 报出 TS2339（`ImportMeta` 上没有 `env`）和 TS2307（找不到模块），且只由这份配置报出；删掉探针后通过。
+
+**libs 被检查两次**：`tsconfig.app.json` 的 `include` 是整个 `src`，所以 libs 的源码也会按 app 的规则检查一遍。这是有意保留的：如果把 libs 从 app 配置中排除，app 就要通过项目引用使用 libs 的类型，被引用的项目必须开启 `composite`（隐含输出声明文件），配置会复杂很多。多一次检查的耗时可以忽略。
+
+**CSS Modules 的类型**：`*.module.scss` 的模块声明来自 `vite/client`，这份配置不加载它，libs 里的组件导入样式时要另外声明，写第一个带样式的组件时加入。
 
 ## 修改时的检查清单
 

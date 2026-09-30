@@ -1,7 +1,7 @@
 # vite.config.ts 配置说明
 
 对应文件：`apps/web/vite.config.ts`
-相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）
+相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（libs 的 Sass 入口）
 
 ## 整体结构
 
@@ -15,6 +15,7 @@
 |---|---|---|
 | `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；后两个会改动源文件，统称 generators，测试模式下不启用：`systemTitlePlugin` 按 `VITE_APP_TITLE` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 来自 `@yzt/icons/tools`，自动规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)） |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
+| `css.preprocessorOptions.scss.loadPaths` | `[src/libs]` | libs 模块的 Sass 入口按模块名引用，见下文 |
 | `server.proxy` | `/backend/` → `PROXY_TARGET` | 同源代理，见下文 |
 | `test` | 见下文 | Vitest 的配置（ADR 0010） |
 
@@ -43,6 +44,7 @@ const generators =
 | `environment` | `'jsdom'` | 在 Node 里模拟 DOM，挂载组件用 |
 | `unstubEnvs` | `true` | 每个用例结束后撤销 `vi.stubEnv`。已用对照实验验证：关掉后，一个用例修改的环境变量会泄漏到下一个用例 |
 | `server.deps.inline` | `['element-plus']` | 让 Vitest 处理 element-plus，而不是交给 Node 直接加载。不加的话，Element 表单的校验在测试中永远通过，见下文 |
+| `css.include` | `[/\/src\/libs\/[^/]+\/_index\.scss/]` | 只让 libs 的 Sass 入口按原文加载，供断点一致性测试读取，见下文"Sass 的 loadPaths" |
 
 没有开启 `globals`，测试文件显式导入 `describe`、`it`、`expect`，和 AGENTS.md"不使用自动导入"一致。Vitest 5 默认开启 `clearMocks`，每个用例之间会清空 mock 的调用记录。
 
@@ -60,6 +62,26 @@ const generators =
 加入 `server.deps.inline` 后，element-plus 由 Vitest 处理，它对 async-validator 的导入会经过 Vitest 的 CommonJS 兼容处理，校验恢复正常。去掉这一项，`useLoginForm` 的 3 个校验用例会失败（已验证）。
 
 代价：element-plus 每次运行都要重新转换，本机上全部测试从约 6 秒增加到约 20 秒。也试过依赖预构建（`deps.optimizer` 的 `client`、`ssr`，单独使用或与 inline 一起），校验仍然返回 `true`，没有采用。
+
+### Sass 的 loadPaths
+
+```ts
+css: {
+  preprocessorOptions: {
+    scss: { loadPaths: [fileURLToPath(new URL('./src/libs', import.meta.url))] }
+  }
+}
+```
+
+libs 模块除了 TS 入口 `index.ts`，还可以有一个 Sass 入口 `_index.scss`，只放变量（目前只有 `libs/ui` 的窄屏断点，ADR 0016）。Sass 解析 `@use 'ui'` 时，先找当前文件旁边的 `ui.scss`、`_ui.scss`，找不到再到 `loadPaths` 里找，`src/libs/ui/_index.scss` 是目录 `ui` 的 index 文件，于是被选中。这和 TS 的 `@yzt/ui` 对应：外部只写模块名，不写模块内部的路径。
+
+- 没有用相对路径（`@use '../../../libs/ui/breakpoints'`）：那样会直接引用模块内部的文件，违背"只从入口导入"
+- 也没有用 `resolve.alias`：别名只在 tsconfig 的 `paths` 里维护，而 `@yzt/*` 只映射到 `index.ts`，不适用于 Sass 文件
+- 路径用 `import.meta.url` 计算，不依赖启动命令所在的目录
+
+已验证：开发服务器和生产构建中，顶部栏的 `@media (width < #{ui.$compact})` 都编译成了 `(width < 1200px)`。
+
+**测试中读取 Sass 入口**：`libs/ui/breakpoints.test.ts` 用 `import sassEntry from './_index.scss?raw'` 读取原文，检查其中的 `$compact` 与 TS 常量一致。Vitest 默认把所有样式请求（包括带 `?raw` 的）替换成空字符串，实测拿到的是 `""`；`test.css.include` 列出的文件才交给 Vite 正常处理，所以这里只放行 libs 的 Sass 入口。
 
 ### 读取环境变量
 
@@ -99,3 +121,4 @@ proxy: {
 - 新增代理规则：同步更新 `docs/deployment.md` 中的 nginx 示例，保持开发和生产一致
 - 新增插件：确认它不依赖 TS 的 JS API（ADR 0003），并在本文登记；插件对测试同样生效，改完运行 `pnpm test`
 - 改动路径别名：只改 tsconfig 的 `paths`，不要在这里加 `resolve.alias`
+- 新增 libs 模块的 Sass 入口：放在模块根目录，命名 `_index.scss`，只放变量；`test.css.include` 的正则已经覆盖所有模块

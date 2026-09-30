@@ -1,3 +1,4 @@
+@use 'ui';
 @use '../breakpoints';
 
 .nav {
@@ -144,7 +145,7 @@
   list-style: none;
 }
 
-@media (max-width: #{breakpoints.$nav-icons - 1px}) {
+@media (width < #{breakpoints.$nav-icons}) {
   .item {
     padding: 0 14px;
   }
@@ -154,7 +155,7 @@
   }
 }
 
-@media (max-width: #{breakpoints.$compact - 1px}) {
+@media (width < #{ui.$compact}) {
   .nav {
     justify-content: flex-end;
   }

@@ -1,0 +1,3 @@
+// @yzt/ui 的 Sass 入口：只放变量，不输出 CSS；应用通过 vite.config.ts 的 loadPaths 以 @use 'ui' 引用
+// 与 breakpoints.ts 的 COMPACT_BREAKPOINT 保持一致，由 breakpoints.test.ts 检查
+$compact: 1200px;

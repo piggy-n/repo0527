@@ -65,10 +65,11 @@ apps/web/src/
 ## libs 的拆包规则（ADR 0004）
 
 - 每个模块只有一个入口 `index.ts`，外部只能从 `@yzt/<name>` 导入，不直接引用模块内部文件
+- 例外：需要给样式共享 Sass 变量（如断点）时，模块根目录可以有 Sass 入口 `_index.scss`，只放变量，不输出 CSS；应用用 `@use '<name>'` 引用（`vite.config.ts` 的 `loadPaths`，ADR 0016）
 - 模块内部只用相对路径，不使用 `@/`
 - 不读取 `import.meta.env`、store、router 或全局单例，需要的依赖通过构造参数或函数参数传入
 - 模块之间不能循环依赖
-- 创建第一个 libs 模块时，加上 `apps/web/tsconfig.libs.json`：只包含 `src/libs`，不加载 `vite/client` 类型，不配置 `@/*`，让读取 env 和使用 `@/` 在类型检查时报错（ADR 0006）
+- `apps/web/tsconfig.libs.json` 只检查 libs 的源码（不含测试）：不加载 `vite/client` 类型，不配置 `@/*`，读取 env 和使用 `@/` 在类型检查时报错（ADR 0006）；libs 需要的环境类型（如 CSS Modules）单独声明，不能加回 `vite/client`
 
 ## 编码约定
 

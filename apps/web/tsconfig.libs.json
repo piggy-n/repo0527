@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.libs.tsbuildinfo",
+    "types": [],
+    "paths": {
+      "@yzt/*": ["./src/libs/*/index.ts"]
+    }
+  },
+  "include": ["src/libs"],
+  "exclude": ["src/libs/**/*.test.ts", "src/libs/**/*.test.tsx"]
+}

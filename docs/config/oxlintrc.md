@@ -299,7 +299,7 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 有两类问题不归 lint 管，而是交给 TS：
 
 - 深层导入 `@yzt/x/internal`：tsconfig 的 `paths` 只映射到 `index.ts`，解析直接失败
-- libs 读取 `import.meta.env`、使用 `@/`：由将来的 `tsconfig.libs.json` 拦截（`no-restricted-properties` 检查不到 `import.meta`）
+- libs 读取 `import.meta.env`、使用 `@/`：由 `tsconfig.libs.json` 拦截（`no-restricted-properties` 检查不到 `import.meta`），见 [tsconfig.md](tsconfig.md)
 
 ## 维护指南
 
