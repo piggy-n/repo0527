@@ -6,7 +6,7 @@ import { setupHttp } from './http';
 import { pinia } from './pinia';
 import { router } from './router';
 
-setupHttp();
+setupHttp(router);
 
 // pinia 要先于 router 安装：安装 router 时就开始首次导航，路由守卫里会用到 store
 createApp(App).use(pinia).use(router).mount('#app');

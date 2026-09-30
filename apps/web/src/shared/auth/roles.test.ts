@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RouteName } from '../router/route-names';
-import { Role, roleHome, toRole } from './roles';
+import { canAccess, Role, roleHome, toRole } from './roles';
 
 describe('toRole', () => {
   it('识别 admin 和 user', () => {
@@ -13,6 +13,18 @@ describe('toRole', () => {
     expect(toRole(null)).toBe(Role.user);
     expect(toRole('Admin')).toBe(Role.user);
     expect(toRole('superadmin')).toBe(Role.user);
+  });
+});
+
+describe('canAccess', () => {
+  it('没有限定角色时都能访问', () => {
+    expect(canAccess(Role.user, undefined)).toBe(true);
+  });
+
+  it('限定角色时只有列出的角色能访问', () => {
+    expect(canAccess(Role.admin, [Role.admin])).toBe(true);
+    expect(canAccess(Role.user, [Role.admin])).toBe(false);
+    expect(canAccess(Role.admin, [])).toBe(false);
   });
 });
 

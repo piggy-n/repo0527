@@ -17,6 +17,11 @@ export function toRole(roleCode: unknown): Role {
   return isRole(roleCode) ? roleCode : Role.user;
 }
 
+/** 角色能否访问限定了 allowed 的页面或功能；allowed 为空表示不限角色 */
+export function canAccess(role: Role, allowed: readonly Role[] | undefined): boolean {
+  return allowed === undefined || allowed.includes(role);
+}
+
 // Record 要求每个角色都有首页，新增角色时漏配会报类型错误
 const roleHomes: Record<Role, RouteName> = {
   admin: RouteName.currentMap,

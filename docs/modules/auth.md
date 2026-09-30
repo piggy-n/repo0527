@@ -5,7 +5,8 @@
 
 - `shared/auth`：登录会话、角色、token 过期判断，应用的各部分都会用到
 - `features/auth`：登录接口、密码加密，只有登录功能使用
-- 路由守卫、请求头和登录表单逻辑完成后补充到本文
+- `app`：路由守卫（`app/router/auth-guard.ts`）、请求头与 401 处理（`app/http.ts`）
+- 登录表单逻辑完成后补充到本文
 
 ## 会话怎么用
 
@@ -55,6 +56,52 @@ const { user, displayName } = storeToRefs(session);
 - `Role`：`admin`、`user`，值与后端的 `roleCode` 相同
 - `toRole(roleCode)`：缺失或无法识别时按 `user` 处理，与旧项目一致
 - `roleHome(role)`：角色登录后进入的页面（目前两种角色都是现状底图），也是访问无权限页面时的去处
+- `canAccess(role, allowed)`：`allowed` 为 `undefined` 表示不限角色；路由守卫用它检查页面权限，布局的导航菜单也用它过滤
+
+## 页面权限（路由 meta）
+
+权限写在 `app/router/routes.ts` 的路由上，不另外维护路径清单：
+
+```ts
+{ path: '/login', name: RouteName.login, component: ..., meta: { title: '登录', public: true } }
+placeholder('system-management', RouteName.systemManagement, '系统管理', [Role.admin])   // meta.roles
+```
+
+| meta | 含义 | 当前使用的页面 |
+|---|---|---|
+| `public: true` | 不登录也能访问 | 登录页、404、开发用的主题预览 |
+| `roles: [...]` | 只允许这些角色访问 | 资源管理、系统管理（`admin`）；资源申请（`user`） |
+| 都不写 | 所有已登录用户都能访问 | 其余业务页 |
+
+`routes.test.ts` 明确列出了公开页面和限定角色的页面。给业务页误加 `public`，或者改了角色限制，这个测试都会失败；确实要改时，同步修改测试。
+
+子路由的 `to.meta` 是父路由和子路由 meta 的浅合并，同名字段以子路由为准。所以 `public`、`roles` 写在父路由上会作用于全部子路由（已验证）。
+
+## 路由守卫
+
+`app/router/auth-guard.ts` 的 `installAuthGuard(router)` 按下面的顺序检查：
+
+| 情况 | 结果 |
+|---|---|
+| 访问登录页，且已登录（token 未过期） | 进入角色首页 |
+| 访问登录页，未登录 | 放行 |
+| 访问 `public` 页面 | 放行 |
+| 未登录，或 token 已过期 | 清空残留的会话，去登录页 |
+| 角色不在 `meta.roles` 中 | 回到角色首页 |
+| 其他 | 放行 |
+
+- 重定向都带 `replace: true`：例如在现状底图点了没有权限的页面，重定向回现状底图时不会在历史记录里多留一条
+- 守卫里调用 `useSessionStore()`：`main.ts` 中 pinia 先于 router 安装，首次导航开始时已经可以取到 store
+- 登录后不回到原来要访问的页面，而是进入角色首页，与旧项目一致
+
+## 请求头与 401
+
+`app/http.ts` 的 `setupHttp(router)` 通过 `configureHttp` 注入：
+
+- `getHeaders`：每次请求时读取会话，有 token 时加上请求头 `token`；登录、退出后立即生效
+- `onUnauthorized`：先清空会话；如果不在登录页，提示"登录状态已过期，请重新登录"并回到登录页
+- 旧项目在每个请求发出前都先检查 token 是否过期；新项目不做这一步，由路由守卫在切换页面时检查，请求期间过期则由后端的 401 处理
+- `router` 由参数传入，而不是直接导入：测试时可以换成只含所需路由的内存路由
 
 ## 登录接口
 
@@ -109,6 +156,11 @@ createTestJwtExpiringAt(Date.now() + 3_600_000);
 
 - `shared/auth` 共 17 个用例；逐个改坏 9 处源码（去掉 30 秒提前量、`exp` 不换算毫秒、非 JWT 时抛错、不删除损坏数据、`start` 不写存储、`clear` 不删存储、`||` 改成 `??`、接受任意角色码、允许空 token），每处都有用例失败
 - `features/auth` 共 10 个用例，`appConfig` 的公钥校验 3 个用例；逐个改坏 10 处（改成 C1C2C3、去掉 `silent`、明文提交密码、`||` 改成 `??`、`roleCode` 可缺失、角色写死、`id` 不转字符串、允许空 token、公钥长度放宽、不检查 `04` 前缀），每处都有用例失败
+- 路由守卫 8 个用例、`setupHttp` 3 个用例、路由表的权限 2 个用例、`canAccess` 2 个用例；逐个改坏 11 处（公开页面也要求登录、不检查过期、过期不清会话、已登录仍停在登录页、不检查角色、空数组视为不限角色、不带 token、401 不清会话、登录页上也提示并跳转、业务页误加 `public`、系统管理不限角色），每处都有用例失败
+- 浏览器实测（开发服务器，真实后端）：
+  - 未登录访问 `/current-map` 被带到 `/login`
+  - 在 localStorage 放入普通用户的测试会话后：访问 `/system-management` 回到 `/current-map`；`/resource-application` 能进入；`/login` 进入 `/current-map`；不存在的地址显示 404
+  - 带着这个假 token 请求 `/system/upms/user/detail`：请求带有 `token` 请求头，后端返回 401；会话被清空，页面回到 `/login`，提示"登录状态已过期，请重新登录"
 
 ## 设计理由
 

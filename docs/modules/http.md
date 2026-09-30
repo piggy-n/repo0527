@@ -85,7 +85,7 @@ try {
 
 ## 为什么这样设计
 
-- **依赖倒置**：401 跳转要用 router，提示要用 `ElMessage`，它们属于 app 层。shared 不能依赖 app，所以 shared 只定义回调接口，由 app 在 `main.ts` 中调用 `setupHttp()` 注入
+- **依赖倒置**：401 跳转要用 router，提示要用 `ElMessage`，它们属于 app 层。shared 不能依赖 app，所以 shared 只定义回调接口，由 app 在 `main.ts` 中调用 `setupHttp(router)` 注入。app 注入的内容（token 请求头、401 时清空会话）见 [auth.md](auth.md)
 - **避免循环依赖**：鉴权 store 要调用登录接口，而 http 要读 token。token 通过 `getHeaders()` 回调获取后，依赖只有一个方向
 - **超时自己实现**：MSW 的 XHR 拦截器模拟响应时不处理 `xhr.timeout`，axios 的超时在测试中测不到。改为 `AbortController` + `setTimeout`，和取消共用一套机制，中止原因是 `TIMEOUT_REASON` 时判为超时
 - **`isAxiosError<unknown>()` 而不是 `instanceof AxiosError`**：`instanceof` 收窄出的是 `AxiosError<any>`，响应体会变成 `any`，类型感知 lint 会报错
@@ -100,7 +100,6 @@ try {
 
 | 事项 | 时机 |
 |---|---|
-| token（`getHeaders`）、登录过期的前置检查 | 鉴权步骤 |
 | 上传、下载、进度 | 迁移文件管理时 |
 | 不遵守 `{ code, msg, data }` 的接口 | 遇到时再加选项，例如 AI 后端 |
 | 请求重试、去重、缓存 | 阶段三决定是否引入 TanStack Query 时一并考虑 |
