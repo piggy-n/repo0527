@@ -1,34 +1,97 @@
+// 从窄到宽编写：基础样式是手机布局，断点只往上加；布局与断点的说明见 docs/modules/auth.md
+// 插画宽度占底图的比例：2078 ÷ 3840
+$illustration-ratio: 54.1%;
+
 // 全局没有 box-sizing 重置，内边距要计入宽高，否则 100vh 加上内边距会出现滚动条
 .root,
+.formArea,
 .card {
   box-sizing: border-box;
 }
 
+// 窄屏只显示底图的右侧，与宽屏时卡片后面的背景一致
 .root {
   display: flex;
+  min-height: 100vh;
+  background: url('./images/login-background.webp') right center / cover no-repeat;
+}
+
+.illustration {
+  display: none;
+}
+
+.formArea {
+  display: flex;
+  flex: 1;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
   padding: 24px 16px;
-  background: var(--color-bg-page);
 }
 
 .card {
   width: min(480px, 100%);
-  padding: 48px 40px;
-  border-radius: 16px;
-  background: var(--color-bg-container);
-  box-shadow: var(--shadow-lg);
+  padding: 36px 24px 40px;
+  border-radius: 12px;
+  background-color: var(--color-primary-bg);
+  box-shadow: var(--shadow-primary-lg);
+}
+
+.header {
+  margin-bottom: 32px;
+  text-align: center;
+  color: var(--color-text-title);
+
+  // 轮廓 SVG 的高度是 1em；宽度不够时按比例缩小
+  svg {
+    display: block;
+    max-width: 100%;
+    margin: 0 auto;
+  }
 }
 
 .title {
-  margin: 0 0 40px;
-  text-align: center;
+  margin: 0;
   font-size: var(--font-size-display);
-  color: var(--color-text-title);
+}
 
-  // 卡片较窄时按宽度缩小
-  svg {
-    max-width: 100%;
+.welcome {
+  margin-top: 10px;
+  font-size: var(--font-size-lg);
+}
+
+// 平板及以上：卡片恢复设计稿的内边距
+@media (min-width: 600px) {
+  .formArea {
+    padding: 40px 32px;
+  }
+
+  .card {
+    padding: 52px 44px 56px;
+    border-radius: 16px;
+  }
+
+  .header {
+    margin-bottom: 40px;
+  }
+}
+
+// 桌面：左侧插画，卡片在插画右侧的区域居中；插画背景只写在这里，窄屏不会下载
+@media (min-width: 1200px) {
+  .root {
+    display: grid;
+    grid-template-columns: $illustration-ratio 1fr;
+    background-position: center;
+  }
+
+  .illustration {
+    display: block;
+    background: url('./images/login-illustration.webp') center / cover no-repeat;
+  }
+}
+
+// 2K 屏按 100% 缩放时卡片显得太小，整体放大；令牌值不变，不支持 zoom 的旧浏览器保持原尺寸
+@media (min-width: 2400px) {
+  .card {
+    zoom: 1.25;
   }
 }

@@ -1,3 +1,12 @@
+// 表单项之间的距离，校验提示显示在这段间距里
+.item {
+  margin-bottom: 24px;
+}
+
+.lastItem {
+  margin-bottom: 32px;
+}
+
 .submit {
   width: 100%;
 }

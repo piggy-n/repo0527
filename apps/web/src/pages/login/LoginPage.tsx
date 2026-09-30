@@ -5,9 +5,10 @@ import { LoginForm } from '@/features/auth/components/LoginForm';
 import { roleHome } from '@/shared/auth/roles';
 import type { Session } from '@/shared/auth/session-store';
 import { SystemTitle } from '@/shared/system-title/SystemTitle';
+import { WelcomeText } from '@/shared/system-title/WelcomeText';
 import styles from './LoginPage.module.scss';
 
-/** 登录页：暂用简单的卡片布局，背景图到位后按设计稿（方案 A）完成外观 */
+/** 登录页：左侧插画、右侧登录卡片，窄屏只显示卡片与底图；布局与断点见 docs/modules/auth.md */
 export const LoginPage = defineComponent({
   name: 'LoginPage',
   setup() {
@@ -21,12 +22,20 @@ export const LoginPage = defineComponent({
 
     return () => (
       <div class={styles.root}>
-        <div class={styles.card}>
-          <h1 class={styles.title}>
-            <SystemTitle />
-          </h1>
-          <LoginForm onSuccess={enterHome} />
-        </div>
+        <div class={styles.illustration} />
+        <main class={styles.formArea}>
+          <div class={styles.card}>
+            <header class={styles.header}>
+              <h1 class={styles.title}>
+                <SystemTitle />
+              </h1>
+              <div class={styles.welcome}>
+                <WelcomeText />
+              </div>
+            </header>
+            <LoginForm onSuccess={enterHome} />
+          </div>
+        </main>
       </div>
     );
   }

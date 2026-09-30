@@ -32,8 +32,9 @@ export const LoginForm = defineComponent({
 
     return () => (
       <ElForm ref={formRef} model={model} rules={rules} size="large">
-        <ElFormItem prop="loginName">
+        <ElFormItem class={styles.item} prop="loginName">
           <ElInput
+            class="input-filled"
             modelValue={model.loginName}
             onUpdate:modelValue={value => {
               model.loginName = value;
@@ -42,11 +43,12 @@ export const LoginForm = defineComponent({
             placeholder="请输入账号"
             autocomplete="username"
           >
-            {{ prefix: () => <SvgIcon name="auth-user" /> }}
+            {{ prefix: () => <SvgIcon name="auth-user" size={18} /> }}
           </ElInput>
         </ElFormItem>
-        <ElFormItem prop="password">
+        <ElFormItem class={styles.lastItem} prop="password">
           <ElInput
+            class="input-filled"
             modelValue={model.password}
             onUpdate:modelValue={value => {
               model.password = value;
@@ -57,10 +59,16 @@ export const LoginForm = defineComponent({
             placeholder="请输入密码"
             autocomplete="current-password"
           >
-            {{ prefix: () => <SvgIcon name="auth-lock" /> }}
+            {{ prefix: () => <SvgIcon name="auth-lock" size={18} /> }}
           </ElInput>
         </ElFormItem>
-        <ElButton class={styles.submit} type="primary" loading={submitting.value} onClick={handleSubmit}>
+        <ElButton
+          class={['button-xl', styles.submit]}
+          type="primary"
+          loading={submitting.value}
+          autoInsertSpace
+          onClick={handleSubmit}
+        >
           登录
         </ElButton>
       </ElForm>
