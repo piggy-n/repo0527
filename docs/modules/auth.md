@@ -59,6 +59,8 @@ const { user, displayName } = storeToRefs(session);
 
 这里只读取载荷，不校验签名：前端拿不到签名密钥，也不需要校验。本地判断只用于提前跳转到登录页，token 是否有效最终由后端决定（返回 401）。
 
+载荷用 zod 校验（`{ exp: number }`），不直接解构 `jwtDecode()` 的返回值：jwtDecode 只保证载荷能按 JSON 解析，它的返回类型 `JwtPayload` 在运行时并不成立。阶段二的实现直接解构，载荷是 JSON `null` 时（例如 `e30.bnVsbA.x`）抛出 `TypeError`；这个错误不是 `InvalidTokenError`，会一直抛到路由守卫，导航失败。会话 schema 只要求 token 非空，这样的 token 能从存储进入守卫，每次刷新都会失败。阶段三开始前修复，现在按"无法得知过期时间"处理，由后端的 401 兜底。
+
 ## 角色
 
 `roles.ts`：

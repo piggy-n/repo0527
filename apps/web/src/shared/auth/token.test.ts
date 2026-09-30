@@ -22,6 +22,16 @@ describe('getTokenExpiry', () => {
     expect(getTokenExpiry('plain-token')).toBeUndefined();
     expect(getTokenExpiry('a.%%%.c')).toBeUndefined();
   });
+
+  // 载荷能按 JSON 解析但不是对象时，jwtDecode 不报错，原样返回解析结果
+  it.each([
+    ['null', 'e30.bnVsbA.x'],
+    ['数字', 'e30.MTIz.x'],
+    ['字符串', 'e30.ImV4cCI.x'],
+    ['数组', 'e30.W10.x']
+  ])('载荷是 %s 时返回 undefined，不抛错', (_, token) => {
+    expect(getTokenExpiry(token)).toBeUndefined();
+  });
 });
 
 describe('isTokenExpired', () => {

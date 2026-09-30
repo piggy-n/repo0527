@@ -83,6 +83,13 @@ describe('已登录', () => {
     expect(localStorage.length).toBe(0);
   });
 
+  it('token 的载荷不是对象时不抛错，无法得知过期时间，按未过期放行', async () => {
+    // 载荷是 JSON null
+    useSessionStore().start({ token: 'e30.bnVsbA.x', user: { loginName: 'zhangsan', role: Role.user } });
+
+    expect((await visit('/current-map')).name).toBe(RouteName.currentMap);
+  });
+
   it('token 过期时访问登录页，停留在登录页', async () => {
     signIn(Role.admin, Date.now() - 1000);
 
