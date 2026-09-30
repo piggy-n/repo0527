@@ -31,7 +31,7 @@ $illustration-ratio: 54.1%;
 .card {
   width: min(480px, 100%);
   padding: 36px 24px 40px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background-color: var(--color-primary-bg);
   box-shadow: var(--shadow-primary-lg);
 }
@@ -67,7 +67,7 @@ $illustration-ratio: 54.1%;
 
   .card {
     padding: 52px 44px 56px;
-    border-radius: 16px;
+    border-radius: var(--radius-xl);
   }
 
   .header {

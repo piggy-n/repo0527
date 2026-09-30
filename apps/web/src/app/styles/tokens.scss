@@ -98,7 +98,9 @@ $primary-alphas: (5, 10, 12, 14, 28, 32);
   --space-lg: 16px;
   --space-xl: 24px;
 
-  // sm 与 Element 的输入框、按钮一致；md 用于面板、卡片
+  // sm 与 Element 的输入框、按钮一致；md 用于面板、卡片；lg、xl 用于登录卡片这类大卡片
   --radius-sm: 4px;
   --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 }

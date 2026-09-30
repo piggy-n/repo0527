@@ -16,7 +16,7 @@
   padding: 20px 24px;
   background-color: var(--color-bg-container);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
 }
 
@@ -53,7 +53,7 @@
   height: 48px;
   margin-bottom: 6px;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .swatchName {
@@ -79,7 +79,7 @@
   padding: 24px 0;
   text-align: center;
   background-color: var(--color-bg-container);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .row {
@@ -123,7 +123,7 @@
   padding: 12px 0;
   color: var(--color-text-strong);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .iconName {
@@ -141,7 +141,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background-color: var(--color-primary);
   color: var(--color-text-inverse);
 }
@@ -155,7 +155,7 @@
 .filledPanel {
   padding: 24px;
   background-color: var(--color-primary-bg);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
 }
 
 .filledForm {

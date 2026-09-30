@@ -41,7 +41,6 @@
 |---|---|---|
 | 3 | 选定第一个列表页：优先文件管理或资源管理（左右结构，能验证布局组件）；数据下载、消息中心为备选 | 本文 |
 | 3 | `libs/ui` 的分栏布局、面板、标题组件（3.1 的规范与设计稿已完成）；组件接口、打开按钮如何送进面板头部、跨断点时保留左栏状态；窄屏断点下移到 `libs/ui` | [design/page-layout.md](design/page-layout.md)、ADR 0016 |
-| 3 | 已有代码中写死的圆角改用令牌 | [design/theme.md](design/theme.md) |
 | 3 | 是否引入 TanStack Query 管理接口数据；请求的重试、去重、缓存 | ADR 0011、[modules/http.md](modules/http.md) |
 | 3 | 全局表格样式（旧项目资源管理列表的表头、行高、悬停色等） | [design/theme.md](design/theme.md) |
 | 3 | 会话结束的统一处理：取消请求、账号之间的数据隔离、清理缓存、错误提示由谁负责，协调逻辑放在 app（多标签页同步已在阶段三开始前完成，届时并入） | [modules/auth.md](modules/auth.md) |

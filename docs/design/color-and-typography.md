@@ -177,6 +177,10 @@ body {
 | `space-xl` | `24px` | 较大的分隔 |
 | `radius-sm` | `4px` | 与 Element 的输入框、按钮一致；标签、树节点、菜单项 |
 | `radius-md` | `8px` | 面板、卡片、悬浮面板；大号输入框与按钮 |
+| `radius-lg` | `12px` | 大卡片（登录卡片） |
+| `radius-xl` | `16px` | 大卡片在大屏上放大后（登录卡片 ≥ 1200 宽） |
+
+圆形和两端全圆的胶囊形（头像、状态标签、标题竖杠）写 `50%` 或 `999px`，它们表示形状，不属于圆角令牌。
 
 ---
 
@@ -251,5 +255,7 @@ body {
   --space-xl: 24px;
   --radius-sm: 4px;
   --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 }
 ```

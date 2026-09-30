@@ -22,7 +22,7 @@
   height: 44px;
   padding: 0 18px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-inverse);
   font: inherit;
@@ -85,7 +85,7 @@
   height: 36px;
   padding: 0 10px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-primary);
   font: inherit;
