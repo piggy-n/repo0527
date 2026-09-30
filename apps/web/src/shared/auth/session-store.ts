@@ -79,8 +79,25 @@ export const useSessionStore = defineStore('session', () => {
     session.value = null;
   }
 
-  return { session, token, user, displayName, isActive, start, clear };
+  /** 重新读取存储中的会话，用于同步其他标签页的登录和退出 */
+  function syncFromStorage(): void {
+    session.value = loadSession();
+  }
+
+  return { session, token, user, displayName, isActive, start, clear, syncFromStorage };
 });
+
+/** 其他标签页写入或删除会话时调用 onChange，本标签页自己的写入不会触发；返回取消监听的函数 */
+export function watchSessionStorage(onChange: () => void): () => void {
+  const onStorage = (event: StorageEvent) => {
+    // key 为 null 表示其他标签页调用了 localStorage.clear()
+    if (event.key === STORAGE_KEY || event.key === null) {
+      onChange();
+    }
+  };
+  window.addEventListener('storage', onStorage);
+  return () => window.removeEventListener('storage', onStorage);
+}
 
 if (import.meta.hot) {
   import.meta.hot.accept(acceptHMRUpdate(useSessionStore, import.meta.hot));

@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Role } from './roles';
-import { type Session, useSessionStore } from './session-store';
+import { type Session, useSessionStore, watchSessionStorage } from './session-store';
 import { createTestJwtExpiringAt } from './testing';
 
 const STORAGE_KEY = 'yzt.session';
@@ -88,6 +88,31 @@ describe('useSessionStore', () => {
     store.clear();
 
     expect(useFreshStore().session).toEqual(otherSession);
+  });
+
+  it('syncFromStorage 读取其他标签页写入的会话', () => {
+    const store = useFreshStore();
+    store.start(createSession());
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(otherSession));
+
+    store.syncFromStorage();
+
+    expect(store.session).toEqual(otherSession);
+  });
+
+  it('watchSessionStorage 只在会话的键变化或存储被清空时回调，取消后不再回调', () => {
+    const onChange = vi.fn<() => void>();
+    const stop = watchSessionStorage(onChange);
+
+    window.dispatchEvent(new StorageEvent('storage', { key: 'other-key' }));
+    expect(onChange).not.toHaveBeenCalled();
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY }));
+    window.dispatchEvent(new StorageEvent('storage', { key: null }));
+    expect(onChange).toHaveBeenCalledTimes(2);
+
+    stop();
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY }));
+    expect(onChange).toHaveBeenCalledTimes(2);
   });
 
   it('显示名优先用真实姓名，没有时用登录名', () => {
