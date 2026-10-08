@@ -1,5 +1,6 @@
+import { Upload } from '@element-plus/icons-vue';
 import { MxPanel, MxSplitLayout } from '@yzt/ui';
-import { ElPagination } from 'element-plus';
+import { ElButton, ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { findCategoryPath } from '@/features/file-management/categories';
 import { FileCategoryTree } from '@/features/file-management/components/FileCategoryTree';
@@ -40,7 +41,16 @@ export const FileManagementPage = defineComponent({
                     model={list.filterForm}
                     onSearch={list.search}
                     onReset={list.resetFilters}
-                  />,
+                  >
+                    {{
+                      // 上传在阶段六实现，先放按钮确定布局
+                      extra: () => (
+                        <ElButton type="primary" icon={Upload}>
+                          上传文档
+                        </ElButton>
+                      )
+                    }}
+                  </FileFilterBar>,
                   <FileTable
                     files={list.files.value}
                     initialLoading={list.initialLoading.value}

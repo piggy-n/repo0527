@@ -194,28 +194,72 @@ $tree-node: '.el-tree > .el-tree-node';
   font-size: var(--font-size-lg);
 }
 
-// 查询表单（列表页的筛选栏）：按最小列宽自动分列，配合 label-width="auto" 让标签和控件在各行之间对齐；
-// 用法 <ElForm class="form-query" labelWidth="auto">，按钮放在 form-query__actions 里，见 docs/design/page-layout.md
+// 查询表单（列表页的筛选栏，由 shared/query-form 的 QueryForm 使用，见 docs/modules/query-form.md）：控件等宽 180；
+// 条件放得下一行时标签按文字宽度；放不下时 QueryForm 加上 form-query--aligned，条件换行，标签统一宽度并两端对齐，各行输入框的起点对齐；
+// 按钮默认另起一行，extra 与最右边的输入框右对齐；条件和按钮都放得下一行时加上 form-query--inline，排成一行，extra 在最右端
 .el-form.form-query {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--space-md) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
 
   .el-form-item {
     --el-form-item-margin-bottom: 0;
   }
 
-  // 日期选择器默认固定 220 宽，这里和其他控件一样占满所在列
+  .el-form-item__content {
+    flex: none;
+    width: 180px;
+  }
+
+  // 日期选择器默认固定 220 宽，这里和其他控件一样占满 180
   .el-date-editor {
     --el-date-editor-width: 100%;
   }
 }
 
-// 查询、重置等按钮：放在最后一列并靠右，最后一列被占用时自动换到下一行
+.form-query__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-self: stretch;
+  gap: var(--space-md) var(--space-lg);
+}
+
+// 另起一行时宽度由 QueryForm 设置为最右边那个条件的右边缘；只有一列时放不下所有按钮，就按内容排开
 .form-query__actions {
   display: flex;
-  grid-column: -2 / -1;
-  justify-content: flex-end;
+  min-width: max-content;
+}
+
+.form-query__buttons {
+  display: flex;
+}
+
+// 与查询、重置之间至少留出和按钮间距相同的 12
+.form-query__extra {
+  display: flex;
+  margin-left: auto;
+  padding-left: 12px;
+}
+
+// 标签宽度由 QueryForm 设置；Element 的标签是 inline-flex，text-align 对它不起作用，改成块级
+.el-form.form-query--aligned .el-form-item__label {
+  display: block;
+  text-align: justify;
+  text-align-last: justify;
+}
+
+.el-form.form-query--inline {
+  flex-direction: row;
+  gap: var(--space-lg);
+
+  .form-query__fields {
+    flex: none;
+  }
+
+  .form-query__actions {
+    flex: 1;
+  }
 }
 
 // 加大号按钮：48px 高、16px 半粗、8px 圆角，与 input-filled 搭配；用法 <ElButton class="button-xl">

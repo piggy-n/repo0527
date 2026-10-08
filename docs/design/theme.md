@@ -215,9 +215,9 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 |---|---|---|---|
 | `input-filled` | `<ElInput class="input-filled">` | `primary-border` 浅蓝底、无边框；悬停 `primary-border-hover`、聚焦 `primary` 描边；48px 高、16px 字、`--radius-md` 圆角；占位符和图标用 `primary` | 登录页 |
 | `button-xl` | `<ElButton class="button-xl">` | 48px 高、16px 半粗、`--radius-md` 圆角；颜色沿用按钮的 `type` | 登录页 |
-| `form-query` | `<ElForm class="form-query" labelWidth="auto">`，按钮放在 `<div class="form-query__actions">` 里 | Grid 按最小列宽 240 自动分列，控件占满所在列，日期选择器去掉默认的 220 固定宽度；表单项不留底部外边距；按钮占最后一列并靠右 | 列表页的筛选栏，规则见 [page-layout.md](page-layout.md) 的"筛选栏" |
+| `form-query` | 由 `shared/query-form` 的 `QueryForm` 加在 `ElForm` 上，页面不直接写 | 条件区（`form-query__fields`）从左到右排列、换行；控件宽 180，日期选择器去掉默认的 220 固定宽度；表单项不留底部外边距；按钮行（`form-query__actions`）默认在条件区下方，`form-query__extra` 靠右。条件换行时加 `form-query--aligned`：标签改为块级并两端对齐（`text-align-last: justify`），宽度由 `QueryForm` 设置；条件和按钮都放得下一行时加 `form-query--inline`：条件区和按钮行排成一行，按钮行占满剩下的宽度，extra 在最右端 | 列表页的筛选栏，规则见 [page-layout.md](page-layout.md) 的"筛选栏" |
 
-`form-query__actions` 不是 Element 组件，所以只有这一个 class，不写成 `.el-xxx.变体名`。
+`form-query__fields`、`form-query__actions`、`form-query__buttons`、`form-query__extra`、`form-query--aligned`、`form-query--inline` 不是 Element 组件的类，所以不写成 `.el-xxx.变体名`。Element 的标签默认是 `inline-flex`，文字是匿名的弹性项目，`text-align` 对它不起作用，所以变体里把标签改成了块级。
 
 `input-filled` 只修改 Element 已提供的 `--el-input-*` 变量，校验失败的红色描边、禁用状态等仍由 Element 处理。Element 的 `large` 尺寸把输入框字号写死为 14px，所以变体里还设置了 `font-size`。两个变体的各种状态可以在主题预览页（`/dev/theme`）查看。
 

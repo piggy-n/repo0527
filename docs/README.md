@@ -29,6 +29,7 @@ docs/
 │  ├─ auth.md                 鉴权：会话、角色、页面权限、路由守卫、登录接口与表单
 │  ├─ composables.md          通用组合式函数：useDelayedFlag（延迟显示的加载状态）
 │  ├─ table.md                shared/table：列表的加载状态（骨架屏、遮罩、后台刷新）与 TableSkeleton
+│  ├─ query-form.md           shared/query-form：列表页的查询表单（按是否换行切换标签宽度与按钮位置）
 │  ├─ layout.md               布局：顶部导航、用户菜单、宽度适配
 │  ├─ system-title.md         系统名称的 SVG 轮廓：用法、自动生成、常见问题
 │  ├─ ui.md                   libs/ui：两个入口、窄屏断点、分栏布局、面板、区块、标题

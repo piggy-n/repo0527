@@ -23,6 +23,7 @@ import {
 } from 'element-plus';
 import { defineComponent, onMounted, ref } from 'vue';
 import { iconNames, SvgIcon } from '@/shared/icons/SvgIcon';
+import { QueryForm } from '@/shared/query-form/QueryForm';
 import { SystemTitle } from '@/shared/system-title/SystemTitle';
 import styles from './ThemePreviewPage.module.scss';
 import { PanelPreview, SectionPreview, SplitLayoutPreview, TitlePreview } from './UiComponentsPreview';
@@ -100,8 +101,14 @@ const actionButtons = [
   { label: '批量删除', icon: Delete }
 ];
 
-// 查询表单的示例宽度：约等于 1440、1226 视口下文件管理主区的内容宽度，以及窄屏
-const queryFormWidths = [1040, 826, 480];
+// 查询表单的示例：三个条件在不同宽度下的三种排布
+const queryFormDemos = [
+  { width: 1100, note: '条件和按钮都放得下一行' },
+  { width: 900, note: '条件放得下一行，按钮另起一行' },
+  { width: 760, note: '条件放不下，换行并统一标签宽度' },
+  { width: 480, note: '每行一个条件' }
+];
+const queryFormLabels = ['文档名称', '年份', '业务类型标签'];
 
 interface TreeSample {
   id: string;
@@ -415,27 +422,37 @@ export const ThemePreviewPage = defineComponent({
         </section>
 
         <section class={styles.section}>
-          <h2 class={styles.sectionTitle}>查询表单（form-query）</h2>
-          {queryFormWidths.map(width => (
-            <div key={width} class={styles.queryFrame} style={{ width: `${width}px` }}>
-              <p class={styles.frameLabel}>宽 {width}</p>
-              <ElForm class="form-query" labelWidth="auto">
-                <ElFormItem label="文档名称">
-                  <ElInput placeholder="请输入文档名称" />
-                </ElFormItem>
-                <ElFormItem label="年份">
-                  <ElDatePicker type="year" placeholder="请选择年份" />
-                </ElFormItem>
-                <ElFormItem label="业务类型标签">
-                  <ElSelect placeholder="全部" />
-                </ElFormItem>
-                <div class="form-query__actions">
-                  <ElButton type="primary" icon={Search}>
-                    查询
-                  </ElButton>
-                  <ElButton icon={RefreshLeft}>重置</ElButton>
-                </div>
-              </ElForm>
+          <h2 class={styles.sectionTitle}>查询表单（QueryForm）</h2>
+          {queryFormDemos.map(({ width, note }) => (
+            <div key={note} class={styles.queryFrame} style={{ width: `${width}px` }}>
+              <p class={styles.frameLabel}>
+                宽 {width}，{note}
+              </p>
+              <QueryForm labelChars={6}>
+                {{
+                  default: () =>
+                    queryFormLabels.map(label => (
+                      <ElFormItem key={label} label={label}>
+                        {label === '年份' ? (
+                          <ElDatePicker type="year" placeholder="全部" />
+                        ) : (
+                          <ElInput placeholder={`请输入${label}`} />
+                        )}
+                      </ElFormItem>
+                    )),
+                  actions: () => [
+                    <ElButton type="primary" icon={Search}>
+                      查询
+                    </ElButton>,
+                    <ElButton icon={RefreshLeft}>重置</ElButton>
+                  ],
+                  extra: () => (
+                    <ElButton type="primary" icon={Upload}>
+                      上传文档
+                    </ElButton>
+                  )
+                }}
+              </QueryForm>
             </div>
           ))}
         </section>
