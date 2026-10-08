@@ -37,6 +37,14 @@ describe('FileFilterBar', () => {
     expect(wrapper.emitted('search')).toHaveLength(2);
   });
 
+  it('输入法选字时按的回车不触发查询', async () => {
+    const wrapper = mountBar();
+
+    await wrapper.find('input[placeholder="请输入文档名称"]').trigger('keydown', { key: 'Enter', isComposing: true });
+
+    expect(wrapper.emitted('search')).toBeUndefined();
+  });
+
   it('点"重置"触发重置', async () => {
     const wrapper = mountBar();
 

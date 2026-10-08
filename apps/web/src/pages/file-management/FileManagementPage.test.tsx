@@ -3,8 +3,12 @@ import { mount } from '@vue/test-utils';
 import { ElMessage, ElMessageBox, type MessageBoxData } from 'element-plus';
 import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
+import { createPinia, setActivePinia } from 'pinia';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { filePageResponse } from '@/features/file-management/test-data';
+import { Role } from '@/shared/auth/roles';
+import { useSessionStore } from '@/shared/auth/session-store';
+import { createTestJwtExpiringAt } from '@/shared/auth/testing';
 import { FileManagementPage } from './FileManagementPage';
 
 const server = setupServer();
@@ -18,6 +22,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.body.innerHTML = '';
+  localStorage.clear();
 });
 
 afterAll(() => {
@@ -67,10 +72,17 @@ function holdFiles(totalElements = 3) {
 // 骨架屏和遮罩都延迟 300ms 才出现，断言它们出现或没有出现都要等过这段时间
 const waitPastLoadingDelay = () => new Promise(resolve => setTimeout(resolve, 400));
 
-function mountPage() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+// 已登录：删除前要确认会话仍然有效
+// 传入同一个 queryClient 可以模拟离开列表后重新进入（缓存还在）
+function mountPage(queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  useSessionStore().start({
+    token: createTestJwtExpiringAt(Date.now() + 3_600_000),
+    user: { loginName: 'zhangsan', role: Role.user }
+  });
   return mount(FileManagementPage, {
-    global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    global: { plugins: [pinia, [VueQueryPlugin, { queryClient }]] },
     attachTo: document.body
   });
 }
@@ -86,6 +98,54 @@ function mainPanel(wrapper: Wrapper) {
     description: textOf('[class*="_description_"]'),
     names: panel?.findAll('.el-table__body tr').map(row => row.findAll('td')[1]?.text()) ?? []
   };
+}
+
+const deleteButtons = (wrapper: Wrapper) =>
+  wrapper.findAll('.el-table__body button').filter(button => button.text() === '删除');
+
+// 确认框挂起，由用例决定何时点确认
+function holdConfirm() {
+  const pending: ((action: MessageBoxData) => void)[] = [];
+  vi.spyOn(ElMessageBox, 'confirm').mockImplementation(
+    () =>
+      new Promise<MessageBoxData>(resolve => {
+        pending.push(resolve);
+      })
+  );
+  return {
+    pending,
+    confirm: () => pending.shift()?.('confirm' as MessageBoxData)
+  };
+}
+
+// 第 1 页 45 条（共 3 页），其他页都返回服务异常；记录每次请求的页码
+function failBeyondFirstPage() {
+  const pageNumbers: string[] = [];
+  server.use(
+    mock.get('/backend/file/page', ({ request }) => {
+      const pageNo = new URL(request.url).searchParams.get('pageNo') ?? '';
+      pageNumbers.push(pageNo);
+      return pageNo === '1'
+        ? HttpResponse.json(filePageResponse({ totalElements: 45 }))
+        : HttpResponse.json({ code: 500, msg: '服务异常', data: null });
+    })
+  );
+  vi.spyOn(ElMessage, 'error').mockReturnValue({ close: () => undefined });
+  return pageNumbers;
+}
+
+// 点分页器上的页码，等这一页的请求失败、结果渲染出来；如果分页器要改页码，这时也已经改了
+async function goToFailingPage(wrapper: Wrapper, page: string, pageNumbers: string[]) {
+  await wrapper.findAll('.el-pager li').find(item => item.text() === page)?.trigger('click');
+  await vi.waitFor(() => expect(pageNumbers).toContain(page));
+  await new Promise(resolve => setTimeout(resolve, 100));
+}
+
+function expectStayedOn(wrapper: Wrapper, page: string) {
+  expect(wrapper.findAll('.el-pager li.is-active').map(item => item.text())).toEqual([page]);
+  // 测试里没有装中文语言包，总数显示为 "Total 45"
+  expect(wrapper.findAll('.el-pagination__total').map(item => item.text())).toEqual([expect.stringContaining('45')]);
+  expect(wrapper.findAll('.el-table__empty-text').map(item => item.text())).toEqual(['加载失败重试']);
 }
 
 const treeNode = (wrapper: Wrapper, label: string) =>
@@ -179,12 +239,153 @@ describe('FileManagementPage', () => {
     const wrapper = mountPage();
     await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(3));
 
-    const deleteButtons = wrapper.findAll('.el-table__body button').filter(button => button.text() === '删除');
-    await deleteButtons[1]?.trigger('click');
+    await deleteButtons(wrapper)[1]?.trigger('click');
 
     await vi.waitFor(() => expect(success).toHaveBeenCalledWith('删除成功'));
     expect(deleted).toEqual(['file-technical-standard-current-survey-2']);
     expect(pageRequests).toHaveLength(2);
+  });
+
+  it('确认框打开期间页面卸载：关闭确认框，之后再点确认也不删除', async () => {
+    const { deleted } = mockFiles();
+    const dialog = holdConfirm();
+    const close = vi.spyOn(ElMessageBox, 'close');
+    const wrapper = mountPage();
+    await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(3));
+    await deleteButtons(wrapper)[0]?.trigger('click');
+    await vi.waitFor(() => expect(dialog.pending).toHaveLength(1));
+
+    wrapper.unmount();
+    expect(close).toHaveBeenCalled();
+    dialog.confirm();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(deleted).toEqual([]);
+  });
+
+  it('确认框打开期间会话结束：再点确认也不删除', async () => {
+    const { deleted } = mockFiles();
+    const dialog = holdConfirm();
+    const wrapper = mountPage();
+    await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(3));
+    await deleteButtons(wrapper)[0]?.trigger('click');
+    await vi.waitFor(() => expect(dialog.pending).toHaveLength(1));
+
+    useSessionStore().clear();
+    dialog.confirm();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(deleted).toEqual([]);
+  });
+
+  it('删除 A 未完成时删除 B：A 仍显示删除中，不能再次删除', async () => {
+    mockFiles();
+    // 删除请求挂起，由用例放行
+    const deleted: string[] = [];
+    const held: (() => void)[] = [];
+    server.use(
+      mock.get('/backend/file/delete', async ({ request }) => {
+        deleted.push(new URL(request.url).searchParams.get('id') ?? '');
+        await new Promise<void>(resolve => {
+          held.push(resolve);
+        });
+        return HttpResponse.json({ code: 200, data: null, msg: '删除成功', success: true });
+      })
+    );
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as MessageBoxData);
+    const success = vi.spyOn(ElMessage, 'success').mockReturnValue({ close: () => undefined });
+    const wrapper = mountPage();
+    await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(3));
+
+    await deleteButtons(wrapper)[0]?.trigger('click');
+    await vi.waitFor(() => expect(deleted).toHaveLength(1));
+    await deleteButtons(wrapper)[1]?.trigger('click');
+    await vi.waitFor(() => expect(deleted).toHaveLength(2));
+
+    expect(deleteButtons(wrapper).map(button => button.classes().includes('is-loading'))).toEqual([true, true, false]);
+    await deleteButtons(wrapper)[0]?.trigger('click');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(deleted).toEqual(['file-technical-standard-current-survey-1', 'file-technical-standard-current-survey-2']);
+
+    // 放行后两次删除各自完成；等列表刷新完再结束，避免请求落到下一个用例
+    for (const resolve of held.splice(0)) {
+      resolve();
+    }
+    await vi.waitFor(() => expect(success).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(deleteButtons(wrapper).some(button => button.classes().includes('is-loading'))).toBe(false));
+  });
+
+  it('翻页请求失败时停在当前页，不因总数未知跳回第 1 页', async () => {
+    const pageNumbers = failBeyondFirstPage();
+    const wrapper = mountPage();
+    await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(20));
+
+    await goToFailingPage(wrapper, '2', pageNumbers);
+
+    expect(pageNumbers).toEqual(['1', '2']);
+    expectStayedOn(wrapper, '2');
+  });
+
+  it('条件不变再点查询后翻页失败：同样停在当前页', async () => {
+    const pageNumbers = failBeyondFirstPage();
+    const wrapper = mountPage();
+    await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(20));
+    await wrapper.findAll('button').find(button => button.text() === '查询')?.trigger('click');
+    await vi.waitFor(() => expect(pageNumbers).toHaveLength(2));
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    await goToFailingPage(wrapper, '3', pageNumbers);
+
+    expect(pageNumbers).toEqual(['1', '1', '3']);
+    expectStayedOn(wrapper, '3');
+  });
+
+  it('离开列表后重新进入（有缓存）再翻页失败：同样停在当前页', async () => {
+    const pageNumbers = failBeyondFirstPage();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const first = mountPage(queryClient);
+    await vi.waitFor(() => expect(mainPanel(first).names).toHaveLength(20));
+    first.unmount();
+
+    const wrapper = mountPage(queryClient);
+    // 先显示缓存的数据，后台重新请求返回同样的数据
+    await vi.waitFor(() => expect(pageNumbers).toHaveLength(2));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await goToFailingPage(wrapper, '3', pageNumbers);
+
+    expect(pageNumbers).toEqual(['1', '1', '3']);
+    expectStayedOn(wrapper, '3');
+  });
+
+  it('总数先减少再增加后跳到第 3 页：不被旧缓存跳回第 2 页', async () => {
+    let totalElements = 45;
+    const pageNumbers: string[] = [];
+    server.use(
+      mock.get('/backend/file/page', ({ request }) => {
+        const pageNo = Number(new URL(request.url).searchParams.get('pageNo'));
+        pageNumbers.push(String(pageNo));
+        return HttpResponse.json(filePageResponse({ pageNo, totalElements }));
+      })
+    );
+    const wrapper = mountPage();
+    await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(20));
+
+    // 总数减到 40（2 页）时翻到第 3 页：后端返回第 2 页的数据，页码改到 2；第 3 页的缓存记着"共 2 页"
+    totalElements = 40;
+    await wrapper.findAll('.el-pager li').find(item => item.text() === '3')?.trigger('click');
+    await vi.waitFor(() => expect(pageNumbers).toContain('2'));
+    await vi.waitFor(() => expect(wrapper.findAll('.el-pager li').map(item => item.text())).toEqual(['1', '2']));
+    // 总数又回到 45：点查询回到第 1 页，可以看到 3 页
+    totalElements = 45;
+    await wrapper.findAll('button').find(button => button.text() === '查询')?.trigger('click');
+    await vi.waitFor(() => expect(wrapper.findAll('.el-pager li').map(item => item.text())).toEqual(['1', '2', '3']));
+
+    await wrapper.findAll('.el-pager li').find(item => item.text() === '3')?.trigger('click');
+    await vi.waitFor(() => expect(pageNumbers.filter(page => page === '3')).toHaveLength(2));
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(wrapper.findAll('.el-pager li.is-active').map(item => item.text())).toEqual(['3']);
+    expect(mainPanel(wrapper).names[0]).toBe('测试文件41.pdf');
   });
 
   it('取消确认时不删除', async () => {

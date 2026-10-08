@@ -125,6 +125,9 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 界面与逻辑分离：表单、提交这类交互逻辑写成组合式函数（`features/<域>/composables/useXxx`，通用的放 `shared/composables`），组合式函数不渲染、不跳转、不弹提示，这些由组件和页面决定（见 `docs/modules/auth.md` 的登录三层）
 - 组合式函数发起的请求在作用域销毁时（`onScopeDispose`）取消，请求返回后再检查一次是否已取消：晚到的结果不写入会话、store 等共享状态，被取消的请求不显示错误。写法见 `useLoginForm`，原因见 `docs/modules/auth.md` 的登录表单
 - 加载状态用 `shared/composables` 的 `useDelayedFlag` 延迟显示，防重复提交的标志仍立即生效
+- 确认框（`ElMessageBox`）不随组件卸载关闭：组件卸载时关闭自己打开的确认框；用户确认后，先检查组件是否已销毁、会话是否还是打开确认框时的那一个，再执行操作（写法见 `features/file-management/composables/useFileRemoval.ts`）
+- 表格行内操作（如删除）的进行中状态按行 ID 记录，不用单个 mutation 的 `variables` / `isPending` 判断是哪一行；操作入口对同一行防重复
+- 回车触发提交或查询时排除输入法选字：`event.key === 'Enter' && !event.isComposing`
 - 列表的加载状态按 `docs/modules/table.md` 区分：没有数据时用 `shared/table` 的 `TableSkeleton`，显示着旧数据时用延迟遮罩，后台刷新当前条件的缓存不提示；遮罩不要直接跟着 `isFetching`
 - 给组件传 `id` 等未声明的透传属性会报类型错误（组件只接受声明的 props 和 `class`、`style`），需要标记时用 `data-*`
 

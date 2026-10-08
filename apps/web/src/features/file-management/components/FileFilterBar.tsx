@@ -36,7 +36,8 @@ export const FileFilterBar = defineComponent({
                 placeholder="请输入文档名称"
                 clearable
                 onKeydown={(event: Event | KeyboardEvent) => {
-                  if (event instanceof KeyboardEvent && event.key === 'Enter') {
+                  // 输入法选字时按的回车只是确认候选词，不查询
+                  if (event instanceof KeyboardEvent && event.key === 'Enter' && !event.isComposing) {
                     emit('search');
                   }
                 }}

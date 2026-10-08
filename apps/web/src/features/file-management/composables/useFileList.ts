@@ -33,8 +33,15 @@ export function useFileList() {
   }));
 
   const query = useFilePageQuery(params);
+  // 页码以外的条件（分类、筛选、每页条数），作为下面记录总数的键；undefined 的字段序列化时被忽略
+  const conditionKey = computed(() => hashKey([{ ...params.value, pageNo: undefined }]));
+  // 每组条件最近一次请求结束时返回的总数，交给分页器时优先用它：
+  // 翻页请求失败时没有数据，跳回缓存过的页时先显示的是旧缓存（总数可能偏小），这两种情况下分页器都会把页码压回去
+  const knownTotals = reactive(new Map<string, number>());
+
   const files = computed(() => query.data.value?.content ?? []);
-  const total = computed(() => query.data.value?.totalElements ?? 0);
+  // 一组条件还没请求结束过时用当前显示的数据（例如重新进入列表时的缓存），都没有时为 0
+  const total = computed(() => knownTotals.get(conditionKey.value) ?? query.data.value?.totalElements ?? 0);
 
   // 主动刷新中；连续点击时 Vue Query 取消前一次请求，前一次的 refetch 会等最新的请求完成才结束
   const manualRefreshing = ref(false);
@@ -44,18 +51,25 @@ export function useFileList() {
   // 后台重新请求当前条件的缓存（切回看过的分类、删除后刷新）不算，数据到了直接替换
   const refreshing = computed(() => !initialLoading.value && (query.isPlaceholderData.value || manualRefreshing.value));
 
-  // 页码越界时后端返回最后一页的数据但不修正页码（例如删掉了最后一页的最后一条），这里改到最后一页
-  // 只看拿到的数据：出错时 data 会变成 undefined，那时不应改动页码
-  watch(query.data, page => {
-    if (!page) {
-      return;
-    }
-    // 没有数据时 totalPages 是 0，仍停在第 1 页
-    const lastPage = Math.max(page.totalPages, 1);
-    if (pageNo.value > lastPage) {
-      pageNo.value = lastPage;
-    }
-  });
+  // 当前条件的请求结束、拿到数据时：记下总数；页码越界时改到最后一页（后端对越界的页码返回最后一页的数据，
+  // 但不修正页码，例如删掉了最后一页的最后一条）。出错时没有数据；占位数据属于上一组条件；
+  // 请求还没结束时显示的可能是旧缓存，总页数可能已经过时：这些都不处理。
+  // 请求结束时数据可能和缓存一样（Vue Query 复用原对象，data 不变），所以同时看 isFetching
+  watch(
+    [query.data, query.isPlaceholderData, query.isFetching],
+    ([page, isPlaceholder, isFetching]) => {
+      if (!page || isPlaceholder || isFetching) {
+        return;
+      }
+      knownTotals.set(conditionKey.value, page.totalElements);
+      // 没有数据时 totalPages 是 0，仍停在第 1 页
+      const lastPage = Math.max(page.totalPages, 1);
+      if (pageNo.value > lastPage) {
+        pageNo.value = lastPage;
+      }
+    },
+    { immediate: true }
+  );
 
   function selectCategory(id: string) {
     categoryId.value = id;

@@ -1,10 +1,9 @@
 import { ElButton, ElMessage, ElMessageBox, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus';
-import { defineComponent, type PropType } from 'vue';
+import { defineComponent, onBeforeUnmount, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
-import { ApiError } from '@/shared/http/errors';
 import { TableSkeleton } from '@/shared/table/TableSkeleton';
 import type { FileRecord } from '../api';
-import { useDeleteFileMutation } from '../queries';
+import { useFileRemoval } from '../composables/useFileRemoval';
 import styles from './FileTable.module.scss';
 
 /** 文件表格：占满父元素的剩余高度；删除需要确认，成功后列表由查询缓存自动刷新 */
@@ -23,35 +22,40 @@ export const FileTable = defineComponent({
     retry: () => true
   },
   setup(props, { emit }) {
-    const removal = useDeleteFileMutation();
+    const removal = useFileRemoval();
     // 骨架屏和遮罩都延迟显示：请求很快完成时什么都不出现，避免一闪而过
     const showSkeleton = useDelayedFlag(() => props.initialLoading);
     const showMask = useDelayedFlag(() => props.refreshing);
 
-    async function remove(file: FileRecord) {
+    // ElMessageBox 不随组件卸载关闭，页面销毁时要关掉本组件打开的确认框；它只能一次关闭全部，所以只在有打开的确认框时调用
+    let openConfirms = 0;
+    onBeforeUnmount(() => {
+      if (openConfirms > 0) {
+        ElMessageBox.close();
+      }
+    });
+
+    async function confirmRemoval(file: FileRecord): Promise<boolean> {
+      openConfirms += 1;
       try {
         await ElMessageBox.confirm(`确定删除"${file.name}"吗？删除后不能恢复。`, '删除文件', {
           type: 'warning',
           confirmButtonText: '删除'
         });
+        return true;
       } catch {
-        // 点了取消或关闭
-        return;
+        // 点了取消、关闭，或页面销毁时被关闭
+        return false;
+      } finally {
+        openConfirms -= 1;
       }
-      try {
-        await removal.mutateAsync(file.id);
-      } catch (error) {
-        // 失败原因已由全局提示显示（例如"文件不存在"）
-        if (error instanceof ApiError) {
-          return;
-        }
-        throw error;
-      }
-      ElMessage.success('删除成功');
     }
 
-    // 删除进行中的那一行，按钮显示加载状态
-    const isRemoving = (file: FileRecord) => removal.isPending.value && removal.variables.value === file.id;
+    async function remove(file: FileRecord) {
+      if (await removal.remove(file.id, () => confirmRemoval(file))) {
+        ElMessage.success('删除成功');
+      }
+    }
 
     return () => (
       <ElTable class={styles.root} data={props.files} height="100%" v-loading={showMask.value}>
@@ -69,7 +73,7 @@ export const FileTable = defineComponent({
             <ElTableColumn label="操作" width="90" align="center">
               {{
                 default: ({ row }: { row: FileRecord }) => (
-                  <ElButton link type="danger" loading={isRemoving(row)} onClick={() => void remove(row)}>
+                  <ElButton link type="danger" loading={removal.isRemoving(row.id)} onClick={() => void remove(row)}>
                     删除
                   </ElButton>
                 )

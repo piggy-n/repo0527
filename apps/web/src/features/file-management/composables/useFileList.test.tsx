@@ -244,6 +244,84 @@ describe('useFileList', () => {
     await vi.waitFor(() => expect(list.files.value).toHaveLength(20));
   });
 
+  it('翻页请求失败时总数未知，沿用同一组条件下最近的总数；换了条件就作废', async () => {
+    const categories: string[] = [];
+    server.use(
+      mock.get('/backend/file/page', ({ request }) => {
+        const params = new URL(request.url).searchParams;
+        categories.push(params.get('categoryId') ?? '');
+        return params.get('pageNo') === '1' && params.get('categoryId') === DEFAULT_CATEGORY_ID
+          ? HttpResponse.json(filePageResponse({ totalElements: 45 }))
+          : HttpResponse.json({ code: 500, msg: '服务异常', data: null });
+      })
+    );
+    mountHost();
+    await vi.waitFor(() => expect(list.total.value).toBe(45));
+
+    list.pageNo.value = 2;
+    await vi.waitFor(() => expect(list.isError.value).toBe(true));
+    expect(list.files.value).toEqual([]);
+    expect(list.total.value).toBe(45);
+
+    list.selectCategory('policy-law-local');
+    await vi.waitFor(() => expect(categories.at(-1)).toBe('policy-law-local'));
+    await vi.waitFor(() => expect(list.isError.value).toBe(true));
+    expect(list.total.value).toBe(0);
+  });
+
+  it('同一分类下换筛选条件后请求失败：总数为 0，不把占位的上一组条件的总数记到新条件下', async () => {
+    const requests: Record<string, string>[] = [];
+    server.use(
+      mock.get('/backend/file/page', ({ request }) => {
+        const params = Object.fromEntries(new URL(request.url).searchParams);
+        requests.push(params);
+        return params.name
+          ? HttpResponse.json({ code: 500, msg: '服务异常', data: null })
+          : HttpResponse.json(filePageResponse({ totalElements: 45 }));
+      })
+    );
+    mountHost();
+    await vi.waitFor(() => expect(list.total.value).toBe(45));
+
+    list.filterForm.name = '政区';
+    list.search();
+    await vi.waitFor(() => expect(requests.at(-1)?.name).toBe('政区'));
+    await vi.waitFor(() => expect(list.isError.value).toBe(true));
+
+    expect(list.total.value).toBe(0);
+  });
+
+  it('总数先减少再增加：跳回之前缓存过的页，不按缓存里旧的总页数修正页码', async () => {
+    let totalElements = 45;
+    const pages: number[] = [];
+    server.use(
+      mock.get('/backend/file/page', ({ request }) => {
+        const pageNo = Number(new URL(request.url).searchParams.get('pageNo'));
+        pages.push(pageNo);
+        return HttpResponse.json(filePageResponse({ pageNo, totalElements }));
+      })
+    );
+    mountHost();
+    await vi.waitFor(() => expect(list.total.value).toBe(45));
+
+    // 总数减到 40（2 页）时请求第 3 页：后端返回第 2 页的数据，页码改到 2；第 3 页的缓存记着"共 2 页"
+    totalElements = 40;
+    list.pageNo.value = 3;
+    await vi.waitFor(() => expect(list.pageNo.value).toBe(2));
+    await vi.waitFor(() => expect(list.total.value).toBe(40));
+    // 总数又回到 45：在第 2 页刷新后可以看到 3 页
+    totalElements = 45;
+    await list.refresh();
+    expect(list.total.value).toBe(45);
+
+    list.pageNo.value = 3;
+    await vi.waitFor(() => expect(pages.filter(page => page === 3)).toHaveLength(2));
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(list.pageNo.value).toBe(3);
+    expect(list.files.value[0]?.name).toBe('测试文件41.pdf');
+  });
+
   it('请求出错时不改页码', async () => {
     const requests = mockFilePage();
     mountHost();
