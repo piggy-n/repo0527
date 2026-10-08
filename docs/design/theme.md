@@ -167,6 +167,14 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 
 **行高的选择器**：Element 只在指定了 `size` 时才给表格加尺寸类（如 `el-table--small`）；不传 `size` 时没有 `el-table--default` 类，单元格用的是基础规则 `.el-table .el-table__cell { padding: 8px 0 }`。所以写成 `.el-table:not(.el-table--small, .el-table--large) .el-table__cell`，覆盖"不传 size"和"显式传 `size="default"`"两种情况，small、large 不受影响。第一版写的是 `.el-table--default .el-table__cell`，预览页实测没有生效（行高仍是 40），查看类名后才发现这一点。
 
+**空值**：值为 null、undefined 或空字符串的单元格显示 `-`（`text-placeholder` 色），由 `element-theme.scss` 中的一条全局样式负责，列上不写 `formatter`（3.3 验收时按反馈加入）：
+
+- 原理：Element 对这些值只渲染一个注释节点（`<!---->`）和空文本，单元格匹配 `:empty`，用 `::before` 补上 `-`；自定义插槽什么都没渲染时同样适用。已在文件管理页（备注为 null）和预览页（null、空字符串各一行）实测
+- 只作用于表体（`.el-table__body`）：表头没有文字的列（如勾选列）不受影响；没有数据时的"暂无数据"区域不在 `.el-table__body` 里，也不受影响
+- `-` 是 CSS 生成的内容，复制单元格时不会带上，符合"占位"的含义
+- 只有空格的字符串不显示 `-`：实测接口缺失的字段返回 null，不为假设的情况另加处理
+- 不采用每列写 `formatter`：每个列表页的每一列都要记得加，容易漏
+
 ### 组件变体
 
 同一种组件需要另一种外观时，在 `element-theme.scss` 中定义变体 class，页面和组件只引用 class，不自己覆盖 `--el-*` 变量。变体选择器写成 `.el-xxx.变体名`，比 Element 自己的尺寸类（如 `.el-input--large`）优先级高，与加载顺序无关。

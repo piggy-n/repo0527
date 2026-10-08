@@ -30,6 +30,8 @@ interface IndicatorRow {
   region: string;
   indicator: string;
   status: '处理完成' | '正在处理' | '计算失败';
+  // 空值演示：null 和空字符串都显示为"-"
+  remark: string | null;
 }
 
 // 令牌名不含 --color- 前缀
@@ -101,9 +103,9 @@ const actionButtons = [
 const queryFormWidths = [1040, 826, 480];
 
 const tableRows: IndicatorRow[] = [
-  { region: '南京市', indicator: '城镇开发边界面积', status: '处理完成' },
-  { region: '苏州市', indicator: '耕地保有量', status: '正在处理' },
-  { region: '无锡市', indicator: '生态保护红线面积', status: '计算失败' }
+  { region: '南京市', indicator: '城镇开发边界面积', status: '处理完成', remark: '按 2025 年变更调查口径' },
+  { region: '苏州市', indicator: '耕地保有量', status: '正在处理', remark: null },
+  { region: '无锡市', indicator: '生态保护红线面积', status: '计算失败', remark: '' }
 ];
 
 const statusTagTypes = {
@@ -442,6 +444,7 @@ export const ThemePreviewPage = defineComponent({
                 )
               }}
             </ElTableColumn>
+            <ElTableColumn prop="remark" label="备注" showOverflowTooltip />
           </ElTable>
           <ElPagination
             class={styles.pagination}

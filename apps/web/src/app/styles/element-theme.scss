@@ -109,6 +109,13 @@
   padding: 12px 0;
 }
 
+// 空值显示"-"：值为 null、undefined、空字符串，或插槽什么都没渲染时，单元格里只有注释节点，匹配 :empty。
+// 只作用于表体，表头没有文字的列（如勾选列）不受影响
+.el-table__body .cell:empty::before {
+  content: '-';
+  color: var(--color-text-placeholder);
+}
+
 // 填充风格的输入框：浅蓝底、无边框、48px 高、16px 字，登录页使用；用法 <ElInput class="input-filled">
 .el-input.input-filled {
   --el-input-height: 48px;
