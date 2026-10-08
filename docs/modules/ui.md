@@ -5,7 +5,7 @@
 
 第一个 libs 模块，按"已经是一个包"的规则编写（ADR 0004）：外部只从入口导入，内部只用相对路径，不读取 `import.meta.env`、store、router，不引用应用代码。这些规则由 lint 的 `boundaries` 和 `tsconfig.libs.json` 检查（见 [config/tsconfig.md](../config/tsconfig.md)）。
 
-目前有标题 `MxTitle` 和面板 `MxPanel`；分栏布局 `MxSplitLayout` 在 3.2c 加入。组件的展示在主题预览页（`/dev/theme`）的最后两节。
+目前有标题 `MxTitle`、区块 `MxSection` 和面板 `MxPanel`；分栏布局 `MxSplitLayout` 在 3.2c 加入。组件的展示在主题预览页（`/dev/theme`）的最后三节。
 
 ## 目录
 
@@ -18,6 +18,7 @@ libs/
    ├─ breakpoints.ts        窄屏断点
    ├─ breakpoints.test.ts   检查 TS 与 Sass 中的断点一致
    ├─ title/MxTitle.tsx     标题
+   ├─ section/MxSection.tsx 区块：区块标题 + 内容
    └─ panel/MxPanel.tsx     面板
 ```
 
@@ -62,7 +63,31 @@ Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不�
 
 结构：外层 `div` 里依次是竖杠或图标、标题元素、`extra`。`extra` 不放在 `h2` / `h3` 里，读屏软件读标题时不会带上"全选""刷新"这类操作；竖杠和图标是装饰，设置了 `aria-hidden`。
 
-组件不设外边距：它会出现在面板头部这类 flex 容器里，由使用方决定间距。规范中的区块间距（区块之间 `--space-lg`，区块标题与内容之间 `--space-md`）目前由页面自己写。
+组件不设外边距：它会出现在面板头部这类 flex 容器里，由使用方决定间距。"区块标题 + 内容"的组合用 `MxSection`，间距由它负责。
+
+## MxSection
+
+```tsx
+<MxSection title="年份选择">
+  <ElDatePicker ... />
+</MxSection>
+<MxSection title="选择表">
+  {{ extra: () => <ElCheckbox>全选</ElCheckbox>, default: () => <TableChecklist /> }}
+</MxSection>
+```
+
+| 属性 / 插槽 | 说明 |
+|---|---|
+| `title` | 必填，区块标题，用 `MxTitle`（区块层级，`h3`）渲染 |
+| `icon`、`extra` | 原样交给区块标题 |
+| `default` | 内容，放在标题下方的一个 `div` 里 |
+
+- 区块标题与内容之间 `--space-md`（12），用 flex 的 `gap` 实现。内容外面包一层 `div`，否则默认插槽里的多个元素会各自成为 flex 项，彼此之间也被拉开 12
+- 相邻区块之间 `--space-lg`（16），用 `.root + .root` 的上外边距实现，只在两个 `MxSection` 紧挨着时生效；区块放在其他元素后面时不额外加外边距，组件不干涉外部的排版
+- 根元素是 `section`，与 `MxPanel` 的 `section` 嵌套时形成"面板 h2 → 区块 h3"的标题层级
+- 已在预览页实测：面板中连续三个区块，标题与内容之间都是 12，区块之间都是 16，最后一个区块到面板底边 16（面板内容区的内边距）
+
+为什么不让 `MxTitle` 自带下外边距：标题也会放在面板头部这类 flex 容器里，带外边距就得在这些地方再抵消掉；把间距放在 `MxSection` 这一层，标题和内容的关系由它负责，标题本身保持干净。
 
 ## MxPanel
 
@@ -108,6 +133,7 @@ TSX 中给组件传多个插槽时，子元素写成对象：`{{ default: () => 
 | 组件 | 变量 |
 |---|---|
 | `MxTitle` | `--color-primary`、`--color-text-strong`、`--color-text-title`、`--color-text-primary`、`--font-size-lg`、`--font-size-base`、`--font-weight-semibold`、`--space-sm` |
+| `MxSection` | `--space-md`、`--space-lg`（另外通过 `MxTitle` 用到它的变量） |
 | `MxPanel` | `--color-bg-container`、`--color-primary-bg`、`--shadow-sm`、`--radius-md`、`--radius-sm`、`--space-lg`、`--space-sm` |
 
 新增或修改组件样式时同步更新本表。变量名写错不会报错（CSS 变量没有类型检查），要在预览页里确认。

@@ -24,7 +24,7 @@ import { defineComponent, onMounted, ref } from 'vue';
 import { iconNames, SvgIcon } from '@/shared/icons/SvgIcon';
 import { SystemTitle } from '@/shared/system-title/SystemTitle';
 import styles from './ThemePreviewPage.module.scss';
-import { PanelPreview, TitlePreview } from './UiComponentsPreview';
+import { PanelPreview, SectionPreview, TitlePreview } from './UiComponentsPreview';
 
 interface IndicatorRow {
   region: string;
@@ -410,6 +410,11 @@ export const ThemePreviewPage = defineComponent({
         <section class={styles.section}>
           <h2 class={styles.sectionTitle}>标题（@yzt/ui 的 MxTitle）</h2>
           <TitlePreview />
+        </section>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>区块（@yzt/ui 的 MxSection）</h2>
+          <SectionPreview />
         </section>
 
         <section class={styles.section}>

@@ -1,0 +1,16 @@
+// 规范见 docs/design/page-layout.md 的"标题"：区块之间 16，区块标题与内容之间 12
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+// 只在两个区块相邻时生效，放在其他元素后面时不额外加外边距
+.root + .root {
+  margin-top: var(--space-lg);
+}
+
+.body {
+  min-width: 0;
+}

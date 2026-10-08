@@ -12,7 +12,7 @@ import {
   ElTableColumn
 } from 'element-plus';
 import { defineComponent, ref } from 'vue';
-import { MxPanel, MxTitle } from '@yzt/ui';
+import { MxPanel, MxSection, MxTitle } from '@yzt/ui';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import styles from './UiComponentsPreview.module.scss';
 
@@ -67,6 +67,65 @@ export const TitlePreview = defineComponent({
           </MxTitle>
           <span class={styles.muted}>↑ 宽 300 时标题省略，"更多"保持完整</span>
         </div>
+      </div>
+    );
+  }
+});
+
+const reportTables = ['土地利用现状分类面积汇总表', '耕地种植属性统计表', '城镇村及工矿用地统计表'];
+
+/** libs/ui 的区块：面板里连续的区块，标题与内容之间 12，区块之间 16 */
+export const SectionPreview = defineComponent({
+  name: 'SectionPreview',
+  setup() {
+    const checked = ref(reportTables.slice(0, 2));
+    const toggle = (table: string, value: boolean) => {
+      checked.value = value ? [...checked.value, table] : checked.value.filter(item => item !== table);
+    };
+
+    return () => (
+      <div class={styles.sectionDemo}>
+        <MxPanel title="统计报表计算">
+          <MxSection title="年份选择">
+            <label class={styles.field}>
+              监测数据年度
+              <ElDatePicker class={styles.year} type="year" modelValue="2025" valueFormat="YYYY" clearable={false} />
+            </label>
+          </MxSection>
+          <MxSection title="选择表">
+            {{
+              extra: () => <ElCheckbox modelValue={checked.value.length === reportTables.length}>全选</ElCheckbox>,
+              default: () => (
+                <div class={styles.checkList}>
+                  {reportTables.map(table => (
+                    <ElCheckbox
+                      key={table}
+                      modelValue={checked.value.includes(table)}
+                      onUpdate:modelValue={value => toggle(table, Boolean(value))}
+                    >
+                      {table}
+                    </ElCheckbox>
+                  ))}
+                </div>
+              )
+            }}
+          </MxSection>
+          <MxSection title="处理进度">
+            {{
+              icon: () => (
+                <ElIcon>
+                  <Timer />
+                </ElIcon>
+              ),
+              default: () => <p class={styles.text}>3 张报表已提交，等待计算</p>
+            }}
+          </MxSection>
+        </MxPanel>
+        <ul class={styles.notes}>
+          <li>区块标题与内容之间：--space-md（12）</li>
+          <li>相邻区块之间：--space-lg（16），只在两个 MxSection 相邻时生效</li>
+          <li>标题与内容放在 section 里，标题渲染为 h3</li>
+        </ul>
       </div>
     );
   }

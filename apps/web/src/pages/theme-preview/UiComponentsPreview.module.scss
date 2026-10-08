@@ -19,6 +19,25 @@
   font-size: var(--font-size-xs);
 }
 
+.sectionDemo {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: var(--space-xl);
+  align-items: start;
+}
+
+.checkList {
+  display: flex;
+  flex-direction: column;
+}
+
+.notes {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--color-text-regular);
+  line-height: var(--line-height-base);
+}
+
 // 模拟内容区顶部：与 AppLayout 相同的渐变，按业务页面的高度比例过渡
 .stage {
   padding: var(--space-lg);
