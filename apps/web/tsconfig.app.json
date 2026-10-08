@@ -21,5 +21,6 @@
       "@yzt/*": ["./src/libs/*/index.ts"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/libs/css-modules.d.ts"]
 }

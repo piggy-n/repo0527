@@ -24,6 +24,7 @@ import { defineComponent, onMounted, ref } from 'vue';
 import { iconNames, SvgIcon } from '@/shared/icons/SvgIcon';
 import { SystemTitle } from '@/shared/system-title/SystemTitle';
 import styles from './ThemePreviewPage.module.scss';
+import { PanelPreview, TitlePreview } from './UiComponentsPreview';
 
 interface IndicatorRow {
   region: string;
@@ -179,6 +180,25 @@ export const ThemePreviewPage = defineComponent({
             {['sm', 'md', 'lg', 'primary-lg'].map(size => (
               <div key={size} class={styles.shadowCard} style={{ boxShadow: `var(--shadow-${size})` }}>
                 shadow-{size}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>间距与圆角</h2>
+          <div class={styles.spaces}>
+            {['xs', 'sm', 'md', 'lg', 'xl'].map(size => (
+              <div key={size} class={styles.space}>
+                <span class={styles.spaceBar} style={{ width: `var(--space-${size})` }} />
+                space-{size}
+              </div>
+            ))}
+          </div>
+          <div class={styles.radii}>
+            {['sm', 'md', 'lg', 'xl'].map(size => (
+              <div key={size} class={styles.radius} style={{ borderRadius: `var(--radius-${size})` }}>
+                radius-{size}
               </div>
             ))}
           </div>
@@ -385,6 +405,16 @@ export const ThemePreviewPage = defineComponent({
             total={50}
             layout="total, prev, pager, next, jumper"
           />
+        </section>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>标题（@yzt/ui 的 MxTitle）</h2>
+          <TitlePreview />
+        </section>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>面板（@yzt/ui 的 MxPanel）</h2>
+          <PanelPreview />
         </section>
       </div>
     );

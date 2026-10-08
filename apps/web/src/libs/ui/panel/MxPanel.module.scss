@@ -1,0 +1,72 @@
+// 规范见 docs/design/page-layout.md 的"面板"
+// 在纵向 flex 容器（如分栏布局的两栏）中占满剩余高度，内容区内部滚动
+.root {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-container);
+  box-shadow: var(--shadow-sm);
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 48px;
+  padding: 0 var(--space-lg);
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
+// 卡片头部的浅底图标块；里面的图标 16，比面板标题默认的 20 小
+.tile {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-primary-bg);
+  font-size: 16px;
+}
+
+// 纵向 flex：放表格时，给表格所在的元素 flex: 1、min-height: 0 即可占满剩余高度
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 var(--space-lg) var(--space-lg);
+
+  // 没有头部时，上方也留出内边距
+  &:first-child {
+    padding-top: var(--space-lg);
+  }
+}
+
+.flush {
+  &,
+  &:first-child {
+    padding: 0;
+  }
+}
+
+.footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-lg);
+}

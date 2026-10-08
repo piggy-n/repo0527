@@ -90,7 +90,7 @@ export const useSessionStore = defineStore('session', () => {
 /** 其他标签页写入或删除会话时调用 onChange，本标签页自己的写入不会触发；返回取消监听的函数 */
 export function watchSessionStorage(onChange: () => void): () => void {
   const onStorage = (event: StorageEvent) => {
-    // key 为 null 表示其他标签页调用了 localStorage.clear()
+    // key 为 null 表示其他标签页调用            了 localStorage.clear()
     if (event.key === STORAGE_KEY || event.key === null) {
       onChange();
     }

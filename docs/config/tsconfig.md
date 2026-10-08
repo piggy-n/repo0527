@@ -137,6 +137,7 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 | `noEmit` | `true` | 只检查不输出，编译交给 Vite |
 | `paths` | 见下 | 路径别名 |
 | `include` | `["src"]` | 检查范围 |
+| `exclude` | `["src/libs/css-modules.d.ts"]` | libs 专用的类型声明，见下文 tsconfig.libs.json 一节 |
 
 ```json
 "paths": {
@@ -211,7 +212,7 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 
 **libs 被检查两次**：`tsconfig.app.json` 的 `include` 是整个 `src`，所以 libs 的源码也会按 app 的规则检查一遍。这是有意保留的：如果把 libs 从 app 配置中排除，app 就要通过项目引用使用 libs 的类型，被引用的项目必须开启 `composite`（隐含输出声明文件），配置会复杂很多。多一次检查的耗时可以忽略。
 
-**CSS Modules 的类型**：`*.module.scss` 的模块声明来自 `vite/client`，这份配置不加载它，libs 里的组件导入样式时要另外声明，写第一个带样式的组件时加入。
+**CSS Modules 的类型**：`*.module.scss` 的模块声明来自 `vite/client`，这份配置不加载它，所以在 `src/libs/css-modules.d.ts` 中单独声明（阶段三 3.2b 加入，与 `@yzt/icons` 包的做法相同）。`tsconfig.app.json` 用 `"exclude": ["src/libs/css-modules.d.ts"]` 排除这份文件，否则 app 配置会同时看到它和 `vite/client` 中的同名声明；那样也不会报错，但只是因为 `skipLibCheck` 跳过了 `.d.ts` 的检查。libs 配置自己写了 `exclude`，会整体覆盖继承来的值，所以仍然包含这份文件（已用 `tsc --listFilesOnly` 确认两份配置各自包含的文件）。
 
 ## 修改时的检查清单
 

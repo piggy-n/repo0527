@@ -1,0 +1,63 @@
+// 规范见 docs/design/page-layout.md 的"标题"
+.root {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.panel {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-strong);
+}
+
+.section {
+  font-size: var(--font-size-base);
+  color: var(--color-text-title);
+}
+
+// 竖杠：宽 4、高等于字号、两端全圆
+.mark {
+  flex: none;
+  width: 4px;
+  height: 1em;
+  border-radius: 999px;
+  background-color: var(--color-primary);
+}
+
+// 图标由使用方传入，大小跟随这里的字号（SvgIcon、ElIcon 默认都是 1em）
+.icon {
+  display: flex;
+  flex: none;
+  color: var(--color-primary);
+}
+
+.panel .icon {
+  font-size: 20px;
+}
+
+.section .icon {
+  font-size: 16px;
+}
+
+.text {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: inherit;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extra {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-left: auto;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+}

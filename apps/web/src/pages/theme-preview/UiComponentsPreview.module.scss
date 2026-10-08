@@ -1,0 +1,102 @@
+.titleGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-xl);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.narrow {
+  width: 300px;
+}
+
+.muted {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+// 模拟内容区顶部：与 AppLayout 相同的渐变，按业务页面的高度比例过渡
+.stage {
+  padding: var(--space-lg);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, var(--color-bg-page-top) 0%, var(--color-bg-page) 250px);
+}
+
+.panelGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-lg);
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.caption {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-regular);
+}
+
+.year {
+  width: 140px;
+}
+
+.tableRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+
+// 固定高度的纵向 flex 容器，面板在其中占满剩余高度
+.tableCell {
+  height: 360px;
+}
+
+.fillTable {
+  flex: 1;
+  min-height: 0;
+}
+
+.sideCells {
+  gap: 0;
+
+  .caption:not(:first-child) {
+    margin-top: var(--space-lg);
+  }
+}
+
+.text {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+// 占满 flush 面板的内容区，四边都贴着面板边缘
+.mapPlaceholder {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 96px;
+  background-color: var(--color-neutral-bg);
+  color: var(--color-text-secondary);
+}
