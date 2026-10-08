@@ -1,5 +1,6 @@
+import { Expand } from '@element-plus/icons-vue';
 import { useMediaQuery, useResizeObserver } from '@vueuse/core';
-import { ElDrawer } from 'element-plus';
+import { ElDrawer, ElIcon } from 'element-plus';
 import {
   computed,
   defineComponent,
@@ -30,7 +31,7 @@ const AsideRegion = defineComponent({
   }
 });
 
-/** 分栏布局：侧栏加主区，四周统一间距；窄屏时侧栏收进抽屉，内容移动而不重建（docs/modules/ui.md） */
+/** 分栏布局：侧栏加主区，四周统一间距；窄屏时侧栏收成左侧的窄条，点击后在抽屉中打开，内容移动而不重建（docs/modules/ui.md） */
 export const MxSplitLayout = defineComponent({
   name: 'MxSplitLayout',
   props: {
@@ -103,6 +104,14 @@ export const MxSplitLayout = defineComponent({
               </div>
             </Teleport>
           </aside>
+          {compact.value && (
+            <button type="button" class={styles.rail} aria-expanded={asideOpen.value} onClick={openAside}>
+              <ElIcon>
+                <Expand />
+              </ElIcon>
+              <span class={styles.railLabel}>{props.asideLabel}</span>
+            </button>
+          )}
           <div class={styles.main}>{slots.default?.()}</div>
           <ElDrawer
             class={styles.drawer}

@@ -27,6 +27,33 @@
   min-height: 0;
 }
 
+// 窄屏时侧栏收成的窄条：图标加竖排的侧栏名称，点击打开抽屉；外观与面板相同
+.rail {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 40px;
+  padding: var(--space-md) 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-container);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text-regular);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-primary);
+  }
+}
+
+.railLabel {
+  letter-spacing: 2px;
+  writing-mode: vertical-rl;
+}
+
 .main {
   display: flex;
   flex: 1;

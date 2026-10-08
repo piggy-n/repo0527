@@ -5,7 +5,7 @@ export interface SplitLayoutContext {
   compact: ComputedRef<boolean>;
   /** 抽屉是否打开 */
   asideOpen: ComputedRef<boolean>;
-  /** 侧栏的名称，用于打开按钮的文字和抽屉的无障碍名称 */
+  /** 侧栏的名称，用于窄条上的文字、抽屉的无障碍名称和关闭按钮 */
   asideLabel: ComputedRef<string>;
   openAside: () => void;
   closeAside: () => void;

@@ -32,7 +32,7 @@ export const FileManagementPage = defineComponent({
             </MxPanel>
           ),
           default: () => (
-            <MxPanel title={title.value} description={parents.value} asideToggle>
+            <MxPanel title={title.value} description={parents.value}>
               {{
                 default: () => [
                   <FileFilterBar

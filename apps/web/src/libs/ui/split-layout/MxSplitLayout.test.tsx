@@ -60,9 +60,7 @@ function mountLayout(asideType?: 'menu' | 'panel') {
             </MxPanel>
           ),
           default: () => (
-            <MxPanel title="文件列表" asideToggle>
-              表格
-            </MxPanel>
+            <MxPanel title="文件列表">表格</MxPanel>
           )
         }}
       </MxSplitLayout>
@@ -105,16 +103,20 @@ describe('MxSplitLayout', () => {
     expect(wrapper.find('aside').attributes('style')).toContain('width: 200px');
   });
 
-  it('窄屏：主区面板出现打开按钮，打开后侧栏内容移进抽屉，组件不重建、状态保留', async () => {
+  it('窄屏：侧栏收成窄条，点击后侧栏内容移进抽屉，组件不重建、状态保留', async () => {
     stubViewport(true);
     const wrapper = mountLayout();
     await flushPromises();
     await wrapper.find('[data-test="increase"]').trigger('click');
 
     expect(toggleButtons(wrapper)).toHaveLength(1);
+    // 入口是布局自己的窄条，不在任何面板（包括主区面板的标题行）里
+    expect(toggleButtons(wrapper)[0]?.element.closest('section')).toBeNull();
+    expect(toggleButtons(wrapper)[0]?.attributes('aria-expanded')).toBe('false');
     await toggleButtons(wrapper)[0]?.trigger('click');
     await flushPromises();
 
+    expect(toggleButtons(wrapper)[0]?.attributes('aria-expanded')).toBe('true');
     expect(counterPlace(wrapper)).toBe('drawer');
     expect(wrapper.find('[data-test="increase"]').text()).toBe('1');
     expect(mounts).toBe(1);

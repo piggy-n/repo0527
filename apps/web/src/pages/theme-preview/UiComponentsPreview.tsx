@@ -322,7 +322,7 @@ export const SplitLayoutPreview = defineComponent({
               </MxPanel>
             ),
             default: () => (
-              <MxPanel title={directory.value} asideToggle>
+              <MxPanel title={directory.value}>
                 {{
                   actions: () => (
                     <ElButton type="primary" icon={Upload}>

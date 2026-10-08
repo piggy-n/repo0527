@@ -1,4 +1,4 @@
-import { Close, Expand } from '@element-plus/icons-vue';
+import { Close } from '@element-plus/icons-vue';
 import { ElButton } from 'element-plus';
 import { computed, defineComponent, inject, provide, type SlotsType, type VNode } from 'vue';
 import { asideRegionKey, splitLayoutKey } from '../split-layout/context';
@@ -15,9 +15,7 @@ export const MxPanel = defineComponent({
     // 去掉内容区的内边距：表格贴边、放地图、内容自带内边距时使用
     flush: Boolean,
     // 卡片头部：图标放在浅底方块里，只用于同一页有多张并列卡片的场合
-    iconTile: Boolean,
-    // 在分栏布局的主区中，窄屏时在头部最左侧显示打开侧栏的按钮
-    asideToggle: Boolean
+    iconTile: Boolean
   },
   slots: Object as SlotsType<{
     default?: () => VNode[];
@@ -33,7 +31,6 @@ export const MxPanel = defineComponent({
     provide(asideRegionKey, false);
 
     const inDrawer = computed(() => isAsideRoot && layout?.compact.value === true);
-    const showToggle = computed(() => props.asideToggle && layout?.compact.value === true);
 
     const renderIcon = () => {
       const icon = slots.icon?.();
@@ -42,17 +39,11 @@ export const MxPanel = defineComponent({
 
     return () => {
       const actions = slots.actions?.();
-      const hasHeader = Boolean(props.title || actions || showToggle.value || inDrawer.value);
+      const hasHeader = Boolean(props.title || actions || inDrawer.value);
       return (
         <section class={[styles.root, inDrawer.value && styles.inDrawer]}>
           {hasHeader && (
             <header class={styles.header}>
-              {showToggle.value && layout && [
-                <ElButton icon={Expand} onClick={layout.openAside}>
-                  {layout.asideLabel.value}
-                </ElButton>,
-                <span class={styles.separator} aria-hidden="true" />
-              ]}
               {props.title && (
                 <MxTitle level="panel" description={props.description}>
                   {{ default: () => props.title, icon: slots.icon && renderIcon }}
