@@ -1,6 +1,6 @@
-import { useResizeObserver } from '@vueuse/core';
+import { useMutationObserver, useResizeObserver } from '@vueuse/core';
 import { ElForm, type FormInstance } from 'element-plus';
-import { defineComponent, ref, type SlotsType, type VNode } from 'vue';
+import { defineComponent, onMounted, ref, shallowRef, type SlotsType, type VNode } from 'vue';
 
 const widthOf = (element: Element) => element.getBoundingClientRect().width;
 
@@ -50,11 +50,18 @@ export const QueryForm = defineComponent({
       actionsWidth.value = `${Math.max(...items.map(rect => rect.right)) - left}px`;
     };
 
-    // 除了表单，还要观察每个条件：标签切换宽度、字体加载完成都会让条件变宽变窄，而表单的宽高可能不变
-    useResizeObserver(
-      () => [formElement(), ...(fields.value?.querySelectorAll<HTMLElement>(':scope > *') ?? [])],
-      measure
-    );
+    // 当前的条件元素，条件增减时重新收集。条件写在 ElForm 里，由 ElForm 的插槽渲染，增减时本组件不会更新，
+    // 所以用 MutationObserver 监听条件区的子元素
+    const fieldItems = shallowRef<HTMLElement[]>([]);
+    const collectFieldItems = () => {
+      fieldItems.value = [...(fields.value?.querySelectorAll<HTMLElement>(':scope > *') ?? [])];
+    };
+    onMounted(collectFieldItems);
+    useMutationObserver(fields, collectFieldItems, { childList: true });
+
+    // 表单宽度变化、条件变宽变窄（标签切换宽度、字体加载完成）、按钮区变化（按钮文案或个数）都会改变排布，
+    // 而表单本身的宽高可能不变，所以分别观察；开始观察新的条件时 ResizeObserver 会回调一次，随即重新判断
+    useResizeObserver(() => [formElement(), buttons.value, extra.value, ...fieldItems.value], measure);
 
     return () => (
       <ElForm
