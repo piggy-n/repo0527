@@ -9,7 +9,7 @@
 | **0. 约定** | `AGENTS.md` 骨架（分层、依赖方向、命名），确认待定问题 | 架构分层、依赖倒置 | ✅ 完成（ADR 0001、0002、0004） |
 | **1. 工程基础** | `apps/web`：Vite 最新版 + `plugin-vue-jsx` + TS strict；tsconfig 分层；实测 TS 7 工具链；lint（只管正确性，格式交给 WebStorm）；Vitest | tsconfig 各项配置的含义、`jsxImportSource: 'vue'`、Vite 插件管线 | ✅ 完成（tag `stage-1`，[总结](stages/stage-1-engineering-foundation.md)） |
 | **2. 应用骨架** | 有类型的 HTTP 客户端和错误模型、鉴权、路由守卫（用模块扩充给 `RouteMeta` 加类型）、布局、存储适配器、MSW、Element Plus 主题、CSS Modules | 泛型、可辨识联合、模块扩充、Adapter 和 Strategy 模式 | ✅ 完成（tag `stage-2`，[总结](stages/stage-2-app-skeleton-and-auth.md)） |
-| **3. 第一个纵切** | 登录 + 布局 + 一个简单列表页，把 API、query、store、TSX 组件、测试整条链路跑通 | vue-query（TanStack Query），TSX 中 props、emits、slots 的类型写法 | ⏳ 进行中：登录和布局已在阶段二完成。3.1 页面布局规范与设计稿已完成（[design/page-layout.md](design/page-layout.md)、ADR 0016）；3.2 `libs/ui` 的分栏布局、面板、区块、标题组件已完成（[modules/ui.md](modules/ui.md)）；下一步 3.3 列表页 |
+| **3. 第一个纵切** | 登录 + 布局 + 一个简单列表页，把 API、query、store、TSX 组件、测试整条链路跑通 | vue-query（TanStack Query），TSX 中 props、emits、slots 的类型写法 | ⏳ 进行中：登录和布局已在阶段二完成。3.1 页面布局规范与设计稿已完成（[design/page-layout.md](design/page-layout.md)、ADR 0016）；3.2 `libs/ui` 的分栏布局、面板、区块、标题组件已完成（[modules/ui.md](modules/ui.md)）；3.3 列表页进行中：选定文件管理（列表、筛选、分页、删除），接口数据用 TanStack Vue Query（ADR 0017） |
 | **4. map-core** | 重新设计引擎抽象、Manager 体系、有类型的事件、有类型的 Worker 消息、资源释放 | 接口与抽象类的区别、Facade、Factory、Observer、`using` / Disposable | 未开始 |
 | **5. map-vue + 现状底图** | `MapProvider`、`useMap()`、图层面板 | provide / inject 的类型、响应式边界（`shallowRef`、`markRaw`） | 未开始 |
 | **6. 复杂业务** | 空间监测三件套、AI 流式对话、文件管理，以及其余业务模块 | 拆分巨型组件、流式读取与 SSE、取消请求 | 未开始 |
@@ -40,9 +40,8 @@
 | 阶段 | 事项 | 出处 |
 |---|---|---|
 | 3 | 选定第一个列表页：优先文件管理或资源管理（左右结构，能验证布局组件）；数据下载、消息中心为备选 | 本文 |
-| 3 | 是否引入 TanStack Query 管理接口数据；请求的重试、去重、缓存 | ADR 0011、[modules/http.md](modules/http.md) |
 | 3 | 全局表格样式（旧项目资源管理列表的表头、行高、悬停色等） | [design/theme.md](design/theme.md) |
-| 3 | 会话结束的统一处理：取消请求、账号之间的数据隔离、清理缓存、错误提示由谁负责，协调逻辑放在 app（多标签页同步已在阶段三开始前完成，届时并入） | [modules/auth.md](modules/auth.md) |
+| 3 | 会话结束的统一处理：取消请求、账号之间的数据隔离、清理缓存（`queryClient.clear()`）、错误提示由谁负责、发请求前是否检查 token 过期，协调逻辑放在 app（多标签页同步已在阶段三开始前完成，届时并入） | [modules/auth.md](modules/auth.md) |
 | 3 结束时 | 阶段总结要包括阶段三开始前的修复：图标重名覆盖已有素材、旧会话的 401 清掉新会话、`clear()` 比较后删除、token 载荷校验、登录表单销毁后取消请求、多标签页同步，以及新增的 AGENTS.md 规则（素材见 `git log stage-2..` 的提交说明）；与原计划不同的地方写进"已完成阶段的调整"：`tsconfig.libs.json` 从阶段四提前、新增 `MxSection`、引入 `@vueuse/core`（与 Element 同版本）、抽屉内边距的 Element 例外 | 本文 |
 | 3 之后 | 接入 Renovate 自动处理依赖更新 | ADR 0005 |
 | 3 之后 | 评估 Playwright 端到端测试；覆盖率与门槛 | ADR 0010 |
@@ -53,6 +52,7 @@
 | 6 | AI 对话：AI 后端登录不再在前端写死账号密码 | ADR 0015 |
 | 6 | 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像、消息铃铛 | [modules/layout.md](modules/layout.md) |
 | 6 | 文件管理：上传、下载与进度 | ADR 0011 |
+| 6 | 上传、下载统一成一套能力（统一的上传 / 下载方法或独立模块，包括进度、文件名、错误处理、预览前的 MIME 补齐），文件管理、数据下载（资源申请）、数据查询的导出共用，不再各自实现。旧项目在迁移范围内至少有 5 处各写各的下载：`libs/http-service.js` 的 blob 处理、`services/resource-application/applyApiService.js`（`downloadApplicationFile`、`downloadStatisticsReportFile`）、`downloadTaskService.js`（带进度）、文件管理 `FileManagementContent.vue`（`requestFileBlob`、`downloadBlob`）、数据查询 `space-monitoring-query/index.vue`（`downloadExportBlob`）；`FormData` 上传 3 处：文件管理上传弹窗、资源管理 Excel 导入、数据查询 | 本文（2026-10-08 提出） |
 | 6 | 页面内菜单（系统管理左栏）用 `ElMenu` 加变体还是做 `MxSideMenu`；侧栏收成窄条（基本统计页）；单列居中（消息中心）；旧页面左栏 296、348 归到 320 | [design/page-layout.md](design/page-layout.md) |
 | 需要时 | 持久化（IndexedDB + idb-keyval，存储适配器） | AGENTS.md |
 | 7 | 部署（nginx 回退与接口转发）；版本号格式 | [deployment.md](deployment.md)、ADR 0005 |

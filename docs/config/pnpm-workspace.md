@@ -23,6 +23,7 @@ allowBuilds:
   "@parcel/watcher": false
   "unrs-resolver": false
   "msw": false
+  "vue-demi": false
 ```
 
 ## packages
@@ -83,6 +84,7 @@ pnpm 从 10 开始默认**不执行**依赖包的安装脚本（`preinstall`、`
 | `@parcel/watcher` | `false` | sass-embedded → sass | 已有各平台的预编译包（例如 `@parcel/watcher-win32-x64`），安装脚本只在缺少预编译包时才从源码构建 |
 | `unrs-resolver` | `false` | eslint-import-resolver-typescript | 已有各平台的预编译包（例如 `@unrs/resolver-binding-win32-x64-msvc`），安装脚本只在缺少时补装 |
 | `msw` | `false` | 直接依赖（测试用） | `postinstall` 只在项目 `package.json` 配置了 `msw.workerDirectory` 时，把浏览器端的 Service Worker 脚本复制过去；项目只在测试中用 `msw/node`，用不到这个脚本 |
+| `vue-demi` | `false` | @tanstack/vue-query | `postinstall` 检测项目装的是 Vue 2 还是 Vue 3，把对应的构建文件复制到 `lib/`；发布的包里 `lib/` 默认就是 Vue 3 版（与 `lib/v3/` 逐个文件比较相同，已验证），项目只用 Vue 3 |
 
 判断一个包要不要放行：
 

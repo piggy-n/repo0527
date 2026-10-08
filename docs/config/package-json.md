@@ -124,6 +124,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "@tanstack/vue-query": "^5.104.1",
     "@vue/devtools-api": "^8.2.1",
     "@vueuse/core": "^15.0.0",
     "@yzt/icons": "workspace:*",
@@ -177,6 +178,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `pinia` | 状态管理，只用 setup store（约定见 AGENTS.md）。4.x 只提供 ESM | 3.x（支持 CommonJS，本项目用不到） |
 | `@vue/devtools-api` | Pinia 4 的必需 peer 依赖，提供开发者工具集成。pnpm 会自动补装 peer，这里显式声明是为了让依赖关系一目了然；生产构建中不会用到 | — |
 | `@element-plus/icons-vue` | Element 的图标组件。它本来就是 element-plus 的依赖，但 pnpm 不允许 import 没有声明的包，所以要自己声明 | — |
+| `@tanstack/vue-query` | 接口数据的查询与缓存（ADR 0017）：取消旧请求、按 key 缓存、变更后失效、会话结束时统一清理。依赖 `vue-demi`（安装脚本不执行，见 pnpm-workspace.md）和 6.x 的 `@vue/devtools-api`（只在开发环境使用，不进生产包）；生产入口包 gzip 后增加约 8.5 KB | 现有 `http` 加每页的组合式函数、VueUse 的 `useAsyncState` |
 | `@vueuse/core` | 组合式工具集，按需具名导入，未用到的函数会被 tree-shake。目前在 `libs/ui` 的分栏布局中用 `useMediaQuery`（窄屏断点）、`useResizeObserver`（侧栏内容显示后写回滚动位置），两者都会在作用域销毁时自动移除监听。element-plus 2.14.6 内部依赖 15.0.0，所以这里也用 15，打包时只有一份；15.0.0 还没出过补丁版本，但它已经随 Element 在项目中运行，选 14 反而会多打包一份 | 手写 matchMedia、ResizeObserver 的封装 |
 | `vite` | 开发服务器与构建工具，8.x 内部使用 Rolldown 打包 | webpack、Rsbuild |
 | `@vitejs/plugin-vue-jsx` | 用 Babel 编译 Vue 的 TSX，支持 Vue 专有的 JSX 语义 | `@vitejs/plugin-vue`（SFC，ADR 0001 未采用） |
