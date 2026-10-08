@@ -78,7 +78,8 @@ interface Sizes {
   buttonsWidth?: number;
 }
 
-// 设定表单宽度和各部分的尺寸（extra 宽 120；条件的位置随标签是否统一宽度变化），不触发 ResizeObserver
+// 设定表单宽度和各部分的尺寸（extra 宽 120；条件的位置随标签是否统一宽度变化），不触发 ResizeObserver。
+// 和浏览器一样，条件的宽度取决于 Element 写在标签上的行内宽度
 async function setSizes(wrapper: Wrapper, { width, buttonsWidth = 172 }: Sizes) {
   // VueUse 在挂载后的更新中才开始观察
   await flushPromises();
@@ -89,7 +90,8 @@ async function setSizes(wrapper: Wrapper, { width, buttonsWidth = 172 }: Sizes) 
   fields.getBoundingClientRect = () => DOMRect.fromRect({ x: 100 });
   for (const [index, item] of [...fields.children].entries()) {
     item.getBoundingClientRect = () => {
-      const rects = form.classList.contains('form-query--aligned') ? alignedRects : naturalRects;
+      const label = item.querySelector<HTMLElement>('.el-form-item__label');
+      const rects = label?.style.width ? alignedRects : naturalRects;
       return DOMRect.fromRect(rects[index]);
     };
   }
@@ -165,16 +167,17 @@ describe('QueryForm', () => {
     expect(actionsOf(wrapper).attributes('style')).toBe('width: 568px;');
   });
 
-  it('统一宽度后沿用标签按文字宽度时量到的值：表单宽度够时恢复', async () => {
+  it('统一宽度时按标签的文字宽度判断：表单宽度够时恢复', async () => {
     const wrapper = mountForm();
     await layout(wrapper, 775);
 
-    // 统一宽度后条件变宽（排成一行要 860）；如果此时重新量，800 会一直被当成放不下
+    // 统一宽度后条件变宽（排成一行要 860）；如果按当前的尺寸判断，800 会一直被当成放不下
     await layout(wrapper, 800);
 
     expect(modifiers(wrapper)).toEqual([]);
     expect(labelWidths(wrapper)).toEqual(['', '', '']);
   });
+
   it('按钮变宽后重新判断：表单尺寸不变时也由按钮区的 ResizeObserver 触发', async () => {
     const wrapper = mountForm();
     await layout(wrapper, 1084);
@@ -200,6 +203,37 @@ describe('QueryForm', () => {
 
     // 1040 + 16 + 172 + 120 = 1348，放不下一行；条件 1040 仍放得下
     expect(modifiers(wrapper)).toEqual([]);
+  });
+
+  it('换行（标签统一宽度）后减少条件：剩下的条件放得下一行时恢复按文字宽度', async () => {
+    const labels = ref(['文档名称', '年份', '业务类型标签']);
+    const wrapper = mountForm(labels);
+    await layout(wrapper, 775);
+    expect(modifiers(wrapper)).toEqual(['form-query--aligned']);
+
+    // 剩下两个条件，按文字宽度排成一行要 248 + 16 + 220 = 484
+    labels.value = labels.value.slice(0, 2);
+    await setSizes(wrapper, { width: 775 });
+    await notifyResize(fieldsOf(wrapper).findAll('.el-form-item')[0]?.element);
+
+    expect(modifiers(wrapper)).toEqual([]);
+    expect(labelWidths(wrapper)).toEqual(['', '']);
+  });
+
+  it('换行（标签统一宽度）后减少条件：剩下的条件仍放不下一行时保持统一宽度', async () => {
+    const labels = ref(['文档名称', '年份', '业务类型标签', '数据类型']);
+    const wrapper = mountForm(labels);
+    await layout(wrapper, 775);
+    expect(modifiers(wrapper)).toEqual(['form-query--aligned']);
+
+    // 剩下三个条件，按文字宽度排成一行要 776
+    labels.value = labels.value.slice(0, 3);
+    await setSizes(wrapper, { width: 775 });
+    await notifyResize(fieldsOf(wrapper).findAll('.el-form-item')[0]?.element);
+
+    expect(modifiers(wrapper)).toEqual(['form-query--aligned']);
+    // 量完后恢复了统一宽度
+    expect(labelWidths(wrapper)).toEqual(Array(3).fill('calc(6em + 12px)'));
   });
 
   it('减少条件后按剩下的条件重新判断', async () => {

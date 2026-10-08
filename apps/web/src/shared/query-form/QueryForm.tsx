@@ -2,7 +2,32 @@ import { useMutationObserver, useResizeObserver } from '@vueuse/core';
 import { ElForm, type FormInstance } from 'element-plus';
 import { defineComponent, onMounted, ref, shallowRef, type SlotsType, type VNode } from 'vue';
 
+const ALIGNED_CLASS = 'form-query--aligned';
+
 const widthOf = (element: Element) => element.getBoundingClientRect().width;
+
+// 在标签按文字宽度的状态下执行 read：标签统一宽度时，临时去掉类名和 Element 写在标签上的行内宽度，执行完马上恢复。
+// 都在同一段同步代码里，浏览器不会画出中间状态，ResizeObserver 也看不到变化
+function withNaturalLabels<T>(form: HTMLElement, read: () => T): T {
+  if (!form.classList.contains(ALIGNED_CLASS)) {
+    return read();
+  }
+  const labels = [...form.querySelectorAll<HTMLElement>('.el-form-item__label')].map(
+    label => [label, label.style.width] as const
+  );
+  form.classList.remove(ALIGNED_CLASS);
+  for (const [label] of labels) {
+    label.style.width = '';
+  }
+  try {
+    return read();
+  } finally {
+    form.classList.add(ALIGNED_CLASS);
+    for (const [label, width] of labels) {
+      label.style.width = width;
+    }
+  }
+}
 
 /** 列表页的查询表单：条件放得下一行时标签按文字宽度，放不下时换行、标签统一宽度并两端对齐；按钮放不下就另起一行（docs/modules/query-form.md） */
 export const QueryForm = defineComponent({
@@ -29,25 +54,27 @@ export const QueryForm = defineComponent({
     const inline = ref(false);
     // 按钮另起一行时的宽度：到最右边那个条件的右边缘为止，让 extra 与它右对齐
     const actionsWidth = ref<string>();
-    // 标签按文字宽度时，条件排成一行要多宽：在标签按文字宽度时量出，统一宽度后条件变宽了，沿用这个值
-    let naturalFieldsWidth = 0;
 
     const measure = () => {
-      const formWidth = formElement()?.clientWidth;
-      if (formWidth === undefined || !fields.value || !buttons.value) {
+      const formEl = formElement();
+      const fieldsEl = fields.value;
+      if (!formEl || !fieldsEl || !buttons.value) {
         return;
       }
-      const gap = Number.parseFloat(getComputedStyle(fields.value).columnGap);
-      const items = [...fields.value.children].map(item => item.getBoundingClientRect());
-      if (!aligned.value) {
-        naturalFieldsWidth = items.reduce((sum, rect) => sum + rect.width, 0) + gap * (items.length - 1);
-      }
+      const gap = Number.parseFloat(getComputedStyle(fieldsEl).columnGap);
+      const items = [...fieldsEl.children];
+      const rects = items.map(item => item.getBoundingClientRect());
+      // 判断依据是标签按文字宽度时条件排成一行的总宽；统一宽度后条件变宽了，不能直接用当前的尺寸
+      const naturalFieldsWidth = withNaturalLabels(
+        formEl,
+        () => items.reduce((sum, item) => sum + widthOf(item), 0) + gap * (items.length - 1)
+      );
       // 按钮的宽度固定，与当前排布无关
       const buttonsWidth = gap + widthOf(buttons.value) + (extra.value ? widthOf(extra.value) : 0);
-      aligned.value = formWidth < naturalFieldsWidth;
-      inline.value = formWidth >= naturalFieldsWidth + buttonsWidth;
-      const left = fields.value.getBoundingClientRect().left;
-      actionsWidth.value = `${Math.max(...items.map(rect => rect.right)) - left}px`;
+      aligned.value = formEl.clientWidth < naturalFieldsWidth;
+      inline.value = formEl.clientWidth >= naturalFieldsWidth + buttonsWidth;
+      const left = fieldsEl.getBoundingClientRect().left;
+      actionsWidth.value = `${Math.max(...rects.map(rect => rect.right)) - left}px`;
     };
 
     // 当前的条件元素，条件增减时重新收集。条件写在 ElForm 里，由 ElForm 的插槽渲染，增减时本组件不会更新，
@@ -66,7 +93,7 @@ export const QueryForm = defineComponent({
     return () => (
       <ElForm
         ref={form}
-        class={['form-query', inline.value && 'form-query--inline', aligned.value && 'form-query--aligned']}
+        class={['form-query', inline.value && 'form-query--inline', aligned.value && ALIGNED_CLASS]}
         labelWidth={aligned.value ? `calc(${props.labelChars}em + 12px)` : ''}
       >
         <div ref={fields} class="form-query__fields">
