@@ -40,7 +40,7 @@ apps/web/src/
 ├─ app/        应用装配：入口、路由、Pinia、全局插件、布局
 ├─ pages/      路由页面，只负责组合 features
 ├─ features/   按业务域划分：api.ts、queries.ts、store.ts、components/、composables/
-├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables 与类型
+├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型
 └─ libs/       将来可拆到 packages/* 的模块，统一用 @yzt/<name> 导入
    ├─ utils/       @yzt/utils       纯 TS 工具，不依赖框架
    ├─ ui/          @yzt/ui          Mx* 通用组件（布局、面板、区块、标题，ADR 0016）

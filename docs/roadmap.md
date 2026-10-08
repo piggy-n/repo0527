@@ -9,7 +9,7 @@
 | **0. 约定** | `AGENTS.md` 骨架（分层、依赖方向、命名），确认待定问题 | 架构分层、依赖倒置 | ✅ 完成（ADR 0001、0002、0004） |
 | **1. 工程基础** | `apps/web`：Vite 最新版 + `plugin-vue-jsx` + TS strict；tsconfig 分层；实测 TS 7 工具链；lint（只管正确性，格式交给 WebStorm）；Vitest | tsconfig 各项配置的含义、`jsxImportSource: 'vue'`、Vite 插件管线 | ✅ 完成（tag `stage-1`，[总结](stages/stage-1-engineering-foundation.md)） |
 | **2. 应用骨架** | 有类型的 HTTP 客户端和错误模型、鉴权、路由守卫（用模块扩充给 `RouteMeta` 加类型）、布局、存储适配器、MSW、Element Plus 主题、CSS Modules | 泛型、可辨识联合、模块扩充、Adapter 和 Strategy 模式 | ✅ 完成（tag `stage-2`，[总结](stages/stage-2-app-skeleton-and-auth.md)） |
-| **3. 第一个纵切** | 登录 + 布局 + 一个简单列表页，把 API、query、store、TSX 组件、测试整条链路跑通 | vue-query（TanStack Query），TSX 中 props、emits、slots 的类型写法 | ⏳ 进行中：登录和布局已在阶段二完成。3.1 页面布局规范与设计稿已完成（[design/page-layout.md](design/page-layout.md)、ADR 0016）；3.2 `libs/ui` 的分栏布局、面板、区块、标题组件已完成（[modules/ui.md](modules/ui.md)）；3.3 列表页进行中：选定文件管理（列表、筛选、分页、删除），接口数据用 TanStack Vue Query（ADR 0017） |
+| **3. 第一个纵切** | 登录 + 布局 + 一个简单列表页，把 API、query、store、TSX 组件、测试整条链路跑通 | vue-query（TanStack Query），TSX 中 props、emits、slots 的类型写法 | ✅ 完成（tag `stage-3`，[总结](stages/stage-3-layout-and-first-list.md)）：页面布局规范与 `libs/ui`（ADR 0016）、文件管理列表（ADR 0017）、会话结束的统一处理 |
 | **4. map-core** | 重新设计引擎抽象、Manager 体系、有类型的事件、有类型的 Worker 消息、资源释放 | 接口与抽象类的区别、Facade、Factory、Observer、`using` / Disposable | 未开始 |
 | **5. map-vue + 现状底图** | `MapProvider`、`useMap()`、图层面板 | provide / inject 的类型、响应式边界（`shallowRef`、`markRaw`） | 未开始 |
 | **6. 复杂业务** | 空间监测三件套、AI 流式对话、文件管理，以及其余业务模块 | 拆分巨型组件、流式读取与 SSE、取消请求 | 未开始 |
@@ -32,6 +32,13 @@
 | 2 | 新增：字体与系统名称 SVG 轮廓、第一个 workspace 包 `@yzt/icons` | 设计规范与 UI 素材到位（ADR 0012～0014） |
 | 2 | 未做：存储适配器 | 会话需要同步读取，直接用 localStorage；IndexedDB 等到有需要持久化的大块数据时再做 |
 | 6 | 不迁移知识图谱（资源中心）；加入文件管理 | 迁移范围确认（见 AGENTS.md"迁移规则"） |
+| 3 | 先定页面布局规范、做 `libs/ui` 组件（3.1、3.2），再做列表页（3.3） | 列表页要用布局组件；先统一规范，避免每个页面各写一套 |
+| 4 → 3 | `tsconfig.libs.json` 和第一个 libs 模块提前到阶段三（`libs/ui`） | 布局组件是第一个可以拆出去的通用代码（ADR 0016） |
+| 3 | 新增 `MxSection`；引入 `@vueuse/core`，版本与 element-plus 内部依赖的一致（15）；抽屉内边距成为"页面不覆盖 `--el-*` 变量"的唯一例外 | 区块间距统一；媒体查询和尺寸监听不重复造轮子，也不打包两份；侧栏面板放进抽屉要贴边 |
+| 6 → 3 | 文件管理的列表部分（列表、筛选、分页、删除）提前到阶段三，上传、下载、预览仍在阶段六 | 选作第一个列表页：左右结构，能验证布局组件 |
+| 3 | 没有用到 Pinia store：接口数据在查询缓存，界面状态在组合式函数 `useFileList` | 原计划要跑通"API、query、store"链路；列表页没有跨组件共享的客户端状态 |
+| 3 | 3.3 验收后新增通用模块和全局样式：`shared/query-form`（查询表单）、`shared/table`（骨架屏）、表格空值与树的全局样式、操作按钮的图标规范、窄屏侧栏收成窄条 | 验收时的反馈都做成通用规则，后续列表页直接套用 |
+| 3 | 发请求前检查 token 是否过期（阶段二认为不需要） | 实测 `/file/page` 不校验 token，过期后停在页面上仍能请求成功 |
 
 ## 后续阶段要带上的事项
 
@@ -39,9 +46,6 @@
 
 | 阶段 | 事项 | 出处 |
 |---|---|---|
-| 3 | 选定第一个列表页：优先文件管理或资源管理（左右结构，能验证布局组件）；数据下载、消息中心为备选 | 本文 |
-| 3 | 会话结束的统一处理：取消请求、账号之间的数据隔离、清理缓存（`queryClient.clear()`）、错误提示由谁负责、发请求前是否检查 token 过期，协调逻辑放在 app（多标签页同步已在阶段三开始前完成，届时并入） | [modules/auth.md](modules/auth.md) |
-| 3 结束时 | 阶段总结要包括阶段三开始前的修复：图标重名覆盖已有素材、旧会话的 401 清掉新会话、`clear()` 比较后删除、token 载荷校验、登录表单销毁后取消请求、多标签页同步，以及新增的 AGENTS.md 规则（素材见 `git log stage-2..` 的提交说明）；与原计划不同的地方写进"已完成阶段的调整"：`tsconfig.libs.json` 从阶段四提前、新增 `MxSection`、引入 `@vueuse/core`（与 Element 同版本）、抽屉内边距的 Element 例外 | 本文 |
 | 3 之后 | 接入 Renovate 自动处理依赖更新 | ADR 0005 |
 | 3 之后 | 评估 Playwright 端到端测试；覆盖率与门槛 | ADR 0010 |
 | 4 | map-core 放 `libs/` 还是做成 `packages/`（第一个 libs 模块和 `tsconfig.libs.json` 已提前到阶段三的 `libs/ui`） | AGENTS.md、ADR 0004、0006 |
@@ -50,25 +54,26 @@
 | 5 | 画布型页面：地图铺满内容区，操作栏和面板悬浮；悬浮面板沿用面板规范、统一浅色；地图定位时的 padding 要避开悬浮面板，由布局提供被占用的区域，不由页面各自计算 | [design/page-layout.md](design/page-layout.md) |
 | 6 | AI 对话：AI 后端登录不再在前端写死账号密码 | ADR 0015 |
 | 6 | 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像、消息铃铛 | [modules/layout.md](modules/layout.md) |
-| 6 | 文件管理：上传、下载与进度 | ADR 0011 |
+| 6 | 文件管理：上传（"上传文档"按钮已占位）、下载与进度、预览 | ADR 0011、[migration.md](migration.md) |
+| 6 | 其他列表页套用阶段三的通用规则：`QueryForm`、加载状态的三种情况与 `TableSkeleton`、表格空值、操作按钮图标 | [modules/query-form.md](modules/query-form.md)、[modules/table.md](modules/table.md) |
+| 需要时 | `QueryForm`：同一行里动态增删条件时按钮行宽度不会更新；日期范围这类 180 放不下的控件要加一种加宽的写法；会话结束时把 feature 的 store 一并重置（目前没有） | [modules/query-form.md](modules/query-form.md)、[modules/auth.md](modules/auth.md) |
 | 6 | 上传、下载统一成一套能力（统一的上传 / 下载方法或独立模块，包括进度、文件名、错误处理、预览前的 MIME 补齐），文件管理、数据下载（资源申请）、数据查询的导出共用，不再各自实现。旧项目在迁移范围内至少有 5 处各写各的下载：`libs/http-service.js` 的 blob 处理、`services/resource-application/applyApiService.js`（`downloadApplicationFile`、`downloadStatisticsReportFile`）、`downloadTaskService.js`（带进度）、文件管理 `FileManagementContent.vue`（`requestFileBlob`、`downloadBlob`）、数据查询 `space-monitoring-query/index.vue`（`downloadExportBlob`）；`FormData` 上传 3 处：文件管理上传弹窗、资源管理 Excel 导入、数据查询 | 本文（2026-10-08 提出） |
-| 6 | 页面内菜单（系统管理左栏）用 `ElMenu` 加变体还是做 `MxSideMenu`；侧栏收成窄条（基本统计页）；单列居中（消息中心）；旧页面左栏 296、348 归到 320 | [design/page-layout.md](design/page-layout.md) |
+| 6 | 页面内菜单（系统管理左栏）用 `ElMenu` 加变体还是做 `MxSideMenu`；宽屏时手动把侧栏收成窄条（基本统计页，可复用窄屏的窄条）；单列居中（消息中心）；旧页面左栏 296、348 归到 320 | [design/page-layout.md](design/page-layout.md) |
 | 需要时 | 持久化（IndexedDB + idb-keyval，存储适配器） | AGENTS.md |
 | 7 | 部署（nginx 回退与接口转发）；版本号格式 | [deployment.md](deployment.md)、ADR 0005 |
 
-## 阶段三：页面布局
+## 阶段三：页面布局与第一个列表页
 
-2026-09-30 阶段三开始前讨论确定目标与范围，3.1 出设计稿确认后写成：
+2026-09-30 开始，2026-10-08 完成，详见[阶段总结](stages/stage-3-layout-and-first-list.md)：
 
-- [design/page-layout.md](design/page-layout.md)：页面类型、分栏布局、面板、标题、卡片头部、窄屏抽屉、画布型的规则，设计稿确认的取舍，以及旧项目的参考文件
-- [ADR 0016](adr/0016-ui-components-in-libs-ui.md)：通用 UI 组件放在 `libs/ui`，以及由此带来的 `tsconfig.libs.json` 提前、断点下移、图标经插槽传入、依赖 CSS 变量四项后果
-- 间距与圆角令牌：[design/color-and-typography.md](design/color-and-typography.md) 第 6.1 节，登记在 [design/theme.md](design/theme.md)
-
-流程：3.1 规范与设计稿（已完成）→ 3.2 `libs/ui` 组件，在主题预览页截图确认（已完成，用法见 [modules/ui.md](modules/ui.md)）→ 3.3 做列表页，优先文件管理或资源管理。
+- 3.1 页面布局规范与设计稿：[design/page-layout.md](design/page-layout.md)、[ADR 0016](adr/0016-ui-components-in-libs-ui.md)、间距与圆角令牌（[design/color-and-typography.md](design/color-and-typography.md) 第 6.1 节）
+- 3.2 `libs/ui` 的分栏布局、面板、区块、标题组件：[modules/ui.md](modules/ui.md)
+- 3.3 文件管理列表：TanStack Vue Query（[ADR 0017](adr/0017-server-state-with-tanstack-query.md)），表格和树的全局样式（[design/theme.md](design/theme.md)），验收后加入的查询表单（[modules/query-form.md](modules/query-form.md)）与加载状态（[modules/table.md](modules/table.md)）
+- 会话结束的统一处理：[modules/auth.md](modules/auth.md)
 
 ## 业务模块
 
-除了阶段 3 的列表页和阶段 5 的现状底图，其余业务模块都在阶段 6。当前的路由（均为占位页）：
+除了阶段 3 的列表页和阶段 5 的现状底图，其余业务模块都在阶段 6。当前的路由（文件管理已完成列表部分，其余为占位页）：
 
 | 模块 | 路由 | 角色 | 旧项目目录 |
 |---|---|---|---|
