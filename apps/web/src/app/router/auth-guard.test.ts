@@ -106,9 +106,12 @@ describe('已登录', () => {
     expect((await visit('/current-map')).name).toBe(RouteName.currentMap);
   });
 
-  it('token 过期时访问登录页，停留在登录页', async () => {
+  it('token 过期时访问登录页：停留在登录页，清掉过期的会话，不提示', async () => {
+    const warning = spyWarning();
     signIn(Role.admin, Date.now() - 1000);
 
     expect((await visit('/login')).name).toBe(RouteName.login);
+    expect(useSessionStore().session).toBeNull();
+    expect(warning).not.toHaveBeenCalled();
   });
 });

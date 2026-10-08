@@ -12,6 +12,7 @@ import { http } from '@/shared/http/client';
 import { configureHttp } from '@/shared/http/configure';
 import { RouteName } from '@/shared/router/route-names';
 import { setupHttp } from './http';
+import { installAuthGuard } from './router/auth-guard';
 import { queryClient } from './query-client';
 
 const server = setupServer();
@@ -112,6 +113,23 @@ describe('setupHttp', () => {
   });
 
   it('未登录时照常发出请求（例如登录接口），不当作登录过期', async () => {
+    const requests: string[] = [];
+    server.use(
+      mock.post('/backend/login', ({ request }) => {
+        requests.push(request.url);
+        return HttpResponse.json({ code: 200, data: null });
+      })
+    );
+
+    await http.post('/login', {}, { schema: z.null() }).catch(() => undefined);
+
+    expect(requests).toHaveLength(1);
+  });
+
+  it('本地有过期会话时进入登录页：第一次登录请求照常发出', async () => {
+    installAuthGuard(router);
+    signIn(createTestJwtExpiringAt(Date.now() - 1000));
+    await router.push('/login');
     const requests: string[] = [];
     server.use(
       mock.post('/backend/login', ({ request }) => {

@@ -1,7 +1,7 @@
 import { SwitchButton } from '@element-plus/icons-vue';
 import { ElDropdown, ElDropdownItem, ElDropdownMenu, ElMessage, ElMessageBox } from 'element-plus';
 import { storeToRefs } from 'pinia';
-import { defineComponent } from 'vue';
+import { defineComponent, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { roleLabel } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
@@ -18,11 +18,29 @@ export const UserMenu = defineComponent({
     const session = useSessionStore();
     const { user, displayName } = storeToRefs(session);
 
+    // ElMessageBox 不随组件卸载关闭（例如确认框打开期间登录过期、在其他标签页退出），卸载时关掉本组件打开的确认框
+    let confirmOpen = false;
+    let unmounted = false;
+    onBeforeUnmount(() => {
+      unmounted = true;
+      if (confirmOpen) {
+        ElMessageBox.close();
+      }
+    });
+
     const logout = async () => {
+      const token = session.token;
+      confirmOpen = true;
       try {
         await ElMessageBox.confirm('确定要退出登录吗？', '提示', { type: 'warning' });
       } catch {
-        // 点了取消或关闭
+        // 点了取消或关闭，或组件卸载时被关闭
+        return;
+      } finally {
+        confirmOpen = false;
+      }
+      // 确认期间组件已卸载，或会话已经结束、更换：会话结束时已经跳转和提示过，这里不再重复
+      if (unmounted || session.token !== token) {
         return;
       }
       endSession();

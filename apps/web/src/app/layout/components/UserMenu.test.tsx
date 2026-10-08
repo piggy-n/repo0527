@@ -38,6 +38,21 @@ function clickLogout() {
   item?.click();
 }
 
+// 确认框挂起，由用例决定何时点确认
+function holdConfirm() {
+  const pending: ((action: MessageBoxData) => void)[] = [];
+  vi.spyOn(ElMessageBox, 'confirm').mockImplementation(
+    () =>
+      new Promise<MessageBoxData>(resolve => {
+        pending.push(resolve);
+      })
+  );
+  return {
+    pending,
+    confirm: () => pending.shift()?.('confirm' as MessageBoxData)
+  };
+}
+
 beforeEach(() => {
   localStorage.clear();
   queryClient.clear();
@@ -70,6 +85,37 @@ describe('UserMenu', () => {
     expect(useSessionStore().session).toBeNull();
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
     expect(success).toHaveBeenCalledWith('已退出登录');
+  });
+
+  it('退出确认框打开期间组件卸载：关闭确认框，之后再点确认也不退出、不提示', async () => {
+    const dialog = holdConfirm();
+    const close = vi.spyOn(ElMessageBox, 'close');
+    const success = vi.spyOn(ElMessage, 'success').mockReturnValue({ close: () => undefined });
+    const wrapper = await mountMenu();
+    clickLogout();
+    await vi.waitFor(() => expect(dialog.pending).toHaveLength(1));
+
+    wrapper.unmount();
+    expect(close).toHaveBeenCalled();
+    dialog.confirm();
+    await flushPromises();
+
+    expect(useSessionStore().session).not.toBeNull();
+    expect(success).not.toHaveBeenCalled();
+  });
+
+  it('退出确认框打开期间会话已结束：点确认后不再提示"已退出登录"', async () => {
+    const dialog = holdConfirm();
+    const success = vi.spyOn(ElMessage, 'success').mockReturnValue({ close: () => undefined });
+    await mountMenu();
+    clickLogout();
+    await vi.waitFor(() => expect(dialog.pending).toHaveLength(1));
+
+    useSessionStore().clear();
+    dialog.confirm();
+    await flushPromises();
+
+    expect(success).not.toHaveBeenCalled();
   });
 
   it('取消退出时保持登录', async () => {

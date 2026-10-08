@@ -15,7 +15,14 @@ export function installAuthGuard(router: Router): void {
 
     // 已登录时访问登录页，直接进入首页
     if (to.name === RouteName.login) {
-      return user ? { name: roleHome(user.role), replace: true } : true;
+      if (user) {
+        return { name: roleHome(user.role), replace: true };
+      }
+      // 会话已过期时清掉，不提示：否则登录请求会带着过期的 token，被"发请求前检查过期"拦下
+      if (session.session) {
+        endSession();
+      }
+      return true;
     }
     if (to.meta.public) {
       return true;
