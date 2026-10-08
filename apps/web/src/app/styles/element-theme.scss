@@ -116,6 +116,24 @@
   color: var(--color-text-placeholder);
 }
 
+// 表格骨架屏（shared/table 的 TableSkeleton，放在 empty 插槽里）：撑满空状态区域，Element 默认只占一半宽度、行高 60；
+// 骨架行与默认尺寸的纯文字数据行同高（上下内边距 12 + 文字行高 23 + 1px 分隔线），改上面的行高时一起改
+.el-table__empty-text:has(> .table-skeleton) {
+  align-self: stretch;
+  width: 100%;
+  overflow: hidden;
+  line-height: normal;
+}
+
+.table-skeleton__row {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  height: 48px;
+  padding: 0 12px;
+  border-bottom: var(--el-table-border);
+}
+
 // 填充风格的输入框：浅蓝底、无边框、48px 高、16px 字，登录页使用；用法 <ElInput class="input-filled">
 .el-input.input-filled {
   --el-input-height: 48px;

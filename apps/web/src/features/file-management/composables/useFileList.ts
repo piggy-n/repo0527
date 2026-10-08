@@ -1,3 +1,4 @@
+import { hashKey } from '@tanstack/vue-query';
 import { computed, reactive, ref, watch } from 'vue';
 import type { FilePageParams } from '../api';
 import { DEFAULT_CATEGORY_ID } from '../categories';
@@ -35,6 +36,14 @@ export function useFileList() {
   const files = computed(() => query.data.value?.content ?? []);
   const total = computed(() => query.data.value?.totalElements ?? 0);
 
+  // 主动刷新中；连续点击时 Vue Query 取消前一次请求，前一次的 refetch 会等最新的请求完成才结束
+  const manualRefreshing = ref(false);
+  // 没有可显示的数据且正在请求（Vue Query 的 isLoading）：首次加载、切到没看过的分类、失败后重试
+  const initialLoading = query.isLoading;
+  // 显示着旧数据、正在等新数据：翻页或换条件时上一次的数据占位，或者主动刷新。
+  // 后台重新请求当前条件的缓存（切回看过的分类、删除后刷新）不算，数据到了直接替换
+  const refreshing = computed(() => !initialLoading.value && (query.isPlaceholderData.value || manualRefreshing.value));
+
   // 页码越界时后端返回最后一页的数据但不修正页码（例如删掉了最后一页的最后一条），这里改到最后一页
   // 只看拿到的数据：出错时 data 会变成 undefined，那时不应改动页码
   watch(query.data, page => {
@@ -53,9 +62,21 @@ export function useFileList() {
     pageNo.value = 1;
   }
 
+  /** 重新请求当前条件，请求期间 refreshing 为 true */
+  async function refresh() {
+    manualRefreshing.value = true;
+    await query.refetch();
+    manualRefreshing.value = false;
+  }
+
   function search() {
+    const previous = hashKey([params.value]);
     appliedFilters.value = { ...filterForm };
     pageNo.value = 1;
+    // 条件没变时查询键也不变，Vue Query 不会重新请求；用户点"查询"是想看最新的数据
+    if (hashKey([params.value]) === previous) {
+      void refresh();
+    }
   }
 
   function resetFilters() {
@@ -75,10 +96,11 @@ export function useFileList() {
     filterForm,
     files,
     total,
-    // 首次加载和后台刷新都算，界面用它显示加载状态（用 useDelayedFlag 延迟显示）
-    loading: query.isFetching,
+    // 两种加载状态的界面表现见 docs/modules/table.md
+    initialLoading,
+    refreshing,
     isError: query.isError,
-    refetch: query.refetch,
+    refresh,
     selectCategory,
     search,
     resetFilters,

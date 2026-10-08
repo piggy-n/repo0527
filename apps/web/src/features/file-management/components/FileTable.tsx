@@ -2,6 +2,7 @@ import { ElButton, ElMessage, ElMessageBox, ElTable, ElTableColumn, ElTag, vLoad
 import { defineComponent, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { ApiError } from '@/shared/http/errors';
+import { TableSkeleton } from '@/shared/table/TableSkeleton';
 import type { FileRecord } from '../api';
 import { useDeleteFileMutation } from '../queries';
 import styles from './FileTable.module.scss';
@@ -13,7 +14,9 @@ export const FileTable = defineComponent({
   directives: { loading: vLoading },
   props: {
     files: { type: Array as PropType<FileRecord[]>, required: true },
-    loading: { type: Boolean, required: true },
+    // 两种加载状态见 docs/modules/table.md：没有数据时显示骨架屏，显示着旧数据时显示遮罩
+    initialLoading: { type: Boolean, required: true },
+    refreshing: { type: Boolean, required: true },
     error: { type: Boolean, required: true }
   },
   emits: {
@@ -21,7 +24,7 @@ export const FileTable = defineComponent({
   },
   setup(props, { emit }) {
     const removal = useDeleteFileMutation();
-    const showLoading = useDelayedFlag(() => props.loading);
+    const showMask = useDelayedFlag(() => props.refreshing);
 
     async function remove(file: FileRecord) {
       try {
@@ -49,7 +52,7 @@ export const FileTable = defineComponent({
     const isRemoving = (file: FileRecord) => removal.isPending.value && removal.variables.value === file.id;
 
     return () => (
-      <ElTable class={styles.root} data={props.files} height="100%" v-loading={showLoading.value}>
+      <ElTable class={styles.root} data={props.files} height="100%" v-loading={showMask.value}>
         {{
           default: () => [
             <ElTableColumn prop="year" label="年份" width="80" align="center" />,
@@ -71,8 +74,10 @@ export const FileTable = defineComponent({
               }}
             </ElTableColumn>
           ],
-          // 加载中不显示"暂无数据"：首次加载还没有数据，加载遮罩又要延迟才出现，会先闪出"暂无数据"
           empty: () => {
+            if (props.initialLoading) {
+              return <TableSkeleton />;
+            }
             if (props.error) {
               return (
                 <div class={styles.error}>
@@ -83,7 +88,7 @@ export const FileTable = defineComponent({
                 </div>
               );
             }
-            return props.loading ? '' : '暂无数据';
+            return '暂无数据';
           }
         }}
       </ElTable>

@@ -42,6 +42,31 @@ function mockFiles() {
   return { pageRequests, deleted };
 }
 
+// 请求到达后挂起，调用 release 才返回，用来观察请求进行中的界面；每个分类 totalElements 条数据
+function holdFiles(totalElements = 3) {
+  const pageRequests: string[] = [];
+  const held: (() => void)[] = [];
+  server.use(
+    mock.get('/backend/file/page', async ({ request }) => {
+      const categoryId = new URL(request.url).searchParams.get('categoryId') ?? '';
+      pageRequests.push(categoryId);
+      await new Promise<void>(resolve => {
+        held.push(resolve);
+      });
+      return HttpResponse.json(filePageResponse({ categoryId, totalElements }));
+    })
+  );
+  const release = () => {
+    for (const resolve of held.splice(0)) {
+      resolve();
+    }
+  };
+  return { pageRequests, release };
+}
+
+// 遮罩延迟 300ms 才出现，断言"没有遮罩"要等过这段时间
+const waitPastMaskDelay = () => new Promise(resolve => setTimeout(resolve, 400));
+
 function mountPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return mount(FileManagementPage, {
@@ -91,6 +116,27 @@ describe('FileManagementPage', () => {
     await vi.waitFor(() => expect(pageRequests.at(-1)).toBe('policy-law-local'));
     await vi.waitFor(() => expect(mainPanel(wrapper).title).toBe('地方层面政策法规'));
     expect(mainPanel(wrapper).description).toBe('政策法规');
+  });
+
+  it('切回看过的分类：立即显示缓存的数据，后台重新请求期间不出遮罩', async () => {
+    const { pageRequests, release } = holdFiles();
+    const wrapper = mountPage();
+    await vi.waitFor(() => expect(pageRequests).toHaveLength(1));
+    release();
+    await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(3));
+    await treeNode(wrapper, '政策法规')[0]?.trigger('click');
+    await treeNode(wrapper, '国家层面政策法规')[0]?.trigger('click');
+    await vi.waitFor(() => expect(pageRequests).toHaveLength(2));
+    release();
+    await vi.waitFor(() => expect(mainPanel(wrapper).title).toBe('国家层面政策法规'));
+
+    await treeNode(wrapper, '自然资源调查类')[0]?.trigger('click');
+    await vi.waitFor(() => expect(pageRequests).toHaveLength(3));
+    await waitPastMaskDelay();
+
+    expect(mainPanel(wrapper)).toMatchObject({ title: '自然资源调查类', names: ['测试文件1.pdf', '测试文件2.pdf', '测试文件3.pdf'] });
+    expect(wrapper.findAll('.el-loading-mask')).toHaveLength(0);
+    release();
   });
 
   it('点分组只展开收起，不请求，选中的分类仍高亮', async () => {
@@ -154,24 +200,35 @@ describe('FileManagementPage', () => {
     expect(deleted).toEqual([]);
   });
 
-  it('首次加载完成前不显示"暂无数据"', async () => {
-    // 请求到达后挂起，用例调用 release 才返回
-    const pending: (() => void)[] = [];
-    server.use(
-      mock.get('/backend/file/page', async () => {
-        await new Promise<void>(resolve => {
-          pending.push(resolve);
-        });
-        return HttpResponse.json(filePageResponse({ totalElements: 0 }));
-      })
-    );
+  it('首次加载时显示骨架屏，不出遮罩，也不显示"暂无数据"', async () => {
+    const { pageRequests, release } = holdFiles(0);
     const wrapper = mountPage();
-    await vi.waitFor(() => expect(pending).toHaveLength(1));
+    await vi.waitFor(() => expect(pageRequests).toHaveLength(1));
+    await waitPastMaskDelay();
 
+    expect(wrapper.findAll('.el-table__empty-text .table-skeleton')).toHaveLength(1);
     expect(wrapper.find('.el-table__empty-text').text()).toBe('');
+    expect(wrapper.findAll('.el-loading-mask')).toHaveLength(0);
 
-    pending[0]?.();
+    release();
     await vi.waitFor(() => expect(wrapper.find('.el-table__empty-text').text()).toBe('暂无数据'));
+    expect(wrapper.findAll('.table-skeleton')).toHaveLength(0);
+  });
+
+  it('换条件查询：请求期间保留上一次的数据并显示遮罩', async () => {
+    const { pageRequests, release } = holdFiles();
+    const wrapper = mountPage();
+    await vi.waitFor(() => expect(pageRequests).toHaveLength(1));
+    release();
+    await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(3));
+
+    await wrapper.find('input[placeholder="请输入文档名称"]').setValue('测试');
+    await wrapper.findAll('button').find(button => button.text() === '查询')?.trigger('click');
+    await vi.waitFor(() => expect(pageRequests).toHaveLength(2));
+
+    await vi.waitFor(() => expect(wrapper.findAll('.el-loading-mask')).toHaveLength(1));
+    expect(mainPanel(wrapper).names).toHaveLength(3);
+    release();
   });
 
   it('加载失败时显示"加载失败"，点重试重新请求', async () => {

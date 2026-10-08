@@ -43,9 +43,10 @@ export const FileManagementPage = defineComponent({
                   />,
                   <FileTable
                     files={list.files.value}
-                    loading={list.loading.value}
+                    initialLoading={list.initialLoading.value}
+                    refreshing={list.refreshing.value}
                     error={list.isError.value}
-                    onRetry={() => void list.refetch()}
+                    onRetry={() => void list.refresh()}
                   />
                 ],
                 footer: () => (

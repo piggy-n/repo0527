@@ -175,6 +175,8 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 - 只有空格的字符串不显示 `-`：实测接口缺失的字段返回 null，不为假设的情况另加处理
 - 不采用每列写 `formatter`：每个列表页的每一列都要记得加，容易漏
 
+**骨架屏**：首次加载时表体显示 `TableSkeleton`（`shared/table`），它的样式也写在表格这几条规则旁边：撑开 Element 的空状态区域，骨架行高 48 与默认尺寸的纯文字数据行相同。改表格行高时同步改骨架行高。何时显示骨架、何时显示遮罩见 [modules/table.md](../modules/table.md)。
+
 ### 组件变体
 
 同一种组件需要另一种外观时，在 `element-theme.scss` 中定义变体 class，页面和组件只引用 class，不自己覆盖 `--el-*` 变量。变体选择器写成 `.el-xxx.变体名`，比 Element 自己的尺寸类（如 `.el-input--large`）优先级高，与加载顺序无关。

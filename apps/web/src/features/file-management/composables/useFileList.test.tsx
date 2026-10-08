@@ -38,6 +38,28 @@ function mockFilePage(totalElements = 45) {
   return requests;
 }
 
+// 请求到达后挂起，调用 release 才返回，用来观察请求进行中的状态
+function holdFilePage() {
+  const requests: Record<string, string>[] = [];
+  const held: (() => void)[] = [];
+  server.use(
+    mock.get('/backend/file/page', async ({ request }) => {
+      const params = Object.fromEntries(new URL(request.url).searchParams);
+      requests.push(params);
+      await new Promise<void>(resolve => {
+        held.push(resolve);
+      });
+      return HttpResponse.json(filePageResponse({ pageNo: Number(params.pageNo), totalElements: 45 }));
+    })
+  );
+  const release = () => {
+    for (const resolve of held.splice(0)) {
+      resolve();
+    }
+  };
+  return { requests, release };
+}
+
 let list: ReturnType<typeof useFileList>;
 
 const Host = defineComponent({
@@ -132,10 +154,94 @@ describe('useFileList', () => {
     // 删除后只剩 40 条，共 2 页；后端对第 3 页返回第 2 页的数据，页码仍是 3
     server.resetHandlers();
     const after = mockFilePage(40);
-    void list.refetch();
+    void list.refresh();
 
     await vi.waitFor(() => expect(list.pageNo.value).toBe(2));
     await vi.waitFor(() => expect(after.at(-1)?.pageNo).toBe('2'));
+  });
+
+  it('首次加载：initialLoading 为 true，refreshing 为 false', async () => {
+    const { requests, release } = holdFilePage();
+    mountHost();
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+
+    expect(list.initialLoading.value).toBe(true);
+    expect(list.refreshing.value).toBe(false);
+
+    release();
+    await vi.waitFor(() => expect(list.initialLoading.value).toBe(false));
+    expect(list.files.value).toHaveLength(20);
+  });
+
+  it('翻页：请求期间保留上一页的数据，refreshing 为 true', async () => {
+    const { requests, release } = holdFilePage();
+    mountHost();
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    release();
+    await vi.waitFor(() => expect(list.files.value).toHaveLength(20));
+
+    list.pageNo.value = 3;
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+
+    expect(list.refreshing.value).toBe(true);
+    expect(list.initialLoading.value).toBe(false);
+    expect(list.files.value[0]?.name).toBe('测试文件1.pdf');
+
+    release();
+    await vi.waitFor(() => expect(list.refreshing.value).toBe(false));
+    expect(list.files.value[0]?.name).toBe('测试文件41.pdf');
+  });
+
+  it('条件没变时点查询也重新请求，请求期间 refreshing 为 true', async () => {
+    const { requests, release } = holdFilePage();
+    mountHost();
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    release();
+    await vi.waitFor(() => expect(list.files.value).toHaveLength(20));
+
+    list.search();
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    expect(list.refreshing.value).toBe(true);
+
+    release();
+    await vi.waitFor(() => expect(list.refreshing.value).toBe(false));
+  });
+
+  it('连续点两次查询：refreshing 保持到最后一次请求结束', async () => {
+    const { requests, release } = holdFilePage();
+    mountHost();
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    release();
+    await vi.waitFor(() => expect(list.files.value).toHaveLength(20));
+
+    list.search();
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    list.search();
+    await vi.waitFor(() => expect(requests).toHaveLength(3));
+    // 前一次请求被取消，但它的 refetch 要等最新的请求完成才结束（Vue Query 的行为）；
+    // 多等一会儿，如果它提前结束，refreshing 会在这期间变成 false
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(list.refreshing.value).toBe(true);
+    release();
+    await vi.waitFor(() => expect(list.refreshing.value).toBe(false));
+  });
+
+  it('失败后重试：没有可显示的数据，重试期间 initialLoading 为 true', async () => {
+    server.use(mock.get('/backend/file/page', () => HttpResponse.json({ code: 500, msg: '服务异常', data: null })));
+    mountHost();
+    await vi.waitFor(() => expect(list.isError.value).toBe(true));
+    expect(list.initialLoading.value).toBe(false);
+
+    server.resetHandlers();
+    const { requests, release } = holdFilePage();
+    void list.refresh();
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+
+    expect(list.initialLoading.value).toBe(true);
+    expect(list.refreshing.value).toBe(false);
+    release();
+    await vi.waitFor(() => expect(list.files.value).toHaveLength(20));
   });
 
   it('请求出错时不改页码', async () => {
