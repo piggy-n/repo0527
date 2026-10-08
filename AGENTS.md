@@ -141,6 +141,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 测试写完后，故意改坏被测代码，确认测试会失败，并确认失败原因是断言而不是代码报错；修 bug 时先写能复现问题的测试
 - `vite.config.ts` 的 `test.server.deps.inline: ['element-plus']` 不能删：不加的话 Element 表单的校验在测试中永远通过（见 `docs/config/vite-config.md`）
 - 不提交 `.only`：lint 的 `vitest/no-focused-tests` 会报错，CI 中 Vitest 也会拒绝运行
+- `mount` 挂载的组件在每个用例结束后由 `src/test-setup.ts` 自动卸载（`enableAutoUnmount`），不用逐个 `unmount()`；Element 放在 `body` 下的弹出层不归组件管，挂到 `body` 的测试仍要在 `afterEach` 里清空它
 
 ### Pinia
 
