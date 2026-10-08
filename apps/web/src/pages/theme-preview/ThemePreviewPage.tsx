@@ -1,4 +1,4 @@
-import { Search } from '@element-plus/icons-vue';
+import { Delete, Download, Plus, Refresh, RefreshLeft, Search, Upload } from '@element-plus/icons-vue';
 import {
   ElAlert,
   ElButton,
@@ -85,6 +85,20 @@ const fontWeights = [
 ];
 
 const buttonTypes = ['primary', 'success', 'warning', 'danger', 'info'] as const;
+
+// 操作按钮的图标，规范见 docs/design/page-layout.md 的"操作按钮"
+const actionButtons = [
+  { label: '查询', icon: Search },
+  { label: '重置', icon: RefreshLeft },
+  { label: '刷新', icon: Refresh },
+  { label: '新增', icon: Plus },
+  { label: '上传', icon: Upload },
+  { label: '下载', icon: Download },
+  { label: '批量删除', icon: Delete }
+];
+
+// 查询表单的示例宽度：约等于 1440、1226 视口下文件管理主区的内容宽度，以及窄屏
+const queryFormWidths = [1040, 826, 480];
 
 const tableRows: IndicatorRow[] = [
   { region: '南京市', indicator: '城镇开发边界面积', status: '处理完成' },
@@ -257,6 +271,13 @@ export const ThemePreviewPage = defineComponent({
             ))}
             <ElButton type="primary" text>文字按钮</ElButton>
           </div>
+          <div class={styles.row}>
+            {actionButtons.map(({ label, icon }) => (
+              <ElButton key={label} icon={icon}>
+                {label}
+              </ElButton>
+            ))}
+          </div>
         </section>
 
         <section class={styles.section}>
@@ -354,6 +375,32 @@ export const ThemePreviewPage = defineComponent({
               </ElButton>
             </ElForm>
           </div>
+        </section>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>查询表单（form-query）</h2>
+          {queryFormWidths.map(width => (
+            <div key={width} class={styles.queryFrame} style={{ width: `${width}px` }}>
+              <p class={styles.frameLabel}>宽 {width}</p>
+              <ElForm class="form-query" labelWidth="auto">
+                <ElFormItem label="文档名称">
+                  <ElInput placeholder="请输入文档名称" />
+                </ElFormItem>
+                <ElFormItem label="年份">
+                  <ElDatePicker type="year" placeholder="请选择年份" />
+                </ElFormItem>
+                <ElFormItem label="业务类型标签">
+                  <ElSelect placeholder="全部" />
+                </ElFormItem>
+                <div class="form-query__actions">
+                  <ElButton type="primary" icon={Search}>
+                    查询
+                  </ElButton>
+                  <ElButton icon={RefreshLeft}>重置</ElButton>
+                </div>
+              </ElForm>
+            </div>
+          ))}
         </section>
 
         <section class={styles.section}>

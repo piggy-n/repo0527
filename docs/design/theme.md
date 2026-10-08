@@ -175,6 +175,9 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 |---|---|---|---|
 | `input-filled` | `<ElInput class="input-filled">` | `primary-border` 浅蓝底、无边框；悬停 `primary-border-hover`、聚焦 `primary` 描边；48px 高、16px 字、`--radius-md` 圆角；占位符和图标用 `primary` | 登录页 |
 | `button-xl` | `<ElButton class="button-xl">` | 48px 高、16px 半粗、`--radius-md` 圆角；颜色沿用按钮的 `type` | 登录页 |
+| `form-query` | `<ElForm class="form-query" labelWidth="auto">`，按钮放在 `<div class="form-query__actions">` 里 | Grid 按最小列宽 240 自动分列，控件占满所在列，日期选择器去掉默认的 220 固定宽度；表单项不留底部外边距；按钮占最后一列并靠右 | 列表页的筛选栏，规则见 [page-layout.md](page-layout.md) 的"筛选栏" |
+
+`form-query__actions` 不是 Element 组件，所以只有这一个 class，不写成 `.el-xxx.变体名`。
 
 `input-filled` 只修改 Element 已提供的 `--el-input-*` 变量，校验失败的红色描边、禁用状态等仍由 Element 处理。Element 的 `large` 尺寸把输入框字号写死为 14px，所以变体里还设置了 `font-size`。两个变体的各种状态可以在主题预览页（`/dev/theme`）查看。
 

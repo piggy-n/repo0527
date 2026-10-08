@@ -1,9 +1,8 @@
-import { Search } from '@element-plus/icons-vue';
-import { ElButton, ElDatePicker, ElInput, ElOption, ElSelect } from 'element-plus';
+import { RefreshLeft, Search } from '@element-plus/icons-vue';
+import { ElButton, ElDatePicker, ElForm, ElFormItem, ElInput, ElOption, ElSelect } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { fileTags } from '../categories';
 import type { FileFilters } from '../composables/useFileList';
-import styles from './FileFilterBar.module.scss';
 
 // 年份不能晚于今年，与旧页面一致
 const isFutureYear = (date: Date) => date.getFullYear() > new Date().getFullYear();
@@ -20,12 +19,11 @@ export const FileFilterBar = defineComponent({
     reset: () => true
   },
   setup(props, { emit }) {
+    // 查询表单的排布见 docs/design/page-layout.md 的"筛选栏"
     return () => (
-      <div class={styles.root}>
-        <label class={styles.field}>
-          文档名称
+      <ElForm class="form-query" labelWidth="auto">
+        <ElFormItem label="文档名称">
           <ElInput
-            class={styles.name}
             modelValue={props.model.name}
             onUpdate:modelValue={(value: string) => {
               props.model.name = value;
@@ -38,11 +36,9 @@ export const FileFilterBar = defineComponent({
               }
             }}
           />
-        </label>
-        <label class={styles.field}>
-          年份
+        </ElFormItem>
+        <ElFormItem label="年份">
           <ElDatePicker
-            class={styles.year}
             type="year"
             valueFormat="YYYY"
             placeholder="请选择年份"
@@ -52,11 +48,9 @@ export const FileFilterBar = defineComponent({
               props.model.year = value ?? '';
             }}
           />
-        </label>
-        <label class={styles.field}>
-          业务类型标签
+        </ElFormItem>
+        <ElFormItem label="业务类型标签">
           <ElSelect
-            class={styles.tag}
             placeholder="全部"
             clearable
             modelValue={props.model.tag}
@@ -68,14 +62,16 @@ export const FileFilterBar = defineComponent({
               <ElOption key={tag} label={tag} value={tag} />
             ))}
           </ElSelect>
-        </label>
-        <div class={styles.actions}>
+        </ElFormItem>
+        <div class="form-query__actions">
           <ElButton type="primary" icon={Search} onClick={() => emit('search')}>
             查询
           </ElButton>
-          <ElButton onClick={() => emit('reset')}>重置</ElButton>
+          <ElButton icon={RefreshLeft} onClick={() => emit('reset')}>
+            重置
+          </ElButton>
         </div>
-      </div>
+      </ElForm>
     );
   }
 });

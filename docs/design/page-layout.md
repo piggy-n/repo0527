@@ -117,6 +117,44 @@
 - 只在同一页有多张并列卡片、需要用图标区分时使用（如统计页的结果区）；普通面板用竖杠标题
 - 旧项目的标题 PNG 不再使用
 
+## 筛选栏
+
+列表页表格上方的查询条件，用 `ElForm` 加变体 class `form-query`（定义在 `element-theme.scss`，见 [theme.md](theme.md) 的"组件变体"）：
+
+```tsx
+<ElForm class="form-query" labelWidth="auto">
+  <ElFormItem label="文档名称">…</ElFormItem>
+  <ElFormItem label="业务类型标签">…</ElFormItem>
+  <div class="form-query__actions">查询、重置按钮</div>
+</ElForm>
+```
+
+- 按最小列宽 240 自动分列（CSS Grid 的 `repeat(auto-fill, minmax(240px, 1fr))`），控件占满所在的列；列间距 `--space-lg`，行间距 `--space-md`
+- `labelWidth="auto"`：所有标签取最长标签的宽度并右对齐，条件换行后各行控件的起点仍然对齐
+- 按钮放在 `form-query__actions` 里，占最后一列并靠右；最后一列已被条件占用时自动换到下一行
+- 编辑条件不触发请求，点"查询"或在文本框里按回车才生效；"重置"清空条件后立即查询
+- 标签不能包住控件：`<label>` 包住控件时，点控件里的清除图标，浏览器会把这次点击转给输入框，下拉框随之展开。`ElFormItem` 生成的标签通过 `for` 关联控件，没有这个问题
+- 与下方表格的间距 `--space-lg`，由页面设置
+
+为什么用 Grid 而不是 `inline` 表单：inline 表单每一项的宽度不同，换行后第二行的控件和第一行对不齐；Grid 让各列等宽，再统一标签宽度，任何宽度下都对齐。代价是条件只有一行时，短标签（如"年份"）左侧的留白较多。各宽度下的效果见主题预览页（`/dev/theme`）的"查询表单"一节。
+
+## 操作按钮
+
+工具栏和筛选栏里的按钮带图标，图标来自 `@element-plus/icons-vue`，同一个操作在全应用用同一个图标：
+
+| 操作 | 图标 |
+|---|---|
+| 查询 | `Search` |
+| 重置 | `RefreshLeft`（逆时针箭头，表示恢复初始条件，与"刷新"区分） |
+| 刷新 | `Refresh` |
+| 新增 | `Plus` |
+| 上传 | `Upload` |
+| 下载、导出 | `Download` |
+| 批量删除 | `Delete` |
+
+- 表格行内的文字按钮（如"删除"）不加图标，保持紧凑
+- 新的操作先补进这张表，再在页面中使用；表中的按钮可以在主题预览页的"按钮"一节查看
+
 ## 窄屏
 
 视口宽度 < 1200 时，左栏收进抽屉。

@@ -205,3 +205,21 @@
     margin-left: 0;
   }
 }
+
+// 查询表单示例的外框：虚线标出表单可用的宽度
+.queryFrame {
+  box-sizing: content-box;
+  padding: 16px;
+  border: 1px dashed var(--color-border-dashed);
+  border-radius: var(--radius-md);
+
+  & + & {
+    margin-top: 16px;
+  }
+}
+
+.frameLabel {
+  margin: 0 0 12px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}

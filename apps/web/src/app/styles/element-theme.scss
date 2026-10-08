@@ -125,6 +125,30 @@
   font-size: var(--font-size-lg);
 }
 
+// 查询表单（列表页的筛选栏）：按最小列宽自动分列，配合 label-width="auto" 让标签和控件在各行之间对齐；
+// 用法 <ElForm class="form-query" labelWidth="auto">，按钮放在 form-query__actions 里，见 docs/design/page-layout.md
+.el-form.form-query {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-md) var(--space-lg);
+
+  .el-form-item {
+    --el-form-item-margin-bottom: 0;
+  }
+
+  // 日期选择器默认固定 220 宽，这里和其他控件一样占满所在列
+  .el-date-editor {
+    --el-date-editor-width: 100%;
+  }
+}
+
+// 查询、重置等按钮：放在最后一列并靠右，最后一列被占用时自动换到下一行
+.form-query__actions {
+  display: flex;
+  grid-column: -2 / -1;
+  justify-content: flex-end;
+}
+
 // 加大号按钮：48px 高、16px 半粗、8px 圆角，与 input-filled 搭配；用法 <ElButton class="button-xl">
 .el-button.button-xl {
   height: 48px;
