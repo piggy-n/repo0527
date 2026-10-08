@@ -81,8 +81,17 @@
 }
 
 // 组件级变量由 Element 定义在组件自己的选择器上，要在同一选择器上覆盖
+// 表格的全局样式（2026-10-08 预览页对比三套方案后确定，见 docs/design/theme.md）
 .el-table {
   --el-table-header-text-color: var(--color-text-title);
+  --el-table-header-bg-color: var(--color-neutral-bg);
+  --el-table-row-hover-bg-color: var(--color-primary-bg-light);
+}
+
+// 默认尺寸的表格行高 48，与 Element 的 large 尺寸相同；small、large 两个尺寸不受影响。
+// 不传 size 时 Element 不加 el-table--default 类，用的是 .el-table .el-table__cell，所以按"不是 small、large"选
+.el-table:not(.el-table--small, .el-table--large) .el-table__cell {
+  padding: 12px 0;
 }
 
 // 填充风格的输入框：浅蓝底、无边框、48px 高、16px 字，登录页使用；用法 <ElInput class="input-filled">

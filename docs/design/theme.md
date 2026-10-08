@@ -139,6 +139,33 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 | 组件 | Element 变量 | 令牌 | 理由 |
 |---|---|---|---|
 | `ElTable` | `--el-table-header-text-color` | `text-title`（`#1F2937`） | Element 默认用 secondary 灰色；旧项目资源管理列表的表头是 `#1F2937`（2026-09-29 确认） |
+| `ElTable` | `--el-table-header-bg-color` | `neutral-bg`（`#EEF1F5`） | Element 默认白色；旧项目的三套表格样式都给表头加了底色，取与资源管理列表的 `#EEF1F8` 最接近的现有令牌（2026-10-08 确认） |
+| `ElTable` | `--el-table-row-hover-bg-color` | `primary-bg-light`（`#F3F6FF`） | Element 默认 `#F5F7FA`；与旧项目资源管理列表的 `#F2F6FF` 最接近（2026-10-08 确认） |
+
+### 表格的全局样式
+
+阶段三做第一个列表页（文件管理）时确定（2026-10-08）。旧项目的表格有三套互不一致的样式：
+
+| 来源 | 表头 | 行高 | 正文 | 悬停 |
+|---|---|---|---|---|
+| 通用表格组件 `components/common/mx-table-pagination`（文件管理、数据下载在用） | 底色 `#EBEEF5`，18px 半粗，居中，带竖向分隔线和外框 | 50 | `#333` | `#E5EFFF` |
+| 资源管理列表 `views/resource-management-new/components/LayerTable.vue`（2026-08 重构） | 底色 `#EEF1F8`，16px 半粗，高 52 | 56 | `#4B5563`，首列 `#1F2937` | `#F2F6FF` |
+| 数据下载 `ApplicationListSection.vue`（又覆盖了一层） | 底色 `#F3F6FB`，14px，高 48 | 52 | `#333` | `#F7FBFF` |
+
+在预览页并排对比了三套方案（Element 默认；推荐方案；照搬资源管理列表）后，采用推荐方案：
+
+| 项目 | 取值 | 理由 |
+|---|---|---|
+| 表头 | `neutral-bg` 底，`text-title`，14 / 600（Element 默认字号字重） | 保留"表头有底色"；16px 会和面板标题一样大，层级分不出来 |
+| 行高 | 48（默认尺寸的单元格上下内边距从 8 改为 12，与 Element 的 `large` 尺寸相同；选择器见下文） | 旧项目 50～56，Element 默认 40；用现成的尺寸规则。不采用"保留 40、页面自己传 `size="large"`"：每个列表页都要记得加，容易不一致 |
+| 正文 | `text-primary`（`#333`，即已有的 `--el-text-color-regular` 映射） | 规范：`text-primary` 用于"正文（表格、表单主文本）"；旧资源管理列表的 `#4B5563` 在规范中是"次级正文" |
+| 悬停 | `primary-bg-light` | 见上表 |
+| 分隔线 | `border-light`（已有的 `--el-border-color-lighter` 映射） | 规范：`border-light` 用于"表格行分隔线" |
+| 不采用 | 首列加深、竖向分隔线、表头居中 | 首列不一定是名称（文件管理的首列是年份）；对齐方式按列用 `align` 设置 |
+
+实测（预览页）：表头高 48，行高 49（含 1px 分隔线）。
+
+**行高的选择器**：Element 只在指定了 `size` 时才给表格加尺寸类（如 `el-table--small`）；不传 `size` 时没有 `el-table--default` 类，单元格用的是基础规则 `.el-table .el-table__cell { padding: 8px 0 }`。所以写成 `.el-table:not(.el-table--small, .el-table--large) .el-table__cell`，覆盖"不传 size"和"显式传 `size="default"`"两种情况，small、large 不受影响。第一版写的是 `.el-table--default .el-table__cell`，预览页实测没有生效（行高仍是 40），查看类名后才发现这一点。
 
 ### 组件变体
 
@@ -217,7 +244,6 @@ CSS 目前没有 lint 检查，以上规则靠评审保证。需要强制检查�
 | 字体 | 已接入，见 [fonts.md](fonts.md)。规范第 7 节的 `--font-family-title` 已删除，系统名称改用 SVG 轮廓 |
 | `--el-border-color` 的非表单用途 | 它除了输入框、选择器、按钮、复选框、单选框，还用于分隔线（`ElDivider`）、菜单边框、开关关闭态、卡片式标签页、上传组件，这些现在都会显示为 `primary-border`。规范的分隔线是 `divider` 色虚线，这些组件第一次使用时在 `element-theme.scss` 中单独处理 |
 | Element 写死的 13px | `ElCollapse` 的标题与内容、`ElInputNumber` 的加减按钮，第一次使用时处理 |
-| 表格的其他样式 | 旧项目资源管理列表（`views/resource-management-new/components/LayerTable.vue`）还改了：表头背景 `#EEF1F8`、16px 半粗、行高 52px；正文 `#4B5563`、首列 `#1F2937`、行高 56px；行悬停底色 `#F2F6FF`；边框 `#E8EBF2`。做第一个列表页时，决定哪些作为全局表格样式 |
 | 其他组件级微调 | 对应组件第一次在页面中使用时处理 |
 | 暗色模式 | 规范未定义，不处理 |
 
@@ -225,5 +251,5 @@ CSS 目前没有 lint 检查，以上规则靠评审保证。需要强制检查�
 
 - 规范有变化：先更新 [color-and-typography.md](color-and-typography.md)，再改 `tokens.scss` 和本文
 - 新增令牌：沿用第 7 节的命名方式，并在本文"令牌清单"中登记
-- 升级 Element Plus：重新统计 `light-3`、`light-7`、`dark-2` 的用法，确认 CSS 变量名没有变化，并检查新增的写死奇数字号
+- 升级 Element Plus：重新统计 `light-3`、`light-7`、`dark-2` 的用法，确认 CSS 变量名没有变化，并检查新增的写死奇数字号；确认表格不传 `size` 时仍然没有尺寸类、`el-table--small` 和 `el-table--large` 的类名没有变化（行高 48 的选择器依赖它们）
 - 修改后打开主题预览页（开发服务器的 `/dev/theme`，只在开发环境注册），逐项检查色板、间距与圆角、按钮、表单、标签、表格，以及最后四节的 `@yzt/ui` 标题、区块、面板和分栏布局（分栏布局要把窗口拖到 1200 以下，检查抽屉）
