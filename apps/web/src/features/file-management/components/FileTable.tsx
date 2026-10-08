@@ -24,6 +24,8 @@ export const FileTable = defineComponent({
   },
   setup(props, { emit }) {
     const removal = useDeleteFileMutation();
+    // 骨架屏和遮罩都延迟显示：请求很快完成时什么都不出现，避免一闪而过
+    const showSkeleton = useDelayedFlag(() => props.initialLoading);
     const showMask = useDelayedFlag(() => props.refreshing);
 
     async function remove(file: FileRecord) {
@@ -75,8 +77,12 @@ export const FileTable = defineComponent({
             </ElTableColumn>
           ],
           empty: () => {
-            if (props.initialLoading) {
+            if (showSkeleton.value) {
               return <TableSkeleton />;
+            }
+            // 骨架屏出现之前表体留空，不显示"暂无数据"
+            if (props.initialLoading) {
+              return '';
             }
             if (props.error) {
               return (

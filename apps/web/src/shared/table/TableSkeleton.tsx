@@ -3,10 +3,8 @@ import { defineComponent } from 'vue';
 
 // 足够铺满常见高度的表体，多出的行被裁掉
 const ROW_COUNT = 20;
-// 每行的长度略有差别，看起来更像内容
-const ROW_WIDTHS = ['100%', '92%', '96%', '88%'];
 
-/** 表格首次加载时的骨架：放在 ElTable 的 empty 插槽里，表头不动，骨架行与数据行同高（见 docs/modules/table.md） */
+/** 表格首次加载时的骨架：放在 ElTable 的 empty 插槽里，表头不动，骨架行与数据行同高、铺满整行（见 docs/modules/table.md） */
 export const TableSkeleton = defineComponent({
   name: 'TableSkeleton',
   setup() {
@@ -17,7 +15,7 @@ export const TableSkeleton = defineComponent({
           template: () =>
             Array.from({ length: ROW_COUNT }, (_, index) => (
               <div key={index} class="table-skeleton__row">
-                <ElSkeletonItem variant="text" style={{ width: ROW_WIDTHS[index % ROW_WIDTHS.length] }} />
+                <ElSkeletonItem variant="text" />
               </div>
             ))
         }}

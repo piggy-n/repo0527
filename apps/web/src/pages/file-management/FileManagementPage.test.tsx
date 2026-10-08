@@ -64,8 +64,8 @@ function holdFiles(totalElements = 3) {
   return { pageRequests, release };
 }
 
-// 遮罩延迟 300ms 才出现，断言"没有遮罩"要等过这段时间
-const waitPastMaskDelay = () => new Promise(resolve => setTimeout(resolve, 400));
+// 骨架屏和遮罩都延迟 300ms 才出现，断言它们出现或没有出现都要等过这段时间
+const waitPastLoadingDelay = () => new Promise(resolve => setTimeout(resolve, 400));
 
 function mountPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -132,7 +132,7 @@ describe('FileManagementPage', () => {
 
     await treeNode(wrapper, '自然资源调查类')[0]?.trigger('click');
     await vi.waitFor(() => expect(pageRequests).toHaveLength(3));
-    await waitPastMaskDelay();
+    await waitPastLoadingDelay();
 
     expect(mainPanel(wrapper)).toMatchObject({ title: '自然资源调查类', names: ['测试文件1.pdf', '测试文件2.pdf', '测试文件3.pdf'] });
     expect(wrapper.findAll('.el-loading-mask')).toHaveLength(0);
@@ -200,11 +200,16 @@ describe('FileManagementPage', () => {
     expect(deleted).toEqual([]);
   });
 
-  it('首次加载时显示骨架屏，不出遮罩，也不显示"暂无数据"', async () => {
+  it('首次加载：请求较慢时延迟出现骨架屏，不出遮罩，也不显示"暂无数据"', async () => {
     const { pageRequests, release } = holdFiles(0);
     const wrapper = mountPage();
     await vi.waitFor(() => expect(pageRequests).toHaveLength(1));
-    await waitPastMaskDelay();
+
+    // 延迟之内表体留空
+    expect(wrapper.findAll('.table-skeleton')).toHaveLength(0);
+    expect(wrapper.find('.el-table__empty-text').text()).toBe('');
+
+    await waitPastLoadingDelay();
 
     expect(wrapper.findAll('.el-table__empty-text .table-skeleton')).toHaveLength(1);
     expect(wrapper.find('.el-table__empty-text').text()).toBe('');
