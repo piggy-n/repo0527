@@ -388,6 +388,82 @@ describe('FileManagementPage', () => {
     expect(mainPanel(wrapper).names[0]).toBe('测试文件41.pdf');
   });
 
+  it('总数 60 → 40 → 60 后进入第 3 页、这次请求失败：不用旧缓存修正页码', async () => {
+    let totalElements = 60;
+    let failThirdPage = false;
+    const pageNumbers: string[] = [];
+    server.use(
+      mock.get('/backend/file/page', ({ request }) => {
+        const pageNo = Number(new URL(request.url).searchParams.get('pageNo'));
+        pageNumbers.push(String(pageNo));
+        return failThirdPage && pageNo === 3
+          ? HttpResponse.json({ code: 500, msg: '服务异常', data: null })
+          : HttpResponse.json(filePageResponse({ pageNo, totalElements }));
+      })
+    );
+    vi.spyOn(ElMessage, 'error').mockReturnValue({ close: () => undefined });
+    const wrapper = mountPage();
+    await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(20));
+
+    // 总数减到 40（2 页）时翻到第 3 页：后端返回第 2 页的数据，页码改到 2；第 3 页的缓存记着"共 2 页"
+    totalElements = 40;
+    await wrapper.findAll('.el-pager li').find(item => item.text() === '3')?.trigger('click');
+    await vi.waitFor(() => expect(wrapper.findAll('.el-pager li').map(item => item.text())).toEqual(['1', '2']));
+    // 总数回到 60，点查询后可以看到 3 页
+    totalElements = 60;
+    await wrapper.findAll('button').find(button => button.text() === '查询')?.trigger('click');
+    await vi.waitFor(() => expect(wrapper.findAll('.el-pager li').map(item => item.text())).toEqual(['1', '2', '3']));
+
+    // 再进入第 3 页：先显示旧缓存，后台请求失败
+    failThirdPage = true;
+    await wrapper.findAll('.el-pager li').find(item => item.text() === '3')?.trigger('click');
+    await vi.waitFor(() => expect(pageNumbers.filter(page => page === '3')).toHaveLength(2));
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(wrapper.findAll('.el-pager li.is-active').map(item => item.text())).toEqual(['3']);
+    expect(wrapper.findAll('.el-pagination__total').map(item => item.text())).toEqual([expect.stringContaining('60')]);
+  });
+
+  it('从缓存重新进入列表、后台刷新还没完成时翻页失败：保持页码和总数', async () => {
+    const pageNumbers: string[] = [];
+    // 第 1 页的第二次请求（重新进入时的后台刷新）挂起，第 3 页失败
+    const held: (() => void)[] = [];
+    server.use(
+      mock.get('/backend/file/page', async ({ request }) => {
+        const pageNo = new URL(request.url).searchParams.get('pageNo') ?? '';
+        pageNumbers.push(pageNo);
+        if (pageNo === '3') {
+          return HttpResponse.json({ code: 500, msg: '服务异常', data: null });
+        }
+        if (pageNumbers.filter(page => page === '1').length === 2) {
+          await new Promise<void>(resolve => {
+            held.push(resolve);
+          });
+        }
+        return HttpResponse.json(filePageResponse({ totalElements: 45 }));
+      })
+    );
+    vi.spyOn(ElMessage, 'error').mockReturnValue({ close: () => undefined });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const first = mountPage(queryClient);
+    await vi.waitFor(() => expect(mainPanel(first).names).toHaveLength(20));
+    first.unmount();
+
+    const wrapper = mountPage(queryClient);
+    await vi.waitFor(() => expect(pageNumbers).toEqual(['1', '1']));
+    await vi.waitFor(() => expect(wrapper.findAll('.el-pager li').map(item => item.text())).toEqual(['1', '2', '3']));
+    await wrapper.findAll('.el-pager li').find(item => item.text() === '3')?.trigger('click');
+    await vi.waitFor(() => expect(pageNumbers).toContain('3'));
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(pageNumbers).toEqual(['1', '1', '3']);
+    expect(wrapper.findAll('.el-pager li.is-active').map(item => item.text())).toEqual(['3']);
+    expect(wrapper.findAll('.el-pagination__total').map(item => item.text())).toEqual([expect.stringContaining('45')]);
+    for (const resolve of held.splice(0)) {
+      resolve();
+    }
+  });
+
   it('取消确认时不删除', async () => {
     const { deleted } = mockFiles();
     const confirm = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel');
