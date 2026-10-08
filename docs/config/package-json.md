@@ -125,6 +125,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "@vue/devtools-api": "^8.2.1",
+    "@vueuse/core": "^15.0.0",
     "@yzt/icons": "workspace:*",
     "axios": "^1.20.0",
     "element-plus": "^2.14.6",
@@ -176,6 +177,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `pinia` | 状态管理，只用 setup store（约定见 AGENTS.md）。4.x 只提供 ESM | 3.x（支持 CommonJS，本项目用不到） |
 | `@vue/devtools-api` | Pinia 4 的必需 peer 依赖，提供开发者工具集成。pnpm 会自动补装 peer，这里显式声明是为了让依赖关系一目了然；生产构建中不会用到 | — |
 | `@element-plus/icons-vue` | Element 的图标组件。它本来就是 element-plus 的依赖，但 pnpm 不允许 import 没有声明的包，所以要自己声明 | — |
+| `@vueuse/core` | 组合式工具集，按需具名导入，未用到的函数会被 tree-shake。目前在 `libs/ui` 的分栏布局中用 `useMediaQuery`（窄屏断点）、`useResizeObserver`（侧栏内容显示后写回滚动位置），两者都会在作用域销毁时自动移除监听。element-plus 2.14.6 内部依赖 15.0.0，所以这里也用 15，打包时只有一份；15.0.0 还没出过补丁版本，但它已经随 Element 在项目中运行，选 14 反而会多打包一份 | 手写 matchMedia、ResizeObserver 的封装 |
 | `vite` | 开发服务器与构建工具，8.x 内部使用 Rolldown 打包 | webpack、Rsbuild |
 | `@vitejs/plugin-vue-jsx` | 用 Babel 编译 Vue 的 TSX，支持 Vue 专有的 JSX 语义 | `@vitejs/plugin-vue`（SFC，ADR 0001 未采用） |
 | `sass-embedded` | 编译 `*.module.scss`；通过嵌入协议调用原生 Dart Sass，比纯 JS 版 `sass` 快 | `sass`、Less、原生 CSS |
@@ -196,7 +198,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 
 ## 修改时的检查清单
 
-- 新增依赖前，先确认现有依赖里没有同类库（AGENTS.md）
+- 新增依赖前，先确认现有依赖里没有同类库（AGENTS.md）；再查 `pnpm-lock.yaml` 里是否已经有其他包间接依赖它，有的话优先选同一版本，避免打包两份
+- 升级 element-plus 后：检查它依赖的 `@vueuse/core` 版本，`apps/web` 的版本范围跟着调整
 - 往根目录装依赖加 `-w`；精确锁定加 `-E`
 - 改了 `devEngines.runtime`：同步检查 CI 能否装到对应的 Node，`@types/node` 的大版本是否一致
 - 升级 `typescript`：根目录和 `apps/web` 两处同时改，保持同一版本；同时评估 `oxlint-tsgolint` 是否要跟着升

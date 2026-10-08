@@ -9,10 +9,11 @@ import {
   ElRadioButton,
   ElRadioGroup,
   ElTable,
-  ElTableColumn
+  ElTableColumn,
+  ElTree
 } from 'element-plus';
 import { defineComponent, ref } from 'vue';
-import { MxPanel, MxSection, MxTitle } from '@yzt/ui';
+import { MxPanel, MxSection, MxSplitLayout, MxTitle, useSplitLayout } from '@yzt/ui';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import styles from './UiComponentsPreview.module.scss';
 
@@ -247,6 +248,99 @@ export const PanelPreview = defineComponent({
             </MxPanel>
           </div>
         </div>
+      </div>
+    );
+  }
+});
+
+interface DirectoryNode {
+  id: string;
+  label: string;
+  children?: DirectoryNode[];
+}
+
+// 旧项目文件管理的目录结构
+const directories: DirectoryNode[] = [
+  ['技术标准规范', ['国家/行业现行技术规程、标准、规范', '地方补充技术规定/细则']],
+  ['设计与报告', ['项目（技术）设计类', '项目（技术）总结类', '专题报告']],
+  ['政策法规', ['国家层面政策法规', '地方层面政策法规']],
+  ['政务公文', ['通知', '公报']]
+].map(([label, groups]) => ({
+  id: String(label),
+  label: String(label),
+  children: (groups as string[]).map(group => ({
+    id: group,
+    label: group,
+    children: ['自然资源调查类', '监测类', '数据库类', '其他'].map(leaf => ({ id: `${group}/${leaf}`, label: leaf }))
+  }))
+}));
+
+// 侧栏里的目录树：选中叶子节点后，窄屏时关闭抽屉
+const DirectoryTree = defineComponent({
+  name: 'DirectoryTree',
+  emits: { select: (_label: string) => true },
+  setup(_, { emit }) {
+    const { compact, closeAside } = useSplitLayout();
+    // ElTree 传入的节点数据类型是 Record<string, any>，这里只声明用到的字段再收窄
+    const select = (node: { label?: unknown; children?: unknown }) => {
+      if (node.children || typeof node.label !== 'string') {
+        return;
+      }
+      emit('select', node.label);
+      if (compact.value) {
+        closeAside();
+      }
+    };
+    return () => (
+      <ElTree
+        data={directories}
+        nodeKey="id"
+        defaultExpandAll
+        highlightCurrent
+        onNode-click={select}
+      />
+    );
+  }
+});
+
+/** libs/ui 的分栏布局：侧栏 320，窄屏（视口 < 1200）时侧栏收进抽屉 */
+export const SplitLayoutPreview = defineComponent({
+  name: 'SplitLayoutPreview',
+  setup() {
+    const directory = ref('自然资源调查类');
+    return () => (
+      <div class={styles.layoutDemo}>
+        <MxSplitLayout asideLabel="文件目录">
+          {{
+            aside: () => (
+              <MxPanel title="文件目录">
+                <DirectoryTree
+                  onSelect={label => {
+                    directory.value = label;
+                  }}
+                />
+              </MxPanel>
+            ),
+            default: () => (
+              <MxPanel title={directory.value} asideToggle>
+                {{
+                  actions: () => (
+                    <ElButton type="primary" icon={Upload}>
+                      上传文件
+                    </ElButton>
+                  ),
+                  default: () => (
+                    <ElTable class={styles.fillTable} data={auditRows} height="100%">
+                      <ElTableColumn prop="name" label="文档名称" showOverflowTooltip />
+                      <ElTableColumn prop="time" label="上传时间" width="170" />
+                    </ElTable>
+                  ),
+                  footer: () => <ElPagination total={128} layout="total, prev, pager, next" />
+                }}
+              </MxPanel>
+            )
+          }}
+        </MxSplitLayout>
       </div>
     );
   }

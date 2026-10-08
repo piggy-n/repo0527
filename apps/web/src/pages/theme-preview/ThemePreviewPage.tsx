@@ -24,7 +24,7 @@ import { defineComponent, onMounted, ref } from 'vue';
 import { iconNames, SvgIcon } from '@/shared/icons/SvgIcon';
 import { SystemTitle } from '@/shared/system-title/SystemTitle';
 import styles from './ThemePreviewPage.module.scss';
-import { PanelPreview, SectionPreview, TitlePreview } from './UiComponentsPreview';
+import { PanelPreview, SectionPreview, SplitLayoutPreview, TitlePreview } from './UiComponentsPreview';
 
 interface IndicatorRow {
   region: string;
@@ -420,6 +420,11 @@ export const ThemePreviewPage = defineComponent({
         <section class={styles.section}>
           <h2 class={styles.sectionTitle}>面板（@yzt/ui 的 MxPanel）</h2>
           <PanelPreview />
+        </section>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>分栏布局（@yzt/ui 的 MxSplitLayout，视口窄于 1200 时侧栏收进抽屉）</h2>
+          <SplitLayoutPreview />
         </section>
       </div>
     );

@@ -98,6 +98,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 
 - 通用问题优先用成熟稳定的库，不重复造轮子：比如 `lodash-es`（判断、防抖节流、深拷贝）、`tippy.js`（提示交互）
 - `lodash-es` 按需具名导入，例如 `import { debounce } from 'lodash-es'`，保证未用到的函数能被 tree-shaking 掉
+- 媒体查询、尺寸监听这类组合式工具用 `@vueuse/core`，同样按需具名导入；版本与 element-plus 内部依赖的版本保持一致，避免打包两份（见 `docs/config/package-json.md`）
 - 原生语法已经足够清晰时直接用原生，例如 `?.`、`??`、`Array.isArray`、`Object.entries`
 - 引入新依赖前先确认现有依赖里没有同类库，同一类问题只保留一个库
 
@@ -172,7 +173,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 字号只用双数
 - 页面排布按 `docs/design/page-layout.md`：分栏型页面由 `libs/ui` 的布局、面板、区块、标题组件组成（ADR 0016）；页面不设背景，侧栏宽度只用固定档位，高度靠布局占满、面板内部滚动，不写 `calc(100% - 32px)` 这类计算
 - `libs/ui` 的组件只通过 CSS 变量使用令牌，不 import app 的 SCSS；不能引用 `SvgIcon`，自定义图标由使用方通过插槽传入
-- Element Plus 的外观只在 `app/styles/element-theme.scss` 统一调整，页面和组件不单独覆盖 `--el-*` 变量；需要另一种外观时在其中定义变体 class（如 `input-filled`、`button-xl`），页面只引用 class，见 `docs/design/theme.md`
+- Element Plus 的外观只在 `app/styles/element-theme.scss` 统一调整，页面和组件不单独覆盖 `--el-*` 变量；需要另一种外观时在其中定义变体 class（如 `input-filled`、`button-xl`），页面只引用 class，见 `docs/design/theme.md`；唯一的例外是 `libs/ui` 分栏布局内部抽屉的内边距（见 `docs/modules/ui.md`）
 
 ## 迁移规则
 

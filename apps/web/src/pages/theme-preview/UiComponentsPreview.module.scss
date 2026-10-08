@@ -119,3 +119,10 @@
   background-color: var(--color-neutral-bg);
   color: var(--color-text-secondary);
 }
+
+// 模拟内容区：固定高度，背景与 AppLayout 的内容区相同；分栏布局占满它
+.layoutDemo {
+  height: 480px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, var(--color-bg-page-top) 0%, var(--color-bg-page) 120px);
+}

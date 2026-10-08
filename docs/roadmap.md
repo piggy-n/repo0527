@@ -9,7 +9,7 @@
 | **0. 约定** | `AGENTS.md` 骨架（分层、依赖方向、命名），确认待定问题 | 架构分层、依赖倒置 | ✅ 完成（ADR 0001、0002、0004） |
 | **1. 工程基础** | `apps/web`：Vite 最新版 + `plugin-vue-jsx` + TS strict；tsconfig 分层；实测 TS 7 工具链；lint（只管正确性，格式交给 WebStorm）；Vitest | tsconfig 各项配置的含义、`jsxImportSource: 'vue'`、Vite 插件管线 | ✅ 完成（tag `stage-1`，[总结](stages/stage-1-engineering-foundation.md)） |
 | **2. 应用骨架** | 有类型的 HTTP 客户端和错误模型、鉴权、路由守卫（用模块扩充给 `RouteMeta` 加类型）、布局、存储适配器、MSW、Element Plus 主题、CSS Modules | 泛型、可辨识联合、模块扩充、Adapter 和 Strategy 模式 | ✅ 完成（tag `stage-2`，[总结](stages/stage-2-app-skeleton-and-auth.md)） |
-| **3. 第一个纵切** | 登录 + 布局 + 一个简单列表页，把 API、query、store、TSX 组件、测试整条链路跑通 | vue-query（TanStack Query），TSX 中 props、emits、slots 的类型写法 | ⏳ 进行中：登录和布局已在阶段二完成。3.1 页面布局规范与设计稿已完成（[design/page-layout.md](design/page-layout.md)、ADR 0016）；3.2 `libs/ui` 进行中：3.2a 基础（`tsconfig.libs.json`、断点下移）、3.2b 标题、区块与面板已完成，接下来 3.2c 分栏布局、3.2d 文档（预览页截图确认），然后 3.3 列表页 |
+| **3. 第一个纵切** | 登录 + 布局 + 一个简单列表页，把 API、query、store、TSX 组件、测试整条链路跑通 | vue-query（TanStack Query），TSX 中 props、emits、slots 的类型写法 | ⏳ 进行中：登录和布局已在阶段二完成。3.1 页面布局规范与设计稿已完成（[design/page-layout.md](design/page-layout.md)、ADR 0016）；3.2 `libs/ui` 进行中：3.2a 基础（`tsconfig.libs.json`、断点下移）、3.2b 标题、区块与面板、3.2c 分栏布局已完成，接下来 3.2d 收尾（检查文档、补全预览），然后 3.3 列表页 |
 | **4. map-core** | 重新设计引擎抽象、Manager 体系、有类型的事件、有类型的 Worker 消息、资源释放 | 接口与抽象类的区别、Facade、Factory、Observer、`using` / Disposable | 未开始 |
 | **5. map-vue + 现状底图** | `MapProvider`、`useMap()`、图层面板 | provide / inject 的类型、响应式边界（`shallowRef`、`markRaw`） | 未开始 |
 | **6. 复杂业务** | 空间监测三件套、AI 流式对话、文件管理，以及其余业务模块 | 拆分巨型组件、流式读取与 SSE、取消请求 | 未开始 |
@@ -40,7 +40,7 @@
 | 阶段 | 事项 | 出处 |
 |---|---|---|
 | 3 | 选定第一个列表页：优先文件管理或资源管理（左右结构，能验证布局组件）；数据下载、消息中心为备选 | 本文 |
-| 3 | `libs/ui` 的分栏布局、面板、标题组件：窄屏用 ElDrawer + Teleport（先做实验验证状态与滚动位置），面板通过 inject 感知布局显示打开 / 关闭按钮，`useMediaQuery` 用 `@vueuse/core` | [design/page-layout.md](design/page-layout.md)、ADR 0016、[modules/ui.md](modules/ui.md) |
+| 3 | `libs/ui` 收尾（3.2d）：通读 modules/ui.md 与 page-layout.md，确认与实现一致 | [modules/ui.md](modules/ui.md) |
 | 3 | 是否引入 TanStack Query 管理接口数据；请求的重试、去重、缓存 | ADR 0011、[modules/http.md](modules/http.md) |
 | 3 | 全局表格样式（旧项目资源管理列表的表头、行高、悬停色等） | [design/theme.md](design/theme.md) |
 | 3 | 会话结束的统一处理：取消请求、账号之间的数据隔离、清理缓存、错误提示由谁负责，协调逻辑放在 app（多标签页同步已在阶段三开始前完成，届时并入） | [modules/auth.md](modules/auth.md) |

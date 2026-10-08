@@ -1,0 +1,48 @@
+// 规范见 docs/design/page-layout.md 的"分栏布局"：占满父元素，四周与两栏之间都是 16，页面本身不滚动
+.root {
+  display: flex;
+  gap: var(--space-lg);
+  box-sizing: border-box;
+  height: 100%;
+  padding: var(--space-lg);
+}
+
+// 宽度由组件按档位以内联样式设置
+.aside {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.hidden {
+  display: none;
+}
+
+// 侧栏内容的外层：在侧栏和抽屉之间移动的就是它
+.asideContent {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-width: 0;
+  min-height: 0;
+}
+
+// 侧栏的面板在抽屉里占满整个抽屉，不要 Element 抽屉内容区默认的 20px 内边距
+.drawer {
+  --el-drawer-padding-primary: 0;
+}
+
+.drawerTarget {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}

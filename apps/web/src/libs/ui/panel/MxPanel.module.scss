@@ -12,6 +12,12 @@
   box-shadow: var(--shadow-sm);
 }
 
+// 侧栏的面板放进抽屉后占满抽屉，不要圆角和阴影
+.inDrawer {
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .header {
   display: flex;
   flex: none;
@@ -19,6 +25,14 @@
   gap: var(--space-sm);
   min-height: 48px;
   padding: 0 var(--space-lg);
+}
+
+// 打开侧栏的按钮与标题之间的竖线
+.separator {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  background-color: var(--color-divider);
 }
 
 .actions {
