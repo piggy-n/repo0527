@@ -223,3 +223,8 @@
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
+
+// 与面板型侧栏同宽（320 减去左右内边距 16）
+.treeBox {
+  width: 288px;
+}

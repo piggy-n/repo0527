@@ -18,7 +18,8 @@ import {
   ElSwitch,
   ElTable,
   ElTableColumn,
-  ElTag
+  ElTag,
+  ElTree
 } from 'element-plus';
 import { defineComponent, onMounted, ref } from 'vue';
 import { iconNames, SvgIcon } from '@/shared/icons/SvgIcon';
@@ -101,6 +102,40 @@ const actionButtons = [
 
 // 查询表单的示例宽度：约等于 1440、1226 视口下文件管理主区的内容宽度，以及窄屏
 const queryFormWidths = [1040, 826, 480];
+
+interface TreeSample {
+  id: string;
+  label: string;
+  children?: TreeSample[];
+}
+
+// 三层，分组出现在第一、二层，叶子出现在第二、三层；ElTree 会在节点数据上写入标记，不能声明为 readonly
+const treeSamples: TreeSample[] = [
+  {
+    id: 'survey',
+    label: '自然资源调查',
+    children: [
+      {
+        id: 'land',
+        label: '国土调查',
+        children: [
+          { id: 'land-annual', label: '年度变更调查' },
+          { id: 'land-special', label: '专项调查' }
+        ]
+      },
+      { id: 'forest', label: '森林资源调查' }
+    ]
+  },
+  {
+    id: 'monitor',
+    label: '监测评价',
+    children: [
+      { id: 'monitor-dynamic', label: '动态监测' },
+      { id: 'monitor-report', label: '评价报告' }
+    ]
+  },
+  { id: 'other', label: '其他' }
+];
 
 const tableRows: IndicatorRow[] = [
   { region: '南京市', indicator: '城镇开发边界面积', status: '处理完成', remark: '按 2025 年变更调查口径' },
@@ -429,6 +464,19 @@ export const ThemePreviewPage = defineComponent({
             <ElButton onClick={() => ElMessage.error('请求失败')}>错误消息</ElButton>
             <ElButton onClick={() => ElMessage.info('暂无数据')}>普通消息</ElButton>
             <ElButton type="danger" onClick={() => void confirmDelete()}>确认框</ElButton>
+          </div>
+        </section>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>树</h2>
+          <div class={styles.treeBox}>
+            <ElTree
+              data={treeSamples}
+              nodeKey="id"
+              highlightCurrent
+              currentNodeKey="land-annual"
+              defaultExpandedKeys={['survey', 'land', 'monitor']}
+            />
           </div>
         </section>
 
