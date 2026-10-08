@@ -51,6 +51,7 @@ export function fetchLayers(year: number, signal?: AbortSignal) {
 http.get(url, options)
   → 合并调用方的 signal 与超时，得到统一的中止信号
   → 附加 getHeaders() 返回的请求头
+  → isCredentialExpired() 为 true 时不发出请求，直接 ApiError('unauthorized')
   → axios 发出请求（baseURL 为 appConfig.apiBaseUrl，即 /backend）
   → 响应体按 { code, msg, data } 校验
       code === 200 → 按 schema 校验 data 并返回
@@ -65,7 +66,7 @@ http.get(url, options)
 |---|---|---|
 | `business` | HTTP 成功，但 `code` 不是 200 | `onError`（`silent` 时不调） |
 | `http` | HTTP 状态码不是 2xx（401 除外） | `onError`（`silent` 时不调） |
-| `unauthorized` | HTTP 401 或业务码 401 | 只调 `onUnauthorized(error, { headers })`，不受 `silent` 影响；`headers` 是请求发出时 `getHeaders()` 的返回值 |
+| `unauthorized` | HTTP 401、业务码 401，或发请求前 `isCredentialExpired()` 返回 true（这时不发出请求） | 只调 `onUnauthorized(error, { headers })`，不受 `silent` 影响；`headers` 是请求发出时 `getHeaders()` 的返回值。提示文案固定为"登录状态已过期，请重新登录"（`UNAUTHORIZED_MESSAGE`），不用后端的 msg |
 | `network` | 没有收到响应 | `onError`（`silent` 时不调） |
 | `timeout` | 超过 `timeout`（默认 60 秒） | `onError`（`silent` 时不调） |
 | `canceled` | 调用方的 `signal` 被中止 | 都不调 |

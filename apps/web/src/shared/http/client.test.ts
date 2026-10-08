@@ -145,6 +145,25 @@ describe('http 失败', () => {
     expect(hooks.onUnauthorized).toHaveBeenCalledWith(error, { headers: { token: 'old' } });
   });
 
+  it('登录凭据已过期：不发出请求，按 unauthorized 处理', async () => {
+    const hooks = setupHooks();
+    configureHttp({ ...hooks, getHeaders: () => ({ token: 'expired' }), isCredentialExpired: () => true });
+    const requests: string[] = [];
+    server.use(
+      mock.get('/backend/user', ({ request }) => {
+        requests.push(request.url);
+        return HttpResponse.json({ code: 200, data: { name: '张三' } });
+      })
+    );
+
+    const error = await catchApiError(http.get('/user', { schema: userSchema, silent: true }));
+
+    expect(requests).toEqual([]);
+    expect(error).toMatchObject({ kind: 'unauthorized', message: '登录状态已过期，请重新登录', url: '/user' });
+    expect(hooks.onUnauthorized).toHaveBeenCalledWith(error, { headers: { token: 'expired' } });
+    expect(hooks.onError).not.toHaveBeenCalled();
+  });
+
   it('HTTP 状态码错误：http，没有 msg 时按状态码提示', async () => {
     setupHooks();
     server.use(mock.get('/backend/user', () => new HttpResponse(null, { status: 404 })));

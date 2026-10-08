@@ -7,6 +7,7 @@ import { roleLabel } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { RouteName } from '@/shared/router/route-names';
+import { endSession } from '../../session-end';
 import styles from './UserMenu.module.scss';
 
 /** 头部右侧的用户菜单：显示名、角色与退出登录；修改密码、修改头像在迁移对应功能时再加 */
@@ -24,7 +25,7 @@ export const UserMenu = defineComponent({
         // 点了取消或关闭
         return;
       }
-      session.clear();
+      endSession();
       // replace：退出后按后退键不会回到业务页（回去也会被路由守卫拦下）
       await router.replace({ name: RouteName.login });
       ElMessage.success('已退出登录');

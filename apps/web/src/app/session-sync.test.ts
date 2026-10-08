@@ -6,6 +6,7 @@ import { Role } from '@/shared/auth/roles';
 import { type Session, useSessionStore } from '@/shared/auth/session-store';
 import { createTestJwtExpiringAt } from '@/shared/auth/testing';
 import { RouteName } from '@/shared/router/route-names';
+import { queryClient } from './query-client';
 import { setupSessionSync } from './session-sync';
 
 const STORAGE_KEY = 'yzt.session';
@@ -28,6 +29,7 @@ let stop: () => void;
 beforeEach(async () => {
   localStorage.clear();
   setActivePinia(createPinia());
+  queryClient.clear();
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -81,26 +83,30 @@ describe('setupSessionSync', () => {
     expect(router.currentRoute.value.name).toBe(RouteName.currentMap);
   });
 
-  it('其他标签页退出时，清空本标签页的会话、提示并回到登录页', async () => {
+  it('其他标签页退出时，清空本标签页的会话和查询缓存、提示并回到登录页', async () => {
     const warning = vi.spyOn(ElMessage, 'warning').mockReturnValue({ close: () => undefined });
     useSessionStore().start(sessionA);
+    queryClient.setQueryData(['files'], ['上一个账号的数据']);
 
     changeInOtherTab(null);
 
     expect(useSessionStore().session).toBeNull();
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe(RouteName.login));
     expect(warning).toHaveBeenCalledOnce();
     expect(reloadPage).not.toHaveBeenCalled();
   });
 
-  it('在公开页面时其他标签页退出，只清空会话，不提示也不跳转', async () => {
+  it('在公开页面时其他标签页退出，只清空会话和查询缓存，不提示也不跳转', async () => {
     const warning = vi.spyOn(ElMessage, 'warning').mockReturnValue({ close: () => undefined });
     await router.push('/login');
     useSessionStore().start(sessionA);
+    queryClient.setQueryData(['files'], ['上一个账号的数据']);
 
     changeInOtherTab(null);
 
     expect(useSessionStore().session).toBeNull();
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
     expect(router.currentRoute.value.name).toBe(RouteName.login);
     expect(warning).not.toHaveBeenCalled();
   });

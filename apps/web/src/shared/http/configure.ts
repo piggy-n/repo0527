@@ -10,6 +10,8 @@ export interface SentRequest {
 export interface HttpHooks {
   /** 每个请求附加的请求头，例如登录 token */
   getHeaders?: () => Record<string, string>;
+  /** 发请求前判断登录凭据（如 token）是否已过期；返回 true 时不发出请求，按未登录处理：抛出 unauthorized，并触发 onUnauthorized */
+  isCredentialExpired?: () => boolean;
   /** 未登录或登录过期；不受 silent 影响，也不再触发 onError。请求往返期间会话可能已经更换，用 request 判断是否是旧会话的请求 */
   onUnauthorized?: (error: ApiError, request: SentRequest) => void;
   /** 需要提示用户的错误；取消的请求和 silent 请求不会触发 */

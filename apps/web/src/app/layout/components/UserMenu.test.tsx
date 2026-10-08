@@ -6,6 +6,7 @@ import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { RouteName } from '@/shared/router/route-names';
+import { queryClient } from '../../query-client';
 import { UserMenu } from './UserMenu';
 
 const Empty = { render: () => null };
@@ -39,6 +40,7 @@ function clickLogout() {
 
 beforeEach(() => {
   localStorage.clear();
+  queryClient.clear();
 });
 
 afterEach(() => {
@@ -54,17 +56,19 @@ describe('UserMenu', () => {
     expect(document.body.textContent).toContain('zhangsan · 普通用户');
   });
 
-  it('确认退出后清空会话、回到登录页并提示', async () => {
+  it('确认退出后清空会话和查询缓存、回到登录页并提示', async () => {
     // Element 把返回值声明为对象与字符串的交叉类型，实际点击确定时返回 'confirm'
     vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as MessageBoxData);
     const success = vi.spyOn(ElMessage, 'success').mockReturnValue({ close: () => undefined });
     await mountMenu();
+    queryClient.setQueryData(['files'], ['上一个账号的数据']);
 
     clickLogout();
     await flushPromises();
 
     await vi.waitFor(() => expect(router.currentRoute.value.name).toBe(RouteName.login));
     expect(useSessionStore().session).toBeNull();
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
     expect(success).toHaveBeenCalledWith('已退出登录');
   });
 

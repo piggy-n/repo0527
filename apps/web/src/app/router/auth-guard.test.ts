@@ -1,10 +1,12 @@
+import { ElMessage } from 'element-plus';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter, type Router, type RouteRecordRaw } from 'vue-router';
 import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { createTestJwtExpiringAt } from '@/shared/auth/testing';
 import { RouteName } from '@/shared/router/route-names';
+import { queryClient } from '../query-client';
 import { installAuthGuard } from './auth-guard';
 
 const Empty = { render: () => null };
@@ -37,11 +39,21 @@ async function visit(path: string) {
 beforeEach(() => {
   localStorage.clear();
   setActivePinia(createPinia());
+  queryClient.clear();
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+const spyWarning = () => vi.spyOn(ElMessage, 'warning').mockReturnValue({ close: () => undefined });
+
 describe('未登录', () => {
-  it('访问业务页时去登录页', async () => {
+  it('访问业务页时去登录页，不提示', async () => {
+    const warning = spyWarning();
+
     expect((await visit('/current-map')).name).toBe(RouteName.login);
+    expect(warning).not.toHaveBeenCalled();
   });
 
   it('根路径重定向到业务页后，同样要求登录', async () => {
@@ -75,12 +87,16 @@ describe('已登录', () => {
     expect((await visit('/system-management')).name).toBe(RouteName.systemManagement);
   });
 
-  it('token 过期时去登录页，并清空会话', async () => {
+  it('token 过期时去登录页，结束会话（清空会话和查询缓存）并提示', async () => {
+    const warning = spyWarning();
     signIn(Role.admin, Date.now() - 1000);
+    queryClient.setQueryData(['files'], ['上一个账号的数据']);
 
     expect((await visit('/current-map')).name).toBe(RouteName.login);
     expect(useSessionStore().session).toBeNull();
     expect(localStorage.length).toBe(0);
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
+    expect(warning).toHaveBeenCalledWith(expect.objectContaining({ message: '登录状态已过期，请重新登录' }));
   });
 
   it('token 的载荷不是对象时不抛错，无法得知过期时间，按未过期放行', async () => {

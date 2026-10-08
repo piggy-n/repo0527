@@ -7,7 +7,8 @@ import {
   INVALID_RESPONSE_MESSAGE,
   NETWORK_ERROR_MESSAGE,
   resolveErrorMessage,
-  TIMEOUT_ERROR_MESSAGE
+  TIMEOUT_ERROR_MESSAGE,
+  UNAUTHORIZED_MESSAGE
 } from './messages';
 
 const SUCCESS_CODE = 200;
@@ -114,6 +115,14 @@ async function request<Schema extends z.ZodType>(
   options: RequestOptions<Schema>
 ): Promise<z.output<Schema>> {
   const { schema, query, signal, silent = false, timeout = DEFAULT_TIMEOUT } = options;
+  const { getHeaders, isCredentialExpired } = getHttpHooks();
+  const headers = getHeaders?.() ?? {};
+  // 登录已过期时不发出请求，与收到 401 同样处理；放在创建定时器之前，提前结束时不用清理
+  if (isCredentialExpired?.()) {
+    const error = new ApiError({ kind: 'unauthorized', message: UNAUTHORIZED_MESSAGE, url: config.url });
+    notify(error, silent, { headers });
+    throw error;
+  }
   const controller = new AbortController();
   const abortByCaller = () => controller.abort(signal?.reason);
   const timer = setTimeout(() => controller.abort(TIMEOUT_REASON), timeout);
@@ -121,7 +130,6 @@ async function request<Schema extends z.ZodType>(
     abortByCaller();
   }
   signal?.addEventListener('abort', abortByCaller, { once: true });
-  const headers = getHttpHooks().getHeaders?.() ?? {};
 
   try {
     const response = await instance.request<unknown>({

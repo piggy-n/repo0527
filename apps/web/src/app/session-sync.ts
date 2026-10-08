@@ -2,6 +2,7 @@ import { ElMessage } from 'element-plus';
 import type { Router } from 'vue-router';
 import { type SessionUser, useSessionStore, watchSessionStorage } from '@/shared/auth/session-store';
 import { RouteName } from '@/shared/router/route-names';
+import { endSession } from './session-end';
 
 // 同一账号重新登录只换了 token，页面上的身份和权限不变
 function isSameAccount(a: SessionUser | undefined, b: SessionUser | undefined): boolean {
@@ -24,6 +25,8 @@ export function setupSessionSync(router: Router, reloadPage = () => location.rel
       reloadPage();
       return;
     }
+    // 在公开页面上也要清掉查询缓存，之后在本标签页登录的账号不能看到上一个账号的数据
+    endSession();
     if (!router.currentRoute.value.meta.public) {
       ElMessage.warning({ message: '已在其他标签页退出登录，请重新登录', grouping: true });
       void router.replace({ name: RouteName.login });
