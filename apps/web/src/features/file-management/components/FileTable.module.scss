@@ -1,0 +1,11 @@
+// 放在面板的纵向 flex 内容区里，占满剩余高度、在内部滚动（docs/modules/ui.md 的 MxPanel）
+.root {
+  flex: 1;
+  min-height: 0;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}

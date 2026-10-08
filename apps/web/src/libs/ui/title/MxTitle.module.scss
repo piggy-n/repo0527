@@ -52,6 +52,18 @@
   white-space: nowrap;
 }
 
+// 收缩系数远大于标题：空间不够时它先缩到 0（省略），之后才轮到标题
+.description {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .extra {
   display: flex;
   flex: none;

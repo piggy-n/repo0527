@@ -88,6 +88,21 @@
   --el-table-row-hover-bg-color: var(--color-primary-bg-light);
 }
 
+// 树：节点高 36（设计稿）；当前节点在 Element 的浅蓝底（primary light-9，即 primary-bg）上加主色文字和半粗，与顶部下拉菜单一致
+.el-tree {
+  --el-tree-node-content-height: 36px;
+  --el-tree-node-hover-bg-color: var(--color-primary-bg-light);
+}
+
+.el-tree-node__content {
+  border-radius: var(--radius-sm);
+}
+
+.el-tree--highlight-current .el-tree-node.is-current > .el-tree-node__content {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
 // 默认尺寸的表格行高 48，与 Element 的 large 尺寸相同；small、large 两个尺寸不受影响。
 // 不传 size 时 Element 不加 el-table--default 类，用的是 .el-table .el-table__cell，所以按"不是 small、large"选
 .el-table:not(.el-table--small, .el-table--large) .el-table__cell {

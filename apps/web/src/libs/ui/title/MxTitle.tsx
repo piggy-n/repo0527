@@ -7,7 +7,9 @@ export type MxTitleLevel = 'panel' | 'section';
 export const MxTitle = defineComponent({
   name: 'MxTitle',
   props: {
-    level: { type: String as PropType<MxTitleLevel>, default: 'section' }
+    level: { type: String as PropType<MxTitleLevel>, default: 'section' },
+    // 紧跟在标题后面的灰色说明，例如分类的上级路径；空间不够时先省略它，标题保持完整
+    description: String
   },
   slots: Object as SlotsType<{
     default?: () => VNode[];
@@ -27,6 +29,11 @@ export const MxTitle = defineComponent({
             <span class={styles.mark} aria-hidden="true" />
           )}
           <Heading class={styles.text}>{slots.default?.()}</Heading>
+          {props.description && (
+            <span class={styles.description} title={props.description}>
+              {props.description}
+            </span>
+          )}
           {slots.extra && <div class={styles.extra}>{slots.extra()}</div>}
         </div>
       );

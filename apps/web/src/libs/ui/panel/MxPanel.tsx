@@ -10,6 +10,8 @@ export const MxPanel = defineComponent({
   name: 'MxPanel',
   props: {
     title: String,
+    // 紧跟在标题后面的灰色说明，交给 MxTitle
+    description: String,
     // 去掉内容区的内边距：表格贴边、放地图、内容自带内边距时使用
     flush: Boolean,
     // 卡片头部：图标放在浅底方块里，只用于同一页有多张并列卡片的场合
@@ -52,7 +54,9 @@ export const MxPanel = defineComponent({
                 <span class={styles.separator} aria-hidden="true" />
               ]}
               {props.title && (
-                <MxTitle level="panel">{{ default: () => props.title, icon: slots.icon && renderIcon }}</MxTitle>
+                <MxTitle level="panel" description={props.description}>
+                  {{ default: () => props.title, icon: slots.icon && renderIcon }}
+                </MxTitle>
               )}
               {(actions || inDrawer.value) && (
                 <div class={styles.actions}>

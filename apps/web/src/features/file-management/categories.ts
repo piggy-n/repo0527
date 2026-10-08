@@ -4,10 +4,11 @@
 export interface FileCategory {
   id: string;
   label: string;
-  children?: readonly FileCategory[];
+  children?: FileCategory[];
 }
 
-export const fileCategories: readonly FileCategory[] = [
+// 不声明为 readonly：ElTree 的 data 要求可变数组，它会在节点数据上写入不可枚举的 $treeNodeId
+export const fileCategories: FileCategory[] = [
   {
     id: 'technical-standard',
     label: '技术标准规范',
@@ -69,15 +70,15 @@ export const fileCategories: readonly FileCategory[] = [
 
 export const DEFAULT_CATEGORY_ID = 'technical-standard-current-survey';
 
-/** 从根到该分类的标签，例如 ['技术标准规范', '国家/行业现行技术规程、标准、规范', '监测类']；找不到时返回空数组 */
-export function findCategoryPath(id: string, nodes: readonly FileCategory[] = fileCategories): string[] {
+/** 从根到该分类的节点（最后一个是它自己）；页面用标签显示标题和上级路径，树用上级的 id 默认展开。找不到时返回空数组 */
+export function findCategoryPath(id: string, nodes: FileCategory[] = fileCategories): FileCategory[] {
   for (const node of nodes) {
     if (node.id === id) {
-      return [node.label];
+      return [node];
     }
     const rest = node.children ? findCategoryPath(id, node.children) : [];
     if (rest.length > 0) {
-      return [node.label, ...rest];
+      return [node, ...rest];
     }
   }
   return [];

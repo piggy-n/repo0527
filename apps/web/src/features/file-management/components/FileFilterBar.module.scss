@@ -1,0 +1,32 @@
+// 放不下时换行；与表格之间的间距由页面决定
+.root {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md) var(--space-lg);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-regular);
+  white-space: nowrap;
+}
+
+.name {
+  width: 220px;
+}
+
+.year {
+  width: 140px;
+}
+
+.tag {
+  width: 180px;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+}

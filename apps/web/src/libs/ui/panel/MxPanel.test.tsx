@@ -13,6 +13,12 @@ describe('MxPanel', () => {
     expect(wrapper.find('[class*="_body_"]').text()).toBe('内容');
   });
 
+  it('description 交给标题显示', () => {
+    const wrapper = mount(() => <MxPanel title="监测类" description="技术标准规范">内容</MxPanel>);
+
+    expect(wrapper.find('header [class*="_description_"]').text()).toBe('技术标准规范');
+  });
+
   it('没有标题和操作时不渲染头部', () => {
     const wrapper = mount(() => <MxPanel>菜单</MxPanel>);
 

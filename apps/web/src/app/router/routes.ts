@@ -23,7 +23,13 @@ const businessRoutes: RouteRecordRaw[] = [
   placeholder('water-resource-basic-query', RouteName.waterResourceBasicQuery, '水资源基础调查'),
   placeholder('space-monitoring-basic-statistics', RouteName.spaceMonitoringBasicStatistics, '城市国土空间监测基本统计'),
   placeholder('space-monitoring-indicators', RouteName.spaceMonitoringIndicators, '城市国土空间监测指标'),
-  placeholder('file-management', RouteName.fileManagement, '文件管理'),
+  {
+    path: 'file-management',
+    name: RouteName.fileManagement,
+    component: () =>
+      import('@/pages/file-management/FileManagementPage').then(({ FileManagementPage }) => FileManagementPage),
+    meta: { title: '文件管理' }
+  },
   placeholder('ai-chat', RouteName.aiChat, 'AI对话'),
   placeholder('message-center', RouteName.messageCenter, '消息中心'),
   placeholder('resource-management', RouteName.resourceManagement, '资源管理', [Role.admin]),
