@@ -30,7 +30,7 @@ docs/
 │  ├─ composables.md          通用组合式函数：useDelayedFlag（延迟显示的加载状态）
 │  ├─ layout.md               布局：顶部导航、用户菜单、宽度适配
 │  ├─ system-title.md         系统名称的 SVG 轮廓：用法、自动生成、常见问题
-│  ├─ ui.md                   libs/ui：两个入口、窄屏断点、布局与面板组件
+│  ├─ ui.md                   libs/ui：两个入口、窄屏断点、分栏布局、面板、区块、标题
 │  └─ icons.md                图标：SvgIcon 用法、添加图标、规范化规则、自动化与检查
 ├─ design/                    设计规范与主题落地
 │  ├─ color-and-typography.md 系统配色与字体规范（原文）
