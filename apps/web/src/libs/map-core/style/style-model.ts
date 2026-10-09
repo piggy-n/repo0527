@@ -9,8 +9,11 @@ export interface StyleGroup {
   readonly layers: readonly LayerSpecification[];
 }
 
-/** 样式的根属性（glyphs、sprite 等），由装配方提供 */
-export type StyleRoot = Omit<StyleSpecification, 'version' | 'sources' | 'layers'>;
+/** 样式的根属性（glyphs、sprite 等），由装配方提供；相机归 CameraModel，不能写在这里 */
+export type StyleRoot = Omit<
+  StyleSpecification,
+  'version' | 'sources' | 'layers' | 'center' | 'centerAltitude' | 'zoom' | 'bearing' | 'pitch' | 'roll'
+>;
 
 /** 一次通知：从上次通知的快照到当前快照的命令 */
 export interface StyleChange {

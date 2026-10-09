@@ -99,6 +99,41 @@ using session = new MapSession({
 
 视图接口（拾取结果的表面与高度、投影、输入、测量方式、切换时的工具状态）见 ADR 0024；资源释放和事件的写法见 ADR 0023；Worker 的取消分层、故障语义和瓦片缓存的约束见 ADR 0025。
 
+### MapLibre 适配器（2026-10-09 讨论确定，实现中）
+
+在 ADR 0022、0024 的范围内，没有另写 ADR。
+
+**分三层测试**：
+
+| 层 | 内容 | 测试方式 |
+|---|---|---|
+| `applyStyleCommand` | 一条命令对应一次地图方法调用 | 假对象，jsdom |
+| `MapLibreView` | 生命周期、版本跟踪、暂停恢复、出错重建、相机读写 | 注入 `createMap` 换成假地图，jsdom |
+| 真实 MapLibre | 渲染、Worker、事件、尺寸监听、中心点 | 开发环境路由 `/dev/map`，浏览器 |
+
+适配器依赖的是自己定义的窄接口（`StyleTarget` 以及之后的 `MapLike`），签名比 MapLibre 的泛型方法简单；用 `expectTypeOf<Map>().toExtend<…>()` 保证 MapLibre 的 `Map` 满足它，MapLibre 升级后签名不兼容会在类型检查时报错。不用 `vi.mock('maplibre-gl')`。
+
+**这一步的范围**：生命周期；样式的首次加载、增量更新、暂停恢复、出错重建；相机写回与恢复时同步；程序定位（`flyTo`、`fitBounds`）；lint 限制 maplibre-gl 的导入位置。输入、拾取、投影、查询留到交互工具那一步，三维期间的按需追上留到做三维时。
+
+**样式同步**：创建地图时直接传入当前快照作为 `style`；收到通知时，`toVersion` 不大于已应用的版本就忽略，`fromVersion` 等于已应用的版本就直接应用命令，否则对比"已应用 → 当前"；遇到不支持的命令或应用时抛错，用当前快照 `setStyle(…, { diff: false })` 整体重建，等 `style.load` 后再继续。MapLibre 自己的 `error` 事件只上报。
+
+**相机**：创建时用会话相机；`ready` 时在 `move` 事件里写回会话，有 `originalEvent` 就是 `user`，否则取 `eventData.cause`，都没有按 `program`；恢复时 `jumpTo(会话相机, { cause: 'sync' })`；`flyTo`、`fitBounds` 带 `{ cause: 'program' }`；暂停期间不写回、不跟随；不订阅会话的相机变化；适配器从不保留 padding（`fitBounds` 不设 `absolutePadding`），所以 `getCenter()` 就是画布几何中心。
+
+**生命周期**：构造即创建地图（`initializing`）；`GPUInitializationError` 时进入 `failed`；初始化期间调用 `pause()`，加载完成后进入 `paused`；状态变化发出 `statechange`；释放时取消订阅、`map.remove()`，等待中的 `whenReady` 以 `AbortError` 结束。
+
+**MapLibre 6 的几个事实**（2026-10-09 核实）：
+
+- 容器尺寸用 `ResizeObserver` 监听（防抖 50ms），隐藏后再显示会自动调整，文档里"窗口尺寸变化"的说法过时
+- `fitBounds` 的 padding 只用于计算，要保留得设 `absolutePadding`
+- 很多样式方法遇到问题时不抛错，而是触发 `error` 事件（对不存在的图层操作、添加校验不通过的图层），所以"抛错就重建"只兜住一部分不一致，其余由 `error` 事件上报
+- `setLayerZoomRange` 把 `undefined` 当作"不修改"：图层去掉已有的 `minzoom` / `maxzoom` 时，这个方法撤销不了
+- `setTransition`、`setLayerProperty` 没有公开方法
+
+**进度**：
+
+- 第 1 步已完成：`StyleRoot` 去掉相机字段（`center`、`zoom` 等归 `CameraModel`，否则 diff 会生成 `setCenter` 和它抢相机）；`applyStyleCommand`（`maplibre/apply-style-command.ts`）支持数据源和图层的 9 种命令，其余 18 种（样式根属性、相机类、没有公开方法的、`setStyle`）返回"不支持"交给整体重建；`setGeoJSONSourceData` 的异步失败交给回调。去掉已有缩放范围的情况由 `diffStyle` 改写成"删除图层、按原位置添加"，只加上或修改范围时仍是 `setLayerZoomRange`（参数里的 `undefined` 表示保持不设）
+- 第 2 步 `MapLibreView`、第 3 步 lint 限制、第 4 步 app 地图运行时与 `/dev/map`：未开始
+
 ## 旧代码
 
 范围：二维在 `src/components/CommonMap`，三维在 `src/views/current-map-new/cesium`。
@@ -221,5 +256,6 @@ using session = new MapSession({
 - 三维样式的支持清单：实现镜像之前写出（ADR 0024）
 - 椭球面测量用哪个库：做测量时确认（ADR 0024）
 - 瓦片是否因用户或权限而不同：向后端确认，决定缓存键是否包含权限范围（ADR 0025）
+- 开发环境下提交样式时是否用 style-spec 的 `validateStyleMin` 校验：MapLibre 对非法图层只触发 `error` 事件，提前在 `StyleModel` 里抛错，报错位置更准确；校验开关由装配方传入（libs 不读 `import.meta.env`），做适配器第 2 步时评估
 
 已确定：map-core 放在 `libs/map-core`（ADR 0018）；MapLibre 用 6.x（ADR 0019）；地图会话状态是唯一真相源（ADR 0020）；Worker 策略（ADR 0021）；样式模型与会话提交（ADR 0022）；资源释放、事件与运行时装配（ADR 0023）；视图接口（ADR 0024）；Worker 通信契约与瓦片数据服务（ADR 0025）；迁移基线 `836f03b` 已记入 [migration.md](../migration.md)。

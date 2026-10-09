@@ -205,6 +205,13 @@ describe('StyleModel', () => {
       expect(() => model.setGroup('measure', EMPTY)).toThrow('未声明的分组：measure');
     });
 
+    it('keeps camera properties out of the style root', () => {
+      // @ts-expect-error 相机归 CameraModel，写在样式根属性里会和它抢着控制相机
+      using model = new StyleModel({ groups: ['basemap'], root: { center: [118.8, 32.05] } });
+
+      expect(model.version).toBe(0);
+    });
+
     it('rejects duplicate group IDs in the declaration', () => {
       expect(() => new StyleModel({ groups: ['basemap', 'basemap'] })).toThrow('分组 ID 重复');
     });

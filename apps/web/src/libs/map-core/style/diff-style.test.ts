@@ -119,6 +119,37 @@ describe('diffStyle', () => {
     ]);
   });
 
+  it('re-adds a layer in place when a zoom limit is dropped', () => {
+    const data = featureCollection(118);
+    const outline: LayerSpecification = { id: 'region-outline', type: 'line', source: 'region' };
+    const before = style({ region: { type: 'geojson', data } }, [{ ...fillLayer, minzoom: 10 }, outline]);
+    const after = style({ region: { type: 'geojson', data } }, [fillLayer, outline]);
+
+    expect(diffStyle(before, after)).toEqual([
+      { command: 'removeLayer', args: ['region-fill'] },
+      { command: 'addLayer', args: [fillLayer, 'region-outline'] }
+    ]);
+  });
+
+  it('re-adds the topmost layer on top when its zoom limit is dropped', () => {
+    const data = featureCollection(118);
+    const before = style({ region: { type: 'geojson', data } }, [{ ...fillLayer, maxzoom: 16 }]);
+    const after = style({ region: { type: 'geojson', data } }, [fillLayer]);
+
+    expect(diffStyle(before, after)).toEqual([
+      { command: 'removeLayer', args: ['region-fill'] },
+      { command: 'addLayer', args: [fillLayer, undefined] }
+    ]);
+  });
+
+  it('keeps setLayerZoomRange when a zoom limit is added or changed', () => {
+    const data = featureCollection(118);
+    const before = style({ region: { type: 'geojson', data } }, [{ ...fillLayer, minzoom: 8 }]);
+    const after = style({ region: { type: 'geojson', data } }, [{ ...fillLayer, minzoom: 10, maxzoom: 16 }]);
+
+    expect(diffStyle(before, after)).toEqual([{ command: 'setLayerZoomRange', args: ['region-fill', 10, 16] }]);
+  });
+
   it('removes a GeoJSON source without updating its data', () => {
     const before = style({ region: { type: 'geojson', data: featureCollection(118) } });
 

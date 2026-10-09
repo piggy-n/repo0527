@@ -23,6 +23,31 @@ function withoutGeoJsonData(style: StyleSpecification): StyleSpecification {
   return sources ? { ...style, sources } : style;
 }
 
+// MapLibre 的 setLayerZoomRange 把 undefined 当作"不修改"，去掉了的缩放范围要删除图层再按原位置添加
+function readdForRemovedZoomRange(
+  before: StyleSpecification,
+  after: StyleSpecification,
+  layerId: string
+): StyleCommand[] | undefined {
+  const previous = before.layers.find(layer => layer.id === layerId);
+  const index = after.layers.findIndex(layer => layer.id === layerId);
+  if (previous === undefined || index === -1) {
+    return undefined;
+  }
+  const next = after.layers[index];
+  const removed =
+    (previous.minzoom !== undefined && next.minzoom === undefined) ||
+    (previous.maxzoom !== undefined && next.maxzoom === undefined);
+  if (!removed) {
+    return undefined;
+  }
+  // 图层属性的命令排在调整顺序之后，此时地图里的顺序已与新快照一致
+  return [
+    { command: 'removeLayer', args: [layerId] },
+    { command: 'addLayer', args: [next, after.layers.at(index + 1)?.id] }
+  ];
+}
+
 /** 对比两份样式快照：GeoJSON 数据按引用比较，其余交给 style-spec（ADR 0022） */
 export function diffStyle(before: StyleSpecification, after: StyleSpecification): StyleCommand[] {
   const commands: StyleCommand[] = [];
@@ -39,6 +64,13 @@ export function diffStyle(before: StyleSpecification, after: StyleSpecification)
       rebuiltSources.add(id);
       commands.push({ command: 'addSource', args: [id, after.sources[id]] });
       continue;
+    }
+    if (command.command === 'setLayerZoomRange') {
+      const readd = readdForRemovedZoomRange(before, after, command.args[0]);
+      if (readd !== undefined) {
+        commands.push(...readd);
+        continue;
+      }
     }
     commands.push(command);
   }
