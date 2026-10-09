@@ -43,7 +43,7 @@ apps/web/src/
 ├─ features/   按业务域划分：api.ts、queries.ts、store.ts、components/、composables/
 ├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型
 └─ libs/       将来可拆到 packages/* 的模块，统一用 @yzt/<name> 导入
-   ├─ utils/       @yzt/utils       纯 TS 工具，不依赖框架
+   ├─ utils/       @yzt/utils       纯 TS 工具，不依赖框架（目前是 Worker 通信层）
    ├─ ui/          @yzt/ui          Mx* 通用组件（布局、面板、区块、标题，ADR 0016）
    ├─ map-core/    @yzt/map-core    地图内核，不依赖 Vue
    ├─ map-cesium/  @yzt/map-cesium  Cesium 三维
@@ -141,8 +141,8 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 工具函数、鉴权、HTTP 错误处理这类纯逻辑要写测试；页面和组件测试关键交互
 - pages、features 的测试用 `createMemoryHistory()` 建只含所需路由的最小路由，不导入 `app` 的路由表（测试文件同样受依赖方向约束）；`app` 自己的测试可以用真实路由表，例如检查导航与路由权限是否一致
 - 模拟环境变量用 `vi.stubEnv`，用例结束后会自动撤销（`unstubEnvs`）
-- 模拟接口用 MSW 的 `setupServer()`，并设置 `onUnhandledRequest: 'error'`；不用 `vi.mock('axios')`
-- 测试写完后，故意改坏被测代码，确认测试会失败，并确认失败原因是断言而不是代码报错；修 bug 时先写能复现问题的测试
+- 模拟接口用 MSW 的 `setupServer()`，并设置 `onUnhandledRequest: 'error'`；不用 `vi.mock('axios')`；依赖第三方类的代码（如 MapLibre 适配器）依赖自己定义的窄接口，测试注入实现它的假对象，并用 `expectTypeOf` 检查真实的类满足它，不用 `vi.mock` 整个库
+- 测试写完后，故意改坏被测代码，确认测试会失败，并确认失败原因是断言而不是代码报错或超时（可能一直挂起的等待要和定时器赛跑，见 `docs/modules/utils.md` 的测试）；修 bug 时先写能复现问题的测试
 - `vite.config.ts` 的 `test.server.deps.inline: ['element-plus']` 不能删：不加的话 Element 表单的校验在测试中永远通过（见 `docs/config/vite-config.md`）
 - 不提交 `.only`：lint 的 `vitest/no-focused-tests` 会报错，CI 中 Vitest 也会拒绝运行
 - `mount` 挂载的组件在每个用例结束后由 `src/test-setup.ts` 自动卸载（`enableAutoUnmount`），不用逐个 `unmount()`；Element 放在 `body` 下的弹出层不归组件管，挂到 `body` 的测试仍要在 `afterEach` 里清空它
