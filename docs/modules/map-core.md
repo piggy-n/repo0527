@@ -147,6 +147,21 @@ using session = new MapSession({
   - **交给 MapLibre 的容器元素只能用静态 class**：MapLibre 会给容器加 `maplibregl-map` 等 class，它自己的 CSS 依赖它们；容器上的 class 绑定一变化，Vue 就会重设 `class` 属性把它们冲掉。可变的 class 放在外层包装元素上。阶段五写 map-vue 时同样遵守
 - 验证中确认的行为：`fitBounds` 带 padding 后，会话相机记的是画布几何中心（右侧留 360px 时偏东 1.35°，与按像素换算的 1.34° 吻合），padding 没有留在相机上；`intentRevision` 按相机变化的次数计数，拖动一次、飞行一次都会加几十（每帧一次 `move`），只能用来比较前后是否相等，不能当作操作次数
 
+### 地图资源的加载策略（2026-10-09 讨论确定原则，阶段五实测后写 ADR）
+
+现状：没有预加载。进入地图路由时 `withMapRuntime` 动态导入 maplibre-gl（约 1 MB，gzip 约 278 KB）和 CSS，创建地图时再下载 Worker 脚本（510 KB）；Cesium（旧项目打包后约 4 MB，另有静态资源）还没迁移，按依赖规则只能由 map-vue 动态导入。登录成功后 `await router.replace(角色首页)` 要等页面分块下载并执行完才跳转，所以点完登录会卡一下（参考项目 zhiHuiJiangSu_web 的提交 75402ca 遇到同样的问题，在登录页空闲时 `import()` 主界面来预热）。
+
+原则：
+
+1. **不绑定默认模式**：客户可能要求默认进入三维，或者按配置动态决定。app 里用一个解析函数回答"进入地图时先用哪个框架"，依据可以是部署配置、后端或用户级配置、上次使用的框架；加载和预加载都以它为准。默认框架要登录后才知道时，登录页按"上次使用的框架"或部署默认值预测，猜错只多一次下载
+2. **运行时按框架组织**：二维的 `setupMapRuntime`、以后三维的 Cesium 运行时（含 `CESIUM_BASE_URL`）各是一个加载函数，由 app 注入给 map-vue（libs 不能导入 app）。进入地图时只阻塞加载默认框架，另一个按访问路径在后台加载。路由上写死 MapLibre 的 `withMapRuntime` 到阶段五可能被这种注入方式取代
+3. **默认三维时二维仍要加载但不阻塞**：ADR 0020 第 7 条，三维期间二维暂时仍充当查询后端，二维视图以 `active: false` 创建；三维点选改用瓦片数据服务后，二维可以推迟到第一次需要时再创建
+4. **预加载**：登录页空闲时预加载预测出的默认框架的运行时和地图页代码。`requestIdleCallback` 加超时，Safari 不支持它（MDN 数据：只在预览版里，需要开启开关），用 `setTimeout` 兜底；`navigator.connection` 的 `saveData` 为真或网络为 2G 时跳过（只有 Chromium 内核支持，其他浏览器按正常网络处理）。另一个框架按访问路径加载：鼠标悬停到切换按钮时开始加载，或地图页空闲后、用户用过这个框架时再加载
+5. **二维的 Worker 池**：MapLibre 6 的 `prewarm()` 可以提前启动 Worker 池（随之下载 Worker 脚本），但会一直保留到 `clearPrewarmedResources()`，实测收益后再决定
+6. **默认三维时的静态资源**：Cesium 的 Worker、Assets 等在运行时从 `CESIUM_BASE_URL` 加载，预加载 JS 模块不会顺带下载它们，做三维时再看是否单独预取
+7. **缓存比预加载更重要**：产物文件名带 hash，部署时给 `/assets/*` 设置长期缓存（`immutable`），`index.html` 不缓存，并开启压缩；预加载真正起作用的是第一次访问和每次部署后的第一次访问（阶段七）
+8. **用数据决定**：阶段五给"点击登录 → 地图第一次加载完成"打性能标记，在禁用缓存、限速的条件下对比有无预加载，再写 ADR
+
 ## 旧代码
 
 范围：二维在 `src/components/CommonMap`，三维在 `src/views/current-map-new/cesium`。

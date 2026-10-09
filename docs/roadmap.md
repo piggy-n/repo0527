@@ -49,13 +49,14 @@
 | 4 结束时 | 阶段总结要包括阶段四开始前对文件管理的修复：删除确认框在页面销毁后仍可确认删除、会话结束后仍可删除、并发删除时前一个文件的删除状态丢失、翻页失败后跳回第 1 页（以及重新进入列表、条件不变再查询两种情况）、旧分页缓存把页码改小（包括请求失败后保留的旧缓存、从缓存重新进入后立即翻页失败）、输入法选字的回车触发查询、`QueryForm` 换行后减少条件不能恢复一行；本地有过期会话时第一次登录被拦截；退出确认框在会话结束后残留；以及删除逻辑抽成 `useFileRemoval` 和新增的三条 AGENTS.md 规则 | 本文 |
 | 3 之后 | 接入 Renovate 自动处理依赖更新 | ADR 0005 |
 | 3 之后 | 评估 Playwright 端到端测试；覆盖率与门槛 | ADR 0010 |
+| 5 | 地图资源的加载策略：不绑定默认模式，由 app 的解析函数给出进入地图时的默认框架（二维或三维）；运行时按框架组织并注入给 map-vue；登录页空闲时预加载预测的默认框架；实测"点击登录 → 地图第一次加载完成"后写 ADR | [modules/map-core.md](modules/map-core.md)"地图资源的加载策略" |
 | 5 | 视图进入 `failed`（如 `GPUInitializationError`）时的提示；Worker 数量是否调到旧项目的 4 个，接入地类图斑时实测（`setupMapRuntime` 里调用 `setWorkerCount`）；现状底图的路由用 `withMapRuntime` 包装；交给 MapLibre 的容器元素只用静态 class | ADR 0019、map-core.md |
 | 5 | 用真实数据实测 MapLibre 6 下图例统计（当前出现的地类）的主线程耗时，再选后端聚合、Worker 解码属性或按需统计 | ADR 0021 |
 | 引入 map-cesium 时 | 评估 utils、map-core、map-cesium 一起拆到 `packages/`；自己写的 Worker 的类型检查配置 | ADR 0018、0021 |
 | 做高亮时 | 用 feature-state 还是按要素 ID 过滤的图层，实测后决定 | ADR 0022 |
 | 做测量时 | 椭球面测量用哪个库（候选 geographiclib-geodesic） | ADR 0024 |
 | 第一个 Worker 真实使用方出现时 | Worker 池的调度、缓存淘汰、内存预算用真实瓦片验证；此前向后端确认瓦片是否因用户或权限而不同 | ADR 0025 |
-| 做三维时 | 实现镜像前写出三维样式的支持清单与降级规则；拾取按模型、地形、椭球报告命中表面；相机同步不再用 `map.transform`（v6 已移除），改用公开 API；MVT 解码的 `@mapbox/vector-tile`、`pbf` 对齐 maplibre-gl 依赖的版本；三维点选改用瓦片数据服务，不再先对齐二维；评估三维期间二维是否还要存活；瓦片数据服务与 MapLibre 之间避免重复下载的做法 | ADR 0019、0020、0021、0024 |
+| 做三维时 | Cesium 运行时作为第二个框架加载函数接入；悬停切换按钮时开始加载；默认三维时是否预取 Cesium 的静态资源；实现镜像前写出三维样式的支持清单与降级规则；拾取按模型、地形、椭球报告命中表面；相机同步不再用 `map.transform`（v6 已移除），改用公开 API；MVT 解码的 `@mapbox/vector-tile`、`pbf` 对齐 maplibre-gl 依赖的版本；三维点选改用瓦片数据服务，不再先对齐二维；评估三维期间二维是否还要存活；瓦片数据服务与 MapLibre 之间避免重复下载的做法 | ADR 0019、0020、0021、0024 |
 | 5 | 地图页的页面缓存（keep-alive） | [modules/layout.md](modules/layout.md) |
 | 5 | 画布型页面：地图铺满内容区，操作栏和面板悬浮；悬浮面板沿用面板规范、统一浅色；地图定位时的 padding 要避开悬浮面板，由布局提供被占用的区域，不由页面各自计算 | [design/page-layout.md](design/page-layout.md) |
 | 6 | AI 对话：AI 后端登录不再在前端写死账号密码 | ADR 0015 |
@@ -66,7 +67,7 @@
 | 6 | 上传、下载统一成一套能力（统一的上传 / 下载方法或独立模块，包括进度、文件名、错误处理、预览前的 MIME 补齐），文件管理、数据下载（资源申请）、数据查询的导出共用，不再各自实现。旧项目在迁移范围内至少有 5 处各写各的下载：`libs/http-service.js` 的 blob 处理、`services/resource-application/applyApiService.js`（`downloadApplicationFile`、`downloadStatisticsReportFile`）、`downloadTaskService.js`（带进度）、文件管理 `FileManagementContent.vue`（`requestFileBlob`、`downloadBlob`）、数据查询 `space-monitoring-query/index.vue`（`downloadExportBlob`）；`FormData` 上传 3 处：文件管理上传弹窗、资源管理 Excel 导入、数据查询 | 本文（2026-10-08 提出） |
 | 6 | 页面内菜单（系统管理左栏）用 `ElMenu` 加变体还是做 `MxSideMenu`；宽屏时手动把侧栏收成窄条（基本统计页，可复用窄屏的窄条）；单列居中（消息中心）；旧页面左栏 296、348 归到 320 | [design/page-layout.md](design/page-layout.md) |
 | 需要时 | 持久化（IndexedDB + idb-keyval，存储适配器） | AGENTS.md |
-| 7 | 部署（nginx 回退与接口转发）；版本号格式 | [deployment.md](deployment.md)、ADR 0005 |
+| 7 | 部署（nginx 回退与接口转发，带 hash 的产物长期缓存、`index.html` 不缓存、开启压缩）；版本号格式 | [deployment.md](deployment.md)、ADR 0005 |
 
 ## 阶段三：页面布局与第一个列表页
 
