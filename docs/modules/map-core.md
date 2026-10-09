@@ -29,6 +29,7 @@
 ```
 
 - 已实现 `diffStyle`（`style/diff-style.ts`）：对比前把 GeoJSON 的 `data` 换成同一个占位值，交给 style-spec；`addSource` 和退路 `setStyle` 换回真实数据；前后都存在且未重建的 GeoJSON 数据源按引用比较，不同就追加 `setGeoJSONSourceData`（放在末尾，这类数据源在整个过程中一直存在）
+- 已实现 `StyleModel`（`style/style-model.ts`）：构造时声明分组顺序，类型参数用 `const`，不写 `as const` 也能推断出分组 ID 的字面量联合；提交前先组合并校验（分组 ID 未声明、数据源或图层 ID 重复、图层引用的数据源不存在都会抛错，整次提交不生效）；所有分组引用都没变的提交被忽略，内容相同的新对象照样加版本号，但对比后没有命令就不通知；通知前先记下快照，监听器里再次提交时下一次通知从这里开始对比；释放后丢弃待发的通知、清空监听器，再提交或订阅会抛错，读取 `current`、`version` 仍然可以
 - 消费方首次挂载、暂停后恢复、按需追上都是"已应用的快照 → 当前快照"的对比；应用某条命令出错时，用当前快照整体重建
 - 视图的生命周期：`idle → initializing → ready ⇄ paused`，另有 `failed`、`disposed`；保留状态、应用变化、统计查询分开控制
 - 选择状态只存要素身份和高亮数据，候选列表和详情在 feature 的查询缓存里

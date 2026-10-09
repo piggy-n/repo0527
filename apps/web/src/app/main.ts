@@ -1,3 +1,6 @@
+// 目标浏览器还没有资源释放的标准接口（ADR 0023）；类定义 [Symbol.dispose] 时就要用到，必须最先执行
+import 'core-js/es/symbol/dispose';
+import 'core-js/es/disposable-stack';
 import 'element-plus/dist/index.css';
 import './styles/index.scss';
 import { VueQueryPlugin } from '@tanstack/vue-query';

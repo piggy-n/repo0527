@@ -62,7 +62,7 @@
 | 选项 | 值 | 说明 |
 |---|---|---|
 | `target` | `es2023` | 语法按 ES2023 检查 |
-| `lib` | `["es2023", "dom"]` | 允许使用哪些内置 API 的类型 |
+| `lib` | `["es2023", "esnext.disposable", "dom"]` | 允许使用哪些内置 API 的类型 |
 | `types` | `["vite/client", "geojson"]` | 自动加载的全局类型包 |
 
 `target` 和 `lib` 的区别：
@@ -71,6 +71,8 @@
 - `lib` 管**API**，例如能不能调用 `Array.prototype.toSorted`
 
 Vite 构建时只转换语法，不会给 API 打补丁。所以 `lib` 实际上是在约束"代码里能用哪些浏览器 API"。选 `es2023`，是为了和 Vite 默认的浏览器目标（Baseline Widely Available）大致对齐。如果写到了更新的 API（例如 ES2024 的 `Object.groupBy`），类型检查会直接报错，而不是等到旧浏览器上运行时才出问题。
+
+`esnext.disposable` 提供 `Disposable`、`DisposableStack`、`Symbol.dispose` 的类型（阶段四加入，ADR 0023）。它是"lib 只写目标浏览器支持的 API"的唯一例外：目标浏览器还不支持这几个接口（DisposableStack 要 Chrome 134、Firefox 141，Safari 只有预览版），所以 `app/main.ts` 最先引入 core-js 补齐运行时。`using` 语法由 Vite（Oxc）降级成辅助函数，不需要补丁。以后在 `lib` 里加入目标浏览器不支持的 API，都要同时提供补丁。
 
 TS 6 起，`dom` 已经包含了原来 `dom.iterable` 的内容，`for (const node of document.querySelectorAll('div'))` 这类写法只写 `dom` 就够了（阶段一已用 TS 7 验证）。
 
@@ -221,7 +223,7 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 ## 修改时的检查清单
 
 - 改了 `paths`：同步检查 `vite.config.ts`、`.oxlintrc.json` 的 boundaries 元素定义，然后运行 `pnpm typecheck`、`pnpm lint`、`pnpm build`
-- 改了 `lib` 或 `target`：确认和 Vite 的浏览器目标一致
+- 改了 `lib` 或 `target`：确认和 Vite 的浏览器目标一致；加入目标浏览器不支持的 API 时，同时在 `app/main.ts` 补齐运行时
 - 新增 tsconfig：加进 `tsconfig.json` 的 `references`，设置独立的 `tsBuildInfoFile`；在 ADR 0009 被取代之前，不要开启 `incremental`
 - 升级 TS：按上文"增量检查"一节的步骤复测，决定是否恢复增量检查
 - 引入新库：如果它的声明文件引用全局命名空间（如 `GeoJSON`），在 `types` 中加载对应的 `@types` 包（app 和 libs 两份配置）；lint 报 `error typed value` 时先查这一点

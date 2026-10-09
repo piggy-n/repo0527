@@ -30,7 +30,7 @@
   },
   "rules": {
     "typescript/no-unsafe-type-assertion": "off",
-    "import/no-unassigned-import": ["error", { "allow": ["**/*.css", "**/*.scss"] }],
+    "import/no-unassigned-import": ["error", { "allow": ["**/*.css", "**/*.scss", "core-js/**"] }],
 
     "eqeqeq": "error",
     "no-var": "error",

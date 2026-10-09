@@ -130,9 +130,11 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "@vueuse/core": "^15.0.0",
     "@yzt/icons": "workspace:*",
     "axios": "^1.20.0",
+    "core-js": "^3.50.0",
     "element-plus": "^2.14.6",
     "jwt-decode": "^4.0.0",
     "maplibre-gl": "^6.12.0",
+    "nanoevents": "^10.0.0",
     "pinia": "^4.0.3",
     "sm-crypto-v2": "^1.15.1",
     "vue": "^3.5.43",
@@ -194,6 +196,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `maplibre-gl` | 二维地图（ADR 0002、0019），只在 map-core 的适配器和 app 的装配中导入。6.x 只提供 ESM，Worker 由 app 用 `?worker&url` 导入后交给 `setWorkerUrl`；依赖里的 `@types/geojson`、`@maplibre/maplibre-gl-style-spec` 不会暴露给应用，要用时自己声明，版本与它保持一致。主模块约 1 MB、Worker 510 KB，地图页必须懒加载 | mapbox-gl（2.0 起为专有许可）、OpenLayers |
 | `@maplibre/maplibre-gl-style-spec` | MapLibre 样式规范的工具：map-core 用它的 `diff` 对比样式快照（ADR 0022），以后在三维和 Worker 里求值表达式和过滤条件（ADR 0021、0024）。它本来就是 maplibre-gl 的依赖，pnpm 不允许使用没有声明的包，所以自己声明；版本范围与 maplibre-gl 声明的相同（`^26.4.4`），两者解析到同一个版本，只打包一份 | 手写求值器（旧项目的做法，ADR 0020） |
 | `@types/geojson` | GeoJSON 的类型，并提供全局命名空间 `GeoJSON`：style-spec 和 maplibre-gl 的声明文件依赖它，要在 tsconfig 的 `types` 中加载，否则相关类型会悄悄变成错误类型（见 [tsconfig.md](tsconfig.md)）。版本范围与 maplibre-gl 依赖的相同 | — |
+| `nanoevents` | 地图内核的带类型事件（ADR 0023）。实现只有 25 行，无依赖；`on` 返回取消订阅的函数，直接登记到释放栈。map-core 对外只暴露自己的 `Unsubscribe` 类型，不暴露它的类型 | mitt（`on` 不返回取消函数，2023 年后没有发布）、`EventTarget` |
+| `core-js` | 补齐资源释放的标准接口：只在 `app/main.ts` 的最前面引入 `es/symbol/dispose`、`es/disposable-stack` 两个模块（ADR 0023）。入口包实测增加 21.8 KB（gzip 7.9 KB）。安装脚本不执行（见 pnpm-workspace.md）；lint 的 `no-unassigned-import` 已放行 `core-js/**` | 在 utils 里自己实现约 60 行 |
 | `msw` | 测试中在网络层模拟接口，只用 `msw/node`；安装脚本不放行（见 pnpm-workspace.md） | axios-mock-adapter |
 | `opentype.js` | 解析字体、把系统名称转成 SVG 轮廓，只在 `tools/system-title/` 中使用（ADR 0012）；2.0 没有自带类型，用本地的最小声明 | fontkit、harfbuzzjs |
 | `vitest` | 测试运行器，复用 `vite.config.ts`（ADR 0010） | Jest |

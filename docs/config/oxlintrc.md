@@ -153,7 +153,7 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 | 规则 | 设置 | 原因 |
 |---|---|---|
 | `typescript/no-unsafe-type-assertion` | `off` | 会把 Vue 的 `String as PropType<...>`、`Object as SlotsType<...>` 误报为不安全断言，这是 Vue 声明 props 和插槽类型的标准写法 |
-| `import/no-unassigned-import` | 放行 `*.css`、`*.scss` | 样式文件只能以副作用方式导入（`import './a.scss'`），不放行就会误报 |
+| `import/no-unassigned-import` | 放行 `*.css`、`*.scss`、`core-js/**` | 样式文件和补丁都只能以副作用方式导入（`import './a.scss'`、`import 'core-js/es/disposable-stack'`），不放行就会误报。core-js 只在 `app/main.ts` 补齐资源释放的接口（ADR 0023） |
 
 ### 第二组：对应 AGENTS.md 约定逐条开启
 

@@ -12,5 +12,7 @@ allowBuilds:
   "unrs-resolver": false
   # 安装脚本只把浏览器端的 Service Worker 复制到 msw.workerDirectory；项目只在测试中用 msw/node
   "msw": false
+  # postinstall 只打印赞助信息（另在系统临时目录写一个去重用的文件），不影响补丁本身
+  "core-js": false
   # postinstall 按项目装的是 Vue 2 还是 Vue 3 切换构建文件；包里默认的就是 Vue 3 版，项目只用 Vue 3
   "vue-demi": false
