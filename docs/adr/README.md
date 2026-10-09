@@ -11,7 +11,7 @@
 | 编号 | 标题 | 状态 |
 |---|---|---|
 | [0001](0001-tsx-instead-of-sfc.md) | 组件使用 TSX，不使用 SFC | 已接受 |
-| [0002](0002-map-libraries.md) | 二维地图用 MapLibre，Cesium 精确锁版本 | 已接受 |
+| [0002](0002-map-libraries.md) | 二维地图用 MapLibre，Cesium 精确锁版本 | 已接受（大版本由 0019 确定） |
 | [0003](0003-typescript-7-toolchain.md) | TypeScript 7 与工具链 | 已接受（`incremental` 一条已被 0009 取代） |
 | [0004](0004-module-boundaries.md) | 模块边界与拆包预留 | 已接受 |
 | [0005](0005-dependency-maintenance-and-ci.md) | 依赖维护与持续集成 | 已接受 |
@@ -27,6 +27,8 @@
 | [0015](0015-login-session-and-permissions.md) | 登录与会话：会话存 localStorage，SM2 用 sm-crypto-v2，权限声明在路由上 | 已接受 |
 | [0016](0016-ui-components-in-libs-ui.md) | 通用 UI 组件放在 libs/ui | 已接受 |
 | [0017](0017-server-state-with-tanstack-query.md) | 接口数据用 TanStack Vue Query 管理 | 已接受 |
+| [0018](0018-map-core-in-libs.md) | map-core 放在 libs/map-core | 已接受 |
+| [0019](0019-maplibre-v6.md) | 二维地图用 MapLibre GL JS 6 | 已接受 |
 
 ## 模板
 

@@ -22,7 +22,7 @@
 - Pinia 4，只用 setup store
 - 只用 TypeScript 7 一个版本；不引入依赖 TS JS API 的工具（vue-tsc、typescript-eslint 等），lint 用 oxlint + oxlint-tsgolint（ADR 0003），规则与依赖方向检查见 ADR 0006
 - tsconfig 不开启 `incremental`：TS 7.0.2 的增量检查在 `declare global` 文件变化后会给出过期结果（ADR 0009）
-- 二维地图用 MapLibre GL JS，大版本在地图阶段确定；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002）
+- 二维地图用 MapLibre GL JS 6，只用具名导入；`setWorkerUrl`、CSS 这类全局设置由 app 完成；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002、0019）
 - 三维地图用 Cesium，精确锁定版本（ADR 0002）
 - 浏览器目标用 Vite 默认值，不兼容旧浏览器，不引入 `@vitejs/plugin-legacy`
 - 测试用 Vitest 5 + jsdom + `@vue/test-utils`，配置写在 `vite.config.ts` 的 `test` 字段（ADR 0010）
@@ -70,6 +70,7 @@ apps/web/src/
 - 模块内部只用相对路径，不使用 `@/`
 - 不读取 `import.meta.env`、store、router 或全局单例，需要的依赖通过构造参数或函数参数传入
 - 模块之间不能循环依赖
+- map-core 放在 libs（ADR 0018）；包不能依赖 libs，所以 `utils ← map-core ← map-cesium` 要拆包时一起拆，引入 map-cesium 时评估
 - `apps/web/tsconfig.libs.json` 只检查 libs 的源码（不含测试）：不加载 `vite/client` 类型，不配置 `@/*`，读取 env 和使用 `@/` 在类型检查时报错（ADR 0006）；libs 需要的环境类型（如 CSS Modules）单独声明，不能加回 `vite/client`
 
 ## 编码约定

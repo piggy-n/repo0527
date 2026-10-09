@@ -131,6 +131,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "axios": "^1.20.0",
     "element-plus": "^2.14.6",
     "jwt-decode": "^4.0.0",
+    "maplibre-gl": "^6.12.0",
     "pinia": "^4.0.3",
     "sm-crypto-v2": "^1.15.1",
     "vue": "^3.5.43",
@@ -188,6 +189,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `zod` | 接口返回值的校验与类型推断（ADR 0011） | valibot、手写类型守卫 |
 | `jwt-decode` | 读取登录 token 的过期时间，只在 `shared/auth/token.ts` 中使用；不校验签名（ADR 0015） | 手写 base64url 解码 |
 | `sm-crypto-v2` | 登录密码的 SM2 加密，只在 `features/auth/password.ts` 中使用；底层是 `@noble/curves`，已与旧项目的 sm-crypto 交叉验证兼容（ADR 0015） | sm-crypto |
+| `maplibre-gl` | 二维地图（ADR 0002、0019），只在 map-core 的适配器和 app 的装配中导入。6.x 只提供 ESM，Worker 由 app 用 `?worker&url` 导入后交给 `setWorkerUrl`；依赖里的 `@types/geojson`、`@maplibre/maplibre-gl-style-spec` 不会暴露给应用，要用时自己声明，版本与它保持一致。主模块约 1 MB、Worker 510 KB，地图页必须懒加载 | mapbox-gl（2.0 起为专有许可）、OpenLayers |
 | `msw` | 测试中在网络层模拟接口，只用 `msw/node`；安装脚本不放行（见 pnpm-workspace.md） | axios-mock-adapter |
 | `opentype.js` | 解析字体、把系统名称转成 SVG 轮廓，只在 `tools/system-title/` 中使用（ADR 0012）；2.0 没有自带类型，用本地的最小声明 | fontkit、harfbuzzjs |
 | `vitest` | 测试运行器，复用 `vite.config.ts`（ADR 0010） | Jest |

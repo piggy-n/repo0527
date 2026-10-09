@@ -10,7 +10,7 @@
 | **1. 工程基础** | `apps/web`：Vite 最新版 + `plugin-vue-jsx` + TS strict；tsconfig 分层；实测 TS 7 工具链；lint（只管正确性，格式交给 WebStorm）；Vitest | tsconfig 各项配置的含义、`jsxImportSource: 'vue'`、Vite 插件管线 | ✅ 完成（tag `stage-1`，[总结](stages/stage-1-engineering-foundation.md)） |
 | **2. 应用骨架** | 有类型的 HTTP 客户端和错误模型、鉴权、路由守卫（用模块扩充给 `RouteMeta` 加类型）、布局、存储适配器、MSW、Element Plus 主题、CSS Modules | 泛型、可辨识联合、模块扩充、Adapter 和 Strategy 模式 | ✅ 完成（tag `stage-2`，[总结](stages/stage-2-app-skeleton-and-auth.md)） |
 | **3. 第一个纵切** | 登录 + 布局 + 一个简单列表页，把 API、query、store、TSX 组件、测试整条链路跑通 | vue-query（TanStack Query），TSX 中 props、emits、slots 的类型写法 | ✅ 完成（tag `stage-3`，[总结](stages/stage-3-layout-and-first-list.md)）：页面布局规范与 `libs/ui`（ADR 0016）、文件管理列表（ADR 0017）、会话结束的统一处理 |
-| **4. map-core** | 重新设计引擎抽象、Manager 体系、有类型的事件、有类型的 Worker 消息、资源释放 | 接口与抽象类的区别、Facade、Factory、Observer、`using` / Disposable | 未开始 |
+| **4. map-core** | 重新设计引擎抽象、Manager 体系、有类型的事件、有类型的 Worker 消息、资源释放 | 接口与抽象类的区别、Facade、Factory、Observer、`using` / Disposable | 进行中（2026-10-09 开始，见下文"阶段四"） |
 | **5. map-vue + 现状底图** | `MapProvider`、`useMap()`、图层面板 | provide / inject 的类型、响应式边界（`shallowRef`、`markRaw`） | 未开始 |
 | **6. 复杂业务** | 空间监测三件套、AI 流式对话、文件管理，以及其余业务模块 | 拆分巨型组件、流式读取与 SSE、取消请求 | 未开始 |
 | **7. 收尾** | Playwright、产物分析、部署 | — | 未开始 |
@@ -49,9 +49,10 @@
 | 4 结束时 | 阶段总结要包括阶段四开始前对文件管理的修复：删除确认框在页面销毁后仍可确认删除、会话结束后仍可删除、并发删除时前一个文件的删除状态丢失、翻页失败后跳回第 1 页（以及重新进入列表、条件不变再查询两种情况）、旧分页缓存把页码改小（包括请求失败后保留的旧缓存、从缓存重新进入后立即翻页失败）、输入法选字的回车触发查询、`QueryForm` 换行后减少条件不能恢复一行；本地有过期会话时第一次登录被拦截；退出确认框在会话结束后残留；以及删除逻辑抽成 `useFileRemoval` 和新增的三条 AGENTS.md 规则 | 本文 |
 | 3 之后 | 接入 Renovate 自动处理依赖更新 | ADR 0005 |
 | 3 之后 | 评估 Playwright 端到端测试；覆盖率与门槛 | ADR 0010 |
-| 4 | 开始前先读设计草稿：旧代码的可取之处与问题、设计模式落点、候选库、Worker 缓存的取舍 | [modules/map-core.md](modules/map-core.md) |
-| 4 | map-core 放 `libs/` 还是做成 `packages/`（第一个 libs 模块和 `tsconfig.libs.json` 已提前到阶段三的 `libs/ui`） | AGENTS.md、ADR 0004、0006 |
-| 4 | MapLibre 的大版本 | ADR 0002 |
+| 4 | 写第一个适配器时，评估用 lint 限制 maplibre-gl 只能在 map-core 的适配器和 app 的装配中导入 | ADR 0018 |
+| 5 | 创建地图时捕获 `GPUInitializationError` 并提示；`setWorkerUrl`、CSS 等全局设置放在 app 的哪个文件；Worker 数量是否调到旧项目的 4 个，接入地类图斑时实测 | ADR 0019 |
+| 引入 map-cesium 时 | 评估 utils、map-core、map-cesium 一起拆到 `packages/`；自己写的 Worker 的类型检查配置 | ADR 0018 |
+| 做三维时 | 相机同步不再用 `map.transform`（v6 已移除），改用公开 API；MVT 解码的 `@mapbox/vector-tile`、`pbf` 对齐 maplibre-gl 依赖的版本 | ADR 0019 |
 | 5 | 地图页的页面缓存（keep-alive） | [modules/layout.md](modules/layout.md) |
 | 5 | 画布型页面：地图铺满内容区，操作栏和面板悬浮；悬浮面板沿用面板规范、统一浅色；地图定位时的 padding 要避开悬浮面板，由布局提供被占用的区域，不由页面各自计算 | [design/page-layout.md](design/page-layout.md) |
 | 6 | AI 对话：AI 后端登录不再在前端写死账号密码 | ADR 0015 |
@@ -72,6 +73,13 @@
 - 3.2 `libs/ui` 的分栏布局、面板、区块、标题组件：[modules/ui.md](modules/ui.md)
 - 3.3 文件管理列表：TanStack Vue Query（[ADR 0017](adr/0017-server-state-with-tanstack-query.md)），表格和树的全局样式（[design/theme.md](design/theme.md)），验收后加入的查询表单（[modules/query-form.md](modules/query-form.md)）与加载状态（[modules/table.md](modules/table.md)）
 - 会话结束的统一处理：[modules/auth.md](modules/auth.md)
+
+## 阶段四：地图内核
+
+2026-10-09 开始：
+
+- 4.0 读旧代码（分析补进 [modules/map-core.md](modules/map-core.md)），确定 map-core 的位置（[ADR 0018](adr/0018-map-core-in-libs.md)）和 MapLibre 的大版本（[ADR 0019](adr/0019-maplibre-v6.md)），记下迁移基线
+- 下一步：讨论"二维为真相源、三维为镜像"是否沿用，它决定引擎接口要不要为 Cesium 设计
 
 ## 业务模块
 
