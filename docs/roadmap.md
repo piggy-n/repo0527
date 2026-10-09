@@ -85,7 +85,7 @@
 - 4.0 读旧代码（分析补进 [modules/map-core.md](modules/map-core.md)），确定 map-core 的位置（[ADR 0018](adr/0018-map-core-in-libs.md)）和 MapLibre 的大版本（[ADR 0019](adr/0019-maplibre-v6.md)），记下迁移基线
 - 4.1 二三维关系：地图会话状态是唯一的真相源，接近无感的切换是核心能力（[ADR 0020](adr/0020-map-session-state-as-source-of-truth.md)）；Worker 策略：二维不自建渲染 Worker，统一通信层与瓦片数据服务（[ADR 0021](adr/0021-worker-strategy.md)）
 - 4.2 接口设计：样式模型与会话提交（[ADR 0022](adr/0022-style-model-and-session-commits.md)）、资源释放与事件（[ADR 0023](adr/0023-disposal-events-and-map-runtime.md)）、二三维共用的视图接口（[ADR 0024](adr/0024-shared-view-interfaces.md)）、Worker 通信契约与瓦片数据服务（[ADR 0025](adr/0025-worker-contract-and-tile-data-service.md)）；评审中对 0020、0021 的修正写进了新的 ADR
-- 下一步：按顺序实现 `diffStyle` → `StyleModel` → `CameraModel` → `createMapSession` → MapLibre 适配器（含 lint 限制 maplibre-gl 的导入位置），每一步带测试；之后是 `@yzt/utils` 的 Worker 通信层
+- 4.3 实现，按顺序：`diffStyle`（已完成）→ `StyleModel` → `CameraModel` → `createMapSession` → MapLibre 适配器（含 lint 限制 maplibre-gl 的导入位置），每一步带测试；之后是 `@yzt/utils` 的 Worker 通信层
 
 ## 业务模块
 

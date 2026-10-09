@@ -10,8 +10,8 @@
 | 文件 | 检查范围 | 环境类型 |
 |---|---|---|
 | `tsconfig.json` | 不检查任何文件，只列出引用 | — |
-| `tsconfig.app.json` | `src/` | DOM + `vite/client` |
-| `tsconfig.libs.json` | `src/libs/`（不含测试） | DOM，不加载 `vite/client`，没有 `@/*` |
+| `tsconfig.app.json` | `src/` | DOM + `vite/client` + `geojson` |
+| `tsconfig.libs.json` | `src/libs/`（不含测试） | DOM + `geojson`，不加载 `vite/client`，没有 `@/*` |
 | `tsconfig.node.json` | `vite.config.ts`、`tools/` | Node |
 
 这种写法叫 **solution 风格**：根 `tsconfig.json` 用 `"files": []` 表示自己不包含文件，再用 `references` 指向真正干活的配置。运行 `tsc -b`（build 模式）时，TS 会依次检查每个被引用的项目。
@@ -63,7 +63,7 @@
 |---|---|---|
 | `target` | `es2023` | 语法按 ES2023 检查 |
 | `lib` | `["es2023", "dom"]` | 允许使用哪些内置 API 的类型 |
-| `types` | `["vite/client"]` | 自动加载的全局类型包 |
+| `types` | `["vite/client", "geojson"]` | 自动加载的全局类型包 |
 
 `target` 和 `lib` 的区别：
 
@@ -81,6 +81,10 @@ TS 6 起，`dom` 已经包含了原来 `dom.iterable` 的内容，`for (const no
 - 各类资源模块的声明，例如 `*.module.scss` 会被声明成 `CSSModuleClasses`，所以 `styles.root` 的类型是 `string`
 
 TS 6 起 `types` 默认值变成了 `[]`（以前会自动加载 `node_modules/@types` 下的全部包），因此这里必须显式写出来。
+
+`geojson`（`@types/geojson`）提供全局命名空间 `GeoJSON`。`@maplibre/maplibre-gl-style-spec` 和 maplibre-gl 的声明文件直接写 `GeoJSON.GeoJSON`，却没有用 `/// <reference>` 引入它（style-spec 甚至不依赖 `@types/geojson`），所以要由使用方加载（阶段四加入）。
+
+不加载时的表现值得记住：`skipLibCheck` 跳过声明文件的检查，`GeoJSON` 解析失败也不报错，相关类型悄悄变成"错误类型"，用起来和 `any` 一样，tsc 全部通过。是 lint 的类型感知规则报出了 `Unsafe assignment of an error typed value` 才发现的。以后遇到库的类型"出奇地宽松"，先查这一点。
 
 ### 模块系统
 
@@ -190,7 +194,7 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.libs.tsbuildinfo",
-    "types": [],
+    "types": ["geojson"],
     "paths": {
       "@yzt/*": ["./src/libs/*/index.ts"]
     }
@@ -203,7 +207,7 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 | 选项 | 值 | 说明 |
 |---|---|---|
 | `extends` | `./tsconfig.app.json` | 其余选项与 app 相同，只覆盖下面几项，两份配置不会逐渐不一致 |
-| `types` | `[]` | 不加载 `vite/client`，libs 里读取 `import.meta.env` 会报错 |
+| `types` | `["geojson"]` | 不加载 `vite/client`，libs 里读取 `import.meta.env` 会报错；只加载 libs 需要的 `geojson`（见上文"语言与运行环境"） |
 | `paths` | 只有 `@yzt/*` | `paths` 整体覆盖而不是合并，没有 `@/*`，libs 里用 `@/` 导入会报错 |
 | `include` | `["src/libs"]` | 只检查 libs |
 | `exclude` | 测试文件 | 测试不打包进模块，可以用 Vite 的特性（如 `?raw` 导入），仍由 app 配置检查 |
@@ -220,3 +224,4 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 - 改了 `lib` 或 `target`：确认和 Vite 的浏览器目标一致
 - 新增 tsconfig：加进 `tsconfig.json` 的 `references`，设置独立的 `tsBuildInfoFile`；在 ADR 0009 被取代之前，不要开启 `incremental`
 - 升级 TS：按上文"增量检查"一节的步骤复测，决定是否恢复增量检查
+- 引入新库：如果它的声明文件引用全局命名空间（如 `GeoJSON`），在 `types` 中加载对应的 `@types` 包（app 和 libs 两份配置）；lint 报 `error typed value` 时先查这一点

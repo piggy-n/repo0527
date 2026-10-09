@@ -28,6 +28,7 @@
 相机、当前工具、选择状态：各自独立，各自发事件，变化时不重算样式
 ```
 
+- 已实现 `diffStyle`（`style/diff-style.ts`）：对比前把 GeoJSON 的 `data` 换成同一个占位值，交给 style-spec；`addSource` 和退路 `setStyle` 换回真实数据；前后都存在且未重建的 GeoJSON 数据源按引用比较，不同就追加 `setGeoJSONSourceData`（放在末尾，这类数据源在整个过程中一直存在）
 - 消费方首次挂载、暂停后恢复、按需追上都是"已应用的快照 → 当前快照"的对比；应用某条命令出错时，用当前快照整体重建
 - 视图的生命周期：`idle → initializing → ready ⇄ paused`，另有 `failed`、`disposed`；保留状态、应用变化、统计查询分开控制
 - 选择状态只存要素身份和高亮数据，候选列表和详情在 feature 的查询缓存里

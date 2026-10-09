@@ -6,7 +6,7 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
-    "types": ["vite/client"],
+    "types": ["vite/client", "geojson"],
     "jsx": "preserve",
     "jsxImportSource": "vue",
     "strict": true,
