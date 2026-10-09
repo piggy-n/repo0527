@@ -1,6 +1,6 @@
 # 地图与 Vue 的衔接（map-vue）
 
-> 状态：5A.2 完成了 `provideMap`、样式绑定、画布组件 `<MapCanvas>` 和只读上下文 `useMap()`。设计依据是 ADR 0027（分层）和 ADR 0028（上下文）。
+> 状态：5A.2 完成了 `provideMap`、样式绑定、画布组件 `<MapCanvas>` 和只读上下文 `useMap()`；5A.3 加入定位可视区域（`useMapOverlay`）。设计依据是 ADR 0027（分层）、ADR 0028（上下文）和 ADR 0029（定位可视区域）。
 
 `libs/map-vue` 把 map-core 的地图会话和视图接到 Vue 的组件树与响应式系统上。它只做衔接：不依赖 element-plus、pinia、vue-router（lint 强制），不读项目配置，除画布容器外不渲染界面。项目级的地图能力（底图、行政区、工具栏界面、失败提示）在 `shared/map`。
 
@@ -10,9 +10,10 @@
 |---|---|
 | `provide-map.ts` | `provideMap`：在当前组件里创建会话、提供上下文、管理提交与释放的时机 |
 | `style-binder.ts` | `StyleBinder`：把各拥有者的推导结果一次提交给样式模型 |
-| `context.ts` | `MapContextState`：会话、当前视图、视图状态、`whenReady`、`useCamera`，对外的只读上下文与视图的受限入口 |
+| `context.ts` | `MapContextState`：会话、当前视图、视图状态、`whenReady`、`useCamera`、悬浮元素的登记表与 `overlayPadding`，对外的只读上下文与视图的受限入口 |
+| `overlay.ts` | `computeOverlayPadding`：按悬浮元素的实际占用算出定位用的 padding（纯函数） |
 | `MapCanvas.tsx` | `<MapCanvas>`：二维地图画布，挂载后创建视图、卸载时释放 |
-| `use-map.ts` | `useMap()`：子孙组件取只读上下文 |
+| `use-map.ts` | `useMap()`：子孙组件取只读上下文；`useMapOverlay()`：悬浮元素登记自己贴着的边 |
 
 ## 用法
 
@@ -113,6 +114,30 @@ view.value?.fitBounds(JIANGSU_BOUNDS, { padding: 40 });
 - **受限入口**：暂停、恢复、释放、订阅都不在 `MapViewport` 上，JS 里也调不到。暂停和恢复以后由框架切换负责，释放由画布负责，状态从 `viewState` 读
 - **等待者的清理**：`whenReady` 同时监听上下文的生命周期和调用方的 `signal`；任一个中止、或者等待结束时，两边的监听都会移除，不会因为一直等不到视图而留在另一个 `signal` 上
 
+## 定位可视区域（ADR 0029）
+
+悬浮的面板、工具栏会盖住地图的一部分。程序定位要把目标放进没被盖住的区域，而且计算不能依赖具体的布局（画布型页面的界面在 5D 才定稿）。
+
+```ts
+// 悬浮组件的 setup：登记这个元素贴着画布的哪一边
+const panel = ref<HTMLElement>();
+useMapOverlay(panel, 'left');
+
+// 任何地方：不传 padding 时自动避开登记过的元素
+useMap().view.value?.fitBounds(bounds);
+// 需要自己组合时
+const padding = useMap().overlayPadding();
+```
+
+- 只登记贴边、会挡住定位的元素（侧面板、横向工具栏）；角落的小控件、弹出层、抽屉不登记。边要显式写明
+- 定位的那一刻才用 `getBoundingClientRect` 量画布和各元素，不持续测量：面板展开、收起、改尺寸都不用另外监听。量的是元素的实际尺寸，例如 `width: 320px` 加上左右内边距 16 的面板，按 352 算
+- 每一边的 padding 取 `max(边距, 占用 + 间隔)`；同一边取最大的占用；元素为空、尺寸为 0、不在文档里、和画布不相交时不算
+- 可视区域的宽、高至少保留画布的 1/3，超出时两侧按比例缩小。极窄的画布上目标可能有一部分落在面板下面，这是为了不缩到几乎看不见
+- 默认值：边距 16、间隔 16、至少保留 1/3，用 `provideMap({ overlay: { edgePadding, gap, minVisibleRatio } })` 修改，取值不合法时抛错
+- 视图入口的 `fitBounds` 没传 `padding` 时使用 `overlayPadding()`；明确传入（包括 `0`）时以传入的为准。这是 `MapViewport` 比 `MapView.fitBounds` 多出的一层默认行为
+- `useMapOverlay` 要放在 `provideMap` 所在组件的子孙组件里：提供上下文的组件 `inject` 不到自己 provide 的值（Vue 的 `inject` 从父组件开始找）；不在作用域里调用时抛错，作用域销毁时注销
+- 还没做：`flyTo` 到一个点并放在可视区域中心（5B.5，要给 `MapView.flyTo` 加用 `offset` 实现的 padding）
+
 ## 卸载与释放
 
 Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUnmount` → 本组件的 `scope.stop()`（`onScopeDispose` 在这里执行）→ 卸载子组件 → 本组件的 `onUnmounted`（晚于子组件的 `onUnmounted`）。
@@ -133,6 +158,7 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 | 切换数据版本，选区晚 800ms 才跟上 | 第一轮被拒绝，报告"图层 selection-line 引用的数据源 regions-v1 不存在"；地图停在原来的快照，视图仍是 `ready`（不合法的组合没有到达 MapLibre）；选区跟上后两者一起提交，只有这一条报错 |
 | 让选区的推导出错，再切换颜色 | 只报告一次推导失败；颜色没有变化（整批跳过）；修好后颜色和选区一起生效 |
 | `flyTo`、`fitBounds` | 经受限入口转发到视图，会话相机随之更新 |
+| 右侧悬浮面板登记为贴右边，`fitBounds` 不传 `padding`（5A.3） | 1280 宽：面板实际宽 352（含内边距），padding 为右 384、其余 16，中心 120.80°；隐藏面板后 padding 四边 16，中心回到江苏范围的几何中心 119.10°。420 宽：原本左右合计 400，按下限缩成左 11、右 268，可视区域 141px，结果 z4.15（没有下限时是 z1.33） |
 | 提交不合法的图层、在不合法的快照下重新创建视图（换 `key`） | 进入 `failed`，去掉后自动恢复；重建时旧画布被移除，新视图按会话里的相机创建，相机保持在重建前的位置 |
 | 离开页面再回来 | 离开后页面上没有地图容器，没有错误和未处理的拒绝；回来后重新进入 `ready` |
 
@@ -145,9 +171,11 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 | `style-binder.test.ts` | 初始提交、同一轮的跨分组修改、晚一轮时的拒绝与收敛、推导失败时整批跳过、缓存、重复绑定、释放 | Node |
 | `provide-map.test.tsx` | 必须在 setup 中调用、初始值早于子组件 setup、挂载后绑定抛错、卸载顺序、卸载路径上的错误、组名的类型检查、默认的错误输出 | jsdom |
 | `MapCanvas.test.tsx` | 用完整快照创建视图、页面的 class 不冲掉 MapLibre 的 class、视图状态的变化、受限入口、只读引用、`whenReady` 的各种结局、`useCamera` 的订阅与取消、先释放视图后释放会话、运行中的错误、画布的数量限制 | jsdom |
-| `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事 | Node |
+| `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，视图入口 `fitBounds` 的默认 padding，`useMapOverlay` 不在作用域里时抛错 | Node |
+| `overlay.test.ts` | 占用与间隔、同一边取最大、不算的元素、画布的位置、横向和纵向的下限、选项 | Node |
 
 - 推导失败的用例用 `await expect(nextTick()).resolves.toBeUndefined()` 等待：异常冒出侦听器时，失败落在断言上，而不是测试本身报错
 - `MapCanvas.test.tsx` 注入实现 `MapLike` 的假地图（`MapLike` 等类型从 `@yzt/map-core` 导出），走真实的 `MapLibreView`；`context.test.ts` 用一个实现 `MapView` 的假视图，测 `MapLibreView` 本身覆盖不到的情况
 - 画布与上下文逐一改坏 20 处，19 处由断言发现。"卸载时先卸下再释放"改成先释放后卸下测不出来：两步都是同步的，等待者的回调在微任务里才执行，侦听器也在之后才运行，看到的都是最终结果，这个顺序不影响行为。"卸下时不取消订阅"起初也没有被发现：`MapLibreView` 释放时会清空自己的监听，碰巧不出问题；`MapView` 接口并不保证这一点，补了 `context.test.ts` 后由断言发现
+- 定位可视区域逐一改坏 16 处，起初有 2 处没被发现："不检查是否相交"（画布外的元素算出的占用本来是负数，被限制到 0；补了"登记为左、但整个在画布下方"的用例）和"不随作用域注销"（组件卸载时模板引用变为空，元素本来就不算；补了登记外部元素的用例）。补上后全部由断言发现
 - 提交器与 `provideMap` 逐一改坏 15 处实现（逐组提交、只跳过失败的分组、不把异常变成值、重复报告、校验失败也更新记录、初始值不立即提交、挂载后仍可绑定、重复检查不先整体检查、释放后不停止侦听、同步侦听、共用一次推导、在 `onScopeDispose` 里释放会话、卸载时不捕获异常、在 `onMounted` 才提交、不检查是否在组件中），全部由断言发现

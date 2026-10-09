@@ -38,6 +38,7 @@
 | [0026](0026-view-sync-failures.md) | 视图同步的失败处理：错误事件、加载失败与恢复 | 已接受 |
 | [0027](0027-map-capability-layers.md) | 地图能力的分层与页面组装 | 已接受 |
 | [0028](0028-map-vue-context.md) | map-vue：会话与视图分开的地图上下文 | 已接受 |
+| [0029](0029-map-overlay-padding.md) | 定位可视区域：悬浮元素登记、定位时现量现算 | 已接受 |
 
 ## 模板
 

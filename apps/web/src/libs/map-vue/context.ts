@@ -19,11 +19,13 @@ import {
   shallowReadonly,
   shallowRef
 } from 'vue';
+import { computeOverlayPadding, type OverlayEdge, type OverlayOptions, type OverlayPadding } from './overlay';
 
 /** 视图的受限入口：只转发定位等使用方需要的能力，暂停、恢复、释放由 map-vue 自己负责（ADR 0028 第 5 条） */
 export interface MapViewport {
   readonly kind: ViewKind;
   flyTo(target: Partial<CameraState>, options?: FlyToOptions): void;
+  /** 没传 padding 时避开登记过的悬浮元素（ADR 0029）；明确传入（包括 0）时以传入的为准 */
   fitBounds(bounds: ViewBounds, options?: FitBoundsOptions): void;
 }
 
@@ -39,13 +41,21 @@ export interface MapContext {
   whenReady(signal?: AbortSignal): Promise<void>;
   /** 在调用方的作用域里订阅相机，作用域销毁时取消 */
   useCamera(): Readonly<ShallowRef<CameraState>>;
+  /** 量出登记过的悬浮元素此刻占用的部分，算出定位用的 padding；还没有画布时四边都是边距 */
+  overlayPadding(): OverlayPadding;
 }
 
-function createViewport(view: MapView): MapViewport {
+interface OverlayEntry {
+  readonly target: Readonly<Ref<HTMLElement | null | undefined>>;
+  readonly edge: OverlayEdge;
+}
+
+function createViewport(view: MapView, overlayPadding: () => OverlayPadding): MapViewport {
   return Object.freeze({
     kind: view.kind,
     flyTo: (target: Partial<CameraState>, options?: FlyToOptions) => view.flyTo(target, options),
-    fitBounds: (bounds: ViewBounds, options?: FitBoundsOptions) => view.fitBounds(bounds, options)
+    fitBounds: (bounds: ViewBounds, options?: FitBoundsOptions) =>
+      view.fitBounds(bounds, { ...options, padding: options?.padding ?? overlayPadding() })
   });
 }
 
@@ -83,28 +93,36 @@ export class MapContextState implements Disposable {
   readonly #lifetime = new AbortController();
   // 还没有视图时调用 whenReady 的等待者，视图挂上时依次通知
   readonly #waiting = new Set<(view: MapView) => void>();
-  #view: { readonly view: MapView; readonly unsubscribe: () => void } | null = null;
+  readonly #overlays = new Set<OverlayEntry>();
+  readonly #overlayOptions: Required<OverlayOptions>;
+  #view: { readonly view: MapView; readonly canvas: HTMLElement; readonly unsubscribe: () => void } | null = null;
 
-  constructor(session: MapSession<string>, onError: (error: unknown) => void) {
+  constructor(
+    session: MapSession<string>,
+    onError: (error: unknown) => void,
+    overlayOptions: Required<OverlayOptions>
+  ) {
     this.session = session;
     this.onError = onError;
+    this.#overlayOptions = overlayOptions;
     this.context = Object.freeze({
       view: shallowReadonly(this.#viewport),
       viewState: shallowReadonly(this.#viewState),
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
-      useCamera: () => this.#useCamera()
+      useCamera: () => this.#useCamera(),
+      overlayPadding: () => this.#overlayPadding()
     });
   }
 
-  /** 画布组件挂载后挂上视图；目前一个上下文只有一个视图 */
-  attachView(view: MapView): void {
+  /** 画布组件挂载后挂上视图和它的容器（量可视区域用）；目前一个上下文只有一个视图 */
+  attachView(view: MapView, canvas: HTMLElement): void {
     if (this.#view) {
       throw new Error('一个地图上下文只能有一个画布');
     }
     const unsubscribe = view.on('statechange', state => (this.#viewState.value = state));
-    this.#view = { view, unsubscribe };
+    this.#view = { view, canvas, unsubscribe };
     this.#viewState.value = view.state;
-    this.#viewport.value = createViewport(view);
+    this.#viewport.value = createViewport(view, () => this.#overlayPadding());
     for (const notify of this.#waiting) {
       notify(view);
     }
@@ -119,6 +137,13 @@ export class MapContextState implements Disposable {
     this.#view = null;
     this.#viewport.value = null;
     this.#viewState.value = 'idle';
+  }
+
+  /** 登记悬浮元素，返回注销函数（ADR 0029） */
+  registerOverlay(target: Readonly<Ref<HTMLElement | null | undefined>>, edge: OverlayEdge): () => void {
+    const entry: OverlayEntry = { target, edge };
+    this.#overlays.add(entry);
+    return () => this.#overlays.delete(entry);
   }
 
   /** 等待中的 whenReady 以 AbortError 结束 */
@@ -144,6 +169,20 @@ export class MapContextState implements Disposable {
         this.#waiting.delete(notify);
       }
     });
+  }
+
+  // 定位时现量现算：不在文档里的元素不算，尺寸为 0、和画布不相交的由纯函数排除
+  #overlayPadding(): OverlayPadding {
+    const canvas = this.#view?.canvas.getBoundingClientRect();
+    if (!canvas) {
+      const { edgePadding } = this.#overlayOptions;
+      return { top: edgePadding, right: edgePadding, bottom: edgePadding, left: edgePadding };
+    }
+    const overlays = [...this.#overlays].flatMap(({ target, edge }) => {
+      const element = target.value;
+      return element?.isConnected ? [{ edge, box: element.getBoundingClientRect() }] : [];
+    });
+    return computeOverlayPadding(canvas, overlays, this.#overlayOptions);
   }
 
   #useCamera(): Readonly<ShallowRef<CameraState>> {

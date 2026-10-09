@@ -1,11 +1,14 @@
 import { MapSession, type MapSessionOptions } from '@yzt/map-core';
 import { getCurrentInstance, onBeforeMount, onBeforeUnmount, onUnmounted, provide } from 'vue';
 import { INTERNAL_MAP_CONTEXT, type MapContext, MapContextState } from './context';
+import { type OverlayOptions, resolveOverlayOptions } from './overlay';
 import { StyleBinder, type StyleDerivation } from './style-binder';
 
 export interface ProvideMapOptions<G extends string> extends MapSessionOptions<G> {
   /** 样式提交失败、视图运行中的错误；默认打印到控制台 */
   readonly onError?: (error: unknown) => void;
+  /** 定位避开悬浮元素时的边距、间隔和可视区域的下限（ADR 0029） */
+  readonly overlay?: OverlayOptions;
 }
 
 /** 页面句柄：只交给调用 provideMap 的页面；除了绑定样式，也包含子孙组件通过 useMap 拿到的只读上下文 */
@@ -27,9 +30,10 @@ export function provideMap<const G extends string>(options: ProvideMapOptions<G>
     throw new Error('provideMap 只能在组件的 setup 中调用');
   }
   const onError = options.onError ?? reportToConsole;
+  const overlayOptions = resolveOverlayOptions(options.overlay);
   const session = new MapSession(options);
   const binder = new StyleBinder(session.style, onError);
-  const state = new MapContextState(session, onError);
+  const state = new MapContextState(session, onError, overlayOptions);
   provide(INTERNAL_MAP_CONTEXT, state);
 
   // 父组件的 onBeforeMount 早于子组件的 setup：视图创建时会话里已经是完整的初始样式

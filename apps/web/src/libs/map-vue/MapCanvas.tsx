@@ -36,7 +36,7 @@ export const MapCanvas = defineComponent({
       });
       // 挂不上（同一个上下文已经有画布）时先释放刚创建的视图，再把错误交给 Vue
       try {
-        state.attachView(created);
+        state.attachView(created, container.value);
       } catch (error) {
         created[Symbol.dispose]();
         throw error;

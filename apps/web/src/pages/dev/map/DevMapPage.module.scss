@@ -45,9 +45,24 @@
   }
 }
 
-.mapFrame {
+.mapArea {
+  position: relative;
   flex: 1;
   min-height: 0;
+}
+
+// 示意的悬浮面板：只用来验证定位避开它，外观不代表设计
+.overlayPanel {
+  position: absolute;
+  top: var(--space-lg);
+  right: var(--space-lg);
+  bottom: var(--space-lg);
+  width: 320px;
+  padding: var(--space-lg);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-regular);
 }
 
 .errors {

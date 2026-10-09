@@ -175,13 +175,14 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 查询和变更写在 `features/<域>/queries.ts`，用 TanStack Vue Query 的 `useQuery` / `useMutation`；`queryFn` 把收到的 `signal` 交给接口函数，组件不直接拼 query key；接口数据由查询缓存持有，不放进 Pinia，组件里也不另存一份
 - shared/http 不依赖路由、UI 和鉴权，这些由 `app/http.ts` 通过 `configureHttp` 注入
 
-### 地图（ADR 0020～0028，设计见 `docs/modules/map-core.md`、`docs/modules/map-vue.md`）
+### 地图（ADR 0020～0029，设计见 `docs/modules/map-core.md`、`docs/modules/map-vue.md`）
 
 - map-core 持有地图会话状态（样式模型、相机、当前工具、选择状态），它是二维和三维共同的唯一真相源；Manager 修改会话状态，不直接写引擎
 - 样式按分组推导：每个拥有者用纯函数从自己的状态推导出分组并整体替换；跨分组的修改用一次 `setGroups` 提交，批次不跨 `await`；交给会话的 GeoJSON 数据不能原地修改，要换新对象（ADR 0022）
 - 地图能力按 ADR 0027 分层：与框架无关的逻辑在 map-core，Vue 衔接在 map-vue，项目级的公共能力（底图、行政区、工具栏界面）在 `shared/map`，业务数据驱动的图层在 feature，页面挑选组合；用组合，不做带开关的全能地图组件。一项能力放哪一层看它是否属于某个业务域，不看有几个使用方
 - 页面用 `provideMap()` 创建会话，用 `map.bindStyle()` 把拥有者的推导函数（`() => StyleGroup`）绑定到分组，只能在同一个组件的 setup 里绑定；拥有者不提交样式，"不显示"用推导结果返回空分组表达（ADR 0028）
 - 引用别的分组数据源的推导，要依赖被引用方的状态，保证两者在同一轮变化、一起提交；拥有者的数据源和图层 ID 以分组名为前缀（ADR 0027、0028）
+- 贴边、会挡住定位的悬浮元素用 `useMapOverlay(element, edge)` 登记，`fitBounds` 不传 `padding` 时自动避开；页面不自己算定位用的 padding，也不用布局的尺寸常量（ADR 0029）
 - 会话只保存地图需要的选择信息（要素身份、高亮数据），候选列表和详情留在 feature 的查询缓存里（ADR 0022）
 - 只有 MapLibre 适配器能写二维地图（lint 只允许 `libs/map-core/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；Cesium 镜像会话状态，不实现二维的引擎接口；二三维共用的是生命周期、相机、输入、拾取、投影这几个视图接口（ADR 0024）
 - 地图页的路由组件用 `app/router/routes.ts` 的 `withMapRuntime` 包装，先加载地图运行时（`setWorkerUrl`、CSS）再加载页面；交给 MapLibre 的容器元素只用静态 class，可变的 class 放在外层元素上，否则 Vue 会冲掉 MapLibre 自己加的 class

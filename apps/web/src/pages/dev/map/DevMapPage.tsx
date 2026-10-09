@@ -2,14 +2,12 @@ import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Feature, FeatureCollection, Polygon } from 'geojson';
 import { ElButton } from 'element-plus';
 import type { CameraState, StyleGroup, ViewBounds } from '@yzt/map-core';
-import { MapCanvas, provideMap } from '@yzt/map-vue';
+import { MapCanvas, type OverlayPadding, provideMap, useMapOverlay } from '@yzt/map-vue';
 import { defineComponent, ref } from 'vue';
 import styles from './DevMapPage.module.scss';
 
 const INITIAL_CAMERA: CameraState = { center: [119.4, 32.9], zoom: 6.5, bearing: 0, pitch: 0 };
 const JIANGSU_BOUNDS: ViewBounds = [116.3, 30.7, 121.9, 35.2];
-// 右侧留出一块，模拟悬浮面板；padding 只用于计算，不留在相机上
-const FIT_PADDING = { top: 40, right: 360, bottom: 40, left: 40 };
 const HIGHLIGHT_POSITIONS: readonly (readonly [number, number])[] = [
   [120.6, 31.3],
   [118.8, 32.05],
@@ -137,6 +135,24 @@ function formatCamera({ center: [lng, lat], zoom, bearing, pitch }: CameraState)
   return `${lng.toFixed(4)}, ${lat.toFixed(4)} · z${zoom.toFixed(2)} · 方位 ${bearing.toFixed(1)}° · 俯角 ${pitch.toFixed(1)}°`;
 }
 
+function formatPadding({ top, right, bottom, left }: OverlayPadding): string {
+  return `上 ${top} · 右 ${right} · 下 ${bottom} · 左 ${left}`;
+}
+
+// 悬浮面板自己登记贴着右边：provideMap 所在的组件 inject 不到自己 provide 的值，登记要放在子组件里
+const OverlayPanel = defineComponent({
+  name: 'DevMapOverlayPanel',
+  setup() {
+    const element = ref<HTMLElement>();
+    useMapOverlay(element, 'right');
+    return () => (
+      <aside ref={element} class={styles.overlayPanel}>
+        悬浮面板：登记为贴右边，fitBounds 不传 padding 时避开它
+      </aside>
+    );
+  }
+});
+
 /** 地图开发页：在真实的 MapLibre 上验证 map-core 和 map-vue，只在开发环境出现 */
 export const DevMapPage = defineComponent({
   name: 'DevMapPage',
@@ -152,6 +168,8 @@ export const DevMapPage = defineComponent({
     const invalidLayer = ref(false);
     // 换 key 重新创建画布，也就重新创建了视图
     const canvasKey = ref(0);
+    const overlayVisible = ref(true);
+    const lastPadding = ref<OverlayPadding>();
 
     const map = provideMap({
       groups: ['background', 'regions', 'selection', 'highlight'],
@@ -202,7 +220,11 @@ export const DevMapPage = defineComponent({
     };
 
     const flyToNanjing = () => view.value?.flyTo({ center: [118.8, 32.05], zoom: 9 }, { duration: 1500 });
-    const fitJiangsu = () => view.value?.fitBounds(JIANGSU_BOUNDS, { padding: FIT_PADDING, duration: 1000 });
+    // 不传 padding：自动避开登记过的悬浮元素（ADR 0029），这里另外记下这次算出的值
+    const fitJiangsu = () => {
+      lastPadding.value = map.overlayPadding();
+      view.value?.fitBounds(JIANGSU_BOUNDS, { duration: 1000 });
+    };
 
     const toggleHighlight = () => {
       highlightIndex.value = ((highlightIndex.value ?? -1) + 1) % HIGHLIGHT_POSITIONS.length;
@@ -235,12 +257,15 @@ export const DevMapPage = defineComponent({
                 flyTo 南京
               </ElButton>
               <ElButton disabled={!ready} onClick={fitJiangsu}>
-                fitBounds 江苏（右侧留 360）
+                fitBounds 江苏（避开悬浮面板）
               </ElButton>
               <ElButton
                 type={invalidLayer.value ? 'danger' : 'default'}
                 onClick={() => (invalidLayer.value = !invalidLayer.value)}>
                 {invalidLayer.value ? '去掉不合法的图层' : '提交不合法的图层'}
+              </ElButton>
+              <ElButton onClick={() => (overlayVisible.value = !overlayVisible.value)}>
+                {overlayVisible.value ? '隐藏悬浮面板' : '显示悬浮面板'}
               </ElButton>
               <ElButton onClick={() => canvasKey.value++}>重新创建视图</ElButton>
               <ElButton disabled={errors.value.length === 0} onClick={() => (errors.value = [])}>
@@ -256,9 +281,14 @@ export const DevMapPage = defineComponent({
               <dd data-version>
                 区域 v{version.value} · 选区 v{selectionVersion.value}
               </dd>
+              <dt>定位 padding</dt>
+              <dd data-padding>{lastPadding.value ? formatPadding(lastPadding.value) : '-'}</dd>
             </dl>
           </header>
-          <MapCanvas key={canvasKey.value} class={styles.mapFrame} />
+          <div class={styles.mapArea}>
+            <MapCanvas key={canvasKey.value} />
+            {overlayVisible.value && <OverlayPanel />}
+          </div>
           {errors.value.length > 0 && (
             <ul class={styles.errors}>
               {errors.value.map((message, index) => (

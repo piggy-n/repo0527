@@ -13,10 +13,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, inject, nextTick, ref, type ShallowRef } from 'vue';
 import { INTERNAL_MAP_CONTEXT, type MapContext } from './context';
 import { MapCanvas } from './MapCanvas';
-import { provideMap } from './provide-map';
-import { useMap } from './use-map';
+import { type MapHandle, provideMap } from './provide-map';
+import { useMap, useMapOverlay } from './use-map';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
+const JIANGSU: readonly [number, number, number, number] = [116.3, 30.7, 121.9, 35.2];
 
 const BASEMAP: StyleGroup = {
   sources: {},
@@ -32,6 +33,7 @@ interface FakeEvent {
 // 只模拟视图用到的行为：相机方法立即到位并同步触发 move；像 MapLibre 一样给容器加 class
 class FakeMap implements MapLike {
   readonly flyToCalls: unknown[] = [];
+  readonly fitBoundsCalls: unknown[] = [];
   readonly #listeners = new Map<string, Set<(event: FakeEvent) => void>>();
   camera: { lng: number; lat: number; zoom: number; bearing: number; pitch: number };
   removed = false;
@@ -94,7 +96,8 @@ class FakeMap implements MapLike {
     this.moveTo(camera.center ?? [this.camera.lng, this.camera.lat], camera.zoom ?? this.camera.zoom, eventData);
   }
 
-  fitBounds(bounds: [number, number, number, number], _options: unknown, eventData: CameraEventData): void {
+  fitBounds(bounds: [number, number, number, number], options: unknown, eventData: CameraEventData): void {
+    this.fitBoundsCalls.push(options);
     const [west, south, east, north] = bounds;
     this.moveTo([(west + east) / 2, (south + north) / 2], this.camera.zoom, eventData);
   }
@@ -395,5 +398,112 @@ describe('MapCanvas', () => {
 
     expect(() => mount(TwoCanvases)).toThrow('一个地图上下文只能有一个画布');
     expect(maps.map(map => map.removed)).toEqual([false, true]);
+  });
+
+  it('悬浮元素登记后，视图入口的 fitBounds 避开它；元素卸载后不再避开', async () => {
+    const showPanel = ref(true);
+    const Panel = defineComponent(() => {
+      const element = ref<HTMLElement>();
+      useMapOverlay(element, 'left');
+      return () => <aside ref={element} />;
+    });
+    const maps: FakeMap[] = [];
+    let handle: MapHandle<'basemap'> | undefined;
+    // 量尺寸时只算在文档里的元素
+    const host = document.body.appendChild(document.createElement('div'));
+    try {
+      mount(
+        defineComponent(() => {
+          handle = provideMap({ groups: ['basemap'], camera: CAMERA });
+          return () => (
+            <div>
+              <MapCanvas createMap={createFakeMap(maps)} />
+              {showPanel.value && <Panel />}
+            </div>
+          );
+        }),
+        { attachTo: host }
+      );
+      const map = maps[0];
+      const panel = host.querySelector('aside');
+      if (!map || !panel || !handle) {
+        throw new Error('没有挂载');
+      }
+      // jsdom 不做布局，矩形由测试给出
+      vi.spyOn(map.options.container as HTMLElement, 'getBoundingClientRect').mockReturnValue(
+        DOMRect.fromRect({ x: 0, y: 0, width: 1440, height: 620 })
+      );
+      vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue(
+        DOMRect.fromRect({ x: 16, y: 16, width: 320, height: 588 })
+      );
+      map.fire('style.load');
+
+      handle.view.value?.fitBounds(JIANGSU);
+      expect(map.fitBoundsCalls.at(-1)).toEqual({ padding: { top: 16, right: 16, bottom: 16, left: 352 } });
+      expect(handle.overlayPadding().left).toBe(352);
+
+      showPanel.value = false;
+      await nextTick();
+      handle.view.value?.fitBounds(JIANGSU);
+
+      expect(map.fitBoundsCalls.at(-1)).toEqual({ padding: { top: 16, right: 16, bottom: 16, left: 16 } });
+    } finally {
+      host.remove();
+    }
+  });
+
+  it('登记的作用域销毁时注销：元素还在文档里也不再避开', async () => {
+    const host = document.body.appendChild(document.createElement('div'));
+    // 由外部管理的元素：登记它的组件卸载后，元素仍然在文档里
+    const external = host.appendChild(document.createElement('aside'));
+    vi.spyOn(external, 'getBoundingClientRect').mockReturnValue(
+      DOMRect.fromRect({ x: 1104, y: 16, width: 320, height: 588 })
+    );
+    const registered = ref(true);
+    const Registrar = defineComponent(() => {
+      useMapOverlay(ref(external), 'right');
+      return () => null;
+    });
+    const maps: FakeMap[] = [];
+    let handle: MapHandle<'basemap'> | undefined;
+    try {
+      mount(
+        defineComponent(() => {
+          handle = provideMap({ groups: ['basemap'], camera: CAMERA });
+          return () => (
+            <div>
+              <MapCanvas createMap={createFakeMap(maps)} />
+              {registered.value && <Registrar />}
+            </div>
+          );
+        }),
+        { attachTo: host }
+      );
+      vi.spyOn(maps[0]?.options.container as HTMLElement, 'getBoundingClientRect').mockReturnValue(
+        DOMRect.fromRect({ x: 0, y: 0, width: 1440, height: 620 })
+      );
+      expect(handle?.overlayPadding().right).toBe(352);
+
+      registered.value = false;
+      await nextTick();
+
+      expect(external.isConnected).toBe(true);
+      expect(handle?.overlayPadding().right).toBe(16);
+    } finally {
+      host.remove();
+    }
+  });
+
+  it('useMapOverlay 必须放在 provideMap 的组件里', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const Orphan = defineComponent(() => {
+        useMapOverlay(ref<HTMLElement>(), 'left');
+        return () => null;
+      });
+      expect(() => mount(Orphan)).toThrow('useMapOverlay 必须放在调用了 provideMap 的组件里面');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
