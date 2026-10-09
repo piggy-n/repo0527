@@ -50,15 +50,6 @@
   min-height: 0;
 }
 
-.map {
-  height: 100%;
-}
-
-// 暂停时模拟切到三维：只隐藏，保留尺寸，二维地图本身仍然存活（ADR 0020）
-.hidden {
-  visibility: hidden;
-}
-
 .errors {
   margin: 0;
   padding: var(--space-sm) var(--space-lg) var(--space-sm) 32px;

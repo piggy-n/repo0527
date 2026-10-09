@@ -59,7 +59,7 @@ session[Symbol.dispose]();
 
 - 地图页的路由组件用 `app/router/routes.ts` 的 `withMapRuntime` 包装，先加载地图运行时（`setWorkerUrl`、CSS），再加载页面
 - 会话和视图不放进 Vue 的响应式状态（Vue 的代理会包住 MapLibre 内部对象），只把要显示的值（视图状态、相机）放进 `ref`
-- 组件里可以把两者登记进一个 `DisposableStack`，卸载时 `stack.dispose()`，按后进先出释放；写法见 `pages/dev/map/DevMapPage.tsx`
+- 在 Vue 组件里不直接创建会话和视图，用 map-vue 的 `provideMap()` 和 `<MapCanvas>`（[map-vue.md](map-vue.md)）：释放顺序、只读的上下文、样式的统一提交都由它负责
 - 交给 MapLibre 的容器元素只用静态 class，可变的 class 放在外层元素上（原因见"MapLibre 6 的实测行为"）
 - 订阅都返回取消函数（`Unsubscribe`），可以直接交给 `stack.defer()`
 
@@ -161,7 +161,7 @@ session[Symbol.dispose]();
 
 - `app/map-runtime.ts` 的 `setupMapRuntime()` 负责 `setWorkerUrl` 和 maplibre-gl 的 CSS，可以重复调用；路由用 `withMapRuntime(loadPage)` 包装地图页，先动态导入运行时再加载页面
 - 登录页不请求 maplibre-gl；生产产物里没有 maplibre-gl 和开发页，入口包不变
-- 开发页 `/dev/map`（`pages/dev/map`，只在开发环境）用本地 GeoJSON 验证过：颜色切换、加上和去掉 `minzoom`（去掉时走"删除再添加"，图层仍在描边下面）、高亮的增删和移动（`setGeoJSONSourceData`）、拖动（`user`）、`flyTo` 与 `fitBounds`（`program`）、暂停后模拟三维改相机再恢复（俯角 70° 收到 60° 按 `sync` 写回，意图版本不变）
+- 开发页 `/dev/map`（`pages/dev/map`，只在开发环境）用本地 GeoJSON 验证过：颜色切换、加上和去掉 `minzoom`（去掉时走"删除再添加"，图层仍在描边下面）、高亮的增删和移动（`setGeoJSONSourceData`）、拖动（`user`）、`flyTo` 与 `fitBounds`（`program`）、暂停后模拟三维改相机再恢复（俯角 70° 收到 60° 按 `sync` 写回，意图版本不变）。5A.2c 起开发页改用 map-vue（见 [map-vue.md](map-vue.md)"开发页验证"），页面拿不到视图的暂停、恢复和直接写相机，暂停与模拟三维的场景暂时去掉，由 `MapLibreView` 的单元测试覆盖，三维阶段加入框架切换后再回到开发页
 - `fitBounds` 带 padding 后，会话相机记的是画布几何中心：右侧留 360px 时偏东 1.35°，与按像素换算的 1.34° 吻合
 
 ## MapLibre 6 的实测行为

@@ -59,7 +59,7 @@
 | 3 之后 | 接入 Renovate 自动处理依赖更新 | ADR 0005 |
 | 3 之后 | 评估 Playwright 端到端测试；覆盖率与门槛 | ADR 0010 |
 | 5A.0 | 测试耗时：`apps/web` 约 51 秒（阶段三结束时约 26 秒），先查原因，同时评估 `fsModuleCache` | [stages/stage-4-map-core.md](stages/stage-4-map-core.md) |
-| 5A.3 | 画布型页面：地图铺满内容区，操作栏和面板悬浮；悬浮面板沿用面板规范、统一浅色；地图定位时的 padding 要避开悬浮面板，由布局提供被占用的区域，不由页面各自计算 | [design/page-layout.md](design/page-layout.md) |
+| 5A.3 | 画布型页面：地图铺满内容区，操作栏和面板悬浮；悬浮面板沿用面板规范、统一浅色；地图定位时的 padding 要避开悬浮面板，由布局提供被占用的区域，不由页面各自计算。被占用的区域换算成 padding 时要考虑画布尺寸：5A.2c 实测画布 420 宽、左右 padding 共 400 时，`fitBounds` 只剩 20px 可用，缩到 z1.33、中心偏到 163.9° | [design/page-layout.md](design/page-layout.md)、[modules/map-vue.md](modules/map-vue.md) |
 | 5A.3 | 视图进入 `failed`（如 `GPUInitializationError`）时的提示；现状底图的路由用 `withMapRuntime` 包装；交给 MapLibre 的容器元素只用静态 class | ADR 0019、map-core.md |
 | 5A 结束时 | 5A 的总结要包括阶段五开始前的边界修复（ADR 0026）：样式加载失败进入 `failed` 并在新版本时自动恢复、应用命令期间的 `error` 事件触发整体重建、首次进入 ready 与恢复显示统一同步相机、Worker 一侧的 `messageerror` 按崩溃处理；以及随后的 3 个样式恢复边界：加载失败时已有新版本就直接重新加载、报错后仍加载完成时恢复快照并继续同步、激活中追赶失败时中止激活；`whenReady()` 按一轮整体加载结束（恢复显示触发重建时不再提前成功） | 本文 |
 | 5B.3、5C.6 | 会话的当前工具（5B.3）与选择状态（5C.6）两个模型；视图接口的输入、拾取、投影（5B.3）和查询（5C.4 或 5C.6，先用到的那一步）；第三个模型出现时，用组合把重复的释放逻辑抽成小辅助对象 | [modules/map-core.md](modules/map-core.md)"还没做的" |
