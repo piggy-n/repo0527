@@ -59,6 +59,11 @@ function causeOfMove({ originalEvent, cause }: MapMoveEventLike): CameraCause {
   return isCameraCause(cause) ? cause : 'program';
 }
 
+// MapLibre 合并默认选项时，值为 undefined 的键会覆盖默认值（例如 fitBounds 的 maxZoom 变成 undefined，中心点算出 NaN）
+function withoutUndefined<T extends object>(options: T): T {
+  return Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined)) as T;
+}
+
 function createMapLibreMap(options: MapLibreMapOptions): MapLike {
   return new MapLibreMap(options);
 }
@@ -167,12 +172,14 @@ export class MapLibreView<const G extends string> implements MapView {
 
   flyTo({ center, zoom, bearing, pitch }: Partial<CameraState>, { duration }: FlyToOptions = {}): void {
     const map = this.#readyMap();
-    map.flyTo({ center: center && [center[0], center[1]], zoom, bearing, pitch, duration }, { cause: 'program' });
+    map.flyTo(withoutUndefined({ center: center && [center[0], center[1]], zoom, bearing, pitch, duration }), {
+      cause: 'program'
+    });
   }
 
   fitBounds([west, south, east, north]: ViewBounds, { padding, maxZoom, duration }: FitBoundsOptions = {}): void {
     const map = this.#readyMap();
-    map.fitBounds([west, south, east, north], { padding, maxZoom, duration }, { cause: 'program' });
+    map.fitBounds([west, south, east, north], withoutUndefined({ padding, maxZoom, duration }), { cause: 'program' });
   }
 
   on<E extends keyof MapLibreViewEvents>(event: E, callback: MapLibreViewEvents[E]): Unsubscribe {

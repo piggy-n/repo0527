@@ -435,11 +435,12 @@ describe('MapLibreView', () => {
       ctx.map.fire('style.load');
 
       ctx.view.flyTo({ center: [120, 31], zoom: 10 }, { duration: 500 });
-      ctx.view.fitBounds([118, 31, 120, 33], { padding: 20, maxZoom: 16 });
+      ctx.view.fitBounds([118, 31, 120, 33], { padding: 20 });
 
-      expect(ctx.map.calls).toEqual([
+      // 不能出现值为 undefined 的键：MapLibre 合并默认选项时会被它覆盖（maxZoom 变成 undefined，算出 NaN）
+      expect(ctx.map.calls).toStrictEqual([
         ['flyTo', { center: [120, 31], zoom: 10, duration: 500 }, { cause: 'program' }],
-        ['fitBounds', [118, 31, 120, 33], { padding: 20, maxZoom: 16 }, { cause: 'program' }]
+        ['fitBounds', [118, 31, 120, 33], { padding: 20 }, { cause: 'program' }]
       ]);
       expect(ctx.session.camera.intentRevision).toBe(2);
     });

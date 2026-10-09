@@ -29,7 +29,7 @@ describe('路由表', () => {
   it('只有登录页、404 和开发页面不需要登录', () => {
     const publicNames = records.filter(({ meta }) => meta?.public).map(({ name }) => String(name));
 
-    expect(publicNames.toSorted()).toEqual([RouteName.login, RouteName.notFound, RouteName.themePreview].toSorted());
+    expect(publicNames.toSorted()).toEqual([RouteName.login, RouteName.notFound, RouteName.themePreview, RouteName.devMap].toSorted());
   });
 
   it('限定角色的页面与旧项目一致', () => {

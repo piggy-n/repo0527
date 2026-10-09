@@ -4,6 +4,7 @@ export const RouteName = {
   login: 'login',
   notFound: 'not-found',
   themePreview: 'theme-preview',
+  devMap: 'dev-map',
   currentMap: 'current-map',
   landChangeQuery: 'land-change-query',
   spaceMonitoringQuery: 'space-monitoring-query',

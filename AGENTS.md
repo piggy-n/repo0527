@@ -178,6 +178,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 样式按分组推导：每个拥有者用纯函数从自己的状态推导出分组并整体替换；跨分组的修改用一次 `setGroups` 提交，批次不跨 `await`；交给会话的 GeoJSON 数据不能原地修改，要换新对象（ADR 0022）
 - 会话只保存地图需要的选择信息（要素身份、高亮数据），候选列表和详情留在 feature 的查询缓存里（ADR 0022）
 - 只有 MapLibre 适配器能写二维地图（lint 只允许 `libs/map-core/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；Cesium 镜像会话状态，不实现二维的引擎接口；二三维共用的是生命周期、相机、输入、拾取、投影这几个视图接口（ADR 0024）
+- 地图页的路由组件用 `app/router/routes.ts` 的 `withMapRuntime` 包装，先加载地图运行时（`setWorkerUrl`、CSS）再加载页面；交给 MapLibre 的容器元素只用静态 class，可变的 class 放在外层元素上，否则 Vue 会冲掉 MapLibre 自己加的 class
 - 相机事件带 `view` 和 `cause`（`user` / `program` / `sync`），不用时间窗口判断回声（ADR 0024）
 - 持有资源的对象实现 `Disposable`，监听和子对象都登记进内部的 `DisposableStack`；释放后等待中的操作以 `AbortError` 结束（ADR 0023）
 - 视图上的差异（如三维期间不画二维标注）由适配器自己处理，不改会话状态；框架独有的功能按能力声明，独有状态由各自的模块保管，切换框架时保留

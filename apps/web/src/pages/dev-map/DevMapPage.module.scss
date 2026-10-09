@@ -1,0 +1,68 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--color-bg-page);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  background-color: var(--color-bg-container);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  // Element 默认给相邻按钮加左外边距，这里统一用 gap
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+.status {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 12px;
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-regular);
+
+  dt {
+    color: var(--color-text-secondary);
+  }
+
+  dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.mapFrame {
+  flex: 1;
+  min-height: 0;
+}
+
+.map {
+  height: 100%;
+}
+
+// 暂停时模拟切到三维：只隐藏，保留尺寸，二维地图本身仍然存活（ADR 0020）
+.hidden {
+  visibility: hidden;
+}
+
+.errors {
+  margin: 0;
+  padding: var(--space-sm) var(--space-lg) var(--space-sm) 32px;
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+  background-color: var(--color-danger-bg);
+}

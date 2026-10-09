@@ -6,6 +6,15 @@ import { AppLayout } from '../layout/AppLayout';
 const loadPlaceholder = () =>
   import('@/pages/placeholder/PlaceholderPage').then(({ PlaceholderPage }) => PlaceholderPage);
 
+// 地图页加载前先完成地图运行时的全局设置；两者都是动态导入，maplibre-gl 不会进入入口包
+const withMapRuntime =
+  <T>(loadPage: () => Promise<T>) =>
+  async (): Promise<T> => {
+    const { setupMapRuntime } = await import('../map-runtime');
+    setupMapRuntime();
+    return loadPage();
+  };
+
 // 尚未迁移的业务页，迁移后换成指向真实页面的完整路由记录；roles 不写时所有已登录用户都能访问
 const placeholder = (path: string, name: RouteName, title: string, roles?: readonly Role[]): RouteRecordRaw => ({
   path,
@@ -44,6 +53,12 @@ const devRoutes: RouteRecordRaw[] = [
     name: RouteName.themePreview,
     component: () => import('@/pages/theme-preview/ThemePreviewPage').then(({ ThemePreviewPage }) => ThemePreviewPage),
     meta: { title: '主题预览', public: true }
+  },
+  {
+    path: '/dev/map',
+    name: RouteName.devMap,
+    component: withMapRuntime(() => import('@/pages/dev-map/DevMapPage').then(({ DevMapPage }) => DevMapPage)),
+    meta: { title: '地图开发页', public: true }
   }
 ];
 
