@@ -171,6 +171,14 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 查询和变更写在 `features/<域>/queries.ts`，用 TanStack Vue Query 的 `useQuery` / `useMutation`；`queryFn` 把收到的 `signal` 交给接口函数，组件不直接拼 query key；接口数据由查询缓存持有，不放进 Pinia，组件里也不另存一份
 - shared/http 不依赖路由、UI 和鉴权，这些由 `app/http.ts` 通过 `configureHttp` 注入
 
+### 地图（ADR 0020、0021，设计见 `docs/modules/map-core.md`）
+
+- map-core 持有地图会话状态（样式模型、相机、当前工具、选择状态），它是二维和三维共同的唯一真相源；Manager 修改会话状态，不直接写引擎
+- 只有 MapLibre 适配器能写二维地图，其他代码只能通过它读（查询、投影、指针事件）；Cesium 镜像会话状态，不实现二维的引擎接口
+- 视图上的差异（如三维期间不画二维标注）由适配器自己处理，不改会话状态；框架独有的功能按能力声明，独有状态由各自的模块保管，切换框架时保留
+- 样式表达式和过滤条件在三维、Worker 里一律用 `@maplibre/maplibre-gl-style-spec` 求值，不手写求值器
+- 二维不自建渲染 Worker；主线程热点先实测再移出；自建的 Worker 一律用 `@yzt/utils` 的通信层（有类型的消息、`AbortSignal` 取消、归实例所有并可释放）
+
 ### 样式与设计规范
 
 - 字体文件按授权不能提交到仓库（ADR 0012）；正文字体普惠体 3.0 只有 400、600 两个字重，改 `font-weight` 即可

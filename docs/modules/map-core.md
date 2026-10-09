@@ -1,13 +1,14 @@
 # 地图内核（map-core）设计草稿
 
-> 状态：阶段四开始前整理的草稿，还没有实施。内容来自阅读旧项目代码（yzt `master-demo` 836f03b）和讨论，文中的数字都引自旧代码的注释，本项目还没有实测。2026-10-09 补充了引擎、Manager、资源释放的分析和"二维与三维的关系"；位置（ADR 0018）和 MapLibre 版本（ADR 0019）已确定。本文随实现改成模块说明。
+> 状态：阶段四开始前整理的草稿，还没有实施。内容来自阅读旧项目代码（yzt `master-demo` 836f03b）和讨论，文中的数字都引自旧代码的注释，本项目还没有实测。2026-10-09 补充了引擎、Manager、资源释放的分析和"二维与三维的关系"；位置（ADR 0018）、MapLibre 版本（ADR 0019）、二三维关系（ADR 0020）、Worker 策略（ADR 0021）已确定。本文随实现改成模块说明。
 
 ## 总体思路
 
 - 长期存在、持有资源的对象写成类：引擎、图层、交互工具、Worker 池。计算写成纯函数：几何计算、样式表达式生成、地类分类规则，便于单独测试
 - 组合优先于继承：最多一层抽象基类（例如统一管理资源释放），不做 `BaseManager → LayerManager → MvtLayerManager` 这样的多层继承
 - 依赖通过构造参数传入（libs 的拆包规则），所有对象在一个地方组装（组合根，预计在 map-vue 的 `MapProvider`）。map-core 不依赖 Vue、Element，不读 store 和全局单例；提示、接口请求、鉴权头由使用方传入
-- Manager 只依赖引擎接口，不直接依赖 MapLibre 或 Cesium：jsdom 里没有 WebGL，测试时可以传入假的引擎
+- 核心能力是二三维之间接近无感的切换：用户在一个框架里的操作和状态，切到另一个框架时尽量保留；框架独有的功能保持独有（ADR 0020）
+- map-core 持有地图会话状态（样式模型、相机、当前工具、选择状态），它是二三维共同的唯一真相源。Manager 修改会话状态，不直接写引擎；只有 MapLibre 适配器写二维地图，Cesium 镜像会话状态（ADR 0020）。jsdom 里没有 WebGL，Manager 的测试断言会话状态即可
 
 ## 旧代码
 
@@ -18,10 +19,10 @@
 | 旧代码 | 模式 | 迁移时的处理 |
 |---|---|---|
 | `IMapEngine` + `MapboxEngine` | 接口 + 适配器 | 旧的"接口"是普通类，每个方法在运行时抛 `notImplemented`；改成 TS 的 `interface` + `implements`，少实现一个方法编译时就报错。保留"逃生口"（取原生地图实例），但只给确实需要的地方用（问题见下文"引擎抽象被绕过"） |
-| `createMapEngine` 的注册表 | 工厂 | 原设想是 map-vue 用动态 `import()` 引用 map-cesium，工厂改成异步。但三维实际没有实现 `IMapEngine`（见"二维与三维的关系"），是否需要引擎工厂待讨论 |
+| `createMapEngine` 的注册表 | 工厂 | 不再需要：Cesium 是会话状态的读者，不实现二维的引擎接口（ADR 0020）。map-vue 仍然只用动态 `import()` 加载 map-cesium |
 | `MapService` 聚合十几个 Manager | 外观 | 保留 |
 | `selection/` 拆成 QueryService、Manager、Highlight、Presenter、InteractionController | 职责分离 | 旧代码里拆得最好的部分，作为其他模块的样板 |
-| `MvtTileWorkerPool` + `mvtTileWorker` + `tileRenderer` | 对象池 + 调度 | 算法保留，补上消息类型，见下文"Worker 与缓存" |
+| `MvtTileWorkerPool` + `mvtTileWorker` + `tileRenderer` | 对象池 + 调度 | 算法移到引擎无关的瓦片数据服务（map-core），通信改用 `@yzt/utils` 的有类型通信层，池归实例所有（ADR 0021），见下文"Worker 与缓存" |
 | Worker 的鉴权头由主线程每次请求时算好传入 | — | Worker 里没有 localStorage；每次现算也避免了 token 刷新后 Worker 拿着旧 token。新代码里由使用方传入取鉴权头的函数 |
 
 ### 要改进的地方
@@ -49,19 +50,29 @@
 - 三维里点选、框选得到的经纬度交回二维的选择流程，详情面板、候选列表等共用一套
 - 三维期间还替换了 `map.setLayoutProperty`，拦截标注图层的显隐（猴子补丁）
 
-所以旧系统真正的抽象边界是 **MapLibre 的样式文档**，不是"引擎"。如果沿用这个架构，引擎接口背后可能只有 MapLibre 一个实现：接口仍然有用（jsdom 没有 WebGL，测试时换成替身），但作用从"可以换引擎"变成"把 SDK 隔离在一处"；图层也直接用 MapLibre 的样式类型描述，不必再包一层与引擎无关的抽象。是否沿用是阶段四设计的第一个问题。
+所以旧系统真正的抽象边界是 **MapLibre 的样式文档**，不是"引擎"。
+
+新结构（ADR 0020）保留"功能只写一次"，但真相源从活着的二维地图换成 map-core 持有的地图会话状态，两个框架都是它的读者。旧做法在新结构里的位置：
+
+| 旧做法 | 新结构 |
+|---|---|
+| 三维监听 `styledata`，取整份样式对比 | 会话状态发出细粒度的事件，三维直接订阅 |
+| 替换 `map.setLayoutProperty` 压住二维标注 | 二维适配器的视图覆盖，会话状态不变 |
+| 测量时把透明的二维画布叠在三维上 | 工具接收统一的指针事件，由当前框架提供 |
+| 三维点选先对齐二维相机再查询 | 查询接口，两个框架各有实现；三维先沿用旧做法，以后改用瓦片数据服务（ADR 0021） |
+| 手写的表达式求值器 | `@maplibre/maplibre-gl-style-spec` |
 
 ## 设计模式的落点
 
 | 模式 | 用在哪 |
 |---|---|
-| 适配器 | MapLibre 引擎；Cesium 是否也走同一接口，取决于是否沿用镜像架构（见"二维与三维的关系"） |
+| 适配器 | MapLibre 适配器：唯一写二维地图的地方 |
 | 外观 | 对外提供的地图服务 |
-| 工厂 / 注册表 | 创建引擎；按图层类型（MVT、GeoJSON、WMTS 等）创建图层实现 |
+| 工厂 / 注册表 | 按图层类型（MVT、GeoJSON、WMTS 等）创建图层实现；不需要引擎工厂 |
 | 策略 | 地类分类配色、符号化、测距与测面 |
 | 状态 | 交互工具（浏览、测距、测面、绘制、点选、框选） |
-| 观察者 | 有类型的事件 |
-| 对象池 | Worker 池 |
+| 观察者 | 地图会话状态的有类型事件：二维适配器、Cesium 镜像、map-vue 都是订阅者 |
+| 对象池 | Worker 池，归实例所有、可释放（ADR 0021） |
 | 命令 | 绘制需要撤销、重做时 |
 
 ## 候选库
@@ -74,7 +85,7 @@
 | 坐标转换 | proj4 | CGCS2000 经纬度（EPSG:4490）在 Web 地图上可以近似当作 WGS84 使用；后端给 3 度带高斯投影坐标时用它转换 |
 | 样式类型 | maplibre-gl 自带 | `LayerSpecification`、`SourceSpecification` 等由 maplibre-gl 导出，不自己定义 |
 | 绘制编辑 | terra-draw | 旧项目自己写了 925 行的 `GeometryDrawManager`；terra-draw 通过适配器支持多种地图引擎，先评估能否替代 |
-| Worker 通信 | 手写 / comlink | 路线图的学习点是"有类型的 Worker 消息"，先用可辨识联合手写消息协议，comlink 作为对照 |
+| Worker 通信 | 手写，放在 `@yzt/utils` | 已定（ADR 0021）：路线图的学习点是"有类型的 Worker 消息"，不引入 comlink |
 | 空间索引 | rbush 或 flatbush | 前端要对大量要素做框选、命中检测时再用；MapLibre 的 `queryRenderedFeatures` 够用就不引入 |
 | 分级设色 | simple-statistics + d3-scale-chromatic（或 chroma-js） | 自然断点等统计分级；d3 只安装用到的子包 |
 | WKT 转换 | `@terraformer/wkt` | 后端返回 WKT 时再引入 |
@@ -84,7 +95,7 @@
 
 ## Worker 与缓存
 
-二维由 MapLibre 自己在 Worker 里解析瓦片，并在内存里缓存（`maxTileCacheSize`），不需要另做。下面说的是三维：旧项目在 Worker 里把 MVT 解码、绘制成图片，作为影像交给 Cesium。
+二维由 MapLibre 自己在 Worker 里解析瓦片，并在内存里缓存（`maxTileCacheSize`），不自建渲染 Worker（ADR 0021）。下面说的是三维：旧项目在 Worker 里把 MVT 解码、绘制成图片，作为影像交给 Cesium。这些缓存算法将移到引擎无关的瓦片数据服务，供三维栅格化和标注、二维图例统计（实测后决定）、以后的三维点选共同使用（ADR 0021）。
 
 ### 旧代码已有的缓存
 
@@ -112,7 +123,8 @@
 
 ## 待定问题
 
-- "二维为真相源、三维为镜像"是否沿用（见"二维与三维的关系"）：决定引擎接口要不要为 Cesium 设计
+- 地图会话状态和样式模型的接口：可变存储加细粒度事件，还是不可变快照加 style-spec 的 `diff`；高频更新（测量的橡皮筋）不能走整份样式对比
 - `using` / `DisposableStack`：Vite（Oxc）能否转译、目标浏览器是否支持，要实测，可能需要 polyfill
+- 图例统计的主线程耗时：阶段五用真实数据实测 MapLibre 6，再在后端聚合、Worker 解码属性、按需统计三者中选（ADR 0021）
 
-已确定：map-core 放在 `libs/map-core`（ADR 0018）；MapLibre 用 6.x（ADR 0019）；迁移基线 `836f03b` 已记入 [migration.md](../migration.md)。
+已确定：map-core 放在 `libs/map-core`（ADR 0018）；MapLibre 用 6.x（ADR 0019）；地图会话状态是唯一真相源（ADR 0020）；Worker 策略（ADR 0021）；迁移基线 `836f03b` 已记入 [migration.md](../migration.md)。
