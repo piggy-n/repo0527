@@ -43,10 +43,12 @@
       "error",
       {
         "paths": [
-          { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" }
+          { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
+          { "name": "maplibre-gl", "message": "maplibre-gl 只能在 libs/map-core/maplibre 和 app 中导入（ADR 0024）" }
         ],
         "patterns": [
-          { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" }
+          { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
+          { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 libs/map-core/maplibre 和 app 中导入（ADR 0024）" }
         ]
       }
     ],
@@ -77,6 +79,22 @@
       "files": ["scripts/**", "apps/web/tools/**", "packages/*/tools/**"],
       "rules": {
         "no-console": "off"
+      }
+    },
+    {
+      "files": ["apps/web/src/libs/map-core/maplibre/**", "apps/web/src/app/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" }
+            ],
+            "patterns": [
+              { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" }
+            ]
+          }
+        ]
       }
     },
     {

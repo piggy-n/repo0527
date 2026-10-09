@@ -49,7 +49,6 @@
 | 4 结束时 | 阶段总结要包括阶段四开始前对文件管理的修复：删除确认框在页面销毁后仍可确认删除、会话结束后仍可删除、并发删除时前一个文件的删除状态丢失、翻页失败后跳回第 1 页（以及重新进入列表、条件不变再查询两种情况）、旧分页缓存把页码改小（包括请求失败后保留的旧缓存、从缓存重新进入后立即翻页失败）、输入法选字的回车触发查询、`QueryForm` 换行后减少条件不能恢复一行；本地有过期会话时第一次登录被拦截；退出确认框在会话结束后残留；以及删除逻辑抽成 `useFileRemoval` 和新增的三条 AGENTS.md 规则 | 本文 |
 | 3 之后 | 接入 Renovate 自动处理依赖更新 | ADR 0005 |
 | 3 之后 | 评估 Playwright 端到端测试；覆盖率与门槛 | ADR 0010 |
-| 4 | 写第一个适配器时，用 lint 限制 maplibre-gl 只能在 map-core 的适配器和 app 的装配中导入（只有适配器能写地图） | ADR 0018、0020 |
 | 5 | 创建地图时捕获 `GPUInitializationError` 并提示；`setWorkerUrl`、CSS 等全局设置放在 app 的哪个文件；Worker 数量是否调到旧项目的 4 个，接入地类图斑时实测 | ADR 0019 |
 | 5 | 用真实数据实测 MapLibre 6 下图例统计（当前出现的地类）的主线程耗时，再选后端聚合、Worker 解码属性或按需统计 | ADR 0021 |
 | 引入 map-cesium 时 | 评估 utils、map-core、map-cesium 一起拆到 `packages/`；自己写的 Worker 的类型检查配置 | ADR 0018、0021 |
@@ -85,7 +84,7 @@
 - 4.0 读旧代码（分析补进 [modules/map-core.md](modules/map-core.md)），确定 map-core 的位置（[ADR 0018](adr/0018-map-core-in-libs.md)）和 MapLibre 的大版本（[ADR 0019](adr/0019-maplibre-v6.md)），记下迁移基线
 - 4.1 二三维关系：地图会话状态是唯一的真相源，接近无感的切换是核心能力（[ADR 0020](adr/0020-map-session-state-as-source-of-truth.md)）；Worker 策略：二维不自建渲染 Worker，统一通信层与瓦片数据服务（[ADR 0021](adr/0021-worker-strategy.md)）
 - 4.2 接口设计：样式模型与会话提交（[ADR 0022](adr/0022-style-model-and-session-commits.md)）、资源释放与事件（[ADR 0023](adr/0023-disposal-events-and-map-runtime.md)）、二三维共用的视图接口（[ADR 0024](adr/0024-shared-view-interfaces.md)）、Worker 通信契约与瓦片数据服务（[ADR 0025](adr/0025-worker-contract-and-tile-data-service.md)）；评审中对 0020、0021 的修正写进了新的 ADR
-- 4.3 实现，按顺序：`diffStyle`（已完成）→ `StyleModel`（已完成）→ `CameraModel`（已完成）→ `MapSession`（已完成，原计划的 `createMapSession` 改为类）→ MapLibre 适配器（分 4 步：`applyStyleCommand` 已完成；`MapLibreView` 已完成；lint 限制 maplibre-gl 的导入位置；app 地图运行时与 `/dev/map` 开发页，见 map-core.md），每一步带测试；之后是 `@yzt/utils` 的 Worker 通信层
+- 4.3 实现，按顺序：`diffStyle`（已完成）→ `StyleModel`（已完成）→ `CameraModel`（已完成）→ `MapSession`（已完成，原计划的 `createMapSession` 改为类）→ MapLibre 适配器（分 4 步：`applyStyleCommand` 已完成；`MapLibreView` 已完成；lint 限制 maplibre-gl 的导入位置已完成；app 地图运行时与 `/dev/map` 开发页，见 map-core.md），每一步带测试；之后是 `@yzt/utils` 的 Worker 通信层
 
 ## 业务模块
 

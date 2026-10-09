@@ -140,7 +140,8 @@ using session = new MapSession({
   - 不支持的命令触发重建但不算错误；应用时抛错才交给 `onError`
 - 第 2 步的测试：假地图 `FakeMap` 实现 `MapLike`，相机方法立即到位并同步触发 `move`、合并 `eventData`，俯角上限 60 用来模拟 MapLibre 的收敛。假地图的 `on` 要和 `MapLike` 一样写出三个重载（回调参数在 `strictFunctionTypes` 下按逆变检查），实现签名的回调参数用 `never`。"释放时取消会话订阅"在行为上测不出来（释放后的状态检查挡住了晚到的通知），用 `vi.spyOn(StyleModel.prototype, 'on')` 换掉返回的取消函数来确认；等待 Promise 结束的断言和一个立即完成的 Promise 赛跑，避免实现出错时测试以超时失败。逐一改坏 18 处均被发现
 - 开发环境下提交样式时用 `validateStyleMin` 校验：评估后不做。152 个图层校验一次约 14.8 ms，高频更新（测量的橡皮筋每秒 60 次）下即使只在开发环境也会明显拖慢；它的报错位置（如 `layers[150].paint.line-width`）与 MapLibre 6 的 `error` 事件一致，后者已经通过 `onError` 上报
-- 第 3 步 lint 限制、第 4 步 app 地图运行时与 `/dev/map`：未开始
+- 第 3 步已完成：`no-restricted-imports` 默认禁止 maplibre-gl（包括类型导入和 `maplibre-gl/dist/...`），用 override 只对 `libs/map-core/maplibre/**` 和 `app/**` 放开；没用 boundaries，因为它只能精确到整个 map-core。写法和探针验证见 [config/oxlintrc.md](../config/oxlintrc.md)
+- 第 4 步 app 地图运行时与 `/dev/map`：未开始
 
 ## 旧代码
 

@@ -165,17 +165,24 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 | `no-console`（允许 `warn`、`error`） | 不留调试输出 |
 | `import/no-cycle` | 模块之间不能循环依赖 |
 | `import/no-duplicates` | 同一模块不重复导入 |
-| `no-restricted-imports` | lodash 用法（见下） |
+| `no-restricted-imports` | lodash 用法、maplibre-gl 的导入位置（见下） |
 
 ```json
 "no-restricted-imports": ["error", {
-  "paths": [{ "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" }],
-  "patterns": [{ "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" }]
+  "paths": [
+    { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
+    { "name": "maplibre-gl", "message": "maplibre-gl 只能在 libs/map-core/maplibre 和 app 中导入（ADR 0024）" }
+  ],
+  "patterns": [
+    { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
+    { "regex": "^maplibre-gl/", "message": "（同上）" }
+  ]
 }]
 ```
 
-- `paths`：禁止 `import _ from 'lodash-es'`（默认导入整个库，影响 tree-shaking）
-- `patterns`：禁止 `lodash` 和 `lodash/xxx`（CommonJS 版本）
+- `paths` 的 lodash-es：禁止 `import _ from 'lodash-es'`（默认导入整个库，影响 tree-shaking）
+- `patterns` 的 lodash：禁止 `lodash` 和 `lodash/xxx`（CommonJS 版本）
+- maplibre-gl（阶段四加入）：只有 MapLibre 适配器能写二维地图（ADR 0020、0024），所以默认禁止导入，由下文的 override 只对 `libs/map-core/maplibre/` 和 `app/` 放开。`paths` 拦住包本身（类型导入也算），`patterns` 拦住 `maplibre-gl/dist/...` 下的 CSS 和 Worker 文件
 
 ### 第三组：类型感知规则
 
@@ -209,6 +216,18 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 ```
 
 命令行脚本本来就通过 console 输出结果。`apps/web/tools/`、`packages/*/tools/` 是阶段二加入的 Node 工具目录（例如 `pnpm title:generate`、`yzt-icons`）。
+
+### MapLibre 适配器和 app 放开 maplibre-gl
+
+```json
+{ "files": ["apps/web/src/libs/map-core/maplibre/**", "apps/web/src/app/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项 }] } }
+```
+
+默认严格、例外显式：基础规则对所有文件禁止 maplibre-gl，这里只对适配器和 app 的装配（`setWorkerUrl`、CSS，ADR 0023）放开。override 会**整体替换**规则的选项，所以 lodash 的两项要在这里再写一遍，否则这两个目录就不再限制 lodash。oxlint 没有独立的 `typescript/no-restricted-imports` 可以分开配置，重复无法避免。
+
+没有用 boundaries 的策略实现：boundaries 的元素只能精确到"哪个 lib 模块"，放行 map-core 就等于整个 map-core 都能导入，`StyleModel` 这类不该接触 SDK 的文件也不受限制。
+
+2026-10-09 用探针验证：`libs/map-core/style` 里的类型导入、`shared` 里导入 `maplibre-gl/dist/maplibre-gl.css`、`features` 里的导入都报错；`app` 和 `libs/map-core/maplibre` 里的导入通过；`app` 里导入 `lodash/debounce` 仍然报错。
 
 ### packages 的依赖方向
 
@@ -294,6 +313,7 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 | 应用用相对路径导入 workspace 包的内部文件 | 策略 6（阶段二） |
 | workspace 包导入应用代码 | packages override（阶段二） |
 | lodash 默认导入、整包 lodash | `no-restricted-imports` |
+| 在 MapLibre 适配器和 app 之外导入 maplibre-gl（包括类型导入和 `dist` 下的文件） | `no-restricted-imports` 加放开用的 override（阶段四） |
 | 未处理的 Promise、`any`、`console.log`、`==` | 各自的规则 |
 
 有两类问题不归 lint 管，而是交给 TS：
@@ -307,6 +327,7 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 
 | 场景 | 要改什么 |
 |---|---|
+| 修改 lodash 的导入限制 | 基础规则和"MapLibre 适配器和 app 放开 maplibre-gl"的 override 两处一起改 |
 | 新增一个 feature | 不用改，`features/*` 自动匹配 |
 | 新增 ADR 0004 已列出的 lib 模块 | 不用改，策略里已经写好了名字 |
 | 新增一个新名字的 lib 模块 | 在策略 6–9 中补充它的依赖关系，并同步 AGENTS.md 与 ADR |
