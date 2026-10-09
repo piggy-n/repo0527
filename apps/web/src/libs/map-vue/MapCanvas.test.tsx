@@ -1,0 +1,399 @@
+import type {
+  CameraEventData,
+  CameraState,
+  MapLibreMapOptions,
+  MapLike,
+  MapMoveEventLike,
+  MapSession,
+  MapSubscription,
+  StyleGroup
+} from '@yzt/map-core';
+import { mount } from '@vue/test-utils';
+import { describe, expect, it, vi } from 'vitest';
+import { defineComponent, inject, nextTick, ref, type ShallowRef } from 'vue';
+import { INTERNAL_MAP_CONTEXT, type MapContext } from './context';
+import { MapCanvas } from './MapCanvas';
+import { provideMap } from './provide-map';
+import { useMap } from './use-map';
+
+const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
+
+const BASEMAP: StyleGroup = {
+  sources: {},
+  layers: [{ id: 'basemap-background', type: 'background', paint: { 'background-color': '#eef2f7' } }]
+};
+
+interface FakeEvent {
+  readonly error?: Error;
+  readonly originalEvent?: unknown;
+  readonly cause?: unknown;
+}
+
+// 只模拟视图用到的行为：相机方法立即到位并同步触发 move；像 MapLibre 一样给容器加 class
+class FakeMap implements MapLike {
+  readonly flyToCalls: unknown[] = [];
+  readonly #listeners = new Map<string, Set<(event: FakeEvent) => void>>();
+  camera: { lng: number; lat: number; zoom: number; bearing: number; pitch: number };
+  removed = false;
+  onRemove: (() => void) | undefined;
+
+  constructor(readonly options: MapLibreMapOptions) {
+    const [lng, lat] = options.center as [number, number];
+    this.camera = { lng, lat, zoom: options.zoom ?? 0, bearing: options.bearing ?? 0, pitch: options.pitch ?? 0 };
+    (options.container as HTMLElement).classList.add('maplibregl-map');
+  }
+
+  addSource(): void {}
+  removeSource(): void {}
+  getSource(): unknown {
+    return undefined;
+  }
+  addLayer(): void {}
+  removeLayer(): void {}
+  setPaintProperty(): void {}
+  setLayoutProperty(): void {}
+  setFilter(): void {}
+  setLayerZoomRange(): void {}
+  setStyle(): void {}
+
+  on(type: 'style.load', listener: () => void): MapSubscription;
+  on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
+  on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  on(type: string, listener: (event: never) => void): MapSubscription {
+    const callback = listener as (event: FakeEvent) => void;
+    const listeners = this.#listeners.get(type) ?? new Set();
+    this.#listeners.set(type, listeners.add(callback));
+    return { unsubscribe: () => listeners.delete(callback) };
+  }
+
+  fire(type: string, event: FakeEvent = {}): void {
+    for (const listener of this.#listeners.get(type) ?? []) {
+      listener(event);
+    }
+  }
+
+  getCenter() {
+    return { lng: this.camera.lng, lat: this.camera.lat };
+  }
+  getZoom(): number {
+    return this.camera.zoom;
+  }
+  getBearing(): number {
+    return this.camera.bearing;
+  }
+  getPitch(): number {
+    return this.camera.pitch;
+  }
+
+  jumpTo(camera: { center: [number, number]; zoom: number }, eventData: CameraEventData): void {
+    this.moveTo(camera.center, camera.zoom, eventData);
+  }
+
+  flyTo(camera: { center?: [number, number]; zoom?: number }, eventData: CameraEventData): void {
+    this.flyToCalls.push(camera);
+    this.moveTo(camera.center ?? [this.camera.lng, this.camera.lat], camera.zoom ?? this.camera.zoom, eventData);
+  }
+
+  fitBounds(bounds: [number, number, number, number], _options: unknown, eventData: CameraEventData): void {
+    const [west, south, east, north] = bounds;
+    this.moveTo([(west + east) / 2, (south + north) / 2], this.camera.zoom, eventData);
+  }
+
+  remove(): void {
+    this.onRemove?.();
+    this.removed = true;
+  }
+
+  /** 模拟用户拖动：带原始的 DOM 事件 */
+  drag(lng: number, lat: number): void {
+    this.moveTo([lng, lat], this.camera.zoom, { originalEvent: new MouseEvent('mousemove') });
+  }
+
+  moveTo([lng, lat]: [number, number], zoom: number, event: FakeEvent): void {
+    this.camera = { ...this.camera, lng, lat, zoom };
+    this.fire('move', event);
+  }
+}
+
+// 创建假地图并记下来，测试里按顺序取用
+function createFakeMap(maps: FakeMap[]): (options: MapLibreMapOptions) => FakeMap {
+  return options => {
+    const map = new FakeMap(options);
+    maps.push(map);
+    return map;
+  };
+}
+
+// 立即可知的结果：还没结束的 Promise 得到 'pending'，测试因断言失败而不是超时
+async function settled(promise: Promise<unknown>): Promise<unknown> {
+  return Promise.race([
+    promise.then(
+      value => ({ resolved: value }),
+      (error: unknown) => ({ rejected: error })
+    ),
+    new Promise(resolve => setTimeout(() => resolve('pending'), 0))
+  ]);
+}
+
+/** 页面：provideMap 并绑定底图，渲染画布和一个读 useMap 的子组件 */
+function setup(options: { showCanvas?: boolean; onChildSetup?: (context: MapContext) => void } = {}) {
+  const showCanvas = ref(options.showCanvas ?? true);
+  const paused = ref(false);
+  const maps: FakeMap[] = [];
+  const errors: unknown[] = [];
+  const observed: { context?: MapContext; session?: MapSession<string> } = {};
+
+  const Child = defineComponent(() => {
+    observed.context = useMap();
+    observed.session = inject(INTERNAL_MAP_CONTEXT)?.session;
+    options.onChildSetup?.(observed.context);
+    return () => null;
+  });
+
+  const createMap = createFakeMap(maps);
+
+  const Page = defineComponent(() => {
+    const map = provideMap({ groups: ['basemap'], camera: CAMERA, onError: error => errors.push(error) });
+    map.bindStyle({ basemap: () => BASEMAP });
+    return () => (
+      <div>
+        {showCanvas.value && <MapCanvas class={['page-map', paused.value && 'is-paused']} createMap={createMap} />}
+        <Child />
+      </div>
+    );
+  });
+
+  const wrapper = mount(Page);
+  const { context, session } = observed;
+  if (!context || !session) {
+    throw new Error('子组件没有拿到上下文');
+  }
+  return { wrapper, showCanvas, paused, maps, errors, context, session };
+}
+
+describe('MapCanvas', () => {
+  it('挂载后用会话的完整快照创建视图；外层接收页面的 class，MapLibre 加在内层容器上的 class 不会被冲掉', async () => {
+    const { wrapper, maps, paused } = setup();
+
+    expect(maps).toHaveLength(1);
+    const style = maps[0]?.options.style as { layers: { id: string }[] };
+    expect(style.layers.map(({ id }) => id)).toEqual(['basemap-background']);
+
+    const root = wrapper.find('.page-map');
+    const container = maps[0]?.options.container as HTMLElement;
+    expect(root.element.firstElementChild).toBe(container);
+    expect(root.classes().some(name => name.includes('_root_'))).toBe(true);
+
+    paused.value = true;
+    await nextTick();
+
+    expect(root.classes()).toContain('is-paused');
+    expect(container.classList.contains('maplibregl-map')).toBe(true);
+  });
+
+  it('视图状态：画布挂载前是 idle，创建后 initializing，加载完成后 ready；画布卸载后回到 idle', async () => {
+    const atChildSetup: unknown[] = [];
+    const { context, maps, showCanvas } = setup({
+      onChildSetup: map => atChildSetup.push(map.viewState.value, map.view.value)
+    });
+
+    expect(atChildSetup).toEqual(['idle', null]);
+    expect(context.viewState.value).toBe('initializing');
+    expect(context.view.value).not.toBeNull();
+
+    maps[0]?.fire('style.load');
+    expect(context.viewState.value).toBe('ready');
+
+    showCanvas.value = false;
+    await nextTick();
+
+    expect(context.viewState.value).toBe('idle');
+    expect(context.view.value).toBeNull();
+    expect(maps[0]?.removed).toBe(true);
+  });
+
+  it('视图的受限入口：冻结，只有 kind、flyTo、fitBounds，定位转发给视图', () => {
+    const { context, maps, session } = setup();
+    maps[0]?.fire('style.load');
+    const viewport = context.view.value;
+    if (!viewport) {
+      throw new Error('没有视图');
+    }
+
+    expect(Object.isFrozen(viewport)).toBe(true);
+    expect(Object.keys(viewport).toSorted()).toEqual(['fitBounds', 'flyTo', 'kind']);
+    expect(Symbol.dispose in viewport).toBe(false);
+
+    viewport.flyTo({ center: [120.6, 31.3] });
+
+    expect(maps[0]?.flyToCalls).toHaveLength(1);
+    expect(session.camera.current.center).toEqual([120.6, 31.3]);
+  });
+
+  it('只读：给 view、viewState、相机引用赋值不生效', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      let camera: Readonly<ShallowRef<CameraState>> | undefined;
+      const { context } = setup({ onChildSetup: map => (camera = map.useCamera()) });
+      const viewport = context.view.value;
+
+      // @ts-expect-error 只读
+      context.view.value = null;
+      // @ts-expect-error 只读
+      context.viewState.value = 'ready';
+      if (camera) {
+        // @ts-expect-error 只读
+        camera.value = { ...CAMERA, zoom: 12 };
+      }
+
+      expect(context.view.value).toBe(viewport);
+      expect(context.viewState.value).toBe('initializing');
+      expect(camera?.value.zoom).toBe(CAMERA.zoom);
+      expect(warn).toHaveBeenCalledTimes(3);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('whenReady：画布还没挂载时就开始等，加载完成后结束', async () => {
+    let early: Promise<void> | undefined;
+    const { maps } = setup({
+      onChildSetup: map => {
+        early = map.whenReady();
+      }
+    });
+    if (!early) {
+      throw new Error('没有开始等待');
+    }
+
+    expect(await settled(early)).toBe('pending');
+
+    maps[0]?.fire('style.load');
+
+    expect(await settled(early)).toEqual({ resolved: undefined });
+  });
+
+  it('whenReady：signal 中止时以它的原因结束；视图失败时以失败的原因结束', async () => {
+    const { context, maps } = setup();
+    const controller = new AbortController();
+    const timeout = new DOMException('等待超时', 'TimeoutError');
+    const aborted = context.whenReady(controller.signal);
+    const failed = context.whenReady();
+
+    controller.abort(timeout);
+    maps[0]?.fire('error', { error: new Error('整份样式没有通过校验') });
+
+    expect(await settled(aborted)).toEqual({ rejected: timeout });
+    expect(context.viewState.value).toBe('failed');
+    expect(await settled(failed)).toEqual({ rejected: new Error('整份样式没有通过校验') });
+  });
+
+  it('whenReady：等待中视图被释放、或者上下文被释放时以 AbortError 结束', async () => {
+    const withCanvas = setup();
+    const waitingForLoad = withCanvas.context.whenReady();
+    const withoutCanvas = setup({ showCanvas: false });
+    const caller = new AbortController();
+    const removeListener = vi.spyOn(caller.signal, 'removeEventListener');
+    const waitingForView = withoutCanvas.context.whenReady(caller.signal);
+
+    withCanvas.wrapper.unmount();
+    withoutCanvas.wrapper.unmount();
+
+    const results = [await settled(waitingForLoad), await settled(waitingForView)];
+    expect(results.map(result => (result as { rejected?: DOMException }).rejected?.name)).toEqual([
+      'AbortError',
+      'AbortError'
+    ]);
+    // 因上下文释放而结束时，调用方 signal 上的监听也要移除
+    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+  });
+
+  it('useCamera：拖动地图时更新，调用方卸载后不再更新；不在作用域里调用时抛错', async () => {
+    const showProbe = ref(true);
+    let camera: Readonly<ShallowRef<CameraState>> | undefined;
+    const Probe = defineComponent(() => {
+      camera = useMap().useCamera();
+      return () => null;
+    });
+    let mapHandle: MapContext | undefined;
+    const maps: FakeMap[] = [];
+    mount(
+      defineComponent(() => {
+        mapHandle = provideMap({ groups: ['basemap'], camera: CAMERA });
+        return () => (
+          <div>
+            <MapCanvas createMap={createFakeMap(maps)} />
+            {showProbe.value && <Probe />}
+          </div>
+        );
+      })
+    );
+    maps[0]?.fire('style.load');
+
+    maps[0]?.drag(120.6, 31.3);
+    expect(camera?.value.center).toEqual([120.6, 31.3]);
+
+    showProbe.value = false;
+    await nextTick();
+    maps[0]?.drag(118.8, 32.05);
+
+    expect(camera?.value.center).toEqual([120.6, 31.3]);
+    expect(() => mapHandle?.useCamera()).toThrow('useCamera 只能在组件的 setup 或 effectScope 中调用');
+  });
+
+  it('卸载时先释放视图（地图 remove 时会话还在），后释放会话', () => {
+    const { wrapper, maps, session } = setup();
+    let sessionAliveAtRemove: boolean | undefined;
+    const map = maps[0];
+    if (map) {
+      map.onRemove = () => {
+        try {
+          session.style.on('change', () => undefined)();
+          sessionAliveAtRemove = true;
+        } catch {
+          sessionAliveAtRemove = false;
+        }
+      };
+    }
+
+    wrapper.unmount();
+
+    expect(sessionAliveAtRemove).toBe(true);
+    expect(() => session.style.on('change', () => undefined)).toThrow('StyleModel 已释放');
+  });
+
+  it('视图运行中的错误交给 provideMap 的 onError', () => {
+    const { maps, errors } = setup();
+    maps[0]?.fire('style.load');
+    const tileError = new Error('瓦片 404');
+
+    maps[0]?.fire('error', { error: tileError });
+
+    expect(errors).toEqual([tileError]);
+  });
+
+  it('必须放在 provideMap 的组件里；一个上下文只能有一个画布，多出来的视图会被释放', () => {
+    // setup 抛错后 Vue 会提示组件没有渲染函数，这里不关心
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(() => mount(MapCanvas)).toThrow('MapCanvas 必须放在调用了 provideMap 的组件里面');
+    } finally {
+      warn.mockRestore();
+    }
+
+    const maps: FakeMap[] = [];
+    const createMap = createFakeMap(maps);
+    const TwoCanvases = defineComponent(() => {
+      provideMap({ groups: ['basemap'], camera: CAMERA });
+      return () => (
+        <div>
+          <MapCanvas createMap={createMap} />
+          <MapCanvas createMap={createMap} />
+        </div>
+      );
+    });
+
+    expect(() => mount(TwoCanvases)).toThrow('一个地图上下文只能有一个画布');
+    expect(maps.map(map => map.removed)).toEqual([false, true]);
+  });
+});

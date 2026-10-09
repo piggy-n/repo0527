@@ -6,7 +6,7 @@
 
 - 长期存在、持有资源的对象写成类：引擎、图层、交互工具、Worker 池。计算写成纯函数：几何计算、样式表达式生成、地类分类规则，便于单独测试
 - 组合优先于继承：最多一层抽象基类（例如统一管理资源释放），不做 `BaseManager → LayerManager → MvtLayerManager` 这样的多层继承。目前一层也没有用到
-- 依赖通过构造参数传入（libs 的拆包规则），所有对象在一个地方组装（组合根，预计在 map-vue 的 `MapProvider`）。map-core 不依赖 Vue、Element，不读 store 和全局单例；提示、接口请求、鉴权头由使用方传入
+- 依赖通过构造参数传入（libs 的拆包规则），所有对象在一个地方组装：页面调用 map-vue 的 `provideMap()` 创建会话、绑定样式（ADR 0028，见 [map-vue.md](map-vue.md)）。map-core 不依赖 Vue、Element，不读 store 和全局单例；提示、接口请求、鉴权头由使用方传入
 - 核心能力是二三维之间接近无感的切换：用户在一个框架里的操作和状态，切到另一个框架时尽量保留；框架独有的功能保持独有（ADR 0020）
 - map-core 持有地图会话状态（样式模型、相机、当前工具、选择状态），它是二三维共同的唯一真相源。Manager 修改会话状态，不直接写引擎；只有 MapLibre 适配器写二维地图，Cesium 镜像会话状态（ADR 0020）。jsdom 里没有 WebGL，Manager 的测试断言会话状态即可
 
@@ -19,7 +19,7 @@
 | `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause` |
 | `session/map-session.ts` | `MapSession`：组合样式与相机，统一释放 |
 | `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位） |
-| `maplibre/map-like.ts` | `MapLike`：适配器用到的 MapLibre 方法（窄接口） |
+| `maplibre/map-like.ts` | `MapLike`：适配器用到的 MapLibre 方法（窄接口）；连同方法签名用到的类型从入口导出，map-vue 的测试据此实现假地图 |
 | `maplibre/apply-style-command.ts` | `applyStyleCommand`：一条命令对应一次地图方法调用 |
 | `maplibre/maplibre-view.ts` | `MapLibreView`：二维视图，唯一写 MapLibre 地图的地方 |
 | `events.ts` | `Unsubscribe` 类型 |
@@ -217,7 +217,7 @@ session[Symbol.dispose]();
 
 | 内容 | 时机 |
 |---|---|
-| map-vue：`MapProvider`（组合根）、`useMap()`、运行时注入、加载策略的实测 | 阶段五 |
+| map-vue 的运行时注入、加载策略的实测（`provideMap`、`<MapCanvas>`、`useMap()` 已在 5A.2 完成，见 [map-vue.md](map-vue.md)） | 5D |
 | 业务图层、底图、边界等拥有者（Manager），从自己的状态推导分组 | 阶段五、六，迁移现状底图和业务图层时 |
 | 当前工具与选择状态两个模型；视图接口的输入、拾取、投影、查询 | 做点选、测量、绘制时 |
 | 高亮用 feature-state 还是按要素 ID 过滤的图层 | 做高亮时实测 |

@@ -1,4 +1,5 @@
 export {
+  abortReason,
   transfer,
   type Transferring,
   WorkerCrashedError,

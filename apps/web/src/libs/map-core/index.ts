@@ -6,7 +6,13 @@ export {
   type ViewKind
 } from './camera/camera-model';
 export type { Unsubscribe } from './events';
-export type { MapLibreMapOptions } from './maplibre/map-like';
+export type {
+  CameraEventData,
+  MapLibreMapOptions,
+  MapLike,
+  MapMoveEventLike,
+  MapSubscription
+} from './maplibre/map-like';
 export { MapLibreView, type MapLibreViewOptions } from './maplibre/maplibre-view';
 export { MapSession, type MapSessionOptions } from './session/map-session';
 export { diffStyle, type StyleCommand } from './style/diff-style';

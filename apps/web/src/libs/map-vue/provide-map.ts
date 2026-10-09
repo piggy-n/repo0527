@@ -1,6 +1,6 @@
 import { MapSession, type MapSessionOptions } from '@yzt/map-core';
 import { getCurrentInstance, onBeforeMount, onBeforeUnmount, onUnmounted, provide } from 'vue';
-import { INTERNAL_MAP_CONTEXT } from './context';
+import { INTERNAL_MAP_CONTEXT, type MapContext, MapContextState } from './context';
 import { StyleBinder, type StyleDerivation } from './style-binder';
 
 export interface ProvideMapOptions<G extends string> extends MapSessionOptions<G> {
@@ -8,8 +8,8 @@ export interface ProvideMapOptions<G extends string> extends MapSessionOptions<G
   readonly onError?: (error: unknown) => void;
 }
 
-/** 页面句柄：只交给调用 provideMap 的页面，子孙组件通过 useMap 拿到只读的上下文 */
-export interface MapHandle<G extends string> {
+/** 页面句柄：只交给调用 provideMap 的页面；除了绑定样式，也包含子孙组件通过 useMap 拿到的只读上下文 */
+export interface MapHandle<G extends string> extends MapContext {
   /** 把推导函数绑定到分组；只能在同一个组件的 setup 中调用，一个分组只能绑定一次 */
   bindStyle(bindings: Partial<Readonly<Record<G, StyleDerivation>>>): void;
 }
@@ -29,16 +29,21 @@ export function provideMap<const G extends string>(options: ProvideMapOptions<G>
   const onError = options.onError ?? reportToConsole;
   const session = new MapSession(options);
   const binder = new StyleBinder(session.style, onError);
-  provide(INTERNAL_MAP_CONTEXT, { session, onError });
+  const state = new MapContextState(session, onError);
+  provide(INTERNAL_MAP_CONTEXT, state);
 
   // 父组件的 onBeforeMount 早于子组件的 setup：视图创建时会话里已经是完整的初始样式
   onBeforeMount(() => binder.start());
   // 早于本组件的 scope.stop 和子组件卸载；卸载路径上的回调不抛错，否则后续的卸载钩子都不会执行
   onBeforeUnmount(() => disposeSafely(binder, onError));
-  // 晚于子组件的 onUnmounted：先释放视图，后释放会话
-  onUnmounted(() => disposeSafely(session, onError));
+  // 晚于子组件的 onUnmounted：画布已经释放了视图，再结束等待者、释放会话
+  onUnmounted(() => {
+    disposeSafely(state, onError);
+    disposeSafely(session, onError);
+  });
 
-  return { bindStyle: bindings => binder.bind(bindings) };
+  const handle: MapHandle<G> = { ...state.context, bindStyle: bindings => binder.bind(bindings) };
+  return Object.freeze(handle);
 }
 
 function disposeSafely(resource: Disposable, onError: (error: unknown) => void): void {

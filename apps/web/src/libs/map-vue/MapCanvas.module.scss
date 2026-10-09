@@ -1,0 +1,10 @@
+.root {
+  width: 100%;
+  height: 100%;
+}
+
+// 交给 MapLibre 的容器：只用这一个静态 class；MapLibre 的 CSS 会给它加 position: relative，这里不定位
+.container {
+  width: 100%;
+  height: 100%;
+}
