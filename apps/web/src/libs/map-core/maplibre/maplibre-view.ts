@@ -1,12 +1,19 @@
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { Map as MapLibreMap } from 'maplibre-gl';
+import { GPUInitializationError, Map as MapLibreMap } from 'maplibre-gl';
 import { createNanoEvents } from 'nanoevents';
 import type { CameraCause, CameraState } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 import type { MapSession } from '../session/map-session';
 import { diffStyle, type StyleCommand } from '../style/diff-style';
 import type { StyleChange } from '../style/style-model';
-import type { FitBoundsOptions, FlyToOptions, MapView, ViewBounds, ViewState } from '../view/map-view';
+import type {
+  FitBoundsOptions,
+  FlyToOptions,
+  MapView,
+  MapViewFailure,
+  ViewBounds,
+  ViewState
+} from '../view/map-view';
 import { applyStyleCommand } from './apply-style-command';
 import type { MapLibreMapOptions, MapLike, MapMoveEventLike } from './map-like';
 
@@ -108,6 +115,7 @@ export class MapLibreView<const G extends string> implements MapView {
   // 当前这一轮整体加载的结果（创建地图、整体重建、重新加载各算一轮），本轮的成功、失败、释放都结束它
   #ready = deferred();
   #state: ViewState = 'initializing';
+  #failure: MapViewFailure | null = null;
   #active: boolean;
   #mapStyle: MapStyle;
   // 引擎本身失败（创建地图或 setStyle 抛错）：不能恢复，只能释放后重新创建视图
@@ -166,6 +174,10 @@ export class MapLibreView<const G extends string> implements MapView {
     return this.#state;
   }
 
+  get failure(): MapViewFailure | null {
+    return this.#failure;
+  }
+
   whenReady(): Promise<void> {
     return this.#ready.promise;
   }
@@ -209,6 +221,7 @@ export class MapLibreView<const G extends string> implements MapView {
       return;
     }
     this.#state = 'disposed';
+    this.#failure = null;
     this.#emitter.events = {};
     this.#stack.dispose();
   }
@@ -257,7 +270,7 @@ export class MapLibreView<const G extends string> implements MapView {
       return;
     }
     this.#ready.reject(error);
-    this.#setState('failed');
+    this.#setState('failed', { kind: 'style', error });
   }
 
   // 首次进入 ready 和恢复显示共用：先追上样式，相机先跟随会话、再把地图的实际值写回，最后才进入 ready
@@ -391,7 +404,8 @@ export class MapLibreView<const G extends string> implements MapView {
   #fail(error: unknown): void {
     this.#fatal = true;
     this.#ready.reject(error);
-    this.#setState('failed');
+    const cause = error instanceof GPUInitializationError ? 'webgl-unavailable' : 'unknown';
+    this.#setState('failed', { kind: 'engine', cause, error });
     this.#onError(error);
   }
 
@@ -403,11 +417,15 @@ export class MapLibreView<const G extends string> implements MapView {
     }
   }
 
-  #setState(state: ViewState): void {
-    if (this.#state !== state) {
-      this.#state = state;
-      this.#emitter.emit('statechange', state);
+  // 失败原因只在 failed 时保留；状态或原因任一变化都通知，监听者读到的原因不会是旧的
+  #setState(state: ViewState, failure: MapViewFailure | null = null): void {
+    const nextFailure = state === 'failed' ? failure : null;
+    if (this.#state === state && this.#failure === nextFailure) {
+      return;
     }
+    this.#state = state;
+    this.#failure = nextFailure;
+    this.#emitter.emit('statechange', state);
   }
 
   // MapLibre 的事件回调里不能抛错，否则会打断它自己的事件分发

@@ -1,5 +1,5 @@
 import { type MapLibreMapOptions, MapLibreView, type MapLibreViewOptions, type MapLike } from '@yzt/map-core';
-import { defineComponent, onMounted, onUnmounted, type PropType, ref } from 'vue';
+import { defineComponent, onMounted, onUnmounted, type PropType, ref, watch } from 'vue';
 import styles from './MapCanvas.module.scss';
 import { injectMapState } from './use-map';
 
@@ -7,7 +7,7 @@ import { injectMapState } from './use-map';
 export type MapCanvasMapOptions = NonNullable<MapLibreViewOptions<string>['mapOptions']>;
 
 /**
- * 二维地图画布（ADR 0028 第 4 条）：挂载后用会话的当前快照创建视图，卸载时先卸下再释放。
+ * 二维地图画布（ADR 0028 第 4 条）：挂载后用会话的当前快照创建视图，卸载时先卸下再释放；引擎失败后可以通过上下文的 retry 重新创建。
  * 外层元素接收页面的 class；交给 MapLibre 的内层容器只用静态 class，否则 Vue 会冲掉 MapLibre 加的 class
  */
 export const MapCanvas = defineComponent({
@@ -23,7 +23,7 @@ export const MapCanvas = defineComponent({
     const container = ref<HTMLElement>();
     let view: MapLibreView<string> | undefined;
 
-    onMounted(() => {
+    const createView = () => {
       if (!container.value) {
         return;
       }
@@ -42,10 +42,9 @@ export const MapCanvas = defineComponent({
         throw error;
       }
       view = created;
-    });
+    };
 
-    // 早于 provideMap 所在组件的 onUnmounted：先释放视图，后释放会话
-    onUnmounted(() => {
+    const disposeView = () => {
       const current = view;
       view = undefined;
       if (!current) {
@@ -59,7 +58,16 @@ export const MapCanvas = defineComponent({
           state.onError(error);
         }
       }
+    };
+
+    onMounted(createView);
+    // 引擎失败后重试：在同一个容器里重新创建视图（ADR 0030）
+    watch(state.retryRequests, () => {
+      disposeView();
+      createView();
     });
+    // 早于 provideMap 所在组件的 onUnmounted：先释放视图，后释放会话
+    onUnmounted(disposeView);
 
     return () => (
       <div class={styles.root}>

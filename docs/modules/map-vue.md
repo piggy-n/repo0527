@@ -1,6 +1,6 @@
 # 地图与 Vue 的衔接（map-vue）
 
-> 状态：5A.2 完成了 `provideMap`、样式绑定、画布组件 `<MapCanvas>` 和只读上下文 `useMap()`；5A.3 加入定位可视区域（`useMapOverlay`）。设计依据是 ADR 0027（分层）、ADR 0028（上下文）和 ADR 0029（定位可视区域）。
+> 状态：5A.2 完成了 `provideMap`、样式绑定、画布组件 `<MapCanvas>` 和只读上下文 `useMap()`；5A.3 加入定位可视区域（`useMapOverlay`）、失败原因与重试。设计依据是 ADR 0027（分层）、ADR 0028（上下文）、ADR 0029（定位可视区域）和 ADR 0030（失败原因）。
 
 `libs/map-vue` 把 map-core 的地图会话和视图接到 Vue 的组件树与响应式系统上。它只做衔接：不依赖 element-plus、pinia、vue-router（lint 强制），不读项目配置，除画布容器外不渲染界面。项目级的地图能力（底图、行政区、工具栏界面、失败提示）在 `shared/map`。
 
@@ -99,6 +99,7 @@ view.value?.fitBounds(JIANGSU_BOUNDS, { padding: 40 });
 - `onMounted` 时用会话的当前快照创建 `MapLibreView` 并挂到上下文上；`onUnmounted` 时先卸下再释放，等待中的 `whenReady` 以 `AbortError` 结束
 - `mapOptions` 只在创建地图时生效；要换选项、或者引擎失败后重新创建，给组件换一个 `key`
 - 一个上下文只能有一个画布：第二个画布挂不上时，先释放它刚创建的视图，再把错误交给 Vue
+- 引擎失败后，上下文的 `retry()` 让画布先卸下、释放旧视图，再在同一个容器里创建新视图（ADR 0030）；`createMap` 等 props 按重试时的值生效
 - 运行中的错误（MapLibre 的 `error` 事件、应用命令失败）交给 `provideMap` 的 `onError`；视图失败时不弹提示，由 `shared/map` 读视图状态决定
 
 ## 只读上下文 `useMap()`
@@ -107,10 +108,12 @@ view.value?.fitBounds(JIANGSU_BOUNDS, { padding: 40 });
 |---|---|
 | `view` | 视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`flyTo`、`fitBounds`；画布还没挂载、已卸载时为 `null` |
 | `viewState` | `idle`（没有视图）、`initializing`、`ready`、`paused`、`failed` |
+| `failure` | 视图失败的原因（`MapViewFailure`），只在 `failed` 时有值，卸下视图时清空（ADR 0030） |
+| `retry()` | 引擎失败后重新创建视图；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
 | `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待中视图被释放、或者 `provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@yzt/utils` 的 `abortReason`） |
 | `useCamera()` | 在调用方的作用域里订阅相机，作用域销毁时取消；不在组件 setup 或 `effectScope` 里调用时抛错 |
 
-- **只读**：`view`、`viewState`、相机引用对外都用 `shallowReadonly` 包了一层。对 `.value` 赋值被忽略，开发环境给出警告；里面的对象不被代理。不对视图、会话这类引擎对象用深层的 `readonly()`：深层代理会让内核类的私有字段访问报错
+- **只读**：`view`、`viewState`、`failure`、相机引用对外都用 `shallowReadonly` 包了一层。对 `.value` 赋值被忽略，开发环境给出警告；里面的对象不被代理。不对视图、会话这类引擎对象用深层的 `readonly()`：深层代理会让内核类的私有字段访问报错
 - **受限入口**：暂停、恢复、释放、订阅都不在 `MapViewport` 上，JS 里也调不到。暂停和恢复以后由框架切换负责，释放由画布负责，状态从 `viewState` 读
 - **等待者的清理**：`whenReady` 同时监听上下文的生命周期和调用方的 `signal`；任一个中止、或者等待结束时，两边的监听都会移除，不会因为一直等不到视图而留在另一个 `signal` 上
 
@@ -158,6 +161,7 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 | 切换数据版本，选区晚 800ms 才跟上 | 第一轮被拒绝，报告"图层 selection-line 引用的数据源 regions-v1 不存在"；地图停在原来的快照，视图仍是 `ready`（不合法的组合没有到达 MapLibre）；选区跟上后两者一起提交，只有这一条报错 |
 | 让选区的推导出错，再切换颜色 | 只报告一次推导失败；颜色没有变化（整批跳过）；修好后颜色和选区一起生效 |
 | `flyTo`、`fitBounds` | 经受限入口转发到视图，会话相机随之更新 |
+| 提交不合法的图层；打开"模拟引擎失败"后重新创建视图，取消模拟后点提示里的"重试"（5A.3） | 样式失败时上方出现警告条，去掉图层后消失；引擎失败时地图画不出来，中间出现"地图无法显示"和"重试"；重试后在原来的容器里创建了真实地图，回到 `ready` |
 | 右侧悬浮面板登记为贴右边，`fitBounds` 不传 `padding`（5A.3） | 1280 宽：面板实际宽 352（含内边距），padding 为右 384、其余 16，中心 120.80°；隐藏面板后 padding 四边 16，中心回到江苏范围的几何中心 119.10°。420 宽：原本左右合计 400，按下限缩成左 11、右 268，可视区域 141px，结果 z4.15（没有下限时是 z1.33） |
 | 提交不合法的图层、在不合法的快照下重新创建视图（换 `key`） | 进入 `failed`，去掉后自动恢复；重建时旧画布被移除，新视图按会话里的相机创建，相机保持在重建前的位置 |
 | 离开页面再回来 | 离开后页面上没有地图容器，没有错误和未处理的拒绝；回来后重新进入 `ready` |
@@ -170,12 +174,13 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 |---|---|---|
 | `style-binder.test.ts` | 初始提交、同一轮的跨分组修改、晚一轮时的拒绝与收敛、推导失败时整批跳过、缓存、重复绑定、释放 | Node |
 | `provide-map.test.tsx` | 必须在 setup 中调用、初始值早于子组件 setup、挂载后绑定抛错、卸载顺序、卸载路径上的错误、组名的类型检查、默认的错误输出 | jsdom |
-| `MapCanvas.test.tsx` | 用完整快照创建视图、页面的 class 不冲掉 MapLibre 的 class、视图状态的变化、受限入口、只读引用、`whenReady` 的各种结局、`useCamera` 的订阅与取消、先释放视图后释放会话、运行中的错误、画布的数量限制 | jsdom |
+| `MapCanvas.test.tsx` | 用完整快照创建视图、页面的 class 不冲掉 MapLibre 的 class、视图状态的变化、受限入口、只读引用、`whenReady` 的各种结局、`useCamera` 的订阅与取消、先释放视图后释放会话、运行中的错误、画布的数量限制、失败原因、引擎失败后的重试 | jsdom |
 | `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，视图入口 `fitBounds` 的默认 padding，`useMapOverlay` 不在作用域里时抛错 | Node |
 | `overlay.test.ts` | 占用与间隔、同一边取最大、不算的元素、画布的位置、横向和纵向的下限、选项 | Node |
 
 - 推导失败的用例用 `await expect(nextTick()).resolves.toBeUndefined()` 等待：异常冒出侦听器时，失败落在断言上，而不是测试本身报错
 - `MapCanvas.test.tsx` 注入实现 `MapLike` 的假地图（`MapLike` 等类型从 `@yzt/map-core` 导出），走真实的 `MapLibreView`；`context.test.ts` 用一个实现 `MapView` 的假视图，测 `MapLibreView` 本身覆盖不到的情况
 - 画布与上下文逐一改坏 20 处，19 处由断言发现。"卸载时先卸下再释放"改成先释放后卸下测不出来：两步都是同步的，等待者的回调在微任务里才执行，侦听器也在之后才运行，看到的都是最终结果，这个顺序不影响行为。"卸下时不取消订阅"起初也没有被发现：`MapLibreView` 释放时会清空自己的监听，碰巧不出问题；`MapView` 接口并不保证这一点，补了 `context.test.ts` 后由断言发现
+- 失败原因与重试（连同 map-core 的 `failure` 和 `shared/map` 的提示）逐一改坏 14 处，全部发现；"重试时不释放旧视图"起初是挂上新视图时抛错、不是断言失败，等待重试的那一步改成 `resolves` 断言后由断言发现
 - 定位可视区域逐一改坏 16 处，起初有 2 处没被发现："不检查是否相交"（画布外的元素算出的占用本来是负数，被限制到 0；补了"登记为左、但整个在画布下方"的用例）和"不随作用域注销"（组件卸载时模板引用变为空，元素本来就不算；补了登记外部元素的用例）。补上后全部由断言发现
 - 提交器与 `provideMap` 逐一改坏 15 处实现（逐组提交、只跳过失败的分组、不把异常变成值、重复报告、校验失败也更新记录、初始值不立即提交、挂载后仍可绑定、重复检查不先整体检查、释放后不停止侦听、同步侦听、共用一次推导、在 `onScopeDispose` 里释放会话、卸载时不捕获异常、在 `onMounted` 才提交、不检查是否在组件中），全部由断言发现

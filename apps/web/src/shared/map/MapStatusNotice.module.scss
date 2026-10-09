@@ -1,0 +1,68 @@
+// 联调用的样式，5D 再设计；父元素是地图区域，作为定位参照
+
+// 引擎失败：地图画不出来，提示放在中间
+.card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  width: min(360px, calc(100% - 32px));
+  padding: var(--space-xl);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+.icon {
+  font-size: 32px;
+  color: var(--color-warning);
+}
+
+.title {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-title);
+}
+
+.detail {
+  margin: 0;
+  color: var(--color-text-regular);
+}
+
+.technical {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  word-break: break-all;
+}
+
+// 样式失败会自动恢复：不挡地图中间，放在上方
+.alert {
+  position: absolute;
+  top: var(--space-lg);
+  left: 50%;
+  width: min(480px, calc(100% - 32px));
+  box-shadow: var(--shadow-md);
+  transform: translateX(-50%);
+}
+
+// 加载中：不拦截地图上的操作
+.loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-regular);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}

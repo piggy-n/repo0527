@@ -23,4 +23,12 @@ export {
   type StyleModelOptions,
   type StyleRoot
 } from './style/style-model';
-export type { FitBoundsOptions, FlyToOptions, MapView, ViewBounds, ViewPadding, ViewState } from './view/map-view';
+export type {
+  FitBoundsOptions,
+  FlyToOptions,
+  MapView,
+  MapViewFailure,
+  ViewBounds,
+  ViewPadding,
+  ViewState
+} from './view/map-view';

@@ -35,10 +35,11 @@
 | [0023](0023-disposal-events-and-map-runtime.md) | 资源释放、事件与地图运行时装配 | 已接受 |
 | [0024](0024-shared-view-interfaces.md) | 二三维共用的视图接口 | 已接受 |
 | [0025](0025-worker-contract-and-tile-data-service.md) | Worker 通信契约与瓦片数据服务的约束 | 已接受 |
-| [0026](0026-view-sync-failures.md) | 视图同步的失败处理：错误事件、加载失败与恢复 | 已接受 |
+| [0026](0026-view-sync-failures.md) | 视图同步的失败处理：错误事件、加载失败与恢复 | 已接受（第 4 条的"不另加 API"由 0030 修正） |
 | [0027](0027-map-capability-layers.md) | 地图能力的分层与页面组装 | 已接受 |
 | [0028](0028-map-vue-context.md) | map-vue：会话与视图分开的地图上下文 | 已接受 |
 | [0029](0029-map-overlay-padding.md) | 定位可视区域：悬浮元素登记、定位时现量现算 | 已接受 |
+| [0030](0030-view-failure-as-data.md) | 视图失败的原因作为数据 | 已接受 |
 
 ## 模板
 

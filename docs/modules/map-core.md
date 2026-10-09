@@ -147,6 +147,7 @@ session[Symbol.dispose]();
 
 - 构造即创建地图（`initializing`）；创建时抛错（如不支持 WebGL2 的 `GPUInitializationError`）不往外抛，进入 `failed`，由 `whenReady` 和 `statechange` 表达
 - `failed` 有两种（ADR 0026 第 4 条）：引擎失败（创建地图或 `setStyle` 本身抛错）不能恢复，之后的样式变化、`error`、`style.load` 都不再改变状态，只能释放后重新创建视图；样式加载失败在出现新版本时自动重新加载，`failed → initializing → ready`（暂停意图时为 `paused`）
+- 失败的原因是数据（ADR 0030）：`view.failure` 只在 `failed` 时有值，引擎失败为 `{ kind: 'engine', cause, error }`（`GPUInitializationError` 时 `cause` 是 `webgl-unavailable`，其余是 `unknown`），样式失败为 `{ kind: 'style', error }`；离开 `failed` 和释放时清空。状态或原因任一变化都发出 `statechange`，监听者收到 `failed` 时已经能读到原因
 - `whenReady()` 表示当前这一轮整体加载的结果。创建地图、整体重建、从 `failed` 重新加载各开始一轮，上一轮已经有结果就换一个新的 Promise；本轮的结局都落在同一个 Promise 上：加载完成后进入 `ready`（运行中重建则是完成并追上之后；暂停期间完成加载时进入 `paused`，和以 `active: false` 创建时一样）就成功，失败就以原因结束，释放就以 `AbortError` 结束。激活中止、失败后改用新版本重试都不结束本轮，同一个 Promise 继续等待。这样恢复显示时触发了重建，等 `whenReady()` 结束后再定位不会遇到 `paused`；重建随后失败，拿到的 Promise 也会失败。从 `failed` 重新加载时，先换 Promise 再发出 `statechange`，监听者拿到的就是这一轮的
 - 初始化期间调用 `pause()`，加载完成后进入 `paused`；状态变化发出 `statechange`
 - 首次激活或恢复显示时，如果追赶样式触发了整体重建，立即中止激活：首次激活停在 `initializing`，恢复显示停在 `paused`，不同步相机，`whenReady()` 不结束。重建完成（`style.load`）后再激活；重建失败则进入 `failed`，不会先进入 `ready` 再失败

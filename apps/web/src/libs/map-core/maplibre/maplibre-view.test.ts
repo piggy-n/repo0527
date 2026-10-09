@@ -1,5 +1,5 @@
 import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
-import type { Map as MapLibreMap } from 'maplibre-gl';
+import { GPUInitializationError, type Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
 import { MapSession } from '../session/map-session';
@@ -235,6 +235,70 @@ async function resumeIntoRebuild() {
 describe('MapLibreView', () => {
   it('works with the MapLibre map', () => {
     expectTypeOf<MapLibreMap>().toExtend<MapLike>();
+  });
+
+  describe('failure', () => {
+    it('引擎失败：不支持 WebGL2 时原因是 webgl-unavailable', () => {
+      const unavailable = new GPUInitializationError({}, null);
+      using ctx = setup({
+        createMap: () => {
+          throw unavailable;
+        }
+      });
+
+      expect(ctx.view.failure).toEqual({ kind: 'engine', cause: 'webgl-unavailable', error: unavailable });
+    });
+
+    it('引擎失败：其他创建错误、运行中 setStyle 抛错时原因是 unknown，之后的事件不改变它', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      const business = lineGroup('dltb');
+      ctx.session.style.setGroup('business', business);
+      await nextMicrotask();
+      // 修改已有图层的未知属性是不支持的命令，触发整体重建，setStyle 本身抛错
+      ctx.map.failOn = 'setStyle';
+      const flagged = { ...business.layers[0], 'custom-flag': true } as unknown as LayerSpecification;
+      ctx.session.style.setGroup('business', { ...business, layers: [flagged] });
+      await nextMicrotask();
+
+      ctx.map.failOn = undefined;
+      ctx.map.fire('error', { error: new Error('invalid style') });
+
+      expect(ctx.view.failure).toEqual({ kind: 'engine', cause: 'unknown', error: new Error('setStyle failed') });
+    });
+
+    it('样式失败：监听者收到 failed 时已经能读到原因；出现新版本重新加载时清空', async () => {
+      using ctx = setup();
+      const seen: unknown[] = [];
+      ctx.view.on('statechange', state => seen.push([state, ctx.view.failure]));
+      const invalid = new Error('layers[0].paint.line-width: number expected');
+
+      ctx.map.fire('error', { error: invalid });
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      ctx.map.fire('style.load');
+
+      expect(seen).toEqual([
+        ['failed', { kind: 'style', error: invalid }],
+        ['initializing', null],
+        ['ready', null]
+      ]);
+    });
+
+    it('没有失败时为 null；释放后为 null', () => {
+      using ctx = setup({
+        createMap: () => {
+          throw new Error('WebGL2 unavailable');
+        }
+      });
+      using healthy = setup();
+      expect(healthy.view.failure).toBeNull();
+      expect(ctx.view.failure?.kind).toBe('engine');
+
+      ctx.view[Symbol.dispose]();
+
+      expect(ctx.view.failure).toBeNull();
+    });
   });
 
   describe('lifecycle', () => {

@@ -2,6 +2,7 @@
 import {
   type FitBoundsOptions,
   type MapView,
+  type MapViewFailure,
   MapSession,
   type Unsubscribe,
   type ViewBounds,
@@ -18,6 +19,7 @@ class FakeView implements MapView {
   readonly kind = '2d';
   readonly fitBoundsCalls: (FitBoundsOptions | undefined)[] = [];
   state: ViewState = 'initializing';
+  failure: MapViewFailure | null = null;
   readonly #listeners = new Set<(state: ViewState) => void>();
 
   whenReady(): Promise<void> {
@@ -83,6 +85,20 @@ describe('MapContextState', () => {
 
     expect(env.state.context.viewState.value).toBe('idle');
     expect(env.state.context.view.value).toBeNull();
+  });
+
+  it('失败原因随状态变化更新，卸下视图后清空', () => {
+    using env = setup();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    const failure = { kind: 'style', error: new Error('invalid style') } as const;
+
+    view.failure = failure;
+    view.emit('failed');
+    expect(env.state.context.failure.value).toBe(failure);
+
+    env.state.detachView(view);
+    expect(env.state.context.failure.value).toBeNull();
   });
 
   it('卸下的不是当前视图时不做任何事；卸下后可以挂上新的视图', () => {

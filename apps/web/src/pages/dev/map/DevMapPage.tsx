@@ -4,6 +4,7 @@ import { ElButton } from 'element-plus';
 import type { CameraState, StyleGroup, ViewBounds } from '@yzt/map-core';
 import { MapCanvas, type OverlayPadding, provideMap, useMapOverlay } from '@yzt/map-vue';
 import { defineComponent, ref } from 'vue';
+import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import styles from './DevMapPage.module.scss';
 
 const INITIAL_CAMERA: CameraState = { center: [119.4, 32.9], zoom: 6.5, bearing: 0, pitch: 0 };
@@ -153,6 +154,11 @@ const OverlayPanel = defineComponent({
   }
 });
 
+// 模拟引擎失败：页面不能导入 maplibre-gl，抛普通的错误，原因按 unknown
+function failingCreateMap(): never {
+  throw new Error('模拟：创建地图失败');
+}
+
 /** 地图开发页：在真实的 MapLibre 上验证 map-core 和 map-vue，只在开发环境出现 */
 export const DevMapPage = defineComponent({
   name: 'DevMapPage',
@@ -169,6 +175,8 @@ export const DevMapPage = defineComponent({
     // 换 key 重新创建画布，也就重新创建了视图
     const canvasKey = ref(0);
     const overlayVisible = ref(true);
+    // 打开后，下一次创建视图（重新创建、重试）时创建地图失败，模拟引擎失败
+    const failNextCreation = ref(false);
     const lastPadding = ref<OverlayPadding>();
 
     const map = provideMap({
@@ -268,6 +276,11 @@ export const DevMapPage = defineComponent({
                 {overlayVisible.value ? '隐藏悬浮面板' : '显示悬浮面板'}
               </ElButton>
               <ElButton onClick={() => canvasKey.value++}>重新创建视图</ElButton>
+              <ElButton
+                type={failNextCreation.value ? 'danger' : 'default'}
+                onClick={() => (failNextCreation.value = !failNextCreation.value)}>
+                {failNextCreation.value ? '取消模拟引擎失败' : '下次创建视图时模拟引擎失败'}
+              </ElButton>
               <ElButton disabled={errors.value.length === 0} onClick={() => (errors.value = [])}>
                 清空错误
               </ElButton>
@@ -286,8 +299,9 @@ export const DevMapPage = defineComponent({
             </dl>
           </header>
           <div class={styles.mapArea}>
-            <MapCanvas key={canvasKey.value} />
+            <MapCanvas key={canvasKey.value} createMap={failNextCreation.value ? failingCreateMap : undefined} />
             {overlayVisible.value && <OverlayPanel />}
+            <MapStatusNotice />
           </div>
           {errors.value.length > 0 && (
             <ul class={styles.errors}>

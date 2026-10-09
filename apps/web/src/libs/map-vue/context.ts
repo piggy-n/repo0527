@@ -4,6 +4,7 @@ import type {
   FlyToOptions,
   MapSession,
   MapView,
+  MapViewFailure,
   ViewBounds,
   ViewKind,
   ViewState
@@ -37,6 +38,10 @@ export interface MapContext {
   /** 当前显示的视图；画布还没挂载、已卸载时为 null */
   readonly view: Readonly<ShallowRef<MapViewport | null>>;
   readonly viewState: Readonly<Ref<MapViewState>>;
+  /** 视图失败的原因，只在 failed 时有值（ADR 0030） */
+  readonly failure: Readonly<ShallowRef<MapViewFailure | null>>;
+  /** 引擎失败后重新创建视图；其他时候什么也不做（样式失败会在出现新版本时自动恢复） */
+  retry(): void;
   /** 等到有视图且这一轮加载完成；视图失败时以原因结束，视图或上下文释放时以 AbortError 结束，signal 中止时以它的原因结束 */
   whenReady(signal?: AbortSignal): Promise<void>;
   /** 在调用方的作用域里订阅相机，作用域销毁时取消 */
@@ -90,6 +95,8 @@ export class MapContextState implements Disposable {
   readonly context: MapContext;
   readonly #viewport = shallowRef<MapViewport | null>(null);
   readonly #viewState = ref<MapViewState>('idle');
+  readonly #failure = shallowRef<MapViewFailure | null>(null);
+  readonly #retryRequests = ref(0);
   readonly #lifetime = new AbortController();
   // 还没有视图时调用 whenReady 的等待者，视图挂上时依次通知
   readonly #waiting = new Set<(view: MapView) => void>();
@@ -108,10 +115,17 @@ export class MapContextState implements Disposable {
     this.context = Object.freeze({
       view: shallowReadonly(this.#viewport),
       viewState: shallowReadonly(this.#viewState),
+      failure: shallowReadonly(this.#failure),
+      retry: () => this.#retry(),
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
       useCamera: () => this.#useCamera(),
       overlayPadding: () => this.#overlayPadding()
     });
+  }
+
+  /** 重新创建视图的请求次数：画布组件侦听它，变化时销毁旧视图、创建新视图 */
+  get retryRequests(): Readonly<Ref<number>> {
+    return this.#retryRequests;
   }
 
   /** 画布组件挂载后挂上视图和它的容器（量可视区域用）；目前一个上下文只有一个视图 */
@@ -119,9 +133,13 @@ export class MapContextState implements Disposable {
     if (this.#view) {
       throw new Error('一个地图上下文只能有一个画布');
     }
-    const unsubscribe = view.on('statechange', state => (this.#viewState.value = state));
+    const unsubscribe = view.on('statechange', state => {
+      this.#viewState.value = state;
+      this.#failure.value = view.failure;
+    });
     this.#view = { view, canvas, unsubscribe };
     this.#viewState.value = view.state;
+    this.#failure.value = view.failure;
     this.#viewport.value = createViewport(view, () => this.#overlayPadding());
     for (const notify of this.#waiting) {
       notify(view);
@@ -137,6 +155,7 @@ export class MapContextState implements Disposable {
     this.#view = null;
     this.#viewport.value = null;
     this.#viewState.value = 'idle';
+    this.#failure.value = null;
   }
 
   /** 登记悬浮元素，返回注销函数（ADR 0029） */
@@ -149,6 +168,12 @@ export class MapContextState implements Disposable {
   /** 等待中的 whenReady 以 AbortError 结束 */
   [Symbol.dispose](): void {
     this.#lifetime.abort(new DOMException('地图上下文已释放', 'AbortError'));
+  }
+
+  #retry(): void {
+    if (this.#failure.value?.kind === 'engine') {
+      this.#retryRequests.value++;
+    }
   }
 
   async #whenReady(signal?: AbortSignal): Promise<void> {

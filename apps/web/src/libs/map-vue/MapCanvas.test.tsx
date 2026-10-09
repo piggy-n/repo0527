@@ -494,6 +494,65 @@ describe('MapCanvas', () => {
     }
   });
 
+  it('失败原因：样式失败时是 style，出现新版本重新加载后清空；样式失败时 retry 不重建', async () => {
+    const { context, maps, session } = setup();
+    const invalid = new Error('layers[0].paint.line-width: number expected');
+
+    maps[0]?.fire('error', { error: invalid });
+    expect(context.viewState.value).toBe('failed');
+    expect(context.failure.value).toEqual({ kind: 'style', error: invalid });
+
+    context.retry();
+    await nextTick();
+    expect(maps).toHaveLength(1);
+
+    session.style.setGroup('basemap', { sources: {}, layers: [] });
+    await nextTick();
+    expect(context.viewState.value).toBe('initializing');
+    expect(context.failure.value).toBeNull();
+  });
+
+  it('引擎失败后 retry：在同一个容器里重新创建视图；没有失败时 retry 什么也不做', async () => {
+    let attempts = 0;
+    const maps: FakeMap[] = [];
+    const createMap = (options: MapLibreMapOptions) => {
+      attempts++;
+      if (attempts === 1) {
+        throw new Error('创建地图失败');
+      }
+      const map = new FakeMap(options);
+      maps.push(map);
+      return map;
+    };
+    let handle: MapHandle<'basemap'> | undefined;
+    const wrapper = mount(
+      defineComponent(() => {
+        handle = provideMap({ groups: ['basemap'], camera: CAMERA, onError: () => undefined });
+        return () => <MapCanvas createMap={createMap} />;
+      })
+    );
+    if (!handle) {
+      throw new Error('没有挂载');
+    }
+    const container = wrapper.find('[class*="_container_"]').element;
+    expect(handle.failure.value).toEqual({ kind: 'engine', cause: 'unknown', error: new Error('创建地图失败') });
+
+    // 重建时要先释放旧视图，否则挂上新视图会抛错
+    handle.retry();
+    await expect(nextTick()).resolves.toBeUndefined();
+
+    expect(attempts).toBe(2);
+    expect(maps[0]?.options.container).toBe(container);
+    expect(handle.viewState.value).toBe('initializing');
+    expect(handle.failure.value).toBeNull();
+
+    maps[0]?.fire('style.load');
+    handle.retry();
+    await nextTick();
+    expect(attempts).toBe(2);
+    expect(handle.viewState.value).toBe('ready');
+  });
+
   it('useMapOverlay 必须放在 provideMap 的组件里', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
