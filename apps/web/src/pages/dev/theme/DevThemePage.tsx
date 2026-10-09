@@ -25,7 +25,7 @@ import { defineComponent, onMounted, ref } from 'vue';
 import { iconNames, SvgIcon } from '@/shared/icons/SvgIcon';
 import { QueryForm } from '@/shared/query-form/QueryForm';
 import { SystemTitle } from '@/shared/system-title/SystemTitle';
-import styles from './ThemePreviewPage.module.scss';
+import styles from './DevThemePage.module.scss';
 import { PanelPreview, SectionPreview, SplitLayoutPreview, TitlePreview } from './UiComponentsPreview';
 
 interface IndicatorRow {
@@ -167,8 +167,8 @@ async function confirmDelete() {
 }
 
 /** 主题预览：检查设计令牌与 Element Plus 主题映射的效果 */
-export const ThemePreviewPage = defineComponent({
-  name: 'ThemePreviewPage',
+export const DevThemePage = defineComponent({
+  name: 'DevThemePage',
   setup() {
     const resolvedColors = ref<Record<string, string>>({});
     const keyword = ref('');

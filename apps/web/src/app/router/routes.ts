@@ -46,18 +46,19 @@ const businessRoutes: RouteRecordRaw[] = [
   placeholder('system-management', RouteName.systemManagement, '系统管理', [Role.admin])
 ];
 
+// 开发页面：放在 pages/dev/<名称>/，路由名 dev<名称>，路径 /dev/<名称>（AGENTS.md）
 // 生产构建中 import.meta.env.DEV 为 false，这些路由连同页面代码都不会进入产物
 const devRoutes: RouteRecordRaw[] = [
   {
     path: '/dev/theme',
-    name: RouteName.themePreview,
-    component: () => import('@/pages/theme-preview/ThemePreviewPage').then(({ ThemePreviewPage }) => ThemePreviewPage),
+    name: RouteName.devTheme,
+    component: () => import('@/pages/dev/theme/DevThemePage').then(({ DevThemePage }) => DevThemePage),
     meta: { title: '主题预览', public: true }
   },
   {
     path: '/dev/map',
     name: RouteName.devMap,
-    component: withMapRuntime(() => import('@/pages/dev-map/DevMapPage').then(({ DevMapPage }) => DevMapPage)),
+    component: withMapRuntime(() => import('@/pages/dev/map/DevMapPage').then(({ DevMapPage }) => DevMapPage)),
     meta: { title: '地图开发页', public: true }
   }
 ];

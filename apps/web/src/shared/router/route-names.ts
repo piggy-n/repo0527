@@ -3,7 +3,7 @@ export const RouteName = {
   home: 'home',
   login: 'login',
   notFound: 'not-found',
-  themePreview: 'theme-preview',
+  devTheme: 'dev-theme',
   devMap: 'dev-map',
   currentMap: 'current-map',
   landChangeQuery: 'land-change-query',

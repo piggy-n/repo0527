@@ -29,7 +29,16 @@ describe('路由表', () => {
   it('只有登录页、404 和开发页面不需要登录', () => {
     const publicNames = records.filter(({ meta }) => meta?.public).map(({ name }) => String(name));
 
-    expect(publicNames.toSorted()).toEqual([RouteName.login, RouteName.notFound, RouteName.themePreview, RouteName.devMap].toSorted());
+    expect(publicNames.toSorted()).toEqual([RouteName.login, RouteName.notFound, RouteName.devTheme, RouteName.devMap].toSorted());
+  });
+
+  // 开发页面的约定见 AGENTS.md：页面在 pages/dev/<名称>/，路径 /dev/<名称>，路由名的值 dev-<名称>
+  it('开发页面的路径和路由名相互对应', () => {
+    const devRecords = records.filter(({ path, name }) => path.startsWith('/dev/') || String(name).startsWith('dev-'));
+    const pairs = devRecords.map(({ path, name }) => [path, String(name)]);
+
+    expect(pairs.length).toBeGreaterThan(0);
+    expect(pairs).toEqual(devRecords.map(({ path }) => [path, `dev-${path.slice('/dev/'.length)}`]));
   });
 
   it('限定角色的页面与旧项目一致', () => {
