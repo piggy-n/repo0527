@@ -18,3 +18,4 @@ export {
 export { WorkerHost, type WorkerHostOptions } from './worker/worker-host';
 export { serveWorker, type ServeOptions, type TaskContext, type WorkerHandlers } from './worker/worker-server';
 export { yieldToEventLoop } from './worker/yield';
+export { safeReporter } from './report';

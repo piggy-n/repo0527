@@ -1,4 +1,5 @@
 import { MapSession, type MapSessionOptions } from '@yzt/map-core';
+import { safeReporter } from '@yzt/utils';
 import { getCurrentInstance, onBeforeMount, onBeforeUnmount, onUnmounted, provide } from 'vue';
 import { INTERNAL_MAP_CONTEXT, type MapContext, MapContextState } from './context';
 import { type OverlayOptions, resolveOverlayOptions } from './overlay';
@@ -29,7 +30,8 @@ export function provideMap<const G extends string>(options: ProvideMapOptions<G>
   if (!getCurrentInstance()) {
     throw new Error('provideMap 只能在组件的 setup 中调用');
   }
-  const onError = options.onError ?? reportToConsole;
+  // 统一的上报入口：外部的报告器抛错时不能打断提交、状态转换和卸载，map-vue 内部都经由它上报
+  const onError = safeReporter(options.onError ?? reportToConsole, 'map-vue');
   const overlayOptions = resolveOverlayOptions(options.overlay);
   const session = new MapSession(options);
   const binder = new StyleBinder(session.style, onError);

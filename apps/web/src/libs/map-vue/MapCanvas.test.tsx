@@ -8,6 +8,7 @@ import type {
   MapSubscription,
   StyleGroup
 } from '@yzt/map-core';
+import { MapLibreView } from '@yzt/map-core';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, inject, nextTick, ref, type ShallowRef } from 'vue';
@@ -563,6 +564,44 @@ describe('MapCanvas', () => {
       expect(() => mount(Orphan)).toThrow('useMapOverlay 必须放在调用了 provideMap 的组件里面');
     } finally {
       warn.mockRestore();
+    }
+  });
+
+  it('释放视图出错、报告器也抛错时，画布照常卸载，会话照常释放', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const dispose = vi.spyOn(MapLibreView.prototype, Symbol.dispose).mockImplementation(() => {
+      throw new Error('释放视图失败');
+    });
+    try {
+      let session: MapSession<string> | undefined;
+      const Probe = defineComponent(() => {
+        session = inject(INTERNAL_MAP_CONTEXT)?.session;
+        return () => null;
+      });
+      const maps: FakeMap[] = [];
+      const wrapper = mount(
+        defineComponent(() => {
+          provideMap({
+            groups: ['basemap'],
+            camera: CAMERA,
+            onError: () => {
+              throw new Error('报告器出错');
+            }
+          });
+          return () => (
+            <div>
+              <MapCanvas createMap={createFakeMap(maps)} />
+              <Probe />
+            </div>
+          );
+        })
+      );
+
+      expect(() => wrapper.unmount()).not.toThrow();
+      expect(() => session?.style.on('change', () => undefined)).toThrow('StyleModel 已释放');
+    } finally {
+      dispose.mockRestore();
+      consoleError.mockRestore();
     }
   });
 });

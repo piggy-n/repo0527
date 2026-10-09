@@ -1,6 +1,6 @@
 import type { StyleGroup } from '@yzt/map-core';
 import { MapCanvas, provideMap } from '@yzt/map-vue';
-import { defineComponent, onMounted, onUnmounted } from 'vue';
+import { defineComponent, watch } from 'vue';
 import { JIANGSU_BOUNDS, JIANGSU_CAMERA } from '@/shared/map/jiangsu';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import styles from './CurrentMapPage.module.scss';
@@ -18,19 +18,14 @@ export const CurrentMapPage = defineComponent({
     const map = provideMap({ groups: ['basemap'], camera: JIANGSU_CAMERA });
     map.bindStyle({ basemap: () => TEMPORARY_BASEMAP });
 
-    // 进入页面后按江苏的范围定位：不同屏幕尺寸下都完整显示，并避开悬浮元素
-    const entering = new AbortController();
-    const fitOnEnter = async () => {
-      try {
-        await map.whenReady(entering.signal);
-      } catch {
-        // 页面已卸载，或者视图失败（由 MapStatusNotice 提示）：不定位
-        return;
+    // 本次进入页面后第一次就绪时按江苏的范围定位一次（首次失败、重试成功后同样补做），之后不再覆盖用户调整过的视角；
+    // 不同屏幕尺寸下都完整显示，并避开悬浮元素。页面卸载时侦听器随之停止
+    const stopInitialFit = watch(map.viewState, state => {
+      if (state === 'ready' && map.view.value) {
+        stopInitialFit();
+        map.view.value.fitBounds(JIANGSU_BOUNDS, { duration: 0 });
       }
-      map.view.value?.fitBounds(JIANGSU_BOUNDS, { duration: 0 });
-    };
-    onMounted(() => void fitOnEnter());
-    onUnmounted(() => entering.abort());
+    });
 
     return () => (
       <div class={styles.root}>

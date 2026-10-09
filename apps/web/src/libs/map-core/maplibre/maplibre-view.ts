@@ -1,5 +1,6 @@
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { GPUInitializationError, Map as MapLibreMap } from 'maplibre-gl';
+import { safeReporter } from '@yzt/utils';
 import { createNanoEvents } from 'nanoevents';
 import type { CameraCause, CameraState } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
@@ -134,7 +135,8 @@ export class MapLibreView<const G extends string> implements MapView {
   }: MapLibreViewOptions<G>) {
     this.#session = session;
     this.#active = active;
-    this.#onError = onError;
+    // 报告器自己抛错时不能打断状态转换和资源释放，也不能冒进 MapLibre 的事件分发
+    this.#onError = safeReporter(onError, 'MapLibreView');
     const { current: style, version } = session.style;
     this.#mapStyle = { status: 'loading', version, style };
 

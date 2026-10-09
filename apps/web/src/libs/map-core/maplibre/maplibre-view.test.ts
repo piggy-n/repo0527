@@ -173,7 +173,7 @@ class FakeMap implements MapLike {
 type Groups = 'basemap' | 'business';
 
 function setup(
-  options: Partial<Pick<MapLibreViewOptions<Groups>, 'active' | 'mapOptions' | 'createMap'>> = {},
+  options: Partial<Pick<MapLibreViewOptions<Groups>, 'active' | 'mapOptions' | 'createMap' | 'onError'>> = {},
   camera = NANJING
 ) {
   const stack = new DisposableStack();
@@ -217,6 +217,11 @@ function lineGroup(id: string, color = '#336699'): StyleGroup {
 
 function names(calls: unknown[][]): unknown[] {
   return calls.map(([name]) => name);
+}
+
+// 自己会抛错的错误报告器
+function throwingReporter(): never {
+  throw new Error('报告器出错');
 }
 
 // 地图就绪 → 暂停 → 修改样式（addLayer 会被拒绝），恢复显示时追赶触发整体重建
@@ -298,6 +303,63 @@ describe('MapLibreView', () => {
       ctx.view[Symbol.dispose]();
 
       expect(ctx.view.failure).toBeNull();
+    });
+  });
+
+  describe('onError 自身抛错', () => {
+    it('样式加载失败时照常进入 failed、结束 whenReady，异常不冒进 MapLibre 的事件分发', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        using ctx = setup({ onError: throwingReporter });
+        const invalid = new Error('layers[0].paint.line-width: number expected');
+
+        expect(() => ctx.map.fire('error', { error: invalid })).not.toThrow();
+
+        expect(ctx.view.state).toBe('failed');
+        expect(ctx.view.failure).toEqual({ kind: 'style', error: invalid });
+        await expect(settled(ctx.view.whenReady())).rejects.toBe(invalid);
+        // 报告器失败时改为打印到控制台，原始错误不丢
+        expect(consoleError).toHaveBeenCalledWith(expect.any(String), new Error('报告器出错'), invalid);
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    it('创建地图失败时照常进入 failed，构造不抛错', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        const failure = new Error('WebGL2 unavailable');
+        const create = () =>
+          setup({
+            onError: throwingReporter,
+            createMap: () => {
+              throw failure;
+            }
+          });
+
+        expect(() => create()[Symbol.dispose]()).not.toThrow();
+        using ctx = create();
+        expect(ctx.view.state).toBe('failed');
+        await expect(settled(ctx.view.whenReady())).rejects.toBe(failure);
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    it('应用命令期间的错误照常触发整体重建', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        using ctx = setup({ onError: throwingReporter });
+        ctx.map.fire('style.load');
+        ctx.map.rejectOn = 'addLayer';
+
+        ctx.session.style.setGroup('business', lineGroup('dltb'));
+        await nextMicrotask();
+
+        expect(names(ctx.map.styleCalls())).toContain('setStyle');
+      } finally {
+        consoleError.mockRestore();
+      }
     });
   });
 

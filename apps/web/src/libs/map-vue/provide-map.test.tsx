@@ -20,6 +20,11 @@ function backgroundColor(session: MapSession<string>): unknown {
   return layer?.paint && 'background-color' in layer.paint ? layer.paint['background-color'] : undefined;
 }
 
+// 自己会抛错的错误报告器
+function throwingReporter(): never {
+  throw new Error('报告器出错');
+}
+
 function injectSession(): MapSession<string> {
   const context = inject(INTERNAL_MAP_CONTEXT);
   if (!context) {
@@ -166,5 +171,52 @@ describe('provideMap', () => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+
+  describe('onError 自身抛错', () => {
+    it('推导失败时报告器的异常不冒出挂载过程，改为打印到控制台', () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        const Page = defineComponent(() => {
+          const map = provideMap({ groups: ['basemap'], camera: CAMERA, onError: throwingReporter });
+          map.bindStyle({
+            basemap: () => {
+              throw new Error('推导失败');
+            }
+          });
+          return () => null;
+        });
+
+        expect(() => mount(Page)).not.toThrow();
+        expect(consoleError).toHaveBeenCalledWith(
+          '[map-vue] 错误报告器抛出了异常',
+          new Error('报告器出错'),
+          expect.any(Error)
+        );
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    it('卸载路径上释放出错、报告器也抛错时，卸载照常完成', () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const dispose = vi.spyOn(StyleBinder.prototype, Symbol.dispose).mockImplementation(() => {
+        throw new Error('停止提交失败');
+      });
+      try {
+        let childUnmounted = false;
+        const { wrapper, session } = setup({
+          onError: throwingReporter,
+          onChildUnmounted: () => (childUnmounted = true)
+        });
+
+        expect(() => wrapper.unmount()).not.toThrow();
+        expect(childUnmounted).toBe(true);
+        expect(() => session.style.on('change', () => undefined)).toThrow('StyleModel 已释放');
+      } finally {
+        dispose.mockRestore();
+        consoleError.mockRestore();
+      }
+    });
   });
 });

@@ -42,12 +42,23 @@ export interface MapContext {
   readonly failure: Readonly<ShallowRef<MapViewFailure | null>>;
   /** 引擎失败后重新创建视图；其他时候什么也不做（样式失败会在出现新版本时自动恢复） */
   retry(): void;
-  /** 等到有视图且这一轮加载完成；视图失败时以原因结束，视图或上下文释放时以 AbortError 结束，signal 中止时以它的原因结束 */
+  /**
+   * 等到有视图且这一轮加载完成；视图失败时以原因结束；等待的视图被卸下或替换、上下文释放时以 AbortError 结束，
+   * signal 中止时以它的原因结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪
+   */
   whenReady(signal?: AbortSignal): Promise<void>;
   /** 在调用方的作用域里订阅相机，作用域销毁时取消 */
   useCamera(): Readonly<ShallowRef<CameraState>>;
   /** 量出登记过的悬浮元素此刻占用的部分，算出定位用的 padding；还没有画布时四边都是边距 */
   overlayPadding(): OverlayPadding;
+}
+
+// 挂上的视图；detached 在卸下时中止，等它就绪的 whenReady 随之以 AbortError 结束
+interface AttachedView {
+  readonly view: MapView;
+  readonly canvas: HTMLElement;
+  readonly unsubscribe: () => void;
+  readonly detached: AbortController;
 }
 
 interface OverlayEntry {
@@ -99,10 +110,10 @@ export class MapContextState implements Disposable {
   readonly #retryRequests = ref(0);
   readonly #lifetime = new AbortController();
   // 还没有视图时调用 whenReady 的等待者，视图挂上时依次通知
-  readonly #waiting = new Set<(view: MapView) => void>();
+  readonly #waiting = new Set<(attached: AttachedView) => void>();
   readonly #overlays = new Set<OverlayEntry>();
   readonly #overlayOptions: Required<OverlayOptions>;
-  #view: { readonly view: MapView; readonly canvas: HTMLElement; readonly unsubscribe: () => void } | null = null;
+  #view: AttachedView | null = null;
 
   constructor(
     session: MapSession<string>,
@@ -137,12 +148,13 @@ export class MapContextState implements Disposable {
       this.#viewState.value = state;
       this.#failure.value = view.failure;
     });
-    this.#view = { view, canvas, unsubscribe };
+    const attached: AttachedView = { view, canvas, unsubscribe, detached: new AbortController() };
+    this.#view = attached;
     this.#viewState.value = view.state;
     this.#failure.value = view.failure;
     this.#viewport.value = createViewport(view, () => this.#overlayPadding());
     for (const notify of this.#waiting) {
-      notify(view);
+      notify(attached);
     }
   }
 
@@ -151,11 +163,14 @@ export class MapContextState implements Disposable {
     if (this.#view?.view !== view) {
       return;
     }
-    this.#view.unsubscribe();
+    const attached = this.#view;
+    attached.unsubscribe();
     this.#view = null;
     this.#viewport.value = null;
     this.#viewState.value = 'idle';
     this.#failure.value = null;
+    // 最后再中止：等待者的回调在微任务里执行，看到的已经是卸下之后的状态
+    attached.detached.abort(new DOMException('等待的视图已被卸下或替换', 'AbortError'));
   }
 
   /** 登记悬浮元素，返回注销函数（ADR 0029） */
@@ -178,13 +193,19 @@ export class MapContextState implements Disposable {
 
   async #whenReady(signal?: AbortSignal): Promise<void> {
     const signals = signal ? [this.#lifetime.signal, signal] : [this.#lifetime.signal];
-    const view = this.#view?.view ?? (await this.#nextView(signals));
-    await abortable(view.whenReady(), signals);
+    const attached = this.#view ?? (await this.#nextView(signals));
+    // 等的是这一个视图：它被卸下时立即结束，不等它自己的 whenReady
+    await abortable(attached.view.whenReady(), [...signals, attached.detached.signal]);
+    // 纵深防御：上面的等待结束后、这里继续执行之前隔着一两个微任务，期间被替换时监听已经移除，返回前再确认等的仍是当前视图。
+    // 这个窗口取决于微任务的个数，测试无法稳定命中
+    if (this.#view !== attached) {
+      throw new DOMException('等待的视图已被卸下或替换', 'AbortError');
+    }
   }
 
-  #nextView(signals: readonly AbortSignal[]): Promise<MapView> {
-    let notify: ((view: MapView) => void) | undefined;
-    const attached = new Promise<MapView>(resolve => {
+  #nextView(signals: readonly AbortSignal[]): Promise<AttachedView> {
+    let notify: ((attached: AttachedView) => void) | undefined;
+    const attached = new Promise<AttachedView>(resolve => {
       notify = resolve;
       this.#waiting.add(resolve);
     });

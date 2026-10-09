@@ -110,11 +110,12 @@ view.value?.fitBounds(JIANGSU_BOUNDS, { padding: 40 });
 | `viewState` | `idle`（没有视图）、`initializing`、`ready`、`paused`、`failed` |
 | `failure` | 视图失败的原因（`MapViewFailure`），只在 `failed` 时有值，卸下视图时清空（ADR 0030） |
 | `retry()` | 引擎失败后重新创建视图；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
-| `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待中视图被释放、或者 `provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@yzt/utils` 的 `abortReason`） |
+| `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@yzt/utils` 的 `abortReason`）。等待绑定具体的视图实例，旧视图就绪不算新视图就绪 |
 | `useCamera()` | 在调用方的作用域里订阅相机，作用域销毁时取消；不在组件 setup 或 `effectScope` 里调用时抛错 |
 
 - **只读**：`view`、`viewState`、`failure`、相机引用对外都用 `shallowReadonly` 包了一层。对 `.value` 赋值被忽略，开发环境给出警告；里面的对象不被代理。不对视图、会话这类引擎对象用深层的 `readonly()`：深层代理会让内核类的私有字段访问报错
 - **受限入口**：暂停、恢复、释放、订阅都不在 `MapViewport` 上，JS 里也调不到。暂停和恢复以后由框架切换负责，释放由画布负责，状态从 `viewState` 读
+- **等待绑定视图实例**（5A 之后的修复）：每个挂上的视图带一个自己的 `AbortController`，卸下时中止，等它的 `whenReady` 立即以 `AbortError` 结束，不等视图自己释放时的拒绝；返回前再确认等的仍是当前视图。后一道是纵深防御：等待结束后、继续执行之前隔着一两个微任务，期间被替换时监听已经移除。这个窗口取决于微任务的个数，测试无法稳定命中，改坏它测不出来
 - **等待者的清理**：`whenReady` 同时监听上下文的生命周期和调用方的 `signal`；任一个中止、或者等待结束时，两边的监听都会移除，不会因为一直等不到视图而留在另一个 `signal` 上
 
 ## 定位可视区域（ADR 0029）
@@ -140,6 +141,12 @@ const padding = useMap().overlayPadding();
 - 视图入口的 `fitBounds` 没传 `padding` 时使用 `overlayPadding()`；明确传入（包括 `0`）时以传入的为准。这是 `MapViewport` 比 `MapView.fitBounds` 多出的一层默认行为
 - `useMapOverlay` 要放在 `provideMap` 所在组件的子孙组件里：提供上下文的组件 `inject` 不到自己 provide 的值（Vue 的 `inject` 从父组件开始找）；不在作用域里调用时抛错，作用域销毁时注销
 - 还没做：`flyTo` 到一个点并放在可视区域中心（5B.5，要给 `MapView.flyTo` 加用 `offset` 实现的 padding）
+
+## 错误上报
+
+- `provideMap` 在入口把 `onError`（没传时是打印到控制台）用 `@yzt/utils` 的 `safeReporter` 包一层，map-vue 内部（提交器、卸载时的释放、画布、交给视图的报告器）都经由它上报
+- 外部的报告器自己抛错时，改为打印到控制台（连同原始错误），不打断提交、视图的状态转换和卸载。之前的问题：报告器在卸载路径上抛错会让后续的卸载钩子都不执行；在挂载时的提交里抛错会让挂载失败
+- 视图（`MapLibreView`）自己也包了一层：map-core 可以脱离 map-vue 单独使用
 
 ## 卸载与释放
 
@@ -181,6 +188,7 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 - 推导失败的用例用 `await expect(nextTick()).resolves.toBeUndefined()` 等待：异常冒出侦听器时，失败落在断言上，而不是测试本身报错
 - `MapCanvas.test.tsx` 注入实现 `MapLike` 的假地图（`MapLike` 等类型从 `@yzt/map-core` 导出），走真实的 `MapLibreView`；`context.test.ts` 用一个实现 `MapView` 的假视图，测 `MapLibreView` 本身覆盖不到的情况
 - 画布与上下文逐一改坏 20 处，19 处由断言发现。"卸载时先卸下再释放"改成先释放后卸下测不出来：两步都是同步的，等待者的回调在微任务里才执行，侦听器也在之后才运行，看到的都是最终结果，这个顺序不影响行为。"卸下时不取消订阅"起初也没有被发现：`MapLibreView` 释放时会清空自己的监听，碰巧不出问题；`MapView` 接口并不保证这一点，补了 `context.test.ts` 后由断言发现
+- 5A 之后的三处修复（`whenReady` 绑定视图实例、初始定位改为第一次就绪时、错误上报的包装）逐一改坏 9 处，起初 2 处没被发现："返回前不确认仍是当前视图"是上面说的纵深防御；"初始定位不停止侦听"是页面测试的场景不对（就绪后收到 `error` 只上报、状态不变，侦听器根本没被触发），改成画布重建后再次就绪才测出来
 - 失败原因与重试（连同 map-core 的 `failure` 和 `shared/map` 的提示）逐一改坏 14 处，全部发现；"重试时不释放旧视图"起初是挂上新视图时抛错、不是断言失败，等待重试的那一步改成 `resolves` 断言后由断言发现
 - 定位可视区域逐一改坏 16 处，起初有 2 处没被发现："不检查是否相交"（画布外的元素算出的占用本来是负数，被限制到 0；补了"登记为左、但整个在画布下方"的用例）和"不随作用域注销"（组件卸载时模板引用变为空，元素本来就不算；补了登记外部元素的用例）。补上后全部由断言发现
 - 提交器与 `provideMap` 逐一改坏 15 处实现（逐组提交、只跳过失败的分组、不把异常变成值、重复报告、校验失败也更新记录、初始值不立即提交、挂载后仍可绑定、重复检查不先整体检查、释放后不停止侦听、同步侦听、共用一次推导、在 `onScopeDispose` 里释放会话、卸载时不捕获异常、在 `onMounted` 才提交、不检查是否在组件中），全部由断言发现

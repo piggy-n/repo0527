@@ -20,10 +20,12 @@ class FakeView implements MapView {
   readonly fitBoundsCalls: (FitBoundsOptions | undefined)[] = [];
   state: ViewState = 'initializing';
   failure: MapViewFailure | null = null;
+  // 这一轮整体加载的结果，测试可以换成还没结束的 Promise
+  ready: Promise<void> = Promise.resolve();
   readonly #listeners = new Set<(state: ViewState) => void>();
 
   whenReady(): Promise<void> {
-    return Promise.resolve();
+    return this.ready;
   }
   pause(): void {}
   resume(): void {}
@@ -45,6 +47,25 @@ class FakeView implements MapView {
   }
 
   [Symbol.dispose](): void {}
+}
+
+// 由测试决定何时就绪的视图
+function pendingView(): { view: FakeView; markReady: () => void } {
+  const view = new FakeView();
+  let resolveReady: (() => void) | undefined;
+  view.ready = new Promise<void>(resolve => (resolveReady = resolve));
+  return { view, markReady: () => resolveReady?.() };
+}
+
+// 立即可知的结果：还没结束的 Promise 得到 'pending'，测试因断言失败而不是超时
+function settled(promise: Promise<unknown>): Promise<unknown> {
+  return Promise.race([
+    promise.then(
+      () => 'resolved',
+      (error: unknown) => (error instanceof DOMException ? error.name : error)
+    ),
+    new Promise(resolve => setTimeout(() => resolve('pending'), 0))
+  ]);
 }
 
 // Node 环境里没有 DOM：只模拟量尺寸用到的两个属性
@@ -115,6 +136,69 @@ describe('MapContextState', () => {
     env.state.attachView(second, CANVAS);
 
     expect(env.state.context.viewState.value).toBe('paused');
+  });
+});
+
+describe('MapContextState 的 whenReady', () => {
+  it('等待中的视图被替换：以 AbortError 结束，旧视图后来就绪也不算', async () => {
+    using env = setup();
+    const first = pendingView();
+    env.state.attachView(first.view, CANVAS);
+    const waiting = env.state.context.whenReady();
+
+    env.state.detachView(first.view);
+    env.state.attachView(pendingView().view, CANVAS);
+    first.markReady();
+
+    expect(await settled(waiting)).toBe('AbortError');
+  });
+
+  it('旧视图就绪的同一轮里被替换：不能当作就绪', async () => {
+    using env = setup();
+    const first = pendingView();
+    env.state.attachView(first.view, CANVAS);
+    const waiting = env.state.context.whenReady();
+
+    first.markReady();
+    env.state.detachView(first.view);
+    env.state.attachView(pendingView().view, CANVAS);
+
+    expect(await settled(waiting)).toBe('AbortError');
+  });
+
+  it('等到的第一个视图在就绪前被替换：同样以 AbortError 结束', async () => {
+    using env = setup();
+    const waiting = env.state.context.whenReady();
+    const first = pendingView();
+    env.state.attachView(first.view, CANVAS);
+    await Promise.resolve();
+
+    env.state.detachView(first.view);
+    first.markReady();
+
+    expect(await settled(waiting)).toBe('AbortError');
+  });
+
+  it('等待中的视图被卸下、它自己一直没有结果：立即以 AbortError 结束，不跟着挂起', async () => {
+    using env = setup();
+    const first = pendingView();
+    env.state.attachView(first.view, CANVAS);
+    const waiting = env.state.context.whenReady();
+
+    env.state.detachView(first.view);
+
+    expect(await settled(waiting)).toBe('AbortError');
+  });
+
+  it('视图没被替换时照常等到就绪', async () => {
+    using env = setup();
+    const first = pendingView();
+    env.state.attachView(first.view, CANVAS);
+    const waiting = env.state.context.whenReady();
+
+    first.markReady();
+
+    expect(await settled(waiting)).toBe('resolved');
   });
 });
 

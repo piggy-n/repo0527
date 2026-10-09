@@ -152,6 +152,7 @@ session[Symbol.dispose]();
 - 初始化期间调用 `pause()`，加载完成后进入 `paused`；状态变化发出 `statechange`
 - 首次激活或恢复显示时，如果追赶样式触发了整体重建，立即中止激活：首次激活停在 `initializing`，恢复显示停在 `paused`，不同步相机，`whenReady()` 不结束。重建完成（`style.load`）后再激活；重建失败则进入 `failed`，不会先进入 `ready` 再失败
 - MapLibre 的事件回调都包一层 `try/catch`，错误交给 `onError`，不让异常打断 MapLibre 自己的事件分发
+- 构造时用 `@yzt/utils` 的 `safeReporter` 包装 `onError`：外部的报告器自己抛错时改为打印到控制台，不打断状态转换（之前报告器在 `error` 事件里抛错，加载失败就判定不了，视图一直停在 `initializing`，异常还会冒进 MapLibre 的事件分发）
 - `whenReady()` 的 Promise 内部先挂一个空的 `catch`：没人等待时被拒绝不会报"未处理的拒绝"，等待的人照样收到错误
 - 释放时取消订阅、`map.remove()`，等待中的 `whenReady` 以 `AbortError` 结束
 - 传给 MapLibre 的选项先用 `withoutUndefined` 去掉值为 `undefined` 的键（原因见下文）

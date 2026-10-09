@@ -1,0 +1,179 @@
+import type {
+  CameraEventData,
+  MapLibreMapOptions,
+  MapLike,
+  MapMoveEventLike,
+  MapSubscription,
+  ViewBounds
+} from '@yzt/map-core';
+import { MapCanvas } from '@yzt/map-vue';
+import { mount } from '@vue/test-utils';
+import { describe, expect, it, vi } from 'vitest';
+import { defineComponent, nextTick, ref } from 'vue';
+import { JIANGSU_BOUNDS } from '@/shared/map/jiangsu';
+import { CurrentMapPage } from './CurrentMapPage';
+
+interface FakeEvent {
+  readonly error?: Error;
+  readonly originalEvent?: unknown;
+  readonly cause?: unknown;
+}
+
+// 只模拟视图用到的行为：相机方法立即到位并同步触发 move，记下 fitBounds
+class FakeMap implements MapLike {
+  readonly fitBoundsCalls: [number, number, number, number][] = [];
+  readonly #listeners = new Map<string, Set<(event: FakeEvent) => void>>();
+  camera: { lng: number; lat: number; zoom: number };
+
+  constructor(readonly options: MapLibreMapOptions) {
+    const [lng, lat] = options.center as [number, number];
+    this.camera = { lng, lat, zoom: options.zoom ?? 0 };
+  }
+
+  addSource(): void {}
+  removeSource(): void {}
+  getSource(): unknown {
+    return undefined;
+  }
+  addLayer(): void {}
+  removeLayer(): void {}
+  setPaintProperty(): void {}
+  setLayoutProperty(): void {}
+  setFilter(): void {}
+  setLayerZoomRange(): void {}
+  setStyle(): void {}
+
+  on(type: 'style.load', listener: () => void): MapSubscription;
+  on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
+  on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  on(type: string, listener: (event: never) => void): MapSubscription {
+    const callback = listener as (event: FakeEvent) => void;
+    const listeners = this.#listeners.get(type) ?? new Set();
+    this.#listeners.set(type, listeners.add(callback));
+    return { unsubscribe: () => listeners.delete(callback) };
+  }
+
+  fire(type: string, event: FakeEvent = {}): void {
+    for (const listener of this.#listeners.get(type) ?? []) {
+      listener(event);
+    }
+  }
+
+  getCenter() {
+    return { lng: this.camera.lng, lat: this.camera.lat };
+  }
+  getZoom(): number {
+    return this.camera.zoom;
+  }
+  getBearing(): number {
+    return 0;
+  }
+  getPitch(): number {
+    return 0;
+  }
+
+  jumpTo(camera: { center: [number, number]; zoom: number }, eventData: CameraEventData): void {
+    this.moveTo(camera.center, camera.zoom, eventData);
+  }
+
+  flyTo(camera: { center?: [number, number]; zoom?: number }, eventData: CameraEventData): void {
+    this.moveTo(camera.center ?? [this.camera.lng, this.camera.lat], camera.zoom ?? this.camera.zoom, eventData);
+  }
+
+  fitBounds(bounds: [number, number, number, number], _options: unknown, eventData: CameraEventData): void {
+    this.fitBoundsCalls.push(bounds);
+    const [west, south, east, north] = bounds;
+    this.moveTo([(west + east) / 2, (south + north) / 2], 6.5, eventData);
+  }
+
+  remove(): void {}
+
+  /** 模拟用户拖动：带原始的 DOM 事件 */
+  drag(lng: number, lat: number): void {
+    this.moveTo([lng, lat], this.camera.zoom, { originalEvent: new MouseEvent('mousemove') });
+  }
+
+  moveTo([lng, lat]: [number, number], zoom: number, event: FakeEvent): void {
+    this.camera = { lng, lat, zoom };
+    this.fire('move', event);
+  }
+}
+
+/**
+ * 页面里的画布用真实的 MapLibre，jsdom 里创建不出来；用 stubs 换成注入了假地图的同一个组件。
+ * 第一次创建可以设为失败，模拟引擎失败后重试；canvasKey 变化时画布重建
+ */
+function mountPage({ failFirstCreation = false } = {}) {
+  const canvasKey = ref(0);
+  const maps: FakeMap[] = [];
+  let attempts = 0;
+  const createMap = (options: MapLibreMapOptions): MapLike => {
+    attempts++;
+    if (failFirstCreation && attempts === 1) {
+      throw new Error('创建地图失败');
+    }
+    const map = new FakeMap(options);
+    maps.push(map);
+    return map;
+  };
+  // 换个名字，免得替身里的画布又被替换成替身
+  const RealCanvas = { ...MapCanvas, name: 'RealMapCanvas' } as typeof MapCanvas;
+  const CanvasWithFakeMap = defineComponent(() => () => <RealCanvas key={canvasKey.value} createMap={createMap} />);
+  const wrapper = mount(CurrentMapPage, { global: { stubs: { MapCanvas: CanvasWithFakeMap } } });
+  return { wrapper, maps, canvasKey };
+}
+
+const jiangsu = [...JIANGSU_BOUNDS] as ViewBounds;
+
+// 等定位相关的微任务和渲染都走完
+const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
+describe('CurrentMapPage', () => {
+  it('第一次就绪时按江苏范围定位一次；画布重建后再次就绪时不再定位，保留用户调整过的视角', async () => {
+    const { maps, canvasKey } = mountPage();
+    const first = maps[0];
+    if (!first) {
+      throw new Error('没有创建地图');
+    }
+
+    first.fire('style.load');
+    await settle();
+    expect(first.fitBoundsCalls).toEqual([jiangsu]);
+
+    // 用户拖动后画布重建：新视图按会话里的相机创建，就绪后不再定位
+    first.drag(120.6, 31.3);
+    canvasKey.value++;
+    await nextTick();
+    const second = maps[1];
+    if (!second) {
+      throw new Error('画布没有重建');
+    }
+    second.fire('style.load');
+    await settle();
+
+    expect(second.options.center).toEqual([120.6, 31.3]);
+    expect(second.fitBoundsCalls).toEqual([]);
+  });
+
+  it('第一次创建地图失败、重试成功后，补做一次初始定位', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const { wrapper, maps } = mountPage({ failFirstCreation: true });
+      await nextTick();
+      expect(maps).toHaveLength(0);
+
+      await wrapper.find('button').trigger('click');
+      await nextTick();
+      const map = maps[0];
+      if (!map) {
+        throw new Error('重试后没有创建地图');
+      }
+      map.fire('style.load');
+      await settle();
+
+      expect(map.fitBoundsCalls).toEqual([jiangsu]);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+});
