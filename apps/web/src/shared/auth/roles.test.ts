@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { RouteName } from '../router/route-names';
 import { canAccess, Role, roleHome, roleLabel, toRole } from './roles';

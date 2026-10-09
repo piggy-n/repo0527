@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import type { CameraState } from '../camera/camera-model';
 import { StyleModel } from '../style/style-model';

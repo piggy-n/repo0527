@@ -48,6 +48,8 @@ export default defineConfig(({ mode }) => {
       include: ['src/**/*.test.{ts,tsx}', 'tools/**/*.test.ts'],
       environment: 'jsdom',
       setupFiles: ['src/test-setup.ts'],
+      // 把转换结果缓存到 node_modules/.vitest-cache，之后的运行跳过转换（见 docs/config/vite-config.md）
+      fsModuleCache: true,
       // 每个用例结束后撤销 vi.stubEnv，避免影响其他用例
       unstubEnvs: true,
       // Vitest 默认把样式文件替换成空内容（带 ?raw 也一样）；libs 的 Sass 入口要按原文读取，供断点一致性测试使用

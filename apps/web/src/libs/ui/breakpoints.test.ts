@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import sassEntry from './_index.scss?raw';
 import { COMPACT_BREAKPOINT, COMPACT_MEDIA_QUERY } from './breakpoints';

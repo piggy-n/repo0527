@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { sm2 } from 'sm-crypto-v2';
 import { describe, expect, it } from 'vitest';
 import { encryptPassword } from './password';

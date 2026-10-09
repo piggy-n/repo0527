@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
 // appConfig 在模块加载时读取环境变量，所以每个用例都要重新加载模块

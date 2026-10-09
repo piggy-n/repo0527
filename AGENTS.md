@@ -138,6 +138,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 ### 测试
 
 - 测试文件和源文件放在一起，命名 `*.test.ts` / `*.test.tsx`；显式从 `vitest` 导入 `describe`、`it`、`expect`，不开 `globals`
+- 不用 DOM 的测试文件（纯逻辑、libs 的会话与 Worker 通信层、`tools/` 脚本）第一行写 `// @vitest-environment node`：默认的 jsdom 每个文件要多花约 1 秒创建（见 `docs/config/vite-config.md` 的"测试耗时"）
 - 工具函数、鉴权、HTTP 错误处理这类纯逻辑要写测试；页面和组件测试关键交互
 - pages、features 的测试用 `createMemoryHistory()` 建只含所需路由的最小路由，不导入 `app` 的路由表（测试文件同样受依赖方向约束）；`app` 自己的测试可以用真实路由表，例如检查导航与路由权限是否一致
 - 模拟环境变量用 `vi.stubEnv`，用例结束后会自动撤销（`unstubEnvs`）

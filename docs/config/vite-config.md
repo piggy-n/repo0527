@@ -41,7 +41,8 @@ const generators =
 | 字段 | 值 | 说明 |
 |---|---|---|
 | `include` | `['src/**/*.test.{ts,tsx}', 'tools/**/*.test.ts']` | 测试文件和源文件放在一起；`tools/` 下是 Node 端的检查测试，例如图标是否已规范化 |
-| `environment` | `'jsdom'` | 在 Node 里模拟 DOM，挂载组件用 |
+| `environment` | `'jsdom'` | 在 Node 里模拟 DOM，挂载组件用。不用 DOM 的测试文件在第一行写 `// @vitest-environment node` 改用 Node 环境，见下文"测试耗时" |
+| `fsModuleCache` | `true` | 把转换结果缓存到根目录的 `node_modules/.vitest-cache`，之后的运行跳过转换，见下文"测试耗时" |
 | `setupFiles` | `['src/test-setup.ts']` | 每个测试文件运行前执行。里面调用 `@vue/test-utils` 的 `enableAutoUnmount(afterEach)`：每个用例结束后卸载用 `mount` 挂载的组件，查询、定时器、ResizeObserver 随之停止，进行中的查询被取消，不会有晚到的请求落到下一个用例（之前出现过 MSW 报"没有匹配的处理函数"）。用例里手动 `unmount()` 过的组件会再卸载一次，这一版 Vue 下是空操作，不报错也不警告。已用对照实验验证：去掉这一项后，前一个用例挂载的组件没有被卸载 |
 | `unstubEnvs` | `true` | 每个用例结束后撤销 `vi.stubEnv`。已用对照实验验证：关掉后，一个用例修改的环境变量会泄漏到下一个用例 |
 | `server.deps.inline` | `['element-plus']` | 让 Vitest 处理 element-plus，而不是交给 Node 直接加载。不加的话，Element 表单的校验在测试中永远通过，见下文 |
@@ -62,7 +63,25 @@ const generators =
 
 加入 `server.deps.inline` 后，element-plus 由 Vitest 处理，它对 async-validator 的导入会经过 Vitest 的 CommonJS 兼容处理，校验恢复正常。去掉这一项，`useLoginForm` 的 3 个校验用例会失败（已验证）。
 
-代价：element-plus 每次运行都要重新转换，本机上全部测试从约 6 秒增加到约 20 秒。也试过依赖预构建（`deps.optimizer` 的 `client`、`ssr`，单独使用或与 inline 一起），校验仍然返回 `true`，没有采用。
+代价：element-plus 每次运行都要重新转换，本机上全部测试从约 6 秒增加到约 20 秒。也试过依赖预构建（`deps.optimizer` 的 `client`、`ssr`，单独使用或与 inline 一起），校验仍然返回 `true`，没有采用。阶段五开启 `fsModuleCache` 后，转换结果缓存在磁盘上，只有第一次运行需要转换。
+
+#### 测试耗时（阶段五 5A.0 实测）
+
+阶段四结束时记下的约 51 秒没有复现：2026-10-09 不开缓存跑了 5 次，是 32～40 秒；只跑阶段三就有的 37 个文件也要约 38 秒，所以变慢不是阶段四新增的测试造成的，那次大概是机器负载高时测的。波动在 ±4 秒左右，比较时要多跑几次。
+
+Vitest 5 运行结束时会打印各部分所占的比例：导入 32～36%、转换 28～31%、创建 jsdom 26%，跑用例只占 8%。每个测试文件隔离运行，都要重新创建 jsdom、重新导入 element-plus（它必须由 Vitest 处理，见上文），所以时间花在每个文件的准备上。
+
+| 做法 | 结果 | 结论 |
+|---|---|---|
+| `fsModuleCache` | 第一次运行写缓存，之后约 25 秒（快约 25%）；第一次没有稳定变慢 | 采用，CI 里同样开启 |
+| 不用 DOM 的文件用 Node 环境 | 单个文件从 1.14 秒降到 0.26 秒；整体再快 2～3 秒 | 采用：19 个文件在第一行写 `// @vitest-environment node` |
+| `pool: 'vmThreads'`（每个工作线程只建一次 jsdom） | 13 个文件失败：MSW、axios 和结构化克隆在不同的 VM 上下文之间出问题 | 不用 |
+| `isolate: false`（各文件共享环境和模块） | 20 多个文件失败：模块里的状态（Pinia、查询缓存、会话）在文件之间共享 | 不用 |
+| `pool: 'threads'`、减少并行数 | 只差 1～2 秒，在波动范围内 | 不改 |
+
+**缓存的失效**：缓存键由模块的路径和内容、Vite 配置（root、mode、resolve、插件名、配置文件本身的内容）、`NODE_ENV` 和 Vitest 版本组成（2026-10-09 读 Vitest 5.0.2 的源码确认），不包含插件的选项；用到 `import.meta.glob` 的模块不缓存。缓存放在 `node_modules` 里，重装依赖时自然清掉。改了插件的选项、或怀疑测试用的是旧的转换结果时，执行 `pnpm --filter @yzt/web exec vitest --clearCache`（同时清掉用于排序的运行记录）。
+
+**Node 环境**：在 Node 环境下也能通过的测试文件——纯逻辑、libs 的会话与 Worker 通信层、`tools/` 下的 Node 脚本——在第一行写 `// @vitest-environment node`。忘了写只是慢一点；写了但实际用到 DOM，会因为 `document` 未定义而直接失败，不会悄悄通过。Node 和 jsdom 有细小差别，例如 `DOMException` 在 Node 和浏览器里都是 `Error` 的实例，在 jsdom 里不是（Worker 通信层的错误处理两种都兼容）。
 
 ### Sass 的 loadPaths
 
@@ -121,5 +140,6 @@ proxy: {
 
 - 新增代理规则：同步更新 `docs/deployment.md` 中的 nginx 示例，保持开发和生产一致
 - 新增插件：确认它不依赖 TS 的 JS API（ADR 0003），并在本文登记；插件对测试同样生效，改完运行 `pnpm test`
+- 修改插件的选项：测试的转换缓存不包含插件选项，先执行 `pnpm --filter @yzt/web exec vitest --clearCache` 再运行测试
 - 改动路径别名：只改 tsconfig 的 `paths`，不要在这里加 `resolve.alias`
 - 新增 libs 模块的 Sass 入口：放在模块根目录，命名 `_index.scss`，只放变量；`test.css.include` 的正则已经覆盖所有模块

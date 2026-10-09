@@ -221,8 +221,9 @@ pnpm build
 **执行了什么**：根目录的 `pnpm -r test` 在 `apps/web` 里执行 `vitest run`：
 
 1. 读取 `vite.config.ts`（与开发、构建共用插件、别名和 `.env`，模式为 `test`）
-2. 运行 `src/**/*.test.{ts,tsx}`，DOM 环境是 jsdom
-3. 有失败时退出码非 0
+2. 运行 `src/**/*.test.{ts,tsx}` 和 `tools/**/*.test.ts`，默认环境是 jsdom；第一行写了 `// @vitest-environment node` 的文件用 Node 环境
+3. 转换结果缓存在根目录的 `node_modules/.vitest-cache`（`fsModuleCache`），第一次运行写缓存，之后跳过转换
+4. 有失败时退出码非 0
 
 **注意事项**：
 
@@ -230,6 +231,8 @@ pnpm build
 - 只跑某个目录或文件：`pnpm --filter @yzt/web test -- src/app/router`
 - 本地 `it.only` 会让其他用例被跳过，lint 会报错；CI 中 Vitest 会直接拒绝运行
 - Vitest 只转译不做类型检查，测试文件的类型由 `pnpm typecheck` 检查
+- 改了 Vite 插件的选项、或怀疑测试用的是旧的转换结果时，先清缓存：`pnpm --filter @yzt/web exec vitest --clearCache`（缓存键不含插件选项，见 [config/vite-config.md](config/vite-config.md)"测试耗时"）
+- 耗时约 25 秒（缓存已写好时），波动约 ±4 秒
 
 ### `pnpm --filter @yzt/web test:watch`
 

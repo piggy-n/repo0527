@@ -1,3 +1,4 @@
+// @vitest-environment node
 import type { LayerSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { FeatureCollection } from 'geojson';
 import type { Map as MapLibreMap } from 'maplibre-gl';

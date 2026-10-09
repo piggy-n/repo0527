@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { loadEnv } from 'vite';
 import { describe, expect, it } from 'vitest';
 import { titleOutlineConfig } from './paths.ts';

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { createTestJwt, createTestJwtExpiringAt } from './testing';
 import { getTokenExpiry, isTokenExpired } from './token';

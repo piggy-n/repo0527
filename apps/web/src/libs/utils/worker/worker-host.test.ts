@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { transfer, WorkerCrashedError, WorkerUnavailableError } from './protocol';
 import { gate, settled, TestEndpoint } from './testing';

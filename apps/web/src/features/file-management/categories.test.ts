@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CATEGORY_ID, type FileCategory, fileCategories, findCategoryPath } from './categories';
 

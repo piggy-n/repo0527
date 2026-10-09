@@ -1,3 +1,4 @@
+// @vitest-environment node
 import type { GeoJSONSourceSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it, vi } from 'vitest';
 import { type StyleChange, type StyleGroup, StyleModel } from './style-model';
