@@ -1,3 +1,10 @@
+export {
+  type CameraCause,
+  type CameraChange,
+  CameraModel,
+  type CameraState,
+  type ViewKind
+} from './camera/camera-model';
 export type { Unsubscribe } from './events';
 export { diffStyle, type StyleCommand } from './style/diff-style';
 export {

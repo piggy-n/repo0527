@@ -30,6 +30,7 @@
 
 - 已实现 `diffStyle`（`style/diff-style.ts`）：对比前把 GeoJSON 的 `data` 换成同一个占位值，交给 style-spec；`addSource` 和退路 `setStyle` 换回真实数据；前后都存在且未重建的 GeoJSON 数据源按引用比较，不同就追加 `setGeoJSONSourceData`（放在末尾，这类数据源在整个过程中一直存在）
 - 已实现 `StyleModel`（`style/style-model.ts`）：构造时声明分组顺序，类型参数用 `const`，不写 `as const` 也能推断出分组 ID 的字面量联合；提交前先组合并校验（分组 ID 未声明、数据源或图层 ID 重复、图层引用的数据源不存在都会抛错，整次提交不生效）；所有分组引用都没变的提交被忽略，内容相同的新对象照样加版本号，但对比后没有命令就不通知；通知前先记下快照，监听器里再次提交时下一次通知从这里开始对比；释放后丢弃待发的通知、清空监听器，再提交或订阅会抛错，读取 `current`、`version` 仍然可以
+- 已实现 `CameraModel`（`camera/camera-model.ts`）：写入时复制并冻结；数值出现 `NaN`、无穷或纬度超出 ±90 时抛 `RangeError`，状态不变；不做范围收敛（俯角上限等由各视图应用时处理）；数值都没变时不通知；同步通知，不合并到微任务（相机本来每帧变一次，事件的 `cause` 要对得上触发它的那次调用）。`intentRevision` 只在 `user`、`program` 的变化时加 1：三维切走时记下它，切回时没变，就按 ADR 0024 第 6 条还原离开时的精确视角
 - 消费方首次挂载、暂停后恢复、按需追上都是"已应用的快照 → 当前快照"的对比；应用某条命令出错时，用当前快照整体重建
 - 视图的生命周期：`idle → initializing → ready ⇄ paused`，另有 `failed`、`disposed`；保留状态、应用变化、统计查询分开控制
 - 选择状态只存要素身份和高亮数据，候选列表和详情在 feature 的查询缓存里
@@ -62,16 +63,23 @@ export type ViewKind = '2d' | '3d';
 export type CameraCause = 'user' | 'program' | 'sync';
 
 export interface CameraState {
-  center: [number, number];
-  zoom: number;
-  bearing: number;
-  pitch: number;
+  readonly center: readonly [number, number];
+  readonly zoom: number;
+  readonly bearing: number;
+  readonly pitch: number;
+}
+
+export interface CameraChange {
+  readonly state: CameraState;
+  readonly view: ViewKind;
+  readonly cause: CameraCause;
 }
 
 export interface CameraModel {
   readonly current: CameraState;
+  readonly intentRevision: number;
   set(state: CameraState, change: { view: ViewKind; cause: CameraCause }): void;
-  on(event: 'change', cb: (state: CameraState, change: { view: ViewKind; cause: CameraCause }) => void): Unsubscribe;
+  on(event: 'change', cb: (change: CameraChange) => void): Unsubscribe;
 }
 
 export interface MapSession<G extends string> extends Disposable {
