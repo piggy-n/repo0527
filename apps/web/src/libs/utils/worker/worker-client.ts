@@ -23,7 +23,7 @@ export type DiscardHandlers<P extends WorkerProtocol<P>> = {
 export interface WorkerClientOptions<P extends WorkerProtocol<P>> {
   /** 取消之后才到达的结果在这里释放，例如 ImageBitmap.close()（ADR 0025） */
   readonly discard?: DiscardHandlers<P>;
-  /** 端点触发 error 或 messageerror 时调用，等待中的请求此时已经以 WorkerCrashedError 结束 */
+  /** 端点触发 error 或 messageerror、或 Worker 报告无法反序列化消息时调用，等待中的请求此时已经以 WorkerCrashedError 结束 */
   readonly onCrash?: (error: WorkerCrashedError) => void;
 }
 
@@ -48,6 +48,10 @@ export class WorkerClient<P extends WorkerProtocol<P>> implements Disposable {
 
   readonly #onMessage = ({ data }: MessageEvent) => {
     if (this.#state !== 'open' || !isServerMessage(data)) {
+      return;
+    }
+    if (data.kind === 'fault') {
+      this.#crash(new WorkerCrashedError('Worker 无法反序列化收到的消息'));
       return;
     }
     const pending = this.#take(data.id);

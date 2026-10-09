@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { transfer, WorkerTaskError } from './protocol';
+import { transfer, WorkerCrashedError, WorkerTaskError } from './protocol';
 import { connect, gate, settled } from './testing';
 import type { WorkerClient } from './worker-client';
 import type { ServeOptions, WorkerHandlers } from './worker-server';
@@ -183,6 +183,31 @@ describe('serveWorker', () => {
     using ctx = setup();
 
     await expect(ctx.client.request('unclonable', undefined)).rejects.toMatchObject({ name: 'DataCloneError' });
+  });
+
+  it('reports a message it cannot deserialize and stops serving', async () => {
+    const running = gate();
+    let aborted = false;
+    using ctx = setup({
+      watch: (_, { signal }) => {
+        running.open();
+        return new Promise(resolve => {
+          signal.addEventListener('abort', () => {
+            aborted = true;
+            resolve('aborted');
+          });
+        });
+      }
+    });
+
+    const watching = ctx.client.request('watch', undefined);
+    await running.opened;
+    ctx.serverEndpoint.crash('messageerror');
+
+    await expect(settled(watching)).rejects.toBeInstanceOf(WorkerCrashedError);
+    // 客户端已经失效，执行中的任务没有意义了
+    expect(aborted).toBe(true);
+    expect(ctx.serverEndpoint.listenerCount()).toBe(0);
   });
 
   it('stops handling requests after disposal', async () => {

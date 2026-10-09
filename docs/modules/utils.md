@@ -75,7 +75,8 @@ serveWorker<TileProtocol>(self, {
 | 处理函数抛错 | 以 `WorkerTaskError` 结束，`name` 保留原错误名，Worker 里的调用栈在 `workerStack` |
 | 结果无法克隆 | Worker 里 `postMessage` 抛 `DataCloneError`，改为回复失败 |
 | 参数无法克隆 | 主线程同步捕获，只结束这一个请求 |
-| 端点触发 `error` 或 `messageerror` | 等待中的请求都以 `WorkerCrashedError` 结束，客户端失效，之后的请求立即以同一个错误结束 |
+| 主线程一侧的端点触发 `error` 或 `messageerror` | 等待中的请求都以 `WorkerCrashedError` 结束，客户端失效，之后的请求立即以同一个错误结束 |
+| Worker 一侧触发 `messageerror`（收到的消息无法反序列化） | 事件不带数据，Worker 不知道是哪个请求，主线程也推断不出来（还有消息在路上）：`serveWorker` 回复一条不带 ID 的 `fault` 消息后停止服务、中止执行中的任务；客户端收到后按上一行处理 |
 | `WorkerHost` 托管的 Worker 崩溃 | 终止它，下次请求时新建；连续崩溃超过 `maxRestarts`（默认 3）后以 `WorkerUnavailableError` 拒绝；成功一次就重新计数；创建 Worker 本身失败（如浏览器不支持）不算崩溃 |
 | 释放 | 等待中的请求以 `AbortError` 结束，之后的请求以"已释放"拒绝；`WorkerHost` 同时终止 Worker |
 | 超时 | 默认不设，需要时传 `AbortSignal.timeout(ms)` |
@@ -95,7 +96,8 @@ serveWorker<TileProtocol>(self, {
 - jsdom 里不能往真实的 `MessagePort` 派发事件（端口来自 Node，`Event` 来自 jsdom），模拟崩溃用 `TestEndpoint`：消息转发给端口，`crash()` 触发 `error` 或 `messageerror`
 - 测试和"Worker"在同一个线程里：取消消息要等下一个任务才送达，测"排队时被取消"要先等它到达
 - 实现出错时可能一直挂起的等待都包进 `settled()`，测试因断言失败而不是超时
-- 逐一改坏 25 处，24 处由断言发现；"释放后不移除服务端的消息监听"测不出来：消息处理函数开头的 `disposed` 检查已经挡住了消息，移除监听只是让对象可以被回收
+- `connect` 的两端都是 `TestEndpoint`：`endpoint.crash()` 模拟主线程一侧的故障，`serverEndpoint.crash()` 模拟 Worker 一侧的故障
+- 逐一改坏 25 处，24 处由断言发现（补上 Worker 一侧的 `messageerror` 后又改坏 6 处，全部发现）；"释放后不移除服务端的消息监听"测不出来：消息处理函数开头的 `disposed` 检查已经挡住了消息，移除监听只是让对象可以被回收
 
 ### 还没做的
 

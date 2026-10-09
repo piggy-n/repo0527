@@ -14,6 +14,7 @@ function setup(options: Partial<WorkerHostOptions<TestProtocol>> = {}) {
   const stack = new DisposableStack();
   const released = gate();
   const workers: TestEndpoint[] = [];
+  const serverEndpoints: TestEndpoint[] = [];
   const handlers: WorkerHandlers<TestProtocol> = {
     echo: text => text,
     hold: async () => {
@@ -29,7 +30,9 @@ function setup(options: Partial<WorkerHostOptions<TestProtocol>> = {}) {
   // 每次"创建 Worker"都是一对新的端口，另一端挂上 serveWorker
   const createWorker = () => {
     const { port1, port2 } = new MessageChannel();
-    stack.use(serveWorker(port2, handlers));
+    const serverEndpoint = new TestEndpoint(port2);
+    serverEndpoints.push(serverEndpoint);
+    stack.use(serveWorker(serverEndpoint, handlers));
     stack.defer(() => port2.close());
     const worker = new TestEndpoint(port1);
     workers.push(worker);
@@ -37,7 +40,14 @@ function setup(options: Partial<WorkerHostOptions<TestProtocol>> = {}) {
   };
   const host = new WorkerHost<TestProtocol>({ createWorker, ...options });
   stack.use(host);
-  return { host, workers, createWorker, release: released.open, [Symbol.dispose]: () => stack.dispose() };
+  return {
+    host,
+    workers,
+    serverEndpoints,
+    createWorker,
+    release: released.open,
+    [Symbol.dispose]: () => stack.dispose()
+  };
 }
 
 // 让最近创建的 Worker 在请求进行中崩溃
@@ -67,6 +77,18 @@ describe('WorkerHost', () => {
     await expect(settled(pending)).rejects.toBeInstanceOf(WorkerCrashedError);
     expect(ctx.workers[0]?.terminated).toBe(true);
     await expect(ctx.host.request('echo', 'after crash')).resolves.toBe('after crash');
+    expect(ctx.workers).toHaveLength(2);
+  });
+
+  it('replaces the worker when the worker cannot deserialize a message', async () => {
+    using ctx = setup();
+
+    const pending = ctx.host.request('hold', undefined);
+    ctx.serverEndpoints[0]?.crash('messageerror');
+
+    await expect(settled(pending)).rejects.toBeInstanceOf(WorkerCrashedError);
+    expect(ctx.workers[0]?.terminated).toBe(true);
+    await expect(ctx.host.request('echo', 'after messageerror')).resolves.toBe('after messageerror');
     expect(ctx.workers).toHaveLength(2);
   });
 

@@ -43,6 +43,8 @@ describe('protocol', () => {
   it.each([
     [{ kind: 'result', id: 1, method: 'decode', value: undefined }, true],
     [{ kind: 'failure', id: 1, error: { name: 'Error', message: 'boom' } }, true],
+    [{ kind: 'fault', type: 'messageerror' }, true],
+    [{ kind: 'fault', type: 'error' }, false],
     [{ kind: 'result', id: 1, value: 1 }, false],
     [{ kind: 'failure', id: 1, error: 'boom' }, false],
     [{ kind: 'request', id: 1, method: 'decode', payload: null }, false],

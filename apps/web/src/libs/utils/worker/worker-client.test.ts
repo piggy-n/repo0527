@@ -105,6 +105,19 @@ describe('WorkerClient', () => {
     expect(ctx.endpoint.listenerCount()).toBe(0);
   });
 
+  it('fails every pending request when the worker cannot deserialize a message', async () => {
+    const crashes: WorkerCrashedError[] = [];
+    using ctx = setup({ onCrash: error => crashes.push(error) });
+
+    const pending = [ctx.client.request('hold', undefined), ctx.client.request('echo', 'queued')];
+    // Worker 一侧触发 messageerror：它不知道是哪条消息，主线程也收不到任何事件
+    ctx.serverEndpoint.crash('messageerror');
+
+    await Promise.all(pending.map(request => expect(settled(request)).rejects.toBeInstanceOf(WorkerCrashedError)));
+    expect(crashes).toHaveLength(1);
+    expect(ctx.client.crashed).toBe(true);
+  });
+
   it('ignores messages that are not part of the protocol', async () => {
     using ctx = setup();
 

@@ -113,20 +113,32 @@ export function serveWorker<P extends WorkerProtocol<P>>(
     }
   };
 
-  endpoint.addEventListener('message', onMessage);
-  endpoint.start?.();
-
-  return {
-    [Symbol.dispose]() {
-      if (disposed) {
-        return;
-      }
-      disposed = true;
-      endpoint.removeEventListener('message', onMessage);
-      queue.length = 0;
-      for (const controller of running.values()) {
-        controller.abort();
-      }
+  const dispose = () => {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
+    endpoint.removeEventListener('message', onMessage);
+    endpoint.removeEventListener('messageerror', onMessageError);
+    queue.length = 0;
+    for (const controller of running.values()) {
+      controller.abort();
     }
   };
+
+  // 收到无法反序列化的消息时拿不到请求 ID：通知客户端按崩溃处理，自己停止服务，执行中的任务已经没人等待
+  const onMessageError = () => {
+    try {
+      reply({ kind: 'fault', type: 'messageerror' });
+    } catch {
+      // 端点已经关闭，客户端那边也收不到其他回复了
+    }
+    dispose();
+  };
+
+  endpoint.addEventListener('message', onMessage);
+  endpoint.addEventListener('messageerror', onMessageError);
+  endpoint.start?.();
+
+  return { [Symbol.dispose]: dispose };
 }

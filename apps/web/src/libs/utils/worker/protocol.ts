@@ -46,8 +46,14 @@ export interface FailureMessage {
   readonly error: SerializedError;
 }
 
+// Worker 一侧收到无法反序列化的消息：拿不到请求 ID，只能通知客户端按崩溃处理（ADR 0025）
+export interface FaultMessage {
+  readonly kind: 'fault';
+  readonly type: 'messageerror';
+}
+
 export type ClientMessage = RequestMessage | CancelMessage;
-export type ServerMessage = ResultMessage | FailureMessage;
+export type ServerMessage = ResultMessage | FailureMessage | FaultMessage;
 
 /** Safari 不能用结构化克隆传递错误对象，只传这几个字段 */
 export interface SerializedError {
@@ -72,7 +78,13 @@ export function isClientMessage(data: unknown): data is ClientMessage {
 }
 
 export function isServerMessage(data: unknown): data is ServerMessage {
-  if (!isRecord(data) || typeof data.id !== 'number') {
+  if (!isRecord(data)) {
+    return false;
+  }
+  if (data.kind === 'fault') {
+    return data.type === 'messageerror';
+  }
+  if (typeof data.id !== 'number') {
     return false;
   }
   return (

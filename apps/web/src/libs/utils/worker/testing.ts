@@ -70,13 +70,21 @@ export function connect<P extends WorkerProtocol<P>>(
   const stack = new DisposableStack();
   const { port1, port2 } = new MessageChannel();
   const endpoint = new TestEndpoint(port1);
-  const server = stack.use(serveWorker(port2, handlers, serve));
+  const serverEndpoint = new TestEndpoint(port2);
+  const server = stack.use(serveWorker(serverEndpoint, handlers, serve));
   const workerClient = stack.use(new WorkerClient<P>(endpoint, client));
   stack.defer(() => {
     port1.close();
     port2.close();
   });
-  return { client: workerClient, server, endpoint, serverPort: port2, [Symbol.dispose]: () => stack.dispose() };
+  return {
+    client: workerClient,
+    server,
+    endpoint,
+    serverEndpoint,
+    serverPort: port2,
+    [Symbol.dispose]: () => stack.dispose()
+  };
 }
 
 /** 一个由测试控制何时放行的开关 */
