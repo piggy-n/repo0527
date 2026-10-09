@@ -219,6 +219,19 @@ function names(calls: unknown[][]): unknown[] {
   return calls.map(([name]) => name);
 }
 
+// 地图就绪 → 暂停 → 修改样式（addLayer 会被拒绝），恢复显示时追赶触发整体重建
+async function resumeIntoRebuild() {
+  const ctx = setup();
+  ctx.map.fire('style.load');
+  ctx.view.pause();
+  ctx.map.rejectOn = 'addLayer';
+  ctx.session.style.setGroup('business', lineGroup('dltb'));
+  await nextMicrotask();
+  ctx.view.resume();
+  ctx.map.rejectOn = undefined;
+  return ctx;
+}
+
 describe('MapLibreView', () => {
   it('works with the MapLibre map', () => {
     expectTypeOf<MapLibreMap>().toExtend<MapLike>();
@@ -580,7 +593,7 @@ describe('MapLibreView', () => {
       expect(ctx.errors).toEqual([]);
     });
 
-    it('reports MapLibre error events without rebuilding', () => {
+    it('reports MapLibre error events without rebuilding', async () => {
       using ctx = setup();
       ctx.map.fire('style.load');
       const failure = new Error('tile 404');
@@ -589,6 +602,273 @@ describe('MapLibreView', () => {
 
       expect(ctx.errors).toEqual([failure]);
       expect(ctx.map.styleCalls()).toEqual([]);
+      // 样式已经加载完成，这类错误不影响状态，之后照常增量同步
+      expect(ctx.view.state).toBe('ready');
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      expect(names(ctx.map.styleCalls())).toEqual(['addSource', 'addLayer']);
+    });
+  });
+
+  describe('style recovery', () => {
+    it('reloads the latest version at once when the loading version fails after a newer one was committed', async () => {
+      using ctx = setup();
+      // 加载期间提交的版本：通知到达时还在加载，先不处理
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      const ready = ctx.view.whenReady();
+
+      ctx.map.fire('error', { error: new Error('invalid style') });
+      await nextMicrotask();
+
+      // 已经有可以尝试的新版本，不进入 failed
+      expect(ctx.map.styleCalls()).toEqual([['setStyle', ctx.session.style.current, { diff: false }]]);
+      expect(ctx.states).toEqual([]);
+      ctx.map.fire('style.load');
+      await expect(settled(ready)).resolves.toBeUndefined();
+      expect(ctx.states).toEqual(['ready']);
+    });
+
+    it('reloads the latest version at once when a rebuild fails after a newer one was committed', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      ctx.map.rejectOn = undefined;
+      ctx.session.style.setGroup('business', lineGroup('dltb', '#993366'));
+      await nextMicrotask();
+
+      ctx.map.fire('error', { error: new Error('invalid style') });
+      await nextMicrotask();
+
+      expect(names(ctx.map.styleCalls())).toEqual(['addSource', 'setStyle', 'setStyle']);
+      expect(ctx.map.styleCalls().at(-1)).toEqual(['setStyle', ctx.session.style.current, { diff: false }]);
+      expect(ctx.states).toEqual(['ready']);
+    });
+
+    it('treats every error of one failed load as the failure of that load', async () => {
+      using ctx = setup();
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+
+      // MapLibre 对每条校验错误各发一次 error；重新加载要等它们发完，否则后面的会被当成新版本的失败
+      ctx.map.fire('error', { error: new Error('layers[0].paint.line-width: number expected') });
+      ctx.map.fire('error', { error: new Error('layers[1].paint.line-color: color expected') });
+      await nextMicrotask();
+
+      expect(ctx.map.styleCalls()).toEqual([['setStyle', ctx.session.style.current, { diff: false }]]);
+      ctx.map.fire('style.load');
+      expect(ctx.states).toEqual(['ready']);
+    });
+
+    it('does not reload after disposal even if a newer version was waiting', async () => {
+      using ctx = setup();
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+
+      ctx.map.fire('error', { error: new Error('invalid style') });
+      ctx.view[Symbol.dispose]();
+      await nextMicrotask();
+
+      expect(ctx.map.styleCalls()).toEqual([]);
+    });
+
+    it('keeps syncing incrementally from the snapshot that finally loaded after an error', async () => {
+      using ctx = setup();
+      ctx.map.fire('error', { error: new Error('sprite 404') });
+      ctx.map.fire('style.load');
+
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+
+      expect(names(ctx.map.styleCalls())).toEqual(['addSource', 'addLayer']);
+      expect(ctx.states).toEqual(['failed', 'ready']);
+    });
+
+    it('catches up the versions committed while loading when the load completes after an error', async () => {
+      using ctx = setup();
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+
+      // 同一次加载里先报了非致命的错误，随后仍然完成
+      ctx.map.fire('error', { error: new Error('sprite 404') });
+      ctx.map.fire('style.load');
+      await nextMicrotask();
+
+      expect(names(ctx.map.styleCalls())).toEqual(['addSource', 'addLayer']);
+      expect(ctx.states).toEqual(['ready']);
+    });
+
+    it('stays initializing when catching up on the first activation triggers a rebuild', async () => {
+      using ctx = setup();
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      const ready = ctx.view.whenReady();
+
+      ctx.map.fire('style.load');
+
+      expect(ctx.view.state).toBe('initializing');
+      expect(ctx.map.styleCalls().at(-1)).toEqual(['setStyle', ctx.session.style.current, { diff: false }]);
+      expect(names(ctx.map.calls)).not.toContain('jumpTo');
+      expect(await settled(ready)).toBe('pending');
+
+      // 重建完成后再激活
+      ctx.map.rejectOn = undefined;
+      ctx.map.fire('style.load');
+      await expect(settled(ready)).resolves.toBeUndefined();
+      expect(ctx.states).toEqual(['ready']);
+    });
+
+    it('fails without having been ready when the rebuild on the first activation is rejected', async () => {
+      using ctx = setup();
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      const invalid = new Error('invalid style');
+
+      ctx.map.fire('style.load');
+      ctx.map.fire('error', { error: invalid });
+
+      expect(ctx.states).toEqual(['failed']);
+      await expect(settled(ctx.view.whenReady())).rejects.toBe(invalid);
+    });
+
+    it('stays paused when catching up on resume triggers a rebuild', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.view.pause();
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      const jumps = ctx.map.calls.filter(([name]) => name === 'jumpTo').length;
+
+      ctx.view.resume();
+
+      expect(ctx.view.state).toBe('paused');
+      expect(ctx.map.calls.filter(([name]) => name === 'jumpTo')).toHaveLength(jumps);
+      ctx.map.rejectOn = undefined;
+      ctx.map.fire('style.load');
+      expect(ctx.states).toEqual(['ready', 'paused', 'ready']);
+    });
+  });
+
+  describe('whenReady', () => {
+    it('waits for the rebuild started on resume and then allows locating', async () => {
+      using ctx = await resumeIntoRebuild();
+      const ready = ctx.view.whenReady();
+
+      expect(ctx.view.state).toBe('paused');
+      expect(await settled(ready)).toBe('pending');
+      ctx.map.fire('style.load');
+
+      await expect(settled(ready)).resolves.toBeUndefined();
+      expect(ctx.view.state).toBe('ready');
+      expect(() => ctx.view.flyTo({ zoom: 10 })).not.toThrow();
+    });
+
+    it('rejects the same promise when the rebuild started on resume fails', async () => {
+      using ctx = await resumeIntoRebuild();
+      const ready = ctx.view.whenReady();
+      const invalid = new Error('invalid style');
+
+      ctx.map.fire('error', { error: invalid });
+
+      await expect(settled(ready)).rejects.toBe(invalid);
+      expect(ctx.view.whenReady()).toBe(ready);
+    });
+
+    it('rejects the same promise with AbortError when disposed during the rebuild', async () => {
+      using ctx = await resumeIntoRebuild();
+      const ready = ctx.view.whenReady();
+
+      ctx.view[Symbol.dispose]();
+
+      await expect(settled(ready)).rejects.toMatchObject({ name: 'AbortError' });
+    });
+
+    it('waits for a rebuild started while ready', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      const ready = ctx.view.whenReady();
+
+      expect(await settled(ready)).toBe('pending');
+      ctx.map.fire('style.load');
+
+      await expect(settled(ready)).resolves.toBeUndefined();
+    });
+
+    it('keeps waiting when catching up after a rebuild starts another rebuild', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      // 重建期间又提交了一个版本，重建完成后追赶它时 addLayer 仍被拒绝
+      ctx.session.style.setGroup('basemap', lineGroup('tdt'));
+      await nextMicrotask();
+      const ready = ctx.view.whenReady();
+
+      ctx.map.fire('style.load');
+
+      expect(names(ctx.map.styleCalls()).filter(name => name === 'setStyle')).toHaveLength(2);
+      expect(await settled(ready)).toBe('pending');
+      ctx.map.rejectOn = undefined;
+      ctx.map.fire('style.load');
+      await expect(settled(ready)).resolves.toBeUndefined();
+    });
+
+    it('hands out the new round on the statechange of a reload after failure', async () => {
+      using ctx = setup();
+      ctx.map.fire('error', { error: new Error('invalid style') });
+      let readyOnInitializing: Promise<void> | undefined;
+      ctx.view.on('statechange', state => {
+        if (state === 'initializing') {
+          readyOnInitializing = ctx.view.whenReady();
+        }
+      });
+
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      ctx.map.fire('style.load');
+
+      expect(readyOnInitializing).toBeDefined();
+      await expect(settled(readyOnInitializing ?? Promise.reject(new Error('missing')))).resolves.toBeUndefined();
+    });
+
+    it('resolves when a rebuild completes while paused', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      ctx.view.pause();
+      const ready = ctx.view.whenReady();
+
+      expect(await settled(ready)).toBe('pending');
+      ctx.map.fire('style.load');
+
+      // 和以 active: false 创建时一样：样式加载完成就结束，视图仍是 paused
+      await expect(settled(ready)).resolves.toBeUndefined();
+      expect(ctx.view.state).toBe('paused');
+    });
+
+    it('keeps the same promise when a failed load is retried with a newer version', async () => {
+      using ctx = setup();
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      const ready = ctx.view.whenReady();
+
+      ctx.map.fire('error', { error: new Error('invalid style') });
+      await nextMicrotask();
+
+      expect(ctx.view.whenReady()).toBe(ready);
+      ctx.map.fire('style.load');
+      await expect(settled(ready)).resolves.toBeUndefined();
     });
   });
 

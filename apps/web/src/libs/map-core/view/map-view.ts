@@ -26,7 +26,10 @@ export interface FitBoundsOptions {
 export interface MapView extends Disposable {
   readonly kind: ViewKind;
   readonly state: ViewState;
-  /** 当前这一轮加载的结果：可以应用样式时结束，失败时以原因结束，释放时以 AbortError 结束；失败后重新加载时换成新的 */
+  /**
+   * 当前这一轮整体加载的结果（创建地图、整体重建、重新加载各算一轮）：加载完成后结束（视图进入 ready，暂停时为 paused），
+   * 失败时以原因结束，释放时以 AbortError 结束；上一轮已有结果时，新一轮换成新的 Promise
+   */
   whenReady(): Promise<void>;
   pause(): void;
   resume(): void;

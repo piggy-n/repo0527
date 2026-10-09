@@ -60,10 +60,15 @@ function deferred(): Deferred {
   };
 }
 
-/** 地图上的样式：整体加载中、已加载（即已应用的快照）、加载失败（ADR 0026） */
-type MapStyle =
-  | { readonly status: 'loading' | 'loaded'; readonly version: number; readonly style: StyleSpecification }
-  | { readonly status: 'failed'; readonly version: number };
+/**
+ * 地图上的样式：整体加载中、已加载（即已应用的快照）、加载失败（ADR 0026）
+ * 失败时也记下快照：之后 style.load 仍然到达时，以它为已加载
+ */
+interface MapStyle {
+  readonly status: 'loading' | 'loaded' | 'failed';
+  readonly version: number;
+  readonly style: StyleSpecification;
+}
 
 const CAMERA_CAUSES: readonly string[] = ['user', 'program', 'sync'] satisfies CameraCause[];
 
@@ -100,7 +105,7 @@ export class MapLibreView<const G extends string> implements MapView {
   readonly #onError: (error: unknown) => void;
   readonly #emitter = createNanoEvents<MapLibreViewEvents>();
   readonly #stack: DisposableStack;
-  // 当前这一轮加载的结果；失败后重新加载时换一个新的
+  // 当前这一轮整体加载的结果（创建地图、整体重建、重新加载各算一轮），本轮的成功、失败、释放都结束它
   #ready = deferred();
   #state: ViewState = 'initializing';
   #active: boolean;
@@ -148,7 +153,7 @@ export class MapLibreView<const G extends string> implements MapView {
     stack.defer(() => map.remove());
     for (const subscription of [
       map.on('style.load', () => this.#guard(() => this.#onStyleLoad(map))),
-      map.on('error', ({ error }) => this.#guard(() => this.#onMapError(error))),
+      map.on('error', ({ error }) => this.#guard(() => this.#onMapError(map, error))),
       map.on('move', event => this.#guard(() => this.#onMove(map, event)))
     ]) {
       stack.defer(() => subscription.unsubscribe());
@@ -212,43 +217,56 @@ export class MapLibreView<const G extends string> implements MapView {
     if (this.#fatal) {
       return;
     }
-    if (this.#mapStyle.status === 'loading') {
-      const { version, style } = this.#mapStyle;
-      this.#mapStyle = { status: 'loaded', version, style };
-    }
     // failed：之前的 error 并不致命，加载最终完成了，以 style.load 为准
-    if (this.#state === 'initializing' || this.#state === 'failed') {
-      this.#renewReady();
-      if (this.#active) {
-        this.#activate(map);
-      } else {
-        this.#setState('paused');
-      }
-      this.#ready.resolve();
-    } else if (this.#state === 'ready') {
+    if (this.#mapStyle.status !== 'loaded') {
+      this.#mapStyle = { ...this.#mapStyle, status: 'loaded' };
+    }
+    if (this.#state === 'ready') {
       this.#catchUp(map);
+      // 运行中的整体重建完成并追上了；追赶又触发了重建时，本轮延续到那一次加载
+      if (this.#mapStyle.status === 'loaded') {
+        this.#ready.resolve();
+      }
+    } else if (this.#active) {
+      // 首次加载、失败后恢复，或者恢复显示时因整体重建而中断的激活
+      this.#activate(map);
+    } else {
+      // 包括暂停期间完成的加载：和以 active: false 创建时一样，样式加载完成本轮就结束
+      this.#enter('paused');
     }
   }
 
-  #onMapError(error: Error): void {
+  #onMapError(map: MapLike, error: Error): void {
     this.#onError(error);
     if (this.#fatal) {
       return;
     }
     if (this.#applying) {
       this.#rejected = true;
-    } else if (this.#mapStyle.status === 'loading') {
-      // 整份样式校验失败时 MapLibre 只发 error，不会再有 style.load
-      this.#mapStyle = { status: 'failed', version: this.#mapStyle.version };
-      this.#renewReady();
-      this.#ready.reject(error);
-      this.#setState('failed');
+      return;
     }
+    if (this.#mapStyle.status !== 'loading') {
+      return;
+    }
+    // 整份样式校验失败时 MapLibre 只发 error，不会再有 style.load
+    this.#mapStyle = { ...this.#mapStyle, status: 'failed' };
+    if (this.#session.style.version > this.#mapStyle.version) {
+      // 加载期间已经提交了更新的版本：不进入 failed，直接用最新的快照再加载；
+      // 放到微任务里，等 MapLibre 发完这次加载的全部错误再调用 setStyle，不在它分发事件的过程中重入
+      queueMicrotask(() => this.#reloadIfNewer(map));
+      return;
+    }
+    this.#ready.reject(error);
+    this.#setState('failed');
   }
 
-  // 首次进入 ready 和恢复显示共用：追上样式，相机先跟随会话、再把地图的实际值写回，最后才发出 ready
+  // 首次进入 ready 和恢复显示共用：先追上样式，相机先跟随会话、再把地图的实际值写回，最后才进入 ready
   #activate(map: MapLike): void {
     this.#catchUp(map);
+    if (this.#mapStyle.status !== 'loaded') {
+      // 追赶时触发了整体重建：中止激活，等 style.load 后再激活，重建失败则进入 failed
+      return;
+    }
     const {
       center: [lng, lat],
       zoom,
@@ -258,7 +276,14 @@ export class MapLibreView<const G extends string> implements MapView {
     // 此时还不是 ready，jumpTo 触发的 move 不会写回；地图收敛过的实际值（如俯角上限）下面按 sync 写回，不算意图
     map.jumpTo({ center: [lng, lat], zoom, bearing, pitch }, { cause: 'sync' });
     this.#writeCamera(map, 'sync');
-    this.#setState('ready');
+    this.#enter('ready');
+  }
+
+  // 加载完成或激活后进入 ready、paused，whenReady 随之结束
+  #enter(state: 'ready' | 'paused'): void {
+    this.#renewReady();
+    this.#setState(state);
+    this.#ready.resolve();
   }
 
   #onStyleChange(change: StyleChange): void {
@@ -268,10 +293,7 @@ export class MapLibreView<const G extends string> implements MapView {
     }
     const mapStyle = this.#mapStyle;
     if (mapStyle.status === 'failed') {
-      // 加载失败的版本不再重试；出现更新的版本时重新整体加载，暂停时也一样
-      if (change.toVersion > mapStyle.version) {
-        this.#reload(map);
-      }
+      this.#reloadIfNewer(map);
       return;
     }
     if (this.#state !== 'ready' || mapStyle.status !== 'loaded' || change.toVersion <= mapStyle.version) {
@@ -313,15 +335,29 @@ export class MapLibreView<const G extends string> implements MapView {
     }
   }
 
-  #reload(map: MapLike): void {
-    this.#renewReady();
-    this.#setState('initializing');
+  // 加载失败的版本不再重试；会话里有更新的版本时用最新的快照重新整体加载，暂停时也一样
+  #reloadIfNewer(map: MapLike): void {
+    const mapStyle = this.#mapStyle;
+    if (
+      this.#state === 'disposed' ||
+      this.#fatal ||
+      mapStyle.status !== 'failed' ||
+      this.#session.style.version <= mapStyle.version
+    ) {
+      return;
+    }
+    if (this.#state === 'failed') {
+      this.#renewReady();
+      this.#setState('initializing');
+    }
     this.#rebuild(map);
   }
 
   // 用当前快照整体加载；完成后触发 style.load，期间的变化届时追上；失败时只有 error（见 #onMapError）
   #rebuild(map: MapLike): void {
     const { current, version } = this.#session.style;
+    // 新的一轮开始：激活因此中止时，等待的人等到本轮结束，而不是拿到上一轮早已成功的结果
+    this.#renewReady();
     this.#mapStyle = { status: 'loading', version, style: current };
     try {
       map.setStyle(current, { diff: false });
@@ -354,13 +390,12 @@ export class MapLibreView<const G extends string> implements MapView {
 
   #fail(error: unknown): void {
     this.#fatal = true;
-    this.#renewReady();
     this.#ready.reject(error);
     this.#setState('failed');
     this.#onError(error);
   }
 
-  // whenReady() 表示当前这一轮加载的结果：已经有结果时（如运行中重建失败，它早已结束）换一个新的；
+  // 新一轮开始（整体重建、从 failed 重新加载），或失败后又收到 style.load 时：上一轮已经有结果就换一个新的；
   // 在改状态之前调用，监听 statechange 的人拿到的就是这一轮的
   #renewReady(): void {
     if (this.#ready.settled) {
