@@ -126,6 +126,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 登录会话只通过 `shared/auth` 的 `useSessionStore` 读写，不直接读写 localStorage 中的 token
 - 结束会话（退出、过期、其他标签页退出）统一调用 `app/session-end.ts` 的 `endSession()`（同时清空查询缓存），不要只调用 `session.clear()`；跳转和提示由调用方负责，见 `docs/modules/auth.md`
 - 界面与逻辑分离：表单、提交这类交互逻辑写成组合式函数（`features/<域>/composables/useXxx`，通用的放 `shared/composables`），组合式函数不渲染、不跳转、不弹提示，这些由组件和页面决定（见 `docs/modules/auth.md` 的登录三层）
+- `computed` 不抛异常：可能失败的计算把失败表示成数据（结果对象），或者放在调用方的 `try/catch` 里直接计算。Vue 3.5 中 `computed` 抛错时，异常在调度器检查依赖时抛出，读取方的 `try/catch` 接不住；之后依赖不变时再读取，返回上一次成功的旧值（ADR 0028 背景第 8 条）
 - 组合式函数发起的请求在作用域销毁时（`onScopeDispose`）取消，请求返回后再检查一次是否已取消：晚到的结果不写入会话、store 等共享状态，被取消的请求不显示错误。写法见 `useLoginForm`，原因见 `docs/modules/auth.md` 的登录表单
 - 加载状态用 `shared/composables` 的 `useDelayedFlag` 延迟显示，防重复提交的标志仍立即生效
 - 确认框（`ElMessageBox`）不随组件卸载关闭：组件卸载时关闭自己打开的确认框；用户确认后，先检查组件是否已销毁、会话是否还是打开确认框时的那一个，再执行操作（写法见 `features/file-management/composables/useFileRemoval.ts`）
