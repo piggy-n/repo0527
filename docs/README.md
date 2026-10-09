@@ -34,6 +34,7 @@ docs/
 │  ├─ system-title.md         系统名称的 SVG 轮廓：用法、自动生成、常见问题
 │  ├─ ui.md                   libs/ui：两个入口、窄屏断点、分栏布局、面板、区块、标题
 │  ├─ map-core.md             地图内核：用法、会话与 MapLibre 适配器的实现、实测行为、加载策略；附录为旧代码分析
+│  ├─ map-vue.md              libs/map-vue：地图与 Vue 的衔接（provideMap、样式绑定）
 │  ├─ utils.md                libs/utils：Worker 通信层（协议、取消、故障、托管）
 │  └─ icons.md                图标：SvgIcon 用法、添加图标、规范化规则、自动化与检查
 ├─ design/                    设计规范与主题落地

@@ -285,7 +285,8 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 | 8 | map-cesium、map-vue → map-core，且写成 `@yzt/*` | 地图内核被三维和 Vue 衔接层使用 |
 | 9 | map-vue → map-cesium，且只能动态 `import()` | Cesium 体积大，只能懒加载 |
 | 10 | 禁止 utils、map-core、map-cesium 依赖 Vue 生态 | 这三个模块要保持框架无关 |
-| 11 | 全局禁止 `mapbox-gl` | 2.0 起为专有许可（ADR 0002） |
+| 11 | 禁止 map-vue 依赖 vue-router、pinia、element-plus、`@element-plus/**` | map-vue 只负责地图与 Vue 的衔接，界面和项目配置放在 `shared/map`（ADR 0027 第 5 条，阶段五加入） |
+| 12 | 全局禁止 `mapbox-gl` | 2.0 起为专有许可（ADR 0002） |
 
 几个写法细节：
 
@@ -309,6 +310,7 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 | 引用 libs 没写 `@yzt` | 策略 5 |
 | shared 依赖 feature、pages 依赖 app | 策略 2–4 |
 | utils 依赖 vue | 策略 10 |
+| map-vue 依赖 element-plus、pinia、vue-router | 策略 11（阶段五） |
 | 静态导入 map-cesium | 策略 9 |
 | 应用用相对路径导入 workspace 包的内部文件 | 策略 6（阶段二） |
 | workspace 包导入应用代码 | packages override（阶段二） |

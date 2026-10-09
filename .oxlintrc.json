@@ -178,6 +178,12 @@
                   }
                 }
               },
+              {
+                "from": { "element": { "type": "lib", "captured": { "name": "map-vue" } } },
+                "disallow": {
+                  "to": { "module": { "source": ["vue-router", "pinia", "element-plus", "@element-plus/**"] } }
+                }
+              },
               { "disallow": { "to": { "module": { "source": "mapbox-gl" } } } }
             ]
           }
