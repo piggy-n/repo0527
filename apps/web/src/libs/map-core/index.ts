@@ -6,6 +6,8 @@ export {
   type ViewKind
 } from './camera/camera-model';
 export type { Unsubscribe } from './events';
+export type { MapLibreMapOptions } from './maplibre/map-like';
+export { MapLibreView, type MapLibreViewOptions } from './maplibre/maplibre-view';
 export { MapSession, type MapSessionOptions } from './session/map-session';
 export { diffStyle, type StyleCommand } from './style/diff-style';
 export {
@@ -15,3 +17,4 @@ export {
   type StyleModelOptions,
   type StyleRoot
 } from './style/style-model';
+export type { FitBoundsOptions, FlyToOptions, MapView, ViewBounds, ViewPadding, ViewState } from './view/map-view';

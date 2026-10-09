@@ -132,7 +132,15 @@ using session = new MapSession({
 **进度**：
 
 - 第 1 步已完成：`StyleRoot` 去掉相机字段（`center`、`zoom` 等归 `CameraModel`，否则 diff 会生成 `setCenter` 和它抢相机）；`applyStyleCommand`（`maplibre/apply-style-command.ts`）支持数据源和图层的 9 种命令，其余 18 种（样式根属性、相机类、没有公开方法的、`setStyle`）返回"不支持"交给整体重建；`setGeoJSONSourceData` 的异步失败交给回调。去掉已有缩放范围的情况由 `diffStyle` 改写成"删除图层、按原位置添加"，只加上或修改范围时仍是 `setLayerZoomRange`（参数里的 `undefined` 表示保持不设）
-- 第 2 步 `MapLibreView`、第 3 步 lint 限制、第 4 步 app 地图运行时与 `/dev/map`：未开始
+- 第 2 步已完成：`MapLibreView`（`maplibre/maplibre-view.ts`）实现二三维共用的 `MapView` 接口（`view/map-view.ts`：生命周期与程序定位，输入、拾取、投影以后再加）。实现时定下的细节：
+  - "可以应用样式"的信号用 `style.load`，不用 `load`：`load` 要等第一帧渲染（依赖 `requestAnimationFrame`，窗口在后台时等不到），样式方法只需要样式已加载；整体重建后同样触发 `style.load`，共用一个处理函数
+  - `flyTo`、`fitBounds` 只在 `ready` 时可用，否则抛错：定位应由当前显示的视图发起，调用方先等 `whenReady()`
+  - MapLibre 的事件回调都包一层 `try/catch`，错误交给 `onError`，不让异常打断 MapLibre 自己的事件分发；`onError` 默认打印到控制台
+  - `whenReady()` 的 Promise 内部先挂一个空的 `catch`：没人等待时被拒绝不会报"未处理的拒绝"，等待的人照样收到错误
+  - 不支持的命令触发重建但不算错误；应用时抛错才交给 `onError`
+- 第 2 步的测试：假地图 `FakeMap` 实现 `MapLike`，相机方法立即到位并同步触发 `move`、合并 `eventData`，俯角上限 60 用来模拟 MapLibre 的收敛。假地图的 `on` 要和 `MapLike` 一样写出三个重载（回调参数在 `strictFunctionTypes` 下按逆变检查），实现签名的回调参数用 `never`。"释放时取消会话订阅"在行为上测不出来（释放后的状态检查挡住了晚到的通知），用 `vi.spyOn(StyleModel.prototype, 'on')` 换掉返回的取消函数来确认；等待 Promise 结束的断言和一个立即完成的 Promise 赛跑，避免实现出错时测试以超时失败。逐一改坏 18 处均被发现
+- 开发环境下提交样式时用 `validateStyleMin` 校验：评估后不做。152 个图层校验一次约 14.8 ms，高频更新（测量的橡皮筋每秒 60 次）下即使只在开发环境也会明显拖慢；它的报错位置（如 `layers[150].paint.line-width`）与 MapLibre 6 的 `error` 事件一致，后者已经通过 `onError` 上报
+- 第 3 步 lint 限制、第 4 步 app 地图运行时与 `/dev/map`：未开始
 
 ## 旧代码
 
@@ -256,6 +264,5 @@ using session = new MapSession({
 - 三维样式的支持清单：实现镜像之前写出（ADR 0024）
 - 椭球面测量用哪个库：做测量时确认（ADR 0024）
 - 瓦片是否因用户或权限而不同：向后端确认，决定缓存键是否包含权限范围（ADR 0025）
-- 开发环境下提交样式时是否用 style-spec 的 `validateStyleMin` 校验：MapLibre 对非法图层只触发 `error` 事件，提前在 `StyleModel` 里抛错，报错位置更准确；校验开关由装配方传入（libs 不读 `import.meta.env`），做适配器第 2 步时评估
 
 已确定：map-core 放在 `libs/map-core`（ADR 0018）；MapLibre 用 6.x（ADR 0019）；地图会话状态是唯一真相源（ADR 0020）；Worker 策略（ADR 0021）；样式模型与会话提交（ADR 0022）；资源释放、事件与运行时装配（ADR 0023）；视图接口（ADR 0024）；Worker 通信契约与瓦片数据服务（ADR 0025）；迁移基线 `836f03b` 已记入 [migration.md](../migration.md)。
