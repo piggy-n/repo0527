@@ -124,7 +124,7 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#map = map;
     stack.defer(() => map.remove());
     for (const subscription of [
-      map.on('style.load', () => this.#guard(() => this.#onStyleLoad())),
+      map.on('style.load', () => this.#guard(() => this.#onStyleLoad(map))),
       map.on('error', ({ error }) => this.#onError(error)),
       map.on('move', event => this.#guard(() => this.#onMove(map, event)))
     ]) {
@@ -154,20 +154,9 @@ export class MapLibreView<const G extends string> implements MapView {
   resume(): void {
     this.#assertAlive();
     this.#active = true;
-    if (this.#state !== 'paused' || this.#map === undefined) {
-      return;
+    if (this.#state === 'paused' && this.#map !== undefined) {
+      this.#activate(this.#map);
     }
-    this.#setState('ready');
-    if (this.#styleLoaded) {
-      this.#catchUp(this.#map);
-    }
-    const {
-      center: [lng, lat],
-      zoom,
-      bearing,
-      pitch
-    } = this.#session.camera.current;
-    this.#map.jumpTo({ center: [lng, lat], zoom, bearing, pitch }, { cause: 'sync' });
   }
 
   flyTo({ center, zoom, bearing, pitch }: Partial<CameraState>, { duration }: FlyToOptions = {}): void {
@@ -196,15 +185,35 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#stack.dispose();
   }
 
-  #onStyleLoad(): void {
+  #onStyleLoad(map: MapLike): void {
     this.#styleLoaded = true;
     if (this.#state === 'initializing') {
-      this.#setState(this.#active ? 'ready' : 'paused');
+      if (this.#active) {
+        this.#activate(map);
+      } else {
+        this.#setState('paused');
+      }
       this.#ready.resolve();
+    } else if (this.#state === 'ready') {
+      this.#catchUp(map);
     }
-    if (this.#state === 'ready' && this.#map !== undefined) {
-      this.#catchUp(this.#map);
+  }
+
+  // 首次进入 ready 和恢复显示共用：追上样式，相机先跟随会话、再把地图的实际值写回，最后才发出 ready
+  #activate(map: MapLike): void {
+    if (this.#styleLoaded) {
+      this.#catchUp(map);
     }
+    const {
+      center: [lng, lat],
+      zoom,
+      bearing,
+      pitch
+    } = this.#session.camera.current;
+    // 此时还不是 ready，jumpTo 触发的 move 不会写回；地图收敛过的实际值（如俯角上限）下面按 sync 写回，不算意图
+    map.jumpTo({ center: [lng, lat], zoom, bearing, pitch }, { cause: 'sync' });
+    this.#writeCamera(map, 'sync');
+    this.#setState('ready');
   }
 
   #onStyleChange(change: StyleChange): void {
@@ -257,13 +266,16 @@ export class MapLibreView<const G extends string> implements MapView {
   }
 
   #onMove(map: MapLike, event: MapMoveEventLike): void {
-    if (this.#state !== 'ready') {
-      return;
+    if (this.#state === 'ready') {
+      this.#writeCamera(map, causeOfMove(event));
     }
+  }
+
+  #writeCamera(map: MapLike, cause: CameraCause): void {
     const { lng, lat } = map.getCenter();
     this.#session.camera.set(
       { center: [lng, lat], zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() },
-      { view: '2d', cause: causeOfMove(event) }
+      { view: '2d', cause }
     );
   }
 

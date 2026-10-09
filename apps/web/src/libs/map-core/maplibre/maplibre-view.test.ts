@@ -40,12 +40,20 @@ class FakeMap implements MapLike {
   readonly maxPitch = 60;
   readonly #listeners = new Map<string, Set<(event: FakeEvent) => void>>();
   camera: FakeCamera;
+  // 调用时抛错
   failOn: string | undefined;
   removed = false;
 
   constructor(readonly options: MapLibreMapOptions) {
     const [lng, lat] = options.center as [number, number];
-    this.camera = { lng, lat, zoom: options.zoom ?? 0, bearing: options.bearing ?? 0, pitch: options.pitch ?? 0 };
+    // MapLibre 创建地图时同样会收敛相机，但此时适配器还没有订阅 move
+    this.camera = {
+      lng,
+      lat,
+      zoom: options.zoom ?? 0,
+      bearing: options.bearing ?? 0,
+      pitch: Math.min(options.pitch ?? 0, this.maxPitch)
+    };
   }
 
   addSource = this.#record('addSource');
@@ -158,9 +166,12 @@ class FakeMap implements MapLike {
 
 type Groups = 'basemap' | 'business';
 
-function setup(options: Partial<Pick<MapLibreViewOptions<Groups>, 'active' | 'mapOptions' | 'createMap'>> = {}) {
+function setup(
+  options: Partial<Pick<MapLibreViewOptions<Groups>, 'active' | 'mapOptions' | 'createMap'>> = {},
+  camera = NANJING
+) {
   const stack = new DisposableStack();
-  const session = stack.use(new MapSession({ groups: ['basemap', 'business'], camera: NANJING }));
+  const session = stack.use(new MapSession({ groups: ['basemap', 'business'], camera }));
   const errors: unknown[] = [];
   const states: ViewState[] = [];
   let map: FakeMap | undefined;
@@ -421,24 +432,64 @@ describe('MapLibreView', () => {
       ctx.view.pause();
       ctx.session.camera.set({ ...NANJING, center: [120, 31], pitch: 75 }, { view: '3d', cause: 'user' });
       const revision = ctx.session.camera.intentRevision;
+      let pitchWhenReady: number | undefined;
+      ctx.view.on('statechange', () => (pitchWhenReady = ctx.session.camera.current.pitch));
 
       ctx.view.resume();
 
       expect(ctx.map.calls).toContainEqual(['jumpTo', { center: [120, 31], zoom: 8, bearing: 0, pitch: 75 }, { cause: 'sync' }]);
-      // 二维把俯角收到上限后写回会话，但不算意图
+      // 二维把俯角收到上限后写回会话，但不算意图；进入 ready 时会话已经是地图的实际值
       expect(ctx.session.camera.current.pitch).toBe(60);
+      expect(pitchWhenReady).toBe(60);
       expect(ctx.session.camera.intentRevision).toBe(revision);
+    });
+
+    it('applies the session camera changed while initializing and writes back what the map settled on', () => {
+      using ctx = setup();
+      // 初始化期间三维改了相机，俯角超出二维的上限
+      ctx.session.camera.set({ ...NANJING, center: [120, 31], pitch: 75 }, { view: '3d', cause: 'user' });
+      const revision = ctx.session.camera.intentRevision;
+      let pitchWhenReady: number | undefined;
+      ctx.view.on('statechange', () => (pitchWhenReady = ctx.session.camera.current.pitch));
+
+      ctx.map.fire('style.load');
+
+      expect(ctx.map.calls).toContainEqual(['jumpTo', { center: [120, 31], zoom: 8, bearing: 0, pitch: 75 }, { cause: 'sync' }]);
+      expect(ctx.session.camera.current).toEqual({ center: [120, 31], zoom: 8, bearing: 0, pitch: 60 });
+      expect(pitchWhenReady).toBe(60);
+      expect(ctx.session.camera.intentRevision).toBe(revision);
+    });
+
+    it('writes back the camera that the map clamped when it was created', () => {
+      using ctx = setup({}, { ...NANJING, pitch: 75 });
+
+      ctx.map.fire('style.load');
+
+      expect(ctx.session.camera.current.pitch).toBe(60);
+    });
+
+    it('leaves the camera alone when it loads paused and syncs it on resume', () => {
+      using ctx = setup({ active: false });
+      ctx.session.camera.set({ ...NANJING, center: [120, 31] }, { view: '3d', cause: 'user' });
+
+      ctx.map.fire('style.load');
+      expect(names(ctx.map.calls)).not.toContain('jumpTo');
+
+      ctx.view.resume();
+      expect(ctx.map.getCenter()).toEqual({ lng: 120, lat: 31 });
     });
 
     it('locates with flyTo and fitBounds as program moves', () => {
       using ctx = setup();
       ctx.map.fire('style.load');
+      // 进入 ready 时同步相机的 jumpTo 不在比较范围内
+      const before = ctx.map.calls.length;
 
       ctx.view.flyTo({ center: [120, 31], zoom: 10 }, { duration: 500 });
       ctx.view.fitBounds([118, 31, 120, 33], { padding: 20 });
 
       // 不能出现值为 undefined 的键：MapLibre 合并默认选项时会被它覆盖（maxZoom 变成 undefined，算出 NaN）
-      expect(ctx.map.calls).toStrictEqual([
+      expect(ctx.map.calls.slice(before)).toStrictEqual([
         ['flyTo', { center: [120, 31], zoom: 10, duration: 500 }, { cause: 'program' }],
         ['fitBounds', [118, 31, 120, 33], { padding: 20 }, { cause: 'program' }]
       ]);
