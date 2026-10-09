@@ -49,6 +49,7 @@
 | 4 结束时 | 阶段总结要包括阶段四开始前对文件管理的修复：删除确认框在页面销毁后仍可确认删除、会话结束后仍可删除、并发删除时前一个文件的删除状态丢失、翻页失败后跳回第 1 页（以及重新进入列表、条件不变再查询两种情况）、旧分页缓存把页码改小（包括请求失败后保留的旧缓存、从缓存重新进入后立即翻页失败）、输入法选字的回车触发查询、`QueryForm` 换行后减少条件不能恢复一行；本地有过期会话时第一次登录被拦截；退出确认框在会话结束后残留；以及删除逻辑抽成 `useFileRemoval` 和新增的三条 AGENTS.md 规则 | 本文 |
 | 3 之后 | 接入 Renovate 自动处理依赖更新 | ADR 0005 |
 | 3 之后 | 评估 Playwright 端到端测试；覆盖率与门槛 | ADR 0010 |
+| 4 | 开始前先读设计草稿：旧代码的可取之处与问题、设计模式落点、候选库、Worker 缓存的取舍 | [modules/map-core.md](modules/map-core.md) |
 | 4 | map-core 放 `libs/` 还是做成 `packages/`（第一个 libs 模块和 `tsconfig.libs.json` 已提前到阶段三的 `libs/ui`） | AGENTS.md、ADR 0004、0006 |
 | 4 | MapLibre 的大版本 | ADR 0002 |
 | 5 | 地图页的页面缓存（keep-alive） | [modules/layout.md](modules/layout.md) |
