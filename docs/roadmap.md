@@ -74,7 +74,7 @@
 | 5D | 地图页的页面缓存（keep-alive） | [modules/layout.md](modules/layout.md) |
 | 5D | 地图资源的加载策略：不绑定默认模式，由 app 的解析函数给出进入地图时的默认框架（二维或三维）；运行时按框架组织并注入给 map-vue；登录页空闲时预加载预测的默认框架；实测"点击登录 → 地图第一次加载完成"后写 ADR | [modules/map-core.md](modules/map-core.md)"地图资源的加载策略" |
 | 三维 | 评估 utils、map-core、map-cesium 一起拆到 `packages/`；自己写的 Worker 的类型检查配置 | ADR 0018、0021 |
-| 第一个 Worker 真实使用方出现时 | Worker 池的调度、缓存淘汰、内存预算用真实瓦片验证；真实 Worker 在 Vite 下的打包与加载在 `/dev` 开发页验证；此前向后端确认瓦片是否因用户或权限而不同 | ADR 0025 |
+| 第一个 Worker 真实使用方出现时 | Worker 池的调度、缓存淘汰、内存预算用真实瓦片验证；真实 Worker 在 Vite 下的打包与加载在 `/dev` 开发页验证；瓦片目前不校验 token、与用户无关（2026-10-09 实测，见 [migration.md](migration.md)），此前仍向后端确认以后是否会按权限过滤 | ADR 0025 |
 | 三维 | Cesium 运行时作为第二个框架加载函数接入；悬停切换按钮时开始加载；默认三维时是否预取 Cesium 的静态资源；实现镜像前写出三维样式的支持清单与降级规则；拾取按模型、地形、椭球报告命中表面；相机同步不再用 `map.transform`（v6 已移除），改用公开 API；MVT 解码的 `@mapbox/vector-tile`、`pbf` 对齐 maplibre-gl 依赖的版本；三维点选改用瓦片数据服务，不再先对齐二维；评估三维期间二维是否还要存活；瓦片数据服务与 MapLibre 之间避免重复下载的做法 | ADR 0019、0020、0021、0024 |
 | 6 | AI 对话：AI 后端登录不再在前端写死账号密码 | ADR 0015 |
 | 6 | 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像、消息铃铛 | [modules/layout.md](modules/layout.md) |

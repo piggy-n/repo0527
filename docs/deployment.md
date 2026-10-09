@@ -48,5 +48,5 @@ server {
 
 ## 待补充
 
-- 矢量瓦片的 gzip 压缩：旧项目 README 记录了瓦片经 nginx 同源转发并开启 gzip 的配置，迁移地图模块时补充
+- 矢量瓦片的 gzip 压缩：后端不压缩瓦片，地类图斑低层级单张可达数 MB（2026-10-09 实测 z5 约 8.6 MB，z8 的一张 gzip 后为原来的 31%，见 [migration.md](migration.md)"现状底图：接口实测"）。新项目的瓦片走同源的 `/backend/api/tiles/`，在 `/backend/` 的转发里对 `application/x-protobuf` 开启 gzip（旧项目 README 的写法：`gzip_proxied any`、`gzip_types application/x-protobuf …`）；首次部署时补充并验证
 - 静态资源缓存：带哈希的 `assets/*` 可以长期缓存，`index.html` 不应缓存；`fonts/*` 每个约 5 MB、文件名带版本号，应长期缓存。首次部署时补充
