@@ -53,6 +53,8 @@
 | 3 之后 | 接入 Renovate 自动处理依赖更新 | ADR 0005 |
 | 3 之后 | 评估 Playwright 端到端测试；覆盖率与门槛 | ADR 0010 |
 | 5 | 地图资源的加载策略：不绑定默认模式，由 app 的解析函数给出进入地图时的默认框架（二维或三维）；运行时按框架组织并注入给 map-vue；登录页空闲时预加载预测的默认框架；实测"点击登录 → 地图第一次加载完成"后写 ADR | [modules/map-core.md](modules/map-core.md)"地图资源的加载策略" |
+| 5 结束时 | 阶段总结要包括阶段五开始前的边界修复（ADR 0026）：样式加载失败进入 `failed` 并在新版本时自动恢复、应用命令期间的 `error` 事件触发整体重建、首次进入 ready 与恢复显示统一同步相机、Worker 一侧的 `messageerror` 按崩溃处理 | 本文 |
+| 5 | 图层配置由后端驱动时，业务图层的拥有者在配置变化时校验自己的分组，不合法的配置不进入会话（否则一个坏图层会让整个二维视图进入 `failed`）；只在配置变化时校验，不在每次提交时校验 | ADR 0026 |
 | 5 | 测试耗时：`apps/web` 约 51 秒（阶段三结束时约 26 秒），先查原因，同时评估 `fsModuleCache` | [stages/stage-4-map-core.md](stages/stage-4-map-core.md) |
 | 5 | 视图进入 `failed`（如 `GPUInitializationError`）时的提示；Worker 数量是否调到旧项目的 4 个，接入地类图斑时实测（`setupMapRuntime` 里调用 `setWorkerCount`）；现状底图的路由用 `withMapRuntime` 包装；交给 MapLibre 的容器元素只用静态 class | ADR 0019、map-core.md |
 | 5 | 用真实数据实测 MapLibre 6 下图例统计（当前出现的地类）的主线程耗时，再选后端聚合、Worker 解码属性或按需统计 | ADR 0021 |

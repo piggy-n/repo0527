@@ -1,3 +1,4 @@
+import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Feature, FeatureCollection, Polygon } from 'geojson';
 import { ElButton } from 'element-plus';
 import {
@@ -59,7 +60,15 @@ const BACKGROUND_GROUP: StyleGroup = {
 // 数据源对象保持同一个：只改样式时不会重新传数据
 const REGIONS_SOURCES: StyleGroup['sources'] = { regions: { type: 'geojson', data: REGIONS } };
 
-function regionsGroup(colorIndex: number, minzoom: number | undefined): StyleGroup {
+// 通不过 MapLibre 校验的图层：addLayer 只触发 error 事件、不抛错，整份样式也加载不了（ADR 0026）
+const INVALID_LAYER = {
+  id: 'regions-invalid',
+  type: 'line',
+  source: 'regions',
+  paint: { 'line-width': 'wide' }
+} as unknown as LayerSpecification;
+
+function regionsGroup(colorIndex: number, minzoom: number | undefined, invalid = false): StyleGroup {
   return {
     sources: REGIONS_SOURCES,
     layers: [
@@ -70,7 +79,8 @@ function regionsGroup(colorIndex: number, minzoom: number | undefined): StyleGro
         paint: { 'fill-color': FILL_COLORS[colorIndex % FILL_COLORS.length], 'fill-opacity': 0.5 },
         ...(minzoom === undefined ? {} : { minzoom })
       },
-      { id: 'regions-outline', type: 'line', source: 'regions', paint: { 'line-color': '#1f3f7f', 'line-width': 1.5 } }
+      { id: 'regions-outline', type: 'line', source: 'regions', paint: { 'line-color': '#1f3f7f', 'line-width': 1.5 } },
+      ...(invalid ? [INVALID_LAYER] : [])
     ]
   };
 }
@@ -108,25 +118,30 @@ export const DevMapPage = defineComponent({
     const colorIndex = ref(0);
     const minzoom = ref<number>();
     const highlightIndex = ref<number>();
+    const invalidLayer = ref(false);
 
     // 地图对象不放进响应式状态：Vue 的代理会包住 MapLibre 内部对象，只把要显示的值放进 ref
     const stack = new DisposableStack();
     let session: MapSession<Groups> | undefined;
     let view: MapLibreView<Groups> | undefined;
+    // 视图可以单独重新创建，它的订阅登记在自己的栈里
+    let viewStack: DisposableStack | undefined;
 
     const commitRegions = () => {
-      session?.style.setGroup('regions', regionsGroup(colorIndex.value, minzoom.value));
+      session?.style.setGroup('regions', regionsGroup(colorIndex.value, minzoom.value, invalidLayer.value));
     };
 
-    onMounted(() => {
-      if (container.value === undefined) {
+    const createView = () => {
+      viewStack?.dispose();
+      if (container.value === undefined || session === undefined) {
         return;
       }
-      session = stack.use(new MapSession({ groups: ['background', 'regions', 'highlight'], camera: INITIAL_CAMERA }));
-      const created = session;
-      view = stack.use(
+      const created = new DisposableStack();
+      viewStack = created;
+      paused.value = false;
+      view = created.use(
         new MapLibreView({
-          session: created,
+          session,
           container: container.value,
           onError: error => {
             errors.value = [...errors.value, describe(error)];
@@ -134,11 +149,19 @@ export const DevMapPage = defineComponent({
         })
       );
       viewState.value = view.state;
-      stack.defer(
+      created.defer(
         view.on('statechange', state => {
           viewState.value = state;
         })
       );
+    };
+
+    onMounted(() => {
+      session = stack.use(new MapSession({ groups: ['background', 'regions', 'highlight'], camera: INITIAL_CAMERA }));
+      const created = session;
+      // 先于会话释放
+      stack.defer(() => viewStack?.dispose());
+      createView();
       stack.defer(
         created.camera.on('change', ({ state }) => {
           camera.value = state;
@@ -152,7 +175,7 @@ export const DevMapPage = defineComponent({
       );
       created.style.setGroups({
         background: BACKGROUND_GROUP,
-        regions: regionsGroup(colorIndex.value, minzoom.value)
+        regions: regionsGroup(colorIndex.value, minzoom.value, invalidLayer.value)
       });
     });
 
@@ -167,6 +190,12 @@ export const DevMapPage = defineComponent({
 
     const toggleMinzoom = () => {
       minzoom.value = minzoom.value === undefined ? 7 : undefined;
+      commitRegions();
+    };
+
+    // 加上后 addLayer 被拒绝 → 用完整快照重建 → 整份样式通不过校验 → failed；去掉后出现新版本，自动重新加载
+    const toggleInvalidLayer = () => {
+      invalidLayer.value = !invalidLayer.value;
       commitRegions();
     };
 
@@ -230,6 +259,10 @@ export const DevMapPage = defineComponent({
               <ElButton disabled={!paused.value} onClick={simulate3dCamera}>
                 模拟三维改相机
               </ElButton>
+              <ElButton type={invalidLayer.value ? 'danger' : 'default'} onClick={toggleInvalidLayer}>
+                {invalidLayer.value ? '去掉不合法的图层' : '提交不合法的图层'}
+              </ElButton>
+              <ElButton onClick={createView}>重新创建视图</ElButton>
             </div>
             <dl class={styles.status} data-view-state={viewState.value}>
               <dt>视图</dt>

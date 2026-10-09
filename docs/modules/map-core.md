@@ -1,6 +1,6 @@
 # 地图内核（map-core）
 
-> 状态：阶段四完成了地图会话（样式模型、相机）和 MapLibre 适配器（二维视图），并在真实的 MapLibre 上验证过。当前工具、选择状态、输入拾取投影、Cesium 镜像、瓦片数据服务等有了使用方再做（见"还没做的"）。设计依据是 ADR 0018～0025；附录保留阶段四开始前对旧项目（yzt `master-demo` 836f03b）的分析，迁移业务图层、点选、测量时对照。
+> 状态：阶段四完成了地图会话（样式模型、相机）和 MapLibre 适配器（二维视图），并在真实的 MapLibre 上验证过。当前工具、选择状态、输入拾取投影、Cesium 镜像、瓦片数据服务等有了使用方再做（见"还没做的"）。设计依据是 ADR 0018～0026；附录保留阶段四开始前对旧项目（yzt `master-demo` 836f03b）的分析，迁移业务图层、点选、测量时对照。
 
 ## 总体思路
 
@@ -118,16 +118,20 @@ session[Symbol.dispose]();
 
 ### MapLibreView
 
-在 ADR 0022、0024 的范围内实现，没有另写 ADR。它实现 `MapView`，依赖的是窄接口 `MapLike`（以及 `applyStyleCommand` 用的 `StyleTarget`），签名比 MapLibre 的泛型方法简单；`expectTypeOf<MapLibreMap>().toExtend<MapLike>()` 保证 MapLibre 的 `Map` 满足它，MapLibre 升级后签名不兼容会在类型检查时报错。
+在 ADR 0022、0024 的范围内实现；失败的处理见 ADR 0026。它实现 `MapView`，依赖的是窄接口 `MapLike`（以及 `applyStyleCommand` 用的 `StyleTarget`），签名比 MapLibre 的泛型方法简单；`expectTypeOf<MapLibreMap>().toExtend<MapLike>()` 保证 MapLibre 的 `Map` 满足它，MapLibre 升级后签名不兼容会在类型检查时报错。
 
 **样式同步**：
 
 - 创建地图时直接传入当前快照作为 `style`
-- 收到通知时，`toVersion` 不大于已应用的版本就忽略；`fromVersion` 等于已应用的版本就直接应用命令；否则对比"已应用 → 当前"
+- 地图上的样式记为三种结果之一（ADR 0026）：加载中（某个快照正在整体加载）、已加载（即已应用的快照）、加载失败（某个版本）
+- 收到通知时，`toVersion` 不大于已加载的版本就忽略；`fromVersion` 等于已加载的版本就直接应用命令；否则对比"已加载 → 当前"
 - `applyStyleCommand` 支持数据源和图层的 9 种命令；其余 18 种（样式根属性、相机类、没有公开方法的、`setStyle`）返回"不支持"，交给整体重建。`setGeoJSONSourceData` 的异步失败交给回调
-- 遇到不支持的命令或应用时抛错，用当前快照 `setStyle(…, { diff: false })` 整体重建，等 `style.load` 后再继续。不支持的命令触发重建但不算错误；应用时抛错才交给 `onError`
+- 遇到不支持的命令、应用时抛错、或应用期间同步收到 `error` 事件（MapLibre 的很多方法校验失败时不抛错，只发事件），命令应用完后用当前快照 `setStyle(…, { diff: false })` 整体重建，等 `style.load` 后再继续。不支持的命令触发重建但不算错误；抛错和 `error` 事件交给 `onError`
+- "已加载"只在一次通知的命令全部成功（期间没有 `error` 事件）、或整体加载完成时更新；发起整体重建时不更新
+- 加载中收到 `error` 就判定加载失败：整份样式通不过校验时，MapLibre 只发 `error`，不会再有 `style.load`。如果 `style.load` 之后仍然到达，以它为准
+- 加载失败的版本不再重试；会话出现更新的版本时重新整体加载（暂停意图时也一样）。每个版本最多整体加载一次，所以不会无限重建；一个不合法的图层会让整个视图进入 `failed`，取舍见 ADR 0026 第 5 条
 - "可以应用样式"的信号用 `style.load`，不用 `load`：`load` 要等第一帧渲染（依赖 `requestAnimationFrame`，窗口在后台时等不到），样式方法只需要样式已加载；整体重建后同样触发 `style.load`，共用一个处理函数
-- MapLibre 自己的 `error` 事件只上报（`onError`，默认打印到控制台）
+- 其他时候收到的 `error` 事件（如瓦片 404）只上报（`onError`，默认打印到控制台）
 
 **相机**：
 
@@ -141,6 +145,8 @@ session[Symbol.dispose]();
 **生命周期**：
 
 - 构造即创建地图（`initializing`）；创建时抛错（如不支持 WebGL2 的 `GPUInitializationError`）不往外抛，进入 `failed`，由 `whenReady` 和 `statechange` 表达
+- `failed` 有两种（ADR 0026 第 4 条）：引擎失败（创建地图或 `setStyle` 本身抛错）不能恢复，之后的样式变化、`error`、`style.load` 都不再改变状态，只能释放后重新创建视图；样式加载失败在出现新版本时自动重新加载，`failed → initializing → ready`（暂停意图时为 `paused`）
+- `whenReady()` 表示当前这一轮加载的结果：重新加载、或运行中重建失败时，它早已有结果，这时换一个新的；先换再发出 `statechange`，监听者拿到的就是这一轮的
 - 初始化期间调用 `pause()`，加载完成后进入 `paused`；状态变化发出 `statechange`
 - MapLibre 的事件回调都包一层 `try/catch`，错误交给 `onError`，不让异常打断 MapLibre 自己的事件分发
 - `whenReady()` 的 Promise 内部先挂一个空的 `catch`：没人等待时被拒绝不会报"未处理的拒绝"，等待的人照样收到错误
@@ -158,11 +164,12 @@ session[Symbol.dispose]();
 
 ## MapLibre 6 的实测行为
 
-2026-10-09 核实，前五条来自源码和文档，后两条是在浏览器里验证时发现的，单元测试的假地图都发现不了：
+2026-10-09 核实，前六条来自源码和文档，后两条是在浏览器里验证时发现的，单元测试的假地图都发现不了：
 
 - 容器尺寸用 `ResizeObserver` 监听（防抖 50ms），隐藏后再显示会自动调整，文档里"窗口尺寸变化"的说法过时
 - `fitBounds` 的 padding 只用于计算，要保留得设 `absolutePadding`
-- 很多样式方法遇到问题时不抛错，而是触发 `error` 事件（对不存在的图层操作、添加校验不通过的图层），所以"抛错就重建"只兜住一部分不一致，其余由 `error` 事件上报
+- 很多样式方法遇到问题时不抛错，而是同步触发 `error` 事件（对不存在的图层操作、添加校验不通过的图层、图层重名），所以适配器把应用命令期间收到的 `error` 也当作失败（ADR 0026）
+- 整份样式（创建地图、`setStyle(…, { diff: false })`）通不过校验时，只触发 `error`，不触发 `style.load`；校验通过之后的加载过程中抛出的异常会被 MapLibre 吞掉，既没有 `error` 也没有 `style.load`（ADR 0026"后果"）
 - `setLayerZoomRange` 把 `undefined` 当作"不修改"：图层去掉已有的 `minzoom` / `maxzoom` 时，这个方法撤销不了
 - `setTransition`、`setLayerProperty` 没有公开方法
 - **传给 MapLibre 的选项不能带值为 `undefined` 的键**：MapLibre 用类似 `Object.assign` 的方式合并默认选项，`fitBounds` 收到 `maxZoom: undefined` 时默认值被覆盖，算出 `Invalid LngLat (NaN, NaN)`。适配器用 `withoutUndefined` 过滤后再传；测试改用 `toStrictEqual`（`toEqual` 把"值为 undefined 的键"和"没有这个键"视为相同，所以原来没测出来）
@@ -181,7 +188,9 @@ session[Symbol.dispose]();
 - 假地图的 `on` 要和 `MapLike` 一样写出三个重载（回调参数在 `strictFunctionTypes` 下按逆变检查），实现签名的回调参数用 `never`
 - "释放时取消会话订阅"在行为上测不出来（释放后的状态检查挡住了晚到的通知），用 `vi.spyOn(StyleModel.prototype, 'on')` 换掉返回的取消函数来确认
 - 等待 Promise 结束的断言和一个立即完成的 Promise 赛跑，避免实现出错时测试以超时失败
-- `MapLibreView` 逐一改坏 18 处均被发现
+- `MapLibreView` 逐一改坏 18 处均被发现；ADR 0026 的修复又改坏 17 处、相机同步改坏 7 处，全部由断言发现。其中"引擎失败后仍处理 `error`"起初没被发现：样式变化入口的检查已经挡住了重新加载，唯一可见的影响是 `whenReady()` 的原因被后来的错误替换，补上了这个断言
+- 假地图的 `rejectOn` 模拟"只发 `error` 不抛错"，`failOn` 模拟抛错；整体加载的结果由测试手动触发 `style.load` 或 `error`
+- 开发页 `/dev/map` 的"提交不合法的图层"和"重新创建视图"在真实的 MapLibre 上验证了两条路径：运行中 `addLayer` 被拒绝 → 整体重建 → 整份样式校验失败 → `failed` → 去掉后自动恢复；用不合法的快照重新创建视图 → 首次加载失败 → 去掉后自动恢复
 
 评估过但没做：开发环境下提交样式时用 `validateStyleMin` 校验。152 个图层校验一次约 14.8 ms，高频更新（测量的橡皮筋每秒 60 次）下即使只在开发环境也会明显拖慢；它的报错位置（如 `layers[150].paint.line-width`）与 MapLibre 6 的 `error` 事件一致，后者已经通过 `onError` 上报。
 

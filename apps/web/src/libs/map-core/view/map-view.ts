@@ -1,7 +1,7 @@
 import type { CameraState, ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 
-/** 视图的生命周期（ADR 0022 第 5 条）；还没创建时没有视图对象，即文档里的 idle */
+/** 视图的生命周期（ADR 0022 第 5 条、ADR 0026）；还没创建时没有视图对象，即文档里的 idle；样式加载失败的 failed 在样式出现新版本时自动恢复 */
 export type ViewState = 'initializing' | 'ready' | 'paused' | 'failed' | 'disposed';
 
 /** [西, 南, 东, 北]，单位是度 */
@@ -26,7 +26,7 @@ export interface FitBoundsOptions {
 export interface MapView extends Disposable {
   readonly kind: ViewKind;
   readonly state: ViewState;
-  /** 可以应用样式时结束；创建失败时以该错误结束，释放时以 AbortError 结束 */
+  /** 当前这一轮加载的结果：可以应用样式时结束，失败时以原因结束，释放时以 AbortError 结束；失败后重新加载时换成新的 */
   whenReady(): Promise<void>;
   pause(): void;
   resume(): void;

@@ -29,11 +29,13 @@ interface MapLibreViewEvents {
 
 interface Deferred {
   readonly promise: Promise<void>;
+  readonly settled: boolean;
   resolve(): void;
   reject(reason: unknown): void;
 }
 
 function deferred(): Deferred {
+  let settled = false;
   let resolve!: () => void;
   let reject!: (reason: unknown) => void;
   const promise = new Promise<void>((onResolve, onReject) => {
@@ -42,8 +44,26 @@ function deferred(): Deferred {
   });
   // 没人等待时被拒绝也不报"未处理的拒绝"，等待的人照样收到错误
   void promise.catch(() => undefined);
-  return { promise, resolve, reject };
+  return {
+    promise,
+    get settled() {
+      return settled;
+    },
+    resolve() {
+      settled = true;
+      resolve();
+    },
+    reject(reason) {
+      settled = true;
+      reject(reason);
+    }
+  };
 }
+
+/** 地图上的样式：整体加载中、已加载（即已应用的快照）、加载失败（ADR 0026） */
+type MapStyle =
+  | { readonly status: 'loading' | 'loaded'; readonly version: number; readonly style: StyleSpecification }
+  | { readonly status: 'failed'; readonly version: number };
 
 const CAMERA_CAUSES: readonly string[] = ['user', 'program', 'sync'] satisfies CameraCause[];
 
@@ -72,21 +92,24 @@ function reportToConsole(error: unknown): void {
   console.error('[MapLibreView]', error);
 }
 
-/** 二维视图：唯一写 MapLibre 地图的地方，把会话的样式和相机同步到地图（ADR 0020、0022、0024） */
+/** 二维视图：唯一写 MapLibre 地图的地方，把会话的样式和相机同步到地图（ADR 0020、0022、0024、0026） */
 export class MapLibreView<const G extends string> implements MapView {
   readonly kind = '2d';
   readonly #session: MapSession<G>;
   readonly #map: MapLike | undefined;
   readonly #onError: (error: unknown) => void;
   readonly #emitter = createNanoEvents<MapLibreViewEvents>();
-  readonly #ready = deferred();
   readonly #stack: DisposableStack;
+  // 当前这一轮加载的结果；失败后重新加载时换一个新的
+  #ready = deferred();
   #state: ViewState = 'initializing';
   #active: boolean;
-  // 初始加载和整体重建期间为 false，此时样式方法不可用
-  #styleLoaded = false;
-  // 已应用到地图的快照，暂停恢复、加载完成、重建之后都从它对比到当前快照
-  #applied: { version: number; style: StyleSpecification };
+  #mapStyle: MapStyle;
+  // 引擎本身失败（创建地图或 setStyle 抛错）：不能恢复，只能释放后重新创建视图
+  #fatal = false;
+  // 应用增量命令期间同步收到的 error 事件：MapLibre 的很多方法校验失败时不抛错，只发事件
+  #applying = false;
+  #rejected = false;
 
   constructor({
     session,
@@ -100,7 +123,7 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#active = active;
     this.#onError = onError;
     const { current: style, version } = session.style;
-    this.#applied = { version, style };
+    this.#mapStyle = { status: 'loading', version, style };
 
     using stack = new DisposableStack();
     stack.defer(() => this.#ready.reject(new DOMException('MapLibreView 已释放', 'AbortError')));
@@ -125,7 +148,7 @@ export class MapLibreView<const G extends string> implements MapView {
     stack.defer(() => map.remove());
     for (const subscription of [
       map.on('style.load', () => this.#guard(() => this.#onStyleLoad(map))),
-      map.on('error', ({ error }) => this.#onError(error)),
+      map.on('error', ({ error }) => this.#guard(() => this.#onMapError(error))),
       map.on('move', event => this.#guard(() => this.#onMove(map, event)))
     ]) {
       stack.defer(() => subscription.unsubscribe());
@@ -186,8 +209,16 @@ export class MapLibreView<const G extends string> implements MapView {
   }
 
   #onStyleLoad(map: MapLike): void {
-    this.#styleLoaded = true;
-    if (this.#state === 'initializing') {
+    if (this.#fatal) {
+      return;
+    }
+    if (this.#mapStyle.status === 'loading') {
+      const { version, style } = this.#mapStyle;
+      this.#mapStyle = { status: 'loaded', version, style };
+    }
+    // failed：之前的 error 并不致命，加载最终完成了，以 style.load 为准
+    if (this.#state === 'initializing' || this.#state === 'failed') {
+      this.#renewReady();
       if (this.#active) {
         this.#activate(map);
       } else {
@@ -199,11 +230,25 @@ export class MapLibreView<const G extends string> implements MapView {
     }
   }
 
+  #onMapError(error: Error): void {
+    this.#onError(error);
+    if (this.#fatal) {
+      return;
+    }
+    if (this.#applying) {
+      this.#rejected = true;
+    } else if (this.#mapStyle.status === 'loading') {
+      // 整份样式校验失败时 MapLibre 只发 error，不会再有 style.load
+      this.#mapStyle = { status: 'failed', version: this.#mapStyle.version };
+      this.#renewReady();
+      this.#ready.reject(error);
+      this.#setState('failed');
+    }
+  }
+
   // 首次进入 ready 和恢复显示共用：追上样式，相机先跟随会话、再把地图的实际值写回，最后才发出 ready
   #activate(map: MapLike): void {
-    if (this.#styleLoaded) {
-      this.#catchUp(map);
-    }
+    this.#catchUp(map);
     const {
       center: [lng, lat],
       zoom,
@@ -217,47 +262,67 @@ export class MapLibreView<const G extends string> implements MapView {
   }
 
   #onStyleChange(change: StyleChange): void {
-    if (this.#state !== 'ready' || !this.#styleLoaded || this.#map === undefined) {
-      // 暂停、加载中、重建中：等能应用时再从已应用的快照对比
+    const map = this.#map;
+    if (map === undefined || this.#fatal) {
       return;
     }
-    if (change.toVersion <= this.#applied.version) {
+    const mapStyle = this.#mapStyle;
+    if (mapStyle.status === 'failed') {
+      // 加载失败的版本不再重试；出现更新的版本时重新整体加载，暂停时也一样
+      if (change.toVersion > mapStyle.version) {
+        this.#reload(map);
+      }
       return;
     }
-    if (change.fromVersion === this.#applied.version) {
-      this.#apply(this.#map, change.commands, change.toVersion, change.style);
+    if (this.#state !== 'ready' || mapStyle.status !== 'loaded' || change.toVersion <= mapStyle.version) {
+      // 暂停、加载中：等能应用时再从已加载的快照对比
+      return;
+    }
+    if (change.fromVersion === mapStyle.version) {
+      this.#apply(map, change.commands, change.toVersion, change.style);
     } else {
-      this.#catchUp(this.#map);
+      this.#catchUp(map);
     }
   }
 
   #catchUp(map: MapLike): void {
+    const mapStyle = this.#mapStyle;
     const { current, version } = this.#session.style;
-    if (version !== this.#applied.version) {
-      this.#apply(map, diffStyle(this.#applied.style, current), version, current);
+    if (mapStyle.status === 'loaded' && mapStyle.version !== version) {
+      this.#apply(map, diffStyle(mapStyle.style, current), version, current);
     }
   }
 
   #apply(map: MapLike, commands: readonly StyleCommand[], version: number, style: StyleSpecification): void {
+    let applied = false;
+    this.#applying = true;
+    this.#rejected = false;
     try {
-      for (const command of commands) {
-        if (!applyStyleCommand(map, command, this.#onError)) {
-          this.#rebuild(map);
-          return;
-        }
-      }
-      this.#applied = { version, style };
+      // 遇到不支持的命令就停下，整体重建
+      applied = commands.every(command => applyStyleCommand(map, command, this.#onError));
     } catch (error) {
       this.#onError(error);
+    } finally {
+      this.#applying = false;
+    }
+    if (applied && !this.#rejected) {
+      this.#mapStyle = { status: 'loaded', version, style };
+    } else {
+      // 地图和记录可能已经不一致
       this.#rebuild(map);
     }
   }
 
-  // 用当前快照整体重建；重建完成会再次触发 style.load，期间的变化届时追上
+  #reload(map: MapLike): void {
+    this.#renewReady();
+    this.#setState('initializing');
+    this.#rebuild(map);
+  }
+
+  // 用当前快照整体加载；完成后触发 style.load，期间的变化届时追上；失败时只有 error（见 #onMapError）
   #rebuild(map: MapLike): void {
     const { current, version } = this.#session.style;
-    this.#styleLoaded = false;
-    this.#applied = { version, style: current };
+    this.#mapStyle = { status: 'loading', version, style: current };
     try {
       map.setStyle(current, { diff: false });
     } catch (error) {
@@ -288,9 +353,19 @@ export class MapLibreView<const G extends string> implements MapView {
   }
 
   #fail(error: unknown): void {
-    this.#setState('failed');
+    this.#fatal = true;
+    this.#renewReady();
     this.#ready.reject(error);
+    this.#setState('failed');
     this.#onError(error);
+  }
+
+  // whenReady() 表示当前这一轮加载的结果：已经有结果时（如运行中重建失败，它早已结束）换一个新的；
+  // 在改状态之前调用，监听 statechange 的人拿到的就是这一轮的
+  #renewReady(): void {
+    if (this.#ready.settled) {
+      this.#ready = deferred();
+    }
   }
 
   #setState(state: ViewState): void {

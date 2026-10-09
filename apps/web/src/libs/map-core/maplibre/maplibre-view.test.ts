@@ -42,6 +42,8 @@ class FakeMap implements MapLike {
   camera: FakeCamera;
   // 调用时抛错
   failOn: string | undefined;
+  // 像 MapLibre 的校验失败一样：同步触发 error 事件，不抛错，也不生效
+  rejectOn: string | undefined;
   removed = false;
 
   constructor(readonly options: MapLibreMapOptions) {
@@ -159,6 +161,10 @@ class FakeMap implements MapLike {
       if (this.failOn === name) {
         throw new Error(`${name} failed`);
       }
+      if (this.rejectOn === name) {
+        this.fire('error', { error: new Error(`${name} rejected`) });
+        return;
+      }
       this.calls.push([name, ...args]);
     };
   }
@@ -272,6 +278,99 @@ describe('MapLibreView', () => {
       expect(() => ctx.view.flyTo({ zoom: 10 })).toThrow('当前状态为 failed');
     });
 
+    it('fails when MapLibre rejects the initial style with error events only', async () => {
+      using ctx = setup();
+      const invalid = new Error('layers[0].paint.line-width: number expected');
+
+      // MapLibre 校验整份样式失败时只触发 error，不触发 style.load
+      ctx.map.fire('error', { error: invalid });
+
+      expect(ctx.view.state).toBe('failed');
+      expect(ctx.states).toEqual(['failed']);
+      await expect(settled(ctx.view.whenReady())).rejects.toBe(invalid);
+      expect(ctx.errors).toEqual([invalid]);
+    });
+
+    it('reloads the next style version after a failed load and becomes ready again', async () => {
+      using ctx = setup();
+      ctx.map.fire('error', { error: new Error('invalid style') });
+
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+
+      expect(ctx.map.styleCalls()).toEqual([['setStyle', ctx.session.style.current, { diff: false }]]);
+      expect(ctx.view.state).toBe('initializing');
+      const ready = ctx.view.whenReady();
+      ctx.map.fire('style.load');
+      await expect(settled(ready)).resolves.toBeUndefined();
+      expect(ctx.states).toEqual(['failed', 'initializing', 'ready']);
+    });
+
+    it('does not reload the same style version again after a failed load', async () => {
+      using ctx = setup();
+      ctx.map.fire('error', { error: new Error('invalid style') });
+
+      ctx.view.pause();
+      ctx.view.resume();
+      ctx.map.fire('error', { error: new Error('tile 404') });
+      await nextMicrotask();
+
+      expect(ctx.map.styleCalls()).toEqual([]);
+      expect(ctx.view.state).toBe('failed');
+    });
+
+    it('keeps pause and resume made while initializing or failed', async () => {
+      using ctx = setup();
+      ctx.view.pause();
+      ctx.map.fire('error', { error: new Error('invalid style') });
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+
+      ctx.map.fire('style.load');
+      expect(ctx.view.state).toBe('paused');
+      ctx.view.resume();
+      expect(ctx.states).toEqual(['failed', 'initializing', 'paused', 'ready']);
+    });
+
+    it('becomes ready when style.load still arrives after an error event', async () => {
+      using ctx = setup();
+
+      // 加载期间的 error 不一定致命，以 style.load 为准
+      ctx.map.fire('error', { error: new Error('sprite 404') });
+      ctx.map.fire('style.load');
+
+      expect(ctx.states).toEqual(['failed', 'ready']);
+      await expect(settled(ctx.view.whenReady())).resolves.toBeUndefined();
+    });
+
+    it('catches up the changes made while reloading', async () => {
+      using ctx = setup();
+      ctx.map.fire('error', { error: new Error('invalid style') });
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+
+      ctx.session.style.setGroup('basemap', lineGroup('tdt'));
+      await nextMicrotask();
+      expect(names(ctx.map.styleCalls())).toEqual(['setStyle']);
+
+      ctx.map.fire('style.load');
+      expect(names(ctx.map.styleCalls())).toEqual(['setStyle', 'addSource', 'addLayer']);
+    });
+
+    it('fails again without retrying when the reloaded version is rejected too', async () => {
+      using ctx = setup();
+      ctx.map.fire('error', { error: new Error('invalid style') });
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+
+      ctx.map.fire('error', { error: new Error('still invalid') });
+      ctx.map.fire('error', { error: new Error('tile 404') });
+      await nextMicrotask();
+
+      expect(ctx.states).toEqual(['failed', 'initializing', 'failed']);
+      expect(names(ctx.map.styleCalls())).toEqual(['setStyle']);
+    });
+
     it('releases the map and stops following the session on disposal', async () => {
       using ctx = setup();
       const { view, map, session } = ctx;
@@ -366,6 +465,103 @@ describe('MapLibreView', () => {
         ['addSource', 'tdt', lineGroup('tdt').sources.tdt],
         ['addLayer', lineGroup('tdt').layers[0], 'dltb-line']
       ]);
+    });
+
+    it('rebuilds from the current snapshot when the map rejects a command with an error event', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+
+      // MapLibre 的 addLayer 校验失败时不抛错，只触发 error 事件，图层实际上没有加上
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+
+      expect(ctx.errors).toEqual([new Error('addLayer rejected')]);
+      expect(ctx.map.styleCalls().at(-1)).toEqual(['setStyle', ctx.session.style.current, { diff: false }]);
+    });
+
+    it('fails instead of rebuilding again when the rebuilt snapshot is rejected as well', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+
+      // 整份样式同样通不过校验：只有 error，没有 style.load
+      ctx.map.fire('error', { error: new Error('invalid style') });
+      expect(ctx.view.state).toBe('failed');
+      expect(names(ctx.map.styleCalls())).toEqual(['addSource', 'setStyle']);
+
+      // 修正后的新版本重新完整加载一次
+      ctx.map.rejectOn = undefined;
+      ctx.session.style.setGroup('business', lineGroup('dltb', '#993366'));
+      await nextMicrotask();
+      expect(names(ctx.map.styleCalls())).toEqual(['addSource', 'setStyle', 'setStyle']);
+      ctx.map.fire('style.load');
+      expect(ctx.view.state).toBe('ready');
+    });
+
+    it('renews whenReady with the failure when a rebuild fails after the view was ready', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      await ctx.view.whenReady();
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      const invalid = new Error('invalid style');
+      let readyOnStateChange: Promise<void> | undefined;
+      ctx.view.on('statechange', () => {
+        readyOnStateChange = ctx.view.whenReady();
+      });
+
+      ctx.map.fire('error', { error: invalid });
+
+      await expect(settled(ctx.view.whenReady())).rejects.toBe(invalid);
+      // 监听 statechange 的人拿到的就是这一轮的结果，而不是之前已经结束的那个
+      expect(readyOnStateChange).toBe(ctx.view.whenReady());
+    });
+
+    it('stays failed when setStyle itself throws', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      const business = lineGroup('dltb');
+      ctx.session.style.setGroup('business', business);
+      await nextMicrotask();
+
+      // 不支持的命令触发整体重建，setStyle 本身抛错：引擎出了问题，不能恢复
+      ctx.map.failOn = 'setStyle';
+      const flagged = { ...business.layers[0], 'custom-flag': true } as unknown as LayerSpecification;
+      ctx.session.style.setGroup('business', { ...business, layers: [flagged] });
+      await nextMicrotask();
+      expect(ctx.view.state).toBe('failed');
+      expect(ctx.errors).toEqual([new Error('setStyle failed')]);
+
+      // 之后的 error、新版本、style.load 都不再改变状态
+      ctx.map.failOn = undefined;
+      ctx.map.fire('error', { error: new Error('invalid style') });
+      ctx.session.style.setGroup('business', lineGroup('dltb', '#993366'));
+      await nextMicrotask();
+      ctx.map.fire('style.load');
+      expect(names(ctx.map.styleCalls())).toEqual(['addSource', 'addLayer']);
+      expect(ctx.states).toEqual(['ready', 'failed']);
+      // whenReady 仍然是引擎失败的原因
+      await expect(settled(ctx.view.whenReady())).rejects.toEqual(new Error('setStyle failed'));
+    });
+
+    it('does not reload for a pending notification of the version that just failed', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.view.pause();
+      ctx.map.rejectOn = 'addLayer';
+
+      // 提交后立即恢复显示：恢复时就追上了这个版本，它的通知还排在微任务里
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      ctx.view.resume();
+      ctx.map.fire('error', { error: new Error('invalid style') });
+      expect(ctx.view.state).toBe('failed');
+      await nextMicrotask();
+
+      expect(names(ctx.map.styleCalls())).toEqual(['addSource', 'setStyle']);
     });
 
     it('rebuilds without reporting an error for a command it does not support', async () => {
