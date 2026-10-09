@@ -25,7 +25,14 @@ const placeholder = (path: string, name: RouteName, title: string, roles?: reado
 
 // 地址和各角色能访问的页面沿用旧项目
 const businessRoutes: RouteRecordRaw[] = [
-  placeholder('current-map', RouteName.currentMap, '现状底图'),
+  {
+    path: 'current-map',
+    name: RouteName.currentMap,
+    component: withMapRuntime(() =>
+      import('@/pages/current-map/CurrentMapPage').then(({ CurrentMapPage }) => CurrentMapPage)
+    ),
+    meta: { title: '现状底图' }
+  },
   placeholder('land-change-query', RouteName.landChangeQuery, '国土变更调查查询'),
   placeholder('space-monitoring-query', RouteName.spaceMonitoringQuery, '城市国土空间监测查询'),
   placeholder('forest-grass-wetland-desert-query', RouteName.forestGrassWetlandDesertQuery, '森林草原湿地荒漠调查监测'),
