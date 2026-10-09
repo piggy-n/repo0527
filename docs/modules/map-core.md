@@ -1,6 +1,6 @@
 # 地图内核（map-core）设计草稿
 
-> 状态：阶段四开始前整理的草稿，还没有实施。内容来自阅读旧项目代码（yzt `master-demo` 836f03b）和讨论，文中的数字都引自旧代码的注释，本项目还没有实测。2026-10-09 补充了引擎、Manager、资源释放的分析和"二维与三维的关系"；位置（ADR 0018）、MapLibre 版本（ADR 0019）、二三维关系（ADR 0020）、Worker 策略（ADR 0021）已确定。本文随实现改成模块说明。
+> 状态：阶段四开始前整理的草稿，还没有实施。内容来自阅读旧项目代码（yzt `master-demo` 836f03b）和讨论，文中的数字都引自旧代码的注释，本项目还没有实测。2026-10-09 补充了引擎、Manager、资源释放的分析和"二维与三维的关系"；位置（ADR 0018）、MapLibre 版本（ADR 0019）、二三维关系（ADR 0020）、Worker 策略（ADR 0021）已确定；同日确定了样式模型与会话提交（ADR 0022）、资源释放与事件（ADR 0023）、视图接口（ADR 0024）、Worker 通信契约（ADR 0025），汇总在"已确定的设计"。本文随实现改成模块说明。
 
 ## 总体思路
 
@@ -10,6 +10,82 @@
 - 核心能力是二三维之间接近无感的切换：用户在一个框架里的操作和状态，切到另一个框架时尽量保留；框架独有的功能保持独有（ADR 0020）
 - map-core 持有地图会话状态（样式模型、相机、当前工具、选择状态），它是二三维共同的唯一真相源。Manager 修改会话状态，不直接写引擎；只有 MapLibre 适配器写二维地图，Cesium 镜像会话状态（ADR 0020）。jsdom 里没有 WebGL，Manager 的测试断言会话状态即可
 
+## 已确定的设计
+
+### 数据流（ADR 0022）
+
+```
+拥有者（底图、业务图层、边界、遮罩、高亮、测量、绘制……）
+  自己的状态 ──纯函数推导──▶ 分组 { sources, layers }（不可变，整体替换）
+                                   │ setGroup / setGroups（一次提交，版本号加 1）
+                                   ▼
+              按装配方声明的顺序拼成完整样式；同一轮事件循环的提交合并通知
+                                   │ diffStyle(上一份, 这一份)：GeoJSON 数据按引用比较
+                                   ▼
+              DiffCommand[] ──▶ MapLibre 适配器（唯一写二维地图的地方，记下已应用的快照）
+                            └──▶ Cesium 镜像（以后）
+
+相机、当前工具、选择状态：各自独立，各自发事件，变化时不重算样式
+```
+
+- 消费方首次挂载、暂停后恢复、按需追上都是"已应用的快照 → 当前快照"的对比；应用某条命令出错时，用当前快照整体重建
+- 视图的生命周期：`idle → initializing → ready ⇄ paused`，另有 `failed`、`disposed`；保留状态、应用变化、统计查询分开控制
+- 选择状态只存要素身份和高亮数据，候选列表和详情在 feature 的查询缓存里
+- feature-state（如果使用）是会话里的独立通道；填充图案按图案 ID 现场生成，不进状态
+
+### 接口草图（实现时可能调整）
+
+```ts
+export interface StyleGroup {
+  readonly sources: Readonly<Record<string, SourceSpecification>>;
+  readonly layers: readonly LayerSpecification[];
+}
+
+export interface StyleChange {
+  readonly fromVersion: number;
+  readonly toVersion: number;
+  readonly commands: readonly DiffCommand[];
+  readonly style: StyleSpecification;
+}
+
+export interface StyleModel<G extends string> {
+  readonly current: StyleSpecification;
+  readonly version: number;
+  setGroup(id: G, group: StyleGroup): void;
+  setGroups(groups: Partial<Record<G, StyleGroup>>): void;
+  on(event: 'change', cb: (change: StyleChange) => void): Unsubscribe;
+}
+
+export type ViewKind = '2d' | '3d';
+export type CameraCause = 'user' | 'program' | 'sync';
+
+export interface CameraState {
+  center: [number, number];
+  zoom: number;
+  bearing: number;
+  pitch: number;
+}
+
+export interface CameraModel {
+  readonly current: CameraState;
+  set(state: CameraState, change: { view: ViewKind; cause: CameraCause }): void;
+  on(event: 'change', cb: (state: CameraState, change: { view: ViewKind; cause: CameraCause }) => void): Unsubscribe;
+}
+
+export interface MapSession<G extends string> extends Disposable {
+  readonly style: StyleModel<G>;
+  readonly camera: CameraModel;
+  // tool、selection 在做交互工具时设计
+}
+
+// 装配方声明分组顺序，setGroup('measur', …) 会报类型错误
+const session = createMapSession({
+  groups: ['basemap', 'business', 'boundary', 'mask', 'highlight', 'measure'] as const
+});
+```
+
+视图接口（拾取结果的表面与高度、投影、输入、测量方式、切换时的工具状态）见 ADR 0024；资源释放和事件的写法见 ADR 0023；Worker 的取消分层、故障语义和瓦片缓存的约束见 ADR 0025。
+
 ## 旧代码
 
 范围：二维在 `src/components/CommonMap`，三维在 `src/views/current-map-new/cesium`。
@@ -18,7 +94,7 @@
 
 | 旧代码 | 模式 | 迁移时的处理 |
 |---|---|---|
-| `IMapEngine` + `MapboxEngine` | 接口 + 适配器 | 旧的"接口"是普通类，每个方法在运行时抛 `notImplemented`；改成 TS 的 `interface` + `implements`，少实现一个方法编译时就报错。保留"逃生口"（取原生地图实例），但只给确实需要的地方用（问题见下文"引擎抽象被绕过"） |
+| `IMapEngine` + `MapboxEngine` | 接口 + 适配器 | 旧的"接口"是普通类，每个方法在运行时抛 `notImplemented`；改成 TS 的 `interface` + `implements`，少实现一个方法编译时就报错。不再提供取原生地图实例的通用出口，适配器按需提供只读方法（ADR 0024；问题见下文"引擎抽象被绕过"） |
 | `createMapEngine` 的注册表 | 工厂 | 不再需要：Cesium 是会话状态的读者，不实现二维的引擎接口（ADR 0020）。map-vue 仍然只用动态 `import()` 加载 map-cesium |
 | `MapService` 聚合十几个 Manager | 外观 | 保留 |
 | `selection/` 拆成 QueryService、Manager、Highlight、Presenter、InteractionController | 职责分离 | 旧代码里拆得最好的部分，作为其他模块的样板 |
@@ -81,7 +157,11 @@
 
 | 用途 | 候选 | 说明 |
 |---|---|---|
-| 几何计算 | turf v7 | 按需安装单个包（如 `@turf/bbox`），不用 `@turf/turf` 全家桶，旧代码两种写法混用。GeoJSON 类型来自 `@types/geojson` |
+| 几何计算 | turf v7 | 按需安装单个包（如 `@turf/bbox`），不用 `@turf/turf` 全家桶，旧代码两种写法混用。GeoJSON 类型来自 `@types/geojson`。测量距离和面积不用 turf 的球面算法（ADR 0024） |
+| 椭球面测量 | geographiclib-geodesic | 候选（ADR 0024）：测量方式 `geodesic` 按椭球面计算，做测量时再确认 |
+| 样式对比与表达式求值 | `@maplibre/maplibre-gl-style-spec` | 已定（ADR 0019、0022）：版本与 maplibre-gl 依赖的保持一致（6.12.0 对应 26.4.4） |
+| 事件 | nanoevents | 已定（ADR 0023）：`on` 返回取消订阅的函数，登记进释放栈 |
+| 资源释放的运行时 | core-js（`es/symbol/dispose`、`es/disposable-stack`） | 已定（ADR 0023）：在 `app/main.ts` 全局引入，gzip 约 7.6 KB |
 | 坐标转换 | proj4 | CGCS2000 经纬度（EPSG:4490）在 Web 地图上可以近似当作 WGS84 使用；后端给 3 度带高斯投影坐标时用它转换 |
 | 样式类型 | maplibre-gl 自带 | `LayerSpecification`、`SourceSpecification` 等由 maplibre-gl 导出，不自己定义 |
 | 绘制编辑 | terra-draw | 旧项目自己写了 925 行的 `GeometryDrawManager`；terra-draw 通过适配器支持多种地图引擎，先评估能否替代 |
@@ -95,7 +175,7 @@
 
 ## Worker 与缓存
 
-二维由 MapLibre 自己在 Worker 里解析瓦片，并在内存里缓存（`maxTileCacheSize`），不自建渲染 Worker（ADR 0021）。下面说的是三维：旧项目在 Worker 里把 MVT 解码、绘制成图片，作为影像交给 Cesium。这些缓存算法将移到引擎无关的瓦片数据服务，供三维栅格化和标注、二维图例统计（实测后决定）、以后的三维点选共同使用（ADR 0021）。
+二维由 MapLibre 自己在 Worker 里解析瓦片，并在内存里缓存（`maxTileCacheSize`），不自建渲染 Worker（ADR 0021）。下面说的是三维：旧项目在 Worker 里把 MVT 解码、绘制成图片，作为影像交给 Cesium。这些缓存算法将移到引擎无关的瓦片数据服务，供三维栅格化和标注、二维图例统计（实测后决定）、以后的三维点选共同使用（ADR 0021）。缓存键、字段并集、共用下载的计数和数据所有权见 ADR 0025；下面的算法是起点，等第一个真实使用方出现后用真实瓦片验证再定。
 
 ### 旧代码已有的缓存
 
@@ -123,8 +203,10 @@
 
 ## 待定问题
 
-- 地图会话状态和样式模型的接口：可变存储加细粒度事件，还是不可变快照加 style-spec 的 `diff`；高频更新（测量的橡皮筋）不能走整份样式对比
-- `using` / `DisposableStack`：Vite（Oxc）能否转译、目标浏览器是否支持，要实测，可能需要 polyfill
 - 图例统计的主线程耗时：阶段五用真实数据实测 MapLibre 6，再在后端聚合、Worker 解码属性、按需统计三者中选（ADR 0021）
+- 高亮用 feature-state 还是按要素 ID 过滤的图层：做高亮时实测（ADR 0022）
+- 三维样式的支持清单：实现镜像之前写出（ADR 0024）
+- 椭球面测量用哪个库：做测量时确认（ADR 0024）
+- 瓦片是否因用户或权限而不同：向后端确认，决定缓存键是否包含权限范围（ADR 0025）
 
-已确定：map-core 放在 `libs/map-core`（ADR 0018）；MapLibre 用 6.x（ADR 0019）；地图会话状态是唯一真相源（ADR 0020）；Worker 策略（ADR 0021）；迁移基线 `836f03b` 已记入 [migration.md](../migration.md)。
+已确定：map-core 放在 `libs/map-core`（ADR 0018）；MapLibre 用 6.x（ADR 0019）；地图会话状态是唯一真相源（ADR 0020）；Worker 策略（ADR 0021）；样式模型与会话提交（ADR 0022）；资源释放、事件与运行时装配（ADR 0023）；视图接口（ADR 0024）；Worker 通信契约与瓦片数据服务（ADR 0025）；迁移基线 `836f03b` 已记入 [migration.md](../migration.md)。

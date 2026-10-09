@@ -53,7 +53,10 @@
 | 5 | 创建地图时捕获 `GPUInitializationError` 并提示；`setWorkerUrl`、CSS 等全局设置放在 app 的哪个文件；Worker 数量是否调到旧项目的 4 个，接入地类图斑时实测 | ADR 0019 |
 | 5 | 用真实数据实测 MapLibre 6 下图例统计（当前出现的地类）的主线程耗时，再选后端聚合、Worker 解码属性或按需统计 | ADR 0021 |
 | 引入 map-cesium 时 | 评估 utils、map-core、map-cesium 一起拆到 `packages/`；自己写的 Worker 的类型检查配置 | ADR 0018、0021 |
-| 做三维时 | 相机同步不再用 `map.transform`（v6 已移除），改用公开 API；MVT 解码的 `@mapbox/vector-tile`、`pbf` 对齐 maplibre-gl 依赖的版本；三维点选改用瓦片数据服务，不再先对齐二维；评估三维期间二维是否还要存活；瓦片数据服务与 MapLibre 之间避免重复下载的做法 | ADR 0019、0020、0021 |
+| 做高亮时 | 用 feature-state 还是按要素 ID 过滤的图层，实测后决定 | ADR 0022 |
+| 做测量时 | 椭球面测量用哪个库（候选 geographiclib-geodesic） | ADR 0024 |
+| 第一个 Worker 真实使用方出现时 | Worker 池的调度、缓存淘汰、内存预算用真实瓦片验证；此前向后端确认瓦片是否因用户或权限而不同 | ADR 0025 |
+| 做三维时 | 实现镜像前写出三维样式的支持清单与降级规则；拾取按模型、地形、椭球报告命中表面；相机同步不再用 `map.transform`（v6 已移除），改用公开 API；MVT 解码的 `@mapbox/vector-tile`、`pbf` 对齐 maplibre-gl 依赖的版本；三维点选改用瓦片数据服务，不再先对齐二维；评估三维期间二维是否还要存活；瓦片数据服务与 MapLibre 之间避免重复下载的做法 | ADR 0019、0020、0021、0024 |
 | 5 | 地图页的页面缓存（keep-alive） | [modules/layout.md](modules/layout.md) |
 | 5 | 画布型页面：地图铺满内容区，操作栏和面板悬浮；悬浮面板沿用面板规范、统一浅色；地图定位时的 padding 要避开悬浮面板，由布局提供被占用的区域，不由页面各自计算 | [design/page-layout.md](design/page-layout.md) |
 | 6 | AI 对话：AI 后端登录不再在前端写死账号密码 | ADR 0015 |
@@ -81,7 +84,8 @@
 
 - 4.0 读旧代码（分析补进 [modules/map-core.md](modules/map-core.md)），确定 map-core 的位置（[ADR 0018](adr/0018-map-core-in-libs.md)）和 MapLibre 的大版本（[ADR 0019](adr/0019-maplibre-v6.md)），记下迁移基线
 - 4.1 二三维关系：地图会话状态是唯一的真相源，接近无感的切换是核心能力（[ADR 0020](adr/0020-map-session-state-as-source-of-truth.md)）；Worker 策略：二维不自建渲染 Worker，统一通信层与瓦片数据服务（[ADR 0021](adr/0021-worker-strategy.md)）
-- 下一步：设计地图会话状态和样式模型的接口
+- 4.2 接口设计：样式模型与会话提交（[ADR 0022](adr/0022-style-model-and-session-commits.md)）、资源释放与事件（[ADR 0023](adr/0023-disposal-events-and-map-runtime.md)）、二三维共用的视图接口（[ADR 0024](adr/0024-shared-view-interfaces.md)）、Worker 通信契约与瓦片数据服务（[ADR 0025](adr/0025-worker-contract-and-tile-data-service.md)）；评审中对 0020、0021 的修正写进了新的 ADR
+- 下一步：按顺序实现 `diffStyle` → `StyleModel` → `CameraModel` → `createMapSession` → MapLibre 适配器（含 lint 限制 maplibre-gl 的导入位置），每一步带测试；之后是 `@yzt/utils` 的 Worker 通信层
 
 ## 业务模块
 
