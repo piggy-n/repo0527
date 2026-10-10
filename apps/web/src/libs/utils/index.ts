@@ -18,4 +18,5 @@ export {
 export { WorkerHost, type WorkerHostOptions } from './worker/worker-host';
 export { serveWorker, type ServeOptions, type TaskContext, type WorkerHandlers } from './worker/worker-server';
 export { yieldToEventLoop } from './worker/yield';
+export { LatestController } from './latest-controller';
 export { safeReporter } from './report';

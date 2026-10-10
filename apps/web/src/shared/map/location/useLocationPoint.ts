@@ -1,5 +1,6 @@
 import type { LngLat, MapInputEvent, MapTool, ScreenPoint, ToolView } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
+import { LatestController } from '@yzt/utils';
 import { getCurrentScope, onScopeDispose, type ShallowRef, shallowReadonly, shallowRef, watch } from 'vue';
 import { findRegion, type Region } from '../region/region-catalog';
 import { type RegionBoundaryLoader, sharedRegionBoundaryLoader } from '../region/region-geometry';
@@ -132,11 +133,11 @@ export function useLocationPoint(
   };
 
   // 位置点变化时重新判断所在区县；拖动时每次移动都判断，只采用最后一次的结果
-  let lookup = 0;
+  const lookups = new LatestController();
   watch(
     () => state.value.point?.lngLat,
     async lngLat => {
-      const id = ++lookup;
+      const signal = lookups.next();
       if (!lngLat) {
         region.value = { kind: 'none' };
         return;
@@ -144,17 +145,17 @@ export function useLocationPoint(
       region.value = { kind: 'loading' };
       try {
         const code = await regions.districtCodeAt(lngLat);
-        if (id === lookup) {
+        if (!signal.aborted) {
           region.value = { kind: 'ready', region: code === null ? null : (findRegion(code) ?? null) };
         }
       } catch (error) {
-        if (id === lookup) {
+        if (!signal.aborted) {
           region.value = { kind: 'failed', error };
         }
       }
     }
   );
-  onScopeDispose(() => lookup++);
+  onScopeDispose(() => lookups[Symbol.dispose]());
 
   return {
     state: shallowReadonly(state),

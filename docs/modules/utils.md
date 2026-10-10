@@ -1,6 +1,6 @@
 # libs/utils（@yzt/utils）
 
-纯 TS 的通用工具，不依赖 Vue、Element、Pinia（AGENTS.md"依赖方向"）。目前只有一部分：Worker 通信层。
+纯 TS 的通用工具，不依赖 Vue、Element、Pinia（AGENTS.md"依赖方向"）。目前有两部分：Worker 通信层，以及只认最新一次的 `LatestController`。
 
 相关决策：ADR 0021（Worker 策略）、ADR 0025（Worker 通信契约）。
 
@@ -110,3 +110,34 @@ serveWorker<TileProtocol>(self, {
 ### 还没做的
 
 等第一个真实使用方出现、用真实瓦片验证后再做（ADR 0025 第 7 条）：多个 Worker 之间的调度（负载均衡、父瓦片固定给同一个 Worker）、空闲一段时间后终止 Worker、缓存与内存预算；真实 Worker 在 Vite 下的打包与加载，到时在 `/dev` 开发页里验证。
+
+## 只认最新的一次：LatestController
+
+ADR 0039 第 2 条的"可替换操作在同一通道里后发覆盖先发"只用这一种写法，不再手写递增计数或换 `AbortController` 的函数。
+
+```ts
+const selections = new LatestController();
+
+async function select(code: string) {
+  const signal = selections.next();   // 中止上一次选择，拿到这一次的信号
+  const boundary = await load(code);
+  if (signal.aborted) {
+    return;                           // 等待期间又选了别的，或作用域已销毁：晚到的结果不写入
+  }
+  state.value = boundary;
+}
+
+onScopeDispose(() => selections[Symbol.dispose]());
+```
+
+| 成员 | 说明 |
+|---|---|
+| `next(reason?)` | 中止当前这一次并开始新的一次，返回新的信号；`reason` 是上一次的中止原因，不传时为 `AbortError`；释放后调用抛错 |
+| `signal` | 当前这一次的信号；创建时就有一个没中止的（相机模型的"初始操作"就是它） |
+| `abort(reason?)` | 中止当前这一次，不开始新的；已经中止时什么也不做 |
+| `[Symbol.dispose]()` | 以 `AbortError` 中止当前这一次，之后 `next()` 抛错；之前已经中止的保留原来的原因 |
+
+- 使用方：相机模型的操作、区划定位的选择、位置点的所在区县判断
+- 只用于可替换操作。删除、保存这类服务端写操作不能"后发作废先发"：前端不再等待不等于后端撤销（ADR 0039 第 1 条）
+- 中止的是等待和写入；多个使用方共用的下载不要把这个信号传进去（ADR 0039 第 1 条第 4 点）
+- 测试：逐一改坏 8 处，全部由断言发现

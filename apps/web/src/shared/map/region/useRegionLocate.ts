@@ -1,5 +1,6 @@
 import type { FitBoundsOptions, StyleGroup } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
+import { LatestController } from '@yzt/utils';
 import { getCurrentScope, onScopeDispose, type ShallowRef, shallowReadonly, shallowRef } from 'vue';
 import { findRegion, type Region } from './region-catalog';
 import { type RegionBoundary, type RegionBoundaryLoader, sharedRegionBoundaryLoader } from './region-geometry';
@@ -62,14 +63,8 @@ export function useRegionLocate(
   }
   const loader = options.loader ?? sharedRegionBoundaryLoader();
   const state = shallowRef<RegionLocateState>(NONE);
-  // 每次选择一个控制器：换选、回到全省、作用域销毁时中止，晚到的结果不写入状态
-  let current = new AbortController();
-
-  const restart = () => {
-    current.abort();
-    current = new AbortController();
-    return current.signal;
-  };
+  // 每次选择一个信号：换选、回到全省、作用域销毁时中止，晚到的结果不写入状态
+  const selections = new LatestController();
 
   const locate = async (region: Region, signal: AbortSignal) => {
     // 选择区划是一次相机操作，之前没完成的定位作废；之后又有了新的操作（拖动、缩放、默认视角、坐标定位）时，
@@ -111,7 +106,7 @@ export function useRegionLocate(
     if (region?.code === previous?.code) {
       return;
     }
-    const signal = restart();
+    const signal = selections.next();
     if (region) {
       void locate(region, signal);
       return;
@@ -123,11 +118,11 @@ export function useRegionLocate(
   const retry = () => {
     const { selected, boundary } = state.value;
     if (selected && boundary.kind === 'failed') {
-      void locate(selected, restart());
+      void locate(selected, selections.next());
     }
   };
 
-  onScopeDispose(() => current.abort());
+  onScopeDispose(() => selections[Symbol.dispose]());
 
   return {
     state: shallowReadonly(state),
