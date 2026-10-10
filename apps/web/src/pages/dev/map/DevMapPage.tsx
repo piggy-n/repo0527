@@ -345,7 +345,7 @@ export const DevMapPage = defineComponent({
     map.registerTools({ [PROBE_TOOL]: createProbeTool(probe => (probes.value = [...probes.value.slice(-4), probe])) });
 
     const camera = map.useCamera();
-    const { view, viewState, activeTool } = map;
+    const { viewState, activeTool } = map;
     const toggleTool = (id: string) => (activeTool.value === id ? map.releaseTool(id) : map.activateTool(id));
 
     const nextVersion = (): DataVersion => (version.value === 0 ? 1 : 0);
@@ -364,11 +364,13 @@ export const DevMapPage = defineComponent({
       setTimeout(() => (selectionVersion.value = next), LATE_SELECTION_DELAY);
     };
 
-    const flyToNanjing = () => view.value?.flyTo({ center: [118.8, 32.05], zoom: 9 }, { duration: 1500 });
+    // 用户发起的定位是一次相机操作，作废之前没完成的定位（ADR 0038）
+    const flyToNanjing = () =>
+      map.runCameraOperation(viewport => viewport.flyTo({ center: [118.8, 32.05], zoom: 9 }, { duration: 1500 }));
     // 不传 padding：自动避开登记过的悬浮元素（ADR 0029），这里另外记下这次算出的值
     const fitJiangsu = () => {
       lastPadding.value = map.overlayPadding();
-      view.value?.fitBounds(JIANGSU_BOUNDS, { duration: 1000 });
+      map.runCameraOperation(viewport => viewport.fitBounds(JIANGSU_BOUNDS, { duration: 1000 }));
     };
 
     const lastProbe = computed(() => probes.value.at(-1));
