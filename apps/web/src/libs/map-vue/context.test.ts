@@ -24,7 +24,7 @@ class FakeView implements MapView {
   failure: MapViewFailure | null = null;
   // 这一轮整体加载的结果，测试可以换成还没结束的 Promise
   ready: Promise<void> = Promise.resolve();
-  readonly #listeners = new Set<(state: ViewState) => void>();
+  readonly #listeners = new Map<string, Set<(state: ViewState) => void>>();
 
   whenReady(): Promise<void> {
     return this.ready;
@@ -42,15 +42,25 @@ class FakeView implements MapView {
     return null;
   }
 
-  on(_event: 'statechange', callback: (state: ViewState) => void): Unsubscribe {
-    this.#listeners.add(callback);
-    return () => this.#listeners.delete(callback);
+  on(event: 'statechange', callback: (state: ViewState) => void): Unsubscribe;
+  on(event: 'resize', callback: () => void): Unsubscribe;
+  on(event: string, callback: (state: ViewState) => void): Unsubscribe {
+    const listeners = this.#listeners.get(event) ?? new Set();
+    this.#listeners.set(event, listeners.add(callback));
+    return () => listeners.delete(callback);
   }
 
   emit(state: ViewState): void {
     this.state = state;
-    for (const listener of this.#listeners) {
+    for (const listener of this.#listeners.get('statechange') ?? []) {
       listener(state);
+    }
+  }
+
+  /** 模拟画布尺寸变化 */
+  resize(): void {
+    for (const listener of this.#listeners.get('resize') ?? []) {
+      listener(this.state);
     }
   }
 
@@ -161,6 +171,31 @@ describe('MapContextState 的工具', () => {
     session.tool.release('measure');
 
     expect(state.context.activeTool.value).toBe('measure');
+    session[Symbol.dispose]();
+  });
+});
+
+describe('MapContextState 的投影版本', () => {
+  it('相机变化、画布尺寸变化时加 1；卸下视图后不再跟随它的尺寸，上下文释放后不再跟随相机', () => {
+    const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
+    const session = new MapSession({ groups: ['basemap'], camera });
+    const state = new MapContextState(session, () => undefined, resolveOverlayOptions());
+    const view = new FakeView();
+    state.attachView(view, CANVAS);
+    const revision = state.context.projectionRevision;
+
+    session.camera.set({ ...camera, zoom: 8 }, { view: '2d', cause: 'user' });
+    expect(revision.value).toBe(1);
+    view.resize();
+    expect(revision.value).toBe(2);
+
+    state.detachView(view);
+    view.resize();
+    expect(revision.value).toBe(2);
+    state[Symbol.dispose]();
+    session.camera.set({ ...camera, zoom: 9 }, { view: '2d', cause: 'user' });
+
+    expect(revision.value).toBe(2);
     session[Symbol.dispose]();
   });
 });

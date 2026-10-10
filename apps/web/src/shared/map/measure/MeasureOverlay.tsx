@@ -27,11 +27,10 @@ export const MeasureOverlay = defineComponent({
   },
   setup(props) {
     const map = useMap();
-    const camera = map.useCamera();
-    // 标签只随测量结果变化，位置随相机重新投影
+    // 标签只随测量结果变化，位置随相机和画布尺寸重新投影
     const labels = computed(() => measureLabels(props.measure.state.value));
     const placed = computed<PlacedLabel[]>(() => {
-      void camera.value;
+      void map.projectionRevision.value;
       const view = map.view.value;
       if (map.viewState.value !== 'ready' || !view) {
         return [];

@@ -81,6 +81,7 @@ class FakeMap implements MapLike {
   on(type: 'style.load', listener: () => void): MapSubscription;
   on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  on(type: 'resize', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
   on(type: string, listener: (event: never) => void): MapSubscription {
     const callback = listener as (event: FakeEvent) => void;
@@ -125,11 +126,16 @@ class FakeMap implements MapLike {
   }
 
   // 拾取、投影用简单的换算：画布左上角是相机中心，每 100 像素 1 度，相机移动后位置跟着变
+  // 画布尺寸变化时投影会变、相机不变：测试改这个偏移再发出 resize 来模拟
+  screenOffset = { x: 0, y: 0 };
   unproject([x, y]: [number, number]) {
-    return { lng: this.camera.lng + x / 100, lat: this.camera.lat - y / 100 };
+    return { lng: this.camera.lng + (x - this.screenOffset.x) / 100, lat: this.camera.lat - (y - this.screenOffset.y) / 100 };
   }
   project([lng, lat]: [number, number]) {
-    return { x: (lng - this.camera.lng) * 100, y: (this.camera.lat - lat) * 100 };
+    return {
+      x: (lng - this.camera.lng) * 100 + this.screenOffset.x,
+      y: (this.camera.lat - lat) * 100 + this.screenOffset.y
+    };
   }
   readonly canvas = document.createElement('canvas');
   getCanvas(): HTMLCanvasElement {
@@ -253,6 +259,12 @@ function valueOf(wrapper: PageWrapper, label: string): string {
 
 function pin(wrapper: PageWrapper) {
   return wrapper.get('[aria-label="坐标定位点"]');
+}
+
+// 图钉在画布上的位置（像素取整）
+function pinAt(wrapper: PageWrapper): [number, number] {
+  const { left, top } = (pin(wrapper).element as HTMLElement).style;
+  return [Math.round(Number.parseFloat(left)), Math.round(Number.parseFloat(top))];
 }
 
 // jsdom 没有 PointerEvent，用同名的 MouseEvent 代替
@@ -630,5 +642,27 @@ describe('CurrentMapPage', () => {
     await pointer(wrapper, 'pointerup', 210, 120);
 
     expect(pin(wrapper).attributes('style')).toContain('left: 200px; top: 100px;');
+  });
+
+  it('画布尺寸变化后（相机不变、投影变了），测量标签和图钉立即重新投影', async () => {
+    stubBoundaryFetch();
+    const { wrapper, map } = await readyPage();
+    await button(wrapper, '测距').trigger('click');
+    drawLine(map);
+    await button(wrapper, '测距').trigger('click');
+    await button(wrapper, '坐标定位').trigger('click');
+    await button(wrapper, '拾取').trigger('click');
+    map.mouse('click', 50, 30);
+    await nextTick();
+    const total = () => overlayItems(wrapper).find(({ text }) => text?.startsWith('总长'));
+    expect(total()).toMatchObject({ x: 100, y: 0 });
+    expect(pinAt(wrapper)).toStrictEqual([50, 30]);
+
+    map.screenOffset = { x: 40, y: 25 };
+    map.fire('resize');
+    await nextTick();
+
+    expect(total()).toMatchObject({ x: 140, y: 25 });
+    expect(pinAt(wrapper)).toStrictEqual([90, 55]);
   });
 });

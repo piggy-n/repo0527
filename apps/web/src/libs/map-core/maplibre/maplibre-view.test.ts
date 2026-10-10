@@ -112,6 +112,7 @@ class FakeMap implements MapLike {
   on(type: 'style.load', listener: () => void): MapSubscription;
   on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  on(type: 'resize', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
   on(type: string, listener: (event: never) => void): MapSubscription {
     // 各个重载的回调都能接收 FakeEvent 中各自需要的字段
@@ -1154,6 +1155,20 @@ describe('MapLibreView', () => {
 
       ctx.view.resume();
       expect(ctx.map.getCenter()).toEqual({ lng: 120, lat: 31 });
+    });
+
+    it('tells listeners when the map resizes, and stops after dispose', () => {
+      const ctx = setup();
+      let resizes = 0;
+      ctx.view.on('resize', () => resizes++);
+
+      ctx.map.fire('resize');
+      expect(resizes).toBe(1);
+      ctx.view[Symbol.dispose]();
+      ctx.map.fire('resize');
+
+      expect(resizes).toBe(1);
+      ctx.session[Symbol.dispose]();
     });
 
     it('locates with flyTo and fitBounds as program moves', () => {

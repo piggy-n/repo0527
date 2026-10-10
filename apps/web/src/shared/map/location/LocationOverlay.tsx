@@ -35,7 +35,6 @@ export const LocationOverlay = defineComponent({
   },
   setup(props) {
     const map = useMap();
-    const camera = map.useCamera();
     const root = ref<HTMLElement>();
     const info = ref<HTMLElement>();
     const canvasSize = useElementSize(root);
@@ -45,9 +44,9 @@ export const LocationOverlay = defineComponent({
     // 拖动开始时的位置点，取消时回到这里
     let origin: LocationPoint | null = null;
 
-    // 图钉尖端在画布上的位置，随相机重新投影；视图没就绪时不显示
+    // 图钉尖端在画布上的位置，随相机和画布尺寸重新投影；视图没就绪时不显示
     const anchor = computed(() => {
-      void camera.value;
+      void map.projectionRevision.value;
       const point = props.location.state.value.point;
       const view = map.view.value;
       return point && map.viewState.value === 'ready' && view ? view.project(point.lngLat) : null;

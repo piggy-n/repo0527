@@ -57,4 +57,6 @@ export interface MapView extends Disposable {
   project(lngLat: LngLat, height?: number): ScreenPoint | null;
   /** 状态或失败原因变化时触发 */
   on(event: 'statechange', callback: (state: ViewState) => void): Unsubscribe;
+  /** 画布尺寸变化：相机不变，屏幕上的投影变了，按屏幕位置摆放的浮层要重新投影 */
+  on(event: 'resize', callback: () => void): Unsubscribe;
 }

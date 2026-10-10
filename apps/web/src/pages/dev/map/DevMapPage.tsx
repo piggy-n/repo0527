@@ -265,9 +265,8 @@ const ProbeLabel = defineComponent({
   },
   setup(props) {
     const map = useMap();
-    const camera = map.useCamera();
     const position = computed(() => {
-      void camera.value;
+      void map.projectionRevision.value;
       const view = map.view.value;
       return map.viewState.value === 'ready' && view ? view.project(props.probe.lngLat) : null;
     });

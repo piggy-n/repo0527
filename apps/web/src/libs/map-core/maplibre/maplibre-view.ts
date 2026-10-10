@@ -36,6 +36,7 @@ export interface MapLibreViewOptions<G extends string> {
 
 interface MapLibreViewEvents {
   statechange: (state: ViewState) => void;
+  resize: () => void;
 }
 
 interface Deferred {
@@ -211,7 +212,8 @@ export class MapLibreView<const G extends string> implements MapView {
     for (const subscription of [
       map.on('style.load', () => this.#guard(() => this.#onStyleLoad(map))),
       map.on('error', ({ error }) => this.#guard(() => this.#onMapError(map, error))),
-      map.on('move', event => this.#guard(() => this.#onMove(map, event)))
+      map.on('move', event => this.#guard(() => this.#onMove(map, event))),
+      map.on('resize', () => this.#guard(() => this.#emitter.emit('resize')))
     ]) {
       stack.defer(() => subscription.unsubscribe());
     }

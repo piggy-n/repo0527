@@ -57,6 +57,8 @@ export interface MapContext {
   whenReady(signal?: AbortSignal): Promise<void>;
   /** 在调用方的作用域里订阅相机，作用域销毁时取消 */
   useCamera(): Readonly<ShallowRef<CameraState>>;
+  /** 屏幕投影的版本：相机变化、画布尺寸变化时加 1；按屏幕位置摆放的浮层依赖它重新投影 */
+  readonly projectionRevision: Readonly<Ref<number>>;
   /** 量出登记过的悬浮元素此刻占用的部分，算出定位用的 padding；还没有画布时四边都是边距 */
   overlayPadding(): OverlayPadding;
   /** 当前工具的 ID（ADR 0034） */
@@ -127,6 +129,8 @@ export class MapContextState implements Disposable {
   readonly #retryRequests = ref(0);
   readonly #activeTool: Ref<string>;
   readonly #unsubscribeTool: () => void;
+  readonly #projectionRevision = ref(0);
+  readonly #unsubscribeCamera: () => void;
   readonly #lifetime = new AbortController();
   // 还没有视图时调用 whenReady 的等待者，视图挂上时依次通知
   readonly #waiting = new Set<(attached: AttachedView) => void>();
@@ -145,6 +149,7 @@ export class MapContextState implements Disposable {
     // 工具模型在会话里，这里只把当前工具桥接成 Vue 的状态；切换由工具模型保证同一时间只有一个
     this.#activeTool = ref(session.tool.active);
     this.#unsubscribeTool = session.tool.on('change', ({ active }) => (this.#activeTool.value = active));
+    this.#unsubscribeCamera = session.camera.on('change', () => this.#projectionRevision.value++);
     this.context = Object.freeze({
       view: shallowReadonly(this.#viewport),
       viewState: shallowReadonly(this.#viewState),
@@ -152,6 +157,7 @@ export class MapContextState implements Disposable {
       retry: () => this.#retry(),
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
       useCamera: () => this.#useCamera(),
+      projectionRevision: shallowReadonly(this.#projectionRevision),
       overlayPadding: () => this.#overlayPadding(),
       activeTool: shallowReadonly(this.#activeTool),
       activateTool: (id: string) => session.tool.activate(id),
@@ -169,10 +175,16 @@ export class MapContextState implements Disposable {
     if (this.#view) {
       throw new Error('一个地图上下文只能有一个画布');
     }
-    const unsubscribe = view.on('statechange', state => {
+    const unsubscribeState = view.on('statechange', state => {
       this.#viewState.value = state;
       this.#failure.value = view.failure;
     });
+    // 画布尺寸变化时相机不变，投影变了
+    const unsubscribeResize = view.on('resize', () => this.#projectionRevision.value++);
+    const unsubscribe = () => {
+      unsubscribeState();
+      unsubscribeResize();
+    };
     const attached: AttachedView = { view, canvas, unsubscribe, detached: new AbortController() };
     this.#view = attached;
     this.#viewState.value = view.state;
@@ -208,6 +220,7 @@ export class MapContextState implements Disposable {
   /** 等待中的 whenReady 以 AbortError 结束 */
   [Symbol.dispose](): void {
     this.#unsubscribeTool();
+    this.#unsubscribeCamera();
     this.#lifetime.abort(new DOMException('地图上下文已释放', 'AbortError'));
   }
 
