@@ -46,6 +46,7 @@
 | [0034](0034-interaction-tools.md) | 交互工具：视图输入、工具模型与工具栏 | 已接受 |
 | [0035](0035-measurement.md) | 测量：椭球面计算、测量的状态与标签 | 已接受 |
 | [0036](0036-region-locate.md) | 区划定位：本地区划目录、边界的加载与定位 | 已接受 |
+| [0037](0037-coordinate-locate-and-location-point.md) | 坐标定位与位置点 | 已接受 |
 
 ## 模板
 
