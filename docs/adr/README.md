@@ -44,6 +44,7 @@
 | [0032](0032-intranet-build-mode.md) | 公网与内网两套构建命令：Vite 构建模式 | 已接受 |
 | [0033](0033-boundaries-and-default-view.md) | 行政区边界与默认视角 | 已接受 |
 | [0034](0034-interaction-tools.md) | 交互工具：视图输入、工具模型与工具栏 | 已接受 |
+| [0035](0035-measurement.md) | 测量：椭球面计算、测量的状态与标签 | 已接受 |
 
 ## 模板
 
