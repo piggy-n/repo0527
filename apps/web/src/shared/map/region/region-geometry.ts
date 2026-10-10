@@ -88,6 +88,14 @@ async function fetchJson(url: string): Promise<unknown> {
   return response.json();
 }
 
+let sharedLoader: RegionBoundaryLoader | undefined;
+
+/** 整个应用共用的加载器：区划定位和位置点的所在区县用同一份市界、县界的解析结果 */
+export function sharedRegionBoundaryLoader(): RegionBoundaryLoader {
+  sharedLoader ??= createRegionBoundaryLoader();
+  return sharedLoader;
+}
+
 /**
  * 从 5B.2 的市界、县界文件取区划的边界（同一个地址，命中 HTTP 缓存）。
  * 下载由各次加载共用，不随某一次选择取消；过期的结果由调用方丢弃

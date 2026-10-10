@@ -2,7 +2,7 @@ import type { LngLat, MapInputEvent, MapTool, ScreenPoint, ToolView } from '@yzt
 import type { MapContext } from '@yzt/map-vue';
 import { getCurrentScope, onScopeDispose, type ShallowRef, shallowReadonly, shallowRef, watch } from 'vue';
 import { findRegion, type Region } from '../region/region-catalog';
-import { createRegionBoundaryLoader, type RegionBoundaryLoader } from '../region/region-geometry';
+import { type RegionBoundaryLoader, sharedRegionBoundaryLoader } from '../region/region-geometry';
 import type { CoordinateFormat } from './coordinate-format';
 
 /** 拾取工具登记到会话里的 ID，面板的"拾取"按钮用同样的 ID */
@@ -55,13 +55,11 @@ export interface LocationPointOwner {
 }
 
 export interface LocationPointOptions {
-  /** 判断所在区县；默认用县界，测试时注入 */
+  /** 判断所在区县；默认用整个应用共用的加载器（和区划定位共用县界），测试时注入 */
   readonly regions?: Pick<RegionBoundaryLoader, 'districtCodeAt'>;
 }
 
 const INITIAL: LocationState = Object.freeze({ point: null, infoOpen: false, format: 'dms' });
-
-let sharedRegions: Pick<RegionBoundaryLoader, 'districtCodeAt'> | undefined;
 
 /** 创建位置点的拥有者，在 provideMap 所在组件的 setup 中调用；作用域销毁时丢弃进行中的区县判断 */
 export function useLocationPoint(
@@ -71,7 +69,7 @@ export function useLocationPoint(
   if (!getCurrentScope()) {
     throw new Error('useLocationPoint 只能在组件的 setup 或 effectScope 中调用');
   }
-  const regions = options.regions ?? (sharedRegions ??= createRegionBoundaryLoader());
+  const regions = options.regions ?? sharedRegionBoundaryLoader();
   const camera = map.useCamera();
   const state = shallowRef<LocationState>(INITIAL);
   const region = shallowRef<LocationRegion>({ kind: 'none' });

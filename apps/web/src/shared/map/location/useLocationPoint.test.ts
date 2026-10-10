@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, ref, shallowRef } from 'vue';
 import countyFile from '../boundary/data/jiangsu-county.json?raw';
 import { findRegion } from '../region/region-catalog';
+import { useRegionLocate } from '../region/useRegionLocate';
 import type { RegionBoundaryLoader } from '../region/region-geometry';
 import { LOCATION_PICK_TOOL, useLocationPoint } from './useLocationPoint';
 
@@ -254,13 +255,19 @@ describe('useLocationPoint', () => {
     expect(owner.region.value).toStrictEqual({ kind: 'loading' });
   });
 
-  it('没有注入时用共享的县界：两个拥有者只下载一次', async () => {
+  it('没有注入时和区划定位共用一个加载器：两个位置点、一个区划定位，县界只下载、解析一次', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(new Response(countyFile)));
     vi.stubGlobal('fetch', fetch);
     const scope = effectScope();
     const owners = scope.run(() => [useLocationPoint(idleMap()), useLocationPoint(idleMap())]);
+    const region = scope.run(() =>
+      useRegionLocate({ view: shallowRef(null), whenReady: () => new Promise(() => {}), cameraIntent: ref(0) }, {
+        goToDefaultView: () => {}
+      })
+    );
 
     owners?.forEach(owner => owner.place(XUANWU, 'input'));
+    region?.select('320102');
     await settle();
     await settle();
 
@@ -268,6 +275,7 @@ describe('useLocationPoint', () => {
       { kind: 'ready', region: findRegion('320102') },
       { kind: 'ready', region: findRegion('320102') }
     ]);
+    expect(region?.state.value.boundary.kind).toBe('ready');
     expect(fetch).toHaveBeenCalledOnce();
     scope.stop();
   });

@@ -2,7 +2,7 @@ import type { FitBoundsOptions, StyleGroup } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
 import { getCurrentScope, onScopeDispose, type ShallowRef, shallowReadonly, shallowRef } from 'vue';
 import { findRegion, type Region } from './region-catalog';
-import { createRegionBoundaryLoader, type RegionBoundary, type RegionBoundaryLoader } from './region-geometry';
+import { type RegionBoundary, type RegionBoundaryLoader, sharedRegionBoundaryLoader } from './region-geometry';
 import { regionGroup } from './region-style';
 
 /** 选中区划的边界：全省没有边界；加载失败时记下原因，可以重试 */
@@ -32,7 +32,7 @@ export interface RegionLocate {
 export interface RegionLocateOptions {
   /** 从市或区县回到全省时调用，现状底图传入 useDefaultView 的 goToDefaultView */
   readonly goToDefaultView: () => void;
-  /** 默认用共享的加载器，同一个文件在整个应用里只下载、解析一次；测试时注入 */
+  /** 默认用整个应用共用的加载器（和位置点共用），同一个文件只下载、解析一次；测试时注入 */
   readonly loader?: Pick<RegionBoundaryLoader, 'load'>;
 }
 
@@ -40,8 +40,6 @@ export interface RegionLocateOptions {
 const FIT_OPTIONS: FitBoundsOptions = { duration: 1100, maxZoom: 14.5, pitch: 0 };
 
 const NONE: RegionLocateState = Object.freeze({ selected: null, boundary: Object.freeze({ kind: 'none' }) });
-
-let sharedLoader: RegionBoundaryLoader | undefined;
 
 /**
  * 面板上点击一个区划后要选择的代码（同旧项目）：再点已选中的区县回到所在的市；
@@ -62,7 +60,7 @@ export function useRegionLocate(
   if (!getCurrentScope()) {
     throw new Error('useRegionLocate 只能在组件的 setup 或 effectScope 中调用');
   }
-  const loader = options.loader ?? (sharedLoader ??= createRegionBoundaryLoader());
+  const loader = options.loader ?? sharedRegionBoundaryLoader();
   const state = shallowRef<RegionLocateState>(NONE);
   // 每次选择一个控制器：换选、回到全省、作用域销毁时中止，晚到的结果不写入状态
   let current = new AbortController();
