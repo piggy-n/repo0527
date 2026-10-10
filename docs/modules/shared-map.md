@@ -32,6 +32,7 @@
 | `region/useRegionLocate.ts` | 区划定位的拥有者：选择、加载边界、定位、回到全省；面板点击的规则 `nextRegionSelection` |
 | `region/RegionLocatePanel.tsx` | 区划定位的面板：市、区县、搜索、加载与失败（联调用的界面） |
 | `location/coordinate-format.ts` | 经纬度的识别与格式：度分秒、小数、方向，一次粘贴的一对坐标（纯函数，ADR 0037） |
+| `location/useLocationPoint.ts` | 位置点的拥有者：位置点、位置信息开关、输入框格式，定位、拾取工具，所在区县的判断 |
 
 ## 江苏的范围与默认视角（ADR 0033）
 
@@ -310,6 +311,22 @@ const { geometry, bounds } = await loader.load(findRegion('320213'));  // 县界
 
 ## 坐标定位与位置点（ADR 0037）
 
+```ts
+// 页面 setup：创建拥有者，登记拾取工具
+const location = useLocationPoint(map);
+map.registerTools(location.tools);
+
+location.locate([118.7978, 32.0486]);   // 输入后定位：放下位置点，飞过去（至少 14 级，避开悬浮元素）
+location.place(lngLat, 'drag');         // 拖动：移动位置点，不移动地图
+location.remove();                      // 删除位置点，连同位置信息
+```
+
+- 状态是 `{ point, infoOpen, format }`：`point` 是经纬度和来源（`input` / `pick` / `drag`），同一时间最多一个；`format` 是面板输入框的格式（默认度分秒），放在拥有者里，关掉面板再打开时还记得。值没变时不替换状态
+- `locate` 只在视图就绪时飞过去，否则只放下位置点；飞行 1000 ms，缩放取当前缩放和 14 的较大者
+- 拾取工具 `LOCATION_PICK_TOOL`（`location-pick`）：临时任务、十字光标。移动时记下鼠标位置（`pickPointer`，给提示定位），离开画布或退出时清掉；左键单击一次（双击里的第二次单击、右键不算）放下位置点、打开位置信息并 `releaseTool` 退出，地图不移动；拾取不到时不放点、不退出；Esc 不处理，由工具模型退回常驻模式
+- 所在区县（`region`）：位置点的经纬度变化时用县界判断（`RegionBoundaryLoader.districtCodeAt`），结果是 `loading`、`ready`（区县，或 `null` 表示不在江苏省内）、`failed`；只开关位置信息时不重新判断，拖动时只采用最后一次判断的结果，作用域销毁后晚到的结果不写入。没有注入时用整个应用共享的县界
+- `districtCodeAt`：先用每个区县的外包范围排除，再用 `@turf/boolean-point-in-polygon` 按多边形判断（外包范围会互相重叠，例如浦口区的点也在江宁区的外包范围里）。县界简化过，边界附近可能判错
+
 ### 坐标的识别与格式
 
 ```ts
@@ -379,10 +396,11 @@ splitCoordinatePair('118°46′40″E 32°03′23″N');  // 粘贴的一对坐�
 | `boundary/BoundaryPanel.test.tsx` | 勾选、取消某一级后改变状态，都不勾选时没有滑块；滑块按百分比显示、拖动时交给拥有者 0～1 的值 | jsdom |
 | `boundary/useBoundaries.test.ts` | 初始状态；开关某一级、透明度；值没变时不重新推导；不合法的透明度抛错；每次调用各有一份状态 | Node |
 | `region/region-catalog.test.ts` | 目录与市界、县界数据逐条对应；市、区县的数量与所在的市；旧项目写错代码的区县；查找、路径、简称；搜索的规则、顺序与条数 | Node |
-| `region/region-geometry.test.ts` | 代码换成 6 位；外包范围；市从市界、区县从县界取，Polygon 与 MultiPolygon；连云港合并；每个文件只读一次；失败不缓存；没有这个区划、结构不对时报错；默认的 fetch 与下载失败 | Node |
+| `region/region-geometry.test.ts` | 代码换成 6 位；外包范围；点在哪个区县（外包范围重叠时按多边形）；市从市界、区县从县界取，Polygon 与 MultiPolygon；连云港合并；每个文件只读一次；失败不缓存；没有这个区划、结构不对时报错；默认的 fetch 与下载失败 | Node |
 | `region/region-style.test.ts` | 没有边界时是空分组；数据源与两个图层；ID 前缀与组合后的校验；每次推导的数据都是新对象 | Node |
 | `region/useRegionLocate.test.ts` | 开始时是全省；加载中、到位后的状态与高亮，等视图就绪后定位一次；换选、回到全省后晚到的成功和失败都不写入；回到默认视角；选同一个、不认识的代码；失败与重试；等待就绪与等待失败；作用域销毁；共享的加载器；面板点击的规则（用假的上下文和手动放行的加载器） | Node |
 | `location/coordinate-format.test.ts` | 各种写法的识别（标准、单位、分隔、连写、小数度、方向）；各种错误的原因与提示；输入框和复制的格式、进位、负零；格式化后能识别回原值；一对坐标的拆分；填反的判断 | Node |
+| `location/useLocationPoint.test.ts` | 初始状态；定位与最小缩放、视图没就绪时；放下、删除、格式、值没变不替换；拾取工具的光标、鼠标位置、单击放点并退出、不算的单击与 Esc；所在区县的判断、只采用最后一次（成功和失败都试过）、作用域销毁；共享的县界（用假的上下文和手动放行的判断） | Node |
 | `apps/web/tools/boundaries/boundaries.test.ts` | 边界数据的转换：文件对应关系、坐标取整与去掉高程、只留名称和代码、去掉 `crs`、原始结构不符合或没有要素时报错 | Node |
 | `basemap/basemap-style.test.ts` | 可选的底图与初始状态；每种底图的组成、瓦片地址、缩放范围与透明度；ID 的分组前缀与组合后的校验；改透明度只产生 `setPaintProperty`；切换底图时背景不动；关闭天地图时任何选择都没有天地图 | Node |
 
@@ -402,3 +420,4 @@ splitCoordinatePair('118°46′40″E 32°03′23″N');  // 粘贴的一对坐�
 - 区划定位的面板逐一改坏 16 处、工具栏的按下状态 2 处、页面的接线 7 处。"面板不登记为悬浮元素"测不出来：jsdom 没有布局，元素的尺寸都是 0，不会算进留白，改在浏览器里验证定位避开了面板；"关闭面板时清掉选择"起初没被发现（页面测试只用工具栏关面板），补了用面板上的关闭按钮关闭。其余全部由断言发现
 - 写面板时发现 `nextRegionSelection` 和旧项目不一致：旧项目选中区县时所在的市也算选中，再点这个市回到全省，原来的实现会选中这个市。先补了复现的用例再改
 - 坐标的识别与格式逐一改坏 42 处，起初 4 处没被发现：纬度前两位超过 90 时度只有 1 位、写了单位的长数字不当作连写、`E… N…` 前缀方向的度分秒、三段时不当作一对，各补了用例
+- 位置点的拥有者逐一改坏 27 处、区县判断 4 处，起初 2 处没被发现：前一次判断晚到的失败（只测了晚到的成功）、只用外包范围判断（测试的点刚好落在第一个外包范围对的区县），补了用例，后者用旧项目标签坐标表里浦口区的点（也在江宁区的外包范围里）

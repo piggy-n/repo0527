@@ -135,4 +135,20 @@ describe('区划的边界', () => {
     await expect(loader.load(region('320102'))).resolves.toMatchObject({ code: '320102' });
     expect(fetch.mock.calls.map(([url]) => url)).toStrictEqual([countyUrl, countyUrl]);
   });
+
+  it('点在哪个区县：用县界判断，省外为 null；只读县界', async () => {
+    const loadJson = vi.fn<LoadJson>(readBoundaryFile);
+    const loader = createRegionBoundaryLoader(loadJson);
+
+    await expect(loader.districtCodeAt([118.79786, 32.04864])).resolves.toBe('320102');
+    await expect(loader.districtCodeAt([120.303369, 31.575706])).resolves.toBe('320213');
+    // 坐标取自旧项目的标签坐标表（区县政府附近）
+    await expect(loader.districtCodeAt([119.338901, 34.760323])).resolves.toBe('320703');
+    await expect(loader.districtCodeAt([119.163509, 34.572506])).resolves.toBe('320706');
+    // 浦口区的点也落在江宁区的外包范围里，要按多边形判断
+    await expect(loader.districtCodeAt([118.6279, 32.0591])).resolves.toBe('320111');
+    await expect(loader.districtCodeAt([121.47, 31.23])).resolves.toBeNull();
+    await expect(loader.districtCodeAt([116.4, 39.9])).resolves.toBeNull();
+    expect(loadJson.mock.calls).toStrictEqual([[countyUrl]]);
+  });
 });

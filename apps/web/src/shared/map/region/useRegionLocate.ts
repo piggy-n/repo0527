@@ -33,7 +33,7 @@ export interface RegionLocateOptions {
   /** 从市或区县回到全省时调用，现状底图传入 useDefaultView 的 goToDefaultView */
   readonly goToDefaultView: () => void;
   /** 默认用共享的加载器，同一个文件在整个应用里只下载、解析一次；测试时注入 */
-  readonly loader?: RegionBoundaryLoader;
+  readonly loader?: Pick<RegionBoundaryLoader, 'load'>;
 }
 
 // 与旧项目一致；四边的留白由登记的悬浮元素决定（ADR 0029），俯角归零（ADR 0036 第 3 条）

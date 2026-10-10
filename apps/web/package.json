@@ -19,6 +19,7 @@
     "@element-plus/icons-vue": "^2.3.2",
     "@maplibre/maplibre-gl-style-spec": "^26.4.4",
     "@tanstack/vue-query": "^5.104.1",
+    "@turf/boolean-point-in-polygon": "^7.4.0",
     "@vue/devtools-api": "^8.2.1",
     "@vueuse/core": "^15.0.0",
     "@yzt/icons": "workspace:*",

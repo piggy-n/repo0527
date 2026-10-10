@@ -201,6 +201,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `@maplibre/maplibre-gl-style-spec` | MapLibre 样式规范的工具：map-core 用它的 `diff` 对比样式快照（ADR 0022），以后在三维和 Worker 里求值表达式和过滤条件（ADR 0021、0024）。它本来就是 maplibre-gl 的依赖，pnpm 不允许使用没有声明的包，所以自己声明；版本范围与 maplibre-gl 声明的相同（`^26.4.4`），两者解析到同一个版本，只打包一份 | 手写求值器（旧项目的做法，ADR 0020） |
 | `@types/geojson` | GeoJSON 的类型，并提供全局命名空间 `GeoJSON`：style-spec 和 maplibre-gl 的声明文件依赖它，要在 tsconfig 的 `types` 中加载，否则相关类型会悄悄变成错误类型（见 [tsconfig.md](tsconfig.md)）。版本范围与 maplibre-gl 依赖的相同 | — |
 | `geographiclib-geodesic` | 椭球面上的距离和面积（ADR 0024 第 4 条、ADR 0035），只在 map-core 的测量中使用。Karney 算法的作者维护，MIT 许可，自带类型；只有 CommonJS 格式的压缩包（32 KB），由 Vite 预构建处理。参数是先纬度后经度，map-core 的封装负责转换 | geodesy（Vincenty，没有椭球面积）、turf（球面） |
+| `@turf/boolean-point-in-polygon` | 判断点在哪个区县的多边形里（ADR 0037），只在 `shared/map/region` 中使用。turf v7 的单个包（按需安装，不用 `@turf/turf` 全家桶），自带类型，处理洞和多面；依赖 `@turf/helpers`、`@turf/invariant` 和 `point-in-polygon-hao` | 自己写射线法 |
 | `nanoevents` | 地图内核的带类型事件（ADR 0023）。实现只有 25 行，无依赖；`on` 返回取消订阅的函数，直接登记到释放栈。map-core 对外只暴露自己的 `Unsubscribe` 类型，不暴露它的类型 | mitt（`on` 不返回取消函数，2023 年后没有发布）、`EventTarget` |
 | `core-js` | 补齐资源释放的标准接口：只在 `app/main.ts` 的最前面引入 `es/symbol/dispose`、`es/disposable-stack` 两个模块（ADR 0023）。入口包实测增加 21.8 KB（gzip 7.9 KB）。安装脚本不执行（见 pnpm-workspace.md）；lint 的 `no-unassigned-import` 已放行 `core-js/**` | 在 utils 里自己实现约 60 行 |
 | `msw` | 测试中在网络层模拟接口，只用 `msw/node`；安装脚本不放行（见 pnpm-workspace.md） | axios-mock-adapter |

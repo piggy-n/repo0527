@@ -361,7 +361,7 @@ store.clear();
 
 | 用途 | 候选 | 说明 |
 |---|---|---|
-| 几何计算 | turf v7 | 按需安装单个包（如 `@turf/bbox`），不用 `@turf/turf` 全家桶，旧代码两种写法混用。GeoJSON 类型来自 `@types/geojson`。测量距离和面积不用 turf 的球面算法（ADR 0024） |
+| 几何计算 | turf v7 | 按需安装单个包（如 `@turf/bbox`），不用 `@turf/turf` 全家桶，旧代码两种写法混用。GeoJSON 类型来自 `@types/geojson`。测量距离和面积不用 turf 的球面算法（ADR 0024）。已用：`@turf/boolean-point-in-polygon`（所在区划，ADR 0037） |
 | 椭球面测量 | geographiclib-geodesic | 已定（ADR 0035）：测量方式 `geodesic` 的距离和面积按椭球面计算 |
 | 样式对比与表达式求值 | `@maplibre/maplibre-gl-style-spec` | 已定（ADR 0019、0022）：版本与 maplibre-gl 依赖的保持一致（6.12.0 对应 26.4.4） |
 | 事件 | nanoevents | 已定（ADR 0023）：`on` 返回取消订阅的函数，登记进释放栈 |
