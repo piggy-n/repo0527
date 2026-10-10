@@ -16,7 +16,7 @@
 |---|---|
 | `style/diff-style.ts` | `diffStyle`：对比两份样式快照，得出命令列表 |
 | `style/style-model.ts` | `StyleModel`：按分组组合样式，提交加版本号，合并通知 |
-| `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause` |
+| `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause`；当前这次相机操作的信号（ADR 0038） |
 | `session/map-session.ts` | `MapSession`：组合样式、相机与当前工具，统一释放 |
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`ToolView` |
 | `measure/geodesic.ts` | 椭球面上的距离、累计距离、折线总长、多边形面积（geographiclib-geodesic，ADR 0035） |
@@ -114,6 +114,7 @@ session[Symbol.dispose]();
 - 不做范围收敛：俯角上限等由各视图应用时处理，再按 `sync` 写回
 - 数值都没变时不通知；同步通知，不合并到微任务：相机本来每帧变一次，事件的 `cause` 要对得上触发它的那次调用
 - `intentRevision` 只在 `user`、`program` 的变化时加 1：三维切走时记下它，切回时没变，就按 ADR 0024 第 6 条还原离开时的精确视角。它按变化次数计数（拖动一次会加几十，每帧一次 `move`），只能比较前后是否相等，不能当作操作次数
+- 相机操作（ADR 0038）：`beginOperation()` 开始一次新的操作，中止上一次的信号并返回这一次的；`operation` 读当前的信号；释放时中止。用户开始拖动或缩放、用户发起的定位各是一次操作，由适配器和发起定位的拥有者调用；相机的变化本身不开始、也不中止操作。等待中的定位（如区划定位等边界）拿着开始时的信号，中止了就不再定位。5B 之后曾用 `intentRevision` 判断，相机没变的操作（目标就是当前视角）和动画的每一帧都会判断错
 
 ### MapSession
 
@@ -176,6 +177,7 @@ store.clear();
 **相机**：
 
 - 创建时用会话相机；`ready` 时在 `move` 事件里写回会话：有 `originalEvent` 就是 `user`，否则取 `eventData.cause`，都没有按 `program`
+- `ready` 时收到带 `originalEvent` 的 `movestart`（用户的手势开始），开始一次相机操作（ADR 0038）。只看 `movestart`，不看每一帧的 `move`：拖动的每一帧只有 `move`；MapLibre 的惯性在松手时发一次 `movestart`，之后也只有 `move`，所以惯性不会作废用户松手之后发起的定位。程序定位的 `movestart` 带 `cause`，不算
 - 首次进入 ready 和恢复显示走同一段流程：追上样式（追不上就中止，见"生命周期"）→ `jumpTo(会话相机, { cause: 'sync' })` → 读地图的实际值按 `sync` 写回会话 → 最后才进入 ready。这样初始化期间会话相机的变化会跟过来；地图收敛过的值（创建时就收敛了，那时还没订阅 `move`；或俯角超过上限）也会写回，而且不算意图；收到 `ready` 的监听者读到的已经是地图的实际值。以 `active: false` 创建、加载完进入 `paused` 时不同步，留到恢复显示
 - `flyTo`、`fitBounds` 带 `{ cause: 'program' }`
 - `fitBounds` 的 `pitch` 选项（5B.2 加入）：MapLibre 6 的 `fitBounds` 总把旋转归零，俯角却保持不变，算缩放级别时也不考虑俯角；要平视地看一个范围（如默认视角）时明确传 `pitch: 0`。三维视图实现 `MapView` 时同样遵守

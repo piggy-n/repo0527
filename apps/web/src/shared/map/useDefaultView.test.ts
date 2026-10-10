@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { MapViewport, MapViewState } from '@yzt/map-vue';
+import type { MapContext, MapViewport, MapViewState } from '@yzt/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, ref, shallowRef } from 'vue';
 import { JIANGSU_BOUNDS } from './jiangsu';
@@ -17,9 +17,17 @@ function fakeViewport() {
   return { viewport, fitBounds };
 }
 
-// 只有 useDefaultView 用到的 view 和 viewState
+// useDefaultView 用到的视图状态和相机操作；runCameraOperation 怎样等待和作废见 map-vue 的测试，这里只记下交给它的定位
 function fakeMap() {
-  return { view: shallowRef<MapViewport | null>(null), viewState: ref<MapViewState>('idle') };
+  // 进入页面时的相机操作，测试中止它表示用户已经开始了新的操作
+  const operation = new AbortController();
+  return {
+    view: shallowRef<MapViewport | null>(null),
+    viewState: ref<MapViewState>('idle'),
+    operation,
+    currentCameraOperation: () => operation.signal,
+    runCameraOperation: vi.fn<MapContext['runCameraOperation']>()
+  };
 }
 
 function setup(map = fakeMap()) {
@@ -70,26 +78,29 @@ describe('useDefaultView', () => {
     expect(retried.fitBounds.mock.calls).toStrictEqual([[JIANGSU_BOUNDS, { duration: 0, pitch: 0 }]]);
   });
 
-  it('回到默认视角：就绪时用 500ms 动画按江苏的范围平视适配，不传 padding（自动避开悬浮元素）', async () => {
+  it('回到默认视角是一次相机操作：用 500ms 动画按江苏的范围平视适配，不传 padding（自动避开悬浮元素）', () => {
     const { map, defaultView } = setup();
     const { viewport, fitBounds } = fakeViewport();
-    map.view.value = viewport;
-    map.viewState.value = 'ready';
-    await nextTick();
-    fitBounds.mockClear();
 
     defaultView.goToDefaultView();
+    const [action] = map.runCameraOperation.mock.calls[0] ?? [];
+    action?.(viewport);
 
+    expect(map.runCameraOperation).toHaveBeenCalledOnce();
     expect(fitBounds.mock.calls).toStrictEqual([[JIANGSU_BOUNDS, { duration: 500, pitch: 0 }]]);
   });
 
-  it.each(['idle', 'initializing', 'paused', 'failed'] as const)('视图是 %s 时回到默认视角什么也不做', state => {
-    const { map, defaultView } = setup();
+  it('就绪之前用户已经开始了相机操作（选区划、坐标定位、点"默认视角"）：第一次就绪时让给它，不再适配', async () => {
+    const { map } = setup();
     const { viewport, fitBounds } = fakeViewport();
-    map.view.value = state === 'idle' ? null : viewport;
-    map.viewState.value = state;
+    map.view.value = viewport;
+    map.viewState.value = 'initializing';
+    await nextTick();
 
-    expect(() => defaultView.goToDefaultView()).not.toThrow();
+    map.operation.abort();
+    map.viewState.value = 'ready';
+    await nextTick();
+
     expect(fitBounds).not.toHaveBeenCalled();
   });
 

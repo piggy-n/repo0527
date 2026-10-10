@@ -44,7 +44,7 @@ export interface LocationPointOwner {
   readonly pickPointer: Readonly<ShallowRef<ScreenPoint | null>>;
   /** 交给 registerTools */
   readonly tools: Readonly<Record<typeof LOCATION_PICK_TOOL, MapTool>>;
-  /** 输入坐标后定位：放下位置点，飞过去，缩放小于 14 级时放大到 14 级；视图没就绪时只放下位置点 */
+  /** 输入坐标后定位：放下位置点，飞过去，缩放小于 14 级时放大到 14 级；是一次相机操作，视图还没就绪时就绪后再飞（ADR 0038） */
   readonly locate: (lngLat: LngLat) => void;
   /** 放下或移动位置点，不移动地图（拖动、拖动取消时回到原位） */
   readonly place: (lngLat: LngLat, source: LocationSource) => void;
@@ -63,7 +63,7 @@ const INITIAL: LocationState = Object.freeze({ point: null, infoOpen: false, for
 
 /** 创建位置点的拥有者，在 provideMap 所在组件的 setup 中调用；作用域销毁时丢弃进行中的区县判断 */
 export function useLocationPoint(
-  map: Pick<MapContext, 'view' | 'viewState' | 'useCamera' | 'releaseTool'>,
+  map: Pick<MapContext, 'useCamera' | 'releaseTool' | 'runCameraOperation'>,
   options: LocationPointOptions = {}
 ): LocationPointOwner {
   if (!getCurrentScope()) {
@@ -88,11 +88,11 @@ export function useLocationPoint(
 
   const locate = (lngLat: LngLat) => {
     place(lngLat, 'input');
-    const view = map.view.value;
-    if (map.viewState.value === 'ready' && view) {
+    // 之前没完成的定位作废；视图还没就绪时等到就绪再飞，级别按那时的相机算
+    map.runCameraOperation(view => {
       const zoom = Math.max(camera.value.zoom, LOCATE_MIN_ZOOM);
       view.flyTo({ center: lngLat, zoom }, { duration: LOCATE_DURATION });
-    }
+    });
   };
 
   // 单击一次就放下位置点、打开位置信息并退出（ADR 0037 第 4 条）；Esc 不处理，由工具模型退回常驻模式

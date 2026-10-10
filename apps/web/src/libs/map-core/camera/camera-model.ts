@@ -53,6 +53,8 @@ export class CameraModel implements Disposable {
   readonly #events = new ModelEvents<CameraModelEvents>('CameraModel');
   #current: CameraState;
   #intentRevision = 0;
+  // 当前这次相机操作，开始下一次时中止（ADR 0038）
+  #operation = new AbortController();
 
   constructor(initial: CameraState) {
     this.#current = snapshot(initial);
@@ -65,6 +67,22 @@ export class CameraModel implements Disposable {
   /** 用户操作或程序定位造成的变化次数，同步不计；三维据此判断能否还原离开时的精确视角 */
   get intentRevision(): number {
     return this.#intentRevision;
+  }
+
+  /** 当前这次相机操作的信号：开始下一次操作、相机释放时中止（ADR 0038） */
+  get operation(): AbortSignal {
+    return this.#operation.signal;
+  }
+
+  /**
+   * 开始一次新的相机操作：中止上一次的信号，返回这一次的（ADR 0038）。
+   * 用户开始拖动或缩放、用户发起的定位（区划、默认视角、坐标）各是一次操作，动画的每一帧和视图之间的同步不是
+   */
+  beginOperation(): AbortSignal {
+    this.#events.assertAlive();
+    this.#operation.abort(new DOMException('有新的相机操作', 'AbortError'));
+    this.#operation = new AbortController();
+    return this.#operation.signal;
   }
 
   /** 写入相机并同步通知；数值都没变时不通知 */
@@ -86,6 +104,7 @@ export class CameraModel implements Disposable {
   }
 
   [Symbol.dispose](): void {
+    this.#operation.abort(new DOMException('CameraModel 已释放', 'AbortError'));
     this.#events[Symbol.dispose]();
   }
 }

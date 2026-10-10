@@ -69,6 +69,34 @@ describe('CameraModel', () => {
     expect(model.intentRevision).not.toBe(leftAt);
   });
 
+  it('starting an operation aborts the previous one; the current signal is always the latest', () => {
+    using model = new CameraModel(NANJING);
+    const initial = model.operation;
+
+    const first = model.beginOperation();
+    expect(initial.aborted).toBe(true);
+    expect(model.operation).toBe(first);
+    expect(first.aborted).toBe(false);
+
+    const second = model.beginOperation();
+    expect(first.reason).toBeInstanceOf(DOMException);
+    expect(first.reason).toMatchObject({ name: 'AbortError' });
+    expect(model.operation).toBe(second);
+    expect(second.aborted).toBe(false);
+  });
+
+  it('camera changes never start or abort an operation, whatever the cause', () => {
+    using model = new CameraModel(NANJING);
+    const operation = model.beginOperation();
+
+    model.set(moved(NANJING, 9), { view: '2d', cause: 'program' });
+    model.set(moved(NANJING, 10), { view: '2d', cause: 'user' });
+    model.set(moved(NANJING, 11), { view: '3d', cause: 'sync' });
+
+    expect(model.operation).toBe(operation);
+    expect(operation.aborted).toBe(false);
+  });
+
   it('keeps the state frozen against the caller and the listeners', () => {
     using model = new CameraModel(NANJING);
     const next = { center: [119, 32] as [number, number], zoom: 9, bearing: 10, pitch: 30 };
@@ -117,6 +145,8 @@ describe('CameraModel', () => {
 
     expect(() => model.set(moved(NANJING, 10), { view: '2d', cause: 'user' })).toThrow('CameraModel 已释放');
     expect(() => model.on('change', listener)).toThrow('CameraModel 已释放');
+    expect(() => model.beginOperation()).toThrow('CameraModel 已释放');
+    expect(model.operation.reason).toMatchObject({ name: 'AbortError', message: 'CameraModel 已释放' });
     expect(model.current).toEqual(NANJING);
     expect(listener).not.toHaveBeenCalled();
     expect(() => model[Symbol.dispose]()).not.toThrow();

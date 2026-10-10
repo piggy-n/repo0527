@@ -112,7 +112,9 @@ view.value?.fitBounds(JIANGSU_BOUNDS, { padding: 40 });
 | `retry()` | 引擎失败后重新创建视图；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
 | `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@yzt/utils` 的 `abortReason`）。等待绑定具体的视图实例，旧视图就绪不算新视图就绪 |
 | `useCamera()` | 在调用方的作用域里订阅相机，作用域销毁时取消；不在组件 setup 或 `effectScope` 里调用时抛错 |
-| `cameraIntent` | 相机被用户操作或程序定位移动的次数（会话相机的 `intentRevision`，视图之间的同步不算）。异步的定位（如区划定位等边界加载）在开始时记下它，结束时变了就不再定位，免得覆盖用户这期间的操作 |
+| `runCameraOperation(action)` | 用户发起的定位（默认视角、坐标定位等）都从这里执行（ADR 0038）：开始一次相机操作，之前没完成的定位作废；视图就绪时立即执行 `action(view)`，还没就绪时等到就绪再执行，期间有新的操作、视图失败或被替换时放弃；就绪后执行时抛出的错误交给 `onError` |
+| `beginCameraOperation()` | 要先异步准备数据的定位（如区划定位等边界）在开始时调用，返回这次操作的信号，准备好后用 `whenReady(信号)` 等视图：下一次操作开始时（包括用户开始拖动、缩放）信号中止，等待随之结束 |
+| `currentCameraOperation()` | 当前这次相机操作的信号，不开始新的操作。页面的初始适配在 setup 时读它，就绪时已经中止就让给用户的操作（ADR 0038） |
 | `projectionRevision` | 屏幕投影的版本：会话相机变化、当前视图的画布尺寸变化（视图的 `resize` 事件）时加 1。按屏幕位置摆放的浮层（测量标签、图钉）在 `computed` 里读它再 `project`；只依赖相机时，窗口尺寸变化后浮层不动（中心和缩放没变，相机不发出变化） |
 | `activeTool` | 当前工具的 ID（只读），跟随会话的工具模型 |
 | `activateTool(id)` | 激活工具，旧工具先退出；未登记时抛错 |
@@ -206,7 +208,7 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 | `style-binder.test.ts` | 初始提交、同一轮的跨分组修改、晚一轮时的拒绝与收敛、推导失败时整批跳过、缓存、重复绑定、释放 | Node |
 | `provide-map.test.tsx` | 必须在 setup 中调用、初始值早于子组件 setup、挂载后绑定抛错、卸载顺序、卸载路径上的错误、组名的类型检查、默认的错误输出；工具的登记、挂载后登记抛错、重复或 `browse` 时这一次都不登记 | jsdom |
 | `MapCanvas.test.tsx` | 用完整快照创建视图、页面的 class 不冲掉 MapLibre 的 class、视图状态的变化、受限入口、只读引用、`whenReady` 的各种结局、`useCamera` 的订阅与取消、先释放视图后释放会话、运行中的错误、画布的数量限制、失败原因、引擎失败后的重试；受限入口的 `pick`、`project`；工具通过上下文激活和退出、`activeTool` 只读、地图上的点击经视图交给工具 | jsdom |
-| `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，视图入口 `fitBounds` 的默认 padding，`useMapOverlay` 不在作用域里时抛错；`activeTool` 跟随工具模型、上下文释放后不再跟随 | Node |
+| `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，视图入口 `fitBounds` 的默认 padding，`useMapOverlay` 不在作用域里时抛错；`activeTool` 跟随工具模型、上下文释放后不再跟随；相机操作：开始时中止上一次、读当前的不开始新的，`runCameraOperation` 就绪时立即执行、没就绪时等到就绪、期间有新的操作时放弃、等待的视图失败时放弃、执行出错交给 `onError` | Node |
 | `overlay.test.ts` | 占用与间隔、同一边取最大、不算的元素、画布的位置、横向和纵向的下限、选项 | Node |
 
 - 推导失败的用例用 `await expect(nextTick()).resolves.toBeUndefined()` 等待：异常冒出侦听器时，失败落在断言上，而不是测试本身报错

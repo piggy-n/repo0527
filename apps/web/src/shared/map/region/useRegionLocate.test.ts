@@ -1,8 +1,8 @@
 // @vitest-environment node
-import type { ViewBounds } from '@yzt/map-core';
+import { CameraModel, type ViewBounds } from '@yzt/map-core';
 import type { MapContext, MapViewport } from '@yzt/map-vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { effectScope, ref, shallowRef } from 'vue';
+import { effectScope, shallowRef } from 'vue';
 import countyFile from '../boundary/data/jiangsu-county.json?raw';
 import { findRegion, type Region } from './region-catalog';
 import type { RegionBoundary, RegionBoundaryLoader } from './region-geometry';
@@ -50,7 +50,20 @@ function manualLoader() {
   };
 }
 
-function fakeMap(whenReady: MapContext['whenReady'] = () => Promise.resolve()) {
+// 按 whenReady 的约定等待：ready 结束时就绪，signal 中止时以 AbortError 结束
+function readyAfter(ready: Promise<void>): MapContext['whenReady'] {
+  return signal =>
+    new Promise<void>((resolve, reject) => {
+      const abort = () => reject(new DOMException('等待被中止', 'AbortError'));
+      if (signal?.aborted) {
+        abort();
+      }
+      signal?.addEventListener('abort', abort, { once: true });
+      void ready.then(resolve);
+    });
+}
+
+function fakeMap(whenReady: MapContext['whenReady'] = readyAfter(Promise.resolve())) {
   const fitBounds = vi.fn<MapViewport['fitBounds']>();
   const viewport: MapViewport = {
     kind: '2d',
@@ -60,21 +73,26 @@ function fakeMap(whenReady: MapContext['whenReady'] = () => Promise.resolve()) {
     project: vi.fn<MapViewport['project']>()
   };
   const view = shallowRef<MapViewport | null>(viewport);
-  // 相机被用户或程序移动的次数，测试加 1 表示这期间有了新的相机操作
-  const cameraIntent = ref(0);
-  return { map: { view, whenReady: vi.fn<MapContext['whenReady']>(whenReady), cameraIntent }, fitBounds };
+  // 真实的相机模型：测试再开始一次操作，表示这期间有了新的相机操作（拖动、默认视角、坐标定位）
+  const camera = new CameraModel({ center: [119, 32], zoom: 7, bearing: 0, pitch: 0 });
+  const map = {
+    view,
+    whenReady: vi.fn<MapContext['whenReady']>(whenReady),
+    beginCameraOperation: () => camera.beginOperation()
+  };
+  return { map, fitBounds, camera };
 }
 
 function setup(whenReady?: MapContext['whenReady']) {
   const manual = manualLoader();
-  const { map, fitBounds } = fakeMap(whenReady);
+  const { map, fitBounds, camera } = fakeMap(whenReady);
   const goToDefaultView = vi.fn<RegionLocateOptions['goToDefaultView']>();
   const scope = effectScope();
   const locate = scope.run(() => useRegionLocate(map, { goToDefaultView, loader: manual.loader }));
   if (!locate) {
     throw new Error('没有创建区划定位');
   }
-  return { locate, scope, map, fitBounds, goToDefaultView, ...manual };
+  return { locate, scope, map, camera, fitBounds, goToDefaultView, ...manual };
 }
 
 afterEach(() => {
@@ -109,11 +127,24 @@ describe('useRegionLocate', () => {
     expect(fitBounds.mock.calls).toStrictEqual([[boundaryOf('320213').bounds, FIT_OPTIONS]]);
   });
 
-  it('加载期间相机被移动过（拖动、默认视角等）：边界到位后只高亮，不再定位覆盖当前视角', async () => {
-    const { locate, map, fitBounds, resolve } = setup();
+  it('选择本身是一次相机操作，作废之前没完成的定位；相机移动（如上一次定位的动画）不算新的操作', async () => {
+    const { locate, camera, fitBounds, resolve } = setup();
+    const earlier = camera.beginOperation();
 
     locate.select('320100');
-    map.cameraIntent.value++;
+    expect(earlier.aborted).toBe(true);
+    camera.set({ center: [118.9, 32.1], zoom: 9, bearing: 0, pitch: 0 }, { view: '2d', cause: 'program' });
+    resolve('320100');
+    await settle();
+
+    expect(fitBounds).toHaveBeenCalledOnce();
+  });
+
+  it('加载期间有了新的相机操作（拖动、缩放、默认视角、坐标定位）：边界到位后只高亮，不覆盖当前视角', async () => {
+    const { locate, camera, fitBounds, resolve } = setup();
+
+    locate.select('320100');
+    camera.beginOperation();
     resolve('320100');
     await settle();
 
@@ -121,14 +152,14 @@ describe('useRegionLocate', () => {
     expect(fitBounds).not.toHaveBeenCalled();
   });
 
-  it('等视图就绪期间相机被移动过：同样不定位', async () => {
+  it('等视图就绪期间有了新的相机操作：同样不定位', async () => {
     let ready: (() => void) | undefined;
-    const { locate, map, fitBounds, resolve } = setup(() => new Promise(done => (ready = done)));
+    const { locate, camera, fitBounds, resolve } = setup(readyAfter(new Promise(done => (ready = done))));
 
     locate.select('320100');
     resolve('320100');
     await settle();
-    map.cameraIntent.value++;
+    camera.beginOperation();
     ready?.();
     await settle();
 
@@ -136,12 +167,12 @@ describe('useRegionLocate', () => {
   });
 
   it('重试时从重试的那一刻算起：之前的相机操作不影响定位', async () => {
-    const { locate, map, fitBounds, resolve, reject } = setup();
+    const { locate, camera, fitBounds, resolve, reject } = setup();
 
     locate.select('320100');
     reject('320100', new Error('断网'));
     await settle();
-    map.cameraIntent.value++;
+    camera.beginOperation();
     locate.retry();
     resolve('320100');
     await settle();

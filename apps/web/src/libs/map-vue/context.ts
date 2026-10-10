@@ -59,8 +59,15 @@ export interface MapContext {
   useCamera(): Readonly<ShallowRef<CameraState>>;
   /** 屏幕投影的版本：相机变化、画布尺寸变化时加 1；按屏幕位置摆放的浮层依赖它重新投影 */
   readonly projectionRevision: Readonly<Ref<number>>;
-  /** 相机被用户操作或程序定位移动的次数（视图之间的同步不算）；异步的定位据此判断这期间有没有新的相机操作 */
-  readonly cameraIntent: Readonly<Ref<number>>;
+  /**
+   * 开始一次相机操作（ADR 0038）：之前没完成的操作作废，返回这一次的信号，下一次操作（包括用户开始拖动、缩放）开始时中止。
+   * 要先异步准备数据的定位（如区划定位等边界）在开始时调用，准备好后用 whenReady(信号) 等视图
+   */
+  beginCameraOperation(): AbortSignal;
+  /** 当前这次相机操作的信号，不开始新的操作：页面初始化的定位据此让给用户已经开始的操作 */
+  currentCameraOperation(): AbortSignal;
+  /** 开始一次相机操作并执行：视图就绪时立即执行；还没就绪时等到就绪，期间有新的操作、视图失败或被替换时放弃 */
+  runCameraOperation(action: (view: MapViewport) => void): void;
   /** 量出登记过的悬浮元素此刻占用的部分，算出定位用的 padding；还没有画布时四边都是边距 */
   overlayPadding(): OverlayPadding;
   /** 当前工具的 ID（ADR 0034） */
@@ -132,7 +139,6 @@ export class MapContextState implements Disposable {
   readonly #activeTool: Ref<string>;
   readonly #unsubscribeTool: () => void;
   readonly #projectionRevision = ref(0);
-  readonly #cameraIntent: Ref<number>;
   readonly #unsubscribeCamera: () => void;
   readonly #lifetime = new AbortController();
   // 还没有视图时调用 whenReady 的等待者，视图挂上时依次通知
@@ -152,11 +158,7 @@ export class MapContextState implements Disposable {
     // 工具模型在会话里，这里只把当前工具桥接成 Vue 的状态；切换由工具模型保证同一时间只有一个
     this.#activeTool = ref(session.tool.active);
     this.#unsubscribeTool = session.tool.on('change', ({ active }) => (this.#activeTool.value = active));
-    this.#cameraIntent = ref(session.camera.intentRevision);
-    this.#unsubscribeCamera = session.camera.on('change', () => {
-      this.#projectionRevision.value++;
-      this.#cameraIntent.value = session.camera.intentRevision;
-    });
+    this.#unsubscribeCamera = session.camera.on('change', () => this.#projectionRevision.value++);
     this.context = Object.freeze({
       view: shallowReadonly(this.#viewport),
       viewState: shallowReadonly(this.#viewState),
@@ -165,7 +167,9 @@ export class MapContextState implements Disposable {
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
       useCamera: () => this.#useCamera(),
       projectionRevision: shallowReadonly(this.#projectionRevision),
-      cameraIntent: shallowReadonly(this.#cameraIntent),
+      beginCameraOperation: () => session.camera.beginOperation(),
+      currentCameraOperation: () => session.camera.operation,
+      runCameraOperation: (action: (view: MapViewport) => void) => this.#runCameraOperation(action),
       overlayPadding: () => this.#overlayPadding(),
       activeTool: shallowReadonly(this.#activeTool),
       activateTool: (id: string) => session.tool.activate(id),
@@ -235,6 +239,33 @@ export class MapContextState implements Disposable {
   #retry(): void {
     if (this.#failure.value?.kind === 'engine') {
       this.#retryRequests.value++;
+    }
+  }
+
+  #runCameraOperation(action: (view: MapViewport) => void): void {
+    const operation = this.session.camera.beginOperation();
+    const viewport = this.#viewport.value;
+    if (this.#viewState.value === 'ready' && viewport) {
+      action(viewport);
+      return;
+    }
+    void this.#runWhenReady(operation, action);
+  }
+
+  // 等不到就绪（有了新的操作、视图失败或被替换）就放弃，不算错误；执行时抛出的错误交给 onError
+  async #runWhenReady(operation: AbortSignal, action: (view: MapViewport) => void): Promise<void> {
+    try {
+      await this.#whenReady(operation);
+    } catch {
+      return;
+    }
+    const viewport = this.#viewport.value;
+    try {
+      if (viewport) {
+        action(viewport);
+      }
+    } catch (error) {
+      this.onError(error);
     }
   }
 

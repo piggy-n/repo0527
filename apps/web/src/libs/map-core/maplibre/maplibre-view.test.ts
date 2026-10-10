@@ -112,6 +112,7 @@ class FakeMap implements MapLike {
   on(type: 'style.load', listener: () => void): MapSubscription;
   on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'resize', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
   on(type: string, listener: (event: never) => void): MapSubscription {
@@ -208,8 +209,10 @@ class FakeMap implements MapLike {
     this.moveTo({ ...this.camera, lng, lat }, { originalEvent: new MouseEvent('mousemove') });
   }
 
+  // 立即到位的移动：和 jumpTo 一样先发 movestart 再发 move
   moveTo(camera: FakeCamera, event: FakeEvent): void {
     this.camera = { ...camera, pitch: Math.min(camera.pitch, this.maxPitch) };
+    this.fire('movestart', event);
     this.fire('move', event);
   }
 
@@ -1091,6 +1094,38 @@ describe('MapLibreView', () => {
         ['2d', 'program']
       ]);
       expect(ctx.session.camera.current).toEqual({ center: [119, 32], zoom: 11, bearing: 0, pitch: 0 });
+    });
+
+    it('starts a camera operation when the user starts moving the map, not on program moves or animation frames', () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      const operation = ctx.session.camera.beginOperation();
+
+      ctx.view.flyTo({ zoom: 10 });
+      ctx.map.fire('move', { cause: 'program' });
+      ctx.map.fire('movestart', { cause: 'sync' });
+      expect(ctx.session.camera.operation).toBe(operation);
+      expect(operation.aborted).toBe(false);
+
+      ctx.map.drag(119, 32);
+      expect(operation.aborted).toBe(true);
+      // 同一次拖动后面的每一帧只有 move，不再开始新的操作
+      const dragging = ctx.session.camera.operation;
+      ctx.map.fire('move', { originalEvent: new MouseEvent('mousemove') });
+      expect(ctx.session.camera.operation).toBe(dragging);
+      expect(dragging.aborted).toBe(false);
+    });
+
+    it('ignores the user moving the map while initializing or paused', () => {
+      using ctx = setup();
+      const operation = ctx.session.camera.operation;
+
+      ctx.map.drag(119, 32);
+      ctx.map.fire('style.load');
+      ctx.view.pause();
+      ctx.map.drag(120, 31);
+
+      expect(operation.aborted).toBe(false);
     });
 
     it('does not write the camera back while initializing or paused', () => {

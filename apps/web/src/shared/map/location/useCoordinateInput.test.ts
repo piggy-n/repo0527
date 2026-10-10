@@ -1,23 +1,17 @@
 // @vitest-environment node
 import type { CameraState, LngLat } from '@yzt/map-core';
-import type { MapViewState } from '@yzt/map-vue';
 import { describe, expect, it } from 'vitest';
-import { effectScope, nextTick, ref, shallowRef } from 'vue';
+import { effectScope, nextTick, shallowRef } from 'vue';
 import { useCoordinateInput } from './useCoordinateInput';
 import { useLocationPoint } from './useLocationPoint';
 
 const CAMERA: CameraState = { center: [119, 32], zoom: 7, bearing: 0, pitch: 0 };
 
-/** 没有视图的位置点和输入；定位只放下位置点 */
+/** 没有视图的位置点和输入；定位只放下位置点，相机操作一直等着 */
 function setup(initial?: LngLat) {
   const scope = effectScope();
   const result = scope.run(() => {
-    const map = {
-      view: shallowRef(null),
-      viewState: ref<MapViewState>('idle'),
-      useCamera: () => shallowRef(CAMERA),
-      releaseTool: () => {}
-    };
+    const map = { useCamera: () => shallowRef(CAMERA), releaseTool: () => {}, runCameraOperation: () => {} };
     const location = useLocationPoint(map, { regions: { districtCodeAt: () => Promise.resolve(null) } });
     if (initial) {
       location.place(initial, 'drag');

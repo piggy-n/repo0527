@@ -86,6 +86,9 @@ function settled(promise: Promise<unknown>): Promise<unknown> {
   ]);
 }
 
+// 只经过微任务的等待走完
+const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
 // Node 环境里没有 DOM：只模拟量尺寸用到的两个属性
 function fakeElement(rect: Box, isConnected = true): HTMLElement {
   return { isConnected, getBoundingClientRect: () => rect } as unknown as HTMLElement;
@@ -200,24 +203,83 @@ describe('MapContextState 的投影版本', () => {
   });
 });
 
-describe('MapContextState 的相机意图', () => {
-  it('用户操作和程序定位计入，视图之间的同步不计；上下文释放后不再跟随', () => {
+describe('MapContextState 的相机操作', () => {
+  it('开始一次操作时上一次的信号中止；读取当前的信号不开始新的操作', () => {
+    using env = setup();
+    const { context } = env.state;
+    const initial = context.currentCameraOperation();
+
+    expect(context.currentCameraOperation()).toBe(initial);
+    expect(initial.aborted).toBe(false);
+    const operation = context.beginCameraOperation();
+
+    expect(initial.aborted).toBe(true);
+    expect(context.currentCameraOperation()).toBe(operation);
+  });
+
+  it('runCameraOperation：视图就绪时立即执行，并作废之前没完成的操作', () => {
+    using env = setup();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+    const earlier = env.state.context.beginCameraOperation();
+    const views: unknown[] = [];
+
+    env.state.context.runCameraOperation(viewport => views.push(viewport));
+
+    expect(views).toStrictEqual([env.state.context.view.value]);
+    expect(earlier.aborted).toBe(true);
+  });
+
+  it('runCameraOperation：还没就绪时等到就绪再执行；期间有新的操作时放弃', async () => {
+    using env = setup();
+    const { view, markReady } = pendingView();
+    env.state.attachView(view, CANVAS);
+    const done: string[] = [];
+
+    env.state.context.runCameraOperation(() => done.push('第一次'));
+    env.state.context.runCameraOperation(() => done.push('第二次'));
+    env.state.context.runCameraOperation(() => done.push('第三次'));
+    env.state.context.beginCameraOperation();
+    env.state.context.runCameraOperation(() => done.push('第四次'));
+    await settle();
+    expect(done).toStrictEqual([]);
+
+    view.emit('ready');
+    markReady();
+    await settle();
+
+    expect(done).toStrictEqual(['第四次']);
+  });
+
+  it('runCameraOperation：等待的视图失败时放弃；就绪后执行时抛出的错误交给 onError', async () => {
+    const errors: unknown[] = [];
     const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
     const session = new MapSession({ groups: ['basemap'], camera });
-    const state = new MapContextState(session, () => undefined, resolveOverlayOptions());
-    const intent = state.context.cameraIntent;
-    expect(intent.value).toBe(0);
+    const state = new MapContextState(session, error => errors.push(error), resolveOverlayOptions());
+    const failing = new FakeView();
+    failing.ready = Promise.reject(new Error('引擎失败'));
+    state.attachView(failing, CANVAS);
+    const done: string[] = [];
 
-    session.camera.set({ ...camera, zoom: 8 }, { view: '2d', cause: 'user' });
-    session.camera.set({ ...camera, zoom: 9 }, { view: '2d', cause: 'program' });
-    expect(intent.value).toBe(2);
-    session.camera.set({ ...camera, zoom: 10 }, { view: '2d', cause: 'sync' });
-    expect(intent.value).toBe(2);
+    state.context.runCameraOperation(() => done.push('失败的视图'));
+    await settle();
+    expect(done).toStrictEqual([]);
+    expect(errors).toStrictEqual([]);
 
+    state.detachView(failing);
+    const { view, markReady } = pendingView();
+    state.attachView(view, CANVAS);
+    const thrown = new Error('定位出错');
+    state.context.runCameraOperation(() => {
+      throw thrown;
+    });
+    view.emit('ready');
+    markReady();
+    await settle();
+
+    expect(errors).toStrictEqual([thrown]);
     state[Symbol.dispose]();
-    session.camera.set({ ...camera, zoom: 11 }, { view: '2d', cause: 'user' });
-
-    expect(intent.value).toBe(2);
     session[Symbol.dispose]();
   });
 });

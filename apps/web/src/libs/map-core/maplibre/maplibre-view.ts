@@ -213,6 +213,7 @@ export class MapLibreView<const G extends string> implements MapView {
       map.on('style.load', () => this.#guard(() => this.#onStyleLoad(map))),
       map.on('error', ({ error }) => this.#guard(() => this.#onMapError(map, error))),
       map.on('move', event => this.#guard(() => this.#onMove(map, event))),
+      map.on('movestart', event => this.#guard(() => this.#onMoveStart(event))),
       map.on('resize', () => this.#guard(() => this.#emitter.emit('resize')))
     ]) {
       stack.defer(() => subscription.unsubscribe());
@@ -464,6 +465,13 @@ export class MapLibreView<const G extends string> implements MapView {
   #onMove(map: MapLike, event: MapMoveEventLike): void {
     if (this.#state === 'ready') {
       this.#writeCamera(map, causeOfMove(event));
+    }
+  }
+
+  // 用户开始拖动或缩放是一次新的相机操作，之前没完成的定位作废；程序定位的开始、动画的每一帧不是（ADR 0038）
+  #onMoveStart(event: MapMoveEventLike): void {
+    if (this.#state === 'ready' && causeOfMove(event) === 'user') {
+      this.#session.camera.beginOperation();
     }
   }
 

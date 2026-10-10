@@ -81,6 +81,7 @@ class FakeMap implements MapLike {
   on(type: 'style.load', listener: () => void): MapSubscription;
   on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'resize', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
   on(type: string, listener: (event: never) => void): MapSubscription {
@@ -156,22 +157,47 @@ class FakeMap implements MapLike {
     this.moveTo([lng, lat], this.camera.zoom, { originalEvent: new MouseEvent('mousemove') });
   }
 
+  /** 模拟程序定位动画中间的一帧：只有 move，带 fitBounds 等方法的 eventData */
+  frame(lng: number, lat: number): void {
+    this.camera = { ...this.camera, lng, lat };
+    this.fire('move', { cause: 'program' });
+  }
+
   /** 模拟鼠标：detail 是连击的次数 */
   mouse(type: MapMouseEventType, x: number, y: number, detail = 1): void {
     this.fire(type, { point: { x, y }, originalEvent: new MouseEvent(type, { detail, button: 0 }) });
   }
 
+  // 立即到位的移动：和 jumpTo 一样先发 movestart 再发 move
   moveTo([lng, lat]: [number, number], zoom: number, event: FakeEvent): void {
     this.camera = { lng, lat, zoom };
+    this.fire('movestart', event);
     this.fire('move', event);
   }
+}
+
+interface PageModules {
+  readonly page: typeof CurrentMapPage;
+  readonly canvas: typeof MapCanvas;
+}
+
+const STATIC_MODULES: PageModules = { page: CurrentMapPage, canvas: MapCanvas };
+
+// 区划边界的加载器是整个应用共用的，同一个文件只解析一次：重新导入页面，边界从没有缓存开始，像第一次打开页面
+async function freshModules(): Promise<PageModules> {
+  vi.resetModules();
+  const [{ CurrentMapPage: page }, { MapCanvas: canvas }] = await Promise.all([
+    import('./CurrentMapPage'),
+    import('@yzt/map-vue')
+  ]);
+  return { page, canvas };
 }
 
 /**
  * 页面里的画布用真实的 MapLibre，jsdom 里创建不出来；用 stubs 换成注入了假地图的同一个组件。
  * 第一次创建可以设为失败，模拟引擎失败后重试；canvasKey 变化时画布重建
  */
-function mountPage({ failFirstCreation = false } = {}) {
+function mountPage({ failFirstCreation = false, modules = STATIC_MODULES } = {}) {
   const canvasKey = ref(0);
   const maps: FakeMap[] = [];
   let attempts = 0;
@@ -185,16 +211,18 @@ function mountPage({ failFirstCreation = false } = {}) {
     return map;
   };
   // 换个名字，免得替身里的画布又被替换成替身；页面传给画布的属性（如 mapOptions）原样转交
-  const RealCanvas = { ...MapCanvas, name: 'RealMapCanvas' } as typeof MapCanvas;
+  const RealCanvas = { ...modules.canvas, name: 'RealMapCanvas' } as typeof MapCanvas;
   const CanvasWithFakeMap = defineComponent({
     inheritAttrs: false,
     setup: (_, { attrs }) => () => <RealCanvas {...attrs} key={canvasKey.value} createMap={createMap} />
   });
-  const wrapper = mount(CurrentMapPage, { global: { stubs: { MapCanvas: CanvasWithFakeMap } } });
+  const wrapper = mount(modules.page, { global: { stubs: { MapCanvas: CanvasWithFakeMap } } });
   return { wrapper, maps, canvasKey };
 }
 
 const jiangsu = [...JIANGSU_BOUNDS] as ViewBounds;
+const NANJING: ViewBounds = [118.357927, 31.230207, 119.236382, 32.616407];
+const XUANWU: ViewBounds = [118.778682, 32.017001, 118.90731, 32.107079];
 
 // 等定位相关的微任务和渲染都走完
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -239,9 +267,25 @@ function stubBoundaryFetch() {
   );
 }
 
+// 边界文件的请求先挂起，由用例决定什么时候返回
+function deferBoundaryFetch() {
+  const pending: { readonly url: string; readonly resolve: (response: Response) => void }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<(url: string) => Promise<Response>>(url => new Promise(resolve => pending.push({ url, resolve })))
+  );
+  return {
+    release(file: 'city' | 'county') {
+      for (const request of pending.filter(({ url }) => url.includes(file))) {
+        request.resolve(new Response(file === 'county' ? countyFile : cityFile));
+      }
+    }
+  };
+}
+
 // 页面就绪：创建地图、加载完样式、做完初始定位
-async function readyPage() {
-  const page = mountPage();
+async function readyPage(modules?: PageModules) {
+  const page = mountPage({ modules });
   const map = page.maps[0];
   if (!map) {
     throw new Error('没有创建地图');
@@ -664,5 +708,82 @@ describe('CurrentMapPage', () => {
 
     expect(total()).toMatchObject({ x: 140, y: 25 });
     expect(pinAt(wrapper)).toStrictEqual([90, 55]);
+  });
+
+  describe('区划定位与其他相机操作的先后（每个用例重新导入页面，边界没有缓存）', () => {
+    it('边界加载期间点"默认视角"：相机没有变化也算一次新的操作，边界到位后只高亮、不定位', async () => {
+      const boundaries = deferBoundaryFetch();
+      const { wrapper, map } = await readyPage(await freshModules());
+      await button(wrapper, '区划定位').trigger('click');
+      await button(wrapper, '南京').trigger('click');
+
+      await button(wrapper, '默认视角').trigger('click');
+      boundaries.release('city');
+      await settle();
+
+      expect(map.fitBoundsCalls).toEqual([jiangsu, jiangsu]);
+      expect(map.geojson.has('region')).toBe(true);
+    });
+
+    it('上一次定位的动画还在进行时选中区县：动画的每一帧不算新的操作，边界到位后定位到区县', async () => {
+      const boundaries = deferBoundaryFetch();
+      const { wrapper, map } = await readyPage(await freshModules());
+      await button(wrapper, '区划定位').trigger('click');
+      await button(wrapper, '南京').trigger('click');
+      boundaries.release('city');
+      await settle();
+      expect(map.fitBoundsCalls).toEqual([jiangsu, NANJING]);
+
+      await button(wrapper, '玄武区').trigger('click');
+      map.frame(118.9, 32.1);
+      map.frame(118.8, 32.05);
+      boundaries.release('county');
+      await settle();
+
+      expect(map.fitBoundsCalls).toEqual([jiangsu, NANJING, XUANWU]);
+    });
+
+    it('地图加载期间选中区划：就绪时的初始适配让给用户的选择，只定位到区划', async () => {
+      const boundaries = deferBoundaryFetch();
+      const { wrapper, maps } = mountPage({ modules: await freshModules() });
+      const map = maps[0];
+      if (!map) {
+        throw new Error('没有创建地图');
+      }
+      await button(wrapper, '区划定位').trigger('click');
+      await button(wrapper, '南京').trigger('click');
+      boundaries.release('city');
+      await settle();
+
+      map.fire('style.load');
+      await settle();
+
+      expect(map.fitBoundsCalls).toEqual([NANJING]);
+    });
+
+    it('边界加载期间拖动地图或输入坐标定位：都是新的操作，边界到位后只高亮、不定位', async () => {
+      const dragged = deferBoundaryFetch();
+      const first = await readyPage(await freshModules());
+      await button(first.wrapper, '区划定位').trigger('click');
+      await button(first.wrapper, '南京').trigger('click');
+      first.map.drag(120.6, 31.3);
+      dragged.release('city');
+      await settle();
+      expect(first.map.fitBoundsCalls).toEqual([jiangsu]);
+      expect(first.map.geojson.has('region')).toBe(true);
+
+      const located = deferBoundaryFetch();
+      const second = await readyPage(await freshModules());
+      await button(second.wrapper, '区划定位').trigger('click');
+      await button(second.wrapper, '南京').trigger('click');
+      await button(second.wrapper, '坐标定位').trigger('click');
+      await second.wrapper.get('input[aria-label="经度"]').setValue('118.79786 32.04864');
+      await second.wrapper.get('input[aria-label="经度"]').trigger('keydown', { key: 'Enter' });
+      located.release('city');
+      await settle();
+      expect(second.map.fitBoundsCalls).toEqual([jiangsu]);
+      expect(second.map.flyToCalls).toHaveLength(1);
+      expect(second.map.flyToCalls[0]).toMatchObject({ center: [118.79786, 32.04864], zoom: 14 });
+    });
   });
 });
