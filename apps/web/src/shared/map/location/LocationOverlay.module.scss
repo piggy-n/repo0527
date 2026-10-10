@@ -1,0 +1,140 @@
+// 联调用的样式，5D 再设计；盖在画布上，只有图钉和位置信息接收鼠标
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+// 元素的原点就是坐标：图标的尖端对准它，名称在下面
+.pin {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.icon {
+  position: absolute;
+  left: -16px;
+  top: -32px;
+  font-size: 32px;
+  color: var(--color-danger);
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+
+.name {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  transform: translateX(-50%);
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-mask);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  color: var(--color-text-title);
+  white-space: nowrap;
+}
+
+// 按住时一圈进度走满 0.5 秒（press-gesture.ts 的 LONG_PRESS_DELAY）
+.ring {
+  position: absolute;
+  left: -22px;
+  top: -38px;
+  width: 44px;
+  height: 44px;
+  overflow: visible;
+  pointer-events: none;
+  transform: rotate(-90deg);
+
+  circle {
+    fill: none;
+    stroke: var(--color-primary);
+    stroke-width: 3;
+    stroke-dasharray: 113.1;
+    stroke-dashoffset: 113.1;
+  }
+}
+
+.pressing .ring circle {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.5s linear;
+}
+
+// 拖动中图钉抬起
+.dragging .icon {
+  transform: translateY(-6px) scale(1.15);
+  cursor: grabbing;
+}
+
+.dragging .ring {
+  display: none;
+}
+
+// 当前工具不是"移动"时不响应鼠标
+.inert {
+  pointer-events: none;
+}
+
+.info {
+  position: absolute;
+  box-sizing: border-box;
+  width: 300px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-title);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 28px;
+  font-size: var(--font-size-xs);
+}
+
+.key {
+  flex: none;
+  width: 56px;
+  color: var(--color-text-secondary);
+}
+
+.value {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-title);
+  word-break: break-all;
+}
+
+.hint {
+  position: absolute;
+  padding: 2px var(--space-xs);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  color: var(--color-text-regular);
+  white-space: nowrap;
+  transform: translate(16px, 16px);
+}
