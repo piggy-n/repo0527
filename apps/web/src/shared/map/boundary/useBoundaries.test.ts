@@ -4,7 +4,9 @@ import { computed } from 'vue';
 import { BOUNDARY_OPTIONS } from './boundary-style';
 import { useBoundaries } from './useBoundaries';
 
-const layerIds = (boundaries: ReturnType<typeof useBoundaries>) => boundaries.deriveGroup().layers.map(layer => layer.id);
+function layerIds(boundaries: ReturnType<typeof useBoundaries>) {
+  return boundaries.deriveGroup().layers.map(layer => layer.id);
+}
 
 describe('useBoundaries', () => {
   it('进入页面时只显示省界，透明度 1', () => {

@@ -116,9 +116,12 @@ function mountPage({ failFirstCreation = false } = {}) {
     maps.push(map);
     return map;
   };
-  // 换个名字，免得替身里的画布又被替换成替身
+  // 换个名字，免得替身里的画布又被替换成替身；页面传给画布的属性（如 mapOptions）原样转交
   const RealCanvas = { ...MapCanvas, name: 'RealMapCanvas' } as typeof MapCanvas;
-  const CanvasWithFakeMap = defineComponent(() => () => <RealCanvas key={canvasKey.value} createMap={createMap} />);
+  const CanvasWithFakeMap = defineComponent({
+    inheritAttrs: false,
+    setup: (_, { attrs }) => () => <RealCanvas {...attrs} key={canvasKey.value} createMap={createMap} />
+  });
   const wrapper = mount(CurrentMapPage, { global: { stubs: { MapCanvas: CanvasWithFakeMap } } });
   return { wrapper, maps, canvasKey };
 }
@@ -136,6 +139,7 @@ describe('CurrentMapPage', () => {
       throw new Error('没有创建地图');
     }
 
+    expect(first.options).toMatchObject({ minZoom: 5, maxZoom: 18 });
     first.fire('style.load');
     await settle();
     expect(first.fitBoundsCalls).toEqual([jiangsu]);

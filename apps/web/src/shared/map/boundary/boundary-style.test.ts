@@ -51,7 +51,10 @@ describe('行政区边界的推导', () => {
       { id: 'city', label: '市界' },
       { id: 'county', label: '县界' }
     ]);
-    expect(INITIAL_BOUNDARY_STATE).toStrictEqual({ visible: { province: true, city: false, county: false }, opacity: 1 });
+    expect(INITIAL_BOUNDARY_STATE).toStrictEqual({
+      visible: { province: true, city: false, county: false },
+      opacity: 1
+    });
   });
 
   it('数据源直接写三份数据文件的地址', () => {

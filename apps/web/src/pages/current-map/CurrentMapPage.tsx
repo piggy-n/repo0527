@@ -1,9 +1,10 @@
 import { MapCanvas, provideMap } from '@yzt/map-vue';
-import { defineComponent, watch } from 'vue';
+import { defineComponent } from 'vue';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
-import { JIANGSU_BOUNDS, JIANGSU_CAMERA } from '@/shared/map/jiangsu';
+import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
+import { useDefaultView } from '@/shared/map/useDefaultView';
 import styles from './CurrentMapPage.module.scss';
 
 /** 现状底图：联调用的骨架，界面在 5D 专门设计（docs/roadmap.md"阶段五"） */
@@ -15,18 +16,12 @@ export const CurrentMapPage = defineComponent({
     const basemap = useBasemap();
     map.bindStyle({ basemap: basemap.deriveGroup, 'basemap-labels': basemap.deriveLabelsGroup });
 
-    // 本次进入页面后第一次就绪时按江苏的范围定位一次（首次失败、重试成功后同样补做），之后不再覆盖用户调整过的视角；
-    // 不同屏幕尺寸下都完整显示，并避开悬浮元素。页面卸载时侦听器随之停止
-    const stopInitialFit = watch(map.viewState, state => {
-      if (state === 'ready' && map.view.value) {
-        stopInitialFit();
-        map.view.value.fitBounds(JIANGSU_BOUNDS, { duration: 0 });
-      }
-    });
+    // 第一次就绪时按江苏的范围定位；回到默认视角的入口在工具栏（5B.3）
+    useDefaultView(map);
 
     return () => (
       <div class={styles.root}>
-        <MapCanvas />
+        <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} />
         <BasemapPanel class={styles.basemapPanel} basemap={basemap} />
         <MapStatusNotice />
       </div>
