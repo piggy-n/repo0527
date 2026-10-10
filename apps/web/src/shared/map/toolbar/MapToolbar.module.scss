@@ -1,8 +1,11 @@
-// 联调用的样式，5D 再设计；位置由页面决定，按钮之间用 Element 默认的间距
+// 联调用的样式，5D 再设计；位置由页面决定，按钮之间用 Element 默认的间距；放不下时换行，靠右对齐
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
+  row-gap: var(--space-xs);
   padding: var(--space-xs);
   border-radius: var(--radius-md);
   background-color: var(--color-bg-mask);

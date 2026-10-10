@@ -17,6 +17,16 @@ export const MEASURE_TOOL_IDS = {
 
 export type MeasureToolId = (typeof MEASURE_TOOL_IDS)[MeasureKind];
 
+const KIND_BY_TOOL = new Map<string, MeasureKind>([
+  [MEASURE_TOOL_IDS.distance, 'distance'],
+  [MEASURE_TOOL_IDS.area, 'area']
+]);
+
+/** 当前工具对应的测量类型；不是测量工具时为 undefined */
+export function measureKindOf(toolId: string): MeasureKind | undefined {
+  return KIND_BY_TOOL.get(toolId);
+}
+
 /** 测量的拥有者（ADR 0035）：页面登记工具、绑定 measure 分组，浮层和工具栏通过 props 拿到它 */
 export interface Measure {
   /** 交给 registerTools */

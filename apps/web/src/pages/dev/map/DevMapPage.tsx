@@ -1,10 +1,12 @@
-import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type { FilterSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Feature, FeatureCollection, Polygon } from 'geojson';
 import { ElButton } from 'element-plus';
 import type { CameraState, LngLat, MapTool, ScreenPoint, StyleGroup, ViewBounds } from '@yzt/map-core';
 import { MapCanvas, type OverlayPadding, provideMap, useMap, useMapOverlay } from '@yzt/map-vue';
 import { computed, defineComponent, type PropType, ref, shallowRef } from 'vue';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
+import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
+import { MEASURE_TOOL_IDS, useMeasure } from '@/shared/map/measure/useMeasure';
 import styles from './DevMapPage.module.scss';
 
 const INITIAL_CAMERA: CameraState = { center: [119.4, 32.9], zoom: 6.5, bearing: 0, pitch: 0 };
@@ -60,6 +62,35 @@ const REGION_SOURCES = DATA_VERSIONS.map(version => ({
 const BACKGROUND_GROUP: StyleGroup = {
   sources: {},
   layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eef2f7' } }]
+};
+
+// 测量预览线的压力场景：接近资源图层数量的 200 个图层（ADR 0035 第 6 条）；对象固定，只在开关时提交
+const STRESS_NAMES = ['南京', '苏州', '徐州'] as const;
+
+function stressLayer(index: number): LayerSpecification {
+  const id = `stress-${index}`;
+  const filter: FilterSpecification = ['==', ['get', 'name'], STRESS_NAMES[index % STRESS_NAMES.length]];
+  if (index % 2 === 0) {
+    return {
+      id,
+      type: 'fill',
+      source: 'stress',
+      filter,
+      paint: { 'fill-color': FILL_COLORS[0], 'fill-opacity': 0.02 }
+    };
+  }
+  return {
+    id,
+    type: 'line',
+    source: 'stress',
+    filter,
+    paint: { 'line-color': '#1f3f7f', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.5, 12, 2] }
+  };
+}
+
+const STRESS_GROUP: StyleGroup = {
+  sources: { stress: { type: 'geojson', data: regions(0) } },
+  layers: Array.from({ length: 200 }, (_, index) => stressLayer(index))
 };
 
 // 通不过 MapLibre 校验的图层：addLayer 只触发 error 事件、不抛错，整份样式也加载不了（ADR 0026）
@@ -274,14 +305,18 @@ export const DevMapPage = defineComponent({
     const failNextCreation = ref(false);
     const lastPadding = ref<OverlayPadding>();
     const probes = shallowRef<readonly Probe[]>([]);
+    const stress = ref(false);
 
     const map = provideMap({
-      groups: ['background', 'regions', 'selection', 'highlight', 'probe'],
+      groups: ['background', 'regions', 'stress', 'selection', 'highlight', 'probe', 'measure'],
       camera: INITIAL_CAMERA,
       onError: error => {
         errors.value = [...errors.value, describe(error)];
       }
     });
+
+    const measure = useMeasure();
+    map.registerTools(measure.tools);
 
     map.bindStyle({
       background: () => BACKGROUND_GROUP,
@@ -302,7 +337,9 @@ export const DevMapPage = defineComponent({
         const index = highlightIndex.value;
         return highlightGroup(index === undefined ? undefined : HIGHLIGHT_POSITIONS[index]);
       },
-      probe: () => probeGroup(probes.value)
+      stress: () => (stress.value ? STRESS_GROUP : { sources: {}, layers: [] }),
+      probe: () => probeGroup(probes.value),
+      measure: measure.deriveGroup
     });
 
     // 只保留最近 5 次拾取
@@ -310,8 +347,7 @@ export const DevMapPage = defineComponent({
 
     const camera = map.useCamera();
     const { view, viewState, activeTool } = map;
-    const toggleProbe = () =>
-      activeTool.value === PROBE_TOOL ? map.releaseTool(PROBE_TOOL) : map.activateTool(PROBE_TOOL);
+    const toggleTool = (id: string) => (activeTool.value === id ? map.releaseTool(id) : map.activateTool(id));
 
     const nextVersion = (): DataVersion => (version.value === 0 ? 1 : 0);
 
@@ -388,11 +424,21 @@ export const DevMapPage = defineComponent({
               <ElButton disabled={errors.value.length === 0} onClick={() => (errors.value = [])}>
                 清空错误
               </ElButton>
-              <ElButton type={activeTool.value === PROBE_TOOL ? 'primary' : 'default'} onClick={toggleProbe}>
+              <ElButton
+                type={activeTool.value === PROBE_TOOL ? 'primary' : 'default'}
+                onClick={() => toggleTool(PROBE_TOOL)}>
                 {activeTool.value === PROBE_TOOL ? '退出坐标拾取（或按 Esc）' : '坐标拾取'}
               </ElButton>
               <ElButton disabled={probes.value.length === 0} onClick={() => (probes.value = [])}>
                 清除拾取点
+              </ElButton>
+              <ElButton
+                type={activeTool.value === MEASURE_TOOL_IDS.distance ? 'primary' : 'default'}
+                onClick={() => toggleTool(MEASURE_TOOL_IDS.distance)}>
+                测距
+              </ElButton>
+              <ElButton onClick={() => (stress.value = !stress.value)}>
+                {stress.value ? '去掉 200 个图层' : '加上 200 个图层'}
               </ElButton>
             </div>
             <dl class={styles.status} data-view-state={viewState.value}>
@@ -416,6 +462,7 @@ export const DevMapPage = defineComponent({
             <MapCanvas key={canvasKey.value} createMap={failNextCreation.value ? failingCreateMap : undefined} />
             {overlayVisible.value && <OverlayPanel />}
             {lastProbe.value && <ProbeLabel probe={lastProbe.value} />}
+            <MeasureOverlay measure={measure} />
             <MapStatusNotice />
           </div>
           {errors.value.length > 0 && (

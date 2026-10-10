@@ -2,7 +2,7 @@
 import type { MapInputEvent, ToolView } from '@yzt/map-core';
 import { describe, expect, it } from 'vitest';
 import { computed, effectScope } from 'vue';
-import { MEASURE_TOOL_IDS, useMeasure } from './useMeasure';
+import { MEASURE_TOOL_IDS, measureKindOf, useMeasure } from './useMeasure';
 
 // 每 100 像素 0.01 度
 const VIEW: ToolView = {
@@ -40,6 +40,12 @@ describe('useMeasure', () => {
 
     measure.tools[MEASURE_TOOL_IDS.area].handleInput?.(input('click', 0, 0), VIEW);
     expect(measure.state.value.draft?.kind).toBe('area');
+  });
+
+  it('由当前工具得到测量类型；不是测量工具时没有', () => {
+    expect(measureKindOf('measure-distance')).toBe('distance');
+    expect(measureKindOf('measure-area')).toBe('area');
+    expect(measureKindOf('browse')).toBeUndefined();
   });
 
   it('状态跟随工具的输入，推导出 measure 分组；删除、清除', () => {

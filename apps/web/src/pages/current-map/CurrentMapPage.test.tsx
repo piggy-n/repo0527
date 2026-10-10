@@ -1,25 +1,29 @@
-import type {
-  CameraEventData,
-  GestureHandlerLike,
-  MapLibreMapOptions,
-  MapLike,
-  MapMouseEventLike,
-  MapMouseEventType,
-  MapMoveEventLike,
-  MapSubscription,
-  ViewBounds
+import type { LayerSpecification, SourceSpecification } from '@maplibre/maplibre-gl-style-spec';
+import {
+  type CameraEventData,
+  type GestureHandlerLike,
+  geodesicDistance,
+  type MapLibreMapOptions,
+  type MapLike,
+  type MapMouseEventLike,
+  type MapMouseEventType,
+  type MapMoveEventLike,
+  type MapSubscription,
+  type ViewBounds
 } from '@yzt/map-core';
 import { MapCanvas } from '@yzt/map-vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
 import { JIANGSU_BOUNDS } from '@/shared/map/jiangsu';
+import { formatDistance } from '@/shared/map/measure/measure-labels';
 import { CurrentMapPage } from './CurrentMapPage';
 
 interface FakeEvent {
   readonly error?: Error;
   readonly originalEvent?: unknown;
   readonly cause?: unknown;
+  readonly point?: { readonly x: number; readonly y: number };
 }
 
 // 只模拟视图用到的行为：相机方法立即到位并同步触发 move，记下 fitBounds
@@ -43,12 +47,27 @@ class FakeMap implements MapLike {
     this.camera = { lng, lat, zoom: options.zoom ?? 0 };
   }
 
-  addSource(): void {}
-  removeSource(): void {}
-  getSource(): unknown {
-    return undefined;
+  // GeoJSON 数据源的当前数据：测量的数据随鼠标更新，要能找到数据源
+  readonly geojson = new Map<string, unknown>();
+  addSource(id: string, source: SourceSpecification): void {
+    if (source.type === 'geojson') {
+      this.geojson.set(id, source.data);
+    }
   }
-  addLayer(): void {}
+  removeSource(id: string): void {
+    this.geojson.delete(id);
+  }
+  getSource(id: string): unknown {
+    if (!this.geojson.has(id)) {
+      return undefined;
+    }
+    return { type: 'geojson', setData: (data: unknown) => Promise.resolve(void this.geojson.set(id, data)) };
+  }
+  // 创建之后加入的图层和插在谁前面（undefined 是最上面）
+  readonly addedLayers: [string, string | undefined][] = [];
+  addLayer(layer: LayerSpecification, beforeId?: string): void {
+    this.addedLayers.push([layer.id, beforeId]);
+  }
   removeLayer(): void {}
   setPaintProperty(): void {}
   setLayoutProperty(): void {}
@@ -100,12 +119,12 @@ class FakeMap implements MapLike {
     this.moveTo([(west + east) / 2, (south + north) / 2], 6.5, eventData);
   }
 
-  // 拾取、投影用固定换算：画布左上角 (0, 0) 是 (118, 33)，每 100 像素 1 度
+  // 拾取、投影用简单的换算：画布左上角是相机中心，每 100 像素 1 度，相机移动后位置跟着变
   unproject([x, y]: [number, number]) {
-    return { lng: 118 + x / 100, lat: 33 - y / 100 };
+    return { lng: this.camera.lng + x / 100, lat: this.camera.lat - y / 100 };
   }
   project([lng, lat]: [number, number]) {
-    return { x: (lng - 118) * 100, y: (33 - lat) * 100 };
+    return { x: (lng - this.camera.lng) * 100, y: (this.camera.lat - lat) * 100 };
   }
   readonly canvas = document.createElement('canvas');
   getCanvas(): HTMLCanvasElement {
@@ -124,6 +143,11 @@ class FakeMap implements MapLike {
   /** 模拟用户拖动：带原始的 DOM 事件 */
   drag(lng: number, lat: number): void {
     this.moveTo([lng, lat], this.camera.zoom, { originalEvent: new MouseEvent('mousemove') });
+  }
+
+  /** 模拟鼠标：detail 是连击的次数 */
+  mouse(type: MapMouseEventType, x: number, y: number, detail = 1): void {
+    this.fire(type, { point: { x, y }, originalEvent: new MouseEvent(type, { detail, button: 0 }) });
   }
 
   moveTo([lng, lat]: [number, number], zoom: number, event: FakeEvent): void {
@@ -170,6 +194,23 @@ function button(wrapper: ReturnType<typeof mountPage>['wrapper'], text: string) 
     throw new Error(`没有"${text}"按钮`);
   }
   return found;
+}
+
+// 测量浮层里的标签和提示：文字与位置（像素取整）
+function overlayItems(wrapper: ReturnType<typeof mountPage>['wrapper']) {
+  return [...wrapper.get('[data-measure-overlay]').element.children].map(element => {
+    const { style, textContent } = element as HTMLElement;
+    const [x, y] = [style.left, style.top].map(value => Math.round(Number.parseFloat(value)));
+    return { text: textContent, x, y };
+  });
+}
+
+// 从画布左上角向右画一条 100 像素的线，双击结束：双击时浏览器先发第二次单击（连击次数 2），再发 dblclick
+function drawLine(map: FakeMap): void {
+  map.mouse('click', 0, 0);
+  map.mouse('click', 100, 0);
+  map.mouse('click', 100, 0, 2);
+  map.mouse('dblclick', 100, 0, 2);
 }
 
 describe('CurrentMapPage', () => {
@@ -250,5 +291,94 @@ describe('CurrentMapPage', () => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+
+  it('测距：提示跟随鼠标；画完后在末点显示总长，标签随相机移动；删除一条、"清除"清掉全部；换成测面', async () => {
+    const { wrapper, maps } = mountPage();
+    const map = maps[0];
+    if (!map) {
+      throw new Error('没有创建地图');
+    }
+    map.fire('style.load');
+    await settle();
+
+    await button(wrapper, '测距').trigger('click');
+    map.mouse('mousemove', 30, 40);
+    await nextTick();
+    expect(overlayItems(wrapper)).toStrictEqual([{ text: '单击开始测距', x: 30, y: 40 }]);
+
+    map.mouse('click', 0, 0);
+    await nextTick();
+    expect(overlayItems(wrapper)).toStrictEqual([{ text: '单击添加节点，双击结束测距', x: 30, y: 40 }]);
+    // 测量的图层叠在最上面：最上面的节点先加入，其余依次插在它下面
+    expect(map.addedLayers).toStrictEqual([
+      ['measure-vertex', undefined],
+      ['measure-line-drawing', 'measure-vertex'],
+      ['measure-line-completed', 'measure-line-drawing'],
+      ['measure-fill-drawing', 'measure-line-completed'],
+      ['measure-fill-completed', 'measure-fill-drawing']
+    ]);
+    map.mouse('click', 100, 0);
+    map.mouse('click', 100, 0, 2);
+    map.mouse('dblclick', 100, 0, 2);
+    await nextTick();
+
+    const { lng, lat } = map.getCenter();
+    const total = `总长 ${formatDistance(geodesicDistance([lng, lat], [lng + 1, lat]))}`;
+    expect(overlayItems(wrapper)).toStrictEqual([
+      { text: total, x: 100, y: 0 },
+      { text: '单击开始测距', x: 30, y: 40 }
+    ]);
+    expect(map.geojson.has('measure')).toBe(true);
+
+    map.drag(lng + 0.5, lat);
+    await nextTick();
+    expect(overlayItems(wrapper)[0]).toStrictEqual({ text: total, x: 50, y: 0 });
+
+    await wrapper.get('[aria-label="删除这条测量"]').trigger('click');
+    expect(overlayItems(wrapper)).toStrictEqual([{ text: '单击开始测距', x: 30, y: 40 }]);
+    expect(map.geojson.has('measure')).toBe(false);
+
+    drawLine(map);
+    await nextTick();
+    expect(overlayItems(wrapper)).toHaveLength(2);
+    await button(wrapper, '清除').trigger('click');
+    expect(overlayItems(wrapper)).toStrictEqual([{ text: '单击开始测距', x: 30, y: 40 }]);
+    expect(map.geojson.has('measure')).toBe(false);
+
+    // 再点"测距"退出测量，提示随之消失；换成测面后提示跟着换
+    await button(wrapper, '测距').trigger('click');
+    expect(overlayItems(wrapper)).toStrictEqual([]);
+    await button(wrapper, '测面').trigger('click');
+    map.mouse('mousemove', 10, 20);
+    await nextTick();
+    expect(overlayItems(wrapper)).toStrictEqual([{ text: '单击开始测面', x: 10, y: 20 }]);
+  });
+
+  it('画布重建时测量的标签先隐藏，新视图就绪后重新显示', async () => {
+    const { wrapper, maps, canvasKey } = mountPage();
+    const first = maps[0];
+    if (!first) {
+      throw new Error('没有创建地图');
+    }
+    first.fire('style.load');
+    await settle();
+    await button(wrapper, '测距').trigger('click');
+    drawLine(first);
+    await nextTick();
+    const labels = overlayItems(wrapper);
+    expect(labels.map(({ text }) => text.startsWith('总长'))).toStrictEqual([true]);
+
+    canvasKey.value++;
+    await nextTick();
+    expect(overlayItems(wrapper)).toStrictEqual([]);
+
+    const second = maps[1];
+    if (!second) {
+      throw new Error('画布没有重建');
+    }
+    second.fire('style.load');
+    await settle();
+    expect(overlayItems(wrapper)).toStrictEqual(labels);
   });
 });

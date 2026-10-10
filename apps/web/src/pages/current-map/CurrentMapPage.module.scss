@@ -4,13 +4,20 @@
   height: 100%;
 }
 
-// 联调用的控件排在右上角，5D 再设计
+// 联调用的控件排在右上角，5D 再设计；左右都留边距，窄屏时工具栏在这个宽度里换行
 .controls {
   position: absolute;
   top: var(--space-lg);
   right: var(--space-lg);
+  left: var(--space-lg);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: var(--space-sm);
+  // 控件之间的空白不拦截地图的鼠标操作
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
 }

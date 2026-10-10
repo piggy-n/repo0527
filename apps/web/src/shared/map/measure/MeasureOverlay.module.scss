@@ -1,0 +1,46 @@
+// 联调用的样式，5D 再设计；盖在画布上，不拦截地图的鼠标操作，只有删除按钮可以点
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.label,
+.result,
+.hint {
+  position: absolute;
+  padding: 2px var(--space-xs);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-title);
+  white-space: nowrap;
+}
+
+// 标签放在节点右侧，垂直居中
+.label,
+.result {
+  transform: translate(12px, -50%);
+}
+
+.result {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.remove {
+  pointer-events: auto;
+}
+
+// 提示在鼠标右下方，避开光标
+.hint {
+  color: var(--color-text-regular);
+  transform: translate(16px, 16px);
+}

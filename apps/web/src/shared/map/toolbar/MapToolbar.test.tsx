@@ -8,12 +8,12 @@ import type { ToolbarActionId, ToolbarItemId } from './toolbar-items';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
-/** 页面登记一个工具栏上没有的工具 probe，渲染工具栏；不需要画布，工具在会话里切换 */
+/** 页面登记测距和一个工具栏上没有的工具 probe，渲染工具栏；不需要画布，工具在会话里切换 */
 function mountToolbar(items: readonly ToolbarItemId[], actions: Partial<Record<ToolbarActionId, () => void>> = {}) {
   let handle: MapHandle<'basemap'> | undefined;
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['basemap'], camera: CAMERA });
-    map.registerTools({ probe: { persistent: false } });
+    map.registerTools({ probe: { persistent: false }, 'measure-distance': { persistent: false } });
     handle = map;
     return () => <MapToolbar items={items} actions={actions} />;
   });
@@ -52,6 +52,19 @@ describe('MapToolbar', () => {
 
     expect(map.activeTool.value).toBe('browse');
     expect(button(wrapper, '移动').classes()).toContain('el-button--primary');
+  });
+
+  it('点击已激活的工具时退出，回到常驻的"移动"', async () => {
+    const { wrapper, map } = mountToolbar(['browse', 'measure-distance']);
+
+    await button(wrapper, '测距').trigger('click');
+    expect(map.activeTool.value).toBe('measure-distance');
+    expect(button(wrapper, '测距').classes()).toContain('el-button--primary');
+
+    await button(wrapper, '测距').trigger('click');
+
+    expect(map.activeTool.value).toBe('browse');
+    expect(button(wrapper, '测距').classes()).not.toContain('el-button--primary');
   });
 
   it('动作按钮调用页面的回调；没有回调时不可用', async () => {
