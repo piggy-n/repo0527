@@ -37,7 +37,7 @@
 | [0025](0025-worker-contract-and-tile-data-service.md) | Worker 通信契约与瓦片数据服务的约束 | 已接受 |
 | [0026](0026-view-sync-failures.md) | 视图同步的失败处理：错误事件、加载失败与恢复 | 已接受（第 4 条的"不另加 API"由 0030 修正） |
 | [0027](0027-map-capability-layers.md) | 地图能力的分层与页面组装 | 已接受 |
-| [0028](0028-map-vue-context.md) | map-vue：会话与视图分开的地图上下文 | 已接受 |
+| [0028](0028-map-vue-context.md) | map-vue：会话与视图分开的地图上下文 | 已接受（第 5 条中 `view` 的含义、`whenReady` 的用途由 0039 修正） |
 | [0029](0029-map-overlay-padding.md) | 定位可视区域：悬浮元素登记、定位时现量现算 | 已接受 |
 | [0030](0030-view-failure-as-data.md) | 视图失败的原因作为数据 | 已接受 |
 | [0031](0031-basemap-tianditu-and-owner.md) | 底图：天地图的配置与底图的拥有者 | 已接受 |
@@ -47,7 +47,8 @@
 | [0035](0035-measurement.md) | 测量：椭球面计算、测量的状态与标签 | 已接受 |
 | [0036](0036-region-locate.md) | 区划定位：本地区划目录、边界的加载与定位 | 已接受 |
 | [0037](0037-coordinate-locate-and-location-point.md) | 坐标定位与位置点 | 已接受 |
-| [0038](0038-camera-operations.md) | 相机操作：用操作的信号判断等待中的定位是否作废 | 已接受 |
+| [0038](0038-camera-operations.md) | 相机操作：用操作的信号判断等待中的定位是否作废 | 已接受（第 1 条的 `intentRevision`、第 3 条的上下文入口由 0039 修正） |
+| [0039](0039-async-supersede-rules.md) | 异步操作的作废规则、相机操作对象与状态命名 | 已接受 |
 
 ## 模板
 

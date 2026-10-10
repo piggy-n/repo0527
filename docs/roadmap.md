@@ -13,7 +13,7 @@
 | **2. 应用骨架** | 有类型的 HTTP 客户端和错误模型、鉴权、路由守卫（用模块扩充给 `RouteMeta` 加类型）、布局、存储适配器、MSW、Element Plus 主题、CSS Modules | 泛型、可辨识联合、模块扩充、Adapter 和 Strategy 模式 | ✅ 完成（tag `stage-2`，[总结](stages/stage-2-app-skeleton-and-auth.md)） |
 | **3. 第一个纵切** | 登录 + 布局 + 一个简单列表页，把 API、query、store、TSX 组件、测试整条链路跑通 | vue-query（TanStack Query），TSX 中 props、emits、slots 的类型写法 | ✅ 完成（tag `stage-3`，[总结](stages/stage-3-layout-and-first-list.md)）：页面布局规范与 `libs/ui`（ADR 0016）、文件管理列表（ADR 0017）、会话结束的统一处理 |
 | **4. map-core** | 重新设计引擎抽象、Manager 体系、有类型的事件、有类型的 Worker 消息、资源释放 | 接口与抽象类的区别、Facade、Factory、Observer、`using` / Disposable | ✅ 完成（tag `stage-4`，[总结](stages/stage-4-map-core.md)）：地图会话与 MapLibre 适配器（ADR 0018～0024）、Worker 通信层（ADR 0025） |
-| **5. map-vue + 现状底图** | `MapProvider`、`useMap()`、图层面板 | provide / inject 的类型、响应式边界（`shallowRef`、`markRaw`） | 进行中：拆成 5A～5E，见下文"阶段五"；5A 完成（tag `stage-5a`，[总结](stages/stage-5a-map-skeleton.md)）；5B 完成（tag `stage-5b`，[总结](stages/stage-5b-public-map-capabilities.md)） |
+| **5. map-vue + 现状底图** | `MapProvider`、`useMap()`、图层面板 | provide / inject 的类型、响应式边界（`shallowRef`、`markRaw`） | 进行中：拆成 5A～5E，见下文"阶段五"；5A 完成（tag `stage-5a`，[总结](stages/stage-5a-map-skeleton.md)）；5B 完成（tag `stage-5b`，[总结](stages/stage-5b-public-map-capabilities.md)）；5C 开始前插入 5C.0 地图内核加固（ADR 0039） |
 | **三维** | map-cesium：Cesium 运行时、样式镜像与三维样式的支持清单、相机同步、三维拾取与测量、瓦片数据服务与 Worker 池；三维独有功能（漫游、钻地、室内地图、本地 3D Tiles）的迁移范围到时再定 | 接近无感的二三维切换、对象池与 Worker 调度 | 未开始（阶段五开始时加入） |
 | **6. 复杂业务** | 空间监测三件套、AI 流式对话、文件管理，以及其余业务模块 | 拆分巨型组件、流式读取与 SSE、取消请求 | 未开始 |
 | **7. 收尾** | Playwright、产物分析、部署 | — | 未开始 |
@@ -74,6 +74,7 @@
 | 5C.1 | 图层配置由后端驱动时，业务图层的拥有者在配置变化时校验自己的分组，不合法的配置不进入会话（否则一个坏图层会让整个二维视图进入 `failed`）；只在配置变化时校验，不在每次提交时校验 | ADR 0026 |
 | 5C.1 | Worker 数量是否调到旧项目的 4 个，接入地类图斑时实测（`setupMapRuntime` 里调用 `setWorkerCount`）；未勾选的资源图层要不要留在样式里，用真实数据实测 | ADR 0019、本文 |
 | 5C.1 | 哪些运行中的错误要提示用户：瓦片 404、行政区边界数据下载失败等目前只打印到控制台，资源图层接入后按真实的错误种类再定 | [stages/stage-5a-map-skeleton.md](stages/stage-5a-map-skeleton.md) |
+| 5C.1 | 真实浏览器测试用 Vitest 浏览器模式（2026-10-10 决定）：少量 `MapLibreView` 与真实 MapLibre、WebGL 的集成用例，兼做约两百个图层的性能基准；依赖与 CI 中的 WebGL 在 5C.1 开头定，写 ADR。登录到地图页的完整流程仍用 Playwright，在阶段七 | 本文 |
 | 5C.3 | 持久化：IndexedDB + idb-keyval 的存储适配器，第一个使用方预计是图层排序；键按用户区分、会话结束时是否清理、首屏等待读取 | AGENTS.md、本文 |
 | 5C.4 | 用真实数据实测 MapLibre 6 下图例统计（当前出现的地类）的主线程耗时，再选后端聚合、Worker 解码属性或按需统计 | ADR 0021 |
 | 5C.5 | 图例等初始化数据是否随项目打包后写入 IndexedDB，结合真实数据量决定 | 本文 |
@@ -84,6 +85,7 @@
 | 三维 | 评估 utils、map-core、map-cesium 一起拆到 `packages/`；自己写的 Worker 的类型检查配置 | ADR 0018、0021 |
 | 第一个 Worker 真实使用方出现时 | Worker 池的调度、缓存淘汰、内存预算用真实瓦片验证；真实 Worker 在 Vite 下的打包与加载在 `/dev` 开发页验证；瓦片目前不校验 token、与用户无关（2026-10-09 实测，见 [migration.md](migration.md)），此前仍向后端确认以后是否会按权限过滤 | ADR 0025 |
 | 三维 | Cesium 运行时作为第二个框架加载函数接入；悬停切换按钮时开始加载；默认三维时是否预取 Cesium 的静态资源；实现镜像前写出三维样式的支持清单与降级规则；拾取按模型、地形、椭球报告命中表面；相机同步不再用 `map.transform`（v6 已移除），改用公开 API；MVT 解码的 `@mapbox/vector-tile`、`pbf` 对齐 maplibre-gl 依赖的版本；三维点选改用瓦片数据服务，不再先对齐二维；评估三维期间二维是否还要存活；瓦片数据服务与 MapLibre 之间避免重复下载的做法 | ADR 0019、0020、0021、0024 |
+| 三维 | 工具模型里的手势用了 MapLibre 的叫法（`dragPan` 等），三维接入时映射或改成按意图命名；`MapView` 的约定写成可复用的契约测试，二三维视图都跑；还原精确视角的条件由三维视图订阅相机事件、看 `cause` 判断（`intentRevision` 已删除） | ADR 0039、本文 |
 | 6 | AI 对话：AI 后端登录不再在前端写死账号密码 | ADR 0015 |
 | 6 | 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像、消息铃铛 | [modules/layout.md](modules/layout.md) |
 | 6 | 文件管理：上传（"上传文档"按钮已占位）、下载与进度、预览 | ADR 0011、[migration.md](migration.md) |
@@ -129,13 +131,29 @@
 |---|---|---|
 | 5A 地图骨架 | 5A.0 测试耗时、接口实测、迁移基线；5A.1 ADR（地图能力的分层、map-vue 的上下文）；5A.2 map-vue（会话的 provide / inject、地图画布组件、分组提交），`/dev/map` 改用；5A.3 被占用区域的机制（无界面）、视图状态与失败提示、现状底图页的联调骨架（设计稿已做，确认先不定界面，见 5D） | 现状底图的空页面能显示地图（✅ 完成） |
 | 5B 公共地图能力 | 5B.1 底图（目录、拥有者、切换面板）；5B.2 行政区边界、默认视角；5B.3 交互基础（二维的输入、拾取、投影，当前工具模型，工具栏外壳）；5B.4 测距、测面、清除；5B.5 区划定位；5B.6 坐标定位与位置点 | 任何地图页都能装上底图、边界和工具栏（✅ 完成） |
-| 5C 现状底图业务 | 5C.1 资源图层（接口、规范化、样式登记表、显示状态、拥有者与校验）；5C.2 图层面板；5C.3 持久化（存储适配器）；5C.4 只读图例与地类统计；5C.5 符号编辑；5C.6 点选与详情面板；5C.7 区划裁剪；5C.8 年份与资源的交互 | 除三维外与旧页面功能对齐 |
+| 5C 现状底图业务 | 5C.0 地图内核加固（见下文）；5C.1 资源图层（接口、规范化、样式登记表、显示状态、拥有者与校验）；5C.2 图层面板；5C.3 持久化（存储适配器）；5C.4 只读图例与地类统计；5C.5 符号编辑；5C.6 点选与详情面板；5C.7 区划裁剪；5C.8 年份与资源的交互 | 除三维外与旧页面功能对齐 |
 | 5D 界面设计 | 地图页界面的专门设计：用户提供设计想法和 SVG 素材，先出设计稿、确认后替换联调骨架；公共能力的界面在 `shared/map`，业务界面在 feature | 现状底图的界面定稿 |
 | 5E 收尾 | 页面缓存；加载策略的性能标记、实测与 ADR | — |
 
 - 每个子阶段单独验收、打 tag（`stage-5a`～`stage-5e`），并在 `stages/` 下写一篇总结
 - 5C.1 风险最大（约两百个图层、真实数据量），不依赖 5B，需要提前暴露性能问题时可以挪到 5B.3 之前
 - 区划定位（飞到区划、高亮边界）是公共能力，放在 5B.5；区划裁剪会影响资源图层，放在 5C.7
+
+### 5C.0 地图内核加固
+
+5C 开始前讨论 5A、5B 的实现时插入（2026-10-10）：时序问题一个接一个，"结果还算不算数"由各个拥有者自己判断，写法有三种。先统一规则、收紧状态的语义，再开始 5C.1。
+
+| 步骤 | 内容 | 提交 |
+|---|---|---|
+| 5C.0a | [ADR 0039](adr/0039-async-supersede-rules.md)：异步操作的作废规则、相机操作对象与状态命名 | docs |
+| 5C.0b | 命名：样式模型的 `version` 改为 `revision`，删除 `CameraModel.intentRevision`；只改名和删除，不改行为 | refactor |
+| 5C.0c | `@yzt/utils` 的 `LatestController`；相机模型、区划定位、位置点的区县查询改用它 | refactor |
+| 5C.0d | map-vue 的相机操作对象、`view` 只在就绪时有值、`run` 不因视图失败放弃、回调的错误统一交给 `onError`；区划定位、默认视角、坐标定位、两个浮层、开发页改用；同步 AGENTS.md 的地图规则 | feat / fix |
+| 5C.0e | `MapLibreView` 的状态转换表、去掉冗余的 `#fatal`、穷举短序列测试 | refactor / test |
+| 5C.0f | 地图架构总览：按主题列出现行有效的 ADR 与取代关系 | docs |
+
+- 命名调整（5C.0b）和行为调整（5C.0d）分开提交，出了回归容易定位
+- 不做：工具生命周期加"完成"阶段（等阶段六空间绘制这第二个使用方）；为三维提前抽象（只记下要带到三维阶段的事项）
 
 ## 业务模块
 
