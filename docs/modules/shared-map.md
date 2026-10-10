@@ -1,6 +1,6 @@
 # 项目级的公共地图能力（shared/map）
 
-> 状态：5A.3 加入地图状态的提示和江苏的范围；5B.1 加入底图（进行中：目录与推导已完成，拥有者、联调面板和页面接入在后续步骤）。行政区边界、工具栏等公共能力在 5B 陆续加入。分层见 ADR 0027：与框架无关的逻辑在 map-core，Vue 衔接在 map-vue（[map-vue.md](map-vue.md)），这里放要读项目配置、用 Element 和 `SvgIcon` 的公共地图能力。
+> 状态：5A.3 加入地图状态的提示和江苏的范围；5B.1 加入底图（进行中：目录、推导与拥有者已完成，联调面板和页面接入在下一步）。行政区边界、工具栏等公共能力在 5B 陆续加入。分层见 ADR 0027：与框架无关的逻辑在 map-core，Vue 衔接在 map-vue（[map-vue.md](map-vue.md)），这里放要读项目配置、用 Element 和 `SvgIcon` 的公共地图能力。
 
 阶段五的界面后置到 5D 专门设计（[roadmap.md](../roadmap.md)"阶段五"）。这里的组件都是联调用的界面：状态和文案由纯函数决定，组件只负责显示，5D 只换组件，纯函数保留。
 
@@ -12,6 +12,7 @@
 | `MapStatusNotice.tsx` | 加载中与失败的提示（联调用的界面） |
 | `jiangsu.ts` | 江苏省的范围 `JIANGSU_BOUNDS` 与创建地图时的相机 `JIANGSU_CAMERA` |
 | `basemap/basemap-style.ts` | 底图目录与推导：可选的底图、初始状态、`createBasemapStyles` 给出两个分组的推导函数（纯函数，ADR 0031） |
+| `basemap/useBasemap.ts` | 底图的拥有者：持有选择和透明度，提供操作和两个推导函数 |
 
 ## 江苏的范围与进入页面时的定位
 
@@ -32,10 +33,24 @@
 | 无底图 | 背景 | 空 |
 
 ```ts
-const styles = createBasemapStyles(appConfig.tianditu);
-styles.basemapGroup(state);  // 背景和所选底图
-styles.labelsGroup(state);   // 所选底图配套的注记
+// 页面 setup：拥有者的状态随页面，进入页面时重新开始
+const map = provideMap({ groups: ['basemap', 'basemap-labels'], camera: JIANGSU_CAMERA });
+const basemap = useBasemap();
+map.bindStyle({ basemap: basemap.deriveGroup, 'basemap-labels': basemap.deriveLabelsGroup });
+
+// 面板通过 props 拿到 basemap，只显示和调用
+basemap.options;          // 可选的底图（按 appConfig.tianditu）
+basemap.selected.value;   // 当前底图
+basemap.opacity.value;    // 当前底图的透明度（0～1），无底图时为 null
+basemap.select('imagery');
+basemap.setOpacity(0.6);
 ```
+
+- `useBasemap()` 默认读取 `appConfig.tianditu`，测试时传入 `{ tianditu }`；不依赖组件的生命周期，没有要清理的东西。推导用的是 `createBasemapStyles(tianditu)` 的两个纯函数
+- 不用 Pinia：状态只在一个页面里共享，不带到其他地图页，同一页面上的两张地图互不影响（ADR 0031）
+- 状态是一个 `shallowRef`，变化时整体替换；选择或透明度没变时不替换，推导函数包在 `computed` 里（提交器就是这样做的）时不会重新推导。滑块拖动时会重复给出相同的值
+- 不合法的调用直接抛错，状态不变：选择不可用的底图（如关闭天地图时选矢量）、透明度不是 0～1 之间的有限数、无底图时修改透明度。界面只提供可用的操作，这些都是编程错误；错误在操作里抛出，不进入推导和 `computed`
+- 暂不记住选择；状态只有 ID 和数字，5C.3 做持久化时再加初始值或存储
 
 - 状态（`BasemapState`）只有选中的底图和每种底图的透明度（0～1），可以直接序列化；透明度同时作用于底图和注记，不影响背景
 - 背景是 `basemap-background`（`#F3F5F8`），无论选哪种底图都在最底下：无底图时显示它，瓦片加载中和调低透明度时与它混合
@@ -72,7 +87,9 @@ styles.labelsGroup(state);   // 所选底图配套的注记
 |---|---|---|
 | `map-status.test.ts` | 各状态的显示内容、两种引擎失败、样式失败、没有原因、不是 Error 的原因 | Node |
 | `MapStatusNotice.test.tsx` | 引擎失败时显示原因和"重试"，点击后重新创建地图，重试过程不抛错 | jsdom |
+| `basemap/useBasemap.test.ts` | 默认读取配置；两种配置下的初始状态；切换后推导出所选底图和注记；透明度作用于当前底图、每种底图各自记住；相同的值不触发重新推导；不合法的调用抛错且状态不变 | Node |
 | `basemap/basemap-style.test.ts` | 可选的底图与初始状态；每种底图的组成、瓦片地址、缩放范围与透明度；ID 的分组前缀与组合后的校验；改透明度只产生 `setPaintProperty`；切换底图时背景不动；关闭天地图时任何选择都没有天地图 | Node |
 
 - 底图的推导逐一改坏 22 处（关闭时仍给出全部选项或仍建数据源、注记图层用错、少一个子域名、缺少缩放范围、占位符被转义、行列写反、不带 key、背景缺失或在底图上面、注记不跟透明度、影像用矢量的透明度、ID 不带前缀或重复等），全部由断言发现
+- 拥有者逐一改坏 18 处，起初有 1 处没被发现、1 处的失败原因不是断言："推导不随传入的配置"（关闭天地图的用例选的是无底图，推导结果与配置无关），补了"瓦片地址里是传入的 key"；"透明度的边界写成开区间"时 `setOpacity(0)` 直接抛错，改用 `not.toThrow()` 断言。补上后全部由断言发现
 - 起初还有一条"同一种底图的数据源始终是同一个对象"的用例，改坏验证时发现它测的是实现细节：数据源每次都新建时，`diffStyle` 的用例照样通过（style-spec 对数据源做深比较），于是删掉；数据源仍在工厂里一次建好，只是省去重复拼地址
