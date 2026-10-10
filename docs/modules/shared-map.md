@@ -1,6 +1,6 @@
 # 项目级的公共地图能力（shared/map）
 
-> 状态：5A.3 加入地图状态的提示和江苏的范围；5B.1 加入底图（目录、推导、拥有者、联调面板，现状底图已接入）。行政区边界、工具栏等公共能力在 5B 陆续加入。分层见 ADR 0027：与框架无关的逻辑在 map-core，Vue 衔接在 map-vue（[map-vue.md](map-vue.md)），这里放要读项目配置、用 Element 和 `SvgIcon` 的公共地图能力。
+> 状态：5A.3 加入地图状态的提示和江苏的范围；5B.1 加入底图（目录、推导、拥有者、联调面板，现状底图已接入）；5B.2 加入行政区边界（进行中：数据、推导与拥有者已完成，默认视角、联调面板和页面接入在后续步骤）。工具栏等公共能力在 5B 陆续加入。分层见 ADR 0027：与框架无关的逻辑在 map-core，Vue 衔接在 map-vue（[map-vue.md](map-vue.md)），这里放要读项目配置、用 Element 和 `SvgIcon` 的公共地图能力。
 
 阶段五的界面后置到 5D 专门设计（[roadmap.md](../roadmap.md)"阶段五"）。这里的组件都是联调用的界面：状态和文案由纯函数决定，组件只负责显示，5D 只换组件，纯函数保留。
 
@@ -14,6 +14,9 @@
 | `basemap/basemap-style.ts` | 底图目录与推导：可选的底图、初始状态、`createBasemapStyles` 给出两个分组的推导函数（纯函数，ADR 0031） |
 | `basemap/useBasemap.ts` | 底图的拥有者：持有选择和透明度，提供操作和两个推导函数 |
 | `basemap/BasemapPanel.tsx` | 底图的切换面板（联调用的界面） |
+| `boundary/data/` | 省、市、县界的 GeoJSON，由转换脚本生成（见"行政区边界的数据"） |
+| `boundary/boundary-style.ts` | 边界的级别、初始状态、`boundaryGroup` 推导（纯函数，ADR 0033） |
+| `boundary/useBoundaries.ts` | 边界的拥有者：持有每一级是否显示和共用的透明度 |
 
 ## 江苏的范围与进入页面时的定位
 
@@ -89,6 +92,28 @@ basemap.setOpacity(0.6);
 - 缩小时地图最小只到 z0.71（画布尺寸的限制），瓦片按 2 级请求；栅格瓦片按 256 像素换算，瓦片级别总比地图缩放级大 1，所以不会请求 0 级，`minzoom: 1` 只是写明天地图的范围
 - 读 WebGL 画布的像素要在渲染的那一帧里读：MapLibre 没有开 `preserveDrawingBuffer`，帧画完后缓冲区被清空，事后用 `drawImage` 读到的是全透明
 
+## 行政区边界（ADR 0033）
+
+```ts
+// 页面 setup：边界在注记上面（旧项目把边界移到最顶，见 ADR 0033 第 4 条）
+const map = provideMap({ groups: ['basemap', 'basemap-labels', 'boundaries'], camera: JIANGSU_CAMERA });
+const boundaries = useBoundaries();
+map.bindStyle({ boundaries: boundaries.deriveGroup });
+
+boundaries.options;           // 省界、市界、县界
+boundaries.visible.value;     // { province: true, city: false, county: false }
+boundaries.opacity.value;     // 三级共用的透明度（0～1）
+boundaries.setVisible('city', true);
+boundaries.setOpacity(0.6);
+```
+
+- 每个打开的级别一个 GeoJSON 数据源和一条线图层，ID 是 `boundaries-province` 等；从下到上是县、市、省
+- 数据源直接写 `?url` 导入的地址（`{ type: 'geojson', data: url }`），由 MapLibre 在 Worker 里下载和解析；地址带内容哈希，可以长期缓存
+- 关闭的级别不在样式里，打开时才下载；关掉再打开要重新解析（下载命中缓存）。打开、关闭一级只增删这一级的数据源和图层，改透明度只产生 `setPaintProperty`
+- 线的样式照搬旧项目：颜色都是 `#597EF7`；省界宽 1.8～3.2、不透明度 0.94，市界 1.1～2.3、0.78，县界 0.6～1.25（从 8 级起变化）、0.62、虚线。状态里的透明度乘在各级的不透明度上
+- `useBoundaries()` 的写法与 `useBasemap()` 相同：状态是一个 `shallowRef`，值没变时不替换；透明度不是 0～1 之间的有限数时抛错。三级都关闭时仍可以改透明度
+- 进入页面时只显示省界；指标页（阶段六）要四项全开时再加初始值的参数
+
 ## 行政区边界的数据（ADR 0033）
 
 `boundary/data/` 下的三份边界由 `apps/web/tools/boundaries` 的脚本从旧项目转换而来：
@@ -133,10 +158,13 @@ basemap.setOpacity(0.6);
 | `MapStatusNotice.test.tsx` | 引擎失败时显示原因和"重试"，点击后重新创建地图，重试过程不抛错 | jsdom |
 | `basemap/BasemapPanel.test.tsx` | 选择底图后改变状态、无底图时没有滑块；滑块按百分比显示、拖动时交给拥有者 0～1 的值；关闭天地图时只有"无底图" | jsdom |
 | `basemap/useBasemap.test.ts` | 默认读取配置；两种配置下的初始状态；切换后推导出所选底图和注记；透明度作用于当前底图、每种底图各自记住；相同的值不触发重新推导；不合法的调用抛错且状态不变 | Node |
+| `boundary/boundary-style.test.ts` | 级别与初始状态；数据源是三份文件的地址；三级的叠放、线宽、虚线；透明度乘在基础值上；关闭的级别不在样式里；ID 前缀与校验；改透明度只产生 `setPaintProperty`；开关一级只增删这一级 | Node |
+| `boundary/useBoundaries.test.ts` | 初始状态；开关某一级、透明度；值没变时不重新推导；不合法的透明度抛错；每次调用各有一份状态 | Node |
 | `apps/web/tools/boundaries/boundaries.test.ts` | 边界数据的转换：文件对应关系、坐标取整与去掉高程、只留名称和代码、去掉 `crs`、原始结构不符合或没有要素时报错 | Node |
 | `basemap/basemap-style.test.ts` | 可选的底图与初始状态；每种底图的组成、瓦片地址、缩放范围与透明度；ID 的分组前缀与组合后的校验；改透明度只产生 `setPaintProperty`；切换底图时背景不动；关闭天地图时任何选择都没有天地图 | Node |
 
 - 底图的推导逐一改坏 22 处（关闭时仍给出全部选项或仍建数据源、注记图层用错、少一个子域名、缺少缩放范围、占位符被转义、行列写反、不带 key、背景缺失或在底图上面、注记不跟透明度、影像用矢量的透明度、ID 不带前缀或重复等），全部由断言发现
+- 边界的推导逐一改坏 12 处、拥有者 10 处（初始状态、面板顺序、叠放顺序、透明度不乘基础值或被忽略、县界没有虚线、地址用错、关闭的级别留在样式里、ID 不带前缀、线宽和颜色、相同的值也替换状态、透明度的校验与边界、状态在模块里共享等），全部由断言发现
 - 面板逐一改坏 5 处（选择时不调用拥有者、透明度不换算、滑块显示 0～1、无底图时仍显示滑块、选项写死），全部发现；"透明度不换算"起初是 `setOpacity` 抛出的 `RangeError` 直接冒出来，把触发拖动的那一步包进 `not.toThrow()` 后由断言发现
 - 拥有者逐一改坏 18 处，起初有 1 处没被发现、1 处的失败原因不是断言："推导不随传入的配置"（关闭天地图的用例选的是无底图，推导结果与配置无关），补了"瓦片地址里是传入的 key"；"透明度的边界写成开区间"时 `setOpacity(0)` 直接抛错，改用 `not.toThrow()` 断言。补上后全部由断言发现
 - 起初还有一条"同一种底图的数据源始终是同一个对象"的用例，改坏验证时发现它测的是实现细节：数据源每次都新建时，`diffStyle` 的用例照样通过（style-spec 对数据源做深比较），于是删掉；数据源仍在工厂里一次建好，只是省去重复拼地址
