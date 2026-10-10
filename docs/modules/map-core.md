@@ -202,6 +202,7 @@ store.clear();
 
 - `pick(point)` 用 `unproject` 得到经纬度，二维总是 `{ kind: 'hit', surface: 'map' }`，没有高度；`project(lngLat)` 用 MapLibre 的 `project`，忽略高度，结果可能在画布之外。两者和定位一样只在 `ready` 时可用
 - 订阅 MapLibre 的 `mousedown`、`mousemove`、`mouseup`、`click`、`dblclick`、`mouseout`，转成 `down`、`move`、`up`、`click`、`dblclick`、`leave`，带画布上的点、按键和四个修饰键；地图容器上的 `keydown` 转成 `{ type: 'key', key }`（地图获得焦点时才收到，不影响页面上的输入框）
+- 切换到临时任务时把键盘焦点移到画布上（`focus({ preventScroll: true })`）：临时任务多由工具栏、面板上的按钮激活，焦点还在按钮上，Esc 到不了地图（5B 收尾时用户发现拾取开启后按 Esc 没反应）。只在切换工具时移，常驻模式不移，视图就绪时也不移，进入页面不会抢走焦点
 - 只有 `ready` 的视图把输入交给 `session.tool.dispatch`：初始化中、暂停（切到三维）时不转交，二三维切换时只有当前显示的视图在转交。交给工具的是冻结的 `{ kind, pick, project }`
 - 当前工具变化时（以及首次激活、恢复显示时）应用它的声明：光标写到画布的 `style.cursor`（没写时清空，交回 MapLibre 的抓手样式）；`gestures` 里写 `false` 的手势关掉。视图记着自己关掉了哪些，切换工具时只恢复这些，页面创建地图时就关掉的手势不会被打开
 - 工具的钩子抛错时由 `#guard` 交给 `onError`，不冒进 MapLibre 的事件分发

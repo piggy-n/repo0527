@@ -1325,6 +1325,34 @@ describe('MapLibreView', () => {
       ]);
     });
 
+    it('moves keyboard focus to the map when a temporary task becomes active, so Esc reaches the tool', () => {
+      using ctx = setup();
+      ctx.session.tool.register('measure', { persistent: false });
+      ctx.session.tool.register('pick', { persistent: true });
+      const focus = vi.spyOn(ctx.map.canvas, 'focus');
+      ctx.map.fire('style.load');
+
+      // 常驻模式不抢焦点；临时任务多由面板、工具栏上的按钮激活，焦点还在按钮上，按键到不了地图
+      ctx.session.tool.activate('pick');
+      expect(focus).not.toHaveBeenCalled();
+      ctx.session.tool.activate('measure');
+      expect(focus.mock.calls).toStrictEqual([[{ preventScroll: true }]]);
+      ctx.session.tool.release('measure');
+
+      expect(focus).toHaveBeenCalledOnce();
+    });
+
+    it('does not take focus when it becomes ready with a temporary task already active', () => {
+      using ctx = setup();
+      ctx.session.tool.register('measure', { persistent: false });
+      const focus = vi.spyOn(ctx.map.canvas, 'focus');
+      ctx.session.tool.activate('measure');
+
+      ctx.map.fire('style.load');
+
+      expect(focus).not.toHaveBeenCalled();
+    });
+
     it('only turns back on the gestures it turned off itself', () => {
       using ctx = setup();
       ctx.session.tool.register('draw', { persistent: false, gestures: { dragPan: false, doubleClickZoom: false } });

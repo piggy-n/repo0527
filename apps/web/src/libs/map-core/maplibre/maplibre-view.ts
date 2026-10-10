@@ -492,6 +492,10 @@ export class MapLibreView<const G extends string> implements MapView {
   #onToolChange(): void {
     if (this.#state === 'ready' && this.#map !== undefined) {
       this.#applyTool(this.#map);
+      // 临时任务多由面板、工具栏上的按钮激活，焦点还在按钮上，按键到不了地图；移到地图上，Esc 才能直接退出
+      if (!this.#session.tool.activeTool.persistent) {
+        this.#map.getCanvas().focus({ preventScroll: true });
+      }
     }
   }
 
