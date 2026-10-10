@@ -43,12 +43,15 @@ const NONE: RegionLocateState = Object.freeze({ selected: null, boundary: Object
 
 let sharedLoader: RegionBoundaryLoader | undefined;
 
-/** 面板上点击一个区划后要选择的代码：再点已选中的市回到全省，再点已选中的区县回到所在的市（同旧项目） */
+/**
+ * 面板上点击一个区划后要选择的代码（同旧项目）：再点已选中的区县回到所在的市；
+ * 选中市或它的区县时这个市都算选中，再点它回到全省
+ */
 export function nextRegionSelection(selected: Region | null, clicked: Region): string | null {
-  if (selected?.code !== clicked.code) {
-    return clicked.code;
+  if (clicked.level === 'city') {
+    return selected?.cityCode === clicked.code ? null : clicked.code;
   }
-  return clicked.level === 'city' ? null : clicked.cityCode;
+  return selected?.code === clicked.code ? clicked.cityCode : clicked.code;
 }
 
 /** 创建区划定位的拥有者，在 provideMap 所在组件的 setup 中调用；作用域销毁时取消进行中的加载和定位 */

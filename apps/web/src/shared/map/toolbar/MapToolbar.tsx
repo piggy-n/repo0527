@@ -22,7 +22,9 @@ export const MapToolbar = defineComponent({
     actions: {
       type: Object as PropType<Partial<Readonly<Record<ToolbarActionId, () => void>>>>,
       default: () => ({})
-    }
+    },
+    /** 显示为按下的动作，如打开着面板的"区划定位"；工具栏自己不保存开关 */
+    pressed: { type: Array as PropType<readonly ToolbarActionId[]>, default: () => [] }
   },
   setup(props) {
     const map = useMap();
@@ -45,8 +47,15 @@ export const MapToolbar = defineComponent({
           }
           const { label, icon } = TOOLBAR_ACTIONS[id];
           const run = props.actions[id];
+          const pressed = props.pressed.includes(id);
           return (
-            <ElButton key={id} icon={icon} disabled={!run} onClick={() => run?.()}>
+            <ElButton
+              key={id}
+              type={pressed ? 'primary' : 'default'}
+              icon={icon}
+              disabled={!run}
+              aria-pressed={pressed}
+              onClick={() => run?.()}>
               {label}
             </ElButton>
           );

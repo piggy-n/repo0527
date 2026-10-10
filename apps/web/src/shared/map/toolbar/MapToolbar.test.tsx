@@ -9,13 +9,17 @@ import type { ToolbarActionId, ToolbarItemId } from './toolbar-items';
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
 /** 页面登记测距和一个工具栏上没有的工具 probe，渲染工具栏；不需要画布，工具在会话里切换 */
-function mountToolbar(items: readonly ToolbarItemId[], actions: Partial<Record<ToolbarActionId, () => void>> = {}) {
+function mountToolbar(
+  items: readonly ToolbarItemId[],
+  actions: Partial<Record<ToolbarActionId, () => void>> = {},
+  pressed: readonly ToolbarActionId[] = []
+) {
   let handle: MapHandle<'basemap'> | undefined;
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['basemap'], camera: CAMERA });
     map.registerTools({ probe: { persistent: false }, 'measure-distance': { persistent: false } });
     handle = map;
-    return () => <MapToolbar items={items} actions={actions} />;
+    return () => <MapToolbar items={items} actions={actions} pressed={pressed} />;
   });
   const wrapper = mount(Page);
   if (!handle) {
@@ -76,5 +80,17 @@ describe('MapToolbar', () => {
 
     expect(goToDefaultView).toHaveBeenCalledOnce();
     expect(button(withoutAction.wrapper, '默认视角').attributes('disabled')).toBeDefined();
+  });
+
+  it('页面告诉工具栏哪些动作显示为按下', () => {
+    const toggle = vi.fn<() => void>();
+    const { wrapper } = mountToolbar(['region-locate', 'clear'], { 'region-locate': toggle, clear: toggle }, [
+      'region-locate'
+    ]);
+
+    expect(button(wrapper, '区划定位').classes()).toContain('el-button--primary');
+    expect(button(wrapper, '区划定位').attributes('aria-pressed')).toBe('true');
+    expect(button(wrapper, '清除').classes()).not.toContain('el-button--primary');
+    expect(button(wrapper, '清除').attributes('aria-pressed')).toBe('false');
   });
 });

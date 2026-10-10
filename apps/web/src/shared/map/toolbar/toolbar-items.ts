@@ -1,4 +1,4 @@
-import { Crop, Delete, HomeFilled, Rank, Share } from '@element-plus/icons-vue';
+import { Crop, Delete, HomeFilled, MapLocation, Rank, Share } from '@element-plus/icons-vue';
 import { BROWSE_TOOL } from '@yzt/map-core';
 import type { Component } from 'vue';
 import { MEASURE_TOOL_IDS, type MeasureToolId } from '../measure/useMeasure';
@@ -6,8 +6,8 @@ import { MEASURE_TOOL_IDS, type MeasureToolId } from '../measure/useMeasure';
 /** 工具栏上的工具：激活后接管地图的鼠标，同一时间只有一个；ID 就是登记到会话里的工具 ID */
 export type ToolbarToolId = typeof BROWSE_TOOL | MeasureToolId;
 
-/** 工具栏上的动作：一次性的操作，由页面给出回调 */
-export type ToolbarActionId = 'default-view' | 'clear';
+/** 工具栏上的动作：由页面给出回调；开关面板的动作由页面告诉工具栏是否显示为按下（ADR 0036） */
+export type ToolbarActionId = 'default-view' | 'clear' | 'region-locate';
 
 export type ToolbarItemId = ToolbarToolId | ToolbarActionId;
 
@@ -25,7 +25,8 @@ export const TOOLBAR_TOOLS: Readonly<Record<ToolbarToolId, ToolbarItem>> = {
 
 export const TOOLBAR_ACTIONS: Readonly<Record<ToolbarActionId, ToolbarItem>> = {
   'default-view': { label: '默认视角', icon: HomeFilled },
-  clear: { label: '清除', icon: Delete }
+  clear: { label: '清除', icon: Delete },
+  'region-locate': { label: '区划定位', icon: MapLocation }
 };
 
 export function isToolbarTool(id: ToolbarItemId): id is ToolbarToolId {

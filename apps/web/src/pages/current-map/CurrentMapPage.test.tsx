@@ -13,8 +13,9 @@ import {
 } from '@yzt/map-core';
 import { MapCanvas } from '@yzt/map-vue';
 import { mount } from '@vue/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
+import cityFile from '@/shared/map/boundary/data/jiangsu-city.json?raw';
 import { JIANGSU_BOUNDS } from '@/shared/map/jiangsu';
 import { formatDistance } from '@/shared/map/measure/measure-labels';
 import { CurrentMapPage } from './CurrentMapPage';
@@ -213,6 +214,10 @@ function drawLine(map: FakeMap): void {
   map.mouse('dblclick', 100, 0, 2);
 }
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe('CurrentMapPage', () => {
   it('绑定底图、注记和边界，从下到上是底图、注记、省界', () => {
     const { maps } = mountPage();
@@ -380,5 +385,45 @@ describe('CurrentMapPage', () => {
     second.fire('style.load');
     await settle();
     expect(overlayItems(wrapper)).toStrictEqual(labels);
+  });
+
+  it('区划定位：工具栏开关面板；选中南京后高亮叠在边界之上并定位，再点回到全省和默认视角；关面板不清选择', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(() => Promise.resolve(new Response(cityFile)))
+    );
+    const { wrapper, maps } = mountPage();
+    const map = maps[0];
+    if (!map) {
+      throw new Error('没有创建地图');
+    }
+    map.fire('style.load');
+    await settle();
+
+    await button(wrapper, '区划定位').trigger('click');
+    expect(button(wrapper, '区划定位').attributes('aria-pressed')).toBe('true');
+    await button(wrapper, '南京').trigger('click');
+    await settle();
+
+    expect(map.addedLayers).toStrictEqual([
+      ['region-line', undefined],
+      ['region-glow', 'region-line']
+    ]);
+    expect(map.fitBoundsCalls).toEqual([jiangsu, [118.357927, 31.230207, 119.236382, 32.616407]]);
+
+    // 用面板上的关闭按钮和工具栏各关一次，选择都保留
+    await wrapper.get('[aria-label="关闭区划定位"]').trigger('click');
+    expect(wrapper.find('[data-region-locate-panel]').exists()).toBe(false);
+    expect(button(wrapper, '区划定位').attributes('aria-pressed')).toBe('false');
+    expect(map.geojson.has('region')).toBe(true);
+    await button(wrapper, '区划定位').trigger('click');
+    await button(wrapper, '区划定位').trigger('click');
+    expect(wrapper.find('[data-region-locate-panel]').exists()).toBe(false);
+    expect(map.geojson.has('region')).toBe(true);
+
+    await button(wrapper, '区划定位').trigger('click');
+    await button(wrapper, '南京').trigger('click');
+    expect(map.geojson.has('region')).toBe(false);
+    expect(map.fitBoundsCalls).toEqual([jiangsu, [118.357927, 31.230207, 119.236382, 32.616407], jiangsu]);
   });
 });

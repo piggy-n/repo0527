@@ -265,6 +265,12 @@ describe('useRegionLocate', () => {
     expect(nextRegionSelection(region('320100'), region('320102'))).toBe('320102');
     expect(nextRegionSelection(region('320100'), region('320100'))).toBeNull();
     expect(nextRegionSelection(region('320102'), region('320102'))).toBe('320100');
+    expect(nextRegionSelection(region('320102'), region('320104'))).toBe('320104');
+    expect(nextRegionSelection(region('320102'), region('320200'))).toBe('320200');
+  });
+
+  it('选中区县时它所在的市也算选中，再点这个市回到全省（同旧项目）', () => {
+    expect(nextRegionSelection(region('320102'), region('320100'))).toBeNull();
   });
 
   it('不在组件 setup 或 effectScope 中调用时抛错', () => {
