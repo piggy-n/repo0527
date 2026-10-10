@@ -447,6 +447,24 @@ describe('MapContextState 的相机操作', () => {
     expect(view.flyToCalls).toStrictEqual([{ zoom: 12 }]);
   });
 
+  it('作废上一次操作的回调里又开始了新的操作：新的那次执行，外层这次不执行', () => {
+    using env = setup();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    const { context } = env.state;
+    const done: string[] = [];
+    context.currentCameraOperation().signal.addEventListener(
+      'abort',
+      () => context.runCameraOperation(() => done.push('回调里开始的')),
+      { once: true }
+    );
+
+    context.runCameraOperation(() => done.push('外层'));
+    view.emit('ready');
+
+    expect(done).toStrictEqual(['回调里开始的']);
+  });
+
   it('回调抛错交给 onError：就绪时同步执行、等到就绪再执行都一样，不抛给调用方', () => {
     using env = setup();
     const view = new FakeView();

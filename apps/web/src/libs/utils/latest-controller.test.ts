@@ -70,6 +70,73 @@ describe('LatestController', () => {
     expect(() => latest[Symbol.dispose]()).not.toThrow();
   });
 
+  it('取消回调里再次 next：回调开始的那一次是最新的，之后能被取消；外层拿到的已经中止', () => {
+    using latest = new LatestController();
+    let inner: AbortSignal | undefined;
+    latest.signal.addEventListener('abort', () => (inner = latest.next()), { once: true });
+
+    const outer = latest.next();
+
+    expect(outer.aborted).toBe(true);
+    expect(inner?.aborted).toBe(false);
+    expect(latest.signal).toBe(inner);
+    latest.next();
+    expect(inner?.aborted).toBe(true);
+  });
+
+  it('取消回调里读到的 signal 已经是新的一次', () => {
+    using latest = new LatestController();
+    let seen: AbortSignal | undefined;
+    latest.signal.addEventListener('abort', () => (seen = latest.signal), { once: true });
+
+    const next = latest.next();
+
+    expect(seen).toBe(next);
+  });
+
+  it('取消回调里释放：外层拿到的也已经中止，之后不能再开始', () => {
+    const latest = new LatestController();
+    latest.signal.addEventListener('abort', () => latest[Symbol.dispose](), { once: true });
+
+    const outer = latest.next();
+
+    expect(outer.aborted).toBe(true);
+    expect(outer.reason).toMatchObject({ name: 'AbortError', message: 'LatestController 已释放' });
+    expect(() => latest.next()).toThrow('LatestController 已释放');
+  });
+
+  it('abort 的回调里开始新的一次：新的不受影响', () => {
+    using latest = new LatestController();
+    let inner: AbortSignal | undefined;
+    latest.signal.addEventListener('abort', () => (inner = latest.next()), { once: true });
+
+    latest.abort();
+
+    expect(inner?.aborted).toBe(false);
+    expect(latest.signal).toBe(inner);
+  });
+
+  it('释放的回调里再开始：抛错，状态仍是释放', () => {
+    const latest = new LatestController();
+    let thrown: unknown;
+    latest.signal.addEventListener(
+      'abort',
+      () => {
+        try {
+          latest.next();
+        } catch (error) {
+          thrown = error;
+        }
+      },
+      { once: true }
+    );
+
+    latest[Symbol.dispose]();
+
+    expect(thrown).toMatchObject({ message: 'LatestController 已释放' });
+    expect(latest.signal.aborted).toBe(true);
+  });
+
   it('释放前已经中止的，保留原来的原因', () => {
     const latest = new LatestController();
     const reason = new Error('先中止');

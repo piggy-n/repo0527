@@ -60,6 +60,20 @@ describe('CameraModel', () => {
     expect(second.aborted).toBe(false);
   });
 
+  it('an operation started while the previous one is being aborted stays current and can be aborted later', () => {
+    using model = new CameraModel(NANJING);
+    let inner: AbortSignal | undefined;
+    model.operation.addEventListener('abort', () => (inner = model.beginOperation()), { once: true });
+
+    const outer = model.beginOperation();
+
+    expect(outer.aborted).toBe(true);
+    expect(inner?.aborted).toBe(false);
+    expect(model.operation).toBe(inner);
+    model.beginOperation();
+    expect(inner?.aborted).toBe(true);
+  });
+
   it('camera changes never start or abort an operation, whatever the cause', () => {
     using model = new CameraModel(NANJING);
     const operation = model.beginOperation();

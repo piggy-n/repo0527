@@ -8,14 +8,20 @@ export class LatestController implements Disposable {
     return this.#controller.signal;
   }
 
-  /** 中止当前这一次并开始新的一次，返回新的信号；reason 是上一次的中止原因，不传时为 AbortError。释放后调用抛错 */
+  /**
+   * 中止当前这一次并开始新的一次，返回新的信号；reason 是上一次的中止原因，不传时为 AbortError。释放后调用抛错。
+   * 取消回调同步执行，可能再次 next 或释放：返回的信号这时已经中止，最新的一次以回调里开始的为准
+   */
   next(reason?: unknown): AbortSignal {
     if (this.#disposed) {
       throw new Error('LatestController 已释放');
     }
-    this.#controller.abort(reason);
-    this.#controller = new AbortController();
-    return this.#controller.signal;
+    // 先登记新的再中止旧的：回调里读到的、再次开始或释放的，都是这一次的新控制器
+    const previous = this.#controller;
+    const current = new AbortController();
+    this.#controller = current;
+    previous.abort(reason);
+    return current.signal;
   }
 
   /** 中止当前这一次，不开始新的；已经中止时什么也不做 */
