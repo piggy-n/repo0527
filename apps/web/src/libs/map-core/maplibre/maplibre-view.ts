@@ -14,6 +14,7 @@ import type {
   MapView,
   MapViewFailure,
   ViewBounds,
+  ViewPadding,
   ViewState
 } from '../view/map-view';
 import type { LngLat, MapInputEvent, MapPointerEvent, PickResult, ScreenPoint } from '../view/view-input';
@@ -97,6 +98,15 @@ function causeOfMove({ originalEvent, cause }: MapMoveEventLike): CameraCause {
 // MapLibre 合并默认选项时，值为 undefined 的键会覆盖默认值（例如 fitBounds 的 maxZoom 变成 undefined，中心点算出 NaN）
 function withoutUndefined<T extends object>(options: T): T {
   return Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined)) as T;
+}
+
+// 去掉四边留白后的区域中心相对画布中心的偏移：左边留得多就往右移，上边留得多就往下移
+function centerOffset(padding: ViewPadding): [number, number] {
+  if (typeof padding === 'number') {
+    return [0, 0];
+  }
+  const { top, right, bottom, left } = padding;
+  return [(left - right) / 2, (top - bottom) / 2];
 }
 
 // 地图的鼠标事件对应的工具输入（ADR 0034 第 1 条）
@@ -248,11 +258,14 @@ export class MapLibreView<const G extends string> implements MapView {
     }
   }
 
-  flyTo({ center, zoom, bearing, pitch }: Partial<CameraState>, { duration }: FlyToOptions = {}): void {
+  flyTo({ center, zoom, bearing, pitch }: Partial<CameraState>, { duration, padding }: FlyToOptions = {}): void {
     const map = this.#readyMap();
-    map.flyTo(withoutUndefined({ center: center && [center[0], center[1]], zoom, bearing, pitch, duration }), {
-      cause: 'program'
-    });
+    // MapLibre 的 padding 会留在地图上，改变"会话相机的中心就是画布中心"；换成只对这一次有效的 offset（ADR 0037）
+    const offset = center && padding !== undefined ? centerOffset(padding) : undefined;
+    map.flyTo(
+      withoutUndefined({ center: center && [center[0], center[1]], zoom, bearing, pitch, duration, offset }),
+      { cause: 'program' }
+    );
   }
 
   fitBounds(

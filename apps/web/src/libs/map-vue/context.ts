@@ -28,6 +28,7 @@ import { computeOverlayPadding, type OverlayEdge, type OverlayOptions, type Over
 /** 视图的受限入口：只转发定位等使用方需要的能力，暂停、恢复、释放由 map-vue 自己负责（ADR 0028 第 5 条） */
 export interface MapViewport {
   readonly kind: ViewKind;
+  /** 有中心时放在避开悬浮元素后的区域中央；没传 padding 时自动避开（ADR 0029、0037），明确传入时以传入的为准 */
   flyTo(target: Partial<CameraState>, options?: FlyToOptions): void;
   /** 没传 padding 时避开登记过的悬浮元素（ADR 0029）；明确传入（包括 0）时以传入的为准 */
   fitBounds(bounds: ViewBounds, options?: FitBoundsOptions): void;
@@ -82,7 +83,8 @@ interface OverlayEntry {
 function createViewport(view: MapView, overlayPadding: () => OverlayPadding): MapViewport {
   return Object.freeze({
     kind: view.kind,
-    flyTo: (target: Partial<CameraState>, options?: FlyToOptions) => view.flyTo(target, options),
+    flyTo: (target: Partial<CameraState>, options?: FlyToOptions) =>
+      view.flyTo(target, { ...options, padding: options?.padding ?? overlayPadding() }),
     fitBounds: (bounds: ViewBounds, options?: FitBoundsOptions) =>
       view.fitBounds(bounds, { ...options, padding: options?.padding ?? overlayPadding() }),
     pick: (point: ScreenPoint) => view.pick(point),

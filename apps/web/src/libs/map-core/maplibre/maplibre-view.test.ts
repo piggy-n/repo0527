@@ -1176,6 +1176,25 @@ describe('MapLibreView', () => {
       expect(ctx.session.camera.intentRevision).toBe(2);
     });
 
+    it('turns flyTo padding into a one-off offset, and only when there is a center', () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      const before = ctx.map.calls.length;
+
+      ctx.view.flyTo({ center: [120, 31], zoom: 14 }, { padding: { top: 16, right: 400, bottom: 16, left: 16 } });
+      ctx.view.flyTo({ center: [120, 31] }, { padding: { top: 100, right: 16, bottom: 20, left: 16 } });
+      ctx.view.flyTo({ center: [120, 31] }, { padding: 16 });
+      ctx.view.flyTo({ zoom: 12 }, { padding: { top: 16, right: 400, bottom: 16, left: 16 } });
+
+      // 偏移是去掉留白后的区域中心相对画布中心：右边留得多往左，上边留得多往下；没有中心时偏移会把地图平移走，不加
+      expect(ctx.map.calls.slice(before)).toStrictEqual([
+        ['flyTo', { center: [120, 31], zoom: 14, offset: [-192, 0] }, { cause: 'program' }],
+        ['flyTo', { center: [120, 31], offset: [0, 40] }, { cause: 'program' }],
+        ['flyTo', { center: [120, 31], offset: [0, 0] }, { cause: 'program' }],
+        ['flyTo', { zoom: 12 }, { cause: 'program' }]
+      ]);
+    });
+
     it('refuses to locate unless ready', () => {
       using ctx = setup();
 

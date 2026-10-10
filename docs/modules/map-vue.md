@@ -157,9 +157,8 @@ const padding = useMap().overlayPadding();
 - 每一边的 padding 取 `max(边距, 占用 + 间隔)`；同一边取最大的占用；元素为空、尺寸为 0、不在文档里、和画布不相交时不算
 - 可视区域的宽、高至少保留画布的 1/3，超出时两侧按比例缩小。极窄的画布上目标可能有一部分落在面板下面，这是为了不缩到几乎看不见
 - 默认值：边距 16、间隔 16、至少保留 1/3，用 `provideMap({ overlay: { edgePadding, gap, minVisibleRatio } })` 修改，取值不合法时抛错
-- 视图入口的 `fitBounds` 没传 `padding` 时使用 `overlayPadding()`；明确传入（包括 `0`）时以传入的为准。这是 `MapViewport` 比 `MapView.fitBounds` 多出的一层默认行为
+- 视图入口的 `fitBounds`、`flyTo` 没传 `padding` 时使用 `overlayPadding()`；明确传入（包括 `0`）时以传入的为准。这是 `MapViewport` 比 `MapView` 多出的一层默认行为。`flyTo` 只在给了中心时把它放在避开悬浮元素后的区域中央（5B.6，ADR 0037）
 - `useMapOverlay` 要放在 `provideMap` 所在组件的子孙组件里：提供上下文的组件 `inject` 不到自己 provide 的值（Vue 的 `inject` 从父组件开始找）；不在作用域里调用时抛错，作用域销毁时注销
-- 还没做：`flyTo` 到一个点并放在可视区域中心（5B.5，要给 `MapView.flyTo` 加用 `offset` 实现的 padding）
 
 ## 错误上报
 

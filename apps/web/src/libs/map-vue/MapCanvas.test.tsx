@@ -449,7 +449,7 @@ describe('MapCanvas', () => {
     expect(maps.map(map => map.removed)).toEqual([false, true]);
   });
 
-  it('悬浮元素登记后，视图入口的 fitBounds 避开它；元素卸载后不再避开', async () => {
+  it('悬浮元素登记后，视图入口的 fitBounds、flyTo 避开它；明确传入时以传入的为准；元素卸载后不再避开', async () => {
     const showPanel = ref(true);
     const Panel = defineComponent(() => {
       const element = ref<HTMLElement>();
@@ -490,12 +490,19 @@ describe('MapCanvas', () => {
       handle.view.value?.fitBounds(JIANGSU);
       expect(map.fitBoundsCalls.at(-1)).toEqual({ padding: { top: 16, right: 16, bottom: 16, left: 352 } });
       expect(handle.overlayPadding().left).toBe(352);
+      // 左边留 352、右边 16：目标放在画布中心往右 168 的地方
+      handle.view.value?.flyTo({ center: [120.6, 31.3] });
+      expect(map.flyToCalls.at(-1)).toEqual({ center: [120.6, 31.3], offset: [168, 0] });
+      handle.view.value?.flyTo({ center: [120.6, 31.3] }, { padding: 0 });
+      expect(map.flyToCalls.at(-1)).toEqual({ center: [120.6, 31.3], offset: [0, 0] });
 
       showPanel.value = false;
       await nextTick();
       handle.view.value?.fitBounds(JIANGSU);
+      handle.view.value?.flyTo({ center: [120.6, 31.3] });
 
       expect(map.fitBoundsCalls.at(-1)).toEqual({ padding: { top: 16, right: 16, bottom: 16, left: 16 } });
+      expect(map.flyToCalls.at(-1)).toEqual({ center: [120.6, 31.3], offset: [0, 0] });
     } finally {
       host.remove();
     }

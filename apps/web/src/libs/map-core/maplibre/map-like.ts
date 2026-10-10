@@ -53,7 +53,14 @@ export interface MapLike extends StyleTarget {
     eventData: CameraEventData
   ): void;
   flyTo(
-    camera: { center?: [number, number]; zoom?: number; bearing?: number; pitch?: number; duration?: number },
+    camera: {
+      center?: [number, number];
+      zoom?: number;
+      bearing?: number;
+      pitch?: number;
+      duration?: number;
+      offset?: [number, number];
+    },
     eventData: CameraEventData
   ): void;
   fitBounds(

@@ -23,6 +23,8 @@ export type ViewPadding =
 
 export interface FlyToOptions {
   readonly duration?: number;
+  /** 把目标中心放在去掉四边留白后的区域中央，只用于这一次定位，不留在相机上；没给中心时不起作用 */
+  readonly padding?: ViewPadding;
 }
 
 export interface FitBoundsOptions {

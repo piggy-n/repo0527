@@ -182,6 +182,7 @@ store.clear();
 - 暂停期间不写回、不跟随；不订阅会话的相机变化（相机由当前显示的视图驱动）
 - `flyTo`、`fitBounds` 只在 `ready` 时可用，否则抛错：定位应由当前显示的视图发起，调用方先等 `whenReady()`
 - 从不保留 padding（`fitBounds` 不设 `absolutePadding`），所以 `getCenter()` 就是画布几何中心，会话相机里没有 padding
+- `flyTo` 的 `padding`（5B.6 加入，ADR 0037）：MapLibre 的 `flyTo` 收到 `padding` 会把它留在地图上，所以换成只对这一次有效的 `offset`，取去掉四边留白后的区域中心相对画布中心的偏移（`[(左 - 右) / 2, (上 - 下) / 2]`）；没给中心时不加，否则地图会被平移走
 
 **生命周期**：
 
