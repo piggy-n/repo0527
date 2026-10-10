@@ -28,6 +28,8 @@
 | `region/data/jiangsu-regions.json` | 区划目录：13 个市及各自的区县（见"区划目录的数据"） |
 | `region/region-catalog.ts` | 区划目录的查询：市的列表、某个市的区县、按代码查找、路径、搜索（纯函数，ADR 0036） |
 | `region/region-geometry.ts` | 从市界、县界文件取区划的边界：按代码查找、合并多个要素、外包范围；文件只下载、解析一次 |
+| `region/region-style.ts` | `region` 分组的推导：选中区划的高亮（纯函数） |
+| `region/useRegionLocate.ts` | 区划定位的拥有者：选择、加载边界、定位、回到全省；面板点击的规则 `nextRegionSelection` |
 
 ## 江苏的范围与默认视角（ADR 0033）
 
@@ -235,9 +237,27 @@ map.bindStyle({ measure: measure.deriveGroup });
 ## 区划定位（ADR 0036）
 
 ```ts
+// 页面 setup：在 useDefaultView 之后创建，回到全省时用它回到默认视角；region 分组叠在边界之上、测量之下
+const { goToDefaultView } = useDefaultView(map);
+const region = useRegionLocate(map, { goToDefaultView });
+map.bindStyle({ region: region.deriveGroup });
+
+region.select('320213');   // 梁溪区：加载边界、高亮，视图就绪后定位
+region.select(null);       // 回到全省：清掉高亮，回到默认视角
+```
+
+- 状态是 `{ selected, boundary }`：`selected` 为 `null` 是全省；`boundary` 是 `none`（全省）、`loading`、`ready`（带边界）或 `failed`（带原因，`retry()` 重新加载）。只有 `ready` 时有高亮，加载中不显示上一个区划的高亮
+- 每次选择一个 `AbortController`：换选、回到全省、作用域销毁时中止，晚到的结果（成功或失败）都不写入。边界到位后用 `whenReady(signal)` 等视图就绪再定位：`fitBounds(范围, { duration: 1100, maxZoom: 14.5, pitch: 0 })`，四边留白由登记的悬浮元素决定（ADR 0029）。等待失败（视图被替换、失败或选择已过期）时不定位，高亮照常
+- 再选当前的区划什么也不做；不认识的代码抛错。从市或区县回到全省时调用页面传入的 `goToDefaultView`，本来就是全省时不调用
+- 面板上的点击由 `nextRegionSelection(selected, clicked)` 换成 `select` 的参数：点别的区划选它，再点已选中的市回到全省，再点已选中的区县回到所在的市（同旧项目）
+- 没有注入加载器时用整个应用共享的一个，市界、县界在应用里只下载、解析一次
+- `region` 分组是红色光晕（宽 8、模糊 5、不透明度 0.8）在下、实线（宽 2、不透明度 0.9）在上，沿用旧项目
+
+区划目录与边界的加载：
+
+```ts
 const loader = createRegionBoundaryLoader();     // 默认用 fetch；测试注入读取函数
-const region = findRegion('320213');             // 梁溪区
-const { geometry, bounds } = await loader.load(region);  // 县界里的要素，Polygon 或 MultiPolygon，范围用于定位
+const { geometry, bounds } = await loader.load(findRegion('320213'));  // 县界里的要素，Polygon 或 MultiPolygon
 ```
 
 - 区划目录是江苏的 13 个市、95 个区县，没有"全省"这一项：没有选择就是全省。`Region` 有代码（6 位）、名称、级别（`city` / `district`）和所在的市
@@ -296,6 +316,8 @@ const { geometry, bounds } = await loader.load(region);  // 县界里的要素�
 | `boundary/useBoundaries.test.ts` | 初始状态；开关某一级、透明度；值没变时不重新推导；不合法的透明度抛错；每次调用各有一份状态 | Node |
 | `region/region-catalog.test.ts` | 目录与市界、县界数据逐条对应；市、区县的数量与所在的市；旧项目写错代码的区县；查找、路径、简称；搜索的规则、顺序与条数 | Node |
 | `region/region-geometry.test.ts` | 代码换成 6 位；外包范围；市从市界、区县从县界取，Polygon 与 MultiPolygon；连云港合并；每个文件只读一次；失败不缓存；没有这个区划、结构不对时报错；默认的 fetch 与下载失败 | Node |
+| `region/region-style.test.ts` | 没有边界时是空分组；数据源与两个图层；ID 前缀与组合后的校验；每次推导的数据都是新对象 | Node |
+| `region/useRegionLocate.test.ts` | 开始时是全省；加载中、到位后的状态与高亮，等视图就绪后定位一次；换选、回到全省后晚到的成功和失败都不写入；回到默认视角；选同一个、不认识的代码；失败与重试；等待就绪与等待失败；作用域销毁；共享的加载器；面板点击的规则（用假的上下文和手动放行的加载器） | Node |
 | `apps/web/tools/boundaries/boundaries.test.ts` | 边界数据的转换：文件对应关系、坐标取整与去掉高程、只留名称和代码、去掉 `crs`、原始结构不符合或没有要素时报错 | Node |
 | `basemap/basemap-style.test.ts` | 可选的底图与初始状态；每种底图的组成、瓦片地址、缩放范围与透明度；ID 的分组前缀与组合后的校验；改透明度只产生 `setPaintProperty`；切换底图时背景不动；关闭天地图时任何选择都没有天地图 | Node |
 
@@ -311,3 +333,4 @@ const { geometry, bounds } = await loader.load(region);  // 县界里的要素�
 - 测量的推导逐一改坏 13 处、标签 22 处、拥有者 10 处。标签里只有"叉积符号反了"测不出来，它是等价改动：面积和加权和同时变号，比值不变（顺时针、逆时针画的形心相同）。图层的 `filter` 拼错时地图上只是什么都不画，为此用 style-spec 的 `featureFilter` 求值检查；起初只按 `status` 求值，没带几何类型，浏览器里才发现折线下面被填充，改成按每个要素的真实几何类型求值，先复现再修；"测面工具其实是测距"起初没被发现，补了用测面工具加点后检查草稿的类型。其余全部由断言发现
 - 测量的浮层逐一改坏 8 处、页面的接线 6 处、工具栏的表 1 处，填充改为只给面之后的 `filter` 7 处。浮层里"提示不看当前工具"起初没被发现（只用测距时测不出），补了换成测面后的提示；画布重建的用例起初没先确认画出了标签，"不登记测量工具"时它比较的是两个空结果，补了前提断言；"投影为 null 时也显示"测不出来，二维的 `project` 不会返回 null，这个判断是给三维（点在地球背面）准备的。其余全部由断言发现
 - 区划目录逐一改坏 10 处、边界的加载 13 处。起初有 2 处没被发现："区县排在所有市后面"（搜索的用例只匹配到一个市，补了"州"的结果顺序）、"简称去掉所有的市"（江苏没有名称中间带"市"的区划，补了"市中区"）；"区县也从市界取"起初是代码自己抛错，改成用 `resolves` 断言后由断言发现
+- 区划定位的拥有者逐一改坏 20 处、高亮的推导 8 处。起初"加载失败时不看是否中止"没被发现（只测了晚到的成功），补了换选、回到全省后晚到的失败；另有 3 处是改坏的写法本身有误（行尾符不匹配、语法错误、实际没改变行为），重写后全部由断言发现
