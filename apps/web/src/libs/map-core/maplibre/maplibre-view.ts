@@ -7,6 +7,7 @@ import type { Unsubscribe } from '../events';
 import type { MapSession } from '../session/map-session';
 import { diffStyle, type StyleCommand } from '../style/diff-style';
 import type { StyleChange } from '../style/style-model';
+import type { Gestures, ToolView } from '../tool/tool-model';
 import type {
   FitBoundsOptions,
   FlyToOptions,
@@ -15,8 +16,9 @@ import type {
   ViewBounds,
   ViewState
 } from '../view/map-view';
+import type { LngLat, MapInputEvent, MapPointerEvent, PickResult, ScreenPoint } from '../view/view-input';
 import { applyStyleCommand } from './apply-style-command';
-import type { MapLibreMapOptions, MapLike, MapMoveEventLike } from './map-like';
+import type { MapLibreMapOptions, MapLike, MapMouseEventLike, MapMouseEventType, MapMoveEventLike } from './map-like';
 
 export interface MapLibreViewOptions<G extends string> {
   readonly session: MapSession<G>;
@@ -97,6 +99,32 @@ function withoutUndefined<T extends object>(options: T): T {
   return Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined)) as T;
 }
 
+// 地图的鼠标事件对应的工具输入（ADR 0034 第 1 条）
+const POINTER_TYPES: Readonly<Record<MapMouseEventType, MapPointerEvent['type']>> = {
+  mousedown: 'down',
+  mousemove: 'move',
+  mouseup: 'up',
+  click: 'click',
+  dblclick: 'dblclick',
+  mouseout: 'leave'
+};
+
+const GESTURES: readonly (keyof Gestures)[] = ['dragPan', 'doubleClickZoom', 'boxZoom'];
+
+function toPointerEvent(type: MapMouseEventType, { point, originalEvent }: MapMouseEventLike): MapPointerEvent {
+  return {
+    type: POINTER_TYPES[type],
+    point: { x: point.x, y: point.y },
+    button: originalEvent.button,
+    modifiers: {
+      shift: originalEvent.shiftKey,
+      ctrl: originalEvent.ctrlKey,
+      alt: originalEvent.altKey,
+      meta: originalEvent.metaKey
+    }
+  };
+}
+
 function createMapLibreMap(options: MapLibreMapOptions): MapLike {
   return new MapLibreMap(options);
 }
@@ -124,6 +152,14 @@ export class MapLibreView<const G extends string> implements MapView {
   // 应用增量命令期间同步收到的 error 事件：MapLibre 的很多方法校验失败时不抛错，只发事件
   #applying = false;
   #rejected = false;
+  // 当前工具让视图关掉的手势；切换工具时只恢复这些，页面创建地图时就关掉的不会被打开
+  readonly #disabledGestures = new Set<keyof Gestures>();
+  // 交给工具的视图能力：只有拾取和投影（ADR 0034 第 2 条）
+  readonly #toolView: ToolView = Object.freeze({
+    kind: '2d',
+    pick: (point: ScreenPoint) => this.pick(point),
+    project: (lngLat: LngLat) => this.project(lngLat)
+  });
 
   constructor({
     session,
@@ -168,7 +204,17 @@ export class MapLibreView<const G extends string> implements MapView {
     ]) {
       stack.defer(() => subscription.unsubscribe());
     }
+    for (const type of Object.keys(POINTER_TYPES) as MapMouseEventType[]) {
+      const subscription = map.on(type, event => this.#guard(() => this.#onInput(toPointerEvent(type, event))));
+      stack.defer(() => subscription.unsubscribe());
+    }
+    // 按键只在地图获得焦点时收到，不影响页面上其他输入框
+    const canvasContainer = map.getCanvasContainer();
+    const onKeyDown = ({ key }: KeyboardEvent) => this.#guard(() => this.#onInput({ type: 'key', key }));
+    canvasContainer.addEventListener('keydown', onKeyDown);
+    stack.defer(() => canvasContainer.removeEventListener('keydown', onKeyDown));
     stack.defer(session.style.on('change', change => this.#onStyleChange(change)));
+    stack.defer(session.tool.on('change', () => this.#guard(() => this.#onToolChange())));
     this.#stack = stack.move();
   }
 
@@ -213,6 +259,18 @@ export class MapLibreView<const G extends string> implements MapView {
     map.fitBounds([west, south, east, north], withoutUndefined({ padding, maxZoom, duration, pitch }), {
       cause: 'program'
     });
+  }
+
+  /** 二维总是命中地图平面，没有高度 */
+  pick({ x, y }: ScreenPoint): PickResult {
+    const { lng, lat } = this.#readyMap().unproject([x, y]);
+    return { kind: 'hit', surface: 'map', lngLat: [lng, lat] };
+  }
+
+  /** 二维忽略高度；结果可能在画布之外 */
+  project([lng, lat]: LngLat): ScreenPoint {
+    const { x, y } = this.#readyMap().project([lng, lat]);
+    return { x, y };
   }
 
   on<E extends keyof MapLibreViewEvents>(event: E, callback: MapLibreViewEvents[E]): Unsubscribe {
@@ -293,6 +351,7 @@ export class MapLibreView<const G extends string> implements MapView {
     // 此时还不是 ready，jumpTo 触发的 move 不会写回；地图收敛过的实际值（如俯角上限）下面按 sync 写回，不算意图
     map.jumpTo({ center: [lng, lat], zoom, bearing, pitch }, { cause: 'sync' });
     this.#writeCamera(map, 'sync');
+    this.#applyTool(map);
     this.#enter('ready');
   }
 
@@ -400,9 +459,40 @@ export class MapLibreView<const G extends string> implements MapView {
   #readyMap(): MapLike {
     this.#assertAlive();
     if (this.#state !== 'ready' || this.#map === undefined) {
-      throw new Error(`MapLibreView 当前状态为 ${this.#state}，不能定位`);
+      throw new Error(`MapLibreView 当前状态为 ${this.#state}，只能在 ready 时定位、拾取和投影`);
     }
     return this.#map;
+  }
+
+  // 只有就绪且没有暂停的视图把输入交给工具：二三维切换时只有当前显示的视图在转交（ADR 0034 第 3 条）
+  #onInput(event: MapInputEvent): void {
+    if (this.#state === 'ready') {
+      this.#session.tool.dispatch(event, this.#toolView);
+    }
+  }
+
+  // 没有就绪时不应用，进入 ready（首次激活、恢复显示）时再按当前工具应用
+  #onToolChange(): void {
+    if (this.#state === 'ready' && this.#map !== undefined) {
+      this.#applyTool(this.#map);
+    }
+  }
+
+  // 光标和手势是当前工具的声明；只恢复自己关掉的手势
+  #applyTool(map: MapLike): void {
+    const { cursor, gestures } = this.#session.tool.activeTool;
+    map.getCanvas().style.cursor = cursor ?? '';
+    for (const name of GESTURES) {
+      const handler = map[name];
+      if (gestures?.[name] === false) {
+        if (handler.isEnabled()) {
+          handler.disable();
+          this.#disabledGestures.add(name);
+        }
+      } else if (this.#disabledGestures.delete(name)) {
+        handler.enable();
+      }
+    }
   }
 
   #fail(error: unknown): void {

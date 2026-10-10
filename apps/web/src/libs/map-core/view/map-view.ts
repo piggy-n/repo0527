@@ -1,5 +1,6 @@
 import type { CameraState, ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
+import type { LngLat, PickResult, ScreenPoint } from './view-input';
 
 /** 视图的生命周期（ADR 0022 第 5 条、ADR 0026）；还没创建时没有视图对象，即文档里的 idle；样式加载失败的 failed 在样式出现新版本时自动恢复 */
 export type ViewState = 'initializing' | 'ready' | 'paused' | 'failed' | 'disposed';
@@ -32,7 +33,7 @@ export interface FitBoundsOptions {
   readonly pitch?: number;
 }
 
-/** 二三维共用的视图接口：生命周期与程序定位（ADR 0024）；输入、拾取、投影在做交互工具时加入 */
+/** 二三维共用的视图接口：生命周期、程序定位、拾取与投影（ADR 0024）；输入由视图交给会话的工具模型（ADR 0034） */
 export interface MapView extends Disposable {
   readonly kind: ViewKind;
   readonly state: ViewState;
@@ -48,6 +49,10 @@ export interface MapView extends Disposable {
   /** 只在 ready 时可用：定位应由当前显示的视图发起 */
   flyTo(target: Partial<CameraState>, options?: FlyToOptions): void;
   fitBounds(bounds: ViewBounds, options?: FitBoundsOptions): void;
+  /** 只在 ready 时可用：屏幕上的点打到哪个表面的哪个位置（ADR 0024 第 2 条） */
+  pick(point: ScreenPoint): PickResult;
+  /** 只在 ready 时可用：经纬度在屏幕上的位置；三维中点在相机背后时为 null（ADR 0024 第 7 条） */
+  project(lngLat: LngLat, height?: number): ScreenPoint | null;
   /** 状态或失败原因变化时触发 */
   on(event: 'statechange', callback: (state: ViewState) => void): Unsubscribe;
 }

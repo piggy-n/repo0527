@@ -1,8 +1,11 @@
 import type {
   CameraEventData,
   CameraState,
+  GestureHandlerLike,
   MapLibreMapOptions,
   MapLike,
+  MapMouseEventLike,
+  MapMouseEventType,
   MapMoveEventLike,
   MapSession,
   MapSubscription,
@@ -32,6 +35,16 @@ interface FakeEvent {
 }
 
 // 只模拟视图用到的行为：相机方法立即到位并同步触发 move；像 MapLibre 一样给容器加 class
+// 手势开关只需要满足类型，这里的测试不关心它们
+function fakeGesture(): GestureHandlerLike {
+  let enabled = true;
+  return {
+    isEnabled: () => enabled,
+    enable: () => void (enabled = true),
+    disable: () => void (enabled = false)
+  };
+}
+
 class FakeMap implements MapLike {
   readonly flyToCalls: unknown[] = [];
   readonly fitBoundsCalls: unknown[] = [];
@@ -62,6 +75,7 @@ class FakeMap implements MapLike {
   on(type: 'style.load', listener: () => void): MapSubscription;
   on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
   on(type: string, listener: (event: never) => void): MapSubscription {
     const callback = listener as (event: FakeEvent) => void;
     const listeners = this.#listeners.get(type) ?? new Set();
@@ -102,6 +116,25 @@ class FakeMap implements MapLike {
     const [west, south, east, north] = bounds;
     this.moveTo([(west + east) / 2, (south + north) / 2], this.camera.zoom, eventData);
   }
+
+  // 拾取、投影用固定换算：画布左上角 (0, 0) 是 (118, 33)，每 100 像素 1 度
+  unproject([x, y]: [number, number]) {
+    return { lng: 118 + x / 100, lat: 33 - y / 100 };
+  }
+  project([lng, lat]: [number, number]) {
+    return { x: (lng - 118) * 100, y: (33 - lat) * 100 };
+  }
+  readonly canvas = document.createElement('canvas');
+  getCanvas(): HTMLCanvasElement {
+    return this.canvas;
+  }
+  readonly canvasContainer = document.createElement('div');
+  getCanvasContainer(): HTMLElement {
+    return this.canvasContainer;
+  }
+  readonly dragPan = fakeGesture();
+  readonly doubleClickZoom = fakeGesture();
+  readonly boxZoom = fakeGesture();
 
   remove(): void {
     this.onRemove?.();

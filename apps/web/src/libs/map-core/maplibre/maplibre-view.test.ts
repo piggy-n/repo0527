@@ -4,8 +4,19 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
 import { MapSession } from '../session/map-session';
 import { type StyleGroup, StyleModel } from '../style/style-model';
+import type { MapTool, ToolView } from '../tool/tool-model';
 import type { ViewState } from '../view/map-view';
-import type { CameraEventData, MapLibreMapOptions, MapLike, MapMoveEventLike, MapSubscription } from './map-like';
+import type { MapInputEvent } from '../view/view-input';
+import type {
+  CameraEventData,
+  GestureHandlerLike,
+  MapLibreMapOptions,
+  MapLike,
+  MapMouseEventLike,
+  MapMouseEventType,
+  MapMoveEventLike,
+  MapSubscription
+} from './map-like';
 import { MapLibreView, type MapLibreViewOptions } from './maplibre-view';
 
 const NANJING: CameraState = { center: [118.8, 32.05], zoom: 8, bearing: 0, pitch: 0 };
@@ -22,6 +33,27 @@ interface FakeEvent {
   readonly error?: Error;
   readonly originalEvent?: unknown;
   readonly cause?: unknown;
+  readonly point?: { readonly x: number; readonly y: number };
+}
+
+// 手势的开关，记下 enable、disable 的调用
+class FakeGesture implements GestureHandlerLike {
+  readonly calls: string[] = [];
+  enabled = true;
+
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  enable(): void {
+    this.enabled = true;
+    this.calls.push('enable');
+  }
+
+  disable(): void {
+    this.enabled = false;
+    this.calls.push('disable');
+  }
 }
 
 interface FakeCamera {
@@ -45,6 +77,11 @@ class FakeMap implements MapLike {
   // 像 MapLibre 的校验失败一样：同步触发 error 事件，不抛错，也不生效
   rejectOn: string | undefined;
   removed = false;
+  readonly canvas = document.createElement('canvas');
+  readonly canvasContainer = document.createElement('div');
+  readonly dragPan = new FakeGesture();
+  readonly doubleClickZoom = new FakeGesture();
+  readonly boxZoom = new FakeGesture();
 
   constructor(readonly options: MapLibreMapOptions) {
     const [lng, lat] = options.center as [number, number];
@@ -75,8 +112,9 @@ class FakeMap implements MapLike {
   on(type: 'style.load', listener: () => void): MapSubscription;
   on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
   on(type: string, listener: (event: never) => void): MapSubscription {
-    // 三个重载的回调都能接收 FakeEvent 中各自需要的字段
+    // 各个重载的回调都能接收 FakeEvent 中各自需要的字段
     const callback = listener as (event: FakeEvent) => void;
     const listeners = this.#listeners.get(type) ?? new Set();
     this.#listeners.set(type, listeners.add(callback));
@@ -137,9 +175,31 @@ class FakeMap implements MapLike {
     );
   }
 
+  // 屏幕坐标与经纬度的固定换算：画布左上角 (0, 0) 是 (118, 33)，每 100 像素 1 度，向下纬度减小
+  unproject([x, y]: [number, number]) {
+    return { lng: 118 + x / 100, lat: 33 - y / 100 };
+  }
+
+  project([lng, lat]: [number, number]) {
+    return { x: (lng - 118) * 100, y: (33 - lat) * 100 };
+  }
+
+  getCanvas(): HTMLCanvasElement {
+    return this.canvas;
+  }
+
+  getCanvasContainer(): HTMLElement {
+    return this.canvasContainer;
+  }
+
   remove(): void {
     this.removed = true;
     this.calls.push(['remove']);
+  }
+
+  /** 模拟鼠标事件：MapLibre 的事件带画布上的点和原始的 DOM 事件 */
+  mouse(type: MapMouseEventType, x: number, y: number, init: MouseEventInit = {}): void {
+    this.fire(type, { point: { x, y }, originalEvent: new MouseEvent(type, init) });
   }
 
   /** 模拟用户拖动：带原始的 DOM 事件 */
@@ -168,6 +228,21 @@ class FakeMap implements MapLike {
       this.calls.push([name, ...args]);
     };
   }
+}
+
+// 记下收到的输入和视图的工具
+function recordingTool(options: Partial<MapTool> = {}) {
+  const inputs: MapInputEvent[] = [];
+  const views: ToolView[] = [];
+  const tool: MapTool = {
+    persistent: false,
+    handleInput: (event, view) => {
+      inputs.push(event);
+      views.push(view);
+    },
+    ...options
+  };
+  return { tool, inputs, views };
 }
 
 type Groups = 'basemap' | 'business';
@@ -1108,6 +1183,190 @@ describe('MapLibreView', () => {
       ctx.map.fire('style.load');
       ctx.view.pause();
       expect(() => ctx.view.fitBounds([118, 31, 120, 33])).toThrow('当前状态为 paused');
+    });
+  });
+  describe('tools and input', () => {
+    const NO_MODIFIERS = { shift: false, ctrl: false, alt: false, meta: false };
+
+    it('picks the map plane and projects back to the screen once ready', () => {
+      using ctx = setup();
+      expect(() => ctx.view.pick({ x: 100, y: 200 })).toThrow('只能在 ready 时定位、拾取和投影');
+
+      ctx.map.fire('style.load');
+
+      expect(ctx.view.pick({ x: 100, y: 200 })).toStrictEqual({ kind: 'hit', surface: 'map', lngLat: [119, 31] });
+      expect(ctx.view.project([119, 31])).toStrictEqual({ x: 100, y: 200 });
+      ctx.view.pause();
+      expect(() => ctx.view.project([119, 31])).toThrow('当前状态为 paused');
+    });
+
+    it('turns map mouse events into input for the active tool', () => {
+      using ctx = setup();
+      const { tool, inputs } = recordingTool();
+      ctx.session.tool.register('probe', tool);
+      ctx.session.tool.activate('probe');
+      ctx.map.fire('style.load');
+
+      ctx.map.mouse('mousedown', 10, 20, { button: 2, shiftKey: true, metaKey: true });
+      for (const type of ['mousemove', 'mouseup', 'click', 'dblclick', 'mouseout'] as const) {
+        ctx.map.mouse(type, 30, 40, { ctrlKey: true, altKey: true });
+      }
+
+      expect(inputs).toStrictEqual([
+        { type: 'down', point: { x: 10, y: 20 }, button: 2, modifiers: { ...NO_MODIFIERS, shift: true, meta: true } },
+        ...(['move', 'up', 'click', 'dblclick', 'leave'] as const).map(type => ({
+          type,
+          point: { x: 30, y: 40 },
+          button: 0,
+          modifiers: { ...NO_MODIFIERS, ctrl: true, alt: true }
+        }))
+      ]);
+    });
+
+    it('gives tools only the kind, pick and project of the view', () => {
+      using ctx = setup();
+      const { tool, views } = recordingTool();
+      ctx.session.tool.register('probe', tool);
+      ctx.session.tool.activate('probe');
+      ctx.map.fire('style.load');
+
+      ctx.map.mouse('click', 100, 200);
+      const [view] = views;
+
+      expect(Object.keys(view ?? {})).toStrictEqual(['kind', 'pick', 'project']);
+      expect(Object.isFrozen(view)).toBe(true);
+      expect(view?.kind).toBe('2d');
+      expect(view?.pick({ x: 100, y: 200 })).toStrictEqual({ kind: 'hit', surface: 'map', lngLat: [119, 31] });
+      expect(view?.project([119, 31])).toStrictEqual({ x: 100, y: 200 });
+    });
+
+    it('passes keys pressed on the focused map; Escape ends a temporary tool', () => {
+      using ctx = setup();
+      const { tool, inputs } = recordingTool();
+      ctx.session.tool.register('probe', tool);
+      ctx.session.tool.activate('probe');
+      ctx.map.fire('style.load');
+
+      ctx.map.canvasContainer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+      expect(inputs).toStrictEqual([{ type: 'key', key: 'Escape' }]);
+      expect(ctx.session.tool.active).toBe('browse');
+    });
+
+    it('passes no input before it is ready or while paused', () => {
+      using ctx = setup();
+      const { tool, inputs } = recordingTool();
+      ctx.session.tool.register('probe', tool);
+      ctx.session.tool.activate('probe');
+
+      ctx.map.mouse('click', 1, 1);
+      ctx.map.canvasContainer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      ctx.map.fire('style.load');
+      ctx.view.pause();
+      ctx.map.mouse('click', 2, 2);
+      ctx.view.resume();
+      ctx.map.mouse('click', 3, 3);
+
+      expect(inputs.map(event => (event.type === 'key' ? event.key : event.point.x))).toStrictEqual([3]);
+      expect(ctx.session.tool.active).toBe('probe');
+    });
+
+    it('applies the cursor of the active tool and turns off the gestures it declares', () => {
+      using ctx = setup();
+      ctx.session.tool.register('measure', {
+        persistent: false,
+        cursor: 'crosshair',
+        gestures: { doubleClickZoom: false, boxZoom: false }
+      });
+      ctx.map.fire('style.load');
+
+      ctx.session.tool.activate('measure');
+
+      expect(ctx.map.canvas.style.cursor).toBe('crosshair');
+      expect([ctx.map.dragPan.enabled, ctx.map.doubleClickZoom.enabled, ctx.map.boxZoom.enabled]).toStrictEqual([
+        true,
+        false,
+        false
+      ]);
+
+      ctx.session.tool.release('measure');
+
+      expect(ctx.map.canvas.style.cursor).toBe('');
+      expect([ctx.map.dragPan.enabled, ctx.map.doubleClickZoom.enabled, ctx.map.boxZoom.enabled]).toStrictEqual([
+        true,
+        true,
+        true
+      ]);
+    });
+
+    it('only turns back on the gestures it turned off itself', () => {
+      using ctx = setup();
+      ctx.session.tool.register('draw', { persistent: false, gestures: { dragPan: false, doubleClickZoom: false } });
+      // 例如页面创建地图时就关掉了双击放大
+      ctx.map.doubleClickZoom.enabled = false;
+      ctx.map.fire('style.load');
+
+      ctx.session.tool.activate('draw');
+      ctx.session.tool.release('draw');
+
+      expect(ctx.map.dragPan.calls).toStrictEqual(['disable', 'enable']);
+      expect(ctx.map.doubleClickZoom.calls).toStrictEqual([]);
+      expect(ctx.map.doubleClickZoom.enabled).toBe(false);
+    });
+
+    it('applies the tool chosen before it was ready, and changes made while paused on resume', () => {
+      using ctx = setup();
+      ctx.session.tool.register('measure', { persistent: false, cursor: 'crosshair' });
+      ctx.session.tool.register('pick', { persistent: true, cursor: 'pointer' });
+      ctx.session.tool.activate('measure');
+      expect(ctx.map.canvas.style.cursor).toBe('');
+
+      ctx.map.fire('style.load');
+      expect(ctx.map.canvas.style.cursor).toBe('crosshair');
+
+      ctx.view.pause();
+      ctx.session.tool.activate('pick');
+      expect(ctx.map.canvas.style.cursor).toBe('crosshair');
+
+      ctx.view.resume();
+      expect(ctx.map.canvas.style.cursor).toBe('pointer');
+    });
+
+    it('reports errors thrown by a tool instead of throwing into MapLibre', () => {
+      using ctx = setup();
+      const failure = new Error('tool failed');
+      ctx.session.tool.register('broken', {
+        persistent: false,
+        handleInput: () => {
+          throw failure;
+        }
+      });
+      ctx.session.tool.activate('broken');
+      ctx.map.fire('style.load');
+
+      expect(() => ctx.map.mouse('click', 1, 1)).not.toThrow();
+      expect(ctx.errors).toStrictEqual([failure]);
+    });
+
+    it('stops passing input and applying tools after it is disposed', () => {
+      const ctx = setup();
+      const { tool, inputs } = recordingTool({ cursor: 'crosshair' });
+      ctx.session.tool.register('probe', tool);
+      ctx.map.fire('style.load');
+      const map = ctx.map;
+      // 释放后状态是 disposed，留着的按键监听也不会转交输入，只能直接确认它被移除了
+      const removeListener = vi.spyOn(map.canvasContainer, 'removeEventListener');
+
+      ctx.view[Symbol.dispose]();
+      expect(removeListener.mock.calls.map(([type]) => type)).toContain('keydown');
+      ctx.session.tool.activate('probe');
+      map.mouse('click', 1, 1);
+      map.canvasContainer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+      expect(inputs).toStrictEqual([]);
+      expect(map.canvas.style.cursor).toBe('');
+      expect(map.listenerCount()).toBe(0);
+      ctx[Symbol.dispose]();
     });
   });
 });

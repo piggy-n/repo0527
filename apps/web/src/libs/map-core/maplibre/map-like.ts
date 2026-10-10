@@ -17,6 +17,22 @@ export interface MapMoveEventLike {
   readonly cause?: unknown;
 }
 
+/** 转成工具输入的地图鼠标事件（ADR 0034 第 1 条）；mouseout 是指针离开画布 */
+export type MapMouseEventType = 'mousedown' | 'mousemove' | 'mouseup' | 'click' | 'dblclick' | 'mouseout';
+
+export interface MapMouseEventLike {
+  // 画布左上角为原点的 CSS 像素
+  readonly point: { readonly x: number; readonly y: number };
+  readonly originalEvent: MouseEvent;
+}
+
+/** 地图的一种手势（拖动平移、双击放大、Shift 框选放大）的开关 */
+export interface GestureHandlerLike {
+  isEnabled(): boolean;
+  enable(): void;
+  disable(): void;
+}
+
 export interface CameraEventData {
   readonly cause: CameraCause;
 }
@@ -27,6 +43,7 @@ export interface MapLike extends StyleTarget {
   on(type: 'style.load', listener: () => void): MapSubscription;
   on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
   getCenter(): { readonly lng: number; readonly lat: number };
   getZoom(): number;
   getBearing(): number;
@@ -44,5 +61,14 @@ export interface MapLike extends StyleTarget {
     options: { padding?: ViewPadding; maxZoom?: number; duration?: number },
     eventData: CameraEventData
   ): void;
+  unproject(point: [number, number]): { readonly lng: number; readonly lat: number };
+  project(lngLat: [number, number]): { readonly x: number; readonly y: number };
+  /** 光标写在画布上 */
+  getCanvas(): HTMLCanvasElement;
+  /** 地图获得焦点时的按键从这里监听 */
+  getCanvasContainer(): HTMLElement;
+  readonly dragPan: GestureHandlerLike;
+  readonly doubleClickZoom: GestureHandlerLike;
+  readonly boxZoom: GestureHandlerLike;
   remove(): void;
 }

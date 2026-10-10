@@ -8,8 +8,11 @@ export {
 export type { Unsubscribe } from './events';
 export type {
   CameraEventData,
+  GestureHandlerLike,
   MapLibreMapOptions,
   MapLike,
+  MapMouseEventLike,
+  MapMouseEventType,
   MapMoveEventLike,
   MapSubscription
 } from './maplibre/map-like';

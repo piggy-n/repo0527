@@ -4,6 +4,8 @@ import {
   type MapView,
   type MapViewFailure,
   MapSession,
+  type PickResult,
+  type ScreenPoint,
   type Unsubscribe,
   type ViewBounds,
   type ViewState
@@ -32,6 +34,12 @@ class FakeView implements MapView {
   flyTo(): void {}
   fitBounds(_bounds: ViewBounds, options?: FitBoundsOptions): void {
     this.fitBoundsCalls.push(options);
+  }
+  pick(): PickResult {
+    return { kind: 'miss' };
+  }
+  project(): ScreenPoint | null {
+    return null;
   }
 
   on(_event: 'statechange', callback: (state: ViewState) => void): Unsubscribe {
