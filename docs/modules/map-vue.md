@@ -112,6 +112,7 @@ view.value?.fitBounds(JIANGSU_BOUNDS, { padding: 40 });
 | `retry()` | 引擎失败后重新创建视图；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
 | `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@yzt/utils` 的 `abortReason`）。等待绑定具体的视图实例，旧视图就绪不算新视图就绪 |
 | `useCamera()` | 在调用方的作用域里订阅相机，作用域销毁时取消；不在组件 setup 或 `effectScope` 里调用时抛错 |
+| `cameraIntent` | 相机被用户操作或程序定位移动的次数（会话相机的 `intentRevision`，视图之间的同步不算）。异步的定位（如区划定位等边界加载）在开始时记下它，结束时变了就不再定位，免得覆盖用户这期间的操作 |
 | `projectionRevision` | 屏幕投影的版本：会话相机变化、当前视图的画布尺寸变化（视图的 `resize` 事件）时加 1。按屏幕位置摆放的浮层（测量标签、图钉）在 `computed` 里读它再 `project`；只依赖相机时，窗口尺寸变化后浮层不动（中心和缩放没变，相机不发出变化） |
 | `activeTool` | 当前工具的 ID（只读），跟随会话的工具模型 |
 | `activateTool(id)` | 激活工具，旧工具先退出；未登记时抛错 |

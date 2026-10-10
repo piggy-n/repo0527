@@ -59,6 +59,8 @@ export interface MapContext {
   useCamera(): Readonly<ShallowRef<CameraState>>;
   /** 屏幕投影的版本：相机变化、画布尺寸变化时加 1；按屏幕位置摆放的浮层依赖它重新投影 */
   readonly projectionRevision: Readonly<Ref<number>>;
+  /** 相机被用户操作或程序定位移动的次数（视图之间的同步不算）；异步的定位据此判断这期间有没有新的相机操作 */
+  readonly cameraIntent: Readonly<Ref<number>>;
   /** 量出登记过的悬浮元素此刻占用的部分，算出定位用的 padding；还没有画布时四边都是边距 */
   overlayPadding(): OverlayPadding;
   /** 当前工具的 ID（ADR 0034） */
@@ -130,6 +132,7 @@ export class MapContextState implements Disposable {
   readonly #activeTool: Ref<string>;
   readonly #unsubscribeTool: () => void;
   readonly #projectionRevision = ref(0);
+  readonly #cameraIntent: Ref<number>;
   readonly #unsubscribeCamera: () => void;
   readonly #lifetime = new AbortController();
   // 还没有视图时调用 whenReady 的等待者，视图挂上时依次通知
@@ -149,7 +152,11 @@ export class MapContextState implements Disposable {
     // 工具模型在会话里，这里只把当前工具桥接成 Vue 的状态；切换由工具模型保证同一时间只有一个
     this.#activeTool = ref(session.tool.active);
     this.#unsubscribeTool = session.tool.on('change', ({ active }) => (this.#activeTool.value = active));
-    this.#unsubscribeCamera = session.camera.on('change', () => this.#projectionRevision.value++);
+    this.#cameraIntent = ref(session.camera.intentRevision);
+    this.#unsubscribeCamera = session.camera.on('change', () => {
+      this.#projectionRevision.value++;
+      this.#cameraIntent.value = session.camera.intentRevision;
+    });
     this.context = Object.freeze({
       view: shallowReadonly(this.#viewport),
       viewState: shallowReadonly(this.#viewState),
@@ -158,6 +165,7 @@ export class MapContextState implements Disposable {
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
       useCamera: () => this.#useCamera(),
       projectionRevision: shallowReadonly(this.#projectionRevision),
+      cameraIntent: shallowReadonly(this.#cameraIntent),
       overlayPadding: () => this.#overlayPadding(),
       activeTool: shallowReadonly(this.#activeTool),
       activateTool: (id: string) => session.tool.activate(id),

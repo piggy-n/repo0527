@@ -56,7 +56,7 @@ export function nextRegionSelection(selected: Region | null, clicked: Region): s
 
 /** 创建区划定位的拥有者，在 provideMap 所在组件的 setup 中调用；作用域销毁时取消进行中的加载和定位 */
 export function useRegionLocate(
-  map: Pick<MapContext, 'view' | 'whenReady'>,
+  map: Pick<MapContext, 'view' | 'whenReady' | 'cameraIntent'>,
   options: RegionLocateOptions
 ): RegionLocate {
   if (!getCurrentScope()) {
@@ -74,6 +74,8 @@ export function useRegionLocate(
   };
 
   const locate = async (region: Region, signal: AbortSignal) => {
+    // 加载期间相机被移动过（拖动、默认视角等）时，边界到位后只高亮，不覆盖当前视角
+    const intent = map.cameraIntent.value;
     state.value = { selected: region, boundary: { kind: 'loading' } };
     let boundary: RegionBoundary;
     try {
@@ -94,7 +96,9 @@ export function useRegionLocate(
     } catch {
       return;
     }
-    map.view.value?.fitBounds(boundary.bounds, FIT_OPTIONS);
+    if (map.cameraIntent.value === intent) {
+      map.view.value?.fitBounds(boundary.bounds, FIT_OPTIONS);
+    }
   };
 
   const select = (code: string | null) => {

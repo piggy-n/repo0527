@@ -200,6 +200,28 @@ describe('MapContextState 的投影版本', () => {
   });
 });
 
+describe('MapContextState 的相机意图', () => {
+  it('用户操作和程序定位计入，视图之间的同步不计；上下文释放后不再跟随', () => {
+    const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
+    const session = new MapSession({ groups: ['basemap'], camera });
+    const state = new MapContextState(session, () => undefined, resolveOverlayOptions());
+    const intent = state.context.cameraIntent;
+    expect(intent.value).toBe(0);
+
+    session.camera.set({ ...camera, zoom: 8 }, { view: '2d', cause: 'user' });
+    session.camera.set({ ...camera, zoom: 9 }, { view: '2d', cause: 'program' });
+    expect(intent.value).toBe(2);
+    session.camera.set({ ...camera, zoom: 10 }, { view: '2d', cause: 'sync' });
+    expect(intent.value).toBe(2);
+
+    state[Symbol.dispose]();
+    session.camera.set({ ...camera, zoom: 11 }, { view: '2d', cause: 'user' });
+
+    expect(intent.value).toBe(2);
+    session[Symbol.dispose]();
+  });
+});
+
 describe('MapContextState 的 whenReady', () => {
   it('等待中的视图被替换：以 AbortError 结束，旧视图后来就绪也不算', async () => {
     using env = setup();

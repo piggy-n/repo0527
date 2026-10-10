@@ -2,7 +2,7 @@
 import type { ViewBounds } from '@yzt/map-core';
 import type { MapContext, MapViewport } from '@yzt/map-vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { effectScope, shallowRef } from 'vue';
+import { effectScope, ref, shallowRef } from 'vue';
 import countyFile from '../boundary/data/jiangsu-county.json?raw';
 import { findRegion, type Region } from './region-catalog';
 import type { RegionBoundary, RegionBoundaryLoader } from './region-geometry';
@@ -60,7 +60,9 @@ function fakeMap(whenReady: MapContext['whenReady'] = () => Promise.resolve()) {
     project: vi.fn<MapViewport['project']>()
   };
   const view = shallowRef<MapViewport | null>(viewport);
-  return { map: { view, whenReady: vi.fn<MapContext['whenReady']>(whenReady) }, fitBounds };
+  // 相机被用户或程序移动的次数，测试加 1 表示这期间有了新的相机操作
+  const cameraIntent = ref(0);
+  return { map: { view, whenReady: vi.fn<MapContext['whenReady']>(whenReady), cameraIntent }, fitBounds };
 }
 
 function setup(whenReady?: MapContext['whenReady']) {
@@ -105,6 +107,46 @@ describe('useRegionLocate', () => {
     expect(Object.keys(locate.deriveGroup().sources)).toStrictEqual(['region']);
     expect(map.whenReady).toHaveBeenCalledWith(expect.any(AbortSignal));
     expect(fitBounds.mock.calls).toStrictEqual([[boundaryOf('320213').bounds, FIT_OPTIONS]]);
+  });
+
+  it('加载期间相机被移动过（拖动、默认视角等）：边界到位后只高亮，不再定位覆盖当前视角', async () => {
+    const { locate, map, fitBounds, resolve } = setup();
+
+    locate.select('320100');
+    map.cameraIntent.value++;
+    resolve('320100');
+    await settle();
+
+    expect(locate.state.value.boundary.kind).toBe('ready');
+    expect(fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('等视图就绪期间相机被移动过：同样不定位', async () => {
+    let ready: (() => void) | undefined;
+    const { locate, map, fitBounds, resolve } = setup(() => new Promise(done => (ready = done)));
+
+    locate.select('320100');
+    resolve('320100');
+    await settle();
+    map.cameraIntent.value++;
+    ready?.();
+    await settle();
+
+    expect(fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('重试时从重试的那一刻算起：之前的相机操作不影响定位', async () => {
+    const { locate, map, fitBounds, resolve, reject } = setup();
+
+    locate.select('320100');
+    reject('320100', new Error('断网'));
+    await settle();
+    map.cameraIntent.value++;
+    locate.retry();
+    resolve('320100');
+    await settle();
+
+    expect(fitBounds).toHaveBeenCalledOnce();
   });
 
   it('加载中换选：前一次晚到的结果不写入、不定位', async () => {
