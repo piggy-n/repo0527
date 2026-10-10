@@ -33,10 +33,11 @@ docs/
 │  ├─ layout.md               布局：顶部导航、用户菜单、宽度适配
 │  ├─ system-title.md         系统名称的 SVG 轮廓：用法、自动生成、常见问题
 │  ├─ ui.md                   libs/ui：两个入口、窄屏断点、分栏布局、面板、区块、标题
+│  ├─ map-overview.md         地图架构总览：分层、贯穿全局的原则、按主题的现行 ADR 与修正关系、阅读顺序
 │  ├─ map-core.md             地图内核：用法、会话与 MapLibre 适配器的实现、实测行为、加载策略；附录为旧代码分析
-│  ├─ map-vue.md              libs/map-vue：地图与 Vue 的衔接（provideMap、样式绑定、MapCanvas、useMap、定位可视区域）
-│  ├─ shared-map.md           shared/map：项目级的公共地图能力（目前是地图状态的提示）
-│  ├─ utils.md                libs/utils：Worker 通信层（协议、取消、故障、托管）
+│  ├─ map-vue.md              libs/map-vue：地图与 Vue 的衔接（provideMap、样式绑定、MapCanvas、useMap、相机操作、定位可视区域）
+│  ├─ shared-map.md           shared/map：项目级的公共地图能力（底图、边界、默认视角、工具栏、测量、区划定位、坐标定位、状态提示）
+│  ├─ utils.md                libs/utils：Worker 通信层（协议、取消、故障、托管）、LatestController
 │  └─ icons.md                图标：SvgIcon 用法、添加图标、规范化规则、自动化与检查
 ├─ design/                    设计规范与主题落地
 │  ├─ color-and-typography.md 系统配色与字体规范（原文）
@@ -68,7 +69,7 @@ docs/
    - [阶段五 5B：公共地图能力](stages/stage-5b-public-map-capabilities.md)
 5. [commands.md](commands.md)：日常要用的命令
 
-想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明。
+地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明。
 
 ## 各类文档的分工
 

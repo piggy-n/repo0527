@@ -180,7 +180,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 查询和变更写在 `features/<域>/queries.ts`，用 TanStack Vue Query 的 `useQuery` / `useMutation`；`queryFn` 把收到的 `signal` 交给接口函数，组件不直接拼 query key；接口数据由查询缓存持有，不放进 Pinia，组件里也不另存一份
 - shared/http 不依赖路由、UI 和鉴权，这些由 `app/http.ts` 通过 `configureHttp` 注入
 
-### 地图（ADR 0020～0038，设计见 `docs/modules/map-core.md`、`docs/modules/map-vue.md`、`docs/modules/shared-map.md`）
+### 地图（ADR 0020～0039，总览见 `docs/modules/map-overview.md`，设计见 `docs/modules/map-core.md`、`docs/modules/map-vue.md`、`docs/modules/shared-map.md`）
 
 - map-core 持有地图会话状态（样式模型、相机、当前工具、选择状态），它是二维和三维共同的唯一真相源；Manager 修改会话状态，不直接写引擎
 - 样式按分组推导：每个拥有者用纯函数从自己的状态推导出分组并整体替换；跨分组的修改用一次 `setGroups` 提交，批次不跨 `await`；交给会话的 GeoJSON 数据不能原地修改，要换新对象（ADR 0022）
