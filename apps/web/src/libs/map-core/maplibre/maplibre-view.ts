@@ -88,12 +88,12 @@ const CAMERA_CAUSES: readonly string[] = ['user', 'program', 'sync'] satisfies C
 type LiveViewState = Exclude<ViewState, 'disposed'>;
 
 // 允许的状态转换（ADR 0026、0030，见 map-core.md"状态转换"）：样式失败后报错的加载仍可能完成，所以 failed 能直接到 ready、paused；
-// 引擎失败不在表里，之后只能释放
+// failed → failed 是失败原因的更新（样式失败换成新的原因，或升级为引擎失败）。引擎失败之后只能释放
 const TRANSITIONS: Readonly<Record<LiveViewState, readonly LiveViewState[]>> = {
   initializing: ['ready', 'paused', 'failed'],
   ready: ['paused', 'failed'],
   paused: ['ready', 'failed'],
-  failed: ['initializing', 'ready', 'paused']
+  failed: ['initializing', 'ready', 'paused', 'failed']
 };
 
 function canTransition(from: ViewState, failure: MapViewFailure | null, to: LiveViewState): boolean {
@@ -456,10 +456,6 @@ export class MapLibreView<const G extends string> implements MapView {
     ) {
       return;
     }
-    if (this.#state === 'failed') {
-      this.#renewReady();
-      this.#setState('initializing');
-    }
     this.#rebuild(map);
   }
 
@@ -468,6 +464,10 @@ export class MapLibreView<const G extends string> implements MapView {
     const { current, revision } = this.#session.style;
     // 新的一轮开始：激活因此中止时，等待的人等到本轮结束，而不是拿到上一轮早已成功的结果
     this.#renewReady();
+    // 从失败开始的新一轮先回到 initializing（先换 Promise 再通知）：失败后重新加载，以及报错后加载仍然完成、激活时追赶触发的重建
+    if (this.#state === 'failed') {
+      this.#setState('initializing');
+    }
     this.#mapStyle = { status: 'loading', revision, style: current };
     try {
       map.setStyle(current, { diff: false });

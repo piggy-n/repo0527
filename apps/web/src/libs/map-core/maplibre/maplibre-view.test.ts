@@ -351,6 +351,29 @@ describe('MapLibreView', () => {
       expect(ctx.view.failure).toEqual({ kind: 'engine', cause: 'unknown', error: new Error('setStyle failed') });
     });
 
+    it('样式失败后同一轮里加载又完成、追赶时整体重建遇到引擎失败：原因换成引擎失败，之后不再恢复', async () => {
+      using ctx = setup();
+      const seen: string[] = [];
+      ctx.view.on('statechange', state => seen.push(`${state}${ctx.view.failure ? `(${ctx.view.failure.kind})` : ''}`));
+      ctx.map.fire('error', { error: new Error('invalid style') });
+      // 同一轮里：提交了新的样式（通知还在微任务里），报错之后的加载又完成了，追赶时增量命令被拒绝、整体重建时 setStyle 抛错
+      ctx.map.rejectOn = 'addLayer';
+      ctx.map.failOn = 'setStyle';
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      ctx.map.fire('style.load');
+
+      expect(ctx.view.failure).toMatchObject({ kind: 'engine', error: new Error('setStyle failed') });
+      await nextMicrotask();
+      ctx.map.rejectOn = undefined;
+      ctx.map.failOn = undefined;
+      ctx.map.fire('style.load');
+
+      expect(ctx.view.state).toBe('failed');
+      expect(ctx.view.failure?.kind).toBe('engine');
+      expect(seen).toStrictEqual(['failed(style)', 'initializing', 'failed(engine)']);
+      expect(ctx.errors.filter(error => error instanceof Error && error.message.includes('不能从'))).toStrictEqual([]);
+    });
+
     it('样式失败：监听者收到 failed 时已经能读到原因；出现新版本重新加载时清空', async () => {
       using ctx = setup();
       const seen: unknown[] = [];
@@ -1484,20 +1507,24 @@ describe('MapLibreView', () => {
   });
 });
 
-// 测试自己的转换表，不导入实现里的那份：两份一致才说明实现照表执行（见 map-core.md"状态转换"）
+// 测试自己的转换表，不导入实现里的那份：两份一致才说明实现照表执行（见 map-core.md"状态转换"）。
+// failed → failed 只允许从样式失败出发（换成新的原因或升级为引擎失败），引擎失败之后不能再有任何转换
 const ALLOWED_TRANSITIONS: Readonly<Record<string, readonly ViewState[]>> = {
   initializing: ['ready', 'paused', 'failed'],
   ready: ['paused', 'failed'],
   paused: ['ready', 'failed'],
-  failed: ['initializing', 'ready', 'paused']
+  failed: ['initializing', 'ready', 'paused', 'failed']
 };
 
 const SEQUENCE_STEPS = ['load', 'error', 'commit', 'reject', 'pause', 'resume', 'breakEngine', 'dispose'] as const;
 type SequenceStep = (typeof SEQUENCE_STEPS)[number];
+// 交错的序列里，走完微任务也是一个事件：提交、加载、报错可以落在同一轮里
+const INTERLEAVED_STEPS = [...SEQUENCE_STEPS, 'flush'] as const;
+type InterleavedStep = (typeof INTERLEAVED_STEPS)[number];
 
 // 所有长度为 length 的序列；检查每一步之后的状态，较短的序列作为前缀都被覆盖到
-function sequencesOf(length: number): SequenceStep[][] {
-  return length === 0 ? [[]] : sequencesOf(length - 1).flatMap(prefix => SEQUENCE_STEPS.map(step => [...prefix, step]));
+function sequencesOf<T>(steps: readonly T[], length: number): T[][] {
+  return length === 0 ? [[]] : sequencesOf(steps, length - 1).flatMap(prefix => steps.map(step => [...prefix, step]));
 }
 
 // 走完会话通知（微任务）、加载失败后排进微任务的重新加载
@@ -1519,7 +1546,8 @@ function promiseState(promise: Promise<unknown>): Promise<'resolved' | 'rejected
   ]);
 }
 
-async function applyStep(ctx: ReturnType<typeof setup>, step: SequenceStep, index: number): Promise<void> {
+// 同步地执行一个事件；reject 让之后的增量命令被拒绝，直到下一次走完微任务
+function fireStep(ctx: ReturnType<typeof setup>, step: SequenceStep, index: number): void {
   switch (step) {
     case 'load':
       ctx.map.fire('style.load');
@@ -1534,8 +1562,6 @@ async function applyStep(ctx: ReturnType<typeof setup>, step: SequenceStep, inde
       // 增量命令被 MapLibre 拒绝，视图整体重建
       ctx.map.rejectOn = 'addLayer';
       ctx.session.style.setGroup('business', lineGroup(`reject-${index}`));
-      await flushMicrotasks();
-      ctx.map.rejectOn = undefined;
       break;
     case 'pause':
       ctx.view.pause();
@@ -1551,7 +1577,11 @@ async function applyStep(ctx: ReturnType<typeof setup>, step: SequenceStep, inde
       ctx.view[Symbol.dispose]();
       break;
   }
+}
+
+async function flushStep(ctx: ReturnType<typeof setup>): Promise<void> {
   await flushMicrotasks();
+  ctx.map.rejectOn = undefined;
 }
 
 // 状态连同失败的种类，例如 failed(style)
@@ -1559,11 +1589,22 @@ function describeState(state: ViewState, failure: MapViewFailure | null): string
   return failure ? `${state}(${failure.kind})` : state;
 }
 
+interface SequenceRun {
+  readonly active: boolean;
+  /** 每一步之后都走完微任务，把视图带到起点 */
+  readonly prefix: readonly SequenceStep[];
+  /** interleaved 为 true 时只在 flush 和最后走完微任务，否则每一步之后都走完 */
+  readonly steps: readonly InterleavedStep[];
+  readonly interleaved: boolean;
+}
+
 // 走完一个序列：违反的不变量（空数组表示全部成立），以及走到过的转换
-async function runSequence(
-  active: boolean,
-  steps: readonly SequenceStep[]
-): Promise<{ problems: string[]; transitions: string[] }> {
+async function runSequence({
+  active,
+  prefix,
+  steps,
+  interleaved
+}: SequenceRun): Promise<{ problems: string[]; transitions: string[] }> {
   using ctx = setup({ active });
   const { view } = ctx;
   const problems: string[] = [];
@@ -1583,18 +1624,8 @@ async function runSequence(
     last = { state, failure: view.failure };
   });
 
-  for (const [index, step] of steps.entries()) {
-    if (disposed && (step === 'pause' || step === 'resume')) {
-      // 释放后调用会抛错，这是约定（另有用例），这里跳过
-      continue;
-    }
-    // oxlint-disable-next-line no-await-in-loop -- 序列按顺序走：这一步的通知和重新加载走完，才检查状态、走下一步
-    await applyStep(ctx, step, index);
-    if (step === 'dispose') {
-      disposed = true;
-      callsAtDispose = ctx.map.calls.length;
-    }
-    const at = `第 ${index + 1} 步（${step}）之后`;
+  // 每一步之后同步检查；不能 await：await 一个 async 函数本身就会让出微任务，排着的会话通知会在这里执行，同一轮就交错不起来了
+  const checkState = (at: string) => {
     if ((view.state === 'failed') !== (view.failure !== null)) {
       problems.push(`${at}：状态 ${view.state} 与失败原因不一致`);
     }
@@ -1602,17 +1633,48 @@ async function runSequence(
       problems.push(`${at}：引擎失败后变成了 ${view.state}`);
     }
     engineFailed ||= view.failure?.kind === 'engine';
-    // oxlint-disable-next-line no-await-in-loop -- 检查的是这一步之后的 whenReady，要在走下一步之前
-    if (view.state === 'failed' && (await promiseState(view.whenReady())) !== 'rejected') {
-      problems.push(`${at}：failed 时 whenReady 没有以失败结束`);
-    }
     if (disposed && view.state !== 'disposed') {
       problems.push(`${at}：释放后状态是 ${view.state}`);
     }
     if (disposed && ctx.map.calls.length !== callsAtDispose) {
       problems.push(`${at}：释放后仍在操作地图`);
     }
+  };
+  // whenReady 要走微任务才能判断，只在走完微任务之后检查
+  const checkWhenReady = async (at: string) => {
+    if (view.state === 'failed' && (await promiseState(view.whenReady())) !== 'rejected') {
+      problems.push(`${at}：failed 时 whenReady 没有以失败结束`);
+    }
+  };
+
+  const all = [...prefix.map(step => ({ step, flush: true })), ...steps.map(step => ({ step, flush: !interleaved }))];
+  for (const [index, { step, flush }] of all.entries()) {
+    if (step === 'flush') {
+      // oxlint-disable-next-line no-await-in-loop -- 序列按顺序走：走完这一轮的微任务，才检查状态、走下一步
+      await flushStep(ctx);
+    } else if (!(disposed && (step === 'pause' || step === 'resume'))) {
+      // 释放后调用 pause、resume 会抛错，这是约定（另有用例），这里跳过
+      fireStep(ctx, step, index);
+      if (flush) {
+        // oxlint-disable-next-line no-await-in-loop -- 序列按顺序走：这一步的通知和重新加载走完，才检查状态、走下一步
+        await flushStep(ctx);
+      }
+    }
+    if (step === 'dispose' && !disposed) {
+      disposed = true;
+      callsAtDispose = ctx.map.calls.length;
+    }
+    const at = `第 ${index + 1} 步（${step}）之后`;
+    checkState(at);
+    if (flush || step === 'flush') {
+      // oxlint-disable-next-line no-await-in-loop -- 检查的是这一步之后的 whenReady，要在走下一步之前
+      await checkWhenReady(at);
+    }
   }
+  await flushStep(ctx);
+  checkState('最后走完微任务之后');
+  await checkWhenReady('最后走完微任务之后');
+
   for (const error of ctx.errors) {
     if (error instanceof Error && error.message.includes('不能从')) {
       problems.push(`报告了非法转换：${error.message}`);
@@ -1621,34 +1683,79 @@ async function runSequence(
   return { problems, transitions };
 }
 
+// 逐个执行，收集前 10 个违反和走到过的转换
+async function runAll(runs: readonly SequenceRun[]): Promise<{ violations: string[]; reached: Set<string> }> {
+  const violations: string[] = [];
+  const reached = new Set<string>();
+  for (const run of runs) {
+    // oxlint-disable-next-line no-await-in-loop -- 逐个执行：并行时各序列的微任务交错，flushMicrotasks 的轮数就不对应一个序列
+    const { problems, transitions } = await runSequence(run);
+    for (const transition of transitions) {
+      reached.add(transition);
+    }
+    if (problems.length > 0 && violations.length < 10) {
+      const steps = [...run.prefix, '|', ...run.steps].join(' → ');
+      violations.push(`${run.active ? '显示' : '暂停'}创建，${steps}：${problems.join('；')}`);
+    }
+  }
+  return { violations, reached };
+}
+
+// 交错序列的起点：每一步之后都走完微任务，把视图带到不同的状态
+const STARTING_POINTS: readonly (readonly SequenceStep[])[] = [
+  [], // 加载中
+  ['load'], // 就绪（暂停创建时为 paused）
+  ['load', 'pause'], // 暂停
+  ['load', 'reject'], // 运行中整体重建
+  ['error'], // 首次加载失败
+  ['load', 'reject', 'error'], // 重建失败
+  ['load', 'breakEngine', 'reject'], // 引擎失败
+  ['error', 'commit'] // 失败后用新的提交重新加载
+];
+
 describe('MapLibreView 的状态转换（穷举短序列）', () => {
   it('长度为 4 的所有事件序列里，每一步之后的状态、失败原因、whenReady 都符合约定，转换都在表里', async () => {
-    const violations: string[] = [];
-    const reached = new Set<string>();
-    let runs = 0;
-    for (const active of [true, false]) {
-      for (const steps of sequencesOf(4)) {
-        runs++;
-        // oxlint-disable-next-line no-await-in-loop -- 逐个执行：并行时各序列的微任务交错，flushMicrotasks 的轮数就不对应一个序列
-        const { problems, transitions } = await runSequence(active, steps);
-        for (const transition of transitions) {
-          reached.add(transition);
-        }
-        if (problems.length > 0 && violations.length < 10) {
-          violations.push(`${active ? '显示' : '暂停'}创建，${steps.join(' → ')}：${problems.join('；')}`);
-        }
-      }
-    }
+    const runs = [true, false].flatMap(active =>
+      sequencesOf(SEQUENCE_STEPS, 4).map(steps => ({ active, prefix: [], steps, interleaved: false }))
+    );
 
-    expect(runs).toBe(2 * SEQUENCE_STEPS.length ** 4);
+    const { violations, reached } = await runAll(runs);
+
+    expect(runs).toHaveLength(2 * SEQUENCE_STEPS.length ** 4);
     expect(violations).toStrictEqual([]);
-    // 事件足够强：表里的每一条转换都走到过（failed 指样式失败），引擎失败在加载中、就绪时都发生过。
+    // 事件足够强：表里除失败原因的更新之外，每一条转换都走到过，引擎失败在加载中、就绪时都发生过。
     // 暂停时的引擎失败要 6 步（就绪、重建中暂停、引擎坏掉、提交、加载失败后改用新提交重建），不在这里
-    const expected = Object.entries(ALLOWED_TRANSITIONS).flatMap(([from, targets]) =>
-      targets.map(to => `${from === 'failed' ? 'failed(style)' : from} → ${to === 'failed' ? 'failed(style)' : to}`)
-    );
     expect([...reached].toSorted()).toStrictEqual(
-      [...expected, 'initializing → failed(engine)', 'ready → failed(engine)'].toSorted()
+      [
+        'initializing → ready',
+        'initializing → paused',
+        'initializing → failed(style)',
+        'initializing → failed(engine)',
+        'ready → paused',
+        'ready → failed(style)',
+        'ready → failed(engine)',
+        'paused → ready',
+        'paused → failed(style)',
+        'failed(style) → initializing',
+        'failed(style) → ready',
+        'failed(style) → paused'
+      ].toSorted()
     );
+  });
+
+  it('同一轮里交错的事件：从各个起点出发，长度为 3 的所有序列（走完微任务也是一个事件）都符合约定', async () => {
+    const runs = [true, false].flatMap(active =>
+      STARTING_POINTS.flatMap(prefix =>
+        sequencesOf(INTERLEAVED_STEPS, 3).map(steps => ({ active, prefix, steps, interleaved: true }))
+      )
+    );
+
+    const { violations, reached } = await runAll(runs);
+
+    expect(runs).toHaveLength(2 * STARTING_POINTS.length * INTERLEAVED_STEPS.length ** 3);
+    expect(violations).toStrictEqual([]);
+    // 交错之后能走到"样式失败后加载又完成、激活时重建"这条路径：从 failed 先回到 initializing 再失败
+    expect(reached).toContain('failed(style) → initializing');
+    expect(reached).toContain('initializing → failed(engine)');
   });
 });
