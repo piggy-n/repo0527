@@ -35,6 +35,8 @@ export default defineConfig(({ mode }) => {
       }
     },
     server: {
+      // 预览工具用 PORT 分配端口（.claude/launch.json 的 autoPort），被占用时直接失败；没有 PORT 时沿用 Vite 的默认端口
+      ...(env.PORT ? { port: Number(env.PORT), strictPort: true } : {}),
       // vite preview 默认沿用这里的代理
       proxy: {
         [`${apiBaseUrl}/`]: {

@@ -113,7 +113,7 @@ pnpm add -Dw -E some-tool
 **注意事项**：
 
 - **开发服务器不做类型检查**。Vite 只把 TS 转成 JS，类型错误不会阻止页面运行。类型问题要看编辑器提示，或者运行 `pnpm typecheck`
-- 默认端口是 5173，被占用时 Vite 会自动换下一个端口，以终端输出的地址为准
+- 默认端口是 5173，被占用时 Vite 会自动换下一个端口，以终端输出的地址为准；设了 `PORT` 环境变量时用它，被占用时直接失败（供 Claude 桌面端的预览分配端口，见 [config/vite-config.md](config/vite-config.md)"开发服务器的端口"）
 - `--filter @yzt/web` 指定在哪个包里运行；也可以 `cd apps/web` 后执行 `pnpm dev`
 
 ### `pnpm --filter @yzt/web dev:intranet`

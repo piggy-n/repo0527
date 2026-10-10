@@ -16,6 +16,7 @@
 | `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；后两个会改动源文件，统称 generators，测试模式下不启用：`systemTitlePlugin` 按 `VITE_APP_TITLE` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 来自 `@yzt/icons/tools`，自动规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)） |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `css.preprocessorOptions.scss.loadPaths` | `[src/libs]` | libs 模块的 Sass 入口按模块名引用，见下文 |
+| `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
 | `server.proxy` | `/backend/` → `PROXY_TARGET` | 同源代理，见下文 |
 | `test` | 见下文 | Vitest 的配置（ADR 0010） |
 
@@ -135,6 +136,17 @@ proxy: {
 `vite preview` 的 `preview.proxy` 默认沿用 `server.proxy`，所以 `PROXY_TARGET` 写在所有模式共用的 `.env` 里，而不是 `.env.development`，本地预览生产构建时也能连到后端。
 
 已验证：通过开发服务器请求 `/backend/system/upms/user/detail`，后端返回 `{"code":401,"msg":"用户未登录"}`；和接口同名的页面路径 `/resource-management` 仍然返回页面。
+
+### 开发服务器的端口
+
+```ts
+...(env.PORT ? { port: Number(env.PORT), strictPort: true } : {}),
+```
+
+- Vite 本身不读 `PORT` 环境变量。Claude 桌面端预览开发服务器时（`.claude/launch.json` 设了 `autoPort: true`），由工具挑一个空闲端口并通过 `PORT` 传入，多个会话可以各开各的服务器
+- 有 `PORT` 时开启 `strictPort`：端口被占用就直接失败，不自动换到下一个端口，否则工具等的端口上没有服务器
+- 没有 `PORT` 时（平时在终端运行 `pnpm --filter @yzt/web dev`）不受影响，仍是默认的 5173，被占用时自动换端口
+- 换了端口就是另一个源，localStorage 里的登录会话不共享，要重新登录
 
 ## 修改时的检查清单
 
