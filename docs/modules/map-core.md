@@ -260,7 +260,6 @@ session.tool.dispatch(event, toolView);          // 视图把输入交给当前�
 - 图例统计的主线程耗时：阶段五用真实数据实测 MapLibre 6，再在后端聚合、Worker 解码属性、按需统计三者中选（ADR 0021）
 - 高亮用 feature-state 还是按要素 ID 过滤的图层：做高亮时实测（ADR 0022）
 - 三维样式的支持清单：实现镜像之前写出（ADR 0024）
-- 椭球面测量用哪个库：做测量时确认（ADR 0024）
 - 瓦片是否因用户或权限而不同：2026-10-09 实测瓦片不校验 token，带不带 token 内容相同（[migration.md](../migration.md)"现状底图：接口实测"）；以后会不会按权限过滤仍要向后端确认，再决定缓存键是否包含权限范围（ADR 0025）
 
 已确定：map-core 放在 `libs/map-core`（ADR 0018）；MapLibre 用 6.x（ADR 0019）；地图会话状态是唯一真相源（ADR 0020）；Worker 策略（ADR 0021）；样式模型与会话提交（ADR 0022）；资源释放、事件与运行时装配（ADR 0023）；视图接口（ADR 0024）；Worker 通信契约与瓦片数据服务（ADR 0025）；迁移基线 `836f03b` 已记入 [migration.md](../migration.md)。
@@ -339,7 +338,7 @@ session.tool.dispatch(event, toolView);          // 视图把输入交给当前�
 | 用途 | 候选 | 说明 |
 |---|---|---|
 | 几何计算 | turf v7 | 按需安装单个包（如 `@turf/bbox`），不用 `@turf/turf` 全家桶，旧代码两种写法混用。GeoJSON 类型来自 `@types/geojson`。测量距离和面积不用 turf 的球面算法（ADR 0024） |
-| 椭球面测量 | geographiclib-geodesic | 候选（ADR 0024）：测量方式 `geodesic` 按椭球面计算，做测量时再确认 |
+| 椭球面测量 | geographiclib-geodesic | 已定（ADR 0035）：测量方式 `geodesic` 的距离和面积按椭球面计算 |
 | 样式对比与表达式求值 | `@maplibre/maplibre-gl-style-spec` | 已定（ADR 0019、0022）：版本与 maplibre-gl 依赖的保持一致（6.12.0 对应 26.4.4） |
 | 事件 | nanoevents | 已定（ADR 0023）：`on` 返回取消订阅的函数，登记进释放栈 |
 | 资源释放的运行时 | core-js（`es/symbol/dispose`、`es/disposable-stack`） | 已定（ADR 0023）：在 `app/main.ts` 全局引入，gzip 约 7.6 KB |
