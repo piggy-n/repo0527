@@ -47,6 +47,7 @@
 | [0035](0035-measurement.md) | 测量：椭球面计算、测量的状态与标签 | 已接受 |
 | [0036](0036-region-locate.md) | 区划定位：本地区划目录、边界的加载与定位 | 已接受 |
 | [0037](0037-coordinate-locate-and-location-point.md) | 坐标定位与位置点 | 已接受 |
+| [0038](0038-camera-operations.md) | 相机操作：用操作的信号判断等待中的定位是否作废 | 已接受 |
 
 ## 模板
 
