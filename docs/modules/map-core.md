@@ -17,8 +17,10 @@
 | `style/diff-style.ts` | `diffStyle`：对比两份样式快照，得出命令列表 |
 | `style/style-model.ts` | `StyleModel`：按分组组合样式，提交加版本号，合并通知 |
 | `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause` |
-| `session/map-session.ts` | `MapSession`：组合样式与相机，统一释放 |
+| `session/map-session.ts` | `MapSession`：组合样式、相机与当前工具，统一释放 |
+| `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`ToolView` |
 | `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位） |
+| `view/view-input.ts` | 输入、拾取、投影的类型（ADR 0024 第 2、7、8 条） |
 | `maplibre/map-like.ts` | `MapLike`：适配器用到的 MapLibre 方法（窄接口）；连同方法签名用到的类型从入口导出，map-vue 的测试据此实现假地图 |
 | `maplibre/apply-style-command.ts` | `applyStyleCommand`：一条命令对应一次地图方法调用 |
 | `maplibre/maplibre-view.ts` | `MapLibreView`：二维视图，唯一写 MapLibre 地图的地方 |
@@ -116,6 +118,21 @@ session[Symbol.dispose]();
 - 用类而不是 `createMapSession` 工厂函数，和各部分的写法一致：构造不是异步的，也不需要隐藏类型，工厂函数没有额外的好处
 - 构造时用 `using stack = new DisposableStack()` 登记各部分，成功后 `stack.move()` 把所有权转给实例：中途抛错（例如相机参数不合法）时，已创建的部分自动释放。释放会话就是释放这个栈，按创建的相反顺序释放各部分
 - 各模型共用的"事件加释放"（已释放的标记、释放后订阅和写入抛错、释放时清空监听器）在 `ModelEvents` 里，每个模型持有一个实例：`StyleModel`、`CameraModel` 原来各有约 10 行相同的逻辑，5B.3 加入工具模型（第三个模型）时抽出。用组合而不是继承，以免占掉唯一的一层基类。释放后 `emit` 不报错，只是没有监听器收到：`StyleModel` 的微任务可能在释放之后才执行，由它自己先检查 `disposed`
+
+### ToolModel
+
+```ts
+session.tool.register('measure', measureTool);  // 页面通过 map-vue 的 registerTools 登记
+session.tool.activate('measure');                // 旧工具先 deactivate，新工具再 activate，然后发出 change
+session.tool.release('measure');                 // 临时任务退回上一个常驻模式，常驻模式退回 browse
+session.tool.dispatch(event, toolView);          // 视图把输入交给当前工具
+```
+
+- 同一时间只有一个激活的工具；内置的 `browse`（移动）是默认的常驻模式，ID 保留，不能登记
+- 常驻模式（移动、点选）和临时任务（测距、测面）：激活常驻模式时它成为回退的目标，临时任务退出后回到它（旧项目的 `navigationMode`）
+- 输入只交给当前工具；Esc 先交给工具，工具没有返回 `true` 并且它是临时任务时退出
+- 工具的光标、要关掉的手势是工具上的声明，由视图读 `activeTool` 后应用（ADR 0034 第 3 条）
+- 释放时让当前工具退出；之后登记、激活、转交输入都抛错
 
 ### MapLibreView
 
@@ -223,7 +240,7 @@ session[Symbol.dispose]();
 |---|---|
 | map-vue 的运行时注入、加载策略的实测（`provideMap`、`<MapCanvas>`、`useMap()` 已在 5A.2 完成，见 [map-vue.md](map-vue.md)） | 5D |
 | 业务图层、底图、边界等拥有者（Manager），从自己的状态推导分组 | 阶段五、六，迁移现状底图和业务图层时 |
-| 当前工具与选择状态两个模型；视图接口的输入、拾取、投影、查询 | 做点选、测量、绘制时 |
+| 选择状态模型；视图接口的查询（当前工具、输入、拾取、投影在 5B.3 加入） | 做点选时（5C.4 或 5C.6） |
 | 高亮用 feature-state 还是按要素 ID 过滤的图层 | 做高亮时实测 |
 | Cesium 镜像与相机同步、三维样式的支持清单 | 做三维时（`libs/map-cesium`） |
 | 瓦片数据服务（基于 `@yzt/utils` 的 Worker 通信层） | 第一个 Worker 真实使用方出现时 |

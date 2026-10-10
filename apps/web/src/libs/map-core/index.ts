@@ -23,6 +23,14 @@ export {
   type StyleModelOptions,
   type StyleRoot
 } from './style/style-model';
+export {
+  BROWSE_TOOL,
+  type Gestures,
+  type MapTool,
+  type ToolChange,
+  ToolModel,
+  type ToolView
+} from './tool/tool-model';
 export type {
   FitBoundsOptions,
   FlyToOptions,
@@ -32,3 +40,13 @@ export type {
   ViewPadding,
   ViewState
 } from './view/map-view';
+export type {
+  LngLat,
+  MapInputEvent,
+  MapKeyEvent,
+  MapPointerEvent,
+  Modifiers,
+  PickResult,
+  PickSurface,
+  ScreenPoint
+} from './view/view-input';
