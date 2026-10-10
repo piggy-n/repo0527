@@ -21,6 +21,9 @@
 | `boundary/BoundaryPanel.tsx` | 边界的面板（联调用的界面） |
 | `toolbar/toolbar-items.ts` | 工具栏上的工具和动作：名称、图标集中在一张表里（ADR 0034） |
 | `toolbar/MapToolbar.tsx` | 工具栏的外壳（联调用的界面） |
+| `measure/measure-style.ts` | `measure` 分组的推导（纯函数，ADR 0035） |
+| `measure/measure-labels.ts` | 测量的标签、单位格式与鼠标旁的提示（纯函数） |
+| `measure/useMeasure.ts` | 测量的拥有者：桥接 map-core 的 `MeasureStore`，提供两个工具和推导函数 |
 
 ## 江苏的范围与默认视角（ADR 0033）
 
@@ -175,6 +178,24 @@ boundaries.setOpacity(0.6);
 - 现状底图页把它和底图面板、边界面板一起放在右上角；它是角落里的小控件，不登记为悬浮元素
 - 工具栏没有为"点击激活的工具时退出"写测试：目前表里只有"移动"，退出它什么也不做，测试表达不出来；5B.4 加入测距后补上
 
+## 测量（ADR 0035）
+
+```tsx
+// 页面 setup：创建拥有者，登记两个工具，绑定 measure 分组（叠放在最上面）
+const measure = useMeasure();
+map.registerTools(measure.tools);
+map.bindStyle({ measure: measure.deriveGroup });
+```
+
+- 测量的状态和两个工具在 map-core 的 `MeasureStore`（见 `map-core.md`），`useMeasure` 只把它的 `change`、`pointer` 桥接成两个 `shallowRef`，作用域销毁时释放。工具 ID 是 `MEASURE_TOOL_IDS`（`measure-distance`、`measure-area`），工具栏用同样的 ID
+- `state` 进样式推导，`pointer` 只给提示定位：没在画时移动鼠标，`state` 不变，绑定的推导不重新运行，不提交样式
+- `measure` 分组从下到上：完成的面填充（不透明度 0.2）、画的过程中的面填充（0.12）、完成的线（实线）、画的过程中的线（虚线）、节点。要素用 `status` 属性（`completed`、`drawing`、`vertex`）区分，由图层的 `filter` 分给对应的图层；颜色和线宽沿用旧项目，写在推导里（地图样式里的颜色是数据，不走 CSS 令牌）
+- 画的过程中：预览点接在线或面的末尾，不画节点；测面不到 3 个点时先画成线
+- 标签由 `measureLabels(state)` 推导：测距在中间节点显示累计距离、末点显示"总长"，测面在形心显示"总面积"；结果标签带 `measurementId`，界面在它旁边放删除按钮。画的过程中的测距也显示已确定的中间节点，与旧项目相同
+- 单位格式沿用旧项目：距离固定用 km、两位小数；面积满 1 km² 用 km²，否则用 m²，两位小数
+- 形心按经纬度平面近似，以第一个顶点为原点计算，避免经纬度的绝对值很大时相减损失精度；面积为 0 时取顶点的平均。凹多边形的形心可能落在外面，与旧项目相同
+- 提示由 `measureHint(kind, drawing)` 给出，沿用旧项目的文案："单击开始测距"、"单击添加节点，双击结束测距"（测面同理）
+
 ## 地图状态的提示（ADR 0030）
 
 ```tsx
@@ -210,6 +231,9 @@ boundaries.setOpacity(0.6);
 | `basemap/useBasemap.test.ts` | 默认读取配置；两种配置下的初始状态；切换后推导出所选底图和注记；透明度作用于当前底图、每种底图各自记住；相同的值不触发重新推导；不合法的调用抛错且状态不变 | Node |
 | `boundary/boundary-style.test.ts` | 级别与初始状态；数据源是三份文件的地址；三级的叠放、线宽、虚线；透明度乘在基础值上；关闭的级别不在样式里；ID 前缀与校验；改透明度只产生 `setPaintProperty`；开关一级只增删这一级 | Node |
 | `toolbar/MapToolbar.test.tsx` | 按列表显示按钮；工具按钮跟随当前工具、点击时激活；动作按钮调用回调、没有回调时不可用 | jsdom |
+| `measure/measure-style.test.ts` | 没有测量时是空分组；完成的测距、测面的几何与节点；画的过程中接上预览点、点不够时退化；图层顺序、ID 前缀与组合后的校验；按 MapLibre 的语义求值 `filter`，检查每种要素由哪些图层画出；移动预览点只产生 `setGeoJSONSourceData` | Node |
+| `measure/measure-labels.test.ts` | 距离与面积的格式和 1 km² 的分界；形心（矩形、三角形、面积为 0）；测距的中间节点与总长、测面的总面积；画的过程中的标签；提示文案 | Node |
+| `measure/useMeasure.test.ts` | 两个工具的 ID 与类型；状态跟随输入、推导、删除和清除；鼠标位置单独跟随，没在画时移动鼠标不重新推导；作用域销毁时释放；不在作用域里时抛错 | Node |
 | `boundary/BoundaryPanel.test.tsx` | 勾选、取消某一级后改变状态，都不勾选时没有滑块；滑块按百分比显示、拖动时交给拥有者 0～1 的值 | jsdom |
 | `boundary/useBoundaries.test.ts` | 初始状态；开关某一级、透明度；值没变时不重新推导；不合法的透明度抛错；每次调用各有一份状态 | Node |
 | `apps/web/tools/boundaries/boundaries.test.ts` | 边界数据的转换：文件对应关系、坐标取整与去掉高程、只留名称和代码、去掉 `crs`、原始结构不符合或没有要素时报错 | Node |
@@ -224,3 +248,4 @@ boundaries.setOpacity(0.6);
 - 面板逐一改坏 5 处（选择时不调用拥有者、透明度不换算、滑块显示 0～1、无底图时仍显示滑块、选项写死），全部发现；"透明度不换算"起初是 `setOpacity` 抛出的 `RangeError` 直接冒出来，把触发拖动的那一步包进 `not.toThrow()` 后由断言发现
 - 拥有者逐一改坏 18 处，起初有 1 处没被发现、1 处的失败原因不是断言："推导不随传入的配置"（关闭天地图的用例选的是无底图，推导结果与配置无关），补了"瓦片地址里是传入的 key"；"透明度的边界写成开区间"时 `setOpacity(0)` 直接抛错，改用 `not.toThrow()` 断言。补上后全部由断言发现
 - 起初还有一条"同一种底图的数据源始终是同一个对象"的用例，改坏验证时发现它测的是实现细节：数据源每次都新建时，`diffStyle` 的用例照样通过（style-spec 对数据源做深比较），于是删掉；数据源仍在工厂里一次建好，只是省去重复拼地址
+- 测量的推导逐一改坏 13 处、标签 22 处、拥有者 10 处。标签里只有"叉积符号反了"测不出来，它是等价改动：面积和加权和同时变号，比值不变（顺时针、逆时针画的形心相同）。图层的 `filter` 拼错时地图上只是什么都不画，为此用 style-spec 的 `featureFilter` 求值检查；"测面工具其实是测距"起初没被发现，补了用测面工具加点后检查草稿的类型。其余全部由断言发现
