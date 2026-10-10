@@ -17,6 +17,14 @@ export type {
   MapSubscription
 } from './maplibre/map-like';
 export { MapLibreView, type MapLibreViewOptions } from './maplibre/maplibre-view';
+export { cumulativeDistances, geodesicArea, geodesicDistance, lineLength } from './measure/geodesic';
+export {
+  type MeasureDraft,
+  type MeasureKind,
+  type Measurement,
+  type MeasureState,
+  MeasureStore
+} from './measure/measure-store';
 export { MapSession, type MapSessionOptions } from './session/map-session';
 export { diffStyle, type StyleCommand } from './style/diff-style';
 export {

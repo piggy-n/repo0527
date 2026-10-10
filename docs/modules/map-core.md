@@ -19,6 +19,8 @@
 | `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause` |
 | `session/map-session.ts` | `MapSession`：组合样式、相机与当前工具，统一释放 |
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`ToolView` |
+| `measure/geodesic.ts` | 椭球面上的距离、累计距离、折线总长、多边形面积（geographiclib-geodesic，ADR 0035） |
+| `measure/measure-store.ts` | `MeasureStore`：测量的状态与测距、测面两个工具（ADR 0035） |
 | `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位） |
 | `view/view-input.ts` | 输入、拾取、投影的类型（ADR 0024 第 2、7、8 条） |
 | `maplibre/map-like.ts` | `MapLike`：适配器用到的 MapLibre 方法（窄接口）；连同方法签名用到的类型从入口导出，map-vue 的测试据此实现假地图 |
@@ -134,6 +136,25 @@ session.tool.dispatch(event, toolView);          // 视图把输入交给当前�
 - 工具的光标、要关掉的手势是工具上的声明，由视图读 `activeTool` 后应用（ADR 0034 第 3 条）
 - 释放时让当前工具退出；之后登记、激活、转交输入都抛错
 
+### MeasureStore（ADR 0035）
+
+```ts
+const store = new MeasureStore();
+session.tool.register('measure-distance', store.createTool('distance'));
+session.tool.register('measure-area', store.createTool('area'));
+store.on('change', state => …);    // 测量结果和正在画的那一条
+store.on('pointer', point => …);   // 鼠标在画布上的位置，只用来放提示
+store.remove(id);
+store.clear();
+```
+
+- 状态是 `{ measurements, draft }`，不可变、变化时整体替换。完成的测量记下各点、测量方式 `geodesic` 和数值（测距为米，测面为平方米），数值在完成时算一次（ADR 0024 第 4 条）；编号是"类型-序号"，递增
+- 两个工具都是临时任务：十字光标，只关掉双击放大。单击（左键、`clickCount` 为 1）用 `pick` 加点，什么都没打到时不加；移动时更新预览点；离开画布时清掉鼠标位置和预览点；双击完成，点数不够（测距少于 2 个、测面少于 3 个）时取消这一条
+- Esc：正在画时取消这一条并返回 `true`（留在工具里）；没在画时返回 `false`，由工具模型退回常驻模式
+- 工具退出（`deactivate`）时丢掉没画完的那一条和鼠标位置，已完成的保留；换另一种工具时重新开始画
+- 鼠标位置单独发出 `pointer`，不改变 `state`：没在画时移动鼠标不会触发样式推导
+- 椭球面计算在 `geodesic.ts`：`Geodesic.WGS84` 的 `Inverse` 和 `Polygon`；它的参数是先纬度后经度，封装里转换；面积用 `Compute(false, true)` 再取绝对值（`sign` 为 `false` 时方向反了会得到"地球上其余部分"的面积）。`s12`、`area` 在类型里是可选的，按我们的调用方式一定会返回，缺失时直接报错
+
 ### MapLibreView
 
 在 ADR 0022、0024 的范围内实现；失败的处理见 ADR 0026。它实现 `MapView`，依赖的是窄接口 `MapLike`（以及 `applyStyleCommand` 用的 `StyleTarget`），签名比 MapLibre 的泛型方法简单；`expectTypeOf<MapLibreMap>().toExtend<MapLike>()` 保证 MapLibre 的 `Map` 满足它，MapLibre 升级后签名不兼容会在类型检查时报错。
@@ -213,6 +234,7 @@ session.tool.dispatch(event, toolView);          // 视图把输入交给当前�
 | 层 | 内容 | 测试方式 |
 |---|---|---|
 | 会话 | `diffStyle`、`StyleModel`、`CameraModel`、`MapSession` | 纯 TS，jsdom |
+| 测量 | `geodesic`（与 WGS84 的已知弧长、矩形面积对比）、`MeasureStore`（单击、双击、`clickCount`、预览点、Esc、退出、删除与清除、两个工具共用） | 纯 TS，Node |
 | `applyStyleCommand` | 一条命令对应一次地图方法调用 | 假对象，jsdom |
 | `MapLibreView` | 生命周期、版本跟踪、暂停恢复、出错重建、相机读写 | 注入 `createMap` 换成假地图，jsdom |
 | 真实 MapLibre | 渲染、Worker、事件、尺寸监听、中心点 | 开发页 `/dev/map`，浏览器 |
@@ -222,6 +244,7 @@ session.tool.dispatch(event, toolView);          // 视图把输入交给当前�
 - "释放时取消会话订阅"在行为上测不出来（释放后的状态检查挡住了晚到的通知），用 `vi.spyOn(StyleModel.prototype, 'on')` 换掉返回的取消函数来确认
 - 等待 Promise 结束的断言和一个立即完成的 Promise 赛跑，避免实现出错时测试以超时失败
 - `MapLibreView` 逐一改坏 18 处均被发现；ADR 0026 的修复又改坏 17 处、相机同步改坏 7 处，全部由断言发现。其中"引擎失败后仍处理 `error`"起初没被发现：样式变化入口的检查已经挡住了重新加载，唯一可见的影响是 `whenReady()` 的原因被后来的错误替换，补上了这个断言。之后修复样式恢复的 3 个边界（失败时已有新版本、报错后仍加载完成、激活中追赶失败）又改坏 10 处，"已加载后收到 `error` 也当作加载失败"起初没被发现（原用例只检查了没有重建），补上了"仍是 `ready`、之后照常增量同步"的断言。`whenReady()` 改为按一轮整体加载结束之后又改坏 9 处，全部发现
+- 测量（5B.4）：椭球面计算改坏 6 处、`MeasureStore` 改坏 26 处、`clickCount` 1 处，起初有 3 处没被发现，都是测试数据区分不了：面积的经纬度顺序（赤道上的正方形对调后面积不变，改用江苏纬度上长宽不等的矩形）、换工具时继续原来的那条（补断言第二条只有测面工具的点）、加点时不清预览点（补"移动后单击"的场景）。补上后全部由断言发现
 - 假地图的 `rejectOn` 模拟"只发 `error` 不抛错"，`failOn` 模拟抛错；整体加载的结果由测试手动触发 `style.load` 或 `error`
 - 开发页 `/dev/map` 的"提交不合法的图层"和"重新创建视图"在真实的 MapLibre 上验证了两条路径：运行中 `addLayer` 被拒绝 → 整体重建 → 整份样式校验失败 → `failed` → 去掉后自动恢复；用不合法的快照重新创建视图 → 首次加载失败 → 去掉后自动恢复；提交不合法的图层后、重建的那一帧到来之前提交修正 → 旧快照校验失败时直接改用最新快照加载，页面上始终没有出现 `failed`
 

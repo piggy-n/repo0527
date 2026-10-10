@@ -9,6 +9,7 @@ const CLICK: MapInputEvent = {
   type: 'click',
   point: { x: 10, y: 20 },
   button: 0,
+  clickCount: 1,
   modifiers: { shift: false, ctrl: false, alt: false, meta: false }
 };
 const ESCAPE: MapInputEvent = { type: 'key', key: 'Escape' };

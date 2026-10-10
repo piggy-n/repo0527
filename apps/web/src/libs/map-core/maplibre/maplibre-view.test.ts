@@ -1207,17 +1207,24 @@ describe('MapLibreView', () => {
       ctx.session.tool.activate('probe');
       ctx.map.fire('style.load');
 
-      ctx.map.mouse('mousedown', 10, 20, { button: 2, shiftKey: true, metaKey: true });
+      ctx.map.mouse('mousedown', 10, 20, { button: 2, detail: 1, shiftKey: true, metaKey: true });
       for (const type of ['mousemove', 'mouseup', 'click', 'dblclick', 'mouseout'] as const) {
-        ctx.map.mouse(type, 30, 40, { ctrlKey: true, altKey: true });
+        ctx.map.mouse(type, 30, 40, { detail: 2, ctrlKey: true, altKey: true });
       }
 
       expect(inputs).toStrictEqual([
-        { type: 'down', point: { x: 10, y: 20 }, button: 2, modifiers: { ...NO_MODIFIERS, shift: true, meta: true } },
+        {
+          type: 'down',
+          point: { x: 10, y: 20 },
+          button: 2,
+          clickCount: 1,
+          modifiers: { ...NO_MODIFIERS, shift: true, meta: true }
+        },
         ...(['move', 'up', 'click', 'dblclick', 'leave'] as const).map(type => ({
           type,
           point: { x: 30, y: 40 },
           button: 0,
+          clickCount: 2,
           modifiers: { ...NO_MODIFIERS, ctrl: true, alt: true }
         }))
       ]);

@@ -116,6 +116,7 @@ function toPointerEvent(type: MapMouseEventType, { point, originalEvent }: MapMo
     type: POINTER_TYPES[type],
     point: { x: point.x, y: point.y },
     button: originalEvent.button,
+    clickCount: originalEvent.detail,
     modifiers: {
       shift: originalEvent.shiftKey,
       ctrl: originalEvent.ctrlKey,

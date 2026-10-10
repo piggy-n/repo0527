@@ -28,6 +28,8 @@ export interface MapPointerEvent {
   readonly point: ScreenPoint;
   /** 0 是左键，2 是右键 */
   readonly button: number;
+  /** 连击次数：双击时第二次单击为 2，工具据此忽略它（ADR 0035）；二维取 MouseEvent.detail */
+  readonly clickCount: number;
   readonly modifiers: Modifiers;
 }
 
