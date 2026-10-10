@@ -84,6 +84,22 @@ interface MapStyle {
 
 const CAMERA_CAUSES: readonly string[] = ['user', 'program', 'sync'] satisfies CameraCause[];
 
+// 释放之前的状态；释放不经过转换表，任何状态都可以释放
+type LiveViewState = Exclude<ViewState, 'disposed'>;
+
+// 允许的状态转换（ADR 0026、0030，见 map-core.md"状态转换"）：样式失败后报错的加载仍可能完成，所以 failed 能直接到 ready、paused；
+// 引擎失败不在表里，之后只能释放
+const TRANSITIONS: Readonly<Record<LiveViewState, readonly LiveViewState[]>> = {
+  initializing: ['ready', 'paused', 'failed'],
+  ready: ['paused', 'failed'],
+  paused: ['ready', 'failed'],
+  failed: ['initializing', 'ready', 'paused']
+};
+
+function canTransition(from: ViewState, failure: MapViewFailure | null, to: LiveViewState): boolean {
+  return from !== 'disposed' && failure?.kind !== 'engine' && TRANSITIONS[from].includes(to);
+}
+
 function isCameraCause(value: unknown): value is CameraCause {
   return typeof value === 'string' && CAMERA_CAUSES.includes(value);
 }
@@ -159,8 +175,6 @@ export class MapLibreView<const G extends string> implements MapView {
   #failure: MapViewFailure | null = null;
   #active: boolean;
   #mapStyle: MapStyle;
-  // 引擎本身失败（创建地图或 setStyle 抛错）：不能恢复，只能释放后重新创建视图
-  #fatal = false;
   // 应用增量命令期间同步收到的 error 事件：MapLibre 的很多方法校验失败时不抛错，只发事件
   #applying = false;
   #rejected = false;
@@ -309,7 +323,7 @@ export class MapLibreView<const G extends string> implements MapView {
   }
 
   #onStyleLoad(map: MapLike): void {
-    if (this.#fatal) {
+    if (this.#engineFailed) {
       return;
     }
     // failed：之前的 error 并不致命，加载最终完成了，以 style.load 为准
@@ -333,7 +347,7 @@ export class MapLibreView<const G extends string> implements MapView {
 
   #onMapError(map: MapLike, error: Error): void {
     this.#onError(error);
-    if (this.#fatal) {
+    if (this.#engineFailed) {
       return;
     }
     if (this.#applying) {
@@ -384,7 +398,7 @@ export class MapLibreView<const G extends string> implements MapView {
 
   #onStyleChange(change: StyleChange): void {
     const map = this.#map;
-    if (map === undefined || this.#fatal) {
+    if (map === undefined || this.#engineFailed) {
       return;
     }
     const mapStyle = this.#mapStyle;
@@ -436,7 +450,7 @@ export class MapLibreView<const G extends string> implements MapView {
     const mapStyle = this.#mapStyle;
     if (
       this.#state === 'disposed' ||
-      this.#fatal ||
+      this.#engineFailed ||
       mapStyle.status !== 'failed' ||
       this.#session.style.revision <= mapStyle.revision
     ) {
@@ -528,7 +542,6 @@ export class MapLibreView<const G extends string> implements MapView {
   }
 
   #fail(error: unknown): void {
-    this.#fatal = true;
     this.#ready.reject(error);
     const cause = error instanceof GPUInitializationError ? 'webgl-unavailable' : 'unknown';
     this.#setState('failed', { kind: 'engine', cause, error });
@@ -543,10 +556,20 @@ export class MapLibreView<const G extends string> implements MapView {
     }
   }
 
-  // 失败原因只在 failed 时保留；状态或原因任一变化都通知，监听者读到的原因不会是旧的
-  #setState(state: ViewState, failure: MapViewFailure | null = null): void {
+  // 引擎本身失败（创建地图或 setStyle 抛错）：不能恢复，只能释放后重新创建视图
+  get #engineFailed(): boolean {
+    return this.#failure?.kind === 'engine';
+  }
+
+  // 失败原因只在 failed 时保留；状态或原因任一变化都通知，监听者读到的原因不会是旧的。
+  // 不在转换表里的转换不执行，报给 onError：调用方都在 MapLibre 的事件处理里，抛错也只会被 #guard 接住
+  #setState(state: LiveViewState, failure: MapViewFailure | null = null): void {
     const nextFailure = state === 'failed' ? failure : null;
     if (this.#state === state && this.#failure === nextFailure) {
+      return;
+    }
+    if (!canTransition(this.#state, this.#failure, state)) {
+      this.#onError(new Error(`MapLibreView 不能从 ${this.#state} 转换到 ${state}`));
       return;
     }
     this.#state = state;

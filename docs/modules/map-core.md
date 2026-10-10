@@ -191,11 +191,28 @@ store.clear();
 - 构造即创建地图（`initializing`）；创建时抛错（如不支持 WebGL2 的 `GPUInitializationError`）不往外抛，进入 `failed`，由 `whenReady` 和 `statechange` 表达
 - `failed` 有两种（ADR 0026 第 4 条）：引擎失败（创建地图或 `setStyle` 本身抛错）不能恢复，之后的样式变化、`error`、`style.load` 都不再改变状态，只能释放后重新创建视图；样式加载失败在出现新的提交时自动重新加载，`failed → initializing → ready`（暂停意图时为 `paused`）
 - 画布尺寸变化时（MapLibre 的 `resize`，容器尺寸变化后由它自己的 `ResizeObserver` 触发）发出 `resize`：相机不变，屏幕上的投影变了，map-vue 据此更新 `projectionRevision`（5B 验收后加入）
+- 引擎是否失败不另存标志，由失败原因推出（`failure.kind === 'engine'`）：同一个事实只存一份（5C.0e 去掉了原来的 `#fatal`）
 - 失败的原因是数据（ADR 0030）：`view.failure` 只在 `failed` 时有值，引擎失败为 `{ kind: 'engine', cause, error }`（`GPUInitializationError` 时 `cause` 是 `webgl-unavailable`，其余是 `unknown`），样式失败为 `{ kind: 'style', error }`；离开 `failed` 和释放时清空。状态或原因任一变化都发出 `statechange`，监听者收到 `failed` 时已经能读到原因
 - `whenReady()` 表示当前这一轮整体加载的结果。创建地图、整体重建、从 `failed` 重新加载各开始一轮，上一轮已经有结果就换一个新的 Promise；本轮的结局都落在同一个 Promise 上：加载完成后进入 `ready`（运行中重建则是完成并追上之后；暂停期间完成加载时进入 `paused`，和以 `active: false` 创建时一样）就成功，失败就以原因结束，释放就以 `AbortError` 结束。激活中止、失败后改用新的提交重试都不结束本轮，同一个 Promise 继续等待。这样恢复显示时触发了重建，等 `whenReady()` 结束后再定位不会遇到 `paused`；重建随后失败，拿到的 Promise 也会失败。从 `failed` 重新加载时，先换 Promise 再发出 `statechange`，监听者拿到的就是这一轮的
 - 初始化期间调用 `pause()`，加载完成后进入 `paused`；状态变化发出 `statechange`
 - 首次激活或恢复显示时，如果追赶样式触发了整体重建，立即中止激活：首次激活停在 `initializing`，恢复显示停在 `paused`，不同步相机，`whenReady()` 不结束。重建完成（`style.load`）后再激活；重建失败则进入 `failed`，不会先进入 `ready` 再失败
 - MapLibre 的事件回调都包一层 `try/catch`，错误交给 `onError`，不让异常打断 MapLibre 自己的事件分发
+- 状态转换按下面的表执行（5C.0e）
+
+**状态转换**：
+
+| 从 | 可以到 | 什么时候 |
+|---|---|---|
+| `initializing` | `ready`、`paused`、`failed` | 首次加载完成（以 `active: false` 创建、加载期间暂停时为 `paused`）；加载失败或引擎失败 |
+| `ready` | `paused`、`failed` | 暂停；运行中整体重建失败，或重建时 `setStyle` 抛错（引擎失败） |
+| `paused` | `ready`、`failed` | 恢复显示；暂停期间的重建失败 |
+| `failed`（样式失败） | `initializing`、`ready`、`paused` | 出现新的提交，重新加载；报错之后 `style.load` 仍然到达，以它为准 |
+| `failed`（引擎失败） | — | 只能释放 |
+
+- 任何状态都可以释放（`disposed`），释放不经过这张表，也不再发出 `statechange`
+- 状态不变、失败原因也不变时什么也不做；状态不变而失败原因变了（如 `failed` 换成另一个原因）也算一次转换，不在表里
+- 不在表里的转换不执行，报给 `onError`（`MapLibreView 不能从 … 转换到 …`），状态保持不变。调用方都在 MapLibre 的事件处理里，抛错也只会被 `#guard` 接住，所以选择报告。它是第二道防线：上游的判断（如"引擎失败后不再处理 `style.load`"）写错时，状态仍然合法，错误被报告出来
+- 表在代码里只有一份（`TRANSITIONS`），测试另写一份作为判断标准，两份一致才说明实现照表执行
 - 构造时用 `@yzt/utils` 的 `safeReporter` 包装 `onError`：外部的报告器自己抛错时改为打印到控制台，不打断状态转换（之前报告器在 `error` 事件里抛错，加载失败就判定不了，视图一直停在 `initializing`，异常还会冒进 MapLibre 的事件分发）
 - `whenReady()` 的 Promise 内部先挂一个空的 `catch`：没人等待时被拒绝不会报"未处理的拒绝"，等待的人照样收到错误
 - 释放时取消订阅、`map.remove()`，等待中的 `whenReady` 以 `AbortError` 结束
@@ -241,13 +258,16 @@ store.clear();
 | 会话 | `diffStyle`、`StyleModel`、`CameraModel`、`MapSession` | 纯 TS，jsdom |
 | 测量 | `geodesic`（与 WGS84 的已知弧长、矩形面积对比）、`MeasureStore`（单击、双击、`clickCount`、预览点、Esc、退出、删除与清除、两个工具共用） | 纯 TS，Node |
 | `applyStyleCommand` | 一条命令对应一次地图方法调用 | 假对象，jsdom |
-| `MapLibreView` | 生命周期、样式修订的跟踪、暂停恢复、出错重建、相机读写 | 注入 `createMap` 换成假地图，jsdom |
+| `MapLibreView` | 生命周期、样式修订的跟踪、暂停恢复、出错重建、相机读写；状态转换的穷举短序列 | 注入 `createMap` 换成假地图，jsdom |
 | 真实 MapLibre | 渲染、Worker、事件、尺寸监听、中心点 | 开发页 `/dev/map`，浏览器 |
 
 - 不用 `vi.mock('maplibre-gl')`：适配器依赖的是 `MapLike`，测试注入实现它的假地图 `FakeMap`。假地图的相机方法立即到位并同步触发 `move`、合并 `eventData`，俯角上限 60 用来模拟 MapLibre 的收敛（创建时同样收敛）
 - 假地图的 `on` 要和 `MapLike` 一样写出三个重载（回调参数在 `strictFunctionTypes` 下按逆变检查），实现签名的回调参数用 `never`
 - "释放时取消会话订阅"在行为上测不出来（释放后的状态检查挡住了晚到的通知），用 `vi.spyOn(StyleModel.prototype, 'on')` 换掉返回的取消函数来确认
 - 等待 Promise 结束的断言和一个立即完成的 Promise 赛跑，避免实现出错时测试以超时失败
+- 状态转换用穷举短序列测试（5C.0e）：8 种事件（`style.load`、加载错误、提交、提交被拒绝而整体重建、暂停、恢复、引擎坏掉即之后的 `setStyle` 抛错、释放），两种创建方式（显示、暂停）下长度为 4 的全部 8192 个序列，每一步之后检查：状态与失败原因一致、引擎失败后不离开 `failed`、`failed` 时 `whenReady()` 已以失败结束、每次 `statechange` 都在测试自己的转换表里、释放后状态是 `disposed` 且不再操作地图、没有报告非法转换。只检查长度 4 就够：较短的序列都是某个长度 4 序列的前缀，每一步之后都检查过。还断言走到过的转换正好是表里的 10 条加上加载中、就绪时的引擎失败，证明事件足够强（暂停期间的引擎失败要 6 步，不在其中）。约 1 秒
+- 序列逐个执行，每一步之后走完 6 轮微任务（会话通知、加载失败后排进微任务的重新加载）；Promise 是否已结束用"已结束的 Promise 的回调先于后登记的微任务执行"来判断，不用定时器
+- 状态转换（5C.0e）改坏 17 处，12 处由断言发现，大多是穷举测试抓到的（报错直接给出出问题的序列，如 `load → reject → error → commit`）。没发现的 5 处都是正确的代码走不到的：拿掉转换表的检查、转换表不看引擎失败、表里多一条走不到的转换（转换表是第二道防线，正确的实现从不尝试非法转换）；样式变化、重新加载时不看引擎失败（引擎失败后地图样式一直停在"加载中"，这两处的前提不可能成立）
 - `MapLibreView` 逐一改坏 18 处均被发现；ADR 0026 的修复又改坏 17 处、相机同步改坏 7 处，全部由断言发现。其中"引擎失败后仍处理 `error`"起初没被发现：样式变化入口的检查已经挡住了重新加载，唯一可见的影响是 `whenReady()` 的原因被后来的错误替换，补上了这个断言。之后修复样式恢复的 3 个边界（失败时已有新版本、报错后仍加载完成、激活中追赶失败）又改坏 10 处，"已加载后收到 `error` 也当作加载失败"起初没被发现（原用例只检查了没有重建），补上了"仍是 `ready`、之后照常增量同步"的断言。`whenReady()` 改为按一轮整体加载结束之后又改坏 9 处，全部发现
 - 测量（5B.4）：椭球面计算改坏 6 处、`MeasureStore` 改坏 26 处、`clickCount` 1 处，起初有 3 处没被发现，都是测试数据区分不了：面积的经纬度顺序（赤道上的正方形对调后面积不变，改用江苏纬度上长宽不等的矩形）、换工具时继续原来的那条（补断言第二条只有测面工具的点）、加点时不清预览点（补"移动后单击"的场景）。补上后全部由断言发现
 - 删除 `intentRevision`（5C.0b，ADR 0039）后，相机按 `sync`、`program` 写回的断言改为检查变化事件的 `cause`：激活时按 `program` 写回、程序定位的原因被当成 `sync`，改坏这 2 处均被发现
