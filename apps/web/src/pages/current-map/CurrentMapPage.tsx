@@ -5,6 +5,9 @@ import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundaryPanel } from '@/shared/map/boundary/BoundaryPanel';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
+import { CoordinateLocatePanel } from '@/shared/map/location/CoordinateLocatePanel';
+import { LocationOverlay } from '@/shared/map/location/LocationOverlay';
+import { useLocationPoint } from '@/shared/map/location/useLocationPoint';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
 import { useMeasure } from '@/shared/map/measure/useMeasure';
@@ -30,7 +33,9 @@ export const CurrentMapPage = defineComponent({
     const boundaries = useBoundaries();
     const region = useRegionLocate(map, { goToDefaultView });
     const measure = useMeasure();
+    const location = useLocationPoint(map);
     map.registerTools(measure.tools);
+    map.registerTools(location.tools);
     map.bindStyle({
       basemap: basemap.deriveGroup,
       'basemap-labels': basemap.deriveLabelsGroup,
@@ -39,22 +44,44 @@ export const CurrentMapPage = defineComponent({
       measure: measure.deriveGroup
     });
 
-    // 区划定位的面板开关只是界面状态；关闭面板不清掉选择（ADR 0036）
-    const regionPanelOpen = ref(false);
-    const toggleRegionPanel = () => (regionPanelOpen.value = !regionPanelOpen.value);
+    // 面板开关只是界面状态，区划定位和坐标定位同一时间只开一个；关闭面板不清掉选择和位置点（ADR 0036、0037）
+    type LocatePanel = 'region-locate' | 'coordinate-locate';
+    const openPanel = ref<LocatePanel | null>(null);
+    const togglePanel = (panel: LocatePanel) => (openPanel.value = openPanel.value === panel ? null : panel);
+    const closePanel = () => (openPanel.value = null);
+    // "清除"清掉地图上画的东西：测量结果和位置点；区划选择不算
+    const clear = () => {
+      measure.clear();
+      location.remove();
+    };
 
     return () => (
       <div class={styles.root}>
         <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} />
         <MeasureOverlay measure={measure} />
+        <LocationOverlay location={location} />
         <div class={styles.controls}>
           <MapToolbar
-            items={['default-view', 'browse', 'measure-distance', 'measure-area', 'clear', 'region-locate']}
-            actions={{ 'default-view': goToDefaultView, clear: measure.clear, 'region-locate': toggleRegionPanel }}
-            pressed={regionPanelOpen.value ? ['region-locate'] : []}
+            items={[
+              'default-view',
+              'browse',
+              'measure-distance',
+              'measure-area',
+              'clear',
+              'region-locate',
+              'coordinate-locate'
+            ]}
+            actions={{
+              'default-view': goToDefaultView,
+              clear,
+              'region-locate': () => togglePanel('region-locate'),
+              'coordinate-locate': () => togglePanel('coordinate-locate')
+            }}
+            pressed={openPanel.value ? [openPanel.value] : []}
           />
-          {regionPanelOpen.value && (
-            <RegionLocatePanel region={region} onClose={() => (regionPanelOpen.value = false)} />
+          {openPanel.value === 'region-locate' && <RegionLocatePanel region={region} onClose={closePanel} />}
+          {openPanel.value === 'coordinate-locate' && (
+            <CoordinateLocatePanel location={location} onClose={closePanel} />
           )}
           <BasemapPanel basemap={basemap} />
           <BoundaryPanel boundaries={boundaries} />
