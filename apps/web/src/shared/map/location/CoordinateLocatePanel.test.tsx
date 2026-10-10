@@ -82,7 +82,8 @@ describe('CoordinateLocatePanel', () => {
     await wrapper.get('input[value="decimal"]').setValue(true);
 
     expect(location.state.value.format).toBe('decimal');
-    expect(valueOf(wrapper, '经度')).toBe('118.797861');
+    // 按精确值换写法，不是从显示的度分秒换算回来
+    expect(valueOf(wrapper, '经度')).toBe('118.797860');
     expect(field(wrapper, '经度').attributes('placeholder')).toBe('如 118.777800');
   });
 
@@ -113,6 +114,40 @@ describe('CoordinateLocatePanel', () => {
 
     expect(location.state.value.point).toStrictEqual({ lngLat: [118.79786, 32.04864], source: 'input' });
     expect(valueOf(wrapper, '经度')).toBe('118°47′52.30″');
+  });
+
+  it('离开输入框规范成度分秒之后，点"定位"仍按输入的原值定位（显示的文字不影响数值）', async () => {
+    const { wrapper, location } = mountPanel();
+
+    await type(wrapper, '经度', '118.79786');
+    await type(wrapper, '纬度', '32.04864');
+    expect(valueOf(wrapper, '经度')).toBe('118°47′52.30″');
+    await button(wrapper, '定位').trigger('click');
+
+    expect(location.state.value.point?.lngLat).toStrictEqual([118.79786, 32.04864]);
+  });
+
+  it('切换格式来回之后仍是原值', async () => {
+    const { wrapper, location } = mountPanel();
+    await type(wrapper, '经度', '118.79786');
+    await type(wrapper, '纬度', '32.04864');
+
+    await wrapper.get('input[value="decimal"]').setValue(true);
+    await wrapper.get('input[value="dms"]').setValue(true);
+    await button(wrapper, '定位').trigger('click');
+
+    expect(location.state.value.point?.lngLat).toStrictEqual([118.79786, 32.04864]);
+  });
+
+  it('经度框里粘贴一对坐标后直接回车：和点"定位"一样分到两个框并定位', async () => {
+    const { wrapper, location } = mountPanel();
+
+    await field(wrapper, '经度').setValue('118.79786, 32.04864');
+    expect(wrapper.text()).not.toContain('无法识别');
+    await field(wrapper, '经度').trigger('keydown', { key: 'Enter' });
+
+    expect(location.state.value.point?.lngLat).toStrictEqual([118.79786, 32.04864]);
+    expect(valueOf(wrapper, '纬度')).toBe('32°02′55.10″');
   });
 
   it('点"定位"时有空白的输入框：提示，不放点；之后识别得了时提示消失', async () => {
