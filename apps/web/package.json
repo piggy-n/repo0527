@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:intranet": "vite --mode intranet",
     "build": "vite build",
+    "build:intranet": "vite build --mode intranet",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",

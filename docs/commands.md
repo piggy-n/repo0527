@@ -10,9 +10,11 @@
 |---|---|
 | 刚 clone / 切分支 / 拉代码后 | `pnpm install` |
 | 本地开发 | `pnpm --filter @yzt/web dev` |
+| 本地开发（内网配置，不请求天地图） | `pnpm --filter @yzt/web dev:intranet` |
 | 提交前（和 CI 相同） | `pnpm typecheck` → `pnpm lint` → `pnpm test` → `pnpm build` |
 | 自动修复 lint 问题 | `pnpm lint:fix` |
 | 写代码时持续运行测试 | `pnpm --filter @yzt/web test:watch` |
+| 内网部署的构建 | `pnpm build:intranet` |
 | 预览构建产物 | `pnpm --filter @yzt/web preview` |
 | 每月检查依赖 | `pnpm deps:check` |
 | 范围内升级 | `pnpm deps:update:within-range` |
@@ -114,6 +116,16 @@ pnpm add -Dw -E some-tool
 - 默认端口是 5173，被占用时 Vite 会自动换下一个端口，以终端输出的地址为准
 - `--filter @yzt/web` 指定在哪个包里运行；也可以 `cd apps/web` 后执行 `pnpm dev`
 
+### `pnpm --filter @yzt/web dev:intranet`
+
+**作用**：用内网部署的配置启动开发服务器，地图不向天地图发任何请求。
+
+**什么时候用**：开发或检查内网环境下的行为，例如底图只能选"无底图"。
+
+**执行了什么**：运行 `vite --mode intranet`，在 `.env` 之上加载 `.env.intranet`（ADR 0032）。
+
+**注意事项**：和 `dev` 用同一个默认端口，同时运行两个时用 `--port` 指定另一个端口。
+
 ### `pnpm --filter @yzt/web preview`
 
 **作用**：在本地启动一个静态服务器，预览 `pnpm build` 的产物。
@@ -122,7 +134,7 @@ pnpm add -Dw -E some-tool
 
 **执行了什么**：用 `vite preview` 托管 `apps/web/dist`。
 
-**注意事项**：必须先运行 `pnpm build`；它只用于本地检查，不能当生产服务器。
+**注意事项**：必须先运行 `pnpm build` 或 `pnpm build:intranet`，预览的是最近一次构建的产物；它只用于本地检查，不能当生产服务器。
 
 ### `pnpm --filter @yzt/web title:generate`
 
@@ -252,6 +264,20 @@ pnpm build
 
 - **构建不做类型检查**，类型错误的代码也能构建成功，所以 `pnpm typecheck` 要单独跑
 - `dist/` 已被 `.gitignore` 忽略
+- 这是公网部署的构建；内网部署用 `pnpm build:intranet`
+
+### `pnpm build:intranet`
+
+**作用**：内网部署（不能访问公网）的生产构建。
+
+**什么时候用**：给内网环境出部署产物时。
+
+**执行了什么**：根目录的 `pnpm -r build:intranet` 在 `apps/web` 里执行 `vite build --mode intranet`，在 `.env` 之上加载 `.env.intranet`，其余和 `pnpm build` 相同（ADR 0032）。没有这个脚本的包被跳过。
+
+**注意事项**：
+
+- 和 `pnpm build` 输出到同一个 `apps/web/dist`，后一次构建覆盖前一次；部署前确认执行的是对应环境的命令
+- 仍是生产构建（`import.meta.env.PROD` 为真），开发页面同样被剔除
 
 ---
 

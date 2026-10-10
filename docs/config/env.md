@@ -1,7 +1,7 @@
 # 环境变量配置说明
 
 对应文件：`apps/web/.env`、`apps/web/src/shared/config/`
-相关决策：ADR 0008（接口走同源代理）
+相关决策：ADR 0008（接口走同源代理）、ADR 0031（天地图的开关与 key）、ADR 0032（内网的构建模式）
 
 ## 文件与优先级
 
@@ -13,11 +13,12 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 
 | 文件 | 是否提交 | 用途 |
 |---|---|---|
-| `.env` | 提交 | 所有模式共用的变量，目前全部变量都在这里 |
+| `.env` | 提交 | 所有模式共用的变量，公网部署只用它 |
+| `.env.intranet` | 提交 | 内网部署（`intranet` 模式）与公网不同的变量，目前只有 `VITE_TIANDITU_ENABLED=false`（ADR 0032） |
 | `.env.local`、`.env.[mode].local` | 不提交（`.gitignore` 中的 `*.local`） | 个人临时覆盖，例如连接另一台后端 |
 | `.env.development`、`.env.production` | 需要时再建 | 只在某个模式下不同的变量 |
 
-`pnpm dev` 的模式是 `development`，`pnpm build` 和 `vite preview` 是 `production`，以后 Vitest 是 `test`。修改 `.env` 文件后，开发服务器会自动重启。
+`pnpm dev` 的模式是 `development`，`pnpm build` 和 `vite preview` 是 `production`，Vitest 是 `test`；内网的 `dev:intranet`、`build:intranet` 是 `intranet`。`vite build --mode intranet` 仍是生产构建（`import.meta.env.PROD` 为真），所以判断是不是生产构建用 `PROD` / `DEV`，不用 `MODE`。修改 `.env` 文件后，开发服务器会自动重启。
 
 ## 变量
 
@@ -53,7 +54,7 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 
 开关类变量（如 `VITE_TIANDITU_ENABLED`）只接受小写的 `true`、`false`，其他值（`TRUE`、`1`、`yes`）在启动时报错，不按"非空即真"处理：`.env` 里的值都是字符串，`'false'` 也是非空的。
 
-**几个变量合成一个值**：天地图的开关和 key 在 `appConfig` 里合成 `tianditu: { key } | null`，关闭时为 `null`。"开启了却没有 key"在类型上不存在，使用方拿到 `null` 时必须处理天地图不可用的情况（内网部署），不用在每条调用路径上各写一次开关判断。公网和内网各用一套构建、部署命令的具体做法待定（ADR 0031），无论用哪种，改变的只是这两个变量从哪里来。
+**几个变量合成一个值**：天地图的开关和 key 在 `appConfig` 里合成 `tianditu: { key } | null`，关闭时为 `null`。"开启了却没有 key"在类型上不存在，使用方拿到 `null` 时必须处理天地图不可用的情况（内网部署），不用在每条调用路径上各写一次开关判断。公网和内网各用一套构建命令（ADR 0032）：内网用 `intranet` 模式，由 `.env.intranet` 覆盖开关；代码只读 `appConfig`，不判断模式名。
 
 例外：Vite 内置的 `DEV`、`PROD`、`MODE`、`BASE_URL` 直接读取 `import.meta.env`。例如路由表靠 `import.meta.env.DEV` 的静态替换，在生产构建中删除开发路由。
 

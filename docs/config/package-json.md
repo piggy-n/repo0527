@@ -30,7 +30,8 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 
 | 脚本 | 内容 | 说明 |
 |---|---|---|
-| `build` | `pnpm -r build` | 构建所有包 |
+| `build` | `pnpm -r build` | 构建所有包（公网部署） |
+| `build:intranet` | `pnpm -r build:intranet` | 内网部署的构建，没有这个脚本的包被跳过（ADR 0032） |
 | `typecheck` | `pnpm -r typecheck` | 检查所有包的类型 |
 | `lint` | `oxlint` | 从根目录检查整个仓库 |
 | `lint:fix` | `oxlint --fix` | 自动修复可以安全修复的问题 |
@@ -114,7 +115,9 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:intranet": "vite --mode intranet",
     "build": "vite build",
+    "build:intranet": "vite build --mode intranet",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
