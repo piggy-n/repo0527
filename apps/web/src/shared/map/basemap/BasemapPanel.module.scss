@@ -1,0 +1,29 @@
+// 联调用的样式，5D 再设计；位置由页面决定
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+}
+
+.opacity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.label {
+  flex: none;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-regular);
+}
+
+.slider {
+  flex: 1;
+  // 两端的滑块按钮不贴着面板边缘
+  padding: 0 var(--space-sm);
+}

@@ -3,3 +3,10 @@
   position: relative;
   height: 100%;
 }
+
+// 联调用的位置，5D 再设计
+.basemapPanel {
+  position: absolute;
+  top: var(--space-lg);
+  right: var(--space-lg);
+}

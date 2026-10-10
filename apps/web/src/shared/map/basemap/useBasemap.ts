@@ -15,7 +15,7 @@ export interface UseBasemapOptions {
   readonly tianditu?: TiandituConfig | null;
 }
 
-/** 底图的拥有者（ADR 0031）：状态随页面，面板通过 props 拿到它，页面把两个推导函数绑定到分组 */
+/** 底图的拥有者（ADR 0031）：状态随页面，面板通过 props 拿到它，页面把两个推导函数绑定到分组；函数都是闭包，可以直接取出来传递 */
 export interface Basemap {
   /** 可选的底图，按天地图配置得出 */
   readonly options: readonly BasemapOption[];
@@ -23,13 +23,13 @@ export interface Basemap {
   /** 当前底图的透明度（0～1），无底图时为 null */
   readonly opacity: ComputedRef<number | null>;
   /** 选择底图；不可用的底图直接抛错 */
-  select(id: BasemapId): void;
+  readonly select: (id: BasemapId) => void;
   /** 修改当前底图的透明度；不在 0～1 之间、或者无底图时直接抛错 */
-  setOpacity(value: number): void;
+  readonly setOpacity: (value: number) => void;
   /** 绑定到 basemap 分组 */
-  deriveGroup(): StyleGroup;
+  readonly deriveGroup: () => StyleGroup;
   /** 绑定到 basemap-labels 分组 */
-  deriveLabelsGroup(): StyleGroup;
+  readonly deriveLabelsGroup: () => StyleGroup;
 }
 
 /** 创建底图的拥有者，在页面的 setup 中调用；不依赖组件的生命周期 */

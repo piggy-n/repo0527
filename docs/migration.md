@@ -16,7 +16,7 @@ git diff <基线>..master-demo -- <旧路径>
 | 登录与鉴权 | `836f03b` | `src/views/login/`、`src/services/auth/auth-service.js`、`src/stores/user.js`、`src/utils/func-crypto.js`（`encryptPassword`）、`src/api/sys/sys-uaa-auth-api.js`、`src/router/index.js`（路由守卫）、`src/libs/http-service.js`（token 请求头与 401） | `shared/auth`、`features/auth`、`pages/login`、`app/router`、`app/http.ts` | 已完成登录、会话、路由权限、退出（阶段二）；AI 后端登录待迁移 AI 对话时处理 |
 | 文件管理 | `836f03b` | `src/views/resource-center/file-management.vue`、`src/views/resource-center/components/` 下的 `FileManagement*.vue`、`DeleteFileManagementDialog.vue`、`UploadFileManagementDialog.vue`、`DocxPreviewDialog.vue`；`src/mock/file-management-data.js`（分类树与业务类型标签，是写死的业务配置，不是 mockjs）；`src/api/resource/resource-api.js` 中的 `/file/*` | `features/file-management`、`pages/file-management`、`shared/query-form`、`shared/table` | 列表已完成（阶段三 3.3）：分类树、筛选、表格、分页、删除；"上传文档"按钮只占了位置；上传、下载、预览在阶段六 |
 | 地图内核 | `836f03b` | `src/components/CommonMap/`（二维：引擎、`MapService`、各 Manager、点选、测量、绘制）；`src/views/current-map-new/cesium/`（三维）、`src/views/current-map-new/composables/useEngineSwitch.js`（二三维切换与同步）；`src/libs/bus.js`（全局事件总线） | `libs/map-core`、`libs/utils`（Worker 通信层）；三维将来在 `libs/map-cesium` | 阶段四：按新设计（ADR 0020～0025）实现了地图会话（样式、相机）、MapLibre 适配器和 Worker 通信层，在 `/dev/map` 上验证；旧代码的分析见 [modules/map-core.md](modules/map-core.md) 附录。业务图层、点选、测量、绘制、三维还没有迁移（阶段五、六）。阶段四结束时 `master-demo` 仍是 `836f03b` |
-| 现状底图与公共地图能力 | `836f03b` | `src/views/current-map-new/`（页面、图层面板、地图控制栏、图例、详情面板；`cesium/` 与 `composables/useEngineSwitch.js` 归三维阶段）；`src/components/CommonMap/`（`MapContainer`、`MapService` 与底图、边界、业务图层、测量、点选、绘制、符号与地类配色）；`src/assets/LayerManager.ts`；`src/services/map-tree/`（图层树接口、规范化、样式登记表、静态节点）；`src/stores/mapTree.js`；`src/components/toolbar/`（工具栏、区划定位面板）；`src/components/map/map-configs.js`；`src/api/resource/resource-map-api.js`；`src/views/current-map/utils/MapStaticBoundaryManager.js` | `libs/map-vue`、`shared/map`、`features/*`、`pages/current-map`（分层在 5A.1 的 ADR 中确定） | 5A 完成：map-vue（`provideMap`、样式绑定、`MapCanvas`、`useMap`、定位可视区域、失败提示）与现状底图的联调骨架，旧代码还没有迁移；底图、边界、工具在 5B，资源图层、面板、图例、点选在 5C，界面在 5D。5A 结束时 `master-demo` 仍是 `836f03b`。不迁移：接口失败时回退的本地快照 `src/assets/tree-data.ts`、三区三线的占位节点 |
+| 现状底图与公共地图能力 | `836f03b` | `src/views/current-map-new/`（页面、图层面板、地图控制栏、图例、详情面板；`cesium/` 与 `composables/useEngineSwitch.js` 归三维阶段）；`src/components/CommonMap/`（`MapContainer`、`MapService` 与底图、边界、业务图层、测量、点选、绘制、符号与地类配色）；`src/assets/LayerManager.ts`；`src/services/map-tree/`（图层树接口、规范化、样式登记表、静态节点）；`src/stores/mapTree.js`；`src/components/toolbar/`（工具栏、区划定位面板）；`src/components/map/map-configs.js`；`src/api/resource/resource-map-api.js`；`src/views/current-map/utils/MapStaticBoundaryManager.js` | `libs/map-vue`、`shared/map`、`features/*`、`pages/current-map`（分层在 5A.1 的 ADR 中确定） | 5A 完成：map-vue（`provideMap`、样式绑定、`MapCanvas`、`useMap`、定位可视区域、失败提示）与现状底图的联调骨架，旧代码还没有迁移；底图、边界、工具在 5B，资源图层、面板、图例、点选在 5C，界面在 5D。5A 结束时 `master-demo` 仍是 `836f03b`。不迁移：接口失败时回退的本地快照 `src/assets/tree-data.ts`、三区三线的占位节点。5B.1 完成：底图（`BaseLayerManager`、`MapControlBar` 的底图部分、提交 `d768c66` 的天地图开关）迁到 `shared/map/basemap`，矢量、影像都用天地图（ADR 0031），内网部署用 `pnpm build:intranet`（ADR 0032）；不迁移 `static-nodes.js` 里的内网影像（`192.168.1.180:8080`）和没用到的 `osm-tiles` 数据源 |
 | 布局（顶部导航、用户菜单） | `836f03b` | `src/layout/components/TheHeader.vue`、`src/services/resource-application/roleService.js`（`getHeaderMenus`、`getRoleLabel`） | `app/layout` | 已完成导航与退出登录（阶段二 2.10）；修改密码、修改头像、消息铃铛待迁移对应功能时处理 |
 
 ## 文件管理：接口实测（2026-10-08）
@@ -95,3 +95,13 @@ git diff <基线>..master-demo -- <旧路径>
 - 范围外的瓦片返回 200、内容为空；**瓦片集不存在、缩放级越界时同样返回 HTTP 200**，内容是 JSON `{"success":false,"code":500,"data":null,"msg":"系统异常"}`。预计 MapLibre 会把它当作瓦片解析失败、通过 `error` 事件上报，不会让视图进入 `failed`（ADR 0026：运行中的其他错误只上报），接入资源图层时在开发页确认
 
 行政区边界在旧项目是静态文件 `public/static/geojson/`：省界 0.8 MB、市界 2.5 MB、县界 0.2 MB。县界比市界小得多，可能做过简化或不完整，到 5B.2 确认。
+
+## 底图：天地图实测（2026-10-10）
+
+5B.1 的依据（ADR 0031），从本机直接请求：
+
+- 天地图 `vec`、`cva`、`img`、`cia`（`_w` 球面墨卡托）的有效级别是 1～18；0 级和 19 级也返回 200，内容是占位图（`img` 的 0 级和 19 级同为 4769 字节），所以数据源设 `minzoom: 1`、`maxzoom: 18`
+- 返回头有 `Access-Control-Allow-Origin: *`、`Cache-Control: max-age=432000`（5 天）；key 不对时返回 418；不带 Referer 也能取到瓦片，这个 key 可能没有设域名白名单（待确认，见 roadmap）
+- 旧项目的内网影像 `http://192.168.1.180:8080/tiles/{z}/{x}/{y}.jpg` 只有 1～9 级（10 级以上全部 404），9 级覆盖约 90.7～135.7°E、20～52.9°N；用户决定改用天地图影像，不迁移
+- 旧项目提交 `d768c66` 的天地图开关：关闭时底图样式里不放天地图数据源，区划边界只用本地 GeoJSON、天地图行政区接口直接抛错；同一提交把现状底图的默认选择从"无底图"改回"矢量底图"。新项目用 `appConfig.tianditu`（关闭时为 `null`）和内网构建模式实现同样的语义，5B.2 的边界、5B.5 的区划定位沿用
+- 旧项目的 `auth-service` 把 `t0`～`t7.tianditu.gov.cn` 排除在加 token 的范围之外：以后给瓦片请求加 token 时只给同源请求加，不能把登录 token 发给天地图
