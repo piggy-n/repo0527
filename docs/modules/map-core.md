@@ -15,7 +15,7 @@
 | 文件 | 内容 |
 |---|---|
 | `style/diff-style.ts` | `diffStyle`：对比两份样式快照，得出命令列表 |
-| `style/style-model.ts` | `StyleModel`：按分组组合样式，提交加版本号，合并通知 |
+| `style/style-model.ts` | `StyleModel`：按分组组合样式，提交时修订号加 1，合并通知 |
 | `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause`；当前这次相机操作的信号（ADR 0038） |
 | `session/map-session.ts` | `MapSession`：组合样式、相机与当前工具，统一释放 |
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`ToolView` |
@@ -73,7 +73,7 @@ session[Symbol.dispose]();
 ```
 拥有者（底图、业务图层、边界、遮罩、高亮、测量、绘制……）
   自己的状态 ──纯函数推导──▶ 分组 { sources, layers }（不可变，整体替换）
-                                   │ setGroup / setGroups（一次提交，版本号加 1）
+                                   │ setGroup / setGroups（一次提交，修订号加 1）
                                    ▼
               按装配方声明的顺序拼成完整样式；同一轮事件循环的提交合并通知
                                    │ diffStyle(上一份, 这一份)：GeoJSON 数据按引用比较
@@ -104,17 +104,17 @@ session[Symbol.dispose]();
 - 构造时声明分组顺序，类型参数用 `const`，不写 `as const` 也能推断出分组 ID 的字面量联合
 - 样式的根属性 `StyleRoot` 去掉了相机字段（`center`、`zoom` 等归 `CameraModel`，否则 diff 会生成 `setCenter` 和它抢相机）
 - 提交前先组合并校验：分组 ID 未声明、数据源或图层 ID 重复、图层引用的数据源不存在都会抛错，整次提交不生效
-- 所有分组引用都没变的提交被忽略；内容相同的新对象照样加版本号，但对比后没有命令就不通知
+- 所有分组引用都没变的提交被忽略；内容相同的新对象照样让修订号加 1，但对比后没有命令就不通知
 - 同一轮事件循环里的提交合并成一次通知（微任务）；通知前先记下快照，监听器里再次提交时，下一次通知从这里开始对比
-- 释放后丢弃待发的通知、清空监听器，再提交或订阅会抛错；读取 `current`、`version` 仍然可以
+- 释放后丢弃待发的通知、清空监听器，再提交或订阅会抛错；读取 `current`、`revision` 仍然可以
 
 ### CameraModel
 
 - 写入时复制并冻结；数值出现 `NaN`、无穷或纬度超出 ±90 时抛 `RangeError`，状态不变
 - 不做范围收敛：俯角上限等由各视图应用时处理，再按 `sync` 写回
 - 数值都没变时不通知；同步通知，不合并到微任务：相机本来每帧变一次，事件的 `cause` 要对得上触发它的那次调用
-- `intentRevision` 只在 `user`、`program` 的变化时加 1：三维切走时记下它，切回时没变，就按 ADR 0024 第 6 条还原离开时的精确视角。它按变化次数计数（拖动一次会加几十，每帧一次 `move`），只能比较前后是否相等，不能当作操作次数
-- 相机操作（ADR 0038）：`beginOperation()` 开始一次新的操作，中止上一次的信号并返回这一次的；`operation` 读当前的信号；释放时中止。用户开始拖动或缩放、用户发起的定位各是一次操作，由适配器和发起定位的拥有者调用；相机的变化本身不开始、也不中止操作。等待中的定位（如区划定位等边界）拿着开始时的信号，中止了就不再定位。5B 之后曾用 `intentRevision` 判断，相机没变的操作（目标就是当前视角）和动画的每一帧都会判断错
+- 不记录变化的次数：三维能否还原离开时的精确视角（ADR 0020 第 5 条），由三维视图在隐藏期间订阅相机事件、看 `cause` 判断（ADR 0039 第 5 条，原来的 `intentRevision` 已删除）
+- 相机操作（ADR 0038）：`beginOperation()` 开始一次新的操作，中止上一次的信号并返回这一次的；`operation` 读当前的信号；释放时中止。用户开始拖动或缩放、用户发起的定位各是一次操作，由适配器和发起定位的拥有者调用；相机的变化本身不开始、也不中止操作。等待中的定位（如区划定位等边界）拿着开始时的信号，中止了就不再定位。5B 之后曾用相机的变化次数判断，相机没变的操作（目标就是当前视角）和动画的每一帧都会判断错
 
 ### MapSession
 
@@ -163,14 +163,14 @@ store.clear();
 **样式同步**：
 
 - 创建地图时直接传入当前快照作为 `style`
-- 地图上的样式记为三种结果之一（ADR 0026）：加载中（某个快照正在整体加载）、已加载（即已应用的快照）、加载失败（某个版本，同时记下它的快照）
-- 收到通知时，`toVersion` 不大于已加载的版本就忽略；`fromVersion` 等于已加载的版本就直接应用命令；否则对比"已加载 → 当前"
+- 地图上的样式记为三种结果之一（ADR 0026）：加载中（某个快照正在整体加载）、已加载（即已应用的快照）、加载失败（某个修订号，同时记下它的快照）
+- 收到通知时，`toRevision` 不大于已加载的修订号就忽略；`fromRevision` 等于已加载的修订号就直接应用命令；否则对比"已加载 → 当前"
 - `applyStyleCommand` 支持数据源和图层的 9 种命令；其余 18 种（样式根属性、相机类、没有公开方法的、`setStyle`）返回"不支持"，交给整体重建。`setGeoJSONSourceData` 的异步失败交给回调
 - 遇到不支持的命令、应用时抛错、或应用期间同步收到 `error` 事件（MapLibre 的很多方法校验失败时不抛错，只发事件），命令应用完后用当前快照 `setStyle(…, { diff: false })` 整体重建，等 `style.load` 后再继续。不支持的命令触发重建但不算错误；抛错和 `error` 事件交给 `onError`
 - "已加载"只在一次通知的命令全部成功（期间没有 `error` 事件）、或整体加载完成时更新；发起整体重建时不更新
-- 加载中收到 `error` 就判定加载失败：整份样式通不过校验时，MapLibre 只发 `error`，不会再有 `style.load`。如果 `style.load` 之后仍然到达，以它为准：把失败时记下的快照记为已加载，再照常激活或追上最新版本，之后继续增量同步
-- 加载失败时，会话里已经有更新的版本（加载期间提交的，那时的通知因为还在加载而没有处理）：不进入 `failed`，直接用最新的快照再加载一次，`whenReady()` 继续等待。重新加载放到微任务里：MapLibre 对每条校验错误各发一次 `error`，要等它发完再调用 `setStyle`，否则后面几条会被当成新版本的失败，也避免在它分发事件的过程中重入
-- 加载失败的版本不再重试；会话出现更新的版本时重新整体加载（暂停意图时也一样）。每个版本最多整体加载一次，所以不会无限重建；一个不合法的图层会让整个视图进入 `failed`，取舍见 ADR 0026 第 5 条
+- 加载中收到 `error` 就判定加载失败：整份样式通不过校验时，MapLibre 只发 `error`，不会再有 `style.load`。如果 `style.load` 之后仍然到达，以它为准：把失败时记下的快照记为已加载，再照常激活或追上最新的提交，之后继续增量同步
+- 加载失败时，会话里已经有更新的提交（加载期间提交的，那时的通知因为还在加载而没有处理）：不进入 `failed`，直接用最新的快照再加载一次，`whenReady()` 继续等待。重新加载放到微任务里：MapLibre 对每条校验错误各发一次 `error`，要等它发完再调用 `setStyle`，否则后面几条会被当成新提交的失败，也避免在它分发事件的过程中重入
+- 加载失败的修订不再重试；会话出现更新的提交时重新整体加载（暂停意图时也一样）。每个修订最多整体加载一次，所以不会无限重建；一个不合法的图层会让整个视图进入 `failed`，取舍见 ADR 0026 第 5 条
 - "可以应用样式"的信号用 `style.load`，不用 `load`：`load` 要等第一帧渲染（依赖 `requestAnimationFrame`，窗口在后台时等不到），样式方法只需要样式已加载；整体重建后同样触发 `style.load`，共用一个处理函数
 - 其他时候收到的 `error` 事件（如瓦片 404）只上报（`onError`，默认打印到控制台）
 
@@ -189,10 +189,10 @@ store.clear();
 **生命周期**：
 
 - 构造即创建地图（`initializing`）；创建时抛错（如不支持 WebGL2 的 `GPUInitializationError`）不往外抛，进入 `failed`，由 `whenReady` 和 `statechange` 表达
-- `failed` 有两种（ADR 0026 第 4 条）：引擎失败（创建地图或 `setStyle` 本身抛错）不能恢复，之后的样式变化、`error`、`style.load` 都不再改变状态，只能释放后重新创建视图；样式加载失败在出现新版本时自动重新加载，`failed → initializing → ready`（暂停意图时为 `paused`）
+- `failed` 有两种（ADR 0026 第 4 条）：引擎失败（创建地图或 `setStyle` 本身抛错）不能恢复，之后的样式变化、`error`、`style.load` 都不再改变状态，只能释放后重新创建视图；样式加载失败在出现新的提交时自动重新加载，`failed → initializing → ready`（暂停意图时为 `paused`）
 - 画布尺寸变化时（MapLibre 的 `resize`，容器尺寸变化后由它自己的 `ResizeObserver` 触发）发出 `resize`：相机不变，屏幕上的投影变了，map-vue 据此更新 `projectionRevision`（5B 验收后加入）
 - 失败的原因是数据（ADR 0030）：`view.failure` 只在 `failed` 时有值，引擎失败为 `{ kind: 'engine', cause, error }`（`GPUInitializationError` 时 `cause` 是 `webgl-unavailable`，其余是 `unknown`），样式失败为 `{ kind: 'style', error }`；离开 `failed` 和释放时清空。状态或原因任一变化都发出 `statechange`，监听者收到 `failed` 时已经能读到原因
-- `whenReady()` 表示当前这一轮整体加载的结果。创建地图、整体重建、从 `failed` 重新加载各开始一轮，上一轮已经有结果就换一个新的 Promise；本轮的结局都落在同一个 Promise 上：加载完成后进入 `ready`（运行中重建则是完成并追上之后；暂停期间完成加载时进入 `paused`，和以 `active: false` 创建时一样）就成功，失败就以原因结束，释放就以 `AbortError` 结束。激活中止、失败后改用新版本重试都不结束本轮，同一个 Promise 继续等待。这样恢复显示时触发了重建，等 `whenReady()` 结束后再定位不会遇到 `paused`；重建随后失败，拿到的 Promise 也会失败。从 `failed` 重新加载时，先换 Promise 再发出 `statechange`，监听者拿到的就是这一轮的
+- `whenReady()` 表示当前这一轮整体加载的结果。创建地图、整体重建、从 `failed` 重新加载各开始一轮，上一轮已经有结果就换一个新的 Promise；本轮的结局都落在同一个 Promise 上：加载完成后进入 `ready`（运行中重建则是完成并追上之后；暂停期间完成加载时进入 `paused`，和以 `active: false` 创建时一样）就成功，失败就以原因结束，释放就以 `AbortError` 结束。激活中止、失败后改用新的提交重试都不结束本轮，同一个 Promise 继续等待。这样恢复显示时触发了重建，等 `whenReady()` 结束后再定位不会遇到 `paused`；重建随后失败，拿到的 Promise 也会失败。从 `failed` 重新加载时，先换 Promise 再发出 `statechange`，监听者拿到的就是这一轮的
 - 初始化期间调用 `pause()`，加载完成后进入 `paused`；状态变化发出 `statechange`
 - 首次激活或恢复显示时，如果追赶样式触发了整体重建，立即中止激活：首次激活停在 `initializing`，恢复显示停在 `paused`，不同步相机，`whenReady()` 不结束。重建完成（`style.load`）后再激活；重建失败则进入 `failed`，不会先进入 `ready` 再失败
 - MapLibre 的事件回调都包一层 `try/catch`，错误交给 `onError`，不让异常打断 MapLibre 自己的事件分发
@@ -217,7 +217,7 @@ store.clear();
 
 - `app/map-runtime.ts` 的 `setupMapRuntime()` 负责 `setWorkerUrl` 和 maplibre-gl 的 CSS，可以重复调用；路由用 `withMapRuntime(loadPage)` 包装地图页，先动态导入运行时再加载页面
 - 登录页不请求 maplibre-gl；生产产物里没有 maplibre-gl 和开发页，入口包不变
-- 开发页 `/dev/map`（`pages/dev/map`，只在开发环境）用本地 GeoJSON 验证过：颜色切换、加上和去掉 `minzoom`（去掉时走"删除再添加"，图层仍在描边下面）、高亮的增删和移动（`setGeoJSONSourceData`）、拖动（`user`）、`flyTo` 与 `fitBounds`（`program`）、暂停后模拟三维改相机再恢复（俯角 70° 收到 60° 按 `sync` 写回，意图版本不变）。5A.2c 起开发页改用 map-vue（见 [map-vue.md](map-vue.md)"开发页验证"），页面拿不到视图的暂停、恢复和直接写相机，暂停与模拟三维的场景暂时去掉，由 `MapLibreView` 的单元测试覆盖，三维阶段加入框架切换后再回到开发页
+- 开发页 `/dev/map`（`pages/dev/map`，只在开发环境）用本地 GeoJSON 验证过：颜色切换、加上和去掉 `minzoom`（去掉时走"删除再添加"，图层仍在描边下面）、高亮的增删和移动（`setGeoJSONSourceData`）、拖动（`user`）、`flyTo` 与 `fitBounds`（`program`）、暂停后模拟三维改相机再恢复（俯角 70° 收到 60° 按 `sync` 写回）。5A.2c 起开发页改用 map-vue（见 [map-vue.md](map-vue.md)"开发页验证"），页面拿不到视图的暂停、恢复和直接写相机，暂停与模拟三维的场景暂时去掉，由 `MapLibreView` 的单元测试覆盖，三维阶段加入框架切换后再回到开发页
 - `fitBounds` 带 padding 后，会话相机记的是画布几何中心：右侧留 360px 时偏东 1.35°，与按像素换算的 1.34° 吻合
 
 ## MapLibre 6 的实测行为
@@ -241,7 +241,7 @@ store.clear();
 | 会话 | `diffStyle`、`StyleModel`、`CameraModel`、`MapSession` | 纯 TS，jsdom |
 | 测量 | `geodesic`（与 WGS84 的已知弧长、矩形面积对比）、`MeasureStore`（单击、双击、`clickCount`、预览点、Esc、退出、删除与清除、两个工具共用） | 纯 TS，Node |
 | `applyStyleCommand` | 一条命令对应一次地图方法调用 | 假对象，jsdom |
-| `MapLibreView` | 生命周期、版本跟踪、暂停恢复、出错重建、相机读写 | 注入 `createMap` 换成假地图，jsdom |
+| `MapLibreView` | 生命周期、样式修订的跟踪、暂停恢复、出错重建、相机读写 | 注入 `createMap` 换成假地图，jsdom |
 | 真实 MapLibre | 渲染、Worker、事件、尺寸监听、中心点 | 开发页 `/dev/map`，浏览器 |
 
 - 不用 `vi.mock('maplibre-gl')`：适配器依赖的是 `MapLike`，测试注入实现它的假地图 `FakeMap`。假地图的相机方法立即到位并同步触发 `move`、合并 `eventData`，俯角上限 60 用来模拟 MapLibre 的收敛（创建时同样收敛）
@@ -250,6 +250,7 @@ store.clear();
 - 等待 Promise 结束的断言和一个立即完成的 Promise 赛跑，避免实现出错时测试以超时失败
 - `MapLibreView` 逐一改坏 18 处均被发现；ADR 0026 的修复又改坏 17 处、相机同步改坏 7 处，全部由断言发现。其中"引擎失败后仍处理 `error`"起初没被发现：样式变化入口的检查已经挡住了重新加载，唯一可见的影响是 `whenReady()` 的原因被后来的错误替换，补上了这个断言。之后修复样式恢复的 3 个边界（失败时已有新版本、报错后仍加载完成、激活中追赶失败）又改坏 10 处，"已加载后收到 `error` 也当作加载失败"起初没被发现（原用例只检查了没有重建），补上了"仍是 `ready`、之后照常增量同步"的断言。`whenReady()` 改为按一轮整体加载结束之后又改坏 9 处，全部发现
 - 测量（5B.4）：椭球面计算改坏 6 处、`MeasureStore` 改坏 26 处、`clickCount` 1 处，起初有 3 处没被发现，都是测试数据区分不了：面积的经纬度顺序（赤道上的正方形对调后面积不变，改用江苏纬度上长宽不等的矩形）、换工具时继续原来的那条（补断言第二条只有测面工具的点）、加点时不清预览点（补"移动后单击"的场景）。补上后全部由断言发现
+- 删除 `intentRevision`（5C.0b，ADR 0039）后，相机按 `sync`、`program` 写回的断言改为检查变化事件的 `cause`：激活时按 `program` 写回、程序定位的原因被当成 `sync`，改坏这 2 处均被发现
 - 假地图的 `rejectOn` 模拟"只发 `error` 不抛错"，`failOn` 模拟抛错；整体加载的结果由测试手动触发 `style.load` 或 `error`
 - 开发页 `/dev/map` 的"提交不合法的图层"和"重新创建视图"在真实的 MapLibre 上验证了两条路径：运行中 `addLayer` 被拒绝 → 整体重建 → 整份样式校验失败 → `failed` → 去掉后自动恢复；用不合法的快照重新创建视图 → 首次加载失败 → 去掉后自动恢复；提交不合法的图层后、重建的那一帧到来之前提交修正 → 旧快照校验失败时直接改用最新快照加载，页面上始终没有出现 `failed`
 

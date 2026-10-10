@@ -78,7 +78,7 @@ describe('StyleBinder', () => {
     env.binder.start();
 
     expect(env.setGroups).toHaveBeenCalledTimes(1);
-    expect(env.style.version).toBe(1);
+    expect(env.style.revision).toBe(1);
     expect(env.style.current.layers.map(layer => layer.id)).toEqual(['resources-fill', 'highlight-line']);
   });
 
@@ -117,14 +117,14 @@ describe('StyleBinder', () => {
     expect(env.errors).toHaveLength(1);
     expect(env.errors[0]?.message).toContain('没有通过校验');
     expect(env.errors[0]?.cause).toBeInstanceOf(Error);
-    expect(env.style.version).toBe(1);
+    expect(env.style.revision).toBe(1);
     expect(Object.keys(env.style.current.sources)).toEqual(['resources-2022']);
 
     highlightYear.value = 2023;
     await nextTick();
 
     expect(env.errors).toHaveLength(1);
-    expect(env.style.version).toBe(2);
+    expect(env.style.revision).toBe(2);
     expect(Object.keys(env.style.current.sources)).toEqual(['resources-2023']);
     expect(env.setGroups).toHaveBeenLastCalledWith({
       resources: resourcesByYear(2023),
@@ -153,7 +153,7 @@ describe('StyleBinder', () => {
     year.value = 2023;
     await expect(nextTick()).resolves.toBeUndefined();
 
-    expect(env.style.version).toBe(1);
+    expect(env.style.revision).toBe(1);
     expect(tileOf(env.style, 'resources')).toContain('/2022/');
     expect(env.errors).toHaveLength(1);
     expect(env.errors[0]?.message).toContain('highlight');
@@ -165,14 +165,14 @@ describe('StyleBinder', () => {
     points.value = 3;
     await expect(nextTick()).resolves.toBeUndefined();
 
-    expect(env.style.version).toBe(1);
+    expect(env.style.revision).toBe(1);
     expect(tileOf(env.style, 'resources')).toContain('/2022/');
     expect(env.errors).toHaveLength(1);
 
     year.value = 2024;
     await nextTick();
 
-    expect(env.style.version).toBe(2);
+    expect(env.style.revision).toBe(2);
     expect(env.setGroups).toHaveBeenLastCalledWith({
       resources: resourcesWithStableSource(2024),
       highlight: highlightWithStableSource(2024),
@@ -218,7 +218,7 @@ describe('StyleBinder', () => {
     await nextTick();
 
     expect(env.setGroups).toHaveBeenCalledTimes(2);
-    expect(env.style.version).toBe(2);
+    expect(env.style.revision).toBe(2);
   });
 
   it('start 之后再绑定、同一个分组重复绑定时抛错；重复时这一次的绑定都不生效', () => {

@@ -42,31 +42,6 @@ describe('CameraModel', () => {
     model.set({ ...NANJING, center: [118.8, 32.05] }, { view: '3d', cause: 'user' });
 
     expect(changes).toHaveLength(0);
-    expect(model.intentRevision).toBe(0);
-  });
-
-  it('counts user and program changes as intent, but not sync', () => {
-    using model = new CameraModel(NANJING);
-
-    model.set(moved(NANJING, 9), { view: '2d', cause: 'sync' });
-    expect(model.intentRevision).toBe(0);
-
-    model.set(moved(NANJING, 10), { view: '2d', cause: 'user' });
-    model.set(moved(NANJING, 11), { view: '2d', cause: 'program' });
-    expect(model.intentRevision).toBe(2);
-  });
-
-  it('tells whether the exact 3D camera can be restored after a round trip', () => {
-    using model = new CameraModel(NANJING);
-    // 切到二维前，三维记下意图版本
-    const leftAt = model.intentRevision;
-
-    // 二维按会话相机同步过去，俯角被收到它的上限
-    model.set({ ...NANJING, pitch: 60 }, { view: '2d', cause: 'sync' });
-    expect(model.intentRevision).toBe(leftAt);
-
-    model.set(moved(NANJING, 12), { view: '2d', cause: 'user' });
-    expect(model.intentRevision).not.toBe(leftAt);
   });
 
   it('starting an operation aborts the previous one; the current signal is always the latest', () => {

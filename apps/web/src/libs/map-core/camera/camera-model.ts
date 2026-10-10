@@ -52,7 +52,6 @@ function isSameCamera(a: CameraState, b: CameraState): boolean {
 export class CameraModel implements Disposable {
   readonly #events = new ModelEvents<CameraModelEvents>('CameraModel');
   #current: CameraState;
-  #intentRevision = 0;
   // 当前这次相机操作，开始下一次时中止（ADR 0038）
   #operation = new AbortController();
 
@@ -62,11 +61,6 @@ export class CameraModel implements Disposable {
 
   get current(): CameraState {
     return this.#current;
-  }
-
-  /** 用户操作或程序定位造成的变化次数，同步不计；三维据此判断能否还原离开时的精确视角 */
-  get intentRevision(): number {
-    return this.#intentRevision;
   }
 
   /** 当前这次相机操作的信号：开始下一次操作、相机释放时中止（ADR 0038） */
@@ -93,9 +87,6 @@ export class CameraModel implements Disposable {
       return;
     }
     this.#current = next;
-    if (cause !== 'sync') {
-      this.#intentRevision++;
-    }
     this.#events.emit('change', { state: next, view, cause });
   }
 

@@ -50,14 +50,14 @@ describe('StyleModel', () => {
     });
   });
 
-  it('counts one version per commit, including setGroups with several groups', () => {
+  it('counts one revision per commit, including setGroups with several groups', () => {
     using model = createModel();
 
     model.setGroups({ basemap: lineGroup('tdt'), business: lineGroup('dltb') });
-    expect(model.version).toBe(1);
+    expect(model.revision).toBe(1);
 
     model.setGroup('highlight', lineGroup('selected'));
-    expect(model.version).toBe(2);
+    expect(model.revision).toBe(2);
   });
 
   it('ignores a commit that keeps every group reference', async () => {
@@ -71,7 +71,7 @@ describe('StyleModel', () => {
     model.setGroups({});
     await nextMicrotask();
 
-    expect(model.version).toBe(1);
+    expect(model.revision).toBe(1);
     expect(changes).toHaveLength(1);
   });
 
@@ -85,7 +85,7 @@ describe('StyleModel', () => {
     await nextMicrotask();
 
     expect(changes).toHaveLength(1);
-    expect(changes[0]).toMatchObject({ fromVersion: 0, toVersion: 2 });
+    expect(changes[0]).toMatchObject({ fromRevision: 0, toRevision: 2 });
     expect(changes[0]?.style).toBe(model.current);
     expect(changes[0]?.commands.map(command => command.command)).toEqual([
       'addSource',
@@ -106,8 +106,8 @@ describe('StyleModel', () => {
     await nextMicrotask();
 
     expect(changes[1]).toMatchObject({
-      fromVersion: 1,
-      toVersion: 2,
+      fromRevision: 1,
+      toRevision: 2,
       commands: [{ command: 'setPaintProperty', args: ['dltb-line', 'line-color', '#993366'] }]
     });
   });
@@ -122,15 +122,15 @@ describe('StyleModel', () => {
     model.setGroup('basemap', { ...basemap });
     await nextMicrotask();
 
-    expect(model.version).toBe(2);
+    expect(model.revision).toBe(2);
     expect(changes).toHaveLength(1);
   });
 
   it('lets a listener commit during a notification', async () => {
     using model = createModel();
     const changes = listen(model);
-    model.on('change', ({ toVersion }) => {
-      if (toVersion === 1) {
+    model.on('change', ({ toRevision }) => {
+      if (toRevision === 1) {
         model.setGroup('highlight', lineGroup('selected'));
       }
     });
@@ -139,7 +139,7 @@ describe('StyleModel', () => {
     await nextMicrotask();
     await nextMicrotask();
 
-    expect(changes.map(({ fromVersion, toVersion }) => [fromVersion, toVersion])).toEqual([
+    expect(changes.map(({ fromRevision, toRevision }) => [fromRevision, toRevision])).toEqual([
       [0, 1],
       [1, 2]
     ]);
@@ -164,7 +164,7 @@ describe('StyleModel', () => {
       const before = model.current;
 
       expect(() => model.setGroup('business', lineGroup('tdt'))).toThrow('数据源 ID "tdt" 在分组 basemap 和 business 中重复');
-      expect(model.version).toBe(1);
+      expect(model.revision).toBe(1);
       expect(model.current).toBe(before);
       // 被拒绝的分组不能留在内部状态里，否则下一次提交才会暴露
       expect(() => model.setGroup('highlight', lineGroup('selected'))).not.toThrow();
@@ -210,7 +210,7 @@ describe('StyleModel', () => {
       // @ts-expect-error 相机归 CameraModel，写在样式根属性里会和它抢着控制相机
       using model = new StyleModel({ groups: ['basemap'], root: { center: [118.8, 32.05] } });
 
-      expect(model.version).toBe(0);
+      expect(model.revision).toBe(0);
     });
 
     it('rejects duplicate group IDs in the declaration', () => {

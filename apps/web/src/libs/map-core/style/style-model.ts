@@ -17,8 +17,8 @@ export type StyleRoot = Omit<
 
 /** 一次通知：从上次通知的快照到当前快照的命令 */
 export interface StyleChange {
-  readonly fromVersion: number;
-  readonly toVersion: number;
+  readonly fromRevision: number;
+  readonly toRevision: number;
   readonly commands: readonly StyleCommand[];
   readonly style: StyleSpecification;
 }
@@ -75,16 +75,16 @@ function compose<G extends string>(
   return { ...root, version: 8, sources, layers };
 }
 
-/** 样式模型：按分组组合样式，提交时加版本号，同一轮事件循环的变化合并通知（ADR 0022） */
+/** 样式模型：按分组组合样式，提交时修订号加 1，同一轮事件循环的变化合并通知（ADR 0022） */
 export class StyleModel<const G extends string> implements Disposable {
   readonly #order: readonly G[];
   readonly #root: StyleRoot;
   readonly #events = new ModelEvents<StyleModelEvents>('StyleModel');
   #groups = new Map<G, StyleGroup>();
   #current: StyleSpecification;
-  #version = 0;
+  #revision = 0;
   // 上次通知时的快照，下次通知从它开始对比
-  #notified: { version: number; style: StyleSpecification };
+  #notified: { revision: number; style: StyleSpecification };
   #flushScheduled = false;
 
   constructor({ groups, root = {} }: StyleModelOptions<G>) {
@@ -94,7 +94,7 @@ export class StyleModel<const G extends string> implements Disposable {
     this.#order = [...groups];
     this.#root = root;
     this.#current = compose(root, this.#order, this.#groups);
-    this.#notified = { version: 0, style: this.#current };
+    this.#notified = { revision: 0, style: this.#current };
   }
 
   /** 当前的完整样式快照 */
@@ -103,15 +103,15 @@ export class StyleModel<const G extends string> implements Disposable {
   }
 
   /** 每次提交加 1 */
-  get version(): number {
-    return this.#version;
+  get revision(): number {
+    return this.#revision;
   }
 
   setGroup(id: G, group: StyleGroup): void {
     this.#commit([[id, group]]);
   }
 
-  /** 一次提交多个分组，只加一次版本号 */
+  /** 一次提交多个分组，修订号只加 1 */
   setGroups(groups: Partial<Readonly<Record<G, StyleGroup>>>): void {
     this.#commit(Object.entries<StyleGroup | undefined>(groups));
   }
@@ -142,7 +142,7 @@ export class StyleModel<const G extends string> implements Disposable {
     const style = compose(this.#root, this.#order, next);
     this.#groups = next;
     this.#current = style;
-    this.#version++;
+    this.#revision++;
     this.#scheduleFlush();
   }
 
@@ -161,14 +161,14 @@ export class StyleModel<const G extends string> implements Disposable {
     }
     const from = this.#notified;
     // 先记下再通知：监听器里再次提交时，下一次通知从这里开始对比
-    this.#notified = { version: this.#version, style: this.#current };
+    this.#notified = { revision: this.#revision, style: this.#current };
     const commands = diffStyle(from.style, this.#current);
     if (commands.length === 0) {
       return;
     }
     this.#events.emit('change', {
-      fromVersion: from.version,
-      toVersion: this.#version,
+      fromRevision: from.revision,
+      toRevision: this.#revision,
       commands,
       style: this.#current
     });

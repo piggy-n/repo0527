@@ -509,7 +509,7 @@ describe('MapLibreView', () => {
       expect(ctx.errors).toEqual([invalid]);
     });
 
-    it('reloads the next style version after a failed load and becomes ready again', async () => {
+    it('reloads the next style revision after a failed load and becomes ready again', async () => {
       using ctx = setup();
       ctx.map.fire('error', { error: new Error('invalid style') });
 
@@ -524,7 +524,7 @@ describe('MapLibreView', () => {
       expect(ctx.states).toEqual(['failed', 'initializing', 'ready']);
     });
 
-    it('does not reload the same style version again after a failed load', async () => {
+    it('does not reload the same style revision again after a failed load', async () => {
       using ctx = setup();
       ctx.map.fire('error', { error: new Error('invalid style') });
 
@@ -575,7 +575,7 @@ describe('MapLibreView', () => {
       expect(names(ctx.map.styleCalls())).toEqual(['setStyle', 'addSource', 'addLayer']);
     });
 
-    it('fails again without retrying when the reloaded version is rejected too', async () => {
+    it('fails again without retrying when the reloaded revision is rejected too', async () => {
       using ctx = setup();
       ctx.map.fire('error', { error: new Error('invalid style') });
       ctx.session.style.setGroup('business', lineGroup('dltb'));
@@ -766,7 +766,7 @@ describe('MapLibreView', () => {
       await expect(settled(ctx.view.whenReady())).rejects.toEqual(new Error('setStyle failed'));
     });
 
-    it('does not reload for a pending notification of the version that just failed', async () => {
+    it('does not reload for a pending notification of the revision that just failed', async () => {
       using ctx = setup();
       ctx.map.fire('style.load');
       ctx.view.pause();
@@ -816,7 +816,7 @@ describe('MapLibreView', () => {
   });
 
   describe('style recovery', () => {
-    it('reloads the latest version at once when the loading version fails after a newer one was committed', async () => {
+    it('reloads the latest revision at once when the loading revision fails after a newer one was committed', async () => {
       using ctx = setup();
       // 加载期间提交的版本：通知到达时还在加载，先不处理
       ctx.session.style.setGroup('business', lineGroup('dltb'));
@@ -834,7 +834,7 @@ describe('MapLibreView', () => {
       expect(ctx.states).toEqual(['ready']);
     });
 
-    it('reloads the latest version at once when a rebuild fails after a newer one was committed', async () => {
+    it('reloads the latest revision at once when a rebuild fails after a newer one was committed', async () => {
       using ctx = setup();
       ctx.map.fire('style.load');
       ctx.map.rejectOn = 'addLayer';
@@ -867,7 +867,7 @@ describe('MapLibreView', () => {
       expect(ctx.states).toEqual(['ready']);
     });
 
-    it('does not reload after disposal even if a newer version was waiting', async () => {
+    it('does not reload after disposal even if a newer revision was waiting', async () => {
       using ctx = setup();
       ctx.session.style.setGroup('business', lineGroup('dltb'));
       await nextMicrotask();
@@ -891,7 +891,7 @@ describe('MapLibreView', () => {
       expect(ctx.states).toEqual(['failed', 'ready']);
     });
 
-    it('catches up the versions committed while loading when the load completes after an error', async () => {
+    it('catches up the revisions committed while loading when the load completes after an error', async () => {
       using ctx = setup();
       ctx.session.style.setGroup('business', lineGroup('dltb'));
       await nextMicrotask();
@@ -1062,7 +1062,7 @@ describe('MapLibreView', () => {
       expect(ctx.view.state).toBe('paused');
     });
 
-    it('keeps the same promise when a failed load is retried with a newer version', async () => {
+    it('keeps the same promise when a failed load is retried with a newer revision', async () => {
       using ctx = setup();
       ctx.session.style.setGroup('business', lineGroup('dltb'));
       await nextMicrotask();
@@ -1144,33 +1144,35 @@ describe('MapLibreView', () => {
       ctx.map.fire('style.load');
       ctx.view.pause();
       ctx.session.camera.set({ ...NANJING, center: [120, 31], pitch: 75 }, { view: '3d', cause: 'user' });
-      const revision = ctx.session.camera.intentRevision;
+      const changes: CameraChange[] = [];
+      ctx.session.camera.on('change', change => changes.push(change));
       let pitchWhenReady: number | undefined;
       ctx.view.on('statechange', () => (pitchWhenReady = ctx.session.camera.current.pitch));
 
       ctx.view.resume();
 
       expect(ctx.map.calls).toContainEqual(['jumpTo', { center: [120, 31], zoom: 8, bearing: 0, pitch: 75 }, { cause: 'sync' }]);
-      // 二维把俯角收到上限后写回会话，但不算意图；进入 ready 时会话已经是地图的实际值
+      // 二维把俯角收到上限后按 sync 写回会话；进入 ready 时会话已经是地图的实际值
+      expect(changes.map(({ view, cause }) => [view, cause])).toEqual([['2d', 'sync']]);
       expect(ctx.session.camera.current.pitch).toBe(60);
       expect(pitchWhenReady).toBe(60);
-      expect(ctx.session.camera.intentRevision).toBe(revision);
     });
 
     it('applies the session camera changed while initializing and writes back what the map settled on', () => {
       using ctx = setup();
       // 初始化期间三维改了相机，俯角超出二维的上限
       ctx.session.camera.set({ ...NANJING, center: [120, 31], pitch: 75 }, { view: '3d', cause: 'user' });
-      const revision = ctx.session.camera.intentRevision;
+      const changes: CameraChange[] = [];
+      ctx.session.camera.on('change', change => changes.push(change));
       let pitchWhenReady: number | undefined;
       ctx.view.on('statechange', () => (pitchWhenReady = ctx.session.camera.current.pitch));
 
       ctx.map.fire('style.load');
 
       expect(ctx.map.calls).toContainEqual(['jumpTo', { center: [120, 31], zoom: 8, bearing: 0, pitch: 75 }, { cause: 'sync' }]);
+      expect(changes.map(({ view, cause }) => [view, cause])).toEqual([['2d', 'sync']]);
       expect(ctx.session.camera.current).toEqual({ center: [120, 31], zoom: 8, bearing: 0, pitch: 60 });
       expect(pitchWhenReady).toBe(60);
-      expect(ctx.session.camera.intentRevision).toBe(revision);
     });
 
     it('writes back the camera that the map clamped when it was created', () => {
@@ -1211,6 +1213,8 @@ describe('MapLibreView', () => {
       ctx.map.fire('style.load');
       // 进入 ready 时同步相机的 jumpTo 不在比较范围内
       const before = ctx.map.calls.length;
+      const changes: CameraChange[] = [];
+      ctx.session.camera.on('change', change => changes.push(change));
 
       ctx.view.flyTo({ center: [120, 31], zoom: 10 }, { duration: 500 });
       ctx.view.fitBounds([118, 31, 120, 33], { padding: 20 });
@@ -1222,8 +1226,8 @@ describe('MapLibreView', () => {
         ['fitBounds', [118, 31, 120, 33], { padding: 20 }, { cause: 'program' }],
         ['fitBounds', [118, 31, 120, 33], { duration: 500, pitch: 0 }, { cause: 'program' }]
       ]);
-      // 第二次 fitBounds 定位到同一个范围，相机没变，不算新的意图
-      expect(ctx.session.camera.intentRevision).toBe(2);
+      // 第二次 fitBounds 定位到同一个范围，相机没变，不发出变化
+      expect(changes.map(({ cause }) => cause)).toEqual(['program', 'program']);
     });
 
     it('turns flyTo padding into a one-off offset, and only when there is a center', () => {

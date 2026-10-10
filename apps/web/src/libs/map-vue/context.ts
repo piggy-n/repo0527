@@ -57,7 +57,7 @@ export interface MapContext {
   whenReady(signal?: AbortSignal): Promise<void>;
   /** 在调用方的作用域里订阅相机，作用域销毁时取消 */
   useCamera(): Readonly<ShallowRef<CameraState>>;
-  /** 屏幕投影的版本：相机变化、画布尺寸变化时加 1；按屏幕位置摆放的浮层依赖它重新投影 */
+  /** 屏幕投影的修订号：相机变化、画布尺寸变化时加 1；按屏幕位置摆放的浮层依赖它重新投影 */
   readonly projectionRevision: Readonly<Ref<number>>;
   /**
    * 开始一次相机操作（ADR 0038）：之前没完成的操作作废，返回这一次的信号，下一次操作（包括用户开始拖动、缩放）开始时中止。

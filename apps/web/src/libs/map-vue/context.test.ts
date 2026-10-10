@@ -178,7 +178,7 @@ describe('MapContextState 的工具', () => {
   });
 });
 
-describe('MapContextState 的投影版本', () => {
+describe('MapContextState 的投影修订号', () => {
   it('相机变化、画布尺寸变化时加 1；卸下视图后不再跟随它的尺寸，上下文释放后不再跟随相机', () => {
     const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
     const session = new MapSession({ groups: ['basemap'], camera });

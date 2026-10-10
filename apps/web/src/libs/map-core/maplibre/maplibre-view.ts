@@ -78,7 +78,7 @@ function deferred(): Deferred {
  */
 interface MapStyle {
   readonly status: 'loading' | 'loaded' | 'failed';
-  readonly version: number;
+  readonly revision: number;
   readonly style: StyleSpecification;
 }
 
@@ -185,8 +185,8 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#active = active;
     // 报告器自己抛错时不能打断状态转换和资源释放，也不能冒进 MapLibre 的事件分发
     this.#onError = safeReporter(onError, 'MapLibreView');
-    const { current: style, version } = session.style;
-    this.#mapStyle = { status: 'loading', version, style };
+    const { current: style, revision } = session.style;
+    this.#mapStyle = { status: 'loading', revision, style };
 
     using stack = new DisposableStack();
     stack.defer(() => this.#ready.reject(new DOMException('MapLibreView 已释放', 'AbortError')));
@@ -345,8 +345,8 @@ export class MapLibreView<const G extends string> implements MapView {
     }
     // 整份样式校验失败时 MapLibre 只发 error，不会再有 style.load
     this.#mapStyle = { ...this.#mapStyle, status: 'failed' };
-    if (this.#session.style.version > this.#mapStyle.version) {
-      // 加载期间已经提交了更新的版本：不进入 failed，直接用最新的快照再加载；
+    if (this.#session.style.revision > this.#mapStyle.revision) {
+      // 加载期间已经有了更新的提交：不进入 failed，直接用最新的快照再加载；
       // 放到微任务里，等 MapLibre 发完这次加载的全部错误再调用 setStyle，不在它分发事件的过程中重入
       queueMicrotask(() => this.#reloadIfNewer(map));
       return;
@@ -392,12 +392,12 @@ export class MapLibreView<const G extends string> implements MapView {
       this.#reloadIfNewer(map);
       return;
     }
-    if (this.#state !== 'ready' || mapStyle.status !== 'loaded' || change.toVersion <= mapStyle.version) {
+    if (this.#state !== 'ready' || mapStyle.status !== 'loaded' || change.toRevision <= mapStyle.revision) {
       // 暂停、加载中：等能应用时再从已加载的快照对比
       return;
     }
-    if (change.fromVersion === mapStyle.version) {
-      this.#apply(map, change.commands, change.toVersion, change.style);
+    if (change.fromRevision === mapStyle.revision) {
+      this.#apply(map, change.commands, change.toRevision, change.style);
     } else {
       this.#catchUp(map);
     }
@@ -405,13 +405,13 @@ export class MapLibreView<const G extends string> implements MapView {
 
   #catchUp(map: MapLike): void {
     const mapStyle = this.#mapStyle;
-    const { current, version } = this.#session.style;
-    if (mapStyle.status === 'loaded' && mapStyle.version !== version) {
-      this.#apply(map, diffStyle(mapStyle.style, current), version, current);
+    const { current, revision } = this.#session.style;
+    if (mapStyle.status === 'loaded' && mapStyle.revision !== revision) {
+      this.#apply(map, diffStyle(mapStyle.style, current), revision, current);
     }
   }
 
-  #apply(map: MapLike, commands: readonly StyleCommand[], version: number, style: StyleSpecification): void {
+  #apply(map: MapLike, commands: readonly StyleCommand[], revision: number, style: StyleSpecification): void {
     let applied = false;
     this.#applying = true;
     this.#rejected = false;
@@ -424,21 +424,21 @@ export class MapLibreView<const G extends string> implements MapView {
       this.#applying = false;
     }
     if (applied && !this.#rejected) {
-      this.#mapStyle = { status: 'loaded', version, style };
+      this.#mapStyle = { status: 'loaded', revision, style };
     } else {
       // 地图和记录可能已经不一致
       this.#rebuild(map);
     }
   }
 
-  // 加载失败的版本不再重试；会话里有更新的版本时用最新的快照重新整体加载，暂停时也一样
+  // 加载失败的修订不再重试；会话里有更新的提交时用最新的快照重新整体加载，暂停时也一样
   #reloadIfNewer(map: MapLike): void {
     const mapStyle = this.#mapStyle;
     if (
       this.#state === 'disposed' ||
       this.#fatal ||
       mapStyle.status !== 'failed' ||
-      this.#session.style.version <= mapStyle.version
+      this.#session.style.revision <= mapStyle.revision
     ) {
       return;
     }
@@ -451,10 +451,10 @@ export class MapLibreView<const G extends string> implements MapView {
 
   // 用当前快照整体加载；完成后触发 style.load，期间的变化届时追上；失败时只有 error（见 #onMapError）
   #rebuild(map: MapLike): void {
-    const { current, version } = this.#session.style;
+    const { current, revision } = this.#session.style;
     // 新的一轮开始：激活因此中止时，等待的人等到本轮结束，而不是拿到上一轮早已成功的结果
     this.#renewReady();
-    this.#mapStyle = { status: 'loading', version, style: current };
+    this.#mapStyle = { status: 'loading', revision, style: current };
     try {
       map.setStyle(current, { diff: false });
     } catch (error) {

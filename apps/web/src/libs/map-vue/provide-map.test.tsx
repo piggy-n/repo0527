@@ -103,7 +103,7 @@ describe('provideMap', () => {
     const { observed, session } = setup();
 
     expect(observed.layersAtChildSetup).toEqual(['basemap-background']);
-    expect(session.style.version).toBe(1);
+    expect(session.style.revision).toBe(1);
   });
 
   it('挂载后推导结果的变化照常提交；挂载后再绑定会抛错', async () => {
@@ -137,7 +137,7 @@ describe('provideMap', () => {
 
     expect(sessionAliveInChildUnmounted).toBe(true);
     expect(() => session.style.on('change', () => undefined)).toThrow('StyleModel 已释放');
-    expect(session.style.version).toBe(1);
+    expect(session.style.revision).toBe(1);
     expect(backgroundColor(session)).toBe('#eef2f7');
   });
 
