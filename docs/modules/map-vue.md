@@ -1,6 +1,6 @@
 # 地图与 Vue 的衔接（map-vue）
 
-> 状态：5A.2 完成了 `provideMap`、样式绑定、画布组件 `<MapCanvas>` 和只读上下文 `useMap()`；5A.3 加入定位可视区域（`useMapOverlay`）、失败原因与重试。设计依据是 ADR 0027（分层）、ADR 0028（上下文）、ADR 0029（定位可视区域）和 ADR 0030（失败原因）。
+> 状态：5A.2 完成了 `provideMap`、样式绑定、画布组件 `<MapCanvas>` 和只读上下文 `useMap()`；5A.3 加入定位可视区域（`useMapOverlay`）、失败原因与重试；5B.3 加入交互工具的登记与切换、视图入口的拾取和投影。设计依据是 ADR 0027（分层）、ADR 0028（上下文）、ADR 0029（定位可视区域）、ADR 0030（失败原因）和 ADR 0034（交互工具）。
 
 `libs/map-vue` 把 map-core 的地图会话和视图接到 Vue 的组件树与响应式系统上。它只做衔接：不依赖 element-plus、pinia、vue-router（lint 强制），不读项目配置，除画布容器外不渲染界面。项目级的地图能力（底图、行政区、工具栏界面、失败提示）在 `shared/map`。
 
@@ -106,17 +106,36 @@ view.value?.fitBounds(JIANGSU_BOUNDS, { padding: 40 });
 
 | 内容 | 说明 |
 |---|---|
-| `view` | 视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`flyTo`、`fitBounds`；画布还没挂载、已卸载时为 `null` |
+| `view` | 视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`flyTo`、`fitBounds`、`pick`、`project`；画布还没挂载、已卸载时为 `null`。定位、拾取、投影都只在视图就绪时可用 |
 | `viewState` | `idle`（没有视图）、`initializing`、`ready`、`paused`、`failed` |
 | `failure` | 视图失败的原因（`MapViewFailure`），只在 `failed` 时有值，卸下视图时清空（ADR 0030） |
 | `retry()` | 引擎失败后重新创建视图；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
 | `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@yzt/utils` 的 `abortReason`）。等待绑定具体的视图实例，旧视图就绪不算新视图就绪 |
 | `useCamera()` | 在调用方的作用域里订阅相机，作用域销毁时取消；不在组件 setup 或 `effectScope` 里调用时抛错 |
+| `activeTool` | 当前工具的 ID（只读），跟随会话的工具模型 |
+| `activateTool(id)` | 激活工具，旧工具先退出；未登记时抛错 |
+| `releaseTool(id)` | 让正在激活的工具退出：临时任务回到上一个常驻模式，常驻模式回到移动；没有激活时什么也不做 |
 
 - **只读**：`view`、`viewState`、`failure`、相机引用对外都用 `shallowReadonly` 包了一层。对 `.value` 赋值被忽略，开发环境给出警告；里面的对象不被代理。不对视图、会话这类引擎对象用深层的 `readonly()`：深层代理会让内核类的私有字段访问报错
 - **受限入口**：暂停、恢复、释放、订阅都不在 `MapViewport` 上，JS 里也调不到。暂停和恢复以后由框架切换负责，释放由画布负责，状态从 `viewState` 读
 - **等待绑定视图实例**（5A 之后的修复）：每个挂上的视图带一个自己的 `AbortController`，卸下时中止，等它的 `whenReady` 立即以 `AbortError` 结束，不等视图自己释放时的拒绝；返回前再确认等的仍是当前视图。后一道是纵深防御：等待结束后、继续执行之前隔着一两个微任务，期间被替换时监听已经移除。这个窗口取决于微任务的个数，测试无法稳定命中，改坏它测不出来
 - **等待者的清理**：`whenReady` 同时监听上下文的生命周期和调用方的 `signal`；任一个中止、或者等待结束时，两边的监听都会移除，不会因为一直等不到视图而留在另一个 `signal` 上
+
+## 交互工具（ADR 0034）
+
+```ts
+// 页面 setup：和 bindStyle 一样只能在这里登记
+map.registerTools({ measure: measureTool, pick: pickTool });
+
+// 工具栏等子组件：读当前工具、切换工具
+const { activeTool, activateTool, releaseTool } = useMap();
+activeTool.value === 'measure' ? releaseTool('measure') : activateTool('measure');
+```
+
+- 工具模型在会话里（map-core 的 `session.tool`），map-vue 只负责登记和把当前工具桥接成 Vue 的状态。工具的语义（常驻模式与临时任务、Esc、光标与手势）见 [map-core.md](map-core.md)"ToolModel"
+- `registerTools` 在 `provideMap` 所在组件的 `onBeforeMount` 关闭；先全部检查再登记：ID 是内置的 `browse` 或已经登记过时抛错，这一次的工具都不登记
+- 输入不经过 map-vue：视图把输入直接交给会话的工具模型，只有就绪且没有暂停的视图转交
+- 上下文释放时取消对工具模型的订阅
 
 ## 定位可视区域（ADR 0029）
 
@@ -180,9 +199,9 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 | 文件 | 内容 | 环境 |
 |---|---|---|
 | `style-binder.test.ts` | 初始提交、同一轮的跨分组修改、晚一轮时的拒绝与收敛、推导失败时整批跳过、缓存、重复绑定、释放 | Node |
-| `provide-map.test.tsx` | 必须在 setup 中调用、初始值早于子组件 setup、挂载后绑定抛错、卸载顺序、卸载路径上的错误、组名的类型检查、默认的错误输出 | jsdom |
-| `MapCanvas.test.tsx` | 用完整快照创建视图、页面的 class 不冲掉 MapLibre 的 class、视图状态的变化、受限入口、只读引用、`whenReady` 的各种结局、`useCamera` 的订阅与取消、先释放视图后释放会话、运行中的错误、画布的数量限制、失败原因、引擎失败后的重试 | jsdom |
-| `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，视图入口 `fitBounds` 的默认 padding，`useMapOverlay` 不在作用域里时抛错 | Node |
+| `provide-map.test.tsx` | 必须在 setup 中调用、初始值早于子组件 setup、挂载后绑定抛错、卸载顺序、卸载路径上的错误、组名的类型检查、默认的错误输出；工具的登记、挂载后登记抛错、重复或 `browse` 时这一次都不登记 | jsdom |
+| `MapCanvas.test.tsx` | 用完整快照创建视图、页面的 class 不冲掉 MapLibre 的 class、视图状态的变化、受限入口、只读引用、`whenReady` 的各种结局、`useCamera` 的订阅与取消、先释放视图后释放会话、运行中的错误、画布的数量限制、失败原因、引擎失败后的重试；受限入口的 `pick`、`project`；工具通过上下文激活和退出、`activeTool` 只读、地图上的点击经视图交给工具 | jsdom |
+| `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，视图入口 `fitBounds` 的默认 padding，`useMapOverlay` 不在作用域里时抛错；`activeTool` 跟随工具模型、上下文释放后不再跟随 | Node |
 | `overlay.test.ts` | 占用与间隔、同一边取最大、不算的元素、画布的位置、横向和纵向的下限、选项 | Node |
 
 - 推导失败的用例用 `await expect(nextTick()).resolves.toBeUndefined()` 等待：异常冒出侦听器时，失败落在断言上，而不是测试本身报错

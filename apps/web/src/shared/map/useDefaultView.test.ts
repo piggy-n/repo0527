@@ -7,7 +7,13 @@ import { useDefaultView } from './useDefaultView';
 
 function fakeViewport() {
   const fitBounds = vi.fn<MapViewport['fitBounds']>();
-  const viewport: MapViewport = Object.freeze({ kind: '2d', flyTo: vi.fn<MapViewport['flyTo']>(), fitBounds });
+  const viewport: MapViewport = Object.freeze({
+    kind: '2d',
+    flyTo: vi.fn<MapViewport['flyTo']>(),
+    fitBounds,
+    pick: vi.fn<MapViewport['pick']>(),
+    project: vi.fn<MapViewport['project']>()
+  });
   return { viewport, fitBounds };
 }
 

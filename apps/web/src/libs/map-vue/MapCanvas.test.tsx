@@ -8,6 +8,8 @@ import type {
   MapMouseEventType,
   MapMoveEventLike,
   MapSession,
+  MapTool,
+  PickResult,
   MapSubscription,
   StyleGroup
 } from '@yzt/map-core';
@@ -32,6 +34,7 @@ interface FakeEvent {
   readonly error?: Error;
   readonly originalEvent?: unknown;
   readonly cause?: unknown;
+  readonly point?: { readonly x: number; readonly y: number };
 }
 
 // 只模拟视图用到的行为：相机方法立即到位并同步触发 move；像 MapLibre 一样给容器加 class
@@ -173,7 +176,13 @@ async function settled(promise: Promise<unknown>): Promise<unknown> {
 }
 
 /** 页面：provideMap 并绑定底图，渲染画布和一个读 useMap 的子组件 */
-function setup(options: { showCanvas?: boolean; onChildSetup?: (context: MapContext) => void } = {}) {
+function setup(
+  options: {
+    showCanvas?: boolean;
+    onChildSetup?: (context: MapContext) => void;
+    tools?: Readonly<Record<string, MapTool>>;
+  } = {}
+) {
   const showCanvas = ref(options.showCanvas ?? true);
   const paused = ref(false);
   const maps: FakeMap[] = [];
@@ -192,6 +201,9 @@ function setup(options: { showCanvas?: boolean; onChildSetup?: (context: MapCont
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['basemap'], camera: CAMERA, onError: error => errors.push(error) });
     map.bindStyle({ basemap: () => BASEMAP });
+    if (options.tools) {
+      map.registerTools(options.tools);
+    }
     return () => (
       <div>
         {showCanvas.value && <MapCanvas class={['page-map', paused.value && 'is-paused']} createMap={createMap} />}
@@ -249,7 +261,7 @@ describe('MapCanvas', () => {
     expect(maps[0]?.removed).toBe(true);
   });
 
-  it('视图的受限入口：冻结，只有 kind、flyTo、fitBounds，定位转发给视图', () => {
+  it('视图的受限入口：冻结，只有 kind、flyTo、fitBounds、pick、project，转发给视图', () => {
     const { context, maps, session } = setup();
     maps[0]?.fire('style.load');
     const viewport = context.view.value;
@@ -258,13 +270,16 @@ describe('MapCanvas', () => {
     }
 
     expect(Object.isFrozen(viewport)).toBe(true);
-    expect(Object.keys(viewport).toSorted()).toEqual(['fitBounds', 'flyTo', 'kind']);
+    expect(Object.keys(viewport).toSorted()).toEqual(['fitBounds', 'flyTo', 'kind', 'pick', 'project']);
     expect(Symbol.dispose in viewport).toBe(false);
 
     viewport.flyTo({ center: [120.6, 31.3] });
 
     expect(maps[0]?.flyToCalls).toHaveLength(1);
     expect(session.camera.current.center).toEqual([120.6, 31.3]);
+    // 假地图的换算：画布左上角是 (118, 33)，每 100 像素 1 度
+    expect(viewport.pick({ x: 100, y: 200 })).toStrictEqual({ kind: 'hit', surface: 'map', lngLat: [119, 31] });
+    expect(viewport.project([119, 31])).toStrictEqual({ x: 100, y: 200 });
   });
 
   it('只读：给 view、viewState、相机引用赋值不生效', () => {
@@ -636,5 +651,56 @@ describe('MapCanvas', () => {
       dispose.mockRestore();
       consoleError.mockRestore();
     }
+  });
+  describe('交互工具（ADR 0034）', () => {
+    it('页面登记的工具通过上下文激活、退出；activeTool 随之变化', () => {
+      const { context } = setup({ tools: { measure: { persistent: false }, pick: { persistent: true } } });
+      expect(context.activeTool.value).toBe('browse');
+
+      context.activateTool('pick');
+      context.activateTool('measure');
+      expect(context.activeTool.value).toBe('measure');
+
+      context.releaseTool('measure');
+      expect(context.activeTool.value).toBe('pick');
+      expect(() => context.activateTool('area')).toThrow('未登记的工具：area');
+    });
+
+    it('activeTool 只读：赋值不生效', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        const { context } = setup();
+
+        // @ts-expect-error 只读
+        context.activeTool.value = 'measure';
+
+        expect(context.activeTool.value).toBe('browse');
+        expect(warn).toHaveBeenCalledOnce();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('地图上的点击经视图交给当前工具，工具用拾取得到经纬度', () => {
+      const picked: PickResult[] = [];
+      const { context, maps } = setup({
+        tools: {
+          probe: {
+            persistent: false,
+            handleInput: (event, view) => {
+              if (event.type === 'click') {
+                picked.push(view.pick(event.point));
+              }
+            }
+          }
+        }
+      });
+      maps[0]?.fire('style.load');
+      context.activateTool('probe');
+
+      maps[0]?.fire('click', { point: { x: 100, y: 200 }, originalEvent: new MouseEvent('click') });
+
+      expect(picked).toStrictEqual([{ kind: 'hit', surface: 'map', lngLat: [119, 31] }]);
+    });
   });
 });

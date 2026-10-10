@@ -147,6 +147,24 @@ describe('MapContextState', () => {
   });
 });
 
+describe('MapContextState 的工具', () => {
+  it('activeTool 跟随会话里的工具变化；上下文释放后不再跟随', () => {
+    const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
+    const session = new MapSession({ groups: ['basemap'], camera });
+    session.tool.register('measure', { persistent: false });
+    const state = new MapContextState(session, () => undefined, resolveOverlayOptions());
+
+    session.tool.activate('measure');
+    expect(state.context.activeTool.value).toBe('measure');
+
+    state[Symbol.dispose]();
+    session.tool.release('measure');
+
+    expect(state.context.activeTool.value).toBe('measure');
+    session[Symbol.dispose]();
+  });
+});
+
 describe('MapContextState 的 whenReady', () => {
   it('等待中的视图被替换：以 AbortError 结束，旧视图后来就绪也不算', async () => {
     using env = setup();

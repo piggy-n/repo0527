@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, inject, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { INTERNAL_MAP_CONTEXT } from './context';
-import { provideMap } from './provide-map';
+import { type MapHandle, provideMap } from './provide-map';
 import { StyleBinder } from './style-binder';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
@@ -65,6 +65,33 @@ function setup(options: { onError?: (error: unknown) => void; onChildUnmounted?:
     throw new Error('子组件没有拿到会话');
   }
   return { wrapper, color, session, observed };
+}
+
+/** 页面在 setup 里调用 register，挂载后再调用 late；记下会话和两处的错误 */
+function mountToolPage(register: (map: MapHandle<'basemap'>) => void, late?: (map: MapHandle<'basemap'>) => void) {
+  const observed: { session?: MapSession<string>; setupError?: unknown; lateError?: unknown } = {};
+  const Probe = defineComponent(() => {
+    observed.session = injectSession();
+    return () => null;
+  });
+  const Page = defineComponent(() => {
+    const map = provideMap({ groups: ['basemap'], camera: CAMERA });
+    try {
+      register(map);
+    } catch (error) {
+      observed.setupError = error;
+    }
+    onMounted(() => {
+      try {
+        late?.(map);
+      } catch (error) {
+        observed.lateError = error;
+      }
+    });
+    return () => <Probe />;
+  });
+  mount(Page);
+  return observed;
 }
 
 describe('provideMap', () => {
@@ -217,6 +244,34 @@ describe('provideMap', () => {
         dispose.mockRestore();
         consoleError.mockRestore();
       }
+    });
+  });
+
+  describe('registerTools', () => {
+    it('登记的工具进入会话的工具模型；挂载后再登记抛错', () => {
+      const observed = mountToolPage(
+        map => {
+          map.registerTools({ measure: { persistent: false } });
+          map.registerTools({ pick: { persistent: true } });
+        },
+        map => map.registerTools({ late: { persistent: false } })
+      );
+
+      expect(['measure', 'pick', 'late'].map(id => observed.session?.tool.has(id))).toStrictEqual([true, true, false]);
+      expect((observed.lateError as Error).message).toContain('工具只能在 provideMap 所在组件的 setup 中登记');
+    });
+
+    it.each([
+      ['与已登记的重复', 'measure', '工具 measure 已经登记'],
+      ['是内置的移动', 'browse', '工具 ID browse 是内置的移动，不能登记']
+    ])('ID %s 时抛错，这一次的工具都不登记', (_, id, message) => {
+      const observed = mountToolPage(map => {
+        map.registerTools({ measure: { persistent: false } });
+        map.registerTools({ other: { persistent: false }, [id]: { persistent: false } });
+      });
+
+      expect((observed.setupError as Error).message).toBe(message);
+      expect(observed.session?.tool.has('other')).toBe(false);
     });
   });
 });

@@ -2,9 +2,12 @@ import type {
   CameraState,
   FitBoundsOptions,
   FlyToOptions,
+  LngLat,
   MapSession,
   MapView,
   MapViewFailure,
+  PickResult,
+  ScreenPoint,
   ViewBounds,
   ViewKind,
   ViewState
@@ -28,6 +31,10 @@ export interface MapViewport {
   flyTo(target: Partial<CameraState>, options?: FlyToOptions): void;
   /** 没传 padding 时避开登记过的悬浮元素（ADR 0029）；明确传入（包括 0）时以传入的为准 */
   fitBounds(bounds: ViewBounds, options?: FitBoundsOptions): void;
+  /** 只在视图就绪时可用 */
+  pick(point: ScreenPoint): PickResult;
+  /** 只在视图就绪时可用 */
+  project(lngLat: LngLat, height?: number): ScreenPoint | null;
 }
 
 /** 视图的生命周期；还没有视图时是 idle（ADR 0022 第 5 条） */
@@ -51,6 +58,12 @@ export interface MapContext {
   useCamera(): Readonly<ShallowRef<CameraState>>;
   /** 量出登记过的悬浮元素此刻占用的部分，算出定位用的 padding；还没有画布时四边都是边距 */
   overlayPadding(): OverlayPadding;
+  /** 当前工具的 ID（ADR 0034） */
+  readonly activeTool: Readonly<Ref<string>>;
+  /** 激活工具，旧工具先退出；未登记时抛错 */
+  activateTool(id: string): void;
+  /** 让正在激活的工具退出：临时任务回到上一个常驻模式，常驻模式回到移动；没有激活时什么也不做 */
+  releaseTool(id: string): void;
 }
 
 // 挂上的视图；detached 在卸下时中止，等它就绪的 whenReady 随之以 AbortError 结束
@@ -71,7 +84,9 @@ function createViewport(view: MapView, overlayPadding: () => OverlayPadding): Ma
     kind: view.kind,
     flyTo: (target: Partial<CameraState>, options?: FlyToOptions) => view.flyTo(target, options),
     fitBounds: (bounds: ViewBounds, options?: FitBoundsOptions) =>
-      view.fitBounds(bounds, { ...options, padding: options?.padding ?? overlayPadding() })
+      view.fitBounds(bounds, { ...options, padding: options?.padding ?? overlayPadding() }),
+    pick: (point: ScreenPoint) => view.pick(point),
+    project: (lngLat: LngLat, height?: number) => view.project(lngLat, height)
   });
 }
 
@@ -108,6 +123,8 @@ export class MapContextState implements Disposable {
   readonly #viewState = ref<MapViewState>('idle');
   readonly #failure = shallowRef<MapViewFailure | null>(null);
   readonly #retryRequests = ref(0);
+  readonly #activeTool: Ref<string>;
+  readonly #unsubscribeTool: () => void;
   readonly #lifetime = new AbortController();
   // 还没有视图时调用 whenReady 的等待者，视图挂上时依次通知
   readonly #waiting = new Set<(attached: AttachedView) => void>();
@@ -123,6 +140,9 @@ export class MapContextState implements Disposable {
     this.session = session;
     this.onError = onError;
     this.#overlayOptions = overlayOptions;
+    // 工具模型在会话里，这里只把当前工具桥接成 Vue 的状态；切换由工具模型保证同一时间只有一个
+    this.#activeTool = ref(session.tool.active);
+    this.#unsubscribeTool = session.tool.on('change', ({ active }) => (this.#activeTool.value = active));
     this.context = Object.freeze({
       view: shallowReadonly(this.#viewport),
       viewState: shallowReadonly(this.#viewState),
@@ -130,7 +150,10 @@ export class MapContextState implements Disposable {
       retry: () => this.#retry(),
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
       useCamera: () => this.#useCamera(),
-      overlayPadding: () => this.#overlayPadding()
+      overlayPadding: () => this.#overlayPadding(),
+      activeTool: shallowReadonly(this.#activeTool),
+      activateTool: (id: string) => session.tool.activate(id),
+      releaseTool: (id: string) => session.tool.release(id)
     });
   }
 
@@ -182,6 +205,7 @@ export class MapContextState implements Disposable {
 
   /** 等待中的 whenReady 以 AbortError 结束 */
   [Symbol.dispose](): void {
+    this.#unsubscribeTool();
     this.#lifetime.abort(new DOMException('地图上下文已释放', 'AbortError'));
   }
 
