@@ -1,9 +1,9 @@
 import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Feature, FeatureCollection, Polygon } from 'geojson';
 import { ElButton } from 'element-plus';
-import type { CameraState, StyleGroup, ViewBounds } from '@yzt/map-core';
-import { MapCanvas, type OverlayPadding, provideMap, useMapOverlay } from '@yzt/map-vue';
-import { defineComponent, ref } from 'vue';
+import type { CameraState, LngLat, MapTool, ScreenPoint, StyleGroup, ViewBounds } from '@yzt/map-core';
+import { MapCanvas, type OverlayPadding, provideMap, useMap, useMapOverlay } from '@yzt/map-vue';
+import { computed, defineComponent, type PropType, ref, shallowRef } from 'vue';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import styles from './DevMapPage.module.scss';
 
@@ -154,6 +154,101 @@ const OverlayPanel = defineComponent({
   }
 });
 
+// 坐标拾取的一次结果：点击的屏幕位置、拾取到的经纬度，以及立刻投影回屏幕时与点击位置的偏差（像素）
+interface Probe {
+  readonly point: ScreenPoint;
+  readonly lngLat: LngLat;
+  readonly roundTrip: number;
+}
+
+const PROBE_TOOL = 'probe';
+
+// 坐标拾取（只在开发页用，ADR 0034 第 6 条）：十字光标、关掉双击放大；单击时拾取经纬度，再投影回屏幕核对
+function createProbeTool(onProbe: (probe: Probe) => void): MapTool {
+  return {
+    persistent: false,
+    cursor: 'crosshair',
+    gestures: { doubleClickZoom: false },
+    handleInput: (event, view) => {
+      if (event.type !== 'click' || event.button !== 0) {
+        return;
+      }
+      const result = view.pick(event.point);
+      if (result.kind !== 'hit') {
+        return;
+      }
+      const back = view.project(result.lngLat);
+      const roundTrip = back ? Math.hypot(back.x - event.point.x, back.y - event.point.y) : Number.NaN;
+      onProbe({ point: event.point, lngLat: result.lngLat, roundTrip });
+    }
+  };
+}
+
+function probeGroup(probes: readonly Probe[]): StyleGroup {
+  if (probes.length === 0) {
+    return { sources: {}, layers: [] };
+  }
+  return {
+    sources: {
+      probe: {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: probes.map(({ lngLat: [lng, lat] }) => ({
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'Point', coordinates: [lng, lat] }
+          }))
+        }
+      }
+    },
+    layers: [
+      {
+        id: 'probe-point',
+        type: 'circle',
+        source: 'probe',
+        paint: {
+          'circle-radius': 5,
+          'circle-color': '#ff3b30',
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 2
+        }
+      }
+    ]
+  };
+}
+
+function formatLngLat([lng, lat]: LngLat): string {
+  return `${lng.toFixed(6)}, ${lat.toFixed(6)}`;
+}
+
+function formatProbe({ point: { x, y }, lngLat, roundTrip }: Probe): string {
+  return `屏幕 (${x}, ${y}) → ${formatLngLat(lngLat)} · 回投偏差 ${roundTrip.toFixed(3)} px`;
+}
+
+// 最近一次拾取的标签：跟着相机用 project 放回屏幕，验证投影；视图没有就绪时不显示
+const ProbeLabel = defineComponent({
+  name: 'DevMapProbeLabel',
+  props: {
+    probe: { type: Object as PropType<Probe>, required: true }
+  },
+  setup(props) {
+    const map = useMap();
+    const camera = map.useCamera();
+    const position = computed(() => {
+      void camera.value;
+      const view = map.view.value;
+      return map.viewState.value === 'ready' && view ? view.project(props.probe.lngLat) : null;
+    });
+    return () =>
+      position.value && (
+        <div class={styles.probeLabel} style={{ left: `${position.value.x}px`, top: `${position.value.y}px` }}>
+          {formatLngLat(props.probe.lngLat)}
+        </div>
+      );
+  }
+});
+
 // 模拟引擎失败：页面不能导入 maplibre-gl，抛普通的错误，原因按 unknown
 function failingCreateMap(): never {
   throw new Error('模拟：创建地图失败');
@@ -178,9 +273,10 @@ export const DevMapPage = defineComponent({
     // 打开后，下一次创建视图（重新创建、重试）时创建地图失败，模拟引擎失败
     const failNextCreation = ref(false);
     const lastPadding = ref<OverlayPadding>();
+    const probes = shallowRef<readonly Probe[]>([]);
 
     const map = provideMap({
-      groups: ['background', 'regions', 'selection', 'highlight'],
+      groups: ['background', 'regions', 'selection', 'highlight', 'probe'],
       camera: INITIAL_CAMERA,
       onError: error => {
         errors.value = [...errors.value, describe(error)];
@@ -205,11 +301,17 @@ export const DevMapPage = defineComponent({
       highlight: () => {
         const index = highlightIndex.value;
         return highlightGroup(index === undefined ? undefined : HIGHLIGHT_POSITIONS[index]);
-      }
+      },
+      probe: () => probeGroup(probes.value)
     });
 
+    // 只保留最近 5 次拾取
+    map.registerTools({ [PROBE_TOOL]: createProbeTool(probe => (probes.value = [...probes.value.slice(-4), probe])) });
+
     const camera = map.useCamera();
-    const { view, viewState } = map;
+    const { view, viewState, activeTool } = map;
+    const toggleProbe = () =>
+      activeTool.value === PROBE_TOOL ? map.releaseTool(PROBE_TOOL) : map.activateTool(PROBE_TOOL);
 
     const nextVersion = (): DataVersion => (version.value === 0 ? 1 : 0);
 
@@ -233,6 +335,8 @@ export const DevMapPage = defineComponent({
       lastPadding.value = map.overlayPadding();
       view.value?.fitBounds(JIANGSU_BOUNDS, { duration: 1000 });
     };
+
+    const lastProbe = computed(() => probes.value.at(-1));
 
     const toggleHighlight = () => {
       highlightIndex.value = ((highlightIndex.value ?? -1) + 1) % HIGHLIGHT_POSITIONS.length;
@@ -284,6 +388,12 @@ export const DevMapPage = defineComponent({
               <ElButton disabled={errors.value.length === 0} onClick={() => (errors.value = [])}>
                 清空错误
               </ElButton>
+              <ElButton type={activeTool.value === PROBE_TOOL ? 'primary' : 'default'} onClick={toggleProbe}>
+                {activeTool.value === PROBE_TOOL ? '退出坐标拾取（或按 Esc）' : '坐标拾取'}
+              </ElButton>
+              <ElButton disabled={probes.value.length === 0} onClick={() => (probes.value = [])}>
+                清除拾取点
+              </ElButton>
             </div>
             <dl class={styles.status} data-view-state={viewState.value}>
               <dt>视图</dt>
@@ -296,11 +406,16 @@ export const DevMapPage = defineComponent({
               </dd>
               <dt>定位 padding</dt>
               <dd data-padding>{lastPadding.value ? formatPadding(lastPadding.value) : '-'}</dd>
+              <dt>当前工具</dt>
+              <dd data-tool>{activeTool.value}</dd>
+              <dt>最近拾取</dt>
+              <dd data-probe>{lastProbe.value ? formatProbe(lastProbe.value) : '-'}</dd>
             </dl>
           </header>
           <div class={styles.mapArea}>
             <MapCanvas key={canvasKey.value} createMap={failNextCreation.value ? failingCreateMap : undefined} />
             {overlayVisible.value && <OverlayPanel />}
+            {lastProbe.value && <ProbeLabel probe={lastProbe.value} />}
             <MapStatusNotice />
           </div>
           {errors.value.length > 0 && (

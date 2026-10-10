@@ -1,0 +1,10 @@
+// 联调用的样式，5D 再设计；位置由页面决定，按钮之间用 Element 默认的间距
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  padding: var(--space-xs);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+}

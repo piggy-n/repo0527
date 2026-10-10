@@ -1,4 +1,3 @@
-import { ElButton } from 'element-plus';
 import { MapCanvas, provideMap } from '@yzt/map-vue';
 import { defineComponent } from 'vue';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
@@ -7,6 +6,7 @@ import { BoundaryPanel } from '@/shared/map/boundary/BoundaryPanel';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
+import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import styles from './CurrentMapPage.module.scss';
 
@@ -24,14 +24,14 @@ export const CurrentMapPage = defineComponent({
       boundaries: boundaries.deriveGroup
     });
 
-    // 第一次就绪时按江苏的范围定位；回到默认视角的按钮是临时的，5B.3 换成工具栏
+    // 第一次就绪时按江苏的范围定位；工具栏的"默认视角"回到这里
     const { goToDefaultView } = useDefaultView(map);
 
     return () => (
       <div class={styles.root}>
         <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} />
         <div class={styles.controls}>
-          <ElButton onClick={goToDefaultView}>默认视角</ElButton>
+          <MapToolbar items={['default-view', 'browse']} actions={{ 'default-view': goToDefaultView }} />
           <BasemapPanel basemap={basemap} />
           <BoundaryPanel boundaries={boundaries} />
         </div>

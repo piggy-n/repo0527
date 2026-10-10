@@ -72,3 +72,17 @@
   color: var(--color-danger);
   background-color: var(--color-danger-bg);
 }
+
+// 坐标拾取的标签：左上角对准拾取点，向右下偏一点免得盖住点
+.probeLabel {
+  position: absolute;
+  padding: 2px var(--space-xs);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-regular);
+  pointer-events: none;
+  transform: translate(8px, 8px);
+}

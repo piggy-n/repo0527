@@ -205,6 +205,7 @@ session.tool.dispatch(event, toolView);          // 视图把输入交给当前�
 - `setLayerZoomRange` 把 `undefined` 当作"不修改"：图层去掉已有的 `minzoom` / `maxzoom` 时，这个方法撤销不了
 - `setTransition`、`setLayerProperty` 没有公开方法
 - **传给 MapLibre 的选项不能带值为 `undefined` 的键**：MapLibre 用类似 `Object.assign` 的方式合并默认选项，`fitBounds` 收到 `maxZoom: undefined` 时默认值被覆盖，算出 `Invalid LngLat (NaN, NaN)`。适配器用 `withoutUndefined` 过滤后再传；测试改用 `toStrictEqual`（`toEqual` 把"值为 undefined 的键"和"没有这个键"视为相同，所以原来没测出来）
+- **MapLibre 的拖动平移在 `document` 上监听 `mousemove`、`mouseup`**（5B.3 验证时发现）：浏览器自动化的拖动操作、直接派发在 `window` 上的鼠标事件都不会让地图移动；在画布上派发、让事件冒泡上去才行。拖动后松手不触发 `click`（拖动距离超过 `clickTolerance`），工具不会把拖地图当成单击
 - **交给 MapLibre 的容器元素只能用静态 class**：MapLibre 会给容器加 `maplibregl-map` 等 class，它自己的 CSS 依赖它们；容器上的 class 绑定一变化，Vue 就会重设 `class` 属性把它们冲掉。阶段五写 map-vue 时同样遵守
 
 ## 测试
