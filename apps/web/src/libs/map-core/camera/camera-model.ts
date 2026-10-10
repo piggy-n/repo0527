@@ -1,5 +1,5 @@
-import { createNanoEvents } from 'nanoevents';
 import type { Unsubscribe } from '../events';
+import { ModelEvents } from '../model-events';
 
 /** 相机变化发生在哪个视图 */
 export type ViewKind = '2d' | '3d';
@@ -50,10 +50,9 @@ function isSameCamera(a: CameraState, b: CameraState): boolean {
 
 /** 二三维共用的相机状态；范围收敛（如俯角上限）由各视图应用时处理（ADR 0024） */
 export class CameraModel implements Disposable {
-  readonly #emitter = createNanoEvents<CameraModelEvents>();
+  readonly #events = new ModelEvents<CameraModelEvents>('CameraModel');
   #current: CameraState;
   #intentRevision = 0;
-  #disposed = false;
 
   constructor(initial: CameraState) {
     this.#current = snapshot(initial);
@@ -70,7 +69,7 @@ export class CameraModel implements Disposable {
 
   /** 写入相机并同步通知；数值都没变时不通知 */
   set(state: CameraState, { view, cause }: { view: ViewKind; cause: CameraCause }): void {
-    this.#assertAlive();
+    this.#events.assertAlive();
     const next = snapshot(state);
     if (isSameCamera(next, this.#current)) {
       return;
@@ -79,22 +78,14 @@ export class CameraModel implements Disposable {
     if (cause !== 'sync') {
       this.#intentRevision++;
     }
-    this.#emitter.emit('change', { state: next, view, cause });
+    this.#events.emit('change', { state: next, view, cause });
   }
 
   on<E extends keyof CameraModelEvents>(event: E, callback: CameraModelEvents[E]): Unsubscribe {
-    this.#assertAlive();
-    return this.#emitter.on(event, callback);
+    return this.#events.on(event, callback);
   }
 
   [Symbol.dispose](): void {
-    this.#disposed = true;
-    this.#emitter.events = {};
-  }
-
-  #assertAlive(): void {
-    if (this.#disposed) {
-      throw new Error('CameraModel 已释放');
-    }
+    this.#events[Symbol.dispose]();
   }
 }

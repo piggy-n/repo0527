@@ -23,6 +23,7 @@
 | `maplibre/apply-style-command.ts` | `applyStyleCommand`：一条命令对应一次地图方法调用 |
 | `maplibre/maplibre-view.ts` | `MapLibreView`：二维视图，唯一写 MapLibre 地图的地方 |
 | `events.ts` | `Unsubscribe` 类型 |
+| `model-events.ts` | `ModelEvents`：会话各模型共用的事件与释放（ADR 0034 第 7 条），模块内部使用，不从入口导出 |
 
 只有 `maplibre/` 目录能导入 maplibre-gl（lint 限制，见 [config/oxlintrc.md](../config/oxlintrc.md)），其余文件只用 `@maplibre/maplibre-gl-style-spec` 的类型和函数。
 
@@ -114,7 +115,7 @@ session[Symbol.dispose]();
 
 - 用类而不是 `createMapSession` 工厂函数，和各部分的写法一致：构造不是异步的，也不需要隐藏类型，工厂函数没有额外的好处
 - 构造时用 `using stack = new DisposableStack()` 登记各部分，成功后 `stack.move()` 把所有权转给实例：中途抛错（例如相机参数不合法）时，已创建的部分自动释放。释放会话就是释放这个栈，按创建的相反顺序释放各部分
-- `StyleModel` 和 `CameraModel` 各有约 10 行相同的释放逻辑（已释放标记、`#assertAlive`、清空监听器）。等出现第三个模型（工具或选择）时，用组合的方式抽一个"事件加释放"的小辅助对象；不用继承，以免占掉唯一的一层基类
+- 各模型共用的"事件加释放"（已释放的标记、释放后订阅和写入抛错、释放时清空监听器）在 `ModelEvents` 里，每个模型持有一个实例：`StyleModel`、`CameraModel` 原来各有约 10 行相同的逻辑，5B.3 加入工具模型（第三个模型）时抽出。用组合而不是继承，以免占掉唯一的一层基类。释放后 `emit` 不报错，只是没有监听器收到：`StyleModel` 的微任务可能在释放之后才执行，由它自己先检查 `disposed`
 
 ### MapLibreView
 

@@ -1,6 +1,6 @@
 import type { LayerSpecification, SourceSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { createNanoEvents } from 'nanoevents';
 import type { Unsubscribe } from '../events';
+import { ModelEvents } from '../model-events';
 import { diffStyle, type StyleCommand } from './diff-style';
 
 /** 一个拥有者负责的数据源和图层：不可变，变化时整体替换（ADR 0022） */
@@ -79,14 +79,13 @@ function compose<G extends string>(
 export class StyleModel<const G extends string> implements Disposable {
   readonly #order: readonly G[];
   readonly #root: StyleRoot;
-  readonly #emitter = createNanoEvents<StyleModelEvents>();
+  readonly #events = new ModelEvents<StyleModelEvents>('StyleModel');
   #groups = new Map<G, StyleGroup>();
   #current: StyleSpecification;
   #version = 0;
   // 上次通知时的快照，下次通知从它开始对比
   #notified: { version: number; style: StyleSpecification };
   #flushScheduled = false;
-  #disposed = false;
 
   constructor({ groups, root = {} }: StyleModelOptions<G>) {
     if (new Set(groups).size !== groups.length) {
@@ -118,17 +117,15 @@ export class StyleModel<const G extends string> implements Disposable {
   }
 
   on<E extends keyof StyleModelEvents>(event: E, callback: StyleModelEvents[E]): Unsubscribe {
-    this.#assertAlive();
-    return this.#emitter.on(event, callback);
+    return this.#events.on(event, callback);
   }
 
   [Symbol.dispose](): void {
-    this.#disposed = true;
-    this.#emitter.events = {};
+    this.#events[Symbol.dispose]();
   }
 
   #commit(changes: ReadonlyArray<readonly [string, StyleGroup | undefined]>): void {
-    this.#assertAlive();
+    this.#events.assertAlive();
     const next = new Map(this.#groups);
     for (const [id, group] of changes) {
       if (!this.#isGroupId(id)) {
@@ -159,7 +156,7 @@ export class StyleModel<const G extends string> implements Disposable {
 
   #flush(): void {
     this.#flushScheduled = false;
-    if (this.#disposed) {
+    if (this.#events.disposed) {
       return;
     }
     const from = this.#notified;
@@ -169,7 +166,7 @@ export class StyleModel<const G extends string> implements Disposable {
     if (commands.length === 0) {
       return;
     }
-    this.#emitter.emit('change', {
+    this.#events.emit('change', {
       fromVersion: from.version,
       toVersion: this.#version,
       commands,
@@ -181,9 +178,4 @@ export class StyleModel<const G extends string> implements Disposable {
     return (this.#order as readonly string[]).includes(id);
   }
 
-  #assertAlive(): void {
-    if (this.#disposed) {
-      throw new Error('StyleModel 已释放');
-    }
-  }
 }
