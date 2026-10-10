@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { transfer, WorkerCrashedError } from './protocol';
-import { connect, gate, settled } from './testing';
+import { connect, flushMessages, gate, settled } from './testing';
 import type { WorkerClientOptions } from './worker-client';
 import type { WorkerHandlers } from './worker-server';
 
@@ -54,7 +54,7 @@ describe('WorkerClient', () => {
     await expect(ctx.client.request('echo', 'hello', { signal: AbortSignal.abort() })).rejects.toMatchObject({
       name: 'AbortError'
     });
-    await settled(new Promise(() => undefined));
+    await flushMessages();
     expect(ctx.received).toEqual([]);
   });
 

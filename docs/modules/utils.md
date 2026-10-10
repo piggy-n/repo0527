@@ -17,7 +17,7 @@
 | `worker/worker-client.ts` | 主线程的一侧：`WorkerClient` |
 | `worker/worker-host.ts` | 托管一个 Worker：`WorkerHost`（第一次请求时创建、崩溃后重建、次数上限） |
 | `worker/yield.ts` | `yieldToEventLoop` |
-| `worker/testing.ts` | 只供测试使用：`TestEndpoint`、`connect`、`gate`、`settled` |
+| `worker/testing.ts` | 只供测试使用：`TestEndpoint`、`connect`、`gate`、`settled`、`flushMessages` |
 
 两侧只依赖窄接口 `WorkerEndpoint`（`postMessage`、`addEventListener`，可选的 `start`、`terminate`）。`Worker`、`MessagePort` 和 Worker 里的 `self` 都满足它，所以 utils 不需要 `WebWorker` 环境的类型；真实的 Worker 入口文件出现时，再配置单独的 tsconfig（ADR 0018 的待定事项）。
 
@@ -98,10 +98,14 @@ serveWorker<TileProtocol>(self, {
 
 - 客户端和服务端分别接在同一个 `MessageChannel` 的两端（`testing.ts` 的 `connect`），结构化克隆、所有权转移、`DataCloneError` 都是真实发生的
 - jsdom 里不能往真实的 `MessagePort` 派发事件（端口来自 Node，`Event` 来自 jsdom），模拟崩溃用 `TestEndpoint`：消息转发给端口，`crash()` 触发 `error` 或 `messageerror`
-- 测试和"Worker"在同一个线程里：取消消息要等下一个任务才送达，测"排队时被取消"要先等它到达
-- 实现出错时可能一直挂起的等待都包进 `settled()`，测试因断言失败而不是超时
+- 测试和"Worker"在同一个线程里：取消消息要等下一个任务才送达，测"排队时被取消"要先用 `flushMessages()` 等它到达
+- 实现出错时可能一直挂起的等待都包进 `settled()`：推进 10 轮事件循环后还没结束就得到 `'pending'`，测试因断言失败而不是超时
+- 按轮数而不是按时长等：每一轮自己发一条 `MessageChannel` 消息并等它到达，实测每轮恰好送达一跳，进程中途被阻塞也不改变轮数；测试里最多等一跳请求加一跳回复，10 轮留足余量，耗时不到 1ms。起初 `settled()` 和 20ms 的定时器赛跑，全量测试并行时偶发失败：进程被挂起超过 20ms 后，事件循环先执行已经到期的定时器，再处理早已到达的消息
+- 推进事件循环不用被测的 `yieldToEventLoop`：改坏它时测试的辅助函数不能跟着坏
+- `testing.test.ts` 在请求发出后同步占住线程 50ms 来复现进程被挂起，改回按时长等时以断言失败
 - `connect` 的两端都是 `TestEndpoint`：`endpoint.crash()` 模拟主线程一侧的故障，`serverEndpoint.crash()` 模拟 Worker 一侧的故障
 - 逐一改坏 25 处，24 处由断言发现（补上 Worker 一侧的 `messageerror` 后又改坏 6 处，全部发现）；"释放后不移除服务端的消息监听"测不出来：消息处理函数开头的 `disposed` 检查已经挡住了消息，移除监听只是让对象可以被回收
+- 改成按轮数等之后重新改坏 15 处，14 处以断言失败，没有超时；反过来"释放时不设 `disposed`"也测不出来，两道防线同时去掉才由"释放后不再处理请求"发现
 
 ### 还没做的
 

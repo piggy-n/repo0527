@@ -96,7 +96,36 @@ export function gate() {
   return { opened, open };
 }
 
-/** 消息往返要经过事件循环；等一小段时间还没结束就得到 'pending'，测试因断言失败而不是超时 */
-export function settled<T>(promise: Promise<T>, waitMs = 20): Promise<T | 'pending'> {
-  return Promise.race([promise, new Promise<'pending'>(resolve => setTimeout(() => resolve('pending'), waitMs))]);
+// 按轮数而不是时长等，原因见 docs/modules/utils.md 的测试；每轮送达一跳，测试里最多等一次请求加一次回复
+const MESSAGE_TURNS = 10;
+
+// 自己发一条消息并等它到达；不用被测的 yieldToEventLoop，改坏它时这里不跟着坏
+function nextMessageTurn(): Promise<void> {
+  const { port1, port2 } = new MessageChannel();
+  return new Promise(resolve => {
+    port1.addEventListener(
+      'message',
+      () => {
+        port1.close();
+        port2.close();
+        resolve();
+      },
+      { once: true }
+    );
+    port1.start();
+    port2.postMessage(null);
+  });
+}
+
+/** 推进若干轮事件循环，之前发出的消息都已送达；用来等取消这类没有回复的消息 */
+export async function flushMessages(): Promise<void> {
+  for (let turn = 0; turn < MESSAGE_TURNS; turn++) {
+    // oxlint-disable-next-line no-await-in-loop -- 一轮只送达一跳，必须等上一轮结束
+    await nextMessageTurn();
+  }
+}
+
+/** 推进若干轮事件循环后还没结束就得到 'pending'，测试因断言失败而不是超时 */
+export function settled<T>(promise: Promise<T>): Promise<T | 'pending'> {
+  return Promise.race([promise, flushMessages().then(() => 'pending' as const)]);
 }

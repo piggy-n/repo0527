@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { transfer, WorkerCrashedError, WorkerTaskError } from './protocol';
-import { connect, gate, settled } from './testing';
+import { connect, flushMessages, gate, settled } from './testing';
 import type { WorkerClient } from './worker-client';
 import type { ServeOptions, WorkerHandlers } from './worker-server';
 
@@ -103,10 +103,10 @@ describe('serveWorker', () => {
 
     await expect(second).rejects.toMatchObject({ name: 'AbortError' });
     // 取消消息要等下一个任务才送达；先等它到达，才是"还在排队时被取消"（已经开始的任务由 signal 中止）
-    await settled(new Promise(() => undefined));
+    await flushMessages();
     ctx.release('first');
     await first;
-    await settled(new Promise(() => undefined));
+    await flushMessages();
     expect(ctx.started).toEqual(['first']);
   });
 

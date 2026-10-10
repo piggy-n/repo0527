@@ -144,7 +144,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - pages、features 的测试用 `createMemoryHistory()` 建只含所需路由的最小路由，不导入 `app` 的路由表（测试文件同样受依赖方向约束）；`app` 自己的测试可以用真实路由表，例如检查导航与路由权限是否一致
 - 模拟环境变量用 `vi.stubEnv`，用例结束后会自动撤销（`unstubEnvs`）
 - 模拟接口用 MSW 的 `setupServer()`，并设置 `onUnhandledRequest: 'error'`；不用 `vi.mock('axios')`；依赖第三方类的代码（如 MapLibre 适配器）依赖自己定义的窄接口，测试注入实现它的假对象，并用 `expectTypeOf` 检查真实的类满足它，不用 `vi.mock` 整个库
-- 测试写完后，故意改坏被测代码，确认测试会失败，并确认失败原因是断言而不是代码报错或超时（可能一直挂起的等待要和定时器赛跑，见 `docs/modules/utils.md` 的测试）；修 bug 时先写能复现问题的测试
+- 测试写完后，故意改坏被测代码，确认测试会失败，并确认失败原因是断言而不是代码报错或超时（可能一直挂起的等待要和必然更晚结束的等待赛跑：只经过微任务的用 `setTimeout(0)`，经过消息往返的按轮数推进事件循环，不用固定时长，见 `docs/modules/utils.md` 的测试）；修 bug 时先写能复现问题的测试
 - `vite.config.ts` 的 `test.server.deps.inline: ['element-plus']` 不能删：不加的话 Element 表单的校验在测试中永远通过（见 `docs/config/vite-config.md`）
 - 不提交 `.only`：lint 的 `vitest/no-focused-tests` 会报错，CI 中 Vitest 也会拒绝运行
 - `mount` 挂载的组件在每个用例结束后由 `src/test-setup.ts` 自动卸载（`enableAutoUnmount`），不用逐个 `unmount()`；Element 放在 `body` 下的弹出层不归组件管，挂到 `body` 的测试仍要在 `afterEach` 里清空它
