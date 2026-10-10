@@ -1,4 +1,4 @@
-import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type { FilterSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Feature, FeatureCollection, Geometry, Position } from 'geojson';
 import type { LngLat, MeasureState, StyleGroup } from '@yzt/map-core';
 
@@ -9,27 +9,38 @@ const COMPLETED_COLOR = '#597EF7';
 const DRAWING_COLOR = '#3B82F6';
 const LINE_WIDTH = 3;
 
+type Status = 'completed' | 'drawing' | 'vertex';
+
+const byStatus = (status: Status): FilterSpecification => ['==', ['get', 'status'], status];
+
+// fill 图层会把线也当成环填充，填充只给面
+const polygonsByStatus = (status: Status): FilterSpecification => [
+  'all',
+  ['==', ['get', 'status'], status],
+  ['==', ['geometry-type'], 'Polygon']
+];
+
 // 从下到上：填充、完成的线、画的过程中的虚线、节点
 const LAYERS: readonly LayerSpecification[] = [
   {
     id: 'measure-fill-completed',
     type: 'fill',
     source: SOURCE,
-    filter: ['==', ['get', 'status'], 'completed'],
+    filter: polygonsByStatus('completed'),
     paint: { 'fill-color': DRAWING_COLOR, 'fill-opacity': 0.2 }
   },
   {
     id: 'measure-fill-drawing',
     type: 'fill',
     source: SOURCE,
-    filter: ['==', ['get', 'status'], 'drawing'],
+    filter: polygonsByStatus('drawing'),
     paint: { 'fill-color': DRAWING_COLOR, 'fill-opacity': 0.12 }
   },
   {
     id: 'measure-line-completed',
     type: 'line',
     source: SOURCE,
-    filter: ['==', ['get', 'status'], 'completed'],
+    filter: byStatus('completed'),
     layout: { 'line-join': 'round', 'line-cap': 'round' },
     paint: { 'line-color': COMPLETED_COLOR, 'line-width': LINE_WIDTH }
   },
@@ -37,14 +48,14 @@ const LAYERS: readonly LayerSpecification[] = [
     id: 'measure-line-drawing',
     type: 'line',
     source: SOURCE,
-    filter: ['==', ['get', 'status'], 'drawing'],
+    filter: byStatus('drawing'),
     paint: { 'line-color': DRAWING_COLOR, 'line-width': LINE_WIDTH, 'line-dasharray': [2, 2] }
   },
   {
     id: 'measure-vertex',
     type: 'circle',
     source: SOURCE,
-    filter: ['==', ['get', 'status'], 'vertex'],
+    filter: byStatus('vertex'),
     paint: {
       'circle-radius': 3,
       'circle-color': COMPLETED_COLOR,
@@ -53,8 +64,6 @@ const LAYERS: readonly LayerSpecification[] = [
     }
   }
 ];
-
-type Status = 'completed' | 'drawing' | 'vertex';
 
 function feature(geometry: Geometry, status: Status): Feature {
   return { type: 'Feature', properties: { status }, geometry };

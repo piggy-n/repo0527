@@ -24,12 +24,18 @@ function summary(group: StyleGroup): string[] {
   return features(group).map(({ properties, geometry }) => `${String(properties?.status)}:${geometry.type}`);
 }
 
-// 按 MapLibre 的语义求值 filter，列出会画这种状态的要素的图层
-function layersFor(group: StyleGroup, status: string): string[] {
-  const feature = { type: 'Unknown', properties: { status } } as const;
-  return group.layers
-    .filter(layer => 'filter' in layer && featureFilter(layer.filter, layer.id).filter({ zoom: 0 }, feature))
-    .map(({ id }) => id);
+// 按 MapLibre 的语义求值 filter（带上几何类型），列出每种要素会被哪些图层画出
+function drawnBy(group: StyleGroup): [string, string[]][] {
+  return features(group).map(({ properties, geometry }) => {
+    if (geometry.type === 'GeometryCollection') {
+      throw new Error('测量不产生 GeometryCollection');
+    }
+    const feature = { type: geometry.type, properties: properties ?? {} };
+    const layers = group.layers
+      .filter(layer => 'filter' in layer && featureFilter(layer.filter, layer.id).filter({ zoom: 0 }, feature))
+      .map(({ id }) => id);
+    return [`${String(properties?.status)}:${geometry.type}`, layers];
+  });
 }
 
 function compose(group: StyleGroup) {
@@ -89,12 +95,23 @@ describe('测量的样式推导', () => {
     expect(() => compose(group)).not.toThrow();
   });
 
-  it('每种要素由对应的图层画出：完成的是填充和实线，画的过程中是浅填充和虚线，节点是圆点', () => {
-    const group = measureGroup({ measurements: [], draft: { kind: 'distance', points: [A], preview: B } });
+  it('每种要素由对应的图层画出：线只描线、不填充，面填充并描边，节点是圆点', () => {
+    const completedAndDrawingLine = measureGroup({
+      measurements: [
+        { id: 'distance-1', kind: 'distance', points: [A, B, C], method: 'geodesic', value: 1 },
+        { id: 'area-2', kind: 'area', points: [A, B, C], method: 'geodesic', value: 2 }
+      ],
+      draft: { kind: 'distance', points: [A, B], preview: C }
+    });
+    const drawingArea = measureGroup({ measurements: [], draft: { kind: 'area', points: [A, B], preview: C } });
 
-    expect(layersFor(group, 'completed')).toStrictEqual(['measure-fill-completed', 'measure-line-completed']);
-    expect(layersFor(group, 'drawing')).toStrictEqual(['measure-fill-drawing', 'measure-line-drawing']);
-    expect(layersFor(group, 'vertex')).toStrictEqual(['measure-vertex']);
+    expect(Object.fromEntries([...drawnBy(completedAndDrawingLine), ...drawnBy(drawingArea)])).toStrictEqual({
+      'completed:LineString': ['measure-line-completed'],
+      'completed:Polygon': ['measure-fill-completed', 'measure-line-completed'],
+      'drawing:LineString': ['measure-line-drawing'],
+      'drawing:Polygon': ['measure-fill-drawing', 'measure-line-drawing'],
+      'vertex:Point': ['measure-vertex']
+    });
   });
 
   it('预览点移动时只更新 GeoJSON 数据，不增删图层', () => {
