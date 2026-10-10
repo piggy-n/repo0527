@@ -95,6 +95,10 @@ export function useRegionLocate(
     } catch {
       return;
     }
+    // 等待返回前，同时等待就绪的其他回调可能已经开始了新的操作：定位前再确认
+    if (operation.aborted) {
+      return;
+    }
     map.view.value?.fitBounds(boundary.bounds, FIT_OPTIONS);
   };
 

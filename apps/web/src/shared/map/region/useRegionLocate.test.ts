@@ -166,6 +166,26 @@ describe('useRegionLocate', () => {
     expect(fitBounds).not.toHaveBeenCalled();
   });
 
+  it('地图刚就绪时新旧操作竞争：先登记的等待者在就绪时开始了新的操作，排在后面的区划定位不再执行', async () => {
+    let ready: (() => void) | undefined;
+    const { locate, map, camera, fitBounds, resolve } = setup(readyAfter(new Promise(done => (ready = done))));
+    // 先登记的等待者：就绪后立即开始新的相机操作（例如按地址里的参数定位）
+    const locateWhenReady = async () => {
+      await map.whenReady();
+      camera.beginOperation();
+    };
+    void locateWhenReady();
+    locate.select('320100');
+    resolve('320100');
+    await settle();
+
+    ready?.();
+    await settle();
+
+    expect(fitBounds).not.toHaveBeenCalled();
+    expect(locate.state.value.boundary.kind).toBe('ready');
+  });
+
   it('重试时从重试的那一刻算起：之前的相机操作不影响定位', async () => {
     const { locate, camera, fitBounds, resolve, reject } = setup();
 

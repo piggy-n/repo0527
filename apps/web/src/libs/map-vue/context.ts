@@ -259,6 +259,10 @@ export class MapContextState implements Disposable {
     } catch {
       return;
     }
+    // 等待返回前，同时等待就绪的其他回调可能已经开始了新的操作：执行前再确认这次没被作废
+    if (operation.aborted) {
+      return;
+    }
     const viewport = this.#viewport.value;
     try {
       if (viewport) {
@@ -274,8 +278,11 @@ export class MapContextState implements Disposable {
     const attached = this.#view ?? (await this.#nextView(signals));
     // 等的是这一个视图：它被卸下时立即结束，不等它自己的 whenReady
     await abortable(attached.view.whenReady(), [...signals, attached.detached.signal]);
-    // 纵深防御：上面的等待结束后、这里继续执行之前隔着一两个微任务，期间被替换时监听已经移除，返回前再确认等的仍是当前视图。
-    // 这个窗口取决于微任务的个数，测试无法稳定命中
+    // 上面的等待结束时监听已经移除，到这里继续执行之前，就绪的同一轮里排在后面的回调可能中止了 signal 或卸下了视图：返回前再确认
+    const aborted = signals.find(item => item.aborted);
+    if (aborted) {
+      throw abortReason(aborted);
+    }
     if (this.#view !== attached) {
       throw new DOMException('等待的视图已被卸下或替换', 'AbortError');
     }

@@ -187,7 +187,8 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 引用别的分组数据源的推导，要依赖被引用方的状态，保证两者在同一轮变化、一起提交；拥有者的数据源和图层 ID 以分组名为前缀（ADR 0027、0028）
 - `shared/map` 和 feature 的地图能力按"拥有者"写（ADR 0031）：组合式函数持有状态（`shallowRef`，整体替换，值没变时不替换）并提供操作（参数不合法时抛错），推导分组的是纯函数；面板等界面通过 props 拿到拥有者，只显示和调用
 - 默认视角 `useDefaultView(map)` 只在 `provideMap` 所在组件的 setup 里调用一次，其他组件通过 props 拿到 `goToDefaultView`（ADR 0033）
-- 用户发起的定位是一次相机操作，作废之前没完成的定位：用上下文的 `runCameraOperation(view => ...)` 执行；要先异步准备数据的，开始时调用 `beginCameraOperation()`，准备好后用 `whenReady(信号)` 等视图。不要直接调用视口的 `flyTo` / `fitBounds`，也不要用相机变化判断请求是否过期（ADR 0038）
+- 用户发起的定位是一次相机操作，作废之前没完成的定位：用上下文的 `runCameraOperation(view => ...)` 执行；要先异步准备数据的，开始时调用 `beginCameraOperation()`，准备好后用 `whenReady(信号)` 等视图，返回后再确认信号没有中止才定位。不要直接调用视口的 `flyTo` / `fitBounds`，也不要用相机变化判断请求是否过期（ADR 0038）
+- 异步操作在每个等待点（`await`）返回后都要重新确认自己仍然有效（信号没有中止、仍是最新的请求），再继续执行：等待会因中止而结束，不等于返回时一定没中止
 - 交互工具用 `map.registerTools()` 在页面的 setup 里登记，同一时间只有一个当前工具；工具声明光标和手势，只由适配器应用；工具只拿到 `ToolView`（`kind`、`pick`、`project`），不碰原生地图（ADR 0034）
 - 工具栏的按钮由页面挑选（`items`），动作的回调由页面给出（`actions`）；开关面板的动作，由页面通过 `pressed` 告诉工具栏显示为按下，工具栏不保存开关（ADR 0034、0036）
 - fill 图层要用 `['geometry-type']` 限定为面：MapLibre 会把线也当成环填充

@@ -252,6 +252,27 @@ describe('MapContextState 的相机操作', () => {
     expect(done).toStrictEqual(['第四次']);
   });
 
+  it('地图刚就绪时新旧操作竞争：先登记的等待者在就绪时发起了新的操作，排在后面的旧操作不再执行', async () => {
+    using env = setup();
+    const { view, markReady } = pendingView();
+    env.state.attachView(view, CANVAS);
+    const { context } = env.state;
+    const done: string[] = [];
+    // 先登记的等待者：就绪后立即发起新的定位（例如按地址里的参数定位）
+    const locateWhenReady = async () => {
+      await context.whenReady();
+      context.runCameraOperation(() => done.push('新的定位'));
+    };
+    void locateWhenReady();
+    context.runCameraOperation(() => done.push('旧的定位'));
+
+    view.emit('ready');
+    markReady();
+    await settle();
+
+    expect(done).toStrictEqual(['新的定位']);
+  });
+
   it('runCameraOperation：等待的视图失败时放弃；就绪后执行时抛出的错误交给 onError', async () => {
     const errors: unknown[] = [];
     const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
@@ -285,6 +306,32 @@ describe('MapContextState 的相机操作', () => {
 });
 
 describe('MapContextState 的 whenReady', () => {
+  it('等待结束、返回之前 signal 中止（就绪的同一轮里排在后面的回调）：以中止结束，不算就绪', async () => {
+    using env = setup();
+    const { view, markReady } = pendingView();
+    env.state.attachView(view, CANVAS);
+    const controller = new AbortController();
+    const waiting = env.state.context.whenReady(controller.signal);
+    // 视图就绪时，这个回调排在 whenReady 的等待之后、它继续执行之前
+    void view.ready.then(() => controller.abort());
+
+    markReady();
+
+    expect(await settled(waiting)).toBe('AbortError');
+  });
+
+  it('等待结束、返回之前视图被卸下（就绪的同一轮里排在后面的回调）：以 AbortError 结束', async () => {
+    using env = setup();
+    const { view, markReady } = pendingView();
+    env.state.attachView(view, CANVAS);
+    const waiting = env.state.context.whenReady();
+    void view.ready.then(() => env.state.detachView(view));
+
+    markReady();
+
+    expect(await settled(waiting)).toBe('AbortError');
+  });
+
   it('等待中的视图被替换：以 AbortError 结束，旧视图后来就绪也不算', async () => {
     using env = setup();
     const first = pendingView();
