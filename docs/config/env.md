@@ -26,6 +26,8 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_APP_TITLE` | `江苏省统一调查监测现状图` | `index.html`（`%VITE_APP_TITLE%`）、`appConfig.title` | 系统名称，只定义一次 |
 | `VITE_API_BASE_URL` | `/backend` | `vite.config.ts`（代理前缀）、`appConfig.apiBaseUrl` | 接口基础地址 |
 | `VITE_LOGIN_PUBLIC_KEY` | `04d2bf…fa83`（130 位） | `appConfig.loginPublicKey` | 登录密码加密用的 SM2 公钥，由后端提供（ADR 0015）。公钥本身是公开的，可以写进产物 |
+| `VITE_TIANDITU_ENABLED` | `true` | `appConfig.tianditu` | 天地图开关（ADR 0031）。不能访问公网的内网部署设为 `false`，地图不再向天地图发任何请求 |
+| `VITE_TIANDITU_KEY` | `13745b…8974`（32 位） | `appConfig.tianditu.key` | 天地图的浏览器端 key，开启时必填，关闭时不读。它本来就写在每个瓦片地址里，防盗用靠天地图控制台的域名白名单和配额 |
 | `PROXY_TARGET` | `http://192.168.1.180:18010` | 只在 `vite.config.ts` | 开发服务器与 `vite preview` 的代理目标 |
 
 ## 两类变量
@@ -47,7 +49,11 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 
 `shared/config/app-config.ts` 集中读取并校验：缺失或为空时，在启动时抛出"缺少环境变量 XXX"，不带着空值继续运行（已验证）。其他代码只使用 `appConfig`。
 
-有固定格式的变量还会校验格式。`VITE_LOGIN_PUBLIC_KEY` 必须是 `04` 开头、共 130 位的十六进制（未压缩格式的 SM2 公钥），复制时少了字符会在启动时报错，而不是等到登录时才失败（已验证）。
+有固定格式的变量还会校验格式。`VITE_LOGIN_PUBLIC_KEY` 必须是 `04` 开头、共 130 位的十六进制（未压缩格式的 SM2 公钥），复制时少了字符会在启动时报错，而不是等到登录时才失败（已验证）。天地图开启时，`VITE_TIANDITU_KEY` 必须是 32 位十六进制。
+
+开关类变量（如 `VITE_TIANDITU_ENABLED`）只接受小写的 `true`、`false`，其他值（`TRUE`、`1`、`yes`）在启动时报错，不按"非空即真"处理：`.env` 里的值都是字符串，`'false'` 也是非空的。
+
+**几个变量合成一个值**：天地图的开关和 key 在 `appConfig` 里合成 `tianditu: { key } | null`，关闭时为 `null`。"开启了却没有 key"在类型上不存在，使用方拿到 `null` 时必须处理天地图不可用的情况（内网部署），不用在每条调用路径上各写一次开关判断。公网和内网各用一套构建、部署命令的具体做法待定（ADR 0031），无论用哪种，改变的只是这两个变量从哪里来。
 
 例外：Vite 内置的 `DEV`、`PROD`、`MODE`、`BASE_URL` 直接读取 `import.meta.env`。例如路由表靠 `import.meta.env.DEV` 的静态替换，在生产构建中删除开发路由。
 
