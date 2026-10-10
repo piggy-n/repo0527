@@ -4,9 +4,13 @@
   height: 100%;
 }
 
-// 联调用的位置，5D 再设计
-.basemapPanel {
+// 联调用的控件排在右上角，5D 再设计
+.controls {
   position: absolute;
   top: var(--space-lg);
   right: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-sm);
 }

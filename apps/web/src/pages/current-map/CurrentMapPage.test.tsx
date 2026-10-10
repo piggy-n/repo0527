@@ -131,7 +131,30 @@ const jiangsu = [...JIANGSU_BOUNDS] as ViewBounds;
 // 等定位相关的微任务和渲染都走完
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
+function button(wrapper: ReturnType<typeof mountPage>['wrapper'], text: string) {
+  const found = wrapper.findAll('button').find(candidate => candidate.text() === text);
+  if (!found) {
+    throw new Error(`没有"${text}"按钮`);
+  }
+  return found;
+}
+
 describe('CurrentMapPage', () => {
+  it('绑定底图、注记和边界，从下到上是底图、注记、省界', () => {
+    const { maps } = mountPage();
+    const style = maps[0]?.options.style;
+    if (!style || typeof style === 'string') {
+      throw new Error('没有用会话的样式创建地图');
+    }
+
+    expect(style.layers.map(layer => layer.id)).toStrictEqual([
+      'basemap-background',
+      'basemap-vector',
+      'basemap-labels-vector',
+      'boundaries-province'
+    ]);
+  });
+
   it('第一次就绪时按江苏范围定位一次；画布重建后再次就绪时不再定位，保留用户调整过的视角', async () => {
     const { maps, canvasKey } = mountPage();
     const first = maps[0];
@@ -159,6 +182,21 @@ describe('CurrentMapPage', () => {
     expect(second.fitBoundsCalls).toEqual([]);
   });
 
+  it('点"默认视角"按江苏的范围再定位一次', async () => {
+    const { wrapper, maps } = mountPage();
+    const map = maps[0];
+    if (!map) {
+      throw new Error('没有创建地图');
+    }
+    map.fire('style.load');
+    await settle();
+    map.drag(120.6, 31.3);
+
+    await button(wrapper, '默认视角').trigger('click');
+
+    expect(map.fitBoundsCalls).toEqual([jiangsu, jiangsu]);
+  });
+
   it('第一次创建地图失败、重试成功后，补做一次初始定位', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
@@ -166,7 +204,7 @@ describe('CurrentMapPage', () => {
       await nextTick();
       expect(maps).toHaveLength(0);
 
-      await wrapper.find('button').trigger('click');
+      await button(wrapper, '重试').trigger('click');
       await nextTick();
       const map = maps[0];
       if (!map) {

@@ -28,6 +28,8 @@ export interface FitBoundsOptions {
   readonly padding?: ViewPadding;
   readonly maxZoom?: number;
   readonly duration?: number;
+  /** 定位结束时的俯角；不传时保持当前俯角。旋转总是归零 */
+  readonly pitch?: number;
 }
 
 /** 二三维共用的视图接口：生命周期与程序定位（ADR 0024）；输入、拾取、投影在做交互工具时加入 */

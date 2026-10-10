@@ -139,6 +139,7 @@ session[Symbol.dispose]();
 - 创建时用会话相机；`ready` 时在 `move` 事件里写回会话：有 `originalEvent` 就是 `user`，否则取 `eventData.cause`，都没有按 `program`
 - 首次进入 ready 和恢复显示走同一段流程：追上样式（追不上就中止，见"生命周期"）→ `jumpTo(会话相机, { cause: 'sync' })` → 读地图的实际值按 `sync` 写回会话 → 最后才进入 ready。这样初始化期间会话相机的变化会跟过来；地图收敛过的值（创建时就收敛了，那时还没订阅 `move`；或俯角超过上限）也会写回，而且不算意图；收到 `ready` 的监听者读到的已经是地图的实际值。以 `active: false` 创建、加载完进入 `paused` 时不同步，留到恢复显示
 - `flyTo`、`fitBounds` 带 `{ cause: 'program' }`
+- `fitBounds` 的 `pitch` 选项（5B.2 加入）：MapLibre 6 的 `fitBounds` 总把旋转归零，俯角却保持不变，算缩放级别时也不考虑俯角；要平视地看一个范围（如默认视角）时明确传 `pitch: 0`。三维视图实现 `MapView` 时同样遵守
 - 暂停期间不写回、不跟随；不订阅会话的相机变化（相机由当前显示的视图驱动）
 - `flyTo`、`fitBounds` 只在 `ready` 时可用，否则抛错：定位应由当前显示的视图发起，调用方先等 `whenReady()`
 - 从不保留 padding（`fitBounds` 不设 `absolutePadding`），所以 `getCenter()` 就是画布几何中心，会话相机里没有 padding

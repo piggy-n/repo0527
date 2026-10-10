@@ -6,7 +6,7 @@ import { JIANGSU_BOUNDS } from './jiangsu';
 const DEFAULT_VIEW_DURATION = 500;
 
 export interface DefaultView {
-  /** 按江苏的范围适配，避开悬浮元素，旋转归零；视图没有就绪时什么也不做 */
+  /** 按江苏的范围适配，避开悬浮元素，旋转和俯角归零；视图没有就绪时什么也不做 */
   readonly goToDefaultView: () => void;
 }
 
@@ -23,13 +23,14 @@ export function useDefaultView(map: Pick<MapContext, 'view' | 'viewState'>): Def
     throw new Error('useDefaultView 要在画布创建视图之前调用（provideMap 所在组件的 setup），其他组件通过 props 拿到 goToDefaultView');
   }
 
-  // 定位只能由就绪的视图发起（ADR 0024）；fitBounds 不传 padding 时自动避开登记过的悬浮元素（ADR 0029）
+  // 定位只能由就绪的视图发起（ADR 0024）；fitBounds 不传 padding 时自动避开登记过的悬浮元素（ADR 0029）。
+  // 默认视角是平视的：fitBounds 只把旋转归零，俯角要明确传入
   const fit = (duration: number): boolean => {
     const view = map.view.value;
     if (map.viewState.value !== 'ready' || !view) {
       return false;
     }
-    view.fitBounds(JIANGSU_BOUNDS, { duration });
+    view.fitBounds(JIANGSU_BOUNDS, { duration, pitch: 0 });
     return true;
   };
 

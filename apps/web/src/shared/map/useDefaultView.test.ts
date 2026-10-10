@@ -37,7 +37,7 @@ describe('useDefaultView', () => {
 
     map.viewState.value = 'ready';
     await nextTick();
-    expect(fitBounds.mock.calls).toStrictEqual([[JIANGSU_BOUNDS, { duration: 0 }]]);
+    expect(fitBounds.mock.calls).toStrictEqual([[JIANGSU_BOUNDS, { duration: 0, pitch: 0 }]]);
 
     map.viewState.value = 'paused';
     await nextTick();
@@ -61,10 +61,10 @@ describe('useDefaultView', () => {
     await nextTick();
 
     expect(failed.fitBounds).not.toHaveBeenCalled();
-    expect(retried.fitBounds.mock.calls).toStrictEqual([[JIANGSU_BOUNDS, { duration: 0 }]]);
+    expect(retried.fitBounds.mock.calls).toStrictEqual([[JIANGSU_BOUNDS, { duration: 0, pitch: 0 }]]);
   });
 
-  it('回到默认视角：就绪时用 500ms 动画按江苏的范围适配，不传 padding（自动避开悬浮元素）', async () => {
+  it('回到默认视角：就绪时用 500ms 动画按江苏的范围平视适配，不传 padding（自动避开悬浮元素）', async () => {
     const { map, defaultView } = setup();
     const { viewport, fitBounds } = fakeViewport();
     map.view.value = viewport;
@@ -74,7 +74,7 @@ describe('useDefaultView', () => {
 
     defaultView.goToDefaultView();
 
-    expect(fitBounds.mock.calls).toStrictEqual([[JIANGSU_BOUNDS, { duration: 500 }]]);
+    expect(fitBounds.mock.calls).toStrictEqual([[JIANGSU_BOUNDS, { duration: 500, pitch: 0 }]]);
   });
 
   it.each(['idle', 'initializing', 'paused', 'failed'] as const)('视图是 %s 时回到默认视角什么也不做', state => {

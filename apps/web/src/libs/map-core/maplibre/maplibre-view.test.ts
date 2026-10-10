@@ -1089,12 +1089,15 @@ describe('MapLibreView', () => {
 
       ctx.view.flyTo({ center: [120, 31], zoom: 10 }, { duration: 500 });
       ctx.view.fitBounds([118, 31, 120, 33], { padding: 20 });
+      ctx.view.fitBounds([118, 31, 120, 33], { duration: 500, pitch: 0 });
 
       // 不能出现值为 undefined 的键：MapLibre 合并默认选项时会被它覆盖（maxZoom 变成 undefined，算出 NaN）
       expect(ctx.map.calls.slice(before)).toStrictEqual([
         ['flyTo', { center: [120, 31], zoom: 10, duration: 500 }, { cause: 'program' }],
-        ['fitBounds', [118, 31, 120, 33], { padding: 20 }, { cause: 'program' }]
+        ['fitBounds', [118, 31, 120, 33], { padding: 20 }, { cause: 'program' }],
+        ['fitBounds', [118, 31, 120, 33], { duration: 500, pitch: 0 }, { cause: 'program' }]
       ]);
+      // 第二次 fitBounds 定位到同一个范围，相机没变，不算新的意图
       expect(ctx.session.camera.intentRevision).toBe(2);
     });
 

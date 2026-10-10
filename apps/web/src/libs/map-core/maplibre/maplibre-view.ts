@@ -208,9 +208,11 @@ export class MapLibreView<const G extends string> implements MapView {
     });
   }
 
-  fitBounds([west, south, east, north]: ViewBounds, { padding, maxZoom, duration }: FitBoundsOptions = {}): void {
+  fitBounds([west, south, east, north]: ViewBounds, { padding, maxZoom, duration, pitch }: FitBoundsOptions = {}): void {
     const map = this.#readyMap();
-    map.fitBounds([west, south, east, north], withoutUndefined({ padding, maxZoom, duration }), { cause: 'program' });
+    map.fitBounds([west, south, east, north], withoutUndefined({ padding, maxZoom, duration, pitch }), {
+      cause: 'program'
+    });
   }
 
   on<E extends keyof MapLibreViewEvents>(event: E, callback: MapLibreViewEvents[E]): Unsubscribe {
