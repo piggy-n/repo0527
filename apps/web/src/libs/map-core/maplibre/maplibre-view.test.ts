@@ -1342,15 +1342,20 @@ describe('MapLibreView', () => {
       expect(focus).toHaveBeenCalledOnce();
     });
 
-    it('does not take focus when it becomes ready with a temporary task already active', () => {
+    it('takes focus when it becomes ready with a temporary task already active, but not with a persistent one', () => {
       using ctx = setup();
       ctx.session.tool.register('measure', { persistent: false });
       const focus = vi.spyOn(ctx.map.canvas, 'focus');
-      ctx.session.tool.activate('measure');
-
+      // 进入页面时是"移动"，就绪时不抢焦点
       ctx.map.fire('style.load');
-
       expect(focus).not.toHaveBeenCalled();
+
+      // 加载期间（画布重建、暂停时）开启的临时任务，就绪后补上焦点，Esc 才能退出
+      ctx.view.pause();
+      ctx.session.tool.activate('measure');
+      ctx.view.resume();
+
+      expect(focus.mock.calls).toStrictEqual([[{ preventScroll: true }]]);
     });
 
     it('only turns back on the gestures it turned off itself', () => {

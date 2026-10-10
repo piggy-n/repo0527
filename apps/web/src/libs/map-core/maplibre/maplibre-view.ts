@@ -492,17 +492,18 @@ export class MapLibreView<const G extends string> implements MapView {
   #onToolChange(): void {
     if (this.#state === 'ready' && this.#map !== undefined) {
       this.#applyTool(this.#map);
-      // 临时任务多由面板、工具栏上的按钮激活，焦点还在按钮上，按键到不了地图；移到地图上，Esc 才能直接退出
-      if (!this.#session.tool.activeTool.persistent) {
-        this.#map.getCanvas().focus({ preventScroll: true });
-      }
     }
   }
 
-  // 光标和手势是当前工具的声明；只恢复自己关掉的手势
+  // 光标和手势是当前工具的声明；只恢复自己关掉的手势。切换工具和进入 ready 时调用
   #applyTool(map: MapLike): void {
-    const { cursor, gestures } = this.#session.tool.activeTool;
+    const { cursor, gestures, persistent } = this.#session.tool.activeTool;
     map.getCanvas().style.cursor = cursor ?? '';
+    // 临时任务多由面板、工具栏上的按钮激活（也可能在加载期间），焦点还在按钮上，按键到不了地图；
+    // 移到地图上，Esc 才能直接退出。常驻模式不移，进入页面时不会抢走焦点
+    if (!persistent) {
+      map.getCanvas().focus({ preventScroll: true });
+    }
     for (const name of GESTURES) {
       const handler = map[name];
       if (gestures?.[name] === false) {
