@@ -40,6 +40,7 @@
 | [0028](0028-map-vue-context.md) | map-vue：会话与视图分开的地图上下文 | 已接受 |
 | [0029](0029-map-overlay-padding.md) | 定位可视区域：悬浮元素登记、定位时现量现算 | 已接受 |
 | [0030](0030-view-failure-as-data.md) | 视图失败的原因作为数据 | 已接受 |
+| [0031](0031-basemap-tianditu-and-owner.md) | 底图：天地图的配置与底图的拥有者 | 已接受 |
 
 ## 模板
 
