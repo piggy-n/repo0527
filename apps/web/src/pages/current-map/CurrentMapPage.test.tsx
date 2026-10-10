@@ -761,6 +761,34 @@ describe('CurrentMapPage', () => {
       expect(map.fitBoundsCalls).toEqual([NANJING]);
     });
 
+    it('引擎失败期间选中区划，重试成功后定位到区划：等待中的定位不因视图失败放弃（ADR 0039）', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        stubBoundaryFetch();
+        const { wrapper, maps } = mountPage({ failFirstCreation: true, modules: await freshModules() });
+        await nextTick();
+        await button(wrapper, '区划定位').trigger('click');
+        await button(wrapper, '南京').trigger('click');
+        await settle();
+
+        await button(wrapper, '重试').trigger('click');
+        await nextTick();
+        const map = maps[0];
+        if (!map) {
+          throw new Error('重试后没有创建地图');
+        }
+        map.fire('style.load');
+        await settle();
+
+        expect(map.fitBoundsCalls).toEqual([NANJING]);
+        // 重试时边界已经到位：高亮在创建地图的样式里
+        const style = map.options.style;
+        expect(typeof style === 'object' && Object.hasOwn(style.sources, 'region')).toBe(true);
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
     it('边界加载期间拖动地图或输入坐标定位：都是新的操作，边界到位后只高亮、不定位', async () => {
       const dragged = deferBoundaryFetch();
       const first = await readyPage(await freshModules());

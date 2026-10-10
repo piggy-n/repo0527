@@ -129,6 +129,8 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 界面与逻辑分离：表单、提交这类交互逻辑写成组合式函数（`features/<域>/composables/useXxx`，通用的放 `shared/composables`），组合式函数不渲染、不跳转、不弹提示，这些由组件和页面决定（见 `docs/modules/auth.md` 的登录三层）
 - `computed` 不抛异常：可能失败的计算把失败表示成数据（结果对象），或者放在调用方的 `try/catch` 里直接计算。Vue 3.5 中 `computed` 抛错时，异常在调度器检查依赖时抛出，读取方的 `try/catch` 接不住；之后依赖不变时再读取，返回上一次成功的旧值（ADR 0028 背景第 8 条）
 - 组合式函数发起的请求在作用域销毁时（`onScopeDispose`）取消，请求返回后再检查一次是否已取消：晚到的结果不写入会话、store 等共享状态，被取消的请求不显示错误。写法见 `useLoginForm`，原因见 `docs/modules/auth.md` 的登录表单
+- 异步按 ADR 0039 分类：能写成状态收敛的不写成操作；可替换操作（同一件事的先后请求，如定位、查询所在区县）在同一通道里后发覆盖先发，用 `@yzt/utils` 的 `LatestController`，不手写递增计数；服务端写操作（删除、保存）不适用，按业务防重复、串行或允许并发，不随组件卸载取消
+- 命名：状态快照的序号叫 revision（只增不减，比较新旧）；一次意图用信号表示（operation，只能作废，不比较大小）；version 只用于外部格式（样式规范的 `version: 8`、依赖版本）（ADR 0039）
 - 加载状态用 `shared/composables` 的 `useDelayedFlag` 延迟显示，防重复提交的标志仍立即生效
 - 确认框（`ElMessageBox`）不随组件卸载关闭：组件卸载时关闭自己打开的确认框；用户确认后，先检查组件是否已销毁、会话是否还是打开确认框时的那一个，再执行操作（写法见 `features/file-management/composables/useFileRemoval.ts`）
 - 同一时间只能打开一个 `ElMessageBox`：组件卸载时只能用 `ElMessageBox.close()` 关闭，它会关掉所有确认框，有多个时会把别处的一起关掉、对方按"取消"处理；需要多个弹框并存时，改用渲染在组件内的确认框（如基于 `ElDialog`），随组件卸载自然销毁
@@ -187,7 +189,8 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 引用别的分组数据源的推导，要依赖被引用方的状态，保证两者在同一轮变化、一起提交；拥有者的数据源和图层 ID 以分组名为前缀（ADR 0027、0028）
 - `shared/map` 和 feature 的地图能力按"拥有者"写（ADR 0031）：组合式函数持有状态（`shallowRef`，整体替换，值没变时不替换）并提供操作（参数不合法时抛错），推导分组的是纯函数；面板等界面通过 props 拿到拥有者，只显示和调用
 - 默认视角 `useDefaultView(map)` 只在 `provideMap` 所在组件的 setup 里调用一次，其他组件通过 props 拿到 `goToDefaultView`（ADR 0033）
-- 用户发起的定位是一次相机操作，作废之前没完成的定位：用上下文的 `runCameraOperation(view => ...)` 执行；要先异步准备数据的，开始时调用 `beginCameraOperation()`，准备好后用 `whenReady(信号)` 等视图，返回后再确认信号没有中止才定位。不要直接调用视口的 `flyTo` / `fitBounds`，也不要用相机变化判断请求是否过期（ADR 0038）
+- 用户发起的定位是一次相机操作，作废之前没完成的定位：用上下文的 `runCameraOperation(camera => ...)` 执行；要先异步准备数据的，开始时 `const operation = beginCameraOperation()`，准备好、确认自己的请求没过期后 `operation.run(camera => ...)`；页面初始化的定位用 `currentCameraOperation().run(...)`，不开始新的操作。等就绪、跨视图失败等待、等待后的再确认都由 `run` 负责；每个操作只能 `run` 一次；回调拿到的相机控制只在回调期间有效，不要存下来。不要用相机变化判断请求是否过期（ADR 0038、0039）
+- 上下文的 `view` 只在视图就绪时有值，只有 `kind`、`pick`、`project`；浮层只判断 `view` 是否为 `null`，不另外判断 `viewState`（ADR 0039）
 - 异步操作在每个等待点（`await`）返回后都要重新确认自己仍然有效（信号没有中止、仍是最新的请求），再继续执行：等待会因中止而结束，不等于返回时一定没中止
 - 交互工具用 `map.registerTools()` 在页面的 setup 里登记，同一时间只有一个当前工具；工具声明光标和手势，只由适配器应用；工具只拿到 `ToolView`（`kind`、`pick`、`project`），不碰原生地图（ADR 0034）
 - 工具栏的按钮由页面挑选（`items`），动作的回调由页面给出（`actions`）；开关面板的动作，由页面通过 `pressed` 告诉工具栏显示为按下，工具栏不保存开关（ADR 0034、0036）

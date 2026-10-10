@@ -32,7 +32,7 @@ export const MeasureOverlay = defineComponent({
     const placed = computed<PlacedLabel[]>(() => {
       void map.projectionRevision.value;
       const view = map.view.value;
-      if (map.viewState.value !== 'ready' || !view) {
+      if (!view) {
         return [];
       }
       return labels.value.flatMap(label => {

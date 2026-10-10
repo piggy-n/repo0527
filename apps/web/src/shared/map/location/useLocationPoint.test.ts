@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { CameraState, LngLat, MapInputEvent, PickResult, ToolView } from '@yzt/map-core';
-import type { MapContext, MapViewport, MapViewState } from '@yzt/map-vue';
+import type { CameraControl, CameraOperation, MapContext, MapViewState } from '@yzt/map-vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, shallowRef } from 'vue';
 import countyFile from '../boundary/data/jiangsu-county.json?raw';
@@ -45,21 +45,15 @@ function manualRegions() {
 }
 
 function setup({ zoom = 10, viewState = 'ready' }: { zoom?: number; viewState?: MapViewState } = {}) {
-  const flyTo = vi.fn<MapViewport['flyTo']>();
-  const viewport: MapViewport = {
-    kind: '2d',
-    flyTo,
-    fitBounds: vi.fn<MapViewport['fitBounds']>(),
-    pick: vi.fn<MapViewport['pick']>(),
-    project: vi.fn<MapViewport['project']>()
-  };
+  const flyTo = vi.fn<CameraControl['flyTo']>();
+  const control: CameraControl = { flyTo, fitBounds: vi.fn<CameraControl['fitBounds']>() };
   const camera = shallowRef<CameraState>({ center: [119, 32], zoom, bearing: 0, pitch: 0 });
   const releaseTool = vi.fn<MapContext['releaseTool']>();
   // 视图就绪时立即执行；还没就绪时先记下，由测试执行（怎样等待和作废见 map-vue 的测试）
-  const waiting: ((view: MapViewport) => void)[] = [];
+  const waiting: ((camera: CameraControl) => void)[] = [];
   const runCameraOperation = vi.fn<MapContext['runCameraOperation']>(action => {
     if (viewState === 'ready') {
-      action(viewport);
+      action(control);
     } else {
       waiting.push(action);
     }
@@ -73,7 +67,7 @@ function setup({ zoom = 10, viewState = 'ready' }: { zoom?: number; viewState?: 
   }
   const pick = owner.tools[LOCATION_PICK_TOOL];
   const send = (event: MapInputEvent, view = toolView()) => pick.handleInput?.(event, view);
-  return { owner, scope, camera, viewport, flyTo, waiting, releaseTool, send, pick, ...manual };
+  return { owner, scope, camera, control, flyTo, waiting, releaseTool, send, pick, ...manual };
 }
 
 // 还没有视图的上下文：相机操作一直等着
@@ -107,13 +101,13 @@ describe('useLocationPoint', () => {
   });
 
   it('定位是一次相机操作：视图还没就绪时先放下位置点，就绪后再飞过去，级别按那时的相机算', () => {
-    const { owner, camera, viewport, flyTo, waiting } = setup({ viewState: 'initializing', zoom: 10 });
+    const { owner, camera, control, flyTo, waiting } = setup({ viewState: 'initializing', zoom: 10 });
 
     owner.locate(XUANWU);
     expect(owner.state.value.point?.lngLat).toBe(XUANWU);
     expect(flyTo).not.toHaveBeenCalled();
     camera.value = { ...camera.value, zoom: 15 };
-    waiting[0]?.(viewport);
+    waiting[0]?.(control);
 
     expect(flyTo.mock.calls).toStrictEqual([[{ center: XUANWU, zoom: 15 }, { duration: 1000 }]]);
   });
@@ -262,10 +256,9 @@ describe('useLocationPoint', () => {
     vi.stubGlobal('fetch', fetch);
     const scope = effectScope();
     const owners = scope.run(() => [useLocationPoint(idleMap()), useLocationPoint(idleMap())]);
+    // 还没有视图：相机操作一直等着
     const regionMap = {
-      view: shallowRef(null),
-      whenReady: () => new Promise<void>(() => {}),
-      beginCameraOperation: () => new AbortController().signal
+      beginCameraOperation: (): CameraOperation => ({ signal: new AbortController().signal, run: () => {} })
     };
     const region = scope.run(() => useRegionLocate(regionMap, { goToDefaultView: () => {} }));
 

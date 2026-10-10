@@ -1,6 +1,6 @@
 # 地图与 Vue 的衔接（map-vue）
 
-> 状态：5A.2 完成了 `provideMap`、样式绑定、画布组件 `<MapCanvas>` 和只读上下文 `useMap()`；5A.3 加入定位可视区域（`useMapOverlay`）、失败原因与重试；5B.3 加入交互工具的登记与切换、视图入口的拾取和投影。设计依据是 ADR 0027（分层）、ADR 0028（上下文）、ADR 0029（定位可视区域）、ADR 0030（失败原因）和 ADR 0034（交互工具）。
+> 状态：5A.2 完成了 `provideMap`、样式绑定、画布组件 `<MapCanvas>` 和只读上下文 `useMap()`；5A.3 加入定位可视区域（`useMapOverlay`）、失败原因与重试；5B.3 加入交互工具的登记与切换、视图入口的拾取和投影；5B 之后加入相机操作，5C.0d 改为相机操作对象、视图入口只在就绪时有值。设计依据是 ADR 0027（分层）、ADR 0028（上下文）、ADR 0029（定位可视区域）、ADR 0030（失败原因）、ADR 0034（交互工具）、ADR 0038 和 0039（相机操作）。
 
 `libs/map-vue` 把 map-core 的地图会话和视图接到 Vue 的组件树与响应式系统上。它只做衔接：不依赖 element-plus、pinia、vue-router（lint 强制），不读项目配置，除画布容器外不渲染界面。项目级的地图能力（底图、行政区、工具栏界面、失败提示）在 `shared/map`。
 
@@ -10,7 +10,7 @@
 |---|---|
 | `provide-map.ts` | `provideMap`：在当前组件里创建会话、提供上下文、管理提交与释放的时机 |
 | `style-binder.ts` | `StyleBinder`：把各拥有者的推导结果一次提交给样式模型 |
-| `context.ts` | `MapContextState`：会话、当前视图、视图状态、`whenReady`、`useCamera`、悬浮元素的登记表与 `overlayPadding`，对外的只读上下文与视图的受限入口 |
+| `context.ts` | `MapContextState`：会话、当前视图、视图状态、`whenReady`、`useCamera`、相机操作、悬浮元素的登记表与 `overlayPadding`，对外的只读上下文与视图的受限入口 |
 | `overlay.ts` | `computeOverlayPadding`：按悬浮元素的实际占用算出定位用的 padding（纯函数） |
 | `MapCanvas.tsx` | `<MapCanvas>`：二维地图画布，挂载后创建视图、卸载时释放 |
 | `use-map.ts` | `useMap()`：子孙组件取只读上下文；`useMapOverlay()`：悬浮元素登记自己贴着的边 |
@@ -52,13 +52,13 @@ return () => (
 );
 
 // 子孙组件：只读的地图上下文
-const { view, viewState, whenReady, useCamera } = useMap();
+const { view, runCameraOperation, useCamera } = useMap();
 const camera = useCamera(); // 每帧更新，只在用到相机的组件里订阅
-await whenReady(signal);
-view.value?.fitBounds(JIANGSU_BOUNDS, { padding: 40 });
+runCameraOperation(control => control.fitBounds(JIANGSU_BOUNDS, { padding: 40 })); // 没就绪时等到就绪
+const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 ```
 
-- 页面句柄（`provideMap` 的返回值）同样带着 `view`、`viewState`、`whenReady`、`useCamera`
+- 页面句柄（`provideMap` 的返回值）同样带着 `view`、`viewState`、`whenReady`、`useCamera`、相机操作
 - 路由组件仍要用 `withMapRuntime` 包装（ADR 0023），画布创建地图前 maplibre-gl 的全局设置要已经完成
 
 ## 提交的时机与语义
@@ -106,15 +106,15 @@ view.value?.fitBounds(JIANGSU_BOUNDS, { padding: 40 });
 
 | 内容 | 说明 |
 |---|---|
-| `view` | 视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`flyTo`、`fitBounds`、`pick`、`project`；画布还没挂载、已卸载时为 `null`。定位、拾取、投影都只在视图就绪时可用 |
+| `view` | 就绪视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`pick`、`project`；只在视图为 `ready` 时有值，同一个视图的入口始终是同一个对象（ADR 0039 第 4 条）。移动相机不在这里，通过相机操作 |
 | `viewState` | `idle`（没有视图）、`initializing`、`ready`、`paused`、`failed` |
 | `failure` | 视图失败的原因（`MapViewFailure`），只在 `failed` 时有值，卸下视图时清空（ADR 0030） |
 | `retry()` | 引擎失败后重新创建视图；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
-| `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@yzt/utils` 的 `abortReason`）。等待结束、返回之前 `signal` 中止或视图被卸下，同样以中止结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪 |
+| `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@yzt/utils` 的 `abortReason`）。等待结束、返回之前 `signal` 中止或视图被卸下，同样以中止结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪。定位不用它，用相机操作 |
 | `useCamera()` | 在调用方的作用域里订阅相机，作用域销毁时取消；不在组件 setup 或 `effectScope` 里调用时抛错 |
-| `runCameraOperation(action)` | 用户发起的定位（默认视角、坐标定位等）都从这里执行（ADR 0038）：开始一次相机操作，之前没完成的定位作废；视图就绪时立即执行 `action(view)`，还没就绪时等到就绪再执行，期间有新的操作、视图失败或被替换时放弃；等待返回后、执行之前再确认一次没被作废（同时等待就绪的其他回调可能先开始了新的操作）；就绪后执行时抛出的错误交给 `onError` |
-| `beginCameraOperation()` | 要先异步准备数据的定位（如区划定位等边界）在开始时调用，返回这次操作的信号，准备好后用 `whenReady(信号)` 等视图：下一次操作开始时（包括用户开始拖动、缩放）信号中止，等待随之结束。`whenReady` 返回后、定位之前要再确认信号没有中止：地图刚就绪时，先登记的等待者可能先执行并开始了新的操作，这时排在后面的这一次已经返回了 |
-| `currentCameraOperation()` | 当前这次相机操作的信号，不开始新的操作。页面的初始适配在 setup 时读它，就绪时已经中止就让给用户的操作（ADR 0038） |
+| `runCameraOperation(action)` | 用户发起的定位（默认视角、坐标定位等）都从这里执行，等于 `beginCameraOperation().run(action)` |
+| `beginCameraOperation()` | 开始一次相机操作，之前没完成的定位作废，返回操作对象 `CameraOperation`（ADR 0038、0039）。要先异步准备数据的定位（如区划定位等边界）在开始时调用，准备好后 `run` |
+| `currentCameraOperation()` | 当前这次相机操作的对象，不开始新的操作，同一次操作返回同一个对象。页面的初始适配在 setup 时在它下面 `run`，被用户的操作作废就让步 |
 | `projectionRevision` | 屏幕投影的修订号：会话相机变化、当前视图的画布尺寸变化（视图的 `resize` 事件）时加 1。按屏幕位置摆放的浮层（测量标签、图钉）在 `computed` 里读它再 `project`；只依赖相机时，窗口尺寸变化后浮层不动（中心和缩放没变，相机不发出变化） |
 | `activeTool` | 当前工具的 ID（只读），跟随会话的工具模型 |
 | `activateTool(id)` | 激活工具，旧工具先退出；未登记时抛错 |
@@ -124,6 +124,40 @@ view.value?.fitBounds(JIANGSU_BOUNDS, { padding: 40 });
 - **受限入口**：暂停、恢复、释放、订阅都不在 `MapViewport` 上，JS 里也调不到。暂停和恢复以后由框架切换负责，释放由画布负责，状态从 `viewState` 读
 - **等待绑定视图实例**（5A 之后的修复）：每个挂上的视图带一个自己的 `AbortController`，卸下时中止，等它的 `whenReady` 立即以 `AbortError` 结束，不等视图自己释放时的拒绝；返回前再确认等的仍是当前视图，`signal` 也没有中止（5B 之后补上）。等待结束时监听已经移除，到继续执行之前，就绪的同一轮里排在后面的回调可能卸下视图或中止 `signal`。起初以为这个窗口取决于微任务的个数、测不到；其实同一个 Promise 的回调按登记顺序排队，`whenReady` 的继续执行排在它们后面，测试在调用 `whenReady` 之后再给视图的就绪登记一个回调，就能稳定命中
 - **等待者的清理**：`whenReady` 同时监听上下文的生命周期和调用方的 `signal`；任一个中止、或者等待结束时，两边的监听都会移除，不会因为一直等不到视图而留在另一个 `signal` 上
+
+## 相机操作（ADR 0038、0039）
+
+```ts
+// 要先准备数据的定位：选择时开始操作，数据到位后在这次操作下定位
+const operation = map.beginCameraOperation();
+const boundary = await loader.load(region);
+if (signal.aborted) {
+  return; // 自己的选择过期了（区划通道的检查）
+}
+operation.run(camera => camera.fitBounds(boundary.bounds, FIT_OPTIONS));
+
+// 页面初始化：不开始新的操作，被用户的操作作废就让步
+map.currentCameraOperation().run(camera => camera.fitBounds(JIANGSU_BOUNDS, { duration: 0 }));
+```
+
+`CameraOperation` 只有 `signal` 和 `run(action)`：
+
+- 每个操作只能 `run` 一次，第二次抛错；回调最多执行一次，执行之后视图再失败、恢复都不重放
+- 已经作废时什么也不做；当前视图是 `ready` 时同步执行
+- 否则等到有视图进入 `ready`：期间引擎失败、重试、视图被替换、样式失败后恢复都继续等，暂停不算就绪；被新的操作作废、上下文释放时放弃。加载期间选中南京、引擎失败、重试成功后，地图定位到南京（ADR 0038 时会放弃）
+- 回调抛错交给 `onError`，同步执行和等到就绪后执行都一样，不抛给调用方
+
+回调拿到的 `CameraControl` 只有 `flyTo`、`fitBounds`，只在这次回调期间有效：
+
+- 每次调用都确认回调还没返回、操作没被作废、视图仍是开始执行时那个就绪的视图；回调里又开始了新的操作、视图不再就绪时什么也不做
+- 回调返回之后再调用抛错：把它存起来延迟调用是编程错误，类型和 lint 拦不住，运行时暴露，不会悄悄覆盖新的定位
+- 没传 `padding` 时避开登记过的悬浮元素（见下文"定位可视区域"）
+
+实现上的几点：
+
+- **同一时间最多一个等待中的操作**：操作一个接一个作废（开始新的就作废旧的），每个只能 `run` 一次，所以等待的槽位只有一个。作废、上下文释放时，中止监听同步把它移出槽位并移除两边的监听；执行时同样移出
+- **订阅状态变化，不循环调用 `whenReady`**：失败视图的 `whenReady` 立即以原因结束，循环会空转。视图的 `statechange` 进入 `ready`、挂上一个已经就绪的视图时，同步执行等待中的操作
+- **同步执行，没有空档**：ADR 0038 时用 `whenReady` 等待，返回到执行之间隔着微任务，地图刚就绪时出现过"新定位 → 旧定位"的竞争（`f5ce757`）。现在在 `statechange` 里同步执行，等待中的旧操作先执行，就绪后才开始的新操作接着执行，最后停在新的定位
 
 ## 交互工具（ADR 0034）
 
@@ -151,7 +185,7 @@ const panel = ref<HTMLElement>();
 useMapOverlay(panel, 'left');
 
 // 任何地方：不传 padding 时自动避开登记过的元素
-useMap().view.value?.fitBounds(bounds);
+useMap().runCameraOperation(camera => camera.fitBounds(bounds));
 // 需要自己组合时
 const padding = useMap().overlayPadding();
 ```
@@ -161,7 +195,7 @@ const padding = useMap().overlayPadding();
 - 每一边的 padding 取 `max(边距, 占用 + 间隔)`；同一边取最大的占用；元素为空、尺寸为 0、不在文档里、和画布不相交时不算
 - 可视区域的宽、高至少保留画布的 1/3，超出时两侧按比例缩小。极窄的画布上目标可能有一部分落在面板下面，这是为了不缩到几乎看不见
 - 默认值：边距 16、间隔 16、至少保留 1/3，用 `provideMap({ overlay: { edgePadding, gap, minVisibleRatio } })` 修改，取值不合法时抛错
-- 视图入口的 `fitBounds`、`flyTo` 没传 `padding` 时使用 `overlayPadding()`；明确传入（包括 `0`）时以传入的为准。这是 `MapViewport` 比 `MapView` 多出的一层默认行为。`flyTo` 只在给了中心时把它放在避开悬浮元素后的区域中央（5B.6，ADR 0037）
+- 相机控制的 `fitBounds`、`flyTo` 没传 `padding` 时使用 `overlayPadding()`；明确传入（包括 `0`）时以传入的为准。这是 `CameraControl` 比 `MapView` 多出的一层默认行为。`flyTo` 只在给了中心时把它放在避开悬浮元素后的区域中央（5B.6，ADR 0037）
 - `useMapOverlay` 要放在 `provideMap` 所在组件的子孙组件里：提供上下文的组件 `inject` 不到自己 provide 的值（Vue 的 `inject` 从父组件开始找）；不在作用域里调用时抛错，作用域销毁时注销
 
 ## 错误上报
@@ -189,8 +223,9 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 | 切换数据版本（区域换数据源 ID，选区引用它） | 同一轮一次提交，没有错误，选区描边跟着换了数据源 |
 | 切换数据版本，选区晚 800ms 才跟上 | 第一轮被拒绝，报告"图层 selection-line 引用的数据源 regions-v1 不存在"；地图停在原来的快照，视图仍是 `ready`（不合法的组合没有到达 MapLibre）；选区跟上后两者一起提交，只有这一条报错 |
 | 让选区的推导出错，再切换颜色 | 只报告一次推导失败；颜色没有变化（整批跳过）；修好后颜色和选区一起生效 |
-| `flyTo`、`fitBounds` | 经受限入口转发到视图，会话相机随之更新 |
+| `flyTo`、`fitBounds` | 经受限入口转发到视图，会话相机随之更新（5C.0d 起改为经相机操作） |
 | 提交不合法的图层；打开"模拟引擎失败"后重新创建视图，取消模拟后点提示里的"重试"（5A.3） | 样式失败时上方出现警告条，去掉图层后消失；引擎失败时地图画不出来，中间出现"地图无法显示"和"重试"；重试后在原来的容器里创建了真实地图，回到 `ready` |
+| 打开"模拟引擎失败"后重新创建视图，失败期间点"flyTo 南京"，取消模拟后点"重试"（5C.0d，ADR 0039；定位按钮不再在没就绪时禁用） | 失败期间相机不动；重试后回到 `ready`，相机飞到南京（119.05, 32.05, z9.00，中心偏东是避开了右侧面板）；失败期间先点 flyTo 再点 fitBounds，重试后停在适配江苏；之后的坐标拾取标签回投偏差 0.000 px，控制台没有错误 |
 | 右侧悬浮面板登记为贴右边，`fitBounds` 不传 `padding`（5A.3） | 1280 宽：面板实际宽 352（含内边距），padding 为右 384、其余 16，中心 120.80°；隐藏面板后 padding 四边 16，中心回到江苏范围的几何中心 119.10°。420 宽：原本左右合计 400，按下限缩成左 11、右 268，可视区域 141px，结果 z4.15（没有下限时是 z1.33） |
 | 提交不合法的图层、在不合法的快照下重新创建视图（换 `key`） | 进入 `failed`，去掉后自动恢复；重建时旧画布被移除，新视图按会话里的相机创建，相机保持在重建前的位置 |
 | 坐标拾取（5B.3，开发页的临时任务工具）：点按钮激活 | 当前工具是 `probe`，画布光标是 `crosshair`，只有双击放大被关掉，拖动平移和 Shift 框选放大照常 |
@@ -207,8 +242,8 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 |---|---|---|
 | `style-binder.test.ts` | 初始提交、同一轮的跨分组修改、晚一轮时的拒绝与收敛、推导失败时整批跳过、缓存、重复绑定、释放 | Node |
 | `provide-map.test.tsx` | 必须在 setup 中调用、初始值早于子组件 setup、挂载后绑定抛错、卸载顺序、卸载路径上的错误、组名的类型检查、默认的错误输出；工具的登记、挂载后登记抛错、重复或 `browse` 时这一次都不登记 | jsdom |
-| `MapCanvas.test.tsx` | 用完整快照创建视图、页面的 class 不冲掉 MapLibre 的 class、视图状态的变化、受限入口、只读引用、`whenReady` 的各种结局、`useCamera` 的订阅与取消、先释放视图后释放会话、运行中的错误、画布的数量限制、失败原因、引擎失败后的重试；受限入口的 `pick`、`project`；工具通过上下文激活和退出、`activeTool` 只读、地图上的点击经视图交给工具 | jsdom |
-| `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，视图入口 `fitBounds` 的默认 padding，`useMapOverlay` 不在作用域里时抛错；`activeTool` 跟随工具模型、上下文释放后不再跟随；相机操作：开始时中止上一次、读当前的不开始新的，`runCameraOperation` 就绪时立即执行、没就绪时等到就绪、期间有新的操作时放弃、等待的视图失败时放弃、执行出错交给 `onError`；地图刚就绪时新旧操作竞争（先登记的等待者开始了新的操作，排在后面的旧操作不再执行）；`whenReady` 返回前 `signal` 中止、视图被卸下 | Node |
+| `MapCanvas.test.tsx` | 用完整快照创建视图、页面的 class 不冲掉 MapLibre 的 class、视图状态的变化（视图入口只在 `ready` 时有值）、受限入口（只有 `kind`、`pick`、`project`，移动相机经相机操作）、只读引用、`whenReady` 的各种结局、`useCamera` 的订阅与取消、先释放视图后释放会话、运行中的错误、画布的数量限制、失败原因、引擎失败后的重试；受限入口的 `pick`、`project`；工具通过上下文激活和退出、`activeTool` 只读、地图上的点击经视图交给工具 | jsdom |
+| `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，相机控制 `fitBounds` 的默认 padding，`useMapOverlay` 不在作用域里时抛错；`activeTool` 跟随工具模型、上下文释放后不再跟随；视图入口只在 `ready` 时有值；相机操作：开始时作废上一次、读当前的不开始新的且是同一个对象，就绪时同步执行、没就绪时等到就绪（暂停不算）、期间有新的操作时放弃、引擎失败后重试和样式失败后恢复都照样执行、挂上已就绪的视图时执行、只能 `run` 一次且不重放、已作废和上下文释放后不执行、地图刚就绪时旧操作先执行新操作后执行、回调里开始的新操作立即执行、相机控制过期后抛错和作废后不生效、回调出错交给 `onError`、等待的监听在执行和作废和释放时移除；`whenReady` 返回前 `signal` 中止、视图被卸下 | Node |
 | `overlay.test.ts` | 占用与间隔、同一边取最大、不算的元素、画布的位置、横向和纵向的下限、选项 | Node |
 
 - 推导失败的用例用 `await expect(nextTick()).resolves.toBeUndefined()` 等待：异常冒出侦听器时，失败落在断言上，而不是测试本身报错
@@ -217,4 +252,5 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 - 5A 之后的三处修复（`whenReady` 绑定视图实例、初始定位改为第一次就绪时、错误上报的包装）逐一改坏 9 处，起初 2 处没被发现："返回前不确认仍是当前视图"当时以为测不到（5B 之后找到了稳定的测法，见上）；"初始定位不停止侦听"是页面测试的场景不对（就绪后收到 `error` 只上报、状态不变，侦听器根本没被触发），改成画布重建后再次就绪才测出来
 - 失败原因与重试（连同 map-core 的 `failure` 和 `shared/map` 的提示）逐一改坏 14 处，全部发现；"重试时不释放旧视图"起初是挂上新视图时抛错、不是断言失败，等待重试的那一步改成 `resolves` 断言后由断言发现
 - 定位可视区域逐一改坏 16 处，起初有 2 处没被发现："不检查是否相交"（画布外的元素算出的占用本来是负数，被限制到 0；补了"登记为左、但整个在画布下方"的用例）和"不随作用域注销"（组件卸载时模板引用变为空，元素本来就不算；补了登记外部元素的用例）。补上后全部由断言发现
+- 相机操作对象（5C.0d，ADR 0039）逐一改坏 21 处，20 处由断言发现；"执行前不再确认操作没被作废"是等价改动：作废时中止监听已经同步把它移出槽位，执行时不可能拿到作废的操作，这行检查按 ADR 规则 5 保留。检查等待的监听有没有移除时，用 `vi.spyOn` 记下 `AbortSignal` 的 `addEventListener`、`removeEventListener`（照常调用原方法），比较两边的调用
 - 提交器与 `provideMap` 逐一改坏 15 处实现（逐组提交、只跳过失败的分组、不把异常变成值、重复报告、校验失败也更新记录、初始值不立即提交、挂载后仍可绑定、重复检查不先整体检查、释放后不停止侦听、同步侦听、共用一次推导、在 `onScopeDispose` 里释放会话、卸载时不捕获异常、在 `onMounted` 才提交、不检查是否在组件中），全部由断言发现

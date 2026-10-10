@@ -53,9 +53,9 @@ export function nextRegionSelection(selected: Region | null, clicked: Region): s
   return selected?.code === clicked.code ? clicked.cityCode : clicked.code;
 }
 
-/** 创建区划定位的拥有者，在 provideMap 所在组件的 setup 中调用；作用域销毁时取消进行中的加载和定位 */
+/** 创建区划定位的拥有者，在 provideMap 所在组件的 setup 中调用；作用域销毁后晚到的结果不写入、不定位 */
 export function useRegionLocate(
-  map: Pick<MapContext, 'view' | 'whenReady' | 'beginCameraOperation'>,
+  map: Pick<MapContext, 'beginCameraOperation'>,
   options: RegionLocateOptions
 ): RegionLocate {
   if (!getCurrentScope()) {
@@ -69,7 +69,7 @@ export function useRegionLocate(
   const locate = async (region: Region, signal: AbortSignal) => {
     // 选择区划是一次相机操作，之前没完成的定位作废；之后又有了新的操作（拖动、缩放、默认视角、坐标定位）时，
     // 边界到位后只高亮，不覆盖当前视角（ADR 0038）
-    const operation = AbortSignal.any([signal, map.beginCameraOperation()]);
+    const operation = map.beginCameraOperation();
     state.value = { selected: region, boundary: { kind: 'loading' } };
     let boundary: RegionBoundary;
     try {
@@ -84,17 +84,8 @@ export function useRegionLocate(
       return;
     }
     state.value = { selected: region, boundary: { kind: 'ready', boundary } };
-    // 视图被替换、失败，选择过期或有了新的相机操作时不定位，高亮照常显示
-    try {
-      await map.whenReady(operation);
-    } catch {
-      return;
-    }
-    // 等待返回前，同时等待就绪的其他回调可能已经开始了新的操作：定位前再确认
-    if (operation.aborted) {
-      return;
-    }
-    map.view.value?.fitBounds(boundary.bounds, FIT_OPTIONS);
+    // 视图没就绪时等到就绪再定位；有了新的相机操作时不定位，高亮照常显示（ADR 0039）
+    operation.run(camera => camera.fitBounds(boundary.bounds, FIT_OPTIONS));
   };
 
   const select = (code: string | null) => {

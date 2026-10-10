@@ -49,7 +49,7 @@ export const LocationOverlay = defineComponent({
       void map.projectionRevision.value;
       const point = props.location.state.value.point;
       const view = map.view.value;
-      return point && map.viewState.value === 'ready' && view ? view.project(point.lngLat) : null;
+      return point && view ? view.project(point.lngLat) : null;
     });
 
     const gesture = createPressGesture({
@@ -63,7 +63,7 @@ export const LocationOverlay = defineComponent({
       onDragMove: ({ x, y }) => {
         const rect = root.value?.getBoundingClientRect();
         const view = map.view.value;
-        if (!rect || !view || map.viewState.value !== 'ready') {
+        if (!rect || !view) {
           return;
         }
         const result = view.pick({ x: x - rect.left, y: y - rect.top });

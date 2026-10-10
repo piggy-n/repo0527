@@ -242,7 +242,7 @@ describe('MapCanvas', () => {
     expect(container.classList.contains('maplibregl-map')).toBe(true);
   });
 
-  it('视图状态：画布挂载前是 idle，创建后 initializing，加载完成后 ready；画布卸载后回到 idle', async () => {
+  it('视图状态：画布挂载前是 idle，创建后 initializing，加载完成后 ready；画布卸载后回到 idle；视图入口只在 ready 时有值', async () => {
     const atChildSetup: unknown[] = [];
     const { context, maps, showCanvas } = setup({
       onChildSetup: map => atChildSetup.push(map.viewState.value, map.view.value)
@@ -250,10 +250,11 @@ describe('MapCanvas', () => {
 
     expect(atChildSetup).toEqual(['idle', null]);
     expect(context.viewState.value).toBe('initializing');
-    expect(context.view.value).not.toBeNull();
+    expect(context.view.value).toBeNull();
 
     maps[0]?.fire('style.load');
     expect(context.viewState.value).toBe('ready');
+    expect(context.view.value).not.toBeNull();
 
     showCanvas.value = false;
     await nextTick();
@@ -263,7 +264,7 @@ describe('MapCanvas', () => {
     expect(maps[0]?.removed).toBe(true);
   });
 
-  it('视图的受限入口：冻结，只有 kind、flyTo、fitBounds、pick、project，转发给视图', () => {
+  it('视图的受限入口：冻结，只有 kind、pick、project，转发给视图；移动相机通过相机操作', () => {
     const { context, maps, session } = setup();
     maps[0]?.fire('style.load');
     const viewport = context.view.value;
@@ -272,10 +273,10 @@ describe('MapCanvas', () => {
     }
 
     expect(Object.isFrozen(viewport)).toBe(true);
-    expect(Object.keys(viewport).toSorted()).toEqual(['fitBounds', 'flyTo', 'kind', 'pick', 'project']);
+    expect(Object.keys(viewport).toSorted()).toEqual(['kind', 'pick', 'project']);
     expect(Symbol.dispose in viewport).toBe(false);
 
-    viewport.flyTo({ center: [120.6, 31.3] });
+    context.runCameraOperation(camera => camera.flyTo({ center: [120.6, 31.3] }));
 
     expect(maps[0]?.flyToCalls).toHaveLength(1);
     expect(session.camera.current.center).toEqual([120.6, 31.3]);
@@ -451,7 +452,7 @@ describe('MapCanvas', () => {
     expect(maps.map(map => map.removed)).toEqual([false, true]);
   });
 
-  it('悬浮元素登记后，视图入口的 fitBounds、flyTo 避开它；明确传入时以传入的为准；元素卸载后不再避开', async () => {
+  it('悬浮元素登记后，相机控制的 fitBounds、flyTo 避开它；明确传入时以传入的为准；元素卸载后不再避开', async () => {
     const showPanel = ref(true);
     const Panel = defineComponent(() => {
       const element = ref<HTMLElement>();
@@ -489,19 +490,21 @@ describe('MapCanvas', () => {
       );
       map.fire('style.load');
 
-      handle.view.value?.fitBounds(JIANGSU);
+      handle.runCameraOperation(camera => camera.fitBounds(JIANGSU));
       expect(map.fitBoundsCalls.at(-1)).toEqual({ padding: { top: 16, right: 16, bottom: 16, left: 352 } });
       expect(handle.overlayPadding().left).toBe(352);
       // 左边留 352、右边 16：目标放在画布中心往右 168 的地方
-      handle.view.value?.flyTo({ center: [120.6, 31.3] });
+      handle.runCameraOperation(camera => camera.flyTo({ center: [120.6, 31.3] }));
       expect(map.flyToCalls.at(-1)).toEqual({ center: [120.6, 31.3], offset: [168, 0] });
-      handle.view.value?.flyTo({ center: [120.6, 31.3] }, { padding: 0 });
+      handle.runCameraOperation(camera => camera.flyTo({ center: [120.6, 31.3] }, { padding: 0 }));
       expect(map.flyToCalls.at(-1)).toEqual({ center: [120.6, 31.3], offset: [0, 0] });
 
       showPanel.value = false;
       await nextTick();
-      handle.view.value?.fitBounds(JIANGSU);
-      handle.view.value?.flyTo({ center: [120.6, 31.3] });
+      handle.runCameraOperation(camera => {
+        camera.fitBounds(JIANGSU);
+        camera.flyTo({ center: [120.6, 31.3] });
+      });
 
       expect(map.fitBoundsCalls.at(-1)).toEqual({ padding: { top: 16, right: 16, bottom: 16, left: 16 } });
       expect(map.flyToCalls.at(-1)).toEqual({ center: [120.6, 31.3], offset: [0, 0] });

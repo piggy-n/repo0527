@@ -1,4 +1,4 @@
-export type { MapContext, MapViewport, MapViewState } from './context';
+export type { CameraControl, CameraOperation, MapContext, MapViewport, MapViewState } from './context';
 export { MapCanvas, type MapCanvasMapOptions } from './MapCanvas';
 export type { OverlayEdge, OverlayOptions, OverlayPadding } from './overlay';
 export { type MapHandle, provideMap, type ProvideMapOptions } from './provide-map';

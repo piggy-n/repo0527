@@ -1,13 +1,13 @@
-import type { MapContext, MapViewport } from '@yzt/map-vue';
-import { getCurrentScope, watch } from 'vue';
+import type { CameraControl, MapContext } from '@yzt/map-vue';
+import { getCurrentScope } from 'vue';
 import { JIANGSU_BOUNDS } from './jiangsu';
 
 /** 回到默认视角的动画时长（毫秒），与旧项目一致 */
 const DEFAULT_VIEW_DURATION = 500;
 
 // fitBounds 不传 padding 时自动避开登记过的悬浮元素（ADR 0029）；默认视角是平视的，fitBounds 只把旋转归零，俯角要明确传入
-function fitJiangsu(view: MapViewport, duration: number): void {
-  view.fitBounds(JIANGSU_BOUNDS, { duration, pitch: 0 });
+function fitJiangsu(camera: CameraControl, duration: number): void {
+  camera.fitBounds(JIANGSU_BOUNDS, { duration, pitch: 0 });
 }
 
 export interface DefaultView {
@@ -17,32 +17,23 @@ export interface DefaultView {
 
 /**
  * 默认视角（ADR 0033）：本次进入页面后视图第一次就绪时不带动画地按江苏的范围适配一次（首次失败、重试成功后同样补做），
- * 之后不再覆盖用户调整过的视角；初始适配不是一次相机操作，就绪之前用户已经开始了操作（选区划、坐标定位等）时让给它（ADR 0038）。
+ * 之后不再覆盖用户调整过的视角；初始适配不开始相机操作，在进入页面时的操作下执行，
+ * 就绪之前用户已经开始了操作（选区划、坐标定位等）时让给它（ADR 0038、0039）。
  * 只在 provideMap 所在组件的 setup 中调用一次，传入页面句柄；
  * 工具栏等需要回到默认视角的组件通过 props 拿到 goToDefaultView，不要自己再调用，否则下一次就绪时会重置用户的视角
  */
 export function useDefaultView(
-  map: Pick<MapContext, 'view' | 'viewState' | 'currentCameraOperation' | 'runCameraOperation'>
+  map: Pick<MapContext, 'viewState' | 'currentCameraOperation' | 'runCameraOperation'>
 ): DefaultView {
   if (!getCurrentScope()) {
     throw new Error('useDefaultView 只能在组件的 setup 或 effectScope 中调用');
   }
-  if (map.view.value) {
+  if (map.viewState.value !== 'idle') {
     throw new Error('useDefaultView 要在画布创建视图之前调用（provideMap 所在组件的 setup），其他组件通过 props 拿到 goToDefaultView');
   }
 
-  // 进入页面时的相机操作：之后用户开始了新的操作，它就中止
-  const initial = map.currentCameraOperation();
-  // 定位只能由就绪的视图发起（ADR 0024）；作用域销毁（页面卸载）时侦听器随之停止
-  const stopInitialFit = watch(map.viewState, state => {
-    const view = map.view.value;
-    if (initial.aborted) {
-      stopInitialFit();
-    } else if (state === 'ready' && view) {
-      fitJiangsu(view, 0);
-      stopInitialFit();
-    }
-  });
+  // 进入页面时的相机操作：等到视图第一次就绪再执行，之后用户开始了新的操作就不再执行；页面卸载时随上下文放弃
+  map.currentCameraOperation().run(camera => fitJiangsu(camera, 0));
 
-  return { goToDefaultView: () => map.runCameraOperation(view => fitJiangsu(view, DEFAULT_VIEW_DURATION)) };
+  return { goToDefaultView: () => map.runCameraOperation(camera => fitJiangsu(camera, DEFAULT_VIEW_DURATION)) };
 }

@@ -25,17 +25,29 @@ import {
 } from 'vue';
 import { computeOverlayPadding, type OverlayEdge, type OverlayOptions, type OverlayPadding } from './overlay';
 
-/** 视图的受限入口：只转发定位等使用方需要的能力，暂停、恢复、释放由 map-vue 自己负责（ADR 0028 第 5 条） */
+/** 就绪视图的受限入口：只有拾取和投影；移动相机通过相机操作（ADR 0028 第 5 条、ADR 0039 第 4 条） */
 export interface MapViewport {
   readonly kind: ViewKind;
+  pick(point: ScreenPoint): PickResult;
+  project(lngLat: LngLat, height?: number): ScreenPoint | null;
+}
+
+/** 移动相机的能力，只在 run 的回调期间有效，之后调用抛错（ADR 0039 第 3 条） */
+export interface CameraControl {
   /** 有中心时放在避开悬浮元素后的区域中央；没传 padding 时自动避开（ADR 0029、0037），明确传入时以传入的为准 */
   flyTo(target: Partial<CameraState>, options?: FlyToOptions): void;
   /** 没传 padding 时避开登记过的悬浮元素（ADR 0029）；明确传入（包括 0）时以传入的为准 */
   fitBounds(bounds: ViewBounds, options?: FitBoundsOptions): void;
-  /** 只在视图就绪时可用 */
-  pick(point: ScreenPoint): PickResult;
-  /** 只在视图就绪时可用 */
-  project(lngLat: LngLat, height?: number): ScreenPoint | null;
+}
+
+/** 一次相机操作（ADR 0038、0039）：signal 在下一次操作开始、上下文释放时中止 */
+export interface CameraOperation {
+  readonly signal: AbortSignal;
+  /**
+   * 执行这次操作的定位，只能调用一次，回调最多执行一次：视图就绪时同步执行；没就绪时等到有视图进入 ready
+   * （期间视图失败、重试、被替换都继续等，暂停不算就绪）；被作废、上下文释放时放弃。回调抛错交给 onError
+   */
+  run(action: (camera: CameraControl) => void): void;
 }
 
 /** 视图的生命周期；还没有视图时是 idle（ADR 0022 第 5 条） */
@@ -43,7 +55,7 @@ export type MapViewState = ViewState | 'idle';
 
 /** 子孙组件通过 useMap 拿到的只读上下文 */
 export interface MapContext {
-  /** 当前显示的视图；画布还没挂载、已卸载时为 null */
+  /** 就绪的视图，只在视图为 ready 时有值（ADR 0039 第 4 条） */
   readonly view: Readonly<ShallowRef<MapViewport | null>>;
   readonly viewState: Readonly<Ref<MapViewState>>;
   /** 视图失败的原因，只在 failed 时有值（ADR 0030） */
@@ -52,7 +64,7 @@ export interface MapContext {
   retry(): void;
   /**
    * 等到有视图且这一轮加载完成；视图失败时以原因结束；等待的视图被卸下或替换、上下文释放时以 AbortError 结束，
-   * signal 中止时以它的原因结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪
+   * signal 中止时以它的原因结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪。定位不用它，用相机操作
    */
   whenReady(signal?: AbortSignal): Promise<void>;
   /** 在调用方的作用域里订阅相机，作用域销毁时取消 */
@@ -60,14 +72,14 @@ export interface MapContext {
   /** 屏幕投影的修订号：相机变化、画布尺寸变化时加 1；按屏幕位置摆放的浮层依赖它重新投影 */
   readonly projectionRevision: Readonly<Ref<number>>;
   /**
-   * 开始一次相机操作（ADR 0038）：之前没完成的操作作废，返回这一次的信号，下一次操作（包括用户开始拖动、缩放）开始时中止。
-   * 要先异步准备数据的定位（如区划定位等边界）在开始时调用，准备好后用 whenReady(信号) 等视图
+   * 开始一次相机操作（ADR 0038、0039）：之前没完成的操作作废，下一次操作（包括用户开始拖动、缩放）开始时这一次作废。
+   * 要先异步准备数据的定位（如区划定位等边界）在开始时调用，准备好后 run
    */
-  beginCameraOperation(): AbortSignal;
-  /** 当前这次相机操作的信号，不开始新的操作：页面初始化的定位据此让给用户已经开始的操作 */
-  currentCameraOperation(): AbortSignal;
-  /** 开始一次相机操作并执行：视图就绪时立即执行；还没就绪时等到就绪，期间有新的操作、视图失败或被替换时放弃 */
-  runCameraOperation(action: (view: MapViewport) => void): void;
+  beginCameraOperation(): CameraOperation;
+  /** 当前这次相机操作，不开始新的操作，同一次操作返回同一个对象：页面初始化的定位在它下面 run，被用户的操作作废就让步 */
+  currentCameraOperation(): CameraOperation;
+  /** 等于 beginCameraOperation().run(action) */
+  runCameraOperation(action: (camera: CameraControl) => void): void;
   /** 量出登记过的悬浮元素此刻占用的部分，算出定位用的 padding；还没有画布时四边都是边距 */
   overlayPadding(): OverlayPadding;
   /** 当前工具的 ID（ADR 0034） */
@@ -81,6 +93,7 @@ export interface MapContext {
 // 挂上的视图；detached 在卸下时中止，等它就绪的 whenReady 随之以 AbortError 结束
 interface AttachedView {
   readonly view: MapView;
+  readonly viewport: MapViewport;
   readonly canvas: HTMLElement;
   readonly unsubscribe: () => void;
   readonly detached: AbortController;
@@ -91,13 +104,9 @@ interface OverlayEntry {
   readonly edge: OverlayEdge;
 }
 
-function createViewport(view: MapView, overlayPadding: () => OverlayPadding): MapViewport {
+function createViewport(view: MapView): MapViewport {
   return Object.freeze({
     kind: view.kind,
-    flyTo: (target: Partial<CameraState>, options?: FlyToOptions) =>
-      view.flyTo(target, { ...options, padding: options?.padding ?? overlayPadding() }),
-    fitBounds: (bounds: ViewBounds, options?: FitBoundsOptions) =>
-      view.fitBounds(bounds, { ...options, padding: options?.padding ?? overlayPadding() }),
     pick: (point: ScreenPoint) => view.pick(point),
     project: (lngLat: LngLat, height?: number) => view.project(lngLat, height)
   });
@@ -143,6 +152,10 @@ export class MapContextState implements Disposable {
   readonly #lifetime = new AbortController();
   // 还没有视图时调用 whenReady 的等待者，视图挂上时依次通知
   readonly #waiting = new Set<(attached: AttachedView) => void>();
+  // 等视图就绪的相机操作：操作一个接一个作废、每个只能 run 一次，所以同一时间最多一个（ADR 0039 第 3 条）
+  #pending: (() => void) | null = null;
+  // 每次相机操作对应一个对象，run 只能调用一次
+  readonly #operations = new WeakMap<AbortSignal, CameraOperation>();
   readonly #overlays = new Set<OverlayEntry>();
   readonly #overlayOptions: Required<OverlayOptions>;
   #view: AttachedView | null = null;
@@ -167,9 +180,10 @@ export class MapContextState implements Disposable {
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
       useCamera: () => this.#useCamera(),
       projectionRevision: shallowReadonly(this.#projectionRevision),
-      beginCameraOperation: () => session.camera.beginOperation(),
-      currentCameraOperation: () => session.camera.operation,
-      runCameraOperation: (action: (view: MapViewport) => void) => this.#runCameraOperation(action),
+      beginCameraOperation: () => this.#operationOf(session.camera.beginOperation()),
+      currentCameraOperation: () => this.#operationOf(session.camera.operation),
+      runCameraOperation: (action: (camera: CameraControl) => void) =>
+        this.#operationOf(session.camera.beginOperation()).run(action),
       overlayPadding: () => this.#overlayPadding(),
       activeTool: shallowReadonly(this.#activeTool),
       activateTool: (id: string) => session.tool.activate(id),
@@ -187,9 +201,14 @@ export class MapContextState implements Disposable {
     if (this.#view) {
       throw new Error('一个地图上下文只能有一个画布');
     }
+    const viewport = createViewport(view);
     const unsubscribeState = view.on('statechange', state => {
       this.#viewState.value = state;
       this.#failure.value = view.failure;
+      this.#viewport.value = state === 'ready' ? viewport : null;
+      if (state === 'ready') {
+        this.#pending?.();
+      }
     });
     // 画布尺寸变化时相机不变，投影变了
     const unsubscribeResize = view.on('resize', () => this.#projectionRevision.value++);
@@ -197,13 +216,16 @@ export class MapContextState implements Disposable {
       unsubscribeState();
       unsubscribeResize();
     };
-    const attached: AttachedView = { view, canvas, unsubscribe, detached: new AbortController() };
+    const attached: AttachedView = { view, viewport, canvas, unsubscribe, detached: new AbortController() };
     this.#view = attached;
     this.#viewState.value = view.state;
     this.#failure.value = view.failure;
-    this.#viewport.value = createViewport(view, () => this.#overlayPadding());
+    this.#viewport.value = view.state === 'ready' ? viewport : null;
     for (const notify of this.#waiting) {
       notify(attached);
+    }
+    if (view.state === 'ready') {
+      this.#pending?.();
     }
   }
 
@@ -242,34 +264,91 @@ export class MapContextState implements Disposable {
     }
   }
 
-  #runCameraOperation(action: (view: MapViewport) => void): void {
-    const operation = this.session.camera.beginOperation();
-    const viewport = this.#viewport.value;
-    if (this.#viewState.value === 'ready' && viewport) {
-      action(viewport);
-      return;
+  #operationOf(signal: AbortSignal): CameraOperation {
+    const existing = this.#operations.get(signal);
+    if (existing) {
+      return existing;
     }
-    void this.#runWhenReady(operation, action);
+    let ran = false;
+    const operation: CameraOperation = Object.freeze({
+      signal,
+      run: (action: (camera: CameraControl) => void) => {
+        if (ran) {
+          throw new Error('一次相机操作只能 run 一次');
+        }
+        ran = true;
+        this.#runOperation(signal, action);
+      }
+    });
+    this.#operations.set(signal, operation);
+    return operation;
   }
 
-  // 等不到就绪（有了新的操作、视图失败或被替换）就放弃，不算错误；执行时抛出的错误交给 onError
-  async #runWhenReady(operation: AbortSignal, action: (view: MapViewport) => void): Promise<void> {
-    try {
-      await this.#whenReady(operation);
-    } catch {
+  // 就绪时同步执行；否则订阅视图进入 ready，不循环调用 whenReady：失败视图的 whenReady 立即结束，循环会空转（ADR 0039 第 3 条）
+  #runOperation(signal: AbortSignal, action: (camera: CameraControl) => void): void {
+    const lifetime = this.#lifetime.signal;
+    if (signal.aborted || lifetime.aborted) {
       return;
     }
-    // 等待返回前，同时等待就绪的其他回调可能已经开始了新的操作：执行前再确认这次没被作废
-    if (operation.aborted) {
+    if (this.#readyView()) {
+      this.#execute(signal, action);
       return;
     }
-    const viewport = this.#viewport.value;
-    try {
-      if (viewport) {
-        action(viewport);
+    // 作废、上下文释放时移出槽位并移除监听；执行前仍按规则再确认一次（ADR 0039 第 1 条第 5 点）
+    const stop = () => {
+      if (this.#pending === onReady) {
+        this.#pending = null;
       }
+      signal.removeEventListener('abort', stop);
+      lifetime.removeEventListener('abort', stop);
+    };
+    const onReady = () => {
+      stop();
+      if (!signal.aborted) {
+        this.#execute(signal, action);
+      }
+    };
+    this.#pending = onReady;
+    signal.addEventListener('abort', stop);
+    lifetime.addEventListener('abort', stop);
+  }
+
+  #readyView(): AttachedView | null {
+    return this.#viewState.value === 'ready' ? this.#view : null;
+  }
+
+  // 相机控制每次调用都确认：回调还没返回、操作没被作废、视图仍是开始执行时那个就绪的视图
+  #execute(signal: AbortSignal, action: (camera: CameraControl) => void): void {
+    const attached = this.#readyView();
+    if (!attached) {
+      return;
+    }
+    let running = true;
+    const usable = () => {
+      if (!running) {
+        throw new Error('相机控制只在 run 的回调期间有效');
+      }
+      return !signal.aborted && this.#readyView() === attached;
+    };
+    const { view } = attached;
+    const camera: CameraControl = Object.freeze({
+      flyTo: (target: Partial<CameraState>, options?: FlyToOptions) => {
+        if (usable()) {
+          view.flyTo(target, { ...options, padding: options?.padding ?? this.#overlayPadding() });
+        }
+      },
+      fitBounds: (bounds: ViewBounds, options?: FitBoundsOptions) => {
+        if (usable()) {
+          view.fitBounds(bounds, { ...options, padding: options?.padding ?? this.#overlayPadding() });
+        }
+      }
+    });
+    try {
+      action(camera);
     } catch (error) {
       this.onError(error);
+    } finally {
+      running = false;
     }
   }
 

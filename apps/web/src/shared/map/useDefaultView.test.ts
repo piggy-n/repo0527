@@ -1,33 +1,35 @@
 // @vitest-environment node
-import type { MapContext, MapViewport, MapViewState } from '@yzt/map-vue';
+import type { CameraControl, CameraOperation, MapContext, MapViewState } from '@yzt/map-vue';
+import { LatestController } from '@yzt/utils';
 import { describe, expect, it, vi } from 'vitest';
-import { effectScope, nextTick, ref, shallowRef } from 'vue';
+import { effectScope, ref } from 'vue';
 import { JIANGSU_BOUNDS } from './jiangsu';
 import { useDefaultView } from './useDefaultView';
 
-function fakeViewport() {
-  const fitBounds = vi.fn<MapViewport['fitBounds']>();
-  const viewport: MapViewport = Object.freeze({
-    kind: '2d',
-    flyTo: vi.fn<MapViewport['flyTo']>(),
-    fitBounds,
-    pick: vi.fn<MapViewport['pick']>(),
-    project: vi.fn<MapViewport['project']>()
+/**
+ * useDefaultView 用到的视图状态和相机操作：run 只记下交给它的定位，由测试执行。
+ * 等到第一次就绪、首次失败后重试、让给用户的操作、页面卸载时放弃，这些由 run 负责，见 map-vue 的测试和现状底图页的测试
+ */
+function fakeMap() {
+  const operations = new LatestController();
+  const runs: { readonly signal: AbortSignal; readonly action: (camera: CameraControl) => void }[] = [];
+  const operationOf = (signal: AbortSignal): CameraOperation => ({
+    signal,
+    run: action => runs.push({ signal, action })
   });
-  return { viewport, fitBounds };
+  return {
+    viewState: ref<MapViewState>('idle'),
+    operations,
+    runs,
+    currentCameraOperation: () => operationOf(operations.signal),
+    runCameraOperation: vi.fn<MapContext['runCameraOperation']>(action => operationOf(operations.next()).run(action))
+  };
 }
 
-// useDefaultView 用到的视图状态和相机操作；runCameraOperation 怎样等待和作废见 map-vue 的测试，这里只记下交给它的定位
-function fakeMap() {
-  // 进入页面时的相机操作，测试中止它表示用户已经开始了新的操作
-  const operation = new AbortController();
-  return {
-    view: shallowRef<MapViewport | null>(null),
-    viewState: ref<MapViewState>('idle'),
-    operation,
-    currentCameraOperation: () => operation.signal,
-    runCameraOperation: vi.fn<MapContext['runCameraOperation']>()
-  };
+function fakeCamera() {
+  const fitBounds = vi.fn<CameraControl['fitBounds']>();
+  const camera: CameraControl = { flyTo: vi.fn<CameraControl['flyTo']>(), fitBounds };
+  return { camera, fitBounds };
 }
 
 function setup(map = fakeMap()) {
@@ -40,88 +42,40 @@ function setup(map = fakeMap()) {
 }
 
 describe('useDefaultView', () => {
-  it('第一次就绪时不带动画地按江苏的范围适配一次，之后再就绪不再定位', async () => {
+  it('初始适配在进入页面时的相机操作下执行，不开始新的操作：不带动画地按江苏的范围平视适配', () => {
     const { map } = setup();
-    const { viewport, fitBounds } = fakeViewport();
+    const { camera, fitBounds } = fakeCamera();
+    const [initial] = map.runs;
 
-    map.view.value = viewport;
-    map.viewState.value = 'initializing';
-    await nextTick();
-    expect(fitBounds).not.toHaveBeenCalled();
+    expect(map.runs).toHaveLength(1);
+    expect(initial?.signal).toBe(map.operations.signal);
+    expect(initial?.signal.aborted).toBe(false);
+    expect(map.runCameraOperation).not.toHaveBeenCalled();
+    initial?.action(camera);
 
-    map.viewState.value = 'ready';
-    await nextTick();
     expect(fitBounds.mock.calls).toStrictEqual([[JIANGSU_BOUNDS, { duration: 0, pitch: 0 }]]);
-
-    map.viewState.value = 'paused';
-    await nextTick();
-    map.viewState.value = 'ready';
-    await nextTick();
-    expect(fitBounds).toHaveBeenCalledTimes(1);
-  });
-
-  it('首次失败、重试后在新视图第一次就绪时补做', async () => {
-    const { map } = setup();
-    const failed = fakeViewport();
-    const retried = fakeViewport();
-
-    map.view.value = failed.viewport;
-    map.viewState.value = 'failed';
-    await nextTick();
-    map.view.value = retried.viewport;
-    map.viewState.value = 'initializing';
-    await nextTick();
-    map.viewState.value = 'ready';
-    await nextTick();
-
-    expect(failed.fitBounds).not.toHaveBeenCalled();
-    expect(retried.fitBounds.mock.calls).toStrictEqual([[JIANGSU_BOUNDS, { duration: 0, pitch: 0 }]]);
   });
 
   it('回到默认视角是一次相机操作：用 500ms 动画按江苏的范围平视适配，不传 padding（自动避开悬浮元素）', () => {
     const { map, defaultView } = setup();
-    const { viewport, fitBounds } = fakeViewport();
+    const { camera, fitBounds } = fakeCamera();
+    const [initial] = map.runs;
 
     defaultView.goToDefaultView();
-    const [action] = map.runCameraOperation.mock.calls[0] ?? [];
-    action?.(viewport);
+    const [, located] = map.runs;
+    located?.action(camera);
 
     expect(map.runCameraOperation).toHaveBeenCalledOnce();
+    expect(initial?.signal.aborted).toBe(true);
     expect(fitBounds.mock.calls).toStrictEqual([[JIANGSU_BOUNDS, { duration: 500, pitch: 0 }]]);
   });
 
-  it('就绪之前用户已经开始了相机操作（选区划、坐标定位、点"默认视角"）：第一次就绪时让给它，不再适配', async () => {
-    const { map } = setup();
-    const { viewport, fitBounds } = fakeViewport();
-    map.view.value = viewport;
-    map.viewState.value = 'initializing';
-    await nextTick();
-
-    map.operation.abort();
-    map.viewState.value = 'ready';
-    await nextTick();
-
-    expect(fitBounds).not.toHaveBeenCalled();
-  });
-
-  it('作用域销毁后，视图就绪时不再定位', async () => {
-    const { map, scope } = setup();
-    const { viewport, fitBounds } = fakeViewport();
-
-    scope.stop();
-    map.view.value = viewport;
-    map.viewState.value = 'ready';
-    await nextTick();
-
-    expect(fitBounds).not.toHaveBeenCalled();
-  });
-
-  it('视图已经存在时调用抛错：只能在页面的 setup 里调用一次', () => {
+  it('画布已经创建视图时调用抛错：只能在页面的 setup 里调用一次', () => {
     const map = fakeMap();
-    map.view.value = fakeViewport().viewport;
-    map.viewState.value = 'ready';
+    map.viewState.value = 'initializing';
 
     expect(() => setup(map)).toThrow('useDefaultView 要在画布创建视图之前调用');
+    expect(map.runs).toHaveLength(0);
   });
 
   it('不在组件 setup 或 effectScope 中调用时抛错', () => {

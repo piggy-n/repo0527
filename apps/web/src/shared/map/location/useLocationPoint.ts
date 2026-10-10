@@ -90,9 +90,9 @@ export function useLocationPoint(
   const locate = (lngLat: LngLat) => {
     place(lngLat, 'input');
     // 之前没完成的定位作废；视图还没就绪时等到就绪再飞，级别按那时的相机算
-    map.runCameraOperation(view => {
+    map.runCameraOperation(control => {
       const zoom = Math.max(camera.value.zoom, LOCATE_MIN_ZOOM);
-      view.flyTo({ center: lngLat, zoom }, { duration: LOCATE_DURATION });
+      control.flyTo({ center: lngLat, zoom }, { duration: LOCATE_DURATION });
     });
   };
 

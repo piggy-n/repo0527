@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { CameraModel, type ViewBounds } from '@yzt/map-core';
-import type { MapContext, MapViewport } from '@yzt/map-vue';
+import type { CameraControl, CameraOperation } from '@yzt/map-vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { effectScope, shallowRef } from 'vue';
+import { effectScope } from 'vue';
 import countyFile from '../boundary/data/jiangsu-county.json?raw';
 import { findRegion, type Region } from './region-catalog';
 import type { RegionBoundary, RegionBoundaryLoader } from './region-geometry';
@@ -50,49 +50,43 @@ function manualLoader() {
   };
 }
 
-// 按 whenReady 的约定等待：ready 结束时就绪，signal 中止时以 AbortError 结束
-function readyAfter(ready: Promise<void>): MapContext['whenReady'] {
-  return signal =>
-    new Promise<void>((resolve, reject) => {
-      const abort = () => reject(new DOMException('等待被中止', 'AbortError'));
-      if (signal?.aborted) {
-        abort();
-      }
-      signal?.addEventListener('abort', abort, { once: true });
-      void ready.then(resolve);
-    });
-}
-
-function fakeMap(whenReady: MapContext['whenReady'] = readyAfter(Promise.resolve())) {
-  const fitBounds = vi.fn<MapViewport['fitBounds']>();
-  const viewport: MapViewport = {
-    kind: '2d',
-    flyTo: vi.fn<MapViewport['flyTo']>(),
-    fitBounds,
-    pick: vi.fn<MapViewport['pick']>(),
-    project: vi.fn<MapViewport['project']>()
-  };
-  const view = shallowRef<MapViewport | null>(viewport);
+/**
+ * 相机操作的替身：视图一直就绪，run 时操作没被作废就立即执行。等待就绪、跨视图失败、只能 run 一次这些语义由 map-vue 负责，
+ * 见它的测试；这里只看区划定位在哪次操作下、什么时候 run、定位到哪里
+ */
+function fakeMap() {
+  const fitBounds = vi.fn<CameraControl['fitBounds']>();
+  const control: CameraControl = { flyTo: vi.fn<CameraControl['flyTo']>(), fitBounds };
   // 真实的相机模型：测试再开始一次操作，表示这期间有了新的相机操作（拖动、默认视角、坐标定位）
   const camera = new CameraModel({ center: [119, 32], zoom: 7, bearing: 0, pitch: 0 });
+  const runs: AbortSignal[] = [];
   const map = {
-    view,
-    whenReady: vi.fn<MapContext['whenReady']>(whenReady),
-    beginCameraOperation: () => camera.beginOperation()
+    beginCameraOperation: (): CameraOperation => {
+      const signal = camera.beginOperation();
+      return {
+        signal,
+        run: action => {
+          runs.push(signal);
+          if (!signal.aborted) {
+            action(control);
+          }
+        }
+      };
+    }
   };
-  return { map, fitBounds, camera };
+  return { map, fitBounds, camera, runs };
 }
 
-function setup(whenReady?: MapContext['whenReady']) {
+function setup() {
   const manual = manualLoader();
-  const { map, fitBounds, camera } = fakeMap(whenReady);
+  const { map, fitBounds, camera, runs } = fakeMap();
   const goToDefaultView = vi.fn<RegionLocateOptions['goToDefaultView']>();
   const scope = effectScope();
   const locate = scope.run(() => useRegionLocate(map, { goToDefaultView, loader: manual.loader }));
   if (!locate) {
     throw new Error('没有创建区划定位');
   }
-  return { locate, scope, map, camera, fitBounds, goToDefaultView, ...manual };
+  return { locate, scope, map, camera, runs, fitBounds, goToDefaultView, ...manual };
 }
 
 afterEach(() => {
@@ -108,12 +102,14 @@ describe('useRegionLocate', () => {
     expect(load).not.toHaveBeenCalled();
   });
 
-  it('选择区划：加载中没有高亮；边界到位后高亮，等视图就绪后定位一次', async () => {
-    const { locate, map, fitBounds, resolve } = setup();
+  it('选择区划：加载中没有高亮；边界到位后高亮，在选择时开始的相机操作下定位一次', async () => {
+    const { locate, camera, runs, fitBounds, resolve } = setup();
 
     locate.select('320213');
+    const operation = camera.operation;
     expect(locate.state.value).toStrictEqual({ selected: region('320213'), boundary: { kind: 'loading' } });
     expect(locate.deriveGroup().layers).toStrictEqual([]);
+    expect(runs).toStrictEqual([]);
 
     resolve('320213');
     await settle();
@@ -123,7 +119,7 @@ describe('useRegionLocate', () => {
       boundary: { kind: 'ready', boundary: boundaryOf('320213') }
     });
     expect(Object.keys(locate.deriveGroup().sources)).toStrictEqual(['region']);
-    expect(map.whenReady).toHaveBeenCalledWith(expect.any(AbortSignal));
+    expect(runs).toStrictEqual([operation]);
     expect(fitBounds.mock.calls).toStrictEqual([[boundaryOf('320213').bounds, FIT_OPTIONS]]);
   });
 
@@ -150,40 +146,6 @@ describe('useRegionLocate', () => {
 
     expect(locate.state.value.boundary.kind).toBe('ready');
     expect(fitBounds).not.toHaveBeenCalled();
-  });
-
-  it('等视图就绪期间有了新的相机操作：同样不定位', async () => {
-    let ready: (() => void) | undefined;
-    const { locate, camera, fitBounds, resolve } = setup(readyAfter(new Promise(done => (ready = done))));
-
-    locate.select('320100');
-    resolve('320100');
-    await settle();
-    camera.beginOperation();
-    ready?.();
-    await settle();
-
-    expect(fitBounds).not.toHaveBeenCalled();
-  });
-
-  it('地图刚就绪时新旧操作竞争：先登记的等待者在就绪时开始了新的操作，排在后面的区划定位不再执行', async () => {
-    let ready: (() => void) | undefined;
-    const { locate, map, camera, fitBounds, resolve } = setup(readyAfter(new Promise(done => (ready = done))));
-    // 先登记的等待者：就绪后立即开始新的相机操作（例如按地址里的参数定位）
-    const locateWhenReady = async () => {
-      await map.whenReady();
-      camera.beginOperation();
-    };
-    void locateWhenReady();
-    locate.select('320100');
-    resolve('320100');
-    await settle();
-
-    ready?.();
-    await settle();
-
-    expect(fitBounds).not.toHaveBeenCalled();
-    expect(locate.state.value.boundary.kind).toBe('ready');
   });
 
   it('重试时从重试的那一刻算起：之前的相机操作不影响定位', async () => {
@@ -294,45 +256,16 @@ describe('useRegionLocate', () => {
     expect(fitBounds).toHaveBeenCalledOnce();
   });
 
-  it('视图没就绪时等到就绪再定位；等待失败（视图被替换或失败）时不定位，高亮照常', async () => {
-    let ready: (() => void) | undefined;
-    const waiting = setup(() => new Promise(resolve => (ready = resolve)));
-    const failing = setup(() => Promise.reject(new DOMException('视图已卸下', 'AbortError')));
+  it('作用域销毁后：进行中的加载结果不写入，也不定位', async () => {
+    const { locate, scope, runs, resolve } = setup();
+    locate.select('320100');
 
-    waiting.locate.select('320100');
-    failing.locate.select('320100');
-    waiting.resolve('320100');
-    failing.resolve('320100');
-    await settle();
-    expect(waiting.fitBounds).not.toHaveBeenCalled();
-
-    ready?.();
+    scope.stop();
+    resolve('320100');
     await settle();
 
-    expect(waiting.fitBounds).toHaveBeenCalledOnce();
-    expect(failing.fitBounds).not.toHaveBeenCalled();
-    expect(failing.locate.state.value.boundary.kind).toBe('ready');
-  });
-
-  it('作用域销毁时：进行中的加载结果不写入，等待就绪的定位被中止', async () => {
-    const loading = setup();
-    let signal: AbortSignal | undefined;
-    const waiting = setup(received => {
-      signal = received;
-      return new Promise(() => {});
-    });
-    loading.locate.select('320100');
-    waiting.locate.select('320100');
-    waiting.resolve('320100');
-    await settle();
-
-    loading.scope.stop();
-    waiting.scope.stop();
-    loading.resolve('320100');
-    await settle();
-
-    expect(loading.locate.state.value.boundary).toStrictEqual({ kind: 'loading' });
-    expect(signal?.aborted).toBe(true);
+    expect(locate.state.value.boundary).toStrictEqual({ kind: 'loading' });
+    expect(runs).toStrictEqual([]);
   });
 
   it('没有注入加载器时用共享的：两个拥有者加载同一个文件只下载一次', async () => {

@@ -268,7 +268,7 @@ const ProbeLabel = defineComponent({
     const position = computed(() => {
       void map.projectionRevision.value;
       const view = map.view.value;
-      return map.viewState.value === 'ready' && view ? view.project(props.probe.lngLat) : null;
+      return view ? view.project(props.probe.lngLat) : null;
     });
     return () =>
       position.value && (
@@ -364,13 +364,13 @@ export const DevMapPage = defineComponent({
       setTimeout(() => (selectionVersion.value = next), LATE_SELECTION_DELAY);
     };
 
-    // 用户发起的定位是一次相机操作，作废之前没完成的定位（ADR 0038）
+    // 用户发起的定位是一次相机操作，作废之前没完成的定位；视图没就绪（加载中、失败后重试前）时等到就绪再执行（ADR 0038、0039）
     const flyToNanjing = () =>
-      map.runCameraOperation(viewport => viewport.flyTo({ center: [118.8, 32.05], zoom: 9 }, { duration: 1500 }));
+      map.runCameraOperation(control => control.flyTo({ center: [118.8, 32.05], zoom: 9 }, { duration: 1500 }));
     // 不传 padding：自动避开登记过的悬浮元素（ADR 0029），这里另外记下这次算出的值
     const fitJiangsu = () => {
       lastPadding.value = map.overlayPadding();
-      map.runCameraOperation(viewport => viewport.fitBounds(JIANGSU_BOUNDS, { duration: 1000 }));
+      map.runCameraOperation(control => control.fitBounds(JIANGSU_BOUNDS, { duration: 1000 }));
     };
 
     const lastProbe = computed(() => probes.value.at(-1));
@@ -379,102 +379,95 @@ export const DevMapPage = defineComponent({
       highlightIndex.value = ((highlightIndex.value ?? -1) + 1) % HIGHLIGHT_POSITIONS.length;
     };
 
-    return () => {
-      const ready = viewState.value === 'ready';
-      return (
-        <div class={styles.root}>
-          <header class={styles.toolbar}>
-            <div class={styles.actions}>
-              <ElButton onClick={() => colorIndex.value++}>切换颜色</ElButton>
-              <ElButton onClick={() => (minzoom.value = minzoom.value === undefined ? 7 : undefined)}>
-                {minzoom.value === undefined ? '加上 minzoom 7' : '去掉 minzoom'}
-              </ElButton>
-              <ElButton onClick={toggleHighlight}>{highlightIndex.value === undefined ? '高亮' : '移动高亮'}</ElButton>
-              <ElButton
-                disabled={highlightIndex.value === undefined}
-                onClick={() => (highlightIndex.value = undefined)}>
-                清除高亮
-              </ElButton>
-              <ElButton onClick={switchVersion}>切换数据版本</ElButton>
-              <ElButton onClick={switchVersionLate}>切换数据版本（选区晚一轮）</ElButton>
-              <ElButton
-                type={selectionBroken.value ? 'danger' : 'default'}
-                onClick={() => (selectionBroken.value = !selectionBroken.value)}>
-                {selectionBroken.value ? '修好选区的推导' : '让选区的推导出错'}
-              </ElButton>
-              <ElButton disabled={!ready} onClick={flyToNanjing}>
-                flyTo 南京
-              </ElButton>
-              <ElButton disabled={!ready} onClick={fitJiangsu}>
-                fitBounds 江苏（避开悬浮面板）
-              </ElButton>
-              <ElButton
-                type={invalidLayer.value ? 'danger' : 'default'}
-                onClick={() => (invalidLayer.value = !invalidLayer.value)}>
-                {invalidLayer.value ? '去掉不合法的图层' : '提交不合法的图层'}
-              </ElButton>
-              <ElButton onClick={() => (overlayVisible.value = !overlayVisible.value)}>
-                {overlayVisible.value ? '隐藏悬浮面板' : '显示悬浮面板'}
-              </ElButton>
-              <ElButton onClick={() => canvasKey.value++}>重新创建视图</ElButton>
-              <ElButton
-                type={failNextCreation.value ? 'danger' : 'default'}
-                onClick={() => (failNextCreation.value = !failNextCreation.value)}>
-                {failNextCreation.value ? '取消模拟引擎失败' : '下次创建视图时模拟引擎失败'}
-              </ElButton>
-              <ElButton disabled={errors.value.length === 0} onClick={() => (errors.value = [])}>
-                清空错误
-              </ElButton>
-              <ElButton
-                type={activeTool.value === PROBE_TOOL ? 'primary' : 'default'}
-                onClick={() => toggleTool(PROBE_TOOL)}>
-                {activeTool.value === PROBE_TOOL ? '退出坐标拾取（或按 Esc）' : '坐标拾取'}
-              </ElButton>
-              <ElButton disabled={probes.value.length === 0} onClick={() => (probes.value = [])}>
-                清除拾取点
-              </ElButton>
-              <ElButton
-                type={activeTool.value === MEASURE_TOOL_IDS.distance ? 'primary' : 'default'}
-                onClick={() => toggleTool(MEASURE_TOOL_IDS.distance)}>
-                测距
-              </ElButton>
-              <ElButton onClick={() => (stress.value = !stress.value)}>
-                {stress.value ? '去掉 200 个图层' : '加上 200 个图层'}
-              </ElButton>
-            </div>
-            <dl class={styles.status} data-view-state={viewState.value}>
-              <dt>视图</dt>
-              <dd>{viewState.value}</dd>
-              <dt>会话相机</dt>
-              <dd data-camera>{formatCamera(camera.value)}</dd>
-              <dt>数据版本</dt>
-              <dd data-version>
-                区域 v{version.value} · 选区 v{selectionVersion.value}
-              </dd>
-              <dt>定位 padding</dt>
-              <dd data-padding>{lastPadding.value ? formatPadding(lastPadding.value) : '-'}</dd>
-              <dt>当前工具</dt>
-              <dd data-tool>{activeTool.value}</dd>
-              <dt>最近拾取</dt>
-              <dd data-probe>{lastProbe.value ? formatProbe(lastProbe.value) : '-'}</dd>
-            </dl>
-          </header>
-          <div class={styles.mapArea}>
-            <MapCanvas key={canvasKey.value} createMap={failNextCreation.value ? failingCreateMap : undefined} />
-            {overlayVisible.value && <OverlayPanel />}
-            {lastProbe.value && <ProbeLabel probe={lastProbe.value} />}
-            <MeasureOverlay measure={measure} />
-            <MapStatusNotice />
+    return () => (
+      <div class={styles.root}>
+        <header class={styles.toolbar}>
+          <div class={styles.actions}>
+            <ElButton onClick={() => colorIndex.value++}>切换颜色</ElButton>
+            <ElButton onClick={() => (minzoom.value = minzoom.value === undefined ? 7 : undefined)}>
+              {minzoom.value === undefined ? '加上 minzoom 7' : '去掉 minzoom'}
+            </ElButton>
+            <ElButton onClick={toggleHighlight}>{highlightIndex.value === undefined ? '高亮' : '移动高亮'}</ElButton>
+            <ElButton
+              disabled={highlightIndex.value === undefined}
+              onClick={() => (highlightIndex.value = undefined)}>
+              清除高亮
+            </ElButton>
+            <ElButton onClick={switchVersion}>切换数据版本</ElButton>
+            <ElButton onClick={switchVersionLate}>切换数据版本（选区晚一轮）</ElButton>
+            <ElButton
+              type={selectionBroken.value ? 'danger' : 'default'}
+              onClick={() => (selectionBroken.value = !selectionBroken.value)}>
+              {selectionBroken.value ? '修好选区的推导' : '让选区的推导出错'}
+            </ElButton>
+            <ElButton onClick={flyToNanjing}>flyTo 南京</ElButton>
+            <ElButton onClick={fitJiangsu}>fitBounds 江苏（避开悬浮面板）</ElButton>
+            <ElButton
+              type={invalidLayer.value ? 'danger' : 'default'}
+              onClick={() => (invalidLayer.value = !invalidLayer.value)}>
+              {invalidLayer.value ? '去掉不合法的图层' : '提交不合法的图层'}
+            </ElButton>
+            <ElButton onClick={() => (overlayVisible.value = !overlayVisible.value)}>
+              {overlayVisible.value ? '隐藏悬浮面板' : '显示悬浮面板'}
+            </ElButton>
+            <ElButton onClick={() => canvasKey.value++}>重新创建视图</ElButton>
+            <ElButton
+              type={failNextCreation.value ? 'danger' : 'default'}
+              onClick={() => (failNextCreation.value = !failNextCreation.value)}>
+              {failNextCreation.value ? '取消模拟引擎失败' : '下次创建视图时模拟引擎失败'}
+            </ElButton>
+            <ElButton disabled={errors.value.length === 0} onClick={() => (errors.value = [])}>
+              清空错误
+            </ElButton>
+            <ElButton
+              type={activeTool.value === PROBE_TOOL ? 'primary' : 'default'}
+              onClick={() => toggleTool(PROBE_TOOL)}>
+              {activeTool.value === PROBE_TOOL ? '退出坐标拾取（或按 Esc）' : '坐标拾取'}
+            </ElButton>
+            <ElButton disabled={probes.value.length === 0} onClick={() => (probes.value = [])}>
+              清除拾取点
+            </ElButton>
+            <ElButton
+              type={activeTool.value === MEASURE_TOOL_IDS.distance ? 'primary' : 'default'}
+              onClick={() => toggleTool(MEASURE_TOOL_IDS.distance)}>
+              测距
+            </ElButton>
+            <ElButton onClick={() => (stress.value = !stress.value)}>
+              {stress.value ? '去掉 200 个图层' : '加上 200 个图层'}
+            </ElButton>
           </div>
-          {errors.value.length > 0 && (
-            <ul class={styles.errors}>
-              {errors.value.map((message, index) => (
-                <li key={index}>{message}</li>
-              ))}
-            </ul>
-          )}
+          <dl class={styles.status} data-view-state={viewState.value}>
+            <dt>视图</dt>
+            <dd>{viewState.value}</dd>
+            <dt>会话相机</dt>
+            <dd data-camera>{formatCamera(camera.value)}</dd>
+            <dt>数据版本</dt>
+            <dd data-version>
+              区域 v{version.value} · 选区 v{selectionVersion.value}
+            </dd>
+            <dt>定位 padding</dt>
+            <dd data-padding>{lastPadding.value ? formatPadding(lastPadding.value) : '-'}</dd>
+            <dt>当前工具</dt>
+            <dd data-tool>{activeTool.value}</dd>
+            <dt>最近拾取</dt>
+            <dd data-probe>{lastProbe.value ? formatProbe(lastProbe.value) : '-'}</dd>
+          </dl>
+        </header>
+        <div class={styles.mapArea}>
+          <MapCanvas key={canvasKey.value} createMap={failNextCreation.value ? failingCreateMap : undefined} />
+          {overlayVisible.value && <OverlayPanel />}
+          {lastProbe.value && <ProbeLabel probe={lastProbe.value} />}
+          <MeasureOverlay measure={measure} />
+          <MapStatusNotice />
         </div>
-      );
-    };
+        {errors.value.length > 0 && (
+          <ul class={styles.errors}>
+            {errors.value.map((message, index) => (
+              <li key={index}>{message}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
   }
 });

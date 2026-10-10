@@ -1,5 +1,6 @@
 // @vitest-environment node
 import {
+  type CameraState,
   type FitBoundsOptions,
   type MapView,
   type MapViewFailure,
@@ -10,15 +11,16 @@ import {
   type ViewBounds,
   type ViewState
 } from '@yzt/map-core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createApp, ref } from 'vue';
-import { INTERNAL_MAP_CONTEXT, MapContextState } from './context';
+import { type CameraControl, INTERNAL_MAP_CONTEXT, MapContextState } from './context';
 import { type Box, resolveOverlayOptions } from './overlay';
 import { useMapOverlay } from './use-map';
 
 // 卸下之后仍会发事件的视图：MapLibreView 释放时会清空监听，接口本身并不保证这一点
 class FakeView implements MapView {
   readonly kind = '2d';
+  readonly flyToCalls: Partial<CameraState>[] = [];
   readonly fitBoundsCalls: (FitBoundsOptions | undefined)[] = [];
   state: ViewState = 'initializing';
   failure: MapViewFailure | null = null;
@@ -31,7 +33,9 @@ class FakeView implements MapView {
   }
   pause(): void {}
   resume(): void {}
-  flyTo(): void {}
+  flyTo(target: Partial<CameraState>): void {
+    this.flyToCalls.push(target);
+  }
   fitBounds(_bounds: ViewBounds, options?: FitBoundsOptions): void {
     this.fitBoundsCalls.push(options);
   }
@@ -104,9 +108,12 @@ const BOUNDS: ViewBounds = [116.3, 30.7, 121.9, 35.2];
 function setup() {
   const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
   const session = new MapSession({ groups: ['basemap'], camera });
-  const state = new MapContextState(session, () => undefined, resolveOverlayOptions());
+  const errors: unknown[] = [];
+  const state = new MapContextState(session, error => errors.push(error), resolveOverlayOptions());
   return {
     state,
+    session,
+    errors,
     [Symbol.dispose]() {
       state[Symbol.dispose]();
       session[Symbol.dispose]();
@@ -148,6 +155,7 @@ describe('MapContextState', () => {
     const first = new FakeView();
     const second = new FakeView();
     env.state.attachView(first, CANVAS);
+    first.emit('ready');
 
     env.state.detachView(second);
     expect(env.state.context.view.value).not.toBeNull();
@@ -203,105 +211,285 @@ describe('MapContextState 的投影修订号', () => {
   });
 });
 
+// 记下 abort 监听的登记与移除（spy 照常调用原方法），检查等待的相机操作有没有留下监听
+function trackAbortListeners() {
+  const add = vi.spyOn(AbortSignal.prototype, 'addEventListener');
+  const remove = vi.spyOn(AbortSignal.prototype, 'removeEventListener');
+  const pairs = (spy: typeof add) => spy.mock.calls.map(([, listener], index) => [spy.mock.contexts[index], listener]);
+  return {
+    get active() {
+      const removed = pairs(remove);
+      return pairs(add).filter(([signal, listener]) => !removed.some(([s, l]) => s === signal && l === listener)).length;
+    },
+    [Symbol.dispose]() {
+      add.mockRestore();
+      remove.mockRestore();
+    }
+  };
+}
+
 describe('MapContextState 的相机操作', () => {
-  it('开始一次操作时上一次的信号中止；读取当前的信号不开始新的操作', () => {
+  it('开始一次操作时上一次作废；currentCameraOperation 不开始新的操作，同一次操作返回同一个对象', () => {
     using env = setup();
     const { context } = env.state;
     const initial = context.currentCameraOperation();
 
     expect(context.currentCameraOperation()).toBe(initial);
-    expect(initial.aborted).toBe(false);
+    expect(initial.signal.aborted).toBe(false);
     const operation = context.beginCameraOperation();
 
-    expect(initial.aborted).toBe(true);
+    expect(initial.signal.aborted).toBe(true);
     expect(context.currentCameraOperation()).toBe(operation);
+    expect(Object.isFrozen(operation)).toBe(true);
   });
 
-  it('runCameraOperation：视图就绪时立即执行，并作废之前没完成的操作', () => {
+  it('view 只在视图 ready 时有值，同一个视图的入口是同一个对象；卸下后为 null', () => {
+    using env = setup();
+    const { context } = env.state;
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    expect(context.view.value).toBeNull();
+
+    view.emit('ready');
+    const viewport = context.view.value;
+    expect(viewport).not.toBeNull();
+    for (const state of ['paused', 'failed', 'initializing'] as const) {
+      view.emit(state);
+      expect(context.view.value).toBeNull();
+    }
+    view.emit('ready');
+    expect(context.view.value).toBe(viewport);
+
+    env.state.detachView(view);
+    expect(context.view.value).toBeNull();
+
+    const ready = new FakeView();
+    ready.state = 'ready';
+    env.state.attachView(ready, CANVAS);
+    expect(context.view.value).not.toBeNull();
+  });
+
+  it('runCameraOperation：视图就绪时同步执行，并作废之前没完成的操作', () => {
     using env = setup();
     const view = new FakeView();
     env.state.attachView(view, CANVAS);
     view.emit('ready');
     const earlier = env.state.context.beginCameraOperation();
-    const views: unknown[] = [];
 
-    env.state.context.runCameraOperation(viewport => views.push(viewport));
+    env.state.context.runCameraOperation(camera => camera.flyTo({ zoom: 9 }));
 
-    expect(views).toStrictEqual([env.state.context.view.value]);
-    expect(earlier.aborted).toBe(true);
+    expect(view.flyToCalls).toStrictEqual([{ zoom: 9 }]);
+    expect(earlier.signal.aborted).toBe(true);
   });
 
-  it('runCameraOperation：还没就绪时等到就绪再执行；期间有新的操作时放弃', async () => {
+  it('run：还没就绪时等到就绪再执行，暂停不算就绪；期间有新的操作时放弃', () => {
     using env = setup();
-    const { view, markReady } = pendingView();
+    const { context } = env.state;
+    const view = new FakeView();
     env.state.attachView(view, CANVAS);
     const done: string[] = [];
 
-    env.state.context.runCameraOperation(() => done.push('第一次'));
-    env.state.context.runCameraOperation(() => done.push('第二次'));
-    env.state.context.runCameraOperation(() => done.push('第三次'));
-    env.state.context.beginCameraOperation();
-    env.state.context.runCameraOperation(() => done.push('第四次'));
-    await settle();
+    context.runCameraOperation(() => done.push('被作废'));
+    context.runCameraOperation(() => done.push('最后一次'));
+    view.emit('paused');
     expect(done).toStrictEqual([]);
 
     view.emit('ready');
-    markReady();
-    await settle();
+    view.emit('paused');
+    view.emit('ready');
 
-    expect(done).toStrictEqual(['第四次']);
+    expect(done).toStrictEqual(['最后一次']);
   });
 
-  it('地图刚就绪时新旧操作竞争：先登记的等待者在就绪时发起了新的操作，排在后面的旧操作不再执行', async () => {
+  it('run：等待期间引擎失败、视图被替换，新视图就绪后照样执行', () => {
+    using env = setup();
+    const failing = new FakeView();
+    env.state.attachView(failing, CANVAS);
+    const operation = env.state.context.beginCameraOperation();
+    operation.run(camera => camera.fitBounds(BOUNDS));
+
+    failing.failure = { kind: 'engine', cause: 'unknown', error: new Error('引擎失败') };
+    failing.emit('failed');
+    env.state.detachView(failing);
+    const retried = new FakeView();
+    env.state.attachView(retried, CANVAS);
+    expect(retried.fitBoundsCalls).toHaveLength(0);
+    retried.emit('ready');
+
+    expect(failing.fitBoundsCalls).toHaveLength(0);
+    expect(retried.fitBoundsCalls).toHaveLength(1);
+  });
+
+  it('run：等待期间样式失败、之后自动恢复，恢复就绪时执行', () => {
+    using env = setup();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    env.state.context.runCameraOperation(camera => camera.fitBounds(BOUNDS));
+
+    view.failure = { kind: 'style', error: new Error('invalid style') };
+    view.emit('failed');
+    view.failure = null;
+    view.emit('initializing');
+    view.emit('ready');
+
+    expect(view.fitBoundsCalls).toHaveLength(1);
+  });
+
+  it('run 只能调用一次，回调最多执行一次：执行之后视图再失败、恢复都不重放', () => {
+    using env = setup();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    const operation = env.state.context.currentCameraOperation();
+    let runs = 0;
+
+    operation.run(() => runs++);
+    expect(() => operation.run(() => runs++)).toThrow('一次相机操作只能 run 一次');
+    expect(() => env.state.context.currentCameraOperation().run(() => runs++)).toThrow('一次相机操作只能 run 一次');
+    view.emit('ready');
+    view.emit('failed');
+    view.emit('initializing');
+    view.emit('ready');
+
+    expect(runs).toBe(1);
+  });
+
+  it('已经作废的操作 run 时不执行回调；上下文释放后 run 也不执行', () => {
+    using env = setup();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+    const operation = env.state.context.beginCameraOperation();
+    env.state.context.beginCameraOperation();
+    let runs = 0;
+
+    operation.run(() => runs++);
+    env.state[Symbol.dispose]();
+    env.state.context.runCameraOperation(() => runs++);
+
+    expect(runs).toBe(0);
+  });
+
+  it('等待中的操作：挂上一个已经就绪的视图时执行', () => {
+    using env = setup();
+    let runs = 0;
+    env.state.context.runCameraOperation(() => runs++);
+
+    const ready = new FakeView();
+    ready.state = 'ready';
+    env.state.attachView(ready, CANVAS);
+
+    expect(runs).toBe(1);
+  });
+
+  it('地图刚就绪时：等待中的操作先执行，就绪后才开始的新操作接着执行，最后停在新的定位', async () => {
     using env = setup();
     const { view, markReady } = pendingView();
     env.state.attachView(view, CANVAS);
     const { context } = env.state;
-    const done: string[] = [];
-    // 先登记的等待者：就绪后立即发起新的定位（例如按地址里的参数定位）
+    // 先登记的等待者：等这一轮加载完成后发起新的定位（例如按地址里的参数定位）
     const locateWhenReady = async () => {
       await context.whenReady();
-      context.runCameraOperation(() => done.push('新的定位'));
+      context.runCameraOperation(camera => camera.flyTo({ zoom: 12 }));
     };
     void locateWhenReady();
-    context.runCameraOperation(() => done.push('旧的定位'));
+    context.runCameraOperation(camera => camera.flyTo({ zoom: 9 }));
 
     view.emit('ready');
     markReady();
     await settle();
 
-    expect(done).toStrictEqual(['新的定位']);
+    expect(view.flyToCalls).toStrictEqual([{ zoom: 9 }, { zoom: 12 }]);
   });
 
-  it('runCameraOperation：等待的视图失败时放弃；就绪后执行时抛出的错误交给 onError', async () => {
-    const errors: unknown[] = [];
-    const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
-    const session = new MapSession({ groups: ['basemap'], camera });
-    const state = new MapContextState(session, error => errors.push(error), resolveOverlayOptions());
-    const failing = new FakeView();
-    failing.ready = Promise.reject(new Error('引擎失败'));
-    state.attachView(failing, CANVAS);
+  it('等待中的操作就绪时执行；它的回调里开始的新操作立即执行', () => {
+    using env = setup();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    const { context } = env.state;
+    const initial = context.currentCameraOperation();
     const done: string[] = [];
+    // 初始化在当前操作下等待；它的回调里开始了新的操作（新的操作作废了它自己，视图已经就绪，立即执行）
+    initial.run(() => {
+      done.push('初始化');
+      context.runCameraOperation(() => done.push('回调里开始的操作'));
+    });
 
-    state.context.runCameraOperation(() => done.push('失败的视图'));
-    await settle();
-    expect(done).toStrictEqual([]);
-    expect(errors).toStrictEqual([]);
+    view.emit('ready');
 
-    state.detachView(failing);
-    const { view, markReady } = pendingView();
-    state.attachView(view, CANVAS);
-    const thrown = new Error('定位出错');
-    state.context.runCameraOperation(() => {
-      throw thrown;
+    expect(done).toStrictEqual(['初始化', '回调里开始的操作']);
+  });
+
+  it('相机控制只在回调期间有效：存下来之后调用抛错；回调里开始了新的操作后，旧的控制什么也不做', () => {
+    using env = setup();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+    const { context } = env.state;
+    let saved: CameraControl | undefined;
+
+    context.runCameraOperation(camera => {
+      saved = camera;
+      context.runCameraOperation(next => next.flyTo({ zoom: 12 }));
+      camera.flyTo({ zoom: 9 });
+      camera.fitBounds(BOUNDS);
+    });
+    // 回调期间视图不再就绪：这次操作的控制同样什么也不做
+    context.runCameraOperation(camera => {
+      view.emit('paused');
+      camera.flyTo({ zoom: 11 });
+      view.emit('ready');
+    });
+
+    expect(view.flyToCalls).toStrictEqual([{ zoom: 12 }]);
+    expect(view.fitBoundsCalls).toStrictEqual([]);
+    expect(() => saved?.flyTo({ zoom: 10 })).toThrow('相机控制只在 run 的回调期间有效');
+    expect(() => saved?.fitBounds(BOUNDS)).toThrow('相机控制只在 run 的回调期间有效');
+    expect(view.flyToCalls).toStrictEqual([{ zoom: 12 }]);
+  });
+
+  it('回调抛错交给 onError：就绪时同步执行、等到就绪再执行都一样，不抛给调用方', () => {
+    using env = setup();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    const waiting = new Error('等到就绪后出错');
+    const immediate = new Error('立即执行时出错');
+
+    env.state.context.runCameraOperation(() => {
+      throw waiting;
     });
     view.emit('ready');
-    markReady();
-    await settle();
+    expect(() =>
+      env.state.context.runCameraOperation(() => {
+        throw immediate;
+      })
+    ).not.toThrow();
 
-    expect(errors).toStrictEqual([thrown]);
-    state[Symbol.dispose]();
-    session[Symbol.dispose]();
+    expect(env.errors).toStrictEqual([waiting, immediate]);
+  });
+
+  it('等待中的操作执行、被作废、上下文释放时移除监听；释放之后视图就绪也不执行', () => {
+    using listeners = trackAbortListeners();
+    const executed = setup();
+    const superseded = setup();
+    const released = setup();
+    const views = [executed, superseded, released].map(env => {
+      const view = new FakeView();
+      env.state.attachView(view, CANVAS);
+      env.state.context.runCameraOperation(camera => camera.flyTo({ zoom: 9 }));
+      return view;
+    });
+    expect(listeners.active).toBeGreaterThan(0);
+
+    views[0]?.emit('ready');
+    superseded.state.context.beginCameraOperation();
+    released.state[Symbol.dispose]();
+    views[2]?.emit('ready');
+
+    expect(listeners.active).toBe(0);
+    expect(views.map(view => view.flyToCalls.length)).toStrictEqual([1, 0, 0]);
+    for (const env of [executed, superseded, released]) {
+      env[Symbol.dispose]();
+    }
   });
 });
 
@@ -421,16 +609,18 @@ describe('MapContextState 的定位可视区域', () => {
     expect(env.state.context.overlayPadding().left).toBe(16);
   });
 
-  it('视图入口的 fitBounds 没传 padding 时避开悬浮元素，明确传入（包括 0）时以传入的为准', () => {
+  it('相机控制的 fitBounds 没传 padding 时避开悬浮元素，明确传入（包括 0）时以传入的为准', () => {
     using env = setup();
     const view = new FakeView();
     env.state.attachView(view, CANVAS);
+    view.emit('ready');
     env.state.registerOverlay(ref(fakeElement(box(16, 16, 320, 588))), 'left');
-    const viewport = env.state.context.view.value;
 
-    viewport?.fitBounds(BOUNDS, { duration: 0 });
-    viewport?.fitBounds(BOUNDS, { padding: 0 });
-    viewport?.fitBounds(BOUNDS, { padding: { top: 1, right: 2, bottom: 3, left: 4 } });
+    env.state.context.runCameraOperation(camera => {
+      camera.fitBounds(BOUNDS, { duration: 0 });
+      camera.fitBounds(BOUNDS, { padding: 0 });
+      camera.fitBounds(BOUNDS, { padding: { top: 1, right: 2, bottom: 3, left: 4 } });
+    });
 
     expect(view.fitBoundsCalls).toEqual([
       { duration: 0, padding: { top: 16, right: 16, bottom: 16, left: 352 } },
