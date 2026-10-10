@@ -123,6 +123,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "test": "vitest run",
     "test:watch": "vitest",
     "title:generate": "node tools/system-title/cli.ts",
+    "boundaries:generate": "node tools/boundaries/cli.ts",
     "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
   },
   "dependencies": {

@@ -89,6 +89,20 @@ basemap.setOpacity(0.6);
 - 缩小时地图最小只到 z0.71（画布尺寸的限制），瓦片按 2 级请求；栅格瓦片按 256 像素换算，瓦片级别总比地图缩放级大 1，所以不会请求 0 级，`minzoom: 1` 只是写明天地图的范围
 - 读 WebGL 画布的像素要在渲染的那一帧里读：MapLibre 没有开 `preserveDrawingBuffer`，帧画完后缓冲区被清空，事后用 `drawImage` 读到的是全透明
 
+## 行政区边界的数据（ADR 0033）
+
+`boundary/data/` 下的三份边界由 `apps/web/tools/boundaries` 的脚本从旧项目转换而来：
+
+| 文件 | 来源（yzt 836f03b `public/static/geojson/`） | 要素 | 原始大小 → 转换后 |
+|---|---|---|---|
+| `jiangsu-province.json` | `江苏省界.json` | 1 | 798 KB → 464 KB |
+| `jiangsu-city.json` | `江苏省市界.json` | 14（连云港分成两块） | 2479 KB → 1441 KB |
+| `jiangsu-county.json` | `江苏省县界.json` | 95 | 199 KB → 199 KB |
+
+- 转换：坐标保留 6 位小数（约 0.1 米，原始数据有 14～15 位），属性只留 `name` 和 `code`（省取 `adcode`、市取 `code`、县取 `gb`），去掉 `crs`（县界标的是 CGCS2000，与 WGS 84 相差不到 1 米）。原始文件的结构不符合时报错，不生成残缺的数据
+- 县界大幅简化过（每个县约 89 个点），放大后和市界、省界对不齐；没有更精细的数据，原样迁移
+- 重新生成：先把旧仓库 `master-demo` 上的三个文件导出到一个临时目录（`git show master-demo:public/static/geojson/江苏省界.json > <目录>/江苏省界.json`，另两个同理），再在仓库根目录运行 `pnpm --filter @yzt/web boundaries:generate <目录>`
+
 ## 地图状态的提示（ADR 0030）
 
 ```tsx
@@ -119,6 +133,7 @@ basemap.setOpacity(0.6);
 | `MapStatusNotice.test.tsx` | 引擎失败时显示原因和"重试"，点击后重新创建地图，重试过程不抛错 | jsdom |
 | `basemap/BasemapPanel.test.tsx` | 选择底图后改变状态、无底图时没有滑块；滑块按百分比显示、拖动时交给拥有者 0～1 的值；关闭天地图时只有"无底图" | jsdom |
 | `basemap/useBasemap.test.ts` | 默认读取配置；两种配置下的初始状态；切换后推导出所选底图和注记；透明度作用于当前底图、每种底图各自记住；相同的值不触发重新推导；不合法的调用抛错且状态不变 | Node |
+| `apps/web/tools/boundaries/boundaries.test.ts` | 边界数据的转换：文件对应关系、坐标取整与去掉高程、只留名称和代码、去掉 `crs`、原始结构不符合或没有要素时报错 | Node |
 | `basemap/basemap-style.test.ts` | 可选的底图与初始状态；每种底图的组成、瓦片地址、缩放范围与透明度；ID 的分组前缀与组合后的校验；改透明度只产生 `setPaintProperty`；切换底图时背景不动；关闭天地图时任何选择都没有天地图 | Node |
 
 - 底图的推导逐一改坏 22 处（关闭时仍给出全部选项或仍建数据源、注记图层用错、少一个子域名、缺少缩放范围、占位符被转义、行列写反、不带 key、背景缺失或在底图上面、注记不跟透明度、影像用矢量的透明度、ID 不带前缀或重复等），全部由断言发现

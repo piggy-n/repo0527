@@ -146,6 +146,16 @@ pnpm add -Dw -E some-tool
 
 **注意事项**：需要本机有优设标题黑字体文件（不入库），缺少时退出码为 1；生成后记得提交 JSON。详见 [modules/system-title.md](modules/system-title.md)。
 
+### `pnpm --filter @yzt/web boundaries:generate <目录>`
+
+**作用**：把旧项目的省、市、县界 GeoJSON 转换成地图用的边界数据（ADR 0033）。
+
+**什么时候用**：边界的原始数据更新时。平时不用运行，转换结果已经提交。
+
+**执行了什么**：Node 直接运行 `tools/boundaries/cli.ts`，读取目录下的 `江苏省界.json`、`江苏省市界.json`、`江苏省县界.json`，坐标保留 6 位小数、属性只留名称和代码，写入 `src/shared/map/boundary/data/`。
+
+**注意事项**：目录是旧项目（yzt）的 `public/static/geojson`。旧仓库可能停在其他分支上，最好先用 `git show master-demo:public/static/geojson/<文件名>` 导出到一个临时目录再转换；原始文件的结构不符合时报错退出。详见 [modules/shared-map.md](modules/shared-map.md)"行政区边界的数据"。
+
 ### `pnpm --filter @yzt/web icons`
 
 **作用**：规范化 `src/assets/icons/` 中的全部 SVG（改名、去固定颜色等），并更新注册表 `src/shared/icons/icons.json`。

@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "title:generate": "node tools/system-title/cli.ts",
+    "boundaries:generate": "node tools/boundaries/cli.ts",
     "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
   },
   "dependencies": {
