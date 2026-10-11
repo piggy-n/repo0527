@@ -1,6 +1,7 @@
 import { MapCanvas, provideMap } from '@yzt/map-vue';
 import { defineComponent, ref } from 'vue';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
+import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
@@ -104,6 +105,9 @@ export const CurrentMapPage = defineComponent({
             )}
             <BasemapPanel basemap={basemap} />
             <BoundaryPanel boundaries={boundaries} />
+            <div class={styles.legend}>
+              <ResourceLegend layers={resources} />
+            </div>
           </div>
         </div>
         <MapStatusNotice />

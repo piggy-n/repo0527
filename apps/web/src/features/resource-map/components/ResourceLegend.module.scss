@@ -1,0 +1,99 @@
+// 联调用的样式，5D 再设计；位置由页面决定，面板内部滚动
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-height: 0;
+  max-width: 100%;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  box-sizing: border-box;
+  width: 280px;
+  max-width: 100%;
+  min-height: 0;
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-title);
+}
+
+// 数量排在标题后面，收起按钮靠右
+.count {
+  flex: 1;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.entries,
+.values {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry + .entry {
+  margin-top: var(--space-xs);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-regular);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Element 按钮把内容包在一层 span 里，按钮上的 gap 作用不到文字，用外边距隔开
+.badge {
+  margin-left: var(--space-xs);
+  font-size: var(--font-size-xxs);
+  color: var(--color-text-secondary);
+}
+
+// 展开的内容缩进到箭头后面
+.content {
+  padding: var(--space-xs) 0 0 20px;
+}
+
+.value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-regular);
+}
+
+.empty {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}

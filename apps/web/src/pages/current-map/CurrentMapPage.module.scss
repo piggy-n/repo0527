@@ -37,3 +37,14 @@
     pointer-events: auto;
   }
 }
+
+// 图例排在右列的最下面，面板高了就在内部滚动。右下角要让出 MapLibre 的版权控件（ADR 0043 第 5 节）：
+// 控件的容器离地图底边 44 像素高（按钮 24、上下外边距各 10），浮层已离底边 --space-lg（16），再让 32 留出约 4 的空隙；
+// 用外边距，让出的地方不拦截地图的鼠标操作
+.legend {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: auto;
+  margin-bottom: 32px;
+}

@@ -1,0 +1,28 @@
+// 联调用的样式，5D 再设计
+
+.swatch {
+  flex: none;
+  box-sizing: border-box;
+  display: inline-block;
+}
+
+.fill {
+  width: 16px;
+  height: 12px;
+  border: 1px solid;
+}
+
+.line {
+  width: 16px;
+  height: 0;
+  border-top: 2px solid;
+}
+
+// 白色描边在浅色面板上看不清，外面再描一圈灰色
+.circle {
+  width: 10px;
+  height: 10px;
+  border: 1px solid;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--color-border);
+}
