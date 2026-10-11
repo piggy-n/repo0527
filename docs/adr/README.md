@@ -52,7 +52,8 @@
 | [0040](0040-vitest-browser-mode.md) | 真实浏览器测试：Vitest 浏览器模式 | 已接受 |
 | [0041](0041-resource-layers.md) | 资源图层：目录、样式登记表、显示状态与数据源错误 | 已接受 |
 | [0042](0042-preference-persistence.md) | 偏好的持久化：IndexedDB + idb-keyval 的键值存储 | 已接受 |
-| [0043](0043-read-only-legend.md) | 只读图例：从样式登记表推导，不做地类统计 | 已接受 |
+| [0043](0043-read-only-legend.md) | 只读图例：从样式登记表推导，不做地类统计 | 已接受（背景中旧地类图例的说法由 0044 更正；图例由 0044 变为可以编辑） |
+| [0044](0044-symbol-overrides.md) | 符号覆盖：模型、推导与保存 | 已接受 |
 
 ## 模板
 
