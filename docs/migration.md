@@ -16,7 +16,7 @@ git diff <基线>..master-demo -- <旧路径>
 | 登录与鉴权 | `836f03b` | `src/views/login/`、`src/services/auth/auth-service.js`、`src/stores/user.js`、`src/utils/func-crypto.js`（`encryptPassword`）、`src/api/sys/sys-uaa-auth-api.js`、`src/router/index.js`（路由守卫）、`src/libs/http-service.js`（token 请求头与 401） | `shared/auth`、`features/auth`、`pages/login`、`app/router`、`app/http.ts` | 已完成登录、会话、路由权限、退出（阶段二）；AI 后端登录待迁移 AI 对话时处理 |
 | 文件管理 | `836f03b` | `src/views/resource-center/file-management.vue`、`src/views/resource-center/components/` 下的 `FileManagement*.vue`、`DeleteFileManagementDialog.vue`、`UploadFileManagementDialog.vue`、`DocxPreviewDialog.vue`；`src/mock/file-management-data.js`（分类树与业务类型标签，是写死的业务配置，不是 mockjs）；`src/api/resource/resource-api.js` 中的 `/file/*` | `features/file-management`、`pages/file-management`、`shared/query-form`、`shared/table` | 列表已完成（阶段三 3.3）：分类树、筛选、表格、分页、删除；"上传文档"按钮只占了位置；上传、下载、预览在阶段六 |
 | 地图内核 | `836f03b` | `src/components/CommonMap/`（二维：引擎、`MapService`、各 Manager、点选、测量、绘制）；`src/views/current-map-new/cesium/`（三维）、`src/views/current-map-new/composables/useEngineSwitch.js`（二三维切换与同步）；`src/libs/bus.js`（全局事件总线） | `libs/map-core`、`libs/utils`（Worker 通信层）；三维将来在 `libs/map-cesium` | 阶段四：按新设计（ADR 0020～0025）实现了地图会话（样式、相机）、MapLibre 适配器和 Worker 通信层，在 `/dev/map` 上验证；旧代码的分析见 [modules/map-core.md](modules/map-core.md) 附录。业务图层、点选、测量、绘制、三维还没有迁移（阶段五、六）。阶段四结束时 `master-demo` 仍是 `836f03b` |
-| 现状底图与公共地图能力 | `836f03b` | `src/views/current-map-new/`（页面、图层面板、地图控制栏、图例、详情面板；`cesium/` 与 `composables/useEngineSwitch.js` 归三维阶段）；`src/components/CommonMap/`（`MapContainer`、`MapService` 与底图、边界、业务图层、测量、点选、绘制、符号与地类配色）；`src/assets/LayerManager.ts`；`src/services/map-tree/`（图层树接口、规范化、样式登记表、静态节点）；`src/stores/mapTree.js`；`src/components/toolbar/`（工具栏、区划定位面板）；`src/components/map/map-configs.js`；`src/api/resource/resource-map-api.js`；`src/views/current-map/utils/MapStaticBoundaryManager.js` | `libs/map-vue`、`shared/map`、`features/*`、`pages/current-map`（分层在 5A.1 的 ADR 中确定） | 5A 完成：map-vue（`provideMap`、样式绑定、`MapCanvas`、`useMap`、定位可视区域、失败提示）与现状底图的联调骨架，旧代码还没有迁移；底图、边界、工具在 5B，资源图层、面板、图例、点选在 5C，界面在 5D。5A 结束时 `master-demo` 仍是 `836f03b`。不迁移：接口失败时回退的本地快照 `src/assets/tree-data.ts`、三区三线的占位节点。5B.1 完成：底图（`BaseLayerManager`、`MapControlBar` 的底图部分、提交 `d768c66` 的天地图开关）迁到 `shared/map/basemap`，矢量、影像都用天地图（ADR 0031），内网部署用 `pnpm build:intranet`（ADR 0032）；不迁移 `static-nodes.js` 里的内网影像（`192.168.1.180:8080`）和没用到的 `osm-tiles` 数据源。5B.2 完成：省、市、县界（`BoundaryManager` 的静态边界、`MapStaticBoundaryManager`、`TiandituBoundaryLayer` 的画线部分、`MapControlBar` 的行政区部分）与默认视角（`MapViewManager.goToDefaultView`）迁到 `shared/map`（ADR 0033）；边界数据由转换脚本从 `public/static/geojson` 生成。区划定位、区划高亮、天地图行政区接口在 5B.5，区划裁剪在 5C.7。5B.3 完成：工具栏的工具切换（`components/toolbar/index.vue` 的分组与 `navigationMode`、`MapService.handleToolbarAction`、`SelectionInteractionController` 的模式）改为会话的工具模型（ADR 0034），工具栏外壳在 `shared/map/toolbar`；点选、框选在 5C.6，测距、测面在 5B.4。5B.4 完成：测距、测面、清除（`MeasureManager`、`MapDistanceMeasureManager`、`MapAreaMeasureManager` 和 `GeometryDrawManager` 中测量用到的部分）迁到 map-core 的 `MeasureStore` 与 `shared/map/measure`（ADR 0035）；距离和面积从 turf 的球面计算改为椭球面计算，单位格式和提示文案照旧；`GeometryDrawManager` 的通用绘制等阶段六的空间查询再看能否抽成通用的绘制工具。5B.5 完成：区划定位（`RegionLocatePanel.vue`、`MapService.selectRegion`、`BoundaryManager` 与 `MapRegionBoundaryManager` 的选区边界和定位）迁到 `shared/map/region`（ADR 0036）；区划目录由 `regionLabelPoints.ts` 转换，不用 `region.js`（8 个区县的代码写错）；边界只用本地的市界、县界。不迁移：天地图行政区接口（`TiandituBoundaryLayer` 的请求部分，本地数据完整时用不到）、选中区划的名称标签（效果一般，以后在 5D 重新设计）、`DEFAULT_FIT_BOUNDS_OPTIONS` 写死的 96 像素留白（改由登记的悬浮元素决定）。区划裁剪（`MapRegionClipManager`、`MapRegionLayerFilter`）在 5C.7；坐标定位在旧项目里只是占位按钮，新做在 5B.6。5B.6 完成：坐标定位与位置点是新功能（ADR 0037），没有旧代码可迁移，交互先在原型里和用户确认（长按 0.5 秒、"坐标定位点"、拾取后打开位置信息、至少 14 级、复制用规范的 `′″`、"清除"连同位置点、所在区划用县界判断、两个定位面板互斥）。5B 结束时 `master-demo` 仍是 `836f03b` |
+| 现状底图与公共地图能力 | `836f03b` | `src/views/current-map-new/`（页面、图层面板、地图控制栏、图例、详情面板；`cesium/` 与 `composables/useEngineSwitch.js` 归三维阶段）；`src/components/CommonMap/`（`MapContainer`、`MapService` 与底图、边界、业务图层、测量、点选、绘制、符号与地类配色）；`src/assets/LayerManager.ts`；`src/services/map-tree/`（图层树接口、规范化、样式登记表、静态节点）；`src/stores/mapTree.js`；`src/components/toolbar/`（工具栏、区划定位面板）；`src/components/map/map-configs.js`；`src/api/resource/resource-map-api.js`；`src/views/current-map/utils/MapStaticBoundaryManager.js` | `libs/map-vue`、`shared/map`、`features/*`、`pages/current-map`（分层在 5A.1 的 ADR 中确定） | 5A 完成：map-vue（`provideMap`、样式绑定、`MapCanvas`、`useMap`、定位可视区域、失败提示）与现状底图的联调骨架，旧代码还没有迁移；底图、边界、工具在 5B，资源图层、面板、图例、点选在 5C，界面在 5D。5A 结束时 `master-demo` 仍是 `836f03b`。不迁移：接口失败时回退的本地快照 `src/assets/tree-data.ts`、三区三线的占位节点。5B.1 完成：底图（`BaseLayerManager`、`MapControlBar` 的底图部分、提交 `d768c66` 的天地图开关）迁到 `shared/map/basemap`，矢量、影像都用天地图（ADR 0031），内网部署用 `pnpm build:intranet`（ADR 0032）；不迁移 `static-nodes.js` 里的内网影像（`192.168.1.180:8080`）和没用到的 `osm-tiles` 数据源。5B.2 完成：省、市、县界（`BoundaryManager` 的静态边界、`MapStaticBoundaryManager`、`TiandituBoundaryLayer` 的画线部分、`MapControlBar` 的行政区部分）与默认视角（`MapViewManager.goToDefaultView`）迁到 `shared/map`（ADR 0033）；边界数据由转换脚本从 `public/static/geojson` 生成。区划定位、区划高亮、天地图行政区接口在 5B.5，区划裁剪在 5C.7。5B.3 完成：工具栏的工具切换（`components/toolbar/index.vue` 的分组与 `navigationMode`、`MapService.handleToolbarAction`、`SelectionInteractionController` 的模式）改为会话的工具模型（ADR 0034），工具栏外壳在 `shared/map/toolbar`；点选、框选在 5C.6，测距、测面在 5B.4。5B.4 完成：测距、测面、清除（`MeasureManager`、`MapDistanceMeasureManager`、`MapAreaMeasureManager` 和 `GeometryDrawManager` 中测量用到的部分）迁到 map-core 的 `MeasureStore` 与 `shared/map/measure`（ADR 0035）；距离和面积从 turf 的球面计算改为椭球面计算，单位格式和提示文案照旧；`GeometryDrawManager` 的通用绘制等阶段六的空间查询再看能否抽成通用的绘制工具。5B.5 完成：区划定位（`RegionLocatePanel.vue`、`MapService.selectRegion`、`BoundaryManager` 与 `MapRegionBoundaryManager` 的选区边界和定位）迁到 `shared/map/region`（ADR 0036）；区划目录由 `regionLabelPoints.ts` 转换，不用 `region.js`（8 个区县的代码写错）；边界只用本地的市界、县界。不迁移：天地图行政区接口（`TiandituBoundaryLayer` 的请求部分，本地数据完整时用不到）、选中区划的名称标签（效果一般，以后在 5D 重新设计）、`DEFAULT_FIT_BOUNDS_OPTIONS` 写死的 96 像素留白（改由登记的悬浮元素决定）。区划裁剪（`MapRegionClipManager`、`MapRegionLayerFilter`）在 5C.7；坐标定位在旧项目里只是占位按钮，新做在 5B.6。5B.6 完成：坐标定位与位置点是新功能（ADR 0037），没有旧代码可迁移，交互先在原型里和用户确认（长按 0.5 秒、"坐标定位点"、拾取后打开位置信息、至少 14 级、复制用规范的 `′″`、"清除"连同位置点、所在区划用县界判断、两个定位面板互斥）。5B 结束时 `master-demo` 仍是 `836f03b`。5C.1d 完成：资源树接口、目录、样式登记表（`services/map-tree/` 的规范化、`layer-style-registry.js`、`source-layer-exceptions.js`）与地类配色（`landuseClassification.js` 的编码表、历史名称表）迁到 `features/resource-map`，差异见"现状底图：资源图层的样式数据" |
 | 布局（顶部导航、用户菜单） | `836f03b` | `src/layout/components/TheHeader.vue`、`src/services/resource-application/roleService.js`（`getHeaderMenus`、`getRoleLabel`） | `app/layout` | 已完成导航与退出登录（阶段二 2.10）；修改密码、修改头像、消息铃铛待迁移对应功能时处理 |
 
 ## 文件管理：接口实测（2026-10-08）
@@ -147,6 +147,43 @@ git diff <基线>..master-demo -- <旧路径>
 - 样式的 `glyphs` 只提供 Noto Sans 的 0-255 一个区段（76 KB），汉字由 MapLibre 的 `localIdeographFontFamily`（默认 `sans-serif`）用浏览器本地字体画
 - 实测 6 条标注（汉字、全角括号、`·`、拉丁字母、数字、罗马数字）都放置成功；只请求了 0-255 和 8448-8703（`Ⅰ` 所在的区段），汉字和全角括号没有请求字形；没提供的区段返回 404，`Ⅰ` 显示不正确，地类名称、水系名称里基本用不到
 - Noto Sans 是 OFL 许可，字形可以随项目分发；实验时字形临时放在不入库的 `public/fonts/glyphs/`（ADR 0013）
+
+## 现状底图：资源图层的样式数据（2026-10-11，5C.1d）
+
+直接请求后端的瓦片（南京、苏州两处），定样式登记表（`features/resource-map/style-registry.ts`）里的数据。
+
+**最小显示级别**：取单张瓦片小于约 2 MB、首次生成少于约 2 s 的最低级别；地类图斑例外（默认勾选，z7 有 6.9 MB 但只要 0.2 s，全省视图 0.7～1.0 s 画出来，ADR 0041）
+
+| 资源 | z7（南京） | z8（南京 / 苏州） | z9（南京 / 苏州） | 最小级别 |
+|---|---|---|---|---|
+| 水域面层 `csxhjctb_hyda` | 42.3 MB、20.5 s | 17.5 MB、8.4 s / 17.6 MB、8.4 s | 2.4 MB、3.5 s / 2.2 MB、3.2 s | 10 |
+| 公路线层 `csxhjctb_lrdl` | 27.0 MB、7.9 s | 4.5 MB、1.8 s / 7.4 MB、2.3 s | 0.6 MB、0.3 s / 1.0 MB、0.4 s | 9 |
+| 永久基本农田图斑 `bgdc_yjjbnttb` | 10.4 MB、4.3 s | 0 / 3.5 MB、2.2 s | 0 / 0 | 9 |
+| 城市道路线层 `csxhjctb_lctl` | 9.3 MB、3.1 s | 2.6 MB、1.1 s / 6.0 MB、1.8 s | 0.9 MB、0.3 s / 1.3 MB、0.5 s | 9 |
+| 路面范围 `bgdc_lmfw` | 5.6 MB、4.4 s | 2.3 MB、2.5 s / 3.5 MB、3.0 s | 0.8 MB、1.2 s / 0.9 MB、1.3 s | 9 |
+| 村级调查区 `bgdc_cjdcq` | 4.5 MB、4.2 s | 1.2 MB、2.9 s / 1.8 MB、3.9 s | 0.3 MB、0.8 s / 0.5 MB、1.2 s | 9 |
+| 村级调查区界线 `bgdc_cjdcqjx` | 5.0 MB、2.1 s | 1.0 MB、0.8 s / 1.7 MB、1.2 s | | 8 |
+| 推土区 `bgdc_ttq` | 2.4 MB、1.8 s | 1.1 MB、1.3 s / 1.6 MB、1.5 s | | 8 |
+| 行政区 `bgdc_xzq` | 0.9 MB、2.6 s | 0.4 MB、1.2 s / 0.4 MB、1.4 s | | 8 |
+
+其余资源 z7 都在 2 MB、2 s 以内（城镇住宅用地面层 0.7 MB、1.0 s，商业服务业设施点层 1.0 MB、0.5 s），不限制。
+
+**属性字段**：瓦片里的字段名都是小写，旧项目为大写字段名写的兜底（`DLBM`、`CZCLX`、`CCN`、`TYPE` 等）不迁移
+
+| 资源 | 字段 | 取值 |
+|---|---|---|
+| 地类图斑 `bgdc_dltb_2022` | `bsm`、`dlmc`、`dlbm` | 样本里的编码、名称都在表 A.2 之内 |
+| 地类图斑（城镇村）`bgdc_dltb_czc_2021` | `dlbm`、`qsxz`、`dlbm_20` | **没有 `dlmc`**，只能按编码换成名称再配色 |
+| 城镇村等用地 `bgdc_czcdyd_2022` | `bsm`、`czclx` | `czclx` 有 8 个值：201、201A、202、202A、203、203A、204、205 |
+| 水域线层 `csxhjctb_hydl_2025` | `ccn`、`bas`、`name` | `ccn`：河流、水渠 |
+| 乡村道路线层 `csxhjctb_lvll_2025` | `type` | 农村硬化道路、机耕路、乡村路 |
+
+**与旧项目的差异**
+
+- 城镇村等用地：旧项目只列了 6 个值、每次刷新随机配色，201A、202A 落到灰色兜底；现在 8 个值按顺序从配色板取色，每次一样
+- 地类图斑：旧项目靠运行时发现地类，把表外的编码按名称补进历史颜色；现在编码没命中时按名称查历史名称表，直接写在表达式里
+- 缩放分段（`mvtZoomFallbacks`）不迁移，改为每个资源一个数据源，按上表设最小显示级别，数据源的最大级别 15
+- 默认样式（10 色配色板、面 0.35 的半透明填充加同色描边、线宽和点半径的插值、默认透明度 0.9）与旧项目相同；标注还没有迁移（ADR 0041）
 
 ## 底图：天地图实测（2026-10-10）
 
