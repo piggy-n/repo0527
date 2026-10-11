@@ -242,7 +242,7 @@ store.clear();
 
 ### app 的地图运行时与开发页
 
-- `app/map-runtime.ts` 的 `setupMapRuntime()` 负责 `setWorkerUrl` 和 maplibre-gl 的 CSS，可以重复调用；路由用 `withMapRuntime(loadPage)` 包装地图页，先动态导入运行时再加载页面
+- `app/map-runtime.ts` 的 `setupMapRuntime()` 负责 `setWorkerUrl`、Worker 数量和 maplibre-gl 的 CSS，可以重复调用。Worker 数量是 `min(4, max(1, ⌊核数 / 2⌋))`（`workerCountFor`，ADR 0041 第 7 节）：Chrome 下 MapLibre 默认只有 1 个，5C.1b 实测 4 个时全选快约 40%，再多主线程更卡；要在第一张地图创建 Worker 池之前设置；路由用 `withMapRuntime(loadPage)` 包装地图页，先动态导入运行时再加载页面
 - 登录页不请求 maplibre-gl；生产产物里没有 maplibre-gl 和开发页，入口包不变
 - 开发页 `/dev/map`（`pages/dev/map`，只在开发环境）用本地 GeoJSON 验证过：颜色切换、加上和去掉 `minzoom`（去掉时走"删除再添加"，图层仍在描边下面）、高亮的增删和移动（`setGeoJSONSourceData`）、拖动（`user`）、`flyTo` 与 `fitBounds`（`program`）、暂停后模拟三维改相机再恢复（俯角 70° 收到 60° 按 `sync` 写回）。5A.2c 起开发页改用 map-vue（见 [map-vue.md](map-vue.md)"开发页验证"），页面拿不到视图的暂停、恢复和直接写相机，暂停与模拟三维的场景暂时去掉，由 `MapLibreView` 的单元测试覆盖，三维阶段加入框架切换后再回到开发页
 - `fitBounds` 带 padding 后，会话相机记的是画布几何中心：右侧留 360px 时偏东 1.35°，与按像素换算的 1.34° 吻合

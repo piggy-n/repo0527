@@ -62,7 +62,7 @@ const generators =
 | 字段 | 值 | 说明 |
 |---|---|---|
 | `include` | `['src/**/*.browser.test.{ts,tsx}']` | 只有依赖真实引擎或真实布局的用例 |
-| `setupFiles` | `['src/test-setup.ts', 'src/test-setup.browser.ts']` | 后者调用 app 的 `setupMapRuntime()`：Worker 地址和 MapLibre 的 CSS 与生产用同一份装配 |
+| `setupFiles` | `['src/test-setup.ts', 'src/test-setup.browser.ts']` | 后者调用 app 的 `setupMapRuntime()`：Worker 地址、Worker 数量和 MapLibre 的 CSS 与生产用同一份装配 |
 | `browser.enabled` | `true` | 默认是 `false`：不写的话这些用例仍在 Node / jsdom 里跑（读 Vitest 5.0.2 的源码确认：`resolved.browser.enabled ??= false`） |
 | `browser.provider` | `playwright({ launchOptions: { args: ['--use-angle=swiftshader'] } })` | Playwright 驱动 Chromium；显式选软件渲染，减少本机和 CI 之间渲染后端的差异 |
 | `browser.headless` | `true` | 不弹出浏览器窗口，CI 也能跑 |
