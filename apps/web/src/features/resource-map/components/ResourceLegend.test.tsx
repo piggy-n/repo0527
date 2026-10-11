@@ -1,6 +1,7 @@
 import type { CameraState } from '@yzt/map-core';
 import { provideMap } from '@yzt/map-vue';
-import { mount, type VueWrapper } from '@vue/test-utils';
+import { type DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
+import { ElColorPicker } from 'element-plus';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick, shallowRef } from 'vue';
 import type { ResourceTreeLayer } from '../api';
@@ -53,6 +54,15 @@ function button(wrapper: VueWrapper, label: string) {
 
 async function openLegend(wrapper: VueWrapper) {
   await wrapper.findAll('button').find(item => item.text() === '图例')?.trigger('click');
+}
+
+// jsdom 里点 label 不会切换单选按钮，直接设置里面的 input（同底图面板的测试）；在一个条目里找，几个条目会有同名的选项
+async function choose(entry: Pick<DOMWrapper<Element>, 'findAll'>, text: string) {
+  const label = entry.findAll('label').find(item => item.text() === text);
+  if (!label) {
+    throw new Error(`没有选项 ${text}`);
+  }
+  await label.get('input').setValue(true);
 }
 
 const entries = (wrapper: VueWrapper) => wrapper.findAll('[data-legend]').map(item => item.attributes('data-legend'));
@@ -187,15 +197,64 @@ describe('ResourceLegend', () => {
     expect(wrapper.get('[data-landuse="0201K"] [data-swatch]').attributes('style')).toContain('rgba(0, 0, 255, 0.5)');
   });
 
-  it('按属性配色的资源选了统一样式：展开后不再列出取值', async () => {
+  it('按属性配色：切换到统一样式时展开的是统一样式的编辑器、名称前显示预览；恢复默认恢复这个资源的全部', async () => {
     const { wrapper, owner, symbols } = mountLegend();
-    owner.setCheckedMany(['csxhjctb_hydl'], true);
-    symbols.setMode('csxhjctb_hydl', 'uniform');
+    owner.setChecked('csxhjctb_hydl', true);
+    symbols.setSymbol({ code: 'csxhjctb_hydl', item: '水渠' }, { width: 'L' });
+    await openLegend(wrapper);
+    await button(wrapper, '展开水域线层').trigger('click');
+    const entry = () => wrapper.get('[data-legend="csxhjctb_hydl"]');
+    const rowSwatch = () => entry().find('button[aria-label="收起水域线层"] [data-swatch]');
+    expect(rowSwatch().exists()).toBe(false);
+    expect(entry().find('[data-value="河流"]').exists()).toBe(true);
+
+    await choose(entry(), '统一样式');
+    expect(symbols.modeOf('csxhjctb_hydl')).toBe('uniform');
+    expect(entry().find('[data-value="河流"]').exists()).toBe(false);
+    expect(entry().find('[data-symbol-editor="csxhjctb_hydl"]').exists()).toBe(true);
+    expect(rowSwatch().exists()).toBe(true);
+
+    await button(wrapper, '恢复水域线层的默认符号').trigger('click');
+    expect(symbols.isCustomized('csxhjctb_hydl')).toBe(false);
+    expect(entry().find('[data-value="河流"]').exists()).toBe(true);
+    expect(button(wrapper, '恢复水域线层的默认符号').attributes('disabled')).toBeDefined();
+  });
+
+  it('按取值配色：展开一个取值编辑它，同一时间只展开一个', async () => {
+    const { wrapper, owner, symbols } = mountLegend();
+    owner.setChecked('csxhjctb_hydl', true);
     await openLegend(wrapper);
     await button(wrapper, '展开水域线层').trigger('click');
 
-    const texts = wrapper.get('[data-legend="csxhjctb_hydl"]').findAll('li').map(item => item.text());
-    expect(texts).not.toContain('河流');
+    await button(wrapper, '展开水渠').trigger('click');
+    expect(wrapper.find('[data-symbol-editor="水渠"]').exists()).toBe(true);
+    await choose(wrapper.get('[data-symbol-editor="水渠"]'), 'XL');
+    expect(symbols.overrides.value.get('csxhjctb_hydl')).toStrictEqual({ items: { 水渠: { width: 'XL' } } });
+
+    await button(wrapper, '展开河流').trigger('click');
+    expect(wrapper.find('[data-symbol-editor="河流"]').exists()).toBe(true);
+    expect(wrapper.find('[data-symbol-editor="水渠"]').exists()).toBe(false);
+    await button(wrapper, '收起河流').trigger('click');
+    expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
+  });
+
+  it('地类：展开一个地类编辑它，同一时间只展开一个', async () => {
+    const { wrapper, symbols } = mountLegend();
+    await openLegend(wrapper);
+    await wrapper.get('input[placeholder="搜索编码或名称"]').setValue('010');
+
+    await button(wrapper, '展开水田').trigger('click');
+    const fill = wrapper.findAllComponents(ElColorPicker).find(item => item.props('ariaLabel') === '水田的填充色');
+    fill?.vm.$emit('change', 'rgba(0, 0, 255, 0.5)');
+    expect(symbols.overrides.value.get('bgdc_dltb')).toStrictEqual({ items: { '0101': { fillColor: 'rgba(0, 0, 255, 0.5)' } } });
+    await nextTick();
+    expect(wrapper.get('[data-landuse="0101"] [data-swatch]').attributes('style')).toContain('rgba(0, 0, 255, 0.5)');
+
+    await button(wrapper, '展开旱地').trigger('click');
+    expect(wrapper.find('[data-symbol-editor="0103"]').exists()).toBe(true);
+    expect(wrapper.find('[data-symbol-editor="0101"]').exists()).toBe(false);
+    await button(wrapper, '收起旱地').trigger('click');
+    expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
   });
 
   it('地类图例：默认现状分类，可以切换和搜索；含义放在 title，可调整地类有标记', async () => {

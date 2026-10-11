@@ -1,0 +1,29 @@
+// 联调用的样式，5D 再设计
+
+.values {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-regular);
+}
+
+// Element 按钮把内容包在一层 span 里，按钮上的 gap 作用不到文字，用外边距隔开
+.swatch {
+  margin-right: var(--space-xs);
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// 编辑器缩进到箭头后面
+.editor {
+  padding: var(--space-xs) 0 var(--space-xs) 20px;
+}

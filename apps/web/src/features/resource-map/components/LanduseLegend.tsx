@@ -1,9 +1,11 @@
 import { ArrowDown, ArrowRight, Search } from '@element-plus/icons-vue';
 import { ElButton, ElInput, ElRadioButton, ElRadioGroup } from 'element-plus';
-import { computed, defineComponent, type PropType, ref } from 'vue';
+import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
+import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LanduseLegendItem, type LanduseLegendView, type LegendSwatch, landuseLegend } from '../legend';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
 import styles from './LanduseLegend.module.scss';
+import { SymbolEditor } from './SymbolEditor';
 
 // 现状分类是土地利用现状分类（表 A.1），工作分类是第三次全国国土调查工作分类（表 A.2）
 const VIEWS: readonly { readonly value: LanduseLegendView; readonly label: string }[] = [
@@ -12,22 +14,15 @@ const VIEWS: readonly { readonly value: LanduseLegendView; readonly label: strin
   { value: 'all', label: '全部' }
 ];
 
-// 一个地类：含义说明放在 title 里
-function renderItem(item: LanduseLegendItem, swatch: LegendSwatch | undefined) {
-  return (
-    <li key={item.key} class={styles.item} title={item.meaning} data-landuse={item.code ?? item.name}>
-      {swatch && <LegendSwatchIcon swatch={swatch} />}
-      {item.code !== null && <span class={styles.code}>{item.code}</span>}
-      <span class={styles.name}>{item.name}</span>
-      {item.adjustable && <span class={styles.tag}>可调整</span>}
-    </li>
-  );
-}
-
-/** 地类图例（ADR 0043）：三种展示、按编码或名称搜索、分组展开；预览由图例按符号推导后传入 */
+/**
+ * 地类图例（ADR 0043、0044）：三种展示、按编码或名称搜索、分组展开；预览由图例按符号推导后传入。
+ * 展开一个地类编辑它在分类样式里的符号，同一时间只展开一个
+ */
 export const LanduseLegend = defineComponent({
   name: 'LanduseLegend',
   props: {
+    symbols: { type: Object as PropType<ResourceSymbols>, required: true },
+    code: { type: String, required: true },
     /** 各地类的预览，按取值的键 */
     swatches: { type: Object as PropType<ReadonlyMap<string, LegendSwatch>>, required: true }
   },
@@ -36,6 +31,33 @@ export const LanduseLegend = defineComponent({
     const view = ref<LanduseLegendView>('status');
     const keyword = ref('');
     const expanded = ref<ReadonlySet<string>>(new Set());
+    const editing = ref<string | null>(null);
+
+    // 一个地类：含义说明放在 title 里
+    const renderItem = (item: LanduseLegendItem): VNode => {
+      const swatch = props.swatches.get(item.key);
+      const open = editing.value === item.key;
+      return (
+        <li key={item.key} title={item.meaning} data-landuse={item.code ?? item.name}>
+          <ElButton
+            link
+            class={styles.item}
+            icon={open ? ArrowDown : ArrowRight}
+            aria-label={`${open ? '收起' : '展开'}${item.name}`}
+            onClick={() => (editing.value = open ? null : item.key)}>
+            {swatch && <LegendSwatchIcon class={styles.swatch} swatch={swatch} />}
+            {item.code !== null && <span class={styles.code}>{item.code}</span>}
+            <span class={styles.name}>{item.name}</span>
+            {item.adjustable && <span class={styles.tag}>可调整</span>}
+          </ElButton>
+          {open && (
+            <div class={styles.editor}>
+              <SymbolEditor symbols={props.symbols} target={{ code: props.code, item: item.key }} name={item.name} />
+            </div>
+          )}
+        </li>
+      );
+    };
     const sections = computed(() => landuseLegend(view.value, keyword.value));
     const searching = computed(() => keyword.value.trim() !== '');
 
@@ -90,9 +112,7 @@ export const LanduseLegend = defineComponent({
                   {section.name}
                   <span class={styles.sectionCount}>{section.items.length}</span>
                 </ElButton>
-                {open && (
-                  <ul class={styles.items}>{section.items.map(item => renderItem(item, props.swatches.get(item.key)))}</ul>
-                )}
+                {open && <ul class={styles.items}>{section.items.map(renderItem)}</ul>}
               </li>
             );
           })}

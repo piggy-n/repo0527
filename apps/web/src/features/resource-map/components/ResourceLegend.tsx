@@ -1,46 +1,28 @@
 import { ArrowDown, ArrowRight, Close, Collection } from '@element-plus/icons-vue';
 import { useMapOverlay } from '@yzt/map-vue';
-import { ElButton, ElPopconfirm } from 'element-plus';
+import { ElButton, ElPopconfirm, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LegendEntry, legendEntries, legendEntrySet } from '../legend';
+import type { SymbolMode } from '../resource-symbols';
 import { LanduseLegend } from './LanduseLegend';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
 import styles from './ResourceLegend.module.scss';
 import { SymbolEditor } from './SymbolEditor';
+import { ValueLegend } from './ValueLegend';
 
 const BADGES: Readonly<Record<Exclude<LegendEntry['kind'], 'symbol'>, string>> = { values: '分类', landuse: '地类' };
 
-// 按属性配色的条目展开后的内容：地类是完整的地类图例，按取值配色是取值和预览；统一符号展开后是编辑器
-function renderContent(entry: Exclude<LegendEntry, { kind: 'symbol' }>): VNode {
-  if (entry.mode === 'uniform') {
-    return (
-      <div class={styles.value}>
-        <LegendSwatchIcon swatch={entry.swatch} />
-        统一样式
-      </div>
-    );
-  }
-  if (entry.kind === 'landuse') {
-    return <LanduseLegend swatches={entry.swatches} />;
-  }
-  return (
-    <ul class={styles.values}>
-      {entry.values.map(value => (
-        <li key={value.key} class={styles.value}>
-          <LegendSwatchIcon swatch={value.swatch} />
-          {value.label}
-        </li>
-      ))}
-    </ul>
-  );
-}
+const MODES: readonly { readonly value: SymbolMode; readonly label: string }[] = [
+  { value: 'classified', label: '分类样式' },
+  { value: 'uniform', label: '统一样式' }
+];
 
 /**
  * 资源图层的图例（ADR 0043、0044，联调用的界面，5D 再设计）：勾选的资源按叠放顺序各一条，内容从样式登记表和符号覆盖推导，
- * 不读地图、不等视图就绪；统一符号的条目展开后可以编辑符号。面板进入页面时总是收起；按属性配色的条目在集合变化后只剩一条时
- * 自动展开，统一符号展开是编辑，不自动展开。登记为贴右边的悬浮元素
+ * 不读地图、不等视图就绪；统一符号的条目展开后可以编辑符号，按属性配色的条目可以切换样式方式、编辑各取值。
+ * 面板进入页面时总是收起；按属性配色的条目在集合变化后只剩一条时自动展开，统一符号展开是编辑，不自动展开。登记为贴右边的悬浮元素
  */
 export const ResourceLegend = defineComponent({
   name: 'ResourceLegend',
@@ -79,7 +61,53 @@ export const ResourceLegend = defineComponent({
       expanded.value = next;
     };
 
-    // 统一符号在名称前显示预览，按属性配色在名称后显示类别
+    const selectMode = (code: string, value: unknown) => {
+      const mode = MODES.find(item => item.value === value);
+      if (mode) {
+        props.symbols.setMode(code, mode.value);
+      }
+    };
+
+    // 按属性配色的条目展开后：样式方式和恢复这个资源的默认；统一样式是编辑器，分类样式是各取值（地类是完整的地类图例）
+    const renderClassified = (entry: Exclude<LegendEntry, { kind: 'symbol' }>): VNode => {
+      const target = { code: entry.code };
+      let body: VNode;
+      if (entry.mode === 'uniform') {
+        body = <SymbolEditor symbols={props.symbols} target={target} name={entry.name} />;
+      } else if (entry.kind === 'landuse') {
+        body = <LanduseLegend symbols={props.symbols} code={entry.code} swatches={entry.swatches} />;
+      } else {
+        body = <ValueLegend symbols={props.symbols} code={entry.code} values={entry.values} />;
+      }
+      return (
+        <div class={styles.classified}>
+          <div class={styles.modes}>
+            <ElRadioGroup
+              size="small"
+              modelValue={entry.mode}
+              onUpdate:modelValue={value => selectMode(entry.code, value)}>
+              {MODES.map(mode => (
+                <ElRadioButton key={mode.value} value={mode.value}>
+                  {mode.label}
+                </ElRadioButton>
+              ))}
+            </ElRadioGroup>
+            <ElButton
+              link
+              type="primary"
+              size="small"
+              disabled={!props.symbols.isCustomized(entry.code)}
+              aria-label={`恢复${entry.name}的默认符号`}
+              onClick={() => props.symbols.resetResource(entry.code)}>
+              恢复默认
+            </ElButton>
+          </div>
+          {body}
+        </div>
+      );
+    };
+
+    // 统一符号（和选了统一样式的条目）在名称前显示预览，按属性配色在名称后显示类别
     const renderEntry = (entry: LegendEntry): VNode => {
       const isOpen = expanded.value.has(entry.code);
       return (
@@ -90,7 +118,9 @@ export const ResourceLegend = defineComponent({
             icon={isOpen ? ArrowDown : ArrowRight}
             aria-label={`${isOpen ? '收起' : '展开'}${entry.name}`}
             onClick={() => toggle(entry.code)}>
-            {entry.kind === 'symbol' && <LegendSwatchIcon class={styles.swatch} swatch={entry.swatch} />}
+            {(entry.kind === 'symbol' || entry.mode === 'uniform') && (
+              <LegendSwatchIcon class={styles.swatch} swatch={entry.swatch} />
+            )}
             <span class={styles.name}>{entry.name}</span>
             {entry.kind !== 'symbol' && <span class={styles.badge}>{BADGES[entry.kind]}</span>}
           </ElButton>
@@ -99,7 +129,7 @@ export const ResourceLegend = defineComponent({
               {entry.kind === 'symbol' ? (
                 <SymbolEditor symbols={props.symbols} target={{ code: entry.code }} name={entry.name} />
               ) : (
-                renderContent(entry)
+                renderClassified(entry)
               )}
             </div>
           )}

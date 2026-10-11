@@ -31,11 +31,14 @@
 }
 
 .item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
   font-size: var(--font-size-xs);
   color: var(--color-text-regular);
+}
+
+// 地类的内容在 Element 按钮里，用外边距隔开
+.swatch,
+.code {
+  margin-right: var(--space-xs);
 }
 
 .code {
@@ -51,11 +54,17 @@
 
 .tag {
   flex: none;
+  margin-left: var(--space-xs);
   padding: 0 var(--space-xs);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xxs);
   color: var(--color-warning);
   background-color: var(--color-warning-bg);
+}
+
+// 编辑器缩进到地类的箭头后面
+.editor {
+  padding: var(--space-xs) 0 var(--space-xs) 20px;
 }
 
 .empty {
