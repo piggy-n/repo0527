@@ -1,0 +1,159 @@
+import type { Resource } from './catalog';
+import {
+  LANDUSE_FALLBACK_COLOR,
+  LANDUSE_GROUPS,
+  LANDUSE_LEGACY_NAME_COLORS,
+  LANDUSE_MEANINGS,
+  LANDUSE_STATUS_GROUPS,
+  type LanduseClass,
+  type LanduseGroup
+} from './landuse';
+import type { ResourceLayersState } from './resource-layers';
+import { type ResourceLayerStyle, resourceLayerStyle, resourceStyle, valueColors } from './style-registry';
+
+// 图例的推导（ADR 0043）：输入是显示状态和样式登记表，不读地图；颜色取自分组推导用的同一份数据
+
+/** 一个符号的预览：面是填充加描边，线是一段线，点是带描边的圆点 */
+export type LegendSwatch =
+  | { readonly geometry: 'fill'; readonly fill: string; readonly outline: string }
+  | { readonly geometry: 'line'; readonly color: string }
+  | { readonly geometry: 'circle'; readonly fill: string; readonly stroke: string };
+
+export interface LegendValue {
+  readonly label: string;
+  readonly swatch: LegendSwatch;
+}
+
+/** 图例的一条：统一符号、按取值配色、地类（按编码或按名称配色，内容是完整的地类图例） */
+export type LegendEntry =
+  | { readonly kind: 'symbol'; readonly code: string; readonly name: string; readonly swatch: LegendSwatch }
+  | { readonly kind: 'values'; readonly code: string; readonly name: string; readonly values: readonly LegendValue[] }
+  | { readonly kind: 'landuse'; readonly code: string; readonly name: string; readonly match: 'code' | 'name' };
+
+// 统一符号的颜色在登记表里都是字符串；按属性配色时主色是表达式，换成取值对应的颜色
+const colorText = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+function swatchOf(style: ResourceLayerStyle, color?: string): LegendSwatch {
+  if (style.type === 'fill') {
+    const fill = color ?? colorText(style.paint['fill-color']);
+    // 按属性配色的面不另设描边，MapLibre 用填充色描边
+    return { geometry: 'fill', fill, outline: colorText(style.paint['fill-outline-color']) || fill };
+  }
+  if (style.type === 'line') {
+    return { geometry: 'line', color: color ?? colorText(style.paint['line-color']) };
+  }
+  return {
+    geometry: 'circle',
+    fill: color ?? colorText(style.paint['circle-color']),
+    stroke: colorText(style.paint['circle-stroke-color'])
+  };
+}
+
+function legendEntry(resource: Resource): LegendEntry {
+  const { code, name } = resource;
+  const rule = resourceStyle(code).color;
+  const style = resourceLayerStyle(resource);
+  if (rule?.kind === 'landuse-code' || rule?.kind === 'landuse-name') {
+    return { kind: 'landuse', code, name, match: rule.kind === 'landuse-code' ? 'code' : 'name' };
+  }
+  if (rule) {
+    const values = valueColors(rule).map(([label, color]) => ({ label, swatch: swatchOf(style, color) }));
+    return { kind: 'values', code, name, values: [...values, { label: '其他', swatch: swatchOf(style, rule.fallback) }] };
+  }
+  return { kind: 'symbol', code, name, swatch: swatchOf(style) };
+}
+
+/** 图例的条目：勾选且配置合法的资源，按叠放顺序从上到下（ADR 0043 第 1 节） */
+export function legendEntries(state: ResourceLayersState, invalid: ReadonlyMap<string, unknown>): LegendEntry[] {
+  return state.order.flatMap(code => {
+    const resource = state.catalog?.resources.get(code);
+    const display = state.displays.get(code);
+    return resource && display?.checked && !invalid.has(code) ? [legendEntry(resource)] : [];
+  });
+}
+
+/** 条目的集合：只看有哪些资源，不看顺序；集合变化后只剩一条时自动展开这一条 */
+export function legendEntrySet(entries: readonly LegendEntry[]): string {
+  return entries
+    .map(entry => entry.code)
+    .toSorted()
+    .join('|');
+}
+
+/** 地类图例的三种展示：表 A.1 现状分类、表 A.2 工作分类、全部平铺 */
+export type LanduseLegendView = 'status' | 'work' | 'all';
+
+export interface LanduseLegendItem {
+  /** 历史地类和未匹配的地类没有编码 */
+  readonly code: string | null;
+  readonly name: string;
+  readonly color: string;
+  readonly meaning: string;
+  readonly adjustable: boolean;
+}
+
+export interface LanduseLegendSection {
+  readonly key: string;
+  /** 一级类的编码；平铺、历史地类、未匹配时为 null */
+  readonly code: string | null;
+  readonly name: string;
+  readonly items: readonly LanduseLegendItem[];
+}
+
+function itemOf({ code, name, color, adjustable }: LanduseClass): LanduseLegendItem {
+  return { code, name, color, meaning: LANDUSE_MEANINGS[code] ?? '', adjustable: adjustable === true };
+}
+
+// 表 A.2 之外：历史地类按名称配色（编码没命中时，或城镇村按名称），都没命中时是兜底色（ADR 0041 第 2 节）
+const LEGACY_SECTION: LanduseLegendSection = {
+  key: 'legacy',
+  code: null,
+  name: '历史地类',
+  items: Object.entries(LANDUSE_LEGACY_NAME_COLORS).map(([name, color]) => ({
+    code: null,
+    name,
+    color,
+    meaning: '表 A.2 之外的历史地类名称，编码没有对应的地类时按名称配色',
+    adjustable: false
+  }))
+};
+
+const UNMATCHED_SECTION: LanduseLegendSection = {
+  key: 'unmatched',
+  code: null,
+  name: '未匹配的地类',
+  items: [
+    {
+      code: null,
+      name: '未匹配的地类',
+      color: LANDUSE_FALLBACK_COLOR,
+      meaning: '编码和名称都没有对应的地类',
+      adjustable: false
+    }
+  ]
+};
+
+function sectionsOf(view: LanduseLegendView): LanduseLegendSection[] {
+  if (view === 'all') {
+    const items = LANDUSE_GROUPS.flatMap(group => group.classes.map(itemOf));
+    return [{ key: 'all', code: null, name: '全部地类', items }];
+  }
+  const groups: readonly LanduseGroup[] = view === 'status' ? LANDUSE_STATUS_GROUPS : LANDUSE_GROUPS;
+  return groups.map(({ code, name, classes }) => ({ key: code, code, name, items: classes.map(itemOf) }));
+}
+
+/**
+ * 地类图例（ADR 0043 第 2 节）：按所选的展示分组，最后是历史地类和未匹配的地类。
+ * 有关键字时（不区分大小写）留下编码或名称命中的地类；分组的编码或名称命中时留下整组；没有地类的分组不显示
+ */
+export function landuseLegend(view: LanduseLegendView, keyword = ''): LanduseLegendSection[] {
+  const needle = keyword.trim().toLowerCase();
+  const matches = (text: string | null) => text !== null && text.toLowerCase().includes(needle);
+  return [...sectionsOf(view), LEGACY_SECTION, UNMATCHED_SECTION].flatMap(section => {
+    if (needle === '' || matches(section.code) || matches(section.name)) {
+      return [section];
+    }
+    const items = section.items.filter(item => matches(item.code) || matches(item.name));
+    return items.length > 0 ? [{ ...section, items }] : [];
+  });
+}
