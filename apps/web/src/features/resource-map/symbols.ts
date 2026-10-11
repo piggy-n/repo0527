@@ -89,7 +89,15 @@ export const SYMBOL_FIELDS: Readonly<Record<ResourceGeometry, readonly SymbolFie
   fill: ['fillColor', 'outlineColor']
 };
 
-const COLOR_FIELDS: ReadonlySet<SymbolField> = new Set(['fillColor', 'strokeColor', 'color', 'outlineColor']);
+/** 颜色字段：比较差异、保存都用规范化后的值，拖动取色时可以预览 */
+export const COLOR_FIELDS = ['fillColor', 'strokeColor', 'color', 'outlineColor'] as const satisfies readonly SymbolField[];
+export type ColorField = (typeof COLOR_FIELDS)[number];
+
+const colorFields: readonly SymbolField[] = COLOR_FIELDS;
+
+export function isColorField(field: SymbolField): field is ColorField {
+  return colorFields.includes(field);
+}
 
 // 0～1 的颜色分量换成 0～255 的整数
 const channel = (component: number) => Math.round(component * 255);
@@ -144,7 +152,7 @@ export function sizeCurve(geometry: 'circle' | 'line', size: SymbolSize): Expres
 
 // 同一字段的两个值是否相同：颜色比较规范化后的值
 function sameValue(field: SymbolField, a: unknown, b: unknown): boolean {
-  if (COLOR_FIELDS.has(field) && typeof a === 'string' && typeof b === 'string') {
+  if (isColorField(field) && typeof a === 'string' && typeof b === 'string') {
     return normalizeColor(a) === normalizeColor(b);
   }
   return a === b;
@@ -179,20 +187,19 @@ export function resolveSymbol(defaults: ResourceSymbol, override: SymbolOverride
   };
 }
 
-/** 新的覆盖：在原有覆盖上改动这些字段，规范化后和默认相同的字段不记（ADR 0044 第 1、3 节） */
+/** 新的覆盖：在原有覆盖上改动这些字段（值为 undefined 的不算改动），规范化后和默认相同的字段不记（ADR 0044 第 1、3 节） */
 export function nextOverride(
   defaults: ResourceSymbol,
   override: SymbolOverride | undefined,
   patch: SymbolOverride
 ): SymbolOverride {
-  const merged: Partial<Record<SymbolField, unknown>> = { ...override, ...patch };
   const base: Partial<Record<SymbolField, unknown>> = defaults;
   const entries = SYMBOL_FIELDS[defaults.geometry].flatMap(field => {
-    const value = merged[field];
+    const value = patch[field] ?? override?.[field];
     if (value === undefined || sameValue(field, value, base[field])) {
       return [];
     }
-    return [[field, COLOR_FIELDS.has(field) && typeof value === 'string' ? normalizeColor(value) : value]];
+    return [[field, isColorField(field) && typeof value === 'string' ? normalizeColor(value) : value]];
   });
   // 字段和值都来自 SymbolOverride 自己，只是经过了 entries 的往返
   return Object.fromEntries(entries) as SymbolOverride;

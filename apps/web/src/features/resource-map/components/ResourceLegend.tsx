@@ -3,6 +3,7 @@ import { useMapOverlay } from '@yzt/map-vue';
 import { ElButton } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
 import type { ResourceLayers } from '../composables/useResourceLayers';
+import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LegendEntry, legendEntries, legendEntrySet } from '../legend';
 import { LanduseLegend } from './LanduseLegend';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
@@ -37,7 +38,8 @@ function renderContent(entry: LegendEntry): VNode | null {
 export const ResourceLegend = defineComponent({
   name: 'ResourceLegend',
   props: {
-    layers: { type: Object as PropType<ResourceLayers>, required: true }
+    layers: { type: Object as PropType<ResourceLayers>, required: true },
+    symbols: { type: Object as PropType<ResourceSymbols>, required: true }
   },
   setup(props) {
     const element = ref<HTMLElement>();
@@ -46,7 +48,9 @@ export const ResourceLegend = defineComponent({
     // 面板的开关和条目的展开都是图例自己的界面状态，不持久化
     const open = ref(false);
     const expanded = ref<ReadonlySet<string>>(new Set());
-    const entries = computed(() => legendEntries(props.layers.state.value, props.layers.configErrors.value));
+    const entries = computed(() =>
+      legendEntries(props.layers.state.value, props.layers.configErrors.value, props.symbols.overrideOf)
+    );
 
     // 只看条目的集合：透明度、顺序、年份的变化不改变集合，不会把手动收起的条目再展开
     watch(

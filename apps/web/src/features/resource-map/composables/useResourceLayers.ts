@@ -31,6 +31,7 @@ import {
   toStoredResourceLayers
 } from '../resource-layers-preference';
 import { resourceStyle } from '../style-registry';
+import type { ResourceSymbols } from './useResourceSymbols';
 
 /** 资源图层的拥有者（ADR 0041 第 3 节）：页面把 deriveGroup 绑定到 resources 分组，面板通过 props 拿到它 */
 export interface ResourceLayers {
@@ -66,6 +67,8 @@ export interface ResourceLayersOptions {
   readonly validate?: (catalog: ResourceCatalog | null, tileBase: string) => ReadonlyMap<string, readonly string[]>;
   /** 页面提供时记住上次的勾选、透明度、顺序和年份（ADR 0042）；不提供时不读不写 */
   readonly preferences?: PreferenceScope | null;
+  /** 用户调整的符号（ADR 0044 第 4 节），推导读它的覆盖和预览；不提供时都用默认符号 */
+  readonly symbols?: Pick<ResourceSymbols, 'overrideOf'> | null;
 }
 
 function reportToConsole(error: unknown): void {
@@ -207,6 +210,7 @@ export function useResourceLayers(
     setOpacity,
     setYear,
     move,
-    deriveGroup: () => resourcesGroup({ state: state.value, invalid: configErrors.value, tileBase })
+    deriveGroup: () =>
+      resourcesGroup({ state: state.value, invalid: configErrors.value, tileBase, overrideOf: options.symbols?.overrideOf })
   };
 }

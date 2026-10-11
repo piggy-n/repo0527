@@ -9,9 +9,10 @@ import {
   type LanduseGroup
 } from './landuse';
 import type { ResourceLayersState } from './resource-layers';
+import { noSymbolOverride, type SymbolOverrideOf } from './resource-symbols';
 import { type ResourceLayerStyle, resourceLayerStyle, resourceStyle, valueColors } from './style-registry';
 
-// 图例的推导（ADR 0043）：输入是显示状态和样式登记表，不读地图；颜色取自分组推导用的同一份数据
+// 图例的推导（ADR 0043）：输入是显示状态、样式登记表和符号覆盖，不读地图；颜色取自分组推导用的同一份数据（ADR 0044 第 4 节）
 
 /** 一个符号的预览：面是填充加描边，线是一段线，点是带描边的圆点 */
 export type LegendSwatch =
@@ -49,10 +50,11 @@ function swatchOf(style: ResourceLayerStyle, color?: string): LegendSwatch {
   };
 }
 
-function legendEntry(resource: Resource): LegendEntry {
+function legendEntry(resource: Resource, overrideOf: SymbolOverrideOf): LegendEntry {
   const { code, name } = resource;
-  const rule = resourceStyle(code).color;
-  const style = resourceLayerStyle(resource);
+  const registered = resourceStyle(code);
+  const rule = registered.color;
+  const style = resourceLayerStyle(resource, registered, overrideOf(code));
   if (rule?.kind === 'landuse-code' || rule?.kind === 'landuse-name') {
     return { kind: 'landuse', code, name, match: rule.kind === 'landuse-code' ? 'code' : 'name' };
   }
@@ -64,11 +66,15 @@ function legendEntry(resource: Resource): LegendEntry {
 }
 
 /** 图例的条目：勾选且配置合法的资源，按叠放顺序从上到下（ADR 0043 第 1 节） */
-export function legendEntries(state: ResourceLayersState, invalid: ReadonlyMap<string, unknown>): LegendEntry[] {
+export function legendEntries(
+  state: ResourceLayersState,
+  invalid: ReadonlyMap<string, unknown>,
+  overrideOf: SymbolOverrideOf = noSymbolOverride
+): LegendEntry[] {
   return state.order.flatMap(code => {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
-    return resource && display?.checked && !invalid.has(code) ? [legendEntry(resource)] : [];
+    return resource && display?.checked && !invalid.has(code) ? [legendEntry(resource, overrideOf)] : [];
   });
 }
 

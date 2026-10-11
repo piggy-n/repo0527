@@ -6,6 +6,7 @@ import {
 } from '@maplibre/maplibre-gl-style-spec';
 import type { StyleGroup } from '@yzt/map-core';
 import type { Resource, ResourceCatalog, ResourceGeometry } from './catalog';
+import { noSymbolOverride, type SymbolOverrideOf } from './resource-symbols';
 import {
   DEFAULT_OPACITY,
   resourceLayerStyle,
@@ -15,6 +16,7 @@ import {
   sourceLayerOf,
   tilesetOf
 } from './style-registry';
+import type { SymbolOverride } from './symbols';
 
 // 资源图层的显示状态与分组推导（ADR 0041 第 3、4 节），都是纯函数；拥有者 useResourceLayers 持有状态并调用它们
 
@@ -128,7 +130,8 @@ function resourceEntry(
   resource: Resource,
   { opacity, year }: ResourceDisplay,
   tileBase: string,
-  style: ResourceStyle
+  style: ResourceStyle,
+  override: SymbolOverride | undefined
 ): ResourceEntry {
   const id = resourceSourceId(resource.code);
   const { minzoom, promoteId } = style;
@@ -147,7 +150,7 @@ function resourceEntry(
     filter: GEOMETRY_FILTERS[resource.geometry],
     ...zoomRange
   };
-  const layerStyle = resourceLayerStyle(resource, style);
+  const layerStyle = resourceLayerStyle(resource, style, override);
   if (layerStyle.type === 'fill') {
     return { id, source, layer: { ...common, type: 'fill', paint: { ...layerStyle.paint, 'fill-opacity': opacity } } };
   }
@@ -161,7 +164,7 @@ function resourceEntry(
 
 /**
  * 逐个资源校验它的数据源和图层（ADR 0041 第 4 节），返回不合法的资源和原因；只在目录变化时调用。
- * 样式默认取登记表，参数留给测试和以后的符号覆盖（5C.5）
+ * 样式默认取登记表，参数留给测试；按默认符号校验，覆盖的取值已由拥有者和存储格式限定在合法范围（ADR 0044）
  */
 export function validateCatalog(
   catalog: ResourceCatalog | null,
@@ -172,7 +175,7 @@ export function validateCatalog(
   for (const resource of catalog?.resources.values() ?? []) {
     const display = { checked: true, opacity: DEFAULT_OPACITY, year: latestYear(resource) };
     try {
-      const { id, source, layer } = resourceEntry(resource, display, tileBase, styleOf(resource.code));
+      const { id, source, layer } = resourceEntry(resource, display, tileBase, styleOf(resource.code), undefined);
       const errors = validateStyleMin({ version: 8, sources: { [id]: source }, layers: [layer] });
       if (errors.length > 0) {
         invalid.set(resource.code, errors.map(({ message }) => message));
@@ -190,10 +193,17 @@ export interface ResourcesGroupInput {
   /** 校验不通过的资源，不进入推导 */
   readonly invalid: ReadonlyMap<string, unknown>;
   readonly tileBase: string;
+  /** 用户调整的符号（ADR 0044 第 4 节）；不传时都用默认符号 */
+  readonly overrideOf?: SymbolOverrideOf;
 }
 
 /** resources 分组：只有勾选且校验通过的资源，每个资源一个数据源、一个图层；面板上排在前面的画在上面 */
-export function resourcesGroup({ state, invalid, tileBase }: ResourcesGroupInput): StyleGroup {
+export function resourcesGroup({
+  state,
+  invalid,
+  tileBase,
+  overrideOf = noSymbolOverride
+}: ResourcesGroupInput): StyleGroup {
   const sources: Record<string, VectorSourceSpecification> = {};
   const layers: LayerSpecification[] = [];
   // order 从上到下，样式里的图层从下到上
@@ -201,7 +211,7 @@ export function resourcesGroup({ state, invalid, tileBase }: ResourcesGroupInput
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
     if (resource && display?.checked && !invalid.has(code)) {
-      const { id, source, layer } = resourceEntry(resource, display, tileBase, resourceStyle(code));
+      const { id, source, layer } = resourceEntry(resource, display, tileBase, resourceStyle(code), overrideOf(code));
       sources[id] = source;
       layers.push(layer);
     }

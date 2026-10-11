@@ -6,6 +6,7 @@ import { defineComponent, nextTick, shallowRef } from 'vue';
 import type { ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
 import { type ResourceLayers, useResourceLayers } from '../composables/useResourceLayers';
+import { type ResourceSymbols, useResourceSymbols } from '../composables/useResourceSymbols';
 import { ResourceLegend } from './ResourceLegend';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
@@ -29,17 +30,21 @@ const CATALOG = buildCatalog([
 
 function mountLegend() {
   let owner: ResourceLayers | undefined;
+  let symbolsOwner: ResourceSymbols | undefined;
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
-    const layers = useResourceLayers(map, { catalog: shallowRef(CATALOG), tileBase: 'http://localhost/tiles/' });
+    const catalog = shallowRef(CATALOG);
+    const symbols = useResourceSymbols({ catalog });
+    const layers = useResourceLayers(map, { catalog, tileBase: 'http://localhost/tiles/', symbols });
     owner = layers;
-    return () => <ResourceLegend layers={layers} />;
+    symbolsOwner = symbols;
+    return () => <ResourceLegend layers={layers} symbols={symbols} />;
   });
   const wrapper = mount(Page);
-  if (!owner) {
-    throw new Error('页面没有创建资源图层的拥有者');
+  if (!owner || !symbolsOwner) {
+    throw new Error('页面没有创建资源图层和符号的拥有者');
   }
-  return { wrapper, owner };
+  return { wrapper, owner, symbols: symbolsOwner };
 }
 
 function button(wrapper: VueWrapper, label: string) {
@@ -102,6 +107,25 @@ describe('ResourceLegend', () => {
       '水渠',
       '其他'
     ]);
+  });
+
+  it('预览和确认的符号都反映在图例上，丢弃预览后回到确认的颜色', async () => {
+    const { wrapper, owner, symbols } = mountLegend();
+    owner.setChecked('szy_kt', true);
+    await openLegend(wrapper);
+    const swatchStyle = () => wrapper.get('[data-legend="szy_kt"] span').attributes('style');
+
+    symbols.setUniform('szy_kt', { fillColor: 'rgba(0, 0, 255, 0.5)' });
+    await nextTick();
+    expect(swatchStyle()).toContain('background-color: rgba(0, 0, 255, 0.5)');
+
+    symbols.previewColor('szy_kt', 'fillColor', 'rgba(0, 128, 0, 0.8)');
+    await nextTick();
+    expect(swatchStyle()).toContain('background-color: rgba(0, 128, 0, 0.8)');
+
+    symbols.clearPreview();
+    await nextTick();
+    expect(swatchStyle()).toContain('background-color: rgba(0, 0, 255, 0.5)');
   });
 
   it('地类图例：默认现状分类，可以切换和搜索；含义放在 title，可调整地类有标记', async () => {

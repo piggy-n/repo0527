@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
 import type { ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
@@ -11,6 +12,7 @@ import {
   resourcesGroup
 } from './resource-layers';
 import { RESOURCE_PALETTE } from './style-registry';
+import { sizeCurve, type SymbolOverride } from './symbols';
 
 function layer(code: string, name: string, geoType: ResourceTreeLayer['geoType']) {
   return { code, name, geoType, yearList: [2022] as [number] };
@@ -128,6 +130,41 @@ describe('legendEntries', () => {
     expect(paintOf('szy_kt')).toMatchObject({ 'fill-color': fill, 'fill-outline-color': RESOURCE_PALETTE[4] });
     expect(entryOf(entries, 'szy_kt')).toMatchObject({ swatch: { fill } });
     expect(paintOf('csxhjctb_gyssp')).toMatchObject({ 'circle-color': RESOURCE_PALETTE[6] });
+  });
+
+  it('符号覆盖：图层和图例都从叠加后的符号推导；按属性配色的资源不用统一样式的覆盖', () => {
+    const overrides = new Map<string, SymbolOverride>([
+      ['szy_kt', { fillColor: 'rgba(0, 0, 255, 0.5)' }],
+      ['bgdc_cjdcqjx', { color: 'rgba(0, 128, 0, 1)', width: 'L', dash: 'dashed' }],
+      ['csxhjctb_gyssp', { strokeColor: 'rgba(0, 0, 0, 1)', size: 6, strokeWidth: 3 }],
+      ['csxhjctb_hydl', { color: 'rgba(0, 0, 0, 1)' }]
+    ]);
+    const overrideOf = (code: string) => overrides.get(code);
+    const tileBase = 'http://localhost/tiles/';
+    const group = resourcesGroup({ state: ALL, invalid: new Map(), tileBase, overrideOf });
+    const paintOf = (code: string) => group.layers.find(item => item.id === `resources-${code}`)?.paint;
+    const entries = legendEntries(ALL, new Map(), overrideOf);
+
+    expect(paintOf('szy_kt')).toMatchObject({ 'fill-color': 'rgba(0, 0, 255, 0.5)', 'fill-outline-color': RESOURCE_PALETTE[4] });
+    expect(entryOf(entries, 'szy_kt')).toMatchObject({ swatch: { fill: 'rgba(0, 0, 255, 0.5)', outline: RESOURCE_PALETTE[4] } });
+    expect(paintOf('bgdc_cjdcqjx')).toMatchObject({
+      'line-color': 'rgba(0, 128, 0, 1)',
+      'line-width': sizeCurve('line', 'L'),
+      'line-dasharray': [3, 2]
+    });
+    expect(entryOf(entries, 'bgdc_cjdcqjx')).toMatchObject({ swatch: { color: 'rgba(0, 128, 0, 1)' } });
+    expect(paintOf('csxhjctb_gyssp')).toMatchObject({
+      'circle-color': RESOURCE_PALETTE[6],
+      'circle-radius': sizeCurve('circle', 6),
+      'circle-stroke-color': 'rgba(0, 0, 0, 1)',
+      'circle-stroke-width': 3
+    });
+    expect(entryOf(entries, 'csxhjctb_gyssp')).toMatchObject({ swatch: { stroke: 'rgba(0, 0, 0, 1)' } });
+
+    const plain = resourcesGroup({ state: ALL, invalid: new Map(), tileBase });
+    expect(paintOf('csxhjctb_hydl')).toStrictEqual(plain.layers.find(item => item.id === 'resources-csxhjctb_hydl')?.paint);
+    expect(byCode(entries).csxhjctb_hydl).toStrictEqual(byCode(legendEntries(ALL, new Map())).csxhjctb_hydl);
+    expect(validateStyleMin({ version: 8, sources: group.sources, layers: group.layers.slice() })).toStrictEqual([]);
   });
 
   it('调整叠放顺序不改变颜色', () => {

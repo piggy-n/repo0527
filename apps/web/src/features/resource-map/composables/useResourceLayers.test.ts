@@ -1,10 +1,11 @@
 // @vitest-environment node
 import { NO_SOURCE_ERRORS, type SourceErrors } from '@yzt/map-core';
 import { describe, expect, it, vi } from 'vitest';
-import { effectScope, nextTick, shallowRef } from 'vue';
+import { computed, effectScope, nextTick, shallowRef } from 'vue';
 import type { ResourceTreeCategory, ResourceTreeLayer } from '../api';
 import { buildCatalog, type ResourceCatalog } from '../catalog';
 import { EMPTY_RESOURCE_LAYERS, validateCatalog } from '../resource-layers';
+import type { SymbolOverride } from '../symbols';
 import { type ResourceLayersOptions, useResourceLayers } from './useResourceLayers';
 
 const TILE_BASE = 'http://localhost:5173/backend/api/tiles/';
@@ -195,6 +196,20 @@ describe('useResourceLayers', () => {
     ]);
 
     expect(ctx.owner.tileErrors.value).toStrictEqual(new Set(['csxhjctb_hydl']));
+  });
+
+  it('推导读符号的覆盖和预览，只有它们变化时也重新推导', async () => {
+    const overrides = shallowRef<ReadonlyMap<string, SymbolOverride>>(new Map());
+    using ctx = await loaded({ symbols: { overrideOf: code => overrides.value.get(code) } });
+    ctx.owner.setChecked('bgdc_cjdcq', true);
+    const fillColors = computed(() =>
+      ctx.owner.deriveGroup().layers.map(item => (item.type === 'fill' ? item.paint?.['fill-color'] : undefined))
+    );
+    const [, landuse] = fillColors.value;
+
+    overrides.value = new Map([['bgdc_dltb', { fillColor: 'rgba(0, 0, 0, 1)' }], ['bgdc_cjdcq', { fillColor: 'red' }]]);
+    // 地类图斑按属性配色，不用统一样式的覆盖
+    expect(fillColors.value).toStrictEqual(['red', landuse]);
   });
 
   it('最小显示级别来自登记表', () => {

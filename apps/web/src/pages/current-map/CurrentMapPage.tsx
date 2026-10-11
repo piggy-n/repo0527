@@ -3,6 +3,7 @@ import { defineComponent, ref } from 'vue';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
+import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
@@ -40,7 +41,8 @@ export const CurrentMapPage = defineComponent({
     const basemap = useBasemap({ preferences });
     // 目录由查询加载和缓存，拥有者只管显示状态；还没有目录时重试，查询会回到 pending，不再是失败
     const catalogQuery = useResourceCatalogQuery();
-    const resources = useResourceLayers(map, { catalog: catalogQuery.data, preferences });
+    const symbols = useResourceSymbols({ catalog: catalogQuery.data, preferences });
+    const resources = useResourceLayers(map, { catalog: catalogQuery.data, preferences, symbols });
     const boundaries = useBoundaries({ preferences });
     const region = useRegionLocate(map, { goToDefaultView });
     const measure = useMeasure();
@@ -106,7 +108,7 @@ export const CurrentMapPage = defineComponent({
             <BasemapPanel basemap={basemap} />
             <BoundaryPanel boundaries={boundaries} />
             <div class={styles.legend}>
-              <ResourceLegend layers={resources} />
+              <ResourceLegend layers={resources} symbols={symbols} />
             </div>
           </div>
         </div>
