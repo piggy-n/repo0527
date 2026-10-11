@@ -720,11 +720,11 @@ describe('CurrentMapPage', () => {
     expect(pin(wrapper).attributes('style')).toContain('left: 200px; top: 100px;');
   });
 
-  it('资源目录加载后：默认勾选的地类图斑插在注记和边界之间；在列表里勾上别的资源就加到地图上', async () => {
+  it('资源目录加载后：默认勾选的地类图斑插在注记下面；在列表里勾上别的资源就加到地图上', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
 
-    expect(map.addedLayers).toContainEqual(['resources-bgdc_dltb', 'boundaries-province']);
+    expect(map.addedLayers).toContainEqual(['resources-bgdc_dltb', 'basemap-labels-vector']);
     // 没有资源的分类不显示
     expect(wrapper.text()).toContain('土地资源');
     expect(wrapper.text()).not.toContain('海洋资源');

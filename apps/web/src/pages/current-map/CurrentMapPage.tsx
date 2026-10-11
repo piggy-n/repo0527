@@ -24,9 +24,10 @@ import styles from './CurrentMapPage.module.scss';
 export const CurrentMapPage = defineComponent({
   name: 'CurrentMapPage',
   setup() {
-    // 资源图层在注记和边界之间（ADR 0033 第 4 条预计的顺序，注记要不要压在资源上面在 5C 定）；区划高亮在边界之上，测量在最上面
+    // 注记压在资源图层上面，地名不被不透明的地类图斑盖住（2026-10-11 定，ADR 0033 第 4 条留到 5C 的问题）；
+    // 边界压在注记上面，区划高亮在边界之上，测量在最上面
     const map = provideMap({
-      groups: ['basemap', 'basemap-labels', 'resources', 'boundaries', 'region', 'measure'],
+      groups: ['basemap', 'resources', 'basemap-labels', 'boundaries', 'region', 'measure'],
       camera: JIANGSU_CAMERA
     });
     // 第一次就绪时按江苏的范围定位；工具栏的"默认视角"、区划定位回到全省时回到这里
