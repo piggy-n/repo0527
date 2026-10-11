@@ -8,6 +8,7 @@ import { computed, defineComponent, onScopeDispose, ref, shallowRef } from 'vue'
 import { z } from 'zod';
 import { appConfig } from '@/shared/config/app-config';
 import { http } from '@/shared/http/client';
+import { LANDUSE_GROUPS } from '@/features/resource-map/landuse';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import styles from './DevResourcesPage.module.scss';
 
@@ -358,6 +359,30 @@ export const DevResourcesPage = defineComponent({
       return [...grouped.entries()];
     });
 
+    // 图例统计的耗时（5C.4，ADR 0021）：对地类图斑的图层做一次整屏 queryRenderedFeatures，另用 querySourceFeatures 对比；
+    // 两者都在主线程上同步执行，记下耗时、要素数和不同的地类编码。要先勾选地类图斑、等它画完
+    const landuseStats = ref<string[]>([]);
+    const countLanduse = () => {
+      const target = nativeMap;
+      if (!target?.getLayer('resources-bgdc_dltb-fill')) {
+        return;
+      }
+      const renderedStart = performance.now();
+      const rendered = target.queryRenderedFeatures({ layers: ['resources-bgdc_dltb-fill'] });
+      const renderedMs = Math.round(performance.now() - renderedStart);
+      const sourceStart = performance.now();
+      const fromSource = target.querySourceFeatures('resources-bgdc_dltb', { sourceLayer: 'bgdc_dltb_2022' });
+      const sourceMs = Math.round(performance.now() - sourceStart);
+      const codes = new Set(rendered.map(feature => String(feature.properties.dlbm)));
+      const known = new Set(LANDUSE_GROUPS.flatMap(group => group.classes.map(item => item.code)));
+      const unknown = [...codes].filter(code => !known.has(code));
+      landuseStats.value = [
+        `z${target.getZoom().toFixed(1)}：queryRenderedFeatures ${rendered.length} 个要素、${codes.size} 种编码、${renderedMs} ms；` +
+          `querySourceFeatures ${fromSource.length} 个、${sourceMs} ms；表外编码：${unknown.join('、') || '无'}`,
+        ...landuseStats.value
+      ];
+    };
+
     const fitJiangsu = () =>
       measure('回到全省', () => map.runCameraOperation(camera => camera.fitBounds(JIANGSU_BOUNDS, { duration: 0 })));
     const flyNanjing = (zoom: number) =>
@@ -382,6 +407,7 @@ export const DevResourcesPage = defineComponent({
             <ElButton onClick={fitJiangsu}>全省</ElButton>
             <ElButton onClick={() => flyNanjing(10)}>南京 z10</ElButton>
             <ElButton onClick={() => flyNanjing(13)}>南京 z13</ElButton>
+            <ElButton onClick={countLanduse}>统计地类</ElButton>
             <ElButton onClick={() => (measurements.value = [])}>清空记录</ElButton>
           </div>
           <div class={styles.options}>
@@ -484,6 +510,12 @@ export const DevResourcesPage = defineComponent({
                 ))}
               </tbody>
             </table>
+            <h3>地类统计（整屏）</h3>
+            <ul data-landuse-stats>
+              {landuseStats.value.map((line, index) => (
+                <li key={index}>{line}</li>
+              ))}
+            </ul>
             <h3>请求过的字形</h3>
             <ul data-glyphs>
               {glyphRanges.value.map((range, index) => (
