@@ -27,6 +27,7 @@ docs/
 ├─ modules/                   内部模块的用法与设计说明
 │  ├─ http.md                 shared/http：HTTP 客户端、ApiError、回调注入
 │  ├─ auth.md                 鉴权：会话、角色、页面权限、路由守卫、登录接口与表单
+│  ├─ storage.md              shared/storage：偏好的持久化（键值存储、偏好的范围、恢复与写入）
 │  ├─ composables.md          通用组合式函数：useDelayedFlag（延迟显示的加载状态）
 │  ├─ table.md                shared/table：列表的加载状态（骨架屏、遮罩、后台刷新）与 TableSkeleton
 │  ├─ query-form.md           shared/query-form：列表页的查询表单（按是否换行切换标签宽度与按钮位置）

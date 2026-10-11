@@ -141,6 +141,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "core-js": "^3.50.0",
     "element-plus": "^2.14.6",
     "geographiclib-geodesic": "^2.2.0",
+    "idb-keyval": "^6.3.0",
     "jwt-decode": "^4.0.0",
     "maplibre-gl": "^6.12.0",
     "nanoevents": "^10.0.0",
@@ -202,6 +203,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `@yzt/icons` | workspace 内部包（ADR 0014）。`workspace:*` 表示始终使用本仓库 `packages/icons` 的当前代码，pnpm 用符号链接连接，见 [internal-packages.md](internal-packages.md) | — |
 | `axios` | HTTP 请求，只在 `shared/http/client.ts` 中使用（ADR 0011） | ky、原生 fetch |
 | `zod` | 接口返回值的校验与类型推断（ADR 0011） | valibot、手写类型守卫 |
+| `idb-keyval` | 偏好存在 IndexedDB，只用 `createStore`、`get`、`set`、`del`，只在 `shared/storage/idb-store.ts` 中使用；一个数据库只放一个仓库（ADR 0042） | localStorage（同步、阻塞主线程、容量小）、idb（完整的封装，用不到事务和索引） |
 | `jwt-decode` | 读取登录 token 的过期时间，只在 `shared/auth/token.ts` 中使用；不校验签名（ADR 0015） | 手写 base64url 解码 |
 | `sm-crypto-v2` | 登录密码的 SM2 加密，只在 `features/auth/password.ts` 中使用；底层是 `@noble/curves`，已与旧项目的 sm-crypto 交叉验证兼容（ADR 0015） | sm-crypto |
 | `maplibre-gl` | 二维地图（ADR 0002、0019），只在 map-core 的适配器和 app 的装配中导入。6.x 只提供 ESM，Worker 由 app 用 `?worker&url` 导入后交给 `setWorkerUrl`；依赖里的 `@types/geojson`、`@maplibre/maplibre-gl-style-spec` 不会暴露给应用，要用时自己声明，版本与它保持一致。主模块约 1 MB、Worker 510 KB，地图页必须懒加载 | mapbox-gl（2.0 起为专有许可）、OpenLayers |
