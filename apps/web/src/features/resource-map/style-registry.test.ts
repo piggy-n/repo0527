@@ -5,6 +5,7 @@ import type { Resource, ResourceGeometry } from './catalog';
 import { LANDUSE_COLOR_BY_CODE, LANDUSE_COLOR_BY_NAME, LANDUSE_FALLBACK_COLOR } from './landuse';
 import {
   colorExpression,
+  defaultSymbol,
   paletteColor,
   RESOURCE_PALETTE,
   resourceLayerStyle,
@@ -12,6 +13,7 @@ import {
   sourceLayerOf,
   valueColors
 } from './style-registry';
+import { sizeCurve } from './symbols';
 import { colorOf, normalizeColor as color, parsesAsColor } from './test-expression';
 
 function resource(code: string, geometry: ResourceGeometry, index = 0): Resource {
@@ -127,6 +129,21 @@ describe('默认样式', () => {
       type: 'circle',
       paint: { 'circle-color': RESOURCE_PALETTE[3], 'circle-stroke-color': '#FFFFFF', 'circle-stroke-width': 1 }
     });
+  });
+
+  it('覆盖叠加到默认符号上（ADR 0044）：线宽、线型、颜色都换成覆盖的值', () => {
+    const line = resource('bgdc_cjdcqjx', 'line', 2);
+
+    expect(resourceLayerStyle(line, undefined, { width: 'L', dash: 'dashed', color: 'rgba(0, 0, 0, 1)' })).toMatchObject({
+      paint: { 'line-color': 'rgba(0, 0, 0, 1)', 'line-width': sizeCurve('line', 'L'), 'line-dasharray': [3, 2] }
+    });
+    expect(defaultSymbol(line)).toStrictEqual({ geometry: 'line', color: RESOURCE_PALETTE[2], width: 'M', dash: 'solid' });
+  });
+
+  it('按属性配色的资源在分类样式之前不受统一样式的覆盖影响', () => {
+    const hydl = resource('csxhjctb_hydl', 'line', 2);
+
+    expect(resourceLayerStyle(hydl, undefined, { color: 'rgba(0, 0, 0, 1)' })).toStrictEqual(resourceLayerStyle(hydl));
   });
 
   it('各种组合放进样式都能通过 MapLibre 的校验', () => {

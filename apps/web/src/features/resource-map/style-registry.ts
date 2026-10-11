@@ -1,13 +1,17 @@
-import {
-  type CircleLayerSpecification,
-  Color,
-  type ExpressionSpecification,
-  type FillLayerSpecification,
-  type LineLayerSpecification
-} from '@maplibre/maplibre-gl-style-spec';
+import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Resource } from './catalog';
 import { LANDUSE_COLOR_BY_CODE, LANDUSE_COLOR_BY_NAME, LANDUSE_FALLBACK_COLOR } from './landuse';
 import { matchExpression } from './match-expression';
+import {
+  LINE_LAYOUT,
+  type ResourceLayerStyle,
+  type ResourceSymbol,
+  resolveSymbol,
+  sizeCurve,
+  type SymbolOverride,
+  symbolPaint,
+  withAlpha
+} from './symbols';
 
 // 样式登记表（ADR 0041 第 2 节）：接口只给 code、名称、几何类型和年份，渲染细节按 code 登记在这里；
 // 只登记和默认值不同的部分。地图样式里的颜色是数据，不走 CSS 令牌
@@ -163,52 +167,49 @@ export function sourceLayerOf(code: string, year: number): string {
   return SOURCE_LAYER_EXCEPTIONS.get(tileset) ?? tileset;
 }
 
-/** 资源图层的类型和样式，不含透明度：透明度是显示状态，推导时再乘上 */
-export type ResourceLayerStyle =
-  | { readonly type: 'fill'; readonly paint: NonNullable<FillLayerSpecification['paint']> }
-  | {
-      readonly type: 'line';
-      readonly layout: NonNullable<LineLayerSpecification['layout']>;
-      readonly paint: NonNullable<LineLayerSpecification['paint']>;
-    }
-  | { readonly type: 'circle'; readonly paint: NonNullable<CircleLayerSpecification['paint']> };
+export type { ResourceLayerStyle } from './symbols';
 
-// 默认样式的数值沿用旧项目的默认符号（layerSymbolModel.js 的 M 档）
+// 统一符号的默认值（ADR 0044 第 2 节）：面是 0.35 透明度的填充加同色描边，线是实线、M 档，点是 M 档、白色 1 像素描边
 const FILL_ALPHA = 0.35;
-const LINE_WIDTH: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 6, 0.6, 10, 1, 14, 1.8, 17, 3];
-const CIRCLE_RADIUS: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 6, 2, 12, 4, 16, 6];
 
-function withAlpha(color: string, alpha: number): string {
-  const parsed = Color.parse(color) ?? Color.black;
-  return new Color(parsed.r, parsed.g, parsed.b, alpha, false).toString();
-}
-
-/** 默认样式按几何类型：面是半透明填充加同色描边（按属性配色的面用实色），线是实色，点是实色加白描边 */
-export function resourceLayerStyle(
-  resource: Resource,
-  style: ResourceStyle = resourceStyle(resource.code)
-): ResourceLayerStyle {
-  const rule = style.color;
+/** 不按属性配色的资源的默认符号，颜色按资源在目录里的顺序从配色板取 */
+export function defaultSymbol(resource: Resource): ResourceSymbol {
   const color = paletteColor(resource.index);
-  const mainColor = rule ? colorExpression(rule) : color;
-  if (resource.geometry === 'fill' && rule) {
-    return { type: 'fill', paint: { 'fill-color': mainColor } };
-  }
   if (resource.geometry === 'fill') {
-    return { type: 'fill', paint: { 'fill-color': withAlpha(color, FILL_ALPHA), 'fill-outline-color': color } };
+    return { geometry: 'fill', fillColor: withAlpha(color, FILL_ALPHA), outlineColor: color };
   }
   if (resource.geometry === 'line') {
-    return {
-      type: 'line',
-      layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: { 'line-color': mainColor, 'line-width': LINE_WIDTH }
-    };
+    return { geometry: 'line', color, width: 'M', dash: 'solid' };
+  }
+  return { geometry: 'circle', size: 'M', fillColor: color, strokeColor: '#FFFFFF', strokeWidth: 1 };
+}
+
+/**
+ * 资源图层的样式：不按属性配色的资源是默认符号加上用户的覆盖（ADR 0044）；
+ * 按属性配色的面用实色、不另设描边，线和点用 M 档（分类样式在 5C.5b）
+ */
+export function resourceLayerStyle(
+  resource: Resource,
+  style: ResourceStyle = resourceStyle(resource.code),
+  override?: SymbolOverride
+): ResourceLayerStyle {
+  const rule = style.color;
+  if (!rule) {
+    return symbolPaint(resolveSymbol(defaultSymbol(resource), override));
+  }
+  const mainColor = colorExpression(rule);
+  if (resource.geometry === 'fill') {
+    return { type: 'fill', paint: { 'fill-color': mainColor } };
+  }
+  if (resource.geometry === 'line') {
+    const paint = { 'line-color': mainColor, 'line-width': sizeCurve('line', 'M') };
+    return { type: 'line', layout: LINE_LAYOUT, paint };
   }
   return {
     type: 'circle',
     paint: {
       'circle-color': mainColor,
-      'circle-radius': CIRCLE_RADIUS,
+      'circle-radius': sizeCurve('circle', 'M'),
       'circle-stroke-color': '#FFFFFF',
       'circle-stroke-width': 1
     }
