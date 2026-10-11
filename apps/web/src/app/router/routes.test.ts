@@ -29,7 +29,7 @@ describe('路由表', () => {
   it('只有登录页、404 和开发页面不需要登录', () => {
     const publicNames = records.filter(({ meta }) => meta?.public).map(({ name }) => String(name));
 
-    expect(publicNames.toSorted()).toEqual([RouteName.login, RouteName.notFound, RouteName.devTheme, RouteName.devMap].toSorted());
+    expect(publicNames.toSorted()).toEqual([RouteName.login, RouteName.notFound, RouteName.devTheme, RouteName.devMap, RouteName.devResources].toSorted());
   });
 
   // 开发页面的约定见 AGENTS.md：页面在 pages/dev/<名称>/，路径 /dev/<名称>，路由名的值 dev-<名称>

@@ -67,6 +67,14 @@ const devRoutes: RouteRecordRaw[] = [
     name: RouteName.devMap,
     component: withMapRuntime(() => import('@/pages/dev/map/DevMapPage').then(({ DevMapPage }) => DevMapPage)),
     meta: { title: '地图开发页', public: true }
+  },
+  {
+    path: '/dev/resources',
+    name: RouteName.devResources,
+    component: withMapRuntime(() =>
+      import('@/pages/dev/resources/DevResourcesPage').then(({ DevResourcesPage }) => DevResourcesPage)
+    ),
+    meta: { title: '资源图层实测', public: true }
   }
 ];
 

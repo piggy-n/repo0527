@@ -5,6 +5,7 @@ export const RouteName = {
   notFound: 'not-found',
   devTheme: 'dev-theme',
   devMap: 'dev-map',
+  devResources: 'dev-resources',
   currentMap: 'current-map',
   landChangeQuery: 'land-change-query',
   spaceMonitoringQuery: 'space-monitoring-query',
