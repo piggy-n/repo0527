@@ -1,0 +1,50 @@
+// 联调用的样式，图层面板在 5C.2、界面在 5D 再设计；位置由页面决定
+
+.panel {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  // 下一级的分类和资源缩进一格
+  .list {
+    padding-left: var(--space-md);
+  }
+}
+
+.categoryName {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-regular);
+}
+
+.resource {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-sm);
+}
+
+.notice {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning);
+}
+
+.failure {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-danger-text);
+}
+
+.loading {
+  color: var(--color-text-secondary);
+}

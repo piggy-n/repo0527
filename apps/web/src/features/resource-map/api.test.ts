@@ -1,6 +1,7 @@
 import { HttpResponse, type JsonBodyType, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { configureHttp } from '@/shared/http/configure';
 import { ApiError } from '@/shared/http/errors';
 import { fetchResourceTree } from './api';
 import { resourceTreeData, resourceTreeResponse } from './test-data';
@@ -13,6 +14,7 @@ beforeAll(() => {
 
 afterEach(() => {
   server.resetHandlers();
+  configureHttp({});
 });
 
 afterAll(() => {
@@ -41,7 +43,7 @@ describe('fetchResourceTree', () => {
       geoType: 'Polygon',
       yearList: [2022]
     });
-    expect(tree[0]?.children[2]).toStrictEqual({ code: null, name: '森林', children: [] });
+    expect(tree[0]?.children[1]).toStrictEqual({ code: null, name: '海洋资源', children: [] });
   });
 
   it('几何类型不在 Polygon、Line、Point 之内：格式不符', async () => {
@@ -60,9 +62,12 @@ describe('fetchResourceTree', () => {
     await expect(fetchResourceTree()).rejects.toMatchObject({ kind: 'invalid-response' });
   });
 
-  it('业务码不是 200：抛出 ApiError', async () => {
+  it('业务码不是 200：抛出 ApiError，不弹全局提示（失败由资源列表显示并重试）', async () => {
+    const onError = vi.fn<(error: ApiError) => void>();
+    configureHttp({ onError });
     mockTree({ code: 500, msg: '系统异常', success: false, data: null });
 
     await expect(fetchResourceTree()).rejects.toBeInstanceOf(ApiError);
+    expect(onError).not.toHaveBeenCalled();
   });
 });

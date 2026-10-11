@@ -11,10 +11,14 @@ import {
   type MapSubscription,
   type ViewBounds
 } from '@yzt/map-core';
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { MapCanvas } from '@yzt/map-vue';
 import { mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { HttpResponse, http as mock } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
+import { resourceTreeResponse } from '@/features/resource-map/test-data';
 import cityFile from '@/shared/map/boundary/data/jiangsu-city.json?raw';
 import countyFile from '@/shared/map/boundary/data/jiangsu-county.json?raw';
 import { JIANGSU_BOUNDS } from '@/shared/map/jiangsu';
@@ -24,6 +28,7 @@ import { CurrentMapPage } from './CurrentMapPage';
 
 interface FakeEvent {
   readonly error?: Error;
+  readonly sourceId?: string;
   readonly originalEvent?: unknown;
   readonly cause?: unknown;
   readonly point?: { readonly x: number; readonly y: number };
@@ -216,9 +221,25 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES } = {})
     inheritAttrs: false,
     setup: (_, { attrs }) => () => <RealCanvas {...attrs} key={canvasKey.value} createMap={createMap} />
   });
-  const wrapper = mount(modules.page, { global: { stubs: { MapCanvas: CanvasWithFakeMap } } });
+  // 每个页面用新的查询缓存，资源目录不在用例之间残留
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = mount(modules.page, {
+    global: { plugins: [[VueQueryPlugin, { queryClient }]], stubs: { MapCanvas: CanvasWithFakeMap } }
+  });
   return { wrapper, maps, canvasKey };
 }
+
+// 资源树默认返回测试数据（结构同实测）；用例可以换成失败的响应
+const TREE_URL = '/backend/resource-map/base/tree';
+const server = setupServer(mock.get(TREE_URL, () => HttpResponse.json(resourceTreeResponse())));
+
+beforeAll(() => {
+  server.listen({ onUnhandledRequest: 'error' });
+});
+
+afterAll(() => {
+  server.close();
+});
 
 const jiangsu = [...JIANGSU_BOUNDS] as ViewBounds;
 const NANJING: ViewBounds = [118.357927, 31.230207, 119.236382, 32.616407];
@@ -253,6 +274,7 @@ function drawLine(map: FakeMap): void {
 }
 
 afterEach(() => {
+  server.resetHandlers();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -309,6 +331,16 @@ function pin(wrapper: PageWrapper) {
 function pinAt(wrapper: PageWrapper): [number, number] {
   const { left, top } = (pin(wrapper).element as HTMLElement).style;
   return [Math.round(Number.parseFloat(left)), Math.round(Number.parseFloat(top))];
+}
+
+// 资源列表里某个资源的一行
+function resourceRow(wrapper: PageWrapper, code: string): ReturnType<PageWrapper['get']> {
+  return wrapper.get(`[data-resource="${code}"]`);
+}
+
+// 某个分组新加入的图层：资源目录加载后地类图斑也会加入，与要检查的分组无关
+function addedLayersOf(map: FakeMap, group: string): [string, string | undefined][] {
+  return map.addedLayers.filter(([id]) => id.startsWith(`${group}-`));
 }
 
 // jsdom 没有 PointerEvent，用同名的 MouseEvent 代替
@@ -415,7 +447,7 @@ describe('CurrentMapPage', () => {
     await nextTick();
     expect(overlayItems(wrapper)).toStrictEqual([{ text: '单击添加节点，双击结束测距', x: 30, y: 40 }]);
     // 测量的图层叠在最上面：最上面的节点先加入，其余依次插在它下面
-    expect(map.addedLayers).toStrictEqual([
+    expect(addedLayersOf(map, 'measure')).toStrictEqual([
       ['measure-vertex', undefined],
       ['measure-line-drawing', 'measure-vertex'],
       ['measure-line-completed', 'measure-line-drawing'],
@@ -504,7 +536,7 @@ describe('CurrentMapPage', () => {
     await button(wrapper, '南京').trigger('click');
     await settle();
 
-    expect(map.addedLayers).toStrictEqual([
+    expect(addedLayersOf(map, 'region')).toStrictEqual([
       ['region-line', undefined],
       ['region-glow', 'region-line']
     ]);
@@ -686,6 +718,62 @@ describe('CurrentMapPage', () => {
     await pointer(wrapper, 'pointerup', 210, 120);
 
     expect(pin(wrapper).attributes('style')).toContain('left: 200px; top: 100px;');
+  });
+
+  it('资源目录加载后：默认勾选的地类图斑插在注记和边界之间；在列表里勾上别的资源就加到地图上', async () => {
+    const { wrapper, map } = await readyPage();
+    await vi.waitFor(() => expect(map.addedLayers.map(([id]) => id)).toContain('resources-bgdc_dltb'));
+
+    expect(map.addedLayers).toContainEqual(['resources-bgdc_dltb', 'boundaries-province']);
+    // 没有资源的分类不显示
+    expect(wrapper.text()).toContain('土地资源');
+    expect(wrapper.text()).not.toContain('海洋资源');
+    expect(wrapper.text()).not.toContain('公共库');
+    await resourceRow(wrapper, 'csxhjctb_hydl').get('input').setValue(true);
+    await settle();
+    expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
+  });
+
+  it('勾选了但级别不够的资源提示放大到几级；瓦片加载失败标在对应的资源上', async () => {
+    const { wrapper, map } = await readyPage();
+    await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
+    expect(resourceRow(wrapper, 'bgdc_cjdcq').text()).not.toContain('放大');
+
+    await resourceRow(wrapper, 'bgdc_cjdcq').get('input').setValue(true);
+    expect(resourceRow(wrapper, 'bgdc_cjdcq').text()).toContain('放大至第 9 级显示');
+    // 数据源的错误照样上报（默认打印到控制台）
+    using consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const tileError = new Error('Unable to parse the tile');
+    map.fire('error', { error: tileError, sourceId: 'resources-bgdc_dltb' });
+    await nextTick();
+    expect(resourceRow(wrapper, 'bgdc_dltb').text()).toContain('部分瓦片加载失败');
+    expect(consoleError).toHaveBeenCalledWith('[map-vue]', tileError);
+
+    map.moveTo([118.8, 32.05], 9, { originalEvent: new MouseEvent('wheel') });
+    await nextTick();
+    expect(resourceRow(wrapper, 'bgdc_cjdcq').text()).not.toContain('放大');
+  });
+
+  it('资源目录加载失败：列表显示失败和重试；重试期间显示加载中，成功后显示资源', async () => {
+    server.use(mock.get(TREE_URL, () => HttpResponse.json({ code: 500, msg: '系统异常', success: false, data: null })));
+    const { wrapper } = await readyPage();
+    await vi.waitFor(() => expect(wrapper.text()).toContain('资源目录加载失败'));
+
+    // 重试的请求先挂起，由用例决定什么时候返回
+    let release: (() => void) | undefined;
+    const released = new Promise<void>(resolve => (release = resolve));
+    server.use(
+      mock.get(TREE_URL, async () => {
+        await released;
+        return HttpResponse.json(resourceTreeResponse());
+      })
+    );
+    await button(wrapper, '重试').trigger('click');
+    await vi.waitFor(() => expect(wrapper.text()).toContain('正在加载资源目录'));
+    expect(wrapper.text()).not.toContain('资源目录加载失败');
+
+    release?.();
+    await vi.waitFor(() => expect(wrapper.find('[data-resource="bgdc_dltb"]').exists()).toBe(true));
   });
 
   it('画布尺寸变化后（相机不变、投影变了），测量标签和图钉立即重新投影', async () => {

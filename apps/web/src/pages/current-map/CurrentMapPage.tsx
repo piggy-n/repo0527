@@ -1,5 +1,8 @@
 import { MapCanvas, provideMap } from '@yzt/map-vue';
 import { defineComponent, ref } from 'vue';
+import { ResourceLayerList } from '@/features/resource-map/components/ResourceLayerList';
+import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
+import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundaryPanel } from '@/shared/map/boundary/BoundaryPanel';
@@ -21,15 +24,18 @@ import styles from './CurrentMapPage.module.scss';
 export const CurrentMapPage = defineComponent({
   name: 'CurrentMapPage',
   setup() {
-    // 边界压在注记上面，以后资源图层放在两者之间（ADR 0033 第 4 条）；区划高亮在边界之上，测量在最上面
+    // 资源图层在注记和边界之间（ADR 0033 第 4 条预计的顺序，注记要不要压在资源上面在 5C 定）；区划高亮在边界之上，测量在最上面
     const map = provideMap({
-      groups: ['basemap', 'basemap-labels', 'boundaries', 'region', 'measure'],
+      groups: ['basemap', 'basemap-labels', 'resources', 'boundaries', 'region', 'measure'],
       camera: JIANGSU_CAMERA
     });
     // 第一次就绪时按江苏的范围定位；工具栏的"默认视角"、区划定位回到全省时回到这里
     const { goToDefaultView } = useDefaultView(map);
 
     const basemap = useBasemap();
+    // 目录由查询加载和缓存，拥有者只管显示状态；还没有目录时重试，查询会回到 pending，不再是失败
+    const catalogQuery = useResourceCatalogQuery();
+    const resources = useResourceLayers(map, { catalog: catalogQuery.data });
     const boundaries = useBoundaries();
     const region = useRegionLocate(map, { goToDefaultView });
     const measure = useMeasure();
@@ -39,6 +45,7 @@ export const CurrentMapPage = defineComponent({
     map.bindStyle({
       basemap: basemap.deriveGroup,
       'basemap-labels': basemap.deriveLabelsGroup,
+      resources: resources.deriveGroup,
       boundaries: boundaries.deriveGroup,
       region: region.deriveGroup,
       measure: measure.deriveGroup
@@ -85,6 +92,11 @@ export const CurrentMapPage = defineComponent({
           )}
           <BasemapPanel basemap={basemap} />
           <BoundaryPanel boundaries={boundaries} />
+          <ResourceLayerList
+            layers={resources}
+            failed={catalogQuery.isError.value}
+            onRetry={() => void catalogQuery.refetch()}
+          />
         </div>
         <MapStatusNotice />
       </div>

@@ -57,9 +57,9 @@ describe('useResourceCatalogQuery', () => {
       'bgdc_cjdcq',
       'bgdc_cjdcqjx',
       'bgdc_dltb',
-      'szy_kt',
       'csxhjctb_hydl',
       'csxhjctb_gyssp',
+      'szy_kt',
       'gtkjgh_czkfbj'
     ]);
   });

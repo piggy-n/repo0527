@@ -30,7 +30,7 @@ const resourceCategorySchema: z.ZodType<ResourceTreeCategory> = z.object({
   }
 });
 
-/** 现状底图的资源树（ADR 0041）：顶层是基础库、公共库、主题库、三区三线四个分组 */
+/** 现状底图的资源树（ADR 0041）：顶层是基础库、公共库、主题库、三区三线四个分组；失败由资源列表显示并重试，不弹全局提示 */
 export function fetchResourceTree(signal?: AbortSignal) {
-  return http.get('/resource-map/base/tree', { schema: z.array(resourceCategorySchema), signal });
+  return http.get('/resource-map/base/tree', { schema: z.array(resourceCategorySchema), signal, silent: true });
 }
