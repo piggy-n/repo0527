@@ -44,7 +44,7 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 | 样式模型与提交 | 分组推导、整体替换，跨分组的修改一次提交，视图按修订号增量同步 | 0022（`failed` 的含义由 0026 修正） | [map-core.md](map-core.md) |
 | map-vue 上下文 | `provideMap`、`useMap`、`bindStyle`；`view` 只在就绪时有值，只有拾取和投影 | 0028（第 5 条由 0039 修正） | [map-vue.md](map-vue.md) |
 | 视图接口与二三维 | 共用生命周期、相机、输入、拾取、投影；相机事件带 `view` 和 `cause`；Cesium 镜像会话 | 0024 | [map-core.md](map-core.md) |
-| 视图失败 | 样式失败在出现新的提交时自动恢复；引擎失败只能重建视图；状态转换按表执行 | 0026（第 4 条由 0030 修正）、0030 | [map-core.md](map-core.md)"状态转换"、[map-vue.md](map-vue.md) |
+| 视图失败 | 样式失败在出现新的提交时自动恢复；引擎失败只能重建视图；状态转换按表执行；带数据源的错误（瓦片出错）不算样式失败，记作视图的数据源错误 | 0026（第 4 条由 0030 修正，第 1、2 条由 0041 修正）、0030、0041 | [map-core.md](map-core.md)"状态转换"、[map-vue.md](map-vue.md) |
 | 资源释放与运行时 | `Disposable`、nanoevents；maplibre-gl 的全局设置在首次进入地图时懒加载 | 0023 | [map-core.md](map-core.md) |
 | Worker | 二维不自建渲染 Worker；自建的 Worker 统一用通信层；瓦片数据服务的约束 | 0021（第 5 条由 0024 修正，第 3、4 条由 0025 补充）、0025 | [utils.md](utils.md) |
 | 定位可视区域 | 贴边的悬浮元素登记自己，定位时现量现算 padding | 0029 | [map-vue.md](map-vue.md) |
@@ -53,6 +53,7 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 | 交互工具 | 会话的工具模型，同一时间一个工具；工具只拿到 `ToolView`；工具栏的按钮和动作由页面给出 | 0034 | [map-core.md](map-core.md)、[map-vue.md](map-vue.md)、[shared-map.md](shared-map.md) |
 | 测量 | 椭球面计算（geographiclib）；`MeasureStore` 持有结果和两个工具 | 0035 | [map-core.md](map-core.md)、[shared-map.md](shared-map.md) |
 | 区划定位、坐标定位 | 本地区划目录与边界；经纬度的识别与格式只用纯函数；位置点可拖动 | 0036、0037 | [shared-map.md](shared-map.md) |
+| 资源图层 | feature `resource-map`：接口树 → 目录（纯函数）→ 样式登记表 → 按 `code` 的显示状态 → `resources` 分组；未勾选的不放进样式，每个资源一个图层，重的资源有最小显示级别；目录变化时逐个资源校验；瓦片错误从视图的数据源错误推导 | 0041 | [migration.md](../migration.md)"现状底图：资源图层实测" |
 | 相机操作与异步 | 用户发起的定位是一次操作，用信号判断是否作废；操作对象的 `run` 负责等待与再确认；可替换操作只认最新（`LatestController`）；revision / operation / version 各有一个意思 | 0038（第 1、3 条由 0039 修正）、0039 | [map-vue.md](map-vue.md)"相机操作"、[utils.md](utils.md) |
 
 ## 阅读顺序
