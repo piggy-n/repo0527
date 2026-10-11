@@ -1,0 +1,245 @@
+// @vitest-environment node
+import { featureFilter, type LayerSpecification, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
+import type { StyleGroup } from '@yzt/map-core';
+import { describe, expect, it } from 'vitest';
+import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
+import { buildCatalog } from './catalog';
+import {
+  EMPTY_RESOURCE_LAYERS,
+  mergeDisplayState,
+  resourceCodeOfSource,
+  type ResourceDisplay,
+  type ResourceLayersState,
+  resourcesGroup,
+  resourceSourceId,
+  resourceTileBase,
+  validateCatalog
+} from './resource-layers';
+import { resourceStyle } from './style-registry';
+
+const TILE_BASE = 'http://localhost:5173/backend/api/tiles/';
+
+function layer(code: string, geoType: ResourceTreeLayer['geoType'], ...yearList: [number, ...number[]]) {
+  return { code, name: code, geoType, yearList };
+}
+
+function catalogOf(...layers: ResourceTreeLayer[]) {
+  const tree: ResourceTreeCategory[] = [{ code: null, name: '测试', children: layers }];
+  return buildCatalog(tree);
+}
+
+const DLTB = layer('bgdc_dltb', 'Polygon', 2022);
+const CJDCQ = layer('bgdc_cjdcq', 'Polygon', 2023, 2024);
+const CJDCQJX = layer('bgdc_cjdcqjx', 'Line', 2022);
+const HYDL = layer('csxhjctb_hydl', 'Line', 2023, 2024, 2025);
+const GYSSP = layer('csxhjctb_gyssp', 'Point', 2025);
+const CZCDYD = layer('bgdc_czcdyd', 'Polygon', 2022);
+
+const CATALOG = catalogOf(DLTB, CJDCQ, CJDCQJX, HYDL, GYSSP);
+
+// 改一个资源的显示状态，返回新的状态
+function withDisplay(state: ResourceLayersState, code: string, change: Partial<ResourceDisplay>): ResourceLayersState {
+  const display = state.displays.get(code);
+  if (!display) {
+    throw new Error(`没有资源 ${code}`);
+  }
+  return { ...state, displays: new Map([...state.displays, [code, { ...display, ...change }]]) };
+}
+
+function checkAll(state: ResourceLayersState): ResourceLayersState {
+  return state.order.reduce((next, code) => withDisplay(next, code, { checked: true }), state);
+}
+
+function derive(state: ResourceLayersState, invalid: ReadonlyMap<string, unknown> = new Map()) {
+  return resourcesGroup({ state, invalid, tileBase: TILE_BASE });
+}
+
+// 水域线层的配色规则里取值重复：match 要求取值唯一，校验不通过
+function styleWithDuplicateValues(code: string) {
+  if (code !== 'csxhjctb_hydl') {
+    return resourceStyle(code);
+  }
+  return {
+    color: {
+      kind: 'values' as const,
+      property: 'ccn',
+      colors: [
+        ['河流', '#1E88E5'],
+        ['河流', '#4FC3F7']
+      ] as const,
+      fallback: '#2F80ED'
+    }
+  };
+}
+
+// 按 MapLibre 的语义求值过滤条件：这种几何类型的要素会被哪些图层画出
+function drawnBy(group: StyleGroup, type: 'Polygon' | 'MultiPolygon' | 'LineString' | 'Point'): string[] {
+  const feature = { type, properties: {} };
+  return group.layers
+    .filter(item => 'filter' in item && featureFilter(item.filter, item.id).filter({ zoom: 12 }, feature))
+    .map(({ id }) => id);
+}
+
+function layerOf(group: StyleGroup, code: string): LayerSpecification {
+  const found = group.layers.find(({ id }) => id === resourceSourceId(code));
+  if (!found) {
+    throw new Error(`分组里没有 ${code} 的图层`);
+  }
+  return found;
+}
+
+describe('ID 与地址', () => {
+  it('数据源和图层的 ID 以分组名为前缀，能反查资源', () => {
+    expect(resourceSourceId('bgdc_dltb')).toBe('resources-bgdc_dltb');
+    expect(resourceCodeOfSource('resources-bgdc_dltb')).toBe('bgdc_dltb');
+    expect(resourceCodeOfSource('boundaries-city')).toBeNull();
+  });
+
+  it('瓦片的基础地址是绝对地址', () => {
+    expect(resourceTileBase('/backend', 'http://localhost:5173')).toBe(TILE_BASE);
+  });
+});
+
+describe('mergeDisplayState', () => {
+  it('第一次合并：顺序同目录，默认值来自登记表（只有地类图斑默认勾选），年份取最新的一年，透明度 0.9', () => {
+    const state = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
+
+    expect(state.catalog).toBe(CATALOG);
+    expect(state.order).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'bgdc_cjdcqjx', 'csxhjctb_hydl', 'csxhjctb_gyssp']);
+    expect(state.displays.get('bgdc_dltb')).toStrictEqual({ checked: true, opacity: 0.9, year: 2022 });
+    expect(state.displays.get('csxhjctb_hydl')).toStrictEqual({ checked: false, opacity: 0.9, year: 2025 });
+  });
+
+  it('同一个目录：返回原来的状态对象', () => {
+    const state = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
+
+    expect(mergeDisplayState(state, CATALOG)).toBe(state);
+  });
+
+  it('目录刷新：仍有的资源保留勾选、透明度和顺序；目录里没有了的删掉', () => {
+    let state = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
+    state = withDisplay(state, 'csxhjctb_hydl', { checked: true, opacity: 0.4 });
+    state = withDisplay(state, 'bgdc_dltb', { checked: false });
+    state = { ...state, order: ['csxhjctb_hydl', 'bgdc_cjdcqjx', 'bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_gyssp'] };
+
+    const next = mergeDisplayState(state, catalogOf(DLTB, CJDCQ, HYDL, GYSSP));
+
+    expect(next.order).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_gyssp']);
+    expect(next.displays.get('csxhjctb_hydl')).toStrictEqual({ checked: true, opacity: 0.4, year: 2025 });
+    expect(next.displays.get('bgdc_dltb')?.checked).toBe(false);
+    expect(next.displays.has('bgdc_cjdcqjx')).toBe(false);
+  });
+
+  it('新出现的资源用默认值，插到目录里排在它后面的第一个已有资源之前，没有就排在最后', () => {
+    let state = mergeDisplayState(EMPTY_RESOURCE_LAYERS, catalogOf(DLTB, HYDL));
+    state = { ...state, order: ['csxhjctb_hydl', 'bgdc_dltb'] };
+
+    // 目录顺序：dltb、新 a、新 b、hydl、新 z
+    const next = mergeDisplayState(state, catalogOf(DLTB, CJDCQ, CJDCQJX, HYDL, GYSSP));
+
+    expect(next.order).toStrictEqual(['bgdc_cjdcq', 'bgdc_cjdcqjx', 'csxhjctb_hydl', 'bgdc_dltb', 'csxhjctb_gyssp']);
+    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({ checked: false, opacity: 0.9, year: 2024 });
+  });
+
+  it('年份：仍在资源的年份里就保留，否则改用最新的一年', () => {
+    let state = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
+    state = withDisplay(state, 'csxhjctb_hydl', { year: 2023 });
+    state = withDisplay(state, 'bgdc_cjdcq', { year: 2023 });
+
+    const next = mergeDisplayState(state, catalogOf(DLTB, layer('bgdc_cjdcq', 'Polygon', 2024, 2025), HYDL));
+
+    expect(next.displays.get('csxhjctb_hydl')?.year).toBe(2023);
+    expect(next.displays.get('bgdc_cjdcq')?.year).toBe(2025);
+  });
+});
+
+describe('resourcesGroup', () => {
+  const initial = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
+
+  it('目录还没加载：空分组', () => {
+    expect(derive(EMPTY_RESOURCE_LAYERS)).toStrictEqual({ sources: {}, layers: [] });
+  });
+
+  it('只放勾选且校验通过的资源；面板上排在前面的画在上面（样式里的图层从下到上）', () => {
+    let state = withDisplay(initial, 'csxhjctb_hydl', { checked: true });
+    state = withDisplay(state, 'csxhjctb_gyssp', { checked: true });
+    state = { ...state, order: ['csxhjctb_gyssp', 'bgdc_dltb', 'bgdc_cjdcq', 'bgdc_cjdcqjx', 'csxhjctb_hydl'] };
+
+    const group = derive(state, new Map([['bgdc_dltb', ['配置错误']]]));
+
+    expect(group.layers.map(({ id }) => id)).toStrictEqual(['resources-csxhjctb_hydl', 'resources-csxhjctb_gyssp']);
+    expect(Object.keys(group.sources)).toStrictEqual(['resources-csxhjctb_hydl', 'resources-csxhjctb_gyssp']);
+  });
+
+  it('数据源：瓦片地址按选中的年份，最大级别 15；有最小显示级别的资源，数据源和图层用同一个级别', () => {
+    let state = checkAll(initial);
+    state = withDisplay(state, 'csxhjctb_hydl', { year: 2023 });
+
+    const group = derive(state);
+
+    expect(group.sources['resources-csxhjctb_hydl']).toStrictEqual({
+      type: 'vector',
+      tiles: [`${TILE_BASE}csxhjctb_hydl_2023/{z}/{x}/{y}.pbf`],
+      maxzoom: 15
+    });
+    expect(layerOf(group, 'csxhjctb_hydl')).toMatchObject({ 'source-layer': 'csxhjctb_hydl_2023' });
+    expect(group.sources['resources-bgdc_cjdcq']).toMatchObject({ minzoom: 9, maxzoom: 15 });
+    expect(layerOf(group, 'bgdc_cjdcq').minzoom).toBe(9);
+    expect(layerOf(group, 'csxhjctb_hydl').minzoom).toBeUndefined();
+  });
+
+  it('地类图斑带 promoteId；瓦片图层名的例外按年份生效', () => {
+    const state = checkAll(mergeDisplayState(EMPTY_RESOURCE_LAYERS, catalogOf(DLTB, CZCDYD)));
+
+    const group = derive(state);
+
+    expect(group.sources['resources-bgdc_dltb']).toMatchObject({ promoteId: 'bsm' });
+    expect(group.sources['resources-bgdc_czcdyd']).not.toHaveProperty('promoteId');
+    expect(layerOf(group, 'bgdc_czcdyd')['source-layer' as keyof LayerSpecification]).toBe('czcdyd');
+  });
+
+  it('透明度乘在各几何类型的不透明度上：面、线，点连同白描边', () => {
+    let state = checkAll(initial);
+    state = withDisplay(state, 'bgdc_cjdcq', { opacity: 0.5 });
+    state = withDisplay(state, 'bgdc_cjdcqjx', { opacity: 0.6 });
+    state = withDisplay(state, 'csxhjctb_gyssp', { opacity: 0.7 });
+
+    const group = derive(state);
+
+    expect(layerOf(group, 'bgdc_cjdcq').paint).toMatchObject({ 'fill-opacity': 0.5 });
+    expect(layerOf(group, 'bgdc_cjdcqjx').paint).toMatchObject({ 'line-opacity': 0.6 });
+    expect(layerOf(group, 'csxhjctb_gyssp').paint).toMatchObject({
+      'circle-opacity': 0.7,
+      'circle-stroke-opacity': 0.7
+    });
+  });
+
+  it('每个图层只画自己几何类型的要素：面图层不画退化成线的要素', () => {
+    const group = derive(checkAll(initial));
+
+    expect(drawnBy(group, 'MultiPolygon')).toStrictEqual(drawnBy(group, 'Polygon'));
+    expect(drawnBy(group, 'Polygon')).toStrictEqual(['resources-bgdc_cjdcq', 'resources-bgdc_dltb']);
+    expect(drawnBy(group, 'LineString')).toStrictEqual(['resources-csxhjctb_hydl', 'resources-bgdc_cjdcqjx']);
+    expect(drawnBy(group, 'Point')).toStrictEqual(['resources-csxhjctb_gyssp']);
+  });
+
+  it('全部勾选时的分组能通过 MapLibre 的校验', () => {
+    const { sources, layers } = derive(checkAll(initial));
+
+    expect(validateStyleMin({ version: 8, sources, layers: layers.slice() })).toStrictEqual([]);
+  });
+});
+
+describe('validateCatalog', () => {
+  it('登记表生成的配置都合法；目录还没加载时没有要校验的', () => {
+    expect(validateCatalog(CATALOG, TILE_BASE)).toStrictEqual(new Map());
+    expect(validateCatalog(null, TILE_BASE)).toStrictEqual(new Map());
+  });
+
+  it('配置不合法（如按属性配色的取值重复）：记下这个资源和原因，其他资源照常', () => {
+    const invalid = validateCatalog(CATALOG, TILE_BASE, styleWithDuplicateValues);
+
+    expect([...invalid.keys()]).toStrictEqual(['csxhjctb_hydl']);
+    expect(invalid.get('csxhjctb_hydl')?.join()).toContain('unique');
+  });
+});

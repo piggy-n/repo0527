@@ -30,7 +30,7 @@ export const RESOURCE_PALETTE: readonly string[] = [
 ];
 
 export function paletteColor(index: number): string {
-  return RESOURCE_PALETTE[index % RESOURCE_PALETTE.length] ?? '';
+  return RESOURCE_PALETTE[index % RESOURCE_PALETTE.length];
 }
 
 /** 按取值对照颜色 */
@@ -184,8 +184,11 @@ function withAlpha(color: string, alpha: number): string {
 }
 
 /** 默认样式按几何类型：面是半透明填充加同色描边（按属性配色的面用实色），线是实色，点是实色加白描边 */
-export function resourceLayerStyle(resource: Resource): ResourceLayerStyle {
-  const rule = resourceStyle(resource.code).color;
+export function resourceLayerStyle(
+  resource: Resource,
+  style: ResourceStyle = resourceStyle(resource.code)
+): ResourceLayerStyle {
+  const rule = style.color;
   const color = paletteColor(resource.index);
   const mainColor = rule ? colorExpression(rule) : color;
   if (resource.geometry === 'fill' && rule) {
