@@ -19,7 +19,7 @@
 | [0007](0007-vue-router-5-and-history-mode.md) | 路由使用 Vue Router 5 与 history 模式 | 已接受 |
 | [0008](0008-same-origin-api-proxy.md) | 接口走同源的 /backend 代理 | 已接受 |
 | [0009](0009-disable-incremental-typecheck.md) | 关闭 tsc 的增量检查 | 已接受 |
-| [0010](0010-testing-with-vitest.md) | 测试使用 Vitest 与 jsdom | 已接受 |
+| [0010](0010-testing-with-vitest.md) | 测试使用 Vitest 与 jsdom | 已接受（真实浏览器测试由 0040 补充） |
 | [0011](0011-http-client-axios-zod-msw.md) | HTTP 客户端：axios + zod，测试用 MSW 模拟接口 | 已接受 |
 | [0012](0012-fonts-self-hosted-and-svg-title.md) | 字体：普惠体 3.0 自托管且不入库，系统名称用 SVG 轮廓 | 已接受（存放位置已被 0013 取代） |
 | [0013](0013-fonts-in-public-dir.md) | 字体文件统一放在 apps/web/public/fonts/ | 已接受 |
@@ -49,6 +49,7 @@
 | [0037](0037-coordinate-locate-and-location-point.md) | 坐标定位与位置点 | 已接受 |
 | [0038](0038-camera-operations.md) | 相机操作：用操作的信号判断等待中的定位是否作废 | 已接受（第 1 条的 `intentRevision`、第 3 条的上下文入口由 0039 修正） |
 | [0039](0039-async-supersede-rules.md) | 异步操作的作废规则、相机操作对象与状态命名 | 已接受 |
+| [0040](0040-vitest-browser-mode.md) | 真实浏览器测试：Vitest 浏览器模式 | 已接受 |
 
 ## 模板
 
