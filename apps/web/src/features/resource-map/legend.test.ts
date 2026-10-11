@@ -11,7 +11,7 @@ import {
   type ResourceLayersState,
   resourcesGroup
 } from './resource-layers';
-import { RESOURCE_PALETTE } from './style-registry';
+import { RESOURCE_PALETTE } from './palette';
 import { sizeCurve, type SymbolOverride } from './symbols';
 
 function layer(code: string, name: string, geoType: ResourceTreeLayer['geoType']) {

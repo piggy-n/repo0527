@@ -2,19 +2,17 @@
 import { type StyleSpecification, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
 import type { Resource, ResourceGeometry } from './catalog';
-import { LANDUSE_COLOR_BY_CODE, LANDUSE_COLOR_BY_NAME, LANDUSE_FALLBACK_COLOR } from './landuse';
-import {
-  colorExpression,
-  defaultSymbol,
-  paletteColor,
-  RESOURCE_PALETTE,
-  resourceLayerStyle,
-  resourceStyle,
-  sourceLayerOf,
-  valueColors
-} from './style-registry';
+import { valueColors } from './classification';
+import { LANDUSE_FALLBACK_COLOR } from './landuse';
+import { paletteColor, RESOURCE_PALETTE } from './palette';
+import { defaultSymbol, resourceLayerStyle, resourceStyle, sourceLayerOf } from './style-registry';
 import { sizeCurve } from './symbols';
-import { colorOf, normalizeColor as color, parsesAsColor } from './test-expression';
+import {
+  colorOf,
+  defaultColorExpression as colorExpression,
+  normalizeColor as color,
+  parsesAsColor
+} from './test-expression';
 
 function resource(code: string, geometry: ResourceGeometry, index = 0): Resource {
   return { code, name: code, geometry, years: [2025], categoryId: '测试', index };
@@ -65,11 +63,6 @@ describe('按属性配色', () => {
     expect(colorOf(expression, { czclx: '206' })).toBe(color(LANDUSE_FALLBACK_COLOR));
   });
 
-  it('地类图斑按编码、地类图斑（城镇村）按名称，用 landuse.ts 的表达式', () => {
-    expect(colorExpression(colorRuleOf('bgdc_dltb'))).toBe(LANDUSE_COLOR_BY_CODE);
-    expect(colorExpression(colorRuleOf('bgdc_dltb_czc'))).toBe(LANDUSE_COLOR_BY_NAME);
-  });
-
   it('登记的规则都能被 MapLibre 解析', () => {
     const codes = ['bgdc_dltb', 'bgdc_dltb_czc', 'bgdc_czcdyd', 'csxhjctb_hydl', 'csxhjctb_lvll'];
 
@@ -113,7 +106,7 @@ describe('默认样式', () => {
   it('按属性配色的面用实色，不另设描边', () => {
     expect(resourceLayerStyle(resource('bgdc_dltb', 'fill'))).toStrictEqual({
       type: 'fill',
-      paint: { 'fill-color': LANDUSE_COLOR_BY_CODE }
+      paint: { 'fill-color': colorExpression(colorRuleOf('bgdc_dltb')) }
     });
   });
 

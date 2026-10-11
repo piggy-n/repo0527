@@ -1,13 +1,12 @@
-import type { ExpressionSpecification } from '@maplibre/maplibre-gl-style-spec';
-import type { Resource } from './catalog';
-import { LANDUSE_COLOR_BY_CODE, LANDUSE_COLOR_BY_NAME, LANDUSE_FALLBACK_COLOR } from './landuse';
-import { matchExpression } from './match-expression';
+import type { Resource, ResourceGeometry } from './catalog';
+import { type ClassItem, type ColorRule, symbolClasses } from './classification';
+import { LANDUSE_FALLBACK_COLOR } from './landuse';
+import { paletteColor } from './palette';
 import {
-  LINE_LAYOUT,
+  classifiedPaint,
   type ResourceLayerStyle,
   type ResourceSymbol,
   resolveSymbol,
-  sizeCurve,
   type SymbolOverride,
   symbolPaint,
   withAlpha
@@ -15,65 +14,6 @@ import {
 
 // 样式登记表（ADR 0041 第 2 节）：接口只给 code、名称、几何类型和年份，渲染细节按 code 登记在这里；
 // 只登记和默认值不同的部分。地图样式里的颜色是数据，不走 CSS 令牌
-
-/**
- * 默认配色板，按资源在目录里的顺序循环取（迁移自旧项目的 LAYER_COLOR_PALETTE）：
- * 浅色底图上都压得住，环形相邻的色相至少差 109°，相邻资源不会撞色
- */
-export const RESOURCE_PALETTE: readonly string[] = [
-  '#D9433F',
-  '#16B3B3',
-  '#C74F9B',
-  '#77A82E',
-  '#B03A6B',
-  '#2278BE',
-  '#C79212',
-  '#7A4FC0',
-  '#E07B39',
-  '#2FA663'
-];
-
-export function paletteColor(index: number): string {
-  return RESOURCE_PALETTE[index % RESOURCE_PALETTE.length];
-}
-
-/** 按取值对照颜色 */
-export interface ValueColorRule {
-  readonly kind: 'values';
-  readonly property: string;
-  readonly colors: readonly (readonly [value: string, color: string])[];
-  readonly fallback: string;
-}
-
-/** 按取值的顺序从配色板取色：每次一样，图例能列出实际颜色 */
-export interface OrderedColorRule {
-  readonly kind: 'ordered';
-  readonly property: string;
-  readonly values: readonly string[];
-  readonly fallback: string;
-}
-
-/** 按属性配色；地类的两种按 landuse.ts 的编码表和历史名称表 */
-export type ColorRule =
-  | ValueColorRule
-  | OrderedColorRule
-  | { readonly kind: 'landuse-code' }
-  | { readonly kind: 'landuse-name' };
-
-/** 按取值配色的对照，图例（5C.4）列出同样的颜色 */
-export function valueColors(rule: ValueColorRule | OrderedColorRule): readonly (readonly [string, string])[] {
-  return rule.kind === 'values' ? rule.colors : rule.values.map((value, index) => [value, paletteColor(index)]);
-}
-
-export function colorExpression(rule: ColorRule): string | ExpressionSpecification {
-  if (rule.kind === 'landuse-code') {
-    return LANDUSE_COLOR_BY_CODE;
-  }
-  if (rule.kind === 'landuse-name') {
-    return LANDUSE_COLOR_BY_NAME;
-  }
-  return matchExpression(['get', rule.property], valueColors(rule), rule.fallback);
-}
 
 export interface ResourceStyle {
   /** 最小显示级别：数据源和图层共用，更低的级别不请求瓦片（ADR 0041 第 3 节） */
@@ -169,24 +109,35 @@ export function sourceLayerOf(code: string, year: number): string {
 
 export type { ResourceLayerStyle } from './symbols';
 
-// 统一符号的默认值（ADR 0044 第 2 节）：面是 0.35 透明度的填充加同色描边，线是实线、M 档，点是 M 档、白色 1 像素描边
-const FILL_ALPHA = 0.35;
-
-/** 不按属性配色的资源的默认符号，颜色按资源在目录里的顺序从配色板取 */
-export function defaultSymbol(resource: Resource): ResourceSymbol {
-  const color = paletteColor(resource.index);
-  if (resource.geometry === 'fill') {
-    return { geometry: 'fill', fillColor: withAlpha(color, FILL_ALPHA), outlineColor: color };
+// 默认符号（ADR 0044 第 2 节）：主色之外，线是实线、M 档，点是 M 档、白色 1 像素描边；面的填充和描边同色
+function colorSymbol(geometry: ResourceGeometry, color: string): ResourceSymbol {
+  if (geometry === 'fill') {
+    return { geometry: 'fill', fillColor: color, outlineColor: color };
   }
-  if (resource.geometry === 'line') {
+  if (geometry === 'line') {
     return { geometry: 'line', color, width: 'M', dash: 'solid' };
   }
   return { geometry: 'circle', size: 'M', fillColor: color, strokeColor: '#FFFFFF', strokeWidth: 1 };
 }
 
+// 统一符号的面是 0.35 透明度的填充加同色描边
+const FILL_ALPHA = 0.35;
+
+/** 统一符号的默认值，颜色按资源在目录里的顺序从配色板取 */
+export function defaultSymbol(resource: Resource): ResourceSymbol {
+  const color = paletteColor(resource.index);
+  const symbol = colorSymbol(resource.geometry, color);
+  return symbol.geometry === 'fill' ? { ...symbol, fillColor: withAlpha(color, FILL_ALPHA) } : symbol;
+}
+
+/** 分类样式里一个取值的默认值：取值的颜色作主色 */
+export function classDefaultSymbol(resource: Resource, item: ClassItem): ResourceSymbol {
+  return colorSymbol(resource.geometry, item.color);
+}
+
 /**
  * 资源图层的样式：不按属性配色的资源是默认符号加上用户的覆盖（ADR 0044）；
- * 按属性配色的面用实色、不另设描边，线和点用 M 档（分类样式在 5C.5b）
+ * 按属性配色的资源由各取值的符号组合成分类样式（覆盖在 5C.5b 接入）
  */
 export function resourceLayerStyle(
   resource: Resource,
@@ -197,21 +148,5 @@ export function resourceLayerStyle(
   if (!rule) {
     return symbolPaint(resolveSymbol(defaultSymbol(resource), override));
   }
-  const mainColor = colorExpression(rule);
-  if (resource.geometry === 'fill') {
-    return { type: 'fill', paint: { 'fill-color': mainColor } };
-  }
-  if (resource.geometry === 'line') {
-    const paint = { 'line-color': mainColor, 'line-width': sizeCurve('line', 'M') };
-    return { type: 'line', layout: LINE_LAYOUT, paint };
-  }
-  return {
-    type: 'circle',
-    paint: {
-      'circle-color': mainColor,
-      'circle-radius': sizeCurve('circle', 'M'),
-      'circle-stroke-color': '#FFFFFF',
-      'circle-stroke-width': 1
-    }
-  };
+  return classifiedPaint(symbolClasses(rule), item => classDefaultSymbol(resource, item));
 }

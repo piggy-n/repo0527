@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { type StyleSpecification, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
+import { type ClassItem, type ColorRule, symbolClasses } from './classification';
 import {
+  classifiedPaint,
   colorOf,
   nextOverride,
   normalizeColor,
@@ -11,8 +13,10 @@ import {
   resolveSymbol,
   sizeCurve,
   sizePixels,
+  sizeStops,
   symbolPaint
 } from './symbols';
+import { paintValueOf } from './test-expression';
 
 const POINT: ResourceSymbol = { geometry: 'circle', size: 'M', fillColor: '#D9433F', strokeColor: '#FFFFFF', strokeWidth: 1 };
 const LINE: ResourceSymbol = { geometry: 'line', color: '#2278BE', width: 'M', dash: 'solid' };
@@ -120,5 +124,84 @@ describe('symbolPaint', () => {
     };
 
     expect(validateStyleMin(style)).toStrictEqual([]);
+  });
+});
+
+// 两个取值加"其他"，按 ccn 匹配
+const RULE: ColorRule = {
+  kind: 'values',
+  property: 'ccn',
+  colors: [
+    ['河流', '#1E88E5'],
+    ['水渠', '#4FC3F7']
+  ],
+  fallback: '#2F80ED'
+};
+const CLASSES = symbolClasses(RULE);
+const bySymbol = (symbols: Record<string, ResourceSymbol>, base: ResourceSymbol) => (item: ClassItem) =>
+  symbols[item.key] ?? base;
+const valueAt = (style: ReturnType<typeof classifiedPaint>, property: string, ccn: string, zoom = 12) =>
+  paintValueOf(style.type, property, (style.paint as Record<string, unknown>)[property], { ccn }, zoom);
+
+function validate(style: ReturnType<typeof classifiedPaint>) {
+  return validateStyleMin({
+    version: 8,
+    sources: { s: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } },
+    layers: [Object.assign({ id: 'l', source: 's' }, style)]
+  });
+}
+
+describe('classifiedPaint', () => {
+  it('所有取值相同的属性直接用这个值，不生成 match', () => {
+    expect(classifiedPaint(CLASSES, () => LINE)).toStrictEqual(symbolPaint(LINE));
+    expect(classifiedPaint(CLASSES, () => POINT)).toStrictEqual(symbolPaint(POINT));
+  });
+
+  it('颜色按取值匹配；大小保留外层的缩放插值，在各断点的输出里匹配，通过校验并按级别和取值求值', () => {
+    const style = classifiedPaint(CLASSES, bySymbol({ 河流: { ...LINE, color: '#000000', width: 'XL' } }, LINE));
+
+    expect(valueAt(style, 'line-color', '河流')).toStrictEqual(paintValueOf('line', 'line-color', '#000000', {}));
+    expect(valueAt(style, 'line-color', '湖泊')).toStrictEqual(paintValueOf('line', 'line-color', LINE.color, {}));
+    const widths = (ccn: string) => sizeStops('line', 'M').map(([zoom]) => valueAt(style, 'line-width', ccn, zoom));
+    expect(widths('河流')).toStrictEqual(sizeStops('line', 'XL').map(([, pixels]) => pixels));
+    expect(widths('水渠')).toStrictEqual(sizeStops('line', 'M').map(([, pixels]) => pixels));
+    // 外层是缩放插值，四个断点的输出都是 match
+    const width = style.type === 'line' ? style.paint['line-width'] : undefined;
+    expect(Array.isArray(width) && width.slice(0, 4)).toStrictEqual(['interpolate', ['linear'], ['zoom'], 6]);
+    const outputs: unknown[] = Array.isArray(width) ? width.slice(4).filter((_, index) => index % 2 === 0) : [];
+    expect(outputs.map(output => JSON.stringify(output).startsWith('["match",'))).toStrictEqual([true, true, true, true]);
+    expect(validate(style)).toStrictEqual([]);
+  });
+
+  it('线型：都是实线时不设，都相同时直接用数组，有的不同时按取值匹配（实线是间隔为 0 的虚线）', () => {
+    expect(classifiedPaint(CLASSES, () => LINE).paint).not.toHaveProperty('line-dasharray');
+    expect(classifiedPaint(CLASSES, () => ({ ...LINE, dash: 'dotted' })).paint).toMatchObject({
+      'line-dasharray': [1, 2]
+    });
+    const mixed = classifiedPaint(CLASSES, bySymbol({ 水渠: { ...LINE, dash: 'dashed' } }, LINE));
+
+    expect(valueAt(mixed, 'line-dasharray', '水渠')).toStrictEqual([3, 2]);
+    expect(valueAt(mixed, 'line-dasharray', '河流')).toStrictEqual([1, 0]);
+    expect(validate(mixed)).toStrictEqual([]);
+  });
+
+  it('面：各取值的描边和填充同色（换了写法也算）时不设描边，有一个不同就按取值设描边', () => {
+    const solid: ResourceSymbol = { geometry: 'fill', fillColor: '#1E88E5', outlineColor: 'rgb(30, 136, 229)' };
+    expect(classifiedPaint(CLASSES, () => solid)).toStrictEqual({ type: 'fill', paint: { 'fill-color': '#1E88E5' } });
+
+    const outlined = classifiedPaint(CLASSES, bySymbol({ 河流: { ...solid, outlineColor: '#000000' } }, solid));
+    expect(valueAt(outlined, 'fill-outline-color', '河流')).toStrictEqual(paintValueOf('fill', 'fill-color', '#000000', {}));
+    expect(valueAt(outlined, 'fill-outline-color', '水渠')).toStrictEqual(paintValueOf('fill', 'fill-color', '#1E88E5', {}));
+    expect(validate(outlined)).toStrictEqual([]);
+  });
+
+  it('点：半径、填充色、描边色、描边宽度都可以按取值不同', () => {
+    const style = classifiedPaint(CLASSES, bySymbol({ $other: { ...POINT, size: 8, strokeWidth: 3 } }, POINT));
+
+    expect(valueAt(style, 'circle-radius', '湖泊')).toBe(8);
+    expect(valueAt(style, 'circle-radius', '河流')).toBe(4);
+    expect(valueAt(style, 'circle-stroke-width', '湖泊')).toBe(3);
+    expect(valueAt(style, 'circle-stroke-width', '水渠')).toBe(1);
+    expect(validate(style)).toStrictEqual([]);
   });
 });

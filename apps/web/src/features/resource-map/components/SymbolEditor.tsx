@@ -1,7 +1,7 @@
 import { ElButton, ElColorPicker, ElInput, ElOption, ElRadioButton, ElRadioGroup, ElSelect } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
-import { RESOURCE_PALETTE } from '../style-registry';
+import { RESOURCE_PALETTE } from '../palette';
 import {
   type ColorField,
   LINE_DASH_NAMES,

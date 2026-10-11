@@ -1,4 +1,5 @@
 import type { Resource } from './catalog';
+import { classItems } from './classification';
 import {
   LANDUSE_FALLBACK_COLOR,
   LANDUSE_GROUPS,
@@ -10,7 +11,7 @@ import {
 } from './landuse';
 import type { ResourceLayersState } from './resource-layers';
 import { noSymbolOverride, type SymbolOverrideOf } from './resource-symbols';
-import { type ResourceLayerStyle, resourceLayerStyle, resourceStyle, valueColors } from './style-registry';
+import { type ResourceLayerStyle, resourceLayerStyle, resourceStyle } from './style-registry';
 
 // 图例的推导（ADR 0043）：输入是显示状态、样式登记表和符号覆盖，不读地图；颜色取自分组推导用的同一份数据（ADR 0044 第 4 节）
 
@@ -59,8 +60,8 @@ function legendEntry(resource: Resource, overrideOf: SymbolOverrideOf): LegendEn
     return { kind: 'landuse', code, name, match: rule.kind === 'landuse-code' ? 'code' : 'name' };
   }
   if (rule) {
-    const values = valueColors(rule).map(([label, color]) => ({ label, swatch: swatchOf(style, color) }));
-    return { kind: 'values', code, name, values: [...values, { label: '其他', swatch: swatchOf(style, rule.fallback) }] };
+    const values = classItems(rule).map(({ label, color }) => ({ label, swatch: swatchOf(style, color) }));
+    return { kind: 'values', code, name, values };
   }
   return { kind: 'symbol', code, name, swatch: swatchOf(style) };
 }

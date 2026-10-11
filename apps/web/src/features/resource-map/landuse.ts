@@ -1,5 +1,3 @@
-import { matchExpression } from './match-expression';
-
 /** 表 A.2 的二级类 */
 export interface LanduseClass {
   readonly code: string;
@@ -193,7 +191,8 @@ export const URBAN_VILLAGE_CODE_NAMES: Readonly<Record<string, string>> = {
   '203A': '村庄用地'
 };
 
-const LANDUSE_CLASSES = LANDUSE_GROUPS.flatMap(group => group.classes);
+/** 编码表的 69 个二级类，按一级类的顺序 */
+export const LANDUSE_CLASSES: readonly LanduseClass[] = LANDUSE_GROUPS.flatMap(group => group.classes);
 
 // 表 A.1（土地利用现状分类，GB/T 21010-2017）的一级类：没有"湿地"，湿地相关的地类归回林地、草地、工矿仓储、水域、其他土地
 const STATUS_GROUPS: readonly { readonly code: string; readonly name: string }[] = [
@@ -296,24 +295,3 @@ export const LANDUSE_MEANINGS: Readonly<Record<string, string>> = {
   '1206': '表层为土质、基本无植被覆盖的土地。',
   '1207': '表层为岩石或石砾、覆盖面积≥70% 的土地。'
 };
-
-/** 地类图斑的颜色：先按编码（`dlbm`）匹配编码表，没命中再按名称（`dlmc`）匹配历史名称表 */
-export const LANDUSE_COLOR_BY_CODE = matchExpression(
-  ['get', 'dlbm'],
-  LANDUSE_CLASSES.map(({ code, color }) => [code, color]),
-  matchExpression(['get', 'dlmc'], Object.entries(LANDUSE_LEGACY_NAME_COLORS), LANDUSE_FALLBACK_COLOR)
-);
-
-// 瓦片里没有名称时（城镇村瓦片只有编码，5C.1b 实测）把编码换成名称
-const NAME_FROM_CODE = matchExpression(
-  ['get', 'dlbm'],
-  [...LANDUSE_CLASSES.map(({ code, name }) => [code, name] as const), ...Object.entries(URBAN_VILLAGE_CODE_NAMES)],
-  ''
-);
-
-/** 地类图斑（城镇村）的颜色：按名称匹配编码表和历史名称表 */
-export const LANDUSE_COLOR_BY_NAME = matchExpression(
-  ['coalesce', ['get', 'dlmc'], NAME_FROM_CODE],
-  [...LANDUSE_CLASSES.map(({ name, color }) => [name, color] as const), ...Object.entries(LANDUSE_LEGACY_NAME_COLORS)],
-  LANDUSE_FALLBACK_COLOR
-);
