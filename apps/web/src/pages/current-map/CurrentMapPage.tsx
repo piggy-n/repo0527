@@ -18,6 +18,7 @@ import { RegionLocatePanel } from '@/shared/map/region/RegionLocatePanel';
 import { useRegionLocate } from '@/shared/map/region/useRegionLocate';
 import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { useDefaultView } from '@/shared/map/useDefaultView';
+import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './CurrentMapPage.module.scss';
 
 /** 现状底图：联调用的骨架，界面在 5D 专门设计（docs/roadmap.md"阶段五"） */
@@ -33,11 +34,13 @@ export const CurrentMapPage = defineComponent({
     // 第一次就绪时按江苏的范围定位；工具栏的"默认视角"、区划定位回到全省时回到这里
     const { goToDefaultView } = useDefaultView(map);
 
-    const basemap = useBasemap();
+    // 记住上次的底图、边界和资源图层（ADR 0042）；没有登录时为 null，不读不写
+    const preferences = usePreferenceScope();
+    const basemap = useBasemap({ preferences });
     // 目录由查询加载和缓存，拥有者只管显示状态；还没有目录时重试，查询会回到 pending，不再是失败
     const catalogQuery = useResourceCatalogQuery();
-    const resources = useResourceLayers(map, { catalog: catalogQuery.data });
-    const boundaries = useBoundaries();
+    const resources = useResourceLayers(map, { catalog: catalogQuery.data, preferences });
+    const boundaries = useBoundaries({ preferences });
     const region = useRegionLocate(map, { goToDefaultView });
     const measure = useMeasure();
     const location = useLocationPoint(map);

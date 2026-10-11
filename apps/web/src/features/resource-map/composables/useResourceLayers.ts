@@ -12,6 +12,8 @@ import {
   watch
 } from 'vue';
 import { appConfig } from '@/shared/config/app-config';
+import type { PreferenceScope } from '@/shared/storage/preference-scope';
+import { usePreference } from '@/shared/storage/use-preference';
 import type { Resource, ResourceCatalog } from '../catalog';
 import {
   EMPTY_RESOURCE_LAYERS,
@@ -23,6 +25,11 @@ import {
   resourceTileBase,
   validateCatalog
 } from '../resource-layers';
+import {
+  fromStoredResourceLayers,
+  storedResourceLayersSchema,
+  toStoredResourceLayers
+} from '../resource-layers-preference';
 import { resourceStyle } from '../style-registry';
 
 /** 资源图层的拥有者（ADR 0041 第 3 节）：页面把 deriveGroup 绑定到 resources 分组，面板通过 props 拿到它 */
@@ -57,6 +64,8 @@ export interface ResourceLayersOptions {
   readonly onError?: (error: unknown) => void;
   /** 默认用登记表的样式逐个资源校验；测试时注入 */
   readonly validate?: (catalog: ResourceCatalog | null, tileBase: string) => ReadonlyMap<string, readonly string[]>;
+  /** 页面提供时记住上次的勾选、透明度、顺序和年份（ADR 0042）；不提供时不读不写 */
+  readonly preferences?: PreferenceScope | null;
 }
 
 function reportToConsole(error: unknown): void {
@@ -74,10 +83,28 @@ export function useResourceLayers(
   // 状态带着它所基于的目录：推导只读这一份，侦听器什么时候执行都不会读到中间态
   const state = shallowRef<ResourceLayersState>(EMPTY_RESOURCE_LAYERS);
 
+  // 有偏好的范围时，目录要等恢复结束才合并：不先按默认值显示、再换成上次的选择（ADR 0042 第 5 节）
+  const { preferences } = options;
+  const restored = shallowRef(!preferences);
+  if (preferences) {
+    usePreference(preferences, {
+      name: 'resource-layers',
+      version: 1,
+      schema: storedResourceLayersSchema,
+      snapshot: () => toStoredResourceLayers(state.value),
+      restore: stored => {
+        if (stored) {
+          state.value = fromStoredResourceLayers(stored);
+        }
+        restored.value = true;
+      }
+    });
+  }
+
   watch(
-    () => toValue(options.catalog),
-    catalog => {
-      if (catalog) {
+    () => [toValue(options.catalog), restored.value] as const,
+    ([catalog, ready]) => {
+      if (catalog && ready) {
         state.value = mergeDisplayState(state.value, catalog);
       }
     },

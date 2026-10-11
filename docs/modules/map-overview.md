@@ -53,7 +53,7 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 | 交互工具 | 会话的工具模型，同一时间一个工具；工具只拿到 `ToolView`；工具栏的按钮和动作由页面给出 | 0034 | [map-core.md](map-core.md)、[map-vue.md](map-vue.md)、[shared-map.md](shared-map.md) |
 | 测量 | 椭球面计算（geographiclib）；`MeasureStore` 持有结果和两个工具 | 0035 | [map-core.md](map-core.md)、[shared-map.md](shared-map.md) |
 | 区划定位、坐标定位 | 本地区划目录与边界；经纬度的识别与格式只用纯函数；位置点可拖动 | 0036、0037 | [shared-map.md](shared-map.md) |
-| 资源图层 | feature `resource-map`：接口树 → 目录（纯函数，查询的 `select` 得出）→ 样式登记表 → 拥有者 `useResourceLayers`（按 `code` 的显示状态）→ `resources` 分组（底图之上、注记之下）；图层面板的目录树只负责勾选，叠放顺序在"已勾选"区调整（5C.2）；未勾选的不放进样式，每个资源一个图层，重的资源有最小显示级别；目录变化时逐个资源校验；瓦片错误从视图的数据源错误推导 | 0041 | [migration.md](../migration.md)"现状底图：资源图层实测" |
+| 资源图层 | feature `resource-map`：接口树 → 目录（纯函数，查询的 `select` 得出）→ 样式登记表 → 拥有者 `useResourceLayers`（按 `code` 的显示状态）→ `resources` 分组（底图之上、注记之下）；图层面板的目录树只负责勾选，叠放顺序在"已勾选"区调整（5C.2）；勾选、透明度、顺序、年份按用户记住（5C.3，ADR 0042）；未勾选的不放进样式，每个资源一个图层，重的资源有最小显示级别；目录变化时逐个资源校验；瓦片错误从视图的数据源错误推导 | 0041 | [migration.md](../migration.md)"现状底图：资源图层实测" |
 | 相机操作与异步 | 用户发起的定位是一次操作，用信号判断是否作废；操作对象的 `run` 负责等待与再确认；可替换操作只认最新（`LatestController`）；revision / operation / version 各有一个意思 | 0038（第 1、3 条由 0039 修正）、0039 | [map-vue.md](map-vue.md)"相机操作"、[utils.md](utils.md) |
 
 ## 阅读顺序

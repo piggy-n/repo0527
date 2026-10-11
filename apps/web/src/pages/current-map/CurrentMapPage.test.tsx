@@ -16,6 +16,7 @@ import { MapCanvas } from '@yzt/map-vue';
 import { mount } from '@vue/test-utils';
 import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
+import { createPinia } from 'pinia';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
 import { resourceTreeResponse } from '@/features/resource-map/test-data';
@@ -223,8 +224,9 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES } = {})
   });
   // 每个页面用新的查询缓存，资源目录不在用例之间残留
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // 页面按会话创建偏好的范围；测试里没有登录，范围为 null，不读不写
   const wrapper = mount(modules.page, {
-    global: { plugins: [[VueQueryPlugin, { queryClient }]], stubs: { MapCanvas: CanvasWithFakeMap } }
+    global: { plugins: [createPinia(), [VueQueryPlugin, { queryClient }]], stubs: { MapCanvas: CanvasWithFakeMap } }
   });
   return { wrapper, maps, canvasKey };
 }
