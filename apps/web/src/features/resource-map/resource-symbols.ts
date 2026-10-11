@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import {
   type ColorField,
-  LINE_DASHES,
-  type LineDash,
+  LINE_DASH_NAMES,
   normalizeColor,
   POINT_STROKE_WIDTHS,
   SIZE_LEVELS,
@@ -52,7 +51,6 @@ const sizeSchema = (geometry: 'circle' | 'line') => {
 };
 
 const strokeWidths: readonly number[] = POINT_STROKE_WIDTHS;
-const lineDashes = Object.keys(LINE_DASHES) as [LineDash, ...LineDash[]];
 
 // 存储时不知道资源的几何，各字段按自己的范围校验；不属于资源几何的字段在推导时不使用
 const overrideSchema = z.object({
@@ -65,7 +63,7 @@ const overrideSchema = z.object({
     .optional(),
   color: colorSchema.optional(),
   width: sizeSchema('line').optional(),
-  dash: z.enum(lineDashes).optional(),
+  dash: z.enum(LINE_DASH_NAMES).optional(),
   outlineColor: colorSchema.optional()
 });
 

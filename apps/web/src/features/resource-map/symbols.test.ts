@@ -2,9 +2,11 @@
 import { type StyleSpecification, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
 import {
+  colorOf,
   nextOverride,
   normalizeColor,
   normalizeSize,
+  parseSize,
   type ResourceSymbol,
   resolveSymbol,
   sizeCurve,
@@ -34,6 +36,21 @@ describe('规范化', () => {
     expect(normalizeSize('line', 0.2)).toBeNull();
     expect(normalizeSize('line', Number.NaN)).toBeNull();
     expect(normalizeSize('circle', 'XL')).toBe('XL');
+  });
+});
+
+describe('parseSize', () => {
+  it('去掉首尾空格后按步长取整；空、不是数、越界时为 null', () => {
+    expect(parseSize('circle', ' 3.3 ')).toBe(3.5);
+    expect(parseSize('line', '2.04')).toBe(2);
+    expect(['', '  ', 'abc', '25', '-1'].map(text => parseSize('circle', text))).toStrictEqual([null, null, null, null, null]);
+  });
+});
+
+describe('colorOf', () => {
+  it('取符号的颜色字段；这个几何没有该字段时为 undefined', () => {
+    expect(colorOf(POINT, 'strokeColor')).toBe('#FFFFFF');
+    expect(colorOf(LINE, 'fillColor')).toBeUndefined();
   });
 });
 

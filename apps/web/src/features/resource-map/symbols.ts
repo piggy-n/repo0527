@@ -53,6 +53,8 @@ export const LINE_DASHES = {
 
 export type LineDash = keyof typeof LINE_DASHES;
 
+export const LINE_DASH_NAMES = Object.keys(LINE_DASHES) as [LineDash, ...LineDash[]];
+
 export interface PointFields {
   readonly size: SymbolSize;
   readonly fillColor: string;
@@ -131,6 +133,13 @@ export function normalizeSize(geometry: 'circle' | 'line', size: SymbolSize): Sy
   return rounded >= min && rounded <= max ? rounded : null;
 }
 
+/** 输入框里的自定义大小：按步长取整；空、不是数、越界时为 null */
+export function parseSize(geometry: 'circle' | 'line', text: string): number | null {
+  // Number 会去掉首尾空格；空字符串是 0，小于下限
+  const size = normalizeSize(geometry, Number(text));
+  return typeof size === 'number' ? size : null;
+}
+
 /** 某档在参考级别下的像素，给自定义输入做初始值 */
 export function sizePixels(geometry: 'circle' | 'line', size: SymbolSize): number {
   const { basePx } = SIZE_REFERENCES[geometry];
@@ -156,6 +165,13 @@ function sameValue(field: SymbolField, a: unknown, b: unknown): boolean {
     return normalizeColor(a) === normalizeColor(b);
   }
   return a === b;
+}
+
+/** 符号某个颜色字段的值；这个几何没有该字段时为 undefined */
+export function colorOf(symbol: ResourceSymbol, field: ColorField): string | undefined {
+  const fields: Partial<Record<SymbolField, unknown>> = symbol;
+  const value = fields[field];
+  return typeof value === 'string' ? value : undefined;
 }
 
 /** 叠加后的符号：默认符号加上属于这个几何的覆盖字段 */

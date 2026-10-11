@@ -136,7 +136,8 @@ describe('useResourceSymbols', () => {
     symbols.previewColor('csxhjctb_gyssp', 'fillColor', '#00FF00');
     expect(symbols.overrides.value.size).toBe(0);
     expect(symbols.overrideOf('csxhjctb_gyssp')).toStrictEqual({ fillColor: 'rgba(0, 255, 0, 1)' });
-    expect(symbols.symbolOf('csxhjctb_gyssp')).toMatchObject({ fillColor: 'rgba(0, 255, 0, 1)' });
+    // 编辑器显示确认过的符号，取色器的值不跟着预览走（否则取消时会重置成预览的颜色）
+    expect(symbols.symbolOf('csxhjctb_gyssp')).toStrictEqual(defaultOf('csxhjctb_gyssp'));
 
     symbols.previewColor('bgdc_cjdcqjx', 'color', '#0000FF');
     expect(symbols.overrideOf('csxhjctb_gyssp')).toBeUndefined();
@@ -153,6 +154,26 @@ describe('useResourceSymbols', () => {
     expect(symbols.overrideOf('bgdc_cjdcqjx')).toStrictEqual({ color: 'rgba(255, 0, 0, 1)' });
     symbols.clearPreview();
     expect(symbols.overrideOf('bgdc_cjdcqjx')).toStrictEqual({ color: 'rgba(0, 0, 255, 1)' });
+  });
+
+  it('取色器报回确认的颜色（取消、打开时）：清掉这个字段的预览，不设新的预览；别的字段的预览不动', () => {
+    using ctx = setup();
+    const { symbols } = ctx;
+    symbols.setUniform('szy_kt', { outlineColor: '#000' });
+
+    // 打开时报一次换了写法的确认值
+    symbols.previewColor('szy_kt', 'outlineColor', 'rgb(0, 0, 0)');
+    symbols.previewColor('szy_kt', 'fillColor', defaultColor('szy_kt', 'fillColor'));
+    expect(symbols.preview.value).toBeNull();
+
+    symbols.previewColor('szy_kt', 'outlineColor', '#F00');
+    symbols.previewColor('szy_kt', 'fillColor', defaultColor('szy_kt', 'fillColor'));
+    expect(symbols.preview.value).toStrictEqual({ code: 'szy_kt', field: 'outlineColor', color: 'rgba(255, 0, 0, 1)' });
+
+    // 取消时重置回确认的值
+    symbols.previewColor('szy_kt', 'outlineColor', 'rgba(0, 0, 0, 1)');
+    expect(symbols.preview.value).toBeNull();
+    expect(symbols.overrideOf('szy_kt')).toStrictEqual({ outlineColor: 'rgba(0, 0, 0, 1)' });
   });
 
   it('叠加后的统一符号：目录里没有的、按属性配色的资源为 null', () => {

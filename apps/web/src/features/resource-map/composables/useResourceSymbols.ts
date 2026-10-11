@@ -15,6 +15,7 @@ import { defaultSymbol, resourceStyle } from '../style-registry';
 import {
   COLOR_FIELDS,
   type ColorField,
+  colorOf,
   LINE_DASHES,
   nextOverride,
   normalizeColor,
@@ -36,11 +37,11 @@ export interface ResourceSymbols {
   readonly preview: Readonly<ShallowRef<SymbolPreview | null>>;
   /** 推导用的覆盖：确认的覆盖再叠加预览 */
   readonly overrideOf: (code: string) => SymbolOverride | undefined;
-  /** 叠加后的统一符号（含预览），编辑器显示它；目录里没有、按属性配色的资源为 null */
+  /** 确认过的统一符号（不含预览），编辑器按它显示，取色器拖动中的颜色由取色器自己显示；目录里没有、按属性配色的资源为 null */
   readonly symbolOf: (code: string) => ResourceSymbol | null;
   /** 改统一样式的字段并保存；参数不合法时抛错，同时清掉预览 */
   readonly setUniform: (code: string, patch: SymbolOverride) => void;
-  /** 拖动取色时的预览，不保存；颜色解析不了、这个几何没有该字段时抛错 */
+  /** 拖动取色时的预览，不保存；和确认的颜色相同时清掉这个字段的预览；颜色解析不了、这个几何没有该字段时抛错 */
   readonly previewColor: (code: string, field: ColorField, color: string) => void;
   /** 丢弃预览（关闭取色器、取消） */
   readonly clearPreview: () => void;
@@ -149,6 +150,9 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
 
   const overrideOf = (code: string) => effectiveOverride(overrides.value, preview.value, code);
 
+  const committedSymbol = (resource: Resource) =>
+    resolveSymbol(defaultSymbol(resource), overrides.value.get(resource.code)?.uniform);
+
   const setUniform = (code: string, patch: SymbolOverride) => {
     const resource = requireUniform(code);
     const uniform = nextOverride(defaultSymbol(resource), overrides.value.get(code)?.uniform, checkedPatch(resource, patch));
@@ -167,6 +171,14 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
     if (normalized === null) {
       throw new Error(`${field} 不是颜色：${color}`);
     }
+    // 取色器取消（Esc、点外面、失焦）时把颜色重置回确认的值并再报一次，打开时也会报一次换了写法的确认值（ADR 0044 第 6 节）
+    const committed = colorOf(committedSymbol(resource), field);
+    if (committed !== undefined && normalizeColor(committed) === normalized) {
+      if (preview.value?.code === code && preview.value.field === field) {
+        preview.value = null;
+      }
+      return;
+    }
     preview.value = { code, field, color: normalized };
   };
 
@@ -176,7 +188,7 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
     overrideOf,
     symbolOf: code => {
       const resource = uniformResource(code);
-      return resource ? resolveSymbol(defaultSymbol(resource), overrideOf(code)) : null;
+      return resource ? committedSymbol(resource) : null;
     },
     setUniform,
     previewColor,

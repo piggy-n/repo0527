@@ -13,7 +13,8 @@
   flex-direction: column;
   gap: var(--space-sm);
   box-sizing: border-box;
-  width: 280px;
+  // 符号编辑器的四档加"自定义"要放进一行
+  width: 320px;
   max-width: 100%;
   min-height: 0;
   padding: var(--space-md);
@@ -74,6 +75,10 @@
 }
 
 // Element 按钮把内容包在一层 span 里，按钮上的 gap 作用不到文字，用外边距隔开
+.swatch {
+  margin-right: var(--space-xs);
+}
+
 .badge {
   margin-left: var(--space-xs);
   font-size: var(--font-size-xxs);

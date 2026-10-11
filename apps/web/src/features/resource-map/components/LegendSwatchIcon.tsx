@@ -17,12 +17,18 @@ export const LegendSwatchIcon = defineComponent({
             class={[styles.swatch, styles.fill]}
             style={{ backgroundColor: swatch.fill, borderColor: swatch.outline }}
             aria-hidden="true"
+            data-swatch
           />
         );
       }
       if (swatch.geometry === 'line') {
         return (
-          <span class={[styles.swatch, styles.line]} style={{ borderTopColor: swatch.color }} aria-hidden="true" />
+          <span
+            class={[styles.swatch, styles.line]}
+            style={{ borderTopColor: swatch.color }}
+            aria-hidden="true"
+            data-swatch
+          />
         );
       }
       return (
@@ -30,6 +36,7 @@ export const LegendSwatchIcon = defineComponent({
           class={[styles.swatch, styles.circle]}
           style={{ backgroundColor: swatch.fill, borderColor: swatch.stroke }}
           aria-hidden="true"
+          data-swatch
         />
       );
     };

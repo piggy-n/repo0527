@@ -1,0 +1,48 @@
+// 联调用的样式，5D 再设计
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+// 标签按"描边宽度"四个字定宽，控件占其余宽度
+.row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.custom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.number {
+  width: 64px;
+}
+
+.select {
+  width: 112px;
+}
+
+.hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.invalid {
+  color: var(--color-danger-text);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+}

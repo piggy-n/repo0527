@@ -1,7 +1,7 @@
 import type { CameraState } from '@yzt/map-core';
 import { provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick, shallowRef } from 'vue';
 import type { ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
@@ -58,6 +58,11 @@ async function openLegend(wrapper: VueWrapper) {
 const entries = (wrapper: VueWrapper) => wrapper.findAll('[data-legend]').map(item => item.attributes('data-legend'));
 const landuseShown = (wrapper: VueWrapper) => wrapper.find('[data-landuse-section]').exists();
 
+// 确认框放在 body 下，不归组件管
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
 describe('ResourceLegend', () => {
   it('面板进入页面时收起，勾选变化不会打开；由用户打开、收起', async () => {
     const { wrapper, owner } = mountLegend();
@@ -94,13 +99,52 @@ describe('ResourceLegend', () => {
     expect(landuseShown(wrapper)).toBe(true);
   });
 
-  it('统一符号只有一行预览；按取值配色展开后列出取值和"其他"', async () => {
+  it('只剩一个统一符号时不自动展开：展开是编辑', async () => {
+    const { wrapper, owner } = mountLegend();
+    await openLegend(wrapper);
+    owner.setChecked('szy_kt', true);
+    await nextTick();
+    owner.setChecked('bgdc_dltb', false);
+    await nextTick();
+
+    expect(entries(wrapper)).toStrictEqual(['szy_kt']);
+    expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
+  });
+
+  it('改过符号时出现"全部恢复默认"，确认后恢复全部资源的默认符号', async () => {
+    const { wrapper, owner, symbols } = mountLegend();
+    owner.setChecked('szy_kt', true);
+    await openLegend(wrapper);
+    const resetAll = () => wrapper.findAll('button').find(item => item.text() === '全部恢复默认');
+    expect(resetAll()).toBeUndefined();
+
+    symbols.setUniform('szy_kt', { fillColor: '#000' });
+    await nextTick();
+    await resetAll()?.trigger('click');
+    // 弹出层由定时器打开
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await nextTick();
+    // 测试里没有语言包，按钮文字是英文，按位置找确认按钮
+    const confirm = document.body.querySelector<HTMLButtonElement>('.el-popconfirm__action .el-button--primary');
+    expect(confirm).not.toBeNull();
+    confirm?.click();
+    await nextTick();
+
+    expect(symbols.overrides.value.size).toBe(0);
+    expect(resetAll()).toBeUndefined();
+  });
+
+  it('统一符号：名称前是预览，展开后是编辑器；按取值配色展开后列出取值和"其他"', async () => {
     const { wrapper, owner } = mountLegend();
     owner.setCheckedMany(['csxhjctb_hydl', 'szy_kt'], true);
     await openLegend(wrapper);
 
     expect(wrapper.get('[data-legend="szy_kt"]').text()).toBe('坑塘');
-    expect(wrapper.get('[data-legend="szy_kt"] span').attributes('style')).toContain('background-color');
+    expect(wrapper.get('[data-legend="szy_kt"] [data-swatch]').attributes('style')).toContain('background-color');
+    expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
+    await button(wrapper, '展开坑塘').trigger('click');
+    expect(wrapper.find('[data-symbol-editor="szy_kt"]').exists()).toBe(true);
+
     await button(wrapper, '展开水域线层').trigger('click');
     expect(wrapper.get('[data-legend="csxhjctb_hydl"]').findAll('li').map(item => item.text())).toStrictEqual([
       '河流',
@@ -113,7 +157,7 @@ describe('ResourceLegend', () => {
     const { wrapper, owner, symbols } = mountLegend();
     owner.setChecked('szy_kt', true);
     await openLegend(wrapper);
-    const swatchStyle = () => wrapper.get('[data-legend="szy_kt"] span').attributes('style');
+    const swatchStyle = () => wrapper.get('[data-legend="szy_kt"] [data-swatch]').attributes('style');
 
     symbols.setUniform('szy_kt', { fillColor: 'rgba(0, 0, 255, 0.5)' });
     await nextTick();
