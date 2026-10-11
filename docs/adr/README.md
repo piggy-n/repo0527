@@ -51,6 +51,7 @@
 | [0039](0039-async-supersede-rules.md) | 异步操作的作废规则、相机操作对象与状态命名 | 已接受 |
 | [0040](0040-vitest-browser-mode.md) | 真实浏览器测试：Vitest 浏览器模式 | 已接受 |
 | [0041](0041-resource-layers.md) | 资源图层：目录、样式登记表、显示状态与数据源错误 | 已接受 |
+| [0042](0042-preference-persistence.md) | 偏好的持久化：IndexedDB + idb-keyval 的键值存储 | 已接受 |
 
 ## 模板
 
