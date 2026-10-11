@@ -85,11 +85,11 @@ basemap.select('imagery');
 basemap.setOpacity(0.6);
 ```
 
-- `useBasemap()` 默认读取 `appConfig.tianditu`，测试时传入 `{ tianditu }`；不依赖组件的生命周期，没有要清理的东西。推导用的是 `createBasemapStyles(tianditu)` 的两个纯函数
+- `useBasemap()` 默认读取 `appConfig.tianditu`，测试时传入 `{ tianditu }`；不传偏好的范围时不依赖组件的生命周期，没有要清理的东西。推导用的是 `createBasemapStyles(tianditu)` 的两个纯函数
 - 不用 Pinia：状态只在一个页面里共享，不带到其他地图页，同一页面上的两张地图互不影响（ADR 0031）
 - 状态是一个 `shallowRef`，变化时整体替换；选择或透明度没变时不替换，推导函数包在 `computed` 里（提交器就是这样做的）时不会重新推导。滑块拖动时会重复给出相同的值
 - 不合法的调用直接抛错，状态不变：选择不可用的底图（如关闭天地图时选矢量）、透明度不是 0～1 之间的有限数、无底图时修改透明度。界面只提供可用的操作，这些都是编程错误；错误在操作里抛出，不进入推导和 `computed`
-- 暂不记住选择；状态只有 ID 和数字，5C.3 做持久化时再加初始值或存储
+- 记住选择（5C.3，ADR 0042）：页面传入偏好的范围 `useBasemap({ preferences })` 时，先用默认值，读到存下的偏好后替换一次（`basemap-preference.ts`）：选中的底图当前可用就恢复它，不可用（没有配置天地图）时保留当前的选择；两种底图的透明度经校验（0～1）后照样恢复。之后选择、改透明度防抖写入。用法与规则见 [storage.md](storage.md)
 
 - 状态（`BasemapState`）只有选中的底图和每种底图的透明度（0～1），可以直接序列化；透明度同时作用于底图和注记，不影响背景
 - 背景是 `basemap-background`（`#F3F5F8`），无论选哪种底图都在最底下：无底图时显示它，瓦片加载中和调低透明度时与它混合
@@ -148,6 +148,7 @@ boundaries.setOpacity(0.6);
 - 线的样式照搬旧项目：颜色都是 `#597EF7`；省界宽 1.8～3.2、不透明度 0.94，市界 1.1～2.3、0.78，县界 0.6～1.25（从 8 级起变化）、0.62、虚线。状态里的透明度乘在各级的不透明度上
 - `useBoundaries()` 的写法与 `useBasemap()` 相同：状态是一个 `shallowRef`，值没变时不替换；透明度不是 0～1 之间的有限数时抛错。三级都关闭时仍可以改透明度
 - 进入页面时只显示省界；指标页（阶段六）要四项全开时再加初始值的参数
+- 记住选择（5C.3，ADR 0042）：`useBoundaries({ preferences })` 读到存下的三个级别和透明度后整体替换一次（`boundary-preference.ts` 的 schema 校验通过才用），之后的修改防抖写入
 - 联调面板 `BoundaryPanel`：三个复选框和一条透明度滑块，没有打开任何级别时没有滑块；复选框组给出勾选的全部值，按级别逐一 `setVisible`，值没变的级别不替换状态。现状底图页把"默认视角"按钮、底图面板、边界面板在右上角排成一列
 
 ### 浏览器验证（2026-10-10）
@@ -464,6 +465,8 @@ splitCoordinatePair('118°46′40″E 32°03′23″N');  // 粘贴的一对坐�
 | `measure/measure-labels.test.ts` | 距离与面积的格式和 1 km² 的分界；形心（矩形、三角形、面积为 0）；测距的中间节点与总长、测面的总面积；画的过程中的标签；提示文案 | Node |
 | `measure/useMeasure.test.ts` | 两个工具的 ID 与类型；由工具 ID 得到测量类型；状态跟随输入、推导、删除和清除；鼠标位置单独跟随，没在画时移动鼠标不重新推导；作用域销毁时释放；不在作用域里时抛错 | Node |
 | `boundary/BoundaryPanel.test.tsx` | 勾选、取消某一级后改变状态，都不勾选时没有滑块；滑块按百分比显示、拖动时交给拥有者 0～1 的值 | jsdom |
+| `basemap/basemap-preference.test.ts` | 恢复上次的底图和透明度；修改后防抖写入；存下的底图不可用时保留"无底图"；透明度越界时当作没有存过；合并函数（假定时器、内存存储） | jsdom |
+| `boundary/boundary-preference.test.ts` | 恢复上次的级别和透明度、推导随之变化；修改后防抖写入；缺少级别时当作没有存过；不传范围时和原来一样 | jsdom |
 | `boundary/useBoundaries.test.ts` | 初始状态；开关某一级、透明度；值没变时不重新推导；不合法的透明度抛错；每次调用各有一份状态 | Node |
 | `region/region-catalog.test.ts` | 目录与市界、县界数据逐条对应；市、区县的数量与所在的市；旧项目写错代码的区县；查找、路径、简称；搜索的规则、顺序与条数 | Node |
 | `region/region-geometry.test.ts` | 代码换成 6 位；外包范围；点在哪个区县（外包范围重叠时按多边形）；市从市界、区县从县界取，Polygon 与 MultiPolygon；连云港合并；每个文件只读一次；失败不缓存；没有这个区划、结构不对时报错；默认的 fetch 与下载失败 | Node |

@@ -1,6 +1,9 @@
 import type { StyleGroup } from '@yzt/map-core';
 import { computed, type ComputedRef, shallowRef } from 'vue';
 import { appConfig, type TiandituConfig } from '../../config/app-config';
+import type { PreferenceScope } from '../../storage/preference-scope';
+import { usePreference } from '../../storage/use-preference';
+import { restoredBasemapState, storedBasemapSchema } from './basemap-preference';
 import {
   type BasemapId,
   type BasemapOption,
@@ -13,6 +16,8 @@ import {
 export interface UseBasemapOptions {
   /** 默认读取 appConfig.tianditu；测试时传入 */
   readonly tianditu?: TiandituConfig | null;
+  /** 页面提供时记住上次的底图和透明度（ADR 0042）；不提供时不读不写 */
+  readonly preferences?: PreferenceScope | null;
 }
 
 /** 底图的拥有者（ADR 0031）：状态随页面，面板通过 props 拿到它，页面把两个推导函数绑定到分组；函数都是闭包，可以直接取出来传递 */
@@ -32,12 +37,26 @@ export interface Basemap {
   readonly deriveLabelsGroup: () => StyleGroup;
 }
 
-/** 创建底图的拥有者，在页面的 setup 中调用；不依赖组件的生命周期 */
-export function useBasemap({ tianditu = appConfig.tianditu }: UseBasemapOptions = {}): Basemap {
+/** 创建底图的拥有者，在页面的 setup 中调用；先用默认值，存下的偏好读到后替换一次（ADR 0042 第 5 节） */
+export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBasemapOptions = {}): Basemap {
   const options = basemapOptions(tianditu);
   const styles = createBasemapStyles(tianditu);
   // 状态不可变，变化时整体替换；推导只依赖它
   const state = shallowRef<BasemapState>(initialBasemapState(tianditu));
+
+  if (preferences) {
+    usePreference(preferences, {
+      name: 'basemap',
+      version: 1,
+      schema: storedBasemapSchema,
+      snapshot: () => state.value,
+      restore: stored => {
+        if (stored) {
+          state.value = restoredBasemapState(stored, state.value, options);
+        }
+      }
+    });
+  }
 
   const selected = computed(() => state.value.selected);
   const opacity = computed(() => {

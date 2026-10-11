@@ -1,5 +1,8 @@
 import type { StyleGroup } from '@yzt/map-core';
 import { computed, type ComputedRef, shallowRef } from 'vue';
+import type { PreferenceScope } from '../../storage/preference-scope';
+import { usePreference } from '../../storage/use-preference';
+import { storedBoundariesSchema } from './boundary-preference';
 import {
   BOUNDARY_OPTIONS,
   boundaryGroup,
@@ -22,10 +25,29 @@ export interface Boundaries {
   readonly deriveGroup: () => StyleGroup;
 }
 
-/** 创建行政区边界的拥有者，在页面的 setup 中调用；进入页面时只显示省界 */
-export function useBoundaries(): Boundaries {
+export interface UseBoundariesOptions {
+  /** 页面提供时记住上次的级别和透明度（ADR 0042）；不提供时不读不写 */
+  readonly preferences?: PreferenceScope | null;
+}
+
+/** 创建行政区边界的拥有者，在页面的 setup 中调用；进入页面时只显示省界，存下的偏好读到后替换一次 */
+export function useBoundaries({ preferences }: UseBoundariesOptions = {}): Boundaries {
   // 状态不可变，变化时整体替换；值没变时不替换，推导不会重新执行
   const state = shallowRef<BoundaryState>(INITIAL_BOUNDARY_STATE);
+
+  if (preferences) {
+    usePreference(preferences, {
+      name: 'boundaries',
+      version: 1,
+      schema: storedBoundariesSchema,
+      snapshot: () => state.value,
+      restore: stored => {
+        if (stored) {
+          state.value = stored;
+        }
+      }
+    });
+  }
 
   const setVisible = (level: BoundaryLevel, visible: boolean) => {
     const current = state.value;
