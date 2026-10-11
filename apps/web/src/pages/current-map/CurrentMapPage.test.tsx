@@ -333,9 +333,14 @@ function pinAt(wrapper: PageWrapper): [number, number] {
   return [Math.round(Number.parseFloat(left)), Math.round(Number.parseFloat(top))];
 }
 
-// 资源列表里某个资源的一行
+// 资源图层面板目录树里某个资源的一行
 function resourceRow(wrapper: PageWrapper, code: string): ReturnType<PageWrapper['get']> {
   return wrapper.get(`[data-resource="${code}"]`);
+}
+
+// "已勾选"区里某个资源的一行：提示、透明度、顺序都在这里
+function layerRow(wrapper: PageWrapper, code: string): ReturnType<PageWrapper['get']> {
+  return wrapper.get(`[data-layer="${code}"]`);
 }
 
 // 某个分组新加入的图层：资源目录加载后地类图斑也会加入，与要检查的分组无关
@@ -737,21 +742,21 @@ describe('CurrentMapPage', () => {
   it('勾选了但级别不够的资源提示放大到几级；瓦片加载失败标在对应的资源上', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
-    expect(resourceRow(wrapper, 'bgdc_cjdcq').text()).not.toContain('放大');
+    expect(wrapper.find('[data-layer="bgdc_cjdcq"]').exists()).toBe(false);
 
     await resourceRow(wrapper, 'bgdc_cjdcq').get('input').setValue(true);
-    expect(resourceRow(wrapper, 'bgdc_cjdcq').text()).toContain('放大至第 9 级显示');
+    expect(layerRow(wrapper, 'bgdc_cjdcq').text()).toContain('放大至第 9 级显示');
     // 数据源的错误照样上报（默认打印到控制台）
     using consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const tileError = new Error('Unable to parse the tile');
     map.fire('error', { error: tileError, sourceId: 'resources-bgdc_dltb' });
     await nextTick();
-    expect(resourceRow(wrapper, 'bgdc_dltb').text()).toContain('部分瓦片加载失败');
+    expect(layerRow(wrapper, 'bgdc_dltb').text()).toContain('部分瓦片加载失败');
     expect(consoleError).toHaveBeenCalledWith('[map-vue]', tileError);
 
     map.moveTo([118.8, 32.05], 9, { originalEvent: new MouseEvent('wheel') });
     await nextTick();
-    expect(resourceRow(wrapper, 'bgdc_cjdcq').text()).not.toContain('放大');
+    expect(layerRow(wrapper, 'bgdc_cjdcq').text()).not.toContain('放大');
   });
 
   it('资源目录加载失败：列表显示失败和重试；重试期间显示加载中，成功后显示资源', async () => {

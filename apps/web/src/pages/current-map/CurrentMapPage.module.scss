@@ -4,18 +4,34 @@
   height: 100%;
 }
 
-// 联调用的控件排在右上角，5D 再设计；左右都留边距，窄屏时工具栏在这个宽度里换行
-.controls {
+// 联调用的浮层，5D 再设计：左边是资源图层面板，右边的控件占剩下的宽度、靠右排；
+// 两列并排，窄屏时工具栏在自己这一列里换行，不会被面板盖住。浮层之间的空白不拦截地图的鼠标操作
+.overlay {
   position: absolute;
-  top: var(--space-lg);
-  right: var(--space-lg);
-  left: var(--space-lg);
+  inset: var(--space-lg);
   display: flex;
+  gap: var(--space-lg);
+  pointer-events: none;
+}
+
+// 资源图层面板从上到下撑满，面板自己决定高度并在内部滚动
+.resources {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.controls {
+  display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: flex-end;
   gap: var(--space-sm);
-  // 控件之间的空白不拦截地图的鼠标操作
-  pointer-events: none;
+  min-width: 0;
 
   > * {
     pointer-events: auto;

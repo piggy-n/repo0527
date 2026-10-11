@@ -109,6 +109,21 @@ describe('useResourceLayers', () => {
     expect(initial.displays.get('csxhjctb_hydl')?.checked).toBe(false);
   });
 
+  it('批量勾选：一次替换状态；都已是目标值时不替换；有目录里没有的资源时抛错、什么也不改', async () => {
+    using ctx = await loaded();
+    const initial = ctx.owner.state.value;
+
+    ctx.owner.setCheckedMany(['bgdc_dltb'], true);
+    expect(ctx.owner.state.value).toBe(initial);
+    expect(() => ctx.owner.setCheckedMany(['bgdc_cjdcq', 'szy_kt'], true)).toThrow('目录里没有资源 szy_kt');
+    expect(ctx.owner.state.value).toBe(initial);
+
+    ctx.owner.setCheckedMany(['bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb'], true);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-csxhjctb_hydl', 'resources-bgdc_cjdcq', 'resources-bgdc_dltb']);
+    ctx.owner.setCheckedMany(['bgdc_cjdcq', 'csxhjctb_hydl'], false);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb']);
+  });
+
   it('移到面板上的第 index 位：排在最上面的画在最上层', async () => {
     using ctx = await loaded();
     ctx.owner.setChecked('csxhjctb_hydl', true);

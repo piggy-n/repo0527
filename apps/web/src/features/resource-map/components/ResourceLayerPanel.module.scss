@@ -1,0 +1,115 @@
+// 联调用的样式，5D 再设计；位置和高度由页面决定，面板内部滚动
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  box-sizing: border-box;
+  width: 320px;
+  max-width: 100%;
+  max-height: 100%;
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-title);
+}
+
+// 目录树占剩下的高度，自己滚动
+.tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+// 下一级缩进到上一级的复选框下面
+.children {
+  margin: 0;
+  padding: 0 0 0 20px;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.count {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.checked {
+  flex: none;
+  max-height: 40%;
+  overflow-y: auto;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-regular);
+}
+
+.layer + .layer {
+  margin-top: var(--space-xs);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-regular);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hint {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+}
+
+.notice {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning);
+}
+
+.slider {
+  // 两端的滑块按钮不贴着面板边缘
+  padding: 0 var(--space-sm);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-regular);
+}

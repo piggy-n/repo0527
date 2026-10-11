@@ -1,6 +1,6 @@
 import { MapCanvas, provideMap } from '@yzt/map-vue';
 import { defineComponent, ref } from 'vue';
-import { ResourceLayerList } from '@/features/resource-map/components/ResourceLayerList';
+import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
@@ -68,36 +68,40 @@ export const CurrentMapPage = defineComponent({
         <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} />
         <MeasureOverlay measure={measure} />
         <LocationOverlay location={location} />
-        <div class={styles.controls}>
-          <MapToolbar
-            items={[
-              'default-view',
-              'browse',
-              'measure-distance',
-              'measure-area',
-              'clear',
-              'region-locate',
-              'coordinate-locate'
-            ]}
-            actions={{
-              'default-view': goToDefaultView,
-              clear,
-              'region-locate': () => togglePanel('region-locate'),
-              'coordinate-locate': () => togglePanel('coordinate-locate')
-            }}
-            pressed={openPanel.value ? [openPanel.value] : []}
-          />
-          {openPanel.value === 'region-locate' && <RegionLocatePanel region={region} onClose={closePanel} />}
-          {openPanel.value === 'coordinate-locate' && (
-            <CoordinateLocatePanel location={location} onClose={closePanel} />
-          )}
-          <BasemapPanel basemap={basemap} />
-          <BoundaryPanel boundaries={boundaries} />
-          <ResourceLayerList
-            layers={resources}
-            failed={catalogQuery.isError.value}
-            onRetry={() => void catalogQuery.refetch()}
-          />
+        <div class={styles.overlay}>
+          <div class={styles.resources}>
+            <ResourceLayerPanel
+              layers={resources}
+              failed={catalogQuery.isError.value}
+              onRetry={() => void catalogQuery.refetch()}
+            />
+          </div>
+          <div class={styles.controls}>
+            <MapToolbar
+              items={[
+                'default-view',
+                'browse',
+                'measure-distance',
+                'measure-area',
+                'clear',
+                'region-locate',
+                'coordinate-locate'
+              ]}
+              actions={{
+                'default-view': goToDefaultView,
+                clear,
+                'region-locate': () => togglePanel('region-locate'),
+                'coordinate-locate': () => togglePanel('coordinate-locate')
+              }}
+              pressed={openPanel.value ? [openPanel.value] : []}
+            />
+            {openPanel.value === 'region-locate' && <RegionLocatePanel region={region} onClose={closePanel} />}
+            {openPanel.value === 'coordinate-locate' && (
+              <CoordinateLocatePanel location={location} onClose={closePanel} />
+            )}
+            <BasemapPanel basemap={basemap} />
+            <BoundaryPanel boundaries={boundaries} />
+          </div>
         </div>
         <MapStatusNotice />
       </div>

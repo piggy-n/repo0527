@@ -37,6 +37,8 @@ export interface ResourceLayers {
   readonly minzoomOf: (code: string) => number | undefined;
   /** 以下操作遇到目录里没有的资源都抛错 */
   readonly setChecked: (code: string, checked: boolean) => void;
+  /** 一次勾选或取消多个资源（分类的级联勾选），只替换一次状态；有目录里没有的资源时什么也不改 */
+  readonly setCheckedMany: (codes: readonly string[], checked: boolean) => void;
   /** 不在 0～1 之间时抛错 */
   readonly setOpacity: (code: string, opacity: number) => void;
   /** 不是这个资源的年份时抛错 */
@@ -119,8 +121,25 @@ export function useResourceLayers(
     }
   };
 
-  const setChecked = (code: string, checked: boolean) =>
-    update(code, display => (display.checked === checked ? display : { ...display, checked }));
+  const setCheckedMany = (codes: readonly string[], checked: boolean) => {
+    const current = state.value;
+    const missing = codes.find(code => !current.displays.has(code));
+    if (missing !== undefined) {
+      throw new Error(`目录里没有资源 ${missing}`);
+    }
+    const displays = new Map(current.displays);
+    let changed = false;
+    for (const code of codes) {
+      const display = displays.get(code);
+      if (display && display.checked !== checked) {
+        displays.set(code, { ...display, checked });
+        changed = true;
+      }
+    }
+    if (changed) {
+      state.value = { ...current, displays };
+    }
+  };
 
   const setOpacity = (code: string, opacity: number) => {
     if (!(Number.isFinite(opacity) && opacity >= 0 && opacity <= 1)) {
@@ -156,7 +175,8 @@ export function useResourceLayers(
     configErrors,
     tileErrors,
     minzoomOf: code => resourceStyle(code).minzoom,
-    setChecked,
+    setChecked: (code, checked) => setCheckedMany([code], checked),
+    setCheckedMany,
     setOpacity,
     setYear,
     move,
