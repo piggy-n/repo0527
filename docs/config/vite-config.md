@@ -39,17 +39,46 @@ const generators =
 
 ### 测试
 
+`test` 下分成两个项目（`test.projects`，ADR 0040）：`unit` 是 jsdom 和 Node 里的测试，`browser` 是真实浏览器里的测试。两个项目都写了 `extends: true`，继承上面的插件、别名和 Sass 配置。两个项目共用的字段写在 `test` 下：
+
+| 字段 | 值 | 说明 |
+|---|---|---|
+| `fsModuleCache` | `true` | 把转换结果缓存到根目录的 `node_modules/.vitest-cache`，之后的运行跳过转换，见下文"测试耗时" |
+| `unstubEnvs` | `true` | 每个用例结束后撤销 `vi.stubEnv`。已用对照实验验证：关掉后，一个用例修改的环境变量会泄漏到下一个用例 |
+
+`unit` 项目：
+
 | 字段 | 值 | 说明 |
 |---|---|---|
 | `include` | `['src/**/*.test.{ts,tsx}', 'tools/**/*.test.ts']` | 测试文件和源文件放在一起；`tools/` 下是 Node 端的检查测试，例如图标是否已规范化 |
+| `exclude` | 默认值加上 `src/**/*.browser.test.{ts,tsx}` | 浏览器测试只在 `browser` 项目里跑 |
 | `environment` | `'jsdom'` | 在 Node 里模拟 DOM，挂载组件用。不用 DOM 的测试文件在第一行写 `// @vitest-environment node` 改用 Node 环境，见下文"测试耗时" |
-| `fsModuleCache` | `true` | 把转换结果缓存到根目录的 `node_modules/.vitest-cache`，之后的运行跳过转换，见下文"测试耗时" |
 | `setupFiles` | `['src/test-setup.ts']` | 每个测试文件运行前执行。里面调用 `@vue/test-utils` 的 `enableAutoUnmount(afterEach)`：每个用例结束后卸载用 `mount` 挂载的组件，查询、定时器、ResizeObserver 随之停止，进行中的查询被取消，不会有晚到的请求落到下一个用例（之前出现过 MSW 报"没有匹配的处理函数"）。用例里手动 `unmount()` 过的组件会再卸载一次，这一版 Vue 下是空操作，不报错也不警告。已用对照实验验证：去掉这一项后，前一个用例挂载的组件没有被卸载 |
-| `unstubEnvs` | `true` | 每个用例结束后撤销 `vi.stubEnv`。已用对照实验验证：关掉后，一个用例修改的环境变量会泄漏到下一个用例 |
 | `server.deps.inline` | `['element-plus']` | 让 Vitest 处理 element-plus，而不是交给 Node 直接加载。不加的话，Element 表单的校验在测试中永远通过，见下文 |
 | `css.include` | `[/\/src\/libs\/[^/]+\/_index\.scss/]` | 只让 libs 的 Sass 入口按原文加载，供断点一致性测试读取，见下文"Sass 的 loadPaths" |
 
+`browser` 项目（ADR 0040）：
+
+| 字段 | 值 | 说明 |
+|---|---|---|
+| `include` | `['src/**/*.browser.test.{ts,tsx}']` | 只有依赖真实引擎或真实布局的用例 |
+| `setupFiles` | `['src/test-setup.ts', 'src/test-setup.browser.ts']` | 后者调用 app 的 `setupMapRuntime()`：Worker 地址和 MapLibre 的 CSS 与生产用同一份装配 |
+| `browser.enabled` | `true` | 默认是 `false`：不写的话这些用例仍在 Node / jsdom 里跑（读 Vitest 5.0.2 的源码确认：`resolved.browser.enabled ??= false`） |
+| `browser.provider` | `playwright({ launchOptions: { args: ['--use-angle=swiftshader'] } })` | Playwright 驱动 Chromium；显式选软件渲染，减少本机和 CI 之间渲染后端的差异 |
+| `browser.headless` | `true` | 不弹出浏览器窗口，CI 也能跑 |
+| `browser.viewport` | `1280 × 800` | 固定视口；用例自己的容器尺寸另外写死 |
+| `browser.screenshotFailures` | `false` | 默认失败时往仓库目录的 `.vitest/attachments` 写截图；不做截图比对，CI 也不上传附件，所以关掉 |
+| `browser.instances` | `[{ browser: 'chromium' }]` | 只用 Chromium（ADR 0040） |
+
 没有开启 `globals`，测试文件显式导入 `describe`、`it`、`expect`，和 AGENTS.md"不使用自动导入"一致。Vitest 5 默认开启 `clearMocks`，每个用例之间会清空 mock 的调用记录。
+
+#### 浏览器测试（5C.1a 实测）
+
+- Playwright 1.64 自带的 Chromium 156 无界面版默认就用 SwiftShader 软件渲染 WebGL2，Windows 上有显卡、不加参数也是如此（渲染器是 `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)`）。环境用例 `src/browser-environment.browser.test.ts` 检查 WebGL2 能否创建并输出渲染器和浏览器版本
+- 浏览器只装无界面版（`pnpm --filter @yzt/web test:browser:install`），Windows 上解压后约 280 MB，放在用户目录的 Playwright 缓存里
+- 同一个测试文件的用例共用一个页面：每个用例自己创建容器，结束时移除；`using` 释放视图和会话
+- 在本会话的终端里，Vitest 自动换成了不打印通过用例日志的简洁报告器，环境用例输出的渲染器信息要加 `--reporter=default` 才看得到；CI 用默认报告器，日志照常显示
+- 刚加第一个地图用例时出现过一次"Vite unexpectedly reloaded a test"（运行中发现了要预构建的依赖）；之后清空 `node_modules/.vite`、`.vitest-cache` 连跑 4 次都没有复现，所以没有加 `optimizeDeps.include`。CI 上如果出现，在 `browser` 项目里预先列出 `maplibre-gl`、style-spec、`nanoevents`、`vue`、`@vue/test-utils`
 
 #### 为什么要 inline element-plus
 

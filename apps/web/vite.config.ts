@@ -1,9 +1,10 @@
 import { fileURLToPath } from 'node:url';
 import vueJsx from '@vitejs/plugin-vue-jsx';
+import { playwright } from '@vitest/browser-playwright';
 import { iconsPlugin } from '@yzt/icons/tools';
 import { loadEnv } from 'vite';
 // 与 vite 的 defineConfig 相同，只是类型里多了 test 字段
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import { iconsPaths } from './tools/icons/paths.ts';
 import { titleOutlineConfig } from './tools/system-title/paths.ts';
 import { systemTitlePlugin } from './tools/system-title/vite-plugin.ts';
@@ -47,17 +48,46 @@ export default defineConfig(({ mode }) => {
       }
     },
     test: {
-      include: ['src/**/*.test.{ts,tsx}', 'tools/**/*.test.ts'],
-      environment: 'jsdom',
-      setupFiles: ['src/test-setup.ts'],
       // 把转换结果缓存到 node_modules/.vitest-cache，之后的运行跳过转换（见 docs/config/vite-config.md）
       fsModuleCache: true,
       // 每个用例结束后撤销 vi.stubEnv，避免影响其他用例
       unstubEnvs: true,
-      // Vitest 默认把样式文件替换成空内容（带 ?raw 也一样）；libs 的 Sass 入口要按原文读取，供断点一致性测试使用
-      css: { include: [/\/src\/libs\/[^/]+\/_index\.scss/] },
-      // 交给 Node 直接加载时，element-plus 会拿到 CommonJS 版的 async-validator，表单校验在测试中永远通过（见 docs/config/vite-config.md）
-      server: { deps: { inline: ['element-plus'] } }
+      // 两个项目继承上面的插件、别名和 Sass 配置（ADR 0040）
+      projects: [
+        {
+          extends: true,
+          test: {
+            name: 'unit',
+            include: ['src/**/*.test.{ts,tsx}', 'tools/**/*.test.ts'],
+            exclude: [...configDefaults.exclude, 'src/**/*.browser.test.{ts,tsx}'],
+            environment: 'jsdom',
+            setupFiles: ['src/test-setup.ts'],
+            // Vitest 默认把样式文件替换成空内容（带 ?raw 也一样）；libs 的 Sass 入口要按原文读取，供断点一致性测试使用
+            css: { include: [/\/src\/libs\/[^/]+\/_index\.scss/] },
+            // 交给 Node 直接加载时，element-plus 会拿到 CommonJS 版的 async-validator，表单校验在测试中永远通过（见 docs/config/vite-config.md）
+            server: { deps: { inline: ['element-plus'] } }
+          }
+        },
+        {
+          extends: true,
+          test: {
+            name: 'browser',
+            include: ['src/**/*.browser.test.{ts,tsx}'],
+            setupFiles: ['src/test-setup.ts', 'src/test-setup.browser.ts'],
+            browser: {
+              // 默认是 false：不写的话这些用例仍在 Node / jsdom 里跑
+              enabled: true,
+              // 显式选软件渲染，减少本机和 CI 之间的差异
+              provider: playwright({ launchOptions: { args: ['--use-angle=swiftshader'] } }),
+              headless: true,
+              viewport: { width: 1280, height: 800 },
+              // 不做截图比对，CI 也不上传附件：失败时不往仓库目录写截图
+              screenshotFailures: false,
+              instances: [{ browser: 'chromium' }]
+            }
+          }
+        }
+      ]
     }
   };
 });

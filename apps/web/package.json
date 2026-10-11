@@ -10,6 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:browser": "vitest run --project browser",
+    "test:browser:install": "playwright install --only-shell chromium",
     "test:watch": "vitest",
     "title:generate": "node tools/system-title/cli.ts",
     "boundaries:generate": "node tools/boundaries/cli.ts",
@@ -40,13 +43,15 @@
     "@types/geojson": "^7946.0.16",
     "@types/node": "^24.19.0",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
+    "@vitest/browser-playwright": "^5.0.3",
     "@vue/test-utils": "^2.5.1",
     "jsdom": "^30.1.1",
     "msw": "^2.15.0",
     "opentype.js": "^2.0.0",
+    "playwright": "^1.64.0",
     "sass-embedded": "^1.105.0",
     "typescript": "7.0.2",
     "vite": "^8.3.1",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.3"
   }
 }

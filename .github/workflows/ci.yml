@@ -35,5 +35,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
+      # 浏览器测试用的 Chromium 无界面版及其系统依赖（ADR 0040）；不缓存，Playwright 不建议缓存浏览器
+      - run: pnpm --filter @yzt/web exec playwright install --with-deps --only-shell chromium
       - run: pnpm test
       - run: pnpm build

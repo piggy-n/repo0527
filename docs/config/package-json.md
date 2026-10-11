@@ -121,6 +121,9 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:browser": "vitest run --project browser",
+    "test:browser:install": "playwright install --only-shell chromium",
     "test:watch": "vitest",
     "title:generate": "node tools/system-title/cli.ts",
     "boundaries:generate": "node tools/boundaries/cli.ts",
@@ -130,12 +133,14 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "@element-plus/icons-vue": "^2.3.2",
     "@maplibre/maplibre-gl-style-spec": "^26.4.4",
     "@tanstack/vue-query": "^5.104.1",
+    "@turf/boolean-point-in-polygon": "^7.4.0",
     "@vue/devtools-api": "^8.2.1",
     "@vueuse/core": "^15.0.0",
     "@yzt/icons": "workspace:*",
     "axios": "^1.20.0",
     "core-js": "^3.50.0",
     "element-plus": "^2.14.6",
+    "geographiclib-geodesic": "^2.2.0",
     "jwt-decode": "^4.0.0",
     "maplibre-gl": "^6.12.0",
     "nanoevents": "^10.0.0",
@@ -149,14 +154,16 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "@types/geojson": "^7946.0.16",
     "@types/node": "^24.19.0",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
+    "@vitest/browser-playwright": "^5.0.3",
     "@vue/test-utils": "^2.5.1",
     "jsdom": "^30.1.1",
     "msw": "^2.15.0",
     "opentype.js": "^2.0.0",
+    "playwright": "^1.64.0",
     "sass-embedded": "^1.105.0",
     "typescript": "7.0.2",
     "vite": "^8.3.1",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.3"
   }
 }
 ```
@@ -207,6 +214,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `msw` | 测试中在网络层模拟接口，只用 `msw/node`；安装脚本不放行（见 pnpm-workspace.md） | axios-mock-adapter |
 | `opentype.js` | 解析字体、把系统名称转成 SVG 轮廓，只在 `tools/system-title/` 中使用（ADR 0012）；2.0 没有自带类型，用本地的最小声明 | fontkit、harfbuzzjs |
 | `vitest` | 测试运行器，复用 `vite.config.ts`（ADR 0010） | Jest |
+| `@vitest/browser-playwright` | Vitest 浏览器模式的 Playwright 驱动（ADR 0040），会带上 `@vitest/browser`。它对 `vitest` 的依赖是精确版本，两者要一起升级 | WebdriverIO 驱动、Vitest 默认的 preview（不能无界面运行） |
+| `playwright` | 浏览器测试用来启动 Chromium（ADR 0040），版本独立管理（驱动对它的依赖是 `*`）。浏览器本身不随依赖安装，第一次要运行 `test:browser:install` | — |
 | `@vue/test-utils` | Vue 官方的组件挂载与交互库 | — |
 | `jsdom` | 测试时在 Node 里模拟 DOM | happy-dom（ADR 0010 有实测对比） |
 | `@types/node` | 只给 `vite.config.ts` 提供 Node 类型 | — |

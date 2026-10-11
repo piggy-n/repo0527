@@ -27,11 +27,11 @@
 - 距离和面积用 geographiclib-geodesic 按椭球面计算，不另写公式（ADR 0035）；其他几何计算按需安装 turf v7 的单个包，不用 `@turf/turf` 全家桶（ADR 0037）
 - 地图内核的事件用 nanoevents；资源释放用标准的 `Disposable` / `DisposableStack`，运行时由 `app/main.ts` 全局引入的 core-js 补齐（ADR 0023）
 - 浏览器目标用 Vite 默认值，不兼容旧浏览器，不引入 `@vitejs/plugin-legacy`
-- 测试用 Vitest 5 + jsdom + `@vue/test-utils`，配置写在 `vite.config.ts` 的 `test` 字段（ADR 0010）
+- 测试用 Vitest 5 + jsdom + `@vue/test-utils`，配置写在 `vite.config.ts` 的 `test` 字段（ADR 0010）；依赖真实引擎或布局的测试用 Vitest 浏览器模式（Playwright 驱动的 Chromium 无界面版，ADR 0040）
 - HTTP 用 axios + zod 4，测试中用 MSW 2.x 模拟接口（ADR 0011）
 - 接口数据用 TanStack Vue Query 5 管理，全局关闭失败重试和切回窗口时的自动刷新（ADR 0017）
 - 登录密码用 sm-crypto-v2 做 SM2 加密，公钥放在 `.env`；token 过期判断用 jwt-decode；会话存 localStorage（ADR 0015）
-- CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 测试 → 构建（ADR 0005）
+- CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 安装浏览器 → 测试 → 构建（ADR 0005、0040）
 
 待定：持久化（计划用 IndexedDB + idb-keyval）
 
@@ -142,6 +142,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 ### 测试
 
 - 测试文件和源文件放在一起，命名 `*.test.ts` / `*.test.tsx`；显式从 `vitest` 导入 `describe`、`it`、`expect`，不开 `globals`
+- 浏览器测试命名 `*.browser.test.{ts,tsx}`（ADR 0040）：只写依赖真实引擎或真实布局的行为，能用假对象测的仍写普通测试；只用本地数据，不请求后端和天地图；`whenReady()` 只表示整体加载完成，验证画面要等渲染条件（如 `idle` 之后查到目标要素）；要等的事件在触发操作前登记，可能挂起的等待和超时赛跑，结束后清理监听和定时器；每个用例自己创建容器、会话和视图，结束时释放并移除容器（同一文件的用例共用一个页面）
 - 不用 DOM 的测试文件（纯逻辑、libs 的会话与 Worker 通信层、`tools/` 脚本）第一行写 `// @vitest-environment node`：默认的 jsdom 每个文件要多花约 1 秒创建（见 `docs/config/vite-config.md` 的"测试耗时"）
 - 工具函数、鉴权、HTTP 错误处理这类纯逻辑要写测试；页面和组件测试关键交互
 - pages、features 的测试用 `createMemoryHistory()` 建只含所需路由的最小路由，不导入 `app` 的路由表（测试文件同样受依赖方向约束）；`app` 自己的测试可以用真实路由表，例如检查导航与路由权限是否一致
@@ -268,8 +269,8 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - `pnpm lint`：lint 检查（含类型感知规则与依赖方向）；`pnpm lint:fix` 自动修复可安全修复的问题
 - `pnpm build`：所有包的生产构建；`pnpm build:intranet` 是内网部署的构建（不请求天地图）
 - `pnpm --filter @yzt/web dev:intranet`：用内网配置启动开发服务器
-- `pnpm test`：所有包的测试（`vitest run`）；`pnpm --filter @yzt/web test:watch` 监听模式
-- CI（`.github/workflows/ci.yml`）依次运行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm lint`、`pnpm test`、`pnpm build`
+- `pnpm test`：所有包的测试（`vitest run`，`apps/web` 里有 `unit`、`browser` 两个项目）；`pnpm --filter @yzt/web test:watch` 监听模式；`test:unit`、`test:browser` 只跑其中一个；第一次跑浏览器测试前运行 `pnpm --filter @yzt/web test:browser:install`
+- CI（`.github/workflows/ci.yml`）依次运行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm lint`、安装 Chromium 无界面版、`pnpm test`、`pnpm build`
 - `pnpm deps:check`：检查过期的依赖和 GitHub Actions
 - `pnpm deps:update:within-range`：在版本范围内更新依赖和 Actions
 - `pnpm deps:update:allow-major`：交互式选择要升级大版本的依赖和 Actions

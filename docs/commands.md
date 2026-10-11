@@ -9,11 +9,13 @@
 | 场景 | 命令 |
 |---|---|
 | 刚 clone / 切分支 / 拉代码后 | `pnpm install` |
+| 第一次运行浏览器测试前（每台机器一次，升级 playwright 后再运行一次） | `pnpm --filter @yzt/web test:browser:install` |
 | 本地开发 | `pnpm --filter @yzt/web dev` |
 | 本地开发（内网配置，不请求天地图） | `pnpm --filter @yzt/web dev:intranet` |
 | 提交前（和 CI 相同） | `pnpm typecheck` → `pnpm lint` → `pnpm test` → `pnpm build` |
 | 自动修复 lint 问题 | `pnpm lint:fix` |
 | 写代码时持续运行测试 | `pnpm --filter @yzt/web test:watch` |
+| 只跑单元测试 / 只跑浏览器测试 | `pnpm --filter @yzt/web test:unit` / `pnpm --filter @yzt/web test:browser` |
 | 内网部署的构建 | `pnpm build:intranet` |
 | 预览构建产物 | `pnpm --filter @yzt/web preview` |
 | 每月检查依赖 | `pnpm deps:check` |
@@ -243,7 +245,7 @@ pnpm build
 **执行了什么**：根目录的 `pnpm -r test` 在 `apps/web` 里执行 `vitest run`：
 
 1. 读取 `vite.config.ts`（与开发、构建共用插件、别名和 `.env`，模式为 `test`）
-2. 运行 `src/**/*.test.{ts,tsx}` 和 `tools/**/*.test.ts`，默认环境是 jsdom；第一行写了 `// @vitest-environment node` 的文件用 Node 环境
+2. 运行两个项目（ADR 0040）：`unit` 跑 `src/**/*.test.{ts,tsx}` 和 `tools/**/*.test.ts`（不含 `*.browser.test.*`），默认环境是 jsdom，第一行写了 `// @vitest-environment node` 的文件用 Node 环境；`browser` 跑 `src/**/*.browser.test.{ts,tsx}`，在 Playwright 启动的 Chromium 无界面版里运行
 3. 转换结果缓存在根目录的 `node_modules/.vitest-cache`（`fsModuleCache`），第一次运行写缓存，之后跳过转换
 4. 有失败时退出码非 0
 
@@ -254,7 +256,27 @@ pnpm build
 - 本地 `it.only` 会让其他用例被跳过，lint 会报错；CI 中 Vitest 会直接拒绝运行
 - Vitest 只转译不做类型检查，测试文件的类型由 `pnpm typecheck` 检查
 - 改了 Vite 插件的选项、或怀疑测试用的是旧的转换结果时，先清缓存：`pnpm --filter @yzt/web exec vitest --clearCache`（缓存键不含插件选项，见 [config/vite-config.md](config/vite-config.md)"测试耗时"）
-- 耗时约 25 秒（缓存已写好时），波动约 ±4 秒
+- 耗时约 30 秒（缓存已写好时），波动约 ±4 秒；加入浏览器项目后多了约 5 秒（启动浏览器、两个项目并行）
+- 本机没有安装浏览器时，`browser` 项目会报找不到浏览器，先运行 `test:browser:install`
+
+### `pnpm --filter @yzt/web test:unit`、`test:browser`
+
+**作用**：只跑其中一个项目（`vitest run --project unit` / `--project browser`）。
+
+**什么时候用**：只改了一边的代码时；排查浏览器测试的问题时。
+
+**注意事项**：浏览器测试里 `console` 的输出在本会话这类简洁报告器下不显示，要看时加 `--reporter=default`，例如 `pnpm --filter @yzt/web test:browser -- --reporter=default`
+
+### `pnpm --filter @yzt/web test:browser:install`
+
+**作用**：下载浏览器测试用的 Chromium 无界面版（`playwright install --only-shell chromium`）。
+
+**什么时候用**：每台机器第一次运行浏览器测试之前；升级 playwright 之后（新版本对应新的浏览器版本）。
+
+**注意事项**：
+
+- 浏览器放在用户目录的 Playwright 缓存里（Windows 是 `%LOCALAPPDATA%\ms-playwright`），不在仓库里；无界面版解压后约 280 MB
+- CI 用 `playwright install --with-deps --only-shell chromium`，同时安装 Linux 上需要的系统库（见 [config/ci-workflow.md](config/ci-workflow.md)）
 
 ### `pnpm --filter @yzt/web test:watch`
 

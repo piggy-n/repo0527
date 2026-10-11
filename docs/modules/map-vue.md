@@ -245,6 +245,7 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 | `MapCanvas.test.tsx` | 用完整快照创建视图、页面的 class 不冲掉 MapLibre 的 class、视图状态的变化（视图入口只在 `ready` 时有值）、受限入口（只有 `kind`、`pick`、`project`，移动相机经相机操作）、只读引用、`whenReady` 的各种结局、`useCamera` 的订阅与取消、先释放视图后释放会话、运行中的错误、画布的数量限制、失败原因、引擎失败后的重试；受限入口的 `pick`、`project`；工具通过上下文激活和退出、`activeTool` 只读、地图上的点击经视图交给工具 | jsdom |
 | `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，相机控制 `fitBounds` 的默认 padding，`useMapOverlay` 不在作用域里时抛错；`activeTool` 跟随工具模型、上下文释放后不再跟随；视图入口只在 `ready` 时有值；相机操作：开始时作废上一次、读当前的不开始新的且是同一个对象，就绪时同步执行、没就绪时等到就绪（暂停不算）、期间有新的操作时放弃、引擎失败后重试和样式失败后恢复都照样执行、挂上已就绪的视图时执行、只能 `run` 一次且不重放、已作废和上下文释放后不执行、地图刚就绪时旧操作先执行新操作后执行、回调里开始的新操作立即执行、相机控制过期后抛错和作废后不生效、回调出错交给 `onError`、等待的监听在执行和作废和释放时移除；`whenReady` 返回前 `signal` 中止、视图被卸下 | Node |
 | `overlay.test.ts` | 占用与间隔、同一边取最大、不算的元素、画布的位置、横向和纵向的下限、选项 | Node |
+| `overlay.browser.test.tsx` | 真实的布局和 MapLibre（ADR 0040）：登记的面板按实际尺寸算进留白（左 352），不传 `padding` 的 `fitBounds` 把范围放在面板右边的区域里、并贴满可视区域的一边。jsdom 里元素的尺寸都是 0，5A.3 起这一点只在开发页手动验证过 | Chromium 无界面版 |
 
 - 推导失败的用例用 `await expect(nextTick()).resolves.toBeUndefined()` 等待：异常冒出侦听器时，失败落在断言上，而不是测试本身报错
 - `MapCanvas.test.tsx` 注入实现 `MapLike` 的假地图（`MapLike` 等类型从 `@yzt/map-core` 导出），走真实的 `MapLibreView`；`context.test.ts` 用一个实现 `MapView` 的假视图，测 `MapLibreView` 本身覆盖不到的情况
