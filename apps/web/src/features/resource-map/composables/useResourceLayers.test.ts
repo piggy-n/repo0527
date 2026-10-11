@@ -200,7 +200,14 @@ describe('useResourceLayers', () => {
 
   it('推导读符号的覆盖和预览，只有它们变化时也重新推导', async () => {
     const overrides = shallowRef<ReadonlyMap<string, SymbolOverride>>(new Map());
-    using ctx = await loaded({ symbols: { overrideOf: code => overrides.value.get(code) } });
+    using ctx = await loaded({
+      symbols: {
+        overrideOf: code => {
+          const uniform = overrides.value.get(code);
+          return uniform && { uniform };
+        }
+      }
+    });
     ctx.owner.setChecked('bgdc_cjdcq', true);
     const fillColors = computed(() =>
       ctx.owner.deriveGroup().layers.map(item => (item.type === 'fill' ? item.paint?.['fill-color'] : undefined))

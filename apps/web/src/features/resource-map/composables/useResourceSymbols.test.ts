@@ -58,18 +58,18 @@ describe('useResourceSymbols', () => {
     using ctx = setup();
     const { symbols } = ctx;
 
-    symbols.setUniform('csxhjctb_gyssp', { fillColor: '#000', size: 'L' });
+    symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { fillColor: '#000', size: 'L' });
     expect(symbols.overrides.value.get('csxhjctb_gyssp')).toStrictEqual({
       uniform: { size: 'L', fillColor: 'rgba(0, 0, 0, 1)' }
     });
     expect(symbols.isCustomized('csxhjctb_gyssp')).toBe(true);
     expect(symbols.isCustomized('szy_kt')).toBe(false);
 
-    symbols.setUniform('csxhjctb_gyssp', { size: 'M' });
+    symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { size: 'M' });
     expect(symbols.overrides.value.get('csxhjctb_gyssp')).toStrictEqual({ uniform: { fillColor: 'rgba(0, 0, 0, 1)' } });
 
     // 默认颜色换一种写法也算改回默认
-    symbols.setUniform('csxhjctb_gyssp', { fillColor: defaultColor('csxhjctb_gyssp', 'fillColor').toLowerCase() });
+    symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { fillColor: defaultColor('csxhjctb_gyssp', 'fillColor').toLowerCase() });
     expect(symbols.overrides.value.has('csxhjctb_gyssp')).toBe(false);
     expect(symbols.isCustomized('csxhjctb_gyssp')).toBe(false);
   });
@@ -78,9 +78,9 @@ describe('useResourceSymbols', () => {
     using ctx = setup();
     const { symbols } = ctx;
 
-    symbols.setUniform('csxhjctb_gyssp', { size: 4.26, strokeWidth: 3 });
-    symbols.setUniform('bgdc_cjdcqjx', { width: 0.64, dash: 'dotted' });
-    symbols.setUniform('csxhjctb_gyssp', { strokeWidth: undefined });
+    symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { size: 4.26, strokeWidth: 3 });
+    symbols.setSymbol({ code: 'bgdc_cjdcqjx' }, { width: 0.64, dash: 'dotted' });
+    symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { strokeWidth: undefined });
 
     expect(symbols.overrides.value.get('csxhjctb_gyssp')).toStrictEqual({ uniform: { size: 4.5, strokeWidth: 3 } });
     expect(symbols.overrides.value.get('bgdc_cjdcqjx')).toStrictEqual({ uniform: { width: 0.6, dash: 'dotted' } });
@@ -91,14 +91,14 @@ describe('useResourceSymbols', () => {
     const { symbols } = ctx;
     const empty = symbols.overrides.value;
 
-    symbols.resetUniform('szy_kt');
+    symbols.resetSymbol({ code: 'szy_kt' });
     symbols.resetAll();
-    symbols.setUniform('szy_kt', { outlineColor: defaultColor('szy_kt', 'outlineColor') });
+    symbols.setSymbol({ code: 'szy_kt' }, { outlineColor: defaultColor('szy_kt', 'outlineColor') });
     expect(symbols.overrides.value).toBe(empty);
 
-    symbols.setUniform('szy_kt', { fillColor: 'rgba(0, 0, 255, 0.5)' });
+    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });
     const changed = symbols.overrides.value;
-    symbols.setUniform('szy_kt', { fillColor: '#0000FF80' });
+    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: '#0000FF80' });
     expect(symbols.overrides.value).toBe(changed);
   });
 
@@ -107,17 +107,20 @@ describe('useResourceSymbols', () => {
     const { symbols } = ctx;
     const before = symbols.overrides.value;
 
-    expect(() => symbols.setUniform('nope', { size: 'L' })).toThrow('不在目录里');
-    expect(() => symbols.setUniform('csxhjctb_hydl', { color: '#000' })).toThrow('不是统一符号');
-    expect(() => symbols.setUniform('csxhjctb_gyssp', { color: '#000' })).toThrow('没有 color');
-    expect(() => symbols.setUniform('szy_kt', { fillColor: '不是颜色' })).toThrow('不是颜色');
-    expect(() => symbols.setUniform('csxhjctb_gyssp', { size: 25 })).toThrow(RangeError);
-    expect(() => symbols.setUniform('bgdc_cjdcqjx', { width: 0.2 })).toThrow(RangeError);
-    expect(() => symbols.setUniform('csxhjctb_gyssp', { strokeWidth: 1.5 })).toThrow('描边宽度');
+    expect(() => symbols.setSymbol({ code: 'nope' }, { size: 'L' })).toThrow('不在目录里');
+    expect(() => symbols.setSymbol({ code: 'csxhjctb_hydl', item: '湖泊' }, { color: '#000' })).toThrow('没有取值 湖泊');
+    expect(() => symbols.setSymbol({ code: 'szy_kt', item: '河流' }, { fillColor: '#000' })).toThrow('没有取值 河流');
+    expect(() => symbols.setMode('szy_kt', 'uniform')).toThrow('不按属性配色');
+    expect(() => symbols.setMode('nope', 'uniform')).toThrow('不在目录里');
+    expect(() => symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { color: '#000' })).toThrow('没有 color');
+    expect(() => symbols.setSymbol({ code: 'szy_kt' }, { fillColor: '不是颜色' })).toThrow('不是颜色');
+    expect(() => symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { size: 25 })).toThrow(RangeError);
+    expect(() => symbols.setSymbol({ code: 'bgdc_cjdcqjx' }, { width: 0.2 })).toThrow(RangeError);
+    expect(() => symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { strokeWidth: 1.5 })).toThrow('描边宽度');
     // 类型不允许，模拟界面传来的脏值
-    expect(() => symbols.setUniform('bgdc_cjdcqjx', { dash: 'wavy' as LineDash })).toThrow('没有线型');
-    expect(() => symbols.previewColor('csxhjctb_gyssp', 'color', '#000')).toThrow('没有 color');
-    expect(() => symbols.previewColor('szy_kt', 'fillColor', '不是颜色')).toThrow('不是颜色');
+    expect(() => symbols.setSymbol({ code: 'bgdc_cjdcqjx' }, { dash: 'wavy' as LineDash })).toThrow('没有线型');
+    expect(() => symbols.previewColor({ code: 'csxhjctb_gyssp' }, 'color', '#000')).toThrow('没有 color');
+    expect(() => symbols.previewColor({ code: 'szy_kt' }, 'fillColor', '不是颜色')).toThrow('不是颜色');
     expect(symbols.overrides.value).toBe(before);
     expect(symbols.preview.value).toBeNull();
   });
@@ -125,85 +128,156 @@ describe('useResourceSymbols', () => {
   it('目录还没加载时操作抛错', () => {
     using ctx = setup(null);
 
-    expect(() => ctx.symbols.setUniform('szy_kt', { fillColor: '#000' })).toThrow('不在目录里');
-    expect(ctx.symbols.symbolOf('szy_kt')).toBeNull();
+    expect(() => ctx.symbols.setSymbol({ code: 'szy_kt' }, { fillColor: '#000' })).toThrow('不在目录里');
+    expect(ctx.symbols.symbolOf({ code: 'szy_kt' })).toBeNull();
   });
 
   it('预览参与推导、不写入覆盖；同一时间只有一个；确认时写入并清掉预览，丢弃时回到原来的颜色', () => {
     using ctx = setup();
     const { symbols } = ctx;
 
-    symbols.previewColor('csxhjctb_gyssp', 'fillColor', '#00FF00');
+    symbols.previewColor({ code: 'csxhjctb_gyssp' }, 'fillColor', '#00FF00');
     expect(symbols.overrides.value.size).toBe(0);
-    expect(symbols.overrideOf('csxhjctb_gyssp')).toStrictEqual({ fillColor: 'rgba(0, 255, 0, 1)' });
+    expect(symbols.overrideOf('csxhjctb_gyssp')).toStrictEqual({ uniform: { fillColor: 'rgba(0, 255, 0, 1)' } });
     // 编辑器显示确认过的符号，取色器的值不跟着预览走（否则取消时会重置成预览的颜色）
-    expect(symbols.symbolOf('csxhjctb_gyssp')).toStrictEqual(defaultOf('csxhjctb_gyssp'));
+    expect(symbols.symbolOf({ code: 'csxhjctb_gyssp' })).toStrictEqual(defaultOf('csxhjctb_gyssp'));
 
-    symbols.previewColor('bgdc_cjdcqjx', 'color', '#0000FF');
+    symbols.previewColor({ code: 'bgdc_cjdcqjx' }, 'color', '#0000FF');
     expect(symbols.overrideOf('csxhjctb_gyssp')).toBeUndefined();
 
     // 确认别的资源不影响这个预览
-    symbols.setUniform('szy_kt', { outlineColor: '#000' });
+    symbols.setSymbol({ code: 'szy_kt' }, { outlineColor: '#000' });
     expect(symbols.preview.value).toStrictEqual({ code: 'bgdc_cjdcqjx', field: 'color', color: 'rgba(0, 0, 255, 1)' });
 
-    symbols.setUniform('bgdc_cjdcqjx', { color: '#0000FF' });
+    symbols.setSymbol({ code: 'bgdc_cjdcqjx' }, { color: '#0000FF' });
     expect(symbols.preview.value).toBeNull();
     expect(symbols.overrides.value.get('bgdc_cjdcqjx')).toStrictEqual({ uniform: { color: 'rgba(0, 0, 255, 1)' } });
 
-    symbols.previewColor('bgdc_cjdcqjx', 'color', '#FF0000');
-    expect(symbols.overrideOf('bgdc_cjdcqjx')).toStrictEqual({ color: 'rgba(255, 0, 0, 1)' });
+    symbols.previewColor({ code: 'bgdc_cjdcqjx' }, 'color', '#FF0000');
+    expect(symbols.overrideOf('bgdc_cjdcqjx')).toStrictEqual({ uniform: { color: 'rgba(255, 0, 0, 1)' } });
     symbols.clearPreview();
-    expect(symbols.overrideOf('bgdc_cjdcqjx')).toStrictEqual({ color: 'rgba(0, 0, 255, 1)' });
+    expect(symbols.overrideOf('bgdc_cjdcqjx')).toStrictEqual({ uniform: { color: 'rgba(0, 0, 255, 1)' } });
   });
 
   it('取色器报回确认的颜色（取消、打开时）：清掉这个字段的预览，不设新的预览；别的字段的预览不动', () => {
     using ctx = setup();
     const { symbols } = ctx;
-    symbols.setUniform('szy_kt', { outlineColor: '#000' });
+    symbols.setSymbol({ code: 'szy_kt' }, { outlineColor: '#000' });
 
     // 打开时报一次换了写法的确认值
-    symbols.previewColor('szy_kt', 'outlineColor', 'rgb(0, 0, 0)');
-    symbols.previewColor('szy_kt', 'fillColor', defaultColor('szy_kt', 'fillColor'));
+    symbols.previewColor({ code: 'szy_kt' }, 'outlineColor', 'rgb(0, 0, 0)');
+    symbols.previewColor({ code: 'szy_kt' }, 'fillColor', defaultColor('szy_kt', 'fillColor'));
     expect(symbols.preview.value).toBeNull();
 
-    symbols.previewColor('szy_kt', 'outlineColor', '#F00');
-    symbols.previewColor('szy_kt', 'fillColor', defaultColor('szy_kt', 'fillColor'));
+    symbols.previewColor({ code: 'szy_kt' }, 'outlineColor', '#F00');
+    symbols.previewColor({ code: 'szy_kt' }, 'fillColor', defaultColor('szy_kt', 'fillColor'));
     expect(symbols.preview.value).toStrictEqual({ code: 'szy_kt', field: 'outlineColor', color: 'rgba(255, 0, 0, 1)' });
 
     // 取消时重置回确认的值
-    symbols.previewColor('szy_kt', 'outlineColor', 'rgba(0, 0, 0, 1)');
+    symbols.previewColor({ code: 'szy_kt' }, 'outlineColor', 'rgba(0, 0, 0, 1)');
     expect(symbols.preview.value).toBeNull();
-    expect(symbols.overrideOf('szy_kt')).toStrictEqual({ outlineColor: 'rgba(0, 0, 0, 1)' });
+    expect(symbols.overrideOf('szy_kt')).toStrictEqual({ uniform: { outlineColor: 'rgba(0, 0, 0, 1)' } });
   });
 
-  it('叠加后的统一符号：目录里没有的、按属性配色的资源为 null', () => {
+  it('确认过的符号：统一样式对任何资源都有，取值用取值的颜色作默认；目录里没有的资源、规则里没有的取值为 null', () => {
     using ctx = setup();
     const { symbols } = ctx;
-    symbols.setUniform('bgdc_cjdcqjx', { dash: 'dashDot' });
+    symbols.setSymbol({ code: 'bgdc_cjdcqjx' }, { dash: 'dashDot' });
 
-    expect(symbols.symbolOf('bgdc_cjdcqjx')).toStrictEqual({ ...defaultOf('bgdc_cjdcqjx'), dash: 'dashDot' });
-    expect(symbols.symbolOf('szy_kt')).toStrictEqual(defaultOf('szy_kt'));
-    expect(symbols.symbolOf('csxhjctb_hydl')).toBeNull();
-    expect(symbols.symbolOf('nope')).toBeNull();
+    expect(symbols.symbolOf({ code: 'bgdc_cjdcqjx' })).toStrictEqual({ ...defaultOf('bgdc_cjdcqjx'), dash: 'dashDot' });
+    expect(symbols.symbolOf({ code: 'szy_kt' })).toStrictEqual(defaultOf('szy_kt'));
+    expect(symbols.symbolOf({ code: 'csxhjctb_hydl' })).toStrictEqual(defaultOf('csxhjctb_hydl'));
+    expect(symbols.symbolOf({ code: 'csxhjctb_hydl', item: '水渠' })).toStrictEqual({
+      geometry: 'line',
+      color: '#4FC3F7',
+      width: 'M',
+      dash: 'solid'
+    });
+    expect(symbols.symbolOf({ code: 'csxhjctb_hydl', item: '湖泊' })).toBeNull();
+    expect(symbols.symbolOf({ code: 'nope' })).toBeNull();
+  });
+
+  it('分类样式：按取值改符号，只记和取值默认不同的字段；取值的预览只叠加在这个取值上，确认别的取值不清掉它', () => {
+    using ctx = setup();
+    const { symbols } = ctx;
+    const canal = { code: 'csxhjctb_hydl', item: '水渠' };
+    const river = { code: 'csxhjctb_hydl', item: '河流' };
+
+    symbols.setSymbol(canal, { color: '#4FC3F7', width: 'L' });
+    expect(symbols.overrides.value.get('csxhjctb_hydl')).toStrictEqual({ items: { 水渠: { width: 'L' } } });
+    expect(symbols.hasOverride(canal)).toBe(true);
+    expect(symbols.hasOverride(river)).toBe(false);
+    expect(symbols.hasOverride({ code: 'csxhjctb_hydl' })).toBe(false);
+
+    symbols.previewColor(river, 'color', '#000');
+    symbols.setSymbol(canal, { dash: 'dotted' });
+    expect(symbols.preview.value).toStrictEqual({ code: 'csxhjctb_hydl', item: '河流', field: 'color', color: 'rgba(0, 0, 0, 1)' });
+    expect(symbols.overrideOf('csxhjctb_hydl')).toStrictEqual({
+      items: { 水渠: { width: 'L', dash: 'dotted' }, 河流: { color: 'rgba(0, 0, 0, 1)' } }
+    });
+
+    symbols.setSymbol(river, { width: 'S' });
+    expect(symbols.preview.value).toBeNull();
+  });
+
+  it('样式方式：默认分类；换成统一样式时各取值的覆盖保留，换回分类时不再记方式；只选了统一样式也算改过', () => {
+    using ctx = setup();
+    const { symbols } = ctx;
+    symbols.setSymbol({ code: 'csxhjctb_hydl', item: '水渠' }, { width: 'L' });
+    expect(symbols.modeOf('csxhjctb_hydl')).toBe('classified');
+    expect(symbols.modeOf('szy_kt')).toBeNull();
+    expect(symbols.modeOf('nope')).toBeNull();
+    // 按属性配色，但不在目录里
+    expect(symbols.modeOf('bgdc_dltb')).toBeNull();
+
+    symbols.previewColor({ code: 'csxhjctb_hydl', item: '河流' }, 'color', '#000');
+    symbols.setMode('csxhjctb_hydl', 'uniform');
+    expect(symbols.preview.value).toBeNull();
+    expect(symbols.modeOf('csxhjctb_hydl')).toBe('uniform');
+    expect(symbols.overrides.value.get('csxhjctb_hydl')).toStrictEqual({ mode: 'uniform', items: { 水渠: { width: 'L' } } });
+
+    symbols.resetSymbol({ code: 'csxhjctb_hydl', item: '水渠' });
+    expect(symbols.overrides.value.get('csxhjctb_hydl')).toStrictEqual({ mode: 'uniform' });
+    expect(symbols.isCustomized('csxhjctb_hydl')).toBe(true);
+
+    const before = symbols.overrides.value;
+    symbols.setMode('csxhjctb_hydl', 'uniform');
+    expect(symbols.overrides.value).toBe(before);
+    symbols.setMode('csxhjctb_hydl', 'classified');
+    expect(symbols.overrides.value.has('csxhjctb_hydl')).toBe(false);
+  });
+
+  it('恢复一个资源：样式方式、统一样式、各取值和它的预览一起去掉，别的资源不动', () => {
+    using ctx = setup();
+    const { symbols } = ctx;
+    symbols.setMode('csxhjctb_hydl', 'uniform');
+    symbols.setSymbol({ code: 'csxhjctb_hydl' }, { color: '#000' });
+    symbols.setSymbol({ code: 'csxhjctb_hydl', item: '河流' }, { width: 'XL' });
+    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: '#000' });
+    symbols.previewColor({ code: 'csxhjctb_hydl', item: '水渠' }, 'color', '#F00');
+
+    symbols.resetResource('csxhjctb_hydl');
+    expect([...symbols.overrides.value.keys()]).toStrictEqual(['szy_kt']);
+    expect(symbols.preview.value).toBeNull();
   });
 
   it('恢复默认：单个资源连同它的预览；全部资源连同预览', () => {
     using ctx = setup();
     const { symbols } = ctx;
-    symbols.setUniform('csxhjctb_gyssp', { size: 'XL' });
-    symbols.setUniform('szy_kt', { fillColor: '#000' });
-    symbols.previewColor('szy_kt', 'outlineColor', '#FFF');
+    symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { size: 'XL' });
+    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: '#000' });
+    symbols.previewColor({ code: 'szy_kt' }, 'outlineColor', '#FFF');
 
-    symbols.resetUniform('csxhjctb_gyssp');
+    symbols.resetSymbol({ code: 'csxhjctb_gyssp' });
     expect([...symbols.overrides.value.keys()]).toStrictEqual(['szy_kt']);
     expect(symbols.preview.value).not.toBeNull();
 
-    symbols.resetUniform('szy_kt');
+    symbols.resetSymbol({ code: 'szy_kt' });
     expect(symbols.overrides.value.size).toBe(0);
     expect(symbols.preview.value).toBeNull();
 
-    symbols.setUniform('szy_kt', { fillColor: '#000' });
-    symbols.previewColor('bgdc_cjdcqjx', 'color', '#FFF');
+    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: '#000' });
+    symbols.previewColor({ code: 'bgdc_cjdcqjx' }, 'color', '#FFF');
     symbols.resetAll();
     expect(symbols.overrides.value.size).toBe(0);
     expect(symbols.preview.value).toBeNull();

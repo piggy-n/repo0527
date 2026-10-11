@@ -5,14 +5,15 @@ import type { ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import { type LanduseLegendView, landuseLegend, type LegendEntry, legendEntries, legendEntrySet } from './legend';
+import { RESOURCE_PALETTE } from './palette';
 import {
   EMPTY_RESOURCE_LAYERS,
   mergeDisplayState,
   type ResourceLayersState,
   resourcesGroup
 } from './resource-layers';
-import { RESOURCE_PALETTE } from './palette';
-import { sizeCurve, type SymbolOverride } from './symbols';
+import type { ResourceSymbolOverride } from './resource-symbols';
+import { sizeCurve } from './symbols';
 
 function layer(code: string, name: string, geoType: ResourceTreeLayer['geoType']) {
   return { code, name, geoType, yearList: [2022] as [number] };
@@ -90,10 +91,13 @@ describe('legendEntries', () => {
       kind: 'values',
       code: 'csxhjctb_hydl',
       name: '水域线层',
+      mode: 'classified',
+      // 统一样式的预览：按目录顺序从配色板取色
+      swatch: { geometry: 'line', color: RESOURCE_PALETTE[2] },
       values: [
-        { label: '河流', swatch: { geometry: 'line', color: '#1E88E5' } },
-        { label: '水渠', swatch: { geometry: 'line', color: '#4FC3F7' } },
-        { label: '其他', swatch: { geometry: 'line', color: '#2F80ED' } }
+        { key: '河流', label: '河流', swatch: { geometry: 'line', color: '#1E88E5' } },
+        { key: '水渠', label: '水渠', swatch: { geometry: 'line', color: '#4FC3F7' } },
+        { key: '$other', label: '其他', swatch: { geometry: 'line', color: '#2F80ED' } }
       ]
     });
     const czcdyd = entryOf(entries, 'bgdc_czcdyd');
@@ -132,12 +136,12 @@ describe('legendEntries', () => {
     expect(paintOf('csxhjctb_gyssp')).toMatchObject({ 'circle-color': RESOURCE_PALETTE[6] });
   });
 
-  it('符号覆盖：图层和图例都从叠加后的符号推导；按属性配色的资源不用统一样式的覆盖', () => {
-    const overrides = new Map<string, SymbolOverride>([
-      ['szy_kt', { fillColor: 'rgba(0, 0, 255, 0.5)' }],
-      ['bgdc_cjdcqjx', { color: 'rgba(0, 128, 0, 1)', width: 'L', dash: 'dashed' }],
-      ['csxhjctb_gyssp', { strokeColor: 'rgba(0, 0, 0, 1)', size: 6, strokeWidth: 3 }],
-      ['csxhjctb_hydl', { color: 'rgba(0, 0, 0, 1)' }]
+  it('符号覆盖：图层和图例都从叠加后的符号推导；分类样式不用统一样式的覆盖', () => {
+    const overrides = new Map<string, ResourceSymbolOverride>([
+      ['szy_kt', { uniform: { fillColor: 'rgba(0, 0, 255, 0.5)' } }],
+      ['bgdc_cjdcqjx', { uniform: { color: 'rgba(0, 128, 0, 1)', width: 'L', dash: 'dashed' } }],
+      ['csxhjctb_gyssp', { uniform: { strokeColor: 'rgba(0, 0, 0, 1)', size: 6, strokeWidth: 3 } }],
+      ['csxhjctb_hydl', { uniform: { color: 'rgba(0, 0, 0, 1)' } }]
     ]);
     const overrideOf = (code: string) => overrides.get(code);
     const tileBase = 'http://localhost/tiles/';
@@ -163,8 +167,38 @@ describe('legendEntries', () => {
 
     const plain = resourcesGroup({ state: ALL, invalid: new Map(), tileBase });
     expect(paintOf('csxhjctb_hydl')).toStrictEqual(plain.layers.find(item => item.id === 'resources-csxhjctb_hydl')?.paint);
-    expect(byCode(entries).csxhjctb_hydl).toStrictEqual(byCode(legendEntries(ALL, new Map())).csxhjctb_hydl);
+    // 分类样式的取值预览不变，变的只是统一样式的预览
+    const hydl = entryOf(entries, 'csxhjctb_hydl');
+    const plainHydl = entryOf(legendEntries(ALL, new Map()), 'csxhjctb_hydl');
+    expect(hydl.kind === 'values' && hydl.values).toStrictEqual(plainHydl.kind === 'values' && plainHydl.values);
     expect(validateStyleMin({ version: 8, sources: group.sources, layers: group.layers.slice() })).toStrictEqual([]);
+  });
+
+  it('分类样式的覆盖：取值的预览和图层一起变；选了统一样式时图例带上方式和统一样式的预览', () => {
+    const overrides = new Map<string, ResourceSymbolOverride>([
+      ['csxhjctb_hydl', { uniform: { color: 'rgba(0, 0, 0, 1)' }, items: { 水渠: { color: 'rgba(255, 0, 0, 1)' } } }],
+      ['bgdc_dltb', { mode: 'uniform', items: { '0101': { fillColor: 'rgba(0, 0, 255, 1)' } } }],
+      ['bgdc_dltb_czc', { items: { 'legacy:城市用地': { fillColor: 'rgba(0, 255, 0, 1)' } } }]
+    ]);
+    const entries = legendEntries(ALL, new Map(), code => overrides.get(code));
+
+    const hydl = entryOf(entries, 'csxhjctb_hydl');
+    expect(hydl).toMatchObject({ mode: 'classified', swatch: { color: 'rgba(0, 0, 0, 1)' } });
+    expect(hydl.kind === 'values' ? hydl.values.map(value => value.swatch) : []).toStrictEqual([
+      { geometry: 'line', color: '#1E88E5' },
+      { geometry: 'line', color: 'rgba(255, 0, 0, 1)' },
+      { geometry: 'line', color: '#2F80ED' }
+    ]);
+    const dltb = entryOf(entries, 'bgdc_dltb');
+    expect(dltb).toMatchObject({ kind: 'landuse', mode: 'uniform', swatch: { geometry: 'fill' } });
+    expect(dltb.kind === 'landuse' ? dltb.swatches.get('0101') : null).toStrictEqual({
+      geometry: 'fill',
+      fill: 'rgba(0, 0, 255, 1)',
+      outline: 'rgb(248, 208, 114)'
+    });
+    const czc = entryOf(entries, 'bgdc_dltb_czc');
+    expect(czc.kind === 'landuse' ? czc.swatches.get('legacy:城市用地') : null).toMatchObject({ fill: 'rgba(0, 255, 0, 1)' });
+    expect(czc.kind === 'landuse' ? czc.swatches.size : 0).toBe(76);
   });
 
   it('调整叠放顺序不改变颜色', () => {
@@ -197,21 +231,20 @@ describe('landuseLegend', () => {
     expect(outline('all')).toStrictEqual(['全部地类:69', '历史地类:6', '未匹配的地类:1']);
   });
 
-  it('地类带颜色、含义和可调整的标记；未匹配的地类是兜底色', () => {
+  it('地类带取值的键、含义和可调整的标记；历史地类的键是 legacy:名称，未匹配的地类是 $other', () => {
     const [wetland] = landuseLegend('work');
     const [unmatched] = landuseLegend('all', '未匹配');
 
     expect(wetland?.items[0]).toStrictEqual({
+      key: '0303',
       code: '0303',
       name: '红树林地',
-      color: 'rgb(49, 173, 105)',
       meaning: '沿海生长红树植物的林地。',
       adjustable: false
     });
     expect(landuseLegend('all', '0201K')[0]?.items[0]?.adjustable).toBe(true);
-    expect(unmatched?.items).toStrictEqual([
-      expect.objectContaining({ code: null, color: LANDUSE_FALLBACK_COLOR })
-    ]);
+    expect(unmatched?.items).toStrictEqual([expect.objectContaining({ key: '$other', code: null })]);
+    expect(landuseLegend('all', '城市用地').at(0)?.items[0]?.key).toBe('legacy:城市用地');
   });
 
   it('搜索编码或名称（不区分大小写、去掉首尾空格）；分组的编码或名称命中时留下整组', () => {

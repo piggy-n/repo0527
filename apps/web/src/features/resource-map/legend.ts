@@ -1,7 +1,6 @@
 import type { Resource } from './catalog';
-import { classItems } from './classification';
+import { classItems, legacyItem, OTHER_ITEM } from './classification';
 import {
-  LANDUSE_FALLBACK_COLOR,
   LANDUSE_GROUPS,
   LANDUSE_LEGACY_NAME_COLORS,
   LANDUSE_MEANINGS,
@@ -10,10 +9,12 @@ import {
   type LanduseGroup
 } from './landuse';
 import type { ResourceLayersState } from './resource-layers';
-import { noSymbolOverride, type SymbolOverrideOf } from './resource-symbols';
-import { type ResourceLayerStyle, resourceLayerStyle, resourceStyle } from './style-registry';
+import { noSymbolOverride, type ResourceSymbolOverride, type SymbolMode, type SymbolOverrideOf } from './resource-symbols';
+import { classSymbol, resourceStyle, symbolModeOf, uniformSymbol } from './style-registry';
+import type { ResourceSymbol } from './symbols';
 
-// 图例的推导（ADR 0043）：输入是显示状态、样式登记表和符号覆盖，不读地图；颜色取自分组推导用的同一份数据（ADR 0044 第 4 节）
+// 图例的推导（ADR 0043）：输入是显示状态、样式登记表和符号覆盖，不读地图；
+// 预览取自分组推导用的同一份符号（uniformSymbol、classSymbol，ADR 0044 第 4 节）
 
 /** 一个符号的预览：面是填充加描边，线是一段线，点是带描边的圆点 */
 export type LegendSwatch =
@@ -21,49 +22,68 @@ export type LegendSwatch =
   | { readonly geometry: 'line'; readonly color: string }
   | { readonly geometry: 'circle'; readonly fill: string; readonly stroke: string };
 
+/** 按取值配色的一个取值；key 是分类样式里取值的键 */
 export interface LegendValue {
+  readonly key: string;
   readonly label: string;
   readonly swatch: LegendSwatch;
 }
 
-/** 图例的一条：统一符号、按取值配色、地类（按编码或按名称配色，内容是完整的地类图例） */
+/**
+ * 图例的一条：统一符号；按取值配色；地类（按编码或按名称配色，内容是完整的地类图例）。
+ * 按属性配色的条目带样式方式，swatch 是统一样式的预览
+ */
 export type LegendEntry =
   | { readonly kind: 'symbol'; readonly code: string; readonly name: string; readonly swatch: LegendSwatch }
-  | { readonly kind: 'values'; readonly code: string; readonly name: string; readonly values: readonly LegendValue[] }
-  | { readonly kind: 'landuse'; readonly code: string; readonly name: string; readonly match: 'code' | 'name' };
+  | {
+      readonly kind: 'values';
+      readonly code: string;
+      readonly name: string;
+      readonly mode: SymbolMode;
+      readonly swatch: LegendSwatch;
+      readonly values: readonly LegendValue[];
+    }
+  | {
+      readonly kind: 'landuse';
+      readonly code: string;
+      readonly name: string;
+      readonly mode: SymbolMode;
+      readonly swatch: LegendSwatch;
+      readonly match: 'code' | 'name';
+      /** 各取值的预览，按取值的键 */
+      readonly swatches: ReadonlyMap<string, LegendSwatch>;
+    };
 
-// 统一符号的颜色在登记表里都是字符串；按属性配色时主色是表达式，换成取值对应的颜色
-const colorText = (value: unknown): string => (typeof value === 'string' ? value : '');
-
-function swatchOf(style: ResourceLayerStyle, color?: string): LegendSwatch {
-  if (style.type === 'fill') {
-    const fill = color ?? colorText(style.paint['fill-color']);
-    // 按属性配色的面不另设描边，MapLibre 用填充色描边
-    return { geometry: 'fill', fill, outline: colorText(style.paint['fill-outline-color']) || fill };
+/** 符号的预览 */
+export function swatchOf(symbol: ResourceSymbol): LegendSwatch {
+  if (symbol.geometry === 'fill') {
+    return { geometry: 'fill', fill: symbol.fillColor, outline: symbol.outlineColor };
   }
-  if (style.type === 'line') {
-    return { geometry: 'line', color: color ?? colorText(style.paint['line-color']) };
+  if (symbol.geometry === 'line') {
+    return { geometry: 'line', color: symbol.color };
   }
-  return {
-    geometry: 'circle',
-    fill: color ?? colorText(style.paint['circle-color']),
-    stroke: colorText(style.paint['circle-stroke-color'])
-  };
+  return { geometry: 'circle', fill: symbol.fillColor, stroke: symbol.strokeColor };
 }
 
-function legendEntry(resource: Resource, overrideOf: SymbolOverrideOf): LegendEntry {
+function legendEntry(resource: Resource, override: ResourceSymbolOverride | undefined): LegendEntry {
   const { code, name } = resource;
-  const registered = resourceStyle(code);
-  const rule = registered.color;
-  const style = resourceLayerStyle(resource, registered, overrideOf(code));
-  if (rule?.kind === 'landuse-code' || rule?.kind === 'landuse-name') {
-    return { kind: 'landuse', code, name, match: rule.kind === 'landuse-code' ? 'code' : 'name' };
+  const style = resourceStyle(code);
+  const rule = style.color;
+  const swatch = swatchOf(uniformSymbol(resource, override));
+  if (!rule) {
+    return { kind: 'symbol', code, name, swatch };
   }
-  if (rule) {
-    const values = classItems(rule).map(({ label, color }) => ({ label, swatch: swatchOf(style, color) }));
-    return { kind: 'values', code, name, values };
+  const mode = symbolModeOf(style, override);
+  const values = classItems(rule).map(item => ({
+    key: item.key,
+    label: item.label,
+    swatch: swatchOf(classSymbol(resource, item, override))
+  }));
+  if (rule.kind === 'landuse-code' || rule.kind === 'landuse-name') {
+    const swatches = new Map(values.map(value => [value.key, value.swatch]));
+    return { kind: 'landuse', code, name, mode, swatch, match: rule.kind === 'landuse-code' ? 'code' : 'name', swatches };
   }
-  return { kind: 'symbol', code, name, swatch: swatchOf(style) };
+  return { kind: 'values', code, name, mode, swatch, values };
 }
 
 /** 图例的条目：勾选且配置合法的资源，按叠放顺序从上到下（ADR 0043 第 1 节） */
@@ -75,7 +95,7 @@ export function legendEntries(
   return state.order.flatMap(code => {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
-    return resource && display?.checked && !invalid.has(code) ? [legendEntry(resource, overrideOf)] : [];
+    return resource && display?.checked && !invalid.has(code) ? [legendEntry(resource, overrideOf(code))] : [];
   });
 }
 
@@ -91,10 +111,11 @@ export function legendEntrySet(entries: readonly LegendEntry[]): string {
 export type LanduseLegendView = 'status' | 'work' | 'all';
 
 export interface LanduseLegendItem {
+  /** 分类样式里取值的键，预览按它取 */
+  readonly key: string;
   /** 历史地类和未匹配的地类没有编码 */
   readonly code: string | null;
   readonly name: string;
-  readonly color: string;
   readonly meaning: string;
   readonly adjustable: boolean;
 }
@@ -107,8 +128,8 @@ export interface LanduseLegendSection {
   readonly items: readonly LanduseLegendItem[];
 }
 
-function itemOf({ code, name, color, adjustable }: LanduseClass): LanduseLegendItem {
-  return { code, name, color, meaning: LANDUSE_MEANINGS[code] ?? '', adjustable: adjustable === true };
+function itemOf({ code, name, adjustable }: LanduseClass): LanduseLegendItem {
+  return { key: code, code, name, meaning: LANDUSE_MEANINGS[code] ?? '', adjustable: adjustable === true };
 }
 
 // 表 A.2 之外：历史地类按名称配色（编码没命中时，或城镇村按名称），都没命中时是兜底色（ADR 0041 第 2 节）
@@ -116,10 +137,10 @@ const LEGACY_SECTION: LanduseLegendSection = {
   key: 'legacy',
   code: null,
   name: '历史地类',
-  items: Object.entries(LANDUSE_LEGACY_NAME_COLORS).map(([name, color]) => ({
+  items: Object.keys(LANDUSE_LEGACY_NAME_COLORS).map(name => ({
+    key: legacyItem(name),
     code: null,
     name,
-    color,
     meaning: '表 A.2 之外的历史地类名称，编码没有对应的地类时按名称配色',
     adjustable: false
   }))
@@ -131,9 +152,9 @@ const UNMATCHED_SECTION: LanduseLegendSection = {
   name: '未匹配的地类',
   items: [
     {
+      key: OTHER_ITEM,
       code: null,
       name: '未匹配的地类',
-      color: LANDUSE_FALLBACK_COLOR,
       meaning: '编码和名称都没有对应的地类',
       adjustable: false
     }

@@ -2,12 +2,12 @@ import type { Resource, ResourceGeometry } from './catalog';
 import { type ClassItem, type ColorRule, symbolClasses } from './classification';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import { paletteColor } from './palette';
+import type { ResourceSymbolOverride, SymbolMode } from './resource-symbols';
 import {
   classifiedPaint,
   type ResourceLayerStyle,
   type ResourceSymbol,
   resolveSymbol,
-  type SymbolOverride,
   symbolPaint,
   withAlpha
 } from './symbols';
@@ -135,18 +135,33 @@ export function classDefaultSymbol(resource: Resource, item: ClassItem): Resourc
   return colorSymbol(resource.geometry, item.color);
 }
 
+/** 统一样式叠加覆盖后的符号 */
+export function uniformSymbol(resource: Resource, override?: ResourceSymbolOverride): ResourceSymbol {
+  return resolveSymbol(defaultSymbol(resource), override?.uniform);
+}
+
+/** 分类样式里一个取值叠加覆盖后的符号 */
+export function classSymbol(resource: Resource, item: ClassItem, override?: ResourceSymbolOverride): ResourceSymbol {
+  return resolveSymbol(classDefaultSymbol(resource, item), override?.items?.[item.key]);
+}
+
+/** 样式方式：不按属性配色的资源只有统一样式 */
+export function symbolModeOf(style: ResourceStyle, override?: ResourceSymbolOverride): SymbolMode {
+  return style.color && override?.mode !== 'uniform' ? 'classified' : 'uniform';
+}
+
 /**
- * 资源图层的样式：不按属性配色的资源是默认符号加上用户的覆盖（ADR 0044）；
- * 按属性配色的资源由各取值的符号组合成分类样式（覆盖在 5C.5b 接入）
+ * 资源图层的样式（ADR 0044 第 4 节）：统一样式是默认符号叠加覆盖；分类样式由各取值叠加覆盖后的符号组合。
+ * 图例用同样的 uniformSymbol、classSymbol 得出预览
  */
 export function resourceLayerStyle(
   resource: Resource,
   style: ResourceStyle = resourceStyle(resource.code),
-  override?: SymbolOverride
+  override?: ResourceSymbolOverride
 ): ResourceLayerStyle {
   const rule = style.color;
-  if (!rule) {
-    return symbolPaint(resolveSymbol(defaultSymbol(resource), override));
+  if (!rule || symbolModeOf(style, override) === 'uniform') {
+    return symbolPaint(uniformSymbol(resource, override));
   }
-  return classifiedPaint(symbolClasses(rule), item => classDefaultSymbol(resource, item));
+  return classifiedPaint(symbolClasses(rule), item => classSymbol(resource, item, override));
 }

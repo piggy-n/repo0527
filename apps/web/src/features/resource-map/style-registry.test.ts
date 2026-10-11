@@ -6,11 +6,12 @@ import { valueColors } from './classification';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import { paletteColor, RESOURCE_PALETTE } from './palette';
 import { defaultSymbol, resourceLayerStyle, resourceStyle, sourceLayerOf } from './style-registry';
-import { sizeCurve } from './symbols';
+import { sizeCurve, sizePixels, symbolPaint } from './symbols';
 import {
   colorOf,
   defaultColorExpression as colorExpression,
   normalizeColor as color,
+  paintValueOf,
   parsesAsColor
 } from './test-expression';
 
@@ -127,16 +128,27 @@ describe('默认样式', () => {
   it('覆盖叠加到默认符号上（ADR 0044）：线宽、线型、颜色都换成覆盖的值', () => {
     const line = resource('bgdc_cjdcqjx', 'line', 2);
 
-    expect(resourceLayerStyle(line, undefined, { width: 'L', dash: 'dashed', color: 'rgba(0, 0, 0, 1)' })).toMatchObject({
+    const uniform = { width: 'L', dash: 'dashed', color: 'rgba(0, 0, 0, 1)' } as const;
+    expect(resourceLayerStyle(line, undefined, { uniform })).toMatchObject({
       paint: { 'line-color': 'rgba(0, 0, 0, 1)', 'line-width': sizeCurve('line', 'L'), 'line-dasharray': [3, 2] }
     });
     expect(defaultSymbol(line)).toStrictEqual({ geometry: 'line', color: RESOURCE_PALETTE[2], width: 'M', dash: 'solid' });
   });
 
-  it('按属性配色的资源在分类样式之前不受统一样式的覆盖影响', () => {
+  it('按属性配色的资源：分类样式用各取值的覆盖、不受统一样式的覆盖影响；选了统一样式时用统一样式', () => {
     const hydl = resource('csxhjctb_hydl', 'line', 2);
+    const items = { 水渠: { width: 'XL' } } as const;
+    const override = { uniform: { color: 'rgba(0, 0, 0, 1)' }, items };
 
-    expect(resourceLayerStyle(hydl, undefined, { color: 'rgba(0, 0, 0, 1)' })).toStrictEqual(resourceLayerStyle(hydl));
+    const classified = resourceLayerStyle(hydl, undefined, override);
+    expect(classified).toStrictEqual(resourceLayerStyle(hydl, undefined, { items }));
+    const width = classified.type === 'line' ? classified.paint['line-width'] : undefined;
+    expect(paintValueOf('line', 'line-width', width, { ccn: '水渠' }, 14)).toBe(sizePixels('line', 'XL'));
+    expect(paintValueOf('line', 'line-width', width, { ccn: '河流' }, 14)).toBe(sizePixels('line', 'M'));
+
+    expect(resourceLayerStyle(hydl, undefined, { ...override, mode: 'uniform' })).toStrictEqual(
+      symbolPaint({ geometry: 'line', color: 'rgba(0, 0, 0, 1)', width: 'M', dash: 'solid' })
+    );
   });
 
   it('各种组合放进样式都能通过 MapLibre 的校验', () => {

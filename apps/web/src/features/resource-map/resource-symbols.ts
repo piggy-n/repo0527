@@ -11,36 +11,84 @@ import {
 
 // 符号覆盖的数据（ADR 0044 第 3、5 节）：按资源记，只记和默认不同的字段；拥有者 useResourceSymbols 持有
 
-/** 一个资源的覆盖：5C.5a 只有统一样式，样式方式和逐项覆盖在 5C.5b 加入 */
+/** 样式方式：按属性配色的资源默认是分类样式，可以换成统一样式 */
+export type SymbolMode = 'uniform' | 'classified';
+
+/** 要编辑的符号：资源的统一样式，或者分类样式里的一个取值（取值的键见 classification.ts） */
+export interface SymbolTarget {
+  readonly code: string;
+  readonly item?: string;
+}
+
+/** 一个资源的覆盖 */
 export interface ResourceSymbolOverride {
   readonly uniform?: SymbolOverride;
+  /** 按属性配色的资源选了统一样式；分类样式是默认，不记 */
+  readonly mode?: 'uniform';
+  /** 分类样式各取值的覆盖，按取值的键 */
+  readonly items?: Readonly<Record<string, SymbolOverride>>;
 }
 
 export type SymbolOverrides = ReadonlyMap<string, ResourceSymbolOverride>;
 
-/** 拖动取色时的临时预览：某个资源统一样式的一个颜色字段；参与推导，不写入覆盖、不保存（ADR 0044 第 6 节） */
+/** 推导时按资源取覆盖（含临时预览）；返回 undefined 表示都用默认符号 */
+export type SymbolOverrideOf = (code: string) => ResourceSymbolOverride | undefined;
+
+export const noSymbolOverride: SymbolOverrideOf = () => undefined;
+
+/** 拖动取色时的临时预览：某个目标的一个颜色字段；参与推导，不写入覆盖、不保存（ADR 0044 第 6 节） */
 export interface SymbolPreview {
   readonly code: string;
+  readonly item?: string;
   readonly field: ColorField;
   readonly color: string;
 }
 
-/** 推导时按资源取覆盖；返回 undefined 表示用默认符号 */
-export type SymbolOverrideOf = (code: string) => SymbolOverride | undefined;
+const isEmpty = (override: SymbolOverride | undefined) => !override || Object.keys(override).length === 0;
 
-export const noSymbolOverride: SymbolOverrideOf = () => undefined;
+/** 去掉空的统一样式和取值；什么都不剩时为 undefined */
+export function pruneOverride(override: ResourceSymbolOverride): ResourceSymbolOverride | undefined {
+  const items = Object.entries(override.items ?? {}).filter(([, item]) => !isEmpty(item));
+  const pruned: ResourceSymbolOverride = {
+    ...(isEmpty(override.uniform) ? {} : { uniform: override.uniform }),
+    ...(override.mode === 'uniform' ? { mode: 'uniform' } : {}),
+    ...(items.length > 0 ? { items: Object.fromEntries(items) } : {})
+  };
+  return Object.keys(pruned).length > 0 ? pruned : undefined;
+}
+
+/** 目标（统一样式或某个取值）的覆盖 */
+export function targetOverride(
+  override: ResourceSymbolOverride | undefined,
+  item: string | undefined
+): SymbolOverride | undefined {
+  return item === undefined ? override?.uniform : override?.items?.[item];
+}
+
+/** 换掉目标的覆盖，去掉空的部分 */
+export function withTargetOverride(
+  override: ResourceSymbolOverride | undefined,
+  item: string | undefined,
+  next: SymbolOverride
+): ResourceSymbolOverride | undefined {
+  if (item === undefined) {
+    return pruneOverride({ ...override, uniform: next });
+  }
+  return pruneOverride({ ...override, items: { ...override?.items, [item]: next } });
+}
 
 /** 推导用的覆盖：确认的覆盖再叠加临时预览 */
 export function effectiveOverride(
   overrides: SymbolOverrides,
   preview: SymbolPreview | null,
   code: string
-): SymbolOverride | undefined {
-  const uniform = overrides.get(code)?.uniform;
+): ResourceSymbolOverride | undefined {
+  const override = overrides.get(code);
   if (preview?.code !== code) {
-    return uniform;
+    return override;
   }
-  return { ...uniform, [preview.field]: preview.color };
+  const color: Partial<Record<ColorField, string>> = { [preview.field]: preview.color };
+  return withTargetOverride(override, preview.item, { ...targetOverride(override, preview.item), ...color });
 }
 
 const colorSchema = z.string().refine(value => normalizeColor(value) !== null, '颜色解析不了');
@@ -68,7 +116,14 @@ const overrideSchema = z.object({
 });
 
 /** 存下的符号覆盖：按资源的普通对象 */
-export const storedSymbolsSchema = z.record(z.string(), z.object({ uniform: overrideSchema.optional() }));
+export const storedSymbolsSchema = z.record(
+  z.string(),
+  z.object({
+    uniform: overrideSchema.optional(),
+    mode: z.literal('uniform').optional(),
+    items: z.record(z.string(), overrideSchema).optional()
+  })
+);
 
 export type StoredSymbols = z.infer<typeof storedSymbolsSchema>;
 
@@ -77,9 +132,12 @@ export function toStoredSymbols(overrides: SymbolOverrides): StoredSymbols {
   return Object.fromEntries(overrides);
 }
 
-/** 存下的覆盖还原；没有任何字段的资源不留 */
+/** 存下的覆盖还原；空的部分去掉，什么都不剩的资源不留 */
 export function fromStoredSymbols(stored: StoredSymbols): SymbolOverrides {
   return new Map(
-    Object.entries(stored).filter(([, override]) => override.uniform && Object.keys(override.uniform).length > 0)
+    Object.entries(stored).flatMap(([code, override]) => {
+      const pruned = pruneOverride(override);
+      return pruned ? [[code, pruned] as const] : [];
+    })
   );
 }

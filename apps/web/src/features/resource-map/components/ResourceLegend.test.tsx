@@ -118,7 +118,7 @@ describe('ResourceLegend', () => {
     const resetAll = () => wrapper.findAll('button').find(item => item.text() === '全部恢复默认');
     expect(resetAll()).toBeUndefined();
 
-    symbols.setUniform('szy_kt', { fillColor: '#000' });
+    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: '#000' });
     await nextTick();
     await resetAll()?.trigger('click');
     // 弹出层由定时器打开
@@ -159,17 +159,43 @@ describe('ResourceLegend', () => {
     await openLegend(wrapper);
     const swatchStyle = () => wrapper.get('[data-legend="szy_kt"] [data-swatch]').attributes('style');
 
-    symbols.setUniform('szy_kt', { fillColor: 'rgba(0, 0, 255, 0.5)' });
+    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });
     await nextTick();
     expect(swatchStyle()).toContain('background-color: rgba(0, 0, 255, 0.5)');
 
-    symbols.previewColor('szy_kt', 'fillColor', 'rgba(0, 128, 0, 0.8)');
+    symbols.previewColor({ code: 'szy_kt' }, 'fillColor', 'rgba(0, 128, 0, 0.8)');
     await nextTick();
     expect(swatchStyle()).toContain('background-color: rgba(0, 128, 0, 0.8)');
 
     symbols.clearPreview();
     await nextTick();
     expect(swatchStyle()).toContain('background-color: rgba(0, 0, 255, 0.5)');
+  });
+
+  it('分类样式的覆盖反映在取值列表和地类图例的预览上', async () => {
+    const { wrapper, owner, symbols } = mountLegend();
+    owner.setChecked('csxhjctb_hydl', true);
+    symbols.setSymbol({ code: 'csxhjctb_hydl', item: '水渠' }, { color: 'rgba(255, 0, 0, 0.5)' });
+    symbols.setSymbol({ code: 'bgdc_dltb', item: '0201K' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });
+    await openLegend(wrapper);
+    await button(wrapper, '展开水域线层').trigger('click');
+
+    const canal = wrapper.get('[data-legend="csxhjctb_hydl"]').findAll('li').find(item => item.text() === '水渠');
+    expect(canal?.get('[data-swatch]').attributes('style')).toContain('rgba(255, 0, 0, 0.5)');
+    // 地类图斑在只有它一条时已经自动展开
+    await wrapper.get('input[placeholder="搜索编码或名称"]').setValue('0201K');
+    expect(wrapper.get('[data-landuse="0201K"] [data-swatch]').attributes('style')).toContain('rgba(0, 0, 255, 0.5)');
+  });
+
+  it('按属性配色的资源选了统一样式：展开后不再列出取值', async () => {
+    const { wrapper, owner, symbols } = mountLegend();
+    owner.setCheckedMany(['csxhjctb_hydl'], true);
+    symbols.setMode('csxhjctb_hydl', 'uniform');
+    await openLegend(wrapper);
+    await button(wrapper, '展开水域线层').trigger('click');
+
+    const texts = wrapper.get('[data-legend="csxhjctb_hydl"]').findAll('li').map(item => item.text());
+    expect(texts).not.toContain('河流');
   });
 
   it('地类图例：默认现状分类，可以切换和搜索；含义放在 title，可调整地类有标记', async () => {

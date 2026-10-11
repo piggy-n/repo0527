@@ -6,7 +6,7 @@ import {
 } from '@maplibre/maplibre-gl-style-spec';
 import type { StyleGroup } from '@yzt/map-core';
 import type { Resource, ResourceCatalog, ResourceGeometry } from './catalog';
-import { noSymbolOverride, type SymbolOverrideOf } from './resource-symbols';
+import { noSymbolOverride, type ResourceSymbolOverride, type SymbolOverrideOf } from './resource-symbols';
 import {
   DEFAULT_OPACITY,
   resourceLayerStyle,
@@ -16,7 +16,6 @@ import {
   sourceLayerOf,
   tilesetOf
 } from './style-registry';
-import type { SymbolOverride } from './symbols';
 
 // 资源图层的显示状态与分组推导（ADR 0041 第 3、4 节），都是纯函数；拥有者 useResourceLayers 持有状态并调用它们
 
@@ -131,7 +130,7 @@ function resourceEntry(
   { opacity, year }: ResourceDisplay,
   tileBase: string,
   style: ResourceStyle,
-  override: SymbolOverride | undefined
+  override: ResourceSymbolOverride | undefined
 ): ResourceEntry {
   const id = resourceSourceId(resource.code);
   const { minzoom, promoteId } = style;

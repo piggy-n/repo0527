@@ -24,12 +24,14 @@ const CATALOG = buildCatalog([
   }
 ]);
 
-function mountEditor(code: string) {
+// 只给资源时编辑统一样式，给了取值时编辑这个取值
+function mountEditor(code: string, item?: string) {
   let owner: ResourceSymbols | undefined;
+  const target = item === undefined ? { code } : { code, item };
   const Page = defineComponent(() => {
     const symbols = useResourceSymbols({ catalog: shallowRef(CATALOG) });
     owner = symbols;
-    return () => <SymbolEditor symbols={symbols} code={code} name={CATALOG.resources.get(code)?.name ?? code} />;
+    return () => <SymbolEditor symbols={symbols} target={target} name={item ?? CATALOG.resources.get(code)?.name ?? code} />;
   });
   const wrapper = mount(Page);
   if (!owner) {
@@ -60,7 +62,7 @@ const customInput = (wrapper: VueWrapper) => wrapper.find('input[aria-label^="�
 describe('SymbolEditor', () => {
   it('点：档位、描边宽度点下就确认；改过之后可以恢复默认，只恢复这个资源', async () => {
     const { wrapper, symbols } = mountEditor('csxhjctb_gyssp');
-    symbols.setUniform('szy_kt', { fillColor: '#000' });
+    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: '#000' });
     const reset = () => wrapper.findAll('button').find(item => item.text() === '恢复默认');
     expect(reset()?.attributes('disabled')).toBeDefined();
 
@@ -112,7 +114,7 @@ describe('SymbolEditor', () => {
     await customInput(wrapper).trigger('keydown', { key: 'Enter' });
     expect(symbols.overrides.value.get('bgdc_cjdcqjx')).toStrictEqual({ uniform: { width: 3 } });
 
-    symbols.resetUniform('bgdc_cjdcqjx');
+    symbols.resetSymbol({ code: 'bgdc_cjdcqjx' });
     await nextTick();
     expect(customInput(wrapper).exists()).toBe(false);
   });
@@ -131,11 +133,11 @@ describe('SymbolEditor', () => {
     expect((customInput(wrapper).element as HTMLInputElement).value).toBe('4');
     expect(invalidShown()).toBe(false);
 
-    symbols.setUniform('csxhjctb_gyssp', { size: 6 });
+    symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { size: 6 });
     await nextTick();
     await customInput(wrapper).setValue('30');
     await customInput(wrapper).trigger('keydown', { key: 'Enter' });
-    symbols.setUniform('csxhjctb_gyssp', { size: 8 });
+    symbols.setSymbol({ code: 'csxhjctb_gyssp' }, { size: 8 });
     await nextTick();
     expect((customInput(wrapper).element as HTMLInputElement).value).toBe('8');
     expect(invalidShown()).toBe(false);
@@ -179,9 +181,18 @@ describe('SymbolEditor', () => {
     expect(fill.wrapper.findAll('label').map(item => item.text())).toStrictEqual([]);
   });
 
-  it('按属性配色的资源没有统一符号的编辑器', () => {
-    const { wrapper } = mountEditor('csxhjctb_hydl');
+  it('分类样式的取值：改的是这个取值，恢复默认只恢复它；规则里没有的取值没有编辑器', async () => {
+    const { wrapper, symbols } = mountEditor('csxhjctb_hydl', '水渠');
+    symbols.setSymbol({ code: 'csxhjctb_hydl' }, { width: 'S' });
+    expect(picker(wrapper, '水渠的颜色').props('modelValue')).toBe('#4FC3F7');
 
-    expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
+    await choose(wrapper, 'XL');
+    picker(wrapper, '水渠的颜色').vm.$emit('activeChange', 'rgba(0, 0, 0, 1)');
+    expect(symbols.preview.value).toMatchObject({ item: '水渠', field: 'color' });
+    expect(symbols.overrides.value.get('csxhjctb_hydl')).toStrictEqual({ uniform: { width: 'S' }, items: { 水渠: { width: 'XL' } } });
+
+    await wrapper.findAll('button').find(item => item.text() === '恢复默认')?.trigger('click');
+    expect(symbols.overrides.value.get('csxhjctb_hydl')).toStrictEqual({ uniform: { width: 'S' } });
+    expect(mountEditor('csxhjctb_hydl', '湖泊').wrapper.find('[data-symbol-editor]').exists()).toBe(false);
   });
 });

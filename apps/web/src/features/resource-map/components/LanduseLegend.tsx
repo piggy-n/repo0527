@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowRight, Search } from '@element-plus/icons-vue';
 import { ElButton, ElInput, ElRadioButton, ElRadioGroup } from 'element-plus';
-import { computed, defineComponent, ref } from 'vue';
-import { type LanduseLegendItem, type LanduseLegendView, landuseLegend } from '../legend';
+import { computed, defineComponent, type PropType, ref } from 'vue';
+import { type LanduseLegendItem, type LanduseLegendView, type LegendSwatch, landuseLegend } from '../legend';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
 import styles from './LanduseLegend.module.scss';
 
@@ -13,10 +13,10 @@ const VIEWS: readonly { readonly value: LanduseLegendView; readonly label: strin
 ];
 
 // 一个地类：含义说明放在 title 里
-function renderItem(item: LanduseLegendItem) {
+function renderItem(item: LanduseLegendItem, swatch: LegendSwatch | undefined) {
   return (
-    <li key={item.code ?? item.name} class={styles.item} title={item.meaning} data-landuse={item.code ?? item.name}>
-      <LegendSwatchIcon swatch={{ geometry: 'fill', fill: item.color, outline: item.color }} />
+    <li key={item.key} class={styles.item} title={item.meaning} data-landuse={item.code ?? item.name}>
+      {swatch && <LegendSwatchIcon swatch={swatch} />}
       {item.code !== null && <span class={styles.code}>{item.code}</span>}
       <span class={styles.name}>{item.name}</span>
       {item.adjustable && <span class={styles.tag}>可调整</span>}
@@ -24,10 +24,14 @@ function renderItem(item: LanduseLegendItem) {
   );
 }
 
-/** 地类图例（ADR 0043）：三种展示、按编码或名称搜索、分组展开；只读，调色在 5C.5 */
+/** 地类图例（ADR 0043）：三种展示、按编码或名称搜索、分组展开；预览由图例按符号推导后传入 */
 export const LanduseLegend = defineComponent({
   name: 'LanduseLegend',
-  setup() {
+  props: {
+    /** 各地类的预览，按取值的键 */
+    swatches: { type: Object as PropType<ReadonlyMap<string, LegendSwatch>>, required: true }
+  },
+  setup(props) {
     // 都是图例自己的界面状态
     const view = ref<LanduseLegendView>('status');
     const keyword = ref('');
@@ -86,7 +90,9 @@ export const LanduseLegend = defineComponent({
                   {section.name}
                   <span class={styles.sectionCount}>{section.items.length}</span>
                 </ElButton>
-                {open && <ul class={styles.items}>{section.items.map(renderItem)}</ul>}
+                {open && (
+                  <ul class={styles.items}>{section.items.map(item => renderItem(item, props.swatches.get(item.key)))}</ul>
+                )}
               </li>
             );
           })}

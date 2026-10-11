@@ -2,6 +2,7 @@ import { ElButton, ElColorPicker, ElInput, ElOption, ElRadioButton, ElRadioGroup
 import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { RESOURCE_PALETTE } from '../palette';
+import type { SymbolTarget } from '../resource-symbols';
 import {
   type ColorField,
   LINE_DASH_NAMES,
@@ -39,12 +40,13 @@ export const SymbolEditor = defineComponent({
   name: 'SymbolEditor',
   props: {
     symbols: { type: Object as PropType<ResourceSymbols>, required: true },
-    code: { type: String, required: true },
+    /** 资源的统一样式，或者分类样式里的一个取值 */
+    target: { type: Object as PropType<SymbolTarget>, required: true },
     name: { type: String, required: true }
   },
   setup(props) {
-    const symbol = computed(() => props.symbols.symbolOf(props.code));
-    const set = (patch: SymbolOverride) => props.symbols.setUniform(props.code, patch);
+    const symbol = computed(() => props.symbols.symbolOf(props.target));
+    const set = (patch: SymbolOverride) => props.symbols.setSymbol(props.target, patch);
 
     // 点的半径、线的线宽；面没有大小
     const sizeField = computed(() => {
@@ -175,7 +177,7 @@ export const SymbolEditor = defineComponent({
           ariaLabel={`${props.name}的${label}`}
           onActiveChange={(color: string | null) => {
             if (color) {
-              props.symbols.previewColor(props.code, field, color);
+              props.symbols.previewColor(props.target, field, color);
             }
           }}
           onChange={(color: string | null) => {
@@ -245,15 +247,15 @@ export const SymbolEditor = defineComponent({
 
     return () =>
       symbol.value && (
-        <div class={styles.editor} data-symbol-editor={props.code}>
+        <div class={styles.editor} data-symbol-editor={props.target.item ?? props.target.code}>
           {renderFields()}
           <div class={styles.footer}>
             <ElButton
               link
               type="primary"
               size="small"
-              disabled={!props.symbols.isCustomized(props.code)}
-              onClick={() => props.symbols.resetUniform(props.code)}>
+              disabled={!props.symbols.hasOverride(props.target)}
+              onClick={() => props.symbols.resetSymbol(props.target)}>
               恢复默认
             </ElButton>
           </div>

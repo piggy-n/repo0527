@@ -12,15 +12,23 @@ import { SymbolEditor } from './SymbolEditor';
 
 const BADGES: Readonly<Record<Exclude<LegendEntry['kind'], 'symbol'>, string>> = { values: '分类', landuse: '地类' };
 
-// 按属性配色的条目展开后的内容：地类是完整的地类图例，按取值配色是取值和颜色；统一符号展开后是编辑器
+// 按属性配色的条目展开后的内容：地类是完整的地类图例，按取值配色是取值和预览；统一符号展开后是编辑器
 function renderContent(entry: Exclude<LegendEntry, { kind: 'symbol' }>): VNode {
+  if (entry.mode === 'uniform') {
+    return (
+      <div class={styles.value}>
+        <LegendSwatchIcon swatch={entry.swatch} />
+        统一样式
+      </div>
+    );
+  }
   if (entry.kind === 'landuse') {
-    return <LanduseLegend />;
+    return <LanduseLegend swatches={entry.swatches} />;
   }
   return (
     <ul class={styles.values}>
       {entry.values.map(value => (
-        <li key={value.label} class={styles.value}>
+        <li key={value.key} class={styles.value}>
           <LegendSwatchIcon swatch={value.swatch} />
           {value.label}
         </li>
@@ -89,7 +97,7 @@ export const ResourceLegend = defineComponent({
           {isOpen && (
             <div class={styles.content}>
               {entry.kind === 'symbol' ? (
-                <SymbolEditor symbols={props.symbols} code={entry.code} name={entry.name} />
+                <SymbolEditor symbols={props.symbols} target={{ code: entry.code }} name={entry.name} />
               ) : (
                 renderContent(entry)
               )}
