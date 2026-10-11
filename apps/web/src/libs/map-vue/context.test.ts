@@ -5,8 +5,10 @@ import {
   type MapView,
   type MapViewFailure,
   MapSession,
+  NO_SOURCE_ERRORS,
   type PickResult,
   type ScreenPoint,
+  type SourceErrors,
   type Unsubscribe,
   type ViewBounds,
   type ViewState
@@ -24,9 +26,10 @@ class FakeView implements MapView {
   readonly fitBoundsCalls: (FitBoundsOptions | undefined)[] = [];
   state: ViewState = 'initializing';
   failure: MapViewFailure | null = null;
+  sourceErrors: SourceErrors = NO_SOURCE_ERRORS;
   // 这一轮整体加载的结果，测试可以换成还没结束的 Promise
   ready: Promise<void> = Promise.resolve();
-  readonly #listeners = new Map<string, Set<(state: ViewState) => void>>();
+  readonly #listeners = new Map<string, Set<(payload: unknown) => void>>();
 
   whenReady(): Promise<void> {
     return this.ready;
@@ -48,27 +51,38 @@ class FakeView implements MapView {
 
   on(event: 'statechange', callback: (state: ViewState) => void): Unsubscribe;
   on(event: 'resize', callback: () => void): Unsubscribe;
-  on(event: string, callback: (state: ViewState) => void): Unsubscribe {
+  on(event: 'sourceerrorchange', callback: (errors: SourceErrors) => void): Unsubscribe;
+  on(event: string, callback: (payload: never) => void): Unsubscribe {
+    // 各个重载的回调只接收自己那种事件的参数
+    const listener = callback as (payload: unknown) => void;
     const listeners = this.#listeners.get(event) ?? new Set();
-    this.#listeners.set(event, listeners.add(callback));
-    return () => listeners.delete(callback);
+    this.#listeners.set(event, listeners.add(listener));
+    return () => listeners.delete(listener);
   }
 
   emit(state: ViewState): void {
     this.state = state;
-    for (const listener of this.#listeners.get('statechange') ?? []) {
-      listener(state);
-    }
+    this.#fire('statechange', state);
   }
 
   /** 模拟画布尺寸变化 */
   resize(): void {
-    for (const listener of this.#listeners.get('resize') ?? []) {
-      listener(this.state);
-    }
+    this.#fire('resize', undefined);
+  }
+
+  /** 模拟数据源错误的记录变化 */
+  setSourceErrors(errors: SourceErrors): void {
+    this.sourceErrors = errors;
+    this.#fire('sourceerrorchange', errors);
   }
 
   [Symbol.dispose](): void {}
+
+  #fire(event: string, payload: unknown): void {
+    for (const listener of this.#listeners.get(event) ?? []) {
+      listener(payload);
+    }
+  }
 }
 
 // 由测试决定何时就绪的视图
@@ -148,6 +162,28 @@ describe('MapContextState', () => {
 
     env.state.detachView(view);
     expect(env.state.context.failure.value).toBeNull();
+  });
+
+  it('数据源错误：挂上时取视图的记录，变化时更新；卸下后为空，换上的新视图从它自己的记录开始', () => {
+    using env = setup();
+    const first = new FakeView();
+    const failed: SourceErrors = new Map([['resources-szy_kt', new Error('tile')]]);
+    first.sourceErrors = failed;
+    env.state.attachView(first, CANVAS);
+    expect(env.state.context.sourceErrors.value).toBe(failed);
+
+    const more: SourceErrors = new Map([...failed, ['boundaries-city', new Error('404')]]);
+    first.setSourceErrors(more);
+    expect(env.state.context.sourceErrors.value).toBe(more);
+
+    env.state.detachView(first);
+    expect(env.state.context.sourceErrors.value).toBe(NO_SOURCE_ERRORS);
+    first.setSourceErrors(failed);
+    expect(env.state.context.sourceErrors.value).toBe(NO_SOURCE_ERRORS);
+
+    const second = new FakeView();
+    env.state.attachView(second, CANVAS);
+    expect(env.state.context.sourceErrors.value).toBe(NO_SOURCE_ERRORS);
   });
 
   it('卸下的不是当前视图时不做任何事；卸下后可以挂上新的视图', () => {

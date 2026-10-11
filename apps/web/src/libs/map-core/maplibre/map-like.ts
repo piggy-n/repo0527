@@ -41,7 +41,8 @@ export interface CameraEventData {
 export interface MapLike extends StyleTarget {
   setStyle(style: StyleSpecification, options: { diff: boolean }): void;
   on(type: 'style.load', listener: () => void): MapSubscription;
-  on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
+  /** 数据源上的错误（瓦片、GeoJSON 加载失败）由 MapLibre 转发时带上 sourceId；瓦片返回 404 时不报错 */
+  on(type: 'error', listener: (event: { readonly error: Error; readonly sourceId?: unknown }) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   /** 一次移动开始：用户的手势带原始的 DOM 事件（松手后的惯性在松手时算一次）；之后的每一帧只有 move */
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;

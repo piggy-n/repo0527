@@ -13,6 +13,15 @@ export type MapViewFailure =
   | { readonly kind: 'engine'; readonly cause: 'webgl-unavailable' | 'unknown'; readonly error: unknown }
   | { readonly kind: 'style'; readonly error: unknown };
 
+/**
+ * 当前样式里每个数据源的第一条错误，键是数据源 ID（ADR 0041 第 5 节）：数据源移除、整体重建开始时清掉。
+ * 含义是这个数据源至少有一处加载失败（如一张瓦片解析失败），不表示整个数据源不可用
+ */
+export type SourceErrors = ReadonlyMap<string, unknown>;
+
+/** 没有数据源错误 */
+export const NO_SOURCE_ERRORS: SourceErrors = new Map();
+
 /** [西, 南, 东, 北]，单位是度 */
 export type ViewBounds = readonly [west: number, south: number, east: number, north: number];
 
@@ -41,6 +50,8 @@ export interface MapView extends Disposable {
   readonly state: ViewState;
   /** 只在 failed 状态下有值 */
   readonly failure: MapViewFailure | null;
+  /** 每次变化换一个新的 Map；不影响视图的状态 */
+  readonly sourceErrors: SourceErrors;
   /**
    * 当前这一轮整体加载的结果（创建地图、整体重建、重新加载各算一轮）：加载完成后结束（视图进入 ready，暂停时为 paused），
    * 失败时以原因结束，释放时以 AbortError 结束；上一轮已有结果时，新一轮换成新的 Promise
@@ -59,4 +70,6 @@ export interface MapView extends Disposable {
   on(event: 'statechange', callback: (state: ViewState) => void): Unsubscribe;
   /** 画布尺寸变化：相机不变，屏幕上的投影变了，按屏幕位置摆放的浮层要重新投影 */
   on(event: 'resize', callback: () => void): Unsubscribe;
+  /** 数据源错误的记录变化 */
+  on(event: 'sourceerrorchange', callback: (errors: SourceErrors) => void): Unsubscribe;
 }

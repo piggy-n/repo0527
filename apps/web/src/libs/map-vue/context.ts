@@ -1,16 +1,18 @@
-import type {
-  CameraState,
-  FitBoundsOptions,
-  FlyToOptions,
-  LngLat,
-  MapSession,
-  MapView,
-  MapViewFailure,
-  PickResult,
-  ScreenPoint,
-  ViewBounds,
-  ViewKind,
-  ViewState
+import {
+  type CameraState,
+  type FitBoundsOptions,
+  type FlyToOptions,
+  type LngLat,
+  type MapSession,
+  type MapView,
+  type MapViewFailure,
+  NO_SOURCE_ERRORS,
+  type PickResult,
+  type ScreenPoint,
+  type SourceErrors,
+  type ViewBounds,
+  type ViewKind,
+  type ViewState
 } from '@yzt/map-core';
 import { abortReason } from '@yzt/utils';
 import {
@@ -60,6 +62,8 @@ export interface MapContext {
   readonly viewState: Readonly<Ref<MapViewState>>;
   /** 视图失败的原因，只在 failed 时有值（ADR 0030） */
   readonly failure: Readonly<ShallowRef<MapViewFailure | null>>;
+  /** 当前视图的数据源错误（ADR 0041 第 5 节）；没有视图时为空，替换视图后从新视图的记录开始 */
+  readonly sourceErrors: Readonly<ShallowRef<SourceErrors>>;
   /** 引擎失败后重新创建视图；其他时候什么也不做（样式失败会在出现新版本时自动恢复） */
   retry(): void;
   /**
@@ -144,6 +148,7 @@ export class MapContextState implements Disposable {
   readonly #viewport = shallowRef<MapViewport | null>(null);
   readonly #viewState = ref<MapViewState>('idle');
   readonly #failure = shallowRef<MapViewFailure | null>(null);
+  readonly #sourceErrors = shallowRef<SourceErrors>(NO_SOURCE_ERRORS);
   readonly #retryRequests = ref(0);
   readonly #activeTool: Ref<string>;
   readonly #unsubscribeTool: () => void;
@@ -176,6 +181,7 @@ export class MapContextState implements Disposable {
       view: shallowReadonly(this.#viewport),
       viewState: shallowReadonly(this.#viewState),
       failure: shallowReadonly(this.#failure),
+      sourceErrors: shallowReadonly(this.#sourceErrors),
       retry: () => this.#retry(),
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
       useCamera: () => this.#useCamera(),
@@ -212,14 +218,17 @@ export class MapContextState implements Disposable {
     });
     // 画布尺寸变化时相机不变，投影变了
     const unsubscribeResize = view.on('resize', () => this.#projectionRevision.value++);
+    const unsubscribeSourceErrors = view.on('sourceerrorchange', errors => (this.#sourceErrors.value = errors));
     const unsubscribe = () => {
       unsubscribeState();
       unsubscribeResize();
+      unsubscribeSourceErrors();
     };
     const attached: AttachedView = { view, viewport, canvas, unsubscribe, detached: new AbortController() };
     this.#view = attached;
     this.#viewState.value = view.state;
     this.#failure.value = view.failure;
+    this.#sourceErrors.value = view.sourceErrors;
     this.#viewport.value = view.state === 'ready' ? viewport : null;
     for (const notify of this.#waiting) {
       notify(attached);
@@ -240,6 +249,7 @@ export class MapContextState implements Disposable {
     this.#viewport.value = null;
     this.#viewState.value = 'idle';
     this.#failure.value = null;
+    this.#sourceErrors.value = NO_SOURCE_ERRORS;
     // 最后再中止：等待者的回调在微任务里执行，看到的已经是卸下之后的状态
     attached.detached.abort(new DOMException('等待的视图已被卸下或替换', 'AbortError'));
   }

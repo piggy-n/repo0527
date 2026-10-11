@@ -5,7 +5,7 @@ import type { CameraChange, CameraState } from '../camera/camera-model';
 import { MapSession } from '../session/map-session';
 import { type StyleGroup, StyleModel } from '../style/style-model';
 import type { MapTool, ToolView } from '../tool/tool-model';
-import type { MapViewFailure, ViewState } from '../view/map-view';
+import { type MapViewFailure, NO_SOURCE_ERRORS, type SourceErrors, type ViewState } from '../view/map-view';
 import type { MapInputEvent } from '../view/view-input';
 import type {
   CameraEventData,
@@ -31,6 +31,7 @@ function settled<T>(promise: Promise<T>): Promise<T | 'pending'> {
 
 interface FakeEvent {
   readonly error?: Error;
+  readonly sourceId?: string;
   readonly originalEvent?: unknown;
   readonly cause?: unknown;
   readonly point?: { readonly x: number; readonly y: number };
@@ -76,6 +77,8 @@ class FakeMap implements MapLike {
   failOn: string | undefined;
   // 像 MapLibre 的校验失败一样：同步触发 error 事件，不抛错，也不生效
   rejectOn: string | undefined;
+  // 照常生效，但同步触发一条带 sourceId 的 error（数据源加载失败）
+  sourceErrorOn: string | undefined;
   removed = false;
   readonly canvas = document.createElement('canvas');
   readonly canvasContainer = document.createElement('div');
@@ -110,7 +113,7 @@ class FakeMap implements MapLike {
   }
 
   on(type: 'style.load', listener: () => void): MapSubscription;
-  on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
+  on(type: 'error', listener: (event: { readonly error: Error; readonly sourceId?: unknown }) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'resize', listener: () => void): MapSubscription;
@@ -230,6 +233,9 @@ class FakeMap implements MapLike {
         return;
       }
       this.calls.push([name, ...args]);
+      if (this.sourceErrorOn === name) {
+        this.fire('error', { error: new Error(`${String(args[0])} failed to load`), sourceId: String(args[0]) });
+      }
     };
   }
 }
@@ -292,6 +298,24 @@ function lineGroup(id: string, color = '#336699'): StyleGroup {
     sources: { [id]: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } },
     layers: [{ id: `${id}-line`, type: 'line', source: id, paint: { 'line-color': color } }]
   };
+}
+
+// 矢量瓦片的数据源：年份不同时地址不同
+function tileGroup(id: string, year: number): StyleGroup {
+  return {
+    sources: { [id]: { type: 'vector', tiles: [`https://tiles.test/${id}_${year}/{z}/{x}/{y}.pbf`] } },
+    layers: [{ id: `${id}-fill`, type: 'fill', source: id, 'source-layer': id }]
+  };
+}
+
+// 就绪后加上 tdt、dltb 两个数据源，返回之后数据源错误的每次变化
+async function addTwoSources(ctx: ReturnType<typeof setup>): Promise<SourceErrors[]> {
+  ctx.map.fire('style.load');
+  ctx.session.style.setGroups({ basemap: lineGroup('tdt'), business: lineGroup('dltb') });
+  await nextMicrotask();
+  const changes: SourceErrors[] = [];
+  ctx.view.on('sourceerrorchange', errors => changes.push(errors));
+  return changes;
 }
 
 function names(calls: unknown[][]): unknown[] {
@@ -462,6 +486,99 @@ describe('MapLibreView', () => {
       } finally {
         consoleError.mockRestore();
       }
+    });
+  });
+
+  describe('数据源错误（ADR 0041 第 5、6 节）', () => {
+    it('就绪时收到：每个数据源只记第一条，照常交给 onError，视图状态和样式都不变', async () => {
+      using ctx = setup();
+      const changes = await addTwoSources(ctx);
+      const first = new Error('Unable to parse the tile');
+      const again = new Error('Unable to parse another tile');
+
+      ctx.map.fire('error', { error: first, sourceId: 'dltb' });
+      ctx.map.fire('error', { error: again, sourceId: 'dltb' });
+
+      expect(ctx.view.sourceErrors).toStrictEqual(new Map([['dltb', first]]));
+      expect(changes).toStrictEqual([ctx.view.sourceErrors]);
+      expect(ctx.errors).toStrictEqual([first, again]);
+      expect(ctx.view.state).toBe('ready');
+      expect(names(ctx.map.styleCalls())).not.toContain('setStyle');
+    });
+
+    it('样式加载期间收到：不算样式加载失败，style.load 后照常就绪，记录保留', async () => {
+      using ctx = setup();
+      const failed = new Error('dltb failed to load');
+
+      ctx.map.fire('error', { error: failed, sourceId: 'dltb' });
+      expect(ctx.view.state).toBe('initializing');
+      ctx.map.fire('style.load');
+
+      await expect(settled(ctx.view.whenReady())).resolves.toBeUndefined();
+      expect(ctx.states).toStrictEqual(['ready']);
+      expect(ctx.view.sourceErrors.get('dltb')).toBe(failed);
+    });
+
+    it('应用命令期间同步收到：不整体重建，照样记下', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.map.sourceErrorOn = 'addSource';
+
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+
+      expect(names(ctx.map.styleCalls())).toStrictEqual(['addSource', 'addLayer']);
+      expect([...ctx.view.sourceErrors.keys()]).toStrictEqual(['dltb']);
+    });
+
+    it('数据源移除时清掉它的记录，其他数据源的保留', async () => {
+      using ctx = setup();
+      const changes = await addTwoSources(ctx);
+      ctx.map.fire('error', { error: new Error('tdt'), sourceId: 'tdt' });
+      ctx.map.fire('error', { error: new Error('dltb'), sourceId: 'dltb' });
+
+      ctx.session.style.setGroup('business', { sources: {}, layers: [] });
+      await nextMicrotask();
+
+      expect([...ctx.view.sourceErrors.keys()]).toStrictEqual(['tdt']);
+      expect(changes.map(errors => Array.from(errors.keys()))).toStrictEqual([['tdt'], ['tdt', 'dltb'], ['tdt']]);
+    });
+
+    it('数据源换了地址（如换年份，先移除再添加）：清掉它的记录', async () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.session.style.setGroup('business', tileGroup('dltb', 2022));
+      await nextMicrotask();
+      ctx.map.fire('error', { error: new Error('2022 failed'), sourceId: 'dltb' });
+
+      ctx.session.style.setGroup('business', tileGroup('dltb', 2023));
+      await nextMicrotask();
+
+      const replaced = names(ctx.map.styleCalls()).slice(2);
+      expect(replaced).toStrictEqual(['removeLayer', 'removeSource', 'addSource', 'addLayer']);
+      expect(ctx.view.sourceErrors).toBe(NO_SOURCE_ERRORS);
+    });
+
+    it('整体重建开始时全部清掉，没有变化的数据源也一样；释放后为空', async () => {
+      using ctx = setup();
+      const changes = await addTwoSources(ctx);
+      ctx.map.fire('error', { error: new Error('tdt'), sourceId: 'tdt' });
+
+      // 只改 business：tdt 不会被移除，记录只能由整体重建清掉
+      ctx.map.rejectOn = 'addLayer';
+      ctx.session.style.setGroup('business', lineGroup('lcsh'));
+      await nextMicrotask();
+
+      expect(names(ctx.map.styleCalls()).at(-1)).toBe('setStyle');
+      expect(ctx.view.sourceErrors).toBe(NO_SOURCE_ERRORS);
+      expect(changes.at(-1)).toBe(NO_SOURCE_ERRORS);
+      ctx.map.rejectOn = undefined;
+      ctx.map.fire('style.load');
+      ctx.map.fire('error', { error: new Error('tdt again'), sourceId: 'tdt' });
+      expect(ctx.view.sourceErrors.size).toBe(1);
+
+      ctx.view[Symbol.dispose]();
+      expect(ctx.view.sourceErrors).toBe(NO_SOURCE_ERRORS);
     });
   });
 

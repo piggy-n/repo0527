@@ -166,13 +166,21 @@ store.clear();
 - 地图上的样式记为三种结果之一（ADR 0026）：加载中（某个快照正在整体加载）、已加载（即已应用的快照）、加载失败（某个修订号，同时记下它的快照）
 - 收到通知时，`toRevision` 不大于已加载的修订号就忽略；`fromRevision` 等于已加载的修订号就直接应用命令；否则对比"已加载 → 当前"
 - `applyStyleCommand` 支持数据源和图层的 9 种命令；其余 18 种（样式根属性、相机类、没有公开方法的、`setStyle`）返回"不支持"，交给整体重建。`setGeoJSONSourceData` 的异步失败交给回调
-- 遇到不支持的命令、应用时抛错、或应用期间同步收到 `error` 事件（MapLibre 的很多方法校验失败时不抛错，只发事件），命令应用完后用当前快照 `setStyle(…, { diff: false })` 整体重建，等 `style.load` 后再继续。不支持的命令触发重建但不算错误；抛错和 `error` 事件交给 `onError`
+- 遇到不支持的命令、应用时抛错、或应用期间同步收到不带 `sourceId` 的 `error` 事件（MapLibre 的很多方法校验失败时不抛错，只发事件），命令应用完后用当前快照 `setStyle(…, { diff: false })` 整体重建，等 `style.load` 后再继续。不支持的命令触发重建但不算错误；抛错和 `error` 事件交给 `onError`
 - "已加载"只在一次通知的命令全部成功（期间没有 `error` 事件）、或整体加载完成时更新；发起整体重建时不更新
-- 加载中收到 `error` 就判定加载失败：整份样式通不过校验时，MapLibre 只发 `error`，不会再有 `style.load`。如果 `style.load` 之后仍然到达，以它为准：把失败时记下的快照记为已加载，再照常激活或追上最新的提交，之后继续增量同步
+- 加载中收到不带 `sourceId` 的 `error` 就判定加载失败：整份样式通不过校验时，MapLibre 只发 `error`，不会再有 `style.load`。如果 `style.load` 之后仍然到达，以它为准：把失败时记下的快照记为已加载，再照常激活或追上最新的提交，之后继续增量同步
 - 加载失败时，会话里已经有更新的提交（加载期间提交的，那时的通知因为还在加载而没有处理）：不进入 `failed`，直接用最新的快照再加载一次，`whenReady()` 继续等待。重新加载放到微任务里：MapLibre 对每条校验错误各发一次 `error`，要等它发完再调用 `setStyle`，否则后面几条会被当成新提交的失败，也避免在它分发事件的过程中重入
 - 加载失败的修订不再重试；会话出现更新的提交时重新整体加载（暂停意图时也一样）。每个修订最多整体加载一次，所以不会无限重建；一个不合法的图层会让整个视图进入 `failed`，取舍见 ADR 0026 第 5 条
 - "可以应用样式"的信号用 `style.load`，不用 `load`：`load` 要等第一帧渲染（依赖 `requestAnimationFrame`，窗口在后台时等不到），样式方法只需要样式已加载；整体重建后同样触发 `style.load`，共用一个处理函数
-- 其他时候收到的 `error` 事件（如瓦片 404）只上报（`onError`，默认打印到控制台）
+- 其他时候收到的 `error` 事件只上报（`onError`，默认打印到控制台）
+
+**数据源错误**（5C.1e，ADR 0041 第 5、6 节）：
+
+- 带 `sourceId` 的 `error`（瓦片解析失败、GeoJSON 加载失败等）照样交给 `onError`，但永远不算样式失败：加载中收到不判定加载失败，应用命令期间收到不整体重建。之前一张瓦片出错就可能把整个视图错判为 `failed`
+- 视图记下每个数据源的第一条错误：`view.sourceErrors`（`ReadonlyMap<数据源 ID, 错误>`），每次变化换一个新的 `Map` 并发出 `sourceerrorchange`；没有错误时是共用的 `NO_SOURCE_ERRORS`。它不影响 `state`
+- 清除的时机由视图决定：应用 `removeSource` 命令时清掉那个数据源的（取消勾选；换年份时数据源 ID 不变、地址变了，diff 同样是先移除再添加，所以按命令清，不比较前后两份样式）；整体重建开始时全部清掉（数据源都重新创建，错误会重新出现）；释放时为空
+- 不另外检查"数据源还在不在样式里"：MapLibre 的 `removeSource` 和整体 `setStyle` 都会断开旧数据源的事件转发（`setEventedParent(null)`），之后不会再收到它的错误；应用命令期间快照还是旧的，这道检查反而会漏掉新数据源同步报的错
+- 含义：这个数据源至少有一处加载失败（如一张瓦片），不表示整个数据源不可用
 
 **相机**：
 
@@ -246,6 +254,7 @@ store.clear();
 - 容器尺寸用 `ResizeObserver` 监听（防抖 50ms），隐藏后再显示会自动调整，文档里"窗口尺寸变化"的说法过时
 - `fitBounds` 的 padding 只用于计算，要保留得设 `absolutePadding`
 - 很多样式方法遇到问题时不抛错，而是同步触发 `error` 事件（对不存在的图层操作、添加校验不通过的图层、图层重名），所以适配器把应用命令期间收到的 `error` 也当作失败（ADR 0026）
+- 数据源上的事件（包括错误）由 `Style.addSource` 用 `setEventedParent(…, () => ({ sourceId }))` 转发到地图，所以带 `sourceId`；瓦片返回 HTTP 404 时不发 `error`（MapLibre 6.12 源码，5C.1e 核实），后端用 HTTP 200 加 JSON 表示没有瓦片时，才会以解析失败报出来
 - 整份样式（创建地图、`setStyle(…, { diff: false })`）通不过校验时，只触发 `error`，不触发 `style.load`；校验通过之后的加载过程中抛出的异常会被 MapLibre 吞掉，既没有 `error` 也没有 `style.load`（ADR 0026"后果"）
 - `setLayerZoomRange` 把 `undefined` 当作"不修改"：图层去掉已有的 `minzoom` / `maxzoom` 时，这个方法撤销不了
 - `setTransition`、`setLayerProperty` 没有公开方法
@@ -279,7 +288,8 @@ store.clear();
 - 删除 `intentRevision`（5C.0b，ADR 0039）后，相机按 `sync`、`program` 写回的断言改为检查变化事件的 `cause`：激活时按 `program` 写回、程序定位的原因被当成 `sync`，改坏这 2 处均被发现
 - 真实 MapLibre 上的结论（5C.1a 浏览器测试）：增量添加不合法的图层时 MapLibre 只发 `error`、不抛错，整体重建时整份样式校验失败、不再有 `style.load`，ADR 0026 的这两个假设从此有自动化的验证；style-spec 的 diff 直接跳过 `metadata`，`setLayerProperty` 只在图层带样式规范以外的属性时产生，所以合法的分组不会产生不支持的命令，整体重建只在命令被拒绝时发生；MapLibre 整体加载时不校验未知的图层属性（带 `custom-flag` 的图层照常加载）
 - 浏览器用例改坏 7 处（加载失败不进入 `failed`、增量添加后仍整体重建、激活时按 `program` 写回、不转发 `resize`、拾取时经纬度写反、整体重建时让 MapLibre 自己 diff、`fitBounds` 不避开悬浮元素），全部发现；其中两处是等待和超时赛跑失败的，报错写明没等到什么
-- 假地图的 `rejectOn` 模拟"只发 `error` 不抛错"，`failOn` 模拟抛错；整体加载的结果由测试手动触发 `style.load` 或 `error`
+- 数据源错误（5C.1e）改坏 10 处（不分出带 `sourceId` 的错误、每次都覆盖、移除数据源时不清、重建时不清、释放时不清、不发变化事件；map-vue 不订阅、挂上时不取初值、卸下时不清空、卸下时不取消订阅），全部由断言发现。浏览器用例用 `data:` 地址放一段不是 JSON 的内容，不发网络请求就能让真实的 MapLibre 报出带 `sourceId` 的错误；适配器读错字段时它和超时赛跑失败，报错写明没等到数据源错误
+- 假地图的 `rejectOn` 模拟"只发 `error` 不抛错"，`failOn` 模拟抛错，`sourceErrorOn` 模拟生效但同步报出数据源错误；整体加载的结果由测试手动触发 `style.load` 或 `error`
 - 开发页 `/dev/map` 的"提交不合法的图层"和"重新创建视图"在真实的 MapLibre 上验证了两条路径：运行中 `addLayer` 被拒绝 → 整体重建 → 整份样式校验失败 → `failed` → 去掉后自动恢复；用不合法的快照重新创建视图 → 首次加载失败 → 去掉后自动恢复；提交不合法的图层后、重建的那一帧到来之前提交修正 → 旧快照校验失败时直接改用最新快照加载，页面上始终没有出现 `failed`
 
 评估过但没做：开发环境下提交样式时用 `validateStyleMin` 校验。152 个图层校验一次约 14.8 ms，高频更新（测量的橡皮筋每秒 60 次）下即使只在开发环境也会明显拖慢；它的报错位置（如 `layers[150].paint.line-width`）与 MapLibre 6 的 `error` 事件一致，后者已经通过 `onError` 上报。

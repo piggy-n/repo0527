@@ -42,14 +42,16 @@ export {
   ToolModel,
   type ToolView
 } from './tool/tool-model';
-export type {
-  FitBoundsOptions,
-  FlyToOptions,
-  MapView,
-  MapViewFailure,
-  ViewBounds,
-  ViewPadding,
-  ViewState
+export {
+  type FitBoundsOptions,
+  type FlyToOptions,
+  type MapView,
+  type MapViewFailure,
+  NO_SOURCE_ERRORS,
+  type SourceErrors,
+  type ViewBounds,
+  type ViewPadding,
+  type ViewState
 } from './view/map-view';
 export type {
   LngLat,

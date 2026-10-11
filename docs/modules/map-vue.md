@@ -109,6 +109,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 | `view` | 就绪视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`pick`、`project`；只在视图为 `ready` 时有值，同一个视图的入口始终是同一个对象（ADR 0039 第 4 条）。移动相机不在这里，通过相机操作 |
 | `viewState` | `idle`（没有视图）、`initializing`、`ready`、`paused`、`failed` |
 | `failure` | 视图失败的原因（`MapViewFailure`），只在 `failed` 时有值，卸下视图时清空（ADR 0030） |
+| `sourceErrors` | 当前视图的数据源错误（`ReadonlyMap<数据源 ID, 错误>`，ADR 0041 第 5 节）：挂上视图时取它的记录、随 `sourceerrorchange` 更新；没有视图时是空表，替换视图（包括引擎失败后重试）后从新视图的记录开始，旧视图上的错误不留下。拥有者按数据源 ID 的前缀从中推导自己的"加载失败" |
 | `retry()` | 引擎失败后重新创建视图；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
 | `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@yzt/utils` 的 `abortReason`）。等待结束、返回之前 `signal` 中止或视图被卸下，同样以中止结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪。定位不用它，用相机操作 |
 | `useCamera()` | 在调用方的作用域里订阅相机，作用域销毁时取消；不在组件 setup 或 `effectScope` 里调用时抛错 |
@@ -120,7 +121,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 | `activateTool(id)` | 激活工具，旧工具先退出；未登记时抛错 |
 | `releaseTool(id)` | 让正在激活的工具退出：临时任务回到上一个常驻模式，常驻模式回到移动；没有激活时什么也不做 |
 
-- **只读**：`view`、`viewState`、`failure`、相机引用对外都用 `shallowReadonly` 包了一层。对 `.value` 赋值被忽略，开发环境给出警告；里面的对象不被代理。不对视图、会话这类引擎对象用深层的 `readonly()`：深层代理会让内核类的私有字段访问报错
+- **只读**：`view`、`viewState`、`failure`、`sourceErrors`、相机引用对外都用 `shallowReadonly` 包了一层。对 `.value` 赋值被忽略，开发环境给出警告；里面的对象不被代理。不对视图、会话这类引擎对象用深层的 `readonly()`：深层代理会让内核类的私有字段访问报错
 - **受限入口**：暂停、恢复、释放、订阅都不在 `MapViewport` 上，JS 里也调不到。暂停和恢复以后由框架切换负责，释放由画布负责，状态从 `viewState` 读
 - **等待绑定视图实例**（5A 之后的修复）：每个挂上的视图带一个自己的 `AbortController`，卸下时中止，等它的 `whenReady` 立即以 `AbortError` 结束，不等视图自己释放时的拒绝；返回前再确认等的仍是当前视图，`signal` 也没有中止（5B 之后补上）。等待结束时监听已经移除，到继续执行之前，就绪的同一轮里排在后面的回调可能卸下视图或中止 `signal`。起初以为这个窗口取决于微任务的个数、测不到；其实同一个 Promise 的回调按登记顺序排队，`whenReady` 的继续执行排在它们后面，测试在调用 `whenReady` 之后再给视图的就绪登记一个回调，就能稳定命中
 - **等待者的清理**：`whenReady` 同时监听上下文的生命周期和调用方的 `signal`；任一个中止、或者等待结束时，两边的监听都会移除，不会因为一直等不到视图而留在另一个 `signal` 上

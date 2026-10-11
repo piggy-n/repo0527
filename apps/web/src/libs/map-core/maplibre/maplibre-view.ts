@@ -8,14 +8,16 @@ import type { MapSession } from '../session/map-session';
 import { diffStyle, type StyleCommand } from '../style/diff-style';
 import type { StyleChange } from '../style/style-model';
 import type { Gestures, ToolView } from '../tool/tool-model';
-import type {
-  FitBoundsOptions,
-  FlyToOptions,
-  MapView,
-  MapViewFailure,
-  ViewBounds,
-  ViewPadding,
-  ViewState
+import {
+  type FitBoundsOptions,
+  type FlyToOptions,
+  type MapView,
+  type MapViewFailure,
+  NO_SOURCE_ERRORS,
+  type SourceErrors,
+  type ViewBounds,
+  type ViewPadding,
+  type ViewState
 } from '../view/map-view';
 import type { LngLat, MapInputEvent, MapPointerEvent, PickResult, ScreenPoint } from '../view/view-input';
 import { applyStyleCommand } from './apply-style-command';
@@ -37,6 +39,7 @@ export interface MapLibreViewOptions<G extends string> {
 interface MapLibreViewEvents {
   statechange: (state: ViewState) => void;
   resize: () => void;
+  sourceerrorchange: (errors: SourceErrors) => void;
 }
 
 interface Deferred {
@@ -173,6 +176,7 @@ export class MapLibreView<const G extends string> implements MapView {
   #ready = deferred();
   #state: ViewState = 'initializing';
   #failure: MapViewFailure | null = null;
+  #sourceErrors = NO_SOURCE_ERRORS;
   #active: boolean;
   #mapStyle: MapStyle;
   // 应用增量命令期间同步收到的 error 事件：MapLibre 的很多方法校验失败时不抛错，只发事件
@@ -225,7 +229,7 @@ export class MapLibreView<const G extends string> implements MapView {
     stack.defer(() => map.remove());
     for (const subscription of [
       map.on('style.load', () => this.#guard(() => this.#onStyleLoad(map))),
-      map.on('error', ({ error }) => this.#guard(() => this.#onMapError(map, error))),
+      map.on('error', ({ error, sourceId }) => this.#guard(() => this.#onMapError(map, error, sourceId))),
       map.on('move', event => this.#guard(() => this.#onMove(map, event))),
       map.on('movestart', event => this.#guard(() => this.#onMoveStart(event))),
       map.on('resize', () => this.#guard(() => this.#emitter.emit('resize')))
@@ -252,6 +256,10 @@ export class MapLibreView<const G extends string> implements MapView {
 
   get failure(): MapViewFailure | null {
     return this.#failure;
+  }
+
+  get sourceErrors(): SourceErrors {
+    return this.#sourceErrors;
   }
 
   whenReady(): Promise<void> {
@@ -318,6 +326,7 @@ export class MapLibreView<const G extends string> implements MapView {
     }
     this.#state = 'disposed';
     this.#failure = null;
+    this.#sourceErrors = NO_SOURCE_ERRORS;
     this.#emitter.events = {};
     this.#stack.dispose();
   }
@@ -345,9 +354,14 @@ export class MapLibreView<const G extends string> implements MapView {
     }
   }
 
-  #onMapError(map: MapLike, error: Error): void {
+  #onMapError(map: MapLike, error: Error, sourceId: unknown): void {
     this.#onError(error);
     if (this.#engineFailed) {
+      return;
+    }
+    // 数据源的错误只记下来：不算样式加载失败，应用命令期间收到也不整体重建（ADR 0041 第 6 节）
+    if (typeof sourceId === 'string') {
+      this.#recordSourceError(sourceId, error);
       return;
     }
     if (this.#applying) {
@@ -437,6 +451,8 @@ export class MapLibreView<const G extends string> implements MapView {
     } finally {
       this.#applying = false;
     }
+    // 数据源移除（包括换了地址的先移除再添加）后，旧的错误不再属于它
+    this.#forgetSourceErrors(commands.flatMap(({ command, args }) => (command === 'removeSource' ? [args[0]] : [])));
     if (applied && !this.#rejected) {
       this.#mapStyle = { status: 'loaded', revision, style };
     } else {
@@ -469,6 +485,8 @@ export class MapLibreView<const G extends string> implements MapView {
       this.#setState('initializing');
     }
     this.#mapStyle = { status: 'loading', revision, style: current };
+    // 所有数据源重新创建，错误会重新出现
+    this.#forgetSourceErrors();
     try {
       map.setStyle(current, { diff: false });
     } catch (error) {
@@ -546,6 +564,29 @@ export class MapLibreView<const G extends string> implements MapView {
     const cause = error instanceof GPUInitializationError ? 'webgl-unavailable' : 'unknown';
     this.#setState('failed', { kind: 'engine', cause, error });
     this.#onError(error);
+  }
+
+  // 每个数据源只记第一条；MapLibre 移除数据源（包括整体 setStyle）时断开它的事件转发，之后不会再收到它的错误
+  #recordSourceError(sourceId: string, error: Error): void {
+    if (this.#sourceErrors.has(sourceId)) {
+      return;
+    }
+    this.#setSourceErrors(new Map([...this.#sourceErrors, [sourceId, error]]));
+  }
+
+  // 不传时全部清掉
+  #forgetSourceErrors(sourceIds?: readonly string[]): void {
+    const forgotten = sourceIds ?? [...this.#sourceErrors.keys()];
+    if (!forgotten.some(id => this.#sourceErrors.has(id))) {
+      return;
+    }
+    const remaining = [...this.#sourceErrors].filter(([id]) => !forgotten.includes(id));
+    this.#setSourceErrors(remaining.length > 0 ? new Map(remaining) : NO_SOURCE_ERRORS);
+  }
+
+  #setSourceErrors(errors: SourceErrors): void {
+    this.#sourceErrors = errors;
+    this.#emitter.emit('sourceerrorchange', errors);
   }
 
   // 新一轮开始（整体重建、从 failed 重新加载），或失败后又收到 style.load 时：上一轮已经有结果就换一个新的；

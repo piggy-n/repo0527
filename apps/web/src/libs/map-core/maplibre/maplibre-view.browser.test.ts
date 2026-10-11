@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
 import { MapSession } from '../session/map-session';
 import type { StyleGroup } from '../style/style-model';
-import type { ViewState } from '../view/map-view';
+import type { SourceErrors, ViewState } from '../view/map-view';
 import type { LngLat, PickResult } from '../view/view-input';
 import { MapLibreView } from './maplibre-view';
 
@@ -208,6 +208,30 @@ describe('MapLibreView（真实的 MapLibre）', () => {
     await renderedUntil(ctx.map, () => renderedAreas(ctx.map) > 0);
 
     expect(ctx.view.failure).toBeNull();
+  });
+
+  it('数据源加载失败：error 事件带 sourceId，只记进数据源错误，视图保持 ready、不整体重建；移除数据源后清掉', async () => {
+    using ctx = setup();
+    await withTimeout(ctx.view.whenReady(), '首次加载完成');
+    const setStyle = vi.spyOn(ctx.map, 'setStyle');
+    let unsubscribe: (() => void) | undefined;
+    const recorded = new Promise<SourceErrors>(resolve => (unsubscribe = ctx.view.on('sourceerrorchange', resolve)));
+
+    // data: 地址不发网络请求，内容不是 JSON，MapLibre 解析失败
+    ctx.session.style.setGroup('data', {
+      sources: { broken: { type: 'geojson', data: 'data:application/json,not-json' } },
+      layers: [{ id: 'broken-fill', type: 'fill', source: 'broken' }]
+    });
+    const errors = await withTimeout(recorded, '数据源错误').finally(() => unsubscribe?.());
+
+    expect([...errors.keys()]).toStrictEqual(['broken']);
+    expect(ctx.errors).toContain(errors.get('broken'));
+    expect(ctx.view.state).toBe('ready');
+    expect(setStyle).not.toHaveBeenCalled();
+
+    ctx.session.style.setGroup('data', areaGroup());
+    await renderedUntil(ctx.map, () => renderedAreas(ctx.map) > 0);
+    expect(ctx.view.sourceErrors.size).toBe(0);
   });
 
   it('拾取与投影：投影再拾取回到原来的经纬度，画布中心拾取到会话相机的中心', async () => {
