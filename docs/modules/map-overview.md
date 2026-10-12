@@ -41,7 +41,7 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 | 引擎与版本 | MapLibre GL JS 6，具名导入；Cesium 精确锁定；不用 mapbox-gl | 0002（大版本由 0019 确定）、0019 | [map-core.md](map-core.md) |
 | 分层与组装 | 五层的职责；能力按拥有者写，页面挑选组合，不做带开关的全能地图组件 | 0027 | 本文、[shared-map.md](shared-map.md) |
 | 会话 | 样式、相机、当前工具；二三维共同的唯一真相源 | 0020（选择状态的范围由 0022 修正，方案比较由 0024 修正） | [map-core.md](map-core.md) |
-| 样式模型与提交 | 分组推导、整体替换，跨分组的修改一次提交，视图按修订号增量同步 | 0022（`failed` 的含义由 0026 修正） | [map-core.md](map-core.md) |
+| 样式模型与提交 | 分组推导、整体替换，跨分组的修改一次提交，视图按修订号增量同步；分组可以带样式图片，图片是快照的一部分 | 0022（`failed` 的含义由 0026 修正）、0045 | [map-core.md](map-core.md) |
 | map-vue 上下文 | `provideMap`、`useMap`、`bindStyle`；`view` 只在就绪时有值，只有拾取和投影 | 0028（第 5 条由 0039 修正） | [map-vue.md](map-vue.md) |
 | 视图接口与二三维 | 共用生命周期、相机、输入、拾取、投影；相机事件带 `view` 和 `cause`；Cesium 镜像会话 | 0024 | [map-core.md](map-core.md) |
 | 视图失败 | 样式失败在出现新的提交时自动恢复；引擎失败只能重建视图；状态转换按表执行；带数据源的错误（瓦片出错）不算样式失败，记作视图的数据源错误 | 0026（第 4 条由 0030 修正，第 1、2 条由 0041 修正）、0030、0041 | [map-core.md](map-core.md)"状态转换"、[map-vue.md](map-vue.md) |
@@ -53,7 +53,7 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 | 交互工具 | 会话的工具模型，同一时间一个工具；工具只拿到 `ToolView`；工具栏的按钮和动作由页面给出 | 0034 | [map-core.md](map-core.md)、[map-vue.md](map-vue.md)、[shared-map.md](shared-map.md) |
 | 测量 | 椭球面计算（geographiclib）；`MeasureStore` 持有结果和两个工具 | 0035 | [map-core.md](map-core.md)、[shared-map.md](shared-map.md) |
 | 区划定位、坐标定位 | 本地区划目录与边界；经纬度的识别与格式只用纯函数；位置点可拖动 | 0036、0037 | [shared-map.md](shared-map.md) |
-| 资源图层 | feature `resource-map`：接口树 → 目录（纯函数，查询的 `select` 得出）→ 样式登记表 → 拥有者 `useResourceLayers`（按 `code` 的显示状态）→ `resources` 分组（底图之上、注记之下）；图层面板的目录树只负责勾选，叠放顺序在"已勾选"区调整（5C.2）；勾选、透明度、顺序、年份按用户记住（5C.3，ADR 0042）；图例从登记表推导，不做地类统计（5C.4，ADR 0043）；符号的覆盖和拖动取色时的预览由拥有者 `useResourceSymbols` 持有，分组和图例都从默认符号、覆盖和预览推导；按属性配色的资源可以换成统一样式，分类样式各取值的符号用 `match` 组合在一个图层里，在图例里编辑（5C.5，ADR 0044）；未勾选的不放进样式，每个资源一个图层，重的资源有最小显示级别；目录变化时逐个资源校验；瓦片错误从视图的数据源错误推导 | 0041、0044 | [migration.md](../migration.md)"现状底图：资源图层实测" |
+| 资源图层 | feature `resource-map`：接口树 → 目录（纯函数，查询的 `select` 得出）→ 样式登记表 → 拥有者 `useResourceLayers`（按 `code` 的显示状态）→ `resources` 分组（底图之上、注记之下）；图层面板的目录树只负责勾选，叠放顺序在"已勾选"区调整（5C.2）；勾选、透明度、顺序、年份按用户记住（5C.3，ADR 0042）；图例从登记表推导，不做地类统计（5C.4，ADR 0043）；符号的覆盖和拖动取色时的预览由拥有者 `useResourceSymbols` 持有，分组和图例都从默认符号、覆盖和预览推导；按属性配色的资源可以换成统一样式，分类样式各取值的符号用 `match` 组合在一个图层里，在图例里编辑（5C.5，ADR 0044）；未勾选的不放进样式，每个资源一个图层，重的资源有最小显示级别；目录变化时逐个资源校验；瓦片错误从视图的数据源错误推导 | 0041、0044、0045 | [migration.md](../migration.md)"现状底图：资源图层实测" |
 | 相机操作与异步 | 用户发起的定位是一次操作，用信号判断是否作废；操作对象的 `run` 负责等待与再确认；可替换操作只认最新（`LatestController`）；revision / operation / version 各有一个意思 | 0038（第 1、3 条由 0039 修正）、0039 | [map-vue.md](map-vue.md)"相机操作"、[utils.md](utils.md) |
 
 ## 阅读顺序
