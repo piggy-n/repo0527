@@ -23,6 +23,7 @@ import {
   COLOR_FIELDS,
   type ColorField,
   colorOf,
+  FILL_STYLES,
   LINE_DASHES,
   nextOverride,
   normalizeColor,
@@ -31,6 +32,7 @@ import {
   type ResourceSymbol,
   resolveSymbol,
   SIZE_REFERENCES,
+  type SizeKind,
   SYMBOL_FIELDS,
   type SymbolOverride,
   type SymbolSize
@@ -81,10 +83,10 @@ export interface ResourceSymbolsOptions {
 const STROKE_WIDTHS: readonly number[] = POINT_STROKE_WIDTHS;
 
 // 自定义大小按步长取整，越界时抛错
-function requireSize(geometry: 'circle' | 'line', size: SymbolSize): SymbolSize {
-  const normalized = normalizeSize(geometry, size);
+function requireSize(kind: SizeKind, size: SymbolSize): SymbolSize {
+  const normalized = normalizeSize(kind, size);
   if (normalized === null) {
-    const { min, max } = SIZE_REFERENCES[geometry];
+    const { min, max } = SIZE_REFERENCES[kind];
     throw new RangeError(`大小只能是 ${min}～${max}，收到 ${size}`);
   }
   return normalized;
@@ -106,13 +108,19 @@ function checkedPatch(resource: Resource, patch: SymbolOverride): SymbolOverride
   if (patch.strokeWidth !== undefined && !STROKE_WIDTHS.includes(patch.strokeWidth)) {
     throw new RangeError(`描边宽度只能是 ${STROKE_WIDTHS.join('、')}，收到 ${patch.strokeWidth}`);
   }
-  if (patch.dash !== undefined && !Object.hasOwn(LINE_DASHES, patch.dash)) {
-    throw new Error(`没有线型 ${patch.dash}`);
+  for (const dash of [patch.dash, patch.outlineDash]) {
+    if (dash !== undefined && !Object.hasOwn(LINE_DASHES, dash)) {
+      throw new Error(`没有线型 ${dash}`);
+    }
+  }
+  if (patch.fillStyle !== undefined && !Object.hasOwn(FILL_STYLES, patch.fillStyle)) {
+    throw new Error(`没有填充方式 ${patch.fillStyle}`);
   }
   return {
     ...patch,
     ...(patch.size === undefined ? {} : { size: requireSize('circle', patch.size) }),
-    ...(patch.width === undefined ? {} : { width: requireSize('line', patch.width) })
+    ...(patch.width === undefined ? {} : { width: requireSize('line', patch.width) }),
+    ...(patch.outlineWidth === undefined ? {} : { outlineWidth: requireSize('outline', patch.outlineWidth) })
   };
 }
 

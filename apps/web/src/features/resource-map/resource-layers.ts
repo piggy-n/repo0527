@@ -4,18 +4,19 @@ import {
   validateStyleMin,
   type VectorSourceSpecification
 } from '@maplibre/maplibre-gl-style-spec';
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup, StyleImage, StyleImages } from '@yzt/map-core';
 import type { Resource, ResourceCatalog, ResourceGeometry } from './catalog';
 import { noSymbolOverride, type ResourceSymbolOverride, type SymbolOverrideOf } from './resource-symbols';
 import {
   DEFAULT_OPACITY,
-  resourceLayerStyle,
   type ResourceStyle,
+  resourceStyleLayers,
   resourceStyle,
   SOURCE_MAXZOOM,
   sourceLayerOf,
   tilesetOf
 } from './style-registry';
+import type { ResourceLayerPart } from './symbols';
 
 // 资源图层的显示状态与分组推导（ADR 0041 第 3、4 节），都是纯函数；拥有者 useResourceLayers 持有状态并调用它们
 
@@ -121,7 +122,26 @@ const GEOMETRY_FILTERS: Readonly<Record<ResourceGeometry, FilterSpecification>> 
 interface ResourceEntry {
   readonly id: string;
   readonly source: VectorSourceSpecification;
-  readonly layer: LayerSpecification;
+  /** 主图层，以及按需拆出的纹理图层、描边图层（ADR 0045 第 2 节），从下到上 */
+  readonly layers: readonly LayerSpecification[];
+  readonly images: StyleImages;
+}
+
+// 共用的部分：数据源、瓦片图层名、几何过滤、最小级别
+type LayerCommon = Pick<LayerSpecification & { type: 'fill' }, 'source' | 'source-layer' | 'filter' | 'minzoom'>;
+
+// 一个图层：ID 按后缀区分，透明度乘在各几何类型的不透明度上
+function layerOf(part: ResourceLayerPart, id: string, common: LayerCommon, opacity: number): LayerSpecification {
+  const layerId = part.suffix ? `${id}-${part.suffix}` : id;
+  if (part.type === 'fill') {
+    return { ...common, id: layerId, type: 'fill', paint: { ...part.paint, 'fill-opacity': opacity } };
+  }
+  if (part.type === 'line') {
+    const paint = { ...part.paint, 'line-opacity': opacity };
+    return { ...common, id: layerId, type: 'line', layout: part.layout, paint };
+  }
+  const paint = { ...part.paint, 'circle-opacity': opacity, 'circle-stroke-opacity': opacity };
+  return { ...common, id: layerId, type: 'circle', paint };
 }
 
 // 有最小显示级别的资源，数据源和图层用同一个最小级别：更低的级别不请求瓦片
@@ -142,23 +162,14 @@ function resourceEntry(
     ...zoomRange,
     ...(promoteId === undefined ? {} : { promoteId })
   };
-  const common = {
-    id,
+  const common: LayerCommon = {
     source: id,
     'source-layer': sourceLayerOf(resource.code, year),
     filter: GEOMETRY_FILTERS[resource.geometry],
     ...zoomRange
   };
-  const layerStyle = resourceLayerStyle(resource, style, override);
-  if (layerStyle.type === 'fill') {
-    return { id, source, layer: { ...common, type: 'fill', paint: { ...layerStyle.paint, 'fill-opacity': opacity } } };
-  }
-  if (layerStyle.type === 'line') {
-    const paint = { ...layerStyle.paint, 'line-opacity': opacity };
-    return { id, source, layer: { ...common, type: 'line', layout: layerStyle.layout, paint } };
-  }
-  const paint = { ...layerStyle.paint, 'circle-opacity': opacity, 'circle-stroke-opacity': opacity };
-  return { id, source, layer: { ...common, type: 'circle', paint } };
+  const { parts, images } = resourceStyleLayers(resource, style, override);
+  return { id, source, layers: parts.map(part => layerOf(part, id, common, opacity)), images };
 }
 
 /**
@@ -174,8 +185,8 @@ export function validateCatalog(
   for (const resource of catalog?.resources.values() ?? []) {
     const display = { checked: true, opacity: DEFAULT_OPACITY, year: latestYear(resource) };
     try {
-      const { id, source, layer } = resourceEntry(resource, display, tileBase, styleOf(resource.code), undefined);
-      const errors = validateStyleMin({ version: 8, sources: { [id]: source }, layers: [layer] });
+      const { id, source, layers } = resourceEntry(resource, display, tileBase, styleOf(resource.code), undefined);
+      const errors = validateStyleMin({ version: 8, sources: { [id]: source }, layers: [...layers] });
       if (errors.length > 0) {
         invalid.set(resource.code, errors.map(({ message }) => message));
       }
@@ -205,15 +216,18 @@ export function resourcesGroup({
 }: ResourcesGroupInput): StyleGroup {
   const sources: Record<string, VectorSourceSpecification> = {};
   const layers: LayerSpecification[] = [];
+  const images: Record<string, StyleImage> = {};
   // order 从上到下，样式里的图层从下到上
   for (const code of state.order.toReversed()) {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
     if (resource && display?.checked && !invalid.has(code)) {
-      const { id, source, layer } = resourceEntry(resource, display, tileBase, resourceStyle(code), overrideOf(code));
-      sources[id] = source;
-      layers.push(layer);
+      const entry = resourceEntry(resource, display, tileBase, resourceStyle(code), overrideOf(code));
+      sources[entry.id] = entry.source;
+      layers.push(...entry.layers);
+      // 几个资源用到同一种花纹时是同一张图片
+      Object.assign(images, entry.images);
     }
   }
-  return { sources, layers };
+  return Object.keys(images).length > 0 ? { sources, layers, images } : { sources, layers };
 }

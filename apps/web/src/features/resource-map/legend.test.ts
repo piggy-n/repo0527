@@ -149,7 +149,11 @@ describe('legendEntries', () => {
     const paintOf = (code: string) => group.layers.find(item => item.id === `resources-${code}`)?.paint;
     const entries = legendEntries(ALL, new Map(), overrideOf);
 
-    expect(paintOf('szy_kt')).toMatchObject({ 'fill-color': 'rgba(0, 0, 255, 0.5)', 'fill-outline-color': RESOURCE_PALETTE[4] });
+    // 填充换了颜色、描边没换：描边随缩放从主色（10 级）过渡到描边色（14 级，ADR 0045）
+    expect(paintOf('szy_kt')).toMatchObject({
+      'fill-color': 'rgba(0, 0, 255, 0.5)',
+      'fill-outline-color': ['interpolate', ['linear'], ['zoom'], 10, 'rgba(0,0,255,1)', 14, RESOURCE_PALETTE[4]]
+    });
     expect(entryOf(entries, 'szy_kt')).toMatchObject({ swatch: { fill: 'rgba(0, 0, 255, 0.5)', outline: RESOURCE_PALETTE[4] } });
     expect(paintOf('bgdc_cjdcqjx')).toMatchObject({
       'line-color': 'rgba(0, 128, 0, 1)',
@@ -199,6 +203,15 @@ describe('legendEntries', () => {
     const czc = entryOf(entries, 'bgdc_dltb_czc');
     expect(czc.kind === 'landuse' ? czc.swatches.get('legacy:城市用地') : null).toMatchObject({ fill: 'rgba(0, 255, 0, 1)' });
     expect(czc.kind === 'landuse' ? czc.swatches.size : 0).toBe(76);
+  });
+
+  it('无填充的面：预览的填充透明，描边照常', () => {
+    const overrides = new Map<string, ResourceSymbolOverride>([['szy_kt', { uniform: { fillStyle: 'none' } }]]);
+    const entries = legendEntries(ALL, new Map(), code => overrides.get(code));
+
+    expect(entryOf(entries, 'szy_kt')).toMatchObject({
+      swatch: { geometry: 'fill', fill: 'rgba(0, 0, 0, 0)', outline: RESOURCE_PALETTE[4] }
+    });
   });
 
   it('调整叠放顺序不改变颜色', () => {

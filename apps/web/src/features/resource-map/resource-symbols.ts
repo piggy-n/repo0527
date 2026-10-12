@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import {
   type ColorField,
+  FILL_STYLE_NAMES,
   LINE_DASH_NAMES,
   normalizeColor,
   POINT_STROKE_WIDTHS,
   SIZE_LEVELS,
   SIZE_REFERENCES,
+  type SizeKind,
   type SymbolOverride
 } from './symbols';
 
@@ -93,8 +95,8 @@ export function effectiveOverride(
 
 const colorSchema = z.string().refine(value => normalizeColor(value) !== null, '颜色解析不了');
 
-const sizeSchema = (geometry: 'circle' | 'line') => {
-  const { min, max } = SIZE_REFERENCES[geometry];
+const sizeSchema = (kind: SizeKind) => {
+  const { min, max } = SIZE_REFERENCES[kind];
   return z.union([z.enum(SIZE_LEVELS), z.number().min(min).max(max)]);
 };
 
@@ -112,7 +114,11 @@ const overrideSchema = z.object({
   color: colorSchema.optional(),
   width: sizeSchema('line').optional(),
   dash: z.enum(LINE_DASH_NAMES).optional(),
-  outlineColor: colorSchema.optional()
+  outlineColor: colorSchema.optional(),
+  fillStyle: z.enum(FILL_STYLE_NAMES).optional(),
+  patternColor: colorSchema.optional(),
+  outlineWidth: sizeSchema('outline').optional(),
+  outlineDash: z.enum(LINE_DASH_NAMES).optional()
 });
 
 /** 存下的符号覆盖：按资源的普通对象 */

@@ -106,6 +106,15 @@ describe('存储格式', () => {
     expect(invalid.filter(uniform => storedSymbolsSchema.safeParse({ a: { uniform } }).success)).toStrictEqual([]);
   });
 
+  it('面的新字段：填充方式、描边线型是给定的几种，描边宽度是四档或 0～8，纹理颜色解析得了', () => {
+    const valid = { fillStyle: 'xCross', patternColor: '#000', outlineWidth: 0, outlineDash: 'dotted' };
+    expect(storedSymbolsSchema.safeParse({ a: { uniform: valid } }).success).toBe(true);
+    expect(storedSymbolsSchema.safeParse({ a: { uniform: { outlineWidth: 'XL' } } }).success).toBe(true);
+
+    const invalid = [{ fillStyle: 'wave' }, { patternColor: '不是颜色' }, { outlineWidth: 8.5 }, { outlineDash: 'wavy' }];
+    expect(invalid.filter(uniform => storedSymbolsSchema.safeParse({ a: { uniform } }).success)).toStrictEqual([]);
+  });
+
   it('样式方式只存"统一样式"；各取值的覆盖按同样的规则校验', () => {
     const items = { 河流: { width: 'XL', color: BLUE } };
     expect(storedSymbolsSchema.safeParse({ a: { mode: 'uniform', items } }).success).toBe(true);

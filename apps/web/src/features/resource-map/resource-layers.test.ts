@@ -15,6 +15,8 @@ import {
   resourceTileBase,
   validateCatalog
 } from './resource-layers';
+import { BLANK_PATTERN_IMAGE_ID, patternImageId, patternImages } from './fill-patterns';
+import type { ResourceSymbolOverride } from './resource-symbols';
 import { resourceStyle } from './style-registry';
 
 const TILE_BASE = 'http://localhost:5173/backend/api/tiles/';
@@ -212,6 +214,51 @@ describe('resourcesGroup', () => {
       'circle-opacity': 0.7,
       'circle-stroke-opacity': 0.7
     });
+  });
+
+  it('面按需拆层（ADR 0045）：纹理图层、描边图层的 ID 加后缀，共用数据源、过滤和最小级别，透明度乘在每个图层上', () => {
+    const state = withDisplay(checkAll(initial), 'bgdc_cjdcq', { opacity: 0.4 });
+    const overrides: Record<string, ResourceSymbolOverride> = {
+      bgdc_cjdcq: { uniform: { fillStyle: 'cross', outlineWidth: 'L' } }
+    };
+    const group = resourcesGroup({ state, invalid: new Map(), tileBase: TILE_BASE, overrideOf: code => overrides[code] });
+    const parts = group.layers.filter(({ id }) => id === 'resources-bgdc_cjdcq' || id.startsWith('resources-bgdc_cjdcq-'));
+
+    expect(parts.map(({ id }) => id)).toStrictEqual([
+      'resources-bgdc_cjdcq',
+      'resources-bgdc_cjdcq-pattern',
+      'resources-bgdc_cjdcq-outline'
+    ]);
+    const main = layerOf(group, 'bgdc_cjdcq');
+    for (const part of parts) {
+      expect(part).toMatchObject({
+        source: 'resources-bgdc_cjdcq',
+        filter: 'filter' in main ? main.filter : undefined,
+        minzoom: resourceStyle('bgdc_cjdcq').minzoom
+      });
+      expect('source-layer' in part && part['source-layer']).toBe('source-layer' in main && main['source-layer']);
+    }
+    expect(parts.map(part => part.paint)).toMatchObject([
+      { 'fill-opacity': 0.4 },
+      { 'fill-opacity': 0.4 },
+      { 'line-opacity': 0.4 }
+    ]);
+    expect(validateStyleMin({ version: 8, sources: group.sources, layers: group.layers.slice() })).toStrictEqual([]);
+  });
+
+  it('分组带上用到的图片：几个资源用同一种花纹时是同一张；没有花纹时不带 images', () => {
+    const state = checkAll(initial);
+    const overrides: Record<string, ResourceSymbolOverride> = {
+      bgdc_cjdcq: { uniform: { fillStyle: 'dot' } },
+      bgdc_dltb: { items: { '0101': { fillStyle: 'dot' } } }
+    };
+    const group = resourcesGroup({ state, invalid: new Map(), tileBase: TILE_BASE, overrideOf: code => overrides[code] });
+
+    expect(Object.keys(group.images ?? {}).toSorted()).toStrictEqual(
+      [BLANK_PATTERN_IMAGE_ID, ...([0, 1, 2] as const).map(band => patternImageId('dot', band))].toSorted()
+    );
+    expect(group.images?.[patternImageId('dot', 1)]).toBe(patternImages(['dot'], false)[patternImageId('dot', 1)]);
+    expect(derive(state)).not.toHaveProperty('images');
   });
 
   it('每个图层只画自己几何类型的要素：面图层不画退化成线的要素', () => {

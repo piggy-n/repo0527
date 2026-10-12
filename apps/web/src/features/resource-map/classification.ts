@@ -134,7 +134,7 @@ export function classExpression<T extends MatchOutput>(
   );
 }
 
-/** 规则的取值和匹配结构，交给 classifiedPaint */
+/** 规则的取值和匹配结构，交给 classifiedLayers */
 export function symbolClasses(rule: ColorRule): SymbolClasses {
   return { items: classItems(rule), combine: output => classExpression(rule, output) };
 }

@@ -57,7 +57,9 @@ export type LegendEntry =
 /** 符号的预览 */
 export function swatchOf(symbol: ResourceSymbol): LegendSwatch {
   if (symbol.geometry === 'fill') {
-    return { geometry: 'fill', fill: symbol.fillColor, outline: symbol.outlineColor };
+    // 纹理、描边宽度和线型的预览在 5C.5c-3、5D
+    const fill = symbol.fillStyle === 'none' ? 'rgba(0, 0, 0, 0)' : symbol.fillColor;
+    return { geometry: 'fill', fill, outline: symbol.outlineColor };
   }
   if (symbol.geometry === 'line') {
     return { geometry: 'line', color: symbol.color };

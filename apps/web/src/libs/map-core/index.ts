@@ -26,7 +26,8 @@ export {
   MeasureStore
 } from './measure/measure-store';
 export { MapSession, type MapSessionOptions } from './session/map-session';
-export { diffStyle, type StyleCommand } from './style/diff-style';
+export { diffSnapshot, diffStyle, type ImageCommand, type StyleCommand, type StyleSnapshot } from './style/diff-style';
+export type { StyleImage, StyleImages } from './style/style-image';
 export {
   type StyleChange,
   type StyleGroup,

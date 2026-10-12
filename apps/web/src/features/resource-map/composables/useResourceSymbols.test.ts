@@ -4,7 +4,7 @@ import { effectScope, shallowRef } from 'vue';
 import type { ResourceTreeLayer } from '../api';
 import { buildCatalog, type ResourceCatalog } from '../catalog';
 import { defaultSymbol } from '../style-registry';
-import type { ColorField, LineDash, SymbolField } from '../symbols';
+import type { ColorField, FillStyle, LineDash, SymbolField } from '../symbols';
 import { useResourceSymbols } from './useResourceSymbols';
 
 function layer(code: string, geoType: ResourceTreeLayer['geoType']) {
@@ -123,6 +123,28 @@ describe('useResourceSymbols', () => {
     expect(() => symbols.previewColor({ code: 'szy_kt' }, 'fillColor', '不是颜色')).toThrow('不是颜色');
     expect(symbols.overrides.value).toBe(before);
     expect(symbols.preview.value).toBeNull();
+  });
+
+  it('面的描边与纹理（ADR 0045）：描边宽度按 0.1 取整、0～8，0 也可以；填充方式、描边线型要在范围里；纹理颜色规范化、可以预览', () => {
+    using ctx = setup();
+    const { symbols } = ctx;
+    const pond = { code: 'szy_kt' };
+
+    symbols.setSymbol(pond, { outlineWidth: 2.34, fillStyle: 'dot', patternColor: '#000', outlineDash: 'dashed' });
+    expect(symbols.overrides.value.get('szy_kt')).toStrictEqual({
+      uniform: { fillStyle: 'dot', patternColor: 'rgba(0, 0, 0, 1)', outlineWidth: 2.3, outlineDash: 'dashed' }
+    });
+    symbols.setSymbol(pond, { outlineWidth: 0 });
+    expect(symbols.symbolOf(pond)).toMatchObject({ outlineWidth: 0 });
+
+    expect(() => symbols.setSymbol(pond, { outlineWidth: 8.5 })).toThrow(RangeError);
+    // 类型不允许，模拟界面传来的脏值
+    expect(() => symbols.setSymbol(pond, { fillStyle: 'wave' as FillStyle })).toThrow('没有填充方式');
+    expect(() => symbols.setSymbol(pond, { outlineDash: 'wavy' as LineDash })).toThrow('没有线型');
+    expect(() => symbols.setSymbol({ code: 'bgdc_cjdcqjx' }, { outlineWidth: 2 })).toThrow('没有 outlineWidth');
+
+    symbols.previewColor(pond, 'patternColor', '#F00');
+    expect(symbols.overrideOf('szy_kt')?.uniform).toMatchObject({ patternColor: 'rgba(255, 0, 0, 1)' });
   });
 
   it('目录还没加载时操作抛错', () => {
