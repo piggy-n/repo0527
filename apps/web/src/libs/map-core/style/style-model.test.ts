@@ -1,6 +1,7 @@
 // @vitest-environment node
 import type { GeoJSONSourceSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it, vi } from 'vitest';
+import type { StyleImage } from './style-image';
 import { type StyleChange, type StyleGroup, StyleModel } from './style-model';
 
 // 通知在微任务里发出，排在它后面的微任务执行时已经发完
@@ -32,6 +33,18 @@ function listen(model: StyleModel<string>) {
   model.on('change', change => changes.push(change));
   return changes;
 }
+
+// 2 × 2 的图片；fill 是每个字节的值
+const image = (fill = 0, overrides: Partial<StyleImage> = {}): StyleImage => ({
+  width: 2,
+  height: 2,
+  data: new Uint8Array(16).fill(fill),
+  ...overrides
+});
+
+// 每条命令的名称和第一个参数（ID 或图层）
+const commandsOf = (change: StyleChange | undefined) =>
+  change?.commands.map(({ command, args }) => [command, args[0]] as const);
 
 describe('StyleModel', () => {
   it('composes groups in the declared order with the root properties', () => {
@@ -155,6 +168,113 @@ describe('StyleModel', () => {
     await nextMicrotask();
 
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  describe('images', () => {
+    // 同一份数据源：GeoJSON 数据按引用比较，换对象会多出更新数据的命令
+    const lines = lineGroup('dltb');
+    const patternGroup = (images: Record<string, StyleImage>): StyleGroup => ({ ...lines, images });
+
+    it('composes the images of all groups and notifies them with the snapshot', async () => {
+      using model = createModel();
+      const changes = listen(model);
+      const stripe = image(1);
+
+      model.setGroup('business', patternGroup({ 'business-stripe': stripe }));
+      await nextMicrotask();
+
+      expect(model.images).toStrictEqual({ 'business-stripe': stripe });
+      expect(changes[0]?.images).toBe(model.images);
+      // 图片先于引用它的图层添加
+      expect(commandsOf(changes[0])).toStrictEqual([
+        ['addImage', 'business-stripe'],
+        ['addSource', 'dltb'],
+        ['addLayer', { ...line('dltb-line', 'dltb') }]
+      ]);
+    });
+
+    it('counts a commit that only changes images and compares images by reference', async () => {
+      using model = createModel();
+      const changes = listen(model);
+      const stripe = image(1);
+      model.setGroup('business', patternGroup({ 'business-stripe': stripe }));
+      await nextMicrotask();
+
+      model.setGroup('business', patternGroup({ 'business-stripe': stripe }));
+      await nextMicrotask();
+      expect(model.revision).toBe(2);
+      expect(changes).toHaveLength(1);
+
+      const repainted = image(2);
+      model.setGroup('business', patternGroup({ 'business-stripe': repainted }));
+      await nextMicrotask();
+      expect(changes[1]?.commands).toStrictEqual([{ command: 'updateImage', args: ['business-stripe', repainted] }]);
+    });
+
+    it('replaces an image whose size, pixel ratio or SDF flag changes, and removes images after the style commands', async () => {
+      using model = createModel();
+      const changes = listen(model);
+      model.setGroup('business', patternGroup({ a: image(), b: image(), c: image(), d: image(), e: image() }));
+      await nextMicrotask();
+
+      model.setGroups({
+        business: {
+          sources: {},
+          layers: [],
+          images: {
+            // 只变宽、只变高
+            a: image(0, { width: 4, data: new Uint8Array(32) }),
+            e: image(0, { height: 1, data: new Uint8Array(8) }),
+            b: image(0, { pixelRatio: 2 }),
+            c: image(0, { sdf: true })
+          }
+        }
+      });
+      await nextMicrotask();
+
+      expect(commandsOf(changes[1])).toStrictEqual([
+        ['removeImage', 'a'],
+        ['addImage', 'a'],
+        ['removeImage', 'e'],
+        ['addImage', 'e'],
+        ['removeImage', 'b'],
+        ['addImage', 'b'],
+        ['removeImage', 'c'],
+        ['addImage', 'c'],
+        ['removeLayer', 'dltb-line'],
+        ['removeSource', 'dltb'],
+        ['removeImage', 'd']
+      ]);
+    });
+
+    it('treats the default pixel ratio and SDF flag as equal to the explicit defaults', async () => {
+      using model = createModel();
+      const changes = listen(model);
+      model.setGroup('business', patternGroup({ a: image() }));
+      await nextMicrotask();
+
+      model.setGroup('business', patternGroup({ a: image(3, { pixelRatio: 1, sdf: false }) }));
+      await nextMicrotask();
+
+      expect(commandsOf(changes[1])).toStrictEqual([['updateImage', 'a']]);
+    });
+
+    it('rejects an image ID used by two groups and invalid images, keeping the previous state', () => {
+      using model = createModel();
+      model.setGroup('basemap', { sources: {}, layers: [], images: { shared: image() } });
+      const before = model.images;
+
+      expect(() => model.setGroup('business', patternGroup({ shared: image() }))).toThrow(
+        '图片 ID "shared" 在分组 basemap 和 business 中重复'
+      );
+      expect(() => model.setGroup('business', patternGroup({ a: image(0, { width: 3 }) }))).toThrow('数据长度 16');
+      expect(() => model.setGroup('business', patternGroup({ a: image(0, { width: 0, data: new Uint8Array() }) }))).toThrow(
+        '宽高不是正整数'
+      );
+      expect(() => model.setGroup('business', patternGroup({ a: image(0, { pixelRatio: 0 }) }))).toThrow('像素比不是正数');
+      expect(model.images).toBe(before);
+      expect(model.revision).toBe(1);
+    });
   });
 
   describe('validation', () => {

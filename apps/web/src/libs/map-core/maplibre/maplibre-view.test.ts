@@ -106,6 +106,9 @@ class FakeMap implements MapLike {
   setLayoutProperty = this.#record('setLayoutProperty');
   setFilter = this.#record('setFilter');
   setLayerZoomRange = this.#record('setLayerZoomRange');
+  addImage = this.#record('addImage');
+  updateImage = this.#record('updateImage');
+  removeImage = this.#record('removeImage');
   setStyle = this.#record('setStyle');
 
   getSource(): unknown {
@@ -299,6 +302,10 @@ function lineGroup(id: string, color = '#336699'): StyleGroup {
     layers: [{ id: `${id}-line`, type: 'line', source: id, paint: { 'line-color': color } }]
   };
 }
+
+// 只有样式图片的分组
+const stripe = { width: 1, height: 1, data: new Uint8Array(4), sdf: true };
+const imageGroup = (images: StyleGroup['images']): StyleGroup => ({ sources: {}, layers: [], images });
 
 // 矢量瓦片的数据源：年份不同时地址不同
 function tileGroup(id: string, year: number): StyleGroup {
@@ -823,6 +830,96 @@ describe('MapLibreView', () => {
         ['addSource', 'tdt', lineGroup('tdt').sources.tdt],
         ['addLayer', lineGroup('tdt').layers[0], 'dltb-line']
       ]);
+    });
+
+    describe('images', () => {
+
+      it('adds the images of the snapshot it was created from on style.load', async () => {
+        using stack = new DisposableStack();
+        const session = stack.use(new MapSession({ groups: ['basemap', 'business'], camera: NANJING }));
+        session.style.setGroup('business', imageGroup({ stripe }));
+        await nextMicrotask();
+        let map: FakeMap | undefined;
+        stack.use(
+          new MapLibreView({
+            session,
+            container: document.createElement('div'),
+            createMap: options => (map = new FakeMap(options))
+          })
+        );
+
+        map?.fire('style.load');
+        expect(map?.styleCalls()).toStrictEqual([
+          ['addImage', 'stripe', { width: 1, height: 1, data: stripe.data }, { pixelRatio: 1, sdf: true }]
+        ]);
+      });
+
+      it('applies image-only commits while ready: add, update pixels, remove', async () => {
+        using ctx = setup();
+        ctx.map.fire('style.load');
+
+        ctx.session.style.setGroup('business', imageGroup({ stripe }));
+        await nextMicrotask();
+        ctx.session.style.setGroup('business', imageGroup({ stripe: { ...stripe, data: new Uint8Array(4).fill(9) } }));
+        await nextMicrotask();
+        ctx.session.style.setGroup('business', imageGroup({}));
+        await nextMicrotask();
+
+        expect(names(ctx.map.styleCalls())).toEqual(['addImage', 'updateImage', 'removeImage']);
+      });
+
+      it('catches up image changes made while paused on resume', async () => {
+        using ctx = setup();
+        ctx.map.fire('style.load');
+        ctx.view.pause();
+
+        ctx.session.style.setGroup('business', imageGroup({ stripe }));
+        await nextMicrotask();
+        expect(ctx.map.styleCalls()).toEqual([]);
+
+        ctx.view.resume();
+        expect(names(ctx.map.styleCalls())).toEqual(['addImage']);
+      });
+
+      it('records the images it applied, so a later catch-up compares from them', async () => {
+        using ctx = setup();
+        ctx.map.fire('style.load');
+        ctx.session.style.setGroup('business', imageGroup({ stripe }));
+        await nextMicrotask();
+        ctx.view.pause();
+
+        ctx.session.style.setGroup('business', imageGroup({}));
+        await nextMicrotask();
+        ctx.view.resume();
+
+        expect(names(ctx.map.styleCalls())).toEqual(['addImage', 'removeImage']);
+      });
+
+      it('adds every image of the rebuilt snapshot after a rebuild, then catches up the commits made meanwhile', async () => {
+        using ctx = setup();
+        ctx.map.fire('style.load');
+        ctx.session.style.setGroup('business', imageGroup({ stripe }));
+        await nextMicrotask();
+
+        ctx.map.failOn = 'addLayer';
+        ctx.session.style.setGroup('basemap', lineGroup('tdt'));
+        await nextMicrotask();
+        expect(names(ctx.map.styleCalls()).at(-1)).toBe('setStyle');
+
+        // 重建完成之前又换了图片
+        ctx.map.failOn = undefined;
+        const dots = { width: 2, height: 1, data: new Uint8Array(8) };
+        ctx.session.style.setGroup('business', imageGroup({ dots }));
+        await nextMicrotask();
+        const before = ctx.map.styleCalls().length;
+
+        ctx.map.fire('style.load');
+        expect(ctx.map.styleCalls().slice(before).map(([name, id]) => [name, id])).toEqual([
+          ['addImage', 'stripe'],
+          ['addImage', 'dots'],
+          ['removeImage', 'stripe']
+        ]);
+      });
     });
 
     it('rebuilds from the current snapshot when the map rejects a command with an error event', async () => {

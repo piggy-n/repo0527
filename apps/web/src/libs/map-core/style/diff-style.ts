@@ -5,9 +5,22 @@ import type {
   SourceSpecification,
   StyleSpecification
 } from '@maplibre/maplibre-gl-style-spec';
+import { sameImageFormat, type StyleImage, type StyleImages } from './style-image';
+
+/** 样式图片的命令（ADR 0045 第 4 节）：style-spec 的 diff 不管图片 */
+export type ImageCommand =
+  | { readonly command: 'addImage'; readonly args: [id: string, image: StyleImage] }
+  | { readonly command: 'updateImage'; readonly args: [id: string, image: StyleImage] }
+  | { readonly command: 'removeImage'; readonly args: [id: string] };
 
 /** 一条样式命令：按 `command` 分支后，`args` 的类型自动收窄 */
-export type StyleCommand = DiffCommand;
+export type StyleCommand = DiffCommand | ImageCommand;
+
+/** 样式快照：样式规范加上样式图片（图片不在样式规范里） */
+export interface StyleSnapshot {
+  readonly style: StyleSpecification;
+  readonly images: StyleImages;
+}
 
 // style-spec 的 deepEqual 不先比较引用，数据留在样式里就要逐个比坐标；两边换成同一个占位值后视为相同
 const DATA_PLACEHOLDER: GeoJSONSourceSpecification['data'] = { type: 'FeatureCollection', features: [] };
@@ -88,4 +101,38 @@ export function diffStyle(before: StyleSpecification, after: StyleSpecification)
   }
 
   return commands;
+}
+
+/**
+ * 对比两份快照的图片，按引用比较：新出现的添加；换了对象的，格式相同时只换像素，不同时先删除再添加；
+ * 没有了的删除。删除要等引用它的图层先改掉，所以单独返回、排在样式命令之后
+ */
+function diffImages(before: StyleImages, after: StyleImages): { leading: ImageCommand[]; trailing: ImageCommand[] } {
+  const leading: ImageCommand[] = [];
+  for (const [id, image] of Object.entries(after)) {
+    const previous = before[id];
+    if (previous === undefined) {
+      leading.push({ command: 'addImage', args: [id, image] });
+    } else if (previous !== image) {
+      if (sameImageFormat(previous, image)) {
+        leading.push({ command: 'updateImage', args: [id, image] });
+      } else {
+        leading.push({ command: 'removeImage', args: [id] }, { command: 'addImage', args: [id, image] });
+      }
+    }
+  }
+  const trailing: ImageCommand[] = Object.keys(before)
+    .filter(id => !Object.hasOwn(after, id))
+    .map(id => ({ command: 'removeImage', args: [id] }));
+  return { leading, trailing };
+}
+
+/** 对比两份快照（ADR 0022、0045）：图片的添加、替换在样式命令之前，删除在之后；样式整体重建时不再单独处理图片 */
+export function diffSnapshot(before: StyleSnapshot, after: StyleSnapshot): StyleCommand[] {
+  const style = diffStyle(before.style, after.style);
+  if (style.some(({ command }) => command === 'setStyle')) {
+    return style;
+  }
+  const { leading, trailing } = diffImages(before.images, after.images);
+  return [...leading, ...style, ...trailing];
 }

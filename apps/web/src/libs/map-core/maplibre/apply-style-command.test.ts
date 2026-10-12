@@ -26,7 +26,10 @@ function fakeMap() {
     setPaintProperty: record('setPaintProperty'),
     setLayoutProperty: record('setLayoutProperty'),
     setFilter: record('setFilter'),
-    setLayerZoomRange: record('setLayerZoomRange')
+    setLayerZoomRange: record('setLayerZoomRange'),
+    addImage: record('addImage'),
+    updateImage: record('updateImage'),
+    removeImage: record('removeImage')
   };
   return { map, calls, sources };
 }
@@ -58,6 +61,31 @@ describe('applyStyleCommand', () => {
 
     expect(applyStyleCommand(map, command, failOnAsyncError)).toBe(true);
     expect(calls).toEqual([[command.command, ...command.args]]);
+  });
+
+  it('adds an image with its pixel ratio and SDF flag (defaults 1 and false), updates pixels and removes images', () => {
+    const { map, calls } = fakeMap();
+    const data = new Uint8Array(4);
+
+    applyStyleCommand(map, { command: 'addImage', args: ['plain', { width: 1, height: 1, data }] }, failOnAsyncError);
+    applyStyleCommand(
+      map,
+      { command: 'addImage', args: ['stripe', { width: 1, height: 1, data, pixelRatio: 2, sdf: true }] },
+      failOnAsyncError
+    );
+    applyStyleCommand(
+      map,
+      { command: 'updateImage', args: ['stripe', { width: 1, height: 1, data, pixelRatio: 2, sdf: true }] },
+      failOnAsyncError
+    );
+    applyStyleCommand(map, { command: 'removeImage', args: ['plain'] }, failOnAsyncError);
+
+    expect(calls).toStrictEqual([
+      ['addImage', 'plain', { width: 1, height: 1, data }, { pixelRatio: 1, sdf: false }],
+      ['addImage', 'stripe', { width: 1, height: 1, data }, { pixelRatio: 2, sdf: true }],
+      ['updateImage', 'stripe', { width: 1, height: 1, data }],
+      ['removeImage', 'plain']
+    ]);
   });
 
   it('updates the data of a GeoJSON source', () => {

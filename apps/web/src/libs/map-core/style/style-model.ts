@@ -1,12 +1,15 @@
 import type { LayerSpecification, SourceSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Unsubscribe } from '../events';
 import { ModelEvents } from '../model-events';
-import { diffStyle, type StyleCommand } from './diff-style';
+import { diffSnapshot, type StyleCommand, type StyleSnapshot } from './diff-style';
+import { assertStyleImage, type StyleImage, type StyleImages } from './style-image';
 
-/** 一个拥有者负责的数据源和图层：不可变，变化时整体替换（ADR 0022） */
+/** 一个拥有者负责的数据源、图层和样式图片：不可变，变化时整体替换（ADR 0022、0045） */
 export interface StyleGroup {
   readonly sources: Readonly<Record<string, SourceSpecification>>;
   readonly layers: readonly LayerSpecification[];
+  /** 图层引用的图片（如 `fill-pattern`）；ID 跨分组不能重复 */
+  readonly images?: StyleImages;
 }
 
 /** 样式的根属性（glyphs、sprite 等），由装配方提供；相机归 CameraModel，不能写在这里 */
@@ -21,6 +24,7 @@ export interface StyleChange {
   readonly toRevision: number;
   readonly commands: readonly StyleCommand[];
   readonly style: StyleSpecification;
+  readonly images: StyleImages;
 }
 
 export interface StyleModelOptions<G extends string> {
@@ -39,11 +43,13 @@ function compose<G extends string>(
   root: StyleRoot,
   order: readonly G[],
   groups: ReadonlyMap<G, StyleGroup>
-): StyleSpecification {
+): StyleSnapshot {
   const sources: Record<string, SourceSpecification> = {};
   const layers: LayerSpecification[] = [];
+  const images: Record<string, StyleImage> = {};
   const sourceOwners = new Map<string, G>();
   const layerOwners = new Map<string, G>();
+  const imageOwners = new Map<string, G>();
 
   for (const id of order) {
     const group = groups.get(id) ?? EMPTY_GROUP;
@@ -63,6 +69,15 @@ function compose<G extends string>(
       layerOwners.set(layer.id, id);
       layers.push(layer);
     }
+    for (const [imageId, image] of Object.entries(group.images ?? {})) {
+      const owner = imageOwners.get(imageId);
+      if (owner !== undefined) {
+        throw new Error(`图片 ID "${imageId}" 在分组 ${owner} 和 ${id} 中重复`);
+      }
+      assertStyleImage(imageId, image);
+      imageOwners.set(imageId, id);
+      images[imageId] = image;
+    }
   }
 
   // 图层可以引用其他分组的数据源；删除数据源时，引用它的图层要在同一次提交中一起处理
@@ -72,7 +87,7 @@ function compose<G extends string>(
     }
   }
 
-  return { ...root, version: 8, sources, layers };
+  return { style: { ...root, version: 8, sources, layers }, images };
 }
 
 /** 样式模型：按分组组合样式，提交时修订号加 1，同一轮事件循环的变化合并通知（ADR 0022） */
@@ -81,10 +96,10 @@ export class StyleModel<const G extends string> implements Disposable {
   readonly #root: StyleRoot;
   readonly #events = new ModelEvents<StyleModelEvents>('StyleModel');
   #groups = new Map<G, StyleGroup>();
-  #current: StyleSpecification;
+  #current: StyleSnapshot;
   #revision = 0;
   // 上次通知时的快照，下次通知从它开始对比
-  #notified: { revision: number; style: StyleSpecification };
+  #notified: { revision: number; snapshot: StyleSnapshot };
   #flushScheduled = false;
 
   constructor({ groups, root = {} }: StyleModelOptions<G>) {
@@ -94,12 +109,17 @@ export class StyleModel<const G extends string> implements Disposable {
     this.#order = [...groups];
     this.#root = root;
     this.#current = compose(root, this.#order, this.#groups);
-    this.#notified = { revision: 0, style: this.#current };
+    this.#notified = { revision: 0, snapshot: this.#current };
   }
 
   /** 当前的完整样式快照 */
   get current(): StyleSpecification {
-    return this.#current;
+    return this.#current.style;
+  }
+
+  /** 当前快照里的样式图片，和 current 是同一份快照 */
+  get images(): StyleImages {
+    return this.#current.images;
   }
 
   /** 每次提交加 1 */
@@ -139,9 +159,9 @@ export class StyleModel<const G extends string> implements Disposable {
       return;
     }
     // 先组合再改状态：校验失败时整次提交不生效
-    const style = compose(this.#root, this.#order, next);
+    const snapshot = compose(this.#root, this.#order, next);
     this.#groups = next;
-    this.#current = style;
+    this.#current = snapshot;
     this.#revision++;
     this.#scheduleFlush();
   }
@@ -161,8 +181,8 @@ export class StyleModel<const G extends string> implements Disposable {
     }
     const from = this.#notified;
     // 先记下再通知：监听器里再次提交时，下一次通知从这里开始对比
-    this.#notified = { revision: this.#revision, style: this.#current };
-    const commands = diffStyle(from.style, this.#current);
+    this.#notified = { revision: this.#revision, snapshot: this.#current };
+    const commands = diffSnapshot(from.snapshot, this.#current);
     if (commands.length === 0) {
       return;
     }
@@ -170,7 +190,8 @@ export class StyleModel<const G extends string> implements Disposable {
       fromRevision: from.revision,
       toRevision: this.#revision,
       commands,
-      style: this.#current
+      style: this.#current.style,
+      images: this.#current.images
     });
   }
 

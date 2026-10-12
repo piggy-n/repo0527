@@ -17,6 +17,16 @@ export interface StyleTarget {
   setLayoutProperty(layerId: string, name: string, value: unknown): void;
   setFilter(layerId: string, filter?: FilterSpecification | null): void;
   setLayerZoomRange(layerId: string, minzoom: number, maxzoom: number): void;
+  addImage(id: string, image: RawImage, options: { pixelRatio: number; sdf: boolean }): void;
+  updateImage(id: string, image: RawImage): void;
+  removeImage(id: string): void;
+}
+
+/** 交给 MapLibre 的原始像素：RGBA，MapLibre 会复制一份 */
+export interface RawImage {
+  readonly width: number;
+  readonly height: number;
+  readonly data: Uint8Array;
 }
 
 interface GeoJsonSourceLike {
@@ -74,6 +84,20 @@ export function applyStyleCommand(
       return true;
     case 'setFilter':
       map.setFilter(...command.args);
+      return true;
+    case 'addImage': {
+      const [id, { width, height, data, pixelRatio = 1, sdf = false }] = command.args;
+      map.addImage(id, { width, height, data }, { pixelRatio, sdf });
+      return true;
+    }
+    case 'updateImage': {
+      // 只在宽高、像素比、是否距离场都不变时出现（diffSnapshot），MapLibre 的 updateImage 只能换像素
+      const [id, { width, height, data }] = command.args;
+      map.updateImage(id, { width, height, data });
+      return true;
+    }
+    case 'removeImage':
+      map.removeImage(...command.args);
       return true;
     case 'setLayerZoomRange':
       // 参数里的 undefined 表示"保持不设"；去掉已有缩放范围的情况，diffStyle 已改写成删除再添加

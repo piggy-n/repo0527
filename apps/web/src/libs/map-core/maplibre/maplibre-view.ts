@@ -1,11 +1,11 @@
-import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { GPUInitializationError, Map as MapLibreMap } from 'maplibre-gl';
 import { safeReporter } from '@yzt/utils';
 import { createNanoEvents } from 'nanoevents';
 import type { CameraCause, CameraState } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 import type { MapSession } from '../session/map-session';
-import { diffStyle, type StyleCommand } from '../style/diff-style';
+import { diffSnapshot, type StyleCommand, type StyleSnapshot } from '../style/diff-style';
+import type { StyleImages } from '../style/style-image';
 import type { StyleChange } from '../style/style-model';
 import type { Gestures, ToolView } from '../tool/tool-model';
 import {
@@ -79,10 +79,9 @@ function deferred(): Deferred {
  * 地图上的样式：整体加载中、已加载（即已应用的快照）、加载失败（ADR 0026）
  * 失败时也记下快照：之后 style.load 仍然到达时，以它为已加载
  */
-interface MapStyle {
+interface MapStyle extends StyleSnapshot {
   readonly status: 'loading' | 'loaded' | 'failed';
   readonly revision: number;
-  readonly style: StyleSpecification;
 }
 
 const CAMERA_CAUSES: readonly string[] = ['user', 'program', 'sync'] satisfies CameraCause[];
@@ -203,8 +202,8 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#active = active;
     // 报告器自己抛错时不能打断状态转换和资源释放，也不能冒进 MapLibre 的事件分发
     this.#onError = safeReporter(onError, 'MapLibreView');
-    const { current: style, revision } = session.style;
-    this.#mapStyle = { status: 'loading', revision, style };
+    const { current: style, images, revision } = session.style;
+    this.#mapStyle = { status: 'loading', revision, style, images };
 
     using stack = new DisposableStack();
     stack.defer(() => this.#ready.reject(new DOMException('MapLibreView 已释放', 'AbortError')));
@@ -339,6 +338,7 @@ export class MapLibreView<const G extends string> implements MapView {
     if (this.#mapStyle.status !== 'loaded') {
       this.#mapStyle = { ...this.#mapStyle, status: 'loaded' };
     }
+    this.#addImages(map, this.#mapStyle.images);
     if (this.#state === 'ready') {
       this.#catchUp(map);
       // 运行中的整体重建完成并追上了；追赶又触发了重建时，本轮延续到那一次加载
@@ -425,21 +425,29 @@ export class MapLibreView<const G extends string> implements MapView {
       return;
     }
     if (change.fromRevision === mapStyle.revision) {
-      this.#apply(map, change.commands, change.toRevision, change.style);
+      this.#apply(map, change.commands, change.toRevision, change);
     } else {
       this.#catchUp(map);
     }
   }
 
-  #catchUp(map: MapLike): void {
-    const mapStyle = this.#mapStyle;
-    const { current, revision } = this.#session.style;
-    if (mapStyle.status === 'loaded' && mapStyle.revision !== revision) {
-      this.#apply(map, diffStyle(mapStyle.style, current), revision, current);
+  // 整体加载的新样式里没有图片（MapLibre 的图片不在样式规范里）：按这次加载的快照加上，此时瓦片还没开始解析
+  #addImages(map: MapLike, images: StyleImages): void {
+    for (const [id, image] of Object.entries(images)) {
+      applyStyleCommand(map, { command: 'addImage', args: [id, image] }, this.#onError);
     }
   }
 
-  #apply(map: MapLike, commands: readonly StyleCommand[], revision: number, style: StyleSpecification): void {
+  #catchUp(map: MapLike): void {
+    const mapStyle = this.#mapStyle;
+    const { current, images, revision } = this.#session.style;
+    if (mapStyle.status === 'loaded' && mapStyle.revision !== revision) {
+      const snapshot = { style: current, images };
+      this.#apply(map, diffSnapshot(mapStyle, snapshot), revision, snapshot);
+    }
+  }
+
+  #apply(map: MapLike, commands: readonly StyleCommand[], revision: number, snapshot: StyleSnapshot): void {
     let applied = false;
     this.#applying = true;
     this.#rejected = false;
@@ -454,7 +462,7 @@ export class MapLibreView<const G extends string> implements MapView {
     // 数据源移除（包括换了地址的先移除再添加）后，旧的错误不再属于它
     this.#forgetSourceErrors(commands.flatMap(({ command, args }) => (command === 'removeSource' ? [args[0]] : [])));
     if (applied && !this.#rejected) {
-      this.#mapStyle = { status: 'loaded', revision, style };
+      this.#mapStyle = { status: 'loaded', revision, style: snapshot.style, images: snapshot.images };
     } else {
       // 地图和记录可能已经不一致
       this.#rebuild(map);
@@ -477,14 +485,14 @@ export class MapLibreView<const G extends string> implements MapView {
 
   // 用当前快照整体加载；完成后触发 style.load，期间的变化届时追上；失败时只有 error（见 #onMapError）
   #rebuild(map: MapLike): void {
-    const { current, revision } = this.#session.style;
+    const { current, images, revision } = this.#session.style;
     // 新的一轮开始：激活因此中止时，等待的人等到本轮结束，而不是拿到上一轮早已成功的结果
     this.#renewReady();
     // 从失败开始的新一轮先回到 initializing（先换 Promise 再通知）：失败后重新加载，以及报错后加载仍然完成、激活时追赶触发的重建
     if (this.#state === 'failed') {
       this.#setState('initializing');
     }
-    this.#mapStyle = { status: 'loading', revision, style: current };
+    this.#mapStyle = { status: 'loading', revision, style: current, images };
     // 所有数据源重新创建，错误会重新出现
     this.#forgetSourceErrors();
     try {

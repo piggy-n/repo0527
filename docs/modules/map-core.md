@@ -14,7 +14,8 @@
 
 | 文件 | 内容 |
 |---|---|
-| `style/diff-style.ts` | `diffStyle`：对比两份样式快照，得出命令列表 |
+| `style/diff-style.ts` | `diffStyle`：对比两份样式规范，得出命令列表；`diffSnapshot`：连同样式图片一起对比（ADR 0045） |
+| `style/style-image.ts` | `StyleImage`：样式图片的类型，格式比较与校验（ADR 0045） |
 | `style/style-model.ts` | `StyleModel`：按分组组合样式，提交时修订号加 1，合并通知 |
 | `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause`；当前这次相机操作的信号（ADR 0038） |
 | `session/map-session.ts` | `MapSession`：组合样式、相机与当前工具，统一释放 |
@@ -72,11 +73,11 @@ session[Symbol.dispose]();
 
 ```
 拥有者（底图、业务图层、边界、遮罩、高亮、测量、绘制……）
-  自己的状态 ──纯函数推导──▶ 分组 { sources, layers }（不可变，整体替换）
+  自己的状态 ──纯函数推导──▶ 分组 { sources, layers, images? }（不可变，整体替换）
                                    │ setGroup / setGroups（一次提交，修订号加 1）
                                    ▼
               按装配方声明的顺序拼成完整样式；同一轮事件循环的提交合并通知
-                                   │ diffStyle(上一份, 这一份)：GeoJSON 数据按引用比较
+                                   │ diffSnapshot(上一份, 这一份)：GeoJSON 数据、样式图片按引用比较
                                    ▼
               StyleCommand[] ──▶ MapLibre 适配器（唯一写二维地图的地方，记下已应用的快照）
                              └──▶ Cesium 镜像（以后）
@@ -87,7 +88,7 @@ session[Symbol.dispose]();
 - 消费方首次挂载、暂停后恢复、按需追上都是"已应用的快照 → 当前快照"的对比；应用某条命令出错时，用当前快照整体重建
 - 视图的生命周期：还没创建时是 `idle`（没有视图对象），之后 `initializing → ready ⇄ paused`，另有 `failed`、`disposed`；保留状态、应用变化、统计查询分开控制
 - 选择状态只存要素身份和高亮数据，候选列表和详情在 feature 的查询缓存里
-- feature-state（如果使用）是会话里的独立通道；填充图案按图案 ID 现场生成，不进状态
+- feature-state（如果使用）是会话里的独立通道；填充图案等样式图片随分组进入快照（ADR 0045，取代原来"现场生成、不进状态"的设想）
 
 视图接口还要加的部分（拾取结果的表面与高度、投影、输入、测量方式、切换时的工具状态）见 ADR 0024；资源释放和事件的写法见 ADR 0023；Worker 的取消分层、故障语义和瓦片缓存的约束见 ADR 0025，通信层的用法见 [utils.md](utils.md)。
 
@@ -156,6 +157,13 @@ store.clear();
 - 鼠标位置单独发出 `pointer`，不改变 `state`：没在画时移动鼠标不会触发样式推导
 - 椭球面计算在 `geodesic.ts`：`Geodesic.WGS84` 的 `Inverse` 和 `Polygon`；它的参数是先纬度后经度，封装里转换；面积用 `Compute(false, true)` 再取绝对值（`sign` 为 `false` 时方向反了会得到"地球上其余部分"的面积）。`s12`、`area` 在类型里是可选的，按我们的调用方式一定会返回，缺失时直接报错
 
+### 样式图片（ADR 0045）
+
+- 分组的 `images` 是按 ID 的图片：宽、高、RGBA 数据、像素比（默认 1）、是否距离场（默认否）；ID 以分组名为前缀，跨分组不能重复；提交时校验宽高是正整数、数据长度等于宽 × 高 × 4、像素比是正数，不合法时整次提交不生效（同重复的数据源 ID）
+- 图片是快照的一部分：`StyleModel` 的 `images` 和 `current` 是同一份快照，`StyleChange` 带上 `images`；只改图片也是一次提交
+- `diffSnapshot` 按引用比较图片：新出现的 `addImage`，换了对象且格式（宽高、像素比、是否距离场）相同的 `updateImage`，格式不同的先 `removeImage` 再 `addImage`，都排在样式命令之前；没有了的 `removeImage` 排在样式命令之后（先改掉引用它的图层）；样式退回 `setStyle` 时不单独处理图片，整体重建会加上
+- MapLibre 的 `updateImage` 只能换像素，宽高变了会报错，也没有改像素比、距离场的参数，所以格式变化要删除再添加
+
 ### MapLibreView
 
 在 ADR 0022、0024 的范围内实现；失败的处理见 ADR 0026。它实现 `MapView`，依赖的是窄接口 `MapLike`（以及 `applyStyleCommand` 用的 `StyleTarget`），签名比 MapLibre 的泛型方法简单；`expectTypeOf<MapLibreMap>().toExtend<MapLike>()` 保证 MapLibre 的 `Map` 满足它，MapLibre 升级后签名不兼容会在类型检查时报错。
@@ -165,12 +173,13 @@ store.clear();
 - 创建地图时直接传入当前快照作为 `style`
 - 地图上的样式记为三种结果之一（ADR 0026）：加载中（某个快照正在整体加载）、已加载（即已应用的快照）、加载失败（某个修订号，同时记下它的快照）
 - 收到通知时，`toRevision` 不大于已加载的修订号就忽略；`fromRevision` 等于已加载的修订号就直接应用命令；否则对比"已加载 → 当前"
-- `applyStyleCommand` 支持数据源和图层的 9 种命令；其余 18 种（样式根属性、相机类、没有公开方法的、`setStyle`）返回"不支持"，交给整体重建。`setGeoJSONSourceData` 的异步失败交给回调
+- `applyStyleCommand` 支持数据源和图层的 9 种命令、图片的 3 种（`addImage` 带上像素比和是否距离场，MapLibre 会复制像素）；其余 18 种（样式根属性、相机类、没有公开方法的、`setStyle`）返回"不支持"，交给整体重建。`setGeoJSONSourceData` 的异步失败交给回调
 - 遇到不支持的命令、应用时抛错、或应用期间同步收到不带 `sourceId` 的 `error` 事件（MapLibre 的很多方法校验失败时不抛错，只发事件），命令应用完后用当前快照 `setStyle(…, { diff: false })` 整体重建，等 `style.load` 后再继续。不支持的命令触发重建但不算错误；抛错和 `error` 事件交给 `onError`
 - "已加载"只在一次通知的命令全部成功（期间没有 `error` 事件）、或整体加载完成时更新；发起整体重建时不更新
 - 加载中收到不带 `sourceId` 的 `error` 就判定加载失败：整份样式通不过校验时，MapLibre 只发 `error`，不会再有 `style.load`。如果 `style.load` 之后仍然到达，以它为准：把失败时记下的快照记为已加载，再照常激活或追上最新的提交，之后继续增量同步
 - 加载失败时，会话里已经有更新的提交（加载期间提交的，那时的通知因为还在加载而没有处理）：不进入 `failed`，直接用最新的快照再加载一次，`whenReady()` 继续等待。重新加载放到微任务里：MapLibre 对每条校验错误各发一次 `error`，要等它发完再调用 `setStyle`，否则后面几条会被当成新提交的失败，也避免在它分发事件的过程中重入
 - 加载失败的修订不再重试；会话出现更新的提交时重新整体加载（暂停意图时也一样）。每个修订最多整体加载一次，所以不会无限重建；一个不合法的图层会让整个视图进入 `failed`，取舍见 ADR 0026 第 5 条
+- 图片：`style.load` 时按这次加载的快照加上全部图片，再激活或追上（首次加载、整体重建都走这里，此时瓦片还没开始解析，图层用到时不缺图）；`setStyle(…, { diff: false })` 换上的新样式不保留旧图片（真实 MapLibre 实测，重新加上时不报"已存在"）；记下的已应用快照带着图片，暂停后恢复、重建期间的提交都按快照对比追上
 - "可以应用样式"的信号用 `style.load`，不用 `load`：`load` 要等第一帧渲染（依赖 `requestAnimationFrame`，窗口在后台时等不到），样式方法只需要样式已加载；整体重建后同样触发 `style.load`，共用一个处理函数
 - 其他时候收到的 `error` 事件只上报（`onError`，默认打印到控制台）
 
@@ -270,7 +279,7 @@ store.clear();
 | 测量 | `geodesic`（与 WGS84 的已知弧长、矩形面积对比）、`MeasureStore`（单击、双击、`clickCount`、预览点、Esc、退出、删除与清除、两个工具共用） | 纯 TS，Node |
 | `applyStyleCommand` | 一条命令对应一次地图方法调用 | 假对象，jsdom |
 | `MapLibreView` | 生命周期、样式修订的跟踪、暂停恢复、出错重建、相机读写；状态转换的穷举短序列 | 注入 `createMap` 换成假地图，jsdom |
-| `MapLibreView`（`maplibre-view.browser.test.ts`） | 真实的 MapLibre（ADR 0040）：首次加载与俯角收敛后按 `sync` 写回、增量提交后画出要素且不整体重建、规范以外的图层属性触发整体重建、不合法的图层进入 `failed(style)` 后自动恢复、拾取与投影、画布尺寸变化 | Chromium 无界面版，软件渲染 |
+| `MapLibreView`（`maplibre-view.browser.test.ts`） | 真实的 MapLibre（ADR 0040）：首次加载与俯角收敛后按 `sync` 写回、增量提交后画出要素且不整体重建、规范以外的图层属性触发整体重建、不合法的图层进入 `failed(style)` 后自动恢复、拾取与投影、画布尺寸变化；样式图片在首次加载、只改图片（换像素、换格式、去掉）、整体重建后都在，没有缺图 | Chromium 无界面版，软件渲染 |
 | 真实 MapLibre | 渲染、Worker、事件、尺寸监听、中心点 | 开发页 `/dev/map`，浏览器 |
 
 - 不用 `vi.mock('maplibre-gl')`：适配器依赖的是 `MapLike`，测试注入实现它的假地图 `FakeMap`。假地图的相机方法立即到位并同步触发 `move`、合并 `eventData`，俯角上限 60 用来模拟 MapLibre 的收敛（创建时同样收敛）

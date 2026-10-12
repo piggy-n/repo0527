@@ -6,7 +6,7 @@ import type {
   StyleSpecification
 } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
-import { diffStyle } from './diff-style';
+import { diffSnapshot, diffStyle } from './diff-style';
 
 type GeoJsonData = GeoJSONSourceSpecification['data'];
 
@@ -167,6 +167,14 @@ describe('diffStyle', () => {
     expect(commands).toHaveLength(1);
     expect(commands[0]).toMatchObject({ command: 'setStyle' });
     expect(commands[0]?.args[0]).toBe(after);
+  });
+
+  it('leaves images to the rebuild when the style falls back to setStyle', () => {
+    const image = { width: 1, height: 1, data: new Uint8Array(4) };
+    const after = { style: style({}), images: { stripe: image } };
+    const before = { style: { ...style({}), version: 7 } as unknown as StyleSpecification, images: {} };
+
+    expect(diffSnapshot(before, after)).toStrictEqual([{ command: 'setStyle', args: [after.style] }]);
   });
 
   it('does not modify the snapshots it compares', () => {

@@ -3,6 +3,7 @@ import { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
 import { MapSession } from '../session/map-session';
+import type { StyleImage } from '../style/style-image';
 import type { StyleGroup } from '../style/style-model';
 import type { SourceErrors, ViewState } from '../view/map-view';
 import type { LngLat, PickResult } from '../view/view-input';
@@ -53,11 +54,15 @@ function areaGroup(paint: Record<string, unknown> = { 'fill-color': '#ff0000' },
 }
 
 // 每个用例自己的容器（尺寸写死）、会话和视图，结束时一起释放并移除容器：同一个文件的用例共用一个页面
-function setup(camera: CameraState = CAMERA) {
+function setup(camera: CameraState = CAMERA, initial?: StyleGroup) {
   const container = document.body.appendChild(document.createElement('div'));
   container.style.width = '800px';
   container.style.height = '600px';
   const session = new MapSession({ groups: ['data'], camera });
+  // 创建视图之前就有的样式：地图按这份快照创建
+  if (initial) {
+    session.style.setGroup('data', initial);
+  }
   const errors: unknown[] = [];
   let created: MapLibreMap | undefined;
   const view = new MapLibreView({
@@ -129,6 +134,27 @@ function renderedUntil(map: MapLibreMap, accept: () => boolean): Promise<void> {
 const renderedAreas = (map: MapLibreMap) => map.queryRenderedFeatures({ layers: ['area-fill'] }).length;
 
 const lngLatOf = (result: PickResult): LngLat | null => (result.kind === 'hit' ? result.lngLat : null);
+
+// 距离场图片：整块都在边缘以内，画出来就是纹理颜色；fill 换像素
+function sdfImage(size = 2, fill = 255): StyleImage {
+  return { width: size, height: size, data: new Uint8Array(size * size * 4).fill(fill), pixelRatio: 1, sdf: true };
+}
+
+function patternGroup(image: StyleImage = sdfImage(), layerExtra: Record<string, unknown> = {}): StyleGroup {
+  const [layer] = areaGroup({ 'fill-pattern': 'data-stripe', 'fill-color': '#ff0000' }).layers;
+  return {
+    ...areaGroup(),
+    layers: [{ ...layer, ...layerExtra }],
+    images: { 'data-stripe': image }
+  };
+}
+
+// 记下 MapLibre 报告缺少的图片：图层要用时图片还没加上
+function missingImages(map: MapLibreMap): string[] {
+  const missing: string[] = [];
+  map.on('styleimagemissing', ({ id }) => missing.push(id));
+  return missing;
+}
 
 describe('MapLibreView（真实的 MapLibre）', () => {
   it('首次加载：style.load 后进入 ready；俯角按 MapLibre 的上限收敛，按 sync 写回会话', async () => {
@@ -232,6 +258,65 @@ describe('MapLibreView（真实的 MapLibre）', () => {
     ctx.session.style.setGroup('data', areaGroup());
     await renderedUntil(ctx.map, () => renderedAreas(ctx.map) > 0);
     expect(ctx.view.sourceErrors.size).toBe(0);
+  });
+
+  describe('样式图片（ADR 0045）', () => {
+    it('首次加载：创建时快照里的图片在图层用到之前就加上，不缺图', async () => {
+      using ctx = setup(CAMERA, patternGroup());
+      const missing = missingImages(ctx.map);
+
+      await withTimeout(ctx.view.whenReady(), '首次加载完成');
+      await renderedUntil(ctx.map, () => renderedAreas(ctx.map) > 0);
+
+      expect(ctx.map.hasImage('data-stripe')).toBe(true);
+      expect(missing).toStrictEqual([]);
+      expect(ctx.errors).toStrictEqual([]);
+    });
+
+    it('只改图片：同样格式的只换像素、换了格式的先删除再添加，都不整体重建；去掉后删除', async () => {
+      using ctx = setup();
+      const missing = missingImages(ctx.map);
+      await withTimeout(ctx.view.whenReady(), '首次加载完成');
+      ctx.session.style.setGroup('data', patternGroup());
+      await renderedUntil(ctx.map, () => renderedAreas(ctx.map) > 0);
+      const setStyle = vi.spyOn(ctx.map, 'setStyle');
+      const updateImage = vi.spyOn(ctx.map, 'updateImage');
+
+      ctx.session.style.setGroup('data', patternGroup(sdfImage(2, 200)));
+      await Promise.resolve();
+      expect(updateImage).toHaveBeenCalledOnce();
+      ctx.session.style.setGroup('data', patternGroup(sdfImage(4)));
+      await Promise.resolve();
+      await renderedUntil(ctx.map, () => renderedAreas(ctx.map) > 0);
+      expect(setStyle).not.toHaveBeenCalled();
+      expect(updateImage).toHaveBeenCalledOnce();
+      expect(ctx.errors).toStrictEqual([]);
+
+      ctx.session.style.setGroup('data', areaGroup());
+      await Promise.resolve();
+      expect(ctx.map.hasImage('data-stripe')).toBe(false);
+      expect(missing).toStrictEqual([]);
+    });
+
+    it('整体重建：新样式里按当前快照重新加上图片，不报"已存在"、不缺图', async () => {
+      using ctx = setup();
+      const missing = missingImages(ctx.map);
+      await withTimeout(ctx.view.whenReady(), '首次加载完成');
+      ctx.session.style.setGroup('data', patternGroup());
+      await renderedUntil(ctx.map, () => renderedAreas(ctx.map) > 0);
+      const setStyle = vi.spyOn(ctx.map, 'setStyle');
+
+      // 样式规范以外的图层属性让 diff 产生不支持的命令，整体重建
+      ctx.session.style.setGroup('data', patternGroup(sdfImage(), { 'custom-flag': true }));
+      await Promise.resolve();
+      await withTimeout(ctx.view.whenReady(), '整体重建完成');
+      await renderedUntil(ctx.map, () => renderedAreas(ctx.map) > 0);
+
+      expect(setStyle).toHaveBeenCalledOnce();
+      expect(ctx.map.hasImage('data-stripe')).toBe(true);
+      expect(missing).toStrictEqual([]);
+      expect(ctx.errors).toStrictEqual([]);
+    });
   });
 
   it('拾取与投影：投影再拾取回到原来的经纬度，画布中心拾取到会话相机的中心', async () => {

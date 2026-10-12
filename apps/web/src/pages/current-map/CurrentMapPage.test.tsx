@@ -82,6 +82,9 @@ class FakeMap implements MapLike {
   setLayoutProperty(): void {}
   setFilter(): void {}
   setLayerZoomRange(): void {}
+  addImage(): void {}
+  updateImage(): void {}
+  removeImage(): void {}
   setStyle(): void {}
 
   on(type: 'style.load', listener: () => void): MapSubscription;
