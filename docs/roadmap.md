@@ -285,6 +285,8 @@ ADR 0046 的实现：分类取值的纹理默认色（`darkenColor`，Lab 插值
 
 5C.6a-1 完成：地图内核的选择状态 `SelectionModel`（只存数据源和业务主键，整体替换、复制后冻结，重复的要素抛错，内容不变不发事件）；视图的渲染要素查询 `queryRendered(area, { sources, withGeometry })`（点或矩形，按已应用的样式找数据源的图层，没有图层时不调用 MapLibre，几何只在要时换算），进 `MapView`、`ToolView`、上下文的 `view`，`MapLike` 加 `queryRenderedFeatures`；map-vue 上下文加 `selection`、`select`、`clearSelection`。比 ADR 多了 `withGeometry`：几何是读取时才换算的，框选估数只要属性。浏览器测试在真实 MapLibre 上验证点、矩形、按数据源过滤和叠放顺序；改坏验证全部测出
 
+5C.6a-2 完成：`shared/http` 加 `envelope: false`（成功时整个返回体按 schema 校验，带非 200 业务码的返回体仍按业务错误处理）；`features/resource-map/api.ts` 加要素查询：分页范围查询 `queryFeaturesAt`、按 `guid` 查属性和完整几何的 `fetchFeatureDetail`（并行，几何字符串解析并逐层校验坐标，不是恰好一条时抛错；`guid` 格式不对时不发请求）；`feature-query.ts` 放识别与详情的纯函数：查询能力表、参与识别的资源（从上到下、勾选、当前级别显示、校验通过）、渲染要素和后端结果的候选（按 `guid` 去重、按屏幕距离排序）、识别方式（14 级起有渲染要素就用，否则能识别的查后端）、后端识别的范围（面用点、线和点用容差框）、标题与字段行（地类用本地中文名）。比 ADR 多了"失败的信封只按业务码判断"：后端的失败返回都带 `code`，和有信封时一致。改坏验证全部测出
+
 ## 业务模块
 
 除了阶段 3 的列表页和阶段 5 的现状底图，其余业务模块都在阶段 6。当前的路由（文件管理已完成列表部分，其余为占位页）：

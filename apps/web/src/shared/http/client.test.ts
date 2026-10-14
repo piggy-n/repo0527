@@ -256,3 +256,58 @@ describe('http 失败', () => {
     expect(hooks.onError).not.toHaveBeenCalled();
   });
 });
+
+describe('没有信封的接口（envelope: false）', () => {
+  const pageSchema = z.object({ total: z.number(), list: z.array(userSchema) });
+
+  it('成功时整体按 schema 校验：对象和数组都可以', async () => {
+    server.use(
+      mock.get('/backend/page', () => HttpResponse.json({ total: 1, list: [{ name: '张三' }], pageNum: 1 })),
+      mock.get('/backend/list', () => HttpResponse.json([{ name: '李四' }]))
+    );
+
+    const page = await http.get('/page', { schema: pageSchema, envelope: false });
+    const list = await http.get('/list', { schema: z.array(userSchema), envelope: false });
+
+    expect(page).toStrictEqual({ total: 1, list: [{ name: '张三' }] });
+    expect(list).toStrictEqual([{ name: '李四' }]);
+  });
+
+  it('出错时返回的信封按业务错误处理：业务码不是 200', async () => {
+    const hooks = setupHooks();
+    server.use(
+      mock.get('/backend/failed', () => HttpResponse.json({ success: false, code: 500, data: null, msg: '系统异常' })),
+      mock.get('/backend/coded', () => HttpResponse.json({ code: 500, msg: '查询失败' }))
+    );
+
+    const failed = await catchApiError(http.get('/failed', { schema: pageSchema, envelope: false }));
+    const coded = await catchApiError(http.get('/coded', { schema: pageSchema, envelope: false }));
+
+    expect([failed.kind, failed.code, failed.message]).toStrictEqual(['business', 500, '系统异常']);
+    expect([coded.kind, coded.code, coded.message]).toStrictEqual(['business', 500, '查询失败']);
+    expect(hooks.onError).toHaveBeenCalledTimes(2);
+  });
+
+  it('业务码 401 仍按 unauthorized 处理；返回体不符合 schema 时是 invalid-response', async () => {
+    const hooks = setupHooks();
+    server.use(
+      mock.get('/backend/expired', () => HttpResponse.json({ code: 401, msg: '登录已过期' })),
+      mock.get('/backend/page', () => HttpResponse.json({ total: '1', list: [] }))
+    );
+
+    const expired = await catchApiError(http.get('/expired', { schema: pageSchema, envelope: false }));
+    const invalid = await catchApiError(http.get('/page', { schema: pageSchema, envelope: false }));
+
+    expect(expired.kind).toBe('unauthorized');
+    expect(hooks.onUnauthorized).toHaveBeenCalledOnce();
+    expect(invalid.kind).toBe('invalid-response');
+  });
+
+  it('默认仍要求信封：没有信封的成功返回是 invalid-response', async () => {
+    server.use(mock.get('/backend/page', () => HttpResponse.json({ total: 1, list: [] })));
+
+    const error = await catchApiError(http.get('/page', { schema: pageSchema }));
+
+    expect(error.kind).toBe('invalid-response');
+  });
+});

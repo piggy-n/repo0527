@@ -179,6 +179,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 接口函数写在 `features/<域>/api.ts`，统一用 `shared/http/client.ts` 的 `http.get / post / put / delete`，不直接使用 axios
 - 每个请求都传 zod schema，返回值类型由 schema 推断（`z.infer`），不另外手写 interface；对象中可能缺失的字段写 `.optional()`（zod 4 中 `z.unknown()` 字段默认必填）
 - 失败时抛出 `ApiError`，按 `kind` 区分；接口函数里不弹提示，全局提示由 app 注入，需要自己处理时传 `silent: true`
+- 成功时没有 `{ code, msg, data }` 外层的接口（如要素查询）传 `envelope: false`，schema 描述整个返回体；失败时的信封仍按业务码转成 `ApiError`（ADR 0047）
 - 支持取消的场景把 `AbortSignal` 传给接口函数
 - 查询和变更写在 `features/<域>/queries.ts`，用 TanStack Vue Query 的 `useQuery` / `useMutation`；`queryFn` 把收到的 `signal` 交给接口函数，组件不直接拼 query key；接口数据由查询缓存持有，不放进 Pinia，组件里也不另存一份
 - shared/http 不依赖路由、UI 和鉴权，这些由 `app/http.ts` 通过 `configureHttp` 注入

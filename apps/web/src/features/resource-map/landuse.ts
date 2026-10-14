@@ -295,3 +295,40 @@ export const LANDUSE_MEANINGS: Readonly<Record<string, string>> = {
   '1206': '表层为土质、基本无植被覆盖的土地。',
   '1207': '表层为岩石或石砾、覆盖面积≥70% 的土地。'
 };
+
+/** 地类图斑的字段名（旧项目 featureModel.js 的 LANDUSE_LABELS），键是大写的字段编码 */
+export const LANDUSE_FIELD_LABELS: Readonly<Record<string, string>> = {
+  WYBM: '唯一编码',
+  BSM: '标识码',
+  YSDM: '要素代码',
+  TBYBH: '图斑预编号',
+  TBBH: '图斑编号',
+  DLBM: '地类编码',
+  DLMC: '地类名称',
+  QSXZ: '权属性质',
+  QSDWDM: '权属单位代码',
+  QSDWMC: '权属单位名称',
+  ZLDWDM: '坐落单位代码',
+  ZLDWMC: '坐落单位名称',
+  TBMJ: '图斑面积',
+  KCDLBM: '扣除地类编码',
+  KCXS: '扣除地类系数',
+  KCMJ: '扣除地类面积',
+  TBDLMJ: '图斑地类面积',
+  GDLX: '耕地类型',
+  GDPDJB: '耕地坡度级别',
+  XZDWKD: '线状地物宽度',
+  TBXHDM: '图斑细化代码',
+  TBXHMC: '图斑细化名称',
+  ZZSXDM: '种植属性代码',
+  ZZSXMC: '种植属性名称',
+  GDDB: '耕地等别',
+  FRDBS: '飞入地标识',
+  CZCSXM: '城镇村属性码',
+  SJNF: '数据年份',
+  MSSM: '描述说明',
+  HDMC: '海岛名称',
+  BZ: '备注',
+  SJDB: '数据大版',
+  GXSJ: '更新时间'
+};

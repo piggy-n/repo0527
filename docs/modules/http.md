@@ -45,6 +45,25 @@ export function fetchLayers(year: number, signal?: AbortSignal) {
 - 路径参数用模板字符串拼接，值要 `encodeURIComponent`
 - 查询参数目前只支持标量；需要数组时，先确认后端期望的格式再扩展 `QueryValue`
 
+### 没有信封的接口（ADR 0047 第 8 节）
+
+要素查询这类接口成功时直接返回 `{ total, list, … }` 或数组，没有 `{ code, msg, data }` 外层，失败时却返回信封（如 `{ success: false, code: 500, data: null, msg: '系统异常' }`）。这类接口传 `envelope: false`：
+
+```ts
+export function queryFeaturesAt(layerCode: string, geometry: Point | Polygon, signal?: AbortSignal) {
+  return http.get('/api/query/scope/geojson/page', {
+    schema: featurePageSchema,  // 整个返回体的 schema
+    envelope: false,
+    query: { layerCode, geometry: JSON.stringify(geometry), relation: 'INTERSECTS' },
+    signal
+  });
+}
+```
+
+- 返回体带数字 `code` 且不是 200 时按失败的信封处理，和有信封时一样：401 是 `unauthorized`，其他是 `business`，提示优先用后端的 `msg`
+- 否则整个返回体按 `schema` 校验，不符合时是 `invalid-response`；所以成功的返回体不能有数字的 `code` 字段，遇到时再给失败的判断加条件
+- 超时、取消、鉴权、回调和有信封时完全一样
+
 ## 请求的处理流程
 
 ```
@@ -57,6 +76,9 @@ http.get(url, options)
       code === 200 → 按 schema 校验 data 并返回
       code === 401 → ApiError('unauthorized')
       其他 code     → ApiError('business')，提示优先用后端的 msg
+    envelope: false 时：
+      带数字 code 且不是 200 → 同上，按 401 或其他业务码处理
+      否则           → 按 schema 校验整个响应体并返回
   → 任何失败都转换成 ApiError，再按下表决定调用哪个回调，最后抛出
 ```
 
@@ -103,5 +125,5 @@ try {
 | 事项 | 时机 |
 |---|---|
 | 上传、下载、进度 | 迁移文件管理时 |
-| 不遵守 `{ code, msg, data }` 的接口 | 遇到时再加选项，例如 AI 后端 |
+| 失败时也不返回 `{ code, msg }` 的接口 | 遇到时再加选项，例如 AI 后端；成功时没有信封、失败时有的已用 `envelope: false` 支持 |
 | 请求重试、去重、缓存 | 已决定（ADR 0017）：查询交给 TanStack Vue Query，相同 key 的请求自动去重、结果缓存；全局关闭失败重试 |

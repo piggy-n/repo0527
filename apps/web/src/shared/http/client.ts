@@ -23,6 +23,12 @@ const envelopeSchema = z.object({
 // 出错时响应体里可能带有 msg
 const errorBodySchema = z.object({ msg: z.string() });
 
+// 没有信封的接口（ADR 0047）出错时仍返回信封，按业务码区分：成功的返回体没有 code
+const rawFailureSchema = z.object({
+  code: z.number().refine(code => code !== SUCCESS_CODE),
+  msg: z.string().nullish()
+});
+
 export type QueryValue = string | number | boolean | null | undefined;
 
 export interface RequestOptions<Schema extends z.ZodType> {
@@ -34,6 +40,8 @@ export interface RequestOptions<Schema extends z.ZodType> {
   silent?: boolean;
   /** 毫秒，默认 60 秒 */
   timeout?: number;
+  /** 为 false 时返回体没有 { code, msg, data } 外层，成功时整体按 schema 校验（ADR 0047 第 8 节） */
+  envelope?: boolean;
 }
 
 const DEFAULT_TIMEOUT = 60_000;
@@ -47,6 +55,28 @@ function invalidResponse(url: string | undefined, cause: unknown): ApiError {
   return new ApiError({ kind: 'invalid-response', message: INVALID_RESPONSE_MESSAGE, url, cause });
 }
 
+function businessError(code: number, msg: string | null | undefined, url?: string): ApiError {
+  return new ApiError({
+    kind: code === 401 ? 'unauthorized' : 'business',
+    message: resolveErrorMessage(code, msg ?? undefined),
+    code,
+    url
+  });
+}
+
+// 没有信封的返回体：出错时的信封按业务错误处理，否则整体按 schema 校验
+function parseRawResponse<Schema extends z.ZodType>(body: unknown, schema: Schema, url?: string): z.output<Schema> {
+  const failure = rawFailureSchema.safeParse(body);
+  if (failure.success) {
+    throw businessError(failure.data.code, failure.data.msg, url);
+  }
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    throw invalidResponse(url, parsed.error);
+  }
+  return parsed.data;
+}
+
 function parseResponse<Schema extends z.ZodType>(body: unknown, schema: Schema, url?: string): z.output<Schema> {
   const envelope = envelopeSchema.safeParse(body);
   if (!envelope.success) {
@@ -55,12 +85,7 @@ function parseResponse<Schema extends z.ZodType>(body: unknown, schema: Schema, 
 
   const { code, msg, data } = envelope.data;
   if (code !== SUCCESS_CODE) {
-    throw new ApiError({
-      kind: code === 401 ? 'unauthorized' : 'business',
-      message: resolveErrorMessage(code, msg ?? undefined),
-      code,
-      url
-    });
+    throw businessError(code, msg, url);
   }
 
   const parsed = schema.safeParse(data);
@@ -114,7 +139,7 @@ async function request<Schema extends z.ZodType>(
   config: AxiosRequestConfig,
   options: RequestOptions<Schema>
 ): Promise<z.output<Schema>> {
-  const { schema, query, signal, silent = false, timeout = DEFAULT_TIMEOUT } = options;
+  const { schema, query, signal, silent = false, timeout = DEFAULT_TIMEOUT, envelope = true } = options;
   const { getHeaders, isCredentialExpired } = getHttpHooks();
   const headers = getHeaders?.() ?? {};
   // 登录已过期时不发出请求，与收到 401 同样处理；放在创建定时器之前，提前结束时不用清理
@@ -138,7 +163,9 @@ async function request<Schema extends z.ZodType>(
       signal: controller.signal,
       headers
     });
-    return parseResponse(response.data, schema, config.url);
+    return envelope
+      ? parseResponse(response.data, schema, config.url)
+      : parseRawResponse(response.data, schema, config.url);
   } catch (error) {
     const apiError = toApiError(error, controller.signal.reason, config.url);
     notify(apiError, silent, { headers });
