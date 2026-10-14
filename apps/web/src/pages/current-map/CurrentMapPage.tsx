@@ -20,7 +20,8 @@ import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
 import { useMeasure } from '@/shared/map/measure/useMeasure';
 import { RegionLocatePanel } from '@/shared/map/region/RegionLocatePanel';
-import { useRegionLocate } from '@/shared/map/region/useRegionLocate';
+import { regionClipGroup } from '@/shared/map/region/region-clip';
+import { readyBoundary, useRegionLocate } from '@/shared/map/region/useRegionLocate';
 import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { usePreferenceScope } from '@/shared/storage/preference-scope';
@@ -31,9 +32,10 @@ export const CurrentMapPage = defineComponent({
   name: 'CurrentMapPage',
   setup() {
     // 注记压在资源图层上面，地名不被不透明的地类图斑盖住（2026-10-11 定，ADR 0033 第 4 条留到 5C 的问题）；
-    // 选中要素的高亮在资源之上、注记之下（ADR 0047 第 5 节）；边界压在注记上面，区划高亮在边界之上，测量在最上面
+    // 选中要素的高亮在资源之上、注记之下（ADR 0047 第 5 节）；区划裁剪的遮罩盖住区划外的资源和高亮，注记、边界在它上面
+    // （ADR 0051）；边界压在注记上面，区划高亮在边界之上，测量在最上面
     const map = provideMap({
-      groups: ['basemap', 'resources', 'selection', 'basemap-labels', 'boundaries', 'region', 'measure'],
+      groups: ['basemap', 'resources', 'selection', 'region-clip', 'basemap-labels', 'boundaries', 'region', 'measure'],
       camera: JIANGSU_CAMERA
     });
     // 第一次就绪时按江苏的范围定位；工具栏的"默认视角"、区划定位回到全省时回到这里
@@ -59,6 +61,8 @@ export const CurrentMapPage = defineComponent({
       'basemap-labels': basemap.deriveLabelsGroup,
       resources: resources.deriveGroup,
       selection: pick.deriveGroup,
+      // 选中市或区县、边界加载好后裁剪（ADR 0051 第 1 节）
+      'region-clip': () => regionClipGroup(readyBoundary(region.state.value)),
       boundaries: boundaries.deriveGroup,
       region: region.deriveGroup,
       measure: measure.deriveGroup

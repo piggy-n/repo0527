@@ -6,7 +6,7 @@ import { effectScope } from 'vue';
 import countyFile from '../boundary/data/jiangsu-county.json?raw';
 import { findRegion, type Region } from './region-catalog';
 import type { RegionBoundary, RegionBoundaryLoader } from './region-geometry';
-import { nextRegionSelection, type RegionLocateOptions, useRegionLocate } from './useRegionLocate';
+import { nextRegionSelection, readyBoundary, type RegionLocateOptions, useRegionLocate } from './useRegionLocate';
 
 const FIT_OPTIONS = { duration: 1100, maxZoom: 14.5, pitch: 0 };
 
@@ -297,6 +297,16 @@ describe('useRegionLocate', () => {
 
   it('选中区县时它所在的市也算选中，再点这个市回到全省（同旧项目）', () => {
     expect(nextRegionSelection(region('320102'), region('320100'))).toBeNull();
+  });
+
+  it('加载好的边界只在加载成功时有：全省、加载中、加载失败时为 null', () => {
+    const boundary = boundaryOf('320102');
+    const selected = region('320102');
+
+    expect(readyBoundary({ selected: null, boundary: { kind: 'none' } })).toBeNull();
+    expect(readyBoundary({ selected, boundary: { kind: 'loading' } })).toBeNull();
+    expect(readyBoundary({ selected, boundary: { kind: 'failed', error: new Error('下载失败') } })).toBeNull();
+    expect(readyBoundary({ selected, boundary: { kind: 'ready', boundary } })).toBe(boundary);
   });
 
   it('不在组件 setup 或 effectScope 中调用时抛错', () => {

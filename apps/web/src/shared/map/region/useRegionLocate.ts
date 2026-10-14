@@ -42,6 +42,11 @@ const FIT_OPTIONS: FitBoundsOptions = { duration: 1100, maxZoom: 14.5, pitch: 0 
 
 const NONE: RegionLocateState = Object.freeze({ selected: null, boundary: Object.freeze({ kind: 'none' }) });
 
+/** 加载好的边界：选中市或区县、边界加载成功时才有；区划轮廓、裁剪的遮罩和查询范围都用它（ADR 0051 第 1 节） */
+export function readyBoundary({ boundary }: RegionLocateState): RegionBoundary | null {
+  return boundary.kind === 'ready' ? boundary.boundary : null;
+}
+
 /**
  * 面板上点击一个区划后要选择的代码（同旧项目）：再点已选中的区县回到所在的市；
  * 选中市或它的区县时这个市都算选中，再点它回到全省
@@ -119,9 +124,6 @@ export function useRegionLocate(
     state: shallowReadonly(state),
     select,
     retry,
-    deriveGroup: () => {
-      const { boundary } = state.value;
-      return regionGroup(boundary.kind === 'ready' ? boundary.boundary : null);
-    }
+    deriveGroup: () => regionGroup(readyBoundary(state.value))
   };
 }

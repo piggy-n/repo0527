@@ -134,7 +134,9 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "@maplibre/maplibre-gl-style-spec": "^26.4.4",
     "@tanstack/vue-query": "^5.104.1",
     "@turf/bbox": "^7.4.0",
+    "@turf/boolean-intersects": "^7.4.0",
     "@turf/boolean-point-in-polygon": "^7.4.0",
+    "@turf/intersect": "^7.4.0",
     "@vue/devtools-api": "^8.2.1",
     "@vueuse/core": "^15.0.0",
     "@yzt/icons": "workspace:*",
@@ -213,6 +215,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `geographiclib-geodesic` | 椭球面上的距离和面积（ADR 0024 第 4 条、ADR 0035），只在 map-core 的测量中使用。Karney 算法的作者维护，MIT 许可，自带类型；只有 CommonJS 格式的压缩包（32 KB），由 Vite 预构建处理。参数是先纬度后经度，map-core 的封装负责转换 | geodesy（Vincenty，没有椭球面积）、turf（球面） |
 | `@turf/bbox` | 选中要素的外包范围，定位时 `fitBounds` 用（ADR 0047），只在 `features/resource-map/feature-query.ts` 中使用。turf v7 的单个包，自带类型；依赖 `@turf/helpers`、`@turf/meta` | 自己遍历坐标 |
 | `@turf/boolean-point-in-polygon` | 判断点在哪个区县的多边形里（ADR 0037），只在 `shared/map/region` 中使用。turf v7 的单个包（按需安装，不用 `@turf/turf` 全家桶），自带类型，处理洞和多面；依赖 `@turf/helpers`、`@turf/invariant` 和 `point-in-polygon-hao` | 自己写射线法 |
+| `@turf/intersect` | 识别范围和区划求交（ADR 0051），只在 `shared/map/region/region-scope.ts` 中使用。turf v7 的单个包，自带类型；底层是 `polyclip-ts`（0.x，用 `bignumber.js` 做精确计算） | 差集、手写多边形裁剪 |
+| `@turf/boolean-intersects` | 要素的几何和区划范围是否相交（ADR 0051），只在 `shared/map/region/region-scope.ts` 中使用。turf v7 的单个包，处理点、线、面和多部分的几何 | 只判断要素的一个顶点 |
 | `nanoevents` | 地图内核的带类型事件（ADR 0023）。实现只有 25 行，无依赖；`on` 返回取消订阅的函数，直接登记到释放栈。map-core 对外只暴露自己的 `Unsubscribe` 类型，不暴露它的类型 | mitt（`on` 不返回取消函数，2023 年后没有发布）、`EventTarget` |
 | `core-js` | 补齐资源释放的标准接口：只在 `app/main.ts` 的最前面引入 `es/symbol/dispose`、`es/disposable-stack` 两个模块（ADR 0023）。入口包实测增加 21.8 KB（gzip 7.9 KB）。安装脚本不执行（见 pnpm-workspace.md）；lint 的 `no-unassigned-import` 已放行 `core-js/**` | 在 utils 里自己实现约 60 行 |
 | `msw` | 测试中在网络层模拟接口，只用 `msw/node`；安装脚本不放行（见 pnpm-workspace.md） | axios-mock-adapter |

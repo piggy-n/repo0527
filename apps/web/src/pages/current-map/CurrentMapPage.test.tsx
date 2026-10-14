@@ -355,9 +355,25 @@ function layerRow(wrapper: PageWrapper, code: string): ReturnType<PageWrapper['g
   return wrapper.get(`[data-layer="${code}"]`);
 }
 
+// 页面的分组；图层 ID 以分组名为前缀，basemap 和 basemap-labels、region 和 region-clip 的前缀重叠，按最长的算
+const GROUPS = [
+  'basemap',
+  'resources',
+  'selection',
+  'region-clip',
+  'basemap-labels',
+  'boundaries',
+  'region',
+  'measure'
+];
+
+function groupOf(id: string): string | undefined {
+  return GROUPS.filter(group => id.startsWith(`${group}-`)).toSorted((a, b) => b.length - a.length)[0];
+}
+
 // 某个分组新加入的图层：资源目录加载后地类图斑也会加入，与要检查的分组无关
 function addedLayersOf(map: FakeMap, group: string): [string, string | undefined][] {
-  return map.addedLayers.filter(([id]) => id.startsWith(`${group}-`));
+  return map.addedLayers.filter(([id]) => groupOf(id) === group);
 }
 
 // jsdom 没有 PointerEvent，用同名的 MouseEvent 代替
@@ -911,6 +927,26 @@ describe('CurrentMapPage', () => {
   });
 
   describe('区划定位与其他相机操作的先后（每个用例重新导入页面，边界没有缓存）', () => {
+    it('区划裁剪：边界到位后才盖上遮罩，插在注记下面、盖住资源和高亮；回到全省后去掉（ADR 0051）', async () => {
+      const boundaries = deferBoundaryFetch();
+      const { wrapper, map } = await readyPage(await freshModules());
+      await button(wrapper, '区划定位').trigger('click');
+      await button(wrapper, '南京').trigger('click');
+      await settle();
+      expect(map.geojson.has('region-clip')).toBe(false);
+
+      boundaries.release('city');
+      await settle();
+      const [[id, beforeId] = []] = addedLayersOf(map, 'region-clip');
+      expect(id).toBe('region-clip-mask');
+      expect(beforeId?.startsWith('basemap-labels')).toBe(true);
+      expect(map.geojson.get('region-clip')).toMatchObject({ geometry: { type: 'MultiPolygon' } });
+
+      await button(wrapper, '南京').trigger('click');
+      await settle();
+      expect(map.geojson.has('region-clip')).toBe(false);
+    });
+
     it('边界加载期间点"默认视角"：相机没有变化也算一次新的操作，边界到位后只高亮、不定位', async () => {
       const boundaries = deferBoundaryFetch();
       const { wrapper, map } = await readyPage(await freshModules());
