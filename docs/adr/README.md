@@ -20,7 +20,7 @@
 | [0008](0008-same-origin-api-proxy.md) | 接口走同源的 /backend 代理 | 已接受 |
 | [0009](0009-disable-incremental-typecheck.md) | 关闭 tsc 的增量检查 | 已接受 |
 | [0010](0010-testing-with-vitest.md) | 测试使用 Vitest 与 jsdom | 已接受（真实浏览器测试由 0040 补充） |
-| [0011](0011-http-client-axios-zod-msw.md) | HTTP 客户端：axios + zod，测试用 MSW 模拟接口 | 已接受 |
+| [0011](0011-http-client-axios-zod-msw.md) | HTTP 客户端：axios + zod，测试用 MSW 模拟接口 | 已接受（没有信封的接口由 0047 补充） |
 | [0012](0012-fonts-self-hosted-and-svg-title.md) | 字体：普惠体 3.0 自托管且不入库，系统名称用 SVG 轮廓 | 已接受（存放位置已被 0013 取代） |
 | [0013](0013-fonts-in-public-dir.md) | 字体文件统一放在 apps/web/public/fonts/ | 已接受 |
 | [0014](0014-icons-as-internal-package.md) | 图标做成第一个 workspace 包 @yzt/icons（内部包） | 已接受 |
@@ -31,9 +31,9 @@
 | [0019](0019-maplibre-v6.md) | 二维地图用 MapLibre GL JS 6 | 已接受 |
 | [0020](0020-map-session-state-as-source-of-truth.md) | 二三维关系：地图会话状态是唯一的真相源 | 已接受（选择状态的范围由 0022 修正，方案 B 的比较由 0024 修正） |
 | [0021](0021-worker-strategy.md) | Worker 策略：二维不自建渲染 Worker，统一通信层与瓦片数据服务 | 已接受（第 5 条的表述由 0024 修正，第 3、4 条由 0025 补充，第 2 条的图例统计由 0043 定为不做） |
-| [0022](0022-style-model-and-session-commits.md) | 样式模型与会话提交：分组推导、快照对比 | 已接受（第 4 条与第 5 条中 `failed` 的含义由 0026 修正；分组加上样式图片由 0045 补充） |
+| [0022](0022-style-model-and-session-commits.md) | 样式模型与会话提交：分组推导、快照对比 | 已接受（第 4 条与第 5 条中 `failed` 的含义由 0026 修正；分组加上样式图片由 0045 补充；第 6 条的选择状态由 0047 补充） |
 | [0023](0023-disposal-events-and-map-runtime.md) | 资源释放、事件与地图运行时装配 | 已接受 |
-| [0024](0024-shared-view-interfaces.md) | 二三维共用的视图接口 | 已接受 |
+| [0024](0024-shared-view-interfaces.md) | 二三维共用的视图接口 | 已接受（渲染要素的只读查询由 0047 补充） |
 | [0025](0025-worker-contract-and-tile-data-service.md) | Worker 通信契约与瓦片数据服务的约束 | 已接受 |
 | [0026](0026-view-sync-failures.md) | 视图同步的失败处理：错误事件、加载失败与恢复 | 已接受（第 4 条的"不另加 API"由 0030 修正；第 1、2 条只适用于不带数据源的错误，由 0041 修正） |
 | [0027](0027-map-capability-layers.md) | 地图能力的分层与页面组装 | 已接受 |
@@ -43,7 +43,7 @@
 | [0031](0031-basemap-tianditu-and-owner.md) | 底图：天地图的配置与底图的拥有者 | 已接受 |
 | [0032](0032-intranet-build-mode.md) | 公网与内网两套构建命令：Vite 构建模式 | 已接受 |
 | [0033](0033-boundaries-and-default-view.md) | 行政区边界与默认视角 | 已接受 |
-| [0034](0034-interaction-tools.md) | 交互工具：视图输入、工具模型与工具栏 | 已接受 |
+| [0034](0034-interaction-tools.md) | 交互工具：视图输入、工具模型与工具栏 | 已接受（点选工具由 0047 补充） |
 | [0035](0035-measurement.md) | 测量：椭球面计算、测量的状态与标签 | 已接受 |
 | [0036](0036-region-locate.md) | 区划定位：本地区划目录、边界的加载与定位 | 已接受 |
 | [0037](0037-coordinate-locate-and-location-point.md) | 坐标定位与位置点 | 已接受 |
@@ -56,6 +56,7 @@
 | [0044](0044-symbol-overrides.md) | 符号覆盖：模型、推导与保存 | 已接受（面的描边宽度、线型与纹理由 0045 补充；线型的推导由 0046 补充） |
 | [0045](0045-fill-patterns-and-style-images.md) | 面的描边与纹理：按需拆层、SDF 纹理与样式图片 | 已接受（第 1 节分类取值的纹理默认色、第 2 节的图层上限由 0046 修改） |
 | [0046](0046-class-pattern-color-and-dash-layers.md) | 分类取值的纹理默认色与按线型拆层 | 已接受 |
+| [0047](0047-feature-pick-and-detail.md) | 点选与详情：渲染要素识别、guid 主键与完整几何高亮 | 已接受 |
 
 ## 模板
 
