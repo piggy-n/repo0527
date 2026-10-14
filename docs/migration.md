@@ -252,14 +252,14 @@ ADR 0021 留下的待定：旧图例打开时，地图空闲后对地类图斑�
 | Esc、换成"移动"、取消勾选选中的资源 | 面板关闭，会话的选择清空 |
 | 9 级点村级调查区界线 | 后端识别找到 9 条，但记录没有 `guid`，显示"这里没有可查询的要素" |
 
-分页范围查询的结果带不带 `guid` 按数据集区分，不按前缀（南京东郊约 5 公里和南京市范围、每页 1 条，最新年份）：
+分页范围查询的结果带不带 `guid` 按数据集区分，不按前缀（南京东郊约 5 公里和南京市范围、每页 1 条，每个数据集用目录里最新的年份，在浏览器里用登录会话的 token 直接请求 `/api/query/scope/geojson/page`，看第一条记录有没有 `guid`）：
 
 | | 带 `guid` | 不带 `guid` | 范围内没有数据，未知 |
 |---|---|---|---|
-| `bgdc_*` | `dltb`、`dltb_czc`、`czcdyd` | `ccwjq`、`cjdcq`、`cjdcqjx`、`gfbq`、`lmfw`、`lsyd`、`ttq`、`xzq`、`xzqjx` | `czkfbj`、`fjmsq`、`gddb`、`kfyq`、`pzwjstd`、`stbhhx`、`yjjbnttb`、`zrbhd` |
-| `csxhjctb_*` | `hydl`、`lvll` | 其余有数据的 37 个（如 `lctl`、`lrdl`、`gyssp`、`xxp`、`hyda`、`czzza`） | `csnljsl`、`dltbbhl`、`dxkja`、`dxkjl`、`sdza`、`swhxcwydctba` |
+| `bgdc_*` | `dltb`（2022）、`dltb_czc`（2021）、`czcdyd`（2022），目录里都只有这一个年份 | `ccwjq`、`cjdcq`、`cjdcqjx`、`gfbq`、`lmfw`、`lsyd`、`ttq`、`xzq`、`xzqjx` | `czkfbj`、`fjmsq`、`gddb`、`kfyq`、`pzwjstd`、`stbhhx`、`yjjbnttb`、`zrbhd` |
+| `csxhjctb_*` | `hydl`（2025）、`lvll`（2025），2022～2024 年没有实测 | 其余有数据的 37 个（如 `lctl`、`lrdl`、`gyssp`、`xxp`、`hyda`、`czzza`） | `csnljsl`、`dltbbhl`、`dxkja`、`dxkjl`、`sdza`、`swhxcwydctba` |
 
-`csxhjctb_cqnfwjza` 和 `szy_*`、`lcsh_*`、`gtkjgh_*` 的范围查询都返回"系统异常"。不带 `guid` 的数据集按 `guid` 查属性和完整几何仍然可以（村级调查区、城市道路、公用设施点已在面板里验证）。
+`csxhjctb_cqnfwjza` 和 `szy_*`、`lcsh_*`、`gtkjgh_*` 的范围查询都返回"系统异常"。不带 `guid` 的数据集按 `guid` 查属性和完整几何仍然可以（村级调查区、城市道路、公用设施点已在面板里验证）。据此后端识别改为按数据集登记，二维 14 级以上以渲染要素为准（ADR 0048）。
 
 其他发现：
 
