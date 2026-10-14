@@ -137,6 +137,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 同一时间只能打开一个 `ElMessageBox`：组件卸载时只能用 `ElMessageBox.close()` 关闭，它会关掉所有确认框，有多个时会把别处的一起关掉、对方按"取消"处理；需要多个弹框并存时，改用渲染在组件内的确认框（如基于 `ElDialog`），随组件卸载自然销毁
 - 表格行内操作（如删除）的进行中状态按行 ID 记录，不用单个 mutation 的 `variables` / `isPending` 判断是哪一行；操作入口对同一行防重复
 - 回车触发提交或查询时排除输入法选字：`event.key === 'Enter' && !event.isComposing`
+- `ElColorPicker` 拖动时的 `active-change` 只设临时预览，确认（`change`）才写入；它没有关闭事件，Esc、点外面时把颜色重置回 `modelValue` 并再发一次 `active-change`，所以由拥有者规定"预览等于确认过的值就是没有预览"，`modelValue` 绑确认过的值、不含预览（ADR 0044，写法见 `features/resource-map/components/SymbolEditor.tsx`）
 - 列表的加载状态按 `docs/modules/table.md` 区分：没有数据时用 `shared/table` 的 `TableSkeleton`，显示着旧数据时用延迟遮罩，后台刷新当前条件的缓存不提示；遮罩不要直接跟着 `isFetching`
 - 给组件传 `id` 等未声明的透传属性会报类型错误（组件只接受声明的 props 和 `class`、`style`），需要标记时用 `data-*`
 
