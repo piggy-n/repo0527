@@ -8,7 +8,8 @@ import { MEASURE_TOOL_IDS, measureKindOf, useMeasure } from './useMeasure';
 const VIEW: ToolView = {
   kind: '2d',
   pick: ({ x, y }) => ({ kind: 'hit', surface: 'map', lngLat: [118 + x / 10000, 32 + y / 10000] }),
-  project: () => null
+  project: () => null,
+  queryRendered: () => []
 };
 
 function input(type: 'click' | 'move' | 'dblclick', x: number, y: number, clickCount = 1): MapInputEvent {

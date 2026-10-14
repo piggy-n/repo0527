@@ -31,7 +31,8 @@ function toolView(result?: PickResult): ToolView {
   return {
     kind: '2d',
     pick: ({ x, y }) => result ?? { kind: 'hit', surface: 'map', lngLat: [118 + x / 1000, 33 - y / 1000] },
-    project: () => null
+    project: () => null,
+    queryRendered: () => []
   };
 }
 

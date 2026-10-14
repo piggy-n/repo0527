@@ -1,4 +1,5 @@
 import { type CameraState, CameraModel } from '../camera/camera-model';
+import { SelectionModel } from '../selection/selection-model';
 import { StyleModel, type StyleRoot } from '../style/style-model';
 import { ToolModel } from '../tool/tool-model';
 
@@ -9,12 +10,14 @@ export interface MapSessionOptions<G extends string> {
   readonly camera: CameraState;
 }
 
-/** 地图会话：二维和三维共同的唯一真相源（ADR 0020）；selection 在做点选时加入（5C.6） */
+/** 地图会话：二维和三维共同的唯一真相源（ADR 0020）；样式、相机、工具、选择四部分各自发出事件（ADR 0022 第 6 条） */
 export class MapSession<const G extends string> implements Disposable {
   readonly style: StyleModel<G>;
   readonly camera: CameraModel;
   /** 当前工具（ADR 0034） */
   readonly tool: ToolModel;
+  /** 选中的要素（ADR 0022 第 6 条、ADR 0047 第 4 节） */
+  readonly selection: SelectionModel;
   readonly #stack: DisposableStack;
 
   constructor({ groups, root, camera }: MapSessionOptions<G>) {
@@ -23,6 +26,7 @@ export class MapSession<const G extends string> implements Disposable {
     this.style = stack.use(new StyleModel({ groups, root }));
     this.camera = stack.use(new CameraModel(camera));
     this.tool = stack.use(new ToolModel());
+    this.selection = stack.use(new SelectionModel());
     this.#stack = stack.move();
   }
 

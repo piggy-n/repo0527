@@ -283,6 +283,8 @@ ADR 0046 的实现：分类取值的纹理默认色（`darkenColor`，Lab 插值
 
 2026-10-14，[ADR 0047](adr/0047-feature-pick-and-detail.md)。读旧的 `selection/`（识别、候选、详情、高亮、框选，约 1200 行）和 `FeatureDetailPanel.vue`，用真实后端实测查询接口后讨论确定：先点选（5C.6a）再框选（5C.6b，另写 ADR）；要素身份统一用瓦片和查询接口都有的 `guid`，不再按全部属性匹配；识别时渲染要素优先、后端范围查询兜底；选中的要素用完整几何的 GeoJSON 分组高亮；字段名先用本地的（资源管理里的字段配置目前名称都是空的）。实测得出的约束：查询接口成功时没有信封（`shared/http` 加 `envelope: false`）；查询能力按数据集分三类（`bgdc_*` 都能查，`csxhjctb_*` 只能按 `guid` 查详情，`szy_*` 等不能查）。评审前讨论了框选的上限：统计 62 万个要素要 8 s、补完整几何 200 个约 1 s，取消上限后全部取回不可行；5C.6b 改为即时估数、只取第一页加总数并按页加载、批量高亮在瓦片上做
 
+5C.6a-1 完成：地图内核的选择状态 `SelectionModel`（只存数据源和业务主键，整体替换、复制后冻结，重复的要素抛错，内容不变不发事件）；视图的渲染要素查询 `queryRendered(area, { sources, withGeometry })`（点或矩形，按已应用的样式找数据源的图层，没有图层时不调用 MapLibre，几何只在要时换算），进 `MapView`、`ToolView`、上下文的 `view`，`MapLike` 加 `queryRenderedFeatures`；map-vue 上下文加 `selection`、`select`、`clearSelection`。比 ADR 多了 `withGeometry`：几何是读取时才换算的，框选估数只要属性。浏览器测试在真实 MapLibre 上验证点、矩形、按数据源过滤和叠放顺序；改坏验证全部测出
+
 ## 业务模块
 
 除了阶段 3 的列表页和阶段 5 的现状底图，其余业务模块都在阶段 6。当前的路由（文件管理已完成列表部分，其余为占位页）：

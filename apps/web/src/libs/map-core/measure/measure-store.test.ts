@@ -11,7 +11,8 @@ const lngLat = (x: number, y: number): LngLat => [118 + x / 10000, 32 + y / 1000
 const VIEW: ToolView = {
   kind: '2d',
   pick: ({ x, y }) => (x < 0 ? { kind: 'miss' } : { kind: 'hit', surface: 'map', lngLat: lngLat(x, y) }),
-  project: () => null
+  project: () => null,
+  queryRendered: () => []
 };
 
 function pointer(

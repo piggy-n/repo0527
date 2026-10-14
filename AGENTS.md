@@ -193,9 +193,9 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - `shared/map` 和 feature 的地图能力按"拥有者"写（ADR 0031）：组合式函数持有状态（`shallowRef`，整体替换，值没变时不替换）并提供操作（参数不合法时抛错），推导分组的是纯函数；面板等界面通过 props 拿到拥有者，只显示和调用
 - 默认视角 `useDefaultView(map)` 只在 `provideMap` 所在组件的 setup 里调用一次，其他组件通过 props 拿到 `goToDefaultView`（ADR 0033）
 - 用户发起的定位是一次相机操作，作废之前没完成的定位：用上下文的 `runCameraOperation(camera => ...)` 执行；要先异步准备数据的，开始时 `const operation = beginCameraOperation()`，准备好、确认自己的请求没过期后 `operation.run(camera => ...)`；页面初始化的定位用 `currentCameraOperation().run(...)`，不开始新的操作。等就绪、跨视图失败等待、等待后的再确认都由 `run` 负责；每个操作只能 `run` 一次；回调拿到的相机控制只在回调期间有效，不要存下来。不要用相机变化判断请求是否过期（ADR 0038、0039）
-- 上下文的 `view` 只在视图就绪时有值，只有 `kind`、`pick`、`project`；浮层只判断 `view` 是否为 `null`，不另外判断 `viewState`（ADR 0039）
+- 上下文的 `view` 只在视图就绪时有值，只有 `kind`、`pick`、`project`、`queryRendered`；浮层只判断 `view` 是否为 `null`，不另外判断 `viewState`（ADR 0039）
 - 异步操作在每个等待点（`await`）返回后都要重新确认自己仍然有效（信号没有中止、仍是最新的请求），再继续执行：等待会因中止而结束，不等于返回时一定没中止
-- 交互工具用 `map.registerTools()` 在页面的 setup 里登记，同一时间只有一个当前工具；工具声明光标和手势，只由适配器应用；工具只拿到 `ToolView`（`kind`、`pick`、`project`），不碰原生地图（ADR 0034）
+- 交互工具用 `map.registerTools()` 在页面的 setup 里登记，同一时间只有一个当前工具；工具声明光标和手势，只由适配器应用；工具只拿到 `ToolView`（`kind`、`pick`、`project`、`queryRendered`），不碰原生地图（ADR 0034、0047）
 - 工具栏的按钮由页面挑选（`items`），动作的回调由页面给出（`actions`）；开关面板的动作，由页面通过 `pressed` 告诉工具栏显示为按下，工具栏不保存开关（ADR 0034、0036）
 - fill 图层要用 `['geometry-type']` 限定为面：MapLibre 会把线也当成环填充
 - line 图层的 `line-dasharray` 不在常量和按要素取值之间切换（MapLibre 6.12 的缺陷会报错）：线型不同的要素按线型拆成多个图层，每层的线型是常量，实线不设（ADR 0046）
@@ -204,8 +204,8 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 接收外部回调的模块（如 `onError`）在入口用 `@yzt/utils` 的 `safeReporter` 包装：回调自己抛错不能打断内部的状态转换和资源释放
 - 地图的加载与失败提示由 `shared/map` 的 `describeMapStatus` 推导，界面只负责显示；引擎失败用上下文的 `retry()` 重建，不在页面里换画布的 `key`（ADR 0030）
 - 贴边、会挡住定位的悬浮元素用 `useMapOverlay(element, edge)` 登记，`fitBounds`、`flyTo` 不传 `padding` 时自动避开；页面不自己算定位用的 padding，也不用布局的尺寸常量（ADR 0029、0037）
-- 会话只保存地图需要的选择信息（要素身份、高亮数据），候选列表和详情留在 feature 的查询缓存里（ADR 0022）
-- 只有 MapLibre 适配器能写二维地图（lint 只允许 `libs/map-core/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；Cesium 镜像会话状态，不实现二维的引擎接口；二三维共用的是生命周期、相机、输入、拾取、投影这几个视图接口（ADR 0024）
+- 会话的选择状态只存要素身份（数据源 + 业务主键），属性、几何、候选列表和详情留在 feature 的查询缓存里，高亮分组从选择和查询结果推导（ADR 0022、0047）
+- 只有 MapLibre 适配器能写二维地图（lint 只允许 `libs/map-core/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；Cesium 镜像会话状态，不实现二维的引擎接口；二三维共用的是生命周期、相机、输入、拾取、投影、渲染要素查询这几个视图接口（ADR 0024、0047；三维的渲染要素查询返回空数组）
 - 地图页的路由组件用 `app/router/routes.ts` 的 `withMapRuntime` 包装，先加载地图运行时（`setWorkerUrl`、CSS）再加载页面；交给 MapLibre 的容器元素只用静态 class，可变的 class 放在外层元素上，否则 Vue 会冲掉 MapLibre 自己加的 class
 - 相机事件带 `view` 和 `cause`（`user` / `program` / `sync`），不用时间窗口判断回声（ADR 0024）
 - 一个不合法的图层会让整个视图进入 `failed`，样式出现新版本时自动恢复（ADR 0026）；来自后端等外部配置的图层，由拥有者在配置变化时先校验自己的分组，不合法的不提交给会话

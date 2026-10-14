@@ -18,11 +18,13 @@
 | `style/style-image.ts` | `StyleImage`：样式图片的类型，格式比较与校验（ADR 0045） |
 | `style/style-model.ts` | `StyleModel`：按分组组合样式，提交时修订号加 1，合并通知 |
 | `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause`；当前这次相机操作的信号（ADR 0038） |
-| `session/map-session.ts` | `MapSession`：组合样式、相机与当前工具，统一释放 |
+| `session/map-session.ts` | `MapSession`：组合样式、相机、当前工具与选择状态，统一释放 |
+| `selection/selection-model.ts` | `SelectionModel`：选中的要素，只存数据源和业务主键（ADR 0047 第 4 节） |
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`ToolView` |
 | `measure/geodesic.ts` | 椭球面上的距离、累计距离、折线总长、多边形面积（geographiclib-geodesic，ADR 0035） |
 | `measure/measure-store.ts` | `MeasureStore`：测量的状态与测距、测面两个工具（ADR 0035） |
-| `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位） |
+| `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位、拾取、投影、渲染要素查询） |
+| `view/rendered-features.ts` | 渲染要素查询的类型：`ScreenBox`、`RenderedQueryOptions`、`RenderedFeature`（ADR 0047 第 4 节） |
 | `view/view-input.ts` | 输入、拾取、投影的类型（ADR 0024 第 2、7、8 条） |
 | `maplibre/map-like.ts` | `MapLike`：适配器用到的 MapLibre 方法（窄接口）；连同方法签名用到的类型从入口导出，map-vue 的测试据此实现假地图 |
 | `maplibre/apply-style-command.ts` | `applyStyleCommand`：一条命令对应一次地图方法调用 |
@@ -138,6 +140,17 @@ session.tool.dispatch(event, toolView);          // 视图把输入交给当前�
 - 工具的光标、要关掉的手势是工具上的声明，由视图读 `activeTool` 后应用（ADR 0034 第 3 条）
 - 释放时让当前工具退出；之后登记、激活、转交输入都抛错
 
+### SelectionModel（ADR 0047 第 4 节）
+
+```ts
+session.selection.set([{ sourceId: 'resources-bgdc_dltb', featureId: guid }]);  // 整体替换，发出 change
+session.selection.clear();
+```
+
+- 只存 `{ sourceId, featureId }[]`：属性、几何、候选列表留在选择的拥有者（feature）的查询缓存里（ADR 0022 第 6 条）；高亮分组由拥有者从选择和详情查询推导，三维以后镜像会话
+- `set` 复制后冻结，调用方之后改自己的数组、对象不影响会话；同一个要素出现两次时抛错，选择不变；内容和顺序都没变时不发事件
+- 释放后写入、订阅都抛错（`ModelEvents`）
+
 ### MeasureStore（ADR 0035）
 
 ```ts
@@ -247,7 +260,14 @@ store.clear();
 - 工具的钩子抛错时由 `#guard` 交给 `onError`，不冒进 MapLibre 的事件分发
 - 释放时取消鼠标事件的订阅、移除按键监听（释放后的状态挡住了转交，所以测试直接确认 `removeEventListener` 被调用）
 
-**这一步没做的**：查询留到点选（5C.4 或 5C.6）；三维期间的按需追上留到做三维时。
+**渲染要素查询（5C.6a-1，ADR 0047 第 4 节）**：
+
+- `queryRendered(area, { sources, withGeometry })`：按已应用的样式快照找出这些数据源的图层（就绪时它就是地图上的样式），交给 `queryRenderedFeatures`；没有图层时直接返回空数组，不调用 MapLibre（它对不存在的图层会报错）
+- `area` 是点或矩形（两个对角点，顺序不限），结果从上到下；同一个要素可能出现多次（同一数据源的多个图层、跨瓦片），去重交给调用方
+- 几何默认不取：MapLibre 要素的 `geometry` 是读取时才从瓦片坐标换算的，框选估数只要属性；`withGeometry` 时给出渲染用的几何，可能被瓦片切开，只用于排序和距离
+- 只在 `ready` 时可用；交给工具的 `ToolView` 和上下文的 `view` 都带它
+
+**这一步没做的**：三维期间的按需追上留到做三维时。
 
 ### app 的地图运行时与开发页
 
@@ -326,8 +346,7 @@ store.clear();
 |---|---|
 | map-vue 的运行时注入、加载策略的实测（`provideMap`、`<MapCanvas>`、`useMap()` 已在 5A.2 完成，见 [map-vue.md](map-vue.md)） | 5D |
 | 业务图层、底图、边界等拥有者（Manager），从自己的状态推导分组 | 阶段五、六，迁移现状底图和业务图层时 |
-| 选择状态模型；视图接口的查询（当前工具、输入、拾取、投影在 5B.3 加入） | 做点选时（5C.4 或 5C.6） |
-| 高亮用 feature-state 还是按要素 ID 过滤的图层 | 做高亮时实测 |
+| 框选的批量高亮：按 `guid` 过滤的图层还是 feature-state（选中的单个要素用完整几何的 GeoJSON 分组，ADR 0047） | 5C.6b |
 | Cesium 镜像与相机同步、三维样式的支持清单 | 做三维时（`libs/map-cesium`） |
 | 瓦片数据服务（基于 `@yzt/utils` 的 Worker 通信层） | 第一个 Worker 真实使用方出现时 |
 

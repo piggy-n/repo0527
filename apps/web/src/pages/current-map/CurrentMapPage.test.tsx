@@ -9,6 +9,7 @@ import {
   type MapMouseEventType,
   type MapMoveEventLike,
   type MapSubscription,
+  type RenderedFeatureLike,
   type ViewBounds
 } from '@yzt/map-core';
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
@@ -140,6 +141,9 @@ class FakeMap implements MapLike {
   screenOffset = { x: 0, y: 0 };
   unproject([x, y]: [number, number]) {
     return { lng: this.camera.lng + (x - this.screenOffset.x) / 100, lat: this.camera.lat - (y - this.screenOffset.y) / 100 };
+  }
+  queryRenderedFeatures(): RenderedFeatureLike[] {
+    return [];
   }
   project([lng, lat]: [number, number]) {
     return {

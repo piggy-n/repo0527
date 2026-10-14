@@ -14,7 +14,8 @@ export type {
   MapMouseEventLike,
   MapMouseEventType,
   MapMoveEventLike,
-  MapSubscription
+  MapSubscription,
+  RenderedFeatureLike
 } from './maplibre/map-like';
 export { MapLibreView, type MapLibreViewOptions } from './maplibre/maplibre-view';
 export { cumulativeDistances, geodesicArea, geodesicDistance, lineLength } from './measure/geodesic';
@@ -25,6 +26,7 @@ export {
   type MeasureState,
   MeasureStore
 } from './measure/measure-store';
+export { type SelectedFeature, SelectionModel } from './selection/selection-model';
 export { MapSession, type MapSessionOptions } from './session/map-session';
 export { diffSnapshot, diffStyle, type ImageCommand, type StyleCommand, type StyleSnapshot } from './style/diff-style';
 export type { StyleImage, StyleImages } from './style/style-image';
@@ -54,6 +56,7 @@ export {
   type ViewPadding,
   type ViewState
 } from './view/map-view';
+export type { RenderedFeature, RenderedQueryOptions, ScreenBox } from './view/rendered-features';
 export type {
   LngLat,
   MapInputEvent,

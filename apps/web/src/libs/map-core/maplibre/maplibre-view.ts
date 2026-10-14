@@ -19,6 +19,7 @@ import {
   type ViewPadding,
   type ViewState
 } from '../view/map-view';
+import type { RenderedFeature, RenderedQueryOptions, ScreenBox } from '../view/rendered-features';
 import type { LngLat, MapInputEvent, MapPointerEvent, PickResult, ScreenPoint } from '../view/view-input';
 import { applyStyleCommand } from './apply-style-command';
 import type { MapLibreMapOptions, MapLike, MapMouseEventLike, MapMouseEventType, MapMoveEventLike } from './map-like';
@@ -183,11 +184,12 @@ export class MapLibreView<const G extends string> implements MapView {
   #rejected = false;
   // 当前工具让视图关掉的手势；切换工具时只恢复这些，页面创建地图时就关掉的不会被打开
   readonly #disabledGestures = new Set<keyof Gestures>();
-  // 交给工具的视图能力：只有拾取和投影（ADR 0034 第 2 条）
+  // 交给工具的视图能力：只有拾取、投影和渲染要素查询（ADR 0034 第 2 条、ADR 0047 第 4 节）
   readonly #toolView: ToolView = Object.freeze({
     kind: '2d',
     pick: (point: ScreenPoint) => this.pick(point),
-    project: (lngLat: LngLat) => this.project(lngLat)
+    project: (lngLat: LngLat) => this.project(lngLat),
+    queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => this.queryRendered(area, options)
   });
 
   constructor({
@@ -312,6 +314,32 @@ export class MapLibreView<const G extends string> implements MapView {
   project([lng, lat]: LngLat): ScreenPoint {
     const { x, y } = this.#readyMap().project([lng, lat]);
     return { x, y };
+  }
+
+  /** 这些数据源在已应用的样式里的图层上画出的要素，从上到下；几何只在要时换算 */
+  queryRendered(area: ScreenPoint | ScreenBox, { sources, withGeometry = false }: RenderedQueryOptions): RenderedFeature[] {
+    const map = this.#readyMap();
+    const wanted = new Set(sources);
+    // 按已应用的样式找图层：就绪时它就是地图上的样式，传给 MapLibre 的图层都存在
+    const layers = this.#mapStyle.style.layers.flatMap(layer =>
+      'source' in layer && wanted.has(layer.source) ? [layer.id] : []
+    );
+    if (layers.length === 0) {
+      return [];
+    }
+    const geometry: [number, number] | [[number, number], [number, number]] =
+      'x' in area
+        ? [area.x, area.y]
+        : [
+            [area.from.x, area.from.y],
+            [area.to.x, area.to.y]
+          ];
+    return map.queryRenderedFeatures(geometry, { layers }).map(feature => {
+      const { source, layer, properties } = feature;
+      return withGeometry
+        ? { sourceId: source, layerId: layer.id, properties, geometry: feature.geometry }
+        : { sourceId: source, layerId: layer.id, properties };
+    });
   }
 
   on<E extends keyof MapLibreViewEvents>(event: E, callback: MapLibreViewEvents[E]): Unsubscribe {
@@ -526,7 +554,7 @@ export class MapLibreView<const G extends string> implements MapView {
   #readyMap(): MapLike {
     this.#assertAlive();
     if (this.#state !== 'ready' || this.#map === undefined) {
-      throw new Error(`MapLibreView 当前状态为 ${this.#state}，只能在 ready 时定位、拾取和投影`);
+      throw new Error(`MapLibreView 当前状态为 ${this.#state}，只能在 ready 时定位、拾取、投影和查询`);
     }
     return this.#map;
   }

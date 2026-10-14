@@ -106,7 +106,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 
 | 内容 | 说明 |
 |---|---|
-| `view` | 就绪视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`pick`、`project`；只在视图为 `ready` 时有值，同一个视图的入口始终是同一个对象（ADR 0039 第 4 条）。移动相机不在这里，通过相机操作 |
+| `view` | 就绪视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`pick`、`project`、`queryRendered`（ADR 0047）；只在视图为 `ready` 时有值，同一个视图的入口始终是同一个对象（ADR 0039 第 4 条）。移动相机不在这里，通过相机操作 |
 | `viewState` | `idle`（没有视图）、`initializing`、`ready`、`paused`、`failed` |
 | `failure` | 视图失败的原因（`MapViewFailure`），只在 `failed` 时有值，卸下视图时清空（ADR 0030） |
 | `sourceErrors` | 当前视图的数据源错误（`ReadonlyMap<数据源 ID, 错误>`，ADR 0041 第 5 节）：挂上视图时取它的记录、随 `sourceerrorchange` 更新；没有视图时是空表，替换视图（包括引擎失败后重试）后从新视图的记录开始，旧视图上的错误不留下。拥有者按数据源 ID 的前缀从中推导自己的"加载失败" |
@@ -120,6 +120,9 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 | `activeTool` | 当前工具的 ID（只读），跟随会话的工具模型 |
 | `activateTool(id)` | 激活工具，旧工具先退出；未登记时抛错 |
 | `releaseTool(id)` | 让正在激活的工具退出：临时任务回到上一个常驻模式，常驻模式回到移动；没有激活时什么也不做 |
+| `selection` | 会话里选中的要素（只读，`{ sourceId, featureId }[]`），跟随会话的选择状态（ADR 0047 第 4 节） |
+| `select(features)` | 替换选中的要素；同一个要素出现两次时抛错 |
+| `clearSelection()` | 清除选择 |
 
 - **只读**：`view`、`viewState`、`failure`、`sourceErrors`、相机引用对外都用 `shallowReadonly` 包了一层。对 `.value` 赋值被忽略，开发环境给出警告；里面的对象不被代理。不对视图、会话这类引擎对象用深层的 `readonly()`：深层代理会让内核类的私有字段访问报错
 - **受限入口**：暂停、恢复、释放、订阅都不在 `MapViewport` 上，JS 里也调不到。暂停和恢复以后由框架切换负责，释放由画布负责，状态从 `viewState` 读
@@ -243,8 +246,8 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 |---|---|---|
 | `style-binder.test.ts` | 初始提交、同一轮的跨分组修改、晚一轮时的拒绝与收敛、推导失败时整批跳过、缓存、重复绑定、释放 | Node |
 | `provide-map.test.tsx` | 必须在 setup 中调用、初始值早于子组件 setup、挂载后绑定抛错、卸载顺序、卸载路径上的错误、组名的类型检查、默认的错误输出；工具的登记、挂载后登记抛错、重复或 `browse` 时这一次都不登记 | jsdom |
-| `MapCanvas.test.tsx` | 用完整快照创建视图、页面的 class 不冲掉 MapLibre 的 class、视图状态的变化（视图入口只在 `ready` 时有值）、受限入口（只有 `kind`、`pick`、`project`，移动相机经相机操作）、只读引用、`whenReady` 的各种结局、`useCamera` 的订阅与取消、先释放视图后释放会话、运行中的错误、画布的数量限制、失败原因、引擎失败后的重试；受限入口的 `pick`、`project`；工具通过上下文激活和退出、`activeTool` 只读、地图上的点击经视图交给工具 | jsdom |
-| `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，相机控制 `fitBounds` 的默认 padding，`useMapOverlay` 不在作用域里时抛错；`activeTool` 跟随工具模型、上下文释放后不再跟随；视图入口只在 `ready` 时有值；相机操作：开始时作废上一次、读当前的不开始新的且是同一个对象，就绪时同步执行、没就绪时等到就绪（暂停不算）、期间有新的操作时放弃、引擎失败后重试和样式失败后恢复都照样执行、挂上已就绪的视图时执行、只能 `run` 一次且不重放、已作废和上下文释放后不执行、地图刚就绪时旧操作先执行新操作后执行、回调里开始的新操作立即执行、相机控制过期后抛错和作废后不生效、回调出错交给 `onError`、等待的监听在执行和作废和释放时移除；`whenReady` 返回前 `signal` 中止、视图被卸下 | Node |
+| `MapCanvas.test.tsx` | 用完整快照创建视图、页面的 class 不冲掉 MapLibre 的 class、视图状态的变化（视图入口只在 `ready` 时有值）、受限入口（只有 `kind`、`pick`、`project`、`queryRendered`，移动相机经相机操作）、只读引用、`whenReady` 的各种结局、`useCamera` 的订阅与取消、先释放视图后释放会话、运行中的错误、画布的数量限制、失败原因、引擎失败后的重试；受限入口的 `pick`、`project`；工具通过上下文激活和退出、`activeTool` 只读、地图上的点击经视图交给工具 | jsdom |
+| `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，相机控制 `fitBounds` 的默认 padding，`useMapOverlay` 不在作用域里时抛错；`activeTool` 跟随工具模型、上下文释放后不再跟随；`selection` 从会话已有的选择开始、跟随会话，`select`、`clearSelection` 写进会话，释放后不再跟随；`view` 的渲染要素查询原样转发；视图入口只在 `ready` 时有值；相机操作：开始时作废上一次、读当前的不开始新的且是同一个对象，就绪时同步执行、没就绪时等到就绪（暂停不算）、期间有新的操作时放弃、引擎失败后重试和样式失败后恢复都照样执行、挂上已就绪的视图时执行、只能 `run` 一次且不重放、已作废和上下文释放后不执行、地图刚就绪时旧操作先执行新操作后执行、回调里开始的新操作立即执行、相机控制过期后抛错和作废后不生效、回调出错交给 `onError`、等待的监听在执行和作废和释放时移除；`whenReady` 返回前 `signal` 中止、视图被卸下 | Node |
 | `overlay.test.ts` | 占用与间隔、同一边取最大、不算的元素、画布的位置、横向和纵向的下限、选项 | Node |
 | `overlay.browser.test.tsx` | 真实的布局和 MapLibre（ADR 0040）：登记的面板按实际尺寸算进留白（左 352），不传 `padding` 的 `fitBounds` 把范围放在面板右边的区域里、并贴满可视区域的一边。jsdom 里元素的尺寸都是 0，5A.3 起这一点只在开发页手动验证过 | Chromium 无界面版 |
 

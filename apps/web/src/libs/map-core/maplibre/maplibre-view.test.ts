@@ -1,4 +1,5 @@
 import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type { Geometry } from 'geojson';
 import { GPUInitializationError, type Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
@@ -15,7 +16,8 @@ import type {
   MapMouseEventLike,
   MapMouseEventType,
   MapMoveEventLike,
-  MapSubscription
+  MapSubscription,
+  RenderedFeatureLike
 } from './map-like';
 import { MapLibreView, type MapLibreViewOptions } from './maplibre-view';
 
@@ -183,6 +185,17 @@ class FakeMap implements MapLike {
     );
   }
 
+  // queryRenderedFeatures 返回的要素，用例按需设置
+  rendered: RenderedFeatureLike[] = [];
+
+  queryRenderedFeatures(
+    geometry: [number, number] | [[number, number], [number, number]],
+    options: { layers: string[] }
+  ): RenderedFeatureLike[] {
+    this.calls.push(['queryRenderedFeatures', geometry, options]);
+    return this.rendered;
+  }
+
   // 屏幕坐标与经纬度的固定换算：画布左上角 (0, 0) 是 (118, 33)，每 100 像素 1 度，向下纬度减小
   unproject([x, y]: [number, number]) {
     return { lng: 118 + x / 100, lat: 33 - y / 100 };
@@ -302,6 +315,9 @@ function lineGroup(id: string, color = '#336699'): StyleGroup {
     layers: [{ id: `${id}-line`, type: 'line', source: id, paint: { 'line-color': color } }]
   };
 }
+
+// 渲染要素查询返回的几何
+const POINT: Geometry = { type: 'Point', coordinates: [119, 31] };
 
 // 只有样式图片的分组
 const stripe = { width: 1, height: 1, data: new Uint8Array(4), sdf: true };
@@ -1500,7 +1516,7 @@ describe('MapLibreView', () => {
 
     it('picks the map plane and projects back to the screen once ready', () => {
       using ctx = setup();
-      expect(() => ctx.view.pick({ x: 100, y: 200 })).toThrow('只能在 ready 时定位、拾取和投影');
+      expect(() => ctx.view.pick({ x: 100, y: 200 })).toThrow('只能在 ready 时定位、拾取、投影和查询');
 
       ctx.map.fire('style.load');
 
@@ -1540,21 +1556,63 @@ describe('MapLibreView', () => {
       ]);
     });
 
-    it('gives tools only the kind, pick and project of the view', () => {
+    it('gives tools only the kind, pick, project and rendered query of the view', async () => {
       using ctx = setup();
       const { tool, views } = recordingTool();
       ctx.session.tool.register('probe', tool);
       ctx.session.tool.activate('probe');
       ctx.map.fire('style.load');
+      ctx.session.style.setGroup('business', lineGroup('dltb'));
+      await nextMicrotask();
+      ctx.map.rendered = [{ source: 'dltb', layer: { id: 'dltb-line' }, properties: { guid: 'a' }, geometry: POINT }];
 
       ctx.map.mouse('click', 100, 200);
       const [view] = views;
 
-      expect(Object.keys(view ?? {})).toStrictEqual(['kind', 'pick', 'project']);
+      expect(Object.keys(view ?? {})).toStrictEqual(['kind', 'pick', 'project', 'queryRendered']);
       expect(Object.isFrozen(view)).toBe(true);
       expect(view?.kind).toBe('2d');
       expect(view?.pick({ x: 100, y: 200 })).toStrictEqual({ kind: 'hit', surface: 'map', lngLat: [119, 31] });
       expect(view?.project([119, 31])).toStrictEqual({ x: 100, y: 200 });
+      expect(view?.queryRendered({ x: 100, y: 200 }, { sources: ['dltb'] })).toStrictEqual([
+        { sourceId: 'dltb', layerId: 'dltb-line', properties: { guid: 'a' } }
+      ]);
+    });
+
+    it('queries what the layers of the given sources drew, top first; geometry only when asked for', async () => {
+      using ctx = setup();
+      expect(() => ctx.view.queryRendered({ x: 1, y: 2 }, { sources: ['dltb'] })).toThrow('只能在 ready 时');
+      ctx.map.fire('style.load');
+      ctx.session.style.setGroups({ basemap: lineGroup('tdt'), business: lineGroup('dltb') });
+      await nextMicrotask();
+      const top = { source: 'dltb', layer: { id: 'dltb-line' }, properties: { guid: 'a' }, geometry: POINT };
+      const below = { source: 'tdt', layer: { id: 'tdt-line' }, properties: { name: '路' }, geometry: POINT };
+      ctx.map.rendered = [top, below];
+      ctx.map.calls.length = 0;
+
+      expect(ctx.view.queryRendered({ x: 100, y: 200 }, { sources: ['dltb'] })).toStrictEqual([
+        { sourceId: 'dltb', layerId: 'dltb-line', properties: { guid: 'a' } },
+        { sourceId: 'tdt', layerId: 'tdt-line', properties: { name: '路' } }
+      ]);
+      const box = { from: { x: 50, y: 60 }, to: { x: 0, y: 0 } };
+      expect(ctx.view.queryRendered(box, { sources: ['dltb', 'tdt'], withGeometry: true })).toStrictEqual([
+        { sourceId: 'dltb', layerId: 'dltb-line', properties: { guid: 'a' }, geometry: POINT },
+        { sourceId: 'tdt', layerId: 'tdt-line', properties: { name: '路' }, geometry: POINT }
+      ]);
+      // 没有图层的数据源不交给 MapLibre（它对不存在的图层会报错）
+      expect(ctx.view.queryRendered({ x: 1, y: 1 }, { sources: ['missing'] })).toStrictEqual([]);
+      // 图层按已应用的样式从下到上列出，矩形照原样交给 MapLibre
+      expect(ctx.map.calls).toStrictEqual([
+        ['queryRenderedFeatures', [100, 200], { layers: ['dltb-line'] }],
+        [
+          'queryRenderedFeatures',
+          [
+            [50, 60],
+            [0, 0]
+          ],
+          { layers: ['tdt-line', 'dltb-line'] }
+        ]
+      ]);
     });
 
     it('passes keys pressed on the focused map; Escape ends a temporary tool', () => {

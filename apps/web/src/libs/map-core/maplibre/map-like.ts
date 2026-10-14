@@ -1,4 +1,5 @@
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type { Geometry } from 'geojson';
 import type { MapOptions } from 'maplibre-gl';
 import type { CameraCause } from '../camera/camera-model';
 import type { ViewPadding } from '../view/map-view';
@@ -35,6 +36,14 @@ export interface GestureHandlerLike {
 
 export interface CameraEventData {
   readonly cause: CameraCause;
+}
+
+/** queryRenderedFeatures 返回的要素：几何是取值时才从瓦片坐标换算的 */
+export interface RenderedFeatureLike {
+  readonly source: string;
+  readonly layer: { readonly id: string };
+  readonly properties: Record<string, unknown>;
+  readonly geometry: Geometry;
 }
 
 /** 适配器用到的地图能力；MapLibre 的 Map 满足这个接口（见测试中的类型检查），测试时换成假地图 */
@@ -74,6 +83,11 @@ export interface MapLike extends StyleTarget {
     eventData: CameraEventData
   ): void;
   unproject(point: [number, number]): { readonly lng: number; readonly lat: number };
+  /** 点或矩形（两个对角点）里画出的要素，从上到下；layers 只能是地图上有的图层 */
+  queryRenderedFeatures(
+    geometry: [number, number] | [[number, number], [number, number]],
+    options: { layers: string[] }
+  ): readonly RenderedFeatureLike[];
   project(lngLat: [number, number]): { readonly x: number; readonly y: number };
   /** 光标写在画布上 */
   getCanvas(): HTMLCanvasElement;

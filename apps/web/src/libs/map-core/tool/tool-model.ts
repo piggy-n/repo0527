@@ -1,6 +1,7 @@
 import type { ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 import { ModelEvents } from '../model-events';
+import type { RenderedFeature, RenderedQueryOptions, ScreenBox } from '../view/rendered-features';
 import type { LngLat, MapInputEvent, PickResult, ScreenPoint } from '../view/view-input';
 
 /** 地图的默认手势；工具激活时可以关掉其中几个 */
@@ -13,11 +14,12 @@ export interface Gestures {
   readonly boxZoom: boolean;
 }
 
-/** 工具能用到的视图能力：只有拾取和投影，拿不到视图的其他部分 */
+/** 工具能用到的视图能力：只有拾取、投影和渲染要素查询，拿不到视图的其他部分 */
 export interface ToolView {
   readonly kind: ViewKind;
   pick(point: ScreenPoint): PickResult;
   project(lngLat: LngLat, height?: number): ScreenPoint | null;
+  queryRendered(area: ScreenPoint | ScreenBox, options: RenderedQueryOptions): readonly RenderedFeature[];
 }
 
 /** 交互工具（ADR 0034 第 2 条）；钩子不应抛错 */

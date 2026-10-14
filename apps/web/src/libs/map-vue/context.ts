@@ -8,7 +8,11 @@ import {
   type MapViewFailure,
   NO_SOURCE_ERRORS,
   type PickResult,
+  type RenderedFeature,
+  type RenderedQueryOptions,
+  type ScreenBox,
   type ScreenPoint,
+  type SelectedFeature,
   type SourceErrors,
   type ViewBounds,
   type ViewKind,
@@ -27,11 +31,12 @@ import {
 } from 'vue';
 import { computeOverlayPadding, type OverlayEdge, type OverlayOptions, type OverlayPadding } from './overlay';
 
-/** 就绪视图的受限入口：只有拾取和投影；移动相机通过相机操作（ADR 0028 第 5 条、ADR 0039 第 4 条） */
+/** 就绪视图的受限入口：只有拾取、投影和渲染要素查询；移动相机通过相机操作（ADR 0028 第 5 条、ADR 0039 第 4 条、ADR 0047） */
 export interface MapViewport {
   readonly kind: ViewKind;
   pick(point: ScreenPoint): PickResult;
   project(lngLat: LngLat, height?: number): ScreenPoint | null;
+  queryRendered(area: ScreenPoint | ScreenBox, options: RenderedQueryOptions): readonly RenderedFeature[];
 }
 
 /** 移动相机的能力，只在 run 的回调期间有效，之后调用抛错（ADR 0039 第 3 条） */
@@ -92,6 +97,11 @@ export interface MapContext {
   activateTool(id: string): void;
   /** 让正在激活的工具退出：临时任务回到上一个常驻模式，常驻模式回到移动；没有激活时什么也不做 */
   releaseTool(id: string): void;
+  /** 会话里选中的要素（ADR 0047 第 4 节） */
+  readonly selection: Readonly<ShallowRef<readonly SelectedFeature[]>>;
+  /** 替换选中的要素；同一个要素出现两次时抛错 */
+  select(features: readonly SelectedFeature[]): void;
+  clearSelection(): void;
 }
 
 // 挂上的视图；detached 在卸下时中止，等它就绪的 whenReady 随之以 AbortError 结束
@@ -112,7 +122,8 @@ function createViewport(view: MapView): MapViewport {
   return Object.freeze({
     kind: view.kind,
     pick: (point: ScreenPoint) => view.pick(point),
-    project: (lngLat: LngLat, height?: number) => view.project(lngLat, height)
+    project: (lngLat: LngLat, height?: number) => view.project(lngLat, height),
+    queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => view.queryRendered(area, options)
   });
 }
 
@@ -152,6 +163,8 @@ export class MapContextState implements Disposable {
   readonly #retryRequests = ref(0);
   readonly #activeTool: Ref<string>;
   readonly #unsubscribeTool: () => void;
+  readonly #selection: ShallowRef<readonly SelectedFeature[]>;
+  readonly #unsubscribeSelection: () => void;
   readonly #projectionRevision = ref(0);
   readonly #unsubscribeCamera: () => void;
   readonly #lifetime = new AbortController();
@@ -176,6 +189,9 @@ export class MapContextState implements Disposable {
     // 工具模型在会话里，这里只把当前工具桥接成 Vue 的状态；切换由工具模型保证同一时间只有一个
     this.#activeTool = ref(session.tool.active);
     this.#unsubscribeTool = session.tool.on('change', ({ active }) => (this.#activeTool.value = active));
+    // 选择状态同样只桥接：会话整体替换，这里跟着换
+    this.#selection = shallowRef(session.selection.current);
+    this.#unsubscribeSelection = session.selection.on('change', features => (this.#selection.value = features));
     this.#unsubscribeCamera = session.camera.on('change', () => this.#projectionRevision.value++);
     this.context = Object.freeze({
       view: shallowReadonly(this.#viewport),
@@ -193,7 +209,10 @@ export class MapContextState implements Disposable {
       overlayPadding: () => this.#overlayPadding(),
       activeTool: shallowReadonly(this.#activeTool),
       activateTool: (id: string) => session.tool.activate(id),
-      releaseTool: (id: string) => session.tool.release(id)
+      releaseTool: (id: string) => session.tool.release(id),
+      selection: shallowReadonly(this.#selection),
+      select: (features: readonly SelectedFeature[]) => session.selection.set(features),
+      clearSelection: () => session.selection.clear()
     });
   }
 
@@ -264,6 +283,7 @@ export class MapContextState implements Disposable {
   /** 等待中的 whenReady 以 AbortError 结束 */
   [Symbol.dispose](): void {
     this.#unsubscribeTool();
+    this.#unsubscribeSelection();
     this.#unsubscribeCamera();
     this.#lifetime.abort(new DOMException('地图上下文已释放', 'AbortError'));
   }

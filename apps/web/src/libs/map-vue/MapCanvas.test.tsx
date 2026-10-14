@@ -11,6 +11,7 @@ import type {
   MapTool,
   PickResult,
   MapSubscription,
+  RenderedFeatureLike,
   StyleGroup
 } from '@yzt/map-core';
 import { MapLibreView } from '@yzt/map-core';
@@ -128,6 +129,9 @@ class FakeMap implements MapLike {
   // 拾取、投影用固定换算：画布左上角 (0, 0) 是 (118, 33)，每 100 像素 1 度
   unproject([x, y]: [number, number]) {
     return { lng: 118 + x / 100, lat: 33 - y / 100 };
+  }
+  queryRenderedFeatures(): RenderedFeatureLike[] {
+    return [];
   }
   project([lng, lat]: [number, number]) {
     return { x: (lng - 118) * 100, y: (33 - lat) * 100 };
@@ -267,7 +271,7 @@ describe('MapCanvas', () => {
     expect(maps[0]?.removed).toBe(true);
   });
 
-  it('视图的受限入口：冻结，只有 kind、pick、project，转发给视图；移动相机通过相机操作', () => {
+  it('视图的受限入口：冻结，只有 kind、pick、project、queryRendered，转发给视图；移动相机通过相机操作', () => {
     const { context, maps, session } = setup();
     maps[0]?.fire('style.load');
     const viewport = context.view.value;
@@ -276,7 +280,7 @@ describe('MapCanvas', () => {
     }
 
     expect(Object.isFrozen(viewport)).toBe(true);
-    expect(Object.keys(viewport).toSorted()).toEqual(['kind', 'pick', 'project']);
+    expect(Object.keys(viewport).toSorted()).toEqual(['kind', 'pick', 'project', 'queryRendered']);
     expect(Symbol.dispose in viewport).toBe(false);
 
     context.runCameraOperation(camera => camera.flyTo({ center: [120.6, 31.3] }));
@@ -286,6 +290,7 @@ describe('MapCanvas', () => {
     // 假地图的换算：画布左上角是 (118, 33)，每 100 像素 1 度
     expect(viewport.pick({ x: 100, y: 200 })).toStrictEqual({ kind: 'hit', surface: 'map', lngLat: [119, 31] });
     expect(viewport.project([119, 31])).toStrictEqual({ x: 100, y: 200 });
+    expect(viewport.queryRendered({ x: 100, y: 200 }, { sources: ['missing'] })).toStrictEqual([]);
   });
 
   it('只读：给 view、viewState、相机引用赋值不生效', () => {

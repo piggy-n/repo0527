@@ -1,4 +1,4 @@
-import type { FeatureCollection, Polygon } from 'geojson';
+import type { Feature, FeatureCollection, Polygon } from 'geojson';
 import { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
@@ -146,6 +146,38 @@ function patternGroup(image: StyleImage = sdfImage(), layerExtra: Record<string,
     ...areaGroup(),
     layers: [{ ...layer, ...layerExtra }],
     images: { 'data-stripe': image }
+  };
+}
+
+function square(guid: string, west: number, east: number): Feature<Polygon> {
+  const [south, north] = [31.95, 32.15];
+  const ring = [
+    [west, south],
+    [east, south],
+    [east, north],
+    [west, north],
+    [west, south]
+  ];
+  return { type: 'Feature', properties: { guid }, geometry: { type: 'Polygon', coordinates: [ring] } };
+}
+
+const collection = (...features: Feature<Polygon>[]): FeatureCollection<Polygon> => ({
+  type: 'FeatureCollection',
+  features
+});
+
+// 两块地块和压在第一块上的覆盖面；地块的数据源有填充、轮廓两个图层
+function parcelsGroup(): StyleGroup {
+  return {
+    sources: {
+      parcels: { type: 'geojson', data: collection(square('a', 118.6, 118.75), square('b', 118.85, 119)) },
+      cover: { type: 'geojson', data: collection(square('c', 118.65, 118.7)) }
+    },
+    layers: [
+      { id: 'parcels-fill', type: 'fill', source: 'parcels', paint: { 'fill-color': '#ff0000' } },
+      { id: 'parcels-outline', type: 'line', source: 'parcels', paint: { 'line-color': '#000000', 'line-width': 2 } },
+      { id: 'cover-fill', type: 'fill', source: 'cover', paint: { 'fill-color': '#0000ff' } }
+    ]
   };
 }
 
@@ -332,6 +364,35 @@ describe('MapLibreView（真实的 MapLibre）', () => {
     expect(lngLatOf(picked)?.[1]).toBeCloseTo(32.1, 6);
     expect(lngLatOf(center)?.[0]).toBeCloseTo(ctx.session.camera.current.center[0], 6);
     expect(lngLatOf(center)?.[1]).toBeCloseTo(ctx.session.camera.current.center[1], 6);
+  });
+
+  it('渲染要素查询（ADR 0047）：点和矩形里画出的要素，只查给定数据源的图层，从上到下；几何只在要时给出', async () => {
+    using ctx = setup();
+    await withTimeout(ctx.view.whenReady(), '首次加载完成');
+    ctx.session.style.setGroup('data', parcelsGroup());
+    await renderedUntil(ctx.map, () => ctx.map.queryRenderedFeatures({ layers: ['cover-fill'] }).length > 0);
+
+    // 第一块地块里、覆盖面下面的一点
+    const point = ctx.view.project([118.68, 32.05]);
+    const hits = (sources: string[]) =>
+      ctx.view.queryRendered(point, { sources }).map(({ sourceId, layerId, properties }) => [sourceId, layerId, properties.guid]);
+    expect(hits(['parcels', 'cover'])).toStrictEqual([
+      ['cover', 'cover-fill', 'c'],
+      ['parcels', 'parcels-fill', 'a']
+    ]);
+    expect(hits(['parcels'])).toStrictEqual([['parcels', 'parcels-fill', 'a']]);
+    expect(hits(['missing'])).toStrictEqual([]);
+
+    const [plain] = ctx.view.queryRendered(point, { sources: ['parcels'] });
+    const [withGeometry] = ctx.view.queryRendered(point, { sources: ['parcels'], withGeometry: true });
+    expect(plain).not.toHaveProperty('geometry');
+    expect(withGeometry?.geometry?.type).toBe('Polygon');
+
+    // 矩形盖住两块地块：填充和轮廓都画了它们，去重交给调用方
+    const box = { from: ctx.view.project([118.55, 32.2]), to: ctx.view.project([119.05, 31.9]) };
+    const inBox = ctx.view.queryRendered(box, { sources: ['parcels'] });
+    expect(new Set(inBox.map(({ properties }) => properties.guid))).toStrictEqual(new Set(['a', 'b']));
+    expect(new Set(inBox.map(({ layerId }) => layerId))).toStrictEqual(new Set(['parcels-fill', 'parcels-outline']));
   });
 
   it('画布尺寸变化：发出 resize，相机不变，同一个经纬度投影到新的位置', async () => {

@@ -7,6 +7,7 @@ import {
   MapSession,
   NO_SOURCE_ERRORS,
   type PickResult,
+  type RenderedFeature,
   type ScreenPoint,
   type SourceErrors,
   type Unsubscribe,
@@ -47,6 +48,13 @@ class FakeView implements MapView {
   }
   project(): ScreenPoint | null {
     return null;
+  }
+  // queryRendered 收到的参数和要返回的要素
+  readonly queries: unknown[][] = [];
+  rendered: RenderedFeature[] = [];
+  queryRendered(...args: unknown[]): RenderedFeature[] {
+    this.queries.push(args);
+    return this.rendered;
   }
 
   on(event: 'statechange', callback: (state: ViewState) => void): Unsubscribe;
@@ -222,6 +230,33 @@ describe('MapContextState 的工具', () => {
   });
 });
 
+describe('MapContextState 的选择', () => {
+  const PADDY = { sourceId: 'resources-bgdc_dltb', featureId: 'a' };
+  const RIVER = { sourceId: 'resources-csxhjctb_hydl', featureId: 'b' };
+
+  it('selection 从会话已有的选择开始，跟随会话变化；select、clearSelection 写进会话；上下文释放后不再跟随', () => {
+    const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
+    using session = new MapSession({ groups: ['basemap'], camera });
+    session.selection.set([PADDY]);
+    const state = new MapContextState(session, () => undefined, resolveOverlayOptions());
+    const { context } = state;
+    expect(context.selection.value).toBe(session.selection.current);
+
+    context.select([RIVER]);
+    expect(session.selection.current).toStrictEqual([RIVER]);
+    expect(context.selection.value).toBe(session.selection.current);
+    session.selection.set([PADDY, RIVER]);
+    expect(context.selection.value).toStrictEqual([PADDY, RIVER]);
+    context.clearSelection();
+    expect(session.selection.current).toStrictEqual([]);
+    expect(context.selection.value).toStrictEqual([]);
+
+    state[Symbol.dispose]();
+    session.selection.set([PADDY]);
+    expect(context.selection.value).toStrictEqual([]);
+  });
+});
+
 describe('MapContextState 的投影修订号', () => {
   it('相机变化、画布尺寸变化时加 1；卸下视图后不再跟随它的尺寸，上下文释放后不再跟随相机', () => {
     const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
@@ -303,6 +338,18 @@ describe('MapContextState 的相机操作', () => {
     ready.state = 'ready';
     env.state.attachView(ready, CANVAS);
     expect(context.view.value).not.toBeNull();
+  });
+
+  it('view 的渲染要素查询原样转发给视图，返回视图的结果', () => {
+    using env = setup();
+    const view = new FakeView();
+    view.state = 'ready';
+    view.rendered = [{ sourceId: 'resources-bgdc_dltb', layerId: 'resources-bgdc_dltb', properties: { guid: 'a' } }];
+    env.state.attachView(view, CANVAS);
+    const options = { sources: ['resources-bgdc_dltb'], withGeometry: true };
+
+    expect(env.state.context.view.value?.queryRendered({ x: 1, y: 2 }, options)).toBe(view.rendered);
+    expect(view.queries).toStrictEqual([[{ x: 1, y: 2 }, options]]);
   });
 
   it('runCameraOperation：视图就绪时同步执行，并作废之前没完成的操作', () => {

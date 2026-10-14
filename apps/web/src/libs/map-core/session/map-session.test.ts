@@ -17,12 +17,13 @@ function createSession() {
 }
 
 describe('MapSession', () => {
-  it('creates the style, camera and tool parts from the options', () => {
+  it('creates the style, camera, tool and selection parts from the options', () => {
     using session = createSession();
 
     expect(session.style.current).toMatchObject({ version: 8, glyphs: '/fonts/{fontstack}/{range}.pbf' });
     expect(session.camera.current).toEqual(NANJING);
     expect(session.tool.active).toBe(BROWSE_TOOL);
+    expect(session.selection.current).toStrictEqual([]);
     // 构造完成后各部分仍然可用，所有权已经转给会话
     expect(() => session.style.setGroup('basemap', EMPTY)).not.toThrow();
     expect(() => session.camera.set({ ...NANJING, zoom: 9 }, { view: '2d', cause: 'user' })).not.toThrow();
@@ -38,6 +39,7 @@ describe('MapSession', () => {
     expect(() => session.style.setGroup('basemap', EMPTY)).toThrow('StyleModel 已释放');
     expect(() => session.camera.set(NANJING, { view: '2d', cause: 'user' })).toThrow('CameraModel 已释放');
     expect(() => session.tool.activate(BROWSE_TOOL)).toThrow('ToolModel 已释放');
+    expect(() => session.selection.clear()).toThrow('SelectionModel 已释放');
     expect(() => session[Symbol.dispose]()).not.toThrow();
   });
 

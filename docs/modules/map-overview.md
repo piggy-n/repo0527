@@ -24,7 +24,7 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 
 | 原则 | 一句话 | 出处 |
 |---|---|---|
-| 会话是唯一真相源 | 样式、相机、当前工具（以后还有选择状态）在 map-core 的会话里，二维、三维的视图只负责同步 | ADR 0020 |
+| 会话是唯一真相源 | 样式、相机、当前工具、选择状态在 map-core 的会话里，二维、三维的视图只负责同步 | ADR 0020 |
 | 拥有者推导分组 | 每项能力是一个拥有者：持有状态、提供操作，用纯函数推导自己的样式分组，整体替换，页面统一提交 | ADR 0022、0027、0028、0031 |
 | 只有适配器写引擎 | 只有 MapLibre 适配器能写二维地图，其他代码通过视图接口查询、投影；二三维共用视图接口，不共用引擎接口 | ADR 0024 |
 | 失败是数据 | 加载失败是一种明确的结果；失败原因放在 `failure` 里，提示由纯函数推导 | ADR 0026、0030 |
@@ -40,10 +40,10 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 | 位置与拆包 | map-core 在 `libs`，单入口；utils、map-core、map-cesium 以后一起拆到 `packages/` | 0004、0018 | [map-core.md](map-core.md) |
 | 引擎与版本 | MapLibre GL JS 6，具名导入；Cesium 精确锁定；不用 mapbox-gl | 0002（大版本由 0019 确定）、0019 | [map-core.md](map-core.md) |
 | 分层与组装 | 五层的职责；能力按拥有者写，页面挑选组合，不做带开关的全能地图组件 | 0027 | 本文、[shared-map.md](shared-map.md) |
-| 会话 | 样式、相机、当前工具；二三维共同的唯一真相源 | 0020（选择状态的范围由 0022 修正，方案比较由 0024 修正）、0047 | [map-core.md](map-core.md) |
+| 会话 | 样式、相机、当前工具、选择状态（只存要素身份）；二三维共同的唯一真相源 | 0020（选择状态的范围由 0022 修正，方案比较由 0024 修正）、0047 | [map-core.md](map-core.md) |
 | 样式模型与提交 | 分组推导、整体替换，跨分组的修改一次提交，视图按修订号增量同步；分组可以带样式图片，图片是快照的一部分 | 0022（`failed` 的含义由 0026 修正）、0045 | [map-core.md](map-core.md) |
 | map-vue 上下文 | `provideMap`、`useMap`、`bindStyle`；`view` 只在就绪时有值，只有拾取和投影 | 0028（第 5 条由 0039 修正） | [map-vue.md](map-vue.md) |
-| 视图接口与二三维 | 共用生命周期、相机、输入、拾取、投影；相机事件带 `view` 和 `cause`；Cesium 镜像会话 | 0024、0047 | [map-core.md](map-core.md) |
+| 视图接口与二三维 | 共用生命周期、相机、输入、拾取、投影、渲染要素查询（三维返回空数组）；相机事件带 `view` 和 `cause`；Cesium 镜像会话 | 0024、0047 | [map-core.md](map-core.md) |
 | 视图失败 | 样式失败在出现新的提交时自动恢复；引擎失败只能重建视图；状态转换按表执行；带数据源的错误（瓦片出错）不算样式失败，记作视图的数据源错误 | 0026（第 4 条由 0030 修正，第 1、2 条由 0041 修正）、0030、0041 | [map-core.md](map-core.md)"状态转换"、[map-vue.md](map-vue.md) |
 | 资源释放与运行时 | `Disposable`、nanoevents；maplibre-gl 的全局设置在首次进入地图时懒加载 | 0023 | [map-core.md](map-core.md) |
 | Worker | 二维不自建渲染 Worker；自建的 Worker 统一用通信层；瓦片数据服务的约束 | 0021（第 5 条由 0024 修正，第 3、4 条由 0025 补充）、0025 | [utils.md](utils.md) |

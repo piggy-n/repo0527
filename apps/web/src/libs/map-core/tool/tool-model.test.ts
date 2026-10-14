@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MapInputEvent } from '../view/view-input';
 import { BROWSE_TOOL, type MapTool, type ToolChange, ToolModel, type ToolView } from './tool-model';
 
-const VIEW: ToolView = { kind: '2d', pick: () => ({ kind: 'miss' }), project: () => null };
+const VIEW: ToolView = { kind: '2d', pick: () => ({ kind: 'miss' }), project: () => null, queryRendered: () => [] };
 
 const CLICK: MapInputEvent = {
   type: 'click',
