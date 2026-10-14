@@ -185,6 +185,13 @@ export function withAlpha(color: string, alpha: number): string {
   return new Color(r, g, b, alpha, false).toString();
 }
 
+/** 颜色在 Lab 空间往黑色插值 amount（0～1）：感知上均匀，各种色相加深的程度一致；透明度不变 */
+export function darkenColor(color: string, amount: number): string {
+  const parsed = Color.parse(color) ?? Color.black;
+  // 插值连透明度一起插：终点用同透明度的黑色
+  return Color.interpolate(parsed, new Color(0, 0, 0, parsed.a), amount, 'lab').toString();
+}
+
 /** 自定义大小按步长取整；越界、不是有限数时为 null */
 export function normalizeSize(kind: SizeKind, size: SymbolSize): SymbolSize | null {
   if (typeof size === 'string') {

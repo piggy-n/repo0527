@@ -5,6 +5,7 @@ import { paletteColor } from './palette';
 import type { ResourceSymbolOverride, SymbolMode } from './resource-symbols';
 import {
   classifiedLayers,
+  darkenColor,
   type ResourceStyleLayers,
   type ResourceSymbol,
   resolveSymbol,
@@ -138,9 +139,13 @@ export function defaultSymbol(resource: Resource): ResourceSymbol {
   return symbol.geometry === 'fill' ? { ...symbol, fillColor: withAlpha(color, FILL_ALPHA) } : symbol;
 }
 
-/** 分类样式里一个取值的默认值：取值的颜色作主色 */
+// 分类样式的纹理颜色是取值颜色加深（ADR 0046）：填充不透明，同色的花纹看不见
+const CLASS_PATTERN_DARKEN = 0.4;
+
+/** 分类样式里一个取值的默认值：取值的颜色作主色，面的纹理颜色加深 */
 export function classDefaultSymbol(resource: Resource, item: ClassItem): ResourceSymbol {
-  return colorSymbol(resource.geometry, item.color);
+  const symbol = colorSymbol(resource.geometry, item.color);
+  return symbol.geometry === 'fill' ? { ...symbol, patternColor: darkenColor(item.color, CLASS_PATTERN_DARKEN) } : symbol;
 }
 
 /** 统一样式叠加覆盖后的符号 */

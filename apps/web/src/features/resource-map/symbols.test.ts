@@ -6,6 +6,7 @@ import { BLANK_PATTERN_IMAGE_ID, patternImageId } from './fill-patterns';
 import {
   classifiedLayers,
   colorOf,
+  darkenColor,
   nextOverride,
   normalizeColor,
   normalizeSize,
@@ -51,6 +52,12 @@ describe('规范化', () => {
     ]);
     expect(normalizeColor('rgba(217, 67, 63, 0.354)')).toBe('rgba(217, 67, 63, 0.35)');
     expect(normalizeColor('不是颜色')).toBeNull();
+  });
+
+  it('加深（ADR 0046）：Lab 空间往黑色插值，透明度不变；透明和不透明的颜色加深后 RGB 相同', () => {
+    expect(normalizeColor(darkenColor('#F8D072', 0.4))).toBe('rgba(141, 119, 69, 1)');
+    expect(normalizeColor(darkenColor('rgba(248, 208, 114, 0.35)', 0.4))).toBe('rgba(141, 119, 69, 0.35)');
+    expect(normalizeColor(darkenColor('#F8D072', 0))).toBe('rgba(248, 208, 114, 1)');
   });
 
   it('自定义大小按步长取整，越界、不是有限数时为 null；四档原样返回', () => {

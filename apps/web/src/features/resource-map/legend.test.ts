@@ -214,7 +214,7 @@ describe('legendEntries', () => {
     });
   });
 
-  it('有花纹的面：预览带上花纹和纹理颜色；分类样式的取值也一样', () => {
+  it('有花纹的面：预览带上花纹和纹理颜色；分类样式的取值也一样，纹理颜色默认是取值颜色加深', () => {
     const overrides = new Map<string, ResourceSymbolOverride>([
       ['szy_kt', { uniform: { fillStyle: 'xCross', patternColor: 'rgba(0, 0, 0, 1)' } }],
       ['bgdc_dltb', { items: { '0101': { fillStyle: 'dot' } } }]
@@ -226,7 +226,7 @@ describe('legendEntries', () => {
     });
     const dltb = entryOf(entries, 'bgdc_dltb');
     expect(dltb.kind === 'landuse' && dltb.swatches.get('0101')).toMatchObject({
-      pattern: { name: 'dot', color: 'rgb(248, 208, 114)' }
+      pattern: { name: 'dot', color: 'rgba(141,119,69,1)' }
     });
     expect(dltb.kind === 'landuse' && dltb.swatches.get('0102')).not.toHaveProperty('pattern');
   });

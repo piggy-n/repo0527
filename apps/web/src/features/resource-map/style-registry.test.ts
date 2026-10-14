@@ -139,7 +139,7 @@ describe('默认样式', () => {
     expect(defaultSymbol(line)).toStrictEqual({ geometry: 'line', color: RESOURCE_PALETTE[2], width: 'M', dash: 'solid' });
   });
 
-  it('面的默认符号（ADR 0045）：均匀填充、1 像素实线描边；统一样式的纹理颜色是不透明的配色板颜色，分类样式是取值的颜色', () => {
+  it('面的默认符号（ADR 0045、0046）：均匀填充、1 像素实线描边；统一样式的纹理颜色是不透明的配色板颜色，分类样式是取值的颜色加深', () => {
     const pond = resource('szy_kt', 'fill', 1);
 
     expect(defaultSymbol(pond)).toStrictEqual({
@@ -155,7 +155,7 @@ describe('默认样式', () => {
       geometry: 'fill',
       fillColor: '#F8D072',
       fillStyle: 'solid',
-      patternColor: '#F8D072',
+      patternColor: 'rgba(141,119,69,1)',
       outlineColor: '#F8D072',
       outlineWidth: 'M',
       outlineDash: 'solid'
