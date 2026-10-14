@@ -3,7 +3,7 @@ import { featureFilter } from '@maplibre/maplibre-gl-style-spec';
 import type { Geometry } from 'geojson';
 import { type StyleGroup, StyleModel } from '@yzt/map-core';
 import { describe, expect, it } from 'vitest';
-import { selectionGroup } from './selection-style';
+import { type BatchHighlight, selectionGroup } from './selection-style';
 
 const SQUARE: Geometry = {
   type: 'Polygon',
@@ -84,5 +84,82 @@ describe('selectionGroup', () => {
       'selection-line',
       'selection-circle'
     ]);
+  });
+});
+
+const BATCH: BatchHighlight = {
+  sourceId: 'resources-bgdc_dltb',
+  sourceLayer: 'bgdc_dltb_2022',
+  minzoom: undefined,
+  guids: ['a'.repeat(32), 'b'.repeat(32)]
+};
+
+// 按 MapLibre 的语义求值：这个要素会被哪些图层画出
+function drawnFeature(group: StyleGroup, type: 'Polygon' | 'LineString' | 'Point', guid: string) {
+  const feature = { type, properties: { guid } };
+  return group.layers
+    .filter(item => 'filter' in item && featureFilter(item.filter, item.id).filter({ zoom: 12 }, feature))
+    .map(({ id }) => id);
+}
+
+// 图层引用的数据源和瓦片图层
+function sourcesOf(group: StyleGroup) {
+  return group.layers.map(layer => {
+    const sourceLayer = 'source-layer' in layer && layer['source-layer'];
+    return [layer.id, 'source' in layer && layer.source, sourceLayer];
+  });
+}
+
+const GUID_A = 'a'.repeat(32);
+
+describe('selectionGroup：框选的批量高亮', () => {
+  it('画在资源的瓦片上：引用资源的数据源和瓦片图层，不加数据源；列表里的 guid 才画，按几何类型分层', () => {
+    const group = selectionGroup(null, false, BATCH);
+
+    expect(group.sources).toStrictEqual({});
+    expect(sourcesOf(group)).toStrictEqual([
+      ['selection-batch-fill', 'resources-bgdc_dltb', 'bgdc_dltb_2022'],
+      ['selection-batch-line', 'resources-bgdc_dltb', 'bgdc_dltb_2022'],
+      ['selection-batch-circle', 'resources-bgdc_dltb', 'bgdc_dltb_2022']
+    ]);
+    expect(drawnFeature(group, 'Polygon', GUID_A)).toStrictEqual(['selection-batch-fill', 'selection-batch-line']);
+    expect(drawnFeature(group, 'LineString', 'b'.repeat(32))).toStrictEqual(['selection-batch-line']);
+    expect(drawnFeature(group, 'Point', GUID_A)).toStrictEqual(['selection-batch-circle']);
+    expect(drawnFeature(group, 'Polygon', 'c'.repeat(32))).toStrictEqual([]);
+  });
+
+  it('比选中的那个淡：面填充 0.12、描边和线 2 像素、点半径 6；最小显示级别同资源', () => {
+    const group = selectionGroup(null, false, { ...BATCH, minzoom: 9 });
+
+    expect(group.layers.map(layer => layer.paint)).toMatchObject([
+      { 'fill-color': '#f5222d', 'fill-opacity': 0.12 },
+      { 'line-color': '#f5222d', 'line-width': 2 },
+      { 'circle-color': '#f5222d', 'circle-radius': 6, 'circle-stroke-color': '#ffffff' }
+    ]);
+    expect(group.layers.map(layer => layer.minzoom)).toStrictEqual([9, 9, 9]);
+    expect(selectionGroup(null, false, BATCH).layers.every(layer => !('minzoom' in layer))).toBe(true);
+  });
+
+  it('没有 guid 时不出图层；和选中的那个同时有时画在它下面', () => {
+    expect(selectionGroup(null, false, { ...BATCH, guids: [] })).toStrictEqual({ sources: {}, layers: [] });
+    expect(selectionGroup(SQUARE, false, BATCH).layers.map(({ id }) => id)).toStrictEqual([
+      'selection-batch-fill',
+      'selection-batch-line',
+      'selection-batch-circle',
+      'selection-fill',
+      'selection-line',
+      'selection-circle'
+    ]);
+  });
+
+  it('和资源分组一起组合时通过校验；资源分组里没有这个数据源时组合失败，所以推导方要和资源的显示状态一致', () => {
+    const resources: StyleGroup = {
+      sources: { 'resources-bgdc_dltb': { type: 'vector', tiles: ['http://localhost/{z}/{x}/{y}'] } },
+      layers: []
+    };
+    const model = new StyleModel({ groups: ['resources', 'selection', 'basemap-labels'] });
+
+    expect(() => model.setGroups({ resources, selection: selectionGroup(null, false, BATCH) })).not.toThrow();
+    expect(() => model.setGroups({ resources: { sources: {}, layers: [] } })).toThrow('引用的数据源');
   });
 });

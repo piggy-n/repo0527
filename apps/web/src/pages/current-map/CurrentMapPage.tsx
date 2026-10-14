@@ -10,6 +10,7 @@ import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundaryPanel } from '@/shared/map/boundary/BoundaryPanel';
+import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { CoordinateLocatePanel } from '@/shared/map/location/CoordinateLocatePanel';
@@ -79,6 +80,7 @@ export const CurrentMapPage = defineComponent({
         <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} />
         <MeasureOverlay measure={measure} />
         <LocationOverlay location={location} />
+        <BoxSelectOverlay box={pick.boxDraft.value} />
         <div class={styles.overlay}>
           <div class={styles.resources}>
             <ResourceLayerPanel

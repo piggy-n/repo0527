@@ -12,6 +12,14 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : '未知错误';
 }
 
+// 候选的数量：后端的有总数；框选用渲染要素的是松手时的快照，不说"共"（ADR 0049 第 2 节）
+function countOf({ mode, candidates, pages }: CandidateList): string {
+  if (pages) {
+    return `共 ${pages.total} 个，已列出 ${candidates.length} 个`;
+  }
+  return mode === 'box' ? `地图上已画出的 ${candidates.length} 个` : `共 ${candidates.length} 个`;
+}
+
 function renderRows(code: string, properties: Readonly<FeatureRecord>) {
   return (
     <dl class={styles.rows}>
@@ -74,11 +82,11 @@ export const FeatureDetailPanel = defineComponent({
     };
 
     const renderCandidates = (list: CandidateList, more: MoreStatus) => {
-      const { target, candidates, pages } = list;
-      const count = pages ? `共 ${pages.total} 个，已列出 ${candidates.length} 个` : `共 ${candidates.length} 个`;
+      const { mode, target, candidates } = list;
+      const title = mode === 'box' ? `框选 · ${target.resource.name}` : target.resource.name;
       return (
         <>
-          {renderHeader(target.resource.name, `${target.year} 年 · ${count}`)}
+          {renderHeader(title, `${target.year} 年 · ${countOf(list)}`)}
           <ul class={styles.candidates}>
             {candidates.map((candidate, index) => (
               <li key={candidate.key}>
@@ -171,6 +179,15 @@ export const FeatureDetailPanel = defineComponent({
                 <ElButton link type="primary" onClick={props.pick.retry}>
                   重试
                 </ElButton>
+              </div>
+            </>
+          );
+        case 'too-many':
+          return (
+            <>
+              {renderHeader('框选')}
+              <div class={styles.notice}>
+                {state.target.resource.name}范围内约 {state.estimate} 个要素，请缩小范围
               </div>
             </>
           );

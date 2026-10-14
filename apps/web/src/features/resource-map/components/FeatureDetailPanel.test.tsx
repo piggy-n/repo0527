@@ -43,7 +43,7 @@ function candidate(target: PickResource, index: number, properties: Record<strin
 
 const FIRST = candidate(DLTB, 1, { guid: '1'.repeat(32), dlmc: '水田', bsm: '3201' });
 const SECOND = candidate(DLTB, 2, { guid: '2'.repeat(32), dlmc: '旱地' });
-const LIST: CandidateList = { target: DLTB, candidates: [FIRST, SECOND], pages: null };
+const LIST: CandidateList = { mode: 'pick', target: DLTB, candidates: [FIRST, SECOND], pages: null };
 const POINT: Point = { type: 'Point', coordinates: [119, 33] };
 
 /** 只记调用的拥有者：状态和详情由测试设置 */
@@ -52,6 +52,7 @@ function fakePick(initial: FeaturePickState, initialDetail: FeatureDetailStatus 
   const detail = shallowRef(initialDetail);
   const pick: FeaturePick = {
     state,
+    boxDraft: computed(() => null),
     detail: computed(() => detail.value),
     tools: { [FEATURE_PICK_TOOL]: { persistent: true } },
     choose: vi.fn<FeaturePick['choose']>(),
@@ -166,6 +167,27 @@ describe('FeatureDetailPanel', () => {
       ['name', '某坑塘'],
       ['mj', '120']
     ]);
+  });
+
+  it('框选的列表：标题注明框选；渲染要素的写"地图上已画出的"，后端的写总数', async () => {
+    const box: CandidateList = { ...LIST, mode: 'box' };
+    const { pick, state } = fakePick({ kind: 'candidates', list: box, more: { kind: 'idle' } });
+    const wrapper = mountPanel(pick);
+
+    expect(wrapper.text()).toContain('框选 · 地类图斑');
+    expect(wrapper.text()).toContain('2022 年 · 地图上已画出的 2 个');
+
+    const pages = { geometry: POINT, loaded: 1, total: 45 };
+    state.value = { kind: 'candidates', list: { ...box, pages }, more: { kind: 'idle' } };
+    await nextTick();
+    expect(wrapper.text()).toContain('2022 年 · 共 45 个，已列出 2 个');
+  });
+
+  it('框里要素过多时提示缩小范围', () => {
+    const { pick } = fakePick({ kind: 'too-many', target: DLTB, estimate: 5321 });
+    const wrapper = mountPanel(pick);
+
+    expect(wrapper.text()).toContain('地类图斑范围内约 5321 个要素，请缩小范围');
   });
 
   it('没有结果、识别失败时显示原因，识别失败可以重试', async () => {

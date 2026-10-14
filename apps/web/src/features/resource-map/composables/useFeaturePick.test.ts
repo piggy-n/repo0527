@@ -3,7 +3,15 @@ import { mount } from '@vue/test-utils';
 import type { Point } from 'geojson';
 import { HttpResponse, type JsonBodyType, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
-import type { CameraState, MapInputEvent, MapPointerEvent, RenderedFeature, ToolView, ViewKind } from '@yzt/map-core';
+import type {
+  CameraState,
+  MapInputEvent,
+  MapPointerEvent,
+  RenderedFeature,
+  ScreenPoint,
+  ToolView,
+  ViewKind
+} from '@yzt/map-core';
 import type { CameraControl, CameraOperation, MapContext } from '@yzt/map-vue';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, shallowRef } from 'vue';
@@ -70,6 +78,7 @@ const STATE: ResourceLayersState = {
 };
 
 const DLTB = 'resources-bgdc_dltb';
+const CZCDYD = 'resources-bgdc_czcdyd';
 const SZY = 'resources-szy_kt';
 
 const guid = (index: number) => index.toString(16).padStart(32, '0');
@@ -165,7 +174,9 @@ function setup(zoom = 15, state = STATE, invalid: ReadonlyMap<string, readonly s
   const fake = fakeCamera(zoom);
   const select = vi.fn<MapContext['select']>();
   const map = { useCamera: () => fake.camera, select, ...fake };
-  const resources = { state: shallowRef(state), configErrors: computed(() => invalid) };
+  // 校验结果可以由用例中途改变
+  const errors = shallowRef(invalid);
+  const resources = { state: shallowRef(state), errors, configErrors: computed(() => errors.value) };
   let owner: FeaturePick | undefined;
   const Host = defineComponent({
     setup() {
@@ -618,6 +629,294 @@ describe('useFeaturePick：清除', () => {
     resources.state.value = withDisplay(resources.state.value, 'szy_kt', { checked: false });
     await nextTick();
     expect(kindOf(owner)).toBe('idle');
+  });
+});
+
+function pointer(type: MapPointerEvent['type'], { x, y }: ScreenPoint, button = 0): MapPointerEvent {
+  const modifiers = { shift: false, ctrl: false, alt: false, meta: false };
+  return { type, point: { x, y }, button, clickCount: 1, modifiers };
+}
+
+const FROM: ScreenPoint = { x: 100, y: 100 };
+const TO: ScreenPoint = { x: 200, y: 160 };
+
+type Send = ReturnType<typeof setup>['send'];
+
+// 从 FROM 拖到 TO 松手，松手时框里有这些渲染要素
+function dragBox(send: Send, features: readonly RenderedFeature[] = [], kind: ViewKind = '2d') {
+  send(pointer('down', FROM));
+  send(pointer('move', TO));
+  return send(pointer('up', TO), features, kind);
+}
+
+const manyOf = (sourceId: string, n: number) => Array.from({ length: n }, (_, index) => rendered(sourceId, index));
+
+function layerIds(owner: Owner): string[] {
+  return owner.deriveGroup().layers.map(({ id }) => id);
+}
+
+describe('useFeaturePick：框选', () => {
+  it('点选工具关掉拖动平移和 Shift 框选放大', () => {
+    const { pick } = setup(15);
+
+    expect(pick.gestures).toStrictEqual({ dragPan: false, boxZoom: false });
+  });
+
+  it('拖动不小于 3 像素开始框选，浮层显示框；松手后按框识别，这次手势派生的单击不识别', () => {
+    const { owner, send } = setup(15);
+    // 右键拖动不框选
+    send(pointer('down', FROM, 2));
+    send(pointer('move', TO));
+    expect(owner.boxDraft.value).toBeNull();
+
+    send(pointer('down', FROM));
+    send(pointer('move', { x: 102, y: 100 }));
+    expect(owner.boxDraft.value).toBeNull();
+    send(pointer('move', { x: 103, y: 100 }));
+    expect(owner.boxDraft.value).toStrictEqual({ from: FROM, to: { x: 103, y: 100 } });
+    send(pointer('move', TO));
+    expect(owner.boxDraft.value).toStrictEqual({ from: FROM, to: TO });
+
+    expect(send(pointer('up', TO), [rendered(DLTB, 1), rendered(DLTB, 2)])).toBe(true);
+    expect(owner.boxDraft.value).toBeNull();
+    expect(owner.state.value).toMatchObject({ kind: 'candidates', list: { mode: 'box', pages: null } });
+    expect(candidatesOf(owner).map(candidate => candidate.guid)).toStrictEqual([guid(1), guid(2)]);
+
+    expect(send(click(200, 160), [rendered(DLTB, 3)])).toBe(false);
+    expect(candidatesOf(owner)).toHaveLength(2);
+  });
+
+  it('下一次按下后单击恢复', () => {
+    mockDetail();
+    const { owner, send } = setup(15);
+    dragBox(send, [rendered(DLTB, 1), rendered(DLTB, 2)]);
+
+    send(pointer('down', FROM));
+    send(pointer('up', FROM));
+    send(click(100, 100), [rendered(DLTB, 3)]);
+
+    expect(selectedGuid(owner)).toBe(guid(3));
+  });
+
+  it('Esc 先取消正在画的框、不改变已有的结果，松手也不再识别；没有手势时关闭', () => {
+    const { owner, send } = setup(15);
+    dragBox(send, [rendered(DLTB, 1), rendered(DLTB, 2)]);
+    send(pointer('down', FROM));
+    send(pointer('move', TO));
+
+    send({ type: 'key', key: 'Escape' });
+
+    expect(owner.boxDraft.value).toBeNull();
+    expect(send(pointer('up', TO), [rendered(DLTB, 5)])).toBe(false);
+    expect(candidatesOf(owner)).toHaveLength(2);
+    send({ type: 'key', key: 'Escape' });
+    expect(kindOf(owner)).toBe('idle');
+  });
+
+  it('离开画布、地图移动、窗口失焦时取消这次框选', async () => {
+    const { owner, send, camera } = setup(15);
+    const startDrawing = () => {
+      send(pointer('down', FROM));
+      send(pointer('move', TO));
+      expect(owner.boxDraft.value).not.toBeNull();
+    };
+
+    startDrawing();
+    send(pointer('leave', TO));
+    expect(owner.boxDraft.value).toBeNull();
+
+    startDrawing();
+    camera.value = { ...camera.value, zoom: 15.5 };
+    await nextTick();
+    expect(owner.boxDraft.value).toBeNull();
+
+    startDrawing();
+    window.dispatchEvent(new Event('blur'));
+    expect(owner.boxDraft.value).toBeNull();
+    expect(send(pointer('up', TO), [rendered(DLTB, 1)])).toBe(false);
+    expect(kindOf(owner)).toBe('idle');
+  });
+
+  it('拖动途中关闭或离开点选工具时，正在画的框消失', () => {
+    const { owner, send, pick } = setup(15);
+
+    send(pointer('down', FROM));
+    send(pointer('move', TO));
+    owner.close();
+    expect(owner.boxDraft.value).toBeNull();
+
+    send(pointer('down', FROM));
+    send(pointer('move', TO));
+    pick.deactivate?.();
+    expect(owner.boxDraft.value).toBeNull();
+  });
+
+  it('框里只有一个要素时直接进入详情，不移动相机', () => {
+    mockDetail();
+    const { owner, send, beginCameraOperation } = setup(15);
+
+    dragBox(send, [rendered(DLTB, 1)]);
+
+    expect(selectedGuid(owner)).toBe(guid(1));
+    expect(beginCameraOperation).not.toHaveBeenCalled();
+  });
+
+  it('框里的渲染要素去重后超过 5000 个时提示缩小范围，不请求后端', async () => {
+    const requests = mockIdentify(() => page(0, []));
+    const { owner, send } = setup(15);
+
+    dragBox(send, manyOf(DLTB, 5001));
+    expect(owner.state.value).toMatchObject({ kind: 'too-many', target: { sourceId: DLTB }, estimate: 5001 });
+
+    // 低级别能后端识别的资源超过上限时同样不请求
+    const lower = setup(12);
+    dragBox(lower.send, manyOf(CZCDYD, 5001));
+    expect(lower.owner.state.value).toMatchObject({ kind: 'too-many', target: { sourceId: CZCDYD } });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(requests).toStrictEqual([]);
+  });
+
+  it('14 级以下登记的数据集查后端：框的四角拾取成多边形，按页加载', async () => {
+    const records = Array.from({ length: 30 }, (_, index) => ({ guid: guid(index + 1) }));
+    const requests = mockIdentify((layerCode, pageNum) => {
+      if (layerCode !== 'bgdc_dltb_2022') {
+        return page(0, []);
+      }
+      return pageNum === 1 ? page(45, records) : page(45, [{ guid: guid(99) }]);
+    });
+    const { owner, send } = setup(12);
+
+    dragBox(send);
+
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
+    expect(owner.state.value).toMatchObject({ list: { mode: 'box', pages: { loaded: 1, total: 45 } } });
+    const polygon = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [118.1, 32.9],
+          [118.2, 32.9],
+          [118.2, 32.84],
+          [118.1, 32.84],
+          [118.1, 32.9]
+        ]
+      ]
+    };
+    expect(requests.map(({ layerCode, geometry }) => [layerCode, geometry])).toStrictEqual([
+      ['bgdc_czcdyd_2022', polygon],
+      ['bgdc_dltb_2022', polygon]
+    ]);
+    owner.loadMore();
+    await vi.waitFor(() => expect(candidatesOf(owner)).toHaveLength(31));
+  });
+
+  it('三维视图：能后端识别的资源仍查后端', async () => {
+    const requests = mockIdentify(layerCode =>
+      layerCode === 'bgdc_dltb_2022' ? page(2, [{ guid: guid(1) }, { guid: guid(2) }]) : page(0, [])
+    );
+    const { owner, send } = setup(16);
+
+    dragBox(send, [], '3d');
+
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
+    expect(requests.map(({ layerCode }) => layerCode)).toStrictEqual(['bgdc_czcdyd_2022', 'bgdc_dltb_2022']);
+  });
+
+  it('框选列表时会话选中列表里的全部要素，进入一个的详情时只有它，返回后恢复；单击的列表不算选中', async () => {
+    mockDetail();
+    const { owner, send, select } = setup(15);
+    const both = [
+      { sourceId: DLTB, featureId: guid(1) },
+      { sourceId: DLTB, featureId: guid(2) }
+    ];
+
+    dragBox(send, [rendered(DLTB, 1), rendered(DLTB, 2)]);
+    await nextTick();
+    expect(select).toHaveBeenLastCalledWith(both);
+
+    const [first] = candidatesOf(owner);
+    if (!first) {
+      throw new Error('应有候选');
+    }
+    owner.choose(first);
+    await nextTick();
+    expect(select).toHaveBeenLastCalledWith([both[0]]);
+    owner.back();
+    await nextTick();
+    expect(select).toHaveBeenLastCalledWith(both);
+
+    send(pointer('down', FROM));
+    send(pointer('up', FROM));
+    send(click(100, 100), [rendered(DLTB, 3), rendered(DLTB, 4)]);
+    await nextTick();
+    expect(select).toHaveBeenLastCalledWith([]);
+  });
+
+  it('批量高亮：框选列表时在资源的瓦片上按 guid 过滤，进入详情时收起、返回后恢复', () => {
+    mockDetail();
+    const { owner, send } = setup(15);
+    dragBox(send, [rendered(DLTB, 1), rendered(DLTB, 2)]);
+
+    const group = owner.deriveGroup();
+    expect(group.sources).toStrictEqual({});
+    expect(group.layers.map(({ id }) => id)).toStrictEqual([
+      'selection-batch-fill',
+      'selection-batch-line',
+      'selection-batch-circle'
+    ]);
+    expect(group.layers[0]).toMatchObject({
+      source: DLTB,
+      'source-layer': 'bgdc_dltb_2022',
+      filter: ['all', expect.anything(), ['match', ['get', 'guid'], [guid(1), guid(2)], true, false]]
+    });
+
+    const [first] = candidatesOf(owner);
+    if (!first) {
+      throw new Error('应有候选');
+    }
+    owner.choose(first);
+    expect(layerIds(owner)).toStrictEqual([]);
+    owner.back();
+    expect(layerIds(owner)).toHaveLength(3);
+
+    // 单击得到的列表不批量高亮
+    send(pointer('down', FROM));
+    send(pointer('up', FROM));
+    send(click(100, 100), [rendered(DLTB, 3), rendered(DLTB, 4)]);
+    expect(kindOf(owner)).toBe('candidates');
+    expect(layerIds(owner)).toStrictEqual([]);
+  });
+
+  it('提示要素过多时，这个资源取消勾选就清除', async () => {
+    const { owner, send, resources } = setup(15);
+    dragBox(send, manyOf(DLTB, 5001));
+
+    resources.state.value = withDisplay(resources.state.value, 'szy_kt', { opacity: 0.4 });
+    await nextTick();
+    expect(kindOf(owner)).toBe('too-many');
+    resources.state.value = withDisplay(resources.state.value, 'bgdc_dltb', { checked: false });
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+  });
+
+  it('资源不再显示时批量高亮立刻不出图层，不等列表清除，和资源分组一起变化', () => {
+    const { owner, send, resources } = setup(15);
+    dragBox(send, [rendered(DLTB, 1), rendered(DLTB, 2)]);
+
+    resources.state.value = withDisplay(resources.state.value, 'bgdc_dltb', { checked: false });
+
+    expect(kindOf(owner)).toBe('candidates');
+    expect(layerIds(owner)).toStrictEqual([]);
+  });
+
+  it('列表显示期间资源被校验拦下时不出批量高亮；别的资源被拦下不影响', () => {
+    const { owner, send, resources } = setup(15);
+    dragBox(send, [rendered(DLTB, 1), rendered(DLTB, 2)]);
+
+    resources.errors.value = new Map([['bgdc_czcdyd', ['图层不合法']]]);
+    expect(layerIds(owner)).toHaveLength(3);
+    resources.errors.value = new Map([['bgdc_dltb', ['图层不合法']]]);
+    expect(layerIds(owner)).toStrictEqual([]);
   });
 });
 

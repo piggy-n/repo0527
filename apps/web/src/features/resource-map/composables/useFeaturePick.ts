@@ -1,10 +1,13 @@
+import { useEventListener } from '@vueuse/core';
 import type { Geometry, Point, Polygon } from 'geojson';
 import type {
   CameraState,
   FitBoundsOptions,
   MapInputEvent,
   MapTool,
+  ScreenBox,
   ScreenPoint,
+  SelectedFeature,
   StyleGroup,
   ToolView
 } from '@yzt/map-core';
@@ -20,22 +23,34 @@ import {
   shallowRef,
   watch
 } from 'vue';
+import {
+  acceptsClick,
+  type BoxGesture,
+  cancelBox,
+  drawingBox,
+  moveBox,
+  NO_BOX_GESTURE,
+  pressBox,
+  releaseBox
+} from '@/shared/map/box-select/box-gesture';
 import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
 import { type FeatureDetail, type FeaturePage, queryFeaturesAt } from '../api';
 import {
+  type BoxTask,
   featureBounds,
-  type IdentifyTask,
   PICK_PAGE_SIZE,
   type PickCandidate,
   type PickResource,
   pickResources,
+  planBox,
   planIdentify,
   queryCapabilityOf,
   serverCandidates
 } from '../feature-query';
 import { type FeatureKey, useFeatureDetailQuery } from '../queries';
 import type { ResourceLayersState } from '../resource-layers';
-import { selectionGroup } from '../selection-style';
+import { type BatchHighlight, selectionGroup } from '../selection-style';
+import { resourceStyle, sourceLayerOf } from '../style-registry';
 import type { ResourceLayers } from './useResourceLayers';
 
 /** 后端识别的分页，用来加载更多 */
@@ -47,8 +62,12 @@ export interface ServerPages {
   readonly total: number;
 }
 
+/** 结果来自单击还是框选（ADR 0049 第 3 节） */
+export type PickMode = 'pick' | 'box';
+
 /** 一个资源的候选；渲染要素的没有分页 */
 export interface CandidateList {
+  readonly mode: PickMode;
   readonly target: PickResource;
   readonly candidates: readonly PickCandidate[];
   readonly pages: ServerPages | null;
@@ -74,6 +93,8 @@ export type FeaturePickState =
   | { readonly kind: 'empty' }
   /** 查后端失败，可以从这个资源继续识别 */
   | { readonly kind: 'failed'; readonly target: PickResource; readonly error: unknown }
+  /** 框里这个资源的渲染要素超过估数的上限，没有请求后端 */
+  | { readonly kind: 'too-many'; readonly target: PickResource; readonly estimate: number }
   | { readonly kind: 'candidates'; readonly list: CandidateList; readonly more: MoreStatus }
   /** back 为 null 时没有可返回的列表 */
   | { readonly kind: 'detail'; readonly candidate: PickCandidate; readonly back: PickReturn | null };
@@ -86,9 +107,11 @@ export type FeatureDetailStatus =
   | { readonly kind: 'ready'; readonly detail: FeatureDetail }
   | { readonly kind: 'failed'; readonly error: unknown };
 
-/** 选择的拥有者（ADR 0047）：页面登记点选工具、绑定 selection 分组，详情面板通过 props 拿到它 */
+/** 选择的拥有者（ADR 0047、0049）：页面登记点选工具、绑定 selection 分组，详情面板和框选的浮层通过 props 拿到它 */
 export interface FeaturePick {
   readonly state: Readonly<ShallowRef<FeaturePickState>>;
+  /** 拖动中正在画的框，交给框选的浮层；没有在框选时为 null */
+  readonly boxDraft: ComputedRef<ScreenBox | null>;
   /** 详情的加载状态，只在 detail 时有值 */
   readonly detail: ComputedRef<FeatureDetailStatus | null>;
   /** 交给 registerTools */
@@ -126,6 +149,10 @@ const IDENTIFYING: FeaturePickState = Object.freeze({ kind: 'identifying' });
 const EMPTY: FeaturePickState = Object.freeze({ kind: 'empty' });
 const MORE_IDLE: MoreStatus = Object.freeze({ kind: 'idle' });
 
+function identityOf({ target, guid }: PickCandidate): SelectedFeature {
+  return { sourceId: target.sourceId, featureId: guid };
+}
+
 // 资源仍然勾选、年份没变、还在目录里
 function isShown(state: ResourceLayersState, target: PickResource): boolean {
   const { code } = target.resource;
@@ -155,8 +182,10 @@ export function useFeaturePick(
   // 识别、加载更多各是一条可替换的通道（ADR 0039）
   const identifications = new LatestController();
   const pages = new LatestController();
-  // 识别失败时还没识别的资源，重试时从失败的那个继续
-  let remaining: readonly IdentifyTask[] = [];
+  // 识别失败时还没识别的资源和识别的方式，重试时从失败的那个继续
+  let remaining: { readonly tasks: readonly BoxTask[]; readonly mode: PickMode } | null = null;
+  // 拖动框选的手势（ADR 0049 第 1 节）
+  const gesture = shallowRef<BoxGesture>(NO_BOX_GESTURE);
   // 详情到了以后要执行的定位
   let pendingLocate: CameraOperation | null = null;
   let flashTimer: ReturnType<typeof setInterval> | undefined;
@@ -215,10 +244,16 @@ export function useFeaturePick(
     return query.isError.value ? { kind: 'failed', error: query.error.value } : { kind: 'loading' };
   });
 
-  // 会话只存选中要素的身份（ADR 0047 第 4 节）；在下一轮调度写入，作用域销毁时（地图上下文可能已经释放）不再写
-  watch(selected, candidate =>
-    map.select(candidate ? [{ sourceId: candidate.target.sourceId, featureId: candidate.guid }] : [])
-  );
+  // 会话只存选中要素的身份（ADR 0047 第 4 节）：详情里的那一个，或框选列表里已取到的全部（ADR 0049 第 3 节）
+  const selectedFeatures = computed((): SelectedFeature[] => {
+    const current = state.value;
+    if (current.kind === 'detail') {
+      return [identityOf(current.candidate)];
+    }
+    return current.kind === 'candidates' && current.list.mode === 'box' ? current.list.candidates.map(identityOf) : [];
+  });
+  // 在下一轮调度写入，作用域销毁时（地图上下文可能已经释放）不再写
+  watch(selectedFeatures, features => map.select(features));
 
   const fitTo = (operation: Pick<CameraOperation, 'run'>, geometry: Geometry) => {
     const bounds = featureBounds(geometry);
@@ -241,21 +276,26 @@ export function useFeaturePick(
   const showDetail = (candidate: PickCandidate, back: PickReturn | null, locate: boolean) =>
     setState({ kind: 'detail', candidate, back }, locate ? map.beginCameraOperation() : null);
 
-  const found = (target: PickResource, candidates: readonly PickCandidate[], serverPages: ServerPages | null) => {
+  const found = (list: CandidateList) => {
+    const { candidates, pages: serverPages } = list;
     const [only] = candidates;
     if (only && candidates.length === 1 && !hasMorePages(serverPages)) {
-      // 后端识别出的要素可能很小或不在眼前，定位并闪烁；直接点中的渲染要素就在眼前，不移动相机
+      // 后端识别出的要素可能很小或不在眼前，定位并闪烁；直接点中、框中的渲染要素就在眼前，不移动相机
       showDetail(only, null, serverPages !== null);
       return;
     }
-    setState({ kind: 'candidates', list: { target, candidates, pages: serverPages }, more: MORE_IDLE });
+    setState({ kind: 'candidates', list, more: MORE_IDLE });
   };
 
-  // 从上到下逐个资源识别，第一个有结果的胜出（ADR 0047 第 2 节）
-  const run = async (tasks: readonly IdentifyTask[], signal: AbortSignal) => {
+  // 从上到下逐个资源识别，第一个有结果的胜出（ADR 0047 第 2 节、ADR 0049 第 2 节）
+  const run = async (tasks: readonly BoxTask[], mode: PickMode, signal: AbortSignal) => {
     for (const [index, task] of tasks.entries()) {
+      if (task.kind === 'too-many') {
+        setState({ kind: 'too-many', target: task.target, estimate: task.estimate });
+        return;
+      }
       if (task.kind === 'rendered') {
-        found(task.target, task.candidates, null);
+        found({ mode, target: task.target, candidates: task.candidates, pages: null });
         return;
       }
       let page: FeaturePage;
@@ -265,7 +305,7 @@ export function useFeaturePick(
         page = await queryFeaturesAt(task.target.layerCode, task.geometry, first, signal);
       } catch (error) {
         if (!signal.aborted) {
-          remaining = tasks.slice(index);
+          remaining = { tasks: tasks.slice(index), mode };
           setState({ kind: 'failed', target: task.target, error });
         }
         return;
@@ -275,28 +315,39 @@ export function useFeaturePick(
       }
       const candidates = serverCandidates(task.target, page.list);
       if (candidates.length > 0) {
-        found(task.target, candidates, { geometry: task.geometry, loaded: 1, total: page.total });
+        const serverPages = { geometry: task.geometry, loaded: 1, total: page.total };
+        found({ mode, target: task.target, candidates, pages: serverPages });
         return;
       }
     }
     setState(EMPTY);
   };
 
-  const identify = (point: ScreenPoint, view: ToolView) => {
+  // 新的单击或框选作废上一次；屏幕上的查询在松手时做完，之后地图移动不影响结果
+  const start = (mode: PickMode, plan: (targets: readonly PickResource[], zoom: number) => BoxTask[]) => {
     const signal = identifications.next();
     pages.abort();
     const { zoom } = camera.value;
-    const targets = pickResources(resources.state.value, resources.configErrors.value, zoom);
-    // 屏幕上的查询在点击时做完，之后地图移动不影响结果
-    const tasks = planIdentify(targets, point, zoom, view);
+    const tasks = plan(pickResources(resources.state.value, resources.configErrors.value, zoom), zoom);
     setState(IDENTIFYING);
-    void run(tasks, signal);
+    void run(tasks, mode, signal);
+  };
+
+  const identify = (point: ScreenPoint, view: ToolView) =>
+    start('pick', (targets, zoom) => planIdentify(targets, point, zoom, view));
+
+  const identifyBox = (box: ScreenBox, view: ToolView) =>
+    start('box', (targets, zoom) => planBox(targets, box, zoom, view));
+
+  const cancelGesture = () => {
+    gesture.value = cancelBox(gesture.value);
   };
 
   const close = () => {
     identifications.abort();
     pages.abort();
-    remaining = [];
+    remaining = null;
+    gesture.value = NO_BOX_GESTURE;
     setState(IDLE);
   };
 
@@ -358,10 +409,10 @@ export function useFeaturePick(
 
   const retry = () => {
     const current = state.value;
-    if (current.kind === 'failed') {
+    if (current.kind === 'failed' && remaining) {
       const signal = identifications.next();
       setState(IDENTIFYING);
-      void run(remaining, signal);
+      void run(remaining.tasks, remaining.mode, signal);
       return;
     }
     if (detail.value?.kind === 'failed') {
@@ -393,6 +444,11 @@ export function useFeaturePick(
             close();
           }
           break;
+        case 'too-many':
+          if (!isShown(next, current.target)) {
+            close();
+          }
+          break;
         case 'detail':
           if (!isShown(next, current.candidate.target)) {
             close();
@@ -407,21 +463,85 @@ export function useFeaturePick(
     }
   );
 
+  // 拖动框选时地图移动（滚轮缩放等）、窗口失焦都取消这次手势（ADR 0049 第 1 节）
+  watch(camera, cancelGesture);
+  useEventListener('blur', cancelGesture);
+
   const handleInput = (event: MapInputEvent, view: ToolView): boolean => {
-    // 拖动后的松手不算单击；双击的第二下忽略
-    if (event.type === 'click' && event.button === 0 && event.clickCount === 1) {
-      identify(event.point, view);
-      return true;
-    }
-    if (event.type === 'key' && event.key === 'Escape') {
-      close();
-      return true;
+    switch (event.type) {
+      case 'down':
+        if (event.button === 0) {
+          gesture.value = pressBox(event.point);
+        }
+        return event.button === 0;
+      case 'move':
+        gesture.value = moveBox(gesture.value, event.point);
+        return gesture.value.kind !== 'idle';
+      case 'up': {
+        if (event.button !== 0) {
+          return false;
+        }
+        const { gesture: next, box } = releaseBox(gesture.value, event.point);
+        gesture.value = next;
+        if (box) {
+          identifyBox(box, view);
+        }
+        return box !== null;
+      }
+      case 'click':
+        // 双击的第二下、框选或取消的手势派生的单击都不识别
+        if (event.button !== 0 || event.clickCount !== 1 || !acceptsClick(gesture.value)) {
+          return false;
+        }
+        identify(event.point, view);
+        return true;
+      case 'leave':
+        cancelGesture();
+        return false;
+      case 'key':
+        if (event.key !== 'Escape') {
+          return false;
+        }
+        // 有手势时只取消这次框选，不改变已有的结果
+        if (gesture.value.kind === 'idle') {
+          close();
+        } else {
+          cancelGesture();
+        }
+        return true;
+      case 'dblclick':
+        break;
     }
     return false;
   };
 
-  // 常驻模式、默认箭头光标；5C.6a 不关拖动平移（ADR 0047 第 6 节）；离开点选工具时清除
-  const pickTool: MapTool = { persistent: true, cursor: 'default', deactivate: close, handleInput };
+  // 常驻模式、默认箭头光标；拖动用来框选，关掉拖动平移和 Shift 框选放大（ADR 0049 第 1 节）；离开点选工具时清除
+  const pickTool: MapTool = {
+    persistent: true,
+    cursor: 'default',
+    gestures: { dragPan: false, boxZoom: false },
+    deactivate: close,
+    handleInput
+  };
+
+  // 框选列表的批量高亮引用资源分组的数据源：资源不再显示时不出图层，和资源分组在同一轮变化（ADR 0049 第 3 节）
+  const batchHighlight = (): BatchHighlight | null => {
+    const current = state.value;
+    if (current.kind !== 'candidates' || current.list.mode !== 'box') {
+      return null;
+    }
+    const { target, candidates } = current.list;
+    const { code } = target.resource;
+    if (!isShown(resources.state.value, target) || resources.configErrors.value.has(code)) {
+      return null;
+    }
+    return {
+      sourceId: target.sourceId,
+      sourceLayer: sourceLayerOf(code, target.year),
+      minzoom: resourceStyle(code).minzoom,
+      guids: candidates.map(({ guid }) => guid)
+    };
+  };
 
   onScopeDispose(() => {
     identifications[Symbol.dispose]();
@@ -431,6 +551,7 @@ export function useFeaturePick(
 
   return {
     state: shallowReadonly(state),
+    boxDraft: computed(() => drawingBox(gesture.value)),
     detail,
     tools: { [FEATURE_PICK_TOOL]: pickTool },
     choose,
@@ -441,7 +562,7 @@ export function useFeaturePick(
     close,
     deriveGroup: () => {
       const status = detail.value;
-      return selectionGroup(status?.kind === 'ready' ? status.detail.geometry : null, flashing.value);
+      return selectionGroup(status?.kind === 'ready' ? status.detail.geometry : null, flashing.value, batchHighlight());
     }
   };
 }
