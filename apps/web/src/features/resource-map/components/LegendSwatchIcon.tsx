@@ -1,4 +1,5 @@
 import { defineComponent, type PropType } from 'vue';
+import { patternPreviewSvg } from '../fill-patterns';
 import type { LegendSwatch } from '../legend';
 import styles from './LegendSwatchIcon.module.scss';
 
@@ -12,10 +13,18 @@ export const LegendSwatchIcon = defineComponent({
     return () => {
       const { swatch } = props;
       if (swatch.geometry === 'fill') {
+        // 花纹平铺成背景，叠在填充色上面（同地图上的纹理图层）
+        const preview = swatch.pattern && patternPreviewSvg(swatch.pattern.name, swatch.pattern.color);
+        const pattern = preview
+          ? {
+              backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(preview.svg)}")`,
+              backgroundSize: `${preview.size}px ${preview.size}px`
+            }
+          : {};
         return (
           <span
             class={[styles.swatch, styles.fill]}
-            style={{ backgroundColor: swatch.fill, borderColor: swatch.outline }}
+            style={{ backgroundColor: swatch.fill, borderColor: swatch.outline, ...pattern }}
             aria-hidden="true"
             data-swatch
           />

@@ -11,14 +11,20 @@ import {
 import type { ResourceLayersState } from './resource-layers';
 import { noSymbolOverride, type ResourceSymbolOverride, type SymbolMode, type SymbolOverrideOf } from './resource-symbols';
 import { classSymbol, resourceStyle, symbolModeOf, uniformSymbol } from './style-registry';
-import type { ResourceSymbol } from './symbols';
+import type { FillPattern } from './fill-patterns';
+import { isFillPattern, type ResourceSymbol } from './symbols';
 
 // 图例的推导（ADR 0043）：输入是显示状态、样式登记表和符号覆盖，不读地图；
 // 预览取自分组推导用的同一份符号（uniformSymbol、classSymbol，ADR 0044 第 4 节）
 
-/** 一个符号的预览：面是填充加描边，线是一段线，点是带描边的圆点 */
+/** 一个符号的预览：面是填充加描边（有花纹时叠上花纹），线是一段线，点是带描边的圆点 */
 export type LegendSwatch =
-  | { readonly geometry: 'fill'; readonly fill: string; readonly outline: string }
+  | {
+      readonly geometry: 'fill';
+      readonly fill: string;
+      readonly outline: string;
+      readonly pattern?: { readonly name: FillPattern; readonly color: string };
+    }
   | { readonly geometry: 'line'; readonly color: string }
   | { readonly geometry: 'circle'; readonly fill: string; readonly stroke: string };
 
@@ -57,9 +63,11 @@ export type LegendEntry =
 /** 符号的预览 */
 export function swatchOf(symbol: ResourceSymbol): LegendSwatch {
   if (symbol.geometry === 'fill') {
-    // 纹理、描边宽度和线型的预览在 5C.5c-3、5D
+    // 描边宽度和线型的预览在 5D
     const fill = symbol.fillStyle === 'none' ? 'rgba(0, 0, 0, 0)' : symbol.fillColor;
-    return { geometry: 'fill', fill, outline: symbol.outlineColor };
+    const { fillStyle, patternColor } = symbol;
+    const pattern = isFillPattern(fillStyle) ? { pattern: { name: fillStyle, color: patternColor } } : {};
+    return { geometry: 'fill', fill, outline: symbol.outlineColor, ...pattern };
   }
   if (symbol.geometry === 'line') {
     return { geometry: 'line', color: symbol.color };

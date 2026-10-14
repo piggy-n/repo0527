@@ -140,6 +140,41 @@ function imageOf(pattern: FillPattern, band: 0 | 1 | 2): StyleImage {
   return image;
 }
 
+// 图例预览的图块边长（CSS 像素）：比地图上密，小色块里也看得出花纹；紧凑网格 12（同旧项目的 LEGEND_PATTERN_TILE_SIZE）
+const PREVIEW_TILES: Readonly<Record<FillPattern, number>> = {
+  horizontal: 8,
+  vertical: 8,
+  cross: 8,
+  diagonal: 8,
+  backDiagonal: 8,
+  xCross: 8,
+  dense: 12,
+  dot: 8
+};
+
+/** 图例里的花纹预览：一个图块的 SVG 和它的边长，按同一份形状数据画（ADR 0045 第 3 节），平铺成背景 */
+export function patternPreviewSvg(pattern: FillPattern, color: string): { readonly svg: string; readonly size: number } {
+  const shape = PATTERN_SHAPES[pattern];
+  const size = PREVIEW_TILES[pattern];
+  const step = size / shape.divisions;
+  const centers = Array.from({ length: shape.divisions }, (_, index) => (index + 0.5) * step);
+  // 斜线要从图块外面画进来，平铺后接缝处才不断开
+  const offsets = Array.from({ length: shape.divisions * 3 + 1 }, (_, index) => index * step - size);
+  const paths: Record<PatternLine, () => string[]> = {
+    horizontal: () => centers.map(y => `M0 ${y}H${size}`),
+    vertical: () => centers.map(x => `M${x} 0V${size}`),
+    diagonal: () => offsets.map(c => `M${c} 0L${c + size} ${size}`),
+    backDiagonal: () => offsets.map(c => `M${c + size} 0L${c} ${size}`)
+  };
+  const lines = shape.lines.flatMap(line => paths[line]());
+  const dots = shape.dots ? centers.flatMap(x => centers.map(y => `<circle cx="${x}" cy="${y}" r="0.8"/>`)) : [];
+  const path = lines.length > 0 ? `<path d="${lines.join('')}"/>` : '';
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" ` +
+    `stroke="${color}" stroke-width="0.8" fill="${color}">${path}${dots.join('')}</svg>`;
+  return { svg, size };
+}
+
 /** 这些花纹三档疏密的图片，按 ID；withBlank 时加上透明图片 */
 export function patternImages(patterns: Iterable<FillPattern>, withBlank: boolean): StyleImages {
   const images: Record<string, StyleImage> = withBlank ? { [BLANK_PATTERN_IMAGE_ID]: BLANK_IMAGE } : {};

@@ -200,7 +200,11 @@ export function normalizeSize(kind: SizeKind, size: SymbolSize): SymbolSize | nu
 
 /** 输入框里的自定义大小：按步长取整；空、不是数、越界时为 null */
 export function parseSize(kind: SizeKind, text: string): number | null {
-  // Number 会去掉首尾空格；空字符串是 0：点和线小于下限，面的描边是"无描边"
+  // 空字符串转成数是 0，面的描边会被当成"无描边"
+  if (text.trim() === '') {
+    return null;
+  }
+  // Number 会去掉首尾空格
   const size = normalizeSize(kind, Number(text));
   return typeof size === 'number' ? size : null;
 }

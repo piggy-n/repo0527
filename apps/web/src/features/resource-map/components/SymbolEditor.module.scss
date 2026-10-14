@@ -42,6 +42,13 @@
   color: var(--color-danger-text);
 }
 
+// 填充方式的选项：预览在文字前面
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
 .footer {
   display: flex;
   justify-content: flex-end;

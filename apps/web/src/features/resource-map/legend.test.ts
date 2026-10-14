@@ -214,6 +214,23 @@ describe('legendEntries', () => {
     });
   });
 
+  it('有花纹的面：预览带上花纹和纹理颜色；分类样式的取值也一样', () => {
+    const overrides = new Map<string, ResourceSymbolOverride>([
+      ['szy_kt', { uniform: { fillStyle: 'xCross', patternColor: 'rgba(0, 0, 0, 1)' } }],
+      ['bgdc_dltb', { items: { '0101': { fillStyle: 'dot' } } }]
+    ]);
+    const entries = legendEntries(ALL, new Map(), code => overrides.get(code));
+
+    expect(entryOf(entries, 'szy_kt')).toMatchObject({
+      swatch: { pattern: { name: 'xCross', color: 'rgba(0, 0, 0, 1)' } }
+    });
+    const dltb = entryOf(entries, 'bgdc_dltb');
+    expect(dltb.kind === 'landuse' && dltb.swatches.get('0101')).toMatchObject({
+      pattern: { name: 'dot', color: 'rgb(248, 208, 114)' }
+    });
+    expect(dltb.kind === 'landuse' && dltb.swatches.get('0102')).not.toHaveProperty('pattern');
+  });
+
   it('调整叠放顺序不改变颜色', () => {
     const reordered = { ...ALL, order: ALL.order.toReversed() };
 

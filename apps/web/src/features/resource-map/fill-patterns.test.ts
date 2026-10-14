@@ -8,7 +8,8 @@ import {
   PATTERN_PIXEL_RATIO,
   PATTERN_SHAPES,
   patternImageId,
-  patternImages
+  patternImages,
+  patternPreviewSvg
 } from './fill-patterns';
 
 const BANDS = [0, 1, 2] as const;
@@ -31,6 +32,31 @@ function coverage(image: StyleImage): number {
   }
   return inside / (image.width * image.height);
 }
+
+// 预览里的线段数（每段以 M 开头）和点数
+const countOf = (svg: string) => ({
+  segments: (svg.match(/M/g) ?? []).length,
+  dots: (svg.match(/<circle/g) ?? []).length
+});
+
+describe('图例的花纹预览', () => {
+  it('按同一份形状数据画：横线、竖线每格一条，斜线从图块外画进来，点阵每格一个；颜色就是纹理颜色', () => {
+    const horizontal = patternPreviewSvg('horizontal', 'rgba(0, 0, 255, 0.5)');
+    expect(horizontal.size).toBe(8);
+    expect(horizontal.svg).toContain('stroke="rgba(0, 0, 255, 0.5)"');
+    expect(horizontal.svg).toContain('M0 2H8M0 6H8');
+    expect(countOf(patternPreviewSvg('cross', '#000').svg)).toStrictEqual({ segments: 4, dots: 0 });
+    expect(countOf(patternPreviewSvg('xCross', '#000').svg)).toStrictEqual({ segments: 14, dots: 0 });
+    expect(countOf(patternPreviewSvg('dot', '#000').svg)).toStrictEqual({ segments: 0, dots: 4 });
+  });
+
+  it('紧凑网格用 12 像素的图块，每个方向 4 条线', () => {
+    const dense = patternPreviewSvg('dense', '#000');
+
+    expect(dense.size).toBe(12);
+    expect(countOf(dense.svg)).toStrictEqual({ segments: 8, dots: 0 });
+  });
+});
 
 describe('花纹的图片', () => {
   it('ID 以 resources 分组为前缀、带图块边长；紧凑网格的疏档和中档是同一张', () => {

@@ -1,10 +1,15 @@
 import { ElButton, ElColorPicker, ElInput, ElOption, ElRadioButton, ElRadioGroup, ElSelect } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
+import { swatchOf } from '../legend';
 import { RESOURCE_PALETTE } from '../palette';
 import type { SymbolTarget } from '../resource-symbols';
 import {
   type ColorField,
+  FILL_STYLE_NAMES,
+  FILL_STYLES,
+  isFillPattern,
+  type LineDash,
   LINE_DASH_NAMES,
   LINE_DASHES,
   parseSize,
@@ -12,19 +17,30 @@ import {
   SIZE_LEVELS,
   SIZE_REFERENCES,
   sizePixels,
+  type ResourceSymbol,
   type SymbolOverride,
   type SymbolSize
 } from '../symbols';
+import { LegendSwatchIcon } from './LegendSwatchIcon';
 import styles from './SymbolEditor.module.scss';
 
 const PREDEFINE = [...RESOURCE_PALETTE, '#FFFFFF', '#000000'];
 const CUSTOM = 'custom';
 const STROKE_WIDTHS: readonly number[] = POINT_STROKE_WIDTHS;
 
-type SizeKey = 'size' | 'width';
+type SizeKey = 'size' | 'width' | 'outlineWidth';
 
 function sizePatch(key: SizeKey, size: SymbolSize): SymbolOverride {
-  return key === 'size' ? { size } : { width: size };
+  if (key === 'size') {
+    return { size };
+  }
+  return key === 'width' ? { width: size } : { outlineWidth: size };
+}
+
+type DashKey = 'dash' | 'outlineDash';
+
+function dashPatch(key: DashKey, dash: LineDash): SymbolOverride {
+  return key === 'dash' ? { dash } : { outlineDash: dash };
 }
 
 function colorPatch(field: ColorField, color: string): SymbolOverride {
@@ -48,14 +64,17 @@ export const SymbolEditor = defineComponent({
     const symbol = computed(() => props.symbols.symbolOf(props.target));
     const set = (patch: SymbolOverride) => props.symbols.setSymbol(props.target, patch);
 
-    // 点的半径、线的线宽；面没有大小
+    // 点的半径、线的线宽、面的描边宽度
     const sizeField = computed(() => {
       const value = symbol.value;
       if (value?.geometry === 'circle') {
-        return { geometry: 'circle', key: 'size', label: '大小', size: value.size } as const;
+        return { kind: 'circle', key: 'size', label: '大小', size: value.size } as const;
       }
       if (value?.geometry === 'line') {
-        return { geometry: 'line', key: 'width', label: '线宽', size: value.width } as const;
+        return { kind: 'line', key: 'width', label: '线宽', size: value.width } as const;
+      }
+      if (value?.geometry === 'fill') {
+        return { kind: 'outline', key: 'outlineWidth', label: '描边宽度', size: value.outlineWidth } as const;
       }
       return null;
     });
@@ -66,7 +85,7 @@ export const SymbolEditor = defineComponent({
     const invalid = ref(false);
     const resetDraft = () => {
       const field = sizeField.value;
-      draft.value = field ? String(sizePixels(field.geometry, field.size)) : '';
+      draft.value = field ? String(sizePixels(field.kind, field.size)) : '';
       invalid.value = false;
     };
     watch(
@@ -101,14 +120,14 @@ export const SymbolEditor = defineComponent({
       if (!field) {
         return;
       }
-      const size = parseSize(field.geometry, draft.value);
+      const size = parseSize(field.kind, draft.value);
       invalid.value = size === null;
       if (size === null) {
         return;
       }
       draft.value = String(size);
       // 和当前大小的像素相同时不提交：档位换成同样像素的自定义值只会多一条覆盖
-      if (size !== sizePixels(field.geometry, field.size)) {
+      if (size !== sizePixels(field.kind, field.size)) {
         set(sizePatch(field.key, size));
       }
     };
@@ -124,7 +143,7 @@ export const SymbolEditor = defineComponent({
       if (!field) {
         return [];
       }
-      const { min, max } = SIZE_REFERENCES[field.geometry];
+      const { min, max } = SIZE_REFERENCES[field.kind];
       const rows = [
         <div key="size" class={styles.row}>
           <span class={styles.label}>{field.label}</span>
@@ -189,6 +208,52 @@ export const SymbolEditor = defineComponent({
       </div>
     );
 
+    const renderDash = (label: string, key: DashKey, value: LineDash) => (
+      <div key={key} class={styles.row}>
+        <span class={styles.label}>{label}</span>
+        <ElSelect
+          class={styles.select}
+          size="small"
+          modelValue={value}
+          onUpdate:modelValue={(name: unknown) => {
+            const dash = LINE_DASH_NAMES.find(item => item === name);
+            if (dash) {
+              set(dashPatch(key, dash));
+            }
+          }}>
+          {LINE_DASH_NAMES.map(dash => (
+            <ElOption key={dash} value={dash} label={LINE_DASHES[dash].label} />
+          ))}
+        </ElSelect>
+      </div>
+    );
+
+    // 填充方式：选项带预览，按当前的颜色画出这种填充方式的样子
+    const renderFillStyle = (value: Extract<ResourceSymbol, { geometry: 'fill' }>) => (
+      <div key="fillStyle" class={styles.row}>
+        <span class={styles.label}>填充方式</span>
+        <ElSelect
+          class={styles.select}
+          size="small"
+          modelValue={value.fillStyle}
+          onUpdate:modelValue={(name: unknown) => {
+            const fillStyle = FILL_STYLE_NAMES.find(item => item === name);
+            if (fillStyle) {
+              set({ fillStyle });
+            }
+          }}>
+          {FILL_STYLE_NAMES.map(fillStyle => (
+            <ElOption key={fillStyle} value={fillStyle} label={FILL_STYLES[fillStyle]}>
+              <span class={styles.option} data-fill-style={fillStyle}>
+                <LegendSwatchIcon swatch={swatchOf({ ...value, fillStyle })} />
+                {FILL_STYLES[fillStyle]}
+              </span>
+            </ElOption>
+          ))}
+        </ElSelect>
+      </div>
+    );
+
     const renderFields = (): VNode[] => {
       const value = symbol.value;
       if (value?.geometry === 'circle') {
@@ -220,27 +285,19 @@ export const SymbolEditor = defineComponent({
         return [
           renderColor('颜色', 'color', value.color),
           ...renderSize(),
-          <div key="dash" class={styles.row}>
-            <span class={styles.label}>线型</span>
-            <ElSelect
-              class={styles.select}
-              size="small"
-              modelValue={value.dash}
-              onUpdate:modelValue={(name: unknown) => {
-                const dash = LINE_DASH_NAMES.find(item => item === name);
-                if (dash) {
-                  set({ dash });
-                }
-              }}>
-              {LINE_DASH_NAMES.map(dash => (
-                <ElOption key={dash} value={dash} label={LINE_DASHES[dash].label} />
-              ))}
-            </ElSelect>
-          </div>
+          renderDash('线型', 'dash', value.dash)
         ];
       }
       if (value?.geometry === 'fill') {
-        return [renderColor('填充色', 'fillColor', value.fillColor), renderColor('描边色', 'outlineColor', value.outlineColor)];
+        // 无填充时填充色用不上（保留着，换回来时还是原来的颜色）；有花纹时才有纹理颜色
+        return [
+          renderFillStyle(value),
+          ...(value.fillStyle === 'none' ? [] : [renderColor('填充色', 'fillColor', value.fillColor)]),
+          ...(isFillPattern(value.fillStyle) ? [renderColor('纹理颜色', 'patternColor', value.patternColor)] : []),
+          renderColor('描边色', 'outlineColor', value.outlineColor),
+          ...renderSize(),
+          renderDash('描边线型', 'outlineDash', value.outlineDash)
+        ];
       }
       return [];
     };

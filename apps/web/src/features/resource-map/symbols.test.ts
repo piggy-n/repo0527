@@ -63,6 +63,19 @@ describe('规范化', () => {
   });
 });
 
+describe('parseSize：面的描边', () => {
+  it('0 是无描边，范围 0～8；空的输入不算 0', () => {
+    expect(['0', ' 2.34 ', '8', '', '  ', '8.5'].map(text => parseSize('outline', text))).toStrictEqual([
+      0,
+      2.3,
+      8,
+      null,
+      null,
+      null
+    ]);
+  });
+});
+
 describe('parseSize', () => {
   it('去掉首尾空格后按步长取整；空、不是数、越界时为 null', () => {
     expect(parseSize('circle', ' 3.3 ')).toBe(3.5);

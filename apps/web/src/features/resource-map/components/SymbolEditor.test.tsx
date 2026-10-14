@@ -1,6 +1,6 @@
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { ElColorPicker, ElSelect } from 'element-plus';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick, shallowRef } from 'vue';
 import type { ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
@@ -58,6 +58,11 @@ function picker(wrapper: VueWrapper, label: string) {
 }
 
 const customInput = (wrapper: VueWrapper) => wrapper.find('input[aria-label^="自定义"]');
+
+// 下拉框放在 body 下，不归组件管
+afterEach(() => {
+  document.body.innerHTML = '';
+});
 
 describe('SymbolEditor', () => {
   it('点：档位、描边宽度点下就确认；改过之后可以恢复默认，只恢复这个资源', async () => {
@@ -165,20 +170,66 @@ describe('SymbolEditor', () => {
     expect(picker(wrapper, '坑塘的填充色').props('modelValue')).toBe('rgba(0, 128, 0, 0.8)');
   });
 
-  it('线：颜色、线宽、线型；面：只有填充色和描边色', async () => {
+  it('线：颜色、线宽、线型', () => {
     const line = mountEditor('bgdc_cjdcqjx');
     expect(line.wrapper.findAllComponents(ElColorPicker).map(item => item.props('ariaLabel'))).toStrictEqual([
       '村级调查区界线的颜色'
     ]);
     line.wrapper.findComponent(ElSelect).vm.$emit('update:modelValue', 'dashDot');
     expect(line.symbols.overrides.value.get('bgdc_cjdcqjx')).toStrictEqual({ uniform: { dash: 'dashDot' } });
+  });
 
-    const fill = mountEditor('szy_kt');
-    expect(fill.wrapper.findAllComponents(ElColorPicker).map(item => item.props('ariaLabel'))).toStrictEqual([
-      '坑塘的填充色',
-      '坑塘的描边色'
-    ]);
-    expect(fill.wrapper.findAll('label').map(item => item.text())).toStrictEqual([]);
+  it('面（ADR 0045）：填充方式、颜色、描边宽度、描边线型；有花纹时才有纹理颜色，无填充时没有填充色', async () => {
+    const { wrapper, symbols } = mountEditor('szy_kt');
+    const pickers = () => wrapper.findAllComponents(ElColorPicker).map(item => item.props('ariaLabel'));
+    expect(pickers()).toStrictEqual(['坑塘的填充色', '坑塘的描边色']);
+    const [fillStyle, outlineDash] = wrapper.findAllComponents(ElSelect);
+
+    fillStyle?.vm.$emit('update:modelValue', 'diagonal');
+    await nextTick();
+    expect(pickers()).toStrictEqual(['坑塘的填充色', '坑塘的纹理颜色', '坑塘的描边色']);
+    fillStyle?.vm.$emit('update:modelValue', 'none');
+    await nextTick();
+    expect(pickers()).toStrictEqual(['坑塘的描边色']);
+
+    outlineDash?.vm.$emit('update:modelValue', 'dotted');
+    await choose(wrapper, 'XL');
+    expect(symbols.overrides.value.get('szy_kt')).toStrictEqual({
+      uniform: { fillStyle: 'none', outlineWidth: 'XL', outlineDash: 'dotted' }
+    });
+  });
+
+  it('面的描边宽度可以自定义 0～8 像素，0 是无描边；清空输入框不算 0', async () => {
+    const { wrapper, symbols } = mountEditor('szy_kt');
+    await choose(wrapper, '自定义');
+    const input = wrapper.get('input[aria-label="自定义描边宽度，0～8 像素"]');
+    const submit = async (text: string) => {
+      await input.setValue(text);
+      await input.trigger('keydown', { key: 'Enter' });
+      return wrapper.find('[class*="invalid"]').exists();
+    };
+
+    expect(await submit('0')).toBe(false);
+    expect(symbols.symbolOf({ code: 'szy_kt' })).toMatchObject({ outlineWidth: 0 });
+    // 每次不合法的输入之前先输一次合法的，提示要先消失
+    expect(await submit('')).toBe(true);
+    expect(await submit('0')).toBe(false);
+    expect(await submit('8.5')).toBe(true);
+    expect(symbols.symbolOf({ code: 'szy_kt' })).toMatchObject({ outlineWidth: 0 });
+  });
+
+  it('填充方式的选项带预览：按当前的颜色画出每种填充方式', async () => {
+    const { wrapper } = mountEditor('szy_kt');
+    // 下拉框打开后才渲染选项
+    await wrapper.findComponent(ElSelect).find('.el-select__wrapper').trigger('click');
+    await nextTick();
+    const options = [...document.body.querySelectorAll<HTMLElement>('[data-fill-style]')];
+
+    expect(options.map(option => option.dataset.fillStyle)).toHaveLength(10);
+    const style = (name: string) =>
+      options.find(option => option.dataset.fillStyle === name)?.querySelector('[data-swatch]')?.getAttribute('style') ?? '';
+    expect(style('dot')).toContain('background-image');
+    expect(style('solid')).not.toContain('background-image');
   });
 
   it('分类样式的取值：改的是这个取值，恢复默认只恢复它；规则里没有的取值没有编辑器', async () => {
