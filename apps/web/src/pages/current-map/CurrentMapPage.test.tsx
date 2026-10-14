@@ -1,4 +1,5 @@
 import type { LayerSpecification, SourceSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type { Polygon } from 'geojson';
 import {
   type CameraEventData,
   type GestureHandlerLike,
@@ -142,8 +143,10 @@ class FakeMap implements MapLike {
   unproject([x, y]: [number, number]) {
     return { lng: this.camera.lng + (x - this.screenOffset.x) / 100, lat: this.camera.lat - (y - this.screenOffset.y) / 100 };
   }
-  queryRenderedFeatures(): RenderedFeatureLike[] {
-    return [];
+  // 点选用的渲染要素：按查询的图层过滤
+  renderedFeatures: RenderedFeatureLike[] = [];
+  queryRenderedFeatures(_geometry: unknown, options: { readonly layers: readonly string[] }): RenderedFeatureLike[] {
+    return this.renderedFeatures.filter(feature => options.layers.includes(feature.layer.id));
   }
   project([lng, lat]: [number, number]) {
     return {
@@ -766,6 +769,47 @@ describe('CurrentMapPage', () => {
     map.moveTo([118.8, 32.05], 9, { originalEvent: new MouseEvent('wheel') });
     await nextTick();
     expect(layerRow(wrapper, 'bgdc_cjdcq').text()).not.toContain('放大');
+  });
+
+  it('点选：14 级起点中地类图斑直接出详情，高亮插在注记下面；离开点选工具时清除', async () => {
+    const guid = 'a'.repeat(32);
+    const square: Polygon = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [119, 32],
+          [119.01, 32],
+          [119.01, 32.01],
+          [119, 32]
+        ]
+      ]
+    };
+    server.use(
+      mock.get('/backend/api/query/attr/page', () =>
+        HttpResponse.json({ total: 1, list: [{ guid, DLMC: '水田', BSM: '320' }] })
+      ),
+      mock.get('/backend/api/query/scope/geojson', () => HttpResponse.json([{ guid, geom: JSON.stringify(square) }]))
+    );
+    const { wrapper, map } = await readyPage();
+    await vi.waitFor(() => expect(addedLayersOf(map, 'resources')).not.toStrictEqual([]));
+    const layer = { id: 'resources-bgdc_dltb' };
+    map.renderedFeatures = [{ source: layer.id, layer, properties: { guid, dlmc: '水田' }, geometry: square }];
+    map.moveTo([119, 32], 15, {});
+
+    await button(wrapper, '点选').trigger('click');
+    map.mouse('click', 200, 150);
+    await nextTick();
+
+    expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(true);
+    expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('2022 · 水田');
+    await vi.waitFor(() => expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('地类名称'));
+    await vi.waitFor(() => expect(addedLayersOf(map, 'selection')).toHaveLength(3));
+    const [[, beforeId] = []] = addedLayersOf(map, 'selection');
+    expect(beforeId?.startsWith('basemap-labels')).toBe(true);
+    expect(map.fitBoundsCalls).toHaveLength(1);
+
+    await button(wrapper, '移动').trigger('click');
+    expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(false);
   });
 
   it('资源目录加载失败：列表显示失败和重试；重试期间显示加载中，成功后显示资源', async () => {

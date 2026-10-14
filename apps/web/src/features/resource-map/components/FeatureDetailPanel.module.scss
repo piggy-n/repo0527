@@ -1,0 +1,111 @@
+// 联调用的样式，5D 再设计；位置由页面决定
+
+// 内容多时在面板内部滚动：页面的控件列是纵向 flex，面板可以收缩
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  box-sizing: border-box;
+  width: 300px;
+  // 窄屏时不超出控件列
+  max-width: 100%;
+  min-height: 0;
+  padding: var(--space-md);
+  overflow-y: auto;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.heading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-base);
+  color: var(--color-text-title);
+}
+
+.subtitle {
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  color: var(--color-text-secondary);
+}
+
+// 返回按钮靠左，不被 Element 的链接按钮撑满
+.back {
+  align-self: flex-start;
+}
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  color: var(--color-text-regular);
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.candidates {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candidate {
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  color: var(--color-text-primary);
+  text-align: left;
+  background: none;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg);
+  }
+}
+
+// 字段名一列、值一列；值可能很长，按字换行
+.rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.row {
+  display: contents;
+
+  dt {
+    color: var(--color-text-secondary);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--color-text-primary);
+    word-break: break-all;
+  }
+}

@@ -1,7 +1,9 @@
 import { MapCanvas, provideMap } from '@yzt/map-vue';
 import { defineComponent, ref } from 'vue';
+import { FeatureDetailPanel } from '@/features/resource-map/components/FeatureDetailPanel';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
+import { useFeaturePick } from '@/features/resource-map/composables/useFeaturePick';
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
@@ -28,9 +30,9 @@ export const CurrentMapPage = defineComponent({
   name: 'CurrentMapPage',
   setup() {
     // 注记压在资源图层上面，地名不被不透明的地类图斑盖住（2026-10-11 定，ADR 0033 第 4 条留到 5C 的问题）；
-    // 边界压在注记上面，区划高亮在边界之上，测量在最上面
+    // 选中要素的高亮在资源之上、注记之下（ADR 0047 第 5 节）；边界压在注记上面，区划高亮在边界之上，测量在最上面
     const map = provideMap({
-      groups: ['basemap', 'resources', 'basemap-labels', 'boundaries', 'region', 'measure'],
+      groups: ['basemap', 'resources', 'selection', 'basemap-labels', 'boundaries', 'region', 'measure'],
       camera: JIANGSU_CAMERA
     });
     // 第一次就绪时按江苏的范围定位；工具栏的"默认视角"、区划定位回到全省时回到这里
@@ -47,12 +49,15 @@ export const CurrentMapPage = defineComponent({
     const region = useRegionLocate(map, { goToDefaultView });
     const measure = useMeasure();
     const location = useLocationPoint(map);
+    const pick = useFeaturePick(map, resources);
     map.registerTools(measure.tools);
     map.registerTools(location.tools);
+    map.registerTools(pick.tools);
     map.bindStyle({
       basemap: basemap.deriveGroup,
       'basemap-labels': basemap.deriveLabelsGroup,
       resources: resources.deriveGroup,
+      selection: pick.deriveGroup,
       boundaries: boundaries.deriveGroup,
       region: region.deriveGroup,
       measure: measure.deriveGroup
@@ -87,6 +92,7 @@ export const CurrentMapPage = defineComponent({
               items={[
                 'default-view',
                 'browse',
+                'feature-pick',
                 'measure-distance',
                 'measure-area',
                 'clear',
@@ -105,6 +111,7 @@ export const CurrentMapPage = defineComponent({
             {openPanel.value === 'coordinate-locate' && (
               <CoordinateLocatePanel location={location} onClose={closePanel} />
             )}
+            {pick.state.value.kind !== 'idle' && <FeatureDetailPanel pick={pick} />}
             <BasemapPanel basemap={basemap} />
             <BoundaryPanel boundaries={boundaries} />
             <div class={styles.legend}>
