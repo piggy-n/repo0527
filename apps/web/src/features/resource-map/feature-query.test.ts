@@ -29,7 +29,8 @@ import {
   renderedCandidates,
   screenBoxPolygon,
   screenDistance,
-  serverCandidates
+  serverCandidates,
+  weightedEstimate
 } from './feature-query';
 import type { ResourceDisplay, ResourceLayersState } from './resource-layers';
 
@@ -515,12 +516,100 @@ describe('planBox', () => {
     expect(kindsOf(planBox([DLTB], BOX, 12, fakeView(repeated).view))).toStrictEqual([['bgdc_dltb', 'server']]);
     const [atLimit] = planBox([DLTB], BOX, 15, fakeView(repeated).view);
     expect(atLimit?.kind === 'rendered' && atLimit.candidates).toHaveLength(limit);
+    // 只用渲染要素时按能列出的候选计数，超过上限同样停下
+    expect(planBox([DLTB, LCTL], BOX, 15, fakeView(crowded).view)).toStrictEqual([
+      { kind: 'too-many', target: DLTB, estimate: limit + 1 }
+    ]);
   });
 
   it('拾取不到范围时退回渲染要素，没有就看下面的资源', () => {
     const missed = fakeView([rendered(LCTL.sourceId, { guid: guid('a') }, 0)], { miss: true }).view;
 
     expect(kindsOf(planBox([DLTB, LCTL], BOX, 12, missed))).toStrictEqual([['csxhjctb_lctl', 'rendered']]);
+  });
+});
+
+// 资源某个样式图层里的渲染要素；suffix 是图层 ID 的后缀
+function onLayer(target: PickResource, suffix: string | null, properties: Record<string, unknown>): RenderedFeature {
+  const layerId = suffix ? `${target.sourceId}-${suffix}` : target.sourceId;
+  return { sourceId: target.sourceId, layerId, properties };
+}
+
+const clusterOf = (count: unknown) => ({ bsm: '1', clustered: true, point_count: count });
+
+describe('weightedEstimate', () => {
+  it('带 guid 的去重，聚合要素按 point_count，其他不带 guid 的按个数，混在一起相加', () => {
+    const features = [
+      onLayer(DLTB, null, { guid: guid('a') }),
+      onLayer(DLTB, null, { guid: guid('a') }),
+      onLayer(DLTB, null, { guid: guid('b') }),
+      onLayer(DLTB, null, clusterOf(20)),
+      onLayer(DLTB, null, clusterOf(5)),
+      onLayer(DLTB, null, { bsm: '2' }),
+      onLayer(DLTB, null, { bsm: '3' })
+    ];
+
+    expect(weightedEstimate('bgdc_dltb', features)).toBe(2 + 25 + 2);
+  });
+
+  it('point_count 不是正数时按 1；不是聚合要素时 point_count 不算', () => {
+    const features = [
+      onLayer(DLTB, null, clusterOf(0)),
+      onLayer(DLTB, null, clusterOf('20')),
+      onLayer(DLTB, null, { clustered: false, point_count: 20 })
+    ];
+
+    expect(weightedEstimate('bgdc_dltb', features)).toBe(3);
+  });
+
+  it('只数画出要素本身的图层：加上纹理、描边层估数不变，聚合要素被几层返回时不重复累加', () => {
+    const body = [onLayer(DLTB, null, clusterOf(20)), onLayer(DLTB, null, { bsm: '2' })];
+    const styled = [
+      ...body,
+      onLayer(DLTB, 'pattern', clusterOf(20)),
+      onLayer(DLTB, 'pattern', { bsm: '2' }),
+      onLayer(DLTB, 'outline', clusterOf(20)),
+      onLayer(DLTB, 'outline-dotted', { bsm: '2' })
+    ];
+
+    expect(weightedEstimate('bgdc_dltb', styled)).toBe(weightedEstimate('bgdc_dltb', body));
+    expect(weightedEstimate('bgdc_dltb', body)).toBe(21);
+  });
+
+  it('线按线型拆到几层时每层的要素都算；别的资源的图层不算', () => {
+    const lines = [onLayer(HYDL, null, {}), onLayer(HYDL, 'dashed', {}), onLayer(HYDL, 'dash-dot', {})];
+
+    expect(weightedEstimate('csxhjctb_hydl', lines)).toBe(3);
+    expect(weightedEstimate('bgdc_dltb', [onLayer(targetOf('bgdc_dltb_czc', 2022), null, {})])).toBe(0);
+  });
+});
+
+// n 个不带 guid 的渲染要素
+const guidless = (target: PickResource, n: number, suffix: string | null = null) =>
+  Array.from({ length: n }, (_, index) => onLayer(target, suffix, { bsm: String(index) }));
+
+describe('planBox：估数（ADR 0050）', () => {
+  const BOX = { from: { x: 0, y: 0 }, to: { x: 200, y: 100 } };
+
+  it('不能后端识别的上层资源有超过 5000 条不带 guid 的渲染要素时跳过，仍查询下面的资源', () => {
+    const crowded = [...guidless(LCTL, BOX_ESTIMATE_LIMIT + 1), onLayer(DLTB, null, { guid: guid('c') })];
+
+    expect(kindsOf(planBox([LCTL, DLTB], BOX, 12, fakeView(crowded).view))).toStrictEqual([['bgdc_dltb', 'server']]);
+    expect(kindsOf(planBox([LCTL, DLTB], BOX, 15, fakeView(crowded).view))).toStrictEqual([['bgdc_dltb', 'rendered']]);
+  });
+
+  it('查后端的资源按加权估数：不带 guid 的聚合要素加起来超过 5000 时提示超限，不查后端', () => {
+    const clusters = Array.from({ length: 60 }, () => onLayer(DLTB, null, clusterOf(100)));
+
+    expect(planBox([DLTB], BOX, 12, fakeView(clusters).view)).toStrictEqual([
+      { kind: 'too-many', target: DLTB, estimate: 6000 }
+    ]);
+  });
+
+  it('同一批要素加上纹理、描边层后，估数不变，不会因为改了符号被拦下', () => {
+    const styled = [...guidless(DLTB, 2000), ...guidless(DLTB, 2000, 'pattern'), ...guidless(DLTB, 2000, 'outline')];
+
+    expect(kindsOf(planBox([DLTB], BOX, 12, fakeView(styled).view))).toStrictEqual([['bgdc_dltb', 'server']]);
   });
 });
 

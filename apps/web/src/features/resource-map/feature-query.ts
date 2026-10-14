@@ -13,7 +13,7 @@ import type {
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
 import { LANDUSE_FIELD_LABELS } from './landuse';
-import { type ResourceLayersState, resourceSourceId } from './resource-layers';
+import { isResourceBodyLayer, type ResourceLayersState, resourceSourceId } from './resource-layers';
 import { resourceStyle, tilesetOf } from './style-registry';
 
 // 点选与详情的纯函数（ADR 0047 第 1～3 节、ADR 0048）：识别的顺序、方式和候选，详情的标题和字段行
@@ -141,22 +141,22 @@ export type IdentifyStep =
   | { readonly kind: 'server' }
   | { readonly kind: 'none' };
 
-/**
- * 二维 14 级以上只用渲染要素，没有就跳过这个资源；三维（没有渲染要素）和低级别下能后端识别的查后端，
- * 其他有渲染要素就用
- */
+// 查不查后端：二维 14 级以上只用渲染要素；三维（没有渲染要素）和低级别下能后端识别的查后端
+function usesBackend(capability: QueryCapability, view: ViewKind, zoom: number): boolean {
+  return capability.identify && !(view === '2d' && zoom >= RENDERED_PICK_ZOOM);
+}
+
+/** 查后端的资源用后端识别；其他的有渲染要素就用，没有就跳过这个资源 */
 export function identifyStep(
   capability: QueryCapability,
   view: ViewKind,
   zoom: number,
   rendered: readonly PickCandidate[]
 ): IdentifyStep {
-  const fromRendered: IdentifyStep =
-    rendered.length > 0 ? { kind: 'rendered', candidates: rendered } : { kind: 'none' };
-  if (view === '2d' && zoom >= RENDERED_PICK_ZOOM) {
-    return fromRendered;
+  if (usesBackend(capability, view, zoom)) {
+    return { kind: 'server' };
   }
-  return capability.identify ? { kind: 'server' } : fromRendered;
+  return rendered.length > 0 ? { kind: 'rendered', candidates: rendered } : { kind: 'none' };
 }
 
 /** 识别一个资源要做的事：渲染要素已经取到，或者用这个地理范围查后端 */
@@ -244,14 +244,35 @@ export function identifyGeometry(
   return screenBoxPolygon(toleranceBox(point, tolerance), pick);
 }
 
-/** 框选一个资源要做的事：同点选；框里的渲染要素超过估数的上限时提示缩小范围 */
+/**
+ * 查后端的资源框里大约有多少要素（ADR 0050 第 2 节）：只数画出要素本身的图层；带 guid 的去重，
+ * 聚合要素按 point_count，其他不带 guid 的按个数（被瓦片切开的会多算）
+ */
+export function weightedEstimate(code: string, features: readonly RenderedFeature[]): number {
+  const guids = new Set<string>();
+  let others = 0;
+  for (const { layerId, properties } of features) {
+    if (!isResourceBodyLayer(code, layerId)) {
+      continue;
+    }
+    const { guid, clustered, point_count: pointCount } = properties;
+    if (isFeatureGuid(guid)) {
+      guids.add(guid);
+    } else {
+      others += clustered === true && typeof pointCount === 'number' && pointCount > 0 ? pointCount : 1;
+    }
+  }
+  return guids.size + others;
+}
+
+/** 框选一个资源要做的事：同点选；超过估数的上限时提示缩小范围 */
 export type BoxTask =
   | IdentifyTask
   | { readonly kind: 'too-many'; readonly target: PickResource; readonly estimate: number };
 
 /**
- * 松手时定下框选怎样识别（ADR 0049 第 2 节）：资源从上到下数框里的渲染要素（按 guid 去重，不换算几何），
- * 识别方式同点选；遇到可以直接用的渲染要素结果、或超过估数的上限时停下，下面的资源不再查询
+ * 松手时定下框选怎样识别（ADR 0049 第 2 节、ADR 0050 第 1 节）：资源从上到下，识别方式同点选，先定方式再计数。
+ * 查后端的资源用加权估数；只用渲染要素的按有效 guid 计数，为 0 时跳过。遇到渲染要素的结果、或超过估数的上限时停下
  */
 export function planBox(
   targets: readonly PickResource[],
@@ -261,22 +282,29 @@ export function planBox(
 ): BoxTask[] {
   const tasks: BoxTask[] = [];
   for (const target of targets) {
+    const { code } = target.resource;
     const features = view.queryRendered(box, { sources: [target.sourceId] });
-    // 先只数 guid，超过上限时不再为每个要素建候选
-    const estimate = new Set(features.flatMap(({ properties: { guid } }) => (isFeatureGuid(guid) ? [guid] : []))).size;
-    if (estimate > BOX_ESTIMATE_LIMIT) {
-      tasks.push({ kind: 'too-many', target, estimate });
+    if (usesBackend(queryCapabilityOf(code), view.kind, zoom)) {
+      const estimate = weightedEstimate(code, features);
+      if (estimate > BOX_ESTIMATE_LIMIT) {
+        tasks.push({ kind: 'too-many', target, estimate });
+        return tasks;
+      }
+      const geometry = screenBoxPolygon(box, at => view.pick(at));
+      if (geometry) {
+        tasks.push({ kind: 'server', target, geometry });
+        continue;
+      }
+    }
+    // 只用渲染要素（后端识别拾取不到范围时也退回这里）：能列出的候选按有效 guid 计数，列不出的不占额度
+    const count = new Set(features.flatMap(({ properties: { guid } }) => (isFeatureGuid(guid) ? [guid] : []))).size;
+    if (count > BOX_ESTIMATE_LIMIT) {
+      tasks.push({ kind: 'too-many', target, estimate: count });
       return tasks;
     }
-    // 框选不按距离排序，保持查询结果从上到下的顺序
-    const rendered = renderedCandidates(target, features, () => 0);
-    const step = identifyStep(queryCapabilityOf(target.resource.code), view.kind, zoom, rendered);
-    const geometry = step.kind === 'server' ? screenBoxPolygon(box, at => view.pick(at)) : null;
-    if (geometry) {
-      tasks.push({ kind: 'server', target, geometry });
-    } else if (rendered.length > 0) {
-      // 用渲染要素；后端识别拾取不到范围时也退回它
-      tasks.push({ kind: 'rendered', target, candidates: rendered });
+    if (count > 0) {
+      // 框选不按距离排序，保持查询结果从上到下的顺序
+      tasks.push({ kind: 'rendered', target, candidates: renderedCandidates(target, features, () => 0) });
       return tasks;
     }
   }

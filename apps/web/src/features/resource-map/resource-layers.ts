@@ -16,7 +16,7 @@ import {
   sourceLayerOf,
   tilesetOf
 } from './style-registry';
-import type { ResourceLayerPart } from './symbols';
+import { isBodyLayerSuffix, type ResourceLayerPart } from './symbols';
 
 // 资源图层的显示状态与分组推导（ADR 0041 第 3、4 节），都是纯函数；拥有者 useResourceLayers 持有状态并调用它们
 
@@ -28,6 +28,15 @@ const ID_PREFIX = `${RESOURCES_GROUP}-`;
 /** 资源的数据源 ID，也是它的图层 ID（MapLibre 里数据源和图层的 ID 互不冲突） */
 export function resourceSourceId(code: string): string {
   return `${ID_PREFIX}${code}`;
+}
+
+/**
+ * 这个资源画出要素本身的图层：主图层和线按线型拆出的图层，每个要素只在其中一层；纹理、描边图层不算。
+ * 框选的估数只数这些图层，换符号时估数不变（ADR 0050 第 2 节）
+ */
+export function isResourceBodyLayer(code: string, layerId: string): boolean {
+  const id = resourceSourceId(code);
+  return layerId === id || (layerId.startsWith(`${id}-`) && isBodyLayerSuffix(layerId.slice(id.length + 1)));
 }
 
 /** 数据源 ID 对应的资源；不是资源图层的数据源时为 null */

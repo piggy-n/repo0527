@@ -7,6 +7,7 @@ import { buildCatalog } from './catalog';
 import {
   EMPTY_RESOURCE_LAYERS,
   mergeDisplayState,
+  isResourceBodyLayer,
   resourceCodeOfSource,
   type ResourceDisplay,
   type ResourceLayersState,
@@ -244,6 +245,39 @@ describe('resourcesGroup', () => {
       { 'line-opacity': 0.4 }
     ]);
     expect(validateStyleMin({ version: 8, sources: group.sources, layers: group.layers.slice() })).toStrictEqual([]);
+  });
+
+  it('画出要素本身的图层（ADR 0050）：主图层和线按线型拆出的图层；纹理、描边图层和别的资源的图层不算', () => {
+    const overrides: Record<string, ResourceSymbolOverride> = {
+      bgdc_cjdcq: { uniform: { fillStyle: 'cross', outlineWidth: 'L', outlineDash: 'dashed' } },
+      bgdc_dltb: { items: { '0101': { fillStyle: 'dot', outlineWidth: 'L', outlineDash: 'dotted' } } },
+      csxhjctb_hydl: { items: { 水渠: { dash: 'dashed' }, 河流: { dash: 'dashDot' } } }
+    };
+    const group = resourcesGroup({
+      state: checkAll(initial),
+      invalid: new Map(),
+      tileBase: TILE_BASE,
+      overrideOf: code => overrides[code]
+    });
+    const layersOf = (code: string) => {
+      const id = resourceSourceId(code);
+      return group.layers.map(item => item.id).filter(layerId => layerId === id || layerId.startsWith(`${id}-`));
+    };
+    const bodyOf = (code: string) => layersOf(code).filter(id => isResourceBodyLayer(code, id));
+
+    expect(layersOf('bgdc_dltb')).toContain('resources-bgdc_dltb-outline-dotted');
+    expect(bodyOf('bgdc_dltb')).toStrictEqual(['resources-bgdc_dltb']);
+    expect(layersOf('bgdc_cjdcq')).toStrictEqual([
+      'resources-bgdc_cjdcq',
+      'resources-bgdc_cjdcq-pattern',
+      'resources-bgdc_cjdcq-outline'
+    ]);
+    expect(bodyOf('bgdc_cjdcq')).toStrictEqual(['resources-bgdc_cjdcq']);
+    expect(bodyOf('csxhjctb_hydl')).toStrictEqual(layersOf('csxhjctb_hydl'));
+    expect(bodyOf('csxhjctb_hydl')).toHaveLength(3);
+    expect(bodyOf('csxhjctb_gyssp')).toStrictEqual(['resources-csxhjctb_gyssp']);
+    expect(isResourceBodyLayer('bgdc_dltb', 'resources-bgdc_dltb_czc')).toBe(false);
+    expect(isResourceBodyLayer('bgdc_dltb', 'resources-bgdc_cjdcq')).toBe(false);
   });
 
   it('按线型拆层（ADR 0046）：其他线型的图层 ID 加后缀，在几何过滤之外按要素的线型过滤，共用数据源，透明度乘在每个图层上', () => {

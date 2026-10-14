@@ -320,6 +320,11 @@ export type ResourceLayerStyle =
 const DASH_SUFFIXES = { dashed: 'dashed', dotted: 'dotted', dashDot: 'dash-dot' } as const;
 type DashSuffix = (typeof DASH_SUFFIXES)[keyof typeof DASH_SUFFIXES];
 
+/** 画出要素本身的图层后缀：线按线型拆出的图层只加线型，每个要素只在其中一层；纹理、描边图层的后缀不算（ADR 0050 第 2 节） */
+export function isBodyLayerSuffix(suffix: string): boolean {
+  return Object.values<string>(DASH_SUFFIXES).includes(suffix);
+}
+
 /**
  * 资源的一个图层：主图层没有后缀，纹理图层、描边图层（ADR 0045 第 2 节）和其他线型的图层（ADR 0046 第 2 节）的 ID 加上后缀；
  * 按线型拆开时带上按要素线型的过滤，和几何类型的过滤一起用
