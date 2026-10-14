@@ -246,6 +246,28 @@ describe('resourcesGroup', () => {
     expect(validateStyleMin({ version: 8, sources: group.sources, layers: group.layers.slice() })).toStrictEqual([]);
   });
 
+  it('按线型拆层（ADR 0046）：其他线型的图层 ID 加后缀，在几何过滤之外按要素的线型过滤，共用数据源，透明度乘在每个图层上', () => {
+    const state = withDisplay(checkAll(initial), 'csxhjctb_hydl', { opacity: 0.6 });
+    const overrides: Record<string, ResourceSymbolOverride> = { csxhjctb_hydl: { items: { 水渠: { dash: 'dashed' } } } };
+    const group = resourcesGroup({ state, invalid: new Map(), tileBase: TILE_BASE, overrideOf: code => overrides[code] });
+    const parts = group.layers.filter(({ id }) => id.startsWith('resources-csxhjctb_hydl'));
+    const drawn = (type: 'LineString' | 'Polygon', properties: Record<string, string>) =>
+      parts
+        .filter(item => 'filter' in item && featureFilter(item.filter, item.id).filter({ zoom: 12 }, { type, properties }))
+        .map(({ id }) => id);
+
+    expect(parts.map(({ id }) => id)).toStrictEqual(['resources-csxhjctb_hydl', 'resources-csxhjctb_hydl-dashed']);
+    expect(drawn('LineString', { ccn: '河流' })).toStrictEqual(['resources-csxhjctb_hydl']);
+    expect(drawn('LineString', { ccn: '水渠' })).toStrictEqual(['resources-csxhjctb_hydl-dashed']);
+    // 几何类型的过滤仍然生效
+    expect(drawn('Polygon', { ccn: '水渠' })).toStrictEqual([]);
+    expect(parts).toMatchObject([
+      { source: 'resources-csxhjctb_hydl', paint: { 'line-opacity': 0.6 } },
+      { source: 'resources-csxhjctb_hydl', paint: { 'line-opacity': 0.6, 'line-dasharray': [3, 2] } }
+    ]);
+    expect(validateStyleMin({ version: 8, sources: group.sources, layers: group.layers.slice() })).toStrictEqual([]);
+  });
+
   it('分组带上用到的图片：几个资源用同一种花纹时是同一张；没有花纹时不带 images', () => {
     const state = checkAll(initial);
     const overrides: Record<string, ResourceSymbolOverride> = {

@@ -1,5 +1,5 @@
 import {
-  type FilterSpecification,
+  type ExpressionSpecification,
   type LayerSpecification,
   validateStyleMin,
   type VectorSourceSpecification
@@ -113,7 +113,7 @@ export function mergeDisplayState(previous: ResourceLayersState, catalog: Resour
 }
 
 // fill 图层要限定为面：MapLibre 会把线也当成环填充（城镇村等用地的瓦片里夹着退化的线）
-const GEOMETRY_FILTERS: Readonly<Record<ResourceGeometry, FilterSpecification>> = {
+const GEOMETRY_FILTERS: Readonly<Record<ResourceGeometry, ExpressionSpecification>> = {
   fill: ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false],
   line: ['match', ['geometry-type'], ['LineString', 'MultiLineString'], true, false],
   circle: ['match', ['geometry-type'], ['Point', 'MultiPoint'], true, false]
@@ -127,21 +127,29 @@ interface ResourceEntry {
   readonly images: StyleImages;
 }
 
-// 共用的部分：数据源、瓦片图层名、几何过滤、最小级别
-type LayerCommon = Pick<LayerSpecification & { type: 'fill' }, 'source' | 'source-layer' | 'filter' | 'minzoom'>;
+// 共用的部分：数据源、瓦片图层名、最小级别
+type LayerCommon = Pick<LayerSpecification & { type: 'fill' }, 'source' | 'source-layer' | 'minzoom'>;
 
-// 一个图层：ID 按后缀区分，透明度乘在各几何类型的不透明度上
-function layerOf(part: ResourceLayerPart, id: string, common: LayerCommon, opacity: number): LayerSpecification {
+// 一个图层：ID 按后缀区分，按线型拆开的图层在几何过滤之外再按要素的线型过滤，透明度乘在各几何类型的不透明度上
+function layerOf(
+  part: ResourceLayerPart,
+  id: string,
+  common: LayerCommon,
+  geometryFilter: ExpressionSpecification,
+  opacity: number
+): LayerSpecification {
   const layerId = part.suffix ? `${id}-${part.suffix}` : id;
+  const filter: ExpressionSpecification = part.filter ? ['all', geometryFilter, part.filter] : geometryFilter;
+  const shared = { ...common, id: layerId, filter };
   if (part.type === 'fill') {
-    return { ...common, id: layerId, type: 'fill', paint: { ...part.paint, 'fill-opacity': opacity } };
+    return { ...shared, type: 'fill', paint: { ...part.paint, 'fill-opacity': opacity } };
   }
   if (part.type === 'line') {
     const paint = { ...part.paint, 'line-opacity': opacity };
-    return { ...common, id: layerId, type: 'line', layout: part.layout, paint };
+    return { ...shared, type: 'line', layout: part.layout, paint };
   }
   const paint = { ...part.paint, 'circle-opacity': opacity, 'circle-stroke-opacity': opacity };
-  return { ...common, id: layerId, type: 'circle', paint };
+  return { ...shared, type: 'circle', paint };
 }
 
 // 有最小显示级别的资源，数据源和图层用同一个最小级别：更低的级别不请求瓦片
@@ -162,14 +170,10 @@ function resourceEntry(
     ...zoomRange,
     ...(promoteId === undefined ? {} : { promoteId })
   };
-  const common: LayerCommon = {
-    source: id,
-    'source-layer': sourceLayerOf(resource.code, year),
-    filter: GEOMETRY_FILTERS[resource.geometry],
-    ...zoomRange
-  };
+  const common: LayerCommon = { source: id, 'source-layer': sourceLayerOf(resource.code, year), ...zoomRange };
+  const geometryFilter = GEOMETRY_FILTERS[resource.geometry];
   const { parts, images } = resourceStyleLayers(resource, style, override);
-  return { id, source, layers: parts.map(part => layerOf(part, id, common, opacity)), images };
+  return { id, source, layers: parts.map(part => layerOf(part, id, common, geometryFilter, opacity)), images };
 }
 
 /**

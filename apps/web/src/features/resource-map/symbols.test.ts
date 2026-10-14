@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { type StyleSpecification, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
+import { featureFilter, type StyleSpecification, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
-import { type ClassItem, type ColorRule, symbolClasses } from './classification';
+import { type ClassItem, type ColorRule, legacyItem, symbolClasses } from './classification';
 import { BLANK_PATTERN_IMAGE_ID, patternImageId } from './fill-patterns';
 import {
   classifiedLayers,
@@ -183,6 +183,18 @@ const bySymbol = (symbols: Record<string, ResourceSymbol>, base: ResourceSymbol)
 const valueAt = (part: ResourceLayerPart | undefined, property: string, ccn: string, zoom = 12) =>
   part && paintValueOf(part.type, property, (part.paint as Record<string, unknown>)[property], { ccn }, zoom);
 
+// 各线型图层的后缀和线型（实线不设 line-dasharray）
+const dashLayersOf = (layers: ResourceStyleLayers) =>
+  layers.parts.flatMap(part => (part.type === 'line' ? [[part.suffix ?? 'main', part.paint['line-dasharray'] ?? 'solid']] : []));
+
+// 按 MapLibre 的语义求值各线型图层的过滤条件：这个要素进了哪几个线型图层
+const routedTo = (layers: ResourceStyleLayers, properties: Record<string, string>) =>
+  layers.parts.flatMap(part => {
+    const id = part.suffix ?? 'main';
+    const passes = !part.filter || featureFilter(part.filter, id).filter({ zoom: 12 }, { type: 'LineString', properties });
+    return part.type === 'line' && passes ? [id] : [];
+  });
+
 // 全部图层放进一份样式校验
 function validate(layers: ResourceStyleLayers) {
   return validateStyleMin({
@@ -216,16 +228,58 @@ describe('classifiedLayers', () => {
     expect(validate(layers)).toStrictEqual([]);
   });
 
-  it('线型：都是实线时不设，都相同时直接用数组，有的不同时按取值匹配（实线是间隔为 0 的虚线）', () => {
-    expect(main(classifiedLayers(CLASSES, () => LINE))?.paint).not.toHaveProperty('line-dasharray');
-    expect(main(classifiedLayers(CLASSES, () => ({ ...LINE, dash: 'dotted' })))?.paint).toMatchObject({
-      'line-dasharray': [1, 2]
-    });
-    const mixed = classifiedLayers(CLASSES, bySymbol({ 水渠: { ...LINE, dash: 'dashed' } }, LINE));
+  it('线型（ADR 0046）：只有一种线型时只有主图层，线型是常量（实线不设），不加过滤', () => {
+    const solid = classifiedLayers(CLASSES, () => LINE);
+    const dotted = classifiedLayers(CLASSES, () => ({ ...LINE, dash: 'dotted' }));
 
-    expect(valueAt(main(mixed), 'line-dasharray', '水渠')).toStrictEqual([3, 2]);
-    expect(valueAt(main(mixed), 'line-dasharray', '河流')).toStrictEqual([1, 0]);
+    expect(dashLayersOf(solid)).toStrictEqual([['main', 'solid']]);
+    expect(dashLayersOf(dotted)).toStrictEqual([['main', [1, 2]]]);
+    expect(dashLayersOf(symbolLayers({ ...LINE, dash: 'dashed' }))).toStrictEqual([['main', [3, 2]]]);
+    expect([...solid.parts, ...dotted.parts].filter(part => part.filter)).toStrictEqual([]);
+  });
+
+  it('多种线型时按线型拆层：主图层放用到的线型里最靠前的一种，其余以线型为后缀；每层的线型是常量，按要素的线型过滤，每个要素恰好进一层', () => {
+    const mixed = classifiedLayers(
+      CLASSES,
+      bySymbol({ 水渠: { ...LINE, dash: 'dashed' }, $other: { ...LINE, dash: 'dashDot' } }, LINE)
+    );
+
+    expect(dashLayersOf(mixed)).toStrictEqual([
+      ['main', 'solid'],
+      ['dashed', [3, 2]],
+      ['dash-dot', [4, 2, 1, 2]]
+    ]);
+    // 没有命中取值、没有这个属性的要素都归兜底取值
+    const features: Record<string, string>[] = [{ ccn: '河流' }, { ccn: '水渠' }, { ccn: '湖泊' }, {}];
+    const routes = features.map(properties => routedTo(mixed, properties));
+    expect(routes).toStrictEqual([['main'], ['dashed'], ['dash-dot'], ['dash-dot']]);
     expect(validate(mixed)).toStrictEqual([]);
+
+    // 没有实线时，主图层放虚线
+    const withoutSolid = classifiedLayers(CLASSES, bySymbol({ 河流: { ...LINE, dash: 'dotted' } }, { ...LINE, dash: 'dashed' }));
+    expect(dashLayersOf(withoutSolid)).toStrictEqual([
+      ['main', [3, 2]],
+      ['dotted', [1, 2]]
+    ]);
+    expect([{ ccn: '河流' }, { ccn: '水渠' }].map(properties => routedTo(withoutSolid, properties))).toStrictEqual([
+      ['dotted'],
+      ['main']
+    ]);
+  });
+
+  it('地类的要素线型和颜色共用匹配规则：先按编码，编码没命中才按名称找历史地类，其余归兜底', () => {
+    const landuse = symbolClasses({ kind: 'landuse-code' });
+    const layers = classifiedLayers(
+      landuse,
+      bySymbol({ '0101': { ...LINE, dash: 'dashed' }, [legacyItem('村庄用地')]: { ...LINE, dash: 'dotted' } }, LINE)
+    );
+    const route = (dlbm: string, dlmc: string) => routedTo(layers, { dlbm, dlmc });
+
+    // 编码命中时不看名称，哪怕名称指向另一个有自己线型的历史地类
+    expect(route('0101', '村庄用地')).toStrictEqual(['dashed']);
+    expect(route('0102', '村庄用地')).toStrictEqual(['main']);
+    expect(route('9999', '村庄用地')).toStrictEqual(['dotted']);
+    expect(route('9999', '不认识的名称')).toStrictEqual(['main']);
   });
 
   it('面：描边和填充同色（换了写法也算）时不设描边，有一个不同就按取值设描边；颜色不同时随缩放从主色过渡到描边色', () => {
@@ -349,6 +403,21 @@ describe('面的图层（ADR 0045）', () => {
     expect(widths).toStrictEqual([2.4, 0, 1]);
     expect(valueAt(outline, 'line-offset', '河流')).toBe(1.2);
     expect(valueAt(main(layers), 'fill-outline-color', '湖泊')).toStrictEqual(color('rgba(0, 0, 0, 0)'));
+    expect(validate(layers)).toStrictEqual([]);
+  });
+
+  it('描边图层同样按线型拆层（ADR 0046）：描边的主图层后缀是 outline，其余加上线型', () => {
+    const layers = classifiedLayers(CLASSES, bySymbol({ 河流: { ...FILL, outlineWidth: 'XL', outlineDash: 'dotted' } }, FILL));
+
+    expect(layers.parts.map(part => part.suffix ?? 'main')).toStrictEqual(['main', 'outline', 'outline-dotted']);
+    expect(dashLayersOf(layers)).toStrictEqual([
+      ['outline', 'solid'],
+      ['outline-dotted', [1, 2]]
+    ]);
+    expect([{ ccn: '河流' }, { ccn: '水渠' }].map(properties => routedTo(layers, properties))).toStrictEqual([
+      ['outline-dotted'],
+      ['outline']
+    ]);
     expect(validate(layers)).toStrictEqual([]);
   });
 

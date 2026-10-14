@@ -316,8 +316,18 @@ export type ResourceLayerStyle =
     }
   | { readonly type: 'circle'; readonly paint: NonNullable<CircleLayerSpecification['paint']> };
 
-/** 资源的一个图层：主图层没有后缀，纹理图层、描边图层的 ID 加上后缀（ADR 0045 第 2 节） */
-export type ResourceLayerPart = ResourceLayerStyle & { readonly suffix?: 'pattern' | 'outline' };
+// 其他线型的图层后缀（ADR 0046 第 2 节）；实线如果用到，总在主图层
+const DASH_SUFFIXES = { dashed: 'dashed', dotted: 'dotted', dashDot: 'dash-dot' } as const;
+type DashSuffix = (typeof DASH_SUFFIXES)[keyof typeof DASH_SUFFIXES];
+
+/**
+ * 资源的一个图层：主图层没有后缀，纹理图层、描边图层（ADR 0045 第 2 节）和其他线型的图层（ADR 0046 第 2 节）的 ID 加上后缀；
+ * 按线型拆开时带上按要素线型的过滤，和几何类型的过滤一起用
+ */
+export type ResourceLayerPart = ResourceLayerStyle & {
+  readonly suffix?: 'pattern' | 'outline' | DashSuffix | `outline-${DashSuffix}`;
+  readonly filter?: ExpressionSpecification;
+};
 
 /** 资源的图层（从下到上）和它们用到的样式图片 */
 export interface ResourceStyleLayers {
@@ -328,9 +338,6 @@ export interface ResourceStyleLayers {
 export const LINE_LAYOUT: NonNullable<LineLayerSpecification['layout']> = { 'line-join': 'round', 'line-cap': 'round' };
 
 const TRANSPARENT = 'rgba(0, 0, 0, 0)';
-
-// 实线在分类的 match 里也要有值：间隔为 0 的虚线（同旧项目）
-const SOLID_DASHARRAY = [1, 0];
 
 /** 面的描边宽度（像素） */
 export function outlinePixels(symbol: FillSymbol): number {
@@ -370,10 +377,39 @@ const same = (values: readonly unknown[]) => values.every(value => JSON.stringif
 
 const NO_IMAGES: StyleImages = {};
 
+type LineLayout = NonNullable<LineLayerSpecification['layout']>;
+type LinePaint = NonNullable<LineLayerSpecification['paint']>;
+
+// 一种线型的图层后缀：主图层（用到的线型里最靠前的一种）同基础后缀，其余加上线型
+function dashSuffix(base: 'outline' | undefined, dash: LineDash, isMain: boolean): ResourceLayerPart['suffix'] {
+  if (isMain || dash === 'solid') {
+    return base;
+  }
+  return base ? `${base}-${DASH_SUFFIXES[dash]}` : DASH_SUFFIXES[dash];
+}
+
+// 一种线型的图层：线型是常量，实线不设；多种线型时带上按要素线型的过滤
+function dashLayer(
+  dash: LineDash,
+  suffix: ResourceLayerPart['suffix'],
+  filter: ExpressionSpecification | null,
+  layout: LineLayout,
+  paint: LinePaint
+): ResourceLayerPart {
+  const { dasharray } = LINE_DASHES[dash];
+  return {
+    type: 'line',
+    layout,
+    paint: dasharray ? { ...paint, 'line-dasharray': [...dasharray] } : paint,
+    ...(suffix ? { suffix } : {}),
+    ...(filter ? { filter } : {})
+  };
+}
+
 /**
- * 资源的图层（ADR 0044 第 4 节、ADR 0045 第 2 节）：每个取值一个符号，按属性组合成 match，所有取值相同的属性直接用这个值；
- * 随缩放的大小、描边颜色保留外层的缩放插值，在各断点的输出里做 match；线型在 match 里用 literal 包起来。
- * 面按需拆成主图层、纹理图层（有取值用了花纹）、描边图层（有取值是复杂描边）
+ * 资源的图层（ADR 0044 第 4 节、ADR 0045 第 2 节、ADR 0046 第 2 节）：每个取值一个符号，按属性组合成 match，
+ * 所有取值相同的属性直接用这个值；随缩放的大小、描边颜色保留外层的缩放插值，在各断点的输出里做 match；
+ * 线型不同的取值按线型拆成多个图层。面按需拆成主图层、纹理图层（有取值用了花纹）、描边图层（有取值是复杂描边）
  */
 export function classifiedLayers(
   classes: SymbolClasses,
@@ -395,17 +431,15 @@ export function classifiedLayers(
   // 随缩放的大小：各取值的断点相同（sizeStops 只缩放像素），外层是缩放插值，逐个断点组合像素
   const curve = (stopsOf: (item: ClassItem) => SizeStops): ExpressionSpecification =>
     interpolateZoom(stopsOf(first).map(([zoom], index) => [zoom, value(item => stopsOf(item)[index][1])]));
-  // 线型：都是实线时不设，都相同时直接用数组，有的不同时按取值匹配
-  const dashPaint = (dashOf: (item: ClassItem) => LineDash) => {
-    const dashes = items.map(item => LINE_DASHES[dashOf(item)].dasharray);
-    if (dashes.every(dash => dash === null)) {
-      return {};
-    }
-    const literal = (item: ClassItem): ExpressionSpecification => [
-      'literal',
-      [...(LINE_DASHES[dashOf(item)].dasharray ?? SOLID_DASHARRAY)]
-    ];
-    return { 'line-dasharray': same(dashes) ? [...(dashes[0] ?? [])] : combine(literal) };
+  // 按线型拆层：每种用到的线型一个图层，line-dasharray 是常量（实线不设），不在常量和按要素取值之间切换（MapLibre 6.12
+  // 的缺陷会报错）；多种线型时每层按要素的线型过滤，要素的线型和颜色共用一套匹配规则，每个要素恰好进一层
+  const dashParts: DashParts = (dashOf, base, layout, paint) => {
+    const used = LINE_DASH_NAMES.filter(dash => items.some(item => dashOf(item) === dash));
+    const featureDash = used.length > 1 ? combine(dashOf) : null;
+    return used.map((dash, index) => {
+      const filter: ExpressionSpecification | null = featureDash === null ? null : ['==', featureDash, dash];
+      return dashLayer(dash, dashSuffix(base, dash, index === 0), filter, layout, paint);
+    });
   };
   const symbolAt =
     <G extends ResourceGeometry>(geometry: G) =>
@@ -418,16 +452,15 @@ export function classifiedLayers(
     };
 
   if (firstSymbol.geometry === 'fill') {
-    return fillLayers(items, symbolAt('fill'), value, dashPaint);
+    return fillLayers(items, symbolAt('fill'), value, dashParts);
   }
   if (firstSymbol.geometry === 'line') {
     const line = symbolAt('line');
     const paint = {
       'line-color': value(item => line(item).color),
-      'line-width': curve(item => sizeStops('line', line(item).width)),
-      ...dashPaint(item => line(item).dash)
+      'line-width': curve(item => sizeStops('line', line(item).width))
     };
-    return { parts: [{ type: 'line', layout: LINE_LAYOUT, paint }], images: NO_IMAGES };
+    return { parts: dashParts(item => line(item).dash, undefined, LINE_LAYOUT, paint), images: NO_IMAGES };
   }
   const circle = symbolAt('circle');
   const paint = {
@@ -441,16 +474,20 @@ export function classifiedLayers(
 
 type ValueOf = <T extends MatchOutput>(output: (item: ClassItem) => T) => T | ExpressionSpecification;
 
-type DashPaint = (dashOf: (item: ClassItem) => LineDash) => {
-  readonly 'line-dasharray'?: number[] | ExpressionSpecification;
-};
+// 按线型拆出的图层：base 是主图层的后缀，paint 是各线型共用的部分
+type DashParts = (
+  dashOf: (item: ClassItem) => LineDash,
+  base: 'outline' | undefined,
+  layout: LineLayout,
+  paint: LinePaint
+) => ResourceLayerPart[];
 
-// 面的三个图层（ADR 0045 第 2 节）
+// 面的主图层、纹理图层、描边图层（ADR 0045 第 2 节），描边按线型拆层（ADR 0046 第 2 节）
 function fillLayers(
   items: readonly ClassItem[],
   fill: (item: ClassItem) => FillSymbol,
   value: ValueOf,
-  dashPaint: DashPaint
+  dashParts: DashParts
 ): ResourceStyleLayers {
   const fillColorOf = (item: ClassItem) => (fill(item).fillStyle === 'none' ? TRANSPARENT : fill(item).fillColor);
   const complex = items.some(item => isComplexOutline(fill(item)));
@@ -506,17 +543,12 @@ function fillLayers(
 
   if (complex) {
     // 线宽是固定像素，内收半个线宽，描边只画在图斑里面（MVT 的外环顺时针，正偏移朝内）
-    parts.push({
-      suffix: 'outline',
-      type: 'line',
-      layout: {},
-      paint: {
-        'line-color': outlineColor(item => outlineColorStops(fill(item))),
-        'line-width': value(item => outlinePixels(fill(item))),
-        'line-offset': value(item => outlinePixels(fill(item)) / 2),
-        ...dashPaint(item => fill(item).outlineDash)
-      }
-    });
+    const paint = {
+      'line-color': outlineColor(item => outlineColorStops(fill(item))),
+      'line-width': value(item => outlinePixels(fill(item))),
+      'line-offset': value(item => outlinePixels(fill(item)) / 2)
+    };
+    parts.push(...dashParts(item => fill(item).outlineDash, 'outline', {}, paint));
   }
   return { parts, images };
 }
