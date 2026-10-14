@@ -3,8 +3,8 @@ import { mount } from '@vue/test-utils';
 import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
-import { useResourceCatalogQuery } from './queries';
+import { defineComponent, shallowRef } from 'vue';
+import { type FeatureKey, resourceMapKeys, useFeatureDetailQuery, useResourceCatalogQuery } from './queries';
 import { resourceTreeData, resourceTreeResponse } from './test-data';
 
 const server = setupServer();
@@ -80,5 +80,85 @@ describe('useResourceCatalogQuery', () => {
     await catalog.refetch();
     expect(catalog.data.value).not.toBe(first);
     expect(catalog.data.value?.resources.has('gtkjgh_czkfbj')).toBe(false);
+  });
+});
+
+const page = (list: unknown[]) => ({ total: list.length, list });
+
+// 条件是 "guid" = '…'，取出其中的 guid
+const guidOf = (request: Request) => (new URL(request.url).searchParams.get('conditions') ?? '').slice(10, 42);
+
+describe('useFeatureDetailQuery', () => {
+  const GUID_A = 'a'.repeat(32);
+  const GUID_B = 'b'.repeat(32);
+  const POINT = { type: 'Point', coordinates: [119.28, 33.82] };
+
+  // 属性和几何按 guid 返回；GUID_A 的属性请求一直不返回
+  function mockDetail() {
+    server.use(
+      mock.get('/backend/api/query/attr/page', async ({ request }) => {
+        const guid = guidOf(request);
+        if (guid === GUID_A) {
+          await new Promise(() => {});
+        }
+        return HttpResponse.json(page([{ guid, name: `要素 ${guid[0]}` }]));
+      }),
+      mock.get('/backend/api/query/scope/geojson', ({ request }) =>
+        HttpResponse.json([{ guid: guidOf(request), geom: JSON.stringify(POINT) }])
+      )
+    );
+  }
+
+  let detail: ReturnType<typeof useFeatureDetailQuery>;
+  let queryClient: QueryClient;
+  const feature = shallowRef<FeatureKey | null>(null);
+
+  const DetailHost = defineComponent({
+    setup() {
+      detail = useFeatureDetailQuery(feature);
+      return () => null;
+    }
+  });
+
+  function mountDetail(key: FeatureKey | null) {
+    feature.value = key;
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mount(DetailHost, { global: { plugins: [[VueQueryPlugin, { queryClient }]] } });
+  }
+
+  it('没有要素时不查询', async () => {
+    mockDetail();
+    mountDetail(null);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(detail.fetchStatus.value).toBe('idle');
+    expect(detail.status.value).toBe('pending');
+    expect(detail.data.value).toBeUndefined();
+  });
+
+  it('按图层编码和 guid 查属性和完整几何', async () => {
+    mockDetail();
+    mountDetail({ layerCode: 'bgdc_dltb_2022', guid: GUID_B });
+
+    await vi.waitFor(() => expect(detail.data.value).toBeDefined());
+    expect(detail.data.value).toStrictEqual({
+      feature: { layerCode: 'bgdc_dltb_2022', guid: GUID_B },
+      detail: { properties: { guid: GUID_B, name: '要素 b' }, geometry: POINT }
+    });
+  });
+
+  // MSW 收到的 request.signal 不随 axios 的取消而中止，所以看缓存里旧查询的状态：取消后立即回到 idle，
+  // 没取消的话会一直是 fetching（模拟接口一直挂着）
+  it('换了要素时取消上一个请求，显示新要素的详情', async () => {
+    mockDetail();
+    mountDetail({ layerCode: 'bgdc_dltb_2022', guid: GUID_A });
+    await vi.waitFor(() => expect(detail.fetchStatus.value).toBe('fetching'));
+
+    feature.value = { layerCode: 'bgdc_dltb_2022', guid: GUID_B };
+
+    await vi.waitFor(() => expect(detail.data.value).toBeDefined());
+    expect(detail.data.value?.detail.properties).toStrictEqual({ guid: GUID_B, name: '要素 b' });
+    const previous = queryClient.getQueryState(resourceMapKeys.featureDetail('bgdc_dltb_2022', GUID_A));
+    expect(previous?.fetchStatus).toBe('idle');
   });
 });

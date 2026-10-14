@@ -1,15 +1,17 @@
 // @vitest-environment node
 import type { Geometry, LineString, Point } from 'geojson';
-import type { LngLat, PickResult, RenderedFeature, ScreenPoint } from '@yzt/map-core';
+import type { LngLat, PickResult, RenderedFeature, RenderedQueryOptions, ScreenBox, ScreenPoint } from '@yzt/map-core';
 import { describe, expect, it } from 'vitest';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import {
+  featureBounds,
   featureRows,
   featureSummary,
   identifyGeometry,
   identifyStep,
   pickResources,
+  planIdentify,
   type PickCandidate,
   type PickResource,
   queryCapabilityOf,
@@ -291,6 +293,93 @@ describe('screenDistance', () => {
       geometries: [{ type: 'Point', coordinates: [0, 4] }, line([-10, 3], [10, 3])]
     } satisfies Geometry;
     expect(screenDistance(collection, ORIGIN, project)).toBe(3);
+  });
+});
+
+// 渲染要素的查询记下范围和选项，按数据源返回给定的要素；拾取同 picker，项目同 project
+function fakeView(features: readonly RenderedFeature[], miss = false) {
+  const queries: [ScreenPoint | ScreenBox, RenderedQueryOptions][] = [];
+  const view = {
+    pick: picker(() => miss).pick,
+    project,
+    queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => {
+      queries.push([area, options]);
+      return features.filter(({ sourceId }) => options.sources.includes(sourceId));
+    }
+  };
+  return { view, queries };
+}
+
+const SZY = targetOf('szy_kt', 2025);
+
+const kindsOf = (tasks: ReturnType<typeof planIdentify>) => tasks.map(task => [task.target.resource.code, task.kind]);
+
+describe('planIdentify', () => {
+  const ORIGIN = { x: 0, y: 0 };
+  const features = [
+    rendered(HYDL.sourceId, { guid: guid('a') }, 5),
+    rendered(HYDL.sourceId, { guid: guid('b') }, 2),
+    rendered(DLTB.sourceId, { guid: guid('c') }, 0)
+  ];
+
+  it('渲染要素按几何类型取：面取点击位置、不换算几何，线、点取容差框并换算几何', () => {
+    const { view, queries } = fakeView(features);
+
+    planIdentify([HYDL, DLTB, SZY], ORIGIN, 15, view);
+
+    expect(queries).toStrictEqual([
+      [{ from: { x: -8, y: -8 }, to: { x: 8, y: 8 } }, { sources: [HYDL.sourceId], withGeometry: true }],
+      [ORIGIN, { sources: [DLTB.sourceId], withGeometry: false }],
+      [ORIGIN, { sources: [SZY.sourceId], withGeometry: false }]
+    ]);
+  });
+
+  it('14 级起有渲染要素的都用渲染要素，候选按屏幕距离排序；什么也没有的资源不在结果里', () => {
+    const tasks = planIdentify([HYDL, DLTB, SZY], ORIGIN, 15, fakeView(features).view);
+
+    expect(kindsOf(tasks)).toStrictEqual([
+      ['csxhjctb_hydl', 'rendered'],
+      ['bgdc_dltb', 'rendered']
+    ]);
+    const [first] = tasks;
+    const order = first?.kind === 'rendered' ? first.candidates.map(({ guid: id }) => id) : [];
+    expect(order).toStrictEqual([guid('b'), guid('a')]);
+  });
+
+  it('级别不够时能识别的资源查后端，面用点击位置；不能识别的有渲染要素就用', () => {
+    const tasks = planIdentify([HYDL, DLTB, SZY], ORIGIN, 12, fakeView(features).view);
+
+    expect(kindsOf(tasks)).toStrictEqual([
+      ['csxhjctb_hydl', 'rendered'],
+      ['bgdc_dltb', 'server']
+    ]);
+    expect(tasks[1]).toStrictEqual({ kind: 'server', target: DLTB, geometry: { type: 'Point', coordinates: [0, 0] } });
+  });
+
+  it('14 级起没有渲染要素时也查后端；拾取不到范围时退回渲染要素，没有就不在结果里', () => {
+    expect(kindsOf(planIdentify([DLTB], ORIGIN, 16, fakeView([]).view))).toStrictEqual([['bgdc_dltb', 'server']]);
+    expect(kindsOf(planIdentify([DLTB], ORIGIN, 12, fakeView(features, true).view))).toStrictEqual([
+      ['bgdc_dltb', 'rendered']
+    ]);
+    expect(planIdentify([DLTB], ORIGIN, 12, fakeView([], true).view)).toStrictEqual([]);
+  });
+});
+
+describe('featureBounds', () => {
+  it('几何的外包范围：西、南、东、北', () => {
+    const polygon = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [119, 33],
+          [119.2, 33.05],
+          [119.1, 33.3],
+          [119, 33]
+        ]
+      ]
+    } satisfies Geometry;
+    expect(featureBounds(polygon)).toStrictEqual([119, 33, 119.2, 33.3]);
+    expect(featureBounds({ type: 'Point', coordinates: [120.5, 32.1] })).toStrictEqual([120.5, 32.1, 120.5, 32.1]);
   });
 });
 

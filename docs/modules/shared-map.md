@@ -190,7 +190,8 @@ boundaries.setOpacity(0.6);
 <MapToolbar items={['region-locate']} actions={{ 'region-locate': togglePanel }} pressed={open ? ['region-locate'] : []} />
 ```
 
-- `toolbar-items.ts` 把工具和动作分成两张表，名称、图标集中在这里，图标先用 Element 的（移动 `Rank`、测距 `Share`、测面 `Crop`、默认视角 `HomeFilled`、清除 `Delete`、区划定位 `MapLocation`、坐标定位 `Location`），5D 换成设计的素材。工具的 ID 就是登记到会话里的工具 ID，测距、测面用 `MEASURE_TOOL_IDS`；5C.6 加点选
+- `toolbar-items.ts` 把工具和动作分成两张表，名称、图标集中在这里，图标先用 Element 的（移动 `Rank`、点选 `Pointer`、测距 `Share`、测面 `Crop`、默认视角 `HomeFilled`、清除 `Delete`、区划定位 `MapLocation`、坐标定位 `Location`），5D 换成设计的素材。工具的 ID 就是登记到会话里的工具 ID，测距、测面用 `MEASURE_TOOL_IDS`
+- 点选的按钮在这里，ID 是 `FEATURE_PICK_TOOL`（`'feature-pick'`），实现由业务模块登记（ADR 0047 第 6 节）：现状底图页登记 `features/resource-map` 的 `useFeaturePick().tools`。按钮放进 `items` 之前必须先登记，否则点击时 `activateTool` 抛错
 - 工具按钮读 `useMap().activeTool`，激活的按钮高亮；点击没激活的工具时 `activateTool`，点击激活的工具时 `releaseTool`（临时任务退回上一个常驻模式）。"移动"是常驻模式，再点一次什么也不做
 - 动作按钮调用页面通过 `actions` 传入的回调，没有回调时不可用。开关面板的动作（区划定位，以后的坐标定位）也是动作：面板开关是页面的界面状态，页面通过 `pressed` 告诉工具栏哪些显示为按下（高亮、`aria-pressed`），工具栏自己不保存；它和当前工具互不影响（ADR 0036）
 - 现状底图页把它和底图面板、边界面板一起放在右上角；它是角落里的小控件，不登记为悬浮元素。放不下时换行、靠右对齐：页面的控件列左右都留边距，工具栏在这个宽度里换行；控件列本身不拦截鼠标，空白处仍是地图

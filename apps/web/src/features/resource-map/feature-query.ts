@@ -1,5 +1,6 @@
+import { bbox } from '@turf/bbox';
 import type { Geometry, Point, Polygon, Position } from 'geojson';
-import type { LngLat, PickResult, RenderedFeature, ScreenPoint } from '@yzt/map-core';
+import type { LngLat, PickResult, RenderedFeature, ScreenBox, ScreenPoint, ToolView, ViewBounds } from '@yzt/map-core';
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
 import { LANDUSE_FIELD_LABELS } from './landuse';
@@ -140,6 +141,52 @@ export function identifyStep(
   return rendered.length > 0 ? { kind: 'rendered', candidates: rendered } : { kind: 'none' };
 }
 
+/** 识别一个资源要做的事：渲染要素已经取到，或者用这个地理范围查后端 */
+export type IdentifyTask =
+  | { readonly kind: 'rendered'; readonly target: PickResource; readonly candidates: readonly PickCandidate[] }
+  | { readonly kind: 'server'; readonly target: PickResource; readonly geometry: Point | Polygon };
+
+// 渲染要素的查询范围：面是点击位置，线、点是容差框
+function renderedArea(point: ScreenPoint, tolerance: number): ScreenPoint | ScreenBox {
+  if (tolerance === 0) {
+    return point;
+  }
+  const { x, y } = point;
+  return { from: { x: x - tolerance, y: y - tolerance }, to: { x: x + tolerance, y: y + tolerance } };
+}
+
+/**
+ * 点击时就定下每个资源怎样识别（ADR 0047 第 2 节）：屏幕上的查询、拾取都在这里同步做完，之后查后端只用地理范围，
+ * 地图移动不影响结果。既没有渲染要素、又不能查后端或拾取不到范围的资源不在结果里
+ */
+export function planIdentify(
+  targets: readonly PickResource[],
+  point: ScreenPoint,
+  zoom: number,
+  view: Pick<ToolView, 'pick' | 'project' | 'queryRendered'>
+): IdentifyTask[] {
+  return targets.flatMap((target): IdentifyTask[] => {
+    const tolerance = PICK_TOLERANCES[target.resource.geometry];
+    // 面的距离都是 0，不用换算几何
+    const features = view.queryRendered(renderedArea(point, tolerance), {
+      sources: [target.sourceId],
+      withGeometry: tolerance > 0
+    });
+    const rendered = renderedCandidates(target, features, shape =>
+      screenDistance(shape, point, lngLat => view.project(lngLat))
+    );
+    const step = identifyStep(queryCapabilityOf(target.resource.code), zoom, rendered);
+    if (step.kind === 'server') {
+      const geometry = identifyGeometry(target.resource.geometry, point, at => view.pick(at));
+      if (geometry) {
+        return [{ kind: 'server', target, geometry }];
+      }
+    }
+    // 用渲染要素；后端识别拾取不到范围时也退回渲染要素
+    return rendered.length > 0 ? [{ kind: 'rendered', target, candidates: rendered }] : [];
+  });
+}
+
 /** 后端识别用的范围：面用点击位置（只返回包含它的面），线、点用容差框四角拾取到的多边形；拾取不到时为 null */
 export function identifyGeometry(
   geometry: ResourceGeometry,
@@ -225,6 +272,13 @@ export function screenDistance(
       break;
   }
   return Math.min(Infinity, ...geometry.geometries.map(part => screenDistance(part, point, project)));
+}
+
+/** 定位用的外包范围 */
+export function featureBounds(geometry: Geometry): ViewBounds {
+  // 查询结果没有 bbox 属性，坐标只取前两维，结果总是四个数
+  const [west, south, east, north] = bbox(geometry, { recompute: true });
+  return [west, south, east, north];
 }
 
 // 地类图斑（含城镇村）：名称取地类名称，字段名用地类的中文名
