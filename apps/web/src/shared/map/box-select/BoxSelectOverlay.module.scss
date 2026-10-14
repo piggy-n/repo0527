@@ -1,0 +1,15 @@
+// 联调用的样式，5D 再设计；盖在画布上，不拦截地图的鼠标操作
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px dashed var(--color-primary);
+  background-color: var(--color-primary-alpha-12);
+}

@@ -13,17 +13,21 @@ import { describe, expect, it } from 'vitest';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import {
+  BOX_ESTIMATE_LIMIT,
+  type BoxTask,
   featureBounds,
   featureRows,
   featureSummary,
   identifyGeometry,
   identifyStep,
   pickResources,
+  planBox,
   planIdentify,
   type PickCandidate,
   type PickResource,
   queryCapabilityOf,
   renderedCandidates,
+  screenBoxPolygon,
   screenDistance,
   serverCandidates
 } from './feature-query';
@@ -342,7 +346,7 @@ const LVLL = targetOf('csxhjctb_lvll', 2025);
 const LCTL = targetOf('csxhjctb_lctl', 2025);
 const CJDCQJX = targetOf('bgdc_cjdcqjx', 2022);
 
-const kindsOf = (tasks: ReturnType<typeof planIdentify>) => tasks.map(task => [task.target.resource.code, task.kind]);
+const kindsOf = (tasks: readonly BoxTask[]) => tasks.map(task => [task.target.resource.code, task.kind]);
 
 describe('planIdentify', () => {
   const ORIGIN = { x: 0, y: 0 };
@@ -415,6 +419,108 @@ describe('planIdentify', () => {
 
     expect(kindsOf(missed)).toStrictEqual([['bgdc_dltb', 'rendered']]);
     expect(planIdentify([DLTB], ORIGIN, 12, fakeView([], { miss: true }).view)).toStrictEqual([]);
+  });
+});
+
+describe('screenBoxPolygon', () => {
+  it('四角从左上起顺时针拾取成闭合多边形，起点和终点在哪个方向都一样', () => {
+    const polygon = screenBoxPolygon({ from: { x: 0, y: 0 }, to: { x: 200, y: 100 } }, picker().pick);
+
+    expect(polygon).toStrictEqual({
+      type: 'Polygon',
+      coordinates: [
+        [
+          [0, 0],
+          [2, 0],
+          [2, 1],
+          [0, 1],
+          [0, 0]
+        ]
+      ]
+    });
+    expect(screenBoxPolygon({ from: { x: 200, y: 100 }, to: { x: 0, y: 0 } }, picker().pick)).toStrictEqual(polygon);
+  });
+
+  it('有一角拾取不到时为 null', () => {
+    const missRightBottom = picker(({ x, y }) => x === 200 && y === 100);
+
+    expect(screenBoxPolygon({ from: { x: 0, y: 0 }, to: { x: 200, y: 100 } }, missRightBottom.pick)).toBeNull();
+  });
+});
+
+// n 个不同的 guid 的渲染要素
+const many = (target: PickResource, n: number) =>
+  Array.from({ length: n }, (_, index) => rendered(target.sourceId, { guid: index.toString(16).padStart(32, '0') }, 0));
+
+describe('planBox', () => {
+  const BOX = { from: { x: 0, y: 0 }, to: { x: 200, y: 100 } };
+
+  it('二维 14 级起用框里的渲染要素：按 guid 去重、保持查询的顺序，不换算几何；有结果的资源下面不再查询', () => {
+    const features = [
+      rendered(DLTB.sourceId, { guid: guid('f') }, 0),
+      rendered(DLTB.sourceId, { guid: guid('c') }, 0),
+      rendered(DLTB.sourceId, { guid: guid('f') }, 0),
+      rendered(SZY.sourceId, { guid: guid('d') }, 0)
+    ];
+    const { view, queries } = fakeView(features);
+
+    const tasks = planBox([LCTL, DLTB, SZY], BOX, 15, view);
+
+    expect(kindsOf(tasks)).toStrictEqual([['bgdc_dltb', 'rendered']]);
+    const [task] = tasks;
+    const order = task?.kind === 'rendered' ? task.candidates.map(({ guid: id }) => id) : [];
+    expect(order).toStrictEqual([guid('f'), guid('c')]);
+    expect(queries).toStrictEqual([
+      [BOX, { sources: [LCTL.sourceId] }],
+      [BOX, { sources: [DLTB.sourceId] }]
+    ]);
+  });
+
+  it('14 级以下登记的数据集查后端（框的四角拾取成多边形）并继续看下面的资源，遇到渲染要素的结果停下', () => {
+    const features = [
+      rendered(CJDCQJX.sourceId, { guid: guid('e') }, 0),
+      rendered(DLTB.sourceId, { guid: guid('c') }, 0)
+    ];
+    const { view, queries } = fakeView(features);
+
+    const tasks = planBox([HYDL, CJDCQJX, DLTB], BOX, 13.99, view);
+
+    expect(kindsOf(tasks)).toStrictEqual([
+      ['csxhjctb_hydl', 'server'],
+      ['bgdc_cjdcqjx', 'rendered']
+    ]);
+    expect(tasks[0]).toMatchObject({ geometry: screenBoxPolygon(BOX, picker().pick) });
+    expect(queries).toHaveLength(2);
+  });
+
+  it('三维没有渲染要素：登记的数据集都查后端', () => {
+    const tasks = planBox([HYDL, LCTL, DLTB], BOX, 16, fakeView([], { kind: '3d' }).view);
+
+    expect(kindsOf(tasks)).toStrictEqual([
+      ['csxhjctb_hydl', 'server'],
+      ['bgdc_dltb', 'server']
+    ]);
+  });
+
+  it('框里去重后超过 5000 个时停在这个资源，不查后端；恰好 5000 个、重复的照常', () => {
+    const limit = BOX_ESTIMATE_LIMIT;
+    // 超限的资源下面还有资源，也不再查询
+    const crowded = [...many(DLTB, limit + 1), rendered(LCTL.sourceId, { guid: guid('a') }, 0)];
+    expect(planBox([HYDL, DLTB, LCTL], BOX, 12, fakeView(crowded).view)).toStrictEqual([
+      { kind: 'server', target: HYDL, geometry: screenBoxPolygon(BOX, picker().pick) },
+      { kind: 'too-many', target: DLTB, estimate: limit + 1 }
+    ]);
+
+    const repeated = [...many(DLTB, limit), ...many(DLTB, 10)];
+    expect(kindsOf(planBox([DLTB], BOX, 12, fakeView(repeated).view))).toStrictEqual([['bgdc_dltb', 'server']]);
+    const [atLimit] = planBox([DLTB], BOX, 15, fakeView(repeated).view);
+    expect(atLimit?.kind === 'rendered' && atLimit.candidates).toHaveLength(limit);
+  });
+
+  it('拾取不到范围时退回渲染要素，没有就看下面的资源', () => {
+    const missed = fakeView([rendered(LCTL.sourceId, { guid: guid('a') }, 0)], { miss: true }).view;
+
+    expect(kindsOf(planBox([DLTB, LCTL], BOX, 12, missed))).toStrictEqual([['csxhjctb_lctl', 'rendered']]);
   });
 });
 

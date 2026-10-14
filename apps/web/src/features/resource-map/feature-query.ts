@@ -51,6 +51,9 @@ export const RENDERED_PICK_ZOOM = 14;
 /** 后端识别每页的条数 */
 export const PICK_PAGE_SIZE = 30;
 
+/** 框选时估数的拒绝阈值：框里的渲染要素去重后超过它时提示缩小范围，不请求后端（ADR 0049 第 2 节） */
+export const BOX_ESTIMATE_LIMIT = 5000;
+
 /** 参与识别的资源 */
 export interface PickResource {
   readonly resource: Resource;
@@ -161,13 +164,14 @@ export type IdentifyTask =
   | { readonly kind: 'rendered'; readonly target: PickResource; readonly candidates: readonly PickCandidate[] }
   | { readonly kind: 'server'; readonly target: PickResource; readonly geometry: Point | Polygon };
 
+// 以点击位置为中心的容差框
+function toleranceBox({ x, y }: ScreenPoint, tolerance: number): ScreenBox {
+  return { from: { x: x - tolerance, y: y - tolerance }, to: { x: x + tolerance, y: y + tolerance } };
+}
+
 // 渲染要素的查询范围：面是点击位置，线、点是容差框
 function renderedArea(point: ScreenPoint, tolerance: number): ScreenPoint | ScreenBox {
-  if (tolerance === 0) {
-    return point;
-  }
-  const { x, y } = point;
-  return { from: { x: x - tolerance, y: y - tolerance }, to: { x: x + tolerance, y: y + tolerance } };
+  return tolerance === 0 ? point : toleranceBox(point, tolerance);
 }
 
 /**
@@ -202,34 +206,81 @@ export function planIdentify(
   });
 }
 
-/** 后端识别用的范围：面用点击位置（只返回包含它的面），线、点用容差框四角拾取到的多边形；拾取不到时为 null */
-export function identifyGeometry(
-  geometry: ResourceGeometry,
-  point: ScreenPoint,
-  pick: (point: ScreenPoint) => PickResult
-): Point | Polygon | null {
-  const lngLatAt = (x: number, y: number): Position | null => {
-    const result = pick({ x, y });
-    return result.kind === 'hit' ? [...result.lngLat] : null;
-  };
-  const tolerance = PICK_TOLERANCES[geometry];
-  if (tolerance === 0) {
-    const center = lngLatAt(point.x, point.y);
-    return center ? { type: 'Point', coordinates: center } : null;
-  }
-  const { x, y } = point;
+// 拾取到的经纬度；拾取不到时为 null
+function lngLatAt(pick: (point: ScreenPoint) => PickResult, point: ScreenPoint): Position | null {
+  const result = pick(point);
+  return result.kind === 'hit' ? [...result.lngLat] : null;
+}
+
+/** 屏幕矩形四角（左上起顺时针）拾取到的闭合多边形，起点和终点可以在任意方向；有一角拾取不到时为 null */
+export function screenBoxPolygon(box: ScreenBox, pick: (point: ScreenPoint) => PickResult): Polygon | null {
+  const [left, right] = [Math.min(box.from.x, box.to.x), Math.max(box.from.x, box.to.x)];
+  const [top, bottom] = [Math.min(box.from.y, box.to.y), Math.max(box.from.y, box.to.y)];
   const corners = [
-    lngLatAt(x - tolerance, y - tolerance),
-    lngLatAt(x + tolerance, y - tolerance),
-    lngLatAt(x + tolerance, y + tolerance),
-    lngLatAt(x - tolerance, y + tolerance)
-  ];
+    { x: left, y: top },
+    { x: right, y: top },
+    { x: right, y: bottom },
+    { x: left, y: bottom }
+  ].map(corner => lngLatAt(pick, corner));
   const ring = corners.filter(corner => corner !== null);
   const [first] = ring;
   if (ring.length !== corners.length || !first) {
     return null;
   }
   return { type: 'Polygon', coordinates: [[...ring, first]] };
+}
+
+/** 后端识别用的范围：面用点击位置（只返回包含它的面），线、点用容差框四角拾取到的多边形；拾取不到时为 null */
+export function identifyGeometry(
+  geometry: ResourceGeometry,
+  point: ScreenPoint,
+  pick: (point: ScreenPoint) => PickResult
+): Point | Polygon | null {
+  const tolerance = PICK_TOLERANCES[geometry];
+  if (tolerance === 0) {
+    const center = lngLatAt(pick, point);
+    return center ? { type: 'Point', coordinates: center } : null;
+  }
+  return screenBoxPolygon(toleranceBox(point, tolerance), pick);
+}
+
+/** 框选一个资源要做的事：同点选；框里的渲染要素超过估数的上限时提示缩小范围 */
+export type BoxTask =
+  | IdentifyTask
+  | { readonly kind: 'too-many'; readonly target: PickResource; readonly estimate: number };
+
+/**
+ * 松手时定下框选怎样识别（ADR 0049 第 2 节）：资源从上到下数框里的渲染要素（按 guid 去重，不换算几何），
+ * 识别方式同点选；遇到可以直接用的渲染要素结果、或超过估数的上限时停下，下面的资源不再查询
+ */
+export function planBox(
+  targets: readonly PickResource[],
+  box: ScreenBox,
+  zoom: number,
+  view: Pick<ToolView, 'kind' | 'pick' | 'queryRendered'>
+): BoxTask[] {
+  const tasks: BoxTask[] = [];
+  for (const target of targets) {
+    const features = view.queryRendered(box, { sources: [target.sourceId] });
+    // 先只数 guid，超过上限时不再为每个要素建候选
+    const estimate = new Set(features.flatMap(({ properties: { guid } }) => (isFeatureGuid(guid) ? [guid] : []))).size;
+    if (estimate > BOX_ESTIMATE_LIMIT) {
+      tasks.push({ kind: 'too-many', target, estimate });
+      return tasks;
+    }
+    // 框选不按距离排序，保持查询结果从上到下的顺序
+    const rendered = renderedCandidates(target, features, () => 0);
+    const step = identifyStep(queryCapabilityOf(target.resource.code), view.kind, zoom, rendered);
+    const geometry = step.kind === 'server' ? screenBoxPolygon(box, at => view.pick(at)) : null;
+    if (geometry) {
+      tasks.push({ kind: 'server', target, geometry });
+    } else if (rendered.length > 0) {
+      // 用渲染要素；后端识别拾取不到范围时也退回它
+      tasks.push({ kind: 'rendered', target, candidates: rendered });
+      return tasks;
+    }
+  }
+  return tasks;
 }
 
 // 点到线段的距离

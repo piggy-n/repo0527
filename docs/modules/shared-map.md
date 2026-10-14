@@ -21,6 +21,8 @@
 | `boundary/BoundaryPanel.tsx` | 边界的面板（联调用的界面） |
 | `toolbar/toolbar-items.ts` | 工具栏上的工具和动作：名称、图标集中在一张表里（ADR 0034） |
 | `toolbar/MapToolbar.tsx` | 工具栏的外壳（联调用的界面） |
+| `box-select/box-gesture.ts` | 拖动框选的手势：阈值、屏蔽派生的单击、取消（纯函数，ADR 0049） |
+| `box-select/BoxSelectOverlay.tsx` | 拖动框选时的矩形（联调用的界面） |
 | `measure/measure-style.ts` | `measure` 分组的推导（纯函数，ADR 0035） |
 | `measure/measure-labels.ts` | 测量的标签、单位格式与鼠标旁的提示（纯函数） |
 | `measure/useMeasure.ts` | 测量的拥有者：桥接 map-core 的 `MeasureStore`，提供两个工具和推导函数 |
@@ -195,6 +197,25 @@ boundaries.setOpacity(0.6);
 - 工具按钮读 `useMap().activeTool`，激活的按钮高亮；点击没激活的工具时 `activateTool`，点击激活的工具时 `releaseTool`（临时任务退回上一个常驻模式）。"移动"是常驻模式，再点一次什么也不做
 - 动作按钮调用页面通过 `actions` 传入的回调，没有回调时不可用。开关面板的动作（区划定位，以后的坐标定位）也是动作：面板开关是页面的界面状态，页面通过 `pressed` 告诉工具栏哪些显示为按下（高亮、`aria-pressed`），工具栏自己不保存；它和当前工具互不影响（ADR 0036）
 - 现状底图页把它和底图面板、边界面板一起放在右上角；它是角落里的小控件，不登记为悬浮元素。放不下时换行、靠右对齐：页面的控件列左右都留边距，工具栏在这个宽度里换行；控件列本身不拦截鼠标，空白处仍是地图
+
+## 框选的手势与矩形（ADR 0049）
+
+框选由点选工具负责（业务在 `features/resource-map` 的点选拥有者里），和业务无关的手势和矩形放在这里：
+
+```ts
+let gesture = NO_BOX_GESTURE;
+gesture = pressBox(point);              // 左键按下：开始新的手势，解除上一次的单击屏蔽
+gesture = moveBox(gesture, point);      // 离起点不小于 3 像素时进入框选，之后更新当前点
+const { gesture: next, box } = releaseBox(gesture, point);  // 框选中松手给出框，并屏蔽这次的单击
+gesture = cancelBox(gesture);           // Esc、地图移动、失焦、离开画布
+acceptsClick(gesture);                  // 收到单击时先问：是不是一次正常的单击
+drawingBox(gesture);                    // 正在画的框，交给 <BoxSelectOverlay box={...} />
+```
+
+- 阈值是 3 像素：所装 MapLibre 只比较按下点和松手点，距离不小于 `clickTolerance`（默认 3）时不发单击；用同一个阈值，单击和框选不会都不触发
+- 一次手势进入了框选或被取消，就屏蔽它派生的单击，到下一次按下才重置：拖出很远再回到起点附近松手时 MapLibre 仍会发出单击，不屏蔽就会覆盖刚完成的框选
+- 松手点离起点够远时，即使没收到移动也按框选处理；拖回起点附近、框不到 3 像素时没有框
+- 状态是整体替换的普通对象，拥有者放在 `shallowRef` 里；浮层只显示 `drawingBox` 给出的框，按左上角和宽高摆放，不拦截地图的鼠标操作
 
 ## 测量（ADR 0035）
 
