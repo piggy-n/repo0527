@@ -62,15 +62,27 @@
   color: var(--color-danger);
 }
 
+// 虚拟滚动的容器：最多显示 10 行，再多在里面滚动
+.scroller {
+  flex-shrink: 0;
+  max-height: 300px;
+}
+
 .candidates {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+// 每行固定高度，和面板里的 CANDIDATE_HEIGHT 一致
 .candidate {
+  box-sizing: border-box;
   width: 100%;
+  height: 30px;
   padding: 6px 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   border: none;
   border-radius: var(--radius-sm);
   font: inherit;

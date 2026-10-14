@@ -812,6 +812,50 @@ describe('CurrentMapPage', () => {
     expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(false);
   });
 
+  it('框选：拖动时显示矩形，松手列出框里的地类图斑并在瓦片上批量高亮；这次手势派生的单击不识别', async () => {
+    const { wrapper, map } = await readyPage();
+    await vi.waitFor(() => expect(addedLayersOf(map, 'resources')).not.toStrictEqual([]));
+    const layer = { id: 'resources-bgdc_dltb' };
+    const geometry: Polygon = { type: 'Polygon', coordinates: [[[119, 32], [119.01, 32], [119.01, 32.01], [119, 32]]] };
+    map.renderedFeatures = ['a', 'b'].map(letter => ({
+      source: layer.id,
+      layer,
+      properties: { guid: letter.repeat(32), dlmc: '水田' },
+      geometry
+    }));
+    map.moveTo([119, 32], 15, {});
+    await button(wrapper, '点选').trigger('click');
+
+    map.mouse('mousedown', 100, 100);
+    map.mouse('mousemove', 200, 160);
+    await nextTick();
+    expect(wrapper.find('[data-box-select-overlay] > div').exists()).toBe(true);
+    const box = wrapper.get('[data-box-select-overlay] > div').element as HTMLElement;
+    expect([box.style.left, box.style.top, box.style.width, box.style.height]).toStrictEqual([
+      '100px',
+      '100px',
+      '100px',
+      '60px'
+    ]);
+
+    map.mouse('mouseup', 200, 160);
+    map.mouse('click', 200, 160);
+    await nextTick();
+
+    expect(wrapper.find('[data-box-select-overlay] > div').exists()).toBe(false);
+    expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(true);
+    expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('框选 · 地类图斑');
+    expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('地图上已画出的 2 个');
+    // 每次 addLayer 带着插在谁前面，调用的先后不是叠放的顺序，这里只看加了哪些
+    await vi.waitFor(() =>
+      expect(addedLayersOf(map, 'selection').map(([id]) => id).toSorted()).toStrictEqual([
+        'selection-batch-circle',
+        'selection-batch-fill',
+        'selection-batch-line'
+      ])
+    );
+  });
+
   it('资源目录加载失败：列表显示失败和重试；重试期间显示加载中，成功后显示资源', async () => {
     server.use(mock.get(TREE_URL, () => HttpResponse.json({ code: 500, msg: '系统异常', success: false, data: null })));
     const { wrapper } = await readyPage();

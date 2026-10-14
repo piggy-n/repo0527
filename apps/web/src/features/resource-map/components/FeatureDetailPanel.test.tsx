@@ -94,6 +94,8 @@ describe('FeatureDetailPanel', () => {
   it('候选列表：资源名、年份和个数，每行是年份和名称；点一行选中它', async () => {
     const { pick } = fakePick({ kind: 'candidates', list: LIST, more: { kind: 'idle' } });
     const wrapper = mountPanel(pick);
+    // 虚拟列表在容器挂载后的下一轮渲染出行
+    await nextTick();
 
     expect(wrapper.text()).toContain('地类图斑');
     expect(wrapper.text()).toContain('2022 年 · 共 2 个');
@@ -110,6 +112,8 @@ describe('FeatureDetailPanel', () => {
     const wrapper = mountPanel(pick);
 
     expect(wrapper.text()).toContain('共 45 个，已列出 2 个');
+    // 单击的结果没有批量高亮，不提示
+    expect(wrapper.text()).not.toContain('放大到 14 级以上');
     await button(wrapper, '加载更多').trigger('click');
     expect(pick.loadMore).toHaveBeenCalledOnce();
 
@@ -176,11 +180,25 @@ describe('FeatureDetailPanel', () => {
 
     expect(wrapper.text()).toContain('框选 · 地类图斑');
     expect(wrapper.text()).toContain('2022 年 · 地图上已画出的 2 个');
+    expect(wrapper.text()).not.toContain('放大到 14 级以上');
 
     const pages = { geometry: POINT, loaded: 1, total: 45 };
     state.value = { kind: 'candidates', list: { ...box, pages }, more: { kind: 'idle' } };
     await nextTick();
     expect(wrapper.text()).toContain('2022 年 · 共 45 个，已列出 2 个');
+    expect(wrapper.text()).toContain('低级别下地图上可能看不到高亮，放大到 14 级以上可以看到');
+  });
+
+  it('框选的列表只渲染看得见的几行：几千个候选时也只有几十行', async () => {
+    const many = Array.from({ length: 3000 }, (_, index) => candidate(DLTB, index, { dlmc: `地类 ${index}` }));
+    const list: CandidateList = { ...LIST, mode: 'box', candidates: many };
+    const { pick } = fakePick({ kind: 'candidates', list, more: { kind: 'idle' } });
+    const wrapper = mountPanel(pick);
+    await nextTick();
+
+    expect(wrapper.text()).toContain('地图上已画出的 3000 个');
+    expect(wrapper.findAll('li').length).toBeLessThan(50);
+    expect(wrapper.findAll('li')[0]?.text()).toBe('1. 2022 · 地类 0');
   });
 
   it('框里要素过多时提示缩小范围', () => {

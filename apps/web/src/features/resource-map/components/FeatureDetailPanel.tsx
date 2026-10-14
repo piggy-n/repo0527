@@ -1,12 +1,16 @@
 import { Aim, ArrowLeft, Close } from '@element-plus/icons-vue';
+import { useVirtualList } from '@vueuse/core';
 import { ElButton } from 'element-plus';
 import { useMapOverlay } from '@yzt/map-vue';
-import { defineComponent, type PropType, ref, type VNode } from 'vue';
+import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import type { FeatureRecord } from '../api';
 import { featureRows, featureSummary, type PickCandidate } from '../feature-query';
 import { type CandidateList, type FeaturePick, hasMorePages, type MoreStatus } from '../composables/useFeaturePick';
 import styles from './FeatureDetailPanel.module.scss';
+
+// 候选列表每行的高度（像素），和样式里的一致；框选可能有几千行，只渲染看得见的（ADR 0049 第 4 节）
+const CANDIDATE_HEIGHT = 30;
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : '未知错误';
@@ -47,6 +51,15 @@ export const FeatureDetailPanel = defineComponent({
     useMapOverlay(element, 'right');
     // 很快结束的识别和加载不显示提示（AGENTS.md"加载状态"）
     const identifying = useDelayedFlag(() => props.pick.state.value.kind === 'identifying');
+    const candidates = computed(() => {
+      const state = props.pick.state.value;
+      return state.kind === 'candidates' ? state.list.candidates : [];
+    });
+    // 容器挂载、尺寸变化、列表变化、滚动时重新算可见的行，挂载后下一轮渲染才有行
+    const { list: visible, containerProps, wrapperProps } = useVirtualList(candidates, {
+      itemHeight: CANDIDATE_HEIGHT,
+      overscan: 10
+    });
     const detailLoading = useDelayedFlag(() => props.pick.detail.value?.kind === 'loading');
 
     const renderHeader = (title: string, subtitle?: string, extra?: VNode[]) => (
@@ -82,20 +95,30 @@ export const FeatureDetailPanel = defineComponent({
     };
 
     const renderCandidates = (list: CandidateList, more: MoreStatus) => {
-      const { mode, target, candidates } = list;
+      const { mode, target, pages } = list;
       const title = mode === 'box' ? `框选 · ${target.resource.name}` : target.resource.name;
       return (
         <>
           {renderHeader(title, `${target.year} 年 · ${countOf(list)}`)}
-          <ul class={styles.candidates}>
-            {candidates.map((candidate, index) => (
-              <li key={candidate.key}>
-                <button type="button" class={styles.candidate} onClick={() => props.pick.choose(candidate)}>
-                  {index + 1}. {featureSummary(target, candidate.properties).subtitle}
-                </button>
-              </li>
-            ))}
-          </ul>
+          {mode === 'box' && pages && (
+            // 低级别的瓦片可能不带 guid，批量高亮匹配不到（docs/migration.md"框选的实测"）
+            <div class={styles.notice}>低级别下地图上可能看不到高亮，放大到 14 级以上可以看到</div>
+          )}
+          <div
+            ref={containerProps.ref}
+            class={styles.scroller}
+            style={containerProps.style}
+            onScroll={containerProps.onScroll}>
+            <ul class={styles.candidates} style={wrapperProps.value.style}>
+              {visible.value.map(({ data: candidate, index }) => (
+                <li key={candidate.key}>
+                  <button type="button" class={styles.candidate} onClick={() => props.pick.choose(candidate)}>
+                    {index + 1}. {featureSummary(target, candidate.properties).subtitle}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
           {renderMore(list, more)}
         </>
       );
