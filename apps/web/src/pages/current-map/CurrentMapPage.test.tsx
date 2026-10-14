@@ -854,6 +854,16 @@ describe('CurrentMapPage', () => {
         'selection-batch-line'
       ])
     );
+
+    // 从列表进入一个要素的详情，可以返回列表
+    server.use(
+      mock.get('/backend/api/query/attr/page', () => HttpResponse.json({ total: 1, list: [{ guid: 'a'.repeat(32) }] })),
+      mock.get('/backend/api/query/scope/geojson', () =>
+        HttpResponse.json([{ guid: 'a'.repeat(32), geom: JSON.stringify(geometry) }])
+      )
+    );
+    await wrapper.get('[data-feature-detail-panel] li button').trigger('click');
+    expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('返回列表');
   });
 
   it('资源目录加载失败：列表显示失败和重试；重试期间显示加载中，成功后显示资源', async () => {

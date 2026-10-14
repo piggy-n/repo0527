@@ -60,6 +60,13 @@ export const FeatureDetailPanel = defineComponent({
       itemHeight: CANDIDATE_HEIGHT,
       overscan: 10
     });
+    // 虚拟列表把可见的行放在深层响应式里，行里的候选是代理；拥有者按对象身份确认候选，按序号取列表里的原对象
+    const choose = (index: number) => {
+      const candidate = candidates.value[index];
+      if (candidate) {
+        props.pick.choose(candidate);
+      }
+    };
     const detailLoading = useDelayedFlag(() => props.pick.detail.value?.kind === 'loading');
 
     const renderHeader = (title: string, subtitle?: string, extra?: VNode[]) => (
@@ -112,7 +119,7 @@ export const FeatureDetailPanel = defineComponent({
             <ul class={styles.candidates} style={wrapperProps.value.style}>
               {visible.value.map(({ data: candidate, index }) => (
                 <li key={candidate.key}>
-                  <button type="button" class={styles.candidate} onClick={() => props.pick.choose(candidate)}>
+                  <button type="button" class={styles.candidate} onClick={() => choose(index)}>
                     {index + 1}. {featureSummary(target, candidate.properties).subtitle}
                   </button>
                 </li>

@@ -102,7 +102,8 @@ describe('FeatureDetailPanel', () => {
     expect(wrapper.findAll('li').map(item => item.text())).toStrictEqual(['1. 2022 · 水田', '2. 2022 · 旱地']);
 
     await button(wrapper, '2. 2022 · 旱地').trigger('click');
-    expect(pick.choose).toHaveBeenCalledWith(SECOND);
+    // 拥有者按对象身份确认候选在列表里，交过去的要是列表里的原对象，不能是响应式代理
+    expect(vi.mocked(pick.choose).mock.calls[0]?.[0]).toBe(SECOND);
     expect(wrapper.findAll('button').some(item => item.text() === '加载更多')).toBe(false);
   });
 
