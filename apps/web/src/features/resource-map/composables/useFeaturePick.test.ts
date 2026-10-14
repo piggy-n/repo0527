@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils';
 import type { Point } from 'geojson';
 import { HttpResponse, type JsonBodyType, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
-import type { CameraState, MapInputEvent, MapPointerEvent, RenderedFeature, ToolView } from '@yzt/map-core';
+import type { CameraState, MapInputEvent, MapPointerEvent, RenderedFeature, ToolView, ViewKind } from '@yzt/map-core';
 import type { CameraControl, CameraOperation, MapContext } from '@yzt/map-vue';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, shallowRef } from 'vue';
@@ -38,9 +38,8 @@ const tree: ResourceTreeCategory[] = [
     code: null,
     name: '测试',
     children: [
-      layer('csxhjctb_hydl', 'Line', 2024),
-      // 9 级起显示
-      layer('bgdc_cjdcq', 'Polygon', 2023, 2024),
+      layer('csxhjctb_lctl', 'Line', 2025),
+      layer('bgdc_czcdyd', 'Polygon', 2021, 2022),
       layer('bgdc_dltb', 'Polygon', 2022),
       layer('szy_kt', 'Polygon', 2025)
     ]
@@ -58,20 +57,17 @@ function withDisplay(state: ResourceLayersState, code: string, change: Partial<R
   return { ...state, displays: new Map([...state.displays, [code, { ...current, ...change }]]) };
 }
 
-// 从上到下：水域线（不能后端识别）、村级调查区、地类图斑、坑塘（不能查询）
+// 从上到下：城市道路（不能后端识别）、城镇村等用地（能后端识别，ADR 0048 第 1 节）、地类图斑、坑塘（不能查询）
 const STATE: ResourceLayersState = {
   catalog: CATALOG,
   displays: new Map([
-    ['csxhjctb_hydl', display(2024)],
-    ['bgdc_cjdcq', display(2023)],
+    ['csxhjctb_lctl', display(2025)],
+    ['bgdc_czcdyd', display(2022)],
     ['bgdc_dltb', display(2022)],
     ['szy_kt', display(2025)]
   ]),
-  order: ['csxhjctb_hydl', 'bgdc_cjdcq', 'bgdc_dltb', 'szy_kt']
+  order: ['csxhjctb_lctl', 'bgdc_czcdyd', 'bgdc_dltb', 'szy_kt']
 };
-
-// 村级调查区不勾选：14 级起上面没有能后端识别、又没有渲染要素的资源，点中渲染要素时不查后端
-const RENDERED_STATE = withDisplay(STATE, 'bgdc_cjdcq', { checked: false });
 
 const DLTB = 'resources-bgdc_dltb';
 const SZY = 'resources-szy_kt';
@@ -86,9 +82,9 @@ function rendered(sourceId: string, id: number): RenderedFeature {
 }
 
 // 拾取：每像素 0.001 度，画布左上角是 (118, 33)；渲染要素按数据源返回给定的
-function toolView(features: readonly RenderedFeature[]): ToolView {
+function toolView(features: readonly RenderedFeature[], kind: ViewKind): ToolView {
   return {
-    kind: '2d',
+    kind,
     pick: ({ x, y }) => ({ kind: 'hit', surface: 'map', lngLat: [118 + x / 1000, 33 - y / 1000] }),
     project: ([lng, lat]) => ({ x: (lng - 118) * 1000, y: (33 - lat) * 1000 }),
     queryRendered: (_area, { sources }) => features.filter(({ sourceId }) => sources.includes(sourceId))
@@ -165,7 +161,7 @@ function fakeCamera(zoom: number) {
   return { camera, fitBounds, flyTo, beginCameraOperation, runCameraOperation, interrupt: () => current.abort() };
 }
 
-function setup(zoom = 15, state = RENDERED_STATE, invalid: ReadonlyMap<string, readonly string[]> = new Map()) {
+function setup(zoom = 15, state = STATE, invalid: ReadonlyMap<string, readonly string[]> = new Map()) {
   const fake = fakeCamera(zoom);
   const select = vi.fn<MapContext['select']>();
   const map = { useCamera: () => fake.camera, select, ...fake };
@@ -183,8 +179,8 @@ function setup(zoom = 15, state = RENDERED_STATE, invalid: ReadonlyMap<string, r
     throw new Error('没有创建选择的拥有者');
   }
   const pick = owner.tools[FEATURE_PICK_TOOL];
-  const send = (event: MapInputEvent, features: readonly RenderedFeature[] = []) =>
-    pick.handleInput?.(event, toolView(features));
+  const send = (event: MapInputEvent, features: readonly RenderedFeature[] = [], kind: ViewKind = '2d') =>
+    pick.handleInput?.(event, toolView(features, kind));
   return { owner, pick, send, select, resources, ...fake };
 }
 
@@ -255,14 +251,14 @@ describe('useFeaturePick：识别', () => {
       layerCode === 'bgdc_dltb_2022' && pageNum === 1 ? page(1, [{ guid: guid(7), dlmc: '水田' }]) : page(0, [])
     );
     mockDetail();
-    const { owner, send, fitBounds } = setup(12, STATE);
+    const { owner, send, fitBounds } = setup(12);
 
     send(click(100, 100));
 
     expect(kindOf(owner)).toBe('identifying');
     await vi.waitFor(() => expect(kindOf(owner)).toBe('detail'));
     expect(requests).toStrictEqual([
-      { layerCode: 'bgdc_cjdcq_2023', pageNum: 1, geometry: { type: 'Point', coordinates: [118.1, 32.9] } },
+      { layerCode: 'bgdc_czcdyd_2022', pageNum: 1, geometry: { type: 'Point', coordinates: [118.1, 32.9] } },
       { layerCode: 'bgdc_dltb_2022', pageNum: 1, geometry: { type: 'Point', coordinates: [118.1, 32.9] } }
     ]);
     expect(owner.state.value).toMatchObject({ candidate: { guid: guid(7), origin: 'server' }, back: null });
@@ -272,11 +268,49 @@ describe('useFeaturePick：识别', () => {
   });
 
   it('被校验拦下的资源不参与识别', () => {
-    const { owner, send } = setup(15, RENDERED_STATE, new Map([['bgdc_dltb', ['图层不合法']]]));
+    const { owner, send } = setup(15, STATE, new Map([['bgdc_dltb', ['图层不合法']]]));
 
     send(click(), [rendered(DLTB, 1), rendered(SZY, 2)]);
 
     expect(owner.state.value).toMatchObject({ kind: 'detail', candidate: { target: { sourceId: SZY } } });
+  });
+
+  it('二维 14 级起只用渲染要素：上面的资源为空、下面的命中时不发识别请求，全部为空时不发任何请求', async () => {
+    const requests = mockIdentify(() => page(0, []));
+    const { owner, send } = setup(14);
+
+    send(click(), [rendered(DLTB, 1), rendered(DLTB, 2)]);
+    expect(kindOf(owner)).toBe('candidates');
+    send(click(), []);
+    expect(kindOf(owner)).toBe('empty');
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(requests).toStrictEqual([]);
+  });
+
+  it('13.99 级仍查后端：有渲染要素也用后端的结果', async () => {
+    const requests = mockIdentify(layerCode =>
+      layerCode === 'bgdc_dltb_2022' ? page(1, [{ guid: guid(5) }]) : page(0, [])
+    );
+    mockDetail();
+    const { owner, send } = setup(13.99);
+
+    send(click(), [rendered(DLTB, 1)]);
+
+    await vi.waitFor(() => expect(owner.state.value).toMatchObject({ candidate: { guid: guid(5), origin: 'server' } }));
+    expect(requests.map(({ layerCode }) => layerCode)).toStrictEqual(['bgdc_czcdyd_2022', 'bgdc_dltb_2022']);
+  });
+
+  it('三维没有渲染要素：14 级以上能后端识别的资源仍查后端', async () => {
+    const requests = mockIdentify(layerCode =>
+      layerCode === 'bgdc_dltb_2022' ? page(2, [{ guid: guid(1) }, { guid: guid(2) }]) : page(0, [])
+    );
+    const { owner, send } = setup(16);
+
+    send(click(), [], '3d');
+
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
+    expect(requests.map(({ layerCode }) => layerCode)).toStrictEqual(['bgdc_czcdyd_2022', 'bgdc_dltb_2022']);
   });
 
   it('点击位置没有要素时为 empty', async () => {
@@ -296,7 +330,7 @@ describe('useFeaturePick：识别', () => {
       }
       return layerCode === 'bgdc_dltb_2022' ? page(2, [{ guid: guid(1) }, { guid: guid(2) }]) : page(0, []);
     });
-    const { owner, send } = setup(12, STATE);
+    const { owner, send } = setup(12);
     send(click());
     await vi.waitFor(() => expect(kindOf(owner)).toBe('failed'));
     expect(owner.state.value).toMatchObject({ target: { layerCode: 'bgdc_dltb_2022' }, error: { message: '系统异常' } });
@@ -307,7 +341,7 @@ describe('useFeaturePick：识别', () => {
     expect(kindOf(owner)).toBe('identifying');
     await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
     expect(requests.map(({ layerCode }) => layerCode)).toStrictEqual([
-      'bgdc_cjdcq_2023',
+      'bgdc_czcdyd_2022',
       'bgdc_dltb_2022',
       'bgdc_dltb_2022'
     ]);
@@ -401,7 +435,9 @@ describe('useFeaturePick：候选与详情', () => {
 
   it('只有一个候选但还有下一页时列出候选，不直接进入详情', async () => {
     // 第一页的其他记录没有 guid
-    mockIdentify(layerCode => (layerCode === 'bgdc_dltb_2022' ? page(31, [{ guid: guid(1) }, { guid: null }]) : page(0, [])));
+    mockIdentify(layerCode =>
+      layerCode === 'bgdc_dltb_2022' ? page(31, [{ guid: guid(1) }, { guid: null }]) : page(0, [])
+    );
     const { owner, send } = setup(12);
 
     send(click());
@@ -444,12 +480,9 @@ describe('useFeaturePick：候选与详情', () => {
     expect(pageNums).toStrictEqual([1, 2, 2]);
   });
 
-  it('不能查详情的资源：属性用候选的，不查询、不高亮、不定位', async () => {
-    // 上面的地类图斑在这里没有渲染要素，仍查后端（ADR 0047 第 2 节）
-    mockIdentify(() => page(0, []));
+  it('不能查详情的资源：属性用候选的，不查询、不高亮、不定位', () => {
     const { owner, send, fitBounds } = setup(15);
     send(click(), [rendered(SZY, 1), rendered(SZY, 2)]);
-    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
     const [first] = candidatesOf(owner);
     if (!first) {
       throw new Error('应有候选');
@@ -567,9 +600,9 @@ describe('useFeaturePick：清除', () => {
     expect(kindOf(owner)).toBe('idle');
 
     resources.state.value = STATE;
-    send(click(), [rendered('resources-bgdc_cjdcq', 1)]);
+    send(click(), [rendered('resources-bgdc_czcdyd', 1)]);
     expect(kindOf(owner)).toBe('detail');
-    resources.state.value = withDisplay(resources.state.value, 'bgdc_cjdcq', { year: 2024 });
+    resources.state.value = withDisplay(resources.state.value, 'bgdc_czcdyd', { year: 2021 });
     await nextTick();
     expect(kindOf(owner)).toBe('idle');
   });

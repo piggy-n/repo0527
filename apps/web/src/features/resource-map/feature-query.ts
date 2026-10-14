@@ -1,15 +1,24 @@
 import { bbox } from '@turf/bbox';
 import type { Geometry, Point, Polygon, Position } from 'geojson';
-import type { LngLat, PickResult, RenderedFeature, ScreenBox, ScreenPoint, ToolView, ViewBounds } from '@yzt/map-core';
+import type {
+  LngLat,
+  PickResult,
+  RenderedFeature,
+  ScreenBox,
+  ScreenPoint,
+  ToolView,
+  ViewBounds,
+  ViewKind
+} from '@yzt/map-core';
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
 import { LANDUSE_FIELD_LABELS } from './landuse';
 import { type ResourceLayersState, resourceSourceId } from './resource-layers';
 import { resourceStyle, tilesetOf } from './style-registry';
 
-// 点选与详情的纯函数（ADR 0047 第 1～3 节）：识别的顺序、方式和候选，详情的标题和字段行
+// 点选与详情的纯函数（ADR 0047 第 1～3 节、ADR 0048）：识别的顺序、方式和候选，详情的标题和字段行
 
-/** 后端查询的能力，按数据集前缀实测得出（2026-10-14，docs/migration.md） */
+/** 后端查询的两种能力，各自判断（ADR 0048 第 1 节） */
 export interface QueryCapability {
   /** 后端范围识别：分页结果带 guid */
   readonly identify: boolean;
@@ -17,23 +26,26 @@ export interface QueryCapability {
   readonly detail: boolean;
 }
 
-const CAPABILITIES: readonly (readonly [prefix: string, capability: QueryCapability])[] = [
-  ['bgdc_', { identify: true, detail: true }],
-  // 分页范围查询的结果不带 guid，按 guid 查详情可以
-  ['csxhjctb_', { identify: false, detail: true }]
-];
+// 分页结果带 guid 的数据集，逐个实测登记（2026-10-14，年份见 docs/migration.md）；没有登记的不做后端范围识别
+const IDENTIFIABLE: ReadonlySet<string> = new Set([
+  'bgdc_dltb',
+  'bgdc_dltb_czc',
+  'bgdc_czcdyd',
+  'csxhjctb_hydl',
+  'csxhjctb_lvll'
+]);
 
-// 其他数据集（szy_、lcsh_、gtkjgh_）的查询接口返回"系统异常"
-const NO_QUERY: QueryCapability = { identify: false, detail: false };
+// 按 guid 查详情按前缀；其他数据集（szy_、lcsh_、gtkjgh_）的查询接口返回"系统异常"
+const DETAIL_PREFIXES: readonly string[] = ['bgdc_', 'csxhjctb_'];
 
 export function queryCapabilityOf(code: string): QueryCapability {
-  return CAPABILITIES.find(([prefix]) => code.startsWith(prefix))?.[1] ?? NO_QUERY;
+  return { identify: IDENTIFIABLE.has(code), detail: DETAIL_PREFIXES.some(prefix => code.startsWith(prefix)) };
 }
 
 /** 渲染要素的查询容差（屏幕像素）：面只取包含点击位置的，线、点同旧项目 */
 export const PICK_TOLERANCES: Readonly<Record<ResourceGeometry, number>> = { fill: 0, line: 8, circle: 10 };
 
-/** 这一级及以上有渲染要素时直接用，不查后端 */
+/** 二维这一级及以上只用渲染要素，不查后端 */
 export const RENDERED_PICK_ZOOM = 14;
 
 /** 后端识别每页的条数 */
@@ -120,25 +132,28 @@ export function serverCandidates(target: PickResource, records: readonly Feature
   return [...unique.values()];
 }
 
-/** 识别一个资源的方式（ADR 0047 第 2 节） */
+/** 识别一个资源的方式（ADR 0048 第 2 节） */
 export type IdentifyStep =
   | { readonly kind: 'rendered'; readonly candidates: readonly PickCandidate[] }
   | { readonly kind: 'server' }
   | { readonly kind: 'none' };
 
-/** 高级别有渲染要素时用它；否则能做后端识别的查后端；都不行时有渲染要素就用 */
+/**
+ * 二维 14 级以上只用渲染要素，没有就跳过这个资源；三维（没有渲染要素）和低级别下能后端识别的查后端，
+ * 其他有渲染要素就用
+ */
 export function identifyStep(
   capability: QueryCapability,
+  view: ViewKind,
   zoom: number,
   rendered: readonly PickCandidate[]
 ): IdentifyStep {
-  if (zoom >= RENDERED_PICK_ZOOM && rendered.length > 0) {
-    return { kind: 'rendered', candidates: rendered };
+  const fromRendered: IdentifyStep =
+    rendered.length > 0 ? { kind: 'rendered', candidates: rendered } : { kind: 'none' };
+  if (view === '2d' && zoom >= RENDERED_PICK_ZOOM) {
+    return fromRendered;
   }
-  if (capability.identify) {
-    return { kind: 'server' };
-  }
-  return rendered.length > 0 ? { kind: 'rendered', candidates: rendered } : { kind: 'none' };
+  return capability.identify ? { kind: 'server' } : fromRendered;
 }
 
 /** 识别一个资源要做的事：渲染要素已经取到，或者用这个地理范围查后端 */
@@ -156,14 +171,14 @@ function renderedArea(point: ScreenPoint, tolerance: number): ScreenPoint | Scre
 }
 
 /**
- * 点击时就定下每个资源怎样识别（ADR 0047 第 2 节）：屏幕上的查询、拾取都在这里同步做完，之后查后端只用地理范围，
+ * 点击时就定下每个资源怎样识别（ADR 0047、0048 第 2 节）：屏幕上的查询、拾取都在这里同步做完，之后查后端只用地理范围，
  * 地图移动不影响结果。既没有渲染要素、又不能查后端或拾取不到范围的资源不在结果里
  */
 export function planIdentify(
   targets: readonly PickResource[],
   point: ScreenPoint,
   zoom: number,
-  view: Pick<ToolView, 'pick' | 'project' | 'queryRendered'>
+  view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>
 ): IdentifyTask[] {
   return targets.flatMap((target): IdentifyTask[] => {
     const tolerance = PICK_TOLERANCES[target.resource.geometry];
@@ -175,7 +190,7 @@ export function planIdentify(
     const rendered = renderedCandidates(target, features, shape =>
       screenDistance(shape, point, lngLat => view.project(lngLat))
     );
-    const step = identifyStep(queryCapabilityOf(target.resource.code), zoom, rendered);
+    const step = identifyStep(queryCapabilityOf(target.resource.code), view.kind, zoom, rendered);
     if (step.kind === 'server') {
       const geometry = identifyGeometry(target.resource.geometry, point, at => view.pick(at));
       if (geometry) {

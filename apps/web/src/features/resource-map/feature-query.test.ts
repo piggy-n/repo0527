@@ -1,6 +1,14 @@
 // @vitest-environment node
 import type { Geometry, LineString, Point } from 'geojson';
-import type { LngLat, PickResult, RenderedFeature, RenderedQueryOptions, ScreenBox, ScreenPoint } from '@yzt/map-core';
+import type {
+  LngLat,
+  PickResult,
+  RenderedFeature,
+  RenderedQueryOptions,
+  ScreenBox,
+  ScreenPoint,
+  ViewKind
+} from '@yzt/map-core';
 import { describe, expect, it } from 'vitest';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
@@ -36,6 +44,10 @@ const tree: ResourceTreeCategory[] = [
       layer('bgdc_cjdcq', 'Polygon', 2023, 2024),
       layer('csxhjctb_hydl', 'Line', 2023, 2024, 2025),
       layer('csxhjctb_gyssp', 'Point', 2025),
+      // 后端识别：乡村道路能，城市道路、村级调查区界线不能（ADR 0048 第 1 节）
+      layer('csxhjctb_lvll', 'Line', 2025),
+      layer('csxhjctb_lctl', 'Line', 2025),
+      layer('bgdc_cjdcqjx', 'Line', 2022),
       layer('szy_kt', 'Polygon', 2025)
     ]
   }
@@ -71,10 +83,15 @@ const HYDL = targetOf('csxhjctb_hydl', 2024);
 const guid = (digit: string) => digit.repeat(32);
 
 describe('queryCapabilityOf', () => {
-  it('按数据集前缀：bgdc_ 能识别、能查详情，csxhjctb_ 只能查详情，其他都不能', () => {
-    expect(queryCapabilityOf('bgdc_dltb')).toStrictEqual({ identify: true, detail: true });
-    expect(queryCapabilityOf('csxhjctb_hydl')).toStrictEqual({ identify: false, detail: true });
-    for (const code of ['szy_kt', 'lcsh_gyl', 'gtkjgh_czkfbj', 'xbgdc_dltb']) {
+  it('后端范围识别逐个数据集登记，查详情按前缀，两者各自判断', () => {
+    for (const code of ['bgdc_dltb', 'bgdc_dltb_czc', 'bgdc_czcdyd', 'csxhjctb_hydl', 'csxhjctb_lvll']) {
+      expect(queryCapabilityOf(code)).toStrictEqual({ identify: true, detail: true });
+    }
+    // 没有登记的不做后端范围识别，前缀相同、名字更长的也不算
+    for (const code of ['bgdc_cjdcqjx', 'bgdc_xzq', 'bgdc_dltbx', 'csxhjctb_lctl', 'csxhjctb_gyssp']) {
+      expect(queryCapabilityOf(code)).toStrictEqual({ identify: false, detail: true });
+    }
+    for (const code of ['szy_kt', 'lcsh_lcshfbtb', 'gtkjgh_czkfbj', 'xbgdc_dltb']) {
       expect(queryCapabilityOf(code)).toStrictEqual({ identify: false, detail: false });
     }
   });
@@ -181,18 +198,24 @@ describe('identifyStep', () => {
   const detailOnly = { identify: false, detail: true };
   const found = renderedCandidates(DLTB, [rendered(DLTB.sourceId, { guid: guid('a') }, 0)], distanceOf);
 
-  it('14 级及以上有渲染要素时直接用它', () => {
-    expect(identifyStep(both, 14, found)).toStrictEqual({ kind: 'rendered', candidates: found });
+  it('二维 14 级起只用渲染要素：有就用，没有就跳过，不查后端', () => {
+    expect(identifyStep(both, '2d', 14, found)).toStrictEqual({ kind: 'rendered', candidates: found });
+    expect(identifyStep(both, '2d', 14, [])).toStrictEqual({ kind: 'none' });
   });
 
-  it('级别不够或没有渲染要素时，能做后端识别的查后端', () => {
-    expect(identifyStep(both, 13.9, found)).toStrictEqual({ kind: 'server' });
-    expect(identifyStep(both, 16, [])).toStrictEqual({ kind: 'server' });
+  it('二维 14 级以下能后端识别的查后端，有渲染要素也查', () => {
+    expect(identifyStep(both, '2d', 13.99, found)).toStrictEqual({ kind: 'server' });
+    expect(identifyStep(both, '2d', 13.99, [])).toStrictEqual({ kind: 'server' });
   });
 
-  it('不能做后端识别时有渲染要素就用，没有就没有结果', () => {
-    expect(identifyStep(detailOnly, 10, found)).toStrictEqual({ kind: 'rendered', candidates: found });
-    expect(identifyStep(detailOnly, 16, [])).toStrictEqual({ kind: 'none' });
+  it('三维没有渲染要素，不论级别，能后端识别的查后端', () => {
+    expect(identifyStep(both, '3d', 16, [])).toStrictEqual({ kind: 'server' });
+  });
+
+  it('不能后端识别时有渲染要素就用，没有就没有结果', () => {
+    expect(identifyStep(detailOnly, '2d', 10, found)).toStrictEqual({ kind: 'rendered', candidates: found });
+    expect(identifyStep(detailOnly, '2d', 10, [])).toStrictEqual({ kind: 'none' });
+    expect(identifyStep(detailOnly, '3d', 16, [])).toStrictEqual({ kind: 'none' });
   });
 });
 
@@ -297,9 +320,13 @@ describe('screenDistance', () => {
 });
 
 // 渲染要素的查询记下范围和选项，按数据源返回给定的要素；拾取同 picker，项目同 project
-function fakeView(features: readonly RenderedFeature[], miss = false) {
+function fakeView(
+  features: readonly RenderedFeature[],
+  { miss = false, kind = '2d' }: { readonly miss?: boolean; readonly kind?: ViewKind } = {}
+) {
   const queries: [ScreenPoint | ScreenBox, RenderedQueryOptions][] = [];
   const view = {
+    kind,
     pick: picker(() => miss).pick,
     project,
     queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => {
@@ -311,33 +338,40 @@ function fakeView(features: readonly RenderedFeature[], miss = false) {
 }
 
 const SZY = targetOf('szy_kt', 2025);
+const LVLL = targetOf('csxhjctb_lvll', 2025);
+const LCTL = targetOf('csxhjctb_lctl', 2025);
+const CJDCQJX = targetOf('bgdc_cjdcqjx', 2022);
 
 const kindsOf = (tasks: ReturnType<typeof planIdentify>) => tasks.map(task => [task.target.resource.code, task.kind]);
 
 describe('planIdentify', () => {
   const ORIGIN = { x: 0, y: 0 };
   const features = [
-    rendered(HYDL.sourceId, { guid: guid('a') }, 5),
-    rendered(HYDL.sourceId, { guid: guid('b') }, 2),
+    rendered(LCTL.sourceId, { guid: guid('a') }, 5),
+    rendered(LCTL.sourceId, { guid: guid('b') }, 2),
+    rendered(HYDL.sourceId, { guid: guid('d') }, 1),
+    rendered(CJDCQJX.sourceId, { guid: guid('e') }, 3),
     rendered(DLTB.sourceId, { guid: guid('c') }, 0)
   ];
+  const parcelOnly = [rendered(DLTB.sourceId, { guid: guid('c') }, 0)];
 
   it('渲染要素按几何类型取：面取点击位置、不换算几何，线、点取容差框并换算几何', () => {
     const { view, queries } = fakeView(features);
 
-    planIdentify([HYDL, DLTB, SZY], ORIGIN, 15, view);
+    planIdentify([LCTL, DLTB, SZY], ORIGIN, 15, view);
 
     expect(queries).toStrictEqual([
-      [{ from: { x: -8, y: -8 }, to: { x: 8, y: 8 } }, { sources: [HYDL.sourceId], withGeometry: true }],
+      [{ from: { x: -8, y: -8 }, to: { x: 8, y: 8 } }, { sources: [LCTL.sourceId], withGeometry: true }],
       [ORIGIN, { sources: [DLTB.sourceId], withGeometry: false }],
       [ORIGIN, { sources: [SZY.sourceId], withGeometry: false }]
     ]);
   });
 
-  it('14 级起有渲染要素的都用渲染要素，候选按屏幕距离排序；什么也没有的资源不在结果里', () => {
-    const tasks = planIdentify([HYDL, DLTB, SZY], ORIGIN, 15, fakeView(features).view);
+  it('二维 14 级起有渲染要素的都用渲染要素，能后端识别的也不查；候选按屏幕距离排序', () => {
+    const tasks = planIdentify([LCTL, HYDL, DLTB, SZY], ORIGIN, 15, fakeView(features).view);
 
     expect(kindsOf(tasks)).toStrictEqual([
+      ['csxhjctb_lctl', 'rendered'],
       ['csxhjctb_hydl', 'rendered'],
       ['bgdc_dltb', 'rendered']
     ]);
@@ -346,22 +380,41 @@ describe('planIdentify', () => {
     expect(order).toStrictEqual([guid('b'), guid('a')]);
   });
 
-  it('级别不够时能识别的资源查后端，面用点击位置；不能识别的有渲染要素就用', () => {
-    const tasks = planIdentify([HYDL, DLTB, SZY], ORIGIN, 12, fakeView(features).view);
+  it('二维 14 级起上面的资源没有渲染要素时跳过、只留下面的；全部没有时没有任务', () => {
+    const lower = planIdentify([HYDL, LVLL, DLTB], ORIGIN, 14, fakeView(parcelOnly).view);
 
-    expect(kindsOf(tasks)).toStrictEqual([
-      ['csxhjctb_hydl', 'rendered'],
-      ['bgdc_dltb', 'server']
-    ]);
-    expect(tasks[1]).toStrictEqual({ kind: 'server', target: DLTB, geometry: { type: 'Point', coordinates: [0, 0] } });
+    expect(kindsOf(lower)).toStrictEqual([['bgdc_dltb', 'rendered']]);
+    expect(planIdentify([HYDL, LVLL, DLTB], ORIGIN, 16, fakeView([]).view)).toStrictEqual([]);
   });
 
-  it('14 级起没有渲染要素时也查后端；拾取不到范围时退回渲染要素，没有就不在结果里', () => {
-    expect(kindsOf(planIdentify([DLTB], ORIGIN, 16, fakeView([]).view))).toStrictEqual([['bgdc_dltb', 'server']]);
-    expect(kindsOf(planIdentify([DLTB], ORIGIN, 12, fakeView(features, true).view))).toStrictEqual([
-      ['bgdc_dltb', 'rendered']
+  it('14 级以下登记的数据集查后端：线用容差框、面用点击位置；没有登记的有渲染要素就用', () => {
+    const tasks = planIdentify([LCTL, HYDL, LVLL, CJDCQJX, DLTB, SZY], ORIGIN, 13.99, fakeView(features).view);
+
+    expect(kindsOf(tasks)).toStrictEqual([
+      ['csxhjctb_lctl', 'rendered'],
+      ['csxhjctb_hydl', 'server'],
+      ['csxhjctb_lvll', 'server'],
+      ['bgdc_cjdcqjx', 'rendered'],
+      ['bgdc_dltb', 'server']
     ]);
-    expect(planIdentify([DLTB], ORIGIN, 12, fakeView([], true).view)).toStrictEqual([]);
+    expect(tasks[1]).toMatchObject({ geometry: { type: 'Polygon' } });
+    expect(tasks[4]).toStrictEqual({ kind: 'server', target: DLTB, geometry: { type: 'Point', coordinates: [0, 0] } });
+  });
+
+  it('三维没有渲染要素：能后端识别的资源仍查后端，其他的没有结果', () => {
+    const tasks = planIdentify([LCTL, HYDL, DLTB, SZY], ORIGIN, 16, fakeView([], { kind: '3d' }).view);
+
+    expect(kindsOf(tasks)).toStrictEqual([
+      ['csxhjctb_hydl', 'server'],
+      ['bgdc_dltb', 'server']
+    ]);
+  });
+
+  it('拾取不到范围时退回渲染要素，没有就不在结果里', () => {
+    const missed = planIdentify([DLTB], ORIGIN, 12, fakeView(parcelOnly, { miss: true }).view);
+
+    expect(kindsOf(missed)).toStrictEqual([['bgdc_dltb', 'rendered']]);
+    expect(planIdentify([DLTB], ORIGIN, 12, fakeView([], { miss: true }).view)).toStrictEqual([]);
   });
 });
 
