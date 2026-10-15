@@ -63,6 +63,7 @@
 | [0051](0051-region-clip.md) | 区划裁剪：按边界几何遮罩显示，点选、框选按几何限定范围 | 已接受 |
 | [0052](0052-resource-years.md) | 资源的年份：每个资源各自选，另有批量设置 | 已接受（第 2 节批量设置的位置由 0053 修正） |
 | [0053](0053-map-page-layout-and-toolbar.md) | 地图页的布局与工具栏 | 已接受 |
+| [0054](0054-sortable-drag-reorder.md) | 拖动排序用 SortableJS | 已接受 |
 
 ## 模板
 

@@ -1,0 +1,131 @@
+// 目录树（ADR 0053 第 6 节，设计稿 5D.2）：行高 32，每层缩进 18，子级左侧 1 像素的引导线；分组 600、叶子 400
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+// 下一级缩进 18，引导线对齐上一级展开箭头的中心
+.children {
+  position: relative;
+  padding-left: 18px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 4px;
+    left: 7px;
+    width: 1px;
+    background-color: var(--color-border);
+  }
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding-right: 4px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-regular);
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+  }
+
+  // 拖动手柄在悬停或获得焦点时出现
+  &:hover .handle,
+  .handle:focus-visible {
+    opacity: 1;
+  }
+}
+
+.group {
+  color: var(--color-text-title);
+
+  .name {
+    font-weight: var(--font-weight-semibold);
+  }
+}
+
+.arrow {
+  flex: none;
+  width: 16px;
+  color: var(--color-text-secondary);
+}
+
+.leafPad {
+  flex: none;
+  width: 16px;
+}
+
+// 复选框占满剩下的宽度，名称放不下时省略
+.checkbox {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  margin-right: 0;
+  color: inherit;
+
+  :global(.el-checkbox__label) {
+    flex: 1;
+    min-width: 0;
+    padding-left: 6px;
+    color: inherit;
+  }
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.geometry {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  flex: none;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.error {
+  flex: none;
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+}
+
+.handle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: grab;
+  opacity: 0;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}

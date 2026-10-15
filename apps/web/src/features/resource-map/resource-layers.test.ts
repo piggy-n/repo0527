@@ -106,13 +106,13 @@ describe('ID 与地址', () => {
 });
 
 describe('mergeDisplayState', () => {
-  it('第一次合并：顺序同目录，默认值来自登记表（只有地类图斑默认勾选），年份取最新的一年，透明度 0.9', () => {
+  it('第一次合并：顺序同目录，默认值来自登记表（只有地类图斑默认勾选），年份取最新的一年，透明度 1', () => {
     const state = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
 
     expect(state.catalog).toBe(CATALOG);
     expect(state.order).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'bgdc_cjdcqjx', 'csxhjctb_hydl', 'csxhjctb_gyssp']);
-    expect(state.displays.get('bgdc_dltb')).toStrictEqual({ checked: true, opacity: 0.9, year: 2022 });
-    expect(state.displays.get('csxhjctb_hydl')).toStrictEqual({ checked: false, opacity: 0.9, year: 2025 });
+    expect(state.displays.get('bgdc_dltb')).toStrictEqual({ checked: true, opacity: 1, year: 2022 });
+    expect(state.displays.get('csxhjctb_hydl')).toStrictEqual({ checked: false, opacity: 1, year: 2025 });
   });
 
   it('同一个目录：返回原来的状态对象', () => {
@@ -143,7 +143,7 @@ describe('mergeDisplayState', () => {
     const next = mergeDisplayState(state, catalogOf(DLTB, CJDCQ, CJDCQJX, HYDL, GYSSP));
 
     expect(next.order).toStrictEqual(['bgdc_cjdcq', 'bgdc_cjdcqjx', 'csxhjctb_hydl', 'bgdc_dltb', 'csxhjctb_gyssp']);
-    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({ checked: false, opacity: 0.9, year: 2024 });
+    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({ checked: false, opacity: 1, year: 2024 });
   });
 
   it('年份：仍在资源的年份里就保留，否则改用最新的一年', () => {
@@ -365,7 +365,7 @@ describe('批量设置年份（ADR 0052 第 2 节）', () => {
     const next = withYearForAll(state, 2023);
 
     expect(next.displays.get('csxhjctb_hydl')).toStrictEqual({ checked: true, opacity: 0.4, year: 2023 });
-    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({ checked: false, opacity: 0.9, year: 2023 });
+    expect(next.displays.get('bgdc_cjdcq')).toStrictEqual({ checked: false, opacity: 1, year: 2023 });
     expect(next.displays.get('bgdc_dltb')).toBe(state.displays.get('bgdc_dltb'));
     expect(next.displays.get('csxhjctb_gyssp')).toBe(state.displays.get('csxhjctb_gyssp'));
     expect(next.order).toBe(state.order);

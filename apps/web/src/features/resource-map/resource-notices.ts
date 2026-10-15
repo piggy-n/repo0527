@@ -10,19 +10,27 @@ export interface ResourceNoticeInput {
 }
 
 /**
+ * 一条提示：最小显示级别只是说明，面板收进名称后的信息图标；配置错误、瓦片加载失败要处理，直接显示（ADR 0053 第 6 节）
+ */
+export interface ResourceNotice {
+  readonly kind: 'config-error' | 'minzoom' | 'tile-error';
+  readonly text: string;
+}
+
+/**
  * 资源在列表上的提示：配置错误时只提示它（不会显示）；勾选了但当前级别还不显示时说明放大到几级，
  * 免得被当成加载失败；瓦片加载失败说的是部分失败，不是整个资源不可用
  */
-export function resourceNotices({ checked, configError, tileError, minzoom, zoom }: ResourceNoticeInput): string[] {
+export function resourceNotices({ checked, configError, tileError, minzoom, zoom }: ResourceNoticeInput): ResourceNotice[] {
   if (configError) {
-    return ['配置错误，不显示'];
+    return [{ kind: 'config-error', text: '配置错误，不显示' }];
   }
-  const notices: string[] = [];
+  const notices: ResourceNotice[] = [];
   if (checked && minzoom !== undefined && zoom < minzoom) {
-    notices.push(`放大至第 ${minzoom} 级显示`);
+    notices.push({ kind: 'minzoom', text: `放大至第 ${minzoom} 级显示` });
   }
   if (tileError) {
-    notices.push('部分瓦片加载失败');
+    notices.push({ kind: 'tile-error', text: '部分瓦片加载失败' });
   }
   return notices;
 }

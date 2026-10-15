@@ -6,8 +6,10 @@ import { computed, defineComponent, ref, watch } from 'vue';
 import { FeatureDetailPanel } from '@/features/resource-map/components/FeatureDetailPanel';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
+import { useCatalogOrder } from '@/features/resource-map/composables/useCatalogOrder';
 import { useFeaturePick } from '@/features/resource-map/composables/useFeaturePick';
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
+import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
@@ -92,10 +94,11 @@ export const CurrentMapPage = defineComponent({
     // 右侧的两组面板；已打开的功能和当前的 Tab 是页面的界面状态，业务状态在各自的拥有者里（ADR 0053 第 4 节）
     const functions = usePanelGroup(FUNCTION_PANELS);
     const display = usePanelGroup(DISPLAY_PANELS);
-    // 资源面板是否收起（5D.2 起按账号记住）；窄屏时左右只显示一边，只推导显示，不改它（ADR 0053 第 8 节）
-    const resourcesCollapsed = ref(false);
+    // 资源面板的收起、分割线的位置和目录顺序按账号记住；窄屏时左右只显示一边，只推导显示，不改收起状态（ADR 0053 第 6、8 节）
+    const panelLayout = useResourcePanelLayout({ preferences });
+    const catalogOrder = useCatalogOrder({ preferences });
     const sides = useSideExclusion({
-      leftExpanded: () => !resourcesCollapsed.value,
+      leftExpanded: () => !panelLayout.collapsed.value,
       rightOpen: () => functions.state.value.open.length > 0 || display.state.value.open.length > 0
     });
 
@@ -149,7 +152,7 @@ export const CurrentMapPage = defineComponent({
     };
     // 展开资源面板算操作左边：窄屏时右边让出来
     const changeResourcesCollapsed = (collapsed: boolean) => {
-      resourcesCollapsed.value = collapsed;
+      panelLayout.setCollapsed(collapsed);
       if (!collapsed) {
         sides.activate('left');
       }
@@ -181,6 +184,8 @@ export const CurrentMapPage = defineComponent({
             <div class={styles.left}>
               <ResourceLayerPanel
                 layers={resources}
+                catalogOrder={catalogOrder}
+                layout={panelLayout}
                 failed={catalogQuery.isError.value}
                 collapsed={!sides.left.value}
                 onRetry={() => void catalogQuery.refetch()}

@@ -10,18 +10,18 @@ describe('resourceNotices', () => {
   });
 
   it('勾选了但当前级别低于最小显示级别：提示放大到几级；没勾选、没有限制时不提示', () => {
-    expect(resourceNotices({ ...NORMAL, zoom: 8.9 })).toStrictEqual(['放大至第 9 级显示']);
+    expect(resourceNotices({ ...NORMAL, zoom: 8.9 })).toStrictEqual([{ kind: 'minzoom', text: '放大至第 9 级显示' }]);
     expect(resourceNotices({ ...NORMAL, zoom: 8.9, checked: false })).toStrictEqual([]);
     expect(resourceNotices({ ...NORMAL, zoom: 3, minzoom: undefined })).toStrictEqual([]);
   });
 
   it('瓦片加载失败可以和级别提示同时出现；配置错误时只提示配置错误', () => {
     expect(resourceNotices({ ...NORMAL, zoom: 7, tileError: true })).toStrictEqual([
-      '放大至第 9 级显示',
-      '部分瓦片加载失败'
+      { kind: 'minzoom', text: '放大至第 9 级显示' },
+      { kind: 'tile-error', text: '部分瓦片加载失败' }
     ]);
     expect(resourceNotices({ ...NORMAL, zoom: 7, tileError: true, configError: true })).toStrictEqual([
-      '配置错误，不显示'
+      { kind: 'config-error', text: '配置错误，不显示' }
     ]);
   });
 });

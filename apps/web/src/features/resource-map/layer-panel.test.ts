@@ -2,7 +2,15 @@
 import { describe, expect, it } from 'vitest';
 import type { ResourceTreeCategory } from './api';
 import { buildCatalog } from './catalog';
-import { checkedLayers, expandedByDefault, moveTarget, type PanelNode, panelTree } from './layer-panel';
+import { CATALOG_ROOT } from './catalog-order';
+import {
+  checkedDropTarget,
+  checkedLayers,
+  expandedByDefault,
+  moveTarget,
+  type PanelNode,
+  panelTree
+} from './layer-panel';
 import { EMPTY_RESOURCE_LAYERS, mergeDisplayState, type ResourceLayersState } from './resource-layers';
 
 function layer(
@@ -55,6 +63,11 @@ function outline(nodes: readonly PanelNode[]): unknown[] {
   return nodes.map(node =>
     node.kind === 'resource' ? node.code : [`${node.name}(${node.checkState})`, outline(node.children)]
   );
+}
+
+// 树里的全部资源，按显示的顺序
+function flatten(node: PanelNode): PanelNode[] {
+  return node.kind === 'resource' ? [node] : node.children.flatMap(flatten);
 }
 
 // 按拥有者 move 的语义移动，返回移动后已勾选资源的顺序
@@ -130,9 +143,9 @@ describe('checkedLayers 与 moveTarget', () => {
     const reordered = { ...state, order: ['poi', ...state.order.filter(code => code !== 'poi')] };
 
     expect(checkedLayers(reordered)).toStrictEqual([
-      { code: 'poi', name: 'POI 点层', opacity: 0.9, year: 2025, years: [2025, 2024, 2023] },
-      { code: 'bgdc_dltb', name: '地类图斑', opacity: 0.9, year: 2024, years: [2024] },
-      { code: 'bgdc_cjdcqjx', name: '村级调查区界线', opacity: 0.9, year: 2024, years: [2024] }
+      { code: 'poi', name: 'POI 点层', opacity: 1, year: 2025, years: [2025, 2024, 2023] },
+      { code: 'bgdc_dltb', name: '地类图斑', opacity: 1, year: 2024, years: [2024] },
+      { code: 'bgdc_cjdcqjx', name: '村级调查区界线', opacity: 1, year: 2024, years: [2024] }
     ]);
   });
 
@@ -153,5 +166,71 @@ describe('checkedLayers 与 moveTarget', () => {
     expect(moveTarget(state, 'bgdc_dltb', 'up')).toBeNull();
     expect(moveTarget(state, 'poi', 'down')).toBeNull();
     expect(moveTarget(state, 'szy_kt', 'up')).toBeNull();
+  });
+});
+
+describe('目录顺序（ADR 0053 第 6 节）', () => {
+  it('按记录的顺序排：记录里的在前，目录里新出现的按目录顺序排在后面，已经不在的键忽略', () => {
+    const order = {
+      [CATALOG_ROOT]: ['三区三线', '基础库'],
+      '基础库 / 土地资源': ['bgdc_cjdcqjx', '已删除的资源', 'bgdc_dltb']
+    };
+
+    expect(outline(panelTree(INITIAL, '', order))).toStrictEqual([
+      ['三区三线(none)', ['poi']],
+      [
+        '基础库(some)',
+        [
+          ['土地资源(some)', ['bgdc_cjdcqjx', 'bgdc_dltb', 'bgdc_cjdcq']],
+          ['水资源(none)', ['szy_kt']]
+        ]
+      ]
+    ]);
+  });
+
+  it('搜索时保留调整过的相对顺序', () => {
+    const order = { '基础库 / 土地资源': ['bgdc_cjdcqjx', 'bgdc_dltb', 'bgdc_cjdcq'] };
+
+    expect(outline(panelTree(INITIAL, '村级', order))).toStrictEqual([
+      ['基础库(none)', [['土地资源(none)', ['bgdc_cjdcqjx', 'bgdc_cjdcq']]]]
+    ]);
+  });
+
+  it('资源带几何类型，名称前显示对应的图标', () => {
+    const resources = panelTree(INITIAL).flatMap(flatten);
+
+    expect(resources.map(node => (node.kind === 'resource' ? [node.code, node.geometry] : null))).toStrictEqual([
+      ['bgdc_dltb', 'fill'],
+      ['bgdc_cjdcq', 'fill'],
+      ['bgdc_cjdcqjx', 'line'],
+      ['szy_kt', 'fill'],
+      ['poi', 'circle']
+    ]);
+  });
+});
+
+describe('checkedDropTarget', () => {
+  // 面板顺序：地类图斑、村级调查区、村级调查区界线、坑塘、POI；勾选其中三个
+  const state = withChecked(INITIAL, ['bgdc_cjdcqjx', 'poi']);
+
+  function dropped(code: string, to: number): string[] | null {
+    const target = checkedDropTarget(state, code, to);
+    if (target === null) {
+      return null;
+    }
+    const order = state.order.toSpliced(state.order.indexOf(code), 1).toSpliced(target, 0, code);
+    return checkedLayers({ ...state, order }).map(item => item.code);
+  }
+
+  it('拖到已勾选里的第几位，就交给拥有者那个位置上原来的资源所在的位置；中间没勾选的不算', () => {
+    expect(dropped('poi', 0)).toStrictEqual(['poi', 'bgdc_dltb', 'bgdc_cjdcqjx']);
+    expect(dropped('bgdc_dltb', 2)).toStrictEqual(['bgdc_cjdcqjx', 'poi', 'bgdc_dltb']);
+    expect(dropped('bgdc_dltb', 1)).toStrictEqual(['bgdc_cjdcqjx', 'bgdc_dltb', 'poi']);
+  });
+
+  it('位置不变、不在已勾选里时为 null；位置越界时抛错', () => {
+    expect(checkedDropTarget(state, 'poi', 2)).toBeNull();
+    expect(checkedDropTarget(state, 'szy_kt', 0)).toBeNull();
+    expect(() => checkedDropTarget(state, 'poi', 3)).toThrow(RangeError);
   });
 });

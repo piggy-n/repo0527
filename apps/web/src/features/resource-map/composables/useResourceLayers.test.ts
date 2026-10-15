@@ -94,7 +94,7 @@ describe('useResourceLayers', () => {
     const initial = ctx.owner.state.value;
 
     ctx.owner.setChecked('bgdc_dltb', true);
-    ctx.owner.setOpacity('bgdc_dltb', 0.9);
+    ctx.owner.setOpacity('bgdc_dltb', 1);
     ctx.owner.setYear('csxhjctb_hydl', 2025);
     ctx.owner.move('bgdc_dltb', 0);
     expect(ctx.owner.state.value).toBe(initial);

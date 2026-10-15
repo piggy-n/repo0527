@@ -816,13 +816,13 @@ describe('CurrentMapPage', () => {
     expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
   });
 
-  it('勾选了但级别不够的资源提示放大到几级；瓦片加载失败标在对应的资源上', async () => {
+  it('勾选了但级别不够的资源在信息图标里提示放大到几级；瓦片加载失败直接标在对应的资源上', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
     expect(wrapper.find('[data-layer="bgdc_cjdcq"]').exists()).toBe(false);
 
     await resourceRow(wrapper, 'bgdc_cjdcq').get('input').setValue(true);
-    expect(layerRow(wrapper, 'bgdc_cjdcq').text()).toContain('放大至第 9 级显示');
+    expect(layerRow(wrapper, 'bgdc_cjdcq').get('[role="img"]').attributes('aria-label')).toBe('放大至第 9 级显示');
     // 数据源的错误照样上报（默认打印到控制台）
     using consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const tileError = new Error('Unable to parse the tile');
@@ -833,7 +833,7 @@ describe('CurrentMapPage', () => {
 
     map.moveTo([118.8, 32.05], 9, { originalEvent: new MouseEvent('wheel') });
     await nextTick();
-    expect(layerRow(wrapper, 'bgdc_cjdcq').text()).not.toContain('放大');
+    expect(layerRow(wrapper, 'bgdc_cjdcq').find('[role="img"]').exists()).toBe(false);
   });
 
   it('点选：14 级起点中地类图斑直接出详情，高亮插在注记下面；离开点选工具时清除', async () => {

@@ -199,8 +199,8 @@ describe('资源图层的偏好', () => {
       version: 1,
       value: {
         displays: {
-          bgdc_dltb: { checked: true, opacity: 0.9, year: 2022 },
-          bgdc_cjdcq: { checked: false, opacity: 0.9, year: 2024 },
+          bgdc_dltb: { checked: true, opacity: 1, year: 2022 },
+          bgdc_cjdcq: { checked: false, opacity: 1, year: 2024 },
           csxhjctb_hydl: { checked: true, opacity: 0.4, year: 2025 }
         },
         order: ['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq']

@@ -86,8 +86,8 @@ export function resourceStyle(code: string): ResourceStyle {
   return RESOURCE_STYLES.get(code) ?? NO_STYLE;
 }
 
-/** 新出现的资源的透明度（同旧项目） */
-export const DEFAULT_OPACITY = 0.9;
+/** 新出现的资源的透明度：100%（ADR 0053 第 6 节；旧项目是 0.9）。已经存下的透明度保留原值 */
+export const DEFAULT_OPACITY = 1;
 
 /** 数据源的最大级别：更高的级别由 MapLibre 放大，不再向后端请求 */
 export const SOURCE_MAXZOOM = 15;

@@ -131,6 +131,7 @@ packages/icons/
 | `nav-*`（7 个导航图标）、`nav-arrow-color` | UI 提供（2026-09-30） | 顶部导航、下拉箭头，见 [layout.md](layout.md) |
 | `auth-user`、`auth-lock` | fzjc 项目（最初作为样例引入） | 登录表单的输入框前缀、用户菜单的头像 |
 | `map-*`（地图工具栏的 10 个） | Tabler Icons 3.49.0（MIT），见下文"第三方图标" | 地图页的业务组和基础组（ADR 0053 第 7 节） |
+| `geometry-*`、`drag-handle`、`splitter-handle`、`panel-*`、`close`、`info` | 同上 | 资源图层面板（5D.2） |
 
 2026-09-30 清理了只在主题预览页演示中用到的样例：`bell-solid`（fzjc）、`toolbar-map`、`toolbar-move`（旧项目的 Toolbar）、`sample-pin-color`（自制的多色样例），主题预览页改用上面的正式图标演示。消息铃铛迁移时使用 UI 提供的图标；地图工具栏在 5D.1 改用下面的开源线性图标（用户决定先用开源图标，有更合适的再替换个别图标）。
 
@@ -154,8 +155,14 @@ packages/icons/
 | `map-zoom-in` | `plus` | 放大 |
 | `map-zoom-out` | `minus` | 缩小 |
 | `map-default-view` | `home` | 默认视角 |
+| `geometry-polygon` / `geometry-line` / `geometry-point` | `polygon` / `line` / `circle-dot` | 资源的几何类型：面、线、点 |
+| `drag-handle` | `grip-vertical` | 拖动排序的手柄 |
+| `splitter-handle` | `menu-2` | 可拖动的分割线中间的手柄 |
+| `panel-collapse` / `panel-expand` | `layout-sidebar-left-collapse` / `layout-sidebar-left-expand` | 收起、展开左侧的面板 |
+| `close` | `x` | 取消勾选、关闭 |
+| `info` | `info-circle` | 带提示的信息图标 |
 
-以后再加 Tabler 的图标（5D.2 起的几何类型、拖动手柄等）照同样的做法，并补进这张表。
+以后再加 Tabler 的图标照同样的做法，并补进这张表。
 
 删除图标后，开发服务器开着时注册表会自动更新；没开时运行 `pnpm icons`。代码中引用了已删除的图标名时，类型检查会报错。
 

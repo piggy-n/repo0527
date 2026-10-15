@@ -1,0 +1,152 @@
+// "已勾选"（ADR 0053 第 6 节，设计稿 5D.2）：行高 36；手柄 16、年份 66、透明度约 44、取消勾选 24
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 4px 0 2px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-regular);
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+
+    .handle {
+      color: var(--color-text-secondary);
+    }
+  }
+}
+
+.handle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-placeholder);
+  cursor: grab;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+// 多年份是小下拉，单年份只有文字，宽度一样，名称对齐；小号选择框左右各留 8、箭头 14，放得下四位的年份
+.year {
+  flex: none;
+  width: 66px;
+}
+
+.yearText {
+  padding-left: 9px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.name {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nameText {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.info {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-text-secondary);
+  cursor: help;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+    border-radius: 50%;
+  }
+}
+
+// 带边框的百分比，看得出能点；点开是滑块
+.opacity {
+  flex: none;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-container);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--color-primary-border-hover);
+  }
+}
+
+.opacityOpen {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.remove {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-placeholder);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-danger);
+  }
+}
+
+.extra {
+  padding: 0 8px 6px 30px;
+  font-size: var(--font-size-xs);
+}
+
+.warning {
+  color: var(--color-warning);
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.slider {
+  // 两端的滑块按钮不贴着边缘
+  padding: 0 var(--space-sm);
+}
+
+.empty {
+  padding: 4px 8px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}

@@ -1,4 +1,5 @@
-import type { CatalogCategory } from './catalog';
+import type { CatalogCategory, ResourceGeometry } from './catalog';
+import { CATALOG_ROOT, type CatalogOrder, EMPTY_CATALOG_ORDER, orderedChildren } from './catalog-order';
 import type { ResourceLayersState } from './resource-layers';
 
 // 图层面板显示的数据，都由显示状态推导；面板只显示和调用拥有者的操作（5C.2）
@@ -10,6 +11,8 @@ export interface PanelResource {
   readonly kind: 'resource';
   readonly code: string;
   readonly name: string;
+  /** 名称前的几何类型图标 */
+  readonly geometry: ResourceGeometry;
   readonly checked: boolean;
 }
 
@@ -25,6 +28,11 @@ export interface PanelCategory {
 
 export type PanelNode = PanelCategory | PanelResource;
 
+/** 目录顺序里的键：分类的 id、资源的 code */
+export function nodeKey(node: PanelNode): string {
+  return node.kind === 'category' ? node.id : node.code;
+}
+
 function checkStateOf(codes: readonly string[], state: ResourceLayersState): CheckState {
   const checked = codes.filter(code => state.displays.get(code)?.checked).length;
   if (checked === 0) {
@@ -34,10 +42,14 @@ function checkStateOf(codes: readonly string[], state: ResourceLayersState): Che
 }
 
 /**
- * 面板上的目录树，按目录顺序：没有资源的分类不显示。有关键字时（不区分大小写）只留名称命中的资源，
- * 分类名称命中时留下它的全部资源；分类的勾选和数量只算显示出来的资源
+ * 面板上的目录树，按目录顺序，有用户调整过的目录顺序时按它排（ADR 0053 第 6 节）：没有资源的分类不显示。
+ * 有关键字时（不区分大小写）只留名称命中的资源，分类名称命中时留下它的全部资源；分类的勾选和数量只算显示出来的资源
  */
-export function panelTree(state: ResourceLayersState, keyword = ''): PanelCategory[] {
+export function panelTree(
+  state: ResourceLayersState,
+  keyword = '',
+  order: CatalogOrder = EMPTY_CATALOG_ORDER
+): PanelCategory[] {
   const { catalog } = state;
   if (!catalog) {
     return [];
@@ -58,20 +70,22 @@ export function panelTree(state: ResourceLayersState, keyword = ''): PanelCatego
         return [];
       }
       const checked = state.displays.get(child.code)?.checked ?? false;
-      return [{ kind: 'resource', code: child.code, name: resource.name, checked }];
+      return [{ kind: 'resource', code: child.code, name: resource.name, geometry: resource.geometry, checked }];
     });
-    const codes = children.flatMap(child => (child.kind === 'resource' ? [child.code] : child.codes));
+    const sorted = orderedChildren(children, nodeKey, order[category.id]);
+    const codes = sorted.flatMap(child => (child.kind === 'resource' ? [child.code] : child.codes));
     if (codes.length === 0) {
       return null;
     }
     const { id, name } = category;
-    return { kind: 'category', id, name, children, codes, checkState: checkStateOf(codes, state) };
+    return { kind: 'category', id, name, children: sorted, codes, checkState: checkStateOf(codes, state) };
   };
 
-  return catalog.categories.flatMap(category => {
+  const roots = catalog.categories.flatMap(category => {
     const node = categoryNode(category, needle === '');
     return node ? [node] : [];
   });
+  return orderedChildren(roots, nodeKey, order[CATALOG_ROOT]);
 }
 
 /** 默认展开的分类：含有勾选资源的分类（同旧项目），进入页面时勾选的资源看得见 */
@@ -105,6 +119,20 @@ export function checkedLayers(state: ResourceLayersState): CheckedLayer[] {
     const { opacity, year } = display;
     return [{ code, name: resource.name, opacity, year, years: resource.years.toReversed() }];
   });
+}
+
+/**
+ * 在"已勾选"里拖到第 to 位（放下后在已勾选的列表里的位置）时交给拥有者 move 的位置：移到那个位置上原来的已勾选资源所在的位置，
+ * 中间没勾选的资源不算。位置不变、不在已勾选里时为 null；位置越界时抛错
+ */
+export function checkedDropTarget(state: ResourceLayersState, code: string, to: number): number | null {
+  const codes = checkedLayers(state).map(layer => layer.code);
+  const from = codes.indexOf(code);
+  if (!(Number.isInteger(to) && to >= 0 && to < codes.length)) {
+    throw new RangeError(`位置应在 0～${codes.length - 1} 之间，收到 ${to}`);
+  }
+  const neighbor = codes[to];
+  return from === -1 || from === to || neighbor === undefined ? null : state.order.indexOf(neighbor);
 }
 
 /**
