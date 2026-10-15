@@ -1214,6 +1214,36 @@ describe('useFeaturePick：和其他操作的交错', () => {
     await vi.waitFor(() => expect(kindOf(owner)).toBe('detail'));
   });
 
+  it('加载更多进行中开始新一轮识别：晚到的一页不进入新的列表', async () => {
+    const slow = gate();
+    const records = Array.from({ length: 32 }, (_, index) => ({ guid: guid(index) }));
+    mockIdentify(async (layerCode, pageNum) => {
+      if (layerCode !== 'bgdc_czcdyd_2022') {
+        return page(0, []);
+      }
+      if (pageNum === 2) {
+        await slow.opened;
+      }
+      return page(32, pageNum === 1 ? records.slice(0, 30) : records.slice(30));
+    });
+    const { owner, send } = setup(12);
+    send(click());
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
+    const firstRound = listIdOf(owner);
+    owner.loadMore();
+    expect(owner.state.value).toMatchObject({ more: { kind: 'loading' } });
+
+    send(click());
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
+    expect(listIdOf(owner)).not.toBe(firstRound);
+    expect(owner.state.value).toMatchObject({ list: { pages: { loaded: 1 } }, more: { kind: 'idle' } });
+    slow.open();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(candidatesOf(owner)).toHaveLength(30);
+    expect(owner.state.value).toMatchObject({ list: { pages: { loaded: 1 } }, more: { kind: 'idle' } });
+  });
+
   it('没有别的定位时，后端识别出的单个要素照常定位', async () => {
     mockIdentify(layerCode => (layerCode === 'bgdc_dltb_2022' ? page(1, [{ guid: guid(1) }]) : page(0, [])));
     mockDetail();
