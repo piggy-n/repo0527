@@ -61,4 +61,29 @@ describe('MxPanel', () => {
     expect(plain.find('[data-test="icon"]').exists()).toBe(true);
     expect(plain.find('[class*="_mark_"]').exists()).toBe(false);
   });
+
+  it('header 插槽代替标题，操作仍在右侧；只有它时也渲染头部', () => {
+    const wrapper = mount(() => (
+      <MxPanel title="不显示">
+        {{
+          header: () => <nav data-test="tabs">Tab</nav>,
+          actions: () => <button type="button">关闭</button>
+        }}
+      </MxPanel>
+    ));
+    const onlyHeader = mount(() => <MxPanel>{{ header: () => <nav data-test="tabs">Tab</nav> }}</MxPanel>);
+
+    expect(wrapper.find('header [data-test="tabs"]').exists()).toBe(true);
+    expect(wrapper.find('header h2').exists()).toBe(false);
+    expect(wrapper.find('header [class*="_actions_"] button').text()).toBe('关闭');
+    expect(onlyHeader.find('header [data-test="tabs"]').exists()).toBe(true);
+  });
+
+  it('floating 换成浮在地图上的外观', () => {
+    const floating = mount(() => <MxPanel floating>内容</MxPanel>);
+    const normal = mount(() => <MxPanel>内容</MxPanel>);
+
+    expect(floating.get('section').classes().join(' ')).toContain('_floating_');
+    expect(normal.get('section').classes().join(' ')).not.toContain('_floating_');
+  });
 });

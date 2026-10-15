@@ -260,12 +260,23 @@ const XUANWU: ViewBounds = [118.778682, 32.017001, 118.90731, 32.107079];
 // 等定位相关的微任务和渲染都走完
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
+// 按文字找按钮；面板外壳的 Tab 和工具栏的按钮可能同名，Tab 用 tab() 找
 function button(wrapper: ReturnType<typeof mountPage>['wrapper'], text: string) {
-  const found = wrapper.findAll('button').find(candidate => candidate.text() === text);
+  const found = wrapper
+    .findAll('button')
+    .find(candidate => candidate.text() === text && candidate.attributes('role') !== 'tab');
   if (!found) {
     throw new Error(`没有"${text}"按钮`);
   }
   return found;
+}
+
+// 面板外壳里正在显示的那个功能（ADR 0053 第 4 节）；切走的内容还在，只是隐藏
+function shownPanels(wrapper: ReturnType<typeof mountPage>['wrapper']): (string | undefined)[] {
+  return wrapper
+    .findAll('[role="tabpanel"]')
+    .filter(panel => panel.attributes('style') === undefined)
+    .map(panel => panel.attributes('data-panel'));
 }
 
 // 测量浮层里的标签和提示：文字与位置（像素取整）
@@ -591,17 +602,28 @@ describe('CurrentMapPage', () => {
     expect(map.fitBoundsCalls).toEqual([jiangsu, [118.357927, 31.230207, 119.236382, 32.616407], jiangsu]);
   });
 
-  it('坐标定位与区划定位的面板同一时间只开一个', async () => {
+  it('区划定位和坐标定位是功能面板的两个 Tab：切走的隐藏、取消拾取、输入保留；再点正在显示的入口关闭它', async () => {
     const { wrapper } = await readyPage();
 
     await button(wrapper, '坐标定位').trigger('click');
-    expect(wrapper.find('[data-coordinate-locate-panel]').exists()).toBe(true);
+    await wrapper.get('input[aria-label="经度"]').setValue('118.5');
+    await button(wrapper, '拾取').trigger('click');
+    expect(button(wrapper, '拾取').attributes('aria-pressed')).toBe('true');
     await button(wrapper, '区划定位').trigger('click');
 
-    expect(wrapper.find('[data-coordinate-locate-panel]').exists()).toBe(false);
-    expect(wrapper.find('[data-region-locate-panel]').exists()).toBe(true);
-    expect(button(wrapper, '坐标定位').attributes('aria-pressed')).toBe('false');
+    expect(shownPanels(wrapper)).toStrictEqual(['region-locate']);
+    expect(wrapper.find('[data-coordinate-locate-panel]').exists()).toBe(true);
+    expect(button(wrapper, '拾取').attributes('aria-pressed')).toBe('false');
+    expect((wrapper.get('input[aria-label="经度"]').element as HTMLInputElement).value).toBe('118.5');
+    expect(button(wrapper, '坐标定位').attributes('aria-pressed')).toBe('true');
     expect(button(wrapper, '区划定位').attributes('aria-pressed')).toBe('true');
+
+    // 点 Tab 切回；再点正在显示的入口关闭它，切到最近显示过的另一个
+    await wrapper.findAll('[role="tab"]').find(tab => tab.text() === '坐标定位')?.trigger('click');
+    expect(shownPanels(wrapper)).toStrictEqual(['coordinate-locate']);
+    await button(wrapper, '坐标定位').trigger('click');
+    expect(wrapper.find('[data-coordinate-locate-panel]').exists()).toBe(false);
+    expect(shownPanels(wrapper)).toStrictEqual(['region-locate']);
   });
 
   it('输入坐标定位：规范写法，放下图钉并飞过去；单击图钉看位置信息，两种格式和所在区划', async () => {
@@ -826,6 +848,51 @@ describe('CurrentMapPage', () => {
 
     await button(wrapper, '移动').trigger('click');
     expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(false);
+  });
+
+  it('资源详情：切到别的 Tab 时结果保留；在地图上再单击时切回；关闭资源详情时清除选择（ADR 0053 第 4 节）', async () => {
+    const guid = 'a'.repeat(32);
+    const square: Polygon = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [119, 32],
+          [119.01, 32],
+          [119.01, 32.01],
+          [119, 32]
+        ]
+      ]
+    };
+    server.use(
+      mock.get('/backend/api/query/attr/page', () =>
+        HttpResponse.json({ total: 1, list: [{ guid, DLMC: '水田', BSM: '320' }] })
+      ),
+      mock.get('/backend/api/query/scope/geojson', () => HttpResponse.json([{ guid, geom: JSON.stringify(square) }]))
+    );
+    const { wrapper, map } = await readyPage();
+    await vi.waitFor(() => expect(addedLayersOf(map, 'resources')).not.toStrictEqual([]));
+    const layer = { id: 'resources-bgdc_dltb' };
+    map.renderedFeatures = [{ source: layer.id, layer, properties: { guid, dlmc: '水田' }, geometry: square }];
+    map.moveTo([119, 32], 15, {});
+    await button(wrapper, '点选').trigger('click');
+    map.mouse('click', 200, 150);
+    await nextTick();
+    expect(shownPanels(wrapper)).toStrictEqual(['feature-detail']);
+    await vi.waitFor(() => expect(addedLayersOf(map, 'selection')).toHaveLength(3));
+
+    await button(wrapper, '区划定位').trigger('click');
+    expect(shownPanels(wrapper)).toStrictEqual(['region-locate']);
+    expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('2022 · 水田');
+    expect(map.geojson.has('selection')).toBe(true);
+
+    map.mouse('click', 200, 150);
+    await nextTick();
+    expect(shownPanels(wrapper)).toStrictEqual(['feature-detail']);
+
+    await wrapper.get('[aria-label="关闭资源详情"]').trigger('click');
+    expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(false);
+    expect(shownPanels(wrapper)).toStrictEqual(['region-locate']);
+    expect(map.geojson.has('selection')).toBe(false);
   });
 
   it('区划裁剪：选中南京后，点在遮罩上不识别、关闭结果，点在南京里照常（ADR 0051）', async () => {

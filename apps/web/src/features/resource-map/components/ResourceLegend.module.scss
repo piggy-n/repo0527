@@ -1,50 +1,15 @@
-// 联调用的样式，5D 再设计；位置由页面决定，面板内部滚动
+// 联调用的样式，5D 再设计；放在显示面板的 Tab 里，外观和滚动由外壳负责
 
 .legend {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  min-height: 0;
-  max-width: 100%;
-}
-
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  box-sizing: border-box;
-  // 符号编辑器的四档加"自定义"要放进一行
-  width: 320px;
-  max-width: 100%;
-  min-height: 0;
-  padding: var(--space-md);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg-mask);
-  box-shadow: var(--shadow-md);
-}
-
-.header {
-  display: flex;
-  align-items: center;
   gap: var(--space-sm);
 }
 
-.title {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-title);
-}
-
-// 数量排在标题后面，收起按钮靠右
-.count {
-  flex: 1;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.body {
-  min-height: 0;
-  overflow-y: auto;
+// "全部恢复默认"靠右
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .entries {

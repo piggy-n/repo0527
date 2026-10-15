@@ -3,7 +3,7 @@ import { provideMap } from '@yzt/map-vue';
 import { type DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
 import { ElColorPicker } from 'element-plus';
 import { afterEach, describe, expect, it } from 'vitest';
-import { defineComponent, nextTick, shallowRef } from 'vue';
+import { defineComponent, nextTick, ref, shallowRef } from 'vue';
 import type { ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
 import { type ResourceLayers, useResourceLayers } from '../composables/useResourceLayers';
@@ -34,9 +34,11 @@ const CATALOG = buildCatalog([
   }
 ]);
 
+/** active 模拟外壳切到别的 Tab、让给另一边 */
 function mountLegend() {
   let owner: ResourceLayers | undefined;
   let symbolsOwner: ResourceSymbols | undefined;
+  const active = ref(true);
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
     const catalog = shallowRef(CATALOG);
@@ -44,21 +46,17 @@ function mountLegend() {
     const layers = useResourceLayers(map, { catalog, tileBase: 'http://localhost/tiles/', symbols });
     owner = layers;
     symbolsOwner = symbols;
-    return () => <ResourceLegend layers={layers} symbols={symbols} />;
+    return () => <ResourceLegend layers={layers} symbols={symbols} active={active.value} />;
   });
   const wrapper = mount(Page);
   if (!owner || !symbolsOwner) {
     throw new Error('页面没有创建资源图层和符号的拥有者');
   }
-  return { wrapper, owner, symbols: symbolsOwner };
+  return { wrapper, owner, symbols: symbolsOwner, active };
 }
 
 function button(wrapper: VueWrapper, label: string) {
   return wrapper.get(`button[aria-label="${label}"]`);
-}
-
-async function openLegend(wrapper: VueWrapper) {
-  await wrapper.findAll('button').find(item => item.text() === '图例')?.trigger('click');
 }
 
 // jsdom 里点 label 不会切换单选按钮，直接设置里面的 input（同底图面板的测试）；在一个条目里找，几个条目会有同名的选项
@@ -79,23 +77,35 @@ afterEach(() => {
 });
 
 describe('ResourceLegend', () => {
-  it('面板进入页面时收起，勾选变化不会打开；由用户打开、收起', async () => {
+  it('按叠放顺序列出勾选的资源', async () => {
     const { wrapper, owner } = mountLegend();
-    expect(wrapper.find('[data-legend]').exists()).toBe(false);
-
     owner.setChecked('csxhjctb_hydl', true);
     await nextTick();
-    expect(wrapper.find('[data-legend]').exists()).toBe(false);
 
-    await openLegend(wrapper);
     expect(entries(wrapper)).toStrictEqual(['bgdc_dltb', 'csxhjctb_hydl']);
-    await button(wrapper, '收起图例').trigger('click');
+  });
+
+  it('隐藏时不渲染条目，编辑器卸载、丢弃取色预览；再显示时展开状态保留（ADR 0053 第 4 节）', async () => {
+    const { wrapper, owner, symbols, active } = mountLegend();
+    owner.setChecked('szy_kt', true);
+    await nextTick();
+    await button(wrapper, '展开坑塘').trigger('click');
+    symbols.previewColor({ code: 'szy_kt' }, 'fillColor', 'rgba(0, 128, 0, 0.8)');
+    expect(symbols.preview.value).not.toBeNull();
+
+    active.value = false;
+    await nextTick();
     expect(wrapper.find('[data-legend]').exists()).toBe(false);
+    expect(symbols.preview.value).toBeNull();
+
+    active.value = true;
+    await nextTick();
+    expect(wrapper.find('[data-legend="szy_kt"] [data-symbol-editor]').exists()).toBe(true);
   });
 
   it('只有一条时自动展开这一条；手动收起后改透明度、调顺序不再展开；集合变化后又只剩一条时再展开', async () => {
     const { wrapper, owner } = mountLegend();
-    await openLegend(wrapper);
+    await nextTick();
     expect(landuseShown(wrapper)).toBe(true);
 
     await button(wrapper, '收起地类图斑').trigger('click');
@@ -116,7 +126,7 @@ describe('ResourceLegend', () => {
 
   it('只剩一个统一符号时不自动展开：展开是编辑', async () => {
     const { wrapper, owner } = mountLegend();
-    await openLegend(wrapper);
+    await nextTick();
     owner.setChecked('szy_kt', true);
     await nextTick();
     owner.setChecked('bgdc_dltb', false);
@@ -129,7 +139,7 @@ describe('ResourceLegend', () => {
   it('改过符号时出现"全部恢复默认"，确认后恢复全部资源的默认符号', async () => {
     const { wrapper, owner, symbols } = mountLegend();
     owner.setChecked('szy_kt', true);
-    await openLegend(wrapper);
+    await nextTick();
     const resetAll = () => wrapper.findAll('button').find(item => item.text() === '全部恢复默认');
     expect(resetAll()).toBeUndefined();
 
@@ -152,7 +162,7 @@ describe('ResourceLegend', () => {
   it('统一符号：名称前是预览，展开后是编辑器；按取值配色展开后列出取值和"其他"', async () => {
     const { wrapper, owner } = mountLegend();
     owner.setCheckedMany(['csxhjctb_hydl', 'szy_kt'], true);
-    await openLegend(wrapper);
+    await nextTick();
 
     expect(wrapper.get('[data-legend="szy_kt"]').text()).toBe('坑塘 · 2022');
     expect(wrapper.get('[data-legend="szy_kt"] [data-swatch]').attributes('style')).toContain('background-color');
@@ -171,7 +181,7 @@ describe('ResourceLegend', () => {
   it('预览和确认的符号都反映在图例上，丢弃预览后回到确认的颜色', async () => {
     const { wrapper, owner, symbols } = mountLegend();
     owner.setChecked('szy_kt', true);
-    await openLegend(wrapper);
+    await nextTick();
     const swatchStyle = () => wrapper.get('[data-legend="szy_kt"] [data-swatch]').attributes('style');
 
     symbols.setSymbol({ code: 'szy_kt' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });
@@ -192,7 +202,7 @@ describe('ResourceLegend', () => {
     owner.setChecked('csxhjctb_hydl', true);
     symbols.setSymbol({ code: 'csxhjctb_hydl', item: '水渠' }, { color: 'rgba(255, 0, 0, 0.5)' });
     symbols.setSymbol({ code: 'bgdc_dltb', item: '0201K' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });
-    await openLegend(wrapper);
+    await nextTick();
     await button(wrapper, '展开水域线层').trigger('click');
 
     const canal = wrapper.get('[data-legend="csxhjctb_hydl"]').findAll('li').find(item => item.text() === '水渠');
@@ -206,7 +216,7 @@ describe('ResourceLegend', () => {
     const { wrapper, owner, symbols } = mountLegend();
     owner.setChecked('csxhjctb_hydl', true);
     symbols.setSymbol({ code: 'csxhjctb_hydl', item: '水渠' }, { width: 'L' });
-    await openLegend(wrapper);
+    await nextTick();
     await button(wrapper, '展开水域线层').trigger('click');
     const entry = () => wrapper.get('[data-legend="csxhjctb_hydl"]');
     const rowSwatch = () => entry().find('button[aria-label="收起水域线层"] [data-swatch]');
@@ -228,7 +238,7 @@ describe('ResourceLegend', () => {
   it('按取值配色：展开一个取值编辑它，同一时间只展开一个', async () => {
     const { wrapper, owner, symbols } = mountLegend();
     owner.setChecked('csxhjctb_hydl', true);
-    await openLegend(wrapper);
+    await nextTick();
     await button(wrapper, '展开水域线层').trigger('click');
 
     await button(wrapper, '展开水渠').trigger('click');
@@ -246,7 +256,7 @@ describe('ResourceLegend', () => {
   it('标题带显示的年份；换年份后条目仍展开，正在编辑的取值仍打开（ADR 0052 第 3 节）', async () => {
     const { wrapper, owner } = mountLegend();
     owner.setChecked('csxhjctb_hydl', true);
-    await openLegend(wrapper);
+    await nextTick();
     await button(wrapper, '展开水域线层').trigger('click');
     await button(wrapper, '展开水渠').trigger('click');
     const title = () => wrapper.get('[data-legend="csxhjctb_hydl"]').get('button').text();
@@ -265,7 +275,7 @@ describe('ResourceLegend', () => {
 
   it('地类：展开一个地类编辑它，同一时间只展开一个', async () => {
     const { wrapper, symbols } = mountLegend();
-    await openLegend(wrapper);
+    await nextTick();
     await wrapper.get('input[placeholder="搜索编码或名称"]').setValue('010');
 
     await button(wrapper, '展开水田').trigger('click');
@@ -284,7 +294,7 @@ describe('ResourceLegend', () => {
 
   it('地类图例：默认现状分类，可以切换和搜索；含义放在 title，可调整地类有标记', async () => {
     const { wrapper } = mountLegend();
-    await openLegend(wrapper);
+    await nextTick();
     const sections = () => wrapper.findAll('[data-landuse-section]').map(item => item.attributes('data-landuse-section'));
     expect(sections().slice(0, 2)).toStrictEqual(['01', '02']);
 
@@ -304,7 +314,7 @@ describe('ResourceLegend', () => {
   it('没有勾选时提示', async () => {
     const { wrapper, owner } = mountLegend();
     owner.setChecked('bgdc_dltb', false);
-    await openLegend(wrapper);
+    await nextTick();
 
     expect(wrapper.text()).toContain('勾选资源后查看图例');
   });

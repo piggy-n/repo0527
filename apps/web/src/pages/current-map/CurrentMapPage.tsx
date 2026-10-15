@@ -1,5 +1,7 @@
+import { Collection, MapLocation } from '@element-plus/icons-vue';
 import { MapCanvas, provideMap } from '@yzt/map-vue';
-import { defineComponent, ref } from 'vue';
+import { ElButton } from 'element-plus';
+import { defineComponent, ref, watch } from 'vue';
 import { FeatureDetailPanel } from '@/features/resource-map/components/FeatureDetailPanel';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
@@ -19,6 +21,9 @@ import { useLocationPoint } from '@/shared/map/location/useLocationPoint';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
 import { useMeasure } from '@/shared/map/measure/useMeasure';
+import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
+import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
+import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
 import { RegionLocatePanel } from '@/shared/map/region/RegionLocatePanel';
 import { regionClipGroup } from '@/shared/map/region/region-clip';
 import { readyBoundary, useRegionLocate } from '@/shared/map/region/useRegionLocate';
@@ -27,7 +32,21 @@ import { useDefaultView } from '@/shared/map/useDefaultView';
 import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './CurrentMapPage.module.scss';
 
-/** 现状底图：联调用的骨架，界面在 5D 专门设计（docs/roadmap.md"阶段五"） */
+// 右侧的两组 Tab 面板（ADR 0053 第 4 节）：功能面板和显示面板，Tab 按这里的顺序
+const FUNCTION_PANELS = ['region-locate', 'coordinate-locate', 'feature-detail'] as const;
+const DISPLAY_PANELS = ['legend', 'basemap'] as const;
+const PANEL_LABELS = {
+  'region-locate': '区划定位',
+  'coordinate-locate': '坐标定位',
+  'feature-detail': '资源详情',
+  legend: '图例',
+  basemap: '底图'
+};
+
+type LocatePanel = 'region-locate' | 'coordinate-locate';
+type DisplayPanel = (typeof DISPLAY_PANELS)[number];
+
+/** 现状底图：区域按 ADR 0053 划分，各块的界面在 5D.1～5D.8 逐块设计（docs/roadmap.md"5D 地图页界面的专门设计"） */
 export const CurrentMapPage = defineComponent({
   name: 'CurrentMapPage',
   setup() {
@@ -52,8 +71,35 @@ export const CurrentMapPage = defineComponent({
     const region = useRegionLocate(map, { goToDefaultView });
     const measure = useMeasure();
     const location = useLocationPoint(map);
-    // 点选、框选只认区划里的要素，和遮罩用同一个边界（ADR 0051 第 1 节）
-    const pick = useFeaturePick(map, resources, { scope: () => readyBoundary(region.state.value)?.geometry ?? null });
+
+    // 右侧的两组面板；已打开的功能和当前的 Tab 是页面的界面状态，业务状态在各自的拥有者里（ADR 0053 第 4 节）
+    const functions = usePanelGroup(FUNCTION_PANELS);
+    const display = usePanelGroup(DISPLAY_PANELS);
+    // 资源面板是否收起（5D.2 起按账号记住）；窄屏时左右只显示一边，只推导显示，不改它（ADR 0053 第 8 节）
+    const resourcesCollapsed = ref(false);
+    const sides = useSideExclusion({
+      leftExpanded: () => !resourcesCollapsed.value,
+      rightOpen: () => functions.state.value.open.length > 0 || display.state.value.open.length > 0
+    });
+
+    // 点选、框选只认区划里的要素，和遮罩用同一个边界（ADR 0051 第 1 节）；用户开始识别时切到资源详情
+    const pick = useFeaturePick(map, resources, {
+      scope: () => readyBoundary(region.state.value)?.geometry ?? null,
+      onIdentifyStart: () => {
+        sides.activate('right');
+        functions.show('feature-detail');
+      }
+    });
+    // 拥有者清除了结果（关闭、取消勾选资源、离开点选工具等）时资源详情随之关闭；请求返回时不切换 Tab
+    watch(
+      () => pick.state.value.kind === 'idle',
+      idle => {
+        if (idle) {
+          functions.close('feature-detail');
+        }
+      }
+    );
+
     map.registerTools(measure.tools);
     map.registerTools(location.tools);
     map.registerTools(pick.tools);
@@ -69,65 +115,115 @@ export const CurrentMapPage = defineComponent({
       measure: measure.deriveGroup
     });
 
-    // 面板开关只是界面状态，区划定位和坐标定位同一时间只开一个；关闭面板不清掉选择和位置点（ADR 0036、0037）
-    type LocatePanel = 'region-locate' | 'coordinate-locate';
-    const openPanel = ref<LocatePanel | null>(null);
-    const togglePanel = (panel: LocatePanel) => (openPanel.value = openPanel.value === panel ? null : panel);
-    const closePanel = () => (openPanel.value = null);
+    // 右侧的入口：工具栏的区划定位、坐标定位，卡片行的图例、底图；关闭面板不清掉选择和位置点（ADR 0036、0037）
+    const toggleFunction = (id: LocatePanel) => {
+      sides.activate('right');
+      functions.toggle(id);
+    };
+    const toggleDisplay = (id: DisplayPanel) => {
+      sides.activate('right');
+      display.toggle(id);
+    };
+    // 关闭资源详情就是清除选择（ADR 0053 第 4 节）；外壳已经从组里关掉了它
+    const closeFunction = (id: string) => {
+      if (id === 'feature-detail') {
+        pick.close();
+      }
+    };
+    // 展开资源面板算操作左边：窄屏时右边让出来
+    const changeResourcesCollapsed = (collapsed: boolean) => {
+      resourcesCollapsed.value = collapsed;
+      if (!collapsed) {
+        sides.activate('left');
+      }
+    };
     // "清除"清掉地图上画的东西：测量结果和位置点；区划选择不算
     const clear = () => {
       measure.clear();
       location.remove();
     };
 
-    return () => (
-      <div class={styles.root}>
-        <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} />
-        <MeasureOverlay measure={measure} />
-        <LocationOverlay location={location} />
-        <BoxSelectOverlay box={pick.boxDraft.value} />
-        <div class={styles.overlay}>
-          <div class={styles.resources}>
-            <ResourceLayerPanel
-              layers={resources}
-              failed={catalogQuery.isError.value}
-              onRetry={() => void catalogQuery.refetch()}
-            />
-          </div>
-          <div class={styles.controls}>
-            <MapToolbar
-              items={[
-                'default-view',
-                'browse',
-                'feature-pick',
-                'measure-distance',
-                'measure-area',
-                'clear',
-                'region-locate',
-                'coordinate-locate'
-              ]}
-              actions={{
-                'default-view': goToDefaultView,
-                clear,
-                'region-locate': () => togglePanel('region-locate'),
-                'coordinate-locate': () => togglePanel('coordinate-locate')
-              }}
-              pressed={openPanel.value ? [openPanel.value] : []}
-            />
-            {openPanel.value === 'region-locate' && <RegionLocatePanel region={region} onClose={closePanel} />}
-            {openPanel.value === 'coordinate-locate' && (
-              <CoordinateLocatePanel location={location} onClose={closePanel} />
-            )}
-            {pick.state.value.kind !== 'idle' && <FeatureDetailPanel pick={pick} />}
-            <BasemapPanel basemap={basemap} />
-            <BoundaryPanel boundaries={boundaries} />
-            <div class={styles.legend}>
-              <ResourceLegend layers={resources} symbols={symbols} />
+    const renderCard = (id: DisplayPanel, icon: typeof Collection) => {
+      const open = display.isOpen(id);
+      return (
+        <ElButton icon={icon} type={open ? 'primary' : 'default'} aria-pressed={open} onClick={() => toggleDisplay(id)}>
+          {PANEL_LABELS[id]}
+        </ElButton>
+      );
+    };
+
+    return () => {
+      const pressed = (['region-locate', 'coordinate-locate'] as const).filter(id => functions.isOpen(id));
+      return (
+        <div class={styles.root}>
+          <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} />
+          <MeasureOverlay measure={measure} />
+          <LocationOverlay location={location} />
+          <BoxSelectOverlay box={pick.boxDraft.value} />
+          <div class={styles.overlay}>
+            <div class={styles.left}>
+              <ResourceLayerPanel
+                layers={resources}
+                failed={catalogQuery.isError.value}
+                collapsed={!sides.left.value}
+                onRetry={() => void catalogQuery.refetch()}
+                onUpdate:collapsed={changeResourcesCollapsed}
+              />
+            </div>
+            <div class={styles.lane}>
+              <MapPanelGroup group={functions} labels={PANEL_LABELS} visible={sides.right.value} onClose={closeFunction}>
+                {{
+                  'region-locate': () => [<RegionLocatePanel region={region} />],
+                  'coordinate-locate': ({ active }: PanelSlotProps) => [
+                    <CoordinateLocatePanel location={location} active={active} />
+                  ],
+                  'feature-detail': () => [<FeatureDetailPanel pick={pick} />]
+                }}
+              </MapPanelGroup>
+              <div class={styles.spacer} />
+              <MapPanelGroup group={display} labels={PANEL_LABELS} visible={sides.right.value}>
+                {{
+                  legend: ({ active }: PanelSlotProps) => [
+                    <ResourceLegend layers={resources} symbols={symbols} active={active} />
+                  ],
+                  basemap: () => [
+                    <BasemapPanel basemap={basemap} />,
+                    <div class={styles.sectionTitle}>行政区</div>,
+                    <BoundaryPanel boundaries={boundaries} />
+                  ]
+                }}
+              </MapPanelGroup>
+              {/* 卡片行：联调用的入口，5D.4、5D.5 换成图例卡和缩略图的底图卡 */}
+              <div class={styles.cards}>
+                {renderCard('legend', Collection)}
+                {renderCard('basemap', MapLocation)}
+              </div>
+            </div>
+            <div class={styles.tools}>
+              <MapToolbar
+                items={[
+                  'default-view',
+                  'browse',
+                  'feature-pick',
+                  'measure-distance',
+                  'measure-area',
+                  'clear',
+                  'region-locate',
+                  'coordinate-locate'
+                ]}
+                actions={{
+                  'default-view': goToDefaultView,
+                  clear,
+                  'region-locate': () => toggleFunction('region-locate'),
+                  'coordinate-locate': () => toggleFunction('coordinate-locate')
+                }}
+                pressed={pressed}
+              />
             </div>
           </div>
+          <MapStatusNotice />
         </div>
-        <MapStatusNotice />
-      </div>
-    );
+      );
+    };
   }
 });

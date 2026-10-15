@@ -176,7 +176,8 @@ function setup(
   zoom = 15,
   state = STATE,
   invalid: ReadonlyMap<string, readonly string[]> = new Map(),
-  initialScope: RegionScope | null = null
+  initialScope: RegionScope | null = null,
+  onIdentifyStart = vi.fn<() => void>()
 ) {
   const fake = fakeCamera(zoom);
   // 区划裁剪的范围，可以由用例中途改变
@@ -189,7 +190,7 @@ function setup(
   let owner: FeaturePick | undefined;
   const Host = defineComponent({
     setup() {
-      owner = useFeaturePick(map, resources, { scope: () => scope.value });
+      owner = useFeaturePick(map, resources, { scope: () => scope.value, onIdentifyStart });
       return () => null;
     }
   });
@@ -201,7 +202,7 @@ function setup(
   const pick = owner.tools[FEATURE_PICK_TOOL];
   const send = (event: MapInputEvent, features: readonly RenderedFeature[] = [], kind: ViewKind = '2d') =>
     pick.handleInput?.(event, toolView(features, kind));
-  return { owner, pick, send, select, resources, scope, ...fake };
+  return { owner, pick, send, select, resources, scope, onIdentifyStart, ...fake };
 }
 
 type Owner = ReturnType<typeof setup>['owner'];
@@ -254,6 +255,28 @@ describe('useFeaturePick：识别', () => {
     expect(highlighted(owner)).toBe(true);
     expect(beginCameraOperation).not.toHaveBeenCalled();
     expect(fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('单击开始识别时通知页面（ADR 0053 第 4 节）；不识别的输入不通知；回调抛错不打断识别', () => {
+    const { owner, send, onIdentifyStart } = setup(15);
+    const features = [rendered(DLTB, 1), rendered(DLTB, 2)];
+
+    send(click(100, 100, 2), features);
+    send({ ...click(), button: 2 }, features);
+    expect(onIdentifyStart).not.toHaveBeenCalled();
+
+    send(click(), features);
+    expect(onIdentifyStart).toHaveBeenCalledOnce();
+    expect(kindOf(owner)).toBe('candidates');
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onIdentifyStart.mockImplementation(() => {
+      throw new Error('页面的回调出错');
+    });
+    send(click(), [rendered(DLTB, 3)]);
+    expect(selectedGuid(owner)).toBe(guid(3));
+    expect(consoleError).toHaveBeenCalledOnce();
+    consoleError.mockRestore();
   });
 
   it('点中多个要素时列出候选；双击的第二下、右键、拖动后的松手不识别', () => {

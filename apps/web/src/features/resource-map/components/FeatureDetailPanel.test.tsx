@@ -159,8 +159,6 @@ describe('FeatureDetailPanel', () => {
     ]);
     await wrapper.get('[aria-label="定位到要素"]').trigger('click');
     expect(pick.locate).toHaveBeenCalledOnce();
-    await wrapper.get('[aria-label="关闭点选"]').trigger('click');
-    expect(pick.close).toHaveBeenCalledOnce();
   });
 
   it('从列表进入的详情可以返回列表', async () => {

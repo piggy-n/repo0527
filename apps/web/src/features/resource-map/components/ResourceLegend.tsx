@@ -1,5 +1,4 @@
-import { ArrowDown, ArrowRight, Close, Collection } from '@element-plus/icons-vue';
-import { useMapOverlay } from '@yzt/map-vue';
+import { ArrowDown, ArrowRight } from '@element-plus/icons-vue';
 import { ElButton, ElPopconfirm, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
 import type { ResourceLayers } from '../composables/useResourceLayers';
@@ -22,20 +21,19 @@ const MODES: readonly { readonly value: SymbolMode; readonly label: string }[] =
 /**
  * 资源图层的图例（ADR 0043、0044，联调用的界面，5D 再设计）：勾选的资源按叠放顺序各一条，内容从样式登记表和符号覆盖推导，
  * 不读地图、不等视图就绪；统一符号的条目展开后可以编辑符号，按属性配色的条目可以切换样式方式、编辑各取值。
- * 面板进入页面时总是收起；按属性配色的条目在集合变化后只剩一条时自动展开，统一符号展开是编辑，不自动展开。登记为贴右边的悬浮元素
+ * 按属性配色的条目在集合变化后只剩一条时自动展开，统一符号展开是编辑，不自动展开。
+ * 放在显示面板的 Tab 里，标题、开关和登记由外壳负责；隐藏时不渲染条目，编辑器随之卸载、丢弃取色预览，展开状态保留（ADR 0053 第 4 节）
  */
 export const ResourceLegend = defineComponent({
   name: 'ResourceLegend',
   props: {
     layers: { type: Object as PropType<ResourceLayers>, required: true },
-    symbols: { type: Object as PropType<ResourceSymbols>, required: true }
+    symbols: { type: Object as PropType<ResourceSymbols>, required: true },
+    /** 正在显示；切到别的 Tab、让给另一边时为 false */
+    active: { type: Boolean, default: true }
   },
   setup(props) {
-    const element = ref<HTMLElement>();
-    useMapOverlay(element, 'right');
-
-    // 面板的开关和条目的展开都是图例自己的界面状态，不持久化
-    const open = ref(false);
+    // 条目的展开是图例自己的界面状态，不持久化
     const expanded = ref<ReadonlySet<string>>(new Set());
     const entries = computed(() =>
       legendEntries(props.layers.state.value, props.layers.configErrors.value, props.symbols.overrideOf)
@@ -138,40 +136,28 @@ export const ResourceLegend = defineComponent({
       );
     };
 
-    return () => (
-      <div ref={element} class={styles.legend} data-resource-legend>
-        {open.value ? (
-          <div class={styles.panel}>
-            <div class={styles.header}>
-              <span class={styles.title}>图例</span>
-              <span class={styles.count}>{entries.value.length > 0 && entries.value.length}</span>
-              {props.symbols.overrides.value.size > 0 && (
-                <ElPopconfirm title="恢复全部资源的默认符号？" onConfirm={() => props.symbols.resetAll()}>
-                  {{
-                    reference: () => (
-                      <ElButton link type="primary" size="small">
-                        全部恢复默认
-                      </ElButton>
-                    )
-                  }}
-                </ElPopconfirm>
-              )}
-              <ElButton link icon={Close} aria-label="收起图例" onClick={() => (open.value = false)} />
+    return () =>
+      props.active ? (
+        <div class={styles.legend} data-resource-legend>
+          {props.symbols.overrides.value.size > 0 && (
+            <div class={styles.toolbar}>
+              <ElPopconfirm title="恢复全部资源的默认符号？" onConfirm={() => props.symbols.resetAll()}>
+                {{
+                  reference: () => (
+                    <ElButton link type="primary" size="small">
+                      全部恢复默认
+                    </ElButton>
+                  )
+                }}
+              </ElPopconfirm>
             </div>
-            <div class={styles.body}>
-              {entries.value.length > 0 ? (
-                <ul class={styles.entries}>{entries.value.map(renderEntry)}</ul>
-              ) : (
-                <div class={styles.empty}>勾选资源后查看图例</div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <ElButton icon={Collection} onClick={() => (open.value = true)}>
-            图例
-          </ElButton>
-        )}
-      </div>
-    );
+          )}
+          {entries.value.length > 0 ? (
+            <ul class={styles.entries}>{entries.value.map(renderEntry)}</ul>
+          ) : (
+            <div class={styles.empty}>勾选资源后查看图例</div>
+          )}
+        </div>
+      ) : null;
   }
 });

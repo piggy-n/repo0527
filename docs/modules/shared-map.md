@@ -42,6 +42,10 @@
 | `location/LocationOverlay.tsx` | 图钉、位置信息和拾取提示（联调用的界面） |
 | `location/useCoordinateInput.ts` | 坐标输入的逻辑：每个输入框的文字和精确数值、识别结果与提示、规范写法、切换格式、拆分一对坐标、提交 |
 | `location/CoordinateLocatePanel.tsx` | 坐标定位的面板：度分秒 / 小数、经纬度输入、拾取、定位（联调用的界面，逻辑在 `useCoordinateInput`） |
+| `panel-group/panel-group.ts` | 一组 Tab 面板的状态与规则：打开、切换、关闭（纯函数）；窄屏时左右只显示一边 `visibleSides`（ADR 0053） |
+| `panel-group/usePanelGroup.ts` | 一组 Tab 面板：已打开的功能、当前的 Tab，页面级的界面状态 |
+| `panel-group/useSideExclusion.ts` | 窄屏时左边的资源面板和右边的面板只显示最后操作的一边，只推导显示 |
+| `panel-group/MapPanelGroup.tsx` | 一组 Tab 面板的外壳：Tab、关闭、内容的隐藏与 `active`，登记为贴右边的悬浮元素 |
 
 ## 江苏的范围与默认视角（ADR 0033）
 
@@ -110,7 +114,7 @@ basemap.setOpacity(0.6);
 
 - Element 的单选按钮组列出 `basemap.options`；滑块按百分比显示当前底图的透明度，拖动过程中实时生效，换算成 0～1 交给 `setOpacity`；无底图时没有滑块
 - 单选按钮组给出的值类型很宽（`string | number | boolean | undefined`），按 `basemap.options` 查出底图 ID，不做类型断言
-- 位置由页面的 class 决定（现状底图放在右上角）；角落里的小控件，不用 `useMapOverlay` 登记（ADR 0029）
+- 现状底图页把它和边界面板放在显示面板的"底图"里（ADR 0053 第 4 节），外观和悬浮元素的登记由外壳负责
 - `Basemap` 接口里的函数都写成函数类型的属性（`readonly deriveGroup: () => StyleGroup`），不写方法签名：它们是闭包，页面直接取出来交给 `bindStyle`，写成方法签名时 lint 的 `unbound-method` 会报错
 
 ### 浏览器验证（2026-10-10）
@@ -153,7 +157,7 @@ boundaries.setOpacity(0.6);
 - `useBoundaries()` 的写法与 `useBasemap()` 相同：状态是一个 `shallowRef`，值没变时不替换；透明度不是 0～1 之间的有限数时抛错。三级都关闭时仍可以改透明度
 - 进入页面时只显示省界；指标页（阶段六）要四项全开时再加初始值的参数
 - 记住选择（5C.3，ADR 0042）：`useBoundaries({ preferences })` 读到存下的三个级别和透明度后整体替换一次（`boundary-preference.ts` 的 schema 校验通过才用），之后的修改防抖写入
-- 联调面板 `BoundaryPanel`：三个复选框和一条透明度滑块，没有打开任何级别时没有滑块；复选框组给出勾选的全部值，按级别逐一 `setVisible`，值没变的级别不替换状态。现状底图页把"默认视角"按钮、底图面板、边界面板在右上角排成一列
+- 联调面板 `BoundaryPanel`：三个复选框和一条透明度滑块，没有打开任何级别时没有滑块；复选框组给出勾选的全部值，按级别逐一 `setVisible`，值没变的级别不替换状态。现状底图页把它放在显示面板的"底图"里，在底图面板下面
 
 ### 浏览器验证（2026-10-10）
 
@@ -198,7 +202,7 @@ boundaries.setOpacity(0.6);
 - 点选的按钮在这里，ID 是 `FEATURE_PICK_TOOL`（`'feature-pick'`），实现由业务模块登记（ADR 0047 第 6 节）：现状底图页登记 `features/resource-map` 的 `useFeaturePick().tools`。按钮放进 `items` 之前必须先登记，否则点击时 `activateTool` 抛错
 - 工具按钮读 `useMap().activeTool`，激活的按钮高亮；点击没激活的工具时 `activateTool`，点击激活的工具时 `releaseTool`（临时任务退回上一个常驻模式）。"移动"是常驻模式，再点一次什么也不做
 - 动作按钮调用页面通过 `actions` 传入的回调，没有回调时不可用。开关面板的动作（区划定位，以后的坐标定位）也是动作：面板开关是页面的界面状态，页面通过 `pressed` 告诉工具栏哪些显示为按下（高亮、`aria-pressed`），工具栏自己不保存；它和当前工具互不影响（ADR 0036）
-- 现状底图页把它和底图面板、边界面板一起放在右上角；它是角落里的小控件，不登记为悬浮元素。放不下时换行、靠右对齐：页面的控件列左右都留边距，工具栏在这个宽度里换行；控件列本身不拦截鼠标，空白处仍是地图
+- 现状底图页把它放在最右边的工具栏一列，联调时竖排（ADR 0053 第 1 节）；竖向的两组、文字分两行、登记为悬浮元素在 5D.1 做。5D 之前是横排、放不下时换行
 
 ## 框选的手势与矩形（ADR 0049）
 
@@ -308,16 +312,17 @@ region.select(null);       // 回到全省：清掉高亮，回到默认视角
 面板与页面：
 
 ```tsx
-// 面板开关是页面的界面状态；关闭面板不清掉选择
-const regionPanelOpen = ref(false);
-<MapToolbar items={[..., 'region-locate']} actions={{ 'region-locate': toggle }} pressed={regionPanelOpen.value ? ['region-locate'] : []} />
-{regionPanelOpen.value && <RegionLocatePanel region={region} onClose={() => (regionPanelOpen.value = false)} />}
+// 面板放在功能面板的 Tab 里（ADR 0053 第 4 节）；关闭面板不清掉选择
+<MapToolbar items={[..., 'region-locate']} actions={{ 'region-locate': () => functions.toggle('region-locate') }} pressed={...} />
+<MapPanelGroup group={functions} labels={PANEL_LABELS}>
+  {{ 'region-locate': () => [<RegionLocatePanel region={region} />] }}
+</MapPanelGroup>
 ```
 
-- 面板列出 13 个市（按钮上去掉"市"字）；选中市或区县后列出所在市的区县；标题旁显示当前的选择（全省或路径）
+- 面板列出 13 个市（按钮上去掉"市"字）；选中市或区县后列出所在市的区县；最上面显示当前的选择（全省或路径）
 - 搜索框按 `searchRegions` 列出路径，点一条直接选中并清空关键字；回车或"搜索"选中第一条，输入法选字时的回车不算
 - 边界加载超过 300ms 才显示"正在加载边界"（`useDelayedFlag`）；失败时显示"边界加载失败"和"重试"
-- 面板登记为贴右边的悬浮元素（`useMapOverlay`），定位时避开它；按钮列表用 `ElSpace` 换行，避免 Element 按钮之间的左边距让换行后的按钮错位
+- 标题、关闭和悬浮元素的登记由外壳负责，定位时避开整组面板；按钮列表用 `ElSpace` 换行，避免 Element 按钮之间的左边距让换行后的按钮错位
 
 区划目录与边界的加载：
 
@@ -431,10 +436,10 @@ location.remove();                      // 删除位置点，连同位置信息
 ### 面板与页面
 
 ```tsx
-// 面板开关是页面的界面状态，区划定位和坐标定位同一时间只开一个
-const openPanel = ref<'region-locate' | 'coordinate-locate' | null>(null);
-<MapToolbar items={[..., 'region-locate', 'coordinate-locate']} pressed={openPanel.value ? [openPanel.value] : []} ... />
-{openPanel.value === 'coordinate-locate' && <CoordinateLocatePanel location={location} onClose={closePanel} />}
+// 区划定位和坐标定位是功能面板的两个 Tab，可以同时打开，同一时间显示一个（ADR 0053 第 4 节）
+<MapPanelGroup group={functions} labels={PANEL_LABELS}>
+  {{ 'coordinate-locate': ({ active }: PanelSlotProps) => [<CoordinateLocatePanel location={location} active={active} />] }}
+</MapPanelGroup>
 ```
 
 - 面板的格式切换（度分秒 / 小数）写进拥有者的 `format`；切换时识别得了的输入框换成新写法，识别不了的保留原文。打开面板时、位置点变化时（定位、拾取、拖动）输入框显示位置点
@@ -442,7 +447,7 @@ const openPanel = ref<'region-locate' | 'coordinate-locate' | null>(null);
 - 输入的逻辑在 `useCoordinateInput`：每个输入框是"显示的文字"和"精确数值"两部分。输入时数值按文字重新识别；离开输入框、切换格式时只把文字换成规范写法，数值不变（度分秒的秒只显示两位小数，约 0.3 米，不能反过来影响定位）；位置点变化时两部分都取位置点的值
 - 离开输入框时规范成标准写法；经度框里是一对坐标时（`splitCoordinatePair`）分到两个框，输入时下方提示"识别为一对坐标"
 - 回车和"定位"走同一个 `submit`：先拆分一对坐标、规范写法，两个数值都有时按精确数值定位；输入法选字时的回车不算
-- "拾取"开关拾取工具，拾取中显示为按下；面板卸载时取消拾取。面板登记为贴右边的悬浮元素
+- "拾取"开关拾取工具，拾取中显示为按下；面板隐藏（`active` 为 false：切到别的 Tab、窄屏时让给另一边）和卸载时都取消拾取，输入框的文字保留。标题、关闭和登记由外壳负责
 - 现状底图页：`location` 登记拾取工具，`LocationOverlay` 和画布放在一起；工具栏的"清除"调用 `measure.clear()` 和 `location.remove()`
 
 ### 浏览器验证（2026-10-10）
@@ -489,6 +494,33 @@ splitCoordinatePair('118°46′40″E 32°03′23″N');  // 粘贴的一对坐�
 - 复制的格式：小数 `118.777800, 32.056500`（经度在前），度分秒 `118°46′40.00″E, 32°03′23.40″N`（规范的 `′″`，带方向）
 - 一次粘贴的一对坐标：按逗号、分号、换行拆，或按 `…E …N`、`E… N…` 这样的方向拆，或两个空格分隔的小数；两段都要"看起来完整"（带小数点、单位或方向），`118, 46` 这类只有整数的当作度、分
 
+## 两组 Tab 面板（ADR 0053）
+
+```tsx
+// 页面 setup：每组一个实例，Tab 按给出的顺序
+const functions = usePanelGroup(['region-locate', 'coordinate-locate', 'feature-detail'] as const);
+functions.toggle('region-locate');   // 入口的点击：没打开时打开，没在显示时切到它，正在显示时关闭
+functions.show('feature-detail');    // 打开并切到它，如用户开始识别时
+functions.close('feature-detail');   // 关掉当前的时切到最近显示过的另一个
+
+// 窄屏时左右只显示一边：右边的入口、展开资源面板时告诉它操作了哪一边
+const sides = useSideExclusion({ leftExpanded: () => !collapsed.value, rightOpen: () => functions.state.value.open.length > 0 });
+sides.activate('right');
+
+// 外壳：每个功能一个插槽，插槽拿到 active
+<MapPanelGroup group={functions} labels={PANEL_LABELS} visible={sides.right.value} onClose={id => ...}>
+  {{ 'coordinate-locate': ({ active }: PanelSlotProps) => [<CoordinateLocatePanel location={location} active={active} />] }}
+</MapPanelGroup>
+```
+
+- 状态是 `{ open, current, recent }`：`open` 按 Tab 的固定顺序，和打开的先后无关；`recent` 按最近显示的先后，关掉当前的时切到它的第一个。规则是纯函数（`showPanel`、`closePanel`、`togglePanel`），不在这组里的功能直接抛错，没有改变时不替换状态
+- `PanelGroup` 的操作写成方法签名，具体 Id 的面板组可以交给只认 `string` 的外壳
+- 外壳只渲染已打开的功能：打开期间内容一直挂载，切走时用 `display: none` 隐藏（输入、滚动、展开状态都在），关闭时卸载。插槽拿到 `active`（整组在显示、并且是当前的 Tab），内容据此结束临时的交互：坐标定位退出拾取，图例不渲染条目（编辑器卸载、丢弃取色预览、收起弹出层）
+- Tab 上的关闭按钮先从组里关掉这个功能，再发出 `close`，页面需要时做连带的事：现状底图页关闭资源详情时调用点选的 `close()`（清除选择）；点选的拥有者自己清除了结果时，页面侦听到回到空闲，关掉资源详情的 Tab
+- 用户的单击、框选开始识别时，点选的拥有者调用 `onIdentifyStart`，页面切到资源详情；识别、加载更多、详情的请求返回时不切换 Tab
+- 外壳代表整组登记为贴右边的悬浮元素；隐藏（没有打开的功能、窄屏时让给左边）时尺寸为 0，不算进定位的留白。原来区划定位、坐标定位、点选、图例各自的登记去掉了
+- 窄屏用全应用的断点（`@yzt/ui` 的 `COMPACT_MEDIA_QUERY`，1200）：两边都有东西要显示时只显示最后操作的一边；`visibleSides` 只推导显示，不改资源面板的收起状态和右边已打开的功能，变宽后两边按各自的状态显示
+
 ## 地图状态的提示（ADR 0030）
 
 ```tsx
@@ -517,12 +549,15 @@ splitCoordinatePair('118°46′40″E 32°03′23″N');  // 粘贴的一对坐�
 |---|---|---|
 | `useDefaultView.test.ts` | 初始适配在进入页面时的操作下 `run`、不开始新的操作，和它的参数；回到默认视角是一次相机操作和它的参数；画布已经创建视图或不在作用域里时抛错。第一次就绪、失败重试后补做、让给用户的操作、页面卸载时放弃由 `run` 负责，见 map-vue 的 `context.test.ts` 和现状底图页的测试 | Node |
 | `jiangsu.test.ts` | 江苏的范围包含省界数据，四边多出的不超过 0.05° | Node |
-| `pages/current-map/CurrentMapPage.test.tsx` | 页面绑定的分组与叠放（底图、注记、省界，区划高亮在边界之上，测量叠在最上面）；区划定位：工具栏开关面板、选中后高亮并定位、用关闭按钮或工具栏关面板都不清选择、再点回到全省和默认视角（市界用替换的 fetch 提供）；坐标定位：两个定位面板互斥、输入后定位与位置信息（两种格式、所在区划）、拾取与提示、长按拖动与 Esc（假定时器）、关闭面板取消拾取、图钉随相机移动、单击开关位置信息（右键不算）、画布重建时先隐藏、拖动时视口坐标换成画布坐标、测量时图钉不响应、"清除"；把缩放范围交给画布；第一次就绪时定位、画布重建后不再定位；"默认视角"按钮；失败重试后补做；测量的完整交互：提示跟随鼠标和状态、末点的总长、标签随相机移动、× 和"清除"、换成测面，画布重建时标签先隐藏、就绪后重新显示；区划定位与其他相机操作的先后（ADR 0038）：加载期间点"默认视角"（相机没变）、上一次定位的动画中选中区县、地图加载期间选中区划、加载期间拖动或坐标定位（这几个用例重新导入页面，区划边界从没有缓存开始，边界文件的请求由用例放行）（用假地图，鼠标事件经过真实的适配器） | jsdom |
+| `pages/current-map/CurrentMapPage.test.tsx` | 页面绑定的分组与叠放（底图、注记、省界，区划高亮在边界之上，测量叠在最上面）；区划定位：工具栏开关面板、选中后高亮并定位、用关闭按钮或工具栏关面板都不清选择、再点回到全省和默认视角（市界用替换的 fetch 提供）；坐标定位：区划定位和坐标定位是功能面板的两个 Tab（切走时隐藏、取消拾取、输入保留，再点正在显示的入口关闭）、资源详情切走时保留、再单击时切回、关闭时清除选择（ADR 0053）、输入后定位与位置信息（两种格式、所在区划）、拾取与提示、长按拖动与 Esc（假定时器）、关闭面板取消拾取、图钉随相机移动、单击开关位置信息（右键不算）、画布重建时先隐藏、拖动时视口坐标换成画布坐标、测量时图钉不响应、"清除"；把缩放范围交给画布；第一次就绪时定位、画布重建后不再定位；"默认视角"按钮；失败重试后补做；测量的完整交互：提示跟随鼠标和状态、末点的总长、标签随相机移动、× 和"清除"、换成测面，画布重建时标签先隐藏、就绪后重新显示；区划定位与其他相机操作的先后（ADR 0038）：加载期间点"默认视角"（相机没变）、上一次定位的动画中选中区县、地图加载期间选中区划、加载期间拖动或坐标定位（这几个用例重新导入页面，区划边界从没有缓存开始，边界文件的请求由用例放行）（用假地图，鼠标事件经过真实的适配器） | jsdom |
 | `map-status.test.ts` | 各状态的显示内容、两种引擎失败、样式失败、没有原因、不是 Error 的原因 | Node |
 | `MapStatusNotice.test.tsx` | 引擎失败时显示原因和"重试"，点击后重新创建地图，重试过程不抛错 | jsdom |
 | `basemap/BasemapPanel.test.tsx` | 选择底图后改变状态、无底图时没有滑块；滑块按百分比显示、拖动时交给拥有者 0～1 的值；关闭天地图时只有"无底图" | jsdom |
 | `basemap/useBasemap.test.ts` | 默认读取配置；两种配置下的初始状态；切换后推导出所选底图和注记；透明度作用于当前底图、每种底图各自记住；相同的值不触发重新推导；不合法的调用抛错且状态不变 | Node |
 | `boundary/boundary-style.test.ts` | 级别与初始状态；数据源是三份文件的地址；三级的叠放、线宽、虚线；透明度乘在基础值上；关闭的级别不在样式里；ID 前缀与校验；改透明度只产生 `setPaintProperty`；开关一级只增删这一级 | Node |
+| `panel-group/panel-group.test.ts` | 打开的功能按固定顺序、切换不改已打开的、关掉当前的切到最近显示过的、入口的三种点击；面板组不替换没变的状态、不认识的功能抛错；窄屏时左右只显示一边 | Node |
+| `panel-group/useSideExclusion.test.ts` | 窄屏时操作哪边显示哪边，变宽后两边都显示 | jsdom |
+| `panel-group/MapPanelGroup.test.tsx` | 没有打开时整组隐藏；Tab 的顺序与当前；切走的内容隐藏不卸载、输入保留、`active` 为 false；关闭按钮关掉、卸载、通知页面、切到最近的；让给另一边时整组隐藏、功能保留 | jsdom |
 | `toolbar/MapToolbar.test.tsx` | 按列表显示按钮；工具按钮跟随当前工具、点击时激活；点击已激活的工具时退出；动作按钮调用回调、没有回调时不可用；按下的动作 | jsdom |
 | `region/RegionLocatePanel.test.tsx` | 市的列表与简称；点市、点区县、再点退回上一级；搜索结果、点一条选中；回车与"搜索"，输入法选字不算；延迟显示加载中；失败与重试；关闭 | jsdom |
 | `measure/measure-style.test.ts` | 没有测量时是空分组；完成的测距、测面的几何与节点；画的过程中接上预览点、点不够时退化；图层顺序、ID 前缀与组合后的校验；按 MapLibre 的语义求值 `filter`（带几何类型），检查线不被填充、每种要素由哪些图层画出；移动预览点只产生 `setGeoJSONSourceData` | Node |

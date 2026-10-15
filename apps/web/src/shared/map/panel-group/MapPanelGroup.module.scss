@@ -1,0 +1,61 @@
+// 外壳按内容定高，放不下时由页面的纵向 flex 容器压缩，内容区内部滚动
+.group {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.shell {
+  max-height: 100%;
+}
+
+.tabs {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+// 当前的 Tab 像面板标题：竖杠、16 / 600（ADR 0053 第 4 节）
+.current .label {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-strong);
+  cursor: default;
+
+  &::before {
+    content: '';
+    width: 4px;
+    height: 16px;
+    border-radius: 999px;
+    background-color: var(--color-primary);
+  }
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-height: 0;
+}

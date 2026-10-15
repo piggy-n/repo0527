@@ -141,6 +141,8 @@ export interface FeaturePick {
 export interface FeaturePickOptions {
   /** 区划裁剪的范围（ADR 0051）：点选、框选只认范围里的要素，范围变化时关闭结果；不传时不限制 */
   readonly scope?: () => RegionScope | null;
+  /** 用户的单击、框选开始了一次识别（规划出结果或失败时，在点击的当下调用）；页面据此切到资源详情（ADR 0053 第 4 节） */
+  readonly onIdentifyStart?: () => void;
 }
 
 /** 后端识别还有没加载的页 */
@@ -190,6 +192,14 @@ export function useFeaturePick(
   }
   const camera = map.useCamera();
   const scope = options.scope ?? (() => null);
+  // 页面的回调抛错不能打断识别（AGENTS.md"接收外部回调的模块"）
+  const notifyStart = () => {
+    try {
+      options.onIdentifyStart?.();
+    } catch (error) {
+      console.error('[feature-pick] onIdentifyStart 抛出了异常', error);
+    }
+  };
   const state = shallowRef<FeaturePickState>(IDLE);
   const flashing = shallowRef(false);
   // 识别、加载更多各是一条可替换的通道（ADR 0039）
@@ -371,6 +381,7 @@ export function useFeaturePick(
       tasks = plan();
     } catch (error) {
       remaining = { kind: 'plan', plan, mode };
+      notifyStart();
       setState({ kind: 'failed', target: null, error });
       return;
     }
@@ -378,6 +389,7 @@ export function useFeaturePick(
       close();
       return;
     }
+    notifyStart();
     setState(IDENTIFYING);
     void run(tasks, mode, signal);
   };

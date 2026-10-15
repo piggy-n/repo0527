@@ -45,19 +45,29 @@ function mountPanel(catalog: ResourceCatalog | null = CATALOG) {
   const source = shallowRef(catalog ?? undefined);
   const failed = ref(false);
   const onRetry = vi.fn<() => void>();
+  // 收起由页面决定：这里像页面一样按面板发出的事件改
+  const collapsed = ref(false);
   let owner: ResourceLayers | undefined;
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
     const layers = useResourceLayers(map, { catalog: source, tileBase: 'http://localhost/tiles/' });
     map.bindStyle({ resources: layers.deriveGroup });
     owner = layers;
-    return () => <ResourceLayerPanel layers={layers} failed={failed.value} onRetry={onRetry} />;
+    return () => (
+      <ResourceLayerPanel
+        layers={layers}
+        failed={failed.value}
+        collapsed={collapsed.value}
+        onRetry={onRetry}
+        onUpdate:collapsed={value => (collapsed.value = value)}
+      />
+    );
   });
   const wrapper = mount(Page);
   if (!owner) {
     throw new Error('页面没有创建资源图层的拥有者');
   }
-  return { wrapper, owner, source, failed, onRetry };
+  return { wrapper, owner, source, failed, onRetry, collapsed };
 }
 
 function button(wrapper: VueWrapper, label: string) {
@@ -150,11 +160,12 @@ describe('ResourceLayerPanel', () => {
     expect(owner.state.value.displays.get('bgdc_dltb')?.opacity).toBe(0.4);
   });
 
-  it('收起面板只留标题', async () => {
-    const { wrapper } = mountPanel();
+  it('收起按钮通知页面；显示为收起时只留标题', async () => {
+    const { wrapper, collapsed } = mountPanel();
 
     await button(wrapper, '收起资源图层').trigger('click');
 
+    expect(collapsed.value).toBe(true);
     expect(wrapper.find('input').exists()).toBe(false);
     expect(wrapper.text()).toBe('资源图层');
     await button(wrapper, '展开资源图层').trigger('click');

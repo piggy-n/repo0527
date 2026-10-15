@@ -16,20 +16,19 @@ function boundaryOf(code: string): RegionBoundary {
 /** 页面创建地图和区划定位，渲染面板；没有画布，选中后只加载边界、不定位 */
 function mountPanel(load: RegionBoundaryLoader['load'] = ({ code }) => Promise.resolve(boundaryOf(code))) {
   let owner: RegionLocate | undefined;
-  const onClose = vi.fn<() => void>();
   const loader = { load: vi.fn<RegionBoundaryLoader['load']>(load) };
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['region'], camera: CAMERA });
     owner = useRegionLocate(map, { goToDefaultView: () => {}, loader });
     map.bindStyle({ region: owner.deriveGroup });
     const region = owner;
-    return () => <RegionLocatePanel region={region} onClose={onClose} />;
+    return () => <RegionLocatePanel region={region} />;
   });
   const wrapper = mount(Page);
   if (!owner) {
     throw new Error('页面没有创建区划定位');
   }
-  return { wrapper, region: owner, loader, onClose };
+  return { wrapper, region: owner, loader };
 }
 
 function button(wrapper: VueWrapper, text: string) {
@@ -42,7 +41,7 @@ function button(wrapper: VueWrapper, text: string) {
 
 const isPrimary = (wrapper: VueWrapper, text: string) => button(wrapper, text).classes().includes('el-button--primary');
 
-const current = (wrapper: VueWrapper) => wrapper.get('[data-region-locate-panel]').find('span + span').text();
+const current = (wrapper: VueWrapper) => wrapper.get('[data-region-current]').text();
 
 afterEach(() => {
   vi.useRealTimers();
@@ -129,13 +128,5 @@ describe('RegionLocatePanel', () => {
 
     await button(wrapper, '重试').trigger('click');
     expect(loader.load).toHaveBeenCalledTimes(2);
-  });
-
-  it('点关闭按钮通知页面关闭面板', async () => {
-    const { wrapper, onClose } = mountPanel();
-
-    await wrapper.get('[aria-label="关闭区划定位"]').trigger('click');
-
-    expect(onClose).toHaveBeenCalledOnce();
   });
 });

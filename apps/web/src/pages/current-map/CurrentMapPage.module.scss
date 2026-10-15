@@ -4,8 +4,8 @@
   height: 100%;
 }
 
-// 联调用的浮层，5D 再设计：左边是资源图层面板，右边的控件占剩下的宽度、靠右排；
-// 两列并排，窄屏时工具栏在自己这一列里换行，不会被面板盖住。浮层之间的空白不拦截地图的鼠标操作
+// 区域按 ADR 0053 第 1 节：左边是资源图层面板，右边是两组面板（面板道）和最右边的工具栏一列，离地图边缘 --space-lg。
+// 浮层之间的空白不拦截地图的鼠标操作
 .overlay {
   position: absolute;
   inset: var(--space-lg);
@@ -15,7 +15,7 @@
 }
 
 // 资源图层面板从上到下撑满，面板自己决定高度并在内部滚动
-.resources {
+.left {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -25,26 +25,58 @@
   }
 }
 
-.controls {
+// 面板道：功能面板靠上，显示面板和卡片行靠下；同时打开时两组按比例收缩、内容区滚动
+.lane {
   display: flex;
-  flex: 1;
   flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-sm);
+  gap: var(--space-md);
+  box-sizing: border-box;
+  width: 320px;
   min-width: 0;
+  min-height: 0;
+  margin-left: auto;
 
   > * {
     pointer-events: auto;
   }
 }
 
-// 图例排在右列的最下面，面板高了就在内部滚动。右下角要让出 MapLibre 的版权控件（ADR 0043 第 5 节）：
-// 控件的容器离地图底边 44 像素高（按钮 24、上下外边距各 10），浮层已离底边 --space-lg（16），再让 32 留出约 4 的空隙；
-// 用外边距，让出的地方不拦截地图的鼠标操作
-.legend {
-  display: flex;
-  flex-direction: column;
+.spacer {
+  flex: 1 1 0;
   min-height: 0;
-  margin-top: auto;
-  margin-bottom: 32px;
+  pointer-events: none;
+}
+
+// 卡片行：右边缘和两组面板对齐
+.cards {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  gap: var(--space-md);
+
+  // 两个 Element 按钮之间不再加默认的左外边距
+  > * + * {
+    margin-left: 0;
+  }
+}
+
+// 底图里"行政区"一节的标题
+.sectionTitle {
+  margin-top: var(--space-sm);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-title);
+}
+
+// 最右边一列只放工具栏：业务组在上，基础组（5D.1）在下
+.tools {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 0;
+
+  > * {
+    pointer-events: auto;
+  }
 }

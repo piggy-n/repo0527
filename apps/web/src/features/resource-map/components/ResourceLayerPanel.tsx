@@ -33,10 +33,13 @@ export const ResourceLayerPanel = defineComponent({
   props: {
     layers: { type: Object as PropType<ResourceLayers>, required: true },
     /** 目录加载失败；已经有目录时照常显示它 */
-    failed: { type: Boolean, default: false }
+    failed: { type: Boolean, default: false },
+    /** 显示为收起：用户收起了，或窄屏时让给右边（ADR 0053 第 8 节），由页面决定 */
+    collapsed: { type: Boolean, default: false }
   },
   emits: {
-    retry: () => true
+    retry: () => true,
+    'update:collapsed': (collapsed: boolean) => typeof collapsed === 'boolean'
   },
   setup(props, { emit }) {
     const element = ref<HTMLElement>();
@@ -44,7 +47,6 @@ export const ResourceLayerPanel = defineComponent({
     const camera = useMap().useCamera();
 
     // 以下都是面板自己的界面状态
-    const collapsed = ref(false);
     const keyword = ref('');
     const expanded = ref<ReadonlySet<string>>(new Set());
     const opacityOpen = ref<ReadonlySet<string>>(new Set());
@@ -254,12 +256,12 @@ export const ResourceLayerPanel = defineComponent({
           <span class={styles.title}>资源图层</span>
           <ElButton
             link
-            icon={collapsed.value ? Expand : Fold}
-            aria-label={collapsed.value ? '展开资源图层' : '收起资源图层'}
-            onClick={() => (collapsed.value = !collapsed.value)}
+            icon={props.collapsed ? Expand : Fold}
+            aria-label={props.collapsed ? '展开资源图层' : '收起资源图层'}
+            onClick={() => emit('update:collapsed', !props.collapsed)}
           />
         </div>
-        {!collapsed.value && renderBody()}
+        {!props.collapsed && renderBody()}
       </div>
     );
   }

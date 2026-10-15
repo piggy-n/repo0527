@@ -1,6 +1,5 @@
-import { Close, Search } from '@element-plus/icons-vue';
+import { Search } from '@element-plus/icons-vue';
 import { ElButton, ElInput, ElSpace } from 'element-plus';
-import { useMapOverlay } from '@yzt/map-vue';
 import { computed, defineComponent, type PropType, ref } from 'vue';
 import { useDelayedFlag } from '../../composables/useDelayedFlag';
 import {
@@ -15,21 +14,15 @@ import { nextRegionSelection, type RegionLocate } from './useRegionLocate';
 import styles from './RegionLocatePanel.module.scss';
 
 /**
- * 区划定位的面板（联调用的界面，5D 再设计；ADR 0036）：显示 useRegionLocate 的状态并调用它的操作。
- * 会挡住定位，登记为贴右边的悬浮元素（ADR 0029）；关闭面板不清掉选择
+ * 区划定位的内容（联调用的界面，5D 再设计；ADR 0036）：显示 useRegionLocate 的状态并调用它的操作。
+ * 放在功能面板的 Tab 里，标题、关闭和悬浮元素的登记由外壳负责（ADR 0053 第 4 节）；关闭不清掉选择
  */
 export const RegionLocatePanel = defineComponent({
   name: 'RegionLocatePanel',
   props: {
     region: { type: Object as PropType<RegionLocate>, required: true }
   },
-  emits: {
-    close: () => true
-  },
-  setup(props, { emit }) {
-    const element = ref<HTMLElement>();
-    useMapOverlay(element, 'right');
-
+  setup(props) {
     const keyword = ref('');
     const results = computed(() => searchRegions(keyword.value));
     const loading = useDelayedFlag(() => props.region.state.value.boundary.kind === 'loading');
@@ -67,11 +60,9 @@ export const RegionLocatePanel = defineComponent({
     return () => {
       const { selected } = props.region.state.value;
       return (
-        <div ref={element} class={styles.panel} data-region-locate-panel>
-          <div class={styles.header}>
-            <span class={styles.title}>区划定位</span>
-            <span class={styles.current}>{selected ? regionPath(selected) : '全省'}</span>
-            <ElButton link icon={Close} aria-label="关闭区划定位" onClick={() => emit('close')} />
+        <div class={styles.panel} data-region-locate-panel>
+          <div class={styles.current} data-region-current>
+            {selected ? regionPath(selected) : '全省'}
           </div>
           <ElSpace wrap size={6}>
             {JIANGSU_CITIES.map(city => (

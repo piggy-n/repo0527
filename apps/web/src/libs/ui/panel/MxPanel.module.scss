@@ -12,6 +12,13 @@
   box-shadow: var(--shadow-sm);
 }
 
+// 浮在地图上：半透明底、更重的阴影；按内容定高，放不下时由容器压缩、内容区滚动
+.floating {
+  flex: 0 1 auto;
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+}
+
 // 侧栏的面板放进抽屉后占满抽屉，不要圆角和阴影
 .inDrawer {
   border-radius: 0;

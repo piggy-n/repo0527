@@ -1,18 +1,18 @@
 import type { CameraState, LngLat } from '@yzt/map-core';
 import { type MapHandle, provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
-import { describe, expect, it, vi } from 'vitest';
-import { defineComponent, nextTick } from 'vue';
+import { describe, expect, it } from 'vitest';
+import { defineComponent, nextTick, ref } from 'vue';
 import { CoordinateLocatePanel } from './CoordinateLocatePanel';
 import { LOCATION_PICK_TOOL, type LocationPointOwner, useLocationPoint } from './useLocationPoint';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
-/** 页面创建地图和位置点，渲染面板；没有画布，定位只放下位置点 */
+/** 页面创建地图和位置点，渲染面板；没有画布，定位只放下位置点；active 模拟外壳切走、让给另一边 */
 function mountPanel(initial?: LngLat) {
   let owner: LocationPointOwner | undefined;
   let handle: MapHandle<'basemap'> | undefined;
-  const onClose = vi.fn<() => void>();
+  const active = ref(true);
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['basemap'], camera: CAMERA });
     const location = useLocationPoint(map, { regions: { districtCodeAt: () => Promise.resolve(null) } });
@@ -22,13 +22,13 @@ function mountPanel(initial?: LngLat) {
     }
     owner = location;
     handle = map;
-    return () => <CoordinateLocatePanel location={location} onClose={onClose} />;
+    return () => <CoordinateLocatePanel location={location} active={active.value} />;
   });
   const wrapper = mount(Page);
   if (!owner || !handle) {
     throw new Error('页面没有创建位置点');
   }
-  return { wrapper, location: owner, map: handle, onClose };
+  return { wrapper, location: owner, map: handle, active };
 }
 
 const field = (wrapper: VueWrapper, label: string) => wrapper.get(`input[aria-label="${label}"]`);
@@ -180,17 +180,28 @@ describe('CoordinateLocatePanel', () => {
     expect(location.state.value.point?.lngLat).toStrictEqual([118.79786, 32.04864]);
   });
 
-  it('"拾取"开关拾取工具，拾取中显示为按下；关闭按钮通知页面', async () => {
-    const { wrapper, map, onClose } = mountPanel();
+  it('"拾取"开关拾取工具，拾取中显示为按下', async () => {
+    const { wrapper, map } = mountPanel();
 
     await button(wrapper, '拾取').trigger('click');
     expect(map.activeTool.value).toBe(LOCATION_PICK_TOOL);
     expect(button(wrapper, '拾取').attributes('aria-pressed')).toBe('true');
     await button(wrapper, '拾取').trigger('click');
     expect(map.activeTool.value).toBe('browse');
+  });
 
-    await wrapper.get('[aria-label="关闭坐标定位"]').trigger('click');
-    expect(onClose).toHaveBeenCalledOnce();
+  it('隐藏（切到别的 Tab）时取消拾取，输入框的文字保留', async () => {
+    const { wrapper, map, active } = mountPanel();
+    await type(wrapper, '经度', '118.5');
+    const typed = valueOf(wrapper, '经度');
+    await button(wrapper, '拾取').trigger('click');
+
+    active.value = false;
+    await nextTick();
+
+    expect(map.activeTool.value).toBe('browse');
+    expect(typed).not.toBe('');
+    expect(valueOf(wrapper, '经度')).toBe(typed);
   });
 
   it('面板卸载时取消拾取', async () => {

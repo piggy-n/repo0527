@@ -15,11 +15,15 @@ export const MxPanel = defineComponent({
     // 去掉内容区的内边距：表格贴边、放地图、内容自带内边距时使用
     flush: Boolean,
     // 卡片头部：图标放在浅底方块里，只用于同一页有多张并列卡片的场合
-    iconTile: Boolean
+    iconTile: Boolean,
+    // 浮在地图上的外观：半透明底、更重的阴影，按内容定高（docs/design/page-layout.md"画布型"）
+    floating: Boolean
   },
   slots: Object as SlotsType<{
     default?: () => VNode[];
     icon?: () => VNode[];
+    // 代替标题的头部内容，如一组 Tab
+    header?: () => VNode[];
     actions?: () => VNode[];
     footer?: () => VNode[];
   }>,
@@ -39,12 +43,14 @@ export const MxPanel = defineComponent({
 
     return () => {
       const actions = slots.actions?.();
-      const hasHeader = Boolean(props.title || actions || inDrawer.value);
+      const custom = slots.header?.();
+      const hasHeader = Boolean(props.title || custom || actions || inDrawer.value);
       return (
-        <section class={[styles.root, inDrawer.value && styles.inDrawer]}>
+        <section class={[styles.root, props.floating && styles.floating, inDrawer.value && styles.inDrawer]}>
           {hasHeader && (
             <header class={styles.header}>
-              {props.title && (
+              {custom}
+              {!custom && props.title && (
                 <MxTitle level="panel" description={props.description}>
                   {{ default: () => props.title, icon: slots.icon && renderIcon }}
                 </MxTitle>

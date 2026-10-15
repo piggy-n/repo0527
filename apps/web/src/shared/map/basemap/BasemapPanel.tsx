@@ -5,7 +5,7 @@ import styles from './BasemapPanel.module.scss';
 
 /**
  * 底图的切换面板（联调用的界面，5D 再设计）：只显示 useBasemap 的状态并调用它的操作。
- * 位置由页面的 class 决定；角落里的小控件，不登记为悬浮元素（ADR 0029）
+ * 放在显示面板的"底图"里，外观和登记由外壳负责（ADR 0053 第 4 节）
  */
 export const BasemapPanel = defineComponent({
   name: 'BasemapPanel',

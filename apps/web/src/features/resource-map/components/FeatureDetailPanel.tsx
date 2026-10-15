@@ -1,8 +1,7 @@
-import { Aim, ArrowLeft, Close } from '@element-plus/icons-vue';
+import { Aim, ArrowLeft } from '@element-plus/icons-vue';
 import { useVirtualList } from '@vueuse/core';
 import { ElButton } from 'element-plus';
-import { useMapOverlay } from '@yzt/map-vue';
-import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
+import { computed, defineComponent, type PropType, type VNode, watch } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import type { FeatureRecord } from '../api';
 import { featureRows, featureSummary, type PickCandidate } from '../feature-query';
@@ -37,9 +36,21 @@ function renderRows(code: string, properties: Readonly<FeatureRecord>) {
   );
 }
 
+function renderHeader(title: string, subtitle?: string, extra?: VNode[]) {
+  return (
+    <div class={styles.header}>
+      <div class={styles.heading}>
+        <span class={styles.title}>{title}</span>
+        {subtitle && <span class={styles.subtitle}>{subtitle}</span>}
+      </div>
+      {extra}
+    </div>
+  );
+}
+
 /**
- * 点选的面板（联调用的界面，5D 再设计；ADR 0047 第 7 节）：识别中、没有结果、失败、候选列表、详情。
- * 状态和操作都在拥有者里，这里只显示和调用；会挡住定位，登记为贴右边的悬浮元素
+ * 点选的内容（联调用的界面，5D 再设计；ADR 0047 第 7 节）：识别中、没有结果、失败、候选列表、详情。
+ * 状态和操作都在拥有者里，这里只显示和调用；放在功能面板的"资源详情"里，关闭（清除选择）和登记由外壳和页面负责（ADR 0053 第 4 节）
  */
 export const FeatureDetailPanel = defineComponent({
   name: 'FeatureDetailPanel',
@@ -47,8 +58,6 @@ export const FeatureDetailPanel = defineComponent({
     pick: { type: Object as PropType<FeaturePick>, required: true }
   },
   setup(props) {
-    const element = ref<HTMLElement>();
-    useMapOverlay(element, 'right');
     // 很快结束的识别和加载不显示提示（AGENTS.md"加载状态"）
     const identifying = useDelayedFlag(() => props.pick.state.value.kind === 'identifying');
     const candidates = computed(() => {
@@ -82,17 +91,6 @@ export const FeatureDetailPanel = defineComponent({
       }
     };
     const detailLoading = useDelayedFlag(() => props.pick.detail.value?.kind === 'loading');
-
-    const renderHeader = (title: string, subtitle?: string, extra?: VNode[]) => (
-      <div class={styles.header}>
-        <div class={styles.heading}>
-          <span class={styles.title}>{title}</span>
-          {subtitle && <span class={styles.subtitle}>{subtitle}</span>}
-        </div>
-        {extra}
-        <ElButton link icon={Close} aria-label="关闭点选" onClick={props.pick.close} />
-      </div>
-    );
 
     const renderMore = (list: CandidateList, more: MoreStatus) => {
       if (!hasMorePages(list.pages)) {
@@ -252,7 +250,7 @@ export const FeatureDetailPanel = defineComponent({
     };
 
     return () => (
-      <div ref={element} class={styles.panel} data-feature-detail-panel>
+      <div class={styles.panel} data-feature-detail-panel>
         {renderContent()}
       </div>
     );
