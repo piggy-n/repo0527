@@ -90,6 +90,26 @@
   white-space: nowrap;
 }
 
+// 年份：多年份资源是选择，单年份资源只有文字，宽度一样，后面的按钮对齐
+.year {
+  flex: none;
+  width: 72px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.batch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+
+  > :first-child {
+    flex: none;
+    width: 128px;
+  }
+}
+
 .hint {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-regular);

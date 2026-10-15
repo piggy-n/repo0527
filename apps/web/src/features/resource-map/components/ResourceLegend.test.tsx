@@ -12,8 +12,13 @@ import { ResourceLegend } from './ResourceLegend';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
-function layer(code: string, name: string, geoType: ResourceTreeLayer['geoType']) {
-  return { code, name, geoType, yearList: [2022] as [number] };
+function layer(
+  code: string,
+  name: string,
+  geoType: ResourceTreeLayer['geoType'],
+  yearList: [number, ...number[]] = [2022]
+) {
+  return { code, name, geoType, yearList };
 }
 
 // 地类、按取值配色、统一符号各一个；只有地类图斑默认勾选
@@ -23,7 +28,7 @@ const CATALOG = buildCatalog([
     name: '测试',
     children: [
       layer('bgdc_dltb', '地类图斑', 'Polygon'),
-      layer('csxhjctb_hydl', '水域线层', 'Line'),
+      layer('csxhjctb_hydl', '水域线层', 'Line', [2023, 2024, 2025]),
       layer('szy_kt', '坑塘', 'Polygon')
     ]
   }
@@ -149,7 +154,7 @@ describe('ResourceLegend', () => {
     owner.setCheckedMany(['csxhjctb_hydl', 'szy_kt'], true);
     await openLegend(wrapper);
 
-    expect(wrapper.get('[data-legend="szy_kt"]').text()).toBe('坑塘');
+    expect(wrapper.get('[data-legend="szy_kt"]').text()).toBe('坑塘 · 2022');
     expect(wrapper.get('[data-legend="szy_kt"] [data-swatch]').attributes('style')).toContain('background-color');
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
     await button(wrapper, '展开坑塘').trigger('click');
@@ -236,6 +241,26 @@ describe('ResourceLegend', () => {
     expect(wrapper.find('[data-symbol-editor="水渠"]').exists()).toBe(false);
     await button(wrapper, '收起河流').trigger('click');
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
+  });
+
+  it('标题带显示的年份；换年份后条目仍展开，正在编辑的取值仍打开（ADR 0052 第 3 节）', async () => {
+    const { wrapper, owner } = mountLegend();
+    owner.setChecked('csxhjctb_hydl', true);
+    await openLegend(wrapper);
+    await button(wrapper, '展开水域线层').trigger('click');
+    await button(wrapper, '展开水渠').trigger('click');
+    const title = () => wrapper.get('[data-legend="csxhjctb_hydl"]').get('button').text();
+    expect(title()).toContain('水域线层 · 2025');
+
+    owner.setYear('csxhjctb_hydl', 2023);
+    await nextTick();
+    expect(title()).toContain('水域线层 · 2023');
+    expect(wrapper.find('[data-symbol-editor="水渠"]').exists()).toBe(true);
+
+    owner.setYearForAll(2024);
+    await nextTick();
+    expect(title()).toContain('水域线层 · 2024');
+    expect(wrapper.find('[data-symbol-editor="水渠"]').exists()).toBe(true);
   });
 
   it('地类：展开一个地类编辑它，同一时间只展开一个', async () => {

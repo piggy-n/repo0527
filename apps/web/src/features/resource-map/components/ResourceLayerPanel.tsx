@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowRight, ArrowUp, Expand, Fold, Operation, Search } from '@element-plus/icons-vue';
 import { useMap, useMapOverlay } from '@yzt/map-vue';
-import { ElButton, ElCheckbox, ElInput, ElSlider } from 'element-plus';
+import { ElButton, ElCheckbox, ElInput, ElOption, ElSelect, ElSlider } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import {
@@ -11,6 +11,7 @@ import {
   type PanelNode,
   panelTree
 } from '../layer-panel';
+import { batchYearOptions } from '../resource-layers';
 import { resourceNotices } from '../resource-notices';
 import styles from './ResourceLayerPanel.module.scss';
 
@@ -25,7 +26,7 @@ function toggle(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
 
 /**
  * 资源图层面板（5C.2，联调用的界面，5D 再设计）：目录树负责浏览和勾选，按目录顺序；"已勾选"按叠放顺序列出，
- * 在这里调整顺序和透明度。只显示 useResourceLayers 的状态并调用它的操作；会挡住定位，登记为贴左边的悬浮元素
+ * 在这里调整顺序、透明度和年份。只显示 useResourceLayers 的状态并调用它的操作；会挡住定位，登记为贴左边的悬浮元素
  */
 export const ResourceLayerPanel = defineComponent({
   name: 'ResourceLayerPanel',
@@ -51,6 +52,7 @@ export const ResourceLayerPanel = defineComponent({
     const searching = computed(() => keyword.value.trim() !== '');
     const tree = computed(() => panelTree(props.layers.state.value, keyword.value));
     const layers = computed(() => checkedLayers(props.layers.state.value));
+    const batchYears = computed(() => batchYearOptions(props.layers.state.value.catalog));
 
     // 目录第一次到达时展开含有勾选资源的分类；之后目录刷新不改用户的展开
     watch(
@@ -132,6 +134,20 @@ export const ResourceLayerPanel = defineComponent({
         <li key={layer.code} class={styles.layer} data-layer={layer.code}>
           <div class={styles.row}>
             <span class={styles.name}>{layer.name}</span>
+            {layer.years.length > 1 ? (
+              <ElSelect
+                class={styles.year}
+                size="small"
+                modelValue={layer.year}
+                aria-label={`${layer.name}的年份`}
+                onUpdate:modelValue={(year: number) => owner.setYear(layer.code, year)}>
+                {layer.years.map(year => (
+                  <ElOption key={year} label={String(year)} value={year} />
+                ))}
+              </ElSelect>
+            ) : (
+              <span class={styles.year}>{layer.year}</span>
+            )}
             <ElButton
               link
               icon={Operation}
@@ -194,6 +210,22 @@ export const ResourceLayerPanel = defineComponent({
             placeholder="搜索资源或分类"
             onUpdate:modelValue={(value: string) => (keyword.value = value)}
           />
+          {batchYears.value.length > 0 && (
+            // 批量设置是一次操作（ADR 0052 第 2 节）：选完就执行、不保留选中值，所以连续两次选同一年也会执行
+            <div class={styles.batch}>
+              <ElSelect
+                size="small"
+                modelValue={undefined}
+                placeholder="批量设置年份"
+                aria-label="批量设置年份"
+                onUpdate:modelValue={(year: number) => props.layers.setYearForAll(year)}>
+                {batchYears.value.map(year => (
+                  <ElOption key={year} label={`${year} 年`} value={year} />
+                ))}
+              </ElSelect>
+              <span class={styles.hint}>没有这一年的资源保持不变</span>
+            </div>
+          )}
           <div class={styles.tree}>
             {tree.value.length > 0 ? (
               <ul class={styles.list}>{tree.value.map(renderNode)}</ul>

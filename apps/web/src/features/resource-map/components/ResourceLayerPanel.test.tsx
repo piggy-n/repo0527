@@ -1,7 +1,7 @@
 import type { CameraState } from '@yzt/map-core';
 import { provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
-import { ElSlider } from 'element-plus';
+import { ElOption, ElSelect, ElSlider } from 'element-plus';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref, shallowRef } from 'vue';
 import type { ResourceTreeCategory } from '../api';
@@ -11,8 +11,13 @@ import { ResourceLayerPanel } from './ResourceLayerPanel';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
-function layer(code: string, name: string, geoType: 'Polygon' | 'Line' | 'Point' = 'Polygon') {
-  return { code, name, geoType, yearList: [2024] as [number] };
+function layer(
+  code: string,
+  name: string,
+  geoType: 'Polygon' | 'Line' | 'Point' = 'Polygon',
+  yearList: [number, ...number[]] = [2024]
+) {
+  return { code, name, geoType, yearList };
 }
 
 // 结构同真实的资源树；只有地类图斑默认勾选
@@ -26,8 +31,8 @@ const CATALOG = buildCatalog([
         name: '土地资源',
         children: [
           layer('bgdc_dltb', '地类图斑'),
-          layer('bgdc_cjdcq', '村级调查区'),
-          layer('csxhjctb_hydl', '水域线层', 'Line')
+          layer('bgdc_cjdcq', '村级调查区', 'Polygon', [2023, 2024]),
+          layer('csxhjctb_hydl', '水域线层', 'Line', [2023, 2024, 2025])
         ]
       },
       { code: 'szy', name: '水资源', children: [layer('szy_kt', '坑塘')] }
@@ -154,5 +159,77 @@ describe('ResourceLayerPanel', () => {
     expect(wrapper.text()).toBe('资源图层');
     await button(wrapper, '展开资源图层').trigger('click');
     expect(visibleResources(wrapper)).toHaveLength(3);
+  });
+});
+
+// 批量设置年份的选择
+function batchSelect(wrapper: VueWrapper) {
+  const select = wrapper.findAllComponents(ElSelect).find(item => item.props('placeholder') === '批量设置年份');
+  if (!select) {
+    throw new Error('没有批量设置年份');
+  }
+  return select;
+}
+
+// 点下拉里的一项；下拉放在 body 下
+async function pickOption(label: string) {
+  const option = [...document.body.querySelectorAll('.el-select-dropdown__item')].find(
+    item => item.textContent?.trim() === label
+  );
+  if (!(option instanceof HTMLElement)) {
+    throw new Error(`下拉里没有 ${label}`);
+  }
+  option.click();
+  await nextTick();
+}
+
+const yearsOf = (owner: ResourceLayers) =>
+  Object.fromEntries([...owner.state.value.displays].map(([code, { year }]) => [code, year]));
+
+describe('ResourceLayerPanel：年份（ADR 0052）', () => {
+  it('已勾选的多年份资源可以选年份（新的在前），单年份资源只显示年份', async () => {
+    const { wrapper, owner } = mountPanel();
+    owner.setChecked('csxhjctb_hydl', true);
+    await nextTick();
+    const select = wrapper.get('[data-layer="csxhjctb_hydl"]').findComponent(ElSelect);
+
+    expect(select.props('modelValue')).toBe(2025);
+    expect(select.findAllComponents(ElOption).map(option => option.props('value'))).toStrictEqual([2025, 2024, 2023]);
+    select.vm.$emit('update:modelValue', 2023);
+    await nextTick();
+    expect(owner.state.value.displays.get('csxhjctb_hydl')?.year).toBe(2023);
+    // 只改这一个资源，有 2023 年的村级调查区不跟着变
+    expect(owner.state.value.displays.get('bgdc_cjdcq')?.year).toBe(2024);
+    expect(wrapper.get('[data-layer="csxhjctb_hydl"]').findComponent(ElSelect).props('modelValue')).toBe(2023);
+
+    const parcel = wrapper.get('[data-layer="bgdc_dltb"]');
+    expect(parcel.findComponent(ElSelect).exists()).toBe(false);
+    expect(parcel.text()).toContain('2024');
+  });
+
+  it('批量设置年份：选完就执行、选择框回到空，连续两次选同一年都执行；提示没有这一年的资源保持不变', async () => {
+    const { wrapper, owner } = mountPanel();
+    expect(batchSelect(wrapper).findAllComponents(ElOption).map(option => option.props('value'))).toStrictEqual([
+      2025, 2024, 2023
+    ]);
+    expect(wrapper.text()).toContain('没有这一年的资源保持不变');
+
+    await pickOption('2023 年');
+    // 没勾选的村级调查区也切过去；地类图斑没有 2023 年，不变
+    expect(yearsOf(owner)).toStrictEqual({ bgdc_dltb: 2024, bgdc_cjdcq: 2023, csxhjctb_hydl: 2023, szy_kt: 2024 });
+    expect(batchSelect(wrapper).props('modelValue')).toBeUndefined();
+
+    owner.setYear('csxhjctb_hydl', 2025);
+    await nextTick();
+    await pickOption('2023 年');
+    expect(owner.state.value.displays.get('csxhjctb_hydl')?.year).toBe(2023);
+  });
+
+  it('没有多年份的资源时不显示批量设置', () => {
+    const single = buildCatalog([{ code: null, name: '基础库', children: [layer('bgdc_dltb', '地类图斑')] }]);
+    const { wrapper } = mountPanel(single);
+
+    expect(wrapper.text()).not.toContain('没有这一年的资源保持不变');
+    expect(wrapper.findAllComponents(ElSelect)).toHaveLength(0);
   });
 });

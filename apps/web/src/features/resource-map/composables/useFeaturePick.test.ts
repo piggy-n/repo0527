@@ -21,7 +21,7 @@ import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
 import type { ResourceTreeCategory, ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
 import type { PickCandidate } from '../feature-query';
-import type { ResourceDisplay, ResourceLayersState } from '../resource-layers';
+import { type ResourceDisplay, type ResourceLayersState, withYearForAll } from '../resource-layers';
 import { type FeaturePick, hasMorePages, useFeaturePick } from './useFeaturePick';
 
 const server = setupServer();
@@ -1046,5 +1046,103 @@ describe('useFeaturePick：区划裁剪（ADR 0051）', () => {
     scope.value = null;
     await nextTick();
     expect(kindOf(owner)).toBe('idle');
+  });
+});
+
+describe('useFeaturePick：年份变化（ADR 0052 第 4 节）', () => {
+  it('批量设置没改到当前结果的资源时保留结果，改到时关闭', async () => {
+    const { owner, send, resources } = setup(15);
+    send(click(), [rendered(DLTB, 1), rendered(DLTB, 2)]);
+
+    // 地类图斑只有 2022 年，批量设成 2021 只改到城镇村等用地
+    resources.state.value = withYearForAll(resources.state.value, 2021);
+    await nextTick();
+    expect(kindOf(owner)).toBe('candidates');
+
+    send(click(), [rendered(CZCDYD, 1), rendered(CZCDYD, 2)]);
+    expect(owner.state.value).toMatchObject({ kind: 'candidates', list: { target: { year: 2021 } } });
+    resources.state.value = withYearForAll(resources.state.value, 2022);
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+  });
+
+  it('识别进行中换年份：作废，晚到的结果不显示、不定位', async () => {
+    const slow = gate();
+    mockIdentify(async () => {
+      await slow.opened;
+      return page(1, [{ guid: guid(9) }]);
+    });
+    mockDetail();
+    const { owner, send, resources, fitBounds } = setup(12);
+    send(click());
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('identifying'));
+
+    resources.state.value = withYearForAll(resources.state.value, 2021);
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+    slow.open();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(kindOf(owner)).toBe('idle');
+    expect(fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('加载更多进行中换年份：关闭列表，晚到的一页不出现', async () => {
+    const slow = gate();
+    const records = Array.from({ length: 32 }, (_, index) => ({ guid: guid(index) }));
+    mockIdentify(async (layerCode, pageNum) => {
+      if (layerCode !== 'bgdc_czcdyd_2022') {
+        return page(0, []);
+      }
+      if (pageNum === 2) {
+        await slow.opened;
+      }
+      return page(32, pageNum === 1 ? records.slice(0, 30) : records.slice(30));
+    });
+    const { owner, send, resources } = setup(12);
+    send(click());
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
+    owner.loadMore();
+    expect(owner.state.value).toMatchObject({ more: { kind: 'loading' } });
+
+    resources.state.value = withYearForAll(resources.state.value, 2021);
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+    slow.open();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(kindOf(owner)).toBe('idle');
+  });
+
+  it('详情请求进行中换年份：关闭详情，晚到的详情不高亮、不定位', async () => {
+    const slow = gate();
+    server.use(
+      mock.get('/backend/api/query/attr/page', async ({ request }) => {
+        await slow.opened;
+        return HttpResponse.json(page(1, [{ guid: guidOf(request), name: '详情' }]));
+      }),
+      mock.get('/backend/api/query/scope/geojson', async ({ request }) => {
+        await slow.opened;
+        return HttpResponse.json([{ guid: guidOf(request), geom: JSON.stringify(POINT) }]);
+      })
+    );
+    const { owner, send, resources, fitBounds } = setup(15);
+    send(click(), [rendered(CZCDYD, 1), rendered(CZCDYD, 2)]);
+    const [first] = candidatesOf(owner);
+    if (!first) {
+      throw new Error('应有候选');
+    }
+    owner.choose(first);
+    expect(owner.detail.value?.kind).toBe('loading');
+
+    resources.state.value = withYearForAll(resources.state.value, 2021);
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+    slow.open();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(kindOf(owner)).toBe('idle');
+    expect(highlighted(owner)).toBe(false);
+    expect(fitBounds).not.toHaveBeenCalled();
   });
 });

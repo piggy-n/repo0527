@@ -121,7 +121,8 @@ export const ResourceLegend = defineComponent({
             {(entry.kind === 'symbol' || entry.mode === 'uniform') && (
               <LegendSwatchIcon class={styles.swatch} swatch={entry.swatch} />
             )}
-            <span class={styles.name}>{entry.name}</span>
+            {/* 年份由条目单独给出，标题在这里组合（ADR 0052 第 3 节） */}
+            <span class={styles.name}>{`${entry.name} · ${entry.year}`}</span>
             {entry.kind !== 'symbol' && <span class={styles.badge}>{BADGES[entry.kind]}</span>}
           </ElButton>
           {isOpen && (
