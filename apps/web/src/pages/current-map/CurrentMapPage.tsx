@@ -26,6 +26,8 @@ import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
 import { useMeasure } from '@/shared/map/measure/useMeasure';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
+import { MapStatusBar } from '@/shared/map/status-bar/MapStatusBar';
+import { useMapReadout } from '@/shared/map/status-bar/useMapReadout';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
 import { RegionLocatePanel } from '@/shared/map/region/RegionLocatePanel';
 import { regionClipGroup } from '@/shared/map/region/region-clip';
@@ -90,6 +92,8 @@ export const CurrentMapPage = defineComponent({
     const region = useRegionLocate(map, { goToDefaultView });
     const measure = useMeasure();
     const location = useLocationPoint(map);
+    // 状态栏的比例尺、经纬度和角度（ADR 0053 第 5 节）
+    const readout = useMapReadout(map);
 
     // 右侧的两组面板；已打开的功能和当前的 Tab 是页面的界面状态，业务状态在各自的拥有者里（ADR 0053 第 4 节）
     const functions = usePanelGroup(FUNCTION_PANELS);
@@ -215,6 +219,9 @@ export const CurrentMapPage = defineComponent({
                   ]
                 }}
               </MapPanelGroup>
+            </div>
+            <div class={styles.bottom}>
+              <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
               {/* 卡片行：联调用的入口，5D.4、5D.5 换成图例卡和缩略图的底图卡 */}
               <div class={styles.cards}>
                 {renderCard('legend', Collection)}

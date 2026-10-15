@@ -49,6 +49,8 @@ export interface ToolChange {
 
 interface ToolModelEvents {
   change: (change: ToolChange) => void;
+  /** 交给当前工具之前发出的输入（ADR 0053 第 5 节），只读；用于跟踪鼠标位置这类和当前工具无关的显示 */
+  input: (event: MapInputEvent, view: ViewKind) => void;
 }
 
 /** 当前工具（ADR 0020 第 6 条、ADR 0034）：同一时间只有一个激活的工具，输入只交给它 */
@@ -107,13 +109,18 @@ export class ToolModel implements Disposable {
     }
   }
 
-  /** 把输入交给当前工具；Esc 没有被处理时，临时任务退出 */
+  /** 先发出只读的 input 事件，再把输入交给当前工具；Esc 没有被处理时，临时任务退出 */
   dispatch(event: MapInputEvent, view: ToolView): void {
     this.#events.assertAlive();
-    const tool = this.activeTool;
-    const handled = tool.handleInput?.(event, view) === true;
-    if (!handled && !tool.persistent && event.type === 'key' && event.key === 'Escape') {
-      this.release(this.#active);
+    try {
+      this.#events.emit('input', event, view.kind);
+    } finally {
+      // 监听者抛错时当前工具照样收到输入，错误仍抛给调用方报告
+      const tool = this.activeTool;
+      const handled = tool.handleInput?.(event, view) === true;
+      if (!handled && !tool.persistent && event.type === 'key' && event.key === 'Escape') {
+        this.release(this.#active);
+      }
     }
   }
 

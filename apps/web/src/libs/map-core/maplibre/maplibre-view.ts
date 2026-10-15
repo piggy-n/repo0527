@@ -228,8 +228,8 @@ export class MapLibreView<const G extends string> implements MapView {
         pitch
       } = session.camera.current;
       map = createMap({
-        // 去掉默认的 MapLibre 链接，保留数据源署名和原有折叠方式
-        attributionControl: { compact: true, customAttribution: '' },
+        // 不用 MapLibre 的版权控件：右下角是基础组，署名由页面决定（ADR 0053 第 5 节）
+        attributionControl: false,
         ...mapOptions,
         container,
         style,

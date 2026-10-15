@@ -9,7 +9,7 @@ pages              挑选能力、组合成页面；provideMap 创建会话，�
   ↓
 features           业务数据驱动的图层（5C 起：资源图层 features/resource-map、点选、图例）
   ↓
-shared/map         项目级的公共能力：底图、行政区边界、默认视角、工具栏、测量、区划定位、坐标定位、地图状态提示
+shared/map         项目级的公共能力：底图、行政区边界、默认视角、工具栏、基础组、状态栏、测量、区划定位、坐标定位、地图状态提示
   ↓
 libs/map-vue       地图与 Vue 的衔接：会话的提供与注入、画布、样式绑定、相机操作、工具登记、定位可视区域
   ↓
@@ -50,8 +50,8 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 | 定位可视区域 | 贴边的悬浮元素登记自己，定位时现量现算 padding | 0029 | [map-vue.md](map-vue.md) |
 | 底图与内网 | 天地图配置是 `{ key } \| null`；内网差异只写在构建模式的环境文件里 | 0031、0032 | [shared-map.md](shared-map.md) |
 | 行政区边界与默认视角 | 本地边界数据；本次进入页面第一次就绪时适配一次江苏 | 0033 | [shared-map.md](shared-map.md) |
-| 交互工具 | 会话的工具模型，同一时间一个工具；工具只拿到 `ToolView`；工具栏的按钮和动作由页面给出 | 0034、0047 | [map-core.md](map-core.md)、[map-vue.md](map-vue.md)、[shared-map.md](shared-map.md) |
-| 地图页的布局 | 资源面板在左；业务组在右上、基础组在右下；右侧两组 Tab 面板（功能：区划定位、坐标定位、资源详情；显示：图例、底图），每组同一时间显示一个内容，隐藏和关闭分开；状态栏在资源面板右边；窄屏时左右只显示一边；目录顺序和叠放顺序分开 | 0053（修正 0034 第 5 节、0043 第 5 节、0052 第 2 节） | [design/page-layout.md](../design/page-layout.md)"画布型"、[shared-map.md](shared-map.md) |
+| 交互工具 | 会话的工具模型，同一时间一个工具；工具只拿到 `ToolView`；工具栏的按钮和动作由页面给出；交给工具之前发出只读的输入事件，上下文由它得出鼠标位置 `pointer`（5D.3） | 0034、0047、0053 | [map-core.md](map-core.md)、[map-vue.md](map-vue.md)、[shared-map.md](shared-map.md) |
+| 地图页的布局 | 资源面板在左；业务组在右上、基础组在右下；右侧两组 Tab 面板（功能：区划定位、坐标定位、资源详情；显示：图例、底图），每组同一时间显示一个内容，隐藏和关闭分开；状态栏在资源面板右边（比例尺、经纬度、不为 0 的角度，不写署名，适配器关掉了 MapLibre 的版权控件）；窄屏时左右只显示一边；目录顺序和叠放顺序分开 | 0053（修正 0034 第 5 节、0043 第 5 节、0052 第 2 节） | [design/page-layout.md](../design/page-layout.md)"画布型"、[shared-map.md](shared-map.md) |
 | 测量 | 椭球面计算（geographiclib）；`MeasureStore` 持有结果和两个工具 | 0035 | [map-core.md](map-core.md)、[shared-map.md](shared-map.md) |
 | 区划定位、坐标定位 | 本地区划目录与边界；经纬度的识别与格式只用纯函数；位置点可拖动 | 0036、0037 | [shared-map.md](shared-map.md) |
 | 资源图层 | feature `resource-map`：接口树 → 目录（纯函数，查询的 `select` 得出）→ 样式登记表 → 拥有者 `useResourceLayers`（按 `code` 的显示状态）→ `resources` 分组（底图之上、注记之下）；图层面板的目录树只负责浏览和勾选，同一分类下可以拖动调整展示顺序（独立的目录顺序 `useCatalogOrder`，不影响叠放），叠放顺序在"已勾选"区拖动调整（5C.2、5D.2，ADR 0053、0054）；勾选、透明度、顺序、年份按用户记住（5C.3，ADR 0042）；图例从登记表推导，不做地类统计（5C.4，ADR 0043）；符号的覆盖和拖动取色时的预览由拥有者 `useResourceSymbols` 持有，分组和图例都从默认符号、覆盖和预览推导；按属性配色的资源可以换成统一样式，分类样式各取值的符号用 `match` 组合在一个图层里，在图例里编辑（5C.5，ADR 0044）；未勾选的不放进样式，每个资源一个数据源、默认一个图层，面用到花纹或复杂描边时按需拆出纹理图层、描边图层，花纹是随分组提交的 SDF 图片（5C.5c，ADR 0045）；线和面的描边用到多种线型时按线型拆层，每层的线型是常量，按要素的线型过滤（ADR 0046），重的资源有最小显示级别；目录变化时逐个资源校验；瓦片错误从视图的数据源错误推导 | 0041、0044、0045、0046、0047 | [migration.md](../migration.md)"现状底图：资源图层实测" |

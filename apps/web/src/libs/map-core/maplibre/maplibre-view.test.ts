@@ -627,6 +627,8 @@ describe('MapLibreView', () => {
       using ctx = setup({ mapOptions: { maxZoom: 18 } });
 
       expect(ctx.map.options).toMatchObject({ center: [118.8, 32.05], zoom: 8, bearing: 0, pitch: 0, maxZoom: 18 });
+      // 不用 MapLibre 的版权控件（ADR 0053 第 5 节）
+      expect(ctx.map.options.attributionControl).toBe(false);
       expect(ctx.map.options.style).toBe(ctx.session.style.current);
       expect(ctx.map.options.container).toBeInstanceOf(HTMLElement);
       expect(ctx.view.state).toBe('initializing');

@@ -2,6 +2,7 @@
 import {
   type CameraState,
   type FitBoundsOptions,
+  type MapInputEvent,
   type MapView,
   type MapViewFailure,
   MapSession,
@@ -10,13 +11,14 @@ import {
   type RenderedFeature,
   type ScreenPoint,
   type SourceErrors,
+  type ToolView,
   type Unsubscribe,
   type ViewBounds,
   type ViewState
 } from '@yzt/map-core';
 import { describe, expect, it, vi } from 'vitest';
 import { createApp, ref } from 'vue';
-import { type CameraControl, INTERNAL_MAP_CONTEXT, MapContextState } from './context';
+import { type CameraControl, type FrameScheduler, INTERNAL_MAP_CONTEXT, MapContextState } from './context';
 import { type Box, resolveOverlayOptions } from './overlay';
 import { useMapOverlay } from './use-map';
 
@@ -279,6 +281,115 @@ describe('MapContextState 的投影修订号', () => {
 
     expect(revision.value).toBe(2);
     session[Symbol.dispose]();
+  });
+});
+
+// 由测试推进的下一帧
+function manualFrames() {
+  const callbacks = new Set<() => void>();
+  const schedule: FrameScheduler = callback => {
+    callbacks.add(callback);
+    return () => callbacks.delete(callback);
+  };
+  return {
+    schedule,
+    get pending() {
+      return callbacks.size;
+    },
+    flush() {
+      const due = [...callbacks];
+      callbacks.clear();
+      for (const callback of due) {
+        callback();
+      }
+    }
+  };
+}
+
+const NO_MODIFIERS = { shift: false, ctrl: false, alt: false, meta: false };
+
+function pointerEvent(type: 'move' | 'leave' | 'down', x: number, y: number): MapInputEvent {
+  return { type, point: { x, y }, button: 0, clickCount: 0, modifiers: NO_MODIFIERS };
+}
+
+const VIEW_3D: ToolView = { kind: '3d', pick: () => ({ kind: 'miss' }), project: () => null, queryRendered: () => [] };
+
+function setupPointer() {
+  const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
+  const session = new MapSession({ groups: ['basemap'], camera });
+  const frames = manualFrames();
+  const state = new MapContextState(session, () => undefined, resolveOverlayOptions(), frames.schedule);
+  const view = new FakeView();
+  state.attachView(view, CANVAS);
+  return {
+    session,
+    state,
+    frames,
+    view,
+    pointer: state.context.pointer,
+    input: (event: MapInputEvent, target: ToolView = view) => session.tool.dispatch(event, target),
+    [Symbol.dispose]() {
+      state[Symbol.dispose]();
+      session[Symbol.dispose]();
+    }
+  };
+}
+
+describe('MapContextState 的鼠标位置', () => {
+  it('一帧里多次移动只更新一次，取最后的位置；按下、抬起也算移动，按键不算；离开画布时为 null', () => {
+    using ctx = setupPointer();
+    ctx.view.emit('ready');
+
+    ctx.input(pointerEvent('move', 10, 20));
+    ctx.input(pointerEvent('down', 30, 40));
+    ctx.input({ type: 'key', key: 'Escape' });
+    expect(ctx.frames.pending).toBe(1);
+    expect(ctx.pointer.value).toBeNull();
+
+    ctx.frames.flush();
+    expect(ctx.pointer.value).toStrictEqual({ x: 30, y: 40 });
+
+    ctx.input(pointerEvent('leave', 50, 60));
+    ctx.frames.flush();
+    expect(ctx.pointer.value).toBeNull();
+  });
+
+  it('视图不在就绪时不跟踪；视图失败、卸下时清空，并取消还没写入的那一帧', () => {
+    using ctx = setupPointer();
+    ctx.input(pointerEvent('move', 10, 20));
+    expect(ctx.frames.pending).toBe(0);
+
+    ctx.view.emit('ready');
+    ctx.input(pointerEvent('move', 10, 20));
+    ctx.frames.flush();
+    ctx.input(pointerEvent('move', 30, 40));
+    ctx.view.emit('failed');
+    expect(ctx.pointer.value).toBeNull();
+    expect(ctx.frames.pending).toBe(0);
+
+    ctx.view.emit('ready');
+    ctx.input(pointerEvent('move', 10, 20));
+    ctx.frames.flush();
+    ctx.state.detachView(ctx.view);
+    expect(ctx.pointer.value).toBeNull();
+  });
+
+  it('只跟踪当前视图的输入；上下文释放后清空，不再跟踪', () => {
+    using ctx = setupPointer();
+    ctx.view.emit('ready');
+
+    ctx.input(pointerEvent('move', 10, 20), VIEW_3D);
+    expect(ctx.frames.pending).toBe(0);
+
+    ctx.input(pointerEvent('move', 30, 40));
+    ctx.frames.flush();
+    ctx.input(pointerEvent('move', 50, 60));
+    ctx.state[Symbol.dispose]();
+    expect(ctx.pointer.value).toBeNull();
+    expect(ctx.frames.pending).toBe(0);
+
+    ctx.input(pointerEvent('move', 70, 80));
+    expect(ctx.frames.pending).toBe(0);
   });
 });
 

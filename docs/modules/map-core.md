@@ -131,12 +131,14 @@ session[Symbol.dispose]();
 session.tool.register('measure', measureTool);  // 页面通过 map-vue 的 registerTools 登记
 session.tool.activate('measure');                // 旧工具先 deactivate，新工具再 activate，然后发出 change
 session.tool.release('measure');                 // 临时任务退回上一个常驻模式，常驻模式退回 browse
-session.tool.dispatch(event, toolView);          // 视图把输入交给当前工具
+session.tool.dispatch(event, toolView);          // 视图把输入交给当前工具，之前先发出 input
+session.tool.on('input', (event, view) => ...);  // 只读的输入，和当前工具无关（ADR 0053 第 5 节）
 ```
 
 - 同一时间只有一个激活的工具；内置的 `browse`（移动）是默认的常驻模式，ID 保留，不能登记
 - 常驻模式（移动、点选）和临时任务（测距、测面）：激活常驻模式时它成为回退的目标，临时任务退出后回到它（旧项目的 `navigationMode`）
 - 输入只交给当前工具；Esc 先交给工具，工具没有返回 `true` 并且它是临时任务时退出
+- 交给当前工具之前先发出 `input` 事件（输入和来自哪个视图的 `kind`，按键也发出），用于跟踪鼠标位置这类和当前工具无关的显示（5D.3 的状态栏）。监听者抛错时当前工具照样收到这次输入（`try/finally`），错误仍抛给调用方，由适配器的 `#guard` 报告
 - 工具的光标、要关掉的手势是工具上的声明，由视图读 `activeTool` 后应用（ADR 0034 第 3 条）
 - 释放时让当前工具退出；之后登记、激活、转交输入都抛错
 
@@ -181,7 +183,7 @@ store.clear();
 
 在 ADR 0022、0024 的范围内实现；失败的处理见 ADR 0026。它实现 `MapView`，依赖的是窄接口 `MapLike`（以及 `applyStyleCommand` 用的 `StyleTarget`），签名比 MapLibre 的泛型方法简单；`expectTypeOf<MapLibreMap>().toExtend<MapLike>()` 保证 MapLibre 的 `Map` 满足它，MapLibre 升级后签名不兼容会在类型检查时报错。
 
-创建地图时默认用 `attributionControl: { compact: true, customAttribution: '' }` 去掉右下角的 MapLibre 链接，保留数据源署名和原有折叠方式；调用方仍可通过 `mapOptions.attributionControl` 覆盖。
+创建地图时默认 `attributionControl: false`，不用 MapLibre 的版权控件：摆法 A 的右下角是基础组，底图不写署名（5D.3 用户决定，以后换成内网底图），见 ADR 0053 第 5 节。调用方仍可通过 `mapOptions.attributionControl` 覆盖。2026-10-15 之前是 `{ compact: true, customAttribution: '' }`（去掉 MapLibre 链接、保留数据源署名）
 
 选项 `scrollZoomRates: { wheel?, trackpad? }` 在创建地图后设到 `map.scrollZoom`（`setWheelZoomRate`、`setZoomRate`），不传的一项用 MapLibre 的默认值（滚轮 1/450、触控板 1/100）；`MapLike` 为此加了 `scrollZoom`（ADR 0053 第 3 节）。
 
@@ -306,6 +308,7 @@ store.clear();
 | `MapLibreView`（`maplibre-view.browser.test.ts`） | 真实的 MapLibre（ADR 0040）：首次加载与俯角收敛后按 `sync` 写回、增量提交后画出要素且不整体重建、规范以外的图层属性触发整体重建、不合法的图层进入 `failed(style)` 后自动恢复、拾取与投影、画布尺寸变化；样式图片在首次加载、只改图片（换像素、换格式、去掉）、整体重建后都在，没有缺图 | Chromium 无界面版，软件渲染 |
 | 真实 MapLibre | 渲染、Worker、事件、尺寸监听、中心点 | 开发页 `/dev/map`，浏览器 |
 
+- 工具模型的输入事件（5D.3）：先发出 `input` 再交给当前工具、按键也发出；监听者抛错时工具照样收到输入，错误抛给调用方。改坏 2 处（不发出、去掉 `try/finally`），连同默认关掉版权控件 1 处，全部由断言发现
 - 不用 `vi.mock('maplibre-gl')`：适配器依赖的是 `MapLike`，测试注入实现它的假地图 `FakeMap`。假地图的相机方法立即到位并同步触发 `move`、合并 `eventData`，俯角上限 60 用来模拟 MapLibre 的收敛（创建时同样收敛）
 - 假地图的 `on` 要和 `MapLike` 一样写出三个重载（回调参数在 `strictFunctionTypes` 下按逆变检查），实现签名的回调参数用 `never`
 - "释放时取消会话订阅"在行为上测不出来（释放后的状态检查挡住了晚到的通知），用 `vi.spyOn(StyleModel.prototype, 'on')` 换掉返回的取消函数来确认

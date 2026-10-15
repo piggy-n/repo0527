@@ -122,6 +122,29 @@ describe('ToolModel', () => {
     expect(log).toStrictEqual(['pick.activate', 'pick.click:2d']);
   });
 
+  it('交给当前工具之前先发出 input 事件，带上视图；按键也发出', () => {
+    const { model, log } = setup();
+    model.activate('pick');
+    model.on('input', (event, view) => void log.push(`input.${event.type}:${view}`));
+
+    model.dispatch(CLICK, VIEW);
+    model.dispatch(ESCAPE, VIEW);
+
+    expect(log).toStrictEqual(['pick.activate', 'input.click:2d', 'pick.click:2d', 'input.key:2d', 'pick.key:2d']);
+  });
+
+  it('input 的监听者抛错时，当前工具照样收到输入，错误抛给调用方', () => {
+    const { model, log } = setup();
+    model.activate('measure');
+    model.on('input', () => {
+      throw new Error('监听者出错');
+    });
+
+    expect(() => model.dispatch(ESCAPE, VIEW)).toThrow('监听者出错');
+    expect(log).toStrictEqual(['measure.activate', 'measure.key:2d', 'measure.deactivate']);
+    expect(model.active).toBe(BROWSE_TOOL);
+  });
+
   it('Esc 没有被处理时，临时任务退出；常驻模式不受影响', () => {
     const { model } = setup();
     model.activate('pick');

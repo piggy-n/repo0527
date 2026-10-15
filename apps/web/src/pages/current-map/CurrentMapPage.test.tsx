@@ -25,7 +25,7 @@ import { resourceTreeResponse } from '@/features/resource-map/test-data';
 import cityFile from '@/shared/map/boundary/data/jiangsu-city.json?raw';
 import countyFile from '@/shared/map/boundary/data/jiangsu-county.json?raw';
 import { JIANGSU_BOUNDS } from '@/shared/map/jiangsu';
-import { formatCoordinate } from '@/shared/map/location/coordinate-format';
+import { formatCoordinate, formatLngLat } from '@/shared/map/location/coordinate-format';
 import { formatDistance } from '@/shared/map/measure/measure-labels';
 import { CurrentMapPage } from './CurrentMapPage';
 
@@ -461,6 +461,32 @@ describe('CurrentMapPage', () => {
     expect(wrapper.get('[role="status"]').text()).toBe('14');
     await button(wrapper, '缩小').trigger('click');
     expect(map.flyToCalls.at(-1)).toStrictEqual({ zoom: 13.6, duration: 300 });
+  });
+
+  it('状态栏：比例尺和鼠标所在的经纬度，写法跟着坐标定位面板；鼠标离开画布时是中心；没有版权控件（ADR 0053 第 5 节）', async () => {
+    const { wrapper, map } = await readyPage();
+    const status = () => wrapper.get('[data-map-status-bar]').element.firstElementChild?.textContent;
+    expect(map.options.attributionControl).toBe(false);
+
+    // 假地图每 100 像素 1 度：画布中间相距 100 像素的两点在北纬 32° 相距约 94.6 千米，比例尺取 50 千米
+    map.moveTo([119, 32], 9, {});
+    await nextTick();
+    expect(status()).toBe(`50 km中心${formatLngLat([119, 32], 'dms')}`);
+
+    // 鼠标的位置在下一帧写入
+    map.mouse('mousemove', 100, 50);
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    await nextTick();
+    expect(status()).toBe(`50 km${formatLngLat([120, 31.5], 'dms')}`);
+
+    await button(wrapper, '坐标定位').trigger('click');
+    await wrapper.get('input[value="decimal"]').setValue();
+    expect(status()).toBe(`50 km${formatLngLat([120, 31.5], 'decimal')}`);
+
+    map.mouse('mouseout', 100, 50);
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    await nextTick();
+    expect(status()).toBe(`50 km中心${formatLngLat([119, 32], 'decimal')}`);
   });
 
   it('点"默认视角"按江苏的范围再定位一次', async () => {

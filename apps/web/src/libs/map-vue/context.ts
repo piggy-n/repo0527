@@ -3,6 +3,7 @@ import {
   type FitBoundsOptions,
   type FlyToOptions,
   type LngLat,
+  type MapInputEvent,
   type MapSession,
   type MapView,
   type MapViewFailure,
@@ -60,6 +61,15 @@ export interface CameraOperation {
 /** 视图的生命周期；还没有视图时是 idle（ADR 0022 第 5 条） */
 export type MapViewState = ViewState | 'idle';
 
+/** 安排下一帧执行，返回取消函数 */
+export type FrameScheduler = (callback: () => void) => () => void;
+
+// 默认的下一帧：requestAnimationFrame
+const animationFrame: FrameScheduler = callback => {
+  const id = requestAnimationFrame(() => callback());
+  return () => cancelAnimationFrame(id);
+};
+
 /** 子孙组件通过 useMap 拿到的只读上下文 */
 export interface MapContext {
   /** 就绪的视图，只在视图为 ready 时有值（ADR 0039 第 4 条） */
@@ -80,6 +90,11 @@ export interface MapContext {
   useCamera(): Readonly<ShallowRef<CameraState>>;
   /** 屏幕投影的修订号：相机变化、画布尺寸变化时加 1；按屏幕位置摆放的浮层依赖它重新投影 */
   readonly projectionRevision: Readonly<Ref<number>>;
+  /**
+   * 鼠标在当前视图画布上的位置（ADR 0053 第 5 节），一帧最多更新一次；离开画布、视图不在就绪、卸下视图时为 null。
+   * 来自工具模型的输入事件，和当前工具无关
+   */
+  readonly pointer: Readonly<ShallowRef<ScreenPoint | null>>;
   /**
    * 开始一次相机操作（ADR 0038、0039）：之前没完成的操作作废，下一次操作（包括用户开始拖动、缩放）开始时这一次作废。
    * 要先异步准备数据的定位（如区划定位等边界）在开始时调用，准备好后 run
@@ -167,6 +182,12 @@ export class MapContextState implements Disposable {
   readonly #unsubscribeSelection: () => void;
   readonly #projectionRevision = ref(0);
   readonly #unsubscribeCamera: () => void;
+  readonly #pointer = shallowRef<ScreenPoint | null>(null);
+  readonly #unsubscribeInput: () => void;
+  readonly #requestFrame: FrameScheduler;
+  // 这一帧要写入的位置和取消函数；一帧里多次移动只记最后一次
+  #nextPointer: ScreenPoint | null = null;
+  #cancelPointerFrame: (() => void) | null = null;
   readonly #lifetime = new AbortController();
   // 还没有视图时调用 whenReady 的等待者，视图挂上时依次通知
   readonly #waiting = new Set<(attached: AttachedView) => void>();
@@ -181,11 +202,13 @@ export class MapContextState implements Disposable {
   constructor(
     session: MapSession<string>,
     onError: (error: unknown) => void,
-    overlayOptions: Required<OverlayOptions>
+    overlayOptions: Required<OverlayOptions>,
+    requestFrame: FrameScheduler = animationFrame
   ) {
     this.session = session;
     this.onError = onError;
     this.#overlayOptions = overlayOptions;
+    this.#requestFrame = requestFrame;
     // 工具模型在会话里，这里只把当前工具桥接成 Vue 的状态；切换由工具模型保证同一时间只有一个
     this.#activeTool = ref(session.tool.active);
     this.#unsubscribeTool = session.tool.on('change', ({ active }) => (this.#activeTool.value = active));
@@ -193,6 +216,7 @@ export class MapContextState implements Disposable {
     this.#selection = shallowRef(session.selection.current);
     this.#unsubscribeSelection = session.selection.on('change', features => (this.#selection.value = features));
     this.#unsubscribeCamera = session.camera.on('change', () => this.#projectionRevision.value++);
+    this.#unsubscribeInput = session.tool.on('input', (event, kind) => this.#onInput(event, kind));
     this.context = Object.freeze({
       view: shallowReadonly(this.#viewport),
       viewState: shallowReadonly(this.#viewState),
@@ -202,6 +226,7 @@ export class MapContextState implements Disposable {
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
       useCamera: () => this.#useCamera(),
       projectionRevision: shallowReadonly(this.#projectionRevision),
+      pointer: shallowReadonly(this.#pointer),
       beginCameraOperation: () => this.#operationOf(session.camera.beginOperation()),
       currentCameraOperation: () => this.#operationOf(session.camera.operation),
       runCameraOperation: (action: (camera: CameraControl) => void) =>
@@ -233,6 +258,8 @@ export class MapContextState implements Disposable {
       this.#viewport.value = state === 'ready' ? viewport : null;
       if (state === 'ready') {
         this.#pending?.();
+      } else {
+        this.#clearPointer();
       }
     });
     // 画布尺寸变化时相机不变，投影变了
@@ -265,6 +292,7 @@ export class MapContextState implements Disposable {
     const attached = this.#view;
     attached.unsubscribe();
     this.#view = null;
+    this.#clearPointer();
     this.#viewport.value = null;
     this.#viewState.value = 'idle';
     this.#failure.value = null;
@@ -285,7 +313,28 @@ export class MapContextState implements Disposable {
     this.#unsubscribeTool();
     this.#unsubscribeSelection();
     this.#unsubscribeCamera();
+    this.#unsubscribeInput();
+    this.#clearPointer();
     this.#lifetime.abort(new DOMException('地图上下文已释放', 'AbortError'));
+  }
+
+  // 只跟踪当前就绪视图的指针；按键不改变位置
+  #onInput(event: MapInputEvent, kind: ViewKind): void {
+    if (event.type === 'key' || this.#readyView()?.view.kind !== kind) {
+      return;
+    }
+    this.#nextPointer = event.type === 'leave' ? null : event.point;
+    this.#cancelPointerFrame ??= this.#requestFrame(() => {
+      this.#cancelPointerFrame = null;
+      this.#pointer.value = this.#nextPointer;
+    });
+  }
+
+  #clearPointer(): void {
+    this.#cancelPointerFrame?.();
+    this.#cancelPointerFrame = null;
+    this.#nextPointer = null;
+    this.#pointer.value = null;
   }
 
   #retry(): void {
