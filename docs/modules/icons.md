@@ -130,8 +130,32 @@ packages/icons/
 |---|---|---|
 | `nav-*`（7 个导航图标）、`nav-arrow-color` | UI 提供（2026-09-30） | 顶部导航、下拉箭头，见 [layout.md](layout.md) |
 | `auth-user`、`auth-lock` | fzjc 项目（最初作为样例引入） | 登录表单的输入框前缀、用户菜单的头像 |
+| `map-*`（地图工具栏的 10 个） | Tabler Icons 3.49.0（MIT），见下文"第三方图标" | 地图页的业务组和基础组（ADR 0053 第 7 节） |
 
-2026-09-30 清理了只在主题预览页演示中用到的样例：`bell-solid`（fzjc）、`toolbar-map`、`toolbar-move`（旧项目的 Toolbar）、`sample-pin-color`（自制的多色样例），主题预览页改用上面的正式图标演示。以后迁移地图工具栏、消息铃铛时，使用 UI 提供的图标。
+2026-09-30 清理了只在主题预览页演示中用到的样例：`bell-solid`（fzjc）、`toolbar-map`、`toolbar-move`（旧项目的 Toolbar）、`sample-pin-color`（自制的多色样例），主题预览页改用上面的正式图标演示。消息铃铛迁移时使用 UI 提供的图标；地图工具栏在 5D.1 改用下面的开源线性图标（用户决定先用开源图标，有更合适的再替换个别图标）。
+
+### 第三方图标
+
+地图页的图标来自 [Tabler Icons](https://tabler.io/icons) 3.49.0（`@tabler/icons`，2026-10-05 发布，MIT 许可，版权 Paweł Kuna）。许可原文在 `apps/web/src/assets/icons/LICENSE-tabler-icons.txt`，和图标放在一起；图标工具只处理 `.svg`，这个文件不受影响。
+
+- 只取用到的单个 SVG，不安装整个包：从 jsDelivr 下载 `icons/outline/<名字>.svg`
+- 文件按用途命名，不用 Tabler 的名字，以后换图不用改代码
+- 根元素的描边宽度由 2 改为 1.5（ADR 0053 第 7 节，和面板里 Element 图标的粗细接近）；其余由规范化处理（颜色本来就是 `currentColor`，去掉 `class`）。Tabler 每个图标开头有一条 `stroke="none"` 的占位路径，画不出东西，原样保留
+
+| 文件 | Tabler 图标 | 用途 |
+|---|---|---|
+| `map-move` | `hand-move` | 移动 |
+| `map-pick` | `click` | 点选 |
+| `map-measure-distance` | `ruler-2` | 测距 |
+| `map-measure-area` | `shape` | 测面 |
+| `map-clear` | `eraser` | 清除 |
+| `map-region-locate` | `map-search` | 区划定位 |
+| `map-coordinate-locate` | `map-pin` | 坐标定位 |
+| `map-zoom-in` | `plus` | 放大 |
+| `map-zoom-out` | `minus` | 缩小 |
+| `map-default-view` | `home` | 默认视角 |
+
+以后再加 Tabler 的图标（5D.2 起的几何类型、拖动手柄等）照同样的做法，并补进这张表。
 
 删除图标后，开发服务器开着时注册表会自动更新；没开时运行 `pnpm icons`。代码中引用了已删除的图标名时，类型检查会报错。
 

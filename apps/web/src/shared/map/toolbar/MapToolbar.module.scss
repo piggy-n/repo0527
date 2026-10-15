@@ -1,18 +1,75 @@
-// 联调用的样式，5D.1 再设计；竖排，放在页面最右边的工具栏一列（ADR 0053 第 2 节）
+// 业务组（ADR 0053 第 2、7 节，设计稿 5D.1）：宽 56，按钮 48 × 46，两行文字时 48 × 62，只显示图标时 48 × 32
 
 .toolbar {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-xs);
-  padding: var(--space-xs);
+  box-sizing: border-box;
+  width: 56px;
+  padding: 4px;
   border-radius: var(--radius-md);
   background-color: var(--color-bg-mask);
   box-shadow: var(--shadow-md);
+}
 
-  // 竖排时不要 Element 按钮之间默认的左外边距，按钮内容靠左
-  > * {
-    justify-content: flex-start;
-    margin-left: 0;
+.button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-regular);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
   }
+
+  // 只在用键盘操作时出现
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    background: transparent;
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
+  }
+}
+
+// 当前工具（同一时间只有一个，是一种模式）用实心主色
+.active,
+.active:hover {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+// 打开着面板的入口用浅主色底
+.pressed,
+.pressed:hover {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.label {
+  font-size: var(--font-size-xs);
+  line-height: 16px;
+  text-align: center;
+}
+
+.compact .button {
+  padding: 6px 0;
+}
+
+.separator {
+  flex: none;
+  height: 1px;
+  margin: 4px 6px;
+  background-color: var(--color-divider);
 }

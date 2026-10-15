@@ -1,4 +1,10 @@
-import { type MapLibreMapOptions, MapLibreView, type MapLibreViewOptions, type MapLike } from '@yzt/map-core';
+import {
+  type MapLibreMapOptions,
+  MapLibreView,
+  type MapLibreViewOptions,
+  type MapLike,
+  type ScrollZoomRates
+} from '@yzt/map-core';
 import { defineComponent, onMounted, onUnmounted, type PropType, ref, watch } from 'vue';
 import styles from './MapCanvas.module.scss';
 import { injectMapState } from './use-map';
@@ -15,6 +21,8 @@ export const MapCanvas = defineComponent({
   props: {
     /** 只在创建地图时生效；要换选项时给组件换一个 key 重新创建 */
     mapOptions: { type: Object as PropType<MapCanvasMapOptions>, default: undefined },
+    /** 滚轮缩放的速率，只在创建地图时生效（ADR 0053 第 3 节）；不传时用 MapLibre 的默认值 */
+    scrollZoomRates: { type: Object as PropType<ScrollZoomRates>, default: undefined },
     /** 测试时替换成假地图 */
     createMap: { type: Function as PropType<(options: MapLibreMapOptions) => MapLike>, default: undefined }
   },
@@ -31,6 +39,7 @@ export const MapCanvas = defineComponent({
         session: state.session,
         container: container.value,
         mapOptions: props.mapOptions,
+        scrollZoomRates: props.scrollZoomRates,
         createMap: props.createMap,
         onError: state.onError
       });

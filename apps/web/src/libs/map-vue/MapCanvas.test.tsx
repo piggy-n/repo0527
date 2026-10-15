@@ -147,6 +147,7 @@ class FakeMap implements MapLike {
   readonly dragPan = fakeGesture();
   readonly doubleClickZoom = fakeGesture();
   readonly boxZoom = fakeGesture();
+  readonly scrollZoom = { setWheelZoomRate: () => undefined, setZoomRate: () => undefined };
 
   remove(): void {
     this.onRemove?.();

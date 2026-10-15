@@ -68,11 +68,12 @@
   color: var(--color-text-title);
 }
 
-// 最右边一列只放工具栏：业务组在上，基础组（5D.1）在下
+// 最右边一列只放工具栏：业务组在上，基础组在下，两组的中线对齐（ADR 0053 第 1 节）
 .tools {
   display: flex;
   flex: none;
   flex-direction: column;
+  align-items: center;
   justify-content: space-between;
   min-height: 0;
 

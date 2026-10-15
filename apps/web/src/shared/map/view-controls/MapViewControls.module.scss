@@ -1,0 +1,86 @@
+// 基础组（ADR 0053 第 3、7 节，设计稿 5D.1）：宽 40；层级 32 × 28，放大、缩小、默认视角 32 × 32，2D、3D 各 32 × 24
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 40px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+}
+
+.level {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-strong);
+  cursor: default;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-regular);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    background: transparent;
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
+  }
+}
+
+.dimension {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  .button {
+    height: 24px;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+  }
+}
+
+// 当前的视图（二维或三维）
+.current,
+.current:hover {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.separator {
+  flex: none;
+  height: 1px;
+  margin: 4px 6px;
+  background-color: var(--color-divider);
+}

@@ -70,6 +70,20 @@ interface FakeCamera {
 const CAMERA_CALLS = new Set(['jumpTo', 'flyTo', 'fitBounds', 'remove']);
 
 // 只模拟适配器用到的行为：记录调用；相机方法立即到位，并像 MapLibre 一样同步触发 move、合并 eventData
+// 记下设置过的滚轮缩放速率
+class FakeScrollZoom {
+  wheelRate: number | undefined;
+  trackpadRate: number | undefined;
+
+  setWheelZoomRate(rate: number) {
+    this.wheelRate = rate;
+  }
+
+  setZoomRate(rate: number) {
+    this.trackpadRate = rate;
+  }
+}
+
 class FakeMap implements MapLike {
   readonly calls: unknown[][] = [];
   readonly maxPitch = 60;
@@ -87,6 +101,7 @@ class FakeMap implements MapLike {
   readonly dragPan = new FakeGesture();
   readonly doubleClickZoom = new FakeGesture();
   readonly boxZoom = new FakeGesture();
+  readonly scrollZoom = new FakeScrollZoom();
 
   constructor(readonly options: MapLibreMapOptions) {
     const [lng, lat] = options.center as [number, number];
@@ -274,7 +289,9 @@ function recordingTool(options: Partial<MapTool> = {}) {
 type Groups = 'basemap' | 'business';
 
 function setup(
-  options: Partial<Pick<MapLibreViewOptions<Groups>, 'active' | 'mapOptions' | 'createMap' | 'onError'>> = {},
+  options: Partial<
+    Pick<MapLibreViewOptions<Groups>, 'active' | 'mapOptions' | 'createMap' | 'onError' | 'scrollZoomRates'>
+  > = {},
   camera = NANJING
 ) {
   const stack = new DisposableStack();
@@ -1331,6 +1348,16 @@ describe('MapLibreView', () => {
   });
 
   describe('camera', () => {
+    it('sets the wheel and trackpad zoom rates when given, leaving MapLibre defaults otherwise (ADR 0053)', () => {
+      using given = setup({ scrollZoomRates: { wheel: 1 / 600, trackpad: 1 / 150 } });
+      using partial = setup({ scrollZoomRates: { wheel: 1 / 500 } });
+      using none = setup();
+
+      expect([given.map.scrollZoom.wheelRate, given.map.scrollZoom.trackpadRate]).toStrictEqual([1 / 600, 1 / 150]);
+      expect([partial.map.scrollZoom.wheelRate, partial.map.scrollZoom.trackpadRate]).toStrictEqual([1 / 500, undefined]);
+      expect([none.map.scrollZoom.wheelRate, none.map.scrollZoom.trackpadRate]).toStrictEqual([undefined, undefined]);
+    });
+
     it('writes the camera back to the session with the cause of the move', () => {
       using ctx = setup();
       ctx.map.fire('style.load');

@@ -183,6 +183,8 @@ store.clear();
 
 创建地图时默认用 `attributionControl: { compact: true, customAttribution: '' }` 去掉右下角的 MapLibre 链接，保留数据源署名和原有折叠方式；调用方仍可通过 `mapOptions.attributionControl` 覆盖。
 
+选项 `scrollZoomRates: { wheel?, trackpad? }` 在创建地图后设到 `map.scrollZoom`（`setWheelZoomRate`、`setZoomRate`），不传的一项用 MapLibre 的默认值（滚轮 1/450、触控板 1/100）；`MapLike` 为此加了 `scrollZoom`（ADR 0053 第 3 节）。
+
 **样式同步**：
 
 - 创建地图时直接传入当前快照作为 `style`

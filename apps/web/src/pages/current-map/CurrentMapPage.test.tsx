@@ -165,6 +165,7 @@ class FakeMap implements MapLike {
   readonly dragPan = fakeGesture();
   readonly doubleClickZoom = fakeGesture();
   readonly boxZoom = fakeGesture();
+  readonly scrollZoom = { wheelRate: 0, trackpadRate: 0, setWheelZoomRate: (rate: number) => void (this.scrollZoom.wheelRate = rate), setZoomRate: (rate: number) => void (this.scrollZoom.trackpadRate = rate) };
 
   remove(): void {}
 
@@ -260,11 +261,15 @@ const XUANWU: ViewBounds = [118.778682, 32.017001, 118.90731, 32.107079];
 // 等定位相关的微任务和渲染都走完
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
-// 按文字找按钮；面板外壳的 Tab 和工具栏的按钮可能同名，Tab 用 tab() 找
+// 按文字或无障碍名称找按钮（基础组只有图标）；面板外壳的 Tab 和工具栏的按钮可能同名，不算 Tab
 function button(wrapper: ReturnType<typeof mountPage>['wrapper'], text: string) {
   const found = wrapper
     .findAll('button')
-    .find(candidate => candidate.text() === text && candidate.attributes('role') !== 'tab');
+    .find(
+      candidate =>
+        (candidate.text() === text || candidate.attributes('aria-label') === text) &&
+        candidate.attributes('role') !== 'tab'
+    );
   if (!found) {
     throw new Error(`没有"${text}"按钮`);
   }
@@ -434,6 +439,28 @@ describe('CurrentMapPage', () => {
 
     expect(second.options.center).toEqual([120.6, 31.3]);
     expect(second.fitBoundsCalls).toEqual([]);
+  });
+
+  it('基础组：层级随相机变化；放大、缩小每次 1 级；画布带上调低的滚轮速率（ADR 0053 第 3 节）', async () => {
+    const { wrapper, maps } = mountPage();
+    const map = maps[0];
+    if (!map) {
+      throw new Error('没有创建地图');
+    }
+    map.fire('style.load');
+    await settle();
+    expect([map.scrollZoom.wheelRate, map.scrollZoom.trackpadRate]).toStrictEqual([1 / 600, 1 / 150]);
+
+    map.moveTo([119, 32], 13.6, {});
+    await nextTick();
+    expect(wrapper.get('[role="status"]').text()).toBe('13');
+
+    await button(wrapper, '放大').trigger('click');
+    expect(map.flyToCalls.at(-1)).toStrictEqual({ zoom: 14.6, duration: 300 });
+    await nextTick();
+    expect(wrapper.get('[role="status"]').text()).toBe('14');
+    await button(wrapper, '缩小').trigger('click');
+    expect(map.flyToCalls.at(-1)).toStrictEqual({ zoom: 13.6, duration: 300 });
   });
 
   it('点"默认视角"按江苏的范围再定位一次', async () => {

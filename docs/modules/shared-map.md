@@ -20,7 +20,10 @@
 | `boundary/useBoundaries.ts` | 边界的拥有者：持有每一级是否显示和共用的透明度 |
 | `boundary/BoundaryPanel.tsx` | 边界的面板（联调用的界面） |
 | `toolbar/toolbar-items.ts` | 工具栏上的工具和动作：名称、图标集中在一张表里（ADR 0034） |
-| `toolbar/MapToolbar.tsx` | 工具栏的外壳（联调用的界面） |
+| `toolbar/MapToolbar.tsx` | 业务组：竖排、分组、文字每行两个字，矮屏时只显示图标（ADR 0053 第 2 节） |
+| `view-controls/zoom.ts` | 层级的显示、按钮缩放的目标级别与连续点击的起点（纯函数），滚轮和触控板的缩放速率 |
+| `view-controls/useZoomButtons.ts` | 基础组的层级与放大、缩小：每次 ±1，连续点击累计，被别的相机操作作废后重新开始 |
+| `view-controls/MapViewControls.tsx` | 基础组：层级、放大、缩小、默认视角、2D/3D（ADR 0053 第 3 节） |
 | `box-select/box-gesture.ts` | 拖动框选的手势：阈值、屏蔽派生的单击、取消（纯函数，ADR 0049） |
 | `box-select/BoxSelectOverlay.tsx` | 拖动框选时的矩形（联调用的界面） |
 | `measure/measure-style.ts` | `measure` 分组的推导（纯函数，ADR 0035） |
@@ -188,21 +191,41 @@ boundaries.setOpacity(0.6);
 - 县界大幅简化过（每个县约 89 个点），放大后和市界、省界对不齐；没有更精细的数据，原样迁移
 - 重新生成：先把旧仓库 `master-demo` 上的三个文件导出到一个临时目录（`git show master-demo:public/static/geojson/江苏省界.json > <目录>/江苏省界.json`，另两个同理），再在仓库根目录运行 `pnpm --filter @yzt/web boundaries:generate <目录>`
 
-## 工具栏（ADR 0034）
+## 工具栏（ADR 0034、0053）
 
 ```tsx
-// 页面：挑选按钮，动作的回调由页面给出；放在 provideMap 所在组件的子孙里
-<MapToolbar items={['default-view', 'browse']} actions={{ 'default-view': goToDefaultView }} />
-
-// 开关面板的动作：页面保存开关，通过 pressed 告诉工具栏显示为按下
-<MapToolbar items={['region-locate']} actions={{ 'region-locate': togglePanel }} pressed={open ? ['region-locate'] : []} />
+// 页面：挑选按钮并分组，动作的回调由页面给出；放在 provideMap 所在组件的子孙里
+<MapToolbar
+  groups={[['browse', 'feature-pick'], ['measure-distance', 'measure-area', 'clear'], ['region-locate', 'coordinate-locate']]}
+  actions={{ clear, 'region-locate': () => functions.toggle('region-locate') }}
+  pressed={functions.isOpen('region-locate') ? ['region-locate'] : []}
+  compact={compact}
+/>
 ```
 
-- `toolbar-items.ts` 把工具和动作分成两张表，名称、图标集中在这里，图标先用 Element 的（移动 `Rank`、点选 `Pointer`、测距 `Share`、测面 `Crop`、默认视角 `HomeFilled`、清除 `Delete`、区划定位 `MapLocation`、坐标定位 `Location`），5D 换成设计的素材。工具的 ID 就是登记到会话里的工具 ID，测距、测面用 `MEASURE_TOOL_IDS`
+- 业务组（ADR 0053 第 2 节，设计稿 5D.1）：竖排、宽 56，组之间画分隔线；按钮 48 × 46，图标 20 在上，文字 12 在下、每行两个字（`labelLines`），"区划定位""坐标定位"分两行、高 62；整组约 380 高
+- `compact`：只显示图标（按钮高 32，整组约 250），名称放进左边的 `ElTooltip`；无障碍名称（`aria-label`）始终是完整的名称。由页面按地图区域的高度决定：现状底图页量页面根元素的高度（`useElementSize`），低于 640 时打开。ADR 原想用容器查询、不写脚本，实现时改成量尺寸：提示要由组件渲染，CSS 决定不了
+- 状态：当前工具主色实心（`aria-pressed`），打开着面板的动作浅主色底（也是 `aria-pressed`），悬停浅底主色，不可用灰色，键盘焦点 `:focus-visible` 时 2 像素的浅主色描边
+- 业务组贴在右边、会挡住定位，组件自己登记为贴右边的悬浮元素（ADR 0053 第 9 节）
+- `toolbar-items.ts` 把工具和动作分成两张表，名称、图标集中在这里；图标是 `SvgIcon` 的名字（`map-move` 等，Tabler Icons，见 [icons.md](icons.md)"第三方图标"）。"默认视角"不在这里，移到了基础组。工具的 ID 就是登记到会话里的工具 ID，测距、测面用 `MEASURE_TOOL_IDS`
 - 点选的按钮在这里，ID 是 `FEATURE_PICK_TOOL`（`'feature-pick'`），实现由业务模块登记（ADR 0047 第 6 节）：现状底图页登记 `features/resource-map` 的 `useFeaturePick().tools`。按钮放进 `items` 之前必须先登记，否则点击时 `activateTool` 抛错
 - 工具按钮读 `useMap().activeTool`，激活的按钮高亮；点击没激活的工具时 `activateTool`，点击激活的工具时 `releaseTool`（临时任务退回上一个常驻模式）。"移动"是常驻模式，再点一次什么也不做
 - 动作按钮调用页面通过 `actions` 传入的回调，没有回调时不可用。开关面板的动作（区划定位，以后的坐标定位）也是动作：面板开关是页面的界面状态，页面通过 `pressed` 告诉工具栏哪些显示为按下（高亮、`aria-pressed`），工具栏自己不保存；它和当前工具互不影响（ADR 0036）
-- 现状底图页把它放在最右边的工具栏一列，联调时竖排（ADR 0053 第 1 节）；竖向的两组、文字分两行、登记为悬浮元素在 5D.1 做。5D 之前是横排、放不下时换行
+- 现状底图页把它放在最右边的工具栏一列的上面，基础组在同一列的下面，两组的中线对齐（ADR 0053 第 1 节）
+
+## 基础组（ADR 0053 第 3 节）
+
+```tsx
+// 页面：放在工具栏一列的下面；默认视角的回调来自页面的 useDefaultView，缩放范围和画布的相同
+<MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
+<MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
+```
+
+- 宽 40，只有图标，悬停在左边提示名称：层级（32 × 28）、放大、缩小（32 × 32）、默认视角、2D/3D（上下两格，各 32 × 24）；整组约 209 高。角落里的小控件，不登记为悬浮元素
+- 层级向下取整（`levelOf`，加 1e-6 再取整），悬停和无障碍名称是"当前层级 13（13.6）"；面板的"放大至第 N 级显示"、点选的 14 级界限都按"级别 ≥ N"判断，所以不四舍五入
+- 放大、缩小每次 ±1（13.6 → 14.6），截断在缩放范围里，到头时按钮不可用；动画 300 ms。每次点击是一次新的相机操作（`beginCameraOperation`），记下这次的目标级别：上一次按钮缩放还没被作废时接着它的目标累计（连点两下就是 +2，不读动画的中间值），被别的相机操作（滚轮、拖动、默认视角、区划定位等）作废后从当时的级别算起。信号的中止不是响应式的，作废时清掉记下的目标，按钮的可用状态马上按当时的级别重新计算
+- 2D 是当前的一格；三维阶段之前 3D 外观照常、`aria-disabled`，提示"三维暂未开放"，点了没有效果
+- 滚轮和触控板的缩放速率 `SCROLL_ZOOM_RATES`：滚轮 1/600、触控板 1/150（MapLibre 默认 1/450、1/100），首轮先调低灵敏度，用普通鼠标和触控板实际试过后再定。画布的 `scrollZoomRates` 只在创建地图时生效，由适配器设到 MapLibre 的 `scrollZoom` 上
 
 ## 框选的手势与矩形（ADR 0049）
 
@@ -558,7 +581,9 @@ sides.activate('right');
 | `panel-group/panel-group.test.ts` | 打开的功能按固定顺序、切换不改已打开的、关掉当前的切到最近显示过的、入口的三种点击；面板组不替换没变的状态、不认识的功能抛错；窄屏时左右只显示一边 | Node |
 | `panel-group/useSideExclusion.test.ts` | 窄屏时操作哪边显示哪边，变宽后两边都显示 | jsdom |
 | `panel-group/MapPanelGroup.test.tsx` | 没有打开时整组隐藏；Tab 的顺序与当前；切走的内容隐藏不卸载、输入保留、`active` 为 false；关闭按钮关掉、卸载、通知页面、切到最近的；让给另一边时整组隐藏、功能保留 | jsdom |
-| `toolbar/MapToolbar.test.tsx` | 按列表显示按钮；工具按钮跟随当前工具、点击时激活；点击已激活的工具时退出；动作按钮调用回调、没有回调时不可用；按下的动作 | jsdom |
+| `toolbar/MapToolbar.test.tsx` | 文字每行两个字；按分组显示按钮和分隔线；只显示图标时不渲染文字；工具按钮跟随当前工具、点击时激活；点击已激活的工具时退出；动作按钮调用回调、没有回调时不可用；按下的动作和当前工具样式不同 | jsdom |
+| `view-controls/zoom.test.ts` | 层级向下取整与浮点误差；目标级别 ±1 与截断、到头不能再缩放；累计的起点；按钮缩放每次 ±1、连续点击累计、被作废后重新开始、到头时不可用、被作废后恢复可用 | Node |
+| `view-controls/MapViewControls.test.tsx` | 层级与完整的提示；最大、最小级别时按钮不可用；默认视角调用回调；三维暂未开放 | jsdom |
 | `region/RegionLocatePanel.test.tsx` | 市的列表与简称；点市、点区县、再点退回上一级；搜索结果、点一条选中；回车与"搜索"，输入法选字不算；延迟显示加载中；失败与重试；关闭 | jsdom |
 | `measure/measure-style.test.ts` | 没有测量时是空分组；完成的测距、测面的几何与节点；画的过程中接上预览点、点不够时退化；图层顺序、ID 前缀与组合后的校验；按 MapLibre 的语义求值 `filter`（带几何类型），检查线不被填充、每种要素由哪些图层画出；移动预览点只产生 `setGeoJSONSourceData` | Node |
 | `measure/measure-labels.test.ts` | 距离与面积的格式和 1 km² 的分界；形心（矩形、三角形、面积为 0）；测距的中间节点与总长、测面的总面积；画的过程中的标签；提示文案 | Node |

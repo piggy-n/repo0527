@@ -98,6 +98,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 - 内层容器的尺寸是 `width/height: 100%`，不用绝对定位：MapLibre 的 CSS 会给它加 `position: relative`
 - `onMounted` 时用会话的当前快照创建 `MapLibreView` 并挂到上下文上；`onUnmounted` 时先卸下再释放，等待中的 `whenReady` 以 `AbortError` 结束
 - `mapOptions` 只在创建地图时生效；要换选项、或者引擎失败后重新创建，给组件换一个 `key`
+- `scrollZoomRates`：滚轮（`wheel`）和触控板（`trackpad`）的缩放速率，同样只在创建地图时生效，交给适配器（ADR 0053 第 3 节）
 - 一个上下文只能有一个画布：第二个画布挂不上时，先释放它刚创建的视图，再把错误交给 Vue
 - 引擎失败后，上下文的 `retry()` 让画布先卸下、释放旧视图，再在同一个容器里创建新视图（ADR 0030）；`createMap` 等 props 按重试时的值生效
 - 运行中的错误（MapLibre 的 `error` 事件、应用命令失败）交给 `provideMap` 的 `onError`；视图失败时不弹提示，由 `shared/map` 读视图状态决定

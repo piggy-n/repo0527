@@ -15,9 +15,10 @@ export type {
   MapMouseEventType,
   MapMoveEventLike,
   MapSubscription,
-  RenderedFeatureLike
+  RenderedFeatureLike,
+  ScrollZoomLike
 } from './maplibre/map-like';
-export { MapLibreView, type MapLibreViewOptions } from './maplibre/maplibre-view';
+export { MapLibreView, type MapLibreViewOptions, type ScrollZoomRates } from './maplibre/maplibre-view';
 export { cumulativeDistances, geodesicArea, geodesicDistance, lineLength } from './measure/geodesic';
 export {
   type MeasureDraft,

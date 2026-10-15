@@ -35,6 +35,14 @@ export interface MapLibreViewOptions<G extends string> {
   readonly createMap?: (options: MapLibreMapOptions) => MapLike;
   /** 运行中的错误：MapLibre 的 error 事件、应用命令失败、数据更新失败；默认打印到控制台 */
   readonly onError?: (error: unknown) => void;
+  /** 滚轮缩放的速率；不传的一项用 MapLibre 的默认值（滚轮 1/450、触控板 1/100） */
+  readonly scrollZoomRates?: ScrollZoomRates;
+}
+
+/** 滚轮缩放的速率（ADR 0053 第 3 节）：wheel 是普通鼠标的滚轮，trackpad 是触控板，数值越小越慢 */
+export interface ScrollZoomRates {
+  readonly wheel?: number;
+  readonly trackpad?: number;
 }
 
 interface MapLibreViewEvents {
@@ -198,7 +206,8 @@ export class MapLibreView<const G extends string> implements MapView {
     active = true,
     mapOptions,
     createMap = createMapLibreMap,
-    onError = reportToConsole
+    onError = reportToConsole,
+    scrollZoomRates
   }: MapLibreViewOptions<G>) {
     this.#session = session;
     this.#active = active;
@@ -238,6 +247,12 @@ export class MapLibreView<const G extends string> implements MapView {
     }
     this.#map = map;
     stack.defer(() => map.remove());
+    if (scrollZoomRates?.wheel !== undefined) {
+      map.scrollZoom.setWheelZoomRate(scrollZoomRates.wheel);
+    }
+    if (scrollZoomRates?.trackpad !== undefined) {
+      map.scrollZoom.setZoomRate(scrollZoomRates.trackpad);
+    }
     for (const subscription of [
       map.on('style.load', () => this.#guard(() => this.#onStyleLoad(map))),
       map.on('error', ({ error, sourceId }) => this.#guard(() => this.#onMapError(map, error, sourceId))),

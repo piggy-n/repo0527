@@ -1,7 +1,8 @@
 import { Collection, MapLocation } from '@element-plus/icons-vue';
+import { useElementSize } from '@vueuse/core';
 import { MapCanvas, provideMap } from '@yzt/map-vue';
 import { ElButton } from 'element-plus';
-import { defineComponent, ref, watch } from 'vue';
+import { computed, defineComponent, ref, watch } from 'vue';
 import { FeatureDetailPanel } from '@/features/resource-map/components/FeatureDetailPanel';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
@@ -29,6 +30,8 @@ import { regionClipGroup } from '@/shared/map/region/region-clip';
 import { readyBoundary, useRegionLocate } from '@/shared/map/region/useRegionLocate';
 import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { useDefaultView } from '@/shared/map/useDefaultView';
+import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
+import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
 import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './CurrentMapPage.module.scss';
 
@@ -46,6 +49,16 @@ const PANEL_LABELS = {
 type LocatePanel = 'region-locate' | 'coordinate-locate';
 type DisplayPanel = (typeof DISPLAY_PANELS)[number];
 
+// 业务组的分组：移动、点选 · 测距、测面、清除 · 区划定位、坐标定位（ADR 0053 第 2 节）
+const TOOLBAR_GROUPS = [
+  ['browse', 'feature-pick'],
+  ['measure-distance', 'measure-area', 'clear'],
+  ['region-locate', 'coordinate-locate']
+] as const;
+
+// 带文字的业务组（约 380）和基础组（约 209）上下都放得下的地图区域高度，加上三处 16 的间距（ADR 0053 第 8 节）
+const FULL_TOOLBAR_HEIGHT = 640;
+
 /** 现状底图：区域按 ADR 0053 划分，各块的界面在 5D.1～5D.8 逐块设计（docs/roadmap.md"5D 地图页界面的专门设计"） */
 export const CurrentMapPage = defineComponent({
   name: 'CurrentMapPage',
@@ -57,8 +70,12 @@ export const CurrentMapPage = defineComponent({
       groups: ['basemap', 'resources', 'selection', 'region-clip', 'basemap-labels', 'boundaries', 'region', 'measure'],
       camera: JIANGSU_CAMERA
     });
-    // 第一次就绪时按江苏的范围定位；工具栏的"默认视角"、区划定位回到全省时回到这里
+    // 第一次就绪时按江苏的范围定位；基础组的"默认视角"、区划定位回到全省时回到这里
     const { goToDefaultView } = useDefaultView(map);
+    // 矮屏时业务组只显示图标；还量不到尺寸（测试环境没有布局）时按常规高度
+    const root = ref<HTMLElement>();
+    const { height } = useElementSize(root);
+    const compactToolbar = computed(() => height.value > 0 && height.value < FULL_TOOLBAR_HEIGHT);
 
     // 记住上次的底图、边界和资源图层（ADR 0042）；没有登录时为 null，不读不写
     const preferences = usePreferenceScope();
@@ -155,8 +172,8 @@ export const CurrentMapPage = defineComponent({
     return () => {
       const pressed = (['region-locate', 'coordinate-locate'] as const).filter(id => functions.isOpen(id));
       return (
-        <div class={styles.root}>
-          <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} />
+        <div ref={root} class={styles.root}>
+          <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
           <MeasureOverlay measure={measure} />
           <LocationOverlay location={location} />
           <BoxSelectOverlay box={pick.boxDraft.value} />
@@ -201,24 +218,16 @@ export const CurrentMapPage = defineComponent({
             </div>
             <div class={styles.tools}>
               <MapToolbar
-                items={[
-                  'default-view',
-                  'browse',
-                  'feature-pick',
-                  'measure-distance',
-                  'measure-area',
-                  'clear',
-                  'region-locate',
-                  'coordinate-locate'
-                ]}
+                groups={TOOLBAR_GROUPS}
                 actions={{
-                  'default-view': goToDefaultView,
                   clear,
                   'region-locate': () => toggleFunction('region-locate'),
                   'coordinate-locate': () => toggleFunction('coordinate-locate')
                 }}
                 pressed={pressed}
+                compact={compactToolbar.value}
               />
+              <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
             </div>
           </div>
           <MapStatusNotice />

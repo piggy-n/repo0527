@@ -34,6 +34,12 @@ export interface GestureHandlerLike {
   disable(): void;
 }
 
+/** 滚轮缩放：普通鼠标的滚轮和触控板分开调速率（ADR 0053 第 3 节） */
+export interface ScrollZoomLike {
+  setWheelZoomRate(rate: number): void;
+  setZoomRate(rate: number): void;
+}
+
 export interface CameraEventData {
   readonly cause: CameraCause;
 }
@@ -96,5 +102,6 @@ export interface MapLike extends StyleTarget {
   readonly dragPan: GestureHandlerLike;
   readonly doubleClickZoom: GestureHandlerLike;
   readonly boxZoom: GestureHandlerLike;
+  readonly scrollZoom: ScrollZoomLike;
   remove(): void;
 }
