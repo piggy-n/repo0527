@@ -2,7 +2,7 @@ import { Aim, ArrowLeft, Close } from '@element-plus/icons-vue';
 import { useVirtualList } from '@vueuse/core';
 import { ElButton } from 'element-plus';
 import { useMapOverlay } from '@yzt/map-vue';
-import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
+import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import type { FeatureRecord } from '../api';
 import { featureRows, featureSummary, type PickCandidate } from '../feature-query';
@@ -56,10 +56,24 @@ export const FeatureDetailPanel = defineComponent({
       return state.kind === 'candidates' ? state.list.candidates : [];
     });
     // 容器挂载、尺寸变化、列表变化、滚动时重新算可见的行，挂载后下一轮渲染才有行
-    const { list: visible, containerProps, wrapperProps } = useVirtualList(candidates, {
+    const { list: visible, containerProps, wrapperProps, scrollTo } = useVirtualList(candidates, {
       itemHeight: CANDIDATE_HEIGHT,
       overscan: 10
     });
+    // 新一轮识别的列表从头显示，加载更多时列表的身份不变，不动滚动位置。
+    // 单击、框选在同一轮调度里就出结果时面板不重新挂载，滚动容器还是上一轮的
+    watch(
+      () => {
+        const state = props.pick.state.value;
+        return state.kind === 'candidates' ? state.list.id : null;
+      },
+      (id, previous) => {
+        if (id !== null && id !== previous) {
+          scrollTo(0);
+        }
+      },
+      { flush: 'post' }
+    );
     // 虚拟列表把可见的行放在深层响应式里，行里的候选是代理；拥有者按对象身份确认候选，按序号取列表里的原对象
     const choose = (index: number) => {
       const candidate = candidates.value[index];
@@ -204,7 +218,7 @@ export const FeatureDetailPanel = defineComponent({
               {renderHeader('点选')}
               <div class={styles.notice}>
                 <span class={styles.error}>
-                  {state.target.resource.name}识别失败：{messageOf(state.error)}
+                  {state.target?.resource.name}识别失败：{messageOf(state.error)}
                 </span>
                 <ElButton link type="primary" onClick={props.pick.retry}>
                   重试

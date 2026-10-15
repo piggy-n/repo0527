@@ -2,7 +2,7 @@ import type { Point } from 'geojson';
 import type { CameraState } from '@yzt/map-core';
 import { provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, shallowRef } from 'vue';
 import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
 import type { ResourceTreeCategory } from '../api';
@@ -43,7 +43,10 @@ function candidate(target: PickResource, index: number, properties: Record<strin
 
 const FIRST = candidate(DLTB, 1, { guid: '1'.repeat(32), dlmc: '水田', bsm: '3201' });
 const SECOND = candidate(DLTB, 2, { guid: '2'.repeat(32), dlmc: '旱地' });
-const LIST: CandidateList = { mode: 'pick', target: DLTB, candidates: [FIRST, SECOND], pages: null };
+const LIST: CandidateList = { id: 1, mode: 'pick', target: DLTB, candidates: [FIRST, SECOND], pages: null };
+// 框选出的几千个候选，名称是前缀加序号
+const many = (prefix: string) =>
+  Array.from({ length: 3000 }, (_, index) => candidate(DLTB, index, { dlmc: `${prefix} ${index}` }));
 const POINT: Point = { type: 'Point', coordinates: [119, 33] };
 
 /** 只记调用的拥有者：状态和详情由测试设置 */
@@ -85,6 +88,20 @@ function button(wrapper: VueWrapper, text: string) {
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+// jsdom 没有实现元素的 scrollTo，虚拟列表回到顶部要用：按 top 设置 scrollTop
+beforeAll(() => {
+  Object.defineProperty(Element.prototype, 'scrollTo', {
+    configurable: true,
+    value(this: Element, options: ScrollToOptions) {
+      this.scrollTop = options.top ?? this.scrollTop;
+    }
+  });
+});
+
+afterAll(() => {
+  Reflect.deleteProperty(Element.prototype, 'scrollTo');
 });
 
 const rows = (wrapper: VueWrapper) =>
@@ -191,8 +208,7 @@ describe('FeatureDetailPanel', () => {
   });
 
   it('框选的列表只渲染看得见的几行：几千个候选时也只有几十行', async () => {
-    const many = Array.from({ length: 3000 }, (_, index) => candidate(DLTB, index, { dlmc: `地类 ${index}` }));
-    const list: CandidateList = { ...LIST, mode: 'box', candidates: many };
+    const list: CandidateList = { ...LIST, mode: 'box', candidates: many('地类') };
     const { pick } = fakePick({ kind: 'candidates', list, more: { kind: 'idle' } });
     const wrapper = mountPanel(pick);
     await nextTick();
@@ -200,6 +216,36 @@ describe('FeatureDetailPanel', () => {
     expect(wrapper.text()).toContain('地图上已画出的 3000 个');
     expect(wrapper.findAll('li').length).toBeLessThan(50);
     expect(wrapper.findAll('li')[0]?.text()).toBe('1. 2022 · 地类 0');
+  });
+
+  it('连续框选：新一轮的列表从头显示；加载更多时保留滚动位置', async () => {
+    const first: CandidateList = { ...LIST, id: 1, mode: 'box', candidates: many('第一轮') };
+    const { pick, state } = fakePick({ kind: 'candidates', list: first, more: { kind: 'idle' } });
+    const wrapper = mountPanel(pick);
+    await nextTick();
+    const scroller = () => wrapper.get('ul').element.parentElement as HTMLElement;
+    const firstRow = () => wrapper.findAll('li')[0]?.text();
+
+    // 滚到第 40 行（每行 30 像素），前面多渲染 10 行
+    scroller().scrollTop = 1200;
+    scroller().dispatchEvent(new Event('scroll'));
+    await nextTick();
+    expect(firstRow()).toBe('32. 2022 · 第一轮 31');
+
+    // 加载更多：同一轮，位置不变
+    state.value = { kind: 'candidates', list: { ...first, candidates: [...first.candidates] }, more: { kind: 'idle' } };
+    await nextTick();
+    await nextTick();
+    expect(scroller().scrollTop).toBe(1200);
+    expect(firstRow()).toBe('32. 2022 · 第一轮 31');
+
+    // 新一轮框选（中间不经过别的状态，面板不重新挂载）：回到顶部
+    const second: CandidateList = { ...LIST, id: 2, mode: 'box', candidates: many('第二轮') };
+    state.value = { kind: 'candidates', list: second, more: { kind: 'idle' } };
+    await nextTick();
+    await nextTick();
+    expect(scroller().scrollTop).toBe(0);
+    expect(firstRow()).toBe('1. 2022 · 第二轮 0');
   });
 
   it('框里要素过多时提示缩小范围', () => {

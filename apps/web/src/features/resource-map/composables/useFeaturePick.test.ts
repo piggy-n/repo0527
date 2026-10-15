@@ -213,6 +213,11 @@ function candidatesOf(owner: Owner): readonly PickCandidate[] {
   return state.kind === 'candidates' ? state.list.candidates : [];
 }
 
+function listIdOf(owner: Owner): number | null {
+  const state = owner.state.value;
+  return state.kind === 'candidates' ? state.list.id : null;
+}
+
 function selectedGuid(owner: Owner): string | null {
   const state = owner.state.value;
   return state.kind === 'detail' ? state.candidate.guid : null;
@@ -483,6 +488,7 @@ describe('useFeaturePick：候选与详情', () => {
     send(click());
     await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
     expect(owner.state.value).toMatchObject({ list: { pages: { loaded: 1, total: 32 } } });
+    const listId = listIdOf(owner);
 
     owner.loadMore();
     owner.loadMore();
@@ -494,10 +500,17 @@ describe('useFeaturePick：候选与详情', () => {
     await vi.waitFor(() => expect(candidatesOf(owner)).toHaveLength(32));
     expect(owner.state.value).toMatchObject({ list: { pages: { loaded: 2, total: 32 } }, more: { kind: 'idle' } });
     expect(candidatesOf(owner).map(candidate => candidate.guid)).toStrictEqual(records.map(record => record.guid));
+    // 加载更多是同一份列表，面板据此保留滚动位置
+    expect(listIdOf(owner)).toBe(listId);
 
     owner.loadMore();
     const pageNums = requests.filter(({ layerCode }) => layerCode === 'bgdc_dltb_2022').map(({ pageNum }) => pageNum);
     expect(pageNums).toStrictEqual([1, 2, 2]);
+
+    // 再点一次是新一轮，列表换了身份
+    send(click());
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
+    expect(listIdOf(owner)).not.toBe(listId);
   });
 
   it('不能查详情的资源：属性用候选的，不查询、不高亮、不定位', () => {
@@ -1144,5 +1157,70 @@ describe('useFeaturePick：年份变化（ADR 0052 第 4 节）', () => {
     expect(kindOf(owner)).toBe('idle');
     expect(highlighted(owner)).toBe(false);
     expect(fitBounds).not.toHaveBeenCalled();
+  });
+});
+
+describe('useFeaturePick：和其他操作的交错', () => {
+  it('后端识别等待期间发起了别的定位（默认视角、坐标定位）：识别晚到的单个结果不再定位', async () => {
+    const slow = gate();
+    mockIdentify(async layerCode => {
+      await slow.opened;
+      return layerCode === 'bgdc_dltb_2022' ? page(1, [{ guid: guid(1) }]) : page(0, []);
+    });
+    mockDetail();
+    const { owner, send, fitBounds, flyTo, runCameraOperation } = setup(12);
+    send(click());
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('identifying'));
+
+    runCameraOperation(control => control.flyTo({ center: [119, 33], zoom: 8 }));
+    slow.open();
+    await vi.waitFor(() => expect(owner.detail.value?.kind).toBe('ready'));
+
+    expect(flyTo).toHaveBeenCalledOnce();
+    expect(fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('规划本身出错（如几何求交）：先作废上一轮识别，显示失败，可以重试；上一轮晚到的结果不出现', async () => {
+    const slow = gate();
+    mockIdentify(async layerCode => {
+      await slow.opened;
+      return layerCode === 'bgdc_dltb_2022' ? page(1, [{ guid: guid(1) }]) : page(0, []);
+    });
+    mockDetail();
+    const { owner, send, pick } = setup(12);
+    send(click());
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('identifying'));
+
+    // 第二次单击时规划抛错，第一次抛错后恢复正常
+    let failing = true;
+    const view = toolView([], '2d');
+    const flaky: ToolView = {
+      ...view,
+      queryRendered: (area, options) => {
+        if (failing) {
+          failing = false;
+          throw new Error('求交失败');
+        }
+        return view.queryRendered(area, options);
+      }
+    };
+    expect(() => pick.handleInput?.(click(), flaky)).not.toThrow();
+    expect(owner.state.value).toMatchObject({ kind: 'failed', target: null });
+    slow.open();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(owner.state.value).toMatchObject({ kind: 'failed', target: null });
+
+    owner.retry();
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('detail'));
+  });
+
+  it('没有别的定位时，后端识别出的单个要素照常定位', async () => {
+    mockIdentify(layerCode => (layerCode === 'bgdc_dltb_2022' ? page(1, [{ guid: guid(1) }]) : page(0, [])));
+    mockDetail();
+    const { owner, send, fitBounds } = setup(12);
+    send(click());
+
+    await vi.waitFor(() => expect(owner.detail.value?.kind).toBe('ready'));
+    expect(fitBounds).toHaveBeenCalledOnce();
   });
 });
