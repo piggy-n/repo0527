@@ -218,7 +218,17 @@ export class MapLibreView<const G extends string> implements MapView {
         bearing,
         pitch
       } = session.camera.current;
-      map = createMap({ ...mapOptions, container, style, center: [lng, lat], zoom, bearing, pitch });
+      map = createMap({
+        // 去掉默认的 MapLibre 链接，保留数据源署名和原有折叠方式
+        attributionControl: { compact: true, customAttribution: '' },
+        ...mapOptions,
+        container,
+        style,
+        center: [lng, lat],
+        zoom,
+        bearing,
+        pitch
+      });
     } catch (error) {
       // 例如不支持 WebGL2 时的 GPUInitializationError：不抛出，交给 whenReady 和 statechange 表达
       this.#map = undefined;

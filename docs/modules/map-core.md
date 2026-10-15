@@ -181,6 +181,8 @@ store.clear();
 
 在 ADR 0022、0024 的范围内实现；失败的处理见 ADR 0026。它实现 `MapView`，依赖的是窄接口 `MapLike`（以及 `applyStyleCommand` 用的 `StyleTarget`），签名比 MapLibre 的泛型方法简单；`expectTypeOf<MapLibreMap>().toExtend<MapLike>()` 保证 MapLibre 的 `Map` 满足它，MapLibre 升级后签名不兼容会在类型检查时报错。
 
+创建地图时默认用 `attributionControl: { compact: true, customAttribution: '' }` 去掉右下角的 MapLibre 链接，保留数据源署名和原有折叠方式；调用方仍可通过 `mapOptions.attributionControl` 覆盖。
+
 **样式同步**：
 
 - 创建地图时直接传入当前快照作为 `style`
