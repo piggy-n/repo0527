@@ -34,8 +34,11 @@ function mountPanel(initial?: LngLat) {
 const field = (wrapper: VueWrapper, label: string) => wrapper.get(`input[aria-label="${label}"]`);
 const valueOf = (wrapper: VueWrapper, label: string) => (field(wrapper, label).element as HTMLInputElement).value;
 
+// 按文字或无障碍名称找按钮："拾取"按下时文字是"拾取中"
 function button(wrapper: VueWrapper, text: string) {
-  const found = wrapper.findAll('button').find(candidate => candidate.text() === text);
+  const found = wrapper
+    .findAll('button')
+    .find(candidate => candidate.text() === text || candidate.attributes('aria-label') === text);
   if (!found) {
     throw new Error(`没有"${text}"按钮`);
   }
@@ -180,14 +183,16 @@ describe('CoordinateLocatePanel', () => {
     expect(location.state.value.point?.lngLat).toStrictEqual([118.79786, 32.04864]);
   });
 
-  it('"拾取"开关拾取工具，拾取中显示为按下', async () => {
+  it('"拾取"开关拾取工具，拾取中显示为按下、文字是"拾取中"', async () => {
     const { wrapper, map } = mountPanel();
 
     await button(wrapper, '拾取').trigger('click');
     expect(map.activeTool.value).toBe(LOCATION_PICK_TOOL);
     expect(button(wrapper, '拾取').attributes('aria-pressed')).toBe('true');
+    expect(button(wrapper, '拾取').text()).toBe('拾取中');
     await button(wrapper, '拾取').trigger('click');
     expect(map.activeTool.value).toBe('browse');
+    expect(button(wrapper, '拾取').text()).toBe('拾取');
   });
 
   it('隐藏（切到别的 Tab）时取消拾取，输入框的文字保留', async () => {

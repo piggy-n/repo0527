@@ -1,7 +1,6 @@
-import { Collection, MapLocation } from '@element-plus/icons-vue';
 import { useElementSize } from '@vueuse/core';
 import { MapCanvas, provideMap } from '@yzt/map-vue';
-import { ElButton } from 'element-plus';
+import { MxTitle } from '@yzt/ui';
 import { computed, defineComponent, ref, watch } from 'vue';
 import { FeatureDetailPanel } from '@/features/resource-map/components/FeatureDetailPanel';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
@@ -12,10 +11,13 @@ import { useResourceLayers } from '@/features/resource-map/composables/useResour
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
+import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
+import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundaryPanel } from '@/shared/map/boundary/BoundaryPanel';
 import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
+import { MapCard } from '@/shared/map/card/MapCard';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { CoordinateLocatePanel } from '@/shared/map/location/CoordinateLocatePanel';
@@ -167,15 +169,6 @@ export const CurrentMapPage = defineComponent({
       location.remove();
     };
 
-    const renderCard = (id: DisplayPanel, icon: typeof Collection) => {
-      const open = display.isOpen(id);
-      return (
-        <ElButton icon={icon} type={open ? 'primary' : 'default'} aria-pressed={open} onClick={() => toggleDisplay(id)}>
-          {PANEL_LABELS[id]}
-        </ElButton>
-      );
-    };
-
     return () => {
       const pressed = (['region-locate', 'coordinate-locate'] as const).filter(id => functions.isOpen(id));
       return (
@@ -214,7 +207,7 @@ export const CurrentMapPage = defineComponent({
                   ],
                   basemap: () => [
                     <BasemapPanel basemap={basemap} />,
-                    <div class={styles.sectionTitle}>行政区</div>,
+                    <MxTitle level="section">行政区</MxTitle>,
                     <BoundaryPanel boundaries={boundaries} />
                   ]
                 }}
@@ -222,10 +215,20 @@ export const CurrentMapPage = defineComponent({
             </div>
             <div class={styles.bottom}>
               <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
-              {/* 卡片行：联调用的入口，5D.4、5D.5 换成图例卡和缩略图的底图卡 */}
+              {/* 卡片行：图例卡、底图卡（显示当前底图的缩略图），点开显示面板里对应的 Tab */}
               <div class={styles.cards}>
-                {renderCard('legend', Collection)}
-                {renderCard('basemap', MapLocation)}
+                <MapCard
+                  label={PANEL_LABELS.legend}
+                  pressed={display.isOpen('legend')}
+                  onClick={() => toggleDisplay('legend')}>
+                  {{ icon: () => [<SvgIcon name="map-legend" size={20} />] }}
+                </MapCard>
+                <MapCard
+                  label={PANEL_LABELS.basemap}
+                  pressed={display.isOpen('basemap')}
+                  onClick={() => toggleDisplay('basemap')}>
+                  {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[basemap.selected.value]} />] }}
+                </MapCard>
               </div>
             </div>
             <div class={styles.tools}>

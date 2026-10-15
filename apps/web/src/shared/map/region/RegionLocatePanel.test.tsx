@@ -31,17 +31,32 @@ function mountPanel(load: RegionBoundaryLoader['load'] = ({ code }) => Promise.r
   return { wrapper, region: owner, loader };
 }
 
+// 按文字或无障碍名称找按钮：格子、当前位置的上一级按文字，搜索结果按路径
 function button(wrapper: VueWrapper, text: string) {
-  const found = wrapper.findAll('button').find(candidate => candidate.text() === text);
+  const found = wrapper
+    .findAll('button')
+    .find(candidate => candidate.text() === text || candidate.attributes('aria-label') === text);
   if (!found) {
     throw new Error(`没有"${text}"按钮`);
   }
   return found;
 }
 
-const isPrimary = (wrapper: VueWrapper, text: string) => button(wrapper, text).classes().includes('el-button--primary');
+const isPressed = (wrapper: VueWrapper, text: string) => button(wrapper, text).attributes('aria-pressed') === 'true';
 
-const current = (wrapper: VueWrapper) => wrapper.get('[data-region-current]').text();
+// 当前位置里能点的上一级；最后一级是当前选中的，不能点
+const links = (wrapper: VueWrapper) =>
+  wrapper
+    .get('[data-region-current]')
+    .findAll('button')
+    .map(item => item.text());
+
+// 当前位置的各级名称
+const trail = (wrapper: VueWrapper) =>
+  wrapper
+    .get('[data-region-current]')
+    .findAll('button, [aria-current]')
+    .map(item => item.text());
 
 afterEach(() => {
   vi.useRealTimers();
@@ -51,7 +66,8 @@ describe('RegionLocatePanel', () => {
   it('列出 13 个市（不带"市"字）；开始时是全省，没有区县', () => {
     const { wrapper } = mountPanel();
 
-    expect(current(wrapper)).toBe('全省');
+    expect(trail(wrapper)).toStrictEqual(['江苏省']);
+    expect(links(wrapper)).toStrictEqual([]);
     expect(button(wrapper, '南京').exists()).toBe(true);
     expect(button(wrapper, '宿迁').exists()).toBe(true);
     expect(wrapper.findAll('button').some(candidate => candidate.text() === '玄武区')).toBe(false);
@@ -62,37 +78,67 @@ describe('RegionLocatePanel', () => {
 
     await button(wrapper, '南京').trigger('click');
     expect(region.state.value.selected?.code).toBe('320100');
-    expect(current(wrapper)).toBe('南京市');
-    expect(isPrimary(wrapper, '南京')).toBe(true);
+    expect(trail(wrapper)).toStrictEqual(['江苏省', '南京市']);
+    expect(wrapper.text()).toContain('南京市的区县');
+    expect(isPressed(wrapper, '南京')).toBe(true);
+    expect(isPressed(wrapper, '无锡')).toBe(false);
 
     await button(wrapper, '玄武区').trigger('click');
-    expect(current(wrapper)).toBe('南京市 / 玄武区');
-    expect(isPrimary(wrapper, '玄武区')).toBe(true);
-    expect(isPrimary(wrapper, '南京')).toBe(true);
+    expect(trail(wrapper)).toStrictEqual(['江苏省', '南京市', '玄武区']);
+    expect(links(wrapper)).toStrictEqual(['江苏省', '南京市']);
+    expect(isPressed(wrapper, '玄武区')).toBe(true);
+    expect(isPressed(wrapper, '南京')).toBe(true);
 
     await button(wrapper, '玄武区').trigger('click');
     expect(region.state.value.selected?.code).toBe('320100');
 
     await button(wrapper, '南京').trigger('click');
     expect(region.state.value.selected).toBeNull();
-    expect(current(wrapper)).toBe('全省');
+    expect(trail(wrapper)).toStrictEqual(['江苏省']);
   });
 
-  it('搜索：输入后列出路径，点一条选中它并清空关键字', async () => {
+  it('当前位置的上一级可以点：点市回到市，点江苏省回到全省', async () => {
+    const { wrapper, region } = mountPanel();
+    region.select('320102');
+    await nextTick();
+
+    await button(wrapper, '南京市').trigger('click');
+    expect(region.state.value.selected?.code).toBe('320100');
+
+    await button(wrapper, '江苏省').trigger('click');
+    expect(region.state.value.selected).toBeNull();
+  });
+
+  it('搜索：输入时换成结果列表，标出关键字；点一条选中它并清空关键字', async () => {
     const { wrapper, region } = mountPanel();
 
     await wrapper.get('input').setValue('鼓楼');
-    const results = wrapper.findAll('li').map(item => item.text());
+    const results = wrapper.findAll('li button').map(item => item.attributes('aria-label'));
     expect(results).toStrictEqual(['南京市 / 鼓楼区', '徐州市 / 鼓楼区']);
+    expect(wrapper.findAll('mark').map(mark => mark.text())).toStrictEqual(['鼓楼', '鼓楼']);
+    expect(wrapper.find('[data-region-current]').exists()).toBe(false);
 
     await button(wrapper, '徐州市 / 鼓楼区').trigger('click');
 
     expect(region.state.value.selected?.code).toBe('320302');
     expect(wrapper.get('input').element.value).toBe('');
     expect(wrapper.findAll('li')).toHaveLength(0);
+    expect(trail(wrapper)).toStrictEqual(['江苏省', '徐州市', '鼓楼区']);
   });
 
-  it('回车或点"搜索"选中第一条；输入法选字时的回车不算', async () => {
+  it('关键字只在所属的市名里时标在市名上；没有结果时说明', async () => {
+    const { wrapper } = mountPanel();
+
+    await wrapper.get('input').setValue('镇江');
+    const jingkou = button(wrapper, '镇江市 / 京口区');
+    expect(jingkou.find('mark').text()).toBe('镇江');
+    expect(jingkou.text()).toBe('京口区镇江市');
+
+    await wrapper.get('input').setValue('北京');
+    expect(wrapper.text()).toContain('没有找到"北京"');
+  });
+
+  it('回车选中第一条；输入法选字时的回车不算', async () => {
     const { wrapper, region } = mountPanel();
     const input = wrapper.get('input');
 
@@ -101,10 +147,6 @@ describe('RegionLocatePanel', () => {
     expect(region.state.value.selected).toBeNull();
     await input.trigger('keydown', { key: 'Enter' });
     expect(region.state.value.selected?.code).toBe('320500');
-
-    await input.setValue('无锡');
-    await button(wrapper, '搜索').trigger('click');
-    expect(region.state.value.selected?.code).toBe('320200');
   });
 
   it('加载边界超过 300ms 才显示"正在加载"', async () => {

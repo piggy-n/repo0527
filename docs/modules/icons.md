@@ -161,6 +161,8 @@ packages/icons/
 | `panel-collapse` / `panel-expand` | `layout-sidebar-left-collapse` / `layout-sidebar-left-expand` | 收起、展开左侧的面板 |
 | `close` | `x` | 取消勾选、关闭 |
 | `info` | `info-circle` | 带提示的信息图标 |
+| `map-legend` | `list-details` | 卡片行的图例卡 |
+| `check` | `check` | 选中的标记（底图缩略图右上角的勾） |
 
 以后再加 Tabler 的图标照同样的做法，并补进这张表。
 

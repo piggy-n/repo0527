@@ -30,6 +30,19 @@ describe('BoundaryPanel', () => {
     expect(wrapper.find('.el-slider').exists()).toBe(false);
   });
 
+  it('每一级前面是它在地图上的线型：省界最粗，县界是虚线', () => {
+    const wrapper = mount(BoundaryPanel, { props: { boundaries: useBoundaries() } });
+    // 线型示意在勾选框的 label 里
+    const style = (label: string) => {
+      const swatch = checkbox(wrapper, label).element.closest('label')?.querySelector('[aria-hidden="true"]');
+      return swatch?.getAttribute('style') ?? '';
+    };
+
+    expect(style('省界')).toContain('height: 2.4px');
+    expect(style('市界')).toContain('height: 1.6px');
+    expect(style('县界')).toContain('linear-gradient');
+  });
+
   it('滑块按百分比显示，拖动时把 0～1 的透明度交给拥有者', async () => {
     const boundaries = useBoundaries();
     boundaries.setOpacity(0.6);

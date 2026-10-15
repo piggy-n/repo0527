@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BOUNDARY_OPTIONS,
   boundaryGroup,
+  boundarySwatch,
   type BoundaryLevel,
   type BoundaryState,
   INITIAL_BOUNDARY_STATE
@@ -81,6 +82,17 @@ describe('行政区边界的推导', () => {
         line('city', CITY_WIDTH, 0.78),
         line('province', PROVINCE_WIDTH, 0.94)
       ]
+    });
+  });
+
+  it('面板的线型示意和地图上同色、同样的不透明度和虚线，线宽取中间一档', () => {
+    expect(boundarySwatch('province')).toStrictEqual({ color: '#597EF7', width: 2.4, opacity: 0.94 });
+    expect(boundarySwatch('city')).toStrictEqual({ color: '#597EF7', width: 1.6, opacity: 0.78 });
+    expect(boundarySwatch('county')).toStrictEqual({
+      color: '#597EF7',
+      width: 0.95,
+      opacity: 0.62,
+      dasharray: [2.2, 1.6]
     });
   });
 

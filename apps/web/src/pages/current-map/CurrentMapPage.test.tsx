@@ -414,6 +414,30 @@ describe('CurrentMapPage', () => {
     ]);
   });
 
+  it('卡片行：图例卡、底图卡开关显示面板里对应的 Tab；底图卡显示当前底图的缩略图（设计稿 5D.4）', async () => {
+    const { wrapper } = await readyPage();
+    const cover = () => button(wrapper, '底图').get('[aria-hidden="true"]').attributes('style') ?? '';
+    // 外壳把切走的内容设为 display: none
+    const basemapShown = () => !wrapper.get('[data-panel="basemap"]').attributes('style')?.includes('display: none');
+    expect(cover()).toContain('/vec_w/');
+
+    await button(wrapper, '底图').trigger('click');
+    expect(button(wrapper, '底图').attributes('aria-pressed')).toBe('true');
+    expect(basemapShown()).toBe(true);
+
+    await wrapper.get('button[aria-label="影像底图"]').trigger('click');
+    expect(cover()).toContain('/img_w/');
+
+    await button(wrapper, '图例').trigger('click');
+    expect(button(wrapper, '图例').attributes('aria-pressed')).toBe('true');
+    expect(basemapShown()).toBe(false);
+
+    await button(wrapper, '图例').trigger('click');
+    await button(wrapper, '底图').trigger('click');
+    expect(button(wrapper, '底图').attributes('aria-pressed')).toBe('false');
+    expect(wrapper.find('[data-panel="basemap"]').exists()).toBe(false);
+  });
+
   it('第一次就绪时按江苏范围定位一次；画布重建后再次就绪时不再定位，保留用户调整过的视角', async () => {
     const { maps, canvasKey } = mountPage();
     const first = maps[0];

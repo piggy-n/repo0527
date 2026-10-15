@@ -3,6 +3,7 @@ import { diffStyle, StyleModel } from '@yzt/map-core';
 import { describe, expect, it } from 'vitest';
 import {
   basemapOptions,
+  basemapThumbnails,
   type BasemapId,
   type BasemapState,
   type BasemapStyles,
@@ -49,15 +50,15 @@ function compose(styles: BasemapStyles, basemap: BasemapState) {
 describe('可选的底图与初始状态', () => {
   it('开启天地图：矢量、影像、无底图，进入时是矢量底图，透明度都是 1', () => {
     expect(basemapOptions(TIANDITU)).toStrictEqual([
-      { id: 'vector', label: '矢量底图' },
-      { id: 'imagery', label: '影像底图' },
-      { id: 'none', label: '无底图' }
+      { id: 'vector', label: '矢量底图', shortLabel: '矢量' },
+      { id: 'imagery', label: '影像底图', shortLabel: '影像' },
+      { id: 'none', label: '无底图', shortLabel: '无底图' }
     ]);
     expect(initialBasemapState(TIANDITU)).toStrictEqual({ selected: 'vector', opacity: { vector: 1, imagery: 1 } });
   });
 
   it('关闭天地图：只有无底图，进入时就是它', () => {
-    expect(basemapOptions(null)).toStrictEqual([{ id: 'none', label: '无底图' }]);
+    expect(basemapOptions(null)).toStrictEqual([{ id: 'none', label: '无底图', shortLabel: '无底图' }]);
     expect(initialBasemapState(null)).toStrictEqual({ selected: 'none', opacity: { vector: 1, imagery: 1 } });
   });
 });
@@ -149,5 +150,24 @@ describe('createBasemapStyles：关闭天地图（内网部署）', () => {
     expect(styles.basemapGroup(basemap)).toStrictEqual({ sources: {}, layers: [BACKGROUND] });
     expect(styles.labelsGroup(basemap)).toStrictEqual({ sources: {}, layers: [] });
     expect(JSON.stringify(compose(styles, basemap))).not.toContain('tianditu');
+  });
+});
+
+// 南京所在的 10 级瓦片：底图和配套的注记各一张
+const thumbnailTile = (layer: string) =>
+  `https://t0.tianditu.gov.cn/${layer}_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0` +
+  `&LAYER=${layer}&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=10&TILEROW=415&TILECOL=849&tk=${KEY}`;
+
+describe('缩略图', () => {
+  it('矢量、影像各用南京附近的一张 10 级瓦片，叠上配套的注记；无底图没有图片', () => {
+    expect(basemapThumbnails(TIANDITU)).toStrictEqual({
+      vector: { base: thumbnailTile('vec'), labels: thumbnailTile('cva'), focus: '86% 67%' },
+      imagery: { base: thumbnailTile('img'), labels: thumbnailTile('cia'), focus: '86% 67%' },
+      none: null
+    });
+  });
+
+  it('关闭天地图时都没有图片，不请求天地图', () => {
+    expect(basemapThumbnails(null)).toStrictEqual({ vector: null, imagery: null, none: null });
   });
 });

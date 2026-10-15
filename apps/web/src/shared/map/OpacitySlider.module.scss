@@ -1,0 +1,25 @@
+// 名称 40、滑块、百分比 36（设计稿 5D.4）
+.row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.name,
+.value {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.value {
+  color: var(--color-text-regular);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+// Element 的滑块宽 100%：内边距要算在宽度里，否则会压到百分比；两端的滑块按钮不贴着名称和百分比
+.slider {
+  box-sizing: border-box;
+  padding: 0 6px;
+}

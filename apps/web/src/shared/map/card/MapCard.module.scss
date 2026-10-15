@@ -1,0 +1,82 @@
+// 卡片（设计稿 5D.4）：56 × 56，浮在地图上的外观；状态和业务组的按钮对应（ADR 0053 第 7 节）
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  box-sizing: border-box;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tag);
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+// 图标加文字：悬停浅主色底、主色；面板打开时浅主色底加主色细边
+.iconic {
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+
+  &.pressed {
+    background-color: var(--color-primary-bg);
+    box-shadow:
+      var(--shadow-md),
+      inset 0 0 0 1px var(--color-primary-border);
+    color: var(--color-primary);
+  }
+}
+
+// 铺满一张图，文字压在底部的白色半透明条上；悬停浅主色描边，面板打开时主色描边
+.covered {
+  justify-content: flex-end;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  &:hover::after {
+    box-shadow: inset 0 0 0 2px var(--color-primary-border-hover);
+  }
+
+  &.pressed::after {
+    box-shadow: inset 0 0 0 2px var(--color-primary);
+  }
+
+  .label {
+    position: relative;
+    width: 100%;
+    padding: 1px 0 2px;
+    background-color: var(--color-bg-mask);
+  }
+
+  &.pressed .label {
+    color: var(--color-primary);
+    font-weight: var(--font-weight-semibold);
+  }
+}
+
+.cover {
+  position: absolute;
+  inset: 0;
+}

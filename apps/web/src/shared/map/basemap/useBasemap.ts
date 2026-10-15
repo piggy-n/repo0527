@@ -9,6 +9,8 @@ import {
   type BasemapOption,
   basemapOptions,
   type BasemapState,
+  type BasemapThumbnail,
+  basemapThumbnails,
   createBasemapStyles,
   initialBasemapState
 } from './basemap-style';
@@ -24,6 +26,8 @@ export interface UseBasemapOptions {
 export interface Basemap {
   /** 可选的底图，按天地图配置得出 */
   readonly options: readonly BasemapOption[];
+  /** 各种底图的缩略图（面板和底图卡用）；无底图、关闭天地图时为 null */
+  readonly thumbnails: Readonly<Record<BasemapId, BasemapThumbnail | null>>;
   readonly selected: ComputedRef<BasemapId>;
   /** 当前底图的透明度（0～1），无底图时为 null */
   readonly opacity: ComputedRef<number | null>;
@@ -40,6 +44,7 @@ export interface Basemap {
 /** 创建底图的拥有者，在页面的 setup 中调用；先用默认值，存下的偏好读到后替换一次（ADR 0042 第 5 节） */
 export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBasemapOptions = {}): Basemap {
   const options = basemapOptions(tianditu);
+  const thumbnails = basemapThumbnails(tianditu);
   const styles = createBasemapStyles(tianditu);
   // 状态不可变，变化时整体替换；推导只依赖它
   const state = shallowRef<BasemapState>(initialBasemapState(tianditu));
@@ -90,6 +95,7 @@ export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBa
 
   return {
     options,
+    thumbnails,
     selected,
     opacity,
     select,

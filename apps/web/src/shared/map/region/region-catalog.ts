@@ -49,6 +49,28 @@ export function regionPath(region: Region): string {
   return `${findRegion(region.cityCode)?.name ?? ''} / ${region.name}`;
 }
 
+/** 区县所在的市的名称；市自己为 null */
+export function parentCityName(region: Region): string | null {
+  return region.level === 'district' ? (findRegion(region.cityCode)?.name ?? '') : null;
+}
+
+/** "当前位置"的一级；code 为 null 的是江苏省，就是全省 */
+export interface RegionTrailItem {
+  readonly code: string | null;
+  readonly name: string;
+}
+
+const PROVINCE: RegionTrailItem = { code: null, name: '江苏省' };
+
+/** 当前选择的各级，从江苏省开始，最后一级是选中的区划（ADR 0053 第 4 节，设计稿 5D.4） */
+export function regionTrail(selected: Region | null): readonly RegionTrailItem[] {
+  if (!selected) {
+    return [PROVINCE];
+  }
+  const city = { code: selected.cityCode, name: findRegion(selected.cityCode)?.name ?? '' };
+  return selected.level === 'city' ? [PROVINCE, city] : [PROVINCE, city, { code: selected.code, name: selected.name }];
+}
+
 /** 去掉名称末尾的"市"，如"南京市"显示为"南京" */
 export function shortRegionName(name: string): string {
   return name.replace(/市$/, '');

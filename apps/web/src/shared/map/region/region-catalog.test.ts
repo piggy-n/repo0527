@@ -7,7 +7,9 @@ import {
   findRegion,
   JIANGSU_CITIES,
   type Region,
+  parentCityName,
   regionPath,
+  regionTrail,
   searchRegions,
   shortRegionName
 } from './region-catalog';
@@ -68,6 +70,25 @@ describe('区划目录', () => {
     expect(shortRegionName('江阴市')).toBe('江阴');
     expect(shortRegionName('玄武区')).toBe('玄武区');
     expect(shortRegionName('市中区')).toBe('市中区');
+  });
+
+  it('当前位置从江苏省开始，到选中的区划为止；区县所在的市', () => {
+    const nanjing = findRegion('320100');
+    const xuanwu = findRegion('320102');
+    if (!nanjing || !xuanwu) {
+      throw new Error('目录里没有南京市或玄武区');
+    }
+    const province = { code: null, name: '江苏省' };
+
+    expect(regionTrail(null)).toStrictEqual([province]);
+    expect(regionTrail(nanjing)).toStrictEqual([province, { code: '320100', name: '南京市' }]);
+    expect(regionTrail(xuanwu)).toStrictEqual([
+      province,
+      { code: '320100', name: '南京市' },
+      { code: '320102', name: '玄武区' }
+    ]);
+    expect(parentCityName(xuanwu)).toBe('南京市');
+    expect(parentCityName(nanjing)).toBeNull();
   });
 
   it('搜索：路径包含关键字的区划，按目录顺序；去掉首尾空白，空白时没有结果', () => {

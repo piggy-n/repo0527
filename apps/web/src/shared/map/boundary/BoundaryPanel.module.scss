@@ -1,4 +1,4 @@
-// 联调用的样式，5D 再设计；放在显示面板的"底图"里，外观和内边距由外壳负责
+// 行政区边界（设计稿 5D.4）：三级横排；放在显示面板的"底图"里，外观和内边距由外壳负责
 
 .panel {
   display: flex;
@@ -6,20 +6,20 @@
   gap: var(--space-sm);
 }
 
-.opacity {
-  display: flex;
+.levels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.option {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: 6px;
 }
 
-.label {
+// 一段 18 宽的线，高度就是线宽
+.swatch {
   flex: none;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-regular);
-}
-
-.slider {
-  flex: 1;
-  // 两端的滑块按钮不贴着面板边缘
-  padding: 0 var(--space-sm);
+  width: 18px;
+  background-repeat: repeat-x;
 }

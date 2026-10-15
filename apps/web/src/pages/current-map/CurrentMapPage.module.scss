@@ -75,19 +75,6 @@
   > * {
     pointer-events: auto;
   }
-
-  // 两个 Element 按钮之间不再加默认的左外边距
-  > * + * {
-    margin-left: 0;
-  }
-}
-
-// 底图里"行政区"一节的标题
-.sectionTitle {
-  margin-top: var(--space-sm);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-title);
 }
 
 // 最右边一列只放工具栏：业务组在上，基础组在下，两组的中线对齐（ADR 0053 第 1 节）

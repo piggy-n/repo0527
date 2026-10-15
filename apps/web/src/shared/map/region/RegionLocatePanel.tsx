@@ -1,20 +1,31 @@
 import { Search } from '@element-plus/icons-vue';
-import { ElButton, ElInput, ElSpace } from 'element-plus';
-import { computed, defineComponent, type PropType, ref } from 'vue';
+import { ElInput } from 'element-plus';
+import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
 import { useDelayedFlag } from '../../composables/useDelayedFlag';
 import {
   districtsOf,
   JIANGSU_CITIES,
+  parentCityName,
   type Region,
   regionPath,
+  regionTrail,
   searchRegions,
   shortRegionName
 } from './region-catalog';
 import { nextRegionSelection, type RegionLocate } from './useRegionLocate';
 import styles from './RegionLocatePanel.module.scss';
 
+// 名称里第一次出现的关键字标出来；搜索按路径包含关键字，关键字也可能只在所属的市名里
+function marked(text: string, keyword: string): (VNode | string)[] {
+  const index = keyword ? text.indexOf(keyword) : -1;
+  if (index < 0) {
+    return [text];
+  }
+  return [text.slice(0, index), <mark>{keyword}</mark>, text.slice(index + keyword.length)];
+}
+
 /**
- * 区划定位的内容（联调用的界面，5D 再设计；ADR 0036）：显示 useRegionLocate 的状态并调用它的操作。
+ * 区划定位的内容（ADR 0036，设计稿 5D.4）：搜索、当前位置、市和区县的格子，显示 useRegionLocate 的状态并调用它的操作。
  * 放在功能面板的 Tab 里，标题、关闭和悬浮元素的登记由外壳负责（ADR 0053 第 4 节）；关闭不清掉选择
  */
 export const RegionLocatePanel = defineComponent({
@@ -27,7 +38,7 @@ export const RegionLocatePanel = defineComponent({
     const results = computed(() => searchRegions(keyword.value));
     const loading = useDelayedFlag(() => props.region.state.value.boundary.kind === 'loading');
 
-    // 列表里的市、区县按旧项目的规则切换；搜索结果直接选中
+    // 格子按旧项目的规则切换；当前位置和搜索结果直接选中
     const toggle = (clicked: Region) => {
       props.region.select(nextRegionSelection(props.region.state.value.selected, clicked));
     };
@@ -46,76 +57,115 @@ export const RegionLocatePanel = defineComponent({
       const { boundary } = props.region.state.value;
       if (boundary.kind === 'failed') {
         return (
-          <div class={styles.status}>
+          <span class={[styles.status, styles.failed]}>
             边界加载失败
-            <ElButton link type="primary" onClick={props.region.retry}>
+            <button type="button" class={styles.retry} onClick={props.region.retry}>
               重试
-            </ElButton>
-          </div>
+            </button>
+          </span>
         );
       }
-      return loading.value && <div class={styles.status}>正在加载边界…</div>;
+      return loading.value && <span class={styles.status}>正在加载边界…</span>;
     };
+
+    // 江苏省 › 南京市 › 江宁区：前面几级可以点，回到全省或回到市
+    const renderTrail = () => {
+      const trail = regionTrail(props.region.state.value.selected);
+      return (
+        <div class={styles.trail}>
+          <nav class={styles.crumbs} aria-label="当前区划" data-region-current>
+            {trail.map((item, index) => {
+              const last = index === trail.length - 1;
+              return [
+                index > 0 && (
+                  <span class={styles.separator} aria-hidden="true">
+                    ›
+                  </span>
+                ),
+                last ? (
+                  <span class={styles.here} aria-current="location">
+                    {item.name}
+                  </span>
+                ) : (
+                  <button type="button" class={styles.crumb} onClick={() => props.region.select(item.code)}>
+                    {item.name}
+                  </button>
+                )
+              ];
+            })}
+          </nav>
+          {renderStatus()}
+        </div>
+      );
+    };
+
+    const renderChips = (regions: readonly Region[], selectedCode: string | null | undefined, short: boolean) => (
+      <div class={styles.chips}>
+        {regions.map(region => {
+          const on = region.code === selectedCode;
+          return (
+            <button
+              key={region.code}
+              type="button"
+              class={[styles.chip, on && styles.chipOn]}
+              aria-pressed={on}
+              onClick={() => toggle(region)}>
+              {short ? shortRegionName(region.name) : region.name}
+            </button>
+          );
+        })}
+      </div>
+    );
+
+    const renderResults = () =>
+      results.value.length === 0 ? (
+        <div class={styles.empty}>没有找到"{keyword.value.trim()}"</div>
+      ) : (
+        <ul class={styles.results}>
+          {results.value.map((region, index) => (
+            <li key={region.code}>
+              <button
+                type="button"
+                class={[styles.result, index === 0 && styles.first]}
+                aria-label={regionPath(region)}
+                onClick={() => choose(region)}>
+                <span>{marked(region.name, keyword.value.trim())}</span>
+                <span class={styles.parent}>{marked(parentCityName(region) ?? '', keyword.value.trim())}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      );
 
     return () => {
       const { selected } = props.region.state.value;
+      const city = selected && JIANGSU_CITIES.find(item => item.code === selected.cityCode);
       return (
         <div class={styles.panel} data-region-locate-panel>
-          <div class={styles.current} data-region-current>
-            {selected ? regionPath(selected) : '全省'}
-          </div>
-          <ElSpace wrap size={6}>
-            {JIANGSU_CITIES.map(city => (
-              <ElButton
-                key={city.code}
-                size="small"
-                type={selected?.cityCode === city.code ? 'primary' : 'default'}
-                onClick={() => toggle(city)}>
-                {shortRegionName(city.name)}
-              </ElButton>
-            ))}
-          </ElSpace>
-          <div class={styles.search}>
-            <ElInput
-              modelValue={keyword.value}
-              clearable
-              placeholder="请输入城市名或区县名"
-              onUpdate:modelValue={(value: string) => (keyword.value = value)}
-              onKeydown={(event: KeyboardEvent | Event) => {
-                if (event instanceof KeyboardEvent && event.key === 'Enter' && !event.isComposing) {
-                  chooseFirst();
-                }
-              }}
-            />
-            <ElButton type="primary" icon={Search} onClick={chooseFirst}>
-              搜索
-            </ElButton>
-          </div>
-          {results.value.length > 0 && (
-            <ul class={styles.results}>
-              {results.value.map(region => (
-                <li key={region.code}>
-                  <ElButton link onClick={() => choose(region)}>
-                    {regionPath(region)}
-                  </ElButton>
-                </li>
-              ))}
-            </ul>
-          )}
-          {selected && (
-            <ElSpace wrap size={6}>
-              {districtsOf(selected.cityCode).map(district => (
-                <ElButton
-                  key={district.code}
-                  size="small"
-                  type={selected.code === district.code ? 'primary' : 'default'}
-                  onClick={() => toggle(district)}>
-                  {district.name}
-                </ElButton>
-              ))}
-            </ElSpace>
-          )}
-          {renderStatus()}
+          <ElInput
+            modelValue={keyword.value}
+            prefixIcon={Search}
+            clearable
+            placeholder="搜索市、区县"
+            aria-label="搜索市、区县"
+            onUpdate:modelValue={(value: string) => (keyword.value = value)}
+            onKeydown={(event: KeyboardEvent | Event) => {
+              if (event instanceof KeyboardEvent && event.key === 'Enter' && !event.isComposing) {
+                chooseFirst();
+              }
+            }}
+          />
+          {keyword.value.trim()
+            ? renderResults()
+            : [
+                renderTrail(),
+                <div class={styles.groupLabel}>设区市</div>,
+                renderChips(JIANGSU_CITIES, selected?.cityCode, true),
+                city && [
+                  <div class={styles.groupLabel}>{city.name}的区县</div>,
+                  renderChips(districtsOf(city.code), selected?.code, false)
+                ]
+              ]}
         </div>
       );
     };

@@ -18,7 +18,7 @@ const PLACEHOLDERS: Readonly<Record<CoordinateFormat, Readonly<Record<Axis, stri
 };
 
 /**
- * 坐标定位的内容（联调用的界面，5D 再设计；ADR 0037 第 6 条）：度分秒、小数输入，拾取，定位。
+ * 坐标定位的内容（ADR 0037 第 6 条，设计稿 5D.4）：度分秒、小数输入，拾取，定位。
  * 输入的逻辑在 useCoordinateInput，这里只显示和调用；放在功能面板的 Tab 里，标题、关闭和登记由外壳负责，
  * 隐藏和关闭时都取消拾取（ADR 0053 第 4 节）
  */
@@ -61,7 +61,9 @@ export const CoordinateLocatePanel = defineComponent({
       const line = input.messages.value[axis];
       return (
         <div class={styles.field}>
-          <span class={styles.label}>{label}</span>
+          <span class={styles.label} aria-hidden="true">
+            {label}
+          </span>
           <ElInput
             modelValue={input.fields.value[axis].text}
             placeholder={PLACEHOLDERS[format.value][axis]}
@@ -82,7 +84,7 @@ export const CoordinateLocatePanel = defineComponent({
 
     return () => (
       <div class={styles.panel} data-coordinate-locate-panel>
-        <ElRadioGroup size="small" modelValue={format.value} onUpdate:modelValue={changeFormat}>
+        <ElRadioGroup size="small" aria-label="坐标的写法" modelValue={format.value} onUpdate:modelValue={changeFormat}>
           {FORMATS.map(option => (
             <ElRadioButton key={option.value} value={option.value}>
               {option.label}
@@ -94,10 +96,12 @@ export const CoordinateLocatePanel = defineComponent({
         <div class={styles.actions}>
           <ElButton
             type={picking.value ? 'primary' : 'default'}
+            plain={picking.value}
             icon={Aim}
+            aria-label="拾取"
             aria-pressed={picking.value}
             onClick={togglePick}>
-            拾取
+            {picking.value ? '拾取中' : '拾取'}
           </ElButton>
           <ElButton type="primary" icon={Position} onClick={input.submit}>
             定位

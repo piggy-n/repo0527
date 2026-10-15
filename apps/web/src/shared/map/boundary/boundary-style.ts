@@ -36,23 +36,35 @@ export const INITIAL_BOUNDARY_STATE: BoundaryState = {
 };
 
 interface LevelStyle {
-  readonly width: ExpressionSpecification;
+  /** 线宽的几档：[级别, 线宽]，地图上按级别线性插值，面板的线型示意取中间一档 */
+  readonly widths: readonly (readonly [zoom: number, width: number])[];
   /** 各级原有的不透明度，状态里的透明度乘在它上面 */
   readonly opacity: number;
+  /** 虚线的线段和间隔，单位是线宽 */
   readonly dasharray?: readonly number[];
 }
 
 // 沿用旧项目的样式：颜色相同，靠线宽、不透明度和虚线区分级别；地图样式里的颜色是数据，不走 CSS 令牌
 const COLOR = '#597EF7';
 const LEVEL_STYLES: Record<BoundaryLevel, LevelStyle> = {
-  province: { width: ['interpolate', ['linear'], ['zoom'], 5, 1.8, 9, 2.4, 13, 3.2], opacity: 0.94 },
-  city: { width: ['interpolate', ['linear'], ['zoom'], 5, 1.1, 9, 1.6, 13, 2.3], opacity: 0.78 },
-  county: {
-    width: ['interpolate', ['linear'], ['zoom'], 8, 0.6, 11, 0.95, 14, 1.25],
-    opacity: 0.62,
-    dasharray: [2.2, 1.6]
-  }
+  province: { widths: [[5, 1.8], [9, 2.4], [13, 3.2]], opacity: 0.94 },
+  city: { widths: [[5, 1.1], [9, 1.6], [13, 2.3]], opacity: 0.78 },
+  county: { widths: [[8, 0.6], [11, 0.95], [14, 1.25]], opacity: 0.62, dasharray: [2.2, 1.6] }
 };
+
+/** 面板里一级边界的线型示意（设计稿 5D.4）：和地图上同色、同样的不透明度和虚线，线宽取中间一档 */
+export interface BoundarySwatch {
+  readonly color: string;
+  readonly width: number;
+  readonly opacity: number;
+  readonly dasharray?: readonly number[];
+}
+
+export function boundarySwatch(level: BoundaryLevel): BoundarySwatch {
+  const { widths, opacity, dasharray } = LEVEL_STYLES[level];
+  const [, width] = widths[Math.floor(widths.length / 2)];
+  return { color: COLOR, width, opacity, ...(dasharray ? { dasharray } : {}) };
+}
 
 // 从下到上：省界压在市界、县界上面
 const BOTTOM_UP: readonly BoundaryLevel[] = ['county', 'city', 'province'];
@@ -67,7 +79,8 @@ const SOURCES: Record<BoundaryLevel, GeoJSONSourceSpecification> = {
 const layerId = (level: BoundaryLevel) => `boundaries-${level}`;
 
 function lineLayer(level: BoundaryLevel, opacity: number): LineLayerSpecification {
-  const { width, opacity: base, dasharray } = LEVEL_STYLES[level];
+  const { widths, opacity: base, dasharray } = LEVEL_STYLES[level];
+  const width: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], ...widths.flat()];
   return {
     id: layerId(level),
     type: 'line',

@@ -1,11 +1,27 @@
-import { ElCheckbox, ElCheckboxGroup, ElSlider } from 'element-plus';
-import { defineComponent, type PropType } from 'vue';
+import { ElCheckbox, ElCheckboxGroup } from 'element-plus';
+import { type CSSProperties, defineComponent, type PropType } from 'vue';
+import { OpacitySlider } from '../OpacitySlider';
+import { type BoundarySwatch, boundarySwatch } from './boundary-style';
 import type { Boundaries } from './useBoundaries';
 import styles from './BoundaryPanel.module.scss';
 
+// 一段线：颜色是地图样式的数据，用内联样式；虚线的线段和间隔按线宽换算（同 MapLibre 的 line-dasharray）
+function swatchStyle({ color, width, opacity, dasharray }: BoundarySwatch): CSSProperties {
+  if (!dasharray) {
+    return { height: `${width}px`, opacity, backgroundColor: color };
+  }
+  const [dash, gap] = dasharray;
+  return {
+    height: `${width}px`,
+    opacity,
+    backgroundImage: `linear-gradient(90deg, ${color} ${dash * width}px, transparent 0)`,
+    backgroundSize: `${(dash + gap) * width}px 100%`
+  };
+}
+
 /**
- * 行政区边界的面板（联调用的界面，5D 再设计）：只显示 useBoundaries 的状态并调用它的操作。
- * 放在显示面板的"底图"里，外观和登记由外壳负责（ADR 0053 第 4 节）
+ * 行政区边界（ADR 0033，设计稿 5D.4）：三级横排，勾选框后面是这一级在地图上的线型；勾选了才有透明度。
+ * 只显示 useBoundaries 的状态并调用它的操作；放在显示面板的"底图"里，外观和登记由外壳负责（ADR 0053 第 4 节）
  */
 export const BoundaryPanel = defineComponent({
   name: 'BoundaryPanel',
@@ -20,36 +36,27 @@ export const BoundaryPanel = defineComponent({
       }
     };
 
-    // 拖动过程中实时生效；滑块按百分比显示，状态里是 0～1
-    const changeOpacity = (value: number | number[]) => {
-      if (typeof value === 'number') {
-        props.boundaries.setOpacity(value / 100);
-      }
-    };
-
     return () => {
       const { options, visible, opacity } = props.boundaries;
       const checked = options.filter(option => visible.value[option.id]).map(option => option.id);
       return (
         <div class={styles.panel}>
-          <ElCheckboxGroup modelValue={checked} onUpdate:modelValue={changeVisible}>
+          <ElCheckboxGroup
+            class={styles.levels}
+            aria-label="行政区边界"
+            modelValue={checked}
+            onUpdate:modelValue={changeVisible}>
             {options.map(option => (
               <ElCheckbox key={option.id} value={option.id}>
-                {option.label}
+                <span class={styles.option}>
+                  <span class={styles.swatch} style={swatchStyle(boundarySwatch(option.id))} aria-hidden="true" />
+                  {option.label}
+                </span>
               </ElCheckbox>
             ))}
           </ElCheckboxGroup>
           {checked.length > 0 && (
-            <div class={styles.opacity}>
-              <span class={styles.label}>透明度</span>
-              <ElSlider
-                class={styles.slider}
-                size="small"
-                modelValue={Math.round(opacity.value * 100)}
-                formatTooltip={(value: number) => `${value}%`}
-                onUpdate:modelValue={changeOpacity}
-              />
-            </div>
+            <OpacitySlider value={opacity.value} label="行政区边界的透明度" onChange={props.boundaries.setOpacity} />
           )}
         </div>
       );
