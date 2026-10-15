@@ -2,6 +2,7 @@ import { mount, type VueWrapper } from '@vue/test-utils';
 import { ElColorPicker, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick, shallowRef } from 'vue';
+import type { SymbolTarget } from '../resource-symbols';
 import type { ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
 import { type ResourceSymbols, useResourceSymbols } from '../composables/useResourceSymbols';
@@ -38,6 +39,34 @@ function mountEditor(code: string, item?: string) {
     throw new Error('页面没有创建符号的拥有者');
   }
   return { wrapper, symbols: owner };
+}
+
+// 页面按资源设 key 列出编辑器，每次渲染给出新的目标对象（同图例）；同一资源换取值时编辑器复用，renders 变化时页面重新渲染
+function mountEditors(initial: readonly SymbolTarget[]) {
+  let owner: ResourceSymbols | undefined;
+  const targets = shallowRef(initial);
+  const renders = shallowRef(0);
+  const Page = defineComponent(() => {
+    const symbols = useResourceSymbols({ catalog: shallowRef(CATALOG) });
+    owner = symbols;
+    return () => (
+      <div data-renders={renders.value}>
+        {targets.value.map(({ code, item }) => (
+          <SymbolEditor
+            key={code}
+            symbols={symbols}
+            target={item === undefined ? { code } : { code, item }}
+            name={item ?? CATALOG.resources.get(code)?.name ?? code}
+          />
+        ))}
+      </div>
+    );
+  });
+  const wrapper = mount(Page);
+  if (!owner) {
+    throw new Error('页面没有创建符号的拥有者');
+  }
+  return { wrapper, symbols: owner, targets, renders };
 }
 
 // jsdom 里点 label 不会切换单选按钮，直接设置里面的 input（同底图面板的测试）
@@ -245,5 +274,46 @@ describe('SymbolEditor', () => {
     await wrapper.findAll('button').find(item => item.text() === '恢复默认')?.trigger('click');
     expect(symbols.overrides.value.get('csxhjctb_hydl')).toStrictEqual({ uniform: { width: 'S' } });
     expect(mountEditor('csxhjctb_hydl', '湖泊').wrapper.find('[data-symbol-editor]').exists()).toBe(false);
+  });
+});
+
+describe('SymbolEditor：卸载和换目标时的预览', () => {
+  it('收起编辑器时丢弃这个目标没确认的预览；之后别的编辑器开始的预览不受它卸载的影响', async () => {
+    const { wrapper, symbols, targets, renders } = mountEditors([{ code: 'szy_kt' }, { code: 'bgdc_cjdcqjx' }]);
+    picker(wrapper, '坑塘的填充色').vm.$emit('activeChange', 'rgba(0, 0, 255, 0.5)');
+    // 页面重新渲染给出新的目标对象，目标没变，预览保留
+    renders.value += 1;
+    await nextTick();
+    expect(symbols.preview.value).toMatchObject({ code: 'szy_kt', field: 'fillColor' });
+
+    targets.value = [{ code: 'bgdc_cjdcqjx' }];
+    await nextTick();
+    expect(symbols.preview.value).toBeNull();
+
+    // 坑塘拖动到一半，别的编辑器开始了新的预览：坑塘卸载时不动它
+    targets.value = [{ code: 'szy_kt' }, { code: 'bgdc_cjdcqjx' }];
+    await nextTick();
+    picker(wrapper, '坑塘的填充色').vm.$emit('activeChange', 'rgba(0, 0, 255, 0.5)');
+    picker(wrapper, '村级调查区界线的颜色').vm.$emit('activeChange', 'rgba(255, 0, 0, 1)');
+    targets.value = [{ code: 'bgdc_cjdcqjx' }];
+    await nextTick();
+    expect(symbols.preview.value).toStrictEqual({ code: 'bgdc_cjdcqjx', field: 'color', color: 'rgba(255, 0, 0, 1)' });
+    expect(symbols.overrides.value.size).toBe(0);
+  });
+
+  it('编辑器换了目标时丢弃原目标的预览；预览属于别的资源时不动', async () => {
+    const { wrapper, symbols, targets } = mountEditors([{ code: 'csxhjctb_hydl', item: '水渠' }]);
+    picker(wrapper, '水渠的颜色').vm.$emit('activeChange', 'rgba(0, 0, 0, 1)');
+    expect(symbols.preview.value).toMatchObject({ item: '水渠' });
+
+    // 同一个编辑器改编辑河流
+    targets.value = [{ code: 'csxhjctb_hydl', item: '河流' }];
+    await nextTick();
+    expect(symbols.preview.value).toBeNull();
+
+    symbols.previewColor({ code: 'szy_kt' }, 'fillColor', 'rgba(0, 0, 255, 0.5)');
+    targets.value = [{ code: 'csxhjctb_hydl', item: '水渠' }];
+    await nextTick();
+    expect(symbols.preview.value).toMatchObject({ code: 'szy_kt' });
   });
 });

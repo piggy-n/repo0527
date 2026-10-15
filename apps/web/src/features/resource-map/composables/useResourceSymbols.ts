@@ -57,8 +57,8 @@ export interface ResourceSymbols {
   readonly setSymbol: (target: SymbolTarget, patch: SymbolOverride) => void;
   /** 拖动取色时的预览，不保存；和确认的颜色相同时清掉这个字段的预览；颜色解析不了、这个几何没有该字段时抛错 */
   readonly previewColor: (target: SymbolTarget, field: ColorField, color: string) => void;
-  /** 丢弃预览（关闭取色器、取消） */
-  readonly clearPreview: () => void;
+  /** 丢弃这个目标的预览（编辑器卸载、换了目标）；预览已经属于别的目标时不动 */
+  readonly clearPreview: (target: SymbolTarget) => void;
   /** 切换按属性配色的资源的样式方式，两种方式的覆盖都保留；不是按属性配色的资源时抛错 */
   readonly setMode: (code: string, mode: SymbolMode) => void;
   /** 恢复一个目标的默认符号 */
@@ -250,8 +250,8 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
     },
     setSymbol,
     previewColor,
-    clearPreview: () => {
-      preview.value = null;
+    clearPreview: target => {
+      clearPreviewIf(previewing => isTarget(previewing, target));
     },
     setMode,
     resetSymbol: target => {

@@ -177,8 +177,23 @@ describe('useResourceSymbols', () => {
 
     symbols.previewColor({ code: 'bgdc_cjdcqjx' }, 'color', '#FF0000');
     expect(symbols.overrideOf('bgdc_cjdcqjx')).toStrictEqual({ uniform: { color: 'rgba(255, 0, 0, 1)' } });
-    symbols.clearPreview();
+    symbols.clearPreview({ code: 'bgdc_cjdcqjx' });
     expect(symbols.overrideOf('bgdc_cjdcqjx')).toStrictEqual({ uniform: { color: 'rgba(0, 0, 255, 1)' } });
+  });
+
+  it('丢弃预览只丢弃这个目标的：预览属于别的资源、同一资源的别的取值时不动', () => {
+    using ctx = setup();
+    const { symbols } = ctx;
+    const canal = { code: 'csxhjctb_hydl', item: '水渠' };
+    symbols.previewColor(canal, 'color', '#FF0000');
+
+    symbols.clearPreview({ code: 'szy_kt' });
+    symbols.clearPreview({ code: 'csxhjctb_hydl' });
+    symbols.clearPreview({ code: 'csxhjctb_hydl', item: '河流' });
+    expect(symbols.preview.value).toStrictEqual({ ...canal, field: 'color', color: 'rgba(255, 0, 0, 1)' });
+
+    symbols.clearPreview({ code: 'csxhjctb_hydl', item: '水渠' });
+    expect(symbols.preview.value).toBeNull();
   });
 
   it('取色器报回确认的颜色（取消、打开时）：清掉这个字段的预览，不设新的预览；别的字段的预览不动', () => {

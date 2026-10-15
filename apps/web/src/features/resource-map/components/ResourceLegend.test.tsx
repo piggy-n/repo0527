@@ -182,7 +182,7 @@ describe('ResourceLegend', () => {
     await nextTick();
     expect(swatchStyle()).toContain('background-color: rgba(0, 128, 0, 0.8)');
 
-    symbols.clearPreview();
+    symbols.clearPreview({ code: 'szy_kt' });
     await nextTick();
     expect(swatchStyle()).toContain('background-color: rgba(0, 0, 255, 0.5)');
   });

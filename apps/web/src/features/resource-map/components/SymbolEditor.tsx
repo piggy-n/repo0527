@@ -1,5 +1,5 @@
 import { ElButton, ElColorPicker, ElInput, ElOption, ElRadioButton, ElRadioGroup, ElSelect } from 'element-plus';
-import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
+import { computed, defineComponent, onUnmounted, type PropType, ref, type VNode, watch } from 'vue';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { swatchOf } from '../legend';
 import { RESOURCE_PALETTE } from '../palette';
@@ -63,6 +63,18 @@ export const SymbolEditor = defineComponent({
   setup(props) {
     const symbol = computed(() => props.symbols.symbolOf(props.target));
     const set = (patch: SymbolOverride) => props.symbols.setSymbol(props.target, patch);
+
+    // 取色器随编辑器销毁或换了目标时不会再报回确认的颜色：丢弃这个目标没确认的预览，别的编辑器的新预览不动。
+    // 上层每次渲染可能给出新的目标对象，按资源和取值比较；卸载时等取色器先卸载完再丢弃
+    watch(
+      () => props.target,
+      (target, previous) => {
+        if (target.code !== previous.code || target.item !== previous.item) {
+          props.symbols.clearPreview(previous);
+        }
+      }
+    );
+    onUnmounted(() => props.symbols.clearPreview(props.target));
 
     // 点的半径、线的线宽、面的描边宽度
     const sizeField = computed(() => {
