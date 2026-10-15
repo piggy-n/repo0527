@@ -1,6 +1,7 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
+import { bbox } from '@turf/bbox';
 import { mount } from '@vue/test-utils';
-import type { Point } from 'geojson';
+import type { Point, Polygon, Position } from 'geojson';
 import { HttpResponse, type JsonBodyType, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import type {
@@ -15,6 +16,7 @@ import type {
 import type { CameraControl, CameraOperation, MapContext } from '@yzt/map-vue';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, shallowRef } from 'vue';
+import type { RegionScope } from '@/shared/map/region/region-scope';
 import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
 import type { ResourceTreeCategory, ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
@@ -170,8 +172,15 @@ function fakeCamera(zoom: number) {
   return { camera, fitBounds, flyTo, beginCameraOperation, runCameraOperation, interrupt: () => current.abort() };
 }
 
-function setup(zoom = 15, state = STATE, invalid: ReadonlyMap<string, readonly string[]> = new Map()) {
+function setup(
+  zoom = 15,
+  state = STATE,
+  invalid: ReadonlyMap<string, readonly string[]> = new Map(),
+  initialScope: RegionScope | null = null
+) {
   const fake = fakeCamera(zoom);
+  // 区划裁剪的范围，可以由用例中途改变
+  const scope = shallowRef(initialScope);
   const select = vi.fn<MapContext['select']>();
   const map = { useCamera: () => fake.camera, select, ...fake };
   // 校验结果可以由用例中途改变
@@ -180,7 +189,7 @@ function setup(zoom = 15, state = STATE, invalid: ReadonlyMap<string, readonly s
   let owner: FeaturePick | undefined;
   const Host = defineComponent({
     setup() {
-      owner = useFeaturePick(map, resources);
+      owner = useFeaturePick(map, resources, { scope: () => scope.value });
       return () => null;
     }
   });
@@ -192,7 +201,7 @@ function setup(zoom = 15, state = STATE, invalid: ReadonlyMap<string, readonly s
   const pick = owner.tools[FEATURE_PICK_TOOL];
   const send = (event: MapInputEvent, features: readonly RenderedFeature[] = [], kind: ViewKind = '2d') =>
     pick.handleInput?.(event, toolView(features, kind));
-  return { owner, pick, send, select, resources, ...fake };
+  return { owner, pick, send, select, resources, scope, ...fake };
 }
 
 type Owner = ReturnType<typeof setup>['owner'];
@@ -926,5 +935,116 @@ describe('hasMorePages', () => {
     expect(hasMorePages(null)).toBe(false);
     expect(hasMorePages({ geometry, loaded: 1, total: 31 })).toBe(true);
     expect(hasMorePages({ geometry, loaded: 1, total: 30 })).toBe(false);
+  });
+});
+
+// 经纬度的矩形
+function rect(west: number, south: number, east: number, north: number): Polygon {
+  const ring: Position[] = [
+    [west, south],
+    [east, south],
+    [east, north],
+    [west, north],
+    [west, south]
+  ];
+  return { type: 'Polygon', coordinates: [ring] };
+}
+
+// 带几何的渲染要素：区划裁剪时按几何判断在不在范围里
+function shapedAt(sourceId: string, id: number, geometry: Polygon): RenderedFeature {
+  return { ...rendered(sourceId, id), geometry };
+}
+
+// 区划盖住单击位置 (118.1, 32.9) 和框（118.1～118.2、32.84～32.9）的左半边
+const SCOPE: RegionScope = rect(118, 32.8, 118.15, 33);
+
+// 同样的区划挖了 40 个小洞，和框求交后坐标太多，简化也压不下来
+const HOLED: RegionScope = {
+  type: 'Polygon',
+  coordinates: [
+    SCOPE.type === 'Polygon' ? (SCOPE.coordinates[0] ?? []) : [],
+    ...Array.from({ length: 40 }, (_, index) => {
+      const [x, y] = [118.102 + (index % 8) * 0.005, 32.842 + Math.floor(index / 8) * 0.01];
+      return (rect(x, y, x + 0.001, y + 0.001).coordinates[0] ?? []).toReversed();
+    })
+  ]
+};
+
+describe('useFeaturePick：区划裁剪（ADR 0051）', () => {
+  it('单击在区划外（遮罩上）时关闭现有的结果、不识别；区划里照常，区划外的渲染要素不算', () => {
+    const { owner, send } = setup(15, STATE, new Map(), SCOPE);
+    send(click(100, 100), [
+      shapedAt(DLTB, 1, rect(118.09, 32.89, 118.11, 32.91)),
+      shapedAt(DLTB, 2, rect(118.09, 32.89, 118.11, 32.91)),
+      shapedAt(DLTB, 3, rect(118.2, 32.89, 118.3, 32.91))
+    ]);
+    expect(candidatesOf(owner).map(({ guid: id }) => id)).toStrictEqual([guid(1), guid(2)]);
+
+    send(click(300, 100), [shapedAt(DLTB, 3, rect(118.2, 32.89, 118.4, 32.91))]);
+    expect(kindOf(owner)).toBe('idle');
+  });
+
+  it('框整个在区划外时关闭现有的结果', () => {
+    const { owner, send } = setup(15, STATE, new Map(), rect(118.5, 32.8, 118.6, 33));
+    send(click(550, 100), [
+      shapedAt(DLTB, 1, rect(118.54, 32.89, 118.56, 32.91)),
+      shapedAt(DLTB, 2, rect(118.54, 32.89, 118.56, 32.91))
+    ]);
+    expect(kindOf(owner)).toBe('candidates');
+
+    dragBox(send, [shapedAt(DLTB, 3, rect(118.12, 32.85, 118.13, 32.86))]);
+    expect(kindOf(owner)).toBe('idle');
+  });
+
+  it('查后端时用框和区划求交后的范围', async () => {
+    const requests = mockIdentify(layerCode =>
+      layerCode === 'bgdc_dltb_2022' ? page(1, [{ guid: guid(1) }]) : page(0, [])
+    );
+    mockDetail();
+    const { owner, send } = setup(12, STATE, new Map(), SCOPE);
+
+    dragBox(send);
+
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('detail'));
+    const [first] = requests;
+    expect(first?.geometry && bbox(first.geometry as Polygon)).toStrictEqual([118.1, 32.84, 118.15, 32.9]);
+  });
+
+  it('求交范围整理不出来时提示范围太复杂，不请求后端；这个资源取消勾选就清除', async () => {
+    const requests = mockIdentify(() => page(0, []));
+    const { owner, send, resources } = setup(12, STATE, new Map(), HOLED);
+
+    dragBox(send);
+
+    expect(owner.state.value).toMatchObject({ kind: 'too-complex', target: { sourceId: CZCDYD } });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(requests).toStrictEqual([]);
+    resources.state.value = withDisplay(resources.state.value, 'bgdc_czcdyd', { checked: false });
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+  });
+
+  it('换区划、回到全省、边界加载完成时关闭结果', async () => {
+    const twoParcels = [
+      shapedAt(DLTB, 1, rect(118.09, 32.89, 118.11, 32.91)),
+      shapedAt(DLTB, 2, rect(118.09, 32.89, 118.11, 32.91))
+    ];
+    const { owner, send, scope } = setup(15);
+    send(click(100, 100), twoParcels);
+    expect(kindOf(owner)).toBe('candidates');
+
+    scope.value = SCOPE;
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+
+    send(click(100, 100), twoParcels);
+    scope.value = rect(117, 32, 119, 34);
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
+
+    send(click(100, 100), twoParcels);
+    scope.value = null;
+    await nextTick();
+    expect(kindOf(owner)).toBe('idle');
   });
 });

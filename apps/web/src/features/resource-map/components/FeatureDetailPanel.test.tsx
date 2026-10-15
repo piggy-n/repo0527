@@ -209,6 +209,13 @@ describe('FeatureDetailPanel', () => {
     expect(wrapper.text()).toContain('地类图斑范围内约 5321 个要素，请缩小范围');
   });
 
+  it('区划边界太复杂、查询范围整理不出来时提示缩小范围', () => {
+    const { pick } = fakePick({ kind: 'too-complex', target: DLTB });
+    const wrapper = mountPanel(pick);
+
+    expect(wrapper.text()).toContain('地类图斑：这里的区划边界太复杂，请缩小范围');
+  });
+
   it('没有结果、识别失败时显示原因，识别失败可以重试', async () => {
     const { pick, state } = fakePick({ kind: 'empty' });
     const wrapper = mountPanel(pick);

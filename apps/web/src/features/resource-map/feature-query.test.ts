@@ -1,5 +1,6 @@
 // @vitest-environment node
-import type { Geometry, LineString, Point } from 'geojson';
+import { bbox } from '@turf/bbox';
+import type { Geometry, LineString, Point, Polygon, Position } from 'geojson';
 import type {
   LngLat,
   PickResult,
@@ -10,6 +11,7 @@ import type {
   ViewKind
 } from '@yzt/map-core';
 import { describe, expect, it } from 'vitest';
+import type { RegionScope } from '@/shared/map/region/region-scope';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import {
@@ -21,6 +23,7 @@ import {
   identifyGeometry,
   identifyStep,
   pickResources,
+  pixelSizeAt,
   planBox,
   planIdentify,
   type PickCandidate,
@@ -32,6 +35,7 @@ import {
   serverCandidates,
   weightedEstimate
 } from './feature-query';
+import { isValidPolygonal, QUERY_VERTEX_LIMIT, vertexCount } from './query-geometry';
 import type { ResourceDisplay, ResourceLayersState } from './resource-layers';
 
 function layer(code: string, geoType: ResourceTreeLayer['geoType'], ...yearList: [number, ...number[]]) {
@@ -472,8 +476,8 @@ describe('planBox', () => {
     const order = task?.kind === 'rendered' ? task.candidates.map(({ guid: id }) => id) : [];
     expect(order).toStrictEqual([guid('f'), guid('c')]);
     expect(queries).toStrictEqual([
-      [BOX, { sources: [LCTL.sourceId] }],
-      [BOX, { sources: [DLTB.sourceId] }]
+      [BOX, { sources: [LCTL.sourceId], withGeometry: false }],
+      [BOX, { sources: [DLTB.sourceId], withGeometry: false }]
     ]);
   });
 
@@ -684,5 +688,180 @@ describe('featureRows', () => {
       'sfjz',
       'extra'
     ]);
+  });
+});
+
+// 经纬度的矩形
+function rect(west: number, south: number, east: number, north: number): Polygon {
+  const ring: Position[] = [
+    [west, south],
+    [east, south],
+    [east, north],
+    [west, north],
+    [west, south]
+  ];
+  return { type: 'Polygon', coordinates: [ring] };
+}
+
+// 拾取和投影互逆：经纬度是屏幕坐标的百分之一；渲染要素按数据源返回，没要几何时去掉几何
+function scopedView(features: readonly RenderedFeature[], kind: ViewKind = '2d') {
+  const queries: [ScreenPoint | ScreenBox, RenderedQueryOptions][] = [];
+  const view = {
+    kind,
+    pick: ({ x, y }: ScreenPoint): PickResult => ({ kind: 'hit', surface: 'map', lngLat: [x / 100, y / 100] }),
+    project: ([lng, lat]: LngLat): ScreenPoint => ({ x: lng * 100, y: lat * 100 }),
+    queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions): RenderedFeature[] => {
+      queries.push([area, options]);
+      return features
+        .filter(({ sourceId }) => options.sources.includes(sourceId))
+        .map(({ sourceId, layerId, properties, geometry }) =>
+          options.withGeometry && geometry
+            ? { sourceId, layerId, properties, geometry }
+            : { sourceId, layerId, properties }
+        );
+    }
+  };
+  return { view, queries };
+}
+
+function shaped(target: PickResource, id: string, geometry: Geometry): RenderedFeature {
+  return { sourceId: target.sourceId, layerId: target.sourceId, properties: { guid: guid(id) }, geometry };
+}
+
+const vertical = (lng: number): LineString => line([lng, 0.4], [lng, 0.6]);
+
+// 区划：经纬度 0～1 的正方形，屏幕上是 0～100 像素
+const SCOPE: RegionScope = rect(0, 0, 1, 1);
+
+// 区划里挖了 40 个小洞：和它求交的范围坐标太多，简化也压不下来
+const HOLED: RegionScope = {
+  type: 'Polygon',
+  coordinates: [
+    rect(0, 0, 1, 1).coordinates[0] ?? [],
+    ...Array.from({ length: 40 }, (_, index) => {
+      const [x, y] = [0.905 + (index % 8) * 0.01, 0.42 + Math.floor(index / 8) * 0.02];
+      return (rect(x, y, x + 0.002, y + 0.002).coordinates[0] ?? []).toReversed();
+    })
+  ]
+};
+
+describe('区划范围（ADR 0051 第 3、4 节）', () => {
+  it('一个像素对应的经纬度距离：横竖取较小的；拾取不到时为 null', () => {
+    const { view } = scopedView([]);
+    expect(pixelSizeAt({ x: 50, y: 50 }, view.pick)).toBeCloseTo(0.01, 10);
+    expect(pixelSizeAt({ x: 50, y: 50 }, picker(({ y }) => y === 51).pick)).toBeNull();
+  });
+
+  it('单击在区划外（遮罩上）时为 null，不查询；区划里的面也取几何，和区划不相交的去掉', () => {
+    const outside = scopedView([shaped(DLTB, 'a', rect(1.2, 0.2, 1.4, 0.4))]);
+    expect(planIdentify([DLTB], { x: 150, y: 50 }, 15, outside.view, SCOPE)).toBeNull();
+    expect(outside.queries).toStrictEqual([]);
+
+    const { view, queries } = scopedView([
+      shaped(DLTB, 'a', rect(0.4, 0.4, 0.6, 0.6)),
+      shaped(DLTB, 'b', rect(1.2, 0.2, 1.4, 0.4))
+    ]);
+    const [task] = planIdentify([DLTB], { x: 50, y: 50 }, 15, view, SCOPE) ?? [];
+    expect(task?.kind === 'rendered' && task.candidates.map(({ guid: id }) => id)).toStrictEqual([guid('a')]);
+    expect(queries[0]?.[1]).toStrictEqual({ sources: [DLTB.sourceId], withGeometry: true });
+  });
+
+  it('线的容差框和区划求交：同一个 guid 有一段在里面就保留，距离只按里面的算；都在外面的去掉', () => {
+    const { view } = scopedView([
+      shaped(LCTL, 'a', vertical(0.94)),
+      shaped(LCTL, 'a', vertical(1.005)),
+      shaped(LCTL, 'b', vertical(1.04))
+    ]);
+
+    const [task] = planIdentify([LCTL], { x: 98, y: 50 }, 15, view, SCOPE) ?? [];
+
+    expect(task?.kind === 'rendered' && task.candidates.map(({ guid: id, distance }) => [id, distance])).toStrictEqual([
+      [guid('a'), 4]
+    ]);
+  });
+
+  it('查后端时：线用容差框和区划的交集（整理过的几何），面仍用点击位置', () => {
+    const { view } = scopedView([]);
+
+    const [lineTask, parcelTask] = planIdentify([HYDL, DLTB], { x: 98, y: 50 }, 12, view, SCOPE) ?? [];
+
+    if (lineTask?.kind !== 'server' || lineTask.geometry.type === 'Point') {
+      throw new Error('线应当用求交范围查后端');
+    }
+    expect(bbox(lineTask.geometry).map(value => Number(value.toFixed(6)))).toStrictEqual([0.9, 0.42, 1, 0.58]);
+    expect(isValidPolygonal(lineTask.geometry)).toBe(true);
+    expect(parcelTask).toStrictEqual({
+      kind: 'server',
+      target: DLTB,
+      geometry: { type: 'Point', coordinates: [0.98, 0.5] }
+    });
+  });
+
+  it('求交范围整理不成能发给后端的几何时是"范围太复杂"', () => {
+    const { view } = scopedView([]);
+
+    expect(planIdentify([HYDL], { x: 98, y: 50 }, 12, view, HOLED)).toStrictEqual([
+      { kind: 'too-complex', target: HYDL }
+    ]);
+  });
+
+  it('框整个在区划外时为 null，不查询', () => {
+    const { view, queries } = scopedView([shaped(DLTB, 'a', rect(1.2, 0.2, 1.4, 0.4))]);
+
+    expect(planBox([DLTB], { from: { x: 120, y: 0 }, to: { x: 200, y: 100 } }, 15, view, SCOPE)).toBeNull();
+    expect(queries).toStrictEqual([]);
+  });
+
+  it('框选的渲染要素先按求交范围过滤再去重、计数：跨过边界的留下，同一个 guid 只要有一段在里面', () => {
+    const { view, queries } = scopedView([
+      shaped(DLTB, 'a', rect(0.6, 0.2, 0.7, 0.3)),
+      shaped(DLTB, 'b', rect(1.2, 0.2, 1.3, 0.3)),
+      shaped(DLTB, 'c', rect(0.9, 0.5, 1.1, 0.6)),
+      shaped(DLTB, 'd', rect(1.1, 0.7, 1.2, 0.8)),
+      shaped(DLTB, 'd', rect(0.8, 0.7, 0.9, 0.8)),
+      // 判断不了在不在范围里的不算
+      rendered(DLTB.sourceId, { guid: guid('e') })
+    ]);
+    const box = { from: { x: 50, y: 0 }, to: { x: 150, y: 100 } };
+
+    const [task] = planBox([DLTB], box, 15, view, SCOPE) ?? [];
+
+    expect(task?.kind === 'rendered' && task.candidates.map(({ guid: id }) => id)).toStrictEqual([
+      guid('a'),
+      guid('c'),
+      guid('d')
+    ]);
+    expect(queries).toStrictEqual([[box, { sources: [DLTB.sourceId], withGeometry: true }]]);
+  });
+
+  it('框里只有区划外的渲染要素时这个资源没有候选，看下面的资源', () => {
+    const { view } = scopedView([shaped(DLTB, 'b', rect(1.2, 0.2, 1.3, 0.3)), shaped(LCTL, 'a', vertical(0.7))]);
+
+    const tasks = planBox([DLTB, LCTL], { from: { x: 50, y: 0 }, to: { x: 150, y: 100 } }, 15, view, SCOPE);
+
+    expect(tasks && kindsOf(tasks)).toStrictEqual([['csxhjctb_lctl', 'rendered']]);
+  });
+
+  it('查后端时估数只数求交范围在屏幕上的外包框里的，后端用整理过的求交范围', () => {
+    const { view, queries } = scopedView([]);
+
+    const tasks = planBox([DLTB], { from: { x: 50, y: 0 }, to: { x: 150, y: 100 } }, 12, view, SCOPE);
+
+    expect(queries).toStrictEqual([[{ from: { x: 50, y: 0 }, to: { x: 100, y: 100 } }, { sources: [DLTB.sourceId] }]]);
+    const [task] = tasks ?? [];
+    if (task?.kind !== 'server' || task.geometry.type === 'Point') {
+      throw new Error('应当用求交范围查后端');
+    }
+    expect(bbox(task.geometry)).toStrictEqual([0.5, 0, 1, 1]);
+    expect(vertexCount(task.geometry)).toBeLessThanOrEqual(QUERY_VERTEX_LIMIT);
+  });
+
+  it('范围太复杂时停在这个资源，不再看下面的资源', () => {
+    const { view, queries } = scopedView([shaped(LCTL, 'a', vertical(0.7))]);
+
+    const tasks = planBox([DLTB, LCTL], { from: { x: 50, y: 0 }, to: { x: 150, y: 100 } }, 12, view, HOLED);
+
+    expect(tasks).toStrictEqual([{ kind: 'too-complex', target: DLTB }]);
+    expect(queries).toHaveLength(1);
   });
 });

@@ -1,5 +1,5 @@
 import { useEventListener } from '@vueuse/core';
-import type { Geometry, Point, Polygon } from 'geojson';
+import type { Geometry } from 'geojson';
 import type {
   CameraState,
   FitBoundsOptions,
@@ -33,6 +33,7 @@ import {
   pressBox,
   releaseBox
 } from '@/shared/map/box-select/box-gesture';
+import type { RegionScope } from '@/shared/map/region/region-scope';
 import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
 import { type FeatureDetail, type FeaturePage, queryFeaturesAt } from '../api';
 import {
@@ -44,6 +45,7 @@ import {
   pickResources,
   planBox,
   planIdentify,
+  type QueryArea,
   queryCapabilityOf,
   serverCandidates
 } from '../feature-query';
@@ -56,7 +58,7 @@ import type { ResourceLayers } from './useResourceLayers';
 /** 后端识别的分页，用来加载更多 */
 export interface ServerPages {
   /** 识别时的地理范围 */
-  readonly geometry: Point | Polygon;
+  readonly geometry: QueryArea;
   /** 已加载的页数 */
   readonly loaded: number;
   readonly total: number;
@@ -95,6 +97,8 @@ export type FeaturePickState =
   | { readonly kind: 'failed'; readonly target: PickResource; readonly error: unknown }
   /** 框里这个资源的渲染要素超过估数的上限，没有请求后端 */
   | { readonly kind: 'too-many'; readonly target: PickResource; readonly estimate: number }
+  /** 识别范围和区划求交后整理不成能发给后端的几何，没有请求后端（ADR 0051 第 4 节） */
+  | { readonly kind: 'too-complex'; readonly target: PickResource }
   | { readonly kind: 'candidates'; readonly list: CandidateList; readonly more: MoreStatus }
   /** back 为 null 时没有可返回的列表 */
   | { readonly kind: 'detail'; readonly candidate: PickCandidate; readonly back: PickReturn | null };
@@ -130,6 +134,11 @@ export interface FeaturePick {
   readonly close: () => void;
   /** 绑定到 selection 分组 */
   readonly deriveGroup: () => StyleGroup;
+}
+
+export interface FeaturePickOptions {
+  /** 区划裁剪的范围（ADR 0051）：点选、框选只认范围里的要素，范围变化时关闭结果；不传时不限制 */
+  readonly scope?: () => RegionScope | null;
 }
 
 /** 后端识别还有没加载的页 */
@@ -171,12 +180,14 @@ function identifySignature(state: ResourceLayersState): string {
 /** 创建选择的拥有者，在 provideMap 所在组件的 setup 中调用；作用域销毁时作废进行中的识别和加载 */
 export function useFeaturePick(
   map: Pick<MapContext, 'useCamera' | 'select' | 'beginCameraOperation' | 'runCameraOperation'>,
-  resources: Pick<ResourceLayers, 'state' | 'configErrors'>
+  resources: Pick<ResourceLayers, 'state' | 'configErrors'>,
+  options: FeaturePickOptions = {}
 ): FeaturePick {
   if (!getCurrentScope()) {
     throw new Error('useFeaturePick 只能在组件的 setup 或 effectScope 中调用');
   }
   const camera = map.useCamera();
+  const scope = options.scope ?? (() => null);
   const state = shallowRef<FeaturePickState>(IDLE);
   const flashing = shallowRef(false);
   // 识别、加载更多各是一条可替换的通道（ADR 0039）
@@ -294,6 +305,10 @@ export function useFeaturePick(
         setState({ kind: 'too-many', target: task.target, estimate: task.estimate });
         return;
       }
+      if (task.kind === 'too-complex') {
+        setState({ kind: 'too-complex', target: task.target });
+        return;
+      }
       if (task.kind === 'rendered') {
         found({ mode, target: task.target, candidates: task.candidates, pages: null });
         return;
@@ -323,32 +338,37 @@ export function useFeaturePick(
     setState(EMPTY);
   };
 
-  // 新的单击或框选作废上一次；屏幕上的查询在松手时做完，之后地图移动不影响结果
-  const start = (mode: PickMode, plan: (targets: readonly PickResource[], zoom: number) => BoxTask[]) => {
-    const signal = identifications.next();
-    pages.abort();
-    const { zoom } = camera.value;
-    const tasks = plan(pickResources(resources.state.value, resources.configErrors.value, zoom), zoom);
-    setState(IDENTIFYING);
-    void run(tasks, mode, signal);
-  };
-
-  const identify = (point: ScreenPoint, view: ToolView) =>
-    start('pick', (targets, zoom) => planIdentify(targets, point, zoom, view));
-
-  const identifyBox = (box: ScreenBox, view: ToolView) =>
-    start('box', (targets, zoom) => planBox(targets, box, zoom, view));
-
-  const cancelGesture = () => {
-    gesture.value = cancelBox(gesture.value);
-  };
-
   const close = () => {
     identifications.abort();
     pages.abort();
     remaining = null;
     gesture.value = NO_BOX_GESTURE;
     setState(IDLE);
+  };
+
+  // 新的单击或框选作废上一次；屏幕上的查询在松手时做完，之后地图移动不影响结果。
+  // 点在区划外、框整个在区划外时计划为 null：落在遮罩上等于点在空白处，关闭现有的结果（ADR 0051 第 3 节）
+  const start = (mode: PickMode, plan: (targets: readonly PickResource[], zoom: number) => BoxTask[] | null) => {
+    const { zoom } = camera.value;
+    const tasks = plan(pickResources(resources.state.value, resources.configErrors.value, zoom), zoom);
+    if (!tasks) {
+      close();
+      return;
+    }
+    const signal = identifications.next();
+    pages.abort();
+    setState(IDENTIFYING);
+    void run(tasks, mode, signal);
+  };
+
+  const identify = (point: ScreenPoint, view: ToolView) =>
+    start('pick', (targets, zoom) => planIdentify(targets, point, zoom, view, scope()));
+
+  const identifyBox = (box: ScreenBox, view: ToolView) =>
+    start('box', (targets, zoom) => planBox(targets, box, zoom, view, scope()));
+
+  const cancelGesture = () => {
+    gesture.value = cancelBox(gesture.value);
   };
 
   const choose = (candidate: PickCandidate) => {
@@ -445,6 +465,7 @@ export function useFeaturePick(
           }
           break;
         case 'too-many':
+        case 'too-complex':
           if (!isShown(next, current.target)) {
             close();
           }
@@ -462,6 +483,9 @@ export function useFeaturePick(
       }
     }
   );
+
+  // 换区划、回到全省、边界加载完成时关闭结果，和资源变化时一样（ADR 0051 第 3 节）
+  watch(scope, close);
 
   // 拖动框选时地图移动（滚轮缩放等）、窗口失焦都取消这次手势（ADR 0049 第 1 节）
   watch(camera, cancelGesture);

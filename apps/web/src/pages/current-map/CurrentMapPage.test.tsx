@@ -828,6 +828,45 @@ describe('CurrentMapPage', () => {
     expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(false);
   });
 
+  it('区划裁剪：选中南京后，点在遮罩上不识别、关闭结果，点在南京里照常（ADR 0051）', async () => {
+    stubBoundaryFetch();
+    const { wrapper, map } = await readyPage();
+    await vi.waitFor(() => expect(addedLayersOf(map, 'resources')).not.toStrictEqual([]));
+    await button(wrapper, '区划定位').trigger('click');
+    await button(wrapper, '南京').trigger('click');
+    await vi.waitFor(() => expect(map.geojson.has('region-clip')).toBe(true));
+    const layer = { id: 'resources-bgdc_dltb' };
+    // 南京城里的两个地类图斑
+    const geometry: Polygon = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [118.77, 32.03],
+          [118.79, 32.03],
+          [118.79, 32.05],
+          [118.77, 32.03]
+        ]
+      ]
+    };
+    map.renderedFeatures = ['a', 'b'].map(letter => ({
+      source: layer.id,
+      layer,
+      properties: { guid: letter.repeat(32), dlmc: '水田' },
+      geometry
+    }));
+    map.moveTo([118.785, 32.035], 15, {});
+    await button(wrapper, '点选').trigger('click');
+
+    map.mouse('click', 0, 0);
+    await nextTick();
+    expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(true);
+
+    // 画布左上角是相机中心，往右 100 像素是 119.785，在南京外面
+    map.mouse('click', 100, 0);
+    await nextTick();
+    expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(false);
+  });
+
   it('框选：拖动时显示矩形，松手列出框里的地类图斑并在瓦片上批量高亮；这次手势派生的单击不识别', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => expect(addedLayersOf(map, 'resources')).not.toStrictEqual([]));

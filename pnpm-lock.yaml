@@ -196,6 +196,9 @@ importers:
       '@turf/bbox':
         specifier: ^7.4.0
         version: 7.4.0
+      '@turf/bbox-clip':
+        specifier: ^7.4.0
+        version: 7.4.0
       '@turf/boolean-intersects':
         specifier: ^7.4.0
         version: 7.4.0
@@ -203,6 +206,9 @@ importers:
         specifier: ^7.4.0
         version: 7.4.0
       '@turf/intersect':
+        specifier: ^7.4.0
+        version: 7.4.0
+      '@turf/simplify':
         specifier: ^7.4.0
         version: 7.4.0
       '@vue/devtools-api':
@@ -1085,6 +1091,9 @@ packages:
       '@vue/composition-api':
         optional: true
 
+  '@turf/bbox-clip@7.4.0':
+    resolution: {integrity: sha512-Vxi8XznT/vhLHfqE9C1IMw0wi73+6EP3Bn51Vm0v9AWLUEv1zKPqR9/a4cj+s7f3diPE1g238rS48+BB5nYKSQ==}
+
   '@turf/bbox@7.4.0':
     resolution: {integrity: sha512-yOX9lALc2GmjYUIE99+nRj7eZA7eDtx7Ixu/hrgIo+YqHvL1reaPVTC9rQWMHMm0pH0/WHjzk8uOpAHjptrudQ==}
 
@@ -1096,6 +1105,15 @@ packages:
 
   '@turf/boolean-point-in-polygon@7.4.0':
     resolution: {integrity: sha512-GQrHc6WSDHhf32GB/b9AGyOeC05AQ3nGN7ooWTrlCYefKn7X9/2wG9BNexF47AuyDq5jPdOvITVR26BLFWV+mA==}
+
+  '@turf/boolean-point-on-line@7.4.0':
+    resolution: {integrity: sha512-5i5UBeZf/LuzgavkIj8L8L5/8SYWItWzQQcE9ymFZr60lV5lM8eFvQDfzAz2R3WQFCrxXExPqNvAVZOKGUyvoA==}
+
+  '@turf/clean-coords@7.4.0':
+    resolution: {integrity: sha512-xl3lVPey/FyVc3Z+drAWtVuVtvt737RHKGUMGyuskmKYW0JUeFDgqSR0OnrDfxXWb58Im/65BgPd1B+TUA9WfA==}
+
+  '@turf/clone@7.4.0':
+    resolution: {integrity: sha512-IfYnuil7XYJauy3crzIYEr26QkmBiTgFdGfYwUUe3S6dawX+lyb3vhuaYyssEPcCJq83g0G7hwxZy7141Mmzjg==}
 
   '@turf/helpers@7.4.0':
     resolution: {integrity: sha512-7PAwLZqOdRzTI5g9bHvUwlloAXPDH/mlajtryk0tw4ZwGMtmXsAyF4QundsAMfy4u48Fyd3AUqMXY0SMxqJGWg==}
@@ -1114,6 +1132,9 @@ packages:
 
   '@turf/polygon-to-line@7.4.0':
     resolution: {integrity: sha512-LCHZ9bojUj99et83ZLGpSR/PFx48c0tcjtfuI1nn66a6Q+EGy7GO4NsHv4rWZsC8Lljy5ldbJ3dd8+WGnAk7dw==}
+
+  '@turf/simplify@7.4.0':
+    resolution: {integrity: sha512-HTolHFuXLReKHJoh3iz92+WpF5EsuCmmZR7fNv3hWnA4hZfkuEzbGB/WZqRdQpvDs99IUS8QIc6BAp6FHzQbBQ==}
 
   '@tybys/wasm-util@0.10.4':
     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
@@ -3849,6 +3870,13 @@ snapshots:
       vue: 3.5.43(typescript@7.0.2)
       vue-demi: 0.14.10(vue@3.5.43(typescript@7.0.2))
 
+  '@turf/bbox-clip@7.4.0':
+    dependencies:
+      '@turf/helpers': 7.4.0
+      '@turf/invariant': 7.4.0
+      '@types/geojson': 7946.0.16
+      tslib: 2.8.1
+
   '@turf/bbox@7.4.0':
     dependencies:
       '@turf/helpers': 7.4.0
@@ -3878,6 +3906,27 @@ snapshots:
       '@turf/invariant': 7.4.0
       '@types/geojson': 7946.0.16
       point-in-polygon-hao: 1.2.4
+      tslib: 2.8.1
+
+  '@turf/boolean-point-on-line@7.4.0':
+    dependencies:
+      '@turf/helpers': 7.4.0
+      '@turf/invariant': 7.4.0
+      '@types/geojson': 7946.0.16
+      tslib: 2.8.1
+
+  '@turf/clean-coords@7.4.0':
+    dependencies:
+      '@turf/boolean-point-on-line': 7.4.0
+      '@turf/helpers': 7.4.0
+      '@turf/invariant': 7.4.0
+      '@types/geojson': 7946.0.16
+      tslib: 2.8.1
+
+  '@turf/clone@7.4.0':
+    dependencies:
+      '@turf/helpers': 7.4.0
+      '@types/geojson': 7946.0.16
       tslib: 2.8.1
 
   '@turf/helpers@7.4.0':
@@ -3917,6 +3966,15 @@ snapshots:
     dependencies:
       '@turf/helpers': 7.4.0
       '@turf/invariant': 7.4.0
+      '@types/geojson': 7946.0.16
+      tslib: 2.8.1
+
+  '@turf/simplify@7.4.0':
+    dependencies:
+      '@turf/clean-coords': 7.4.0
+      '@turf/clone': 7.4.0
+      '@turf/helpers': 7.4.0
+      '@turf/meta': 7.4.0
       '@types/geojson': 7946.0.16
       tslib: 2.8.1
 

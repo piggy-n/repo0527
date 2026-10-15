@@ -1,4 +1,4 @@
-import type { Geometry, Point, Polygon } from 'geojson';
+import type { Geometry, MultiPolygon, Point, Polygon } from 'geojson';
 import { z } from 'zod';
 import { http } from '@/shared/http/client';
 
@@ -110,7 +110,7 @@ export function guidCondition(guid: string): string {
 /** 和这个点或范围相交的要素（只有属性），分页；图层编码是"资源编码_年份" */
 export function queryFeaturesAt(
   layerCode: string,
-  geometry: Point | Polygon,
+  geometry: Point | Polygon | MultiPolygon,
   { pageNum, pageSize }: { readonly pageNum: number; readonly pageSize: number },
   signal?: AbortSignal
 ) {

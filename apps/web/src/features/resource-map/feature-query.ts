@@ -1,5 +1,5 @@
 import { bbox } from '@turf/bbox';
-import type { Geometry, Point, Polygon, Position } from 'geojson';
+import type { Geometry, MultiPolygon, Point, Polygon, Position } from 'geojson';
 import type {
   LngLat,
   PickResult,
@@ -10,9 +10,11 @@ import type {
   ViewBounds,
   ViewKind
 } from '@yzt/map-core';
+import { clipToScope, intersectsScope, type RegionScope, scopeContains } from '@/shared/map/region/region-scope';
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
 import { LANDUSE_FIELD_LABELS } from './landuse';
+import { queryGeometry } from './query-geometry';
 import { isResourceBodyLayer, type ResourceLayersState, resourceSourceId } from './resource-layers';
 import { resourceStyle, tilesetOf } from './style-registry';
 
@@ -159,10 +161,17 @@ export function identifyStep(
   return rendered.length > 0 ? { kind: 'rendered', candidates: rendered } : { kind: 'none' };
 }
 
-/** 识别一个资源要做的事：渲染要素已经取到，或者用这个地理范围查后端 */
+/** 后端范围识别用的地理范围：点击位置、容差框或框，有区划范围时是和区划求交后整理过的几何 */
+export type QueryArea = Point | Polygon | MultiPolygon;
+
+/**
+ * 识别一个资源要做的事：渲染要素已经取到，或者用这个地理范围查后端；有区划范围时，查后端的几何整理不出来
+ * （顶点太多、简化后无效）是"范围太复杂"，不请求后端（ADR 0051 第 4 节）
+ */
 export type IdentifyTask =
   | { readonly kind: 'rendered'; readonly target: PickResource; readonly candidates: readonly PickCandidate[] }
-  | { readonly kind: 'server'; readonly target: PickResource; readonly geometry: Point | Polygon };
+  | { readonly kind: 'server'; readonly target: PickResource; readonly geometry: QueryArea }
+  | { readonly kind: 'too-complex'; readonly target: PickResource };
 
 // 以点击位置为中心的容差框
 function toleranceBox({ x, y }: ScreenPoint, tolerance: number): ScreenBox {
@@ -174,31 +183,100 @@ function renderedArea(point: ScreenPoint, tolerance: number): ScreenPoint | Scre
   return tolerance === 0 ? point : toleranceBox(point, tolerance);
 }
 
+// 两个经纬度当作平面坐标的距离
+function planarDistance([x1 = 0, y1 = 0]: Position, [x2 = 0, y2 = 0]: Position): number {
+  return Math.hypot(x2 - x1, y2 - y1);
+}
+
+/** 一个屏幕像素在这个点附近对应的经纬度距离，横竖两个方向取较小的；拾取不到时为 null（ADR 0051 第 4 节） */
+export function pixelSizeAt(point: ScreenPoint, pick: (point: ScreenPoint) => PickResult): number | null {
+  const center = lngLatAt(pick, point);
+  const right = lngLatAt(pick, { x: point.x + 1, y: point.y });
+  const below = lngLatAt(pick, { x: point.x, y: point.y + 1 });
+  if (!center || !right || !below) {
+    return null;
+  }
+  return Math.min(planarDistance(center, right), planarDistance(center, below));
+}
+
+// 只留几何和范围相交的渲染要素；没有范围时原样（ADR 0051 第 3 节）。在转换成候选、按 guid 去重之前过滤，
+// 同一个 guid 被瓦片切成的几段里有一段相交就留下
+function withinScope(features: readonly RenderedFeature[], area: RegionScope | null): readonly RenderedFeature[] {
+  return area ? features.filter(({ geometry }) => geometry !== undefined && intersectsScope(geometry, area)) : features;
+}
+
+// 查后端的任务：有区划范围时，容差框、框换成和区划求交并整理过的几何，整理不出来时是"范围太复杂"；
+// 点击位置的点在区划里，原样使用。几何对所有资源都一样，由调用方只整理一次
+function serverTask(
+  target: PickResource,
+  geometry: Point | Polygon,
+  prepared: (() => RegionScope | null) | null
+): IdentifyTask {
+  if (!prepared || geometry.type === 'Point') {
+    return { kind: 'server', target, geometry };
+  }
+  const area = prepared();
+  return area ? { kind: 'server', target, geometry: area } : { kind: 'too-complex', target };
+}
+
+// 只算一次的值
+function once<T>(compute: () => T): () => T {
+  let cached: { readonly value: T } | null = null;
+  return () => (cached ??= { value: compute() }).value;
+}
+
 /**
  * 点击时就定下每个资源怎样识别（ADR 0047、0048 第 2 节）：屏幕上的查询、拾取都在这里同步做完，之后查后端只用地理范围，
- * 地图移动不影响结果。既没有渲染要素、又不能查后端或拾取不到范围的资源不在结果里
+ * 地图移动不影响结果。既没有渲染要素、又不能查后端或拾取不到范围的资源不在结果里。
+ * 有区划范围时（ADR 0051 第 3 节）：点击位置不在区划里为 null，不识别；线、点的容差框先和区划求交
  */
 export function planIdentify(
   targets: readonly PickResource[],
   point: ScreenPoint,
   zoom: number,
   view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>
-): IdentifyTask[] {
+): IdentifyTask[];
+export function planIdentify(
+  targets: readonly PickResource[],
+  point: ScreenPoint,
+  zoom: number,
+  view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
+  scope: RegionScope | null
+): IdentifyTask[] | null;
+export function planIdentify(
+  targets: readonly PickResource[],
+  point: ScreenPoint,
+  zoom: number,
+  view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
+  scope: RegionScope | null = null
+): IdentifyTask[] | null {
+  const pick = (at: ScreenPoint) => view.pick(at);
+  const clicked = pick(point);
+  if (scope && (clicked.kind !== 'hit' || !scopeContains(scope, clicked.lngLat))) {
+    return null;
+  }
+  const pixelSize = once(() => pixelSizeAt(point, pick));
   return targets.flatMap((target): IdentifyTask[] => {
     const tolerance = PICK_TOLERANCES[target.resource.geometry];
-    // 面的距离都是 0，不用换算几何
+    // 求交范围：面只取包含点击位置的，点击位置在区划里，用整个区划过滤；线、点用容差框和区划的交集
+    const square = tolerance > 0 ? screenBoxPolygon(toleranceBox(point, tolerance), pick) : null;
+    const area = scope && (tolerance === 0 ? scope : square && clipToScope(square, scope));
+    if (scope && !area) {
+      return [];
+    }
+    // 面的距离都是 0，没有范围时不用换算几何
     const features = view.queryRendered(renderedArea(point, tolerance), {
       sources: [target.sourceId],
-      withGeometry: tolerance > 0
+      withGeometry: tolerance > 0 || area !== null
     });
-    const rendered = renderedCandidates(target, features, shape =>
+    const rendered = renderedCandidates(target, withinScope(features, area), shape =>
       screenDistance(shape, point, lngLat => view.project(lngLat))
     );
     const step = identifyStep(queryCapabilityOf(target.resource.code), view.kind, zoom, rendered);
     if (step.kind === 'server') {
-      const geometry = identifyGeometry(target.resource.geometry, point, at => view.pick(at));
+      const geometry = identifyGeometry(target.resource.geometry, point, pick);
       if (geometry) {
-        return [{ kind: 'server', target, geometry }];
+        return [serverTask(target, geometry, area && once(() => queryGeometry(area, pixelSize())))];
       }
     }
     // 用渲染要素；后端识别拾取不到范围时也退回渲染要素
@@ -270,33 +348,74 @@ export type BoxTask =
   | IdentifyTask
   | { readonly kind: 'too-many'; readonly target: PickResource; readonly estimate: number };
 
+// 范围在屏幕上的外包框；有顶点投影不到时为 null
+function screenBounds(area: RegionScope, project: (lngLat: LngLat) => ScreenPoint | null): ScreenBox | null {
+  const positions = (area.type === 'Polygon' ? [area.coordinates] : area.coordinates).flat(2);
+  const points = positions.map(([lng = 0, lat = 0]) => project([lng, lat]));
+  if (points.some(point => point === null)) {
+    return null;
+  }
+  const xs = points.map(point => point?.x ?? 0);
+  const ys = points.map(point => point?.y ?? 0);
+  return { from: { x: Math.min(...xs), y: Math.min(...ys) }, to: { x: Math.max(...xs), y: Math.max(...ys) } };
+}
+
 /**
  * 松手时定下框选怎样识别（ADR 0049 第 2 节、ADR 0050 第 1 节）：资源从上到下，识别方式同点选，先定方式再计数。
- * 查后端的资源用加权估数；只用渲染要素的按有效 guid 计数，为 0 时跳过。遇到渲染要素的结果、或超过估数的上限时停下
+ * 查后端的资源用加权估数；只用渲染要素的按有效 guid 计数，为 0 时跳过。遇到渲染要素的结果、超过估数的上限
+ * 或范围太复杂时停下。有区划范围时（ADR 0051 第 3 节）：框先和区划求交，框整个在区划外时为 null，不识别；
+ * 渲染要素只留和求交范围相交的，估数只数求交范围在屏幕上的外包框里的
  */
 export function planBox(
   targets: readonly PickResource[],
   box: ScreenBox,
   zoom: number,
-  view: Pick<ToolView, 'kind' | 'pick' | 'queryRendered'>
-): BoxTask[] {
+  view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>
+): BoxTask[];
+export function planBox(
+  targets: readonly PickResource[],
+  box: ScreenBox,
+  zoom: number,
+  view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
+  scope: RegionScope | null
+): BoxTask[] | null;
+export function planBox(
+  targets: readonly PickResource[],
+  box: ScreenBox,
+  zoom: number,
+  view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
+  scope: RegionScope | null = null
+): BoxTask[] | null {
+  const pick = (at: ScreenPoint) => view.pick(at);
+  const polygon = screenBoxPolygon(box, pick);
+  const area = scope && polygon && clipToScope(polygon, scope);
+  if (scope && !area) {
+    return null;
+  }
+  const estimateArea = (area && screenBounds(area, lngLat => view.project(lngLat))) ?? box;
+  const center = { x: (box.from.x + box.to.x) / 2, y: (box.from.y + box.to.y) / 2 };
+  const prepared = area && once(() => queryGeometry(area, pixelSizeAt(center, pick)));
   const tasks: BoxTask[] = [];
   for (const target of targets) {
     const { code } = target.resource;
-    const features = view.queryRendered(box, { sources: [target.sourceId] });
+    const sources = [target.sourceId];
     if (usesBackend(queryCapabilityOf(code), view.kind, zoom)) {
-      const estimate = weightedEstimate(code, features);
+      const estimate = weightedEstimate(code, view.queryRendered(estimateArea, { sources }));
       if (estimate > BOX_ESTIMATE_LIMIT) {
         tasks.push({ kind: 'too-many', target, estimate });
         return tasks;
       }
-      const geometry = screenBoxPolygon(box, at => view.pick(at));
-      if (geometry) {
-        tasks.push({ kind: 'server', target, geometry });
+      if (polygon) {
+        const task = serverTask(target, polygon, prepared);
+        tasks.push(task);
+        if (task.kind === 'too-complex') {
+          return tasks;
+        }
         continue;
       }
     }
     // 只用渲染要素（后端识别拾取不到范围时也退回这里）：能列出的候选按有效 guid 计数，列不出的不占额度
+    const features = withinScope(view.queryRendered(box, { sources, withGeometry: area !== null }), area);
     const count = new Set(features.flatMap(({ properties: { guid } }) => (isFeatureGuid(guid) ? [guid] : []))).size;
     if (count > BOX_ESTIMATE_LIMIT) {
       tasks.push({ kind: 'too-many', target, estimate: count });

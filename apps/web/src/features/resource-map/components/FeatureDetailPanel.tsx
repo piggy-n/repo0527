@@ -221,6 +221,14 @@ export const FeatureDetailPanel = defineComponent({
               </div>
             </>
           );
+        case 'too-complex':
+          // 文字在 5D 定（ADR 0051 第 4 节）
+          return (
+            <>
+              {renderHeader('点选')}
+              <div class={styles.notice}>{state.target.resource.name}：这里的区划边界太复杂，请缩小范围</div>
+            </>
+          );
         case 'candidates':
           return renderCandidates(state.list, state.more);
         case 'detail':

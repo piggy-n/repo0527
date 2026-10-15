@@ -52,7 +52,8 @@ export const CurrentMapPage = defineComponent({
     const region = useRegionLocate(map, { goToDefaultView });
     const measure = useMeasure();
     const location = useLocationPoint(map);
-    const pick = useFeaturePick(map, resources);
+    // 点选、框选只认区划里的要素，和遮罩用同一个边界（ADR 0051 第 1 节）
+    const pick = useFeaturePick(map, resources, { scope: () => readyBoundary(region.state.value)?.geometry ?? null });
     map.registerTools(measure.tools);
     map.registerTools(location.tools);
     map.registerTools(pick.tools);
