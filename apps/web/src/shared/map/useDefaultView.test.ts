@@ -28,7 +28,11 @@ function fakeMap() {
 
 function fakeCamera() {
   const fitBounds = vi.fn<CameraControl['fitBounds']>();
-  const camera: CameraControl = { flyTo: vi.fn<CameraControl['flyTo']>(), fitBounds };
+  const camera: CameraControl = {
+    flyTo: vi.fn<CameraControl['flyTo']>(),
+    fitBounds,
+    reveal: vi.fn<CameraControl['reveal']>()
+  };
   return { camera, fitBounds };
 }
 

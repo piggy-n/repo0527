@@ -529,47 +529,91 @@ export function featureBounds(geometry: Geometry): ViewBounds {
   return [west, south, east, north];
 }
 
-// 地类图斑（含城镇村）：名称取地类名称，字段名用地类的中文名
+// 地类图斑（含城镇村）
 function isLanduse(code: string): boolean {
   const kind = resourceStyle(code).color?.kind;
   return kind === 'landuse-code' || kind === 'landuse-name';
 }
 
-const textOf = (value: unknown): string | null =>
-  typeof value === 'string' || typeof value === 'number' ? String(value) : null;
+// 后端用来占位的"没有值"（城市现状数据的大多数字段是 -9999）
+const PLACEHOLDERS: ReadonlySet<unknown> = new Set([null, undefined, '', -9999, '-9999', -999, '-999']);
 
-/** 候选和详情的标题是资源名，副标题是年份和名称（地类取地类名称，其他取 name） */
-export function featureSummary(
-  target: PickResource,
-  properties: Readonly<FeatureRecord>
-): { readonly title: string; readonly subtitle: string } {
-  const name = textOf(isLanduse(target.resource.code) ? properties.dlmc : properties.name);
-  return { title: target.resource.name, subtitle: [String(target.year), name].filter(Boolean).join(' · ') };
+/** 字段没有值：null、空字符串和 -9999、-999 这类占位值；"-" 可能有意义（如无变化），不算 */
+export function isEmptyValue(value: unknown): boolean {
+  return PLACEHOLDERS.has(value);
+}
+
+// 名称、分类按资源取哪些字段，按顺序取第一个有值的（设计稿 5D.6）
+function labelFieldsOf(code: string): { readonly name: readonly string[]; readonly category: readonly string[] } {
+  if (isLanduse(code)) {
+    return { name: ['dlmc'], category: ['dlbm'] };
+  }
+  if (code.startsWith('csxhjctb_')) {
+    return { name: ['name', 'ccn'], category: ['type', 'ccn'] };
+  }
+  return { name: ['zldwmc', 'name'], category: [] };
+}
+
+// 字段编码大小写不敏感，同字段行的中文名
+function firstText(properties: Readonly<FeatureRecord>, keys: readonly string[]): string | null {
+  const values = new Map(Object.entries(properties).map(([key, value]) => [key.toLowerCase(), value]));
+  for (const key of keys) {
+    const value = values.get(key);
+    if ((typeof value === 'string' || typeof value === 'number') && !isEmptyValue(value)) {
+      return String(value);
+    }
+  }
+  return null;
+}
+
+/** 要素的名称和分类 */
+export interface FeatureLabel {
+  /** 名称字段都没有值时为 null */
+  readonly name: string | null;
+  /** 候选列表里帮着区分重名的要素；和名称相同时为 null */
+  readonly category: string | null;
+}
+
+/** 名称：地类取地类名称，城市现状数据取 name、没有时取分类名称，其他取坐落单位名称或 name；分类：地类编码，城市现状数据的 type 或分类名称 */
+export function featureLabel(code: string, properties: Readonly<FeatureRecord>): FeatureLabel {
+  const fields = labelFieldsOf(code);
+  const name = firstText(properties, fields.name);
+  const category = firstText(properties, fields.category);
+  return { name, category: category === name ? null : category };
 }
 
 /** 详情的一行 */
 export interface FeatureRow {
   readonly key: string;
-  readonly label: string;
-  readonly value: string;
+  /** 字段名表里没有时为 null，显示字段编码 */
+  readonly label: string | null;
+  /** 没有值时为 null */
+  readonly value: string | null;
+}
+
+/** 详情的字段：有值的和没有值的分开，各自按接口返回的顺序 */
+export interface FeatureRows {
+  readonly filled: readonly FeatureRow[];
+  readonly empty: readonly FeatureRow[];
 }
 
 // 主键和几何不在详情里列出
 const HIDDEN_FIELDS = new Set(['guid', 'geom', 'geometry']);
 
-function displayValue(value: unknown): string {
-  if (value === null || value === undefined || value === '') {
-    return '-';
+/** 详情的字段行：字段名按三调的字段名表（大小写不敏感），所有资源都用；没有值的另放一组 */
+export function featureRows(properties: Readonly<FeatureRecord>): FeatureRows {
+  const filled: FeatureRow[] = [];
+  const empty: FeatureRow[] = [];
+  for (const [key, value] of Object.entries(properties)) {
+    if (HIDDEN_FIELDS.has(key.toLowerCase())) {
+      continue;
+    }
+    const label = LANDUSE_FIELD_LABELS[key.toUpperCase()] ?? null;
+    if (isEmptyValue(value)) {
+      empty.push({ key, label, value: null });
+    } else {
+      filled.push({ key, label, value: typeof value === 'string' ? value : JSON.stringify(value) });
+    }
   }
-  return typeof value === 'string' ? value : JSON.stringify(value);
-}
-
-/** 详情的字段行，按接口返回的顺序；字段名地类用中文名（大小写不敏感），其他用字段编码；空值显示 - */
-export function featureRows(code: string, properties: Readonly<FeatureRecord>): FeatureRow[] {
-  const labels: Readonly<Record<string, string>> = isLanduse(code) ? LANDUSE_FIELD_LABELS : {};
-  return Object.entries(properties).flatMap(([key, value]) =>
-    HIDDEN_FIELDS.has(key.toLowerCase())
-      ? []
-      : [{ key, label: labels[key.toUpperCase()] ?? key, value: displayValue(value) }]
-  );
+  return { filled, empty };
 }

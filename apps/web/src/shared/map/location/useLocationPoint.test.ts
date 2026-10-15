@@ -47,7 +47,11 @@ function manualRegions() {
 
 function setup({ zoom = 10, viewState = 'ready' }: { zoom?: number; viewState?: MapViewState } = {}) {
   const flyTo = vi.fn<CameraControl['flyTo']>();
-  const control: CameraControl = { flyTo, fitBounds: vi.fn<CameraControl['fitBounds']>() };
+  const control: CameraControl = {
+    flyTo,
+    fitBounds: vi.fn<CameraControl['fitBounds']>(),
+    reveal: vi.fn<CameraControl['reveal']>()
+  };
   const camera = shallowRef<CameraState>({ center: [119, 32], zoom, bearing: 0, pitch: 0 });
   const releaseTool = vi.fn<MapContext['releaseTool']>();
   // 视图就绪时立即执行；还没就绪时先记下，由测试执行（怎样等待和作废见 map-vue 的测试）

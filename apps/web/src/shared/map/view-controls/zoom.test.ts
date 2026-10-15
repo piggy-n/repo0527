@@ -43,7 +43,11 @@ function fakeMap(zoom: number) {
   const camera = shallowRef<CameraState>({ center: [119, 32], zoom, bearing: 0, pitch: 0 });
   let current = new AbortController();
   const flyTo = vi.fn<CameraControl['flyTo']>();
-  const control: CameraControl = { flyTo, fitBounds: vi.fn<CameraControl['fitBounds']>() };
+  const control: CameraControl = {
+    flyTo,
+    fitBounds: vi.fn<CameraControl['fitBounds']>(),
+    reveal: vi.fn<CameraControl['reveal']>()
+  };
   const next = () => {
     current.abort();
     current = new AbortController();

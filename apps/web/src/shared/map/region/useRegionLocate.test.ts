@@ -56,7 +56,11 @@ function manualLoader() {
  */
 function fakeMap() {
   const fitBounds = vi.fn<CameraControl['fitBounds']>();
-  const control: CameraControl = { flyTo: vi.fn<CameraControl['flyTo']>(), fitBounds };
+  const control: CameraControl = {
+    flyTo: vi.fn<CameraControl['flyTo']>(),
+    fitBounds,
+    reveal: vi.fn<CameraControl['reveal']>()
+  };
   // 真实的相机模型：测试再开始一次操作，表示这期间有了新的相机操作（拖动、默认视角、坐标定位）
   const camera = new CameraModel({ center: [119, 32], zoom: 7, bearing: 0, pitch: 0 });
   const runs: AbortSignal[] = [];

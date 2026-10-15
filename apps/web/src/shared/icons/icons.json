@@ -1,4 +1,15 @@
 {
+  "arrow-left": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<path stroke=\"none\" d=\"M0 0h24v24H0z\"/><path d=\"M5 12h14M5 12l6 6m-6-6 6-6\"/>"
+  },
   "auth-lock": {
     "viewBox": "0 0 24 24",
     "attrs": {
@@ -45,6 +56,17 @@
       "stroke-linejoin": "round"
     },
     "body": "<path stroke=\"none\" d=\"M0 0h24v24H0z\"/><path d=\"M8 5a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0 1 1 0 1 0-2 0m6-14a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0 1 1 0 1 0-2 0\"/>"
+  },
+  "focus": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<path stroke=\"none\" d=\"M0 0h24v24H0z\"/><path fill=\"currentColor\" d=\"M11.5 12a.5.5 0 1 0 1 0 .5.5 0 1 0-1 0\"/><path d=\"M5 12a7 7 0 1 0 14 0 7 7 0 1 0-14 0m7-9v2m-9 7h2m7 7v2m7-9h2\"/>"
   },
   "geometry-line": {
     "viewBox": "0 0 24 24",
@@ -299,5 +321,16 @@
       "stroke-linejoin": "round"
     },
     "body": "<path stroke=\"none\" d=\"M0 0h24v24H0z\"/><path d=\"M4 6h16M4 12h16M4 18h16\"/>"
+  },
+  "warning": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<path stroke=\"none\" d=\"M0 0h24v24H0z\"/><path d=\"M12 9v4m-1.637-9.409L2.257 17.125a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636-2.87L13.637 3.59a1.914 1.914 0 0 0-3.274 0M12 16h.01\"/>"
   }
 }

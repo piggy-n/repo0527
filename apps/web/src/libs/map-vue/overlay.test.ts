@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { type Box, computeOverlayPadding, type MeasuredOverlay, resolveOverlayOptions } from './overlay';
+import { type Box, computeOverlayPadding, type MeasuredOverlay, resolveOverlayOptions, revealOffset } from './overlay';
 
 const DEFAULTS = resolveOverlayOptions();
 
@@ -87,6 +87,48 @@ describe('computeOverlayPadding', () => {
     const options = resolveOverlayOptions({ edgePadding: 40, gap: 8, minVisibleRatio: 0.5 });
 
     expect(computeOverlayPadding(CANVAS, [LEFT_PANEL], options)).toEqual({ top: 40, right: 40, bottom: 40, left: 344 });
+  });
+});
+
+// 整个页面向右 100、向下 50
+function moved(overlay: MeasuredOverlay): MeasuredOverlay {
+  const { left, top, right, bottom } = overlay.box;
+  return { ...overlay, box: { left: left + 100, top: top + 50, right: right + 100, bottom: bottom + 50 } };
+}
+
+describe('revealOffset', () => {
+  const OVERLAYS = [LEFT_PANEL, TOOLBAR, RIGHT_COLUMN];
+
+  it('被右侧一列挡住：向左平移到可视区域的右边（1440 - 352 = 1088），纵向在可视区域里不动', () => {
+    expect(revealOffset({ x: 1200, y: 300 }, CANVAS, OVERLAYS, DEFAULTS)).toEqual({ x: -112, y: 0 });
+  });
+
+  it('间隔也算挡住：离元素不到 16 像素时挪到可视区域的边上；正好在边上时不动', () => {
+    expect(revealOffset({ x: 1095, y: 300 }, CANVAS, OVERLAYS, DEFAULTS)).toEqual({ x: -7, y: 0 });
+    expect(revealOffset({ x: 1088, y: 300 }, CANVAS, OVERLAYS, DEFAULTS)).toBeNull();
+  });
+
+  it('被左侧面板挡住时向右平移；横纵都挡住时两个方向都挪', () => {
+    expect(revealOffset({ x: 100, y: 300 }, CANVAS, OVERLAYS, DEFAULTS)).toEqual({ x: 252, y: 0 });
+    expect(revealOffset({ x: 1000, y: 30 }, CANVAS, OVERLAYS, DEFAULTS)).toEqual({ x: 0, y: 42 });
+    expect(revealOffset({ x: 1200, y: 60 }, CANVAS, OVERLAYS, DEFAULTS)).toEqual({ x: -112, y: 12 });
+  });
+
+  it('只看元素的方框，不看占用的整条边：点在矮面板的下面、画布的边上、尺寸为 0 的元素上都不动', () => {
+    const shortPanel: MeasuredOverlay = { edge: 'right', box: box(1104, 16, 320, 200) };
+    const hidden: MeasuredOverlay = { edge: 'right', box: box(1104, 16, 0, 0) };
+
+    expect(revealOffset({ x: 1200, y: 400 }, CANVAS, [shortPanel], DEFAULTS)).toBeNull();
+    expect(revealOffset({ x: 1200, y: 100 }, CANVAS, [shortPanel], DEFAULTS)).toEqual({ x: -112, y: 0 });
+    expect(revealOffset({ x: 4, y: 4 }, CANVAS, [], DEFAULTS)).toBeNull();
+    expect(revealOffset({ x: 1104, y: 16 }, CANVAS, [hidden], DEFAULTS)).toBeNull();
+  });
+
+  it('点是画布坐标，方框是页面坐标：画布不在页面左上角时结果相同', () => {
+    expect(revealOffset({ x: 1200, y: 300 }, box(100, 50, 1440, 620), OVERLAYS.map(moved), DEFAULTS)).toEqual({
+      x: -112,
+      y: 0
+    });
   });
 });
 

@@ -1,61 +1,203 @@
-// 联调用的样式，5D 再设计；放在功能面板的 Tab 里，外观和滚动由外壳负责
+// 设计稿 5D.6；放在功能面板的 Tab 里，外观和滚动由外壳负责
 
 .panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-md);
   min-height: 0;
 }
 
-.header {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
+// 标题下面一行灰色的说明，和标题的文字对齐（竖杠 4 + 间距 8）
 .heading {
   display: flex;
-  flex: 1;
   flex-direction: column;
   min-width: 0;
 }
 
-.title {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-base);
-  color: var(--color-text-title);
+.meta {
+  padding-left: 12px;
+  overflow: hidden;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.subtitle {
+// 文字链接：返回列表、显示没有值的字段、重试、加载更多
+.link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  color: var(--color-primary);
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-primary-border-hover);
+  }
+
+  &:disabled {
+    color: var(--color-text-placeholder);
+    cursor: not-allowed;
+  }
+}
+
+.iconButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-regular);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+
+  &:disabled {
+    color: var(--color-text-placeholder);
+    cursor: not-allowed;
+  }
+}
+
+// 字段两列：字段名在左（灰色 12），值在右，可能很长，按字换行
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--space-sm);
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--color-divider);
+  line-height: var(--line-height-base);
+
+  dt {
+    overflow: hidden;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  dd {
+    margin: 0;
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+    word-break: break-all;
+  }
+
+  .dim {
+    color: var(--color-text-placeholder);
+  }
+}
+
+// 字段名表里没有的字段编码
+.code {
+  color: var(--color-text-placeholder);
+}
+
+.empties {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-compact);
   color: var(--color-text-secondary);
 }
 
-// 返回按钮靠左，不被 Element 的链接按钮撑满
-.back {
-  align-self: flex-start;
-}
-
 .notice {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
+  align-items: flex-start;
+  gap: 6px;
+  padding: var(--space-sm) 10px;
+  border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-compact);
   color: var(--color-text-regular);
 }
 
+// 图标和第一行文字对齐
+.noticeIcon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.noticeText {
+  flex: 1;
+  min-width: 0;
+}
+
+.info {
+  background-color: var(--color-neutral-bg-light);
+
+  .noticeIcon {
+    color: var(--color-text-secondary);
+  }
+}
+
+.warning {
+  background-color: var(--color-warning-bg);
+
+  .noticeIcon {
+    color: var(--color-warning);
+  }
+}
+
 .error {
-  color: var(--color-danger);
+  background-color: var(--color-danger-bg-solid);
+
+  .noticeIcon,
+  .noticeText {
+    color: var(--color-danger);
+  }
+}
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg) 0 var(--space-sm);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.spinner {
+  font-size: 16px;
+  color: var(--color-primary);
+}
+
+.hint {
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
 }
 
 // 虚拟滚动的容器：最多显示 10 行，再多在里面滚动
 .scroller {
   flex-shrink: 0;
-  max-height: 300px;
+  max-height: 340px;
 }
 
 .candidates {
@@ -66,48 +208,60 @@
 
 // 每行固定高度，和面板里的 CANDIDATE_HEIGHT 一致
 .candidate {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
   box-sizing: border-box;
   width: 100%;
-  height: 30px;
-  padding: 6px 8px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  height: 34px;
+  padding: 0 var(--space-sm);
   border: none;
   border-radius: var(--radius-sm);
-  font: inherit;
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-compact);
-  color: var(--color-text-primary);
-  text-align: left;
   background: none;
+  font: inherit;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  color: var(--color-text-regular);
+  text-align: left;
   cursor: pointer;
 
   &:hover {
-    background-color: var(--color-primary-bg);
+    background-color: var(--color-primary-bg-light);
   }
 }
 
-// 字段名一列、值一列；值可能很长，按字换行
-.rows {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 12px;
-  margin: 0;
+.index {
+  flex: none;
+  width: 20px;
   font-size: var(--font-size-xs);
-  line-height: var(--line-height-compact);
+  color: var(--color-text-placeholder);
+  font-variant-numeric: tabular-nums;
 }
 
-.row {
-  display: contents;
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-  dt {
-    color: var(--color-text-secondary);
-  }
+.unnamed {
+  color: var(--color-text-placeholder);
+}
 
-  dd {
-    margin: 0;
-    color: var(--color-text-primary);
-    word-break: break-all;
-  }
+.category {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more {
+  display: flex;
+  justify-content: center;
 }

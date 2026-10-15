@@ -45,11 +45,14 @@ class FakeView implements MapView {
   fitBounds(_bounds: ViewBounds, options?: FitBoundsOptions): void {
     this.fitBoundsCalls.push(options);
   }
-  pick(): PickResult {
-    return { kind: 'miss' };
+  // reveal 用到的投影结果；拾取到的经纬度就是屏幕坐标，surface 为 null 时拾取不到
+  projected: ScreenPoint | null = null;
+  pickSurface: 'map' | null = null;
+  pick({ x, y }: ScreenPoint): PickResult {
+    return this.pickSurface ? { kind: 'hit', surface: this.pickSurface, lngLat: [x, y] } : { kind: 'miss' };
   }
   project(): ScreenPoint | null {
-    return null;
+    return this.projected;
   }
   // queryRendered 收到的参数和要返回的要素
   readonly queries: unknown[][] = [];
@@ -839,6 +842,43 @@ describe('MapContextState 的定位可视区域', () => {
       { padding: 0 },
       { padding: { top: 1, right: 2, bottom: 3, left: 4 } }
     ]);
+  });
+
+  it('相机控制的 reveal：被挡住时把平移后的画布中心对应的位置作为中心，不缩放、不加 padding', () => {
+    using env = setup();
+    const view = new FakeView();
+    view.pickSurface = 'map';
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+    // 贴右边、高 300 的面板：可视区域的右边是 1440 - 352 = 1088
+    env.state.registerOverlay(ref(fakeElement(box(1104, 16, 320, 300))), 'right');
+    const reveal = (point: ScreenPoint | null) => {
+      view.projected = point;
+      env.state.context.runCameraOperation(camera => camera.reveal([120, 32]));
+    };
+
+    reveal({ x: 1200, y: 100 });
+    // 点要向左挪 112，画布中心 (720, 310) 向右 112 处的位置成为新的中心
+    expect(view.flyToCalls).toStrictEqual([{ center: [832, 310] }]);
+  });
+
+  it('reveal 在没被挡住、投影不到、拾取不到时不动', () => {
+    using env = setup();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+    env.state.registerOverlay(ref(fakeElement(box(1104, 16, 320, 300))), 'right');
+    const reveal = (point: ScreenPoint | null) => {
+      view.projected = point;
+      env.state.context.runCameraOperation(camera => camera.reveal([120, 32]));
+    };
+
+    reveal({ x: 1200, y: 400 });
+    reveal(null);
+    reveal({ x: 1200, y: 100 });
+
+    expect(view.flyToCalls).toStrictEqual([]);
+    expect(env.errors).toStrictEqual([]);
   });
 
   it('useMapOverlay 拿得到上下文、但不在作用域里时抛错，不留下注销不掉的登记', () => {

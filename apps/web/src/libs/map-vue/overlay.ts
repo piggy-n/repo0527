@@ -104,3 +104,47 @@ export function computeOverlayPadding(
   const [top, bottom] = capPair(side('top'), side('bottom'), height, options.minVisibleRatio);
   return { top, right, bottom, left };
 }
+
+/** 屏幕上的平移量（像素） */
+export interface ScreenOffset {
+  readonly x: number;
+  readonly y: number;
+}
+
+// 一条轴上把 value 挪进 [start, end] 要移动的距离；可视区域总会保留一部分（capPair），start 不大于 end
+function shiftInto(value: number, start: number, end: number): number {
+  if (value < start) {
+    return start - value;
+  }
+  return value > end ? end - value : 0;
+}
+
+/**
+ * 画布上的一点被悬浮元素挡住（落在它的方框里，含 gap）时，把它挪进可视区域最少要平移的像素；没被挡住时为 null。
+ * 可视区域是定位用的 padding 围出的部分（ADR 0029）；point 是画布坐标，方框是页面坐标
+ */
+export function revealOffset(
+  point: { readonly x: number; readonly y: number },
+  canvas: Box,
+  overlays: readonly MeasuredOverlay[],
+  options: Required<OverlayOptions>
+): ScreenOffset | null {
+  const x = canvas.left + point.x;
+  const y = canvas.top + point.y;
+  const { gap } = options;
+  const covered = overlays.some(
+    ({ box }) =>
+      isVisible(box) && x >= box.left - gap && x <= box.right + gap && y >= box.top - gap && y <= box.bottom + gap
+  );
+  if (!covered) {
+    return null;
+  }
+  const padding = computeOverlayPadding(canvas, overlays, options);
+  const width = canvas.right - canvas.left;
+  const height = canvas.bottom - canvas.top;
+  const offset = {
+    x: shiftInto(point.x, padding.left, width - padding.right),
+    y: shiftInto(point.y, padding.top, height - padding.bottom)
+  };
+  return offset.x === 0 && offset.y === 0 ? null : offset;
+}

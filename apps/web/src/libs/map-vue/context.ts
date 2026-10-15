@@ -30,7 +30,14 @@ import {
   shallowReadonly,
   shallowRef
 } from 'vue';
-import { computeOverlayPadding, type OverlayEdge, type OverlayOptions, type OverlayPadding } from './overlay';
+import {
+  computeOverlayPadding,
+  type MeasuredOverlay,
+  type OverlayEdge,
+  type OverlayOptions,
+  type OverlayPadding,
+  revealOffset
+} from './overlay';
 
 /** 就绪视图的受限入口：只有拾取、投影和渲染要素查询；移动相机通过相机操作（ADR 0028 第 5 条、ADR 0039 第 4 条、ADR 0047） */
 export interface MapViewport {
@@ -46,6 +53,8 @@ export interface CameraControl {
   flyTo(target: Partial<CameraState>, options?: FlyToOptions): void;
   /** 没传 padding 时避开登记过的悬浮元素（ADR 0029）；明确传入（包括 0）时以传入的为准 */
   fitBounds(bounds: ViewBounds, options?: FitBoundsOptions): void;
+  /** 这个位置被登记的悬浮元素挡住时，平移地图（不缩放、不旋转）让它露出来，停在可视区域的边上；没被挡住时不动 */
+  reveal(lngLat: LngLat): void;
 }
 
 /** 一次相机操作（ADR 0038、0039）：signal 在下一次操作开始、上下文释放时中止 */
@@ -420,6 +429,11 @@ export class MapContextState implements Disposable {
         if (usable()) {
           view.fitBounds(bounds, { ...options, padding: options?.padding ?? this.#overlayPadding() });
         }
+      },
+      reveal: (lngLat: LngLat) => {
+        if (usable()) {
+          this.#reveal(attached, lngLat);
+        }
       }
     });
     try {
@@ -461,17 +475,38 @@ export class MapContextState implements Disposable {
   }
 
   // 定位时现量现算：不在文档里的元素不算，尺寸为 0、和画布不相交的由纯函数排除
+  #measureOverlays(): MeasuredOverlay[] {
+    return [...this.#overlays].flatMap(({ target, edge }) => {
+      const element = target.value;
+      return element?.isConnected ? [{ edge, box: element.getBoundingClientRect() }] : [];
+    });
+  }
+
   #overlayPadding(): OverlayPadding {
     const canvas = this.#view?.canvas.getBoundingClientRect();
     if (!canvas) {
       const { edgePadding } = this.#overlayOptions;
       return { top: edgePadding, right: edgePadding, bottom: edgePadding, left: edgePadding };
     }
-    const overlays = [...this.#overlays].flatMap(({ target, edge }) => {
-      const element = target.value;
-      return element?.isConnected ? [{ edge, box: element.getBoundingClientRect() }] : [];
-    });
-    return computeOverlayPadding(canvas, overlays, this.#overlayOptions);
+    return computeOverlayPadding(canvas, this.#measureOverlays(), this.#overlayOptions);
+  }
+
+  // 平移后的画布中心对应的位置作为新的中心，中心不加 padding；投影不到（三维在背面）、拾取不到时不动
+  #reveal({ view, canvas }: AttachedView, lngLat: LngLat): void {
+    const point = view.project(lngLat);
+    if (!point) {
+      return;
+    }
+    const box = canvas.getBoundingClientRect();
+    const offset = revealOffset(point, box, this.#measureOverlays(), this.#overlayOptions);
+    if (!offset) {
+      return;
+    }
+    const middle = { x: (box.right - box.left) / 2, y: (box.bottom - box.top) / 2 };
+    const center = view.pick({ x: middle.x - offset.x, y: middle.y - offset.y });
+    if (center.kind === 'hit') {
+      view.flyTo({ center: center.lngLat });
+    }
   }
 
   #useCamera(): Readonly<ShallowRef<CameraState>> {

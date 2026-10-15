@@ -18,10 +18,11 @@ import {
   BOX_ESTIMATE_LIMIT,
   type BoxTask,
   featureBounds,
+  featureLabel,
   featureRows,
-  featureSummary,
   identifyGeometry,
   identifyStep,
+  isEmptyValue,
   pickResources,
   pixelSizeAt,
   planBox,
@@ -632,20 +633,47 @@ describe('featureBounds', () => {
   });
 });
 
-describe('featureSummary', () => {
-  it('标题是资源名，副标题是年份和名称：地类（编码、名称配色）取地类名称', () => {
-    const properties = { dlmc: '水田', name: '不用的名称' };
+describe('isEmptyValue', () => {
+  it('null、空字符串和 -9999、-999（数字或字符串）没有值；0、false、"-" 和其他负数有值', () => {
+    const empty = [null, undefined, '', -9999, '-9999', -999, '-999'];
+    const filled = [0, '0', false, '-', -1, -99999, ' '];
 
-    expect(featureSummary(DLTB, properties)).toStrictEqual({ title: 'bgdc_dltb 的名称', subtitle: '2022 · 水田' });
-    expect(featureSummary(targetOf('bgdc_dltb_czc', 2022), properties).subtitle).toBe('2022 · 水田');
+    expect(empty.map(isEmptyValue)).toStrictEqual(empty.map(() => true));
+    expect(filled.map(isEmptyValue)).toStrictEqual(filled.map(() => false));
+  });
+});
+
+describe('featureLabel', () => {
+  it('地类（编码、名称配色）：名称是地类名称，分类是地类编码', () => {
+    const properties = { dlmc: '旱地', dlbm: '0103', name: '不用的名称', zldwmc: '欢口镇常庄村' };
+
+    expect(featureLabel('bgdc_dltb', properties)).toStrictEqual({ name: '旱地', category: '0103' });
+    expect(featureLabel('bgdc_dltb_czc', properties)).toStrictEqual({ name: '旱地', category: '0103' });
+    expect(featureLabel('bgdc_dltb', { DLMC: '水田', DLBM: '0101' })).toStrictEqual({ name: '水田', category: '0101' });
   });
 
-  it('其他资源取 name；没有名称或名称为空时只有年份，数字照常显示', () => {
-    expect(featureSummary(HYDL, { name: '某河', dlmc: '河流水面' }).subtitle).toBe('2024 · 某河');
-    expect(featureSummary(HYDL, { name: 42 }).subtitle).toBe('2024 · 42');
-    expect(featureSummary(HYDL, { name: '' }).subtitle).toBe('2024');
-    expect(featureSummary(HYDL, { name: { text: '某河' } }).subtitle).toBe('2024');
-    expect(featureSummary(DLTB, {}).subtitle).toBe('2022');
+  it('城市现状数据：名称取 name，没有值时取分类名称；分类取 type，没有值时取分类名称，和名称相同时不写', () => {
+    const station = { name: '涵西村微型消防站', ccn: '消防站', type: '微型消防站' };
+    const pond = { name: '-9999', ccn: '坑塘', type: '-9999' };
+    const road = { name: -9999, type: '支路' };
+
+    expect(featureLabel('csxhjctb_gyssp', station)).toStrictEqual({ name: '涵西村微型消防站', category: '微型消防站' });
+    expect(featureLabel('csxhjctb_gyssp', { ...station, type: '' })).toStrictEqual({
+      name: '涵西村微型消防站',
+      category: '消防站'
+    });
+    expect(featureLabel('csxhjctb_hyda', pond)).toStrictEqual({ name: '坑塘', category: null });
+    expect(featureLabel('csxhjctb_road', road)).toStrictEqual({ name: null, category: '支路' });
+  });
+
+  it('其他资源：名称取坐落单位名称，没有值时取 name，没有分类；数字照常显示，对象不算名称', () => {
+    expect(featureLabel('bgdc_cjdcq', { zldwmc: '后坝村', name: '不用的名称' })).toStrictEqual({
+      name: '后坝村',
+      category: null
+    });
+    expect(featureLabel('szy_market', { zldwmc: '', name: 42 }).name).toBe('42');
+    expect(featureLabel('szy_market', { name: { text: '某市场' } }).name).toBeNull();
+    expect(featureLabel('bgdc_cjdcqjx', { bsm: '320321125000000165' })).toStrictEqual({ name: null, category: null });
   });
 });
 
@@ -660,30 +688,42 @@ describe('featureRows', () => {
     bz: null,
     kcxs: '',
     sfjz: false,
+    ngrade: '-9999',
+    kcmj: 0,
     extra: { a: 1 }
   };
 
-  it('按返回的顺序，不列主键和几何；地类的字段名用中文名（大小写不敏感），不认识的用字段编码', () => {
-    expect(featureRows('bgdc_dltb', properties)).toStrictEqual([
-      { key: 'bsm', label: '标识码', value: '320826211000006380' },
-      { key: 'DLMC', label: '地类名称', value: '水田' },
-      { key: 'tbmj', label: '图斑面积', value: '6033.8398' },
-      { key: 'bz', label: '备注', value: '-' },
-      { key: 'kcxs', label: '扣除地类系数', value: '-' },
-      { key: 'sfjz', label: 'sfjz', value: 'false' },
-      { key: 'extra', label: 'extra', value: '{"a":1}' }
+  it('不列主键和几何；有值的和没有值的分开，各自按返回的顺序', () => {
+    const { filled, empty } = featureRows(properties);
+
+    expect(filled.map(row => [row.key, row.value])).toStrictEqual([
+      ['bsm', '320826211000006380'],
+      ['DLMC', '水田'],
+      ['tbmj', '6033.8398'],
+      ['sfjz', 'false'],
+      ['kcmj', '0'],
+      ['extra', '{"a":1}']
+    ]);
+    expect(empty.map(row => [row.key, row.value])).toStrictEqual([
+      ['bz', null],
+      ['kcxs', null],
+      ['ngrade', null]
     ]);
   });
 
-  it('其他资源的字段名都用字段编码', () => {
-    expect(featureRows('csxhjctb_hydl', properties).map(row => row.label)).toStrictEqual([
-      'bsm',
-      'DLMC',
-      'tbmj',
-      'bz',
-      'kcxs',
-      'sfjz',
-      'extra'
+  it('字段名按三调的字段名表（大小写不敏感），不分资源；表里没有的为 null', () => {
+    const { filled, empty } = featureRows(properties);
+
+    expect([...filled, ...empty].map(row => row.label)).toStrictEqual([
+      '标识码',
+      '地类名称',
+      '图斑面积',
+      null,
+      '扣除地类面积',
+      null,
+      '备注',
+      '扣除地类系数',
+      null
     ]);
   });
 });

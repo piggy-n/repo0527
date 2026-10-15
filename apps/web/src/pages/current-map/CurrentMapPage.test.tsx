@@ -916,7 +916,8 @@ describe('CurrentMapPage', () => {
     await nextTick();
 
     expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(true);
-    expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('2022 · 水田');
+    expect(wrapper.get('[data-feature-detail-panel] h3').text()).toBe('水田');
+    expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('地类图斑 · 2022');
     await vi.waitFor(() => expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('地类名称'));
     await vi.waitFor(() => expect(addedLayersOf(map, 'selection')).toHaveLength(3));
     const [[, beforeId] = []] = addedLayersOf(map, 'selection');
@@ -959,7 +960,7 @@ describe('CurrentMapPage', () => {
 
     await button(wrapper, '区划定位').trigger('click');
     expect(shownPanels(wrapper)).toStrictEqual(['region-locate']);
-    expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('2022 · 水田');
+    expect(wrapper.get('[data-feature-detail-panel] h3').text()).toBe('水田');
     expect(map.geojson.has('selection')).toBe(true);
 
     map.mouse('click', 200, 150);

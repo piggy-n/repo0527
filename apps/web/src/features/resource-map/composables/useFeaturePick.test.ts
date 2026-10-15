@@ -154,6 +154,7 @@ function fakeCamera(zoom: number) {
   const camera = shallowRef<CameraState>({ center: [119, 33], zoom, bearing: 0, pitch: 0 });
   const fitBounds = vi.fn<CameraControl['fitBounds']>();
   const flyTo = vi.fn<CameraControl['flyTo']>();
+  const reveal = vi.fn<CameraControl['reveal']>();
   let current = new AbortController();
   const beginCameraOperation = vi.fn<() => CameraOperation>(() => {
     current.abort();
@@ -163,13 +164,14 @@ function fakeCamera(zoom: number) {
       signal: controller.signal,
       run: action => {
         if (!controller.signal.aborted) {
-          action({ fitBounds, flyTo });
+          action({ fitBounds, flyTo, reveal });
         }
       }
     };
   });
   const runCameraOperation = vi.fn<MapContext['runCameraOperation']>(action => beginCameraOperation().run(action));
-  return { camera, fitBounds, flyTo, beginCameraOperation, runCameraOperation, interrupt: () => current.abort() };
+  const interrupt = () => current.abort();
+  return { camera, fitBounds, flyTo, reveal, beginCameraOperation, runCameraOperation, interrupt };
 }
 
 function setup(
@@ -237,9 +239,9 @@ function highlightColor(owner: Owner): unknown {
 }
 
 describe('useFeaturePick：识别', () => {
-  it('14 级起点中一个渲染要素：直接进入详情，不移动相机；会话记下选中的要素，详情到了以后高亮', async () => {
+  it('14 级起点中一个渲染要素：直接进入详情，不定位；会话记下选中的要素，详情到了以后高亮', async () => {
     mockDetail();
-    const { owner, send, select, beginCameraOperation, fitBounds } = setup(15);
+    const { owner, send, select, fitBounds } = setup(15);
 
     expect(send(click(), [rendered(DLTB, 1)])).toBe(true);
 
@@ -253,7 +255,6 @@ describe('useFeaturePick：识别', () => {
     await vi.waitFor(() => expect(owner.detail.value?.kind).toBe('ready'));
     expect(owner.detail.value).toMatchObject({ detail: { properties: { guid: guid(1) }, geometry: POINT } });
     expect(highlighted(owner)).toBe(true);
-    expect(beginCameraOperation).not.toHaveBeenCalled();
     expect(fitBounds).not.toHaveBeenCalled();
   });
 
@@ -1052,7 +1053,7 @@ describe('useFeaturePick：区划裁剪（ADR 0051）', () => {
 
     dragBox(send);
 
-    expect(owner.state.value).toMatchObject({ kind: 'too-complex', target: { sourceId: CZCDYD } });
+    expect(owner.state.value).toMatchObject({ kind: 'too-complex', target: { sourceId: CZCDYD }, mode: 'box' });
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(requests).toStrictEqual([]);
     resources.state.value = withDisplay(resources.state.value, 'bgdc_czcdyd', { checked: false });
@@ -1180,6 +1181,85 @@ describe('useFeaturePick：年份变化（ADR 0052 第 4 节）', () => {
     expect(kindOf(owner)).toBe('idle');
     expect(highlighted(owner)).toBe(false);
     expect(fitBounds).not.toHaveBeenCalled();
+  });
+});
+
+// 同一处点中的两个渲染要素
+const twoRoads = (first: number) => [rendered(DLTB, first), rendered(DLTB, first + 1)];
+
+describe('useFeaturePick：被面板挡住时露出来（设计稿 5D.6）', () => {
+  it('单击点中一个渲染要素：面板按结果渲染以后让点中的位置露出来，不定位', async () => {
+    mockDetail();
+    const { send, reveal, fitBounds } = setup(15);
+
+    send(click(), [rendered(DLTB, 1)]);
+    expect(reveal).not.toHaveBeenCalled();
+    await nextTick();
+
+    expect(reveal).toHaveBeenCalledOnce();
+    expect(reveal).toHaveBeenCalledWith([118.1, 32.9]);
+    expect(fitBounds).not.toHaveBeenCalled();
+  });
+
+  it('单击点中多个渲染要素：列出候选后露出来', async () => {
+    const { send, reveal } = setup(15);
+
+    send(click(200, 100), twoRoads(1));
+    await nextTick();
+
+    expect(reveal).toHaveBeenCalledOnce();
+    expect(reveal).toHaveBeenCalledWith([118.2, 32.9]);
+  });
+
+  it('后端识别出多个：用等待之前开始的那次相机操作露出来', async () => {
+    mockIdentify(layerCode =>
+      layerCode === 'bgdc_dltb_2022' ? page(2, [{ guid: guid(1) }, { guid: guid(2) }]) : page(0, [])
+    );
+    const { owner, send, reveal, beginCameraOperation } = setup(12);
+
+    send(click());
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
+    await nextTick();
+
+    expect(reveal).toHaveBeenCalledWith([118.1, 32.9]);
+    expect(beginCameraOperation).toHaveBeenCalledOnce();
+  });
+
+  it('框选、没有结果、后端识别出一个（要定位）时不露出来', async () => {
+    mockIdentify(layerCode => (layerCode === 'bgdc_dltb_2022' ? page(1, [{ guid: guid(7) }]) : page(0, [])));
+    mockDetail();
+    const boxed = setup(15);
+    dragBox(boxed.send, twoRoads(1));
+    expect(kindOf(boxed.owner)).toBe('candidates');
+    const empty = setup(15);
+    empty.send(click(), []);
+    expect(kindOf(empty.owner)).toBe('empty');
+    await nextTick();
+    expect(boxed.reveal).not.toHaveBeenCalled();
+    expect(empty.reveal).not.toHaveBeenCalled();
+
+    const far = setup(12);
+    far.send(click());
+    await vi.waitFor(() => expect(far.fitBounds).toHaveBeenCalledOnce());
+    expect(far.reveal).not.toHaveBeenCalled();
+  });
+
+  it('面板渲染之前关闭了结果、用户移动了地图、又点了别处：这一次不露出来', async () => {
+    const { owner, send, reveal, interrupt } = setup(15);
+
+    send(click(), twoRoads(1));
+    owner.close();
+    await nextTick();
+    send(click(), twoRoads(1));
+    interrupt();
+    await nextTick();
+    expect(reveal).not.toHaveBeenCalled();
+
+    send(click(100, 100), twoRoads(1));
+    send(click(300, 100), twoRoads(3));
+    await nextTick();
+    expect(reveal).toHaveBeenCalledOnce();
+    expect(reveal).toHaveBeenCalledWith([118.3, 32.9]);
   });
 });
 

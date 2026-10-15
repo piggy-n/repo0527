@@ -296,7 +296,7 @@ export const LANDUSE_MEANINGS: Readonly<Record<string, string>> = {
   '1207': '表层为岩石或石砾、覆盖面积≥70% 的土地。'
 };
 
-/** 地类图斑的字段名（旧项目 featureModel.js 的 LANDUSE_LABELS），键是大写的字段编码 */
+/** 三调的字段名（旧项目 featureModel.js 的 LANDUSE_LABELS），键是大写的字段编码；其他资源的同名字段也用它 */
 export const LANDUSE_FIELD_LABELS: Readonly<Record<string, string>> = {
   WYBM: '唯一编码',
   BSM: '标识码',

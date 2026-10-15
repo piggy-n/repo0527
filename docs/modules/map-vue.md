@@ -11,7 +11,7 @@
 | `provide-map.ts` | `provideMap`：在当前组件里创建会话、提供上下文、管理提交与释放的时机 |
 | `style-binder.ts` | `StyleBinder`：把各拥有者的推导结果一次提交给样式模型 |
 | `context.ts` | `MapContextState`：会话、当前视图、视图状态、`whenReady`、`useCamera`、相机操作、悬浮元素的登记表与 `overlayPadding`，对外的只读上下文与视图的受限入口 |
-| `overlay.ts` | `computeOverlayPadding`：按悬浮元素的实际占用算出定位用的 padding（纯函数） |
+| `overlay.ts` | `computeOverlayPadding`：按悬浮元素的实际占用算出定位用的 padding；`revealOffset`：被挡住的位置挪进可视区域的平移量（纯函数） |
 | `MapCanvas.tsx` | `<MapCanvas>`：二维地图画布，挂载后创建视图、卸载时释放 |
 | `use-map.ts` | `useMap()`：子孙组件取只读上下文；`useMapOverlay()`：悬浮元素登记自己贴着的边 |
 
@@ -153,7 +153,7 @@ map.currentCameraOperation().run(camera => camera.fitBounds(JIANGSU_BOUNDS, { du
 - 否则等到有视图进入 `ready`：期间引擎失败、重试、视图被替换、样式失败后恢复都继续等，暂停不算就绪；被新的操作作废、上下文释放时放弃。加载期间选中南京、引擎失败、重试成功后，地图定位到南京（ADR 0038 时会放弃）
 - 回调抛错交给 `onError`，同步执行和等到就绪后执行都一样，不抛给调用方
 
-回调拿到的 `CameraControl` 只有 `flyTo`、`fitBounds`，只在这次回调期间有效：
+回调拿到的 `CameraControl` 只有 `flyTo`、`fitBounds`、`reveal`，只在这次回调期间有效：
 
 - 每次调用都确认回调还没返回、操作没被作废、视图仍是开始执行时那个就绪的视图；回调里又开始了新的操作、视图不再就绪时什么也不做
 - 回调返回之后再调用抛错：把它存起来延迟调用是编程错误，类型和 lint 拦不住，运行时暴露，不会悄悄覆盖新的定位
@@ -203,6 +203,10 @@ const padding = useMap().overlayPadding();
 - 可视区域的宽、高至少保留画布的 1/3，超出时两侧按比例缩小。极窄的画布上目标可能有一部分落在面板下面，这是为了不缩到几乎看不见
 - 默认值：边距 16、间隔 16、至少保留 1/3，用 `provideMap({ overlay: { edgePadding, gap, minVisibleRatio } })` 修改，取值不合法时抛错
 - 相机控制的 `fitBounds`、`flyTo` 没传 `padding` 时使用 `overlayPadding()`；明确传入（包括 `0`）时以传入的为准。这是 `CameraControl` 比 `MapView` 多出的一层默认行为。`flyTo` 只在给了中心时把它放在避开悬浮元素后的区域中央（5B.6，ADR 0037）
+- 相机控制的 `reveal(lngLat)`（5D.6）：这个位置被登记的元素挡住时，平移地图把它挪进可视区域，停在可视区域的边上（离元素一个间隔），不缩放、不旋转；没被挡住、投影或拾取不到时不动。判断和平移量是纯函数 `revealOffset`
+  - "挡住"是落在元素的方框里（含间隔），只看方框，不看占用的整条边：点在矮面板的下面不算挡住，点在画布边上也不动。Leaflet 的 `panInside` 是点进了留白就平移，这里只在真的被挡住时平移
+  - 新的中心取平移后画布中心处拾取到的位置，用视图的 `flyTo` 移过去，不加 padding；这么短的距离，`flyTo` 中途几乎不拉远
+  - 用于点中的要素在面板下面、相机又不需要定位的时候（点选）；要定位的直接用 `fitBounds`，它本来就避开元素
 - `useMapOverlay` 要放在 `provideMap` 所在组件的子孙组件里：提供上下文的组件 `inject` 不到自己 provide 的值（Vue 的 `inject` 从父组件开始找）；不在作用域里调用时抛错，作用域销毁时注销
 
 ## 错误上报
@@ -250,8 +254,8 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 | `style-binder.test.ts` | 初始提交、同一轮的跨分组修改、晚一轮时的拒绝与收敛、推导失败时整批跳过、缓存、重复绑定、释放 | Node |
 | `provide-map.test.tsx` | 必须在 setup 中调用、初始值早于子组件 setup、挂载后绑定抛错、卸载顺序、卸载路径上的错误、组名的类型检查、默认的错误输出；工具的登记、挂载后登记抛错、重复或 `browse` 时这一次都不登记 | jsdom |
 | `MapCanvas.test.tsx` | 用完整快照创建视图、页面的 class 不冲掉 MapLibre 的 class、视图状态的变化（视图入口只在 `ready` 时有值）、受限入口（只有 `kind`、`pick`、`project`、`queryRendered`，移动相机经相机操作）、只读引用、`whenReady` 的各种结局、`useCamera` 的订阅与取消、先释放视图后释放会话、运行中的错误、画布的数量限制、失败原因、引擎失败后的重试；受限入口的 `pick`、`project`；工具通过上下文激活和退出、`activeTool` 只读、地图上的点击经视图交给工具 | jsdom |
-| `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，相机控制 `fitBounds` 的默认 padding，`useMapOverlay` 不在作用域里时抛错；`activeTool` 跟随工具模型、上下文释放后不再跟随；`selection` 从会话已有的选择开始、跟随会话，`select`、`clearSelection` 写进会话，释放后不再跟随；`view` 的渲染要素查询原样转发；视图入口只在 `ready` 时有值；相机操作：开始时作废上一次、读当前的不开始新的且是同一个对象，就绪时同步执行、没就绪时等到就绪（暂停不算）、期间有新的操作时放弃、引擎失败后重试和样式失败后恢复都照样执行、挂上已就绪的视图时执行、只能 `run` 一次且不重放、已作废和上下文释放后不执行、地图刚就绪时旧操作先执行新操作后执行、回调里开始的新操作立即执行、相机控制过期后抛错和作废后不生效、回调出错交给 `onError`、等待的监听在执行和作废和释放时移除；`whenReady` 返回前 `signal` 中止、视图被卸下；鼠标位置：一帧只更新一次、取最后的位置，按下也算移动、按键不算，离开画布为 null，视图不在就绪时不跟踪，失败、卸下、上下文释放时清空并取消那一帧，不是当前视图的输入不算（用手动推进的下一帧） | Node |
-| `overlay.test.ts` | 占用与间隔、同一边取最大、不算的元素、画布的位置、横向和纵向的下限、选项 | Node |
+| `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，相机控制 `fitBounds` 的默认 padding、`reveal` 的新中心以及不动的几种情况，`useMapOverlay` 不在作用域里时抛错；`activeTool` 跟随工具模型、上下文释放后不再跟随；`selection` 从会话已有的选择开始、跟随会话，`select`、`clearSelection` 写进会话，释放后不再跟随；`view` 的渲染要素查询原样转发；视图入口只在 `ready` 时有值；相机操作：开始时作废上一次、读当前的不开始新的且是同一个对象，就绪时同步执行、没就绪时等到就绪（暂停不算）、期间有新的操作时放弃、引擎失败后重试和样式失败后恢复都照样执行、挂上已就绪的视图时执行、只能 `run` 一次且不重放、已作废和上下文释放后不执行、地图刚就绪时旧操作先执行新操作后执行、回调里开始的新操作立即执行、相机控制过期后抛错和作废后不生效、回调出错交给 `onError`、等待的监听在执行和作废和释放时移除；`whenReady` 返回前 `signal` 中止、视图被卸下；鼠标位置：一帧只更新一次、取最后的位置，按下也算移动、按键不算，离开画布为 null，视图不在就绪时不跟踪，失败、卸下、上下文释放时清空并取消那一帧，不是当前视图的输入不算（用手动推进的下一帧） | Node |
+| `overlay.test.ts` | 占用与间隔、同一边取最大、不算的元素、画布的位置、横向和纵向的下限、选项；`revealOffset` 的挡住判断（含间隔、只看方框）、平移量和画布的位置 | Node |
 | `overlay.browser.test.tsx` | 真实的布局和 MapLibre（ADR 0040）：登记的面板按实际尺寸算进留白（左 352），不传 `padding` 的 `fitBounds` 把范围放在面板右边的区域里、并贴满可视区域的一边。jsdom 里元素的尺寸都是 0，5A.3 起这一点只在开发页手动验证过 | Chromium 无界面版 |
 
 - 推导失败的用例用 `await expect(nextTick()).resolves.toBeUndefined()` 等待：异常冒出侦听器时，失败落在断言上，而不是测试本身报错

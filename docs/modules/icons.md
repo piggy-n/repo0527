@@ -132,6 +132,7 @@ packages/icons/
 | `auth-user`、`auth-lock` | fzjc 项目（最初作为样例引入） | 登录表单的输入框前缀、用户菜单的头像 |
 | `map-*`（地图工具栏的 10 个） | Tabler Icons 3.49.0（MIT），见下文"第三方图标" | 地图页的业务组和基础组（ADR 0053 第 7 节） |
 | `geometry-*`、`drag-handle`、`splitter-handle`、`panel-*`、`close`、`info` | 同上 | 资源图层面板（5D.2） |
+| `arrow-left`、`focus`、`warning` | 同上 | 点选详情（5D.6） |
 
 2026-09-30 清理了只在主题预览页演示中用到的样例：`bell-solid`（fzjc）、`toolbar-map`、`toolbar-move`（旧项目的 Toolbar）、`sample-pin-color`（自制的多色样例），主题预览页改用上面的正式图标演示。消息铃铛迁移时使用 UI 提供的图标；地图工具栏在 5D.1 改用下面的开源线性图标（用户决定先用开源图标，有更合适的再替换个别图标）。
 
@@ -163,6 +164,9 @@ packages/icons/
 | `info` | `info-circle` | 带提示的信息图标 |
 | `map-legend` | `list-details` | 卡片行的图例卡 |
 | `check` | `check` | 选中的标记（底图缩略图右上角的勾） |
+| `arrow-left` | `arrow-left` | 返回（点选详情的"返回列表"） |
+| `focus` | `focus-2` | 定位到要素 |
+| `warning` | `alert-triangle` | 警告、出错的提示条 |
 
 以后再加 Tabler 的图标照同样的做法，并补进这张表。
 
