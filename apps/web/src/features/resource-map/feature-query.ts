@@ -225,9 +225,20 @@ function once<T>(compute: () => T): () => T {
   return () => (cached ??= { value: compute() }).value;
 }
 
+// 一种几何类型（容差由它决定）在一次点选里的范围：同类型的资源共用，求交、整理只算一次
+interface ClickArea {
+  /** 和区划求交的范围；没有区划范围时为 null */
+  readonly area: RegionScope | null;
+  /** 查后端的几何：点击位置或容差框，拾取不到时为 null */
+  readonly geometry: () => Point | Polygon | null;
+  /** 和区划求交后整理过的几何（ADR 0051 第 4 节） */
+  readonly prepared: (() => RegionScope | null) | null;
+}
+
 /**
  * 点击时就定下每个资源怎样识别（ADR 0047、0048 第 2 节）：屏幕上的查询、拾取都在这里同步做完，之后查后端只用地理范围，
- * 地图移动不影响结果。既没有渲染要素、又不能查后端或拾取不到范围的资源不在结果里。
+ * 地图移动不影响结果。资源从上到下，遇到渲染要素的结果或范围太复杂时停下（下面的资源不会用到，同框选）；
+ * 既没有渲染要素、又不能查后端或拾取不到范围的资源不在结果里。
  * 有区划范围时（ADR 0051 第 3 节）：点击位置不在区划里为 null，不识别；线、点的容差框先和区划求交
  */
 export function planIdentify(
@@ -256,13 +267,31 @@ export function planIdentify(
     return null;
   }
   const pixelSize = once(() => pixelSizeAt(point, pick));
-  return targets.flatMap((target): IdentifyTask[] => {
-    const tolerance = PICK_TOLERANCES[target.resource.geometry];
+  const areas = new Map<ResourceGeometry, ClickArea>();
+  const areaOf = (type: ResourceGeometry): ClickArea => {
+    const cached = areas.get(type);
+    if (cached) {
+      return cached;
+    }
+    const tolerance = PICK_TOLERANCES[type];
     // 求交范围：面只取包含点击位置的，点击位置在区划里，用整个区划过滤；线、点用容差框和区划的交集
     const square = tolerance > 0 ? screenBoxPolygon(toleranceBox(point, tolerance), pick) : null;
     const area = scope && (tolerance === 0 ? scope : square && clipToScope(square, scope));
+    const created: ClickArea = {
+      area,
+      geometry: once(() => identifyGeometry(type, point, pick)),
+      prepared: area && once(() => queryGeometry(area, pixelSize()))
+    };
+    areas.set(type, created);
+    return created;
+  };
+  const tasks: IdentifyTask[] = [];
+  for (const target of targets) {
+    const { geometry: type, code } = target.resource;
+    const tolerance = PICK_TOLERANCES[type];
+    const { area, geometry, prepared } = areaOf(type);
     if (scope && !area) {
-      return [];
+      continue;
     }
     // 面的距离都是 0，没有范围时不用换算几何
     const features = view.queryRendered(renderedArea(point, tolerance), {
@@ -272,16 +301,22 @@ export function planIdentify(
     const rendered = renderedCandidates(target, withinScope(features, area), shape =>
       screenDistance(shape, point, lngLat => view.project(lngLat))
     );
-    const step = identifyStep(queryCapabilityOf(target.resource.code), view.kind, zoom, rendered);
-    if (step.kind === 'server') {
-      const geometry = identifyGeometry(target.resource.geometry, point, pick);
-      if (geometry) {
-        return [serverTask(target, geometry, area && once(() => queryGeometry(area, pixelSize())))];
+    const server = identifyStep(queryCapabilityOf(code), view.kind, zoom, rendered).kind === 'server' && geometry();
+    if (server) {
+      const task = serverTask(target, server, prepared);
+      tasks.push(task);
+      if (task.kind === 'too-complex') {
+        return tasks;
       }
+      continue;
     }
     // 用渲染要素；后端识别拾取不到范围时也退回渲染要素
-    return rendered.length > 0 ? [{ kind: 'rendered', target, candidates: rendered }] : [];
-  });
+    if (rendered.length > 0) {
+      tasks.push({ kind: 'rendered', target, candidates: rendered });
+      return tasks;
+    }
+  }
+  return tasks;
 }
 
 // 拾取到的经纬度；拾取不到时为 null

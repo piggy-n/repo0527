@@ -365,7 +365,7 @@ describe('planIdentify', () => {
   const parcelOnly = [rendered(DLTB.sourceId, { guid: guid('c') }, 0)];
 
   it('渲染要素按几何类型取：面取点击位置、不换算几何，线、点取容差框并换算几何', () => {
-    const { view, queries } = fakeView(features);
+    const { view, queries } = fakeView([]);
 
     planIdentify([LCTL, DLTB, SZY], ORIGIN, 15, view);
 
@@ -376,15 +376,13 @@ describe('planIdentify', () => {
     ]);
   });
 
-  it('二维 14 级起有渲染要素的都用渲染要素，能后端识别的也不查；候选按屏幕距离排序', () => {
-    const tasks = planIdentify([LCTL, HYDL, DLTB, SZY], ORIGIN, 15, fakeView(features).view);
+  it('二维 14 级起有渲染要素的用渲染要素，能后端识别的也不查；遇到第一个就停下，下面的资源不再查询；候选按屏幕距离排序', () => {
+    const { view, queries } = fakeView(features);
+    const tasks = planIdentify([HYDL, LCTL, DLTB, SZY], ORIGIN, 15, view);
 
-    expect(kindsOf(tasks)).toStrictEqual([
-      ['csxhjctb_lctl', 'rendered'],
-      ['csxhjctb_hydl', 'rendered'],
-      ['bgdc_dltb', 'rendered']
-    ]);
-    const [first] = tasks;
+    expect(kindsOf(tasks)).toStrictEqual([['csxhjctb_hydl', 'rendered']]);
+    expect(queries.map(([, { sources }]) => sources)).toStrictEqual([[HYDL.sourceId]]);
+    const [first] = planIdentify([LCTL, DLTB], ORIGIN, 15, view);
     const order = first?.kind === 'rendered' ? first.candidates.map(({ guid: id }) => id) : [];
     expect(order).toStrictEqual([guid('b'), guid('a')]);
   });
@@ -396,18 +394,17 @@ describe('planIdentify', () => {
     expect(planIdentify([HYDL, LVLL, DLTB], ORIGIN, 16, fakeView([]).view)).toStrictEqual([]);
   });
 
-  it('14 级以下登记的数据集查后端：线用容差框、面用点击位置；没有登记的有渲染要素就用', () => {
-    const tasks = planIdentify([LCTL, HYDL, LVLL, CJDCQJX, DLTB, SZY], ORIGIN, 13.99, fakeView(features).view);
+  it('14 级以下登记的数据集查后端：线用容差框、面用点击位置；没有登记的有渲染要素就用，用到时停下', () => {
+    const tasks = planIdentify([HYDL, LVLL, DLTB, CJDCQJX, LCTL], ORIGIN, 13.99, fakeView(features).view);
 
     expect(kindsOf(tasks)).toStrictEqual([
-      ['csxhjctb_lctl', 'rendered'],
       ['csxhjctb_hydl', 'server'],
       ['csxhjctb_lvll', 'server'],
-      ['bgdc_cjdcqjx', 'rendered'],
-      ['bgdc_dltb', 'server']
+      ['bgdc_dltb', 'server'],
+      ['bgdc_cjdcqjx', 'rendered']
     ]);
-    expect(tasks[1]).toMatchObject({ geometry: { type: 'Polygon' } });
-    expect(tasks[4]).toStrictEqual({ kind: 'server', target: DLTB, geometry: { type: 'Point', coordinates: [0, 0] } });
+    expect(tasks[0]).toMatchObject({ geometry: { type: 'Polygon' } });
+    expect(tasks[2]).toStrictEqual({ kind: 'server', target: DLTB, geometry: { type: 'Point', coordinates: [0, 0] } });
   });
 
   it('三维没有渲染要素：能后端识别的资源仍查后端，其他的没有结果', () => {
@@ -797,12 +794,41 @@ describe('区划范围（ADR 0051 第 3、4 节）', () => {
     });
   });
 
-  it('求交范围整理不成能发给后端的几何时是"范围太复杂"', () => {
-    const { view } = scopedView([]);
+  it('求交范围整理不成能发给后端的几何时是"范围太复杂"，停下，下面的资源不再查询', () => {
+    const { view, queries } = scopedView([]);
 
-    expect(planIdentify([HYDL], { x: 98, y: 50 }, 12, view, HOLED)).toStrictEqual([
+    expect(planIdentify([HYDL, DLTB], { x: 98, y: 50 }, 12, view, HOLED)).toStrictEqual([
       { kind: 'too-complex', target: HYDL }
     ]);
+    expect(queries.map(([, { sources }]) => sources)).toStrictEqual([[HYDL.sourceId]]);
+  });
+
+  it('同一几何类型的资源共用容差框、求交范围和整理过的几何：一次点选里只拾取、求交一次', () => {
+    const { view } = scopedView([]);
+    let picks = 0;
+    const counted = {
+      ...view,
+      pick: (point: ScreenPoint) => {
+        picks += 1;
+        return view.pick(point);
+      }
+    };
+    const plan = (targets: readonly PickResource[]) => {
+      picks = 0;
+      const tasks = planIdentify(targets, { x: 98, y: 50 }, 12, counted, SCOPE) ?? [];
+      return { tasks, picks };
+    };
+
+    const single = plan([HYDL]);
+    const shared = plan([HYDL, LVLL, LCTL]);
+
+    expect(kindsOf(shared.tasks)).toStrictEqual([
+      ['csxhjctb_hydl', 'server'],
+      ['csxhjctb_lvll', 'server']
+    ]);
+    expect(shared.picks).toBe(single.picks);
+    const [hydl, lvll] = shared.tasks;
+    expect(hydl?.kind === 'server' && lvll?.kind === 'server' && hydl.geometry === lvll.geometry).toBe(true);
   });
 
   it('框整个在区划外时为 null，不查询', () => {
