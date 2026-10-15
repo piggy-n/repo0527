@@ -93,6 +93,10 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+// 下拉框里某个线型选项的示意的 stroke-dasharray；实线没有
+const dasharray = (dash: string) =>
+  document.body.querySelector(`[data-dash="${dash}"] [data-swatch] line`)?.getAttribute('stroke-dasharray') ?? null;
+
 describe('SymbolEditor', () => {
   it('点：档位、描边宽度点下就确认；改过之后可以恢复默认，只恢复这个资源', async () => {
     const { wrapper, symbols } = mountEditor('csxhjctb_gyssp');
@@ -255,10 +259,31 @@ describe('SymbolEditor', () => {
     const options = [...document.body.querySelectorAll<HTMLElement>('[data-fill-style]')];
 
     expect(options.map(option => option.dataset.fillStyle)).toHaveLength(10);
-    const style = (name: string) =>
-      options.find(option => option.dataset.fillStyle === name)?.querySelector('[data-swatch]')?.getAttribute('style') ?? '';
-    expect(style('dot')).toContain('background-image');
-    expect(style('solid')).not.toContain('background-image');
+    const hasPattern = (name: string) =>
+      options.find(option => option.dataset.fillStyle === name)?.querySelector('[data-swatch] pattern') !== null;
+    expect(hasPattern('dot')).toBe(true);
+    expect(hasPattern('solid')).toBe(false);
+  });
+
+  it('线型的选项带示意：按当前的颜色和粗细画出每种线型（设计稿 5D.5）', async () => {
+    const { wrapper, symbols } = mountEditor('bgdc_cjdcqjx');
+    symbols.setSymbol({ code: 'bgdc_cjdcqjx' }, { width: 'L' });
+    await nextTick();
+    await wrapper.findComponent(ElSelect).find('.el-select__wrapper').trigger('click');
+    await nextTick();
+    // L 档 14 级 2.88 像素，线型的线段和间隔按线宽换算
+    expect(dasharray('dashed')).toBe('8.64 5.76');
+    expect(dasharray('dotted')).toBe('2.88 5.76');
+    expect(dasharray('solid')).toBeNull();
+  });
+
+  it('颜色旁写出色值：#RRGGBB，半透明时带百分比', () => {
+    const { wrapper } = mountEditor('szy_kt');
+
+    const text = wrapper.get('[data-symbol-editor]').text();
+    // 坑塘的默认符号：半透明的填充，同色不透明的描边
+    expect(text).toContain('填充色#C74F9B 35%');
+    expect(text).toContain('描边色#C74F9B描边宽度');
   });
 
   it('分类样式的取值：改的是这个取值，恢复默认只恢复它；规则里没有的取值没有编辑器', async () => {

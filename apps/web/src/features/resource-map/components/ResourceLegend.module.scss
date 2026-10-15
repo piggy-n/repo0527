@@ -1,15 +1,16 @@
-// 联调用的样式，5D 再设计；放在显示面板的 Tab 里，外观和滚动由外壳负责
+// 图例（设计稿 5D.5）：放在显示面板的 Tab 里，外观和滚动由外壳负责；条目一行高 36、预览 28 × 20
 
 .legend {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
 }
 
-// "全部恢复默认"靠右
+// "全部恢复默认"靠右，贴着外壳的头部
 .toolbar {
   display: flex;
   justify-content: flex-end;
+  margin-top: -4px;
 }
 
 .entries {
@@ -19,45 +20,94 @@
 }
 
 .entry + .entry {
-  margin-top: var(--space-xs);
+  border-top: 1px solid var(--color-divider);
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  min-width: 0;
+  gap: var(--space-sm);
+  width: 100%;
+  min-height: 36px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-regular);
+  font-size: var(--font-size-base);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: -2px;
+  }
+}
+
+.arrow {
+  flex: none;
+  color: var(--color-text-placeholder);
+}
+
+// 前三个取值的颜色，拼成一个和预览一样高的色条
+.colors {
+  display: flex;
+  flex: none;
+  overflow: hidden;
+  border-radius: 2px;
+
+  i {
+    width: 8px;
+    height: 16px;
+  }
 }
 
 .name {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-regular);
+  color: var(--color-text-strong);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-// Element 按钮把内容包在一层 span 里，按钮上的 gap 作用不到文字，用外边距隔开
-.swatch {
-  margin-right: var(--space-xs);
-}
-
-.badge {
-  margin-left: var(--space-xs);
-  font-size: var(--font-size-xxs);
+.year {
+  font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }
 
-// 展开的内容缩进到箭头后面
+// 改过符号
+.edited {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+}
+
+.badge {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background-color: var(--color-neutral-bg);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+// 展开的内容不缩进，编辑器和面板一样宽
 .content {
-  padding: var(--space-xs) 0 0 20px;
+  padding: var(--space-xs) 0 var(--space-md);
 }
 
 .classified {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 // 样式方式在左，恢复默认靠右
@@ -68,6 +118,8 @@
 }
 
 .empty {
-  font-size: var(--font-size-xs);
+  padding: var(--space-xl) 0;
+  font-size: var(--font-size-base);
+  text-align: center;
   color: var(--color-text-secondary);
 }

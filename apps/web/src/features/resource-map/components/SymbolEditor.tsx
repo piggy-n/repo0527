@@ -1,11 +1,12 @@
 import { ElButton, ElColorPicker, ElInput, ElOption, ElRadioButton, ElRadioGroup, ElSelect } from 'element-plus';
 import { computed, defineComponent, onUnmounted, type PropType, ref, type VNode, watch } from 'vue';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
-import { swatchOf } from '../legend';
+import { type LegendSwatch, swatchOf } from '../legend';
 import { RESOURCE_PALETTE } from '../palette';
 import type { SymbolTarget } from '../resource-symbols';
 import {
   type ColorField,
+  colorLabel,
   FILL_STYLE_NAMES,
   FILL_STYLES,
   isFillPattern,
@@ -49,7 +50,8 @@ function colorPatch(field: ColorField, color: string): SymbolOverride {
 }
 
 /**
- * 统一符号的编辑器（ADR 0044 第 6 节，联调用的界面，5D 再设计）：点选的档位、描边宽度、线型点下就确认；
+ * 符号的编辑器（ADR 0044 第 6 节，设计稿 5D.5）：浅灰底的一块，名称在左、控件在右，颜色旁写出色值；线型、填充方式的选项带示意。
+ * 点选的档位、描边宽度、线型点下就确认；
  * 颜色拖动时预览、确认时写入，取消由取色器报回原来的颜色、拥有者清掉预览；自定义大小回车或失焦时确认，不合法时留在输入框里
  */
 export const SymbolEditor = defineComponent({
@@ -199,26 +201,47 @@ export const SymbolEditor = defineComponent({
     const renderColor = (label: string, field: ColorField, value: string) => (
       <div key={field} class={styles.row}>
         <span class={styles.label}>{label}</span>
-        <ElColorPicker
-          size="small"
-          modelValue={value}
-          showAlpha
-          predefine={PREDEFINE}
-          clearable={false}
-          ariaLabel={`${props.name}的${label}`}
-          onActiveChange={(color: string | null) => {
-            if (color) {
-              props.symbols.previewColor(props.target, field, color);
-            }
-          }}
-          onChange={(color: string | null) => {
-            if (color) {
-              set(colorPatch(field, color));
-            }
-          }}
-        />
+        <div class={styles.control}>
+          <ElColorPicker
+            size="small"
+            modelValue={value}
+            showAlpha
+            predefine={PREDEFINE}
+            clearable={false}
+            ariaLabel={`${props.name}的${label}`}
+            onActiveChange={(color: string | null) => {
+              if (color) {
+                props.symbols.previewColor(props.target, field, color);
+              }
+            }}
+            onChange={(color: string | null) => {
+              if (color) {
+                set(colorPatch(field, color));
+              }
+            }}
+          />
+          <span class={styles.hex}>{colorLabel(value)}</span>
+        </div>
       </div>
     );
+
+    // 线型的示意：按当前的颜色和粗细画一段线（面的描边为 0 时按 1 像素画，免得看不见）
+    const dashSwatch = (dash: LineDash): LegendSwatch | null => {
+      const preview = symbol.value && swatchOf(symbol.value);
+      if (preview?.geometry === 'line') {
+        return { ...preview, dash: LINE_DASHES[dash].dasharray };
+      }
+      if (preview?.geometry === 'fill') {
+        const width = Math.max(preview.outlineWidth, 1);
+        return { geometry: 'line', color: preview.outline, width, dash: LINE_DASHES[dash].dasharray };
+      }
+      return null;
+    };
+
+    const renderDashSwatch = (dash: LineDash) => {
+      const swatch = dashSwatch(dash);
+      return swatch && <LegendSwatchIcon swatch={swatch} />;
+    };
 
     const renderDash = (label: string, key: DashKey, value: LineDash) => (
       <div key={key} class={styles.row}>
@@ -233,9 +256,18 @@ export const SymbolEditor = defineComponent({
               set(dashPatch(key, dash));
             }
           }}>
-          {LINE_DASH_NAMES.map(dash => (
-            <ElOption key={dash} value={dash} label={LINE_DASHES[dash].label} />
-          ))}
+          {{
+            prefix: () => renderDashSwatch(value),
+            default: () =>
+              LINE_DASH_NAMES.map(dash => (
+                <ElOption key={dash} value={dash} label={LINE_DASHES[dash].label}>
+                  <span class={styles.option} data-dash={dash}>
+                    {renderDashSwatch(dash)}
+                    {LINE_DASHES[dash].label}
+                  </span>
+                </ElOption>
+              ))
+          }}
         </ElSelect>
       </div>
     );
@@ -254,14 +286,18 @@ export const SymbolEditor = defineComponent({
               set({ fillStyle });
             }
           }}>
-          {FILL_STYLE_NAMES.map(fillStyle => (
-            <ElOption key={fillStyle} value={fillStyle} label={FILL_STYLES[fillStyle]}>
-              <span class={styles.option} data-fill-style={fillStyle}>
-                <LegendSwatchIcon swatch={swatchOf({ ...value, fillStyle })} />
-                {FILL_STYLES[fillStyle]}
-              </span>
-            </ElOption>
-          ))}
+          {{
+            prefix: () => <LegendSwatchIcon swatch={swatchOf(value)} />,
+            default: () =>
+              FILL_STYLE_NAMES.map(fillStyle => (
+                <ElOption key={fillStyle} value={fillStyle} label={FILL_STYLES[fillStyle]}>
+                  <span class={styles.option} data-fill-style={fillStyle}>
+                    <LegendSwatchIcon swatch={swatchOf({ ...value, fillStyle })} />
+                    {FILL_STYLES[fillStyle]}
+                  </span>
+                </ElOption>
+              ))
+          }}
         </ElSelect>
       </div>
     );

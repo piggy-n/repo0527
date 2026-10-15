@@ -1,5 +1,3 @@
-import { ArrowDown, ArrowRight } from '@element-plus/icons-vue';
-import { ElButton } from 'element-plus';
 import { defineComponent, type PropType, ref } from 'vue';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import type { LegendValue } from '../legend';
@@ -7,7 +5,10 @@ import { LegendSwatchIcon } from './LegendSwatchIcon';
 import { SymbolEditor } from './SymbolEditor';
 import styles from './ValueLegend.module.scss';
 
-/** 按取值配色的分类样式（ADR 0044 第 6 节，联调用的界面，5D 再设计）：各取值和预览，展开一个取值编辑它的符号，同一时间只展开一个 */
+/**
+ * 按取值配色的分类样式（ADR 0044 第 6 节，设计稿 5D.5）：各取值和预览，点一个展开它的编辑器，同一时间只展开一个；
+ * 改过符号的取值名称后有一个小圆点
+ */
 export const ValueLegend = defineComponent({
   name: 'ValueLegend',
   props: {
@@ -23,22 +24,20 @@ export const ValueLegend = defineComponent({
       <ul class={styles.values}>
         {props.values.map(value => {
           const open = expanded.value === value.key;
+          const target = { code: props.code, item: value.key };
           return (
             <li key={value.key} data-value={value.key}>
-              <ElButton
-                link
-                class={styles.row}
-                icon={open ? ArrowDown : ArrowRight}
+              <button
+                type="button"
+                class={[styles.row, open && styles.open]}
                 aria-label={`${open ? '收起' : '展开'}${value.label}`}
+                aria-expanded={open}
                 onClick={() => (expanded.value = open ? null : value.key)}>
-                <LegendSwatchIcon class={styles.swatch} swatch={value.swatch} />
+                <LegendSwatchIcon swatch={value.swatch} />
                 <span class={styles.label}>{value.label}</span>
-              </ElButton>
-              {open && (
-                <div class={styles.editor}>
-                  <SymbolEditor symbols={props.symbols} target={{ code: props.code, item: value.key }} name={value.label} />
-                </div>
-              )}
+                {props.symbols.hasOverride(target) && <span class={styles.edited} title="改过符号" data-edited />}
+              </button>
+              {open && <SymbolEditor symbols={props.symbols} target={target} name={value.label} />}
             </li>
           );
         })}

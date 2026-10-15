@@ -4,7 +4,17 @@ import { describe, expect, it } from 'vitest';
 import type { ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
-import { type LanduseLegendView, landuseLegend, type LegendEntry, legendEntries, legendEntrySet } from './legend';
+import {
+  type LanduseLegendView,
+  landuseLegend,
+  type LegendEntry,
+  legendEntries,
+  legendEntrySet,
+  type LegendSwatch,
+  SWATCH_LIMITS,
+  swatchColor,
+  swatchOf
+} from './legend';
 import { RESOURCE_PALETTE } from './palette';
 import {
   EMPTY_RESOURCE_LAYERS,
@@ -61,6 +71,16 @@ function byCode(entries: readonly LegendEntry[]): Record<string, LegendEntry> {
   return Object.fromEntries(entries.map(entry => [entry.code, entry]));
 }
 
+// 默认大小的预览：线是 M 档（14 级 1.8 像素）、实线；面的描边是 M 档（1 像素）、实线
+const lineSwatch = (color: string) => ({ geometry: 'line', color, width: 1.8, dash: null });
+const fillSwatch = (fill: string, stroke: string) => ({
+  geometry: 'fill',
+  fill,
+  outline: stroke,
+  outlineWidth: 1,
+  outlineDash: null
+});
+
 describe('legendEntries', () => {
   it('勾选且配置合法的资源，按叠放顺序从上到下；没勾选的、配置错误的不进图例', () => {
     const state = { ...ALL, order: ['szy_kt', ...ALL.order.filter(code => code !== 'szy_kt')] };
@@ -99,20 +119,22 @@ describe('legendEntries', () => {
       year: 2025,
       mode: 'classified',
       // 统一样式的预览：按目录顺序从配色板取色
-      swatch: { geometry: 'line', color: RESOURCE_PALETTE[2] },
+      swatch: lineSwatch(RESOURCE_PALETTE[2]),
+      // 名称前显示前三个取值的颜色
+      colors: ['#1E88E5', '#4FC3F7', '#2F80ED'],
       values: [
-        { key: '河流', label: '河流', swatch: { geometry: 'line', color: '#1E88E5' } },
-        { key: '水渠', label: '水渠', swatch: { geometry: 'line', color: '#4FC3F7' } },
-        { key: '$other', label: '其他', swatch: { geometry: 'line', color: '#2F80ED' } }
+        { key: '河流', label: '河流', swatch: lineSwatch('#1E88E5') },
+        { key: '水渠', label: '水渠', swatch: lineSwatch('#4FC3F7') },
+        { key: '$other', label: '其他', swatch: lineSwatch('#2F80ED') }
       ]
     });
     const czcdyd = entryOf(entries, 'bgdc_czcdyd');
     expect(czcdyd.kind === 'values' ? czcdyd.values.map(({ label, swatch }) => [label, swatch]) : null).toStrictEqual([
       ...['201', '201A', '202', '202A', '203', '203A', '204', '205'].map((label, index) => [
         label,
-        { geometry: 'fill', fill: RESOURCE_PALETTE[index], outline: RESOURCE_PALETTE[index] }
+        fillSwatch(RESOURCE_PALETTE[index], RESOURCE_PALETTE[index])
       ]),
-      ['其他', { geometry: 'fill', fill: LANDUSE_FALLBACK_COLOR, outline: LANDUSE_FALLBACK_COLOR }]
+      ['其他', fillSwatch(LANDUSE_FALLBACK_COLOR, LANDUSE_FALLBACK_COLOR)]
     ]);
   });
 
@@ -129,6 +151,49 @@ describe('legendEntries', () => {
     expect(entryOf(entries, 'csxhjctb_gyssp')).toMatchObject({
       swatch: { geometry: 'circle', fill: RESOURCE_PALETTE[6], stroke: '#FFFFFF' }
     });
+  });
+
+  it('预览的线宽、点的半径、面的描边按参考级别的像素，超过上限按上限；线型以线宽为单位（设计稿 5D.5）', () => {
+    const line = { geometry: 'line', color: '#000', width: 'XL', dash: 'dashed' } as const;
+    expect(swatchOf(line)).toStrictEqual({ geometry: 'line', color: '#000', width: 4.32, dash: [3, 2] });
+    expect(swatchOf({ ...line, width: 12, dash: 'dotted' })).toMatchObject({ width: SWATCH_LIMITS.line, dash: [1, 2] });
+
+    // 描边画在半径外面，两者加起来不超过上限
+    const point = { geometry: 'circle', size: 'M', fillColor: '#f00', strokeColor: '#fff', strokeWidth: 1 } as const;
+    expect(swatchOf(point)).toStrictEqual({
+      geometry: 'circle',
+      fill: '#f00',
+      stroke: '#fff',
+      radius: 4,
+      strokeWidth: 1
+    });
+    expect(swatchOf({ ...point, size: 20, strokeWidth: 3 })).toMatchObject({ radius: SWATCH_LIMITS.circle - 3 });
+
+    const fill = {
+      geometry: 'fill',
+      fillColor: '#0f0',
+      fillStyle: 'solid',
+      patternColor: '#000',
+      outlineColor: '#00f',
+      outlineWidth: 'L',
+      outlineDash: 'dashDot'
+    } as const;
+    expect(swatchOf(fill)).toStrictEqual({
+      geometry: 'fill',
+      fill: '#0f0',
+      outline: '#00f',
+      outlineWidth: 1.6,
+      outlineDash: [4, 2, 1, 2]
+    });
+    expect(swatchOf({ ...fill, outlineWidth: 8 })).toMatchObject({ outlineWidth: SWATCH_LIMITS.outline });
+    expect(swatchOf({ ...fill, outlineWidth: 0 })).toMatchObject({ outlineWidth: 0 });
+  });
+
+  it('预览的主色：面是填充色，无填充时是描边色；线是线色；点是填充色', () => {
+    expect(swatchColor(fillSwatch('#0f0', '#00f') as LegendSwatch)).toBe('#0f0');
+    expect(swatchColor(fillSwatch('rgba(0, 0, 0, 0)', '#00f') as LegendSwatch)).toBe('#00f');
+    expect(swatchColor(lineSwatch('#f00') as LegendSwatch)).toBe('#f00');
+    expect(swatchColor({ geometry: 'circle', fill: '#f00', stroke: '#fff', radius: 4, strokeWidth: 1 })).toBe('#f00');
   });
 
   it('颜色和分组推导出的图层是同一份：预览的颜色就是图层上的颜色', () => {
@@ -195,17 +260,16 @@ describe('legendEntries', () => {
     const hydl = entryOf(entries, 'csxhjctb_hydl');
     expect(hydl).toMatchObject({ mode: 'classified', swatch: { color: 'rgba(0, 0, 0, 1)' } });
     expect(hydl.kind === 'values' ? hydl.values.map(value => value.swatch) : []).toStrictEqual([
-      { geometry: 'line', color: '#1E88E5' },
-      { geometry: 'line', color: 'rgba(255, 0, 0, 1)' },
-      { geometry: 'line', color: '#2F80ED' }
+      lineSwatch('#1E88E5'),
+      lineSwatch('rgba(255, 0, 0, 1)'),
+      lineSwatch('#2F80ED')
     ]);
+    expect(hydl).toMatchObject({ colors: ['#1E88E5', 'rgba(255, 0, 0, 1)', '#2F80ED'] });
     const dltb = entryOf(entries, 'bgdc_dltb');
     expect(dltb).toMatchObject({ kind: 'landuse', mode: 'uniform', swatch: { geometry: 'fill' } });
-    expect(dltb.kind === 'landuse' ? dltb.swatches.get('0101') : null).toStrictEqual({
-      geometry: 'fill',
-      fill: 'rgba(0, 0, 255, 1)',
-      outline: 'rgb(248, 208, 114)'
-    });
+    expect(dltb.kind === 'landuse' ? dltb.swatches.get('0101') : null).toStrictEqual(
+      fillSwatch('rgba(0, 0, 255, 1)', 'rgb(248, 208, 114)')
+    );
     const czc = entryOf(entries, 'bgdc_dltb_czc');
     expect(czc.kind === 'landuse' ? czc.swatches.get('legacy:城市用地') : null).toMatchObject({ fill: 'rgba(0, 255, 0, 1)' });
     expect(czc.kind === 'landuse' ? czc.swatches.size : 0).toBe(76);

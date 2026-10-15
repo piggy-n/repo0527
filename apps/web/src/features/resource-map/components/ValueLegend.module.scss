@@ -1,4 +1,4 @@
-// 联调用的样式，5D 再设计
+// 按取值配色的各取值（设计稿 5D.5）：一行高 30，展开的取值浅主色底，编辑器在它下面
 
 .values {
   margin: 0;
@@ -7,13 +7,34 @@
 }
 
 .row {
-  font-size: var(--font-size-xs);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  height: 30px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
   color: var(--color-text-regular);
+  font-size: var(--font-size-base);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: -2px;
+  }
 }
 
-// Element 按钮把内容包在一层 span 里，按钮上的 gap 作用不到文字，用外边距隔开
-.swatch {
-  margin-right: var(--space-xs);
+.open,
+.open:hover {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .label {
@@ -23,7 +44,11 @@
   white-space: nowrap;
 }
 
-// 编辑器缩进到箭头后面
-.editor {
-  padding: var(--space-xs) 0 var(--space-xs) 20px;
+// 改过符号
+.edited {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
 }

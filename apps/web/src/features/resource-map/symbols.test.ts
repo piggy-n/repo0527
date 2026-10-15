@@ -5,6 +5,7 @@ import { type ClassItem, type ColorRule, legacyItem, symbolClasses } from './cla
 import { BLANK_PATTERN_IMAGE_ID, patternImageId } from './fill-patterns';
 import {
   classifiedLayers,
+  colorLabel,
   colorOf,
   darkenColor,
   nextOverride,
@@ -52,6 +53,14 @@ describe('规范化', () => {
     ]);
     expect(normalizeColor('rgba(217, 67, 63, 0.354)')).toBe('rgba(217, 67, 63, 0.35)');
     expect(normalizeColor('不是颜色')).toBeNull();
+  });
+
+  it('编辑器写出的色值：#RRGGBB，半透明时带百分比；解析不了时原样（设计稿 5D.5）', () => {
+    expect(colorLabel('rgba(217, 67, 63, 1)')).toBe('#D9433F');
+    expect(colorLabel('rgb(248, 208, 114)')).toBe('#F8D072');
+    expect(colorLabel('#ffffff')).toBe('#FFFFFF');
+    expect(colorLabel('rgba(176, 58, 107, 0.35)')).toBe('#B03A6B 35%');
+    expect(colorLabel('不是颜色')).toBe('不是颜色');
   });
 
   it('加深（ADR 0046）：Lab 空间往黑色插值，透明度不变；透明和不透明的颜色加深后 RGB 相同', () => {

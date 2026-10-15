@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowRight, Search } from '@element-plus/icons-vue';
-import { ElButton, ElInput, ElRadioButton, ElRadioGroup } from 'element-plus';
+import { ElIcon, ElInput, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LanduseLegendItem, type LanduseLegendView, type LegendSwatch, landuseLegend } from '../legend';
@@ -15,8 +15,8 @@ const VIEWS: readonly { readonly value: LanduseLegendView; readonly label: strin
 ];
 
 /**
- * 地类图例（ADR 0043、0044）：三种展示、按编码或名称搜索、分组展开；预览由图例按符号推导后传入。
- * 展开一个地类编辑它在分类样式里的符号，同一时间只展开一个
+ * 地类图例（ADR 0043、0044，设计稿 5D.5）：三种展示、按编码或名称搜索、分组展开；预览由图例按符号推导后传入。
+ * 点一个地类展开它在分类样式里的编辑器，同一时间只展开一个；改过符号的地类名称后有一个小圆点
  */
 export const LanduseLegend = defineComponent({
   name: 'LanduseLegend',
@@ -33,28 +33,26 @@ export const LanduseLegend = defineComponent({
     const expanded = ref<ReadonlySet<string>>(new Set());
     const editing = ref<string | null>(null);
 
-    // 一个地类：含义说明放在 title 里
+    // 一个地类：含义说明放在 title 里；编辑器向左拉回地类的缩进，和面板一样宽
     const renderItem = (item: LanduseLegendItem): VNode => {
       const swatch = props.swatches.get(item.key);
       const open = editing.value === item.key;
+      const target = { code: props.code, item: item.key };
       return (
         <li key={item.key} title={item.meaning} data-landuse={item.code ?? item.name}>
-          <ElButton
-            link
-            class={styles.item}
-            icon={open ? ArrowDown : ArrowRight}
+          <button
+            type="button"
+            class={[styles.item, open && styles.open]}
             aria-label={`${open ? '收起' : '展开'}${item.name}`}
+            aria-expanded={open}
             onClick={() => (editing.value = open ? null : item.key)}>
-            {swatch && <LegendSwatchIcon class={styles.swatch} swatch={swatch} />}
+            {swatch && <LegendSwatchIcon swatch={swatch} />}
             {item.code !== null && <span class={styles.code}>{item.code}</span>}
             <span class={styles.name}>{item.name}</span>
+            {props.symbols.hasOverride(target) && <span class={styles.edited} title="改过符号" data-edited />}
             {item.adjustable && <span class={styles.tag}>可调整</span>}
-          </ElButton>
-          {open && (
-            <div class={styles.editor}>
-              <SymbolEditor symbols={props.symbols} target={{ code: props.code, item: item.key }} name={item.name} />
-            </div>
-          )}
+          </button>
+          {open && <SymbolEditor class={styles.editor} symbols={props.symbols} target={target} name={item.name} />}
         </li>
       );
     };
@@ -103,15 +101,17 @@ export const LanduseLegend = defineComponent({
             const open = view.value === 'all' || searching.value || expanded.value.has(section.key);
             return (
               <li key={section.key} data-landuse-section={section.key}>
-                <ElButton
-                  link
-                  icon={open ? ArrowDown : ArrowRight}
+                <button
+                  type="button"
+                  class={styles.section}
                   aria-label={`${open ? '收起' : '展开'}${section.name}`}
+                  aria-expanded={open}
                   onClick={() => toggle(section.key)}>
-                  {section.code !== null && <span class={styles.sectionCode}>{section.code}</span>}
-                  {section.name}
-                  <span class={styles.sectionCount}>{section.items.length}</span>
-                </ElButton>
+                  <ElIcon class={styles.arrow}>{open ? <ArrowDown /> : <ArrowRight />}</ElIcon>
+                  {section.code !== null && <span class={styles.code}>{section.code}</span>}
+                  <span class={styles.name}>{section.name}</span>
+                  <span class={styles.count}>{section.items.length}</span>
+                </button>
                 {open && <ul class={styles.items}>{section.items.map(renderItem)}</ul>}
               </li>
             );

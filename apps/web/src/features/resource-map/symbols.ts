@@ -179,6 +179,17 @@ export function normalizeColor(value: string): string | null {
   return `rgba(${channel(r)}, ${channel(g)}, ${channel(b)}, ${Math.round(a * 100) / 100})`;
 }
 
+/** 编辑器里写出的色值：#RRGGBB，半透明时后面加百分比，如"#C74F98 35%"；解析不了时原样返回 */
+export function colorLabel(value: string): string {
+  const parsed = Color.parse(value);
+  if (!parsed) {
+    return value;
+  }
+  const [r, g, b, a] = parsed.rgb;
+  const hex = `#${[r, g, b].map(component => channel(component).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+  return a < 1 ? `${hex} ${Math.round(a * 100)}%` : hex;
+}
+
 /** 颜色改成给定的透明度 */
 export function withAlpha(color: string, alpha: number): string {
   const [r, g, b] = (Color.parse(color) ?? Color.black).rgb;

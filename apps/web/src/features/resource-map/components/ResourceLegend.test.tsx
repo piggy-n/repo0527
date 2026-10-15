@@ -68,6 +68,13 @@ async function choose(entry: Pick<DOMWrapper<Element>, 'findAll'>, text: string)
   await label.get('input').setValue(true);
 }
 
+// 预览里用到的颜色：SVG 各图形的填充和描边
+const swatchColors = (swatch: Omit<DOMWrapper<Element>, 'exists'>) =>
+  swatch
+    .findAll('rect, line, circle')
+    .flatMap(shape => [shape.attributes('fill'), shape.attributes('stroke')])
+    .filter(color => color !== undefined);
+
 const entries = (wrapper: VueWrapper) => wrapper.findAll('[data-legend]').map(item => item.attributes('data-legend'));
 const landuseShown = (wrapper: VueWrapper) => wrapper.find('[data-landuse-section]').exists();
 
@@ -165,7 +172,7 @@ describe('ResourceLegend', () => {
     await nextTick();
 
     expect(wrapper.get('[data-legend="szy_kt"]').text()).toBe('坑塘 · 2022');
-    expect(wrapper.get('[data-legend="szy_kt"] [data-swatch]').attributes('style')).toContain('background-color');
+    expect(swatchColors(wrapper.get('[data-legend="szy_kt"] [data-swatch]'))).toContain('rgba(199,79,155,0.35)');
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
     await button(wrapper, '展开坑塘').trigger('click');
     expect(wrapper.find('[data-symbol-editor="szy_kt"]').exists()).toBe(true);
@@ -178,23 +185,50 @@ describe('ResourceLegend', () => {
     ]);
   });
 
+  it('按属性配色的条目名称前是前三个取值的颜色；改过符号的条目、取值名称后有小圆点（设计稿 5D.5）', async () => {
+    const { wrapper, owner, symbols } = mountLegend();
+    owner.setCheckedMany(['csxhjctb_hydl', 'szy_kt'], true);
+    await nextTick();
+    const row = (code: string) => wrapper.get(`[data-legend="${code}"] > button`);
+    const edited = (code: string) => row(code).find('[data-edited]').exists();
+
+    // 河流、水渠、其他三个取值的颜色
+    expect(row('csxhjctb_hydl').findAll('[data-colors] i').map(chip => chip.attributes('style'))).toStrictEqual([
+      'background-color: rgb(30, 136, 229);',
+      'background-color: rgb(79, 195, 247);',
+      'background-color: rgb(47, 128, 237);'
+    ]);
+    expect(row('szy_kt').find('[data-colors]').exists()).toBe(false);
+    expect([edited('szy_kt'), edited('csxhjctb_hydl')]).toStrictEqual([false, false]);
+
+    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });
+    symbols.setSymbol({ code: 'csxhjctb_hydl', item: '水渠' }, { color: 'rgba(255, 0, 0, 1)' });
+    await nextTick();
+    expect([edited('szy_kt'), edited('csxhjctb_hydl')]).toStrictEqual([true, true]);
+
+    await button(wrapper, '展开水域线层').trigger('click');
+    const valueEdited = (key: string) => wrapper.get(`[data-value="${key}"]`).find('[data-edited]').exists();
+    expect([valueEdited('河流'), valueEdited('水渠')]).toStrictEqual([false, true]);
+  });
+
   it('预览和确认的符号都反映在图例上，丢弃预览后回到确认的颜色', async () => {
     const { wrapper, owner, symbols } = mountLegend();
     owner.setChecked('szy_kt', true);
     await nextTick();
-    const swatchStyle = () => wrapper.get('[data-legend="szy_kt"] [data-swatch]').attributes('style');
+    const colors = () => swatchColors(wrapper.get('[data-legend="szy_kt"] [data-swatch]'));
 
     symbols.setSymbol({ code: 'szy_kt' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });
     await nextTick();
-    expect(swatchStyle()).toContain('background-color: rgba(0, 0, 255, 0.5)');
+    expect(colors()).toContain('rgba(0, 0, 255, 0.5)');
 
     symbols.previewColor({ code: 'szy_kt' }, 'fillColor', 'rgba(0, 128, 0, 0.8)');
     await nextTick();
-    expect(swatchStyle()).toContain('background-color: rgba(0, 128, 0, 0.8)');
+    expect(colors()).toContain('rgba(0, 128, 0, 0.8)');
 
     symbols.clearPreview({ code: 'szy_kt' });
     await nextTick();
-    expect(swatchStyle()).toContain('background-color: rgba(0, 0, 255, 0.5)');
+    expect(colors()).toContain('rgba(0, 0, 255, 0.5)');
+    expect(colors()).not.toContain('rgba(0, 128, 0, 0.8)');
   });
 
   it('分类样式的覆盖反映在取值列表和地类图例的预览上', async () => {
@@ -206,10 +240,10 @@ describe('ResourceLegend', () => {
     await button(wrapper, '展开水域线层').trigger('click');
 
     const canal = wrapper.get('[data-legend="csxhjctb_hydl"]').findAll('li').find(item => item.text() === '水渠');
-    expect(canal?.get('[data-swatch]').attributes('style')).toContain('rgba(255, 0, 0, 0.5)');
+    expect(canal && swatchColors(canal.get('[data-swatch]'))).toContain('rgba(255, 0, 0, 0.5)');
     // 地类图斑在只有它一条时已经自动展开
     await wrapper.get('input[placeholder="搜索编码或名称"]').setValue('0201K');
-    expect(wrapper.get('[data-landuse="0201K"] [data-swatch]').attributes('style')).toContain('rgba(0, 0, 255, 0.5)');
+    expect(swatchColors(wrapper.get('[data-landuse="0201K"] [data-swatch]'))).toContain('rgba(0, 0, 255, 0.5)');
   });
 
   it('按属性配色：切换到统一样式时展开的是统一样式的编辑器、名称前显示预览；恢复默认恢复这个资源的全部', async () => {
@@ -283,7 +317,9 @@ describe('ResourceLegend', () => {
     fill?.vm.$emit('change', 'rgba(0, 0, 255, 0.5)');
     expect(symbols.overrides.value.get('bgdc_dltb')).toStrictEqual({ items: { '0101': { fillColor: 'rgba(0, 0, 255, 0.5)' } } });
     await nextTick();
-    expect(wrapper.get('[data-landuse="0101"] [data-swatch]').attributes('style')).toContain('rgba(0, 0, 255, 0.5)');
+    expect(swatchColors(wrapper.get('[data-landuse="0101"] [data-swatch]'))).toContain('rgba(0, 0, 255, 0.5)');
+    expect(wrapper.find('[data-landuse="0101"] [data-edited]').exists()).toBe(true);
+    expect(wrapper.find('[data-landuse="0102"] [data-edited]').exists()).toBe(false);
 
     await button(wrapper, '展开旱地').trigger('click');
     expect(wrapper.find('[data-symbol-editor="0103"]').exists()).toBe(true);

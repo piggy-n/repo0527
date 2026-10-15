@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowRight } from '@element-plus/icons-vue';
-import { ElButton, ElPopconfirm, ElRadioButton, ElRadioGroup } from 'element-plus';
+import { ElButton, ElIcon, ElPopconfirm, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
@@ -18,8 +18,17 @@ const MODES: readonly { readonly value: SymbolMode; readonly label: string }[] =
   { value: 'uniform', label: '统一样式' }
 ];
 
+// 按属性配色的条目在名称前显示前三个取值的颜色（设计稿 5D.5）
+const renderColors = (colors: readonly string[]) => (
+  <span class={styles.colors} aria-hidden="true" data-colors>
+    {colors.map(color => (
+      <i style={{ backgroundColor: color }} />
+    ))}
+  </span>
+);
+
 /**
- * 资源图层的图例（ADR 0043、0044，联调用的界面，5D 再设计）：勾选的资源按叠放顺序各一条，内容从样式登记表和符号覆盖推导，
+ * 资源图层的图例（ADR 0043、0044，设计稿 5D.5）：勾选的资源按叠放顺序各一条，内容从样式登记表和符号覆盖推导，
  * 不读地图、不等视图就绪；统一符号的条目展开后可以编辑符号，按属性配色的条目可以切换样式方式、编辑各取值。
  * 按属性配色的条目在集合变化后只剩一条时自动展开，统一符号展开是编辑，不自动展开。
  * 放在显示面板的 Tab 里，标题、开关和登记由外壳负责；隐藏时不渲染条目，编辑器随之卸载、丢弃取色预览，展开状态保留（ADR 0053 第 4 节）
@@ -105,24 +114,29 @@ export const ResourceLegend = defineComponent({
       );
     };
 
-    // 统一符号（和选了统一样式的条目）在名称前显示预览，按属性配色在名称后显示类别
+    // 统一符号（和选了统一样式的条目）在名称前显示预览，按属性配色显示前三个取值的颜色、名称后显示类别；
+    // 改过符号的在名称后有一个小圆点
     const renderEntry = (entry: LegendEntry): VNode => {
       const isOpen = expanded.value.has(entry.code);
+      const uniform = entry.kind === 'symbol' || entry.mode === 'uniform';
       return (
         <li key={entry.code} class={styles.entry} data-legend={entry.code}>
-          <ElButton
-            link
+          <button
+            type="button"
             class={styles.row}
-            icon={isOpen ? ArrowDown : ArrowRight}
             aria-label={`${isOpen ? '收起' : '展开'}${entry.name}`}
+            aria-expanded={isOpen}
             onClick={() => toggle(entry.code)}>
-            {(entry.kind === 'symbol' || entry.mode === 'uniform') && (
-              <LegendSwatchIcon class={styles.swatch} swatch={entry.swatch} />
-            )}
+            <ElIcon class={styles.arrow}>{isOpen ? <ArrowDown /> : <ArrowRight />}</ElIcon>
+            {uniform ? <LegendSwatchIcon swatch={entry.swatch} /> : renderColors(entry.colors)}
             {/* 年份由条目单独给出，标题在这里组合（ADR 0052 第 3 节） */}
-            <span class={styles.name}>{`${entry.name} · ${entry.year}`}</span>
+            <span class={styles.name}>
+              {entry.name}
+              <span class={styles.year}> · {entry.year}</span>
+            </span>
+            {props.symbols.isCustomized(entry.code) && <span class={styles.edited} title="改过符号" data-edited />}
             {entry.kind !== 'symbol' && <span class={styles.badge}>{BADGES[entry.kind]}</span>}
-          </ElButton>
+          </button>
           {isOpen && (
             <div class={styles.content}>
               {entry.kind === 'symbol' ? (

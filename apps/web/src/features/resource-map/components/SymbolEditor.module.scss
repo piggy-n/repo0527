@@ -1,21 +1,39 @@
-// 联调用的样式，5D 再设计
+// 符号编辑器（设计稿 5D.5）：浅灰底的一块，内边距 10 12；名称 56 宽、12 号灰色，控件在右
 
 .editor {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
+  // 只设上下：左右由放它的地方决定（地类下面要拉回缩进）
+  margin-block: var(--space-xs);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-neutral-bg-light);
 }
 
-// 标签按"描边宽度"四个字定宽，控件占其余宽度
 .row {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
+  grid-template-columns: 56px minmax(0, 1fr);
   align-items: center;
   gap: var(--space-sm);
+  min-height: 26px;
 }
 
 .label {
   font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+// 颜色的色值：#RRGGBB，半透明时带百分比
+.hex {
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
   color: var(--color-text-secondary);
 }
 
@@ -29,8 +47,9 @@
   width: 64px;
 }
 
+// 前面有 28 宽的示意，放得下"均匀填充"这样四个字的选项
 .select {
-  width: 112px;
+  width: 148px;
 }
 
 .hint {
@@ -42,11 +61,11 @@
   color: var(--color-danger-text);
 }
 
-// 填充方式的选项：预览在文字前面
+// 线型、填充方式的选项：示意在文字前面
 .option {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 .footer {

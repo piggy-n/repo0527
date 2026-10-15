@@ -1,28 +1,13 @@
-// 联调用的样式，5D 再设计
+// 符号预览（设计稿 5D.5）：28 × 20 的 SVG，尺寸固定
 
 .swatch {
+  display: block;
   flex: none;
-  box-sizing: border-box;
-  display: inline-block;
 }
 
-.fill {
-  width: 16px;
-  height: 12px;
-  border: 1px solid;
-}
-
-.line {
-  width: 16px;
-  height: 0;
-  border-top: 2px solid;
-}
-
-// 白色描边在浅色面板上看不清，外面再描一圈灰色
-.circle {
-  width: 10px;
-  height: 10px;
-  border: 1px solid;
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px var(--color-border);
+// 点的最外圈：白色描边在浅色面板上也看得出边界
+.halo {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 1;
 }
