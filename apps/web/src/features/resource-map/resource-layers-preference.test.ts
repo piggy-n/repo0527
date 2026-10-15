@@ -166,6 +166,25 @@ describe('资源图层的偏好', () => {
     expect(ctx.owner.state.value.displays.get('bgdc_dltb')?.checked).toBe(false);
   });
 
+  it('批量设置的年份写入，没勾选的资源也写；重新打开时还原', async () => {
+    const store = createMemoryStore();
+    {
+      using ctx = setup(store);
+      await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+      ctx.owner.setYearForAll(2023);
+      await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+    }
+    expect(store.entries.get(KEY)).toMatchObject({
+      value: { displays: { bgdc_cjdcq: { checked: false, year: 2023 }, csxhjctb_hydl: { year: 2023 } } }
+    });
+
+    using reopened = setup(store);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(reopened.owner.state.value.displays.get('bgdc_cjdcq')?.year).toBe(2023);
+    expect(reopened.owner.state.value.displays.get('csxhjctb_hydl')?.year).toBe(2023);
+  });
+
   it('修改后防抖写入：每个资源的设置和面板顺序', async () => {
     const store = createMemoryStore();
     using ctx = setup(store);

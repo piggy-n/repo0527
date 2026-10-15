@@ -15,8 +15,13 @@ import {
 import type { ResourceSymbolOverride } from './resource-symbols';
 import { sizeCurve } from './symbols';
 
-function layer(code: string, name: string, geoType: ResourceTreeLayer['geoType']) {
-  return { code, name, geoType, yearList: [2022] as [number] };
+function layer(
+  code: string,
+  name: string,
+  geoType: ResourceTreeLayer['geoType'],
+  yearList: [number, ...number[]] = [2022]
+) {
+  return { code, name, geoType, yearList };
 }
 
 // 每种条目各一个：地类按编码、按名称，按取值（线、按顺序取色的面），统一符号（面、线、点）
@@ -27,7 +32,7 @@ const CATALOG = buildCatalog([
     children: [
       layer('bgdc_dltb', '地类图斑', 'Polygon'),
       layer('bgdc_dltb_czc', '地类图斑（城镇村）', 'Polygon'),
-      layer('csxhjctb_hydl', '水域线层', 'Line'),
+      layer('csxhjctb_hydl', '水域线层', 'Line', [2023, 2024, 2025]),
       layer('bgdc_czcdyd', '城镇村等用地', 'Polygon'),
       layer('szy_kt', '坑塘', 'Polygon'),
       layer('bgdc_cjdcqjx', '村级调查区界线', 'Line'),
@@ -91,6 +96,7 @@ describe('legendEntries', () => {
       kind: 'values',
       code: 'csxhjctb_hydl',
       name: '水域线层',
+      year: 2025,
       mode: 'classified',
       // 统一样式的预览：按目录顺序从配色板取色
       swatch: { geometry: 'line', color: RESOURCE_PALETTE[2] },
@@ -244,6 +250,23 @@ describe('legendEntrySet', () => {
 
     expect(legendEntrySet(entries.toReversed())).toBe(legendEntrySet(entries));
     expect(legendEntrySet(entries.slice(1))).not.toBe(legendEntrySet(entries));
+  });
+});
+
+describe('图例条目的年份（ADR 0052 第 3 节）', () => {
+  it('条目带显示的年份；换年份后名称、符号和条目的集合都不变', () => {
+    const hydl = ALL.displays.get('csxhjctb_hydl');
+    const displays = new Map(ALL.displays);
+    if (hydl) {
+      displays.set('csxhjctb_hydl', { ...hydl, year: 2023 });
+    }
+    const older = { ...ALL, displays };
+    const [before, after] = [legendEntries(ALL, new Map()), legendEntries(older, new Map())];
+
+    expect(entryOf(before, 'csxhjctb_hydl').year).toBe(2025);
+    expect(entryOf(after, 'csxhjctb_hydl')).toStrictEqual({ ...entryOf(before, 'csxhjctb_hydl'), year: 2023 });
+    expect(entryOf(before, 'szy_kt').year).toBe(2022);
+    expect(legendEntrySet(after)).toBe(legendEntrySet(before));
   });
 });
 

@@ -88,14 +88,22 @@ export interface CheckedLayer {
   readonly name: string;
   /** 0～1 */
   readonly opacity: number;
+  /** 显示的年份 */
+  readonly year: number;
+  /** 可选的年份，新的在前；只有一个时不能切换（ADR 0052 第 1 节） */
+  readonly years: readonly number[];
 }
 
-/** 已勾选的资源，按叠放顺序从上到下：在这里调整顺序和透明度 */
+/** 已勾选的资源，按叠放顺序从上到下：在这里调整顺序、透明度和年份 */
 export function checkedLayers(state: ResourceLayersState): CheckedLayer[] {
   return state.order.flatMap(code => {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
-    return resource && display?.checked ? [{ code, name: resource.name, opacity: display.opacity }] : [];
+    if (!resource || !display?.checked) {
+      return [];
+    }
+    const { opacity, year } = display;
+    return [{ code, name: resource.name, opacity, year, years: resource.years.toReversed() }];
   });
 }
 

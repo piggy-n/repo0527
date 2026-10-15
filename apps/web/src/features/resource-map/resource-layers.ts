@@ -121,6 +121,38 @@ export function mergeDisplayState(previous: ResourceLayersState, catalog: Resour
   return { catalog, displays, order: mergedOrder(previous.order, catalog) };
 }
 
+/** 批量设置年份可选的年份（ADR 0052 第 2 节）：多年份资源的年份并集，新的在前；只出现在单年份资源里的不列出 */
+export function batchYearOptions(catalog: ResourceCatalog | null): number[] {
+  const years = new Set<number>();
+  for (const resource of catalog?.resources.values() ?? []) {
+    if (resource.years.length > 1) {
+      resource.years.forEach(year => years.add(year));
+    }
+  }
+  return [...years].toSorted((a, b) => b - a);
+}
+
+/**
+ * 批量设置年份后的显示状态（ADR 0052 第 2 节）：有这一年的资源不论是否勾选都切过去，其他不变；
+ * 没有资源要改时返回原来的状态对象，没有任何资源有这一年时抛错
+ */
+export function withYearForAll(state: ResourceLayersState, year: number): ResourceLayersState {
+  const resources = [...(state.catalog?.resources.values() ?? [])];
+  if (!resources.some(resource => resource.years.includes(year))) {
+    throw new RangeError(`没有资源有 ${year} 年的数据`);
+  }
+  const displays = new Map(state.displays);
+  let changed = false;
+  for (const { code, years } of resources) {
+    const display = displays.get(code);
+    if (display && years.includes(year) && display.year !== year) {
+      displays.set(code, { ...display, year });
+      changed = true;
+    }
+  }
+  return changed ? { ...state, displays } : state;
+}
+
 // fill 图层要限定为面：MapLibre 会把线也当成环填充（城镇村等用地的瓦片里夹着退化的线）
 const GEOMETRY_FILTERS: Readonly<Record<ResourceGeometry, ExpressionSpecification>> = {
   fill: ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false],

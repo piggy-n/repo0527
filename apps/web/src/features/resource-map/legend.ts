@@ -40,11 +40,18 @@ export interface LegendValue {
  * 按属性配色的条目带样式方式，swatch 是统一样式的预览
  */
 export type LegendEntry =
-  | { readonly kind: 'symbol'; readonly code: string; readonly name: string; readonly swatch: LegendSwatch }
+  | {
+      readonly kind: 'symbol';
+      readonly code: string;
+      readonly name: string;
+      readonly year: number;
+      readonly swatch: LegendSwatch;
+    }
   | {
       readonly kind: 'values';
       readonly code: string;
       readonly name: string;
+      readonly year: number;
       readonly mode: SymbolMode;
       readonly swatch: LegendSwatch;
       readonly values: readonly LegendValue[];
@@ -53,6 +60,7 @@ export type LegendEntry =
       readonly kind: 'landuse';
       readonly code: string;
       readonly name: string;
+      readonly year: number;
       readonly mode: SymbolMode;
       readonly swatch: LegendSwatch;
       readonly match: 'code' | 'name';
@@ -75,13 +83,14 @@ export function swatchOf(symbol: ResourceSymbol): LegendSwatch {
   return { geometry: 'circle', fill: symbol.fillColor, stroke: symbol.strokeColor };
 }
 
-function legendEntry(resource: Resource, override: ResourceSymbolOverride | undefined): LegendEntry {
+// 年份只用来显示（ADR 0052 第 3 节）：条目的身份、名称和符号仍按 code
+function legendEntry(resource: Resource, year: number, override: ResourceSymbolOverride | undefined): LegendEntry {
   const { code, name } = resource;
   const style = resourceStyle(code);
   const rule = style.color;
   const swatch = swatchOf(uniformSymbol(resource, override));
   if (!rule) {
-    return { kind: 'symbol', code, name, swatch };
+    return { kind: 'symbol', code, name, year, swatch };
   }
   const mode = symbolModeOf(style, override);
   const values = classItems(rule).map(item => ({
@@ -91,9 +100,10 @@ function legendEntry(resource: Resource, override: ResourceSymbolOverride | unde
   }));
   if (rule.kind === 'landuse-code' || rule.kind === 'landuse-name') {
     const swatches = new Map(values.map(value => [value.key, value.swatch]));
-    return { kind: 'landuse', code, name, mode, swatch, match: rule.kind === 'landuse-code' ? 'code' : 'name', swatches };
+    const match = rule.kind === 'landuse-code' ? 'code' : 'name';
+    return { kind: 'landuse', code, name, year, mode, swatch, match, swatches };
   }
-  return { kind: 'values', code, name, mode, swatch, values };
+  return { kind: 'values', code, name, year, mode, swatch, values };
 }
 
 /** 图例的条目：勾选且配置合法的资源，按叠放顺序从上到下（ADR 0043 第 1 节） */
@@ -105,7 +115,10 @@ export function legendEntries(
   return state.order.flatMap(code => {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
-    return resource && display?.checked && !invalid.has(code) ? [legendEntry(resource, overrideOf(code))] : [];
+    if (!resource || !display?.checked || invalid.has(code)) {
+      return [];
+    }
+    return [legendEntry(resource, display.year, overrideOf(code))];
   });
 }
 

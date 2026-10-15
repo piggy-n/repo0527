@@ -23,7 +23,8 @@ import {
   type ResourceLayersState,
   resourcesGroup,
   resourceTileBase,
-  validateCatalog
+  validateCatalog,
+  withYearForAll
 } from '../resource-layers';
 import {
   fromStoredResourceLayers,
@@ -51,6 +52,11 @@ export interface ResourceLayers {
   readonly setOpacity: (code: string, opacity: number) => void;
   /** 不是这个资源的年份时抛错 */
   readonly setYear: (code: string, year: number) => void;
+  /**
+   * 批量设置年份（ADR 0052 第 2 节）：有这一年的资源不论是否勾选都切过去，其他不变，只替换一次状态；
+   * 没有任何资源有这一年时抛错
+   */
+  readonly setYearForAll: (year: number) => void;
   /** 移到面板上的第 index 位（0 在最上面，画在最上层）；位置越界时抛错 */
   readonly move: (code: string, index: number) => void;
   readonly deriveGroup: () => StyleGroup;
@@ -186,6 +192,10 @@ export function useResourceLayers(
       return display.year === year ? display : { ...display, year };
     });
 
+  const setYearForAll = (year: number) => {
+    state.value = withYearForAll(state.value, year);
+  };
+
   const move = (code: string, index: number) => {
     const current = state.value;
     const from = current.order.indexOf(code);
@@ -209,6 +219,7 @@ export function useResourceLayers(
     setCheckedMany,
     setOpacity,
     setYear,
+    setYearForAll,
     move,
     deriveGroup: () =>
       resourcesGroup({ state: state.value, invalid: configErrors.value, tileBase, overrideOf: options.symbols?.overrideOf })

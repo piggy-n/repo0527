@@ -5,8 +5,13 @@ import { buildCatalog } from './catalog';
 import { checkedLayers, expandedByDefault, moveTarget, type PanelNode, panelTree } from './layer-panel';
 import { EMPTY_RESOURCE_LAYERS, mergeDisplayState, type ResourceLayersState } from './resource-layers';
 
-function layer(code: string, name: string, geoType: 'Polygon' | 'Line' | 'Point' = 'Polygon') {
-  return { code, name, geoType, yearList: [2024] as [number] };
+function layer(
+  code: string,
+  name: string,
+  geoType: 'Polygon' | 'Line' | 'Point' = 'Polygon',
+  yearList: [number, ...number[]] = [2024]
+) {
+  return { code, name, geoType, yearList };
 }
 
 // 结构同真实的资源树：公共库、海洋资源是空分类
@@ -29,7 +34,7 @@ const TREE: ResourceTreeCategory[] = [
     ]
   },
   { code: null, name: '公共库', children: [{ code: null, name: '气象', children: [] }] },
-  { code: 'sqsx', name: '三区三线', children: [layer('poi', 'POI 点层', 'Point')] }
+  { code: 'sqsx', name: '三区三线', children: [layer('poi', 'POI 点层', 'Point', [2023, 2024, 2025])] }
 ];
 
 const INITIAL = mergeDisplayState(EMPTY_RESOURCE_LAYERS, buildCatalog(TREE));
@@ -121,14 +126,21 @@ describe('checkedLayers 与 moveTarget', () => {
   // 面板顺序：地类图斑、村级调查区、村级调查区界线、坑塘、POI；勾选其中三个
   const state = withChecked(INITIAL, ['bgdc_cjdcqjx', 'poi']);
 
-  it('已勾选的资源按叠放顺序从上到下，带透明度', () => {
+  it('已勾选的资源按叠放顺序从上到下，带透明度、显示的年份和可选的年份（新的在前）', () => {
     const reordered = { ...state, order: ['poi', ...state.order.filter(code => code !== 'poi')] };
 
     expect(checkedLayers(reordered)).toStrictEqual([
-      { code: 'poi', name: 'POI 点层', opacity: 0.9 },
-      { code: 'bgdc_dltb', name: '地类图斑', opacity: 0.9 },
-      { code: 'bgdc_cjdcqjx', name: '村级调查区界线', opacity: 0.9 }
+      { code: 'poi', name: 'POI 点层', opacity: 0.9, year: 2025, years: [2025, 2024, 2023] },
+      { code: 'bgdc_dltb', name: '地类图斑', opacity: 0.9, year: 2024, years: [2024] },
+      { code: 'bgdc_cjdcqjx', name: '村级调查区界线', opacity: 0.9, year: 2024, years: [2024] }
     ]);
+  });
+
+  it('显示的年份跟着显示状态，名称不带年份', () => {
+    const poi = state.displays.get('poi');
+    const older = poi ? { ...state, displays: new Map([...state.displays, ['poi', { ...poi, year: 2023 }]]) } : state;
+
+    expect(checkedLayers(older).find(({ code }) => code === 'poi')).toMatchObject({ name: 'POI 点层', year: 2023 });
   });
 
   it('上移、下移一位：越过中间没勾选的资源，和相邻的已勾选资源交换', () => {

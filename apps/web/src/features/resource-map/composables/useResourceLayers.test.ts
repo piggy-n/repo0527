@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { NO_SOURCE_ERRORS, type SourceErrors } from '@yzt/map-core';
 import { describe, expect, it, vi } from 'vitest';
-import { computed, effectScope, nextTick, shallowRef } from 'vue';
+import { computed, effectScope, nextTick, shallowRef, watch } from 'vue';
 import type { ResourceTreeCategory, ResourceTreeLayer } from '../api';
 import { buildCatalog, type ResourceCatalog } from '../catalog';
 import { EMPTY_RESOURCE_LAYERS, validateCatalog } from '../resource-layers';
@@ -54,6 +54,9 @@ function invalidLanduse(catalog: ResourceCatalog | null): ReadonlyMap<string, re
 function layerIds(owner: ReturnType<typeof useResourceLayers>): string[] {
   return owner.deriveGroup().layers.map(({ id }) => id);
 }
+
+// 村级调查区的统一符号改成红色
+const redVillageSurvey = (code: string) => (code === 'bgdc_cjdcq' ? { uniform: { fillColor: 'red' } } : undefined);
 
 describe('useResourceLayers', () => {
   it('目录还没加载：空状态、空分组；目录到了按默认值合并，推导出默认勾选的地类图斑', async () => {
@@ -217,6 +220,59 @@ describe('useResourceLayers', () => {
     overrides.value = new Map([['bgdc_dltb', { fillColor: 'rgba(0, 0, 0, 1)' }], ['bgdc_cjdcq', { fillColor: 'red' }]]);
     // 地类图斑按属性配色，不用统一样式的覆盖
     expect(fillColors.value).toStrictEqual(['red', landuse]);
+  });
+
+  it('批量设置年份：只替换一次状态，推导用新的年份；没有资源要改时不替换；没有任何资源有这一年时抛错、状态不变', async () => {
+    using ctx = await loaded();
+    ctx.owner.setChecked('csxhjctb_hydl', true);
+    let replaced = 0;
+    const stop = watch(ctx.owner.state, () => replaced++, { flush: 'sync' });
+
+    ctx.owner.setYearForAll(2023);
+    expect(replaced).toBe(1);
+    const years = [...ctx.owner.state.value.displays].map(([code, { year }]) => [code, year]);
+    expect(years).toStrictEqual([
+      ['bgdc_dltb', 2022],
+      ['bgdc_cjdcq', 2023],
+      ['csxhjctb_hydl', 2023]
+    ]);
+    expect(ctx.owner.deriveGroup().sources['resources-csxhjctb_hydl']).toMatchObject({
+      tiles: [`${TILE_BASE}csxhjctb_hydl_2023/{z}/{x}/{y}.pbf`]
+    });
+
+    ctx.owner.setYearForAll(2023);
+    expect(replaced).toBe(1);
+    const before = ctx.owner.state.value;
+    expect(() => ctx.owner.setYearForAll(2030)).toThrow('没有资源有 2030 年的数据');
+    expect(ctx.owner.state.value).toBe(before);
+    stop();
+  });
+
+  it('重复操作：批量设成 2023，单独把一个改回 2025，再批量设成 2023，它又回到 2023', async () => {
+    using ctx = await loaded();
+
+    ctx.owner.setYearForAll(2023);
+    ctx.owner.setYear('csxhjctb_hydl', 2025);
+    expect(ctx.owner.state.value.displays.get('csxhjctb_hydl')?.year).toBe(2025);
+    ctx.owner.setYearForAll(2023);
+
+    expect(ctx.owner.state.value.displays.get('csxhjctb_hydl')?.year).toBe(2023);
+  });
+
+  it('换年份不改变勾选、透明度、顺序和符号', async () => {
+    using ctx = await loaded({ symbols: { overrideOf: redVillageSurvey } });
+    ctx.owner.setChecked('bgdc_cjdcq', true);
+    ctx.owner.setOpacity('bgdc_cjdcq', 0.5);
+    ctx.owner.move('bgdc_cjdcq', 0);
+    const fillOf = () => ctx.owner.deriveGroup().layers.find(({ id }) => id === 'resources-bgdc_cjdcq');
+
+    ctx.owner.setYearForAll(2023);
+    ctx.owner.setYear('bgdc_cjdcq', 2024);
+
+    expect(ctx.owner.state.value.displays.get('bgdc_cjdcq')).toStrictEqual({ checked: true, opacity: 0.5, year: 2024 });
+    expect(ctx.owner.state.value.order).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl']);
+    const fill = fillOf();
+    expect(fill?.type === 'fill' && fill.paint?.['fill-color']).toBe('red');
   });
 
   it('最小显示级别来自登记表', () => {
