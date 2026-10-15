@@ -51,7 +51,8 @@ docs/
    ├─ stage-3-layout-and-first-list.md   阶段三：页面布局与第一个列表页
    ├─ stage-4-map-core.md                阶段四：地图内核
    ├─ stage-5a-map-skeleton.md           阶段五 5A：地图骨架
-   └─ stage-5b-public-map-capabilities.md 阶段五 5B：公共地图能力
+   ├─ stage-5b-public-map-capabilities.md 阶段五 5B：公共地图能力
+   └─ stage-5c-current-map-business.md   阶段五 5C：现状底图业务
 ```
 
 ## 建议的阅读顺序
@@ -68,6 +69,7 @@ docs/
    - [阶段四：地图内核](stages/stage-4-map-core.md)
    - [阶段五 5A：地图骨架](stages/stage-5a-map-skeleton.md)
    - [阶段五 5B：公共地图能力](stages/stage-5b-public-map-capabilities.md)
+   - [阶段五 5C：现状底图业务](stages/stage-5c-current-map-business.md)
 5. [commands.md](commands.md)：日常要用的命令
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明。

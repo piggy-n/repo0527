@@ -54,6 +54,10 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 | 测量 | 椭球面计算（geographiclib）；`MeasureStore` 持有结果和两个工具 | 0035 | [map-core.md](map-core.md)、[shared-map.md](shared-map.md) |
 | 区划定位、坐标定位 | 本地区划目录与边界；经纬度的识别与格式只用纯函数；位置点可拖动 | 0036、0037 | [shared-map.md](shared-map.md) |
 | 资源图层 | feature `resource-map`：接口树 → 目录（纯函数，查询的 `select` 得出）→ 样式登记表 → 拥有者 `useResourceLayers`（按 `code` 的显示状态）→ `resources` 分组（底图之上、注记之下）；图层面板的目录树只负责勾选，叠放顺序在"已勾选"区调整（5C.2）；勾选、透明度、顺序、年份按用户记住（5C.3，ADR 0042）；图例从登记表推导，不做地类统计（5C.4，ADR 0043）；符号的覆盖和拖动取色时的预览由拥有者 `useResourceSymbols` 持有，分组和图例都从默认符号、覆盖和预览推导；按属性配色的资源可以换成统一样式，分类样式各取值的符号用 `match` 组合在一个图层里，在图例里编辑（5C.5，ADR 0044）；未勾选的不放进样式，每个资源一个数据源、默认一个图层，面用到花纹或复杂描边时按需拆出纹理图层、描边图层，花纹是随分组提交的 SDF 图片（5C.5c，ADR 0045）；线和面的描边用到多种线型时按线型拆层，每层的线型是常量，按要素的线型过滤（ADR 0046），重的资源有最小显示级别；目录变化时逐个资源校验；瓦片错误从视图的数据源错误推导 | 0041、0044、0045、0046、0047 | [migration.md](../migration.md)"现状底图：资源图层实测" |
+| 点选与框选 | 选择状态只存要素身份（数据源 + `guid`）；二维 14 级以上只用渲染要素，14 级以下和三维由登记的数据集查后端；框选离起点 3 像素起算并屏蔽派生的单击，松手时按渲染要素加权估数，超过 5000 提示缩小范围；批量高亮在瓦片上按 `guid` 过滤 | 0047（第 1、2 节由 0048 修正，框选由 0049 确定）、0048、0049（第 2 节的估数由 0050 修正）、0050 | [migration.md](../migration.md)"点选的实测""框选的实测" |
+| 区划裁剪 | 按区划边界几何：区划外用遮罩盖住（按环的嵌套深度构造）；点选、框选按几何限定范围，发给后端的几何误差不超过 2 像素、有效、最多 120 个坐标 | 0051 | [shared-map.md](shared-map.md)"区划裁剪" |
+| 资源的年份 | 年份是按 `code` 的显示状态；单个资源各自选，另有批量设置（作用于所有有这一年的资源）；不存"当前年份" | 0052 | [migration.md](../migration.md)"年份的验收" |
+| 真实引擎的测试 | 依赖真实 MapLibre 或真实布局的少量用例用 Vitest 浏览器模式，只用本地数据 | 0040 | [vite-config.md](../config/vite-config.md) |
 | 相机操作与异步 | 用户发起的定位是一次操作，用信号判断是否作废；操作对象的 `run` 负责等待与再确认；可替换操作只认最新（`LatestController`）；revision / operation / version 各有一个意思 | 0038（第 1、3 条由 0039 修正）、0039 | [map-vue.md](map-vue.md)"相机操作"、[utils.md](utils.md) |
 
 ## 阅读顺序
@@ -65,7 +69,7 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 3. ADR 0026 → 0030：失败的处理
 4. ADR 0034：交互工具
 5. ADR 0038 → 0039：相机操作与异步规则
-6. 其余按要做的事去读；阶段总结（[stage-4](../stages/stage-4-map-core.md)、[5A](../stages/stage-5a-map-skeleton.md)、[5B](../stages/stage-5b-public-map-capabilities.md)）记录了每次决定前后踩过的坑
+6. 其余按要做的事去读；阶段总结（[stage-4](../stages/stage-4-map-core.md)、[5A](../stages/stage-5a-map-skeleton.md)、[5B](../stages/stage-5b-public-map-capabilities.md)、[5C](../stages/stage-5c-current-map-business.md)）记录了每次决定前后踩过的坑
 
 ## 维护
 

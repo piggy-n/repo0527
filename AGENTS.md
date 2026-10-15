@@ -10,6 +10,7 @@
 - 重要决策写成 ADR（`docs/adr/`）；阶段结束时把新结论同步到本文件，并更新 `docs/roadmap.md` 的状态与调整
 - 登录页等重要页面先按设计规范出设计稿，确认后再开发；主题与组件库层面的改动用主题预览页（`/dev/theme`）截图确认
 - 提交信息使用 Conventional Commits 格式（`feat` / `fix` / `refactor` / `docs` / `chore` 等）
+- 后端有些级别、有些资源暂时没有数据（瓦片为空、缺字段、接口报错）时，不为适配这种现状调整既定方案，记进 `docs/migration.md` 或 roadmap 的待办
 
 ## 技术栈
 
