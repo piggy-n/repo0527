@@ -1,5 +1,5 @@
 import type { GeoJSONSourceSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { MapLibreView, MapSession, type StyleGroup } from '@yzt/map-core';
+import { type CameraState, MapLibreView, MapSession, type StyleGroup } from '@yzt/map-core';
 import type { Feature, FeatureCollection } from 'geojson';
 import { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it } from 'vitest';
@@ -12,8 +12,8 @@ import {
 } from '@/features/resource-map/resource-layers';
 import type { ResourceSymbolOverride } from '@/features/resource-map/resource-symbols';
 
-// 资源图层按线型拆层（ADR 0046）放在真实 MapLibre 上：用推导出的分组，数据换成内联 GeoJSON。
-// 放在 app 里：要用原生地图等渲染完成、查画出的要素，只有 app 和 MapLibre 适配器能导入 maplibre-gl
+// 资源图层放在真实 MapLibre 上（按线型拆层 ADR 0046、面的花纹 ADR 0045）：用推导出的分组，数据换成内联 GeoJSON。
+// 放在 app 里：要用原生地图等渲染完成、查画出的要素、读画面，只有 app 和 MapLibre 适配器能导入 maplibre-gl
 
 const WAIT_TIMEOUT = 10_000;
 const HYDL = 'csxhjctb_hydl';
@@ -136,11 +136,10 @@ function nextRender(map: MapLibreMap, label: string): Promise<void> {
   });
 }
 
-function setup() {
+function setup(camera: CameraState = { center: [118.8, 32.08], zoom: 9, bearing: 0, pitch: 0 }) {
   const container = document.body.appendChild(document.createElement('div'));
   container.style.width = '800px';
   container.style.height = '600px';
-  const camera = { center: [118.8, 32.08] as const, zoom: 9, bearing: 0, pitch: 0 };
   const session = new MapSession({ groups: ['resources'], camera });
   session.style.setGroup('resources', groupOf({}));
   // 渲染中途抛出的错误没有经过视图，只能在窗口上收集
@@ -245,5 +244,56 @@ describe('资源图层按线型拆层（ADR 0046）', () => {
       全实线: { [`resources-${HYDL}`]: ['水渠', '河流', '湖泊'] },
       统一样式虚线: { [`resources-${HYDL}`]: ['水渠', '河流', '湖泊'] }
     });
+  });
+});
+
+// 画布中心一块的像素，在 render 事件里读（还没交给页面合成，不需要 preserveDrawingBuffer）
+const BLOCK = 32;
+
+function centerBlock(map: MapLibreMap): string {
+  const gl = map.getCanvas().getContext('webgl2');
+  if (!gl) {
+    throw new Error('地图没有 WebGL2 上下文');
+  }
+  const x = Math.floor((gl.drawingBufferWidth - BLOCK) / 2);
+  const y = Math.floor((gl.drawingBufferHeight - BLOCK) / 2);
+  const pixels = new Uint8Array(BLOCK * BLOCK * 4);
+  gl.readPixels(x, y, BLOCK, BLOCK, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  return pixels.join(',');
+}
+
+// 地类图斑用统一样式的花纹
+function uniform(fillStyle: 'diagonal' | 'backDiagonal'): Readonly<Record<string, ResourceSymbolOverride>> {
+  return { [DLTB]: { mode: 'uniform', uniform: { fillStyle, fillColor: '#FFFF00', patternColor: '#0000FF' } } };
+}
+
+describe('面的花纹（ADR 0045）', () => {
+  // 统一样式的花纹只随级别变化，MapLibre 会给它做过渡；过渡期间按旧图片取图集位置，而重新加载的瓦片里只有新图片，
+  // 约 300 毫秒里画出别的花纹（docs/migration.md"切换填充方式的闪烁"）
+  it('切换填充方式：每一帧要么是原来的花纹，要么是新的花纹，中间不画出别的花纹', async () => {
+    // 中心落在一个图斑里，15.5 级是最密的一档
+    using ctx = setup({ center: [118.513, 31.9215], zoom: 15.5, bearing: 0, pitch: 0 });
+    const { map, session } = ctx;
+    const first = nextRender(map, '首次渲染完成');
+    session.style.setGroup('resources', groupOf(uniform('diagonal')));
+    await first;
+    const before = centerBlock(map);
+
+    const frames: string[] = [];
+    const capture = () => frames.push(centerBlock(map));
+    map.on('render', capture);
+    try {
+      const switched = nextRender(map, '切换后渲染完成');
+      session.style.setGroup('resources', groupOf(uniform('backDiagonal')));
+      await switched;
+    } finally {
+      map.off('render', capture);
+    }
+
+    const after = frames.at(-1);
+    expect(after).not.toBe(before);
+    const others = frames.filter(frame => frame !== before && frame !== after);
+    expect(others, `${frames.length} 帧里有 ${others.length} 帧既不是原来的花纹也不是新的花纹`).toHaveLength(0);
+    expect(ctx.errors).toStrictEqual([]);
   });
 });

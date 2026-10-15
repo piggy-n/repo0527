@@ -352,7 +352,7 @@ describe('面的图层（ADR 0045）', () => {
     expect(validate(layers)).toStrictEqual([]);
   });
 
-  it('花纹建纹理图层：按缩放切换三档图片，颜色是纹理颜色，不画边线；带上用到的图片', () => {
+  it('花纹建纹理图层：按缩放切换三档图片，花纹不过渡，颜色是纹理颜色，不画边线；带上用到的图片', () => {
     const layers = symbolLayers({ ...FILL, fillStyle: 'diagonal', patternColor: '#000000' });
 
     expect(partOf(layers, 'pattern')).toStrictEqual({
@@ -368,6 +368,7 @@ describe('面的图层（ADR 0045）', () => {
           14,
           patternImageId('diagonal', 2)
         ],
+        'fill-pattern-transition': { duration: 0, delay: 0 },
         'fill-color': '#000000',
         'fill-antialias': false
       }

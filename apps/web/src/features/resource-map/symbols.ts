@@ -538,6 +538,9 @@ function fillLayers(
       type: 'fill',
       paint: {
         'fill-pattern': ['step', ['zoom'], value(imageAt(0)), medium, value(imageAt(1)), high, value(imageAt(2))],
+        // 花纹不过渡：过渡期间 MapLibre 仍按旧图片取图集位置，重新加载的瓦片里没有旧图片，会画错约 300 毫秒
+        // （docs/migration.md"切换填充方式的闪烁"）
+        'fill-pattern-transition': { duration: 0, delay: 0 },
         'fill-color': value(item => (patternOf(item) ? fill(item).patternColor : TRANSPARENT)),
         // 纹理图层不画边线：默认的边线会盖住主图层的 1 像素描边（ADR 0045 审阅时实测）
         'fill-antialias': false
