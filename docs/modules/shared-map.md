@@ -10,7 +10,7 @@
 |---|---|
 | `map-status.ts` | `describeMapStatus(viewState, failure)`：由视图状态和失败原因推导要显示的内容（纯函数） |
 | `MapStatusNotice.tsx` | 加载中与失败的提示：中间的卡片、上方的警告条（设计稿 5D.7） |
-| `pointer-hint/pointer-hint.ts` | 鼠标旁的提示在哪一侧：右边、下边放不下时翻到另一侧（纯函数，ADR 0055） |
+| `pointer-hint/pointer-hint.ts` | 鼠标旁的提示在哪一侧：右边、下边放不下时翻到另一侧（纯函数，ADR 0055）；提示的内容 `PointerHintContent`（位置和各行） |
 | `pointer-hint/PointerHint.tsx` | 鼠标旁的提示：加粗的数值和操作说明，测量和拾取共用 |
 | `jiangsu.ts` | 江苏省的范围 `JIANGSU_BOUNDS`、创建地图时的相机 `JIANGSU_CAMERA`、缩放范围 `JIANGSU_ZOOM_RANGE` |
 | `useDefaultView.ts` | 默认视角：第一次就绪时按江苏的范围定位，`goToDefaultView()` 回到默认视角（ADR 0033） |
@@ -31,7 +31,8 @@
 | `status-bar/useMapReadout.ts` | 状态栏的读数：比例尺、鼠标所在或画布中心的经纬度、角度，从地图上下文推导 |
 | `status-bar/MapStatusBar.tsx` | 左下角的状态栏：只显示，按量出的宽度取舍 |
 | `box-select/box-gesture.ts` | 拖动框选的手势：阈值、屏蔽派生的单击、取消（纯函数，ADR 0049） |
-| `box-select/BoxSelectOverlay.tsx` | 拖动框选时的矩形（设计稿 5D.7 保留原来的外观） |
+| `box-select/BoxSelectOverlay.tsx` | 点/框选的浮层：拖动框选时的矩形（设计稿 5D.7 保留原来的外观）和鼠标旁的提示（ADR 0056） |
+| `pan-key.ts` | 临时拖动地图的键：Mac 用 ⌘、其他平台用 Ctrl，交给工具声明的修饰键和提示里的写法（ADR 0056） |
 | `measure/measure-style.ts` | `measure` 分组的推导（纯函数，ADR 0035） |
 | `measure/measure-labels.ts` | 测量的标签、单位格式、标签放在哪一边与鼠标旁的提示（纯函数，ADR 0055） |
 | `measure/useMeasure.ts` | 测量的拥有者：桥接 map-core 的 `MeasureStore`，提供两个工具和推导函数 |
@@ -286,6 +287,18 @@ drawingBox(gesture);                    // 正在画的框，交给 <BoxSelectOv
 - 一次手势进入了框选或被取消，就屏蔽它派生的单击，到下一次按下才重置：拖出很远再回到起点附近松手时 MapLibre 仍会发出单击，不屏蔽就会覆盖刚完成的框选
 - 松手点离起点够远时，即使没收到移动也按框选处理；拖回起点附近、框不到 3 像素时没有框
 - 状态是整体替换的普通对象，拥有者放在 `shallowRef` 里；浮层只显示 `drawingBox` 给出的框，按左上角和宽高摆放，不拦截地图的鼠标操作；外观是 1 像素主色虚线、12% 的主色填充（5D.7 保留）
+
+### 跟随提示与临时拖动（ADR 0056）
+
+```tsx
+const panKey = currentPanKey();          // { modifier: 'ctrl', label: 'Ctrl' }；Mac 上是 { modifier: 'meta', label: '⌘' }
+const tool: MapTool = { ..., panModifier: panKey.modifier };   // 按住这个键拖动地图，由适配器平移
+<BoxSelectOverlay box={pick.boxDraft.value} hint={pick.hint.value} />
+```
+
+- 平台按 `navigator.userAgent` 判断（`panKeyFor` 是纯函数）：Macintosh、iPhone、iPad 用 ⌘，因为 Mac 上 Ctrl + 单击会被系统当成右键；iPadOS 的 Safari 也写成 Macintosh，外接键盘时同样用 ⌘
+- 提示的内容和显示条件由点选的拥有者给出（`features/resource-map` 的 `useFeaturePick`，ADR 0056 第 4 节），浮层只显示：`hint` 为 `null` 时不渲染，否则用 `PointerHint` 放在指针旁，靠边时翻到另一侧
+- 框带 `data-box`，提示带 `data-pointer-hint`，测试据此区分
 
 ## 测量（ADR 0035）
 

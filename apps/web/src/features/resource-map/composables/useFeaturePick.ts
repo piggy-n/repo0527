@@ -35,6 +35,8 @@ import {
   pressBox,
   releaseBox
 } from '@/shared/map/box-select/box-gesture';
+import { currentPanKey } from '@/shared/map/pan-key';
+import type { PointerHintContent } from '@/shared/map/pointer-hint/pointer-hint';
 import type { RegionScope } from '@/shared/map/region/region-scope';
 import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
 import { type FeatureDetail, type FeaturePage, queryFeaturesAt } from '../api';
@@ -51,6 +53,7 @@ import {
   queryCapabilityOf,
   serverCandidates
 } from '../feature-query';
+import { pickHintLines } from '../pick-hint';
 import { type FeatureKey, useFeatureDetailQuery } from '../queries';
 import type { ResourceLayersState } from '../resource-layers';
 import { type BatchHighlight, selectionGroup } from '../selection-style';
@@ -126,6 +129,11 @@ export interface FeaturePick {
   readonly state: Readonly<ShallowRef<FeaturePickState>>;
   /** 拖动中正在画的框，交给框选的浮层；没有在框选时为 null */
   readonly boxDraft: ComputedRef<ScreenBox | null>;
+  /**
+   * 鼠标旁的提示，交给框选的浮层（ADR 0056 第 4 节）：每次进入点/框选时打开，第一次单击或框选识别之后关闭；
+   * 视图就绪、指针在画布上、没有在框选时才有值
+   */
+  readonly hint: ComputedRef<PointerHintContent | null>;
   /** 详情的加载状态，只在 detail 时有值 */
   readonly detail: ComputedRef<FeatureDetailStatus | null>;
   /** 交给 registerTools */
@@ -201,7 +209,10 @@ function identifySignature(state: ResourceLayersState): string {
 
 /** 创建选择的拥有者，在 provideMap 所在组件的 setup 中调用；作用域销毁时作废进行中的识别和加载 */
 export function useFeaturePick(
-  map: Pick<MapContext, 'useCamera' | 'select' | 'beginCameraOperation' | 'runCameraOperation'>,
+  map: Pick<
+    MapContext,
+    'useCamera' | 'select' | 'beginCameraOperation' | 'runCameraOperation' | 'view' | 'pointer'
+  >,
   resources: Pick<ResourceLayers, 'state' | 'configErrors'>,
   options: FeaturePickOptions = {}
 ): FeaturePick {
@@ -232,6 +243,11 @@ export function useFeaturePick(
   let listIds = 0;
   // 拖动框选的手势（ADR 0049 第 1 节）
   const gesture = shallowRef<BoxGesture>(NO_BOX_GESTURE);
+  // 按住 Ctrl（Mac 上 ⌘）临时拖动地图，提示里写同一个键（ADR 0056）
+  const panKey = currentPanKey();
+  const hintLines = pickHintLines(panKey);
+  // 鼠标旁的提示是否打开：进入点/框选时打开，单击或框选识别过一次后关闭，直到下次进入
+  const hintOpen = shallowRef(false);
   // 详情到了以后要执行的定位
   let pendingLocate: CameraOperation | null = null;
   let flashTimer: ReturnType<typeof setInterval> | undefined;
@@ -433,13 +449,16 @@ export function useFeaturePick(
 
   // 点中的位置也在点击时取下，之后地图移动不影响
   const identify = (point: ScreenPoint, view: ToolView) => {
+    hintOpen.value = false;
     const hit = view.pick(point);
     const anchor = hit.kind === 'hit' ? hit.lngLat : null;
     start({ mode: 'pick', anchor }, (targets, zoom, area) => planIdentify(targets, point, zoom, view, area));
   };
 
-  const identifyBox = (box: ScreenBox, view: ToolView) =>
+  const identifyBox = (box: ScreenBox, view: ToolView) => {
+    hintOpen.value = false;
     start({ mode: 'box', anchor: null }, (targets, zoom, area) => planBox(targets, box, zoom, view, area));
+  };
 
   const cancelGesture = () => {
     gesture.value = cancelBox(gesture.value);
@@ -618,13 +637,20 @@ export function useFeaturePick(
     return false;
   };
 
-  // 常驻模式、十字光标（2026-10-16 用户要求，原来是默认箭头）；拖动用来框选，关掉拖动平移和 Shift 框选放大
-  // （ADR 0049 第 1 节）；离开点选工具时清除
+  // 常驻模式、十字光标（ADR 0056 第 3 节）；拖动用来框选，关掉拖动平移和 Shift 框选放大（ADR 0049 第 1 节），
+  // 按住修饰键时临时拖动地图；进入时打开提示，离开时关闭提示、清除结果
   const pickTool: MapTool = {
     persistent: true,
     cursor: 'crosshair',
     gestures: { dragPan: false, boxZoom: false },
-    deactivate: close,
+    panModifier: panKey.modifier,
+    activate: () => {
+      hintOpen.value = true;
+    },
+    deactivate: () => {
+      hintOpen.value = false;
+      close();
+    },
     handleInput
   };
 
@@ -656,6 +682,13 @@ export function useFeaturePick(
   return {
     state: shallowReadonly(state),
     boxDraft: computed(() => drawingBox(gesture.value)),
+    hint: computed(() => {
+      const point = map.pointer.value;
+      if (!hintOpen.value || point === null || map.view.value === null || gesture.value.kind === 'drawing') {
+        return null;
+      }
+      return { point, lines: hintLines };
+    }),
     detail,
     tools: { [FEATURE_PICK_TOOL]: pickTool },
     choose,

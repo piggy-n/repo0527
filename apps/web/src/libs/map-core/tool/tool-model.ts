@@ -14,6 +14,9 @@ export interface Gestures {
   readonly boxZoom: boolean;
 }
 
+/** 临时拖动地图的修饰键（ADR 0056）：Windows 等用 Ctrl，Mac 用 ⌘；由使用方按平台决定 */
+export type PanModifier = 'ctrl' | 'meta';
+
 /** 工具能用到的视图能力：只有拾取、投影和渲染要素查询，拿不到视图的其他部分 */
 export interface ToolView {
   readonly kind: ViewKind;
@@ -30,6 +33,8 @@ export interface MapTool {
   readonly cursor?: string;
   /** 激活时要关掉的手势，写 false 的才会关掉 */
   readonly gestures?: Partial<Gestures>;
+  /** 按住这个修饰键时左键拖动平移地图，这次拖动不交给工具；供关掉了拖动平移的工具使用（ADR 0056） */
+  readonly panModifier?: PanModifier;
   activate?(): void;
   /** 退出时丢掉瞬时状态 */
   deactivate?(): void;

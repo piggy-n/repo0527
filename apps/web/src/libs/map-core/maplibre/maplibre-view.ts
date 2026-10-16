@@ -23,6 +23,7 @@ import type { RenderedFeature, RenderedQueryOptions, ScreenBox } from '../view/r
 import type { LngLat, MapInputEvent, MapPointerEvent, PickResult, ScreenPoint } from '../view/view-input';
 import { applyStyleCommand } from './apply-style-command';
 import type { MapLibreMapOptions, MapLike, MapMouseEventLike, MapMouseEventType, MapMoveEventLike } from './map-like';
+import { ModifierPan } from './modifier-pan';
 
 export interface MapLibreViewOptions<G extends string> {
   readonly session: MapSession<G>;
@@ -177,6 +178,8 @@ export class MapLibreView<const G extends string> implements MapView {
   readonly kind = '2d';
   readonly #session: MapSession<G>;
   readonly #map: MapLike | undefined;
+  // 按住修饰键临时拖动（ADR 0056）；和地图一起创建
+  readonly #pan: ModifierPan | undefined;
   readonly #onError: (error: unknown) => void;
   readonly #emitter = createNanoEvents<MapLibreViewEvents>();
   readonly #stack: DisposableStack;
@@ -241,12 +244,26 @@ export class MapLibreView<const G extends string> implements MapView {
     } catch (error) {
       // 例如不支持 WebGL2 时的 GPUInitializationError：不抛出，交给 whenReady 和 statechange 表达
       this.#map = undefined;
+      this.#pan = undefined;
       this.#stack = stack.move();
       this.#fail(error);
       return;
     }
     this.#map = map;
     stack.defer(() => map.remove());
+    this.#pan = stack.use(
+      new ModifierPan({
+        map,
+        modifier: () => (this.#state === 'ready' ? (this.#session.tool.activeTool.panModifier ?? null) : null),
+        // 没有就绪时不应用光标，进入 ready 时按当前工具应用
+        onCursorChange: () => {
+          if (this.#state === 'ready') {
+            this.#applyCursor(map);
+          }
+        },
+        guard: callback => this.#guard(callback)
+      })
+    );
     if (scrollZoomRates?.wheel !== undefined) {
       map.scrollZoom.setWheelZoomRate(scrollZoomRates.wheel);
     }
@@ -295,6 +312,7 @@ export class MapLibreView<const G extends string> implements MapView {
   pause(): void {
     this.#assertAlive();
     this.#active = false;
+    this.#pan?.cancel();
     if (this.#state === 'ready') {
       this.#setState('paused');
     }
@@ -584,15 +602,17 @@ export class MapLibreView<const G extends string> implements MapView {
     return this.#map;
   }
 
-  // 只有就绪且没有暂停的视图把输入交给工具：二三维切换时只有当前显示的视图在转交（ADR 0034 第 3 条）
+  // 只有就绪且没有暂停的视图把输入交给工具：二三维切换时只有当前显示的视图在转交（ADR 0034 第 3 条）；
+  // 临时拖动的松开和派生的单击不交给工具（ADR 0056 第 2 节）
   #onInput(event: MapInputEvent): void {
-    if (this.#state === 'ready') {
+    if (this.#state === 'ready' && (event.type === 'key' || this.#pan?.swallows(event.type) !== true)) {
       this.#session.tool.dispatch(event, this.#toolView);
     }
   }
 
-  // 没有就绪时不应用，进入 ready（首次激活、恢复显示）时再按当前工具应用
+  // 没有就绪时不应用，进入 ready（首次激活、恢复显示）时再按当前工具应用；切换工具时结束临时拖动
   #onToolChange(): void {
+    this.#pan?.cancel();
     if (this.#state === 'ready' && this.#map !== undefined) {
       this.#applyTool(this.#map);
     }
@@ -600,8 +620,8 @@ export class MapLibreView<const G extends string> implements MapView {
 
   // 光标和手势是当前工具的声明；只恢复自己关掉的手势。切换工具和进入 ready 时调用
   #applyTool(map: MapLike): void {
-    const { cursor, gestures, persistent } = this.#session.tool.activeTool;
-    map.getCanvas().style.cursor = cursor ?? '';
+    const { gestures, persistent } = this.#session.tool.activeTool;
+    this.#applyCursor(map);
     // 临时任务多由面板、工具栏上的按钮激活（也可能在加载期间），焦点还在按钮上，按键到不了地图；
     // 移到地图上，Esc 才能直接退出。常驻模式不移，进入页面时不会抢走焦点
     if (!persistent) {
@@ -618,6 +638,12 @@ export class MapLibreView<const G extends string> implements MapView {
         handler.enable();
       }
     }
+  }
+
+  // 工具声明的光标，按住修饰键、临时拖动时换成手型（ADR 0056 第 2 节）
+  #applyCursor(map: MapLike): void {
+    const { cursor } = this.#session.tool.activeTool;
+    map.getCanvas().style.cursor = this.#pan?.cursor(cursor) ?? cursor ?? '';
   }
 
   #fail(error: unknown): void {

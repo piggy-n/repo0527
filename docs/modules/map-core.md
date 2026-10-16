@@ -20,7 +20,7 @@
 | `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause`；当前这次相机操作的信号（ADR 0038） |
 | `session/map-session.ts` | `MapSession`：组合样式、相机、当前工具与选择状态，统一释放 |
 | `selection/selection-model.ts` | `SelectionModel`：选中的要素，只存数据源和业务主键（ADR 0047 第 4 节） |
-| `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`ToolView` |
+| `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`PanModifier`、`ToolView` |
 | `measure/geodesic.ts` | 椭球面上的距离、累计距离、折线总长、多边形面积（geographiclib-geodesic，ADR 0035） |
 | `measure/measure-store.ts` | `MeasureStore`：测量的状态与测距、测面两个工具（ADR 0035） |
 | `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位、拾取、投影、渲染要素查询） |
@@ -29,6 +29,7 @@
 | `maplibre/map-like.ts` | `MapLike`：适配器用到的 MapLibre 方法（窄接口）；连同方法签名用到的类型从入口导出，map-vue 的测试据此实现假地图 |
 | `maplibre/apply-style-command.ts` | `applyStyleCommand`：一条命令对应一次地图方法调用 |
 | `maplibre/maplibre-view.ts` | `MapLibreView`：二维视图，唯一写 MapLibre 地图的地方 |
+| `maplibre/modifier-pan.ts` | `ModifierPan`：按住修饰键临时拖动地图，截下这次按下、按位移平移、给出临时的光标（ADR 0056，适配器内部用，不导出） |
 | `events.ts` | `Unsubscribe` 类型 |
 | `model-events.ts` | `ModelEvents`：会话各模型共用的事件与释放（ADR 0034 第 7 条），模块内部使用，不从入口导出 |
 
@@ -140,6 +141,7 @@ session.tool.on('input', (event, view) => ...);  // 只读的输入，和当前�
 - 输入只交给当前工具；Esc 先交给工具，工具没有返回 `true` 并且它是临时任务时退出
 - 交给当前工具之前先发出 `input` 事件（输入和来自哪个视图的 `kind`，按键也发出），用于跟踪鼠标位置这类和当前工具无关的显示（5D.3 的状态栏）。监听者抛错时当前工具照样收到这次输入（`try/finally`），错误仍抛给调用方，由适配器的 `#guard` 报告
 - 工具的光标、要关掉的手势是工具上的声明，由视图读 `activeTool` 后应用（ADR 0034 第 3 条）
+- 关掉了拖动平移的工具可以声明 `panModifier`（`'ctrl'` 或 `'meta'`）：按住这个键时左键拖动平移地图，这次拖动不交给工具（ADR 0056）。map-core 不判断平台，由使用方给出（`shared/map` 的 `currentPanKey()`）
 - 释放时让当前工具退出；之后登记、激活、转交输入都抛错
 
 ### SelectionModel（ADR 0047 第 4 节）
@@ -266,6 +268,16 @@ store.clear();
 - 工具的钩子抛错时由 `#guard` 交给 `onError`，不冒进 MapLibre 的事件分发
 - 释放时取消鼠标事件的订阅、移除按键监听（释放后的状态挡住了转交，所以测试直接确认 `removeEventListener` 被调用）
 
+**按住修饰键临时拖动（ADR 0056）**：由适配器内部的 `ModifierPan` 负责，和地图一起创建、一起释放。
+
+- 为什么要自己平移：所装 MapLibre（6.12）的拖动平移只认没按 Ctrl 的左键，左键加 Ctrl 是旋转和俯仰，而且只在按下时判断；打开它的拖动平移也拖不动
+- 开始：视图就绪、当前工具声明了 `panModifier`、左键按下时按着这个键。`ModifierPan` 在画布容器的捕获阶段截下这次按下（`stopPropagation`，不阻止默认行为，画布照常获得焦点）：MapLibre 在同一个元素的冒泡阶段监听按下，收不到它，所以不旋转、不俯仰，也不发出 `mousedown` 地图事件，工具不会开始框选
+- 拖动：文档上（捕获阶段）的 `mousemove` 按前后两次的位移调用 `panBy(offset, { animate: false }, { cause: 'user' })`，同步到位，相机事件的来源是 `user`；拖动中阻止默认行为，不选中页面上的文字（MapLibre 的拖动也这样）。地图倾斜时 `panBy` 按画面中心换算，离中心远的地方不完全跟手；没有惯性
+- 结束：左键松开；移动时 `buttons` 里没有左键（在窗口外松开）；窗口失焦；切换工具、视图暂停（`cancel()`）；当前不再能临时拖动（工具没声明、视图不再就绪）。是否临时拖动只在按下时判断：拖动中松开修饰键继续拖，框选中按下修饰键仍是框选
+- 交给工具的输入：最近一次按下是临时拖动时，`up`、`click`、`dblclick` 不交给工具，到下一次按下为止；`move`、`leave` 照常经过工具模型，上下文的 `pointer` 跟着更新
+- 光标：拖动中 `grabbing`；按住修饰键、没有别的左键按下（如框选中）时 `grab`；否则是工具声明的光标。修饰键从文档的 `keydown` / `keyup` 和指针事件的 `ctrlKey` / `metaKey` 读出（点/框选不抢焦点，按键只能在文档上监听），窗口失焦时当作松开；光标变了才通知视图，视图就绪时写到画布上
+- 监听用一个 `AbortController` 的 `signal` 登记，释放时一起移除；回调里的错误交给视图的 `#guard`
+
 **渲染要素查询（5C.6a-1，ADR 0047 第 4 节）**：
 
 - `queryRendered(area, { sources, withGeometry })`：按已应用的样式快照找出这些数据源的图层（就绪时它就是地图上的样式），交给 `queryRenderedFeatures`；没有图层时直接返回空数组，不调用 MapLibre（它对不存在的图层会报错）
@@ -305,10 +317,12 @@ store.clear();
 | 测量 | `geodesic`（与 WGS84 的已知弧长、矩形面积对比）、`MeasureStore`（单击、双击、`clickCount`、预览点、Esc、退出、删除与清除、两个工具共用） | 纯 TS，Node |
 | `applyStyleCommand` | 一条命令对应一次地图方法调用 | 假对象，jsdom |
 | `MapLibreView` | 生命周期、样式修订的跟踪、暂停恢复、出错重建、相机读写；状态转换的穷举短序列 | 注入 `createMap` 换成假地图，jsdom |
-| `MapLibreView`（`maplibre-view.browser.test.ts`） | 真实的 MapLibre（ADR 0040）：首次加载与俯角收敛后按 `sync` 写回、增量提交后画出要素且不整体重建、规范以外的图层属性触发整体重建、不合法的图层进入 `failed(style)` 后自动恢复、拾取与投影、画布尺寸变化；样式图片在首次加载、只改图片（换像素、换格式、去掉）、整体重建后都在，没有缺图 | Chromium 无界面版，软件渲染 |
+| `MapLibreView`（`maplibre-view.browser.test.ts`） | 真实的 MapLibre（ADR 0040）：首次加载与俯角收敛后按 `sync` 写回、增量提交后画出要素且不整体重建、规范以外的图层属性触发整体重建、不合法的图层进入 `failed(style)` 后自动恢复、拾取与投影、画布尺寸变化；样式图片在首次加载、只改图片（换像素、换格式、去掉）、整体重建后都在，没有缺图；声明了 Ctrl 的工具按住 Ctrl 拖动是平移、不旋转，右键拖动照常旋转（对照："移动"里按住 Ctrl 拖动是 MapLibre 的旋转） | Chromium 无界面版，软件渲染 |
+| `ModifierPan` | 截下按下、按位移平移、结束的各种情况、吞掉的输入、光标的切换与通知、失焦、释放后不再监听 | 真实的 DOM 事件，jsdom |
 | 真实 MapLibre | 渲染、Worker、事件、尺寸监听、中心点 | 开发页 `/dev/map`，浏览器 |
 
 - 工具模型的输入事件（5D.3）：先发出 `input` 再交给当前工具、按键也发出；监听者抛错时工具照样收到输入，错误抛给调用方。改坏 2 处（不发出、去掉 `try/finally`），连同默认关掉版权控件 1 处，全部由断言发现
+- 临时拖动（ADR 0056）：假地图像 MapLibre 一样在画布容器的冒泡阶段收到 DOM 的按下再发出地图事件（`press`），并实现 `panBy`；改坏 10 处（不截下、位移方向、不记别的左键、不吞输入、光标没变也通知、不看 `buttons`、失焦不清按键、切换工具不结束、没就绪也拖动，以及浏览器里不截下时真实的 MapLibre 会旋转），全部由断言发现
 - 不用 `vi.mock('maplibre-gl')`：适配器依赖的是 `MapLike`，测试注入实现它的假地图 `FakeMap`。假地图的相机方法立即到位并同步触发 `move`、合并 `eventData`，俯角上限 60 用来模拟 MapLibre 的收敛（创建时同样收敛）
 - 假地图的 `on` 要和 `MapLike` 一样写出三个重载（回调参数在 `strictFunctionTypes` 下按逆变检查），实现签名的回调参数用 `never`
 - "释放时取消会话订阅"在行为上测不出来（释放后的状态检查挡住了晚到的通知），用 `vi.spyOn(StyleModel.prototype, 'on')` 换掉返回的取消函数来确认

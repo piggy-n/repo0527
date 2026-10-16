@@ -83,6 +83,8 @@ export interface MapLike extends StyleTarget {
     },
     eventData: CameraEventData
   ): void;
+  /** 视野按屏幕像素移动（地图内容反向移动）；animate 为 false 时同步到位，和 jumpTo 一样发出 movestart、move */
+  panBy(offset: [number, number], options: { animate: false }, eventData: CameraEventData): void;
   fitBounds(
     bounds: [number, number, number, number],
     options: { padding?: ViewPadding; maxZoom?: number; duration?: number },

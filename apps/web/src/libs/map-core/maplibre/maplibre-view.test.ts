@@ -67,7 +67,7 @@ interface FakeCamera {
   pitch: number;
 }
 
-const CAMERA_CALLS = new Set(['jumpTo', 'flyTo', 'fitBounds', 'remove']);
+const CAMERA_CALLS = new Set(['jumpTo', 'flyTo', 'panBy', 'fitBounds', 'remove']);
 
 // 只模拟适配器用到的行为：记录调用；相机方法立即到位，并像 MapLibre 一样同步触发 move、合并 eventData
 // 记下设置过的滚轮缩放速率
@@ -113,6 +113,11 @@ class FakeMap implements MapLike {
       bearing: options.bearing ?? 0,
       pitch: Math.min(options.pitch ?? 0, this.maxPitch)
     };
+    this.canvasContainer.append(this.canvas);
+    // 像 MapLibre 一样在画布容器的冒泡阶段收到按下，再发出地图事件；画布在 (0, 0)
+    this.canvasContainer.addEventListener('mousedown', event =>
+      this.fire('mousedown', { point: { x: event.clientX, y: event.clientY }, originalEvent: event })
+    );
   }
 
   addSource = this.#record('addSource');
@@ -187,6 +192,12 @@ class FakeMap implements MapLike {
     this.moveTo({ ...this.camera, lng, lat, zoom: camera.zoom ?? this.camera.zoom }, eventData);
   }
 
+  // 和 unproject 一样每 100 像素 1 度
+  panBy([x, y]: [number, number], options: { animate: false }, eventData: CameraEventData): void {
+    this.calls.push(['panBy', [x, y], options, eventData]);
+    this.moveTo({ ...this.camera, lng: this.camera.lng + x / 100, lat: this.camera.lat - y / 100 }, eventData);
+  }
+
   fitBounds(
     bounds: [number, number, number, number],
     options: { maxZoom?: number },
@@ -238,6 +249,11 @@ class FakeMap implements MapLike {
     this.fire(type, { point: { x, y }, originalEvent: new MouseEvent(type, init) });
   }
 
+  /** 在画布上按下鼠标（DOM 事件）：先经过适配器在捕获阶段的监听，没被截下才发出地图事件 */
+  press(x: number, y: number, init: MouseEventInit = {}): void {
+    this.canvas.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: x, clientY: y, ...init }));
+  }
+
   /** 模拟用户拖动：带原始的 DOM 事件 */
   drag(lng: number, lat: number): void {
     this.moveTo({ ...this.camera, lng, lat }, { originalEvent: new MouseEvent('mousemove') });
@@ -284,6 +300,17 @@ function recordingTool(options: Partial<MapTool> = {}) {
     ...options
   };
   return { tool, inputs, views };
+}
+
+// 临时拖动的移动、松开在文档上（指针可以移出画布）
+const moveOnDocument = (x: number, y: number, init: MouseEventInit = {}) =>
+  document.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y, buttons: 1, ...init }));
+const releaseOnDocument = () => document.dispatchEvent(new MouseEvent('mouseup', { button: 0 }));
+const holdCtrl = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }));
+
+// 像点/框选一样：关掉拖动平移，按住 Ctrl 临时拖动
+function pickTool() {
+  return recordingTool({ persistent: true, cursor: 'crosshair', gestures: { dragPan: false }, panModifier: 'ctrl' });
 }
 
 type Groups = 'basemap' | 'business';
@@ -1767,6 +1794,100 @@ describe('MapLibreView', () => {
 
       ctx.view.resume();
       expect(ctx.map.canvas.style.cursor).toBe('pointer');
+    });
+
+    describe('temporary pan with a modifier (ADR 0056)', () => {
+      it('pans by itself; the press, its release and click do not reach MapLibre or the tool, moves still do', () => {
+        using ctx = setup();
+        const { tool, inputs } = pickTool();
+        ctx.session.tool.register('pick', tool);
+        ctx.session.tool.activate('pick');
+        ctx.map.fire('style.load');
+        const engineDowns: unknown[] = [];
+        ctx.map.on('mousedown', event => engineDowns.push(event));
+        const changes: CameraChange[] = [];
+        ctx.session.camera.on('change', change => changes.push(change));
+
+        holdCtrl();
+        expect(ctx.map.canvas.style.cursor).toBe('grab');
+        ctx.map.press(100, 100, { ctrlKey: true });
+        expect(ctx.map.canvas.style.cursor).toBe('grabbing');
+        moveOnDocument(150, 100);
+        // MapLibre 照常发出移动的地图事件：经过工具模型，鼠标位置跟着更新
+        ctx.map.mouse('mousemove', 150, 100);
+        releaseOnDocument();
+        ctx.map.mouse('mouseup', 150, 100);
+        ctx.map.mouse('click', 150, 100, { detail: 1 });
+
+        expect(engineDowns).toStrictEqual([]);
+        expect(inputs.map(event => event.type)).toStrictEqual(['move']);
+        expect(ctx.map.calls.filter(([name]) => name === 'panBy')).toStrictEqual([
+          ['panBy', [-50, 0], { animate: false }, { cause: 'user' }]
+        ]);
+        expect(changes.map(({ state, cause }) => [state.center, cause])).toStrictEqual([[[118.3, 32.05], 'user']]);
+        // 松开时没有按着 Ctrl
+        expect(ctx.map.canvas.style.cursor).toBe('crosshair');
+
+        // 下一次没按修饰键的按下照常交给工具
+        ctx.map.press(10, 10);
+        ctx.map.mouse('mouseup', 10, 10);
+        ctx.map.mouse('click', 10, 10, { detail: 1 });
+        expect(inputs.map(event => event.type)).toStrictEqual(['move', 'down', 'up', 'click']);
+      });
+
+      it('leaves Ctrl presses alone before ready, while paused and for tools that declare no modifier', () => {
+        using ctx = setup();
+        const pick = pickTool();
+        const plain = recordingTool({ persistent: true });
+        ctx.session.tool.register('pick', pick.tool);
+        ctx.session.tool.register('plain', plain.tool);
+        ctx.session.tool.activate('pick');
+        const engineDowns: unknown[] = [];
+        ctx.map.on('mousedown', event => engineDowns.push(event));
+
+        ctx.map.press(0, 0, { ctrlKey: true });
+        moveOnDocument(20, 20);
+        releaseOnDocument();
+        ctx.map.fire('style.load');
+        ctx.view.pause();
+        ctx.map.press(0, 0, { ctrlKey: true });
+        moveOnDocument(20, 20);
+        releaseOnDocument();
+        ctx.view.resume();
+        ctx.session.tool.activate('plain');
+        holdCtrl();
+        ctx.map.press(0, 0, { ctrlKey: true });
+        moveOnDocument(20, 20);
+
+        expect(engineDowns).toHaveLength(3);
+        expect(plain.inputs.map(event => event.type)).toStrictEqual(['down']);
+        expect(ctx.map.calls.filter(([name]) => name === 'panBy')).toStrictEqual([]);
+        expect(ctx.map.canvas.style.cursor).toBe('');
+      });
+
+      it('ends the pan when the tool changes, even to another tool that declares a modifier', () => {
+        using ctx = setup();
+        ctx.session.tool.register('pick', pickTool().tool);
+        ctx.session.tool.register('select', { ...pickTool().tool, cursor: 'cell' });
+        ctx.session.tool.register('measure', { persistent: false, cursor: 'copy' });
+        ctx.session.tool.activate('pick');
+        ctx.map.fire('style.load');
+
+        ctx.map.press(0, 0, { ctrlKey: true });
+        ctx.session.tool.activate('measure');
+        // 不用等下一次移动，立刻换成新工具的光标
+        expect(ctx.map.canvas.style.cursor).toBe('copy');
+        moveOnDocument(20, 20);
+        releaseOnDocument();
+        ctx.session.tool.activate('pick');
+        ctx.map.press(0, 0, { ctrlKey: true });
+        ctx.session.tool.activate('select');
+        // Ctrl 还按着，新工具也声明了 Ctrl：拖动结束，回到按住时的手型
+        expect(ctx.map.canvas.style.cursor).toBe('grab');
+        moveOnDocument(20, 20);
+
+        expect(ctx.map.calls.filter(([name]) => name === 'panBy')).toStrictEqual([]);
+      });
     });
 
     it('reports errors thrown by a tool instead of throwing into MapLibre', () => {

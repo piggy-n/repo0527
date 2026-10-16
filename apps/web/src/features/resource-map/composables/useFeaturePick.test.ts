@@ -13,7 +13,7 @@ import type {
   ToolView,
   ViewKind
 } from '@yzt/map-core';
-import type { CameraControl, CameraOperation, MapContext } from '@yzt/map-vue';
+import type { CameraControl, CameraOperation, MapContext, MapViewport } from '@yzt/map-vue';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, shallowRef } from 'vue';
 import type { RegionScope } from '@/shared/map/region/region-scope';
@@ -185,7 +185,10 @@ function setup(
   // 区划裁剪的范围，可以由用例中途改变
   const scope = shallowRef(initialScope);
   const select = vi.fn<MapContext['select']>();
-  const map = { useCamera: () => fake.camera, select, ...fake };
+  // 视图和指针：跟随提示要视图就绪、指针在画布上
+  const view = shallowRef<MapViewport | null>(toolView([], '2d'));
+  const mapPointer = shallowRef<ScreenPoint | null>(null);
+  const map = { useCamera: () => fake.camera, select, view, pointer: mapPointer, ...fake };
   // 校验结果可以由用例中途改变
   const errors = shallowRef(invalid);
   const resources = { state: shallowRef(state), errors, configErrors: computed(() => errors.value) };
@@ -204,7 +207,7 @@ function setup(
   const pick = owner.tools[FEATURE_PICK_TOOL];
   const send = (event: MapInputEvent, features: readonly RenderedFeature[] = [], kind: ViewKind = '2d') =>
     pick.handleInput?.(event, toolView(features, kind));
-  return { owner, pick, send, select, resources, scope, onIdentifyStart, ...fake };
+  return { owner, pick, send, select, resources, scope, onIdentifyStart, view, mapPointer, ...fake };
 }
 
 type Owner = ReturnType<typeof setup>['owner'];
@@ -702,11 +705,88 @@ function layerIds(owner: Owner): string[] {
 }
 
 describe('useFeaturePick：框选', () => {
-  it('点选工具是十字光标，关掉拖动平移和 Shift 框选放大', () => {
+  it('点选工具是十字光标，关掉拖动平移和 Shift 框选放大，按住 Ctrl 临时拖动地图（ADR 0056）', () => {
     const { pick } = setup(15);
 
     expect(pick.cursor).toBe('crosshair');
     expect(pick.gestures).toStrictEqual({ dragPan: false, boxZoom: false });
+    expect(pick.panModifier).toBe('ctrl');
+  });
+
+  it('Mac 上按住 ⌘ 临时拖动，提示里也写 ⌘', () => {
+    const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (Macintosh)');
+    try {
+      const { owner, pick, mapPointer } = setup(15);
+      pick.activate?.();
+      mapPointer.value = { x: 1, y: 1 };
+
+      expect(pick.panModifier).toBe('meta');
+      expect(owner.hint.value?.lines[1]).toBe('按住 ⌘ 拖动地图，Esc 取消或清除结果');
+    } finally {
+      userAgent.mockRestore();
+    }
+  });
+
+  it('进入点/框选时打开鼠标旁的提示：视图就绪、指针在画布上、没有在框选时显示', () => {
+    const { owner, pick, send, view, mapPointer } = setup(15);
+    mapPointer.value = { x: 50, y: 60 };
+    expect(owner.hint.value).toBeNull();
+
+    pick.activate?.();
+    expect(owner.hint.value).toStrictEqual({
+      point: { x: 50, y: 60 },
+      lines: ['单击查看要素，拖动框选', '按住 Ctrl 拖动地图，Esc 取消或清除结果']
+    });
+
+    mapPointer.value = null;
+    expect(owner.hint.value).toBeNull();
+    mapPointer.value = { x: 70, y: 80 };
+    const ready = view.value;
+    view.value = null;
+    expect(owner.hint.value).toBeNull();
+    view.value = ready;
+    expect(owner.hint.value?.point).toStrictEqual({ x: 70, y: 80 });
+
+    // 框选中显示的是矩形
+    send(pointer('down', FROM));
+    expect(owner.hint.value).not.toBeNull();
+    send(pointer('move', TO));
+    expect(owner.hint.value).toBeNull();
+    // 取消的框选不算用过
+    send({ type: 'key', key: 'Escape' });
+    expect(owner.hint.value).not.toBeNull();
+  });
+
+  it('第一次单击识别后关闭提示，直到下次进入；临时拖动、Esc 不算用过', () => {
+    const { owner, pick, send, mapPointer } = setup(15);
+    mapPointer.value = { x: 50, y: 60 };
+    pick.activate?.();
+
+    // 临时拖动时工具只收到移动
+    send(pointer('move', TO));
+    send({ type: 'key', key: 'Escape' });
+    expect(owner.hint.value).not.toBeNull();
+
+    send(click(100, 100), [rendered(DLTB, 1)]);
+    expect(owner.hint.value).toBeNull();
+    send({ type: 'key', key: 'Escape' });
+    expect(owner.hint.value).toBeNull();
+
+    pick.deactivate?.();
+    expect(owner.hint.value).toBeNull();
+    pick.activate?.();
+    expect(owner.hint.value).not.toBeNull();
+  });
+
+  it('框选识别后同样关闭提示', () => {
+    const { owner, pick, send, mapPointer } = setup(15);
+    mapPointer.value = { x: 50, y: 60 };
+    pick.activate?.();
+
+    dragBox(send, [rendered(DLTB, 1), rendered(DLTB, 2)]);
+    mapPointer.value = TO;
+
+    expect(owner.hint.value).toBeNull();
   });
 
   it('拖动不小于 3 像素开始框选，浮层显示框；松手后按框识别，这次手势派生的单击不识别', () => {

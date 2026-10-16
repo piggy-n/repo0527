@@ -56,6 +56,7 @@ function fakePick(initial: FeaturePickState, initialDetail: FeatureDetailStatus 
   const pick: FeaturePick = {
     state,
     boxDraft: computed(() => null),
+    hint: computed(() => null),
     detail: computed(() => detail.value),
     tools: { [FEATURE_PICK_TOOL]: { persistent: true } },
     choose: vi.fn<FeaturePick['choose']>(),

@@ -5,6 +5,7 @@ import type { CameraChange, CameraState } from '../camera/camera-model';
 import { MapSession } from '../session/map-session';
 import type { StyleImage } from '../style/style-image';
 import type { StyleGroup } from '../style/style-model';
+import { BROWSE_TOOL } from '../tool/tool-model';
 import type { SourceErrors, ViewState } from '../view/map-view';
 import type { LngLat, PickResult } from '../view/view-input';
 import { MapLibreView } from './maplibre-view';
@@ -51,6 +52,24 @@ function areaGroup(paint: Record<string, unknown> = { 'fill-color': '#ff0000' },
       }
     ]
   };
+}
+
+// MapLibre 把一帧里收到的手势合在一起，在动画帧里应用
+const twoFrames = () => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+
+// 从画布中心按下，分几步向右拖 100 像素后松开，全程按着 init 里的修饰键
+async function dragRight(map: MapLibreMap, button: 0 | 2, init: MouseEventInit = {}) {
+  const canvas = map.getCanvas();
+  const { left, top } = canvas.getBoundingClientRect();
+  const buttons = button === 0 ? 1 : 2;
+  const at = (x: number) => ({ bubbles: true, button, buttons, clientX: left + x, clientY: top + 300, ...init });
+  canvas.dispatchEvent(new MouseEvent('mousedown', at(400)));
+  for (const x of [420, 440, 460, 480, 500]) {
+    canvas.dispatchEvent(new MouseEvent('mousemove', at(x)));
+  }
+  await twoFrames();
+  canvas.dispatchEvent(new MouseEvent('mouseup', { ...at(500), buttons: 0 }));
+  await twoFrames();
 }
 
 // 每个用例自己的容器（尺寸写死）、会话和视图，结束时一起释放并移除容器：同一个文件的用例共用一个页面
@@ -393,6 +412,44 @@ describe('MapLibreView（真实的 MapLibre）', () => {
     const inBox = ctx.view.queryRendered(box, { sources: ['parcels'] });
     expect(new Set(inBox.map(({ properties }) => properties.guid))).toStrictEqual(new Set(['a', 'b']));
     expect(new Set(inBox.map(({ layerId }) => layerId))).toStrictEqual(new Set(['parcels-fill', 'parcels-outline']));
+  });
+
+  describe('按住修饰键临时拖动（ADR 0056）', () => {
+    it('声明了 Ctrl 的工具：按住 Ctrl 拖动是平移、不旋转，工具收不到这次按下；右键拖动照常旋转', async () => {
+      using ctx = setup();
+      await withTimeout(ctx.view.whenReady(), '首次加载完成');
+      const inputs: string[] = [];
+      ctx.session.tool.register('pick', {
+        persistent: true,
+        cursor: 'crosshair',
+        gestures: { dragPan: false, boxZoom: false },
+        panModifier: 'ctrl',
+        handleInput: event => void inputs.push(event.type)
+      });
+      ctx.session.tool.activate('pick');
+      const grabbed = lngLatOf(ctx.view.pick({ x: 400, y: 300 }));
+
+      await dragRight(ctx.map, 0, { ctrlKey: true });
+
+      // 按下时画布中心的地方跟着指针向右移了 100 像素
+      expect(grabbed && ctx.view.project(grabbed).x).toBeCloseTo(500, 0);
+      expect([ctx.map.getBearing(), ctx.map.getPitch()]).toStrictEqual([0, 0]);
+      expect(ctx.session.camera.current.center).not.toStrictEqual(CAMERA.center);
+      expect(new Set(inputs)).toStrictEqual(new Set(['move']));
+
+      await dragRight(ctx.map, 2);
+      expect(ctx.map.getBearing()).not.toBe(0);
+    });
+
+    it('对照：没有声明修饰键的工具（移动）按住 Ctrl 拖动，是 MapLibre 的旋转', async () => {
+      using ctx = setup();
+      await withTimeout(ctx.view.whenReady(), '首次加载完成');
+      expect(ctx.session.tool.active).toBe(BROWSE_TOOL);
+
+      await dragRight(ctx.map, 0, { ctrlKey: true });
+
+      expect(ctx.map.getBearing()).not.toBe(0);
+    });
   });
 
   it('画布尺寸变化：发出 resize，相机不变，同一个经纬度投影到新的位置', async () => {

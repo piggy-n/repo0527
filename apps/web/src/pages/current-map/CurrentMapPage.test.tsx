@@ -131,6 +131,11 @@ class FakeMap implements MapLike {
     this.moveTo(camera.center ?? [this.camera.lng, this.camera.lat], camera.zoom ?? this.camera.zoom, eventData);
   }
 
+  // 和拾取、投影一样每 100 像素 1 度
+  panBy([x, y]: [number, number], _options: unknown, eventData: CameraEventData): void {
+    this.moveTo([this.camera.lng + x / 100, this.camera.lat - y / 100], this.camera.zoom, eventData);
+  }
+
   fitBounds(bounds: [number, number, number, number], _options: unknown, eventData: CameraEventData): void {
     this.fitBoundsCalls.push(bounds);
     const [west, south, east, north] = bounds;
@@ -1038,6 +1043,26 @@ describe('CurrentMapPage', () => {
     expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(false);
   });
 
+  it('点/框选：鼠标旁有提示，第一次单击识别后不再显示，下次进入时再显示（ADR 0056 第 4 节）', async () => {
+    const { wrapper, map } = await readyPage();
+    const hint = () => wrapper.find('[data-box-select-overlay] [data-pointer-hint]');
+
+    await button(wrapper, '点/框选').trigger('click');
+    // 鼠标的位置在下一帧写入
+    map.mouse('mousemove', 30, 40);
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    await nextTick();
+    expect(hint().text()).toBe('单击查看要素，拖动框选按住 Ctrl 拖动地图，Esc 取消或清除结果');
+
+    map.mouse('click', 30, 40);
+    await nextTick();
+    expect(hint().exists()).toBe(false);
+
+    await button(wrapper, '移动').trigger('click');
+    await button(wrapper, '点/框选').trigger('click');
+    expect(hint().exists()).toBe(true);
+  });
+
   it('资源详情：切到别的 Tab 时结果保留；在地图上再单击时切回；关闭资源详情时清除选择（ADR 0053 第 4 节）', async () => {
     const guid = 'a'.repeat(32);
     const square: Polygon = {
@@ -1139,8 +1164,8 @@ describe('CurrentMapPage', () => {
     map.mouse('mousedown', 100, 100);
     map.mouse('mousemove', 200, 160);
     await nextTick();
-    expect(wrapper.find('[data-box-select-overlay] > div').exists()).toBe(true);
-    const box = wrapper.get('[data-box-select-overlay] > div').element as HTMLElement;
+    expect(wrapper.find('[data-box-select-overlay] [data-box]').exists()).toBe(true);
+    const box = wrapper.get('[data-box-select-overlay] [data-box]').element as HTMLElement;
     expect([box.style.left, box.style.top, box.style.width, box.style.height]).toStrictEqual([
       '100px',
       '100px',
@@ -1152,7 +1177,7 @@ describe('CurrentMapPage', () => {
     map.mouse('click', 200, 160);
     await nextTick();
 
-    expect(wrapper.find('[data-box-select-overlay] > div').exists()).toBe(false);
+    expect(wrapper.find('[data-box-select-overlay] [data-box]').exists()).toBe(false);
     expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(true);
     expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('框选 · 地类图斑');
     expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('地图上已画出的 2 个');

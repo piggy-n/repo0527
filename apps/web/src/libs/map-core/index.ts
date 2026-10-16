@@ -42,6 +42,7 @@ export {
   BROWSE_TOOL,
   type Gestures,
   type MapTool,
+  type PanModifier,
   type ToolChange,
   ToolModel,
   type ToolView

@@ -5,6 +5,12 @@ export interface Size {
   readonly height: number;
 }
 
+/** 鼠标旁要显示的提示（ADR 0056 第 4 节）：位置是鼠标在画布上的坐标 */
+export interface PointerHintContent {
+  readonly point: ScreenPoint;
+  readonly lines: readonly string[];
+}
+
 /** 提示在鼠标的哪一侧 */
 export interface HintSides {
   readonly x: 'right' | 'left';

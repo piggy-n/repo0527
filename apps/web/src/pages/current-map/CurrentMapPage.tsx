@@ -196,7 +196,7 @@ export const CurrentMapPage = defineComponent({
           <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
           <MeasureOverlay measure={measure} />
           <LocationOverlay location={location} />
-          <BoxSelectOverlay box={pick.boxDraft.value} />
+          <BoxSelectOverlay box={pick.boxDraft.value} hint={pick.hint.value} />
           <div class={styles.overlay}>
             {/* 当前区划放在第一个：和面板重叠时（窄屏）面板在上面 */}
             {scopeShown && (

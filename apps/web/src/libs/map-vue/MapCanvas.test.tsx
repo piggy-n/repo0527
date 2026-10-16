@@ -120,6 +120,11 @@ class FakeMap implements MapLike {
     this.moveTo(camera.center ?? [this.camera.lng, this.camera.lat], camera.zoom ?? this.camera.zoom, eventData);
   }
 
+  // 和拾取、投影一样每 100 像素 1 度
+  panBy([x, y]: [number, number], _options: unknown, eventData: CameraEventData): void {
+    this.moveTo([this.camera.lng + x / 100, this.camera.lat - y / 100], this.camera.zoom, eventData);
+  }
+
   fitBounds(bounds: [number, number, number, number], options: unknown, eventData: CameraEventData): void {
     this.fitBoundsCalls.push(options);
     const [west, south, east, north] = bounds;
