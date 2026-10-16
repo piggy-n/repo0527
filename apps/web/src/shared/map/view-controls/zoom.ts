@@ -1,3 +1,6 @@
+/** 基础组按钮的相机动画时长：放大、缩小、指北针一样；手感在实现后体验确认 */
+export const VIEW_BUTTON_DURATION = 300;
+
 /** 缩放范围，和画布的 minZoom、maxZoom 相同（如 JIANGSU_ZOOM_RANGE） */
 export interface ZoomRange {
   readonly minZoom: number;

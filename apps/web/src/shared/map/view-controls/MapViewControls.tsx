@@ -2,6 +2,7 @@ import { useMap } from '@yzt/map-vue';
 import { ElTooltip } from 'element-plus';
 import { defineComponent, type PropType, type VNode } from 'vue';
 import { type IconName, SvgIcon } from '../../icons/SvgIcon';
+import { useCompassButton } from './useCompassButton';
 import { useZoomButtons } from './useZoomButtons';
 import type { ZoomRange } from './zoom';
 import styles from './MapViewControls.module.scss';
@@ -25,7 +26,7 @@ function iconButton(label: string, icon: IconName, onClick: () => void, disabled
 }
 
 /**
- * 地图的基础组（ADR 0053 第 3 节）：层级、放大、缩小、默认视角、2D/3D，只有图标，悬停在左边提示名称。
+ * 地图的基础组（ADR 0053 第 3 节、ADR 0058）：层级、放大、缩小、指北针、默认视角、2D/3D，只有图标，悬停在左边提示名称。
  * 角落里的小控件，不登记为悬浮元素（第 9 节）；放在 provideMap 所在组件的子孙里
  */
 export const MapViewControls = defineComponent({
@@ -37,7 +38,9 @@ export const MapViewControls = defineComponent({
     zoomRange: { type: Object as PropType<ZoomRange>, required: true }
   },
   setup(props) {
-    const zoom = useZoomButtons(useMap(), props.zoomRange);
+    const map = useMap();
+    const zoom = useZoomButtons(map, props.zoomRange);
+    const compass = useCompassButton(map);
 
     return () => (
       <div class={styles.controls} role="toolbar" aria-label="地图视角" aria-orientation="vertical">
@@ -50,6 +53,12 @@ export const MapViewControls = defineComponent({
         <div class={styles.separator} role="separator" />
         {iconButton('放大', 'map-zoom-in', zoom.zoomIn, !zoom.canZoomIn.value)}
         {iconButton('缩小', 'map-zoom-out', zoom.zoomOut, !zoom.canZoomOut.value)}
+        {withTip(
+          compass.title.value,
+          <button type="button" class={styles.button} aria-label={compass.title.value} onClick={compass.resetNorth}>
+            <SvgIcon name="map-compass-color" size={20} rotate={compass.rotation.value} />
+          </button>
+        )}
         <div class={styles.separator} role="separator" />
         {iconButton('默认视角', 'map-default-view', props.goToDefaultView)}
         <div class={styles.separator} role="separator" />

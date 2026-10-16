@@ -2,7 +2,7 @@ import { ElButton, ElColorPicker, ElInput, ElOption, ElRadioButton, ElRadioGroup
 import { computed, defineComponent, onUnmounted, type PropType, ref, type VNode, watch } from 'vue';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LegendSwatch, swatchOf } from '../legend';
-import { RESOURCE_PALETTE } from '../palette';
+import { COLOR_PRESETS } from '../palette';
 import type { SymbolTarget } from '../resource-symbols';
 import {
   type ColorField,
@@ -25,7 +25,8 @@ import {
 import { LegendSwatchIcon } from './LegendSwatchIcon';
 import styles from './SymbolEditor.module.scss';
 
-const PREDEFINE = [...RESOURCE_PALETTE, '#FFFFFF', '#000000'];
+// Element 的 predefine 要可变数组：模块里复制一份
+const PREDEFINE = [...COLOR_PRESETS];
 const CUSTOM = 'custom';
 const STROKE_WIDTHS: readonly number[] = POINT_STROKE_WIDTHS;
 

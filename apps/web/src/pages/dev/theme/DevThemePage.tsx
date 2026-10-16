@@ -3,6 +3,7 @@ import {
   ElAlert,
   ElButton,
   ElCheckbox,
+  ElColorPicker,
   ElDatePicker,
   ElForm,
   ElFormItem,
@@ -23,6 +24,7 @@ import {
   ElTree
 } from 'element-plus';
 import { defineComponent, onMounted, ref } from 'vue';
+import { COLOR_PRESETS } from '@/features/resource-map/palette';
 import { iconNames, SvgIcon } from '@/shared/icons/SvgIcon';
 import { QueryForm } from '@/shared/query-form/QueryForm';
 import { SystemTitle } from '@/shared/system-title/SystemTitle';
@@ -180,6 +182,7 @@ export const DevThemePage = defineComponent({
     // 地图页的两个变体
     const layerYear = ref(2025);
     const coordinateFormat = ref('dms');
+    const symbolColor = ref('#2FA663');
     const date = ref('');
     const currentPage = ref(1);
 
@@ -426,7 +429,7 @@ export const DevThemePage = defineComponent({
         </section>
 
         <section class={styles.section}>
-          <h2 class={styles.sectionTitle}>不带箭头的选择框与占满宽度的单选按钮组（地图页）</h2>
+          <h2 class={styles.sectionTitle}>不带箭头的选择框、占满宽度的单选按钮组与取色器的色卡（地图页）</h2>
           <div class={styles.mapVariants}>
             <ElSelect
               class="select-no-arrow"
@@ -448,6 +451,14 @@ export const DevThemePage = defineComponent({
               <ElRadioButton value="dms">度分秒</ElRadioButton>
               <ElRadioButton value="decimal">小数</ElRadioButton>
             </ElRadioGroup>
+            {/* 图例符号编辑的色卡：两行各 10 个，白色有浅灰描边（打开下拉查看） */}
+            <ElColorPicker
+              size="small"
+              showAlpha
+              predefine={[...COLOR_PRESETS]}
+              modelValue={symbolColor.value}
+              onUpdate:modelValue={(value: string | null) => (symbolColor.value = value ?? symbolColor.value)}
+            />
           </div>
         </section>
 

@@ -53,11 +53,12 @@
   }
 }
 
-// 内容区在外壳可滚动的区域里：上面留出 3 像素，贴着顶边的边框（Element 的单选按钮用 outline 画边框）和键盘焦点框不被裁掉
+// 内容区在外壳可滚动的区域里：上面留出 3 像素，贴着顶边的边框（Element 的单选按钮用 outline 画边框）和键盘焦点框不被裁掉。
+// 不随外壳压缩（flex: none）：压缩时子元素溢出到它外面，浏览器把外壳的下内边距算在它的下边，滚到底时内容贴着底边
 .content {
   display: flex;
+  flex: none;
   flex-direction: column;
   gap: var(--space-sm);
-  min-height: 0;
   padding-top: 3px;
 }

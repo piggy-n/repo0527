@@ -1,9 +1,15 @@
 import type { MapContext } from '@yzt/map-vue';
 import { computed, type ComputedRef, shallowRef } from 'vue';
-import { canZoom, levelOf, levelTitle, type PendingZoom, zoomBase, type ZoomRange, zoomTarget } from './zoom';
-
-/** 放大、缩小的动画时长；手感在实现后体验确认 */
-const ZOOM_DURATION = 300;
+import {
+  canZoom,
+  levelOf,
+  levelTitle,
+  type PendingZoom,
+  VIEW_BUTTON_DURATION,
+  zoomBase,
+  type ZoomRange,
+  zoomTarget
+} from './zoom';
 
 export interface ZoomButtons {
   /** 显示的层级（向下取整） */
@@ -48,7 +54,7 @@ export function useZoomButtons(
       },
       { once: true }
     );
-    operation.run(control => control.flyTo({ zoom: target }, { duration: ZOOM_DURATION }));
+    operation.run(control => control.flyTo({ zoom: target }, { duration: VIEW_BUTTON_DURATION }));
   };
 
   return {

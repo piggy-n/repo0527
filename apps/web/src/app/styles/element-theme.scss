@@ -275,6 +275,12 @@ $tree-node: '.el-tree > .el-tree-node';
   }
 }
 
+// 取色器预设色里的白色：加一圈浅灰内描边，不和下拉的白底融在一起（2026-10-16 用户要求）。
+// Element 把预设色写成行内的 background-color，浏览器把白色序列化为 rgb(255, 255, 255)；半透明的白是 rgba(…)，不受影响
+.el-color-predefine__color-selector > div[style*='rgb(255, 255, 255)'] {
+  box-shadow: inset 0 0 0 1px var(--color-divider);
+}
+
 // 不带下拉箭头的选择框，点击照常弹出选项（地图页"已勾选"的年份）；用法 <ElSelect class="select-no-arrow">
 .el-select.select-no-arrow .el-select__suffix {
   display: none;

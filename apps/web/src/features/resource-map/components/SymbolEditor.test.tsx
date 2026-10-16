@@ -6,6 +6,7 @@ import type { SymbolTarget } from '../resource-symbols';
 import type { ResourceTreeLayer } from '../api';
 import { buildCatalog } from '../catalog';
 import { type ResourceSymbols, useResourceSymbols } from '../composables/useResourceSymbols';
+import { COLOR_PRESETS } from '../palette';
 import { SymbolEditor } from './SymbolEditor';
 
 function layer(code: string, name: string, geoType: ResourceTreeLayer['geoType']) {
@@ -185,6 +186,8 @@ describe('SymbolEditor', () => {
     const { wrapper, symbols } = mountEditor('szy_kt');
     const fill = picker(wrapper, '坑塘的填充色');
     const committed = fill.props('modelValue');
+    // 预设色是排满两行的色卡（2026-10-16 用户要求）
+    expect(fill.props('predefine')).toStrictEqual(COLOR_PRESETS);
 
     fill.vm.$emit('activeChange', 'rgba(0, 0, 255, 0.5)');
     expect(symbols.preview.value).toStrictEqual({ code: 'szy_kt', field: 'fillColor', color: 'rgba(0, 0, 255, 0.5)' });

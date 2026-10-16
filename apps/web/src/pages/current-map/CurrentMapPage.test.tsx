@@ -525,6 +525,10 @@ describe('CurrentMapPage', () => {
     expect(wrapper.get('[role="status"]').text()).toBe('14');
     await button(wrapper, '缩小').trigger('click');
     expect(map.flyToCalls.at(-1)).toStrictEqual({ zoom: 13.6, duration: 300 });
+
+    // 指北针只交出旋转和俯仰，中心、级别和避让的偏移都不传（ADR 0058）
+    await wrapper.get('button[aria-label^="指北针"]').trigger('click');
+    expect(map.flyToCalls.at(-1)).toStrictEqual({ bearing: 0, pitch: 0, duration: 300 });
   });
 
   it('状态栏：比例尺和鼠标所在的经纬度，写法跟着坐标定位面板；鼠标离开画布时是中心；没有版权控件（ADR 0053 第 5 节）', async () => {
