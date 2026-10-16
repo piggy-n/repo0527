@@ -55,7 +55,8 @@ docs/
    ├─ stage-5b-public-map-capabilities.md 阶段五 5B：公共地图能力
    ├─ stage-5c-current-map-business.md   阶段五 5C：现状底图业务
    ├─ stage-5d-map-ui.md                 阶段五 5D：地图页界面的专门设计
-   └─ stage-5e-wrap-up.md                阶段五 5E：收尾（加载策略与页面缓存），附阶段五回顾
+   ├─ stage-5e-wrap-up.md                阶段五 5E：收尾（加载策略与页面缓存），附阶段五回顾
+   └─ stage-5-acceptance-review.md       阶段五验收报告：自动检查、发现的问题、可以优化的地方
 ```
 
 ## 建议的阅读顺序

@@ -1,0 +1,184 @@
+# 阶段五验收报告
+
+- 验收日期：2026-10-16
+- 范围：`stage-4..stage-5e`（`68b9a1e..58ae738`），`apps/web/src` 下 361 个文件、新增约 4.3 万行，其中非测试源码约 1.5 万行
+- 结论：**通过**。发现 5 个问题（2 个中、3 个低）和 1 处文档不一致，另有 2 处每帧重新渲染的性能问题建议优先处理，都不阻塞进入下一阶段。地图内核、map-vue、公共地图能力和现状底图业务的设计与实现一致，规则落实得很彻底；发现的问题集中在"构建产物"和"每帧渲染"两类，都是类型检查、lint 和单元测试照不到的地方
+
+本文分四部分：验收方法与自动检查、发现的问题、可以优化的地方、检查过没有发现问题的部分。每条问题都注明"已复现"或"推断"，复现用的探针都是临时文件，跑完即删除，工作区没有留下改动。
+
+---
+
+## 一、验收方法与自动检查
+
+### 方法
+
+1. 跑全部自动检查：类型检查、lint、单元测试与浏览器测试、公网和内网两种生产构建
+2. 通读阶段五的源码：map-core（`MapLibreView`、样式模型与差异、相机、工具、修饰键平移、选择、测量）、map-vue（上下文、画布、样式绑定、悬浮元素）、`shared/map` 的拥有者与界面、`features/resource-map` 的拥有者与组件、现状底图页面、`app` 的加载策略与页面缓存、`shared/storage`、`shared/perf`
+3. 疑点逐个用探针确认：真实 MapLibre 的浏览器测试、jsdom 的页面测试、对比构建；推断不了的标为"推断"
+4. 对照 AGENTS.md 和 `docs/` 核对规则是否落实、文档是否和代码一致
+
+### 自动检查结果
+
+| 检查 | 结果 |
+|---|---|
+| `pnpm typecheck` | 通过 |
+| `pnpm lint` | 通过 |
+| `pnpm test` | 通过：`apps/web` 161 个文件、1571 个用例（浏览器测试 9 个文件），`packages/icons` 35 个用例；`apps/web` 用时约 54 秒 |
+| `pnpm build` | 通过；有"分块大于 500 KB"的提示（`maplibre-gl` 1023 KB、gzip 277 KB，预期之内） |
+| `vite build --mode intranet` | 通过；产物问题见第二部分第 2、5 条 |
+
+---
+
+## 二、发现的问题
+
+| # | 级别 | 问题 | 状态 |
+|---|---|---|---|
+| 1 | 中 | 开发页面的分块进入生产产物 | 已复现，修法已验证 |
+| 2 | 中 | `public/design.local/` 被复制进产物 | 已复现 |
+| 3 | 低 | 整体重建期间的渲染要素查询被当成样式加载失败 | 已复现（真实 MapLibre） |
+| 4 | 低 | 拖动分割线时页面被缓存，拖动的监听留在分割线上 | 推断 |
+| 5 | 低 | 内网产物里仍带着天地图 key | 已复现 |
+| 6 | 文档 | 代码注释和文档索引没跟上 5E 的更正 | 已确认 |
+
+### 1. 开发页面的分块进入生产产物（中，已复现）
+
+- **现象**：`pnpm build` 和内网构建的 `dist/assets/` 里都有 `DevMapPage-*.js/css`、`DevResourcesPage-*.js/css`，没有任何分块引用它们；`DevThemePage` 没有进入
+- **原因**：`app/router/routes.ts` 第 53 行的 `devRoutes` 数组在模块顶层求值，第 88 行才按 `import.meta.env.DEV` 决定用不用。两个地图开发页的 `component` 是 `withMapRuntime(...)` 的调用结果，`DevThemePage` 只包在箭头函数里、没有进入产物。看起来是 Rolldown（Vite 8.3.1、rolldown 1.2.11）先把调用里的动态 `import()` 登记成了分块，摇树时删掉了调用，分块却留了下来（机制是推测，没有读 Rolldown 的源码；现象和下面的修法都实测过）
+- **影响**
+  - 和 AGENTS.md"只注册在 `devRoutes` 里，生产构建不包含"、`routes.ts` 第 52 行的注释、[modules/map-core.md](../modules/map-core.md)"app 的地图运行时与开发页"里"生产产物里没有 maplibre-gl 和开发页"的记录不符。开发页从阶段四（`745f435`）起就用 `withMapRuntime` 包装，那时的记录可能成立，是哪一次升级构建工具后开始出现的没有追查
+  - 分块图被开发页牵动：地图页和开发页共用的模块被拆成独立的共享分块（`MapStatusNotice`、`MeasureOverlay`、`landuse` 等）。地图页的静态依赖是 16 个文件，修正后是 10 个，总量少约 3 KB（gzip）；登录页的静态依赖从 11 个文件变成 9 个。5E 的实测是在现在的分块图上做的，结论不受影响，修正后复测时要知道分块变了
+- **修法**（本地改写后构建验证，已还原）：条件包住整个数组字面量，常量折叠后动态 `import()` 根本不会出现
+
+  ```ts
+  const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [ /* 原来的三条 */ ] : [];
+  // routes 里直接展开
+  ...devRoutes,
+  ```
+
+  再按第三部分第 7 条加一个产物检查，这类问题以后由 CI 发现
+
+### 2. `public/design.local/` 被复制进产物（中，已复现）
+
+- **现象**：本机构建的 `dist/` 里有 `design.local/`（13 个设计稿 HTML，约 688 KB），内网构建同样有，其中 10 个设计稿里写着天地图的地址
+- **原因**：Vite 构建时把整个 `public/` 原样复制到 `dist/`；`*.local` 只在 `.gitignore` 里忽略，管不到构建。CI 从干净的检出构建，不会出现，但 [deployment.md](../deployment.md) 规定部署用的构建要先在本机放好字体再构建，所以部署包会带上设计稿
+- **影响**：设计稿随部署公开（`/design.local/*.html` 谁都能打开）；内网版本里出现公网地址，和 ADR 0031、0032"内网版本不出现依赖天地图的东西"的意图不符（不会自动请求，打开设计稿才会）
+- **修法**：设计稿移出 `public/`（例如 `apps/web/design.local/`，开发服务器用只在 `serve` 时生效的中间件提供，或者直接用文件方式打开）；不想挪目录时，在 `vite.config.ts` 加一个只在 `build` 时生效的小插件，`closeBundle` 时删除 `dist/design.local`。同步改 AGENTS.md 和 5D 总结里"放在 `public/design.local/`"的说法
+
+### 3. 整体重建期间的渲染要素查询被当成样式加载失败（低，已复现）
+
+- **位置**：`libs/map-core/maplibre/maplibre-view.ts` 的 `queryRendered`（第 387 行起）和 `#onMapError`（第 452 行起）
+- **过程**：视图在 `ready` 时整体重建（`#apply` 遇到不支持的命令、命令被 MapLibre 拒绝），`#mapStyle` 换成 `loading` 的新快照，视图状态仍是 `ready`。从 `setStyle` 到 MapLibre 下一帧真正加载新样式之间，新的 `Style` 对象里还没有图层；这时调用 `queryRendered`，按新快照取出的图层 ID 在 MapLibre 里不存在，MapLibre 发出不带 `sourceId` 的 `error`，`#onMapError` 看到样式正在 `loading`，就判成整份样式加载失败
+- **探针**（在 `maplibre-view.browser.test.ts` 的公共部分上加一个用例：就绪后提交带未知图层属性的分组触发重建，紧接着查询）：
+
+  ```json
+  {"result":0,"round":"failed: Error: The layer 'area-fill' does not exist in the map's style and cannot be queried for features.","states":["failed","ready"]}
+  ```
+
+  视图先进入 `failed(style)`、这一轮 `whenReady` 以这个错误结束，下一帧 `style.load` 到达后又回到 `ready`
+- **影响**：触发条件少（就绪时整体重建本身就少见，还要恰好在那一帧点选或框选）。发生时状态提示条闪出"地图样式加载失败"，这次识别得到空结果，等待 `whenReady` 的调用方（如加载耗时标记）以错误结束，鼠标位置被清空。第 390 行的注释"就绪时它就是地图上的样式"在这段时间里不成立
+- **修法**：`queryRendered` 在 `#mapStyle.status !== 'loaded'` 时返回空数组（这时地图上没有一份已应用完的快照），改掉第 390 行的注释；补一个浏览器测试：就绪时整体重建期间查询，状态不离开 `ready`、这一轮 `whenReady` 正常结束。"只把加载样式本身引起的错误当成样式失败"更彻底，但 MapLibre 的 `error` 事件不区分来源，不建议
+
+### 4. 拖动分割线时页面被缓存，拖动的监听留在分割线上（低，推断）
+
+- **位置**：`features/resource-map/components/ResourceLayerPanel.tsx` 的 `onSplitterPointerDown`（第 134～151 行）
+- **原因**：拖动的监听只在 `pointerup`、`pointercancel` 时移除。拖动中切走页面（键盘、鼠标侧键的后退），KeepAlive 把 DOM 移出文档，浏览器隐式释放指针捕获，发出的是 `lostpointercapture` 而不是 `pointercancel`；之后的 `pointerup` 落在别的页面上
+- **影响**：回到地图后，鼠标只是从分割线上经过（没按键）也会改变两区的高度，直到在分割线上再按下、松开一次。5E.4 给图钉和框选草稿处理了"拖动中停用"，分割线漏掉了
+- **修法**：用 `lostpointercapture` 结束拖动（`pointerup`、`pointercancel` 之后它也会发出，可以只监听它）；`onMove` 里再检查 `move.buttons & 1`。补测试时注意 jsdom 没有指针捕获，要在浏览器测试里做
+
+### 5. 内网产物里仍带着天地图 key（低，已复现）
+
+- `.env.intranet` 只设 `VITE_TIANDITU_ENABLED=false`，`VITE_TIANDITU_KEY` 继承 `.env`；`app-config.ts` 把两个值都交给 `tianditu()`，key 的字面量因此留在内网产物的入口相关分块里（本文不抄录）
+- key 是浏览器端 key，公网版本本来就公开（ADR 0031）；内网版本用不到它，也不应该带着公网服务的凭据
+- **修法**：`.env.intranet` 加一行 `VITE_TIANDITU_KEY=`（关闭时 `tianditu()` 不校验 key），[config/env.md](../config/env.md) 同步说明
+
+### 6. 代码注释和文档索引没跟上（文档，已确认）
+
+- `maplibre-view.ts` 第 338 行的注释仍写"页面被缓存时 MapLibre 把画布缩成 0×0"。5E 已在 roadmap 和 [modules/map-core.md](../modules/map-core.md) 更正为"量到容器宽高为 0 时用默认的 400×300"（MapLibre 6.12 的 `_containerDimensions` 里是 `|| 400`、`|| 300`），注释要跟着改
+- [docs/README.md](../README.md)"建议的阅读顺序"列到 5D，缺 5E 和阶段五回顾；"维护约定"里还写着"阶段五拆成 5A～5D"
+- 第 1 条修好后，[modules/map-core.md](../modules/map-core.md)"生产产物里没有 maplibre-gl 和开发页"补上"由产物检查保证"
+
+---
+
+## 三、可以优化的地方
+
+### 1. "已勾选"在相机每次变化时整个重新渲染（性能，已测，建议优先）
+
+- `features/resource-map/components/CheckedLayerList.tsx` 第 140 行在渲染每一行时读 `camera.value.zoom`（判断"放大至第 N 级显示"），整个列表的渲染因此依赖相机。地图平移、缩放时 MapLibre 每帧发 `move`，会话的相机每帧换一个新对象，列表跟着每帧重新渲染（每行有年份下拉、提示、按钮）
+- 探针（无界面 Chromium、软件渲染；勾选 12 个资源，相机连续变化 120 次，每次等 Vue 更新完）：
+
+  | | 每次更新的中位数 | P90 |
+  |---|---|---|
+  | 不勾选资源 | 0 ms | 0 ms |
+  | 勾选 12 个资源 | 10.9 ms | 12.4 ms |
+
+  真实显卡、更快的 CPU 上会小一些，但已经占了一帧（16.7 ms）的大半，勾选越多越明显，拖动地图时最容易感觉到
+- **修法**：让渲染只依赖"级别"：`const level = computed(() => levelOf(camera.value.zoom))`，渲染里用 `level.value`。登记表里的最小级别都是整数，`zoom < minzoom` 和 `level < minzoom` 等价；computed 的值不变时不通知，列表只在跨过整数级别时重新渲染。也可以把状态图标拆成一个小组件，只有它依赖相机。改完用同样的探针对比
+
+### 2. 点/框选的提示和框选草稿让整个页面每帧重新渲染（性能，已测）
+
+- `pages/current-map/CurrentMapPage.tsx` 第 212 行在页面的渲染函数里读 `pick.boxDraft.value`、`pick.hint.value`。提示打开时（进入点/框选到第一次识别之前）`hint` 随鼠标每帧换新对象，拖动框选时 `boxDraft` 每帧变化，页面根组件随之重新渲染
+- 探针（jsdom，鼠标在画布上移动 10 次）：
+
+  | 当前工具 | 页面根组件重新渲染 | `MapToolbar` 重新渲染 | `ResourceLayerPanel` 重新渲染 |
+  |---|---|---|---|
+  | 移动 | 0 次 | 否 | 否 |
+  | 点/框选（提示打开） | 10 次 | 是 | 否 |
+
+  `MapToolbar` 跟着更新是因为第 262 行的 `actions`、`pressed` 每次渲染都是新对象；两组面板外壳、卡片的插槽在 TSX 里每次是新函数，按 Vue 的更新规则也会跟着更新（没有单独测）
+- **修法**：`BoxSelectOverlay` 改为接收 `pick`，在自己的渲染里读 `boxDraft`、`hint`（和 `MeasureOverlay` 接收 `measure`、`LocationOverlay` 接收 `location` 的写法一致），页面的渲染就不再依赖鼠标；`MapToolbar` 的 `actions` 提到 setup 里成为常量
+
+### 3. 点选面状资源时多余的区划过滤（性能，小）
+
+- `features/resource-map/feature-query.ts` 第 299 行：有区划范围时，面状资源（容差 0）也要求带几何查询，再逐个 `intersectsScope`。点击位置已经确认在区划里，查到的面都包含这一点，必然和区划相交；跨区划边界的大图斑会走 `booleanIntersects`，和上万个坐标的市界求交
+- **修法**：容差为 0 时不取几何、跳过 `withinScope`。收益只在点击的那一下，优先级低
+
+### 4. 位置信息在渲染里量布局（性能，小）
+
+- `shared/map/location/LocationOverlay.tsx` 第 147 行在渲染里调用 `map.overlayPadding()`，会对画布和所有悬浮元素调用 `getBoundingClientRect`；位置信息打开时它随 `projectionRevision` 每帧渲染，每帧强制一次布局。悬浮元素不多，影响小；可以改成面板开关、尺寸变化时量，渲染里用量好的值
+
+### 5. `useFeaturePick` 可以拆小（可维护性）
+
+- `features/resource-map/composables/useFeaturePick.ts` 有 736 行，承担了识别流程、详情与定位、闪烁、框选手势、鼠标提示、批量高亮六件事。可以把框选手势和提示拆成单独的组合式函数，识别流程、详情和高亮留在拥有者里；拆出来以后第三部分第 2 条的修法也更自然（浮层直接拿手势和提示）
+
+### 6. Tab 与图钉的无障碍（小）
+
+- `MapPanelGroup` 和资源面板头部的页签只有 `role` 和 `aria-selected`：没有 `aria-controls` / `aria-labelledby`，也不支持左右方向键切换（WAI-ARIA 的 Tabs 模式）
+- 坐标定位点是 `role="button"`，但只能用鼠标操作
+- 不影响功能，可以放到阶段七统一处理
+
+### 7. 加一个构建产物检查（工程）
+
+第二部分的第 1、2、5 条只有在产物里才看得到。建议在 CI 的 `pnpm build` 之后跑一个小脚本（例如 `tools/check-dist`），同时用于本机的部署构建：
+
+- `dist/assets/` 里没有 `Dev*Page` 分块
+- `dist/` 里没有 `design.local/`
+- 内网产物里没有 `tianditu.gov.cn` 和天地图 key
+- `maplibre-gl` 不在入口分块的静态依赖里（ADR 0019、0023 的约定，现在只靠人工确认）
+
+---
+
+## 四、检查过、没有发现问题的部分
+
+以下是重点看过、结论是"没问题"的地方，供以后回归时参考：
+
+- **视图的状态转换**：转换表、每一轮 `whenReady` 的更替、引擎失败只能释放、样式失败后加载仍完成时直接进入 `ready`；暂停、恢复与"定位动画直接到终点"的顺序；修饰键平移在捕获阶段截下按下、不影响 MapLibre 的旋转
+- **相机操作**：同一时间最多一个等待中的操作，作废时移出槽位；`currentCameraOperation()` 只有 `useDefaultView` 用，不会出现同一个操作 `run` 两次；用户的拖动、滚轮、修饰键平移都会开始新的操作
+- **样式绑定**：推导失败变成值、整批跳过、之后连同没提交成功的分组重新提交；交给会话的 GeoJSON 每次换新对象
+- **偏好持久化**：恢复只应用一次、恢复期间的变化不写回、生命期结束先写入再停止；页面被缓存时仍随会话结束
+- **点选、框选**：新的识别先作废再准备，准备出错进入失败和重试；每个等待点之后都检查信号；翻页去重；虚拟列表交给拥有者的是原数组里的对象；资源取消勾选、换年份、换区划时关闭结果
+- **区划**：市界、县界各下载解析一次，失败后下次重新下载；最大的市界 9915 个坐标，`Math.min(...)` 展开不会超出参数上限；发给后端的几何先查坐标数上限、再做 O(n²) 的有效性检查
+- **加载策略**：预加载和路由共用同一个加载函数，运行时的设置幂等；耗时标记出错不影响业务
+- **页面缓存**：布局卸载（回到登录页）时缓存清空，退出、过期、其他标签页退出都会经过它；被缓存的页面量尺寸、临时交互、视图暂停都按 ADR 0063 处理（分割线除外，见第二部分第 4 条）
+- **内网构建**：天地图的地址模板仍在产物里，但只在 `appConfig.tianditu` 不为 `null` 时使用
+
+---
+
+## 建议的处理顺序
+
+1. 产物：开发页（第二部分第 1 条）、设计稿（第 2 条）、内网 key（第 5 条），连同产物检查（第三部分第 7 条），一个提交
+2. 性能："已勾选"（第三部分第 1 条）、点/框选的提示（第 2 条），各一个提交，用本文的探针做前后对比
+3. map-core：渲染要素查询的守卫和浏览器测试（第二部分第 3 条）
+4. 分割线的 `lostpointercapture`（第二部分第 4 条）
+5. 注释和文档索引（第二部分第 6 条）
+
+第三部分第 3～6 条可以记进 roadmap 的"后续阶段要带上的事项"，在相关模块下次改动时一起做。
