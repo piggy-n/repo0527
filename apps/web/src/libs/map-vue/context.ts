@@ -95,6 +95,11 @@ export interface MapContext {
    * signal 中止时以它的原因结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪。定位不用它，用相机操作
    */
   whenReady(signal?: AbortSignal): Promise<void>;
+  /**
+   * 等到视图下一次画面稳定（没有动画，视野里的瓦片都已画出），用于加载耗时的标记；没有视图时等视图挂上。
+   * 等待绑定具体的视图实例：它被卸下或替换、上下文释放时以 AbortError 结束，signal 中止时以它的原因结束
+   */
+  whenSettled(signal?: AbortSignal): Promise<void>;
   /** 在调用方的作用域里订阅相机，作用域销毁时取消 */
   useCamera(): Readonly<ShallowRef<CameraState>>;
   /** 屏幕投影的修订号：相机变化、画布尺寸变化时加 1；按屏幕位置摆放的浮层依赖它重新投影 */
@@ -233,6 +238,7 @@ export class MapContextState implements Disposable {
       sourceErrors: shallowReadonly(this.#sourceErrors),
       retry: () => this.#retry(),
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
+      whenSettled: (signal?: AbortSignal) => this.#whenSettled(signal),
       useCamera: () => this.#useCamera(),
       projectionRevision: shallowReadonly(this.#projectionRevision),
       pointer: shallowReadonly(this.#pointer),
@@ -457,6 +463,26 @@ export class MapContextState implements Disposable {
     }
     if (this.#view !== attached) {
       throw new DOMException('等待的视图已被卸下或替换', 'AbortError');
+    }
+  }
+
+  async #whenSettled(signal?: AbortSignal): Promise<void> {
+    const signals = signal ? [this.#lifetime.signal, signal] : [this.#lifetime.signal];
+    const attached = this.#view ?? (await this.#nextView(signals));
+    const bound = [...signals, attached.detached.signal];
+    // 等到视图之后、继续执行之前可能已经卸下（随后就会释放，不能再订阅）
+    const aborted = bound.find(item => item.aborted);
+    if (aborted) {
+      throw abortReason(aborted);
+    }
+    let resolveSettled: (() => void) | undefined;
+    const settled = new Promise<void>(resolve => (resolveSettled = resolve));
+    // 在 Promise 外面订阅：订阅出错时 whenSettled 以这个错误结束，不会变成没人处理的拒绝
+    const unsubscribe = attached.view.on('settle', () => resolveSettled?.());
+    try {
+      await abortable(settled, bound);
+    } finally {
+      unsubscribe();
     }
   }
 

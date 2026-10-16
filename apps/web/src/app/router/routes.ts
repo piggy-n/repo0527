@@ -1,5 +1,6 @@
 import type { RouteRecordRaw } from 'vue-router';
 import { Role } from '@/shared/auth/roles';
+import { loginToMap } from '@/shared/perf/login-to-map';
 import { RouteName } from '@/shared/router/route-names';
 import { AppLayout } from '../layout/AppLayout';
 
@@ -12,6 +13,7 @@ const withMapRuntime =
   async (): Promise<T> => {
     const { setupMapRuntime } = await import('../map-runtime');
     setupMapRuntime();
+    loginToMap.mark('runtime');
     return loadPage();
   };
 

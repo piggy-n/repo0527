@@ -3,10 +3,11 @@ import { ElForm, ElFormItem } from 'element-plus';
 import { delay, HttpResponse, type JsonBodyType, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { createPinia, type Pinia, setActivePinia } from 'pinia';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
+import { loginToMap } from '@/shared/perf/login-to-map';
 import { useLoginForm } from './useLoginForm';
 
 const server = setupServer();
@@ -79,6 +80,7 @@ beforeEach(() => {
 
 afterEach(() => {
   server.resetHandlers();
+  vi.restoreAllMocks();
 });
 
 afterAll(() => {
@@ -150,7 +152,8 @@ describe('useLoginForm', () => {
     expect(form.submitting.value).toBe(false);
   });
 
-  it('表单销毁后，晚到的登录结果不写入会话，也不显示错误', async () => {
+  it('表单销毁后，晚到的登录结果不写入会话，也不显示错误，不记 session', async () => {
+    const mark = vi.spyOn(loginToMap, 'mark');
     const { requestReceived, respond } = mockPendingLogin();
     const wrapper = mountForm('zhangsan', 'secret');
     const pending = form.submit();
@@ -166,6 +169,39 @@ describe('useLoginForm', () => {
     expect(useSessionStore().session).toEqual(other);
     expect(localStorage.getItem('yzt.session')).toBe(JSON.stringify(other));
     expect(form.errorMessage.value).toBe('');
+    expect(mark).not.toHaveBeenCalled();
+  });
+
+  it('耗时标记：校验通过、发出请求之前开始一轮，接口成功返回后记下 session', async () => {
+    const begin = vi.spyOn(loginToMap, 'begin');
+    const mark = vi.spyOn(loginToMap, 'mark');
+    const begunAtRequest: number[] = [];
+    server.use(
+      mock.post('/backend/user/login', () => {
+        begunAtRequest.push(begin.mock.calls.length);
+        return HttpResponse.json(SUCCESS);
+      })
+    );
+    mountForm('', '');
+    await form.submit();
+    expect(begin).not.toHaveBeenCalled();
+
+    form.model.loginName = 'zhangsan';
+    form.model.password = 'secret';
+    await form.submit();
+
+    expect(begunAtRequest).toStrictEqual([1]);
+    expect(mark.mock.calls).toStrictEqual([['session']]);
+  });
+
+  it('耗时标记：登录失败时不记 session', async () => {
+    const mark = vi.spyOn(loginToMap, 'mark');
+    mockLogin({ code: 500, msg: '用户名或密码错误' });
+    mountForm('zhangsan', 'wrong');
+
+    await form.submit();
+
+    expect(mark).not.toHaveBeenCalled();
   });
 
   it('表单销毁时取消进行中的登录请求，不等响应返回', async () => {

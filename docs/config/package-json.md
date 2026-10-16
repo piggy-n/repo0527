@@ -127,6 +127,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "test:watch": "vitest",
     "title:generate": "node tools/system-title/cli.ts",
     "boundaries:generate": "node tools/boundaries/cli.ts",
+    "measure:map-load": "vite build && node tools/measure-map-load/cli.ts",
     "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
   },
   "dependencies": {
@@ -231,7 +232,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `opentype.js` | 解析字体、把系统名称转成 SVG 轮廓，只在 `tools/system-title/` 中使用（ADR 0012）；2.0 没有自带类型，用本地的最小声明 | fontkit、harfbuzzjs |
 | `vitest` | 测试运行器，复用 `vite.config.ts`（ADR 0010） | Jest |
 | `@vitest/browser-playwright` | Vitest 浏览器模式的 Playwright 驱动（ADR 0040），会带上 `@vitest/browser`。它对 `vitest` 的依赖是精确版本，两者要一起升级 | WebdriverIO 驱动、Vitest 默认的 preview（不能无界面运行） |
-| `playwright` | 浏览器测试用来启动 Chromium（ADR 0040），版本独立管理（驱动对它的依赖是 `*`）。浏览器本身不随依赖安装，第一次要运行 `test:browser:install` | — |
+| `playwright` | 浏览器测试用来启动 Chromium（ADR 0040），版本独立管理（驱动对它的依赖是 `*`）。浏览器本身不随依赖安装，第一次要运行 `test:browser:install`。加载耗时的实测脚本 `tools/measure-map-load/` 也用它驱动本机的 Edge（见 modules/perf.md） | — |
 | `@vue/test-utils` | Vue 官方的组件挂载与交互库 | — |
 | `jsdom` | 测试时在 Node 里模拟 DOM | happy-dom（ADR 0010 有实测对比） |
 | `@types/node` | 只给 `vite.config.ts` 提供 Node 类型 | — |

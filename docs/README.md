@@ -38,6 +38,7 @@ docs/
 │  ├─ map-core.md             地图内核：用法、会话与 MapLibre 适配器的实现、实测行为、加载策略；附录为旧代码分析
 │  ├─ map-vue.md              libs/map-vue：地图与 Vue 的衔接（provideMap、样式绑定、MapCanvas、useMap、相机操作、定位可视区域）
 │  ├─ shared-map.md           shared/map：项目级的公共地图能力（底图、边界、默认视角、工具栏、测量、区划定位、坐标定位、状态提示）
+│  ├─ perf.md                 shared/perf：加载耗时的标记（LoadTrace、登录到地图）与实测脚本
 │  ├─ utils.md                libs/utils：Worker 通信层（协议、取消、故障、托管）、LatestController
 │  └─ icons.md                图标：SvgIcon 用法、添加图标、规范化规则、自动化与检查
 ├─ design/                    设计规范与主题落地

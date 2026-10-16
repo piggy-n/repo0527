@@ -13,7 +13,7 @@
 | **2. 应用骨架** | 有类型的 HTTP 客户端和错误模型、鉴权、路由守卫（用模块扩充给 `RouteMeta` 加类型）、布局、存储适配器、MSW、Element Plus 主题、CSS Modules | 泛型、可辨识联合、模块扩充、Adapter 和 Strategy 模式 | ✅ 完成（tag `stage-2`，[总结](stages/stage-2-app-skeleton-and-auth.md)） |
 | **3. 第一个纵切** | 登录 + 布局 + 一个简单列表页，把 API、query、store、TSX 组件、测试整条链路跑通 | vue-query（TanStack Query），TSX 中 props、emits、slots 的类型写法 | ✅ 完成（tag `stage-3`，[总结](stages/stage-3-layout-and-first-list.md)）：页面布局规范与 `libs/ui`（ADR 0016）、文件管理列表（ADR 0017）、会话结束的统一处理 |
 | **4. map-core** | 重新设计引擎抽象、Manager 体系、有类型的事件、有类型的 Worker 消息、资源释放 | 接口与抽象类的区别、Facade、Factory、Observer、`using` / Disposable | ✅ 完成（tag `stage-4`，[总结](stages/stage-4-map-core.md)）：地图会话与 MapLibre 适配器（ADR 0018～0024）、Worker 通信层（ADR 0025） |
-| **5. map-vue + 现状底图** | `MapProvider`、`useMap()`、图层面板 | provide / inject 的类型、响应式边界（`shallowRef`、`markRaw`） | 进行中：拆成 5A～5E，见下文"阶段五"；5A 完成（tag `stage-5a`，[总结](stages/stage-5a-map-skeleton.md)）；5B 完成（tag `stage-5b`，[总结](stages/stage-5b-public-map-capabilities.md)）；5C 完成（tag `stage-5c`，[总结](stages/stage-5c-current-map-business.md)）：地图内核加固、资源图层、面板、持久化、图例、符号编辑、点选与框选、区划裁剪、年份（ADR 0039～0052）；5D 完成（tag `stage-5d`，[总结](stages/stage-5d-map-ui.md)）：地图页界面按设计稿逐块替换（ADR 0053～0055），打标签之后的优化（ADR 0056～0060）也在标签里；5E 未开始 |
+| **5. map-vue + 现状底图** | `MapProvider`、`useMap()`、图层面板 | provide / inject 的类型、响应式边界（`shallowRef`、`markRaw`） | 进行中：拆成 5A～5E，见下文"阶段五"；5A 完成（tag `stage-5a`，[总结](stages/stage-5a-map-skeleton.md)）；5B 完成（tag `stage-5b`，[总结](stages/stage-5b-public-map-capabilities.md)）；5C 完成（tag `stage-5c`，[总结](stages/stage-5c-current-map-business.md)）：地图内核加固、资源图层、面板、持久化、图例、符号编辑、点选与框选、区划裁剪、年份（ADR 0039～0052）；5D 完成（tag `stage-5d`，[总结](stages/stage-5d-map-ui.md)）：地图页界面按设计稿逐块替换（ADR 0053～0055），打标签之后的优化（ADR 0056～0060）也在标签里；5E 进行中，见下文"5E 收尾" |
 | **三维** | map-cesium：Cesium 运行时、样式镜像与三维样式的支持清单、相机同步、三维拾取与测量、瓦片数据服务与 Worker 池；三维独有功能（漫游、钻地、室内地图、本地 3D Tiles）的迁移范围到时再定 | 接近无感的二三维切换、对象池与 Worker 调度 | 未开始（阶段五开始时加入） |
 | **6. 复杂业务** | 空间监测三件套、AI 流式对话、文件管理，以及其余业务模块 | 拆分巨型组件、流式读取与 SSE、取消请求 | 未开始 |
 | **7. 收尾** | Playwright、产物分析、部署 | — | 未开始 |
@@ -562,6 +562,42 @@ ADR 0046 的实现：分类取值的纹理默认色（`darkenColor`，Lab 插值
 - 手机宽度时三个功能的 Tab 被裁切：改为 Tab 区横向滚动、不显示滚动条，当前的 Tab 连同关闭按钮滚进可见范围
 - 顺带整理：`arrowStep` 从 `ResourceTreeList.tsx` 移到 `features/resource-map/keyboard.ts`，组件不再是公共逻辑的入口；本表第 16 行去掉"5D 进行中"
 - 改坏验证 14 处全部由断言测出；在真实页面上核对过：375 × 812 时让出去以后再点坐标定位重新显示、经度保留，三个功能时 Tab 区 183 宽、当前的"资源详情"连同关闭按钮可见，切回"区划定位"时滚回去；图例切到底图再切回，"工作分类 A.2"和搜索词"水田"都在
+
+### 5E 收尾
+
+2026-10-16 开始。范围是"后续阶段要带上的事项"里标着 5E 的三条：地图页的页面缓存、地图资源的加载策略、区划裁剪的求交库是否按需加载。按"先实测、再定方案"拆分，用户确认拆分和下面的决定都按推荐：
+
+| 事项 | 决定 |
+|---|---|
+| 顺序 | 先加载策略（实测要用户跑脚本，耗时最长；页面缓存的"回到地图的耗时"复用它的标记），再页面缓存 |
+| "地图第一次加载完成" | 记两个终点：视图就绪（样式加载完成，能操作）和第一次画面稳定（视野里的瓦片、省界都画完），ADR 以后者为准；场景是新用户 |
+| 性能标记 | 留在产物里（User Timing，三维阶段和阶段七复测用），不上报 |
+| 实测方式 | Playwright 脚本入库，用户在自己的终端运行，账号密码从环境变量读 |
+| 网络条件 | 不限速、Fast 4G、Slow 4G，每组 5 次，登录页停留 5 秒；CPU 不降速 |
+| 预加载 | 先倾向登录页空闲时预加载运行时和页面分块，预热 Worker 池看数据 |
+| 默认框架 | 只做最小的解析函数（现在只回答二维）；map-vue 的运行时注入等三维阶段有了第二个框架再做 |
+| 求交库 | 先倾向不拆，以实测为准；要拆时选中区划时和边界一起加载，`readyBoundary` 等两者都就绪 |
+| 页面缓存 | 常驻 `KeepAlive` 加路由 meta；隐藏期间暂停视图、结束临时交互，其余状态保留 |
+| 阶段总结 | 一篇 5E 的总结，末尾加"阶段五回顾" |
+
+| 步骤 | 内容 | 完成的标准 |
+|---|---|---|
+| 5E.1 | 性能标记、"画面稳定"事件、实测脚本，测出基线 | 标记有测试和改坏验证；用户跑出基线表，写进 modules/perf.md |
+| 5E.2 | 加载策略：本地实验（预加载、预热 Worker 池、去掉求交库）、ADR 0061、实现 | ADR 接受；实现后复测，收益和实验一致 |
+| 5E.3 | 求交库：按 ADR 0061 执行 | 不拆时关闭待办；拆时实现、测试、真实页面验收 |
+| 5E.4 | 页面缓存：浏览器里先实测隐藏期间的问题，ADR 0062、实现 | ADR 接受；切页面再回来状态都在、不闪，别的页面按 Esc 不影响地图，退出再登录是新页面 |
+| 5E.5 | 整体验收、阶段总结、同步 AGENTS.md 和本文，打 tag `stage-5e` | — |
+
+开始时核对旧仓库：`master-demo` 已到 `6b4799b`，地图相关的路径和基线 `836f03b` 相比没有改动。
+
+5E.1 性能标记与实测脚本（2026-10-16，[modules/perf.md](modules/perf.md)）：
+
+- `shared/perf`：`LoadTrace`（User Timing；每一轮由 `begin` 开始并清掉上一轮，每个步骤只记第一次，记到最后一步结束；不在一轮里时什么也不记，出错时吞掉）和登录到地图的 `loginToMap`（`session`、`runtime`、`page`、`view-ready`、`settled`）。开始在 `useLoginForm` 校验通过、发出请求之前，`runtime` 在路由的 `withMapRuntime`，后三个在 `shared/map/useMapLoadMarks`
+- map-core 的视图加 `settle` 事件（MapLibre 的 `idle`，只在 ready 时），map-vue 的上下文加 `whenSettled(signal?)`（绑定视图实例，和 `whenReady` 一样）；视图就绪对应 `style.load`，那时瓦片还没到，所以要另一个终点
+- `tools/measure-map-load/`：`pnpm --filter @yzt/web measure:map-load`，`vite preview` 加 Playwright 驱动 Edge，CDP 限速，输出步骤、资源、长任务三张表和画面稳定时还没下载完的请求
+- 实现中的调整：原则第 8 条写的是"禁用缓存"，试跑发现 4 个 Worker 各下载一次 Worker 脚本（Slow 4G 下画面稳定晚约 2 秒），改为每次用新的浏览器上下文（缓存为空、照常工作）；先在本地实测了 CDP 的限速对 Worker 里的请求同样生效；本机没有 Chrome，默认用 Edge 有界面运行
+- 改坏验证 24 处，23 处由断言测出；没测出的是"表单销毁后仍记 session"：这一支只在响应到达之后、继续执行之前表单被销毁时才走到，测试复现不了，后果只是多一条标记。"订阅前不确认视图仍挂着"起初表现为没人处理的拒绝，把订阅移到 Promise 外面后由断言测出
+- 基线（用户用真实账号跑，三档各 5 次全部完成，每档 5 次相差不到 0.4 秒）：画面稳定在不限速 1.26 s、Fast 4G 3.33 s、Slow 4G 17.5 s。maplibre-gl 和地图页分块先后下载，两段占限速时的 36%；视图就绪之后最后到的是 Worker 里下载的省界（要等 Worker 脚本）；普惠体两个字重各约 5.2 MB（按授权不能子集化），限速时一直在抢带宽；资源目录到达时有一个 80～120 ms 的长任务。详见 modules/perf.md"基线"。5E.1 完成
 
 ## 业务模块
 

@@ -38,6 +38,7 @@ import { regionClipGroup } from '@/shared/map/region/region-clip';
 import { readyBoundary, useRegionLocate } from '@/shared/map/region/useRegionLocate';
 import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { useDefaultView } from '@/shared/map/useDefaultView';
+import { useMapLoadMarks } from '@/shared/map/useMapLoadMarks';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
 import { usePreferenceScope } from '@/shared/storage/preference-scope';
@@ -76,6 +77,8 @@ export const CurrentMapPage = defineComponent({
       groups: ['basemap', 'resources', 'selection', 'region-clip', 'basemap-labels', 'boundaries', 'region', 'measure'],
       camera: JIANGSU_CAMERA
     });
+    // 登录后第一次进入时记下加载的耗时（docs/modules/perf.md）
+    useMapLoadMarks(map);
     // 第一次就绪时按江苏的范围定位；基础组的"默认视角"、区划定位回到全省时回到这里
     const { goToDefaultView } = useDefaultView(map);
     // 手机宽度时卡片叠到工具栏一列，矮屏时业务组只显示图标（ADR 0053 第 8 节）；还量不到尺寸时按常规

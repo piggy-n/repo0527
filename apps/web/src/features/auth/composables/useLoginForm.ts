@@ -2,6 +2,7 @@ import type { FormInstance, FormRules } from 'element-plus';
 import { onScopeDispose, reactive, ref } from 'vue';
 import { type Session, useSessionStore } from '@/shared/auth/session-store';
 import { ApiError } from '@/shared/http/errors';
+import { loginToMap } from '@/shared/perf/login-to-map';
 import { type LoginCredentials, login } from '../api';
 
 /** 登录表单的状态与提交逻辑，不含界面：不渲染、不跳转、不弹提示，这些由使用它的组件决定 */
@@ -40,11 +41,13 @@ export function useLoginForm() {
         return undefined;
       }
       const { signal } = controller;
+      loginToMap.begin();
       const result = await login({ loginName: model.loginName.trim(), password: model.password }, signal);
       // 响应已收到、这里还没执行时表单被销毁，取消来不及生效
       if (signal.aborted) {
         return undefined;
       }
+      loginToMap.mark('session');
       session.start(result);
       return result;
     } catch (error) {

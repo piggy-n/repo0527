@@ -49,6 +49,7 @@ export interface ScrollZoomRates {
 interface MapLibreViewEvents {
   statechange: (state: ViewState) => void;
   resize: () => void;
+  settle: () => void;
   sourceerrorchange: (errors: SourceErrors) => void;
 }
 
@@ -275,7 +276,8 @@ export class MapLibreView<const G extends string> implements MapView {
       map.on('error', ({ error, sourceId }) => this.#guard(() => this.#onMapError(map, error, sourceId))),
       map.on('move', event => this.#guard(() => this.#onMove(map, event))),
       map.on('movestart', event => this.#guard(() => this.#onMoveStart(event))),
-      map.on('resize', () => this.#guard(() => this.#emitter.emit('resize')))
+      map.on('resize', () => this.#guard(() => this.#emitter.emit('resize'))),
+      map.on('idle', () => this.#guard(() => this.#onIdle()))
     ]) {
       stack.defer(() => subscription.unsubscribe());
     }
@@ -583,6 +585,13 @@ export class MapLibreView<const G extends string> implements MapView {
   #onMoveStart(event: MapMoveEventLike): void {
     if (this.#state === 'ready' && causeOfMove(event) === 'user') {
       this.#session.camera.beginOperation();
+    }
+  }
+
+  // 加载中、暂停时的画面不算：加载中样式还没生效，暂停时显示的是另一个视图
+  #onIdle(): void {
+    if (this.#state === 'ready') {
+      this.#emitter.emit('settle');
     }
   }
 

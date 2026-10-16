@@ -229,6 +229,7 @@ store.clear();
 - 构造即创建地图（`initializing`）；创建时抛错（如不支持 WebGL2 的 `GPUInitializationError`）不往外抛，进入 `failed`，由 `whenReady` 和 `statechange` 表达
 - `failed` 有两种（ADR 0026 第 4 条）：引擎失败（创建地图或 `setStyle` 本身抛错）不能恢复，之后的样式变化、`error`、`style.load` 都不再改变状态，只能释放后重新创建视图；样式加载失败在出现新的提交时自动重新加载，`failed → initializing → ready`（暂停意图时为 `paused`）
 - 画布尺寸变化时（MapLibre 的 `resize`，容器尺寸变化后由它自己的 `ResizeObserver` 触发）发出 `resize`：相机不变，屏幕上的投影变了，map-vue 据此更新 `projectionRevision`（5B 验收后加入）
+- MapLibre 发出 `idle`（没有动画，请求的瓦片都已加载并画出）且视图处于 `ready` 时发出 `settle`；加载中、暂停时的 `idle` 不算。用于加载耗时的标记（5E.1，见 [perf.md](perf.md)）
 - 引擎是否失败不另存标志，由失败原因推出（`failure.kind === 'engine'`）：同一个事实只存一份（5C.0e 去掉了原来的 `#fatal`）
 - 失败的原因是数据（ADR 0030）：`view.failure` 只在 `failed` 时有值，引擎失败为 `{ kind: 'engine', cause, error }`（`GPUInitializationError` 时 `cause` 是 `webgl-unavailable`，其余是 `unknown`），样式失败为 `{ kind: 'style', error }`；离开 `failed` 和释放时清空。状态或原因任一变化都发出 `statechange`，监听者收到 `failed` 时已经能读到原因
 - `whenReady()` 表示当前这一轮整体加载的结果。创建地图、整体重建、从 `failed` 重新加载各开始一轮，上一轮已经有结果就换一个新的 Promise；本轮的结局都落在同一个 Promise 上：加载完成后进入 `ready`（运行中重建则是完成并追上之后；暂停期间完成加载时进入 `paused`，和以 `active: false` 创建时一样）就成功，失败就以原因结束，释放就以 `AbortError` 结束。激活中止、失败后改用新的提交重试都不结束本轮，同一个 Promise 继续等待。这样恢复显示时触发了重建，等 `whenReady()` 结束后再定位不会遇到 `paused`；重建随后失败，拿到的 Promise 也会失败。从 `failed` 重新加载时，先换 Promise 再发出 `statechange`，监听者拿到的就是这一轮的
@@ -360,13 +361,28 @@ store.clear();
 7. **缓存比预加载更重要**：产物文件名带 hash，部署时给 `/assets/*` 设置长期缓存（`immutable`），`index.html` 不缓存，并开启压缩；预加载真正起作用的是第一次访问和每次部署后的第一次访问（阶段七）
 8. **用数据决定**：阶段五给"点击登录 → 地图第一次加载完成"打性能标记，在禁用缓存、限速的条件下对比有无预加载，再写 ADR
 
+实测（5E.1）：标记、实测脚本和数据见 [perf.md](perf.md)。第 8 条的"禁用缓存"实测时改为每次用新的浏览器上下文（缓存为空、照常工作）：禁用缓存时 MapLibre 的每个 Worker 都会重新下载一次 Worker 脚本，真实的第一次访问不会这样。
+
+5E 开始时的产物（2026-10-16，`pnpm build`）：
+
+| 文件 | 大小 | gzip | 什么时候下载 |
+|---|---|---|---|
+| maplibre-gl | 1,024 KB | 277 KB | 进入地图路由时 |
+| 地图页分块（其中求交库约 66 KB） | 497 KB | 159 KB | 进入地图路由时，在 maplibre-gl 之后 |
+| maplibre-gl 的 Worker | 511 KB | 构建不统计 | 创建地图时 |
+| 省界（默认显示） | 475 KB | 147 KB | 加入样式时，在 Worker 里 |
+| 市界、县界 | 1,476 KB、204 KB | 455 KB、63 KB | 打开这一级边界或选中区划时 |
+| 地图的 CSS | 83 KB、39 KB | 11 KB、7 KB | 进入地图路由时 |
+| 普惠体（`public/fonts`，不入库） | 两个字重各约 5.2 MB | 已压缩 | Regular 在登录页，SemiBold 在登录后 |
+
 ## 还没做的
 
 有了使用方再做，各项的时机也登记在 [roadmap.md](../roadmap.md) 的"后续阶段要带上的事项"：
 
 | 内容 | 时机 |
 |---|---|
-| map-vue 的运行时注入、加载策略的实测（`provideMap`、`<MapCanvas>`、`useMap()` 已在 5A.2 完成，见 [map-vue.md](map-vue.md)） | 5D |
+| 加载策略的实测与 ADR（标记和实测脚本已在 5E.1 完成，见 [perf.md](perf.md)） | 5E.2 |
+| map-vue 的运行时注入（按框架组织的运行时由 app 注入；`provideMap`、`<MapCanvas>`、`useMap()` 已在 5A.2 完成，见 [map-vue.md](map-vue.md)） | 三维阶段，有了第二个框架时（5E 开始时决定） |
 | 业务图层、底图、边界等拥有者（Manager），从自己的状态推导分组 | 阶段五、六，迁移现状底图和业务图层时 |
 | 框选的批量高亮：按 `guid` 过滤的图层还是 feature-state（选中的单个要素用完整几何的 GeoJSON 分组，ADR 0047） | 5C.6b |
 | Cesium 镜像与相机同步、三维样式的支持清单 | 做三维时（`libs/map-cesium`） |

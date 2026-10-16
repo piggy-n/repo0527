@@ -73,6 +73,8 @@ export interface MapView extends Disposable {
   on(event: 'statechange', callback: (state: ViewState) => void): Unsubscribe;
   /** 画布尺寸变化：相机不变，屏幕上的投影变了，按屏幕位置摆放的浮层要重新投影 */
   on(event: 'resize', callback: () => void): Unsubscribe;
+  /** 画面稳定：没有相机动画和过渡，视野里请求的瓦片都已加载并画出；只在 ready 时触发，用于加载耗时的标记 */
+  on(event: 'settle', callback: () => void): Unsubscribe;
   /** 数据源错误的记录变化 */
   on(event: 'sourceerrorchange', callback: (errors: SourceErrors) => void): Unsubscribe;
 }

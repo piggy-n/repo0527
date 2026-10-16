@@ -63,6 +63,8 @@ export interface MapLike extends StyleTarget {
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
   /** 容器尺寸变化、画布重新调整之后 */
   on(type: 'resize', listener: () => void): MapSubscription;
+  /** 没有相机动画和过渡、请求的瓦片都已加载并画出之后；每次进入这种状态触发一次 */
+  on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
   getCenter(): { readonly lng: number; readonly lat: number };
   getZoom(): number;

@@ -142,6 +142,7 @@ class FakeMap implements MapLike {
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'resize', listener: () => void): MapSubscription;
+  on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
   on(type: string, listener: (event: never) => void): MapSubscription {
     // 各个重载的回调都能接收 FakeEvent 中各自需要的字段
@@ -1514,6 +1515,30 @@ describe('MapLibreView', () => {
       ctx.map.fire('resize');
 
       expect(resizes).toBe(1);
+      ctx.session[Symbol.dispose]();
+    });
+
+    it('tells listeners when the picture settles, only while ready', () => {
+      const ctx = setup();
+      let settles = 0;
+      ctx.view.on('settle', () => settles++);
+
+      // 样式还没加载完时的 idle 不算
+      ctx.map.fire('idle');
+      expect(settles).toBe(0);
+      ctx.map.fire('style.load');
+      ctx.map.fire('idle');
+      expect(settles).toBe(1);
+      ctx.view.pause();
+      ctx.map.fire('idle');
+      expect(settles).toBe(1);
+      ctx.view.resume();
+      ctx.map.fire('idle');
+      expect(settles).toBe(2);
+      ctx.view[Symbol.dispose]();
+      ctx.map.fire('idle');
+
+      expect(settles).toBe(2);
       ctx.session[Symbol.dispose]();
     });
 

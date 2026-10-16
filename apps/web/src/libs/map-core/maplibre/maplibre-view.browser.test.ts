@@ -221,6 +221,23 @@ describe('MapLibreView（真实的 MapLibre）', () => {
     expect(changes.map(({ view, cause }) => [view, cause])).toStrictEqual([['2d', 'sync']]);
   });
 
+  it('画面稳定：首次加载时 settle 在进入 ready 之后发出，那时初始样式的数据已经画出', async () => {
+    using ctx = setup(CAMERA, areaGroup());
+    let drawn: { state: ViewState; areas: number } | undefined;
+    let unsubscribe: (() => void) | undefined;
+    const settled = new Promise<void>(resolve => {
+      unsubscribe = ctx.view.on('settle', () => {
+        drawn ??= { state: ctx.view.state, areas: renderedAreas(ctx.map) };
+        resolve();
+      });
+    });
+
+    await withTimeout(settled, '画面稳定').finally(() => unsubscribe?.());
+
+    expect(drawn?.state).toBe('ready');
+    expect(drawn?.areas).toBeGreaterThan(0);
+  });
+
   it('增量提交：只用增量命令，不整体重建，渲染完成后能查到画出的要素', async () => {
     using ctx = setup();
     await withTimeout(ctx.view.whenReady(), '首次加载完成');

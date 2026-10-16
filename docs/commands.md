@@ -18,6 +18,7 @@
 | 只跑单元测试 / 只跑浏览器测试 | `pnpm --filter @yzt/web test:unit` / `pnpm --filter @yzt/web test:browser` |
 | 内网部署的构建 | `pnpm build:intranet` |
 | 预览构建产物 | `pnpm --filter @yzt/web preview` |
+| 实测"点击登录 → 地图第一次加载完成" | `pnpm --filter @yzt/web measure:map-load` |
 | 每月检查依赖 | `pnpm deps:check` |
 | 范围内升级 | `pnpm deps:update:within-range` |
 | 大版本升级 | `pnpm deps:update:allow-major` |
@@ -157,6 +158,16 @@ pnpm add -Dw -E some-tool
 **执行了什么**：Node 直接运行 `tools/boundaries/cli.ts`，读取目录下的 `江苏省界.json`、`江苏省市界.json`、`江苏省县界.json`，坐标保留 6 位小数、属性只留名称和代码，写入 `src/shared/map/boundary/data/`。
 
 **注意事项**：目录是旧项目（yzt）的 `public/static/geojson`。旧仓库可能停在其他分支上，最好先用 `git show master-demo:public/static/geojson/<文件名>` 导出到一个临时目录再转换；原始文件的结构不符合时报错退出。详见 [modules/shared-map.md](modules/shared-map.md)"行政区边界的数据"。
+
+### `pnpm --filter @yzt/web measure:map-load`
+
+**作用**：实测"点击登录 → 地图第一次加载完成"在不同网络下的耗时，输出各步骤、各资源的中位数（5E.1）。
+
+**什么时候用**：评估地图资源的加载策略（预加载、按需加载）前后各测一次；三维阶段、阶段七改了加载方式后复测。
+
+**执行了什么**：先 `vite build`，再由 Node 运行 `tools/measure-map-load/cli.ts`：用 `vite preview` 提供产物，Playwright 驱动本机的 Edge，每次用新的浏览器上下文打开登录页、停留几秒、登录、等到画面稳定；网络和 CPU 用 CDP 限速。原始数据写进 `tools/measure-map-load/results.local/`（不入库）。
+
+**注意事项**：要先在自己的终端设置环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD`；默认三档网络各 5 次，Slow 4G 每次约 20 秒，全部跑完约 5 分钟，期间会弹出浏览器窗口。参数（次数、网络、停留时长、CPU 降速等）和实测的前提见 [modules/perf.md](modules/perf.md)。
 
 ### `pnpm --filter @yzt/web icons`
 

@@ -64,8 +64,13 @@ class FakeView implements MapView {
 
   on(event: 'statechange', callback: (state: ViewState) => void): Unsubscribe;
   on(event: 'resize', callback: () => void): Unsubscribe;
+  on(event: 'settle', callback: () => void): Unsubscribe;
   on(event: 'sourceerrorchange', callback: (errors: SourceErrors) => void): Unsubscribe;
   on(event: string, callback: (payload: never) => void): Unsubscribe {
+    // 和 MapLibreView 一样，释放后不能再订阅
+    if (this.disposed) {
+      throw new Error('FakeView 已释放');
+    }
     // 各个重载的回调只接收自己那种事件的参数
     const listener = callback as (payload: unknown) => void;
     const listeners = this.#listeners.get(event) ?? new Set();
@@ -83,13 +88,26 @@ class FakeView implements MapView {
     this.#fire('resize', undefined);
   }
 
+  /** 模拟画面稳定 */
+  settleDown(): void {
+    this.#fire('settle', undefined);
+  }
+
+  listenerCount(event: string): number {
+    return this.#listeners.get(event)?.size ?? 0;
+  }
+
   /** 模拟数据源错误的记录变化 */
   setSourceErrors(errors: SourceErrors): void {
     this.sourceErrors = errors;
     this.#fire('sourceerrorchange', errors);
   }
 
-  [Symbol.dispose](): void {}
+  disposed = false;
+
+  [Symbol.dispose](): void {
+    this.disposed = true;
+  }
 
   #fire(event: string, payload: unknown): void {
     for (const listener of this.#listeners.get(event) ?? []) {
@@ -794,6 +812,81 @@ describe('MapContextState 的 whenReady', () => {
     first.markReady();
 
     expect(await settled(waiting)).toBe('resolved');
+  });
+});
+
+describe('MapContextState 的 whenSettled', () => {
+  it('等到视图的下一次画面稳定，之后取消订阅', async () => {
+    using env = setup();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+    const waiting = env.state.context.whenSettled();
+    await settle();
+    expect(await settled(waiting)).toBe('pending');
+
+    view.settleDown();
+
+    expect(await settled(waiting)).toBe('resolved');
+    expect(view.listenerCount('settle')).toBe(0);
+  });
+
+  it('还没有视图时等视图挂上，再等它的画面稳定', async () => {
+    using env = setup();
+    const waiting = env.state.context.whenSettled();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    await settle();
+
+    view.settleDown();
+
+    expect(await settled(waiting)).toBe('resolved');
+  });
+
+  it('等待中的视图被卸下：以 AbortError 结束、取消订阅，换上的视图稳定也不算', async () => {
+    using env = setup();
+    const first = new FakeView();
+    env.state.attachView(first, CANVAS);
+    const waiting = env.state.context.whenSettled();
+    await settle();
+
+    env.state.detachView(first);
+    const second = new FakeView();
+    env.state.attachView(second, CANVAS);
+    second.settleDown();
+
+    expect(await settled(waiting)).toBe('AbortError');
+    expect(first.listenerCount('settle')).toBe(0);
+  });
+
+  it('等到视图挂上的同一轮里它又被卸下、释放：以 AbortError 结束，不订阅已释放的视图', async () => {
+    using env = setup();
+    const waiting = env.state.context.whenSettled();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    // 画布组件卸载时先卸下、再释放视图
+    env.state.detachView(view);
+    view[Symbol.dispose]();
+
+    expect(await settled(waiting)).toBe('AbortError');
+    expect(view.listenerCount('settle')).toBe(0);
+  });
+
+  it('signal 中止、上下文释放时结束等待并取消订阅', async () => {
+    const env = setup();
+    const view = new FakeView();
+    env.state.attachView(view, CANVAS);
+    const controller = new AbortController();
+    const bySignal = env.state.context.whenSettled(controller.signal);
+    const byDispose = env.state.context.whenSettled();
+    await settle();
+
+    controller.abort();
+    expect(await settled(bySignal)).toBe('AbortError');
+    env[Symbol.dispose]();
+
+    expect(await settled(byDispose)).toBe('AbortError');
+    expect(view.listenerCount('settle')).toBe(0);
   });
 });
 
