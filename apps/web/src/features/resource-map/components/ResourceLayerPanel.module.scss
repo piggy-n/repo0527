@@ -25,9 +25,16 @@
   }
 }
 
+// 放不下时（手机宽度）页签在自己的区域里横向滚动，收起按钮始终可见（设计稿 5D.8）；
+// 横向滚动会连带裁掉纵向，下面留出当前页签横线的位置
 .tabs {
   display: flex;
   gap: 12px;
+  min-width: 0;
+  margin-bottom: -6px;
+  padding-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .tab {

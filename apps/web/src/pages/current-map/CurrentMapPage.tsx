@@ -41,6 +41,7 @@ import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
 import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './CurrentMapPage.module.scss';
+import { mapPageLayout } from './map-page-layout';
 
 // 右侧的两组 Tab 面板（ADR 0053 第 4 节）：功能面板和显示面板，Tab 按这里的顺序
 const FUNCTION_PANELS = ['region-locate', 'coordinate-locate', 'feature-detail'] as const;
@@ -63,9 +64,6 @@ const TOOLBAR_GROUPS = [
   ['region-locate', 'coordinate-locate']
 ] as const;
 
-// 带文字的业务组（约 380）和基础组（约 209）上下都放得下的地图区域高度，加上三处 16 的间距（ADR 0053 第 8 节）
-const FULL_TOOLBAR_HEIGHT = 640;
-
 /** 现状底图：区域按 ADR 0053 划分，各块的界面在 5D.1～5D.8 逐块设计（docs/roadmap.md"5D 地图页界面的专门设计"） */
 export const CurrentMapPage = defineComponent({
   name: 'CurrentMapPage',
@@ -79,10 +77,10 @@ export const CurrentMapPage = defineComponent({
     });
     // 第一次就绪时按江苏的范围定位；基础组的"默认视角"、区划定位回到全省时回到这里
     const { goToDefaultView } = useDefaultView(map);
-    // 矮屏时业务组只显示图标；还量不到尺寸（测试环境没有布局）时按常规高度
+    // 手机宽度时卡片叠到工具栏一列，矮屏时业务组只显示图标（ADR 0053 第 8 节）；还量不到尺寸时按常规
     const root = ref<HTMLElement>();
-    const { height } = useElementSize(root);
-    const compactToolbar = computed(() => height.value > 0 && height.value < FULL_TOOLBAR_HEIGHT);
+    const { width, height } = useElementSize(root);
+    const layout = computed(() => mapPageLayout(width.value, height.value));
 
     // 记住上次的底图、边界和资源图层（ADR 0042）；没有登录时为 null，不读不写
     const preferences = usePreferenceScope();
@@ -170,19 +168,42 @@ export const CurrentMapPage = defineComponent({
       location.remove();
     };
 
+    // 卡片行：图例卡、底图卡（显示当前底图的缩略图），点开显示面板里对应的 Tab；手机宽度时叠在基础组上面
+    const renderCards = () => (
+      <div class={styles.cards} data-map-cards>
+        <MapCard
+          label={PANEL_LABELS.legend}
+          pressed={display.isOpen('legend')}
+          onClick={() => toggleDisplay('legend')}>
+          {{ icon: () => [<SvgIcon name="map-legend" size={20} />] }}
+        </MapCard>
+        <MapCard
+          label={PANEL_LABELS.basemap}
+          pressed={display.isOpen('basemap')}
+          onClick={() => toggleDisplay('basemap')}>
+          {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[basemap.selected.value]} />] }}
+        </MapCard>
+      </div>
+    );
+
     return () => {
       const pressed = (['region-locate', 'coordinate-locate'] as const).filter(id => functions.isOpen(id));
+      const { phone, compactToolbar } = layout.value;
+      // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示
+      const scopeShown = !phone || !sides.left.value;
       return (
-        <div ref={root} class={styles.root}>
+        <div ref={root} class={[styles.root, phone && styles.phone]} data-map-page={phone ? 'phone' : 'wide'}>
           <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
           <MeasureOverlay measure={measure} />
           <LocationOverlay location={location} />
           <BoxSelectOverlay box={pick.boxDraft.value} />
           <div class={styles.overlay}>
             {/* 当前区划放在第一个：和面板重叠时（窄屏）面板在上面 */}
-            <div class={styles.scope}>
-              <RegionScopeBar region={region} />
-            </div>
+            {scopeShown && (
+              <div class={styles.scope}>
+                <RegionScopeBar region={region} />
+              </div>
+            )}
             <div class={styles.left}>
               <ResourceLayerPanel
                 layers={resources}
@@ -220,21 +241,7 @@ export const CurrentMapPage = defineComponent({
             </div>
             <div class={styles.bottom}>
               <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
-              {/* 卡片行：图例卡、底图卡（显示当前底图的缩略图），点开显示面板里对应的 Tab */}
-              <div class={styles.cards}>
-                <MapCard
-                  label={PANEL_LABELS.legend}
-                  pressed={display.isOpen('legend')}
-                  onClick={() => toggleDisplay('legend')}>
-                  {{ icon: () => [<SvgIcon name="map-legend" size={20} />] }}
-                </MapCard>
-                <MapCard
-                  label={PANEL_LABELS.basemap}
-                  pressed={display.isOpen('basemap')}
-                  onClick={() => toggleDisplay('basemap')}>
-                  {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[basemap.selected.value]} />] }}
-                </MapCard>
-              </div>
+              {!phone && renderCards()}
             </div>
             <div class={styles.tools}>
               <MapToolbar
@@ -245,9 +252,12 @@ export const CurrentMapPage = defineComponent({
                   'coordinate-locate': () => toggleFunction('coordinate-locate')
                 }}
                 pressed={pressed}
-                compact={compactToolbar.value}
+                compact={compactToolbar}
               />
-              <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
+              <div class={styles.stack}>
+                {phone && renderCards()}
+                <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
+              </div>
             </div>
           </div>
           <MapStatusNotice />

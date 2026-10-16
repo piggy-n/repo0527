@@ -305,7 +305,37 @@ afterEach(() => {
   server.resetHandlers();
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  observed.clear();
 });
+
+// jsdom 没有布局，也没有 ResizeObserver：替身按被观察的元素记下回调，用例给页面根元素设定尺寸后手动触发
+const observed = new Map<Element, (width: number, height: number) => void>();
+
+class ResizeObserverStub {
+  readonly #callback: ResizeObserverCallback;
+
+  constructor(callback: ResizeObserverCallback) {
+    this.#callback = callback;
+  }
+
+  observe(target: Element) {
+    observed.set(target, (width, height) => {
+      const size = [{ inlineSize: width, blockSize: height }];
+      const entry = { target, contentRect: { width, height }, contentBoxSize: size, borderBoxSize: size };
+      this.#callback([entry as unknown as ResizeObserverEntry], this);
+    });
+  }
+
+  unobserve() {}
+
+  disconnect() {}
+}
+
+// 页面根元素（地图区域）的尺寸
+async function resizePage(wrapper: PageWrapper, width: number, height: number) {
+  observed.get(wrapper.get('[data-map-page]').element)?.(width, height);
+  await nextTick();
+}
 
 // 边界文件按地址给出：县界或市界
 function stubBoundaryFetch() {
@@ -656,6 +686,33 @@ describe('CurrentMapPage', () => {
 
     await button(wrapper, '回到全省').trigger('click');
     expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
+  });
+
+  it('手机宽度（设计稿 5D.8）：卡片叠到工具栏一列、业务组只显示图标；资源面板展开时不显示区划条', async () => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    stubBoundaryFetch();
+    const { wrapper } = await readyPage();
+    expect(wrapper.get('[data-map-page]').attributes('data-map-page')).toBe('wide');
+    expect(wrapper.get('button[aria-label="测距"]').text()).toBe('测距');
+
+    await resizePage(wrapper, 375, 737);
+    expect(wrapper.get('[data-map-page]').attributes('data-map-page')).toBe('phone');
+    // 卡片和基础组在同一列里
+    const stack = wrapper.get('[data-map-cards]').element.parentElement;
+    expect(stack?.contains(wrapper.get('button[aria-label="默认视角"]').element)).toBe(true);
+    expect(wrapper.get('button[aria-label="测距"]').text()).toBe('');
+
+    // 选中南京：资源面板展开着，中间一列没有宽度，区划条不显示；收起资源面板后显示
+    await button(wrapper, '区划定位').trigger('click');
+    await button(wrapper, '南京').trigger('click');
+    expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
+    await wrapper.get('button[aria-label="收起资源图层"]').trigger('click');
+    expect(wrapper.get('[data-region-scope]').text()).toBe('区划南京市回到全省');
+
+    // 变宽以后卡片回到底部一行，和状态栏在一起
+    await resizePage(wrapper, 1440, 900);
+    const bottomRow = wrapper.get('[data-map-status-bar]').element.parentElement;
+    expect(bottomRow?.contains(wrapper.get('[data-map-cards]').element)).toBe(true);
   });
 
   it('画布重建时测量的标签先隐藏，新视图就绪后重新显示', async () => {

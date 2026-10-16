@@ -24,14 +24,16 @@ export const RegionScopeBar = defineComponent({
       levels.value.length > 0 ? (
         <div ref={element} class={styles.bar} data-region-scope>
           <span class={styles.label}>区划</span>
-          {levels.value.flatMap((level, index) => [
-            index > 0 ? (
-              <span key={`separator-${index}`} class={styles.separator} aria-hidden="true">
-                ›
-              </span>
-            ) : null,
-            <span key={level.code ?? ''}>{level.name}</span>
-          ])}
+          <span class={styles.names}>
+            {levels.value.flatMap((level, index) => [
+              index > 0 ? (
+                <span key={`separator-${index}`} class={styles.separator} aria-hidden="true">
+                  {' › '}
+                </span>
+              ) : null,
+              <span key={level.code ?? ''}>{level.name}</span>
+            ])}
+          </span>
           <button type="button" class={styles.reset} onClick={() => props.region.select(null)}>
             <SvgIcon name="close" size={12} />
             回到全省

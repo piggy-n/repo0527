@@ -82,7 +82,8 @@
 
 .chips {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  // 每格至少 64：320 宽的面板里是 4 列，手机宽度变窄时少几列（设计稿 5D.8）
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
   gap: var(--space-sm);
 }
 

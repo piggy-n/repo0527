@@ -156,7 +156,10 @@
 }
 
 @media (width < #{ui.$compact}) {
+  // 只剩"菜单"：按内容的宽度、不收缩（flex: 1 的基准是 0，菜单会溢出到 Logo 上），放不下时由 Logo 区域收缩、
+  // 裁掉右侧（docs/modules/layout.md）
   .nav {
+    flex: 1 0 auto;
     justify-content: flex-end;
   }
 
