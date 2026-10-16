@@ -191,6 +191,8 @@ export class MapLibreView<const G extends string> implements MapView {
   #sourceErrors = NO_SOURCE_ERRORS;
   #active: boolean;
   #mapStyle: MapStyle;
+  // 正在进行的定位动画（flyTo、fitBounds）怎样直接到终点；动画结束、被打断时为 null
+  #finishAnimation: (() => void) | null = null;
   // 应用增量命令期间同步收到的 error 事件：MapLibre 的很多方法校验失败时不抛错，只发事件
   #applying = false;
   #rejected = false;
@@ -276,6 +278,8 @@ export class MapLibreView<const G extends string> implements MapView {
       map.on('error', ({ error, sourceId }) => this.#guard(() => this.#onMapError(map, error, sourceId))),
       map.on('move', event => this.#guard(() => this.#onMove(map, event))),
       map.on('movestart', event => this.#guard(() => this.#onMoveStart(event))),
+      // 动画到达终点、被打断都算结束：暂停时不再需要直接到终点
+      map.on('moveend', () => (this.#finishAnimation = null)),
       map.on('resize', () => this.#guard(() => this.#emitter.emit('resize'))),
       map.on('idle', () => this.#guard(() => this.#onIdle()))
     ]) {
@@ -316,14 +320,24 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#active = false;
     this.#pan?.cancel();
     if (this.#state === 'ready') {
+      // 还在进行的定位动画直接到终点，在暂停之前按 program 写回会话：暂停期间地图的移动不写回，
+      // 恢复时按会话的相机同步，否则会回到动画的中途（页面被缓存时实测，ADR 0063）
+      const finish = this.#finishAnimation;
+      this.#finishAnimation = null;
+      if (finish) {
+        this.#guard(finish);
+      }
       this.#setState('paused');
     }
   }
 
-  /** 恢复显示：追上暂停期间的样式变化，并把会话相机同步过来 */
+  /** 恢复显示：先按容器的尺寸调整画布，再追上暂停期间的样式变化，并把会话相机同步过来 */
   resume(): void {
     this.#assertAlive();
     this.#active = true;
+    // 暂停期间容器可能离开过文档（页面被缓存时 MapLibre 把画布缩成 0×0，ADR 0063）；它自己的尺寸监听要到下一帧才量，
+    // 恢复后立即执行的定位（暂停期间排队的相机操作）要按真实尺寸算
+    this.#map?.resize();
     if (this.#state === 'paused' && this.#map !== undefined) {
       this.#activate(this.#map);
     }
@@ -333,10 +347,16 @@ export class MapLibreView<const G extends string> implements MapView {
     const map = this.#readyMap();
     // MapLibre 的 padding 会留在地图上，改变"会话相机的中心就是画布中心"；换成只对这一次有效的 offset（ADR 0037）
     const offset = center && padding !== undefined ? centerOffset(padding) : undefined;
-    map.flyTo(
-      withoutUndefined({ center: center && [center[0], center[1]], zoom, bearing, pitch, duration, offset }),
-      { cause: 'program' }
-    );
+    const options: Parameters<MapLike['flyTo']>[0] = withoutUndefined({
+      center: center && [center[0], center[1]],
+      zoom,
+      bearing,
+      pitch,
+      duration,
+      offset
+    });
+    map.flyTo(options, { cause: 'program' });
+    this.#animating(duration, () => map.flyTo({ ...options, duration: 0 }, { cause: 'program' }));
   }
 
   fitBounds(
@@ -344,9 +364,11 @@ export class MapLibreView<const G extends string> implements MapView {
     { padding, maxZoom, duration, pitch }: FitBoundsOptions = {}
   ): void {
     const map = this.#readyMap();
-    map.fitBounds([west, south, east, north], withoutUndefined({ padding, maxZoom, duration, pitch }), {
-      cause: 'program'
-    });
+    const options = withoutUndefined({ padding, maxZoom, duration, pitch });
+    map.fitBounds([west, south, east, north], options, { cause: 'program' });
+    this.#animating(duration, () =>
+      map.fitBounds([west, south, east, north], { ...options, duration: 0 }, { cause: 'program' })
+    );
   }
 
   /** 二维总是命中地图平面，没有高度 */
@@ -586,6 +608,11 @@ export class MapLibreView<const G extends string> implements MapView {
     if (this.#state === 'ready' && causeOfMove(event) === 'user') {
       this.#session.camera.beginOperation();
     }
+  }
+
+  // 记下定位动画怎样直接到终点（暂停时用）；duration 为 0 时已经同步到位
+  #animating(duration: number | undefined, finish: () => void): void {
+    this.#finishAnimation = duration === 0 ? null : finish;
   }
 
   // 加载中、暂停时的画面不算：加载中样式还没生效，暂停时显示的是另一个视图

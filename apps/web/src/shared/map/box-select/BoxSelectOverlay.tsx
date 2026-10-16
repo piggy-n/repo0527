@@ -1,6 +1,6 @@
-import { useElementSize } from '@vueuse/core';
 import type { ScreenBox } from '@yzt/map-core';
 import { defineComponent, type PropType, ref } from 'vue';
+import { useShownElementSize } from '../../composables/useShownElementSize';
 import type { PointerHintContent } from '../pointer-hint/pointer-hint';
 import { PointerHint } from '../pointer-hint/PointerHint';
 import styles from './BoxSelectOverlay.module.scss';
@@ -29,7 +29,7 @@ export const BoxSelectOverlay = defineComponent({
   },
   setup(props) {
     const root = ref<HTMLElement>();
-    const canvas = useElementSize(root);
+    const canvas = useShownElementSize(root);
 
     return () => (
       <div ref={root} class={styles.overlay} data-box-select-overlay>

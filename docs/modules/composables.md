@@ -88,3 +88,35 @@ SortableJS 拖动时自己移动 DOM，Vue 不知道。放下后组合式函数�
 jsdom 里没有真实的拖放，测试从 `SortableJS.get(element)` 取到实例，直接调用它的 `onEnd`，再检查 DOM 是否还原、`onMove` 收到的序号。实例在 `flush: 'post'` 的侦听里创建，挂载后要先 `await nextTick()`。真实的拖动在浏览器里验证（5D.2：目录树、"已勾选"各拖一次，行数和顺序正确、没有重复的行）。
 
 已验证：4 个用例；逐个改坏（不还原 DOM、位置不变也调用、停用不随条件变化、卸载时不销毁），每处都有用例失败。
+
+## usePageActive
+
+所在页面是否在显示（ADR 0063）：页面被布局里的 `KeepAlive` 缓存、切到别的页面期间为 `false`，激活后回到 `true`；不在 `KeepAlive` 里时一直为 `true`。只能在组件的 setup 里调用（用的是 `onDeactivated`、`onActivated`）。
+
+```ts
+import { usePageActive } from '@/shared/composables/usePageActive';
+
+const pageActive = usePageActive();
+watch(pageActive, active => {
+  if (!active) {
+    gesture.cancel();   // 停用时结束临时的交互，例如拖动中的图钉
+  }
+});
+```
+
+用到它的地方：两组 Tab 面板把它算进内容的 `active`（页面停用也算隐藏），位置点的图钉在停用时取消拖动，资源面板手写的尺寸监听在停用期间不采用测量结果。
+
+## useShownElementSize
+
+和 `@vueuse/core` 的 `useElementSize` 用法相同（`target`、`initialSize`、`options`），但所在页面停用期间量到的尺寸不采用，保留上一次的值（ADR 0063）。
+
+```ts
+import { useShownElementSize } from '@/shared/composables/useShownElementSize';
+
+const { width, height } = useShownElementSize(root);
+const layout = computed(() => mapPageLayout(width.value, height.value));
+```
+
+为什么需要它：页面被缓存时 DOM 移出文档，`ResizeObserver` 量到 0；恢复时它要到下一帧才重新量，这一帧按 0 排的界面会闪一下（手机宽度的排法退回常规、状态栏去掉经纬度、测量标签翻到另一边、资源面板两区重新分）。浏览器测试 `useShownElementSize.browser.test.tsx` 在真实的 `ResizeObserver` 上对比：再次激活的那一刻，`useElementSize` 读到 0，它读到原来的尺寸。
+
+被缓存的页面（现在是现状底图）里量尺寸一律用它，不直接用 `useElementSize`；不在 `KeepAlive` 里时两者完全一样。

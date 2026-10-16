@@ -141,6 +141,7 @@ class FakeMap implements MapLike {
   on(type: 'error', listener: (event: { readonly error: Error; readonly sourceId?: unknown }) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  on(type: 'moveend', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'resize', listener: () => void): MapSubscription;
   on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
@@ -160,6 +161,15 @@ class FakeMap implements MapLike {
     for (const listener of this.#listeners.get(type) ?? []) {
       listener(event);
     }
+  }
+
+  // 每次 resize 时 calls 的长度：resize 不是样式命令，不记进 calls，只用来比较先后
+  readonly resizedAt: number[] = [];
+
+  // 像 MapLibre 一样同步发出 resize
+  resize(): void {
+    this.resizedAt.push(this.calls.length);
+    this.fire('resize');
   }
 
   getCenter() {
@@ -187,10 +197,12 @@ class FakeMap implements MapLike {
     this.moveTo({ lng, lat, zoom: camera.zoom, bearing: camera.bearing, pitch: camera.pitch }, eventData);
   }
 
-  flyTo(camera: { center?: [number, number]; zoom?: number }, eventData: CameraEventData): void {
+  flyTo(camera: { center?: [number, number]; zoom?: number; duration?: number }, eventData: CameraEventData): void {
     this.calls.push(['flyTo', camera, eventData]);
     const [lng, lat] = camera.center ?? [this.camera.lng, this.camera.lat];
-    this.moveTo({ ...this.camera, lng, lat, zoom: camera.zoom ?? this.camera.zoom }, eventData);
+    this.#animated(camera.duration, () =>
+      this.moveTo({ ...this.camera, lng, lat, zoom: camera.zoom ?? this.camera.zoom }, eventData)
+    );
   }
 
   // 和 unproject 一样每 100 像素 1 度
@@ -201,15 +213,48 @@ class FakeMap implements MapLike {
 
   fitBounds(
     bounds: [number, number, number, number],
-    options: { maxZoom?: number },
+    options: { maxZoom?: number; duration?: number },
     eventData: CameraEventData
   ): void {
     this.calls.push(['fitBounds', bounds, options, eventData]);
     const [west, south, east, north] = bounds;
-    this.moveTo(
-      { ...this.camera, lng: (west + east) / 2, lat: (south + north) / 2, zoom: options.maxZoom ?? 10 },
-      eventData
+    this.#animated(options.duration, () =>
+      this.moveTo(
+        { ...this.camera, lng: (west + east) / 2, lat: (south + north) / 2, zoom: options.maxZoom ?? 10 },
+        eventData
+      )
     );
+  }
+
+  // animate 为真时，带时长的 flyTo、fitBounds 先不到位（动画进行中），endAnimation 时才到位；新的定位打断它，像 MapLibre 一样发出 moveend
+  animate = false;
+  #inFlight: (() => void) | null = null;
+
+  #animated(duration: number | undefined, arrive: () => void): void {
+    if (this.#inFlight) {
+      this.#inFlight = null;
+      this.fire('moveend');
+    }
+    if (this.animate && duration !== 0) {
+      this.#inFlight = arrive;
+      return;
+    }
+    arrive();
+    this.fire('moveend');
+  }
+
+  /** 动画被打断（用户开始拖动）：停在原地，发出 moveend */
+  interrupt(): void {
+    this.#inFlight = null;
+    this.fire('moveend');
+  }
+
+  /** 动画到达终点 */
+  endAnimation(): void {
+    const arrive = this.#inFlight;
+    this.#inFlight = null;
+    arrive?.();
+    this.fire('moveend');
   }
 
   // queryRenderedFeatures 返回的要素，用例按需设置
@@ -1502,6 +1547,92 @@ describe('MapLibreView', () => {
 
       ctx.view.resume();
       expect(ctx.map.getCenter()).toEqual({ lng: 120, lat: 31 });
+    });
+
+    it('finishes a program animation at its end when paused, writing it to the session first; resume stays there (ADR 0063)', () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.map.animate = true;
+      ctx.view.fitBounds([118, 31, 120, 33], { duration: 1100, maxZoom: 9 });
+      expect(ctx.session.camera.current.center).not.toEqual([119, 32]);
+      const changes: CameraChange[] = [];
+      ctx.session.camera.on('change', change => changes.push(change));
+
+      ctx.view.pause();
+
+      // 按同样的参数、时长 0 直接到终点，在进入 paused 之前按 program 写回
+      expect(ctx.map.calls.at(-1)).toStrictEqual([
+        'fitBounds',
+        [118, 31, 120, 33],
+        { maxZoom: 9, duration: 0 },
+        { cause: 'program' }
+      ]);
+      expect(ctx.session.camera.current).toMatchObject({ center: [119, 32], zoom: 9 });
+      expect(changes.map(({ cause }) => cause)).toStrictEqual(['program']);
+      expect(ctx.view.state).toBe('paused');
+      ctx.view.resume();
+      expect(ctx.map.getCenter()).toEqual({ lng: 119, lat: 32 });
+    });
+
+    it('does not replay an animation that already reached its end when paused', () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.map.animate = true;
+      ctx.view.flyTo({ center: [120, 31], zoom: 8 }, { duration: 500 });
+      ctx.map.endAnimation();
+      const before = ctx.map.calls.length;
+
+      ctx.view.pause();
+
+      expect(ctx.map.calls.length).toBe(before);
+      expect(ctx.session.camera.current.center).toStrictEqual([120, 31]);
+    });
+
+    it('does not replay an animation the user interrupted when paused', () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.map.animate = true;
+      ctx.view.fitBounds([118, 31, 120, 33], { duration: 1100 });
+      // 用户开始拖动：MapLibre 停下动画、发出 moveend，之后的移动带原始的 DOM 事件
+      ctx.map.interrupt();
+      ctx.map.moveTo({ ...ctx.map.camera, lng: 117.5 }, { originalEvent: new MouseEvent('mousemove') });
+      const before = ctx.map.calls.length;
+
+      ctx.view.pause();
+
+      expect(ctx.map.calls.length).toBe(before);
+      expect(ctx.session.camera.current.center[0]).toBe(117.5);
+    });
+
+    it('does not replay a move without animation when paused', () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.map.animate = true;
+      ctx.view.fitBounds([118, 31, 120, 33], { duration: 1100 });
+      ctx.view.flyTo({ center: [119.5, 32.5] }, { duration: 0 });
+      const before = ctx.map.calls.length;
+
+      ctx.view.pause();
+
+      expect(ctx.map.calls.length).toBe(before);
+      expect(ctx.session.camera.current.center).toStrictEqual([119.5, 32.5]);
+    });
+
+    it('resizes the canvas to its container on resume, before syncing the camera (ADR 0063)', () => {
+      using ctx = setup();
+      ctx.map.fire('style.load');
+      ctx.view.pause();
+      ctx.session.camera.set({ ...NANJING, center: [120, 31] }, { view: '3d', cause: 'user' });
+      const before = ctx.map.calls.length;
+      const states: ViewState[] = [];
+      ctx.view.on('statechange', state => states.push(state));
+
+      ctx.view.resume();
+
+      // 恢复时只调整一次尺寸，在同步相机的 jumpTo 之前，进入 ready 之前
+      expect(ctx.map.resizedAt).toStrictEqual([before]);
+      expect(names(ctx.map.calls.slice(before))).toContain('jumpTo');
+      expect(states).toStrictEqual(['ready']);
     });
 
     it('tells listeners when the map resizes, and stops after dispose', () => {

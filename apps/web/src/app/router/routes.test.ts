@@ -41,6 +41,13 @@ describe('路由表', () => {
     expect(pairs).toEqual(devRecords.map(({ path }) => [path, `dev-${path.slice('/dev/'.length)}`]));
   });
 
+  // 缓存的页面在布局里常驻、会话期间不释放（ADR 0063），新增时要同步修改这里
+  it('只有现状底图切走时缓存', () => {
+    const cached = records.filter(({ meta }) => meta?.keepAlive).map(({ name }) => String(name));
+
+    expect(cached).toEqual([RouteName.currentMap]);
+  });
+
   it('限定角色的页面与旧项目一致', () => {
     const restricted = records
       .filter(({ meta }) => meta?.roles !== undefined)

@@ -97,6 +97,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 - 渲染两层元素：外层接收页面的 `class`、`style`；内层交给 MapLibre，只用一个静态 class。页面的 class 变化时 Vue 只重设外层，MapLibre 加在内层的 `maplibregl-map` 等 class 不会被冲掉（map-core.md"MapLibre 6 的实测行为"）
 - 内层容器的尺寸是 `width/height: 100%`，不用绝对定位：MapLibre 的 CSS 会给它加 `position: relative`
 - `onMounted` 时用会话的当前快照创建 `MapLibreView` 并挂到上下文上；`onUnmounted` 时先卸下再释放，等待中的 `whenReady` 以 `AbortError` 结束
+- 所在页面被 `KeepAlive` 缓存时（ADR 0063）：`onDeactivated` 暂停视图，`onActivated` 恢复（第一次挂载的激活不算）。暂停期间上下文的 `view` 为 null、`viewState` 是 `paused`，相机操作等恢复后再执行，工具收不到输入；停用期间引擎失败后重试，新视图以暂停状态创建
 - `mapOptions` 只在创建地图时生效；要换选项、或者引擎失败后重新创建，给组件换一个 `key`
 - `scrollZoomRates`：滚轮（`wheel`）和触控板（`trackpad`）的缩放速率，同样只在创建地图时生效，交给适配器（ADR 0053 第 3 节）
 - 一个上下文只能有一个画布：第二个画布挂不上时，先释放它刚创建的视图，再把错误交给 Vue

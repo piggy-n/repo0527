@@ -3,13 +3,14 @@ import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel } from '@yzt/ui';
 import { ElButton } from 'element-plus';
 import { defineComponent, type PropType, ref, type SlotsType, type VNode, watch } from 'vue';
+import { usePageActive } from '../../composables/usePageActive';
 import { revealScrollLeft } from './panel-group';
 import type { PanelGroup } from './usePanelGroup';
 import styles from './MapPanelGroup.module.scss';
 
 /** 每个功能的内容插槽拿到的参数 */
 export interface PanelSlotProps {
-  /** 正在显示：隐藏（切到别的 Tab、窄屏时让给另一边）时为 false，内容据此结束临时的交互（ADR 0053 第 4 节） */
+  /** 正在显示：隐藏（切到别的 Tab、窄屏时让给另一边、所在页面被缓存）时为 false，内容据此结束临时的交互（ADR 0053 第 4 节、ADR 0063） */
   readonly active: boolean;
 }
 
@@ -35,6 +36,8 @@ export const MapPanelGroup = defineComponent({
   setup(props, { emit, slots }) {
     const element = ref<HTMLElement>();
     useMapOverlay(element, 'right');
+    // 页面被缓存、切到别的页面期间按隐藏处理：取色预览、拾取这类临时交互由内容按 active 结束
+    const pageActive = usePageActive();
 
     // 换了当前的 Tab、打开了新的、整组重新显示时，把当前的 Tab 滚进可见范围；隐藏时量不到尺寸，什么也不做
     const tabs = ref<HTMLElement>();
@@ -98,7 +101,7 @@ export const MapPanelGroup = defineComponent({
                       class={styles.content}
                       style={id === current ? undefined : { display: 'none' }}
                       data-panel={id}>
-                      {slots[id]?.({ active: shown && id === current })}
+                      {slots[id]?.({ active: shown && pageActive.value && id === current })}
                     </div>
                   ))
               }}

@@ -1,7 +1,7 @@
-import { useElementSize } from '@vueuse/core';
 import type { ScreenPoint } from '@yzt/map-core';
 import { useMap } from '@yzt/map-vue';
 import { computed, defineComponent, type PropType, ref } from 'vue';
+import { useShownElementSize } from '../../composables/useShownElementSize';
 import { SvgIcon } from '../../icons/SvgIcon';
 import { PointerHint } from '../pointer-hint/PointerHint';
 import { labelSide, measureHint, type MeasureLabel, measureLabels } from './measure-labels';
@@ -29,7 +29,7 @@ export const MeasureOverlay = defineComponent({
   setup(props) {
     const map = useMap();
     const root = ref<HTMLElement>();
-    const canvas = useElementSize(root);
+    const canvas = useShownElementSize(root);
     // 标签只随测量结果变化，位置随相机和画布尺寸重新投影
     const labels = computed(() => measureLabels(props.measure.state.value));
     const placed = computed<PlacedLabel[]>(() => {

@@ -17,7 +17,7 @@ import type {
 import { MapLibreView } from '@yzt/map-core';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent, inject, nextTick, ref, type ShallowRef } from 'vue';
+import { defineComponent, inject, KeepAlive, nextTick, ref, type ShallowRef } from 'vue';
 import { INTERNAL_MAP_CONTEXT, type MapContext } from './context';
 import { MapCanvas } from './MapCanvas';
 import { type MapHandle, provideMap } from './provide-map';
@@ -83,6 +83,7 @@ class FakeMap implements MapLike {
   on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  on(type: 'moveend', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'resize', listener: () => void): MapSubscription;
   on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
@@ -97,6 +98,11 @@ class FakeMap implements MapLike {
     for (const listener of this.#listeners.get(type) ?? []) {
       listener(event);
     }
+  }
+
+  resizes = 0;
+  resize(): void {
+    this.resizes++;
   }
 
   getCenter() {
@@ -235,6 +241,26 @@ function setup(
   }
   return { wrapper, showCanvas, paused, maps, errors, context, session };
 }
+
+// 页面放在 KeepAlive 里，shown 为 false 时停用（缓存），为 true 时激活
+function setupCached(createMap: (options: MapLibreMapOptions) => FakeMap) {
+  const shown = ref(true);
+  let handle: MapHandle<'basemap'> | undefined;
+  const Page = defineComponent({
+    name: 'CachedMapPage',
+    setup() {
+      handle = provideMap({ groups: ['basemap'], camera: CAMERA, onError: () => undefined });
+      handle.bindStyle({ basemap: () => BASEMAP });
+      return () => <MapCanvas createMap={createMap} />;
+    }
+  });
+  mount(defineComponent(() => () => <KeepAlive>{shown.value ? <Page /> : null}</KeepAlive>));
+  if (!handle) {
+    throw new Error('没有挂载');
+  }
+  return { shown, handle };
+}
+
 
 describe('MapCanvas', () => {
   it('挂载后用会话的完整快照创建视图；外层接收页面的 class，MapLibre 加在内层容器上的 class 不会被冲掉', async () => {
@@ -627,6 +653,61 @@ describe('MapCanvas', () => {
     await nextTick();
     expect(attempts).toBe(2);
     expect(handle.viewState.value).toBe('ready');
+  });
+
+  describe('所在页面被 KeepAlive 缓存（ADR 0063）', () => {
+    it('停用时暂停视图，激活时恢复并先调整尺寸；视图不重建，停用期间的定位等激活后再执行', async () => {
+      const maps: FakeMap[] = [];
+      const { shown, handle } = setupCached(createFakeMap(maps));
+      maps[0]?.fire('style.load');
+      expect(handle.viewState.value).toBe('ready');
+
+      shown.value = false;
+      await nextTick();
+      expect(handle.viewState.value).toBe('paused');
+      expect(handle.view.value).toBeNull();
+      handle.runCameraOperation(camera => camera.flyTo({ center: [118.8, 32.05], zoom: 10 }));
+      expect(maps[0]?.flyToCalls).toStrictEqual([]);
+
+      shown.value = true;
+      await nextTick();
+      expect(maps).toHaveLength(1);
+      expect(maps[0]?.resizes).toBe(1);
+      expect(handle.viewState.value).toBe('ready');
+      expect(maps[0]?.flyToCalls).toMatchObject([{ center: [118.8, 32.05], zoom: 10 }]);
+    });
+
+    it('第一次挂载时的激活不恢复视图：没有暂停过', () => {
+      const maps: FakeMap[] = [];
+      setupCached(createFakeMap(maps));
+
+      expect(maps[0]?.resizes).toBe(0);
+    });
+
+    it('停用期间引擎失败后重试：新视图以暂停状态创建，激活时恢复', async () => {
+      let attempts = 0;
+      const maps: FakeMap[] = [];
+      const { shown, handle } = setupCached(options => {
+        attempts++;
+        if (attempts === 1) {
+          throw new Error('创建地图失败');
+        }
+        const map = new FakeMap(options);
+        maps.push(map);
+        return map;
+      });
+      shown.value = false;
+      await nextTick();
+
+      handle.retry();
+      await nextTick();
+      maps[0]?.fire('style.load');
+      expect(handle.viewState.value).toBe('paused');
+      shown.value = true;
+      await nextTick();
+
+      expect(handle.viewState.value).toBe('ready');
+    });
   });
 
   it('useMapOverlay 必须放在 provideMap 的组件里', () => {

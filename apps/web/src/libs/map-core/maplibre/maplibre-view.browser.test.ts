@@ -1,5 +1,5 @@
 import type { Feature, FeatureCollection, Polygon } from 'geojson';
-import { Map as MapLibreMap } from 'maplibre-gl';
+import { LngLat as MapLibreLngLat, Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
 import { MapSession } from '../session/map-session';
@@ -482,5 +482,49 @@ describe('MapLibreView（真实的 MapLibre）', () => {
     const after = ctx.view.project([118.9, 32.1]);
     expect(ctx.session.camera.current.center).toStrictEqual(CAMERA.center);
     expect(after.x - before.x).toBeCloseTo(100, 0);
+  });
+
+  it('容器离开文档期间调整过尺寸时，恢复显示先按容器调整，恢复后立即投影就按真实尺寸算（ADR 0063）', async () => {
+    using ctx = setup();
+    await withTimeout(ctx.view.whenReady(), '首次加载完成');
+    const before = ctx.view.project([118.9, 32.1]);
+
+    // 页面被 KeepAlive 缓存时：先暂停，DOM 移出文档。MapLibre 的尺寸监听什么时候触发不确定，这里直接调整一次：
+    // 量到的容器宽高是 0，它改用默认的 400×300
+    ctx.view.pause();
+    ctx.container.remove();
+    ctx.map.resize();
+    expect(ctx.map.getCanvas().width).toBe(400 * devicePixelRatio);
+    document.body.appendChild(ctx.container);
+    ctx.view.resume();
+
+    // 不等下一帧
+    expect(ctx.view.state).toBe('ready');
+    expect(ctx.view.project([118.9, 32.1])).toStrictEqual(before);
+  });
+
+  it('定位动画进行中暂停：直接到终点并写回会话，恢复后停在终点，不回到动画的中途（ADR 0063）', async () => {
+    using ctx = setup();
+    await withTimeout(ctx.view.whenReady(), '首次加载完成');
+    const bounds: [number, number, number, number] = [120.0, 31.2, 120.6, 31.8];
+    // 同样的参数直接定位时的相机，就是动画的终点
+    const end = ctx.map.cameraForBounds(bounds, { padding: 20, maxZoom: 14 });
+    if (!end?.center || end.zoom === undefined) {
+      throw new Error('算不出终点');
+    }
+    const { lng, lat } = MapLibreLngLat.convert(end.center);
+
+    ctx.view.fitBounds(bounds, { padding: 20, maxZoom: 14, duration: 2000 });
+    await twoFrames();
+    expect(ctx.map.isMoving()).toBe(true);
+    ctx.view.pause();
+
+    expect(ctx.map.isMoving()).toBe(false);
+    const { center, zoom } = ctx.session.camera.current;
+    expect(center[0]).toBeCloseTo(lng, 6);
+    expect(center[1]).toBeCloseTo(lat, 6);
+    expect(zoom).toBeCloseTo(end.zoom, 6);
+    ctx.view.resume();
+    expect(ctx.map.getZoom()).toBeCloseTo(end.zoom, 6);
   });
 });

@@ -864,6 +864,26 @@ describe('useFeaturePick：框选', () => {
     expect(kindOf(owner)).toBe('idle');
   });
 
+  it('视图不再就绪（页面被缓存时暂停）时取消这次框选，工具不变；恢复后照常框选（ADR 0063）', async () => {
+    const { owner, send, view } = setup(15);
+    const viewport = view.value;
+    send(pointer('down', FROM));
+    send(pointer('move', TO));
+    expect(owner.boxDraft.value).not.toBeNull();
+
+    view.value = null;
+    await nextTick();
+    expect(owner.boxDraft.value).toBeNull();
+    view.value = viewport;
+    await nextTick();
+    expect(send(pointer('up', TO), [rendered(DLTB, 1)])).toBe(false);
+    expect(kindOf(owner)).toBe('idle');
+
+    send(pointer('down', FROM));
+    send(pointer('move', TO));
+    expect(owner.boxDraft.value).not.toBeNull();
+  });
+
   it('拖动途中关闭或离开点选工具时，正在画的框消失', () => {
     const { owner, send, pick } = setup(15);
 

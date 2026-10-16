@@ -1,9 +1,11 @@
 import { Search } from '@element-plus/icons-vue';
-import { useElementSize, useResizeObserver } from '@vueuse/core';
+import { useResizeObserver } from '@vueuse/core';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
 import { ElButton, ElInput, ElOption, ElSelect } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, watch } from 'vue';
+import { usePageActive } from '@/shared/composables/usePageActive';
+import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { CATALOG_ROOT } from '../catalog-order';
 import type { CatalogOrderOwner } from '../composables/useCatalogOrder';
@@ -86,25 +88,27 @@ export const ResourceLayerPanel = defineComponent({
     // 两区最多能用的高度：面板所在的列（页面上纵向 flex 的一列）的高度就是面板最高能到的高度，减去头部、搜索行
     // 和分割线。不用两区量到的高度：它又由分法决定，会来回重算
     const column = computed(() => element.value?.parentElement ?? null);
-    const { height: columnHeight } = useElementSize(column);
+    const { height: columnHeight } = useShownElementSize(column);
     // 头部、搜索行的高度：面板不被列压缩，它就是面板和两区的高度差，和内容无关，在搜索行出现或尺寸变化时量。
     // 不监听面板和两区：它们跟着内容变，又比内容那一层浅，浏览器同一帧里不再通知，报 ResizeObserver loop 的错误
     const filter = ref<HTMLElement>();
     const lists = ref<HTMLElement>();
     const chrome = ref(0);
+    // 所在页面停用（被缓存）期间量到的 0 不采用（ADR 0063）
+    const pageActive = usePageActive();
     useResizeObserver(filter, () => {
-      if (element.value && lists.value) {
+      if (pageActive.value && element.value && lists.value) {
         chrome.value = element.value.getBoundingClientRect().height - lists.value.getBoundingClientRect().height;
       }
     });
     const available = computed(() => Math.max(0, Math.floor(columnHeight.value - chrome.value - SPLITTER_HEIGHT)));
     // 两区的内容本来的高度：各包一层量，不受两区的高度影响
     const treeContent = ref<HTMLElement>();
-    const { height: treeHeight } = useElementSize(treeContent);
+    const { height: treeHeight } = useShownElementSize(treeContent);
     const checkedHead = ref<HTMLElement>();
-    const { height: checkedHeadHeight } = useElementSize(checkedHead, undefined, { box: 'border-box' });
+    const { height: checkedHeadHeight } = useShownElementSize(checkedHead, undefined, { box: 'border-box' });
     const checkedContent = ref<HTMLElement>();
-    const { height: checkedContentHeight } = useElementSize(checkedContent, undefined, { box: 'border-box' });
+    const { height: checkedContentHeight } = useShownElementSize(checkedContent, undefined, { box: 'border-box' });
     // 都量到之前不设高度，按内容排
     const split = computed(() =>
       columnHeight.value > 0 && chrome.value > 0

@@ -20,7 +20,7 @@ import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { createPinia } from 'pinia';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { defineComponent, nextTick, ref } from 'vue';
+import { defineComponent, KeepAlive, nextTick, ref } from 'vue';
 import { resourceTreeResponse } from '@/features/resource-map/test-data';
 import cityFile from '@/shared/map/boundary/data/jiangsu-city.json?raw';
 import countyFile from '@/shared/map/boundary/data/jiangsu-county.json?raw';
@@ -93,6 +93,7 @@ class FakeMap implements MapLike {
   on(type: 'error', listener: (event: { readonly error: Error }) => void): MapSubscription;
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  on(type: 'moveend', listener: (event: MapMoveEventLike) => void): MapSubscription;
   on(type: 'resize', listener: () => void): MapSubscription;
   on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
@@ -108,6 +109,8 @@ class FakeMap implements MapLike {
       listener(event);
     }
   }
+
+  resize(): void {}
 
   getCenter() {
     return { lng: this.camera.lng, lat: this.camera.lat };
@@ -220,8 +223,10 @@ async function freshModules(): Promise<PageModules> {
  * 页面里的画布用真实的 MapLibre，jsdom 里创建不出来；用 stubs 换成注入了假地图的同一个组件。
  * 第一次创建可以设为失败，模拟引擎失败后重试；canvasKey 变化时画布重建
  */
-function mountPage({ failFirstCreation = false, modules = STATIC_MODULES } = {}) {
+function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAlive = false } = {}) {
   const canvasKey = ref(0);
+  // keepAlive 时页面放在 KeepAlive 里，pageShown 为 false 时停用（缓存），和布局里一样（ADR 0063）
+  const pageShown = ref(true);
   const maps: FakeMap[] = [];
   let attempts = 0;
   const createMap = (options: MapLibreMapOptions): MapLike => {
@@ -242,10 +247,14 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES } = {})
   // 每个页面用新的查询缓存，资源目录不在用例之间残留
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // 页面按会话创建偏好的范围；测试里没有登录，范围为 null，不读不写
-  const wrapper = mount(modules.page, {
+  const Page = modules.page;
+  const root = keepAlive
+    ? defineComponent(() => () => <KeepAlive>{pageShown.value ? <Page /> : null}</KeepAlive>)
+    : Page;
+  const wrapper = mount(root, {
     global: { plugins: [createPinia(), [VueQueryPlugin, { queryClient }]], stubs: { MapCanvas: CanvasWithFakeMap } }
   });
-  return { wrapper, maps, canvasKey };
+  return { wrapper, maps, canvasKey, pageShown };
 }
 
 // 资源树默认返回测试数据（结构同实测）；用例可以换成失败的响应
@@ -380,6 +389,19 @@ async function readyPage(modules?: PageModules) {
   await settle();
   return { ...page, map };
 }
+
+// 页面放在 KeepAlive 里就绪：创建地图、加载完样式、做完初始定位（ADR 0063）
+async function readyCachedPage(modules?: PageModules) {
+  const page = mountPage({ keepAlive: true, modules });
+  const map = page.maps[0];
+  if (!map) {
+    throw new Error('没有创建地图');
+  }
+  map.fire('style.load');
+  await settle();
+  return { ...page, map };
+}
+
 
 type PageWrapper = ReturnType<typeof mountPage>['wrapper'];
 
@@ -950,6 +972,52 @@ describe('CurrentMapPage', () => {
     map.mouse('click', 10, 10);
     await nextTick();
     expect(pin(wrapper).attributes('style')).toContain('left: 200px; top: 50px;');
+  });
+
+  describe('页面被缓存（ADR 0063）', () => {
+    it('拖动图钉时切走：回来后图钉回到拖动前的位置', async () => {
+      stubBoundaryFetch();
+      const { wrapper, map, pageShown } = await readyCachedPage();
+      await button(wrapper, '坐标定位').trigger('click');
+      await button(wrapper, '拾取').trigger('click');
+      map.mouse('click', 100, 50);
+      await nextTick();
+      vi.useFakeTimers();
+      await pointer(wrapper, 'pointerdown', 100, 50);
+      vi.advanceTimersByTime(500);
+      await pointer(wrapper, 'pointermove', 300, 80);
+
+      // 停用期间视图暂停、图钉不显示，看不出是停用时还是回来时取消的，只检查回来以后
+      pageShown.value = false;
+      await nextTick();
+      pageShown.value = true;
+      await nextTick();
+
+      expect(pin(wrapper).attributes('style')).toContain('left: 100px; top: 50px;');
+      // 拖动已经结束：之后的移动不再拖着图钉
+      await pointer(wrapper, 'pointermove', 250, 90);
+      expect(pin(wrapper).attributes('style')).toContain('left: 100px; top: 50px;');
+    });
+
+    it('区划边界还在加载时切走：停用期间不定位，回来后再定位到区划；页面和地图都不重建', async () => {
+      const boundaries = deferBoundaryFetch();
+      // 边界文件在模块里只下载一次：用新的模块，别的用例下载过的不算
+      const { wrapper, map, maps, pageShown } = await readyCachedPage(await freshModules());
+      await button(wrapper, '区划定位').trigger('click');
+      await button(wrapper, '南京').trigger('click');
+
+      pageShown.value = false;
+      await nextTick();
+      boundaries.release('city');
+      await settle();
+      expect(map.fitBoundsCalls).toEqual([jiangsu]);
+      pageShown.value = true;
+      await nextTick();
+
+      expect(map.fitBoundsCalls).toEqual([jiangsu, NANJING]);
+      expect(maps).toHaveLength(1);
+      expect(wrapper.find('[data-region-locate-panel]').exists()).toBe(true);
+    });
   });
 
   it('测量时图钉不响应鼠标；"清除"连同位置点一起清掉', async () => {

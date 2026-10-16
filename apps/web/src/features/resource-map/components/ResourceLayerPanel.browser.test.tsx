@@ -3,7 +3,7 @@ import type { CameraState } from '@yzt/map-core';
 import { provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import { defineComponent, shallowRef } from 'vue';
+import { defineComponent, KeepAlive, nextTick, type Ref, ref, shallowRef } from 'vue';
 import type { ResourceTreeCategory } from '../api';
 import { buildCatalog } from '../catalog';
 import { useCatalogOrder } from '../composables/useCatalogOrder';
@@ -52,8 +52,8 @@ const CATALOG = buildCatalog([
 // 土地资源下除了默认勾选的地类图斑以外的 11 个，都勾选时两区都放不下
 const MANY = Array.from({ length: 11 }, (_, index) => `tdzy_${index + 1}`);
 
-// 和面板所在的地图页一样：一个纵向 flex 的列，列的高度就是面板最高能到的高度
-function setup(height: number) {
+// 和面板所在的地图页一样：一个纵向 flex 的列，列的高度就是面板最高能到的高度；给出 shown 时放在 KeepAlive 里，为 false 时停用
+function setup(height: number, shown?: Ref<boolean>) {
   const host = document.body.appendChild(document.createElement('div'));
   // 尺寸监听的回调改了比被监听元素浅的元素时，浏览器报"ResizeObserver loop completed with undelivered notifications"，
   // 来回重算时每帧都报
@@ -66,8 +66,9 @@ function setup(height: number) {
   window.addEventListener('error', onError);
   const layout = useResourcePanelLayout();
   let owner: ResourceLayers | undefined;
-  const wrapper = mount(
-    defineComponent(() => {
+  const Page = defineComponent({
+    name: 'PanelPage',
+    setup() {
       const map = provideMap({ groups: ['resources'], camera: CAMERA });
       const layers = useResourceLayers(map, { catalog: shallowRef(CATALOG), tileBase: 'http://localhost/tiles/' });
       owner = layers;
@@ -79,7 +80,10 @@ function setup(height: number) {
           <ResourceLayerPanel layers={layers} catalogOrder={order} layout={layout} />
         </div>
       );
-    }),
+    }
+  });
+  const wrapper = mount(
+    shown ? defineComponent(() => () => <KeepAlive>{shown.value ? <Page /> : null}</KeepAlive>) : Page,
     { attachTo: host }
   );
   const column = host.querySelector('[data-column]');
@@ -361,5 +365,24 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     const below = title.top - (lineTop + Number.parseFloat(line.height));
     expect(above).toBeCloseTo(below, 0);
     expect(above).toBeGreaterThan(8);
+  });
+  it('所在页面被缓存：停用期间量到的 0 不采用，再次激活的那一刻两区的高度和停用前一样（ADR 0063）', async () => {
+    const shown = ref(true);
+    using env = setup(400, shown);
+    env.layers.setCheckedMany(MANY, true);
+    await frames(3);
+    const before = areas(env.wrapper);
+
+    shown.value = false;
+    await nextTick();
+    // 停用后 DOM 离开文档，等尺寸监听报完量到的 0
+    await frames(3);
+    shown.value = true;
+    await nextTick();
+
+    // 激活的那一刻，尺寸监听还没重新量
+    const after = areas(env.wrapper);
+    expect([after.tree, after.checked]).toStrictEqual([before.tree, before.checked]);
+    expect(env.loopErrors).toStrictEqual([]);
   });
 });

@@ -1,6 +1,6 @@
-import { useElementSize } from '@vueuse/core';
 import type { ScreenPoint } from '@yzt/map-core';
 import { computed, defineComponent, type PropType, ref } from 'vue';
+import { useShownElementSize } from '../../composables/useShownElementSize';
 import { pointerHintSides, type Size } from './pointer-hint';
 import styles from './PointerHint.module.scss';
 
@@ -20,7 +20,7 @@ export const PointerHint = defineComponent({
   },
   setup(props) {
     const element = ref<HTMLElement>();
-    const { width, height } = useElementSize(element, undefined, { box: 'border-box' });
+    const { width, height } = useShownElementSize(element, undefined, { box: 'border-box' });
     const sides = computed(() =>
       pointerHintSides(props.point, { width: width.value, height: height.value }, props.canvas)
     );

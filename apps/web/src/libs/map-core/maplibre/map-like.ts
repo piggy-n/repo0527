@@ -61,11 +61,15 @@ export interface MapLike extends StyleTarget {
   on(type: 'move', listener: (event: MapMoveEventLike) => void): MapSubscription;
   /** 一次移动开始：用户的手势带原始的 DOM 事件（松手后的惯性在松手时算一次）；之后的每一帧只有 move */
   on(type: 'movestart', listener: (event: MapMoveEventLike) => void): MapSubscription;
+  /** 一次移动结束：动画到达终点、被新的移动或用户的操作打断时；没有动画的移动同步发出 */
+  on(type: 'moveend', listener: (event: MapMoveEventLike) => void): MapSubscription;
   /** 容器尺寸变化、画布重新调整之后 */
   on(type: 'resize', listener: () => void): MapSubscription;
   /** 没有相机动画和过渡、请求的瓦片都已加载并画出之后；每次进入这种状态触发一次 */
   on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
+  /** 按容器现在的尺寸调整画布，同步发出 resize；平时由 MapLibre 自己的尺寸监听在下一帧调用 */
+  resize(): void;
   getCenter(): { readonly lng: number; readonly lat: number };
   getZoom(): number;
   getBearing(): number;

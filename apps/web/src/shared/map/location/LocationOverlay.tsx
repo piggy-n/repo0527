@@ -1,8 +1,10 @@
-import { useClipboard, useElementSize, useEventListener } from '@vueuse/core';
+import { useClipboard, useEventListener } from '@vueuse/core';
 import { BROWSE_TOOL, type ScreenPoint } from '@yzt/map-core';
 import { useMap } from '@yzt/map-vue';
 import { MxTitle } from '@yzt/ui';
-import { computed, defineComponent, onScopeDispose, type PropType, ref } from 'vue';
+import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
+import { usePageActive } from '../../composables/usePageActive';
+import { useShownElementSize } from '../../composables/useShownElementSize';
 import { SvgIcon } from '../../icons/SvgIcon';
 import { PointerHint } from '../pointer-hint/PointerHint';
 import { type CoordinateFormat, formatLngLat } from './coordinate-format';
@@ -41,8 +43,8 @@ export const LocationOverlay = defineComponent({
     const map = useMap();
     const root = ref<HTMLElement>();
     const info = ref<HTMLElement>();
-    const canvasSize = useElementSize(root);
-    const infoSize = useElementSize(info, undefined, { box: 'border-box' });
+    const canvasSize = useShownElementSize(root);
+    const infoSize = useShownElementSize(info, undefined, { box: 'border-box' });
     const { copy, copied, text: copiedText } = useClipboard({ legacy: true, copiedDuring: 1500 });
     const phase = ref<PressPhase>('idle');
     // 拖动开始时的位置点，取消时回到这里
@@ -86,6 +88,13 @@ export const LocationOverlay = defineComponent({
     onScopeDispose(() => gesture[Symbol.dispose]());
     useEventListener(document, 'keydown', (event: KeyboardEvent) => {
       if (event.key === 'Escape' && gesture.phase !== 'idle') {
+        gesture.cancel();
+      }
+    });
+    // 拖动中所在页面被缓存（键盘或浏览器的前进后退切走）：和 Esc 一样回到拖动前的位置（ADR 0063）
+    const pageActive = usePageActive();
+    watch(pageActive, active => {
+      if (!active && gesture.phase !== 'idle') {
         gesture.cancel();
       }
     });

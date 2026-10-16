@@ -1,5 +1,5 @@
-import { useElementSize } from '@vueuse/core';
 import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
+import { useShownElementSize } from '../../composables/useShownElementSize';
 import { type CoordinateFormat, formatLngLat } from '../location/coordinate-format';
 import { fitStatusLayout, type ScaleBar, type StatusLayout, type ViewAngles } from './status-bar';
 import type { MapReadout, ReadoutPosition } from './useMapReadout';
@@ -37,12 +37,12 @@ export const MapStatusBar = defineComponent({
     const fullRuler = ref<HTMLElement>();
     const noAnglesRuler = ref<HTMLElement>();
     const scaleOnlyRuler = ref<HTMLElement>();
-    const { width: available } = useElementSize(root);
+    const { width: available } = useShownElementSize(root);
     const borderBox = { box: 'border-box' } as const;
     const widths = {
-      full: useElementSize(fullRuler, undefined, borderBox).width,
-      'no-angles': useElementSize(noAnglesRuler, undefined, borderBox).width,
-      'scale-only': useElementSize(scaleOnlyRuler, undefined, borderBox).width
+      full: useShownElementSize(fullRuler, undefined, borderBox).width,
+      'no-angles': useShownElementSize(noAnglesRuler, undefined, borderBox).width,
+      'scale-only': useShownElementSize(scaleOnlyRuler, undefined, borderBox).width
     };
     const layout = computed(() =>
       fitStatusLayout(

@@ -610,6 +610,15 @@ export function useFeaturePick(
   // 拖动框选时地图移动（滚轮缩放等）、窗口失焦都取消这次手势（ADR 0049 第 1 节）
   watch(camera, cancelGesture);
   useEventListener('blur', cancelGesture);
+  // 视图不再就绪（页面被缓存时暂停、失败）时同样取消：之后收不到松开，回来后不能留着矩形；工具不变（ADR 0063）
+  watch(
+    () => map.view.value === null,
+    gone => {
+      if (gone) {
+        cancelGesture();
+      }
+    }
+  );
 
   const handleInput = (event: MapInputEvent, view: ToolView): boolean => {
     switch (event.type) {

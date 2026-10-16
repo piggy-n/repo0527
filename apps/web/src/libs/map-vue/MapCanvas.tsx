@@ -5,7 +5,7 @@ import {
   type MapLike,
   type ScrollZoomRates
 } from '@yzt/map-core';
-import { defineComponent, onMounted, onUnmounted, type PropType, ref, watch } from 'vue';
+import { defineComponent, onActivated, onDeactivated, onMounted, onUnmounted, type PropType, ref, watch } from 'vue';
 import styles from './MapCanvas.module.scss';
 import { injectMapState } from './use-map';
 
@@ -30,6 +30,8 @@ export const MapCanvas = defineComponent({
     const state = injectMapState('MapCanvas');
     const container = ref<HTMLElement>();
     let view: MapLibreView<string> | undefined;
+    // 所在页面被 KeepAlive 缓存、切到别的页面期间（ADR 0063）
+    let deactivated = false;
 
     const createView = () => {
       if (!container.value) {
@@ -38,6 +40,8 @@ export const MapCanvas = defineComponent({
       const created = new MapLibreView({
         session: state.session,
         container: container.value,
+        // 停用期间重试时也以暂停状态创建，激活时再恢复
+        active: !deactivated,
         mapOptions: props.mapOptions,
         scrollZoomRates: props.scrollZoomRates,
         createMap: props.createMap,
@@ -74,6 +78,18 @@ export const MapCanvas = defineComponent({
     watch(state.retryRequests, () => {
       disposeView();
       createView();
+    });
+    // 页面停用时暂停视图：隐藏期间的定位等恢复后再执行，工具收不到输入；恢复时视图先按容器调整画布（ADR 0063）
+    onDeactivated(() => {
+      deactivated = true;
+      view?.pause();
+    });
+    onActivated(() => {
+      if (!deactivated) {
+        return;
+      }
+      deactivated = false;
+      view?.resume();
     });
     // 早于 provideMap 所在组件的 onUnmounted：先释放视图，后释放会话
     onUnmounted(disposeView);

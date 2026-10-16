@@ -26,7 +26,7 @@ const businessRoutes: RouteRecordRaw[] = [
     path: 'current-map',
     name: RouteName.currentMap,
     component: loadCurrentMapPage,
-    meta: { title: '现状底图' }
+    meta: { title: '现状底图', keepAlive: true }
   },
   placeholder('land-change-query', RouteName.landChangeQuery, '国土变更调查查询'),
   placeholder('space-monitoring-query', RouteName.spaceMonitoringQuery, '城市国土空间监测查询'),

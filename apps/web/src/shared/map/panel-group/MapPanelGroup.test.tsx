@@ -2,7 +2,7 @@ import type { CameraState } from '@yzt/map-core';
 import { provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent, onBeforeUnmount, type PropType, ref } from 'vue';
+import { defineComponent, KeepAlive, nextTick, onBeforeUnmount, type PropType, ref } from 'vue';
 import { MapPanelGroup, type PanelSlotProps } from './MapPanelGroup';
 import { type PanelGroup, usePanelGroup } from './usePanelGroup';
 
@@ -122,5 +122,46 @@ describe('MapPanelGroup', () => {
     visible.value = true;
     await wrapper.vm.$nextTick();
     expect(active(wrapper, 'region')).toBe('true');
+  });
+});
+
+describe('MapPanelGroup 所在页面被缓存（ADR 0063）', () => {
+  it('页面停用期间内容的 active 为 false、不卸载；激活后按原来的 Tab 恢复', async () => {
+    let group: PanelGroup<Id> | undefined;
+    const unmounted = vi.fn<(name: string) => void>();
+    const slot = (name: string) => ({ active: isActive }: PanelSlotProps) => [
+      <Content name={name} active={isActive} onUnmount={() => unmounted(name)} />
+    ];
+    const Page = defineComponent({
+      name: 'CachedPage',
+      setup() {
+        provideMap({ groups: [], camera: CAMERA });
+        const owned = usePanelGroup(ORDER);
+        group = owned;
+        return () => (
+          <MapPanelGroup group={owned} labels={LABELS}>
+            {{ region: slot('region'), coordinate: slot('coordinate'), detail: slot('detail') }}
+          </MapPanelGroup>
+        );
+      }
+    });
+    const pageShown = ref(true);
+    const wrapper = mount(defineComponent(() => () => <KeepAlive>{pageShown.value ? <Page /> : null}</KeepAlive>));
+    group?.show('detail');
+    group?.show('region');
+    await nextTick();
+    // 停用后元素离开 wrapper 的树，先拿住
+    const region = wrapper.get('[data-content="region"]').element;
+    expect(region.getAttribute('data-active')).toBe('true');
+
+    pageShown.value = false;
+    await nextTick();
+    expect(region.getAttribute('data-active')).toBe('false');
+    pageShown.value = true;
+    await nextTick();
+
+    expect(region.getAttribute('data-active')).toBe('true');
+    expect(wrapper.get('[data-content="detail"]').attributes('data-active')).toBe('false');
+    expect(unmounted).not.toHaveBeenCalled();
   });
 });

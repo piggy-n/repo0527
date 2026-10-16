@@ -6,6 +6,8 @@
 
 ## 结构
 
+地图页被布局缓存（ADR 0063）：这里的浮层、状态栏、工具栏的排法量尺寸都用 `shared/composables` 的 `useShownElementSize`，停用期间量到的 0 不采用；两组 Tab 面板在页面停用时把内容当作隐藏；位置点的图钉在页面停用时取消拖动。
+
 | 文件 | 内容 |
 |---|---|
 | `map-status.ts` | `describeMapStatus(viewState, failure)`：由视图状态和失败原因推导要显示的内容（纯函数） |
@@ -62,7 +64,7 @@
 | `panel-group/panel-group.ts` | 一组 Tab 面板的状态与规则：打开、切换、关闭（纯函数）；窄屏时左右只显示一边 `visibleSides`（ADR 0053） |
 | `panel-group/usePanelGroup.ts` | 一组 Tab 面板：已打开的功能、当前的 Tab，页面级的界面状态 |
 | `panel-group/useSideExclusion.ts` | 窄屏时左边的资源面板和右边的面板只显示最后操作的一边，只推导显示 |
-| `panel-group/MapPanelGroup.tsx` | 一组 Tab 面板的外壳：Tab、关闭、内容的隐藏与 `active`，登记为贴右边的悬浮元素 |
+| `panel-group/MapPanelGroup.tsx` | 一组 Tab 面板的外壳：Tab、关闭、内容的隐藏与 `active`（所在页面被缓存期间也为 false，ADR 0063），登记为贴右边的悬浮元素 |
 
 ## 江苏的范围与默认视角（ADR 0033）
 

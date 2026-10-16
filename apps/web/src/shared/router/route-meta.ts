@@ -10,5 +10,7 @@ declare module 'vue-router' {
     public?: boolean;
     /** 只允许这些角色访问；不写时所有已登录用户都能访问 */
     roles?: readonly Role[];
+    /** 切到别的页面时缓存这个页面（布局里的 KeepAlive，ADR 0063）；只对布局里的页面有效 */
+    keepAlive?: boolean;
   }
 }

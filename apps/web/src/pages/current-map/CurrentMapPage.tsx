@@ -1,4 +1,3 @@
-import { useElementSize } from '@vueuse/core';
 import { MapCanvas, provideMap } from '@yzt/map-vue';
 import { MxTitle } from '@yzt/ui';
 import { computed, defineComponent, ref, watch } from 'vue';
@@ -11,6 +10,7 @@ import { useResourceLayers } from '@/features/resource-map/composables/useResour
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
+import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { basemapOption } from '@/shared/map/basemap/basemap-style';
@@ -83,7 +83,7 @@ export const CurrentMapPage = defineComponent({
     const { goToDefaultView } = useDefaultView(map);
     // 手机宽度时卡片叠到工具栏一列，矮屏时业务组只显示图标（ADR 0053 第 8 节）；还量不到尺寸时按常规
     const root = ref<HTMLElement>();
-    const { width, height } = useElementSize(root);
+    const { width, height } = useShownElementSize(root);
     const layout = computed(() => mapPageLayout(width.value, height.value));
 
     // 记住上次的底图、边界和资源图层（ADR 0042）；没有登录时为 null，不读不写
