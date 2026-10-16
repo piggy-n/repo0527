@@ -2135,7 +2135,8 @@ const STARTING_POINTS: readonly (readonly SequenceStep[])[] = [
   ['error', 'commit'] // 失败后用新的提交重新加载
 ];
 
-describe('MapLibreView 的状态转换（穷举短序列）', () => {
+// 只经过微任务、不会挂起，耗时由序列数决定；全量并行运行时会超过默认的 5 秒（见 map-core.md 的测试）
+describe('MapLibreView 的状态转换（穷举短序列）', { timeout: 20_000 }, () => {
   it('长度为 4 的所有事件序列里，每一步之后的状态、失败原因、whenReady 都符合约定，转换都在表里', async () => {
     const runs = [true, false].flatMap(active =>
       sequencesOf(SEQUENCE_STEPS, 4).map(steps => ({ active, prefix: [], steps, interleaved: false }))
