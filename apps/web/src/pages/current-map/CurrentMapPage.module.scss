@@ -16,6 +16,18 @@
   pointer-events: none;
 }
 
+// 当前区划在地图上方居中（设计稿 5D.7）：横跨三列，排在其他区域前面，重叠时被面板盖住
+.scope {
+  grid-row: 1;
+  grid-column: 1 / 4;
+  justify-self: center;
+  align-self: start;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
 // 资源图层面板从上到下撑满，面板自己决定高度并在内部滚动
 .left {
   grid-row: 1 / 3;

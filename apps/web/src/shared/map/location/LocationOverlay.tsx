@@ -1,9 +1,10 @@
-import { Close, CopyDocument, LocationFilled } from '@element-plus/icons-vue';
 import { useClipboard, useElementSize, useEventListener } from '@vueuse/core';
-import { ElButton, ElIcon } from 'element-plus';
 import { BROWSE_TOOL, type ScreenPoint } from '@yzt/map-core';
 import { useMap } from '@yzt/map-vue';
+import { MxTitle } from '@yzt/ui';
 import { computed, defineComponent, onScopeDispose, type PropType, ref } from 'vue';
+import { SvgIcon } from '../../icons/SvgIcon';
+import { PointerHint } from '../pointer-hint/PointerHint';
 import { type CoordinateFormat, formatLngLat } from './coordinate-format';
 import { describeLocationRegion, placeLocationInfo } from './location-info';
 import { createPressGesture, type PressPhase } from './press-gesture';
@@ -24,8 +25,11 @@ function client(event: PointerEvent): ScreenPoint {
   return { x: event.clientX, y: event.clientY };
 }
 
+// 拾取时鼠标旁的提示
+const PICK_HINT: readonly string[] = ['单击地图拾取点位', 'Esc 取消'];
+
 /**
- * 位置点的图钉、位置信息和拾取提示（联调用的界面，5D 再设计；ADR 0037 第 5 条）。
+ * 位置点的图钉、位置信息和拾取提示（ADR 0037 第 5 条，设计稿 5D.7）。
  * 和画布放在同一个定位参照里盖在上面；当前工具不是"移动"时图钉不响应鼠标，单击落到地图上
  */
 export const LocationOverlay = defineComponent({
@@ -38,7 +42,7 @@ export const LocationOverlay = defineComponent({
     const root = ref<HTMLElement>();
     const info = ref<HTMLElement>();
     const canvasSize = useElementSize(root);
-    const infoSize = useElementSize(info);
+    const infoSize = useElementSize(info, undefined, { box: 'border-box' });
     const { copy, copied, text: copiedText } = useClipboard({ legacy: true, copiedDuring: 1500 });
     const phase = ref<PressPhase>('idle');
     // 拖动开始时的位置点，取消时回到这里
@@ -115,9 +119,8 @@ export const LocationOverlay = defineComponent({
         <svg class={styles.ring} viewBox="0 0 44 44" aria-hidden="true">
           <circle cx="22" cy="22" r="18" />
         </svg>
-        <ElIcon class={styles.icon}>
-          <LocationFilled />
-        </ElIcon>
+        {phase.value === 'dragging' && <span class={styles.shadow} />}
+        <SvgIcon class={styles.icon} name="location-pin" size={32} />
         <span class={styles.name}>坐标定位点</span>
       </div>
     );
@@ -127,35 +130,46 @@ export const LocationOverlay = defineComponent({
       if (!location) {
         return null;
       }
+      // 只放在没被登记的悬浮元素挡住的区域里（设计稿 5D.7）；每次渲染时现量，面板开关后下一次重新投影时跟上
       const placement = placeLocationInfo(
         point,
         { width: infoSize.width.value, height: infoSize.height.value },
-        { width: canvasSize.width.value, height: canvasSize.height.value }
+        { width: canvasSize.width.value, height: canvasSize.height.value },
+        map.overlayPadding()
+      );
+      const closeButton = (
+        <button
+          type="button"
+          class={styles.iconButton}
+          aria-label="关闭位置信息"
+          title="关闭位置信息"
+          onClick={() => props.location.setInfoOpen(false)}>
+          <SvgIcon name="close" size={14} />
+        </button>
       );
       return (
         <div
           ref={info}
-          class={styles.info}
+          class={[styles.info, styles[placement.side]]}
           style={{ left: `${placement.left}px`, top: `${placement.top}px` }}
           data-location-info={placement.side}>
-          <div class={styles.header}>
-            <span class={styles.title}>位置信息</span>
-            <ElButton
-              link
-              icon={Close}
-              aria-label="关闭位置信息"
-              onClick={() => props.location.setInfoOpen(false)}
-            />
-          </div>
+          <span class={styles.caret} style={{ left: `${placement.caret}px` }} />
+          <MxTitle class={styles.heading}>{{ default: () => '位置信息', extra: () => [closeButton] }}</MxTitle>
           {COPY_ROWS.map(({ format, label }) => {
             const value = formatLngLat(location.lngLat, format);
+            const done = copied.value && copiedText.value === value;
             return (
               <div key={format} class={styles.row}>
                 <span class={styles.key}>{label}</span>
                 <span class={styles.value}>{value}</span>
-                <ElButton link icon={CopyDocument} aria-label={`复制${label}坐标`} onClick={() => void copy(value)}>
-                  {copied.value && copiedText.value === value ? '已复制' : ''}
-                </ElButton>
+                <button
+                  type="button"
+                  class={[styles.iconButton, done && styles.copied]}
+                  aria-label={done ? `已复制${label}坐标` : `复制${label}坐标`}
+                  title={done ? '已复制' : `复制${label}坐标`}
+                  onClick={() => void copy(value)}>
+                  <SvgIcon name={done ? 'check' : 'copy'} size={14} />
+                </button>
               </div>
             );
           })}
@@ -163,9 +177,11 @@ export const LocationOverlay = defineComponent({
             <span class={styles.key}>所在区划</span>
             <span class={styles.value}>{describeLocationRegion(props.location.region.value)}</span>
           </div>
-          <ElButton link type="danger" onClick={props.location.remove}>
-            删除位置点
-          </ElButton>
+          <div class={styles.footer}>
+            <button type="button" class={styles.remove} onClick={props.location.remove}>
+              删除位置点
+            </button>
+          </div>
         </div>
       );
     };
@@ -178,9 +194,11 @@ export const LocationOverlay = defineComponent({
           {point && renderPin(point)}
           {point && props.location.state.value.infoOpen && renderInfo(point)}
           {map.activeTool.value === LOCATION_PICK_TOOL && pointer && (
-            <div class={styles.hint} style={position(pointer)}>
-              点击地图拾取点位，Esc 取消
-            </div>
+            <PointerHint
+              point={pointer}
+              canvas={{ width: canvasSize.width.value, height: canvasSize.height.value }}
+              lines={PICK_HINT}
+            />
           )}
         </div>
       );

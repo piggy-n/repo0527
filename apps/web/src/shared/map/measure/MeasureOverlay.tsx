@@ -1,9 +1,10 @@
-import { Close } from '@element-plus/icons-vue';
-import { ElButton } from 'element-plus';
+import { useElementSize } from '@vueuse/core';
 import type { ScreenPoint } from '@yzt/map-core';
 import { useMap } from '@yzt/map-vue';
-import { computed, defineComponent, type PropType } from 'vue';
-import { measureHint, type MeasureLabel, measureLabels } from './measure-labels';
+import { computed, defineComponent, type PropType, ref } from 'vue';
+import { SvgIcon } from '../../icons/SvgIcon';
+import { PointerHint } from '../pointer-hint/PointerHint';
+import { labelSide, measureHint, type MeasureLabel, measureLabels } from './measure-labels';
 import { type Measure, measureKindOf } from './useMeasure';
 import styles from './MeasureOverlay.module.scss';
 
@@ -17,7 +18,7 @@ function position({ x, y }: ScreenPoint) {
 }
 
 /**
- * 测量的标签、删除按钮和鼠标旁的提示（联调用的界面，5D 再设计；ADR 0035 第 4 条）。
+ * 测量的标签、删除按钮和鼠标旁的提示（ADR 0035 第 4 条，设计稿 5D.7）。
  * 和画布放在同一个定位参照里盖在上面；只负责显示和调用 remove，显示什么由纯函数推导
  */
 export const MeasureOverlay = defineComponent({
@@ -27,6 +28,8 @@ export const MeasureOverlay = defineComponent({
   },
   setup(props) {
     const map = useMap();
+    const root = ref<HTMLElement>();
+    const canvas = useElementSize(root);
     // 标签只随测量结果变化，位置随相机和画布尺寸重新投影
     const labels = computed(() => measureLabels(props.measure.state.value));
     const placed = computed<PlacedLabel[]>(() => {
@@ -46,34 +49,47 @@ export const MeasureOverlay = defineComponent({
       if (!kind || !pointer) {
         return null;
       }
-      return { point: pointer, text: measureHint(kind, props.measure.state.value.draft !== null) };
+      return { point: pointer, ...measureHint(kind, props.measure.state.value.draft) };
     });
 
-    const renderLabel = ({ label: { key, text, measurementId }, point }: PlacedLabel) =>
-      measurementId ? (
-        <div key={key} class={styles.result} style={position(point)}>
+    const sideOf = ({ label, point }: PlacedLabel) =>
+      label.centered ? 'centered' : labelSide(point.x, canvas.width.value);
+
+    const renderLabel = (placedLabel: PlacedLabel) => {
+      const { key, caption, text, measurementId } = placedLabel.label;
+      const side = sideOf(placedLabel);
+      return (
+        <div
+          key={key}
+          class={[styles.label, measurementId && styles.result, styles[side]]}
+          style={position(placedLabel.point)}
+          data-side={side}>
+          {caption && [<span class={styles.caption}>{caption}</span>, ' ']}
           {text}
-          <ElButton
-            class={styles.remove}
-            link
-            icon={Close}
-            aria-label="删除这条测量"
-            onClick={() => props.measure.remove(measurementId)}
-          />
-        </div>
-      ) : (
-        <div key={key} class={styles.label} style={position(point)}>
-          {text}
+          {measurementId && (
+            <button
+              type="button"
+              class={styles.remove}
+              aria-label="删除这条测量"
+              title="删除这条测量"
+              onClick={() => props.measure.remove(measurementId)}>
+              <SvgIcon name="close" size={12} />
+            </button>
+          )}
         </div>
       );
+    };
 
     return () => (
-      <div class={styles.overlay} data-measure-overlay>
+      <div ref={root} class={styles.overlay} data-measure-overlay>
         {placed.value.map(renderLabel)}
         {hint.value && (
-          <div class={styles.hint} style={position(hint.value.point)}>
-            {hint.value.text}
-          </div>
+          <PointerHint
+            point={hint.value.point}
+            canvas={{ width: canvas.width.value, height: canvas.height.value }}
+            value={hint.value.value}
+            lines={[hint.value.text]}
+          />
         )}
       </div>
     );

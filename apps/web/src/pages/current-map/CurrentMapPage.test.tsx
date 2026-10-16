@@ -564,9 +564,16 @@ describe('CurrentMapPage', () => {
     await nextTick();
     expect(overlayItems(wrapper)).toStrictEqual([{ text: '单击开始测距', x: 30, y: 40 }]);
 
+    const { lng, lat } = map.getCenter();
     map.mouse('click', 0, 0);
     await nextTick();
-    expect(overlayItems(wrapper)).toStrictEqual([{ text: '单击添加节点，双击结束测距', x: 30, y: 40 }]);
+    expect(overlayItems(wrapper)).toStrictEqual([{ text: '单击添加节点，双击结束，Esc 取消', x: 30, y: 40 }]);
+    // 移动鼠标：提示的第一行是含鼠标所在点的长度
+    map.mouse('mousemove', 50, 0);
+    await nextTick();
+    const preview = `总长 ${formatDistance(geodesicDistance([lng, lat], [lng + 0.5, lat]))}`;
+    expect(overlayItems(wrapper)).toStrictEqual([{ text: `${preview}单击添加节点，双击结束，Esc 取消`, x: 50, y: 0 }]);
+    map.mouse('mousemove', 30, 40);
     // 测量的图层叠在最上面：最上面的节点先加入，其余依次插在它下面
     expect(addedLayersOf(map, 'measure')).toStrictEqual([
       ['measure-vertex', undefined],
@@ -580,7 +587,6 @@ describe('CurrentMapPage', () => {
     map.mouse('dblclick', 100, 0, 2);
     await nextTick();
 
-    const { lng, lat } = map.getCenter();
     const total = `总长 ${formatDistance(geodesicDistance([lng, lat], [lng + 1, lat]))}`;
     expect(overlayItems(wrapper)).toStrictEqual([
       { text: total, x: 100, y: 0 },
@@ -610,6 +616,46 @@ describe('CurrentMapPage', () => {
     map.mouse('mousemove', 10, 20);
     await nextTick();
     expect(overlayItems(wrapper)).toStrictEqual([{ text: '单击开始测面', x: 10, y: 20 }]);
+  });
+
+  it('测量的结果标签：总长在末点旁边，总面积在形心正中（jsdom 里画布宽度是 0，节点旁的都在右边）', async () => {
+    const { wrapper, maps } = mountPage();
+    const map = maps[0];
+    if (!map) {
+      throw new Error('没有创建地图');
+    }
+    map.fire('style.load');
+    await settle();
+
+    await button(wrapper, '测距').trigger('click');
+    drawLine(map);
+    await button(wrapper, '测面').trigger('click');
+    map.mouse('click', 0, 0);
+    map.mouse('click', 100, 0);
+    map.mouse('click', 100, 100);
+    map.mouse('click', 100, 100, 2);
+    map.mouse('dblclick', 100, 100, 2);
+    await nextTick();
+
+    const labels = wrapper.findAll('[data-measure-overlay] [data-side]');
+    expect(labels.map(label => [label.text().split(' ')[0], label.attributes('data-side')])).toStrictEqual([
+      ['总长', 'right'],
+      ['总面积', 'centered']
+    ]);
+  });
+
+  it('选中区划后地图上方显示当前区划，"回到全省"清除选择；没选时不显示', async () => {
+    stubBoundaryFetch();
+    const { wrapper } = await readyPage();
+    expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
+
+    await button(wrapper, '区划定位').trigger('click');
+    await button(wrapper, '南京').trigger('click');
+    await button(wrapper, '区划定位').trigger('click');
+    expect(wrapper.get('[data-region-scope]').text()).toBe('区划南京市回到全省');
+
+    await button(wrapper, '回到全省').trigger('click');
+    expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
   });
 
   it('画布重建时测量的标签先隐藏，新视图就绪后重新显示', async () => {
@@ -739,14 +785,14 @@ describe('CurrentMapPage', () => {
     expect(button(wrapper, '拾取').attributes('aria-pressed')).toBe('true');
     map.mouse('mousemove', 30, 40);
     await nextTick();
-    expect(wrapper.get('[data-location-overlay]').text()).toContain('点击地图拾取点位，Esc 取消');
+    expect(wrapper.get('[data-location-overlay] [data-pointer-hint]').text()).toBe('单击地图拾取点位Esc 取消');
     map.mouse('click', 100, 50);
     await nextTick();
 
     expect(button(wrapper, '拾取').attributes('aria-pressed')).toBe('false');
     expect(pin(wrapper).attributes('style')).toContain('left: 100px; top: 50px;');
     expect(wrapper.find('[data-location-info]').exists()).toBe(true);
-    expect(wrapper.get('[data-location-overlay]').text()).not.toContain('点击地图拾取点位');
+    expect(wrapper.find('[data-location-overlay] [data-pointer-hint]').exists()).toBe(false);
     expect(valueOf(wrapper, '经度')).toBe(formatCoordinate(lng + 1, 'dms'));
     expect(valueOf(wrapper, '纬度')).toBe(formatCoordinate(lat - 0.5, 'dms'));
   });

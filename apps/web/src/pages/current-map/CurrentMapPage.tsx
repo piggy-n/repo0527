@@ -32,6 +32,7 @@ import { MapStatusBar } from '@/shared/map/status-bar/MapStatusBar';
 import { useMapReadout } from '@/shared/map/status-bar/useMapReadout';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
 import { RegionLocatePanel } from '@/shared/map/region/RegionLocatePanel';
+import { RegionScopeBar } from '@/shared/map/region/RegionScopeBar';
 import { regionClipGroup } from '@/shared/map/region/region-clip';
 import { readyBoundary, useRegionLocate } from '@/shared/map/region/useRegionLocate';
 import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
@@ -178,6 +179,10 @@ export const CurrentMapPage = defineComponent({
           <LocationOverlay location={location} />
           <BoxSelectOverlay box={pick.boxDraft.value} />
           <div class={styles.overlay}>
+            {/* 当前区划放在第一个：和面板重叠时（窄屏）面板在上面 */}
+            <div class={styles.scope}>
+              <RegionScopeBar region={region} />
+            </div>
             <div class={styles.left}>
               <ResourceLayerPanel
                 layers={resources}

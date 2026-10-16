@@ -1,4 +1,4 @@
-// 联调用的样式，5D 再设计；盖在画布上，只有图钉和位置信息接收鼠标
+// 设计稿 5D.7；盖在画布上，只有图钉和位置信息接收鼠标
 
 .overlay {
   position: absolute;
@@ -7,7 +7,7 @@
   pointer-events: none;
 }
 
-// 元素的原点就是坐标：图标的尖端对准它，名称在下面
+// 元素的原点就是坐标：图钉的尖端（图标里 22.5 / 24 的高度）对准它，名称在下面
 .pin {
   position: absolute;
   width: 0;
@@ -20,11 +20,22 @@
 .icon {
   position: absolute;
   left: -16px;
-  top: -32px;
-  font-size: 32px;
+  top: -30px;
   color: var(--color-danger);
+  filter: drop-shadow(0 2px 2px rgba(20, 52, 105, 0.3));
   cursor: pointer;
   transition: transform 0.12s;
+}
+
+// 拖动时图钉抬起，坐标处留一个影子
+.shadow {
+  position: absolute;
+  left: -6px;
+  top: -2px;
+  width: 12px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: rgba(20, 52, 105, 0.25);
 }
 
 .name {
@@ -32,9 +43,10 @@
   top: 4px;
   left: 0;
   transform: translateX(-50%);
-  padding: 0 var(--space-xs);
+  padding: 0 6px;
   border-radius: var(--radius-sm);
   background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-sm);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-compact);
   color: var(--color-text-title);
@@ -45,7 +57,7 @@
 .ring {
   position: absolute;
   left: -22px;
-  top: -38px;
+  top: -37px;
   width: 44px;
   height: 44px;
   overflow: visible;
@@ -81,60 +93,98 @@
   pointer-events: none;
 }
 
+// 位置信息：和面板一样的浮层外观；宽度放得下度分秒的一整行
 .info {
   position: absolute;
   box-sizing: border-box;
-  width: 300px;
-  padding: var(--space-sm) var(--space-md);
+  width: 320px;
+  padding: 10px var(--space-md) 10px var(--space-lg);
   border-radius: var(--radius-md);
   background-color: var(--color-bg-mask);
   box-shadow: var(--shadow-md);
+  font-size: var(--font-size-xs);
   pointer-events: auto;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+// 指向图钉的小三角，水平位置由 caret 给出
+.caret {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background-color: var(--color-bg-mask);
+  transform: rotate(45deg);
 }
 
-.title {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-title);
+.above .caret {
+  bottom: -6px;
+  box-shadow: 3px 3px 6px rgba(20, 52, 105, 0.08);
 }
 
+.below .caret {
+  top: -6px;
+  box-shadow: -3px -3px 6px rgba(20, 52, 105, 0.06);
+}
+
+.heading {
+  margin-bottom: var(--space-xs);
+}
+
+// 名称、数值、复制按钮三列
 .row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 24px;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   min-height: 28px;
-  font-size: var(--font-size-xs);
 }
 
 .key {
-  flex: none;
-  width: 56px;
   color: var(--color-text-secondary);
 }
 
 .value {
-  flex: 1;
-  min-width: 0;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-title);
   word-break: break-all;
 }
 
-.hint {
-  position: absolute;
-  padding: 2px var(--space-xs);
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
   border-radius: var(--radius-sm);
-  background-color: var(--color-bg-mask);
-  box-shadow: var(--shadow-sm);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-compact);
-  color: var(--color-text-regular);
-  white-space: nowrap;
-  transform: translate(16px, 16px);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+}
+
+// 复制以后变成绿色的勾，1.5 秒后恢复
+.copied,
+.copied:hover {
+  color: var(--color-success);
+}
+
+.footer {
+  margin-top: var(--space-xs);
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-divider);
+}
+
+.remove {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--color-danger);
+  cursor: pointer;
 }

@@ -5,21 +5,37 @@ import { describeLocationRegion, placeLocationInfo } from './location-info';
 
 const INFO = { width: 240, height: 120 };
 const CANVAS = { width: 800, height: 600 };
+// 没有悬浮元素时四边都是边距 16
+const EDGES = { top: 16, right: 16, bottom: 16, left: 16 };
 
 describe('位置信息的位置', () => {
-  it('放在图钉上方、水平居中', () => {
-    expect(placeLocationInfo({ x: 400, y: 300 }, INFO, CANVAS)).toStrictEqual({ left: 280, top: 140, side: 'above' });
+  it('放在图钉上方、水平居中，小三角在中间', () => {
+    expect(placeLocationInfo({ x: 400, y: 300 }, INFO, CANVAS, EDGES)).toStrictEqual({
+      left: 280,
+      top: 140,
+      side: 'above',
+      caret: 120
+    });
   });
 
-  it('上方放不下时翻到下方，避开图钉下面的名称', () => {
-    expect(placeLocationInfo({ x: 400, y: 168 }, INFO, CANVAS)).toStrictEqual({ left: 280, top: 8, side: 'above' });
-    expect(placeLocationInfo({ x: 400, y: 167 }, INFO, CANVAS)).toStrictEqual({ left: 280, top: 195, side: 'below' });
+  it('上方放不下（超出可视区域的上边）时翻到下方，避开图钉下面的名称', () => {
+    expect(placeLocationInfo({ x: 400, y: 176 }, INFO, CANVAS, EDGES)).toMatchObject({ top: 16, side: 'above' });
+    expect(placeLocationInfo({ x: 400, y: 175 }, INFO, CANVAS, EDGES)).toMatchObject({ top: 203, side: 'below' });
+    // 上边登记了工具条：可视区域从 64 开始
+    const toolbar = { ...EDGES, top: 64 };
+    expect(placeLocationInfo({ x: 400, y: 200 }, INFO, CANVAS, toolbar)).toMatchObject({ side: 'below' });
   });
 
-  it('左右不超出画布，离边缘至少 8；画布比它窄时靠左', () => {
-    expect(placeLocationInfo({ x: 20, y: 300 }, INFO, CANVAS).left).toBe(8);
-    expect(placeLocationInfo({ x: 790, y: 300 }, INFO, CANVAS).left).toBe(552);
-    expect(placeLocationInfo({ x: 100, y: 300 }, INFO, { width: 200, height: 600 }).left).toBe(8);
+  it('左右限制在可视区域里：避开右侧的面板；小三角仍对着图钉，最多到卡片两边留 18', () => {
+    const panel = { ...EDGES, right: 352 };
+    expect(placeLocationInfo({ x: 20, y: 300 }, INFO, CANVAS, EDGES)).toMatchObject({ left: 16, caret: 18 });
+    expect(placeLocationInfo({ x: 790, y: 300 }, INFO, CANVAS, EDGES)).toMatchObject({ left: 544, caret: 222 });
+    expect(placeLocationInfo({ x: 400, y: 300 }, INFO, CANVAS, panel)).toMatchObject({ left: 208, caret: 192 });
+  });
+
+  it('可视区域比卡片窄时靠左', () => {
+    const narrow = { ...EDGES, right: 600 };
+    expect(placeLocationInfo({ x: 100, y: 300 }, INFO, CANVAS, narrow).left).toBe(16);
   });
 });
 

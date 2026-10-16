@@ -1,4 +1,4 @@
-// 联调用的样式，5D 再设计；盖在画布上，不拦截地图的鼠标操作，只有删除按钮可以点
+// 设计稿 5D.7；盖在画布上，不拦截地图的鼠标操作，只有删除按钮可以点
 
 .overlay {
   position: absolute;
@@ -7,11 +7,11 @@
   pointer-events: none;
 }
 
-.label,
-.result,
-.hint {
+.label {
   position: absolute;
-  padding: 2px var(--space-xs);
+  display: flex;
+  align-items: center;
+  padding: 1px 6px;
   border-radius: var(--radius-sm);
   background-color: var(--color-bg-mask);
   box-shadow: var(--shadow-sm);
@@ -19,28 +19,50 @@
   line-height: var(--line-height-compact);
   font-variant-numeric: tabular-nums;
   color: var(--color-text-title);
-  white-space: nowrap;
+  white-space: pre;
 }
 
-// 标签放在节点右侧，垂直居中
-.label,
-.result {
-  transform: translate(12px, -50%);
+// 节点旁的标签默认在右边，离画布右边太近时放到左边；测面的结果在形心正中
+.right {
+  transform: translate(10px, -50%);
 }
 
+.left {
+  transform: translate(calc(-100% - 10px), -50%);
+}
+
+.centered {
+  transform: translate(-50%, -50%);
+}
+
+// 结果：数值加粗，前面的"总长""总面积"是灰色的，后面是删除按钮
 .result {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  gap: 2px;
+  padding: 2px 2px 2px var(--space-sm);
   font-weight: var(--font-weight-semibold);
 }
 
-.remove {
-  pointer-events: auto;
+.caption {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
 }
 
-// 提示在鼠标右下方，避开光标
-.hint {
-  color: var(--color-text-regular);
-  transform: translate(16px, 16px);
+.remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-placeholder);
+  cursor: pointer;
+  pointer-events: auto;
+
+  &:hover {
+    background-color: var(--color-danger-bg-solid);
+    color: var(--color-danger);
+  }
 }

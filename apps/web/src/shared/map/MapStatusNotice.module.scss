@@ -1,4 +1,4 @@
-// 联调用的样式，5D 再设计；父元素是地图区域，作为定位参照
+// 设计稿 5D.7；父元素是地图区域，作为定位参照
 
 // 引擎失败：地图画不出来，提示放在中间
 .card {
@@ -8,8 +8,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-md);
+  gap: var(--space-sm);
   width: min(360px, calc(100% - 32px));
+  box-sizing: border-box;
   padding: var(--space-xl);
   border-radius: var(--radius-md);
   background-color: var(--color-bg-mask);
@@ -19,35 +20,83 @@
 }
 
 .icon {
-  font-size: 32px;
   color: var(--color-warning);
 }
 
 .title {
   font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-base);
   color: var(--color-text-title);
 }
 
 .detail {
   margin: 0;
+  line-height: var(--line-height-base);
   color: var(--color-text-regular);
 }
 
+// 技术细节：小一号的灰字，放在浅灰底里，方便截图反馈
 .technical {
+  box-sizing: border-box;
+  width: 100%;
   margin: 0;
+  padding: 6px var(--space-sm);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-neutral-bg-light);
+  font-family: Consolas, monospace;
   font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
   color: var(--color-text-secondary);
+  text-align: left;
   word-break: break-all;
 }
 
 // 样式失败会自动恢复：不挡地图中间，放在上方
-.alert {
+.bar {
   position: absolute;
   top: var(--space-lg);
   left: 50%;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
   width: min(480px, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 10px var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-warning-bg);
   box-shadow: var(--shadow-md);
+  font-size: var(--font-size-xs);
   transform: translateX(-50%);
+
+  .detail {
+    line-height: var(--line-height-compact);
+  }
+
+  .technical {
+    margin-top: var(--space-xs);
+    padding: 0;
+    background: none;
+  }
+}
+
+.barIcon {
+  margin-top: 2px;
+  color: var(--color-warning);
+}
+
+.barText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.barTitle {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-base);
+  color: var(--color-text-title);
 }
 
 // 加载中：不拦截地图上的操作
@@ -65,4 +114,9 @@
   color: var(--color-text-regular);
   pointer-events: none;
   transform: translate(-50%, -50%);
+}
+
+.spinner {
+  font-size: 16px;
+  color: var(--color-primary);
 }

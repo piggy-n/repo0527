@@ -1,0 +1,42 @@
+// 设计稿 5D.7；元素的原点是鼠标的位置，偏移由 sides 决定
+
+.hint {
+  --hint-dx: 16px;
+  --hint-dy: 16px;
+
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  color: var(--color-text-regular);
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(var(--hint-dx), var(--hint-dy));
+  // 跟着鼠标的提示盖在卡片、面板上面：鼠标移到面板上时画布收不到移动，提示随之消失，不会挡住面板
+  z-index: 1;
+}
+
+// 翻到另一侧时贴得近一些：鼠标的光标在右下方
+.left {
+  --hint-dx: calc(-100% - 8px);
+}
+
+.above {
+  --hint-dy: calc(-100% - 8px);
+}
+
+.value {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-title);
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  color: var(--color-text-secondary);
+}

@@ -44,9 +44,9 @@
 | [0032](0032-intranet-build-mode.md) | 公网与内网两套构建命令：Vite 构建模式 | 已接受 |
 | [0033](0033-boundaries-and-default-view.md) | 行政区边界与默认视角 | 已接受 |
 | [0034](0034-interaction-tools.md) | 交互工具：视图输入、工具模型与工具栏 | 已接受（点选工具由 0047 补充；第 5 节工具栏的位置与登记由 0053 修正） |
-| [0035](0035-measurement.md) | 测量：椭球面计算、测量的状态与标签 | 已接受 |
-| [0036](0036-region-locate.md) | 区划定位：本地区划目录、边界的加载与定位 | 已接受 |
-| [0037](0037-coordinate-locate-and-location-point.md) | 坐标定位与位置点 | 已接受 |
+| [0035](0035-measurement.md) | 测量：椭球面计算、测量的状态与标签 | 已接受（第 4 节的单位格式和提示由 0055 修正） |
+| [0036](0036-region-locate.md) | 区划定位：本地区划目录、边界的加载与定位 | 已接受（选中区划的显示由 0055 补充） |
+| [0037](0037-coordinate-locate-and-location-point.md) | 坐标定位与位置点 | 已接受（第 5 节位置信息的摆放由 0055 修正） |
 | [0038](0038-camera-operations.md) | 相机操作：用操作的信号判断等待中的定位是否作废 | 已接受（第 1 条的 `intentRevision`、第 3 条的上下文入口由 0039 修正） |
 | [0039](0039-async-supersede-rules.md) | 异步操作的作废规则、相机操作对象与状态命名 | 已接受 |
 | [0040](0040-vitest-browser-mode.md) | 真实浏览器测试：Vitest 浏览器模式 | 已接受 |
@@ -64,6 +64,7 @@
 | [0052](0052-resource-years.md) | 资源的年份：每个资源各自选，另有批量设置 | 已接受（第 2 节批量设置的位置由 0053 修正） |
 | [0053](0053-map-page-layout-and-toolbar.md) | 地图页的布局与工具栏 | 已接受 |
 | [0054](0054-sortable-drag-reorder.md) | 拖动排序用 SortableJS | 已接受 |
+| [0055](0055-map-overlays.md) | 地图上的浮层：测量的单位与提示、位置信息的摆放、当前区划 | 已接受 |
 
 ## 模板
 

@@ -13,7 +13,7 @@ export function boxStyle({ from, to }: ScreenBox) {
 }
 
 /**
- * 拖动框选时的矩形（联调用的界面，5D 再设计；ADR 0049 第 1 节）。和画布放在同一个定位参照里盖在上面，
+ * 拖动框选时的矩形（ADR 0049 第 1 节，设计稿 5D.7 保留原来的外观）。和画布放在同一个定位参照里盖在上面，
  * 不拦截地图的鼠标操作；框由点选的拥有者给出，这里只显示
  */
 export const BoxSelectOverlay = defineComponent({

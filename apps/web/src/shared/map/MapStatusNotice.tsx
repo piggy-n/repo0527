@@ -1,13 +1,14 @@
-import { Loading, WarningFilled } from '@element-plus/icons-vue';
-import { ElAlert, ElButton, ElIcon } from 'element-plus';
+import { Loading } from '@element-plus/icons-vue';
+import { ElButton, ElIcon } from 'element-plus';
 import { useMap } from '@yzt/map-vue';
 import { computed, defineComponent } from 'vue';
 import { useDelayedFlag } from '../composables/useDelayedFlag';
+import { SvgIcon } from '../icons/SvgIcon';
 import { describeMapStatus } from './map-status';
 import styles from './MapStatusNotice.module.scss';
 
 /**
- * 地图的加载与失败提示（联调用的界面，5D 再设计）：放在地图区域里，父元素要能作为定位参照。
+ * 地图的加载与失败提示（ADR 0030，设计稿 5D.7）：放在地图区域里，父元素要能作为定位参照。
  * 显示什么由 describeMapStatus 决定，这里只负责显示；加载中延迟出现，很快加载完就不显示
  */
 export const MapStatusNotice = defineComponent({
@@ -21,10 +22,8 @@ export const MapStatusNotice = defineComponent({
       const current = status.value;
       if (current.kind === 'engine-failed') {
         return (
-          <div class={styles.card} role="alert">
-            <ElIcon class={styles.icon}>
-              <WarningFilled />
-            </ElIcon>
+          <div class={styles.card} role="alert" data-map-status="engine-failed">
+            <SvgIcon class={styles.icon} name="warning" size={32} />
             <strong class={styles.title}>{current.title}</strong>
             <p class={styles.detail}>{current.detail}</p>
             {current.technical && <p class={styles.technical}>{current.technical}</p>}
@@ -36,16 +35,20 @@ export const MapStatusNotice = defineComponent({
       }
       if (current.kind === 'style-failed') {
         return (
-          <ElAlert class={styles.alert} type="warning" showIcon closable={false} title={current.title}>
-            <p class={styles.detail}>{current.detail}</p>
-            <p class={styles.technical}>{current.technical}</p>
-          </ElAlert>
+          <div class={styles.bar} role="alert" data-map-status="style-failed">
+            <SvgIcon class={styles.barIcon} name="warning" size={16} />
+            <div class={styles.barText}>
+              <strong class={styles.barTitle}>{current.title}</strong>
+              <p class={styles.detail}>{current.detail}</p>
+              <p class={styles.technical}>{current.technical}</p>
+            </div>
+          </div>
         );
       }
       if (current.kind === 'loading' && loadingShown.value) {
         return (
-          <div class={styles.loading}>
-            <ElIcon class="is-loading">
+          <div class={styles.loading} data-map-status="loading">
+            <ElIcon class={['is-loading', styles.spinner]}>
               <Loading />
             </ElIcon>
             地图加载中…
