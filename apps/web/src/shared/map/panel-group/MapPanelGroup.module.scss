@@ -10,12 +10,15 @@
   max-height: 100%;
 }
 
+// 放不下时（手机宽度时三个功能）在自己的区域里横向滚动，不显示滚动条；当前的 Tab 由外壳滚进可见范围
 .tabs {
   display: flex;
   flex: 1;
   align-items: center;
   gap: var(--space-md);
   min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .tab {

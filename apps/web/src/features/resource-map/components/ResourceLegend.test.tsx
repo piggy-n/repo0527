@@ -110,6 +110,35 @@ describe('ResourceLegend', () => {
     expect(wrapper.find('[data-legend="szy_kt"] [data-symbol-editor]').exists()).toBe(true);
   });
 
+  it('切走再切回：地类图例的分类方式、搜索词、分组展开、正在编辑的地类和正在编辑的取值都保留（2026-10-16 评审发现）', async () => {
+    const { wrapper, owner, active } = mountLegend();
+    owner.setChecked('csxhjctb_hydl', true);
+    await nextTick();
+    // 按取值配色：展开条目和第一个取值的编辑器
+    await button(wrapper, '展开水域线层').trigger('click');
+    await wrapper.get('[data-legend="csxhjctb_hydl"] [data-value] button').trigger('click');
+    // 地类：工作分类、展开第一组，再搜索水田、展开它的编辑器
+    const landuse = wrapper.get('[data-legend="bgdc_dltb"]');
+    await choose(landuse, '工作分类 A.2');
+    await wrapper.get('[data-landuse-section="00"] button').trigger('click');
+    await wrapper.get('input[placeholder="搜索编码或名称"]').setValue('水田');
+    await wrapper.get('[data-landuse="0101"] button').trigger('click');
+
+    active.value = false;
+    await nextTick();
+    active.value = true;
+    await nextTick();
+
+    const work = wrapper.findAll('[data-legend="bgdc_dltb"] label').find(item => item.text() === '工作分类 A.2');
+    expect(work?.get('input').element.checked).toBe(true);
+    expect((wrapper.get('input[placeholder="搜索编码或名称"]').element as HTMLInputElement).value).toBe('水田');
+    expect(wrapper.find('[data-landuse="0101"] [data-symbol-editor]').exists()).toBe(true);
+    expect(wrapper.find('[data-legend="csxhjctb_hydl"] [data-value] [data-symbol-editor]').exists()).toBe(true);
+    // 清掉搜索后，之前展开的分组仍展开
+    await wrapper.get('input[placeholder="搜索编码或名称"]').setValue('');
+    expect(wrapper.get('[data-landuse-section="00"] button').attributes('aria-expanded')).toBe('true');
+  });
+
   it('只有一条时自动展开这一条；手动收起后改透明度、调顺序不再展开；集合变化后又只剩一条时再展开', async () => {
     const { wrapper, owner } = mountLegend();
     await nextTick();

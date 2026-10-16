@@ -12,8 +12,8 @@ export interface PanelGroup<Id extends string = string> {
   isOpen(id: Id): boolean;
   /** 打开并切到它 */
   show(id: Id): void;
-  /** 入口的点击：没打开时打开，没在显示时切到它，正在显示时关闭 */
-  toggle(id: Id): void;
+  /** 入口的点击：groupShown 是点击时整组是否显示；没打开、没在显示、整组被隐藏时打开并切到它，正在显示时关闭 */
+  toggle(id: Id, groupShown: boolean): void;
   close(id: Id): void;
 }
 
@@ -34,7 +34,7 @@ export function usePanelGroup<const Id extends string>(order: readonly Id[]): Pa
     state,
     isOpen: id => state.value.open.includes(id),
     show: id => update(id, current => showPanel(current, id, order)),
-    toggle: id => update(id, current => togglePanel(current, id, order)),
+    toggle: (id, groupShown) => update(id, current => togglePanel(current, id, order, groupShown)),
     close: id => update(id, current => closePanel(current, id))
   };
 }

@@ -13,7 +13,7 @@
 | **2. 应用骨架** | 有类型的 HTTP 客户端和错误模型、鉴权、路由守卫（用模块扩充给 `RouteMeta` 加类型）、布局、存储适配器、MSW、Element Plus 主题、CSS Modules | 泛型、可辨识联合、模块扩充、Adapter 和 Strategy 模式 | ✅ 完成（tag `stage-2`，[总结](stages/stage-2-app-skeleton-and-auth.md)） |
 | **3. 第一个纵切** | 登录 + 布局 + 一个简单列表页，把 API、query、store、TSX 组件、测试整条链路跑通 | vue-query（TanStack Query），TSX 中 props、emits、slots 的类型写法 | ✅ 完成（tag `stage-3`，[总结](stages/stage-3-layout-and-first-list.md)）：页面布局规范与 `libs/ui`（ADR 0016）、文件管理列表（ADR 0017）、会话结束的统一处理 |
 | **4. map-core** | 重新设计引擎抽象、Manager 体系、有类型的事件、有类型的 Worker 消息、资源释放 | 接口与抽象类的区别、Facade、Factory、Observer、`using` / Disposable | ✅ 完成（tag `stage-4`，[总结](stages/stage-4-map-core.md)）：地图会话与 MapLibre 适配器（ADR 0018～0024）、Worker 通信层（ADR 0025） |
-| **5. map-vue + 现状底图** | `MapProvider`、`useMap()`、图层面板 | provide / inject 的类型、响应式边界（`shallowRef`、`markRaw`） | 进行中：拆成 5A～5E，见下文"阶段五"；5A 完成（tag `stage-5a`，[总结](stages/stage-5a-map-skeleton.md)）；5B 完成（tag `stage-5b`，[总结](stages/stage-5b-public-map-capabilities.md)）；5D 完成（tag `stage-5d`，[总结](stages/stage-5d-map-ui.md)）：地图页界面按设计稿逐块替换（ADR 0053～0055）；5C 完成（tag `stage-5c`，[总结](stages/stage-5c-current-map-business.md)）：地图内核加固、资源图层、面板、持久化、图例、符号编辑、点选与框选、区划裁剪、年份（ADR 0039～0052）；5D 进行中（2026-10-15 开始） |
+| **5. map-vue + 现状底图** | `MapProvider`、`useMap()`、图层面板 | provide / inject 的类型、响应式边界（`shallowRef`、`markRaw`） | 进行中：拆成 5A～5E，见下文"阶段五"；5A 完成（tag `stage-5a`，[总结](stages/stage-5a-map-skeleton.md)）；5B 完成（tag `stage-5b`，[总结](stages/stage-5b-public-map-capabilities.md)）；5C 完成（tag `stage-5c`，[总结](stages/stage-5c-current-map-business.md)）：地图内核加固、资源图层、面板、持久化、图例、符号编辑、点选与框选、区划裁剪、年份（ADR 0039～0052）；5D 完成（tag `stage-5d`，[总结](stages/stage-5d-map-ui.md)）：地图页界面按设计稿逐块替换（ADR 0053～0055），打标签之后的优化（ADR 0056～0060）也在标签里；5E 未开始 |
 | **三维** | map-cesium：Cesium 运行时、样式镜像与三维样式的支持清单、相机同步、三维拾取与测量、瓦片数据服务与 Worker 池；三维独有功能（漫游、钻地、室内地图、本地 3D Tiles）的迁移范围到时再定 | 接近无感的二三维切换、对象池与 Worker 调度 | 未开始（阶段五开始时加入） |
 | **6. 复杂业务** | 空间监测三件套、AI 流式对话、文件管理，以及其余业务模块 | 拆分巨型组件、流式读取与 SSE、取消请求 | 未开始 |
 | **7. 收尾** | Playwright、产物分析、部署 | — | 未开始 |
@@ -552,6 +552,16 @@ ADR 0046 的实现：分类取值的纹理默认色（`darkenColor`，Lab 插值
 - 分割线高 24、线在正中，上下离目录和"已勾选"的标题都是 11
 - 浏览器测试 10 个用例（每个都检查没有 loop 报错），改坏验证 20 处全部由断言测出；在真实页面上用鼠标拖过分割线，照复现步骤收起后面板稳定在 253 像素
 - 学到的：`ResizeObserver` 在同一帧里只继续通知比上一轮更深的元素；回调里改了更浅的被监听元素，通知留到下一帧并报 loop 错误。量尺寸来分配空间时，被量的东西不能是分配的结果
+
+`stage-5d` 移到 `24db271` 之后，评审发现 5 处问题（2026-10-16），都先写测试复现再修：
+
+- 晚到的识别结果作废后续的相机操作：低级别点选时上面的资源查后端为空、转用下面资源的渲染要素，结果到达时新开了一次相机操作，等待期间用户发起的定位被作废。原因是 `found` 用"有没有相机操作"同时表示"要不要定位"；改为分开传，自动平移沿用等待之前开始的那一次（ADR 0038、0039）
+- 拾取点中的位置抛错时绕过了失败处理：`view.pick` 在作废旧识别之前执行。改为拾取和规划一起放进"先作废、再准备、出错进入失败和重试"的流程，准备的结果连同识别方式（单击还是框选、点中的位置）一起给出
+- 窄屏时重新打开让出去的面板被误关：入口只看当前的 Tab。改为按点击时整组是否显示决定，入口显示为按下也要右边在显示（ADR 0053 第 4 节"正在显示时关闭它"本来就是这个意思）
+- 切换图例的 Tab 重置了条目里的浏览状态：图例隐藏时条目卸载，只保留了条目的展开。改为把地类图例的分类方式、搜索词、分组展开、正在编辑的地类，和按取值配色正在编辑的取值，按资源留在图例里；隐藏时仍卸载条目，取色预览、弹出层照常结束
+- 手机宽度时三个功能的 Tab 被裁切：改为 Tab 区横向滚动、不显示滚动条，当前的 Tab 连同关闭按钮滚进可见范围
+- 顺带整理：`arrowStep` 从 `ResourceTreeList.tsx` 移到 `features/resource-map/keyboard.ts`，组件不再是公共逻辑的入口；本表第 16 行去掉"5D 进行中"
+- 改坏验证 14 处全部由断言测出；在真实页面上核对过：375 × 812 时让出去以后再点坐标定位重新显示、经度保留，三个功能时 Tab 区 183 宽、当前的"资源详情"连同关闭按钮可见，切回"区划定位"时滚回去；图例切到底图再切回，"工作分类 A.2"和搜索词"水田"都在
 
 ## 业务模块
 

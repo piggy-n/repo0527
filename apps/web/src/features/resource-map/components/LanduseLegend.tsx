@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowRight, Search } from '@element-plus/icons-vue';
 import { ElIcon, ElInput, ElRadioButton, ElRadioGroup } from 'element-plus';
-import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
+import { computed, defineComponent, type PropType, type VNode } from 'vue';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LanduseLegendItem, type LanduseLegendView, type LegendSwatch, landuseLegend } from '../legend';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
@@ -14,9 +14,27 @@ const VIEWS: readonly { readonly value: LanduseLegendView; readonly label: strin
   { value: 'all', label: '全部' }
 ];
 
+/** 地类图例的浏览状态：由资源图例按资源保管，隐藏后再显示时照旧 */
+export interface LanduseBrowse {
+  readonly view: LanduseLegendView;
+  readonly keyword: string;
+  /** 展开的分组 */
+  readonly expanded: ReadonlySet<string>;
+  /** 展开编辑器的地类 */
+  readonly editing: string | null;
+}
+
+export const INITIAL_LANDUSE_BROWSE: LanduseBrowse = Object.freeze({
+  view: 'status',
+  keyword: '',
+  expanded: new Set<string>(),
+  editing: null
+});
+
 /**
  * 地类图例（ADR 0043、0044，设计稿 5D.5）：三种展示、按编码或名称搜索、分组展开；预览由图例按符号推导后传入。
- * 点一个地类展开它在分类样式里的编辑器，同一时间只展开一个；改过符号的地类名称后有一个小圆点
+ * 点一个地类展开它在分类样式里的编辑器，同一时间只展开一个；改过符号的地类名称后有一个小圆点。
+ * 浏览状态由上层通过 browse 给出，组件只显示和发出新的状态
  */
 export const LanduseLegend = defineComponent({
   name: 'LanduseLegend',
@@ -24,14 +42,18 @@ export const LanduseLegend = defineComponent({
     symbols: { type: Object as PropType<ResourceSymbols>, required: true },
     code: { type: String, required: true },
     /** 各地类的预览，按取值的键 */
-    swatches: { type: Object as PropType<ReadonlyMap<string, LegendSwatch>>, required: true }
+    swatches: { type: Object as PropType<ReadonlyMap<string, LegendSwatch>>, required: true },
+    browse: { type: Object as PropType<LanduseBrowse>, required: true }
   },
-  setup(props) {
-    // 都是图例自己的界面状态
-    const view = ref<LanduseLegendView>('status');
-    const keyword = ref('');
-    const expanded = ref<ReadonlySet<string>>(new Set());
-    const editing = ref<string | null>(null);
+  emits: {
+    'update:browse': (browse: LanduseBrowse) => typeof browse === 'object'
+  },
+  setup(props, { emit }) {
+    const view = computed(() => props.browse.view);
+    const keyword = computed(() => props.browse.keyword);
+    const expanded = computed(() => props.browse.expanded);
+    const editing = computed(() => props.browse.editing);
+    const update = (patch: Partial<LanduseBrowse>) => emit('update:browse', { ...props.browse, ...patch });
 
     // 一个地类：含义说明放在 title 里；编辑器向左拉回地类的缩进，和面板一样宽
     const renderItem = (item: LanduseLegendItem): VNode => {
@@ -45,7 +67,7 @@ export const LanduseLegend = defineComponent({
             class={[styles.item, open && styles.open]}
             aria-label={`${open ? '收起' : '展开'}${item.name}`}
             aria-expanded={open}
-            onClick={() => (editing.value = open ? null : item.key)}>
+            onClick={() => update({ editing: open ? null : item.key })}>
             {swatch && <LegendSwatchIcon swatch={swatch} />}
             {item.code !== null && <span class={styles.code}>{item.code}</span>}
             <span class={styles.name}>{item.name}</span>
@@ -62,7 +84,7 @@ export const LanduseLegend = defineComponent({
     const selectView = (value: unknown) => {
       const next = VIEWS.find(item => item.value === value);
       if (next) {
-        view.value = next.value;
+        update({ view: next.value });
       }
     };
 
@@ -71,7 +93,7 @@ export const LanduseLegend = defineComponent({
       if (!next.delete(key)) {
         next.add(key);
       }
-      expanded.value = next;
+      update({ expanded: next });
     };
 
     return () => (
@@ -92,7 +114,7 @@ export const LanduseLegend = defineComponent({
           clearable
           prefixIcon={Search}
           placeholder="搜索编码或名称"
-          onUpdate:modelValue={(value: string) => (keyword.value = value)}
+          onUpdate:modelValue={(value: string) => update({ keyword: value })}
         />
         {sections.value.length === 0 && <div class={styles.empty}>没有找到地类</div>}
         <ul class={styles.sections}>

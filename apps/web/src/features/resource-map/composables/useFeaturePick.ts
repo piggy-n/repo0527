@@ -78,6 +78,12 @@ interface Identification {
   readonly anchor: LngLat | null;
 }
 
+// 一次识别的准备结果：要做的识别和识别的方式；点在区划外、框整个在区划外时为 null
+type Prepared = { readonly tasks: BoxTask[]; readonly how: Identification } | null;
+
+// 一次识别的准备：在点击的当下拾取、规划
+type IdentifyPlan = () => Prepared;
+
 /** 一个资源的候选；渲染要素的没有分页 */
 export interface CandidateList {
   /** 列表的身份：每轮识别一个新的，加载更多、从详情返回时不变；面板据此决定是否回到顶部 */
@@ -237,7 +243,7 @@ export function useFeaturePick(
   // 识别失败时重试要做的事：查后端失败时从失败的资源继续，规划出错时重新规划
   let remaining:
     | { readonly kind: 'tasks'; readonly tasks: readonly BoxTask[]; readonly how: Identification }
-    | { readonly kind: 'plan'; readonly plan: () => BoxTask[] | null; readonly how: Identification }
+    | { readonly kind: 'plan'; readonly plan: IdentifyPlan }
     | null = null;
   // 每轮识别的列表编号
   let listIds = 0;
@@ -339,30 +345,43 @@ export function useFeaturePick(
   const showDetail = (candidate: PickCandidate, back: PickReturn | null, locate: CameraOperation | null) =>
     setState({ kind: 'detail', candidate, back }, locate);
 
-  // locate：查后端时在开始等待之前开始的相机操作，渲染要素的结果为 null
-  const found = (list: CandidateList, locate: CameraOperation | null, how: Identification, signal: AbortSignal) => {
+  // operation：这次识别在开始等待之前开始的相机操作，没有等待过时为 null；locate：结果来自后端，只有一个时定位。
+  // 要不要移动相机和操作是否仍有效分开：等待过的沿用等待之前的那一次，等待期间用户发起的定位（默认视角、坐标定位等）
+  // 会作废它，晚到的结果不再移动相机，也不作废用户的定位；没有等待过时还在点击的当下，要移动时才开始（ADR 0038、0039）
+  const found = (
+    list: CandidateList,
+    operation: CameraOperation | null,
+    locate: boolean,
+    how: Identification,
+    signal: AbortSignal
+  ) => {
+    const cameraOperation = () => operation ?? map.beginCameraOperation();
     const { candidates, pages: serverPages } = list;
     const [only] = candidates;
     if (only && candidates.length === 1 && !hasMorePages(serverPages)) {
       // 后端识别出的要素可能很小或不在眼前，定位并闪烁；直接点中、框中的渲染要素就在眼前，不移动相机，只在被挡住时露出来
-      showDetail(only, null, locate);
-      if (!locate && how.anchor) {
-        reveal(map.beginCameraOperation(), how.anchor, signal);
+      if (locate) {
+        showDetail(only, null, cameraOperation());
+        return;
+      }
+      showDetail(only, null, null);
+      if (how.anchor) {
+        reveal(cameraOperation(), how.anchor, signal);
       }
       return;
     }
     setState({ kind: 'candidates', list, more: MORE_IDLE });
     if (how.anchor) {
-      reveal(locate ?? map.beginCameraOperation(), how.anchor, signal);
+      reveal(cameraOperation(), how.anchor, signal);
     }
   };
 
   // 从上到下逐个资源识别，第一个有结果的胜出（ADR 0047 第 2 节、ADR 0049 第 2 节）
   const run = async (tasks: readonly BoxTask[], how: Identification, signal: AbortSignal) => {
     const { mode } = how;
-    // 查后端的识别可能以定位结束：在开始等待之前就开始这次相机操作，等待期间用户发起的定位（默认视角、坐标定位等）
-    // 会作废它，晚到的结果不再覆盖（ADR 0038、0039）
-    let locate: CameraOperation | null = null;
+    // 查后端的识别可能以定位、露出结束：在开始等待之前就开始这次相机操作，等待期间用户发起的定位（默认视角、坐标定位等）
+    // 会作废它，晚到的结果不再覆盖（ADR 0038、0039）；后端为空、转用下面资源的渲染要素时也用它
+    let operation: CameraOperation | null = null;
     for (const [index, task] of tasks.entries()) {
       if (task.kind === 'too-many') {
         setState({ kind: 'too-many', target: task.target, estimate: task.estimate });
@@ -374,10 +393,10 @@ export function useFeaturePick(
       }
       if (task.kind === 'rendered') {
         const list = { id: ++listIds, mode, target: task.target, candidates: task.candidates, pages: null };
-        found(list, null, how, signal);
+        found(list, operation, false, how, signal);
         return;
       }
-      locate ??= map.beginCameraOperation();
+      operation ??= map.beginCameraOperation();
       let page: FeaturePage;
       try {
         const first = { pageNum: 1, pageSize: PICK_PAGE_SIZE };
@@ -396,7 +415,7 @@ export function useFeaturePick(
       const candidates = serverCandidates(task.target, page.list);
       if (candidates.length > 0) {
         const serverPages = { geometry: task.geometry, loaded: 1, total: page.total };
-        found({ id: ++listIds, mode, target: task.target, candidates, pages: serverPages }, locate, how, signal);
+        found({ id: ++listIds, mode, target: task.target, candidates, pages: serverPages }, operation, true, how, signal);
         return;
       }
     }
@@ -411,53 +430,56 @@ export function useFeaturePick(
     setState(IDLE);
   };
 
-  // 新的单击或框选先作废上一次，再规划：规划里的屏幕查询、求交在点击时做完，之后地图移动不影响结果。
-  // 点在区划外、框整个在区划外时计划为 null：落在遮罩上等于点在空白处，关闭现有的结果（ADR 0051 第 3 节）；
-  // 规划出错时显示失败，重试时用同样的输入重新规划（ADR 0051 第 4 节）
-  const execute = (how: Identification, plan: () => BoxTask[] | null) => {
+  // 新的单击或框选先作废上一次，再准备：拾取点中的位置、屏幕查询、求交都在点击时做完，之后地图移动不影响结果。
+  // 点在区划外、框整个在区划外时准备结果为 null：落在遮罩上等于点在空白处，关闭现有的结果（ADR 0051 第 3 节）；
+  // 准备出错（拾取、求交）也是这次识别的失败，显示失败，重试时用同样的输入重新准备（ADR 0051 第 4 节）
+  const execute = (plan: IdentifyPlan) => {
     const signal = identifications.next();
     pages.abort();
     remaining = null;
-    let tasks: BoxTask[] | null;
+    let prepared: Prepared;
     try {
-      tasks = plan();
+      prepared = plan();
     } catch (error) {
-      remaining = { kind: 'plan', plan, how };
+      remaining = { kind: 'plan', plan };
       notifyStart();
       setState({ kind: 'failed', target: null, error });
       return;
     }
-    if (!tasks) {
+    if (!prepared) {
       close();
       return;
     }
     notifyStart();
     setState(IDENTIFYING);
-    void run(tasks, how, signal);
+    void run(prepared.tasks, prepared.how, signal);
   };
 
   // 参与识别的资源、级别和区划范围按点击时的定
-  const start = (
-    how: Identification,
-    plan: (targets: readonly PickResource[], zoom: number, area: RegionScope | null) => BoxTask[] | null
-  ) => {
+  const start = (plan: (targets: readonly PickResource[], zoom: number, area: RegionScope | null) => Prepared) => {
     const { zoom } = camera.value;
     const targets = pickResources(resources.state.value, resources.configErrors.value, zoom);
     const area = scope();
-    execute(how, () => plan(targets, zoom, area));
+    execute(() => plan(targets, zoom, area));
   };
 
-  // 点中的位置也在点击时取下，之后地图移动不影响
+  // 点中的位置也在准备时取下，之后地图移动不影响
   const identify = (point: ScreenPoint, view: ToolView) => {
     hintOpen.value = false;
-    const hit = view.pick(point);
-    const anchor = hit.kind === 'hit' ? hit.lngLat : null;
-    start({ mode: 'pick', anchor }, (targets, zoom, area) => planIdentify(targets, point, zoom, view, area));
+    start((targets, zoom, area) => {
+      const hit = view.pick(point);
+      const how: Identification = { mode: 'pick', anchor: hit.kind === 'hit' ? hit.lngLat : null };
+      const tasks = planIdentify(targets, point, zoom, view, area);
+      return tasks && { tasks, how };
+    });
   };
 
   const identifyBox = (box: ScreenBox, view: ToolView) => {
     hintOpen.value = false;
-    start({ mode: 'box', anchor: null }, (targets, zoom, area) => planBox(targets, box, zoom, view, area));
+    start((targets, zoom, area) => {
+      const tasks = planBox(targets, box, zoom, view, area);
+      return tasks && { tasks, how: { mode: 'box', anchor: null } };
+    });
   };
 
   const cancelGesture = () => {
@@ -524,7 +546,7 @@ export function useFeaturePick(
   const retry = () => {
     const current = state.value;
     if (current.kind === 'failed' && remaining?.kind === 'plan') {
-      execute(remaining.how, remaining.plan);
+      execute(remaining.plan);
       return;
     }
     if (current.kind === 'failed' && remaining?.kind === 'tasks') {

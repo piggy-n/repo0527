@@ -9,11 +9,12 @@ import { CATALOG_ROOT } from '../catalog-order';
 import type { CatalogOrderOwner } from '../composables/useCatalogOrder';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourcePanelLayout } from '../composables/useResourcePanelLayout';
+import { arrowStep } from '../keyboard';
 import { checkedLayers, expandedByDefault, panelTree } from '../layer-panel';
 import { ratioForCheckedHeight, splitLists } from '../panel-split';
 import { batchYearOptions } from '../resource-layers';
 import { CheckedLayerList } from './CheckedLayerList';
-import { arrowStep, ResourceTreeList } from './ResourceTreeList';
+import { ResourceTreeList } from './ResourceTreeList';
 import styles from './ResourceLayerPanel.module.scss';
 
 // 头部的页签：统计报表、分节点资源先显示"暂无数据"（ADR 0053 第 6 节）

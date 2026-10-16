@@ -4,9 +4,9 @@ import { computed, defineComponent, nextTick, type PropType, ref, type VNode } f
 import { useSortableList } from '@/shared/composables/useSortableList';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import type { ResourceLayers } from '../composables/useResourceLayers';
+import { arrowStep } from '../keyboard';
 import { type CheckedLayer, checkedDropTarget, checkedLayers, moveTarget } from '../layer-panel';
 import { type ResourceStatus, type ResourceStatusLevel, resourceStatuses } from '../resource-status';
-import { arrowStep } from './ResourceTreeList';
 import styles from './CheckedLayerList.module.scss';
 
 const HANDLE = '[data-drag-handle="checked"]';

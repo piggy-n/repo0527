@@ -36,13 +36,37 @@ export function closePanel<Id extends string>(state: PanelGroupState<Id>, id: Id
   };
 }
 
-/** 入口的点击：没打开时打开并切到它，打开了但没在显示时切到它，正在显示时关闭 */
+/**
+ * 入口的点击：按实际的显示决定。没打开、打开了但没在显示、整组被隐藏（窄屏时让给了另一边）时打开并切到它，
+ * 正在显示时才关闭（2026-10-16 评审发现：只看当前的 Tab 时，让出去的面板被误关，输入丢失）
+ */
 export function togglePanel<Id extends string>(
   state: PanelGroupState<Id>,
   id: Id,
-  order: readonly Id[]
+  order: readonly Id[],
+  groupShown: boolean
 ): PanelGroupState<Id> {
-  return state.current === id ? closePanel(state, id) : showPanel(state, id, order);
+  return groupShown && state.current === id ? closePanel(state, id) : showPanel(state, id, order);
+}
+
+/** 一段横向的范围（屏幕坐标） */
+export interface HorizontalSpan {
+  readonly left: number;
+  readonly right: number;
+}
+
+/**
+ * 横向滚动的 Tab 区要滚到哪里，让这个 Tab 完整可见：已经可见时不动，超出左边时贴左边，超出右边时贴右边；
+ * 比可见范围还宽时贴左边，名称在前面
+ */
+export function revealScrollLeft(scrollLeft: number, view: HorizontalSpan, item: HorizontalSpan): number {
+  if (item.left < view.left || item.right - item.left > view.right - view.left) {
+    return scrollLeft - (view.left - item.left);
+  }
+  if (item.right > view.right) {
+    return scrollLeft + (item.right - view.right);
+  }
+  return scrollLeft;
 }
 
 export type MapSide = 'left' | 'right';

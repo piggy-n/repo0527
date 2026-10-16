@@ -6,6 +6,7 @@ import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import type { ResourceGeometry } from '../catalog';
 import type { CatalogOrderOwner } from '../composables/useCatalogOrder';
 import type { ResourceLayers } from '../composables/useResourceLayers';
+import { arrowStep } from '../keyboard';
 import { nodeKey, type PanelNode } from '../layer-panel';
 import styles from './ResourceTreeList.module.scss';
 
@@ -14,14 +15,6 @@ const GEOMETRY_ICONS: Readonly<Record<ResourceGeometry, IconName>> = {
   line: 'geometry-line',
   circle: 'geometry-point'
 };
-
-/** 上下方向键对应的一步；其他键为 0 */
-export function arrowStep(event: KeyboardEvent): -1 | 0 | 1 {
-  if (event.key === 'ArrowUp') {
-    return -1;
-  }
-  return event.key === 'ArrowDown' ? 1 : 0;
-}
 
 /**
  * 目录树里一个父节点下的子节点（ADR 0053 第 6 节）：分类可以展开，资源名称前是几何类型的图标。

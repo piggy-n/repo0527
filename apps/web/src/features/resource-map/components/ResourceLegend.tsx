@@ -5,7 +5,7 @@ import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LegendEntry, legendEntries, legendEntrySet } from '../legend';
 import type { SymbolMode } from '../resource-symbols';
-import { LanduseLegend } from './LanduseLegend';
+import { INITIAL_LANDUSE_BROWSE, type LanduseBrowse, LanduseLegend } from './LanduseLegend';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
 import styles from './ResourceLegend.module.scss';
 import { SymbolEditor } from './SymbolEditor';
@@ -31,7 +31,8 @@ const renderColors = (colors: readonly string[]) => (
  * 资源图层的图例（ADR 0043、0044，设计稿 5D.5）：勾选的资源按叠放顺序各一条，内容从样式登记表和符号覆盖推导，
  * 不读地图、不等视图就绪；统一符号的条目展开后可以编辑符号，按属性配色的条目可以切换样式方式、编辑各取值。
  * 按属性配色的条目在集合变化后只剩一条时自动展开，统一符号展开是编辑，不自动展开。
- * 放在显示面板的 Tab 里，标题、开关和登记由外壳负责；隐藏时不渲染条目，编辑器随之卸载、丢弃取色预览，展开状态保留（ADR 0053 第 4 节）
+ * 放在显示面板的 Tab 里，标题、开关和登记由外壳负责；隐藏时不渲染条目，编辑器、取色器和弹出层随之卸载，丢弃取色预览；
+ * 浏览状态（条目的展开，条目里的分类方式、搜索词、分组展开和正在编辑的项）留在这里，再显示时照旧（ADR 0053 第 4 节）
  */
 export const ResourceLegend = defineComponent({
   name: 'ResourceLegend',
@@ -44,6 +45,15 @@ export const ResourceLegend = defineComponent({
   setup(props) {
     // 条目的展开是图例自己的界面状态，不持久化
     const expanded = ref<ReadonlySet<string>>(new Set());
+    // 条目里的浏览状态，按资源：隐藏时条目卸载，状态留在这里（2026-10-16 评审发现切走再切回时被重置）
+    const landuseBrowse = ref<ReadonlyMap<string, LanduseBrowse>>(new Map());
+    const openValues = ref<ReadonlyMap<string, string | null>>(new Map());
+    const setLanduseBrowse = (code: string, browse: LanduseBrowse) => {
+      landuseBrowse.value = new Map([...landuseBrowse.value, [code, browse]]);
+    };
+    const setOpenValue = (code: string, key: string | null) => {
+      openValues.value = new Map([...openValues.value, [code, key]]);
+    };
     const entries = computed(() =>
       legendEntries(props.layers.state.value, props.layers.configErrors.value, props.symbols.overrideOf)
     );
@@ -82,9 +92,25 @@ export const ResourceLegend = defineComponent({
       if (entry.mode === 'uniform') {
         body = <SymbolEditor symbols={props.symbols} target={target} name={entry.name} />;
       } else if (entry.kind === 'landuse') {
-        body = <LanduseLegend symbols={props.symbols} code={entry.code} swatches={entry.swatches} />;
+        body = (
+          <LanduseLegend
+            symbols={props.symbols}
+            code={entry.code}
+            swatches={entry.swatches}
+            browse={landuseBrowse.value.get(entry.code) ?? INITIAL_LANDUSE_BROWSE}
+            onUpdate:browse={(browse: LanduseBrowse) => setLanduseBrowse(entry.code, browse)}
+          />
+        );
       } else {
-        body = <ValueLegend symbols={props.symbols} code={entry.code} values={entry.values} />;
+        body = (
+          <ValueLegend
+            symbols={props.symbols}
+            code={entry.code}
+            values={entry.values}
+            open={openValues.value.get(entry.code) ?? null}
+            onUpdate:open={(key: string | null) => setOpenValue(entry.code, key)}
+          />
+        );
       }
       return (
         <div class={styles.classified}>

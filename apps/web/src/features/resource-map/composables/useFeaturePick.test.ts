@@ -1437,4 +1437,70 @@ describe('useFeaturePick：和其他操作的交错', () => {
     await vi.waitFor(() => expect(owner.detail.value?.kind).toBe('ready'));
     expect(fitBounds).toHaveBeenCalledOnce();
   });
+
+  it('后端识别为空、转用下面资源的渲染要素：等待期间发起的定位不被作废，晚到的结果不再移动相机（2026-10-16 评审发现）', async () => {
+    const slow = gate();
+    mockIdentify(async () => {
+      await slow.opened;
+      return page(0, []);
+    });
+    const { owner, send, reveal, beginCameraOperation } = setup(12);
+    // 上面两个资源查后端，坑塘不能查询，用渲染要素
+    send(click(), [rendered(SZY, 3)]);
+    expect(kindOf(owner)).toBe('identifying');
+
+    const later = beginCameraOperation();
+    slow.open();
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('detail'));
+    await nextTick();
+
+    expect(later.signal.aborted).toBe(false);
+    expect(reveal).not.toHaveBeenCalled();
+  });
+
+  it('后端识别为空、转用渲染要素，期间没有别的定位：用点击时开始的那次相机操作露出来', async () => {
+    mockIdentify(() => page(0, []));
+    const { owner, send, reveal, beginCameraOperation } = setup(12);
+    send(click(), [rendered(SZY, 3)]);
+
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('detail'));
+    await nextTick();
+
+    expect(reveal).toHaveBeenCalledWith([118.1, 32.9]);
+    expect(beginCameraOperation).toHaveBeenCalledOnce();
+  });
+
+  it('单击时拾取点中的位置抛错：先作废上一轮识别，显示失败，可以重试；上一轮晚到的结果不出现（2026-10-16 评审发现）', async () => {
+    const slow = gate();
+    mockIdentify(async layerCode => {
+      await slow.opened;
+      return layerCode === 'bgdc_dltb_2022' ? page(1, [{ guid: guid(1) }]) : page(0, []);
+    });
+    mockDetail();
+    const { owner, send, pick } = setup(12);
+    send(click());
+    expect(kindOf(owner)).toBe('identifying');
+
+    // 第二次单击时拾取抛错，第一次抛错后恢复正常
+    let failing = true;
+    const view = toolView([], '2d');
+    const flaky: ToolView = {
+      ...view,
+      pick: point => {
+        if (failing) {
+          failing = false;
+          throw new Error('拾取失败');
+        }
+        return view.pick(point);
+      }
+    };
+    expect(() => pick.handleInput?.(click(), flaky)).not.toThrow();
+    expect(owner.state.value).toMatchObject({ kind: 'failed', target: null });
+    slow.open();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(owner.state.value).toMatchObject({ kind: 'failed', target: null });
+
+    owner.retry();
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('detail'));
+  });
 });

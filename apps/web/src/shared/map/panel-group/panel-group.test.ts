@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { closePanel, emptyPanelGroup, showPanel, togglePanel, visibleSides } from './panel-group';
+import { closePanel, emptyPanelGroup, revealScrollLeft, showPanel, togglePanel, visibleSides } from './panel-group';
 import { usePanelGroup } from './usePanelGroup';
 
 const ORDER = ['region', 'coordinate', 'detail'] as const;
@@ -52,26 +52,33 @@ describe('showPanel / closePanel / togglePanel', () => {
   });
 
   it('入口的点击：没打开时打开，打开了但没在显示时切到它，正在显示时关闭', () => {
-    let state = togglePanel(emptyPanelGroup<Id>(), 'region', ORDER);
+    let state = togglePanel(emptyPanelGroup<Id>(), 'region', ORDER, false);
     expect(state.current).toBe('region');
 
-    state = togglePanel(state, 'coordinate', ORDER);
+    state = togglePanel(state, 'coordinate', ORDER, true);
     expect(state.current).toBe('coordinate');
 
-    state = togglePanel(state, 'region', ORDER);
+    state = togglePanel(state, 'region', ORDER, true);
     expect(state.current).toBe('region');
     expect(state.open).toStrictEqual(['region', 'coordinate']);
 
-    state = togglePanel(state, 'region', ORDER);
+    state = togglePanel(state, 'region', ORDER, true);
     expect(state.open).toStrictEqual(['coordinate']);
     expect(state.current).toBe('coordinate');
+  });
+
+  it('整组被隐藏（窄屏时让给了另一边）时点正在显示的入口：不关闭，原样返回（2026-10-16 评审发现）', () => {
+    const state = showPanel(showPanel(emptyPanelGroup<Id>(), 'region', ORDER), 'coordinate', ORDER);
+
+    expect(togglePanel(state, 'coordinate', ORDER, false)).toBe(state);
+    expect(togglePanel(state, 'region', ORDER, false).current).toBe('region');
   });
 });
 
 describe('usePanelGroup', () => {
   it('按规则打开、切换、关闭；没有改变时不替换状态', () => {
     const group = usePanelGroup(ORDER);
-    group.toggle('region');
+    group.toggle('region', true);
     group.show('detail');
 
     expect(group.isOpen('region')).toBe(true);
@@ -93,6 +100,20 @@ describe('usePanelGroup', () => {
     // @ts-expect-error 测试运行时的检查
     expect(() => group.show('legend')).toThrow(RangeError);
     expect(group.state.value).toBe(before);
+  });
+});
+
+describe('revealScrollLeft', () => {
+  const view = { left: 100, right: 283 };
+
+  it('Tab 已经完整可见时不动；超出右边时贴右边，超出左边时贴左边', () => {
+    expect(revealScrollLeft(20, view, { left: 120, right: 200 })).toBe(20);
+    expect(revealScrollLeft(0, view, { left: 250, right: 330 })).toBe(47);
+    expect(revealScrollLeft(89, view, { left: 11, right: 91 })).toBe(0);
+  });
+
+  it('比可见范围还宽时贴左边，名称在前面', () => {
+    expect(revealScrollLeft(0, view, { left: 150, right: 400 })).toBe(50);
   });
 });
 

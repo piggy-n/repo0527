@@ -827,6 +827,48 @@ describe('CurrentMapPage', () => {
     expect(shownPanels(wrapper)).toStrictEqual(['region-locate']);
   });
 
+  it('窄屏时右边让给了资源面板：再点坐标定位、图例是重新显示，输入保留；让出去时入口不显示为按下（2026-10-16 评审发现）', async () => {
+    // jsdom 没有 matchMedia，模拟一个始终是窄屏的版本
+    vi.stubGlobal('matchMedia', (media: string) => ({
+      media,
+      matches: true,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined
+    }));
+    const { wrapper } = await readyPage();
+    const [functionGroup, displayGroup] = wrapper.findAll('[data-panel-group]');
+    const shown = (group: typeof functionGroup) => group?.attributes('style') === undefined;
+
+    await button(wrapper, '坐标定位').trigger('click');
+    await wrapper.get('input[aria-label="经度"]').setValue('118.5');
+    await button(wrapper, '图例').trigger('click');
+    expect(shown(functionGroup)).toBe(true);
+
+    // 展开资源面板：右边整个让出去，打开的功能保留
+    await button(wrapper, '展开资源图层').trigger('click');
+    expect(shown(functionGroup)).toBe(false);
+    expect(shown(displayGroup)).toBe(false);
+    expect(button(wrapper, '坐标定位').attributes('aria-pressed')).toBe('false');
+    expect(button(wrapper, '图例').attributes('aria-pressed')).toBe('false');
+
+    await button(wrapper, '坐标定位').trigger('click');
+    expect(shown(functionGroup)).toBe(true);
+    expect(shownPanels(wrapper)).toContain('coordinate-locate');
+    expect((wrapper.get('input[aria-label="经度"]').element as HTMLInputElement).value).toBe('118.5');
+    expect(button(wrapper, '坐标定位').attributes('aria-pressed')).toBe('true');
+    expect(wrapper.find('button[aria-label="展开资源图层"]').exists()).toBe(true);
+
+    // 图例同样：让出去以后再点是重新显示
+    await button(wrapper, '展开资源图层').trigger('click');
+    await button(wrapper, '图例').trigger('click');
+    expect(shown(displayGroup)).toBe(true);
+    expect(shownPanels(wrapper)).toContain('legend');
+
+    // 显示着时再点才关闭
+    await button(wrapper, '坐标定位').trigger('click');
+    expect(wrapper.find('[data-coordinate-locate-panel]').exists()).toBe(false);
+  });
+
   it('输入坐标定位：规范写法，放下图钉并飞过去；单击图钉看位置信息，两种格式和所在区划', async () => {
     stubBoundaryFetch();
     const { wrapper, map } = await readyPage();

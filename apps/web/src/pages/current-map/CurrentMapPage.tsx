@@ -28,7 +28,7 @@ import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
 import { useMeasure } from '@/shared/map/measure/useMeasure';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
-import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
+import { type PanelGroup, usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { MapStatusBar } from '@/shared/map/status-bar/MapStatusBar';
 import { useMapReadout } from '@/shared/map/status-bar/useMapReadout';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
@@ -141,15 +141,20 @@ export const CurrentMapPage = defineComponent({
       measure: measure.deriveGroup
     });
 
-    // 右侧的入口：工具栏的区划定位、坐标定位，卡片行的图例、底图；关闭面板不清掉选择和位置点（ADR 0036、0037）
+    // 右侧的入口：工具栏的区划定位、坐标定位，卡片行的图例、底图；关闭面板不清掉选择和位置点（ADR 0036、0037）。
+    // 按点击时右边是否显示决定：窄屏时让给了左边就是重新显示，不是关闭
     const toggleFunction = (id: LocatePanel) => {
+      const shown = sides.right.value;
       sides.activate('right');
-      functions.toggle(id);
+      functions.toggle(id, shown);
     };
     const toggleDisplay = (id: DisplayPanel) => {
+      const shown = sides.right.value;
       sides.activate('right');
-      display.toggle(id);
+      display.toggle(id, shown);
     };
+    // 入口显示为按下：打开着，而且右边没有让出去
+    const pressedIn = (group: PanelGroup, id: string) => sides.right.value && group.isOpen(id);
     // 关闭资源详情就是清除选择（ADR 0053 第 4 节）；外壳已经从组里关掉了它
     const closeFunction = (id: string) => {
       if (id === 'feature-detail') {
@@ -176,14 +181,14 @@ export const CurrentMapPage = defineComponent({
         <div class={styles.cards} data-map-cards>
           <MapCard
             label={PANEL_LABELS.legend}
-            pressed={display.isOpen('legend')}
+            pressed={pressedIn(display, 'legend')}
             onClick={() => toggleDisplay('legend')}>
             {{ icon: () => [<SvgIcon name="map-legend" size={20} />] }}
           </MapCard>
           <MapCard
             label={current.shortLabel}
             name={`${PANEL_LABELS.basemap}：${current.label}`}
-            pressed={display.isOpen('basemap')}
+            pressed={pressedIn(display, 'basemap')}
             onClick={() => toggleDisplay('basemap')}>
             {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[current.id]} />] }}
           </MapCard>
@@ -192,7 +197,7 @@ export const CurrentMapPage = defineComponent({
     };
 
     return () => {
-      const pressed = (['region-locate', 'coordinate-locate'] as const).filter(id => functions.isOpen(id));
+      const pressed = (['region-locate', 'coordinate-locate'] as const).filter(id => pressedIn(functions, id));
       const { phone, compactToolbar } = layout.value;
       // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示
       const scopeShown = !phone || !sides.left.value;

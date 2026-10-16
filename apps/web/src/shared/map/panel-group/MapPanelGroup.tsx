@@ -2,7 +2,8 @@ import { Close } from '@element-plus/icons-vue';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel } from '@yzt/ui';
 import { ElButton } from 'element-plus';
-import { defineComponent, type PropType, ref, type SlotsType, type VNode } from 'vue';
+import { defineComponent, type PropType, ref, type SlotsType, type VNode, watch } from 'vue';
+import { revealScrollLeft } from './panel-group';
 import type { PanelGroup } from './usePanelGroup';
 import styles from './MapPanelGroup.module.scss';
 
@@ -14,7 +15,8 @@ export interface PanelSlotProps {
 
 /**
  * 一组 Tab 面板的外壳（ADR 0053 第 4 节）：头部是已打开功能的 Tab，同一时间只显示一个内容。
- * 打开期间内容一直挂载，切走时只隐藏；关闭时卸载。外壳代表整组登记为贴右边的悬浮元素，隐藏时不算
+ * 打开期间内容一直挂载，切走时只隐藏；关闭时卸载。外壳代表整组登记为贴右边的悬浮元素，隐藏时不算。
+ * Tab 放不下时（手机宽度时三个功能）在自己的区域里横向滚动，当前的 Tab 连同关闭按钮滚进可见范围
  */
 export const MapPanelGroup = defineComponent({
   name: 'MapPanelGroup',
@@ -33,6 +35,24 @@ export const MapPanelGroup = defineComponent({
   setup(props, { emit, slots }) {
     const element = ref<HTMLElement>();
     useMapOverlay(element, 'right');
+
+    // 换了当前的 Tab、打开了新的、整组重新显示时，把当前的 Tab 滚进可见范围；隐藏时量不到尺寸，什么也不做
+    const tabs = ref<HTMLElement>();
+    watch(
+      [() => props.group.state.value.current, () => props.group.state.value.open.length, () => props.visible],
+      () => {
+        const list = tabs.value;
+        const current = list?.querySelector('[aria-selected="true"]')?.parentElement;
+        if (list && current) {
+          list.scrollLeft = revealScrollLeft(
+            list.scrollLeft,
+            list.getBoundingClientRect(),
+            current.getBoundingClientRect()
+          );
+        }
+      },
+      { flush: 'post' }
+    );
 
     const close = (id: string) => {
       props.group.close(id);
@@ -65,7 +85,7 @@ export const MapPanelGroup = defineComponent({
             <MxPanel floating class={styles.shell}>
               {{
                 header: () => (
-                  <div class={styles.tabs} role="tablist">
+                  <div ref={tabs} class={styles.tabs} role="tablist">
                     {open.map(id => renderTab(id, id === current))}
                   </div>
                 ),
