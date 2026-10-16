@@ -3,7 +3,7 @@ import { provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { ElOption, ElSelect, ElSlider } from 'element-plus';
 import SortableJS from 'sortablejs';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref, shallowRef } from 'vue';
 import type { ResourceTreeCategory } from '../api';
 import { buildCatalog, type ResourceCatalog } from '../catalog';
@@ -49,7 +49,11 @@ const LAND = '基础库 / 土地资源';
  * 页面创建地图和拥有者，渲染面板；没有画布，只看面板和拥有者的状态。null 表示目录还没到；
  * 要检查焦点时挂到文档上（脱离文档的元素不能获得焦点）
  */
-async function mountPanel(catalog: ResourceCatalog | null = CATALOG, attach = false) {
+async function mountPanel(
+  catalog: ResourceCatalog | null = CATALOG,
+  attach = false,
+  validate?: (catalog: ResourceCatalog | null) => ReadonlyMap<string, readonly string[]>
+) {
   const source = shallowRef(catalog ?? undefined);
   const failed = ref(false);
   const onRetry = vi.fn<() => void>();
@@ -58,7 +62,7 @@ async function mountPanel(catalog: ResourceCatalog | null = CATALOG, attach = fa
   let owners: { layers: ResourceLayers; order: CatalogOrderOwner; layout: ResourcePanelLayout } | undefined;
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
-    const layers = useResourceLayers(map, { catalog: source, tileBase: 'http://localhost/tiles/' });
+    const layers = useResourceLayers(map, { catalog: source, tileBase: 'http://localhost/tiles/', validate });
     const order = useCatalogOrder();
     const layout = useResourcePanelLayout();
     map.bindStyle({ resources: layers.deriveGroup });
@@ -110,6 +114,12 @@ function drop(list: Element, from: number, to: number) {
   const event = { item, from: list, oldIndex: from, newIndex: to, oldDraggableIndex: from, newDraggableIndex: to };
   sortable.options.onEnd?.(event as unknown as SortableJS.SortableEvent);
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+  // Element 的提示挂在 body 下，不归组件管
+  document.body.innerHTML = '';
+});
 
 describe('ResourceLayerPanel', () => {
   it('目录还没到：显示加载中；加载失败：显示失败和重试', async () => {
@@ -246,7 +256,7 @@ describe('ResourceLayerPanel', () => {
     expect(button(wrapper, '地类图斑的透明度').text()).toBe('40%');
   });
 
-  it('级别不够时名称后有信息图标，提示放大到几级；级别够了就没有', async () => {
+  it('级别不够时名称后有说明图标，提示放大到几级；级别够了就没有，位置仍然留着（ADR 0059）', async () => {
     const { wrapper, owner } = await mountPanel();
     const minzoom = owner.minzoomOf('bgdc_cjdcq');
     if (minzoom === undefined || minzoom <= CAMERA.zoom) {
@@ -255,11 +265,37 @@ describe('ResourceLayerPanel', () => {
     owner.setChecked('bgdc_cjdcq', true);
     await nextTick();
 
-    expect(wrapper.get('[data-layer="bgdc_cjdcq"] [role="img"]').attributes('aria-label')).toBe(
-      `放大至第 ${minzoom} 级显示`
-    );
+    const status = wrapper.get('[data-layer="bgdc_cjdcq"] [role="img"]');
+    expect(status.attributes('data-status')).toBe('minzoom');
+    expect(status.attributes('aria-label')).toBe(`放大至第 ${minzoom} 级显示`);
     expect(wrapper.get('[data-layer="bgdc_cjdcq"]').text()).not.toContain('放大');
-    expect(wrapper.find('[data-layer="bgdc_dltb"] [role="img"]').exists()).toBe(false);
+    // 地类图斑没有状态：没有图标，名称后面的位置照样在
+    const dltb = wrapper.get('[data-layer="bgdc_dltb"]');
+    expect(dltb.find('[role="img"]').exists()).toBe(false);
+    expect(dltb.get('[title="地类图斑"]').element.nextElementSibling?.childElementCount).toBe(0);
+  });
+
+  it('配置错误：名称后是错误图标，不再在名称下面多一行；悬停时显示提示（ADR 0059）', async () => {
+    vi.useFakeTimers();
+    // 拥有者把配置错误打印到控制台
+    using consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const reasons = ['layers[0]: missing required property "source"'];
+    const { wrapper, owner } = await mountPanel(CATALOG, true, () => new Map([['bgdc_dltb', reasons]]));
+    owner.setChecked('bgdc_dltb', true);
+    await nextTick();
+
+    const row = wrapper.get('[data-layer="bgdc_dltb"]');
+    const status = row.get('[role="img"]');
+    expect(status.attributes('data-status')).toBe('config-error');
+    expect(status.attributes('aria-label')).toBe('配置错误');
+    expect(row.text()).not.toContain('配置错误');
+
+    await status.trigger('mouseenter');
+    await vi.runAllTimersAsync();
+    // body 下还有批量设置年份的下拉，按内容找状态的提示
+    const tips = [...document.body.querySelectorAll('[role="tooltip"]')].map(tip => tip.textContent);
+    expect(tips).toContain('配置错误');
+    expect(consoleError).toHaveBeenCalled();
   });
 
   it('收起按钮通知页面；显示为收起时是竖条，点它通知展开', async () => {

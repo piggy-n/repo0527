@@ -66,6 +66,11 @@ describe('RegionLocatePanel', () => {
   it('列出 13 个市（不带"市"字）；开始时是全省，没有区县', () => {
     const { wrapper } = mountPanel();
 
+    // 文案（2026-10-16 用户要求）：搜索框写"区/县"，市的小标题只写"市"
+    expect(wrapper.get('input').attributes('placeholder')).toBe('搜索市、区/县');
+    expect(wrapper.findAll('div').some(candidate => candidate.text() === '市')).toBe(true);
+    expect(wrapper.text()).not.toContain('设区市');
+
     expect(trail(wrapper)).toStrictEqual(['江苏省']);
     expect(links(wrapper)).toStrictEqual([]);
     expect(button(wrapper, '南京').exists()).toBe(true);
@@ -79,7 +84,7 @@ describe('RegionLocatePanel', () => {
     await button(wrapper, '南京').trigger('click');
     expect(region.state.value.selected?.code).toBe('320100');
     expect(trail(wrapper)).toStrictEqual(['江苏省', '南京市']);
-    expect(wrapper.text()).toContain('南京市的区县');
+    expect(wrapper.text()).toContain('南京市的区/县');
     expect(isPressed(wrapper, '南京')).toBe(true);
     expect(isPressed(wrapper, '无锡')).toBe(false);
 

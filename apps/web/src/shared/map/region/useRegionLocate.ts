@@ -9,7 +9,8 @@ import { regionGroup } from './region-style';
 /** 选中区划的边界：全省没有边界；加载失败时记下原因，可以重试 */
 export type RegionBoundaryStatus =
   | { readonly kind: 'none' }
-  | { readonly kind: 'loading' }
+  /** previous 是换选之前加载好的边界，加载期间沿用它（从全省、失败开始时为 null） */
+  | { readonly kind: 'loading'; readonly previous: RegionBoundary | null }
   | { readonly kind: 'ready'; readonly boundary: RegionBoundary }
   | { readonly kind: 'failed'; readonly error: unknown };
 
@@ -42,9 +43,15 @@ const FIT_OPTIONS: FitBoundsOptions = { duration: 1100, maxZoom: 14.5, pitch: 0 
 
 const NONE: RegionLocateState = Object.freeze({ selected: null, boundary: Object.freeze({ kind: 'none' }) });
 
-/** 加载好的边界：选中市或区县、边界加载成功时才有；区划轮廓、裁剪的遮罩和查询范围都用它（ADR 0051 第 1 节） */
+/**
+ * 生效的边界：选中市或区县、边界加载成功时是它；区划轮廓、裁剪的遮罩和查询范围都用它（ADR 0051 第 1 节）。
+ * 从一个区划换到另一个时，新边界加载期间仍是上一个：不先撤掉遮罩、闪出全部区划（2026-10-16 用户发现）
+ */
 export function readyBoundary({ boundary }: RegionLocateState): RegionBoundary | null {
-  return boundary.kind === 'ready' ? boundary.boundary : null;
+  if (boundary.kind === 'ready') {
+    return boundary.boundary;
+  }
+  return boundary.kind === 'loading' ? boundary.previous : null;
 }
 
 /**
@@ -75,7 +82,7 @@ export function useRegionLocate(
     // 选择区划是一次相机操作，之前没完成的定位作废；之后又有了新的操作（拖动、缩放、默认视角、坐标定位）时，
     // 边界到位后只高亮，不覆盖当前视角（ADR 0038）
     const operation = map.beginCameraOperation();
-    state.value = { selected: region, boundary: { kind: 'loading' } };
+    state.value = { selected: region, boundary: { kind: 'loading', previous: readyBoundary(state.value) } };
     let boundary: RegionBoundary;
     try {
       boundary = await loader.load(region);

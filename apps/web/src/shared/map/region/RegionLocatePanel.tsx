@@ -123,8 +123,8 @@ export const RegionLocatePanel = defineComponent({
             modelValue={keyword.value}
             prefixIcon={Search}
             clearable
-            placeholder="搜索市、区县"
-            aria-label="搜索市、区县"
+            placeholder="搜索市、区/县"
+            aria-label="搜索市、区/县"
             onUpdate:modelValue={(value: string) => (keyword.value = value)}
             onKeydown={(event: KeyboardEvent | Event) => {
               if (event instanceof KeyboardEvent && event.key === 'Enter' && !event.isComposing) {
@@ -136,10 +136,10 @@ export const RegionLocatePanel = defineComponent({
             ? renderResults()
             : [
                 renderTrail(),
-                <div class={styles.groupLabel}>设区市</div>,
+                <div class={styles.groupLabel}>市</div>,
                 renderChips(JIANGSU_CITIES, selected?.cityCode, true),
                 city && [
-                  <div class={styles.groupLabel}>{city.name}的区县</div>,
+                  <div class={styles.groupLabel}>{city.name}的区/县</div>,
                   renderChips(districtsOf(city.code), selected?.code, false)
                 ]
               ]}

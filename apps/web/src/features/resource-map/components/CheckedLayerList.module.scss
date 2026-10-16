@@ -73,10 +73,18 @@
   white-space: nowrap;
 }
 
-.info {
+// 名称后面固定 16 × 16 的位置（ADR 0059），名称太长时省略，不挤占它
+.status {
   display: inline-flex;
   flex: none;
-  color: var(--color-text-secondary);
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.statusIcon {
+  display: inline-flex;
   cursor: help;
 
   &:focus-visible {
@@ -84,6 +92,55 @@
     outline-offset: 1px;
     border-radius: 50%;
   }
+}
+
+// 级别的颜色：图标和提示里的小圆点共用
+.error {
+  color: var(--color-danger);
+
+  &.dot {
+    background-color: var(--color-danger);
+  }
+}
+
+.warning {
+  color: var(--color-warning);
+
+  &.dot {
+    background-color: var(--color-warning);
+  }
+}
+
+.info {
+  color: var(--color-text-secondary);
+
+  &.dot {
+    background-color: var(--color-text-secondary);
+  }
+}
+
+// 提示：按严重程度一条一行，前面一个同色的小圆点
+.tipList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tipItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
 // 带边框的百分比，看得出能点；点开是滑块
@@ -130,19 +187,6 @@
   &:hover {
     color: var(--color-danger);
   }
-}
-
-.extra {
-  padding: 0 8px 6px 30px;
-  font-size: var(--font-size-xs);
-}
-
-.warning {
-  color: var(--color-warning);
-}
-
-.error {
-  color: var(--color-danger);
 }
 
 // 透明度滑块在行下面单独一行、垂直居中：从名称开始（2 + 手柄 16 + 6 + 年份 48 + 6），到透明度框的右边为止

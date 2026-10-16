@@ -111,7 +111,7 @@ describe('useRegionLocate', () => {
 
     locate.select('320213');
     const operation = camera.operation;
-    expect(locate.state.value).toStrictEqual({ selected: region('320213'), boundary: { kind: 'loading' } });
+    expect(locate.state.value).toStrictEqual({ selected: region('320213'), boundary: { kind: 'loading', previous: null } });
     expect(locate.deriveGroup().layers).toStrictEqual([]);
     expect(runs).toStrictEqual([]);
 
@@ -125,6 +125,44 @@ describe('useRegionLocate', () => {
     expect(Object.keys(locate.deriveGroup().sources)).toStrictEqual(['region']);
     expect(runs).toStrictEqual([operation]);
     expect(fitBounds.mock.calls).toStrictEqual([[boundaryOf('320213').bounds, FIT_OPTIONS]]);
+  });
+
+  it('从一个区划换到另一个：新边界加载期间仍用上一个的边界，轮廓、遮罩和查询范围不会先闪出全部区划（2026-10-16 用户发现）', async () => {
+    const { locate, resolve, reject } = setup();
+    locate.select('320100');
+    resolve('320100');
+    await settle();
+    const nanjing = boundaryOf('320100');
+    const outline = locate.deriveGroup();
+
+    locate.select('320213');
+    expect(locate.state.value.selected).toStrictEqual(region('320213'));
+    expect(locate.state.value.boundary.kind).toBe('loading');
+    expect(readyBoundary(locate.state.value)).toStrictEqual(nanjing);
+    expect(locate.deriveGroup()).toStrictEqual(outline);
+
+    // 加载中又换一次：仍是最后加载好的那个
+    locate.select('320102');
+    expect(readyBoundary(locate.state.value)).toStrictEqual(nanjing);
+    resolve('320102');
+    await settle();
+    expect(readyBoundary(locate.state.value)).toStrictEqual(boundaryOf('320102'));
+
+    // 新的加载失败时不再沿用：显示全部区划，面板提示失败
+    locate.select('320200');
+    reject('320200', new Error('断网'));
+    await settle();
+    expect(readyBoundary(locate.state.value)).toBeNull();
+  });
+
+  it('回到全省时马上不再有边界，不等加载', () => {
+    const { locate } = setup();
+    locate.select('320100');
+
+    locate.select(null);
+
+    expect(readyBoundary(locate.state.value)).toBeNull();
+    expect(locate.deriveGroup()).toStrictEqual({ sources: {}, layers: [] });
   });
 
   it('选择本身是一次相机操作，作废之前没完成的定位；相机移动（如上一次定位的动画）不算新的操作', async () => {
@@ -220,7 +258,7 @@ describe('useRegionLocate', () => {
     cleared.reject('320100', new Error('断网'));
     await settle();
 
-    expect(switched.locate.state.value).toStrictEqual({ selected: region('320213'), boundary: { kind: 'loading' } });
+    expect(switched.locate.state.value).toStrictEqual({ selected: region('320213'), boundary: { kind: 'loading', previous: null } });
     expect(cleared.locate.state.value).toStrictEqual({ selected: null, boundary: { kind: 'none' } });
   });
 
@@ -250,7 +288,7 @@ describe('useRegionLocate', () => {
     expect(fitBounds).not.toHaveBeenCalled();
 
     locate.retry();
-    expect(locate.state.value.boundary).toStrictEqual({ kind: 'loading' });
+    expect(locate.state.value.boundary).toStrictEqual({ kind: 'loading', previous: null });
     resolve('320100');
     await settle();
     locate.retry();
@@ -268,7 +306,7 @@ describe('useRegionLocate', () => {
     resolve('320100');
     await settle();
 
-    expect(locate.state.value.boundary).toStrictEqual({ kind: 'loading' });
+    expect(locate.state.value.boundary).toStrictEqual({ kind: 'loading', previous: null });
     expect(runs).toStrictEqual([]);
   });
 
@@ -303,12 +341,15 @@ describe('useRegionLocate', () => {
     expect(nextRegionSelection(region('320102'), region('320100'))).toBeNull();
   });
 
-  it('加载好的边界只在加载成功时有：全省、加载中、加载失败时为 null', () => {
+  it('生效的边界：加载成功时是它，换选的加载期间是上一个；全省、从全省开始加载、加载失败时为 null', () => {
     const boundary = boundaryOf('320102');
     const selected = region('320102');
 
     expect(readyBoundary({ selected: null, boundary: { kind: 'none' } })).toBeNull();
-    expect(readyBoundary({ selected, boundary: { kind: 'loading' } })).toBeNull();
+    expect(readyBoundary({ selected, boundary: { kind: 'loading', previous: null } })).toBeNull();
+    expect(readyBoundary({ selected, boundary: { kind: 'loading', previous: boundaryOf('320100') } })).toStrictEqual(
+      boundaryOf('320100')
+    );
     expect(readyBoundary({ selected, boundary: { kind: 'failed', error: new Error('下载失败') } })).toBeNull();
     expect(readyBoundary({ selected, boundary: { kind: 'ready', boundary } })).toBe(boundary);
   });

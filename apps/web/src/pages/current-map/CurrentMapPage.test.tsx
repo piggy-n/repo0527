@@ -990,7 +990,7 @@ describe('CurrentMapPage', () => {
     expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
   });
 
-  it('勾选了但级别不够的资源在信息图标里提示放大到几级；瓦片加载失败直接标在对应的资源上', async () => {
+  it('勾选了但级别不够的资源在状态图标里提示放大到几级；瓦片加载失败标在对应资源的图标上（ADR 0059）', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
     expect(wrapper.find('[data-layer="bgdc_cjdcq"]').exists()).toBe(false);
@@ -1002,12 +1002,23 @@ describe('CurrentMapPage', () => {
     const tileError = new Error('Unable to parse the tile');
     map.fire('error', { error: tileError, sourceId: 'resources-bgdc_dltb' });
     await nextTick();
-    expect(layerRow(wrapper, 'bgdc_dltb').text()).toContain('部分瓦片加载失败');
+    // 图标是更严重的瓦片加载失败，名称下面不再多一行
+    const dltb = layerRow(wrapper, 'bgdc_dltb').get('[role="img"]');
+    expect(dltb.attributes('data-status')).toBe('tile-error');
+    expect(dltb.attributes('aria-label')).toBe('有瓦片加载失败');
+    expect(layerRow(wrapper, 'bgdc_dltb').text()).not.toContain('瓦片');
     expect(consoleError).toHaveBeenCalledWith('[map-vue]', tileError);
+
+    // 级别不够的资源又有瓦片加载失败：图标换成更严重的，提示里两条都在
+    map.fire('error', { error: tileError, sourceId: 'resources-bgdc_cjdcq' });
+    await nextTick();
+    const cjdcq = layerRow(wrapper, 'bgdc_cjdcq').get('[role="img"]');
+    expect(cjdcq.attributes('data-status')).toBe('tile-error');
+    expect(cjdcq.attributes('aria-label')).toBe('有瓦片加载失败；放大至第 9 级显示');
 
     map.moveTo([118.8, 32.05], 9, { originalEvent: new MouseEvent('wheel') });
     await nextTick();
-    expect(layerRow(wrapper, 'bgdc_cjdcq').find('[role="img"]').exists()).toBe(false);
+    expect(layerRow(wrapper, 'bgdc_cjdcq').get('[role="img"]').attributes('aria-label')).toBe('有瓦片加载失败');
   });
 
   it('点选：14 级起点中地类图斑直接出详情，高亮插在注记下面；离开点选工具时清除', async () => {
