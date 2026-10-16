@@ -38,7 +38,15 @@ export type ProfileName = keyof typeof NETWORK_PROFILES;
 const CHANNELS = ['msedge', 'chrome', 'chromium'] as const;
 export type Channel = (typeof CHANNELS)[number];
 
+/** 一份要测的构建：名称用在报告里，目录相对 apps/web */
+export interface Build {
+  readonly name: string;
+  readonly dir: string;
+}
+
 export interface MeasureOptions {
+  /** 要测的构建；有多份时交替测量，第一份是对比的参照 */
+  readonly builds: readonly Build[];
   readonly runs: number;
   readonly profiles: readonly ProfileName[];
   /** 登录页停留的毫秒数，模拟输入账号密码的时间 */
@@ -63,6 +71,24 @@ function isChannel(name: string): name is Channel {
   return (CHANNELS as readonly string[]).includes(name);
 }
 
+const NAME = /^[\w-]+$/;
+
+// "名称=目录,名称=目录"；名称不能重复
+function parseBuilds(text: string): Build[] {
+  const builds = text.split(',').map(item => {
+    const [name = '', dir = '', ...rest] = item.split('=').map(part => part.trim());
+    if (!NAME.test(name) || dir === '' || rest.length > 0) {
+      throw new Error(`--builds 的每一项要写成 名称=目录，名称只能有字母、数字、下划线和连字符，收到 ${item}`);
+    }
+    return { name, dir };
+  });
+  const names = builds.map(({ name }) => name);
+  if (new Set(names).size !== names.length) {
+    throw new Error(`--builds 的名称重复：${text}`);
+  }
+  return builds;
+}
+
 function integerAtLeast(text: string, min: number, option: string): number {
   const value = Number(text);
   if (!Number.isInteger(value) || value < min) {
@@ -79,6 +105,7 @@ export function parseOptions(argv: readonly string[]): MeasureOptions {
     args,
     strict: true,
     options: {
+      builds: { type: 'string' },
       runs: { type: 'string', default: '5' },
       profiles: { type: 'string', default: 'none,fast4g,slow4g' },
       dwell: { type: 'string', default: '5000' },
@@ -98,10 +125,14 @@ export function parseOptions(argv: readonly string[]): MeasureOptions {
   if (!isChannel(values.channel)) {
     throw new Error(`--channel 只能是 ${CHANNELS.join('、')}，收到 ${values.channel}`);
   }
-  if (!/^[\w-]+$/.test(values.label)) {
+  if (!NAME.test(values.label)) {
     throw new Error(`--label 只能有字母、数字、下划线和连字符，收到 ${values.label}`);
   }
+  if (values.url !== undefined && values.builds !== undefined) {
+    throw new Error('--url 和 --builds 不能同时给出：给了地址时测的是那个服务器');
+  }
   return {
+    builds: values.builds === undefined ? [{ name: 'dist', dir: 'dist' }] : parseBuilds(values.builds),
     runs: integerAtLeast(values.runs, 1, 'runs'),
     profiles: profiles.filter(isProfileName),
     dwell: integerAtLeast(values.dwell, 0, 'dwell'),
@@ -304,5 +335,51 @@ export function formatReport(results: readonly ProfileResult[]): string {
     '登录页停留期间的长任务（超过 50 毫秒的任务，毫秒）：',
     '',
     ...longTasks
+  ].join('\n');
+}
+
+export interface BuildResult {
+  readonly build: string;
+  readonly profiles: readonly ProfileResult[];
+}
+
+// 和参照的差：负数是更快
+function delta(value: number | undefined, reference: number | undefined): string {
+  if (value === undefined || reference === undefined) {
+    return '';
+  }
+  const difference = Math.round(value - reference);
+  return `（${difference > 0 ? '+' : ''}${difference}）`;
+}
+
+/** 多份构建的对比：每份一行，第一份是参照；画面稳定、视图就绪、登录页停留期间长任务的总时长，都是中位数 */
+export function formatComparison(builds: readonly BuildResult[]): string {
+  const [reference] = builds;
+  if (!reference) {
+    return '';
+  }
+  const profiles = reference.profiles.map(({ profile }) => profile);
+  const done = (result: BuildResult, profile: ProfileName) =>
+    result.profiles.find(item => item.profile === profile)?.runs.filter(({ settled }) => settled) ?? [];
+  const table = (title: string, pick: (run: RunSummary) => number | undefined, withDelta: boolean) => [
+    title,
+    '',
+    `| 构建 | ${profiles.map(profile => NETWORK_PROFILES[profile].label).join(' | ')} |`,
+    `|---|${profiles.map(() => '---|').join('')}`,
+    ...builds.map(result => {
+      const cells = profiles.map(profile => {
+        const value = medianOf(done(result, profile), pick);
+        const base = medianOf(done(reference, profile), pick);
+        return `${ms(value)}${withDelta && result !== reference ? delta(value, base) : ''}`;
+      });
+      return `| ${result.build} | ${cells.join(' | ')} |`;
+    })
+  ];
+  return [
+    ...table(`画面稳定（毫秒，括号里是和 ${reference.build} 的差）：`, run => run.steps.settled, true),
+    '',
+    ...table(`视图就绪（毫秒，括号里是和 ${reference.build} 的差）：`, run => run.steps['view-ready'], true),
+    '',
+    ...table('登录页停留期间长任务的总时长（毫秒）：', run => run.dwellLongTasks.total, false)
   ].join('\n');
 }

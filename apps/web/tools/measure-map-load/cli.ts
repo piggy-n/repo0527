@@ -1,16 +1,17 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type Browser, chromium, type Request } from 'playwright';
-import { preview } from 'vite';
+import { preview, type PreviewServer } from 'vite';
 import {
+  type BuildResult,
   type FinishedRequest,
+  formatComparison,
   formatReport,
   type LongTask,
   type MeasureOptions,
   NETWORK_PROFILES,
   parseOptions,
   type ProfileName,
-  type ProfileResult,
   type RawRun,
   STEPS,
   summarizeRun,
@@ -147,25 +148,39 @@ async function measureOnce(browser: Browser, baseUrl: string, profile: ProfileNa
   }
 }
 
-async function measureAll(baseUrl: string, measure: MeasureOptions): Promise<{ profile: ProfileName; raw: RawRun[] }[]> {
+interface Target {
+  readonly name: string;
+  readonly baseUrl: string;
+}
+
+interface BuildRaw {
+  readonly build: string;
+  readonly profiles: { readonly profile: ProfileName; readonly raw: RawRun[] }[];
+}
+
+async function measureAll(targets: readonly Target[], measure: MeasureOptions): Promise<BuildRaw[]> {
   const browser = await chromium.launch({
     channel: measure.channel === 'chromium' ? undefined : measure.channel,
     headless: measure.headless
   });
   try {
-    const results: { profile: ProfileName; raw: RawRun[] }[] = [];
-    for (const profile of measure.profiles) {
-      const raw: RawRun[] = [];
+    const results = targets.map(({ name }) => ({
+      build: name,
+      profiles: measure.profiles.map(profile => ({ profile, raw: [] as RawRun[] }))
+    }));
+    for (const [profileIndex, profile] of measure.profiles.entries()) {
       for (let run = 1; run <= measure.runs; run++) {
-        // oxlint-disable-next-line no-await-in-loop -- 每次实测依次进行：同时进行会互相抢带宽和 CPU
-        const result = await measureOnce(browser, baseUrl, profile);
-        const settledAt = result.measures.settled;
-        console.log(
-          `[measure] ${NETWORK_PROFILES[profile].label} 第 ${run} 次：${settledAt === undefined ? '没有等到画面稳定' : `画面稳定 ${Math.round(settledAt)} ms`}`
-        );
-        raw.push(result);
+        // 各份构建交替测量：网络的波动平均分到每一份上，不集中在某一份
+        for (const [buildIndex, target] of targets.entries()) {
+          // oxlint-disable-next-line no-await-in-loop -- 每次实测依次进行：同时进行会互相抢带宽和 CPU
+          const result = await measureOnce(browser, target.baseUrl, profile);
+          results[buildIndex]?.profiles[profileIndex]?.raw.push(result);
+          const settledAt = result.measures.settled;
+          console.log(
+            `[measure] ${target.name}，${NETWORK_PROFILES[profile].label} 第 ${run} 次：${settledAt === undefined ? '没有等到画面稳定' : `画面稳定 ${Math.round(settledAt)} ms`}`
+          );
+        }
       }
-      results.push({ profile, raw });
     }
     return results;
   } finally {
@@ -173,27 +188,50 @@ async function measureAll(baseUrl: string, measure: MeasureOptions): Promise<{ p
   }
 }
 
-if (!options.url && !existsSync(resolve(appRoot, 'dist/index.html'))) {
-  console.error('[measure] 没有构建产物，请先运行 pnpm build（pnpm measure:map-load 会先构建）');
-  process.exit(1);
-}
-// 不给地址时用 vite preview 提供构建产物，接口按 vite.config.ts 的代理转发
-const server = options.url ? undefined : await preview({ root: appRoot, logLevel: 'warn', preview: { open: false } });
+// 不给地址时每份构建各用一个 vite preview 提供，接口按 vite.config.ts 的代理转发
+const servers: PreviewServer[] = [];
 try {
-  const baseUrl = options.url ?? server?.resolvedUrls?.local[0];
-  if (!baseUrl) {
-    throw new Error('预览服务器没有给出地址');
+  const targets: Target[] = [];
+  if (options.url) {
+    targets.push({ name: options.label, baseUrl: options.url });
   }
-  console.log(`[measure] ${baseUrl}，每档 ${options.runs} 次，登录页停留 ${options.dwell} ms，CPU ${options.cpu}×，${options.channel}`);
-  const results = await measureAll(baseUrl, options);
-  const report: ProfileResult[] = results.map(({ profile, raw }) => ({ profile, runs: raw.map(summarizeRun) }));
-  console.log(`\n${formatReport(report)}\n`);
+  for (const { name, dir } of options.url ? [] : options.builds) {
+    const outDir = resolve(appRoot, dir);
+    if (!existsSync(resolve(outDir, 'index.html'))) {
+      throw new Error(`${dir} 里没有构建产物，请先构建（pnpm measure:map-load 会先构建 dist）`);
+    }
+    // oxlint-disable-next-line no-await-in-loop -- 依次启动，各自分到不同的端口
+    const server = await preview({ root: appRoot, logLevel: 'warn', build: { outDir }, preview: { open: false } });
+    servers.push(server);
+    const baseUrl = server.resolvedUrls?.local[0];
+    if (!baseUrl) {
+      throw new Error(`${dir} 的预览服务器没有给出地址`);
+    }
+    targets.push({ name, baseUrl });
+  }
+  console.log(
+    `[measure] ${targets.map(({ name, baseUrl }) => `${name} ${baseUrl}`).join('，')}；每档 ${options.runs} 次，登录页停留 ${options.dwell} ms，CPU ${options.cpu}×，${options.channel}`
+  );
+  const results = await measureAll(targets, options);
+  const summaries: BuildResult[] = results.map(({ build, profiles }) => ({
+    build,
+    profiles: profiles.map(({ profile, raw }) => ({ profile, runs: raw.map(summarizeRun) }))
+  }));
+  if (summaries.length > 1) {
+    console.log(`\n${formatComparison(summaries)}`);
+  }
+  for (const { build, profiles } of summaries) {
+    console.log(`\n${summaries.length > 1 ? `## ${build}\n\n` : ''}${formatReport(profiles)}`);
+  }
 
   const outputDir = resolve(import.meta.dirname, 'results.local');
   mkdirSync(outputDir, { recursive: true });
   const file = resolve(outputDir, `${options.label}-${new Date().toISOString().replaceAll(':', '-')}.json`);
   writeFileSync(file, JSON.stringify({ options: { ...options, url: options.url ?? 'vite preview' }, results }, null, 2));
-  console.log(`[measure] 原始数据：${file}`);
+  console.log(`\n[measure] 原始数据：${file}`);
+} catch (error) {
+  console.error(`[measure] ${error instanceof Error ? error.message : String(error)}`);
+  process.exitCode = 1;
 } finally {
-  await server?.close();
+  await Promise.all(servers.map(server => server.close()));
 }

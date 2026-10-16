@@ -96,8 +96,8 @@
 | 有更准确的县界数据时 | 县界和市界不重合：县界是另一份更粗的数据（全省 8420 个点），沿着市界能看到旁边有一条县界的虚线（偏差的中位数约 150 米，见 shared-map.md 行政区边界的浏览器验证）；换数据后用测试保证县界的边落在市界上 | ADR 0057 后果 |
 | 上线前 | 地图上没有署名（5D.3 用户决定，以后换成内网底图）：公网版本用天地图期间，天地图的版权声明要求使用时注明来源，《地图管理条例》要求公开登载的地图标注审图号；换成内网底图时按它的要求处理，仍用天地图上线公网时再定 | 本文"5D.3"、[modules/shared-map.md](modules/shared-map.md)"状态栏" |
 | 5E | 地图页的页面缓存（keep-alive） | [modules/layout.md](modules/layout.md) |
-| 5E | 区划裁剪的求交库（`polyclip-ts`、`bignumber.js`）让现状底图的页面分块多了约 66 KB（gzip 22 KB），和地图资源的加载策略一起评估是否在选中区划时按需加载 | ADR 0051、modules/shared-map.md"区划裁剪" |
-| 5E | 地图资源的加载策略：不绑定默认模式，由 app 的解析函数给出进入地图时的默认框架（二维或三维）；运行时按框架组织并注入给 map-vue；登录页空闲时预加载预测的默认框架；实测"点击登录 → 地图第一次加载完成"后写 ADR | [modules/map-core.md](modules/map-core.md)"地图资源的加载策略" |
+| 5E | 区划裁剪的求交库（2026-10-16 实测后决定，ADR 0061 第 4 节）：不按需加载。实际是 42 KB（gzip 15 KB），去掉它 Fast 4G 只快 2 ms、Slow 4G 快 138 ms，登录页又会预加载地图页分块 | ADR 0051、modules/shared-map.md"区划裁剪" |
+| 5E | 地图资源的加载策略（2026-10-16 实测后决定，ADR 0061）：`defaultMapFramework()` 现在固定回答二维；进入地图时两个分块同时加载、都到了再预热 Worker 池；登录页空闲时预加载，只在省流量模式时跳过；运行时注入 map-vue 留到三维阶段。字体不推迟（ADR 0062） | [modules/map-core.md](modules/map-core.md)"地图资源的加载策略"、[modules/perf.md](modules/perf.md) |
 | 三维 | 评估 utils、map-core、map-cesium 一起拆到 `packages/`；自己写的 Worker 的类型检查配置 | ADR 0018、0021 |
 | 第一个 Worker 真实使用方出现时 | Worker 池的调度、缓存淘汰、内存预算用真实瓦片验证；真实 Worker 在 Vite 下的打包与加载在 `/dev` 开发页验证；瓦片目前不校验 token、与用户无关（2026-10-09 实测，见 [migration.md](migration.md)），此前仍向后端确认以后是否会按权限过滤 | ADR 0025 |
 | 三维 | Cesium 运行时作为第二个框架加载函数接入；悬停切换按钮时开始加载；默认三维时是否预取 Cesium 的静态资源；实现镜像前写出三维样式的支持清单与降级规则；拾取按模型、地形、椭球报告命中表面；相机同步不再用 `map.transform`（v6 已移除），改用公开 API；MVT 解码的 `@mapbox/vector-tile`、`pbf` 对齐 maplibre-gl 依赖的版本；三维点选改用瓦片数据服务，不再先对齐二维；评估三维期间二维是否还要存活；瓦片数据服务与 MapLibre 之间避免重复下载的做法 | ADR 0019、0020、0021、0024 |
@@ -111,6 +111,7 @@
 | 6 | 上传、下载统一成一套能力（统一的上传 / 下载方法或独立模块，包括进度、文件名、错误处理、预览前的 MIME 补齐），文件管理、数据下载（资源申请）、数据查询的导出共用，不再各自实现。旧项目在迁移范围内至少有 5 处各写各的下载：`libs/http-service.js` 的 blob 处理、`services/resource-application/applyApiService.js`（`downloadApplicationFile`、`downloadStatisticsReportFile`）、`downloadTaskService.js`（带进度）、文件管理 `FileManagementContent.vue`（`requestFileBlob`、`downloadBlob`）、数据查询 `space-monitoring-query/index.vue`（`downloadExportBlob`）；`FormData` 上传 3 处：文件管理上传弹窗、资源管理 Excel 导入、数据查询 | 本文（2026-10-08 提出） |
 | 6 | 页面内菜单（系统管理左栏）用 `ElMenu` 加变体还是做 `MxSideMenu`；宽屏时手动把侧栏收成窄条（基本统计页，可复用窄屏的窄条）；单列居中（消息中心）；旧页面左栏 296、348 归到 320 | [design/page-layout.md](design/page-layout.md) |
 | 7 | 部署（nginx 回退与接口转发，带 hash 的产物长期缓存、`index.html` 不缓存、开启压缩）；版本号格式 | [deployment.md](deployment.md)、ADR 0005 |
+| 7 | 确定部署的网络条件后复查字体的加载时机：目标网络明显慢于 Fast 4G 时，用 `measure:map-load` 比较推迟字体的做法 | ADR 0062 |
 
 ## 阶段三：页面布局与第一个列表页
 
@@ -583,9 +584,9 @@ ADR 0046 的实现：分类取值的纹理默认色（`darkenColor`，Lab 插值
 | 步骤 | 内容 | 完成的标准 |
 |---|---|---|
 | 5E.1 | 性能标记、"画面稳定"事件、实测脚本，测出基线 | 标记有测试和改坏验证；用户跑出基线表，写进 modules/perf.md |
-| 5E.2 | 加载策略：本地实验（预加载、预热 Worker 池、去掉求交库）、ADR 0061、实现 | ADR 接受；实现后复测，收益和实验一致 |
+| 5E.2 | 加载策略：本地实验（预加载、预热 Worker 池、去掉求交库、不加载字体）、ADR 0061、实现；字体的时机另写 ADR 0062 | ADR 接受；实现后复测，收益和实验一致 |
 | 5E.3 | 求交库：按 ADR 0061 执行 | 不拆时关闭待办；拆时实现、测试、真实页面验收 |
-| 5E.4 | 页面缓存：浏览器里先实测隐藏期间的问题，ADR 0062、实现 | ADR 接受；切页面再回来状态都在、不闪，别的页面按 Esc 不影响地图，退出再登录是新页面 |
+| 5E.4 | 页面缓存：浏览器里先实测隐藏期间的问题，ADR 0063、实现 | ADR 接受；切页面再回来状态都在、不闪，别的页面按 Esc 不影响地图，退出再登录是新页面 |
 | 5E.5 | 整体验收、阶段总结、同步 AGENTS.md 和本文，打 tag `stage-5e` | — |
 
 开始时核对旧仓库：`master-demo` 已到 `6b4799b`，地图相关的路径和基线 `836f03b` 相比没有改动。
@@ -598,6 +599,16 @@ ADR 0046 的实现：分类取值的纹理默认色（`darkenColor`，Lab 插值
 - 实现中的调整：原则第 8 条写的是"禁用缓存"，试跑发现 4 个 Worker 各下载一次 Worker 脚本（Slow 4G 下画面稳定晚约 2 秒），改为每次用新的浏览器上下文（缓存为空、照常工作）；先在本地实测了 CDP 的限速对 Worker 里的请求同样生效；本机没有 Chrome，默认用 Edge 有界面运行
 - 改坏验证 24 处，23 处由断言测出；没测出的是"表单销毁后仍记 session"：这一支只在响应到达之后、继续执行之前表单被销毁时才走到，测试复现不了，后果只是多一条标记。"订阅前不确认视图仍挂着"起初表现为没人处理的拒绝，把订阅移到 Promise 外面后由断言测出
 - 基线（用户用真实账号跑，三档各 5 次全部完成，每档 5 次相差不到 0.4 秒）：画面稳定在不限速 1.26 s、Fast 4G 3.33 s、Slow 4G 17.5 s。maplibre-gl 和地图页分块先后下载，两段占限速时的 36%；视图就绪之后最后到的是 Worker 里下载的省界（要等 Worker 脚本）；普惠体两个字重各约 5.2 MB（按授权不能子集化），限速时一直在抢带宽；资源目录到达时有一个 80～120 ms 的长任务。详见 modules/perf.md"基线"。5E.1 完成
+
+5E.2 加载策略（2026-10-16）：
+
+- 实测脚本加 `--builds`：几份构建各起一个 `vite preview`，交替测量，输出对比表
+- 对比实验（用户决定加上"不加载字体"一组）：基线、登录页空闲时预加载、再预热 Worker 池、两个分块同时下载、去掉求交库、不加载字体，6 份构建每档 3 次，结果见 modules/perf.md"5E.2 的对比实验"。预热 Worker 池的一组画面稳定最快（Fast 4G 3.33 → 2.24 s、Slow 4G 17.5 → 11.8 s），预加载让 Fast 4G 的视图就绪从 1.5 s 到 0.34 s；去掉求交库几乎没有差别；不加载字体在 Slow 4G 下和预热 Worker 池的收益相当
+- [ADR 0061](adr/0061-map-resource-loading.md)（用户按初稿接受）：默认框架的解析函数、进入地图时两个分块同时加载再预热 Worker 池、登录页空闲时预加载（只在省流量模式时跳过，修正原则第 4 条）、求交库不拆
+- 实现：`app/map-framework.ts`（`defaultMapFramework`、按框架加载运行时、`withMapRuntime` 移到这里）、`app/map-preload.ts`（`main.ts` 里登记，加载函数由调用方传入）、`prewarmMapRuntime`。导航栏的两个测试用真实路由表导航到地图页，加载地图页会预热 Worker 池、jsdom 里没有 Worker，改为把页面换成空组件（它们只用路由的名称和 meta）。改坏验证 15 处全部由断言测出。在真实页面上核对过：运行时和地图页分块同时请求，Worker 脚本在两者之后，maplibre-gl 的样式表仍在地图页之前
+- 复测（modules/perf.md"ADR 0061 实现后的复测"）：画面稳定 Fast 4G 3.59 → 2.22 s、Slow 4G 17.6 → 12.5 s，视图就绪 Fast 4G 1.51 → 0.37 s、Slow 4G 7.06 → 2.04 s。Slow 4G 的画面稳定比实验里"运行时到了就预热"慢 0.7 s，没达到 ADR 的验收标准（省界跟着推迟的 Worker 脚本晚到），但瓦片早 2.3 s 画完，用户决定保留
+- 字体（[ADR 0062](adr/0062-font-loading-not-deferred.md)）：在实现上比较了推迟 SemiBold（Slow 4G 快 1.6 s）和两个字重都推迟（快 5.1 s），Fast 4G、不限速只快几十毫秒；用户决定不推迟，阶段七确定部署网络后再复查
+- 5E.2 完成；页面缓存的 ADR 顺延为 0063
 
 ## 业务模块
 

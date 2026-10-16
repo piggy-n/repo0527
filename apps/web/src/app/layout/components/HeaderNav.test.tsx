@@ -1,18 +1,32 @@
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createMemoryHistory, createRouter } from 'vue-router';
+import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router';
 import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { routes } from '../../router/routes';
 import { HeaderNav } from './HeaderNav';
+
+const Empty = { render: () => null };
+
+// 导航只用路由的名称和 meta：页面换成空组件，导航时不加载页面分块（地图页会预热 Worker 池，jsdom 里没有 Worker）
+function withoutPages(records: readonly RouteRecordRaw[]): RouteRecordRaw[] {
+  return records.map(
+    record =>
+      ({
+        ...record,
+        ...(record.component ? { component: Empty } : {}),
+        ...(record.children ? { children: withoutPages(record.children) } : {})
+      }) as RouteRecordRaw
+  );
+}
 
 // 用真实的路由表：导航的权限来自路由的 meta.roles
 async function mountNav(role: Role, path: string) {
   const pinia = createPinia();
   setActivePinia(pinia);
   useSessionStore().start({ token: 't', user: { loginName: 'u', role } });
-  const router = createRouter({ history: createMemoryHistory(), routes });
+  const router = createRouter({ history: createMemoryHistory(), routes: withoutPages(routes) });
   await router.push(path);
   return mount(HeaderNav, { global: { plugins: [pinia, router] }, attachTo: document.body });
 }

@@ -28,7 +28,7 @@ trace.mark('session');  // 记下 login-to-map:session，并量出从 start 到�
 |---|---|---|
 | 开始 `start` | 校验通过、发出登录请求之前（校验不通过的点击不算） | `useLoginForm` |
 | `session` | 登录接口成功返回；表单已经销毁时不记 | `useLoginForm` |
-| `runtime` | maplibre-gl 加载完成、地图运行时设置好 | 路由的 `withMapRuntime` |
+| `runtime` | 运行时和地图页分块都加载完、运行时设置好、Worker 池开始预热（ADR 0061 第 2 节；5E.1 时只等运行时） | `app/map-framework.ts` 的 `withMapRuntime` |
 | `page` | 地图页开始创建（setup），页面分块已经加载 | `useMapLoadMarks` |
 | `view-ready` | 视图就绪：样式加载完成（MapLibre 的 `style.load`），可以操作，瓦片可能还没到 | `useMapLoadMarks` |
 | `settled` | 第一次画面稳定：没有动画，视野里的瓦片和省界都已画出（MapLibre 的 `idle`） | `useMapLoadMarks` |
@@ -53,6 +53,12 @@ pnpm --filter @yzt/web measure:map-load
 
 先 `vite build`，再用 `vite preview` 提供构建产物（接口按 `vite.config.ts` 的代理转发到后端），用 Playwright 打开登录页、登录、等到画面稳定，每档网络测几次取中位数。参数加在命令后面，例如 `pnpm --filter @yzt/web measure:map-load --runs 3 --profiles slow4g --label baseline`。
 
+对比几种做法时，先把每种做法各自构建到一个目录（`vite build --outDir tools/measure-map-load/builds.local/<名称>`，`*.local` 不入库），再不经过构建直接运行脚本：
+
+```bash
+pnpm --filter @yzt/web exec node tools/measure-map-load/cli.ts --runs 3 --label variants --builds "baseline=tools/measure-map-load/builds.local/baseline,preload=tools/measure-map-load/builds.local/preload"
+```
+
 账号密码从环境变量读取，在自己的终端里设置（PowerShell 是 `$env:YZT_MEASURE_LOGIN_NAME = '...'`、`$env:YZT_MEASURE_PASSWORD = '...'`）：
 
 | 环境变量 | 说明 |
@@ -62,6 +68,7 @@ pnpm --filter @yzt/web measure:map-load
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
+| `--builds` | `dist=dist` | 要测的构建，写成 `名称=目录,名称=目录`（目录相对 `apps/web`）；有多份时每份各起一个 `vite preview`，每档网络的第 i 次依次测完所有构建再进入下一次（网络的波动平均分到每一份上），最后多输出一张对比表，第一份是参照 |
 | `--runs` | 5 | 每档网络测几次 |
 | `--profiles` | `none,fast4g,slow4g` | 网络：不限速、Fast 4G、Slow 4G |
 | `--dwell` | 5000 | 登录页停留的毫秒数，模拟输入账号密码；预加载在这段时间里进行 |
@@ -69,7 +76,7 @@ pnpm --filter @yzt/web measure:map-load
 | `--channel` | `msedge` | `msedge`、`chrome` 或 `chromium`（Playwright 自带） |
 | `--headless` | 不加 | 加上时无界面运行；默认有界面，用真实的 GPU 渲染 |
 | `--label` | `run` | 结果文件名的前缀，如 `baseline`、`preload` |
-| `--url` | — | 已经在运行的服务器；不给时由脚本启动 `vite preview` |
+| `--url` | — | 已经在运行的服务器；不给时由脚本启动 `vite preview`；不能和 `--builds` 一起用 |
 | `--timeout` | 120000 | 每一次从点击登录到画面稳定最多等多久 |
 
 两档限速取 Chrome DevTools 的预设（DevTools 按 0.9 折算吞吐量、放大延迟）：
@@ -92,7 +99,7 @@ pnpm --filter @yzt/web measure:map-load
 
 - **不禁用缓存**：每次都是新的上下文，缓存为空，和第一次访问一样。起初按原则第 8 条禁用了缓存，试跑发现 MapLibre 的 4 个 Worker 各下载一次 Worker 脚本，Slow 4G 下画面稳定晚约 2 秒；真实的第一次访问里，后 3 个请求等第一个下载完后从缓存里取
 - **限速对 Worker 的请求同样生效**：页面级 CDP 的 `Network.emulateNetworkConditions` 也作用于专用 Worker 里的 `fetch`（Edge 上下载 300 KB：主线程 2287 ms、Worker 2298 ms）。MapLibre 在 Worker 里下载省界和矢量瓦片，这一点不成立的话 Slow 4G 的数字会偏小
-- **请求记录**：页面级 CDP 的网络事件里没有 Worker 自己发出的请求，所以用 Playwright 的请求事件（它能看到）；Worker 脚本本身的大小两边都取不到，表里只写完成时刻
+- **请求记录**：页面级 CDP 的网络事件里没有 Worker 自己发出的请求，所以用 Playwright 的请求事件（它能看到）；Worker 脚本本身的大小两边都取不到，表里只写完成时刻（按产物计算 gzip 后约 142 KB）
 - **预览服务器和生产的差别**：文本资源都是 gzip，和生产相同；缓存头是 `no-cache` 加 ETag，同一次访问里重复的请求（4 个 Worker 的脚本）有一次 304 往返，生产给 `/assets/*` 设 `immutable` 后没有（阶段七）
 - **浏览器**：本机没有安装 Chrome，Playwright 自带的完整 Chromium 启动失败（spawn UNKNOWN），无界面的 headless shell 用软件渲染，所以默认用 Windows 自带的 Edge 有界面运行
 - CDP 的限速是给每个请求加延迟、限制总吞吐量，不模拟丢包和拥塞
@@ -138,3 +145,97 @@ pnpm --filter @yzt/web measure:map-load
 - **字体在抢带宽**：普惠体按授权不能子集化（[design/fonts.md](../design/fonts.md)），两个字重各约 5.2 MB。Regular 在登录页开始下载，Fast 4G 下点登录时还没下完；SemiBold 在登录后开始下载。"开始后下载的总量"在不限速、Fast 4G 下大部分是字体。只有 maplibre-gl 一个请求时，Slow 4G 下 268 KB 约要 2.1 s（1.49 s 传输加一次往返），实测 3.7 s，Fast 4G 下约要 0.43 s，实测 0.77 s，差的部分基本是被字体分走的带宽。这只影响第一次访问，之后字体在缓存里
 - **主线程**：每次有两个 100 ms 左右的长任务。一个在地图页创建前后（执行页面分块、setup 和第一次渲染，约 110 ms），一个在资源目录到达时（规范化目录，80～120 ms），两者都不在登录页上
 - 登录接口本身很快（不限速 54 ms），限速时主要是往返的延迟；加载样式只要约 100 ms
+
+15 分钟后用同样的命令复测了一次（`baseline-2026-10-16T07-28-58.702Z.json`），画面稳定只差 14～32 ms，视图就绪最多差 69 ms，实测可以复现。
+
+## 5E.2 的对比实验（2026-10-16）
+
+6 份构建在同一轮里交替测量（`--builds`，每档 3 次，其余条件同基线），原始数据 `results.local/variants-2026-10-16T07-57-43.314Z.json`。除了基线，每份都是一处本地改动，构建后还原，不提交：
+
+| 构建 | 改动 |
+|---|---|
+| baseline | 当时的 `main` |
+| preload | 进入登录页后，浏览器空闲时（`requestIdleCallback`，超时 2 秒）导入路由用的同一个加载函数：运行时和地图页分块 |
+| prewarm | 在 preload 上，`setupMapRuntime` 设置好 Worker 后调用 MapLibre 的 `prewarm()` |
+| parallel | 不预加载，`withMapRuntime` 同时导入运行时和页面 |
+| no-polyclip | 求交换成空实现（新用户不选区划，走不到它），地图页分块 155 KB → 140 KB（压缩前 497 KB → 455 KB） |
+| no-fonts | 产物里删掉两个 woff2，字体请求 404，用后备字体 |
+
+画面稳定（毫秒，中位数，括号里是和 baseline 的差）：
+
+| 构建 | 不限速 | Fast 4G | Slow 4G |
+|---|---|---|---|
+| baseline | 1241 | 3328 | 17533 |
+| preload | 1123（-118） | 2374（-953） | 13983（-3550） |
+| prewarm | 1110（-131） | 2244（-1084） | 11797（-5736） |
+| parallel | 1192（-49） | 3193（-135） | 16065（-1468） |
+| no-polyclip | 1175（-66） | 3326（-2） | 17394（-138） |
+| no-fonts | 1193（-48） | 2993（-335） | 11829（-5704） |
+
+视图就绪（毫秒，中位数）：
+
+| 构建 | 不限速 | Fast 4G | Slow 4G |
+|---|---|---|---|
+| baseline | 315 | 1521 | 7021 |
+| preload | 204（-111） | 344（-1177） | 3496（-3525） |
+| prewarm | 215（-100） | 347（-1174） | 4323（-2698） |
+| parallel | 272（-43） | 1337（-183） | 5566（-1455） |
+| no-polyclip | 290（-25） | 1528（+7） | 6888（-132） |
+| no-fonts | 309（-6） | 1245（-276） | 4692（-2329） |
+
+所有构建在登录页停留期间都没有长任务：预加载在登录页上执行 maplibre-gl 和地图页分块，没有超过 50 ms 的任务。
+
+预加载的资源什么时候下载完（毫秒，从发出登录请求算起，负数是点登录之前）：
+
+| 构建 | 网络 | maplibre-gl | 地图页分块 | Worker 脚本 | 省界 |
+|---|---|---|---|---|---|
+| preload | Fast 4G | -3925 | -3383 | 1557 | 2224 |
+| preload | Slow 4G | 813 | 3337 | 10875 | 13875 |
+| prewarm | Fast 4G | -3913 | -3216 | -3152 | 1555 |
+| prewarm | Slow 4G | 802 | 4168 | 4063 | 11671 |
+
+看到的：
+
+- **预加载**：Fast 4G 下点登录时两个分块早已下完，视图就绪从 1.5 s 变成 0.34 s，登录后几乎马上看到地图。Slow 4G 下 5 秒的停留不够（还在和 Regular 字体分带宽），maplibre-gl 在点登录后 0.8 s、地图页分块 3.3 s 才下完，仍然比基线早了 3.5 s
+- **预热 Worker 池**：Worker 脚本也在登录页下载，省界不再等它。Fast 4G 在预加载的基础上又快 130 ms，Slow 4G 快 2.2 s；但 Slow 4G 下视图就绪比只预加载晚 0.8 s：Worker 脚本和地图页分块在登录页上抢带宽
+- **两个分块同时下载**：不预加载时 Fast 4G 快 135 ms、Slow 4G 快 1.5 s（省掉一次往返和串行的等待）。预加载本身也经过同一个加载函数，Slow 4G 下停留期间没下完时，同时下载同样有用
+- **求交库**：去掉它 Fast 4G 只差 2 ms、Slow 4G 差 138 ms（15 KB 在 Slow 4G 下约 85 ms 的传输），不值得为它把区划范围改成异步的
+- **字体**：不加载字体时 Slow 4G 快 5.7 s，和预热 Worker 池的收益相当；Fast 4G 快 335 ms，不限速只快 48 ms。字体只在第一次访问时下载，之后在缓存里
+
+## ADR 0061 实现后的复测（2026-10-16）
+
+5 份构建交替测量，每档 3 次，原始数据 `results.local/final-2026-10-16T08-32-19.918Z.json`：基线、上一轮实验里的 prewarm（运行时加载完就预热）、按 ADR 0061 实现的 final（两个分块同时加载，都到了再预热），以及 final 上的两种字体时机（实验用的本地改动，构建后还原）：`final-defer-semibold` 去掉 600 的 `@font-face`，画面稳定后用 `FontFace` 加载；`final-defer-fonts` 两个字重都这样推迟。
+
+画面稳定（毫秒，中位数，括号里是和 baseline 的差）：
+
+| 构建 | 不限速 | Fast 4G | Slow 4G |
+|---|---|---|---|
+| baseline | 1243 | 3591 | 17574 |
+| prewarm | 1059（-185） | 2209（-1382） | 11778（-5795） |
+| final | 1126（-118） | 2223（-1368） | 12493（-5080） |
+| final-defer-semibold | 1095（-149） | 2160（-1431） | 10934（-6640） |
+| final-defer-fonts | 1060（-183） | 2158（-1433） | 7412（-10162） |
+
+视图就绪（毫秒，中位数）：
+
+| 构建 | 不限速 | Fast 4G | Slow 4G |
+|---|---|---|---|
+| baseline | 313 | 1509 | 7064 |
+| prewarm | 185（-128） | 338（-1171） | 4336（-2728） |
+| final | 192（-121） | 366（-1143） | 2039（-5024） |
+| final-defer-semibold | 163（-150） | 353（-1156） | 2072（-4991） |
+| final-defer-fonts | 173（-139） | 381（-1127） | 789（-6275） |
+
+Slow 4G 下的资源（毫秒，从发出登录请求算起）：
+
+| 构建 | maplibre-gl | 地图页分块 | Worker 脚本 | 天地图瓦片（最后一张） | 省界 |
+|---|---|---|---|---|---|
+| prewarm | 804 | 4178 | 4059 | 11105 | 11692 |
+| final | 1896 | 795 | 9376 | 8842 | 12390 |
+| final-defer-fonts | 390 | -1311 | 5586 | 6733 | 7312 |
+
+所有构建在登录页停留期间都没有长任务。final 的地图页分块变成 123 KB（gzip）：两个分块同时导入后，打包把一部分模块拆进了共享的分块，总量不变。
+
+- **final 对照 ADR 0061 的验收标准**：Fast 4G 的画面稳定 2223 ms，和 prewarm 的 2209 ms 相当；Slow 4G 的视图就绪 2039 ms，比只预加载（约 3.5 s）和 prewarm（4336 ms）都早。Slow 4G 的画面稳定 12493 ms，比 prewarm 慢 0.7 s，没达到"不差于约 11.8 s"：Worker 脚本推迟到两个分块之后才下载，省界跟着晚到；但天地图瓦片早了 2.3 s 画完，看得见的底图先到，只有省界的线晚了
+- **字体的时机**：推迟 SemiBold 在 Slow 4G 下快 1.6 s，两个字重都推迟快 5.1 s（视图就绪 0.8 s，Regular 不再和预加载抢带宽）；Fast 4G、不限速只快几十毫秒
+- **用户的决定**：保留 final（看得见的底图先到，Slow 4G 的画面稳定没达到 ADR 0061 的验收标准，记在这里）；字体不推迟（[ADR 0062](../adr/0062-font-loading-not-deferred.md)：收益只在慢网络的第一次访问，代价每次访问都有）

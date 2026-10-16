@@ -516,6 +516,7 @@ map.bindStyle({ 'region-clip': () => regionClipGroup(readyBoundary(region.state.
 
 - 14 级整屏框里 1000 个约 30 米见方的面判断和求交范围是否相交：6.1 ms
 - 生产构建：页面分块从 358.9 KB 增加到 424.5 KB（gzip 111.3 KB → 133.3 KB），主要是求交用的 `polyclip-ts`（压缩后约 42 KB）和它依赖的 `bignumber.js`
+- 5E.2 实测（2026-10-16）：把求交换成空实现，地图页分块少 42 KB（gzip 15 KB），登录到画面稳定 Fast 4G 只快 2 ms、Slow 4G 快 138 ms；登录页又会预加载地图页分块，所以不按需加载，区划范围仍是同步的（ADR 0061 第 4 节）
 
 ## 坐标定位与位置点（ADR 0037）
 

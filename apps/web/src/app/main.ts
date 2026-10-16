@@ -7,12 +7,16 @@ import { VueQueryPlugin } from '@tanstack/vue-query';
 import { createApp } from 'vue';
 import { App } from './App';
 import { setupHttp } from './http';
+import { setupMapPreload } from './map-preload';
 import { pinia } from './pinia';
 import { queryClient } from './query-client';
 import { router } from './router';
+import { loadCurrentMapPage } from './router/routes';
 import { setupSessionSync } from './session-sync';
 
 setupHttp(router);
+// 在 router 安装之前登记：首次导航到登录页时也要安排预加载
+setupMapPreload(router, loadCurrentMapPage);
 
 // pinia 要先于 router 安装：安装 router 时就开始首次导航，路由守卫里会用到 store
 createApp(App).use(pinia).use(VueQueryPlugin, { queryClient }).use(router).mount('#app');

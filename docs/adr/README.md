@@ -21,7 +21,7 @@
 | [0009](0009-disable-incremental-typecheck.md) | 关闭 tsc 的增量检查 | 已接受 |
 | [0010](0010-testing-with-vitest.md) | 测试使用 Vitest 与 jsdom | 已接受（真实浏览器测试由 0040 补充） |
 | [0011](0011-http-client-axios-zod-msw.md) | HTTP 客户端：axios + zod，测试用 MSW 模拟接口 | 已接受（没有信封的接口由 0047 补充） |
-| [0012](0012-fonts-self-hosted-and-svg-title.md) | 字体：普惠体 3.0 自托管且不入库，系统名称用 SVG 轮廓 | 已接受（存放位置已被 0013 取代） |
+| [0012](0012-fonts-self-hosted-and-svg-title.md) | 字体：普惠体 3.0 自托管且不入库，系统名称用 SVG 轮廓 | 已接受（存放位置已被 0013 取代；加载时机由 0062 补充） |
 | [0013](0013-fonts-in-public-dir.md) | 字体文件统一放在 apps/web/public/fonts/ | 已接受 |
 | [0014](0014-icons-as-internal-package.md) | 图标做成第一个 workspace 包 @yzt/icons（内部包） | 已接受 |
 | [0015](0015-login-session-and-permissions.md) | 登录与会话：会话存 localStorage，SM2 用 sm-crypto-v2，权限声明在路由上 | 已接受 |
@@ -32,7 +32,7 @@
 | [0020](0020-map-session-state-as-source-of-truth.md) | 二三维关系：地图会话状态是唯一的真相源 | 已接受（选择状态的范围由 0022 修正，方案 B 的比较由 0024 修正） |
 | [0021](0021-worker-strategy.md) | Worker 策略：二维不自建渲染 Worker，统一通信层与瓦片数据服务 | 已接受（第 5 条的表述由 0024 修正，第 3、4 条由 0025 补充，第 2 条的图例统计由 0043 定为不做） |
 | [0022](0022-style-model-and-session-commits.md) | 样式模型与会话提交：分组推导、快照对比 | 已接受（第 4 条与第 5 条中 `failed` 的含义由 0026 修正；分组加上样式图片由 0045 补充；第 6 条的选择状态由 0047 补充） |
-| [0023](0023-disposal-events-and-map-runtime.md) | 资源释放、事件与地图运行时装配 | 已接受 |
+| [0023](0023-disposal-events-and-map-runtime.md) | 资源释放、事件与地图运行时装配 | 已接受（运行时的加载时机与预加载由 0061 补充） |
 | [0024](0024-shared-view-interfaces.md) | 二三维共用的视图接口 | 已接受（渲染要素的只读查询由 0047 补充） |
 | [0025](0025-worker-contract-and-tile-data-service.md) | Worker 通信契约与瓦片数据服务的约束 | 已接受 |
 | [0026](0026-view-sync-failures.md) | 视图同步的失败处理：错误事件、加载失败与恢复 | 已接受（第 4 条的"不另加 API"由 0030 修正；第 1、2 条只适用于不带数据源的错误，由 0041 修正） |
@@ -60,7 +60,7 @@
 | [0048](0048-pick-identify-corrections.md) | 点选识别的修正：后端识别按数据集登记，二维 14 级以上以渲染要素为准 | 已接受 |
 | [0049](0049-box-select.md) | 框选：与点选一致的识别、即时估数的上限与瓦片上的批量高亮 | 已接受（第 2 节的即时估数由 0050 修改；第 1 节不能拖动平移由 0056 修正） |
 | [0050](0050-box-estimate-weighted-count.md) | 框选估数的修正：查后端的资源按渲染要素加权计数 | 已接受 |
-| [0051](0051-region-clip.md) | 区划裁剪：按边界几何遮罩显示，点选、框选按几何限定范围 | 已接受 |
+| [0051](0051-region-clip.md) | 区划裁剪：按边界几何遮罩显示，点选、框选按几何限定范围 | 已接受（求交库不按需加载由 0061 补充） |
 | [0052](0052-resource-years.md) | 资源的年份：每个资源各自选，另有批量设置 | 已接受（第 2 节批量设置的位置由 0053 修正） |
 | [0053](0053-map-page-layout-and-toolbar.md) | 地图页的布局与工具栏 | 已接受（第 7 节卡片在面板打开时的外观由 0057 修正；第 3 节基础组的指北针由 0058 补充，第 8 节矮屏的高度阈值由 0058 修正；第 6 节"已勾选"的提示由 0059 修正；第 1 节资源面板的高度、第 6 节的分割线由 0060 修正） |
 | [0054](0054-sortable-drag-reorder.md) | 拖动排序用 SortableJS | 已接受 |
@@ -70,6 +70,8 @@
 | [0058](0058-compass-button.md) | 基础组的指北针 | 已接受 |
 | [0059](0059-checked-layer-status-icons.md) | "已勾选"的状态图标 | 已接受 |
 | [0060](0060-resource-panel-height-and-splitter.md) | 资源图层面板的高度与分割线 | 已接受 |
+| [0061](0061-map-resource-loading.md) | 地图资源的加载策略：登录页空闲时预加载地图页，预热 Worker 池 | 已接受 |
+| [0062](0062-font-loading-not-deferred.md) | 普惠体照常按用到时加载，不为地图推迟 | 已接受 |
 
 ## 模板
 

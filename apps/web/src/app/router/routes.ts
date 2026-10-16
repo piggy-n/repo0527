@@ -1,21 +1,16 @@
 import type { RouteRecordRaw } from 'vue-router';
 import { Role } from '@/shared/auth/roles';
-import { loginToMap } from '@/shared/perf/login-to-map';
 import { RouteName } from '@/shared/router/route-names';
 import { AppLayout } from '../layout/AppLayout';
+import { withMapRuntime } from '../map-framework';
 
 const loadPlaceholder = () =>
   import('@/pages/placeholder/PlaceholderPage').then(({ PlaceholderPage }) => PlaceholderPage);
 
-// 地图页加载前先完成地图运行时的全局设置；两者都是动态导入，maplibre-gl 不会进入入口包
-const withMapRuntime =
-  <T>(loadPage: () => Promise<T>) =>
-  async (): Promise<T> => {
-    const { setupMapRuntime } = await import('../map-runtime');
-    setupMapRuntime();
-    loginToMap.mark('runtime');
-    return loadPage();
-  };
+/** 现状底图的加载函数：路由和登录页的预加载共用（ADR 0061 第 3 节） */
+export const loadCurrentMapPage = withMapRuntime(() =>
+  import('@/pages/current-map/CurrentMapPage').then(({ CurrentMapPage }) => CurrentMapPage)
+);
 
 // 尚未迁移的业务页，迁移后换成指向真实页面的完整路由记录；roles 不写时所有已登录用户都能访问
 const placeholder = (path: string, name: RouteName, title: string, roles?: readonly Role[]): RouteRecordRaw => ({
@@ -30,9 +25,7 @@ const businessRoutes: RouteRecordRaw[] = [
   {
     path: 'current-map',
     name: RouteName.currentMap,
-    component: withMapRuntime(() =>
-      import('@/pages/current-map/CurrentMapPage').then(({ CurrentMapPage }) => CurrentMapPage)
-    ),
+    component: loadCurrentMapPage,
     meta: { title: '现状底图' }
   },
   placeholder('land-change-query', RouteName.landChangeQuery, '国土变更调查查询'),

@@ -1,7 +1,16 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { LOGIN_TO_MAP_STEPS, loginToMap } from '../../src/shared/perf/login-to-map';
-import { formatReport, median, parseOptions, type RawRun, STEPS, summarizeRun, TRACE_NAME } from './report.ts';
+import {
+  formatComparison,
+  formatReport,
+  median,
+  parseOptions,
+  type RawRun,
+  STEPS,
+  summarizeRun,
+  TRACE_NAME
+} from './report.ts';
 
 const ORIGIN = 'http://localhost:4173';
 
@@ -28,6 +37,7 @@ describe('步骤与应用一致', () => {
 describe('parseOptions', () => {
   it('默认三档网络各 5 次、停留 5 秒、用 Edge 有界面运行', () => {
     expect(parseOptions([])).toStrictEqual({
+      builds: [{ name: 'dist', dir: 'dist' }],
       runs: 5,
       profiles: ['none', 'fast4g', 'slow4g'],
       dwell: 5000,
@@ -46,7 +56,19 @@ describe('parseOptions', () => {
     ).toMatchObject({ runs: 3, profiles: ['slow4g'], cpu: 4, label: 'baseline', headless: true });
   });
 
+  it('--builds 按顺序给出要交替测量的构建', () => {
+    expect(parseOptions(['--builds', 'baseline=builds.local/baseline, preload = builds.local/preload']).builds).toStrictEqual([
+      { name: 'baseline', dir: 'builds.local/baseline' },
+      { name: 'preload', dir: 'builds.local/preload' }
+    ]);
+  });
+
   it.each([
+    [['--builds', 'a=x,a=y'], '名称重复'],
+    [['--builds', 'a'], '名称=目录'],
+    [['--builds', 'a b=x'], '名称=目录'],
+    [['--builds', 'a=x=y'], '名称=目录'],
+    [['--builds', 'a=x', '--url', 'http://localhost:5173'], '不能同时给出'],
     [['--runs', '0'], '--runs'],
     [['--runs', '2.5'], '--runs'],
     [['--profiles', 'fast4g,3g'], '--profiles'],
@@ -171,5 +193,43 @@ describe('formatReport', () => {
 
     expect(report).toContain('| Fast 4G | 800（280 KB） | —（—） | 1500 | —（—） |');
     expect(report).toContain('- Fast 4G：/fonts/SemiBold.woff2（1/2 次）');
+  });
+});
+
+describe('formatComparison', () => {
+  it('每份构建一行，画面稳定和视图就绪写出和第一份的差，长任务不写差', () => {
+    const report = formatComparison([
+      { build: 'baseline', profiles: [{ profile: 'slow4g', runs: [summarizeRun(raw())] }] },
+      {
+        build: 'preload',
+        profiles: [
+          {
+            profile: 'slow4g',
+            runs: [
+              summarizeRun(
+                raw({
+                  measures: { 'view-ready': 1500, settled: 2500 },
+                  longTasks: [{ startTime: 3000, duration: 180 }]
+                })
+              )
+            ]
+          }
+        ]
+      }
+    ]);
+
+    expect(report).toContain('画面稳定（毫秒，括号里是和 baseline 的差）：\n\n| 构建 | Slow 4G |\n|---|---|\n| baseline | 3000 |\n| preload | 2500（-500） |');
+    expect(report).toContain('| preload | 1500（-500） |');
+    expect(report).toContain('登录页停留期间长任务的总时长（毫秒）：\n\n| 构建 | Slow 4G |\n|---|---|\n| baseline | 0 |\n| preload | 180 |');
+  });
+
+  it('慢了时差写成正数，没有构建时为空', () => {
+    const report = formatComparison([
+      { build: 'a', profiles: [{ profile: 'none', runs: [summarizeRun(raw())] }] },
+      { build: 'b', profiles: [{ profile: 'none', runs: [summarizeRun(raw({ measures: { settled: 3200 } }))] }] }
+    ]);
+
+    expect(report).toContain('| b | 3200（+200） |');
+    expect(formatComparison([])).toBe('');
   });
 });

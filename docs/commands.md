@@ -167,7 +167,7 @@ pnpm add -Dw -E some-tool
 
 **执行了什么**：先 `vite build`，再由 Node 运行 `tools/measure-map-load/cli.ts`：用 `vite preview` 提供产物，Playwright 驱动本机的 Edge，每次用新的浏览器上下文打开登录页、停留几秒、登录、等到画面稳定；网络和 CPU 用 CDP 限速。原始数据写进 `tools/measure-map-load/results.local/`（不入库）。
 
-**注意事项**：要先在自己的终端设置环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD`；默认三档网络各 5 次，Slow 4G 每次约 20 秒，全部跑完约 5 分钟，期间会弹出浏览器窗口。参数（次数、网络、停留时长、CPU 降速等）和实测的前提见 [modules/perf.md](modules/perf.md)。
+**注意事项**：要先在自己的终端设置环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD`；默认三档网络各 5 次，Slow 4G 每次约 20 秒，全部跑完约 5 分钟，期间会弹出浏览器窗口。对比几份构建时不用这个脚本（它会先构建 `dist`），直接运行 `cli.ts` 并给出 `--builds`。参数（次数、网络、停留时长、CPU 降速、多份构建等）和实测的前提见 [modules/perf.md](modules/perf.md)。
 
 ### `pnpm --filter @yzt/web icons`
 
