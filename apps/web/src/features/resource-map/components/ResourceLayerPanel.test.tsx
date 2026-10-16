@@ -314,12 +314,13 @@ const yearsOf = (owner: ResourceLayers) =>
   Object.fromEntries([...owner.state.value.displays].map(([code, { year }]) => [code, year]));
 
 describe('ResourceLayerPanel：年份（ADR 0052）', () => {
-  it('已勾选的多年份资源可以选年份（新的在前），单年份资源只显示年份', async () => {
+  it('已勾选的多年份资源可以选年份（新的在前，选择框不带下拉箭头），单年份资源只显示年份', async () => {
     const { wrapper, owner } = await mountPanel();
     owner.setChecked('csxhjctb_hydl', true);
     await nextTick();
     const select = wrapper.get('[data-layer="csxhjctb_hydl"]').findComponent(ElSelect);
 
+    expect(select.classes()).toContain('select-no-arrow');
     expect(select.props('modelValue')).toBe(2025);
     expect(select.findAllComponents(ElOption).map(option => option.props('value'))).toStrictEqual([2025, 2024, 2023]);
     select.vm.$emit('update:modelValue', 2023);
@@ -334,12 +335,12 @@ describe('ResourceLayerPanel：年份（ADR 0052）', () => {
     expect(parcel.text()).toContain('2024');
   });
 
-  it('批量设置年份：选完就执行、选择框回到空，连续两次选同一年都执行；下拉里提示没有这一年的资源保持不变', async () => {
+  it('批量设置年份：选完就执行、选择框回到空，连续两次选同一年都执行；下拉里只有年份', async () => {
     const { wrapper, owner } = await mountPanel();
     expect(batchSelect(wrapper).findAllComponents(ElOption).map(option => option.props('value'))).toStrictEqual([
       2025, 2024, 2023
     ]);
-    expect(document.body.textContent).toContain('没有这一年的资源保持不变');
+    expect(document.querySelector('.el-select-dropdown__footer')).toBeNull();
 
     await pickOption('2023 年');
     // 没勾选的村级调查区也切过去；地类图斑没有 2023 年，不变
@@ -356,7 +357,6 @@ describe('ResourceLayerPanel：年份（ADR 0052）', () => {
     const single = buildCatalog([{ code: null, name: '基础库', children: [layer('bgdc_dltb', '地类图斑')] }]);
     const { wrapper } = await mountPanel(single);
 
-    expect(document.body.textContent).not.toContain('没有这一年的资源保持不变');
     expect(wrapper.findAllComponents(ElSelect)).toHaveLength(0);
   });
 });

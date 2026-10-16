@@ -8,10 +8,10 @@ import {
   parentCityName,
   type Region,
   regionPath,
-  regionTrail,
   searchRegions,
   shortRegionName
 } from './region-catalog';
+import { RegionTrail } from './RegionTrail';
 import { nextRegionSelection, type RegionLocate } from './useRegionLocate';
 import styles from './RegionLocatePanel.module.scss';
 
@@ -68,36 +68,13 @@ export const RegionLocatePanel = defineComponent({
       return loading.value && <span class={styles.status}>正在加载边界…</span>;
     };
 
-    // 江苏省 › 南京市 › 江宁区：前面几级可以点，回到全省或回到市
-    const renderTrail = () => {
-      const trail = regionTrail(props.region.state.value.selected);
-      return (
-        <div class={styles.trail}>
-          <nav class={styles.crumbs} aria-label="当前区划" data-region-current>
-            {trail.map((item, index) => {
-              const last = index === trail.length - 1;
-              return [
-                index > 0 && (
-                  <span class={styles.separator} aria-hidden="true">
-                    ›
-                  </span>
-                ),
-                last ? (
-                  <span class={styles.here} aria-current="location">
-                    {item.name}
-                  </span>
-                ) : (
-                  <button type="button" class={styles.crumb} onClick={() => props.region.select(item.code)}>
-                    {item.name}
-                  </button>
-                )
-              ];
-            })}
-          </nav>
-          {renderStatus()}
-        </div>
-      );
-    };
+    // 江苏省 › 南京市 › 江宁区：前面几级可以点，回到全省或回到市（和地图上方的区划条共用）
+    const renderTrail = () => (
+      <div class={styles.trail}>
+        <RegionTrail class={styles.crumbs} region={props.region} />
+        {renderStatus()}
+      </div>
+    );
 
     const renderChips = (regions: readonly Region[], selectedCode: string | null | undefined, short: boolean) => (
       <div class={styles.chips}>

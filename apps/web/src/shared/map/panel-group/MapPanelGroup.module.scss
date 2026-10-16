@@ -53,9 +53,11 @@
   }
 }
 
+// 内容区在外壳可滚动的区域里：上面留出 3 像素，贴着顶边的边框（Element 的单选按钮用 outline 画边框）和键盘焦点框不被裁掉
 .content {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
   min-height: 0;
+  padding-top: 3px;
 }

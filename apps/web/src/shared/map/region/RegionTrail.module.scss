@@ -1,0 +1,44 @@
+// 当前区划的各级（设计稿 5D.4）；宽度由使用方决定，放不下时最后一级省略
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--font-size-base);
+  color: var(--color-text-regular);
+  white-space: nowrap;
+}
+
+.crumb {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    border-radius: var(--radius-sm);
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+.separator {
+  flex: none;
+  color: var(--color-text-placeholder);
+}
+
+.here {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-strong);
+  text-overflow: ellipsis;
+}

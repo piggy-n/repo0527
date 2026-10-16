@@ -84,7 +84,12 @@ export const CoordinateLocatePanel = defineComponent({
 
     return () => (
       <div class={styles.panel} data-coordinate-locate-panel>
-        <ElRadioGroup size="small" aria-label="坐标的写法" modelValue={format.value} onUpdate:modelValue={changeFormat}>
+        <ElRadioGroup
+          class="radio-group-block"
+          size="small"
+          aria-label="坐标的写法"
+          modelValue={format.value}
+          onUpdate:modelValue={changeFormat}>
           {FORMATS.map(option => (
             <ElRadioButton key={option.value} value={option.value}>
               {option.label}

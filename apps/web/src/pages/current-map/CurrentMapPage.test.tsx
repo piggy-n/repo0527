@@ -674,16 +674,23 @@ describe('CurrentMapPage', () => {
     ]);
   });
 
-  it('选中区划后地图上方显示当前区划，"回到全省"清除选择；没选时不显示', async () => {
+  it('选中区划后地图上方显示可点击的各级，点"江苏省"或"回到全省"清除选择；没选时不显示', async () => {
     stubBoundaryFetch();
     const { wrapper } = await readyPage();
     expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
 
-    await button(wrapper, '区划定位').trigger('click');
-    await button(wrapper, '南京').trigger('click');
-    await button(wrapper, '区划定位').trigger('click');
-    expect(wrapper.get('[data-region-scope]').text()).toBe('区划南京市回到全省');
+    const chooseNanjing = async () => {
+      await button(wrapper, '区划定位').trigger('click');
+      await button(wrapper, '南京').trigger('click');
+      await button(wrapper, '区划定位').trigger('click');
+    };
+    await chooseNanjing();
+    // 和区划定位面板一样的各级："江苏省"可以点，南京市是当前位置
+    expect(wrapper.get('[data-region-scope]').text()).toBe('江苏省›南京市回到全省');
+    await wrapper.get('[data-region-scope] nav button').trigger('click');
+    expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
 
+    await chooseNanjing();
     await button(wrapper, '回到全省').trigger('click');
     expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
   });
@@ -707,7 +714,7 @@ describe('CurrentMapPage', () => {
     await button(wrapper, '南京').trigger('click');
     expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
     await wrapper.get('button[aria-label="收起资源图层"]').trigger('click');
-    expect(wrapper.get('[data-region-scope]').text()).toBe('区划南京市回到全省');
+    expect(wrapper.get('[data-region-scope]').text()).toBe('江苏省›南京市回到全省');
 
     // 变宽以后卡片回到底部一行，和状态栏在一起
     await resizePage(wrapper, 1440, 900);
@@ -1014,7 +1021,7 @@ describe('CurrentMapPage', () => {
     map.renderedFeatures = [{ source: layer.id, layer, properties: { guid, dlmc: '水田' }, geometry: square }];
     map.moveTo([119, 32], 15, {});
 
-    await button(wrapper, '点选').trigger('click');
+    await button(wrapper, '点/框选').trigger('click');
     map.mouse('click', 200, 150);
     await nextTick();
 
@@ -1055,7 +1062,7 @@ describe('CurrentMapPage', () => {
     const layer = { id: 'resources-bgdc_dltb' };
     map.renderedFeatures = [{ source: layer.id, layer, properties: { guid, dlmc: '水田' }, geometry: square }];
     map.moveTo([119, 32], 15, {});
-    await button(wrapper, '点选').trigger('click');
+    await button(wrapper, '点/框选').trigger('click');
     map.mouse('click', 200, 150);
     await nextTick();
     expect(shownPanels(wrapper)).toStrictEqual(['feature-detail']);
@@ -1103,7 +1110,7 @@ describe('CurrentMapPage', () => {
       geometry
     }));
     map.moveTo([118.785, 32.035], 15, {});
-    await button(wrapper, '点选').trigger('click');
+    await button(wrapper, '点/框选').trigger('click');
 
     map.mouse('click', 0, 0);
     await nextTick();
@@ -1127,7 +1134,7 @@ describe('CurrentMapPage', () => {
       geometry
     }));
     map.moveTo([119, 32], 15, {});
-    await button(wrapper, '点选').trigger('click');
+    await button(wrapper, '点/框选').trigger('click');
 
     map.mouse('mousedown', 100, 100);
     map.mouse('mousemove', 200, 160);

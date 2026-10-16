@@ -13,6 +13,7 @@ import {
   ElOption,
   ElPagination,
   ElRadio,
+  ElRadioButton,
   ElRadioGroup,
   ElSelect,
   ElSwitch,
@@ -176,6 +177,9 @@ export const DevThemePage = defineComponent({
     const checked = ref(true);
     const period = ref('year');
     const enabled = ref(true);
+    // 地图页的两个变体
+    const layerYear = ref(2025);
+    const coordinateFormat = ref('dms');
     const date = ref('');
     const currentPage = ref(1);
 
@@ -418,6 +422,32 @@ export const DevThemePage = defineComponent({
                 登录
               </ElButton>
             </ElForm>
+          </div>
+        </section>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>不带箭头的选择框与占满宽度的单选按钮组（地图页）</h2>
+          <div class={styles.mapVariants}>
+            <ElSelect
+              class="select-no-arrow"
+              size="small"
+              style={{ width: '48px' }}
+              modelValue={layerYear.value}
+              onUpdate:modelValue={(value: number) => (layerYear.value = value)}>
+              {[2025, 2024, 2023].map(year => (
+                <ElOption key={year} label={String(year)} value={year} />
+              ))}
+            </ElSelect>
+            <ElRadioGroup
+              class="radio-group-block"
+              size="small"
+              modelValue={coordinateFormat.value}
+              onUpdate:modelValue={(value: string | number | boolean | undefined) =>
+                (coordinateFormat.value = String(value))
+              }>
+              <ElRadioButton value="dms">度分秒</ElRadioButton>
+              <ElRadioButton value="decimal">小数</ElRadioButton>
+            </ElRadioGroup>
           </div>
         </section>
 

@@ -1,4 +1,4 @@
-// 设计稿 5D.7；位置由页面决定（地图上方居中）
+// 设计稿 5D.7，2026-10-16 按用户的意见改成可点击的各级；位置由页面决定（地图上方居中）
 
 .bar {
   display: flex;
@@ -16,22 +16,17 @@
   white-space: nowrap;
 }
 
-.label {
+// 地方不够（手机宽度）时最后一级省略，"回到全省"保留
+.trail {
+  flex: 0 1 auto;
+}
+
+// 各级和"回到全省"之间的竖线
+.divider {
   flex: none;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-// 地方不够（手机宽度）时名称省略，"回到全省"保留
-.names {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: pre;
-}
-
-.separator {
-  color: var(--color-text-placeholder);
+  width: 1px;
+  height: 14px;
+  background-color: var(--color-divider);
 }
 
 .reset {

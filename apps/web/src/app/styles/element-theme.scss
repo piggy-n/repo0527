@@ -262,6 +262,24 @@ $tree-node: '.el-tree > .el-tree-node';
   }
 }
 
+// 占满宽度、各项等宽的单选按钮组（地图页坐标定位的写法切换）；用法 <ElRadioGroup class="radio-group-block">
+.el-radio-group.radio-group-block {
+  display: flex;
+
+  .el-radio-button {
+    flex: 1;
+  }
+
+  .el-radio-button__inner {
+    width: 100%;
+  }
+}
+
+// 不带下拉箭头的选择框，点击照常弹出选项（地图页"已勾选"的年份）；用法 <ElSelect class="select-no-arrow">
+.el-select.select-no-arrow .el-select__suffix {
+  display: none;
+}
+
 // 加大号按钮：48px 高、16px 半粗、8px 圆角，与 input-filled 搭配；用法 <ElButton class="button-xl">
 .el-button.button-xl {
   height: 48px;

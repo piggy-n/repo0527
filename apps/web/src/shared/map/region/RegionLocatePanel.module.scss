@@ -14,43 +14,9 @@
   min-height: 22px;
 }
 
+// 当前位置占满这一行，加载状态在右边
 .crumbs {
-  display: flex;
   flex: 1;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  font-size: var(--font-size-base);
-  color: var(--color-text-regular);
-  white-space: nowrap;
-}
-
-.crumb {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--color-primary);
-  font: inherit;
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
-  }
-
-  &:focus-visible {
-    border-radius: var(--radius-sm);
-    outline: 2px solid var(--color-primary-border-hover);
-    outline-offset: 1px;
-  }
-}
-
-.separator {
-  color: var(--color-text-placeholder);
-}
-
-.here {
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-strong);
 }
 
 .status {

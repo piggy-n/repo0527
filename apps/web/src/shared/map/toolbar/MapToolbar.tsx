@@ -4,7 +4,7 @@ import { defineComponent, type PropType, ref, type VNode } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
 import {
   isToolbarTool,
-  labelLines,
+  buttonLines,
   TOOLBAR_ACTIONS,
   TOOLBAR_TOOLS,
   type ToolbarActionId,
@@ -39,7 +39,8 @@ export const MapToolbar = defineComponent({
 
     const renderButton = (id: ToolbarItemId): VNode => {
       const tool = isToolbarTool(id);
-      const { label, icon } = tool ? TOOLBAR_TOOLS[id] : TOOLBAR_ACTIONS[id];
+      const item = tool ? TOOLBAR_TOOLS[id] : TOOLBAR_ACTIONS[id];
+      const { label, icon } = item;
       const active = tool && map.activeTool.value === id;
       const pressed = !tool && props.pressed.includes(id);
       const run = tool ? undefined : props.actions[id];
@@ -64,7 +65,7 @@ export const MapToolbar = defineComponent({
           <SvgIcon name={icon} size={20} />
           {!props.compact && (
             <span class={styles.label}>
-              {labelLines(label).map((line, index) => [index > 0 && <br />, line])}
+              {buttonLines(item).map((line, index) => [index > 0 && <br />, line])}
             </span>
           )}
         </button>

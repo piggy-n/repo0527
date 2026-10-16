@@ -702,9 +702,10 @@ function layerIds(owner: Owner): string[] {
 }
 
 describe('useFeaturePick：框选', () => {
-  it('点选工具关掉拖动平移和 Shift 框选放大', () => {
+  it('点选工具是十字光标，关掉拖动平移和 Shift 框选放大', () => {
     const { pick } = setup(15);
 
+    expect(pick.cursor).toBe('crosshair');
     expect(pick.gestures).toStrictEqual({ dragPan: false, boxZoom: false });
   });
 

@@ -169,11 +169,9 @@ export const ResourceLayerPanel = defineComponent({
                 placeholder="批量设置年份"
                 aria-label="批量设置年份"
                 onUpdate:modelValue={(year: number) => props.layers.setYearForAll(year)}>
-                {{
-                  default: () =>
-                    batchYears.value.map(year => <ElOption key={year} label={`${year} 年`} value={year} />),
-                  footer: () => <div class={styles.batchHint}>没有这一年的资源保持不变</div>
-                }}
+                {batchYears.value.map(year => (
+                  <ElOption key={year} label={`${year} 年`} value={year} />
+                ))}
               </ElSelect>
             )}
           </div>

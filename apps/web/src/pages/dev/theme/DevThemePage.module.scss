@@ -188,6 +188,13 @@
 }
 
 // 模拟登录卡片的底色，填充输入框放在这种底色上
+// 地图页面板的内容宽 288
+.mapVariants {
+  display: grid;
+  gap: 12px;
+  width: 288px;
+}
+
 .filledPanel {
   padding: 24px;
   background-color: var(--color-primary-bg);

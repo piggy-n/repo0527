@@ -4,7 +4,14 @@ import { mount, type VueWrapper } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { MapToolbar } from './MapToolbar';
-import { labelLines, type ToolbarActionId, type ToolbarItemId } from './toolbar-items';
+import {
+  buttonLines,
+  FEATURE_PICK_TOOL,
+  labelLines,
+  TOOLBAR_TOOLS,
+  type ToolbarActionId,
+  type ToolbarItemId
+} from './toolbar-items';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
@@ -45,6 +52,13 @@ describe('labelLines', () => {
   });
 });
 
+describe('buttonLines', () => {
+  it('条目指定了分行时按它（"点/框选"不拆开），否则每行两个字', () => {
+    expect(buttonLines(TOOLBAR_TOOLS[FEATURE_PICK_TOOL])).toStrictEqual(['点/框选']);
+    expect(buttonLines({ label: '区划定位', icon: 'map-region-locate' })).toStrictEqual(['区划', '定位']);
+  });
+});
+
 describe('MapToolbar', () => {
   it('按页面给出的分组显示按钮，组之间有分隔线；文字每行两个字', () => {
     const { wrapper } = mountToolbar([['browse'], ['measure-distance', 'region-locate']]);
@@ -57,6 +71,13 @@ describe('MapToolbar', () => {
     expect(wrapper.findAll('[role="separator"]')).toHaveLength(1);
     expect(button(wrapper, '区划定位').findAll('br')).toHaveLength(1);
     expect(button(wrapper, '区划定位').text()).toBe('区划定位');
+  });
+
+  it('"点/框选"在按钮上不换行', () => {
+    const { wrapper } = mountToolbar([[FEATURE_PICK_TOOL]]);
+
+    expect(button(wrapper, '点/框选').findAll('br')).toHaveLength(0);
+    expect(button(wrapper, '点/框选').text()).toBe('点/框选');
   });
 
   it('只显示图标时不渲染文字，名称交给提示和无障碍名称', () => {

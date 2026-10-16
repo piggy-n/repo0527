@@ -14,15 +14,18 @@ export type ToolbarActionId = 'clear' | 'region-locate' | 'coordinate-locate';
 export type ToolbarItemId = ToolbarToolId | ToolbarActionId;
 
 export interface ToolbarItem {
-  /** 完整的名称：按钮上每行两个字，提示和无障碍名称用完整的 */
+  /** 完整的名称：提示和无障碍名称用它 */
   readonly label: string;
   readonly icon: IconName;
+  /** 按钮上的文字怎样分行；不写时每行两个字 */
+  readonly lines?: readonly string[];
 }
 
 // 工具和动作的名称、图标集中在这里（ADR 0034 第 5 条、ADR 0053 第 7 节）
 export const TOOLBAR_TOOLS: Readonly<Record<ToolbarToolId, ToolbarItem>> = {
   [BROWSE_TOOL]: { label: '移动', icon: 'map-move' },
-  [FEATURE_PICK_TOOL]: { label: '点选', icon: 'map-pick' },
+  // "点/框选"四个字符放得下一行，不按两个字拆开
+  [FEATURE_PICK_TOOL]: { label: '点/框选', icon: 'map-pick', lines: ['点/框选'] },
   [MEASURE_TOOL_IDS.distance]: { label: '测距', icon: 'map-measure-distance' },
   [MEASURE_TOOL_IDS.area]: { label: '测面', icon: 'map-measure-area' }
 };
@@ -40,4 +43,9 @@ export function isToolbarTool(id: ToolbarItemId): id is ToolbarToolId {
 /** 按钮上的文字每行两个字（ADR 0053 第 2 节） */
 export function labelLines(label: string): string[] {
   return Array.from({ length: Math.ceil(label.length / 2) }, (_, line) => label.slice(line * 2, line * 2 + 2));
+}
+
+/** 按钮上的文字：条目指定了分行时按它，否则每行两个字 */
+export function buttonLines(item: ToolbarItem): readonly string[] {
+  return item.lines ?? labelLines(item.label);
 }

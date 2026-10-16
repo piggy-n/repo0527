@@ -1,16 +1,19 @@
-// 坐标定位（设计稿 5D.4）：放在功能面板的 Tab 里，外观和内边距由外壳负责；名称在输入框左边，说明在输入框下面
+// 坐标定位（设计稿 5D.4）：放在功能面板的 Tab 里，外观和内边距由外壳负责；名称在输入框左边，说明在输入框下面。
+// 写法的切换、经纬度、底部按钮都占满宽度，之间的间距一样（2026-10-16 用户要求）
 
 .panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-xl);
 }
 
+// 识别结果或错误放在下面的间距里，不占自己的一行：各块之间的距离不随它变
 .field {
+  position: relative;
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr);
   align-items: center;
-  gap: 4px var(--space-sm);
+  column-gap: var(--space-sm);
 }
 
 .label {
@@ -18,13 +21,18 @@
   color: var(--color-text-regular);
 }
 
-// 识别结果或错误；没有内容时也占一行，输入时面板不跳动
+// 识别结果或错误：在输入框下面 4 像素，和输入框左对齐；写在间距里，有没有内容面板都不跳动
 .message {
-  grid-column: 2;
-  min-height: var(--line-height-tag);
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: calc(32px + var(--space-sm));
+  overflow: hidden;
   font-size: var(--font-size-xs);
   line-height: var(--line-height-tag);
   color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .error {
@@ -34,7 +42,6 @@
 .actions {
   display: flex;
   gap: var(--space-md);
-  margin-top: var(--space-xs);
 
   > * {
     flex: 1;

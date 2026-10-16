@@ -75,7 +75,7 @@ export const CheckedLayerList = defineComponent({
     const renderYear = (layer: CheckedLayer) =>
       layer.years.length > 1 ? (
         <ElSelect
-          class={styles.year}
+          class={[styles.year, 'select-no-arrow']}
           size="small"
           modelValue={layer.year}
           aria-label={`${layer.name}的年份`}
@@ -153,7 +153,7 @@ export const CheckedLayerList = defineComponent({
             </div>
           ))}
           {sliderOpen && (
-            <div class={styles.extra}>
+            <div class={styles.sliderRow}>
               <ElSlider
                 class={styles.slider}
                 size="small"

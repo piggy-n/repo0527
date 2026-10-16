@@ -618,10 +618,11 @@ export function useFeaturePick(
     return false;
   };
 
-  // 常驻模式、默认箭头光标；拖动用来框选，关掉拖动平移和 Shift 框选放大（ADR 0049 第 1 节）；离开点选工具时清除
+  // 常驻模式、十字光标（2026-10-16 用户要求，原来是默认箭头）；拖动用来框选，关掉拖动平移和 Shift 框选放大
+  // （ADR 0049 第 1 节）；离开点选工具时清除
   const pickTool: MapTool = {
     persistent: true,
-    cursor: 'default',
+    cursor: 'crosshair',
     gestures: { dragPan: false, boxZoom: false },
     deactivate: close,
     handleInput

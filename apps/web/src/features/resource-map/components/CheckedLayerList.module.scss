@@ -1,4 +1,4 @@
-// "已勾选"（ADR 0053 第 6 节，设计稿 5D.2）：行高 36；手柄 16、年份 66、透明度约 44、取消勾选 24
+// "已勾选"（ADR 0053 第 6 节，设计稿 5D.2）：行高 36；手柄 16、年份 48、透明度 44、取消勾选 24
 
 .list {
   margin: 0;
@@ -44,10 +44,11 @@
   }
 }
 
-// 多年份是小下拉，单年份只有文字，宽度一样，名称对齐；小号选择框左右各留 8、箭头 14，放得下四位的年份
+// 多年份是不带箭头的小下拉（点击照常弹出选项），单年份只有文字，宽度一样，名称对齐；小号选择框左右各留 8，放得下四位的年份
 .year {
   flex: none;
-  width: 66px;
+  box-sizing: border-box;
+  width: 48px;
 }
 
 .yearText {
@@ -86,10 +87,14 @@
 }
 
 // 带边框的百分比，看得出能点；点开是滑块
+// 宽度固定，90% 和 100% 一样宽
 .opacity {
   flex: none;
+  box-sizing: border-box;
+  width: 44px;
   height: 22px;
-  padding: 0 5px;
+  padding: 0;
+  text-align: center;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background-color: var(--color-bg-container);
@@ -140,7 +145,19 @@
   color: var(--color-danger);
 }
 
+// 透明度滑块在行下面单独一行、垂直居中：从名称开始（2 + 手柄 16 + 6 + 年份 48 + 6），到透明度框的右边为止
+// （右边留出取消勾选 24、间距 6 和行的内边距 4），不贴着列表的边
+.sliderRow {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 34px 0 78px;
+}
+
 .slider {
+  flex: 1;
+  box-sizing: border-box;
+  min-width: 0;
   // 两端的滑块按钮不贴着边缘
   padding: 0 var(--space-sm);
 }
