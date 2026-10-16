@@ -30,17 +30,32 @@ describe('BoundaryPanel', () => {
     expect(wrapper.find('.el-slider').exists()).toBe(false);
   });
 
-  it('每一级前面是它在地图上的线型：省界最粗，县界是虚线', () => {
+  it('每一级前面是它在地图上的线型：省界是色带、白边和深蓝的线，市界是白边上的细线，县界是虚线', () => {
     const wrapper = mount(BoundaryPanel, { props: { boundaries: useBoundaries() } });
-    // 线型示意在勾选框的 label 里
-    const style = (label: string) => {
-      const swatch = checkbox(wrapper, label).element.closest('label')?.querySelector('[aria-hidden="true"]');
-      return swatch?.getAttribute('style') ?? '';
+    // 线型示意在勾选框的 label 里，是叠起来的几条 SVG 线
+    const swatch = (label: string) => {
+      const svg = checkbox(wrapper, label).element.closest('label')?.querySelector('svg[aria-hidden="true"]');
+      if (!svg) {
+        throw new Error(`"${label}"没有线型示意`);
+      }
+      return svg;
     };
+    const attributeOf = (label: string, name: string) =>
+      [...swatch(label).querySelectorAll('line')].map(line => line.getAttribute(name));
 
-    expect(style('省界')).toContain('height: 2.4px');
-    expect(style('市界')).toContain('height: 1.6px');
-    expect(style('县界')).toContain('linear-gradient');
+    expect(attributeOf('省界', 'stroke')).toStrictEqual(['#597EF7', '#FFFFFF', '#2F54EB']);
+    expect(attributeOf('省界', 'stroke-width')).toStrictEqual(['10', '4.4', '2.4']);
+    // 高度放得下最宽的一条（省界的色带），其他两级至少 8
+    expect([swatch('省界'), swatch('市界'), swatch('县界')].map(svg => svg.getAttribute('height'))).toStrictEqual([
+      '10',
+      '8',
+      '8'
+    ]);
+    expect(attributeOf('市界', 'stroke')).toStrictEqual(['#FFFFFF', '#597EF7']);
+    // 虚线的线段和间隔按线宽换算：3、2 个线宽，线宽 1.1
+    const [dasharray] = attributeOf('县界', 'stroke-dasharray');
+    expect(dasharray?.split(' ').map(Number)).toStrictEqual([expect.closeTo(3.3), expect.closeTo(2.2)]);
+    expect(attributeOf('省界', 'stroke-dasharray')).toStrictEqual([null, null, null]);
   });
 
   it('滑块按百分比显示，拖动时把 0～1 的透明度交给拥有者', async () => {

@@ -41,12 +41,13 @@ export interface BasemapStyles {
   labelsGroup(state: BasemapState): StyleGroup;
 }
 
-const OPTIONS: readonly BasemapOption[] = [
-  { id: 'vector', label: '矢量底图', shortLabel: '矢量' },
-  { id: 'imagery', label: '影像底图', shortLabel: '影像' },
-  { id: 'none', label: '无底图', shortLabel: '无底图' }
-];
-const NONE_ONLY = OPTIONS.filter(option => option.id === 'none');
+const OPTION_BY_ID: Readonly<Record<BasemapId, BasemapOption>> = {
+  vector: { id: 'vector', label: '矢量底图', shortLabel: '矢量' },
+  imagery: { id: 'imagery', label: '影像底图', shortLabel: '影像' },
+  none: { id: 'none', label: '无底图', shortLabel: '无底图' }
+};
+const OPTIONS: readonly BasemapOption[] = [OPTION_BY_ID.vector, OPTION_BY_ID.imagery, OPTION_BY_ID.none];
+const NONE_ONLY = [OPTION_BY_ID.none];
 
 // 天地图 WMTS 的图层：底图和配套的注记
 const TIANDITU_LAYERS = {
@@ -67,6 +68,11 @@ const BACKGROUND_LAYER: BackgroundLayerSpecification = {
 };
 const BACKGROUND_ONLY: StyleGroup = { sources: {}, layers: [BACKGROUND_LAYER] };
 const EMPTY: StyleGroup = { sources: {}, layers: [] };
+
+/** 一种底图的名称和简称：底图卡写简称，无障碍名称写全称（ADR 0057） */
+export function basemapOption(id: BasemapId): BasemapOption {
+  return OPTION_BY_ID[id];
+}
 
 /** 可选的底图；关闭天地图（内网部署）时只有"无底图" */
 export function basemapOptions(tianditu: TiandituConfig | null): readonly BasemapOption[] {

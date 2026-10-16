@@ -2,6 +2,7 @@
 import { diffStyle, StyleModel } from '@yzt/map-core';
 import { describe, expect, it } from 'vitest';
 import {
+  basemapOption,
   basemapOptions,
   basemapThumbnails,
   type BasemapId,
@@ -60,6 +61,12 @@ describe('可选的底图与初始状态', () => {
   it('关闭天地图：只有无底图，进入时就是它', () => {
     expect(basemapOptions(null)).toStrictEqual([{ id: 'none', label: '无底图', shortLabel: '无底图' }]);
     expect(initialBasemapState(null)).toStrictEqual({ selected: 'none', opacity: { vector: 1, imagery: 1 } });
+  });
+
+  it('按 ID 取一种底图的名称和简称：底图卡写简称，无障碍名称写全称（ADR 0057）', () => {
+    expect(basemapOption('vector')).toBe(basemapOptions(TIANDITU)[0]);
+    expect(basemapOption('imagery')).toStrictEqual({ id: 'imagery', label: '影像底图', shortLabel: '影像' });
+    expect(basemapOption('none')).toBe(basemapOptions(null)[0]);
   });
 });
 

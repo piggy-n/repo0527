@@ -1,17 +1,14 @@
-// 卡片（设计稿 5D.4）：56 × 56，浮在地图上的外观；状态和业务组的按钮对应（ADR 0053 第 7 节）
+// 卡片（ADR 0057）：56 × 56 的白底卡片，四周留 4，上面 48 × 30 的图，下面一行字；浮在地图上的外观（ADR 0053 第 7 节）
 
 .card {
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 2px;
   box-sizing: border-box;
   width: 56px;
   height: 56px;
-  padding: 0;
-  overflow: hidden;
+  padding: 4px 4px 0;
   border: 0;
   border-radius: var(--radius-md);
   background-color: var(--color-bg-mask);
@@ -21,62 +18,55 @@
   line-height: var(--line-height-tag);
   cursor: pointer;
 
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+
   &:focus-visible {
     outline: 2px solid var(--color-primary-border-hover);
     outline-offset: 1px;
   }
 }
 
-// 图标加文字：悬停浅主色底、主色；面板打开时浅主色底加主色细边
-.iconic {
-  &:hover {
-    background-color: var(--color-primary-bg-light);
-    color: var(--color-primary);
-  }
+// 面板打开：和键盘焦点同一个位置的主色外边框，缩略图不加圈（2026-10-16 用户要求）；又有键盘焦点时外面再加一圈焦点色
+.pressed {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  color: var(--color-primary);
 
-  &.pressed {
-    background-color: var(--color-primary-bg);
+  &:focus-visible {
+    outline-color: var(--color-primary);
     box-shadow:
       var(--shadow-md),
-      inset 0 0 0 1px var(--color-primary-border);
-    color: var(--color-primary);
+      0 0 0 5px var(--color-primary-border-hover);
   }
 }
 
-// 铺满一张图，文字压在底部的白色半透明条上；悬停浅主色描边，面板打开时主色描边
-.covered {
-  justify-content: flex-end;
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-  }
-
-  &:hover::after {
-    box-shadow: inset 0 0 0 2px var(--color-primary-border-hover);
-  }
-
-  &.pressed::after {
-    box-shadow: inset 0 0 0 2px var(--color-primary);
-  }
-
-  .label {
-    position: relative;
-    width: 100%;
-    padding: 1px 0 2px;
-    background-color: var(--color-bg-mask);
-  }
-
-  &.pressed .label {
-    color: var(--color-primary);
-    font-weight: var(--font-weight-semibold);
-  }
+// 图标放在浅灰底上居中；缩略图铺满
+.media {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 30px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-neutral-bg-light);
 }
 
-.cover {
+// 缩略图的一圈细边，浅色的矢量底图也和白边分得开
+.covered::after {
+  content: '';
   position: absolute;
   inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  pointer-events: none;
+}
+
+.label {
+  flex: none;
 }

@@ -13,6 +13,7 @@ import { useResourceSymbols } from '@/features/resource-map/composables/useResou
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
+import { basemapOption } from '@/shared/map/basemap/basemap-style';
 import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundaryPanel } from '@/shared/map/boundary/BoundaryPanel';
@@ -168,23 +169,27 @@ export const CurrentMapPage = defineComponent({
       location.remove();
     };
 
-    // 卡片行：图例卡、底图卡（显示当前底图的缩略图），点开显示面板里对应的 Tab；手机宽度时叠在基础组上面
-    const renderCards = () => (
-      <div class={styles.cards} data-map-cards>
-        <MapCard
-          label={PANEL_LABELS.legend}
-          pressed={display.isOpen('legend')}
-          onClick={() => toggleDisplay('legend')}>
-          {{ icon: () => [<SvgIcon name="map-legend" size={20} />] }}
-        </MapCard>
-        <MapCard
-          label={PANEL_LABELS.basemap}
-          pressed={display.isOpen('basemap')}
-          onClick={() => toggleDisplay('basemap')}>
-          {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[basemap.selected.value]} />] }}
-        </MapCard>
-      </div>
-    );
+    // 卡片行：图例卡、底图卡（当前底图的缩略图和简称，ADR 0057），点开显示面板里对应的 Tab；手机宽度时叠在基础组上面
+    const renderCards = () => {
+      const current = basemapOption(basemap.selected.value);
+      return (
+        <div class={styles.cards} data-map-cards>
+          <MapCard
+            label={PANEL_LABELS.legend}
+            pressed={display.isOpen('legend')}
+            onClick={() => toggleDisplay('legend')}>
+            {{ icon: () => [<SvgIcon name="map-legend" size={20} />] }}
+          </MapCard>
+          <MapCard
+            label={current.shortLabel}
+            name={`${PANEL_LABELS.basemap}：${current.label}`}
+            pressed={display.isOpen('basemap')}
+            onClick={() => toggleDisplay('basemap')}>
+            {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[current.id]} />] }}
+          </MapCard>
+        </div>
+      );
+    };
 
     return () => {
       const pressed = (['region-locate', 'coordinate-locate'] as const).filter(id => functions.isOpen(id));

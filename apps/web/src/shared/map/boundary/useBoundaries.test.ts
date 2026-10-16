@@ -4,8 +4,13 @@ import { computed } from 'vue';
 import { BOUNDARY_OPTIONS } from './boundary-style';
 import { useBoundaries } from './useBoundaries';
 
-function layerIds(boundaries: ReturnType<typeof useBoundaries>) {
-  return boundaries.deriveGroup().layers.map(layer => layer.id);
+// 每个打开的级别一个数据源，从下到上
+function levelSources(boundaries: ReturnType<typeof useBoundaries>) {
+  return Object.keys(boundaries.deriveGroup().sources);
+}
+
+function opacities(boundaries: ReturnType<typeof useBoundaries>) {
+  return boundaries.deriveGroup().layers.map(layer => (layer.type === 'line' ? layer.paint?.['line-opacity'] : undefined));
 }
 
 describe('useBoundaries', () => {
@@ -15,7 +20,7 @@ describe('useBoundaries', () => {
     expect(boundaries.options).toBe(BOUNDARY_OPTIONS);
     expect(boundaries.visible.value).toStrictEqual({ province: true, city: false, county: false });
     expect(boundaries.opacity.value).toBe(1);
-    expect(layerIds(boundaries)).toStrictEqual(['boundaries-province']);
+    expect(levelSources(boundaries)).toStrictEqual(['boundaries-province']);
   });
 
   it('打开、关闭某一级后推导随之变化，其他级别不变', () => {
@@ -23,22 +28,23 @@ describe('useBoundaries', () => {
 
     boundaries.setVisible('county', true);
     expect(boundaries.visible.value).toStrictEqual({ province: true, city: false, county: true });
-    expect(layerIds(boundaries)).toStrictEqual(['boundaries-county', 'boundaries-province']);
+    expect(levelSources(boundaries)).toStrictEqual(['boundaries-county', 'boundaries-province']);
 
     boundaries.setVisible('province', false);
-    expect(layerIds(boundaries)).toStrictEqual(['boundaries-county']);
+    expect(levelSources(boundaries)).toStrictEqual(['boundaries-county']);
   });
 
   it('透明度作用于所有打开的级别', () => {
     const boundaries = useBoundaries();
     boundaries.setVisible('city', true);
+    const full = opacities(boundaries);
 
     boundaries.setOpacity(0.5);
 
     expect(boundaries.opacity.value).toBe(0.5);
-    expect(
-      boundaries.deriveGroup().layers.map(layer => (layer.type === 'line' ? layer.paint?.['line-opacity'] : undefined))
-    ).toStrictEqual([0.39, 0.47]);
+    // 市界、省界的每一条线（色带、白边、核心线）都减半
+    expect(full).toHaveLength(5);
+    expect(opacities(boundaries)).toStrictEqual(full.map(value => (typeof value === 'number' ? value / 2 : value)));
   });
 
   it('包进 computed 时只在状态变化后重新推导；相同的显隐和透明度不触发', () => {

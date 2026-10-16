@@ -11,16 +11,14 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-// 块级的 flex：线型示意是空的 span、没有基线，行内排列时整行按它的下边缘对齐，文字会偏下
+// 块级的 flex：线型示意是 SVG、没有文字基线，行内排列时整行按它的下边缘对齐，文字会偏下
 .option {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-// 一段 18 宽的线，高度就是线宽
+// 线型示意（ADR 0057）：宽 24，高度由组件按最宽的一条线给出
 .swatch {
   flex: none;
-  width: 18px;
-  background-repeat: repeat-x;
 }

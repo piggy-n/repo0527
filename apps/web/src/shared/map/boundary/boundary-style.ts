@@ -35,35 +35,54 @@ export const INITIAL_BOUNDARY_STATE: BoundaryState = {
   opacity: 1
 };
 
-interface LevelStyle {
+/** 一级边界由几条线叠成：色带、白边在下，核心线在上 */
+type LinePart = 'band' | 'casing' | 'line';
+
+interface LineStyle {
+  readonly part: LinePart;
+  readonly color: string;
   /** 线宽的几档：[级别, 线宽]，地图上按级别线性插值，面板的线型示意取中间一档 */
   readonly widths: readonly (readonly [zoom: number, width: number])[];
-  /** 各级原有的不透明度，状态里的透明度乘在它上面 */
+  /** 原有的不透明度，状态里的透明度乘在它上面 */
   readonly opacity: number;
+  /** 边缘虚化的宽度（像素） */
+  readonly blur?: number;
   /** 虚线的线段和间隔，单位是线宽 */
   readonly dasharray?: readonly number[];
 }
 
-// 沿用旧项目的样式：颜色相同，靠线宽、不透明度和虚线区分级别；地图样式里的颜色是数据，不走 CSS 令牌
-const COLOR = '#597EF7';
-const LEVEL_STYLES: Record<BoundaryLevel, LevelStyle> = {
-  province: { widths: [[5, 1.8], [9, 2.4], [13, 3.2]], opacity: 0.94 },
-  city: { widths: [[5, 1.1], [9, 1.6], [13, 2.3]], opacity: 0.78 },
-  county: { widths: [[8, 0.6], [11, 0.95], [14, 1.25]], opacity: 0.62, dasharray: [2.2, 1.6] }
+// 线型（ADR 0057）：省界加主色色带、核心线更深，市界细实线，县界虚线；省界、市界下面的白边让影像底图上的线更清楚。
+// 省、市都是实线，共用的边上一级盖住下一级；地图样式里的颜色是数据，不走 CSS 令牌
+const BLUE = '#597EF7';
+const DEEP_BLUE = '#2F54EB';
+const WHITE = '#FFFFFF';
+const LEVEL_STYLES: Record<BoundaryLevel, readonly LineStyle[]> = {
+  province: [
+    { part: 'band', color: BLUE, widths: [[5, 7], [9, 10], [13, 16]], opacity: 0.22, blur: 1 },
+    { part: 'casing', color: WHITE, widths: [[5, 3.4], [9, 4.4], [13, 5.6]], opacity: 0.7 },
+    { part: 'line', color: DEEP_BLUE, widths: [[5, 1.8], [9, 2.4], [13, 3.2]], opacity: 1 }
+  ],
+  city: [
+    { part: 'casing', color: WHITE, widths: [[5, 2.4], [9, 3.2], [13, 4]], opacity: 0.6 },
+    { part: 'line', color: BLUE, widths: [[5, 1], [9, 1.4], [13, 2]], opacity: 0.95 }
+  ],
+  county: [{ part: 'line', color: BLUE, widths: [[8, 0.8], [11, 1.1], [14, 1.4]], opacity: 0.8, dasharray: [3, 2] }]
 };
 
-/** 面板里一级边界的线型示意（设计稿 5D.4）：和地图上同色、同样的不透明度和虚线，线宽取中间一档 */
-export interface BoundarySwatch {
+/** 面板线型示意里的一条线（从下到上）：和地图上同色、同样的不透明度和虚线，线宽取中间一档 */
+export interface BoundarySwatchLine {
   readonly color: string;
   readonly width: number;
   readonly opacity: number;
   readonly dasharray?: readonly number[];
 }
 
-export function boundarySwatch(level: BoundaryLevel): BoundarySwatch {
-  const { widths, opacity, dasharray } = LEVEL_STYLES[level];
-  const [, width] = widths[Math.floor(widths.length / 2)];
-  return { color: COLOR, width, opacity, ...(dasharray ? { dasharray } : {}) };
+/** 面板里一级边界的线型示意；色带的虚化只有 1 像素，示意里不画 */
+export function boundarySwatch(level: BoundaryLevel): readonly BoundarySwatchLine[] {
+  return LEVEL_STYLES[level].map(({ color, widths, opacity, dasharray }) => {
+    const [, width] = widths[Math.floor(widths.length / 2)];
+    return { color, width, opacity, ...(dasharray ? { dasharray } : {}) };
+  });
 }
 
 // 从下到上：省界压在市界、县界上面
@@ -76,30 +95,34 @@ const SOURCES: Record<BoundaryLevel, GeoJSONSourceSpecification> = {
   county: { type: 'geojson', data: countyUrl }
 };
 
-const layerId = (level: BoundaryLevel) => `boundaries-${level}`;
+const sourceId = (level: BoundaryLevel) => `boundaries-${level}`;
 
-function lineLayer(level: BoundaryLevel, opacity: number): LineLayerSpecification {
-  const { widths, opacity: base, dasharray } = LEVEL_STYLES[level];
+// 核心线的 ID 就是 boundaries-province 等，色带、白边在后面加上部位
+const layerId = (level: BoundaryLevel, part: LinePart) => (part === 'line' ? sourceId(level) : `${sourceId(level)}-${part}`);
+
+function lineLayer(level: BoundaryLevel, style: LineStyle, opacity: number): LineLayerSpecification {
+  const { part, color, widths, opacity: base, blur, dasharray } = style;
   const width: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], ...widths.flat()];
   return {
-    id: layerId(level),
+    id: layerId(level, part),
     type: 'line',
-    source: layerId(level),
+    source: sourceId(level),
     layout: { 'line-join': 'round', 'line-cap': 'round' },
     paint: {
-      'line-color': COLOR,
+      'line-color': color,
       'line-width': width,
       'line-opacity': base * opacity,
+      ...(blur ? { 'line-blur': blur } : {}),
       ...(dasharray ? { 'line-dasharray': [...dasharray] } : {})
     }
   };
 }
 
-/** 推导 boundaries 分组：每个打开的级别一个数据源和一条线 */
+/** 推导 boundaries 分组：每个打开的级别一个数据源和几条线 */
 export function boundaryGroup({ visible, opacity }: BoundaryState): StyleGroup {
   const levels = BOTTOM_UP.filter(level => visible[level]);
   return {
-    sources: Object.fromEntries(levels.map(level => [layerId(level), SOURCES[level]])),
-    layers: levels.map(level => lineLayer(level, opacity))
+    sources: Object.fromEntries(levels.map(level => [sourceId(level), SOURCES[level]])),
+    layers: levels.flatMap(level => LEVEL_STYLES[level].map(style => lineLayer(level, style, opacity)))
   };
 }

@@ -1,22 +1,40 @@
 import { ElCheckbox, ElCheckboxGroup } from 'element-plus';
-import { type CSSProperties, defineComponent, type PropType } from 'vue';
+import { defineComponent, type PropType } from 'vue';
 import { OpacitySlider } from '../OpacitySlider';
-import { type BoundarySwatch, boundarySwatch } from './boundary-style';
+import { type BoundarySwatchLine, boundarySwatch } from './boundary-style';
 import type { Boundaries } from './useBoundaries';
 import styles from './BoundaryPanel.module.scss';
 
-// 一段线：颜色是地图样式的数据，用内联样式；虚线的线段和间隔按线宽换算（同 MapLibre 的 line-dasharray）
-function swatchStyle({ color, width, opacity, dasharray }: BoundarySwatch): CSSProperties {
-  if (!dasharray) {
-    return { height: `${width}px`, opacity, backgroundColor: color };
-  }
-  const [dash, gap] = dasharray;
-  return {
-    height: `${width}px`,
-    opacity,
-    backgroundImage: `linear-gradient(90deg, ${color} ${dash * width}px, transparent 0)`,
-    backgroundSize: `${(dash + gap) * width}px 100%`
-  };
+const SWATCH_WIDTH = 24;
+
+// 一级边界的线型示意：照地图上的画法从下到上叠几条线，颜色是地图样式的数据；高度放得下最宽的一条。
+// 虚线的线段和间隔按线宽换算，圆头画在线段外面，和 MapLibre 的圆头虚线一样
+function renderSwatch(lines: readonly BoundarySwatchLine[]) {
+  const height = Math.max(8, Math.ceil(Math.max(...lines.map(line => line.width))));
+  const y = height / 2;
+  return (
+    <svg
+      class={styles.swatch}
+      width={SWATCH_WIDTH}
+      height={height}
+      viewBox={`0 0 ${SWATCH_WIDTH} ${height}`}
+      aria-hidden="true">
+      {lines.map(({ color, width, opacity, dasharray }, index) => (
+        <line
+          key={index}
+          x1={width / 2}
+          y1={y}
+          x2={SWATCH_WIDTH - width / 2}
+          y2={y}
+          stroke={color}
+          stroke-opacity={opacity}
+          stroke-width={width}
+          stroke-linecap="round"
+          stroke-dasharray={dasharray?.map(value => value * width).join(' ')}
+        />
+      ))}
+    </svg>
+  );
 }
 
 /**
@@ -49,7 +67,7 @@ export const BoundaryPanel = defineComponent({
             {options.map(option => (
               <ElCheckbox key={option.id} value={option.id}>
                 <span class={styles.option}>
-                  <span class={styles.swatch} style={swatchStyle(boundarySwatch(option.id))} aria-hidden="true" />
+                  {renderSwatch(boundarySwatch(option.id))}
                   {option.label}
                 </span>
               </ElCheckbox>

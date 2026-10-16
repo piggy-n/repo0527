@@ -445,31 +445,36 @@ describe('CurrentMapPage', () => {
       'basemap-background',
       'basemap-vector',
       'basemap-labels-vector',
+      'boundaries-province-band',
+      'boundaries-province-casing',
       'boundaries-province'
     ]);
   });
 
-  it('卡片行：图例卡、底图卡开关显示面板里对应的 Tab；底图卡显示当前底图的缩略图（设计稿 5D.4）', async () => {
+  it('卡片行：图例卡、底图卡开关显示面板里对应的 Tab；底图卡显示当前底图的缩略图和简称（ADR 0057）', async () => {
     const { wrapper } = await readyPage();
-    const cover = () => button(wrapper, '底图').get('[aria-hidden="true"]').attributes('style') ?? '';
+    const basemapCard = () => wrapper.get('[data-map-cards] button:last-child');
+    const cover = () => basemapCard().get('[aria-hidden="true"]').attributes('style') ?? '';
     // 外壳把切走的内容设为 display: none
     const basemapShown = () => !wrapper.get('[data-panel="basemap"]').attributes('style')?.includes('display: none');
     expect(cover()).toContain('/vec_w/');
+    expect([basemapCard().text(), basemapCard().attributes('aria-label')]).toStrictEqual(['矢量', '底图：矢量底图']);
 
-    await button(wrapper, '底图').trigger('click');
-    expect(button(wrapper, '底图').attributes('aria-pressed')).toBe('true');
+    await basemapCard().trigger('click');
+    expect(basemapCard().attributes('aria-pressed')).toBe('true');
     expect(basemapShown()).toBe(true);
 
     await wrapper.get('button[aria-label="影像底图"]').trigger('click');
     expect(cover()).toContain('/img_w/');
+    expect([basemapCard().text(), basemapCard().attributes('aria-label')]).toStrictEqual(['影像', '底图：影像底图']);
 
     await button(wrapper, '图例').trigger('click');
     expect(button(wrapper, '图例').attributes('aria-pressed')).toBe('true');
     expect(basemapShown()).toBe(false);
 
     await button(wrapper, '图例').trigger('click');
-    await button(wrapper, '底图').trigger('click');
-    expect(button(wrapper, '底图').attributes('aria-pressed')).toBe('false');
+    await basemapCard().trigger('click');
+    expect(basemapCard().attributes('aria-pressed')).toBe('false');
     expect(wrapper.find('[data-panel="basemap"]').exists()).toBe(false);
   });
 

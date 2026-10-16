@@ -55,7 +55,7 @@
 | `location/useCoordinateInput.ts` | 坐标输入的逻辑：每个输入框的文字和精确数值、识别结果与提示、规范写法、切换格式、拆分一对坐标、提交 |
 | `location/CoordinateLocatePanel.tsx` | 坐标定位的面板：度分秒 / 小数、经纬度输入、拾取、定位（设计稿 5D.4，逻辑在 `useCoordinateInput`） |
 | `OpacitySlider.tsx` | 面板里的透明度一行：名称、不带刻度的滑块、百分比（底图和边界共用） |
-| `card/MapCard.tsx` | 卡片行的入口：56 × 56，图标加文字，或铺满一张图、文字在底部（设计稿 5D.4） |
+| `card/MapCard.tsx` | 卡片行的入口：56 × 56 的白底卡片，上面 48 × 30 的图（图标或铺满的缩略图），下面一行字；面板打开时主色外边框（ADR 0057） |
 | `panel-group/panel-group.ts` | 一组 Tab 面板的状态与规则：打开、切换、关闭（纯函数）；窄屏时左右只显示一边 `visibleSides`（ADR 0053） |
 | `panel-group/usePanelGroup.ts` | 一组 Tab 面板：已打开的功能、当前的 Tab，页面级的界面状态 |
 | `panel-group/useSideExclusion.ts` | 窄屏时左边的资源面板和右边的面板只显示最后操作的一边，只推导显示 |
@@ -124,8 +124,13 @@ basemap.setOpacity(0.6);
 
 ```tsx
 <BasemapPanel basemap={basemap} />
-<MapCard label="底图" pressed={display.isOpen('basemap')} onClick={() => toggleDisplay('basemap')}>
-  {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[basemap.selected.value]} />] }}
+const current = basemapOption(basemap.selected.value);   // { id, label: '矢量底图', shortLabel: '矢量' }
+<MapCard
+  label={current.shortLabel}
+  name={`底图：${current.label}`}
+  pressed={display.isOpen('basemap')}
+  onClick={() => toggleDisplay('basemap')}>
+  {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[current.id]} />] }}
 </MapCard>
 ```
 
@@ -133,7 +138,8 @@ basemap.setOpacity(0.6);
 - 缩略图由拥有者给出（`basemap.thumbnails`，`basemapThumbnails(tianditu)` 纯函数）：天地图南京所在的那张 10 级瓦片（849, 415），底图和配套的注记各一张，放大到 160% 后按 `focus`（86% 67%，南京在瓦片里的位置）对准。和底图的数据源用同一个地址模板（`tileUrl`）；无底图、关闭天地图时为 `null`，不请求天地图，显示和地图背景同色的方格。组件不读 `appConfig`
 - 透明度用共用的 `OpacitySlider`：滑块按百分比显示、不带刻度、右边写出百分比，拖动过程中实时交出 0～1；无底图时没有这一行。Element 的滑块宽 100%，内边距要算进宽度（`box-sizing: border-box`），否则会压到百分比（浏览器验证时发现）
 - 现状底图页把它和边界面板放在显示面板的"底图"里（ADR 0053 第 4 节），中间是 `MxTitle` 的区块标题"行政区"；外观和悬浮元素的登记由外壳负责
-- 底图卡铺满当前底图的缩略图，文字压在底部的白色半透明条上；面板打开时主色描边
+- 底图卡（ADR 0057）：上面是当前底图的缩略图（48 × 30，一圈 `--color-border` 的细边），下面写简称（矢量、影像、无底图），无障碍名称写全称"底图：矢量底图"（`MapCard` 的 `name`）；名称和简称用 `basemapOption(id)` 按 ID 取，三种底图都有，不用在选项里查找
+- 卡片（ADR 0057）：图例卡、底图卡结构相同，56 × 56 的白底卡片四周留 4，上面 48 × 30 的图、下面一行字，文字在同一条线上。悬停浅主色底、主色；面板打开时外面 2 像素的主色边框（`outline`，离卡片 1 像素，和键盘焦点同一个位置），文字和图标变主色，缩略图不加圈；键盘焦点是同样位置的 `--color-primary-border-hover` 边框，面板打开时又有焦点就在主色边外面再加一圈焦点色
 - `Basemap` 接口里的函数都写成函数类型的属性（`readonly deriveGroup: () => StyleGroup`），不写方法签名：它们是闭包，页面直接取出来交给 `bindStyle`，写成方法签名时 lint 的 `unbound-method` 会报错
 
 ### 浏览器验证（2026-10-10）
@@ -169,14 +175,19 @@ boundaries.setVisible('city', true);
 boundaries.setOpacity(0.6);
 ```
 
-- 每个打开的级别一个 GeoJSON 数据源和一条线图层，ID 是 `boundaries-province` 等；从下到上是县、市、省
+- 每个打开的级别一个 GeoJSON 数据源和几条线（ADR 0057）：核心线的 ID 是 `boundaries-province` 等，色带、白边是 `boundaries-province-band`、`boundaries-city-casing` 这样加上部位；各级从下到上是县、市、省，一级之内是色带、白边、核心线
 - 数据源直接写 `?url` 导入的地址（`{ type: 'geojson', data: url }`），由 MapLibre 在 Worker 里下载和解析；地址带内容哈希，可以长期缓存
 - 关闭的级别不在样式里，打开时才下载；关掉再打开要重新解析（下载命中缓存）。打开、关闭一级只增删这一级的数据源和图层，改透明度只产生 `setPaintProperty`
-- 线的样式照搬旧项目：颜色都是 `#597EF7`；省界宽 1.8～3.2、不透明度 0.94，市界 1.1～2.3、0.78，县界 0.6～1.25（从 8 级起变化）、0.62、虚线。状态里的透明度乘在各级的不透明度上。线宽写成"级别 → 线宽"的几档数据，地图上的插值表达式由它生成，面板的线型示意（`boundarySwatch`）取中间一档，不在界面上求值表达式
+- 线型（ADR 0057，2026-10-16 按用户的优化意见改，原来照搬旧项目，三级同色、只靠线宽区分）：
+  - 省界：主色色带（宽 7～16、0.22、虚化 1），白边（3.4～5.6、0.7），`#2F54EB` 的核心线（1.8～3.2、不透明）
+  - 市界：白边（2.4～4、0.6），主色实线（1～2、0.95）
+  - 县界：主色虚线（3、2 个线宽），宽 0.8～1.4（从 8 级起变化）、0.8
+  - 省、市都是实线，共用的边上省界的核心线和白边都不比市界的窄，盖住市界（测试检查各档线宽）；白边在矢量底图上几乎看不见，让影像底图上的线更清楚
+- 状态里的透明度乘在每一条线的不透明度上。线宽写成"级别 → 线宽"的几档数据，地图上的插值表达式由它生成，面板的线型示意（`boundarySwatch` 从下到上列出每一条线）取中间一档，不在界面上求值表达式
 - `useBoundaries()` 的写法与 `useBasemap()` 相同：状态是一个 `shallowRef`，值没变时不替换；透明度不是 0～1 之间的有限数时抛错。三级都关闭时仍可以改透明度
 - 进入页面时只显示省界；指标页（阶段六）要四项全开时再加初始值的参数
 - 记住选择（5C.3，ADR 0042）：`useBoundaries({ preferences })` 读到存下的三个级别和透明度后整体替换一次（`boundary-preference.ts` 的 schema 校验通过才用），之后的修改防抖写入
-- 面板 `BoundaryPanel`（设计稿 5D.4）：三级横排，勾选框后面是这一级的线型示意（一段 18 宽的线，高度是线宽，同样的颜色和不透明度；虚线用重复的线性渐变，线段和间隔按线宽换算，同 MapLibre 的 `line-dasharray`）；透明度用共用的 `OpacitySlider`，没有打开任何级别时没有这一行。复选框组给出勾选的全部值，按级别逐一 `setVisible`，值没变的级别不替换状态。现状底图页把它放在显示面板的"底图"里，在"行政区"标题下面
+- 面板 `BoundaryPanel`（设计稿 5D.4）：三级横排，勾选框后面是这一级的线型示意（ADR 0057：24 宽的 SVG，从下到上叠同样的几条线，高度放得下最宽的一条；色带的虚化只有 1 像素，不画；虚线的线段和间隔按线宽换算，圆头画在线段外面，和 MapLibre 的圆头虚线一样）；透明度用共用的 `OpacitySlider`，没有打开任何级别时没有这一行。复选框组给出勾选的全部值，按级别逐一 `setVisible`，值没变的级别不替换状态。现状底图页把它放在显示面板的"底图"里，在"行政区"标题下面
 
 ### 浏览器验证（2026-10-10）
 
@@ -659,7 +670,7 @@ sides.activate('right');
 | `map-status.test.ts` | 各状态的显示内容、两种引擎失败、样式失败、没有原因、不是 Error 的原因 | Node |
 | `MapStatusNotice.test.tsx` | 引擎失败时显示原因和"重试"，点击后重新创建地图，重试过程不抛错 | jsdom |
 | `basemap/BasemapPanel.test.tsx` | 三张缩略图只写类型、当前的按下，点一张选中、无底图时没有透明度；缩略图叠着注记和底图、无底图没有图片；滑块按百分比显示、右边写出百分比、拖动时交给拥有者 0～1 的值；关闭天地图时只有"无底图" | jsdom |
-| `card/MapCard.test.tsx` | 图标加文字、点击通知、按下；铺满一张图时文字压在底部 | jsdom |
+| `card/MapCard.test.tsx` | 图在上、字在下（图标和铺满的图都一样）、点击通知、按下、只写简称时的无障碍名称 | jsdom |
 | `basemap/useBasemap.test.ts` | 默认读取配置；两种配置下的初始状态；切换后推导出所选底图和注记；透明度作用于当前底图、每种底图各自记住；相同的值不触发重新推导；不合法的调用抛错且状态不变 | Node |
 | `boundary/boundary-style.test.ts` | 级别与初始状态；数据源是三份文件的地址；三级的叠放、线宽、虚线；透明度乘在基础值上；关闭的级别不在样式里；ID 前缀与校验；改透明度只产生 `setPaintProperty`；开关一级只增删这一级；面板的线型示意（同色、同不透明度和虚线，线宽取中间一档） | Node |
 | `panel-group/panel-group.test.ts` | 打开的功能按固定顺序、切换不改已打开的、关掉当前的切到最近显示过的、入口的三种点击；面板组不替换没变的状态、不认识的功能抛错；窄屏时左右只显示一边 | Node |

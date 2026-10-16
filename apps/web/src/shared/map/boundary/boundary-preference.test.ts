@@ -34,10 +34,7 @@ describe('边界的偏好', () => {
 
     expect(ctx.boundaries.visible.value).toStrictEqual({ province: false, city: true, county: true });
     expect(ctx.boundaries.opacity.value).toBe(0.5);
-    expect(ctx.boundaries.deriveGroup().layers.map(layer => layer.id)).toStrictEqual([
-      'boundaries-county',
-      'boundaries-city'
-    ]);
+    expect(Object.keys(ctx.boundaries.deriveGroup().sources)).toStrictEqual(['boundaries-county', 'boundaries-city']);
   });
 
   it('打开级别、改透明度后防抖写入', async () => {
