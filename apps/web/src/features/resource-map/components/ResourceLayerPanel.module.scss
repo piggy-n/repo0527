@@ -1,9 +1,11 @@
-// 资源图层面板（ADR 0053 第 6 节，设计稿 5D.2）：宽 320，从上到下撑满，目录和"已勾选"在内部滚动
+// 资源图层面板（ADR 0053 第 6 节，设计稿 5D.2）：宽 320，最高到所在列的高度，目录和"已勾选"在内部滚动
 
+// 不让列压缩：面板的高度只由内容决定，两区的高度由组件按列的高度算好，面板最高正好到列的高度。
+// 被压缩时面板和两区的高度差不再是头部、搜索行的高度，分法会停在错的结果上
 .root {
   display: flex;
+  flex: none;
   flex-direction: column;
-  min-height: 0;
 }
 
 .panel {
@@ -102,32 +104,33 @@
   width: 132px;
 }
 
-// 目录、分割线、"已勾选"：目录占剩下的高度，"已勾选"的高度由分割线决定
+// 目录、分割线、"已勾选"：两区的高度由组件按内容和分割线算好（panel-split.ts），面板跟着内容变矮
 .lists {
   display: flex;
-  flex: 1;
+  flex: none;
   flex-direction: column;
   min-height: 0;
 }
 
 .tree {
-  flex: 1;
+  flex: none;
   min-height: 0;
   overflow-y: auto;
   padding: 0 var(--space-sm) 0 var(--space-md);
 }
 
+// 高 24，线在正中：上面离目录、下面离"已勾选"的标题都是 11
 .splitter {
   position: relative;
   flex: none;
-  height: 16px;
+  height: 24px;
   cursor: row-resize;
   touch-action: none;
 
   &::before {
     content: '';
     position: absolute;
-    top: 7px;
+    top: 11px;
     right: var(--space-lg);
     left: var(--space-lg);
     height: 2px;
@@ -135,8 +138,8 @@
     background-color: var(--color-border);
   }
 
-  &:hover,
-  &:active,
+  &:not(.fixed):hover,
+  &:not(.fixed):active,
   &:focus-visible {
     outline: none;
 
@@ -153,10 +156,15 @@
   }
 }
 
+// 拖动改变不了两区时（都放得下、目录已经全部显示）：不显示成能拖的样子，键盘焦点照常显示
+.fixed {
+  cursor: default;
+}
+
 // 中间的圆形手柄
 .splitterHandle {
   position: absolute;
-  top: -4px;
+  top: 0;
   left: 50%;
   display: flex;
   align-items: center;
@@ -177,12 +185,13 @@
   min-height: 0;
 }
 
+// 上面不留边距：和分割线的间距由分割线自己留
 .checkedHead {
   display: flex;
   flex: none;
   align-items: center;
   gap: var(--space-sm);
-  padding: 4px var(--space-lg) var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-sm);
 
   > :first-child {
     flex: none;
@@ -204,7 +213,12 @@
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 0 var(--space-sm) var(--space-md);
+  padding: 0 var(--space-sm);
+}
+
+// 下边距放在量本来高度的这一层里，算进"已勾选"的内容高度
+.checkedContent {
+  padding-bottom: var(--space-md);
 }
 
 .status {

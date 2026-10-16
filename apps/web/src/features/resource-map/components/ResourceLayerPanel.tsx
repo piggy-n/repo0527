@@ -1,5 +1,5 @@
 import { Search } from '@element-plus/icons-vue';
-import { useElementSize } from '@vueuse/core';
+import { useElementSize, useResizeObserver } from '@vueuse/core';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
 import { ElButton, ElInput, ElOption, ElSelect } from 'element-plus';
@@ -10,6 +10,7 @@ import type { CatalogOrderOwner } from '../composables/useCatalogOrder';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourcePanelLayout } from '../composables/useResourcePanelLayout';
 import { checkedLayers, expandedByDefault, panelTree } from '../layer-panel';
+import { ratioForCheckedHeight, splitLists } from '../panel-split';
 import { batchYearOptions } from '../resource-layers';
 import { CheckedLayerList } from './CheckedLayerList';
 import { arrowStep, ResourceTreeList } from './ResourceTreeList';
@@ -23,24 +24,13 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
-// 分割线两边的最小高度：目录至少 3 行，"已勾选"至少放得下标题和 2 行
-const MIN_TREE_HEIGHT = 3 * 32;
-const MIN_CHECKED_HEIGHT = 30 + 2 * 36;
-const SPLITTER_HEIGHT = 16;
+// 分割线的高度：线在中间，上下留出一样的间距
+const SPLITTER_HEIGHT = 24;
 // 键盘调整分割线的一步
 const RATIO_STEP = 0.05;
 
-/** "已勾选"区的高度：按比例，限制在两边的最小高度以内；放不下两边的最小高度时只按比例 */
-export function checkedAreaHeight(available: number, ratio: number): number {
-  const wanted = available * ratio;
-  if (available < MIN_TREE_HEIGHT + MIN_CHECKED_HEIGHT) {
-    return Math.max(0, wanted);
-  }
-  return Math.min(available - MIN_TREE_HEIGHT, Math.max(MIN_CHECKED_HEIGHT, wanted));
-}
-
 /**
- * 资源图层面板（ADR 0053 第 6 节，设计稿 5D.2）：目录树负责浏览、勾选和目录顺序，"已勾选"按叠放顺序调整顺序、年份和透明度，
+ * 资源图层面板（ADR 0053 第 6 节、ADR 0060，设计稿 5D.2）：目录树负责浏览、勾选和目录顺序，"已勾选"按叠放顺序调整顺序、年份和透明度，
  * 两区之间的分割线可以拖动。只显示拥有者的状态并调用它们的操作；收起和分割线的位置由面板布局的拥有者记住，
  * 窄屏时让给右边由页面决定，所以收起与否由页面通过 collapsed 给出。会挡住定位，登记为贴左边的悬浮元素
  */
@@ -92,21 +82,52 @@ export const ResourceLayerPanel = defineComponent({
       expanded.value = next;
     };
 
-    // 目录和"已勾选"两区的可用高度：量列表区域，减去分割线
+    // 两区最多能用的高度：面板所在的列（页面上纵向 flex 的一列）的高度就是面板最高能到的高度，减去头部、搜索行
+    // 和分割线。不用两区量到的高度：它又由分法决定，会来回重算
+    const column = computed(() => element.value?.parentElement ?? null);
+    const { height: columnHeight } = useElementSize(column);
+    // 头部、搜索行的高度：面板不被列压缩，它就是面板和两区的高度差，和内容无关，在搜索行出现或尺寸变化时量。
+    // 不监听面板和两区：它们跟着内容变，又比内容那一层浅，浏览器同一帧里不再通知，报 ResizeObserver loop 的错误
+    const filter = ref<HTMLElement>();
     const lists = ref<HTMLElement>();
-    const { height: listsHeight } = useElementSize(lists);
-    const available = computed(() => Math.max(0, listsHeight.value - SPLITTER_HEIGHT));
-    const checkedHeight = computed(() => checkedAreaHeight(available.value, props.layout.checkedRatio.value));
-
+    const chrome = ref(0);
+    useResizeObserver(filter, () => {
+      if (element.value && lists.value) {
+        chrome.value = element.value.getBoundingClientRect().height - lists.value.getBoundingClientRect().height;
+      }
+    });
+    const available = computed(() => Math.max(0, Math.floor(columnHeight.value - chrome.value - SPLITTER_HEIGHT)));
+    // 两区的内容本来的高度：各包一层量，不受两区的高度影响
+    const treeContent = ref<HTMLElement>();
+    const { height: treeHeight } = useElementSize(treeContent);
+    const checkedHead = ref<HTMLElement>();
+    const { height: checkedHeadHeight } = useElementSize(checkedHead, undefined, { box: 'border-box' });
+    const checkedContent = ref<HTMLElement>();
+    const { height: checkedContentHeight } = useElementSize(checkedContent, undefined, { box: 'border-box' });
+    // 都量到之前不设高度，按内容排
+    const split = computed(() =>
+      columnHeight.value > 0 && chrome.value > 0
+        ? splitLists({
+            available: available.value,
+            tree: treeHeight.value,
+            checked: checkedHeadHeight.value + checkedContentHeight.value,
+            ratio: props.layout.checkedRatio.value
+          })
+        : null
+    );
+    const checkedHeight = computed(() => split.value?.checked ?? 0);
+    // 拖动改变不了两区时分割线不响应，也不显示成能拖的样子
+    const adjustable = computed(() => split.value?.adjustable ?? false);
     const setCheckedHeight = (height: number) => {
-      if (available.value > 0) {
-        props.layout.setCheckedRatio(checkedAreaHeight(available.value, height / available.value) / available.value);
+      const ratio = ratioForCheckedHeight(available.value, height);
+      if (ratio !== null) {
+        props.layout.setCheckedRatio(ratio);
       }
     };
 
     // 拖动分割线：按住后跟着指针改"已勾选"区的高度，松开时结束
     const onSplitterPointerDown = (event: PointerEvent) => {
-      if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) {
+      if (event.button !== 0 || !adjustable.value || !(event.currentTarget instanceof HTMLElement)) {
         return;
       }
       const splitter = event.currentTarget;
@@ -127,7 +148,7 @@ export const ResourceLayerPanel = defineComponent({
     // 分割线上按上下方向键：往上是"已勾选"区变高
     const onSplitterKeydown = (event: KeyboardEvent) => {
       const step = arrowStep(event);
-      if (step === 0 || available.value <= 0) {
+      if (step === 0 || !adjustable.value) {
         return;
       }
       event.preventDefault();
@@ -152,7 +173,7 @@ export const ResourceLayerPanel = defineComponent({
       }
       return (
         <>
-          <div class={styles.filter}>
+          <div ref={filter} class={styles.filter}>
             <ElInput
               class={styles.search}
               modelValue={keyword.value}
@@ -176,27 +197,30 @@ export const ResourceLayerPanel = defineComponent({
             )}
           </div>
           <div ref={lists} class={styles.lists}>
-            <div class={styles.tree}>
-              {tree.value.length > 0 ? (
-                <ResourceTreeList
-                  nodes={tree.value}
-                  parentId={CATALOG_ROOT}
-                  depth={0}
-                  expanded={expanded.value}
-                  searching={searching.value}
-                  layers={props.layers}
-                  catalogOrder={props.catalogOrder}
-                  onToggle={toggleExpanded}
-                />
-              ) : (
-                <div class={styles.status}>没有找到资源</div>
-              )}
+            <div class={styles.tree} style={split.value ? { height: `${split.value.tree}px` } : undefined}>
+              <div ref={treeContent}>
+                {tree.value.length > 0 ? (
+                  <ResourceTreeList
+                    nodes={tree.value}
+                    parentId={CATALOG_ROOT}
+                    depth={0}
+                    expanded={expanded.value}
+                    searching={searching.value}
+                    layers={props.layers}
+                    catalogOrder={props.catalogOrder}
+                    onToggle={toggleExpanded}
+                  />
+                ) : (
+                  <div class={styles.status}>没有找到资源</div>
+                )}
+              </div>
             </div>
             <div
-              class={styles.splitter}
+              class={[styles.splitter, !adjustable.value && styles.fixed]}
               role="separator"
               aria-orientation="horizontal"
               aria-label="调整目录和已勾选的高度"
+              aria-disabled={!adjustable.value}
               aria-valuenow={Math.round(props.layout.checkedRatio.value * 100)}
               tabindex={0}
               onPointerdown={onSplitterPointerDown}
@@ -205,13 +229,15 @@ export const ResourceLayerPanel = defineComponent({
                 <SvgIcon name="splitter-handle" size={14} />
               </span>
             </div>
-            <div class={styles.checked} style={{ height: `${checkedHeight.value}px` }}>
-              <div class={styles.checkedHead}>
+            <div class={styles.checked} style={split.value ? { height: `${split.value.checked}px` } : undefined}>
+              <div ref={checkedHead} class={styles.checkedHead}>
                 <MxTitle>已勾选</MxTitle>
                 <span class={styles.badge}>{checkedCount.value}</span>
               </div>
               <div class={styles.checkedList}>
-                <CheckedLayerList layers={props.layers} />
+                <div ref={checkedContent} class={styles.checkedContent}>
+                  <CheckedLayerList layers={props.layers} />
+                </div>
               </div>
             </div>
           </div>

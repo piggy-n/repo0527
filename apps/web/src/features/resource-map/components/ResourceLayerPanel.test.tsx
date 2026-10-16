@@ -10,7 +10,7 @@ import { buildCatalog, type ResourceCatalog } from '../catalog';
 import { type CatalogOrderOwner, useCatalogOrder } from '../composables/useCatalogOrder';
 import { type ResourceLayers, useResourceLayers } from '../composables/useResourceLayers';
 import { type ResourcePanelLayout, useResourcePanelLayout } from '../composables/useResourcePanelLayout';
-import { checkedAreaHeight, ResourceLayerPanel } from './ResourceLayerPanel';
+import { ResourceLayerPanel } from './ResourceLayerPanel';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
@@ -309,19 +309,6 @@ describe('ResourceLayerPanel', () => {
     await button(wrapper, '展开资源图层').trigger('click');
     expect(collapsed.value).toBe(false);
     expect(visibleResources(wrapper)).toHaveLength(3);
-  });
-});
-
-describe('checkedAreaHeight', () => {
-  it('按比例，限制在两边的最小高度以内：目录至少 3 行（96），"已勾选"至少标题加 2 行（102）', () => {
-    expect(checkedAreaHeight(500, 0.4)).toBe(200);
-    expect(checkedAreaHeight(500, 0.05)).toBe(102);
-    expect(checkedAreaHeight(500, 0.95)).toBe(404);
-  });
-
-  it('放不下两边的最小高度时只按比例', () => {
-    expect(checkedAreaHeight(150, 0.4)).toBe(60);
-    expect(checkedAreaHeight(0, 0.4)).toBe(0);
   });
 });
 
