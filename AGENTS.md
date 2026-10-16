@@ -43,7 +43,7 @@ apps/web/src/
 ├─ app/        应用装配：入口、路由、Pinia、全局插件、布局
 ├─ pages/      路由页面，只负责组合 features
 ├─ features/   按业务域划分：api.ts、queries.ts、store.ts、components/、composables/
-├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、项目级的公共地图能力（map）
+├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、加载耗时的标记（perf）、项目级的公共地图能力（map）
 └─ libs/       将来可拆到 packages/* 的模块，统一用 @yzt/<name> 导入
    ├─ utils/       @yzt/utils       纯 TS 工具，不依赖框架（目前是 Worker 通信层）
    ├─ ui/          @yzt/ui          Mx* 通用组件（布局、面板、区块、标题，ADR 0016）
@@ -54,7 +54,7 @@ apps/web/src/
 
 - `pages/dev/<名称>/`：开发页面（主题预览 `/dev/theme`、地图开发页 `/dev/map`、资源图层实测 `/dev/resources`），和业务页面分开放。组件名 `Dev<名称>Page`，路由名 `dev<名称>`（值为 `dev-<名称>`），路径 `/dev/<名称>`；只注册在 `app/router/routes.ts` 的 `devRoutes` 里，生产构建不包含；业务代码不导入开发页面。`routes.test.ts` 检查路径与路由名是否对应
 - `packages/*`：workspace 内部包，`exports` 直接指向 `src/index.ts`，不单独构建（ADR 0014）；目前有 `@yzt/icons`（图标组件与 SVG 规范化工具）。新建包按 `docs/config/internal-packages.md`
-- `apps/web/tools/`：Node 直接运行的 TS 工具脚本（如 `pnpm title:generate`），相对导入写 `.ts` 扩展名，只用可剥离的语法（`erasableSyntaxOnly`）
+- `apps/web/tools/`：Node 直接运行的 TS 工具脚本（如 `pnpm title:generate`、加载耗时的实测 `measure:map-load`），相对导入写 `.ts` 扩展名，只用可剥离的语法（`erasableSyntaxOnly`）
 - `apps/web/public/fonts/`：唯一的字体目录，不入库（ADR 0013），见 `docs/design/fonts.md`
 
 ## 依赖方向
@@ -136,6 +136,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 异步按 ADR 0039 分类：能写成状态收敛的不写成操作；可替换操作（同一件事的先后请求，如定位、查询所在区县）在同一通道里后发覆盖先发，用 `@yzt/utils` 的 `LatestController`，不手写递增计数；服务端写操作（删除、保存）不适用，按业务防重复、串行或允许并发，不随组件卸载取消
 - 命名：状态快照的序号叫 revision（只增不减，比较新旧）；一次意图用信号表示（operation，只能作废，不比较大小）；version 只用于外部格式（样式规范的 `version: 8`、依赖版本）（ADR 0039）
 - 加载状态用 `shared/composables` 的 `useDelayedFlag` 延迟显示，防重复提交的标志仍立即生效
+- 加载耗时用 `shared/perf` 的 `LoadTrace` 标记（User Timing，留在产物里、不上报），登录到地图的步骤清单和实测脚本的 `STEPS` 由测试保证一致；改加载方式（预加载、拆分块、换框架）前后用 `measure:map-load` 实测，几种做法用 `--builds` 交替比较，模拟第一次访问用新的浏览器上下文、不禁用缓存（ADR 0061，见 `docs/modules/perf.md`）
 - 确认框（`ElMessageBox`）不随组件卸载关闭：组件卸载时关闭自己打开的确认框；用户确认后，先检查组件是否已销毁、会话是否还是打开确认框时的那一个，再执行操作（写法见 `features/file-management/composables/useFileRemoval.ts`）
 - 同一时间只能打开一个 `ElMessageBox`：组件卸载时只能用 `ElMessageBox.close()` 关闭，它会关掉所有确认框，有多个时会把别处的一起关掉、对方按"取消"处理；需要多个弹框并存时，改用渲染在组件内的确认框（如基于 `ElDialog`），随组件卸载自然销毁
 - 表格行内操作（如删除）的进行中状态按行 ID 记录，不用单个 mutation 的 `variables` / `isPending` 判断是哪一行；操作入口对同一行防重复
@@ -190,7 +191,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - shared/http 不依赖路由、UI 和鉴权，这些由 `app/http.ts` 通过 `configureHttp` 注入
 - `useQuery` 的 key 变化后，`data` 要到下一轮调度才换成新 key 的结果；同步读取或在侦听里要知道结果属于哪个 key 时，用 `select` 给结果标上 key 再比较（写法见 `features/resource-map/queries.ts` 的 `useFeatureDetailQuery`）
 
-### 地图（ADR 0020～0039，总览见 `docs/modules/map-overview.md`，设计见 `docs/modules/map-core.md`、`docs/modules/map-vue.md`、`docs/modules/shared-map.md`）
+### 地图（ADR 0020～0063，总览见 `docs/modules/map-overview.md`，设计见 `docs/modules/map-core.md`、`docs/modules/map-vue.md`、`docs/modules/shared-map.md`）
 
 - map-core 持有地图会话状态（样式模型、相机、当前工具、选择状态），它是二维和三维共同的唯一真相源；Manager 修改会话状态，不直接写引擎
 - 样式按分组推导：每个拥有者用纯函数从自己的状态推导出分组并整体替换；跨分组的修改用一次 `setGroups` 提交，批次不跨 `await`；交给会话的 GeoJSON 数据和样式图片不能原地修改，要换新对象（ADR 0022、0045）
@@ -290,6 +291,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - `pnpm --filter @yzt/web dev:intranet`：用内网配置启动开发服务器
 - `pnpm test`：所有包的测试（`vitest run`，`apps/web` 里有 `unit`、`browser` 两个项目）；`pnpm --filter @yzt/web test:watch` 监听模式；`test:unit`、`test:browser` 只跑其中一个；第一次跑浏览器测试前运行 `pnpm --filter @yzt/web test:browser:install`
 - CI（`.github/workflows/ci.yml`）依次运行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm lint`、安装 Chromium 无界面版、`pnpm test`、`pnpm build`
+- `pnpm --filter @yzt/web measure:map-load`：实测"点击登录 → 地图第一次加载完成"（先构建；账号密码从环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD` 读，由用户在自己的终端运行）
 - `pnpm deps:check`：检查过期的依赖和 GitHub Actions
 - `pnpm deps:update:within-range`：在版本范围内更新依赖和 Actions
 - `pnpm deps:update:allow-major`：交互式选择要升级大版本的依赖和 Actions

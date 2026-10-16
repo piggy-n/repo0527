@@ -143,6 +143,7 @@ UI 在 2026-09-30 提供（此前用旧项目的 PNG 转 webp 占位）：
 - 不另设缓存的上限：`KeepAlive` 里只会出现标了 `keepAlive` 的页面。按组件类型缓存，两个标了 `keepAlive` 的路由不能共用同一个页面组件
 - 布局卸载时缓存跟着清空：登录页、404 不在布局里，退出、会话过期、别的标签页退出都会回到登录页，缓存的页面随之卸载；之后再登录（包括换了用户）是新的页面
 - 缓存的页面里，停用期间要结束的临时交互用 `shared/composables` 的 `usePageActive`，量尺寸用 `useShownElementSize`（见 [composables.md](composables.md)）；地图怎样暂停见 [map-vue.md](map-vue.md) 的 `MapCanvas`
+- 开发时：改了被缓存页面用到的文件，热更新会在缓存的页面上报 Vue 的 `emitsOptions` 之类的错误（KeepAlive 和热更新的已知问题），刷新页面即可；生产构建没有这个问题（5E.5 在干净的会话里来回切换两次，没有错误）
 - 测试：`AppLayout.test.tsx` 检查缓存的页面切走再回来是同一个实例、其他页面重新创建、离开布局后缓存清空；`routes.test.ts` 列出缓存的页面
 
 ## 暂未处理
