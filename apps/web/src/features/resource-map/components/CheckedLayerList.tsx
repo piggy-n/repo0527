@@ -63,6 +63,8 @@ export const CheckedLayerList = defineComponent({
   },
   setup(props) {
     const camera = useMap().useCamera();
+    // 登记表的最小级别都是整数：只在跨级时更新列表，不把显示层级的浮点容差用于可见性判断
+    const level = computed(() => Math.floor(camera.value.zoom));
     const list = ref<HTMLElement>();
     const items = computed(() => checkedLayers(props.layers.state.value));
     // 哪个资源的透明度滑块打开着：面板自己的界面状态
@@ -137,7 +139,7 @@ export const CheckedLayerList = defineComponent({
         configError: owner.configErrors.value.has(layer.code),
         tileError: owner.tileErrors.value.has(layer.code),
         minzoom: owner.minzoomOf(layer.code),
-        zoom: camera.value.zoom
+        zoom: level.value
       });
       const sliderOpen = opacityOpen.value.has(layer.code);
       const percent = Math.round(layer.opacity * 100);

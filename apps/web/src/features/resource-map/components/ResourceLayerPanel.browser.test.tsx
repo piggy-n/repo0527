@@ -257,6 +257,40 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     expect(ctx.loopErrors).toEqual([]);
   });
 
+  it.each(['lostpointercapture', 'deactivated', 'buttons'] as const)(
+    '拖动在 %s 时结束，之后经过分割线不再改变高度',
+    async reason => {
+      const shown = ref(true);
+      using ctx = setup(600, shown);
+      ctx.layers.setCheckedMany(MANY, true);
+      await frames(4);
+      const { separator } = areas(ctx.wrapper);
+      const { left, top } = separator.getBoundingClientRect();
+      const init = { bubbles: true, pointerId: 1, button: 0, buttons: 1, clientX: left + 10, clientY: top + 12 };
+      const before = ctx.layout.checkedRatio.value;
+      separator.dispatchEvent(new PointerEvent('pointerdown', init));
+      separator.dispatchEvent(new PointerEvent('pointermove', { ...init, clientY: top - 30 }));
+      await nextTick();
+      expect(ctx.layout.checkedRatio.value).not.toBe(before);
+      const stopped = ctx.layout.checkedRatio.value;
+
+      if (reason === 'deactivated') {
+        shown.value = false;
+        await nextTick();
+        shown.value = true;
+        await nextTick();
+      } else if (reason === 'lostpointercapture') {
+        separator.dispatchEvent(new PointerEvent('lostpointercapture', init));
+      } else {
+        separator.dispatchEvent(new PointerEvent('pointermove', { ...init, buttons: 0, clientY: top - 60 }));
+      }
+      // 即使随后又按着左键经过，旧的拖动也不能恢复
+      separator.dispatchEvent(new PointerEvent('pointermove', { ...init, clientY: top - 80 }));
+      await nextTick();
+      expect(ctx.layout.checkedRatio.value).toBe(stopped);
+    }
+  );
+
   it('分割线上按方向键：往上一步"已勾选"高可用高度的 5%', async () => {
     using ctx = setup(600);
     ctx.layers.setCheckedMany(MANY, true);

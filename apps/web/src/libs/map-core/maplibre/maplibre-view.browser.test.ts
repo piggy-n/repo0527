@@ -283,6 +283,24 @@ describe('MapLibreView（真实的 MapLibre）', () => {
     await renderedUntil(ctx.map, () => renderedAreas(ctx.map) > 0);
   });
 
+  it('就绪后的整体重建期间查询返回空结果，不把不存在的图层误报为样式失败', async () => {
+    using ctx = setup(CAMERA, areaGroup());
+    await withTimeout(ctx.view.whenReady(), '首次加载完成');
+    await renderedUntil(ctx.map, () => renderedAreas(ctx.map) > 0);
+    const [layer] = areaGroup().layers;
+    const flagged = { ...layer, 'custom-flag': true } as unknown as StyleGroup['layers'][number];
+    ctx.session.style.setGroup('data', { ...areaGroup(), layers: [flagged] });
+    await Promise.resolve();
+    const round = ctx.view.whenReady().then(() => 'loaded', () => 'failed');
+
+    expect(ctx.view.queryRendered({ x: 400, y: 300 }, { sources: ['area'] })).toStrictEqual([]);
+    expect(ctx.view.state).toBe('ready');
+    expect(await withTimeout(round, '整体重建的结果')).toBe('loaded');
+    expect(ctx.errors).toStrictEqual([]);
+    await renderedUntil(ctx.map, () => renderedAreas(ctx.map) > 0);
+    expect(ctx.view.queryRendered({ x: 400, y: 300 }, { sources: ['area'] }).length).toBeGreaterThan(0);
+  });
+
   it('不合法的图层：增量添加只发 error 不抛错，整体重建时整份样式校验失败，进入 failed(style)；去掉后自动恢复', async () => {
     using ctx = setup();
     await withTimeout(ctx.view.whenReady(), '首次加载完成');

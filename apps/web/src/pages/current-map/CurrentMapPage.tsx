@@ -176,6 +176,15 @@ export const CurrentMapPage = defineComponent({
       measure.clear();
       location.remove();
     };
+    // 回调保持同一对象；按下状态只随面板的显示状态变化
+    const toolbarActions = {
+      clear,
+      'region-locate': () => toggleFunction('region-locate'),
+      'coordinate-locate': () => toggleFunction('coordinate-locate')
+    };
+    const pressed = computed(() =>
+      (['region-locate', 'coordinate-locate'] as const).filter(id => pressedIn(functions, id))
+    );
 
     // 卡片行：图例卡、底图卡（当前底图的缩略图和简称，ADR 0057），点开显示面板里对应的 Tab；手机宽度时叠在基础组上面
     const renderCards = () => {
@@ -200,7 +209,6 @@ export const CurrentMapPage = defineComponent({
     };
 
     return () => {
-      const pressed = (['region-locate', 'coordinate-locate'] as const).filter(id => pressedIn(functions, id));
       const { phone, compactToolbar } = layout.value;
       // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示
       const scopeShown = !phone || !sides.left.value;
@@ -209,7 +217,7 @@ export const CurrentMapPage = defineComponent({
           <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
           <MeasureOverlay measure={measure} />
           <LocationOverlay location={location} />
-          <BoxSelectOverlay box={pick.boxDraft.value} hint={pick.hint.value} />
+          <BoxSelectOverlay pick={pick} />
           <div class={styles.overlay}>
             {/* 当前区划放在第一个：和面板重叠时（窄屏）面板在上面 */}
             {scopeShown && (
@@ -259,12 +267,8 @@ export const CurrentMapPage = defineComponent({
             <div class={styles.tools}>
               <MapToolbar
                 groups={TOOLBAR_GROUPS}
-                actions={{
-                  clear,
-                  'region-locate': () => toggleFunction('region-locate'),
-                  'coordinate-locate': () => toggleFunction('coordinate-locate')
-                }}
-                pressed={pressed}
+                actions={toolbarActions}
+                pressed={pressed.value}
                 compact={compactToolbar}
               />
               <div class={styles.stack}>

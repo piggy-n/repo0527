@@ -20,7 +20,7 @@ import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { createPinia } from 'pinia';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { defineComponent, KeepAlive, nextTick, ref } from 'vue';
+import { type ComponentPublicInstance, defineComponent, KeepAlive, nextTick, ref } from 'vue';
 import { resourceTreeResponse } from '@/features/resource-map/test-data';
 import cityFile from '@/shared/map/boundary/data/jiangsu-city.json?raw';
 import countyFile from '@/shared/map/boundary/data/jiangsu-county.json?raw';
@@ -228,6 +228,8 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
   // keepAlive 时页面放在 KeepAlive 里，pageShown 为 false 时停用（缓存），和布局里一样（ADR 0063）
   const pageShown = ref(true);
   const maps: FakeMap[] = [];
+  // 记录组件实际更新次数，验证高频输入不会带动整页或整份列表重渲染
+  const updates = new Map<string, number>();
   let attempts = 0;
   const createMap = (options: MapLibreMapOptions): MapLike => {
     attempts++;
@@ -252,9 +254,22 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
     ? defineComponent(() => () => <KeepAlive>{pageShown.value ? <Page /> : null}</KeepAlive>)
     : Page;
   const wrapper = mount(root, {
-    global: { plugins: [createPinia(), [VueQueryPlugin, { queryClient }]], stubs: { MapCanvas: CanvasWithFakeMap } }
+    global: {
+      plugins: [createPinia(), [VueQueryPlugin, { queryClient }]],
+      stubs: { MapCanvas: CanvasWithFakeMap },
+      mixins: [
+        {
+          updated(this: ComponentPublicInstance) {
+            const name = this.$options.name;
+            if (name) {
+              updates.set(name, (updates.get(name) ?? 0) + 1);
+            }
+          }
+        }
+      ]
+    }
   });
-  return { wrapper, maps, canvasKey, pageShown };
+  return { wrapper, maps, canvasKey, pageShown, updates };
 }
 
 // 资源树默认返回测试数据（结构同实测）；用例可以换成失败的响应
@@ -1101,6 +1116,31 @@ describe('CurrentMapPage', () => {
     expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
   });
 
+  it('平移和同一级内缩放不更新已勾选列表，跨过最小级别才更新提示', async () => {
+    const { wrapper, map, updates } = await readyPage();
+    await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
+    await resourceRow(wrapper, 'bgdc_cjdcq').get('input').setValue(true);
+    map.moveTo([119, 32], 8, {});
+    await settle();
+    updates.clear();
+
+    for (let index = 0; index < 10; index++) {
+      map.moveTo([119 + index / 100, 32], 8 + index / 10, {});
+      // oxlint-disable-next-line no-await-in-loop -- 每次相机变化后让 Vue 完成更新，不能合并成一帧
+      await nextTick();
+    }
+    expect(updates.get('CheckedLayerList') ?? 0).toBe(0);
+    map.moveTo([119, 32], 9 - 1e-7, {});
+    await nextTick();
+    expect(layerRow(wrapper, 'bgdc_cjdcq').get('[data-status="minzoom"]').exists()).toBe(true);
+    expect(updates.get('CheckedLayerList') ?? 0).toBe(0);
+
+    map.moveTo([119, 32], 9, {});
+    await nextTick();
+    expect(layerRow(wrapper, 'bgdc_cjdcq').find('[data-status="minzoom"]').exists()).toBe(false);
+    expect(updates.get('CheckedLayerList')).toBe(1);
+  });
+
   it('勾选了但级别不够的资源在状态图标里提示放大到几级；瓦片加载失败标在对应资源的图标上（ADR 0059）', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
@@ -1172,6 +1212,38 @@ describe('CurrentMapPage', () => {
 
     await button(wrapper, '移动').trigger('click');
     expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(false);
+  });
+
+  it('点框选的提示和草稿更新不带动页面、工具栏或资源面板重渲染', async () => {
+    const { wrapper, map, updates } = await readyPage();
+    await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
+    await button(wrapper, '点/框选').trigger('click');
+    await settle();
+    updates.clear();
+    for (let index = 0; index < 10; index++) {
+      map.mouse('mousemove', 30 + index, 40);
+      // oxlint-disable-next-line no-await-in-loop -- 指针每帧写入一次，逐帧检查独立更新
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      // oxlint-disable-next-line no-await-in-loop -- 等这一帧的 Vue 更新结束再发下一次输入
+      await nextTick();
+    }
+    expect(wrapper.find('[data-box-select-overlay] [data-pointer-hint]').exists()).toBe(true);
+    expect(updates.get('BoxSelectOverlay')).toBeGreaterThan(0);
+    for (const name of ['CurrentMapPage', 'MapToolbar', 'ResourceLayerPanel']) {
+      expect(updates.get(name) ?? 0).toBe(0);
+    }
+
+    map.mouse('mousedown', 100, 100);
+    await nextTick();
+    updates.clear();
+    map.mouse('mousemove', 200, 160);
+    await nextTick();
+    const box = wrapper.get('[data-box-select-overlay] [data-box]').element as HTMLElement;
+    expect([box.style.width, box.style.height]).toStrictEqual(['100px', '60px']);
+    expect(updates.get('BoxSelectOverlay')).toBeGreaterThan(0);
+    for (const name of ['CurrentMapPage', 'MapToolbar', 'ResourceLayerPanel']) {
+      expect(updates.get(name) ?? 0).toBe(0);
+    }
   });
 
   it('点/框选：鼠标旁有提示，第一次单击识别后不再显示，下次进入时再显示（ADR 0056 第 4 节）', async () => {

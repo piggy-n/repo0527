@@ -297,7 +297,7 @@ gesture = moveBox(gesture, point);      // 离起点不小于 3 像素时进入�
 const { gesture: next, box } = releaseBox(gesture, point);  // 框选中松手给出框，并屏蔽这次的单击
 gesture = cancelBox(gesture);           // Esc、地图移动、失焦、离开画布
 acceptsClick(gesture);                  // 收到单击时先问：是不是一次正常的单击
-drawingBox(gesture);                    // 正在画的框，交给 <BoxSelectOverlay box={...} />
+drawingBox(gesture);                    // 拥有者据此推导 boxDraft，交给浮层
 ```
 
 - 阈值是 3 像素：所装 MapLibre 只比较按下点和松手点，距离不小于 `clickTolerance`（默认 3）时不发单击；用同一个阈值，单击和框选不会都不触发
@@ -310,11 +310,12 @@ drawingBox(gesture);                    // 正在画的框，交给 <BoxSelectOv
 ```tsx
 const panKey = currentPanKey();          // { modifier: 'ctrl', label: 'Ctrl' }；Mac 上是 { modifier: 'meta', label: '⌘' }
 const tool: MapTool = { ..., panModifier: panKey.modifier };   // 按住这个键拖动地图，由适配器平移
-<BoxSelectOverlay box={pick.boxDraft.value} hint={pick.hint.value} />
+<BoxSelectOverlay pick={pick} />
 ```
 
 - 平台按 `navigator.userAgent` 判断（`panKeyFor` 是纯函数）：Macintosh、iPhone、iPad 用 ⌘，因为 Mac 上 Ctrl + 单击会被系统当成右键；iPadOS 的 Safari 也写成 Macintosh，外接键盘时同样用 ⌘
 - 提示的内容和显示条件由点选的拥有者给出（`features/resource-map` 的 `useFeaturePick`，ADR 0056 第 4 节），浮层只显示：`hint` 为 `null` 时不渲染，否则用 `PointerHint` 放在指针旁，靠边时翻到另一侧
+- 浮层只要求 `BoxSelectOverlayState` 的两个只读 ref（`boxDraft`、`hint`），不导入业务类型。页面传稳定的拥有者，由浮层在自己的渲染里读 `.value`，鼠标每帧变化不带动页面根组件重渲染
 - 框带 `data-box`，提示带 `data-pointer-hint`，测试据此区分
 
 ## 测量（ADR 0035）

@@ -3,7 +3,7 @@ import { useResizeObserver } from '@vueuse/core';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
 import { ElButton, ElInput, ElOption, ElSelect } from 'element-plus';
-import { computed, defineComponent, type PropType, ref, watch } from 'vue';
+import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
 import { usePageActive } from '@/shared/composables/usePageActive';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
@@ -130,24 +130,58 @@ export const ResourceLayerPanel = defineComponent({
       }
     };
 
+    // 拖动归面板所有：失去捕获、页面停用、面板隐藏或卸载时结束
+    let stopSplitterDrag: (() => void) | undefined;
+    watch(
+      () => pageActive.value && !props.collapsed && tab.value === 'core' && adjustable.value,
+      active => {
+        if (!active) {
+          stopSplitterDrag?.();
+        }
+      },
+      { flush: 'sync' }
+    );
+    onScopeDispose(() => stopSplitterDrag?.());
+
     // 拖动分割线：按住后跟着指针改"已勾选"区的高度，松开时结束
     const onSplitterPointerDown = (event: PointerEvent) => {
       if (event.button !== 0 || !adjustable.value || !(event.currentTarget instanceof HTMLElement)) {
         return;
       }
       const splitter = event.currentTarget;
+      stopSplitterDrag?.();
+      const pointerId = event.pointerId;
       const startY = event.clientY;
       const startHeight = checkedHeight.value;
-      splitter.setPointerCapture(event.pointerId);
-      const onMove = (move: PointerEvent) => setCheckedHeight(startHeight - (move.clientY - startY));
-      const onEnd = () => {
+      splitter.setPointerCapture(pointerId);
+      const onMove = (move: PointerEvent) => {
+        if (move.pointerId !== pointerId) {
+          return;
+        }
+        if ((move.buttons & 1) === 0) {
+          onEnd();
+          return;
+        }
+        setCheckedHeight(startHeight - (move.clientY - startY));
+      };
+      const onEnd = (end?: PointerEvent) => {
+        if (end && end.pointerId !== pointerId) {
+          return;
+        }
         splitter.removeEventListener('pointermove', onMove);
         splitter.removeEventListener('pointerup', onEnd);
         splitter.removeEventListener('pointercancel', onEnd);
+        splitter.removeEventListener('lostpointercapture', onEnd);
+        if (splitter.hasPointerCapture(pointerId)) {
+          splitter.releasePointerCapture(pointerId);
+        }
+        stopSplitterDrag = undefined;
       };
+      stopSplitterDrag = onEnd;
       splitter.addEventListener('pointermove', onMove);
       splitter.addEventListener('pointerup', onEnd);
       splitter.addEventListener('pointercancel', onEnd);
+      splitter.addEventListener('lostpointercapture', onEnd);
     };
 
     // 分割线上按上下方向键：往上是"已勾选"区变高

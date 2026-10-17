@@ -386,8 +386,12 @@ export class MapLibreView<const G extends string> implements MapView {
   /** 这些数据源在已应用的样式里的图层上画出的要素，从上到下；几何只在要时换算 */
   queryRendered(area: ScreenPoint | ScreenBox, { sources, withGeometry = false }: RenderedQueryOptions): RenderedFeature[] {
     const map = this.#readyMap();
+    // 就绪后整体重建时状态仍是 ready，但新样式的图层要等加载完成才能查询
+    if (this.#mapStyle.status !== 'loaded') {
+      return [];
+    }
     const wanted = new Set(sources);
-    // 按已应用的样式找图层：就绪时它就是地图上的样式，传给 MapLibre 的图层都存在
+    // 按加载完成的样式找图层，传给 MapLibre 的图层都存在
     const layers = this.#mapStyle.style.layers.flatMap(layer =>
       'source' in layer && wanted.has(layer.source) ? [layer.id] : []
     );

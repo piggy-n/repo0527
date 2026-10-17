@@ -283,7 +283,7 @@ store.clear();
 
 **渲染要素查询（5C.6a-1，ADR 0047 第 4 节）**：
 
-- `queryRendered(area, { sources, withGeometry })`：按已应用的样式快照找出这些数据源的图层（就绪时它就是地图上的样式），交给 `queryRenderedFeatures`；没有图层时直接返回空数组，不调用 MapLibre（它对不存在的图层会报错）
+- `queryRendered(area, { sources, withGeometry })`：按加载完成的样式快照找出这些数据源的图层，交给 `queryRenderedFeatures`；整体重建尚未加载完、或没有图层时直接返回空数组，不调用 MapLibre（它对不存在的图层会报错）。就绪后的整体重建期间，视图状态仍是 `ready`，不能只凭这个状态判断图层已经存在
 - `area` 是点或矩形（两个对角点，顺序不限），结果从上到下；同一个要素可能出现多次（同一数据源的多个图层、跨瓦片），去重交给调用方
 - 几何默认不取：MapLibre 要素的 `geometry` 是读取时才从瓦片坐标换算的，框选估数只要属性；`withGeometry` 时给出渲染用的几何，可能被瓦片切开，只用于排序和距离
 - 只在 `ready` 时可用；交给工具的 `ToolView` 和上下文的 `view` 都带它

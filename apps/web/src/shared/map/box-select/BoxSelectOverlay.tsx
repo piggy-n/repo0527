@@ -1,9 +1,15 @@
 import type { ScreenBox } from '@yzt/map-core';
-import { defineComponent, type PropType, ref } from 'vue';
+import { defineComponent, type PropType, type Ref, ref } from 'vue';
 import { useShownElementSize } from '../../composables/useShownElementSize';
 import type { PointerHintContent } from '../pointer-hint/pointer-hint';
 import { PointerHint } from '../pointer-hint/PointerHint';
 import styles from './BoxSelectOverlay.module.scss';
+
+/** 浮层所需的只读状态，由业务拥有者提供，公共组件不依赖业务类型 */
+export interface BoxSelectOverlayState {
+  readonly boxDraft: Readonly<Ref<ScreenBox | null>>;
+  readonly hint: Readonly<Ref<PointerHintContent | null>>;
+}
 
 /** 框的屏幕位置：起点和当前点可以在任意方向 */
 export function boxStyle({ from, to }: ScreenBox) {
@@ -22,26 +28,28 @@ export function boxStyle({ from, to }: ScreenBox) {
 export const BoxSelectOverlay = defineComponent({
   name: 'BoxSelectOverlay',
   props: {
-    /** 正在画的框；没有在框选时为 null */
-    box: { type: Object as PropType<ScreenBox | null>, default: null },
-    /** 鼠标旁的提示；不显示时为 null */
-    hint: { type: Object as PropType<PointerHintContent | null>, default: null }
+    /** 在浮层里读取高频状态，页面只传稳定的拥有者 */
+    pick: { type: Object as PropType<BoxSelectOverlayState>, required: true }
   },
   setup(props) {
     const root = ref<HTMLElement>();
     const canvas = useShownElementSize(root);
 
-    return () => (
-      <div ref={root} class={styles.overlay} data-box-select-overlay>
-        {props.box && <div class={styles.box} style={boxStyle(props.box)} data-box />}
-        {props.hint && (
-          <PointerHint
-            point={props.hint.point}
-            canvas={{ width: canvas.width.value, height: canvas.height.value }}
-            lines={props.hint.lines}
-          />
-        )}
-      </div>
-    );
+    return () => {
+      const box = props.pick.boxDraft.value;
+      const hint = props.pick.hint.value;
+      return (
+        <div ref={root} class={styles.overlay} data-box-select-overlay>
+          {box && <div class={styles.box} style={boxStyle(box)} data-box />}
+          {hint && (
+            <PointerHint
+              point={hint.point}
+              canvas={{ width: canvas.width.value, height: canvas.height.value }}
+              lines={hint.lines}
+            />
+          )}
+        </div>
+      );
+    };
   }
 });
