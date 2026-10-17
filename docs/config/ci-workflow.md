@@ -10,7 +10,7 @@
 每次推送到 `main`，或者有 Pull Request 时，GitHub 会在一台干净的 Linux 机器上从零执行：
 
 ```
-检出代码 → 安装 pnpm → 安装 Node → pnpm install --frozen-lockfile → 类型检查 → lint → 测试 → 构建
+检出代码 → 安装 pnpm → 安装 Node → pnpm install --frozen-lockfile → 类型检查 → lint → 测试 → 公网构建及产物检查 → 内网构建及产物检查
 ```
 
 任何一步失败，这次运行就标红。它回答的问题是："在一台没有任何本地缓存和个人配置的机器上，这份代码还能不能通过所有检查？"
@@ -96,6 +96,7 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 - run: pnpm --filter @yzt/web exec playwright install --with-deps --only-shell chromium
 - run: pnpm test
 - run: pnpm build
+- run: pnpm build:intranet
 ```
 
 | 步骤 | 作用 |
@@ -105,7 +106,8 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 | `pnpm lint` | oxlint，包括类型感知规则和依赖方向检查 |
 | `playwright install --with-deps --only-shell chromium` | 安装浏览器测试用的 Chromium 无界面版和它在 Linux 上需要的系统库（ADR 0040）。不缓存：Playwright 不建议缓存浏览器，系统库也缓存不了 |
 | `pnpm test` | 所有包的 `vitest run`（ADR 0010），`apps/web` 里包括 `unit`、`browser` 两个项目（ADR 0040）。GitHub Actions 会设置 `CI` 环境变量，Vitest 检测到后会拒绝带 `.only` 的测试，避免其他用例被悄悄跳过（已验证） |
-| `pnpm build` | 生产构建，确认能打出产物 |
+| `pnpm build` | 公网生产构建，自动清理本地设计稿副本，检查没有开发页、入口没有静态引入 MapLibre |
+| `pnpm build:intranet` | 内网生产构建，执行同样的产物检查，并检查关闭天地图时没有携带 key；输出覆盖上一份公网产物 |
 
 ## Actions 为什么用 commit SHA 固定
 

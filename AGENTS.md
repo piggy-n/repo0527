@@ -32,7 +32,7 @@
 - HTTP 用 axios + zod 4，测试中用 MSW 2.x 模拟接口（ADR 0011）
 - 接口数据用 TanStack Vue Query 5 管理，全局关闭失败重试和切回窗口时的自动刷新（ADR 0017）
 - 登录密码用 sm-crypto-v2 做 SM2 加密，公钥放在 `.env`；token 过期判断用 jwt-decode；会话存 localStorage（ADR 0015）
-- CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 安装浏览器 → 测试 → 构建（ADR 0005、0040）
+- CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 安装浏览器 → 测试 → 公网、内网构建（ADR 0005、0040）；构建自动清理设计稿副本并检查开发页、入口静态依赖和天地图 key，见 docs/config/vite-config.md
 
 - 偏好（资源图层、底图、边界的选择等）用 IndexedDB 持久化，经 `shared/storage` 的键值接口读写，实现用 idb-keyval；会话仍存 localStorage（ADR 0042）
 
@@ -290,7 +290,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - `pnpm build`：所有包的生产构建；`pnpm build:intranet` 是内网部署的构建（不请求天地图）
 - `pnpm --filter @yzt/web dev:intranet`：用内网配置启动开发服务器
 - `pnpm test`：所有包的测试（`vitest run`，`apps/web` 里有 `unit`、`browser` 两个项目）；`pnpm --filter @yzt/web test:watch` 监听模式；`test:unit`、`test:browser` 只跑其中一个；第一次跑浏览器测试前运行 `pnpm --filter @yzt/web test:browser:install`
-- CI（`.github/workflows/ci.yml`）依次运行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm lint`、安装 Chromium 无界面版、`pnpm test`、`pnpm build`
+- CI（`.github/workflows/ci.yml`）依次运行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm lint`、安装 Chromium 无界面版、`pnpm test`、`pnpm build`、`pnpm build:intranet`
 - `pnpm --filter @yzt/web measure:map-load`：实测"点击登录 → 地图第一次加载完成"（先构建；账号密码从环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD` 读，由用户在自己的终端运行）
 - `pnpm deps:check`：检查过期的依赖和 GitHub Actions
 - `pnpm deps:update:within-range`：在版本范围内更新依赖和 Actions

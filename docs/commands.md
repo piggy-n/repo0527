@@ -303,6 +303,8 @@ pnpm build
 
 **执行了什么**：根目录的 `pnpm -r build` 在 `apps/web` 里执行 `vite build`：Rolldown 打包、压缩，输出到 `apps/web/dist`。文件名带内容哈希，CSS Modules 的类名也会哈希化。
 
+构建内置产物检查：清理输出目录里的 `design.local/` 副本，检查没有开发页面、MapLibre 没有进入入口的静态依赖；失败时构建也失败。源设计稿和字体保留，具体规则见 [config/vite-config.md](config/vite-config.md) 的“构建产物检查”。
+
 **注意事项**：
 
 - **构建不做类型检查**，类型错误的代码也能构建成功，所以 `pnpm typecheck` 要单独跑
@@ -321,6 +323,7 @@ pnpm build
 
 - 和 `pnpm build` 输出到同一个 `apps/web/dist`，后一次构建覆盖前一次；部署前确认执行的是对应环境的命令
 - 仍是生产构建（`import.meta.env.PROD` 为真），开发页面同样被剔除
+- `.env.intranet` 同时关闭天地图并清空 key；构建检查会拒绝有效 key 非空的关闭配置，以及文本产物中残留的公网 key
 
 ---
 

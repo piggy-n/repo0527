@@ -14,7 +14,7 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 | 文件 | 是否提交 | 用途 |
 |---|---|---|
 | `.env` | 提交 | 所有模式共用的变量，公网部署只用它 |
-| `.env.intranet` | 提交 | 内网部署（`intranet` 模式）与公网不同的变量，目前只有 `VITE_TIANDITU_ENABLED=false`（ADR 0032） |
+| `.env.intranet` | 提交 | 内网部署（`intranet` 模式）：`VITE_TIANDITU_ENABLED=false`，并用 `VITE_TIANDITU_KEY=` 清空继承的公网 key（ADR 0032） |
 | `.env.local`、`.env.[mode].local` | 不提交（`.gitignore` 中的 `*.local`） | 个人临时覆盖，例如连接另一台后端 |
 | `.env.development`、`.env.production` | 需要时再建 | 只在某个模式下不同的变量 |
 
@@ -56,7 +56,9 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 
 **几个变量合成一个值**：天地图的开关和 key 在 `appConfig` 里合成 `tianditu: { key } | null`，关闭时为 `null`。"开启了却没有 key"在类型上不存在，使用方拿到 `null` 时必须处理天地图不可用的情况（内网部署），不用在每条调用路径上各写一次开关判断。公网和内网各用一套构建命令（ADR 0032）：内网用 `intranet` 模式，由 `.env.intranet` 覆盖开关；代码只读 `appConfig`，不判断模式名。
 
-例外：Vite 内置的 `DEV`、`PROD`、`MODE`、`BASE_URL` 直接读取 `import.meta.env`。例如路由表靠 `import.meta.env.DEV` 的静态替换，在生产构建中删除开发路由。
+关闭天地图并不自动删除传给配置函数的 key 字面量，所以内网配置要显式清空 key。构建插件会拒绝“关闭但 key 非空”的有效配置，并检查产物不含公网配置的 key；更高优先级的个人配置或进程环境变量也受检查。通用底图代码仍保留未调用的地址模板，不会因此发出请求。
+
+例外：Vite 内置的 `DEV`、`PROD`、`MODE`、`BASE_URL` 直接读取 `import.meta.env`。例如路由表在定义整个开发路由数组时判断 `import.meta.env.DEV`，让生产构建同时删除开发路由和动态导入，产物检查保证不残留开发页。
 
 ## 修改时的检查清单
 

@@ -13,7 +13,7 @@
 
 | 配置 | 值 | 说明 |
 |---|---|---|
-| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；后两个会改动源文件，统称 generators，测试模式下不启用：`systemTitlePlugin` 按 `VITE_APP_TITLE` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 来自 `@yzt/icons/tools`，自动规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)） |
+| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`buildOutputPlugin` 只在构建时清理、检查产物，见下文 |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `css.preprocessorOptions.scss.loadPaths` | `[src/libs]` | libs 模块的 Sass 入口按模块名引用，见下文 |
 | `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
@@ -36,6 +36,17 @@ const generators =
 - 测试模式（`mode === 'test'`，即 Vitest）下不加入：测试检查已提交的结果，不在运行时改动源文件
 - `systemTitlePlugin` 从 `./tools/system-title/vite-plugin.ts` 导入，带 `.ts` 扩展名，因为同一份代码也由 Node 直接运行；`iconsPlugin` 从 workspace 包的 `@yzt/icons/tools` 入口导入
 - 同时开着多个开发服务器时，它们都会处理图标目录；`iconsPlugin` 对此做了容错，见 [modules/icons.md](../modules/icons.md)
+
+### 构建产物检查
+
+`tools/build-output/vite-plugin.ts` 的 `buildOutputPlugin` 只在 `build` 生效，每次公网、内网构建都会执行，不需要另跑命令：
+
+- Vite 复制 `public/` 后，在 `writeBundle` 清理当前输出目录内的 `design.local/`，源设计稿仍放在 `public/design.local/`。删除前确认输出目录与源码、`public` 不重叠，支持自定义 `outDir`
+- 检查全部分块的模块清单，禁止包含 `src/pages/dev/`；再检查磁盘文件，禁止残留 `Dev*Page` 文件和 `design.local`
+- 从入口分块沿静态 `imports` 检查依赖，禁止包含 `maplibre-gl`；不遍历动态导入，地图运行时仍可按需加载、预加载
+- 关闭天地图时，有效的 `VITE_TIANDITU_KEY` 必须为空；扫描文本产物，禁止残留按 `production` 模式读取的公网 key，错误只报告文件名。未调用的天地图地址模板允许保留，不以域名字符串代替运行时开关
+
+检查失败会让构建失败。本机部署构建和 CI 使用同一套检查；CI 同时执行公网和内网构建。
 
 ### 测试
 

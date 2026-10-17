@@ -13,6 +13,8 @@
 
 两条命令输出到同一个目录，后一次覆盖前一次；nginx 配置相同。
 
+两种构建都自动清理产物中的 `design.local/`（源设计稿保留），并检查开发页没有进入产物、MapLibre 没有成为入口的静态依赖；内网构建还检查天地图 key 已清空且未残留在文本产物中。检查失败时不能使用该次产物部署，规则见 [config/vite-config.md](config/vite-config.md) 的“构建产物检查”。
+
 ### 构建前放入字体
 
 普惠体的字体文件按授权不能提交到公开仓库（ADR 0012），所以仓库和 CI 中都没有。用于部署的构建，要在构建前把字体放进 `apps/web/public/fonts/`（文件名和来源见 [design/fonts.md](design/fonts.md)），构建时整个目录会被复制到 `dist/fonts/`。

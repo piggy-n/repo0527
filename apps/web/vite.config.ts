@@ -5,6 +5,7 @@ import { iconsPlugin } from '@yzt/icons/tools';
 import { loadEnv } from 'vite';
 // 与 vite 的 defineConfig 相同，只是类型里多了 test 字段
 import { configDefaults, defineConfig } from 'vitest/config';
+import { buildOutputPlugin } from './tools/build-output/vite-plugin.ts';
 import { iconsPaths } from './tools/icons/paths.ts';
 import { titleOutlineConfig } from './tools/system-title/paths.ts';
 import { systemTitlePlugin } from './tools/system-title/vite-plugin.ts';
@@ -24,7 +25,7 @@ export default defineConfig(({ mode }) => {
         ];
 
   return {
-    plugins: [vueJsx(), ...generators],
+    plugins: [vueJsx(), ...generators, buildOutputPlugin()],
     resolve: {
       // 直接读取 tsconfig 的 paths，不再单独维护一份别名
       tsconfigPaths: true
