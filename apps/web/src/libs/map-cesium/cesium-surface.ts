@@ -129,7 +129,7 @@ export class CesiumSurface implements Disposable {
         this.#input?.afterRender();
         const pose = port.capture();
         if (this.#loaded && this.#active && !this.#flight && !resizedDuringFrame &&
-          renderedStyleRevision === this.#styleRevision && widget.scene.globe.tilesLoaded &&
+          renderedStyleRevision === this.#styleRevision && widget.scene.globe.tilesLoaded && this.#imagery?.ready !== false &&
           port.equals(previousPose, pose)) {
           settled(undefined);
         }
@@ -176,7 +176,7 @@ export class CesiumSurface implements Disposable {
       const ready = safeReporter(() => options.onReady?.(), 'CesiumSurface.onReady');
       const removeReady = widget.scene.postRender.addEventListener(() => {
         if (!this.#failed && !resizedDuringFrame && renderedStyleRevision === this.#styleRevision &&
-          widget.scene.globe.tilesLoaded) {
+          widget.scene.globe.tilesLoaded && this.#imagery?.ready !== false) {
           removeReady();
           this.#loaded = true;
           if (this.#active) {

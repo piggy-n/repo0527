@@ -1,6 +1,6 @@
 # 三维画布与运行时（map-cesium）
 
-状态：2026-10-19，已实现 3D.1 运行时、3D.2 相机/视图/缓存切换，以及 3D.3a 基础样式镜像、3D.3b MVT、Worker 与缓存；本步完整测试与构建通过。业务页切换尚未接入。范围依据 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md)，基础绘制按 [ADR 0065](../adr/0065-basic-geojson-imagery-layers.md)，Worker 边界按 [ADR 0066](../adr/0066-mvt-worker-runtime-boundary.md)，后续步骤见 [3D.0 计划](../stages/stage-3d-0-plan.md)。
+状态：2026-10-19，已实现 3D.1 运行时、3D.2 相机/视图/缓存切换，以及 3D.3a 基础样式、3D.3b MVT/Worker/缓存、3D.3c 符号/高亮/区划遮罩。业务页切换尚未接入。范围依据 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md)，基础绘制按 [ADR 0065](../adr/0065-basic-geojson-imagery-layers.md)，Worker 边界按 [ADR 0066](../adr/0066-mvt-worker-runtime-boundary.md)，符号与全球遮罩按 [ADR 0067](../adr/0067-symbols-highlights-world-mask.md)，后续步骤见 [3D.0 计划](../stages/stage-3d-0-plan.md)。
 
 ## 职责与用法
 
@@ -74,7 +74,7 @@
 
 - background、raster、GeoJSON fill/line/circle 共用影像集合；GeoJSON 绘制成透明瓦片，允许影像、面、影像交错。透明全球底层隔离 SDK 的底层边缘延展；背景覆盖两极，GeoJSON 只支持 Mercator 有效范围
 - 栅格支持多 URL、XYZ/TMS、尺寸、级别、范围及署名；请求节流、取消仍由 SDK 管理。局部和跨经线覆盖范围同时传给 provider 与影像层，避免默认范围求交截掉一侧
-- GeoJSON 支持内联简单/Multi 几何、几何集合、孔洞、分类属性与身份过滤。完整路径交给画布裁切，不在瓦片边缘补假端点；求值用相机级别，笔宽和半径再换算到当前瓦片像素
+- GeoJSON 支持内联简单/Multi 几何、几何集合、孔洞、分类属性与身份过滤。填充保留完整环，线段按后文的外扩视窗裁剪并保留累计相位；求值用相机级别，笔宽和半径再换算到当前瓦片像素
 - 没变的图层和来源保留实例，重排只移动；换色、换数据重建对应层。GeoJSON 缩放会重新生成影像，使用最新相机级别与像素尺寸；内联 GeoJSON 保持同步绘制，MVT 的 Worker 管线见下节
 - 暂停不写引擎，恢复应用最新快照。就绪和稳定事件检查该帧开始绘制时的样式修订；尺寸变化或 postRender 中刚更新样式时等待下一帧，避免把旧画面报告为稳定
 - 不支持的图层/属性逐层提示并跳过；同步构造或绘制属性异常只作图层诊断，provider 的实际加载失败进入 `sourceErrors`，其他层继续。修正样式不会误留来源错误，真实下载错误则在来源替换/移除时清理；过期 provider 回调不能污染新层
@@ -100,7 +100,21 @@ MVT 向 SDK 声明完整 Web Mercator 范围，有限 bounds 在提供者内完�
 
 当前 Cesium 公开提供者接口不能逐个通知活动平移时被丢弃瓦片的取消；不使用私有 Request 状态或 RequestScheduler 方法。尚在活动视图内的此类任务可能完成后才回收，池通过 16 个未完成请求约束工作量，容量不足时 provider 返回 undefined 交给 SDK 稍后重试。持续平移、缩放和多来源情况下的排队、内存与取消延迟留给 3D.4 性能验收。
 
-Worker 使用单独的 WebWorker tsconfig，并在独立运行环境补齐 `Symbol.dispose`。`@yzt/map-core/worker` 只暴露瓦片能力，不导入 DOM、MapLibre 或主入口；主线程仍使用 `@yzt/map-core`。开发页增加本地合成 MVT，两个来源层和不同 extent 同时验证分类面、孔洞、线点、层序及缓存切换；自动化测试不请求业务后端。
+Worker 使用单独的 WebWorker tsconfig，并在独立运行环境补齐 `Symbol.dispose`。`@yzt/map-core/worker` 只暴露瓦片能力和样式图片数据类型，不导入 DOM、MapLibre 或主入口；主线程仍使用 `@yzt/map-core`。开发页增加本地合成 MVT，两个来源层和不同 extent 同时验证分类面、孔洞、线点、层序及缓存切换；自动化测试不请求业务后端。
+
+## 3D.3c 符号、高亮与区划遮罩
+
+在前两步的支持范围上增加 `fill-pattern`、严格 `fill-antialias: false`、虚线、面内收半线宽和边界光晕。直接使用会话图片，支持 SDF/RGBA 和像素比；花纹相位锚定世界像素，图片变化只重建依赖层。主线程 GeoJSON 与 Worker MVT 共用绘制器，传给 Worker 的像素数据按结构化克隆复制。每次绘制的着色纹理缓存限制为 64 张/4 MiB，不计入 MVT 驻留数据预算。
+
+URL GeoJSON 使用 `GeoJsonSources` 的共享租约；来源替换、隐藏、暂停、释放撤销各自等待，最后使用者离开才取消下载并丢弃数据。异步提供者完成前不交付就绪或稳定帧，加载失败仍按来源隔离。省市县界使用已有本地文件；不调用天地图边界接口。
+
+世界矩形补集走单独的 Geographic 影像提供者，铺满到两极，洞与岛保留原结构。普通边线在墨卡托空间细分后转到地理瓦片，误差不超过 0.25 纹理像素；覆盖先二值化，再合成颜色透明度。普通业务路径跨日界线、极区，以及全球遮罩花纹仍明确诊断。
+
+选择、年份、区域与测量继续来自原拥有者和样式分组。开发页同时展示实际业务高亮、洞岛遮罩与测量，保留原来的控制按钮。内收描边、光晕和 SDF 近似的视觉边界、实际业务测试和后续性能项目见 [3D.3c 记录](../stages/stage-3d-3c-symbols-mask.md)。新的 symbol 碰撞布局、业务工具查询与业务页切换仍未开放。
+
+线图层先裁出画布附近的路径，保留完整累计长度以维持虚线相位，所有可见实段一次描边；GeoJSON 与 MVT 的线画布使用 `willReadFrequently: true`，避免粗瓦片极细虚线的 GPU 栅格化开销。这个选项不改变样式求值，也不把粗瓦片替换成透明占位；性能证据与像素对照见阶段记录。
+
+内联 GeoJSON 没有匹配的绘制几何时，保留原影像层并复用一张 1×1 全透明画布，避免空测量层等重复分配 512×512 纹理。没有采用瓦片丢弃策略，因为 SDK 会回退到父影像，可能把子瓦片里本已没有的内容重新显示出来。
 
 ## 最小场景与资源所有权
 

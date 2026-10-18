@@ -7,6 +7,7 @@ import {
   type StyleSpecification,
   type VectorSourceSpecification
 } from '@maplibre/maplibre-gl-style-spec';
+import type { StyleImages } from '@yzt/map-core/worker';
 import { compileStyleFilter, compileStyleProperty, type CompiledStyleProperty } from './style-expression';
 
 type BasicLayerType = 'background' | 'raster' | 'fill' | 'line' | 'circle';
@@ -20,6 +21,7 @@ export interface BasicStyleLayer {
   readonly sourceId?: string;
   readonly source?: BasicSource;
   readonly specification: LayerSpecification;
+  readonly images: StyleImages;
   readonly zoomDependent: boolean;
   visible(zoom: number): boolean;
   value(property: string, zoom: number, feature?: Feature): unknown;
@@ -41,8 +43,8 @@ export interface BasicStylePlan {
 const PAINT: Record<BasicLayerType, readonly string[]> = {
   background: ['background-color', 'background-opacity'],
   raster: ['raster-opacity'],
-  fill: ['fill-color', 'fill-opacity', 'fill-outline-color', 'fill-antialias'],
-  line: ['line-color', 'line-opacity', 'line-width'],
+  fill: ['fill-color', 'fill-opacity', 'fill-outline-color', 'fill-antialias', 'fill-pattern'],
+  line: ['line-color', 'line-opacity', 'line-width', 'line-dasharray', 'line-offset', 'line-blur'],
   circle: ['circle-color', 'circle-opacity', 'circle-radius', 'circle-stroke-color',
     'circle-stroke-opacity', 'circle-stroke-width']
 };
@@ -60,7 +62,7 @@ const SOURCE_KEYS: Record<BasicSource['type'], readonly string[]> = {
 };
 
 /** 按会话层序编译支持的基础样式；诊断与跳过规则见 ADR 0024 */
-export function compileStylePlan(style: StyleSpecification): BasicStylePlan {
+export function compileStylePlan(style: StyleSpecification, images: StyleImages = {}): BasicStylePlan {
   const layers: BasicStyleLayer[] = [];
   const issues: StylePlanIssue[] = [];
   for (const specification of style.layers) {
@@ -68,7 +70,7 @@ export function compileStylePlan(style: StyleSpecification): BasicStylePlan {
       if (!isBasicLayer(specification)) {
         throw new Error(`三维基础样式暂不支持 ${specification.type} 图层`);
       }
-      layers.push(compileLayer(specification, style));
+      layers.push(compileLayer(specification, style, images));
     } catch (error) {
       issues.push({ layerId: specification.id, error: error instanceof Error ? error : new Error(String(error)) });
     }
@@ -80,11 +82,7 @@ function isBasicLayer(layer: LayerSpecification): layer is BasicLayerSpecificati
   return Object.hasOwn(PAINT, layer.type);
 }
 
-function compileLayer(layer: BasicLayerSpecification, style: StyleSpecification): BasicStyleLayer {
-  // Canvas 路径无法关闭抗锯齿，明确拒绝，不能接受后仍按平滑边缘绘制
-  if (layer.type === 'fill' && layer.paint?.['fill-antialias'] !== undefined && layer.paint['fill-antialias'] !== true) {
-    throw new Error('三维基础样式 fill-antialias 只支持 true');
-  }
+function compileLayer(layer: BasicLayerSpecification, style: StyleSpecification, images: StyleImages): BasicStyleLayer {
   const sourceId = 'source' in layer ? layer.source : undefined;
   const source = resolveSource(layer, sourceId, style);
   const visibility = layer.layout?.visibility ?? 'visible';
@@ -108,6 +106,7 @@ function compileLayer(layer: BasicLayerSpecification, style: StyleSpecification)
     sourceId,
     source,
     specification: layer,
+    images: referencedImages(layer, images),
     zoomDependent: layer.minzoom !== undefined || layer.maxzoom !== undefined || filter.zoomDependent ||
       [...properties.values()].some(property => property.zoomDependent),
     visible: zoom => visibility === 'visible' && zoom >= minimum && zoom < maximum,
@@ -156,13 +155,40 @@ function resolveSource(
       throw new Error(`三维 ${source.type} 数据源暂不支持 ${key}`);
     }
   }
-  if (source.type === 'geojson' && (typeof source.data !== 'object' || source.data === null)) {
-    throw new Error('三维基础样式只支持内联 GeoJSON 数据');
+  if (source.type === 'geojson' && (source.data === null ||
+    (typeof source.data !== 'object' && (typeof source.data !== 'string' || !source.data)))) {
+    throw new Error('三维基础样式需要内联 GeoJSON 或非空 URL');
   }
   if (source.type === 'raster' && !source.tiles?.length) {
     throw new Error('三维栅格数据源需要至少一个 tiles 地址');
   }
   return source;
+}
+
+// 只保存花纹输出引用的图片；动态图片名保守依赖全部图片
+export function referencedImages(layer: LayerSpecification, images: StyleImages): StyleImages {
+  if (layer.type !== 'fill' || layer.paint?.['fill-pattern'] === undefined) { return {}; }
+  const names = new Set<string>();
+  function collect(value: unknown): boolean {
+    if (typeof value === 'string') { names.add(value); return true; }
+    if (!Array.isArray(value)) { return false; }
+    const operator: unknown = value[0];
+    if (operator === 'literal') { return collect(value[1]); }
+    if (operator === 'coalesce') { return value.slice(1).every(collect); }
+    if (operator === 'step') { return value.filter((_, index) => index >= 2 && index % 2 === 0).every(collect); }
+    if (operator === 'match' || operator === 'case') {
+      const first = operator === 'match' ? 3 : 2;
+      return value.slice(0, -1).filter((_, index) => index >= first && (index - first) % 2 === 0).every(collect) &&
+        collect(value.at(-1));
+    }
+    return false;
+  }
+  if (!collect(layer.paint['fill-pattern'])) { return images; }
+  return Object.fromEntries([...names].map(name => {
+    const image = images[name];
+    if (!image) { throw new Error(`缺少花纹图片：${name}`); }
+    return [name, image];
+  }));
 }
 
 function compileProperties(

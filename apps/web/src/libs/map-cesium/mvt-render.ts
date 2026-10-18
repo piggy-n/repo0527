@@ -5,10 +5,11 @@ import {
   drawCanvasCooperatively, prepareCanvasDrawing, type CanvasContext, type CanvasProject, type CanvasShape
 } from './canvas-renderer';
 import type { BasicStyleLayer } from './style-plan';
+import { CanvasPatternCache } from './canvas-pattern';
 
 /** 可注入的画布边界用于验证取消和资源所有权 */
 export interface MvtCanvas {
-  getContext(kind: '2d'): CanvasContext | null;
+  getContext(kind: '2d', options?: { readonly willReadFrequently?: boolean }): CanvasContext | null;
   transferToImageBitmap(): ImageBitmap;
 }
 
@@ -47,9 +48,11 @@ export async function renderMvt({
     throw new Error('MVT 绘制需要 source-layer');
   }
   const canvas = createCanvas(tileSize);
-  const drawing = canvas.getContext('2d');
+  // 微小虚线使用软件栅格化，避免 GPU 在上传纹理时处理大量细密路径
+  const drawing = canvas.getContext('2d', { willReadFrequently: layer.type === 'line' });
   if (!drawing) { throw new Error('无法创建 MVT 的 OffscreenCanvas 二维上下文'); }
   const decoded = data.layers[sourceLayer];
+  const environment = { origin: [tile.x * tileSize, tile.y * tileSize] as const, patterns: new CanvasPatternCache() };
   if (decoded && layer.visible(cameraZoom)) {
     const ratio = 2 ** (tile.z - coordinate.z);
     const offsetX = tile.x - coordinate.x * ratio;
@@ -70,7 +73,7 @@ export async function renderMvt({
       if (!layer.accepts(cameraZoom, styleFeature)) { continue; }
       const type = geometryType(feature.type);
       // 每个外环及其洞单独填充，多个面之间不互相挖洞
-      const parts = layer.type === 'fill' && type === 'Polygon'
+      const parts = (layer.type === 'fill' || layer.type === 'line') && type === 'Polygon'
         ? feature.polygons ?? [feature.geometry]
         : [feature.geometry];
       for (const paths of parts) {
@@ -78,7 +81,7 @@ export async function renderMvt({
         const draw = prepareCanvasDrawing(layer, shape, cameraZoom);
         if (draw) {
           // oxlint-disable-next-line no-await-in-loop -- 同一要素的面按原始顺序绘制，长路径内部继续分批检查取消
-          await drawCanvasCooperatively(drawing, draw, project, scale, checkpoint);
+          await drawCanvasCooperatively(drawing, draw, project, scale, checkpoint, environment);
           signal.throwIfAborted();
         }
         if (count++ % FEATURES_PER_CHECKPOINT === 0) {

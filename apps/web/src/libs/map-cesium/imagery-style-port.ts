@@ -2,6 +2,7 @@ import { GeographicTilingScheme, ImageryLayer, UrlTemplateImageryProvider } from
 import type { ImageryLayerCollection, ImageryProvider } from 'cesium';
 import { safeReporter } from '@yzt/utils';
 import { createGeoJsonProvider } from './geojson-provider';
+import { GeoJsonSources, type GeoJsonLease } from './geojson-source';
 import { createRasterProvider } from './raster-provider';
 import { createMvtProvider, type MvtProvider } from './mvt-provider';
 import { MvtWorkerPool, type MvtWorkerPoolOptions } from './mvt-worker-pool';
@@ -12,17 +13,21 @@ interface ImageryStylePortOptions {
   readonly layers: ImageryLayerCollection;
   readonly requestRender: () => void;
   readonly mvt?: MvtWorkerPoolOptions;
+  readonly geojson?: { readonly fetch?: typeof fetch };
 }
 
 export interface ImageryStylePort extends StyleMirrorPort, Disposable {
+  readonly ready: boolean;
   pause(): void;
   resume(): void;
 }
 
 interface ImageryResource {
+  pending?: boolean;
   readonly layer: ImageryLayer;
   readonly unsubscribe: () => void;
   readonly mvt?: MvtProvider;
+  readonly geojson?: GeoJsonLease;
 }
 
 // 最底层必须覆盖全球，避免 SDK 把局部影像的边缘拉伸到其他区域
@@ -30,9 +35,12 @@ const TRANSPARENT_PIXEL = 'data:image/png;base64,' +
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABpfZFQAAAAABJRU5ErkJggg==';
 
 /** 所有基础图层进入同一个影像集合，跨栅格与 GeoJSON 保持会话的层序 */
-export function createImageryStylePort({ layers, requestRender, mvt }: ImageryStylePortOptions): ImageryStylePort {
+export function createImageryStylePort({ layers, requestRender, mvt, geojson }: ImageryStylePortOptions): ImageryStylePort {
+  const notifyRender = safeReporter(requestRender, 'ImageryStylePort.requestRender');
+  const render = () => notifyRender(undefined);
   const owned = new Set<ImageryStyleLayer>();
   const pool = new MvtWorkerPool(mvt);
+  const sources = new GeoJsonSources(geojson);
   let anchor: ImageryLayer | undefined;
   let paused = false;
 
@@ -46,6 +54,7 @@ export function createImageryStylePort({ layers, requestRender, mvt }: ImagerySt
   }
 
   return {
+    get ready() { return [...owned].every(handle => handle.ready); },
     create: (layer, zoom, onError) => {
       if (!anchor) {
         anchor = new ImageryLayer(new UrlTemplateImageryProvider({
@@ -57,7 +66,7 @@ export function createImageryStylePort({ layers, requestRender, mvt }: ImagerySt
         layers.add(anchor, 0);
       }
       try {
-        const handle = new ImageryStyleLayer(layer, zoom, layers, pool, onError, () => {
+        const handle = new ImageryStyleLayer(layer, zoom, layers, pool, sources, render, onError, () => {
           owned.delete(handle);
           removeUnusedAnchor();
         });
@@ -81,19 +90,24 @@ export function createImageryStylePort({ layers, requestRender, mvt }: ImagerySt
         layers.raiseToTop((handle as ImageryStyleLayer).imagery);
       }
     },
-    requestRender,
-    pause: () => { paused = true; pool.pause(); },
+    requestRender: render,
+    pause: () => {
+      paused = true;
+      pool.pause();
+      for (const handle of owned) { handle.cancelPending(); }
+    },
     resume: () => {
       if (!paused) { return; }
       paused = false;
       pool.resume();
       // 已取消的 SDK 影像处于失败状态，恢复时换提供者；Worker 数据缓存仍保留
-      for (const handle of owned) { handle.restartMvt(); }
-      requestRender();
+      for (const handle of owned) { handle.restartPending(); }
+      render();
     },
     [Symbol.dispose]: () => {
       for (const handle of owned) { handle[Symbol.dispose](); }
       pool[Symbol.dispose]();
+      sources[Symbol.dispose]();
     }
   };
 }
@@ -105,6 +119,8 @@ class ImageryStyleLayer implements StyleMirrorLayer {
   readonly #report: (error: unknown) => void;
   readonly #onDispose: () => void;
   readonly #pool: MvtWorkerPool;
+  readonly #sources: GeoJsonSources;
+  readonly #requestRender: () => void;
   #resource: ImageryResource | undefined;
   #zoom: number;
 
@@ -113,12 +129,16 @@ class ImageryStyleLayer implements StyleMirrorLayer {
     zoom: number,
     collection: ImageryLayerCollection,
     pool: MvtWorkerPool,
+    sources: GeoJsonSources,
+    requestRender: () => void,
     onError: (error: unknown) => void,
     onDispose: () => void
   ) {
     this.#specification = layer;
     this.#collection = collection;
     this.#pool = pool;
+    this.#sources = sources;
+    this.#requestRender = requestRender;
     this.#report = safeReporter(onError, 'ImageryStyleLayer');
     this.#onDispose = onDispose;
     this.#zoom = zoom;
@@ -139,22 +159,33 @@ class ImageryStyleLayer implements StyleMirrorLayer {
     return this.#resource.layer;
   }
 
+  get ready(): boolean {
+    return !this.#resource?.layer.show || this.#resource.pending !== true;
+  }
+
   setVisible(visible: boolean): void {
     if (this.#resource) {
       if (!this.#resource.layer.show && visible) {
-        this.restartMvt();
+        this.#resource.layer.show = true;
+        this.restartPending();
       } else if (!visible) {
-        this.#resource.mvt?.cancelPending();
+        this.cancelPending();
       }
       this.#resource.layer.show = visible;
     }
   }
 
   /** 暂停或隐藏取消过的影像重新开始请求，共享数据不受影响 */
-  restartMvt(): void {
-    if (this.#resource?.mvt) {
+  restartPending(): void {
+    if (this.#resource?.mvt || this.#resource?.geojson) {
       this.#replace(this.#zoom);
     }
+  }
+
+  /** 隐藏、暂停和释放共同撤销当前影像的下载等待 */
+  cancelPending(): void {
+    this.#resource?.mvt?.cancelPending();
+    this.#resource?.geojson?.[Symbol.dispose]();
   }
 
   setZoom(zoom: number): void {
@@ -183,6 +214,7 @@ class ImageryStyleLayer implements StyleMirrorLayer {
     }
     // 先换身份再解绑旧资源，已排队的旧错误不能归到新影像
     this.#resource = next;
+    if (!next.layer.show) { this.cancelPending(); }
     this.#release(previous);
   }
 
@@ -201,6 +233,9 @@ class ImageryStyleLayer implements StyleMirrorLayer {
 
   #create(zoom: number): ImageryResource {
     const specification = this.#specification;
+    if (specification.source?.type === 'geojson' && typeof specification.source.data === 'string') {
+      return this.#createUrlGeoJson(zoom);
+    }
     let provider: ImageryProvider;
     let mvt: MvtProvider | undefined;
     if (specification.type === 'raster') {
@@ -231,6 +266,45 @@ class ImageryStyleLayer implements StyleMirrorLayer {
     return resource;
   }
 
+  // 保持影像层身份和顺序，数据就绪后再交给同一套内联绘制路径
+  #createUrlGeoJson(zoom: number): ImageryResource {
+    const specification = this.#specification;
+    const source = specification.source;
+    if (source?.type !== 'geojson') { throw new Error('缺少 GeoJSON 数据源'); }
+    const lease = this.#sources.acquire(source);
+    const provider = lease.promise.then(data => {
+      lease.signal.throwIfAborted();
+      return createGeoJsonProvider({ ...specification, source: { ...source, data } }, zoom);
+    }).catch((error: unknown) => {
+      if (!lease.signal.aborted) { throw error; }
+      // SDK 的异步层会自行记录 rejection，主动取消用空提供者结束，不留下虚假的来源错误
+      return createGeoJsonProvider({ ...specification,
+        source: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } }, zoom);
+    });
+    const layer = ImageryLayer.fromProviderAsync(provider, { gamma: 1 });
+    const listeners: (() => void)[] = [];
+    const report = (error: unknown): void => {
+      if (this.#resource === resource && !lease.signal.aborted && !isCancellation(error)) { this.#report(error); }
+    };
+    // SDK 在层销毁后仍可能完成 Promise；这个仅随层存活的监听吞掉过期错误，不持有外部注册
+    layer.errorEvent.addEventListener(error => {
+      resource.pending = false;
+      report(error);
+      if (this.#resource === resource) { this.#requestRender(); }
+    });
+    listeners.push(layer.readyEvent.addEventListener(ready => {
+      if (this.#resource !== resource || lease.signal.aborted) { return; }
+      resource.pending = false;
+      listeners.push(ready.errorEvent.addEventListener(report));
+      this.#requestRender();
+    }));
+    const resource: ImageryResource = {
+      layer, geojson: lease, pending: true,
+      unsubscribe: () => { for (const unsubscribe of listeners) { unsubscribe(); } }
+    };
+    return resource;
+  }
+
   #opacity(zoom: number): number {
     if (this.#specification.type !== 'raster') {
       return 1;
@@ -245,6 +319,7 @@ class ImageryStyleLayer implements StyleMirrorLayer {
   #release(resource: ImageryResource): void {
     resource.unsubscribe();
     resource.mvt?.[Symbol.dispose]();
+    resource.geojson?.[Symbol.dispose]();
     if (!this.#collection.remove(resource.layer, true) && !resource.layer.isDestroyed()) {
       resource.layer.destroy();
     }

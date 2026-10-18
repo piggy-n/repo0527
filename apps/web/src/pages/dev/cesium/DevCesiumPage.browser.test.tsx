@@ -14,8 +14,8 @@ import { DevCesiumPage } from './DevCesiumPage';
 (buildModuleUrl as typeof buildModuleUrl & { setBaseUrl(url: string): void }).setBaseUrl('/cesium/');
 setWorkerUrl(workerUrl);
 
-// 首次真实引擎着色器编译在全项目回归时较慢，按状态满足结束等待
-const READY_TIMEOUT = 15000;
+// 软件 WebGL 的 27 层首屏实测约 24 秒，功能等待留出编译余量，性能验收另属 3D.4
+const READY_TIMEOUT = 45000;
 
 afterEach(() => { vi.restoreAllMocks(); document.body.replaceChildren(); });
 
@@ -34,12 +34,13 @@ describe('二三维开发页实际装配', () => {
       }
       return found;
     };
-    const waitReady = (kind: '2d' | '3d') => vi.waitFor(() => {
+    const waitReady = (kind: '2d' | '3d', step: string) => vi.waitFor(() => {
       const status = wrapper.get('[data-cesium-state]');
-      expect(status.attributes('data-cesium-state')).toBe('ready');
+      expect(status.attributes('data-cesium-state'), `${step}：目标 ${kind}，当前 ${status.attributes('data-current-view')}`)
+        .toBe('ready');
       expect(status.attributes('data-current-view')).toBe(kind);
     }, { timeout: READY_TIMEOUT });
-    await waitReady('2d');
+    await waitReady('2d', '首次创建');
     const model: unknown = commits.mock.contexts[0];
     expect(model).toBeInstanceOf(StyleModel);
     if (!(model instanceof StyleModel)) {
@@ -47,7 +48,11 @@ describe('二三维开发页实际装配', () => {
     }
     expect(model.current.layers.map(layer => layer.id)).toEqual([
       'sample-background', 'sample-raster-below', 'sample-mvt-fill', 'sample-fill', 'sample-raster-overlay',
-      'sample-mvt-line', 'sample-line', 'sample-mvt-points', 'sample-points'
+      'sample-mvt-pattern', 'sample-pattern', 'sample-outline',
+      'sample-mvt-line', 'sample-line', 'sample-mvt-points', 'sample-points',
+      'selection-batch-fill', 'selection-batch-line', 'selection-batch-circle',
+      'selection-fill', 'selection-line', 'selection-circle', 'region-clip-mask', 'region-glow', 'region-line',
+      'measure-fill-completed', 'measure-fill-drawing', 'measure-line-completed', 'measure-line-drawing', 'measure-vertex'
     ]);
     const two = wrapper.get('[data-map-view="2d"] canvas').element;
     expect(wrapper.find('[data-map-view="3d"] canvas').exists()).toBe(false);
@@ -58,7 +63,7 @@ describe('二三维开发页实际装配', () => {
     expect(wrapper.get('[data-map-view="2d"] canvas').element).toBe(two);
     expect(wrapper.get('[data-map-view="2d"]').attributes('inert')).toBeUndefined();
     await button('重试').trigger('click');
-    await waitReady('3d');
+    await waitReady('3d', '首次三维失败后重试');
     const three = wrapper.get('[data-map-view="3d"] canvas').element;
     expect(three.getBoundingClientRect().width).toBeGreaterThan(0);
     expect(wrapper.get('[data-map-view="2d"]').attributes('inert')).toBeDefined();
@@ -68,7 +73,7 @@ describe('二三维开发页实际装配', () => {
     });
     const camera = wrapper.get('[data-session-camera]').text();
     await button('二维').trigger('click');
-    await waitReady('2d');
+    await waitReady('2d', '返回缓存二维');
     expect(wrapper.get('[data-map-view="2d"] canvas').element).toBe(two);
     await button('样例变色').trigger('click');
     await button('栅格移到面下').trigger('click');
@@ -77,9 +82,13 @@ describe('二三维开发页实际装配', () => {
       'fill-color': ['match', ['get', 'category'], 'primary', '#13c2c2', '#eb2f96']
     } });
     const changedStyle = model.current;
+    expect(model.images['sample-pattern-medium']).toMatchObject({ sdf: true, width: 32, pixelRatio: 2 });
+    expect(changedStyle.layers.find(layer => layer.id === 'selection-line')).toMatchObject({ paint: {
+      'line-color': '#ff7875'
+    } });
     const revision = model.revision;
     await button('三维').trigger('click');
-    await waitReady('3d');
+    await waitReady('3d', '恢复缓存三维');
     expect(wrapper.get('[data-map-view="3d"] canvas').element).toBe(three);
     expect(wrapper.get('[data-session-camera]').text()).toBe(camera);
     expect(model.current).toBe(changedStyle);
@@ -102,9 +111,9 @@ describe('二三维开发页实际装配', () => {
     await button('释放画布').trigger('click');
     expect(wrapper.find('canvas').exists()).toBe(false);
     await button('创建画布').trigger('click');
-    await waitReady('2d');
+    await waitReady('2d', '释放后重建');
     expect(wrapper.find('canvas').exists()).toBe(true);
     wrapper.unmount();
     expect(host.querySelector('canvas')).toBeNull();
-  }, 45000);
+  }, 60000);
 });

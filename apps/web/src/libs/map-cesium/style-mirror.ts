@@ -1,7 +1,7 @@
 import type { SourceSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { NO_SOURCE_ERRORS, type CameraModel, type SourceErrors, type StyleModel } from '@yzt/map-core';
+import { NO_SOURCE_ERRORS, type CameraModel, type SourceErrors, type StyleImages, type StyleModel } from '@yzt/map-core';
 import { safeReporter } from '@yzt/utils';
-import { compileStylePlan, type BasicStyleLayer } from './style-plan';
+import { compileStylePlan, referencedImages, type BasicStyleLayer } from './style-plan';
 
 /** 一层已创建的引擎资源，拥有者负责释放 */
 export interface StyleMirrorLayer extends Disposable {
@@ -128,7 +128,7 @@ export class StyleMirror implements Disposable {
   }
 
   #syncStyle(style: StyleSpecification, revision: number, zoom: number): void {
-    const plan = compileStylePlan(style);
+    const plan = compileStylePlan(style, this.#style.images);
     this.#forgetChangedSources(style.sources);
     if (!this.#canWrite()) {
       return;
@@ -136,7 +136,8 @@ export class StyleMirror implements Disposable {
     const next = new Map(plan.layers.map(layer => [layer.id, layer]));
     for (const [id, entry] of this.#entries) {
       const layer = next.get(id);
-      if (layer?.specification !== entry.layer.specification || layer?.source !== entry.layer.source) {
+      if (!layer || layer.specification !== entry.layer.specification || layer.source !== entry.layer.source ||
+        !sameImages(layer.images, entry.layer.images)) {
         this.#entries.delete(id);
         this.#release(entry);
         if (!this.#canWrite()) {
@@ -261,7 +262,8 @@ export class StyleMirror implements Disposable {
     const style = this.#style.current;
     const { sourceId, source, specification } = entry.layer;
     if (style.layers.find(layer => layer.id === entry.layer.id) !== specification ||
-      (sourceId !== undefined && style.sources[sourceId] !== source)) {
+      (sourceId !== undefined && style.sources[sourceId] !== source) ||
+      !hasCurrentImages(entry.layer, this.#style.images)) {
       return;
     }
     if (sourceFailure && sourceId !== undefined && !this.#sourceErrors.has(sourceId)) {
@@ -293,5 +295,20 @@ export class StyleMirror implements Disposable {
 
   #canWrite(): boolean {
     return !this.#disposed && !this.#paused;
+  }
+}
+
+// 编译计划每次创建图片表，按会话中的图片身份比较实际依赖
+function sameImages(left: StyleImages, right: StyleImages): boolean {
+  return Object.keys(left).length === Object.keys(right).length &&
+    Object.entries(left).every(([id, image]) => right[id] === image);
+}
+
+// 动态图片名依赖整张图片表，新增图片也会让旧请求失效
+function hasCurrentImages(layer: BasicStyleLayer, images: StyleImages): boolean {
+  try {
+    return sameImages(layer.images, referencedImages(layer.specification, images));
+  } catch {
+    return false;
   }
 }

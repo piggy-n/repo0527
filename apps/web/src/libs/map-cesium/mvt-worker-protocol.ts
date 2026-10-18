@@ -1,11 +1,12 @@
 import type { LayerSpecification, VectorSourceSpecification } from '@maplibre/maplibre-gl-style-spec';
-import type { TileCoordinate, TileDataRequest, TileDataStats } from '@yzt/map-core/worker';
+import type { StyleImages, TileCoordinate, TileDataRequest, TileDataStats } from '@yzt/map-core/worker';
 
 /** 绘制快照可结构化克隆，不传编译函数或缓存中的几何 */
 export interface MvtRenderRequest {
   readonly data: TileDataRequest;
   readonly source: VectorSourceSpecification;
   readonly layer: LayerSpecification;
+  readonly images?: StyleImages;
   readonly cameraZoom: number;
   readonly tile: TileCoordinate;
   readonly tileSize?: number;

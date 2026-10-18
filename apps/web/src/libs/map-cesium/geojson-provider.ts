@@ -5,11 +5,13 @@ import {
 import type { GeoJSON, Geometry, Position } from 'geojson';
 import {
   canvasColor, canvasNumber, drawCanvas, prepareCanvasDrawing,
-  type CanvasPath, type CanvasProject, type CanvasShape
+  type CanvasEnvironment, type CanvasPath, type CanvasProject, type CanvasShape
 } from './canvas-renderer';
+import { CanvasPatternCache } from './canvas-pattern';
 import type { BasicStyleLayer } from './style-plan';
+import { createWorldMaskProvider, hasWorldMask } from './world-mask-provider';
 
-type Draw = (context: CanvasRenderingContext2D, project: CanvasProject, scale: number) => void;
+type Draw = (context: CanvasRenderingContext2D, project: CanvasProject, scale: number, environment: CanvasEnvironment) => void;
 
 // 世界像素与 MapLibre 的 512 像素口径一致，瓦片层级不参与样式求值
 const TILE_SIZE = 512;
@@ -19,6 +21,10 @@ const MAX_LATITUDE = CesiumMath.toDegrees(WebMercatorProjection.MaximumLatitude)
 export function createGeoJsonProvider(layer: BasicStyleLayer, zoom: number): ImageryProvider {
   if (!Number.isFinite(zoom)) {
     throw new RangeError('三维样式的相机级别必须是有限数值');
+  }
+  if (layer.type === 'fill' && layer.source?.type === 'geojson' && typeof layer.source.data !== 'string' &&
+    hasWorldMask(layer.source.data)) {
+    return createWorldMaskProvider(layer, zoom);
   }
   // 纯色背景覆盖两极，业务几何仍只使用 Web Mercator 的有效范围
   const tilingScheme = layer.type === 'background' ? new GeographicTilingScheme() : new WebMercatorTilingScheme();
@@ -42,11 +48,13 @@ export function createGeoJsonProvider(layer: BasicStyleLayer, zoom: number): Ima
       }
       const draw = prepareCanvasDrawing(layer, shape, zoom);
       if (draw) {
-        draws.push((context, project, scale) => drawCanvas(context, draw, project, scale));
+        draws.push((context, project, scale, environment) => drawCanvas(context, draw, project, scale, environment));
       }
     }
   }
   const credit = layer.source?.attribution ? new Credit(layer.source.attribution) : undefined;
+  // 空图层保留影像层序，但不为每张瓦片重复分配 512 像素的透明纹理
+  let empty: HTMLCanvasElement | undefined;
   const provider = {
     rectangle: tilingScheme.rectangle,
     tileWidth: TILE_SIZE,
@@ -63,10 +71,19 @@ export function createGeoJsonProvider(layer: BasicStyleLayer, zoom: number): Ima
     pickFeatures: () => undefined,
     // SDK 只把 Promise rejection 转为数据源错误，同步绘制失败也须进入这条隔离通道
     requestImage: async (x, y, level) => {
+      if (draws.length === 0) {
+        if (!empty) {
+          empty = document.createElement('canvas');
+          empty.width = 1;
+          empty.height = 1;
+        }
+        return empty;
+      }
       const canvas = document.createElement('canvas');
       canvas.width = TILE_SIZE;
       canvas.height = TILE_SIZE;
-      const context = canvas.getContext('2d');
+      // 微小虚线的 GPU 栅格化开销很大，离屏瓦片使用软件画布后仍按原样上传纹理
+      const context = canvas.getContext('2d', { willReadFrequently: layer.type === 'line' });
       if (!context) {
         throw new Error('无法创建三维样式的二维画布');
       }
@@ -77,9 +94,10 @@ export function createGeoJsonProvider(layer: BasicStyleLayer, zoom: number): Ima
           (bounds.north - pointY) / (bounds.north - bounds.south) * TILE_SIZE
         ];
         const scale = 2 ** (level - zoom);
+        const environment = { origin: [x * TILE_SIZE, y * TILE_SIZE] as const, patterns: new CanvasPatternCache() };
         for (const draw of draws) {
           context.save();
-          draw(context, project, scale);
+          draw(context, project, scale, environment);
           context.restore();
         }
       }

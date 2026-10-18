@@ -51,6 +51,19 @@ function opaqueSpan(canvas: HTMLCanvasElement, fixed: number, vertical = false):
 }
 
 describe('GeoJSON 透明瓦片真实画布', () => {
+  it('没有匹配几何的层复用单像素透明纹理，保持瓦片级别与层身份', async () => {
+    const imagery = provider({ id: 'empty', type: 'circle', source: 'data' }, {
+      type: 'LineString', coordinates: [position(100, 200), position(200, 200)]
+    });
+    const first = await tile(imagery);
+    const next = await tile(imagery, 1, 1, 1);
+    expect(imagery.tileWidth).toBe(512);
+    expect(first.width).toBe(1);
+    expect(first.height).toBe(1);
+    expect(next).toBe(first);
+    expect(pixel(first, 0, 0)).toEqual([0, 0, 0, 0]);
+  });
+
   it('画布创建失败返回被拒绝的 Promise，不同步打断 SDK 渲染循环', async () => {
     const imagery = provider({ id: 'background', type: 'background' });
     const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
@@ -148,6 +161,8 @@ describe('GeoJSON 透明瓦片真实画布', () => {
     ] });
     const low = await tile(imagery);
     const high = await tile(imagery, 1, 1, 1);
+    expect(low.getContext('2d')!.getContextAttributes().willReadFrequently).toBe(true);
+    expect(high.getContext('2d')!.getContextAttributes().willReadFrequently).toBe(true);
     expect(opaqueSpan(low, 384, true)).toBe(10);
     expect(opaqueSpan(high, 256, true)).toBe(20);
     expect(pixel(low, 150, 200)).toEqual([255, 0, 0, 255]);

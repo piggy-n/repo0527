@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
 import { INITIAL_SAMPLE_STYLE_STATE, sampleStyleGroup } from './sample-style';
+import { sampleOverlayGroups } from './sample-overlays';
+import { StyleModel } from '@yzt/map-core';
 
 describe('三维开发页共享样例样式', () => {
   it('使用内嵌栅格和内联点线面，面保留孔洞与分类属性', () => {
@@ -45,10 +47,12 @@ describe('三维开发页共享样例样式', () => {
     const after = sampleStyleGroup({ ...INITIAL_SAMPLE_STYLE_STATE, rasterAbove: false });
     expect(before.layers.map(layer => layer.id)).toEqual([
       'sample-background', 'sample-raster-below', 'sample-mvt-fill', 'sample-fill', 'sample-raster-overlay',
+      'sample-mvt-pattern', 'sample-pattern', 'sample-outline',
       'sample-mvt-line', 'sample-line', 'sample-mvt-points', 'sample-points'
     ]);
     expect(after.layers.map(layer => layer.id)).toEqual([
       'sample-background', 'sample-raster-below', 'sample-raster-overlay', 'sample-mvt-fill', 'sample-fill',
+      'sample-mvt-pattern', 'sample-pattern', 'sample-outline',
       'sample-mvt-line', 'sample-line', 'sample-mvt-points', 'sample-points'
     ]);
     expect(after.sources).toBe(before.sources);
@@ -105,5 +109,50 @@ describe('三维开发页共享样例样式', () => {
       source: 'sample-mvt', 'source-layer': 'landuse', minzoom: 10,
       filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['in', ['id'], ['literal', ['area-primary', 'area-secondary']]]]
     });
+  });
+
+  it('花纹共享业务距离场并按级别和分类取图，描边与线型保持实际业务单位', () => {
+    const group = sampleStyleGroup(INITIAL_SAMPLE_STYLE_STATE);
+    expect(Object.keys(group.images ?? {})).toEqual([
+      'sample-pattern-low', 'sample-pattern-medium', 'sample-pattern-high', 'sample-pattern-none'
+    ]);
+    expect(group.images?.['sample-pattern-medium']).toMatchObject({ width: 32, pixelRatio: 2, sdf: true });
+    expect(group.layers.find(layer => layer.id === 'sample-pattern')).toMatchObject({ paint: {
+      'fill-antialias': false,
+      'fill-pattern': ['step', ['zoom'], ['match', ['get', 'category'], 'primary', 'sample-pattern-low', 'sample-pattern-none'],
+        10, ['match', ['get', 'category'], 'primary', 'sample-pattern-medium', 'sample-pattern-none'],
+        14, ['match', ['get', 'category'], 'primary', 'sample-pattern-high', 'sample-pattern-none']]
+    } });
+    expect(group.layers.find(layer => layer.id === 'sample-outline')).toMatchObject({ paint: {
+      'line-width': 4, 'line-offset': 2, 'line-dasharray': [3, 2]
+    } });
+    expect(group.layers.find(layer => layer.id === 'sample-line')).toMatchObject({ paint: {
+      'line-dasharray': [4, 2, 1, 2]
+    } });
+  });
+
+  it('高亮、遮罩、边界和测量按实际业务分组提交，隐藏时跨分组引用一起移除', () => {
+    using model = new StyleModel({ groups: ['sample', 'selection', 'region-clip', 'region', 'measure'] });
+    const overlays = sampleOverlayGroups(INITIAL_SAMPLE_STYLE_STATE);
+    model.setGroups({ sample: sampleStyleGroup(INITIAL_SAMPLE_STYLE_STATE), ...overlays });
+    const ids = model.current.layers.map(layer => layer.id);
+    expect(ids.indexOf('selection-batch-circle')).toBeLessThan(ids.indexOf('selection-fill'));
+    expect(ids.indexOf('selection-circle')).toBeLessThan(ids.indexOf('region-clip-mask'));
+    expect(ids.indexOf('region-clip-mask')).toBeLessThan(ids.indexOf('region-glow'));
+    expect(ids.indexOf('region-line')).toBeLessThan(ids.indexOf('measure-line-drawing'));
+    expect(overlays.selection.layers[2]).toMatchObject({ source: 'sample-mvt', 'source-layer': 'detail',
+      filter: ['all', expect.any(Array), ['match', ['get', 'guid'], ['points-secondary'], true, false]] });
+    expect(overlays['region-clip'].sources['region-clip']).toMatchObject({ data: {
+      geometry: { type: 'MultiPolygon', coordinates: [expect.any(Array), expect.any(Array)] }
+    } });
+    const changed = sampleOverlayGroups({ ...INITIAL_SAMPLE_STYLE_STATE, alternateColors: true });
+    expect(changed.selection.layers.find(layer => layer.id === 'selection-line')).toMatchObject({ paint: {
+      'line-color': '#ff7875'
+    } });
+    const hidden = { ...INITIAL_SAMPLE_STYLE_STATE, visible: false };
+    model.setGroups({ sample: sampleStyleGroup(hidden), ...sampleOverlayGroups(hidden) });
+    expect(model.current.sources).toEqual({});
+    expect(model.images).toEqual({});
+    expect(model.current.layers.map(layer => layer.id)).toEqual(['sample-background']);
   });
 });

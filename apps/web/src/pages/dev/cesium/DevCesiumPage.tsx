@@ -1,9 +1,10 @@
 import { ElButton } from 'element-plus';
-import { defineComponent, type PropType, ref, shallowRef } from 'vue';
+import { computed, defineComponent, type PropType, ref, shallowRef } from 'vue';
 import type { ViewKind } from '@yzt/map-core';
 import { SwitchableMapCanvas, type MapViewSwitchState, type SwitchableMapCanvasHandle, provideMap } from '@yzt/map-vue';
 import styles from './DevCesiumPage.module.scss';
 import { INITIAL_SAMPLE_STYLE_STATE, sampleStyleGroup } from './sample-style';
+import { sampleOverlayGroups } from './sample-overlays';
 
 /** 二三维基础样式的验证入口：共享样式、相机与生命周期 */
 export const DevCesiumPage = defineComponent({
@@ -19,12 +20,19 @@ export const DevCesiumPage = defineComponent({
     const broken = ref(false);
     const hasCreated3d = ref(false);
     const sample = shallowRef(INITIAL_SAMPLE_STYLE_STATE);
+    const overlays = computed(() => sampleOverlayGroups(sample.value));
     const state = shallowRef<MapViewSwitchState>({ current: null, target: '2d', status: 'loading' });
     const map = provideMap({
-      groups: ['sample'],
+      groups: ['sample', 'selection', 'region-clip', 'region', 'measure'],
       camera: { center: [119.2, 32.8], zoom: 4, bearing: 0, pitch: 0 }
     });
-    map.bindStyle({ sample: () => sampleStyleGroup(sample.value) });
+    map.bindStyle({
+      sample: () => sampleStyleGroup(sample.value),
+      selection: () => overlays.value.selection,
+      'region-clip': () => overlays.value['region-clip'],
+      region: () => overlays.value.region,
+      measure: () => overlays.value.measure
+    });
     const camera = map.useCamera();
 
     const statusText = () => {
@@ -64,7 +72,7 @@ export const DevCesiumPage = defineComponent({
     return () => (
       <div class={styles.root}>
         <header class={styles.toolbar}>
-          <strong>Cesium · 3D.3b</strong>
+          <strong>Cesium · 3D.3c</strong>
           <ElButton onClick={() => {
             mounted.value = !mounted.value;
             hasCreated3d.value = false;
@@ -112,7 +120,7 @@ export const DevCesiumPage = defineComponent({
           </span>
         </header>
         <p class={styles.description}>
-          点击“定位到南京”查看本地 MVT、GeoJSON 与棋盘栅格；两个视图共用显隐、分类配色和叠放顺序
+          点击“定位到南京”查看本地花纹、虚线、高亮与带洞区划遮罩；两个视图共用显隐、配色和叠放顺序
         </p>
         <p class={styles.description} data-session-camera>
           会话相机：{camera.value.center.map(value => value.toFixed(5)).join(', ')}

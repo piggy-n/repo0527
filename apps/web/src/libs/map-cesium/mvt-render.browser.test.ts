@@ -11,12 +11,18 @@ async function pixels(
   specification: LayerSpecification,
   data: DecodedTile,
   tile: TileCoordinate = { z: 0, x: 0, y: 0 },
-  cameraZoom = tile.z
+  cameraZoom = tile.z,
+  defaultContext = false
 ): Promise<OffscreenCanvasRenderingContext2D> {
   const layer = compileStylePlan({ version: 8, sources: { data: SOURCE }, layers: [specification] }).layers[0];
   const signal = new AbortController().signal;
   const bitmap = await renderMvt({
     data, layer, source: SOURCE, coordinate: { z: 0, x: 0, y: 0 }, tile, cameraZoom,
+    createCanvas: defaultContext ? size => {
+      const canvas = new OffscreenCanvas(size, size);
+      // 参考画布刻意忽略生产传入的软件栅格化选项，以比较两种上下文的输出
+      return { getContext: kind => canvas.getContext(kind), transferToImageBitmap: () => canvas.transferToImageBitmap() };
+    } : undefined,
     context: { signal, checkpoint: async () => signal.throwIfAborted() }
   });
   try {
@@ -39,6 +45,26 @@ function opaqueWidth(context: OffscreenCanvasRenderingContext2D, y: number): num
 }
 
 describe('MVT OffscreenCanvas 画面', () => {
+  it.each([0, 13])('线图层使用软件画布后，zoom %i 的普通或极细虚线仍与默认画布像素一致', async cameraZoom => {
+    const data: DecodedTile = { bytes: 1, layers: { road: { extent: 512, features: [{
+      type: 2, properties: {}, geometry: [ring(200, 256, 220, 256)]
+    }] } } };
+    const specification: LayerSpecification = {
+      id: 'line', type: 'line', source: 'data', 'source-layer': 'road',
+      paint: { 'line-color': '#ff0000', 'line-width': 4, 'line-opacity': 0.4, 'line-dasharray': [3, 2] }
+    };
+    const tile = { z: 0, x: 0, y: 0 };
+    const software = await pixels(specification, data, tile, cameraZoom);
+    const reference = await pixels(specification, data, tile, cameraZoom, true);
+    // 读取实际像素强制完成延迟栅格化，不能只验证 stroke 或位图 Promise 已返回
+    const actual = software.getImageData(0, 0, 512, 512).data;
+    const expected = reference.getImageData(0, 0, 512, 512).data;
+    expect(actual).toEqual(expected);
+    expect([...software.getImageData(204, 256, 1, 1).data]).toEqual(cameraZoom === 0 ? [255, 0, 0, 102] : [0, 0, 0, 0]);
+    expect(software.getImageData(216, 256, 1, 1).data[3]).toBe(0);
+    expect(actual.some(value => value !== 0)).toBe(cameraZoom === 0);
+  });
+
   it('非默认 extent 的面保留孔洞与多个外环，重叠面分别合成透明度', async () => {
     const outer = ring(1024, 1024, 7168, 1024, 7168, 7168, 1024, 7168, 1024, 1024);
     const hole = ring(3072, 3072, 3072, 5120, 5120, 5120, 5120, 3072, 3072, 3072);

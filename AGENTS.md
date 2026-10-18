@@ -72,7 +72,7 @@ apps/web/src/
 ## libs 的拆包规则（ADR 0004）
 
 - 每个模块只有一个入口 `index.ts`，外部只能从 `@yzt/<name>` 导入，不直接引用模块内部文件
-- Worker 的受限例外是 `@yzt/map-core/worker`：只导出引擎无关的瓦片数据能力，不引用主入口、DOM 或 MapLibre；`*.worker.ts` 单独用 `tsconfig.worker.json` 的 WebWorker 环境检查，不混入 DOM 类型（ADR 0066）
+- Worker 的受限例外是 `@yzt/map-core/worker`：只导出引擎无关的瓦片数据能力和样式图片数据类型，不引用主入口、DOM 或 MapLibre；`*.worker.ts` 单独用 `tsconfig.worker.json` 的 WebWorker 环境检查，不混入 DOM 类型（ADR 0066、0067）
 - 例外：需要给样式共享 Sass 变量（如断点）时，模块根目录可以有 Sass 入口 `_index.scss`，只放变量，不输出 CSS；应用用 `@use '<name>'` 引用（`vite.config.ts` 的 `loadPaths`，ADR 0016）
 - 模块内部只用相对路径，不使用 `@/`
 - 不读取 `import.meta.env`、store、router 或全局单例，需要的依赖通过构造参数或函数参数传入
@@ -228,7 +228,8 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 地图页被缓存时（ADR 0063）：`MapCanvas` 在页面停用时暂停视图、激活时恢复，隐藏期间的定位等恢复后再执行；视图恢复时先按容器尺寸调整画布，暂停时进行中的定位动画直接到终点并写回会话；面板内容在页面停用时按隐藏处理（`active` 为 false）
 - 相机事件带 `view` 和 `cause`（`user` / `program` / `sync`），不用时间窗口判断回声（ADR 0024）
 - 三维相机在目标点的 ENU 坐标系与共享相机换算，隐藏期间不实时跟随；恢复精确视角按隐藏期间的 `cause` 判断（ADR 0024、0064）。3D.2b 通过 `CesiumView` 接入统一上下文，候选视图先完成预备渲染再暂停，定位时长的毫秒在适配器转换为秒；验收边界见 `docs/modules/map-cesium.md`
-- 三维基础样式按 ADR 0065 使用统一影像层序：background、raster、内联 GeoJSON 与 MVT 点线面；表达式和过滤用 style-spec，级别取共享相机，不取瓦片级别。不支持的属性逐层诊断并跳过；有数据源的 provider 加载错误进入来源错误，同步样式诊断不使整图失败。绘制与支持范围见 `docs/stages/stage-3d-3a-basic-style.md`、`stage-3d-3b-mvt-worker.md`；花纹、虚线、符号、高亮与世界遮罩留到 3D.3c
+- 三维基础样式按 ADR 0065、0067 使用统一影像层序：background、raster、内联/URL GeoJSON 与 MVT 点线面；表达式和过滤用 style-spec，级别取共享相机，不取瓦片级别。不支持的属性逐层诊断并跳过；有数据源的 provider 加载错误进入来源错误，同步样式诊断不使整图失败。绘制与支持范围见 `docs/stages/stage-3d-3a-basic-style.md`、`stage-3d-3b-mvt-worker.md`、`stage-3d-3c-symbols-mask.md`
+- 三维花纹复用会话的 RGBA/SDF 图片和 pixelRatio，图片按依赖失效，不转移会话像素缓冲；硬边覆盖先二值化再着色。世界矩形补集用 Geographic 瓦片铺满球面，洞岛保留墨卡托边线，不按区划包围盒收缩。高亮、遮罩和测量沿用原样式分组，不另存业务状态（ADR 0067）
 - MVT 下载、解码和按字节 LRU 在 map-core，绘制和视图独占的惰性 Worker 池在 map-cesium，通信复用 utils；父瓦片身份固定线程，放大后从矢量重画，字段需求取并集。暂停取消未完成任务并保留缓存，释放视图终止线程，转移的位图用后或晚到时关闭；不增加持久化缓存或拦截二维请求（ADR 0066）
 - 二维中，一个不合法的图层会让整个视图进入 `failed`，样式出现新版本时自动恢复（ADR 0026）；来自后端等外部配置的图层，由拥有者在配置变化时先校验自己的分组，不合法的不提交给会话
 - 带 `sourceId` 的错误（瓦片、GeoJSON 加载失败）不算样式失败，记在视图的数据源错误里；拥有者从上下文的 `sourceErrors` 按数据源 ID 推导自己的加载失败，不监听原生的 `error` 事件，也不自己清除（ADR 0041）

@@ -1,8 +1,9 @@
 import type {
-  FillLayerSpecification, LayerSpecification, RasterSourceSpecification
+  ExpressionSpecification, FillLayerSpecification, LayerSpecification, RasterSourceSpecification
 } from '@maplibre/maplibre-gl-style-spec';
 import type { FeatureCollection } from 'geojson';
 import type { StyleGroup } from '@yzt/map-core';
+import { BLANK_PATTERN_IMAGE_ID, patternImageId, patternImages } from '@/features/resource-map/fill-patterns';
 import { SAMPLE_MVT_SOURCE } from './sample-mvt';
 
 /** 开发页只保存样例显示意图，两个视图共用推导后的会话样式 */
@@ -27,6 +28,14 @@ const BACKGROUND: LayerSpecification = {
   id: 'sample-background', type: 'background', paint: { 'background-color': '#f3f5f8' }
 };
 const BACKGROUND_ONLY: StyleGroup = { sources: {}, layers: [BACKGROUND] };
+// 使用业务生成器的同一份距离场，样例图片仍由 sample 分组命名和持有
+const RESOURCE_IMAGES = patternImages(['diagonal'], true);
+const PATTERN_IMAGES = {
+  'sample-pattern-low': RESOURCE_IMAGES[patternImageId('diagonal', 0)],
+  'sample-pattern-medium': RESOURCE_IMAGES[patternImageId('diagonal', 1)],
+  'sample-pattern-high': RESOURCE_IMAGES[patternImageId('diagonal', 2)],
+  'sample-pattern-none': RESOURCE_IMAGES[BLANK_PATTERN_IMAGE_ID]
+};
 
 // 南京附近的面、洞、折线和节点；定位按钮在俯视与斜视下都能覆盖
 const SAMPLE_DATA: FeatureCollection = {
@@ -78,14 +87,27 @@ const LINE: LayerSpecification = {
   id: 'sample-line', type: 'line', source: 'sample-geometry',
   filter: ['==', ['geometry-type'], 'LineString'],
   layout: { 'line-cap': 'round', 'line-join': 'round' },
-  paint: { 'line-color': '#253858', 'line-width': 4 }
+  paint: { 'line-color': '#253858', 'line-width': 4, 'line-dasharray': [4, 2, 1, 2] }
 };
 const MVT_LINE: LayerSpecification = {
   id: 'sample-mvt-line', type: 'line', source: 'sample-mvt', 'source-layer': 'detail', minzoom: 10,
   filter: ['==', ['geometry-type'], 'LineString'],
   layout: { 'line-cap': 'round', 'line-join': 'round' },
-  paint: { 'line-color': '#389e0d', 'line-width': 3 }
+  paint: { 'line-color': '#389e0d', 'line-width': 3, 'line-dasharray': [3, 2] }
 };
+
+// 分类中没有花纹的取值用透明 SDF 图片，和业务资源的拆层方式相同
+const patternAt = (image: string): ExpressionSpecification =>
+  ['match', ['get', 'category'], 'primary', image, 'sample-pattern-none'];
+
+function patternPaint(color: string): NonNullable<FillLayerSpecification['paint']> {
+  return {
+    'fill-pattern': ['step', ['zoom'], patternAt('sample-pattern-low'), 10,
+      patternAt('sample-pattern-medium'), 14, patternAt('sample-pattern-high')],
+    'fill-pattern-transition': { duration: 0, delay: 0 },
+    'fill-color': color, 'fill-antialias': false
+  };
+}
 
 /** 推导同一份基础样式：面夹在两张栅格之间，调整时只改变会话层序 */
 export function sampleStyleGroup({ visible, alternateColors, rasterAbove }: SampleStyleState): StyleGroup {
@@ -109,9 +131,16 @@ export function sampleStyleGroup({ visible, alternateColors, rasterAbove }: Samp
   };
   return {
     sources: SOURCES,
+    images: PATTERN_IMAGES,
     layers: [
       BACKGROUND, BASE_RASTER,
       ...(rasterAbove ? [mvtFill, fill, OVERLAY_RASTER] : [OVERLAY_RASTER, mvtFill, fill]),
+      { ...mvtFill, id: 'sample-mvt-pattern', paint: patternPaint(secondary) },
+      { ...fill, id: 'sample-pattern', paint: patternPaint(secondary) },
+      {
+        id: 'sample-outline', type: 'line', source: 'sample-geometry', filter: fill.filter,
+        paint: { 'line-color': primary, 'line-width': 4, 'line-offset': 2, 'line-dasharray': [3, 2] }
+      },
       MVT_LINE, LINE,
       {
         id: 'sample-mvt-points', type: 'circle', source: 'sample-mvt', 'source-layer': 'detail', minzoom: 10,

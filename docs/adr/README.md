@@ -76,6 +76,7 @@
 | [0064](0064-three-dimensional-integration-scope.md) | 三维接入：先完成现状底图的切换与样式镜像 | 已接受 |
 | [0065](0065-basic-geojson-imagery-layers.md) | 基础 GeoJSON 与栅格使用统一影像层序 | 已接受 |
 | [0066](0066-mvt-worker-runtime-boundary.md) | MVT Worker 的运行环境入口与缓存边界 | 已接受 |
+| [0067](0067-symbols-highlights-world-mask.md) | 三维符号、选择高亮与全球区划遮罩 | 已接受 |
 
 ## 模板
 

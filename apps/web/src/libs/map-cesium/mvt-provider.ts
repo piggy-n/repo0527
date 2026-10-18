@@ -108,7 +108,7 @@ export function createMvtProvider(
           .replaceAll(/\{x\}|%7Bx%7D/gi, String(coordinate.x))
           .replaceAll(/\{y\}|%7By%7D/gi, String(row));
         const bitmap = await pool.render({ data: { source: dataSource, coordinate, url, headers, fields },
-          source, layer: layer.specification, cameraZoom: zoom, tile, tileSize: 512 }, controller.signal);
+          source, layer: layer.specification, images: layer.images, cameraZoom: zoom, tile, tileSize: 512 }, controller.signal);
         try {
           controller.signal.throwIfAborted();
           const context = canvas.getContext('2d');

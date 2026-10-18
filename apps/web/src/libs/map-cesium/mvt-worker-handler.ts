@@ -31,7 +31,7 @@ export function createMvtWorkerHandler({
         if (!sourceId) { throw new Error('MVT 图层缺少数据源'); }
         const plan = compileStylePlan({
           version: 8, sources: { [sourceId]: request.source }, layers: [request.layer]
-        });
+        }, request.images);
         const layer = plan.layers[0];
         if (!layer || plan.issues.length > 0) {
           throw plan.issues[0]?.error ?? new Error('无法编译 MVT 图层');

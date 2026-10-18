@@ -68,6 +68,41 @@ function raster(id: string, source = 'tiles'): LayerSpecification {
 }
 
 describe('三维会话样式镜像', () => {
+  it('图片变化只重建依赖层，暂停期间只应用最新图片并隔离迟到错误', async () => {
+    const image = { width: 1, height: 1, data: new Uint8Array([255, 255, 255, 255]) };
+    const next = { ...image, pixelRatio: 2, sdf: true };
+    const latest = { ...next, data: new Uint8Array([0, 0, 0, 255]) };
+    const group: StyleGroup = {
+      sources: { points: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } },
+      layers: [background('base'), { id: 'pattern', type: 'fill', source: 'points', paint: { 'fill-pattern': 'tile' } }],
+      images: { tile: image, unused: image }
+    };
+    using ctx = fixture(group);
+    const [base, pattern] = ctx.handles;
+    ctx.style.setGroup('sample', { ...group, images: { tile: image, unused: next } });
+    await Promise.resolve();
+    expect(ctx.port.create).toHaveBeenCalledTimes(2);
+    ctx.mirror.pause();
+    ctx.style.setGroup('sample', { ...group, images: { tile: next } });
+    pattern.report(new Error('旧图片失败'));
+    ctx.style.setGroup('sample', { ...group, images: { tile: latest } });
+    await Promise.resolve();
+    expect(ctx.onError).not.toHaveBeenCalled();
+    expect(ctx.port.create).toHaveBeenCalledTimes(2);
+    ctx.mirror.resume();
+    expect(ctx.port.create).toHaveBeenCalledTimes(3);
+    expect(pattern.dispose).toHaveBeenCalledOnce();
+    expect(base.dispose).not.toHaveBeenCalled();
+    expect(ctx.handles[2].layer.images.tile).toBe(latest);
+    ctx.style.setGroup('sample', { ...group, images: {} });
+    await Promise.resolve();
+    expect(ctx.handles[2].dispose).toHaveBeenCalledOnce();
+    expect(ctx.onError).toHaveBeenCalledOnce();
+    ctx.style.setGroup('sample', group);
+    await Promise.resolve();
+    expect(ctx.handles[3].layer.images.tile).toBe(image);
+  });
+
   it('首轮直接同步，排序只移动原来的层，变色只替换目标层', async () => {
     const bottom = background('bottom');
     const top = background('top', '#0000ff');

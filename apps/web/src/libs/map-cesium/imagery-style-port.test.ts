@@ -14,17 +14,123 @@ function plan(layer: LayerSpecification, source = RASTER) {
   return result.layers[0];
 }
 
-function fixture() {
+function fixture(fetchData?: typeof fetch) {
   const layers = new ImageryLayerCollection();
   const render = vi.fn<() => void>();
+  const port = createImageryStylePort({ layers, requestRender: render, geojson: { fetch: fetchData } });
   return {
     layers, render,
-    port: createImageryStylePort({ layers, requestRender: render }),
-    [Symbol.dispose]: () => layers.destroy()
+    port,
+    [Symbol.dispose]: () => { port[Symbol.dispose](); layers.destroy(); }
   };
 }
 
+// 推进 Promise 加载链，晚一轮的计时器同时防止错误等待挂起
+const nextTurn = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
+function pendingFetch() {
+  const pending: { signal: AbortSignal; resolve: (response: Response) => void }[] = [];
+  const fetchData = vi.fn<typeof fetch>((_url, options) => new Promise(resolve => {
+    pending.push({ signal: options?.signal as AbortSignal, resolve });
+  }));
+  return { pending, fetchData };
+}
+
 describe('三维影像样式端口', () => {
+  it('URL GeoJSON 多层共享下载，就绪前保留位置，缩放继续复用数据', async () => {
+    const { pending, fetchData } = pendingFetch();
+    using ctx = fixture(fetchData);
+    const source: SourceSpecification = { type: 'geojson', data: '/boundary.json' };
+    const report = vi.fn<(error: unknown) => void>();
+    using fill = ctx.port.create(plan({ id: 'fill', type: 'fill', source: 'data' }, source), 8, report);
+    using line = ctx.port.create(plan({ id: 'line', type: 'line', source: 'data' }, source), 8, report);
+    expect(ctx.port.ready).toBe(false);
+    await nextTurn();
+    expect(fetchData).toHaveBeenCalledOnce();
+    const first = ctx.layers.get(1);
+    const second = ctx.layers.get(2);
+    ctx.port.order([line, fill]);
+    pending[0].resolve(Response.json(GEOJSON.data));
+    await nextTurn();
+    expect(ctx.port.ready).toBe(true);
+    expect([ctx.layers.get(1), ctx.layers.get(2)]).toEqual([second, first]);
+    expect(first.ready).toBe(true);
+    fill.setZoom(9);
+    await nextTurn();
+    expect(fetchData).toHaveBeenCalledOnce();
+    expect(first.isDestroyed()).toBe(true);
+    expect(ctx.layers.get(2).ready).toBe(true);
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('URL 隐藏、暂停和释放取消等待，恢复与迟到返回互不覆盖', async () => {
+    const { pending, fetchData } = pendingFetch();
+    using ctx = fixture(fetchData);
+    const report = vi.fn<(error: unknown) => void>();
+    const layer = plan({ id: 'fill', type: 'fill', source: 'data' }, { type: 'geojson', data: '/boundary.json' });
+    const handle = ctx.port.create(layer, 8, report);
+    await nextTurn();
+    handle.setVisible(false);
+    expect(pending[0].signal.aborted).toBe(true);
+    expect(ctx.port.ready).toBe(true);
+    handle.setVisible(true);
+    await nextTurn();
+    expect(pending[1].signal.aborted).toBe(false);
+    expect(ctx.port.ready).toBe(false);
+    ctx.port.pause();
+    expect(pending[1].signal.aborted).toBe(true);
+    ctx.port.resume();
+    await nextTurn();
+    const current = ctx.layers.get(1);
+    pending[0].resolve(Response.json({ type: 'not-geojson' }));
+    pending[1].resolve(new Response('failed', { status: 500 }));
+    await nextTurn();
+    expect(ctx.port.ready).toBe(false);
+    expect(report).not.toHaveBeenCalled();
+    pending[2].resolve(Response.json(GEOJSON.data));
+    await nextTurn();
+    expect(current.ready).toBe(true);
+    expect(ctx.port.ready).toBe(true);
+    handle[Symbol.dispose]();
+    expect(ctx.layers.length).toBe(0);
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('URL 就绪后的外部重绘回调抛错不误报来源加载失败', async () => {
+    using consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    using ctx = fixture(async () => Response.json(GEOJSON.data));
+    ctx.render.mockImplementationOnce(() => { throw new Error('外部重绘失败'); });
+    const report = vi.fn<(error: unknown) => void>();
+    ctx.port.create(plan({ id: 'fill', type: 'fill', source: 'data' }, {
+      type: 'geojson', data: '/boundary.json'
+    }), 8, report);
+    await nextTurn();
+    expect(ctx.port.ready).toBe(true);
+    expect(report).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledOnce();
+  });
+
+  it('URL 下载失败只报告来源错误并结束等待，释放前晚到失败不再报告', async () => {
+    const { pending, fetchData } = pendingFetch();
+    using ctx = fixture(fetchData);
+    const report = vi.fn<(error: unknown) => void>();
+    const layer = plan({ id: 'fill', type: 'fill', source: 'data' }, { type: 'geojson', data: '/boundary.json' });
+    const handle = ctx.port.create(layer, 8, report);
+    await nextTurn();
+    pending[0].resolve(new Response('failed', { status: 500 }));
+    await nextTurn();
+    expect(report).toHaveBeenCalledOnce();
+    expect(ctx.port.ready).toBe(true);
+    handle[Symbol.dispose]();
+    const next = ctx.port.create(layer, 8, report);
+    await nextTurn();
+    next[Symbol.dispose]();
+    pending[1].resolve(new Response('failed', { status: 500 }));
+    await nextTurn();
+    expect(report).toHaveBeenCalledOnce();
+    expect(ctx.layers.length).toBe(0);
+  });
+
   it('全部图层共享顺序，透明全球锚定层随最后一个 handle 释放', () => {
     using ctx = fixture();
     const report = vi.fn<(error: unknown) => void>();

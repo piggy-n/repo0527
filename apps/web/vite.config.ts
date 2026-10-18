@@ -31,8 +31,9 @@ export default defineConfig(({ mode }) => {
       // 直接读取 tsconfig 的 paths，不再单独维护一份别名
       tsconfigPaths: true
     },
-    // Worker 首次请求时才发现依赖会使浏览器测试重载，预先纳入同一优化批次
-    optimizeDeps: { include: ['@mapbox/vector-tile', 'pbf', 'core-js/es/symbol/dispose'] },
+    // Worker 与业务样式验证的延迟依赖预先纳入同一优化批次，避免测试途中重载
+    optimizeDeps: { include: ['@mapbox/vector-tile', 'pbf', 'core-js/es/symbol/dispose',
+      '@turf/boolean-point-in-polygon', '@turf/bbox-clip'] },
     css: {
       preprocessorOptions: {
         // libs 模块的 Sass 入口按模块名引用，如 @use 'ui' 对应 src/libs/ui/_index.scss

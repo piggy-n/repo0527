@@ -119,14 +119,15 @@ describe('三维基础样式计划', () => {
     expect(next.layers[0].specification).toBe(previous.layers[0].specification);
   });
 
-  it('无法表达的抗锯齿关闭和圆连接阈值不静默接受', () => {
+  it('支持硬边覆盖，未实现的圆连接阈值仍明确报告', () => {
     const plan = compileStylePlan(style([
       { id: 'smooth', type: 'fill', source: 'data', paint: { 'fill-antialias': true } },
       { id: 'hard', type: 'fill', source: 'data', paint: { 'fill-antialias': false } },
       { id: 'round-limit', type: 'line', source: 'data', layout: { 'line-round-limit': 1.5 } }
     ]));
-    expect(plan.layers.map(layer => layer.id)).toEqual(['smooth']);
-    expect(plan.issues.map(issue => issue.layerId)).toEqual(['hard', 'round-limit']);
+    expect(plan.layers.map(layer => layer.id)).toEqual(['smooth', 'hard']);
+    expect(plan.layers[1].value('fill-antialias', 8)).toBe(false);
+    expect(plan.issues.map(issue => issue.layerId)).toEqual(['round-limit']);
   });
 
   it('不支持的类型、属性和编译失败逐层隔离，不改画成另一种样式', () => {
@@ -143,11 +144,11 @@ describe('三维基础样式计划', () => {
       { id: 'visible', type: 'fill', source: 'data', layout: { visibility: ['literal', 'visible'] } },
       { id: 'valid-after', type: 'line', source: 'data' }
     ]));
-    expect(layers.map(layer => layer.id)).toEqual(['valid-before', 'valid-after']);
-    expect(issues.map(issue => issue.layerId)).toEqual(['label', 'dash', 'pattern', 'sort', 'expression', 'filter', 'visible']);
+    expect(layers.map(layer => layer.id)).toEqual(['valid-before', 'dash', 'valid-after']);
+    expect(issues.map(issue => issue.layerId)).toEqual(['label', 'pattern', 'sort', 'expression', 'filter', 'visible']);
     expect(issues.every(issue => issue.error instanceof Error)).toBe(true);
-    expect(issues[1].error.message).toContain('line-dasharray');
-    expect(issues[3].error.message).toContain('fill-sort-key');
+    expect(issues[1].error.message).toContain('缺少花纹图片');
+    expect(issues[2].error.message).toContain('fill-sort-key');
   });
 
   it.each([
@@ -167,9 +168,9 @@ describe('三维基础样式计划', () => {
     expect(plan.issues[0].error.message).toContain(option);
   });
 
-  it('拒绝 URL GeoJSON、缺源图层的 MVT、来源缺失、不匹配和 GeoJSON source-layer', () => {
+  it('拒绝空 URL、缺源图层的 MVT、来源缺失、不匹配和 GeoJSON source-layer', () => {
     const snapshots: StyleSpecification[] = [
-      style([{ id: 'url', type: 'fill', source: 'data' }], { type: 'geojson', data: '/data.json' }),
+      style([{ id: 'url', type: 'fill', source: 'data' }], { type: 'geojson', data: '' }),
       style([{ id: 'vector', type: 'fill', source: 'data' }], { type: 'vector', tiles: ['/data.pbf'] }),
       style([{ id: 'missing', type: 'fill', source: 'absent' }]),
       style([{ id: 'mismatch', type: 'raster', source: 'data' }]),
@@ -195,6 +196,24 @@ describe('三维基础样式计划', () => {
     expect(plan.layers[0].value('fill-opacity', 16.25)).toBe(0.2);
     expect(plan.layers[0].value('fill-opacity', 16.75)).toBe(0.8);
     expect(plan.layers[0].visible(20)).toBe(true);
+  });
+
+  it('URL GeoJSON 保留来源身份，花纹只引用表达式输出图片并保留像素所有权', () => {
+    const source: GeoJSONSourceSpecification = { type: 'geojson', data: '/boundary.json' };
+    const low = { width: 1, height: 1, data: new Uint8Array([255, 255, 255, 192]), sdf: true, pixelRatio: 2 };
+    const high = { ...low, data: new Uint8Array([255, 255, 255, 255]) };
+    const plan = compileStylePlan(style([{ id: 'pattern', type: 'fill', source: 'data', paint: {
+      'fill-pattern': ['step', ['zoom'], ['match', ['get', 'kind'], 'water', 'low', 'high'], 10, 'high'],
+      'fill-pattern-transition': { duration: 0 }
+    } }], source), { low, high, unused: low });
+    expect(plan.issues).toEqual([]);
+    expect(plan.layers[0].source).toBe(source);
+    expect(plan.layers[0].images).toEqual({ low, high });
+    expect(plan.layers[0].images.low).toBe(low);
+    expect(plan.layers[0].value('fill-pattern', 8, { ...FEATURE, properties: { kind: 'water' } }))
+      .toMatchObject({ name: 'low' });
+    expect(plan.layers[0].value('fill-pattern', 10, FEATURE)).toMatchObject({ name: 'high' });
+    expect(low.data.byteLength).toBe(4);
   });
 
   it('MVT 源图层必须非空，未实现的身份表达式不能静默回退', () => {
