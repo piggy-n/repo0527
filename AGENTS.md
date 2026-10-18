@@ -63,6 +63,7 @@ apps/web/src/
 - `pages → features → shared → libs`，`app` 可以依赖所有目录
 - features 之间不互相导入，需要复用的内容上移到 shared 或 libs
 - libs 内部：`utils ← ui`，`utils ← map-core ← map-cesium`，`map-vue → map-core`；map-vue 只能用动态 `import()` 引用 map-cesium
+- 二三维切换由 map-vue 的 `SwitchableMapCanvas` 管理缓存与交接，app 注入运行时准备；上下文只挂当前视图。3D.2c 先用于 `/dev/cesium`，业务样式与工具验收后再接业务页（ADR 0064）
 - `utils`、`map-core`、`map-cesium` 不依赖 vue、element-plus、pinia；`map-vue` 不依赖 element-plus、pinia、vue-router，项目配置和地图界面放在 `shared/map`（ADR 0027）
 - 应用通过 `@yzt/<name>` 使用 `packages/*`，不用相对路径；包只能依赖外部模块和包内部文件，不能导入应用代码；包同样遵守下面"libs 的拆包规则"
 - 同一单元（一个 feature、一个 lib 模块、shared、pages、app）内部只用相对路径；跨单元只用别名，引用 libs 只写 `@yzt/<name>`

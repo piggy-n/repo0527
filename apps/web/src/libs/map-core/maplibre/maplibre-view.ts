@@ -193,6 +193,8 @@ export class MapLibreView<const G extends string> implements MapView {
   #mapStyle: MapStyle;
   // 正在进行的定位动画（flyTo、fitBounds）怎样直接到终点；动画结束、被打断时为 null
   #finishAnimation: (() => void) | null = null;
+  // 最后交给当前工具的指针输入，暂停时用 leave 清理草稿和提示
+  #lastPointer: MapPointerEvent | null = null;
   // 应用增量命令期间同步收到的 error 事件：MapLibre 的很多方法校验失败时不抛错，只发事件
   #applying = false;
   #rejected = false;
@@ -320,6 +322,11 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#active = false;
     this.#pan?.cancel();
     if (this.#state === 'ready') {
+      const pointer = this.#lastPointer;
+      this.#lastPointer = null;
+      if (pointer) {
+        this.#guard(() => this.#session.tool.dispatch({ ...pointer, type: 'leave' }, this.#toolView));
+      }
       // 还在进行的定位动画直接到终点，在暂停之前按 program 写回会话：暂停期间地图的移动不写回，
       // 恢复时按会话的相机同步，否则会回到动画的中途（页面被缓存时实测，ADR 0063）
       const finish = this.#finishAnimation;
@@ -646,12 +653,16 @@ export class MapLibreView<const G extends string> implements MapView {
   // 临时拖动的松开和派生的单击不交给工具（ADR 0056 第 2 节）
   #onInput(event: MapInputEvent): void {
     if (this.#state === 'ready' && (event.type === 'key' || this.#pan?.swallows(event.type) !== true)) {
+      if (event.type !== 'key') {
+        this.#lastPointer = event.type === 'leave' ? null : event;
+      }
       this.#session.tool.dispatch(event, this.#toolView);
     }
   }
 
   // 没有就绪时不应用，进入 ready（首次激活、恢复显示）时再按当前工具应用；切换工具时结束临时拖动
   #onToolChange(): void {
+    this.#lastPointer = null;
     this.#pan?.cancel();
     if (this.#state === 'ready' && this.#map !== undefined) {
       this.#applyTool(this.#map);

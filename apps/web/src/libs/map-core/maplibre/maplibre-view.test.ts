@@ -3,6 +3,7 @@ import type { Geometry } from 'geojson';
 import { GPUInitializationError, type Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
+import { MeasureStore } from '../measure/measure-store';
 import { MapSession } from '../session/map-session';
 import { type StyleGroup, StyleModel } from '../style/style-model';
 import type { MapTool, ToolView } from '../tool/tool-model';
@@ -1856,6 +1857,103 @@ describe('MapLibreView', () => {
 
       expect(inputs.map(event => (event.type === 'key' ? event.key : event.point.x))).toStrictEqual([3]);
       expect(ctx.session.tool.active).toBe('probe');
+    });
+
+    it('sends leave before pausing to end transient input without deactivating the tool', () => {
+      using ctx = setup();
+      const deactivate = vi.fn<() => void>();
+      const { tool, inputs } = recordingTool({ deactivate });
+      ctx.session.tool.register('probe', tool);
+      ctx.session.tool.activate('probe');
+      ctx.map.fire('style.load');
+      ctx.map.mouse('mousedown', 10, 20);
+      ctx.map.mouse('mousemove', 30, 40, { ctrlKey: true });
+      const atPause: MapInputEvent[][] = [];
+      ctx.view.on('statechange', state => {
+        if (state === 'paused') {
+          atPause.push([...inputs]);
+        }
+      });
+
+      ctx.view.pause();
+      ctx.view.pause();
+      ctx.view.resume();
+      ctx.view.pause();
+
+      expect(inputs.map(event => event.type)).toStrictEqual(['down', 'move', 'leave']);
+      expect(inputs[2]).toStrictEqual({
+        type: 'leave',
+        point: { x: 30, y: 40 },
+        button: 0,
+        clickCount: 0,
+        modifiers: { ...NO_MODIFIERS, ctrl: true }
+      });
+      expect(atPause.map(events => events.at(-1)?.type)).toStrictEqual(['leave', 'leave']);
+      expect(ctx.session.tool.active).toBe('probe');
+      expect(deactivate).not.toHaveBeenCalled();
+    });
+
+    it('keeps confirmed measurement points but clears preview and pointer while pausing', () => {
+      using measurements = new MeasureStore();
+      using ctx = setup();
+      ctx.session.tool.register('measure', measurements.createTool('distance'));
+      ctx.session.tool.activate('measure');
+      ctx.map.fire('style.load');
+      ctx.map.mouse('click', 100, 100, { detail: 1 });
+      ctx.map.mouse('click', 200, 200, { detail: 1 });
+      ctx.map.mouse('mousemove', 300, 300);
+      expect(measurements.state.draft?.preview).toStrictEqual([121, 30]);
+      expect(measurements.pointer).toStrictEqual({ x: 300, y: 300 });
+
+      ctx.view.pause();
+      ctx.view.resume();
+
+      expect(measurements.state.draft).toStrictEqual({
+        kind: 'distance', points: [[119, 32], [120, 31]], preview: null
+      });
+      expect(measurements.pointer).toBeNull();
+      expect(ctx.session.tool.active).toBe('measure');
+    });
+
+    it('does not repeat leave after the pointer already left or the tool changed', () => {
+      using ctx = setup();
+      const original = recordingTool();
+      const replacement = recordingTool();
+      ctx.session.tool.register('original', original.tool);
+      ctx.session.tool.register('replacement', replacement.tool);
+      ctx.session.tool.activate('original');
+      ctx.map.fire('style.load');
+      ctx.map.mouse('mousemove', 10, 20);
+      ctx.map.mouse('mouseout', 10, 20);
+
+      ctx.view.pause();
+      ctx.view.resume();
+      ctx.map.mouse('mousemove', 30, 40);
+      ctx.session.tool.activate('replacement');
+      ctx.view.pause();
+
+      expect(original.inputs.map(event => event.type)).toStrictEqual(['move', 'leave', 'move']);
+      expect(replacement.inputs).toStrictEqual([]);
+    });
+
+    it('still pauses when a tool throws while clearing transient input', () => {
+      using ctx = setup();
+      const failure = new Error('leave failed');
+      ctx.session.tool.register('broken', {
+        persistent: false,
+        handleInput: event => {
+          if (event.type === 'leave') {
+            throw failure;
+          }
+        }
+      });
+      ctx.session.tool.activate('broken');
+      ctx.map.fire('style.load');
+      ctx.map.mouse('mousemove', 10, 20);
+
+      expect(() => ctx.view.pause()).not.toThrow();
+      expect(ctx.errors).toStrictEqual([failure]);
+      expect(ctx.view.state).toBe('paused');
     });
 
     it('applies the cursor of the active tool and turns off the gestures it declares', () => {

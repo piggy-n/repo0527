@@ -11,6 +11,9 @@ import {
   useCesiumCanvas
 } from './use-cesium-canvas';
 
+// SDK 的首次模块加载属于测试装配，避免并行回归时占用单个交互用例的超时预算
+const { CesiumView } = await import('@yzt/map-cesium');
+
 /** 控制模块何时加载完成，不依赖真实 SDK 或计时长度 */
 function pendingLoader() {
   let resolve!: (create: (options: CesiumCanvasOptions) => CesiumCanvasSurface) => void;
@@ -55,7 +58,6 @@ const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
 describe('三维预览画布生命周期', () => {
   it('失败视图仍在上下文中，公共 retry 重建，卸载先卸下视图', async () => {
-    const { CesiumView } = await import('@yzt/map-cesium');
     using session = new MapSession({ groups: [], camera: { center: [119, 32], zoom: 8, bearing: 0, pitch: 0 } });
     using map = new MapContextState(session, () => {}, resolveOverlayOptions());
     let fail: ((error: unknown) => void) | undefined;

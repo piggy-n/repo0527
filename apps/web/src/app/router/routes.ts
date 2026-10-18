@@ -74,11 +74,17 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
   {
     path: '/dev/cesium',
     name: RouteName.devCesium,
-    component: withMapRuntime(
-      () => import('@/pages/dev/cesium/DevCesiumPage').then(({ DevCesiumPage }) => DevCesiumPage),
-      () => loadMapRuntime('3d')
+    component: withMapRuntime(() =>
+      import('@/pages/dev/cesium/DevCesiumPage').then(({ DevCesiumPage }) => DevCesiumPage)
     ),
-    props: { assetBaseUrl: `${import.meta.env.BASE_URL}cesium/` },
+    props: {
+      assetBaseUrl: `${import.meta.env.BASE_URL}cesium/`,
+      prepareRuntime: async (kind: '2d' | '3d') => {
+        const runtime = await loadMapRuntime(kind);
+        runtime.setup();
+        runtime.prewarm?.();
+      }
+    },
     meta: { title: '三维画布验证', public: true }
   }
 ] : [];

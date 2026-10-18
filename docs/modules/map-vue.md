@@ -14,6 +14,7 @@
 | `overlay.ts` | `computeOverlayPadding`：按悬浮元素的实际占用算出定位用的 padding；`revealOffset`：被挡住的位置挪进可视区域的平移量（纯函数） |
 | `MapCanvas.tsx` | `<MapCanvas>`：二维地图画布，挂载后创建视图、卸载时释放 |
 | `CesiumCanvas.tsx`、`use-cesium-canvas.ts` | 动态加载三维视图、挂到公共上下文、失败重试、暂停与释放；3D.2b 已接入统一定位与只读视口，见 [map-cesium](map-cesium.md) |
+| `SwitchableMapCanvas.tsx`、`view-switch.ts` | 3D.2c 开发页的双容器与缓存切换；app 注入运行时准备，候选就绪后交接，失败保留原图，最后意图生效；接口与生命周期见 [map-cesium](map-cesium.md#3d2c-缓存与切换) |
 | `use-map.ts` | `useMap()`：子孙组件取只读上下文；`useMapOverlay()`：悬浮元素登记自己贴着的边 |
 
 ## 用法
