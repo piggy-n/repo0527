@@ -1,6 +1,7 @@
-import { MapCanvas, provideMap } from '@yzt/map-vue';
+import type { ViewKind } from '@yzt/map-core';
+import { type MapViewSwitchState, provideMap, SwitchableMapCanvas, type SwitchableMapCanvasHandle } from '@yzt/map-vue';
 import { MxTitle } from '@yzt/ui';
-import { computed, defineComponent, ref, watch } from 'vue';
+import { computed, defineComponent, type PropType, ref, shallowRef, watch } from 'vue';
 import { FeatureDetailPanel } from '@/features/resource-map/components/FeatureDetailPanel';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
@@ -69,7 +70,14 @@ const TOOLBAR_GROUPS = [
 /** 现状底图：区域按 ADR 0053 划分，各块的界面在 5D.1～5D.8 逐块设计（docs/roadmap.md"5D 地图页界面的专门设计"） */
 export const CurrentMapPage = defineComponent({
   name: 'CurrentMapPage',
-  setup() {
+  props: {
+    /** 运行时由应用装配提供，页面只选择目标视图 */
+    assetBaseUrl: { type: String, required: true },
+    prepareRuntime: { type: Function as PropType<(kind: ViewKind) => Promise<void>>, required: true }
+  },
+  setup(props) {
+    const canvas = ref<SwitchableMapCanvasHandle>();
+    const viewSwitch = shallowRef<MapViewSwitchState>({ current: null, target: '2d', status: 'loading' });
     // 注记压在资源图层上面，地名不被不透明的地类图斑盖住（2026-10-11 定，ADR 0033 第 4 条留到 5C 的问题）；
     // 选中要素的高亮在资源之上、注记之下（ADR 0047 第 5 节）；区划裁剪的遮罩盖住区划外的资源和高亮，注记、边界在它上面
     // （ADR 0051）；边界压在注记上面，区划高亮在边界之上，测量在最上面
@@ -214,7 +222,14 @@ export const CurrentMapPage = defineComponent({
       const scopeShown = !phone || !sides.left.value;
       return (
         <div ref={root} class={[styles.root, phone && styles.phone]} data-map-page={phone ? 'phone' : 'wide'}>
-          <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
+          <SwitchableMapCanvas
+            ref={canvas}
+            assetBaseUrl={props.assetBaseUrl}
+            prepareRuntime={props.prepareRuntime}
+            mapOptions={JIANGSU_ZOOM_RANGE}
+            scrollZoomRates={SCROLL_ZOOM_RATES}
+            onState={value => { viewSwitch.value = value; }}
+          />
           <MeasureOverlay measure={measure} />
           <LocationOverlay location={location} />
           <BoxSelectOverlay pick={pick} />
@@ -273,11 +288,16 @@ export const CurrentMapPage = defineComponent({
               />
               <div class={styles.stack}>
                 {phone && renderCards()}
-                <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
+                <MapViewControls
+                  goToDefaultView={goToDefaultView}
+                  zoomRange={JIANGSU_ZOOM_RANGE}
+                  viewSwitch={viewSwitch.value}
+                  onSwitch={kind => { void canvas.value?.switchTo(kind); }}
+                />
               </div>
             </div>
           </div>
-          <MapStatusNotice />
+          <MapStatusNotice viewSwitch={viewSwitch.value} onRetrySwitch={() => { void canvas.value?.retry(); }} />
         </div>
       );
     };

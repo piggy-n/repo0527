@@ -122,6 +122,49 @@ describe('ToolModel', () => {
     expect(log).toStrictEqual(['pick.activate', 'pick.click:2d']);
   });
 
+  it('不支持的视图暂停工具但保留身份和状态，返回支持的视图继续输入', () => {
+    using model = new ToolModel();
+    const log: string[] = [];
+    const tool: MapTool = {
+      ...fakeTool('drawing', log, { persistent: false }),
+      supportedViews: ['2d'],
+      cursor: 'crosshair',
+      gestures: { dragPan: false }
+    };
+    model.register('drawing', tool);
+    model.activate('drawing');
+    const input = vi.fn<(event: MapInputEvent, view: ToolView['kind']) => void>();
+    model.on('input', input);
+
+    expect(model.toolFor('2d')).toBe(tool);
+    expect(model.toolFor('3d')).toStrictEqual({ persistent: true });
+    model.dispatch(CLICK, { ...VIEW, kind: '3d' });
+    model.dispatch(ESCAPE, { ...VIEW, kind: '3d' });
+    expect(model.active).toBe('drawing');
+    expect(model.activeTool).toBe(tool);
+    expect(log).toEqual(['drawing.activate']);
+    expect(input.mock.calls).toEqual([[CLICK, '3d'], [ESCAPE, '3d']]);
+
+    model.dispatch(CLICK, VIEW);
+    expect(log).toEqual(['drawing.activate', 'drawing.click:2d']);
+    model.dispatch(ESCAPE, VIEW);
+    expect(model.active).toBe(BROWSE_TOOL);
+  });
+
+  it('省略视图声明兼容二三维，空声明在两种视图都暂停', () => {
+    using model = new ToolModel();
+    const shared: MapTool = { persistent: true };
+    model.register('shared', shared);
+    model.activate('shared');
+    expect(model.toolFor('2d')).toBe(shared);
+    expect(model.toolFor('3d')).toBe(shared);
+    const unsupported: MapTool = { persistent: true, supportedViews: [], cursor: 'crosshair' };
+    model.register('unsupported', unsupported);
+    model.activate('unsupported');
+    expect(model.toolFor('2d')).toStrictEqual({ persistent: true });
+    expect(model.toolFor('3d')).toStrictEqual({ persistent: true });
+  });
+
   it('交给当前工具之前先发出 input 事件，带上视图；按键也发出', () => {
     const { model, log } = setup();
     model.activate('pick');

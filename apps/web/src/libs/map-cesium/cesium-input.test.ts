@@ -95,6 +95,34 @@ describe('CesiumInput', () => {
     expect(handleInput.mock.calls.map(([event]) => event.type)).toEqual(['down', 'up', 'click']);
   });
 
+  it('三维不支持的工具保留身份并暂停，原生浏览与状态栏输入继续可用', () => {
+    const { canvas, controller, input, tool } = setup();
+    const handleInput = vi.fn<(event: MapInputEvent, view: ToolView) => void>();
+    const deactivate = vi.fn<() => void>();
+    const observe = vi.fn<(event: MapInputEvent, view: ToolView['kind']) => void>();
+    tool.on('input', observe);
+    tool.register('flat-only', {
+      supportedViews: ['2d'], persistent: false, cursor: 'crosshair',
+      gestures: { dragPan: false }, panModifier: 'ctrl', handleInput, deactivate
+    });
+    input.setActive(true);
+    tool.activate('flat-only');
+    const nativeDown = vi.fn<(event: PointerEvent) => void>();
+    canvas.addEventListener('pointerdown', nativeDown);
+    pointer(canvas, 'pointerdown', { ctrlKey: true });
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(controller.enableInputs).toBe(true);
+    expect(controller.enableRotate).toBe(true);
+    expect(controller.enableTilt).toBe(true);
+    expect(controller.rotateEventTypes).toEqual(['original']);
+    expect(canvas.style.cursor).toBe('');
+    expect(nativeDown).toHaveBeenCalledOnce();
+    expect(handleInput).not.toHaveBeenCalled();
+    expect(deactivate).not.toHaveBeenCalled();
+    expect(tool.active).toBe('flat-only');
+    expect(observe.mock.calls.map(([event]) => event.type)).toEqual(['down', 'key']);
+  });
+
   it('Ctrl 临时平移吞掉整个工具序列，松键不改变正在拖动的手势', () => {
     const { canvas, controller, input, handleInput } = setup();
     input.setActive(true);

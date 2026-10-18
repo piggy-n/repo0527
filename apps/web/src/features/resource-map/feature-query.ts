@@ -15,6 +15,7 @@ import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
 import { LANDUSE_FIELD_LABELS } from './landuse';
 import { queryGeometry } from './query-geometry';
+import { projectedQueryGeometry, projectedScreenBox, type QueryUnavailableReason } from './query-projection';
 import { isResourceBodyLayer, type ResourceLayersState, resourceSourceId } from './resource-layers';
 import { resourceStyle, tilesetOf } from './style-registry';
 
@@ -171,7 +172,8 @@ export type QueryArea = Point | Polygon | MultiPolygon;
 export type IdentifyTask =
   | { readonly kind: 'rendered'; readonly target: PickResource; readonly candidates: readonly PickCandidate[] }
   | { readonly kind: 'server'; readonly target: PickResource; readonly geometry: QueryArea }
-  | { readonly kind: 'too-complex'; readonly target: PickResource };
+  | { readonly kind: 'too-complex'; readonly target: PickResource }
+  | { readonly kind: 'query-unavailable'; readonly reason: QueryUnavailableReason };
 
 // 以点击位置为中心的容差框
 function toleranceBox({ x, y }: ScreenPoint, tolerance: number): ScreenBox {
@@ -261,6 +263,9 @@ export function planIdentify(
   view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
   scope: RegionScope | null = null
 ): IdentifyTask[] | null {
+  if (view.kind === '3d') {
+    return planProjectedIdentify(targets, point, view, scope);
+  }
   const pick = (at: ScreenPoint) => view.pick(at);
   const clicked = pick(point);
   if (scope && (clicked.kind !== 'hit' || !scopeContains(scope, clicked.lngLat))) {
@@ -315,6 +320,52 @@ export function planIdentify(
       tasks.push({ kind: 'rendered', target, candidates: rendered });
       return tasks;
     }
+  }
+  return tasks;
+}
+
+// 三维只查询已登记的后端能力；范围在点击时完成采样、裁剪和误差复核，不依赖空的渲染估数
+function planProjectedIdentify(
+  targets: readonly PickResource[],
+  point: ScreenPoint,
+  view: Pick<ToolView, 'pick' | 'project'>,
+  scope: RegionScope | null
+): IdentifyTask[] | null {
+  const eligible = targets.filter(target => queryCapabilityOf(target.resource.code).identify);
+  if (eligible.length === 0) { return []; }
+  const clicked = view.pick(point);
+  if (clicked.kind !== 'hit') { return [{ kind: 'query-unavailable', reason: 'surface' }]; }
+  const [lng, lat] = clicked.lngLat;
+  if (!clicked.lngLat.every(Number.isFinite) || Math.abs(lng) > 180 || Math.abs(lat) >= 90) {
+    return [{ kind: 'query-unavailable', reason: 'geometry' }];
+  }
+  if (scope && !scopeContains(scope, clicked.lngLat)) { return null; }
+  const pixelSize = once(() => pixelSizeAt(point, at => view.pick(at)));
+  const geometries = new Map<ResourceGeometry, QueryArea | QueryUnavailableReason | null>();
+  const tasks: IdentifyTask[] = [];
+  for (const target of eligible) {
+    const type = target.resource.geometry;
+    let geometry = geometries.get(type);
+    if (geometry === undefined) {
+      const tolerance = PICK_TOLERANCES[type];
+      if (tolerance === 0) {
+        geometry = { type: 'Point', coordinates: [...clicked.lngLat] };
+      } else {
+        const result = projectedScreenBox(toleranceBox(point, tolerance), view);
+        if (result.kind === 'query-unavailable') {
+          geometry = result.reason;
+        } else {
+          const area = scope ? clipToScope(result.geometry, scope) : result.geometry;
+          geometry = area ? projectedQueryGeometry(area, pixelSize(), view) ?? 'geometry' : null;
+        }
+      }
+      geometries.set(type, geometry);
+    }
+    if (typeof geometry === 'string') {
+      tasks.push({ kind: 'query-unavailable', reason: geometry });
+      return tasks;
+    }
+    if (geometry) { tasks.push({ kind: 'server', target, geometry }); }
   }
   return tasks;
 }
@@ -421,6 +472,9 @@ export function planBox(
   view: Pick<ToolView, 'kind' | 'pick' | 'project' | 'queryRendered'>,
   scope: RegionScope | null = null
 ): BoxTask[] | null {
+  if (view.kind === '3d') {
+    return planProjectedBox(targets, box, view, scope);
+  }
   const pick = (at: ScreenPoint) => view.pick(at);
   const polygon = screenBoxPolygon(box, pick);
   const area = scope && polygon && clipToScope(polygon, scope);
@@ -463,6 +517,25 @@ export function planBox(
     }
   }
   return tasks;
+}
+
+// 三维的空 queryRendered 不能提供数量估计；仅保留后端分页和总数，不把 0 当成可靠估数
+function planProjectedBox(
+  targets: readonly PickResource[],
+  box: ScreenBox,
+  view: Pick<ToolView, 'pick' | 'project'>,
+  scope: RegionScope | null
+): BoxTask[] | null {
+  const eligible = targets.filter(target => queryCapabilityOf(target.resource.code).identify);
+  if (eligible.length === 0) { return []; }
+  const result = projectedScreenBox(box, view);
+  if (result.kind === 'query-unavailable') { return [result]; }
+  const area = scope ? clipToScope(result.geometry, scope) : result.geometry;
+  if (!area) { return null; }
+  const center = { x: (box.from.x + box.to.x) / 2, y: (box.from.y + box.to.y) / 2 };
+  const geometry = projectedQueryGeometry(area, pixelSizeAt(center, point => view.pick(point)), view);
+  if (!geometry) { return [{ kind: 'query-unavailable', reason: 'geometry' }]; }
+  return eligible.map(target => ({ kind: 'server', target, geometry }));
 }
 
 // 点到线段的距离

@@ -56,7 +56,9 @@ describe('MeasureStore', () => {
   it('工具是临时任务：十字光标，只关掉双击放大', () => {
     const { distance } = setup();
 
-    expect(distance).toMatchObject({ persistent: false, cursor: 'crosshair', gestures: { doubleClickZoom: false } });
+    expect(distance).toMatchObject({
+      supportedViews: ['2d', '3d'], persistent: false, cursor: 'crosshair', gestures: { doubleClickZoom: false }
+    });
   });
 
   it('测距：单击加点，双击完成；双击里的第二次单击不加点；数值按椭球面算一次', () => {
@@ -140,6 +142,37 @@ describe('MeasureStore', () => {
     input(distance, pointer('move', 10, 20), pointer('move', 10, 20), pointer('leave', 0, 0), pointer('leave', 0, 0));
 
     expect(pointers).toStrictEqual([{ x: 10, y: 20 }, null]);
+  });
+
+  it.each(['distance', 'area'] as const)('跨视图继续%s，椭球面测量忽略拾取高度，天空不加点', kind => {
+    using store = new MeasureStore();
+    using tools = new ToolModel();
+    tools.register('measure', store.createTool(kind));
+    tools.activate('measure');
+    tools.dispatch(pointer('click', 0, 0), VIEW);
+    tools.dispatch(pointer('move', 100, 0), VIEW);
+    tools.dispatch(pointer('leave', 100, 0), VIEW);
+    expect(store.pointer).toBeNull();
+    expect(store.state.draft?.points).toEqual([lngLat(0, 0)]);
+    expect(store.state.draft?.preview).toBeNull();
+    const space: ToolView = {
+      ...VIEW, kind: '3d',
+      pick: ({ x, y }) => x < 0 ? { kind: 'miss' }
+        : { kind: 'hit', surface: 'ellipsoid', height: 800, lngLat: lngLat(x, y) }
+    };
+    tools.dispatch(pointer('click', -1, 0), space);
+    expect(store.state.draft?.points).toHaveLength(1);
+    tools.dispatch(pointer('click', 100, 0), space);
+    if (kind === 'area') {
+      tools.dispatch(pointer('click', 100, 100), space);
+    }
+    tools.dispatch(pointer('dblclick', 100, 100, { clickCount: 2 }), space);
+    const points = [lngLat(0, 0), lngLat(100, 0), ...(kind === 'area' ? [lngLat(100, 100)] : [])];
+    expect(store.state.measurements).toEqual([{
+      id: `${kind}-1`, kind, points, method: 'geodesic',
+      value: kind === 'area' ? geodesicArea(points) : lineLength(points)
+    }]);
+    expect(tools.active).toBe('measure');
   });
 
   it('Esc：正在画时取消这一条并留在工具里；没在画时交给工具模型退出', () => {

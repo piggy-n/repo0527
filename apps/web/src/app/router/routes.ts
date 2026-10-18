@@ -12,6 +12,16 @@ export const loadCurrentMapPage = withMapRuntime(() =>
   import('@/pages/current-map/CurrentMapPage').then(({ CurrentMapPage }) => CurrentMapPage)
 );
 
+// 二三维运行时只由应用准备；业务页与开发页共用同一懒加载边界
+const switchableMapProps = {
+  assetBaseUrl: `${import.meta.env.BASE_URL}cesium/`,
+  prepareRuntime: async (kind: '2d' | '3d') => {
+    const runtime = await loadMapRuntime(kind);
+    runtime.setup();
+    runtime.prewarm?.();
+  }
+};
+
 // 尚未迁移的业务页，迁移后换成指向真实页面的完整路由记录；roles 不写时所有已登录用户都能访问
 const placeholder = (path: string, name: RouteName, title: string, roles?: readonly Role[]): RouteRecordRaw => ({
   path,
@@ -26,6 +36,7 @@ const businessRoutes: RouteRecordRaw[] = [
     path: 'current-map',
     name: RouteName.currentMap,
     component: loadCurrentMapPage,
+    props: switchableMapProps,
     meta: { title: '现状底图', keepAlive: true }
   },
   placeholder('land-change-query', RouteName.landChangeQuery, '国土变更调查查询'),
@@ -77,14 +88,7 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
     component: withMapRuntime(() =>
       import('@/pages/dev/cesium/DevCesiumPage').then(({ DevCesiumPage }) => DevCesiumPage)
     ),
-    props: {
-      assetBaseUrl: `${import.meta.env.BASE_URL}cesium/`,
-      prepareRuntime: async (kind: '2d' | '3d') => {
-        const runtime = await loadMapRuntime(kind);
-        runtime.setup();
-        runtime.prewarm?.();
-      }
-    },
+    props: switchableMapProps,
     meta: { title: '三维画布验证', public: true }
   }
 ] : [];

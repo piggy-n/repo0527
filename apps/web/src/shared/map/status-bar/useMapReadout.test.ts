@@ -80,7 +80,9 @@ describe('useMapReadout', () => {
     using ctx = setup();
     ctx.view.value = ctx.viewport;
 
-    expect(ctx.readout.position.value).toStrictEqual({ lngLat: [118.8, 32], center: true });
+    expect(ctx.readout.position.value).toStrictEqual({
+      lngLat: [118.8, 32], center: true, surface: 'map', height: undefined
+    });
 
     ctx.pointer.value = { x: 600, y: 200 };
     expect(lngLatOf(ctx.readout.position.value)).toStrictEqual(['119.80', '33.00']);
@@ -109,5 +111,29 @@ describe('useMapReadout', () => {
 
     expect(ctx.readout.scale.value).toBeNull();
     expect(ctx.readout.position.value).toBeNull();
+  });
+
+  it('中心投影或拾取失败不伪造坐标，三维保留椭球高与实际拾取表面', () => {
+    using ctx = setup();
+    ctx.view.value = { ...ctx.viewport, kind: '3d', project: () => null };
+    expect(ctx.readout.position.value).toBeNull();
+    ctx.view.value = { ...ctx.viewport, kind: '3d', pick: () => ({ kind: 'miss' }) };
+    expect(ctx.readout.position.value).toBeNull();
+    ctx.view.value = {
+      ...ctx.viewport, kind: '3d',
+      pick: () => ({ kind: 'hit', lngLat: [119, 32], surface: 'ellipsoid', height: 0 })
+    };
+    expect(ctx.readout.position.value).toEqual({ lngLat: [119, 32], center: true, surface: 'ellipsoid', height: 0 });
+    ctx.pointer.value = { x: 600, y: 300 };
+    ctx.view.value = {
+      ...ctx.viewport, kind: '3d',
+      pick: () => ({ kind: 'hit', lngLat: [119.5, 32.5], surface: 'terrain', height: 120 })
+    };
+    expect(ctx.readout.position.value).toEqual({
+      lngLat: [119.5, 32.5], center: false, surface: 'terrain', height: 120
+    });
+    ctx.view.value = ctx.viewport;
+    expect(ctx.readout.position.value?.surface).toBe('map');
+    expect(ctx.readout.position.value?.height).toBeUndefined();
   });
 });

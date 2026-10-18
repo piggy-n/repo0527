@@ -33,7 +33,8 @@ export default defineConfig(({ mode }) => {
     },
     // Worker 与业务样式验证的延迟依赖预先纳入同一优化批次，避免测试途中重载
     optimizeDeps: { include: ['@mapbox/vector-tile', 'pbf', 'core-js/es/symbol/dispose',
-      '@turf/boolean-point-in-polygon', '@turf/bbox-clip'] },
+      '@turf/boolean-point-in-polygon', '@turf/bbox-clip', '@turf/bbox', '@turf/boolean-intersects',
+      '@turf/intersect', '@turf/simplify', 'axios'] },
     css: {
       preprocessorOptions: {
         // libs 模块的 Sass 入口按模块名引用，如 @use 'ui' 对应 src/libs/ui/_index.scss

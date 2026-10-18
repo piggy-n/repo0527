@@ -27,6 +27,8 @@ export interface ToolView {
 
 /** 交互工具（ADR 0034 第 2 条）；钩子不应抛错 */
 export interface MapTool {
+  /** 支持的视图；省略时兼容二三维，不支持时保留工具状态并暂停输入 */
+  readonly supportedViews?: readonly ViewKind[];
   /** 常驻模式（移动、点选）还是临时任务（测距、测面）；临时任务退出时回到上一个常驻模式 */
   readonly persistent: boolean;
   /** 激活时的光标；不写时用地图默认的样式 */
@@ -75,6 +77,12 @@ export class ToolModel implements Disposable {
     return this.#toolOf(this.#active);
   }
 
+  /** 当前视图生效的光标和手势；暂停的工具不退出，只让地图正常浏览 */
+  toolFor(kind: ViewKind): MapTool {
+    const tool = this.activeTool;
+    return tool.supportedViews === undefined || tool.supportedViews.includes(kind) ? tool : BROWSE;
+  }
+
   has(id: string): boolean {
     return this.#tools.has(id);
   }
@@ -121,7 +129,7 @@ export class ToolModel implements Disposable {
       this.#events.emit('input', event, view.kind);
     } finally {
       // 监听者抛错时当前工具照样收到输入，错误仍抛给调用方报告
-      const tool = this.activeTool;
+      const tool = this.toolFor(view.kind);
       const handled = tool.handleInput?.(event, view) === true;
       if (!handled && !tool.persistent && event.type === 'key' && event.key === 'Escape') {
         this.release(this.#active);

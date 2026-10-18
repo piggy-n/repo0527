@@ -1,6 +1,8 @@
 # 三维画布与运行时（map-cesium）
 
-状态：2026-10-19，已实现 3D.1 运行时、3D.2 相机/视图/缓存切换，以及 3D.3a 基础样式、3D.3b MVT/Worker/缓存、3D.3c 符号/高亮/区划遮罩。业务页切换尚未接入。范围依据 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md)，基础绘制按 [ADR 0065](../adr/0065-basic-geojson-imagery-layers.md)，Worker 边界按 [ADR 0066](../adr/0066-mvt-worker-runtime-boundary.md)，符号与全球遮罩按 [ADR 0067](../adr/0067-symbols-highlights-world-mask.md)，后续步骤见 [3D.0 计划](../stages/stage-3d-0-plan.md)。
+状态：2026-10-19，已实现 3D.1～3D.3c 的运行时、相机、切换、基础样式、MVT/Worker/缓存与符号/高亮/遮罩。3D.4 接入现状底图的切换按钮，补齐公共工具、三维查询范围与资源释放，验收数据见 [3D.4 记录](../stages/stage-3d-4-acceptance.md)。范围依据 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md)，绘制、Worker 与遮罩分别按 ADR 0065～0067，公共交互和验收按 [ADR 0068](../adr/0068-three-dimensional-tools-query-acceptance.md)。
+
+3D.4 最终验证：全项目 1,963 项测试、类型检查、lint、公网/内网构建与三维开发入口独立构建通过；实际浏览器验证公共工具、三维查询投影、多源 Worker 压力和重复 GPU 释放。27 层软件 WebGL 首次三维约 16.5 秒，缓存往返约 0.16～0.38 秒，不代表真实网络或硬件性能目标已经达成。
 
 ## 职责与用法
 
@@ -98,7 +100,9 @@ MVT 向 SDK 声明完整 Web Mercator 范围，有限 bounds 在提供者内完�
 - Worker 解码分批检查共享取消信号；绘制按要素和顶点分批调用通信层 checkpoint。解码缓存始终留在 Worker，产物 ImageBitmap 一次性转移；取消后的晚到产物关闭。主线程将有效位图复制到 Canvas 后立即关闭，再交给 Cesium，避免依赖 SDK 未提供的位图释放回调
 - 页面暂停、图层隐藏、provider 替换和视图销毁会取消对应任务；暂停保留已完成数据，恢复重建被取消的影像请求。首次 inactive 候选仍允许完成首帧预备加载，再暂停。释放视图终止 Worker 并清空缓存，普通加载错误继续沿单来源错误通道报告
 
-当前 Cesium 公开提供者接口不能逐个通知活动平移时被丢弃瓦片的取消；不使用私有 Request 状态或 RequestScheduler 方法。尚在活动视图内的此类任务可能完成后才回收，池通过 16 个未完成请求约束工作量，容量不足时 provider 返回 undefined 交给 SDK 稍后重试。持续平移、缩放和多来源情况下的排队、内存与取消延迟留给 3D.4 性能验收。
+当前 Cesium 公开提供者接口不能逐个通知活动平移时被丢弃瓦片的取消；不使用私有 Request 状态或 RequestScheduler 方法。尚在活动视图内的此类任务可能完成后才回收，池通过 16 个未完成请求约束工作量，容量不足时 provider 返回 undefined 交给 SDK 稍后重试。3D.4 的合成多来源压力和重复生命周期验收见阶段记录，不等同于全省业务网络负载。
+
+3D.4 中 minzoom/bounds 外透明祖先改为共享 1×1 画布，真实内容与 provider 瓦片尺度声明仍为 512。提供者本次信号已取消时向 SDK 返回透明占位，避免缩放/暂停时 SDK 把主动取消打印成故障；真实错误仍拒绝，底层 Worker 取消仍为 AbortError。最终释放在 `widget.destroy()` 后关闭本画布独占的 WebGL 上下文，解决固定版本 SDK 销毁后地形缓冲仍有效的问题；使用公开 `WEBGL_lose_context`，不碰 SDK 私有缓存，暂停与切换不关闭。扩展不可用时仍释放 SDK，其余 GPU 对象由浏览器回收。
 
 Worker 使用单独的 WebWorker tsconfig，并在独立运行环境补齐 `Symbol.dispose`。`@yzt/map-core/worker` 只暴露瓦片能力和样式图片数据类型，不导入 DOM、MapLibre 或主入口；主线程仍使用 `@yzt/map-core`。开发页增加本地合成 MVT，两个来源层和不同 extent 同时验证分类面、孔洞、线点、层序及缓存切换；自动化测试不请求业务后端。
 

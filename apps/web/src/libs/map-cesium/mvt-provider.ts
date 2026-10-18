@@ -54,6 +54,16 @@ export function createMvtProvider(
     new Rectangle(-Math.PI, bounds.south, bounds.east, bounds.north)
   ] : [bounds]).map(rectangle => tilingScheme.rectangleToNativeRectangle(rectangle));
   const pending = new Set<AbortController>();
+  // 恒透明祖先共享一个像素，保留 SDK 层级遍历但不重复分配大画布
+  let empty: HTMLCanvasElement | undefined;
+  const emptyImage = () => {
+    if (!empty) {
+      empty = document.createElement('canvas');
+      empty.width = 1;
+      empty.height = 1;
+    }
+    return empty;
+  };
   let disposed = false;
   const cancelPending = () => {
     for (const controller of pending) {
@@ -83,12 +93,9 @@ export function createMvtProvider(
       return (async () => {
         const tile = { x, y, z: level };
         const coordinate = nativeTileCoordinate(tile, maximum);
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
         if (level < minimum) {
           // 低于来源 minzoom 不下载，透明祖先仅用于 SDK 的影像层级遍历
-          return canvas;
+          return emptyImage();
         }
         const tileBounds = tilingScheme.tileXYToNativeRectangle(x, y, level);
         const clips = nativeBounds.flatMap(nativeBound => {
@@ -100,8 +107,11 @@ export function createMvtProvider(
         });
         if (!clips.length) {
           // 范围外不请求父数据，透明影像只服务于 SDK 的完整根级覆盖
-          return canvas;
+          return emptyImage();
         }
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
         const row = scheme === 'tms' ? 2 ** coordinate.z - 1 - coordinate.y : coordinate.y;
         const url = tiles[(coordinate.x + coordinate.y) % tiles.length]
           .replaceAll(/\{z\}|%7Bz%7D/gi, String(coordinate.z))
@@ -129,7 +139,11 @@ export function createMvtProvider(
           // Cesium 纹理上传不负责关闭 ImageBitmap，立即转为可自动回收的 Canvas
           bitmap.close();
         }
-      })().finally(() => pending.delete(controller));
+      })().catch((error: unknown) => {
+        // 已撤销影像不再参与显示，兑现占位避免 SDK 把主动取消打印成来源失败
+        if (controller.signal.aborted) { return emptyImage(); }
+        throw error;
+      }).finally(() => pending.delete(controller));
     },
     cancelPending,
     [Symbol.dispose]: () => { disposed = true; cancelPending(); }

@@ -14,7 +14,7 @@ import { DevCesiumPage } from './DevCesiumPage';
 (buildModuleUrl as typeof buildModuleUrl & { setBaseUrl(url: string): void }).setBaseUrl('/cesium/');
 setWorkerUrl(workerUrl);
 
-// 软件 WebGL 的 27 层首屏实测约 24 秒，功能等待留出编译余量，性能验收另属 3D.4
+// 软件 WebGL 的 27 层首屏实测约 24 秒；等待预算与下方记录的实际耗时分开
 const READY_TIMEOUT = 45000;
 
 afterEach(() => { vi.restoreAllMocks(); document.body.replaceChildren(); });
@@ -26,6 +26,8 @@ describe('二三维开发页实际装配', () => {
     const prepareRuntime = vi.fn<() => Promise<void>>().mockResolvedValue();
     // 观察真实会话提交，不替换视图、样式模型或渲染实现
     const commits = vi.spyOn(StyleModel.prototype, 'setGroups');
+    const timings: { readonly step: string; readonly milliseconds: number }[] = [];
+    const createdAt = performance.now();
     const wrapper = mount(DevCesiumPage, { props: { assetBaseUrl: '/cesium/', prepareRuntime }, attachTo: host });
     const button = (name: string) => {
       const found = wrapper.findAll('button').find(item => item.text() === name);
@@ -41,6 +43,13 @@ describe('二三维开发页实际装配', () => {
       expect(status.attributes('data-current-view')).toBe(kind);
     }, { timeout: READY_TIMEOUT });
     await waitReady('2d', '首次创建');
+    timings.push({ step: '首次二维', milliseconds: performance.now() - createdAt });
+    const timedSwitch = async (buttonName: string, kind: '2d' | '3d', step: string) => {
+      const startedAt = performance.now();
+      await button(buttonName).trigger('click');
+      await waitReady(kind, step);
+      timings.push({ step, milliseconds: performance.now() - startedAt });
+    };
     const model: unknown = commits.mock.contexts[0];
     expect(model).toBeInstanceOf(StyleModel);
     if (!(model instanceof StyleModel)) {
@@ -62,8 +71,7 @@ describe('二三维开发页实际装配', () => {
     expect(wrapper.get('[data-cesium-state]').attributes('data-current-view')).toBe('2d');
     expect(wrapper.get('[data-map-view="2d"] canvas').element).toBe(two);
     expect(wrapper.get('[data-map-view="2d"]').attributes('inert')).toBeUndefined();
-    await button('重试').trigger('click');
-    await waitReady('3d', '首次三维失败后重试');
+    await timedSwitch('重试', '3d', '首次三维失败后重试');
     const three = wrapper.get('[data-map-view="3d"] canvas').element;
     expect(three.getBoundingClientRect().width).toBeGreaterThan(0);
     expect(wrapper.get('[data-map-view="2d"]').attributes('inert')).toBeDefined();
@@ -72,8 +80,7 @@ describe('二三维开发页实际装配', () => {
       timeout: 5000
     });
     const camera = wrapper.get('[data-session-camera]').text();
-    await button('二维').trigger('click');
-    await waitReady('2d', '返回缓存二维');
+    await timedSwitch('二维', '2d', '返回缓存二维');
     expect(wrapper.get('[data-map-view="2d"] canvas').element).toBe(two);
     await button('样例变色').trigger('click');
     await button('栅格移到面下').trigger('click');
@@ -87,13 +94,20 @@ describe('二三维开发页实际装配', () => {
       'line-color': '#ff7875'
     } });
     const revision = model.revision;
-    await button('三维').trigger('click');
-    await waitReady('3d', '恢复缓存三维');
+    await timedSwitch('三维', '3d', '恢复缓存三维并追赶样式');
     expect(wrapper.get('[data-map-view="3d"] canvas').element).toBe(three);
     expect(wrapper.get('[data-session-camera]').text()).toBe(camera);
     expect(model.current).toBe(changedStyle);
     expect(model.revision).toBe(revision);
     expect(prepareRuntime.mock.calls).toEqual([['2d'], ['3d']]);
+    for (let round = 1; round <= 2; round++) {
+      // oxlint-disable-next-line no-await-in-loop -- 每轮必须完成交接，测量缓存视图的往返
+      await timedSwitch('二维', '2d', `缓存二维往返 ${round}`);
+      // oxlint-disable-next-line no-await-in-loop -- 三维复用同一个画布，不能并发切换
+      await timedSwitch('三维', '3d', `缓存三维往返 ${round}`);
+      expect(wrapper.get('[data-map-view="2d"] canvas').element).toBe(two);
+      expect(wrapper.get('[data-map-view="3d"] canvas').element).toBe(three);
+    }
     await button('隐藏样例').trigger('click');
     expect(model.current.sources).toEqual({});
     expect(model.current.layers.map(layer => layer.id)).toEqual(['sample-background']);
@@ -115,5 +129,7 @@ describe('二三维开发页实际装配', () => {
     expect(wrapper.find('canvas').exists()).toBe(true);
     wrapper.unmount();
     expect(host.querySelector('canvas')).toBeNull();
+    // oxlint-disable-next-line no-console -- 留下本机冷热切换实测，不能用等待超时替代性能数据
+    console.info('3D.4 二三维 27 层切换实测（毫秒）', timings);
   }, 60000);
 });

@@ -151,8 +151,9 @@ describe('MVT provider 的真实 Worker 绘制', () => {
     using provider = imagery(pool, { ...fixture.source, minzoom: 8, maxzoom: 8 }, fill(), 10);
     const [root, ancestor] = await Promise.all([tile(provider), tile(provider, 127, 127, 7)]);
     expect(provider.minimumLevel).toBe(0);
-    expect(pixel(root, 64, 64)).toEqual([0, 0, 0, 0]);
-    expect(pixel(ancestor, 450, 200)).toEqual([0, 0, 0, 0]);
+    expect(root).toMatchObject({ width: 1, height: 1 });
+    expect(ancestor).toBe(root);
+    expect(pixel(root, 0, 0)).toEqual([0, 0, 0, 0]);
     expect(await bounded(pool.stats())).toEqual([]);
     const native = await tile(provider, 127, 127, 8);
     expect(pixel(native, 64, 64)).toEqual([0, 255, 0, 255]);
@@ -164,7 +165,9 @@ describe('MVT provider 的真实 Worker 绘制', () => {
     using pool = new MvtWorkerPool({ workerCount: 1 });
     using provider = imagery(pool, { ...fixture.source, bounds: [-90, 0, 0, 66.51326044311186] }, fill());
     expect(provider.rectangle).toEqual(provider.tilingScheme.rectangle);
-    expect(pixel(await tile(provider, 3, 3, 2), 64, 64)).toEqual([0, 0, 0, 0]);
+    const outside = await tile(provider, 3, 3, 2);
+    expect(outside).toMatchObject({ width: 1, height: 1 });
+    expect(pixel(outside, 0, 0)).toEqual([0, 0, 0, 0]);
     expect(await bounded(pool.stats())).toEqual([]);
     const image = await tile(provider);
     expect(pixel(image, 140, 140)).toEqual([0, 255, 0, 255]);
@@ -224,8 +227,9 @@ describe('MVT provider 的真实 Worker 绘制', () => {
     const bitmap = response.bitmap;
     try {
       expect(bitmap.width).toBe(512);
+      provider.cancelPending();
       pool.pause();
-      expect(await bounded(waiting)).toMatchObject({ error: { name: 'AbortError' } });
+      expect(await bounded(waiting)).toMatchObject({ value: { width: 1, height: 1 } });
       expect(provider.requestImage(0, 0, 0)).toBeUndefined();
       worker.dispatchEvent(new MessageEvent('message', { data: held }));
       expect(bitmap.width).toBe(0);

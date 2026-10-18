@@ -20,7 +20,7 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 
 三维（`libs/map-cesium`）位于 map-core 之上，map-vue 只能动态导入它。依赖方向由 lint 检查（ADR 0006）。
 
-三维的 [3D.0 盘点与数据小样](../stages/stage-3d-0-plan.md) 和 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md) 已确认。3D.1 接入开发画布和本地静态资源，3D.2a 接入会话相机，3D.2b 补齐统一视图、定位、拾取投影与工具输入，3D.2c 在开发页加入缓存切换、失败回退和最新意图，见 [map-cesium](map-cesium.md)；业务图层与业务页切换尚未接入。
+三维的 [3D.0 盘点与数据小样](../stages/stage-3d-0-plan.md) 和 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md) 已确认。3D.1～3D.3c 已接入运行时、统一视图、相机切换、业务图层和 Worker 绘制；3D.4 开放现状底图的二三维切换，补齐公共工具、三维查询范围与资源释放，见 [map-cesium](map-cesium.md) 和 [验收记录](../stages/stage-3d-4-acceptance.md)。真实服务成本与硬件性能仍按记录中的边界继续测量。
 
 ## 贯穿全局的几条原则
 
@@ -46,6 +46,7 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 | 样式模型与提交 | 分组推导、整体替换，跨分组的修改一次提交，视图按修订号增量同步；分组可以带样式图片，图片是快照的一部分 | 0022（`failed` 的含义由 0026 修正）、0045 | [map-core.md](map-core.md) |
 | map-vue 上下文 | `provideMap`、`useMap`、`bindStyle`；`view` 只在就绪时有值，只有拾取和投影 | 0028（第 5 条由 0039 修正） | [map-vue.md](map-vue.md) |
 | 视图接口与二三维 | 共用生命周期、相机、输入、拾取、投影、渲染要素查询（三维返回空数组）；相机事件带 `view` 和 `cause`；Cesium 镜像会话 | 0024、0047 | [map-core.md](map-core.md) |
+| 三维工具与查询验收 | 工具按支持视图暂停而不退出；三维框边缘细分并复核投影误差，天空和不可验证范围拒绝，后端仍第一页加总数；最终销毁关闭独占上下文，缓存切换保留 | 0064、0068 | [stage-3d-4-acceptance.md](../stages/stage-3d-4-acceptance.md) |
 | 视图失败 | 样式失败在出现新的提交时自动恢复；引擎失败只能重建视图；状态转换按表执行；带数据源的错误（瓦片出错）不算样式失败，记作视图的数据源错误 | 0026（第 4 条由 0030 修正，第 1、2 条由 0041 修正）、0030、0041 | [map-core.md](map-core.md)"状态转换"、[map-vue.md](map-vue.md) |
 | 资源释放与运行时 | `Disposable`、nanoevents；maplibre-gl 的全局设置在登录页空闲时预加载或首次进入地图时懒加载，同时预热 Worker 池 | 0023、0061 | [map-core.md](map-core.md) |
 | Worker | 二维不自建渲染 Worker；自建的 Worker 统一用通信层；瓦片数据服务的约束 | 0021（第 5 条由 0024 修正，第 3、4 条由 0025 补充）、0025 | [utils.md](utils.md) |

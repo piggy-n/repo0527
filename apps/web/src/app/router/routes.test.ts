@@ -11,6 +11,14 @@ function flatten(records: readonly RouteRecordRaw[]): RouteRecordRaw[] {
 describe('路由表', () => {
   const records = flatten(routes);
 
+  it('现状底图与三维开发页由应用注入相同的运行时准备入口和静态资源地址', () => {
+    const business = records.find(record => record.name === RouteName.currentMap);
+    const development = records.find(record => record.name === RouteName.devCesium);
+    expect(business?.props).toBe(development?.props);
+    expect(business?.props).toHaveProperty('assetBaseUrl', `${import.meta.env.BASE_URL}cesium/`);
+    expect(typeof business?.props === 'object' && typeof business.props.prepareRuntime).toBe('function');
+  });
+
   it('路由名不重复', () => {
     const names = records.flatMap(({ name }) => (name === undefined ? [] : [name]));
     const duplicated = names.filter((name, index) => names.indexOf(name) !== index);

@@ -1,4 +1,5 @@
-import { useMap } from '@yzt/map-vue';
+import type { ViewKind } from '@yzt/map-core';
+import { type MapViewSwitchState, useMap } from '@yzt/map-vue';
 import { ElTooltip } from 'element-plus';
 import { defineComponent, type PropType, type VNode } from 'vue';
 import { type IconName, SvgIcon } from '../../icons/SvgIcon';
@@ -35,9 +36,12 @@ export const MapViewControls = defineComponent({
     /** 页面的 useDefaultView 给出的回调；不要在这里调用 useDefaultView（ADR 0033） */
     goToDefaultView: { type: Function as PropType<() => void>, required: true },
     /** 和画布的缩放范围相同 */
-    zoomRange: { type: Object as PropType<ZoomRange>, required: true }
+    zoomRange: { type: Object as PropType<ZoomRange>, required: true },
+    /** 有切换拥有者的页面才开放三维；按下状态取已完成交接的视图 */
+    viewSwitch: { type: Object as PropType<MapViewSwitchState>, default: undefined }
   },
-  setup(props) {
+  emits: { switch: (_kind: ViewKind) => true },
+  setup(props, { emit }) {
     const map = useMap();
     const zoom = useZoomButtons(map, props.zoomRange);
     const compass = useCompassButton(map);
@@ -63,13 +67,24 @@ export const MapViewControls = defineComponent({
         {iconButton('默认视角', 'map-default-view', props.goToDefaultView)}
         <div class={styles.separator} role="separator" />
         <div class={styles.dimension}>
-          <button type="button" class={[styles.button, styles.current]} aria-label="二维" aria-pressed="true">
+          <button
+            type="button"
+            class={[styles.button, (!props.viewSwitch || props.viewSwitch.current === '2d') && styles.current]}
+            aria-label="二维"
+            aria-pressed={!props.viewSwitch || props.viewSwitch.current === '2d'}
+            onClick={() => { if (props.viewSwitch) { emit('switch', '2d'); } }}>
             2D
           </button>
-          {/* 三维阶段之前点了没有效果（用户决定显示，ADR 0053 第 3 节） */}
           {withTip(
-            '三维暂未开放',
-            <button type="button" class={styles.button} aria-label="三维" aria-pressed="false" aria-disabled="true">
+            props.viewSwitch ? '三维' : '三维暂未开放',
+            <button
+              type="button"
+              class={[styles.button, props.viewSwitch?.current === '3d' && styles.current]}
+              aria-label="三维"
+              aria-pressed={props.viewSwitch?.current === '3d'}
+              aria-disabled={!props.viewSwitch}
+              aria-busy={props.viewSwitch?.target === '3d' && props.viewSwitch.status === 'loading'}
+              onClick={() => { if (props.viewSwitch) { emit('switch', '3d'); } }}>
               3D
             </button>
           )}

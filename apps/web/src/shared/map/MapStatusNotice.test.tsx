@@ -9,6 +9,18 @@ const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch:
 
 // 联调用的界面只测关键交互：引擎失败时显示原因，点"重试"重新创建地图
 describe('MapStatusNotice', () => {
+  it('候选失败提供重试，原图没有被替换成引擎失败卡片', () => {
+    const wrapper = mount(defineComponent(() => {
+      provideMap({ groups: ['basemap'], camera: CAMERA });
+      return () => <MapStatusNotice viewSwitch={{
+        current: '2d', target: '3d', status: 'failed', error: new Error('三维静态资源不可用')
+      }} />;
+    }));
+    expect(wrapper.find('[data-map-status="engine-failed"]').exists()).toBe(false);
+    expect(wrapper.get('[data-map-status="switch-failed"]').text()).toContain('三维静态资源不可用');
+    expect(wrapper.get('button').text()).toBe('重试');
+  });
+
   it('引擎失败时显示原因和"重试"，点击后重新创建地图', async () => {
     let attempts = 0;
     const createMap = (): MapLike => {

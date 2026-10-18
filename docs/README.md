@@ -59,7 +59,8 @@ docs/
    ├─ stage-5e-wrap-up.md                阶段五 5E：收尾（加载策略与页面缓存），附阶段五回顾
    ├─ stage-5-acceptance-review.md       阶段五验收报告：自动检查、发现的问题、可以优化的地方
    ├─ stage-3d-0-plan.md                三维 3D.0：接入范围、样式支持、数据小样与后续验收计划
-   └─ stage-3d-2-view-switch.md         三维 3D.2：统一视图、相机与缓存切换
+   ├─ stage-3d-2-view-switch.md         三维 3D.2：统一视图、相机与缓存切换
+   └─ stage-3d-4-acceptance.md          三维 3D.4：工具、查询、性能与资源释放验收
 ```
 
 ## 建议的阅读顺序

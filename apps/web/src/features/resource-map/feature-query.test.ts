@@ -338,7 +338,7 @@ function fakeView(
   const view = {
     kind,
     pick: picker(() => miss).pick,
-    project,
+    project: kind === '3d' ? ([lng, lat]: LngLat) => ({ x: lng * 100, y: lat * 100 }) : project,
     queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => {
       queries.push([area, options]);
       return features.filter(({ sourceId }) => options.sources.includes(sourceId));
@@ -352,7 +352,8 @@ const LVLL = targetOf('csxhjctb_lvll', 2025);
 const LCTL = targetOf('csxhjctb_lctl', 2025);
 const CJDCQJX = targetOf('bgdc_cjdcqjx', 2022);
 
-const kindsOf = (tasks: readonly BoxTask[]) => tasks.map(task => [task.target.resource.code, task.kind]);
+const kindsOf = (tasks: readonly BoxTask[]) => tasks.map(task =>
+  [task.kind === 'query-unavailable' ? null : task.target.resource.code, task.kind]);
 
 describe('planIdentify', () => {
   const ORIGIN = { x: 0, y: 0 };
@@ -497,12 +498,36 @@ describe('planBox', () => {
   });
 
   it('三维没有渲染要素：登记的数据集都查后端', () => {
-    const tasks = planBox([HYDL, LCTL, DLTB], BOX, 16, fakeView([], { kind: '3d' }).view);
+    const { view, queries } = fakeView([], { kind: '3d' });
+    const tasks = planBox([HYDL, LCTL, DLTB], BOX, 16, view);
 
     expect(kindsOf(tasks)).toStrictEqual([
       ['csxhjctb_hydl', 'server'],
       ['bgdc_dltb', 'server']
     ]);
+    expect(queries).toEqual([]);
+    const first = tasks[0];
+    expect(first?.kind === 'server' && first.geometry.type).toBe('Polygon');
+  });
+
+  it('三维拾取不到完整地表时明确拒绝，不把空渲染查询当成零个要素', () => {
+    const { view, queries } = fakeView([], { kind: '3d', miss: true });
+    expect(planBox([DLTB], BOX, 15, view)).toEqual([{ kind: 'query-unavailable', reason: 'surface' }]);
+    expect(planIdentify([DLTB], BOX.from, 15, view)).toEqual([{ kind: 'query-unavailable', reason: 'surface' }]);
+    expect(queries).toEqual([]);
+  });
+
+  it('三维不扩大数据集查询能力，未登记的资源不尝试生成范围或请求后端', () => {
+    const { view } = fakeView([], { kind: '3d', miss: true });
+    expect(planBox([LCTL, SZY], BOX, 15, view)).toEqual([]);
+    expect(planIdentify([LCTL, SZY], BOX.from, 15, view)).toEqual([]);
+  });
+
+  it('三维面点选也拒绝非有限经纬度，不把无效的 Point 发给后端', () => {
+    const { view } = fakeView([], { kind: '3d' });
+    expect(planIdentify([DLTB], BOX.from, 15, {
+      ...view, pick: () => ({ kind: 'hit', surface: 'ellipsoid', height: 0, lngLat: [NaN, 32] })
+    })).toEqual([{ kind: 'query-unavailable', reason: 'geometry' }]);
   });
 
   it('框里去重后超过 5000 个时停在这个资源，不查后端；恰好 5000 个、重复的照常', () => {

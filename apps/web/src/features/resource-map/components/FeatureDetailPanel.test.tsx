@@ -117,6 +117,17 @@ const titleOf = (wrapper: VueWrapper) => wrapper.get('h3').text();
 const notice = (wrapper: VueWrapper, tone: string) => wrapper.find(`[data-notice="${tone}"]`);
 
 describe('FeatureDetailPanel', () => {
+  it('三维范围无法查询时说明原因和调整方式，不显示空结果或估算数量', async () => {
+    const { pick, state } = fakePick({ kind: 'query-unavailable', reason: 'surface' });
+    const wrapper = mountPanel(pick);
+    expect(notice(wrapper, 'warning').text()).toContain('包含天空或无法拾取的位置，没有查询');
+    expect(wrapper.text()).not.toContain('这里没有可查询的要素');
+    state.value = { kind: 'query-unavailable', reason: 'geometry' };
+    await nextTick();
+    expect(notice(wrapper, 'warning').text()).toContain('当前视角下无法准确查询此范围');
+    expect(wrapper.text()).not.toContain('5000');
+  });
+
   it('候选列表：标题是资源名，下面是年份和个数；每行是序号、名称和分类，没有名称的写"未命名"；点一行选中它', async () => {
     const { pick } = fakePick({ kind: 'candidates', list: LIST, more: { kind: 'idle' } });
     const wrapper = mountPanel(pick);

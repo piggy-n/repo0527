@@ -3,6 +3,22 @@ import { describe, expect, it } from 'vitest';
 import { describeMapStatus } from './map-status';
 
 describe('describeMapStatus', () => {
+  it('候选加载或失败时显示反馈，保留原图；首次失败仍给出引擎重试', () => {
+    expect(describeMapStatus('ready', null, { current: '2d', target: '3d', status: 'loading' }))
+      .toEqual({ kind: 'loading' });
+    expect(describeMapStatus('ready', null, {
+      current: '2d', target: '3d', status: 'failed', error: new Error('资源加载失败')
+    })).toMatchObject({ kind: 'switch-failed', title: '地图切换失败', technical: '资源加载失败' });
+    expect(describeMapStatus('idle', null, {
+      current: null, target: '2d', status: 'failed', error: new Error('初次失败')
+    })).toMatchObject({ kind: 'engine-failed', technical: '初次失败' });
+    const failed = describeMapStatus('failed', { kind: 'engine', cause: 'webgl-unavailable', error: 'GPU' }, {
+      current: '2d', target: '3d', status: 'loading'
+    });
+    expect(failed.kind).toBe('engine-failed');
+    expect(failed.kind === 'engine-failed' && failed.detail).toContain('WebGL2');
+  });
+
   it('初始化中是加载中；没有视图、就绪、暂停、已释放时不显示', () => {
     expect(describeMapStatus('initializing', null)).toEqual({ kind: 'loading' });
     for (const state of ['idle', 'ready', 'paused', 'disposed'] as const) {

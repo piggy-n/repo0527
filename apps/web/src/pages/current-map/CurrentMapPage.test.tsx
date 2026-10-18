@@ -11,16 +11,19 @@ import {
   type MapMoveEventLike,
   type MapSubscription,
   type RenderedFeatureLike,
+  type ScrollZoomRates,
   type ViewBounds
 } from '@yzt/map-core';
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
-import { MapCanvas } from '@yzt/map-vue';
+import { MapCanvas, type MapCanvasMapOptions, type MapViewSwitchState } from '@yzt/map-vue';
 import { mount } from '@vue/test-utils';
 import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { createPinia } from 'pinia';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { type ComponentPublicInstance, defineComponent, KeepAlive, nextTick, ref } from 'vue';
+import {
+  type ComponentPublicInstance, defineComponent, KeepAlive, nextTick, type PropType, ref, shallowRef, watch
+} from 'vue';
 import { resourceTreeResponse } from '@/features/resource-map/test-data';
 import cityFile from '@/shared/map/boundary/data/jiangsu-city.json?raw';
 import countyFile from '@/shared/map/boundary/data/jiangsu-county.json?raw';
@@ -225,6 +228,9 @@ async function freshModules(): Promise<PageModules> {
  */
 function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAlive = false } = {}) {
   const canvasKey = ref(0);
+  const switchState = shallowRef<MapViewSwitchState>({ current: '2d', target: '2d', status: 'ready' });
+  const switchTo = vi.fn<(kind: '2d' | '3d') => Promise<void>>().mockResolvedValue();
+  const retrySwitch = vi.fn<() => Promise<void>>().mockResolvedValue();
   // keepAlive 时页面放在 KeepAlive 里，pageShown 为 false 时停用（缓存），和布局里一样（ADR 0063）
   const pageShown = ref(true);
   const maps: FakeMap[] = [];
@@ -244,19 +250,34 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
   const RealCanvas = { ...modules.canvas, name: 'RealMapCanvas' } as typeof MapCanvas;
   const CanvasWithFakeMap = defineComponent({
     inheritAttrs: false,
-    setup: (_, { attrs }) => () => <RealCanvas {...attrs} key={canvasKey.value} createMap={createMap} />
+    props: {
+      mapOptions: { type: Object as PropType<MapCanvasMapOptions>, default: undefined },
+      scrollZoomRates: { type: Object as PropType<ScrollZoomRates>, default: undefined }
+    },
+    emits: { state: (_value: MapViewSwitchState) => true },
+    setup(props, { emit, expose }) {
+      expose({ switchTo, retry: retrySwitch });
+      watch(switchState, value => emit('state', value), { immediate: true });
+      return () => <RealCanvas
+        mapOptions={props.mapOptions}
+        scrollZoomRates={props.scrollZoomRates}
+        key={canvasKey.value}
+        createMap={createMap}
+      />;
+    }
   });
   // 每个页面用新的查询缓存，资源目录不在用例之间残留
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // 页面按会话创建偏好的范围；测试里没有登录，范围为 null，不读不写
   const Page = modules.page;
+  const pageProps = { assetBaseUrl: '/cesium/', prepareRuntime: async () => undefined };
   const root = keepAlive
-    ? defineComponent(() => () => <KeepAlive>{pageShown.value ? <Page /> : null}</KeepAlive>)
-    : Page;
+    ? defineComponent(() => () => <KeepAlive>{pageShown.value ? <Page {...pageProps} /> : null}</KeepAlive>)
+    : defineComponent(() => () => <Page {...pageProps} />);
   const wrapper = mount(root, {
     global: {
       plugins: [createPinia(), [VueQueryPlugin, { queryClient }]],
-      stubs: { MapCanvas: CanvasWithFakeMap },
+      stubs: { SwitchableMapCanvas: CanvasWithFakeMap },
       mixins: [
         {
           updated(this: ComponentPublicInstance) {
@@ -269,7 +290,7 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
       ]
     }
   });
-  return { wrapper, maps, canvasKey, pageShown, updates };
+  return { wrapper, maps, canvasKey, pageShown, updates, switchState, switchTo, retrySwitch };
 }
 
 // 资源树默认返回测试数据（结构同实测）；用例可以换成失败的响应
@@ -472,6 +493,23 @@ async function pointer(wrapper: PageWrapper, type: string, clientX = 0, clientY 
 }
 
 describe('CurrentMapPage', () => {
+  it('现有三维按钮请求切换；失败保留二维并显示可重试提示，成功后更新按钮', async () => {
+    const { wrapper, switchTo, switchState, retrySwitch } = await readyPage();
+    await button(wrapper, '三维').trigger('click');
+    expect(switchTo).toHaveBeenCalledExactlyOnceWith('3d');
+    expect(button(wrapper, '二维').attributes('aria-pressed')).toBe('true');
+    switchState.value = { current: '2d', target: '3d', status: 'failed', error: new Error('三维加载失败') };
+    await nextTick();
+    expect(wrapper.get('[data-map-status="switch-failed"]').text()).toContain('当前地图仍可使用');
+    expect(wrapper.get('[data-map-status="switch-failed"]').text()).toContain('重试');
+    await wrapper.get('[data-map-status="switch-failed"] button').trigger('click');
+    expect(retrySwitch).toHaveBeenCalledOnce();
+    switchState.value = { current: '3d', target: '3d', status: 'ready' };
+    await nextTick();
+    expect(button(wrapper, '三维').attributes('aria-pressed')).toBe('true');
+    expect(wrapper.find('[data-map-status="switch-failed"]').exists()).toBe(false);
+  });
+
   it('绑定底图、注记和边界，从下到上是底图、注记、省界', () => {
     const { maps } = mountPage();
     const style = maps[0]?.options.style;

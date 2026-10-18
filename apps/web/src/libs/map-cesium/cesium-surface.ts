@@ -79,7 +79,21 @@ export class CesiumSurface implements Disposable {
         maximumRenderTimeChange: Number.POSITIVE_INFINITY
       });
       this.#widget = widget;
-      this.#resources.defer(() => widget.destroy());
+      this.#resources.defer(() => {
+        // 固定版本 SDK 的地形缓冲未全部显式删除，最终卸载再释放本画布的上下文
+        let release: WEBGL_lose_context | null = null;
+        try {
+          const context = widget.canvas.getContext('webgl2') ?? widget.canvas.getContext('webgl');
+          release = context?.getExtension('WEBGL_lose_context') ?? null;
+        } catch (error) {
+          this.#report(error);
+        }
+        try {
+          widget.destroy();
+        } finally {
+          release?.loseContext();
+        }
+      });
 
       resizeCameraFrustum(widget);
       const port = createCesiumCameraPort(widget);

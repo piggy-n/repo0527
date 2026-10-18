@@ -969,6 +969,64 @@ describe('useFeaturePick：框选', () => {
     expect(requests.map(({ layerCode }) => layerCode)).toStrictEqual(['bgdc_czcdyd_2022', 'bgdc_dltb_2022']);
   });
 
+  it('三维查询含天空或范围过复杂时显示拒绝原因，作废先前请求但不发送新请求', async () => {
+    const slow = gate();
+    const requests = mockIdentify(async () => {
+      await slow.opened;
+      return page(2, [{ guid: guid(1) }, { guid: guid(2) }]);
+    });
+    const { owner, send, pick } = setup(16);
+    send(click(), [], '3d');
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    const sky: ToolView = { ...toolView([], '3d'), pick: () => ({ kind: 'miss' }) };
+    pick.handleInput?.(click(), sky);
+    expect(owner.state.value).toEqual({ kind: 'query-unavailable', reason: 'surface' });
+    slow.open();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(owner.state.value).toEqual({ kind: 'query-unavailable', reason: 'surface' });
+    expect(requests).toHaveLength(1);
+
+    const view = toolView([], '3d');
+    pick.handleInput?.(pointer('down', FROM), view);
+    pick.handleInput?.(pointer('move', { x: 4096, y: 4096 }), view);
+    pick.handleInput?.(pointer('up', { x: 4096, y: 4096 }), view);
+    expect(owner.state.value).toEqual({ kind: 'query-unavailable', reason: 'geometry' });
+    expect(requests).toHaveLength(1);
+  });
+
+  it('同一轮二三维交接立即清框选草稿，已确定的查询继续返回原来的结果', async () => {
+    const slow = gate();
+    const requests = mockIdentify(async () => {
+      await slow.opened;
+      return page(2, [{ guid: guid(1) }, { guid: guid(2) }]);
+    });
+    const { owner, send, view } = setup(16);
+    send(click(), [], '3d');
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    send(pointer('down', FROM));
+    send(pointer('move', TO));
+    expect(owner.boxDraft.value).not.toBeNull();
+    view.value = null;
+    view.value = toolView([], '3d');
+    expect(owner.boxDraft.value).toBeNull();
+    expect(send(pointer('up', TO), [], '3d')).toBe(false);
+    slow.open();
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
+    expect(candidatesOf(owner)).toHaveLength(2);
+    expect(requests).toHaveLength(1);
+  });
+
+  it('三维大总数仍只请求一页，不把空渲染估数当成 5000 条总数上限', async () => {
+    const records = Array.from({ length: 30 }, (_, index) => ({ guid: guid(index) }));
+    const requests = mockIdentify(() => page(620000, records));
+    const { owner, send } = setup(12);
+    dragBox(send, [], '3d');
+    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
+    expect(owner.state.value).toMatchObject({ list: { pages: { loaded: 1, total: 620000 } } });
+    expect(candidatesOf(owner)).toHaveLength(30);
+    expect(requests).toHaveLength(1);
+  });
+
   it('框选列表时会话选中列表里的全部要素，进入一个的详情时只有它，返回后恢复；单击的列表不算选中', async () => {
     mockDetail();
     const { owner, send, select } = setup(15);

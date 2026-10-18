@@ -1,6 +1,7 @@
-import { MapLibreView, type ViewKind } from '@yzt/map-core';
+import { MapLibreView, type ScrollZoomRates, type ViewKind } from '@yzt/map-core';
 import { defineComponent, onActivated, onDeactivated, onMounted, onUnmounted, type PropType, ref, watch } from 'vue';
 import { injectMapState } from './use-map';
+import type { MapCanvasMapOptions } from './MapCanvas';
 import { MapViewSwitch, type MapViewSwitchState } from './view-switch';
 import styles from './SwitchableMapCanvas.module.scss';
 
@@ -9,12 +10,15 @@ export interface SwitchableMapCanvasHandle {
   retry(): Promise<void>;
 }
 
-/** 开发阶段的二三维画布；界面只请求目标，缓存与交接由拥有者处理 */
+/** 二三维画布；界面只请求目标，缓存、页面暂停与交接由拥有者处理 */
 export const SwitchableMapCanvas = defineComponent({
   name: 'SwitchableMapCanvas',
   props: {
     assetBaseUrl: { type: String, required: true },
     prepareRuntime: { type: Function as PropType<(kind: ViewKind) => Promise<void>>, required: true },
+    /** 二维初始选项与滚轮速率，和单视图画布保持一致 */
+    mapOptions: { type: Object as PropType<MapCanvasMapOptions>, default: undefined },
+    scrollZoomRates: { type: Object as PropType<ScrollZoomRates>, default: undefined },
     active: { type: Boolean, default: true }
   },
   emits: { state: (_value: MapViewSwitchState) => true },
@@ -35,7 +39,9 @@ export const SwitchableMapCanvas = defineComponent({
         await props.prepareRuntime(kind);
         const options = { session: map.session, active: false, onError: map.onError };
         if (kind === '2d') {
-          return container => new MapLibreView({ ...options, container });
+          return container => new MapLibreView({
+            ...options, container, mapOptions: props.mapOptions, scrollZoomRates: props.scrollZoomRates
+          });
         }
         const { CesiumView } = await import('@yzt/map-cesium');
         return container => new CesiumView({ ...options, container, assetBaseUrl: props.assetBaseUrl });

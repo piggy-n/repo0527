@@ -61,6 +61,7 @@ export class MeasureStore implements Disposable {
   /** 创建一个工具：临时任务，十字光标，只关掉双击放大，测量中可以拖动地图 */
   createTool(kind: MeasureKind): MapTool {
     return {
+      supportedViews: ['2d', '3d'],
       persistent: false,
       cursor: 'crosshair',
       gestures: { doubleClickZoom: false },

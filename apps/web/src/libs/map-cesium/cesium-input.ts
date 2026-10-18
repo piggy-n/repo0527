@@ -143,8 +143,9 @@ export class CesiumInput implements Disposable {
     this.#pointer = event;
     this.#swallowClick = false;
     const { canvas, controller, tool, beginUserOperation } = this.#options;
-    const modifier = tool.activeTool.panModifier;
-    this.#panning = event.button === 0 && tool.activeTool.gestures?.dragPan === false
+    const current = tool.toolFor('3d');
+    const modifier = current.panModifier;
+    this.#panning = event.button === 0 && current.gestures?.dragPan === false
       && (modifier === 'ctrl' ? this.#ctrl : modifier === 'meta' && this.#meta);
     this.#swallowClick = this.#panning;
     canvas.focus({ preventScroll: true });
@@ -155,7 +156,7 @@ export class CesiumInput implements Disposable {
       return;
     }
     // 工具占用的左键不能进入 SDK，避免 Ctrl 俯仰、Shift 自由观察和框选同时发生
-    if (event.button === 0 && tool.activeTool.gestures?.dragPan === false) {
+    if (event.button === 0 && current.gestures?.dragPan === false) {
       event.stopPropagation();
       controller.enableInputs = false;
     }
@@ -308,7 +309,7 @@ export class CesiumInput implements Disposable {
 
   #applyTool(focus = true): void {
     const { controller, canvas, tool } = this.#options;
-    const current = tool.activeTool;
+    const current = tool.toolFor('3d');
     controller.enableRotate = this.#panning || this.#defaults.enableRotate && current.gestures?.dragPan !== false;
     controller.enableTilt = !this.#panning && this.#defaults.enableTilt;
     controller.enableLook = !this.#panning && this.#defaults.enableLook;
@@ -322,7 +323,7 @@ export class CesiumInput implements Disposable {
 
   #applyCursor(): void {
     const { canvas, tool } = this.#options;
-    const current = tool.activeTool;
+    const current = tool.toolFor('3d');
     const held = current.panModifier === 'ctrl' ? this.#ctrl : current.panModifier === 'meta' && this.#meta;
     const temporary = current.gestures?.dragPan === false && held && this.#pointer === null;
     canvas.style.cursor = !this.#active ? '' : this.#panning && !this.#finishPan ? 'grabbing'

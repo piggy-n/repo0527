@@ -259,7 +259,7 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#pan = stack.use(
       new ModifierPan({
         map,
-        modifier: () => (this.#state === 'ready' ? (this.#session.tool.activeTool.panModifier ?? null) : null),
+        modifier: () => (this.#state === 'ready' ? (this.#session.tool.toolFor('2d').panModifier ?? null) : null),
         // 没有就绪时不应用光标，进入 ready 时按当前工具应用
         onCursorChange: () => {
           if (this.#state === 'ready') {
@@ -671,7 +671,7 @@ export class MapLibreView<const G extends string> implements MapView {
 
   // 光标和手势是当前工具的声明；只恢复自己关掉的手势。切换工具和进入 ready 时调用
   #applyTool(map: MapLike): void {
-    const { gestures, persistent } = this.#session.tool.activeTool;
+    const { gestures, persistent } = this.#session.tool.toolFor('2d');
     this.#applyCursor(map);
     // 临时任务多由面板、工具栏上的按钮激活（也可能在加载期间），焦点还在按钮上，按键到不了地图；
     // 移到地图上，Esc 才能直接退出。常驻模式不移，进入页面时不会抢走焦点
@@ -693,7 +693,7 @@ export class MapLibreView<const G extends string> implements MapView {
 
   // 工具声明的光标，按住修饰键、临时拖动时换成手型（ADR 0056 第 2 节）
   #applyCursor(map: MapLike): void {
-    const { cursor } = this.#session.tool.activeTool;
+    const { cursor } = this.#session.tool.toolFor('2d');
     map.getCanvas().style.cursor = this.#pan?.cursor(cursor) ?? cursor ?? '';
   }
 

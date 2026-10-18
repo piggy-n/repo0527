@@ -170,7 +170,11 @@ export function isValidPolygonal(geometry: Polygonal): boolean {
  * 求交范围变成发给后端的几何：容差依次取 SIMPLIFY_PIXELS（乘上一个像素对应的经纬度距离），简化、舍入后
  * 顶点不超过上限且有效的第一个就用；都不通过时为 null（范围太复杂）。一个像素的距离未知时只试不简化的
  */
-export function queryGeometry(area: Polygonal, pixelSize: number | null): Polygonal | null {
+export function queryGeometry(
+  area: Polygonal,
+  pixelSize: number | null,
+  accepts: (candidate: Polygonal) => boolean = () => true
+): Polygonal | null {
   for (const pixels of SIMPLIFY_PIXELS) {
     if (pixels > 0 && pixelSize === null) {
       break;
@@ -178,7 +182,7 @@ export function queryGeometry(area: Polygonal, pixelSize: number | null): Polygo
     const tolerance = pixels * (pixelSize ?? 0);
     const simplified = pixels === 0 ? area : simplify(area, { tolerance, highQuality: true });
     const rounded = roundPolygonal(simplified);
-    if (rounded && vertexCount(rounded) <= QUERY_VERTEX_LIMIT && isValidPolygonal(rounded)) {
+    if (rounded && vertexCount(rounded) <= QUERY_VERTEX_LIMIT && isValidPolygonal(rounded) && accepts(rounded)) {
       return rounded;
     }
   }

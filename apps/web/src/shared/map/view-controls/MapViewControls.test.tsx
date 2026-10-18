@@ -1,8 +1,8 @@
 import type { CameraState } from '@yzt/map-core';
-import { provideMap } from '@yzt/map-vue';
+import { type MapViewSwitchState, provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
+import { defineComponent, nextTick, shallowRef } from 'vue';
 import { MapViewControls } from './MapViewControls';
 
 const RANGE = { minZoom: 5, maxZoom: 18 };
@@ -21,6 +21,34 @@ function mountControls(zoom: number, bearing = 0) {
 const button = (wrapper: VueWrapper, label: string) => wrapper.get(`button[aria-label="${label}"]`);
 
 describe('MapViewControls', () => {
+  it('切换请求交给拥有者，按下状态直到完成交接才改变，加载中可返回原视图', async () => {
+    const state = shallowRef<MapViewSwitchState>({ current: '2d', target: '3d', status: 'loading' });
+    const switchTo = vi.fn<(kind: '2d' | '3d') => void>();
+    const wrapper = mount(defineComponent(() => {
+      provideMap({ groups: ['basemap'], camera: { center: [119, 32], zoom: 10, bearing: 0, pitch: 0 } });
+      return () => <MapViewControls
+        goToDefaultView={() => undefined}
+        zoomRange={RANGE}
+        viewSwitch={state.value}
+        onSwitch={switchTo}
+      />;
+    }));
+    expect(button(wrapper, '二维').attributes('aria-pressed')).toBe('true');
+    expect(button(wrapper, '三维').attributes('aria-busy')).toBe('true');
+    await button(wrapper, '二维').trigger('click');
+    await button(wrapper, '三维').trigger('click');
+    expect(switchTo.mock.calls).toEqual([['2d'], ['3d']]);
+    expect(button(wrapper, '三维').attributes('aria-pressed')).toBe('false');
+    state.value = { current: '3d', target: '3d', status: 'ready' };
+    await nextTick();
+    expect(button(wrapper, '三维').attributes('aria-pressed')).toBe('true');
+    expect(button(wrapper, '二维').attributes('aria-pressed')).toBe('false');
+    state.value = { current: null, target: '2d', status: 'failed', error: new Error('首次加载失败') };
+    await nextTick();
+    expect(button(wrapper, '二维').attributes('aria-pressed')).toBe('false');
+    expect(button(wrapper, '三维').attributes('aria-pressed')).toBe('false');
+  });
+
   it('显示向下取整的层级，完整的级别在提示和无障碍名称里', () => {
     const { wrapper } = mountControls(13.6);
 

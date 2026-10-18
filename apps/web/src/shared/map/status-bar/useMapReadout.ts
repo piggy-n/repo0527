@@ -1,4 +1,4 @@
-import { geodesicDistance, type LngLat } from '@yzt/map-core';
+import { geodesicDistance, type LngLat, type PickSurface } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
 import { computed, type ComputedRef } from 'vue';
 import { SCALE_SAMPLE_WIDTH, type ScaleBar, scaleBar, type ViewAngles, visibleAngles } from './status-bar';
@@ -8,6 +8,10 @@ export interface ReadoutPosition {
   readonly lngLat: LngLat;
   /** 鼠标不在画布上，显示的是画布中心 */
   readonly center: boolean;
+  /** 实际拾取表面，不能把椭球面描述成地形 */
+  readonly surface: PickSurface;
+  /** 米，以椭球面为基准；二维拾取没有高度 */
+  readonly height?: number;
 }
 
 /** 状态栏的读数（ADR 0053 第 5 节）：视图不在就绪、拾取不到时比例尺和经纬度为 null */
@@ -38,19 +42,21 @@ export function useMapReadout(map: ReadoutSource): MapReadout {
     return left.kind === 'hit' && right.kind === 'hit' ? scaleBar(geodesicDistance(left.lngLat, right.lngLat)) : null;
   });
 
-  // 鼠标在画布上时拾取它下面的点；不在时是画布中心，也就是相机的中心
+  // 鼠标不在时拾取中心投影，三维无法投影或拾取时不伪造地表坐标
   const position = computed((): ReadoutPosition | null => {
     void map.projectionRevision.value;
     const view = map.view.value;
     if (!view) {
       return null;
     }
-    const pointer = map.pointer.value;
-    if (!pointer) {
-      return { lngLat: camera.value.center, center: true };
+    const pointer = map.pointer.value ?? view.project(camera.value.center);
+    if (pointer === null) {
+      return null;
     }
     const picked = view.pick(pointer);
-    return picked.kind === 'hit' ? { lngLat: picked.lngLat, center: false } : null;
+    return picked.kind === 'hit'
+      ? { lngLat: picked.lngLat, center: map.pointer.value === null, surface: picked.surface, height: picked.height }
+      : null;
   });
 
   const angles = computed(() => visibleAngles(camera.value));

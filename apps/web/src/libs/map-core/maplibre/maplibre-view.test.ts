@@ -1984,6 +1984,24 @@ describe('MapLibreView', () => {
       ]);
     });
 
+    it('pauses a 3d-only tool without its gestures, cursor or modifier pan taking over the 2d view', () => {
+      using ctx = setup();
+      const { tool, inputs } = recordingTool({
+        supportedViews: ['3d'], cursor: 'crosshair', gestures: { dragPan: false }, panModifier: 'ctrl'
+      });
+      const deactivate = vi.fn<() => void>();
+      ctx.session.tool.register('space-only', { ...tool, deactivate });
+      ctx.map.fire('style.load');
+      ctx.session.tool.activate('space-only');
+      ctx.map.canvas.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, ctrlKey: true }));
+      ctx.map.canvasContainer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(ctx.map.dragPan.enabled).toBe(true);
+      expect(ctx.map.canvas.style.cursor).toBe('');
+      expect(ctx.session.tool.active).toBe('space-only');
+      expect(inputs).toEqual([]);
+      expect(deactivate).not.toHaveBeenCalled();
+    });
+
     it('moves keyboard focus to the map when a temporary task becomes active, so Esc reaches the tool', () => {
       using ctx = setup();
       ctx.session.tool.register('measure', { persistent: false });

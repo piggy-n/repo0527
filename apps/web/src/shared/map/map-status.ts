@@ -1,10 +1,12 @@
 import type { MapViewFailure } from '@yzt/map-core';
-import type { MapViewState } from '@yzt/map-vue';
+import type { MapViewState, MapViewSwitchState } from '@yzt/map-vue';
 
 /** 地图状态要显示的内容（ADR 0030）：界面只负责显示，文案和能否重试都在这里决定 */
 export type MapStatus =
   | { readonly kind: 'none' }
   | { readonly kind: 'loading' }
+  /** 候选视图失败，原图保留，允许重试目标 */
+  | { readonly kind: 'switch-failed'; readonly title: string; readonly detail: string; readonly technical: string }
   /** 引擎失败不能自动恢复，提供重试 */
   | { readonly kind: 'engine-failed'; readonly title: string; readonly detail: string; readonly technical?: string }
   /** 样式失败在样式出现新版本时自动恢复，不提供重试 */
@@ -42,12 +44,28 @@ function describeFailure(failure: MapViewFailure | null): MapStatus {
 }
 
 /** 由视图状态和失败原因推导要显示的内容；没有视图、就绪、暂停、已释放时不显示 */
-export function describeMapStatus(viewState: MapViewState, failure: MapViewFailure | null): MapStatus {
-  if (viewState === 'initializing') {
-    return { kind: 'loading' };
-  }
+export function describeMapStatus(
+  viewState: MapViewState,
+  failure: MapViewFailure | null,
+  viewSwitch?: MapViewSwitchState
+): MapStatus {
+  // 当前引擎自己的故障优先；切换失败不能把仍可使用的原图当作引擎失败
   if (viewState === 'failed') {
     return describeFailure(failure);
+  }
+  if (viewSwitch?.status === 'failed') {
+    return {
+      kind: viewSwitch.current ? 'switch-failed' : 'engine-failed',
+      title: viewSwitch.current ? '地图切换失败' : ENGINE_TITLE,
+      detail: viewSwitch.current ? '当前地图仍可使用，可以重试切换。' : '地图未能加载，可以重试。',
+      technical: messageOf(viewSwitch.error)
+    };
+  }
+  if (viewSwitch?.status === 'loading') {
+    return { kind: 'loading' };
+  }
+  if (viewState === 'initializing') {
+    return { kind: 'loading' };
   }
   return { kind: 'none' };
 }

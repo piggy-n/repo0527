@@ -12,7 +12,7 @@ const POINT: LngLat = [118.7898, 32.0614];
 
 function fakeReadout() {
   const scale = shallowRef<ScaleBar | null>(SCALE);
-  const position = shallowRef<ReadoutPosition | null>({ lngLat: POINT, center: false });
+  const position = shallowRef<ReadoutPosition | null>({ lngLat: POINT, center: false, surface: 'map' });
   const angles = shallowRef<ViewAngles>({ bearing: null, pitch: null });
   const readout: MapReadout = {
     scale: computed(() => scale.value),
@@ -49,7 +49,7 @@ describe('MapStatusBar', () => {
   it('鼠标不在画布上时，经纬度前面标"中心"', async () => {
     const { wrapper, position } = mountBar('decimal');
 
-    position.value = { lngLat: POINT, center: true };
+    position.value = { lngLat: POINT, center: true, surface: 'map' };
     await nextTick();
 
     expect(shown(wrapper)).toBe('10 km中心118.789800, 32.061400');

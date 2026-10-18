@@ -55,6 +55,7 @@ import {
 } from '../feature-query';
 import { pickHintLines } from '../pick-hint';
 import { type FeatureKey, useFeatureDetailQuery } from '../queries';
+import type { QueryUnavailableReason } from '../query-projection';
 import type { ResourceLayersState } from '../resource-layers';
 import { type BatchHighlight, selectionGroup } from '../selection-style';
 import { resourceStyle, sourceLayerOf } from '../style-registry';
@@ -118,6 +119,8 @@ export type FeaturePickState =
   | { readonly kind: 'too-many'; readonly target: PickResource; readonly estimate: number }
   /** 识别范围和区划求交后整理不成能发给后端的几何，没有请求后端（ADR 0051 第 4 节）；单击的容差框也可能出现 */
   | { readonly kind: 'too-complex'; readonly target: PickResource; readonly mode: PickMode }
+  /** 三维范围没有完整地表或无法满足查询几何的限制，没有请求后端 */
+  | { readonly kind: 'query-unavailable'; readonly reason: QueryUnavailableReason }
   | { readonly kind: 'candidates'; readonly list: CandidateList; readonly more: MoreStatus }
   /** back 为 null 时没有可返回的列表 */
   | { readonly kind: 'detail'; readonly candidate: PickCandidate; readonly back: PickReturn | null };
@@ -383,6 +386,10 @@ export function useFeaturePick(
     // 会作废它，晚到的结果不再覆盖（ADR 0038、0039）；后端为空、转用下面资源的渲染要素时也用它
     let operation: CameraOperation | null = null;
     for (const [index, task] of tasks.entries()) {
+      if (task.kind === 'query-unavailable') {
+        setState(task);
+        return;
+      }
       if (task.kind === 'too-many') {
         setState({ kind: 'too-many', target: task.target, estimate: task.estimate });
         return;
@@ -575,6 +582,7 @@ export function useFeaturePick(
       switch (current.kind) {
         case 'identifying':
         case 'failed':
+        case 'query-unavailable':
           if (identifySignature(next) !== identifySignature(previous)) {
             close();
           }
@@ -610,14 +618,11 @@ export function useFeaturePick(
   // 拖动框选时地图移动（滚轮缩放等）、窗口失焦都取消这次手势（ADR 0049 第 1 节）
   watch(camera, cancelGesture);
   useEventListener('blur', cancelGesture);
-  // 视图不再就绪（页面被缓存时暂停、失败）时同样取消：之后收不到松开，回来后不能留着矩形；工具不变（ADR 0063）
+  // 同步交接可能在同一轮把旧视图换成新视图；立即清草稿，已经确定地理范围的查询和结果仍保留
   watch(
-    () => map.view.value === null,
-    gone => {
-      if (gone) {
-        cancelGesture();
-      }
-    }
+    () => map.view.value,
+    cancelGesture,
+    { flush: 'sync' }
   );
 
   const handleInput = (event: MapInputEvent, view: ToolView): boolean => {
@@ -672,6 +677,7 @@ export function useFeaturePick(
   // 按住修饰键时临时拖动地图；进入时打开提示，离开时关闭提示、清除结果
   const pickTool: MapTool = {
     persistent: true,
+    supportedViews: ['2d', '3d'],
     cursor: 'crosshair',
     gestures: { dragPan: false, boxZoom: false },
     panModifier: panKey.modifier,

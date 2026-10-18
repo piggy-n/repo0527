@@ -126,6 +126,7 @@ export function useLocationPoint(
   };
 
   const pickTool: MapTool = {
+    supportedViews: ['2d', '3d'],
     persistent: false,
     cursor: 'crosshair',
     deactivate: () => (pickPointer.value = null),

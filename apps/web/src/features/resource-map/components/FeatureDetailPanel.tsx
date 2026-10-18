@@ -283,6 +283,10 @@ export const FeatureDetailPanel = defineComponent({
           return identifying.value ? renderState('正在识别…', { loading: true }) : null;
         case 'empty':
           return renderState('这里没有可查询的要素', { hint: '点在勾选的资源上，或放大地图后再点' });
+        case 'query-unavailable':
+          return renderNotice('warning', state.reason === 'surface'
+            ? '查询范围包含天空或无法拾取的位置，没有查询。请调整视角后再试'
+            : '当前视角下无法准确查询此范围。请调整视角或查询范围后重试。');
         case 'failed': {
           const text = `${state.target?.resource.name ?? ''}识别失败：${messageOf(state.error)}`;
           return renderNotice('error', text, { label: '重试', run: props.pick.retry });
