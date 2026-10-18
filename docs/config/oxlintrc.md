@@ -284,9 +284,10 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 | 7 | ui、map-core、map-cesium、map-vue → utils，且写成 `@yzt/*` | libs 之间的依赖也只能用包名 |
 | 8 | map-cesium、map-vue → map-core，且写成 `@yzt/*` | 地图内核被三维和 Vue 衔接层使用 |
 | 9 | map-vue → map-cesium，且只能动态 `import()` | Cesium 体积大，只能懒加载 |
-| 10 | 禁止 utils、map-core、map-cesium 依赖 Vue 生态 | 这三个模块要保持框架无关 |
-| 11 | 禁止 map-vue 依赖 vue-router、pinia、element-plus、`@element-plus/**` | map-vue 只负责地图与 Vue 的衔接，界面和项目配置放在 `shared/map`（ADR 0027 第 5 条，阶段五加入） |
-| 12 | 全局禁止 `mapbox-gl` | 2.0 起为专有许可（ADR 0002） |
+| 10 | map-cesium → map-core，且精确写成 `@yzt/map-core/worker` | ADR 0066 的 Worker 专用入口例外；不放开其他模块或内部路径 |
+| 11 | 禁止 utils、map-core、map-cesium 依赖 Vue 生态 | 这三个模块要保持框架无关 |
+| 12 | 禁止 map-vue 依赖 vue-router、pinia、element-plus、`@element-plus/**` | map-vue 只负责地图与 Vue 的衔接，界面和项目配置放在 `shared/map`（ADR 0027 第 5 条，阶段五加入） |
+| 13 | 全局禁止 `mapbox-gl` | 2.0 起为专有许可（ADR 0002） |
 
 几个写法细节：
 
@@ -294,7 +295,7 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
   - 不能写成 `./**`：底层的 micromatch 会把 `./` 规范化掉，导致 `./store` 匹配不上（阶段一实测）
   - 阶段一原来写的是 `".{,.}/**"`（展开为 `./**`、`../**`），阶段二发现它匹配不了 `../../router/routes`：micromatch 的 `**` 不匹配以点开头的路径段，第二个 `..` 过不去，所以单元内部往上跨两层的相对导入被误报。改成现在的写法后，用 micromatch 4.0.8 实测：`./a`、`../a`、`../../a`、`../../../a` 都匹配，`@/app/x`、`vue` 不匹配；用 lint 实测：两层相对导入通过，单元内部改用 `@/` 别名仍然报错
 - **`"@/**"`（策略 2–4）**：跨单元导入必须写成 `@/` 别名（AGENTS.md"跨单元只用别名"）。阶段二之前这三条策略没有限制写法，用 `../../../shared/...` 这样的相对路径跨单元导入也会放行；2026-09-30 补上，用探针验证 app → shared、pages → feature、feature → shared 改用相对路径后各报 1 处，现有代码没有违规。`@/**` 不会误匹配 `@yzt/icons`、`@element-plus/...` 这类以 `@` 开头的包名（已用 micromatch 验证）
-- **`"@yzt/*"`（策略 5–9）**：micromatch 的 `*` 不跨越 `/`，所以 `@yzt/map-core/internal` 不匹配。不过这种深层导入在 tsconfig 那一关就已经解析失败了
+- **`"@yzt/*"`（策略 5–9）**：micromatch 的 `*` 不跨越 `/`，所以 `@yzt/map-core/internal` 不匹配。不过这种深层导入在 tsconfig 那一关就已经解析失败了。`@yzt/map-core/worker` 由精确别名和策略 10 单独放行，普通规则不会把这个例外扩展到所有使用方
 - **`"nodeKind": "dynamic-import"`（策略 9）**：boundaries 会区分静态 `import` 和动态 `import()`，前者的 `nodeKind` 是 `import`
 - **`captured.name`**：用 `{a,b}` 花括号语法匹配多个模块名
 

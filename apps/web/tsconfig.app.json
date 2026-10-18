@@ -18,9 +18,10 @@
     "noEmit": true,
     "paths": {
       "@/*": ["./src/*"],
+      "@yzt/map-core/worker": ["./src/libs/map-core/worker.ts"],
       "@yzt/*": ["./src/libs/*/index.ts"]
     }
   },
   "include": ["src"],
-  "exclude": ["src/libs/css-modules.d.ts"]
+  "exclude": ["src/libs/css-modules.d.ts", "src/**/*.worker.ts"]
 }

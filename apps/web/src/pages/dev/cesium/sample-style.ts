@@ -3,6 +3,7 @@ import type {
 } from '@maplibre/maplibre-gl-style-spec';
 import type { FeatureCollection } from 'geojson';
 import type { StyleGroup } from '@yzt/map-core';
+import { SAMPLE_MVT_SOURCE } from './sample-mvt';
 
 /** 开发页只保存样例显示意图，两个视图共用推导后的会话样式 */
 export interface SampleStyleState {
@@ -64,7 +65,8 @@ const SAMPLE_DATA: FeatureCollection = {
 };
 const SOURCES: StyleGroup['sources'] = {
   'sample-raster': RASTER_SOURCE,
-  'sample-geometry': { type: 'geojson', data: SAMPLE_DATA }
+  'sample-geometry': { type: 'geojson', data: SAMPLE_DATA },
+  'sample-mvt': SAMPLE_MVT_SOURCE
 };
 const BASE_RASTER: LayerSpecification = {
   id: 'sample-raster-below', type: 'raster', source: 'sample-raster', paint: { 'raster-opacity': 0.7 }
@@ -77,6 +79,12 @@ const LINE: LayerSpecification = {
   filter: ['==', ['geometry-type'], 'LineString'],
   layout: { 'line-cap': 'round', 'line-join': 'round' },
   paint: { 'line-color': '#253858', 'line-width': 4 }
+};
+const MVT_LINE: LayerSpecification = {
+  id: 'sample-mvt-line', type: 'line', source: 'sample-mvt', 'source-layer': 'detail', minzoom: 10,
+  filter: ['==', ['geometry-type'], 'LineString'],
+  layout: { 'line-cap': 'round', 'line-join': 'round' },
+  paint: { 'line-color': '#389e0d', 'line-width': 3 }
 };
 
 /** 推导同一份基础样式：面夹在两张栅格之间，调整时只改变会话层序 */
@@ -94,12 +102,26 @@ export function sampleStyleGroup({ visible, alternateColors, rasterAbove }: Samp
       'fill-opacity': 0.8
     }
   };
+  const mvtFill: FillLayerSpecification = {
+    id: 'sample-mvt-fill', type: 'fill', source: 'sample-mvt', 'source-layer': 'landuse', minzoom: 10,
+    filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['in', ['id'], ['literal', ['area-primary', 'area-secondary']]]],
+    paint: { 'fill-color': fill.paint?.['fill-color'], 'fill-opacity': 0.65 }
+  };
   return {
     sources: SOURCES,
     layers: [
       BACKGROUND, BASE_RASTER,
-      ...(rasterAbove ? [fill, OVERLAY_RASTER] : [OVERLAY_RASTER, fill]),
-      LINE,
+      ...(rasterAbove ? [mvtFill, fill, OVERLAY_RASTER] : [OVERLAY_RASTER, mvtFill, fill]),
+      MVT_LINE, LINE,
+      {
+        id: 'sample-mvt-points', type: 'circle', source: 'sample-mvt', 'source-layer': 'detail', minzoom: 10,
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-color': ['match', ['get', 'category'], 'primary', primary, secondary],
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 7, 14, 12],
+          'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2
+        }
+      },
       {
         id: 'sample-points', type: 'circle', source: 'sample-geometry',
         filter: ['==', ['geometry-type'], 'Point'],

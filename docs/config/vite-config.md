@@ -15,6 +15,7 @@
 |---|---|---|
 | `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`cesiumAssetsPlugin()`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`cesiumAssetsPlugin` 提供三维静态资源；`buildOutputPlugin` 只在构建时清理、检查产物，见下文 |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
+| `optimizeDeps.include` | `['@mapbox/vector-tile', 'pbf', 'core-js/es/symbol/dispose']` | 首次 MVT Worker 请求前预先优化其依赖，避免测试进行中发现新依赖而重载页面；见下文 |
 | `css.preprocessorOptions.scss.loadPaths` | `[src/libs]` | libs 模块的 Sass 入口按模块名引用，见下文 |
 | `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
 | `server.proxy` | `/backend/` → `PROXY_TARGET` | 同源代理，见下文 |
@@ -93,7 +94,9 @@ const generators =
 - CI（ubuntu-latest）第一次运行就通过，Linux 上的软件渲染没有问题：安装浏览器和系统依赖 14 s，`pnpm test` 54 s
 - 同一个测试文件的用例共用一个页面：每个用例自己创建容器，结束时移除；`using` 释放视图和会话
 - 在本会话的终端里，Vitest 自动换成了不打印通过用例日志的简洁报告器，环境用例输出的渲染器信息要加 `--reporter=default` 才看得到；CI 用默认报告器，日志照常显示
-- 刚加第一个地图用例时出现过一次"Vite unexpectedly reloaded a test"（运行中发现了要预构建的依赖）；之后清空 `node_modules/.vite`、`.vitest-cache` 连跑 4 次都没有复现，所以没有加 `optimizeDeps.include`。CI 上如果出现，在 `browser` 项目里预先列出 `maplibre-gl`、style-spec、`nanoevents`、`vue`、`@vue/test-utils`
+- 5C.1a 刚加第一个地图用例时曾出现一次 "Vite unexpectedly reloaded a test"，当时清空缓存后未复现，没有增加预优化清单。3D.3b 首次真正加载 MVT 模块 Worker 时发现其依赖会迟于页面扫描，现已在顶层 `optimizeDeps.include` 明确加入 `@mapbox/vector-tile`、`pbf`、`core-js/es/symbol/dispose`；浏览器测试继承同一设置，避免运行途中新增优化批次触发页面重载
+
+MVT Worker 用标准的 `new Worker(new URL('./mvt.worker.ts', import.meta.url), { type: 'module' })` 创建，Vite 单独构建它的导入图；不把 Worker URL 写成开发服务器路径，也不把 Worker 入口静态导入主线程。`@yzt/map-core/worker` 的精确别名由 tsconfig 提供，Worker 入口本身的类型隔离见 [tsconfig.md](tsconfig.md)。预优化仅影响开发和测试的依赖发现，不会把 Worker 放进应用的生产入口。
 
 #### 为什么要 inline element-plus
 

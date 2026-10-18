@@ -4,13 +4,14 @@ import {
   type GeoJSONSourceSpecification,
   type LayerSpecification,
   type RasterSourceSpecification,
-  type StyleSpecification
+  type StyleSpecification,
+  type VectorSourceSpecification
 } from '@maplibre/maplibre-gl-style-spec';
 import { compileStyleFilter, compileStyleProperty, type CompiledStyleProperty } from './style-expression';
 
 type BasicLayerType = 'background' | 'raster' | 'fill' | 'line' | 'circle';
 type BasicLayerSpecification = Extract<LayerSpecification, { type: BasicLayerType }>;
-type BasicSource = RasterSourceSpecification | GeoJSONSourceSpecification;
+type BasicSource = RasterSourceSpecification | GeoJSONSourceSpecification | VectorSourceSpecification;
 
 /** 一个可绘制图层的只读计划，保留会话快照的对象身份 */
 export interface BasicStyleLayer {
@@ -54,7 +55,8 @@ const LAYOUT: Record<BasicLayerType, readonly string[]> = {
 };
 const SOURCE_KEYS: Record<BasicSource['type'], readonly string[]> = {
   raster: ['type', 'tiles', 'bounds', 'minzoom', 'maxzoom', 'tileSize', 'scheme', 'attribution'],
-  geojson: ['type', 'data', 'attribution']
+  geojson: ['type', 'data', 'attribution'],
+  vector: ['type', 'tiles', 'bounds', 'minzoom', 'maxzoom', 'scheme', 'attribution', 'promoteId']
 };
 
 /** 按会话层序编译支持的基础样式；诊断与跳过规则见 ADR 0024 */
@@ -120,9 +122,6 @@ function resolveSource(
   sourceId: string | undefined,
   style: StyleSpecification
 ): BasicSource | undefined {
-  if ('source-layer' in layer) {
-    throw new Error('三维基础样式暂不支持 source-layer');
-  }
   if (layer.type === 'background') {
     return undefined;
   }
@@ -130,11 +129,27 @@ function resolveSource(
   if (!source) {
     throw new Error(`缺少图层数据源：${sourceId ?? ''}`);
   }
-  if (source.type !== 'geojson' && source.type !== 'raster') {
+  if (source.type !== 'geojson' && source.type !== 'raster' && source.type !== 'vector') {
     throw new Error(`三维基础样式暂不支持 ${source.type} 数据源`);
   }
   if ((layer.type === 'raster') !== (source.type === 'raster')) {
     throw new Error(`${layer.type} 图层与 ${source.type} 数据源不匹配`);
+  }
+  if (source.type === 'vector') {
+    if (!('source-layer' in layer) || typeof layer['source-layer'] !== 'string' || !layer['source-layer']) {
+      throw new Error('三维 MVT 图层需要非空 source-layer');
+    }
+    const promoteId = source.promoteId;
+    if (promoteId !== undefined && typeof promoteId !== 'string' &&
+      (typeof promoteId !== 'object' || promoteId === null || Array.isArray(promoteId) ||
+        Object.values(promoteId).some(value => typeof value !== 'string'))) {
+      throw new Error('三维 MVT promoteId 只支持字段名或按源图层指定字段名');
+    }
+    if (!source.tiles?.length) {
+      throw new Error('三维 MVT 数据源需要至少一个 tiles 地址');
+    }
+  } else if ('source-layer' in layer) {
+    throw new Error('只有 MVT 数据源允许 source-layer');
   }
   for (const key of Object.keys(source)) {
     if (!SOURCE_KEYS[source.type].includes(key)) {

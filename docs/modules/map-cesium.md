@@ -1,6 +1,6 @@
 # 三维画布与运行时（map-cesium）
 
-状态：2026-10-19，已实现 3D.1 运行时、3D.2 相机/视图/缓存切换，以及 3D.3a 基础样式镜像。业务页切换尚未接入。范围依据 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md)，基础绘制按 [ADR 0065](../adr/0065-basic-geojson-imagery-layers.md)，后续步骤见 [3D.0 计划](../stages/stage-3d-0-plan.md)。
+状态：2026-10-19，已实现 3D.1 运行时、3D.2 相机/视图/缓存切换，以及 3D.3a 基础样式镜像、3D.3b MVT、Worker 与缓存；本步完整测试与构建通过。业务页切换尚未接入。范围依据 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md)，基础绘制按 [ADR 0065](../adr/0065-basic-geojson-imagery-layers.md)，Worker 边界按 [ADR 0066](../adr/0066-mvt-worker-runtime-boundary.md)，后续步骤见 [3D.0 计划](../stages/stage-3d-0-plan.md)。
 
 ## 职责与用法
 
@@ -17,10 +17,14 @@
 | `libs/map-cesium/style-expression.ts`、`style-plan.ts` | 规范库求值、基础支持范围校验与逐层诊断 |
 | `libs/map-cesium/style-mirror.ts` | 样式与级别增量同步、暂停追赶、来源错误与资源释放 |
 | `libs/map-cesium/imagery-style-port.ts`、`raster-provider.ts`、`geojson-provider.ts` | 统一影像层序、SDK 栅格请求、透明点线面瓦片 |
+| `libs/map-core/tile/`、`map-core/worker.ts` | 引擎无关的 MVT 下载、解码、字段并集、共享请求与字节预算 LRU；受限 Worker 子入口 |
+| `libs/map-cesium/style-fields.ts`、`canvas-renderer.ts` | 从表达式树提取字段；主线程 GeoJSON 与 Worker MVT 共用基础绘制语义 |
+| `libs/map-cesium/mvt-provider.ts`、`mvt-worker-pool.ts` | 影像任务、父瓦片稳定分片、并发上限、暂停与释放 |
+| `libs/map-cesium/mvt.worker.ts`、`mvt-worker-handler.ts`、`mvt-render.ts` | 独立 Worker 环境中的下载解码调度、OffscreenCanvas 绘制与位图转移 |
 | `libs/map-vue/use-cesium-canvas.ts` | 挂载后动态导入 map-cesium；`LatestController` 丢弃晚到的加载；暴露状态与重试 |
 | `libs/map-vue/CesiumCanvas.tsx` | 静态容器，挂上和卸下统一视图；接收 `assetBaseUrl`、`active`，发出 `state`，暴露 `retry()` |
 | `libs/map-vue/SwitchableMapCanvas.tsx`、`view-switch.ts` | 两个有尺寸的容器、懒加载与缓存、最新意图、就绪交接、失败回退与释放 |
-| `pages/dev/cesium/DevCesiumPage.tsx` | `/dev/cesium`：本地基础样式、变色显隐与排序，以及二三维切换、定位、暂停恢复、失败重试；生产构建排除 |
+| `pages/dev/cesium/DevCesiumPage.tsx` | `/dev/cesium`：本地 MVT、GeoJSON 与栅格混排、变色显隐与排序，以及二三维切换、定位、暂停恢复、失败重试；生产构建排除 |
 
 路由用 `withMapRuntime` 加载默认二维运行时和页面；app 通过路由 props 传入资源地址和 `prepareRuntime(kind)`，首次切到三维时才配置三维运行时。`map-cesium` 不读取环境变量，也不依赖 Vue。开发页通过 `provideMap` 创建会话，通过 `useCamera()` 显示读数，通过 `runCameraOperation` 定位。上下文只挂当前视图，只有 ready 时公开只读视口；卸载时先卸下再释放。
 
@@ -71,12 +75,32 @@
 - background、raster、GeoJSON fill/line/circle 共用影像集合；GeoJSON 绘制成透明瓦片，允许影像、面、影像交错。透明全球底层隔离 SDK 的底层边缘延展；背景覆盖两极，GeoJSON 只支持 Mercator 有效范围
 - 栅格支持多 URL、XYZ/TMS、尺寸、级别、范围及署名；请求节流、取消仍由 SDK 管理。局部和跨经线覆盖范围同时传给 provider 与影像层，避免默认范围求交截掉一侧
 - GeoJSON 支持内联简单/Multi 几何、几何集合、孔洞、分类属性与身份过滤。完整路径交给画布裁切，不在瓦片边缘补假端点；求值用相机级别，笔宽和半径再换算到当前瓦片像素
-- 没变的图层和来源保留实例，重排只移动；换色、换数据重建对应层。GeoJSON 缩放会重新生成影像，使用最新相机级别与像素尺寸；小样先同步绘制，大数据与 Worker 性能在 3D.3b 处理
+- 没变的图层和来源保留实例，重排只移动；换色、换数据重建对应层。GeoJSON 缩放会重新生成影像，使用最新相机级别与像素尺寸；内联 GeoJSON 保持同步绘制，MVT 的 Worker 管线见下节
 - 暂停不写引擎，恢复应用最新快照。就绪和稳定事件检查该帧开始绘制时的样式修订；尺寸变化或 postRender 中刚更新样式时等待下一帧，避免把旧画面报告为稳定
 - 不支持的图层/属性逐层提示并跳过；同步构造或绘制属性异常只作图层诊断，provider 的实际加载失败进入 `sourceErrors`，其他层继续。修正样式不会误留来源错误，真实下载错误则在来源替换/移除时清理；过期 provider 回调不能污染新层
 - Canvas 绘制失败返回 Promise rejection，由 SDK 转为 provider 错误；有数据源的图层再记入 `sourceErrors`，背景只报告诊断。引擎渲染失败才进入整个视图的 failed。单画布加载器同样按视图状态判断整体失败，不能把普通诊断当作加载失败
 
 开发页的“定位到南京”显示本地点线面、孔洞和两层栅格，使用三个按钮验证显隐、换色与排序。页面的样式拥有者通过 `bindStyle` 绑定同一会话；三维隐藏期间修改后再切回，只追赶最新状态。测试数据随开发页打包，不请求后端或天地图。
+
+## 3D.3b MVT、Worker 与缓存
+
+`vector` 来源的 fill/line/circle 进入相同影像集合，继续复用 3D.3a 的样式求值与层序。支持显式 `tiles`、XYZ/TMS、级别、范围、署名、非空 `source-layer`，以及字段名或按源图层指定的 `promoteId`；TileJSON 与尚未实现的样式属性仍明确诊断。详细边界与实测见 [3D.3b 记录](../stages/stage-3d-3b-mvt-worker.md)。
+
+影像 minimumLevel 固定为 0；低于来源 minzoom 的祖先返回透明画布，不下载、不启动 Worker。来源 minzoom 只约束数据请求，合法的高起始级别来源无需额外提供 bounds，也不会要求 SDK 初始化全球高等级瓦片。
+
+MVT 向 SDK 声明完整 Web Mercator 范围，有限 bounds 在提供者内完成请求过滤与边缘裁剪，跨 180° 拆段；范围外的可视瓦片只返回透明画布。这避免 Cesium 26.3 在局部影像浮点贴边时将空交集继续投影的异常，不调整业务范围或调用引擎私有方法。
+
+- map-core 的瓦片服务使用直接声明的 `@mapbox/vector-tile` 3.0.0 与 `pbf` 5.1.2。保留真实 extent、要素 ID、buffer 坐标及多部件几何；面外环与洞由库分类。属性只保留样式、过滤和 `promoteId` 所需字段；动态字段名或整属性对象读取才请求全部字段
+- 数据身份包含完整模板、scheme、数据版本、权限范围和原生 XYZ 坐标。超出来源 maxzoom 的显示瓦片固定使用同一父数据，但按目标子块重新绘制；属性按真实相机级别求值，笔宽再换算为瓦片像素，不放大父位图代替
+- 每个三维视图拥有惰性池，初始参数为最多 2 个 Worker、总计 64 MiB 驻留缓存预算、16 个未完成绘制请求，每个 Worker 同时处理最多 4 个任务。按父瓦片完整身份确定性散列，兄弟子块和同源样式层共享线程；这些是可配置起点，单瓦片实验不能证明省域吞吐或最优线程数
+- 下载和解码按数据身份共享，单个消费者取消只撤销自己；最后一个离开才中止底层任务。字段并集扩大时复用原始 PBF 重解，纯颜色变化复用已解码数据；空成功瓦片可缓存，HTTP 或解码失败不能缓存为空数据
+- LRU 命中刷新最近使用顺序，预算包含原始 PBF 和解码几何/属性估算；超预算单条目不驻留。没有驻留瓦片和任务的来源清理字段登记，避免切年份留下无界元数据。预算不包括正在解码/绘制的工作集、Canvas 或 Cesium 纹理；没有持久化缓存，也没有跨用户全局缓存
+- Worker 解码分批检查共享取消信号；绘制按要素和顶点分批调用通信层 checkpoint。解码缓存始终留在 Worker，产物 ImageBitmap 一次性转移；取消后的晚到产物关闭。主线程将有效位图复制到 Canvas 后立即关闭，再交给 Cesium，避免依赖 SDK 未提供的位图释放回调
+- 页面暂停、图层隐藏、provider 替换和视图销毁会取消对应任务；暂停保留已完成数据，恢复重建被取消的影像请求。首次 inactive 候选仍允许完成首帧预备加载，再暂停。释放视图终止 Worker 并清空缓存，普通加载错误继续沿单来源错误通道报告
+
+当前 Cesium 公开提供者接口不能逐个通知活动平移时被丢弃瓦片的取消；不使用私有 Request 状态或 RequestScheduler 方法。尚在活动视图内的此类任务可能完成后才回收，池通过 16 个未完成请求约束工作量，容量不足时 provider 返回 undefined 交给 SDK 稍后重试。持续平移、缩放和多来源情况下的排队、内存与取消延迟留给 3D.4 性能验收。
+
+Worker 使用单独的 WebWorker tsconfig，并在独立运行环境补齐 `Symbol.dispose`。`@yzt/map-core/worker` 只暴露瓦片能力，不导入 DOM、MapLibre 或主入口；主线程仍使用 `@yzt/map-core`。开发页增加本地合成 MVT，两个来源层和不同 extent 同时验证分类面、孔洞、线点、层序及缓存切换；自动化测试不请求业务后端。
 
 ## 最小场景与资源所有权
 
@@ -111,3 +135,5 @@
 真实 Chromium 已覆盖本地底图加载、拾取投影往返、背面排除、非对称留白、毫秒动画、暂停到终点、inactive 初次加载、范围定位及释放。3D.2c 开发页测试验证默认二维、首次三维失败保留原图、重试、两种画布身份复用、相机往返与暂停期间排队定位、释放后重建。部署子路径、真实拖动惯性和 GPU 内存数量仍需后续专项验收；不得据此宣称业务三维已经完成。
 
 3D.3a 验证结果：全项目回归通过（icons 35、web 1764，共 1799 个用例，本步新增 110 个），类型检查、lint、公网/内网及开发页独立构建均通过。真实 Canvas 像素验证尺寸换算、透明度、孔洞、分类与瓦片接缝；真实 Cesium 验证栅格与面穿插、重排、局部覆盖不延展、来源替换、暂停追赶，以及尺寸变化后等待最新样式帧。默认加载器与开发页覆盖局部诊断不导致整体失败、切换后样式一致。新增测试执行改坏或修复前复现验证，均以预期断言失败捕获错误，恢复后通过；细节见 [3D.3a 记录](../stages/stage-3d-3a-basic-style.md)。全量回归中的软件 WebGL 首次渲染争用通过浏览器文件串行、关键首帧等待 15 秒处理，像素与状态断言保留；普通测试仍并行。
+
+3D.3b 独立真实瓦片实测：匿名只读 GET 获得与 3D.0 相同的 70,995 字节、301 个面、8,715 个顶点，经实际打包的 Worker 与池完成绘制；每轮父瓦片及四个子块共用一次下载、一次解码，驻留数据 211,439 字节。首次绘制 32.1～46.1 ms，热绘制 6.6～8.6 ms，四子块并发 17.5～18.6 ms。计时不含真实网络、Cesium 纹理上传，采用无属性的常量填充；不是全省、业务样式或性能验收。完整输入身份、实验限制及改坏记录见 [3D.3b 记录](../stages/stage-3d-3b-mvt-worker.md)。最终全量 1871 项测试、类型检查、lint、公网/内网及含开发页和 Worker 的独立构建均通过。

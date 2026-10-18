@@ -169,6 +169,13 @@
                 }
               },
               {
+                "from": { "element": { "type": "lib", "captured": { "name": "map-cesium" } } },
+                "allow": {
+                  "to": { "element": { "type": "lib", "captured": { "name": "map-core" } } },
+                  "dependency": { "source": "@yzt/map-core/worker" }
+                }
+              },
+              {
                 "from": { "element": { "type": "lib", "captured": { "name": "{utils,map-core,map-cesium}" } } },
                 "disallow": {
                   "to": {

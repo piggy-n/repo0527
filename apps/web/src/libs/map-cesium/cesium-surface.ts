@@ -14,7 +14,7 @@ import { type CesiumCameraPose, createCesiumCameraPort, resizeCameraFrustum } fr
 import { planCesiumFitBounds, planCesiumFlyTo } from './camera-plan';
 import { CesiumInput } from './cesium-input';
 import { pickScene, projectScene } from './scene-query';
-import { createImageryStylePort } from './imagery-style-port';
+import { createImageryStylePort, type ImageryStylePort } from './imagery-style-port';
 import { StyleMirror } from './style-mirror';
 
 /** 最小三维画布的依赖；资源地址由应用提供，不读取部署环境 */
@@ -46,6 +46,7 @@ export class CesiumSurface implements Disposable {
   readonly #model: CameraModel | undefined;
   #input: CesiumInput | undefined;
   #style: StyleMirror | undefined;
+  #imagery: ImageryStylePort | undefined;
   // 判断 postRender 中的样式更新是否已经出现在这一帧
   #styleRevision = 0;
   // 首轮可见瓦片完成前允许预备渲染，但不交付工具输入
@@ -139,16 +140,17 @@ export class CesiumSurface implements Disposable {
         if (!options.camera) {
           throw new Error('三维样式镜像需要共享相机');
         }
+        this.#imagery = this.#resources.use(createImageryStylePort({
+          layers: widget.imageryLayers,
+          requestRender: () => {
+            this.#styleRevision++;
+            widget.scene.requestRender();
+          }
+        }));
         this.#style = this.#resources.use(new StyleMirror({
           style: options.style,
           camera: options.camera,
-          port: createImageryStylePort({
-            layers: widget.imageryLayers,
-            requestRender: () => {
-              this.#styleRevision++;
-              widget.scene.requestRender();
-            }
-          }),
+          port: this.#imagery,
           onError: options.onStyleError,
           onSourceErrors: options.onSourceErrors
         }));
@@ -218,6 +220,8 @@ export class CesiumSurface implements Disposable {
     this.#active = false;
     this.#camera?.pause();
     this.#style?.pause();
+    // 候选的首次准备仍需加载影像，交付首帧后才停止后台任务
+    if (this.#loaded) { this.#imagery?.pause(); }
   }
 
   /** 恢复前先按当前容器尺寸调整画布 */
@@ -231,6 +235,7 @@ export class CesiumSurface implements Disposable {
     if (this.#failed) {
       return;
     }
+    this.#imagery?.resume();
     this.#style?.resume();
     if (this.#failed || this.#resources.disposed) {
       return;

@@ -69,3 +69,6 @@ export type {
   PickSurface,
   ScreenPoint
 } from './view/view-input';
+export {
+  nativeTileCoordinate, tileDataKey, tileSourceKey, type TileCoordinate, type TileDataSource
+} from './tile/tile-identity';

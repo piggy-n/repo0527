@@ -64,7 +64,7 @@ export const DevCesiumPage = defineComponent({
     return () => (
       <div class={styles.root}>
         <header class={styles.toolbar}>
-          <strong>Cesium · 3D.3a</strong>
+          <strong>Cesium · 3D.3b</strong>
           <ElButton onClick={() => {
             mounted.value = !mounted.value;
             hasCreated3d.value = false;
@@ -89,7 +89,7 @@ export const DevCesiumPage = defineComponent({
             模拟首次三维加载失败
           </ElButton>
           <ElButton disabled={!mounted.value} onClick={() => map.runCameraOperation(control => {
-            control.flyTo({ center: [118.8, 32.05], zoom: 10, bearing: 25, pitch: 40 }, { duration: 300 });
+            control.flyTo({ center: [118.8, 32.05], zoom: 11, bearing: 25, pitch: 40 }, { duration: 300 });
           })}>定位到南京</ElButton>
           <ElButton disabled={!mounted.value} onClick={() => map.runCameraOperation(control => {
             control.fitBounds([116.3, 30.7, 121.9, 35.2], { pitch: 0, duration: 300 });
@@ -112,7 +112,7 @@ export const DevCesiumPage = defineComponent({
           </span>
         </header>
         <p class={styles.description}>
-          点击“定位到南京”查看本地点线面与棋盘栅格；两个视图共用显隐、分类配色和叠放顺序，三维使用椭球地形
+          点击“定位到南京”查看本地 MVT、GeoJSON 与棋盘栅格；两个视图共用显隐、分类配色和叠放顺序
         </p>
         <p class={styles.description} data-session-camera>
           会话相机：{camera.value.center.map(value => value.toFixed(5)).join(', ')}

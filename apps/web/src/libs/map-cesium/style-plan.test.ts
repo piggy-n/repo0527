@@ -167,7 +167,7 @@ describe('三维基础样式计划', () => {
     expect(plan.issues[0].error.message).toContain(option);
   });
 
-  it('拒绝 URL GeoJSON、矢量瓦片、来源缺失、不匹配和 source-layer', () => {
+  it('拒绝 URL GeoJSON、缺源图层的 MVT、来源缺失、不匹配和 GeoJSON source-layer', () => {
     const snapshots: StyleSpecification[] = [
       style([{ id: 'url', type: 'fill', source: 'data' }], { type: 'geojson', data: '/data.json' }),
       style([{ id: 'vector', type: 'fill', source: 'data' }], { type: 'vector', tiles: ['/data.pbf'] }),
@@ -178,6 +178,32 @@ describe('三维基础样式计划', () => {
     expect(snapshots.map(snapshot => compileStylePlan(snapshot).layers.length)).toEqual([0, 0, 0, 0, 0]);
     expect(snapshots.map(snapshot => compileStylePlan(snapshot).issues[0].layerId))
       .toEqual(['url', 'vector', 'missing', 'mismatch', 'source-layer']);
+  });
+
+  it('MVT 点线面保留源图层、来源身份与 promoteId，并继续按相机级别求值', () => {
+    const source: SourceSpecification = { type: 'vector', tiles: ['/tiles/{z}/{x}/{y}.pbf'], maxzoom: 15,
+      promoteId: { land: 'bsm' } };
+    const plan = compileStylePlan(style([
+      { id: 'area', type: 'fill', source: 'data', 'source-layer': 'land',
+        paint: { 'fill-opacity': ['step', ['zoom'], 0.2, 16.5, 0.8] } },
+      { id: 'line', type: 'line', source: 'data', 'source-layer': 'detail' },
+      { id: 'point', type: 'circle', source: 'data', 'source-layer': 'detail' }
+    ], source));
+    expect(plan.issues).toEqual([]);
+    expect(plan.layers.map(layer => layer.type)).toEqual(['fill', 'line', 'circle']);
+    expect(plan.layers[0].source).toBe(source);
+    expect(plan.layers[0].value('fill-opacity', 16.25)).toBe(0.2);
+    expect(plan.layers[0].value('fill-opacity', 16.75)).toBe(0.8);
+    expect(plan.layers[0].visible(20)).toBe(true);
+  });
+
+  it('MVT 源图层必须非空，未实现的身份表达式不能静默回退', () => {
+    const layer: LayerSpecification = { id: 'area', type: 'fill', source: 'data', 'source-layer': '' };
+    expect(compileStylePlan(style([layer], { type: 'vector', tiles: ['/a.pbf'] })).issues[0].error.message)
+      .toContain('source-layer');
+    const invalid = { type: 'vector', tiles: ['/a.pbf'], promoteId: { land: ['get', 'bsm'] } } as unknown as SourceSpecification;
+    expect(compileStylePlan(style([{ ...layer, 'source-layer': 'land' }], invalid)).issues[0].error.message)
+      .toContain('promoteId');
   });
 
   it('只忽略合法且显式关闭动画的过渡属性', () => {

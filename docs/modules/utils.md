@@ -6,7 +6,7 @@
 
 ## Worker 通信层
 
-所有自建的 Worker 都用它：有类型的协议、请求与响应按 ID 配对、三层取消、明确的故障语义、可以转移所有权的数据。二维不自建渲染 Worker（ADR 0021），第一批使用方是以后三维的瓦片栅格化、二维图例统计（实测后决定）。
+所有自建的 Worker 都用它：有类型的协议、请求与响应按 ID 配对、三层取消、明确的故障语义、可以转移所有权的数据。第一个真实使用方已在 3D.3b 接入：三维 MVT 下载、解码与栅格化（ADR 0066）。二维仍由 MapLibre 自己管理渲染 Worker，图例统计是否使用自建 Worker 留待实测（ADR 0021）。
 
 ### 结构
 
@@ -19,34 +19,34 @@
 | `worker/yield.ts` | `yieldToEventLoop` |
 | `worker/testing.ts` | 只供测试使用：`TestEndpoint`、`connect`、`gate`、`settled`、`flushMessages` |
 
-两侧只依赖窄接口 `WorkerEndpoint`（`postMessage`、`addEventListener`，可选的 `start`、`terminate`）。`Worker`、`MessagePort` 和 Worker 里的 `self` 都满足它，所以 utils 不需要 `WebWorker` 环境的类型；真实的 Worker 入口文件出现时，再配置单独的 tsconfig（ADR 0018 的待定事项）。
+两侧只依赖窄接口 `WorkerEndpoint`（`postMessage`、`addEventListener`，可选的 `start`、`terminate`）。`Worker`、`MessagePort` 和 Worker 里的 `self` 都满足它。3D.3b 的 `mvt.worker.ts` 已通过独立的 `tsconfig.worker.json` 按 WebWorker 环境检查；utils 的实现不需要依赖某个具体 Worker 全局对象。
 
 ### 用法
 
 ```ts
 // 协议是普通 interface，主线程和 Worker 入口各自 import type 同一份
 interface TileProtocol {
-  decode: { request: { url: string; fields: string[] }; response: DecodedTile };
+  render: { request: { url: string; fields: string[] }; response: ImageBitmap };
   stats: { request: undefined; response: CacheStats };
 }
 
 // 主线程：参数和返回值按方法名推断，写错方法名会报类型错误
 using host = new WorkerHost<TileProtocol>({
   createWorker: () => new Worker(new URL('./tile.worker.ts', import.meta.url), { type: 'module' }),
-  discard: { decode: tile => tile.bitmap.close() }
+  discard: { render: bitmap => bitmap.close() }
 });
-const tile = await host.request('decode', { url, fields }, { signal });
+const bitmap = await host.request('render', { url, fields }, { signal });
 
 // Worker 里
 serveWorker<TileProtocol>(self, {
-  async decode({ url, fields }, { signal, checkpoint }) {
+  async render({ url, fields }, { signal, checkpoint }) {
     const buffer = await (await fetch(url, { signal })).arrayBuffer();
     for (const layer of layers) {
       decodeLayer(layer);
       // oxlint-disable-next-line no-await-in-loop -- 分段执行：每段之间让出事件循环，取消消息才能被处理
       await checkpoint();
     }
-    return transfer(result, [result.bitmap]);
+    return transfer(result.bitmap, [result.bitmap]);
   },
   stats: () => cache.stats()
 });
@@ -107,9 +107,17 @@ serveWorker<TileProtocol>(self, {
 - 逐一改坏 25 处，24 处由断言发现（补上 Worker 一侧的 `messageerror` 后又改坏 6 处，全部发现）；"释放后不移除服务端的消息监听"测不出来：消息处理函数开头的 `disposed` 检查已经挡住了消息，移除监听只是让对象可以被回收
 - 改成按轮数等之后重新改坏 15 处，14 处以断言失败，没有超时；反过来"释放时不设 `disposed`"也测不出来，两道防线同时去掉才由"释放后不再处理请求"发现
 
-### 还没做的
+### 第一个真实使用方：三维 MVT
 
-等第一个真实使用方出现、用真实瓦片验证后再做（ADR 0025 第 7 条）：多个 Worker 之间的调度（负载均衡、父瓦片固定给同一个 Worker）、空闲一段时间后终止 Worker、缓存与内存预算；真实 Worker 在 Vite 下的打包与加载，到时在 `/dev` 开发页里验证。
+3D.3b 的 `map-cesium/mvt.worker.ts` 已使用这套通信层（ADR 0066）：`MvtWorkerPool` 由三维视图拥有，默认 2 个惰性 Worker，按完整父瓦片身份散列分配，总驻留数据预算 64 MiB。池最多接收 16 个任务，每个 Worker 的 `serveWorker` 并发数为 4，让多个使用者能够共用下载；满载时由影像提供者返回 `undefined`，交给 Cesium 后续重试。
+
+- Worker 入口显式引入 `core-js/es/symbol/dispose`，浏览器主线程的补丁不会自动进入 Worker
+- 数据服务通过 `@yzt/map-core/worker` 导入，避免主线程地图模块进入 Worker；身份计算仍可以从普通入口使用
+- 共享下载、解码使用数据服务自己的 signal；各任务自己的 `checkpoint` 用于绘制阶段。等待数据、绘制与创建位图之后都再次检查取消
+- Worker 转移一次性 ImageBitmap；已取消请求的迟到位图由 `discard` 关闭，主线程成功接收后转为 Canvas 并关闭位图，解码缓存始终留在 Worker
+- 暂停取消任务但保留数据缓存，恢复时重建已取消的影像提供者；视图销毁立即终止线程。没有加入旧项目的 30 秒延迟终止或全局池
+
+真实 Chromium 测试直接创建模块 Worker，验证 MVT 解码、OffscreenCanvas 绘制、像素和位图释放。数据层与池的状态测试仍用假端口或 MessageChannel；后续需要根据业务瓦片实测再调整线程数、预算和任务优先级，二维图例统计尚未接入。
 
 ## 只认最新的一次：LatestController
 

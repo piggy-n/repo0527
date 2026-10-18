@@ -217,7 +217,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `jwt-decode` | 读取登录 token 的过期时间，只在 `shared/auth/token.ts` 中使用；不校验签名（ADR 0015） | 手写 base64url 解码 |
 | `sm-crypto-v2` | 登录密码的 SM2 加密，只在 `features/auth/password.ts` 中使用；底层是 `@noble/curves`，已与旧项目的 sm-crypto 交叉验证兼容（ADR 0015） | sm-crypto |
 | `maplibre-gl` | 二维地图（ADR 0002、0019），只在 map-core 的适配器和 app 的装配中导入。6.x 只提供 ESM，Worker 由 app 用 `?worker&url` 导入后交给 `setWorkerUrl`；依赖里的 `@types/geojson`、`@maplibre/maplibre-gl-style-spec` 不会暴露给应用，要用时自己声明，版本与它保持一致。主模块约 1 MB、Worker 510 KB，地图页必须懒加载 | mapbox-gl（2.0 起为专有许可）、OpenLayers |
-| `@maplibre/maplibre-gl-style-spec` | MapLibre 样式规范的工具：map-core 用它的 `diff` 对比样式快照（ADR 0022），以后在三维和 Worker 里求值表达式和过滤条件（ADR 0021、0024）。它本来就是 maplibre-gl 的依赖，pnpm 不允许使用没有声明的包，所以自己声明；版本范围与 maplibre-gl 声明的相同（`^26.4.4`），两者解析到同一个版本，只打包一份 | 手写求值器（旧项目的做法，ADR 0020） |
+| `@maplibre/maplibre-gl-style-spec` | MapLibre 样式规范的工具：map-core 用它的 `diff` 对比样式快照（ADR 0022），三维基础图层与 MVT Worker 用它求值表达式和过滤条件（ADR 0065、0066）。它本来就是 maplibre-gl 的依赖，pnpm 不允许使用没有声明的包，所以自己声明；版本范围与 maplibre-gl 声明的相同（`^26.4.4`），解析到同一版本 | 手写求值器（旧项目的做法，ADR 0020） |
+| `@mapbox/vector-tile`、`pbf` | 3D.3b 的 Worker 数据服务解析 MVT：`VectorTile` 读取要素、`classifyRings` 分类面洞，`PbfReader` 读取 PBF。直接依赖范围为 `^3.0.0`、`^5.1.2`，当前解析版本与 MapLibre 相同；测试用 `PbfWriter` 生成本地样本。两者是 BSD 许可，ADR 0002 禁止的只有 mapbox-gl，不禁止这两个库 | 手写 PBF/MVT 解析器 |
 | `@types/geojson` | GeoJSON 的类型，并提供全局命名空间 `GeoJSON`：style-spec 和 maplibre-gl 的声明文件依赖它，要在 tsconfig 的 `types` 中加载，否则相关类型会悄悄变成错误类型（见 [tsconfig.md](tsconfig.md)）。版本范围与 maplibre-gl 依赖的相同 | — |
 | `geographiclib-geodesic` | 椭球面上的距离和面积（ADR 0024 第 4 条、ADR 0035），只在 map-core 的测量中使用。Karney 算法的作者维护，MIT 许可，自带类型；只有 CommonJS 格式的压缩包（32 KB），由 Vite 预构建处理。参数是先纬度后经度，map-core 的封装负责转换 | geodesy（Vincenty，没有椭球面积）、turf（球面） |
 | `@turf/bbox` | 选中要素的外包范围，定位时 `fitBounds` 用（ADR 0047），只在 `features/resource-map/feature-query.ts` 中使用。turf v7 的单个包，自带类型；依赖 `@turf/helpers`、`@turf/meta` | 自己遍历坐标 |
@@ -229,7 +230,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `sortablejs` | 资源图层面板的拖动排序（ADR 0054）：目录顺序和"已勾选"的叠放顺序，只在 `shared/composables/useSortableList.ts` 中使用（测试可以导入它来模拟放下）。只认手柄、每个列表一个实例，放下后先把 DOM 还原，再把位置交给拥有者，由 Vue 重新渲染；MIT 许可，无依赖。没有用 `@vueuse/integrations` 的 `useSortable`：它默认直接改数组，我们的顺序在拥有者里，自己包一层更直接，也少一个依赖 | ElTree 自带的拖放、自己写指针事件（ADR 0054） |
 | `@types/sortablejs` | SortableJS 的类型（它不自带），只在开发时使用 | — |
 | `nanoevents` | 地图内核的带类型事件（ADR 0023）。实现只有 25 行，无依赖；`on` 返回取消订阅的函数，直接登记到释放栈。map-core 对外只暴露自己的 `Unsubscribe` 类型，不暴露它的类型 | mitt（`on` 不返回取消函数，2023 年后没有发布）、`EventTarget` |
-| `core-js` | 补齐资源释放的标准接口：只在 `app/main.ts` 的最前面引入 `es/symbol/dispose`、`es/disposable-stack` 两个模块（ADR 0023）。入口包实测增加 21.8 KB（gzip 7.9 KB）。安装脚本不执行（见 pnpm-workspace.md）；lint 的 `no-unassigned-import` 已放行 `core-js/**` | 在 utils 里自己实现约 60 行 |
+| `core-js` | 补齐资源释放的标准接口：`app/main.ts` 最前面引入 `es/symbol/dispose`、`es/disposable-stack`（ADR 0023）；3D.3b 的 `mvt.worker.ts` 另引入 `es/symbol/dispose`，Worker 不能继承主线程补丁。主线程入口包实测增加 21.8 KB（gzip 7.9 KB）。安装脚本不执行（见 pnpm-workspace.md）；lint 的 `no-unassigned-import` 已放行 `core-js/**` | 在 utils 里自己实现约 60 行 |
 | `msw` | 测试中在网络层模拟接口，只用 `msw/node`；安装脚本不放行（见 pnpm-workspace.md） | axios-mock-adapter |
 | `opentype.js` | 解析字体、把系统名称转成 SVG 轮廓，只在 `tools/system-title/` 中使用（ADR 0012）；2.0 没有自带类型，用本地的最小声明 | fontkit、harfbuzzjs |
 | `vitest` | 测试运行器，复用 `vite.config.ts`（ADR 0010） | Jest |

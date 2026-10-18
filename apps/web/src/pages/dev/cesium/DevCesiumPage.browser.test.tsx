@@ -46,7 +46,8 @@ describe('二三维开发页实际装配', () => {
       throw new Error('开发页没有创建样式会话');
     }
     expect(model.current.layers.map(layer => layer.id)).toEqual([
-      'sample-background', 'sample-raster-below', 'sample-fill', 'sample-raster-overlay', 'sample-line', 'sample-points'
+      'sample-background', 'sample-raster-below', 'sample-mvt-fill', 'sample-fill', 'sample-raster-overlay',
+      'sample-mvt-line', 'sample-line', 'sample-mvt-points', 'sample-points'
     ]);
     const two = wrapper.get('[data-map-view="2d"] canvas').element;
     expect(wrapper.find('[data-map-view="3d"] canvas').exists()).toBe(false);
@@ -72,7 +73,7 @@ describe('二三维开发页实际装配', () => {
     await button('样例变色').trigger('click');
     await button('栅格移到面下').trigger('click');
     expect(wrapper.get('[data-map-view="3d"]').attributes('inert')).toBeDefined();
-    expect(model.current.layers[3]).toMatchObject({ id: 'sample-fill', paint: {
+    expect(model.current.layers.find(layer => layer.id === 'sample-fill')).toMatchObject({ paint: {
       'fill-color': ['match', ['get', 'category'], 'primary', '#13c2c2', '#eb2f96']
     } });
     const changedStyle = model.current;
@@ -88,7 +89,7 @@ describe('二三维开发页实际装配', () => {
     expect(model.current.sources).toEqual({});
     expect(model.current.layers.map(layer => layer.id)).toEqual(['sample-background']);
     await button('显示样例').trigger('click');
-    expect(model.current.layers[3]).toMatchObject({ id: 'sample-fill', paint: {
+    expect(model.current.layers.find(layer => layer.id === 'sample-mvt-fill')).toMatchObject({ paint: {
       'fill-color': ['match', ['get', 'category'], 'primary', '#13c2c2', '#eb2f96']
     } });
     expect(new Set(commits.mock.contexts).size).toBe(1);

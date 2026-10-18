@@ -71,14 +71,14 @@ function tileTemplate(url: string, scheme: 'xyz' | 'tms'): string {
   return scheme === 'tms' ? url.replaceAll('{y}', '{reverseY}') : url;
 }
 
-function assertLevel(level: number, name: string): void {
+export function assertLevel(level: number, name: string): void {
   if (!Number.isInteger(level) || level < 0 || level > MAX_LEVEL) {
     throw new RangeError(`三维栅格 ${name} 必须是 0～${MAX_LEVEL} 的整数`);
   }
 }
 
 // 墨卡托影像只覆盖投影的有效纬度，保留跨 180° 经线的 bounds
-function sourceRectangle(bounds: RasterSourceSpecification['bounds'], world: Rectangle): Rectangle {
+export function sourceRectangle(bounds: RasterSourceSpecification['bounds'], world: Rectangle): Rectangle {
   if (!bounds) {
     return world;
   }

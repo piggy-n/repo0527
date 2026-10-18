@@ -416,7 +416,7 @@ store.clear();
 | `createMapEngine` 的注册表 | 工厂 | 不再需要：Cesium 是会话状态的读者，不实现二维的引擎接口（ADR 0020）。map-vue 仍然只用动态 `import()` 加载 map-cesium |
 | `MapService` 聚合十几个 Manager | 外观 | 保留 |
 | `selection/` 拆成 QueryService、Manager、Highlight、Presenter、InteractionController | 职责分离 | 旧代码里拆得最好的部分，作为其他模块的样板 |
-| `MvtTileWorkerPool` + `mvtTileWorker` + `tileRenderer` | 对象池 + 调度 | 算法移到引擎无关的瓦片数据服务（map-core），通信改用 `@yzt/utils` 的有类型通信层，池归实例所有（ADR 0021），见下文"Worker 与缓存" |
+| `MvtTileWorkerPool` + `mvtTileWorker` + `tileRenderer` | 对象池 + 调度 | 3D.3b 已拆为 map-core 的瓦片数据服务和 map-cesium 的视图范围 Worker 池、绘制器；使用 `@yzt/utils` 的有类型通信层（ADR 0066），见下文"Worker 与缓存" |
 | Worker 的鉴权头由主线程每次请求时算好传入 | — | Worker 里没有 localStorage；每次现算也避免了 token 刷新后 Worker 拿着旧 token。新代码里由使用方传入取鉴权头的函数 |
 
 ## 要改进的地方
@@ -467,7 +467,7 @@ store.clear();
 | 工厂 / 注册表 | 按图层类型（MVT、GeoJSON、WMTS 等）创建图层实现；不需要引擎工厂 | 迁移业务图层时 |
 | 策略 | 地类分类配色、符号化、测距与测面 | 迁移业务图层、测量时 |
 | 状态 | 交互工具（浏览、测距、测面、绘制、点选、框选）；视图的生命周期 | 视图的生命周期已实现，交互工具以后 |
-| 对象池 | Worker 池，归实例所有、可释放（ADR 0021） | 通信层已实现，池以后 |
+| 对象池 | Worker 池，归实例所有、可释放（ADR 0021） | 3D.3b 已实现三维视图独占的惰性池（ADR 0066） |
 
 ## 候选库
 
@@ -487,13 +487,38 @@ store.clear();
 | 空间索引 | rbush 或 flatbush | 前端要对大量要素做框选、命中检测时再用；MapLibre 的 `queryRenderedFeatures` 够用就不引入 |
 | 分级设色 | simple-statistics + d3-scale-chromatic（或 chroma-js） | 自然断点等统计分级；d3 只安装用到的子包 |
 | WKT 转换 | `@terraformer/wkt` | 后端返回 WKT 时再引入 |
-| 矢量瓦片解码 | `@mapbox/vector-tile` + `pbf` | 三维自己解码 MVT 时使用（旧项目在用 1.x、3.x）；它们是 BSD 许可，ADR 0002 禁止的只是 `mapbox-gl`。版本对齐 maplibre-gl 6.12.0 依赖的 3.0.0、5.1.2，避免打包两份（ADR 0019） |
+| 矢量瓦片解码 | `@mapbox/vector-tile` + `pbf` | 3D.3b 已用于 Worker 内的 MVT 解码，直接依赖与 maplibre-gl 6.12.0 对齐为 3.0.0、5.1.2。它们是 BSD 许可，ADR 0002 禁止的只是 `mapbox-gl`；不另写 PBF 解码或面环分类算法（ADR 0066） |
 
 面积的口径：turf 的面积是球面近似，三调的图斑面积是椭球面积，两者不同。测面工具用来估算可以；展示图斑面积时直接用后端字段（如 `TBMJ`），不在前端重新计算。
 
 ## Worker 与缓存
 
-二维由 MapLibre 自己在 Worker 里解析瓦片，并在内存里缓存（`maxTileCacheSize`），不自建渲染 Worker（ADR 0021）。下面说的是三维：旧项目在 Worker 里把 MVT 解码、绘制成图片，作为影像交给 Cesium。Worker 通信层已经在 `@yzt/utils` 实现（[utils.md](utils.md)），瓦片数据服务将基于它。这些缓存算法将移到引擎无关的瓦片数据服务，供三维栅格化和标注、二维图例统计（实测后决定）、以后的三维点选共同使用（ADR 0021）。缓存键、字段并集、共用下载的计数和数据所有权见 ADR 0025；下面的算法是起点，等第一个真实使用方出现后用真实瓦片验证再定。
+二维由 MapLibre 自己在 Worker 里解析瓦片，并在内存里缓存（`maxTileCacheSize`），不自建渲染 Worker（ADR 0021）。3D.3b 已把引擎无关的 MVT 数据服务放到 `map-core/tile/`，由三维 Worker 使用；渲染与 Cesium 影像适配仍在 map-cesium。通信使用 `@yzt/utils`（[utils.md](utils.md)），缓存身份、字段并集、共用请求计数和数据所有权遵循 ADR 0025，当前实现边界见 ADR 0066。
+
+### 3D.3b 已实现的数据服务
+
+| 文件 | 职责 |
+|---|---|
+| `tile/tile-identity.ts` | 模板数组、scheme、数据版本、权限范围、XYZ 坐标组成缓存身份；`nativeTileCoordinate` 将显示子瓦片映射到实际下载的父瓦片 |
+| `tile/mvt-decode.ts` | 用 VectorTile/PbfReader 解码，按字段裁剪属性；路径保存为 Int32Array，面与洞由 `classifyRings` 分类并共用路径内存 |
+| `tile/byte-cache.ts` | 按字节预算淘汰最近最少使用的条目；命中刷新顺序，超大条目不驻留 |
+| `tile/tile-data-service.ts` | 下载与解码去重、消费者独立取消、字段并集、原始与解码缓存、统计及销毁 |
+| `worker.ts` | 受限的 `@yzt/map-core/worker` 入口，只导出数据服务、解码和身份能力，不加载主线程地图实现 |
+
+主入口 `@yzt/map-core` 只增加瓦片身份与父瓦片计算；map-cesium 的 Worker 通过受限入口取得 `TileDataService`。额外入口已由用户确认并记录在 ADR 0066，其他内部路径仍不能跨模块导入。
+
+`new TileDataService({ budgetBytes, fetch? })` 创建 Worker 内的数据拥有者；`acquire(request, { signal })` 返回解码结果。请求提供完整源身份、实际父瓦片坐标、绝对下载地址、可选 headers 和所需字段（`null` 表示全部）。地址与身份由调用方传入，服务不读取环境变量、登录状态或原生地图。
+
+- 同一源字段在仍有驻留数据或任务期间取各请求的并集。字段扩大时复用缓存的原始 PBF 重新解码，纯颜色或透明度修改直接复用几何；解码让出期间又加入字段，所有等待者交付前都确认最新并集
+- 同一父瓦片共用下载和解码；消费者取消立即结束自己的等待，最后一个消费者离开才中止底层任务。共享解码使用自己的 signal 与 `yieldToEventLoop`，不能使用第一个消费者的 `checkpoint`，否则它的取消会误杀其他消费者
+- 解码每 64 个要素让出一次事件循环。第三方库单次 `loadGeometry()` 仍为同步调用，超大单要素的打断粒度留待性能验收；坐标或 ID 超出可精确表示的范围时明确失败，不截断
+- 预算包含原始 PBF 字节、TypedArray 精确字节和对象、字符串估算；这是驻留缓存预算，不包含进行中的解码、画布、Cesium 纹理等工作集。超大瓦片供当前请求使用后不缓存，失败不缓存，零字节成功响应是合法空瓦片
+- 统计提供 `bytes`、`budget`、`tiles`、`sources`、`inflight`、`hits`、`misses`、`downloads`、`decodes`、`aborts`。源最后一份驻留数据和任务都离开后，字段登记一起清理，切年份不会遗留无界的历史源登记
+- 解码引用只在 Worker 内使用；主线程只收到一次性 ImageBitmap。销毁取消所有等待者、清空缓存和字段登记；每个异步等待后检查取消，旧结果不能重新写回
+
+三维视图拥有的 Worker 池与提供者生命周期见 [map-cesium.md](map-cesium.md)。当前是视图范围的内存缓存，不持久化、不与 MapLibre 的下载协议共享，也不跨登录会话复用；后端瓦片是否随权限变化仍需确认。
+
+数据层已用本地合成 PBF、MSW 和可控异步边界验证解码、字段扩展、共享取消、晚到结果、身份隔离、LRU 与预算；真实 Worker 的原生 fetch 会校验接收者，服务先取出下载函数再调用，避免把服务实例当作 `this`。
 
 ### 旧代码已有的缓存
 
@@ -512,9 +537,9 @@ store.clear();
 
 | 做法 | 省掉什么 | 收益 | 前提与代价 | 建议 |
 |---|---|---|---|---|
-| 命中时刷新顺序（真正的 LRU） | 来回缩放时被挤掉的瓦片的重新下载和解码 | 取决于访问模式，用旧代码已有的 `stats` 消息看命中率 | 很小：旧代码命中时不调整顺序，实际是先进先出，注释里的"近似 LRU"不准确 | 迁移时顺手改 |
+| 命中时刷新顺序（真正的 LRU） | 来回缩放时被挤掉的瓦片的重新下载和解码 | 取决于访问模式，用 `stats` 消息看命中率 | 很小：旧代码命中时不调整顺序，实际是先进先出，注释里的"近似 LRU"不准确 | 3D.3b 已实现 |
 | 持久化原始瓦片（Cache Storage，Worker 里可用） | 刷新页面、下次打开时的下载 | 只省下载，不省解码和绘制（旧注释里大头是解码和绘制，一次 z12 跳转绘制 5.5 秒）；按带宽估算，9MB 的瓦片在百兆内网约 0.7 秒，千兆约 0.07 秒 | 浏览器 HTTP 缓存可能已经在做（旧代码 `fetch` 用默认缓存模式，取决于后端的响应头）；要处理数据更新后的失效（需要后端提供数据版本）、瓦片按权限过滤时按用户区分、会话结束时清理 | 先查后端瓦片的响应头和数据更新频率，测出网络是瓶颈再做 |
 | 持久化解码结果（IndexedDB） | 下载和解码 | 不确定：解码后的数据比 pbf 大得多，读出来也要时间 | 同上，加上存储空间 | 先实测，再决定 |
 | 缓存绘制结果（ImageBitmap） | 绘制 | 低：Cesium 自己有影像缓存 | 多占内存和显存 | 不做 |
 
-持久化缓存和 AGENTS.md 里待定的持久化方案（IndexedDB + idb-keyval）一起决定：瓦片这种请求与响应成对的数据更适合 Cache Storage，其他业务数据再考虑 IndexedDB。
+用户偏好已使用 IndexedDB + idb-keyval（ADR 0042）；瓦片仍只用内存缓存。是否增加 Cache Storage 等持久化能力需另行实测与决策，不能因偏好存储已经存在就直接复用。
