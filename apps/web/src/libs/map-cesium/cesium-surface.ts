@@ -6,13 +6,16 @@ import {
 } from 'cesium';
 import { safeReporter } from '@yzt/utils';
 import type {
-  CameraModel, CameraState, FitBoundsOptions, FlyToOptions, LngLat, PickResult, ScreenPoint, ToolModel, ViewBounds
+  CameraModel, CameraState, FitBoundsOptions, FlyToOptions, LngLat, PickResult, ScreenPoint,
+  SourceErrors, StyleModel, ToolModel, ViewBounds
 } from '@yzt/map-core';
 import { CesiumCameraBridge } from './camera-bridge';
 import { type CesiumCameraPose, createCesiumCameraPort, resizeCameraFrustum } from './camera-geometry';
 import { planCesiumFitBounds, planCesiumFlyTo } from './camera-plan';
 import { CesiumInput } from './cesium-input';
 import { pickScene, projectScene } from './scene-query';
+import { createImageryStylePort } from './imagery-style-port';
+import { StyleMirror } from './style-mirror';
 
 /** 最小三维画布的依赖；资源地址由应用提供，不读取部署环境 */
 export interface CesiumSurfaceOptions {
@@ -20,10 +23,14 @@ export interface CesiumSurfaceOptions {
   assetBaseUrl: string;
   /** 会话相机；不传时保留 3D.1 的独立场景用途 */
   camera?: CameraModel;
+  /** 会话样式；独立运行时验证不传，仍使用 SDK 本地底图 */
+  style?: StyleModel<string>;
   tool?: ToolModel;
   active?: boolean;
   onReady?: () => void;
   onError?: (error: unknown) => void;
+  onStyleError?: (error: unknown) => void;
+  onSourceErrors?: (errors: SourceErrors) => void;
   onResize?: () => void;
   onSettle?: () => void;
 }
@@ -38,6 +45,9 @@ export class CesiumSurface implements Disposable {
   #camera: CesiumCameraBridge<CesiumCameraPose> | undefined;
   readonly #model: CameraModel | undefined;
   #input: CesiumInput | undefined;
+  #style: StyleMirror | undefined;
+  // 判断 postRender 中的样式更新是否已经出现在这一帧
+  #styleRevision = 0;
   // 首轮可见瓦片完成前允许预备渲染，但不交付工具输入
   #loaded = false;
   #flight: { pose: CesiumCameraPose; cleanup: () => void } | undefined;
@@ -98,8 +108,14 @@ export class CesiumSurface implements Disposable {
       let width = widget.canvas.clientWidth;
       let height = widget.canvas.clientHeight;
       let previousPose = port.capture();
+      let renderedStyleRevision = 0;
+      let resizedDuringFrame = false;
+      this.#resources.defer(widget.scene.preRender.addEventListener(() => {
+        renderedStyleRevision = this.#styleRevision;
+      }));
       this.#resources.defer(widget.scene.postRender.addEventListener(() => {
-        if (width !== widget.canvas.clientWidth || height !== widget.canvas.clientHeight) {
+        resizedDuringFrame = width !== widget.canvas.clientWidth || height !== widget.canvas.clientHeight;
+        if (resizedDuringFrame) {
           width = widget.canvas.clientWidth;
           height = widget.canvas.clientHeight;
           resizeCameraFrustum(widget);
@@ -111,25 +127,45 @@ export class CesiumSurface implements Disposable {
         }
         this.#input?.afterRender();
         const pose = port.capture();
-        if (this.#loaded && this.#active && !this.#flight && widget.scene.globe.tilesLoaded &&
+        if (this.#loaded && this.#active && !this.#flight && !resizedDuringFrame &&
+          renderedStyleRevision === this.#styleRevision && widget.scene.globe.tilesLoaded &&
           port.equals(previousPose, pose)) {
           settled(undefined);
         }
         previousPose = pose;
       }));
 
-      // Natural Earth II 随 SDK 部署，实际发布的瓦片只有 0～2 级
-      const imagery = new UrlTemplateImageryProvider({
-        url: `${options.assetBaseUrl}Assets/Textures/NaturalEarthII/{z}/{x}/{reverseY}.jpg`,
-        tilingScheme: new GeographicTilingScheme(),
-        maximumLevel: 2,
-        enablePickFeatures: false,
-        credit: 'Natural Earth II'
-      });
-      this.#resources.defer(imagery.errorEvent.addEventListener(() => {
-        this.#fail(new Error('本地三维底图加载失败，请检查 Cesium 静态资源是否完整部署'));
-      }));
-      widget.imageryLayers.addImageryProvider(imagery);
+      if (options.style) {
+        if (!options.camera) {
+          throw new Error('三维样式镜像需要共享相机');
+        }
+        this.#style = this.#resources.use(new StyleMirror({
+          style: options.style,
+          camera: options.camera,
+          port: createImageryStylePort({
+            layers: widget.imageryLayers,
+            requestRender: () => {
+              this.#styleRevision++;
+              widget.scene.requestRender();
+            }
+          }),
+          onError: options.onStyleError,
+          onSourceErrors: options.onSourceErrors
+        }));
+      } else {
+        // 独立运行时验证仍使用随 SDK 部署的 Natural Earth II，实际只有 0～2 级
+        const imagery = new UrlTemplateImageryProvider({
+          url: `${options.assetBaseUrl}Assets/Textures/NaturalEarthII/{z}/{x}/{reverseY}.jpg`,
+          tilingScheme: new GeographicTilingScheme(),
+          maximumLevel: 2,
+          enablePickFeatures: false,
+          credit: 'Natural Earth II'
+        });
+        this.#resources.defer(imagery.errorEvent.addEventListener(() => {
+          this.#fail(new Error('本地三维底图加载失败，请检查 Cesium 静态资源是否完整部署'));
+        }));
+        widget.imageryLayers.addImageryProvider(imagery);
+      }
       this.#resources.defer(widget.scene.renderError.addEventListener((_scene: unknown, error: unknown) => {
         this.#fail(error);
       }));
@@ -137,7 +173,8 @@ export class CesiumSurface implements Disposable {
       // 首轮可见瓦片完成且经过一次渲染后才报告就绪
       const ready = safeReporter(() => options.onReady?.(), 'CesiumSurface.onReady');
       const removeReady = widget.scene.postRender.addEventListener(() => {
-        if (!this.#failed && widget.scene.globe.tilesLoaded) {
+        if (!this.#failed && !resizedDuringFrame && renderedStyleRevision === this.#styleRevision &&
+          widget.scene.globe.tilesLoaded) {
           removeReady();
           this.#loaded = true;
           if (this.#active) {
@@ -180,6 +217,7 @@ export class CesiumSurface implements Disposable {
     this.#widget.scene.screenSpaceCameraController.enableInputs = false;
     this.#active = false;
     this.#camera?.pause();
+    this.#style?.pause();
   }
 
   /** 恢复前先按当前容器尺寸调整画布 */
@@ -191,6 +229,10 @@ export class CesiumSurface implements Disposable {
     resizeCameraFrustum(this.#widget);
     this.#camera?.resume();
     if (this.#failed) {
+      return;
+    }
+    this.#style?.resume();
+    if (this.#failed || this.#resources.disposed) {
       return;
     }
     this.#active = true;

@@ -1,0 +1,189 @@
+import {
+  latest,
+  type Feature,
+  type GeoJSONSourceSpecification,
+  type LayerSpecification,
+  type RasterSourceSpecification,
+  type StyleSpecification
+} from '@maplibre/maplibre-gl-style-spec';
+import { compileStyleFilter, compileStyleProperty, type CompiledStyleProperty } from './style-expression';
+
+type BasicLayerType = 'background' | 'raster' | 'fill' | 'line' | 'circle';
+type BasicLayerSpecification = Extract<LayerSpecification, { type: BasicLayerType }>;
+type BasicSource = RasterSourceSpecification | GeoJSONSourceSpecification;
+
+/** 一个可绘制图层的只读计划，保留会话快照的对象身份 */
+export interface BasicStyleLayer {
+  readonly id: string;
+  readonly type: BasicLayerType;
+  readonly sourceId?: string;
+  readonly source?: BasicSource;
+  readonly specification: LayerSpecification;
+  readonly zoomDependent: boolean;
+  visible(zoom: number): boolean;
+  value(property: string, zoom: number, feature?: Feature): unknown;
+  accepts(zoom: number, feature: Feature): boolean;
+}
+
+/** 不支持或无效的图层单独报告，不影响其他图层 */
+export interface StylePlanIssue {
+  readonly layerId: string;
+  readonly error: Error;
+}
+
+export interface BasicStylePlan {
+  readonly layers: readonly BasicStyleLayer[];
+  readonly issues: readonly StylePlanIssue[];
+}
+
+// 只列支持边界，属性默认值和表达式语义仍由规范库提供
+const PAINT: Record<BasicLayerType, readonly string[]> = {
+  background: ['background-color', 'background-opacity'],
+  raster: ['raster-opacity'],
+  fill: ['fill-color', 'fill-opacity', 'fill-outline-color', 'fill-antialias'],
+  line: ['line-color', 'line-opacity', 'line-width'],
+  circle: ['circle-color', 'circle-opacity', 'circle-radius', 'circle-stroke-color',
+    'circle-stroke-opacity', 'circle-stroke-width']
+};
+const LAYOUT: Record<BasicLayerType, readonly string[]> = {
+  background: [],
+  raster: [],
+  fill: [],
+  line: ['line-cap', 'line-join', 'line-miter-limit'],
+  circle: []
+};
+const SOURCE_KEYS: Record<BasicSource['type'], readonly string[]> = {
+  raster: ['type', 'tiles', 'bounds', 'minzoom', 'maxzoom', 'tileSize', 'scheme', 'attribution'],
+  geojson: ['type', 'data', 'attribution']
+};
+
+/** 按会话层序编译支持的基础样式；诊断与跳过规则见 ADR 0024 */
+export function compileStylePlan(style: StyleSpecification): BasicStylePlan {
+  const layers: BasicStyleLayer[] = [];
+  const issues: StylePlanIssue[] = [];
+  for (const specification of style.layers) {
+    try {
+      if (!isBasicLayer(specification)) {
+        throw new Error(`三维基础样式暂不支持 ${specification.type} 图层`);
+      }
+      layers.push(compileLayer(specification, style));
+    } catch (error) {
+      issues.push({ layerId: specification.id, error: error instanceof Error ? error : new Error(String(error)) });
+    }
+  }
+  return { layers, issues };
+}
+
+function isBasicLayer(layer: LayerSpecification): layer is BasicLayerSpecification {
+  return Object.hasOwn(PAINT, layer.type);
+}
+
+function compileLayer(layer: BasicLayerSpecification, style: StyleSpecification): BasicStyleLayer {
+  // Canvas 路径无法关闭抗锯齿，明确拒绝，不能接受后仍按平滑边缘绘制
+  if (layer.type === 'fill' && layer.paint?.['fill-antialias'] !== undefined && layer.paint['fill-antialias'] !== true) {
+    throw new Error('三维基础样式 fill-antialias 只支持 true');
+  }
+  const sourceId = 'source' in layer ? layer.source : undefined;
+  const source = resolveSource(layer, sourceId, style);
+  const visibility = layer.layout?.visibility ?? 'visible';
+  if (visibility !== 'visible' && visibility !== 'none') {
+    throw new Error('三维基础样式 visibility 只支持 visible 或 none 常量');
+  }
+  const minimum = layer.minzoom ?? -Infinity;
+  const maximum = layer.maxzoom ?? Infinity;
+  if ((layer.minzoom !== undefined && !Number.isFinite(minimum)) ||
+    (layer.maxzoom !== undefined && !Number.isFinite(maximum)) || minimum > maximum) {
+    throw new Error('图层 minzoom / maxzoom 必须是有效的级别范围');
+  }
+
+  const properties = new Map<string, CompiledStyleProperty>();
+  compileProperties(layer.type, 'paint', layer.paint ?? {}, PAINT[layer.type], properties);
+  compileProperties(layer.type, 'layout', layer.layout ?? {}, LAYOUT[layer.type], properties);
+  const filter = compileStyleFilter('filter' in layer ? layer.filter : undefined, layer.id);
+  return {
+    id: layer.id,
+    type: layer.type,
+    sourceId,
+    source,
+    specification: layer,
+    zoomDependent: layer.minzoom !== undefined || layer.maxzoom !== undefined || filter.zoomDependent ||
+      [...properties.values()].some(property => property.zoomDependent),
+    visible: zoom => visibility === 'visible' && zoom >= minimum && zoom < maximum,
+    value: (property, zoom, feature) => properties.get(property)?.evaluate(zoom, feature),
+    accepts: (zoom, feature) => filter.test(zoom, feature)
+  };
+}
+
+// 来源替换时不能克隆快照，渲染镜像依靠身份判断是否需要重建
+function resolveSource(
+  layer: BasicLayerSpecification,
+  sourceId: string | undefined,
+  style: StyleSpecification
+): BasicSource | undefined {
+  if ('source-layer' in layer) {
+    throw new Error('三维基础样式暂不支持 source-layer');
+  }
+  if (layer.type === 'background') {
+    return undefined;
+  }
+  const source = sourceId === undefined ? undefined : style.sources[sourceId];
+  if (!source) {
+    throw new Error(`缺少图层数据源：${sourceId ?? ''}`);
+  }
+  if (source.type !== 'geojson' && source.type !== 'raster') {
+    throw new Error(`三维基础样式暂不支持 ${source.type} 数据源`);
+  }
+  if ((layer.type === 'raster') !== (source.type === 'raster')) {
+    throw new Error(`${layer.type} 图层与 ${source.type} 数据源不匹配`);
+  }
+  for (const key of Object.keys(source)) {
+    if (!SOURCE_KEYS[source.type].includes(key)) {
+      throw new Error(`三维 ${source.type} 数据源暂不支持 ${key}`);
+    }
+  }
+  if (source.type === 'geojson' && (typeof source.data !== 'object' || source.data === null)) {
+    throw new Error('三维基础样式只支持内联 GeoJSON 数据');
+  }
+  if (source.type === 'raster' && !source.tiles?.length) {
+    throw new Error('三维栅格数据源需要至少一个 tiles 地址');
+  }
+  return source;
+}
+
+function compileProperties(
+  type: BasicLayerType,
+  section: 'paint' | 'layout',
+  values: Record<string, unknown>,
+  supported: readonly string[],
+  compiled: Map<string, CompiledStyleProperty>
+): void {
+  for (const [property, value] of Object.entries(values)) {
+    if (supported.includes(property) || (section === 'layout' && property === 'visibility')) {
+      continue;
+    }
+    if (section === 'paint' && isImmediateTransition(type, property, value)) {
+      continue;
+    }
+    throw new Error(`三维 ${type} 图层暂不支持 ${section}.${property}`);
+  }
+  for (const property of supported) {
+    compiled.set(property, compileStyleProperty(type, property, values[property]));
+  }
+}
+
+// 仅忽略规范允许且明确关闭动画的过渡；空配置仍包含默认的动画时间
+function isImmediateTransition(type: BasicLayerType, property: string, value: unknown): boolean {
+  if (!property.endsWith('-transition') || typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const base = property.slice(0, -'-transition'.length);
+  const reference: Record<string, unknown> = latest[`paint_${type}`];
+  const definition = reference[base];
+  if (typeof definition !== 'object' || definition === null ||
+    !('transition' in definition) || definition.transition !== true) {
+    return false;
+  }
+  const transition: Record<string, unknown> = { ...value };
+  return transition.duration === 0 && (transition.delay === undefined || transition.delay === 0) &&
+    Object.keys(transition).every(key => key === 'duration' || key === 'delay');
+}

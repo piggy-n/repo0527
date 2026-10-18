@@ -30,7 +30,13 @@ const loadCesiumSurface: LoadCesiumSurface = async () => {
     if (!options.session) {
       throw new Error('CesiumCanvas 需要地图会话');
     }
-    const view = new CesiumView({ ...options, session: options.session });
+    // onError 也包含单层诊断，只有视图失败或就绪等待失败才改变画布的加载反馈
+    const view = new CesiumView({ ...options, session: options.session, onError: console.error });
+    view.on('statechange', state => {
+      if (state === 'failed') {
+        options.onError(view.failure?.error);
+      }
+    });
     void view.whenReady().then(() => options.onReady(), error => options.onError(error));
     return view;
   };

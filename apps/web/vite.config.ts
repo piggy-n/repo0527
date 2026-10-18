@@ -74,6 +74,8 @@ export default defineConfig(({ mode }) => {
           extends: true,
           test: {
             name: 'browser',
+            // 软件 WebGL 的多场景并发会争用渲染资源，按文件依次验证，普通测试仍并行
+            fileParallelism: false,
             include: ['src/**/*.browser.test.{ts,tsx}'],
             setupFiles: ['src/test-setup.ts', 'src/test-setup.browser.ts'],
             browser: {

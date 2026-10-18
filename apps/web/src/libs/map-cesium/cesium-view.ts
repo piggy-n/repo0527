@@ -54,10 +54,10 @@ export interface CesiumViewOptions {
   createSurface?: (options: CesiumSurfaceOptions) => CesiumViewSurface;
 }
 
-/** 三维的统一视图入口；本步只接入本地底图，样式镜像在 3D.3 实现 */
+/** 三维的统一视图入口，装配共享样式、相机与输入 */
 export class CesiumView implements MapView {
   readonly kind = '3d';
-  readonly sourceErrors = NO_SOURCE_ERRORS;
+  #sourceErrors: SourceErrors = NO_SOURCE_ERRORS;
   readonly #events = createNanoEvents<ViewEvents>();
   readonly #ready = readyResult();
   readonly #report: (error: unknown) => void;
@@ -74,7 +74,7 @@ export class CesiumView implements MapView {
     void this.#ready.promise.catch(() => {});
     try {
       const surface = createSurface({
-        container, assetBaseUrl, camera: session.camera, tool: session.tool, active,
+        container, assetBaseUrl, camera: session.camera, style: session.style, tool: session.tool, active,
         onReady: () => {
           if (this.#state === 'initializing') {
             this.#setState(this.#active ? 'ready' : 'paused');
@@ -82,6 +82,17 @@ export class CesiumView implements MapView {
           }
         },
         onError: error => this.#fail(error),
+        onStyleError: error => {
+          if (this.#state !== 'disposed' && this.#state !== 'failed') {
+            this.#report(error);
+          }
+        },
+        onSourceErrors: errors => {
+          if (this.#state !== 'disposed' && this.#state !== 'failed') {
+            this.#sourceErrors = errors;
+            this.#notify(() => this.#events.emit('sourceerrorchange', errors));
+          }
+        },
         onResize: () => this.#emit('resize'),
         onSettle: () => this.#emit('settle')
       });
@@ -98,6 +109,7 @@ export class CesiumView implements MapView {
 
   get state(): ViewState { return this.#state; }
   get failure(): MapViewFailure | null { return this.#failure; }
+  get sourceErrors(): SourceErrors { return this.#sourceErrors; }
   whenReady(): Promise<void> { return this.#ready.promise; }
 
   pause(): void {
@@ -202,6 +214,10 @@ export class CesiumView implements MapView {
   #release(): void {
     const surface = this.#surface;
     this.#surface = undefined;
+    if (this.#sourceErrors.size > 0) {
+      this.#sourceErrors = NO_SOURCE_ERRORS;
+      this.#notify(() => this.#events.emit('sourceerrorchange', this.#sourceErrors));
+    }
     try {
       surface?.[Symbol.dispose]();
     } catch (error) {

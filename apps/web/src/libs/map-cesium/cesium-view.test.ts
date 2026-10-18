@@ -1,4 +1,4 @@
-import { MapSession } from '@yzt/map-core';
+import { MapSession, NO_SOURCE_ERRORS, type SourceErrors } from '@yzt/map-core';
 import { describe, expect, it, vi } from 'vitest';
 import { CesiumView, type CesiumViewSurface } from './cesium-view';
 import type { CesiumSurfaceOptions } from './cesium-surface';
@@ -18,7 +18,7 @@ function setup(active = true) {
     createSurface: value => { options = value; return surface; }
   });
   return {
-    session, view, surface, errors,
+    session, view, surface, errors, options,
     ready: () => options.onReady?.(), fail: (error: unknown) => options.onError?.(error),
     resize: () => options.onResize?.(), settle: () => options.onSettle?.(),
     [Symbol.dispose]() { view[Symbol.dispose](); session[Symbol.dispose](); }
@@ -29,6 +29,7 @@ describe('CesiumView 生命周期与统一接口', () => {
   it('等待加载后才开放接口，候选视图加载完成也保持暂停', async () => {
     using fixture = setup(false);
     const { view, surface } = fixture;
+    expect(fixture.options.style).toBe(fixture.session.style);
     expect(() => view.flyTo({ zoom: 9 })).toThrow('尚未就绪');
     fixture.ready();
     await view.whenReady();
@@ -101,5 +102,42 @@ describe('CesiumView 生命周期与统一接口', () => {
     expect(fixture.surface[Symbol.dispose]).toHaveBeenCalledOnce();
     expect(fixture.view.state).toBe('failed');
     expect(notified.mock.calls.map(([state]) => state)).toEqual(['ready', 'failed']);
+  });
+
+  it('图层诊断和来源错误不会让整个视图失败，清除错误也通知上下文', async () => {
+    using fixture = setup();
+    const { view, options, errors } = fixture;
+    const changed = vi.fn<(value: SourceErrors) => void>();
+    view.on('sourceerrorchange', changed);
+    const error = new Error('某张影像瓦片失败');
+    const sources: SourceErrors = new Map([['image', error]]);
+    options.onSourceErrors?.(sources);
+    options.onStyleError?.(error);
+    fixture.ready();
+    await expect(view.whenReady()).resolves.toBeUndefined();
+    expect(view.state).toBe('ready');
+    expect(view.failure).toBeNull();
+    expect(view.sourceErrors).toBe(sources);
+    expect(changed).toHaveBeenCalledWith(sources);
+    expect(errors).toHaveBeenCalledWith(error);
+    options.onSourceErrors?.(NO_SOURCE_ERRORS);
+    expect(view.sourceErrors.size).toBe(0);
+    expect(changed).toHaveBeenLastCalledWith(NO_SOURCE_ERRORS);
+  });
+
+  it('失败和释放清空来源错误，晚到的样式通知不复活状态', () => {
+    using fixture = setup();
+    const { view, options, errors } = fixture;
+    const sources: SourceErrors = new Map([['old', new Error('旧瓦片')]]);
+    options.onSourceErrors?.(sources);
+    fixture.fail(new Error('引擎失败'));
+    expect(view.sourceErrors.size).toBe(0);
+    options.onSourceErrors?.(sources);
+    options.onStyleError?.(new Error('晚到的诊断'));
+    expect(view.sourceErrors.size).toBe(0);
+    expect(errors).toHaveBeenCalledOnce();
+    view[Symbol.dispose]();
+    options.onSourceErrors?.(sources);
+    expect(view.sourceErrors.size).toBe(0);
   });
 });

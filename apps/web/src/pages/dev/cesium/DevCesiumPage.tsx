@@ -3,8 +3,9 @@ import { defineComponent, type PropType, ref, shallowRef } from 'vue';
 import type { ViewKind } from '@yzt/map-core';
 import { SwitchableMapCanvas, type MapViewSwitchState, type SwitchableMapCanvasHandle, provideMap } from '@yzt/map-vue';
 import styles from './DevCesiumPage.module.scss';
+import { INITIAL_SAMPLE_STYLE_STATE, sampleStyleGroup } from './sample-style';
 
-/** 二三维切换的验证入口：本地底图、共享相机与生命周期 */
+/** 二三维基础样式的验证入口：共享样式、相机与生命周期 */
 export const DevCesiumPage = defineComponent({
   name: 'DevCesiumPage',
   props: {
@@ -17,11 +18,13 @@ export const DevCesiumPage = defineComponent({
     const active = ref(true);
     const broken = ref(false);
     const hasCreated3d = ref(false);
+    const sample = shallowRef(INITIAL_SAMPLE_STYLE_STATE);
     const state = shallowRef<MapViewSwitchState>({ current: null, target: '2d', status: 'loading' });
     const map = provideMap({
-      groups: [],
+      groups: ['sample'],
       camera: { center: [119.2, 32.8], zoom: 4, bearing: 0, pitch: 0 }
     });
+    map.bindStyle({ sample: () => sampleStyleGroup(sample.value) });
     const camera = map.useCamera();
 
     const statusText = () => {
@@ -61,7 +64,7 @@ export const DevCesiumPage = defineComponent({
     return () => (
       <div class={styles.root}>
         <header class={styles.toolbar}>
-          <strong>Cesium · 3D.2c</strong>
+          <strong>Cesium · 3D.3a</strong>
           <ElButton onClick={() => {
             mounted.value = !mounted.value;
             hasCreated3d.value = false;
@@ -91,6 +94,15 @@ export const DevCesiumPage = defineComponent({
           <ElButton disabled={!mounted.value} onClick={() => map.runCameraOperation(control => {
             control.fitBounds([116.3, 30.7, 121.9, 35.2], { pitch: 0, duration: 300 });
           })}>江苏范围</ElButton>
+          <ElButton onClick={() => { sample.value = { ...sample.value, visible: !sample.value.visible }; }}>
+            {sample.value.visible ? '隐藏样例' : '显示样例'}
+          </ElButton>
+          <ElButton onClick={() => {
+            sample.value = { ...sample.value, alternateColors: !sample.value.alternateColors };
+          }}>样例变色</ElButton>
+          <ElButton onClick={() => { sample.value = { ...sample.value, rasterAbove: !sample.value.rasterAbove }; }}>
+            {sample.value.rasterAbove ? '栅格移到面下' : '栅格移到面上'}
+          </ElButton>
           <span
             data-cesium-state={mounted.value ? state.value.status : 'disposed'}
             data-current-view={mounted.value ? state.value.current ?? '' : ''}
@@ -99,7 +111,9 @@ export const DevCesiumPage = defineComponent({
             {statusText()}
           </span>
         </header>
-        <p class={styles.description}>二维为空白底图，三维仅使用本地 Natural Earth II 底图与椭球地形；已创建的视图保留供切换复用</p>
+        <p class={styles.description}>
+          点击“定位到南京”查看本地点线面与棋盘栅格；两个视图共用显隐、分类配色和叠放顺序，三维使用椭球地形
+        </p>
         <p class={styles.description} data-session-camera>
           会话相机：{camera.value.center.map(value => value.toFixed(5)).join(', ')}
           {' · '}级别 {camera.value.zoom.toFixed(2)}

@@ -86,6 +86,8 @@ const generators =
 
 #### 浏览器测试（5C.1a 实测）
 
+3D.3a 新增多个 Cesium 场景后，浏览器项目设 `fileParallelism: false`，按文件顺序使用软件 WebGL，普通单元测试仍并行。完整回归曾分别在三维视图的 8 秒、开发页的 10 秒首次加载等待中超时，而单独运行通过；三维首次渲染/就绪等待统一留出 15 秒余量，按事件和实际画面满足立即结束，不固定睡眠、不放宽像素或状态断言。
+
 - Playwright 1.64 自带的 Chromium 156 无界面版默认就用 SwiftShader 软件渲染 WebGL2，Windows 上有显卡、不加参数也是如此（渲染器是 `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)`）。环境用例 `src/browser-environment.browser.test.ts` 检查 WebGL2 能否创建并输出渲染器和浏览器版本
 - 浏览器只装无界面版（`pnpm --filter @yzt/web test:browser:install`），Windows 上解压后约 280 MB，放在用户目录的 Playwright 缓存里
 - CI（ubuntu-latest）第一次运行就通过，Linux 上的软件渲染没有问题：安装浏览器和系统依赖 14 s，`pnpm test` 54 s

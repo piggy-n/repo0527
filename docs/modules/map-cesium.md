@@ -1,6 +1,6 @@
 # 三维画布与运行时（map-cesium）
 
-状态：2026-10-19，已实现 3D.1 运行时、3D.2a 相机桥接、3D.2b 统一视图接口和 3D.2c 开发页二三维切换。会话样式镜像与业务页切换尚未接入。范围依据 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md)，后续步骤见 [3D.0 计划](../stages/stage-3d-0-plan.md)。
+状态：2026-10-19，已实现 3D.1 运行时、3D.2 相机/视图/缓存切换，以及 3D.3a 基础样式镜像。业务页切换尚未接入。范围依据 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md)，基础绘制按 [ADR 0065](../adr/0065-basic-geojson-imagery-layers.md)，后续步骤见 [3D.0 计划](../stages/stage-3d-0-plan.md)。
 
 ## 职责与用法
 
@@ -14,10 +14,13 @@
 | `libs/map-cesium/scene-query.ts`、`cesium-input.ts` | 表面拾取、背面投影排除；工具输入、焦点、手势与临时平移 |
 | `libs/map-cesium/camera-geometry.ts` | 在目标点的 ENU 坐标系换算共享相机与原生姿态，保存精确姿态 |
 | `libs/map-cesium/camera-bridge.ts` | 会话相机同步、用户意图、回声抑制、暂停期间的失效规则 |
+| `libs/map-cesium/style-expression.ts`、`style-plan.ts` | 规范库求值、基础支持范围校验与逐层诊断 |
+| `libs/map-cesium/style-mirror.ts` | 样式与级别增量同步、暂停追赶、来源错误与资源释放 |
+| `libs/map-cesium/imagery-style-port.ts`、`raster-provider.ts`、`geojson-provider.ts` | 统一影像层序、SDK 栅格请求、透明点线面瓦片 |
 | `libs/map-vue/use-cesium-canvas.ts` | 挂载后动态导入 map-cesium；`LatestController` 丢弃晚到的加载；暴露状态与重试 |
 | `libs/map-vue/CesiumCanvas.tsx` | 静态容器，挂上和卸下统一视图；接收 `assetBaseUrl`、`active`，发出 `state`，暴露 `retry()` |
 | `libs/map-vue/SwitchableMapCanvas.tsx`、`view-switch.ts` | 两个有尺寸的容器、懒加载与缓存、最新意图、就绪交接、失败回退与释放 |
-| `pages/dev/cesium/DevCesiumPage.tsx` | `/dev/cesium`：默认二维、切换三维、定位、暂停恢复、释放重建与首次三维加载失败模拟；生产构建排除 |
+| `pages/dev/cesium/DevCesiumPage.tsx` | `/dev/cesium`：本地基础样式、变色显隐与排序，以及二三维切换、定位、暂停恢复、失败重试；生产构建排除 |
 
 路由用 `withMapRuntime` 加载默认二维运行时和页面；app 通过路由 props 传入资源地址和 `prepareRuntime(kind)`，首次切到三维时才配置三维运行时。`map-cesium` 不读取环境变量，也不依赖 Vue。开发页通过 `provideMap` 创建会话，通过 `useCamera()` 显示读数，通过 `runCameraOperation` 定位。上下文只挂当前视图，只有 ready 时公开只读视口；卸载时先卸下再释放。
 
@@ -61,11 +64,25 @@
 
 本步只在开发页使用浏览工具；不支持工具的能力声明与暂停策略、业务工具与查询接入仍在 3D.4，不据此开放业务三维。
 
+## 3D.3a 基础样式镜像
+
+`CesiumView` 将会话的 `style` 和 `camera` 一起交给 Surface，镜像不读取二维引擎，也不另存资源勾选、年份或符号。完整支持表及画面差异见 [3D.3a 记录](../stages/stage-3d-3a-basic-style.md)。
+
+- background、raster、GeoJSON fill/line/circle 共用影像集合；GeoJSON 绘制成透明瓦片，允许影像、面、影像交错。透明全球底层隔离 SDK 的底层边缘延展；背景覆盖两极，GeoJSON 只支持 Mercator 有效范围
+- 栅格支持多 URL、XYZ/TMS、尺寸、级别、范围及署名；请求节流、取消仍由 SDK 管理。局部和跨经线覆盖范围同时传给 provider 与影像层，避免默认范围求交截掉一侧
+- GeoJSON 支持内联简单/Multi 几何、几何集合、孔洞、分类属性与身份过滤。完整路径交给画布裁切，不在瓦片边缘补假端点；求值用相机级别，笔宽和半径再换算到当前瓦片像素
+- 没变的图层和来源保留实例，重排只移动；换色、换数据重建对应层。GeoJSON 缩放会重新生成影像，使用最新相机级别与像素尺寸；小样先同步绘制，大数据与 Worker 性能在 3D.3b 处理
+- 暂停不写引擎，恢复应用最新快照。就绪和稳定事件检查该帧开始绘制时的样式修订；尺寸变化或 postRender 中刚更新样式时等待下一帧，避免把旧画面报告为稳定
+- 不支持的图层/属性逐层提示并跳过；同步构造或绘制属性异常只作图层诊断，provider 的实际加载失败进入 `sourceErrors`，其他层继续。修正样式不会误留来源错误，真实下载错误则在来源替换/移除时清理；过期 provider 回调不能污染新层
+- Canvas 绘制失败返回 Promise rejection，由 SDK 转为 provider 错误；有数据源的图层再记入 `sourceErrors`，背景只报告诊断。引擎渲染失败才进入整个视图的 failed。单画布加载器同样按视图状态判断整体失败，不能把普通诊断当作加载失败
+
+开发页的“定位到南京”显示本地点线面、孔洞和两层栅格，使用三个按钮验证显隐、换色与排序。页面的样式拥有者通过 `bindStyle` 绑定同一会话；三维隐藏期间修改后再切回，只追赶最新状态。测试数据随开发页打包，不请求后端或天地图。
+
 ## 最小场景与资源所有权
 
-使用 `CesiumWidget`，不用带选图器、时间轴等控件的 `Viewer`。构造时显式 `baseLayer: false`，随后加入本地 `UrlTemplateImageryProvider`；椭球地形、不创建星空与太阳/月球、不启用在线影像或地形服务。底图是 SDK 自带的 `NaturalEarthII`，按其发布 XML 使用 Geographic 分块、反向 Y、0～2 级。这是加载验证数据，不能当作业务底图精度。
+使用 `CesiumWidget`，不用带选图器、时间轴等控件的 `Viewer`。构造时显式 `baseLayer: false`；椭球地形、不创建星空与太阳/月球、不启用 SDK 默认在线服务。有会话时全部影像来自会话样式；直接创建 Surface 而不传样式时，才保留 3D.1 的 SDK 本地 `NaturalEarthII` 验证场景（Geographic、反向 Y、0～2 级），不把它作为业务底图。
 
-先关闭默认渲染循环，完成监听与底图设置后再开启。`postRender` 中可见瓦片加载完成后发出就绪；隐藏时关闭渲染循环和相机输入，恢复先调整画布尺寸再请求渲染。资源错误或渲染错误会进入失败状态，在 SDK 事件调用栈结束后释放画布，再由重试重建。
+先关闭默认渲染循环，完成监听与样式设置后再开启。`postRender` 中确认可见瓦片加载完成、该帧使用当前样式后发出就绪；隐藏时关闭渲染循环和相机输入，恢复先调整画布尺寸再请求渲染。会话来源错误单独记录；独立验证场景的本地底图资源错误或引擎渲染错误进入失败，在 SDK 事件调用栈结束后释放画布，再由重试重建。
 
 实例用 `DisposableStack` 反序释放：移除监听、销毁 Widget、移除独占容器。SDK 构造函数内部抛错、尚未返回实例时，只能移除残留容器；不能声称已验证这种情况的所有内部 GPU 资源都被释放。反复失败与 WebGL 上下文释放仍需浏览器验收。
 
@@ -92,3 +109,5 @@
 3D.2c 验证结果：全项目回归通过（icons 35、web 1654，共 1689 个用例），包含 21 条切换拥有者用例与真实开发页切换验证。暂停时的 leave 和交接后信号检查分别做过改坏验证，产生 3 个和 1 个断言失败，恢复后通过；生命周期异常重试和激活期间同目标重入也先复现再修复。类型检查、lint、公网、内网和开发页独立构建均通过。完整并行回归曾暴露 SDK 首次加载占用单用例超时、软件渲染未在 5 秒内完成的问题，已将 SDK 加载移到测试装配，并将页面末次动画的渲染等待上限与加载等待统一为 10 秒，仍按最终相机断言判断成功。
 
 真实 Chromium 已覆盖本地底图加载、拾取投影往返、背面排除、非对称留白、毫秒动画、暂停到终点、inactive 初次加载、范围定位及释放。3D.2c 开发页测试验证默认二维、首次三维失败保留原图、重试、两种画布身份复用、相机往返与暂停期间排队定位、释放后重建。部署子路径、真实拖动惯性和 GPU 内存数量仍需后续专项验收；不得据此宣称业务三维已经完成。
+
+3D.3a 验证结果：全项目回归通过（icons 35、web 1764，共 1799 个用例，本步新增 110 个），类型检查、lint、公网/内网及开发页独立构建均通过。真实 Canvas 像素验证尺寸换算、透明度、孔洞、分类与瓦片接缝；真实 Cesium 验证栅格与面穿插、重排、局部覆盖不延展、来源替换、暂停追赶，以及尺寸变化后等待最新样式帧。默认加载器与开发页覆盖局部诊断不导致整体失败、切换后样式一致。新增测试执行改坏或修复前复现验证，均以预期断言失败捕获错误，恢复后通过；细节见 [3D.3a 记录](../stages/stage-3d-3a-basic-style.md)。全量回归中的软件 WebGL 首次渲染争用通过浏览器文件串行、关键首帧等待 15 秒处理，像素与状态断言保留；普通测试仍并行。

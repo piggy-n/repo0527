@@ -7,19 +7,25 @@ import { setWorkerUrl } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { buildModuleUrl } from 'cesium';
 import { mount } from '@vue/test-utils';
+import { StyleModel } from '@yzt/map-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DevCesiumPage } from './DevCesiumPage';
 
 (buildModuleUrl as typeof buildModuleUrl & { setBaseUrl(url: string): void }).setBaseUrl('/cesium/');
 setWorkerUrl(workerUrl);
 
-afterEach(() => { document.body.replaceChildren(); });
+// 首次真实引擎着色器编译在全项目回归时较慢，按状态满足结束等待
+const READY_TIMEOUT = 15000;
+
+afterEach(() => { vi.restoreAllMocks(); document.body.replaceChildren(); });
 
 describe('二三维开发页实际装配', () => {
-  it('默认二维，三维加载失败保留原图，重试后交接并缓存两个视图', async () => {
+  it('共享样式随显隐、换色和排序更新，切换与失败恢复保留同一会话', async () => {
     const host = document.body.appendChild(document.createElement('div'));
     host.style.cssText = 'height:700px;width:1100px;';
     const prepareRuntime = vi.fn<() => Promise<void>>().mockResolvedValue();
+    // 观察真实会话提交，不替换视图、样式模型或渲染实现
+    const commits = vi.spyOn(StyleModel.prototype, 'setGroups');
     const wrapper = mount(DevCesiumPage, { props: { assetBaseUrl: '/cesium/', prepareRuntime }, attachTo: host });
     const button = (name: string) => {
       const found = wrapper.findAll('button').find(item => item.text() === name);
@@ -32,8 +38,16 @@ describe('二三维开发页实际装配', () => {
       const status = wrapper.get('[data-cesium-state]');
       expect(status.attributes('data-cesium-state')).toBe('ready');
       expect(status.attributes('data-current-view')).toBe(kind);
-    }, { timeout: 10000 });
+    }, { timeout: READY_TIMEOUT });
     await waitReady('2d');
+    const model: unknown = commits.mock.contexts[0];
+    expect(model).toBeInstanceOf(StyleModel);
+    if (!(model instanceof StyleModel)) {
+      throw new Error('开发页没有创建样式会话');
+    }
+    expect(model.current.layers.map(layer => layer.id)).toEqual([
+      'sample-background', 'sample-raster-below', 'sample-fill', 'sample-raster-overlay', 'sample-line', 'sample-points'
+    ]);
     const two = wrapper.get('[data-map-view="2d"] canvas').element;
     expect(wrapper.find('[data-map-view="3d"] canvas').exists()).toBe(false);
     expect(prepareRuntime).toHaveBeenCalledExactlyOnceWith('2d');
@@ -55,11 +69,29 @@ describe('二三维开发页实际装配', () => {
     await button('二维').trigger('click');
     await waitReady('2d');
     expect(wrapper.get('[data-map-view="2d"] canvas').element).toBe(two);
+    await button('样例变色').trigger('click');
+    await button('栅格移到面下').trigger('click');
+    expect(wrapper.get('[data-map-view="3d"]').attributes('inert')).toBeDefined();
+    expect(model.current.layers[3]).toMatchObject({ id: 'sample-fill', paint: {
+      'fill-color': ['match', ['get', 'category'], 'primary', '#13c2c2', '#eb2f96']
+    } });
+    const changedStyle = model.current;
+    const revision = model.revision;
     await button('三维').trigger('click');
     await waitReady('3d');
     expect(wrapper.get('[data-map-view="3d"] canvas').element).toBe(three);
     expect(wrapper.get('[data-session-camera]').text()).toBe(camera);
+    expect(model.current).toBe(changedStyle);
+    expect(model.revision).toBe(revision);
     expect(prepareRuntime.mock.calls).toEqual([['2d'], ['3d']]);
+    await button('隐藏样例').trigger('click');
+    expect(model.current.sources).toEqual({});
+    expect(model.current.layers.map(layer => layer.id)).toEqual(['sample-background']);
+    await button('显示样例').trigger('click');
+    expect(model.current.layers[3]).toMatchObject({ id: 'sample-fill', paint: {
+      'fill-color': ['match', ['get', 'category'], 'primary', '#13c2c2', '#eb2f96']
+    } });
+    expect(new Set(commits.mock.contexts).size).toBe(1);
     await button('暂停').trigger('click');
     const paused = wrapper.get('[data-session-camera]').text();
     await button('江苏范围').trigger('click');
@@ -73,5 +105,5 @@ describe('二三维开发页实际装配', () => {
     expect(wrapper.find('canvas').exists()).toBe(true);
     wrapper.unmount();
     expect(host.querySelector('canvas')).toBeNull();
-  }, 30000);
+  }, 45000);
 });

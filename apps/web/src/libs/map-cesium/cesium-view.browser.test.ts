@@ -1,16 +1,22 @@
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import { buildModuleUrl } from 'cesium';
-import { MapSession, type CameraChange } from '@yzt/map-core';
+import { MapSession, type CameraChange, type StyleGroup } from '@yzt/map-core';
 import { describe, expect, it } from 'vitest';
 import { CesiumView } from './cesium-view';
 
 // 官方导出函数的 setBaseUrl 在当前发布类型中遗漏；测试只使用本地静态资源
 (buildModuleUrl as typeof buildModuleUrl & { setBaseUrl(url: string): void }).setBaseUrl('/cesium/');
 
-function setup(active = true) {
+// 全项目并行回归使用软件 WebGL，首次着色器编译需留出余量；仍按渲染事件结束等待
+const FRAME_TIMEOUT = 15000;
+
+function setup(active = true, group?: StyleGroup) {
   const container = document.body.appendChild(document.createElement('div'));
   container.style.cssText = 'width:800px;height:600px;';
-  const session = new MapSession({ groups: [], camera: { center: [119, 32], zoom: 8, bearing: 0, pitch: 0 } });
+  const session = new MapSession({ groups: ['sample'], camera: { center: [119, 32], zoom: 8, bearing: 0, pitch: 0 } });
+  if (group) {
+    session.style.setGroup('sample', group);
+  }
   const errors: unknown[] = [];
   const changes: CameraChange[] = [];
   const unsubscribe = session.camera.on('change', change => changes.push(change));
@@ -29,7 +35,7 @@ async function outcome(promise: Promise<void>) {
   try {
     return await Promise.race([
       promise.then(() => 'ready', error => String(error)),
-      new Promise<string>(resolve => { timer = setTimeout(() => resolve('timeout'), 8000); })
+      new Promise<string>(resolve => { timer = setTimeout(() => resolve('timeout'), FRAME_TIMEOUT); })
     ]);
   } finally {
     clearTimeout(timer);
@@ -44,8 +50,93 @@ function settled(view: CesiumView) {
   return outcome(promise).finally(unsubscribe);
 }
 
+// 在渲染回调内读取公开画布，避免 WebGL 默认清空帧缓冲后读到黑色
+function centerPixel(view: CesiumView, container: HTMLElement) {
+  let resolve!: (pixel: readonly number[]) => void;
+  const promise = new Promise<readonly number[]>(yes => { resolve = yes; });
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('缺少测试画布');
+  }
+  const remove = view.on('settle', () => {
+    const sceneCanvas = container.querySelector('canvas');
+    if (sceneCanvas) {
+      context.drawImage(sceneCanvas, sceneCanvas.width / 2, sceneCanvas.height / 2, 1, 1, 0, 0, 1, 1);
+      resolve([...context.getImageData(0, 0, 1, 1).data]);
+    }
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<readonly number[]>(yes => { timer = setTimeout(() => yes([]), FRAME_TIMEOUT); })
+  ]).finally(() => { clearTimeout(timer); remove(); });
+}
+
+// 相同来源配合替换图层，验证真实 Surface 接到会话而非测试单独装配的镜像
+const SAMPLE_SOURCE: StyleGroup['sources'] = {
+  'sample-area': {
+    type: 'geojson', data: {
+      type: 'Polygon', coordinates: [[[118.8, 31.8], [119.2, 31.8], [119.2, 32.2], [118.8, 32.2], [118.8, 31.8]]]
+    }
+  }
+};
+function sampleStyle(color: string, visible = true): StyleGroup {
+  return {
+    sources: SAMPLE_SOURCE,
+    layers: [
+      { id: 'sample-background', type: 'background', paint: { 'background-color': '#0000ff' } },
+      {
+        id: 'sample-fill', type: 'fill', source: 'sample-area',
+        layout: { visibility: visible ? 'visible' : 'none' }, paint: { 'fill-color': color }
+      }
+    ]
+  };
+}
+
 describe('Cesium 真实视图', () => {
-  it('本地底图加载、拾取投影往返与背面排除，程序定位按毫秒完成', async () => {
+  it('真实画布镜像会话颜色、显隐，暂停期间的修改在恢复时追上', async () => {
+    using fixture = setup(true, sampleStyle('#ff0000'));
+    const { view, session, container } = fixture;
+    const initial = centerPixel(view, container);
+    expect(await outcome(view.whenReady())).toBe('ready');
+    expect(await initial).toEqual([255, 0, 0, 255]);
+    const changed = centerPixel(view, container);
+    session.style.setGroup('sample', sampleStyle('#00ff00'));
+    expect(await changed).toEqual([0, 255, 0, 255]);
+    view.pause();
+    session.style.setGroup('sample', sampleStyle('#ff0000'));
+    session.style.setGroup('sample', sampleStyle('#00ff00', false));
+    const resumed = centerPixel(view, container);
+    view.resume();
+    expect(await resumed).toEqual([0, 0, 255, 255]);
+    expect(view.sourceErrors.size).toBe(0);
+    expect(fixture.errors).toEqual([]);
+  }, 30000);
+
+  it('尺寸改变引发级别样式重绘时，首次稳定事件必须对应新画面', async () => {
+    using fixture = setup(true, {
+      sources: {},
+      layers: [{
+        id: 'sample-background', type: 'background',
+        paint: { 'background-color': ['step', ['zoom'], '#ff0000', 8.1, '#00ff00'] }
+      }]
+    });
+    const { view, container, session } = fixture;
+    const initial = centerPixel(view, container);
+    expect(await outcome(view.whenReady())).toBe('ready');
+    expect(await initial).toEqual([255, 0, 0, 255]);
+    const resized = centerPixel(view, container);
+    container.style.height = '750px';
+    const pixel = await resized;
+    expect(session.camera.current.zoom).toBeGreaterThan(8.1);
+    expect(pixel).toEqual([0, 255, 0, 255]);
+    expect(fixture.errors).toEqual([]);
+  }, 20000);
+
+  it('会话场景加载、拾取投影往返与背面排除，程序定位按毫秒完成', async () => {
     using fixture = setup();
     const { view, errors, changes } = fixture;
     const initialFrame = settled(view);
