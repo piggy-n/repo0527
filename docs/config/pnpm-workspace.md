@@ -19,6 +19,10 @@ packages:
 
 minimumReleaseAge: 4320
 
+overrides:
+  "@cesium/engine": "26.3.0"
+  "@cesium/widgets": "16.2.0"
+
 allowBuilds:
   "@parcel/watcher": false
   "unrs-resolver": false
@@ -38,6 +42,10 @@ workspace 带来的能力：
 - 包之间可以用 `workspace:*` 互相引用，不用发布到 npm
 
 pnpm 的 `node_modules` 是严格的：每个包只能访问自己声明过的依赖，不会出现"没声明却能 import"的幽灵依赖。npm 和 yarn classic 把所有依赖平铺到根目录，没声明的包往往也能被 import 到。
+
+## overrides
+
+Cesium 1.145.0 的源码依赖写的是 engine/widgets 版本范围，随包发布的 Worker 和类型却来自同一次发行。这里把 engine 固定为 26.3.0、widgets 固定为 16.2.0，使两边一致；升级 Cesium 时一起核对并更新，不单独放宽内部版本。详见 [map-cesium](../modules/map-cesium.md)。
 
 ## minimumReleaseAge
 

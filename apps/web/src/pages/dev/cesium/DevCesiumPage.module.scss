@@ -1,0 +1,35 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--color-bg-page);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+  padding: var(--space-md);
+  background-color: var(--color-bg-container);
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+.description,
+.error {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-sm);
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.mapArea {
+  flex: 1;
+  min-height: 0;
+}

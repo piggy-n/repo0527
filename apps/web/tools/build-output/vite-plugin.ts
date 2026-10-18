@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { loadEnv, normalizePath, type Plugin, type ResolvedConfig, type Rolldown } from 'vite';
+import { checkCesiumAssets } from '../cesium-assets/vite-plugin.ts';
 
 /** 判断目标是否在目录内，包含目录自身 */
 function contains(directory: string, target: string): boolean {
@@ -18,8 +19,8 @@ function checkEntryImports(bundle: Rolldown.OutputBundle): void {
       continue;
     }
     visited.add(chunk.fileName);
-    if (chunk.moduleIds.some(id => normalizePath(id).includes('/node_modules/maplibre-gl/'))) {
-      throw new Error(`[build-output] 入口静态依赖包含 MapLibre：${chunk.fileName}`);
+    if (chunk.moduleIds.some(id => /\/node_modules\/(?:maplibre-gl|cesium|@cesium\/[^/]+)\//.test(normalizePath(id)))) {
+      throw new Error(`[build-output] 入口静态依赖包含地图引擎：${chunk.fileName}`);
     }
     for (const name of chunk.imports) {
       const dependency = bundle[name];
@@ -50,7 +51,7 @@ function checkFiles(directory: string, keys: readonly string[], prefix = ''): vo
   }
 }
 
-/** 构建完成时清理本地设计稿，并检查开发页、入口依赖和关闭天地图时的 key */
+/** 构建完成时清理本地设计稿，并检查开发页、入口依赖、Cesium 资源和关闭天地图时的 key */
 export function buildOutputPlugin(): Plugin {
   let config: ResolvedConfig;
   let forbiddenKeys: string[] = [];
@@ -96,6 +97,7 @@ export function buildOutputPlugin(): Plugin {
           }
         }
         checkEntryImports(bundle);
+        checkCesiumAssets(outputDir);
         checkFiles(outputDir, forbiddenKeys);
         config.logger.info('[build-output] 产物检查通过');
       }

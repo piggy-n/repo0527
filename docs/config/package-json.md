@@ -196,6 +196,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 
 ### 各依赖的选择理由
 
+3D.1 新增运行时依赖 `cesium: 1.145.0` 和构建依赖 `vite-plugin-static-copy: ^3.4.0`。前者按 ADR 0002、0064 精确固定，内部 engine/widgets 的发行版本在 workspace 的 `overrides` 对齐；后者处理四类 SDK 静态资源的开发服务和构建复制，避免另写静态文件服务。部署细节与初次构建发现的目录差异见 [map-cesium](../modules/map-cesium.md)。
+
 | 依赖 | 说明 | 常见替代 |
 |---|---|---|
 | `element-plus` | UI 组件库。组件显式具名导入，JS 由打包工具 tree-shake；样式全量引入 `dist/index.css`（约 345 KB，gzip 约 46 KB），主题映射见 [design/theme.md](../design/theme.md) | Naive UI、Ant Design Vue |

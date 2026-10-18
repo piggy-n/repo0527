@@ -55,6 +55,14 @@ describe('withMapRuntime', () => {
     await expect(load()).rejects.toThrow('分块加载失败');
     expect(setup).not.toHaveBeenCalled();
   });
+
+  it('不需要预热的运行时也先设置再交出页面', async () => {
+    const setup = vi.fn<() => void>();
+    const load = withMapRuntime(() => Promise.resolve('三维页面'), () => Promise.resolve({ setup }));
+
+    await expect(load()).resolves.toBe('三维页面');
+    expect(setup).toHaveBeenCalledOnce();
+  });
 });
 
 describe('框架', () => {

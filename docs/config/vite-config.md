@@ -13,7 +13,7 @@
 
 | 配置 | 值 | 说明 |
 |---|---|---|
-| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`buildOutputPlugin` 只在构建时清理、检查产物，见下文 |
+| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`cesiumAssetsPlugin()`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`cesiumAssetsPlugin` 提供三维静态资源；`buildOutputPlugin` 只在构建时清理、检查产物，见下文 |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `css.preprocessorOptions.scss.loadPaths` | `[src/libs]` | libs 模块的 Sass 入口按模块名引用，见下文 |
 | `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
@@ -43,7 +43,8 @@ const generators =
 
 - Vite 复制 `public/` 后，在 `writeBundle` 清理当前输出目录内的 `design.local/`，源设计稿仍放在 `public/design.local/`。删除前确认输出目录与源码、`public` 不重叠，支持自定义 `outDir`
 - 检查全部分块的模块清单，禁止包含 `src/pages/dev/`；再检查磁盘文件，禁止残留 `Dev*Page` 文件和 `design.local`
-- 从入口分块沿静态 `imports` 检查依赖，禁止包含 `maplibre-gl`；不遍历动态导入，地图运行时仍可按需加载、预加载
+- 从入口分块沿静态 `imports` 检查依赖，禁止包含 `maplibre-gl`、`cesium` 或 `@cesium/*`；不遍历动态导入，地图运行时仍可按需加载、预加载
+- `cesiumAssetsPlugin` 用 `vite-plugin-static-copy` 在 `writeBundle` 复制四个 SDK 资源目录到 `cesium/`，后置产物检查逐个比较源与输出的文件名、字节，遗漏或错层级会让构建失败；开发环境由同一插件提供静态文件，见 [map-cesium](../modules/map-cesium.md)
 - 关闭天地图时，有效的 `VITE_TIANDITU_KEY` 必须为空；扫描文本产物，禁止残留按 `production` 模式读取的公网 key，错误只报告文件名。未调用的天地图地址模板允许保留，不以域名字符串代替运行时开关
 
 检查失败会让构建失败。本机部署构建和 CI 使用同一套检查；CI 同时执行公网和内网构建。

@@ -18,7 +18,9 @@ libs/map-core      地图会话（样式、相机、当前工具）、视图接�
 libs/utils         LatestController、safeReporter、Worker 通信层
 ```
 
-三维（`libs/map-cesium`）以后放在 map-core 之上，只能由 map-vue 动态导入。依赖方向由 lint 检查（ADR 0006）。
+三维（`libs/map-cesium`）位于 map-core 之上，map-vue 只能动态导入它。依赖方向由 lint 检查（ADR 0006）。
+
+三维的 [3D.0 盘点与数据小样](../stages/stage-3d-0-plan.md) 和 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md) 已确认。3D.1 接入了开发画布和本地静态资源，3D.2a 接入会话相机，见 [map-cesium](map-cesium.md)；完整视图接口、业务图层与二三维切换尚未接入。
 
 ## 贯穿全局的几条原则
 

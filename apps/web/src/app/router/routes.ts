@@ -2,7 +2,7 @@ import type { RouteRecordRaw } from 'vue-router';
 import { Role } from '@/shared/auth/roles';
 import { RouteName } from '@/shared/router/route-names';
 import { AppLayout } from '../layout/AppLayout';
-import { withMapRuntime } from '../map-framework';
+import { loadMapRuntime, withMapRuntime } from '../map-framework';
 
 const loadPlaceholder = () =>
   import('@/pages/placeholder/PlaceholderPage').then(({ PlaceholderPage }) => PlaceholderPage);
@@ -70,6 +70,16 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
       import('@/pages/dev/resources/DevResourcesPage').then(({ DevResourcesPage }) => DevResourcesPage)
     ),
     meta: { title: '资源图层实测', public: true }
+  },
+  {
+    path: '/dev/cesium',
+    name: RouteName.devCesium,
+    component: withMapRuntime(
+      () => import('@/pages/dev/cesium/DevCesiumPage').then(({ DevCesiumPage }) => DevCesiumPage),
+      () => loadMapRuntime('3d')
+    ),
+    props: { assetBaseUrl: `${import.meta.env.BASE_URL}cesium/` },
+    meta: { title: '三维画布验证', public: true }
   }
 ] : [];
 

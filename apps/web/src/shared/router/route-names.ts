@@ -6,6 +6,7 @@ export const RouteName = {
   devTheme: 'dev-theme',
   devMap: 'dev-map',
   devResources: 'dev-resources',
+  devCesium: 'dev-cesium',
   currentMap: 'current-map',
   landChangeQuery: 'land-change-query',
   spaceMonitoringQuery: 'space-monitoring-query',

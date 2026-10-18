@@ -36,6 +36,7 @@ docs/
 │  ├─ ui.md                   libs/ui：两个入口、窄屏断点、分栏布局、面板、区块、标题
 │  ├─ map-overview.md         地图架构总览：分层、贯穿全局的原则、按主题的现行 ADR 与修正关系、阅读顺序
 │  ├─ map-core.md             地图内核：用法、会话与 MapLibre 适配器的实现、实测行为、加载策略；附录为旧代码分析
+│  ├─ map-cesium.md           三维：最小画布、运行时、资源部署、3D.2a 相机桥接与待验收项
 │  ├─ map-vue.md              libs/map-vue：地图与 Vue 的衔接（provideMap、样式绑定、MapCanvas、useMap、相机操作、定位可视区域）
 │  ├─ shared-map.md           shared/map：项目级的公共地图能力（底图、边界、默认视角、工具栏、测量、区划定位、坐标定位、状态提示）
 │  ├─ perf.md                 shared/perf：加载耗时的标记（LoadTrace、登录到地图）与实测脚本
@@ -56,7 +57,8 @@ docs/
    ├─ stage-5c-current-map-business.md   阶段五 5C：现状底图业务
    ├─ stage-5d-map-ui.md                 阶段五 5D：地图页界面的专门设计
    ├─ stage-5e-wrap-up.md                阶段五 5E：收尾（加载策略与页面缓存），附阶段五回顾
-   └─ stage-5-acceptance-review.md       阶段五验收报告：自动检查、发现的问题、可以优化的地方
+   ├─ stage-5-acceptance-review.md       阶段五验收报告：自动检查、发现的问题、可以优化的地方
+   └─ stage-3d-0-plan.md                三维 3D.0：接入范围、样式支持、数据小样与后续验收计划
 ```
 
 ## 建议的阅读顺序
@@ -78,6 +80,8 @@ docs/
 5. [commands.md](commands.md)：日常要用的命令
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明。
+
+三维接入从 [3D.0 盘点与小样记录](stages/stage-3d-0-plan.md) 开始；范围由已接受的 [ADR 0064](adr/0064-three-dimensional-integration-scope.md) 确定，当前已实现的部分与验收边界见 [map-cesium](modules/map-cesium.md)。
 
 ## 各类文档的分工
 
