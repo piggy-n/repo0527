@@ -3,7 +3,7 @@ import styles from './CesiumCanvas.module.scss';
 import { type CesiumCanvasState, useCesiumCanvas } from './use-cesium-canvas';
 import { injectMapState } from './use-map';
 
-/** 三维预览画布；相机来自同一个地图会话，完整视图接口尚未接入 */
+/** 三维画布挂到统一上下文，定位、拾取、工具与失败重试复用同一个会话 */
 export const CesiumCanvas = defineComponent({
   name: 'CesiumCanvas',
   props: {
@@ -17,7 +17,7 @@ export const CesiumCanvas = defineComponent({
     const container = ref<HTMLElement>();
     const map = injectMapState('CesiumCanvas');
     const { state, retry } = useCesiumCanvas(
-      container, () => props.assetBaseUrl, () => props.active, undefined, map.session.camera
+      container, () => props.assetBaseUrl, () => props.active, undefined, map
     );
     watch(state, value => emit('state', value), { immediate: true });
     expose({ retry });

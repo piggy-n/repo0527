@@ -14,7 +14,7 @@ import type { CameraState } from '@yzt/map-core';
 import type { CameraPort } from './camera-bridge';
 
 // 与 MapLibre 6 的 transform_helper、mercator_coordinate 保持相同的视场角和 512 像素缩放口径
-const VERTICAL_FOV = 0.6435011087932844;
+export const VERTICAL_FOV = 0.6435011087932844;
 const METERS_PER_PIXEL_AT_EQUATOR = 2 * Math.PI * 6371008.8 / 512;
 const MERCATOR_LATITUDE = 85.05112878;
 // lookAt 在正天底丢失方位角，用微小俯角保留朝向，读回时归零
@@ -25,7 +25,7 @@ interface CameraGeometryHost {
   readonly camera: Pick<
     Camera,
     'frustum' | 'positionCartographic' | 'positionWC' | 'directionWC' | 'upWC' |
-    'lookAt' | 'lookAtTransform' | 'pickEllipsoid' | 'setView'
+    'lookAt' | 'lookAtTransform' | 'pickEllipsoid' | 'position' | 'direction' | 'up' | 'right'
   >;
   readonly canvas: Pick<HTMLCanvasElement, 'clientWidth' | 'clientHeight'>;
   readonly scene: Pick<Scene, 'ellipsoid'>;
@@ -39,7 +39,7 @@ export interface CesiumCameraPose {
 }
 
 // 极区按二维可表示的纬度计算比例尺，避免 cos(90°) 退化
-function scaleAtLatitude(latitude: number): number {
+export function scaleAtLatitude(latitude: number): number {
   const limited = CesiumMath.clamp(latitude, -MERCATOR_LATITUDE, MERCATOR_LATITUDE);
   return METERS_PER_PIXEL_AT_EQUATOR * Math.cos(CesiumMath.toRadians(limited));
 }
@@ -84,7 +84,7 @@ export function createCesiumCameraPort(widget: CameraGeometryHost): CameraPort<C
       const up = Matrix4.multiplyByPointAsVector(toLocal, camera.upWC, new Cartesian3());
       const bearing = CesiumMath.toDegrees(Math.atan2(up.x, up.y));
       const pitch = CesiumMath.toDegrees(Math.atan2(Math.hypot(offset.x, offset.y), offset.z));
-      const metersPerPixel = 2 * distance * Math.tan(camera.frustum.fovy / 2) / canvas.clientHeight;
+      const metersPerPixel = 2 * distance * Math.tan(VERTICAL_FOV / 2) / canvas.clientHeight;
       const zoom = Math.log2(scaleAtLatitude(latitude) / metersPerPixel);
       if (![latitude, bearing, pitch, zoom].every(Number.isFinite)) {
         return null;
@@ -104,7 +104,7 @@ export function createCesiumCameraPort(widget: CameraGeometryHost): CameraPort<C
       const latitude = CesiumMath.clamp(state.center[1], -MERCATOR_LATITUDE, MERCATOR_LATITUDE);
       const pitch = CesiumMath.clamp(state.pitch, NADIR_PITCH, 85);
       const range = scaleAtLatitude(latitude) / 2 ** state.zoom * Math.max(1, canvas.clientHeight) /
-        (2 * Math.tan(camera.frustum.fovy / 2));
+        (2 * Math.tan(VERTICAL_FOV / 2));
       if (!Number.isFinite(range) || range <= 0) {
         throw new RangeError('相机缩放级无法转换为有限的三维距离');
       }
@@ -123,11 +123,12 @@ export function createCesiumCameraPort(widget: CameraGeometryHost): CameraPort<C
       };
     },
     restore(pose): void {
-      camera.setView({
-        destination: pose.position,
-        orientation: { direction: pose.direction, up: pose.up },
-        endTransform: Matrix4.IDENTITY
-      });
+      // setView 会把方向转成欧拉角，近正俯视时舍入方位；直接恢复公开向量保持精确快照
+      camera.lookAtTransform(Matrix4.IDENTITY);
+      Cartesian3.clone(pose.position, camera.position);
+      Cartesian3.clone(pose.direction, camera.direction);
+      Cartesian3.clone(pose.up, camera.up);
+      Cartesian3.cross(camera.direction, camera.up, camera.right);
     },
     equals(a, b): boolean {
       // 世界坐标只用绝对误差，避免按地球半径计算相对误差而吞掉真实移动

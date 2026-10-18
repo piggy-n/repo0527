@@ -21,7 +21,7 @@ function listFiles(directory: string, prefix = ''): string[] {
       throw new Error(`[build-output] Cesium 静态资源包含非普通文件：${name}`);
     }
   }
-  return files.sort();
+  return files.toSorted();
 }
 
 /** 开发时提供静态文件，构建时在产物检查之前复制到 cesium 目录 */

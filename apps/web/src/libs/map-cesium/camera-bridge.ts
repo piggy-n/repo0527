@@ -50,7 +50,7 @@ export class CesiumCameraBridge<Pose> implements Disposable {
   }
 
   /** 每轮渲染后读取真实姿态；同步写入的迟到事件不会被归为用户操作 */
-  update(): void {
+  update(cause: CameraCause = 'user'): void {
     if (!this.#active || this.#disposed) {
       return;
     }
@@ -60,8 +60,19 @@ export class CesiumCameraBridge<Pose> implements Disposable {
         return;
       }
       this.#last = pose;
-      this.#publish('user');
+      this.#publish(cause);
     });
+  }
+
+  /** 程序定位直接到达终点；先登记姿态，再按 program 写回，避免下一帧被认作用户操作 */
+  move(pose: Pose): void {
+    if (this.#active && !this.#disposed) {
+      this.#guard(() => {
+        this.#port.restore(pose);
+        this.#last = this.#port.capture();
+        this.#publish('program');
+      });
+    }
   }
 
   /** 视口改变了像素尺度，保持精确姿态并按同步原因更新共享相机 */

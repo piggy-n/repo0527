@@ -117,6 +117,7 @@ describe('Cesium 相机几何', () => {
     const { port } = fixture();
     port.apply({ ...INITIAL, center: [118.8, 90], pitch: 90 });
 
+    expect(port.read()).not.toBeNull();
     expectCamera(port.read(), { ...INITIAL, center: [118.8, 85.05112878], pitch: 85 });
   });
 

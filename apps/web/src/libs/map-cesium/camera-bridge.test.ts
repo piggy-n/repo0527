@@ -18,8 +18,8 @@ function fixture(onError = vi.fn<(error: unknown) => void>()) {
   camera.on('change', change => changes.push(change));
   let pose: Pose = { state: INITIAL, detail: 0 };
   let hit = true;
-  const apply = vi.fn((state: CameraState) => { pose = { state, detail: 0 }; });
-  const restore = vi.fn((saved: Pose) => { pose = saved; });
+  const apply = vi.fn<(state: CameraState) => void>(state => { pose = { state, detail: 0 }; });
+  const restore = vi.fn<(saved: Pose) => void>(saved => { pose = saved; });
   const port: CameraPort<Pose> = {
     read: () => hit ? pose.state : null,
     capture: () => pose,
@@ -36,6 +36,19 @@ function fixture(onError = vi.fn<(error: unknown) => void>()) {
 }
 
 describe('Cesium 会话相机桥接', () => {
+  it('程序终点与中间帧按 program 写回，后续渲染没有用户回声', () => {
+    const { bridge, camera, changes, move } = fixture();
+    using lifetime = new DisposableStack();
+    lifetime.use(camera);
+    lifetime.use(bridge);
+    bridge.resume();
+    move({ ...MOVED, zoom: 9 });
+    bridge.update('program');
+    bridge.move({ state: MOVED, detail: 1 });
+    bridge.update();
+    expect(camera.current).toEqual(MOVED);
+    expect(changes.map(change => change.cause)).toEqual(['program', 'program']);
+  });
   it('构造时不改引擎，激活后才应用会话；迟到的渲染不产生用户回声', () => {
     const { bridge, apply, changes, camera } = fixture();
     using lifetime = new DisposableStack();

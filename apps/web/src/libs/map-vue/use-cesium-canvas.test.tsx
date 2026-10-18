@@ -1,6 +1,9 @@
 import { mount } from '@vue/test-utils';
 import { defineComponent, nextTick, ref } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
+import { MapSession, NO_SOURCE_ERRORS } from '@yzt/map-core';
+import { MapContextState } from './context';
+import { resolveOverlayOptions } from './overlay';
 import {
   type CesiumCanvasOptions,
   type CesiumCanvasSurface,
@@ -17,13 +20,19 @@ function pendingLoader() {
 
 /** 假画布记录生命周期，保留回调以模拟晚到的引擎事件 */
 function fakeSurface() {
-  const pause = vi.fn();
-  const resume = vi.fn();
-  const dispose = vi.fn();
+  const pause = vi.fn<() => void>();
+  const resume = vi.fn<() => void>();
+  const dispose = vi.fn<() => void>();
   let options!: CesiumCanvasOptions;
-  const create = vi.fn((value: CesiumCanvasOptions): CesiumCanvasSurface => {
+  const create = vi.fn<(value: CesiumCanvasOptions) => CesiumCanvasSurface>(value => {
     options = value;
-    return { pause, resume, [Symbol.dispose]: dispose };
+    return {
+      kind: '3d', state: 'initializing', failure: null, sourceErrors: NO_SOURCE_ERRORS,
+      whenReady: () => Promise.resolve(),
+      flyTo: () => {}, fitBounds: () => {}, pick: () => ({ kind: 'miss' }), project: () => null,
+      queryRendered: () => [], on: () => () => {},
+      pause, resume, [Symbol.dispose]: dispose
+    };
   });
   return { create, pause, resume, dispose, ready: () => options.onReady(), fail: () => options.onError(new Error('失败')) };
 }
@@ -45,6 +54,44 @@ function harness(load: LoadCesiumSurface) {
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
 describe('三维预览画布生命周期', () => {
+  it('失败视图仍在上下文中，公共 retry 重建，卸载先卸下视图', async () => {
+    const { CesiumView } = await import('@yzt/map-cesium');
+    using session = new MapSession({ groups: [], camera: { center: [119, 32], zoom: 8, bearing: 0, pitch: 0 } });
+    using map = new MapContextState(session, () => {}, resolveOverlayOptions());
+    let fail: ((error: unknown) => void) | undefined;
+    const dispose = vi.fn<() => void>();
+    const create = vi.fn<(options: CesiumCanvasOptions) => CesiumCanvasSurface>(options => new CesiumView({
+      ...options, session,
+      createSurface: value => {
+        fail = value.onError;
+        queueMicrotask(() => { value.onReady?.(); options.onReady(); });
+        return {
+          pause: () => {}, resume: () => {}, flyTo: () => {}, fitBounds: () => {},
+          pick: () => ({ kind: 'miss' }), project: () => null, [Symbol.dispose]: dispose
+        };
+      }
+    }));
+    const wrapper = mount(defineComponent({
+      setup() {
+        const container = ref<HTMLElement>();
+        useCesiumCanvas(container, () => '/cesium/', () => true, () => Promise.resolve(create), map);
+        return () => <div ref={container} />;
+      }
+    }));
+    await flush();
+    expect(map.context.view.value?.kind).toBe('3d');
+    fail?.(new Error('引擎失败'));
+    expect(map.context.viewState.value).toBe('failed');
+    expect(map.context.failure.value?.kind).toBe('engine');
+    map.context.retry();
+    await flush();
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(map.context.viewState.value).toBe('ready');
+    wrapper.unmount();
+    expect(map.context.viewState.value).toBe('idle');
+    expect(dispose).toHaveBeenCalledTimes(2);
+  });
   it('加载晚于卸载时不创建引擎', async () => {
     const loading = pendingLoader();
     const surface = fakeSurface();
@@ -99,8 +146,9 @@ describe('三维预览画布生命周期', () => {
     await flush();
     first.fail();
     expect(controller.state.value).toEqual({ status: 'failed', message: '失败' });
-    expect(first.dispose).toHaveBeenCalledOnce();
+    expect(first.dispose).not.toHaveBeenCalled();
     await controller.retry();
+    expect(first.dispose).toHaveBeenCalledOnce();
     second.ready();
     first.ready();
     first.fail();

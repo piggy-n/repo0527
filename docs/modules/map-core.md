@@ -1,6 +1,6 @@
 # 地图内核（map-core）
 
-> 状态：阶段四完成了地图会话和 MapLibre 适配器；阶段五已加入工具、选择、输入、拾取、投影与渲染要素查询，以及加载预热和页面暂停恢复。三维的 [3D.0 方案](../stages/stage-3d-0-plan.md) 已接受，3D.1 已有独立开发画布，3D.2a 已桥接会话相机，见 [map-cesium](map-cesium.md)；完整视图、样式镜像与瓦片数据服务尚未实现。现行决策及修正关系见 [map-overview.md](map-overview.md)；附录保留对旧项目（yzt `master-demo` 836f03b）的历史分析。
+> 状态：阶段四完成了地图会话和 MapLibre 适配器；阶段五已加入工具、选择、输入、拾取、投影与渲染要素查询，以及加载预热和页面暂停恢复。三维的 [3D.0 方案](../stages/stage-3d-0-plan.md) 已接受，3D.1 已有独立开发画布，3D.2a 已桥接会话相机，3D.2b 已实现统一视图，见 [map-cesium](map-cesium.md)；切换、样式镜像与瓦片数据服务尚未实现。现行决策及修正关系见 [map-overview.md](map-overview.md)；附录保留对旧项目（yzt `master-demo` 836f03b）的历史分析。
 
 ## 总体思路
 
@@ -389,7 +389,7 @@ store.clear();
 |---|---|
 | map-vue 的运行时注入（按框架组织的运行时由 app 注入；`provideMap`、`<MapCanvas>`、`useMap()` 已在 5A.2 完成，见 [map-vue.md](map-vue.md)） | 三维阶段，有了第二个框架时（5E 开始时决定） |
 | 阶段六新增业务图层的拥有者，从自己的状态推导分组（现状底图、底图与边界已在阶段五完成） | 对应业务迁移时 |
-| Cesium 镜像与相机同步、三维样式的支持清单 | [3D.0](../stages/stage-3d-0-plan.md) 已盘点，ADR 0064 已接受；3D.2a 已桥接会话相机，完整视图与样式镜像待做 |
+| Cesium 镜像与相机同步、三维样式的支持清单 | [3D.0](../stages/stage-3d-0-plan.md) 已盘点，ADR 0064 已接受；3D.2a 相机桥接、3D.2b 统一视图已完成，切换与样式镜像待做 |
 | 瓦片数据服务（基于 `@yzt/utils` 的 Worker 通信层） | 第一个 Worker 真实使用方出现时 |
 
 ## 待定问题

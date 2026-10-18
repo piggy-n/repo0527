@@ -13,7 +13,7 @@
 | `context.ts` | `MapContextState`：会话、当前视图、视图状态、`whenReady`、`whenSettled`、`useCamera`、相机操作、悬浮元素的登记表与 `overlayPadding`，对外的只读上下文与视图的受限入口 |
 | `overlay.ts` | `computeOverlayPadding`：按悬浮元素的实际占用算出定位用的 padding；`revealOffset`：被挡住的位置挪进可视区域的平移量（纯函数） |
 | `MapCanvas.tsx` | `<MapCanvas>`：二维地图画布，挂载后创建视图、卸载时释放 |
-| `CesiumCanvas.tsx`、`use-cesium-canvas.ts` | 三维预览的动态加载、失败重试、暂停与释放；3D.2a 从上下文取会话相机，完整视图入口尚未接入，见 [map-cesium](map-cesium.md) |
+| `CesiumCanvas.tsx`、`use-cesium-canvas.ts` | 动态加载三维视图、挂到公共上下文、失败重试、暂停与释放；3D.2b 已接入统一定位与只读视口，见 [map-cesium](map-cesium.md) |
 | `use-map.ts` | `useMap()`：子孙组件取只读上下文；`useMapOverlay()`：悬浮元素登记自己贴着的边 |
 
 ## 用法

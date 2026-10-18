@@ -1,23 +1,21 @@
 import { LatestController, safeReporter } from '@yzt/utils';
-import type { CameraModel } from '@yzt/map-core';
+import type { MapSession, MapView } from '@yzt/map-core';
 import { onActivated, onDeactivated, onMounted, onScopeDispose, type Ref, shallowRef, watch } from 'vue';
+import type { MapContextState } from './context';
 
-/** 预览画布的状态；后续 MapView 接入时由地图上下文统一持有 */
+/** 开发画布的加载反馈；就绪视口和引擎失败同时由地图上下文持有 */
 export type CesiumCanvasState =
   | { status: 'loading' | 'ready' }
   | { status: 'failed'; message: string };
 
 /** Vue 层只持有生命周期，不暴露原生 Cesium 对象 */
-export interface CesiumCanvasSurface extends Disposable {
-  pause(): void;
-  resume(): void;
-}
+export type CesiumCanvasSurface = MapView;
 
 /** 创建边界用于注入假画布，测试不模拟整个 SDK */
 export interface CesiumCanvasOptions {
   container: HTMLElement;
   assetBaseUrl: string;
-  camera?: CameraModel;
+  session?: MapSession<string>;
   active: boolean;
   onReady(): void;
   onError(error: unknown): void;
@@ -27,8 +25,15 @@ export type LoadCesiumSurface = () => Promise<(options: CesiumCanvasOptions) => 
 
 /** 模块只在画布挂载时加载，二维入口不静态引用 Cesium */
 const loadCesiumSurface: LoadCesiumSurface = async () => {
-  const { CesiumSurface } = await import('@yzt/map-cesium');
-  return options => new CesiumSurface(options);
+  const { CesiumView } = await import('@yzt/map-cesium');
+  return options => {
+    if (!options.session) {
+      throw new Error('CesiumCanvas 需要地图会话');
+    }
+    const view = new CesiumView({ ...options, session: options.session });
+    void view.whenReady().then(() => options.onReady(), error => options.onError(error));
+    return view;
+  };
 };
 
 /** 管理预览画布的懒加载、重试和隐藏生命周期 */
@@ -37,7 +42,7 @@ export function useCesiumCanvas(
   assetBaseUrl: () => string,
   active: () => boolean,
   load: LoadCesiumSurface = loadCesiumSurface,
-  camera?: CameraModel
+  map?: MapContextState
 ) {
   const state = shallowRef<CesiumCanvasState>({ status: 'loading' });
   const operation = new LatestController();
@@ -51,6 +56,9 @@ export function useCesiumCanvas(
     const previous = surface;
     surface = undefined;
     try {
+      if (previous) {
+        map?.detachView(previous);
+      }
       previous?.[Symbol.dispose]();
     } catch (error) {
       report(error);
@@ -68,7 +76,6 @@ export function useCesiumCanvas(
     const fail = (error: unknown) => {
       if (!signal.aborted && !failed) {
         failed = true;
-        release();
         state.value = { status: 'failed', message: error instanceof Error ? error.message : String(error) };
       }
     };
@@ -80,7 +87,7 @@ export function useCesiumCanvas(
       surface = create({
         container: container.value,
         assetBaseUrl: assetBaseUrl(),
-        camera,
+        session: map?.session,
         active: active() && !deactivated,
         onReady: () => {
           if (!signal.aborted && state.value.status === 'loading') {
@@ -89,12 +96,17 @@ export function useCesiumCanvas(
         },
         onError: fail
       });
-      if (signal.aborted || failed) {
+      if (signal.aborted) {
         release();
-      } else if (!active() || deactivated) {
+        return;
+      }
+      // 引擎失败的实例仍挂在上下文上，供公共状态提示和 retry 使用
+      map?.attachView(surface, container.value);
+      if (!active() || deactivated) {
         surface.pause();
       }
     } catch (error) {
+      release();
       fail(error);
     }
   };
@@ -120,6 +132,9 @@ export function useCesiumCanvas(
   });
   watch(assetBaseUrl, () => { void retry(); });
   watch(active, updateActive);
+  if (map) {
+    watch(map.retryRequests, () => { void retry(); });
+  }
   onDeactivated(() => { deactivated = true; updateActive(); });
   onActivated(() => { deactivated = false; updateActive(); });
   onScopeDispose(() => {

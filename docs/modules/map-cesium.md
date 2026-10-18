@@ -1,6 +1,6 @@
 # 三维画布与运行时（map-cesium）
 
-状态：2026-10-18，3D.1 的最小接入和 3D.2a 的会话相机桥接已实现，构建通过。当前仍是开发画布，尚未实现完整 `MapView`、会话样式镜像或业务页的二三维切换。范围依据 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md)，后续步骤见 [3D.0 计划](../stages/stage-3d-0-plan.md)。
+状态：2026-10-18，已实现 3D.1 运行时、3D.2a 相机桥接和 3D.2b 统一视图接口，并接入开发页上下文。会话样式镜像与业务页二三维切换尚未接入。范围依据 [ADR 0064](../adr/0064-three-dimensional-integration-scope.md)，后续步骤见 [3D.0 计划](../stages/stage-3d-0-plan.md)。
 
 ## 职责与用法
 
@@ -9,13 +9,16 @@
 | `app/cesium-runtime.ts` | 懒加载 SDK 样式、按 Vite `BASE_URL` 设置静态资源目录 |
 | `app/map-framework.ts` | 增加 `3d` 运行时；默认仍是 `2d`，预热变为可选，Cesium 暂无预热动作 |
 | `libs/map-cesium/cesium-surface.ts` | 持有 `CesiumWidget`、底图和事件监听；暂停、恢复、失败清理与释放 |
+| `libs/map-cesium/cesium-view.ts` | 实现 `MapView`：就绪等待、生命周期、失败、定位、拾取与投影，隔离渲染器 |
+| `libs/map-cesium/camera-plan.ts` | 不修改引擎的定位规划：CSS 留白、范围包围球与最大缩放级 |
+| `libs/map-cesium/scene-query.ts`、`cesium-input.ts` | 表面拾取、背面投影排除；工具输入、焦点、手势与临时平移 |
 | `libs/map-cesium/camera-geometry.ts` | 在目标点的 ENU 坐标系换算共享相机与原生姿态，保存精确姿态 |
 | `libs/map-cesium/camera-bridge.ts` | 会话相机同步、用户意图、回声抑制、暂停期间的失效规则 |
 | `libs/map-vue/use-cesium-canvas.ts` | 挂载后动态导入 map-cesium；`LatestController` 丢弃晚到的加载；暴露状态与重试 |
-| `libs/map-vue/CesiumCanvas.tsx` | 静态容器，从 `provideMap` 的上下文取得相机；接收 `assetBaseUrl`、`active`，发出 `state`，暴露 `retry()` |
+| `libs/map-vue/CesiumCanvas.tsx` | 静态容器，挂上和卸下统一视图；接收 `assetBaseUrl`、`active`，发出 `state`，暴露 `retry()` |
 | `pages/dev/cesium/DevCesiumPage.tsx` | `/dev/cesium`：创建、释放、暂停、恢复、重建与失败模拟；生产构建排除 |
 
-路由用 `withMapRuntime` 加载三维运行时和页面，完成设置后才挂载画布；资源地址由 app 通过路由 props 传入。`map-cesium` 不读取环境变量，也不依赖 Vue。开发页通过 `provideMap` 创建会话，画布只读写同一个 `CameraModel`，页面通过 `useCamera()` 显示读数，没有第二份相机状态。完整视图接口留到 3D.2b，目前上下文的 `view` 仍为空，尚不能通过 `runCameraOperation` 在此画布定位。
+路由用 `withMapRuntime` 加载三维运行时和页面，完成设置后才挂载画布；资源地址由 app 通过路由 props 传入。`map-cesium` 不读取环境变量，也不依赖 Vue。开发页通过 `provideMap` 创建会话，页面通过 `useCamera()` 显示读数，通过 `runCameraOperation` 定位。画布把 `CesiumView` 挂到同一个上下文，只有 ready 时公开只读视口；失败实例保留供公共 `retry()` 触发重建，卸载时先卸下再释放。
 
 当前不拆成 workspace 包：map-core 仍在 libs，按现有依赖方向将来一起评估拆分。
 
@@ -30,7 +33,19 @@
 - 暂停前收下最后一帧，保存精确位置、方向和上方向；隐藏期间不修改引擎。只有 sync 变化时恢复精确快照；发生过 user/program 后采用最新会话，之后的 sync 不会重新允许旧快照
 - 视口尺寸变化保留原生姿态，将新的像素尺度按 sync 写回；释放时先断开相机桥接，不把卸载过程写回会话。以暂停状态创建的画布不先激活，避免零尺寸隐藏画布修改会话
 
-本步没有定位动画、`fitBounds`、拾取/投影接口或工具输入适配，也没有让三维冒充完整 `MapView`；3D.2b 补齐这些契约，再接切换拥有者。动画的毫秒/秒换算、面板不对称留白、暂停时动画收尾及惯性输入清理需要在对应步骤实现和验收。
+3D.2a 只实现上述相机桥接；定位、拾取和工具接口在下面的 3D.2b 接入。
+
+## 3D.2b 统一视图
+
+- `CesiumView` 与 MapLibre 使用相同的生命周期、只读视口与相机操作。候选视图以 inactive 创建时仍完成首轮预备渲染，进入 paused，期间不写会话、不接收工具输入；不能完全停掉首轮渲染，否则 `whenReady()` 永远不结束
+- `flyTo` 的 duration 从公共接口的毫秒转为 Cesium 的秒。飞行每帧及终点都按 program 写回，暂停时直接到规划终点，新的相机操作中止旧飞行；释放时先断开桥接，不把卸载写成移动
+- 定位规划只计算姿态，不修改当前引擎。不对称留白通过迭代求共享中心实现，保留 zoom/bearing/pitch；不会留下持久化的相机留白。`fitBounds` 用 SDK 椭球矩形包围球保证范围落在留白区域，旋转归零、保留或指定俯角、遵守 maxZoom。极端俯角与留白无法求解时明确失败，不能悄悄改变俯角
+- 精确快照直接恢复公开的 position/direction/up/right 向量；SDK 的 `setView` 在近正俯视时会将方向换成欧拉角并舍入，测试发现这会产生偏移。公开接口依据 [Cesium Camera](https://cesium.com/learn/cesiumjs/ref-doc/Camera.html)
+- 拾取优先模型深度，再地形/椭球；命中模型但无法取深度时返回 miss。投影排除相机背后及被椭球遮挡的点；`queryRendered()` 返回空数组，业务识别仍走后端。首期场景只有椭球，模型与真实地形的浏览器验证随对应功能接入
+- 输入仅在当前视图 ready 时交给 `ToolModel`；画布获得键盘焦点，输入法选字不触发快捷键。工具占用左键时不交给 SDK；Ctrl/Meta 临时平移抑制整轮工具事件，松键后保持该轮手势，最后一帧结束再还原
+- 暂停、失焦和程序定位结束旧手势，禁用原生输入；恢复后等待新的按下或滚轮意图再开放，避免隐藏前的惯性自动继续。没有访问 SDK 私有聚合器；真实拖动、组合键和触控的广泛验收仍在 3D.4
+
+开发页增加“定位到南京”“江苏范围”，用于验证公共上下文。3D.2c 再实现缓存视图、目标准备、失败保留原视图与最新切换意图；本步不增加业务页切换按钮。
 
 ## 最小场景与资源所有权
 
@@ -56,6 +71,8 @@
 2. `pnpm build:intranet`：同样的资源核对，加上天地图 key 排除检查
 3. 单独用 Vite 库构建编译 `DevCesiumPage.tsx` 与 `cesium-runtime.ts` 两个入口，包含动态 map-cesium 分块；临时输出在 `apps/web/node_modules/.tmp/cesium-build`，不入库。普通生产构建会裁掉开发页，不能用它代替这项构建
 
-3D.2a 完成后再次执行上述三项构建，均通过。按本轮要求只做构建，未启动本地服务；未运行测试、改坏验证、lint、类型检查或性能探针。3D.1 已补异步生命周期回归；3D.2a 新增桥接规则测试，以及使用真实 Cesium Camera 数学运算的 Node 用例（横竖屏、缩放往返、ENU 朝向、天空、范围收敛和精确快照），这些测试均尚未执行。已有 `sm-crypto-v2` 的浏览器外部模块提示和大分块提示仍保留。
+3D.2a 当时只执行上述三项构建，未运行测试。3D.2b 开始时，用户明确本项目需要执行测试、必要时验证真实页面：此前积累的测试已开始执行，修复了构建没有检出的类型与 lint 问题。已有 `sm-crypto-v2` 的浏览器外部模块提示和大分块提示仍保留。
 
-后续浏览器验收：本地底图真实显示；网络请求均为本地资源；根路径和部署子路径的 Worker、图片、CSS 路径；缺失资源后重试；相机读数、倾斜与方位的往返误差、惯性操作后暂停恢复；反复创建、暂停、释放与 WebGL 上下文数量；缓存页面停用期间无渲染。上述结果尚未验证。
+3D.2b 验证结果：全项目回归通过（icons 35、web 1628 个用例）；随后补充的公共 retry 用例及扩展后的页面失败重建用例单独通过。类型检查、lint、公网构建、内网构建及开发页独立构建均通过。故意改坏 program 原因、留白中心和 inactive 就绪状态，共触发 5 个断言失败；恢复后 24 个相关用例重新通过。
+
+真实 Chromium 已覆盖本地底图加载、拾取投影往返、背面排除、非对称留白、毫秒动画、暂停到终点、inactive 初次加载、范围定位及释放。开发页测试通过真实组件装配验证公共定位、隐藏期间排队定位、恢复执行、释放后重建以及资源缺失后的失败提示与重试。部署子路径、真实拖动惯性和 GPU 内存数量仍需后续专项验收；不得据此宣称业务三维或二三维切换已完成。

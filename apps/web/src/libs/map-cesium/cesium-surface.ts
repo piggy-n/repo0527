@@ -5,9 +5,14 @@ import {
   UrlTemplateImageryProvider
 } from 'cesium';
 import { safeReporter } from '@yzt/utils';
-import type { CameraModel } from '@yzt/map-core';
+import type {
+  CameraModel, CameraState, FitBoundsOptions, FlyToOptions, LngLat, PickResult, ScreenPoint, ToolModel, ViewBounds
+} from '@yzt/map-core';
 import { CesiumCameraBridge } from './camera-bridge';
 import { type CesiumCameraPose, createCesiumCameraPort, resizeCameraFrustum } from './camera-geometry';
+import { planCesiumFitBounds, planCesiumFlyTo } from './camera-plan';
+import { CesiumInput } from './cesium-input';
+import { pickScene, projectScene } from './scene-query';
 
 /** 最小三维画布的依赖；资源地址由应用提供，不读取部署环境 */
 export interface CesiumSurfaceOptions {
@@ -15,12 +20,15 @@ export interface CesiumSurfaceOptions {
   assetBaseUrl: string;
   /** 会话相机；不传时保留 3D.1 的独立场景用途 */
   camera?: CameraModel;
+  tool?: ToolModel;
   active?: boolean;
   onReady?: () => void;
   onError?: (error: unknown) => void;
+  onResize?: () => void;
+  onSettle?: () => void;
 }
 
-/** 本地底图画布与会话相机桥接；完整 MapView 和样式镜像留给后续步骤 */
+/** 三维渲染与交互的拥有者，统一视图生命周期由 CesiumView 装配 */
 export class CesiumSurface implements Disposable {
   // 独占子容器，初始化失败时也能清理 SDK 留下的 DOM
   readonly #host = document.createElement('div');
@@ -28,11 +36,19 @@ export class CesiumSurface implements Disposable {
   readonly #report: (error: unknown) => void;
   #widget: CesiumWidget | undefined;
   #camera: CesiumCameraBridge<CesiumCameraPose> | undefined;
+  readonly #model: CameraModel | undefined;
+  #input: CesiumInput | undefined;
+  // 首轮可见瓦片完成前允许预备渲染，但不交付工具输入
+  #loaded = false;
+  #flight: { pose: CesiumCameraPose; cleanup: () => void } | undefined;
   #active = false;
   #failed = false;
 
   constructor(options: CesiumSurfaceOptions) {
+    this.#model = options.camera;
     this.#report = safeReporter(options.onError ?? console.error, 'CesiumSurface');
+    const resized = safeReporter(() => options.onResize?.(), 'CesiumSurface.onResize');
+    const settled = safeReporter(() => options.onSettle?.(), 'CesiumSurface.onSettle');
     this.#host.style.width = '100%';
     this.#host.style.height = '100%';
     options.container.append(this.#host);
@@ -55,31 +71,51 @@ export class CesiumSurface implements Disposable {
       this.#resources.defer(() => widget.destroy());
 
       resizeCameraFrustum(widget);
+      const port = createCesiumCameraPort(widget);
       if (options.camera) {
-        const bridge = new CesiumCameraBridge(options.camera, createCesiumCameraPort(widget), error => this.#fail(error));
+        // 候选视图也有初始视角，但准备期间不改写共享会话
+        port.apply(options.camera.current);
+        const bridge = new CesiumCameraBridge(options.camera, port, error => this.#fail(error));
         this.#camera = bridge;
         this.#resources.use(bridge);
       }
-      // SDK 的 moveStart 不带原因；用户意图从画布输入开始，程序写入由桥接器显式记录
-      const beginUserOperation = () => this.#camera?.beginUserOperation();
-      widget.canvas.addEventListener('pointerdown', beginUserOperation, { passive: true });
-      widget.canvas.addEventListener('wheel', beginUserOperation, { passive: true });
-      this.#resources.defer(() => {
-        widget.canvas.removeEventListener('pointerdown', beginUserOperation);
-        widget.canvas.removeEventListener('wheel', beginUserOperation);
-      });
+      if (options.tool) {
+        this.#input = this.#resources.use(new CesiumInput({
+          canvas: widget.canvas, tool: options.tool, controller: widget.scene.screenSpaceCameraController,
+          view: Object.freeze({
+            kind: '3d' as const,
+            pick: (point: ScreenPoint) => this.pick(point),
+            project: (lngLat: LngLat, height?: number) => this.project(lngLat, height),
+            queryRendered: () => []
+          }),
+          beginUserOperation: () => {
+            this.#cancelFlight();
+            this.#camera?.beginUserOperation();
+          },
+          onError: error => this.#fail(error)
+        }));
+      }
       let width = widget.canvas.clientWidth;
       let height = widget.canvas.clientHeight;
+      let previousPose = port.capture();
       this.#resources.defer(widget.scene.postRender.addEventListener(() => {
         if (width !== widget.canvas.clientWidth || height !== widget.canvas.clientHeight) {
           width = widget.canvas.clientWidth;
           height = widget.canvas.clientHeight;
           resizeCameraFrustum(widget);
           this.#camera?.viewportChanged();
+          resized(undefined);
           widget.scene.requestRender();
         } else {
-          this.#camera?.update();
+          this.#camera?.update(this.#flight ? 'program' : 'user');
         }
+        this.#input?.afterRender();
+        const pose = port.capture();
+        if (this.#loaded && this.#active && !this.#flight && widget.scene.globe.tilesLoaded &&
+          port.equals(previousPose, pose)) {
+          settled(undefined);
+        }
+        previousPose = pose;
       }));
 
       // Natural Earth II 随 SDK 部署，实际发布的瓦片只有 0～2 级
@@ -103,7 +139,17 @@ export class CesiumSurface implements Disposable {
       const removeReady = widget.scene.postRender.addEventListener(() => {
         if (!this.#failed && widget.scene.globe.tilesLoaded) {
           removeReady();
+          this.#loaded = true;
+          if (this.#active) {
+            this.#input?.setActive(true);
+            if (!this.#input) {
+              widget.scene.screenSpaceCameraController.enableInputs = true;
+            }
+          } else {
+            this.pause();
+          }
           ready(undefined);
+          widget.scene.requestRender();
         }
       });
       this.#resources.defer(removeReady);
@@ -123,7 +169,14 @@ export class CesiumSurface implements Disposable {
     if (!this.#widget || this.#resources.disposed) {
       return;
     }
-    this.#widget.useDefaultRenderLoop = false;
+    // 暂停中的定位动画直接到终点，仍按 program 写回会话
+    const destination = this.#flight?.pose;
+    this.#cancelFlight();
+    if (destination) {
+      this.#camera?.move(destination);
+    }
+    this.#widget.useDefaultRenderLoop = !this.#loaded && !this.#failed;
+    this.#input?.setActive(false);
     this.#widget.scene.screenSpaceCameraController.enableInputs = false;
     this.#active = false;
     this.#camera?.pause();
@@ -141,9 +194,94 @@ export class CesiumSurface implements Disposable {
       return;
     }
     this.#active = true;
-    this.#widget.scene.screenSpaceCameraController.enableInputs = true;
+    this.#input?.setActive(this.#loaded);
+    if (!this.#input) {
+      this.#widget.scene.screenSpaceCameraController.enableInputs = this.#loaded;
+    }
     this.#widget.scene.requestRender();
     this.#widget.useDefaultRenderLoop = true;
+  }
+
+  /** 按当前共享尺度规划一次定位，duration 的公共单位是毫秒 */
+  flyTo(target: Partial<CameraState>, options: FlyToOptions = {}): void {
+    const widget = this.#requireWidget();
+    this.#fly(planCesiumFlyTo(widget, this.#currentCamera(), target, options), options.duration);
+  }
+
+  fitBounds(bounds: ViewBounds, options: FitBoundsOptions = {}): void {
+    const widget = this.#requireWidget();
+    this.#fly(planCesiumFitBounds(widget, this.#currentCamera(), bounds, options), options.duration);
+  }
+
+  pick(point: ScreenPoint): PickResult { return pickScene(this.#requireWidget().scene, point); }
+  project(lngLat: LngLat, height?: number): ScreenPoint | null {
+    return projectScene(this.#requireWidget().scene, lngLat, height);
+  }
+
+  #requireWidget(): CesiumWidget {
+    if (!this.#widget || this.#failed || this.#resources.disposed) {
+      throw new Error('Cesium 画布不可用');
+    }
+    return this.#widget;
+  }
+
+  #currentCamera(): CameraState {
+    const state = this.#model?.current ?? createCesiumCameraPort(this.#requireWidget()).read();
+    if (!state) {
+      throw new Error('当前视角没有可用的共享相机');
+    }
+    return state;
+  }
+
+  #fly(pose: CesiumCameraPose, duration = 1000): void {
+    if (!Number.isFinite(duration) || duration < 0) {
+      throw new RangeError('定位时长必须是非负有限数');
+    }
+    const widget = this.#requireWidget();
+    this.#cancelFlight();
+    this.#input?.cancelInteraction();
+    if (duration === 0) {
+      this.#camera?.move(pose);
+      widget.scene.requestRender();
+      return;
+    }
+    const signal = this.#model?.operation;
+    const cancel = () => this.#cancelFlight();
+    const flight = { pose, cleanup: () => signal?.removeEventListener('abort', cancel) };
+    this.#flight = flight;
+    signal?.addEventListener('abort', cancel, { once: true });
+    widget.camera.flyTo({
+      destination: pose.position,
+      orientation: { direction: pose.direction, up: pose.up },
+      duration: duration / 1000,
+      complete: () => {
+        if (this.#flight === flight) {
+          flight.cleanup();
+          this.#flight = undefined;
+          this.#camera?.move(pose);
+          widget.scene.requestRender();
+        }
+      },
+      cancel: () => {
+        if (this.#flight === flight) {
+          flight.cleanup();
+          this.#flight = undefined;
+          this.#camera?.update('program');
+        }
+      }
+    });
+    widget.scene.requestRender();
+  }
+
+  #cancelFlight(): void {
+    const flight = this.#flight;
+    if (!flight) {
+      return;
+    }
+    this.#flight = undefined;
+    flight.cleanup();
+    this.#widget?.camera.cancelFlight();
+    this.#camera?.update('program');
   }
 
   /** 离开 SDK 的事件调用栈后再释放，避免它继续访问已经销毁的场景 */

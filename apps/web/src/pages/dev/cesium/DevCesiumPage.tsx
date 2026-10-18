@@ -46,7 +46,7 @@ export const DevCesiumPage = defineComponent({
     return () => (
       <div class={styles.root}>
         <header class={styles.toolbar}>
-          <strong>Cesium · 3D.2a</strong>
+          <strong>Cesium · 3D.2b</strong>
           <ElButton onClick={() => (mounted.value = !mounted.value)}>
             {mounted.value ? '释放画布' : '创建画布'}
           </ElButton>
@@ -57,6 +57,12 @@ export const DevCesiumPage = defineComponent({
           <ElButton disabled={!mounted.value || broken.value} onClick={() => (broken.value = true)}>
             模拟底图加载失败
           </ElButton>
+          <ElButton disabled={!mounted.value} onClick={() => map.runCameraOperation(control => {
+            control.flyTo({ center: [118.8, 32.05], zoom: 10, bearing: 25, pitch: 40 }, { duration: 300 });
+          })}>定位到南京</ElButton>
+          <ElButton disabled={!mounted.value} onClick={() => map.runCameraOperation(control => {
+            control.fitBounds([116.3, 30.7, 121.9, 35.2], { pitch: 0, duration: 300 });
+          })}>江苏范围</ElButton>
           <span data-cesium-state={mounted.value ? state.value.status : 'disposed'}>
             {statusText()}
           </span>
