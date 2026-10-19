@@ -49,7 +49,7 @@
 | [0037](0037-coordinate-locate-and-location-point.md) | 坐标定位与位置点 | 已接受（第 5 节位置信息的摆放由 0055 修正） |
 | [0038](0038-camera-operations.md) | 相机操作：用操作的信号判断等待中的定位是否作废 | 已接受（第 1 条的 `intentRevision`、第 3 条的上下文入口由 0039 修正） |
 | [0039](0039-async-supersede-rules.md) | 异步操作的作废规则、相机操作对象与状态命名 | 已接受 |
-| [0040](0040-vitest-browser-mode.md) | 真实浏览器测试：Vitest 浏览器模式 | 已接受 |
+| [0040](0040-vitest-browser-mode.md) | 真实浏览器测试：Vitest 浏览器模式 | 已接受（生产构建的最小完整流程由 0065 提前加入） |
 | [0041](0041-resource-layers.md) | 资源图层：目录、样式登记表、显示状态与数据源错误 | 已接受（一个面资源可以有多个图层由 0045 补充；目录的展示顺序由 0053 补充） |
 | [0042](0042-preference-persistence.md) | 偏好的持久化：IndexedDB + idb-keyval 的键值存储 | 已接受 |
 | [0043](0043-read-only-legend.md) | 只读图例：从样式登记表推导，不做地类统计 | 已接受（背景中旧地类图例的说法由 0044 更正；图例由 0044 变为可以编辑；第 5 节图例的位置由 0053 修正） |
@@ -74,6 +74,7 @@
 | [0062](0062-font-loading-not-deferred.md) | 普惠体照常按用到时加载，不为地图推迟 | 已接受 |
 | [0063](0063-map-page-keep-alive.md) | 地图页的页面缓存：KeepAlive 加路由 meta，停用期间暂停视图 | 已接受 |
 | [0064](0064-navigation-failure-recovery.md) | 页面导航失败：应用根部提示，用户主动重试或刷新 | 已接受 |
+| [0065](0065-production-smoke-tests.md) | 生产构建的浏览器冒烟：登录、地图缓存与分块失败恢复 | 已接受 |
 
 ## 模板
 

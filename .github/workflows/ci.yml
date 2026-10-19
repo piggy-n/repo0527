@@ -40,3 +40,5 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: pnpm build:intranet
+      # 使用刚生成的生产产物和本地固定数据，不访问真实后端或天地图
+      - run: pnpm --filter @yzt/web test:smoke

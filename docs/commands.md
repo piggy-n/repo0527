@@ -12,10 +12,11 @@
 | 第一次运行浏览器测试前（每台机器一次，升级 playwright 后再运行一次） | `pnpm --filter @yzt/web test:browser:install` |
 | 本地开发 | `pnpm --filter @yzt/web dev` |
 | 本地开发（内网配置，不请求天地图） | `pnpm --filter @yzt/web dev:intranet` |
-| 提交前（和 CI 相同） | `pnpm typecheck` → `pnpm lint` → `pnpm test` → `pnpm build` |
+| 提交前（和 CI 相同，需已安装浏览器） | `pnpm typecheck` → `pnpm lint` → `pnpm test` → `pnpm build` → `pnpm build:intranet` → `pnpm --filter @yzt/web test:smoke` |
 | 自动修复 lint 问题 | `pnpm lint:fix` |
 | 写代码时持续运行测试 | `pnpm --filter @yzt/web test:watch` |
 | 只跑单元测试 / 只跑浏览器测试 | `pnpm --filter @yzt/web test:unit` / `pnpm --filter @yzt/web test:browser` |
+| 生产产物的浏览器冒烟 | `pnpm build:intranet` → `pnpm --filter @yzt/web test:smoke` |
 | 内网部署的构建 | `pnpm build:intranet` |
 | 预览构建产物 | `pnpm --filter @yzt/web preview` |
 | 实测"点击登录 → 地图第一次加载完成" | `pnpm --filter @yzt/web measure:map-load` |
@@ -183,18 +184,15 @@ pnpm add -Dw -E some-tool
 
 ## 三、质量检查
 
-提交前按顺序运行下面三条命令，和 CI 的检查完全一致：
+已安装浏览器后，提交前按顺序运行下面的检查；CI 还会先执行冻结安装：
 
 ```bash
 pnpm typecheck
-```
-
-```bash
 pnpm lint
-```
-
-```bash
+pnpm test
 pnpm build
+pnpm build:intranet
+pnpm --filter @yzt/web test:smoke
 ```
 
 ### `pnpm typecheck`
@@ -288,6 +286,16 @@ pnpm build
 
 - 浏览器放在用户目录的 Playwright 缓存里（Windows 是 `%LOCALAPPDATA%\ms-playwright`），不在仓库里；无界面版解压后约 280 MB
 - CI 用 `playwright install --with-deps --only-shell chromium`，同时安装 Linux 上需要的系统库（见 [config/ci-workflow.md](config/ci-workflow.md)）
+
+### `pnpm --filter @yzt/web test:smoke`
+
+**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）。
+
+**什么时候用**：先运行 `pnpm build:intranet`；修改加载、路由或页面缓存后运行，CI 在内网构建后自动执行。
+
+**执行了什么**：已有 Playwright Test 从 `tools/smoke/playwright.config.ts` 读取配置，自动启动并关闭 4173 端口上的产物预览；接口在浏览器中替换为固定响应，地图使用本地省界和真实引擎，未知接口与公网请求使测试失败。
+
+**注意事项**：需要已安装 Chromium；4173 端口须空闲，不复用已有服务。不会自动构建，不能在公网产物上运行；输出写入已忽略的 `apps/web/smoke-results.local/`，不依赖账号、私有字体或真实后端，不设毫秒性能门槛。`pnpm test` 不包含这组 `*.spec.ts` 用例。
 
 ### `pnpm --filter @yzt/web test:watch`
 

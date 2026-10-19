@@ -95,7 +95,7 @@ export const MapCanvas = defineComponent({
     onUnmounted(disposeView);
 
     return () => (
-      <div class={styles.root}>
+      <div class={styles.root} data-map-view-state={state.context.viewState.value}>
         <div ref={container} class={styles.container} />
       </div>
     );

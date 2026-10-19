@@ -13,6 +13,7 @@
     "test:unit": "vitest run --project unit",
     "test:browser": "vitest run --project browser",
     "test:browser:install": "playwright install --only-shell chromium",
+    "test:smoke": "playwright test --config tools/smoke/playwright.config.ts",
     "test:watch": "vitest",
     "title:generate": "node tools/system-title/cli.ts",
     "boundaries:generate": "node tools/boundaries/cli.ts",
