@@ -17,6 +17,9 @@ import { pickScene, projectScene } from './scene-query';
 import { createImageryStylePort, type ImageryStylePort } from './imagery-style-port';
 import { StyleMirror } from './style-mirror';
 
+// 等待惯性停止后再刷新精确尺度，不依赖 SDK 的私有运动计时配置
+const MOTION_IDLE_MS = 500;
+
 /** 最小三维画布的依赖；资源地址由应用提供，不读取部署环境 */
 export interface CesiumSurfaceOptions {
   container: HTMLElement;
@@ -52,6 +55,9 @@ export class CesiumSurface implements Disposable {
   // 首轮可见瓦片完成前允许预备渲染，但不交付工具输入
   #loaded = false;
   #flight: { pose: CesiumCameraPose; cleanup: () => void } | undefined;
+  // 按共享相机精度检测运动，避免 SDK 的浮点噪声使 moveEnd 永远不触发
+  #moving = false;
+  #motion: { pose: CesiumCameraPose; changedAt: number } | undefined;
   #active = false;
   #failed = false;
 
@@ -125,6 +131,22 @@ export class CesiumSurface implements Disposable {
       let previousPose = port.capture();
       let renderedStyleRevision = 0;
       let resizedDuringFrame = false;
+      // 按需渲染静止时仍有 postUpdate，惯性结束后无需额外定时器也能刷新最终样式
+      this.#resources.defer(widget.scene.postUpdate.addEventListener(() => {
+        if (!this.#active) { return; }
+        const pose = port.capture();
+        const now = performance.now();
+        if (!this.#motion || !port.equals(this.#motion.pose, pose)) {
+          // 只在显著变化后移动锚点，保留每帧细小移动累计成真实位移的能力
+          this.#motion = { pose, changedAt: now };
+          this.#moving = true;
+          this.#style?.setMoving(true);
+        } else if (this.#moving && now - this.#motion.changedAt >= MOTION_IDLE_MS) {
+          this.#moving = false;
+          this.#style?.setMoving(false);
+          widget.scene.requestRender();
+        }
+      }));
       this.#resources.defer(widget.scene.preRender.addEventListener(() => {
         renderedStyleRevision = this.#styleRevision;
       }));
@@ -142,7 +164,7 @@ export class CesiumSurface implements Disposable {
         }
         this.#input?.afterRender();
         const pose = port.capture();
-        if (this.#loaded && this.#active && !this.#flight && !resizedDuringFrame &&
+        if (this.#loaded && this.#active && !this.#flight && !this.#moving && !resizedDuringFrame && !this.#style?.pending &&
           renderedStyleRevision === this.#styleRevision && widget.scene.globe.tilesLoaded && this.#imagery?.ready !== false &&
           port.equals(previousPose, pose)) {
           settled(undefined);
@@ -165,6 +187,8 @@ export class CesiumSurface implements Disposable {
           style: options.style,
           camera: options.camera,
           port: this.#imagery,
+          // 相机与样式通知可能来自 SDK 渲染回调，等本轮渲染退出后再替换和销毁影像
+          scheduleRefresh: refresh => queueMicrotask(refresh),
           onError: options.onStyleError,
           onSourceErrors: options.onSourceErrors
         }));
@@ -189,7 +213,7 @@ export class CesiumSurface implements Disposable {
       // 首轮可见瓦片完成且经过一次渲染后才报告就绪
       const ready = safeReporter(() => options.onReady?.(), 'CesiumSurface.onReady');
       const removeReady = widget.scene.postRender.addEventListener(() => {
-        if (!this.#failed && !resizedDuringFrame && renderedStyleRevision === this.#styleRevision &&
+        if (!this.#failed && !resizedDuringFrame && !this.#style?.pending && renderedStyleRevision === this.#styleRevision &&
           widget.scene.globe.tilesLoaded && this.#imagery?.ready !== false) {
           removeReady();
           this.#loaded = true;
@@ -234,6 +258,10 @@ export class CesiumSurface implements Disposable {
     this.#active = false;
     this.#camera?.pause();
     this.#style?.pause();
+    // 恢复时重新建立静止窗口，暂停前的移动不能阻止最终尺度更新
+    this.#moving = false;
+    this.#motion = undefined;
+    this.#style?.setMoving(false);
     // 候选的首次准备仍需加载影像，交付首帧后才停止后台任务
     if (this.#loaded) { this.#imagery?.pause(); }
   }
@@ -254,6 +282,9 @@ export class CesiumSurface implements Disposable {
     if (this.#failed || this.#resources.disposed) {
       return;
     }
+    this.#motion = { pose: createCesiumCameraPort(this.#widget).capture(), changedAt: performance.now() };
+    // 首帧前先追赶缓存样式；静止确认窗口不等于真实运动，不延后镜像的尺度更新
+    this.#moving = true;
     this.#active = true;
     this.#input?.setActive(this.#loaded);
     if (!this.#input) {

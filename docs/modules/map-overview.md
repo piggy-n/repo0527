@@ -47,6 +47,7 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 | map-vue 上下文 | `provideMap`、`useMap`、`bindStyle`；`view` 只在就绪时有值，只有拾取和投影 | 0028（第 5 条由 0039 修正） | [map-vue.md](map-vue.md) |
 | 视图接口与二三维 | 共用生命周期、相机、输入、拾取、投影、渲染要素查询（三维返回空数组）；相机事件带 `view` 和 `cause`；Cesium 镜像会话 | 0024、0047 | [map-core.md](map-core.md) |
 | 三维工具与查询验收 | 工具按支持视图暂停而不退出；三维框边缘细分并复核投影误差，天空和不可验证范围拒绝，后端仍第一页加总数；最终销毁关闭独占上下文，缓存切换保留 | 0064、0068 | [stage-3d-4-acceptance.md](../stages/stage-3d-4-acceptance.md) |
+| 三维影像更新与复用 | 运动期间复用影像，停止后按精确 zoom 更新；在 SDK 渲染返回后合并镜像更新；视图内弱缓存投影，瓦片按符号余量粗筛 | 0069（补充 0065～0068） | [stage-3d-performance-repair.md](../stages/stage-3d-performance-repair.md) |
 | 视图失败 | 样式失败在出现新的提交时自动恢复；引擎失败只能重建视图；状态转换按表执行；带数据源的错误（瓦片出错）不算样式失败，记作视图的数据源错误 | 0026（第 4 条由 0030 修正，第 1、2 条由 0041 修正）、0030、0041 | [map-core.md](map-core.md)"状态转换"、[map-vue.md](map-vue.md) |
 | 资源释放与运行时 | `Disposable`、nanoevents；maplibre-gl 的全局设置在登录页空闲时预加载或首次进入地图时懒加载，同时预热 Worker 池 | 0023、0061 | [map-core.md](map-core.md) |
 | Worker | 二维不自建渲染 Worker；自建的 Worker 统一用通信层；瓦片数据服务的约束 | 0021（第 5 条由 0024 修正，第 3、4 条由 0025 补充）、0025 | [utils.md](utils.md) |

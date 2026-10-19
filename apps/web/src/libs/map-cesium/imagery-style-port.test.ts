@@ -71,10 +71,19 @@ describe('三维影像样式端口', () => {
     const handle = ctx.port.create(layer, 8, report);
     await nextTurn();
     handle.setVisible(false);
+    const hidden = ctx.layers.get(1);
+    handle.setZoom(8.5);
+    handle.setZoom(9.25);
     expect(pending[0].signal.aborted).toBe(true);
     expect(ctx.port.ready).toBe(true);
+    ctx.port.pause();
+    ctx.port.resume();
+    await nextTurn();
+    expect(ctx.layers.get(1)).toBe(hidden);
+    expect(fetchData).toHaveBeenCalledOnce();
     handle.setVisible(true);
     await nextTurn();
+    expect(fetchData).toHaveBeenCalledTimes(2);
     expect(pending[1].signal.aborted).toBe(false);
     expect(ctx.port.ready).toBe(false);
     ctx.port.pause();
@@ -96,6 +105,31 @@ describe('三维影像样式端口', () => {
     expect(report).not.toHaveBeenCalled();
   });
 
+  it('MVT 隐藏时不换影像，显示先追精确级别且只重建一次', () => {
+    using globals = new DisposableStack();
+    globals.defer(() => vi.unstubAllGlobals());
+    // 本用例不请求瓦片，只提供来源 URL 解析所需的文档基址
+    vi.stubGlobal('document', { baseURI: 'https://local.test/' });
+    using ctx = fixture();
+    const source: SourceSpecification = { type: 'vector', tiles: ['/tiles/{z}/{x}/{y}.pbf'] };
+    using handle = ctx.port.create(plan({ id: 'fill', type: 'fill', source: 'data', 'source-layer': 'areas' }, source),
+      8, () => {});
+    const added = vi.fn<() => void>();
+    const unsubscribe = ctx.layers.layerAdded.addEventListener(added);
+    const initial = ctx.layers.get(1);
+    handle.setVisible(false);
+    handle.setZoom(8.75);
+    handle.setZoom(9.25);
+    expect(ctx.layers.get(1)).toBe(initial);
+    expect(added).not.toHaveBeenCalled();
+    handle.setVisible(true);
+    expect(ctx.layers.get(1)).not.toBe(initial);
+    expect(added).toHaveBeenCalledOnce();
+    handle.setZoom(9.25);
+    expect(added).toHaveBeenCalledOnce();
+    unsubscribe();
+  });
+
   it('URL 就绪后的外部重绘回调抛错不误报来源加载失败', async () => {
     using consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     using ctx = fixture(async () => Response.json(GEOJSON.data));
@@ -108,6 +142,25 @@ describe('三维影像样式端口', () => {
     expect(ctx.port.ready).toBe(true);
     expect(report).not.toHaveBeenCalled();
     expect(consoleError).toHaveBeenCalledOnce();
+  });
+
+  it('端口释放后 URL 迟到完成仍给 SDK 空提供者，不再读取已释放的几何缓存', async () => {
+    const { pending, fetchData } = pendingFetch();
+    using ctx = fixture(fetchData);
+    const handle = ctx.port.create(plan({ id: 'fill', type: 'fill', source: 'data' }, {
+      type: 'geojson', data: '/boundary.json'
+    }), 8, () => {});
+    const rejected = vi.fn<(error: unknown) => void>();
+    const imagery = ctx.layers.get(1);
+    imagery.errorEvent.addEventListener(rejected);
+    await nextTurn();
+    ctx.port[Symbol.dispose]();
+    expect(pending[0].signal.aborted).toBe(true);
+    pending[0].resolve(Response.json(GEOJSON.data));
+    await nextTurn();
+    expect(rejected).not.toHaveBeenCalled();
+    expect(imagery.isDestroyed()).toBe(true);
+    handle[Symbol.dispose]();
   });
 
   it('URL 下载失败只报告来源错误并结束等待，释放前晚到失败不再报告', async () => {
@@ -184,7 +237,7 @@ describe('三维影像样式端口', () => {
     expect(imagery.getImageryRectangle()).toEqual(Rectangle.fromDegrees(170, -20, -170, 20));
   });
 
-  it('GeoJSON 缩放重建影像但保留索引和显隐，旧 provider 错误不再报告', () => {
+  it('隐藏 GeoJSON 只记录最新级别，重新显示时重建一次并保留索引', () => {
     using ctx = fixture();
     const report = vi.fn<(error: unknown) => void>();
     using area = ctx.port.create(plan({ id: 'area', type: 'fill', source: 'data' }, GEOJSON), 8, report);
@@ -194,10 +247,15 @@ describe('三维影像样式端口', () => {
     const above = ctx.layers.get(2);
     area.setVisible(false);
     area.setZoom(9);
+    area.setZoom(9.25);
+    expect(ctx.layers.get(1)).toBe(previous);
+    expect(previous.isDestroyed()).toBe(false);
+    expect(previous.show).toBe(false);
+    area.setVisible(true);
     const current = ctx.layers.get(1);
     expect(current).not.toBe(previous);
     expect(previous.isDestroyed()).toBe(true);
-    expect(current.show).toBe(false);
+    expect(current.show).toBe(true);
     expect(ctx.layers.get(2)).toBe(above);
     expect(oldProvider.errorEvent.numberOfListeners).toBe(0);
     oldProvider.errorEvent.raiseEvent(new Error('旧错误'));
@@ -205,7 +263,7 @@ describe('三维影像样式端口', () => {
     const failure = new Error('当前错误');
     current.imageryProvider.errorEvent.raiseEvent(failure);
     expect(report).toHaveBeenCalledExactlyOnceWith(failure);
-    area.setZoom(9);
+    area.setZoom(9.25);
     expect(ctx.layers.get(1)).toBe(current);
     ctx.port.order([top, area]);
     expect(ctx.layers.get(2)).toBe(current);

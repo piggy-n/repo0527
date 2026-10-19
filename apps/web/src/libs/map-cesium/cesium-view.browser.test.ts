@@ -1,7 +1,7 @@
 import 'cesium/Build/Cesium/Widgets/widgets.css';
-import { buildModuleUrl } from 'cesium';
+import { buildModuleUrl, ImageryLayer, Scene } from 'cesium';
 import { MapSession, type CameraChange, type StyleGroup } from '@yzt/map-core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { CesiumView } from './cesium-view';
 
 // 官方导出函数的 setBaseUrl 在当前发布类型中遗漏；测试只使用本地静态资源
@@ -163,24 +163,95 @@ describe('Cesium 真实视图', () => {
     expect(errors).toEqual([]);
   }, 20000);
 
+  it('带影像样式的放大缩小动画不会在 SDK 渲染栈内销毁图层', async () => {
+    using fixture = setup(true, sampleStyle('#ff0000'));
+    const { view, session } = fixture;
+    expect(await outcome(view.whenReady())).toBe('ready');
+    // oxlint-disable-next-line typescript/unbound-method -- 探针保存原实现，调用时用 call 显式还原 SDK 实例
+    const render = Scene.prototype.render;
+    // oxlint-disable-next-line typescript/unbound-method -- 探针保存原实现，调用时用 call 显式还原 SDK 实例
+    const destroy = ImageryLayer.prototype.destroy;
+    let rendering = false;
+    // 只记录资源释放的时机，不替换真实 SDK 的绘制和销毁行为
+    let destroyedDuringFrame = 0;
+    const renderSpy = vi.spyOn(Scene.prototype, 'render').mockImplementation(function(this: Scene, time) {
+      rendering = true;
+      try { return render.call(this, time); }
+      finally { rendering = false; }
+    });
+    const destroySpy = vi.spyOn(ImageryLayer.prototype, 'destroy').mockImplementation(function(this: ImageryLayer) {
+      if (rendering) { destroyedDuringFrame++; }
+      return destroy.call(this);
+    });
+    try {
+      for (const zoom of [9, 8, 9.5, 8]) {
+        const done = settled(view);
+        session.camera.beginOperation();
+        view.flyTo({ zoom }, { duration: 300 });
+        // oxlint-disable-next-line no-await-in-loop -- 每次真实动画完成后再开始下一次缩放
+        expect(await done).toBe('ready');
+        expect(fixture.errors).toEqual([]);
+        expect(view.state).toBe('ready');
+        expect(session.camera.current.zoom).toBeCloseTo(zoom, 5);
+      }
+      expect(destroyedDuringFrame).toBe(0);
+    } finally {
+      renderSpy.mockRestore();
+      destroySpy.mockRestore();
+    }
+  }, 70000);
+
   it('候选视图可以完成预备加载，暂停动画到终点且恢复不漂移', async () => {
-    using fixture = setup(false);
-    const { view, session, changes } = fixture;
+    using fixture = setup(false, {
+      sources: {},
+      layers: [{
+        id: 'sample-background', type: 'background',
+        paint: { 'background-color': ['step', ['zoom'], '#ff0000', 9.5, '#00ff00'] }
+      }]
+    });
+    const { view, session, changes, container } = fixture;
     expect(await outcome(view.whenReady())).toBe('ready');
     expect(view.state).toBe('paused');
     expect(changes).toHaveLength(0);
-    const resumed = settled(view);
+    const resumed = centerPixel(view, container);
     view.resume();
-    expect(await resumed).toBe('ready');
-    view.flyTo({ center: [121, 34], zoom: 10 }, { duration: 2000 });
+    expect(await resumed).toEqual([255, 0, 0, 255]);
+    // 等动画真实前进一帧再暂停，覆盖已开始运动而尚未稳定的缓存路径
+    let resolveMoving!: () => void;
+    const moving = new Promise<void>(resolve => { resolveMoving = resolve; });
+    const removeMoving = session.camera.on('change', change => {
+      if (change.cause === 'program') { resolveMoving(); }
+    });
+    try {
+      view.flyTo({ center: [121, 34], zoom: 10 }, { duration: 2000 });
+      expect(await outcome(moving)).toBe('ready');
+      expect(session.camera.current.zoom).toBeLessThan(9.5);
+    } finally {
+      removeMoving();
+    }
     view.pause();
     expect(session.camera.current.center[0]).toBeCloseTo(121, 5);
     expect(session.camera.current.center[1]).toBeCloseTo(34, 5);
     expect(changes.at(-1)?.cause).toBe('program');
     const camera = session.camera.current;
-    const restored = settled(view);
-    view.resume();
-    expect(await restored).toBe('ready');
+    // 恢复后的首轮渲染前先追赶尺度，不让静止确认窗口把旧尺度影像再画一轮
+    const destroy = vi.spyOn(ImageryLayer.prototype, 'destroy');
+    // oxlint-disable-next-line typescript/unbound-method -- 观察首帧前的替换次数，调用时保留真实 Scene 实例
+    const render = Scene.prototype.render;
+    let replacementsBeforeFrame: number | undefined;
+    const frame = vi.spyOn(Scene.prototype, 'render').mockImplementation(function(this: Scene, time) {
+      replacementsBeforeFrame ??= destroy.mock.calls.length;
+      return render.call(this, time);
+    });
+    try {
+      const restored = centerPixel(view, container);
+      view.resume();
+      expect(await restored).toEqual([0, 255, 0, 255]);
+      expect(replacementsBeforeFrame).toBe(1);
+    } finally {
+      frame.mockRestore();
+      destroy.mockRestore();
+    }
     expect(session.camera.current.zoom).toBeCloseTo(camera.zoom, 7);
     expect(session.camera.current.center[0]).toBeCloseTo(camera.center[0], 7);
     expect(fixture.errors).toEqual([]);

@@ -23,6 +23,8 @@ export interface StyleMirrorOptions {
   readonly port: StyleMirrorPort;
   readonly onError?: (error: unknown) => void;
   readonly onSourceErrors?: (errors: SourceErrors) => void;
+  /** 引擎拥有者把刷新安排在安全阶段，镜像负责合并同一轮请求 */
+  readonly scheduleRefresh?: (refresh: () => void) => void;
 }
 
 interface LayerEntry {
@@ -41,6 +43,7 @@ export class StyleMirror implements Disposable {
   readonly #port: StyleMirrorPort;
   readonly #report: (error: unknown) => void;
   readonly #notifySourceErrors: (error: unknown) => void;
+  readonly #scheduleRefresh: (refresh: () => void) => void;
   readonly #unsubscribe: (() => void)[];
   readonly #entries = new Map<string, LayerEntry>();
   readonly #reportedIssues = new Set<string>();
@@ -52,21 +55,27 @@ export class StyleMirror implements Disposable {
   #paused = false;
   #disposed = false;
   #syncing = false;
+  #moving = false;
+  #queuedRefresh: (() => void) | undefined;
 
-  constructor({ style, camera, port, onError = console.error, onSourceErrors }: StyleMirrorOptions) {
+  constructor({
+    style, camera, port, onError = console.error, onSourceErrors, scheduleRefresh = refresh => refresh()
+  }: StyleMirrorOptions) {
     this.#style = style;
     this.#camera = camera;
     this.#port = port;
     this.#report = safeReporter(onError, 'StyleMirror');
     this.#notifySourceErrors = safeReporter(() => onSourceErrors?.(this.#sourceErrors), 'StyleMirror.sourceErrors');
+    this.#scheduleRefresh = scheduleRefresh;
     this.#unsubscribe = [
-      style.on('change', () => this.#refresh()),
+      style.on('change', () => this.#requestRefresh()),
       camera.on('change', ({ state }) => {
         if (state.zoom !== this.#zoom) {
-          this.#refresh();
+          this.#requestRefresh();
         }
       })
     ];
+    // 构造阶段尚未渲染；候选视图随后会暂停镜像，首轮影像必须在此时准备
     this.#refresh();
   }
 
@@ -74,8 +83,26 @@ export class StyleMirror implements Disposable {
     return this.#sourceErrors;
   }
 
+  /** 首帧和稳定帧不能越过尚未应用的样式刷新 */
+  get pending(): boolean {
+    return this.#queuedRefresh !== undefined;
+  }
+
+  /** 运动期间复用可见影像，结束后按最终精确级别重画一次 */
+  setMoving(moving: boolean): void {
+    if (this.#disposed || this.#moving === moving) {
+      return;
+    }
+    this.#moving = moving;
+    if (!moving) {
+      this.#zoom = undefined;
+      this.#requestRefresh();
+    }
+  }
+
   pause(): void {
     this.#paused = true;
+    this.#queuedRefresh = undefined;
   }
 
   resume(): void {
@@ -83,7 +110,7 @@ export class StyleMirror implements Disposable {
       return;
     }
     this.#paused = false;
-    this.#refresh();
+    this.#requestRefresh();
   }
 
   [Symbol.dispose](): void {
@@ -91,6 +118,7 @@ export class StyleMirror implements Disposable {
       return;
     }
     this.#disposed = true;
+    this.#queuedRefresh = undefined;
     for (const unsubscribe of this.#unsubscribe) {
       this.#attempt(unsubscribe);
     }
@@ -101,6 +129,25 @@ export class StyleMirror implements Disposable {
     this.#sourceErrors = NO_SOURCE_ERRORS;
     for (const entry of entries) {
       this.#release(entry);
+    }
+  }
+
+  #requestRefresh(): void {
+    if (this.#queuedRefresh || !this.#canWrite()) {
+      return;
+    }
+    // 回调身份让暂停前排队的旧刷新失效，恢复后只处理最新快照
+    const refresh = () => {
+      if (this.#queuedRefresh !== refresh) { return; }
+      this.#queuedRefresh = undefined;
+      this.#refresh();
+    };
+    this.#queuedRefresh = refresh;
+    try {
+      this.#scheduleRefresh(refresh);
+    } catch (error) {
+      if (this.#queuedRefresh === refresh) { this.#queuedRefresh = undefined; }
+      this.#report(error);
     }
   }
 
@@ -217,14 +264,15 @@ export class StyleMirror implements Disposable {
       return;
     }
     try {
-      if (entry.zoom !== zoom) {
+      const visible = entry.layer.visible(zoom);
+      // 新显示的层先追到当前尺度；已经可见的层等运动结束，隐藏层不重画
+      if (visible && entry.zoom !== zoom && (!this.#moving || entry.visible !== true)) {
         handle.setZoom(zoom);
         entry.zoom = zoom;
       }
       if (!this.#canWrite()) {
         return;
       }
-      const visible = entry.layer.visible(zoom);
       if (entry.visible !== visible) {
         handle.setVisible(visible);
         entry.visible = visible;

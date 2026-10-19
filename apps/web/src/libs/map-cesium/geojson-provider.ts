@@ -13,12 +13,46 @@ import { createWorldMaskProvider, hasWorldMask } from './world-mask-provider';
 
 type Draw = (context: CanvasRenderingContext2D, project: CanvasProject, scale: number, environment: CanvasEnvironment) => void;
 
+interface PreparedShape extends CanvasShape {
+  readonly bounds: readonly [west: number, south: number, east: number, north: number];
+}
+
+interface TileDrawing {
+  readonly draw: Draw;
+  readonly bounds?: PreparedShape['bounds'];
+  /** 符号在相机级别下向几何外扩的保守像素范围 */
+  readonly padding: number;
+}
+
+/** 视图拥有投影缓存，同源图层和缩放重画共享几何，旧数据仍可被回收 */
+export class GeoJsonGeometryCache implements Disposable {
+  #shapes = new WeakMap<GeoJSON, readonly PreparedShape[]>();
+  #disposed = false;
+
+  prepare(data: GeoJSON): readonly PreparedShape[] {
+    if (this.#disposed) { throw new Error('GeoJSON 投影缓存已释放'); }
+    let prepared = this.#shapes.get(data);
+    if (!prepared) {
+      prepared = shapes(data, new WebMercatorProjection());
+      this.#shapes.set(data, prepared);
+    }
+    return prepared;
+  }
+
+  [Symbol.dispose](): void {
+    this.#disposed = true;
+    this.#shapes = new WeakMap();
+  }
+}
+
 // 世界像素与 MapLibre 的 512 像素口径一致，瓦片层级不参与样式求值
 const TILE_SIZE = 512;
 const MAX_LATITUDE = CesiumMath.toDegrees(WebMercatorProjection.MaximumLatitude);
 
 /** 将一个背景或内联 GeoJSON 图层镜像为固定相机级别的透明影像 */
-export function createGeoJsonProvider(layer: BasicStyleLayer, zoom: number): ImageryProvider {
+export function createGeoJsonProvider(
+  layer: BasicStyleLayer, zoom: number, cache = new GeoJsonGeometryCache()
+): ImageryProvider {
   if (!Number.isFinite(zoom)) {
     throw new RangeError('三维样式的相机级别必须是有限数值');
   }
@@ -28,39 +62,40 @@ export function createGeoJsonProvider(layer: BasicStyleLayer, zoom: number): Ima
   }
   // 纯色背景覆盖两极，业务几何仍只使用 Web Mercator 的有效范围
   const tilingScheme = layer.type === 'background' ? new GeographicTilingScheme() : new WebMercatorTilingScheme();
-  const projection = new WebMercatorProjection(tilingScheme.ellipsoid);
-  const draws: Draw[] = [];
+  const draws: TileDrawing[] = [];
   if (layer.type === 'background') {
     const color = canvasColor(layer.value('background-color', zoom));
     const opacity = canvasNumber(layer.value('background-opacity', zoom), 'background-opacity', 1);
-    draws.push(context => {
+    draws.push({ padding: 0, draw: context => {
       context.fillStyle = color;
       context.globalAlpha = opacity;
       context.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
-    });
+    } });
   } else {
     if (layer.source?.type !== 'geojson' || typeof layer.source.data === 'string') {
       throw new Error('GeoJSON 影像仅支持内联 GeoJSON 数据源');
     }
-    for (const shape of shapes(layer.source.data, projection)) {
+    for (const shape of cache.prepare(layer.source.data)) {
       if (!layer.accepts(zoom, shape.feature)) {
         continue;
       }
       const draw = prepareCanvasDrawing(layer, shape, zoom);
       if (draw) {
-        draws.push((context, project, scale, environment) => drawCanvas(context, draw, project, scale, environment));
+        draws.push({ bounds: shape.bounds, padding: drawingPadding(layer, shape, zoom),
+          draw: (context, project, scale, environment) => drawCanvas(context, draw, project, scale, environment) });
       }
     }
   }
   const credit = layer.source?.attribution ? new Credit(layer.source.attribution) : undefined;
-  // 空图层保留影像层序，但不为每张瓦片重复分配 512 像素的透明纹理
-  let empty: HTMLCanvasElement | undefined;
+  // 纯色背景与完全空层在空间上恒定，根级单像素足够覆盖整个范围
+  const uniform = layer.type === 'background' || draws.length === 0;
+  let sharedImage: HTMLCanvasElement | undefined;
   const provider = {
     rectangle: tilingScheme.rectangle,
     tileWidth: TILE_SIZE,
     tileHeight: TILE_SIZE,
     minimumLevel: 0,
-    maximumLevel: 22,
+    maximumLevel: uniform ? 0 : 22,
     tilingScheme,
     tileDiscardPolicy: undefined,
     errorEvent: new Event<(error: TileProviderError) => void>(),
@@ -71,36 +106,48 @@ export function createGeoJsonProvider(layer: BasicStyleLayer, zoom: number): Ima
     pickFeatures: () => undefined,
     // SDK 只把 Promise rejection 转为数据源错误，同步绘制失败也须进入这条隔离通道
     requestImage: async (x, y, level) => {
-      if (draws.length === 0) {
-        if (!empty) {
-          empty = document.createElement('canvas');
-          empty.width = 1;
-          empty.height = 1;
+      if (uniform && sharedImage) { return sharedImage; }
+      const bounds = tilingScheme.tileXYToNativeRectangle(x, y, level);
+      const scale = 2 ** (level - zoom);
+      const visible = layer.visible(zoom) ? draws.filter(drawing => {
+        if (!drawing.bounds) { return true; }
+        // 多留两个纹理像素覆盖抗锯齿，线帽、尖角和模糊由符号范围共同约束
+        const padding = drawing.padding * scale + 2;
+        const marginX = padding * (bounds.east - bounds.west) / TILE_SIZE;
+        const marginY = padding * (bounds.north - bounds.south) / TILE_SIZE;
+        const [west, south, east, north] = drawing.bounds;
+        return west <= bounds.east + marginX && east >= bounds.west - marginX &&
+          south <= bounds.north + marginY && north >= bounds.south - marginY;
+      }) : [];
+      if (visible.length === 0) {
+        if (!sharedImage) {
+          sharedImage = document.createElement('canvas');
+          sharedImage.width = 1;
+          sharedImage.height = 1;
         }
-        return empty;
+        return sharedImage;
       }
       const canvas = document.createElement('canvas');
-      canvas.width = TILE_SIZE;
-      canvas.height = TILE_SIZE;
+      canvas.width = uniform ? 1 : TILE_SIZE;
+      canvas.height = uniform ? 1 : TILE_SIZE;
       // 微小虚线的 GPU 栅格化开销很大，离屏瓦片使用软件画布后仍按原样上传纹理
       const context = canvas.getContext('2d', { willReadFrequently: layer.type === 'line' });
       if (!context) {
         throw new Error('无法创建三维样式的二维画布');
       }
       if (layer.visible(zoom)) {
-        const bounds = tilingScheme.tileXYToNativeRectangle(x, y, level);
         const project: CanvasProject = (pointX, pointY) => [
           (pointX - bounds.west) / (bounds.east - bounds.west) * TILE_SIZE,
           (bounds.north - pointY) / (bounds.north - bounds.south) * TILE_SIZE
         ];
-        const scale = 2 ** (level - zoom);
         const environment = { origin: [x * TILE_SIZE, y * TILE_SIZE] as const, patterns: new CanvasPatternCache() };
-        for (const draw of draws) {
+        for (const { draw } of visible) {
           context.save();
           draw(context, project, scale, environment);
           context.restore();
         }
       }
+      if (uniform) { sharedImage = canvas; }
       return canvas;
     }
   } satisfies Omit<ImageryProvider, 'tileDiscardPolicy' | 'credit' | 'proxy' | 'getTileCredits'> & {
@@ -114,15 +161,25 @@ export function createGeoJsonProvider(layer: BasicStyleLayer, zoom: number): Ima
 }
 
 // 多部件几何拆为简单几何，过滤器沿用矢量瓦片的 Point / LineString / Polygon 类型
-function shapes(data: GeoJSON, projection: WebMercatorProjection): CanvasShape[] {
-  const result: CanvasShape[] = [];
+function shapes(data: GeoJSON, projection: WebMercatorProjection): readonly PreparedShape[] {
+  const result: PreparedShape[] = [];
   const append = (geometry: Geometry | null, properties: Record<string, unknown>, id?: string | number): void => {
     if (!geometry) {
       return;
     }
     const add = (type: CanvasShape['type'], coordinates: Position[][]): void => {
       const paths = coordinates.map(path => projectPath(path, projection, type));
-      result.push({ type, paths, feature: { type, properties, id } });
+      let west = Infinity;
+      let south = Infinity;
+      let east = -Infinity;
+      let north = -Infinity;
+      for (const path of paths) {
+        for (let index = 0; index < path.length; index += 2) {
+          west = Math.min(west, path[index]); east = Math.max(east, path[index]);
+          south = Math.min(south, path[index + 1]); north = Math.max(north, path[index + 1]);
+        }
+      }
+      result.push({ type, paths, bounds: [west, south, east, north], feature: { type, properties, id } });
     };
     switch (geometry.type) {
       case 'Point': add('Point', [[geometry.coordinates]]); break;
@@ -152,6 +209,22 @@ function shapes(data: GeoJSON, projection: WebMercatorProjection): CanvasShape[]
     append(data, {});
   }
   return result;
+}
+
+// 与绘制器的可见线段范围一致，粗筛只排除不可能覆盖当前瓦片的几何
+function drawingPadding(layer: BasicStyleLayer, shape: CanvasShape, zoom: number): number {
+  const value = (property: string) => layer.value(property, zoom, shape.feature);
+  if (layer.type === 'circle') {
+    return canvasNumber(value('circle-radius'), 'circle-radius') +
+      canvasNumber(value('circle-stroke-width'), 'circle-stroke-width');
+  }
+  if (layer.type === 'line') {
+    return canvasNumber(value('line-width'), 'line-width') *
+      Math.max(2, canvasNumber(value('line-miter-limit'), 'line-miter-limit')) +
+      canvasNumber(value('line-blur') ?? 0, 'line-blur') * 3;
+  }
+  // 面描边宽度为 scale，Canvas 默认 miterLimit 10 的尖角最多外扩 5 * scale
+  return value('fill-antialias') === true ? 5 : 0;
 }
 
 // 明确拒绝跨经线与极区路径，不把世界遮罩或长环改写成局部多边形

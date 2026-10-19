@@ -60,7 +60,8 @@ docs/
    ├─ stage-5-acceptance-review.md       阶段五验收报告：自动检查、发现的问题、可以优化的地方
    ├─ stage-3d-0-plan.md                三维 3D.0：接入范围、样式支持、数据小样与后续验收计划
    ├─ stage-3d-2-view-switch.md         三维 3D.2：统一视图、相机与缓存切换
-   └─ stage-3d-4-acceptance.md          三维 3D.4：工具、查询、性能与资源释放验收
+   ├─ stage-3d-4-acceptance.md          三维 3D.4：工具、查询、性能与资源释放验收
+   └─ stage-3d-performance-repair.md    三维性能修复：更新时机、几何复用与交替实测
 ```
 
 ## 建议的阅读顺序
@@ -83,7 +84,7 @@ docs/
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明。
 
-三维接入从 [3D.0 盘点与小样记录](stages/stage-3d-0-plan.md) 开始；范围由已接受的 [ADR 0064](adr/0064-three-dimensional-integration-scope.md) 确定，当前已实现的部分与验收边界见 [map-cesium](modules/map-cesium.md)。
+三维接入从 [3D.0 盘点与小样记录](stages/stage-3d-0-plan.md) 开始；范围由已接受的 [ADR 0064](adr/0064-three-dimensional-integration-scope.md) 确定，当前已实现的部分与验收边界见 [map-cesium](modules/map-cesium.md)，后续性能修复与测量见[性能修复记录](stages/stage-3d-performance-repair.md)。
 
 ## 各类文档的分工
 

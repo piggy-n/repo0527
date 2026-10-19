@@ -26,7 +26,9 @@ class FakeLayer implements StyleMirrorLayer {
 }
 
 /** 每个用例独立持有模型、镜像和假引擎 */
-function fixture(group: StyleGroup, options: Pick<StyleMirrorOptions, 'onError' | 'onSourceErrors'> = {}) {
+function fixture(
+  group: StyleGroup, options: Pick<StyleMirrorOptions, 'onError' | 'onSourceErrors' | 'scheduleRefresh'> = {}
+) {
   const style = new StyleModel<string>({ groups: ['sample'] });
   style.setGroup('sample', group);
   const camera = new CameraModel(INITIAL_CAMERA);
@@ -48,7 +50,7 @@ function fixture(group: StyleGroup, options: Pick<StyleMirrorOptions, 'onError' 
   } satisfies StyleMirrorPort;
   const onError = options.onError ?? vi.fn<(error: unknown) => void>();
   const onSourceErrors = options.onSourceErrors ?? vi.fn<(errors: SourceErrors) => void>();
-  const mirror = new StyleMirror({ style, camera, port, onError, onSourceErrors });
+  const mirror = new StyleMirror({ style, camera, port, onError, onSourceErrors, ...options });
   return {
     style, camera, mirror, port, handles, failures, duringCreate, onError, onSourceErrors,
     [Symbol.dispose]: () => {
@@ -68,6 +70,81 @@ function raster(id: string, source = 'tiles'): LayerSpecification {
 }
 
 describe('三维会话样式镜像', () => {
+  it('运动中保留已有影像，只即时更新显隐，停止后一次同步精确级别', () => {
+    const range: BackgroundLayerSpecification = { ...background('range'), minzoom: 9, maxzoom: 10 };
+    using ctx = fixture({ sources: {}, layers: [background('base'), range] });
+    const [base, ranged] = ctx.handles;
+    ctx.mirror.setMoving(true);
+    for (const zoom of [8.2, 8.6, 9.1, 9.4, 10.1]) {
+      ctx.camera.set({ ...INITIAL_CAMERA, zoom }, { view: '3d', cause: 'user' });
+    }
+    expect(base.setZoom).not.toHaveBeenCalled();
+    expect(ranged.setZoom).toHaveBeenCalledExactlyOnceWith(9.1);
+    expect(ranged.setVisible.mock.calls.map(([visible]) => visible)).toEqual([false, true, false]);
+    ctx.mirror.setMoving(false);
+    expect(base.setZoom).toHaveBeenCalledExactlyOnceWith(10.1);
+    expect(ranged.setZoom).toHaveBeenCalledOnce();
+    ctx.camera.set({ ...INITIAL_CAMERA, zoom: 9.8 }, { view: '3d', cause: 'user' });
+    expect(ranged.setZoom).toHaveBeenLastCalledWith(9.8);
+    expect(ranged.setZoom).toHaveBeenCalledTimes(2);
+    expect(ranged.setVisible).toHaveBeenLastCalledWith(true);
+  });
+
+  it('运动中的业务变色及时替换目标层，不顺带重画其他层', async () => {
+    const fixed = background('fixed');
+    using ctx = fixture({ sources: {}, layers: [fixed, background('changed')] });
+    const [retained, replaced] = ctx.handles;
+    ctx.mirror.setMoving(true);
+    ctx.camera.set({ ...INITIAL_CAMERA, zoom: 9.25 }, { view: '3d', cause: 'user' });
+    const changed = background('changed', '#00ff00');
+    ctx.style.setGroup('sample', { sources: {}, layers: [fixed, changed] });
+    await Promise.resolve();
+    expect(replaced.dispose).toHaveBeenCalledOnce();
+    expect(ctx.handles[2].layer.specification).toBe(changed);
+    expect(ctx.handles[2].zoom).toBe(9.25);
+    expect(retained.setZoom).not.toHaveBeenCalled();
+    ctx.mirror.setMoving(false);
+    expect(retained.setZoom).toHaveBeenCalledExactlyOnceWith(9.25);
+    expect(ctx.handles[2].setZoom).not.toHaveBeenCalled();
+  });
+
+  it('注入安全调度后合并刷新，暂停和释放让迟到刷新失效', async () => {
+    const scheduled: (() => void)[] = [];
+    using ctx = fixture({ sources: {}, layers: [background('base')] }, {
+      scheduleRefresh: refresh => { scheduled.push(refresh); }
+    });
+    expect(ctx.port.create).toHaveBeenCalledOnce();
+    expect(scheduled).toHaveLength(0);
+    expect(ctx.mirror.pending).toBe(false);
+    const original = ctx.handles[0];
+    ctx.mirror.setMoving(true);
+    for (const zoom of [8.1, 8.2, 8.3]) {
+      ctx.camera.set({ ...INITIAL_CAMERA, zoom }, { view: '3d', cause: 'user' });
+    }
+    expect(scheduled).toHaveLength(1);
+    expect(ctx.mirror.pending).toBe(true);
+    expect(original.setZoom).not.toHaveBeenCalled();
+    ctx.mirror.pause();
+    ctx.mirror.setMoving(false);
+    expect(ctx.mirror.pending).toBe(false);
+    expect(original.setZoom).not.toHaveBeenCalled();
+    ctx.mirror.resume();
+    expect(scheduled).toHaveLength(2);
+    scheduled.shift()?.();
+    expect(original.setZoom).not.toHaveBeenCalled();
+    expect(ctx.mirror.pending).toBe(true);
+    scheduled.shift()?.();
+    expect(original.setZoom).toHaveBeenCalledExactlyOnceWith(8.3);
+    expect(ctx.mirror.pending).toBe(false);
+    ctx.style.setGroup('sample', { sources: {}, layers: [background('next')] });
+    await Promise.resolve();
+    expect(scheduled).toHaveLength(1);
+    ctx.mirror[Symbol.dispose]();
+    scheduled.shift()?.();
+    expect(ctx.port.create).toHaveBeenCalledOnce();
+    expect(original.dispose).toHaveBeenCalledOnce();
+  });
+
   it('图片变化只重建依赖层，暂停期间只应用最新图片并隔离迟到错误', async () => {
     const image = { width: 1, height: 1, data: new Uint8Array([255, 255, 255, 255]) };
     const next = { ...image, pixelRatio: 2, sdf: true };

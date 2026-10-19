@@ -1,7 +1,7 @@
 import { GeographicTilingScheme, ImageryLayer, UrlTemplateImageryProvider } from 'cesium';
 import type { ImageryLayerCollection, ImageryProvider } from 'cesium';
 import { safeReporter } from '@yzt/utils';
-import { createGeoJsonProvider } from './geojson-provider';
+import { createGeoJsonProvider, GeoJsonGeometryCache } from './geojson-provider';
 import { GeoJsonSources, type GeoJsonLease } from './geojson-source';
 import { createRasterProvider } from './raster-provider';
 import { createMvtProvider, type MvtProvider } from './mvt-provider';
@@ -41,6 +41,7 @@ export function createImageryStylePort({ layers, requestRender, mvt, geojson }: 
   const owned = new Set<ImageryStyleLayer>();
   const pool = new MvtWorkerPool(mvt);
   const sources = new GeoJsonSources(geojson);
+  const geometry = new GeoJsonGeometryCache();
   let anchor: ImageryLayer | undefined;
   let paused = false;
 
@@ -66,7 +67,7 @@ export function createImageryStylePort({ layers, requestRender, mvt, geojson }: 
         layers.add(anchor, 0);
       }
       try {
-        const handle = new ImageryStyleLayer(layer, zoom, layers, pool, sources, render, onError, () => {
+        const handle = new ImageryStyleLayer(layer, zoom, layers, pool, sources, geometry, render, onError, () => {
           owned.delete(handle);
           removeUnusedAnchor();
         });
@@ -108,6 +109,7 @@ export function createImageryStylePort({ layers, requestRender, mvt, geojson }: 
       for (const handle of owned) { handle[Symbol.dispose](); }
       pool[Symbol.dispose]();
       sources[Symbol.dispose]();
+      geometry[Symbol.dispose]();
     }
   };
 }
@@ -120,9 +122,12 @@ class ImageryStyleLayer implements StyleMirrorLayer {
   readonly #onDispose: () => void;
   readonly #pool: MvtWorkerPool;
   readonly #sources: GeoJsonSources;
+  readonly #geometry: GeoJsonGeometryCache;
   readonly #requestRender: () => void;
   #resource: ImageryResource | undefined;
   #zoom: number;
+  #appliedZoom: number;
+  #restart = false;
 
   constructor(
     layer: BasicStyleLayer,
@@ -130,6 +135,7 @@ class ImageryStyleLayer implements StyleMirrorLayer {
     collection: ImageryLayerCollection,
     pool: MvtWorkerPool,
     sources: GeoJsonSources,
+    geometry: GeoJsonGeometryCache,
     requestRender: () => void,
     onError: (error: unknown) => void,
     onDispose: () => void
@@ -138,10 +144,12 @@ class ImageryStyleLayer implements StyleMirrorLayer {
     this.#collection = collection;
     this.#pool = pool;
     this.#sources = sources;
+    this.#geometry = geometry;
     this.#requestRender = requestRender;
     this.#report = safeReporter(onError, 'ImageryStyleLayer');
     this.#onDispose = onDispose;
     this.#zoom = zoom;
+    this.#appliedZoom = zoom;
     const resource = this.#create(zoom);
     try {
       collection.add(resource.layer);
@@ -164,33 +172,43 @@ class ImageryStyleLayer implements StyleMirrorLayer {
   }
 
   setVisible(visible: boolean): void {
-    if (this.#resource) {
-      if (!this.#resource.layer.show && visible) {
-        this.#resource.layer.show = true;
-        this.restartPending();
-      } else if (!visible) {
-        this.cancelPending();
-      }
-      this.#resource.layer.show = visible;
+    if (!this.#resource || this.#resource.layer.show === visible) {
+      return;
+    }
+    if (visible) {
+      this.#resource.layer.show = true;
+      this.restartPending();
+      this.#applyZoom();
+    } else {
+      this.cancelPending();
+      this.#resource.layer.show = false;
     }
   }
 
   /** 暂停或隐藏取消过的影像重新开始请求，共享数据不受影响 */
   restartPending(): void {
-    if (this.#resource?.mvt || this.#resource?.geojson) {
+    if (this.#resource?.layer.show && this.#restart) {
       this.#replace(this.#zoom);
     }
   }
 
   /** 隐藏、暂停和释放共同撤销当前影像的下载等待 */
   cancelPending(): void {
+    this.#restart = Boolean(this.#resource?.mvt || this.#resource?.geojson);
     this.#resource?.mvt?.cancelPending();
     this.#resource?.geojson?.[Symbol.dispose]();
   }
 
   setZoom(zoom: number): void {
+    this.#zoom = zoom;
+    if (this.#resource?.layer.show) { this.#applyZoom(); }
+  }
+
+  // 隐藏期间只保存目标级别，重新显示或结束运动时才重画
+  #applyZoom(): void {
     const previous = this.#resource;
-    if (!previous || zoom === this.#zoom) {
+    const zoom = this.#zoom;
+    if (!previous || zoom === this.#appliedZoom) {
       return;
     }
     if (this.#specification.type === 'raster') {
@@ -198,7 +216,7 @@ class ImageryStyleLayer implements StyleMirrorLayer {
     } else if (this.#specification.type !== 'background' || this.#specification.zoomDependent) {
       this.#replace(zoom);
     }
-    this.#zoom = zoom;
+    this.#appliedZoom = zoom;
   }
 
   #replace(zoom: number): void {
@@ -214,6 +232,8 @@ class ImageryStyleLayer implements StyleMirrorLayer {
     }
     // 先换身份再解绑旧资源，已排队的旧错误不能归到新影像
     this.#resource = next;
+    this.#appliedZoom = zoom;
+    this.#restart = false;
     if (!next.layer.show) { this.cancelPending(); }
     this.#release(previous);
   }
@@ -247,7 +267,7 @@ class ImageryStyleLayer implements StyleMirrorLayer {
       mvt = createMvtProvider(specification, zoom, this.#pool);
       provider = mvt;
     } else {
-      provider = createGeoJsonProvider(specification, zoom);
+      provider = createGeoJsonProvider(specification, zoom, this.#geometry);
     }
     // 全球矩形参与求交会截短跨 180° 经线的范围，直接沿用提供者的范围
     const layer = new ImageryLayer(provider, {
@@ -274,7 +294,7 @@ class ImageryStyleLayer implements StyleMirrorLayer {
     const lease = this.#sources.acquire(source);
     const provider = lease.promise.then(data => {
       lease.signal.throwIfAborted();
-      return createGeoJsonProvider({ ...specification, source: { ...source, data } }, zoom);
+      return createGeoJsonProvider({ ...specification, source: { ...source, data } }, zoom, this.#geometry);
     }).catch((error: unknown) => {
       if (!lease.signal.aborted) { throw error; }
       // SDK 的异步层会自行记录 rejection，主动取消用空提供者结束，不留下虚假的来源错误

@@ -1,9 +1,9 @@
 import 'cesium/Build/Cesium/Widgets/widgets.css';
-import { buildModuleUrl } from 'cesium';
+import { buildModuleUrl, ImageryLayer } from 'cesium';
 import type { Polygon } from 'geojson';
 import { CesiumView } from '@yzt/map-cesium';
 import { MapSession, type LngLat, type StyleGroup } from '@yzt/map-core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { FILL_PATTERNS, type FillPattern } from '@/features/resource-map/fill-patterns';
 import { selectionGroup } from '@/features/resource-map/selection-style';
 import { symbolLayers } from '@/features/resource-map/symbols';
@@ -200,6 +200,17 @@ describe('实际业务样式的三维装配', () => {
       measurements: [], draft: { kind: 'distance', points: [[-90.3, 0]], preview: null }
     }));
     expect(await measure).toEqual([89, 126, 247, 255]);
+    // 此斜视存在 SDK 的微小姿态噪声；稳定后再次移动仍须合并影像刷新
+    const destroy = vi.spyOn(ImageryLayer.prototype, 'destroy');
+    try {
+      const zoomed = nextColor(ctx, [89, 126, 247, 255]);
+      ctx.view.flyTo({ zoom: 12 }, { duration: 700 });
+      expect(await zoomed).toEqual([89, 126, 247, 255]);
+      expect(ctx.session.camera.current.zoom).toBeCloseTo(12, 5);
+      expect(destroy.mock.calls.length).toBeLessThanOrEqual(ctx.session.style.current.layers.length);
+    } finally {
+      destroy.mockRestore();
+    }
     expect(ctx.view.sourceErrors.size).toBe(0);
     expect(ctx.errors).toEqual([]);
   }, 60000);

@@ -58,6 +58,7 @@ describe('GeoJSON 透明瓦片真实画布', () => {
     const first = await tile(imagery);
     const next = await tile(imagery, 1, 1, 1);
     expect(imagery.tileWidth).toBe(512);
+    expect(imagery.maximumLevel).toBe(0);
     expect(first.width).toBe(1);
     expect(first.height).toBe(1);
     expect(next).toBe(first);
@@ -85,11 +86,28 @@ describe('GeoJSON 透明瓦片真实画布', () => {
     const image = await tile(background);
     expect(background.rectangle.north).toBe(Math.PI / 2);
     expect(background.rectangle.south).toBe(-Math.PI / 2);
-    expect(pixel(image, 200, 0)).toEqual([255, 0, 0, 64]);
-    expect(pixel(image, 200, 511)).toEqual([255, 0, 0, 64]);
-    expect(pixel(image, 200, 200)).toEqual([255, 0, 0, 64]);
+    expect(background.maximumLevel).toBe(0);
+    expect(image.width).toBe(1);
+    expect(image.height).toBe(1);
+    expect(pixel(image, 0, 0)).toEqual([255, 0, 0, 64]);
+    expect(await tile(background, 1, 0, 0)).toBe(image);
     const hidden = await tile(provider({ id: 'hidden', type: 'background', layout: { visibility: 'none' } }));
-    expect(pixel(hidden, 200, 200)).toEqual([0, 0, 0, 0]);
+    expect(pixel(hidden, 0, 0)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('缩放样式改变后替换纯色提供者，重新求值颜色与透明度', async () => {
+    const layer: LayerSpecification = {
+      id: 'background-zoom', type: 'background', paint: {
+        'background-color': ['step', ['zoom'], 'rgba(255,0,0,0.5)', 1, 'rgba(0,0,255,0.5)'],
+        'background-opacity': ['step', ['zoom'], 0.5, 1, 1]
+      }
+    };
+    const low = provider(layer, EMPTY, 0);
+    const high = provider(layer, EMPTY, 1);
+    expect(low.maximumLevel).toBe(0);
+    expect(high.maximumLevel).toBe(0);
+    expect(pixel(await tile(low), 0, 0)).toEqual([255, 0, 0, 64]);
+    expect(pixel(await tile(high), 0, 0)).toEqual([0, 0, 255, 128]);
   });
 
   it('逐个 Polygon 填充孔洞，半透明重叠区不会被 evenodd 挖空', async () => {
@@ -219,6 +237,51 @@ describe('GeoJSON 透明瓦片真实画布', () => {
     expect(pixel(fillRight, 0, 256)[3]).toBe(0);
     expect(pixel(fillLeft, 511, 180)).toEqual([255, 0, 0, 255]);
     expect(pixel(fillRight, 0, 180)).toEqual([255, 0, 0, 255]);
+  });
+
+  it('几何在相邻瓦片内时，圆外描边、宽线、尖角和模糊仍能覆盖当前瓦片边缘', async () => {
+    const circle = await tile(provider({
+      id: 'outside-circle', type: 'circle', source: 'data',
+      paint: { 'circle-radius': 2, 'circle-stroke-width': ['get', 'stroke'], 'circle-stroke-color': 'green' }
+    }, { type: 'Feature', properties: { stroke: 8 }, geometry: {
+      type: 'Point', coordinates: position(260, 128)
+    } }), 0, 0, 1);
+    expect(pixel(circle, 511, 256)).toEqual([0, 128, 0, 255]);
+
+    const line: GeoJSON = { type: 'LineString', coordinates: [position(260, 100), position(260, 150)] };
+    const wide = await tile(provider({
+      id: 'outside-wide', type: 'line', source: 'data', paint: { 'line-color': 'blue', 'line-width': 12 }
+    }, line), 0, 0, 1);
+    expect(pixel(wide, 511, 256)).toEqual([0, 0, 255, 255]);
+
+    const blurred = await tile(provider({
+      id: 'outside-blur', type: 'line', source: 'data',
+      paint: { 'line-color': 'red', 'line-width': 2, 'line-blur': 4 }
+    }, line), 0, 0, 1);
+    expect(pixel(blurred, 511, 256)[3]).toBeGreaterThan(0);
+
+    const corner = await tile(provider({
+      id: 'outside-miter', type: 'line', source: 'data', layout: { 'line-join': 'miter', 'line-miter-limit': 4 },
+      paint: { 'line-color': 'red', 'line-width': 20 }
+    }, { type: 'LineString', coordinates: [position(290, 116), position(260, 128), position(290, 140)] }), 0, 0, 1);
+    expect(pixel(corner, 510, 256)).toEqual([255, 0, 0, 255]);
+  });
+
+  it('粗筛保留面抗锯齿描边越过瓦片边缘的像素', async () => {
+    const fill = await tile(provider({
+      id: 'outside-fill', type: 'fill', source: 'data', paint: { 'fill-color': 'red', 'fill-antialias': true }
+    }, { type: 'Polygon', coordinates: [ring(256.2, 100, 280, 150)] }), 0, 0, 1);
+    expect(pixel(fill, 511, 256)[3]).toBeGreaterThan(0);
+  });
+
+  it('面抗锯齿描边的默认尖角连接可以越过几何包围盒进入相邻瓦片', async () => {
+    const fill = await tile(provider({
+      id: 'outside-fill-miter', type: 'fill', source: 'data',
+      paint: { 'fill-color': 'red', 'fill-antialias': true }
+    }, { type: 'Polygon', coordinates: [[
+      position(258.1, 128), position(280, 125.5), position(280, 130.5), position(258.1, 128)
+    ]] }), 0, 0, 1);
+    expect(pixel(fill, 511, 256)[3]).toBeGreaterThan(0);
   });
 
 });

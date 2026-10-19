@@ -46,16 +46,46 @@ interface WorkerRecord {
   terminated: boolean;
 }
 
+interface HeldRender {
+  readonly bitmap: ImageBitmap;
+  release(): void;
+}
+
 // 只观察浏览器公开 Worker 生命周期，SDK 的模块级线程与视图自己的线程分别计数
 function watchWorkers() {
   const NativeWorker = globalThis.Worker;
   const records: WorkerRecord[] = [];
+  const held = new Set<HeldRender>();
+  let receive: ((response: HeldRender) => void) | undefined;
   class ObservedWorker extends NativeWorker {
     readonly record: WorkerRecord;
     constructor(url: string | URL, options?: WorkerOptions) {
       super(url, options);
       this.record = { kind: String(url).includes('mvt.worker') ? 'mvt' : 'sdk', terminated: false };
       records.push(this.record);
+      // 在通信层监听之前扣留一次真实位图，让取消发生在明确的交付边界
+      this.addEventListener('message', event => {
+        const data: unknown = event.data;
+        if (!receive || this.record.kind !== 'mvt' || typeof data !== 'object' || data === null ||
+          !('kind' in data) || data.kind !== 'result' || !('method' in data) || data.method !== 'render' ||
+          !('value' in data) || !(data.value instanceof ImageBitmap)) { return; }
+        event.stopImmediatePropagation();
+        const respond = receive;
+        receive = undefined;
+        let released = false;
+        const response: HeldRender = {
+          bitmap: data.value,
+          release: () => {
+            if (released) { return; }
+            released = true;
+            this.dispatchEvent(new MessageEvent('message', { data }));
+            // 断言发现关闭遗漏时仍由测试清理，避免故意改坏验证把位图留在共享页面
+            if (response.bitmap.width === 0) { held.delete(response); }
+          }
+        };
+        held.add(response);
+        respond(response);
+      });
     }
     override terminate(): void {
       this.record.terminated = true;
@@ -66,7 +96,16 @@ function watchWorkers() {
   return {
     records,
     live: (kind: WorkerRecord['kind']) => records.filter(record => record.kind === kind && !record.terminated).length,
-    [Symbol.dispose]: () => vi.stubGlobal('Worker', NativeWorker)
+    holdNextRender: () => new Promise<HeldRender>(resolve => {
+      expect(receive).toBeUndefined();
+      receive = resolve;
+    }),
+    [Symbol.dispose]: () => {
+      receive = undefined;
+      for (const response of held) { response.bitmap.close(); }
+      held.clear();
+      vi.stubGlobal('Worker', NativeWorker);
+    }
   };
 }
 
@@ -148,12 +187,12 @@ function rendered(view: CesiumView, container: HTMLElement, action: () => void =
   return bounded(result).finally(() => remove?.());
 }
 
-function sampleGroup(): StyleGroup {
+function sampleGroup(fillId = 'fill'): StyleGroup {
   return {
     sources: { mvt: { type: 'vector', tiles: [mvtFixtureUrl()], maxzoom: 0 } },
     layers: [
       { id: 'background', type: 'background', paint: { 'background-color': '#000000' } },
-      { id: 'fill', type: 'fill', source: 'mvt', 'source-layer': 'landuse', paint: { 'fill-color': '#00ff00' } }
+      { id: fillId, type: 'fill', source: 'mvt', 'source-layer': 'landuse', paint: { 'fill-color': '#00ff00' } }
     ]
   };
 }
@@ -232,9 +271,9 @@ describe('三维负载与资源释放验收', () => {
     // oxlint-disable-next-line typescript/unbound-method -- 只包装公开销毁方法，call 保留 SDK 实例
     const destroy = CesiumWidget.prototype.destroy;
     const destroySpy = vi.spyOn(CesiumWidget.prototype, 'destroy').mockImplementation(function (this: CesiumWidget) {
-      const { preRender, postRender } = this.scene;
+      const { preRender, postRender, postUpdate } = this.scene;
       destroy.call(this);
-      releasedListeners.push(preRender.numberOfListeners + postRender.numberOfListeners);
+      releasedListeners.push(preRender.numberOfListeners + postRender.numberOfListeners + postUpdate.numberOfListeners);
       destroyed.push(this);
     });
     const timings: {
@@ -258,6 +297,21 @@ describe('三维负载与资源释放验收', () => {
           const cold = await rendered(view, container);
           const context = container.querySelector('canvas')?.getContext('webgl2');
           expect(context).not.toBeNull();
+          // 先登记真实响应再触发新影像，不依赖移动时刚好有请求来不及完成
+          const pending = workers.holdNextRender();
+          session.style.setGroup('sample', sampleGroup('fill-pending'));
+          // oxlint-disable-next-line no-await-in-loop -- 每轮分别扣留一个已经完成绘制但尚未交付的真实位图
+          const delayed = await bounded(pending);
+          const failuresBeforePause = failures.length;
+          expect(delayed.bitmap.width).toBe(512);
+          view.pause();
+          // oxlint-disable-next-line no-await-in-loop -- 明确确认这轮 pause 取消了被扣留的请求，不由后续自然取消兜底
+          await vi.waitFor(() => expect(failures.length).toBeGreaterThan(failuresBeforePause), { timeout: 5000 });
+          delayed.release();
+          expect(delayed.bitmap.width).toBe(0);
+          expect(delayed.bitmap.height).toBe(0);
+          // oxlint-disable-next-line no-await-in-loop -- 取消后恢复必须重新得到真实绿色像素，再进入移动负载
+          await rendered(view, container, () => view.resume());
           const moves: number[] = [];
           const resumes: number[] = [];
           for (let step = 0; step < 3; step++) {
