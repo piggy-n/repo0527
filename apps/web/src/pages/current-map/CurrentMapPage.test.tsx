@@ -1132,7 +1132,7 @@ describe('CurrentMapPage', () => {
     expect(updates.get('CheckedLayerList') ?? 0).toBe(0);
     map.moveTo([119, 32], 9 - 1e-7, {});
     await nextTick();
-    expect(layerRow(wrapper, 'bgdc_cjdcq').get('[data-status="minzoom"]').exists()).toBe(true);
+    expect(layerRow(wrapper, 'bgdc_cjdcq').find('[data-status="minzoom"]').exists()).toBe(true);
     expect(updates.get('CheckedLayerList') ?? 0).toBe(0);
 
     map.moveTo([119, 32], 9, {});
