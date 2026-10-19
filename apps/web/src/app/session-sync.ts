@@ -2,6 +2,7 @@ import { ElMessage } from 'element-plus';
 import type { Router } from 'vue-router';
 import { type SessionUser, useSessionStore, watchSessionStorage } from '@/shared/auth/session-store';
 import { RouteName } from '@/shared/router/route-names';
+import { navigate } from '@/shared/router/navigate';
 import { endSession } from './session-end';
 
 // 同一账号重新登录只换了 token，页面上的身份和权限不变
@@ -29,7 +30,7 @@ export function setupSessionSync(router: Router, reloadPage = () => location.rel
     endSession();
     if (!router.currentRoute.value.meta.public) {
       ElMessage.warning({ message: '已在其他标签页退出登录，请重新登录', grouping: true });
-      void router.replace({ name: RouteName.login });
+      void navigate(router, { name: RouteName.login, replace: true });
     }
   });
 }

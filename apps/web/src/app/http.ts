@@ -3,6 +3,7 @@ import type { Router } from 'vue-router';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { configureHttp } from '@/shared/http/configure';
 import { RouteName } from '@/shared/router/route-names';
+import { navigate } from '@/shared/router/navigate';
 import { endSession } from './session-end';
 
 /** 向 shared/http 注入登录 token、过期检查、路由跳转和错误提示；router 由参数传入，测试时可以换成内存路由 */
@@ -30,7 +31,7 @@ export function setupHttp(router: Router): void {
         return;
       }
       ElMessage.warning({ message: error.message, grouping: true });
-      void router.replace({ name: RouteName.login });
+      void navigate(router, { name: RouteName.login, replace: true });
     },
     onError: error => {
       ElMessage.error({ message: error.message, grouping: true });

@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router';
 import { roleLabel } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
+import { navigate } from '@/shared/router/navigate';
 import { RouteName } from '@/shared/router/route-names';
 import { endSession } from '../../session-end';
 import styles from './UserMenu.module.scss';
@@ -45,8 +46,9 @@ export const UserMenu = defineComponent({
       }
       endSession();
       // replace：退出后按后退键不会回到业务页（回去也会被路由守卫拦下）
-      await router.replace({ name: RouteName.login });
-      ElMessage.success('已退出登录');
+      if (await navigate(router, { name: RouteName.login, replace: true })) {
+        ElMessage.success('已退出登录');
+      }
     };
 
     return () =>

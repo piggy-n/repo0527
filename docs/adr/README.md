@@ -73,6 +73,7 @@
 | [0061](0061-map-resource-loading.md) | 地图资源的加载策略：登录页空闲时预加载地图页，预热 Worker 池 | 已接受 |
 | [0062](0062-font-loading-not-deferred.md) | 普惠体照常按用到时加载，不为地图推迟 | 已接受 |
 | [0063](0063-map-page-keep-alive.md) | 地图页的页面缓存：KeepAlive 加路由 meta，停用期间暂停视图 | 已接受 |
+| [0064](0064-navigation-failure-recovery.md) | 页面导航失败：应用根部提示，用户主动重试或刷新 | 已接受 |
 
 ## 模板
 

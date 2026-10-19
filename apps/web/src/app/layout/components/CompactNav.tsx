@@ -3,6 +3,7 @@ import { ElDropdown, ElDropdownItem, ElDropdownMenu, ElIcon } from 'element-plus
 import { defineComponent, type PropType } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
+import { navigate } from '@/shared/router/navigate';
 import type { NavDropdown, NavItem, NavLinkTarget } from '../menus';
 import styles from './HeaderNav.module.scss';
 
@@ -23,7 +24,7 @@ export const CompactNav = defineComponent({
       <ElDropdownItem
         key={target}
         class={[!icon && styles.compactNested, target === route.name && styles.compactActive]}
-        onClick={() => void router.push({ name: target })}
+        onClick={() => void navigate(router, { name: target })}
       >
         {icon && <SvgIcon class={styles.compactIcon} name={icon} size={16} />}
         {label}

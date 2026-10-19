@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { LoginForm } from '@/features/auth/components/LoginForm';
 import { roleHome } from '@/shared/auth/roles';
 import type { Session } from '@/shared/auth/session-store';
+import { navigate } from '@/shared/router/navigate';
 import { SystemTitle } from '@/shared/system-title/SystemTitle';
 import { WelcomeText } from '@/shared/system-title/WelcomeText';
 import styles from './LoginPage.module.scss';
@@ -16,8 +17,9 @@ export const LoginPage = defineComponent({
 
     // replace：登录后按后退键不会回到登录页
     const enterHome = async (session: Session) => {
-      await router.replace({ name: roleHome(session.user.role) });
-      ElMessage.success('登录成功');
+      if (await navigate(router, { name: roleHome(session.user.role), replace: true })) {
+        ElMessage.success('登录成功');
+      }
     };
 
     return () => (

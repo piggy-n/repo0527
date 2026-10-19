@@ -1,6 +1,7 @@
 import { ElButton, ElResult } from 'element-plus';
 import { defineComponent } from 'vue';
 import { useRouter } from 'vue-router';
+import { navigate } from '@/shared/router/navigate';
 import { RouteName } from '@/shared/router/route-names';
 import styles from './NotFoundPage.module.scss';
 
@@ -10,7 +11,7 @@ export const NotFoundPage = defineComponent({
     const router = useRouter();
 
     const goHome = () => {
-      void router.push({ name: RouteName.home });
+      void navigate(router, { name: RouteName.home });
     };
 
     return () => (

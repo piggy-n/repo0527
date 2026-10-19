@@ -109,6 +109,12 @@ placeholder('system-management', RouteName.systemManagement, '系统管理', [Ro
 - 守卫里调用 `useSessionStore()`：`main.ts` 中 pinia 先于 router 安装，首次导航开始时已经可以取到 store
 - 登录后不回到原来要访问的页面，而是进入角色首页，与旧项目一致
 
+## 导航失败的恢复（ADR 0064）
+
+程序式跳转用 `shared/router/navigate(router, { name, replace: true })`；返回 true 后才显示成功提示。路由分块、地图运行时或守卫抛出的异常由 app 的 `navigation-recovery` 统一接收，在应用根部显示“重试”和“刷新页面”，不会因为目标页面尚未挂载而丢失提示。
+
+重试保留目标的查询与锚点，重新经过鉴权守卫；成功导航清除提示，旧导航晚到的失败不会覆盖新的页面。刷新重新打开失败目标。空闲预加载失败仍不提示，也不自动重试。这里只处理导航失败，不代替地图已挂载后的引擎重试。
+
 ## 请求头与 401
 
 `app/http.ts` 的 `setupHttp(router)` 通过 `configureHttp` 注入：

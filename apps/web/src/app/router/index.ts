@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { appConfig } from '@/shared/config/app-config';
+import { createNavigationRecovery } from '../navigation-recovery';
 import { installAuthGuard } from './auth-guard';
 import { routes } from './routes';
 
@@ -9,6 +10,8 @@ export const router = createRouter({
   routes
 });
 
+// 先登记失败恢复，再安装守卫，首次导航和守卫里的异常都能被接收
+export const navigationRecovery = createNavigationRecovery(router);
 installAuthGuard(router);
 
 router.afterEach(to => {
