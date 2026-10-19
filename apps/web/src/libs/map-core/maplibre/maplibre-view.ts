@@ -335,8 +335,8 @@ export class MapLibreView<const G extends string> implements MapView {
   resume(): void {
     this.#assertAlive();
     this.#active = true;
-    // 暂停期间容器可能离开过文档（页面被缓存时 MapLibre 把画布缩成 0×0，ADR 0063）；它自己的尺寸监听要到下一帧才量，
-    // 恢复后立即执行的定位（暂停期间排队的相机操作）要按真实尺寸算
+    // 容器离开文档、宽高为 0 时 MapLibre 使用默认尺寸；恢复时先按实际尺寸调整，避免排队的定位使用旧尺寸
+    // 尺寸监听要到下一帧才重新量，原因与实测更正见 map-core.md 的 pause/resume 说明（ADR 0063）
     this.#map?.resize();
     if (this.#state === 'paused' && this.#map !== undefined) {
       this.#activate(this.#map);

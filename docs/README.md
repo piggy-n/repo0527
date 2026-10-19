@@ -75,6 +75,8 @@ docs/
    - [阶段五 5B：公共地图能力](stages/stage-5b-public-map-capabilities.md)
    - [阶段五 5C：现状底图业务](stages/stage-5c-current-map-business.md)
    - [阶段五 5D：地图页界面的专门设计](stages/stage-5d-map-ui.md)
+   - [阶段五 5E：加载策略、页面缓存与阶段五回顾](stages/stage-5e-wrap-up.md)
+   - [阶段五验收与后续修复](stages/stage-5-acceptance-review.md)
 5. [commands.md](commands.md)：日常要用的命令
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明。
@@ -97,6 +99,6 @@ docs/
 - JSON 配置文件不写注释（包括 `.oxlintrc.json` 这类允许 JSONC 的文件），解释写在 `config/` 下对应的文档里。YAML 文件可以保留简短注释，完整说明同样放在 `config/`
 - 修改配置文件时，同步更新 `config/` 下的说明，尤其是每篇末尾的"修改时的检查清单"
 - 新增或修改 `package.json` 里的脚本时，同步更新 `commands.md`
-- 每个阶段结束时，在 `stages/` 下新增一篇总结，格式参考阶段一：第一部分记录做了什么和目的，第二部分整理知识点、设计理由和替代方案；阶段五拆成 5A～5D，每个子阶段各写一篇
+- 每个阶段结束时，在 `stages/` 下新增一篇总结，格式参考阶段一：第一部分记录做了什么和目的，第二部分整理知识点、设计理由和替代方案；阶段五拆成 5A～5E，每个子阶段各写一篇
 - 文档里写的行为尽量先实测再写，并注明"已验证"；没有验证的内容要明确说明
 - 决策发生变化时写新的 ADR，而不是修改已接受的 ADR；`config/` 和 `stages/` 中引用旧决策的地方同步更新
