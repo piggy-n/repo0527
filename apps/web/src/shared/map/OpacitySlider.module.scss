@@ -18,8 +18,8 @@
   text-align: right;
 }
 
-// Element 的滑块宽 100%：内边距要算在宽度里，否则会压到百分比；两端的滑块按钮不贴着名称和百分比
+// 两端各留 12：圆点悬浮放大到 24 时仍保留网格的 8 间距，内边距计入宽度避免溢出
 .slider {
   box-sizing: border-box;
-  padding: 0 6px;
+  padding: 0 var(--space-md);
 }

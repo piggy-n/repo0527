@@ -146,7 +146,7 @@ const current = basemapOption(basemap.selected.value);   // { id, label: '矢量
 
 - 三张缩略图只写类型（选项的 `shortLabel`：矢量、影像、无底图），名称叠在缩略图右下角，沿用底图卡的半透明底色，选中时为主色底、反白文字；无障碍名称是全称，当前的用 `aria-pressed`、主色描边和右上角的勾（`SvgIcon` 的 `check`）
 - 缩略图由拥有者给出（`basemap.thumbnails`，`basemapThumbnails(tianditu)` 纯函数）：天地图南京所在的那张 10 级瓦片（849, 415），底图和配套的注记各一张，放大到 160% 后按 `focus`（86% 67%，南京在瓦片里的位置）对准。和底图的数据源用同一个地址模板（`tileUrl`）；无底图、关闭天地图时为 `null`，不请求天地图，显示和地图背景同色的方格。组件不读 `appConfig`
-- 透明度用共用的 `OpacitySlider`：滑块按百分比显示、不带刻度、右边写出百分比，拖动过程中实时交出 0～1。底图 Popover 的顶部操作栏与行政区标签的选项行各自用 `OpacityToggle` 控制下方滑块，默认隐藏，关闭重开恢复隐藏、数值保留。页面把 `basemap.opacity` 与 `setOpacity` 交给 `MapOptionsPopover`，内部的 `BasemapPanel` 用 `showOpacity={false}` 避免重复；行政区仍由 `BoundaryPanel` 的 `showOpacity` 控制。选择无底图时隐藏透明度入口并收起滑块，切回后按需展开。Element 的滑块宽 100%，内边距要算进宽度（`box-sizing: border-box`），否则会压到百分比（浏览器验证时发现）
+- 透明度用共用的 `OpacitySlider`：滑块按百分比显示、不带刻度、右边写出百分比，拖动过程中实时交出 0～1。底图 Popover 的顶部操作栏与行政区标签的选项行各自用 `OpacityToggle` 控制下方滑块，默认隐藏，关闭重开恢复隐藏、数值保留。页面把 `basemap.opacity` 与 `setOpacity` 交给 `MapOptionsPopover`，内部的 `BasemapPanel` 用 `showOpacity={false}` 避免重复；行政区仍由 `BoundaryPanel` 的 `showOpacity` 控制。选择无底图时隐藏透明度入口并收起滑块，切回后按需展开。Element 的滑块宽 100%，两端各留 `--space-md`（12）并计入宽度（`box-sizing: border-box`）；端点圆点悬浮放大到 24 时，与名称及百分比仍保留至少 8 间距
 - 现状底图页的底图使用 `MapOptionsPopover`，行政区已并入功能标签。按 ADR 0070 及后续界面反馈，底图再次点击入口或右上关闭按钮关闭；外部点击、失焦和 Esc 不关闭，页面停用仍关闭。`visible` 与更新监听保持受控，入口单独切换，忽略 Element 的自动显隐请求；禁用组件的触发按键拦截，键盘通过原生按钮点击执行同一开关
 - 底图 Popover 在入口左侧间隔 12、带箭头，宽 320，固定定位并限制在视口内；窄屏限制宽度，内容自然撑高，无内部滚动区。`afterWrite` 定位修饰器报告真实顶部，右侧面板列在它上方留 12；透明度展开与视口变化都会重新定位。`OpacityToggle` 的独立选中类和 `aria-pressed` 跟随展开状态，不依赖 Tooltip 的 `aria-expanded`
 - 底图不显示标题，顶部留 8、左右及底部留 12；顶部操作栏高 24，透明度与关闭按钮靠右排列、间隔 8，不加背景或分隔线，与缩略图间隔 4。缩略图等宽、高 60，独占整行；滑块在缩略图下方另起一行，行距 8，不增加内部滚动区
