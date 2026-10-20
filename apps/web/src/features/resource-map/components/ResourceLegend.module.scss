@@ -70,6 +70,12 @@ button.summary {
   }
 }
 
+// 留出复杂图例设置入口的同等宽度，整行仍可点击，年份保持对齐
+.uniformSummary {
+  box-sizing: border-box;
+  padding-right: 28px;
+}
+
 // 编辑状态只改变颜色，鼠标点击留下的焦点不维持按钮显示
 .configure {
   display: inline-flex;
@@ -140,10 +146,9 @@ button.summary {
 .name {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
   color: var(--color-text-strong);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  padding-block: 4px;
   font-weight: var(--font-weight-semibold);
 }
 
@@ -169,25 +174,50 @@ button.summary {
   background-color: var(--color-primary);
 }
 
-// 展开的内容不缩进，编辑器和面板一样宽
+// 搜索和子图例整体缩进，独立编辑视图仍占满内容宽度
 .content {
-  padding: var(--space-xs) 0 var(--space-sm);
+  padding: var(--space-xs) 0 var(--space-sm) var(--space-xl);
 }
 
 .configuration {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  padding: var(--space-sm) 0;
+  min-width: 0;
 }
 
-// 样式方式在左，恢复默认靠右
+// 返回入口与当前名称同行，名称沿用 MxTitle 的区块标题规范
+.settingsHeading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: 28px;
+  min-width: 0;
+}
+
+.back {
+  flex: none;
+}
+
 .modes {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-sm);
+  padding-block: var(--space-sm);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.label,
+.description {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 18px;
+}
+
+.resetLayer {
+  align-self: flex-end;
 }
 
 .empty {

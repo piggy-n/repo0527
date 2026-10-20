@@ -83,6 +83,7 @@
 | [0071](0071-map-panel-title-and-wrapped-tabs.md) | 地图工具的标准标题与两列标签 | 已接受（修正 0053、0066、0070） |
 | [0072](0072-map-tab-size-and-selection.md) | 地图功能标签的字号与选中状态 | 已接受（修正 0071） |
 | [0073](0073-map-single-panel-title.md) | 单功能面板直接显示功能标题 | 已接受（修正 0071） |
+| [0074](0074-legend-browse-and-edit-views.md) | 图例浏览与编辑视图分离 | 已接受（修正 0043、0066） |
 
 ## 模板
 

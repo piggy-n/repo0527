@@ -61,7 +61,9 @@ export const SymbolEditor = defineComponent({
     symbols: { type: Object as PropType<ResourceSymbols>, required: true },
     /** 资源的统一样式，或者分类样式里的一个取值 */
     target: { type: Object as PropType<SymbolTarget>, required: true },
-    name: { type: String, required: true }
+    name: { type: String, required: true },
+    /** 由调用方区分当前图例与整个图层的恢复范围 */
+    resetLabel: { type: String, default: '恢复默认' }
   },
   setup(props) {
     const symbol = computed(() => props.symbols.symbolOf(props.target));
@@ -362,7 +364,7 @@ export const SymbolEditor = defineComponent({
               size="small"
               disabled={!props.symbols.hasOverride(props.target)}
               onClick={() => props.symbols.resetSymbol(props.target)}>
-              恢复默认
+              {props.resetLabel}
             </ElButton>
           </div>
         </div>

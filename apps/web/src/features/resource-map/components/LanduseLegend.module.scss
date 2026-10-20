@@ -1,33 +1,21 @@
-// 地类图例（ADR 0066）：默认两列平铺；分类视图保留缩进，编辑器占满内容宽度
+// 地类图例：两列紧凑展示，名称完整换行，窄面板自动改为单列
 
 .legend {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  container-type: inline-size;
 }
 
-.filters {
-  display: flex;
-  gap: var(--space-sm);
-}
-
-.view {
-  flex: none;
-  width: 120px;
-}
-
-.sections,
 .items {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px var(--space-xs);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.items {
-  padding-left: 20px;
-}
-
-.section,
 .item {
   display: flex;
   align-items: center;
@@ -35,11 +23,13 @@
   box-sizing: border-box;
   width: 100%;
   min-height: 28px;
-  padding: 0 4px;
+  padding: 4px 0;
   border: 0;
   border-radius: var(--radius-sm);
   background: none;
   font-size: var(--font-size-xs);
+  line-height: 18px;
+  color: var(--color-text-regular);
   text-align: left;
   cursor: pointer;
 
@@ -53,56 +43,15 @@
   }
 }
 
-.section {
-  color: var(--color-text-strong);
-}
-
-.item {
-  color: var(--color-text-regular);
-  cursor: default;
-
-  &:hover .configure,
-  &:has(:focus-visible) .configure {
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
-
-.open,
-.open:hover {
-  background-color: var(--color-primary-bg);
-  color: var(--color-primary);
-}
-
-.arrow {
-  flex: none;
-  color: var(--color-text-placeholder);
-}
-
-.code {
-  flex: none;
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-secondary);
-}
-
-// 地类的编码定宽，名称对齐
-.item .code {
-  width: 40px;
+.swatch {
+  width: 22px;
+  height: 16px;
 }
 
 .name {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.count {
-  flex: none;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
 }
 
 // 改过符号
@@ -114,71 +63,13 @@
   background-color: var(--color-primary);
 }
 
-// 拉回地类的缩进，编辑器和面板一样宽
-.editor {
-  margin-left: -20px;
-}
-
 .empty {
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }
 
-.configure {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-
-  &:hover,
-  &[aria-expanded='true'] {
-    color: var(--color-primary);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-primary-border-hover);
-  }
-}
-
-// 平铺只保留符号和名称，编码、含义在悬停提示里，编辑时占满两列
-.flat {
+@container (max-width: 239px) {
   .items {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding-left: 0;
-  }
-
-  .item {
-    gap: 4px;
-    font-size: var(--font-size-xs);
-  }
-
-  .code {
-    display: none;
-  }
-
-  .editing {
-    grid-column: 1 / -1;
-  }
-
-  .editor {
-    margin-left: 0;
-  }
-}
-
-@media (hover: none) {
-  .configure {
-    opacity: 1;
-    pointer-events: auto;
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -93,6 +93,8 @@ export const CurrentMapPage = defineComponent({
     // 目录由查询加载和缓存，拥有者只管显示状态；还没有目录时重试，查询会回到 pending，不再是失败
     const catalogQuery = useResourceCatalogQuery();
     const symbols = useResourceSymbols({ catalog: catalogQuery.data, preferences });
+    // 编辑时隐藏图例的全局恢复入口，保留当前图例和图层级操作
+    const legendEditing = ref(false);
     const resources = useResourceLayers(map, { catalog: catalogQuery.data, preferences, symbols });
     const boundaries = useBoundaries({ preferences });
     const region = useRegionLocate(map, { goToDefaultView });
@@ -289,9 +291,14 @@ export const CurrentMapPage = defineComponent({
                       <BoundarySettingsPanel boundaries={boundaries} active={active} />
                     ],
                     legend: ({ active }: PanelSlotProps) => [
-                      <ResourceLegend layers={resources} symbols={symbols} active={active} />
+                      <ResourceLegend
+                        layers={resources}
+                        symbols={symbols}
+                        active={active}
+                        onEditingChange={value => { legendEditing.value = value; }}
+                      />
                     ],
-                    'legend-footer': () => symbols.overrides.value.size > 0
+                    'legend-footer': () => !legendEditing.value && symbols.overrides.value.size > 0
                       ? [<ResourceLegendReset symbols={symbols} />]
                       : [],
                     'region-locate': () => [<RegionLocatePanel region={region} />],
