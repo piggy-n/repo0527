@@ -191,14 +191,18 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     const trigger = ctx.wrapper.get(`[${attribute}="bgdc_dltb"] button[aria-label="地类图斑的透明度"]`).element;
     await userEvent.hover(row);
     await userEvent.click(trigger);
-    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
+    // Element Popover 会接管 aria-expanded，按组件自有的按下状态及实际浮层核验
+    await expect.poll(() => trigger.getAttribute('aria-pressed')).toBe('true');
+    const slider = document.querySelector('[role="slider"][aria-label="地类图斑的透明度"]');
+    expect(slider?.checkVisibility()).toBe(true);
     await frames(3);
     expect(document.documentElement.scrollWidth).toBe(pageWidth);
     expect(document.documentElement.scrollHeight).toBe(pageHeight);
 
     const list = ctx.wrapper.get(`.${attribute === 'data-resource' ? styles.tree : styles.checkedList}`).element;
     list.scrollTop = 32;
-    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('false');
+    await expect.poll(() => trigger.getAttribute('aria-pressed')).toBe('false');
+    await expect.poll(() => slider?.checkVisibility()).toBe(false);
     expect(ctx.layers.state.value.displays.get('bgdc_dltb')?.checked).toBe(true);
   });
 
@@ -211,9 +215,9 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     await userEvent.hover(row);
     expect(getComputedStyle(trigger).opacity).toBe('1');
     await userEvent.click(trigger);
-    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
+    await expect.poll(() => trigger.getAttribute('aria-pressed')).toBe('true');
     await userEvent.click(trigger);
-    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('false');
+    await expect.poll(() => trigger.getAttribute('aria-pressed')).toBe('false');
     await userEvent.unhover(trigger);
 
     // 真实点击保留鼠标焦点，关闭后不能继续触发整行的操作显隐

@@ -64,6 +64,12 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
     meta: { title: '地图开发页', public: true }
   },
   {
+    path: '/dev/map-ui',
+    name: RouteName.devMapUi,
+    component: () => import('@/pages/dev/map-ui/DevMapUiPage').then(({ DevMapUiPage }) => DevMapUiPage),
+    meta: { title: '地图界面交互样例', public: true }
+  },
+  {
     path: '/dev/resources',
     name: RouteName.devResources,
     component: withMapRuntime(() =>

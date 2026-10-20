@@ -206,12 +206,13 @@ describe('MapPanelGroup（真实的布局）', () => {
     expect(ctx.wrapper.get('h2').text()).toBe('地图工具');
     expect(ctx.wrapper.find('[role="tablist"]').exists()).toBe(false);
     expect(ctx.wrapper.findAll('[role="tabpanel"]')).toHaveLength(4);
+    expect(ctx.wrapper.get('[data-panel="legend"]').isVisible()).toBe(false);
     expect(ctx.wrapper.get('[data-panel-group]').element.getBoundingClientRect().height).toBe(48);
     expect(ctx.group.state.value.open).toHaveLength(4);
 
     await ctx.wrapper.get('[aria-label="展开功能面板"]').trigger('click');
     expect(ctx.wrapper.findAll('[role="tab"]')).toHaveLength(4);
     expect(ctx.wrapper.get('[aria-selected="true"]').text()).toBe('图例');
-    expect(ctx.wrapper.get('[data-panel="legend"]').attributes('style')).toBeUndefined();
+    expect(ctx.wrapper.get('[data-panel="legend"]').isVisible()).toBe(true);
   });
 });

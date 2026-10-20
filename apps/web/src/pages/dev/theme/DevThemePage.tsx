@@ -24,10 +24,12 @@ import {
   ElTree
 } from 'element-plus';
 import { defineComponent, onMounted, ref } from 'vue';
+import { RouterLink } from 'vue-router';
 import { COLOR_PRESETS } from '@/features/resource-map/palette';
 import { iconNames, SvgIcon } from '@/shared/icons/SvgIcon';
 import { QueryForm } from '@/shared/query-form/QueryForm';
 import { SystemTitle } from '@/shared/system-title/SystemTitle';
+import { RouteName } from '@/shared/router/route-names';
 import styles from './DevThemePage.module.scss';
 import { PanelPreview, SectionPreview, SplitLayoutPreview, TitlePreview } from './UiComponentsPreview';
 
@@ -200,6 +202,11 @@ export const DevThemePage = defineComponent({
         <h1 class={styles.systemTitle}>
           <SystemTitle />
         </h1>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>已验收页面样例</h2>
+          <RouterLink to={{ name: RouteName.devMapUi }}>现状底图 · 真实组件交互样例</RouterLink>
+        </section>
 
         <section class={styles.section}>
           <h2 class={styles.sectionTitle}>色板</h2>

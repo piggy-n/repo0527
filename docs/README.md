@@ -46,6 +46,7 @@ docs/
 │  ├─ theme.md                设计令牌清单、Element Plus 映射与使用规则
 │  ├─ page-layout.md          页面布局规范：分栏型与画布型、面板、标题、窄屏抽屉
 │  ├─ ui-workflow.md          UI 工作流程：交互原型、真实页面检查、短时浏览器测试与验收
+│  ├─ current-map-reference.md 现状底图交互样例：已验收组件、年份规则与复查路径
 │  └─ fonts.md                字体：来源、授权要点、存放位置、字重与性能
 └─ stages/                    各阶段的总结与学习笔记
    ├─ stage-1-engineering-foundation.md  阶段一：工程基础
