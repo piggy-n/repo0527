@@ -24,6 +24,14 @@
     .handle {
       color: var(--color-text-secondary);
     }
+
+    .rank {
+      opacity: 0;
+    }
+
+    .grip {
+      opacity: 1;
+    }
   }
 }
 
@@ -45,17 +53,6 @@
 
   > * {
     grid-area: 1 / 1;
-  }
-
-  &:hover,
-  &:focus-visible {
-    .rank {
-      opacity: 0;
-    }
-
-    .grip {
-      opacity: 1;
-    }
   }
 
   &:focus-visible {

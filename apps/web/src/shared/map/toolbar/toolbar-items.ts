@@ -31,7 +31,7 @@ export const TOOLBAR_TOOLS: Readonly<Record<ToolbarToolId, ToolbarItem>> = {
 };
 
 export const TOOLBAR_ACTIONS: Readonly<Record<ToolbarActionId, ToolbarItem>> = {
-  clear: { label: '清除', icon: 'map-clear' },
+  clear: { label: '清除测量与定位标记', icon: 'map-clear', lines: ['清除'] },
   'region-locate': { label: '区划定位', icon: 'map-region-locate' },
   'coordinate-locate': { label: '坐标定位', icon: 'map-coordinate-locate' },
   boundaries: { label: '行政区', icon: 'map-boundaries' },

@@ -57,26 +57,6 @@ export function togglePanel<Id extends string>(
   return groupShown && state.current === id ? closePanel(state, id) : showPanel(state, id, order);
 }
 
-/** 一段横向的范围（屏幕坐标） */
-export interface HorizontalSpan {
-  readonly left: number;
-  readonly right: number;
-}
-
-/**
- * 横向滚动的 Tab 区要滚到哪里，让这个 Tab 完整可见：已经可见时不动，超出左边时贴左边，超出右边时贴右边；
- * 比可见范围还宽时贴左边，名称在前面
- */
-export function revealScrollLeft(scrollLeft: number, view: HorizontalSpan, item: HorizontalSpan): number {
-  if (item.left < view.left || item.right - item.left > view.right - view.left) {
-    return scrollLeft - (view.left - item.left);
-  }
-  if (item.right > view.right) {
-    return scrollLeft + (item.right - view.right);
-  }
-  return scrollLeft;
-}
-
 export type MapSide = 'left' | 'right';
 
 export interface SideInput {

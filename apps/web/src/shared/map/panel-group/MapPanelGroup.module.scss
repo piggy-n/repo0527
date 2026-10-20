@@ -10,60 +10,106 @@
   max-height: 100%;
 }
 
-// 放不下时（手机宽度时三个功能）在自己的区域里横向滚动，不显示滚动条；当前的 Tab 由外壳滚进可见范围
-.tabs {
+.collapsed {
+  flex: none;
+}
+
+.heading {
   display: flex;
   flex: 1;
-  align-items: center;
-  gap: var(--space-md);
+  flex-direction: column;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding: 6px 0;
+}
+
+// 标题与操作独占 48 高的一行，与资源详情使用同一个 MxTitle
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 48px;
+}
+
+// 四个功能完整铺成两行，不再横向滚动或隐藏名称
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px var(--space-sm);
+  min-width: 0;
+  margin-bottom: var(--space-md);
 }
 
 .tab {
-  position: relative;
   display: flex;
   align-items: center;
-  gap: 2px;
-  white-space: nowrap;
+  gap: 4px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 4px 0 8px;
+  border-radius: var(--radius-sm);
+
+  &:hover {
+    background-color: var(--color-neutral-bg-light);
+  }
 }
 
 .label {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: var(--space-sm);
-  padding: 0;
+  min-width: 0;
+  padding: 2px 0;
   border: 0;
   background: none;
   font-size: var(--font-size-base);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-}
-
-// 标签大小不随选中变化，切换时关闭按钮不跳位
-.current .label {
   font-weight: var(--font-weight-semibold);
-  color: var(--color-primary);
-  cursor: default;
+  line-height: 1.5;
+  text-align: left;
+  overflow-wrap: anywhere;
+  color: var(--color-text-title);
+  cursor: pointer;
 
-  &::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -6px;
-    height: 2px;
-    border-radius: 999px;
-    background-color: var(--color-primary);
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
   }
 }
 
-.closeAll {
-  padding-left: var(--space-sm);
-  border-left: 1px solid var(--color-border);
-  border-radius: 0;
+// 与资源详情区块副标题相同的主色竖条，切换选中状态时始终显示
+.mark {
+  flex: none;
+  width: 4px;
+  height: 1em;
+  border-radius: 999px;
+  background-color: var(--color-primary);
+}
+
+// 选中背景覆盖整个标签，内描边不挤占空间，悬浮时仍保持选中状态
+.current {
+  &,
+  &:hover {
+    background-color: var(--color-primary-bg);
+    box-shadow: inset 0 0 0 1px var(--color-primary-border);
+  }
+
+  .label {
+    cursor: default;
+  }
+}
+
+.closeTab {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+// 与资源详情共用箭头和关闭图标的按钮样式、间距
+.controls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-sm);
 }
 
 // 内容区在外壳可滚动的区域里：上面留出 3 像素，贴着顶边的边框（Element 的单选按钮用 outline 画边框）和键盘焦点框不被裁掉。

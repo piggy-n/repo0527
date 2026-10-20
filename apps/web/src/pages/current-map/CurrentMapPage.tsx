@@ -1,6 +1,6 @@
 import { MapCanvas, provideMap } from '@yzt/map-vue';
 import { computed, defineComponent, ref, watch } from 'vue';
-import { FeatureDetailPanel } from '@/features/resource-map/components/FeatureDetailPanel';
+import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureDetailWindow';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
 import { useCatalogOrder } from '@/features/resource-map/composables/useCatalogOrder';
@@ -17,7 +17,7 @@ import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
 import { MapCard } from '@/shared/map/card/MapCard';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
-import { BoundaryPanel } from '@/shared/map/boundary/BoundaryPanel';
+import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { CoordinateLocatePanel } from '@/shared/map/location/CoordinateLocatePanel';
 import { LocationOverlay } from '@/shared/map/location/LocationOverlay';
@@ -27,6 +27,8 @@ import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
 import { useMeasure } from '@/shared/map/measure/useMeasure';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
+import { panelStackHeight } from '@/shared/map/panel-group/panel-stack';
+import { usePanelStack } from '@/shared/map/panel-group/usePanelStack';
 import { MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
 import { MapStatusBar } from '@/shared/map/status-bar/MapStatusBar';
 import { useMapReadout } from '@/shared/map/status-bar/useMapReadout';
@@ -35,7 +37,7 @@ import { RegionLocatePanel } from '@/shared/map/region/RegionLocatePanel';
 import { RegionScopeBar } from '@/shared/map/region/RegionScopeBar';
 import { regionClipGroup } from '@/shared/map/region/region-clip';
 import { readyBoundary, useRegionLocate } from '@/shared/map/region/useRegionLocate';
-import { MapToolbar, type ToolbarButtonSlotProps } from '@/shared/map/toolbar/MapToolbar';
+import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { useMapLoadMarks } from '@/shared/map/useMapLoadMarks';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
@@ -44,24 +46,25 @@ import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './CurrentMapPage.module.scss';
 import { mapPageLayout } from './map-page-layout';
 
-// 图例与定位、资源详情共用功能面板；底图和行政区分别使用按钮左侧的 Popover（ADR 0068）
-const FUNCTION_PANELS = ['legend', 'region-locate', 'coordinate-locate', 'feature-detail'] as const;
+// 功能标签、独立详情和底图分开管理，功能与详情同列上下排列（ADR 0070）
+const FUNCTION_PANELS = ['boundaries', 'legend', 'region-locate', 'coordinate-locate'] as const;
 const PANEL_LABELS = {
   'region-locate': '区划定位',
   'coordinate-locate': '坐标定位',
-  'feature-detail': '资源详情',
+  boundaries: '行政区',
   legend: '图例',
   basemap: '底图'
 };
 
-type FunctionPanel = Exclude<(typeof FUNCTION_PANELS)[number], 'feature-detail'>;
+type FunctionPanel = (typeof FUNCTION_PANELS)[number];
 
-// 业务组沿用原有分组，图例固定在最下方（ADR 0066）
+// 地图操作、测量、定位、显示辅助、清理分组
 const TOOLBAR_GROUPS = [
   ['browse', 'feature-pick'],
-  ['measure-distance', 'measure-area', 'clear'],
+  ['measure-distance', 'measure-area'],
   ['region-locate', 'coordinate-locate'],
-  ['boundaries', 'legend']
+  ['boundaries', 'legend'],
+  ['clear']
 ] as const;
 
 /** 现状底图：区域按 ADR 0053 划分，各块的界面在 5D.1～5D.8 逐块设计（docs/roadmap.md"5D 地图页界面的专门设计"） */
@@ -97,32 +100,48 @@ export const CurrentMapPage = defineComponent({
     // 状态栏的比例尺、经纬度和角度（ADR 0053 第 5 节）
     const readout = useMapReadout(map);
 
-    // 功能面板、底图和行政区分别开关，业务状态仍由各自的拥有者持有
+    // 业务状态仍由各自的拥有者持有，这里只组合窗口与排布
     const functions = usePanelGroup(FUNCTION_PANELS);
     const basemapOpen = ref(false);
-    const boundariesOpen = ref(false);
+    const detailOpen = ref(false);
+    const lane = ref<HTMLElement>();
+    const { height: laneHeight } = useShownElementSize(lane);
+    const laneTop = ref(0);
+    const basemapTop = ref<number | null>(null);
+    const stackHeight = computed(() => panelStackHeight(laneHeight.value, laneTop.value, basemapTop.value));
+    const stack = usePanelStack({
+      height: () => stackHeight.value,
+      functionsOpen: () => functions.state.value.open.length > 0,
+      detailOpen: () => detailOpen.value
+    });
+    // 浮层报告定位结果，页面只量共同的列边界，留白由纯函数计算
+    const changeBasemapTop = (top: number | null) => {
+      laneTop.value = lane.value?.getBoundingClientRect().top ?? 0;
+      basemapTop.value = top;
+    };
     // 资源面板的收起、分割线的位置和目录顺序按账号记住；窄屏时左右只显示一边，只推导显示，不改收起状态（ADR 0053 第 6、8 节）
     const panelLayout = useResourcePanelLayout({ preferences });
     const catalogOrder = useCatalogOrder({ preferences });
     const sides = useSideExclusion({
       leftExpanded: () => !panelLayout.collapsed.value,
-      rightOpen: () => functions.state.value.open.length > 0 || basemapOpen.value || boundariesOpen.value
+      rightOpen: () => functions.state.value.open.length > 0 || basemapOpen.value || detailOpen.value
     });
 
-    // 点选、框选只认区划里的要素，和遮罩用同一个边界（ADR 0051 第 1 节）；用户开始识别时切到资源详情
+    // 识别只打开独立详情，不切走正在查看的功能标签
     const pick = useFeaturePick(map, resources, {
       scope: () => readyBoundary(region.state.value)?.geometry ?? null,
       onIdentifyStart: () => {
         sides.activate('right');
-        functions.show('feature-detail');
+        detailOpen.value = true;
+        stack.activate('detail', true);
       }
     });
-    // 拥有者清除了结果（关闭、取消勾选资源、离开点选工具等）时资源详情随之关闭；请求返回时不切换 Tab
+    // 取消勾选资源、切出点选工具等仍沿用拥有者的清理规则
     watch(
       () => pick.state.value.kind === 'idle',
       idle => {
         if (idle) {
-          functions.close('feature-detail');
+          detailOpen.value = false;
         }
       }
     );
@@ -145,29 +164,16 @@ export const CurrentMapPage = defineComponent({
     // 功能入口按显示状态开关；关闭定位面板不清掉区划和位置点
     // 按点击时右边是否显示决定：窄屏时让给了左边就是重新显示，不是关闭
     const toggleFunction = (id: FunctionPanel) => {
-      const shown = sides.right.value;
+      const shown = sides.right.value && !stack.layout.value.collapsed.functions;
       sides.activate('right');
       functions.toggle(id, shown);
+      stack.activate('functions', true);
     };
-    // Popover 自己处理按钮切换和外部点击，页面同步开关与窄屏的操作侧
+    // 底图入口切换开关，外部点击不关闭
     const changeBasemapOpen = (open: boolean) => {
       basemapOpen.value = open;
       if (open) {
         sides.activate('right');
-      }
-    };
-    const changeBoundariesOpen = (open: boolean) => {
-      boundariesOpen.value = open;
-      if (open) {
-        sides.activate('right');
-      }
-    };
-    // 入口显示为按下：打开着，而且右边没有让出去
-    const pressedIn = (id: FunctionPanel) => sides.right.value && functions.isOpen(id);
-    // 关闭资源详情就是清除选择（ADR 0053 第 4 节）；外壳已经从组里关掉了它
-    const closeFunction = (id: string) => {
-      if (id === 'feature-detail') {
-        pick.close();
       }
     };
     // 展开资源面板算操作左边：窄屏时右边让出来
@@ -187,13 +193,13 @@ export const CurrentMapPage = defineComponent({
       clear,
       'region-locate': () => toggleFunction('region-locate'),
       'coordinate-locate': () => toggleFunction('coordinate-locate'),
-      boundaries: () => sides.activate('right'),
+      boundaries: () => toggleFunction('boundaries'),
       legend: () => toggleFunction('legend')
     };
-    const pressed = computed(() => [
-      ...(['region-locate', 'coordinate-locate', 'legend'] as const).filter(pressedIn),
-      ...(sides.right.value && boundariesOpen.value ? ['boundaries' as const] : [])
-    ]);
+    // 当前显示用浅底，后台标签只标主色；左右让出或收起后不显示为当前面板
+    const pressed = computed(() => FUNCTION_PANELS.filter(id =>
+      sides.right.value && !stack.layout.value.collapsed.functions && functions.state.value.current === id
+    ));
 
     // 当前底图的缩略图入口固定在地图控制栏下方
     const renderBasemapCard = () => {
@@ -205,6 +211,7 @@ export const CurrentMapPage = defineComponent({
             label="底图"
             open={basemapOpen.value}
             visible={sides.right.value}
+            onTopChange={changeBasemapTop}
             onUpdate:open={changeBasemapOpen}>
             {{
               reference: () => [
@@ -256,19 +263,48 @@ export const CurrentMapPage = defineComponent({
                 onUpdate:collapsed={changeResourcesCollapsed}
               />
             </div>
-            <div class={styles.lane}>
-              <MapPanelGroup group={functions} labels={PANEL_LABELS} visible={sides.right.value} onClose={closeFunction}>
-                {{
-                  legend: ({ active }: PanelSlotProps) => [
-                    <ResourceLegend layers={resources} symbols={symbols} active={active} />
-                  ],
-                  'region-locate': () => [<RegionLocatePanel region={region} />],
-                  'coordinate-locate': ({ active }: PanelSlotProps) => [
-                    <CoordinateLocatePanel location={location} active={active} />
-                  ],
-                  'feature-detail': () => [<FeatureDetailPanel pick={pick} />]
-                }}
-              </MapPanelGroup>
+            <div ref={lane} class={styles.lane}>
+              <div
+                class={styles.panelStack}
+                style={{ height: laneHeight.value > 0 ? `${stackHeight.value}px` : '100%' }}>
+                <MapPanelGroup
+                  class={styles.functions}
+                  style={{
+                    maxHeight: stack.layout.value.functionsMaxHeight === undefined
+                      ? undefined
+                      : `${stack.layout.value.functionsMaxHeight}px`
+                  }}
+                  group={functions}
+                  labels={PANEL_LABELS}
+                  visible={sides.right.value}
+                  collapsible
+                  collapsed={stack.layout.value.collapsed.functions}
+                  onActivate={() => stack.activate('functions')}
+                  onUpdate:collapsed={value => stack.setCollapsed('functions', value)}>
+                  {{
+                    boundaries: ({ active }: PanelSlotProps) => [
+                      <BoundarySettingsPanel boundaries={boundaries} active={active} />
+                    ],
+                    legend: ({ active }: PanelSlotProps) => [
+                      <ResourceLegend layers={resources} symbols={symbols} active={active} />
+                    ],
+                    'region-locate': () => [<RegionLocatePanel region={region} />],
+                    'coordinate-locate': ({ active }: PanelSlotProps) => [
+                      <CoordinateLocatePanel location={location} active={active} />
+                    ]
+                  }}
+                </MapPanelGroup>
+                {detailOpen.value && (
+                  <FeatureDetailWindow
+                    pick={pick}
+                    visible={sides.right.value}
+                    collapsed={stack.layout.value.collapsed.detail}
+                    onActivate={() => stack.activate('detail')}
+                    onUpdate:collapsed={value => stack.setCollapsed('detail', value)}
+                    onClose={pick.close}
+                  />
+                )}
+              </div>
             </div>
             <div class={styles.bottom}>
               <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
@@ -279,26 +315,10 @@ export const CurrentMapPage = defineComponent({
                   groups={TOOLBAR_GROUPS}
                   actions={toolbarActions}
                   pressed={pressed.value}
+                  opened={functions.state.value.open}
                   compact
-                  columns={toolbarColumns}>
-                  {{
-                    boundaries: ({ button }: ToolbarButtonSlotProps) => [
-                      <MapOptionsPopover
-                        name="boundaries"
-                        label="行政区"
-                        open={boundariesOpen.value}
-                        visible={sides.right.value}
-                        onUpdate:open={changeBoundariesOpen}>
-                        {{
-                          reference: () => [button],
-                          default: ({ showOpacity }: { showOpacity: boolean }) => [
-                            <BoundaryPanel boundaries={boundaries} showOpacity={showOpacity} />
-                          ]
-                        }}
-                      </MapOptionsPopover>
-                    ]
-                  }}
-                </MapToolbar>
+                  columns={toolbarColumns}
+                />
               </div>
               <div class={styles.stack}>
                 <div class={styles.controls}>

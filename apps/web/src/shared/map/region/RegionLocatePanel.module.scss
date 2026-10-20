@@ -1,9 +1,9 @@
-// 区划定位（设计稿 5D.4）：放在功能面板的 Tab 里，外观和内边距由外壳负责；格子 4 列、高 28、间隔 8
+// 区划定位：外观和内边距由外壳负责；常规面板内格子 5 列、高 24、间隔 4
 
 .panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: var(--space-sm);
 }
 
 // 当前位置一行，右边是边界的加载状态
@@ -39,29 +39,28 @@
   cursor: pointer;
 }
 
-.groupLabel {
-  margin-bottom: -4px;
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-tag);
-  color: var(--color-text-secondary);
+.divider {
+  margin: 0;
+  border: 0;
+  border-top: 1px dashed var(--color-divider);
 }
 
 .chips {
   display: grid;
-  // 每格至少 64：320 宽的面板里是 4 列，手机宽度变窄时少几列（设计稿 5D.8）
-  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-  gap: var(--space-sm);
+  // 每格至少 52，容纳 4 字名称；320 宽的面板里是 5 列，窄屏减少列数
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: var(--space-xs);
 }
 
 // 和工具栏一样：悬停主色，选中浅主色底（ADR 0053 第 7 节）
 .chip {
-  height: 28px;
-  padding: 0 4px;
+  height: 24px;
+  padding: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background-color: var(--color-bg-container);
   color: var(--color-text-regular);
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-xs);
   white-space: nowrap;
   cursor: pointer;
 

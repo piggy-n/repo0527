@@ -79,6 +79,10 @@
 | [0067](0067-map-popup-spacing-and-alignment.md) | 地图浮窗间距、透明度入口与图例对齐 | 已接受（修正 0066） |
 | [0068](0068-basemap-and-boundary-popovers.md) | 底图与行政区独立 Popover | 已接受（修正 0066、0067） |
 | [0069](0069-map-options-popover-interaction.md) | 底图与行政区 Popover 的显示和关闭规则 | 已接受（修正 0068） |
+| [0070](0070-map-functional-tabs-and-detail-stack.md) | 行政区功能标签、独立详情与右侧面板排布 | 已接受（修正 0053、0066、0068、0069） |
+| [0071](0071-map-panel-title-and-wrapped-tabs.md) | 地图工具的标准标题与两列标签 | 已接受（修正 0053、0066、0070） |
+| [0072](0072-map-tab-size-and-selection.md) | 地图功能标签的字号与选中状态 | 已接受（修正 0071） |
+| [0073](0073-map-single-panel-title.md) | 单功能面板直接显示功能标题 | 已接受（修正 0071） |
 
 ## 模板
 

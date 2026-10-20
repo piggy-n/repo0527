@@ -74,7 +74,7 @@ export const LayerOpacity = defineComponent({
                     size="small"
                     modelValue={percent.value}
                     aria-label={`${props.name}的透明度`}
-                    formatTooltip={(value: number) => `${value}%`}
+                    showTooltip={false}
                     onUpdate:modelValue={change}
                   />
                   <output class={styles.value}>{percent.value}%</output>

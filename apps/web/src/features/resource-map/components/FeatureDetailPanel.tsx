@@ -92,7 +92,7 @@ const renderRow = ({ key, label, value }: FeatureRow) => (
 
 /**
  * 点选的内容（设计稿 5D.6，ADR 0047 第 7 节）：识别中、没有结果、失败、候选列表、详情。
- * 状态和操作都在拥有者里，这里只显示和调用；放在功能面板的"资源详情"里，关闭（清除选择）和登记由外壳和页面负责（ADR 0053 第 4 节）
+ * 状态和操作都在拥有者里，这里只显示和调用；独立外壳负责收起、关闭和悬浮登记（ADR 0070）
  */
 export const FeatureDetailPanel = defineComponent({
   name: 'FeatureDetailPanel',

@@ -45,6 +45,10 @@
 }
 
 // 当前工具（同一时间只有一个，是一种模式）用实心主色
+.opened {
+  color: var(--color-primary);
+}
+
 .active,
 .active:hover {
   background-color: var(--color-primary);
@@ -97,7 +101,7 @@
 
   .separator,
   .popoverButton,
-  .button:last-child {
+  .fullRow {
     grid-column: 1 / -1;
   }
 }

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { closePanel, emptyPanelGroup, revealScrollLeft, selectPanel, showPanel, togglePanel, visibleSides } from './panel-group';
+import { closePanel, emptyPanelGroup, selectPanel, showPanel, togglePanel, visibleSides } from './panel-group';
 import { usePanelGroup } from './usePanelGroup';
 
 const ORDER = ['region', 'coordinate', 'detail'] as const;
@@ -113,20 +113,6 @@ describe('usePanelGroup', () => {
     // @ts-expect-error 测试运行时的检查
     expect(() => group.show('legend')).toThrow(RangeError);
     expect(group.state.value).toBe(before);
-  });
-});
-
-describe('revealScrollLeft', () => {
-  const view = { left: 100, right: 283 };
-
-  it('Tab 已经完整可见时不动；超出右边时贴右边，超出左边时贴左边', () => {
-    expect(revealScrollLeft(20, view, { left: 120, right: 200 })).toBe(20);
-    expect(revealScrollLeft(0, view, { left: 250, right: 330 })).toBe(47);
-    expect(revealScrollLeft(89, view, { left: 11, right: 91 })).toBe(0);
-  });
-
-  it('比可见范围还宽时贴左边，名称在前面', () => {
-    expect(revealScrollLeft(0, view, { left: 150, right: 400 })).toBe(50);
   });
 });
 

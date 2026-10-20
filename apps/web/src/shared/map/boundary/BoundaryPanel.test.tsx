@@ -5,11 +5,12 @@ import { BoundaryPanel } from './BoundaryPanel';
 import { useBoundaries } from './useBoundaries';
 
 function checkbox(wrapper: ReturnType<typeof mount>, label: string): DOMWrapper<HTMLInputElement> {
-  const found = wrapper.findAll('label').find(candidate => candidate.text() === label);
+  const found = wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')
+    .find(candidate => candidate.attributes('aria-label') === label);
   if (!found) {
     throw new Error(`没有找到"${label}"`);
   }
-  return found.find('input');
+  return found;
 }
 
 // 联调用的界面只测关键交互：勾选级别、拖动透明度，状态由 useBoundaries 持有
@@ -18,7 +19,7 @@ describe('BoundaryPanel', () => {
     const boundaries = useBoundaries();
     const wrapper = mount(BoundaryPanel, { props: { boundaries } });
 
-    expect(wrapper.findAll('label').map(label => label.text())).toStrictEqual(['省界', '市界', '县界']);
+    expect(wrapper.findAll('label').map(label => label.text())).toStrictEqual(['省', '市', '县']);
     expect(checkbox(wrapper, '省界').element.checked).toBe(true);
 
     await checkbox(wrapper, '县界').setValue(true);

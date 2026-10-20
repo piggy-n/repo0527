@@ -2,6 +2,7 @@ import { useMap, useMapOverlay } from '@yzt/map-vue';
 import { ElTooltip } from 'element-plus';
 import { defineComponent, type PropType, ref, type SlotsType, type VNode } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
+import { MAP_TOOLTIP_PROPS } from '../tooltip';
 import {
   isToolbarTool,
   buttonLines,
@@ -34,6 +35,8 @@ export const MapToolbar = defineComponent({
     },
     /** 显示为按下的动作，如打开着面板的"区划定位"；工具栏自己不保存开关 */
     pressed: { type: Array as PropType<readonly ToolbarActionId[]>, default: () => [] },
+    /** 已打开的标签，包括暂时未显示的功能 */
+    opened: { type: Array as PropType<readonly ToolbarActionId[]>, default: () => [] },
     /** 只显示图标，悬停提示名称；现状底图始终启用（ADR 0066） */
     compact: { type: Boolean, default: false },
     /** 矮屏下图标分成两列，和下方地图控制栏错开 */
@@ -65,7 +68,13 @@ export const MapToolbar = defineComponent({
         <button
           key={id}
           type="button"
-          class={[styles.button, active && styles.active, pressed && styles.pressed]}
+          class={[
+            styles.button,
+            !tool && props.opened.includes(id) && styles.opened,
+            id === 'clear' && styles.fullRow,
+            active && styles.active,
+            pressed && styles.pressed
+          ]}
           aria-label={label}
           aria-pressed={active || pressed}
           disabled={!tool && !run}
@@ -79,7 +88,7 @@ export const MapToolbar = defineComponent({
         </button>
       );
       const reference = props.compact ? (
-        <ElTooltip key={id} content={label} placement="left" disabled={pressed}>
+        <ElTooltip {...MAP_TOOLTIP_PROPS} key={id} content={label} placement="left" disabled={pressed}>
           {button}
         </ElTooltip>
       ) : (

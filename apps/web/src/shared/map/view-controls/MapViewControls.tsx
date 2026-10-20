@@ -2,6 +2,7 @@ import { useMap } from '@yzt/map-vue';
 import { ElTooltip } from 'element-plus';
 import { defineComponent, type PropType, type VNode } from 'vue';
 import { type IconName, SvgIcon } from '../../icons/SvgIcon';
+import { MAP_TOOLTIP_PROPS } from '../tooltip';
 import { useCompassButton } from './useCompassButton';
 import { useZoomButtons } from './useZoomButtons';
 import type { ZoomRange } from './zoom';
@@ -10,7 +11,7 @@ import styles from './MapViewControls.module.scss';
 // 只有图标，悬停在左边提示名称
 function withTip(content: string, child: VNode) {
   return (
-    <ElTooltip content={content} placement="left">
+    <ElTooltip {...MAP_TOOLTIP_PROPS} content={content} placement="left">
       {child}
     </ElTooltip>
   );

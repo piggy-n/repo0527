@@ -136,10 +136,9 @@ export const RegionLocatePanel = defineComponent({
             ? renderResults()
             : [
                 renderTrail(),
-                <div class={styles.groupLabel}>市</div>,
                 renderChips(JIANGSU_CITIES, selected?.cityCode, true),
                 city && [
-                  <div class={styles.groupLabel}>{city.name}的区/县</div>,
+                  <hr class={styles.divider} />,
                   renderChips(districtsOf(city.code), selected?.code, false)
                 ]
               ]}

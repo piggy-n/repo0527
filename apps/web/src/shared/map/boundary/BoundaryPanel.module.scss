@@ -6,9 +6,26 @@
   gap: var(--space-sm);
 }
 
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
 .levels {
   display: grid;
+  flex: 1;
+  min-width: 0;
   grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+}
+
+// 透明度是整组操作，用分隔线和留白与边界勾选区分
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding-left: var(--space-sm);
+  border-left: 1px solid var(--color-border);
 }
 
 // 块级的 flex：线型示意是 SVG、没有文字基线，行内排列时整行按它的下边缘对齐，文字会偏下

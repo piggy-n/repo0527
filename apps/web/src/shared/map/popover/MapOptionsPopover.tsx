@@ -1,13 +1,13 @@
 import { Close } from '@element-plus/icons-vue';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxTitle } from '@yzt/ui';
-import { ElButton, ElPopover, ElTooltip } from 'element-plus';
-import { computed, defineComponent, ref, type SlotsType, type VNode, watch } from 'vue';
+import { ElButton, ElPopover } from 'element-plus';
+import { computed, defineComponent, onScopeDispose, ref, type SlotsType, type VNode, watch } from 'vue';
 import { usePageActive } from '../../composables/usePageActive';
-import { SvgIcon } from '../../icons/SvgIcon';
+import { OpacityToggle } from '../OpacityToggle';
 import styles from './MapOptionsPopover.module.scss';
 
-/** 底图、行政区共用的左侧箭头浮层；选择状态仍由原有拥有者持有 */
+/** 底图的左侧箭头浮层；选择状态仍由原有拥有者持有 */
 export const MapOptionsPopover = defineComponent({
   name: 'MapOptionsPopover',
   props: {
@@ -17,7 +17,9 @@ export const MapOptionsPopover = defineComponent({
     visible: { type: Boolean, default: true }
   },
   emits: {
-    'update:open': (open: boolean) => typeof open === 'boolean'
+    'update:open': (open: boolean) => typeof open === 'boolean',
+    /** 定位完成后的视口顶部，用于上方面板让出空间 */
+    topChange: (top: number | null) => top === null || Number.isFinite(top)
   },
   slots: Object as SlotsType<{
     reference: () => VNode[];
@@ -33,6 +35,7 @@ export const MapOptionsPopover = defineComponent({
     watch(shown, visible => {
       if (!visible) {
         opacityOpen.value = false;
+        emit('topChange', null);
       }
     });
     watch(pageActive, active => {
@@ -40,16 +43,31 @@ export const MapOptionsPopover = defineComponent({
         emit('update:open', false);
       }
     });
-    // 只接受 Popover 的打开请求，外部点击、Esc 和入口再次点击不能关闭
-    const openPopover = (open: boolean) => {
-      if (open && pageActive.value) {
-        emit('update:open', true);
-      }
+    // 自己处理入口切换，忽略 Element 的外部点击、失焦和 Esc 关闭请求
+    const ignoreVisibility = () => undefined;
+    const toggle = () => emit('update:open', pageActive.value && !shown.value);
+    // 在 Popper 写完位置后测量，滑块展开和视口变化都会重新报告；选项保持同一对象避免更新循环
+    const popperOptions = {
+      modifiers: [
+        { name: 'preventOverflow', options: { padding: 12, altAxis: true, tether: false } },
+        {
+          name: 'reportTop',
+          enabled: true,
+          phase: 'afterWrite' as const,
+          fn: ({ state }: { state: { elements: { popper: HTMLElement } } }) => {
+            if (shown.value) {
+              emit('topChange', state.elements.popper.getBoundingClientRect().top);
+            }
+          }
+        }
+      ]
     };
+    onScopeDispose(() => emit('topChange', null));
 
     return () => (
       <ElPopover
         trigger="click"
+        triggerKeys={[]}
         placement="left"
         fallbackPlacements={['left-start', 'left-end']}
         strategy="fixed"
@@ -59,28 +77,20 @@ export const MapOptionsPopover = defineComponent({
         tabindex={-1}
         persistent={false}
         popperStyle={{ padding: 0, maxWidth: 'calc(100vw - 112px)' }}
-        popperOptions={{
-          modifiers: [{ name: 'preventOverflow', options: { padding: 12, altAxis: true, tether: false } }]
-        }}
+        popperOptions={popperOptions}
         visible={shown.value}
-        onUpdate:visible={openPopover}>
+        onUpdate:visible={ignoreVisibility}>
         {{
-          reference: () => <span class={styles.reference}>{slots.reference()}</span>,
+          reference: () => <span class={styles.reference} onClick={toggle}>{slots.reference()}</span>,
           default: () => (
             <div ref={element} class={styles.content} data-map-options={props.name}>
               <div class={styles.header}>
                 <MxTitle level="section">{props.label}</MxTitle>
-                <ElTooltip content="调整透明度" placement="top">
-                  <button
-                    type="button"
-                    class={[styles.opacity, opacityOpen.value && styles.opacityOpen]}
-                    aria-label={`调整${props.label}透明度`}
-                    aria-expanded={opacityOpen.value}
-                    aria-pressed={opacityOpen.value}
-                    onClick={() => (opacityOpen.value = !opacityOpen.value)}>
-                    <SvgIcon name="layer-opacity" size={16} />
-                  </button>
-                </ElTooltip>
+                <OpacityToggle
+                  label={props.label}
+                  open={opacityOpen.value}
+                  onUpdate:open={open => (opacityOpen.value = open)}
+                />
                 <ElButton link icon={Close} aria-label={`关闭${props.label}`} onClick={() => emit('update:open', false)} />
               </div>
               <div class={styles.body}>{slots.default({ showOpacity: opacityOpen.value })}</div>

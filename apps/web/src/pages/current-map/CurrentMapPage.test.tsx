@@ -521,15 +521,15 @@ describe('CurrentMapPage', () => {
     await button(wrapper, '图例').trigger('click');
     expect(button(wrapper, '图例').attributes('aria-pressed')).toBe('true');
 
-    await button(wrapper, '关闭全部功能').trigger('click');
+    await button(wrapper, '关闭图例').trigger('click');
     expect(button(wrapper, '图例').attributes('aria-pressed')).toBe('false');
     expect(basemapCard().text()).toBe('影像');
   });
 
-  it('行政区位于图例上方并独立打开；两处透明度分别控制，关闭重开保留数值且默认收起', async () => {
+  it('行政区并入功能标签；两处透明度分别控制，关闭重开保留数值且默认收起', async () => {
     const { wrapper } = await readyPage();
     const labels = wrapper.get('[role="toolbar"]').findAll('button').map(item => item.attributes('aria-label'));
-    expect(labels.slice(-2)).toStrictEqual(['行政区', '图例']);
+    expect(labels.slice(-3)).toStrictEqual(['行政区', '图例', '清除测量与定位标记']);
     await button(wrapper, '底图：矢量底图').trigger('click');
     await vi.waitFor(() => expect(optionsPopover('basemap').exists()).toBe(true));
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
@@ -542,22 +542,30 @@ describe('CurrentMapPage', () => {
     await vi.waitFor(() => expect(document.querySelector('[data-map-options="basemap"]')).toBeNull());
 
     await button(wrapper, '行政区').trigger('click');
-    await vi.waitFor(() => expect(optionsPopover('boundaries').exists()).toBe(true));
-    expect(optionsPopover('boundaries').find('[aria-label="底图"]').exists()).toBe(false);
+    expect(shownPanels(wrapper)).toStrictEqual(['boundaries']);
+    const boundaryPanel = () => wrapper.get('[data-panel="boundaries"]');
+    expect(boundaryPanel().find('[aria-label="底图"]').exists()).toBe(false);
     expect(button(wrapper, '行政区').attributes('aria-pressed')).toBe('true');
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
-    await optionsPopover('boundaries').get('[aria-label="调整行政区透明度"]').trigger('click');
-    expect(optionsPopover('boundaries').get('[aria-label="调整行政区透明度"]').attributes('aria-pressed')).toBe('true');
+    await boundaryPanel().get('[aria-label="调整行政区透明度"]').trigger('click');
+    expect(boundaryPanel().get('[aria-label="调整行政区透明度"]').attributes('aria-pressed')).toBe('true');
     wrapper.getComponent(ElSlider).vm.$emit('update:modelValue', 70);
     await nextTick();
-    await optionsPopover('boundaries').get('[aria-label="调整行政区透明度"]').trigger('click');
+    await boundaryPanel().get('[aria-label="调整行政区透明度"]').trigger('click');
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
-    expect(optionsPopover('boundaries').get('[aria-label="调整行政区透明度"]').attributes('aria-pressed')).toBe('false');
-    await optionsPopover('boundaries').get('[aria-label="调整行政区透明度"]').trigger('click');
+    expect(boundaryPanel().get('[aria-label="调整行政区透明度"]').attributes('aria-pressed')).toBe('false');
+    await boundaryPanel().get('[aria-label="调整行政区透明度"]').trigger('click');
     expect(wrapper.getComponent(ElSlider).props('modelValue')).toBe(70);
-    await optionsPopover('boundaries').get('[aria-label="关闭行政区"]').trigger('click');
+    await button(wrapper, '图例').trigger('click');
     expect(button(wrapper, '行政区').attributes('aria-pressed')).toBe('false');
-    await vi.waitFor(() => expect(document.querySelector('[data-map-options="boundaries"]')).toBeNull());
+    expect(wrapper.find('[role="tab"][aria-selected="false"]').text()).toBe('行政区');
+    await button(wrapper, '行政区').trigger('click');
+    expect(shownPanels(wrapper)).toStrictEqual(['boundaries']);
+    // 正在显示时再次点入口关闭，其他标签保留
+    await button(wrapper, '行政区').trigger('click');
+    expect(button(wrapper, '行政区').attributes('aria-pressed')).toBe('false');
+    expect(wrapper.find('[data-panel="boundaries"]').exists()).toBe(false);
+    expect(shownPanels(wrapper)).toStrictEqual(['legend']);
 
     await button(wrapper, '底图：矢量底图').trigger('click');
     await vi.waitFor(() => expect(optionsPopover('basemap').exists()).toBe(true));
@@ -567,17 +575,14 @@ describe('CurrentMapPage', () => {
     expect(wrapper.getComponent(ElSlider).props('modelValue')).toBe(40);
   });
 
-  it.each([
-    { name: 'basemap', entry: '底图：矢量底图', close: '关闭底图' },
-    { name: 'boundaries', entry: '行政区', close: '关闭行政区' }
-  ])('$entry 只由关闭按钮关闭，外部点击、再次点击入口和 Esc 保持打开与选中', async ({ name, entry, close }) => {
+  it('底图入口再次点击可关闭，关闭按钮可关闭，外部点击和 Esc 保持打开', async () => {
+    const name = 'basemap';
     const { wrapper } = await readyPage();
-    const trigger = button(wrapper, entry);
+    const trigger = button(wrapper, '底图：矢量底图');
     await trigger.trigger('click');
     await vi.waitFor(() => expect(optionsPopover(name).exists()).toBe(true));
     vi.useFakeTimers();
 
-    await trigger.trigger('click');
     document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
     document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
     await optionsPopover(name).trigger('keydown', { key: 'Escape', code: 'Escape' });
@@ -586,10 +591,15 @@ describe('CurrentMapPage', () => {
     expect(trigger.attributes('aria-pressed')).toBe('true');
     expect(optionsPopover(name).isVisible()).toBe(true);
 
-    await optionsPopover(name).get(`[aria-label="${close}"]`).trigger('click');
+    await trigger.trigger('click');
     await vi.advanceTimersByTimeAsync(1000);
     expect(trigger.attributes('aria-pressed')).toBe('false');
     expect(document.querySelector(`[data-map-options="${name}"]`)).toBeNull();
+    await trigger.trigger('click');
+    await vi.advanceTimersByTimeAsync(1000);
+    await optionsPopover(name).get('[aria-label="关闭底图"]').trigger('click');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(trigger.attributes('aria-pressed')).toBe('false');
   });
 
   it('第一次就绪时按江苏范围定位一次；画布重建后再次就绪时不再定位，保留用户调整过的视角', async () => {
@@ -763,7 +773,7 @@ describe('CurrentMapPage', () => {
     drawLine(map);
     await nextTick();
     expect(overlayItems(wrapper)).toHaveLength(2);
-    await button(wrapper, '清除').trigger('click');
+    await button(wrapper, '清除测量与定位标记').trigger('click');
     expect(overlayItems(wrapper)).toStrictEqual([{ text: '单击开始测距', x: 30, y: 40 }]);
     expect(map.geojson.has('measure')).toBe(false);
 
@@ -934,7 +944,7 @@ describe('CurrentMapPage', () => {
     expect(button(wrapper, '拾取').attributes('aria-pressed')).toBe('false');
     expect((wrapper.get('input[aria-label="经度"]').element as HTMLInputElement).value).toBe('118.5');
     expect(button(wrapper, '坐标定位').attributes('aria-pressed')).toBe('true');
-    expect(button(wrapper, '区划定位').attributes('aria-pressed')).toBe('true');
+    expect(button(wrapper, '区划定位').attributes('aria-pressed')).toBe('false');
 
     // 点 Tab 切回；再点正在显示的入口关闭它，切到最近显示过的另一个
     await wrapper.findAll('[role="tab"]').find(tab => tab.text() === '坐标定位')?.trigger('click');
@@ -1127,7 +1137,7 @@ describe('CurrentMapPage', () => {
     await button(wrapper, '测距').trigger('click');
     expect(pin(wrapper).classes().some(name => name.includes('inert'))).toBe(false);
 
-    await button(wrapper, '清除').trigger('click');
+    await button(wrapper, '清除测量与定位标记').trigger('click');
     expect(wrapper.find('[aria-label="坐标定位点"]').exists()).toBe(false);
   });
 
@@ -1347,7 +1357,7 @@ describe('CurrentMapPage', () => {
     expect(hint().exists()).toBe(true);
   });
 
-  it('资源详情：切到别的 Tab 时结果保留；在地图上再单击时切回；关闭资源详情时清除选择（ADR 0053 第 4 节）', async () => {
+  it('资源详情独立展示：识别不切走功能标签，收起保留结果，统一关闭功能不影响详情', async () => {
     const guid = 'a'.repeat(32);
     const square: Polygon = {
       type: 'Polygon',
@@ -1374,7 +1384,8 @@ describe('CurrentMapPage', () => {
     await button(wrapper, '点/框选').trigger('click');
     map.mouse('click', 200, 150);
     await nextTick();
-    expect(shownPanels(wrapper)).toStrictEqual(['feature-detail']);
+    expect(shownPanels(wrapper)).toStrictEqual([]);
+    expect(wrapper.find('[data-feature-detail-window]').exists()).toBe(true);
     await vi.waitFor(() => expect(addedLayersOf(map, 'selection')).toHaveLength(3));
 
     await button(wrapper, '区划定位').trigger('click');
@@ -1384,11 +1395,19 @@ describe('CurrentMapPage', () => {
 
     map.mouse('click', 200, 150);
     await nextTick();
-    expect(shownPanels(wrapper)).toStrictEqual(['feature-detail']);
+    expect(shownPanels(wrapper)).toStrictEqual(['region-locate']);
+
+    await button(wrapper, '收起资源详情').trigger('click');
+    expect(wrapper.get('[data-feature-detail-panel] h3').text()).toBe('水田');
+    expect(map.geojson.has('selection')).toBe(true);
+    await button(wrapper, '展开资源详情').trigger('click');
+    await button(wrapper, '关闭区划定位').trigger('click');
+    expect(wrapper.find('[data-feature-detail-window]').exists()).toBe(true);
+    expect(map.geojson.has('selection')).toBe(true);
 
     await wrapper.get('[aria-label="关闭资源详情"]').trigger('click');
     expect(wrapper.find('[data-feature-detail-panel]').exists()).toBe(false);
-    expect(shownPanels(wrapper)).toStrictEqual(['region-locate']);
+    expect(shownPanels(wrapper)).toStrictEqual([]);
     expect(map.geojson.has('selection')).toBe(false);
   });
 

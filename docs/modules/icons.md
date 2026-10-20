@@ -135,7 +135,8 @@ packages/icons/
 | `arrow-left`、`focus`、`warning` | 同上 | 点选详情（5D.6） |
 | `copy`、`location-pin` | 同上 | 位置信息的复制、坐标定位点的图钉（5D.7） |
 | `layer-opacity`、`symbol-settings` | 项目自绘，24 × 24、描边 1.5 | 资源透明度入口、图例配置入口（ADR 0066） |
-| `map-boundaries` | 项目自绘，24 × 24、描边 1.5 | 独立行政区 Popover 入口，位于图例上方（ADR 0068） |
+| `map-boundaries` | 项目自绘，24 × 24、描边 1.5 | 行政区标签入口，位于图例上方（ADR 0070）；用不规则区域轮廓与内部边界区分区划定位的折叠地图图标 |
+| `map-basemap-none` | 项目自绘，24 × 24、描边 2 | 「无底图」缩略图的圆圈斜杠，显示尺寸 32、中性文字色，预留右下标签空间，选项和入口共用 |
 
 2026-09-30 清理了只在主题预览页演示中用到的样例：`bell-solid`（fzjc）、`toolbar-map`、`toolbar-move`（旧项目的 Toolbar）、`sample-pin-color`（自制的多色样例），主题预览页改用上面的正式图标演示。消息铃铛迁移时使用 UI 提供的图标；地图工具栏在 5D.1 改用下面的开源线性图标（用户决定先用开源图标，有更合适的再替换个别图标）。
 

@@ -1,8 +1,8 @@
 /** 地图区域窄于它时按手机宽度限制面板和区划条 */
 export const PHONE_WIDTH = 768;
 
-// 单列业务组增加行政区后高 323、基础组 241、底图卡及间距 68，加上三处 16 的留白
-const SINGLE_COLUMN_HEIGHT = 680;
+// 清理独立成组后多一条分隔线，为基础组、底图卡和边缘留白保留空间
+const SINGLE_COLUMN_HEIGHT = 692;
 
 /** 现状底图页随地图区域尺寸变化的排法 */
 export interface MapPageLayout {

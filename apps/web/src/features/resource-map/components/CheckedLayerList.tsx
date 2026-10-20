@@ -3,6 +3,7 @@ import { ElOption, ElSelect, ElTooltip } from 'element-plus';
 import { computed, defineComponent, nextTick, type PropType, ref, type VNode } from 'vue';
 import { useSortableList } from '@/shared/composables/useSortableList';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
+import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import { arrowStep } from '../keyboard';
 import { type CheckedLayer, checkedDropTarget, checkedLayers, moveTarget } from '../layer-panel';
@@ -26,7 +27,7 @@ function renderStatus(statuses: readonly ResourceStatus[]) {
     return null;
   }
   return (
-    <ElTooltip placement="top">
+    <ElTooltip {...MAP_TOOLTIP_PROPS} placement="top">
       {{
         default: () => (
           <span

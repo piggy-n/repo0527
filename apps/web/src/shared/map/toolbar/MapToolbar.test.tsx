@@ -120,10 +120,10 @@ describe('MapToolbar', () => {
     const withAction = mountToolbar([['clear']], { clear });
     const withoutAction = mountToolbar([['clear']]);
 
-    await button(withAction.wrapper, '清除').trigger('click');
+    await button(withAction.wrapper, '清除测量与定位标记').trigger('click');
 
     expect(clear).toHaveBeenCalledOnce();
-    expect(button(withoutAction.wrapper, '清除').attributes('disabled')).toBeDefined();
+    expect(button(withoutAction.wrapper, '清除测量与定位标记').attributes('disabled')).toBeDefined();
   });
 
   it('页面告诉工具栏哪些动作显示为按下，样式和当前工具不同', () => {
@@ -135,7 +135,7 @@ describe('MapToolbar', () => {
     expect(isPressed(wrapper, '区划定位')).toBe(true);
     expect(isActive(wrapper, '区划定位')).toBe(false);
     expect(button(wrapper, '区划定位').attributes('aria-pressed')).toBe('true');
-    expect(isPressed(wrapper, '清除')).toBe(false);
-    expect(button(wrapper, '清除').attributes('aria-pressed')).toBe('false');
+    expect(isPressed(wrapper, '清除测量与定位标记')).toBe(false);
+    expect(button(wrapper, '清除测量与定位标记').attributes('aria-pressed')).toBe('false');
   });
 });

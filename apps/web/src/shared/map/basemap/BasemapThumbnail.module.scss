@@ -8,8 +8,14 @@
   background-size: 160%;
 }
 
-// 无底图：和地图背景同色的浅色方格
+// 无底图：浅色方格中央放置禁用图标
 .none {
+  display: grid;
+  place-items: center;
+  // 放大图标后预留右下角标签的空间
+  box-sizing: border-box;
+  padding-bottom: var(--space-lg);
+  color: var(--color-text-secondary);
   background-color: var(--color-bg-page);
   background-image:
     linear-gradient(var(--color-border) 1px, transparent 1px),

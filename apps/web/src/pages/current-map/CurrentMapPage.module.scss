@@ -66,6 +66,23 @@
   }
 }
 
+// 列边界不随内容缩短，底图展开只压缩内部两块面板，避免测量相互反馈
+.panelStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-height: 0;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.panelStack > .functions {
+  flex-shrink: 0;
+}
+
 // 状态栏位于资源面板右侧，底图入口移至最右列
 .bottom {
   grid-row: 3;
