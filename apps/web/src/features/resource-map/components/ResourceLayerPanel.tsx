@@ -66,6 +66,9 @@ export const ResourceLayerPanel = defineComponent({
     const searching = computed(() => keyword.value.trim() !== '');
     const tree = computed(() => panelTree(props.layers.state.value, keyword.value, props.catalogOrder.order.value));
     const checkedCount = computed(() => checkedLayers(props.layers.state.value).length);
+    // 没有勾选资源时隐藏整个区域，不占用目录高度；保留用户的展开状态
+    const hasChecked = computed(() => checkedCount.value > 0);
+    const checkedExpanded = computed(() => hasChecked.value && !checkedCollapsed.value);
     const batchYears = computed(() => batchYearOptions(props.layers.state.value.catalog));
 
     // 目录第一次到达时展开含有勾选资源的分类；之后目录刷新不改用户的展开
@@ -104,7 +107,7 @@ export const ResourceLayerPanel = defineComponent({
       }
     });
     const available = computed(() =>
-      Math.max(0, Math.floor(columnHeight.value - chrome.value - (checkedCollapsed.value ? 0 : SPLITTER_HEIGHT)))
+      Math.max(0, Math.floor(columnHeight.value - chrome.value - (checkedExpanded.value ? SPLITTER_HEIGHT : 0)))
     );
     // 两区的内容本来的高度：各包一层量，不受两区的高度影响
     const treeContent = ref<HTMLElement>();
@@ -119,9 +122,11 @@ export const ResourceLayerPanel = defineComponent({
         ? splitLists({
             available: available.value,
             tree: treeHeight.value,
-            checked: checkedHeadHeight.value + (checkedCollapsed.value ? 0 : checkedContentHeight.value),
+            checked: hasChecked.value
+              ? checkedHeadHeight.value + (checkedExpanded.value ? checkedContentHeight.value : 0)
+              : 0,
             ratio: props.layout.checkedRatio.value,
-            collapsed: checkedCollapsed.value
+            collapsed: !checkedExpanded.value
           })
         : null
     );
@@ -259,7 +264,7 @@ export const ResourceLayerPanel = defineComponent({
                 )}
               </div>
             </div>
-            {!checkedCollapsed.value && (
+            {checkedExpanded.value && (
               <div
                 class={[styles.splitter, !adjustable.value && styles.fixed]}
                 role="separator"
@@ -275,27 +280,29 @@ export const ResourceLayerPanel = defineComponent({
                 </span>
               </div>
             )}
-            <div class={styles.checked} style={split.value ? { height: `${split.value.checked}px` } : undefined}>
-              <button
-                ref={checkedHead}
-                type="button"
-                class={[styles.checkedHead, checkedCollapsed.value && styles.checkedCollapsed]}
-                aria-label={checkedCollapsed.value ? '展开已勾选图层' : '收起已勾选图层'}
-                aria-expanded={!checkedCollapsed.value}
-                onClick={() => (checkedCollapsed.value = !checkedCollapsed.value)}>
-                <span class={styles.checkedTitle}>已勾选</span>
-                <span class={styles.badge}>{checkedCount.value}</span>
-                <span class={styles.checkedToggle}>{checkedCollapsed.value ? '展开图层' : '收起图层'}</span>
-                <ElIcon>{checkedCollapsed.value ? <ArrowUp /> : <ArrowDown />}</ElIcon>
-              </button>
-              {!checkedCollapsed.value && (
-                <div class={styles.checkedList}>
-                  <div ref={checkedContent} class={styles.checkedContent}>
-                    <CheckedLayerList layers={props.layers} />
+            {hasChecked.value && (
+              <div class={styles.checked} style={split.value ? { height: `${split.value.checked}px` } : undefined}>
+                <button
+                  ref={checkedHead}
+                  type="button"
+                  class={[styles.checkedHead, checkedCollapsed.value && styles.checkedCollapsed]}
+                  aria-label={checkedCollapsed.value ? '展开已勾选图层' : '收起已勾选图层'}
+                  aria-expanded={!checkedCollapsed.value}
+                  onClick={() => (checkedCollapsed.value = !checkedCollapsed.value)}>
+                  <span class={styles.checkedTitle}>已勾选</span>
+                  <span class={styles.badge}>{checkedCount.value}</span>
+                  <span class={styles.checkedToggle}>{checkedCollapsed.value ? '展开' : '收起图层'}</span>
+                  <ElIcon>{checkedCollapsed.value ? <ArrowUp /> : <ArrowDown />}</ElIcon>
+                </button>
+                {checkedExpanded.value && (
+                  <div class={styles.checkedList}>
+                    <div ref={checkedContent} class={styles.checkedContent}>
+                      <CheckedLayerList layers={props.layers} />
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         </>
       );

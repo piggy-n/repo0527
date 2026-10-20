@@ -12,6 +12,7 @@ import { type ResourceLayers, useResourceLayers } from '../composables/useResour
 import { type ResourcePanelLayout, useResourcePanelLayout } from '../composables/useResourcePanelLayout';
 import { ResourceLayerPanel } from './ResourceLayerPanel';
 import { LayerOpacity } from './LayerOpacity';
+import styles from './ResourceLayerPanel.module.scss';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
@@ -132,11 +133,31 @@ describe('ResourceLayerPanel', () => {
     const before = owner.state.value;
     expect(checkedOrder(wrapper)).toStrictEqual([]);
     expect(wrapper.find('[role="separator"]').exists()).toBe(false);
+    expect(wrapper.get(`.${styles.checkedToggle}`).text()).toBe('展开');
     await button(wrapper, '展开已勾选图层').trigger('click');
     expect(checkedOrder(wrapper)).toStrictEqual(['bgdc_dltb']);
     await button(wrapper, '收起已勾选图层').trigger('click');
     expect(checkedOrder(wrapper)).toStrictEqual([]);
     expect(owner.state.value).toBe(before);
+  });
+
+  it('初始没有勾选资源时隐藏底部区域；勾选后显示收起入口，取消最后一项后再次隐藏', async () => {
+    const catalog = buildCatalog([{ code: null, name: '基础库', children: [layer('bgdc_cjdcq', '村级调查区')] }]);
+    const { wrapper, owner } = await mountPanel(catalog, false, undefined, false);
+    expect(wrapper.find(`.${styles.checked}`).exists()).toBe(false);
+    expect(wrapper.find('[role="separator"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('勾选资源后在这里调整叠放顺序和透明度');
+
+    owner.setChecked('bgdc_cjdcq', true);
+    await nextTick();
+    expect(button(wrapper, '展开已勾选图层').attributes('aria-expanded')).toBe('false');
+    expect(wrapper.get(`.${styles.badge}`).text()).toBe('1');
+    expect(checkedOrder(wrapper)).toStrictEqual([]);
+
+    owner.setChecked('bgdc_cjdcq', false);
+    await nextTick();
+    expect(wrapper.find(`.${styles.checked}`).exists()).toBe(false);
+    expect(wrapper.find('[role="separator"]').exists()).toBe(false);
   });
 
   it('目录还没到：显示加载中；加载失败：显示失败和重试', async () => {
@@ -251,10 +272,14 @@ describe('ResourceLayerPanel', () => {
     await button(wrapper, '取消勾选地类图斑').trigger('click');
     expect(owner.state.value.displays.get('bgdc_dltb')?.checked).toBe(false);
     expect(checkedOrder(wrapper)).toStrictEqual([]);
-    expect(wrapper.text()).toContain('勾选资源后在这里调整叠放顺序和透明度');
+    expect(wrapper.find(`.${styles.checked}`).exists()).toBe(false);
+    expect(wrapper.find('[role="separator"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('勾选资源后在这里调整叠放顺序和透明度');
 
     owner.setChecked('bgdc_dltb', true);
     await nextTick();
+    expect(checkedOrder(wrapper)).toStrictEqual(['bgdc_dltb']);
+    expect(wrapper.find('[role="separator"]').exists()).toBe(true);
     expect(button(wrapper, '地类图斑的透明度').attributes('title')).toBe('透明度 50%');
   });
 

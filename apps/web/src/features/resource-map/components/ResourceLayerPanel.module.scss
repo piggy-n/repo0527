@@ -185,7 +185,7 @@
   min-height: 0;
 }
 
-// 整行开关始终保留，收起时作为面板底部的展开入口
+// 有勾选资源时保留整行开关，收起时作为面板底部的展开入口
 .checkedHead {
   display: flex;
   flex: none;
@@ -213,7 +213,7 @@
 }
 
 .checkedCollapsed {
-  background: linear-gradient(180deg, var(--color-bg-container), var(--color-primary-bg));
+  background-color: var(--color-neutral-bg-light);
 }
 
 .checkedTitle {

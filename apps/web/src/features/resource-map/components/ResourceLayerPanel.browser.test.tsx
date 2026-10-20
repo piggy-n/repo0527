@@ -11,6 +11,7 @@ import { useCatalogOrder } from '../composables/useCatalogOrder';
 import { type ResourceLayers, useResourceLayers } from '../composables/useResourceLayers';
 import { useResourcePanelLayout } from '../composables/useResourcePanelLayout';
 import { ResourceLayerPanel } from './ResourceLayerPanel';
+import styles from './ResourceLayerPanel.module.scss';
 
 // 真实的布局（ADR 0040）：面板的高度、分割线的位置都靠量尺寸，jsdom 里元素的尺寸都是 0，只能在浏览器里验证
 
@@ -213,6 +214,30 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     await ctx.wrapper.get('[aria-label="收起已勾选图层"]').trigger('click');
     await frames(4);
     expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(360);
+    expect(ctx.layout.checkedRatio.value).toBe(ratio);
+    expect(ctx.loopErrors).toStrictEqual([]);
+  });
+
+  it.each([false, true])('已勾选展开为 %s 时清空资源：目录获得全部剩余高度，重新勾选恢复布局', async expanded => {
+    using ctx = setup(360, undefined, expanded);
+    await frames(4);
+    const tree = ctx.wrapper.get(`.${styles.tree}`).element;
+    const before = tree.getBoundingClientRect().height;
+    const ratio = ctx.layout.checkedRatio.value;
+
+    ctx.layers.setChecked('bgdc_dltb', false);
+    await frames(4);
+    expect(ctx.wrapper.find(`.${styles.checked}`).exists()).toBe(false);
+    expect(ctx.wrapper.find('[role="separator"]').exists()).toBe(false);
+    expect(tree.getBoundingClientRect().height).toBeGreaterThan(before);
+    const panel = ctx.wrapper.get('[data-resource-layer-panel]').element.getBoundingClientRect();
+    expect(tree.getBoundingClientRect().bottom).toBeCloseTo(panel.bottom, 0);
+    expect(panel.height).toBeCloseTo(360, 0);
+
+    ctx.layers.setChecked('bgdc_dltb', true);
+    await frames(4);
+    expect(tree.getBoundingClientRect().height).toBeCloseTo(before, 0);
+    expect(ctx.wrapper.find('[role="separator"]').exists()).toBe(expanded);
     expect(ctx.layout.checkedRatio.value).toBe(ratio);
     expect(ctx.loopErrors).toStrictEqual([]);
   });
