@@ -9,19 +9,18 @@ describe('mapPageLayout', () => {
     expect(mapPageLayout(0, 900).phone).toBe(false);
   });
 
-  it('矮屏：地图区域低于 672 时业务组只显示图标（基础组加了指北针，ADR 0058）', () => {
-    expect(mapPageLayout(1440, 672).compactToolbar).toBe(false);
-    expect(mapPageLayout(1440, 671).compactToolbar).toBe(true);
+  it('地图区域低于 648 时业务组分成两列，留出基础组和底图入口的高度', () => {
+    expect(mapPageLayout(1440, 648).toolbarColumns).toBe(false);
+    expect(mapPageLayout(1440, 647).toolbarColumns).toBe(true);
   });
 
-  it('手机宽度时还要放下叠在基础组上面的两张卡片：低于 804 就只显示图标', () => {
-    expect(mapPageLayout(375, 804).compactToolbar).toBe(false);
-    expect(mapPageLayout(375, 803).compactToolbar).toBe(true);
-    // 375 × 812 的手机，地图区域 737
-    expect(mapPageLayout(375, 737)).toStrictEqual({ phone: true, compactToolbar: true });
+  it('窄屏和宽屏的底图入口都在基础组下方，使用同一个高度规则', () => {
+    expect(mapPageLayout(375, 648).toolbarColumns).toBe(false);
+    expect(mapPageLayout(375, 647).toolbarColumns).toBe(true);
+    expect(mapPageLayout(375, 737)).toStrictEqual({ phone: true, toolbarColumns: false });
   });
 
-  it('还量不到高度（0）时按常规显示文字', () => {
-    expect(mapPageLayout(375, 0).compactToolbar).toBe(false);
+  it('还量不到高度（0）时按单列显示', () => {
+    expect(mapPageLayout(375, 0).toolbarColumns).toBe(false);
   });
 });

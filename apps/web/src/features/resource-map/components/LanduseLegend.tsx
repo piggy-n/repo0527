@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowRight, Search } from '@element-plus/icons-vue';
-import { ElIcon, ElInput, ElRadioButton, ElRadioGroup } from 'element-plus';
+import { ElIcon, ElInput, ElOption, ElSelect } from 'element-plus';
 import { computed, defineComponent, type PropType, type VNode } from 'vue';
+import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import { type LanduseLegendItem, type LanduseLegendView, type LegendSwatch, landuseLegend } from '../legend';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
@@ -11,7 +12,7 @@ import { SymbolEditor } from './SymbolEditor';
 const VIEWS: readonly { readonly value: LanduseLegendView; readonly label: string }[] = [
   { value: 'status', label: '现状分类 A.1' },
   { value: 'work', label: '工作分类 A.2' },
-  { value: 'all', label: '全部' }
+  { value: 'all', label: '平铺查看' }
 ];
 
 /** 地类图例的浏览状态：由资源图例按资源保管，隐藏后再显示时照旧 */
@@ -25,7 +26,7 @@ export interface LanduseBrowse {
 }
 
 export const INITIAL_LANDUSE_BROWSE: LanduseBrowse = Object.freeze({
-  view: 'status',
+  view: 'all',
   keyword: '',
   expanded: new Set<string>(),
   editing: null
@@ -61,19 +62,26 @@ export const LanduseLegend = defineComponent({
       const open = editing.value === item.key;
       const target = { code: props.code, item: item.key };
       return (
-        <li key={item.key} title={item.meaning} data-landuse={item.code ?? item.name}>
-          <button
-            type="button"
-            class={[styles.item, open && styles.open]}
-            aria-label={`${open ? '收起' : '展开'}${item.name}`}
-            aria-expanded={open}
-            onClick={() => update({ editing: open ? null : item.key })}>
+        <li
+          key={item.key}
+          class={open && styles.editing}
+          title={`${item.code ?? ''} ${item.name}${item.adjustable ? '（可调整）' : ''} ${item.meaning}`}
+          data-landuse={item.code ?? item.name}>
+          <div class={[styles.item, open && styles.open]}>
             {swatch && <LegendSwatchIcon swatch={swatch} />}
             {item.code !== null && <span class={styles.code}>{item.code}</span>}
             <span class={styles.name}>{item.name}</span>
             {props.symbols.hasOverride(target) && <span class={styles.edited} title="改过符号" data-edited />}
-            {item.adjustable && <span class={styles.tag}>可调整</span>}
-          </button>
+            <button
+              type="button"
+              class={styles.configure}
+              aria-label={`编辑${item.name}样式`}
+              aria-expanded={open}
+              title="编辑样式"
+              onClick={() => update({ editing: open ? null : item.key })}>
+              <SvgIcon name="symbol-settings" size={14} />
+            </button>
+          </div>
           {open && <SymbolEditor class={styles.editor} symbols={props.symbols} target={target} name={item.name} />}
         </li>
       );
@@ -98,42 +106,46 @@ export const LanduseLegend = defineComponent({
 
     return () => (
       <div class={styles.legend}>
-        <ElRadioGroup
-          size="small"
-          modelValue={view.value}
-          onUpdate:modelValue={value => selectView(value)}>
-          {VIEWS.map(item => (
-            <ElRadioButton key={item.value} value={item.value}>
-              {item.label}
-            </ElRadioButton>
-          ))}
-        </ElRadioGroup>
-        <ElInput
-          size="small"
-          modelValue={keyword.value}
-          clearable
-          prefixIcon={Search}
-          placeholder="搜索编码或名称"
-          onUpdate:modelValue={(value: string) => update({ keyword: value })}
-        />
+        <div class={styles.filters}>
+          <ElSelect
+            class={styles.view}
+            size="small"
+            aria-label="地类展示方式"
+            modelValue={view.value}
+            onUpdate:modelValue={selectView}>
+            {VIEWS.map(item => (
+              <ElOption key={item.value} value={item.value} label={item.label} />
+            ))}
+          </ElSelect>
+          <ElInput
+            size="small"
+            modelValue={keyword.value}
+            clearable
+            prefixIcon={Search}
+            placeholder="搜索编码或名称"
+            onUpdate:modelValue={(value: string) => update({ keyword: value })}
+          />
+        </div>
         {sections.value.length === 0 && <div class={styles.empty}>没有找到地类</div>}
-        <ul class={styles.sections}>
+        <ul class={[styles.sections, view.value === 'all' && styles.flat]}>
           {sections.value.map(section => {
             // 平铺只有一组，直接显示；搜索时都展开
             const open = view.value === 'all' || searching.value || expanded.value.has(section.key);
             return (
               <li key={section.key} data-landuse-section={section.key}>
-                <button
-                  type="button"
-                  class={styles.section}
-                  aria-label={`${open ? '收起' : '展开'}${section.name}`}
-                  aria-expanded={open}
-                  onClick={() => toggle(section.key)}>
-                  <ElIcon class={styles.arrow}>{open ? <ArrowDown /> : <ArrowRight />}</ElIcon>
-                  {section.code !== null && <span class={styles.code}>{section.code}</span>}
-                  <span class={styles.name}>{section.name}</span>
-                  <span class={styles.count}>{section.items.length}</span>
-                </button>
+                {view.value !== 'all' && (
+                  <button
+                    type="button"
+                    class={styles.section}
+                    aria-label={`${open ? '收起' : '展开'}${section.name}`}
+                    aria-expanded={open}
+                    onClick={() => toggle(section.key)}>
+                    <ElIcon class={styles.arrow}>{open ? <ArrowDown /> : <ArrowRight />}</ElIcon>
+                    {section.code !== null && <span class={styles.code}>{section.code}</span>}
+                    <span class={styles.name}>{section.name}</span>
+                    <span class={styles.count}>{section.items.length}</span>
+                  </button>
+                )}
                 {open && <ul class={styles.items}>{section.items.map(renderItem)}</ul>}
               </li>
             );

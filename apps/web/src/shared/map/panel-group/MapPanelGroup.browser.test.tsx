@@ -106,7 +106,7 @@ describe('MapPanelGroup（真实的布局）', () => {
   });
 
   it('手机宽度时三个功能放不下：Tab 区横向滚动，当前的 Tab 连同关闭按钮在可见范围里（2026-10-16 评审发现被裁切）', async () => {
-    // Tab 区可用 183 宽，和 375 宽的页面上一样
+    // 窄面板的标题区同时保留统一关闭按钮，标签需要横向滚动
     using ctx = setup(400, 215);
     ctx.group.show('region');
     ctx.group.show('coordinate');
@@ -123,9 +123,15 @@ describe('MapPanelGroup（真实的布局）', () => {
     expect(tabVisible(ctx.wrapper, '资源详情')).toBe(true);
     expect(tabVisible(ctx.wrapper, '区划定位')).toBe(false);
 
-    // 切到第一个：滚回去
+    // 点击已有标签只切换：滚到后面的区划定位
+    ctx.group.select('region');
+    await frames(2);
+    expect(tabVisible(ctx.wrapper, '区划定位')).toBe(true);
+
+    // 再从入口调用当前功能：只变顺序，仍应重新滚到最前面
     ctx.group.show('region');
     await frames(2);
+    expect(ctx.group.state.value.open[0]).toBe('region');
     expect(tabVisible(ctx.wrapper, '区划定位')).toBe(true);
   });
 });

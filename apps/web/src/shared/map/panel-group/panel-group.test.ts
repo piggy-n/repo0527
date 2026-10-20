@@ -1,28 +1,30 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { closePanel, emptyPanelGroup, revealScrollLeft, showPanel, togglePanel, visibleSides } from './panel-group';
+import { closePanel, emptyPanelGroup, revealScrollLeft, selectPanel, showPanel, togglePanel, visibleSides } from './panel-group';
 import { usePanelGroup } from './usePanelGroup';
 
 const ORDER = ['region', 'coordinate', 'detail'] as const;
 type Id = (typeof ORDER)[number];
 
 describe('showPanel / closePanel / togglePanel', () => {
-  it('打开的功能按 Tab 的固定顺序排列，和打开的先后无关；新打开的成为当前的', () => {
+  it('从入口打开的功能移到最前，并成为当前的', () => {
     let state = emptyPanelGroup<Id>();
     state = showPanel(state, 'detail', ORDER);
     state = showPanel(state, 'region', ORDER);
 
     expect(state.open).toStrictEqual(['region', 'detail']);
     expect(state.current).toBe('region');
+    state = showPanel(state, 'detail', ORDER);
+    expect(state.open).toStrictEqual(['detail', 'region']);
   });
 
-  it('切到已打开的功能不改变已打开的；已经在显示时原样返回', () => {
+  it('直接点 Tab 只切换，不改变顺序；已在显示时原样返回', () => {
     const opened = showPanel(showPanel(emptyPanelGroup<Id>(), 'region', ORDER), 'detail', ORDER);
-    const switched = showPanel(opened, 'region', ORDER);
+    const switched = selectPanel(opened, 'region');
 
     expect(switched.open).toBe(opened.open);
     expect(switched.current).toBe('region');
-    expect(showPanel(switched, 'region', ORDER)).toBe(switched);
+    expect(selectPanel(switched, 'region')).toBe(switched);
   });
 
   it('关掉当前的时切到最近显示过的另一个，不是按 Tab 的顺序', () => {
@@ -33,7 +35,7 @@ describe('showPanel / closePanel / togglePanel', () => {
 
     state = closePanel(state, 'coordinate');
     expect(state.current).toBe('detail');
-    expect(state.open).toStrictEqual(['region', 'detail']);
+    expect(state.open).toStrictEqual(['detail', 'region']);
 
     state = closePanel(state, 'detail');
     expect(state.current).toBe('region');
@@ -76,6 +78,17 @@ describe('showPanel / closePanel / togglePanel', () => {
 });
 
 describe('usePanelGroup', () => {
+  it('统一关闭清空当前、已打开和历史；再次关闭不替换状态', () => {
+    const group = usePanelGroup(ORDER);
+    group.show('region');
+    group.show('detail');
+    group.closeAll();
+    expect(group.state.value).toStrictEqual(emptyPanelGroup());
+    const before = group.state.value;
+    group.closeAll();
+    expect(group.state.value).toBe(before);
+  });
+
   it('按规则打开、切换、关闭；没有改变时不替换状态', () => {
     const group = usePanelGroup(ORDER);
     group.toggle('region', true);

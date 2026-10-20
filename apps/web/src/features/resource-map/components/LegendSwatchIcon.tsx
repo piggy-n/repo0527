@@ -95,6 +95,7 @@ export const LegendSwatchIcon = defineComponent({
           width={WIDTH}
           height={HEIGHT}
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          style={{ opacity: 'var(--legend-opacity, 1)' }}
           aria-hidden="true"
           data-swatch>
           {shapes}

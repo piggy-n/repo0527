@@ -6,6 +6,13 @@ import { ratioForCheckedHeight, splitLists } from './panel-split';
 const overflowing = (ratio: number) => splitLists({ available: 500, tree: 2000, checked: 2000, ratio });
 
 describe('splitLists', () => {
+  it('已勾选收起只保留入口，不按分割线比例占用目录空间', () => {
+    expect(splitLists({ available: 500, tree: 2000, checked: 40, ratio: 0.9, collapsed: true }))
+      .toStrictEqual({ tree: 460, checked: 40, adjustable: false });
+    expect(splitLists({ available: 500, tree: 64, checked: 40, ratio: 0.1, collapsed: true }))
+      .toStrictEqual({ tree: 64, checked: 40, adjustable: false });
+  });
+
   it('都放得下时按内容：面板跟着变矮，比例不起作用，分割线不能调整（2026-10-16 用户发现收起目录后"已勾选"被截掉）', () => {
     const fits = { tree: 64, checked: 74, adjustable: false };
     expect(splitLists({ available: 600, tree: 64, checked: 74, ratio: 0.4 })).toStrictEqual(fits);
@@ -13,9 +20,9 @@ describe('splitLists', () => {
     expect(splitLists({ available: 138, tree: 64, checked: 74, ratio: 0.4 })).toStrictEqual(fits);
   });
 
-  it('放不下时按比例分，限制在两边的最小高度以内：目录至少 96，"已勾选"至少 102', () => {
+  it('放不下时按比例分，限制在两边的最小高度以内：目录至少 96，"已勾选"至少 112', () => {
     expect(overflowing(0.4)).toStrictEqual({ tree: 300, checked: 200, adjustable: true });
-    expect(overflowing(0.05)).toStrictEqual({ tree: 398, checked: 102, adjustable: true });
+    expect(overflowing(0.05)).toStrictEqual({ tree: 388, checked: 112, adjustable: true });
     expect(overflowing(0.95)).toStrictEqual({ tree: 96, checked: 404, adjustable: true });
   });
 
@@ -59,7 +66,7 @@ describe('splitLists', () => {
 describe('ratioForCheckedHeight', () => {
   it('拖到的高度先按两边的最小高度限制，再换成比例；还量不到可用高度时为 null', () => {
     expect(ratioForCheckedHeight(500, 200)).toBe(0.4);
-    expect(ratioForCheckedHeight(500, 20)).toBe(102 / 500);
+    expect(ratioForCheckedHeight(500, 20)).toBe(112 / 500);
     expect(ratioForCheckedHeight(500, 490)).toBe(404 / 500);
     expect(ratioForCheckedHeight(150, 60)).toBe(0.4);
     expect(ratioForCheckedHeight(0, 60)).toBeNull();

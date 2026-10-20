@@ -1,5 +1,5 @@
 import { useMap } from '@yzt/map-vue';
-import { ElOption, ElSelect, ElSlider, ElTooltip } from 'element-plus';
+import { ElOption, ElSelect, ElTooltip } from 'element-plus';
 import { computed, defineComponent, nextTick, type PropType, ref, type VNode } from 'vue';
 import { useSortableList } from '@/shared/composables/useSortableList';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
@@ -8,6 +8,7 @@ import { arrowStep } from '../keyboard';
 import { type CheckedLayer, checkedDropTarget, checkedLayers, moveTarget } from '../layer-panel';
 import { type ResourceStatus, type ResourceStatusLevel, resourceStatuses } from '../resource-status';
 import styles from './CheckedLayerList.module.scss';
+import { LayerOpacity } from './LayerOpacity';
 
 const HANDLE = '[data-drag-handle="checked"]';
 
@@ -67,8 +68,6 @@ export const CheckedLayerList = defineComponent({
     const level = computed(() => Math.floor(camera.value.zoom));
     const list = ref<HTMLElement>();
     const items = computed(() => checkedLayers(props.layers.state.value));
-    // 哪个资源的透明度滑块打开着：面板自己的界面状态
-    const opacityOpen = ref<ReadonlySet<string>>(new Set());
 
     const moveTo = (code: string, target: number | null) => {
       if (target !== null) {
@@ -100,21 +99,6 @@ export const CheckedLayerList = defineComponent({
       [...handles].find(handle => handle.dataset.code === code)?.focus();
     };
 
-    const toggleOpacity = (code: string) => {
-      const next = new Set(opacityOpen.value);
-      if (!next.delete(code)) {
-        next.add(code);
-      }
-      opacityOpen.value = next;
-    };
-
-    // 滑块按百分比显示，拖动过程中实时生效
-    const changeOpacity = (code: string, value: number | number[]) => {
-      if (typeof value === 'number') {
-        props.layers.setOpacity(code, value / 100);
-      }
-    };
-
     const renderYear = (layer: CheckedLayer) =>
       layer.years.length > 1 ? (
         <ElSelect
@@ -131,7 +115,7 @@ export const CheckedLayerList = defineComponent({
         <span class={[styles.year, styles.yearText]}>{layer.year}</span>
       );
 
-    const renderLayer = (layer: CheckedLayer): VNode => {
+    const renderLayer = (layer: CheckedLayer, index: number): VNode => {
       const { layers: owner } = props;
       const display = owner.state.value.displays.get(layer.code);
       const statuses = resourceStatuses({
@@ -141,8 +125,6 @@ export const CheckedLayerList = defineComponent({
         minzoom: owner.minzoomOf(layer.code),
         zoom: level.value
       });
-      const sliderOpen = opacityOpen.value.has(layer.code);
-      const percent = Math.round(layer.opacity * 100);
       return (
         <li key={layer.code} data-sortable-item data-layer={layer.code}>
           <div class={styles.row}>
@@ -154,7 +136,8 @@ export const CheckedLayerList = defineComponent({
               aria-label={`调整叠放顺序：${layer.name}`}
               title="调整叠放顺序（上层优先显示）"
               onKeydown={event => void onHandleKeydown(event, layer.code)}>
-              <SvgIcon name="drag-handle" size={16} />
+              <span class={styles.rank}>{index + 1}</span>
+              <SvgIcon class={styles.grip} name="drag-handle" size={16} />
             </button>
             {renderYear(layer)}
             <span class={styles.name}>
@@ -164,14 +147,11 @@ export const CheckedLayerList = defineComponent({
               {/* 没有状态时也留出位置：缩放时图标出现、消失，名称省略到哪里不跟着跳 */}
               <span class={styles.status}>{renderStatus(statuses)}</span>
             </span>
-            <button
-              type="button"
-              class={[styles.opacity, sliderOpen && styles.opacityOpen]}
-              aria-label={`${layer.name}的透明度`}
-              aria-expanded={sliderOpen}
-              onClick={() => toggleOpacity(layer.code)}>
-              {percent}%
-            </button>
+            <LayerOpacity
+              name={layer.name}
+              modelValue={layer.opacity}
+              onUpdate:modelValue={value => owner.setOpacity(layer.code, value)}
+            />
             <button
               type="button"
               class={styles.remove}
@@ -181,18 +161,6 @@ export const CheckedLayerList = defineComponent({
               <SvgIcon name="close" size={16} />
             </button>
           </div>
-          {sliderOpen && (
-            <div class={styles.sliderRow}>
-              <ElSlider
-                class={styles.slider}
-                size="small"
-                modelValue={percent}
-                aria-label={`${layer.name}的透明度`}
-                formatTooltip={(value: number) => `${value}%`}
-                onUpdate:modelValue={value => changeOpacity(layer.code, value)}
-              />
-            </div>
-          )}
         </li>
       );
     };

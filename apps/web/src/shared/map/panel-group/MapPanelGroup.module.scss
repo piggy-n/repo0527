@@ -19,9 +19,11 @@
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
+  padding: 6px 0;
 }
 
 .tab {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -40,20 +42,28 @@
   cursor: pointer;
 }
 
-// 当前的 Tab 像面板标题：竖杠、16 / 600（ADR 0053 第 4 节）
+// 标签大小不随选中变化，切换时关闭按钮不跳位
 .current .label {
-  font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-text-strong);
+  color: var(--color-primary);
   cursor: default;
 
-  &::before {
+  &::after {
     content: '';
-    width: 4px;
-    height: 16px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -6px;
+    height: 2px;
     border-radius: 999px;
     background-color: var(--color-primary);
   }
+}
+
+.closeAll {
+  padding-left: var(--space-sm);
+  border-left: 1px solid var(--color-border);
+  border-radius: 0;
 }
 
 // 内容区在外壳可滚动的区域里：上面留出 3 像素，贴着顶边的边框（Element 的单选按钮用 outline 画边框）和键盘焦点框不被裁掉。

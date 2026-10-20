@@ -44,7 +44,9 @@ function renderSwatch(lines: readonly BoundarySwatchLine[]) {
 export const BoundaryPanel = defineComponent({
   name: 'BoundaryPanel',
   props: {
-    boundaries: { type: Object as PropType<Boundaries>, required: true }
+    boundaries: { type: Object as PropType<Boundaries>, required: true },
+    /** 独立底图浮窗由头部图标控制透明度行 */
+    showOpacity: { type: Boolean, default: true }
   },
   setup(props) {
     // 复选框组给出勾选的全部值，按级别逐一设置；值没变的级别不会替换状态
@@ -73,7 +75,7 @@ export const BoundaryPanel = defineComponent({
               </ElCheckbox>
             ))}
           </ElCheckboxGroup>
-          {checked.length > 0 && (
+          {props.showOpacity && checked.length > 0 && (
             <OpacitySlider value={opacity.value} label="行政区边界的透明度" onChange={props.boundaries.setOpacity} />
           )}
         </div>

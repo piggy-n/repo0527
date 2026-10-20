@@ -59,7 +59,7 @@ const shown = (wrapper: VueWrapper) =>
 const active = (wrapper: VueWrapper, name: string) => wrapper.get(`[data-content="${name}"]`).attributes('data-active');
 
 describe('MapPanelGroup', () => {
-  it('没有打开的功能时整组隐藏；打开后 Tab 按固定顺序，只显示当前的内容', async () => {
+  it('没有打开的功能时整组隐藏；新打开的 Tab 前置，只显示当前的内容', async () => {
     const { wrapper, group } = mountGroup();
     expect(wrapper.get('[data-panel-group]').attributes('style')).toContain('display: none');
 
@@ -90,6 +90,19 @@ describe('MapPanelGroup', () => {
     expect(shown(wrapper)).toStrictEqual(['coordinate']);
     expect(active(wrapper, 'region')).toBe('false');
     expect((wrapper.get('[data-content="region"] input').element as HTMLInputElement).value).toBe('南京');
+    expect(tabs(wrapper)).toStrictEqual(['区划定位', '坐标定位']);
+  });
+
+  it('统一关闭卸载所有内容，并逐项通知页面清理', async () => {
+    const { wrapper, group, unmounted, onClose } = mountGroup();
+    group.show('region');
+    group.show('detail');
+    await nextTick();
+    await wrapper.get('[aria-label="关闭全部功能"]').trigger('click');
+    expect(group.state.value.open).toStrictEqual([]);
+    expect(wrapper.find('[role="tabpanel"]').exists()).toBe(false);
+    expect(unmounted.mock.calls.map(([id]) => id).toSorted()).toStrictEqual(['detail', 'region']);
+    expect(onClose.mock.calls.map(([id]) => id).toSorted()).toStrictEqual(['detail', 'region']);
   });
 
   it('Tab 上的关闭：从组里关掉、卸载内容、通知页面，切到最近显示过的另一个', async () => {

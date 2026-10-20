@@ -9,6 +9,7 @@ import type { ResourceLayers } from '../composables/useResourceLayers';
 import { arrowStep } from '../keyboard';
 import { nodeKey, type PanelNode } from '../layer-panel';
 import styles from './ResourceTreeList.module.scss';
+import { LayerOpacity } from './LayerOpacity';
 
 const GEOMETRY_ICONS: Readonly<Record<ResourceGeometry, IconName>> = {
   fill: 'geometry-polygon',
@@ -80,6 +81,7 @@ export const ResourceTreeList = defineComponent({
     const renderNode = (node: PanelNode, index: number): VNode => {
       const { layers: owner } = props;
       if (node.kind === 'resource') {
+        const display = owner.state.value.displays.get(node.code);
         return (
           <li key={node.code} data-sortable-item data-resource={node.code}>
             <div class={styles.row}>
@@ -96,6 +98,13 @@ export const ResourceTreeList = defineComponent({
                 </span>
               </ElCheckbox>
               {owner.configErrors.value.has(node.code) && <span class={styles.error}>配置错误</span>}
+              {node.checked && display && (
+                <LayerOpacity
+                  name={node.name}
+                  modelValue={display.opacity}
+                  onUpdate:modelValue={value => owner.setOpacity(node.code, value)}
+                />
+              )}
               {renderHandle(node, index, node.name)}
             </div>
           </li>

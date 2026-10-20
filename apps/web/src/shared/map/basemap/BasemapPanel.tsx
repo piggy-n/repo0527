@@ -12,7 +12,9 @@ import styles from './BasemapPanel.module.scss';
 export const BasemapPanel = defineComponent({
   name: 'BasemapPanel',
   props: {
-    basemap: { type: Object as PropType<Basemap>, required: true }
+    basemap: { type: Object as PropType<Basemap>, required: true },
+    /** 独立底图浮窗由头部图标控制透明度行 */
+    showOpacity: { type: Boolean, default: true }
   },
   setup(props) {
     return () => {
@@ -39,7 +41,7 @@ export const BasemapPanel = defineComponent({
               );
             })}
           </div>
-          {opacity.value !== null && (
+          {props.showOpacity && opacity.value !== null && (
             <OpacitySlider value={opacity.value} label="底图的透明度" onChange={props.basemap.setOpacity} />
           )}
         </div>

@@ -31,7 +31,10 @@
   border-radius: var(--radius-sm);
   color: var(--color-text-regular);
 
-  &:hover {
+  &:hover,
+  &:has(:focus-visible) {
+    --resource-action-opacity: 1;
+    --resource-action-pointer-events: auto;
     background-color: var(--color-primary-bg-light);
   }
 

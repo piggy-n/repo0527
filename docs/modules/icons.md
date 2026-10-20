@@ -134,6 +134,7 @@ packages/icons/
 | `geometry-*`、`drag-handle`、`splitter-handle`、`panel-*`、`close`、`info` | 同上 | 资源图层面板（5D.2） |
 | `arrow-left`、`focus`、`warning` | 同上 | 点选详情（5D.6） |
 | `copy`、`location-pin` | 同上 | 位置信息的复制、坐标定位点的图钉（5D.7） |
+| `layer-opacity`、`symbol-settings` | 项目自绘，24 × 24、描边 1.5 | 资源透明度入口、图例配置入口（ADR 0066） |
 
 2026-09-30 清理了只在主题预览页演示中用到的样例：`bell-solid`（fzjc）、`toolbar-map`、`toolbar-move`（旧项目的 Toolbar）、`sample-pin-color`（自制的多色样例），主题预览页改用上面的正式图标演示。消息铃铛迁移时使用 UI 提供的图标；地图工具栏在 5D.1 改用下面的开源线性图标（用户决定先用开源图标，有更合适的再替换个别图标）。
 
@@ -167,7 +168,7 @@ packages/icons/
 | `status-error` | 自制（ADR 0059） | "已勾选"的错误状态：实心圆，感叹号镂空，颜色由 `--color-danger` 给 |
 | `status-warning` | 自制（ADR 0059） | "已勾选"的警告状态：实心三角，感叹号镂空，颜色由 `--color-warning` 给 |
 | `status-zoom` | `zoom-in` | "已勾选"的说明状态（当前级别不显示） |
-| `map-legend` | `list-details` | 卡片行的图例卡 |
+| `map-legend` | `list-details` | 右上工具栏末尾的图例入口（ADR 0066） |
 | `check` | `check` | 选中的标记（底图缩略图右上角的勾） |
 | `arrow-left` | `arrow-left` | 返回（点选详情的"返回列表"） |
 | `focus` | `focus-2` | 定位到要素 |

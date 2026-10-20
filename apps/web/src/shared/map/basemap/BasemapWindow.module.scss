@@ -1,0 +1,40 @@
+.window {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel {
+  flex: 1;
+}
+
+.heading {
+  flex: none;
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.opacity {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    background-color: var(--color-primary-bg);
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+  }
+}

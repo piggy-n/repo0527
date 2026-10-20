@@ -174,7 +174,7 @@ export function legendEntries(
   });
 }
 
-/** 条目的集合：只看有哪些资源，不看顺序；集合变化后只剩一条时自动展开这一条 */
+/** 条目的集合：只看有哪些资源，不看顺序 */
 export function legendEntrySet(entries: readonly LegendEntry[]): string {
   return entries
     .map(entry => entry.code)

@@ -1,9 +1,19 @@
-// 地类图例（设计稿 5D.5）：大类、地类一行高 30，地类缩进 20；展开的地类浅主色底，编辑器在它下面并拉回缩进
+// 地类图例（ADR 0066）：默认两列平铺；分类视图保留缩进，编辑器占满内容宽度
 
 .legend {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+}
+
+.filters {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.view {
+  flex: none;
+  width: 120px;
 }
 
 .sections,
@@ -22,8 +32,9 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  box-sizing: border-box;
   width: 100%;
-  height: 30px;
+  min-height: 28px;
   padding: 0 4px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -48,6 +59,13 @@
 
 .item {
   color: var(--color-text-regular);
+  cursor: default;
+
+  &:hover .configure,
+  &:focus-within .configure {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .open,
@@ -74,6 +92,7 @@
 }
 
 .name {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -95,16 +114,6 @@
   background-color: var(--color-primary);
 }
 
-.tag {
-  flex: none;
-  margin-left: auto;
-  padding: 0 var(--space-xs);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-  color: var(--color-warning);
-  background-color: var(--color-warning-bg);
-}
-
 // 拉回地类的缩进，编辑器和面板一样宽
 .editor {
   margin-left: -20px;
@@ -113,4 +122,65 @@
 .empty {
   font-size: var(--font-size-base);
   color: var(--color-text-secondary);
+}
+
+.configure {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    color: var(--color-primary);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+  }
+}
+
+// 平铺只保留符号和名称，编码、含义在悬停提示里，编辑时占满两列
+.flat {
+  .items {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-left: 0;
+  }
+
+  .item {
+    gap: 4px;
+    font-size: var(--font-size-xs);
+  }
+
+  .code {
+    display: none;
+  }
+
+  .editing {
+    grid-column: 1 / -1;
+  }
+
+  .editor {
+    margin-left: 0;
+  }
+}
+
+@media (hover: none) {
+  .configure {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }

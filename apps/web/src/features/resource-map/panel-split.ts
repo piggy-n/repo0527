@@ -15,11 +15,13 @@ export interface ListSplitInput {
   readonly checked: number;
   /** 分割线的位置："已勾选"占可用高度的比例（0～1） */
   readonly ratio: number;
+  /** 收起时只保留展开入口，目录可以使用其余高度 */
+  readonly collapsed?: boolean;
 }
 
 // 放不下时两边的最小高度：目录至少 3 行，"已勾选"至少放得下标题和 2 行
 const MIN_TREE_HEIGHT = 3 * 32;
-const MIN_CHECKED_HEIGHT = 30 + 2 * 36;
+const MIN_CHECKED_HEIGHT = 40 + 2 * 36;
 
 // 可用高度放不下两边的最小高度时只按比例，两边都可以到 0
 const tooShort = (available: number) => available < MIN_TREE_HEIGHT + MIN_CHECKED_HEIGHT;
@@ -30,7 +32,10 @@ const tooShort = (available: number) => available < MIN_TREE_HEIGHT + MIN_CHECKE
  * 多出的给"已勾选"，目录全部显示。
  * 输入都和算出的高度无关：面板的高度不再反过来影响分法，不会来回重算（2026-10-16 用户发现收起目录后一直闪）
  */
-export function splitLists({ available, tree, checked, ratio }: ListSplitInput): ListSplit {
+export function splitLists({ available, tree, checked, ratio, collapsed = false }: ListSplitInput): ListSplit {
+  if (collapsed) {
+    return { tree: Math.min(tree, Math.max(0, available - checked)), checked, adjustable: false };
+  }
   if (tree + checked <= available) {
     return { tree, checked, adjustable: false };
   }

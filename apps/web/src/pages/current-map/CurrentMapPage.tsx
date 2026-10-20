@@ -1,5 +1,4 @@
 import { MapCanvas, provideMap } from '@yzt/map-vue';
-import { MxTitle } from '@yzt/ui';
 import { computed, defineComponent, ref, watch } from 'vue';
 import { FeatureDetailPanel } from '@/features/resource-map/components/FeatureDetailPanel';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
@@ -11,12 +10,10 @@ import { useResourcePanelLayout } from '@/features/resource-map/composables/useR
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
-import { SvgIcon } from '@/shared/icons/SvgIcon';
-import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
+import { BasemapWindow } from '@/shared/map/basemap/BasemapWindow';
 import { basemapOption } from '@/shared/map/basemap/basemap-style';
 import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
-import { BoundaryPanel } from '@/shared/map/boundary/BoundaryPanel';
 import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
 import { MapCard } from '@/shared/map/card/MapCard';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
@@ -28,7 +25,7 @@ import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
 import { useMeasure } from '@/shared/map/measure/useMeasure';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
-import { type PanelGroup, usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
+import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { MapStatusBar } from '@/shared/map/status-bar/MapStatusBar';
 import { useMapReadout } from '@/shared/map/status-bar/useMapReadout';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
@@ -45,9 +42,8 @@ import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './CurrentMapPage.module.scss';
 import { mapPageLayout } from './map-page-layout';
 
-// 右侧的两组 Tab 面板（ADR 0053 第 4 节）：功能面板和显示面板，Tab 按这里的顺序
-const FUNCTION_PANELS = ['region-locate', 'coordinate-locate', 'feature-detail'] as const;
-const DISPLAY_PANELS = ['legend', 'basemap'] as const;
+// 图例与定位、资源详情共用功能面板；底图是独立浮窗（ADR 0066）
+const FUNCTION_PANELS = ['legend', 'region-locate', 'coordinate-locate', 'feature-detail'] as const;
 const PANEL_LABELS = {
   'region-locate': '区划定位',
   'coordinate-locate': '坐标定位',
@@ -56,14 +52,14 @@ const PANEL_LABELS = {
   basemap: '底图'
 };
 
-type LocatePanel = 'region-locate' | 'coordinate-locate';
-type DisplayPanel = (typeof DISPLAY_PANELS)[number];
+type FunctionPanel = Exclude<(typeof FUNCTION_PANELS)[number], 'feature-detail'>;
 
-// 业务组的分组：移动、点选 · 测距、测面、清除 · 区划定位、坐标定位（ADR 0053 第 2 节）
+// 业务组沿用原有分组，图例固定在最下方（ADR 0066）
 const TOOLBAR_GROUPS = [
   ['browse', 'feature-pick'],
   ['measure-distance', 'measure-area', 'clear'],
-  ['region-locate', 'coordinate-locate']
+  ['region-locate', 'coordinate-locate'],
+  ['legend']
 ] as const;
 
 /** 现状底图：区域按 ADR 0053 划分，各块的界面在 5D.1～5D.8 逐块设计（docs/roadmap.md"5D 地图页界面的专门设计"） */
@@ -81,10 +77,13 @@ export const CurrentMapPage = defineComponent({
     useMapLoadMarks(map);
     // 第一次就绪时按江苏的范围定位；基础组的"默认视角"、区划定位回到全省时回到这里
     const { goToDefaultView } = useDefaultView(map);
-    // 手机宽度时卡片叠到工具栏一列，矮屏时业务组只显示图标（ADR 0053 第 8 节）；还量不到尺寸时按常规
+    // 业务组始终只显示图标，矮屏时分成两列；还量不到尺寸时按常规（ADR 0066）
     const root = ref<HTMLElement>();
     const { width, height } = useShownElementSize(root);
     const layout = computed(() => mapPageLayout(width.value, height.value));
+    // 底图浮窗与基础控制条等高，直接量控制条，不重复维护按钮高度
+    const controls = ref<HTMLElement>();
+    const { height: controlsHeight } = useShownElementSize(controls, undefined, { box: 'border-box' });
 
     // 记住上次的底图、边界和资源图层（ADR 0042）；没有登录时为 null，不读不写
     const preferences = usePreferenceScope();
@@ -100,15 +99,15 @@ export const CurrentMapPage = defineComponent({
     // 状态栏的比例尺、经纬度和角度（ADR 0053 第 5 节）
     const readout = useMapReadout(map);
 
-    // 右侧的两组面板；已打开的功能和当前的 Tab 是页面的界面状态，业务状态在各自的拥有者里（ADR 0053 第 4 节）
+    // 功能面板和底图分别开关，业务状态仍由各自的拥有者持有
     const functions = usePanelGroup(FUNCTION_PANELS);
-    const display = usePanelGroup(DISPLAY_PANELS);
+    const basemapOpen = ref(false);
     // 资源面板的收起、分割线的位置和目录顺序按账号记住；窄屏时左右只显示一边，只推导显示，不改收起状态（ADR 0053 第 6、8 节）
     const panelLayout = useResourcePanelLayout({ preferences });
     const catalogOrder = useCatalogOrder({ preferences });
     const sides = useSideExclusion({
       leftExpanded: () => !panelLayout.collapsed.value,
-      rightOpen: () => functions.state.value.open.length > 0 || display.state.value.open.length > 0
+      rightOpen: () => functions.state.value.open.length > 0 || basemapOpen.value
     });
 
     // 点选、框选只认区划里的要素，和遮罩用同一个边界（ADR 0051 第 1 节）；用户开始识别时切到资源详情
@@ -144,20 +143,20 @@ export const CurrentMapPage = defineComponent({
       measure: measure.deriveGroup
     });
 
-    // 右侧的入口：工具栏的区划定位、坐标定位，卡片行的图例、底图；关闭面板不清掉选择和位置点（ADR 0036、0037）。
+    // 功能入口按显示状态开关；关闭定位面板不清掉区划和位置点
     // 按点击时右边是否显示决定：窄屏时让给了左边就是重新显示，不是关闭
-    const toggleFunction = (id: LocatePanel) => {
+    const toggleFunction = (id: FunctionPanel) => {
       const shown = sides.right.value;
       sides.activate('right');
       functions.toggle(id, shown);
     };
-    const toggleDisplay = (id: DisplayPanel) => {
+    const toggleBasemap = () => {
       const shown = sides.right.value;
       sides.activate('right');
-      display.toggle(id, shown);
+      basemapOpen.value = !shown || !basemapOpen.value;
     };
     // 入口显示为按下：打开着，而且右边没有让出去
-    const pressedIn = (group: PanelGroup, id: string) => sides.right.value && group.isOpen(id);
+    const pressedIn = (id: FunctionPanel) => sides.right.value && functions.isOpen(id);
     // 关闭资源详情就是清除选择（ADR 0053 第 4 节）；外壳已经从组里关掉了它
     const closeFunction = (id: string) => {
       if (id === 'feature-detail') {
@@ -180,28 +179,21 @@ export const CurrentMapPage = defineComponent({
     const toolbarActions = {
       clear,
       'region-locate': () => toggleFunction('region-locate'),
-      'coordinate-locate': () => toggleFunction('coordinate-locate')
+      'coordinate-locate': () => toggleFunction('coordinate-locate'),
+      legend: () => toggleFunction('legend')
     };
-    const pressed = computed(() =>
-      (['region-locate', 'coordinate-locate'] as const).filter(id => pressedIn(functions, id))
-    );
+    const pressed = computed(() => (['region-locate', 'coordinate-locate', 'legend'] as const).filter(pressedIn));
 
-    // 卡片行：图例卡、底图卡（当前底图的缩略图和简称，ADR 0057），点开显示面板里对应的 Tab；手机宽度时叠在基础组上面
-    const renderCards = () => {
+    // 当前底图的缩略图入口固定在地图控制栏下方
+    const renderBasemapCard = () => {
       const current = basemapOption(basemap.selected.value);
       return (
         <div class={styles.cards} data-map-cards>
           <MapCard
-            label={PANEL_LABELS.legend}
-            pressed={pressedIn(display, 'legend')}
-            onClick={() => toggleDisplay('legend')}>
-            {{ icon: () => [<SvgIcon name="map-legend" size={20} />] }}
-          </MapCard>
-          <MapCard
             label={current.shortLabel}
             name={`${PANEL_LABELS.basemap}：${current.label}`}
-            pressed={pressedIn(display, 'basemap')}
-            onClick={() => toggleDisplay('basemap')}>
+            pressed={sides.right.value && basemapOpen.value}
+            onClick={toggleBasemap}>
             {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[current.id]} />] }}
           </MapCard>
         </div>
@@ -209,11 +201,18 @@ export const CurrentMapPage = defineComponent({
     };
 
     return () => {
-      const { phone, compactToolbar } = layout.value;
+      const { phone, toolbarColumns } = layout.value;
       // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示
       const scopeShown = !phone || !sides.left.value;
       return (
-        <div ref={root} class={[styles.root, phone && styles.phone]} data-map-page={phone ? 'phone' : 'wide'}>
+        <div
+          ref={root}
+          class={[styles.root, phone && styles.phone]}
+          style={{
+            '--map-tools-width': toolbarColumns ? '72px' : '40px',
+            '--map-controls-height': controlsHeight.value > 0 ? `${controlsHeight.value}px` : undefined
+          }}
+          data-map-page={phone ? 'phone' : 'wide'}>
           <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
           <MeasureOverlay measure={measure} />
           <LocationOverlay location={location} />
@@ -239,6 +238,9 @@ export const CurrentMapPage = defineComponent({
             <div class={styles.lane}>
               <MapPanelGroup group={functions} labels={PANEL_LABELS} visible={sides.right.value} onClose={closeFunction}>
                 {{
+                  legend: ({ active }: PanelSlotProps) => [
+                    <ResourceLegend layers={resources} symbols={symbols} active={active} />
+                  ],
                   'region-locate': () => [<RegionLocatePanel region={region} />],
                   'coordinate-locate': ({ active }: PanelSlotProps) => [
                     <CoordinateLocatePanel location={location} active={active} />
@@ -246,34 +248,33 @@ export const CurrentMapPage = defineComponent({
                   'feature-detail': () => [<FeatureDetailPanel pick={pick} />]
                 }}
               </MapPanelGroup>
-              <div class={styles.spacer} />
-              <MapPanelGroup group={display} labels={PANEL_LABELS} visible={sides.right.value}>
-                {{
-                  legend: ({ active }: PanelSlotProps) => [
-                    <ResourceLegend layers={resources} symbols={symbols} active={active} />
-                  ],
-                  basemap: () => [
-                    <BasemapPanel basemap={basemap} />,
-                    <MxTitle level="section">行政区</MxTitle>,
-                    <BoundaryPanel boundaries={boundaries} />
-                  ]
-                }}
-              </MapPanelGroup>
             </div>
+            <BasemapWindow
+              class={styles.basemapWindow}
+              basemap={basemap}
+              boundaries={boundaries}
+              open={basemapOpen.value}
+              visible={sides.right.value}
+              onClose={() => (basemapOpen.value = false)}
+            />
             <div class={styles.bottom}>
               <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
-              {!phone && renderCards()}
             </div>
             <div class={styles.tools}>
-              <MapToolbar
-                groups={TOOLBAR_GROUPS}
-                actions={toolbarActions}
-                pressed={pressed.value}
-                compact={compactToolbar}
-              />
+              <div class={styles.business}>
+                <MapToolbar
+                  groups={TOOLBAR_GROUPS}
+                  actions={toolbarActions}
+                  pressed={pressed.value}
+                  compact
+                  columns={toolbarColumns}
+                />
+              </div>
               <div class={styles.stack}>
-                {phone && renderCards()}
-                <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
+                <div ref={controls} class={styles.controls}>
+                  <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
+                </div>
+                {renderBasemapCard()}
               </div>
             </div>
           </div>

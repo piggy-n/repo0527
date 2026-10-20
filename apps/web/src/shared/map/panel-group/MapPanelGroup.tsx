@@ -1,7 +1,7 @@
 import { Close } from '@element-plus/icons-vue';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel } from '@yzt/ui';
-import { ElButton } from 'element-plus';
+import { ElButton, ElTooltip } from 'element-plus';
 import { defineComponent, type PropType, ref, type SlotsType, type VNode, watch } from 'vue';
 import { usePageActive } from '../../composables/usePageActive';
 import { revealScrollLeft } from './panel-group';
@@ -39,10 +39,10 @@ export const MapPanelGroup = defineComponent({
     // 页面被缓存、切到别的页面期间按隐藏处理：取色预览、拾取这类临时交互由内容按 active 结束
     const pageActive = usePageActive();
 
-    // 换了当前的 Tab、打开了新的、整组重新显示时，把当前的 Tab 滚进可见范围；隐藏时量不到尺寸，什么也不做
+    // 切换、前移 Tab 或重新显示整组时，把当前 Tab 滚进可见范围；隐藏时不量尺寸
     const tabs = ref<HTMLElement>();
     watch(
-      [() => props.group.state.value.current, () => props.group.state.value.open.length, () => props.visible],
+      [() => props.group.state.value.current, () => props.group.state.value.open, () => props.visible],
       () => {
         const list = tabs.value;
         const current = list?.querySelector('[aria-selected="true"]')?.parentElement;
@@ -61,6 +61,14 @@ export const MapPanelGroup = defineComponent({
       props.group.close(id);
       emit('close', id);
     };
+    // 先清空整组，再逐项通知页面执行资源详情等功能的关闭副作用
+    const closeAll = () => {
+      const opened = props.group.state.value.open;
+      props.group.closeAll();
+      for (const id of opened) {
+        emit('close', id);
+      }
+    };
 
     const renderTab = (id: string, current: boolean) => {
       const label = props.labels[id] ?? id;
@@ -71,7 +79,7 @@ export const MapPanelGroup = defineComponent({
             role="tab"
             class={styles.label}
             aria-selected={current}
-            onClick={() => props.group.show(id)}>
+            onClick={() => props.group.select(id)}>
             {label}
           </button>
           <ElButton link size="small" icon={Close} aria-label={`关闭${label}`} onClick={() => close(id)} />
@@ -91,6 +99,17 @@ export const MapPanelGroup = defineComponent({
                   <div ref={tabs} class={styles.tabs} role="tablist">
                     {open.map(id => renderTab(id, id === current))}
                   </div>
+                ),
+                actions: () => (
+                  <ElTooltip content="关闭全部功能" placement="left">
+                    <ElButton
+                      class={styles.closeAll}
+                      link
+                      icon={Close}
+                      aria-label="关闭全部功能"
+                      onClick={closeAll}
+                    />
+                  </ElTooltip>
                 ),
                 default: () =>
                   open.map(id => (

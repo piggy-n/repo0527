@@ -185,17 +185,57 @@
   min-height: 0;
 }
 
-// 上面不留边距：和分割线的间距由分割线自己留
+// 整行开关始终保留，收起时作为面板底部的展开入口
 .checkedHead {
   display: flex;
   flex: none;
   align-items: center;
   gap: var(--space-sm);
-  padding: 0 var(--space-lg) var(--space-sm);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  padding: var(--space-sm) var(--space-lg);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  cursor: pointer;
 
-  > :first-child {
-    flex: none;
+  &:hover {
+    color: var(--color-primary);
+    background-color: var(--color-primary-bg);
   }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: -2px;
+  }
+}
+
+.checkedCollapsed {
+  background: linear-gradient(180deg, var(--color-bg-container), var(--color-primary-bg));
+}
+
+.checkedTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-title);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+
+  &::before {
+    content: '';
+    width: 4px;
+    height: 14px;
+    border-radius: 999px;
+    background-color: var(--color-primary);
+  }
+}
+
+.checkedToggle {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
 }
 
 .badge {

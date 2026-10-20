@@ -3,6 +3,7 @@ import type { CameraState } from '@yzt/map-core';
 import { provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
+import { userEvent } from 'vitest/browser';
 import { defineComponent, KeepAlive, nextTick, type Ref, ref, shallowRef } from 'vue';
 import type { ResourceTreeCategory } from '../api';
 import { buildCatalog } from '../catalog';
@@ -53,7 +54,7 @@ const CATALOG = buildCatalog([
 const MANY = Array.from({ length: 11 }, (_, index) => `tdzy_${index + 1}`);
 
 // 和面板所在的地图页一样：一个纵向 flex 的列，列的高度就是面板最高能到的高度；给出 shown 时放在 KeepAlive 里，为 false 时停用
-function setup(height: number, shown?: Ref<boolean>) {
+function setup(height: number, shown?: Ref<boolean>, expandChecked = true) {
   const host = document.body.appendChild(document.createElement('div'));
   // 尺寸监听的回调改了比被监听元素浅的元素时，浏览器报"ResizeObserver loop completed with undelivered notifications"，
   // 来回重算时每帧都报
@@ -86,6 +87,12 @@ function setup(height: number, shown?: Ref<boolean>) {
     shown ? defineComponent(() => () => <KeepAlive>{shown.value ? <Page /> : null}</KeepAlive>) : Page,
     { attachTo: host }
   );
+  if (expandChecked) {
+    const toggle = wrapper.get('[aria-label="展开已勾选图层"]').element;
+    if (toggle instanceof HTMLButtonElement) {
+      toggle.click();
+    }
+  }
   const column = host.querySelector('[data-column]');
   if (!(column instanceof HTMLElement) || !owner) {
     throw new Error('没有找到面板所在的列');
@@ -118,7 +125,7 @@ async function collapseAll(wrapper: VueWrapper) {
   for (;;) {
     const button = wrapper.findAll('button').find(candidate => {
       const label = candidate.attributes('aria-label');
-      return label !== undefined && label.startsWith('收起') && label !== '收起资源图层';
+      return label !== undefined && label.startsWith('收起') && !['收起资源图层', '收起已勾选图层'].includes(label);
     });
     if (!button) {
       return;
@@ -173,6 +180,43 @@ function measure(wrapper: VueWrapper) {
 }
 
 describe('ResourceLayerPanel（真实的布局）', () => {
+  it.each(['data-resource', 'data-layer'])('%s 的透明度关闭后，鼠标移出时不因残留焦点继续显示', async attribute => {
+    using ctx = setup(700);
+    await frames(3);
+    const row = ctx.wrapper.get(`[${attribute}="bgdc_dltb"] > div`).element;
+    const trigger = ctx.wrapper.get(`[${attribute}="bgdc_dltb"] button[aria-label="地类图斑的透明度"]`).element;
+
+    await userEvent.hover(row);
+    expect(getComputedStyle(trigger).opacity).toBe('1');
+    await userEvent.click(trigger);
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
+    await userEvent.click(trigger);
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('false');
+    await userEvent.unhover(trigger);
+
+    // 真实点击保留鼠标焦点，关闭后不能继续触发整行的操作显隐
+    expect(document.activeElement).toBe(trigger);
+    expect(getComputedStyle(trigger).opacity).toBe('0');
+    expect(ctx.layers.state.value.displays.get('bgdc_dltb')?.checked).toBe(true);
+  });
+
+  it('默认收起只保留完整入口，展开再收起不改变分割线偏好、不超出列高度', async () => {
+    using ctx = setup(360, undefined, false);
+    await frames(4);
+    const ratio = ctx.layout.checkedRatio.value;
+    const panel = ctx.wrapper.get('[data-resource-layer-panel]').element;
+    expect(ctx.wrapper.find('[role="separator"]').exists()).toBe(false);
+    expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(360);
+    await ctx.wrapper.get('[aria-label="展开已勾选图层"]').trigger('click');
+    await frames(4);
+    expect(ctx.wrapper.find('[role="separator"]').exists()).toBe(true);
+    await ctx.wrapper.get('[aria-label="收起已勾选图层"]').trigger('click');
+    await frames(4);
+    expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(360);
+    expect(ctx.layout.checkedRatio.value).toBe(ratio);
+    expect(ctx.loopErrors).toStrictEqual([]);
+  });
+
   it('目录都收起时面板跟着内容变矮："已勾选"完整显示，目录和"已勾选"都没有滚动（2026-10-16 用户发现）', async () => {
     using ctx = setup(700);
     await frames(3);
@@ -248,7 +292,7 @@ describe('ResourceLayerPanel（真实的布局）', () => {
 
     drag(up.separator, 1000);
     await frames(3);
-    expect(areas(ctx.wrapper).checked).toBeCloseTo(30 + 2 * 36, 0);
+    expect(areas(ctx.wrapper).checked).toBeCloseTo(40 + 2 * 36, 0);
 
     drag(up.separator, -1000);
     await frames(3);
@@ -387,8 +431,8 @@ describe('ResourceLayerPanel（真实的布局）', () => {
 
     const separator = ctx.wrapper.get('[role="separator"]').element;
     const tree = separator.previousElementSibling?.getBoundingClientRect();
-    // "已勾选"的标题（标题行里的第一个元素）
-    const title = separator.nextElementSibling?.firstElementChild?.firstElementChild?.getBoundingClientRect();
+    // 分割线两侧的容器边缘等距，标题内边距由整行按钮提供
+    const title = separator.nextElementSibling?.firstElementChild?.getBoundingClientRect();
     if (!tree || !title) {
       throw new Error('没有找到目录和"已勾选"的标题');
     }

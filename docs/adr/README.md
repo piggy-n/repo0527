@@ -75,6 +75,8 @@
 | [0063](0063-map-page-keep-alive.md) | 地图页的页面缓存：KeepAlive 加路由 meta，停用期间暂停视图 | 已接受 |
 | [0064](0064-navigation-failure-recovery.md) | 页面导航失败：应用根部提示，用户主动重试或刷新 | 已接受 |
 | [0065](0065-production-smoke-tests.md) | 生产构建的浏览器冒烟：登录、地图缓存与分块失败恢复 | 已接受 |
+| [0066](0066-current-map-ui-refinement.md) | 现状底图的资源操作、紧凑图例与独立底图浮窗 | 已接受（修正 0053、0057、0060，补充 0043、0044） |
+| [0067](0067-map-popup-spacing-and-alignment.md) | 地图浮窗间距、透明度入口与图例对齐 | 已接受（修正 0066） |
 
 ## 模板
 

@@ -6,7 +6,7 @@
 
 ## 结构
 
-地图页被布局缓存（ADR 0063）：这里的浮层、状态栏、工具栏的排法量尺寸都用 `shared/composables` 的 `useShownElementSize`，停用期间量到的 0 不采用；两组 Tab 面板在页面停用时把内容当作隐藏；位置点的图钉在页面停用时取消拖动。
+地图页被布局缓存（ADR 0063）：这里的浮层、状态栏、工具栏的排法量尺寸都用 `shared/composables` 的 `useShownElementSize`，停用期间量到的 0 不采用；Tab 面板在页面停用时把内容当作隐藏；位置点的图钉在页面停用时取消拖动。现状底图按 ADR 0066 使用一组功能标签和独立底图浮窗。
 
 | 文件 | 内容 |
 |---|---|
@@ -20,6 +20,7 @@
 | `basemap/basemap-style.ts` | 底图目录与推导：可选的底图、初始状态、`createBasemapStyles` 给出两个分组的推导函数（纯函数，ADR 0031） |
 | `basemap/useBasemap.ts` | 底图的拥有者：持有选择和透明度，提供操作和两个推导函数 |
 | `basemap/BasemapPanel.tsx` | 底图的切换：三张缩略图只写类型、当前底图的透明度（设计稿 5D.4） |
+| `basemap/BasemapWindow.tsx` | 底图与行政区边界的独立浮窗：标题、关闭、定位避让，开关由页面持有（ADR 0066） |
 | `basemap/BasemapThumbnail.tsx` | 底图的缩略图：注记叠在底图上、对准南京；无底图是浅色的方格（面板和底图卡共用） |
 | `boundary/data/` | 省、市、县界的 GeoJSON，由转换脚本生成（见"行政区边界的数据"） |
 | `boundary/boundary-style.ts` | 边界的级别、初始状态、`boundaryGroup` 推导（纯函数，ADR 0033） |
@@ -141,10 +142,11 @@ const current = basemapOption(basemap.selected.value);   // { id, label: '矢量
 
 - 三张缩略图只写类型（选项的 `shortLabel`：矢量、影像、无底图），无障碍名称是全称；当前的用 `aria-pressed`、主色描边和右上角的勾（`SvgIcon` 的 `check`）
 - 缩略图由拥有者给出（`basemap.thumbnails`，`basemapThumbnails(tianditu)` 纯函数）：天地图南京所在的那张 10 级瓦片（849, 415），底图和配套的注记各一张，放大到 160% 后按 `focus`（86% 67%，南京在瓦片里的位置）对准。和底图的数据源用同一个地址模板（`tileUrl`）；无底图、关闭天地图时为 `null`，不请求天地图，显示和地图背景同色的方格。组件不读 `appConfig`
-- 透明度用共用的 `OpacitySlider`：滑块按百分比显示、不带刻度、右边写出百分比，拖动过程中实时交出 0～1；无底图时没有这一行。Element 的滑块宽 100%，内边距要算进宽度（`box-sizing: border-box`），否则会压到百分比（浏览器验证时发现）
-- 现状底图页把它和边界面板放在显示面板的"底图"里（ADR 0053 第 4 节），中间是 `MxTitle` 的区块标题"行政区"；外观和悬浮元素的登记由外壳负责
-- 底图卡（ADR 0057）：上面是当前底图的缩略图（48 × 30，一圈 `--color-border` 的细边），下面写简称（矢量、影像、无底图），无障碍名称写全称"底图：矢量底图"（`MapCard` 的 `name`）；名称和简称用 `basemapOption(id)` 按 ID 取，三种底图都有，不用在选项里查找
-- 卡片（ADR 0057）：图例卡、底图卡结构相同，56 × 56 的白底卡片四周留 4，上面 48 × 30 的图、下面一行字，文字在同一条线上。悬停浅主色底、主色；面板打开时外面 2 像素的主色边框（`outline`，离卡片 1 像素，和键盘焦点同一个位置），文字和图标变主色，缩略图不加圈；键盘焦点是同样位置的 `--color-primary-border-hover` 边框，面板打开时又有焦点就在主色边外面再加一圈焦点色
+- 透明度用共用的 `OpacitySlider`：滑块按百分比显示、不带刻度、右边写出百分比，拖动过程中实时交出 0～1；无底图时没有这一行。独立浮窗中由头部图标控制 `BasemapPanel`、`BoundaryPanel` 的 `showOpacity`，默认隐藏，关闭重开恢复隐藏、数值保留（ADR 0067）。Element 的滑块宽 100%，内边距要算进宽度（`box-sizing: border-box`），否则会压到百分比（浏览器验证时发现）
+- 现状底图页把它和边界面板放在独立 `BasemapWindow` 里（ADR 0066），中间是 `MxTitle` 的区块标题"行政区"；外观和定位避让由外壳负责，功能组的切换、统一关闭不影响底图
+- 浮窗与基础控制条左侧间隔 12、底边对齐，位于底图卡上方 12；高度通过 `useShownElementSize` 读取控制条，内容超出时滚动。上方功能面板单独占一行，止于基础控制区上方（ADR 0067）
+- 底图卡（ADR 0066）：基础控制栏下方的 80 × 56 缩略图，四周留 2，右下角写简称（矢量、影像、无底图），无障碍名称写全称"底图：矢量底图"（`MapCard` 的 `name`）；名称和简称用 `basemapOption(id)` 按 ID 取
+- `MapCard` 有封面时使用缩略图变体，无封面仍保留 56 × 56 的图标卡。面板打开时沿用主色外边框和独立焦点框，缩略图名称使用主色底；现状底图的图例入口已移至右上工具栏
 - `Basemap` 接口里的函数都写成函数类型的属性（`readonly deriveGroup: () => StyleGroup`），不写方法签名：它们是闭包，页面直接取出来交给 `bindStyle`，写成方法签名时 lint 的 `unbound-method` 会报错
 
 ### 浏览器验证（2026-10-10）
@@ -236,7 +238,7 @@ boundaries.setOpacity(0.6);
 ```
 
 - 业务组（ADR 0053 第 2 节，设计稿 5D.1）：竖排、宽 56，组之间画分隔线；按钮 48 × 46，图标 20 在上，文字 12 在下、每行两个字（`labelLines`），"区划定位""坐标定位"分两行、高 62；整组约 380 高
-- `compact`：只显示图标（按钮高 32，整组约 250），名称放进左边的 `ElTooltip`；无障碍名称（`aria-label`）始终是完整的名称。由页面按地图区域的高度决定：现状底图页量页面根元素的高度（`useElementSize`），低于 672 时打开（基础组加了指北针以前是 640，ADR 0058）。ADR 原想用容器查询、不写脚本，实现时改成量尺寸：提示要由组件渲染，CSS 决定不了
+- `compact`：只显示图标，整组宽 40、按钮高 32，名称放进左边的 `ElTooltip`，`aria-label` 始终是完整名称。现状底图始终启用，图例位于末尾；用 `useShownElementSize` 和 `mapPageLayout` 推导矮屏的 `columns`（高度低于 648）：两列宽 72、按钮高 28，图例独占末行（ADR 0066）
 - 状态：当前工具主色实心（`aria-pressed`），打开着面板的动作浅主色底（也是 `aria-pressed`），悬停浅底主色，不可用灰色，键盘焦点 `:focus-visible` 时 2 像素的浅主色描边
 - 业务组贴在右边、会挡住定位，组件自己登记为贴右边的悬浮元素（ADR 0053 第 9 节）
 - `toolbar-items.ts` 把工具和动作分成两张表，名称、图标集中在这里；图标是 `SvgIcon` 的名字（`map-move` 等，Tabler Icons，见 [icons.md](icons.md)"第三方图标"）。"默认视角"不在这里，移到了基础组。工具的 ID 就是登记到会话里的工具 ID，测距、测面用 `MEASURE_TOOL_IDS`
@@ -244,7 +246,7 @@ boundaries.setOpacity(0.6);
 - 点选的按钮在这里，ID 是 `FEATURE_PICK_TOOL`（`'feature-pick'`），实现由业务模块登记（ADR 0047 第 6 节）：现状底图页登记 `features/resource-map` 的 `useFeaturePick().tools`。按钮放进 `items` 之前必须先登记，否则点击时 `activateTool` 抛错
 - 工具按钮读 `useMap().activeTool`，激活的按钮高亮；点击没激活的工具时 `activateTool`，点击激活的工具时 `releaseTool`（临时任务退回上一个常驻模式）。"移动"是常驻模式，再点一次什么也不做
 - 动作按钮调用页面通过 `actions` 传入的回调，没有回调时不可用。开关面板的动作（区划定位，以后的坐标定位）也是动作：面板开关是页面的界面状态，页面通过 `pressed` 告诉工具栏哪些显示为按下（高亮、`aria-pressed`），工具栏自己不保存；它和当前工具互不影响（ADR 0036）
-- 现状底图页把它放在最右边的工具栏一列的上面，基础组在同一列的下面，两组的中线对齐（ADR 0053 第 1 节）
+- 现状底图页把它放在最右列上方，基础组与底图卡在同列下方，右边缘对齐（ADR 0066）
 
 ## 基础组（ADR 0053 第 3 节）
 
@@ -618,14 +620,16 @@ splitCoordinatePair('118°46′40″E 32°03′23″N');  // 粘贴的一对坐�
 - 复制的格式：小数 `118.777800, 32.056500`（经度在前），度分秒 `118°46′40.00″E, 32°03′23.40″N`（规范的 `′″`，带方向）
 - 一次粘贴的一对坐标：按逗号、分号、换行拆，或按 `…E …N`、`E… N…` 这样的方向拆，或两个空格分隔的小数；两段都要"看起来完整"（带小数点、单位或方向），`118, 46` 这类只有整数的当作度、分
 
-## 两组 Tab 面板（ADR 0053）
+## 功能 Tab 面板与独立底图（ADR 0053、0066）
 
 ```tsx
-// 页面 setup：每组一个实例，Tab 按给出的顺序
-const functions = usePanelGroup(['region-locate', 'coordinate-locate', 'feature-detail'] as const);
+// 页面 setup：参数限定可用功能，显示顺序按入口调用更新
+const functions = usePanelGroup(['legend', 'region-locate', 'coordinate-locate', 'feature-detail'] as const);
 functions.toggle('region-locate', sides.right.value); // 入口的点击：第二个参数是点击时整组是否显示
-functions.show('feature-detail');    // 打开并切到它，如用户开始识别时
+functions.show('feature-detail');    // 打开、前移并切到它，如用户开始识别时
+functions.select('region-locate');   // 点击已有标签只切换，不改顺序
 functions.close('feature-detail');   // 关掉当前的时切到最近显示过的另一个
+functions.closeAll();                // 清空整组；外壳还会逐项发出 close，页面处理连带操作
 
 // 窄屏时左右只显示一边：右边的入口、展开资源面板时告诉它操作了哪一边
 const sides = useSideExclusion({ leftExpanded: () => !collapsed.value, rightOpen: () => functions.state.value.open.length > 0 });
@@ -637,12 +641,13 @@ sides.activate('right');
 </MapPanelGroup>
 ```
 
-- 状态是 `{ open, current, recent }`：`open` 按 Tab 的固定顺序，和打开的先后无关；`recent` 按最近显示的先后，关掉当前的时切到它的第一个。规则是纯函数（`showPanel`、`closePanel`、`togglePanel`），不在这组里的功能直接抛错，没有改变时不替换状态
+- 状态是 `{ open, current, recent }`：`open` 是显示顺序，入口调用 `showPanel` 时对应标签移到最前；标签调用 `selectPanel` 时只切换、不重排。`recent` 记录最近显示顺序，关闭当前时切到最近显示过的另一个。规则放在纯函数里，不在这组里的功能直接抛错，没有改变时不替换状态
 - `PanelGroup` 的操作写成方法签名，具体 Id 的面板组可以交给只认 `string` 的外壳
 - 入口的点击按实际的显示决定（ADR 0053 第 4 节"正在显示时关闭它"）：没打开、打开了但没在显示、整组被隐藏（窄屏时让给了左边）时打开并切到它，正在显示时才关闭。页面在调用 `activate('right')` 之前取下右边是否显示，交给 `toggle` 的第二个参数；入口显示为按下也要右边在显示。原来只看当前的 Tab：窄屏时右边让出去以后再点入口，面板被关掉、输入丢失，要再点一次才打开（2026-10-16 评审发现，页面测试先复现再修）
 - 外壳只渲染已打开的功能：打开期间内容一直挂载，切走时用 `display: none` 隐藏（输入、滚动、展开状态都在），关闭时卸载。插槽拿到 `active`（整组在显示、并且是当前的 Tab），内容据此结束临时的交互：坐标定位退出拾取，图例不渲染条目（编辑器卸载、丢弃取色预览、收起弹出层），浏览状态（条目的展开，条目里的分类方式、搜索词、分组展开和正在编辑的项）按资源留在图例里，切回时照旧（2026-10-16 评审发现原来只保留了条目的展开）
-- Tab 放不下时（手机宽度时同时打开三个功能，Tab 区 183 宽、内容 272 宽）在自己的区域里横向滚动，不显示滚动条；换了当前的 Tab、打开了新的、整组重新显示时，外壳把当前的 Tab 连同关闭按钮滚进可见范围（`revealScrollLeft`）。和资源面板页签在手机宽度时的做法一样。原来不换行也不滚动，被外壳裁掉（2026-10-16 评审发现，浏览器测试先复现再修）
+- Tab 放不下时在自己的区域里横向滚动，不显示滚动条；切换、前移标签或整组重新显示时，把当前标签连同关闭按钮滚进可见范围（`revealScrollLeft`），统一关闭按钮始终留在标题右侧
 - Tab 上的关闭按钮先从组里关掉这个功能，再发出 `close`，页面需要时做连带的事：现状底图页关闭资源详情时调用点选的 `close()`（清除选择）；点选的拥有者自己清除了结果时，页面侦听到回到空闲，关掉资源详情的 Tab
+- 统一关闭先清空功能组，再逐项发出 `close` 执行同样的连带操作。底图不属于功能组：页面单独持有开关，`BasemapWindow` 独立登记右侧避让；`useSideExclusion` 的 `rightOpen` 同时考虑功能组与底图
 - 用户的单击、框选开始识别时，点选的拥有者调用 `onIdentifyStart`，页面切到资源详情；识别、加载更多、详情的请求返回时不切换 Tab
 - 内容区在外壳可滚动的区域里，上面留出 3 像素：Element 的单选按钮用 `outline` 画边框，贴着滚动区域的顶边时会被裁掉（坐标定位的写法切换曾经少了上边框），键盘焦点框也一样
 - 内容区不随外壳压缩（`flex: none`）。原来是 `min-height: 0`：两组面板都打开、外壳被压矮时，内容区缩到可见的高度，子元素溢出到它外面；纵向 flex 的滚动区域把下内边距算在内容区的下边，滚到底时内容贴着底边（2026-10-16 用户在区划定位、资源详情上发现，浏览器测试 `MapPanelGroup.browser.test.tsx` 先复现再修）

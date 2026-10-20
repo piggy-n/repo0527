@@ -1,4 +1,5 @@
 import { defineComponent, type PropType } from 'vue';
+import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
 import type { LegendValue } from '../legend';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
@@ -6,7 +7,7 @@ import { SymbolEditor } from './SymbolEditor';
 import styles from './ValueLegend.module.scss';
 
 /**
- * 按取值配色的分类样式（ADR 0044 第 6 节，设计稿 5D.5）：各取值和预览，点一个展开它的编辑器，同一时间只展开一个；
+ * 按取值配色的分类样式（ADR 0044、0066）：各取值和预览，独立配置按钮展开编辑器，同一时间只展开一个；
  * 改过符号的取值名称后有一个小圆点。展开的取值由上层通过 open 给出，隐藏后再显示时照旧
  */
 export const ValueLegend = defineComponent({
@@ -29,16 +30,20 @@ export const ValueLegend = defineComponent({
           const target = { code: props.code, item: value.key };
           return (
             <li key={value.key} data-value={value.key}>
-              <button
-                type="button"
-                class={[styles.row, open && styles.open]}
-                aria-label={`${open ? '收起' : '展开'}${value.label}`}
-                aria-expanded={open}
-                onClick={() => emit('update:open', open ? null : value.key)}>
+              <div class={[styles.row, open && styles.open]}>
                 <LegendSwatchIcon swatch={value.swatch} />
                 <span class={styles.label}>{value.label}</span>
                 {props.symbols.hasOverride(target) && <span class={styles.edited} title="改过符号" data-edited />}
-              </button>
+                <button
+                  type="button"
+                  class={styles.configure}
+                  aria-label={`编辑${value.label}样式`}
+                  aria-expanded={open}
+                  title="编辑样式"
+                  onClick={() => emit('update:open', open ? null : value.key)}>
+                  <SvgIcon name="symbol-settings" size={14} />
+                </button>
+              </div>
               {open && <SymbolEditor symbols={props.symbols} target={target} name={value.label} />}
             </li>
           );

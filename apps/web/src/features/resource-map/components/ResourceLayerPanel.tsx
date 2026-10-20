@@ -1,8 +1,8 @@
-import { Search } from '@element-plus/icons-vue';
+import { ArrowDown, ArrowUp, Search } from '@element-plus/icons-vue';
 import { useResizeObserver } from '@vueuse/core';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
-import { ElButton, ElInput, ElOption, ElSelect } from 'element-plus';
+import { ElButton, ElIcon, ElInput, ElOption, ElSelect } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
 import { usePageActive } from '@/shared/composables/usePageActive';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
@@ -60,6 +60,8 @@ export const ResourceLayerPanel = defineComponent({
     const tab = ref<TabId>('core');
     const keyword = ref('');
     const expanded = ref<ReadonlySet<string>>(new Set());
+    // 首次进入默认收起，不写入偏好；页面缓存期间保留用户的展开
+    const checkedCollapsed = ref(true);
 
     const searching = computed(() => keyword.value.trim() !== '');
     const tree = computed(() => panelTree(props.layers.state.value, keyword.value, props.catalogOrder.order.value));
@@ -101,7 +103,9 @@ export const ResourceLayerPanel = defineComponent({
         chrome.value = element.value.getBoundingClientRect().height - lists.value.getBoundingClientRect().height;
       }
     });
-    const available = computed(() => Math.max(0, Math.floor(columnHeight.value - chrome.value - SPLITTER_HEIGHT)));
+    const available = computed(() =>
+      Math.max(0, Math.floor(columnHeight.value - chrome.value - (checkedCollapsed.value ? 0 : SPLITTER_HEIGHT)))
+    );
     // 两区的内容本来的高度：各包一层量，不受两区的高度影响
     const treeContent = ref<HTMLElement>();
     const { height: treeHeight } = useShownElementSize(treeContent);
@@ -115,8 +119,9 @@ export const ResourceLayerPanel = defineComponent({
         ? splitLists({
             available: available.value,
             tree: treeHeight.value,
-            checked: checkedHeadHeight.value + checkedContentHeight.value,
-            ratio: props.layout.checkedRatio.value
+            checked: checkedHeadHeight.value + (checkedCollapsed.value ? 0 : checkedContentHeight.value),
+            ratio: props.layout.checkedRatio.value,
+            collapsed: checkedCollapsed.value
           })
         : null
     );
@@ -254,30 +259,42 @@ export const ResourceLayerPanel = defineComponent({
                 )}
               </div>
             </div>
-            <div
-              class={[styles.splitter, !adjustable.value && styles.fixed]}
-              role="separator"
-              aria-orientation="horizontal"
-              aria-label="调整目录和已勾选的高度"
-              aria-disabled={!adjustable.value}
-              aria-valuenow={Math.round(props.layout.checkedRatio.value * 100)}
-              tabindex={0}
-              onPointerdown={onSplitterPointerDown}
-              onKeydown={onSplitterKeydown}>
-              <span class={styles.splitterHandle}>
-                <SvgIcon name="splitter-handle" size={14} />
-              </span>
-            </div>
+            {!checkedCollapsed.value && (
+              <div
+                class={[styles.splitter, !adjustable.value && styles.fixed]}
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="调整目录和已勾选的高度"
+                aria-disabled={!adjustable.value}
+                aria-valuenow={Math.round(props.layout.checkedRatio.value * 100)}
+                tabindex={0}
+                onPointerdown={onSplitterPointerDown}
+                onKeydown={onSplitterKeydown}>
+                <span class={styles.splitterHandle}>
+                  <SvgIcon name="splitter-handle" size={14} />
+                </span>
+              </div>
+            )}
             <div class={styles.checked} style={split.value ? { height: `${split.value.checked}px` } : undefined}>
-              <div ref={checkedHead} class={styles.checkedHead}>
-                <MxTitle>已勾选</MxTitle>
+              <button
+                ref={checkedHead}
+                type="button"
+                class={[styles.checkedHead, checkedCollapsed.value && styles.checkedCollapsed]}
+                aria-label={checkedCollapsed.value ? '展开已勾选图层' : '收起已勾选图层'}
+                aria-expanded={!checkedCollapsed.value}
+                onClick={() => (checkedCollapsed.value = !checkedCollapsed.value)}>
+                <span class={styles.checkedTitle}>已勾选</span>
                 <span class={styles.badge}>{checkedCount.value}</span>
-              </div>
-              <div class={styles.checkedList}>
-                <div ref={checkedContent} class={styles.checkedContent}>
-                  <CheckedLayerList layers={props.layers} />
+                <span class={styles.checkedToggle}>{checkedCollapsed.value ? '展开图层' : '收起图层'}</span>
+                <ElIcon>{checkedCollapsed.value ? <ArrowUp /> : <ArrowDown />}</ElIcon>
+              </button>
+              {!checkedCollapsed.value && (
+                <div class={styles.checkedList}>
+                  <div ref={checkedContent} class={styles.checkedContent}>
+                    <CheckedLayerList layers={props.layers} />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </>

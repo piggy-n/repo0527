@@ -11,6 +11,7 @@ import { type CatalogOrderOwner, useCatalogOrder } from '../composables/useCatal
 import { type ResourceLayers, useResourceLayers } from '../composables/useResourceLayers';
 import { type ResourcePanelLayout, useResourcePanelLayout } from '../composables/useResourcePanelLayout';
 import { ResourceLayerPanel } from './ResourceLayerPanel';
+import { LayerOpacity } from './LayerOpacity';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 
@@ -52,7 +53,8 @@ const LAND = '基础库 / 土地资源';
 async function mountPanel(
   catalog: ResourceCatalog | null = CATALOG,
   attach = false,
-  validate?: (catalog: ResourceCatalog | null) => ReadonlyMap<string, readonly string[]>
+  validate?: (catalog: ResourceCatalog | null) => ReadonlyMap<string, readonly string[]>,
+  expandChecked = true
 ) {
   const source = shallowRef(catalog ?? undefined);
   const failed = ref(false);
@@ -82,6 +84,9 @@ async function mountPanel(
   const wrapper = mount(Page, attach ? { attachTo: document.body } : {});
   // 拖动的实例在挂载后的下一轮渲染里建
   await nextTick();
+  if (catalog && expandChecked) {
+    await wrapper.get('[aria-label="展开已勾选图层"]').trigger('click');
+  }
   if (!owners) {
     throw new Error('页面没有创建拥有者');
   }
@@ -122,6 +127,18 @@ afterEach(() => {
 });
 
 describe('ResourceLayerPanel', () => {
+  it('已勾选默认收起；整行入口展开和再次收起，图层状态不变', async () => {
+    const { wrapper, owner } = await mountPanel(CATALOG, false, undefined, false);
+    const before = owner.state.value;
+    expect(checkedOrder(wrapper)).toStrictEqual([]);
+    expect(wrapper.find('[role="separator"]').exists()).toBe(false);
+    await button(wrapper, '展开已勾选图层').trigger('click');
+    expect(checkedOrder(wrapper)).toStrictEqual(['bgdc_dltb']);
+    await button(wrapper, '收起已勾选图层').trigger('click');
+    expect(checkedOrder(wrapper)).toStrictEqual([]);
+    expect(owner.state.value).toBe(before);
+  });
+
   it('目录还没到：显示加载中；加载失败：显示失败和重试', async () => {
     const { wrapper, failed, onRetry } = await mountPanel(null);
     expect(wrapper.text()).toContain('正在加载资源目录');
@@ -221,6 +238,7 @@ describe('ResourceLayerPanel', () => {
     drop(wrapper.get('[data-layer="bgdc_dltb"]').element.parentElement ?? document.body, 0, 2);
     await nextTick();
     expect(checkedOrder(wrapper)).toStrictEqual(['bgdc_dltb', 'szy_kt', 'csxhjctb_hydl']);
+    expect(wrapper.findAll('[data-drag-handle="checked"]').map(handle => handle.text())).toStrictEqual(['1', '2', '3']);
 
     expect(visibleResources(wrapper)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
     expect(order.order.value).toStrictEqual({});
@@ -237,15 +255,16 @@ describe('ResourceLayerPanel', () => {
 
     owner.setChecked('bgdc_dltb', true);
     await nextTick();
-    expect(button(wrapper, '地类图斑的透明度').text()).toBe('50%');
+    expect(button(wrapper, '地类图斑的透明度').attributes('title')).toBe('透明度 50%');
   });
 
-  it('透明度：带边框的百分比，默认 100%，点开滑块拖动时把 0～1 的透明度交给拥有者', async () => {
+  it('两处共用透明度浮层：实时同步数值，打开和拖动不取消勾选', async () => {
     const { wrapper, owner } = await mountPanel();
-    expect(button(wrapper, '地类图斑的透明度').text()).toBe('100%');
+    expect(button(wrapper, '地类图斑的透明度').attributes('title')).toBe('透明度 100%');
     expect(wrapper.findComponent(ElSlider).exists()).toBe(false);
 
     await button(wrapper, '地类图斑的透明度').trigger('click');
+    await vi.waitFor(() => expect(wrapper.findComponent(ElSlider).exists()).toBe(true));
     expect(button(wrapper, '地类图斑的透明度').attributes('aria-expanded')).toBe('true');
     const slider = wrapper.findComponent(ElSlider);
     expect(slider.props('modelValue')).toBe(100);
@@ -253,7 +272,9 @@ describe('ResourceLayerPanel', () => {
     await nextTick();
 
     expect(owner.state.value.displays.get('bgdc_dltb')?.opacity).toBe(0.4);
-    expect(button(wrapper, '地类图斑的透明度').text()).toBe('40%');
+    expect(owner.state.value.displays.get('bgdc_dltb')?.checked).toBe(true);
+    expect(wrapper.findAllComponents(LayerOpacity).map(item => item.props('modelValue'))).toStrictEqual([0.4, 0.4]);
+    expect(button(wrapper, '地类图斑的透明度').attributes('title')).toBe('透明度 40%');
   });
 
   it('级别不够时名称后有说明图标，提示放大到几级；级别够了就没有，位置仍然留着（ADR 0059）', async () => {

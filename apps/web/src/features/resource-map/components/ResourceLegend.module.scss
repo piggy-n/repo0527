@@ -1,4 +1,4 @@
-// 图例（设计稿 5D.5）：放在显示面板的 Tab 里，外观和滚动由外壳负责；条目一行高 36、预览 28 × 20
+// 图例以浏览为主，复杂条目默认显示多色块摘要，配置单独展开（ADR 0066）
 
 .legend {
   display: flex;
@@ -10,7 +10,7 @@
 .toolbar {
   display: flex;
   justify-content: flex-end;
-  margin-top: -4px;
+  padding: 0 4px;
 }
 
 .entries {
@@ -20,26 +20,28 @@
 }
 
 .entry + .entry {
-  border-top: 1px solid var(--color-divider);
+  margin-top: 4px;
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 4px;
+  box-sizing: border-box;
   width: 100%;
-  min-height: 36px;
+  min-height: 32px;
   padding: 0 4px;
   border: 0;
   border-radius: var(--radius-sm);
-  background: none;
+  background: var(--color-primary-bg-light);
   color: var(--color-text-regular);
   font-size: var(--font-size-base);
   text-align: left;
-  cursor: pointer;
 
-  &:hover {
-    background-color: var(--color-primary-bg-light);
+  &:hover .configure,
+  &:focus-within .configure {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   &:focus-visible {
@@ -48,21 +50,115 @@
   }
 }
 
-.arrow {
+.summary {
+  display: grid;
+  flex: 1;
+  // 符号、名称、年份、修改标记和箭头各占固定位置，简单与复杂图例共用
+  grid-template-columns: 28px minmax(0, 1fr) 32px 6px 16px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.summary {
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: -2px;
+    border-radius: var(--radius-sm);
+  }
+}
+
+.summaryBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 0 4px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.configure,
+.settings {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    color: var(--color-primary);
+    background-color: var(--color-primary-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+  }
+}
+
+.configure {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.configure.configuring {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .configure {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 20px;
   color: var(--color-text-placeholder);
 }
 
-// 前三个取值的颜色，拼成一个和预览一样高的色条
+// 复杂色条与普通面符号共用 28 × 20 的展示区域
+.preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 20px;
+}
+
 .colors {
   display: flex;
-  flex: none;
+  width: 28px;
+  height: 20px;
   overflow: hidden;
   border-radius: 2px;
+  opacity: var(--legend-opacity, 1);
 
   i {
-    width: 8px;
-    height: 16px;
+    flex: 1;
+    height: 100%;
   }
 }
 
@@ -73,11 +169,20 @@
   color: var(--color-text-strong);
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: var(--font-weight-semibold);
 }
 
 .year {
+  text-align: right;
   font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
   color: var(--color-text-secondary);
+}
+
+.editedSlot {
+  display: flex;
+  align-items: center;
+  width: 6px;
 }
 
 // 改过符号
@@ -89,32 +194,25 @@
   background-color: var(--color-primary);
 }
 
-.badge {
-  flex: none;
-  padding: 0 6px;
-  border-radius: 999px;
-  background-color: var(--color-neutral-bg);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-compact);
-}
-
 // 展开的内容不缩进，编辑器和面板一样宽
 .content {
-  padding: var(--space-xs) 0 var(--space-md);
+  padding: var(--space-xs) 0 var(--space-sm);
 }
 
-.classified {
+.configuration {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  padding: var(--space-sm) 0;
 }
 
 // 样式方式在左，恢复默认靠右
 .modes {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-sm);
 }
 
 .empty {

@@ -1,4 +1,4 @@
-// 按取值配色的各取值（设计稿 5D.5）：一行高 30，展开的取值浅主色底，编辑器在它下面
+// 按取值配色的各取值（ADR 0066）：一行高 28，编辑入口悬停显示，编辑器放在行下面
 
 .values {
   margin: 0;
@@ -10,8 +10,9 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  box-sizing: border-box;
   width: 100%;
-  height: 30px;
+  height: 28px;
   padding: 0 4px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -19,10 +20,15 @@
   color: var(--color-text-regular);
   font-size: var(--font-size-base);
   text-align: left;
-  cursor: pointer;
 
   &:hover {
     background-color: var(--color-primary-bg-light);
+  }
+
+  &:hover .configure,
+  &:focus-within .configure {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   &:focus-visible {
@@ -38,10 +44,46 @@
 }
 
 .label {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.configure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    opacity: 1;
+    pointer-events: auto;
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+  }
+}
+
+@media (hover: none) {
+  .configure {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 // 改过符号

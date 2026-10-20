@@ -9,6 +9,7 @@
   border-radius: var(--radius-md);
   background-color: var(--color-bg-mask);
   box-shadow: var(--shadow-md);
+  flex: none;
 }
 
 .button {
@@ -64,8 +65,13 @@
   white-space: nowrap;
 }
 
-.compact .button {
-  padding: 6px 0;
+.compact {
+  width: 40px;
+
+  .button {
+    height: 32px;
+    padding: 0;
+  }
 }
 
 .separator {
@@ -73,4 +79,19 @@
   height: 1px;
   margin: 4px 6px;
   background-color: var(--color-divider);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(2, 32px);
+  width: 72px;
+
+  .button {
+    height: 28px;
+  }
+
+  .separator,
+  .button:last-child {
+    grid-column: 1 / -1;
+  }
 }

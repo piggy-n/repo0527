@@ -1,4 +1,4 @@
-/** 一组 Tab 面板的界面状态（ADR 0053 第 4 节）：已打开的功能按 Tab 的固定顺序，当前显示的一个，最近显示过的排在前面 */
+/** 一组 Tab 面板的界面状态：入口唤起的功能前置，直接切换 Tab 保持顺序（ADR 0066） */
 export interface PanelGroupState<Id extends string = string> {
   readonly open: readonly Id[];
   readonly current: Id | null;
@@ -10,17 +10,25 @@ export function emptyPanelGroup<Id extends string>(): PanelGroupState<Id> {
   return { open: [], current: null, recent: [] };
 }
 
-/** 打开并切到这个功能；已经在显示时原样返回 */
+/** 打开并前置这个功能；已经在最前显示时原样返回 */
 export function showPanel<Id extends string>(
   state: PanelGroupState<Id>,
   id: Id,
   order: readonly Id[]
 ): PanelGroupState<Id> {
-  if (state.current === id) {
+  if (state.current === id && state.open[0] === id) {
     return state;
   }
-  const open = state.open.includes(id) ? state.open : order.filter(item => item === id || state.open.includes(item));
+  const open = [id, ...state.open.filter(item => item !== id && order.includes(item))];
   return { open, current: id, recent: [id, ...state.recent.filter(item => item !== id)] };
+}
+
+/** 点击已打开的 Tab 只切换内容，不移动标签和关闭按钮的位置 */
+export function selectPanel<Id extends string>(state: PanelGroupState<Id>, id: Id): PanelGroupState<Id> {
+  if (!state.open.includes(id) || state.current === id) {
+    return state;
+  }
+  return { ...state, current: id, recent: [id, ...state.recent.filter(item => item !== id)] };
 }
 
 /** 关闭这个功能；关的是当前的时切到最近显示过的另一个，都关了时没有当前；没打开时原样返回 */

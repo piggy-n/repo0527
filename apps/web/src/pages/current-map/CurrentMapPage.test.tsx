@@ -16,6 +16,7 @@ import {
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { MapCanvas } from '@yzt/map-vue';
 import { mount } from '@vue/test-utils';
+import { ElSlider } from 'element-plus';
 import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { createPinia } from 'pinia';
@@ -489,12 +490,11 @@ describe('CurrentMapPage', () => {
     ]);
   });
 
-  it('卡片行：图例卡、底图卡开关显示面板里对应的 Tab；底图卡显示当前底图的缩略图和简称（ADR 0057）', async () => {
+  it('底图是独立浮窗：缩略图同步当前底图，打开和统一关闭功能面板不影响底图', async () => {
     const { wrapper } = await readyPage();
     const basemapCard = () => wrapper.get('[data-map-cards] button:last-child');
     const cover = () => basemapCard().get('[aria-hidden="true"]').attributes('style') ?? '';
-    // 外壳把切走的内容设为 display: none
-    const basemapShown = () => !wrapper.get('[data-panel="basemap"]').attributes('style')?.includes('display: none');
+    const basemapShown = () => !wrapper.get('[data-basemap-window]').attributes('style')?.includes('display: none');
     expect(cover()).toContain('/vec_w/');
     expect([basemapCard().text(), basemapCard().attributes('aria-label')]).toStrictEqual(['矢量', '底图：矢量底图']);
 
@@ -508,12 +508,35 @@ describe('CurrentMapPage', () => {
 
     await button(wrapper, '图例').trigger('click');
     expect(button(wrapper, '图例').attributes('aria-pressed')).toBe('true');
-    expect(basemapShown()).toBe(false);
+    expect(basemapShown()).toBe(true);
 
-    await button(wrapper, '图例').trigger('click');
+    await button(wrapper, '关闭全部功能').trigger('click');
+    expect(basemapShown()).toBe(true);
+    expect(button(wrapper, '图例').attributes('aria-pressed')).toBe('false');
     await basemapCard().trigger('click');
     expect(basemapCard().attributes('aria-pressed')).toBe('false');
-    expect(wrapper.find('[data-panel="basemap"]').exists()).toBe(false);
+    expect(basemapShown()).toBe(false);
+  });
+
+  it('底图与边界透明度默认收起，图标切换显隐保留数值，重新打开浮窗回到收起状态', async () => {
+    const { wrapper } = await readyPage();
+    await button(wrapper, '底图：矢量底图').trigger('click');
+    expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
+
+    await button(wrapper, '调整底图与边界透明度').trigger('click');
+    const sliders = wrapper.findAllComponents(ElSlider);
+    expect(sliders).toHaveLength(2);
+    sliders[0]?.vm.$emit('update:modelValue', 40);
+    sliders[1]?.vm.$emit('update:modelValue', 70);
+    await nextTick();
+    await button(wrapper, '调整底图与边界透明度').trigger('click');
+    expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
+
+    await button(wrapper, '调整底图与边界透明度').trigger('click');
+    expect(wrapper.findAllComponents(ElSlider).map(slider => slider.props('modelValue'))).toStrictEqual([40, 70]);
+    await button(wrapper, '关闭底图').trigger('click');
+    await button(wrapper, '底图：矢量底图').trigger('click');
+    expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
   });
 
   it('第一次就绪时按江苏范围定位一次；画布重建后再次就绪时不再定位，保留用户调整过的视角', async () => {
@@ -747,12 +770,12 @@ describe('CurrentMapPage', () => {
     expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
   });
 
-  it('手机宽度（设计稿 5D.8）：卡片叠到工具栏一列、业务组只显示图标；资源面板展开时不显示区划条', async () => {
+  it('业务组始终只显示图标、底图在基础组下方；手机宽度资源面板展开时不显示区划条', async () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     stubBoundaryFetch();
     const { wrapper } = await readyPage();
     expect(wrapper.get('[data-map-page]').attributes('data-map-page')).toBe('wide');
-    expect(wrapper.get('button[aria-label="测距"]').text()).toBe('测距');
+    expect(wrapper.get('button[aria-label="测距"]').text()).toBe('');
 
     await resizePage(wrapper, 375, 737);
     expect(wrapper.get('[data-map-page]').attributes('data-map-page')).toBe('phone');
@@ -768,10 +791,13 @@ describe('CurrentMapPage', () => {
     await wrapper.get('button[aria-label="收起资源图层"]').trigger('click');
     expect(wrapper.get('[data-region-scope]').text()).toBe('江苏省›南京市回到全省');
 
-    // 变宽以后卡片回到底部一行，和状态栏在一起
+    // 变宽后底图入口仍在基础组下面，不占状态栏一行
     await resizePage(wrapper, 1440, 900);
     const bottomRow = wrapper.get('[data-map-status-bar]').element.parentElement;
-    expect(bottomRow?.contains(wrapper.get('[data-map-cards]').element)).toBe(true);
+    expect(bottomRow?.contains(wrapper.get('[data-map-cards]').element)).toBe(false);
+    expect(wrapper.get('[data-map-cards]').element.parentElement?.contains(
+      wrapper.get('button[aria-label="默认视角"]').element
+    )).toBe(true);
   });
 
   it('画布重建时测量的标签先隐藏，新视图就绪后重新显示', async () => {
@@ -874,7 +900,7 @@ describe('CurrentMapPage', () => {
       removeEventListener: () => undefined
     }));
     const { wrapper } = await readyPage();
-    const [functionGroup, displayGroup] = wrapper.findAll('[data-panel-group]');
+    const functionGroup = wrapper.get('[data-panel-group]');
     const shown = (group: typeof functionGroup) => group?.attributes('style') === undefined;
 
     await button(wrapper, '坐标定位').trigger('click');
@@ -885,7 +911,6 @@ describe('CurrentMapPage', () => {
     // 展开资源面板：右边整个让出去，打开的功能保留
     await button(wrapper, '展开资源图层').trigger('click');
     expect(shown(functionGroup)).toBe(false);
-    expect(shown(displayGroup)).toBe(false);
     expect(button(wrapper, '坐标定位').attributes('aria-pressed')).toBe('false');
     expect(button(wrapper, '图例').attributes('aria-pressed')).toBe('false');
 
@@ -899,10 +924,11 @@ describe('CurrentMapPage', () => {
     // 图例同样：让出去以后再点是重新显示
     await button(wrapper, '展开资源图层').trigger('click');
     await button(wrapper, '图例').trigger('click');
-    expect(shown(displayGroup)).toBe(true);
+    expect(shown(functionGroup)).toBe(true);
     expect(shownPanels(wrapper)).toContain('legend');
 
     // 显示着时再点才关闭
+    await button(wrapper, '坐标定位').trigger('click');
     await button(wrapper, '坐标定位').trigger('click');
     expect(wrapper.find('[data-coordinate-locate-panel]').exists()).toBe(false);
   });
@@ -1119,6 +1145,7 @@ describe('CurrentMapPage', () => {
   it('平移和同一级内缩放不更新已勾选列表，跨过最小级别才更新提示', async () => {
     const { wrapper, map, updates } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
+    await button(wrapper, '展开已勾选图层').trigger('click');
     await resourceRow(wrapper, 'bgdc_cjdcq').get('input').setValue(true);
     map.moveTo([119, 32], 8, {});
     await settle();
@@ -1144,6 +1171,7 @@ describe('CurrentMapPage', () => {
   it('勾选了但级别不够的资源在状态图标里提示放大到几级；瓦片加载失败标在对应资源的图标上（ADR 0059）', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
+    await button(wrapper, '展开已勾选图层').trigger('click');
     expect(wrapper.find('[data-layer="bgdc_cjdcq"]').exists()).toBe(false);
 
     await resourceRow(wrapper, 'bgdc_cjdcq').get('input').setValue(true);

@@ -29,8 +29,10 @@ export const MapToolbar = defineComponent({
     },
     /** 显示为按下的动作，如打开着面板的"区划定位"；工具栏自己不保存开关 */
     pressed: { type: Array as PropType<readonly ToolbarActionId[]>, default: () => [] },
-    /** 矮屏时只显示图标，悬停提示名称（第 8 节）；由页面按地图区域的高度决定 */
-    compact: { type: Boolean, default: false }
+    /** 只显示图标，悬停提示名称；现状底图始终启用（ADR 0066） */
+    compact: { type: Boolean, default: false },
+    /** 矮屏下图标分成两列，和下方地图控制栏错开 */
+    columns: { type: Boolean, default: false }
   },
   setup(props) {
     const map = useMap();
@@ -82,7 +84,7 @@ export const MapToolbar = defineComponent({
     return () => (
       <div
         ref={element}
-        class={[styles.toolbar, props.compact && styles.compact]}
+        class={[styles.toolbar, props.compact && styles.compact, props.columns && styles.columns]}
         role="toolbar"
         aria-orientation="vertical">
         {props.groups.map((group, index) => [

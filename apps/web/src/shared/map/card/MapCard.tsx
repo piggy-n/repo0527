@@ -2,8 +2,8 @@ import { defineComponent, type SlotsType, type VNode } from 'vue';
 import styles from './MapCard.module.scss';
 
 /**
- * 卡片行的入口（ADR 0053 第 1 节、ADR 0057）：56 × 56 的白底卡片，上面是图（图标，或铺满的缩略图），下面一行字；
- * 两张卡片结构相同，文字在同一条线上。pressed 表示它打开的面板正开着，由页面给出
+ * 地图卡片入口：图标卡沿用 56 × 56；封面卡为 80 × 56，名称叠在缩略图右下角（ADR 0066）
+ * pressed 表示它打开的面板正开着，由页面给出
  */
 export const MapCard = defineComponent({
   name: 'MapCard',
@@ -28,7 +28,7 @@ export const MapCard = defineComponent({
       return (
         <button
           type="button"
-          class={[styles.card, props.pressed && styles.pressed]}
+          class={[styles.card, cover && styles.thumbnail, props.pressed && styles.pressed]}
           aria-label={props.name}
           aria-pressed={props.pressed}
           onClick={() => emit('click')}>
