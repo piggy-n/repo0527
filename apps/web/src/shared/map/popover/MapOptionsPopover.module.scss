@@ -12,18 +12,35 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding: var(--space-md);
+  padding: var(--space-sm) var(--space-md) var(--space-md);
+  overflow: hidden;
+  border-radius: inherit;
 }
 
-.header {
+// 无标题的紧凑操作栏，只保留右侧两个 24 像素按钮
+.controls {
   display: flex;
   flex: none;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-sm);
-  margin-bottom: var(--space-sm);
+  height: 24px;
+  margin-bottom: var(--space-xs);
 }
 
-.body {
+// 覆盖 Element 链接按钮的自动高度，与透明度入口保持相同点击区域
+.controls .close {
   flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+// 缩略图占满整行，透明度在下方按需展开
+.body {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-sm);
   min-width: 0;
 }

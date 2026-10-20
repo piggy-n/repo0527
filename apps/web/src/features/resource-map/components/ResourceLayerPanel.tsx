@@ -285,7 +285,7 @@ export const ResourceLayerPanel = defineComponent({
                 <button
                   ref={checkedHead}
                   type="button"
-                  class={[styles.checkedHead, checkedCollapsed.value && styles.checkedCollapsed]}
+                  class={styles.checkedHead}
                   aria-label={checkedCollapsed.value ? '展开已勾选图层' : '收起已勾选图层'}
                   aria-expanded={!checkedCollapsed.value}
                   onClick={() => (checkedCollapsed.value = !checkedCollapsed.value)}>

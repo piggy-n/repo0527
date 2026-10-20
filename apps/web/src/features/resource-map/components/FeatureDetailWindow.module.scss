@@ -11,8 +11,13 @@
 
 .shell {
   max-height: 100%;
+
+  > header {
+    background-color: var(--color-neutral-bg-light);
+  }
 }
 
 .content {
   flex: none;
+  padding-top: var(--space-sm);
 }

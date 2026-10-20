@@ -511,6 +511,8 @@ describe('CurrentMapPage', () => {
     await vi.waitFor(() => expect(optionsPopover('basemap').exists()).toBe(true));
     expect(basemapCard().attributes('aria-pressed')).toBe('true');
     expect(optionsPopover('basemap').find('[aria-label="行政区边界"]').exists()).toBe(false);
+    expect(optionsPopover('basemap').find('h2, h3').exists()).toBe(false);
+    expect(optionsPopover('basemap').find('[aria-label="关闭底图"]').exists()).toBe(true);
 
     await optionsPopover('basemap').get('button[aria-label="影像底图"]').trigger('click');
     expect(cover()).toContain('/img_w/');
@@ -538,7 +540,11 @@ describe('CurrentMapPage', () => {
     expect(optionsPopover('basemap').get('[aria-label="调整底图透明度"]').attributes('aria-pressed')).toBe('true');
     wrapper.getComponent(ElSlider).vm.$emit('update:modelValue', 40);
     await nextTick();
-    await optionsPopover('basemap').get('[aria-label="关闭底图"]').trigger('click');
+    expect(optionsPopover('basemap').text()).toContain('40%');
+    await optionsPopover('basemap').get('[aria-label="调整底图透明度"]').trigger('click');
+    expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
+    expect(optionsPopover('basemap').get('[aria-label="调整底图透明度"]').attributes('aria-pressed')).toBe('false');
+    await button(wrapper, '底图：矢量底图').trigger('click');
     await vi.waitFor(() => expect(document.querySelector('[data-map-options="basemap"]')).toBeNull());
 
     await button(wrapper, '行政区').trigger('click');
@@ -573,9 +579,17 @@ describe('CurrentMapPage', () => {
     expect(optionsPopover('basemap').get('[aria-label="调整底图透明度"]').attributes('aria-pressed')).toBe('false');
     await optionsPopover('basemap').get('[aria-label="调整底图透明度"]').trigger('click');
     expect(wrapper.getComponent(ElSlider).props('modelValue')).toBe(40);
+
+    await optionsPopover('basemap').get('[aria-label="无底图"]').trigger('click');
+    expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
+    expect(optionsPopover('basemap').find('[aria-label="调整底图透明度"]').exists()).toBe(false);
+    await optionsPopover('basemap').get('[aria-label="矢量底图"]').trigger('click');
+    expect(optionsPopover('basemap').get('[aria-label="调整底图透明度"]').attributes('aria-pressed')).toBe('false');
+    await optionsPopover('basemap').get('[aria-label="调整底图透明度"]').trigger('click');
+    expect(wrapper.getComponent(ElSlider).props('modelValue')).toBe(40);
   });
 
-  it('底图入口再次点击可关闭，关闭按钮可关闭，外部点击和 Esc 保持打开', async () => {
+  it('底图入口再次点击可关闭，外部点击和 Esc 保持打开', async () => {
     const name = 'basemap';
     const { wrapper } = await readyPage();
     const trigger = button(wrapper, '底图：矢量底图');
@@ -595,11 +609,6 @@ describe('CurrentMapPage', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(trigger.attributes('aria-pressed')).toBe('false');
     expect(document.querySelector(`[data-map-options="${name}"]`)).toBeNull();
-    await trigger.trigger('click');
-    await vi.advanceTimersByTimeAsync(1000);
-    await optionsPopover(name).get('[aria-label="关闭底图"]').trigger('click');
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(trigger.attributes('aria-pressed')).toBe('false');
   });
 
   it('第一次就绪时按江苏范围定位一次；画布重建后再次就绪时不再定位，保留用户调整过的视角', async () => {

@@ -209,9 +209,11 @@ export const CurrentMapPage = defineComponent({
           <MapOptionsPopover
             name="basemap"
             label="底图"
+            opacity={basemap.opacity.value}
             open={basemapOpen.value}
             visible={sides.right.value}
             onTopChange={changeBasemapTop}
+            onOpacityChange={basemap.setOpacity}
             onUpdate:open={changeBasemapOpen}>
             {{
               reference: () => [
@@ -222,8 +224,8 @@ export const CurrentMapPage = defineComponent({
                   {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[current.id]} />] }}
                 </MapCard>
               ],
-              default: ({ showOpacity }: { showOpacity: boolean }) => [
-                <BasemapPanel basemap={basemap} showOpacity={showOpacity} />
+              default: () => [
+                <BasemapPanel basemap={basemap} showOpacity={false} />
               ]
             }}
           </MapOptionsPopover>

@@ -13,7 +13,7 @@ export const BasemapPanel = defineComponent({
   name: 'BasemapPanel',
   props: {
     basemap: { type: Object as PropType<Basemap>, required: true },
-    /** 底图 Popover 由头部图标控制透明度行 */
+    /** 浮层另行提供透明度滑块时隐藏这里的滑块 */
     showOpacity: { type: Boolean, default: true }
   },
   setup(props) {
