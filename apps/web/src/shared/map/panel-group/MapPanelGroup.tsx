@@ -90,6 +90,10 @@ export const MapPanelGroup = defineComponent({
       const shown = props.visible && open.length > 0;
       // 单功能省去标签区，数量变化只调整标题布局，保留内容与交互状态
       const title = open.length === 1 && current !== null ? (props.labels[current] ?? current) : '地图工具';
+      // 当前功能的可选底栏独立于内容滚动区，隐藏或收起时卸载其中的临时交互
+      const footer = shown && !props.collapsed && pageActive.value && current !== null
+        ? slots[`${current}-footer`]?.({ active: true })
+        : undefined;
       return (
         <div
           ref={element}
@@ -140,7 +144,8 @@ export const MapPanelGroup = defineComponent({
                       data-panel={id}>
                       {slots[id]?.({ active: shown && !props.collapsed && pageActive.value && id === current })}
                     </div>
-                  ))
+                  )),
+                footer: footer && footer.length > 0 ? () => footer : undefined
               }}
             </MxPanel>
           )}

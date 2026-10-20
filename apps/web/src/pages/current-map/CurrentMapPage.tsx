@@ -3,6 +3,7 @@ import { computed, defineComponent, ref, watch } from 'vue';
 import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureDetailWindow';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
+import { ResourceLegendReset } from '@/features/resource-map/components/ResourceLegendReset';
 import { useCatalogOrder } from '@/features/resource-map/composables/useCatalogOrder';
 import { useFeaturePick } from '@/features/resource-map/composables/useFeaturePick';
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
@@ -290,6 +291,9 @@ export const CurrentMapPage = defineComponent({
                     legend: ({ active }: PanelSlotProps) => [
                       <ResourceLegend layers={resources} symbols={symbols} active={active} />
                     ],
+                    'legend-footer': () => symbols.overrides.value.size > 0
+                      ? [<ResourceLegendReset symbols={symbols} />]
+                      : [],
                     'region-locate': () => [<RegionLocatePanel region={region} />],
                     'coordinate-locate': ({ active }: PanelSlotProps) => [
                       <CoordinateLocatePanel location={location} active={active} />

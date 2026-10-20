@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowRight } from '@element-plus/icons-vue';
-import { ElButton, ElIcon, ElPopconfirm, ElRadioButton, ElRadioGroup } from 'element-plus';
+import { ElButton, ElIcon, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { ResourceLayers } from '../composables/useResourceLayers';
@@ -45,7 +45,6 @@ export const ResourceLegend = defineComponent({
     const expanded = ref<ReadonlySet<string>>(new Set());
     // 资源级配置与图例浏览分开；同时只配置一个资源
     const editing = ref<string | null>(null);
-    const settingsOpen = ref(false);
     // 条目里的浏览状态，按资源：隐藏时条目卸载，状态留在这里（2026-10-16 评审发现切走再切回时被重置）
     const landuseBrowse = ref<ReadonlyMap<string, LanduseBrowse>>(new Map());
     const openValues = ref<ReadonlyMap<string, string | null>>(new Map());
@@ -137,6 +136,9 @@ export const ResourceLegend = defineComponent({
       const configuring = editing.value === entry.code;
       const summary = (
         <>
+          <span class={styles.arrow} aria-hidden="true">
+            {!uniform && <ElIcon>{isOpen ? <ArrowDown /> : <ArrowRight />}</ElIcon>}
+          </span>
           <span class={styles.preview}>
             {uniform ? <LegendSwatchIcon swatch={entry.swatch} /> : renderColors(entry.colors)}
           </span>
@@ -144,9 +146,6 @@ export const ResourceLegend = defineComponent({
           <span class={styles.year}>{entry.year}</span>
           <span class={styles.editedSlot}>
             {props.symbols.isCustomized(entry.code) && <span class={styles.edited} title="改过符号" data-edited />}
-          </span>
-          <span class={styles.arrow} aria-hidden="true">
-            {!uniform && <ElIcon>{isOpen ? <ArrowDown /> : <ArrowRight />}</ElIcon>}
           </span>
         </>
       );
@@ -171,7 +170,7 @@ export const ResourceLegend = defineComponent({
             )}
             <button
               type="button"
-              class={[styles.configure, configuring && styles.configuring]}
+              class={styles.configure}
               aria-label={`编辑${entry.name}样式`}
               aria-expanded={configuring}
               title="样式设置"
@@ -190,30 +189,6 @@ export const ResourceLegend = defineComponent({
     return () =>
       props.active ? (
         <div class={styles.legend} data-resource-legend>
-          <div class={styles.summaryBar}>
-            <span>{entries.value.length} 个图层 · 按叠放顺序</span>
-            <button
-              type="button"
-              class={styles.settings}
-              aria-label="图例设置"
-              aria-expanded={settingsOpen.value}
-              onClick={() => (settingsOpen.value = !settingsOpen.value)}>
-              <SvgIcon name="symbol-settings" size={16} />
-            </button>
-          </div>
-          {settingsOpen.value && (
-            <div class={styles.toolbar}>
-              <ElPopconfirm title="恢复全部资源的默认符号？" onConfirm={() => props.symbols.resetAll()}>
-                {{
-                  reference: () => (
-                    <ElButton link type="primary" size="small" disabled={props.symbols.overrides.value.size === 0}>
-                      全部恢复默认
-                    </ElButton>
-                  )
-                }}
-              </ElPopconfirm>
-            </div>
-          )}
           {entries.value.length > 0 ? (
             <ul class={styles.entries}>{entries.value.map(renderEntry)}</ul>
           ) : (

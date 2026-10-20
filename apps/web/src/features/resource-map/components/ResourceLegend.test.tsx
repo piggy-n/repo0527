@@ -9,6 +9,7 @@ import { buildCatalog } from '../catalog';
 import { type ResourceLayers, useResourceLayers } from '../composables/useResourceLayers';
 import { type ResourceSymbols, useResourceSymbols } from '../composables/useResourceSymbols';
 import { ResourceLegend } from './ResourceLegend';
+import { ResourceLegendReset } from './ResourceLegendReset';
 import { LanduseLegend } from './LanduseLegend';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
@@ -47,7 +48,12 @@ function mountLegend() {
     const layers = useResourceLayers(map, { catalog, tileBase: 'http://localhost/tiles/', symbols });
     owner = layers;
     symbolsOwner = symbols;
-    return () => <ResourceLegend layers={layers} symbols={symbols} active={active.value} />;
+    return () => (
+      <>
+        <ResourceLegend layers={layers} symbols={symbols} active={active.value} />
+        {active.value && symbols.overrides.value.size > 0 && <ResourceLegendReset symbols={symbols} />}
+      </>
+    );
   });
   const wrapper = mount(Page);
   if (!owner || !symbolsOwner) {
@@ -183,7 +189,7 @@ describe('ResourceLegend', () => {
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
   });
 
-  it('全部恢复默认收进图例设置，确认后恢复；没有覆盖时禁用', async () => {
+  it('仅有符号覆盖时显示全部恢复默认，确认后恢复并隐藏入口', async () => {
     const { wrapper, owner, symbols } = mountLegend();
     owner.setChecked('szy_kt', true);
     await nextTick();
@@ -192,8 +198,8 @@ describe('ResourceLegend', () => {
 
     symbols.setSymbol({ code: 'szy_kt' }, { fillColor: '#000' });
     await nextTick();
-    expect(resetAll()).toBeUndefined();
-    await button(wrapper, '图例设置').trigger('click');
+    expect(resetAll()?.attributes('disabled')).toBeUndefined();
+    expect(resetAll()).toBeDefined();
     await resetAll()?.trigger('click');
     // 弹出层由定时器打开
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -205,7 +211,7 @@ describe('ResourceLegend', () => {
     await nextTick();
 
     expect(symbols.overrides.value.size).toBe(0);
-    expect(resetAll()?.attributes('disabled')).toBeDefined();
+    expect(resetAll()).toBeUndefined();
   });
 
   it('统一符号的配置入口打开编辑器；按取值配色展开后列出取值和"其他"', async () => {

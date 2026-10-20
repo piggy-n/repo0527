@@ -6,13 +6,6 @@
   gap: var(--space-xs);
 }
 
-// "全部恢复默认"靠右，贴着外壳的头部
-.toolbar {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0 4px;
-}
-
 .entries {
   margin: 0;
   padding: 0;
@@ -35,11 +28,11 @@
   border-radius: var(--radius-sm);
   background: var(--color-primary-bg-light);
   color: var(--color-text-regular);
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-xs);
   text-align: left;
 
   &:hover .configure,
-  &:focus-within .configure {
+  &:has(:focus-visible) .configure {
     opacity: 1;
     pointer-events: auto;
   }
@@ -53,8 +46,8 @@
 .summary {
   display: grid;
   flex: 1;
-  // 符号、名称、年份、修改标记和箭头各占固定位置，简单与复杂图例共用
-  grid-template-columns: 28px minmax(0, 1fr) 32px 6px 16px;
+  // 普通图例也保留首列箭头占位，色块、名称、年份和修改标记逐行对齐
+  grid-template-columns: 16px 28px minmax(0, 1fr) 32px 6px;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -77,18 +70,8 @@ button.summary {
   }
 }
 
-.summaryBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 28px;
-  padding: 0 4px;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.configure,
-.settings {
+// 编辑状态只改变颜色，鼠标点击留下的焦点不维持按钮显示
+.configure {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -101,6 +84,8 @@ button.summary {
   background: none;
   color: var(--color-text-secondary);
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
 
   &:hover,
   &[aria-expanded='true'] {
@@ -111,16 +96,6 @@ button.summary {
   &:focus-visible {
     outline: 2px solid var(--color-primary-border-hover);
   }
-}
-
-.configure {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.configure.configuring {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 @media (hover: none) {

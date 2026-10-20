@@ -39,7 +39,7 @@
   border: 0;
   border-radius: var(--radius-sm);
   background: none;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-xs);
   text-align: left;
   cursor: pointer;
 
@@ -62,7 +62,7 @@
   cursor: default;
 
   &:hover .configure,
-  &:focus-within .configure {
+  &:has(:focus-visible) .configure {
     opacity: 1;
     pointer-events: auto;
   }
@@ -143,8 +143,6 @@
   &:hover,
   &[aria-expanded='true'] {
     color: var(--color-primary);
-    opacity: 1;
-    pointer-events: auto;
   }
 
   &:focus-visible {
