@@ -45,6 +45,7 @@ docs/
 │  ├─ color-and-typography.md 系统配色与字体规范（原文）
 │  ├─ theme.md                设计令牌清单、Element Plus 映射与使用规则
 │  ├─ page-layout.md          页面布局规范：分栏型与画布型、面板、标题、窄屏抽屉
+│  ├─ ui-workflow.md          UI 工作流程：交互原型、真实页面检查、短时浏览器测试与验收
 │  └─ fonts.md                字体：来源、授权要点、存放位置、字重与性能
 └─ stages/                    各阶段的总结与学习笔记
    ├─ stage-1-engineering-foundation.md  阶段一：工程基础
@@ -79,7 +80,7 @@ docs/
    - [阶段五验收与后续修复](stages/stage-5-acceptance-review.md)
 5. [commands.md](commands.md)：日常要用的命令
 
-地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明。
+地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明，并按 [UI 工作流程](design/ui-workflow.md) 完成交互原型和实际页面验证。
 
 ## 各类文档的分工
 
