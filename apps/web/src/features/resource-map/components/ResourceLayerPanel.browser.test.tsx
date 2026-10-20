@@ -181,6 +181,27 @@ function measure(wrapper: VueWrapper) {
 }
 
 describe('ResourceLayerPanel（真实的布局）', () => {
+  it.each(['data-resource', 'data-layer'])('%s 的透明度浮层不会撑开页面，滚动列表立即关闭', async attribute => {
+    using ctx = setup(360);
+    ctx.layers.setCheckedMany(MANY, true);
+    await frames(4);
+    const pageWidth = document.documentElement.scrollWidth;
+    const pageHeight = document.documentElement.scrollHeight;
+    const row = ctx.wrapper.get(`[${attribute}="bgdc_dltb"] > div`).element;
+    const trigger = ctx.wrapper.get(`[${attribute}="bgdc_dltb"] button[aria-label="地类图斑的透明度"]`).element;
+    await userEvent.hover(row);
+    await userEvent.click(trigger);
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true');
+    await frames(3);
+    expect(document.documentElement.scrollWidth).toBe(pageWidth);
+    expect(document.documentElement.scrollHeight).toBe(pageHeight);
+
+    const list = ctx.wrapper.get(`.${attribute === 'data-resource' ? styles.tree : styles.checkedList}`).element;
+    list.scrollTop = 32;
+    await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(ctx.layers.state.value.displays.get('bgdc_dltb')?.checked).toBe(true);
+  });
+
   it.each(['data-resource', 'data-layer'])('%s 的透明度关闭后，鼠标移出时不因残留焦点继续显示', async attribute => {
     using ctx = setup(700);
     await frames(3);

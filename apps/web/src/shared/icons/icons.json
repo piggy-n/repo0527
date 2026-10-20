@@ -138,6 +138,17 @@
     "viewBox": "0 0 24 24",
     "body": "<path fill=\"none\" d=\"M0 0h24v24H0z\"/><path d=\"M18.364 4.636a9 9 0 0 1 .203 12.519l-.203.21-4.243 4.242a3 3 0 0 1-4.097.135l-.144-.135-4.244-4.243A9 9 0 0 1 18.364 4.636M12 8a3 3 0 1 0 0 6 3 3 0 0 0 0-6\"/>"
   },
+  "map-boundaries": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<path d=\"m3 7 6-3 6 3 6-3v13l-6 3-6-3-6 3zm6-3v13m6-10v13\"/>"
+  },
   "map-clear": {
     "viewBox": "0 0 24 24",
     "attrs": {

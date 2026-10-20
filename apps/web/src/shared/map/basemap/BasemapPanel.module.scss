@@ -1,4 +1,4 @@
-// 底图（设计稿 5D.4）：三张缩略图约 88 × 60、间隔 12，名称在下面；放在显示面板的"底图"里，外观和内边距由外壳负责
+// 底图缩略图约 88 × 60、间隔 12，名称叠在右下角；外观和内边距由 Popover 外壳负责
 
 .panel {
   display: flex;
@@ -17,7 +17,6 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
   padding: 0;
   border: 0;
   background: none;
@@ -47,7 +46,17 @@
   border-radius: var(--radius-sm);
 }
 
-// 选中：主色描边、右上角的勾、名称主色加粗
+// 名称沿用底图入口的右下角标签
+.label {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 2px 6px;
+  border-top-left-radius: var(--radius-sm);
+  background-color: var(--color-bg-mask);
+}
+
+// 选中：主色描边、右上角的勾和主色标签
 .on {
   color: var(--color-primary);
   font-weight: var(--font-weight-semibold);
@@ -55,6 +64,11 @@
   .frame,
   &:hover .frame {
     border: 2px solid var(--color-primary);
+  }
+
+  .label {
+    background-color: var(--color-primary);
+    color: var(--color-text-inverse);
   }
 }
 

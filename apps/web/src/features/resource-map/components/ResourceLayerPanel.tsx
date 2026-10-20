@@ -291,7 +291,7 @@ export const ResourceLayerPanel = defineComponent({
                   onClick={() => (checkedCollapsed.value = !checkedCollapsed.value)}>
                   <span class={styles.checkedTitle}>已勾选</span>
                   <span class={styles.badge}>{checkedCount.value}</span>
-                  <span class={styles.checkedToggle}>{checkedCollapsed.value ? '展开' : '收起图层'}</span>
+                  <span class={styles.checkedToggle}>{checkedCollapsed.value ? '展开' : '收起'}</span>
                   <ElIcon>{checkedCollapsed.value ? <ArrowUp /> : <ArrowDown />}</ElIcon>
                 </button>
                 {checkedExpanded.value && (

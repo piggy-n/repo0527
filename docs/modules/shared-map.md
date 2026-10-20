@@ -6,7 +6,7 @@
 
 ## 结构
 
-地图页被布局缓存（ADR 0063）：这里的浮层、状态栏、工具栏的排法量尺寸都用 `shared/composables` 的 `useShownElementSize`，停用期间量到的 0 不采用；Tab 面板在页面停用时把内容当作隐藏；位置点的图钉在页面停用时取消拖动。现状底图按 ADR 0066 使用一组功能标签和独立底图浮窗。
+地图页被布局缓存（ADR 0063）：这里的浮层、状态栏、工具栏的排法量尺寸都用 `shared/composables` 的 `useShownElementSize`，停用期间量到的 0 不采用；Tab 面板在页面停用时把内容当作隐藏；位置点的图钉在页面停用时取消拖动。现状底图按 ADR 0066、0068 使用一组功能标签和两个独立的底图、行政区 Popover，页面停用时关闭 Popover。
 
 | 文件 | 内容 |
 |---|---|
@@ -20,7 +20,7 @@
 | `basemap/basemap-style.ts` | 底图目录与推导：可选的底图、初始状态、`createBasemapStyles` 给出两个分组的推导函数（纯函数，ADR 0031） |
 | `basemap/useBasemap.ts` | 底图的拥有者：持有选择和透明度，提供操作和两个推导函数 |
 | `basemap/BasemapPanel.tsx` | 底图的切换：三张缩略图只写类型、当前底图的透明度（设计稿 5D.4） |
-| `basemap/BasemapWindow.tsx` | 底图与行政区边界的独立浮窗：标题、关闭、定位避让，开关由页面持有（ADR 0066） |
+| `popover/MapOptionsPopover.tsx` | 底图、行政区共用的左侧箭头 Popover：标题、透明度入口、关闭、定位避让，开关由页面持有（ADR 0068） |
 | `basemap/BasemapThumbnail.tsx` | 底图的缩略图：注记叠在底图上、对准南京；无底图是浅色的方格（面板和底图卡共用） |
 | `boundary/data/` | 省、市、县界的 GeoJSON，由转换脚本生成（见"行政区边界的数据"） |
 | `boundary/boundary-style.ts` | 边界的级别、初始状态、`boundaryGroup` 推导（纯函数，ADR 0033） |
@@ -140,11 +140,11 @@ const current = basemapOption(basemap.selected.value);   // { id, label: '矢量
 </MapCard>
 ```
 
-- 三张缩略图只写类型（选项的 `shortLabel`：矢量、影像、无底图），无障碍名称是全称；当前的用 `aria-pressed`、主色描边和右上角的勾（`SvgIcon` 的 `check`）
+- 三张缩略图只写类型（选项的 `shortLabel`：矢量、影像、无底图），名称叠在缩略图右下角，沿用底图卡的半透明底色，选中时为主色底、反白文字；无障碍名称是全称，当前的用 `aria-pressed`、主色描边和右上角的勾（`SvgIcon` 的 `check`）
 - 缩略图由拥有者给出（`basemap.thumbnails`，`basemapThumbnails(tianditu)` 纯函数）：天地图南京所在的那张 10 级瓦片（849, 415），底图和配套的注记各一张，放大到 160% 后按 `focus`（86% 67%，南京在瓦片里的位置）对准。和底图的数据源用同一个地址模板（`tileUrl`）；无底图、关闭天地图时为 `null`，不请求天地图，显示和地图背景同色的方格。组件不读 `appConfig`
-- 透明度用共用的 `OpacitySlider`：滑块按百分比显示、不带刻度、右边写出百分比，拖动过程中实时交出 0～1；无底图时没有这一行。独立浮窗中由头部图标控制 `BasemapPanel`、`BoundaryPanel` 的 `showOpacity`，默认隐藏，关闭重开恢复隐藏、数值保留（ADR 0067）。Element 的滑块宽 100%，内边距要算进宽度（`box-sizing: border-box`），否则会压到百分比（浏览器验证时发现）
-- 现状底图页把它和边界面板放在独立 `BasemapWindow` 里（ADR 0066），中间是 `MxTitle` 的区块标题"行政区"；外观和定位避让由外壳负责，功能组的切换、统一关闭不影响底图
-- 浮窗与基础控制条左侧间隔 12、底边对齐，位于底图卡上方 12；高度通过 `useShownElementSize` 读取控制条，内容超出时滚动。上方功能面板单独占一行，止于基础控制区上方（ADR 0067）
+- 透明度用共用的 `OpacitySlider`：滑块按百分比显示、不带刻度、右边写出百分比，拖动过程中实时交出 0～1；无底图时没有这一行。两个 Popover 各自由头部图标控制 `BasemapPanel`、`BoundaryPanel` 的 `showOpacity`，默认隐藏，关闭重开恢复隐藏、数值保留（ADR 0068）。Element 的滑块宽 100%，内边距要算进宽度（`box-sizing: border-box`），否则会压到百分比（浏览器验证时发现）
+- 现状底图页将底图和行政区分别放在 `MapOptionsPopover` 里，复用 Element 的箭头浮层和 `MxTitle`。外壳负责定位避让、标题、透明度入口及关闭，内容组件继续调用原拥有者；入口只打开，只有关闭按钮关闭，外部点击、再次点击入口和 Esc 都不关闭，不清空底图与边界选择。页面停用仍关闭（ADR 0069）
+- 两个 Popover 各在入口左侧间隔 12、带箭头，宽 320，固定定位并限制在视口内；窄屏限制宽度，内容自然撑高，不设置内部滚动区。透明度入口用独立选中类和 `aria-pressed` 跟随展开状态，避免 Tooltip 的 `aria-expanded` 覆盖功能样式。多标签功能面板跨网格前两行，最大高度到基础工具栏底部（ADR 0068、0069）
 - 底图卡（ADR 0066）：基础控制栏下方的 80 × 56 缩略图，四周留 2，右下角写简称（矢量、影像、无底图），无障碍名称写全称"底图：矢量底图"（`MapCard` 的 `name`）；名称和简称用 `basemapOption(id)` 按 ID 取
 - `MapCard` 有封面时使用缩略图变体，无封面仍保留 56 × 56 的图标卡。面板打开时沿用主色外边框和独立焦点框，缩略图名称使用主色底；现状底图的图例入口已移至右上工具栏
 - `Basemap` 接口里的函数都写成函数类型的属性（`readonly deriveGroup: () => StyleGroup`），不写方法签名：它们是闭包，页面直接取出来交给 `bindStyle`，写成方法签名时 lint 的 `unbound-method` 会报错
@@ -194,7 +194,7 @@ boundaries.setOpacity(0.6);
 - `useBoundaries()` 的写法与 `useBasemap()` 相同：状态是一个 `shallowRef`，值没变时不替换；透明度不是 0～1 之间的有限数时抛错。三级都关闭时仍可以改透明度
 - 进入页面时只显示省界；指标页（阶段六）要四项全开时再加初始值的参数
 - 记住选择（5C.3，ADR 0042）：`useBoundaries({ preferences })` 读到存下的三个级别和透明度后整体替换一次（`boundary-preference.ts` 的 schema 校验通过才用），之后的修改防抖写入
-- 面板 `BoundaryPanel`（设计稿 5D.4）：三级横排，勾选框后面是这一级的线型示意（ADR 0057：24 宽的 SVG，从下到上叠同样的几条线，高度放得下最宽的一条；色带的虚化只有 1 像素，不画；虚线的线段和间隔按线宽换算，圆头画在线段外面，和 MapLibre 的圆头虚线一样）；透明度用共用的 `OpacitySlider`，没有打开任何级别时没有这一行。复选框组给出勾选的全部值，按级别逐一 `setVisible`，值没变的级别不替换状态。现状底图页把它放在显示面板的"底图"里，在"行政区"标题下面
+- 面板 `BoundaryPanel`（设计稿 5D.4）：常规宽度三级横排，窄 Popover 自动换行，勾选框后面是这一级的线型示意（ADR 0057：24 宽的 SVG，从下到上叠同样的几条线，高度放得下最宽的一条；色带的虚化只有 1 像素，不画；虚线的线段和间隔按线宽换算，圆头画在线段外面，和 MapLibre 的圆头虚线一样）；透明度用共用的 `OpacitySlider`，没有打开任何级别时没有这一行。复选框组给出勾选的全部值，按级别逐一 `setVisible`，值没变的级别不替换状态。现状底图页将其放在独立的行政区 Popover 中，入口位于图例上方（ADR 0068）
 
 ### 浏览器验证（2026-10-10）
 
@@ -238,7 +238,7 @@ boundaries.setOpacity(0.6);
 ```
 
 - 业务组（ADR 0053 第 2 节，设计稿 5D.1）：竖排、宽 56，组之间画分隔线；按钮 48 × 46，图标 20 在上，文字 12 在下、每行两个字（`labelLines`），"区划定位""坐标定位"分两行、高 62；整组约 380 高
-- `compact`：只显示图标，整组宽 40、按钮高 32，名称放进左边的 `ElTooltip`，`aria-label` 始终是完整名称。现状底图始终启用，图例位于末尾；用 `useShownElementSize` 和 `mapPageLayout` 推导矮屏的 `columns`（高度低于 648）：两列宽 72、按钮高 28，图例独占末行（ADR 0066）
+- `compact`：只显示图标，整组宽 40、按钮高 32，名称放进左边的 `ElTooltip`，`aria-label` 始终是完整名称。现状底图始终启用，行政区和图例位于末尾；用 `useShownElementSize` 和 `mapPageLayout` 推导矮屏的 `columns`（高度低于 680）：两列宽 72、按钮高 28，行政区和图例各占一行（ADR 0068）。动作名插槽接收 `ToolbarButtonSlotProps` 的 `button`，页面可复用原按钮和 Tooltip 作为 Popover 的入口
 - 状态：当前工具主色实心（`aria-pressed`），打开着面板的动作浅主色底（也是 `aria-pressed`），悬停浅底主色，不可用灰色，键盘焦点 `:focus-visible` 时 2 像素的浅主色描边
 - 业务组贴在右边、会挡住定位，组件自己登记为贴右边的悬浮元素（ADR 0053 第 9 节）
 - `toolbar-items.ts` 把工具和动作分成两张表，名称、图标集中在这里；图标是 `SvgIcon` 的名字（`map-move` 等，Tabler Icons，见 [icons.md](icons.md)"第三方图标"）。"默认视角"不在这里，移到了基础组。工具的 ID 就是登记到会话里的工具 ID，测距、测面用 `MEASURE_TOOL_IDS`
@@ -647,7 +647,7 @@ sides.activate('right');
 - 外壳只渲染已打开的功能：打开期间内容一直挂载，切走时用 `display: none` 隐藏（输入、滚动、展开状态都在），关闭时卸载。插槽拿到 `active`（整组在显示、并且是当前的 Tab），内容据此结束临时的交互：坐标定位退出拾取，图例不渲染条目（编辑器卸载、丢弃取色预览、收起弹出层），浏览状态（条目的展开，条目里的分类方式、搜索词、分组展开和正在编辑的项）按资源留在图例里，切回时照旧（2026-10-16 评审发现原来只保留了条目的展开）
 - Tab 放不下时在自己的区域里横向滚动，不显示滚动条；切换、前移标签或整组重新显示时，把当前标签连同关闭按钮滚进可见范围（`revealScrollLeft`），统一关闭按钮始终留在标题右侧
 - Tab 上的关闭按钮先从组里关掉这个功能，再发出 `close`，页面需要时做连带的事：现状底图页关闭资源详情时调用点选的 `close()`（清除选择）；点选的拥有者自己清除了结果时，页面侦听到回到空闲，关掉资源详情的 Tab
-- 统一关闭先清空功能组，再逐项发出 `close` 执行同样的连带操作。底图不属于功能组：页面单独持有开关，`BasemapWindow` 独立登记右侧避让；`useSideExclusion` 的 `rightOpen` 同时考虑功能组与底图
+- 统一关闭先清空功能组，再逐项发出 `close` 执行同样的连带操作。底图和行政区不属于功能组：页面分别持有开关，`MapOptionsPopover` 各自登记右侧避让；`useSideExclusion` 的 `rightOpen` 同时考虑功能组、底图与行政区
 - 用户的单击、框选开始识别时，点选的拥有者调用 `onIdentifyStart`，页面切到资源详情；识别、加载更多、详情的请求返回时不切换 Tab
 - 内容区在外壳可滚动的区域里，上面留出 3 像素：Element 的单选按钮用 `outline` 画边框，贴着滚动区域的顶边时会被裁掉（坐标定位的写法切换曾经少了上边框），键盘焦点框也一样
 - 内容区不随外壳压缩（`flex: none`）。原来是 `min-height: 0`：两组面板都打开、外壳被压矮时，内容区缩到可见的高度，子元素溢出到它外面；纵向 flex 的滚动区域把下内边距算在内容区的下边，滚到底时内容贴着底边（2026-10-16 用户在区划定位、资源详情上发现，浏览器测试 `MapPanelGroup.browser.test.tsx` 先复现再修）

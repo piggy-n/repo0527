@@ -1,6 +1,6 @@
 import { useMap, useMapOverlay } from '@yzt/map-vue';
 import { ElTooltip } from 'element-plus';
-import { defineComponent, type PropType, ref, type VNode } from 'vue';
+import { defineComponent, type PropType, ref, type SlotsType, type VNode } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
 import {
   isToolbarTool,
@@ -11,6 +11,11 @@ import {
   type ToolbarItemId
 } from './toolbar-items';
 import styles from './MapToolbar.module.scss';
+
+/** 页面为动作按钮附加浮层时，继续复用工具栏的按钮和提示 */
+export interface ToolbarButtonSlotProps {
+  readonly button: VNode;
+}
 
 /**
  * 地图的业务组（ADR 0053 第 2 节）：竖排，按页面给出的分组显示按钮，组之间有分隔线；图标在上，文字每行两个字。
@@ -34,7 +39,8 @@ export const MapToolbar = defineComponent({
     /** 矮屏下图标分成两列，和下方地图控制栏错开 */
     columns: { type: Boolean, default: false }
   },
-  setup(props) {
+  slots: Object as SlotsType<Partial<Record<ToolbarActionId, (props: ToolbarButtonSlotProps) => VNode[]>>>,
+  setup(props, { slots }) {
     const map = useMap();
     const element = ref<HTMLElement>();
     useMapOverlay(element, 'right');
@@ -72,13 +78,15 @@ export const MapToolbar = defineComponent({
           )}
         </button>
       );
-      return props.compact ? (
-        <ElTooltip key={id} content={label} placement="left">
+      const reference = props.compact ? (
+        <ElTooltip key={id} content={label} placement="left" disabled={pressed}>
           {button}
         </ElTooltip>
       ) : (
         button
       );
+      const slot = !tool ? slots[id] : undefined;
+      return slot ? <span key={id} class={styles.popoverButton}>{slot({ button: reference })}</span> : reference;
     };
 
     return () => (

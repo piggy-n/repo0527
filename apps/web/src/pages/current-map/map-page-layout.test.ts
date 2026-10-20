@@ -9,14 +9,14 @@ describe('mapPageLayout', () => {
     expect(mapPageLayout(0, 900).phone).toBe(false);
   });
 
-  it('地图区域低于 648 时业务组分成两列，留出基础组和底图入口的高度', () => {
-    expect(mapPageLayout(1440, 648).toolbarColumns).toBe(false);
-    expect(mapPageLayout(1440, 647).toolbarColumns).toBe(true);
+  it('地图区域低于 680 时业务组分成两列，留出基础组和底图入口的高度', () => {
+    expect(mapPageLayout(1440, 680).toolbarColumns).toBe(false);
+    expect(mapPageLayout(1440, 679).toolbarColumns).toBe(true);
   });
 
   it('窄屏和宽屏的底图入口都在基础组下方，使用同一个高度规则', () => {
-    expect(mapPageLayout(375, 648).toolbarColumns).toBe(false);
-    expect(mapPageLayout(375, 647).toolbarColumns).toBe(true);
+    expect(mapPageLayout(375, 680).toolbarColumns).toBe(false);
+    expect(mapPageLayout(375, 679).toolbarColumns).toBe(true);
     expect(mapPageLayout(375, 737)).toStrictEqual({ phone: true, toolbarColumns: false });
   });
 

@@ -10,13 +10,14 @@ import { useResourcePanelLayout } from '@/features/resource-map/composables/useR
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
-import { BasemapWindow } from '@/shared/map/basemap/BasemapWindow';
+import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { basemapOption } from '@/shared/map/basemap/basemap-style';
 import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
 import { MapCard } from '@/shared/map/card/MapCard';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
+import { BoundaryPanel } from '@/shared/map/boundary/BoundaryPanel';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { CoordinateLocatePanel } from '@/shared/map/location/CoordinateLocatePanel';
 import { LocationOverlay } from '@/shared/map/location/LocationOverlay';
@@ -26,6 +27,7 @@ import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
 import { useMeasure } from '@/shared/map/measure/useMeasure';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
+import { MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
 import { MapStatusBar } from '@/shared/map/status-bar/MapStatusBar';
 import { useMapReadout } from '@/shared/map/status-bar/useMapReadout';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
@@ -33,7 +35,7 @@ import { RegionLocatePanel } from '@/shared/map/region/RegionLocatePanel';
 import { RegionScopeBar } from '@/shared/map/region/RegionScopeBar';
 import { regionClipGroup } from '@/shared/map/region/region-clip';
 import { readyBoundary, useRegionLocate } from '@/shared/map/region/useRegionLocate';
-import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
+import { MapToolbar, type ToolbarButtonSlotProps } from '@/shared/map/toolbar/MapToolbar';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { useMapLoadMarks } from '@/shared/map/useMapLoadMarks';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
@@ -42,7 +44,7 @@ import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './CurrentMapPage.module.scss';
 import { mapPageLayout } from './map-page-layout';
 
-// 图例与定位、资源详情共用功能面板；底图是独立浮窗（ADR 0066）
+// 图例与定位、资源详情共用功能面板；底图和行政区分别使用按钮左侧的 Popover（ADR 0068）
 const FUNCTION_PANELS = ['legend', 'region-locate', 'coordinate-locate', 'feature-detail'] as const;
 const PANEL_LABELS = {
   'region-locate': '区划定位',
@@ -59,7 +61,7 @@ const TOOLBAR_GROUPS = [
   ['browse', 'feature-pick'],
   ['measure-distance', 'measure-area', 'clear'],
   ['region-locate', 'coordinate-locate'],
-  ['legend']
+  ['boundaries', 'legend']
 ] as const;
 
 /** 现状底图：区域按 ADR 0053 划分，各块的界面在 5D.1～5D.8 逐块设计（docs/roadmap.md"5D 地图页界面的专门设计"） */
@@ -81,10 +83,6 @@ export const CurrentMapPage = defineComponent({
     const root = ref<HTMLElement>();
     const { width, height } = useShownElementSize(root);
     const layout = computed(() => mapPageLayout(width.value, height.value));
-    // 底图浮窗与基础控制条等高，直接量控制条，不重复维护按钮高度
-    const controls = ref<HTMLElement>();
-    const { height: controlsHeight } = useShownElementSize(controls, undefined, { box: 'border-box' });
-
     // 记住上次的底图、边界和资源图层（ADR 0042）；没有登录时为 null，不读不写
     const preferences = usePreferenceScope();
     const basemap = useBasemap({ preferences });
@@ -99,15 +97,16 @@ export const CurrentMapPage = defineComponent({
     // 状态栏的比例尺、经纬度和角度（ADR 0053 第 5 节）
     const readout = useMapReadout(map);
 
-    // 功能面板和底图分别开关，业务状态仍由各自的拥有者持有
+    // 功能面板、底图和行政区分别开关，业务状态仍由各自的拥有者持有
     const functions = usePanelGroup(FUNCTION_PANELS);
     const basemapOpen = ref(false);
+    const boundariesOpen = ref(false);
     // 资源面板的收起、分割线的位置和目录顺序按账号记住；窄屏时左右只显示一边，只推导显示，不改收起状态（ADR 0053 第 6、8 节）
     const panelLayout = useResourcePanelLayout({ preferences });
     const catalogOrder = useCatalogOrder({ preferences });
     const sides = useSideExclusion({
       leftExpanded: () => !panelLayout.collapsed.value,
-      rightOpen: () => functions.state.value.open.length > 0 || basemapOpen.value
+      rightOpen: () => functions.state.value.open.length > 0 || basemapOpen.value || boundariesOpen.value
     });
 
     // 点选、框选只认区划里的要素，和遮罩用同一个边界（ADR 0051 第 1 节）；用户开始识别时切到资源详情
@@ -150,10 +149,18 @@ export const CurrentMapPage = defineComponent({
       sides.activate('right');
       functions.toggle(id, shown);
     };
-    const toggleBasemap = () => {
-      const shown = sides.right.value;
-      sides.activate('right');
-      basemapOpen.value = !shown || !basemapOpen.value;
+    // Popover 自己处理按钮切换和外部点击，页面同步开关与窄屏的操作侧
+    const changeBasemapOpen = (open: boolean) => {
+      basemapOpen.value = open;
+      if (open) {
+        sides.activate('right');
+      }
+    };
+    const changeBoundariesOpen = (open: boolean) => {
+      boundariesOpen.value = open;
+      if (open) {
+        sides.activate('right');
+      }
     };
     // 入口显示为按下：打开着，而且右边没有让出去
     const pressedIn = (id: FunctionPanel) => sides.right.value && functions.isOpen(id);
@@ -180,22 +187,39 @@ export const CurrentMapPage = defineComponent({
       clear,
       'region-locate': () => toggleFunction('region-locate'),
       'coordinate-locate': () => toggleFunction('coordinate-locate'),
+      boundaries: () => sides.activate('right'),
       legend: () => toggleFunction('legend')
     };
-    const pressed = computed(() => (['region-locate', 'coordinate-locate', 'legend'] as const).filter(pressedIn));
+    const pressed = computed(() => [
+      ...(['region-locate', 'coordinate-locate', 'legend'] as const).filter(pressedIn),
+      ...(sides.right.value && boundariesOpen.value ? ['boundaries' as const] : [])
+    ]);
 
     // 当前底图的缩略图入口固定在地图控制栏下方
     const renderBasemapCard = () => {
       const current = basemapOption(basemap.selected.value);
       return (
         <div class={styles.cards} data-map-cards>
-          <MapCard
-            label={current.shortLabel}
-            name={`${PANEL_LABELS.basemap}：${current.label}`}
-            pressed={sides.right.value && basemapOpen.value}
-            onClick={toggleBasemap}>
-            {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[current.id]} />] }}
-          </MapCard>
+          <MapOptionsPopover
+            name="basemap"
+            label="底图"
+            open={basemapOpen.value}
+            visible={sides.right.value}
+            onUpdate:open={changeBasemapOpen}>
+            {{
+              reference: () => [
+                <MapCard
+                  label={current.shortLabel}
+                  name={`${PANEL_LABELS.basemap}：${current.label}`}
+                  pressed={sides.right.value && basemapOpen.value}>
+                  {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[current.id]} />] }}
+                </MapCard>
+              ],
+              default: ({ showOpacity }: { showOpacity: boolean }) => [
+                <BasemapPanel basemap={basemap} showOpacity={showOpacity} />
+              ]
+            }}
+          </MapOptionsPopover>
         </div>
       );
     };
@@ -208,10 +232,7 @@ export const CurrentMapPage = defineComponent({
         <div
           ref={root}
           class={[styles.root, phone && styles.phone]}
-          style={{
-            '--map-tools-width': toolbarColumns ? '72px' : '40px',
-            '--map-controls-height': controlsHeight.value > 0 ? `${controlsHeight.value}px` : undefined
-          }}
+          style={{ '--map-tools-width': toolbarColumns ? '72px' : '40px' }}
           data-map-page={phone ? 'phone' : 'wide'}>
           <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
           <MeasureOverlay measure={measure} />
@@ -249,14 +270,6 @@ export const CurrentMapPage = defineComponent({
                 }}
               </MapPanelGroup>
             </div>
-            <BasemapWindow
-              class={styles.basemapWindow}
-              basemap={basemap}
-              boundaries={boundaries}
-              open={basemapOpen.value}
-              visible={sides.right.value}
-              onClose={() => (basemapOpen.value = false)}
-            />
             <div class={styles.bottom}>
               <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
             </div>
@@ -267,11 +280,28 @@ export const CurrentMapPage = defineComponent({
                   actions={toolbarActions}
                   pressed={pressed.value}
                   compact
-                  columns={toolbarColumns}
-                />
+                  columns={toolbarColumns}>
+                  {{
+                    boundaries: ({ button }: ToolbarButtonSlotProps) => [
+                      <MapOptionsPopover
+                        name="boundaries"
+                        label="行政区"
+                        open={boundariesOpen.value}
+                        visible={sides.right.value}
+                        onUpdate:open={changeBoundariesOpen}>
+                        {{
+                          reference: () => [button],
+                          default: ({ showOpacity }: { showOpacity: boolean }) => [
+                            <BoundaryPanel boundaries={boundaries} showOpacity={showOpacity} />
+                          ]
+                        }}
+                      </MapOptionsPopover>
+                    ]
+                  }}
+                </MapToolbar>
               </div>
               <div class={styles.stack}>
-                <div ref={controls} class={styles.controls}>
+                <div class={styles.controls}>
                   <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
                 </div>
                 {renderBasemapCard()}

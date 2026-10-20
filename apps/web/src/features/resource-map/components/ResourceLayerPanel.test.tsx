@@ -136,6 +136,7 @@ describe('ResourceLayerPanel', () => {
     expect(wrapper.get(`.${styles.checkedToggle}`).text()).toBe('展开');
     await button(wrapper, '展开已勾选图层').trigger('click');
     expect(checkedOrder(wrapper)).toStrictEqual(['bgdc_dltb']);
+    expect(wrapper.get(`.${styles.checkedToggle}`).text()).toBe('收起');
     await button(wrapper, '收起已勾选图层').trigger('click');
     expect(checkedOrder(wrapper)).toStrictEqual([]);
     expect(owner.state.value).toBe(before);

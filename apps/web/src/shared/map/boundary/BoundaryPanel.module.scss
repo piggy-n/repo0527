@@ -1,4 +1,4 @@
-// 行政区边界（设计稿 5D.4）：三级横排；放在显示面板的"底图"里，外观和内边距由外壳负责
+// 行政区边界：常规宽度三级横排，窄弹窗自动换行，外观和内边距由外壳负责
 
 .panel {
   display: flex;
@@ -8,7 +8,7 @@
 
 .levels {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
 }
 
 // 块级的 flex：线型示意是 SVG、没有文字基线，行内排列时整行按它的下边缘对齐，文字会偏下

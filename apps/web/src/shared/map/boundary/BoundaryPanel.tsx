@@ -39,13 +39,13 @@ function renderSwatch(lines: readonly BoundarySwatchLine[]) {
 
 /**
  * 行政区边界（ADR 0033，设计稿 5D.4）：三级横排，勾选框后面是这一级在地图上的线型；勾选了才有透明度。
- * 只显示 useBoundaries 的状态并调用它的操作；放在显示面板的"底图"里，外观和登记由外壳负责（ADR 0053 第 4 节）
+ * 只显示 useBoundaries 的状态并调用它的操作；现状底图中放在独立的行政区 Popover，外观和登记由外壳负责
  */
 export const BoundaryPanel = defineComponent({
   name: 'BoundaryPanel',
   props: {
     boundaries: { type: Object as PropType<Boundaries>, required: true },
-    /** 独立底图浮窗由头部图标控制透明度行 */
+    /** 行政区 Popover 由头部图标控制透明度行 */
     showOpacity: { type: Boolean, default: true }
   },
   setup(props) {

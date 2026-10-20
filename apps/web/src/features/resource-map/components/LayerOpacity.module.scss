@@ -38,6 +38,11 @@
   box-shadow: inset 0 0 0 1px var(--color-primary-border);
 }
 
+// 内边距归内容区所有，浮层边缘也能取消自动关闭
+.content {
+  padding: var(--space-md);
+}
+
 .heading {
   display: flex;
   align-items: center;

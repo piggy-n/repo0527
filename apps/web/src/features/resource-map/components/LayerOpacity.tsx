@@ -1,7 +1,8 @@
 import { ElPopover, ElSlider } from 'element-plus';
-import { computed, defineComponent, ref, watch } from 'vue';
+import { computed, defineComponent } from 'vue';
 import { usePageActive } from '@/shared/composables/usePageActive';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
+import { useLayerOpacityPopup } from '../composables/useLayerOpacityPopup';
 import styles from './LayerOpacity.module.scss';
 
 /** 资源树和已勾选列表共用的透明度浮层；数值由图层拥有者持有，100% 表示完全显示 */
@@ -15,15 +16,8 @@ export const LayerOpacity = defineComponent({
     'update:modelValue': (value: number) => Number.isFinite(value) && value >= 0 && value <= 1
   },
   setup(props, { emit }) {
-    // 打开状态只属于入口，页面停用时关闭挂在 body 上的浮层
-    const open = ref(false);
-    const pageActive = usePageActive();
+    const popup = useLayerOpacityPopup(usePageActive());
     const percent = computed(() => Math.round(props.modelValue * 100));
-    watch(pageActive, active => {
-      if (!active) {
-        open.value = false;
-      }
-    });
     const change = (value: number | number[]) => {
       if (typeof value === 'number') {
         emit('update:modelValue', value / 100);
@@ -33,27 +27,43 @@ export const LayerOpacity = defineComponent({
     const stop = (event: Event) => event.stopPropagation();
 
     return () => (
-      <span class={[styles.root, open.value && styles.open]} onClick={stop} onPointerdown={stop}>
+      <span class={[styles.root, popup.open.value && styles.open]} onClick={stop} onPointerdown={stop}>
         <ElPopover
           trigger="click"
           placement="right"
+          strategy="fixed"
+          popperOptions={{
+            modifiers: [{ name: 'preventOverflow', options: { padding: 8, altAxis: true, tether: false } }]
+          }}
           width={240}
+          popperStyle={{ padding: 0 }}
           persistent={false}
-          visible={open.value}
-          onUpdate:visible={(visible: boolean) => (open.value = visible && pageActive.value)}>
+          visible={popup.open.value}
+          onUpdate:visible={popup.setOpen}>
           {{
             reference: () => (
               <button
                 type="button"
                 class={styles.trigger}
                 aria-label={`${props.name}的透明度`}
-                aria-expanded={open.value}
-                title={`透明度 ${percent.value}%`}>
+                aria-expanded={popup.open.value}
+                aria-pressed={popup.open.value}
+                title={`透明度 ${percent.value}%`}
+                onMouseenter={popup.enter}
+                onMouseleave={popup.leave}>
                 <SvgIcon name="layer-opacity" size={16} />
               </button>
             ),
             default: () => (
-              <div onClick={stop} onPointerdown={stop}>
+              <div
+                class={styles.content}
+                onMouseenter={popup.enter}
+                onMouseleave={popup.leave}
+                onClick={stop}
+                onPointerdown={event => {
+                  stop(event);
+                  popup.beginPointer(event);
+                }}>
                 <div class={styles.heading}>
                   <strong>透明度</strong>
                   <span class={styles.name}>{props.name}</span>

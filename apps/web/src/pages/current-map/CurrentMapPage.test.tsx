@@ -15,7 +15,7 @@ import {
 } from '@yzt/map-core';
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { MapCanvas } from '@yzt/map-vue';
-import { mount } from '@vue/test-utils';
+import { DOMWrapper, mount } from '@vue/test-utils';
 import { ElSlider } from 'element-plus';
 import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
@@ -307,6 +307,15 @@ function button(wrapper: ReturnType<typeof mountPage>['wrapper'], text: string) 
   return found;
 }
 
+// Popover 挂在 body 下，按功能名称找到其内容
+function optionsPopover(name: string) {
+  const element = document.querySelector(`[data-map-options="${name}"]`);
+  if (!(element instanceof HTMLElement)) {
+    throw new Error(`没有"${name}"浮层`);
+  }
+  return new DOMWrapper(element);
+}
+
 // 面板外壳里正在显示的那个功能（ADR 0053 第 4 节）；切走的内容还在，只是隐藏
 function shownPanels(wrapper: ReturnType<typeof mountPage>['wrapper']): (string | undefined)[] {
   return wrapper
@@ -337,6 +346,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
   observed.clear();
+  document.body.innerHTML = '';
 });
 
 // jsdom 没有布局，也没有 ResizeObserver：替身按被观察的元素记下回调，用例给页面根元素设定尺寸后手动触发
@@ -490,53 +500,96 @@ describe('CurrentMapPage', () => {
     ]);
   });
 
-  it('底图是独立浮窗：缩略图同步当前底图，打开和统一关闭功能面板不影响底图', async () => {
+  it('底图 Popover 只包含底图，缩略图同步选择；关闭功能组不清空底图选择', async () => {
     const { wrapper } = await readyPage();
     const basemapCard = () => wrapper.get('[data-map-cards] button:last-child');
     const cover = () => basemapCard().get('[aria-hidden="true"]').attributes('style') ?? '';
-    const basemapShown = () => !wrapper.get('[data-basemap-window]').attributes('style')?.includes('display: none');
     expect(cover()).toContain('/vec_w/');
     expect([basemapCard().text(), basemapCard().attributes('aria-label')]).toStrictEqual(['矢量', '底图：矢量底图']);
 
     await basemapCard().trigger('click');
+    await vi.waitFor(() => expect(optionsPopover('basemap').exists()).toBe(true));
     expect(basemapCard().attributes('aria-pressed')).toBe('true');
-    expect(basemapShown()).toBe(true);
+    expect(optionsPopover('basemap').find('[aria-label="行政区边界"]').exists()).toBe(false);
 
-    await wrapper.get('button[aria-label="影像底图"]').trigger('click');
+    await optionsPopover('basemap').get('button[aria-label="影像底图"]').trigger('click');
     expect(cover()).toContain('/img_w/');
     expect([basemapCard().text(), basemapCard().attributes('aria-label')]).toStrictEqual(['影像', '底图：影像底图']);
 
+    await optionsPopover('basemap').get('[aria-label="关闭底图"]').trigger('click');
+    expect(basemapCard().attributes('aria-pressed')).toBe('false');
     await button(wrapper, '图例').trigger('click');
     expect(button(wrapper, '图例').attributes('aria-pressed')).toBe('true');
-    expect(basemapShown()).toBe(true);
 
     await button(wrapper, '关闭全部功能').trigger('click');
-    expect(basemapShown()).toBe(true);
     expect(button(wrapper, '图例').attributes('aria-pressed')).toBe('false');
-    await basemapCard().trigger('click');
-    expect(basemapCard().attributes('aria-pressed')).toBe('false');
-    expect(basemapShown()).toBe(false);
+    expect(basemapCard().text()).toBe('影像');
   });
 
-  it('底图与边界透明度默认收起，图标切换显隐保留数值，重新打开浮窗回到收起状态', async () => {
+  it('行政区位于图例上方并独立打开；两处透明度分别控制，关闭重开保留数值且默认收起', async () => {
     const { wrapper } = await readyPage();
+    const labels = wrapper.get('[role="toolbar"]').findAll('button').map(item => item.attributes('aria-label'));
+    expect(labels.slice(-2)).toStrictEqual(['行政区', '图例']);
     await button(wrapper, '底图：矢量底图').trigger('click');
+    await vi.waitFor(() => expect(optionsPopover('basemap').exists()).toBe(true));
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
 
-    await button(wrapper, '调整底图与边界透明度').trigger('click');
-    const sliders = wrapper.findAllComponents(ElSlider);
-    expect(sliders).toHaveLength(2);
-    sliders[0]?.vm.$emit('update:modelValue', 40);
-    sliders[1]?.vm.$emit('update:modelValue', 70);
+    await optionsPopover('basemap').get('[aria-label="调整底图透明度"]').trigger('click');
+    expect(optionsPopover('basemap').get('[aria-label="调整底图透明度"]').attributes('aria-pressed')).toBe('true');
+    wrapper.getComponent(ElSlider).vm.$emit('update:modelValue', 40);
     await nextTick();
-    await button(wrapper, '调整底图与边界透明度').trigger('click');
-    expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
+    await optionsPopover('basemap').get('[aria-label="关闭底图"]').trigger('click');
+    await vi.waitFor(() => expect(document.querySelector('[data-map-options="basemap"]')).toBeNull());
 
-    await button(wrapper, '调整底图与边界透明度').trigger('click');
-    expect(wrapper.findAllComponents(ElSlider).map(slider => slider.props('modelValue'))).toStrictEqual([40, 70]);
-    await button(wrapper, '关闭底图').trigger('click');
-    await button(wrapper, '底图：矢量底图').trigger('click');
+    await button(wrapper, '行政区').trigger('click');
+    await vi.waitFor(() => expect(optionsPopover('boundaries').exists()).toBe(true));
+    expect(optionsPopover('boundaries').find('[aria-label="底图"]').exists()).toBe(false);
+    expect(button(wrapper, '行政区').attributes('aria-pressed')).toBe('true');
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
+    await optionsPopover('boundaries').get('[aria-label="调整行政区透明度"]').trigger('click');
+    expect(optionsPopover('boundaries').get('[aria-label="调整行政区透明度"]').attributes('aria-pressed')).toBe('true');
+    wrapper.getComponent(ElSlider).vm.$emit('update:modelValue', 70);
+    await nextTick();
+    await optionsPopover('boundaries').get('[aria-label="调整行政区透明度"]').trigger('click');
+    expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
+    expect(optionsPopover('boundaries').get('[aria-label="调整行政区透明度"]').attributes('aria-pressed')).toBe('false');
+    await optionsPopover('boundaries').get('[aria-label="调整行政区透明度"]').trigger('click');
+    expect(wrapper.getComponent(ElSlider).props('modelValue')).toBe(70);
+    await optionsPopover('boundaries').get('[aria-label="关闭行政区"]').trigger('click');
+    expect(button(wrapper, '行政区').attributes('aria-pressed')).toBe('false');
+    await vi.waitFor(() => expect(document.querySelector('[data-map-options="boundaries"]')).toBeNull());
+
+    await button(wrapper, '底图：矢量底图').trigger('click');
+    await vi.waitFor(() => expect(optionsPopover('basemap').exists()).toBe(true));
+    expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
+    expect(optionsPopover('basemap').get('[aria-label="调整底图透明度"]').attributes('aria-pressed')).toBe('false');
+    await optionsPopover('basemap').get('[aria-label="调整底图透明度"]').trigger('click');
+    expect(wrapper.getComponent(ElSlider).props('modelValue')).toBe(40);
+  });
+
+  it.each([
+    { name: 'basemap', entry: '底图：矢量底图', close: '关闭底图' },
+    { name: 'boundaries', entry: '行政区', close: '关闭行政区' }
+  ])('$entry 只由关闭按钮关闭，外部点击、再次点击入口和 Esc 保持打开与选中', async ({ name, entry, close }) => {
+    const { wrapper } = await readyPage();
+    const trigger = button(wrapper, entry);
+    await trigger.trigger('click');
+    await vi.waitFor(() => expect(optionsPopover(name).exists()).toBe(true));
+    vi.useFakeTimers();
+
+    await trigger.trigger('click');
+    document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    await optionsPopover(name).trigger('keydown', { key: 'Escape', code: 'Escape' });
+    // 推进 Element 的隐藏延迟，避免在关闭请求尚未处理时就断言
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(trigger.attributes('aria-pressed')).toBe('true');
+    expect(optionsPopover(name).isVisible()).toBe(true);
+
+    await optionsPopover(name).get(`[aria-label="${close}"]`).trigger('click');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(trigger.attributes('aria-pressed')).toBe('false');
+    expect(document.querySelector(`[data-map-options="${name}"]`)).toBeNull();
   });
 
   it('第一次就绪时按江苏范围定位一次；画布重建后再次就绪时不再定位，保留用户调整过的视角', async () => {

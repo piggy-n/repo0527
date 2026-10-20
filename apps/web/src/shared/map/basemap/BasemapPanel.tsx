@@ -7,13 +7,13 @@ import styles from './BasemapPanel.module.scss';
 
 /**
  * 底图的切换（ADR 0031，设计稿 5D.4）：缩略图只写类型，选中的主色描边；当前底图的透明度。
- * 只显示 useBasemap 的状态并调用它的操作；放在显示面板的"底图"里，外观和登记由外壳负责（ADR 0053 第 4 节）
+ * 只显示 useBasemap 的状态并调用它的操作；现状底图中放在底图 Popover，外观和登记由外壳负责
  */
 export const BasemapPanel = defineComponent({
   name: 'BasemapPanel',
   props: {
     basemap: { type: Object as PropType<Basemap>, required: true },
-    /** 独立底图浮窗由头部图标控制透明度行 */
+    /** 底图 Popover 由头部图标控制透明度行 */
     showOpacity: { type: Boolean, default: true }
   },
   setup(props) {
@@ -35,8 +35,8 @@ export const BasemapPanel = defineComponent({
                   <span class={styles.frame}>
                     <BasemapThumbnail thumbnail={thumbnails[option.id]} />
                     {on && <SvgIcon class={styles.check} name="check" size={12} />}
+                    <span class={styles.label}>{option.shortLabel}</span>
                   </span>
-                  {option.shortLabel}
                 </button>
               );
             })}

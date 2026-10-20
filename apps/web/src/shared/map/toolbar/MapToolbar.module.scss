@@ -81,6 +81,11 @@
   background-color: var(--color-divider);
 }
 
+.popoverButton {
+  display: flex;
+  min-width: 0;
+}
+
 .columns {
   display: grid;
   grid-template-columns: repeat(2, 32px);
@@ -91,6 +96,7 @@
   }
 
   .separator,
+  .popoverButton,
   .button:last-child {
     grid-column: 1 / -1;
   }
