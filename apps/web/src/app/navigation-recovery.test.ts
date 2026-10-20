@@ -10,7 +10,9 @@ afterEach(() => vi.restoreAllMocks());
 function fixture() {
   const page = { render: () => null };
   let failed = true;
-  const load = vi.fn(() => failed ? Promise.reject(new Error('分块加载失败')) : Promise.resolve(page));
+  const load = vi.fn<() => Promise<typeof page>>(
+    () => failed ? Promise.reject(new Error('分块加载失败')) : Promise.resolve(page)
+  );
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/', component: page }, { path: '/map', component: load }]

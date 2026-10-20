@@ -22,7 +22,7 @@ function chunkFile(prefix: string): string {
   const files = readdirSync(new URL('../../dist/assets/', import.meta.url));
   const matches = files.filter(name => name.startsWith(`${prefix}-`) && name.endsWith('.js'));
   expect(matches, `应有唯一的 ${prefix} 生产分块`).toHaveLength(1);
-  return matches[0]!;
+  return matches[0];
 }
 
 test('登录到地图，切页期间改变尺寸，返回后复用画布并保留状态', async ({ page }) => {
@@ -51,11 +51,11 @@ test('登录到地图，切页期间改变尺寸，返回后复用画布并保�
     await expect(page).toHaveURL(/\/file-management$/);
     await expect(page.getByRole('button', { name: '上传文档', exact: true })).toBeVisible();
     // KeepAlive 将旧画布移出文档；只检查新画布存在不足以发现意外重建
-    expect(await original!.evaluate((element: { isConnected: boolean }) => element.isConnected)).toBe(false);
+    expect(await original.evaluate((element: { isConnected: boolean }) => element.isConnected)).toBe(false);
     await page.setViewportSize({ width: 1440, height: 860 });
     await page.getByRole('link', { name: '现状底图', exact: true }).click();
     await readyMap(page);
-    expect(await original!.evaluate((element: { isConnected: boolean }) => element.isConnected)).toBe(true);
+    expect(await original.evaluate((element: { isConnected: boolean }) => element.isConnected)).toBe(true);
     await expect(search).toHaveValue('南京');
     await expect(level).toHaveAttribute('aria-label', savedLevel!);
     // 设备比例为 1，绘图缓冲区应随恢复后的 CSS 尺寸调整

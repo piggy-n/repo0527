@@ -316,11 +316,17 @@ function optionsPopover(name: string) {
   return new DOMWrapper(element);
 }
 
+// 过渡桩可能保留已隐藏节点，兼容实际隐藏或过渡结束后卸载
+function optionsPopoverVisible(name: string): boolean {
+  const element = document.querySelector(`[data-map-options="${name}"]`);
+  return element instanceof HTMLElement && new DOMWrapper(element).isVisible();
+}
+
 // 面板外壳里正在显示的那个功能（ADR 0053 第 4 节）；切走的内容还在，只是隐藏
 function shownPanels(wrapper: ReturnType<typeof mountPage>['wrapper']): (string | undefined)[] {
   return wrapper
-    .findAll('[role="tabpanel"]')
-    .filter(panel => panel.attributes('style') === undefined)
+    .findAll<HTMLElement>('[role="tabpanel"]')
+    .filter(panel => panel.element.style.display !== 'none')
     .map(panel => panel.attributes('data-panel'));
 }
 
@@ -545,7 +551,7 @@ describe('CurrentMapPage', () => {
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
     expect(optionsPopover('basemap').get('[aria-label="调整底图透明度"]').attributes('aria-pressed')).toBe('false');
     await button(wrapper, '底图：矢量底图').trigger('click');
-    await vi.waitFor(() => expect(document.querySelector('[data-map-options="basemap"]')).toBeNull());
+    await vi.waitFor(() => expect(optionsPopoverVisible('basemap')).toBe(false));
 
     await button(wrapper, '行政区').trigger('click');
     expect(shownPanels(wrapper)).toStrictEqual(['boundaries']);
@@ -564,7 +570,7 @@ describe('CurrentMapPage', () => {
     expect(wrapper.getComponent(ElSlider).props('modelValue')).toBe(70);
     await button(wrapper, '图例').trigger('click');
     expect(button(wrapper, '行政区').attributes('aria-pressed')).toBe('false');
-    expect(wrapper.find('[role="tab"][aria-selected="false"]').text()).toBe('行政区');
+    expect(wrapper.get('[aria-label="已打开的地图工具"] [aria-selected="false"]').text()).toBe('行政区');
     await button(wrapper, '行政区').trigger('click');
     expect(shownPanels(wrapper)).toStrictEqual(['boundaries']);
     // 正在显示时再次点入口关闭，其他标签保留
@@ -608,7 +614,7 @@ describe('CurrentMapPage', () => {
     await trigger.trigger('click');
     await vi.advanceTimersByTimeAsync(1000);
     expect(trigger.attributes('aria-pressed')).toBe('false');
-    expect(document.querySelector(`[data-map-options="${name}"]`)).toBeNull();
+    expect(optionsPopoverVisible(name)).toBe(false);
   });
 
   it('第一次就绪时按江苏范围定位一次；画布重建后再次就绪时不再定位，保留用户调整过的视角', async () => {
@@ -952,11 +958,13 @@ describe('CurrentMapPage', () => {
     expect(wrapper.find('[data-coordinate-locate-panel]').exists()).toBe(true);
     expect(button(wrapper, '拾取').attributes('aria-pressed')).toBe('false');
     expect((wrapper.get('input[aria-label="经度"]').element as HTMLInputElement).value).toBe('118.5');
-    expect(button(wrapper, '坐标定位').attributes('aria-pressed')).toBe('true');
-    expect(button(wrapper, '区划定位').attributes('aria-pressed')).toBe('false');
+    expect(button(wrapper, '坐标定位').attributes('aria-pressed')).toBe('false');
+    expect(button(wrapper, '区划定位').attributes('aria-pressed')).toBe('true');
 
     // 点 Tab 切回；再点正在显示的入口关闭它，切到最近显示过的另一个
-    await wrapper.findAll('[role="tab"]').find(tab => tab.text() === '坐标定位')?.trigger('click');
+    const coordinateTab = wrapper.get('[aria-label="已打开的地图工具"] [aria-selected="false"]');
+    expect(coordinateTab.text()).toBe('坐标定位');
+    await coordinateTab.trigger('click');
     expect(shownPanels(wrapper)).toStrictEqual(['coordinate-locate']);
     await button(wrapper, '坐标定位').trigger('click');
     expect(wrapper.find('[data-coordinate-locate-panel]').exists()).toBe(false);
@@ -972,8 +980,8 @@ describe('CurrentMapPage', () => {
       removeEventListener: () => undefined
     }));
     const { wrapper } = await readyPage();
-    const functionGroup = wrapper.get('[data-panel-group]');
-    const shown = (group: typeof functionGroup) => group?.attributes('style') === undefined;
+    const functionGroup = wrapper.get<HTMLElement>('[data-panel-group]');
+    const shown = (group: typeof functionGroup) => group.element.style.display !== 'none';
 
     await button(wrapper, '坐标定位').trigger('click');
     await wrapper.get('input[aria-label="经度"]').setValue('118.5');

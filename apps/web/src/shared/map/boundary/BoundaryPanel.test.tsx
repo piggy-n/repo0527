@@ -1,16 +1,16 @@
-import { type DOMWrapper, mount } from '@vue/test-utils';
+import { mount } from '@vue/test-utils';
 import { ElSlider } from 'element-plus';
 import { describe, expect, it } from 'vitest';
 import { BoundaryPanel } from './BoundaryPanel';
 import { useBoundaries } from './useBoundaries';
 
-function checkbox(wrapper: ReturnType<typeof mount>, label: string): DOMWrapper<HTMLInputElement> {
-  const found = wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')
+function checkbox(wrapper: ReturnType<typeof mount>, label: string) {
+  const found = wrapper.findAll('label')
     .find(candidate => candidate.attributes('aria-label') === label);
   if (!found) {
     throw new Error(`没有找到"${label}"`);
   }
-  return found;
+  return found.get<HTMLInputElement>('input[type="checkbox"]');
 }
 
 // 联调用的界面只测关键交互：勾选级别、拖动透明度，状态由 useBoundaries 持有

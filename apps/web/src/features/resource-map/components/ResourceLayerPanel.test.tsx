@@ -291,7 +291,7 @@ describe('ResourceLayerPanel', () => {
 
     await button(wrapper, '地类图斑的透明度').trigger('click');
     await vi.waitFor(() => expect(wrapper.findComponent(ElSlider).exists()).toBe(true));
-    expect(button(wrapper, '地类图斑的透明度').attributes('aria-expanded')).toBe('true');
+    expect(button(wrapper, '地类图斑的透明度').attributes('aria-pressed')).toBe('true');
     const slider = wrapper.findComponent(ElSlider);
     expect(slider.props('modelValue')).toBe(100);
     slider.vm.$emit('update:modelValue', 40);

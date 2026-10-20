@@ -1,8 +1,10 @@
 import { expect, test as base } from 'playwright/test';
 
+// 测试 JWT 的头部和载荷共用 Base64URL 编码
+const encode = (value: unknown) => Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+
 /** 固定账号的测试 JWT，签名只作占位，前端照常检查有效期 */
 function sessionToken(): string {
-  const encode = (value: unknown) => Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
   const header = encode({ alg: 'HS256', typ: 'JWT' });
   const payload = encode({ sub: 'smoke', exp: Math.floor(Date.now() / 1000) + 3600 });
   return `${header}.${payload}.signature`;

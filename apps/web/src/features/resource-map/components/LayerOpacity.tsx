@@ -5,6 +5,9 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { useLayerOpacityPopup } from '../composables/useLayerOpacityPopup';
 import styles from './LayerOpacity.module.scss';
 
+// 操作按钮和滑块不触发资源行的选择或拖动
+const stop = (event: Event) => event.stopPropagation();
+
 /** 资源树和已勾选列表共用的透明度浮层；数值由图层拥有者持有，100% 表示完全显示 */
 export const LayerOpacity = defineComponent({
   name: 'LayerOpacity',
@@ -23,9 +26,6 @@ export const LayerOpacity = defineComponent({
         emit('update:modelValue', value / 100);
       }
     };
-    // 操作按钮和滑块不触发资源行的选择或拖动
-    const stop = (event: Event) => event.stopPropagation();
-
     return () => (
       <span class={[styles.root, popup.open.value && styles.open]} onClick={stop} onPointerdown={stop}>
         <ElPopover

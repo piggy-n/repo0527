@@ -7,6 +7,9 @@ import { OpacitySlider } from '../OpacitySlider';
 import { OpacityToggle } from '../OpacityToggle';
 import styles from './MapOptionsPopover.module.scss';
 
+// 自己处理入口切换，忽略 Element 的外部点击、失焦和 Esc 关闭请求
+const ignoreVisibility = () => undefined;
+
 /** 底图的左侧箭头浮层；选择状态仍由原有拥有者持有 */
 export const MapOptionsPopover = defineComponent({
   name: 'MapOptionsPopover',
@@ -52,8 +55,6 @@ export const MapOptionsPopover = defineComponent({
         opacityOpen.value = false;
       }
     });
-    // 自己处理入口切换，忽略 Element 的外部点击、失焦和 Esc 关闭请求
-    const ignoreVisibility = () => undefined;
     const toggle = () => emit('update:open', pageActive.value && !shown.value);
     // 在 Popper 写完位置后报告顶部；选项保持同一对象避免更新循环
     const popperOptions = {
