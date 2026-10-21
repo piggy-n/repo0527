@@ -118,7 +118,7 @@ describe('目录维护流程', () => {
   it('重命名当前目录后标题、查询名称和筛选同步，删除当前目录重新选择有效节点', async () => {
     const api = backend();
     const { editor, list } = host();
-    await vi.waitFor(() => expect(list.resources.value).toHaveLength(10));
+    await vi.waitFor(() => expect(list.resources.value).toHaveLength(20));
     list.filterForm.name = '草稿';
     list.pageNum.value = 2;
     editor.open('rename', 'land');

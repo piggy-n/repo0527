@@ -1,7 +1,7 @@
 import { Delete, EditPen, Plus } from '@element-plus/icons-vue';
 import { MxTitle, useSplitLayout } from '@yzt/ui';
-import { ElAlert, ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElMessage, ElTree, type TreeInstance } from 'element-plus';
-import { defineComponent, type PropType, ref } from 'vue';
+import { ElAlert, ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElTree, type TreeInstance } from 'element-plus';
+import { computed, defineComponent, onBeforeUnmount, type PropType, ref } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { ResourceDirectory } from '../api';
@@ -31,7 +31,42 @@ export const ResourceDirectoryPanel = defineComponent({
     const showLoading = useDelayedFlag(() => props.loading);
     const showSaving = useDelayedFlag(editor.pending);
     const isGroup = (id: string) => props.nodes.some(group => group.id === id);
-    const labels = { add: '新增二级目录', rename: '重命名目录', remove: '删除目录' };
+    const labels = { add: '新增二级目录', rename: '重命名目录' };
+    const dialogTitle = computed(() => {
+      const kind = editor.target.value?.kind;
+      return kind && kind !== 'remove' ? labels[kind] : '';
+    });
+    // MessageBox 独立于组件挂载，仅关闭本组件当前拥有的确认框
+    let confirmingRemoval = false;
+    onBeforeUnmount(() => {
+      if (confirmingRemoval) { ElMessageBox.close(); }
+    });
+
+    async function remove(id: string) {
+      editor.open('remove', id);
+      const target = editor.target.value;
+      if (!target || target.kind !== 'remove' || confirmingRemoval) { return; }
+      confirmingRemoval = true;
+      try {
+        await ElMessageBox.confirm(
+          <p class={styles.confirmText}>确定删除「{target.name}」吗？删除后不能恢复。</p>,
+          '删除目录',
+          { type: 'warning', confirmButtonText: '删除' }
+        );
+      } catch {
+        editor.close();
+        return;
+      } finally {
+        confirmingRemoval = false;
+      }
+      // submit 仍检查节点快照、管理员会话和卸载状态，确认框本身不承担业务校验
+      if (await editor.submit()) {
+        ElMessage.success('目录已删除');
+      } else if (editor.error.value) {
+        ElMessage.error(editor.error.value);
+      }
+      editor.close();
+    }
 
     async function submit() {
       const kind = editor.target.value?.kind;
@@ -50,6 +85,7 @@ export const ResourceDirectoryPanel = defineComponent({
         )}
         {props.nodes.length > 0 ? (
           <ElTree
+            class={styles.tree}
             ref={tree}
             data={props.nodes}
             props={{ label: 'name', children: 'children' }}
@@ -109,7 +145,7 @@ export const ResourceDirectoryPanel = defineComponent({
                           aria-label={`删除${data.name}`}
                           onClick={(event: MouseEvent) => {
                             event.stopPropagation();
-                            editor.open('remove', data.id);
+                            void remove(data.id);
                           }}
                         />
                       </>
@@ -121,9 +157,9 @@ export const ResourceDirectoryPanel = defineComponent({
           </ElTree>
         ) : <div class={styles.state}>{showLoading.value ? '正在加载目录…' : props.loading || props.error ? '' : '暂无资源目录'}</div>}
         <ElDialog
-          class={[styles.dialog, editor.target.value?.kind !== 'remove' && 'dialog-panel-header']}
-          modelValue={editor.target.value !== null}
-          title={editor.target.value ? labels[editor.target.value.kind] : ''}
+          class={[styles.dialog, 'dialog-panel-header']}
+          modelValue={editor.target.value !== null && editor.target.value.kind !== 'remove'}
+          title={dialogTitle.value}
           destroyOnClose
           appendToBody
           closeOnClickModal={false}
@@ -132,15 +168,10 @@ export const ResourceDirectoryPanel = defineComponent({
           onUpdate:modelValue={(open: boolean) => { if (!open) { editor.close(); } }}
         >
           {{
-            header: editor.target.value?.kind !== 'remove' ? () => (
-              <MxTitle level="panel">{editor.target.value ? labels[editor.target.value.kind] : ''}</MxTitle>
-            ) : undefined,
-            default: () => editor.target.value?.kind === 'remove' ? (
-              <>
-                <p class={styles.confirmText}>确定删除目录「{editor.target.value.name}」吗？</p>
-                {editor.error.value && <ElAlert title={editor.error.value} type="error" closable={false} />}
-              </>
-            ) : (
+            header: () => (
+              <MxTitle level="panel">{dialogTitle.value}</MxTitle>
+            ),
+            default: () => (
               <ElForm labelPosition="top">
                 <ElFormItem label="目录名称" required error={editor.error.value}>
                   <ElInput
@@ -164,12 +195,12 @@ export const ResourceDirectoryPanel = defineComponent({
               <>
                 <ElButton disabled={editor.pending.value} onClick={editor.close}>取消</ElButton>
                 <ElButton
-                  type={editor.target.value?.kind === 'remove' ? 'danger' : 'primary'}
+                  type="primary"
                   disabled={editor.pending.value}
                   loading={showSaving.value}
                   onClick={() => void submit()}
                 >
-                  {editor.target.value?.kind === 'remove' ? '删除目录' : '保存目录'}
+                  保存目录
                 </ElButton>
               </>
             )

@@ -1,3 +1,5 @@
+import { COMPACT_MEDIA_QUERY } from '@yzt/ui';
+import { useMediaQuery } from '@vueuse/core';
 import { ElAlert, ElButton, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
@@ -20,6 +22,7 @@ export const ResourceTable = defineComponent({
   },
   emits: { retry: () => true, view: (_row: ResourceRecord) => true, toggle: (_row: ResourceRecord) => true },
   setup(props, { emit }) {
+    const compact = useMediaQuery(COMPACT_MEDIA_QUERY);
     const showSkeleton = useDelayedFlag(() => props.initialLoading);
     const showMask = useDelayedFlag(() => props.refreshing);
     return () => (
@@ -49,7 +52,7 @@ export const ResourceTable = defineComponent({
                     onToggle={() => emit('toggle', row)}
                   /> }}
               </ElTableColumn>,
-              <ElTableColumn label="操作" width="90" fixed="right" align="center">
+              <ElTableColumn label="操作" width="90" fixed={compact.value ? false : 'right'} align="center">
                 {{ default: ({ row }: { row: ResourceRecord }) =>
                   <ElButton link type="primary" onClick={() => emit('view', row)}>查看</ElButton> }}
               </ElTableColumn>

@@ -20,6 +20,7 @@ export const ResourceStatusSwitch = defineComponent({
       return false;
     }
     return () => <ElSwitch
+      size="small"
       modelValue={props.row.enabled}
       disabled={props.disabled || props.pending}
       loading={loading.value}

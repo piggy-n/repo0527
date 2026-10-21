@@ -1,5 +1,5 @@
 import { MxPanel, MxSplitLayout } from '@yzt/ui';
-import { ElAlert, ElButton, ElDialog, ElMessage, ElOption, ElPagination, ElSelect } from 'element-plus';
+import { ElAlert, ElButton, ElDialog, ElMessage, ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { useSessionStore } from '@/shared/auth/session-store';
@@ -92,25 +92,17 @@ export const ResourceManagementPage = defineComponent({
                   />
                 ],
                 footer: () => (
-                  <div class={styles.pagination}>
-                    <span>共 {list.total.value} 条</span>
-                    <ElSelect
-                      class={styles.pageSize}
-                      modelValue={list.pageSize.value}
-                      onUpdate:modelValue={list.changePageSize}
-                      aria-label="每页条数"
-                    >
-                      {[10, 20, 50, 100].map(size => <ElOption key={size} label={`${size} 条/页`} value={size} />)}
-                    </ElSelect>
-                    <ElPagination
-                      currentPage={list.pageNum.value}
-                      pageSize={list.pageSize.value}
-                      total={list.total.value}
-                      pagerCount={5}
-                      layout="prev, pager, next"
-                      onUpdate:current-page={(page: number) => { list.pageNum.value = page; }}
-                    />
-                  </div>
+                  <ElPagination
+                    class={styles.pagination}
+                    currentPage={list.pageNum.value}
+                    pageSize={list.pageSize.value}
+                    total={list.total.value}
+                    pageSizes={[10, 20, 50, 100]}
+                    pagerCount={5}
+                    layout="total, sizes, prev, pager, next, jumper"
+                    onUpdate:current-page={(page: number) => { list.pageNum.value = page; }}
+                    onUpdate:page-size={list.changePageSize}
+                  />
                 )
               }}
             </MxPanel>

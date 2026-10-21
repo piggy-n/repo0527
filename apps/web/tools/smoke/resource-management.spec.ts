@@ -8,6 +8,7 @@ interface Directory {
   id: string;
   name: string;
   icon?: string;
+  code?: string;
   children?: Directory[] | null;
 }
 
@@ -25,6 +26,7 @@ interface Backend {
   statuses: { id: string; status: string | null }[];
   saves: { id: string | null; resourceName: string | null; attributes: Attribute[] }[];
   holdPage?: Promise<void>;
+  holdDirectoryWrite?: Promise<void>;
   writes: string[];
   reads: string[];
   pages: { resource: string; pageNum: number; pageSize: number; layerName?: string; year?: string }[];
@@ -51,7 +53,8 @@ const test = base.extend<{ resourceBackend: Backend }>({
     const groups: Directory[] = [
       { id: 'base', name: '基础库', children: ['土地资源', '地质/矿产资源', '海洋资源', '水资源', '森林资源',
         '草原资源', '湿地资源', '荒漠', '国家公园'].map((name, index) => ({ id: `base-${index}`, name,
-        icon: name.replace('/', '_') + '@1x.png' })) },
+        code: name === '国家公园' ? 'gjgyzy' : name === '湿地资源' ? 'sdzy' : undefined,
+        icon: (name === '国家公园' ? '湿地资源' : name.replace('/', '_')) + '@1x.png' })) },
       { id: 'public', name: '公共库', children: ['气象', '水利', '生态'].map((name, index) => ({ id: `public-${index}`, name })) },
       { id: 'topic', name: '主题库', children: ['生态保护区', '耕地保护区', '联合审批'].map((name, index) => ({ id: `topic-${index}`, name })) },
       { id: 'three', name: '三区三线', children: null }
@@ -124,6 +127,7 @@ const test = base.extend<{ resourceBackend: Backend }>({
         data = null;
       } else if (endpoint.startsWith('/resource-management/menu/')) {
         backend.writes.push(endpoint);
+        await backend.holdDirectoryWrite;
         fail = backend.failWrite;
         if (!fail) {
           if (endpoint.endsWith('/delete')) {
@@ -165,11 +169,74 @@ async function settleAnimations(page: Page) {
   await page.evaluate('Promise.all(document.getAnimations().filter(a => Number.isFinite(a.effect?.getTiming().iterations)).map(a => a.finished.catch(() => {})))');
 }
 
+test('目录整行悬浮、移出和鼠标关闭后隐藏；键盘与业务图标保持可用', async ({ page }, testInfo) => {
+  await enter(page);
+  const rename = page.getByRole('button', { name: '重命名土地资源', exact: true });
+  const row = rename.locator('xpath=ancestor::div[contains(@class, "el-tree-node__content")]');
+  const actions = row.locator('[class*="_treeActions_"]');
+  const label = row.locator('[class*="_treeName_"]');
+  await page.mouse.move(700, 130);
+  await expect(actions).toHaveCSS('opacity', '0');
+  const before = await label.boundingBox();
+  for (let index = 0; index < 3; index += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- 连续移入移出检验整行而非仅文字的悬浮区域
+    await row.hover({ position: { x: 2, y: 18 } });
+    // oxlint-disable-next-line no-await-in-loop -- 必须在移出前检查显示状态
+    await expect(actions).toHaveCSS('opacity', '1');
+    // oxlint-disable-next-line no-await-in-loop -- 保留真实鼠标序列
+    await page.mouse.move(700, 130);
+    // oxlint-disable-next-line no-await-in-loop -- 必须在下一轮移入前检查隐藏状态
+    await expect(actions).toHaveCSS('opacity', '0');
+  }
+  expect(await label.boundingBox()).toEqual(before);
+  await row.hover();
+  await rename.click();
+  const dialog = page.getByRole('dialog', { name: '重命名目录', exact: true });
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await page.mouse.move(700, 130);
+  await expect(actions).toHaveCSS('opacity', '0');
+  await rename.press('Tab');
+  await expect(page.getByRole('button', { name: '删除土地资源', exact: true })).toBeFocused();
+  await expect(actions).toHaveCSS('opacity', '1');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name: '删除目录', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: '删除目录', exact: true })).not.toBeVisible();
+  await expect(actions).toHaveCSS('opacity', '1');
+  const wetland = page.getByRole('button', { name: '重命名湿地资源', exact: true }).locator('xpath=../..').locator('svg').first();
+  const park = page.getByRole('button', { name: '重命名国家公园', exact: true }).locator('xpath=../..').locator('svg').first();
+  expect(await wetland.innerHTML()).not.toEqual(await park.innerHTML());
+  const dataRow = page.locator('.el-table__row').first();
+  const height = (await dataRow.boundingBox())!.height;
+  expect(height).toBeGreaterThanOrEqual(48);
+  expect(height).toBeLessThanOrEqual(50);
+  await expect(dataRow.locator('td').first()).toHaveCSS('padding', '12px 0px');
+  await expect(dataRow.locator('.cell').first()).toHaveCSS('padding', '0px 12px');
+  await settleAnimations(page);
+  await page.screenshot({ path: testInfo.outputPath('directory-keyboard-and-table.png') });
+});
+
+test.describe('触屏目录操作', () => {
+  test.use({ hasTouch: true });
+  test('无需悬浮即可打开和关闭目录弹窗', async ({ page }) => {
+    await enter(page);
+    const rename = page.getByRole('button', { name: '重命名土地资源', exact: true });
+    await expect(rename.locator('..')).toHaveCSS('opacity', '1');
+    await rename.tap();
+    await expect(page.getByRole('dialog', { name: '重命名目录', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '取消', exact: true }).tap();
+    await expect(page.getByRole('dialog', { name: '重命名目录', exact: true })).not.toBeVisible();
+    await expect(rename.locator('..')).toHaveCSS('opacity', '1');
+  });
+});
+
 test('目录维护、列表联动、失败保留草稿和重试；正式页面没有刷新按钮', async ({ page, resourceBackend }) => {
   await enter(page);
-  await expect(page.locator('.el-table__row')).toHaveCount(10);
+  await expect(page.locator('.el-table__row')).toHaveCount(20);
   await expect(page.getByRole('button', { name: '刷新', exact: true })).toHaveCount(0);
   await expect(page.locator('.el-tree [class*="_treeIcon_"]')).toHaveCount(19);
+  await page.getByRole('button', { name: '在三区三线新增目录', exact: true }).locator('xpath=ancestor::div[contains(@class, "el-tree-node__content")]').hover();
   await page.getByRole('button', { name: '在三区三线新增目录', exact: true }).click();
   const add = page.getByRole('dialog', { name: '新增二级目录', exact: true });
   await expect(add.getByText('所属分组')).toHaveCount(0);
@@ -188,6 +255,7 @@ test('目录维护、列表联动、失败保留草稿和重试；正式页面�
   await expect(add).not.toBeVisible();
   await expect(page.locator('.el-tree').getByText('新目录', { exact: true })).toBeVisible();
   await page.getByPlaceholder('请输入资源名称').fill('旧草稿');
+  await page.getByRole('button', { name: '重命名土地资源', exact: true }).locator('xpath=ancestor::div[contains(@class, "el-tree-node__content")]').hover();
   await page.getByRole('button', { name: '重命名土地资源', exact: true }).click();
   const rename = page.getByRole('dialog', { name: '重命名目录', exact: true });
   await expect(rename.getByText('所属分组')).toHaveCount(0);
@@ -197,13 +265,26 @@ test('目录维护、列表联动、失败保留草稿和重试；正式页面�
   await expect(rename).not.toBeVisible();
   await expect(page.locator('h2').filter({ hasText: '土地调查' })).toBeVisible();
   await expect(page.getByPlaceholder('请输入资源名称')).toHaveValue('');
+  await page.getByRole('button', { name: '删除土地调查', exact: true }).locator('xpath=ancestor::div[contains(@class, "el-tree-node__content")]').hover();
   await page.getByRole('button', { name: '删除土地调查', exact: true }).click();
   const remove = page.getByRole('dialog', { name: '删除目录', exact: true });
   await remove.getByRole('button', { name: '取消', exact: true }).click();
   await expect(remove).not.toBeVisible();
   expect(resourceBackend.writes).toHaveLength(3);
+  await page.getByRole('button', { name: '删除土地调查', exact: true }).locator('xpath=ancestor::div[contains(@class, "el-tree-node__content")]').hover();
   await page.getByRole('button', { name: '删除土地调查', exact: true }).click();
-  await remove.getByRole('button', { name: '删除目录', exact: true }).click();
+  resourceBackend.failWrite = true;
+  await remove.getByRole('button', { name: '删除', exact: true }).click();
+  await expect(page.getByText('模拟接口失败', { exact: true })).toBeVisible();
+  await expect(page.locator('h2').filter({ hasText: '土地调查' })).toBeVisible();
+  resourceBackend.failWrite = false;
+  await page.getByRole('button', { name: '删除土地调查', exact: true }).locator('xpath=ancestor::div[contains(@class, "el-tree-node__content")]').hover();
+  await page.getByRole('button', { name: '删除土地调查', exact: true }).click();
+  let release!: () => void;
+  resourceBackend.holdDirectoryWrite = new Promise<void>(resolve => { release = resolve; });
+  await remove.getByRole('button', { name: '删除', exact: true }).click();
+  await expect(page.getByRole('button', { name: '删除土地调查', exact: true })).toBeDisabled();
+  release();
   await expect(remove).not.toBeVisible();
   await expect(page.locator('h2').filter({ hasText: '地质/矿产资源' })).toBeVisible();
 });
@@ -211,7 +292,7 @@ test('目录维护、列表联动、失败保留草稿和重试；正式页面�
 test('图层启停按行等待、并发与失败重试；查看只保留文字', async ({ page, resourceBackend }, testInfo) => {
   await enter(page);
   const rows = page.locator('.el-table__row');
-  await expect(rows).toHaveCount(10);
+  await expect(rows).toHaveCount(20);
   await expect(page.getByRole('button', { name: '查看', exact: true }).first().locator('svg')).toHaveCount(0);
   const first = rows.nth(0).getByRole('switch');
   const second = rows.nth(1).getByRole('switch');
@@ -278,12 +359,19 @@ test('筛选、分页、空结果与页面错误区重试', async ({ page, resou
   await expect(page.getByText('资源列表加载失败', { exact: false })).toBeVisible();
   resourceBackend.failPage = false;
   await page.getByRole('button', { name: '重试列表', exact: true }).click();
-  await expect(page.locator('.el-table__row')).toHaveCount(10);
+  await expect(page.locator('.el-table__row')).toHaveCount(20);
   resourceBackend.failYears = false;
   await page.getByRole('button', { name: '重试年份', exact: true }).click();
   await expect(page.getByRole('button', { name: '重试年份', exact: true })).toHaveCount(0);
   await page.locator('.el-pager').getByText('2', { exact: true }).click();
-  await expect(page.locator('.el-table__row').first()).toContainText('土地资源记录10');
+  await expect(page.locator('.el-table__row').first()).toContainText('土地资源记录20');
+  await page.locator('.el-pagination__sizes .el-select__wrapper').click();
+  await page.getByRole('option', { name: '10条/页', exact: true }).click();
+  await expect(page.locator('.el-pager .is-active')).toHaveText('1');
+  await expect(page.locator('.el-table__row')).toHaveCount(10);
+  await page.locator('.el-pagination__sizes .el-select__wrapper').click();
+  await page.getByRole('option', { name: '20条/页', exact: true }).click();
+  await expect(page.locator('.el-table__row')).toHaveCount(20);
   await page.getByPlaceholder('请输入资源名称').fill('记录');
   await page.locator('.el-form-item').filter({ hasText: '年份' }).locator('.el-select__wrapper').click();
   await page.getByRole('option', { name: '2024', exact: true }).click();
@@ -294,16 +382,16 @@ test('筛选、分页、空结果与页面错误区重试', async ({ page, resou
   await page.getByPlaceholder('请输入资源名称').press('Enter');
   await expect(page.getByText('暂无资源，可调整筛选条件后查询')).toBeVisible();
   await page.getByRole('button', { name: '重置', exact: true }).click();
-  await expect(page.locator('.el-table__row')).toHaveCount(10);
+  await expect(page.locator('.el-table__row')).toHaveCount(20);
   resourceBackend.failPage = true;
   await page.getByRole('button', { name: '查询', exact: true }).click();
   await expect(page.getByText('刷新失败，以下为上次结果。', { exact: false })).toBeVisible();
-  await expect(page.locator('.el-table__row')).toHaveCount(10);
+  await expect(page.locator('.el-table__row')).toHaveCount(20);
 });
 
 test('多尺寸布局、长名称、目录抽屉及窄屏弹窗', async ({ page }, testInfo) => {
   await enter(page);
-  await expect(page.locator('.el-table__row')).toHaveCount(10);
+  await expect(page.locator('.el-table__row')).toHaveCount(20);
   await page.evaluate('document.fonts.ready');
   const checkSize = async (width: number, height: number) => {
     await page.setViewportSize({ width, height });
@@ -311,6 +399,15 @@ test('多尺寸布局、长名称、目录抽屉及窄屏弹窗', async ({ page 
       (element: { scrollWidth: number }, viewportWidth) => element.scrollWidth <= viewportWidth, width
     )).toBe(true);
     await expect(page.locator('.el-pagination')).toBeVisible();
+    const pager = await page.locator('.el-pagination').boundingBox();
+    expect(pager!.x).toBeGreaterThanOrEqual(0);
+    expect(pager!.x + pager!.width).toBeLessThanOrEqual(width);
+    expect(pager!.y + pager!.height).toBeLessThanOrEqual(height);
+    // 翻页按钮必须和页码同行，不能在窄屏换行到条数选择旁
+    const previous = await page.getByRole('button', { name: '上一页', exact: true }).boundingBox();
+    const next = await page.getByRole('button', { name: '下一页', exact: true }).boundingBox();
+    expect(previous!.y).toBe(next!.y);
+    expect((await page.locator('.el-pager').boundingBox())!.y).toBe(previous!.y);
     if (width < 1200) {
       await page.getByRole('button', { name: '资源目录', exact: true }).click();
       await expect(page.getByRole('button', { name: '关闭资源目录', exact: true })).toBeVisible();
@@ -326,6 +423,7 @@ test('多尺寸布局、长名称、目录抽屉及窄屏弹窗', async ({ page 
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: '资源目录', exact: true }).click();
+  await page.getByRole('button', { name: '在基础库新增目录', exact: true }).locator('xpath=ancestor::div[contains(@class, "el-tree-node__content")]').hover();
   await page.getByRole('button', { name: '在基础库新增目录', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '新增二级目录', exact: true });
   await expect(dialog).toBeVisible();
@@ -355,13 +453,14 @@ test('首次加载用骨架，查询期间保留行并显示遮罩，切页卸�
   await expect(page.locator('.table-skeleton')).toBeVisible();
   await expect(page.getByText('暂无资源，可调整筛选条件后查询')).toHaveCount(0);
   release?.();
-  await expect(page.locator('.el-table__row')).toHaveCount(10);
+  await expect(page.locator('.el-table__row')).toHaveCount(20);
   resourceBackend.holdPage = new Promise<void>(resolve => { release = resolve; });
   await page.getByRole('button', { name: '查询', exact: true }).click();
   await expect(page.locator('.el-loading-mask')).toBeVisible();
-  await expect(page.locator('.el-table__row')).toHaveCount(10);
+  await expect(page.locator('.el-table__row')).toHaveCount(20);
   release?.();
   await expect(page.locator('.el-loading-mask')).not.toBeVisible();
+  await page.getByRole('button', { name: '删除土地资源', exact: true }).locator('xpath=ancestor::div[contains(@class, "el-tree-node__content")]').hover();
   await page.getByRole('button', { name: '删除土地资源', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '删除目录', exact: true })).toBeVisible();
   await page.goto('/file-management');
@@ -374,7 +473,7 @@ test('详情头部修改、属性保存失败保留草稿、保存后刷新列�
   await page.getByPlaceholder('请输入资源名称').fill('记录');
   await page.getByRole('button', { name: '查询', exact: true }).click();
   await page.locator('.el-pager').getByText('2', { exact: true }).click();
-  await expect(page.locator('.el-table__row').first()).toContainText('土地资源记录11');
+  await expect(page.locator('.el-table__row').first()).toContainText('土地资源记录21');
   await page.getByRole('button', { name: '查看', exact: true }).first().click();
   const detail = page.locator('[data-resource-detail]');
   await expect(detail.getByText('数据集元数据', { exact: true })).toBeVisible();
@@ -399,14 +498,14 @@ test('详情头部修改、属性保存失败保留草稿、保存后刷新列�
   release();
   await expect(detail.getByRole('button', { name: '修改', exact: true })).toBeVisible();
   expect(resourceBackend.saves).toHaveLength(2);
-  expect(resourceBackend.saves[1]).toMatchObject({ id: 'row-11', resourceName: '水资源' });
+  expect(resourceBackend.saves[1]).toMatchObject({ id: 'row-21', resourceName: '水资源' });
   expect(resourceBackend.saves[1].attributes[0]).toEqual({ attrId: null, name: '标识码', code: 'FIELD_0',
     fieldType: 'Long', fieldLength: '100', year: 2025, remark: '必须保留的备注' });
   expect(resourceBackend.saves[1].attributes[1].name).toBeNull();
   await page.getByRole('button', { name: '返回', exact: true }).click();
   await expect(page.getByPlaceholder('请输入资源名称')).toHaveValue('记录');
   await expect(page.locator('.el-pager .is-active')).toHaveText('2');
-  await expect(page.locator('.el-table__row').first()).toContainText('土地资源记录12');
+  await expect(page.locator('.el-table__row').first()).toContainText('土地资源记录22');
 });
 
 test('未保存返回、切目录、取消编辑和路由离开都确认；拒绝不改目录高亮', async ({ page }) => {
