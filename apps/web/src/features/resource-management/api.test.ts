@@ -3,7 +3,7 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { configureHttp } from '@/shared/http/configure';
 import { ApiError } from '@/shared/http/errors';
-import { fetchResourceDirectory, fetchResourcePage, fetchResourceYears } from './api';
+import { changeResourceDirectory, fetchResourceDirectory, fetchResourcePage, fetchResourceYears } from './api';
 import { resourceDirectoryResponse, resourcePageResponse, resourceYearsResponse } from './test-data';
 
 const server = setupServer();
@@ -13,6 +13,37 @@ afterEach(() => {
   configureHttp({});
 });
 afterAll(() => server.close());
+
+describe('资源目录写接口', () => {
+  it('新增传完整旧业务参数，重命名仅传 id/name，删除使用 query 且无 body', async () => {
+    const received: unknown[] = [];
+    server.use(mock.post('/backend/resource-management/menu/:action', async ({ request, params }) => {
+      received.push({ action: params.action, query: new URL(request.url).searchParams.get('id'), body: await request.text() });
+      return HttpResponse.json({ code: 200, data: null });
+    }));
+    await changeResourceDirectory({ kind: 'add', parentId: 'base', name: '水 / 土资源' });
+    await changeResourceDirectory({ kind: 'rename', id: 'land', name: '新名称' });
+    await changeResourceDirectory({ kind: 'remove', id: '目录 / &?' });
+    expect(received).toEqual([
+      { action: 'add', query: null, body: JSON.stringify({ name: '水 / 土资源', code: '水 / 土资源',
+        parentId: 'base', public: false, sort: 0, children: [] }) },
+      { action: 'edit', query: null, body: JSON.stringify({ id: 'land', name: '新名称' }) },
+      { action: 'delete', query: '目录 / &?', body: '' }
+    ]);
+  });
+
+  it('成功不假设 data 的形状；业务失败保留服务端原因且不重复全局提示', async () => {
+    const onError = vi.fn<() => void>();
+    configureHttp({ onError });
+    server.use(mock.post('/backend/resource-management/menu/add', () => HttpResponse.json({ code: 200 })));
+    await expect(changeResourceDirectory({ kind: 'add', parentId: 'base', name: '新目录' })).resolves.toBeUndefined();
+    server.use(mock.post('/backend/resource-management/menu/add', () =>
+      HttpResponse.json({ code: 500, msg: '同名目录不允许新增' })));
+    await expect(changeResourceDirectory({ kind: 'add', parentId: 'base', name: '新目录' }))
+      .rejects.toMatchObject({ kind: 'business', message: '同名目录不允许新增' });
+    expect(onError).not.toHaveBeenCalled();
+  });
+});
 
 describe('资源管理读取接口', () => {
   it('目录保留层级、接口顺序及空分组，允许可选图标和 null code', async () => {

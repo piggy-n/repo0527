@@ -1,11 +1,14 @@
-import { type Query, skipToken, useQuery, useQueryClient } from '@tanstack/vue-query';
+import { type Query, skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
+import { useSessionStore } from '@/shared/auth/session-store';
 import {
+  changeResourceDirectory,
   fetchResourceDirectory,
   fetchResourcePage,
   fetchResourceYears,
   type ResourcePage,
-  type ResourcePageParams
+  type ResourcePageParams,
+  type ResourceDirectoryChange
 } from './api';
 
 /** 目录 ID 隔离同名节点的缓存；params 中的名称是本次请求使用的目录名称 */
@@ -43,6 +46,24 @@ export function useResourceYearsQuery() {
   return useQuery({
     queryKey: resourceManagementKeys.years(),
     queryFn: ({ signal }) => fetchResourceYears(signal)
+  });
+}
+
+/** 写入成功后先更新目录身份，再刷新列表；旧会话的晚到结果不触碰新会话缓存 */
+export function useResourceDirectoryMutation() {
+  const queryClient = useQueryClient();
+  const session = useSessionStore();
+  return useMutation({
+    mutationFn: ({ change }: { change: ResourceDirectoryChange; token: string }) => changeResourceDirectory(change),
+    onSuccess: async (_, { token }) => {
+      if (session.token !== token) {
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: resourceManagementKeys.directory() });
+      if (session.token === token) {
+        await queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() });
+      }
+    }
   });
 }
 

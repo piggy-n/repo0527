@@ -43,7 +43,13 @@ const businessRoutes: RouteRecordRaw[] = [
   },
   placeholder('ai-chat', RouteName.aiChat, 'AI对话'),
   placeholder('message-center', RouteName.messageCenter, '消息中心'),
-  placeholder('resource-management', RouteName.resourceManagement, '资源管理', [Role.admin]),
+  {
+    path: 'resource-management',
+    name: RouteName.resourceManagement,
+    component: () =>
+      import('@/pages/resource-management/ResourceManagementPage').then(({ ResourceManagementPage }) => ResourceManagementPage),
+    meta: { title: '资源管理', roles: [Role.admin] }
+  },
   placeholder('resource-application', RouteName.resourceApplication, '资源申请', [Role.user]),
   placeholder('system-management', RouteName.systemManagement, '系统管理', [Role.admin])
 ];

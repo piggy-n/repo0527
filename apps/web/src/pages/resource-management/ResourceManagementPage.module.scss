@@ -1,0 +1,30 @@
+// 仅本业务主面板标题栏使用已确认的浅灰背景，标题层级继续由 MxTitle 提供
+.panel > header {
+  background-color: var(--color-neutral-bg-light);
+}
+
+.panel > header + div {
+  padding-top: var(--space-lg);
+}
+
+.filters {
+  flex: none;
+  margin-bottom: var(--space-lg);
+}
+
+.notice {
+  flex: none;
+  margin-bottom: var(--space-md);
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.pageSize { width: 100px; }

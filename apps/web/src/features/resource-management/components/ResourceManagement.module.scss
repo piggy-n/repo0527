@@ -1,0 +1,74 @@
+.treeRow {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: var(--space-sm);
+}
+
+.treeIcon {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.selected .treeIcon {
+  color: var(--color-primary);
+}
+
+.treeName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.treeActions {
+  display: flex;
+  flex: none;
+  gap: var(--space-xs);
+  opacity: 0;
+}
+
+.treeRow:hover .treeActions,
+.treeRow:focus-within .treeActions,
+.selected .treeActions {
+  opacity: 1;
+}
+
+.treeActions :global(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+@media (hover: none) {
+  .treeActions { opacity: 1; }
+}
+
+.state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  color: var(--color-text-secondary);
+}
+
+.notice {
+  flex: none;
+  margin-bottom: var(--space-md);
+}
+
+.table {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.confirmText {
+  margin: 0 0 var(--space-lg);
+  overflow-wrap: anywhere;
+}

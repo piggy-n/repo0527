@@ -79,3 +79,28 @@ export function fetchResourceYears(signal?: AbortSignal) {
 export function fetchResourcePage(params: ResourcePageParams, signal?: AbortSignal) {
   return http.post('/resource-management/layer/page', params, { schema: resourcePageSchema, signal, silent: true });
 }
+
+/** 目录写入的业务参数；成功只消费公共信封，不假设尚未确认的 data 形状 */
+export type ResourceDirectoryChange =
+  | { kind: 'add'; parentId: string; name: string }
+  | { kind: 'rename'; id: string; name: string }
+  | { kind: 'remove'; id: string };
+
+/** 服务端写操作不随页面卸载取消；失败由目录弹窗呈现，401 仍由全局处理 */
+export function changeResourceDirectory(change: ResourceDirectoryChange) {
+  const options = { schema: z.unknown(), silent: true };
+  if (change.kind === 'add') {
+    return http.post('/resource-management/menu/add', {
+      name: change.name,
+      code: change.name,
+      parentId: change.parentId,
+      public: false,
+      sort: 0,
+      children: []
+    }, options);
+  }
+  if (change.kind === 'rename') {
+    return http.post('/resource-management/menu/edit', { id: change.id, name: change.name }, options);
+  }
+  return http.post('/resource-management/menu/delete', undefined, { ...options, query: { id: change.id } });
+}
