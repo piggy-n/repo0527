@@ -1,16 +1,52 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
+import { CancelledError, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { useSessionStore, type Session } from '@/shared/auth/session-store';
 import type { TransferProgress } from '@/shared/http/client';
 import { ApiError } from '@/shared/http/errors';
-import { deleteFile, fetchFilePage, uploadFiles, type FilePageParams, type FileUploadInput } from './api';
+import { deleteFile, fetchFileContent, fetchFilePage, uploadFiles, type FilePageParams, type FileUploadInput } from './api';
+import type { FileTransferTarget } from './file-types';
 
 /** 文件管理的 query key 只在这里拼，查询和失效共用，避免两边写得不一致 */
 export const fileKeys = {
   all: ['files'] as const,
   pages: () => [...fileKeys.all, 'page'] as const,
+  content: (objectKey: string, requestId: string) => [...fileKeys.all, 'content', objectKey, requestId] as const,
   page: (params: FilePageParams) => [...fileKeys.pages(), params] as const
 };
+
+/** 手动读取的 Blob 不跨操作缓存；独立 key 让下载和预览各自取消，结束会话仍由 QueryClient 统一清理 */
+export function useFileContentRequest() {
+  const queryClient = useQueryClient();
+  const session = useSessionStore();
+  return async (file: FileTransferTarget, signal: AbortSignal, onProgress?: (progress: TransferProgress) => void) => {
+    const sentSession = session.session;
+    // 临时身份只用于隔离查询，不比较先后；getRandomValues 也可用于普通 HTTP 内网
+    const requestId = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
+    const queryKey = fileKeys.content(file.objectKey, requestId);
+    try {
+      return await queryClient.query({
+        queryKey,
+        queryFn: ({ signal: querySignal }) => {
+          if (signal.aborted || !sentSession || session.session !== sentSession || !session.isActive()) {
+            throw new ApiError({ kind: 'canceled', message: '文件读取已取消' });
+          }
+          return fetchFileContent(file, AbortSignal.any([signal, querySignal]), onProgress);
+        },
+        retry: false,
+        // 手动操作离线时直接失败，不排队在恢复联网后悄悄开始下载
+        networkMode: 'always',
+        gcTime: 0
+      });
+    } catch (error) {
+      if (error instanceof CancelledError) {
+        throw new ApiError({ kind: 'canceled', message: '文件读取已取消' });
+      }
+      throw error;
+    } finally {
+      queryClient.removeQueries({ queryKey, exact: true });
+    }
+  };
+}
 
 /** 某个分类下某一页的文件；同一分类内翻页、筛选时保留上一次的数据，换分类时不保留 */
 export function useFilePageQuery(params: MaybeRefOrGetter<FilePageParams>) {

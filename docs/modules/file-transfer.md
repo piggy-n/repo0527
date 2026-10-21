@@ -1,6 +1,6 @@
 # 公共文件传输
 
-状态：2026-10-21 公共基础已实现并完成本地验证；独立提交 `d8cdf8ece9fb1db97a7ab3517a1b7b48bfe6e045`。文件管理上传原型已确认并接入公共层，详情见 [文件管理](file-management.md)；下载和预览仍待接入。
+状态：2026-10-21 公共基础已实现并完成本地验证；独立提交 `d8cdf8ece9fb1db97a7ab3517a1b7b48bfe6e045`。文件管理上传、下载与预览均已确认原型并接入公共层，业务验证及待办见 [文件管理](file-management.md)。
 
 本轮由文件管理会话负责 `shared/http` 的传输扩展、`shared/file-transfer` 及其测试和本文。资源管理只消费公共接口，业务接口、Excel 校验与刷新由资源管理维护。公共基础首个提交不包含业务 UI、预览依赖、公共主题或锁文件变更；提交号另记迁移记录，由用户协调合入 main。
 
@@ -71,16 +71,17 @@ saveFile(file);
 
 `getBlob` 返回 `Promise<BinaryResponse>`；`fetchFile` 返回 `Promise<DownloadedFile>`，同时透传 `timeout`、`silent`；`saveFile` 不发请求、不弹提示。公共基础第一版只提供这三个场景需要的 GET 文件流，未来遇到 POST 导出再扩展。
 
-文件管理业务接口调用示意（业务名称待接入）：
+文件管理业务接口 `fetchFileContent` 的调用方式：
 
 ```ts
 // features/file-management/api.ts
 return fetchFile('/file/download', {
   query: { objectKey: file.objectKey },
   fallbackName: file.name,
-  fallbackType: previewMimeType(file.type),
+  fallbackType: filePreviewType(file.type)?.mime,
   signal,
-  onDownloadProgress
+  onDownloadProgress,
+  silent: true
 });
 ```
 
@@ -121,7 +122,7 @@ return http.post('/resource-management/layer/create-attribute-by-excel', body, {
 
 ## 第一轮交互原型计划
 
-本节是起始计划；已实现原型的访问方式、实际验证与待确认项统一维护在 [文件管理模块](file-management.md)，不以计划代替验收结果。
+本节保留起始计划；用户已接受统一容器与 docx-preview 依赖，正式功能已接入。访问方式、实际验证与待验收项统一维护在 [文件管理模块](file-management.md)，不以计划代替验收结果。
 
 先参考真实文件列表、`/dev/theme` 的 QueryForm、标题、面板和表格，以及 `/dev/map-ui` 复用真实组件和固定数据的方式。优先做隔离的真实组件预览，复用 Element 的对话框、选择器、上传选择区和进度条；如增加 `/dev/file-management`，遵守开发路由命名及生产隔离检查。
 

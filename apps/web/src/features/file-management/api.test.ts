@@ -3,10 +3,39 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { http } from '@/shared/http/client';
 import { ApiError } from '@/shared/http/errors';
-import { deleteFile, fetchFilePage, uploadFiles } from './api';
+import { deleteFile, fetchFileContent, fetchFilePage, uploadFiles } from './api';
 import { filePageResponse } from './test-data';
 
 const server = setupServer();
+
+describe('fetchFileContent', () => {
+  const file = { id: 'one', name: '后备.pdf', type: 'pdf', objectKey: '目录/文件 +1.pdf' };
+  it('复用下载接口，准确传 objectKey，响应名优先，只补缺失 MIME', async () => {
+    const received: string[] = [];
+    server.use(mock.get('/backend/file/download', ({ request }) => {
+      received.push(new URL(request.url).searchParams.get('objectKey') ?? '');
+      return new HttpResponse('binary', { headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': "attachment; filename*=UTF-8''%E6%96%87%E6%A1%A3.pdf"
+      } });
+    }));
+    const result = await fetchFileContent(file, new AbortController().signal);
+    expect(received).toEqual([file.objectKey]);
+    expect(result.fileName).toBe('文档.pdf');
+    expect(result.blob.type).toBe('application/pdf');
+    expect(result.blob.size).toBe(6);
+  });
+
+  it('失败信封不能作为文件，地址缺失不发送请求', async () => {
+    const handler = vi.fn<() => Response>(() => HttpResponse.json({ code: 40000, msg: '文件不存在' }));
+    server.use(mock.get('/backend/file/download', handler));
+    await expect(fetchFileContent({ ...file, objectKey: ' ' }, new AbortController().signal))
+      .rejects.toMatchObject({ kind: 'invalid-response', message: '文件地址缺失，无法读取文件' });
+    expect(handler).not.toHaveBeenCalled();
+    await expect(fetchFileContent(file, new AbortController().signal))
+      .rejects.toMatchObject({ kind: 'business', message: '文件不存在' });
+  });
+});
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });

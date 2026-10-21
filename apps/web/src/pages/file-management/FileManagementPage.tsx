@@ -6,14 +6,20 @@ import { FileCategoryTree } from '@/features/file-management/components/FileCate
 import { FileFilterBar } from '@/features/file-management/components/FileFilterBar';
 import { FileTable } from '@/features/file-management/components/FileTable';
 import { FileUploadButton } from '@/features/file-management/components/FileUploadButton';
+import { FileDownloadPanel } from '@/features/file-management/components/FileDownloadPanel';
+import { FilePreviewDialog } from '@/features/file-management/components/FilePreviewDialog';
+import { useFileDownloads } from '@/features/file-management/composables/useFileDownloads';
+import { useFilePreview } from '@/features/file-management/composables/useFilePreview';
 import { useFileList } from '@/features/file-management/composables/useFileList';
 import styles from './FileManagementPage.module.scss';
 
-/** 文件管理：分类树、筛选、上传、表格与分页 */
+/** 文件管理：分类树、筛选、传输、预览、表格与分页 */
 export const FileManagementPage = defineComponent({
   name: 'FileManagementPage',
   setup() {
     const list = useFileList();
+    const downloads = useFileDownloads();
+    const preview = useFilePreview();
     const path = computed(() => findCategoryPath(list.categoryId.value));
     // 有重名的叶子（如两个"监测类"），所以标题后面显示上级路径
     const title = computed(() => path.value.at(-1)?.label);
@@ -46,13 +52,18 @@ export const FileManagementPage = defineComponent({
                       extra: () => <FileUploadButton categoryId={list.categoryId.value} />
                     }}
                   </FileFilterBar>,
+                  <FileDownloadPanel model={downloads} />,
                   <FileTable
                     files={list.files.value}
                     initialLoading={list.initialLoading.value}
                     refreshing={list.refreshing.value}
                     error={list.isError.value}
                     onRetry={() => void list.refresh()}
-                  />
+                    isDownloading={downloads.isDownloading}
+                    onDownload={file => void downloads.start(file)}
+                    onPreview={file => void preview.open(file)}
+                  />,
+                  <FilePreviewDialog model={preview} downloads={downloads} />
                 ],
                 footer: () => (
                   <ElPagination

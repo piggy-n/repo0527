@@ -1,9 +1,12 @@
+import { COMPACT_MEDIA_QUERY } from '@yzt/ui';
+import { useMediaQuery } from '@vueuse/core';
 import { ElButton, ElMessage, ElMessageBox, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus';
 import { defineComponent, onBeforeUnmount, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { TableSkeleton } from '@/shared/table/TableSkeleton';
 import type { FileRecord } from '../api';
 import { useFileRemoval } from '../composables/useFileRemoval';
+import { filePreviewType } from '../file-types';
 import styles from './FileTable.module.scss';
 
 /** 文件表格：占满父元素的剩余高度；删除需要确认，成功后列表由查询缓存自动刷新 */
@@ -16,13 +19,18 @@ export const FileTable = defineComponent({
     // 两种加载状态见 docs/modules/table.md：没有数据时显示骨架屏，显示着旧数据时显示遮罩
     initialLoading: { type: Boolean, required: true },
     refreshing: { type: Boolean, required: true },
-    error: { type: Boolean, required: true }
+    error: { type: Boolean, required: true },
+    isDownloading: { type: Function as PropType<(id: string) => boolean>, required: true }
   },
   emits: {
-    retry: () => true
+    retry: () => true,
+    download: (_file: FileRecord) => true,
+    preview: (_file: FileRecord) => true
   },
   setup(props, { emit }) {
     const removal = useFileRemoval();
+    // 窄屏随表格滚动，避免固定操作列盖住文件名
+    const compact = useMediaQuery(COMPACT_MEDIA_QUERY);
     // 骨架屏和遮罩都延迟显示：请求很快完成时什么都不出现，避免一闪而过
     const showSkeleton = useDelayedFlag(() => props.initialLoading);
     const showMask = useDelayedFlag(() => props.refreshing);
@@ -70,13 +78,24 @@ export const FileTable = defineComponent({
             </ElTableColumn>,
             <ElTableColumn prop="createdTime" label="更新时间" width="180" />,
             <ElTableColumn prop="remark" label="备注" minWidth="120" showOverflowTooltip />,
-            <ElTableColumn label="操作" width="90" align="center">
+            <ElTableColumn label="操作" width="180" align="center" fixed={compact.value ? false : 'right'}>
               {{
-                default: ({ row }: { row: FileRecord }) => (
+                default: ({ row }: { row: FileRecord }) => [
+                  filePreviewType(row.type) && <ElButton link type="primary" onClick={() => emit('preview', row)}>
+                    预览
+                  </ElButton>,
+                  <ElButton
+                    link
+                    type="primary"
+                    disabled={props.isDownloading(row.id)}
+                    onClick={() => emit('download', row)}
+                  >
+                    {props.isDownloading(row.id) ? '下载中' : '下载'}
+                  </ElButton>,
                   <ElButton link type="danger" loading={removal.isRemoving(row.id)} onClick={() => void remove(row)}>
                     删除
                   </ElButton>
-                )
+                ]
               }}
             </ElTableColumn>
           ],
