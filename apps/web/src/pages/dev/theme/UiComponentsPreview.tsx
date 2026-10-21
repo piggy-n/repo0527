@@ -145,7 +145,7 @@ const documentIcon = () => (
   </ElIcon>
 );
 
-/** libs/ui 的面板：三种头部写法、操作与底部、表格占满、无头部、去掉内边距 */
+/** libs/ui 的面板：默认与浅灰标题、操作与底部、表格占满、无头部、去掉内边距 */
 export const PanelPreview = defineComponent({
   name: 'PanelPreview',
   setup() {
@@ -194,9 +194,9 @@ export const PanelPreview = defineComponent({
             <MxPanel title="选择查看报表">{{ default: reportForm, actions: reportActions }}</MxPanel>
           </div>
           <div class={styles.cell}>
-            <p class={styles.caption}>② 标题换成图标</p>
-            <MxPanel title="选择查看报表">
-              {{ default: reportForm, actions: reportActions, icon: documentIcon }}
+            <p class={styles.caption}>② 浅灰标题栏（headerTone="muted"）</p>
+            <MxPanel title="选择查看报表" headerTone="muted">
+              {{ default: reportForm, actions: reportActions }}
             </MxPanel>
           </div>
           <div class={styles.cell}>

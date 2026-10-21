@@ -1,6 +1,6 @@
 import { Close } from '@element-plus/icons-vue';
 import { ElButton } from 'element-plus';
-import { computed, defineComponent, inject, provide, type SlotsType, type VNode } from 'vue';
+import { computed, defineComponent, inject, provide, type PropType, type SlotsType, type VNode } from 'vue';
 import { asideRegionKey, splitLayoutKey } from '../split-layout/context';
 import { MxTitle } from '../title/MxTitle';
 import styles from './MxPanel.module.scss';
@@ -12,6 +12,8 @@ export const MxPanel = defineComponent({
     title: String,
     // 紧跟在标题后面的灰色说明，交给 MxTitle
     description: String,
+    // 按需使用浅灰标题栏，默认面板保持原来的容器底色
+    headerTone: { type: String as PropType<'plain' | 'muted'>, default: 'plain' },
     // 去掉内容区的内边距：表格贴边、放地图、内容自带内边距时使用
     flush: Boolean,
     // 卡片头部：图标放在浅底方块里，只用于同一页有多张并列卡片的场合
@@ -24,6 +26,8 @@ export const MxPanel = defineComponent({
     icon?: () => VNode[];
     // 代替标题的头部内容，如一组 Tab
     header?: () => VNode[];
+    // 标题下方固定区域，如功能标签；独立于标题背景和内容滚动区
+    subheader?: () => VNode[];
     actions?: () => VNode[];
     footer?: () => VNode[];
   }>,
@@ -48,7 +52,7 @@ export const MxPanel = defineComponent({
       return (
         <section class={[styles.root, props.floating && styles.floating, inDrawer.value && styles.inDrawer]}>
           {hasHeader && (
-            <header class={styles.header}>
+            <header class={[styles.header, props.headerTone === 'muted' && styles.muted]}>
               {custom}
               {!custom && props.title && (
                 <MxTitle level="panel" description={props.description}>
@@ -70,6 +74,7 @@ export const MxPanel = defineComponent({
               )}
             </header>
           )}
+          {slots.subheader && <div class={styles.subheader}>{slots.subheader()}</div>}
           <div class={[styles.body, props.flush && styles.flush]}>{slots.default?.()}</div>
           {slots.footer && <footer class={styles.footer}>{slots.footer()}</footer>}
         </section>

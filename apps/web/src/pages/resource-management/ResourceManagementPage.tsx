@@ -40,7 +40,7 @@ export const ResourceManagementPage = defineComponent({
       <><MxSplitLayout asideLabel="资源目录">
         {{
           aside: () => (
-            <MxPanel class={styles.panel} title="资源目录">
+            <MxPanel headerTone="muted" title="资源目录">
               <ResourceDirectoryPanel
                 nodes={directoryQuery.data.value ?? []}
                 selected={list.directoryId.value ?? undefined}
@@ -57,7 +57,7 @@ export const ResourceManagementPage = defineComponent({
             <ResourceDetailPanel owner={detail} directories={directoryQuery.data.value ?? []} />
           ) : (
             <MxPanel
-              class={styles.panel}
+              headerTone="muted"
               title={list.selectedDirectory.value?.name ?? '资源列表'}
               description={parent.value?.name}
             >

@@ -8,18 +8,6 @@
   flex-direction: column;
   max-width: calc(100vw - 24px);
   max-height: 88dvh;
-  padding: var(--space-xl);
-  border-radius: var(--radius-md);
-
-  :global(.el-dialog__header) {
-    padding-bottom: var(--space-lg);
-  }
-
-  :global(.el-dialog__title) {
-    color: var(--color-text-title);
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-  }
 
   :global(.el-dialog__body) {
     min-height: 0;
@@ -28,7 +16,6 @@
 
   :global(.el-dialog__footer) {
     flex: none;
-    padding-top: var(--space-lg);
     border-top: 1px solid var(--color-border-light);
   }
 
@@ -42,7 +29,7 @@
 }
 
 .dialogBody {
-  padding: 0 var(--space-xs) var(--space-lg) 0;
+  padding-right: var(--space-xs);
 }
 
 .fieldRow {
@@ -118,6 +105,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
+  padding-top: var(--space-lg);
   text-align: left;
 }
 
@@ -126,10 +114,6 @@
 }
 
 @media (max-width: 540px) {
-  .dialog {
-    padding: var(--space-lg);
-  }
-
   .fieldRow {
     grid-template-columns: 1fr;
     gap: 0;

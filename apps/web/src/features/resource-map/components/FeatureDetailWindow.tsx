@@ -30,7 +30,7 @@ export const FeatureDetailWindow = defineComponent({
         style={props.visible ? undefined : { display: 'none' }}
         data-feature-detail-window
         onPointerdown={() => !props.collapsed && emit('activate')}>
-        <MxPanel floating flush={props.collapsed} title="资源详情" class={styles.shell}>
+        <MxPanel floating headerTone="muted" flush={props.collapsed} title="资源详情" class={styles.shell}>
           {{
             actions: () => [
               <ElButton

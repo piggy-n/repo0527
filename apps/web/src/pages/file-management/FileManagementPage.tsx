@@ -34,12 +34,12 @@ export const FileManagementPage = defineComponent({
       <MxSplitLayout asideLabel="文件目录">
         {{
           aside: () => (
-            <MxPanel title="文件目录">
+            <MxPanel headerTone="muted" title="文件目录">
               <FileCategoryTree modelValue={list.categoryId.value} onUpdate:modelValue={list.selectCategory} />
             </MxPanel>
           ),
           default: () => (
-            <MxPanel title={title.value} description={parents.value}>
+            <MxPanel headerTone="muted" title={title.value} description={parents.value}>
               {{
                 default: () => [
                   <FileFilterBar

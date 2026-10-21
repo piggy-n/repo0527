@@ -42,6 +42,26 @@
   margin-left: auto;
 }
 
+// 灰底只铺主标题行，标签与内容仍使用面板底色
+.muted {
+  background-color: var(--color-neutral-bg-light);
+
+  ~ .body:not(.flush) {
+    padding-top: var(--space-lg);
+  }
+}
+
+// 地图浮层沿用紧凑的 8px 内容上间距
+.floating > .muted ~ .body:not(.flush) {
+  padding-top: var(--space-sm);
+}
+
+.subheader {
+  flex: none;
+  min-width: 0;
+  padding: 0 var(--space-lg);
+}
+
 // 卡片头部的浅底图标块；里面的图标 16，比面板标题默认的 20 小
 .tile {
   display: grid;

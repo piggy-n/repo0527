@@ -320,7 +320,7 @@ export const ResourceLayerPanel = defineComponent({
             <span class={styles.stripLabel}>资源图层</span>
           </button>
         ) : (
-          <MxPanel floating flush class={styles.panel}>
+          <MxPanel floating flush headerTone="muted" class={styles.panel}>
             {{
               header: () => (
                 <div class={styles.header}>

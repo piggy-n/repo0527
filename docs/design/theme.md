@@ -226,14 +226,14 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 | `button-inline` | `<ElButton class="button-inline" link size="small">` | 使用项目字体，与同一行状态文字按基线对齐；其他外观由 `type` 和 `size` 决定 | 文件管理下载状态行，由文件管理分支维护 |
 | `select-no-arrow` | `<ElSelect class="select-no-arrow">` | 不显示右侧的下拉箭头，点击照常弹出选项 | 地图页"已勾选"的年份（2026-10-16 用户要求） |
 | `radio-group-block` | `<ElRadioGroup class="radio-group-block">` | 占满宽度，各项等宽 | 地图页坐标定位的写法切换 |
-| `dialog-panel-header` | `<ElDialog class="dialog-panel-header">`，`header` 插槽用 `<MxTitle level="panel">` | 浅灰标题栏横向铺满，最小高 48、左侧 16、右侧预留 48 关闭区；内容内边距 16，底部 `0 16 16`；不加独立阴影或渐变 | 资源管理新增 / 重命名目录；真实样例在 `/dev/theme` 的「灰底标题弹窗」 |
+| `dialog-panel-header` | `<ElDialog class="dialog-panel-header">`，`header` 插槽用 `<MxTitle level="panel">` | 浅灰标题栏横向铺满，最小高 48、左侧 16、右侧预留 48 关闭区；内容内边距 16，底部 `0 16 16`；不加独立阴影或渐变 | 资源管理新增 / 重命名目录、文件上传 / 预览；真实样例在 `/dev/theme` 的「灰底标题弹窗」 |
 | `form-query` | 由 `shared/query-form` 的 `QueryForm` 加在 `ElForm` 上，页面不直接写 | 条件区（`form-query__fields`）从左到右排列、换行；控件宽 180，日期选择器去掉默认的 220 固定宽度；表单项不留底部外边距；按钮行（`form-query__actions`）默认在条件区下方，`form-query__extra` 靠右。条件换行时加 `form-query--aligned`：标签改为块级并两端对齐（`text-align-last: justify`），宽度由 `QueryForm` 设置；条件和按钮都放得下一行时加 `form-query--inline`：条件区和按钮行排成一行，按钮行占满剩下的宽度，extra 在最右端 | 列表页的筛选栏，规则见 [page-layout.md](page-layout.md) 的"筛选栏" |
 
 `form-query__fields`、`form-query__actions`、`form-query__buttons`、`form-query__extra`、`form-query--aligned`、`form-query--inline` 不是 Element 组件的类，所以不写成 `.el-xxx.变体名`。Element 的标签默认是 `inline-flex`，文字是匿名的弹性项目，`text-align` 对它不起作用，所以变体里把标签改成了块级。
 
 `input-filled` 只修改 Element 已提供的 `--el-input-*` 变量，校验失败的红色描边、禁用状态等仍由 Element 处理。Element 的 `large` 尺寸把输入框字号写死为 14px，所以变体里还设置了 `font-size`。两个变体的各种状态可以在主题预览页（`/dev/theme`）查看。
 
-`dialog-panel-header` 于资源管理 R4 经用户确认，由资源管理会话负责新增；其他页面按需引用，不自动改变现有弹窗。标题背景为 `--color-neutral-bg-light`，标题文字、蓝色竖条与间距由 `MxTitle` 负责；仍传 `title` 提供弹窗的无障碍名称。布局规则见 [page-layout.md](page-layout.md) 的「标题」。
+`dialog-panel-header` 于资源管理 R4 经用户确认新增，文件管理上传与预览在合入后复用，不自动改变其他弹窗。标题背景为 `--color-neutral-bg-light`，标题文字、蓝色竖条与间距由 `MxTitle` 负责；仍传 `title` 提供弹窗的无障碍名称。普通面板使用 `MxPanel headerTone="muted"`，不引用 Element 的变体类；两者共用 [page-layout.md](page-layout.md) 的「浅灰底面板标题栏」规范，底图等无标题浮层不套用。
 
 `button-xl` 的加载状态：Element 在文字前插入 1em 的加载图标，文字再加 6px 左外边距，整组居中后文字会右移约 11px。变体给图标设置 `margin-left: calc(-1em - 6px)` 抵消这段宽度，文字位置不变，图标显示在文字左侧（已在预览页比对：加载前后文字的位置相同）。前提是按钮两侧留有一个图标的空间，宽按钮满足这个条件。另外，加载状态本身最好延迟显示，见 [modules/composables.md](../modules/composables.md) 的 `useDelayedFlag`。
 

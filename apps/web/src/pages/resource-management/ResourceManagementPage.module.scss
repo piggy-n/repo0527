@@ -1,12 +1,3 @@
-// 仅本业务主面板标题栏使用已确认的浅灰背景，标题层级继续由 MxTitle 提供
-.panel > header {
-  background-color: var(--color-neutral-bg-light);
-}
-
-.panel > header + div {
-  padding-top: var(--space-lg);
-}
-
 .filters {
   flex: none;
   margin-bottom: var(--space-lg);

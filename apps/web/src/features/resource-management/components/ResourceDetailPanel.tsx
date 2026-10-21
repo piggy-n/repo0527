@@ -64,6 +64,7 @@ export const ResourceDetailPanel = defineComponent({
       const attributes = owner.draft.value?.attributes ?? data?.attributes ?? [];
       return (
         <MxPanel
+          headerTone="muted"
           class={styles.panel}
           title={owner.target.value?.name ?? '资源详情'}
           description={`${owner.target.value?.year ?? '年份未提供'} · ${owner.editing.value ? '编辑' : '查看'}`}

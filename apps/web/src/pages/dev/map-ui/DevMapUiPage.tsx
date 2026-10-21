@@ -133,10 +133,10 @@ const MapUiSamples = defineComponent({
             <p class={styles.note}>标题直接使用公共组件；底图使用本地示意缩略图，交互与业务页相同。</p>
             <div class={[styles.stage, styles.examples]}>
               <div class={styles.panelColumn}>
-                <MxPanel title="通用面板标题" class={styles.titlePanel}>
+                <MxPanel title="通用面板标题" headerTone="muted" class={styles.titlePanel}>
                   <MxTitle>区块标题</MxTitle>
                   <p class={styles.note}>主标题 16 / 600，区块标题 14 / 600，辅助信息 12。</p>
-                  <span class={styles.note}>浅灰标题背景由地图面板外壳负责，不覆盖通用面板。</span>
+                  <span class={styles.note}>浅灰标题栏使用公共 headerTone="muted" 变体，内部区块保留容器底色。</span>
                 </MxPanel>
               </div>
               <div class={styles.basemapArea}>

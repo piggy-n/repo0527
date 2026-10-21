@@ -14,25 +14,6 @@
   flex: none;
 }
 
-.heading {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-}
-
-// 标题与操作独占 48 高的一行，与资源详情使用同一个 MxTitle
-.titleRow {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  min-height: 48px;
-  // 背景铺满外壳标题栏，文字仍与下方内容保持相同的左右留白
-  margin: 0 calc(-1 * var(--space-lg));
-  padding: 0 var(--space-lg);
-  background-color: var(--color-neutral-bg-light);
-}
-
 // 四个功能完整铺成两行，不再横向滚动或隐藏名称
 .tabs {
   display: grid;
@@ -110,20 +91,11 @@
   height: 20px;
 }
 
-// 与资源详情共用箭头和关闭图标的按钮样式、间距
-.controls {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-// 内容区在外壳可滚动的区域里：顶部留出标准间距，同时避免裁掉控件边框和键盘焦点框
+// 内容区在外壳可滚动的区域里，顶部间距由 MxPanel 的 floating 变体提供
 // 不随外壳压缩（flex: none）：压缩时子元素溢出到它外面，浏览器把外壳的下内边距算在它的下边，滚到底时内容贴着底边
 .content {
   display: flex;
   flex: none;
   flex-direction: column;
   gap: var(--space-sm);
-  padding-top: var(--space-sm);
 }

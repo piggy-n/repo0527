@@ -26,7 +26,8 @@ const TOKENS = {
   '--color-text-title': '#1F2937',
   '--color-primary-bg': '#EEF3FF',
   '--color-primary-border': '#C9D4FB',
-  '--color-primary': '#597EF7'
+  '--color-primary': '#597EF7',
+  '--color-neutral-bg-light': '#F1F4F8'
 };
 
 // 每个功能的内容：20 行
@@ -168,6 +169,11 @@ describe('MapPanelGroup（真实的布局）', () => {
     expect(boxes[2].top).toBe(boxes[3].top);
     expect(boxes[2].top).toBeGreaterThan(boxes[0].top);
     const titleStyle = getComputedStyle(ctx.wrapper.get('h2').element);
+    const header = ctx.wrapper.get('header').element;
+    expect(getComputedStyle(header).backgroundColor).toBe('rgb(241, 244, 248)');
+    expect(header.getBoundingClientRect().height).toBe(48);
+    expect(header.contains(list)).toBe(false);
+    expect(getComputedStyle(list).backgroundColor).toBe('rgba(0, 0, 0, 0)');
     for (const tab of tabs) {
       expect(tabVisible(ctx.wrapper, tab.text())).toBe(true);
       expect(tab.element.scrollWidth).toBeLessThanOrEqual(tab.element.clientWidth);
@@ -208,6 +214,7 @@ describe('MapPanelGroup（真实的布局）', () => {
     expect(ctx.wrapper.findAll('[role="tabpanel"]')).toHaveLength(4);
     expect(ctx.wrapper.get('[data-panel="legend"]').isVisible()).toBe(false);
     expect(ctx.wrapper.get('[data-panel-group]').element.getBoundingClientRect().height).toBe(48);
+    expect(getComputedStyle(ctx.wrapper.get('header').element).backgroundColor).toBe('rgb(241, 244, 248)');
     expect(ctx.group.state.value.open).toHaveLength(4);
 
     await ctx.wrapper.get('[aria-label="展开功能面板"]').trigger('click');

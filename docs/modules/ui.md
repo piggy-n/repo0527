@@ -108,11 +108,13 @@ Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不�
 | 属性 / 插槽 | 说明 |
 |---|---|
 | `title` | 面板标题，用 `MxTitle level="panel"` 渲染 |
+| `headerTone` | `'plain'`（默认）保留容器底色；`'muted'` 使用浅灰主标题栏，普通内容上留 16，`floating` 内容上留 8，`flush` 不追加留白（ADR 0076） |
 | `description` | 紧跟在标题后面的灰色说明（12px、`text-secondary`），例如分类的上级路径；空间不够时先省略它，标题保持完整（收缩系数远大于标题），悬停显示全文。`MxTitle` 也有同名属性 |
 | `flush` | 去掉内容区的内边距：表格贴边、放地图、内容自带内边距时使用 |
 | `iconTile` | 卡片头部：`icon` 放在 24 的浅底方块里，图标 16。只用于同一页有多张并列卡片、需要用图标区分的场合 |
 | `floating` | 浮在地图上的外观（ADR 0053）：`--color-bg-mask` 底、`--shadow-md`，`flex: 0 1 auto` 按内容定高，放不下时由容器压缩、内容区滚动 |
-| `header` | 代替标题的头部内容，例如地图页面板外壳的一组 Tab；`actions` 仍在右侧 |
+| `header` | 代替主标题的自定义内容，如资源图层标题与同行切换入口；`actions` 仍在右侧 |
+| `subheader` | 主标题下的固定区域，如地图功能标签；左右留 16，使用面板底色，不随内容滚动，不传就不渲染 |
 | `icon` | 标题左侧的图标，替换竖杠；有 `title` 时才显示 |
 | `actions` | 头部右侧的操作 |
 | `default` | 内容区 |
@@ -131,12 +133,12 @@ Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不�
 <MxSplitLayout asideLabel="文件目录">
   {{
     aside: () => (
-      <MxPanel title="文件目录">
+      <MxPanel title="文件目录" headerTone="muted">
         <DirectoryTree />
       </MxPanel>
     ),
     default: () => (
-      <MxPanel title={directory.value}>
+      <MxPanel title={directory.value} headerTone="muted">
         {{ actions: ..., default: ..., footer: ... }}
       </MxPanel>
     )

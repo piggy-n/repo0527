@@ -1,9 +1,8 @@
 .panel > header {
   flex-wrap: wrap;
-  background-color: var(--color-neutral-bg-light);
 }
 
-.panel > header + div { padding-top: var(--space-lg); overflow: hidden; }
+.panel > header + div { overflow: hidden; }
 
 .categoryRow {
   display: flex;

@@ -41,7 +41,7 @@ export const FileUploadDialog = defineComponent({
       const error = (key: keyof typeof model.errors.value) => model.attempted.value ? model.errors.value[key] : '';
       return (
         <ElDialog
-          class={styles.dialog}
+          class={['dialog-panel-header', styles.dialog]}
           title="上传文件"
           width="720px"
           top="6vh"

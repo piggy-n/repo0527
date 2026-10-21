@@ -131,13 +131,14 @@ export const DevFileManagementPage = defineComponent({
       <div class={styles.workspace}>
         <MxSplitLayout asideLabel="文件目录">
           {{
-            aside: () => <MxPanel title="文件目录">
+            aside: () => <MxPanel headerTone="muted" title="文件目录">
               <FileCategoryTree
                 modelValue={category.value}
                 onUpdate:modelValue={value => { category.value = value; }}
               />
             </MxPanel>,
             default: () => <MxPanel
+              headerTone="muted"
               title={path.value.at(-1)?.label}
               description={path.value.slice(0, -1).map(item => item.label).join(' / ')}
             >

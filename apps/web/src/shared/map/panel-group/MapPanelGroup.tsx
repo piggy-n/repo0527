@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Close } from '@element-plus/icons-vue';
 import { useMapOverlay } from '@yzt/map-vue';
-import { MxPanel, MxTitle } from '@yzt/ui';
+import { MxPanel } from '@yzt/ui';
 import { ElButton } from 'element-plus';
 import { defineComponent, type PropType, ref, type SlotsType, type VNode } from 'vue';
 import { usePageActive } from '../../composables/usePageActive';
@@ -102,37 +102,28 @@ export const MapPanelGroup = defineComponent({
           data-panel-group
           onPointerdown={() => !props.collapsed && emit('activate')}>
           {open.length > 0 && (
-            <MxPanel floating flush={props.collapsed} class={styles.shell}>
+            <MxPanel floating headerTone="muted" title={title} flush={props.collapsed} class={styles.shell}>
               {{
-                header: () => (
-                  <div class={styles.heading}>
-                    <div class={styles.titleRow}>
-                      <MxTitle level="panel">{title}</MxTitle>
-                      <div class={styles.controls}>
-                        {props.collapsible && (
-                          <ElButton
-                            link
-                            icon={props.collapsed ? ArrowDown : ArrowUp}
-                            aria-label={props.collapsed ? '展开功能面板' : '收起功能面板'}
-                            aria-expanded={!props.collapsed}
-                            onClick={() => emit('update:collapsed', !props.collapsed)}
-                          />
-                        )}
-                        <ElButton
-                          link
-                          icon={Close}
-                          aria-label={open.length === 1 ? `关闭${title}` : '关闭全部功能'}
-                          onClick={closeAll}
-                        />
-                      </div>
-                    </div>
-                    {!props.collapsed && open.length > 1 && (
-                      <div class={styles.tabs} role="tablist" aria-label="已打开的地图工具">
-                        {open.map(id => renderTab(id, id === current))}
-                      </div>
-                    )}
+                actions: () => [
+                  props.collapsible && <ElButton
+                    link
+                    icon={props.collapsed ? ArrowDown : ArrowUp}
+                    aria-label={props.collapsed ? '展开功能面板' : '收起功能面板'}
+                    aria-expanded={!props.collapsed}
+                    onClick={() => emit('update:collapsed', !props.collapsed)}
+                  />,
+                  <ElButton
+                    link
+                    icon={Close}
+                    aria-label={open.length === 1 ? `关闭${title}` : '关闭全部功能'}
+                    onClick={closeAll}
+                  />
+                ],
+                subheader: !props.collapsed && open.length > 1 ? () => (
+                  <div class={styles.tabs} role="tablist" aria-label="已打开的地图工具">
+                    {open.map(id => renderTab(id, id === current))}
                   </div>
-                ),
+                ) : undefined,
                 default: () =>
                   open.map(id => (
                     <div

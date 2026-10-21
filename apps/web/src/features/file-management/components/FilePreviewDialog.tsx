@@ -38,7 +38,7 @@ export const FilePreviewDialog = defineComponent({
       const receiving = file ? props.downloads.isDownloading(file.id) : false;
       const scalable = content?.kind === 'image' || content?.kind === 'docx';
       return <ElDialog
-        class={styles.dialog}
+        class={['dialog-panel-header', styles.dialog]}
         title="文件预览"
         width="1120px"
         top="4vh"
