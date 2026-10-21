@@ -1,0 +1,4 @@
+# 测试文件保留原始字节，PDF 的交叉引用偏移不能被换行转换破坏
+*.docx binary
+*.pdf binary
+*.png binary

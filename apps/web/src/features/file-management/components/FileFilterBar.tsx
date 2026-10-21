@@ -27,13 +27,13 @@ export const FileFilterBar = defineComponent({
       <QueryForm labelChars={6}>
         {{
           default: () => [
-            <ElFormItem label="文档名称">
+            <ElFormItem label="文件名称">
               <ElInput
                 modelValue={props.model.name}
                 onUpdate:modelValue={(value: string) => {
                   props.model.name = value;
                 }}
-                placeholder="请输入文档名称"
+                placeholder="请输入文件名称"
                 clearable
                 onKeydown={(event: Event | KeyboardEvent) => {
                   // 输入法选字时按的回车只是确认候选词，不查询

@@ -24,14 +24,14 @@ describe('FileFilterBar', () => {
     await flushPromises();
 
     const labels = wrapper.findAll('label');
-    expect(labels.map(label => label.text())).toEqual(['文档名称', '年份', '业务类型标签']);
+    expect(labels.map(label => label.text())).toEqual(['文件名称', '年份', '业务类型标签']);
     expect(labels.filter(label => label.find('input').exists())).toHaveLength(0);
   });
 
   it('在名称框按回车、点"查询"都触发查询', async () => {
     const wrapper = mountBar();
 
-    await wrapper.find('input[placeholder="请输入文档名称"]').trigger('keydown', { key: 'Enter' });
+    await wrapper.find('input[placeholder="请输入文件名称"]').trigger('keydown', { key: 'Enter' });
     await button(wrapper, '查询')[0]?.trigger('click');
 
     expect(wrapper.emitted('search')).toHaveLength(2);
@@ -40,7 +40,7 @@ describe('FileFilterBar', () => {
   it('输入法选字时按的回车不触发查询', async () => {
     const wrapper = mountBar();
 
-    await wrapper.find('input[placeholder="请输入文档名称"]').trigger('keydown', { key: 'Enter', isComposing: true });
+    await wrapper.find('input[placeholder="请输入文件名称"]').trigger('keydown', { key: 'Enter', isComposing: true });
 
     expect(wrapper.emitted('search')).toBeUndefined();
   });

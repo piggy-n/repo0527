@@ -1,11 +1,41 @@
 import { HttpResponse, type JsonBodyType, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { http } from '@/shared/http/client';
 import { ApiError } from '@/shared/http/errors';
-import { deleteFile, fetchFilePage } from './api';
+import { deleteFile, fetchFileContent, fetchFilePage, uploadFiles } from './api';
 import { filePageResponse } from './test-data';
 
 const server = setupServer();
+
+describe('fetchFileContent', () => {
+  const file = { id: 'one', name: '后备.pdf', type: 'pdf', objectKey: '目录/文件 +1.pdf' };
+  it('复用下载接口，准确传 objectKey，响应名优先，只补缺失 MIME', async () => {
+    const received: string[] = [];
+    server.use(mock.get('/backend/file/download', ({ request }) => {
+      received.push(new URL(request.url).searchParams.get('objectKey') ?? '');
+      return new HttpResponse('binary', { headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': "attachment; filename*=UTF-8''%E6%96%87%E6%A1%A3.pdf"
+      } });
+    }));
+    const result = await fetchFileContent(file, new AbortController().signal);
+    expect(received).toEqual([file.objectKey]);
+    expect(result.fileName).toBe('文档.pdf');
+    expect(result.blob.type).toBe('application/pdf');
+    expect(result.blob.size).toBe(6);
+  });
+
+  it('失败信封不能作为文件，地址缺失不发送请求', async () => {
+    const handler = vi.fn<() => Response>(() => HttpResponse.json({ code: 40000, msg: '文件不存在' }));
+    server.use(mock.get('/backend/file/download', handler));
+    await expect(fetchFileContent({ ...file, objectKey: ' ' }, new AbortController().signal))
+      .rejects.toMatchObject({ kind: 'invalid-response', message: '文件地址缺失，无法读取文件' });
+    expect(handler).not.toHaveBeenCalled();
+    await expect(fetchFileContent(file, new AbortController().signal))
+      .rejects.toMatchObject({ kind: 'business', message: '文件不存在' });
+  });
+});
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });
@@ -99,5 +129,52 @@ describe('deleteFile', () => {
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({ kind: 'business', message: '文件不存在', code: 40000 });
+  });
+});
+
+describe('uploadFiles', () => {
+  const input = {
+    files: [new File(['甲'], '说明甲.txt'), new File(['乙'], '说明乙.txt')],
+    categoryId: 'policy-law-national', year: '2025', tag: '综合', remark: '  本批说明  '
+  };
+
+  it('重复 files 字段携带整批文件及元数据，不发送上传人', async () => {
+    // 检查交给公共层的 FormData；jsdom 与 Node 的 File 不兼容，原生 multipart 由浏览器用例覆盖
+    const post = vi.spyOn(http, 'post');
+    server.use(mock.post('/backend/file/upload', () => HttpResponse.json({ code: 200 })));
+
+    await expect(uploadFiles(input)).resolves.toBeUndefined();
+    const body = post.mock.calls[0]?.[1];
+    expect(body).toBeInstanceOf(FormData);
+    const received = Array.from(body as FormData, ([name, value]) => ({
+      name, value: typeof value === 'string' ? value : value.name
+    }));
+    expect(received).toEqual([
+      { name: 'files', value: '说明甲.txt' }, { name: 'files', value: '说明乙.txt' },
+      { name: 'categoryId', value: 'policy-law-national' }, { name: 'year', value: '2025' },
+      { name: 'tag', value: '综合' }, { name: 'remark', value: '本批说明' }
+    ]);
+  });
+
+  it('空备注不发送', async () => {
+    const post = vi.spyOn(http, 'post');
+    server.use(mock.post('/backend/file/upload', () => HttpResponse.json({ code: 200, data: null })));
+    await uploadFiles({ ...input, remark: '  ' });
+    const body = post.mock.calls[0]?.[1] as FormData;
+    expect(Array.from(body.keys())).not.toContain('remark');
+  });
+
+  it.each([null, [], { succeeded: 1, failed: 1 }, '未知返回'])('暂不解释成功响应的 data：%j', async data => {
+    server.use(mock.post('/backend/file/upload', () => HttpResponse.json({ code: 200, data })));
+    await expect(uploadFiles(input)).resolves.toBeUndefined();
+  });
+
+  it.each([
+    { body: { code: 500, msg: '上传失败' }, kind: 'business' },
+    { body: { success: true }, kind: 'invalid-response' },
+    { body: { code: '200' }, kind: 'invalid-response' }
+  ])('拒绝失败或缺少有效 code 的响应：$kind', async ({ body, kind }) => {
+    server.use(mock.post('/backend/file/upload', () => HttpResponse.json(body)));
+    await expect(uploadFiles(input)).rejects.toMatchObject({ kind });
   });
 });

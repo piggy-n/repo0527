@@ -12,6 +12,8 @@
 | `messages.ts` | 状态码到中文提示的对照，文案沿用旧项目 |
 | `configure.ts` | `configureHttp` / `getHttpHooks`：app 注入的回调 |
 | `client.test.ts` | 用 MSW 模拟接口的测试 |
+| `transfer.ts` | 业务无关的传输进度、可取消的小型 Blob 错误体读取 |
+| `client-transfer.test.ts`、`transfer.test.ts` | 文件响应、上传进度、鉴权与取消的回归测试 |
 | `app/http.ts` | 在 app 层实现回调：401 提示并跳转登录页，其他错误弹出提示 |
 
 ## 怎么写接口函数
@@ -63,6 +65,14 @@ export function queryFeaturesAt(layerCode: string, geometry: Point | Polygon, si
 - 返回体带数字 `code` 且不是 200 时按失败的信封处理，和有信封时一样：401 是 `unauthorized`，其他是 `business`，提示优先用后端的 `msg`
 - 否则整个返回体按 `schema` 校验，不符合时是 `invalid-response`；所以成功的返回体不能有数字的 `code` 字段，遇到时再给失败的判断加条件
 - 超时、取消、鉴权、回调和有信封时完全一样
+
+### 文件上传与下载
+
+上传继续使用 `http.post(url, formData, { schema, onUploadProgress, ... })`，由浏览器设置 multipart boundary，不手写 Content-Type。进度只暴露 `{ loaded, total, percent }`，总量未知时后两项为 null；发送 100% 不代表服务端成功。
+
+`http.getBlob(url, { query, signal, timeout, silent, onDownloadProgress })` 返回 `{ blob, contentType, contentDisposition }`，不传 JSON schema；二进制先检查响应类型和错误信封，再交出 Blob。取消、鉴权和超时仍经过同一个请求通道。文件名整理、MIME 后备值和触发浏览器保存使用 `shared/file-transfer`，完整接口、限制和三场景示例见 [file-transfer.md](file-transfer.md)。
+
+这些接口只中止网络传输，不撤销已经发生的服务端写入；上传与 Excel 导入的防重复、会话检查和刷新由各 feature 按 ADR 0039 持有。
 
 ## 请求的处理流程
 
@@ -124,6 +134,5 @@ try {
 
 | 事项 | 时机 |
 |---|---|
-| 上传、下载、进度 | 迁移文件管理时 |
 | 失败时也不返回 `{ code, msg }` 的接口 | 遇到时再加选项，例如 AI 后端；成功时没有信封、失败时有的已用 `envelope: false` 支持 |
 | 请求重试、去重、缓存 | 已决定（ADR 0017）：查询交给 TanStack Vue Query，相同 key 的请求自动去重、结果缓存；全局关闭失败重试 |

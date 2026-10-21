@@ -89,7 +89,7 @@ function mountPage(queryClient = new QueryClient({ defaultOptions: { queries: { 
 
 type Wrapper = ReturnType<typeof mountPage>;
 
-// 主区的面板：标题、上级路径、表格第二列（文档名称）；元素不存在时是 undefined，由断言报出差异
+// 主区的面板：标题、上级路径、表格第二列（文件名称）；元素不存在时是 undefined，由断言报出差异
 function mainPanel(wrapper: Wrapper) {
   const panel = wrapper.findAll('section').find(section => section.find('table').exists());
   const textOf = (selector: string) => panel?.findAll(selector)[0]?.text();
@@ -152,6 +152,19 @@ const treeNode = (wrapper: Wrapper, label: string) =>
   wrapper.findAll('.el-tree-node__content').filter(node => node.text() === label);
 
 describe('FileManagementPage', () => {
+  it('不可预览的文件在预览位置显示仅下载，保留三个操作位置', async () => {
+    const response = filePageResponse({ totalElements: 2 });
+    response.data.content[1].type = 'xlsx';
+    response.data.content[1].name = '成果清单.xlsx';
+    server.use(mock.get('/backend/file/page', () => HttpResponse.json(response)));
+    const wrapper = mountPage();
+    await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(2));
+    const actions = wrapper.findAll('.el-table__body tr').map(row =>
+      row.findAll('td').at(-1)!.findAll('.cell > div > *').map(item => item.text())
+    );
+    expect(actions).toEqual([['预览', '下载', '删除'], ['仅下载', '下载', '删除']]);
+  });
+
   it('显示默认分类的标题、上级路径和文件', async () => {
     const { pageRequests } = mockFiles();
     const wrapper = mountPage();
@@ -504,7 +517,7 @@ describe('FileManagementPage', () => {
     release();
     await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(3));
 
-    await wrapper.find('input[placeholder="请输入文档名称"]').setValue('测试');
+    await wrapper.find('input[placeholder="请输入文件名称"]').setValue('测试');
     await wrapper.findAll('button').find(button => button.text() === '查询')?.trigger('click');
     await vi.waitFor(() => expect(pageRequests).toHaveLength(2));
 

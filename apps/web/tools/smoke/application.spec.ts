@@ -49,7 +49,7 @@ test('登录到地图，切页期间改变尺寸，返回后复用画布并保�
   try {
     await page.getByRole('link', { name: '文件管理', exact: true }).click();
     await expect(page).toHaveURL(/\/file-management$/);
-    await expect(page.getByRole('button', { name: '上传文档', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '上传文件', exact: true })).toBeVisible();
     // KeepAlive 将旧画布移出文档；只检查新画布存在不足以发现意外重建
     expect(await original.evaluate((element: { isConnected: boolean }) => element.isConnected)).toBe(false);
     await page.setViewportSize({ width: 1440, height: 860 });

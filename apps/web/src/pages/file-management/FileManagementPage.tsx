@@ -1,19 +1,25 @@
-import { Upload } from '@element-plus/icons-vue';
 import { MxPanel, MxSplitLayout } from '@yzt/ui';
-import { ElButton, ElPagination } from 'element-plus';
+import { ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { findCategoryPath } from '@/features/file-management/categories';
 import { FileCategoryTree } from '@/features/file-management/components/FileCategoryTree';
 import { FileFilterBar } from '@/features/file-management/components/FileFilterBar';
 import { FileTable } from '@/features/file-management/components/FileTable';
+import { FileUploadButton } from '@/features/file-management/components/FileUploadButton';
+import { FileDownloadPanel } from '@/features/file-management/components/FileDownloadPanel';
+import { FilePreviewDialog } from '@/features/file-management/components/FilePreviewDialog';
+import { useFileDownloads } from '@/features/file-management/composables/useFileDownloads';
+import { useFilePreview } from '@/features/file-management/composables/useFilePreview';
 import { useFileList } from '@/features/file-management/composables/useFileList';
 import styles from './FileManagementPage.module.scss';
 
-/** 文件管理：左侧分类树，右侧筛选、表格、分页；上传、下载、预览在阶段六迁移 */
+/** 文件管理：分类树、筛选、传输、预览、表格与分页 */
 export const FileManagementPage = defineComponent({
   name: 'FileManagementPage',
   setup() {
     const list = useFileList();
+    const downloads = useFileDownloads();
+    const preview = useFilePreview();
     const path = computed(() => findCategoryPath(list.categoryId.value));
     // 有重名的叶子（如两个"监测类"），所以标题后面显示上级路径
     const title = computed(() => path.value.at(-1)?.label);
@@ -43,21 +49,21 @@ export const FileManagementPage = defineComponent({
                     onReset={list.resetFilters}
                   >
                     {{
-                      // 上传在阶段六实现，先放按钮确定布局
-                      extra: () => (
-                        <ElButton type="primary" icon={Upload}>
-                          上传文档
-                        </ElButton>
-                      )
+                      extra: () => <FileUploadButton categoryId={list.categoryId.value} />
                     }}
                   </FileFilterBar>,
+                  <FileDownloadPanel model={downloads} />,
                   <FileTable
                     files={list.files.value}
                     initialLoading={list.initialLoading.value}
                     refreshing={list.refreshing.value}
                     error={list.isError.value}
                     onRetry={() => void list.refresh()}
-                  />
+                    isDownloading={downloads.isDownloading}
+                    onDownload={file => void downloads.start(file)}
+                    onPreview={file => void preview.open(file)}
+                  />,
+                  <FilePreviewDialog model={preview} downloads={downloads} />
                 ],
                 footer: () => (
                   <ElPagination

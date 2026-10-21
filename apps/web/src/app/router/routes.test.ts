@@ -33,6 +33,7 @@ describe('路由表', () => {
       RouteName.login,
       RouteName.notFound,
       RouteName.devTheme,
+      RouteName.devFileManagement,
       RouteName.devMap,
       RouteName.devResources,
       RouteName.devMapUi

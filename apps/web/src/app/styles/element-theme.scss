@@ -286,6 +286,11 @@ $tree-node: '.el-tree > .el-tree-node';
   display: none;
 }
 
+// 与旁边的状态文字同字体，避免浏览器默认按钮字体造成字形错位
+.el-button.button-inline {
+  font-family: var(--font-family-base);
+}
+
 // 加大号按钮：48px 高、16px 半粗、8px 圆角，与 input-filled 搭配；用法 <ElButton class="button-xl">
 .el-button.button-xl {
   height: 48px;
