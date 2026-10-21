@@ -1,4 +1,5 @@
 import type { Page } from 'playwright/test';
+import { createServer, type ServerResponse } from 'node:http';
 import { expect, test as base } from './fixtures.ts';
 
 // 测试登录令牌的编码，不包含真实凭据
@@ -27,6 +28,10 @@ interface Backend {
   saves: { id: string | null; resourceName: string | null; attributes: Attribute[] }[];
   holdPage?: Promise<void>;
   holdDirectoryWrite?: Promise<void>;
+  holdImport?: Promise<void>;
+  detailYear: number | null;
+  imported: boolean;
+  imports: { fields: { key: string; name: string | null; value: string | number[] }[]; query: string; contentType: string; token: string | undefined }[];
   writes: string[];
   reads: string[];
   pages: { resource: string; pageNum: number; pageSize: number; layerName?: string; year?: string }[];
@@ -47,7 +52,7 @@ const test = base.extend<{ resourceBackend: Backend }>({
   resourceBackend: [async ({ context }, use) => {
     const backend: Backend = { role: 'admin', failWrite: false, failTree: false, failYears: false,
       failPage: false, failDetail: false, emptyAttributes: false, saves: [], holdStatus: new Map(), statuses: [],
-      writes: [], reads: [], pages: [] };
+      writes: [], reads: [], pages: [], imports: [], detailYear: 2025, imported: false };
     const saved = new Map<string, { resourceName: string; attributes: Attribute[] }>();
     const enabled = new Map<string, string>();
     const groups: Directory[] = [
@@ -109,13 +114,29 @@ const test = base.extend<{ resourceBackend: Backend }>({
         const id = url.searchParams.get('id')!;
         data = { id, resourceName: saved.get(id)?.resourceName ?? '土地资源', datasetName: '年度调查数据集',
           datasetCode: 'DATASET', datasets: 'CCWJQ, CJDCQ, CJDCQJX, CZCDYD, CZKFBJ, DLTB, FJMSQ, GDDB, GFBQ',
-          year: 2025, submit_unit: '江苏省基础地理信息中心', layerName: 'DLTB', layerCode: 'LAYER',
+          year: backend.detailYear, submit_unit: '江苏省基础地理信息中心', layerName: 'DLTB', layerCode: 'LAYER',
           elementType: '其他', layerRecord: 29307, coordinate: 'Geodetic Coordinate System 2000 (EPSG:4490)',
           attributes: backend.emptyAttributes ? [] : saved.get(id)?.attributes ?? Array.from({ length: 33 }, (_, index) => ({
-            attrId: index === 0 ? null : `attribute-${index}`, name: index === 0 ? null : `属性名称${index}`,
+            attrId: index === 0 ? null : `attribute-${index}`, name: index === 0 ? (backend.imported ? '导入后的字段' : null) : `属性名称${index}`,
             code: `FIELD_${index}`, fieldType: index === 0 ? 'Long' : 'String', fieldLength: '100', year: 2025,
             remark: index === 0 ? '必须保留的备注' : null
           })) };
+      } else if (endpoint === '/resource-management/layer/create-attribute-by-excel' && request.method() === 'POST') {
+        const contentType = request.headers()['content-type'];
+        const incoming = new Request(request.url(), {
+          method: 'POST', headers: { 'Content-Type': contentType }, body: request.postDataBuffer()!
+        });
+        // oxlint-disable-next-line typescript/no-deprecated -- 仅解析固定测试样本，不为测试引入 multipart 服务端依赖
+        const form = await incoming.formData();
+        const fields = await Promise.all(Array.from(form, async ([key, value]) => ({ key,
+          name: typeof value === 'string' ? null : value.name,
+          value: typeof value === 'string' ? value : [...new Uint8Array(await value.arrayBuffer())]
+        })));
+        backend.imports.push({ fields, query: url.search, contentType, token: request.headers().token });
+        await backend.holdImport;
+        fail = backend.failWrite;
+        backend.imported = !fail;
+        data = { unknown: '测试响应，不解释数量或部分成功' };
       } else if (endpoint === '/resource-management/layer/edit-struct' && request.method() === 'PUT') {
         const attributes = request.postDataJSON() as Attribute[];
         const id = url.searchParams.get('id');
@@ -560,6 +581,125 @@ test('详情加载、错误重试、空属性结构及保存后刷新失败', as
   await page.getByRole('button', { name: '重试详情', exact: true }).click();
   await expect(page.locator('[data-resource-detail]').getByText('水资源', { exact: true })).toBeVisible();
   expect(resourceBackend.saves).toHaveLength(1);
+});
+
+test('Excel 直接选择上传：校验、原生 multipart、鉴权、互斥和成功刷新', async ({ page, resourceBackend }, testInfo) => {
+  await enter(page);
+  await page.getByRole('button', { name: '查看', exact: true }).first().click();
+  const upload = page.getByRole('button', { name: '上传 Excel', exact: true });
+  const input = page.locator('input[type="file"]');
+  await expect(upload).toBeVisible();
+  await expect(page.getByText('年份：2025 · 支持 .xlsx、.xls，选择后直接上传')).toBeVisible();
+  await input.setInputFiles({ name: '错误.txt', mimeType: 'text/plain', buffer: Buffer.from('错误格式') });
+  await expect(page.getByRole('alert')).toContainText('请选择 .xlsx 或 .xls 文件');
+  await input.setInputFiles({ name: '空.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.alloc(0) });
+  await expect(page.getByRole('alert')).toContainText('文件为空');
+  expect(resourceBackend.imports).toHaveLength(0);
+  let release!: () => void;
+  resourceBackend.holdImport = new Promise<void>(resolve => { release = resolve; });
+  const chosen = page.waitForEvent('filechooser');
+  await upload.click();
+  const chooser = await chosen;
+  expect(chooser.isMultiple()).toBe(false);
+  expect(await page.getByRole('dialog').count()).toBe(0);
+  const bytes = [80, 75, 0, 255, 128, 9];
+  await chooser.setFiles({ name: '属性规范.XLSX', mimeType: 'application/octet-stream', buffer: Buffer.from(bytes) });
+  try {
+    await expect.poll(() => resourceBackend.imports.length).toBe(1);
+    expect(resourceBackend.imports[0]).toMatchObject({ query: '', fields: [
+      { key: 'file', name: '属性规范.XLSX', value: bytes }, { key: 'year', name: null, value: '2025' }
+    ] });
+    expect(resourceBackend.imports[0].contentType).toMatch(/^multipart\/form-data; boundary=/);
+    expect(resourceBackend.imports[0].token).toBeTruthy();
+    await expect(upload).toBeDisabled();
+    await expect(page.getByRole('button', { name: '修改', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: '返回', exact: true })).toBeDisabled();
+    await page.getByRole('link', { name: '文件管理', exact: true }).click();
+    await expect(page).toHaveURL(/\/resource-management$/);
+    await expect(page.getByRole('status')).not.toContainText('导入成功');
+    await settleAnimations(page);
+    await page.screenshot({ path: testInfo.outputPath('excel-pending.png') });
+  } finally { release(); }
+  await expect(page.getByRole('status')).toHaveText('导入成功');
+  await expect(page.getByText('导入后的字段', { exact: true })).toBeVisible();
+  expect(resourceBackend.reads.filter(path => path === '/resource-management/layer/struct')).toHaveLength(2);
+  await page.getByRole('button', { name: '修改', exact: true }).click();
+  await expect(upload).toBeDisabled();
+  await page.getByRole('button', { name: '取消编辑', exact: true }).click();
+  await expect(upload).toBeEnabled();
+  await page.getByRole('button', { name: '返回', exact: true }).click();
+  await expect.poll(() => resourceBackend.pages.length).toBe(2);
+});
+
+test('Excel 原生发送到 100% 后仍等待服务端，处理状态覆盖六尺寸', async ({ page }, testInfo) => {
+  let response: ServerResponse | undefined;
+  // 此用例让 XHR 实际发送到临时本机接口，避免 route.fulfill 抑制上传进度事件
+  const receiver = createServer((request, reply) => {
+    request.on('end', () => {
+      reply.setHeader('Access-Control-Allow-Origin', '*');
+      reply.setHeader('Content-Type', 'application/json');
+      response = reply;
+    });
+    request.resume();
+  });
+  await new Promise<void>(resolve => receiver.listen(0, '127.0.0.1', resolve));
+  const address = receiver.address();
+  if (!address || typeof address === 'string') { throw new Error('测试接口未绑定端口'); }
+  const localUrl = `http://127.0.0.1:${address.port}/import`;
+  await page.route('**/backend/resource-management/layer/create-attribute-by-excel', route =>
+    route.continue({ url: localUrl }));
+  try {
+    await enter(page);
+    await page.getByRole('button', { name: '查看', exact: true }).first().click();
+    await page.locator('input[type="file"]').setInputFiles({
+      name: '进度测试.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.alloc(64 * 1024, 1)
+    });
+    await expect(page.getByRole('status')).toHaveText('文件已发送，正在处理…');
+    expect(response).toBeDefined();
+    for (const [width, height] of [[1440, 900], [1200, 800], [1199, 800], [760, 640], [390, 844], [1440, 600]]) {
+      // oxlint-disable-next-line no-await-in-loop -- 同一未完成上传逐个检查断点，不能并发改变尺寸
+      await page.setViewportSize({ width, height });
+      // oxlint-disable-next-line no-await-in-loop -- 等待同一尺寸的真实布局
+      await settleAnimations(page);
+      // oxlint-disable-next-line no-await-in-loop -- 每个尺寸独立记录实际布局
+      const layout = await page.locator('[data-resource-detail]').evaluate((element: {
+        clientHeight: number; scrollHeight: number; ownerDocument: { documentElement: { scrollWidth: number } };
+      }) => ({ client: element.clientHeight, scroll: element.scrollHeight,
+        documentWidth: element.ownerDocument.documentElement.scrollWidth }));
+      expect(layout.scroll).toBe(layout.client);
+      expect(layout.documentWidth).toBeLessThanOrEqual(width);
+      // oxlint-disable-next-line no-await-in-loop -- 按尺寸保存生产产物状态证据
+      await page.screenshot({ path: testInfo.outputPath(`excel-processing-${width}-${height}.png`) });
+    }
+    response!.end(JSON.stringify({ code: 200 }));
+    await expect(page.getByRole('status')).toHaveText('导入成功');
+  } finally {
+    response?.end(JSON.stringify({ code: 200 }));
+    receiver.closeAllConnections();
+    await new Promise<void>(resolve => receiver.close(() => resolve()));
+  }
+});
+
+test('Excel 失败后可重选同一文件，缺年份不补造参数，成功后读取失败可独立重试', async ({ page, resourceBackend }) => {
+  resourceBackend.detailYear = null;
+  resourceBackend.failWrite = true;
+  await enter(page);
+  await page.getByRole('button', { name: '查看', exact: true }).first().click();
+  const input = page.locator('input[type="file"]');
+  const file = { name: '规范.xls', mimeType: 'application/vnd.ms-excel', buffer: Buffer.from('固定样本') };
+  await input.setInputFiles(file);
+  await expect(page.getByRole('alert')).toContainText('模拟接口失败');
+  expect(resourceBackend.imports[0].fields.map(field => field.key)).toEqual(['file']);
+  resourceBackend.failWrite = false;
+  resourceBackend.failDetail = true;
+  await input.setInputFiles(file);
+  await expect(page.getByRole('status')).toHaveText('导入成功');
+  await expect(page.getByRole('button', { name: '重试详情', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '上传 Excel', exact: true })).toBeDisabled();
+  resourceBackend.failDetail = false;
+  await page.getByRole('button', { name: '重试详情', exact: true }).click();
+  await expect(page.getByText('导入后的字段', { exact: true })).toBeVisible();
+  expect(resourceBackend.imports).toHaveLength(2);
 });
 
 test('详情与编辑多尺寸布局：长标题、属性表滚动、固定头尾和未保存弹窗', async ({ page }, testInfo) => {

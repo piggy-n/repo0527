@@ -46,7 +46,7 @@ export const ResourceManagementPage = defineComponent({
                 selected={list.directoryId.value ?? undefined}
                 loading={directoryQuery.isLoading.value}
                 error={directoryQuery.isError.value}
-                maintenanceDisabled={detail.editing.value || detail.pending.value}
+                maintenanceDisabled={detail.editing.value || detail.pending.value || detail.importer.pending.value}
                 beforeSelect={async id => id === list.directoryId.value || await detail.close()}
                 onSelect={list.selectDirectory}
                 onRetry={() => void directoryQuery.refetch()}

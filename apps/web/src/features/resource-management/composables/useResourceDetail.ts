@@ -4,6 +4,7 @@ import { useSessionStore } from '@/shared/auth/session-store';
 import { ApiError } from '@/shared/http/errors';
 import type { ResourceAttribute, ResourceDetail, ResourceDirectory, ResourceRecord } from '../api';
 import { useResourceDetailMutation, useResourceDetailQuery } from '../queries';
+import { useResourceImport } from './useResourceImport';
 
 interface DetailTarget {
   id: string;
@@ -34,6 +35,7 @@ export function useResourceDetail(tree: MaybeRefOrGetter<ResourceDirectory[]>) {
   const detail = computed(() => query.data.value?.id === target.value?.id ? query.data.value?.detail : undefined);
   const categories = computed(() => toValue(tree).flatMap(group => group.children ?? []));
   const editing = computed(() => draft.value !== null);
+  const importer = useResourceImport(detail, () => !editing.value && !pending.value && !query.isError.value);
   const dirty = computed(() => {
     const current = draft.value;
     return current !== null && ((current.category?.name ?? current.base.resourceName) !== current.base.resourceName ||
@@ -59,7 +61,7 @@ export function useResourceDetail(tree: MaybeRefOrGetter<ResourceDirectory[]>) {
 
   /** 单一确认通道；后续点击不复用第一次的许可，避免一次确认触发多个导航 */
   async function allowLeave(): Promise<boolean> {
-    if (disposed || pending.value || confirming.value) { return false; }
+    if (disposed || pending.value || importer.pending.value || confirming.value) { return false; }
     if (!dirty.value) { return true; }
     const token = session.token;
     confirming.value = true;
@@ -68,7 +70,7 @@ export function useResourceDetail(tree: MaybeRefOrGetter<ResourceDirectory[]>) {
   }
 
   function open(row: ResourceRecord, directoryId: string) {
-    if (disposed || pending.value || editing.value || confirming.value) { return; }
+    if (disposed || pending.value || importer.pending.value || editing.value || confirming.value) { return; }
     target.value = { id: row.id, name: row.name, year: row.year, directoryId };
     error.value = '';
   }
@@ -84,7 +86,7 @@ export function useResourceDetail(tree: MaybeRefOrGetter<ResourceDirectory[]>) {
 
   function beginEdit() {
     const base = detail.value;
-    if (!base || editing.value || pending.value || query.isError.value || disposed ||
+    if (!base || editing.value || pending.value || importer.pending.value || query.isError.value || disposed ||
       !session.isActive() || !session.token || session.user?.role !== Role.admin) { return; }
     const matches = categories.value.filter(node => node.name === base.resourceName);
     const category = matches.find(node => node.id === target.value?.directoryId) ??
@@ -155,6 +157,7 @@ export function useResourceDetail(tree: MaybeRefOrGetter<ResourceDirectory[]>) {
     draft: computed(() => draft.value),
     detail,
     query,
+    importer,
     editing,
     dirty,
     pending: readonly(pending),

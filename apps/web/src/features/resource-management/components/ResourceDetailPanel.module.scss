@@ -21,6 +21,15 @@
 .attributes > :first-child { flex: none; }
 .attributes > :last-child { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .attributeTable { flex: 1; min-height: 0; }
+.importHint, .importStatus {
+  flex: none;
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+.importStatus { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.importError { color: var(--el-color-danger); }
+.importSuccess { color: var(--el-color-success); }
 
 .metadata {
   margin: 0;

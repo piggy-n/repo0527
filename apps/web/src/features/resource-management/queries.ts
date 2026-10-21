@@ -1,16 +1,19 @@
 import { type Query, skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { useSessionStore } from '@/shared/auth/session-store';
+import type { TransferProgress } from '@/shared/http/client';
 import {
   changeResourceDirectory,
   fetchResourceDirectory,
   fetchResourceDetail,
   fetchResourcePage,
   fetchResourceYears,
+  importResourceExcel,
   saveResourceDetail,
   setResourceStatus,
   type ResourceDetail,
   type ResourceDetailChange,
+  type ResourceExcelImport,
   type ResourcePage,
   type ResourcePageParams,
   type ResourceDirectoryChange
@@ -151,6 +154,26 @@ export function useResourceStatusMutation() {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() }),
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.detail(id) })
+        ]);
+      }
+    }
+  });
+}
+
+/** Excel 不带图层 ID，成功后失效本模块全部列表、详情及年份；不猜测影响图层 */
+export function useResourceImportMutation() {
+  const queryClient = useQueryClient();
+  const session = useSessionStore();
+  return useMutation({
+    mutationFn: ({ input, onProgress }: {
+      input: ResourceExcelImport; token: string; onProgress: (value: TransferProgress) => void;
+    }) => importResourceExcel(input, onProgress),
+    onSuccess: async (_, { token }) => {
+      if (session.token === token) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() }),
+          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.details() }),
+          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.years() })
         ]);
       }
     }

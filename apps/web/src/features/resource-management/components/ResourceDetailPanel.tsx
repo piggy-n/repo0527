@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowUp, EditPen } from '@element-plus/icons-vue';
+import { ArrowDown, ArrowLeft, ArrowUp, EditPen, Upload } from '@element-plus/icons-vue';
 import { useMediaQuery } from '@vueuse/core';
 import { MxPanel, MxSection, MxTitle } from '@yzt/ui';
 import {
@@ -36,6 +36,16 @@ export const ResourceDetailPanel = defineComponent({
     const showSaving = useDelayedFlag(() => props.owner.pending.value);
     const compact = useMediaQuery('(max-width: 760px), (max-height: 700px)');
     const expanded = ref<string | null>(null);
+    const fileInput = ref<HTMLInputElement>();
+    const showImporting = useDelayedFlag(() => props.owner.importer.pending.value);
+
+    /** 选择单个文件后直接上传；清空 input 以便失败后重新选择同一文件 */
+    function selectFile(event: Event) {
+      const input = event.target as HTMLInputElement;
+      const file = input.files?.[0];
+      input.value = '';
+      if (file) { void props.owner.importer.upload(file); }
+    }
 
     /** 窄屏和矮屏每次只展开一组元数据，属性表始终留在同一主区 */
     function metadataSection(title: string, items: MetadataItems) {
@@ -62,6 +72,11 @@ export const ResourceDetailPanel = defineComponent({
       const owner = props.owner;
       const data = owner.draft.value?.base ?? owner.detail.value;
       const attributes = owner.draft.value?.attributes ?? data?.attributes ?? [];
+      const importer = owner.importer;
+      const importDisabled = owner.editing.value || owner.pending.value || importer.pending.value || owner.query.isError.value;
+      const importMessage = importer.stage.value === 'sending'
+        ? `正在上传${importer.percent.value === null ? '…' : ` ${importer.percent.value}%`}`
+        : importer.stage.value === 'processing' ? '文件已发送，正在处理…' : importer.message.value;
       return (
         <MxPanel
           headerTone="muted"
@@ -72,13 +87,17 @@ export const ResourceDetailPanel = defineComponent({
         >
           {{
             actions: () => <>
-              <span><ElButton icon={ArrowLeft} disabled={owner.pending.value} onClick={() => void owner.close()}>
+              <span><ElButton
+                icon={ArrowLeft}
+                disabled={owner.pending.value || importer.pending.value}
+                onClick={() => void owner.close()}
+              >
                 返回
               </ElButton></span>
               {!owner.editing.value && <span><ElButton
                 type="primary"
                 icon={EditPen}
-                disabled={!data || owner.query.isError.value}
+                disabled={!data || owner.query.isError.value || importer.pending.value}
                 onClick={owner.beginEdit}
               >修改</ElButton></span>}
             </>,
@@ -121,6 +140,30 @@ export const ResourceDetailPanel = defineComponent({
                   ['记录数目', data.layerRecord?.toLocaleString('zh-CN')], ['平面坐标系', data.coordinate]
                 ])}
                 <MxSection class={styles.attributes} title="属性结构描述表">
+                  {{ extra: () => <>
+                    <input
+                      ref={fileInput}
+                      hidden
+                      type="file"
+                      accept=".xlsx,.xls"
+                      aria-label="属性规范 Excel 文件"
+                      disabled={importDisabled}
+                      onChange={selectFile}
+                    />
+                    <ElButton
+                      icon={Upload}
+                      loading={showImporting.value}
+                      disabled={importDisabled}
+                      onClick={() => fileInput.value?.click()}
+                    >上传 Excel</ElButton>
+                  </>, default: () => <>
+                  <p class={styles.importHint}>年份：{data.year ?? '未提供'} · 支持 .xlsx、.xls，选择后直接上传</p>
+                  {importMessage && <p
+                    class={[styles.importStatus, importer.stage.value === 'error' && styles.importError,
+                      importer.stage.value === 'success' && styles.importSuccess]}
+                    role={importer.stage.value === 'error' ? 'alert' : 'status'}
+                    title={importMessage}
+                  >{importMessage}</p>}
                   <ElTable class={styles.attributeTable} height="100%" data={attributes} emptyText="暂无属性结构">
                     <ElTableColumn label="字段名称" minWidth="200">
                       {{ default: ({ row, $index }: { row: ResourceAttribute; $index: number }) => owner.editing.value
@@ -136,6 +179,7 @@ export const ResourceDetailPanel = defineComponent({
                     <ElTableColumn prop="fieldType" label="字段类型" minWidth="100" />
                     <ElTableColumn prop="fieldLength" label="字段长度" width="100" />
                   </ElTable>
+                  </> }}
                 </MxSection>
               </> : showLoading.value ? <ElSkeleton rows={8} animated aria-label="正在加载资源详情" /> : null}
             </>,
