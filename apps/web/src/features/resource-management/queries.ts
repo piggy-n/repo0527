@@ -4,8 +4,12 @@ import { useSessionStore } from '@/shared/auth/session-store';
 import {
   changeResourceDirectory,
   fetchResourceDirectory,
+  fetchResourceDetail,
   fetchResourcePage,
   fetchResourceYears,
+  saveResourceDetail,
+  type ResourceDetail,
+  type ResourceDetailChange,
   type ResourcePage,
   type ResourcePageParams,
   type ResourceDirectoryChange
@@ -30,7 +34,9 @@ export const resourceManagementKeys = {
   directory: () => [...resourceManagementKeys.all, 'directory'] as const,
   years: () => [...resourceManagementKeys.all, 'years'] as const,
   pages: () => [...resourceManagementKeys.all, 'page'] as const,
-  page: (request: ResourcePageRequest | null) => [...resourceManagementKeys.pages(), request] as const
+  page: (request: ResourcePageRequest | null) => [...resourceManagementKeys.pages(), request] as const,
+  details: () => [...resourceManagementKeys.all, 'detail'] as const,
+  detail: (id: string | null) => [...resourceManagementKeys.details(), id] as const
 };
 
 /** 目录缓存由 Query 持有；组件只从缓存推导当前选择 */
@@ -61,7 +67,10 @@ export function useResourceDirectoryMutation() {
       }
       await queryClient.invalidateQueries({ queryKey: resourceManagementKeys.directory() });
       if (session.token === token) {
-        await queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() }),
+          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.details() })
+        ]);
       }
     }
   });
@@ -99,4 +108,33 @@ export function useResourcePageQuery(request: MaybeRefOrGetter<ResourcePageReque
   }
 
   return { ...query, rememberPage };
+}
+
+/** 详情不借用其他资源占位；标记所属 ID，避免 key 切换当轮读取旧值 */
+export function useResourceDetailQuery(id: MaybeRefOrGetter<string | null>) {
+  return useQuery(computed(() => {
+    const current = toValue(id);
+    return {
+      queryKey: resourceManagementKeys.detail(current),
+      queryFn: current ? ({ signal }: { signal: AbortSignal }) => fetchResourceDetail(current, signal) : skipToken,
+      select: (detail: ResourceDetail) => ({ id: current, detail })
+    };
+  }));
+}
+
+/** 保存是不可替换的服务端写操作；只刷新同会话的详情与列表 */
+export function useResourceDetailMutation() {
+  const queryClient = useQueryClient();
+  const session = useSessionStore();
+  return useMutation({
+    mutationFn: ({ change }: { change: ResourceDetailChange; token: string }) => saveResourceDetail(change),
+    onSuccess: async (_, { change, token }) => {
+      if (session.token === token) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.detail(change.id) }),
+          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() })
+        ]);
+      }
+    }
+  });
 }

@@ -27,6 +27,21 @@ export function resourceYearsResponse() {
   ] };
 }
 
+/** 属性含空名称、空 ID 和扩展字段，用于验证编辑后的完整往返 */
+export function resourceDetailResponse(id = 'layer-1') {
+  return { code: 200, data: {
+    id, resourceName: '土地资源', datasetName: '年度调查数据集', datasetCode: 'DATASET',
+    datasets: 'CCWJQ, DLTB', year: 2025, submit_unit: '调查单位', layerName: 'DLTB', layerCode: 'LAYER',
+    elementType: '其他', layerRecord: 29307, coordinate: 'Geodetic Coordinate System 2000 (EPSG:4490)',
+    attributes: [
+      { attrId: null, name: null, code: 'BSM', fieldType: 'Long', fieldLength: '10', year: 2025,
+        fieldPlaces: null, rangeValue: null, condition: null, remark: null, property: null, extension: { keep: true } },
+      { attrId: 'attr-2', name: '图斑名称', code: 'TBMC', fieldType: 'String', fieldLength: '100', year: 2025,
+        fieldPlaces: null, rangeValue: null, condition: null, remark: '保留备注', property: null }
+    ]
+  } };
+}
+
 export function resourceRecordResponse(index: number, resource = '土地资源') {
   return {
     id: `${resource}-${index}`,

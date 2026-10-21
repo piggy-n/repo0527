@@ -104,3 +104,57 @@ export function changeResourceDirectory(change: ResourceDirectoryChange) {
   }
   return http.post('/resource-management/menu/delete', undefined, { ...options, query: { id: change.id } });
 }
+
+// 属性仅 name 可编辑；其余字段及尚未识别的扩展字段原样往返，不能在校验时剥离
+const resourceAttributeSchema = z.looseObject({
+  attrId: z.string().nullable(),
+  name: z.string().nullable(),
+  code: z.string(),
+  fieldType: z.string(),
+  fieldLength: z.string(),
+  year: z.number().int().nullable()
+});
+
+export type ResourceAttribute = z.infer<typeof resourceAttributeSchema>;
+
+const resourceDetailSchema = z.object({
+  id: z.string().min(1),
+  resourceName: z.string(),
+  datasetName: z.string().nullish(),
+  datasetCode: z.string().nullish(),
+  datasets: z.string().nullish(),
+  year: z.number().int().nullable(),
+  submit_unit: z.string().nullish(),
+  submitUnit: z.string().nullish(),
+  layerName: z.string().nullish(),
+  layerCode: z.string().nullish(),
+  elementType: z.string().nullish(),
+  layerRecord: z.number().int().nonnegative().nullish(),
+  coordinate: z.string().nullish(),
+  attributes: z.array(resourceAttributeSchema)
+});
+
+export type ResourceDetail = z.infer<typeof resourceDetailSchema>;
+
+/** 详情和属性同源读取；校验响应身份，不能把另一资源的结构当作当前编辑目标 */
+export function fetchResourceDetail(id: string, signal?: AbortSignal) {
+  return http.get('/resource-management/layer/struct', {
+    query: { id },
+    schema: resourceDetailSchema.refine(detail => detail.id === id, '资源详情 ID 不匹配'),
+    signal,
+    silent: true
+  });
+}
+
+export interface ResourceDetailChange {
+  id: string;
+  resourceName: string;
+  attributes: ResourceAttribute[];
+}
+
+/** shared HTTP 同时支持 PUT query 和 JSON body，无需旧项目的兼容分支 */
+export function saveResourceDetail(change: ResourceDetailChange) {
+  return http.put('/resource-management/layer/edit-struct', change.attributes, {
+    query: { id: change.id, resourceName: change.resourceName }, schema: z.unknown(), silent: true
+  });
+}

@@ -3,8 +3,11 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { configureHttp } from '@/shared/http/configure';
 import { ApiError } from '@/shared/http/errors';
-import { changeResourceDirectory, fetchResourceDirectory, fetchResourcePage, fetchResourceYears } from './api';
-import { resourceDirectoryResponse, resourcePageResponse, resourceYearsResponse } from './test-data';
+import {
+  changeResourceDirectory, fetchResourceDetail, fetchResourceDirectory, fetchResourcePage, fetchResourceYears,
+  saveResourceDetail
+} from './api';
+import { resourceDetailResponse, resourceDirectoryResponse, resourcePageResponse, resourceYearsResponse } from './test-data';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
@@ -13,6 +16,50 @@ afterEach(() => {
   configureHttp({});
 });
 afterAll(() => server.close());
+
+describe('资源详情接口', () => {
+  it('GET 用 query ID，保留属性的 null 和扩展字段；PUT 同时传编码参数和数组正文', async () => {
+    const id = '资源 / &?';
+    const received: unknown[] = [];
+    const response = resourceDetailResponse(id);
+    server.use(
+      mock.get('/backend/resource-management/layer/struct', ({ request }) => {
+        received.push(new URL(request.url).searchParams.get('id'));
+        return HttpResponse.json(response);
+      }),
+      mock.put('/backend/resource-management/layer/edit-struct', async ({ request }) => {
+        received.push({ query: Object.fromEntries(new URL(request.url).searchParams), body: await request.json() });
+        return HttpResponse.json({ code: 200 });
+      })
+    );
+    const detail = await fetchResourceDetail(id);
+    expect(detail.attributes).toEqual(response.data.attributes);
+    await saveResourceDetail({ id, resourceName: '水 / &? 资源', attributes: detail.attributes });
+    expect(received).toEqual([id, { query: { id, resourceName: '水 / &? 资源' }, body: response.data.attributes }]);
+  });
+
+  it('错误身份和损坏的属性不能进入编辑缓存，空属性表合法', async () => {
+    server.use(mock.get('/backend/resource-management/layer/struct', () =>
+      HttpResponse.json(resourceDetailResponse('other'))));
+    await expect(fetchResourceDetail('layer-1')).rejects.toMatchObject({ kind: 'invalid-response' });
+    server.use(mock.get('/backend/resource-management/layer/struct', () =>
+      HttpResponse.json({ code: 200, data: { ...resourceDetailResponse().data, attributes: [{ code: 'broken' }] } })));
+    await expect(fetchResourceDetail('layer-1')).rejects.toMatchObject({ kind: 'invalid-response' });
+    server.use(mock.get('/backend/resource-management/layer/struct', () =>
+      HttpResponse.json({ code: 200, data: { ...resourceDetailResponse().data, attributes: [] } })));
+    expect((await fetchResourceDetail('layer-1')).attributes).toEqual([]);
+  });
+
+  it('保存失败沿用服务端原因，不弹全局重复提示', async () => {
+    const onError = vi.fn<() => void>();
+    configureHttp({ onError });
+    server.use(mock.put('/backend/resource-management/layer/edit-struct', () =>
+      HttpResponse.json({ code: 500, msg: '属性保存失败' })));
+    await expect(saveResourceDetail({ id: 'layer-1', resourceName: '土地资源', attributes: [] }))
+      .rejects.toMatchObject({ kind: 'business', message: '属性保存失败' });
+    expect(onError).not.toHaveBeenCalled();
+  });
+});
 
 describe('资源目录写接口', () => {
   it('新增传完整旧业务参数，重命名仅传 id/name，删除使用 query 且无 body', async () => {

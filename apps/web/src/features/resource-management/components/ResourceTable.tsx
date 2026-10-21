@@ -1,3 +1,4 @@
+import { View } from '@element-plus/icons-vue';
 import { ElAlert, ElButton, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
@@ -5,7 +6,7 @@ import { TableSkeleton } from '@/shared/table/TableSkeleton';
 import type { ResourceRecord } from '../api';
 import styles from './ResourceManagement.module.scss';
 
-/** 资源列表的三类加载状态；启停与详情入口随对应业务接入，不放置无效按钮 */
+/** 资源列表的三类加载状态与详情入口；启停操作随 R4 接入 */
 export const ResourceTable = defineComponent({
   name: 'ResourceTable',
   directives: { loading: vLoading },
@@ -16,7 +17,7 @@ export const ResourceTable = defineComponent({
     error: Boolean,
     selected: Boolean
   },
-  emits: { retry: () => true },
+  emits: { retry: () => true, view: (_row: ResourceRecord) => true },
   setup(props, { emit }) {
     const showSkeleton = useDelayedFlag(() => props.initialLoading);
     const showMask = useDelayedFlag(() => props.refreshing);
@@ -41,6 +42,10 @@ export const ResourceTable = defineComponent({
               <ElTableColumn label="启用状态" width="100" align="center">
                 {{ default: ({ row }: { row: ResourceRecord }) =>
                   <ElTag type={row.enabled ? 'success' : 'info'}>{row.enabled ? '启用' : '停用'}</ElTag> }}
+              </ElTableColumn>,
+              <ElTableColumn label="操作" width="90" fixed="right" align="center">
+                {{ default: ({ row }: { row: ResourceRecord }) =>
+                  <ElButton link type="primary" icon={View} onClick={() => emit('view', row)}>查看</ElButton> }}
               </ElTableColumn>
             ],
             empty: () => {

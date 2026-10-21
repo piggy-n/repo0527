@@ -16,7 +16,9 @@ export const ResourceDirectoryPanel = defineComponent({
     nodes: { type: Array as PropType<ResourceDirectory[]>, required: true },
     selected: String,
     loading: Boolean,
-    error: Boolean
+    error: Boolean,
+    maintenanceDisabled: Boolean,
+    beforeSelect: Function as PropType<(id: string) => Promise<boolean>>
   },
   emits: {
     select: (_id: string) => true,
@@ -55,11 +57,14 @@ export const ResourceDirectoryPanel = defineComponent({
             defaultExpandAll
             highlightCurrent
             currentNodeKey={props.selected}
-            onNode-click={(node: ResourceDirectory) => {
+            onNode-click={async (node: ResourceDirectory) => {
+              tree.value?.setCurrentKey(props.selected);
               if (isGroup(node.id)) {
-                tree.value?.setCurrentKey(props.selected);
+                return;
               } else {
+                if (props.beforeSelect && !await props.beforeSelect(node.id)) { return; }
                 emit('select', node.id);
+                tree.value?.setCurrentKey(node.id);
                 if (layout.compact.value) {
                   layout.closeAside();
                 }
@@ -77,7 +82,7 @@ export const ResourceDirectoryPanel = defineComponent({
                         link
                         type="primary"
                         icon={Plus}
-                        disabled={editor.pending.value}
+                        disabled={editor.pending.value || props.maintenanceDisabled}
                         aria-label={`在${data.name}新增目录`}
                         onClick={(event: MouseEvent) => {
                           event.stopPropagation();
@@ -89,7 +94,7 @@ export const ResourceDirectoryPanel = defineComponent({
                         <ElButton
                           link
                           icon={EditPen}
-                          disabled={editor.pending.value}
+                          disabled={editor.pending.value || props.maintenanceDisabled}
                           aria-label={`重命名${data.name}`}
                           onClick={(event: MouseEvent) => {
                             event.stopPropagation();
@@ -100,7 +105,7 @@ export const ResourceDirectoryPanel = defineComponent({
                           link
                           type="danger"
                           icon={Delete}
-                          disabled={editor.pending.value}
+                          disabled={editor.pending.value || props.maintenanceDisabled}
                           aria-label={`删除${data.name}`}
                           onClick={(event: MouseEvent) => {
                             event.stopPropagation();

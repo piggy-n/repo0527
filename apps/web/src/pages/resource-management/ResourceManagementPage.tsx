@@ -1,10 +1,14 @@
 import { MxPanel, MxSplitLayout } from '@yzt/ui';
-import { ElAlert, ElButton, ElOption, ElPagination, ElSelect } from 'element-plus';
+import { ElAlert, ElButton, ElDialog, ElOption, ElPagination, ElSelect } from 'element-plus';
 import { computed, defineComponent } from 'vue';
+import { onBeforeRouteLeave } from 'vue-router';
+import { useSessionStore } from '@/shared/auth/session-store';
+import { ResourceDetailPanel } from '@/features/resource-management/components/ResourceDetailPanel';
 import { ResourceDirectoryPanel } from '@/features/resource-management/components/ResourceDirectoryPanel';
 import { ResourceFilterBar } from '@/features/resource-management/components/ResourceFilterBar';
 import { ResourceTable } from '@/features/resource-management/components/ResourceTable';
 import { useResourceList } from '@/features/resource-management/composables/useResourceList';
+import { useResourceDetail } from '@/features/resource-management/composables/useResourceDetail';
 import styles from './ResourceManagementPage.module.scss';
 
 /** 管理员资源管理页：组合目录、筛选与列表，写入成功后由 Query 更新数据 */
@@ -13,11 +17,15 @@ export const ResourceManagementPage = defineComponent({
   setup() {
     const list = useResourceList();
     const { directoryQuery, yearsQuery } = list;
+    const detail = useResourceDetail(() => directoryQuery.data.value ?? []);
+    const session = useSessionStore();
+    // 会话结束必须允许离开；正常导航先确认草稿，不能在保存中离开
+    onBeforeRouteLeave(() => !session.isActive() || detail.allowLeave());
     const parent = computed(() => directoryQuery.data.value?.find(group =>
       group.children?.some(child => child.id === list.directoryId.value)));
 
     return () => (
-      <MxSplitLayout asideLabel="资源目录">
+      <><MxSplitLayout asideLabel="资源目录">
         {{
           aside: () => (
             <MxPanel class={styles.panel} title="资源目录">
@@ -26,12 +34,16 @@ export const ResourceManagementPage = defineComponent({
                 selected={list.directoryId.value ?? undefined}
                 loading={directoryQuery.isLoading.value}
                 error={directoryQuery.isError.value}
+                maintenanceDisabled={detail.editing.value || detail.pending.value}
+                beforeSelect={async id => id === list.directoryId.value || await detail.close()}
                 onSelect={list.selectDirectory}
                 onRetry={() => void directoryQuery.refetch()}
               />
             </MxPanel>
           ),
-          default: () => (
+          default: () => detail.target.value ? (
+            <ResourceDetailPanel owner={detail} directories={directoryQuery.data.value ?? []} />
+          ) : (
             <MxPanel
               class={styles.panel}
               title={list.selectedDirectory.value?.name ?? '资源列表'}
@@ -62,6 +74,7 @@ export const ResourceManagementPage = defineComponent({
                     refreshing={list.refreshing.value}
                     error={list.isError.value}
                     onRetry={() => void list.refresh()}
+                    onView={row => { if (list.directoryId.value) { detail.open(row, list.directoryId.value); } }}
                   />
                 ],
                 footer: () => (
@@ -90,6 +103,24 @@ export const ResourceManagementPage = defineComponent({
           )
         }}
       </MxSplitLayout>
+        <ElDialog
+          class={styles.confirmDialog}
+          modelValue={detail.confirming.value}
+          title="放弃未保存的修改？"
+          appendToBody
+          destroyOnClose
+          closeOnClickModal={false}
+          onUpdate:modelValue={open => { if (!open) { detail.answerDiscard(false); } }}
+        >
+          {{
+            default: () => <p>离开后，本次对数据分类和字段名称的修改将不会保存。</p>,
+            footer: () => <>
+              <ElButton onClick={() => detail.answerDiscard(false)}>继续编辑</ElButton>
+              <ElButton type="danger" onClick={() => detail.answerDiscard(true)}>放弃修改</ElButton>
+            </>
+          }}
+        </ElDialog>
+      </>
     );
   }
 });
