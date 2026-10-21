@@ -1,19 +1,27 @@
-import { ArrowLeft, EditPen } from '@element-plus/icons-vue';
-import { MxPanel, MxSection } from '@yzt/ui';
+import { ArrowDown, ArrowLeft, ArrowUp, EditPen } from '@element-plus/icons-vue';
+import { useMediaQuery } from '@vueuse/core';
+import { MxPanel, MxSection, MxTitle } from '@yzt/ui';
 import {
-  ElAlert, ElButton, ElInput, ElMessage, ElOption, ElOptionGroup, ElSelect, ElSkeleton, ElTable, ElTableColumn
+  ElAlert, ElButton, ElInput, ElMessage, ElOption, ElOptionGroup, ElPopover, ElSelect, ElSkeleton, ElTable, ElTableColumn
 } from 'element-plus';
-import { defineComponent, type PropType } from 'vue';
+import { defineComponent, type PropType, ref } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import type { ResourceAttribute, ResourceDirectory } from '../api';
 import type { useResourceDetail } from '../composables/useResourceDetail';
 import styles from './ResourceDetailPanel.module.scss';
 
-/** 只读元数据保留完整内容，长文本在单元格内换行 */
-function metadata(items: [string, string | number | null | undefined][]) {
-  return <dl class={styles.metadata}>{items.map(([label, value]) => (
-    <div class={styles.metadataItem} key={label}><dt>{label}</dt><dd>{value === '' ? '—' : value ?? '—'}</dd></div>
-  ))}</dl>;
+type MetadataItems = [string, string | number | null | undefined][];
+
+/** 元数据固定占高；长值可点开完整文本，避免挤掉属性表 */
+function metadata(items: MetadataItems) {
+  return <dl class={styles.metadata}>{items.map(([label, value]) => {
+    const text = value === '' ? '—' : String(value ?? '—');
+    return <div class={styles.metadataItem} key={label}>
+      <dt>{label}</dt><dd><ElPopover trigger="click" width={280} content={text}>
+        {{ reference: () => <button class={styles.value} title={text} aria-label={`${label}：${text}`}>{text}</button> }}
+      </ElPopover></dd>
+    </div>;
+  })}</dl>;
 }
 
 /** 详情主区按 v2 展示；编辑入口固定在头部，草稿与提交逻辑由拥有者管理 */
@@ -26,6 +34,25 @@ export const ResourceDetailPanel = defineComponent({
   setup(props) {
     const showLoading = useDelayedFlag(() => props.owner.query.isLoading.value);
     const showSaving = useDelayedFlag(() => props.owner.pending.value);
+    const compact = useMediaQuery('(max-width: 760px), (max-height: 700px)');
+    const expanded = ref<string | null>(null);
+
+    /** 窄屏和矮屏每次只展开一组元数据，属性表始终留在同一主区 */
+    function metadataSection(title: string, items: MetadataItems) {
+      const collapsed = compact.value && expanded.value !== title;
+      return <MxSection class={styles.metadataSection} title={title} data-collapsed={collapsed || undefined}>
+        {{
+          extra: compact.value ? () => <ElButton
+            link
+            icon={collapsed ? ArrowDown : ArrowUp}
+            aria-label={`${collapsed ? '展开' : '收起'}${title}`}
+            aria-expanded={!collapsed}
+            onClick={() => { expanded.value = collapsed ? title : null; }}
+          /> : undefined,
+          default: () => collapsed ? [] : [metadata(items)]
+        }}
+      </MxSection>;
+    }
 
     async function save() {
       if (await props.owner.save()) { ElMessage.success('资源属性已保存'); }
@@ -44,15 +71,15 @@ export const ResourceDetailPanel = defineComponent({
         >
           {{
             actions: () => <>
-              <ElButton link icon={ArrowLeft} disabled={owner.pending.value} onClick={() => void owner.close()}>
-                返回列表
-              </ElButton>
-              {!owner.editing.value && <ElButton
+              <span><ElButton icon={ArrowLeft} disabled={owner.pending.value} onClick={() => void owner.close()}>
+                返回
+              </ElButton></span>
+              {!owner.editing.value && <span><ElButton
                 type="primary"
                 icon={EditPen}
                 disabled={!data || owner.query.isError.value}
                 onClick={owner.beginEdit}
-              >修改</ElButton>}
+              >修改</ElButton></span>}
             </>,
             default: () => <>
               {owner.error.value && <ElAlert class={styles.notice} type="error" title={owner.error.value} closable={false} />}
@@ -61,7 +88,7 @@ export const ResourceDetailPanel = defineComponent({
                 <ElButton link type="primary" onClick={() => void owner.query.refetch()}>重试详情</ElButton>
               </ElAlert>}
               {data ? <>
-                <MxSection title="数据分类">
+                <div class={styles.categoryRow}><MxTitle level="section">数据分类</MxTitle>
                   {owner.editing.value ? <>
                     <ElSelect
                       class={styles.categorySelect}
@@ -83,17 +110,17 @@ export const ResourceDetailPanel = defineComponent({
                       当前分类「{data.resourceName || '未提供'}」未唯一匹配目录，请选择后保存
                     </p>}
                   </> : <span>{data.resourceName || '—'}</span>}
-                </MxSection>
-                <MxSection title="数据集元数据">{metadata([
+                </div>
+                {metadataSection('数据集元数据', [
                   ['数据集名称', data.datasetName], ['数据生产年份', data.year],
                   ['数据来源', data.submit_unit || data.submitUnit], ['数据集图层列表', data.datasets]
-                ])}</MxSection>
-                <MxSection title="空间要素图层元数据">{metadata([
+                ])}
+                {metadataSection('空间要素图层元数据', [
                   ['图层名称', data.layerName], ['要素类型', data.elementType],
                   ['记录数目', data.layerRecord?.toLocaleString('zh-CN')], ['平面坐标系', data.coordinate]
-                ])}</MxSection>
-                <MxSection title="属性结构描述表">
-                  <ElTable data={attributes} emptyText="暂无属性结构">
+                ])}
+                <MxSection class={styles.attributes} title="属性结构描述表">
+                  <ElTable class={styles.attributeTable} height="100%" data={attributes} emptyText="暂无属性结构">
                     <ElTableColumn label="字段名称" minWidth="200">
                       {{ default: ({ row, $index }: { row: ResourceAttribute; $index: number }) => owner.editing.value
                         ? <ElInput

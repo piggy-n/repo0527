@@ -5,7 +5,7 @@ import { configureHttp } from '@/shared/http/configure';
 import { ApiError } from '@/shared/http/errors';
 import {
   changeResourceDirectory, fetchResourceDetail, fetchResourceDirectory, fetchResourcePage, fetchResourceYears,
-  saveResourceDetail
+  saveResourceDetail, setResourceStatus
 } from './api';
 import { resourceDetailResponse, resourceDirectoryResponse, resourcePageResponse, resourceYearsResponse } from './test-data';
 
@@ -16,6 +16,33 @@ afterEach(() => {
   configureHttp({});
 });
 afterAll(() => server.close());
+
+describe('资源启停接口', () => {
+  it('POST query 同时传编码后的 ID 和字符串状态，不带正文且沿用鉴权头', async () => {
+    const received: unknown[] = [];
+    configureHttp({ getHeaders: () => ({ Authorization: 'resource-session' }) });
+    server.use(mock.post('/backend/resource-management/layer/status', async ({ request }) => {
+      received.push({ query: Object.fromEntries(new URL(request.url).searchParams), body: await request.text(),
+        authorization: request.headers.get('Authorization') });
+      return HttpResponse.json({ code: 200 });
+    }));
+    await setResourceStatus('图层 / &?', true);
+    await setResourceStatus('图层 / &?', false);
+    expect(received).toEqual([
+      { query: { id: '图层 / &?', status: 'true' }, body: '', authorization: 'resource-session' },
+      { query: { id: '图层 / &?', status: 'false' }, body: '', authorization: 'resource-session' }
+    ]);
+  });
+
+  it('启停失败保留服务端原因，交给页面提示', async () => {
+    const onError = vi.fn<() => void>();
+    configureHttp({ onError });
+    server.use(mock.post('/backend/resource-management/layer/status', () =>
+      HttpResponse.json({ code: 500, msg: '图层状态修改失败' })));
+    await expect(setResourceStatus('layer-1', false)).rejects.toMatchObject({ kind: 'business', message: '图层状态修改失败' });
+    expect(onError).not.toHaveBeenCalled();
+  });
+});
 
 describe('资源详情接口', () => {
   it('GET 用 query ID，保留属性的 null 和扩展字段；PUT 同时传编码参数和数组正文', async () => {

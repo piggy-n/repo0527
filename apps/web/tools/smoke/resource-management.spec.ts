@@ -21,6 +21,8 @@ interface Backend {
   emptyAttributes: boolean;
   holdDetail?: Promise<void>;
   holdSave?: Promise<void>;
+  holdStatus: Map<string, Promise<void>>;
+  statuses: { id: string; status: string | null }[];
   saves: { id: string | null; resourceName: string | null; attributes: Attribute[] }[];
   holdPage?: Promise<void>;
   writes: string[];
@@ -42,8 +44,10 @@ interface Attribute {
 const test = base.extend<{ resourceBackend: Backend }>({
   resourceBackend: [async ({ context }, use) => {
     const backend: Backend = { role: 'admin', failWrite: false, failTree: false, failYears: false,
-      failPage: false, failDetail: false, emptyAttributes: false, saves: [], writes: [], reads: [], pages: [] };
+      failPage: false, failDetail: false, emptyAttributes: false, saves: [], holdStatus: new Map(), statuses: [],
+      writes: [], reads: [], pages: [] };
     const saved = new Map<string, { resourceName: string; attributes: Attribute[] }>();
+    const enabled = new Map<string, string>();
     const groups: Directory[] = [
       { id: 'base', name: '基础库', children: ['土地资源', '地质/矿产资源', '海洋资源', '水资源', '森林资源',
         '草原资源', '湿地资源', '荒漠', '国家公园'].map((name, index) => ({ id: `base-${index}`, name,
@@ -79,7 +83,8 @@ const test = base.extend<{ resourceBackend: Backend }>({
         const rows = Array.from({ length: 23 }, (_, index) => ({
           id: `row-${index}`, layer_name: index === 0 ? '资源名称很长时应省略并且保留完整的悬浮提示文本' : `${params.resource}记录${index}`,
           year: index % 2 === 0 ? 2025 : 2024, dataset_name: '年度调查数据集', resource_name: params.resource,
-          layer_code: `LAYER_${index}`, dataset_code: 'DATASET', slice: index % 2 === 0, enable: index % 3 === 0 ? 'false' : 'true'
+          layer_code: `LAYER_${index}`, dataset_code: 'DATASET', slice: index % 2 === 0,
+          enable: enabled.get(`row-${index}`) ?? (index % 3 === 0 ? 'false' : 'true')
         })).filter(row => (!saved.has(row.id) || saved.get(row.id)?.resourceName === params.resource) &&
           (!params.layerName || row.layer_name.includes(params.layerName)) &&
           (!params.year || String(row.year) === params.year));
@@ -87,6 +92,14 @@ const test = base.extend<{ resourceBackend: Backend }>({
         const pageNum = Math.min(params.pageNum, Math.max(pages, 1));
         data = { list: rows.slice((pageNum - 1) * params.pageSize, pageNum * params.pageSize),
           total: rows.length, pages, pageNum, pageSize: params.pageSize };
+      } else if (endpoint === '/resource-management/layer/status' && request.method() === 'POST') {
+        const id = url.searchParams.get('id')!;
+        const status = url.searchParams.get('status');
+        backend.statuses.push({ id, status });
+        await backend.holdStatus.get(id);
+        fail = backend.failWrite;
+        if (!fail && status !== null) { enabled.set(id, status); }
+        data = null;
       } else if (endpoint === '/resource-management/layer/struct') {
         await backend.holdDetail;
         fail = backend.failDetail;
@@ -159,6 +172,10 @@ test('目录维护、列表联动、失败保留草稿和重试；正式页面�
   await expect(page.locator('.el-tree [class*="_treeIcon_"]')).toHaveCount(19);
   await page.getByRole('button', { name: '在三区三线新增目录', exact: true }).click();
   const add = page.getByRole('dialog', { name: '新增二级目录', exact: true });
+  await expect(add.getByText('所属分组')).toHaveCount(0);
+  await expect(add.locator('.el-dialog__header')).toHaveCSS('background-color', 'rgb(241, 244, 248)');
+  await expect(add.locator('.el-dialog__header')).toHaveCSS('min-height', '48px');
+  await expect(add.getByRole('heading', { name: '新增二级目录' })).toHaveCSS('font-size', '16px');
   await add.getByRole('button', { name: '保存目录', exact: true }).click();
   await expect(add.getByText('请输入目录名称', { exact: true })).toBeVisible();
   await add.getByPlaceholder('请输入目录名称').fill(' 新目录 ');
@@ -173,6 +190,8 @@ test('目录维护、列表联动、失败保留草稿和重试；正式页面�
   await page.getByPlaceholder('请输入资源名称').fill('旧草稿');
   await page.getByRole('button', { name: '重命名土地资源', exact: true }).click();
   const rename = page.getByRole('dialog', { name: '重命名目录', exact: true });
+  await expect(rename.getByText('所属分组')).toHaveCount(0);
+  await expect(rename.locator('.el-dialog__header')).toHaveCSS('background-color', 'rgb(241, 244, 248)');
   await rename.getByPlaceholder('请输入目录名称').fill('土地调查');
   await rename.getByPlaceholder('请输入目录名称').press('Enter');
   await expect(rename).not.toBeVisible();
@@ -187,6 +206,65 @@ test('目录维护、列表联动、失败保留草稿和重试；正式页面�
   await remove.getByRole('button', { name: '删除目录', exact: true }).click();
   await expect(remove).not.toBeVisible();
   await expect(page.locator('h2').filter({ hasText: '地质/矿产资源' })).toBeVisible();
+});
+
+test('图层启停按行等待、并发与失败重试；查看只保留文字', async ({ page, resourceBackend }, testInfo) => {
+  await enter(page);
+  const rows = page.locator('.el-table__row');
+  await expect(rows).toHaveCount(10);
+  await expect(page.getByRole('button', { name: '查看', exact: true }).first().locator('svg')).toHaveCount(0);
+  const first = rows.nth(0).getByRole('switch');
+  const second = rows.nth(1).getByRole('switch');
+  await expect(first).not.toBeChecked();
+  await expect(second).toBeChecked();
+  let releaseFirst!: () => void;
+  let releaseSecond!: () => void;
+  resourceBackend.holdStatus.set('row-0', new Promise<void>(resolve => { releaseFirst = resolve; }));
+  resourceBackend.holdStatus.set('row-1', new Promise<void>(resolve => { releaseSecond = resolve; }));
+  await rows.nth(0).locator('.el-switch').click();
+  await expect(first).toBeDisabled();
+  await expect(first).not.toBeChecked();
+  await rows.nth(1).locator('.el-switch').click();
+  await expect(second).toBeDisabled();
+  await expect(second).toBeChecked();
+  await expect.poll(() => resourceBackend.statuses).toEqual([
+    { id: 'row-0', status: 'true' }, { id: 'row-1', status: 'false' }
+  ]);
+  releaseSecond();
+  await expect(second).toBeEnabled();
+  await expect(second).not.toBeChecked();
+  await expect(first).toBeDisabled();
+  await expect(first).not.toBeChecked();
+  releaseFirst();
+  await expect(first).toBeEnabled();
+  await expect(first).toBeChecked();
+  resourceBackend.failWrite = true;
+  await rows.nth(0).locator('.el-switch').click();
+  await expect(page.locator('.el-message').filter({ hasText: '模拟接口失败' })).toBeVisible();
+  await expect(first).toBeEnabled();
+  await expect(first).toBeChecked();
+  resourceBackend.failWrite = false;
+  await rows.nth(0).locator('.el-switch').click();
+  await expect(first).not.toBeChecked();
+  await expect(first).toBeEnabled();
+  await settleAnimations(page);
+  await page.screenshot({ path: testInfo.outputPath('resource-status.png') });
+});
+
+test('启停成功但列表刷新失败时保留旧状态并禁止重复写，读取重试恢复真实状态', async ({ page, resourceBackend }) => {
+  await enter(page);
+  const first = page.locator('.el-table__row').first().getByRole('switch');
+  await expect(first).not.toBeChecked();
+  resourceBackend.failPage = true;
+  await page.locator('.el-table__row').first().locator('.el-switch').click();
+  await expect(page.getByText('刷新失败，以下为上次结果。', { exact: false })).toBeVisible();
+  await expect(first).not.toBeChecked();
+  await expect(first).toBeDisabled();
+  resourceBackend.failPage = false;
+  await page.getByRole('button', { name: '重试列表', exact: true }).click();
+  await expect(first).toBeChecked();
+  await expect(first).toBeEnabled();
+  expect(resourceBackend.statuses).toEqual([{ id: 'row-0', status: 'true' }]);
 });
 
 test('筛选、分页、空结果与页面错误区重试', async ({ page, resourceBackend }) => {
@@ -251,7 +329,7 @@ test('多尺寸布局、长名称、目录抽屉及窄屏弹窗', async ({ page 
   await page.getByRole('button', { name: '在基础库新增目录', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '新增二级目录', exact: true });
   await expect(dialog).toBeVisible();
-  const box = await dialog.boundingBox();
+  const box = await dialog.locator('.el-dialog').boundingBox();
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   await dialog.getByPlaceholder('请输入目录名称').fill('窄屏目录');
@@ -316,7 +394,7 @@ test('详情头部修改、属性保存失败保留草稿、保存后刷新列�
   let release!: () => void;
   resourceBackend.holdSave = new Promise<void>(resolve => { release = resolve; });
   await page.getByRole('button', { name: '保存', exact: true }).click();
-  await expect(page.getByRole('button', { name: '返回列表', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '返回', exact: true })).toBeDisabled();
   await expect(page.getByRole('textbox', { name: 'FIELD_0字段名称', exact: true })).toBeDisabled();
   release();
   await expect(detail.getByRole('button', { name: '修改', exact: true })).toBeVisible();
@@ -325,7 +403,7 @@ test('详情头部修改、属性保存失败保留草稿、保存后刷新列�
   expect(resourceBackend.saves[1].attributes[0]).toEqual({ attrId: null, name: '标识码', code: 'FIELD_0',
     fieldType: 'Long', fieldLength: '100', year: 2025, remark: '必须保留的备注' });
   expect(resourceBackend.saves[1].attributes[1].name).toBeNull();
-  await page.getByRole('button', { name: '返回列表', exact: true }).click();
+  await page.getByRole('button', { name: '返回', exact: true }).click();
   await expect(page.getByPlaceholder('请输入资源名称')).toHaveValue('记录');
   await expect(page.locator('.el-pager .is-active')).toHaveText('2');
   await expect(page.locator('.el-table__row').first()).toContainText('土地资源记录12');
@@ -337,7 +415,7 @@ test('未保存返回、切目录、取消编辑和路由离开都确认；拒�
   await page.getByRole('button', { name: '修改', exact: true }).click();
   await page.getByRole('textbox', { name: 'FIELD_0字段名称', exact: true }).fill('未保存');
   const dialog = page.getByRole('dialog', { name: '放弃未保存的修改？', exact: true });
-  await page.getByRole('button', { name: '返回列表', exact: true }).click();
+  await page.getByRole('button', { name: '返回', exact: true }).click();
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: '继续编辑', exact: true }).click();
   await page.locator('.el-tree').getByText('水资源', { exact: true }).click();
@@ -389,22 +467,45 @@ test('详情与编辑多尺寸布局：长标题、属性表滚动、固定头�
   await enter(page);
   await page.getByRole('button', { name: '查看', exact: true }).first().click();
   await expect(page.locator('[data-resource-detail] .el-table__row')).toHaveCount(33);
+  await page.getByRole('button', { name: /^数据集图层列表：/ }).click();
+  await expect(page.locator('.el-popover').filter({ visible: true })).toContainText('CCWJQ, CJDCQ, CJDCQJX, CZCDYD, CZKFBJ, DLTB, FJMSQ, GDDB, GFBQ');
+  await page.getByText('数据分类', { exact: true }).click();
+  await expect(page.locator('.el-popover').filter({ visible: true })).toHaveCount(0);
   const checkSize = async (width: number, height: number) => {
     await page.setViewportSize({ width, height });
     await expect.poll(() => page.locator('html').evaluate(
       (element: { scrollWidth: number }, viewportWidth) => element.scrollWidth <= viewportWidth, width
     )).toBe(true);
-    await page.getByText('数据分类', { exact: true }).scrollIntoViewIfNeeded();
+    const detail = page.locator('[data-resource-detail]');
+    const body = detail.locator(':scope > header + div');
+    await expect(body).toHaveCSS('overflow', 'hidden');
+    await expect(page.getByText('数据分类', { exact: true })).toBeInViewport();
+    const back = await page.getByRole('button', { name: '返回', exact: true }).boundingBox();
+    const modify = await page.getByRole('button', { name: '修改', exact: true }).boundingBox();
+    expect(back!.height).toBe(32);
+    expect(modify!.height).toBe(back!.height);
+    if (width <= 760 || height <= 700) {
+      await page.getByRole('button', { name: '展开数据集元数据', exact: true }).click();
+      await expect(page.getByRole('button', { name: '数据集名称：年度调查数据集', exact: true })).toBeInViewport();
+      await page.getByRole('button', { name: '展开空间要素图层元数据', exact: true }).click();
+      await expect(page.getByRole('button', { name: '展开数据集元数据', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: '收起空间要素图层元数据', exact: true }).click();
+    }
     await settleAnimations(page);
     await page.screenshot({ path: testInfo.outputPath(`metadata-${width}-${height}.png`) });
     await page.getByText('属性名称32', { exact: true }).scrollIntoViewIfNeeded();
+    await expect.poll(() => detail.locator('.el-table__body-wrapper .el-scrollbar__wrap').evaluate(
+      (element: { scrollTop: number }) => element.scrollTop
+    )).toBeGreaterThan(0);
+    expect(await body.evaluate((element: { scrollTop: number }) => element.scrollTop)).toBe(0);
+    await expect(page.getByText('数据分类', { exact: true })).toBeInViewport();
     await expect(page.locator('[data-resource-detail] header').getByRole('button', { name: '修改', exact: true })).toBeInViewport();
     await settleAnimations(page);
     await page.screenshot({ path: testInfo.outputPath(`detail-${width}-${height}.png`) });
     await page.getByRole('button', { name: '修改', exact: true }).click();
     await page.getByRole('textbox', { name: 'FIELD_32字段名称', exact: true }).fill('窄屏未保存名称');
     await expect(page.getByRole('button', { name: '保存', exact: true })).toBeInViewport();
-    await expect(page.getByRole('button', { name: '返回列表', exact: true })).toBeInViewport();
+    await expect(page.getByRole('button', { name: '返回', exact: true })).toBeInViewport();
     await settleAnimations(page);
     await page.screenshot({ path: testInfo.outputPath(`edit-${width}-${height}.png`) });
     await page.getByRole('button', { name: '取消编辑', exact: true }).click();

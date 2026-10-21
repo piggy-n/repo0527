@@ -158,3 +158,10 @@ export function saveResourceDetail(change: ResourceDetailChange) {
     query: { id: change.id, resourceName: change.resourceName }, schema: z.unknown(), silent: true
   });
 }
+
+/** 后端按 RequestParam 读取启停状态，使用 POST query、字符串布尔值和空正文 */
+export function setResourceStatus(id: string, enabled: boolean) {
+  return http.post('/resource-management/layer/status', undefined, {
+    query: { id, status: enabled ? 'true' : 'false' }, schema: z.unknown(), silent: true
+  });
+}

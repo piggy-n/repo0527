@@ -1,12 +1,12 @@
-import { View } from '@element-plus/icons-vue';
 import { ElAlert, ElButton, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { TableSkeleton } from '@/shared/table/TableSkeleton';
 import type { ResourceRecord } from '../api';
+import { ResourceStatusSwitch } from './ResourceStatusSwitch';
 import styles from './ResourceManagement.module.scss';
 
-/** 资源列表的三类加载状态与详情入口；启停操作随 R4 接入 */
+/** 资源列表的加载、详情与启停入口；开关的真实值仍由查询缓存持有 */
 export const ResourceTable = defineComponent({
   name: 'ResourceTable',
   directives: { loading: vLoading },
@@ -15,9 +15,10 @@ export const ResourceTable = defineComponent({
     initialLoading: Boolean,
     refreshing: Boolean,
     error: Boolean,
-    selected: Boolean
+    selected: Boolean,
+    statusPending: { type: Function as PropType<(id: string) => boolean>, required: true }
   },
-  emits: { retry: () => true, view: (_row: ResourceRecord) => true },
+  emits: { retry: () => true, view: (_row: ResourceRecord) => true, toggle: (_row: ResourceRecord) => true },
   setup(props, { emit }) {
     const showSkeleton = useDelayedFlag(() => props.initialLoading);
     const showMask = useDelayedFlag(() => props.refreshing);
@@ -39,13 +40,18 @@ export const ResourceTable = defineComponent({
                 {{ default: ({ row }: { row: ResourceRecord }) =>
                   <ElTag type={row.hasSlice ? 'success' : 'info'}>{row.hasSlice ? '有' : '无'}</ElTag> }}
               </ElTableColumn>,
-              <ElTableColumn label="启用状态" width="100" align="center">
+              <ElTableColumn label="启用状态" width="130" align="center">
                 {{ default: ({ row }: { row: ResourceRecord }) =>
-                  <ElTag type={row.enabled ? 'success' : 'info'}>{row.enabled ? '启用' : '停用'}</ElTag> }}
+                  <ResourceStatusSwitch
+                    row={row}
+                    pending={props.statusPending(row.id)}
+                    disabled={props.error || props.refreshing}
+                    onToggle={() => emit('toggle', row)}
+                  /> }}
               </ElTableColumn>,
               <ElTableColumn label="操作" width="90" fixed="right" align="center">
                 {{ default: ({ row }: { row: ResourceRecord }) =>
-                  <ElButton link type="primary" icon={View} onClick={() => emit('view', row)}>查看</ElButton> }}
+                  <ElButton link type="primary" onClick={() => emit('view', row)}>查看</ElButton> }}
               </ElTableColumn>
             ],
             empty: () => {

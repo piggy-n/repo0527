@@ -3,9 +3,32 @@
   background-color: var(--color-neutral-bg-light);
 }
 
-.panel > header + div { padding-top: var(--space-lg); }
+.panel > header + div { padding-top: var(--space-lg); overflow: hidden; }
 
-.metadata { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
+.categoryRow {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-lg);
+  min-height: 32px;
+  margin-bottom: var(--space-md);
+}
+.categoryRow > :first-child { flex: none; }
+.categoryRow > .hint { flex-basis: 100%; }
+.metadataSection { flex: none; }
+.metadataSection[data-collapsed] > :last-child { display: none; }
+.attributes { flex: 1; min-height: 0; }
+.attributes > :first-child { flex: none; }
+.attributes > :last-child { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.attributeTable { flex: 1; min-height: 0; }
+
+.metadata {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm) var(--space-xl);
+}
 .metadataItem {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr);
@@ -14,13 +37,28 @@
   line-height: var(--line-height-base);
 
   dt { color: var(--color-text-secondary); }
-  dd { margin: 0; overflow-wrap: anywhere; }
+  dd { margin: 0; min-width: 0; }
+}
+
+.value {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: var(--color-text-primary);
+  cursor: pointer;
 }
 
 .categorySelect { width: min(100%, 360px); }
 .attributeName { overflow-wrap: anywhere; }
 .notice { flex: none; margin-bottom: var(--space-md); }
-.hint { color: var(--color-text-secondary); margin: var(--space-md) 0 0; }
+.hint { flex: none; color: var(--color-text-secondary); margin: var(--space-md) 0 0; }
 .footer { width: 100%; display: flex; align-items: center; justify-content: flex-end; gap: var(--space-md); }
 .dirty { margin-right: auto; color: var(--color-text-secondary); font-size: var(--font-size-xs); }
 
@@ -31,6 +69,5 @@
 @media (max-width: 560px) {
   .panel > header { padding-top: var(--space-sm); padding-bottom: var(--space-sm); }
   .panel > header > :first-child { flex-basis: 100%; }
-  .metadataItem { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .footer { flex-wrap: wrap; }
 }

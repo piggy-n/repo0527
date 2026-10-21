@@ -1,5 +1,5 @@
 import { Delete, EditPen, Plus } from '@element-plus/icons-vue';
-import { useSplitLayout } from '@yzt/ui';
+import { MxTitle, useSplitLayout } from '@yzt/ui';
 import { ElAlert, ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElMessage, ElTree, type TreeInstance } from 'element-plus';
 import { defineComponent, type PropType, ref } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
@@ -121,7 +121,7 @@ export const ResourceDirectoryPanel = defineComponent({
           </ElTree>
         ) : <div class={styles.state}>{showLoading.value ? '正在加载目录…' : props.loading || props.error ? '' : '暂无资源目录'}</div>}
         <ElDialog
-          class={styles.dialog}
+          class={[styles.dialog, editor.target.value?.kind !== 'remove' && 'dialog-panel-header']}
           modelValue={editor.target.value !== null}
           title={editor.target.value ? labels[editor.target.value.kind] : ''}
           destroyOnClose
@@ -132,6 +132,9 @@ export const ResourceDirectoryPanel = defineComponent({
           onUpdate:modelValue={(open: boolean) => { if (!open) { editor.close(); } }}
         >
           {{
+            header: editor.target.value?.kind !== 'remove' ? () => (
+              <MxTitle level="panel">{editor.target.value ? labels[editor.target.value.kind] : ''}</MxTitle>
+            ) : undefined,
             default: () => editor.target.value?.kind === 'remove' ? (
               <>
                 <p class={styles.confirmText}>确定删除目录「{editor.target.value.name}」吗？</p>
@@ -139,7 +142,6 @@ export const ResourceDirectoryPanel = defineComponent({
               </>
             ) : (
               <ElForm labelPosition="top">
-                <ElFormItem label="所属分组"><span>{editor.target.value?.parentName}</span></ElFormItem>
                 <ElFormItem label="目录名称" required error={editor.error.value}>
                   <ElInput
                     modelValue={editor.name.value}

@@ -32,6 +32,7 @@ import { SystemTitle } from '@/shared/system-title/SystemTitle';
 import { RouteName } from '@/shared/router/route-names';
 import styles from './DevThemePage.module.scss';
 import { PanelPreview, SectionPreview, SplitLayoutPreview, TitlePreview } from './UiComponentsPreview';
+import { DialogPreview } from './DialogPreview';
 
 interface IndicatorRow {
   region: string;
@@ -529,6 +530,7 @@ export const DevThemePage = defineComponent({
             <ElButton onClick={() => ElMessage.error('请求失败')}>错误消息</ElButton>
             <ElButton onClick={() => ElMessage.info('暂无数据')}>普通消息</ElButton>
             <ElButton type="danger" onClick={() => void confirmDelete()}>确认框</ElButton>
+            <DialogPreview />
           </div>
         </section>
 

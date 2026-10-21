@@ -8,6 +8,7 @@ import {
   fetchResourcePage,
   fetchResourceYears,
   saveResourceDetail,
+  setResourceStatus,
   type ResourceDetail,
   type ResourceDetailChange,
   type ResourcePage,
@@ -133,6 +134,23 @@ export function useResourceDetailMutation() {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.detail(change.id) }),
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() })
+        ]);
+      }
+    }
+  });
+}
+
+/** 启停允许不同图层并发；成功后重新读取后端状态，不原地修改列表缓存 */
+export function useResourceStatusMutation() {
+  const queryClient = useQueryClient();
+  const session = useSessionStore();
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean; token: string }) => setResourceStatus(id, enabled),
+    onSuccess: async (_, { id, token }) => {
+      if (session.token === token) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() }),
+          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.detail(id) })
         ]);
       }
     }

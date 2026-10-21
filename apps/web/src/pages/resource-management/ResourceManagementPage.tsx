@@ -1,5 +1,5 @@
 import { MxPanel, MxSplitLayout } from '@yzt/ui';
-import { ElAlert, ElButton, ElDialog, ElOption, ElPagination, ElSelect } from 'element-plus';
+import { ElAlert, ElButton, ElDialog, ElMessage, ElOption, ElPagination, ElSelect } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { useSessionStore } from '@/shared/auth/session-store';
@@ -9,6 +9,8 @@ import { ResourceFilterBar } from '@/features/resource-management/components/Res
 import { ResourceTable } from '@/features/resource-management/components/ResourceTable';
 import { useResourceList } from '@/features/resource-management/composables/useResourceList';
 import { useResourceDetail } from '@/features/resource-management/composables/useResourceDetail';
+import { useResourceStatus } from '@/features/resource-management/composables/useResourceStatus';
+import type { ResourceRecord } from '@/features/resource-management/api';
 import styles from './ResourceManagementPage.module.scss';
 
 /** 管理员资源管理页：组合目录、筛选与列表，写入成功后由 Query 更新数据 */
@@ -18,11 +20,21 @@ export const ResourceManagementPage = defineComponent({
     const list = useResourceList();
     const { directoryQuery, yearsQuery } = list;
     const detail = useResourceDetail(() => directoryQuery.data.value ?? []);
+    const status = useResourceStatus(list.resources, () => !list.isError.value && !list.refreshing.value);
     const session = useSessionStore();
     // 会话结束必须允许离开；正常导航先确认草稿，不能在保存中离开
     onBeforeRouteLeave(() => !session.isActive() || detail.allowLeave());
     const parent = computed(() => directoryQuery.data.value?.find(group =>
       group.children?.some(child => child.id === list.directoryId.value)));
+
+    async function toggleStatus(row: ResourceRecord) {
+      const result = await status.toggle(row.id);
+      if (result?.kind === 'success') {
+        ElMessage.success(`「${row.name}」已${result.enabled ? '启用' : '停用'}`);
+      } else if (result?.kind === 'error') {
+        ElMessage.error(result.message);
+      }
+    }
 
     return () => (
       <><MxSplitLayout asideLabel="资源目录">
@@ -73,6 +85,8 @@ export const ResourceManagementPage = defineComponent({
                     initialLoading={list.initialLoading.value}
                     refreshing={list.refreshing.value}
                     error={list.isError.value}
+                    statusPending={id => status.pending.has(id)}
+                    onToggle={row => void toggleStatus(row)}
                     onRetry={() => void list.refresh()}
                     onView={row => { if (list.directoryId.value) { detail.open(row, list.directoryId.value); } }}
                   />
