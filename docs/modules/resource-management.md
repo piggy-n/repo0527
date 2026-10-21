@@ -1,0 +1,160 @@
+# 资源管理迁移
+
+阶段六，分支 `codex/migrate-resource-management`。本文独立维护资源管理的业务清单、接口证据、设计方案及验证记录；公共文件传输由文件管理会话负责。
+
+## 基线与当前状态
+
+- 新项目共同起点：`9023f3fcb37b80555e4595dcbcf6f508fc9a47fe`（已推送的 `main`）
+- 受管理 worktree：`C:\Users\13273\.codex\worktrees\migrate-resource-management\repo0527`
+- 旧项目基线：`master-demo` 的 `6b4799b922efb2ed276cc28122fbe78527234b75`（2026-10-21 核对）
+- 旧路由 `src/router/index.js` 的 `/resource-management` 实际加载 `src/views/resource-management-new/index.vue`
+- 本轮读取旧提交中的文件；旧工作区 `.claude/launch.json` 删除、`package.json` 修改均未处理
+- 新路由仍为占位页，保留 `meta.roles: [Role.admin]`；本轮不改变业务路由、公共主题、锁文件或文件管理模块
+- 当前交付为接口核对、实施计划和第一版可操作原型，业务迁移尚未开始，UI 方案待用户确认
+
+## 实际功能与迁移边界
+
+| 功能 | 当前页面的真实行为 | 本轮处理 |
+|---|---|---|
+| 目录 | 一级分组展开/收起；只选择二级目录；一级分组下新增二级目录，二级目录重命名、删除 | 迁移；按 ID 记录选择，查询使用最新名称 |
+| 目录与列表联动 | 首次选第一个二级目录；目录切换或当前目录重命名后重置名称、年份与页码 | 保留；目录不存在时重新选择有效目录，无目录时不发列表请求 |
+| 资源列表 | 名称、年份、数据来源（实际来自 `dataset_name`）、切片、启停、查看、下载申请入口 | 先迁移前六项；原型将来源列明确为「所属数据集」 |
+| 筛选、分页 | 名称和年份，提交查询；后端分页 | 复用 QueryForm，增加已统一的重置行为；返回详情前的列表上下文保留 |
+| 详情 | 数据分类、数据集元数据、图层元数据、属性结构表 | 主区内切换，复用 MxPanel / MxSection |
+| 编辑 | 只编辑数据分类和属性的 `name`；字段代码、类型、长度及元数据只读；名称去首尾空白后允许为 null | 保留编辑范围；草稿与缓存分离；未保存离开提示；失败保留草稿 |
+| 图层启停 | `POST` 的 query 参数更新状态 | 按图层 ID 防重复；不同图层可分别进行；成功后刷新，失败保留原状态 |
+| Excel 导入 | 详情属性表处选择文件立即上传，带详情年份；成功后重新读属性 | 业务参数与交互由本会话负责；原型先做选择、校验、明确提交、结果和重试，等公共传输合入再接真实上传 |
+| 地图服务、数据接口 | `useLayerServices.js` 的模块级 reactive 内存对象；无持久化接口，刷新丢失 | 待确认，不迁移为真实后端业务，原型不展示虚假的服务数量 |
+| 自助取数 | `LayerListPanel.vue` 引用 `resource-center/components/qushu/QushuDialog.vue`，进一步依赖知识图谱和取数服务 | 不扩入当前范围；知识图谱不在项目迁移范围内，记录实际入口供协调 |
+| 下载 | `LayerTable.vue` 打开 `ResourceApplyDialog`；用 datasetCode、layerCode、year 拼申请资源代码 | 这是数据申请，不是文件流下载；本批未包含，后续资源申请模块迁移时协调入口 |
+
+不迁移旧 `views/resource-management/`，也不迁移新页面未调用的旧实现。`saveLayerAttribute` / `rmEditLayerAttribute` 虽在新服务文件中定义，但当前详情实际调用的是 `saveLayerStruct`；不为未使用的 PUT 接口新增界面或第二套保存流程。
+
+目录树按后端顺序显示。当前「三区三线」顶层的 `children` 为 null，旧页没有可选的二级目录；保留该分组及新增入口，不凭其他模块的数据补造目录。
+
+## 接口清单
+
+地址均相对 `/backend` 同源代理。来源：旧提交的 `src/api/resource/resource-manage-api.js`、`resource-management-new/api/resource-manage-service.js` 及实际调用组件。读取接口已实际请求，写接口只核对源码，本轮未提交真实新增、删除、改名、启停、保存或 Excel 文件。
+
+| 方法 | 地址 | 参数位置与内容 | 响应 / 使用方 |
+|---|---|---|---|
+| GET | `/resource-center/tree` | 无 | data 为目录数组；ResourceMenuPanel |
+| GET | `/resource-center/year/list` | 无 | data 为 `{ label, value, … }[]`；LayerFilterBar |
+| POST | `/resource-management/layer/page` | JSON `{ pageNum, pageSize, resource, layerName?, year? }`；resource 是目录名称 | data 为 PageHelper 分页结构；LayerListPanel |
+| GET | `/resource-management/layer/struct` | query `{ id }` | data 为详情，含 attributes；LayerDetailPanel |
+| GET | `/resource-management/layer/attribute` | query `{ id }` | data 为属性数组；旧页导入成功后刷新 |
+| PUT | `/resource-management/layer/edit-struct` | query `{ id, resourceName }` + JSON 属性数组 body | 保存分类和字段名称；成功 data 形状待写接口联调确认 |
+| POST | `/resource-management/layer/status` | query `{ id, status: 'true' \| 'false' }`，无业务 body | 启停；成功 data 形状待确认 |
+| POST | `/resource-management/menu/add` | JSON `{ name, code: name, parentId, public: false, sort: 0, children: [] }` | 新增二级目录；成功后刷新目录 |
+| POST | `/resource-management/menu/edit` | JSON `{ id, name }` | 重命名二级目录；成功后刷新目录及相关列表 |
+| POST | `/resource-management/menu/delete` | query `{ id }`，无业务 body | 删除二级目录；成功后刷新目录及选择状态 |
+| POST | `/resource-management/layer/create-attribute-by-excel` | multipart：`file`，有年份时附加字符串 `year`；**没有 id、resourceName 或 layerCode** | 返回 data 的格式、导入影响范围待确认；成功后刷新相关查询 |
+
+未被当前页面调用的 `PUT /resource-management/layer/edit-attribute`：JSON 属性数组，仅列作核对结果，不纳入第一轮实现。
+
+### PUT query + body 已有能力
+
+`shared/http/client.ts` 的 `http.put(url, body, options)` 将 body 交给 axios 的 `data`，同时将 `options.query` 交给 `params`。二者独立存在。保存结构直接使用这两个正式参数，不拼 query 到 URL，不复制 `dynamicAPI`。
+
+旧兼容代码的原因是旧 HTTP 服务的 PUT 分支把 query 与 body 作为互斥选项；新客户端没有这个限制。实现时用 MSW 断言 query 的中文编码和数组 body 同时到达。
+
+## 真实读取记录（2026-10-21）
+
+从本 worktree 的环境配置读取既有后端目标，直接执行只读请求（分页虽为 POST，业务语义为读取）。这些结果是本次样本，不替代完整后端契约。
+
+| 请求 / 场景 | 实测结果 |
+|---|---|
+| 目录 | HTTP 200，`{ success: true, code: 200, data, msg }`；基础库 9 个二级目录、公共库 3 个、主题库 3 个、三区三线 children=null；根节点 parentId=null；叶子 children=null；code、icon、iconSelected 可为 null |
+| 年份 | label、value 均为字符串，顺序 2025 至 2019；另有用不到的 null 字段 |
+| 土地资源第一页，每页 10 条 | total=171，pageNum=1，pageSize=10，pages=18；记录 year 是数字，slice 是布尔值，enable 是字符串 `'true'`；字段名为 layer_name、dataset_name、resource_name、layer_code、dataset_code、geo_type |
+| 土地资源第 2 页，每页 2 条 | pageNum=2，pages=86，返回 2 条 |
+| 名称「地类图斑」+ 年份字符串「2022」 | 2 条；名称是模糊匹配 |
+| 名称「 地类图斑 」 | 0 条；后端不裁剪查询首尾空白，前端提交时 trim |
+| 气象 | total=0、pages=0、list=[] |
+| 土地资源第 999 页 | 后端改成最后一页 pageNum=18、返回 1 条，与文件管理接口的越界处理不同 |
+| 拆除未尽区详情与单独属性接口 | 7 条属性，两接口一致；layerRecord=29307；详情 layerName=`CCWJQ`，列表 layer_name 是中文名；submit_unit 是字符串，elementType=`其他`，geoType=`Polygon` |
+| 地类图斑详情 | 33 条属性，样本中 attrId、name 为 null；不能把 attrId 声明成必有字符串或直接作为唯一行 key |
+| 城镇村等用地详情 | 7 条属性，attrId 有值、name 有中文，remark 可为字符串 |
+| 村级调查区 2024 详情 | 12 条属性，样本中 attrId、name 为 null |
+
+四个详情样本中字段属性包含 `attrId`、`name`、`code`、`fieldType`、`fieldLength`、`fieldPlaces`、`rangeValue`、`condition`、`remark`、`property`、`year`。`fieldLength` 为字符串，`year` 为数字；未编辑的字段保存时应保留。`fieldPlaces` / `rangeValue` 在这些样本中只有 null，不能据此猜测其非空类型。
+
+读取测试没有携带登录凭据，以上接口仍返回成功。这只说明所测读取接口的行为，不说明写接口权限；前端继续保留管理员守卫，后端鉴权需另行核对。
+
+## 待确认事项
+
+| 事项 | 需要确认的具体问题 | 是否阻塞 |
+|---|---|---|
+| Excel 作用范围 | 只带 file/year 时按什么字段匹配图层和属性？影响整个年份还是文件内匹配项？覆盖还是追加？部分成功如何表达？ | 阻塞真实导入，不阻塞目录、列表、详情和编辑开发 |
+| Excel 输入与结果 | 模板、表头、允许格式、大小上限、year 是否必填、导入耗时、成功/失败 data 样例、是否提供错误行或结果文件 | 阻塞最终校验与反馈；不自行添加解析库或虚构导入数量 |
+| 属性保存 | attrId=null 时后端是否按 id + property/year/code 更新或创建？名称清空传 null 是否保持旧语义？未展示字段非空时的类型 | 不擅自丢字段或禁用这些资源；写接口契约需联调确认 |
+| 目录维护 | 非空目录删除后关联资源如何处理？重命名是否同步资源名称？同名二级目录是否允许、如何消歧？ | 不据当前数据假设级联删除或唯一性；原型展示操作，真实写入前核对 |
+| 内存服务管理 | 地图服务、数据接口是否保留；若保留，持久化 API 和字段契约是什么？ | 独立待办，不作为已迁移功能 |
+| 跨模块入口 | 下载申请是否随资源申请模块迁移再恢复；自助取数属于既定不迁移的知识图谱范围 | 第一版原型不放这两项，不扩大本批 |
+| 权限 | 所测只读接口未带凭据也返回数据，写操作的管理员校验需后端确认 | 前端管理员路由保留，不放宽权限 |
+
+## 对公共文件传输的接口需求
+
+公共实现归文件管理会话；本会话只从 shared 正式入口调用，等待用户通知已合入 main 的提交再同步，不读取另一个 worktree 的未提交代码。
+
+1. 向上表 Excel 地址发送 multipart 文件字段 `file`，可附加字符串字段 `year`；支持指定原文件名，不手动设置 multipart boundary
+2. 复用既有同源地址、鉴权头、超时、401 与 ApiError 处理；支持业务侧提供成功响应 schema，以及在对话框内反馈所需的 silent 行为
+3. 上传进度给出已传字节、总字节可缺省，不能把总量未知当成 0%；上传到 100% 与服务器完成处理分开表示
+4. 接受业务层提供的 AbortSignal，取消映射成既有 canceled；不误显示「导入成功」或普通错误。停止等待不等于服务端撤销，重新进入后需刷新核对
+5. 不因资源详情组件卸载就自动取消服务端导入；导入是写操作，防重复及取消时机由业务拥有者确定（ADR 0039）
+6. 本模块目前不需要二进制下载；若后端返回错误结果文件，再提供明确接口，不预先复制下载基础
+
+本会话负责文件后缀与空文件校验、年份与业务参数、编辑/导入互斥、提交状态、结果反馈、重试与相关查询失效。文件大小上限、Excel 内容规则和返回数据类型待取得契约后实现。
+
+## 第一版交互方案（待确认）
+
+采用既有文件管理分栏结构：320 宽目录，主区为列表或详情，页面四周与面板间隔 16；小于 1200 时目录收成左侧窄条和抽屉。复用真实 Mx*、QueryForm、ElTree、ElTable、ElDialog，使用本 worktree 的主题和项目字体。
+
+- 列表：数据名称、年份、所属数据集、切片、启用状态、查看；目录行右侧在悬停、焦点或选中时显示维护入口；一级分组提供新增二级目录
+- 查询：名称与年份是草稿，点查询或非输入法回车才应用；重置清空查询；表头和分页固定，表体滚动；横向空间不够时只在表格内部滚动
+- 详情：右侧主区切换，标题是列表中文资源名和年份；元数据按实际返回文本显示，不把只读内容全部做成禁用输入框；长字段自动换行
+- 编辑：分类与字段名称可改，其他字段只读；底栏为取消编辑 / 保存；返回列表或切目录时，未保存内容需确认丢弃；保存失败保留草稿
+- 导入：属性表右上入口，仅在非编辑态可用；先选文件与年份再明确提交；展示上传、等待服务端、成功、失败、停止等待。当前原型带醒目标识，所有动作均为模拟
+- 状态演示：正常、空列表、首次加载、加载失败、刷新中、带旧数据的刷新失败、空目录、目录失败；可设置下次操作失败和模拟普通用户
+
+替代方案：详情抽屉或大弹窗会压缩属性表的可用空间，并使保存/返回上下文更复杂；单独路由涉及额外页面参数，本轮先沿用旧页的主区视图切换。原型确认后再把需要记录的重要取舍写成 ADR，不提前宣布方案已接受。
+
+原型与业务的差异：原型只维护固定样本的内存状态，刷新即可还原；没有调用上传、写接口或生产鉴权。原型的状态切换展示外观，不验证 Query 的取消、缓存与失效规则。正式实现仍必须用真实业务组件和固定接口测试重新验收。
+
+### 原型位置与操作
+
+- 自包含成品：`apps/web/public/design.local/resource-management/resource-management.html`，可直接用浏览器打开，字体和依赖已内嵌，不依赖常驻服务
+- 源码：同目录 `prototype.tsx`、`Prototype.module.scss`、`index.html`；`export.mjs` 用本项目依赖导出成品，`verify.mjs` 做本轮短时检查
+- `design.local` 被 Git 忽略，原型与截图不入库；本次确认依据及最终规范写入本文，不依赖截图代替可操作页面
+- 主要路径：土地资源 → 筛选/翻页 → 查看 → 修改 → 保存/取消；目录维护；详情 → 导入 Excel → 使用演示文件 → 模拟导入；顶栏可切换失败与空状态
+
+## 小步实施计划
+
+| 步骤 | 产出与验证 | 状态 |
+|---|---|---|
+| R0 基线、真实读取与原型 | 记录旧入口和接口；交付可操作原型、范围与待确认项 | 本轮，等待设计确认 |
+| R1 目录、年份、列表读取 | feature 的 zod schema、api、queries、useResourceList；目录/筛选/页码联动、请求取消与旧结果隔离；MSW 测试 | 下一步，不依赖上传 |
+| R2 列表 UI 与目录维护 | 管理员路由接页面；复用查询表单、加载状态和布局；菜单写操作、成功后刷新、删除选择修正；确认框会话与卸载保护 | R1 后，先完成原型确认 |
+| R3 详情与属性编辑 | 查询缓存和编辑草稿分离；分类与名称保存；保留未编辑字段；query + body 测试；失败不丢草稿；保存后失效列表和详情 | 不依赖上传 |
+| R4 图层启停 | 按 ID 防重复、不直接修改共享查询结果；成功后失效，失败保持原状态；并发不同图层测试 | 可与 R3 按小步推进 |
+| R5 Excel 接入 | 同步已合入 main 的公共基础提交；接业务校验、进度、取消语义、结果与刷新 | 等公共基础和 Excel 契约，不阻塞 R1～R4 |
+| R6 验收与分支提交 | 相关测试、类型、lint、构建；真实 UI 多尺寸/错误/权限验收；同步本文及迁移记录 | 每步检查，最终汇总；main 合入由用户协调 |
+
+目录计划为 `features/resource-management/{api.ts, queries.ts, components/, composables/}`、`pages/resource-management/ResourceManagementPage.tsx`。页面只组装 feature，不导入 file-management；没有跨组件以外的全局客户端状态需求，暂不新增 Pinia store。读取遵守 ADR 0017，写操作遵守 ADR 0039，不把保存、启停当成 LatestController 可替换查询。
+
+每步先说明设计理由与替代方案，再实现和验证。测试覆盖真实行为：目录变更后的 query key、翻页失败保留页码、仅成功响应修正越界、表单草稿不污染缓存、同 ID 防重复、保存 query/body、旧会话晚到结果。新增测试按项目要求做故意改坏后的断言核验。共享主题、锁文件、公共传输不在本分支重复修改。
+
+## 本轮验证
+
+- `pnpm install --frozen-lockfile`：通过，锁文件未改变
+- `pnpm typecheck`、`pnpm lint`：通过
+- 相关基线测试：HTTP、路由权限、文件管理列表、QueryForm，4 个文件 / 57 个用例通过
+- `pnpm build`：通过，产物检查通过；已有 crypto 浏览器外置、较大分块提示仍存在
+- 原型另做独立 TypeScript 检查和导出检查，不把被忽略的原型当成生产业务已迁移
+- 独立原型的 TypeScript 检查与导出通过；自包含 HTML 通过 file URL 实际运行，不依赖预览服务
+- 本 worktree 的短时预览中打开 `/dev/theme`、`/dev/map-ui`，并以已有固定接口样本打开真实 `/file-management`，对照标题、树、表格、表单及面板；文件管理对照没有访问真实后端或其他 worktree。预览与测试浏览器在 finally 中关闭，并有最长运行时限
+- 原型实查尺寸：1440 × 860、1200 × 800、1199 × 800、900 × 700、760 × 640、390 × 700，以及 1440 × 600 矮屏
+- 已操作：目录切换、查询/重置、翻页和详情返回保留页码、长名称、空列表、骨架屏、加载/刷新失败、目录新增/重命名/删除与取消、编辑离开确认、保存失败保留草稿并重试、启停成功/失败、导入后缀/空文件校验、导入取消/失败/重试、窄屏抽屉、详情滚动到底及固定底栏、导入弹窗、普通用户权限结果演示
+- 主动修复：MxSection 与外层容器重复的区块间距、隐藏弹窗残留的表单校验状态、目录整行选择、详情图层代码与所选样本的对应关系；交互检查通过，未发现页面脚本异常，所查尺寸无页面级横向溢出
+- 截图存于原型目录的 `screenshots/`，含参考页、列表/详情/编辑/导入、断点两侧及窄屏；实际查看截图确认了抽屉展开、弹窗和底栏，不仅依赖断言。表格在窄屏保留内部横向滚动，正式实现仍需验收
+- 未验证：真实写接口和 Excel 上传、最终资源管理业务 UI；本轮不提交真实业务数据
