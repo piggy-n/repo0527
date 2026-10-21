@@ -7,7 +7,7 @@
   background: var(--color-bg-page);
 }
 
-.taskHeading, .toolbar, .zoom, .footer {
+.taskHeading, .fileHeading, .zoom, .footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -94,7 +94,6 @@
     flex: 1;
     min-height: 0;
     display: flex;
-    padding: 0;
   }
 }
 
@@ -107,10 +106,13 @@
 }
 
 .fileHeading {
-  padding-bottom: var(--space-md);
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
   flex-shrink: 0;
   max-height: 25%;
   overflow: auto;
+  > .filename { flex: 1 1 160px; min-width: 0; }
 
   :global(.el-tag) {
     margin-left: var(--space-sm);
@@ -118,13 +120,9 @@
   }
 }
 
-.toolbar {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  padding: var(--space-sm) 0;
-}
-
 .zoom {
+  flex: none;
+  margin-left: auto;
   gap: var(--space-xs);
   > span { min-width: 44px; text-align: center; font-size: var(--font-size-xs); }
   :global(.el-button + .el-button) { margin-left: 0; }
@@ -154,9 +152,7 @@
   color: var(--color-text-secondary);
 }
 
-.pages, .imageExample { margin-inline: auto; }
-.pages { width: 720px; }
-.imageExample svg { display: block; width: 100%; }
+.pages { width: 720px; margin-inline: auto; }
 
 // 白纸与插图是固定内容示例，界面颜色仍使用主题变量
 .paper, .text {

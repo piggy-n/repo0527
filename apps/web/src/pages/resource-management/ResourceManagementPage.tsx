@@ -1,4 +1,4 @@
-import { MxPanel, MxSplitLayout } from '@yzt/ui';
+import { MxPanel, MxSplitLayout, MxTitle } from '@yzt/ui';
 import { ElAlert, ElButton, ElDialog, ElMessage, ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
@@ -110,7 +110,7 @@ export const ResourceManagementPage = defineComponent({
         }}
       </MxSplitLayout>
         <ElDialog
-          class={styles.confirmDialog}
+          class={['dialog-panel-header', styles.confirmDialog]}
           modelValue={detail.confirming.value}
           title="放弃未保存的修改？"
           appendToBody
@@ -119,7 +119,8 @@ export const ResourceManagementPage = defineComponent({
           onUpdate:modelValue={open => { if (!open) { detail.answerDiscard(false); } }}
         >
           {{
-            default: () => <p>离开后，本次对数据分类和字段名称的修改将不会保存。</p>,
+            header: () => <MxTitle level="panel">放弃未保存的修改？</MxTitle>,
+            default: () => <p class={styles.confirmMessage}>离开后，本次对数据分类和字段名称的修改将不会保存。</p>,
             footer: () => <>
               <ElButton onClick={() => detail.answerDiscard(false)}>继续编辑</ElButton>
               <ElButton type="danger" onClick={() => detail.answerDiscard(true)}>放弃修改</ElButton>

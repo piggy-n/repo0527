@@ -69,9 +69,8 @@ export const ResourceDirectoryPanel = defineComponent({
     }
 
     async function submit() {
-      const kind = editor.target.value?.kind;
       if (await editor.submit()) {
-        ElMessage.success(kind === 'remove' ? '目录已删除' : '目录已保存');
+        ElMessage.success('目录已保存');
       }
     }
 

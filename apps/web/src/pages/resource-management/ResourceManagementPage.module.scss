@@ -9,6 +9,7 @@
 }
 
 .confirmDialog { width: min(480px, calc(100vw - 32px)); }
+.confirmMessage { margin: 0; line-height: var(--line-height-base); }
 
 // 复用标准分页控件；窄屏只换行，不裁掉页码、条数或跳页入口
 .pagination {

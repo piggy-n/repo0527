@@ -2,8 +2,13 @@ import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { mount } from '@vue/test-utils';
 import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
+import { createPinia, setActivePinia } from 'pinia';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { Role } from '@/shared/auth/roles';
+import { useSessionStore } from '@/shared/auth/session-store';
+import { createTestJwtExpiringAt } from '@/shared/auth/testing';
+import * as api from './api';
 import type { FilePageParams } from './api';
 import { fileKeys, useDeleteFileMutation, useFilePageQuery } from './queries';
 import { filePageResponse } from './test-data';
@@ -16,6 +21,9 @@ beforeAll(() => {
 
 afterEach(() => {
   server.resetHandlers();
+  localStorage.clear();
+  queryClient?.clear();
+  vi.restoreAllMocks();
 });
 
 afterAll(() => {
@@ -63,8 +71,12 @@ let queryClient: QueryClient;
 
 // 每个用例用新的 QueryClient，缓存不在用例之间残留
 function mountHost() {
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  useSessionStore().start({ token: createTestJwtExpiringAt(Date.now() + 3600000),
+    user: { loginName: 'test', role: Role.user } });
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return mount(Host, { global: { plugins: [[VueQueryPlugin, { queryClient }]] } });
+  return mount(Host, { global: { plugins: [pinia, [VueQueryPlugin, { queryClient }]] } });
 }
 
 const firstId = () => page.data.value?.content[0]?.id;
@@ -136,7 +148,7 @@ describe('useDeleteFileMutation', () => {
 
     let settled = false;
     const done = (async () => {
-      await removal.mutateAsync('file-policy-law-local-1');
+      await removal.mutateAsync({ id: 'file-policy-law-local-1', session: useSessionStore().session! });
       settled = true;
     })();
     await vi.waitFor(() => expect(requests).toHaveLength(2));
@@ -148,5 +160,38 @@ describe('useDeleteFileMutation', () => {
     requests[1]?.release();
     await done;
     expect(settled).toBe(true);
+  });
+
+  it('删除调度前换会话不发送旧操作', async () => {
+    const requests = mockPendingFilePage();
+    await loadFirstPage(requests);
+    const session = useSessionStore();
+    const request = vi.spyOn(api, 'deleteFile').mockResolvedValue(null);
+    vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
+    const done = removal.mutateAsync({ id: 'one', session: session.session! });
+    session.start({ token: createTestJwtExpiringAt(Date.now() + 7200000),
+      user: { loginName: 'new', role: Role.user } });
+    await expect(done).rejects.toMatchObject({ kind: 'canceled' });
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('旧会话删除成功不刷新新会话缓存', async () => {
+    const requests = mockPendingFilePage();
+    await loadFirstPage(requests);
+    const session = useSessionStore();
+    const sentSession = session.session!;
+    let release!: () => void;
+    const request = vi.spyOn(api, 'deleteFile').mockImplementation(() => new Promise<null>(resolve => {
+      release = () => resolve(null);
+    }));
+    const pending = removal.mutateAsync({ id: 'one', session: sentSession });
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    session.start({ token: createTestJwtExpiringAt(Date.now() + 7200000),
+      user: { loginName: 'new', role: Role.user } });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
+    release();
+    await pending;
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledOnce();
   });
 });

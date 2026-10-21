@@ -194,6 +194,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 成功时没有 `{ code, msg, data }` 外层的接口（如要素查询）传 `envelope: false`，schema 描述整个返回体；失败时的信封仍按业务码转成 `ApiError`（ADR 0047）
 - 支持取消的场景把 `AbortSignal` 传给接口函数
 - 查询和变更写在 `features/<域>/queries.ts`，用 TanStack Vue Query 的 `useQuery` / `useMutation`；`queryFn` 把收到的 `signal` 交给接口函数，组件不直接拼 query key；接口数据由查询缓存持有，不放进 Pinia，组件里也不另存一份
+- 服务端写操作在 `mutationFn` 发请求前复核提交时的会话，避免调度期间换账号后用新凭据发送旧操作；响应后再次核对，旧会话不刷新新缓存、不报告旧操作成功。已发出的写操作不随卸载取消，见资源管理 `queries.ts` 和文件管理 `useFileRemoval`
 - shared/http 不依赖路由、UI 和鉴权，这些由 `app/http.ts` 通过 `configureHttp` 注入
 - `useQuery` 的 key 变化后，`data` 要到下一轮调度才换成新 key 的结果；同步读取或在侦听里要知道结果属于哪个 key 时，用 `select` 给结果标上 key 再比较（写法见 `features/resource-map/queries.ts` 的 `useFeatureDetailQuery`）
 

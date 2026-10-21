@@ -589,7 +589,7 @@ test('Excel 直接选择上传：校验、原生 multipart、鉴权、互斥和�
   const upload = page.getByRole('button', { name: '导入', exact: true });
   const input = page.locator('input[type="file"]');
   await expect(upload).toBeVisible();
-  await expect(page.getByText('支持 .xlsx、.xls', { exact: true })).toBeVisible();
+  await expect(page.getByText('（支持 .xlsx、.xls）', { exact: true })).toBeVisible();
   await input.setInputFiles({ name: '错误.txt', mimeType: 'text/plain', buffer: Buffer.from('错误格式') });
   await expect(page.getByRole('alert')).toContainText('请选择 .xlsx 或 .xls 文件');
   await input.setInputFiles({ name: '空.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.alloc(0) });
@@ -723,6 +723,13 @@ test('详情与编辑多尺寸布局：长标题、属性表滚动、固定头�
     const modify = await page.getByRole('button', { name: '修改', exact: true }).boundingBox();
     expect(back!.height).toBe(32);
     expect(modify!.height).toBe(back!.height);
+    const upload = await page.getByRole('button', { name: '导入', exact: true }).boundingBox();
+    const hint = await page.getByText('（支持 .xlsx、.xls）', { exact: true }).boundingBox();
+    expect(upload).not.toBeNull();
+    expect(hint).not.toBeNull();
+    expect(hint!.x).toBeGreaterThan(upload!.x + upload!.width);
+    expect(Math.abs(hint!.y + hint!.height / 2 - upload!.y - upload!.height / 2)).toBeLessThanOrEqual(1);
+    expect(hint!.x + hint!.width).toBeLessThanOrEqual(width);
     if (width <= 760 || height <= 700) {
       await page.getByRole('button', { name: '展开数据集元数据', exact: true }).click();
       await expect(page.getByRole('button', { name: '数据集名称：年度调查数据集', exact: true })).toBeInViewport();
@@ -750,6 +757,11 @@ test('详情与编辑多尺寸布局：长标题、属性表滚动、固定头�
     await page.getByRole('button', { name: '取消编辑', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '放弃未保存的修改？', exact: true });
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('heading')).toHaveCSS('font-size', '16px');
+    await expect(dialog.getByRole('heading')).toHaveCSS('font-weight', '600');
+    await expect(dialog.locator('.el-dialog__header')).toHaveCSS('min-height', '48px');
+    await expect(dialog.getByRole('button', { name: '继续编辑', exact: true })).toBeInViewport();
+    await expect(dialog.getByRole('button', { name: '放弃修改', exact: true })).toBeInViewport();
     await settleAnimations(page);
     await page.screenshot({ path: testInfo.outputPath(`discard-${width}-${height}.png`) });
     await dialog.getByRole('button', { name: '放弃修改', exact: true }).click();

@@ -4,6 +4,8 @@
 
 ## 基线与当前状态
 
+本轮由原验收会话对 R5 与文件管理联合复测，修复 mutation 调度前会话检查、导入提示位置和未保存确认框样式；前端及本地固定接口验收通过，用户已授权合入最新 main。范围、修复证据、真实联调边界及最终结果见[联合验收报告](../stages/resource-file-management-acceptance.md)。以下保留各阶段历史记录。
+
 - 新项目共同起点：`9023f3fcb37b80555e4595dcbcf6f508fc9a47fe`（已推送的 `main`）
 - 受管理 worktree：`C:\Users\13273\.codex\worktrees\migrate-resource-management\repo0527`
 - 旧项目基线：`master-demo` 的 `6b4799b922efb2ed276cc28122fbe78527234b75`（2026-10-21 核对）

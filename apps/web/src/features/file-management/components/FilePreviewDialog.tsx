@@ -1,6 +1,5 @@
 import { Download, Loading, Minus, Plus, Warning } from '@element-plus/icons-vue';
 import { MxTitle } from '@yzt/ui';
-import { useElementSize } from '@vueuse/core';
 import { ElButton, ElDialog, ElIcon, ElTag } from 'element-plus';
 import { defineComponent, ref, watch, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
@@ -10,7 +9,7 @@ import { formatFileBytes } from '../file-types';
 import { DocxPreviewContent } from './DocxPreviewContent';
 import styles from './FileTransfer.module.scss';
 
-/** 统一外壳；PDF 使用浏览器阅读器，DOCX、图片与文本保留各自的显示方式 */
+/** 统一外壳；PDF 使用浏览器阅读器，DOCX 与文本保留各自的显示方式 */
 export const FilePreviewDialog = defineComponent({
   name: 'FilePreviewDialog',
   props: {
@@ -19,12 +18,9 @@ export const FilePreviewDialog = defineComponent({
   },
   setup(props) {
     const viewport = ref<HTMLElement>();
-    const imageWidth = ref(0);
-    const { width } = useElementSize(viewport);
     const loading = useDelayedFlag(() => props.model.visible.value
       && (props.model.phase.value === 'reading' || props.model.phase.value === 'rendering'));
     watch(() => props.model.content.value, () => {
-      imageWidth.value = 0;
       if (viewport.value) {
         viewport.value.scrollTop = 0;
         viewport.value.scrollLeft = 0;
@@ -36,7 +32,7 @@ export const FilePreviewDialog = defineComponent({
       const file = model.file.value;
       const content = model.content.value;
       const receiving = file ? props.downloads.isDownloading(file.id) : false;
-      const scalable = content?.kind === 'image' || content?.kind === 'docx';
+      const scalable = content?.kind === 'docx';
       return <ElDialog
         class={['dialog-panel-header', styles.dialog]}
         title="文件预览"
@@ -54,9 +50,7 @@ export const FilePreviewDialog = defineComponent({
               <div class={styles.filename}>
                 <span>{file.name}</span><ElTag size="small" type="info">{file.type.toUpperCase()}</ElTag>
               </div>
-            </div>
-            {model.phase.value === 'ready' && scalable && <div class={styles.toolbar}>
-              <div class={styles.zoom}>
+              {model.phase.value === 'ready' && scalable && <div class={styles.zoom}>
                 <ElButton
                   class={styles.zoomButton}
                   size="small"
@@ -74,11 +68,8 @@ export const FilePreviewDialog = defineComponent({
                   disabled={model.zoom.value >= 150}
                   onClick={() => { model.zoom.value += 25; }}
                 />
-                {content.kind === 'image' && <ElButton size="small" onClick={() => { model.zoom.value = 100; }}>
-                  适合宽度
-                </ElButton>}
-              </div>
-            </div>}
+              </div>}
+            </div>
             <div
               ref={viewport}
               class={[styles.viewport, (content?.kind === 'docx' || content?.kind === 'pdf') && styles.frameViewport]}
@@ -101,26 +92,6 @@ export const FilePreviewDialog = defineComponent({
                 {content?.kind === 'text' && (content.text
                   ? <pre class={styles.text}>{content.text}</pre>
                   : <div class={styles.center}>文件没有可显示的文本内容</div>)}
-                {content?.kind === 'image' && <img
-                  key={content.url}
-                  class={styles.image}
-                  src={content.url}
-                  alt={file.name}
-                  style={{
-                    width: `${Math.min(imageWidth.value, Math.max(1, width.value - 32)) * model.zoom.value / 100}px`
-                  }}
-                  onLoad={event => {
-                    // 被替换图片的 load 可能晚到，尺寸与就绪状态都只属于当前内容
-                    if (model.content.value !== content || content.signal.aborted) {
-                      return;
-                    }
-                    if (event.currentTarget instanceof HTMLImageElement) {
-                      imageWidth.value = event.currentTarget.naturalWidth;
-                    }
-                    model.rendered(content);
-                  }}
-                  onError={() => model.renderFailed(content)}
-                />}
                 {content?.kind === 'pdf' && <iframe
                   key={content.url}
                   class={styles.frame}

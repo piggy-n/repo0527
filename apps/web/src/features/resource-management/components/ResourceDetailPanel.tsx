@@ -155,8 +155,8 @@ export const ResourceDetailPanel = defineComponent({
                       disabled={importDisabled}
                       onClick={() => fileInput.value?.click()}
                     >导入</ElButton>
+                    <span class={styles.importHint}>（支持 .xlsx、.xls）</span>
                   </>, default: () => <>
-                  <p class={styles.importHint}>支持 .xlsx、.xls</p>
                   {importMessage && <p
                     class={[styles.importStatus, importer.stage.value === 'error' && styles.importError,
                       importer.stage.value === 'success' && styles.importSuccess]}

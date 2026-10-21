@@ -2,6 +2,7 @@ import { type Query, skipToken, useMutation, useQuery, useQueryClient } from '@t
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { useSessionStore } from '@/shared/auth/session-store';
 import type { TransferProgress } from '@/shared/http/client';
+import { ApiError } from '@/shared/http/errors';
 import {
   changeResourceDirectory,
   fetchResourceDirectory,
@@ -64,7 +65,12 @@ export function useResourceDirectoryMutation() {
   const queryClient = useQueryClient();
   const session = useSessionStore();
   return useMutation({
-    mutationFn: ({ change }: { change: ResourceDirectoryChange; token: string }) => changeResourceDirectory(change),
+    mutationFn: ({ change, token }: { change: ResourceDirectoryChange; token: string }) => {
+      if (session.token !== token) {
+        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
+      }
+      return changeResourceDirectory(change);
+    },
     onSuccess: async (_, { token }) => {
       if (session.token !== token) {
         return;
@@ -131,7 +137,12 @@ export function useResourceDetailMutation() {
   const queryClient = useQueryClient();
   const session = useSessionStore();
   return useMutation({
-    mutationFn: ({ change }: { change: ResourceDetailChange; token: string }) => saveResourceDetail(change),
+    mutationFn: ({ change, token }: { change: ResourceDetailChange; token: string }) => {
+      if (session.token !== token) {
+        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
+      }
+      return saveResourceDetail(change);
+    },
     onSuccess: async (_, { change, token }) => {
       if (session.token === token) {
         await Promise.all([
@@ -148,7 +159,12 @@ export function useResourceStatusMutation() {
   const queryClient = useQueryClient();
   const session = useSessionStore();
   return useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean; token: string }) => setResourceStatus(id, enabled),
+    mutationFn: ({ id, enabled, token }: { id: string; enabled: boolean; token: string }) => {
+      if (session.token !== token) {
+        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
+      }
+      return setResourceStatus(id, enabled);
+    },
     onSuccess: async (_, { id, token }) => {
       if (session.token === token) {
         await Promise.all([
@@ -165,9 +181,14 @@ export function useResourceImportMutation() {
   const queryClient = useQueryClient();
   const session = useSessionStore();
   return useMutation({
-    mutationFn: ({ input, onProgress }: {
+    mutationFn: ({ input, token, onProgress }: {
       input: ResourceExcelImport; token: string; onProgress: (value: TransferProgress) => void;
-    }) => importResourceExcel(input, onProgress),
+    }) => {
+      if (session.token !== token) {
+        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
+      }
+      return importResourceExcel(input, onProgress);
+    },
     onSuccess: async (_, { token }) => {
       if (session.token === token) {
         await Promise.all([
