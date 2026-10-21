@@ -40,6 +40,8 @@ git diff <基线>..master-demo -- <旧路径>
 
 本轮进展：公共基础独立提交 `d8cdf8ece9fb1db97a7ab3517a1b7b48bfe6e045`，包含 FormData 上传进度、二进制取流、文件名/MIME 与错误识别、取消和浏览器保存；119 项回归测试、4 项浏览器测试、类型检查、lint 与构建通过，详见 [公共文件传输](modules/file-transfer.md)。上传真实组件原型已提供 `/dev/file-management` 与本 worktree 的离线 HTML，首轮完成 7 个尺寸检查、6 项路由测试、内网构建及 4 项生产冒烟。用户要求蓝色标题竖条、关闭清空后接受原型，已调整并复用到正式上传；请求、防重复、进度、成功刷新及会话边界已接入，验证限制与记录见 [文件管理](modules/file-management.md)。下载/预览 UI 仍待接入；未合并 main，未更改资源管理分支。
 
+下载与预览交互原型（2026-10-21）：扩展 `/dev/file-management` 并导出离线 `file-transfer-preview.html`，提供独立下载进度/取消/重试及统一预览弹窗提案；支持范围沿用上表，DOCX/PDF/图片/TXT 内容均为固定示例。统一容器和 docx-preview 按需加载方案待用户确认，本轮未新增依赖、未接真实下载/解析；6 个尺寸与异常状态已检查，74 项相关测试、类型检查、lint、构建通过，详细边界见 [文件管理](modules/file-management.md)。
+
 ## 文件管理：接口实测（2026-10-08）
 
 用浏览器中已登录的会话直接请求后端，按实测结果写 zod schema 和联动规则（`features/file-management/api.ts`、`composables/useFileList.ts`），不照搬旧代码的兜底判断。

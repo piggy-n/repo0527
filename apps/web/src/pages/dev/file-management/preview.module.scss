@@ -28,6 +28,24 @@
   }
 }
 
+.options {
+  margin-top: var(--space-sm);
+  max-height: 28dvh;
+  overflow: auto;
+  font-size: var(--font-size-xs);
+
+  summary {
+    cursor: pointer;
+    color: var(--color-primary);
+  }
+}
+
+.actions {
+  display: flex;
+  justify-content: space-evenly;
+  align-items: center;
+}
+
 .workspace {
   flex: 1;
   min-height: 0;

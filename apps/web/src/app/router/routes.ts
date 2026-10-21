@@ -56,7 +56,7 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
     name: RouteName.devFileManagement,
     component: () => import('@/pages/dev/file-management/DevFileManagementPage')
       .then(({ DevFileManagementPage }) => DevFileManagementPage),
-    meta: { title: '文件上传交互原型', public: true }
+    meta: { title: '文件管理交互原型', public: true }
   },
   {
     path: '/dev/theme',
