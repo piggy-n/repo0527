@@ -52,9 +52,9 @@
 
 .taskDetails {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-xs) var(--space-lg);
+  align-items: baseline;
+  gap: var(--space-lg);
+  :global(.el-button) { flex-shrink: 0; }
 }
 
 .progress {
@@ -70,9 +70,11 @@
 }
 
 .taskStatus {
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
-  line-height: 1.6;
+  line-height: var(--line-height-compact);
 }
 
 .error {

@@ -23,8 +23,3 @@ export async function renderDocx(blob: Blob, target: HTMLElement, signal: AbortS
     + '.file-docx-wrapper>section.file-docx{box-shadow:0 4px 16px #19376e14;margin-bottom:16px;}';
   target.replaceChildren(styles, appearance, body);
 }
-
-/** 100% 表示适合当前阅读宽度，放大时允许阅读区内部横向滚动 */
-export function fittedPreviewScale(viewportWidth: number, contentWidth: number, zoom: number): number {
-  return Math.min(1, Math.max(1, viewportWidth - 32) / Math.max(1, contentWidth)) * zoom / 100;
-}

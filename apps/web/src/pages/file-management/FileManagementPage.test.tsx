@@ -152,6 +152,19 @@ const treeNode = (wrapper: Wrapper, label: string) =>
   wrapper.findAll('.el-tree-node__content').filter(node => node.text() === label);
 
 describe('FileManagementPage', () => {
+  it('不可预览的文件在预览位置显示仅下载，保留三个操作位置', async () => {
+    const response = filePageResponse({ totalElements: 2 });
+    response.data.content[1].type = 'xlsx';
+    response.data.content[1].name = '成果清单.xlsx';
+    server.use(mock.get('/backend/file/page', () => HttpResponse.json(response)));
+    const wrapper = mountPage();
+    await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(2));
+    const actions = wrapper.findAll('.el-table__body tr').map(row =>
+      row.findAll('td').at(-1)!.findAll('.cell > div > *').map(item => item.text())
+    );
+    expect(actions).toEqual([['预览', '下载', '删除'], ['仅下载', '下载', '删除']]);
+  });
+
   it('显示默认分类的标题、上级路径和文件', async () => {
     const { pageRequests } = mockFiles();
     const wrapper = mountPage();

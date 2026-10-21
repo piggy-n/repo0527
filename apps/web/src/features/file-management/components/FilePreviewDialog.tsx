@@ -1,4 +1,4 @@
-import { Download, Loading, Warning, ZoomIn, ZoomOut } from '@element-plus/icons-vue';
+import { Download, Loading, Minus, Plus, Warning } from '@element-plus/icons-vue';
 import { MxTitle } from '@yzt/ui';
 import { useElementSize } from '@vueuse/core';
 import { ElButton, ElDialog, ElIcon, ElTag } from 'element-plus';
@@ -51,26 +51,32 @@ export const FilePreviewDialog = defineComponent({
           header: () => <MxTitle level="panel">文件预览</MxTitle>,
           default: () => file && <div class={styles.reader}>
             <div class={styles.fileHeading}>
-              <div class={styles.filename}>{file.name}</div>
-              <ElTag type="info">{file.type.toUpperCase()}</ElTag>
+              <div class={styles.filename}>
+                <span>{file.name}</span><ElTag size="small" type="info">{file.type.toUpperCase()}</ElTag>
+              </div>
             </div>
             {model.phase.value === 'ready' && scalable && <div class={styles.toolbar}>
-              <span class={styles.hint}>{content.kind === 'docx' ? '上下滚动阅读' : '图片预览'}</span>
               <div class={styles.zoom}>
                 <ElButton
-                  icon={ZoomOut}
+                  class={styles.zoomButton}
+                  size="small"
+                  icon={Minus}
                   aria-label="缩小"
                   disabled={model.zoom.value <= 50}
                   onClick={() => { model.zoom.value -= 25; }}
                 />
                 <span>{model.zoom.value}%</span>
                 <ElButton
-                  icon={ZoomIn}
+                  class={styles.zoomButton}
+                  size="small"
+                  icon={Plus}
                   aria-label="放大"
                   disabled={model.zoom.value >= 150}
                   onClick={() => { model.zoom.value += 25; }}
                 />
-                <ElButton onClick={() => { model.zoom.value = 100; }}>适合宽度</ElButton>
+                {content.kind === 'image' && <ElButton size="small" onClick={() => { model.zoom.value = 100; }}>
+                  适合宽度
+                </ElButton>}
               </div>
             </div>}
             <div
@@ -133,7 +139,6 @@ export const FilePreviewDialog = defineComponent({
             </div>
           </div>,
           footer: () => <div class={styles.footer}>
-            <span class={styles.hint}>{receiving ? '正在下载，关闭预览后仍可在列表查看进度' : '无法正常显示时可下载后查看'}</span>
             <div>
               <ElButton onClick={model.close}>关闭</ElButton>
               <ElButton

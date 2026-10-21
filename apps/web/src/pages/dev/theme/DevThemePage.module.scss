@@ -133,6 +133,13 @@
   width: 220px;
 }
 
+.inlineAction {
+  align-items: baseline;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  color: var(--color-text-secondary);
+}
+
 .alerts {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

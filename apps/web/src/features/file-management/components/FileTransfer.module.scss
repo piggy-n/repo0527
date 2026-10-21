@@ -7,16 +7,55 @@
   background: var(--color-bg-page);
 }
 
-.taskHeading, .task, .toolbar, .zoom, .footer {
+.taskHeading, .toolbar, .zoom, .footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
 }
 
-.tasks { max-height: 156px; overflow: auto; }
-.task { padding: var(--space-sm) 0; }
-.taskMain { flex: 1; min-width: 0; }
+.taskHeading {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  :global(.el-button + .el-button) { margin-left: 0; }
+}
+
+.downloadTitle { flex: none; }
+.count {
+  padding: 0 var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--color-border-light);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+}
+
+.summary { color: var(--color-text-secondary); font-size: var(--font-size-xs); }
+.tasks {
+  max-height: clamp(80px, calc(100dvh - 660px), 260px);
+  margin-top: var(--space-sm);
+  overflow: auto;
+}
+
+.task {
+  display: grid;
+  gap: var(--space-xs);
+  padding: var(--space-sm) 0;
+  + .task { border-top: 1px solid var(--color-border-light); }
+}
+
+.taskDetails {
+  display: flex;
+  // 同一行按文字基线对齐，错误信息换行时按钮仍跟首行对齐
+  align-items: baseline;
+  gap: var(--space-lg);
+  :global(.el-button) { flex-shrink: 0; }
+}
+
+.progress {
+  width: min(100%, 480px);
+  margin: var(--space-xs) 0;
+}
 
 .filename {
   overflow-wrap: anywhere;
@@ -24,14 +63,16 @@
   font-weight: var(--font-weight-semibold);
 }
 
-.taskStatus, .hint {
+.taskStatus {
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
-  line-height: 1.6;
+  line-height: var(--line-height-compact);
 }
 
-.taskStatus { margin: var(--space-xs) 0; }
 .error { color: var(--el-color-danger); }
+.success { color: var(--el-color-success); }
 
 .dialog {
   display: flex;
@@ -61,14 +102,17 @@
   flex-shrink: 0;
   max-height: 25%;
   overflow: auto;
-  :global(.el-tag) { margin-top: var(--space-xs); }
+  :global(.el-tag) { margin-left: var(--space-sm); vertical-align: middle; }
 }
 
-.toolbar { flex-wrap: wrap; padding: var(--space-sm) 0; }
+.toolbar { flex-wrap: wrap; justify-content: flex-end; padding: var(--space-sm) 0; }
 .zoom {
-  gap: var(--space-sm);
+  gap: var(--space-xs);
+  > span { min-width: 44px; text-align: center; font-size: var(--font-size-xs); }
   :global(.el-button + .el-button) { margin-left: 0; }
 }
+
+.zoomButton { width: 24px; padding: 0; }
 
 .viewport {
   position: relative;
@@ -118,7 +162,7 @@
 }
 
 @media (max-width: 540px) {
-  .tasks { max-height: 112px; }
+  .tasks { max-height: min(22dvh, 140px); }
   .viewport:not(.frameViewport) { padding: var(--space-sm); }
   .footer { gap: var(--space-sm); }
 }

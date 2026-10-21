@@ -13,6 +13,7 @@ import { configureHttp } from '@/shared/http/configure';
 import { ApiError } from '@/shared/http/errors';
 import * as api from '../api';
 import { FilePreviewDialog } from '../components/FilePreviewDialog';
+import { FileDownloadPanel } from '../components/FileDownloadPanel';
 import { useFileContentRequest } from '../queries';
 import { useFileDownloads } from './useFileDownloads';
 import { useFilePreview } from './useFilePreview';
@@ -53,7 +54,10 @@ function setup(renderDialog = false) {
     downloads = useFileDownloads();
     preview = useFilePreview();
     read = useFileContentRequest();
-    return () => renderDialog ? <FilePreviewDialog model={preview} downloads={downloads} /> : null;
+    return () => renderDialog ? <>
+      <FileDownloadPanel model={downloads} />
+      <FilePreviewDialog model={preview} downloads={downloads} />
+    </> : null;
   } }), { global: { plugins: [pinia, [VueQueryPlugin, { queryClient }]] } });
   cleanups.push(() => {
     if (!wrapper.vm.$.isUnmounted) { wrapper.unmount(); }
@@ -70,6 +74,31 @@ function deferred<T>() {
 }
 
 describe('文件下载', () => {
+  it('进度区默认收起，新任务及完成失败不展开，手动开关保持用户选择', async () => {
+    const env = setup(true);
+    const request = vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['ok']), fileName: file.name });
+    const panel = env.wrapper.findComponent(FileDownloadPanel);
+    expect(panel.find('section').exists()).toBe(false);
+    await env.downloads.start(file);
+    await nextTick();
+    expect(panel.get('[aria-expanded]').attributes('aria-expanded')).toBe('false');
+    expect(panel.text()).not.toContain(file.name);
+    request.mockRejectedValueOnce(new ApiError({ kind: 'business', message: '文件不存在' }));
+    await env.downloads.start({ ...file, id: 'two' });
+    await nextTick();
+    expect(panel.get('[aria-expanded]').attributes('aria-expanded')).toBe('false');
+    await panel.get('[aria-expanded]').trigger('click');
+    expect(panel.text()).toContain('文件不存在');
+    expect(panel.text()).toContain('已交给浏览器保存');
+    await env.downloads.start({ ...file, id: 'three' });
+    await nextTick();
+    expect(panel.get('[aria-expanded]').attributes('aria-expanded')).toBe('true');
+    await panel.get('[aria-expanded]').trigger('click');
+    await env.downloads.start({ ...file, id: 'four' });
+    await nextTick();
+    expect(panel.get('[aria-expanded]').attributes('aria-expanded')).toBe('false');
+  });
+
   it('普通 HTTP 内网没有 randomUUID 时仍能读取文件', async () => {
     const env = setup();
     vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
@@ -164,6 +193,30 @@ describe('文件下载', () => {
 });
 
 describe('预览与会话边界', () => {
+  it('DOCX 仅保留手动缩放；图片保留适宽，关闭后的下一文件从 100% 开始', async () => {
+    const env = setup(true);
+    vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['content']), fileName: 'test.docx' });
+    await env.preview.open({ ...file, name: '测试文件.docx', type: 'docx' });
+    env.preview.rendered(env.preview.content.value!);
+    await nextTick();
+    const dialog = document.querySelector('.el-dialog')!;
+    const labels = () => Array.from(dialog.querySelectorAll('button')).map(button => button.textContent?.trim());
+    expect(labels()).not.toContain('适合宽度');
+    expect(dialog.textContent).not.toContain('上下滚动阅读');
+    expect(dialog.textContent).not.toContain('无法正常显示时可下载后查看');
+    const name = Array.from(dialog.querySelectorAll('span')).find(span => span.textContent === '测试文件.docx')!;
+    expect(name.parentElement?.querySelector('.el-tag')?.textContent).toBe('DOCX');
+    dialog.querySelector<HTMLButtonElement>('[aria-label="缩小"]')!.click();
+    await nextTick();
+    expect(env.preview.zoom.value).toBe(75);
+    env.preview.close();
+    await env.preview.open({ ...file, type: 'png' });
+    env.preview.rendered(env.preview.content.value!);
+    await nextTick();
+    expect(labels()).toContain('适合宽度');
+    expect(env.preview.zoom.value).toBe(100);
+  });
+
   it('旧图片的晚到 load 不写入新图片的显示尺寸', async () => {
     const env = setup(true);
     vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['image']), fileName: 'image.png' });

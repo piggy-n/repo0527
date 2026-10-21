@@ -64,6 +64,7 @@ export const DownloadPreviewPanel = defineComponent({
               {task.phase === 'error' && <span class={styles.error}>下载失败，请重试</span>}
             </div>
             <ElButton
+              class="button-inline"
               link
               type="primary"
               size="small"

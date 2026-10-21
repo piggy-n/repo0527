@@ -9,7 +9,7 @@ async function fixture() {
 }
 
 describe('DOCX 真实浏览器渲染', () => {
-  it('隔离渲染、内嵌图片与分页，禁止文档链接和 HTML 片段，并随宽度缩放', async () => {
+  it('隔离渲染、内嵌图片与分页，禁止链接和 HTML 片段，缩放不随窗口宽度改变', async () => {
     const host = document.body.appendChild(document.createElement('div'));
     host.style.cssText = 'width:760px;height:540px';
     const controller = new AbortController();
@@ -21,7 +21,8 @@ describe('DOCX 真实浏览器渲染', () => {
       attachTo: host
     });
     try {
-      await expect.poll(() => loaded.mock.calls.length + failed.mock.calls.length).toBe(1);
+      // 按需加载解析库和 iframe 就绪在并行测试时可能超过默认轮询期限
+      await expect.poll(() => loaded.mock.calls.length + failed.mock.calls.length, { timeout: 10000 }).toBe(1);
       expect(failed).not.toHaveBeenCalled();
       const frame = wrapper.get('iframe').element as HTMLIFrameElement;
       const body = frame.contentDocument!.body;
@@ -37,18 +38,23 @@ describe('DOCX 真实浏览器渲染', () => {
       expect(frame.getAttribute('sandbox')).toBe('allow-same-origin');
       expect(document.querySelector('section.file-docx')).toBeNull();
       const paper = body.querySelector<HTMLElement>('.file-docx-wrapper')!;
-      const desktopZoom = Number(paper.style.zoom);
+      expect(Number(paper.style.zoom)).toBe(1);
+      const desktopWidth = paper.getBoundingClientRect().width;
       host.style.width = '360px';
-      await expect.poll(() => Number(paper.style.zoom)).toBeLessThan(desktopZoom);
-      const fitted = Number(paper.style.zoom);
+      await expect.poll(() => frame.getBoundingClientRect().width).toBe(360);
+      expect(Number(paper.style.zoom)).toBe(1);
+      expect(paper.getBoundingClientRect().width).toBe(desktopWidth);
+      expect(frame.contentDocument!.documentElement.scrollWidth).toBeGreaterThan(frame.clientWidth);
       await wrapper.setProps({ zoom: 150 });
-      await expect.poll(() => Number(paper.style.zoom)).toBeCloseTo(fitted * 1.5, 5);
+      expect(paper.getBoundingClientRect().width).toBeCloseTo(desktopWidth * 1.5, 1);
+      await wrapper.setProps({ zoom: 50 });
+      expect(paper.getBoundingClientRect().width).toBeCloseTo(desktopWidth * 0.5, 1);
     } finally {
       controller.abort();
       wrapper.unmount();
       host.remove();
     }
-  });
+  }, 15000);
 
   it('损坏 DOCX 报显示失败，销毁后不再回报成功或失败', async () => {
     const host = document.body.appendChild(document.createElement('div'));

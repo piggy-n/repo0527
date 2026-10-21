@@ -1,8 +1,7 @@
 import { LatestController } from '@yzt/utils';
-import { useElementSize } from '@vueuse/core';
 import { defineComponent, onScopeDispose, ref, watch, type PropType } from 'vue';
 import type { FilePreviewContent } from '../composables/useFilePreview';
-import { fittedPreviewScale, renderDocx } from '../docx-preview';
+import { renderDocx } from '../docx-preview';
 import styles from './FileTransfer.module.scss';
 
 type DocxContent = Extract<FilePreviewContent, { kind: 'docx' }>;
@@ -24,13 +23,12 @@ export const DocxPreviewContent = defineComponent({
   emits: { loaded: (_content: DocxContent) => true, failed: (_content: DocxContent) => true },
   setup(props, { emit }) {
     const frame = ref<HTMLIFrameElement>();
-    const { width } = useElementSize(frame);
     const renderOperation = new LatestController();
     let wrapper: HTMLElement | null = null;
-    let pageWidth = 1;
-    const fit = () => {
+    // 只应用用户选择的比例，不再随视口宽度自动适配
+    const applyZoom = () => {
       if (wrapper) {
-        wrapper.style.zoom = String(fittedPreviewScale(width.value, pageWidth, props.zoom));
+        wrapper.style.zoom = String(props.zoom / 100);
       }
     };
     const render = async () => {
@@ -47,13 +45,13 @@ export const DocxPreviewContent = defineComponent({
           return;
         }
         wrapper = target.querySelector<HTMLElement>('.file-docx-wrapper');
-        pageWidth = Math.max(1, ...Array.from(target.querySelectorAll<HTMLElement>('section.file-docx'),
+        const pageWidth = Math.max(1, ...Array.from(target.querySelectorAll<HTMLElement>('section.file-docx'),
           page => page.offsetWidth)) + 32;
         if (wrapper) {
           wrapper.style.width = `${pageWidth}px`;
           wrapper.style.margin = '0 auto';
         }
-        fit();
+        applyZoom();
         emit('loaded', content);
       } catch {
         if (!signal.aborted) {
@@ -62,7 +60,7 @@ export const DocxPreviewContent = defineComponent({
       }
     };
     watch(() => props.content, () => void render(), { flush: 'post' });
-    watch([width, () => props.zoom], fit);
+    watch(() => props.zoom, applyZoom);
     onScopeDispose(() => { renderOperation[Symbol.dispose](); wrapper = null; });
     return () => <iframe
       ref={frame}

@@ -329,6 +329,12 @@ export const DevThemePage = defineComponent({
             ))}
             <ElButton type="primary" text>文字按钮</ElButton>
           </div>
+          <div class={[styles.row, styles.inlineAction]}>
+            <span>下载失败，请重试（状态行示例）</span>
+            <ElButton class="button-inline" link type="primary" size="small" onClick={() => ElMessage.info('状态行按钮示例')}>
+              重试
+            </ElButton>
+          </div>
           <div class={styles.row}>
             {actionButtons.map(({ label, icon }) => (
               <ElButton key={label} icon={icon}>

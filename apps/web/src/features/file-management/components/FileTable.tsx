@@ -80,10 +80,10 @@ export const FileTable = defineComponent({
             <ElTableColumn prop="remark" label="备注" minWidth="120" showOverflowTooltip />,
             <ElTableColumn label="操作" width="180" align="center" fixed={compact.value ? false : 'right'}>
               {{
-                default: ({ row }: { row: FileRecord }) => [
-                  filePreviewType(row.type) && <ElButton link type="primary" onClick={() => emit('preview', row)}>
-                    预览
-                  </ElButton>,
+                default: ({ row }: { row: FileRecord }) => <div class={styles.actions}>
+                  {filePreviewType(row.type)
+                    ? <ElButton link type="primary" onClick={() => emit('preview', row)}>预览</ElButton>
+                    : <span class={styles.downloadOnly}>仅下载</span>}
                   <ElButton
                     link
                     type="primary"
@@ -91,11 +91,11 @@ export const FileTable = defineComponent({
                     onClick={() => emit('download', row)}
                   >
                     {props.isDownloading(row.id) ? '下载中' : '下载'}
-                  </ElButton>,
+                  </ElButton>
                   <ElButton link type="danger" loading={removal.isRemoving(row.id)} onClick={() => void remove(row)}>
                     删除
                   </ElButton>
-                ]
+                </div>
               }}
             </ElTableColumn>
           ],
