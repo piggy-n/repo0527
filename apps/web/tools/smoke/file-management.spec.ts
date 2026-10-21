@@ -54,11 +54,9 @@ test('文件预览使用实际阅读器，下载保留中文文件名和原始�
   const row = (type: string) => page.locator('.el-table__body tr').filter({ hasText: `验收资料.${type}` });
   await expect(row('zip').getByText('仅下载', { exact: true })).toBeVisible();
   await expect(row('zip').getByRole('button', { name: '预览' })).toHaveCount(0);
-  await expect(row('png').getByText('仅下载', { exact: true })).toBeVisible();
-  await expect(row('png').getByRole('button', { name: '预览' })).toHaveCount(0);
   const dialog = page.getByRole('dialog', { name: '文件预览', exact: true });
   // CI 的 headless shell 不带 PDF 阅读器；指定完整浏览器 channel 时一并实测 PDF
-  const previewTypes = test.info().project.use.channel ? ['txt', 'docx', 'pdf'] : ['txt', 'docx'];
+  const previewTypes = test.info().project.use.channel ? ['txt', 'docx', 'png', 'pdf'] : ['txt', 'docx', 'png'];
   for (const type of previewTypes) {
     await row(type).getByRole('button', { name: '预览', exact: true }).click();
     await expect(dialog).toBeVisible();
@@ -66,13 +64,25 @@ test('文件预览使用实际阅读器，下载保留中文文件名和原始�
     await expect(dialog.getByLabel('文件阅读区')).toHaveAttribute('aria-busy', 'false');
     if (type === 'txt') {
       await expect(dialog.locator('pre')).toHaveText(textContent);
-    } else if (type === 'docx') {
-      await expect(dialog.locator('iframe').contentFrame().locator('section.file-docx').first()).toBeVisible();
+    } else if (type === 'docx' || type === 'png') {
+      if (type === 'docx') {
+        await expect(dialog.locator('iframe').contentFrame().locator('section.file-docx').first()).toBeVisible();
+      } else {
+        const image = dialog.getByRole('img', { name: '验收资料.png', exact: true });
+        await expect(image).toBeVisible();
+        const original = await image.boundingBox();
+        await dialog.getByRole('button', { name: '放大', exact: true }).click();
+        await expect(dialog.getByText('125%', { exact: true })).toBeVisible();
+        await expect.poll(async () => (await image.boundingBox())!.width).toBeCloseTo(original!.width * 1.25, 0);
+        await dialog.getByRole('button', { name: '缩小', exact: true }).click();
+        await expect.poll(async () => (await image.boundingBox())!.width).toBeCloseTo(original!.width, 0);
+      }
+      await expect(dialog.getByRole('button', { name: '适合宽度', exact: true })).toHaveCount(0);
       await expect(dialog.getByText('100%', { exact: true })).toBeVisible();
       for (const [width, height] of [[1440, 900], [1200, 800], [1199, 800], [760, 640], [390, 844], [1440, 600]]) {
         await page.setViewportSize({ width, height });
         await settled(page);
-        const name = await dialog.getByText('验收资料.docx', { exact: true }).boundingBox();
+        const name = await dialog.getByText(`验收资料.${type}`, { exact: true }).boundingBox();
         const zoom = await dialog.getByRole('button', { name: '缩小', exact: true }).boundingBox();
         const reader = await dialog.getByLabel('文件阅读区').boundingBox();
         expect(Math.abs(name!.y + name!.height / 2 - zoom!.y - zoom!.height / 2)).toBeLessThanOrEqual(2);
@@ -80,7 +90,7 @@ test('文件预览使用实际阅读器，下载保留中文文件名和原始�
         await expect(dialog.getByRole('button', { name: '关闭', exact: true })).toBeInViewport();
         await expect(dialog.getByRole('button', { name: '下载文件', exact: true })).toBeInViewport();
         expect(await page.locator('html').evaluate((element: { scrollWidth: number }) => element.scrollWidth)).toBeLessThanOrEqual(width);
-        await page.screenshot({ path: test.info().outputPath(`docx-compact-${width}x${height}.png`) });
+        await page.screenshot({ path: test.info().outputPath(`${type}-compact-${width}x${height}.png`) });
       }
       await page.setViewportSize({ width: 1440, height: 900 });
     } else {

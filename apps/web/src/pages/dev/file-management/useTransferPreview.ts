@@ -22,7 +22,7 @@ export interface DownloadDemo {
   unknown: boolean;
 }
 
-/** 与正式页共用预览范围，图片和其他格式只下载 */
+/** 与正式页共用文档和图片的预览范围 */
 export const canPreviewSample = (file: PreviewSample) => filePreviewType(file.type) !== undefined;
 
 /** 下载演示按文件防重复，独立取消，不发送请求或保存文件 */

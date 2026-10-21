@@ -85,7 +85,7 @@ export const DownloadPreviewPanel = defineComponent({
   }
 });
 
-/** 只演示阅读区域与交互，文档分页为固定内容 */
+/** 只演示阅读区域与交互，文档分页和图片均为固定内容 */
 const ExampleContent = defineComponent({
   name: 'ExampleContent',
   props: { type: { type: String, required: true }, zoom: { type: Number, required: true } },
@@ -111,7 +111,22 @@ const ExampleContent = defineComponent({
             <footer>{page} / 2</footer>
           </article>)}
         </div>
-        : null;
+        : <div class={styles.imageExample} style={{ width: `${props.zoom}%`, maxWidth: `${props.zoom * 8}px` }}>
+          <svg viewBox="0 0 800 500" role="img" aria-label="调查区域示意图（固定图片示例）">
+            <rect width="800" height="500" fill="#eef3f6" />
+            <path
+              d="M80 120L320 60 440 160 700 110 730 360 480 440 260 360 100 410Z"
+              fill="#d8e7d5"
+              stroke="#8fae88"
+              stroke-width="3"
+            />
+            <path d="M320 60L260 360M440 160L480 440M100 250L700 260" fill="none" stroke="#8fae88" stroke-width="2" />
+            <path d="M600 0Q420 150 520 260T400 500" fill="none" stroke="#8fbdd6" stroke-width="22" />
+            <circle cx="330" cy="240" r="10" fill="#307fe2" />
+            <text x="350" y="246" fill="#334155" font-size="20">调查点位（示例）</text>
+            <text x="40" y="465" fill="#64748b" font-size="16">固定示意图 · 不加载地图或业务数据</text>
+          </svg>
+        </div>;
   }
 });
 
@@ -147,7 +162,7 @@ export const DocumentPreviewDialog = defineComponent({
               <div class={styles.filename}>
                 <span>{file.name}</span><ElTag size="small" type="info">{file.type.toUpperCase()}</ElTag>
               </div>
-              {model.phase.value === 'ready' && type === 'docx' && <div class={styles.zoom}>
+              {model.phase.value === 'ready' && !['txt', 'pdf'].includes(type) && <div class={styles.zoom}>
                 <ElButton
                   class={styles.zoomButton}
                   size="small"

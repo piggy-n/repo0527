@@ -10,7 +10,7 @@ import { useFileContentRequest } from '../queries';
 export type FilePreviewContent = { signal: AbortSignal } & (
   | { kind: 'docx'; blob: Blob }
   | { kind: 'text'; text: string }
-  | { kind: 'pdf'; url: string }
+  | { kind: 'pdf' | 'image'; url: string }
 );
 
 /** 预览的取流、目标和资源生命周期；渲染由组件承担 */
@@ -30,7 +30,7 @@ export function useFilePreview() {
   const releaseContent = () => {
     const previous = content.value;
     content.value = null;
-    if (previous?.kind === 'pdf') {
+    if (previous?.kind === 'pdf' || previous?.kind === 'image') {
       URL.revokeObjectURL(previous.url);
     }
   };

@@ -193,10 +193,11 @@ describe('文件下载', () => {
 });
 
 describe('预览与会话边界', () => {
-  it('DOCX 仅保留手动缩放，关闭后的下一文件从 100% 开始', async () => {
+  it.each(['docx', 'png'])('%s 仅保留加减缩放，关闭后的下一文件从 100% 开始', async type => {
     const env = setup(true);
     vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['content']), fileName: 'test.docx' });
-    await env.preview.open({ ...file, name: '测试文件.docx', type: 'docx' });
+    await env.preview.open({ ...file, name: `测试文件.${type}`, type });
+    expect(env.preview.content.value).not.toBeNull();
     env.preview.rendered(env.preview.content.value!);
     await nextTick();
     const dialog = document.querySelector('.el-dialog')!;
@@ -204,27 +205,48 @@ describe('预览与会话边界', () => {
     expect(labels()).not.toContain('适合宽度');
     expect(dialog.textContent).not.toContain('上下滚动阅读');
     expect(dialog.textContent).not.toContain('无法正常显示时可下载后查看');
-    const name = Array.from(dialog.querySelectorAll('span')).find(span => span.textContent === '测试文件.docx')!;
-    expect(name.parentElement?.querySelector('.el-tag')?.textContent).toBe('DOCX');
+    const name = Array.from(dialog.querySelectorAll('span')).find(span => span.textContent === `测试文件.${type}`)!;
+    expect(name.parentElement?.querySelector('.el-tag')?.textContent).toBe(type.toUpperCase());
     dialog.querySelector<HTMLButtonElement>('[aria-label="缩小"]')!.click();
     await nextTick();
     expect(env.preview.zoom.value).toBe(75);
     env.preview.close();
-    await env.preview.open({ ...file, id: 'two', type: 'docx' });
+    await env.preview.open({ ...file, id: 'two', type });
     env.preview.rendered(env.preview.content.value!);
     await nextTick();
     expect(labels()).not.toContain('适合宽度');
     expect(env.preview.zoom.value).toBe(100);
   });
 
-  it.each(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'])('图片 %s 不取预览流，仍可独立下载', async type => {
+  it('旧图片的晚到 load 不写入新图片的显示尺寸', async () => {
+    const env = setup(true);
+    vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['image']), fileName: 'image.png' });
+    await env.preview.open({ ...file, type: 'png' });
+    await nextTick();
+    const oldImage = document.querySelector('img')!;
+    expect(oldImage).not.toBeNull();
+    Object.defineProperty(oldImage, 'naturalWidth', { value: 900 });
+    await env.preview.open({ ...file, id: 'two', type: 'png' });
+    await nextTick();
+    const nextImage = document.querySelector('img')!;
+    expect(nextImage).not.toBe(oldImage);
+    expect(nextImage.style.width).toBe('0px');
+    oldImage.dispatchEvent(new Event('load'));
+    await nextTick();
+    expect(nextImage.style.width).toBe('0px');
+    expect(env.preview.phase.value).toBe('rendering');
+  });
+
+  it.each(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'])('图片 %s 可预览、关闭释放 URL，仍可独立下载', async type => {
     const env = setup();
     const target = { ...file, name: `图片.${type}`, type };
     const request = vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['image']), fileName: target.name });
     await env.preview.open(target);
-    expect(request).not.toHaveBeenCalled();
-    expect(env.preview.content.value).toBeNull();
-    expect(env.createUrl).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledOnce();
+    expect(env.preview.content.value?.kind).toBe('image');
+    expect(env.createUrl).toHaveBeenCalledOnce();
+    env.preview.close();
+    expect(env.revokeUrl).toHaveBeenCalledOnce();
     await env.downloads.start(target);
     expect(env.save).toHaveBeenCalledOnce();
     expect(env.save.mock.calls[0]?.[0].fileName).toBe(target.name);

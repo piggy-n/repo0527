@@ -153,6 +153,8 @@
 }
 
 .pages { width: 720px; margin-inline: auto; }
+.imageExample { margin-inline: auto; }
+.imageExample svg { display: block; width: 100%; }
 
 // 白纸与插图是固定内容示例，界面颜色仍使用主题变量
 .paper, .text {
