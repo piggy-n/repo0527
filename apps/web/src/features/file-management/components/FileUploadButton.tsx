@@ -32,7 +32,7 @@ export const FileUploadButton = defineComponent({
 
     return () => <>
       <ElButton type="primary" icon={Upload} onClick={() => upload.open(props.categoryId)}>
-        {upload.busy.value ? '查看上传进度' : '上传文档'}
+        {upload.busy.value ? '查看上传进度' : '上传文件'}
       </ElButton>
       <FileUploadDialog model={upload} onSubmit={() => void submit()} />
     </>;

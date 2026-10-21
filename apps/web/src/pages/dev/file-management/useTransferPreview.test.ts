@@ -61,6 +61,20 @@ describe('下载与预览原型边界', () => {
     expect(model.tasks.value).toEqual([]);
   });
 
+  it('接收后的检查仍算进行中，清除已结束只保留接收和检查，可分别取消', () => {
+    const model = setup(useDownloadPreview);
+    model.showStates(sample);
+    expect(model.tasks.value).toHaveLength(6);
+    expect(model.isReceiving('demo-checking')).toBe(true);
+    model.clearFinished();
+    expect(model.tasks.value.map(task => task.phase)).toEqual(['receiving', 'receiving', 'checking']);
+    model.cancel(model.tasks.value[2]);
+    expect(model.isReceiving('demo-checking')).toBe(false);
+    model.clearAll();
+    expect(model.tasks.value).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('关闭中止预览；快速重开不被上一轮失败覆盖', () => {
     const model = setup(useDocumentPreview);
     model.scene.value = 'render-error';

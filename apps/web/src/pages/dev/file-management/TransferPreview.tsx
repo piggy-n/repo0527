@@ -1,7 +1,7 @@
-import { Download, Loading, Warning, ZoomIn, ZoomOut } from '@element-plus/icons-vue';
+import { ArrowDown, ArrowRight, Download, Loading, Minus, Plus, Warning } from '@element-plus/icons-vue';
 import { MxTitle } from '@yzt/ui';
 import { ElButton, ElDialog, ElIcon, ElProgress, ElTag } from 'element-plus';
-import { defineComponent, type PropType } from 'vue';
+import { defineComponent, ref, useId, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import type { useDocumentPreview, useDownloadPreview } from './useTransferPreview';
 import styles from './transfer-preview.module.scss';
@@ -21,37 +21,65 @@ export const DownloadPreviewPanel = defineComponent({
   name: 'DownloadPreviewPanel',
   props: { model: { type: Object as PropType<DownloadModel>, required: true } },
   setup(props) {
+    // 展开状态只由用户改变，新增、完成或失败都不自动展开
+    const expanded = ref(false);
+    const listId = useId();
     return () => props.model.tasks.value.length > 0 && <section class={styles.downloads} aria-label="下载进度">
       <div class={styles.taskHeading}>
-        <MxTitle level="section">下载进度</MxTitle>
+        <MxTitle class={styles.downloadTitle} level="section">
+          下载进度 <span class={styles.count}>{props.model.tasks.value.length}</span>
+        </MxTitle>
+        <span class={styles.summary} role="status">
+          进行中 {props.model.tasks.value.filter(task => props.model.isReceiving(task.file.id)).length}
+          {' · '}失败 {props.model.tasks.value.filter(task => task.phase === 'error').length}
+        </span>
         <ElButton
           link
           type="primary"
-          disabled={props.model.tasks.value.every(task => task.phase === 'receiving')}
+          size="small"
+          icon={expanded.value ? ArrowDown : ArrowRight}
+          aria-expanded={expanded.value}
+          aria-controls={listId}
+          onClick={() => { expanded.value = !expanded.value; }}
+        >{expanded.value ? '收起' : '展开'}</ElButton>
+        {expanded.value && <ElButton
+          link
+          type="primary"
+          size="small"
+          disabled={props.model.tasks.value.every(task => props.model.isReceiving(task.file.id))}
           onClick={props.model.clearFinished}
-        >清除已结束</ElButton>
+        >清除已结束</ElButton>}
       </div>
-      <div class={styles.tasks}>
+      {expanded.value && <div id={listId} class={styles.tasks}>
         {props.model.tasks.value.map(task => <div key={task.file.id} class={styles.task}>
-          <div class={styles.taskMain}>
-            <div class={styles.filename}>{task.file.name}</div>
+          <div class={styles.filename}>{task.file.name}</div>
+          <div class={styles.taskDetails}>
             <div class={styles.taskStatus} role="status">
               {task.phase === 'receiving' && (task.unknown
                 ? `正在接收 · 已接收 ${(task.received / 20).toFixed(1)} MB（总量未知）`
                 : `正在接收 · ${task.received}%`)}
-              {task.phase === 'done' && '演示完成 · 正式下载将在此时交给浏览器保存'}
+              {task.phase === 'checking' && '文件已接收，正在检查下载内容'}
+              {task.phase === 'done' && <span class={styles.success}>已交给浏览器保存</span>}
               {task.phase === 'cancelled' && '已取消本次下载'}
               {task.phase === 'error' && <span class={styles.error}>下载失败，请重试</span>}
             </div>
-            {task.phase === 'receiving' && !task.unknown && <ElProgress percentage={task.received} showText={false} />}
+            <ElButton
+              link
+              type="primary"
+              size="small"
+              onClick={() => {
+                if (props.model.isReceiving(task.file.id)) {
+                  props.model.cancel(task);
+                } else {
+                  props.model.start(task.file);
+                }
+              }}
+            >{props.model.isReceiving(task.file.id) ? '取消' : task.phase === 'done' ? '重新下载' : '重试'}</ElButton>
           </div>
-          {task.phase === 'receiving'
-            ? <ElButton onClick={() => props.model.cancel(task)}>取消</ElButton>
-            : <ElButton link type="primary" onClick={() => props.model.start(task.file)}>
-              {task.phase === 'done' ? '重新下载' : '重试'}
-            </ElButton>}
+          {task.phase === 'receiving' && !task.unknown
+            && <ElProgress class={styles.progress} percentage={task.received} showText={false} />}
         </div>)}
-      </div>
+      </div>}
     </section>;
   }
 });
@@ -64,13 +92,13 @@ const ExampleContent = defineComponent({
     return () => props.type === 'txt'
       ? <pre class={styles.text}>{exampleText}</pre>
       : ['docx', 'pdf'].includes(props.type)
-        ? <div class={styles.pages} style={{ width: `${props.zoom}%`, maxWidth: `${props.zoom * 7.2}px` }}>
-          {[1, 2].map(page => <article key={page} class={styles.paper} style={{ zoom: props.zoom / 100 }}>
-            <div class={styles.paperMeta}>调查监测 / 文档示例</div>
+        ? <div class={styles.pages} style={{ zoom: props.type === 'docx' ? props.zoom / 100 : 1 }}>
+          {[1, 2].map(page => <article key={page} class={styles.paper}>
+            <div class={styles.paperMeta}>调查监测 / 文件示例</div>
             <h2>{page === 1 ? '自然资源调查成果说明' : '成果清单与汇交要求'}</h2>
             <p class={styles.paperSubtitle}>2026 年度 · 固定排版示意</p>
             <h3>{page === 1 ? '一、编制说明' : '三、汇交说明'}</h3>
-            <p>本页为交互原型的固定示例，用于检查阅读区域、滚动和缩放。真实文档的内容与分页将在接入后另行验证。</p>
+            <p>本页为交互原型的固定示例，用于检查阅读区域、滚动和缩放。真实文件的内容与分页在正式页面验证。</p>
             <p>调查成果按业务分类组织，提交时填写年份、业务类型标签及必要备注，确保目录清晰、文件名称完整。</p>
             <h3>{page === 1 ? '二、成果组成' : '四、检查记录'}</h3>
             <table><thead><tr><th>序号</th><th>材料名称</th><th>状态</th></tr></thead>
@@ -78,7 +106,7 @@ const ExampleContent = defineComponent({
                 <tr key={label}><td>{index + 1}</td><td>{label}</td><td>示例</td></tr>
               )}</tbody>
             </table>
-            <p>文档仅供交互设计确认，不代表 DOCX 或 PDF 的真实渲染效果。</p>
+            <p>文件仅供交互设计确认，不代表 DOCX 或 PDF 的真实渲染效果。</p>
             <footer>{page} / 2</footer>
           </article>)}
         </div>
@@ -101,7 +129,7 @@ const ExampleContent = defineComponent({
   }
 });
 
-/** 统一预览容器是待确认的交互提案，尚未替换正式页面 */
+/** 本轮预览排版提案，固定内容不替代正式文件解析验收 */
 export const DocumentPreviewDialog = defineComponent({
   name: 'DocumentPreviewDialog',
   props: {
@@ -130,26 +158,32 @@ export const DocumentPreviewDialog = defineComponent({
           header: () => <MxTitle level="panel">文件预览</MxTitle>,
           default: () => file && <div class={styles.reader}>
             <div class={styles.fileHeading}>
-              <div class={styles.filename}>{file.name}</div>
-              <ElTag type="info">{file.type.toUpperCase()} · 示例内容</ElTag>
+              <div class={styles.filename}>
+                <span>{file.name}</span><ElTag size="small" type="info">{file.type.toUpperCase()}</ElTag>
+              </div>
             </div>
-            {model.phase.value === 'ready' && type !== 'txt' && <div class={styles.toolbar}>
-              <span class={styles.hint}>{['pdf', 'docx'].includes(type) ? '2 页 · 上下滚动阅读' : '图片示例'}</span>
+            {model.phase.value === 'ready' && !['txt', 'pdf'].includes(type) && <div class={styles.toolbar}>
               <div class={styles.zoom}>
                 <ElButton
-                  icon={ZoomOut}
+                  class={styles.zoomButton}
+                  size="small"
+                  icon={Minus}
                   aria-label="缩小"
                   disabled={model.zoom.value <= 50}
                   onClick={() => { model.zoom.value -= 25; }}
                 />
                 <span>{model.zoom.value}%</span>
                 <ElButton
-                  icon={ZoomIn}
+                  class={styles.zoomButton}
+                  size="small"
+                  icon={Plus}
                   aria-label="放大"
                   disabled={model.zoom.value >= 150}
                   onClick={() => { model.zoom.value += 25; }}
                 />
-                <ElButton onClick={() => { model.zoom.value = 100; }}>适合宽度</ElButton>
+                {type !== 'docx' && <ElButton size="small" onClick={() => { model.zoom.value = 100; }}>
+                  适合宽度
+                </ElButton>}
               </div>
             </div>}
             <div class={styles.viewport} aria-label="文件阅读区" aria-busy={loading.value}>
@@ -168,7 +202,6 @@ export const DocumentPreviewDialog = defineComponent({
             </div>
           </div>,
           footer: () => <div class={styles.footer}>
-            <span class={styles.hint}>{receiving ? '正在下载，关闭预览后仍可在列表查看进度' : '需要原文件时可下载后查看'}</span>
             <div>
               <ElButton onClick={model.close}>关闭</ElButton>
               <ElButton

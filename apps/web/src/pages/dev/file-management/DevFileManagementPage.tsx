@@ -1,6 +1,7 @@
 import { Upload } from '@element-plus/icons-vue';
-import { MxPanel, MxSplitLayout } from '@yzt/ui';
-import { ElButton, ElOption, ElPagination, ElSelect, ElTable, ElTableColumn, ElTag } from 'element-plus';
+import { COMPACT_MEDIA_QUERY, MxPanel, MxSplitLayout } from '@yzt/ui';
+import { useMediaQuery } from '@vueuse/core';
+import { ElButton, ElMessage, ElOption, ElPagination, ElSelect, ElTable, ElTableColumn, ElTag } from 'element-plus';
 import { computed, defineComponent, reactive, ref } from 'vue';
 import { DEFAULT_CATEGORY_ID, findCategoryPath } from '@/features/file-management/categories';
 import { FileCategoryTree } from '@/features/file-management/components/FileCategoryTree';
@@ -37,6 +38,8 @@ export const DevFileManagementPage = defineComponent({
     const page = ref(1);
     const downloads = useDownloadPreview();
     const preview = useDocumentPreview();
+    // 与正式页相同，窄屏操作列随表格滚动，不遮住文件名
+    const compact = useMediaQuery(COMPACT_MEDIA_QUERY);
     const path = computed(() => findCategoryPath(category.value));
     const rows = computed(() => state.value !== 'normal' ? [] : records.value.filter(file =>
       file.name.includes(applied.value.name) && (!applied.value.year || file.year === applied.value.year)
@@ -57,9 +60,15 @@ export const DevFileManagementPage = defineComponent({
     return () => <main class={styles.page}>
       <header class={styles.header}>
         <div>
-          <h1>文件管理 · 下载与预览原型</h1>
-          <p class={styles.hint}>固定示例与模拟进度，不上传或下载真实文件；DOCX/PDF 为排版示意，尚未接入解析。</p>
-          <p class={styles.hint}>预览范围：DOCX、PDF、TXT、PNG/JPG/JPEG/GIF/WebP/BMP。其余格式只下载。</p>
+          <h1>文件管理 · 交互调整稿</h1>
+          <p class={styles.hint}>固定示例与模拟状态，不执行真实上传、下载或删除。DOCX/PDF 为排版示意，正式页使用实际文件。</p>
+          <p class={styles.hint}>预览范围沿用旧项目；DOCX 的 100% 为原始尺寸，窄屏可横向滚动。其他 Office 格式只下载。</p>
+        </div>
+        <div class={styles.demoActions}>
+          <ElButton size="small" onClick={() => { if (samples[1]) { downloads.showStates(samples[1]); } }}>
+            载入全部下载状态
+          </ElButton>
+          <ElButton size="small" onClick={downloads.clearAll}>清空演示任务</ElButton>
         </div>
         <details class={styles.options}>
           <summary>演示选项（切换正常、加载、失败等状态）</summary>
@@ -70,7 +79,9 @@ export const DevFileManagementPage = defineComponent({
             onUpdate:modelValue={(value: DownloadScene) => { downloads.scene.value = value; }}
             aria-label="下载结果"
           >
-            {[['success', '成功'], ['unknown', '总量未知'], ['error', '失败'], ['waiting', '持续接收']].map(([value, label]) =>
+            {[
+              ['success', '成功'], ['unknown', '总量未知'], ['error', '失败'], ['waiting', '持续接收'], ['checking', '检查内容']
+            ].map(([value, label]) =>
               <ElOption key={value} value={value ?? ''} label={label} />
             )}
           </ElSelect>
@@ -139,7 +150,7 @@ export const DevFileManagementPage = defineComponent({
                     onReset={() => { Object.assign(filters, { name: '', year: '', tag: '' }); search(); }}
                   >
                     {{ extra: () => <ElButton type="primary" icon={Upload} onClick={() => upload.open(category.value)}>
-                      {upload.busy.value ? '查看上传进度' : '上传文档'}
+                      {upload.busy.value ? '查看上传进度' : '上传文件'}
                     </ElButton> }}
                   </FileFilterBar>
                   {upload.busy.value && <button class={styles.batch} onClick={() => upload.open(category.value)}>
@@ -154,9 +165,9 @@ export const DevFileManagementPage = defineComponent({
                     {{
                       default: () => [
                         <ElTableColumn prop="year" label="年份" width="80" align="center" />,
-                        <ElTableColumn prop="name" label="文档名称" minWidth="260" showOverflowTooltip />,
+                        <ElTableColumn prop="name" label="文件名称" minWidth="260" showOverflowTooltip />,
                         <ElTableColumn label="上传人" width="120">{{ default: () => '演示用户' }}</ElTableColumn>,
-                        <ElTableColumn prop="type" label="文档类型" width="100" align="center" />,
+                        <ElTableColumn prop="type" label="文件类型" width="100" align="center" />,
                         <ElTableColumn label="业务类型标签" width="140">
                           {{ default: ({ row }: { row: PreviewSample }) => <ElTag>{row.tag}</ElTag> }}
                         </ElTableColumn>,
@@ -164,7 +175,7 @@ export const DevFileManagementPage = defineComponent({
                           {{ default: () => '2026-10-21 10:30:00' }}
                         </ElTableColumn>,
                         <ElTableColumn label="备注" minWidth="120">{{ default: () => '演示数据' }}</ElTableColumn>,
-                        <ElTableColumn label="操作" width="128" fixed="right">
+                        <ElTableColumn label="操作" width="180" align="center" fixed={compact.value ? false : 'right'}>
                           {{ default: ({ row }: { row: PreviewSample }) => <div class={styles.actions}>
                             {canPreviewSample(row)
                               ? <ElButton link type="primary" onClick={() => preview.open(row)}>预览</ElButton>
@@ -176,6 +187,9 @@ export const DevFileManagementPage = defineComponent({
                               onClick={() => downloads.start(row)}
                             >
                               {downloads.isReceiving(row.id) ? '下载中' : '下载'}
+                            </ElButton>
+                            <ElButton link type="danger" onClick={() => ElMessage.info('设计稿仅展示删除入口，不删除文件')}>
+                              删除
                             </ElButton>
                           </div> }}
                         </ElTableColumn>

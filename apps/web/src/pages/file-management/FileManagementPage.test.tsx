@@ -89,7 +89,7 @@ function mountPage(queryClient = new QueryClient({ defaultOptions: { queries: { 
 
 type Wrapper = ReturnType<typeof mountPage>;
 
-// 主区的面板：标题、上级路径、表格第二列（文档名称）；元素不存在时是 undefined，由断言报出差异
+// 主区的面板：标题、上级路径、表格第二列（文件名称）；元素不存在时是 undefined，由断言报出差异
 function mainPanel(wrapper: Wrapper) {
   const panel = wrapper.findAll('section').find(section => section.find('table').exists());
   const textOf = (selector: string) => panel?.findAll(selector)[0]?.text();
@@ -504,7 +504,7 @@ describe('FileManagementPage', () => {
     release();
     await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(3));
 
-    await wrapper.find('input[placeholder="请输入文档名称"]').setValue('测试');
+    await wrapper.find('input[placeholder="请输入文件名称"]').setValue('测试');
     await wrapper.findAll('button').find(button => button.text() === '查询')?.trigger('click');
     await vi.waitFor(() => expect(pageRequests).toHaveLength(2));
 

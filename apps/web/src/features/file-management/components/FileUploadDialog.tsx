@@ -42,7 +42,7 @@ export const FileUploadDialog = defineComponent({
       return (
         <ElDialog
           class={styles.dialog}
-          title="上传文档"
+          title="上传文件"
           width="720px"
           top="6vh"
           appendToBody
@@ -52,7 +52,7 @@ export const FileUploadDialog = defineComponent({
           closeOnClickModal={false}
         >
           {{
-            header: () => <MxTitle level="panel">上传文档</MxTitle>,
+            header: () => <MxTitle level="panel">上传文件</MxTitle>,
             default: () => <div class={styles.dialogBody}>
               {!model.progressOnly.value && <><MxSection title="基本信息">
                 <ElForm model={model.fields} labelPosition="top" disabled={model.locked.value}>

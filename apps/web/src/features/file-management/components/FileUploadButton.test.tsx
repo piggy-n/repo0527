@@ -47,7 +47,7 @@ describe('正式上传入口', () => {
   it.each(['footer', 'header'] as const)('%s 关闭清空文件和填写，标题复用 MxTitle 且不展示上传人', async action => {
     const wrapper = await openUpload();
     await fillUpload(wrapper);
-    expect(wrapper.findComponent({ name: 'MxTitle' }).text()).toBe('上传文档');
+    expect(wrapper.findComponent({ name: 'MxTitle' }).text()).toBe('上传文件');
     expect(dialog().text()).not.toContain('上传人');
     if (action === 'footer') {
       await dialog().get('.el-dialog__footer button').trigger('click');

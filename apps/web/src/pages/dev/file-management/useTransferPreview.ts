@@ -10,9 +10,9 @@ export interface PreviewSample {
   tag: string;
 }
 
-export type DownloadScene = 'success' | 'unknown' | 'error' | 'waiting';
+export type DownloadScene = 'success' | 'unknown' | 'error' | 'waiting' | 'checking';
 export type ReadScene = 'success' | 'error' | 'render-error' | 'waiting';
-type DownloadPhase = 'receiving' | 'done' | 'error' | 'cancelled';
+type DownloadPhase = 'receiving' | 'checking' | 'done' | 'error' | 'cancelled';
 
 export interface DownloadDemo {
   file: PreviewSample;
@@ -48,7 +48,7 @@ export function useDownloadPreview() {
       if (result === 'error' && task.received >= 60) {
         task.phase = 'error';
       } else if (task.received === 100) {
-        task.phase = 'done';
+        task.phase = result === 'checking' ? 'checking' : 'done';
       }
       if (task.phase !== 'receiving') {
         controller.abort();
@@ -63,14 +63,36 @@ export function useDownloadPreview() {
     controllers.get(task.file.id)?.abort();
     task.phase = 'cancelled';
   };
-  const clearFinished = () => { tasks.value = tasks.value.filter(task => task.phase === 'receiving'); };
-  const isReceiving = (id: string) => tasks.value.some(task => task.file.id === id && task.phase === 'receiving');
+  const isReceiving = (id: string) => tasks.value.some(task => task.file.id === id
+    && (task.phase === 'receiving' || task.phase === 'checking'));
+  const clearFinished = () => { tasks.value = tasks.value.filter(task => isReceiving(task.file.id)); };
+  const clearAll = () => {
+    for (const controller of controllers.values()) { controller.abort(); }
+    tasks.value = [];
+  };
+  /** 静止的代表状态方便验收排版，不自动展开进度区 */
+  const showStates = (file: PreviewSample) => {
+    clearAll();
+    tasks.value = [
+      { file: { ...file, id: 'demo-receiving' }, phase: 'receiving', received: 37, unknown: false },
+      { file: { ...file, id: 'demo-unknown', name: '调查区域影像成果附件.zip' },
+        phase: 'receiving', received: 64, unknown: true },
+      { file: { ...file, id: 'demo-checking', name: '年度成果汇交说明.pdf' },
+        phase: 'checking', received: 100, unknown: false },
+      { file: { ...file, id: 'demo-error', name: '质量检查记录.pdf' },
+        phase: 'error', received: 60, unknown: false },
+      { file: { ...file, id: 'demo-done', name: '调查区域示意图.png' },
+        phase: 'done', received: 100, unknown: false },
+      { file: { ...file, id: 'demo-cancelled', name: '调查成果目录说明.txt' },
+        phase: 'cancelled', received: 25, unknown: false }
+    ];
+  };
   onScopeDispose(() => {
     for (const controller of controllers.values()) {
       controller.abort();
     }
   });
-  return { scene, tasks, start, cancel, clearFinished, isReceiving };
+  return { scene, tasks, start, cancel, clearFinished, isReceiving, clearAll, showStates };
 }
 
 /** 预览读取可替换，关闭或切换文件立即作废上一轮演示 */

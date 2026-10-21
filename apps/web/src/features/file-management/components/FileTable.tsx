@@ -70,9 +70,9 @@ export const FileTable = defineComponent({
         {{
           default: () => [
             <ElTableColumn prop="year" label="年份" width="80" align="center" />,
-            <ElTableColumn prop="name" label="文档名称" minWidth="260" showOverflowTooltip />,
+            <ElTableColumn prop="name" label="文件名称" minWidth="260" showOverflowTooltip />,
             <ElTableColumn prop="createdName" label="上传人" width="120" showOverflowTooltip />,
-            <ElTableColumn prop="type" label="文档类型" width="100" align="center" />,
+            <ElTableColumn prop="type" label="文件类型" width="100" align="center" />,
             <ElTableColumn label="业务类型标签" width="140">
               {{ default: ({ row }: { row: FileRecord }) => <ElTag>{row.tag}</ElTag> }}
             </ElTableColumn>,
