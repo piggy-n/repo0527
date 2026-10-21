@@ -135,7 +135,6 @@ export const ResourceDetailPanel = defineComponent({
                     <ElTableColumn prop="fieldType" label="字段类型" minWidth="100" />
                     <ElTableColumn prop="fieldLength" label="字段长度" width="100" />
                   </ElTable>
-                  {!owner.editing.value && <p class={styles.hint}>字段代码、类型和长度只读。</p>}
                 </MxSection>
               </> : showLoading.value ? <ElSkeleton rows={8} animated aria-label="正在加载资源详情" /> : null}
             </>,
