@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
-import { deleteFile, fetchFilePage, type FilePageParams } from './api';
+import { useSessionStore, type Session } from '@/shared/auth/session-store';
+import type { TransferProgress } from '@/shared/http/client';
+import { ApiError } from '@/shared/http/errors';
+import { deleteFile, fetchFilePage, uploadFiles, type FilePageParams, type FileUploadInput } from './api';
 
 /** 文件管理的 query key 只在这里拼，查询和失效共用，避免两边写得不一致 */
 export const fileKeys = {
@@ -27,5 +30,33 @@ export function useDeleteFileMutation() {
   return useMutation({
     mutationFn: deleteFile,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: fileKeys.pages() })
+  });
+}
+
+interface UploadSubmission {
+  input: FileUploadInput;
+  session: Session;
+  onProgress: (progress: TransferProgress) => void;
+}
+
+/** 写操作不随页面销毁取消、不自动重试；晚到的成功只能使原会话的列表失效 */
+export function useUploadFilesMutation() {
+  const queryClient = useQueryClient();
+  const session = useSessionStore();
+  return useMutation({
+    mutationFn: (submission: UploadSubmission) => {
+      // mutation 调度到真正发请求前可能已换会话，不能用新凭据发送旧草稿
+      if (session.session !== submission.session) {
+        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
+      }
+      return uploadFiles(submission.input, submission.onProgress);
+    },
+    retry: false,
+    onSuccess: (_data, submission) => {
+      if (session.session === submission.session && session.isActive()) {
+        return queryClient.invalidateQueries({ queryKey: fileKeys.pages() });
+      }
+      return undefined;
+    }
   });
 }

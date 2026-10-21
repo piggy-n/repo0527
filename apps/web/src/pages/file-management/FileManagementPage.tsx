@@ -1,15 +1,15 @@
-import { Upload } from '@element-plus/icons-vue';
 import { MxPanel, MxSplitLayout } from '@yzt/ui';
-import { ElButton, ElPagination } from 'element-plus';
+import { ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { findCategoryPath } from '@/features/file-management/categories';
 import { FileCategoryTree } from '@/features/file-management/components/FileCategoryTree';
 import { FileFilterBar } from '@/features/file-management/components/FileFilterBar';
 import { FileTable } from '@/features/file-management/components/FileTable';
+import { FileUploadButton } from '@/features/file-management/components/FileUploadButton';
 import { useFileList } from '@/features/file-management/composables/useFileList';
 import styles from './FileManagementPage.module.scss';
 
-/** 文件管理：左侧分类树，右侧筛选、表格、分页；上传、下载、预览在阶段六迁移 */
+/** 文件管理：分类树、筛选、上传、表格与分页 */
 export const FileManagementPage = defineComponent({
   name: 'FileManagementPage',
   setup() {
@@ -43,12 +43,7 @@ export const FileManagementPage = defineComponent({
                     onReset={list.resetFilters}
                   >
                     {{
-                      // 上传在阶段六实现，先放按钮确定布局
-                      extra: () => (
-                        <ElButton type="primary" icon={Upload}>
-                          上传文档
-                        </ElButton>
-                      )
+                      extra: () => <FileUploadButton categoryId={list.categoryId.value} />
                     }}
                   </FileFilterBar>,
                   <FileTable

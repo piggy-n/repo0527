@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { http } from '@/shared/http/client';
+import { http, type TransferProgress } from '@/shared/http/client';
 
 // 字段按 2026-10-08 实测的返回确定（docs/migration.md）；bucket、createdId 等用不到的字段不声明，解析时丢弃
 const fileRecordSchema = z.object({
@@ -51,4 +51,30 @@ export function fetchFilePage(params: FilePageParams, signal?: AbortSignal) {
 /** 删除文件；后端用 GET，文件不存在时返回业务错误"文件不存在" */
 export function deleteFile(id: string) {
   return http.get('/file/delete', { schema: z.null(), query: { id } });
+}
+
+export interface FileUploadInput {
+  files: readonly File[];
+  categoryId: string;
+  year: string;
+  tag: string;
+  remark: string;
+}
+
+/** 沿用旧接口的整批提交；暂按用户确认只判断 code，不解释未知的 data 或推断部分成功 */
+export function uploadFiles(input: FileUploadInput, onProgress?: (progress: TransferProgress) => void) {
+  const body = new FormData();
+  for (const file of input.files) {
+    body.append('files', file, file.name);
+  }
+  body.append('categoryId', input.categoryId);
+  body.append('year', input.year);
+  body.append('tag', input.tag);
+  if (input.remark.trim()) {
+    body.append('remark', input.remark.trim());
+  }
+  // shared/http 校验 code；返回数据主动丢弃，待后端恢复后再收紧契约（见 docs/modules/file-management.md）
+  return http.post('/file/upload', body, {
+    schema: z.unknown().transform(() => undefined), onUploadProgress: onProgress, silent: true
+  });
 }

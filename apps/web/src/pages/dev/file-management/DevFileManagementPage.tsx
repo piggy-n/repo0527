@@ -5,8 +5,8 @@ import { computed, defineComponent, reactive, ref } from 'vue';
 import { DEFAULT_CATEGORY_ID, findCategoryPath } from '@/features/file-management/categories';
 import { FileCategoryTree } from '@/features/file-management/components/FileCategoryTree';
 import { FileFilterBar } from '@/features/file-management/components/FileFilterBar';
+import { FileUploadDialog } from '@/features/file-management/components/FileUploadDialog';
 import { TableSkeleton } from '@/shared/table/TableSkeleton';
-import { UploadPreviewDialog } from './UploadPreviewDialog';
 import { useUploadPreview, type PreviewResult } from './useUploadPreview';
 import styles from './preview.module.scss';
 
@@ -75,9 +75,9 @@ export const DevFileManagementPage = defineComponent({
           <ElButton
             disabled={upload.locked.value}
             onClick={() => {
+              upload.open(category.value);
               upload.addFiles([new File(['演示文件'], '江苏省自然资源统一调查监测成果质量检查与汇交说明（超长名称演示）.docx')]);
               upload.fields.tag = '综合';
-              upload.open(category.value);
             }}
           >加入演示文件</ElButton>
           {upload.phase.value === 'processing' && <ElButton onClick={upload.finish}>模拟处理完成</ElButton>}
@@ -150,7 +150,7 @@ export const DevFileManagementPage = defineComponent({
           }}
         </MxSplitLayout>
       </div>
-      <UploadPreviewDialog model={upload} />
+      <FileUploadDialog model={upload} onSubmit={upload.submit} />
     </main>;
   }
 });
