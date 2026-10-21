@@ -1,4 +1,4 @@
-import { type AxiosRequestConfig, create, isAxiosError, isCancel } from 'axios';
+import { type AxiosRequestConfig, type AxiosResponse, create, isAxiosError, isCancel } from 'axios';
 import { z } from 'zod';
 import { appConfig } from '../config/app-config';
 import { getHttpHooks, type SentRequest } from './configure';
@@ -10,6 +10,9 @@ import {
   TIMEOUT_ERROR_MESSAGE,
   UNAUTHORIZED_MESSAGE
 } from './messages';
+import { progressReporter, readBlobText, type TransferProgress } from './transfer';
+
+export type { TransferProgress } from './transfer';
 
 const SUCCESS_CODE = 200;
 
@@ -31,17 +34,34 @@ const rawFailureSchema = z.object({
 
 export type QueryValue = string | number | boolean | null | undefined;
 
-export interface RequestOptions<Schema extends z.ZodType> {
-  /** 响应中 data 字段的 schema，返回值类型由它推断 */
-  schema: Schema;
+export interface HttpRequestOptions {
   query?: Record<string, QueryValue>;
   signal?: AbortSignal;
   /** 为 true 时出错不触发全局提示，由调用方自己处理 */
   silent?: boolean;
   /** 毫秒，默认 60 秒 */
   timeout?: number;
+}
+
+export interface RequestOptions<Schema extends z.ZodType> extends HttpRequestOptions {
+  /** 响应中 data 字段的 schema，返回值类型由它推断 */
+  schema: Schema;
   /** 为 false 时返回体没有 { code, msg, data } 外层，成功时整体按 schema 校验（ADR 0047 第 8 节） */
   envelope?: boolean;
+  /** 整个请求体的发送进度；发送完毕不表示服务端已经处理成功 */
+  onUploadProgress?: (progress: TransferProgress) => void;
+}
+
+export interface BinaryRequestOptions extends HttpRequestOptions {
+  /** 响应内容的接收进度，不表示文件已经保存到磁盘 */
+  onDownloadProgress?: (progress: TransferProgress) => void;
+}
+
+/** 文件响应，只暴露内容与文件相关的响应头 */
+export interface BinaryResponse {
+  blob: Blob;
+  contentType: string | null;
+  contentDisposition: string | null;
 }
 
 const DEFAULT_TIMEOUT = 60_000;
@@ -50,6 +70,56 @@ const DEFAULT_TIMEOUT = 60_000;
 const TIMEOUT_REASON = new Error('请求超时');
 
 const instance = create({ baseURL: appConfig.apiBaseUrl });
+
+// 错误信封只读取小块内容，文件本身仍保持 Blob；超出范围的 HTTP 错误使用状态码提示
+const ERROR_BODY_LIMIT = 64 * 1024;
+
+function tryJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function responseHeader(response: AxiosResponse<unknown>, name: string): string | null {
+  const value: unknown = response.headers[name];
+  return typeof value === 'string' ? value : null;
+}
+
+/** 文件接口也可能返回 JSON 错误；先识别失败信封，再交出二进制内容 */
+async function parseBinaryResponse(response: AxiosResponse<unknown>, signal: AbortSignal): Promise<BinaryResponse> {
+  const blob = z.instanceof(Blob).safeParse(response.data);
+  if (!blob.success) {
+    throw invalidResponse(response.config.url, blob.error);
+  }
+  const contentType = responseHeader(response, 'content-type');
+  const contentDisposition = responseHeader(response, 'content-disposition');
+  const mime = (contentType ?? blob.data.type).split(';')[0]?.trim().toLowerCase() ?? '';
+  const json = mime === 'application/json' || mime.endsWith('+json');
+  const html = mime === 'text/html' || mime === 'application/xhtml+xml';
+  const generic = !mime || mime === 'application/octet-stream' || mime === 'text/plain';
+  const attachment = contentDisposition !== null && /^attachment(?:;|$)/i.test(contentDisposition.trim());
+  if (json || html || generic) {
+    let text: string;
+    try {
+      text = await readBlobText(blob.data.slice(0, ERROR_BODY_LIMIT), signal);
+    } catch (cause) {
+      throw invalidResponse(response.config.url, cause);
+    }
+    const body = blob.data.size <= ERROR_BODY_LIMIT ? tryJson(text) : undefined;
+    const failure = rawFailureSchema.safeParse(body);
+    if (failure.success) {
+      throw businessError(failure.data.code, failure.data.msg, response.config.url);
+    }
+    // 信封不是文件；JSON/HTML 的真实附件可以下载，无附件声明的异常页面不能当文档保存
+    const unexpectedPage = !attachment && (json || html || /^\s*<(?:!doctype html|html)\b/i.test(text));
+    if (envelopeSchema.safeParse(body).success || unexpectedPage) {
+      throw invalidResponse(response.config.url, undefined);
+    }
+  }
+  return { blob: blob.data, contentType, contentDisposition };
+}
 
 function invalidResponse(url: string | undefined, cause: unknown): ApiError {
   return new ApiError({ kind: 'invalid-response', message: INVALID_RESPONSE_MESSAGE, url, cause });
@@ -95,20 +165,39 @@ function parseResponse<Schema extends z.ZodType>(body: unknown, schema: Schema, 
   return parsed.data;
 }
 
-function toApiError(error: unknown, abortReason: unknown, url?: string): ApiError {
+function abortedError(reason: unknown, url?: string): ApiError {
+  return reason === TIMEOUT_REASON
+    ? new ApiError({ kind: 'timeout', message: TIMEOUT_ERROR_MESSAGE, url })
+    : new ApiError({ kind: 'canceled', message: '请求已取消', url });
+}
+
+async function toApiError(error: unknown, signal: AbortSignal, url?: string): Promise<ApiError> {
+  if (signal.aborted) {
+    return abortedError(signal.reason, url);
+  }
   if (error instanceof ApiError) {
     return error;
   }
   if (isCancel(error)) {
-    return abortReason === TIMEOUT_REASON
-      ? new ApiError({ kind: 'timeout', message: TIMEOUT_ERROR_MESSAGE, url, cause: error })
-      : new ApiError({ kind: 'canceled', message: '请求已取消', url, cause: error });
+    return abortedError(signal.reason, url);
   }
   // instanceof 收窄出的是 AxiosError<any>，用带泛型的类型守卫把响应体限定为 unknown
   if (isAxiosError<unknown>(error)) {
     if (error.response) {
       const { status, data } = error.response;
-      const body = errorBodySchema.safeParse(data);
+      let errorBody: unknown = data;
+      if (data instanceof Blob) {
+        try {
+          errorBody = data.size <= ERROR_BODY_LIMIT ? tryJson(await readBlobText(data, signal)) : undefined;
+        } catch {
+          // 无法读取错误体时仍按 HTTP 状态码处理，不把服务端错误变成网络错误
+          errorBody = undefined;
+        }
+        if (signal.aborted) {
+          return abortedError(signal.reason, url);
+        }
+      }
+      const body = errorBodySchema.safeParse(errorBody);
       return new ApiError({
         kind: status === 401 ? 'unauthorized' : 'http',
         message: resolveErrorMessage(status, body.success ? body.data.msg : undefined),
@@ -135,11 +224,18 @@ function notify(error: ApiError, silent: boolean, sent: SentRequest): void {
   }
 }
 
-async function request<Schema extends z.ZodType>(
+async function request<Result>(
   config: AxiosRequestConfig,
-  options: RequestOptions<Schema>
-): Promise<z.output<Schema>> {
-  const { schema, query, signal, silent = false, timeout = DEFAULT_TIMEOUT, envelope = true } = options;
+  options: HttpRequestOptions & {
+    onUploadProgress?: (progress: TransferProgress) => void;
+    onDownloadProgress?: (progress: TransferProgress) => void;
+  },
+  parse: (response: AxiosResponse<unknown>, signal: AbortSignal) => Result | Promise<Result>
+): Promise<Result> {
+  const { query, signal, silent = false, timeout = DEFAULT_TIMEOUT, onUploadProgress, onDownloadProgress } = options;
+  if (signal?.aborted) {
+    throw abortedError(signal.reason, config.url);
+  }
   const { getHeaders, isCredentialExpired } = getHttpHooks();
   const headers = getHeaders?.() ?? {};
   // 登录已过期时不发出请求，与收到 401 同样处理；放在创建定时器之前，提前结束时不用清理
@@ -155,35 +251,54 @@ async function request<Schema extends z.ZodType>(
     abortByCaller();
   }
   signal?.addEventListener('abort', abortByCaller, { once: true });
+  let settled = false;
+  const active = () => !settled && !controller.signal.aborted;
 
   try {
     const response = await instance.request<unknown>({
       ...config,
       params: query,
       signal: controller.signal,
-      headers
+      headers,
+      onUploadProgress: progressReporter(onUploadProgress, active),
+      onDownloadProgress: progressReporter(onDownloadProgress, active)
     });
-    return envelope
-      ? parseResponse(response.data, schema, config.url)
-      : parseRawResponse(response.data, schema, config.url);
+    if (controller.signal.aborted) {
+      throw abortedError(controller.signal.reason, config.url);
+    }
+    const result = await parse(response, controller.signal);
+    if (controller.signal.aborted) {
+      throw abortedError(controller.signal.reason, config.url);
+    }
+    return result;
   } catch (error) {
-    const apiError = toApiError(error, controller.signal.reason, config.url);
+    const converted = await toApiError(error, controller.signal, config.url);
+    const apiError = controller.signal.aborted ? abortedError(controller.signal.reason, config.url) : converted;
     notify(apiError, silent, { headers });
     throw apiError;
   } finally {
+    settled = true;
     clearTimeout(timer);
     signal?.removeEventListener('abort', abortByCaller);
   }
 }
 
+function requestJson<Schema extends z.ZodType>(config: AxiosRequestConfig, options: RequestOptions<Schema>) {
+  return request(config, options, response => options.envelope === false
+    ? parseRawResponse(response.data, options.schema, config.url)
+    : parseResponse(response.data, options.schema, config.url));
+}
+
 /** 调用后端接口：成功时返回按 schema 校验过的 data，失败时抛出 ApiError */
 export const http = {
   get: <Schema extends z.ZodType>(url: string, options: RequestOptions<Schema>) =>
-    request({ method: 'get', url }, options),
+    requestJson({ method: 'get', url }, options),
   delete: <Schema extends z.ZodType>(url: string, options: RequestOptions<Schema>) =>
-    request({ method: 'delete', url }, options),
+    requestJson({ method: 'delete', url }, options),
   post: <Schema extends z.ZodType>(url: string, body: unknown, options: RequestOptions<Schema>) =>
-    request({ method: 'post', url, data: body }, options),
+    requestJson({ method: 'post', url, data: body }, options),
   put: <Schema extends z.ZodType>(url: string, body: unknown, options: RequestOptions<Schema>) =>
-    request({ method: 'put', url, data: body }, options)
+    requestJson({ method: 'put', url, data: body }, options),
+  getBlob: (url: string, options: BinaryRequestOptions = {}): Promise<BinaryResponse> =>
+    request({ method: 'get', url, responseType: 'blob' }, options, parseBinaryResponse)
 };
