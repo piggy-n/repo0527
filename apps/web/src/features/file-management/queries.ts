@@ -63,9 +63,20 @@ export function useFilePageQuery(params: MaybeRefOrGetter<FilePageParams>) {
 /** 删除文件，成功后让所有分页缓存失效；不传 signal，请求发出后后端就会执行，组件卸载也不取消 */
 export function useDeleteFileMutation() {
   const queryClient = useQueryClient();
+  const session = useSessionStore();
   return useMutation({
-    mutationFn: deleteFile,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: fileKeys.pages() })
+    mutationFn: (submission: { id: string; session: Session }) => {
+      if (session.session !== submission.session) {
+        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
+      }
+      return deleteFile(submission.id);
+    },
+    onSuccess: (_data, submission) => {
+      if (session.session === submission.session) {
+        return queryClient.invalidateQueries({ queryKey: fileKeys.pages() });
+      }
+      return undefined;
+    }
   });
 }
 

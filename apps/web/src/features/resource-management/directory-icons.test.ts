@@ -15,4 +15,11 @@ describe('资源目录图标', () => {
     expect(resourceDirectoryIcon({ id: 'a', name: '新名称', iconSelected: '气象1@1x.png' })).toBe('resource-weather');
     expect(resourceDirectoryIcon({ id: 'a', name: '自定义', icon: 'https://invalid/icon.svg' })).toBe('resource-default');
   });
+
+  it('湿地和国家公园共用旧图标名时按业务代码区分，改名后仍然正确', () => {
+    const icon = '湿地资源@1x.png';
+    expect(resourceDirectoryIcon({ id: 'wetland', name: '湿地资源', code: 'sdzy', icon })).toBe('resource-wetland');
+    expect(resourceDirectoryIcon({ id: 'park', name: '国家公园', code: 'gjgyzy', icon })).toBe('resource-park');
+    expect(resourceDirectoryIcon({ id: 'park', name: '重命名的国家公园', code: 'gjgyzy', icon })).toBe('resource-park');
+  });
 });

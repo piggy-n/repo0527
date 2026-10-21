@@ -1,16 +1,20 @@
 import { type Query, skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { useSessionStore } from '@/shared/auth/session-store';
+import type { TransferProgress } from '@/shared/http/client';
+import { ApiError } from '@/shared/http/errors';
 import {
   changeResourceDirectory,
   fetchResourceDirectory,
   fetchResourceDetail,
   fetchResourcePage,
   fetchResourceYears,
+  importResourceExcel,
   saveResourceDetail,
   setResourceStatus,
   type ResourceDetail,
   type ResourceDetailChange,
+  type ResourceExcelImport,
   type ResourcePage,
   type ResourcePageParams,
   type ResourceDirectoryChange
@@ -61,7 +65,12 @@ export function useResourceDirectoryMutation() {
   const queryClient = useQueryClient();
   const session = useSessionStore();
   return useMutation({
-    mutationFn: ({ change }: { change: ResourceDirectoryChange; token: string }) => changeResourceDirectory(change),
+    mutationFn: ({ change, token }: { change: ResourceDirectoryChange; token: string }) => {
+      if (session.token !== token) {
+        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
+      }
+      return changeResourceDirectory(change);
+    },
     onSuccess: async (_, { token }) => {
       if (session.token !== token) {
         return;
@@ -128,7 +137,12 @@ export function useResourceDetailMutation() {
   const queryClient = useQueryClient();
   const session = useSessionStore();
   return useMutation({
-    mutationFn: ({ change }: { change: ResourceDetailChange; token: string }) => saveResourceDetail(change),
+    mutationFn: ({ change, token }: { change: ResourceDetailChange; token: string }) => {
+      if (session.token !== token) {
+        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
+      }
+      return saveResourceDetail(change);
+    },
     onSuccess: async (_, { change, token }) => {
       if (session.token === token) {
         await Promise.all([
@@ -145,12 +159,42 @@ export function useResourceStatusMutation() {
   const queryClient = useQueryClient();
   const session = useSessionStore();
   return useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean; token: string }) => setResourceStatus(id, enabled),
+    mutationFn: ({ id, enabled, token }: { id: string; enabled: boolean; token: string }) => {
+      if (session.token !== token) {
+        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
+      }
+      return setResourceStatus(id, enabled);
+    },
     onSuccess: async (_, { id, token }) => {
       if (session.token === token) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() }),
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.detail(id) })
+        ]);
+      }
+    }
+  });
+}
+
+/** Excel 不带图层 ID，成功后失效本模块全部列表、详情及年份；不猜测影响图层 */
+export function useResourceImportMutation() {
+  const queryClient = useQueryClient();
+  const session = useSessionStore();
+  return useMutation({
+    mutationFn: ({ input, token, onProgress }: {
+      input: ResourceExcelImport; token: string; onProgress: (value: TransferProgress) => void;
+    }) => {
+      if (session.token !== token) {
+        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
+      }
+      return importResourceExcel(input, onProgress);
+    },
+    onSuccess: async (_, { token }) => {
+      if (session.token === token) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() }),
+          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.details() }),
+          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.years() })
         ]);
       }
     }

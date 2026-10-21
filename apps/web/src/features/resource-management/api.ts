@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { http } from '@/shared/http/client';
+import { http, type TransferProgress } from '@/shared/http/client';
 
 // 按实际目录接口校验；空分组和叶子的 children 都可能为 null，层级由所在位置决定
 const resourceDirectorySchema = z.object({
@@ -163,5 +163,20 @@ export function saveResourceDetail(change: ResourceDetailChange) {
 export function setResourceStatus(id: string, enabled: boolean) {
   return http.post('/resource-management/layer/status', undefined, {
     query: { id, status: enabled ? 'true' : 'false' }, schema: z.unknown(), silent: true
+  });
+}
+
+export interface ResourceExcelImport {
+  file: File;
+  year: number | null;
+}
+
+/** 按旧入口仅发送 file/year；用户允许暂按成功业务码处理，未知 data 主动丢弃 */
+export function importResourceExcel(input: ResourceExcelImport, onUploadProgress?: (value: TransferProgress) => void) {
+  const body = new FormData();
+  body.append('file', input.file);
+  if (input.year !== null) { body.append('year', String(input.year)); }
+  return http.post('/resource-management/layer/create-attribute-by-excel', body, {
+    schema: z.unknown().transform(() => undefined), onUploadProgress, silent: true
   });
 }

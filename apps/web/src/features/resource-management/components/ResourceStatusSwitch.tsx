@@ -20,12 +20,10 @@ export const ResourceStatusSwitch = defineComponent({
       return false;
     }
     return () => <ElSwitch
+      size="small"
       modelValue={props.row.enabled}
       disabled={props.disabled || props.pending}
       loading={loading.value}
-      activeText="启用"
-      inactiveText="停用"
-      inlinePrompt
       aria-label={`${props.row.name}启用状态`}
       beforeChange={requestChange}
     />;

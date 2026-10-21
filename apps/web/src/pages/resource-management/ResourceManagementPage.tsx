@@ -1,5 +1,5 @@
-import { MxPanel, MxSplitLayout } from '@yzt/ui';
-import { ElAlert, ElButton, ElDialog, ElMessage, ElOption, ElPagination, ElSelect } from 'element-plus';
+import { MxPanel, MxSplitLayout, MxTitle } from '@yzt/ui';
+import { ElAlert, ElButton, ElDialog, ElMessage, ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { useSessionStore } from '@/shared/auth/session-store';
@@ -46,7 +46,7 @@ export const ResourceManagementPage = defineComponent({
                 selected={list.directoryId.value ?? undefined}
                 loading={directoryQuery.isLoading.value}
                 error={directoryQuery.isError.value}
-                maintenanceDisabled={detail.editing.value || detail.pending.value}
+                maintenanceDisabled={detail.editing.value || detail.pending.value || detail.importer.pending.value}
                 beforeSelect={async id => id === list.directoryId.value || await detail.close()}
                 onSelect={list.selectDirectory}
                 onRetry={() => void directoryQuery.refetch()}
@@ -92,25 +92,17 @@ export const ResourceManagementPage = defineComponent({
                   />
                 ],
                 footer: () => (
-                  <div class={styles.pagination}>
-                    <span>共 {list.total.value} 条</span>
-                    <ElSelect
-                      class={styles.pageSize}
-                      modelValue={list.pageSize.value}
-                      onUpdate:modelValue={list.changePageSize}
-                      aria-label="每页条数"
-                    >
-                      {[10, 20, 50, 100].map(size => <ElOption key={size} label={`${size} 条/页`} value={size} />)}
-                    </ElSelect>
-                    <ElPagination
-                      currentPage={list.pageNum.value}
-                      pageSize={list.pageSize.value}
-                      total={list.total.value}
-                      pagerCount={5}
-                      layout="prev, pager, next"
-                      onUpdate:current-page={(page: number) => { list.pageNum.value = page; }}
-                    />
-                  </div>
+                  <ElPagination
+                    class={styles.pagination}
+                    currentPage={list.pageNum.value}
+                    pageSize={list.pageSize.value}
+                    total={list.total.value}
+                    pageSizes={[10, 20, 50, 100]}
+                    pagerCount={5}
+                    layout="total, sizes, prev, pager, next, jumper"
+                    onUpdate:current-page={(page: number) => { list.pageNum.value = page; }}
+                    onUpdate:page-size={list.changePageSize}
+                  />
                 )
               }}
             </MxPanel>
@@ -118,7 +110,7 @@ export const ResourceManagementPage = defineComponent({
         }}
       </MxSplitLayout>
         <ElDialog
-          class={styles.confirmDialog}
+          class={['dialog-panel-header', styles.confirmDialog]}
           modelValue={detail.confirming.value}
           title="放弃未保存的修改？"
           appendToBody
@@ -127,7 +119,8 @@ export const ResourceManagementPage = defineComponent({
           onUpdate:modelValue={open => { if (!open) { detail.answerDiscard(false); } }}
         >
           {{
-            default: () => <p>离开后，本次对数据分类和字段名称的修改将不会保存。</p>,
+            header: () => <MxTitle level="panel">放弃未保存的修改？</MxTitle>,
+            default: () => <p class={styles.confirmMessage}>离开后，本次对数据分类和字段名称的修改将不会保存。</p>,
             footer: () => <>
               <ElButton onClick={() => detail.answerDiscard(false)}>继续编辑</ElButton>
               <ElButton type="danger" onClick={() => detail.answerDiscard(true)}>放弃修改</ElButton>

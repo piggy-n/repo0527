@@ -62,7 +62,7 @@ export const DevFileManagementPage = defineComponent({
         <div>
           <h1>文件管理 · 交互调整稿</h1>
           <p class={styles.hint}>固定示例与模拟状态，不执行真实上传、下载或删除。DOCX/PDF 为排版示意，正式页使用实际文件。</p>
-          <p class={styles.hint}>预览范围沿用旧项目；DOCX 的 100% 为原始尺寸，窄屏可横向滚动。其他 Office 格式只下载。</p>
+          <p class={styles.hint}>仅预览 DOCX、PDF 和 TXT；DOCX 的 100% 为原始尺寸，窄屏可横向滚动。图片与其他格式只下载。</p>
         </div>
         <div class={styles.demoActions}>
           <ElButton size="small" onClick={() => { if (samples[1]) { downloads.showStates(samples[1]); } }}>

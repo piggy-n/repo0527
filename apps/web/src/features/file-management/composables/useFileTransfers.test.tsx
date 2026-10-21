@@ -193,7 +193,7 @@ describe('文件下载', () => {
 });
 
 describe('预览与会话边界', () => {
-  it('DOCX 仅保留手动缩放；图片保留适宽，关闭后的下一文件从 100% 开始', async () => {
+  it('DOCX 仅保留手动缩放，关闭后的下一文件从 100% 开始', async () => {
     const env = setup(true);
     vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['content']), fileName: 'test.docx' });
     await env.preview.open({ ...file, name: '测试文件.docx', type: 'docx' });
@@ -210,35 +210,30 @@ describe('预览与会话边界', () => {
     await nextTick();
     expect(env.preview.zoom.value).toBe(75);
     env.preview.close();
-    await env.preview.open({ ...file, type: 'png' });
+    await env.preview.open({ ...file, id: 'two', type: 'docx' });
     env.preview.rendered(env.preview.content.value!);
     await nextTick();
-    expect(labels()).toContain('适合宽度');
+    expect(labels()).not.toContain('适合宽度');
     expect(env.preview.zoom.value).toBe(100);
   });
 
-  it('旧图片的晚到 load 不写入新图片的显示尺寸', async () => {
-    const env = setup(true);
-    vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['image']), fileName: 'image.png' });
-    await env.preview.open({ ...file, type: 'png' });
-    await nextTick();
-    const oldImage = document.querySelector('img')!;
-    Object.defineProperty(oldImage, 'naturalWidth', { value: 900 });
-    await env.preview.open({ ...file, id: 'two', type: 'png' });
-    await nextTick();
-    const nextImage = document.querySelector('img')!;
-    expect(nextImage).not.toBe(oldImage);
-    expect(nextImage.style.width).toBe('0px');
-    oldImage.dispatchEvent(new Event('load'));
-    await nextTick();
-    expect(nextImage.style.width).toBe('0px');
-    expect(env.preview.phase.value).toBe('rendering');
+  it.each(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'])('图片 %s 不取预览流，仍可独立下载', async type => {
+    const env = setup();
+    const target = { ...file, name: `图片.${type}`, type };
+    const request = vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['image']), fileName: target.name });
+    await env.preview.open(target);
+    expect(request).not.toHaveBeenCalled();
+    expect(env.preview.content.value).toBeNull();
+    expect(env.createUrl).not.toHaveBeenCalled();
+    await env.downloads.start(target);
+    expect(env.save).toHaveBeenCalledOnce();
+    expect(env.save.mock.calls[0]?.[0].fileName).toBe(target.name);
   });
 
   it('每次成功取流只创建一个 URL；关闭、替换、显示失败会释放', async () => {
     const env = setup();
-    vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['image']), fileName: 'image.png' });
-    await env.preview.open({ ...file, type: 'png' });
+    vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['pdf']), fileName: file.name });
+    await env.preview.open(file);
     const first = env.preview.content.value!;
     expect(env.preview.phase.value).toBe('rendering');
     env.preview.rendered(first);
@@ -262,7 +257,7 @@ describe('预览与会话边界', () => {
     const held = deferred<transfer.DownloadedFile>();
     const request = vi.spyOn(api, 'fetchFileContent').mockReturnValue(held.promise);
     const first = env.preview.open(file);
-    const second = env.preview.open({ ...file, id: 'two', type: 'png' });
+    const second = env.preview.open({ ...file, id: 'two' });
     expect(request.mock.calls[0]?.[1].aborted).toBe(true);
     env.preview.close();
     held.resolve({ blob: new Blob(['content']), fileName: file.name });

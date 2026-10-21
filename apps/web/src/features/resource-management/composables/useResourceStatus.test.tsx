@@ -73,7 +73,7 @@ async function host() {
     status = useResourceStatus(list.resources, () => !list.isError.value && !list.refreshing.value);
     return () => null;
   } }), { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } });
-  await vi.waitFor(() => expect(list.resources.value).toHaveLength(10));
+  await vi.waitFor(() => expect(list.resources.value).toHaveLength(20));
   return { status, list, client, session, wrapper };
 }
 

@@ -169,4 +169,20 @@ describe('useFileRemoval', () => {
     release();
     await pending;
   });
+
+  it.each(['session', 'unmount'] as const)('请求发出后 %s：完成删除但不再报告旧页面成功', async reason => {
+    const { deleted, release } = holdDeletes();
+    const wrapper = mountHost();
+    const pending = removal.remove('a', confirmed);
+    await vi.waitFor(() => expect(deleted).toEqual(['a']));
+    if (reason === 'unmount') {
+      wrapper.unmount();
+    } else {
+      useSessionStore().start({ token: createTestJwtExpiringAt(Date.now() + 7200000),
+        user: { loginName: 'new', role: Role.user } });
+    }
+    release();
+    expect(await pending).toBe(false);
+    expect(removal.isRemoving('a')).toBe(false);
+  });
 });

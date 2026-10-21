@@ -21,7 +21,7 @@ export function useResourceList() {
   const yearsQuery = useResourceYearsQuery();
   const directoryId = ref<string | null>(null);
   const pageNum = ref(1);
-  const pageSize = ref(10);
+  const pageSize = ref(20);
   const filterForm = reactive(emptyFilters());
   const appliedFilters = ref(emptyFilters());
   // 只允许选择第二级；children=null 的顶层仍是分组，不当作资源目录查询

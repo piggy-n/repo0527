@@ -14,13 +14,13 @@ const server = setupServer();
 const clients: QueryClient[] = [];
 const releases = new Set<() => void>();
 let tree = resourceDirectoryResponse();
-let total = 24;
+let total = 48;
 let requests: ResourcePageParams[];
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 beforeEach(() => {
   tree = resourceDirectoryResponse();
-  total = 24;
+  total = 48;
   requests = [];
   server.use(
     mock.get('/backend/resource-center/tree', () => HttpResponse.json(tree)),
@@ -59,7 +59,7 @@ function mountList(queryClient = createClient()) {
 
 async function loadList(queryClient?: QueryClient) {
   const host = mountList(queryClient);
-  await vi.waitFor(() => expect(host.list.resources.value).toHaveLength(10));
+  await vi.waitFor(() => expect(host.list.resources.value).toHaveLength(20));
   return host;
 }
 
@@ -105,10 +105,10 @@ describe('useResourceList 的目录、年份与筛选', () => {
     expect(list.directoryId.value).toBeNull();
     releaseTree();
 
-    await vi.waitFor(() => expect(list.resources.value).toHaveLength(10));
-    expect(requests).toEqual([{ resource: '土地资源', pageNum: 1, pageSize: 10 }]);
+    await vi.waitFor(() => expect(list.resources.value).toHaveLength(20));
+    expect(requests).toEqual([{ resource: '土地资源', pageNum: 1, pageSize: 20 }]);
     expect(list.directoryId.value).toBe('land');
-    expect(list.total.value).toBe(24);
+    expect(list.total.value).toBe(48);
   });
 
   it('只有顶层空分组时不查询列表，也不允许手动刷新发出无目录请求', async () => {
@@ -136,7 +136,7 @@ describe('useResourceList 的目录、年份与筛选', () => {
 
     server.use(mock.get('/backend/resource-center/tree', () => HttpResponse.json(tree)));
     await list.directoryQuery.refetch();
-    await vi.waitFor(() => expect(list.resources.value).toHaveLength(10));
+    await vi.waitFor(() => expect(list.resources.value).toHaveLength(20));
     expect(list.yearsQuery.data.value).toBeUndefined();
     expect(list.directoryId.value).toBe('land');
   });
@@ -144,17 +144,17 @@ describe('useResourceList 的目录、年份与筛选', () => {
   it('表单草稿不请求，提交才裁剪名称、应用年份并回到首页；重置移除空筛选', async () => {
     const { list } = await loadList();
     list.pageNum.value = 2;
-    await vi.waitFor(() => expect(list.resources.value[0]?.id).toBe('土地资源-11'));
+    await vi.waitFor(() => expect(list.resources.value[0]?.id).toBe('土地资源-21'));
     list.filterForm.name = '  地类图斑  ';
     list.filterForm.year = '2024';
     await flushPromises();
     expect(requests).toHaveLength(2);
     list.search();
     await vi.waitFor(() => expect(requests.at(-1)).toEqual({
-      resource: '土地资源', pageNum: 1, pageSize: 10, layerName: '地类图斑', year: '2024'
+      resource: '土地资源', pageNum: 1, pageSize: 20, layerName: '地类图斑', year: '2024'
     }));
     list.resetFilters();
-    await vi.waitFor(() => expect(requests.at(-1)).toEqual({ resource: '土地资源', pageNum: 1, pageSize: 10 }));
+    await vi.waitFor(() => expect(requests.at(-1)).toEqual({ resource: '土地资源', pageNum: 1, pageSize: 20 }));
     expect(list.filterForm).toEqual({ name: '', year: '' });
   });
 
@@ -190,7 +190,7 @@ describe('useResourceList 的目录、年份与筛选', () => {
     const selected = tree.data[0]?.children?.[0];
     if (selected) { selected.name = '新土地资源'; }
     await list.directoryQuery.refetch();
-    await vi.waitFor(() => expect(requests.at(-1)).toEqual({ resource: '新土地资源', pageNum: 1, pageSize: 10 }));
+    await vi.waitFor(() => expect(requests.at(-1)).toEqual({ resource: '新土地资源', pageNum: 1, pageSize: 20 }));
     expect(list.directoryId.value).toBe('land');
     expect(list.filterForm).toEqual({ name: '', year: '' });
   });
@@ -220,8 +220,8 @@ describe('useResourceList 的目录、年份与筛选', () => {
     list.selectDirectory('land');
     expect(list.pageNum.value).toBe(2);
     expect(list.filterForm.name).toBe('未提交草稿');
-    list.changePageSize(20);
-    await vi.waitFor(() => expect(requests.at(-1)).toEqual({ resource: '土地资源', pageNum: 1, pageSize: 20 }));
+    list.changePageSize(10);
+    await vi.waitFor(() => expect(requests.at(-1)).toEqual({ resource: '土地资源', pageNum: 1, pageSize: 10 }));
   });
 });
 
@@ -233,14 +233,14 @@ describe('useResourceList 的缓存、加载与页码', () => {
     expect(list.initialLoading.value).toBe(true);
     expect(list.refreshing.value).toBe(false);
     held[0]?.reply();
-    await vi.waitFor(() => expect(list.resources.value).toHaveLength(10));
+    await vi.waitFor(() => expect(list.resources.value).toHaveLength(20));
     list.pageNum.value = 2;
     await vi.waitFor(() => expect(held).toHaveLength(2));
     expect(list.resources.value[0]?.id).toBe('土地资源-1');
     expect(list.initialLoading.value).toBe(false);
     expect(list.refreshing.value).toBe(true);
     held[1]?.reply();
-    await vi.waitFor(() => expect(list.resources.value[0]?.id).toBe('土地资源-11'));
+    await vi.waitFor(() => expect(list.resources.value[0]?.id).toBe('土地资源-21'));
     list.selectDirectory('water');
     expect(list.resources.value).toEqual([]);
     await vi.waitFor(() => expect(held).toHaveLength(3));
@@ -271,14 +271,14 @@ describe('useResourceList 的缓存、加载与页码', () => {
     held[0]?.reply({ code: 500, msg: '分页失败' });
     await vi.waitFor(() => expect(list.isError.value).toBe(true));
     expect(list.pageNum.value).toBe(3);
-    expect(list.total.value).toBe(24);
+    expect(list.total.value).toBe(48);
     expect(list.resources.value).toEqual([]);
     const pending = list.refresh();
     await vi.waitFor(() => expect(held).toHaveLength(2));
     expect(list.initialLoading.value).toBe(true);
     held[1]?.reply();
     await pending;
-    expect(list.resources.value[0]?.id).toBe('土地资源-21');
+    expect(list.resources.value[0]?.id).toBe('土地资源-41');
     expect(list.isError.value).toBe(false);
   });
 
@@ -288,22 +288,22 @@ describe('useResourceList 的缓存、加载与页码', () => {
     list.filterForm.name = '没有结果';
     list.search();
     await vi.waitFor(() => expect(held).toHaveLength(1));
-    expect(list.resources.value).toHaveLength(10);
+    expect(list.resources.value).toHaveLength(20);
     held[0]?.reply({ code: 500, msg: '查询失败' });
     await vi.waitFor(() => expect(list.isError.value).toBe(true));
     expect(list.total.value).toBe(0);
     list.resetFilters();
     await vi.waitFor(() => expect(held).toHaveLength(2));
-    expect(list.total.value).toBe(24);
+    expect(list.total.value).toBe(48);
   });
 
   it('仅成功结果修正越界页；后端空结果的 pages=0 仍停在首页', async () => {
     const { list } = await loadList();
-    total = 20;
+    total = 40;
     list.pageNum.value = 999;
     await vi.waitFor(() => expect(list.pageNum.value).toBe(2));
     await vi.waitFor(() => expect(requests.at(-1)?.pageNum).toBe(2));
-    expect(list.total.value).toBe(20);
+    expect(list.total.value).toBe(40);
     total = 0;
     await list.refresh();
     await vi.waitFor(() => expect(list.pageNum.value).toBe(1));
@@ -313,24 +313,24 @@ describe('useResourceList 的缓存、加载与页码', () => {
 
   it('缓存里过时的总页数不修正页码，后台刷新失败也不修正', async () => {
     const { list } = await loadList();
-    total = 20;
+    total = 40;
     list.pageNum.value = 3;
     await vi.waitFor(() => expect(list.pageNum.value).toBe(2));
     await vi.waitFor(() => expect(requests.at(-1)?.pageNum).toBe(2));
-    total = 24;
+    total = 48;
     await list.refresh();
-    expect(list.total.value).toBe(24);
+    expect(list.total.value).toBe(48);
     const held = holdPages();
     list.pageNum.value = 3;
     await vi.waitFor(() => expect(held).toHaveLength(1));
     expect(list.pageNum.value).toBe(3);
-    expect(list.total.value).toBe(24);
+    expect(list.total.value).toBe(48);
     expect(list.refreshing.value).toBe(false);
     held[0]?.reply({ code: 500, msg: '后台刷新失败' });
     await vi.waitFor(() => expect(list.isError.value).toBe(true));
     expect(list.pageNum.value).toBe(3);
-    expect(list.total.value).toBe(24);
-    expect(list.resources.value).toHaveLength(10);
+    expect(list.total.value).toBe(48);
+    expect(list.resources.value).toHaveLength(20);
   });
 
   it('从缓存重新进入后立即翻页失败，仍保留缓存初始化的总数', async () => {
@@ -339,13 +339,13 @@ describe('useResourceList 的缓存、加载与页码', () => {
     const held = holdPages();
     const { list } = mountList(previous.queryClient);
     await vi.waitFor(() => expect(held).toHaveLength(1));
-    expect(list.total.value).toBe(24);
+    expect(list.total.value).toBe(48);
     expect(list.refreshing.value).toBe(false);
     list.pageNum.value = 3;
     await vi.waitFor(() => expect(held).toHaveLength(2));
     held[1]?.reply({ code: 500, msg: '分页失败' });
     await vi.waitFor(() => expect(list.isError.value).toBe(true));
-    expect(list.total.value).toBe(24);
+    expect(list.total.value).toBe(48);
     expect(list.pageNum.value).toBe(3);
   });
 
@@ -369,7 +369,7 @@ describe('useResourceList 的缓存、加载与页码', () => {
     list.selectDirectory('water');
     await vi.waitFor(() => expect(held).toHaveLength(2));
     const oldKey = resourceManagementKeys.page({ directoryId: 'land', params: {
-      resource: '土地资源', pageNum: 1, pageSize: 10
+      resource: '土地资源', pageNum: 1, pageSize: 20
     } });
     expect(queryClient.getQueryState(oldKey)?.fetchStatus).toBe('idle');
     held[1]?.reply(resourcePageResponse({ resource: '水资源', total: 2 }));
@@ -456,7 +456,7 @@ describe('useResourceList 的缓存、加载与页码', () => {
     await vi.waitFor(() => expect(held).toHaveLength(1));
     first.wrapper.unmount();
     held[0]?.reply();
-    await vi.waitFor(() => expect(second.list.resources.value).toHaveLength(10));
+    await vi.waitFor(() => expect(second.list.resources.value).toHaveLength(20));
     expect(requests).toHaveLength(1);
     expect(client.getQueryData(resourceManagementKeys.directory())).toBeDefined();
     expect(client.getQueryData(resourceManagementKeys.years())).toBeDefined();

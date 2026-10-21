@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { filePreviewType, formatFileBytes } from './file-types';
 
 describe('文件预览范围与尺寸', () => {
-  it('只接受旧项目格式，忽略扩展名大小写', () => {
+  it('只预览文档和文本，忽略扩展名大小写；图片仅下载', () => {
     expect(filePreviewType('DOCX')?.kind).toBe('docx');
     expect(filePreviewType('PDF')).toEqual({ kind: 'pdf', mime: 'application/pdf' });
     expect(filePreviewType('txt')?.kind).toBe('text');
     for (const type of ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']) {
-      expect(filePreviewType(type)?.kind).toBe('image');
+      expect(filePreviewType(type)).toBeUndefined();
     }
     for (const type of ['doc', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'html', 'svg', 'constructor', '']) {
       expect(filePreviewType(type)).toBeUndefined();

@@ -4,6 +4,8 @@
   flex: 1;
   min-width: 0;
   gap: var(--space-sm);
+  height: 100%;
+  padding-right: var(--space-sm);
 }
 
 .treeIcon {
@@ -28,20 +30,23 @@
   flex: none;
   gap: var(--space-xs);
   opacity: 0;
+  pointer-events: none;
 }
 
-.treeRow:hover .treeActions,
-.treeRow:focus-within .treeActions,
-.selected .treeActions {
+// 整行悬浮与键盘焦点显示操作；点击后的普通焦点、选中态不保留操作图标
+.tree :global(.el-tree-node__content:hover) > .treeRow .treeActions,
+.tree :global(.el-tree-node:focus-visible) > :global(.el-tree-node__content) .treeActions,
+.treeRow:has(:focus-visible) .treeActions {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .treeActions :global(.el-button + .el-button) {
   margin-left: 0;
 }
 
-@media (hover: none) {
-  .treeActions { opacity: 1; }
+@media (hover: none), (any-pointer: coarse) {
+  .treeActions { opacity: 1; pointer-events: auto; }
 }
 
 .state {
@@ -60,7 +65,7 @@
 
 .table {
   flex: 1;
-  min-height: 0;
+  min-height: 140px;
   width: 100%;
 }
 
@@ -69,6 +74,6 @@
 }
 
 .confirmText {
-  margin: 0 0 var(--space-lg);
+  margin: 0;
   overflow-wrap: anywhere;
 }

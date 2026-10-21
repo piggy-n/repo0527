@@ -20,22 +20,25 @@ export function useFileRemoval() {
    * 同一个文件正在确认或删除中时直接返回 false
    */
   async function remove(id: string, confirm: () => Promise<boolean>): Promise<boolean> {
-    if (confirming.has(id) || removing.has(id)) {
+    if (disposed || confirming.has(id) || removing.has(id)) {
       return false;
     }
-    const token = session.token;
+    const sentSession = session.session;
+    if (!sentSession) {
+      return false;
+    }
     confirming.add(id);
     const confirmed = await confirm();
     confirming.delete(id);
     // 确认期间页面已销毁，或会话已结束、已更换：不再删除。token 只是过期时照常请求，由 http 按登录过期处理并提示
-    if (!confirmed || disposed || session.token !== token) {
+    if (!confirmed || disposed || session.session !== sentSession) {
       return false;
     }
 
     removing.add(id);
     try {
-      await mutation.mutateAsync(id);
-      return true;
+      await mutation.mutateAsync({ id, session: sentSession });
+      return !disposed && session.session === sentSession;
     } catch (error) {
       // 失败原因已由全局提示显示（例如"文件不存在"）
       if (error instanceof ApiError) {
