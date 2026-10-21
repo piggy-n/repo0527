@@ -586,10 +586,10 @@ test('详情加载、错误重试、空属性结构及保存后刷新失败', as
 test('Excel 直接选择上传：校验、原生 multipart、鉴权、互斥和成功刷新', async ({ page, resourceBackend }, testInfo) => {
   await enter(page);
   await page.getByRole('button', { name: '查看', exact: true }).first().click();
-  const upload = page.getByRole('button', { name: '上传 Excel', exact: true });
+  const upload = page.getByRole('button', { name: '导入', exact: true });
   const input = page.locator('input[type="file"]');
   await expect(upload).toBeVisible();
-  await expect(page.getByText('年份：2025 · 支持 .xlsx、.xls，选择后直接上传')).toBeVisible();
+  await expect(page.getByText('支持 .xlsx、.xls', { exact: true })).toBeVisible();
   await input.setInputFiles({ name: '错误.txt', mimeType: 'text/plain', buffer: Buffer.from('错误格式') });
   await expect(page.getByRole('alert')).toContainText('请选择 .xlsx 或 .xls 文件');
   await input.setInputFiles({ name: '空.xlsx', mimeType: 'application/octet-stream', buffer: Buffer.alloc(0) });
@@ -695,7 +695,7 @@ test('Excel 失败后可重选同一文件，缺年份不补造参数，成功�
   await input.setInputFiles(file);
   await expect(page.getByRole('status')).toHaveText('导入成功');
   await expect(page.getByRole('button', { name: '重试详情', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '上传 Excel', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '导入', exact: true })).toBeDisabled();
   resourceBackend.failDetail = false;
   await page.getByRole('button', { name: '重试详情', exact: true }).click();
   await expect(page.getByText('导入后的字段', { exact: true })).toBeVisible();

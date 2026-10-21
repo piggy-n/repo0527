@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowUp, EditPen, Upload } from '@element-plus/icons-vue';
+import { ArrowDown, ArrowLeft, ArrowUp, EditPen } from '@element-plus/icons-vue';
 import { useMediaQuery } from '@vueuse/core';
 import { MxPanel, MxSection, MxTitle } from '@yzt/ui';
 import {
@@ -37,7 +37,6 @@ export const ResourceDetailPanel = defineComponent({
     const compact = useMediaQuery('(max-width: 760px), (max-height: 700px)');
     const expanded = ref<string | null>(null);
     const fileInput = ref<HTMLInputElement>();
-    const showImporting = useDelayedFlag(() => props.owner.importer.pending.value);
 
     /** 选择单个文件后直接上传；清空 input 以便失败后重新选择同一文件 */
     function selectFile(event: Event) {
@@ -151,13 +150,13 @@ export const ResourceDetailPanel = defineComponent({
                       onChange={selectFile}
                     />
                     <ElButton
-                      icon={Upload}
-                      loading={showImporting.value}
+                      link
+                      type="primary"
                       disabled={importDisabled}
                       onClick={() => fileInput.value?.click()}
-                    >上传 Excel</ElButton>
+                    >导入</ElButton>
                   </>, default: () => <>
-                  <p class={styles.importHint}>年份：{data.year ?? '未提供'} · 支持 .xlsx、.xls，选择后直接上传</p>
+                  <p class={styles.importHint}>支持 .xlsx、.xls</p>
                   {importMessage && <p
                     class={[styles.importStatus, importer.stage.value === 'error' && styles.importError,
                       importer.stage.value === 'success' && styles.importSuccess]}
