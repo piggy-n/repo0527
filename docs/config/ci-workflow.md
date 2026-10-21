@@ -10,7 +10,7 @@
 每次推送到 `main`，或者有 Pull Request 时，GitHub 会在一台干净的 Linux 机器上从零执行：
 
 ```
-检出代码 → 安装 pnpm → 安装 Node → pnpm install --frozen-lockfile → 类型检查 → lint → 测试 → 公网构建及产物检查 → 内网构建及产物检查
+检出代码 → 安装 pnpm → 安装 Node → pnpm install --frozen-lockfile → 类型检查 → lint → 安装 Chromium → 测试 → 公网构建及产物检查 → 内网构建及产物检查 → 生产冒烟
 ```
 
 任何一步失败，这次运行就标红。它回答的问题是："在一台没有任何本地缓存和个人配置的机器上，这份代码还能不能通过所有检查？"
@@ -58,6 +58,8 @@ runs-on: ubuntu-latest
 
 类型检查、lint、构建的结果和操作系统无关，用 Linux 最快、最常见。开发机是 Windows，CI 是 Linux，正好还能发现路径大小写之类的跨平台问题。
 
+整个作业的 `timeout-minutes` 为 20，生产冒烟步骤为 5。超时仍按失败处理，不跳过用例或自动重试，避免进程退出异常一直耗尽 GitHub 默认的 6 小时上限。
+
 ### 检出代码
 
 ```yaml
@@ -98,6 +100,9 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 - run: pnpm build
 - run: pnpm build:intranet
 - run: pnpm --filter @yzt/web test:smoke
+  timeout-minutes: 5
+  env:
+    DEBUG: pw:webserver
 ```
 
 | 步骤 | 作用 |
@@ -110,6 +115,12 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 | `pnpm build` | 公网生产构建，自动清理本地设计稿副本，检查没有开发页、入口没有静态引入 MapLibre |
 | `pnpm build:intranet` | 内网生产构建，执行同样的产物检查，并检查关闭天地图时没有携带 key；输出覆盖上一份公网产物 |
 | `pnpm --filter @yzt/web test:smoke` | Playwright 访问刚生成的内网生产产物，以本地固定接口验证登录、地图就绪、缓存恢复与分块失败恢复（ADR 0065）；不访问真实后端和天地图，预览进程由测试自动关闭 |
+
+### 冒烟收尾卡住的排查
+
+2026-10-21 核对日志：pnpm 12.6.0 在 Linux 上会留下被启动脚本的进程组，使 Playwright 关闭预览时一直等待输出管道结束，见 [pnpm #15555](https://github.com/pnpm/pnpm/issues/15555)。这次将锁定的 pnpm 升为最新稳定版 12.14.0；该修复从 12.7.0 起提供，业务依赖不随之升级。
+
+CI 的 `DEBUG: pw:webserver` 输出预览服务的启动与退出。正常结束应同时看到 `Terminated the WebServer` 和测试汇总；只打印最后一项用例名称不能证明用例失败或整组通过。以后发生停滞时，先结合该日志区分用例、浏览器清理和预览服务退出，不增加重试来掩盖问题。
 
 ## Actions 为什么用 commit SHA 固定
 

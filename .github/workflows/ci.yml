@@ -17,6 +17,7 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       # Actions 用 commit SHA 固定，由 pnpm deps:check 检查更新（ADR 0005）
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,3 +43,7 @@ jobs:
       - run: pnpm build:intranet
       # 使用刚生成的生产产物和本地固定数据，不访问真实后端或天地图
       - run: pnpm --filter @yzt/web test:smoke
+        timeout-minutes: 5
+        env:
+          # 记录预览进程启动和退出，区分用例失败与收尾卡住
+          DEBUG: pw:webserver
