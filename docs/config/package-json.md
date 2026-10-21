@@ -65,7 +65,7 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 | `error` | 直接失败 |
 | `download` | 自动下载满足要求的版本来用 |
 
-**packageManager 用 `download`**：本机的 pnpm 版本不对时，pnpm 会自动下载 12.x 来执行命令，并且在 lockfile 的 `packageManagerDependencies` 里锁定精确版本（当前是 12.6.0，含各平台二进制的校验和）。CI 里的 `pnpm/action-setup` 也读这个字段。
+**packageManager 用 `download`**：本机的 pnpm 版本不对时，pnpm 会自动下载 12.x 来执行命令，并且在 lockfile 的 `packageManagerDependencies` 里锁定精确版本（当前是 12.14.0，含各平台二进制的校验和）。CI 里的 `pnpm/action-setup` 也读这个字段。
 
 **runtime 用 `error`**：本机 Node 不是 24.x 时，所有 pnpm 命令都会直接报错。阶段一试过 `download`：pnpm 会把 Node 也精确锁进 lockfile（例如 `node@runtime:24.21.0`），并下载一份放进 `node_modules/.bin`。复现性最好，但下载要约 1 分钟，而且和 CI 的 `actions/setup-node` 重复装 Node，所以没有采用。CI 的 setup-node 通过 `node-version-file: package.json` 读取同一个声明。
 
