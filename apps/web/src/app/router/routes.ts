@@ -52,6 +52,13 @@ const businessRoutes: RouteRecordRaw[] = [
 // 生产构建中 import.meta.env.DEV 为 false，这些路由连同页面代码都不会进入产物
 const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
   {
+    path: '/dev/file-management',
+    name: RouteName.devFileManagement,
+    component: () => import('@/pages/dev/file-management/DevFileManagementPage')
+      .then(({ DevFileManagementPage }) => DevFileManagementPage),
+    meta: { title: '文件上传交互原型', public: true }
+  },
+  {
     path: '/dev/theme',
     name: RouteName.devTheme,
     component: () => import('@/pages/dev/theme/DevThemePage').then(({ DevThemePage }) => DevThemePage),

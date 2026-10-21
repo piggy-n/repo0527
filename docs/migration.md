@@ -38,6 +38,8 @@ git diff <基线>..master-demo -- <旧路径>
 
 待真实接口核对：上传成功与失败的返回结构、批量上传是否可能部分成功、下载响应头/失败体与实际权限；不得把旧代码的兜底推断当成实测。公共基础用固定契约测试，业务 schema 在实测后确定。
 
+本轮进展：公共基础独立提交 `d8cdf8ece9fb1db97a7ab3517a1b7b48bfe6e045`，包含 FormData 上传进度、二进制取流、文件名/MIME 与错误识别、取消和浏览器保存；119 项回归测试、4 项浏览器测试、类型检查、lint 与构建通过，详见 [公共文件传输](modules/file-transfer.md)。上传真实组件原型已提供 `/dev/file-management` 与本 worktree 的离线 HTML，完成 7 个尺寸的交互检查；6 项路由测试、内网构建及 4 项生产冒烟通过，详见 [文件管理](modules/file-management.md)。原型待用户确认，业务接口及下载/预览 UI 仍待接入；未合并 main，未更改资源管理分支。
+
 ## 文件管理：接口实测（2026-10-08）
 
 用浏览器中已登录的会话直接请求后端，按实测结果写 zod schema 和联动规则（`features/file-management/api.ts`、`composables/useFileList.ts`），不照搬旧代码的兜底判断。

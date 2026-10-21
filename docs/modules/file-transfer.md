@@ -1,6 +1,6 @@
 # 公共文件传输
 
-状态：2026-10-21 公共基础已实现并完成本地验证；业务上传、下载和预览仍待接入，新增 UI 先确认交互原型。
+状态：2026-10-21 公共基础已实现并完成本地验证；独立提交 `d8cdf8ece9fb1db97a7ab3517a1b7b48bfe6e045`。业务上传、下载和预览仍待接入，新增 UI 先确认交互原型。
 
 本轮由文件管理会话负责 `shared/http` 的传输扩展、`shared/file-transfer` 及其测试和本文。资源管理只消费公共接口，业务接口、Excel 校验与刷新由资源管理维护。公共基础首个提交不包含业务 UI、预览依赖、公共主题或锁文件变更；提交号另记迁移记录，由用户协调合入 main。
 
@@ -120,6 +120,8 @@ return http.post('/resource-management/layer/create-attribute-by-excel', body, {
 - 分类、标签、年份、列表回第一页与缓存失效属于 file-management；公共层不持有 Vue Query key 或业务状态
 
 ## 第一轮交互原型计划
+
+本节是起始计划；已实现原型的访问方式、实际验证与待确认项统一维护在 [文件管理模块](file-management.md)，不以计划代替验收结果。
 
 先参考真实文件列表、`/dev/theme` 的 QueryForm、标题、面板和表格，以及 `/dev/map-ui` 复用真实组件和固定数据的方式。优先做隔离的真实组件预览，复用 Element 的对话框、选择器、上传选择区和进度条；如增加 `/dev/file-management`，遵守开发路由命名及生产隔离检查。
 

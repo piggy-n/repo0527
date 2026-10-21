@@ -27,6 +27,7 @@ docs/
 ├─ modules/                   内部模块的用法与设计说明
 │  ├─ http.md                 shared/http：HTTP 客户端、ApiError、回调注入
 │  ├─ file-transfer.md        公共上传进度、二进制下载、文件名与取消语义
+│  ├─ file-management.md      文件管理迁移边界、上传交互原型与验证记录
 │  ├─ auth.md                 鉴权：会话、角色、页面权限、路由守卫、登录接口与表单
 │  ├─ storage.md              shared/storage：偏好的持久化（键值存储、偏好的范围、恢复与写入）
 │  ├─ composables.md          通用组合式函数：useDelayedFlag（延迟显示的加载状态）、usePageActive、useShownElementSize（页面缓存）

@@ -7,6 +7,7 @@ export const RouteName = {
   devMap: 'dev-map',
   devResources: 'dev-resources',
   devMapUi: 'dev-map-ui',
+  devFileManagement: 'dev-file-management',
   currentMap: 'current-map',
   landChangeQuery: 'land-change-query',
   spaceMonitoringQuery: 'space-monitoring-query',
