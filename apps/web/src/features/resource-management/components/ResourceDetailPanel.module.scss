@@ -59,8 +59,6 @@
 .attributeName { overflow-wrap: anywhere; }
 .notice { flex: none; margin-bottom: var(--space-md); }
 .hint { flex: none; color: var(--color-text-secondary); margin: var(--space-md) 0 0; }
-.footer { width: 100%; display: flex; align-items: center; justify-content: flex-end; gap: var(--space-md); }
-.dirty { margin-right: auto; color: var(--color-text-secondary); font-size: var(--font-size-xs); }
 
 @media (max-width: 900px) {
   .metadata { grid-template-columns: minmax(0, 1fr); }
@@ -69,5 +67,4 @@
 @media (max-width: 560px) {
   .panel > header { padding-top: var(--space-sm); padding-bottom: var(--space-sm); }
   .panel > header > :first-child { flex-basis: 100%; }
-  .footer { flex-wrap: wrap; }
 }

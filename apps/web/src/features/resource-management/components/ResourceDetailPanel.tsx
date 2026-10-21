@@ -135,21 +135,20 @@ export const ResourceDetailPanel = defineComponent({
                     <ElTableColumn prop="fieldType" label="字段类型" minWidth="100" />
                     <ElTableColumn prop="fieldLength" label="字段长度" width="100" />
                   </ElTable>
-                  <p class={styles.hint}>{owner.editing.value
-                    ? '仅可修改数据分类和字段名称；字段名称允许为空。' : '字段代码、类型和长度只读。'}</p>
+                  {!owner.editing.value && <p class={styles.hint}>字段代码、类型和长度只读。</p>}
                 </MxSection>
               </> : showLoading.value ? <ElSkeleton rows={8} animated aria-label="正在加载资源详情" /> : null}
             </>,
-            footer: owner.editing.value ? () => <div class={styles.footer}>
-              <span class={styles.dirty}>{owner.pending.value ? '正在保存…' : owner.dirty.value ? '有未保存的修改' : '尚未修改'}</span>
-              <ElButton disabled={owner.pending.value} onClick={() => void owner.cancelEdit()}>取消编辑</ElButton>
-              <ElButton
+            // 分隔按钮节点，间距只由 MxPanel 底栏控制，避免叠加 Element 相邻按钮外边距
+            footer: owner.editing.value ? () => <>
+              <span><ElButton disabled={owner.pending.value} onClick={() => void owner.cancelEdit()}>取消编辑</ElButton></span>
+              <span><ElButton
                 type="primary"
                 loading={showSaving.value}
                 disabled={!owner.dirty.value || owner.pending.value}
                 onClick={() => void save()}
-              >保存</ElButton>
-            </div> : undefined
+              >保存</ElButton></span>
+            </> : undefined
           }}
         </MxPanel>
       );
