@@ -20,11 +20,11 @@ afterEach(() => {
 });
 
 describe('下载与预览原型边界', () => {
-  it('只提供旧项目支持格式的预览入口', () => {
-    for (const type of ['DOCX', 'pdf', 'txt', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']) {
+  it('仅提供文档预览入口，图片和其他格式只下载', () => {
+    for (const type of ['DOCX', 'pdf', 'txt']) {
       expect(canPreviewSample({ ...sample, type })).toBe(true);
     }
-    for (const type of ['doc', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'html', 'svg']) {
+    for (const type of ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'doc', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'html', 'svg']) {
       expect(canPreviewSample({ ...sample, type })).toBe(false);
     }
   });

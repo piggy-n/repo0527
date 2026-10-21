@@ -1,5 +1,6 @@
 import { LatestController } from '@yzt/utils';
 import { onScopeDispose, reactive, ref, shallowRef } from 'vue';
+import { filePreviewType } from '@/features/file-management/file-types';
 
 /** 设计稿只持有固定样例的元数据，不解析用户文件 */
 export interface PreviewSample {
@@ -21,9 +22,8 @@ export interface DownloadDemo {
   unknown: boolean;
 }
 
-// 与旧项目已使用的范围一致，不开放其他 Office 格式
-const previewTypes = new Set(['docx', 'pdf', 'txt', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']);
-export const canPreviewSample = (file: PreviewSample) => previewTypes.has(file.type.toLowerCase());
+/** 与正式页共用预览范围，图片和其他格式只下载 */
+export const canPreviewSample = (file: PreviewSample) => filePreviewType(file.type) !== undefined;
 
 /** 下载演示按文件防重复，独立取消，不发送请求或保存文件 */
 export function useDownloadPreview() {
