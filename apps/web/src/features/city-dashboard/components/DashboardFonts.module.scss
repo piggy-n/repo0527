@@ -1,0 +1,14 @@
+// 驾驶舱标题沿用思源宋体，完整官方字库避免逐字回退；仅本模块引用
+@font-face {
+  font-family: 'City Dashboard Serif';
+  src: url('/fonts/SourceHanSerifCN-Heavy.otf') format('opentype');
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+}
+
+.scope {
+  --dashboard-title-font: 'City Dashboard Serif', 'Alibaba PuHuiTi', 'Microsoft YaHei', sans-serif;
+  font-family: var(--font-family-base);
+  font-synthesis: none;
+}

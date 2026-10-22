@@ -87,6 +87,14 @@ apps/web/public/fonts/                   唯一的字体目录，在 .gitignore 
 - 字体到达前显示微软雅黑，到达后会有一次字体切换
 - 5E 实测：限速时第一次访问的字体一直在和地图资源分带宽（Slow 4G 下不加载字体，登录到地图画面稳定快 5 s 以上）。比较过推迟 SemiBold、两个字重都推迟到地图画面稳定后再加载，决定不推迟（[ADR 0062](../adr/0062-font-loading-not-deferred.md)）：收益只在慢网络的第一次访问，代价是每次访问都有字体切换；阶段七确定部署网络后再复查
 
+## 驾驶舱局部标题字体
+
+城市体检驾驶舱沿用旧版宋体视觉，使用官方思源宋体 CN Heavy 2.003 的完整地区字库（900），独立声明为 `City Dashboard Serif`。文件为 `public/fonts/SourceHanSerifCN-Heavy.otf`，同目录保存 SIL OFL 1.1 许可证，均不入库；不修改全局字体令牌。旧 `dashboard-serif.woff2` 裁剪字库缺少指标用字，不能继续作为标题字体或 fallback。来源、校验值、覆盖检查和大小见 [驾驶舱字体记录](../modules/city-dashboard.md#字体排查与文件记录)。
+
+驾驶舱普通文字、主标题、图表轴与普通弹窗仍使用本项目普惠体 3.x 的 400 / 600，不转换或裁剪普惠体文件。Canvas 在字体加载结束后重绘，避免保留首次绘制的备用字体。
+
+字体未部署或加载失败时，页面和 PNG 导出均允许使用后备字体；导出仍等待其他字体完成，并保留等待超时与离开页面取消。完整思源宋体转 WOFF2 的体积实验及后续选项见[独立验收记录](../stages/city-dashboard-acceptance.md#已知限制与后续)，本次未替换生产字体。
+
 ## 修改时的检查清单
 
 - 增加字重：在 `fonts.scss` 增加一个 `@font-face`，把官方 WOFF2 放进 `apps/web/public/fonts/`，更新本文和 [theme.md](theme.md)；注意每个字重约 5 MB

@@ -67,4 +67,13 @@ describe('路由表', () => {
       [RouteName.resourceApplication]: [Role.user]
     });
   });
+
+  it('驾驶舱独立懒加载，所有登录角色可访问且离开即释放', () => {
+    const dashboard = routes.find(record => record.name === RouteName.cityDashboard);
+    expect(dashboard?.path).toBe('/city-dashboard');
+    expect(typeof dashboard?.component).toBe('function');
+    expect(dashboard?.meta?.public).not.toBe(true);
+    expect(dashboard?.meta?.roles).toBeUndefined();
+    expect(dashboard?.meta?.keepAlive).not.toBe(true);
+  });
 });

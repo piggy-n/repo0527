@@ -71,8 +71,12 @@ export default defineConfig(({ mode }) => {
         },
         {
           extends: true,
+          // 公共下载能力间接引入 axios，预构建避免测试运行中重载页面
+          optimizeDeps: { include: ['axios'] },
           test: {
             name: 'browser',
+            // MapLibre 与驾驶舱共用软件 WebGL，逐文件执行避免渲染资源竞争
+            fileParallelism: false,
             include: ['src/**/*.browser.test.{ts,tsx}'],
             setupFiles: ['src/test-setup.ts', 'src/test-setup.browser.ts'],
             browser: {

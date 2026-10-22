@@ -94,6 +94,12 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
 
 export const routes: RouteRecordRaw[] = [
   {
+    path: '/city-dashboard',
+    name: RouteName.cityDashboard,
+    component: () => import('@/pages/city-dashboard/CityDashboardPage').then(({ CityDashboardPage }) => CityDashboardPage),
+    meta: { title: '城市体检驾驶舱' }
+  },
+  {
     path: '/login',
     name: RouteName.login,
     component: () => import('@/pages/login/LoginPage').then(({ LoginPage }) => LoginPage),

@@ -28,6 +28,7 @@ docs/
 │  ├─ http.md                 shared/http：HTTP 客户端、ApiError、回调注入
 │  ├─ file-transfer.md        公共上传进度、二进制下载、文件名与取消语义
 │  ├─ file-management.md      文件管理迁移边界、上传交互原型与验证记录
+│  ├─ city-dashboard.md       城市体检驾驶舱：旧版口径、依赖评估、分步迁移与交互预览
 │  ├─ auth.md                 鉴权：会话、角色、页面权限、路由守卫、登录接口与表单
 │  ├─ storage.md              shared/storage：偏好的持久化（键值存储、偏好的范围、恢复与写入）
 │  ├─ composables.md          通用组合式函数：useDelayedFlag（延迟显示的加载状态）、usePageActive、useShownElementSize（页面缓存）
@@ -81,6 +82,7 @@ docs/
    - [阶段五 5D：地图页界面的专门设计](stages/stage-5d-map-ui.md)
    - [阶段五 5E：加载策略、页面缓存与阶段五回顾](stages/stage-5e-wrap-up.md)
    - [阶段五验收与后续修复](stages/stage-5-acceptance-review.md)
+   - [城市体检驾驶舱独立验收](stages/city-dashboard-acceptance.md)
 5. [commands.md](commands.md)：日常要用的命令
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明，并按 [UI 工作流程](design/ui-workflow.md) 完成交互原型和实际页面验证。
