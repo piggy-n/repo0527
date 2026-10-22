@@ -86,6 +86,7 @@
 | [0074](0074-legend-browse-and-edit-views.md) | 图例浏览与编辑视图分离 | 已接受（修正 0043、0066） |
 | [0075](0075-file-transfer-and-preview.md) | 公共文件传输与文件管理预览 | 已接受 |
 | [0076](0076-muted-panel-header.md) | 按需复用浅灰底面板标题栏 | 已接受 |
+| [0077](0077-city-dashboard-isolated-rendering.md) | 城市体检驾驶舱独立渲染与资源所有权 | 已接受 |
 
 ## 模板
 

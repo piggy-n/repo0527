@@ -1,0 +1,28 @@
+.dashboard {
+  --dashboard-gap: calc(20px * var(--ui-scale, 1));
+  width: 100%; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; position: relative;
+  color: #0e4894; background: #d3effd; isolation: isolate;
+  * { box-sizing: border-box; }
+  font-size: calc(17px * var(--ui-scale, 1));
+  line-height: normal;
+  button, input { font: inherit; }
+  button { color: inherit; cursor: pointer; }
+  button:focus-visible { outline: 2px solid #438efb; outline-offset: 2px; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-thumb { background: #b2d5fd; border-radius: 4px; }
+}
+.heading { position: relative; z-index: 2; flex: 0 0 calc(113px * var(--ui-scale, 1)); min-height: 82px; display: flex; align-items: center; justify-content: center; background: url('../assets/header-skyline.webp') center bottom / cover; padding: 0 calc(220px * var(--ui-scale, 1)); }
+.heading::after { content: ''; position: absolute; bottom: 0; left: 12%; right: 12%; height: 2px; pointer-events: none; transform: scaleX(var(--title-rule, 1)); background: linear-gradient(90deg, transparent, #51b2fd 25%, #fff, #51b2fd 75%, transparent); box-shadow: 0 0 12px rgba(85,224,255,.7); }
+.heading h1 { margin: 0; font-family: var(--font-family-base); font-size: calc(49px * var(--ui-scale, 1)); font-weight: 600; line-height: 1.35; letter-spacing: .13em; text-align: center; color: #0750ad; }
+.content { min-height: 0; flex: 1; display: grid; position: relative; grid-template-columns: clamp(300px, 22.4vw, 860px) minmax(0, 1fr) clamp(300px, 22.4vw, 860px); grid-template-areas: 'filters map charts'; gap: var(--dashboard-gap); padding: calc(16px * var(--ui-scale, 1)) var(--dashboard-gap) calc(12px * var(--ui-scale, 1)); }
+.tooltip { --tooltip-top: max(82px, calc(82px * var(--ui-scale, 1)), calc(18px * var(--ui-scale, 1) + var(--map-heading-height, 50px) + 12px)); position: absolute; top: var(--tooltip-top); right: 12px; z-index: 8; width: 286px; max-width: calc(100% - 24px); max-height: calc(100% - var(--tooltip-top) - 12px); overflow: auto; overscroll-behavior: contain; }
+.dashboard[data-dashboard-phase='map-entering'] {
+  [data-enter='title'], [data-enter='map-title'], [data-enter='left'], [data-enter='chart'],
+  [data-enter='legend'], [data-enter='timeline'], [data-scene='surface'], [data-scene='orbit'],
+  [data-scene='wash'], [data-scene='grid'], [data-scene='haze'], [data-scene='particles'], [data-scene='mist'] { visibility: hidden; }
+  [data-scene='frame'] { --frame-progress: 0; }
+}
+.dashboard[data-suspended='true'] { [data-scene], [data-scene] * { animation-play-state: paused; } }
+.dashboard[data-reduced='true'] { [data-scene], [data-scene] * { animation: none; } }
+@media (max-width: 1180px) { .heading { padding: 0 9%; } .heading h1 { font-size: clamp(23px, 3.1vw, 34px); letter-spacing: 2px; } .content { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: clamp(620px, 68vw, 800px) 760px; grid-template-areas: 'map map' 'filters charts'; overflow: auto; } }
+@media (max-width: 720px) { .heading { flex-basis: 95px; padding: 8px 5%; } .heading h1 { font-size: clamp(21px, 4.3vw, 29px); line-height: 1.5; letter-spacing: 1px; } .content { grid-template-columns: minmax(0, 1fr); grid-template-rows: 600px 760px 440px; grid-template-areas: 'map' 'filters' 'charts'; padding: 12px; gap: 12px; } }

@@ -22,6 +22,8 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
 
 ## 怎么添加图标
 
+驾驶舱 `dashboard-*` 共 13 个 SVG，统一经 SvgIcon 使用，不引用 PNG 蒙版或字体字符图标。四分类和区块标记采用用户 2026-10-22 提供的五份 SVG；均值、折线、柱状图采用项目自绘，24 × 24、描边 1.5。下载、放大和分类箭头沿用项目 SVG；两个时间轴方向按钮沿用旧版已授权 SVG 并规范化，多色素材以 `-color.svg` 命名以保留渐变。通用勾选和关闭复用既有图标；素材名称对应见 [驾驶舱模块](city-dashboard.md)。
+
 1. 把 SVG 放进 `apps/web/src/assets/icons/`，文件名随意（例如设计导出的 `UserAvatar.svg`、`map_layer.svg`）
 2. 开发服务器开着时会自动处理；没开时在 `apps/web` 下运行 `pnpm icons`
 3. 处理结果：
