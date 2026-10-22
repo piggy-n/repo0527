@@ -71,8 +71,19 @@ export default defineConfig(({ mode }) => {
         },
         {
           extends: true,
-          // 公共下载能力间接引入 axios，预构建避免测试运行中重载页面
-          optimizeDeps: { include: ['axios'] },
+          // 跨测试文件才出现的应用依赖提前构建，避免干净环境运行中重载页面
+          optimizeDeps: {
+            include: [
+              'axios',
+              '@tanstack/vue-query',
+              'core-js/es/disposable-stack',
+              'core-js/es/symbol/dispose',
+              'element-plus/es/locale/lang/zh-cn',
+              'jwt-decode',
+              'pinia',
+              'vue-router'
+            ]
+          },
           test: {
             name: 'browser',
             // MapLibre 与驾驶舱共用软件 WebGL，逐文件执行避免渲染资源竞争

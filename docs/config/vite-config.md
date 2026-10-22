@@ -90,7 +90,7 @@ const generators =
 - CI（ubuntu-latest）第一次运行就通过，Linux 上的软件渲染没有问题：安装浏览器和系统依赖 14 s，`pnpm test` 54 s
 - 同一个测试文件的用例共用一个页面：每个用例自己创建容器，结束时移除；`using` 释放视图和会话
 - 在本会话的终端里，Vitest 自动换成了不打印通过用例日志的简洁报告器，环境用例输出的渲染器信息要加 `--reporter=default` 才看得到；CI 用默认报告器，日志照常显示
-- 阶段五曾出现运行中预构建触发重载，清缓存后未复现，当时没有额外配置。驾驶舱验收时公共下载能力间接引入 `axios`，完整回归再次出现 `Vite unexpectedly reloaded a test`；现在仅在 `browser` 项目配置 `optimizeDeps.include: ['axios']`，避免运行中补预构建
+- 阶段五曾出现运行中预构建触发重载，清缓存后未复现，当时没有额外配置。驾驶舱验收时公共下载能力间接引入 `axios`，完整回归再次出现 `Vite unexpectedly reloaded a test`；Linux 干净环境进一步暴露 Vue Query、Disposable polyfill、中文语言包、JWT、Pinia 和路由的延迟发现。现在仅在 `browser` 项目将这八个已观察到的入口加入 `optimizeDeps.include`，避免运行中补预构建；修改后必须以新的 Vite 浏览器缓存验证，不能只跑暖缓存
 - 驾驶舱加入后，MapLibre 与 Three.js 的软件 WebGL 测试并行出现渲染超时；`browser` 项目设置 `fileParallelism: false`，逐文件运行并保留原有超时断言。普通单元测试的并行方式不变，不改变生产构建或业务行为
 
 #### 为什么要 inline element-plus
