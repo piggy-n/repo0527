@@ -96,7 +96,10 @@ describe('useResourceList 的目录、年份与筛选', () => {
   it('目录返回前不请求列表，默认选择第一个二级目录；年份独立读取', async () => {
     let releaseTree!: () => void;
     server.use(mock.get('/backend/resource-center/tree', async () => {
-      await new Promise<void>(resolve => { releaseTree = resolve; releases.add(resolve); });
+      await new Promise<void>(resolve => {
+        releaseTree = resolve;
+        releases.add(resolve);
+      });
       return HttpResponse.json(tree);
     }));
     const { list } = mountList();
@@ -183,12 +186,16 @@ describe('useResourceList 的目录、年份与筛选', () => {
     list.pageNum.value = 2;
     await vi.waitFor(() => expect(requests.at(-1)?.pageNum).toBe(2));
     const other = tree.data[0]?.children?.[1];
-    if (other) { other.name = '新水资源'; }
+    if (other) {
+      other.name = '新水资源';
+    }
     await list.directoryQuery.refetch();
     expect(list.pageNum.value).toBe(2);
     expect(list.filterForm.name).toBe('图斑');
     const selected = tree.data[0]?.children?.[0];
-    if (selected) { selected.name = '新土地资源'; }
+    if (selected) {
+      selected.name = '新土地资源';
+    }
     await list.directoryQuery.refetch();
     await vi.waitFor(() => expect(requests.at(-1)).toEqual({ resource: '新土地资源', pageNum: 1, pageSize: 20 }));
     expect(list.directoryId.value).toBe('land');
@@ -198,7 +205,9 @@ describe('useResourceList 的目录、年份与筛选', () => {
   it('当前目录消失后选择第一个有效目录，全部消失后停止列表查询', async () => {
     const { list } = await loadList();
     const base = tree.data[0];
-    if (base) { base.children = base.children?.filter(node => node.id !== 'land') ?? null; }
+    if (base) {
+      base.children = base.children?.filter(node => node.id !== 'land') ?? null;
+    }
     await list.directoryQuery.refetch();
     await vi.waitFor(() => expect(list.resources.value[0]?.resourceName).toBe('水资源'));
     expect(list.directoryId.value).toBe('water');
@@ -351,7 +360,9 @@ describe('useResourceList 的缓存、加载与页码', () => {
 
   it('同名目录按 ID 隔离缓存，不能借用上一个目录的占位数据', async () => {
     const water = tree.data[0]?.children?.[1];
-    if (water) { water.name = '土地资源'; }
+    if (water) {
+      water.name = '土地资源';
+    }
     const { list, queryClient } = await loadList();
     const held = holdPages();
     list.selectDirectory('water');
@@ -403,7 +414,10 @@ describe('useResourceList 的缓存、加载与页码', () => {
       let reply: (() => void) | undefined;
       let returned = false;
       server.use(mock.get(url, async () => {
-        await new Promise<void>(resolve => { reply = resolve; releases.add(resolve); });
+        await new Promise<void>(resolve => {
+          reply = resolve;
+          releases.add(resolve);
+        });
         returned = true;
         return HttpResponse.json({ code: 401 });
       }));

@@ -116,6 +116,8 @@
 | 6 | 页面内菜单（系统管理左栏）用 `ElMenu` 加变体还是做 `MxSideMenu`；宽屏时手动把侧栏收成窄条（基本统计页，可复用窄屏的窄条）；单列居中（消息中心）；旧页面左栏 296、348 归到 320 | [design/page-layout.md](design/page-layout.md) |
 | 7 | 部署（nginx 回退与接口转发，带 hash 的产物长期缓存、`index.html` 不缓存、开启压缩）；版本号格式 | [deployment.md](deployment.md)、ADR 0005 |
 | 7 | 确定部署的网络条件后复查字体的加载时机：目标网络明显慢于 Fast 4G 时，用 `measure:map-load` 比较推迟字体的做法 | ADR 0062 |
+| 待用户决定 | `tools/smoke` 里资源管理、文件管理、驾驶舱的业务流程用例超出 ADR 0065 的"最小冒烟"：写新 ADR 认可并约定范围，或移到阶段七的端到端测试；决定前不整理这几份用例的写法 | [审查报告](stages/post-5e-code-review.md)第四部分 |
+| 待用户决定 | TXT 预览的行距 1.9 没有对应的行高令牌；阶段五两处写死的阴影（资源面板拖动手柄、位置信息卡片）需要新的阴影令牌 | 同上 |
 
 ## 阶段三：页面布局与第一个列表页
 
@@ -736,6 +738,8 @@ UI 工作流程补充（2026-10-20）：用户确认将设计与验证流程固�
 
 图片预览范围更正（2026-10-21）：用户澄清只移除加减缩放旁的「适合宽度」按钮，并非移除图片预览。已恢复图片入口、显示、缩放和 URL 生命周期，保留紧凑头部；开发样例与 ADR 0075 同步纠正。101 项相关测试、2 项文件管理生产冒烟、六尺寸布局、类型 / lint / 公网及内网构建通过，Chrome 实测桌面与窄屏图片。原 `8884315` 已随 `stage-6a` 推送且 Linux CI 通过；修正以新提交保留，不改写原标签。详见[联合验收报告](stages/resource-file-management-acceptance.md#图片预览更正2026-10-21)。
 
+代码审查与整改（2026-10-23）：按 `stage-5e` 之前的质量复查 `stage-5e` 之后的全部代码。修复登录过期后操作没有反应的问题；写操作的会话核对统一为 `shared/auth/session-guard`；删除借用查询缓存的取消登记、重复的角色判断和旧代码猜测的字段；开发样例改为驱动正式组件；压缩写法全部展开并写进 code-style.md；AGENTS.md 中的界面细节移到 docs/design。见[审查报告](stages/post-5e-code-review.md)。之后的迁移以该报告和 `stage-5e` 之前的代码为写法基准。
+
 除了阶段 3 的列表页和阶段 5 的现状底图，其余业务模块都在阶段 6。当前文件管理已补齐传输与预览，资源管理 R1～R5 本轮前端迁移已阶段性验收收尾；真实后端写入仍待验收，其余页面仍为占位：
 
 | 模块 | 路由 | 角色 | 旧项目目录 |
@@ -753,3 +757,18 @@ UI 工作流程补充（2026-10-20）：用户确认将设计与验证流程固�
 | 数据下载（资源申请） | `resource-application` | 普通用户 | `views/resource-application` |
 
 "空间监测三件套"指数据查询、基本统计、指标这三个页面组件。旧目录按旧项目的路由表对应（2026-09-30 核对），开始迁移某个模块时再读代码确认实际用到的文件，并在 [migration.md](migration.md) 记下基线。
+
+### 剩余模块的迁移计划（2026-10-23）
+
+AI 对话和消息中心暂不迁移（用户 2026-10-23 确认）。剩下的按依赖分成四组，每组单独一个会话：从读旧代码、记基线开始，先出可操作的原型（`/dev/<名称>`）请用户确认，再分步实现；写法以 `stage-5e` 之前的代码和[审查报告](stages/post-5e-code-review.md)为准。行数是旧项目 `master-demo`（`6b4799b`）的规模，用来估工作量。
+
+| 顺序 | 分组 | 旧代码 | 依赖与注意 |
+|---|---|---|---|
+| 1 | 数据下载（资源申请）与系统管理 | `views/resource-application/`、`views/system-management/`（两页共用 817 行的 `ApplicationListSection`，按角色区分申请与审核，另有"统计报表"）；`components/resource-application/` 的申请、审核、详情、下载进度对话框；`services/resource-application/` 的接口与状态 | 最接近文件管理、资源管理的列表页写法，先做。下载复用 `shared/file-transfer`；资源管理列表里旧的"下载申请"入口（`ResourceApplyDialog`）随这一组恢复。旧代码里和消息中心耦合的部分（`messageService`、`NotificationBell`）不迁移，申请状态的提醒方式在原型阶段和用户确认。左侧菜单用 `ElMenu` 变体还是 `MxSideMenu` 在这里定（见上文"后续阶段要带上的事项"） |
+| 2 | 城市国土空间监测基本统计 | `views/space-monitoring-statistics/`（主文件 2056 行，任务状态轮询 1058 行，条件、进度、矩阵、表格组件） | 统计任务的轮询先按 ADR 0039 归类（同一任务的先后查询多半是可替换操作，用 `LatestController`），不手写递增计数；不依赖地图，可以和第 1 组并行 |
+| 3 | 数据查询（四个页面共用） | `views/space-monitoring-query/`（主文件 4780 行、配置 1550 行，按 `queryModule` 区分国土变更、城市国土空间监测、森林草原湿地荒漠、水资源） | 地图页：复用阶段五的公共地图能力（底图、边界、区划定位、工具栏）。空间查询的绘制是新的交互工具（ADR 0034），先在 map-core 做通用的绘制再接业务；旧的 `TiandituBoundaryLayer` 不迁移（区划边界只用本地数据，ADR 0036）。导出复用 `shared/file-transfer`。四个页面一个路由组件、页面参数用路由 `props` 传入 |
+| 4 | 城市国土空间监测指标 | `views/space-monitoring-indicators/`（主文件 2116 行，指标树 1087 行，MVT 图层管理与图例） | 地图页：指标图层按"拥有者 + 纯函数推导分组"接入（ADR 0028），图例复用现状底图的图例组件能复用的部分；旧代码里的 `mock-data.js`、`mockIndicatorLayers.js` 先核对是否在真实页面用到 |
+
+另有两件小事随相关分组做：用户菜单的修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像，放在第 1 组；"消息铃铛"属于消息中心，不做。
+
+第 3、4 组都会改 `shared/map` 和 `libs/map-core`，不要同时进行；第 1、2 组和它们不冲突。四组都会改 `app/router/routes.ts`、`app/layout/menus.ts`、`shared/router/route-names.ts`，合入时注意顺序。

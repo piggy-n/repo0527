@@ -51,7 +51,9 @@ describe('资源写入的会话边界', () => {
       session.start({ token: createTestJwtExpiringAt(Date.now() + 7200000),
         user: { loginName: 'second', role: Role.admin } });
       await expect(done).rejects.toMatchObject({ kind: 'canceled' });
-      for (const request of requests) { expect(request).not.toHaveBeenCalled(); }
+      for (const request of requests) {
+        expect(request).not.toHaveBeenCalled();
+      }
     } finally {
       wrapper.unmount();
       queryClient.clear();

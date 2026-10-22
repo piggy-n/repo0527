@@ -9,7 +9,9 @@ type TooltipSource = 'map' | 'chart';
 /** 统一地图与图表的提示目标，移入提示表格时取消延迟关闭 */
 export function useDashboardTooltip(model: DashboardModel, visibility: Ref<DocumentVisibilityState>) {
   const context = shallowRef<(ChartHover & { source: TooltipSource }) | null>(null);
-  const indicator = computed(() => model.category.value.indicators.find(item => item.id === context.value?.indicatorId));
+  const indicator = computed(
+    () => model.category.value.indicators.find(item => item.id === context.value?.indicatorId)
+  );
   const city = computed(() => CITIES.find(item => item.code === context.value?.cityCode));
   let closeTimer: ReturnType<typeof setTimeout> | undefined;
 

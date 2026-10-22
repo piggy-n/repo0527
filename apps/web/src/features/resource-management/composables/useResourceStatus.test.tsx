@@ -35,10 +35,16 @@ function backend() {
     mock.get('/backend/resource-center/tree', () => HttpResponse.json(resourceDirectoryResponse())),
     mock.get('/backend/resource-center/year/list', () => HttpResponse.json(resourceYearsResponse())),
     mock.post('/backend/resource-management/layer/page', async ({ request }) => {
-      if (state.failRead) { return HttpResponse.json({ code: 500, msg: '刷新失败' }); }
+      if (state.failRead) {
+        return HttpResponse.json({ code: 500, msg: '刷新失败' });
+      }
       const params = await request.json() as { resource: string; pageNum: number; pageSize: number };
       const response = resourcePageResponse(params);
-      response.data.list.forEach(row => { if (enabled.has(row.id)) { row.enable = String(enabled.get(row.id)); } });
+      for (const row of response.data.list) {
+        if (enabled.has(row.id)) {
+          row.enable = String(enabled.get(row.id));
+        }
+      }
       return HttpResponse.json(response);
     }),
     mock.post('/backend/resource-management/layer/status', async ({ request }) => {
@@ -46,12 +52,18 @@ function backend() {
       const id = query.get('id')!;
       const value = query.get('status') === 'true';
       let release!: () => void;
-      const gate = new Promise<void>(resolve => { release = resolve; });
+      const gate = new Promise<void>(resolve => {
+        release = resolve;
+      });
       writes.push({ id, value, release });
       releases.add(release);
-      if (state.hold) { await gate; }
+      if (state.hold) {
+        await gate;
+      }
       releases.delete(release);
-      if (state.fail) { return HttpResponse.json({ code: 500, msg: '启停失败' }); }
+      if (state.fail) {
+        return HttpResponse.json({ code: 500, msg: '启停失败' });
+      }
       enabled.set(id, value);
       return HttpResponse.json({ code: 200 });
     })
@@ -160,15 +172,12 @@ describe('按资源 ID 的启停写操作', () => {
     expect(list.resources.value[0]?.enabled).toBe(!row.enabled);
   });
 
-  it('普通用户、过期会话、缺失资源和已卸载的入口不发写请求', async () => {
+  // 角色由路由限定、换账号整页重新加载，过期由 shared/http 在发请求前处理，这里都不再重复判断
+  it('缺失资源和已卸载的入口不发写请求', async () => {
     const api = backend();
-    const { status, list, session, wrapper } = await host();
+    const { status, list, wrapper } = await host();
     const id = list.resources.value[0].id;
     expect(await status.toggle('missing')).toBeNull();
-    session.start({ token: session.token!, user: { loginName: 'user', role: Role.user } });
-    expect(await status.toggle(id)).toBeNull();
-    session.start({ token: createTestJwtExpiringAt(Date.now() - 1000), user: { loginName: 'admin', role: Role.admin } });
-    expect(await status.toggle(id)).toBeNull();
     wrapper.unmount();
     expect(await status.toggle(id)).toBeNull();
     expect(api.writes).toEqual([]);

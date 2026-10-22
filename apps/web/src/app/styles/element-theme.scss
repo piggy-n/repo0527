@@ -318,9 +318,19 @@ $tree-node: '.el-tree > .el-tree-node';
     background-color: var(--color-neutral-bg-light);
   }
 
-  .el-dialog__headerbtn { width: 48px; height: 48px; }
-  .el-dialog__body { padding: var(--space-lg); }
-  .el-dialog__footer { padding: 0 var(--space-lg) var(--space-lg); }
+  // 关闭按钮占满标题行的高度，和右边留出的 48 对齐
+  .el-dialog__headerbtn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .el-dialog__body {
+    padding: var(--space-lg);
+  }
+
+  .el-dialog__footer {
+    padding: 0 var(--space-lg) var(--space-lg);
+  }
 }
 
 // 浏览器自动填充账号密码后，会用带 !important 的样式把输入框改成浅蓝底，页面样式无法直接改回；

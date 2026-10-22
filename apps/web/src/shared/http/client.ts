@@ -1,4 +1,4 @@
-import { type AxiosRequestConfig, type AxiosResponse, create, isAxiosError, isCancel } from 'axios';
+import { type AxiosRequestConfig, type AxiosResponse, create, isAxiosError } from 'axios';
 import { z } from 'zod';
 import { appConfig } from '../config/app-config';
 import { getHttpHooks, type SentRequest } from './configure';
@@ -64,6 +64,12 @@ export interface BinaryResponse {
   contentDisposition: string | null;
 }
 
+// 两种进度只在各自的入口开放（上传在 JSON 接口，下载在 getBlob），内部的请求函数一并接收
+interface TransferRequestOptions extends HttpRequestOptions {
+  onUploadProgress?: (progress: TransferProgress) => void;
+  onDownloadProgress?: (progress: TransferProgress) => void;
+}
+
 const DEFAULT_TIMEOUT = 60_000;
 
 // 超时和调用方取消都通过中止请求实现，用中止原因区分；不用 axios 的 timeout：它依赖 XHR 的 timeout，MSW 模拟响应时不会触发，测不到
@@ -100,6 +106,7 @@ async function parseBinaryResponse(response: AxiosResponse<unknown>, signal: Abo
   const html = mime === 'text/html' || mime === 'application/xhtml+xml';
   const generic = !mime || mime === 'application/octet-stream' || mime === 'text/plain';
   const attachment = contentDisposition !== null && /^attachment(?:;|$)/i.test(contentDisposition.trim());
+  // 只有可能装着错误信封或错误页面的类型才读开头一段；明确的二进制类型（PDF、图片等）直接交出
   if (json || html || generic) {
     let text: string;
     try {
@@ -171,15 +178,13 @@ function abortedError(reason: unknown, url?: string): ApiError {
     : new ApiError({ kind: 'canceled', message: '请求已取消', url });
 }
 
+// 中止优先：请求被取消或超时后，不论收到了什么错误都按中止处理（axios 的 CanceledError 也在这里）
 async function toApiError(error: unknown, signal: AbortSignal, url?: string): Promise<ApiError> {
   if (signal.aborted) {
     return abortedError(signal.reason, url);
   }
   if (error instanceof ApiError) {
     return error;
-  }
-  if (isCancel(error)) {
-    return abortedError(signal.reason, url);
   }
   // instanceof 收窄出的是 AxiosError<any>，用带泛型的类型守卫把响应体限定为 unknown
   if (isAxiosError<unknown>(error)) {
@@ -226,13 +231,11 @@ function notify(error: ApiError, silent: boolean, sent: SentRequest): void {
 
 async function request<Result>(
   config: AxiosRequestConfig,
-  options: HttpRequestOptions & {
-    onUploadProgress?: (progress: TransferProgress) => void;
-    onDownloadProgress?: (progress: TransferProgress) => void;
-  },
+  options: TransferRequestOptions,
   parse: (response: AxiosResponse<unknown>, signal: AbortSignal) => Result | Promise<Result>
 ): Promise<Result> {
   const { query, signal, silent = false, timeout = DEFAULT_TIMEOUT, onUploadProgress, onDownloadProgress } = options;
+  // 调用方已经取消时不发请求，也不按登录过期提示
   if (signal?.aborted) {
     throw abortedError(signal.reason, config.url);
   }
@@ -247,10 +250,8 @@ async function request<Result>(
   const controller = new AbortController();
   const abortByCaller = () => controller.abort(signal?.reason);
   const timer = setTimeout(() => controller.abort(TIMEOUT_REASON), timeout);
-  if (signal?.aborted) {
-    abortByCaller();
-  }
   signal?.addEventListener('abort', abortByCaller, { once: true });
+  // 请求结束或中止后不再上报进度
   let settled = false;
   const active = () => !settled && !controller.signal.aborted;
 
@@ -263,17 +264,14 @@ async function request<Result>(
       onUploadProgress: progressReporter(onUploadProgress, active),
       onDownloadProgress: progressReporter(onDownloadProgress, active)
     });
-    if (controller.signal.aborted) {
-      throw abortedError(controller.signal.reason, config.url);
-    }
     const result = await parse(response, controller.signal);
+    // 响应到达后、解析完成前被中止的，晚到的结果不交给调用方
     if (controller.signal.aborted) {
       throw abortedError(controller.signal.reason, config.url);
     }
     return result;
   } catch (error) {
-    const converted = await toApiError(error, controller.signal, config.url);
-    const apiError = controller.signal.aborted ? abortedError(controller.signal.reason, config.url) : converted;
+    const apiError = await toApiError(error, controller.signal, config.url);
     notify(apiError, silent, { headers });
     throw apiError;
   } finally {
@@ -284,9 +282,11 @@ async function request<Result>(
 }
 
 function requestJson<Schema extends z.ZodType>(config: AxiosRequestConfig, options: RequestOptions<Schema>) {
-  return request(config, options, response => options.envelope === false
-    ? parseRawResponse(response.data, options.schema, config.url)
-    : parseResponse(response.data, options.schema, config.url));
+  return request(config, options, ({ data }) => {
+    return options.envelope === false
+      ? parseRawResponse(data, options.schema, config.url)
+      : parseResponse(data, options.schema, config.url);
+  });
 }
 
 /** 调用后端接口：成功时返回按 schema 校验过的 data，失败时抛出 ApiError */

@@ -31,7 +31,10 @@ function mountUpload() {
   queryClient.setQueryData(key, { marker: '当前缓存' });
   let upload!: ReturnType<typeof useFileUpload>;
   const wrapper = mount(defineComponent({
-    setup() { upload = useFileUpload(); return () => null; }
+    setup() {
+      upload = useFileUpload();
+      return () => null;
+    }
   }), { global: { plugins: [pinia, [VueQueryPlugin, { queryClient }]] } });
   upload.open(DEFAULT_CATEGORY_ID);
   upload.fields.tag = '综合';
@@ -46,7 +49,9 @@ function holdUpload(success = true) {
   let release: (() => void) | undefined;
   server.use(mock.post('/backend/file/upload', async ({ request }) => {
     forms.push(await request.text());
-    await new Promise<void>(resolve => { release = resolve; });
+    await new Promise<void>(resolve => {
+      release = resolve;
+    });
     return HttpResponse.json(success ? { code: 200 } : { code: 500, msg: '上传失败' });
   }));
   return { forms, release: () => release?.() };
@@ -100,18 +105,15 @@ describe('useFileUpload', () => {
     expect(upload.phase.value).toBe(phase);
   });
 
-  it.each(['clear', 'replace', 'expire'] as const)('会话 %s 后成功结果不污染新界面或查询缓存', async action => {
+  it.each(['clear', 'replace'] as const)('会话 %s 后成功结果不污染新界面或查询缓存', async action => {
     const pending = holdUpload();
     const { upload, session, queryClient, key } = mountUpload();
     const done = upload.submit();
     await vi.waitFor(() => expect(pending.forms).toHaveLength(1));
     if (action === 'clear') {
       session.clear();
-    } else if (action === 'replace') {
-      session.start({ token: session.token!, user: { loginName: 'new', role: Role.user } });
     } else {
-      // 时间经过导致失效，不替换会话对象
-      vi.spyOn(session, 'isActive').mockReturnValue(false);
+      session.start({ token: createTestJwtExpiringAt(Date.now() + 7_200_000), user: { loginName: 'new', role: Role.user } });
     }
     pending.release();
     expect(await done).toBe(false);
@@ -119,11 +121,23 @@ describe('useFileUpload', () => {
     expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
   });
 
+  it('发送期间只是过期：服务端已经接受，照常报告成功并刷新列表（刷新时由 shared/http 处理过期）', async () => {
+    const pending = holdUpload();
+    const { upload, session, queryClient, key } = mountUpload();
+    const done = upload.submit();
+    await vi.waitFor(() => expect(pending.forms).toHaveLength(1));
+    vi.spyOn(session, 'isActive').mockReturnValue(false);
+    pending.release();
+    expect(await done).toBe(true);
+    expect(upload.phase.value).toBe('success');
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+  });
+
   it('mutation 尚未开始发送就换会话，不使用新凭据发送旧草稿', async () => {
     const { upload, session } = mountUpload();
     const send = vi.spyOn(api, 'uploadFiles');
     const done = upload.submit();
-    session.start({ token: session.token!, user: { loginName: 'new', role: Role.user } });
+    session.start({ token: createTestJwtExpiringAt(Date.now() + 7_200_000), user: { loginName: 'new', role: Role.user } });
     expect(await done).toBe(false);
     expect(send).not.toHaveBeenCalled();
   });
@@ -154,7 +168,9 @@ describe('useFileUpload', () => {
     let finish: (() => void) | undefined;
     vi.spyOn(api, 'uploadFiles').mockImplementation((_input, onProgress) => {
       progress = onProgress;
-      return new Promise<undefined>(resolve => { finish = () => resolve(undefined); });
+      return new Promise<undefined>(resolve => {
+        finish = () => resolve(undefined);
+      });
     });
     const { upload, wrapper } = mountUpload();
     const done = upload.submit();

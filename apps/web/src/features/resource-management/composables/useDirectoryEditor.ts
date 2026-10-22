@@ -1,42 +1,60 @@
 import { type MaybeRefOrGetter, onScopeDispose, readonly, ref, shallowRef, toValue } from 'vue';
-import { Role } from '@/shared/auth/roles';
-import { useSessionStore } from '@/shared/auth/session-store';
+import { useSessionGuard } from '@/shared/auth/session-guard';
 import { ApiError } from '@/shared/http/errors';
 import type { ResourceDirectory, ResourceDirectoryChange } from '../api';
 import { useResourceDirectoryMutation } from '../queries';
 
-/** 弹窗持有打开时的节点快照，不能在确认期间悄悄换成另一节点 */
+// 和旧页面的输入框一致
+const NAME_MAX_LENGTH = 20;
+
+/** 打开弹窗时记下的节点快照：确认期间目录刷新了，也不能悄悄换成另一个节点 */
 interface DirectoryTarget {
   kind: ResourceDirectoryChange['kind'];
+  // 新增时是一级分组的 ID，改名、删除时是二级目录的 ID
   id: string;
   name: string;
-  parentName: string;
-  token: string;
+  token: string | undefined;
 }
 
-/** 目录维护：同一页面串行写入，输入与请求状态独立于 Query 中的目录数据 */
+// 新增挂在一级分组下，改名、删除只针对二级目录
+function findNode(tree: ResourceDirectory[], kind: DirectoryTarget['kind'], id: string) {
+  const nodes = kind === 'add' ? tree : tree.flatMap(group => group.children ?? []);
+  return nodes.find(node => node.id === id);
+}
+
+function toChange(target: DirectoryTarget, name: string): ResourceDirectoryChange {
+  if (target.kind === 'add') {
+    return { kind: 'add', parentId: target.id, name };
+  }
+  if (target.kind === 'rename') {
+    return { kind: 'rename', id: target.id, name };
+  }
+  return { kind: 'remove', id: target.id };
+}
+
+/** 目录维护：一个页面同时只有一次写入；输入和请求状态在这里，目录数据仍在查询缓存。不渲染、不提示 */
 export function useDirectoryEditor(tree: MaybeRefOrGetter<ResourceDirectory[]>) {
   const mutation = useResourceDirectoryMutation();
-  const session = useSessionStore();
+  const sessionGuard = useSessionGuard();
   const target = shallowRef<DirectoryTarget | null>(null);
   const name = ref('');
   const error = ref('');
   const pending = ref(false);
   let disposed = false;
-  onScopeDispose(() => { disposed = true; });
+  onScopeDispose(() => {
+    disposed = true;
+  });
 
+  /** 开始一次维护；写入进行中或已有打开的弹窗时忽略 */
   function open(kind: DirectoryTarget['kind'], id: string) {
-    if (disposed || pending.value || target.value || !session.token || session.user?.role !== Role.admin) {
+    if (disposed || pending.value || target.value) {
       return;
     }
-    const groups = toValue(tree);
-    const parent = kind === 'add' ? groups.find(group => group.id === id)
-      : groups.find(group => group.children?.some(child => child.id === id));
-    const node = kind === 'add' ? parent : parent?.children?.find(child => child.id === id);
-    if (!parent || !node) {
+    const node = findNode(toValue(tree), kind, id);
+    if (!node) {
       return;
     }
-    target.value = { kind, id, name: node.name, parentName: parent.name, token: session.token };
+    target.value = { kind, id, name: node.name, token: sessionGuard.capture() };
     name.value = kind === 'rename' ? node.name : '';
     error.value = '';
   }
@@ -55,50 +73,53 @@ export function useDirectoryEditor(tree: MaybeRefOrGetter<ResourceDirectory[]>) 
     }
   }
 
-  /** 返回是否完成本次写入；卸载或会话变化后不再返回成功，也不显示旧会话错误 */
+  // 名称不合法时返回提示；删除不需要名称
+  function validateName(current: DirectoryTarget, trimmed: string): string {
+    if (current.kind === 'remove') {
+      return '';
+    }
+    if (!trimmed) {
+      return '请输入目录名称';
+    }
+    return trimmed.length > NAME_MAX_LENGTH ? `目录名称不能超过 ${NAME_MAX_LENGTH} 个字符` : '';
+  }
+
+  /** 返回是否完成写入；页面销毁或换了会话后不再返回成功，也不显示旧会话的错误 */
   async function submit(): Promise<boolean> {
     const current = target.value;
     if (!current || pending.value || disposed) {
       return false;
     }
-    if (session.token !== current.token || session.user?.role !== Role.admin) {
+    if (!sessionGuard.isCurrent(current.token)) {
       close();
       return false;
     }
-    const groups = toValue(tree);
-    const nodes = current.kind === 'add' ? groups : groups.flatMap(group => group.children ?? []);
-    if (!nodes.some(node => node.id === current.id && node.name === current.name)) {
+    // 打开弹窗之后目录刷新过：节点被删或改了名，不按旧快照写入
+    if (findNode(toValue(tree), current.kind, current.id)?.name !== current.name) {
       error.value = '目录已变化，请关闭后重新操作';
       return false;
     }
     const trimmed = name.value.trim();
-    if (current.kind !== 'remove' && (!trimmed || trimmed.length > 20)) {
-      error.value = trimmed ? '目录名称不能超过 20 个字符' : '请输入目录名称';
+    error.value = validateName(current, trimmed);
+    if (error.value) {
       return false;
     }
+    // 名称没变的改名不用写入
     if (current.kind === 'rename' && trimmed === current.name) {
       close();
       return false;
     }
-    let change: ResourceDirectoryChange;
-    if (current.kind === 'add') {
-      change = { kind: 'add', parentId: current.id, name: trimmed };
-    } else if (current.kind === 'rename') {
-      change = { kind: 'rename', id: current.id, name: trimmed };
-    } else {
-      change = { kind: 'remove', id: current.id };
-    }
+
     pending.value = true;
-    error.value = '';
     try {
-      await mutation.mutateAsync({ change, token: current.token });
-      if (disposed || session.token !== current.token) {
+      await mutation.mutateAsync({ change: toChange(current, trimmed), token: current.token });
+      if (disposed || !sessionGuard.isCurrent(current.token)) {
         return false;
       }
       target.value = null;
       return true;
     } catch (cause) {
-      if (!disposed && session.token === current.token) {
+      if (!disposed && sessionGuard.isCurrent(current.token)) {
         error.value = cause instanceof ApiError ? cause.message : '操作失败，请重试';
       }
       return false;

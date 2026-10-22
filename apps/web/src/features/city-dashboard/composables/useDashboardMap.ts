@@ -178,7 +178,7 @@ export function useDashboardMap(
           return;
         }
         status.value = 'ready';
-        transition(reduced.value ? 0 : .85);
+        transition(reduced.value ? 0 : 0.85);
         if (!options.valuesVisible()) {
           displayValues.value = Object.fromEntries(CITIES.map(city => [city.code, 0]));
           tween?.kill();
@@ -205,7 +205,7 @@ export function useDashboardMap(
   watch(fontRevision, updateFallback);
   watch(options.valuesVisible, value => {
     if (value && status.value === 'ready') {
-      transition(reduced.value ? 0 : .85);
+      transition(reduced.value ? 0 : 0.85);
     }
   });
   watch(reduced, value => {

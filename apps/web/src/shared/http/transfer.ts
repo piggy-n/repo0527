@@ -1,5 +1,4 @@
 import type { AxiosProgressEvent } from 'axios';
-import { safeReporter } from '@yzt/utils';
 
 /** 已传输字节；总量未知时不提供百分比 */
 export interface TransferProgress {
@@ -8,7 +7,7 @@ export interface TransferProgress {
   percent: number | null;
 }
 
-/** 将底层进度转为业务无关的数据，回调异常不打断传输 */
+/** 将底层进度转为业务无关的数据；active 为 false（请求已结束或中止）时不再上报 */
 export function progressReporter(
   callback: ((progress: TransferProgress) => void) | undefined,
   active: () => boolean
@@ -20,13 +19,19 @@ export function progressReporter(
     if (!active()) {
       return;
     }
+    // 总量为 0 或未知时（如分块传输）不伪造百分比
     const total = event.lengthComputable && event.total !== undefined && event.total > 0 ? event.total : null;
     const progress: TransferProgress = {
       loaded: event.loaded,
       total,
       percent: total === null ? null : Math.min(100, event.loaded / total * 100)
     };
-    safeReporter(() => callback(progress), 'HTTP 传输进度')(undefined);
+    // 回调属于调用方，它抛错时只打印，不能打断传输
+    try {
+      callback(progress);
+    } catch (error) {
+      console.error('[http] 传输进度回调抛出了异常', error);
+    }
   };
 }
 

@@ -19,7 +19,8 @@
     border-top: 1px solid var(--color-border-light);
   }
 
-  :global(.el-cascader), :global(.el-date-editor.el-input) {
+  :global(.el-cascader),
+  :global(.el-date-editor.el-input) {
     width: 100%;
   }
 
@@ -54,7 +55,8 @@
     background: var(--color-primary-bg-lighter);
   }
 
-  :global(.el-icon), .choose {
+  :global(.el-icon),
+  .choose {
     color: var(--color-primary);
   }
 }
@@ -118,5 +120,4 @@
     grid-template-columns: 1fr;
     gap: 0;
   }
-
 }

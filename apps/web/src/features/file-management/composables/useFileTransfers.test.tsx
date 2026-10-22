@@ -14,7 +14,6 @@ import { ApiError } from '@/shared/http/errors';
 import * as api from '../api';
 import { FilePreviewDialog } from '../components/FilePreviewDialog';
 import { FileDownloadPanel } from '../components/FileDownloadPanel';
-import { useFileContentRequest } from '../queries';
 import { useFileDownloads } from './useFileDownloads';
 import { useFilePreview } from './useFilePreview';
 
@@ -24,7 +23,9 @@ const cleanups: (() => void)[] = [];
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterAll(() => server.close());
 afterEach(() => {
-  for (const cleanup of cleanups.splice(0)) { cleanup(); }
+  for (const cleanup of cleanups.splice(0)) {
+    cleanup();
+  }
   server.resetHandlers();
   localStorage.clear();
   configureHttp({});
@@ -49,27 +50,29 @@ function setup(renderDialog = false) {
   });
   let downloads!: ReturnType<typeof useFileDownloads>;
   let preview!: ReturnType<typeof useFilePreview>;
-  let read!: ReturnType<typeof useFileContentRequest>;
   const wrapper = mount(defineComponent({ setup() {
     downloads = useFileDownloads();
     preview = useFilePreview();
-    read = useFileContentRequest();
     return () => renderDialog ? <>
       <FileDownloadPanel model={downloads} />
       <FilePreviewDialog model={preview} downloads={downloads} />
     </> : null;
   } }), { global: { plugins: [pinia, [VueQueryPlugin, { queryClient }]] } });
   cleanups.push(() => {
-    if (!wrapper.vm.$.isUnmounted) { wrapper.unmount(); }
+    if (!wrapper.vm.$.isUnmounted) {
+      wrapper.unmount();
+    }
     queryClient.clear();
   });
-  return { downloads, preview, read, session, queryClient, save, createUrl, revokeUrl, wrapper };
+  return { downloads, preview, session, queryClient, save, createUrl, revokeUrl, wrapper };
 }
 
 /** 手动释放结果以验证晚到结果不会保存或覆盖当前目标 */
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>(done => { resolve = done; });
+  const promise = new Promise<T>(done => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
@@ -97,15 +100,6 @@ describe('文件下载', () => {
     await env.downloads.start({ ...file, id: 'four' });
     await nextTick();
     expect(panel.get('[aria-expanded]').attributes('aria-expanded')).toBe('false');
-  });
-
-  it('普通 HTTP 内网没有 randomUUID 时仍能读取文件', async () => {
-    const env = setup();
-    vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
-    vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['ok']), fileName: file.name });
-    await env.downloads.start(file);
-    expect(env.downloads.tasks.value[0]?.phase).toBe('done');
-    expect(env.save).toHaveBeenCalledTimes(1);
   });
 
   it('用真实 HTTP 取得文件交给保存，结束后不留二进制查询缓存', async () => {
@@ -313,20 +307,16 @@ describe('预览与会话边界', () => {
     expect(env.preview.failure.value).toBe('文件内容为空，无法预览');
   });
 
-  it.each(['session', 'unmount', 'expire'] as const)('%s 后忽略进度、读取和保存的晚到结果', async reason => {
+  it.each(['session', 'unmount'] as const)('%s 后忽略进度、读取和保存的晚到结果', async reason => {
     const env = setup();
     const held = deferred<transfer.DownloadedFile>();
     const request = vi.spyOn(api, 'fetchFileContent').mockReturnValue(held.promise);
     const download = env.downloads.start(file);
     const preview = env.preview.open(file);
     if (reason === 'session') {
-      env.session.start({
-        token: createTestJwtExpiringAt(Date.now() + 3600000), user: { loginName: 'new', role: Role.user }
-      });
-    } else if (reason === 'unmount') {
-      env.wrapper.unmount();
+      env.session.start({ token: createTestJwtExpiringAt(Date.now() + 7200000), user: { loginName: 'new', role: Role.user } });
     } else {
-      vi.spyOn(env.session, 'isActive').mockReturnValue(false);
+      env.wrapper.unmount();
     }
     for (const call of request.mock.calls) {
       call[2]?.({ loaded: 100, total: 100, percent: 100 });
@@ -340,18 +330,32 @@ describe('预览与会话边界', () => {
     expect(env.queryClient.getQueryCache().getAll()).toHaveLength(0);
   });
 
-  it('QueryClient 清理会取消取流，已经取消或无效会话不会发送请求', async () => {
+  it('只是过期不中断已发出的读取：服务端已经接受，内容照常交给保存', async () => {
     const env = setup();
     const held = deferred<transfer.DownloadedFile>();
-    const request = vi.spyOn(api, 'fetchFileContent').mockReturnValue(held.promise);
-    const controller = new AbortController();
-    controller.abort();
-    await expect(env.read(file, controller.signal)).rejects.toMatchObject({ kind: 'canceled' });
-    expect(request).not.toHaveBeenCalled();
-    const done = env.read(file, new AbortController().signal).catch((error: unknown) => error);
-    env.queryClient.clear();
-    expect(request.mock.calls[0]?.[1].aborted).toBe(true);
-    expect(await done).toMatchObject({ kind: 'canceled' });
-    held.resolve({ blob: new Blob(['old']), fileName: file.name });
+    vi.spyOn(api, 'fetchFileContent').mockReturnValue(held.promise);
+    const download = env.downloads.start(file);
+    vi.spyOn(env.session, 'isActive').mockReturnValue(false);
+    held.resolve({ blob: new Blob(['content']), fileName: file.name });
+    await download;
+    expect(env.save).toHaveBeenCalledOnce();
+    expect(env.downloads.tasks.value[0]?.phase).toBe('done');
+  });
+
+  it.each(['download', 'preview'] as const)('过期后再%s：交给 shared/http 结束会话，界面随之清空而不是没有反应', async action => {
+    const env = setup();
+    // 和 app/http.ts 一样按会话判断过期；结束会话由 onUnauthorized 负责
+    vi.spyOn(env.session, 'isActive').mockReturnValue(false);
+    const onUnauthorized = vi.fn<() => void>(() => env.session.clear());
+    configureHttp({ isCredentialExpired: () => !env.session.isActive(), onUnauthorized });
+    if (action === 'download') {
+      await env.downloads.start(file);
+    } else {
+      await env.preview.open(file);
+    }
+    expect(onUnauthorized).toHaveBeenCalledOnce();
+    expect(env.downloads.tasks.value).toEqual([]);
+    expect(env.preview.visible.value).toBe(false);
+    expect(env.save).not.toHaveBeenCalled();
   });
 });

@@ -49,11 +49,11 @@ export class JiangsuMapScene implements Disposable {
   private readonly objects = new Map<string, RegionObject>();
   private readonly raycaster = new Raycaster();
   private readonly pointer = new Vector2();
-  private readonly view = { yaw: -.42, pitch: .86, distance: 1.18 };
+  private readonly view = { yaw: -0.42, pitch: 0.86, distance: 1.18 };
   private readonly sweepUniforms: SweepUniforms = { uSweepPosition: { value: -200 }, uSweepStrength: { value: 0 } };
   private readonly outlineProgress = { value: 0 };
   private readonly scene = new Scene();
-  private readonly camera = new PerspectiveCamera(38, 1, .1, 2000);
+  private readonly camera = new PerspectiveCamera(38, 1, 0.1, 2000);
   private readonly renderer: WebGLRenderer;
   private readonly mapGroup = new Group();
   private cameraFitPoints: Vector3[] = [];
@@ -556,7 +556,7 @@ export class JiangsuMapScene implements Disposable {
         return;
       }
       const active = cityCode === code;
-      const duration = this.reducedMotion || document.hidden ? 0 : .35;
+      const duration = this.reducedMotion || document.hidden ? 0 : 0.35;
       gsap.to(
         object.group.position,
         {

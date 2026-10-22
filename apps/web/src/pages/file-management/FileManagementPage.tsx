@@ -3,17 +3,17 @@ import { ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { findCategoryPath } from '@/features/file-management/categories';
 import { FileCategoryTree } from '@/features/file-management/components/FileCategoryTree';
+import { FileDownloadPanel } from '@/features/file-management/components/FileDownloadPanel';
 import { FileFilterBar } from '@/features/file-management/components/FileFilterBar';
+import { FilePreviewDialog } from '@/features/file-management/components/FilePreviewDialog';
 import { FileTable } from '@/features/file-management/components/FileTable';
 import { FileUploadButton } from '@/features/file-management/components/FileUploadButton';
-import { FileDownloadPanel } from '@/features/file-management/components/FileDownloadPanel';
-import { FilePreviewDialog } from '@/features/file-management/components/FilePreviewDialog';
 import { useFileDownloads } from '@/features/file-management/composables/useFileDownloads';
-import { useFilePreview } from '@/features/file-management/composables/useFilePreview';
 import { useFileList } from '@/features/file-management/composables/useFileList';
+import { useFilePreview } from '@/features/file-management/composables/useFilePreview';
 import styles from './FileManagementPage.module.scss';
 
-/** 文件管理：分类树、筛选、传输、预览、表格与分页 */
+/** 文件管理：左侧分类树；右侧筛选、上传入口、下载进度、表格与分页，预览在弹窗里 */
 export const FileManagementPage = defineComponent({
   name: 'FileManagementPage',
   setup() {

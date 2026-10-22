@@ -1,7 +1,6 @@
 import { z } from 'zod';
-import { http, type TransferProgress } from '@/shared/http/client';
 import { fetchFile } from '@/shared/file-transfer';
-import { ApiError } from '@/shared/http/errors';
+import { http, type TransferProgress } from '@/shared/http/client';
 import { filePreviewType, type FileTransferTarget } from './file-types';
 
 // 字段按 2026-10-08 实测的返回确定（docs/migration.md）；bucket、createdId 等用不到的字段不声明，解析时丢弃
@@ -56,15 +55,15 @@ export function deleteFile(id: string) {
   return http.get('/file/delete', { schema: z.null(), query: { id } });
 }
 
-/** 下载和预览沿用旧项目实际调用的同一取流接口 */
-export async function fetchFileContent(
+/**
+ * 读取文件内容，下载和预览共用；用旧项目实际调用的 /file/download（声明了但没有调用的 /file/preview 不迁移）。
+ * 请求出错时不弹全局提示，由下载、预览各自显示
+ */
+export function fetchFileContent(
   file: FileTransferTarget,
   signal: AbortSignal,
   onProgress?: (progress: TransferProgress) => void
 ) {
-  if (!file.objectKey.trim()) {
-    throw new ApiError({ kind: 'invalid-response', message: '文件地址缺失，无法读取文件' });
-  }
   return fetchFile('/file/download', {
     query: { objectKey: file.objectKey },
     fallbackName: file.name,
@@ -83,7 +82,7 @@ export interface FileUploadInput {
   remark: string;
 }
 
-/** 沿用旧接口的整批提交；暂按用户确认只判断 code，不解释未知的 data 或推断部分成功 */
+/** 一次提交一批文件，共用分类、年份、标签和备注；字段名和旧页面一致（重复追加 files，备注为空时不传） */
 export function uploadFiles(input: FileUploadInput, onProgress?: (progress: TransferProgress) => void) {
   const body = new FormData();
   for (const file of input.files) {
@@ -92,11 +91,14 @@ export function uploadFiles(input: FileUploadInput, onProgress?: (progress: Tran
   body.append('categoryId', input.categoryId);
   body.append('year', input.year);
   body.append('tag', input.tag);
-  if (input.remark.trim()) {
-    body.append('remark', input.remark.trim());
+  const remark = input.remark.trim();
+  if (remark) {
+    body.append('remark', remark);
   }
-  // shared/http 校验 code；返回数据主动丢弃，待后端恢复后再收紧契约（见 docs/modules/file-management.md）
   return http.post('/file/upload', body, {
-    schema: z.unknown().transform(() => undefined), onUploadProgress: onProgress, silent: true
+    // 后端不可达时用户确认先只判断 code：返回的 data 丢弃，不推断部分成功；后端恢复后按真实返回收紧（docs/modules/file-management.md）
+    schema: z.unknown().transform(() => undefined),
+    onUploadProgress: onProgress,
+    silent: true
   });
 }

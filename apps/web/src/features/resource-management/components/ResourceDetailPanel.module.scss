@@ -1,8 +1,12 @@
+// 头部放不下"返回 / 修改"时换行
 .panel > header {
   flex-wrap: wrap;
 }
 
-.panel > header + div { overflow: hidden; }
+// 只有属性表滚动，其余部分固定占高
+.panel > header + div {
+  overflow: hidden;
+}
 
 .categoryRow {
   display: flex;
@@ -12,67 +16,150 @@
   gap: var(--space-sm) var(--space-lg);
   min-height: 32px;
   margin-bottom: var(--space-md);
+
+  > :first-child {
+    flex: none;
+  }
+
+  > .hint {
+    flex-basis: 100%;
+  }
 }
-.categoryRow > :first-child { flex: none; }
-.categoryRow > .hint { flex-basis: 100%; }
-.metadataSection { flex: none; }
-.metadataSection[data-collapsed] > :last-child { display: none; }
-.attributes { flex: 1; min-height: 0; }
-.attributes > :first-child { flex: none; flex-wrap: wrap; align-self: flex-start; max-width: 100%; }
-.attributes > :last-child { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-.attributeTable { flex: 1; min-height: 0; }
-.importHint, .importStatus {
+
+.categorySelect {
+  width: min(100%, 360px);
+}
+
+.metadataSection {
   flex: none;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+
+  // 收起时只留标题行
+  &[data-collapsed] > :last-child {
+    display: none;
+  }
 }
-.importHint { white-space: nowrap; }
-.importStatus { margin: 0 0 var(--space-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.importError { color: var(--el-color-danger); }
-.importSuccess { color: var(--el-color-success); }
 
 .metadata {
-  margin: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-sm) var(--space-xl);
+  margin: 0;
 }
+
 .metadataItem {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr);
-  gap: 12px;
   align-items: baseline;
+  gap: var(--space-md);
   line-height: var(--line-height-base);
 
-  dt { color: var(--color-text-secondary); }
-  dd { margin: 0; min-width: 0; }
+  dt {
+    color: var(--color-text-secondary);
+  }
+
+  dd {
+    min-width: 0;
+    margin: 0;
+  }
 }
 
+// 长值省略，点开看全文；外观是普通文字
 .value {
   display: block;
   width: 100%;
+  padding: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   border: 0;
   background: none;
-  padding: 0;
-  text-align: left;
-  font: inherit;
   color: var(--color-text-primary);
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.categorySelect { width: min(100%, 360px); }
-.attributeName { overflow-wrap: anywhere; }
-.notice { flex: none; margin-bottom: var(--space-md); }
-.hint { flex: none; color: var(--color-text-secondary); margin: var(--space-md) 0 0; }
+// 属性表占满剩下的高度，在内部滚动
+.attributes {
+  flex: 1;
+  min-height: 0;
+
+  // 标题行：标题、"导入"和格式提示放不下时换行
+  > :first-child {
+    flex: none;
+    flex-wrap: wrap;
+    align-self: flex-start;
+    max-width: 100%;
+  }
+
+  > :last-child {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+}
+
+.attributeTable {
+  flex: 1;
+  min-height: 0;
+}
+
+.attributeName {
+  overflow-wrap: anywhere;
+}
+
+.importHint,
+.importStatus {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.importHint {
+  white-space: nowrap;
+}
+
+.importStatus {
+  margin: 0 0 var(--space-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.importError {
+  color: var(--color-danger);
+}
+
+.importSuccess {
+  color: var(--color-success);
+}
+
+.notice {
+  flex: none;
+  margin-bottom: var(--space-md);
+}
+
+.hint {
+  flex: none;
+  margin: var(--space-md) 0 0;
+  color: var(--color-text-secondary);
+}
 
 @media (max-width: 900px) {
-  .metadata { grid-template-columns: minmax(0, 1fr); }
+  .metadata {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 560px) {
-  .panel > header { padding-top: var(--space-sm); padding-bottom: var(--space-sm); }
-  .panel > header > :first-child { flex-basis: 100%; }
+  .panel > header {
+    padding-top: var(--space-sm);
+    padding-bottom: var(--space-sm);
+  }
+
+  // 窄屏时标题独占一行，按钮在下一行
+  .panel > header > :first-child {
+    flex-basis: 100%;
+  }
 }

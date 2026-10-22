@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, type EffectScope } from 'vue';
-import { canPreviewSample, useDocumentPreview, useDownloadPreview, type PreviewSample } from './useTransferPreview';
+import { canPreviewSample, type PreviewSample, useDownloadSample, usePreviewSample } from './useTransferPreview';
 
-const sample: PreviewSample = { id: 'one', name: '说明.docx', type: 'docx', year: '2026', tag: '综合' };
+const sample: PreviewSample = { id: 'one', objectKey: 'one', name: '说明.txt', type: 'txt', year: '2026', tag: '综合' };
 const scopes: EffectScope[] = [];
 
-/** 独立作用域确保测试结束时模拟任务已释放 */
+/** 每个模型在自己的作用域里创建，用例结束时停止作用域，模拟计时器也随之清掉 */
 function setup<T>(create: () => T): T {
   vi.useFakeTimers();
   const scope = effectScope();
@@ -19,104 +19,123 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('下载与预览原型边界', () => {
-  it('提供文档与图片预览入口，其他格式只下载', () => {
+describe('文件管理样例的演示模型', () => {
+  it('预览范围和正式页一致：文档和图片可预览，其他格式只下载', () => {
     for (const type of ['DOCX', 'pdf', 'txt', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']) {
-      expect(canPreviewSample({ ...sample, type })).toBe(true);
+      expect(canPreviewSample({ type })).toBe(true);
     }
     for (const type of ['doc', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'html', 'svg']) {
-      expect(canPreviewSample({ ...sample, type })).toBe(false);
+      expect(canPreviewSample({ type })).toBe(false);
     }
   });
 
   it('下载同一文件防重复，取消一项不影响其他项', () => {
-    const model = setup(useDownloadPreview);
-    model.start(sample);
-    model.start(sample);
-    model.start({ ...sample, id: 'two' });
+    const model = setup(useDownloadSample);
+    void model.start(sample);
+    void model.start(sample);
+    void model.start({ ...sample, id: 'two' });
     expect(model.tasks.value).toHaveLength(2);
     const first = model.tasks.value.find(task => task.file.id === 'one')!;
     vi.advanceTimersByTime(1200);
     model.cancel(first);
     vi.advanceTimersByTime(6000);
-    expect(first.phase).toBe('cancelled');
-    expect(first.received).toBe(20);
+    expect(first.phase).toBe('canceled');
+    expect(first.progress?.percent).toBe(20);
     expect(model.tasks.value[0]?.phase).toBe('done');
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('未知总量不生成百分比语义，失败可重新开始，清理不移除进行中项', () => {
-    const model = setup(useDownloadPreview);
+  it('总量未知时不给百分比；失败可以重新开始，清除已结束时保留进行中的', () => {
+    const model = setup(useDownloadSample);
     model.scene.value = 'error';
-    model.start(sample);
+    void model.start(sample);
     vi.advanceTimersByTime(6000);
-    expect(model.tasks.value[0]?.phase).toBe('error');
+    expect(model.tasks.value[0]).toMatchObject({ phase: 'error', failure: '下载失败，请重试' });
     model.scene.value = 'unknown';
-    model.start(sample);
+    void model.start(sample);
     model.clearFinished();
-    expect(model.tasks.value[0]).toMatchObject({ phase: 'receiving', received: 0, unknown: true });
+    vi.advanceTimersByTime(600);
+    expect(model.tasks.value[0]).toMatchObject({ phase: 'receiving', progress: { total: null, percent: null } });
     vi.advanceTimersByTime(6000);
     expect(model.tasks.value[0]?.phase).toBe('done');
     model.clearFinished();
     expect(model.tasks.value).toEqual([]);
   });
 
-  it('接收后的检查仍算进行中，清除已结束只保留接收和检查，可分别取消', () => {
-    const model = setup(useDownloadPreview);
+  it('一次列出全部状态；检查中仍算进行中，可以取消', () => {
+    const model = setup(useDownloadSample);
     model.showStates(sample);
-    expect(model.tasks.value).toHaveLength(6);
-    expect(model.isReceiving('demo-checking')).toBe(true);
+    expect(model.tasks.value.map(task => task.phase)).toEqual([
+      'receiving',
+      'receiving',
+      'checking',
+      'error',
+      'done',
+      'canceled'
+    ]);
+    expect(model.isDownloading('demo-checking')).toBe(true);
     model.clearFinished();
     expect(model.tasks.value.map(task => task.phase)).toEqual(['receiving', 'receiving', 'checking']);
     model.cancel(model.tasks.value[2]);
-    expect(model.isReceiving('demo-checking')).toBe(false);
+    expect(model.isDownloading('demo-checking')).toBe(false);
     model.clearAll();
     expect(model.tasks.value).toEqual([]);
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('关闭中止预览；快速重开不被上一轮失败覆盖', () => {
-    const model = setup(useDocumentPreview);
-    model.scene.value = 'render-error';
-    model.open(sample);
-    vi.advanceTimersByTime(1200);
+  it('关闭中止预览；快速重开不被上一轮的失败覆盖', async () => {
+    const model = setup(usePreviewSample);
+    model.scene.value = 'error';
+    const first = model.open(sample);
     model.close();
+    await vi.advanceTimersByTimeAsync(1200);
+    await first;
     expect(model.file.value).toBeNull();
     expect(model.visible.value).toBe(false);
-    expect(vi.getTimerCount()).toBe(0);
     model.scene.value = 'success';
-    model.open({ ...sample, id: 'two', type: 'txt' });
-    vi.advanceTimersByTime(600);
+    const second = model.open({ ...sample, id: 'two' });
+    await vi.advanceTimersByTimeAsync(600);
     expect(model.phase.value).toBe('reading');
-    vi.advanceTimersByTime(1200);
+    await vi.advanceTimersByTimeAsync(600);
+    await second;
     expect(model.phase.value).toBe('ready');
+    expect(model.content.value).toMatchObject({ kind: 'text' });
     expect(model.file.value?.id).toBe('two');
   });
 
-  it('读取失败可以重试，不支持的文件作废上一轮预览', () => {
-    const model = setup(useDocumentPreview);
+  it('读取失败可以重试；不支持的格式直接说明只能下载', async () => {
+    const model = setup(usePreviewSample);
     model.scene.value = 'error';
-    model.open(sample);
-    vi.advanceTimersByTime(1200);
+    const failed = model.open(sample);
+    await vi.advanceTimersByTimeAsync(1200);
+    await failed;
     expect(model.failure.value).toBe('文件读取失败，请重试');
-    model.retry();
-    vi.advanceTimersByTime(1800);
+    const retried = model.retry();
+    await vi.advanceTimersByTimeAsync(1200);
+    await retried;
     expect(model.phase.value).toBe('ready');
-    model.open({ ...sample, type: 'xlsx' });
-    expect(model.visible.value).toBe(false);
-    expect(model.file.value).toBeNull();
+    await model.open({ ...sample, type: 'xlsx' });
+    expect(model.phase.value).toBe('error');
+    expect(model.failure.value).toContain('下载');
   });
 
-  it('离开原型页面清理所有下载与预览计时器', () => {
-    const downloads = setup(useDownloadPreview);
-    const preview = setup(useDocumentPreview);
+  it('显示失败一次：内容交给阅读区后报告失败', async () => {
+    const model = setup(usePreviewSample);
+    model.scene.value = 'render-error';
+    const pending = model.open(sample);
+    await vi.advanceTimersByTimeAsync(1200);
+    await pending;
+    expect(model.phase.value).toBe('error');
+    expect(model.content.value).toBeNull();
+  });
+
+  it('离开样例页面时清掉全部下载和预览的计时器', () => {
+    const downloads = setup(useDownloadSample);
+    const preview = setup(usePreviewSample);
     downloads.scene.value = 'waiting';
-    downloads.start(sample);
-    preview.open(sample);
+    void downloads.start(sample);
+    void preview.open(sample);
     scopes.forEach(scope => scope.stop());
     expect(vi.getTimerCount()).toBe(0);
-    vi.advanceTimersByTime(8000);
-    expect(preview.phase.value).toBe('reading');
-    expect(downloads.tasks.value[0]?.received).toBe(0);
   });
 });

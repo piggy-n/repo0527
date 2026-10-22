@@ -44,28 +44,50 @@ function backend() {
     mock.post('/backend/resource-management/menu/:action', async ({ request, params }) => {
       const action = String(params.action);
       writes.push(action);
-      request.signal.addEventListener('abort', () => { aborted = true; });
+      request.signal.addEventListener('abort', () => {
+        aborted = true;
+      });
       await gate;
-      if (failure) { return HttpResponse.json({ code: 500, msg: '目录操作失败' }); }
+      if (failure) {
+        return HttpResponse.json({ code: 500, msg: '目录操作失败' });
+      }
       if (action === 'delete') {
         const id = new URL(request.url).searchParams.get('id');
-        tree.forEach(group => { group.children = group.children?.filter(node => node.id !== id); });
+        tree.forEach(group => {
+          group.children = group.children?.filter(node => node.id !== id);
+        });
       } else {
         const body = await request.json() as { name: string; parentId?: string; id?: string };
         if (action === 'add') {
           const group = tree.find(node => node.id === body.parentId);
-          if (group) { group.children = [...(group.children ?? []), { id: 'new', name: body.name }]; }
+          if (group) {
+            group.children = [...(group.children ?? []), { id: 'new', name: body.name }];
+          }
         } else {
           const node = tree.flatMap(group => group.children ?? []).find(child => child.id === body.id);
-          if (node) { node.name = body.name; }
+          if (node) {
+            node.name = body.name;
+          }
         }
       }
       return HttpResponse.json({ code: 200, data: null });
     })
   );
-  return { tree, writes, pages, fail: (value: boolean) => { failure = value; },
-    hold: () => { gate = new Promise<void>(resolve => { release = resolve; }); },
-    release: () => release?.(), aborted: () => aborted };
+  return {
+    tree,
+    writes,
+    pages,
+    fail: (value: boolean) => {
+      failure = value;
+    },
+    hold: () => {
+      gate = new Promise<void>(resolve => {
+        release = resolve;
+      });
+    },
+    release: () => release?.(),
+    aborted: () => aborted
+  };
 }
 
 function host() {
@@ -162,7 +184,11 @@ describe('目录维护流程', () => {
     const { editor, list, session, wrapper } = host();
     await vi.waitFor(() => expect(list.directoryId.value).toBe('land'));
     editor.open('remove', 'land');
-    if (kind === 'session') { session.clear(); } else { wrapper.unmount(); }
+    if (kind === 'session') {
+      session.clear();
+    } else {
+      wrapper.unmount();
+    }
     expect(await editor.submit()).toBe(false);
     expect(api.writes).toEqual([]);
   });

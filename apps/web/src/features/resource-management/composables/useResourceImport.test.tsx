@@ -42,15 +42,25 @@ function backend() {
     }),
     mock.post('/backend/resource-management/layer/create-attribute-by-excel', async ({ request }) => {
       let release!: () => void;
-      const gate = new Promise<void>(resolve => { release = resolve; });
+      const gate = new Promise<void>(resolve => {
+        release = resolve;
+      });
       const write = { release, aborted: false };
       writes.push(write);
       releases.add(release);
-      request.signal.addEventListener('abort', () => { write.aborted = true; });
-      if (state.hold) { await gate; }
+      request.signal.addEventListener('abort', () => {
+        write.aborted = true;
+      });
+      if (state.hold) {
+        await gate;
+      }
       releases.delete(release);
-      if (state.network) { return HttpResponse.error(); }
-      if (state.fail) { return HttpResponse.json({ code: 500, msg: '模板不符合要求' }); }
+      if (state.network) {
+        return HttpResponse.error();
+      }
+      if (state.fail) {
+        return HttpResponse.json({ code: 500, msg: '模板不符合要求' });
+      }
       data.attributes[0].name = '导入后的名称';
       return HttpResponse.json({ code: 200, data: { unknown: '不解释此结果' } });
     })

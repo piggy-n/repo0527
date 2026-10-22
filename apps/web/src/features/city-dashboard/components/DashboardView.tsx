@@ -28,7 +28,7 @@ export const DashboardView = defineComponent({
     useResizeObserver(shell, entries => {
       const size = entries[0]?.contentRect;
       if (size) {
-        density.value = Math.max(.9, Math.min(1.8, size.width / 1920, size.height / 1080));
+        density.value = Math.max(0.9, Math.min(1.8, size.width / 1920, size.height / 1080));
       }
     });
 

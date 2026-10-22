@@ -17,7 +17,7 @@
 // Popconfirm 的内容传送到 body，通过本地操作区限定样式范围
 :global(.el-popconfirm):has(.confirmActions) {
   font-size: var(--font-size-xs);
-  line-height: 18px;
+  line-height: var(--line-height-compact);
   color: var(--color-text-regular);
 
   :global(.el-popconfirm__action) {

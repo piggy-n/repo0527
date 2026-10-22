@@ -244,7 +244,7 @@
   background-color: var(--color-neutral-bg);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
-  line-height: 18px;
+  line-height: var(--line-height-compact);
 }
 
 // 只纵向滚动：透明度滑块等行内的内容不撑开列表

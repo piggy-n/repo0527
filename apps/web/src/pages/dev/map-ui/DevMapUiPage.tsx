@@ -99,14 +99,14 @@ const MapUiSamples = defineComponent({
                     labels={{ legend: '图例', boundaries: '行政区' }}
                     collapsed={collapsed.value}
                     collapsible
-                    onUpdate:collapsed={value => { collapsed.value = value; }}>
+                    onUpdate:collapsed={value => (collapsed.value = value)}>
                     {{
                       legend: ({ active }: PanelSlotProps) => [
                         <ResourceLegend
                           layers={layers}
                           symbols={symbols}
                           active={active}
-                          onEditingChange={value => { editing.value = value; }}
+                          onEditingChange={value => (editing.value = value)}
                         />
                       ],
                       'legend-footer': () => !editing.value && symbols.overrides.value.size > 0
@@ -147,7 +147,7 @@ const MapUiSamples = defineComponent({
                     label="底图"
                     opacity={basemap.opacity.value}
                     open={basemapOpen.value}
-                    onUpdate:open={value => { basemapOpen.value = value; }}
+                    onUpdate:open={value => (basemapOpen.value = value)}
                     onOpacityChange={basemap.setOpacity}>
                     {{
                       reference: () => [
@@ -217,14 +217,32 @@ export const DevMapUiPage = defineComponent({
         </header>
         <div class={styles.controls}>
           <span>面板宽度</span>
-          <ElRadioGroup modelValue={width.value} onUpdate:modelValue={value => { width.value = Number(value); }} size="small">
-            {[320, 280, 240].map(value => <ElRadioButton value={value}>{value}px</ElRadioButton>)}
+          <ElRadioGroup
+            modelValue={width.value}
+            onUpdate:modelValue={value => (width.value = Number(value))}
+            size="small"
+          >
+            {[320, 280, 240].map(value => (
+              <ElRadioButton key={value} value={value}>
+                {value}px
+              </ElRadioButton>
+            ))}
           </ElRadioGroup>
           <span>可用高度</span>
-          <ElRadioGroup modelValue={height.value} onUpdate:modelValue={value => { height.value = Number(value); }} size="small">
-            {[520, 360].map(value => <ElRadioButton value={value}>{value}px</ElRadioButton>)}
+          <ElRadioGroup
+            modelValue={height.value}
+            onUpdate:modelValue={value => (height.value = Number(value))}
+            size="small"
+          >
+            {[520, 360].map(value => (
+              <ElRadioButton key={value} value={value}>
+                {value}px
+              </ElRadioButton>
+            ))}
           </ElRadioGroup>
-          <ElButton size="small" onClick={() => { revision.value++; }}>还原样例</ElButton>
+          <ElButton size="small" onClick={() => revision.value++}>
+            还原样例
+          </ElButton>
         </div>
         <MapUiSamples key={revision.value} width={width.value} height={height.value} />
       </main>

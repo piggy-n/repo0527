@@ -1,5 +1,4 @@
 import { type BinaryRequestOptions, http } from '../http/client';
-import { ApiError } from '../http/errors';
 import { downloadFileName } from './file-name';
 
 export type { TransferProgress } from '../http/client';
@@ -16,13 +15,11 @@ export interface DownloadedFile {
   fileName: string;
 }
 
-/** 读取文件，识别错误后再整理文件名和缺失的 MIME；不触发保存或提示 */
+/** 读取文件，识别错误后再整理文件名和缺失的 MIME；不触发保存或提示。取消后 getBlob 不会交出晚到的结果 */
 export async function fetchFile(url: string, options: FetchFileOptions): Promise<DownloadedFile> {
   const { fallbackName, fallbackType, ...requestOptions } = options;
   const response = await http.getBlob(url, requestOptions);
-  if (options.signal?.aborted) {
-    throw new ApiError({ kind: 'canceled', message: '请求已取消', url });
-  }
+  // 只补缺失或通用的类型，不覆盖服务端明确给出的类型
   const mime = (response.contentType ?? response.blob.type).split(';')[0]?.trim().toLowerCase();
   const blob = fallbackType && (!mime || mime === 'application/octet-stream')
     ? new Blob([response.blob], { type: fallbackType })

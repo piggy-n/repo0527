@@ -20,7 +20,9 @@ function fixture() {
   const reload = vi.fn<(href: string) => void>();
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   const recovery = createNavigationRecovery(router, reload);
-  return { router, recovery, reload, load, restore: () => { failed = false; } };
+  return { router, recovery, reload, load, restore: () => {
+    failed = false;
+  } };
 }
 
 describe('导航失败恢复', () => {
@@ -68,7 +70,9 @@ describe('导航失败恢复', () => {
     router.addRoute({
       path: '/slow',
       component: () => {
-        return new Promise<{ render: () => null }>((_resolve, onReject) => { reject = onReject; });
+        return new Promise<{ render: () => null }>((_resolve, onReject) => {
+          reject = onReject;
+        });
       }
     });
     const previous = navigate(router, '/slow');

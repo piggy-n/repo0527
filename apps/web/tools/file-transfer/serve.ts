@@ -86,6 +86,12 @@ async function close() {
   await server.close();
 }
 
-const timeout = setTimeout(() => { void close(); }, 180_000);
-process.once('SIGTERM', () => { void close(); });
-process.once('SIGINT', () => { void close(); });
+const timeout = setTimeout(() => {
+  void close();
+}, 180_000);
+process.once('SIGTERM', () => {
+  void close();
+});
+process.once('SIGINT', () => {
+  void close();
+});

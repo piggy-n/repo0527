@@ -45,8 +45,12 @@
   margin-left: 0;
 }
 
+// 触屏没有悬浮，操作一直显示
 @media (hover: none), (any-pointer: coarse) {
-  .treeActions { opacity: 1; pointer-events: auto; }
+  .treeActions {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .state {
@@ -76,4 +80,13 @@
 .confirmText {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.confirmDialog {
+  width: min(480px, calc(100vw - 32px));
+}
+
+.confirmMessage {
+  margin: 0;
+  line-height: var(--line-height-base);
 }

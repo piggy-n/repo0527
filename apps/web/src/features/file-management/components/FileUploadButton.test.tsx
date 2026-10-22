@@ -13,7 +13,11 @@ import { FileUploadButton } from './FileUploadButton';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => { server.resetHandlers(); localStorage.clear(); document.body.innerHTML = ''; });
+afterEach(() => {
+  server.resetHandlers();
+  localStorage.clear();
+  document.body.innerHTML = '';
+});
 afterAll(() => server.close());
 
 async function openUpload() {
@@ -84,7 +88,9 @@ describe('正式上传入口', () => {
     const error = vi.spyOn(ElMessage, 'error').mockReturnValue({ close: () => undefined });
     let release: (() => void) | undefined;
     server.use(mock.post('/backend/file/upload', async () => {
-      await new Promise<void>(resolve => { release = resolve; });
+      await new Promise<void>(resolve => {
+        release = resolve;
+      });
       return HttpResponse.json({ code: 500, msg: '上传失败' });
     }));
     const wrapper = await openUpload();

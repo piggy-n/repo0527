@@ -117,15 +117,16 @@ const resourceAttributeSchema = z.looseObject({
 
 export type ResourceAttribute = z.infer<typeof resourceAttributeSchema>;
 
+// 2026-10-21、2026-10-22 实测的详情字段；数据来源是 submit_unit（旧页面读的 submitUnit 并不存在，显示为空）
 const resourceDetailSchema = z.object({
   id: z.string().min(1),
   resourceName: z.string(),
   datasetName: z.string().nullish(),
   datasetCode: z.string().nullish(),
+  // 同一数据集的图层代码，逗号分隔
   datasets: z.string().nullish(),
   year: z.number().int().nullable(),
   submit_unit: z.string().nullish(),
-  submitUnit: z.string().nullish(),
   layerName: z.string().nullish(),
   layerCode: z.string().nullish(),
   elementType: z.string().nullish(),
@@ -152,17 +153,21 @@ export interface ResourceDetailChange {
   attributes: ResourceAttribute[];
 }
 
-/** shared HTTP 同时支持 PUT query 和 JSON body，无需旧项目的兼容分支 */
+/** 保存数据分类和字段名称：资源 ID 和分类在 query 里，属性数组是正文（shared/http 两者可以同时传，不需要旧项目的兼容写法） */
 export function saveResourceDetail(change: ResourceDetailChange) {
   return http.put('/resource-management/layer/edit-struct', change.attributes, {
-    query: { id: change.id, resourceName: change.resourceName }, schema: z.unknown(), silent: true
+    query: { id: change.id, resourceName: change.resourceName },
+    schema: z.unknown(),
+    silent: true
   });
 }
 
-/** 后端按 RequestParam 读取启停状态，使用 POST query、字符串布尔值和空正文 */
+/** 启用或停用图层；后端按 RequestParam 读取，状态是 query 里的字符串布尔值，没有正文 */
 export function setResourceStatus(id: string, enabled: boolean) {
   return http.post('/resource-management/layer/status', undefined, {
-    query: { id, status: enabled ? 'true' : 'false' }, schema: z.unknown(), silent: true
+    query: { id, status: enabled ? 'true' : 'false' },
+    schema: z.unknown(),
+    silent: true
   });
 }
 
@@ -171,12 +176,17 @@ export interface ResourceExcelImport {
   year: number | null;
 }
 
-/** 按旧入口仅发送 file/year；用户允许暂按成功业务码处理，未知 data 主动丢弃 */
+/** 导入属性规范 Excel；和旧页面一样只发 file 与详情的年份，不带图层 ID */
 export function importResourceExcel(input: ResourceExcelImport, onUploadProgress?: (value: TransferProgress) => void) {
   const body = new FormData();
   body.append('file', input.file);
-  if (input.year !== null) { body.append('year', String(input.year)); }
+  if (input.year !== null) {
+    body.append('year', String(input.year));
+  }
   return http.post('/resource-management/layer/create-attribute-by-excel', body, {
-    schema: z.unknown().transform(() => undefined), onUploadProgress, silent: true
+    // 返回结构还没有实测，用户允许先只判断业务码；data 丢弃，不推断导入数量（docs/modules/resource-management.md）
+    schema: z.unknown().transform(() => undefined),
+    onUploadProgress,
+    silent: true
   });
 }

@@ -26,12 +26,8 @@ describe('fetchFileContent', () => {
     expect(result.blob.size).toBe(6);
   });
 
-  it('失败信封不能作为文件，地址缺失不发送请求', async () => {
-    const handler = vi.fn<() => Response>(() => HttpResponse.json({ code: 40000, msg: '文件不存在' }));
-    server.use(mock.get('/backend/file/download', handler));
-    await expect(fetchFileContent({ ...file, objectKey: ' ' }, new AbortController().signal))
-      .rejects.toMatchObject({ kind: 'invalid-response', message: '文件地址缺失，无法读取文件' });
-    expect(handler).not.toHaveBeenCalled();
+  it('失败信封不能作为文件', async () => {
+    server.use(mock.get('/backend/file/download', () => HttpResponse.json({ code: 40000, msg: '文件不存在' })));
     await expect(fetchFileContent(file, new AbortController().signal))
       .rejects.toMatchObject({ kind: 'business', message: '文件不存在' });
   });

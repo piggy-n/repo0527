@@ -1,40 +1,39 @@
 import { Upload } from '@element-plus/icons-vue';
 import { ElButton, ElMessage } from 'element-plus';
-import { defineComponent, onScopeDispose } from 'vue';
-import { useSessionStore } from '@/shared/auth/session-store';
+import { defineComponent } from 'vue';
 import { useFileUpload } from '../composables/useFileUpload';
 import { FileUploadDialog } from './FileUploadDialog';
 
-/** 上传入口持有整批任务，关窗后仍可查看进度 */
+/** 上传入口：持有这一批的上传任务，关窗后仍可点开查看进度 */
 export const FileUploadButton = defineComponent({
   name: 'FileUploadButton',
-  props: { categoryId: { type: String, required: true } },
+  props: {
+    categoryId: { type: String, required: true }
+  },
   setup(props) {
     const upload = useFileUpload();
-    const session = useSessionStore();
-    let disposed = false;
-    onScopeDispose(() => { disposed = true; });
-    const submit = async () => {
-      const sentSession = session.session;
+
+    // 窗口开着时结果显示在窗口里；关窗后在后台结束的这一批用消息提示。
+    // 页面销毁、换会话后 submit 返回 false 且不进入失败，这里也就不提示
+    async function submit() {
       const success = await upload.submit();
-      // UI 又经过一次等待，提示前再次确认页面和会话有效
-      if (disposed || session.session !== sentSession || !session.isActive()) {
+      if (upload.visible.value) {
         return;
       }
-      if (!upload.visible.value) {
-        if (success) {
-          ElMessage.success('上传成功');
-        } else if (upload.phase.value === 'error') {
-          ElMessage.error(`${upload.failure.value}，请先核对列表再决定是否重试`);
-        }
+      if (success) {
+        ElMessage.success('上传成功');
+      } else if (upload.phase.value === 'error') {
+        ElMessage.error(`${upload.failure.value}，请先核对列表再决定是否重试`);
       }
-    };
+    }
 
-    return () => <>
-      <ElButton type="primary" icon={Upload} onClick={() => upload.open(props.categoryId)}>
-        {upload.busy.value ? '查看上传进度' : '上传文件'}
-      </ElButton>
-      <FileUploadDialog model={upload} onSubmit={() => void submit()} />
-    </>;
+    return () => (
+      <>
+        <ElButton type="primary" icon={Upload} onClick={() => upload.open(props.categoryId)}>
+          {upload.busy.value ? '查看上传进度' : '上传文件'}
+        </ElButton>
+        <FileUploadDialog model={upload} onSubmit={() => void submit()} />
+      </>
+    );
   }
 });

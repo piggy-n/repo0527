@@ -27,7 +27,7 @@ describe('下载进度与项目主题的真实布局', () => {
   it('各状态及窄屏长错误的首行文字和操作按钮保持同一基线', async () => {
     const host = document.body.appendChild(document.createElement('div'));
     host.style.width = '1000px';
-    const phases: FileDownloadTask['phase'][] = ['receiving', 'receiving', 'checking', 'done', 'cancelled', 'error'];
+    const phases: FileDownloadTask['phase'][] = ['receiving', 'receiving', 'checking', 'done', 'canceled', 'error'];
     const tasks = ref<FileDownloadTask[]>(phases.map((phase, index) => ({
       file: { id: String(index), name: `测试文件${index}.txt`, type: 'txt', objectKey: String(index) },
       phase,
@@ -39,8 +39,8 @@ describe('下载进度与项目主题的真实布局', () => {
       start: vi.fn<DownloadModel['start']>(async () => undefined),
       cancel: vi.fn<DownloadModel['cancel']>(),
       clearFinished: vi.fn<DownloadModel['clearFinished']>(),
-      isDownloading: id => tasks.value.some(task => task.file.id === id
-        && (task.phase === 'receiving' || task.phase === 'checking'))
+      isDownloading: id =>
+        tasks.value.some(task => task.file.id === id && (task.phase === 'receiving' || task.phase === 'checking'))
     };
     const wrapper = mount(FileDownloadPanel, { props: { model }, attachTo: host });
     try {

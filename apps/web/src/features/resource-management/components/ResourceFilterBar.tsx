@@ -6,7 +6,7 @@ import { QueryForm } from '@/shared/query-form/QueryForm';
 import type { ResourceYear } from '../api';
 import type { ResourceFilters } from '../composables/useResourceList';
 
-/** 名称和年份先编辑草稿，明确查询时才应用到请求 */
+/** 资源列表的筛选栏：名称和年份是草稿，点"查询"或回车后才生效（由 useResourceList 处理） */
 export const ResourceFilterBar = defineComponent({
   name: 'ResourceFilterBar',
   props: {
@@ -16,9 +16,24 @@ export const ResourceFilterBar = defineComponent({
     errorYears: Boolean,
     disabled: Boolean
   },
-  emits: { search: () => true, reset: () => true },
+  emits: {
+    search: () => true,
+    reset: () => true
+  },
   setup(props, { emit }) {
     const showLoading = useDelayedFlag(() => props.loadingYears);
+
+    // 回车查询；输入法选字时的回车不算
+    function onNameKeydown(event: Event | KeyboardEvent) {
+      if (!(event instanceof KeyboardEvent) || event.key !== 'Enter') {
+        return;
+      }
+      event.preventDefault();
+      if (!event.isComposing) {
+        emit('search');
+      }
+    }
+
     return () => (
       <QueryForm labelChars={4}>
         {{
@@ -26,22 +41,22 @@ export const ResourceFilterBar = defineComponent({
             <ElFormItem label="资源名称">
               <ElInput
                 modelValue={props.model.name}
-                onUpdate:modelValue={(value: string) => { props.model.name = value; }}
+                onUpdate:modelValue={(value: string) => {
+                  props.model.name = value;
+                }}
                 placeholder="请输入资源名称"
                 clearable
                 disabled={props.disabled}
-                onKeydown={(event: Event | KeyboardEvent) => {
-                  if (event instanceof KeyboardEvent && event.key === 'Enter') {
-                    event.preventDefault();
-                    if (!event.isComposing) { emit('search'); }
-                  }
-                }}
+                onKeydown={onNameKeydown}
               />
             </ElFormItem>,
             <ElFormItem label="年份">
               <ElSelect
                 modelValue={props.model.year}
-                onUpdate:modelValue={(value: string | undefined) => { props.model.year = value ?? ''; }}
+                onUpdate:modelValue={(value: string | undefined) => {
+                  // 清空时是 undefined，表单里用空字符串表示不筛选
+                  props.model.year = value ?? '';
+                }}
                 placeholder="全部"
                 clearable
                 loading={showLoading.value}
@@ -55,7 +70,9 @@ export const ResourceFilterBar = defineComponent({
             <ElButton type="primary" icon={Search} disabled={props.disabled} onClick={() => emit('search')}>
               查询
             </ElButton>,
-            <ElButton icon={RefreshLeft} disabled={props.disabled} onClick={() => emit('reset')}>重置</ElButton>
+            <ElButton icon={RefreshLeft} disabled={props.disabled} onClick={() => emit('reset')}>
+              重置
+            </ElButton>
           ]
         }}
       </QueryForm>

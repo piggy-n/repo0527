@@ -35,7 +35,7 @@ export function prepareRegions(entries: readonly RegionGeometry[]): DashboardReg
       properties: { name: city.name, code: city.code },
       geometry: { type: 'MultiPolygon', coordinates }
     };
-    return simplify(feature, { tolerance: .0006, highQuality: true, mutate: false });
+    return simplify(feature, { tolerance: 0.0006, highQuality: true, mutate: false });
   });
   const projection = geoMercator().center([119.15, 32.9]).scale(1000).translate([0, 0]);
 

@@ -295,7 +295,7 @@ export const CurrentMapPage = defineComponent({
                         layers={resources}
                         symbols={symbols}
                         active={active}
-                        onEditingChange={value => { legendEditing.value = value; }}
+                        onEditingChange={value => (legendEditing.value = value)}
                       />
                     ],
                     'legend-footer': () => !legendEditing.value && symbols.overrides.value.size > 0

@@ -14,13 +14,22 @@ export const DashboardMapFrame = defineComponent({
         size.value = { width: rectangle.width, height: rectangle.height };
       }
     });
+    // 从上边中点出发，分别沿左半边、右半边画到下边中点；四角是圆角，线描在 1 像素内侧
     const paths = computed(() => {
       const { width, height } = size.value;
       const radius = Math.min(10, width / 4, height / 4);
-      return [
-        `M ${width / 2} 1 H ${radius} Q 1 1 1 ${radius} V ${height - radius} Q 1 ${height - 1} ${radius} ${height - 1} H ${width / 2}`,
-        `M ${width / 2} 1 H ${width - radius} Q ${width - 1} 1 ${width - 1} ${radius} V ${height - radius} Q ${width - 1} ${height - 1} ${width - radius} ${height - 1} H ${width / 2}`
+      const center = width / 2;
+      const right = width - 1;
+      const bottom = height - 1;
+      const left = [
+        `M ${center} 1 H ${radius} Q 1 1 1 ${radius}`,
+        `V ${height - radius} Q 1 ${bottom} ${radius} ${bottom} H ${center}`
       ];
+      const rightSide = [
+        `M ${center} 1 H ${width - radius} Q ${right} 1 ${right} ${radius}`,
+        `V ${height - radius} Q ${right} ${bottom} ${width - radius} ${bottom} H ${center}`
+      ];
+      return [left.join(' '), rightSide.join(' ')];
     });
     return () => (
       <svg

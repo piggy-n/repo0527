@@ -54,7 +54,9 @@ function mountLegend() {
           layers={layers}
           symbols={symbols}
           active={active.value}
-          onEditingChange={value => { editing.value = value; }}
+          onEditingChange={value => {
+            editing.value = value;
+          }}
         />
         {active.value && !editing.value && symbols.overrides.value.size > 0 && <ResourceLegendReset symbols={symbols} />}
       </>

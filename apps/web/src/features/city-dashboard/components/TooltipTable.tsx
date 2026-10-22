@@ -21,6 +21,8 @@ export const TooltipTable = defineComponent({
       const index = props.cities.findIndex(city => city.code === props.city.code);
       const rows = props.comparison.filter(item => props.legend[String(item.year)] ?? true).toReversed();
       const current = props.comparison.find(item => item.year === props.activeYear);
+      // 均值至少保留一位小数，整数指标的均值也能看出差别
+      const averagePrecision = Math.max(1, props.indicator.precision);
       let emptyMessage = '';
       if (index < 0) {
         emptyMessage = '该城市未纳入当前筛选';
@@ -57,7 +59,7 @@ export const TooltipTable = defineComponent({
                         {item.year === props.activeYear && <small class={styles.currentYear}>当前</small>}
                       </th>
                       <td>{formatValue(item.values[index], props.indicator, false)}</td>
-                      <td>{formatValue(item.average, props.indicator, false, Math.max(1, props.indicator.precision))}</td>
+                      <td>{formatValue(item.average, props.indicator, false, averagePrecision)}</td>
                     </tr>
                   ))}
                 </tbody>

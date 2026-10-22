@@ -98,6 +98,46 @@ const [
 
 WebStorm 对应设置为 Wrapping and Braces 中的 Chop down if long，函数参数同时启用左括号后换行、右括号独占一行，取消多行参数按列对齐，使用固定续行缩进。
 
+## 语句与块
+
+2026-10-23 代码审查时补充（[审查报告](stages/post-5e-code-review.md)）：`stage-5e` 之前的代码一处也没有下面这些写法，之后的代码里有两百多处，读起来要逐字拆开。格式化器不会自动展开它们，提交前人工检查。
+
+- 一行只写一条语句；`if` 的分支、箭头函数和方法的函数体，有语句就换行，即使只有一句
+- 单个表达式的箭头函数照常写成一行；只赋值一个值时写成 `value => (keyword.value = value)`，这是阶段五以来的写法
+- 换行的长条件把 `&&`、`||` 放在行尾，续行缩进 2 个空格；超过两三个条件时先取一个有名字的变量
+- 不写长串的三元表达式：两层以上的分支改成提前返回的 `if` 或查表
+- 小数写出整数位：`0.85`，不写 `.85`
+
+```typescript
+// 错误
+if (!row || disposed) { return null; }
+onScopeDispose(() => { disposed = true; reset(); });
+const label = busy ? '上传中' : failed ? '重新上传' : '开始上传';
+
+// 正确
+if (!row || disposed) {
+  return null;
+}
+onScopeDispose(() => {
+  disposed = true;
+  reset();
+});
+function submitLabel() {
+  if (busy) {
+    return '上传中';
+  }
+  return failed ? '重新上传' : '开始上传';
+}
+```
+
+TSX 里同样适用：
+
+- 多行 JSX 的返回值写 `return (`，JSX 从下一行开始（见下文"JSX / TSX"）；渲染函数里内容多时拆成 `renderXxx()` 小函数，不在一个表达式里嵌套几层条件
+- 条件渲染的 JSX 跨行时用括号包住：`{visible && (` 换行写 JSX，`)}` 收尾；二选一写 `{cond ? (` … `) : (` … `)}`
+- 带属性的元素，文字子元素另起一行，不写成 `>{text}</ElButton>` 贴在最后一个属性后面
+
+SCSS 同理：一条声明一行，不写 `.a { flex: none; }` 这样的单行规则；选择器列表每个选择器一行。
+
 ## JSX / TSX
 
 ### 标签属性：短的保持单行，换行就按统一格式

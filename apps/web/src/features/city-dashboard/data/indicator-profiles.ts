@@ -207,7 +207,8 @@ export function createProfileValue(cityCode: string, indicator: Indicator, year:
     // 积水点允许零值、局部集中与偶发回升，不强求各城市均匀分布
     const exposure = random('exposure');
     const event = random(`rain:${year}`);
-    value = exposure < 0.2 && event < 0.7 ? 0 : baseline * Math.exp(offset * rate) * (0.25 + exposure ** 2 * 1.8) * (event > 0.85 ? 2.2 : 0.65 + event);
+    const surge = event > 0.85 ? 2.2 : 0.65 + event;
+    value = exposure < 0.2 && event < 0.7 ? 0 : baseline * Math.exp(offset * rate) * (0.25 + exposure ** 2 * 1.8) * surge;
   } else if (settings.pattern === 'project' || settings.pattern === 'distance') {
     const period = 2 + Math.floor(random('period') * 3);
     const phase = Math.floor(random('phase') * period);

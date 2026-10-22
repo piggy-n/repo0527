@@ -105,8 +105,8 @@ DOCX 正式预览建议继续用旧项目的 `docx-preview`，打开 DOCX 时再
 
 ### 请求与状态归属
 
-- `fetchFileContent` 复用 `shared/file-transfer.fetchFile`，准确传递 objectKey；列表名称作为后备文件名，白名单格式提供后备 MIME。缺失 objectKey 本地失败，不调用旧项目未使用的 `/file/preview`
-- `useFileContentRequest` 在 queries.ts 内创建一次操作一个 key 的手动查询，合并调用方与 QueryClient 的取消信号；不重试，离线立即失败，结束后移除查询，避免长期缓存 Blob。请求前和每次异步返回后检查会话，结束会话仍可由全局 QueryClient 清理
+- `fetchFileContent` 复用 `shared/file-transfer.fetchFile`，准确传递 objectKey；列表名称作为后备文件名，白名单格式提供后备 MIME。不调用旧项目未使用的 `/file/preview`
+- 下载和预览由组合式函数直接调用 `fetchFileContent`（和现状底图的点选调用 `queryFeaturesAt` 一样），不放进查询缓存：Blob 不缓存，取消由各自的 `AbortController` / `LatestController` 负责，换会话时 `watch(() => session.token, …)` 中止读取。2026-10-23 前曾借 `queryClient.query()` 登记一次性查询来接收会话结束的取消，和上面的会话侦听重复，已删除（见下文"代码审查后的调整"）
 - `useFileDownloads` 按文件 ID 防重复。不同文件各自接收、取消、重试；筛选和翻页不影响任务区。100% 后仍检查响应内容，成功才交给 `saveFile`，界面只写“已交给浏览器保存”；取消后的晚到结果不得保存，也不得移除新的重试任务
 - `useFilePreview` 使用 LatestController 管理替换；关闭/X/Esc、换文件、卸载、会话变更会停止读取并清空内容。PDF / 图片 URL 在替换、关闭、显示失败时释放；取消不显示错误。预览中的下载是独立操作，关闭预览后仍在列表进度区继续
 - 正式组件为 `FileDownloadPanel`、`FilePreviewDialog` 和 `DocxPreviewContent`。保留分类、筛选、分页、上传与删除；紧凑布局下操作列随表格横向滚动，避免三个固定按钮盖住文件名，桌面仍固定右侧
@@ -179,3 +179,13 @@ pnpm test:smoke
 4. 用真实业务文档补充 DOCX 排版、其他图片编码及部署浏览器的 PDF 验收，不扩展其他 Office 预览
 
 上传、下载与预览原型及本次交互调整均已获用户确认，已完成业务连接和本地 UI 检查。真实后端联调与用户对调整后正式实现的验收仍未完成，不把本地固定接口验证当作阶段六整体完成。
+
+## 代码审查后的调整（2026-10-23）
+
+按 `stage-5e` 之前的代码质量复查本模块，详见[审查报告](../stages/post-5e-code-review.md)。行为上的变化只有一处，其余是写法：
+
+- 登录过期不再让下载、预览没有反应：组合式函数不再预先判断 `isActive()`，请求由 `shared/http` 发现过期后按 401 统一提示并回到登录页；已经发出的下载、上传照常完成（服务端已经接受）。会话核对统一用 `shared/auth/session-guard` 的 `useSessionGuard`（比较 token），见 [auth.md](auth.md)"写操作的会话核对"
+- 删除 `useFileContentRequest`（见上文"请求与状态归属"）；下载阶段的拼写和 `ApiError` 一致，取消是 `canceled`
+- 上传弹窗的字节显示复用 `formatFileBytes`，不再另写一份；DOCX 阅读区的底色、文字色、阴影和间距改为在写入 iframe 时从页面读取令牌（iframe 不继承页面的 CSS 变量），不再写死色值
+- 开发样例 `/dev/file-management` 改为直接使用正式的 `FileUploadDialog`、`FileDownloadPanel`、`FilePreviewDialog`，只把请求结果换成固定数据（演示模型和正式组合式函数接口相同）；预览用 `fixtures/` 里的自建样例文件，DOCX 真实渲染。原来复制的一套下载区和预览弹窗（`TransferPreview.tsx` 及其样式，约 400 行）已删除，不再和正式组件分别维护
+- 待确认：TXT 预览的行距 `1.9` 是验收时确认的效果，规范的行高令牌里没有对应的值，要么补一个阅读用的行高令牌，要么改用 `--line-height-base`（22px，会比现在紧）

@@ -79,7 +79,7 @@ export function imageWithTitle(image: HTMLCanvasElement, title: string, backgrou
   lines.forEach((line, index) => context.fillText(
     line,
     width / 2,
-    16 + (index + .5) * 34
+    16 + (index + 0.5) * 34
   ));
   context.drawImage(image, 0, headingHeight, width, image.height / ratio);
   return canvas;

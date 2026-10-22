@@ -1,52 +1,15 @@
-import { CancelledError, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
-import { useSessionStore, type Session } from '@/shared/auth/session-store';
+import { useSessionGuard } from '@/shared/auth/session-guard';
 import type { TransferProgress } from '@/shared/http/client';
-import { ApiError } from '@/shared/http/errors';
-import { deleteFile, fetchFileContent, fetchFilePage, uploadFiles, type FilePageParams, type FileUploadInput } from './api';
-import type { FileTransferTarget } from './file-types';
+import { deleteFile, fetchFilePage, type FilePageParams, type FileUploadInput, uploadFiles } from './api';
 
 /** 文件管理的 query key 只在这里拼，查询和失效共用，避免两边写得不一致 */
 export const fileKeys = {
   all: ['files'] as const,
   pages: () => [...fileKeys.all, 'page'] as const,
-  content: (objectKey: string, requestId: string) => [...fileKeys.all, 'content', objectKey, requestId] as const,
   page: (params: FilePageParams) => [...fileKeys.pages(), params] as const
 };
-
-/** 手动读取的 Blob 不跨操作缓存；独立 key 让下载和预览各自取消，结束会话仍由 QueryClient 统一清理 */
-export function useFileContentRequest() {
-  const queryClient = useQueryClient();
-  const session = useSessionStore();
-  return async (file: FileTransferTarget, signal: AbortSignal, onProgress?: (progress: TransferProgress) => void) => {
-    const sentSession = session.session;
-    // 临时身份只用于隔离查询，不比较先后；getRandomValues 也可用于普通 HTTP 内网
-    const requestId = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
-    const queryKey = fileKeys.content(file.objectKey, requestId);
-    try {
-      return await queryClient.query({
-        queryKey,
-        queryFn: ({ signal: querySignal }) => {
-          if (signal.aborted || !sentSession || session.session !== sentSession || !session.isActive()) {
-            throw new ApiError({ kind: 'canceled', message: '文件读取已取消' });
-          }
-          return fetchFileContent(file, AbortSignal.any([signal, querySignal]), onProgress);
-        },
-        retry: false,
-        // 手动操作离线时直接失败，不排队在恢复联网后悄悄开始下载
-        networkMode: 'always',
-        gcTime: 0
-      });
-    } catch (error) {
-      if (error instanceof CancelledError) {
-        throw new ApiError({ kind: 'canceled', message: '文件读取已取消' });
-      }
-      throw error;
-    } finally {
-      queryClient.removeQueries({ queryKey, exact: true });
-    }
-  };
-}
 
 /** 某个分类下某一页的文件；同一分类内翻页、筛选时保留上一次的数据，换分类时不保留 */
 export function useFilePageQuery(params: MaybeRefOrGetter<FilePageParams>) {
@@ -60,50 +23,46 @@ export function useFilePageQuery(params: MaybeRefOrGetter<FilePageParams>) {
   });
 }
 
+/** 写操作的参数都带上提交时的会话（useSessionGuard 的 capture） */
+interface DeleteSubmission {
+  id: string;
+  token: string | undefined;
+}
+
 /** 删除文件，成功后让所有分页缓存失效；不传 signal，请求发出后后端就会执行，组件卸载也不取消 */
 export function useDeleteFileMutation() {
   const queryClient = useQueryClient();
-  const session = useSessionStore();
+  const sessionGuard = useSessionGuard();
   return useMutation({
-    mutationFn: (submission: { id: string; session: Session }) => {
-      if (session.session !== submission.session) {
-        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
-      }
-      return deleteFile(submission.id);
+    mutationFn: ({ id, token }: DeleteSubmission) => {
+      // 从提交到真正发请求之间可能已换会话，不能用新会话的凭据删除
+      sessionGuard.assertCurrent(token);
+      return deleteFile(id);
     },
-    onSuccess: (_data, submission) => {
-      if (session.session === submission.session) {
-        return queryClient.invalidateQueries({ queryKey: fileKeys.pages() });
-      }
-      return undefined;
-    }
+    // 旧会话的结果不刷新新会话的缓存
+    onSuccess: (_data, { token }) =>
+      sessionGuard.isCurrent(token) ? queryClient.invalidateQueries({ queryKey: fileKeys.pages() }) : undefined
   });
 }
 
 interface UploadSubmission {
   input: FileUploadInput;
-  session: Session;
+  token: string | undefined;
   onProgress: (progress: TransferProgress) => void;
 }
 
-/** 写操作不随页面销毁取消、不自动重试；晚到的成功只能使原会话的列表失效 */
+/** 上传一批文件；和删除一样不随页面销毁取消，晚到的成功只让原会话的列表失效 */
 export function useUploadFilesMutation() {
   const queryClient = useQueryClient();
-  const session = useSessionStore();
+  const sessionGuard = useSessionGuard();
   return useMutation({
-    mutationFn: (submission: UploadSubmission) => {
-      // mutation 调度到真正发请求前可能已换会话，不能用新凭据发送旧草稿
-      if (session.session !== submission.session) {
-        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
-      }
-      return uploadFiles(submission.input, submission.onProgress);
+    mutationFn: ({ input, token, onProgress }: UploadSubmission) => {
+      sessionGuard.assertCurrent(token);
+      return uploadFiles(input, onProgress);
     },
+    // 显式不重试：失败时可能已经部分写入，重发会产生重复文件，由用户核对列表后决定
     retry: false,
-    onSuccess: (_data, submission) => {
-      if (session.session === submission.session && session.isActive()) {
-        return queryClient.invalidateQueries({ queryKey: fileKeys.pages() });
-      }
-      return undefined;
-    }
+    onSuccess: (_data, { token }) =>
+      sessionGuard.isCurrent(token) ? queryClient.invalidateQueries({ queryKey: fileKeys.pages() }) : undefined
   });
 }

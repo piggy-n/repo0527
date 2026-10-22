@@ -213,7 +213,7 @@ button.summary {
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
-  line-height: 18px;
+  line-height: var(--line-height-compact);
 }
 
 .resetLayer {

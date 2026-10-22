@@ -64,7 +64,9 @@ describe('浏览器保存', () => {
   it('触发保存失败时立即清理节点和 URL', () => {
     const revokeObjectURL = vi.fn<(url: string) => void>();
     vi.stubGlobal('URL', { createObjectURL: () => 'blob:failed', revokeObjectURL });
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => { throw new Error('保存失败'); });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
+      throw new Error('保存失败');
+    });
     expect(() => saveFile({ blob: new Blob(), fileName: '资料.txt' })).toThrow('保存失败');
     expect(document.querySelector('a[download]')).toBeNull();
     expect(revokeObjectURL).toHaveBeenCalledExactlyOnceWith('blob:failed');

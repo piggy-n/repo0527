@@ -20,7 +20,7 @@
   color: var(--color-text-regular);
   font-size: var(--font-size-xs);
   text-align: left;
-  line-height: 18px;
+  line-height: var(--line-height-compact);
   cursor: pointer;
 
   &:hover {

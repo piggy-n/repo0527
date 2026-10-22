@@ -30,7 +30,10 @@ export function createDetailLabelPlan(input: LabelInput): Record<number, LabelPl
   if (!primary) {
     return {};
   }
-  const compact = (): Record<number, LabelPlacement> => ({ [primary.year]: { show: true, position: stacked ? 'inside' : 'top', offset: [0, 0], compact: true } });
+  // 放不下逐年标注时只标当前年
+  const compact = (): Record<number, LabelPlacement> => ({
+    [primary.year]: { show: true, position: stacked ? 'inside' : 'top', offset: [0, 0], compact: true }
+  });
   if (stacked || entries.length > 3 || size.width < 360 || size.height < 220) {
     return compact();
   }
@@ -39,9 +42,9 @@ export function createDetailLabelPlan(input: LabelInput): Record<number, LabelPl
   const labelHeight = 22;
   const separation = labelHeight + 8;
   if (chartType === 'bar') {
-    const groupWidth = plotWidth / Math.max(1, cityCount) * .8;
+    const groupWidth = plotWidth / Math.max(1, cityCount) * 0.8;
     const barWidth = Math.min(32,
-      groupWidth / (entries.length + (entries.length - 1) * .65)
+      groupWidth / (entries.length + (entries.length - 1) * 0.65)
     );
     const widest = Math.max(...entries.map(item => formatValue(item.values[cityIndex]).length * 10 + 12));
     if (entries.length > 1 && widest + 8 > barWidth * 1.65) {

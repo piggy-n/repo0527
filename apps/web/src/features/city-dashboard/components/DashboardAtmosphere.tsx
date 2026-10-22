@@ -30,7 +30,7 @@ export const DashboardAtmosphere = defineComponent({
         {props.entering && !props.reduced && <div class={styles.honeycomb} data-scene="honeycomb">
           <svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">{columns.map(column =>
             (
-              <g key={column.id} style={{ animationDelay: `${Math.abs(column.id) * .055}s` }}>
+              <g key={column.id} style={{ animationDelay: `${Math.abs(column.id) * 0.055}s` }}>
                 {column.cells.map((points, index) => <polygon key={index} points={points} />)}
               </g>
             ))}</svg>

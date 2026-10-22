@@ -84,7 +84,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
         formatter: `${labelPrefix}${formatValue(value, indicator, false)}`
       },
       itemStyle: focusedCity ? {
-        opacity: cities[index]?.code === focusedCity ? 1 : .38,
+        opacity: cities[index]?.code === focusedCity ? 1 : 0.38,
         borderColor: cities[index]?.code === focusedCity ? '#C88E00' : undefined,
         borderWidth: cities[index]?.code === focusedCity ? 2 : 0
       } : undefined
@@ -122,7 +122,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
       symbol: 'none',
       z: 6,
       itemStyle: { color: AVERAGE_COLOR },
-      lineStyle: { color: AVERAGE_COLOR, type: [3, 3], width: 1.6 * density, opacity: .92 }
+      lineStyle: { color: AVERAGE_COLOR, type: [3, 3], width: 1.6 * density, opacity: 0.92 }
     });
   }
   return {

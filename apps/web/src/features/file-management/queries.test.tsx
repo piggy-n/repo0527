@@ -73,8 +73,10 @@ let queryClient: QueryClient;
 function mountHost() {
   const pinia = createPinia();
   setActivePinia(pinia);
-  useSessionStore().start({ token: createTestJwtExpiringAt(Date.now() + 3600000),
-    user: { loginName: 'test', role: Role.user } });
+  useSessionStore().start({
+    token: createTestJwtExpiringAt(Date.now() + 3600000),
+    user: { loginName: 'test', role: Role.user }
+  });
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return mount(Host, { global: { plugins: [pinia, [VueQueryPlugin, { queryClient }]] } });
 }
@@ -148,7 +150,7 @@ describe('useDeleteFileMutation', () => {
 
     let settled = false;
     const done = (async () => {
-      await removal.mutateAsync({ id: 'file-policy-law-local-1', session: useSessionStore().session! });
+      await removal.mutateAsync({ id: 'file-policy-law-local-1', token: useSessionStore().token });
       settled = true;
     })();
     await vi.waitFor(() => expect(requests).toHaveLength(2));
@@ -168,9 +170,8 @@ describe('useDeleteFileMutation', () => {
     const session = useSessionStore();
     const request = vi.spyOn(api, 'deleteFile').mockResolvedValue(null);
     vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
-    const done = removal.mutateAsync({ id: 'one', session: session.session! });
-    session.start({ token: createTestJwtExpiringAt(Date.now() + 7200000),
-      user: { loginName: 'new', role: Role.user } });
+    const done = removal.mutateAsync({ id: 'one', token: session.token });
+    session.start({ token: createTestJwtExpiringAt(Date.now() + 7200000), user: { loginName: 'new', role: Role.user } });
     await expect(done).rejects.toMatchObject({ kind: 'canceled' });
     expect(request).not.toHaveBeenCalled();
   });
@@ -179,15 +180,14 @@ describe('useDeleteFileMutation', () => {
     const requests = mockPendingFilePage();
     await loadFirstPage(requests);
     const session = useSessionStore();
-    const sentSession = session.session!;
+    const token = session.token;
     let release!: () => void;
     const request = vi.spyOn(api, 'deleteFile').mockImplementation(() => new Promise<null>(resolve => {
       release = () => resolve(null);
     }));
-    const pending = removal.mutateAsync({ id: 'one', session: sentSession });
+    const pending = removal.mutateAsync({ id: 'one', token });
     await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
-    session.start({ token: createTestJwtExpiringAt(Date.now() + 7200000),
-      user: { loginName: 'new', role: Role.user } });
+    session.start({ token: createTestJwtExpiringAt(Date.now() + 7200000), user: { loginName: 'new', role: Role.user } });
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
     release();
     await pending;

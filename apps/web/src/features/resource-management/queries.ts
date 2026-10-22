@@ -1,31 +1,31 @@
 import { type Query, skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
-import { useSessionStore } from '@/shared/auth/session-store';
+import { useSessionGuard } from '@/shared/auth/session-guard';
 import type { TransferProgress } from '@/shared/http/client';
-import { ApiError } from '@/shared/http/errors';
 import {
   changeResourceDirectory,
-  fetchResourceDirectory,
   fetchResourceDetail,
+  fetchResourceDirectory,
   fetchResourcePage,
   fetchResourceYears,
   importResourceExcel,
-  saveResourceDetail,
-  setResourceStatus,
   type ResourceDetail,
   type ResourceDetailChange,
+  type ResourceDirectoryChange,
   type ResourceExcelImport,
   type ResourcePage,
   type ResourcePageParams,
-  type ResourceDirectoryChange
+  saveResourceDetail,
+  setResourceStatus
 } from './api';
 
-/** 目录 ID 隔离同名节点的缓存；params 中的名称是本次请求使用的目录名称 */
+/** 列表请求：目录 ID 区分同名目录的缓存，params 里是这次请求用的目录名称（接口只接收名称） */
 export interface ResourcePageRequest {
   directoryId: string;
   params: ResourcePageParams;
 }
 
+/** 带上所属请求的一页结果，见 useResourcePageQuery 的 select */
 export interface ResourcePageEntry {
   request: ResourcePageRequest | null;
   page: ResourcePage;
@@ -33,7 +33,7 @@ export interface ResourcePageEntry {
 
 type ResourcePageQuery = Query<ResourcePage, Error, ResourcePage, ReturnType<typeof resourceManagementKeys.page>>;
 
-/** 资源管理的查询与失效入口，独立于现状底图和文件管理的缓存 */
+/** 资源管理的 query key 只在这里拼；和现状底图的资源目录、文件管理的缓存互不影响 */
 export const resourceManagementKeys = {
   all: ['resource-management'] as const,
   directory: () => [...resourceManagementKeys.all, 'directory'] as const,
@@ -44,7 +44,7 @@ export const resourceManagementKeys = {
   detail: (id: string | null) => [...resourceManagementKeys.details(), id] as const
 };
 
-/** 目录缓存由 Query 持有；组件只从缓存推导当前选择 */
+/** 资源目录；当前选中的目录由列表的拥有者从缓存推导 */
 export function useResourceDirectoryQuery() {
   return useQuery({
     queryKey: resourceManagementKeys.directory(),
@@ -52,7 +52,7 @@ export function useResourceDirectoryQuery() {
   });
 }
 
-/** 年份与目录独立加载；年份失败不阻止查看未限定年份的列表 */
+/** 年份和目录分开加载：年份加载失败时仍能查看不限年份的列表 */
 export function useResourceYearsQuery() {
   return useQuery({
     queryKey: resourceManagementKeys.years(),
@@ -60,59 +60,33 @@ export function useResourceYearsQuery() {
   });
 }
 
-/** 写入成功后先更新目录身份，再刷新列表；旧会话的晚到结果不触碰新会话缓存 */
-export function useResourceDirectoryMutation() {
-  const queryClient = useQueryClient();
-  const session = useSessionStore();
-  return useMutation({
-    mutationFn: ({ change, token }: { change: ResourceDirectoryChange; token: string }) => {
-      if (session.token !== token) {
-        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
-      }
-      return changeResourceDirectory(change);
-    },
-    onSuccess: async (_, { token }) => {
-      if (session.token !== token) {
-        return;
-      }
-      await queryClient.invalidateQueries({ queryKey: resourceManagementKeys.directory() });
-      if (session.token === token) {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() }),
-          queryClient.invalidateQueries({ queryKey: resourceManagementKeys.details() })
-        ]);
-      }
-    }
-  });
-}
-
-/** 没有有效二级目录时不查询；同目录内换条件保留占位，换目录或重命名时不保留 */
+/** 没有可选的二级目录时不请求；同一目录内换条件、翻页时保留上一次的数据，换目录或目录改名时不保留 */
 export function useResourcePageQuery(request: MaybeRefOrGetter<ResourcePageRequest | null>) {
   const queryClient = useQueryClient();
   const query = useQuery(computed(() => {
     const current = toValue(request);
-    const queryFn = current
-      ? ({ signal }: { signal: AbortSignal }) => fetchResourcePage(current.params, signal)
-      : skipToken;
     return {
       queryKey: resourceManagementKeys.page(current),
-      queryFn,
+      queryFn: current ? ({ signal }: { signal: AbortSignal }) => fetchResourcePage(current.params, signal) : skipToken,
       placeholderData: (previous: ResourcePage | undefined, previousQuery: ResourcePageQuery | undefined) => {
-        // 当前条件已经失败过且没有缓存时，重试不重新显示另一页的占位记录
+        // 这组条件失败过、又没有缓存：重试时不再拿别的页占位，否则失败提示下面显示的是另一页
         const state = queryClient.getQueryState(resourceManagementKeys.page(current));
         if (state && state.data === undefined && state.errorUpdatedAt > 0) {
           return undefined;
         }
         const previousRequest = previousQuery?.queryKey[2];
-        return current && previousRequest?.directoryId === current.directoryId &&
-          previousRequest.params.resource === current.params.resource ? previous : undefined;
+        const sameDirectory =
+          current !== null &&
+          previousRequest?.directoryId === current.directoryId &&
+          previousRequest.params.resource === current.params.resource;
+        return sameDirectory ? previous : undefined;
       },
-      // key 改变后 data 到下一轮调度才更新；带上身份，防止旧响应修正新目录的页码和总数
+      // key 变化后 data 要到下一轮调度才换成新 key 的结果；标上所属请求，旧结果不能修正新目录的页码和总数
       select: (page: ResourcePage): ResourcePageEntry => ({ request: current, page })
     };
   }));
 
-  /** 后端修正页码后先登记对应页的成功结果，切到该页时不闪回过时缓存 */
+  /** 后端把越界的页码修正到最后一页时，把这页结果登记到修正后的 key 下：切过去时直接显示，不再请求一次 */
   function rememberPage(current: ResourcePageRequest, page: ResourcePage) {
     queryClient.setQueryData(resourceManagementKeys.page(current), page);
   }
@@ -120,7 +94,7 @@ export function useResourcePageQuery(request: MaybeRefOrGetter<ResourcePageReque
   return { ...query, rememberPage };
 }
 
-/** 详情不借用其他资源占位；标记所属 ID，避免 key 切换当轮读取旧值 */
+/** 资源详情；不借用其他资源的数据占位，结果标上所属 ID（同 useResourcePageQuery 的 select） */
 export function useResourceDetailQuery(id: MaybeRefOrGetter<string | null>) {
   return useQuery(computed(() => {
     const current = toValue(id);
@@ -132,19 +106,56 @@ export function useResourceDetailQuery(id: MaybeRefOrGetter<string | null>) {
   }));
 }
 
-/** 保存是不可替换的服务端写操作；只刷新同会话的详情与列表 */
+// 下面的写操作都不传 signal：请求发出后后端就会执行，组件卸载也不取消。
+// 参数都带上提交时的会话（useSessionGuard 的 capture）：发请求前确认没换会话，旧会话的结果不刷新新会话的缓存
+
+interface DirectorySubmission {
+  change: ResourceDirectoryChange;
+  token: string | undefined;
+}
+
+/** 新增、改名、删除目录；成功后先刷新目录（选中的目录可能已不存在），再刷新列表和详情 */
+export function useResourceDirectoryMutation() {
+  const queryClient = useQueryClient();
+  const sessionGuard = useSessionGuard();
+  return useMutation({
+    mutationFn: ({ change, token }: DirectorySubmission) => {
+      sessionGuard.assertCurrent(token);
+      return changeResourceDirectory(change);
+    },
+    onSuccess: async (_data, { token }) => {
+      if (!sessionGuard.isCurrent(token)) {
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: resourceManagementKeys.directory() });
+      // 等待目录刷新期间也可能换了会话
+      if (!sessionGuard.isCurrent(token)) {
+        return;
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() }),
+        queryClient.invalidateQueries({ queryKey: resourceManagementKeys.details() })
+      ]);
+    }
+  });
+}
+
+interface DetailSubmission {
+  change: ResourceDetailChange;
+  token: string | undefined;
+}
+
+/** 保存资源详情（分类与字段名称）；成功后刷新这个资源的详情和列表 */
 export function useResourceDetailMutation() {
   const queryClient = useQueryClient();
-  const session = useSessionStore();
+  const sessionGuard = useSessionGuard();
   return useMutation({
-    mutationFn: ({ change, token }: { change: ResourceDetailChange; token: string }) => {
-      if (session.token !== token) {
-        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
-      }
+    mutationFn: ({ change, token }: DetailSubmission) => {
+      sessionGuard.assertCurrent(token);
       return saveResourceDetail(change);
     },
-    onSuccess: async (_, { change, token }) => {
-      if (session.token === token) {
+    onSuccess: async (_data, { change, token }) => {
+      if (sessionGuard.isCurrent(token)) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.detail(change.id) }),
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() })
@@ -154,19 +165,23 @@ export function useResourceDetailMutation() {
   });
 }
 
-/** 启停允许不同图层并发；成功后重新读取后端状态，不原地修改列表缓存 */
+interface StatusSubmission {
+  id: string;
+  enabled: boolean;
+  token: string | undefined;
+}
+
+/** 启用或停用图层，不同图层可以同时进行；成功后重新读取后端的状态，不原地修改列表缓存 */
 export function useResourceStatusMutation() {
   const queryClient = useQueryClient();
-  const session = useSessionStore();
+  const sessionGuard = useSessionGuard();
   return useMutation({
-    mutationFn: ({ id, enabled, token }: { id: string; enabled: boolean; token: string }) => {
-      if (session.token !== token) {
-        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
-      }
+    mutationFn: ({ id, enabled, token }: StatusSubmission) => {
+      sessionGuard.assertCurrent(token);
       return setResourceStatus(id, enabled);
     },
-    onSuccess: async (_, { id, token }) => {
-      if (session.token === token) {
+    onSuccess: async (_data, { id, token }) => {
+      if (sessionGuard.isCurrent(token)) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() }),
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.detail(id) })
@@ -176,21 +191,23 @@ export function useResourceStatusMutation() {
   });
 }
 
-/** Excel 不带图层 ID，成功后失效本模块全部列表、详情及年份；不猜测影响图层 */
+interface ImportSubmission {
+  input: ResourceExcelImport;
+  token: string | undefined;
+  onProgress: (value: TransferProgress) => void;
+}
+
+/** 导入 Excel；请求不带图层 ID，影响哪些图层不知道，成功后刷新本模块全部列表、详情和年份 */
 export function useResourceImportMutation() {
   const queryClient = useQueryClient();
-  const session = useSessionStore();
+  const sessionGuard = useSessionGuard();
   return useMutation({
-    mutationFn: ({ input, token, onProgress }: {
-      input: ResourceExcelImport; token: string; onProgress: (value: TransferProgress) => void;
-    }) => {
-      if (session.token !== token) {
-        throw new ApiError({ kind: 'canceled', message: '会话已变更' });
-      }
+    mutationFn: ({ input, token, onProgress }: ImportSubmission) => {
+      sessionGuard.assertCurrent(token);
       return importResourceExcel(input, onProgress);
     },
-    onSuccess: async (_, { token }) => {
-      if (session.token === token) {
+    onSuccess: async (_data, { token }) => {
+      if (sessionGuard.isCurrent(token)) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.pages() }),
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.details() }),

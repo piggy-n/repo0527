@@ -53,7 +53,9 @@ function setup(width: number) {
             <ResourceLegend
               layers={layers}
               symbols={symbols}
-              onEditingChange={value => { editing.value = value; }}
+              onEditingChange={value => {
+                editing.value = value;
+              }}
             />
           ],
           footer: !editing.value && symbols.overrides.value.size

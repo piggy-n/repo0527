@@ -1,12 +1,12 @@
 import { onScopeDispose, reactive } from 'vue';
-import { useSessionStore } from '@/shared/auth/session-store';
+import { useSessionGuard } from '@/shared/auth/session-guard';
 import { ApiError } from '@/shared/http/errors';
 import { useDeleteFileMutation } from '../queries';
 
 /** 删除文件的流程：按文件 ID 防重复、记录删除中的状态；确认框和提示由界面提供，这里不渲染、不提示 */
 export function useFileRemoval() {
   const mutation = useDeleteFileMutation();
-  const session = useSessionStore();
+  const sessionGuard = useSessionGuard();
   // 按文件 ID 记录：删除 A 未完成时删除 B，A 的状态不会被覆盖
   const confirming = reactive(new Set<string>());
   const removing = reactive(new Set<string>());
@@ -23,22 +23,20 @@ export function useFileRemoval() {
     if (disposed || confirming.has(id) || removing.has(id)) {
       return false;
     }
-    const sentSession = session.session;
-    if (!sentSession) {
-      return false;
-    }
+    const token = sessionGuard.capture();
     confirming.add(id);
     const confirmed = await confirm();
     confirming.delete(id);
     // 确认期间页面已销毁，或会话已结束、已更换：不再删除。token 只是过期时照常请求，由 http 按登录过期处理并提示
-    if (!confirmed || disposed || session.session !== sentSession) {
+    if (!confirmed || disposed || !sessionGuard.isCurrent(token)) {
       return false;
     }
 
     removing.add(id);
     try {
-      await mutation.mutateAsync({ id, session: sentSession });
-      return !disposed && session.session === sentSession;
+      await mutation.mutateAsync({ id, token });
+      // 删除已经生效；页面已销毁或换了会话时不再报告成功
+      return !disposed && sessionGuard.isCurrent(token);
     } catch (error) {
       // 失败原因已由全局提示显示（例如"文件不存在"）
       if (error instanceof ApiError) {

@@ -48,7 +48,9 @@ function backend() {
       request.signal.addEventListener('abort', () => aborted.push(id));
       await state.holdRead;
       state.returned++;
-      if (state.expiredRead) { return HttpResponse.json({ code: 401, msg: '旧请求过期' }); }
+      if (state.expiredRead) {
+        return HttpResponse.json({ code: 401, msg: '旧请求过期' });
+      }
       return HttpResponse.json(state.failRead ? { code: 500, msg: '详情读取失败' } : { code: 200, data: { ...data, id } });
     }),
     mock.put('/backend/resource-management/layer/edit-struct', async ({ request }) => {
@@ -57,10 +59,14 @@ function backend() {
       writes.push({ id: query.get('id'), resourceName: query.get('resourceName'), attributes });
       request.signal.addEventListener('abort', () => aborted.push('write'));
       await state.holdWrite;
-      if (state.failWrite) { return HttpResponse.json({ code: 500, msg: '保存被拒绝' }); }
+      if (state.failWrite) {
+        return HttpResponse.json({ code: 500, msg: '保存被拒绝' });
+      }
       data.resourceName = query.get('resourceName')!;
       // 仅模拟后端保存名称，其余字段由契约测试检查完整往返
-      data.attributes.forEach((attribute, index) => { attribute.name = attributes[index]?.name ?? null; });
+      data.attributes.forEach((attribute, index) => {
+        attribute.name = attributes[index]?.name ?? null;
+      });
       return HttpResponse.json({ code: 200, data: null });
     })
   );
@@ -126,7 +132,9 @@ describe('资源详情与属性草稿', () => {
     expect(detail.draft.value?.attributes[0]?.name).toBe('重试名称');
     api.state.failWrite = false;
     let release!: () => void;
-    api.state.holdWrite = new Promise<void>(resolve => { release = resolve; });
+    api.state.holdWrite = new Promise<void>(resolve => {
+      release = resolve;
+    });
     const saving = detail.save();
     await vi.waitFor(() => expect(api.writes).toHaveLength(2));
     expect(await detail.save()).toBe(false);
@@ -169,7 +177,9 @@ describe('资源详情与属性草稿', () => {
     detail.open(row(), 'land');
     await vi.waitFor(() => expect(detail.detail.value?.id).toBe('layer-1'));
     let release!: () => void;
-    api.state.holdRead = new Promise<void>(resolve => { release = resolve; });
+    api.state.holdRead = new Promise<void>(resolve => {
+      release = resolve;
+    });
     detail.open(row('slow'), 'land');
     expect(detail.detail.value).toBeUndefined();
     await vi.waitFor(() => expect(api.reads).toContain('slow'));
@@ -234,7 +244,11 @@ describe('资源详情与属性草稿', () => {
     await startEditing(detail);
     detail.setName(0, '未保存');
     const leaving = detail.close();
-    if (kind === 'session') { session.clear(); } else { wrapper.unmount(); }
+    if (kind === 'session') {
+      session.clear();
+    } else {
+      wrapper.unmount();
+    }
     expect(await leaving).toBe(false);
     detail.answerDiscard(true);
     expect(await detail.save()).toBe(false);
@@ -247,7 +261,9 @@ describe('资源详情与属性草稿', () => {
     await startEditing(detail);
     detail.setName(0, '已发送');
     let release!: () => void;
-    api.state.holdWrite = new Promise<void>(resolve => { release = resolve; });
+    api.state.holdWrite = new Promise<void>(resolve => {
+      release = resolve;
+    });
     const saving = detail.save();
     await vi.waitFor(() => expect(api.writes).toHaveLength(1));
     wrapper.unmount();
@@ -261,9 +277,9 @@ describe('资源详情与属性草稿', () => {
     expect(client.getQueryState(resourceManagementKeys.detail('layer-1'))?.isInvalidated).toBe(kind !== 'session');
   });
 
-  it('同名分类优先当前目录身份，其他同名不猜测；普通用户不能编辑', async () => {
+  it('同名分类优先当前目录身份，其他同名不猜测', async () => {
     backend();
-    const { detail, tree, session } = host();
+    const { detail, tree } = host();
     tree.value.push({ id: 'other-group', name: '其他', children: [{ id: 'duplicate', name: '土地资源' }] });
     await startEditing(detail);
     expect(detail.draft.value?.category?.id).toBe('land');
@@ -272,9 +288,5 @@ describe('资源详情与属性草稿', () => {
     await nextTick();
     detail.beginEdit();
     expect(detail.draft.value?.category).toBeNull();
-    await detail.cancelEdit();
-    session.start({ token: session.token!, user: { loginName: 'user', role: Role.user } });
-    detail.beginEdit();
-    expect(detail.editing.value).toBe(false);
   });
 });

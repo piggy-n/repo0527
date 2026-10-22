@@ -4,57 +4,81 @@ import { useSessionStore } from '@/shared/auth/session-store';
 import type { TransferProgress } from '@/shared/file-transfer';
 import { ApiError } from '@/shared/http/errors';
 import { readBlobText } from '@/shared/http/transfer';
-import { filePreviewType, type FileTransferTarget } from '../file-types';
-import { useFileContentRequest } from '../queries';
+import { fetchFileContent } from '../api';
+import { filePreviewType, type FilePreviewKind, type FileTransferTarget } from '../file-types';
 
+/** 交给阅读区的内容；signal 属于取得它的那次打开，组件渲染完再用它确认内容没有过期 */
 export type FilePreviewContent = { signal: AbortSignal } & (
   | { kind: 'docx'; blob: Blob }
   | { kind: 'text'; text: string }
   | { kind: 'pdf' | 'image'; url: string }
 );
 
-/** 预览的取流、目标和资源生命周期；渲染由组件承担 */
+/** reading：取流中；rendering：内容已交给阅读区，等组件报告显示完成（rendered）或失败（renderFailed） */
+export type FilePreviewPhase = 'reading' | 'rendering' | 'ready' | 'error';
+
+const ZOOM_DEFAULT = 100;
+
+// DOCX 交给组件渲染，PDF、图片转成 object URL；空文件在这里失败，不让阅读区一直停在加载中
+function binaryContent(kind: Exclude<FilePreviewKind, 'text'>, mime: string, blob: Blob, signal: AbortSignal) {
+  if (blob.size === 0) {
+    throw new ApiError({ kind: 'invalid-response', message: '文件内容为空，无法预览' });
+  }
+  if (kind === 'docx') {
+    return { kind, blob, signal };
+  }
+  // 按白名单的类型交给 iframe 和 img：服务端给错类型（例如 HTML）时也不会被当成网页执行
+  const typed = blob.type === mime ? blob : new Blob([blob], { type: mime });
+  return { kind, url: URL.createObjectURL(typed), signal };
+}
+
+/**
+ * 预览的取流、当前目标和内容的生命周期；渲染由组件负责。打开另一个文件是可替换操作（LatestController），
+ * 关闭、换会话、页面销毁都中止读取并释放内容
+ */
 export function useFilePreview() {
-  const read = useFileContentRequest();
   const session = useSessionStore();
   const operation = new LatestController();
   const file = shallowRef<FileTransferTarget | null>(null);
   const content = shallowRef<FilePreviewContent | null>(null);
   const visible = ref(false);
-  const phase = ref<'reading' | 'rendering' | 'ready' | 'error'>('reading');
+  const phase = ref<FilePreviewPhase>('reading');
   const progress = shallowRef<TransferProgress | null>(null);
   const failure = ref('');
-  const zoom = ref(100);
+  const zoom = ref(ZOOM_DEFAULT);
   let disposed = false;
 
-  const releaseContent = () => {
+  // PDF、图片的 object URL 归预览所有，换内容和关闭时释放
+  function releaseContent() {
     const previous = content.value;
     content.value = null;
     if (previous?.kind === 'pdf' || previous?.kind === 'image') {
       URL.revokeObjectURL(previous.url);
     }
-  };
-  const close = () => {
+  }
+
+  function close() {
     operation.abort();
     releaseContent();
     visible.value = false;
     file.value = null;
     progress.value = null;
     failure.value = '';
-    zoom.value = 100;
-  };
-  const current = (signal: AbortSignal) => {
-    if (disposed || signal.aborted) {
-      return false;
-    }
-    if (!session.isActive()) {
-      close();
-      return false;
-    }
-    return true;
-  };
-  watch(() => session.session, close, { flush: 'sync' });
-  onScopeDispose(() => { disposed = true; close(); operation[Symbol.dispose](); });
+    zoom.value = ZOOM_DEFAULT;
+  }
+
+  function fail(message: string) {
+    releaseContent();
+    phase.value = 'error';
+    failure.value = message;
+  }
+
+  watch(() => session.token, close, { flush: 'sync' });
+  onScopeDispose(() => {
+    disposed = true;
+    close();
+    operation[Symbol.dispose]();
+  });
 
   async function open(target: FileTransferTarget): Promise<void> {
     if (disposed) {
@@ -67,62 +91,53 @@ export function useFilePreview() {
     phase.value = 'reading';
     failure.value = '';
     progress.value = null;
-    zoom.value = 100;
-    if (!current(signal)) {
+    zoom.value = ZOOM_DEFAULT;
+    const type = filePreviewType(target.type);
+    if (!type) {
+      fail('不支持预览这种格式，请下载后查看');
       return;
     }
     try {
-      const type = filePreviewType(target.type);
-      if (!type) {
-        throw new Error('不支持预览的类型');
-      }
-      const result = await read(target, signal, next => { if (current(signal)) { progress.value = next; } });
-      if (!current(signal)) {
+      const result = await fetchFileContent(target, signal, next => {
+        progress.value = next;
+      });
+      if (signal.aborted) {
         return;
       }
       phase.value = 'rendering';
-      if (type.kind === 'text') {
-        const text = await readBlobText(result.blob, signal);
-        if (!current(signal)) {
-          return;
-        }
-        content.value = { kind: 'text', text, signal };
-        phase.value = 'ready';
-      } else if (result.blob.size === 0) {
-        throw new ApiError({ kind: 'invalid-response', message: '文件内容为空，无法预览' });
-      } else if (type.kind === 'docx') {
-        content.value = { kind: 'docx', blob: result.blob, signal };
-      } else {
-        // 阅读容器只解释白名单格式，不能把错误的 HTML 类型交给 iframe 执行
-        const blob = result.blob.type === type.mime ? result.blob : new Blob([result.blob], { type: type.mime });
-        content.value = { kind: type.kind, url: URL.createObjectURL(blob), signal };
+      if (type.kind !== 'text') {
+        content.value = binaryContent(type.kind, type.mime, result.blob, signal);
+        return;
       }
+      // 文本在这里读出，直接就绪
+      const text = await readBlobText(result.blob, signal);
+      if (signal.aborted) {
+        return;
+      }
+      content.value = { kind: 'text', text, signal };
+      phase.value = 'ready';
     } catch (error) {
-      if (!current(signal)) {
+      if (signal.aborted) {
         return;
       }
-      if (error instanceof ApiError && error.kind === 'canceled') {
-        close();
-        return;
-      }
-      releaseContent();
-      phase.value = 'error';
-      failure.value = error instanceof ApiError ? error.message : '暂时无法预览此文件，可重试或下载后查看';
+      fail(error instanceof ApiError ? error.message : '暂时无法预览此文件，可重试或下载后查看');
     }
   }
 
-  const rendered = (target: FilePreviewContent) => {
-    if (content.value === target && current(target.signal)) {
+  /** 组件显示完成；旧内容晚到的报告不改变当前状态 */
+  function rendered(target: FilePreviewContent) {
+    if (content.value === target && !target.signal.aborted) {
       phase.value = 'ready';
     }
-  };
-  const renderFailed = (target: FilePreviewContent) => {
-    if (content.value === target && current(target.signal)) {
-      releaseContent();
-      phase.value = 'error';
-      failure.value = '暂时无法显示此文件，可重试或下载后查看';
+  }
+
+  function renderFailed(target: FilePreviewContent) {
+    if (content.value === target && !target.signal.aborted) {
+      fail('暂时无法显示此文件，可重试或下载后查看');
     }
-  };
-  const retry = () => file.value ? open(file.value) : Promise.resolve();
+  }
+
+  const retry = () => (file.value ? open(file.value) : Promise.resolve());
+
   return { file, content, visible, phase, progress, failure, zoom, open, close, retry, rendered, renderFailed };
 }

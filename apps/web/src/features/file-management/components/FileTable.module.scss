@@ -16,7 +16,10 @@
   gap: var(--space-xs);
   align-items: center;
 
-  :global(.el-button + .el-button) { margin-left: 0; }
+  // 间距由 gap 决定，去掉 Element 相邻按钮的外边距
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
 }
 
 .downloadOnly {

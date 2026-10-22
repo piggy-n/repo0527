@@ -27,13 +27,15 @@ const directoryIcons: Record<string, IconName> = {
   联合审批: 'resource-approval'
 };
 
-// 真实目录中这两类共用旧 PNG 名称，以稳定业务代码区分；重命名后仍保留正确图标
+// 真实目录里湿地和国家公园共用一个旧图标文件名，按目录代码区分（代码不随改名变化）
 const categoryIcons: Record<string, IconName> = { sdzy: 'resource-wetland', gjgyzy: 'resource-park' };
 
-/** 不加载后端任意图标 URL；已知旧图标映射至本地图标组件，新目录使用缺省 SVG */
+/** 目录的图标：不加载后端给的图标地址，已知的旧图标对应到本地图标，其他目录用默认图标 */
 export function resourceDirectoryIcon(node: ResourceDirectory): IconName {
   const categoryIcon = node.code && categoryIcons[node.code];
-  if (categoryIcon) { return categoryIcon; }
+  if (categoryIcon) {
+    return categoryIcon;
+  }
   for (const filename of [node.icon, node.iconSelected]) {
     const key = filename?.replace(/(?:1)?@1x\.png$/, '');
     if (key && directoryIcons[key]) {

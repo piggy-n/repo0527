@@ -22,7 +22,9 @@ describe('传输进度', () => {
 
   it('结束后的进度不再通知，使用方抛错也不打断传输', () => {
     let active = true;
-    const callback = vi.fn<() => void>(() => { throw new Error('界面回调失败'); });
+    const callback = vi.fn<() => void>(() => {
+      throw new Error('界面回调失败');
+    });
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const report = progressReporter(callback, () => active);

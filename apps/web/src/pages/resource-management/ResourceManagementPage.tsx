@@ -1,31 +1,50 @@
-import { MxPanel, MxSplitLayout, MxTitle } from '@yzt/ui';
-import { ElAlert, ElButton, ElDialog, ElMessage, ElPagination } from 'element-plus';
+import { MxPanel, MxSplitLayout } from '@yzt/ui';
+import { ElAlert, ElButton, ElMessage, ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
-import { useSessionStore } from '@/shared/auth/session-store';
+import type { ResourceRecord } from '@/features/resource-management/api';
+import { DiscardChangesDialog } from '@/features/resource-management/components/DiscardChangesDialog';
 import { ResourceDetailPanel } from '@/features/resource-management/components/ResourceDetailPanel';
 import { ResourceDirectoryPanel } from '@/features/resource-management/components/ResourceDirectoryPanel';
 import { ResourceFilterBar } from '@/features/resource-management/components/ResourceFilterBar';
 import { ResourceTable } from '@/features/resource-management/components/ResourceTable';
-import { useResourceList } from '@/features/resource-management/composables/useResourceList';
 import { useResourceDetail } from '@/features/resource-management/composables/useResourceDetail';
+import { useResourceList } from '@/features/resource-management/composables/useResourceList';
 import { useResourceStatus } from '@/features/resource-management/composables/useResourceStatus';
-import type { ResourceRecord } from '@/features/resource-management/api';
+import { useSessionStore } from '@/shared/auth/session-store';
 import styles from './ResourceManagementPage.module.scss';
 
-/** 管理员资源管理页：组合目录、筛选与列表，写入成功后由 Query 更新数据 */
+/** 资源管理（管理员）：左侧资源目录；右侧是资源列表，查看时换成详情。写入成功后由查询缓存刷新数据 */
 export const ResourceManagementPage = defineComponent({
   name: 'ResourceManagementPage',
   setup() {
     const list = useResourceList();
     const { directoryQuery, yearsQuery } = list;
     const detail = useResourceDetail(() => directoryQuery.data.value ?? []);
+    // 列表出错或刷新中时显示的状态可能已过时，不能启停
     const status = useResourceStatus(list.resources, () => !list.isError.value && !list.refreshing.value);
     const session = useSessionStore();
-    // 会话结束必须允许离开；正常导航先确认草稿，不能在保存中离开
+    // 离开页面前确认未保存的修改；会话已结束（退出、过期）时直接放行，回到登录页
     onBeforeRouteLeave(() => !session.isActive() || detail.allowLeave());
-    const parent = computed(() => directoryQuery.data.value?.find(group =>
-      group.children?.some(child => child.id === list.directoryId.value)));
+    // 当前目录所在的一级分组，作为标题的说明
+    const parent = computed(() =>
+      directoryQuery.data.value?.find(group => group.children?.some(child => child.id === list.directoryId.value))
+    );
+    // 编辑、保存、导入期间不能改目录
+    const maintenanceDisabled = computed(
+      () => detail.editing.value || detail.pending.value || detail.importer.pending.value
+    );
+
+    // 切换目录时先关闭详情；有未保存的修改时等用户确认
+    async function beforeSelect(id: string): Promise<boolean> {
+      return id === list.directoryId.value || detail.close();
+    }
+
+    function view(row: ResourceRecord) {
+      if (list.directoryId.value) {
+        detail.open(row, list.directoryId.value);
+      }
+    }
 
     async function toggleStatus(row: ResourceRecord) {
       const result = await status.toggle(row.id);
@@ -36,97 +55,92 @@ export const ResourceManagementPage = defineComponent({
       }
     }
 
-    return () => (
-      <><MxSplitLayout asideLabel="资源目录">
-        {{
-          aside: () => (
-            <MxPanel headerTone="muted" title="资源目录">
-              <ResourceDirectoryPanel
-                nodes={directoryQuery.data.value ?? []}
-                selected={list.directoryId.value ?? undefined}
-                loading={directoryQuery.isLoading.value}
-                error={directoryQuery.isError.value}
-                maintenanceDisabled={detail.editing.value || detail.pending.value || detail.importer.pending.value}
-                beforeSelect={async id => id === list.directoryId.value || await detail.close()}
-                onSelect={list.selectDirectory}
-                onRetry={() => void directoryQuery.refetch()}
-              />
-            </MxPanel>
-          ),
-          default: () => detail.target.value ? (
-            <ResourceDetailPanel owner={detail} directories={directoryQuery.data.value ?? []} />
-          ) : (
-            <MxPanel
-              headerTone="muted"
-              title={list.selectedDirectory.value?.name ?? '资源列表'}
-              description={parent.value?.name}
-            >
-              {{
-                default: () => [
-                  <ResourceFilterBar
-                    class={styles.filters}
-                    model={list.filterForm}
-                    years={yearsQuery.data.value ?? []}
-                    loadingYears={yearsQuery.isLoading.value}
-                    errorYears={yearsQuery.isError.value}
-                    disabled={!list.selectedDirectory.value}
-                    onSearch={list.search}
-                    onReset={list.resetFilters}
-                  />,
-                  yearsQuery.isError.value && (
-                    <ElAlert class={styles.notice} type="error" closable={false}>
-                      年份加载失败
-                      <ElButton link type="primary" onClick={() => void yearsQuery.refetch()}>重试年份</ElButton>
-                    </ElAlert>
-                  ),
-                  <ResourceTable
-                    rows={list.resources.value}
-                    selected={list.selectedDirectory.value !== null}
-                    initialLoading={list.initialLoading.value}
-                    refreshing={list.refreshing.value}
-                    error={list.isError.value}
-                    statusPending={id => status.pending.has(id)}
-                    onToggle={row => void toggleStatus(row)}
-                    onRetry={() => void list.refresh()}
-                    onView={row => { if (list.directoryId.value) { detail.open(row, list.directoryId.value); } }}
-                  />
-                ],
-                footer: () => (
-                  <ElPagination
-                    class={styles.pagination}
-                    currentPage={list.pageNum.value}
-                    pageSize={list.pageSize.value}
-                    total={list.total.value}
-                    pageSizes={[10, 20, 50, 100]}
-                    pagerCount={5}
-                    layout="total, sizes, prev, pager, next, jumper"
-                    onUpdate:current-page={(page: number) => { list.pageNum.value = page; }}
-                    onUpdate:page-size={list.changePageSize}
-                  />
-                )
-              }}
-            </MxPanel>
-          )
-        }}
-      </MxSplitLayout>
-        <ElDialog
-          class={['dialog-panel-header', styles.confirmDialog]}
-          modelValue={detail.confirming.value}
-          title="放弃未保存的修改？"
-          appendToBody
-          destroyOnClose
-          closeOnClickModal={false}
-          onUpdate:modelValue={open => { if (!open) { detail.answerDiscard(false); } }}
+    function renderList() {
+      return (
+        <MxPanel
+          headerTone="muted"
+          title={list.selectedDirectory.value?.name ?? '资源列表'}
+          description={parent.value?.name}
         >
           {{
-            header: () => <MxTitle level="panel">放弃未保存的修改？</MxTitle>,
-            default: () => <p class={styles.confirmMessage}>离开后，本次对数据分类和字段名称的修改将不会保存。</p>,
-            footer: () => <>
-              <ElButton onClick={() => detail.answerDiscard(false)}>继续编辑</ElButton>
-              <ElButton type="danger" onClick={() => detail.answerDiscard(true)}>放弃修改</ElButton>
-            </>
+            default: () => [
+              <ResourceFilterBar
+                class={styles.filters}
+                model={list.filterForm}
+                years={yearsQuery.data.value ?? []}
+                loadingYears={yearsQuery.isLoading.value}
+                errorYears={yearsQuery.isError.value}
+                disabled={!list.selectedDirectory.value}
+                onSearch={list.search}
+                onReset={list.resetFilters}
+              />,
+              yearsQuery.isError.value && (
+                <ElAlert class={styles.notice} type="error" closable={false}>
+                  年份加载失败
+                  <ElButton link type="primary" onClick={() => void yearsQuery.refetch()}>
+                    重试年份
+                  </ElButton>
+                </ElAlert>
+              ),
+              <ResourceTable
+                rows={list.resources.value}
+                selected={list.selectedDirectory.value !== null}
+                initialLoading={list.initialLoading.value}
+                refreshing={list.refreshing.value}
+                error={list.isError.value}
+                statusPending={id => status.pending.has(id)}
+                onToggle={row => void toggleStatus(row)}
+                onRetry={() => void list.refresh()}
+                onView={view}
+              />
+            ],
+            footer: () => (
+              <ElPagination
+                class={styles.pagination}
+                currentPage={list.pageNum.value}
+                pageSize={list.pageSize.value}
+                total={list.total.value}
+                pageSizes={[10, 20, 50, 100]}
+                pagerCount={5}
+                layout="total, sizes, prev, pager, next, jumper"
+                onUpdate:current-page={(page: number) => {
+                  list.pageNum.value = page;
+                }}
+                onUpdate:page-size={list.changePageSize}
+              />
+            )
           }}
-        </ElDialog>
+        </MxPanel>
+      );
+    }
+
+    return () => (
+      <>
+        <MxSplitLayout asideLabel="资源目录">
+          {{
+            aside: () => (
+              <MxPanel headerTone="muted" title="资源目录">
+                <ResourceDirectoryPanel
+                  nodes={directoryQuery.data.value ?? []}
+                  selected={list.directoryId.value ?? undefined}
+                  loading={directoryQuery.isLoading.value}
+                  error={directoryQuery.isError.value}
+                  maintenanceDisabled={maintenanceDisabled.value}
+                  beforeSelect={beforeSelect}
+                  onSelect={list.selectDirectory}
+                  onRetry={() => void directoryQuery.refetch()}
+                />
+              </MxPanel>
+            ),
+            default: () =>
+              detail.target.value ? (
+                <ResourceDetailPanel owner={detail} directories={directoryQuery.data.value ?? []} />
+              ) : (
+                renderList()
+              )
+          }}
+        </MxSplitLayout>
+        <DiscardChangesDialog owner={detail} />
       </>
     );
   }

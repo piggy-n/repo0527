@@ -186,6 +186,36 @@ export function endSession(): void {
 - "同一账号"按登录名和角色判断
 - `setupSessionSync` 调用时就创建 session store，所以 `main.ts` 中要放在安装 pinia 之后。如果等到事件发生时才创建，store 创建时读到的已是新会话，无法与之前的身份比较（写测试时发现：本标签页未登录时收不到"重新加载"）
 
+### 写操作的会话核对（useSessionGuard）
+
+2026-10-23 代码审查时抽出（[审查报告](../stages/post-5e-code-review.md)）。服务端写操作（删除、上传、保存、启停、导入、目录维护）在提交和完成之间可能换了会话：其他标签页退出、换账号，或同一账号重新登录拿到新 token。`shared/auth/session-guard.ts` 的 `useSessionGuard()` 统一这件事：
+
+```ts
+const sessionGuard = useSessionGuard();
+
+// 组合式函数：提交时记下会话
+const token = sessionGuard.capture();
+await mutation.mutateAsync({ id, token });
+if (disposed || !sessionGuard.isCurrent(token)) {
+  return false;                      // 旧会话的结果不再报告成功
+}
+
+// queries.ts：发请求前确认，响应后只刷新原会话的缓存
+mutationFn: ({ id, token }) => {
+  sessionGuard.assertCurrent(token); // 会话已变时以 canceled 结束，不用新凭据发送旧操作
+  return deleteFile(id);
+},
+onSuccess: (_data, { token }) =>
+  sessionGuard.isCurrent(token) ? queryClient.invalidateQueries({ queryKey }) : undefined
+```
+
+| 事项 | 决定 |
+|---|---|
+| 比较什么 | token。退出、换账号、其他标签页重新登录都会换掉它；和阶段三 `useFileRemoval` 的做法一致。阶段六曾有两套写法（文件管理比较会话对象，资源管理比较 token），统一成这一个 |
+| 只是过期 | 不算换会话。已经发出的请求服务端已经接受，结果照常报告；之后的请求由 `shared/http` 在发出前发现过期，按 401 统一提示并回到登录页。组合式函数不再自己判断 `isActive()`：阶段六的实现在过期后让下载、启停、导入的按钮直接没有反应，上传收到成功也停在"正在处理" |
+| 角色 | 不在组合式函数里判断。页面的角色由路由 meta 限定，其他标签页换了账号整页重新加载（上文"多标签页"），页面挂载期间角色不会变 |
+| 读操作 | 不用它：下载、预览这类可以取消的读取在会话变化时直接中止（`watch(() => session.token, …)`），晚到的结果不交出 |
+
 `clear()` 的比较后删除：阶段二的 `clear()` 总是删除 localStorage 中的会话，会删掉其他标签页刚登录的会话，例如：
 
 - 标签页 1 登录着 A，收到 401 或 token 过期时，删掉了标签页 2 用 B 登录的会话

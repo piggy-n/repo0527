@@ -80,22 +80,29 @@ export const FileTable = defineComponent({
             <ElTableColumn prop="remark" label="备注" minWidth="120" showOverflowTooltip />,
             <ElTableColumn label="操作" width="180" align="center" fixed={compact.value ? false : 'right'}>
               {{
-                default: ({ row }: { row: FileRecord }) => <div class={styles.actions}>
-                  {filePreviewType(row.type)
-                    ? <ElButton link type="primary" onClick={() => emit('preview', row)}>预览</ElButton>
-                    : <span class={styles.downloadOnly}>仅下载</span>}
-                  <ElButton
-                    link
-                    type="primary"
-                    disabled={props.isDownloading(row.id)}
-                    onClick={() => emit('download', row)}
-                  >
-                    {props.isDownloading(row.id) ? '下载中' : '下载'}
-                  </ElButton>
-                  <ElButton link type="danger" loading={removal.isRemoving(row.id)} onClick={() => void remove(row)}>
-                    删除
-                  </ElButton>
-                </div>
+                // 固定三格：不能预览的格式在第一格写"仅下载"，各行的下载、删除上下对齐
+                default: ({ row }: { row: FileRecord }) => (
+                  <div class={styles.actions}>
+                    {filePreviewType(row.type) ? (
+                      <ElButton link type="primary" onClick={() => emit('preview', row)}>
+                        预览
+                      </ElButton>
+                    ) : (
+                      <span class={styles.downloadOnly}>仅下载</span>
+                    )}
+                    <ElButton
+                      link
+                      type="primary"
+                      disabled={props.isDownloading(row.id)}
+                      onClick={() => emit('download', row)}
+                    >
+                      {props.isDownloading(row.id) ? '下载中' : '下载'}
+                    </ElButton>
+                    <ElButton link type="danger" loading={removal.isRemoving(row.id)} onClick={() => void remove(row)}>
+                      删除
+                    </ElButton>
+                  </div>
+                )
               }}
             </ElTableColumn>
           ],

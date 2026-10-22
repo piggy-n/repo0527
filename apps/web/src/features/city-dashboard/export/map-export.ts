@@ -21,7 +21,7 @@ export function drawMapLabels(snapshot: DashboardMapSnapshot, indicator: Indicat
       context.moveTo(label.anchorX, label.anchorY);
       context.lineTo(label.x, label.y);
       context.strokeStyle = '#FFFFFF';
-      context.lineWidth = .8;
+      context.lineWidth = 0.8;
       context.stroke();
     }
     context.font = `600 ${Math.max(14, 20 * snapshot.labelScale)}px "Alibaba PuHuiTi"`;

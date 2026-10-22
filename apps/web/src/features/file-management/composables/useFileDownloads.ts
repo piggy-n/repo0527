@@ -2,89 +2,100 @@ import { onScopeDispose, reactive, ref, watch } from 'vue';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { saveFile, type TransferProgress } from '@/shared/file-transfer';
 import { ApiError } from '@/shared/http/errors';
+import { fetchFileContent } from '../api';
 import type { FileTransferTarget } from '../file-types';
-import { useFileContentRequest } from '../queries';
+
+/** checking：内容已收完，shared/http 正在检查它是不是错误信封；done 只表示交给了浏览器，不表示已存到磁盘 */
+export type FileDownloadPhase = 'receiving' | 'checking' | 'done' | 'error' | 'canceled';
 
 export interface FileDownloadTask {
   file: FileTransferTarget;
-  phase: 'receiving' | 'checking' | 'done' | 'error' | 'cancelled';
+  phase: FileDownloadPhase;
   progress: TransferProgress | null;
   failure: string;
 }
 
-/** 下载只读操作按文件防重复；取消、离开页面、换会话均停止读取，不触发晚到的保存 */
+/**
+ * 文件下载的任务列表：按文件 ID 防重复，每个任务可以单独取消和重试；不渲染、不提示。
+ * 下载是只读操作：取消、页面销毁、换会话都中止读取，晚到的内容不交给浏览器保存
+ */
 export function useFileDownloads() {
-  const read = useFileContentRequest();
   const session = useSessionStore();
   const tasks = ref<FileDownloadTask[]>([]);
-  const pending = new Map<string, { task: FileDownloadTask; controller: AbortController }>();
+  // 进行中的读取，按文件 ID；取消和收尾时要核对是不是同一次读取
+  const running = new Map<string, { task: FileDownloadTask; controller: AbortController }>();
   let disposed = false;
 
-  const reset = () => {
-    for (const { controller } of pending.values()) {
+  function reset() {
+    for (const { controller } of running.values()) {
       controller.abort();
     }
-    pending.clear();
+    running.clear();
     tasks.value = [];
-  };
-  watch(() => session.session, reset, { flush: 'sync' });
-  onScopeDispose(() => { disposed = true; reset(); });
+  }
+
+  // 换会话时上一个会话的下载不再继续，记录也不留在界面上
+  watch(() => session.token, reset, { flush: 'sync' });
+  onScopeDispose(() => {
+    disposed = true;
+    reset();
+  });
 
   async function start(file: FileTransferTarget): Promise<void> {
-    if (disposed || pending.has(file.id) || !session.isActive()) {
+    if (disposed || running.has(file.id)) {
       return;
     }
-    const sentSession = session.session;
     const controller = new AbortController();
+    const { signal } = controller;
+    // 复制一份：表格换页、刷新后，任务仍指向发起时的文件
     const task = reactive<FileDownloadTask>({ file: { ...file }, phase: 'receiving', progress: null, failure: '' });
-    pending.set(file.id, { task, controller });
+    running.set(file.id, { task, controller });
+    // 同一文件重新下载时替换它的旧任务，新任务排在最前
     tasks.value = [task, ...tasks.value.filter(item => item.file.id !== file.id)];
-    const current = () => {
-      if (disposed || controller.signal.aborted || session.session !== sentSession) {
-        return false;
-      }
-      if (!session.isActive()) {
-        reset();
-        return false;
-      }
-      return true;
-    };
     try {
-      const result = await read(task.file, controller.signal, progress => {
-        if (current()) {
-          task.progress = progress;
-          task.phase = progress.percent === 100 ? 'checking' : 'receiving';
-        }
+      // 中止后 shared/http 不再上报进度，回调里不用再判断
+      const result = await fetchFileContent(task.file, signal, progress => {
+        task.progress = progress;
+        task.phase = progress.percent === 100 ? 'checking' : 'receiving';
       });
-      if (!current()) {
+      if (signal.aborted) {
         return;
       }
       saveFile(result);
       task.phase = 'done';
     } catch (error) {
-      if (!current()) {
+      // 取消时状态已由 cancel 设置；页面销毁、换会话时任务已清空
+      if (signal.aborted) {
         return;
       }
-      task.phase = error instanceof ApiError && error.kind === 'canceled' ? 'cancelled' : 'error';
+      task.phase = 'error';
       task.failure = error instanceof ApiError ? error.message : '下载未完成，请重试';
     } finally {
-      // 取消后同一文件可能已经重试，旧请求的收尾不能移除新的任务
-      if (pending.get(file.id)?.controller === controller) {
-        pending.delete(file.id);
+      // 取消后同一文件可能已经重新下载，旧读取的收尾不能移除新的记录
+      if (running.get(file.id)?.controller === controller) {
+        running.delete(file.id);
       }
     }
   }
 
-  const cancel = (task: FileDownloadTask) => {
-    const entry = pending.get(task.file.id);
-    if (entry?.task === task) {
-      entry.controller.abort();
-      pending.delete(task.file.id);
-      task.phase = 'cancelled';
+  function cancel(task: FileDownloadTask) {
+    const entry = running.get(task.file.id);
+    if (entry?.task !== task) {
+      return;
     }
-  };
-  const isDownloading = (id: string) => tasks.value.some(task => task.file.id === id
-    && (task.phase === 'receiving' || task.phase === 'checking'));
-  const clearFinished = () => { tasks.value = tasks.value.filter(task => isDownloading(task.file.id)); };
+    entry.controller.abort();
+    running.delete(task.file.id);
+    task.phase = 'canceled';
+  }
+
+  // 按任务状态判断，界面能随之更新（running 不是响应式的）
+  const isDownloading = (id: string) =>
+    tasks.value.some(task => task.file.id === id && (task.phase === 'receiving' || task.phase === 'checking'));
+
+  /** 清除已结束（完成、失败、取消）的任务，进行中的保留 */
+  function clearFinished() {
+    tasks.value = tasks.value.filter(task => isDownloading(task.file.id));
+  }
+
   return { tasks, start, cancel, isDownloading, clearFinished };
 }
