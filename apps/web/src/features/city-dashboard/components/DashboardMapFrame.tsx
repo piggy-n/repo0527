@@ -22,9 +22,17 @@ export const DashboardMapFrame = defineComponent({
         `M ${width / 2} 1 H ${width - radius} Q ${width - 1} 1 ${width - 1} ${radius} V ${height - radius} Q ${width - 1} ${height - 1} ${width - radius} ${height - 1} H ${width / 2}`
       ];
     });
-    return () => <svg ref={frame} class={styles.frame} viewBox={`0 0 ${size.value.width} ${size.value.height}`} data-scene="frame" aria-hidden="true">
-      <g class={styles.frameSoft}>{paths.value.map(path => <path key={path} d={path} pathLength={1} />)}</g>
-      <g class={styles.frameLine}>{paths.value.map(path => <path key={path} d={path} pathLength={1} />)}</g>
-    </svg>;
+    return () => (
+      <svg
+        ref={frame}
+        class={styles.frame}
+        viewBox={`0 0 ${size.value.width} ${size.value.height}`}
+        data-scene="frame"
+        aria-hidden="true"
+      >
+        <g class={styles.frameSoft}>{paths.value.map(path => <path key={path} d={path} pathLength={1} />)}</g>
+        <g class={styles.frameLine}>{paths.value.map(path => <path key={path} d={path} pathLength={1} />)}</g>
+      </svg>
+    );
   }
 });

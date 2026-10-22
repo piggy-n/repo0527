@@ -39,7 +39,9 @@ function boundaryPenalty(value: number): number {
     return value % 5 === 0 ? 0 : 0.08;
   }
   const [coefficient, exponent = '0'] = String(value).split('e');
-  const digits = Math.max(0, (coefficient.split('.')[1]?.length ?? 0) - Number(exponent));
+  const digits = Math.max(0,
+    (coefficient.split('.')[1]?.length ?? 0) - Number(exponent)
+  );
   return 0.08 + digits * 0.12;
 }
 
@@ -72,10 +74,14 @@ export function createMapClassification(values: readonly (number | null)[], maxC
   const breaks: number[] = [];
   if (classCount > 1) {
     // 首尾不参与边界惩罚，仍提供明确数值以免出现未定义的分界
-    const nodes = [{ count: 0, value: samples[0] }, ...groups.slice(1).map((group, index) => ({
-      count: group.count,
-      value: friendlyBoundary(groups[index].value, group.value)
-    })), { count: samples.length, value: samples[samples.length - 1] }];
+    const nodes = [
+      { count: 0, value: samples[0] },
+      ...groups.slice(1).map((group, index) => ({
+        count: group.count,
+        value: friendlyBoundary(groups[index].value, group.value)
+      })),
+      { count: samples.length, value: samples[samples.length - 1] }
+    ];
     const last = nodes.length - 1;
     const costs = Array.from({ length: classCount + 1 }, () => Array<number>(nodes.length).fill(Infinity));
     const previous = Array.from({ length: classCount + 1 }, () => Array<number>(nodes.length).fill(-1));

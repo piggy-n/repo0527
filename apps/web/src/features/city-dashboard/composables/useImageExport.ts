@@ -9,8 +9,11 @@ export function useImageExport() {
   onScopeDispose(() => lifetime.abort());
 
   async function run(key: string, create: (signal: AbortSignal) => Promise<HTMLCanvasElement>): Promise<Blob | null> {
-    if (pending.value.has(key) || lifetime.signal.aborted) { return null; }
-    pending.value = new Set(pending.value).add(key); error.value = '';
+    if (pending.value.has(key) || lifetime.signal.aborted) {
+      return null;
+    }
+    pending.value = new Set(pending.value).add(key);
+    error.value = '';
     try {
       const canvas = await create(lifetime.signal);
       lifetime.signal.throwIfAborted();
@@ -18,11 +21,14 @@ export function useImageExport() {
       lifetime.signal.throwIfAborted();
       return blob;
     } catch (reason) {
-      if (!lifetime.signal.aborted) { error.value = reason instanceof Error ? reason.message : '图片导出失败，请重试'; }
+      if (!lifetime.signal.aborted) {
+        error.value = reason instanceof Error ? reason.message : '图片导出失败，请重试';
+      }
       return null;
     } finally {
       pending.value = new Set([...pending.value].filter(item => item !== key));
     }
   }
+
   return { pending: computed(() => pending.value), error, run, waitForFonts: waitForExportFonts };
 }

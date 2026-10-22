@@ -16,8 +16,14 @@ export function createRegionMaterials(value: number | null, sweepUniforms: Sweep
   // 扫光沿真实地图顶面移动，保留城市着色和灰色无数据语义
   top.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, sweepUniforms, { uDataAvailable: dataAvailable, uHover: hover });
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vDashboardPosition;');
-    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvDashboardPosition = position.xy;');
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      '#include <common>\nvarying vec2 vDashboardPosition;'
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      '#include <begin_vertex>\nvDashboardPosition = position.xy;'
+    );
     shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `
       #include <common>
       varying vec2 vDashboardPosition;
@@ -53,7 +59,12 @@ export function createRegionMaterials(value: number | null, sweepUniforms: Sweep
   const sideColor = color.clone();
   const side = new ShaderMaterial({
     transparent: true,
-    uniforms: { uColor: { value: sideColor }, uOpacity: { value: 0 }, uDepth: { value: MAP_DEPTH }, uDataAvailable: dataAvailable },
+    uniforms: {
+      uColor: { value: sideColor },
+      uOpacity: { value: 0 },
+      uDepth: { value: MAP_DEPTH },
+      uDataAvailable: dataAvailable
+    },
     vertexShader: `
       varying vec3 vPosition;
       varying vec3 vSideNormal;
@@ -87,13 +98,26 @@ export function createRegionMaterials(value: number | null, sweepUniforms: Sweep
 }
 
 // 直接插值材质颜色，避免数值跨过分级阈值时突然跳色
-export function updateRegionMaterials(materials: RegionMaterials, value: number | null, duration = 0, onUpdate?: () => void) {
+export function updateRegionMaterials(
+  materials: RegionMaterials,
+  value: number | null,
+  duration = 0,
+  onUpdate?: () => void
+) {
   const color = new Color(getMapColor(value));
   gsap.killTweensOf(materials.top.color);
   if (duration) {
     gsap.to(materials.top.color, {
-      r: color.r, g: color.g, b: color.b, duration, ease: MAP_YEAR_TRANSITION.ease, paused: document.hidden,
-      onUpdate: () => { materials.sideColor.copy(materials.top.color); onUpdate?.(); }
+      r: color.r,
+      g: color.g,
+      b: color.b,
+      duration,
+      ease: MAP_YEAR_TRANSITION.ease,
+      paused: document.hidden,
+      onUpdate: () => {
+        materials.sideColor.copy(materials.top.color);
+        onUpdate?.();
+      }
     });
   } else {
     materials.top.color.copy(color);

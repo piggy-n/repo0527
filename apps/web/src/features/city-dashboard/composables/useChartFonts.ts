@@ -4,7 +4,9 @@ import { onMounted, onScopeDispose, shallowRef } from 'vue';
 export function useChartFonts() {
   const revision = shallowRef(0);
   let active = true;
-  onScopeDispose(() => { active = false; });
+  onScopeDispose(() => {
+    active = false;
+  });
   onMounted(() => {
     if (!document.fonts) {
       return;

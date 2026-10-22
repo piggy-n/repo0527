@@ -9,7 +9,9 @@ describe('图片导出生命周期', () => {
     const exporter = scope.run(useImageExport)!;
     const canvas = document.createElement('canvas');
     let complete: BlobCallback | undefined;
-    vi.spyOn(canvas, 'toBlob').mockImplementation(callback => { complete = callback; });
+    vi.spyOn(canvas, 'toBlob').mockImplementation(callback => {
+      complete = callback;
+    });
     const create = vi.fn<() => Promise<HTMLCanvasElement>>(async () => canvas);
     const first = exporter.run('map', create);
     expect(exporter.pending.value.has('map')).toBe(true);

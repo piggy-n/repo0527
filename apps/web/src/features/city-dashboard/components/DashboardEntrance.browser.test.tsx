@@ -4,11 +4,15 @@ import { nextTick } from 'vue';
 import { DashboardView } from './DashboardView';
 
 const hosts: HTMLElement[] = [];
-afterEach(() => { hosts.splice(0).forEach(host => host.remove()); vi.unstubAllGlobals(); });
+afterEach(() => {
+  hosts.splice(0).forEach(host => host.remove());
+  vi.unstubAllGlobals();
+});
 
 function createHost(): HTMLElement {
   const host = document.createElement('div');
-  document.body.append(host); hosts.push(host);
+  document.body.append(host);
+  hosts.push(host);
   return host;
 }
 
@@ -17,7 +21,10 @@ describe('整屏入场生命周期', () => {
     const wrapper = mount(DashboardView, { attachTo: createHost(), props: { forceFallback: true } });
     expect(wrapper.attributes('data-dashboard-phase')).toBe('map-entering');
     expect(wrapper.find('[aria-label="大屏筛选条件"]').attributes('inert')).toBeDefined();
-    await vi.waitFor(() => expect(wrapper.attributes('data-dashboard-phase')).toBe('panels-entering'), { timeout: 10000 });
+    await vi.waitFor(
+      () => expect(wrapper.attributes('data-dashboard-phase')).toBe('panels-entering'),
+      { timeout: 10000 }
+    );
     await vi.waitFor(() => expect(wrapper.attributes('data-dashboard-phase')).toBe('ready'), { timeout: 10000 });
     for (const group of wrapper.findAll('[data-filter-group], [data-enter="left"], [data-enter="title"]')) {
       expect((group.element as HTMLElement).style.transform).toBe('');
@@ -33,7 +40,10 @@ describe('整屏入场生命周期', () => {
   it('入场中开启减少动画会结束全部阶段，卸载不会晚到恢复节点', async () => {
     const host = createHost();
     const wrapper = mount(DashboardView, { attachTo: host });
-    await vi.waitFor(() => expect(wrapper.get('[data-state]').attributes('data-state')).toBe('entering'), { timeout: 10000 });
+    await vi.waitFor(
+      () => expect(wrapper.get('[data-state]').attributes('data-state')).toBe('entering'),
+      { timeout: 10000 }
+    );
     await wrapper.setProps({ reducedMotion: true });
     await vi.waitFor(() => expect(wrapper.attributes('data-dashboard-phase')).toBe('ready'), { timeout: 10000 });
     expect(wrapper.findAll('button[aria-haspopup="dialog"]')).toHaveLength(13);

@@ -26,15 +26,31 @@ export interface MapLabel extends LabelPosition {
 
 export interface SceneCallbacks {
   onLabels(positions: LabelPosition[]): void;
+
   onHover(code: string | null): void;
+
   onCityPointer(code: string | null): void;
+
   onCityClick(code: string): void;
+
   onFailure(error: Error): void;
 }
 
 export type MapValues = Readonly<Record<string, number | null>>;
 
-export interface NumberUniform { value: number }
+/** 导出时冻结地图像素、标签位置与数值，字体等待期间不再读取活动场景 */
+export interface DashboardMapSnapshot {
+  readonly canvas: HTMLCanvasElement;
+  readonly labels: readonly MapLabel[];
+  readonly values: MapValues;
+  readonly simple: boolean;
+  readonly labelScale: number;
+}
+
+export interface NumberUniform {
+  value: number;
+}
+
 export interface SweepUniforms {
   uSweepPosition: NumberUniform;
   uSweepStrength: NumberUniform;

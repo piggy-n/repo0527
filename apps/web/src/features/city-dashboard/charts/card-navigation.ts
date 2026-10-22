@@ -6,17 +6,26 @@ export class CardWheelGesture {
   private consumed = false;
 
   reset(): void {
-    this.lastTime = -Infinity; this.direction = 0; this.distance = 0; this.consumed = false;
+    this.lastTime = -Infinity;
+    this.direction = 0;
+    this.distance = 0;
+    this.consumed = false;
   }
 
   consume(delta: number, now: number): number {
-    if (!Number.isFinite(delta) || !delta) { return 0; }
+    if (!Number.isFinite(delta) || !delta) {
+      return 0;
+    }
     const direction = Math.sign(delta);
-    if (now - this.lastTime >= 200 || direction !== this.direction) { this.reset(); }
+    if (now - this.lastTime >= 200 || direction !== this.direction) {
+      this.reset();
+    }
     this.lastTime = now;
     this.direction = direction;
     this.distance += Math.abs(delta);
-    if (this.consumed || this.distance < 18) { return 0; }
+    if (this.consumed || this.distance < 18) {
+      return 0;
+    }
     this.consumed = true;
     return direction;
   }
@@ -26,8 +35,11 @@ export class CardWheelGesture {
 export function cardStops(tops: readonly number[], maximum: number): number[] {
   return tops.reduce<number[]>((stops, top) => {
     const position = Math.max(0, Math.min(top, maximum));
-    if (!stops.length || position - stops[stops.length - 1] > 1) { stops.push(position); }
-    else { stops[stops.length - 1] = position; }
+    if (!stops.length || position - stops[stops.length - 1] > 1) {
+      stops.push(position);
+    } else {
+      stops[stops.length - 1] = position;
+    }
     return stops;
   }, []);
 }

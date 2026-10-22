@@ -25,12 +25,20 @@ describe('统计口径与展示计算', () => {
     expect(classification.sampleCount).toBe(7);
     expect(classification.classCount).toBe(5);
     expect(classification.breaks).toHaveLength(4);
-    classification.breaks.forEach((boundary, index) => expect(getMapClassIndex(boundary, classification)).toBe(index + 1));
+    classification.breaks.forEach((boundary, index) => expect(getMapClassIndex(
+      boundary,
+      classification
+    )).toBe(index + 1));
     expect(getMapClassIndex(-100, classification)).toBe(0);
     expect(getMapClassIndex(100, classification)).toBe(4);
     expect(getMapClassIndex(null, classification)).toBeNull();
     expect(createMapClassification([null, NaN]).classCount).toBe(0);
-    expect(createMapClassification([2, 2, 2])).toMatchObject({ classCount: 1, breaks: [], displayMin: 2, displayMax: 2 });
+    expect(createMapClassification([2, 2, 2])).toMatchObject({
+      classCount: 1,
+      breaks: [],
+      displayMin: 2,
+      displayMax: 2
+    });
   });
 
   it.each([2, 3, 4])('有限观测值只分 %i 档，窄区间保留有效分界', count => {

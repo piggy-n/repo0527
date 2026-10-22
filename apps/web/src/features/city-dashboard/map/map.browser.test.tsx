@@ -9,7 +9,9 @@ import type { SceneCallbacks } from './types';
 import viewStyles from '../components/DashboardView.module.scss';
 
 const hosts: HTMLElement[] = [];
-afterEach(() => { hosts.splice(0).forEach(element => element.remove()); });
+afterEach(() => {
+  hosts.splice(0).forEach(element => element.remove());
+});
 
 function host(): HTMLDivElement {
   const element = document.createElement('div');
@@ -26,7 +28,8 @@ describe('驾驶舱真实地图引擎', () => {
     const indicator = model.category.value.indicators.find(item => item.name.startsWith('每10万人拥有的博物馆'))!;
     model.selectIndicator(indicator.id);
     const wrapper = mount(DashboardMap, {
-      attachTo: host(), props: { model, reducedMotion: true, active: true, forceFallback: true },
+      attachTo: host(),
+      props: { model, reducedMotion: true, active: true, forceFallback: true },
       attrs: { style: 'width:366px;height:600px;--ui-scale:.9' },
       slots: { default: () => <div class={viewStyles.tooltip} data-dashboard-tooltip>城市数据表格</div> }
     });
@@ -36,7 +39,9 @@ describe('驾驶舱真实地图引擎', () => {
       const tooltip = wrapper.get('[data-dashboard-tooltip]').element.getBoundingClientRect();
       expect(title.height).toBeGreaterThan(60);
       expect(tooltip.top - title.bottom).toBeGreaterThanOrEqual(11);
-    } finally { wrapper.unmount(); }
+    } finally {
+      wrapper.unmount();
+    }
   });
 
   it('空闲和隐藏时不重绘，扫光不重复发布静止标签，销毁结束定时动画', async () => {
@@ -45,7 +50,15 @@ describe('驾驶舱真实地图引擎', () => {
     const labels = vi.fn<SceneCallbacks['onLabels']>();
     const rendered = vi.spyOn(WebGL2RenderingContext.prototype, 'clear');
     const scene = new JiangsuMapScene(element, data.regions, {
-      onLabels: labels, onHover: () => {}, onCityClick: () => {}, onCityPointer: () => {}, onFailure: () => {}
+      onLabels: labels,
+      onHover: () => {
+      },
+      onCityClick: () => {
+      },
+      onCityPointer: () => {
+      },
+      onFailure: () => {
+      }
     });
     try {
       await scene.playEntrance(true);
@@ -67,7 +80,10 @@ describe('驾驶舱真实地图引擎', () => {
       vi.restoreAllMocks();
       document.dispatchEvent(new Event('visibilitychange'));
       scene.setReducedMotion(false);
-    } finally { scene.dispose(); vi.restoreAllMocks(); }
+    } finally {
+      scene.dispose();
+      vi.restoreAllMocks();
+    }
     expect(element.querySelectorAll('canvas')).toHaveLength(0);
   }, 10000);
 
@@ -76,7 +92,15 @@ describe('驾驶舱真实地图引擎', () => {
     const data = await loadDashboardRegions(new AbortController().signal);
     const labels = vi.fn<SceneCallbacks['onLabels']>();
     const scene = new JiangsuMapScene(element, data.regions, {
-      onLabels: labels, onHover: () => {}, onCityClick: () => {}, onCityPointer: () => {}, onFailure: () => {}
+      onLabels: labels,
+      onHover: () => {
+      },
+      onCityClick: () => {
+      },
+      onCityPointer: () => {
+      },
+      onFailure: () => {
+      }
     });
     try {
       await scene.playEntrance(true);
@@ -92,14 +116,19 @@ describe('驾驶舱真实地图引擎', () => {
       scene.dispose();
       await pending;
       expect(element.querySelector('canvas')).toBeNull();
-    } finally { scene.dispose(); }
+    } finally {
+      scene.dispose();
+    }
   }, 15000);
 
   it('运行中失去 WebGL 自动降为二维，重复进入退出不遗留画布', async () => {
     const element = host();
     for (let index = 0; index < 3; index++) {
       const model = useDashboard(createMockData(2026));
-      const wrapper = mount(DashboardMap, { attachTo: element, props: { model, reducedMotion: true }, attrs: { style: 'width:900px;height:700px' } });
+      const wrapper = mount(
+        DashboardMap,
+        { attachTo: element, props: { model, reducedMotion: true }, attrs: { style: 'width:900px;height:700px' } }
+      );
       try {
         // oxlint-disable-next-line no-await-in-loop -- 连续创建和释放同一容器，验证上一轮资源已清理
         await vi.waitFor(() => expect(wrapper.attributes('data-state')).toBe('ready'), { timeout: 10000 });
@@ -120,7 +149,9 @@ describe('驾驶舱真实地图引擎', () => {
         model.setYears([]);
         // oxlint-disable-next-line no-await-in-loop -- 卸载前确认本轮筛选收敛
         await vi.waitFor(() => expect(wrapper.text()).toContain('请选择年份'));
-      } finally { wrapper.unmount(); }
+      } finally {
+        wrapper.unmount();
+      }
       expect(element.querySelectorAll('canvas')).toHaveLength(0);
     }
   }, 30000);

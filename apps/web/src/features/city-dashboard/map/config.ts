@@ -13,6 +13,8 @@ export function colorCoordinate(value: number | null, classification: MapClassif
 }
 
 export function getMapColor(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) { return EMPTY_COLOR; }
+  if (value === null || !Number.isFinite(value)) {
+    return EMPTY_COLOR;
+  }
   return MAP_COLORS[Math.max(0, Math.min(4, Math.floor(value / 100 * 5)))];
 }

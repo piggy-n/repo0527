@@ -10,27 +10,40 @@ export function playVisibleTimeline(timeline: ReturnType<typeof Gsap.timeline>):
 
   function dispose(): void {
     disposed = true;
-    if (frame !== undefined) { cancelAnimationFrame(frame); frame = undefined; }
+    if (frame !== undefined) {
+      cancelAnimationFrame(frame);
+      frame = undefined;
+    }
     document.removeEventListener('visibilitychange', visibilityChanged);
   }
 
   function tick(now: number): void {
     frame = undefined;
-    if (disposed || document.hidden) { return; }
-    elapsed += Math.max(0, now - previous); previous = now;
+    if (disposed || document.hidden) {
+      return;
+    }
+    elapsed += Math.max(0, now - previous);
+    previous = now;
     const duration = timeline.totalDuration();
     timeline.totalTime(Math.min(duration, elapsed / 1000), false);
-    if (elapsed / 1000 >= duration) { dispose(); }
-    else if (!disposed) { frame = requestAnimationFrame(tick); }
+    if (elapsed / 1000 >= duration) {
+      dispose();
+    } else if (!disposed) {
+      frame = requestAnimationFrame(tick);
+    }
   }
 
   function visibilityChanged(): void {
-    if (frame !== undefined) { cancelAnimationFrame(frame); frame = undefined; }
+    if (frame !== undefined) {
+      cancelAnimationFrame(frame);
+      frame = undefined;
+    }
     if (!document.hidden && !disposed) {
       previous = performance.now();
       frame = requestAnimationFrame(tick);
     }
   }
+
   document.addEventListener('visibilitychange', visibilityChanged);
   visibilityChanged();
   return { [Symbol.dispose]: dispose };

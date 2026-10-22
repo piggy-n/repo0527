@@ -13,7 +13,11 @@ export function compareIndicator(
   cities: readonly City[]
 ): Comparison[] {
   return [...new Set(years)].toSorted((a, b) => a - b).map(year => {
-    const values = cities.map(city => data.value(year, city.code, indicator.id)).map(value => isValue(value) ? value : null);
+    const values = cities.map(city => data.value(
+      year,
+      city.code,
+      indicator.id
+    )).map(value => isValue(value) ? value : null);
     const valid = values.filter(isValue);
     const average = valid.length
       ? Number((valid.reduce((sum, value) => sum + value, 0) / valid.length).toFixed(Math.max(1, indicator.precision)))

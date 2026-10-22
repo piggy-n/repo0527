@@ -16,8 +16,8 @@ interface FilterState {
 /** 单页状态拥有者：筛选与图表偏好通过操作更新，组件不直接改内部快照 */
 export function useDashboard(data: DashboardData) {
   const availableYears = DASHBOARD_YEARS.filter(year => data.years.includes(year));
-  const preferred = [2026, 2025].filter(year => availableYears.includes(year));
-  const years = preferred.length ? preferred : availableYears.slice(0, 2);
+  const preferredYears = [2026, 2025].filter(year => availableYears.includes(year));
+  const years = preferredYears.length ? preferredYears : availableYears.slice(0, 2);
   const state = shallowRef<FilterState>({
     years,
     cityCodes: CITIES.map(city => city.code),
@@ -34,29 +34,35 @@ export function useDashboard(data: DashboardData) {
   const cities = computed(() => CITIES.filter(city => cityCodes.value.includes(city.code)));
   const comparisonYears = computed(() => selectedYears.value.toSorted((a, b) => a - b));
   const comparisons = computed(() => new Map(category.value.indicators.map(item => [
-    item.id, compareIndicator(data, item, comparisonYears.value, cities.value)
+    item.id,
+    compareIndicator(data, item, comparisonYears.value, cities.value)
   ])));
   // 六个开放年份 × 全部城市是色阶基准，不跟随用户筛选变化
   const classification = computed(() => createMapClassification(availableYears.flatMap(year =>
     CITIES.map(city => data.value(year, city.code, indicator.value.id))
   )));
-  const mapValues = computed(() => Object.fromEntries(CITIES.map(city => [city.code,
+  const mapValues = computed(() => Object.fromEntries(CITIES.map(city => [
+    city.code,
     state.value.activeYear !== null && state.value.cityCodes.includes(city.code)
       ? data.value(state.value.activeYear, city.code, indicator.value.id) : null
   ])));
 
+  /** 比较年改变时优先保留当前地图年份，已移除则回到最新所选年 */
   function setYears(input: readonly number[]): void {
-    const next = [...new Set(input)].filter(year => availableYears.includes(year)).toSorted((a, b) => b - a);
-    const current = state.value.activeYear;
+    const nextYears = [...new Set(input)].filter(year => availableYears.includes(year)).toSorted((a, b) => b - a);
+    const activeYear = state.value.activeYear;
     state.value = {
       ...state.value,
-      years: next,
-      activeYear: current !== null && next.includes(current) ? current : next[0] ?? null
+      years: nextYears,
+      activeYear: activeYear !== null && nextYears.includes(activeYear) ? activeYear : nextYears[0] ?? null
     };
   }
 
   function setCities(input: readonly string[]): void {
-    state.value = { ...state.value, cityCodes: CITIES.filter(city => input.includes(city.code)).map(city => city.code) };
+    state.value = {
+      ...state.value,
+      cityCodes: CITIES.filter(city => input.includes(city.code)).map(city => city.code)
+    };
   }
 
   function toggleCity(code: string): void {
@@ -64,6 +70,7 @@ export function useDashboard(data: DashboardData) {
     setCities(selected.includes(code) ? selected.filter(item => item !== code) : [...selected, code]);
   }
 
+  /** 分类切换回到首个指标，并清理上一分类的临时图表偏好 */
   function selectCategory(id: CategoryId): void {
     const next = CATEGORIES.find(item => item.id === id);
     if (!next?.indicators.length) {
@@ -101,8 +108,21 @@ export function useDashboard(data: DashboardData) {
   return {
     availableYears,
     state: computed(() => state.value),
-    category, indicator, cities, comparisonYears, comparisons, classification, mapValues,
-    setYears, setCities, toggleCity, selectCategory, selectIndicator, setActiveYear, preference, setPreference
+    category,
+    indicator,
+    cities,
+    comparisonYears,
+    comparisons,
+    classification,
+    mapValues,
+    setYears,
+    setCities,
+    toggleCity,
+    selectCategory,
+    selectIndicator,
+    setActiveYear,
+    preference,
+    setPreference
   };
 }
 

@@ -36,6 +36,7 @@ export type DashboardRecord = {
 /** 页面注入数据读接口；目前唯一实现是固定模拟数据，不声明虚构接口 */
 export interface DashboardData {
   readonly years: readonly number[];
+
   value(year: number, cityCode: string, indicatorCode: string): number | null;
 }
 
@@ -49,4 +50,10 @@ export interface ChartPreference {
   readonly type: ChartType;
   readonly showAverage: boolean;
   readonly legend: Readonly<Record<string, boolean>>;
+}
+
+/** 地图和图表共用的指标悬停目标 */
+export interface ChartHover {
+  readonly indicatorId: string;
+  readonly cityCode: string;
 }

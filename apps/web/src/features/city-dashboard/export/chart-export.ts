@@ -11,10 +11,17 @@ export function renderChartImage(option: DashboardChartOption, width: number, he
     chart = createChart(host, undefined, { devicePixelRatio: 2 });
     chart.setOption({ ...option, animation: false });
     const image = chart.renderToCanvas({ pixelRatio: 2, backgroundColor: '#ECF6FE' });
-    const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
     const context = canvas.getContext('2d');
-    if (!context) { throw new Error('图表导出画布不可用'); }
+    if (!context) {
+      throw new Error('图表导出画布不可用');
+    }
     context.drawImage(image, 0, 0);
     return canvas;
-  } finally { chart?.dispose(); host.remove(); }
+  } finally {
+    chart?.dispose();
+    host.remove();
+  }
 }

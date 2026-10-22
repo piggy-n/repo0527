@@ -1,6 +1,12 @@
 import type { ChartType, Comparison } from '../model';
 
-export interface LabelPlacement { show: boolean; position: 'top' | 'inside'; offset: [number, number]; compact?: boolean }
+export interface LabelPlacement {
+  show: boolean;
+  position: 'top' | 'inside';
+  offset: [number, number];
+  compact?: boolean;
+}
+
 interface LabelInput {
   comparison: readonly Comparison[];
   cityIndex: number;
@@ -16,20 +22,31 @@ interface LabelInput {
 /** 保留旧详情避让算法；密集场景强调当前可见年，完整数值留在表格 */
 export function createDetailLabelPlan(input: LabelInput): Record<number, LabelPlacement> {
   const { comparison, cityIndex, cityCount, activeYear, chartType, stacked, axis, size, formatValue } = input;
-  const entries = comparison.filter(item => typeof item.values[cityIndex] === 'number' && Number.isFinite(item.values[cityIndex]));
+  const entries = comparison.filter(item => {
+    const value = item.values[cityIndex];
+    return typeof value === 'number' && Number.isFinite(value);
+  });
   const primary = entries.find(item => item.year === activeYear) ?? entries.at(-1);
-  if (!primary) { return {}; }
+  if (!primary) {
+    return {};
+  }
   const compact = (): Record<number, LabelPlacement> => ({ [primary.year]: { show: true, position: stacked ? 'inside' : 'top', offset: [0, 0], compact: true } });
-  if (stacked || entries.length > 3 || size.width < 360 || size.height < 220) { return compact(); }
+  if (stacked || entries.length > 3 || size.width < 360 || size.height < 220) {
+    return compact();
+  }
   const plotWidth = Math.max(1, size.width - 140);
   const plotHeight = Math.max(1, size.height - 150);
   const labelHeight = 22;
   const separation = labelHeight + 8;
   if (chartType === 'bar') {
     const groupWidth = plotWidth / Math.max(1, cityCount) * .8;
-    const barWidth = Math.min(32, groupWidth / (entries.length + (entries.length - 1) * .65));
+    const barWidth = Math.min(32,
+      groupWidth / (entries.length + (entries.length - 1) * .65)
+    );
     const widest = Math.max(...entries.map(item => formatValue(item.values[cityIndex]).length * 10 + 12));
-    if (entries.length > 1 && widest + 8 > barWidth * 1.65) { return compact(); }
+    if (entries.length > 1 && widest + 8 > barWidth * 1.65) {
+      return compact();
+    }
     return Object.fromEntries(entries.map(item => [item.year, { show: true, position: 'top', offset: [0, 0] }]));
   }
   const placed: number[] = [];
@@ -40,7 +57,9 @@ export function createDetailLabelPlan(input: LabelInput): Record<number, LabelPl
     const candidate = [0, -separation, separation, -2 * separation, 2 * separation]
       .map(offset => Math.max(-24, Math.min(plotHeight - labelHeight / 2, preferred + offset)))
       .find(y => placed.every(other => Math.abs(y - other) >= separation));
-    if (candidate === undefined) { return compact(); }
+    if (candidate === undefined) {
+      return compact();
+    }
     placed.push(candidate);
     plan[item.year] = { show: true, position: 'top', offset: [0, candidate - preferred] };
   }

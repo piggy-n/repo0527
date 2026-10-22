@@ -55,7 +55,9 @@ export const DashboardPlot = defineComponent({
         return;
       }
       if (!visible.value) {
-        if (!props.retain) { release(); }
+        if (!props.retain) {
+          release();
+        }
         return;
       }
       // 隐藏后的零尺寸不传给引擎，恢复时以真实容器重新初始化
@@ -95,9 +97,19 @@ export const DashboardPlot = defineComponent({
     }
 
     useResizeObserver(element, update);
-    watch([() => props.option, () => props.active, () => props.retain, visible, pageVisibility, fontRevision], update, { flush: 'post' });
-    onMounted(() => { mounted = true; update(); });
-    onScopeDispose(() => { mounted = false; release(); });
+    watch(
+      [() => props.option, () => props.active, () => props.retain, visible, pageVisibility, fontRevision],
+      update,
+      { flush: 'post' }
+    );
+    onMounted(() => {
+      mounted = true;
+      update();
+    });
+    onScopeDispose(() => {
+      mounted = false;
+      release();
+    });
 
     function onKeydown(event: KeyboardEvent): void {
       if (!['ArrowLeft', 'ArrowRight', 'Escape'].includes(event.key)) {
@@ -108,19 +120,27 @@ export const DashboardPlot = defineComponent({
         hide();
         return;
       }
-      keyboardCity = Math.max(0, Math.min(props.cities.length - 1, keyboardCity + (event.key === 'ArrowRight' ? 1 : -1)));
+      keyboardCity = Math.max(
+        0,
+        Math.min(
+          props.cities.length - 1,
+          keyboardCity + (event.key === 'ArrowRight' ? 1 : -1)
+        )
+      );
       chart?.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: keyboardCity });
       emit('hover', props.cities[keyboardCity]?.code ?? null);
     }
 
-    return () => <div
-      ref={element}
-      class={styles.plot}
-      tabindex={0}
-      role="img"
-      aria-label={`${props.description}，左右键查看城市数值，Esc 关闭提示`}
-      onKeydown={onKeydown}
-      onBlur={hide}
-    />;
+    return () => (
+      <div
+        ref={element}
+        class={styles.plot}
+        tabindex={0}
+        role="img"
+        aria-label={`${props.description}，左右键查看城市数值，Esc 关闭提示`}
+        onKeydown={onKeydown}
+        onBlur={hide}
+      />
+    );
   }
 });

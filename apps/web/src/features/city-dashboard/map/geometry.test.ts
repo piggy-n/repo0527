@@ -8,19 +8,31 @@ import { layoutMapLabels } from './label-layout';
 function boundaries(): RegionGeometry[] {
   return CITIES.map((city, index) => {
     const x = 118 + index * .1;
-    return { code: city.code, geometry: { type: 'Polygon', coordinates: [
-      [[x, 32], [x + .08, 32], [x + .08, 32.08], [x, 32.08], [x, 32]],
-      [[x + .02, 32.02], [x + .02, 32.04], [x + .04, 32.04], [x + .04, 32.02], [x + .02, 32.02]]
-    ] } };
+    return {
+      code: city.code,
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [[x, 32], [x + .08, 32], [x + .08, 32.08], [x, 32.08], [x, 32]],
+          [[x + .02, 32.02], [x + .02, 32.04], [x + .04, 32.04], [x + .04, 32.02], [x + .02, 32.02]]
+        ]
+      }
+    };
   });
 }
 
 describe('驾驶舱地图几何', () => {
   it('聚合同市离散面并保留孔洞，不修改共享边界', () => {
     const source = boundaries();
-    source.push({ code: CITIES[0].code, geometry: { type: 'MultiPolygon', coordinates: [
-      [[[119.8, 33], [119.9, 33], [119.9, 33.1], [119.8, 33.1], [119.8, 33]]]
-    ] } });
+    source.push({
+      code: CITIES[0].code,
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: [
+          [[[119.8, 33], [119.9, 33], [119.9, 33.1], [119.8, 33.1], [119.8, 33]]]
+        ]
+      }
+    });
     const before = JSON.stringify(source);
     const result = prepareRegions(source);
     expect(result.regions).toHaveLength(13);

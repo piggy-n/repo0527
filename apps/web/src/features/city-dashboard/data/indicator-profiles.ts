@@ -2,11 +2,26 @@ import type { Indicator } from '../model';
 
 type Driver = keyof typeof CITY_DRIVERS;
 type Pattern = 'steady' | 'coverage' | 'rail' | 'risk' | 'project' | 'distance' | 'cohort' | 'flow';
-interface Profile { base: number; driver: Driver; spread: number; change: number; noise: number; pattern: Pattern }
+
+interface Profile {
+  base: number;
+  driver: Driver;
+  spread: number;
+  change: number;
+  noise: number;
+  pattern: Pattern;
+}
 
 // 参数依次为参考量级、城市特征、空间差异、年变化率、波动幅度、演变方式
 // 所有参数均为演示假设，不代表真实城市排名、业务阈值或历史统计
-function profile(base: number, driver: Driver, spread: number, change: number, noise: number, pattern: Pattern = 'steady'): Profile {
+function profile(
+  base: number,
+  driver: Driver,
+  spread: number,
+  change: number,
+  noise: number,
+  pattern: Pattern = 'steady'
+): Profile {
   return { base, driver, spread, change, noise, pattern };
 }
 
@@ -123,7 +138,21 @@ export const INDICATOR_PROFILES: Readonly<Record<string, Profile>> = {
 };
 
 // 城市特征用于模拟不同资源禀赋，顺序与城市编码对应，不能解读为真实测评得分
-const CITY_CODES = ['320100', '320200', '320300', '320400', '320500', '320600', '320700', '320800', '320900', '321000', '321100', '321200', '321300'];
+const CITY_CODES = [
+  '320100',
+  '320200',
+  '320300',
+  '320400',
+  '320500',
+  '320600',
+  '320700',
+  '320800',
+  '320900',
+  '321000',
+  '321100',
+  '321200',
+  '321300'
+];
 const CITY_DRIVERS = {
   size: [0.7, 0.3, 0.65, -0.05, 1, 0.35, -0.3, -0.45, 0.4, -0.25, -0.65, -0.35, -0.5],
   compact: [0.6, 0.85, -0.25, 0.65, 0.75, 0.1, -0.15, -0.35, -0.8, -0.1, 0.35, 0, -0.45],
@@ -169,7 +198,10 @@ export function createProfileValue(cityCode: string, indicator: Indicator, year:
     // 演示不同轨道发展阶段：部分城市尚未配置，已有城市按独立批次扩展
     const maturity = [1.65, 0.9, 0.55, 0.68, 1.5, 0.42, 0, 0, 0, 0, 0, 0, 0][cityIndex] || 0;
     const start = 2012 + Math.floor(random('opening') * 10);
-    const stages = Math.max(0, Math.floor((year - start) / 2) + 1);
+    const stages = Math.max(
+      0,
+      Math.floor((year - start) / 2) + 1
+    );
     value = maturity * settings.base * (1 - Math.exp(-stages * 0.28)) * (1 + disturbance);
   } else if (settings.pattern === 'risk') {
     // 积水点允许零值、局部集中与偶发回升，不强求各城市均匀分布

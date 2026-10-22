@@ -46,7 +46,8 @@ export function createMockData(currentYear: number): DashboardData & { readonly 
     status: 'available' as const
   }))));
   const index = new Map(records.map(record => [
-    `${record.year}:${record.cityCode}:${record.indicatorCode}`, record.value
+    `${record.year}:${record.cityCode}:${record.indicatorCode}`,
+    record.value
   ]));
   return {
     years,

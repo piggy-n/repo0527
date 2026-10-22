@@ -1,9 +1,24 @@
 import type { MapRegion, MapValues, SceneCallbacks, SweepUniforms } from './types';
 import type { RegionMaterials } from './map-materials';
 import {
-  AmbientLight, BufferGeometry, DirectionalLight, ExtrudeGeometry, Group,
-  LineBasicMaterial, Line, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster, Scene, ShapeGeometry, Material,
-  SRGBColorSpace, Vector2, Vector3, WebGLRenderer
+  AmbientLight,
+  BufferGeometry,
+  DirectionalLight,
+  ExtrudeGeometry,
+  Group,
+  LineBasicMaterial,
+  Line,
+  Mesh,
+  MeshBasicMaterial,
+  PerspectiveCamera,
+  Raycaster,
+  Scene,
+  ShapeGeometry,
+  Material,
+  SRGBColorSpace,
+  Vector2,
+  Vector3,
+  WebGLRenderer
 } from 'three';
 import { gsap } from 'gsap';
 import { polygonHull } from 'd3-polygon';
@@ -70,81 +85,12 @@ export class JiangsuMapScene implements Disposable {
     });
     this.resources.defer(() => this.releaseObjects());
     try {
-      this.renderer.outputColorSpace = SRGBColorSpace;
-      this.renderer.setClearColor(0x000000, 0);
-      this.renderer.domElement.setAttribute('aria-hidden', 'true');
-      this.container.appendChild(this.renderer.domElement);
-      this.scene.add(new AmbientLight('#E6F5FF', 1.7));
-      const sunlight = new DirectionalLight('#FFFFFF', 2.0);
-      sunlight.position.set(-80, 200, 140);
-      this.scene.add(sunlight);
-      const rimLight = new DirectionalLight('#55E0FF', 0.7);
-      rimLight.position.set(180, 80, -120);
-      this.scene.add(rimLight);
-      this.mapGroup.rotation.x = -Math.PI / 2;
-      this.scene.add(this.mapGroup);
+      this.initializeScene();
       this.buildRegions();
-      this.mapGroup.updateMatrixWorld();
-      // 用真实轮廓的凸包拟合镜头，避免空白包围盒四角挤小斜向省域
-      const boundaryPoints = this.regions.flatMap(region => region.shapes.flatMap(shape => shape.getPoints().map(point => [point.x, point.y] as [number, number])));
-      const hull = polygonHull(boundaryPoints) || boundaryPoints;
-      this.cameraFitPoints = hull.flatMap(([x, y]) => [0, MAP_DEPTH].map(z => new Vector3(x, y, z).applyMatrix4(this.mapGroup.matrixWorld)));
+      this.prepareCameraFitPoints();
       this.mapGroup.scale.z = 0.02;
       this.resize();
-      const observer = new ResizeObserver(() => this.resize());
-      observer.observe(container);
-      this.resources.defer(() => observer.disconnect());
-      const handlePointer = (event: PointerEvent) => this.movePointer(event);
-      const handlePointerDown = (event: PointerEvent) => this.beginDrag(event);
-      const handlePointerUp = (event: PointerEvent) => this.endDrag(event);
-      const handleLeave = () => { if (!this.drag) { this.hoverRegion(null); } };
-      const handleClick = (event: MouseEvent) => {
-        // 拖拽结束产生的合成 click 不得切换城市
-        if (performance.now() < this.suppressClickUntil) { return; }
-        const code = this.pickRegion(event, false);
-        if (code && this.interactive) {
-          this.callbacks.onCityClick(code);
-        }
-      };
-      const handleContextLost = (event: Event) => {
-        event.preventDefault();
-        this.callbacks.onFailure(new Error('地图图形上下文不可用'));
-      };
-      const handleVisibility = () => {
-        if (this.frame !== undefined) { cancelAnimationFrame(this.frame); this.frame = undefined; }
-        this.ambientTimeline?.paused(document.hidden);
-        clearTimeout(this.ambientTimer);
-        if (document.hidden) { this.finishDrag(); }
-        const targets = [this.view, ...[...this.objects.values()].flatMap(object =>
-          [object.materials.top.color, object.group.position, object.materials.hover])];
-        // 时间线统一暂停其子动画；重复暂停子项会改变恢复后的相对起点
-        gsap.getTweensOf(targets).forEach(tween => {
-          if (tween.parent === gsap.globalTimeline) { tween.paused(document.hidden); }
-        });
-        if (!document.hidden && !this.disposed) {
-          this.resize();
-          this.invalidate();
-          if (!this.reducedMotion && this.interactive && !this.ambientTimeline?.isActive()) { this.scheduleAmbientSweep(); }
-        }
-      };
-      container.addEventListener('pointermove', handlePointer);
-      this.resources.defer(() => container.removeEventListener('pointermove', handlePointer));
-      container.addEventListener('pointerdown', handlePointerDown);
-      this.resources.defer(() => container.removeEventListener('pointerdown', handlePointerDown));
-      container.addEventListener('pointerup', handlePointerUp);
-      this.resources.defer(() => container.removeEventListener('pointerup', handlePointerUp));
-      container.addEventListener('pointercancel', handlePointerUp);
-      this.resources.defer(() => container.removeEventListener('pointercancel', handlePointerUp));
-      container.addEventListener('lostpointercapture', handlePointerUp);
-      this.resources.defer(() => container.removeEventListener('lostpointercapture', handlePointerUp));
-      container.addEventListener('pointerleave', handleLeave);
-      this.resources.defer(() => container.removeEventListener('pointerleave', handleLeave));
-      container.addEventListener('click', handleClick);
-      this.resources.defer(() => container.removeEventListener('click', handleClick));
-      this.renderer.domElement.addEventListener('webglcontextlost', handleContextLost);
-      this.resources.defer(() => this.renderer.domElement.removeEventListener('webglcontextlost', handleContextLost));
-      document.addEventListener('visibilitychange', handleVisibility);
-      this.resources.defer(() => document.removeEventListener('visibilitychange', handleVisibility));
+      this.bindEvents();
       this.invalidate();
     } catch (error) {
       this.dispose();
@@ -152,16 +98,131 @@ export class JiangsuMapScene implements Disposable {
     }
   }
 
+  /** 创建场景灯光与地图根节点，城市几何由独立步骤装配 */
+  private initializeScene(): void {
+    this.renderer.outputColorSpace = SRGBColorSpace;
+    this.renderer.setClearColor(0x000000, 0);
+    this.renderer.domElement.setAttribute('aria-hidden', 'true');
+    this.container.appendChild(this.renderer.domElement);
+    this.scene.add(new AmbientLight('#E6F5FF', 1.7));
+    const sunlight = new DirectionalLight('#FFFFFF', 2.0);
+    sunlight.position.set(-80, 200, 140);
+    this.scene.add(sunlight);
+    const rimLight = new DirectionalLight('#55E0FF', 0.7);
+    rimLight.position.set(180, 80, -120);
+    this.scene.add(rimLight);
+    this.mapGroup.rotation.x = -Math.PI / 2;
+    this.scene.add(this.mapGroup);
+  }
+
+  /** 取完整省域凸包的顶底面顶点，供相机拟合使用 */
+  private prepareCameraFitPoints(): void {
+    this.mapGroup.updateMatrixWorld();
+    // 用真实轮廓的凸包拟合镜头，避免空白包围盒四角挤小斜向省域
+    const shapes = this.regions.flatMap(region => region.shapes);
+    const boundaryPoints = shapes.flatMap(shape => shape.getPoints().map(point => [point.x, point.y] as [number, number]));
+    const hull = polygonHull(boundaryPoints) || boundaryPoints;
+    this.cameraFitPoints = hull.flatMap(([x, y]) => [0, MAP_DEPTH].map(z => {
+      return new Vector3(x, y, z).applyMatrix4(this.mapGroup.matrixWorld);
+    }));
+  }
+
+  /** 监听登记与移除成对维护，统一交给资源栈释放 */
+  private bindEvents(): void {
+    const { container } = this;
+    const observer = new ResizeObserver(() => this.resize());
+    observer.observe(container);
+    this.resources.defer(() => observer.disconnect());
+    const handlePointer = (event: PointerEvent) => this.movePointer(event);
+    const handlePointerDown = (event: PointerEvent) => this.beginDrag(event);
+    const handlePointerUp = (event: PointerEvent) => this.endDrag(event);
+    const handleLeave = () => {
+      if (!this.drag) {
+        this.hoverRegion(null);
+      }
+    };
+    const handleClick = (event: MouseEvent) => {
+      // 拖拽结束产生的合成 click 不得切换城市
+      if (performance.now() < this.suppressClickUntil) {
+        return;
+      }
+      const code = this.pickRegion(event, false);
+      if (code && this.interactive) {
+        this.callbacks.onCityClick(code);
+      }
+    };
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      this.callbacks.onFailure(new Error('地图图形上下文不可用'));
+    };
+    const handleVisibility = () => this.updateVisibility();
+    container.addEventListener('pointermove', handlePointer);
+    this.resources.defer(() => container.removeEventListener('pointermove', handlePointer));
+    container.addEventListener('pointerdown', handlePointerDown);
+    this.resources.defer(() => container.removeEventListener('pointerdown', handlePointerDown));
+    container.addEventListener('pointerup', handlePointerUp);
+    this.resources.defer(() => container.removeEventListener('pointerup', handlePointerUp));
+    container.addEventListener('pointercancel', handlePointerUp);
+    this.resources.defer(() => container.removeEventListener('pointercancel', handlePointerUp));
+    container.addEventListener('lostpointercapture', handlePointerUp);
+    this.resources.defer(() => container.removeEventListener('lostpointercapture', handlePointerUp));
+    container.addEventListener('pointerleave', handleLeave);
+    this.resources.defer(() => container.removeEventListener('pointerleave', handleLeave));
+    container.addEventListener('click', handleClick);
+    this.resources.defer(() => container.removeEventListener('click', handleClick));
+    this.renderer.domElement.addEventListener('webglcontextlost', handleContextLost);
+    this.resources.defer(() => this.renderer.domElement.removeEventListener('webglcontextlost', handleContextLost));
+    document.addEventListener('visibilitychange', handleVisibility);
+    this.resources.defer(() => document.removeEventListener('visibilitychange', handleVisibility));
+  }
+
+  /** 页面隐藏时暂停独立动画与渲染，恢复时重新量取容器 */
+  private updateVisibility(): void {
+    if (this.frame !== undefined) {
+      cancelAnimationFrame(this.frame);
+      this.frame = undefined;
+    }
+    this.ambientTimeline?.paused(document.hidden);
+    clearTimeout(this.ambientTimer);
+    if (document.hidden) {
+      this.finishDrag();
+    }
+    const targets = [
+      this.view,
+      ...[...this.objects.values()].flatMap(object =>
+        [object.materials.top.color, object.group.position, object.materials.hover])
+    ];
+    // 时间线统一暂停其子动画；重复暂停子项会改变恢复后的相对起点
+    gsap.getTweensOf(targets).forEach(tween => {
+      if (tween.parent === gsap.globalTimeline) {
+        tween.paused(document.hidden);
+      }
+    });
+    if (!document.hidden && !this.disposed) {
+      this.resize();
+      this.invalidate();
+      if (!this.reducedMotion && this.interactive && !this.ambientTimeline?.isActive()) {
+        this.scheduleAmbientSweep();
+      }
+    }
+  }
+
   private buildRegions(): void {
     this.regions.forEach(region => {
       const group = new Group();
       this.mapGroup.add(group);
-      const geometry = new ExtrudeGeometry(region.shapes, { depth: MAP_DEPTH, steps: 1, bevelEnabled: false, curveSegments: 1 });
+      const geometry = new ExtrudeGeometry(
+        region.shapes,
+        { depth: MAP_DEPTH, steps: 1, bevelEnabled: false, curveSegments: 1 }
+      );
       const materials = createRegionMaterials(null, this.sweepUniforms, true);
       const mesh = new Mesh(geometry, [materials.top, materials.side]);
       mesh.userData.cityCode = region.code;
       group.add(mesh);
-      const base = new Mesh(new ShapeGeometry(region.shapes), new MeshBasicMaterial({ color: '#146ADE', transparent: true, opacity: 0, depthWrite: false }));
+      const base = new Mesh(
+        new ShapeGeometry(region.shapes),
+        new MeshBasicMaterial({ color: '#146ADE', transparent: true, opacity: 0, depthWrite: false })
+      );
       base.position.set(0.6, -0.6, -2);
       base.scale.set(1.008, 1.008, 1);
       group.add(base);
@@ -174,7 +235,10 @@ export class JiangsuMapScene implements Disposable {
           // 使用连续折线描边，部分绘制时不把终点强行接回起点
           const outline = new BufferGeometry().setFromPoints([...points, points[0]]);
           outline.setDrawRange(0, 0);
-          const line = new Line(outline, new LineBasicMaterial({ color: MAP_ENTRANCE.boundaryColor, transparent: true, opacity: 0 }));
+          const line = new Line(
+            outline,
+            new LineBasicMaterial({ color: MAP_ENTRANCE.boundaryColor, transparent: true, opacity: 0 })
+          );
           line.renderOrder = 2;
           group.add(line);
           lines.push(line);
@@ -192,17 +256,27 @@ export class JiangsuMapScene implements Disposable {
   // 相机按容器宽高比拟合完整地图，非标准分辨率不会横向拉伸
   private updateCamera(): void {
     const key = `${this.width}:${this.height}:${this.view.yaw}:${this.view.pitch}:${this.view.distance}`;
-    if (key === this.cameraKey) { return; }
+    if (key === this.cameraKey) {
+      return;
+    }
     this.cameraKey = key;
     this.camera.clearViewOffset();
-    const direction = new Vector3(Math.sin(this.view.yaw) * Math.cos(this.view.pitch), Math.sin(this.view.pitch), Math.cos(this.view.yaw) * Math.cos(this.view.pitch));
+    const direction = new Vector3(
+      Math.sin(this.view.yaw) * Math.cos(this.view.pitch),
+      Math.sin(this.view.pitch),
+      Math.cos(this.view.yaw) * Math.cos(this.view.pitch)
+    );
     const right = new Vector3().crossVectors(new Vector3(0, 1, 0), direction).normalize();
     const up = new Vector3().crossVectors(direction, right).normalize();
     const tangent = Math.tan(this.camera.fov * Math.PI / 360);
     let distance = 0;
     this.cameraFitPoints.forEach(point => {
       const depth = point.dot(direction);
-      distance = Math.max(distance, depth + Math.abs(point.dot(up)) / tangent, depth + Math.abs(point.dot(right)) / (tangent * this.camera.aspect));
+      distance = Math.max(
+        distance,
+        depth + Math.abs(point.dot(up)) / tangent,
+        depth + Math.abs(point.dot(right)) / (tangent * this.camera.aspect)
+      );
     });
     distance *= 1.055 * this.view.distance;
     let projected: Vector3[] = [];
@@ -217,9 +291,20 @@ export class JiangsuMapScene implements Disposable {
       distance *= Math.max(spanX, spanY) / (1.87 / this.view.distance);
     }
     // 屏幕投影中心对齐容器中轴，修正透视导致的省域视觉偏右
-    const centerX = (Math.min(...projected.map(point => point.x)) + Math.max(...projected.map(point => point.x))) / 2;
-    const centerY = (Math.min(...projected.map(point => point.y)) + Math.max(...projected.map(point => point.y))) / 2;
-    this.camera.setViewOffset(this.width, this.height, centerX * this.width / 2, -centerY * this.height / 2, this.width, this.height);
+    const centerX = (
+      Math.min(...projected.map(point => point.x)) + Math.max(...projected.map(point => point.x))
+    ) / 2;
+    const centerY = (
+      Math.min(...projected.map(point => point.y)) + Math.max(...projected.map(point => point.y))
+    ) / 2;
+    this.camera.setViewOffset(
+      this.width,
+      this.height,
+      centerX * this.width / 2,
+      -centerY * this.height / 2,
+      this.width,
+      this.height
+    );
   }
 
   resize(): void {
@@ -241,7 +326,9 @@ export class JiangsuMapScene implements Disposable {
 
   updateValues(values: MapValues, duration = 0) {
     this.objects.forEach((object, code) => {
-      updateRegionMaterials(object.materials, values[code], duration, () => { this.invalidate(); });
+      updateRegionMaterials(object.materials, values[code], duration, () => {
+        this.invalidate();
+      });
       const selected = Number.isFinite(values[code]);
       object.base.material.color.set(selected ? '#146ADE' : '#C8D4E0');
       object.lines.forEach(line => line.material.color.set(selected ? '#73E3FF' : '#BCCBD8'));
@@ -262,7 +349,10 @@ export class JiangsuMapScene implements Disposable {
         paused: true,
         onUpdate: () => {
           this.objects.forEach(object => object.lines.forEach(line => {
-            line.geometry.setDrawRange(0, Math.ceil(line.geometry.attributes.position.count * this.outlineProgress.value));
+            line.geometry.setDrawRange(
+              0,
+              Math.ceil(line.geometry.attributes.position.count * this.outlineProgress.value)
+            );
           }));
           this.invalidate();
         },
@@ -277,18 +367,42 @@ export class JiangsuMapScene implements Disposable {
       });
       // 顶面及轮廓先出现，让镜头推进有参照物，再建立地图厚度
       const timeline = this.timeline;
-      this.timeline.to(this.view, { yaw: 0.05, pitch: 0.76, distance: 1, duration: 2.15 * duration, ease: 'power2.inOut' }, 0);
-      this.timeline.to(this.outlineProgress, { value: 1, duration: 1.1 * duration, ease: 'power1.inOut' }, 0.05 * duration);
+      this.timeline.to(
+        this.view,
+        { yaw: 0.05, pitch: 0.76, distance: 1, duration: 2.15 * duration, ease: 'power2.inOut' },
+        0
+      );
+      this.timeline.to(
+        this.outlineProgress,
+        { value: 1, duration: 1.1 * duration, ease: 'power1.inOut' },
+        0.05 * duration
+      );
       this.timeline.to(this.mapGroup.scale, { z: 1, duration: 1.15 * duration, ease: 'power3.out' }, 0.85 * duration);
       this.objects.forEach(object => {
-        timeline.to(object.materials.top, { opacity: 1, duration: 0.65 * duration, ease: 'power2.out' }, 0.12 * duration);
+        timeline.to(
+          object.materials.top,
+          { opacity: 1, duration: 0.65 * duration, ease: 'power2.out' },
+          0.12 * duration
+        );
         timeline.to(object.materials.side.uniforms.uOpacity, { value: 1, duration: 0.9 * duration }, 0.85 * duration);
         timeline.to(object.base.material, { opacity: 0.3, duration: 0.9 * duration }, 0.85 * duration);
-        object.lines.forEach(line => { timeline.to(line.material, { opacity: 0.95, duration: 0.4 * duration }, 0.05 * duration); });
-        object.glows.forEach(glow => { timeline.to(glow.material.uniforms.uOpacity, { value: 0.32, duration: 0.75 * duration }, 0.2 * duration); });
+        object.lines.forEach(line => {
+          timeline.to(line.material, { opacity: 0.95, duration: 0.4 * duration }, 0.05 * duration);
+        });
+        object.glows.forEach(glow => {
+          timeline.to(glow.material.uniforms.uOpacity, { value: 0.32, duration: 0.75 * duration }, 0.2 * duration);
+        });
       });
-      this.timeline.to(this.sweepUniforms.uSweepStrength, { value: reducedMotion ? 0 : 0.3, duration: 0.2 * duration }, 1.05 * duration);
-      this.timeline.to(this.sweepUniforms.uSweepPosition, { value: 200, duration: 1.5 * duration, ease: 'power1.inOut' }, 1.05 * duration);
+      this.timeline.to(
+        this.sweepUniforms.uSweepStrength,
+        { value: reducedMotion ? 0 : 0.3, duration: 0.2 * duration },
+        1.05 * duration
+      );
+      this.timeline.to(
+        this.sweepUniforms.uSweepPosition,
+        { value: 200, duration: 1.5 * duration, ease: 'power1.inOut' },
+        1.05 * duration
+      );
       this.timeline.to(this.sweepUniforms.uSweepStrength, { value: 0, duration: 0.38 * duration }, 2.25 * duration);
       this.entranceClock = playVisibleTimeline(this.timeline);
     });
@@ -299,27 +413,48 @@ export class JiangsuMapScene implements Disposable {
     this.reducedMotion = value;
     if (value) {
       clearTimeout(this.ambientTimer);
-      this.ambientTimeline?.kill(); this.ambientTimeline = undefined;
+      this.ambientTimeline?.kill();
+      this.ambientTimeline = undefined;
       this.entranceClock?.[Symbol.dispose]();
       this.timeline?.totalProgress(1);
       this.sweepUniforms.uSweepStrength.value = 0;
       this.invalidate();
-    } else if (this.interactive) { this.scheduleAmbientSweep(); }
+    } else if (this.interactive) {
+      this.scheduleAmbientSweep();
+    }
   }
 
   // 用一次性定时器等待下一次扫光，间隔内不让重复时间线持续唤醒 RAF
   private scheduleAmbientSweep(delay = 7000): void {
     clearTimeout(this.ambientTimer);
-    if (this.disposed || this.reducedMotion || document.hidden) { return; }
+    if (this.disposed || this.reducedMotion || document.hidden) {
+      return;
+    }
     this.ambientTimer = setTimeout(() => this.startAmbientSweep(), delay);
   }
 
   private startAmbientSweep(): void {
     this.ambientTimeline?.kill();
-    this.ambientTimeline = gsap.timeline({ paused: document.hidden, onComplete: () => { this.scheduleAmbientSweep(10000); } });
+    this.ambientTimeline = gsap.timeline({
+      paused: document.hidden,
+      onComplete: () => {
+        this.scheduleAmbientSweep(10000);
+      }
+    });
     this.ambientTimeline.set(this.sweepUniforms.uSweepPosition, { value: -200 }, 0);
     this.ambientTimeline.to(this.sweepUniforms.uSweepStrength, { value: 0.16, duration: 0.5 }, 0);
-    this.ambientTimeline.to(this.sweepUniforms.uSweepPosition, { value: 200, duration: 3.4, ease: 'sine.inOut', onUpdate: () => { this.invalidate(); } }, 0);
+    this.ambientTimeline.to(
+      this.sweepUniforms.uSweepPosition,
+      {
+        value: 200,
+        duration: 3.4,
+        ease: 'sine.inOut',
+        onUpdate: () => {
+          this.invalidate();
+        }
+      },
+      0
+    );
     this.ambientTimeline.to(this.sweepUniforms.uSweepStrength, { value: 0, duration: 0.6 }, 2.8);
   }
 
@@ -328,7 +463,10 @@ export class JiangsuMapScene implements Disposable {
       return null;
     }
     const rect = this.renderer.domElement.getBoundingClientRect();
-    this.pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+    this.pointer.set(
+      (event.clientX - rect.left) / rect.width * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    );
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const hit = this.raycaster.intersectObjects(Array.from(this.objects.values()).map(object => object.mesh), false)[0];
     const code: string | null = typeof hit?.object.userData.cityCode === 'string' ? hit.object.userData.cityCode : null;
@@ -340,9 +478,18 @@ export class JiangsuMapScene implements Disposable {
 
   // 轻点保留城市选择，移动超过阈值才进入旋转，镜头由现有拟合逻辑统一控制
   private beginDrag(event: PointerEvent) {
-    if (!this.interactive || event.button !== 0 || this.drag) { return; }
+    if (!this.interactive || event.button !== 0 || this.drag) {
+      return;
+    }
     gsap.killTweensOf(this.view);
-    this.drag = { id: event.pointerId, x: event.clientX, y: event.clientY, yaw: this.view.yaw, pitch: this.view.pitch, moved: false };
+    this.drag = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      yaw: this.view.yaw,
+      pitch: this.view.pitch,
+      moved: false
+    };
     this.container.setPointerCapture(event.pointerId);
   }
 
@@ -354,7 +501,9 @@ export class JiangsuMapScene implements Disposable {
     }
     const dx = event.clientX - this.drag.x;
     const dy = event.clientY - this.drag.y;
-    if (!this.drag.moved && Math.hypot(dx, dy) < 5) { return; }
+    if (!this.drag.moved && Math.hypot(dx, dy) < 5) {
+      return;
+    }
     this.drag.moved = true;
     this.hoverRegion(null);
     this.container.style.cursor = 'grabbing';
@@ -362,22 +511,34 @@ export class JiangsuMapScene implements Disposable {
     gsap.to(this.view, {
       yaw: Math.max(-1.15, Math.min(1.15, this.drag.yaw - dx * 0.004)),
       pitch: Math.max(0.42, Math.min(1.2, this.drag.pitch + dy * 0.003)),
-      duration: 0.22, ease: 'power2.out', overwrite: true,
-      onUpdate: () => { this.invalidate(); }
+      duration: 0.22,
+      ease: 'power2.out',
+      overwrite: true,
+      onUpdate: () => {
+        this.invalidate();
+      }
     });
   }
 
   private endDrag(event: PointerEvent) {
-    if (!this.drag || this.drag.id !== event.pointerId) { return; }
+    if (!this.drag || this.drag.id !== event.pointerId) {
+      return;
+    }
     this.finishDrag();
   }
 
   private finishDrag(): void {
-    if (!this.drag) { return; }
+    if (!this.drag) {
+      return;
+    }
     const pointerId = this.drag.id;
-    if (this.drag.moved) { this.suppressClickUntil = performance.now() + 250; }
+    if (this.drag.moved) {
+      this.suppressClickUntil = performance.now() + 250;
+    }
     this.drag = null;
-    if (this.container.hasPointerCapture(pointerId)) { this.container.releasePointerCapture(pointerId); }
+    if (this.container.hasPointerCapture(pointerId)) {
+      this.container.releasePointerCapture(pointerId);
+    }
     this.container.style.cursor = 'grab';
   }
 
@@ -391,11 +552,31 @@ export class JiangsuMapScene implements Disposable {
     this.container.style.cursor = code ? 'pointer' : 'grab';
     [previousCode, code].filter((value): value is string => value !== null).forEach(cityCode => {
       const object = this.objects.get(cityCode);
-      if (!object) { return; }
+      if (!object) {
+        return;
+      }
       const active = cityCode === code;
       const duration = this.reducedMotion || document.hidden ? 0 : .35;
-      gsap.to(object.group.position, { z: active ? 3.4 : 0, duration, ease: 'power2.out', overwrite: true, onUpdate: () => { this.invalidate(); } });
-      gsap.to(object.materials.hover, { value: active ? 1 : 0, duration, overwrite: true, onUpdate: () => { this.invalidate(); } });
+      gsap.to(
+        object.group.position,
+        {
+          z: active ? 3.4 : 0,
+          duration,
+          ease: 'power2.out',
+          overwrite: true,
+          onUpdate: () => {
+            this.invalidate();
+          }
+        }
+      );
+      gsap.to(object.materials.hover, {
+        value: active ? 1 : 0,
+        duration,
+        overwrite: true,
+        onUpdate: () => {
+          this.invalidate();
+        }
+      });
     });
   }
 
@@ -414,9 +595,12 @@ export class JiangsuMapScene implements Disposable {
     this.updateCamera();
     this.scene.updateMatrixWorld();
     this.renderer.render(this.scene, this.camera);
-    const key = `${this.cameraKey}:${this.mapGroup.scale.z}:${[...this.objects.values()].map(object => object.group.position.z).join(':')}`;
+    const cityOffsets = [...this.objects.values()].map(object => object.group.position.z).join(':');
+    const key = `${this.cameraKey}:${this.mapGroup.scale.z}:${cityOffsets}`;
     this.dirty = false;
-    if (key === this.labelKey) { return; }
+    if (key === this.labelKey) {
+      return;
+    }
     this.labelKey = key;
     const labels = this.regions.map(region => {
       const object = this.objects.get(region.code);
@@ -425,8 +609,12 @@ export class JiangsuMapScene implements Disposable {
       const base = anchor.clone().applyMatrix4(this.mapGroup.matrixWorld).project(this.camera);
       const point = anchor.applyMatrix4(object!.group.matrixWorld).project(this.camera);
       return {
-        code: region.code, name: region.name, x: (base.x + 1) / 2 * this.width, y: (1 - base.y) / 2 * this.height,
-        offsetX: (point.x - base.x) / 2 * this.width, offsetY: (base.y - point.y) / 2 * this.height
+        code: region.code,
+        name: region.name,
+        x: (base.x + 1) / 2 * this.width,
+        y: (1 - base.y) / 2 * this.height,
+        offsetX: (point.x - base.x) / 2 * this.width,
+        offsetY: (base.y - point.y) / 2 * this.height
       };
     });
     this.callbacks.onLabels(labels);
@@ -442,14 +630,18 @@ export class JiangsuMapScene implements Disposable {
 
   /** 截图在同步阶段冻结像素，后续字体等待不会改用新场景 */
   capture(): HTMLCanvasElement {
-    if (this.disposed || !this.width || !this.height) { throw new Error('地图尚未就绪'); }
+    if (this.disposed || !this.width || !this.height) {
+      throw new Error('地图尚未就绪');
+    }
     this.resize();
     this.render();
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(this.width * 2);
     canvas.height = Math.round(this.height * 2);
     const context = canvas.getContext('2d');
-    if (!context) { throw new Error('无法创建地图导出画布'); }
+    if (!context) {
+      throw new Error('无法创建地图导出画布');
+    }
     context.drawImage(this.renderer.domElement, 0, 0, canvas.width, canvas.height);
     return canvas;
   }
@@ -461,9 +653,15 @@ export class JiangsuMapScene implements Disposable {
     });
     this.scene.traverse(object => {
       if (object instanceof Mesh || object instanceof Line) {
-        if (object.geometry instanceof BufferGeometry) { object.geometry.dispose(); }
+        if (object.geometry instanceof BufferGeometry) {
+          object.geometry.dispose();
+        }
         const materials: unknown[] = Array.isArray(object.material) ? object.material : [object.material];
-        materials.forEach(material => { if (material instanceof Material) { material.dispose(); } });
+        materials.forEach(material => {
+          if (material instanceof Material) {
+            material.dispose();
+          }
+        });
       }
     });
     this.objects.clear();
@@ -471,19 +669,27 @@ export class JiangsuMapScene implements Disposable {
   }
 
   dispose(): void {
-    if (this.disposed) { return; }
+    if (this.disposed) {
+      return;
+    }
     this.disposed = true;
-    if (this.frame !== undefined) { cancelAnimationFrame(this.frame); }
+    if (this.frame !== undefined) {
+      cancelAnimationFrame(this.frame);
+    }
     this.timeline?.kill();
     this.entranceClock?.[Symbol.dispose]();
     this.ambientTimeline?.kill();
     clearTimeout(this.ambientTimer);
     this.resolveEntrance?.();
     gsap.killTweensOf(this.view);
-    if (this.drag && this.container.hasPointerCapture(this.drag.id)) { this.container.releasePointerCapture(this.drag.id); }
+    if (this.drag && this.container.hasPointerCapture(this.drag.id)) {
+      this.container.releasePointerCapture(this.drag.id);
+    }
     this.drag = null;
     this.resources.dispose();
   }
 
-  [Symbol.dispose](): void { this.dispose(); }
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
 }

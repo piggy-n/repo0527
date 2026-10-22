@@ -32,7 +32,11 @@ describe('驾驶舱固定模拟数据迁移基线', () => {
   it('全部指标的六年地图分档与旧版一致', async () => {
     const classifications = CATEGORIES.flatMap(category => category.indicators).map(indicator => [
       indicator.id,
-      createMapClassification(DASHBOARD_YEARS.flatMap(year => CITIES.map(city => data.value(year, city.code, indicator.id))))
+      createMapClassification(DASHBOARD_YEARS.flatMap(year => CITIES.map(city => data.value(
+        year,
+        city.code,
+        indicator.id
+      ))))
     ]);
     expect(await digest(classifications)).toBe(baseline.classificationsSha256);
   });

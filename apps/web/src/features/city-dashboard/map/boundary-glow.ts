@@ -6,8 +6,13 @@ import { MAP_DEPTH } from './map-materials';
 
 // 将同市所有边界一次性描成圆角光带，避免密集拐点的宽三角带交叉形成毛刺
 export function createBoundaryGlow(shapes: readonly Shape[], materials: RegionMaterials, reveal: NumberUniform) {
-  const rings = shapes.flatMap(shape => [shape, ...shape.holes].map(ring => ring.getPoints())).filter(points => points.length >= 3);
-  if (!rings.length) return null;
+  const rings = shapes.flatMap(shape => [
+    shape,
+    ...shape.holes
+  ].map(ring => ring.getPoints())).filter(points => points.length >= 3);
+  if (!rings.length) {
+    return null;
+  }
   // 统一世界单位宽度，并限制每座城市纹理的尺寸与内存占用
   const bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
   rings.forEach(points => points.forEach(point => {
@@ -24,14 +29,19 @@ export function createBoundaryGlow(shapes: readonly Shape[], materials: RegionMa
   canvas.width = Math.ceil(width * resolution);
   canvas.height = Math.ceil(height * resolution);
   const context = canvas.getContext('2d');
-  if (!context) return null;
+  if (!context) {
+    return null;
+  }
   context.beginPath();
   rings.forEach(points => {
     points.forEach((point, index) => {
       const x = (point.x - bounds.minX + padding) / width * canvas.width;
       const y = (bounds.maxY - point.y + padding) / height * canvas.height;
-      if (index) context.lineTo(x, y);
-      else context.moveTo(x, y);
+      if (index) {
+        context.lineTo(x, y);
+      } else {
+        context.moveTo(x, y);
+      }
     });
     context.closePath();
   });
@@ -49,8 +59,16 @@ export function createBoundaryGlow(shapes: readonly Shape[], materials: RegionMa
   const texture = new CanvasTexture(canvas);
   const geometry = new PlaneGeometry(width, height);
   const material = new ShaderMaterial({
-    transparent: true, depthWrite: false, side: DoubleSide,
-    uniforms: { uBoundaryMask: { value: texture }, uOpacity: { value: 0 }, uReveal: reveal, uDataAvailable: materials.dataAvailable, uHover: materials.hover },
+    transparent: true,
+    depthWrite: false,
+    side: DoubleSide,
+    uniforms: {
+      uBoundaryMask: { value: texture },
+      uOpacity: { value: 0 },
+      uReveal: reveal,
+      uDataAvailable: materials.dataAvailable,
+      uHover: materials.hover
+    },
     vertexShader: `
       varying vec2 vUv;
       void main() {
@@ -75,7 +93,11 @@ export function createBoundaryGlow(shapes: readonly Shape[], materials: RegionMa
     `
   });
   const mesh = new Mesh(geometry, material);
-  mesh.position.set((bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, MAP_DEPTH + 0.2);
+  mesh.position.set(
+    (bounds.minX + bounds.maxX) / 2,
+    (bounds.minY + bounds.maxY) / 2,
+    MAP_DEPTH + 0.2
+  );
   mesh.renderOrder = 1;
   return Object.assign(mesh, { boundaryMask: texture });
 }

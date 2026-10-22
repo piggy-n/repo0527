@@ -7,7 +7,9 @@ import { DashboardCharts, type DashboardChartsHandle } from './DashboardCharts';
 import { DashboardFilters } from './DashboardFilters';
 
 const hosts: HTMLElement[] = [];
-afterEach(() => { hosts.splice(0).forEach(host => host.remove()); });
+afterEach(() => {
+  hosts.splice(0).forEach(host => host.remove());
+});
 
 describe('驾驶舱真实列表布局', () => {
   it('矮屏保留指标内部滚动且不压缩长名称行高', async () => {
@@ -53,7 +55,8 @@ describe('驾驶舱真实列表布局', () => {
   it('惯性只翻一张、反向打断，连续指标定位只完成最后一个', async () => {
     const host = document.createElement('div');
     host.style.cssText = 'width:420px;height:600px;position:relative';
-    document.body.append(host); hosts.push(host);
+    document.body.append(host);
+    hosts.push(host);
     const model = useDashboard(createMockData(2026));
     model.selectCategory('happiness');
     const wrapper = mount(DashboardCharts, { attachTo: host, props: { model }, attrs: { style: 'height:600px' } });
@@ -62,8 +65,14 @@ describe('驾驶舱真实列表布局', () => {
     // 首次尺寸观察完成后再输入真实滚轮序列
     await vi.waitFor(() => expect(list.clientHeight).toBe(600));
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    const wheel = (deltaY: number, extra = {}) => list.dispatchEvent(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true, ...extra }));
-    wheel(30); wheel(22); wheel(12); wheel(4);
+    const wheel = (deltaY: number, extra = {}) => list.dispatchEvent(new WheelEvent(
+      'wheel',
+      { deltaY, bubbles: true, cancelable: true, ...extra }
+    ));
+    wheel(30);
+    wheel(22);
+    wheel(12);
+    wheel(4);
     await vi.waitFor(() => expect(Math.abs(list.scrollTop - cards[1].offsetTop)).toBeLessThan(2), { timeout: 5000 });
     wheel(-40);
     await vi.waitFor(() => expect(list.scrollTop).toBeLessThan(2), { timeout: 5000 });

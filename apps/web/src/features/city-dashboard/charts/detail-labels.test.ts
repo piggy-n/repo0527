@@ -4,8 +4,14 @@ import { createDetailLabelPlan } from './detail-labels';
 
 const input = {
   comparison: [2024, 2025, 2026].map(year => ({ year, values: [50], average: 50 })),
-  cityIndex: 0, cityCount: 13, activeYear: 2026, chartType: 'line' as const, stacked: false,
-  axis: { min: 0, max: 100 }, size: { width: 1000, height: 500 }, formatValue: (value: number | null) => String(value)
+  cityIndex: 0,
+  cityCount: 13,
+  activeYear: 2026,
+  chartType: 'line' as const,
+  stacked: false,
+  axis: { min: 0, max: 100 },
+  size: { width: 1000, height: 500 },
+  formatValue: (value: number | null) => String(value)
 };
 
 describe('详情数值避让', () => {
@@ -20,7 +26,10 @@ describe('详情数值避让', () => {
     expect(plan[2025].show).toBe(true);
   });
   it('无有效值不生成标签，窄屏只保留当前年', () => {
-    expect(createDetailLabelPlan({ ...input, comparison: [{ year: 2026, values: [null], average: null }] })).toEqual({});
+    expect(createDetailLabelPlan({
+      ...input,
+      comparison: [{ year: 2026, values: [null], average: null }]
+    })).toEqual({});
     expect(Object.keys(createDetailLabelPlan({ ...input, size: { width: 300, height: 180 } }))).toEqual(['2026']);
   });
 });

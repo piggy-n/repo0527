@@ -53,7 +53,9 @@ export function createValueAxisScale(
   const padding = (max - min) * 0.08;
   const lower = Math.max(lowerLimit, includeZero && min === 0 ? 0 : min - padding);
   const upper = Math.min(upperLimit, includeZero && max === 0 ? 0 : max + padding);
-  let interval = Math.max(integer ? 1 : 0, niceInterval((upper - lower) / 5));
+  let interval = Math.max(integer ? 1 : 0,
+    niceInterval((upper - lower) / 5)
+  );
   let axisMin = lower;
   let axisMax = upper;
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -73,6 +75,8 @@ export function createValueAxisScale(
     axisMax = Math.min(axisMax, upperLimit);
   }
   const [coefficient, exponent = '0'] = String(interval).split('e');
-  const precision = Math.max(0, (coefficient.split('.')[1]?.length ?? 0) - Number(exponent));
+  const precision = Math.max(0,
+    (coefficient.split('.')[1]?.length ?? 0) - Number(exponent)
+  );
   return { min: axisMin, max: axisMax, interval, precision };
 }

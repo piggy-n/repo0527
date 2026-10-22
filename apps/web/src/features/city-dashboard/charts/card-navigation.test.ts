@@ -5,7 +5,15 @@ import { CardWheelGesture, cardStops, nearestStop } from './card-navigation';
 describe('逐卡导航口径', () => {
   it('小增量累计到阈值后只消费一次，惯性尾部不会再翻页', () => {
     const gesture = new CardWheelGesture();
-    expect([5, 6, 7, 15, 8, 3, 1].map((delta, index) => gesture.consume(delta, index * 40))).toEqual([0, 0, 1, 0, 0, 0, 0]);
+    expect([5, 6, 7, 15, 8, 3, 1].map((delta, index) => gesture.consume(delta, index * 40))).toEqual([
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0
+    ]);
     expect(gesture.consume(18, 440)).toBe(1);
   });
   it('反向手势立即允许回退，重置后不保留旧距离', () => {
