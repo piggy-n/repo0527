@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
-import { FileDownloadPanel } from '@/features/file-management/components/FileDownloadPanel';
+import { DownloadPanel } from '@/shared/file-transfer/DownloadPanel';
 import type { FileDownloadTask, useFileDownloads } from '@/features/file-management/composables/useFileDownloads';
 import { required } from '@/shared/testing/required';
 import 'element-plus/dist/index.css';
@@ -38,12 +38,13 @@ describe('下载进度与项目主题的真实布局', () => {
     const model: DownloadModel = {
       tasks,
       start: vi.fn<DownloadModel['start']>(async () => undefined),
+      retry: vi.fn<DownloadModel['retry']>(async () => undefined),
       cancel: vi.fn<DownloadModel['cancel']>(),
       clearFinished: vi.fn<DownloadModel['clearFinished']>(),
       isDownloading: id =>
         tasks.value.some(task => task.file.id === id && (task.phase === 'receiving' || task.phase === 'checking'))
     };
-    const wrapper = mount(FileDownloadPanel, { props: { model }, attachTo: host });
+    const wrapper = mount(DownloadPanel, { props: { model }, attachTo: host });
     try {
       await wrapper.get('[aria-expanded]').trigger('click');
       await document.fonts.ready;

@@ -14,6 +14,21 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe('文件读取', () => {
+  it('POST 下载沿用响应文件名与错误信封解析', async () => {
+    server.use(
+      mock.get('/backend/archive', () => new HttpResponse('错误的请求方法')),
+      mock.post('/backend/archive', () => new HttpResponse('压缩包', { headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': 'attachment; filename="result.zip"'
+      } }))
+    );
+    const result = await fetchFile('/archive', { method: 'post', fallbackName: '申请.zip' });
+    expect(result.fileName).toBe('result.zip');
+    server.use(mock.post('/backend/archive', () => HttpResponse.json({ code: 40000, msg: '文件尚未就绪' })));
+    await expect(fetchFile('/archive', { method: 'post', fallbackName: '申请.zip' }))
+      .rejects.toMatchObject({ kind: 'business', message: '文件尚未就绪' });
+  });
+
   it('用响应头定名称，只补齐通用类型，不改内容长度', async () => {
     server.use(mock.get('/backend/file', () => new HttpResponse('测试内容', { headers: {
       'Content-Type': 'application/octet-stream',

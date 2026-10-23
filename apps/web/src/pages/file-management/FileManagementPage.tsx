@@ -3,7 +3,7 @@ import { ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { findCategoryPath } from '@/features/file-management/categories';
 import { FileCategoryTree } from '@/features/file-management/components/FileCategoryTree';
-import { FileDownloadPanel } from '@/features/file-management/components/FileDownloadPanel';
+import { DownloadPanel } from '@/shared/file-transfer/DownloadPanel';
 import { FileFilterBar } from '@/features/file-management/components/FileFilterBar';
 import { FilePreviewDialog } from '@/features/file-management/components/FilePreviewDialog';
 import { FileTable } from '@/features/file-management/components/FileTable';
@@ -52,7 +52,7 @@ export const FileManagementPage = defineComponent({
                       extra: () => <FileUploadButton categoryId={list.categoryId.value} />
                     }}
                   </FileFilterBar>,
-                  <FileDownloadPanel model={downloads} />,
+                  <DownloadPanel model={downloads} />,
                   <FileTable
                     files={list.files.value}
                     initialLoading={list.initialLoading.value}

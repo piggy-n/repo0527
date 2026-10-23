@@ -53,12 +53,32 @@ const businessRoutes: RouteRecordRaw[] = [
     meta: { title: '资源管理', roles: [Role.admin] }
   },
   placeholder('resource-application', RouteName.resourceApplication, '资源申请', [Role.user]),
-  placeholder('system-management', RouteName.systemManagement, '系统管理', [Role.admin])
+  {
+    path: 'system-management/:section(statistical-report)?',
+    name: RouteName.systemManagement,
+    component: () => import('@/pages/system-management/SystemManagementPage')
+      .then(({ SystemManagementPage }) => SystemManagementPage),
+    props: route => ({ section: route.params.section === 'statistical-report' ? 'reports' : 'audit' }),
+    meta: { title: '系统管理', roles: [Role.admin] }
+  }
 ];
 
 // 开发页面：放在 pages/dev/<名称>/，路由名 dev<名称>，路径 /dev/<名称>（AGENTS.md）
 // 生产构建中 import.meta.env.DEV 为 false，这些路由连同页面代码都不会进入产物
 const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
+  {
+    path: '/dev/ai-chat',
+    name: RouteName.devAiChat,
+    component: () => import('@/pages/dev/ai-chat/DevAiChatPage').then(({ DevAiChatPage }) => DevAiChatPage),
+    meta: { title: 'AI 对话交互预览', public: true }
+  },
+  {
+    path: '/dev/system-management',
+    name: RouteName.devSystemManagement,
+    component: () => import('@/pages/dev/system-management/DevSystemManagementPage')
+      .then(({ DevSystemManagementPage }) => DevSystemManagementPage),
+    meta: { title: '系统管理交互预览', public: true }
+  },
   {
     path: '/dev/file-management',
     name: RouteName.devFileManagement,

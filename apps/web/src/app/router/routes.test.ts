@@ -1,4 +1,4 @@
-import type { RouteRecordRaw } from 'vue-router';
+import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router';
 import { describe, expect, it } from 'vitest';
 import { Role } from '@/shared/auth/roles';
 import { RouteName } from '@/shared/router/route-names';
@@ -34,6 +34,8 @@ describe('路由表', () => {
       RouteName.notFound,
       RouteName.devTheme,
       RouteName.devFileManagement,
+      RouteName.devAiChat,
+      RouteName.devSystemManagement,
       RouteName.devMap,
       RouteName.devResources,
       RouteName.devMapUi,
@@ -68,6 +70,24 @@ describe('路由表', () => {
       [RouteName.systemManagement]: [Role.admin],
       [RouteName.resourceApplication]: [Role.user]
     });
+  });
+
+  it('系统管理保留两个旧地址，共用管理员权限并通过 props 区分栏目', () => {
+    const router = createRouter({ history: createMemoryHistory(), routes });
+    const audit = router.resolve('/system-management');
+    const reports = router.resolve('/system-management/statistical-report');
+    expect(audit.name).toBe(RouteName.systemManagement);
+    expect(reports.name).toBe(RouteName.systemManagement);
+    expect(reports.meta.roles).toEqual([Role.admin]);
+    const record = records.find(item => item.name === RouteName.systemManagement);
+    const props = record?.props;
+    expect(typeof props).toBe('function');
+    if (typeof props !== 'function') {
+      throw new Error('系统管理需要通过路由 props 选择栏目');
+    }
+    expect(props({ ...audit, name: RouteName.systemManagement })).toEqual({ section: 'audit' });
+    expect(props({ ...reports, name: RouteName.systemManagement })).toEqual({ section: 'reports' });
+    expect(router.resolve('/system-management/unknown').name).toBe(RouteName.notFound);
   });
 
   it('驾驶舱独立懒加载，所有登录角色可访问且离开即释放', () => {

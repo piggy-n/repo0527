@@ -14,7 +14,7 @@ import { ApiError } from '@/shared/http/errors';
 import { required } from '@/shared/testing/required';
 import * as api from '../api';
 import { FilePreviewDialog } from '../components/FilePreviewDialog';
-import { FileDownloadPanel } from '../components/FileDownloadPanel';
+import { DownloadPanel } from '@/shared/file-transfer/DownloadPanel';
 import { useFileDownloads } from './useFileDownloads';
 import { useFilePreview } from './useFilePreview';
 
@@ -43,6 +43,8 @@ function setup(renderDialog = false) {
   session.start({ token: createTestJwtExpiringAt(Date.now() + 3600000), user: { loginName: 'test', role: Role.user } });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 3 } } });
   const save = vi.spyOn(transfer, 'saveFile').mockImplementation(() => undefined);
+  // 在组合式函数接收请求依赖前创建 spy，各用例再控制返回时序
+  vi.spyOn(api, 'fetchFileContent');
   const createUrl = vi.fn<typeof URL.createObjectURL>(() => `blob:test-${crypto.randomUUID()}`);
   const revokeUrl = vi.fn<typeof URL.revokeObjectURL>();
   vi.stubGlobal('URL', class extends URL {
@@ -60,7 +62,7 @@ function setup(renderDialog = false) {
       }
       return () => (
         <>
-          <FileDownloadPanel model={downloads} />
+          <DownloadPanel model={downloads} />
           <FilePreviewDialog model={preview} downloads={downloads} />
         </>
       );
@@ -89,7 +91,7 @@ describe('文件下载', () => {
   it('进度区默认收起，新任务及完成失败不展开，手动开关保持用户选择', async () => {
     const env = setup(true);
     const request = vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['ok']), fileName: file.name });
-    const panel = env.wrapper.findComponent(FileDownloadPanel);
+    const panel = env.wrapper.findComponent(DownloadPanel);
     expect(panel.find('section').exists()).toBe(false);
     await env.downloads.start(file);
     await nextTick();

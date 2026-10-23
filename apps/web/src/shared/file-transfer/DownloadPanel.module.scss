@@ -1,0 +1,97 @@
+.downloads {
+  flex-shrink: 0;
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-page);
+}
+
+.taskHeading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+.downloadTitle {
+  flex: none;
+}
+
+.count {
+  padding: 0 var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: var(--color-border-light);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+}
+
+.summary {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+// 限制任务区高度，为业务表格保留可见空间
+.tasks {
+  max-height: clamp(80px, calc(100dvh - 660px), 260px);
+  margin-top: var(--space-sm);
+  overflow: auto;
+}
+
+.task {
+  display: grid;
+  gap: var(--space-xs);
+  padding: var(--space-sm) 0;
+
+  + .task {
+    border-top: 1px solid var(--color-border-light);
+  }
+}
+
+.taskDetails {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-lg);
+
+  :global(.el-button) {
+    flex-shrink: 0;
+  }
+}
+
+.progress {
+  width: min(100%, 480px);
+  margin: var(--space-xs) 0;
+}
+
+.filename {
+  overflow-wrap: anywhere;
+  color: var(--color-text-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.taskStatus {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.success {
+  color: var(--color-success);
+}
+
+@media (max-width: 540px) {
+  .tasks {
+    max-height: min(22dvh, 140px);
+  }
+}

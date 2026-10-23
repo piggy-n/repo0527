@@ -10,6 +10,8 @@ export const RouteName = {
   devFileManagement: 'dev-file-management',
   devMap3d: 'dev-map-3d',
   devNavGrid: 'dev-nav-grid',
+  devAiChat: 'dev-ai-chat',
+  devSystemManagement: 'dev-system-management',
   currentMap: 'current-map',
   cityDashboard: 'city-dashboard',
   landChangeQuery: 'land-change-query',

@@ -25,6 +25,8 @@
 
 ## 后果
 
+2026-10-23 系统管理复用补充：文件管理已有的下载任务与进度区上移到 `shared/file-transfer/useDownloads`、`DownloadPanel`，业务注入取流函数并保留接口参数、权限、列表缓存和预览。准备状态与下载状态仍分开，任务只表示当前页面发起的读取。按旧申请下载实际 POST 调用增加 `http.postBlob` 和 `fetchFile` 的可选 method，默认 GET；两者走同一二进制解析与取消通道，不引入新客户端。代码整改后下载直接由业务接口取流，不再为一次性 Blob 建立 Vue Query 缓存；第 2 项中的独立二进制查询做法已被替代。
+
 DOCX 解析依赖和锁文件由本文件管理分支维护，公共基础提交不包含该依赖。真实后端暂不可达，使用自建文件与固定接口验证，不能据此确认后端权限、上传部分成功、真实响应头或所有业务文档排版。PDF 内部解码失败由浏览器阅读器处理，外层 iframe 的 load 事件不能证明 PDF 内容有效。详细结果与待办持续更新在 [文件管理](../modules/file-management.md) 和 [公共文件传输](../modules/file-transfer.md)。
 
 参考：[docx-preview 官方说明](https://github.com/VolodymyrBaydalka/docxjs)、[ADR 0011](0011-http-client-axios-zod-msw.md)、[ADR 0017](0017-server-state-with-tanstack-query.md)、[ADR 0039](0039-async-supersede-rules.md)。
