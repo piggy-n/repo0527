@@ -12,6 +12,7 @@ export const RouteName = {
   devNavGrid: 'dev-nav-grid',
   devAiChat: 'dev-ai-chat',
   devSystemManagement: 'dev-system-management',
+  devMessageCenter: 'dev-message-center',
   currentMap: 'current-map',
   cityDashboard: 'city-dashboard',
   landChangeQuery: 'land-change-query',
@@ -22,7 +23,6 @@ export const RouteName = {
   spaceMonitoringIndicators: 'space-monitoring-indicators',
   fileManagement: 'file-management',
   aiChat: 'ai-chat',
-  messageCenter: 'message-center',
   resourceManagement: 'resource-management',
   resourceApplication: 'resource-application',
   systemManagement: 'system-management'

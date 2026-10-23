@@ -96,6 +96,7 @@
 | [0084](0084-underground-space-entries-and-ground-models.md) | 地下空间时隐藏不适用的入口；钻地时隐藏地面上的模型；徐州倾斜摄影 | 已接受（修改 0081 第 6 节的钻地时隐藏白膜） |
 | [0085](0085-navigation-grid.md) | 导航网格：map-core 里的纯 TS 实现、Worker 构建、按区域着色的平面图 | 已接受（解决 0018 的 Worker 类型检查；步行时由谁构建、是否缓存由 0086 定） |
 | [0086](0086-first-person-walk.md) | 第一人称步行：会话里的步行意图、map-core 的步行者、场景接管键鼠 | 已接受（补充 0083、0085） |
+| [0087](0087-header-message-center.md) | 消息中心迁移为 Header 下方弹框 | 已接受 |
 
 ## 模板
 

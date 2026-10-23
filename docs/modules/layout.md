@@ -13,6 +13,7 @@ app/layout/
 ├─ images/                顶部栏背景与 Logo（UI 提供的 2x webp）
 └─ components/
    ├─ AppHeader.tsx       顶部栏
+   ├─ HeaderMessages.tsx  消息弹框装配、会话隔离与关联业务跳转
    ├─ HeaderNav.tsx       导航（按角色过滤、桌面导航）
    ├─ CompactNav.tsx      窄屏时的"菜单"下拉
    ├─ NavDropdown.tsx     "查询统计"的两级下拉
@@ -55,7 +56,9 @@ app/layout/
 
 ## 用户菜单
 
-显示名（真实姓名，没有时用登录名，过长时省略）、下拉菜单中的"登录名 · 角色"和"退出登录"。按钮没有悬停效果（2026-09-30 确认），键盘聚焦时的轮廓线保留。修改密码、修改头像、消息铃铛在迁移对应功能时再加（2026-09-30 确认）。
+`AppHeader` 提供可选 `actions` 插槽，位于用户菜单前方，并传入实测的 `headerBottom`；没有传入时保持原布局。`AppLayout` 通过 `HeaderMessages` 装配消息弹框，app 负责管理员业务跳转，feature 不依赖其他 feature。会话变化重建操作状态，路由变化关闭浮层；列表读取和已读状态由查询缓存管理，见 [ADR 0087](../adr/0087-header-message-center.md)。开发预览由 `app/previews` 组合真实 Header 与固定数据，共用正式显示组件，见 [消息中心迁移](../stages/message-center-migration.md)。
+
+显示名（真实姓名，没有时用登录名，过长时省略）、下拉菜单中的"登录名 · 角色"和"退出登录"。按钮没有悬停效果（2026-09-30 确认），键盘聚焦时的轮廓线保留。修改密码、修改头像在迁移对应功能时再加；消息铃铛已于 2026-10-23 接入。
 
 退出登录：`ElMessageBox.confirm('确定要退出登录吗？')` → `session.clear()` → `router.replace` 到登录页 → 提示"已退出登录"。取消时什么也不做。用 `replace`，退出后按后退键不会回到业务页（回去也会被路由守卫拦下）。
 

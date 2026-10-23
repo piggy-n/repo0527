@@ -1,7 +1,8 @@
 import { defineComponent, KeepAlive, type VNode } from 'vue';
 import { type RouteLocationNormalizedLoaded, RouterView } from 'vue-router';
 import styles from './AppLayout.module.scss';
-import { AppHeader } from './components/AppHeader';
+import { AppHeader, type HeaderActions } from './components/AppHeader';
+import { HeaderMessages } from './components/HeaderMessages';
 
 interface RouterViewSlotProps {
   readonly Component: VNode | undefined;
@@ -17,7 +18,9 @@ export const AppLayout = defineComponent({
   setup() {
     return () => (
       <div class={styles.root}>
-        <AppHeader />
+        <AppHeader>
+          {{ actions: ({ headerBottom }: HeaderActions) => <HeaderMessages headerBottom={headerBottom} /> }}
+        </AppHeader>
         <main class={styles.main}>
           <RouterView>
             {{

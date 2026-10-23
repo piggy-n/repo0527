@@ -42,7 +42,6 @@ const businessRoutes: RouteRecordRaw[] = [
     meta: { title: '文件管理' }
   },
   placeholder('ai-chat', RouteName.aiChat, 'AI对话'),
-  placeholder('message-center', RouteName.messageCenter, '消息中心'),
   {
     path: 'resource-management',
     name: RouteName.resourceManagement,
@@ -58,7 +57,10 @@ const businessRoutes: RouteRecordRaw[] = [
     name: RouteName.systemManagement,
     component: () => import('@/pages/system-management/SystemManagementPage')
       .then(({ SystemManagementPage }) => SystemManagementPage),
-    props: route => ({ section: route.params.section === 'statistical-report' ? 'reports' : 'audit' }),
+    props: route => ({
+      section: route.params.section === 'statistical-report' ? 'reports' : 'audit',
+      applicationId: typeof route.query.applicationId === 'string' ? route.query.applicationId : undefined
+    }),
     meta: { title: '系统管理', roles: [Role.admin] }
   }
 ];
@@ -66,6 +68,13 @@ const businessRoutes: RouteRecordRaw[] = [
 // 开发页面：放在 pages/dev/<名称>/，路由名 dev<名称>，路径 /dev/<名称>（AGENTS.md）
 // 生产构建中 import.meta.env.DEV 为 false，这些路由连同页面代码都不会进入产物
 const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
+  {
+    path: '/dev/message-center',
+    name: RouteName.devMessageCenter,
+    component: () => import('../previews/MessageCenterPreview')
+      .then(({ MessageCenterPreview }) => MessageCenterPreview),
+    meta: { title: '消息中心弹框预览', public: true }
+  },
   {
     path: '/dev/ai-chat',
     name: RouteName.devAiChat,

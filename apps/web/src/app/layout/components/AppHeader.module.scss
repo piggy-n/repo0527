@@ -34,7 +34,10 @@
 }
 
 .user {
+  display: flex;
   flex: none;
+  align-items: center;
+  gap: var(--space-lg);
   margin-left: 24px;
 }
 

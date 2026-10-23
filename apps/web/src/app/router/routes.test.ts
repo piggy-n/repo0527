@@ -36,6 +36,7 @@ describe('路由表', () => {
       RouteName.devFileManagement,
       RouteName.devAiChat,
       RouteName.devSystemManagement,
+      RouteName.devMessageCenter,
       RouteName.devMap,
       RouteName.devResources,
       RouteName.devMapUi,
@@ -85,9 +86,20 @@ describe('路由表', () => {
     if (typeof props !== 'function') {
       throw new Error('系统管理需要通过路由 props 选择栏目');
     }
-    expect(props({ ...audit, name: RouteName.systemManagement })).toEqual({ section: 'audit' });
-    expect(props({ ...reports, name: RouteName.systemManagement })).toEqual({ section: 'reports' });
+    expect(props({ ...audit, name: RouteName.systemManagement }))
+      .toEqual({ section: 'audit', applicationId: undefined });
+    expect(props({ ...reports, name: RouteName.systemManagement }))
+      .toEqual({ section: 'reports', applicationId: undefined });
+    expect(props({ ...audit, name: RouteName.systemManagement, query: { applicationId: 'one' } }))
+      .toMatchObject({ applicationId: 'one' });
+    expect(props({ ...audit, name: RouteName.systemManagement, query: { applicationId: ['one', 'two'] } }))
+      .toMatchObject({ applicationId: undefined });
     expect(router.resolve('/system-management/unknown').name).toBe(RouteName.notFound);
+  });
+
+  it('消息中心由 Header 弹框承载，不保留独立页面', () => {
+    const router = createRouter({ history: createMemoryHistory(), routes });
+    expect(router.resolve('/message-center').name).toBe(RouteName.notFound);
   });
 
   it('驾驶舱独立懒加载，所有登录角色可访问且离开即释放', () => {
