@@ -267,6 +267,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 
 ## 迁移规则
 
+- 数据查询按 ADR 0088 迁移，高级查询与属性、空间、自然语言同级切换；表单草稿与已提交快照分开，分页、地图与导出使用同一快照。通用绘制在 map-core，GUID 几何读取在 shared/map，导出复用 shared/file-transfer。森林草原湿地荒漠、水资源只有地图壳，不臆造查询配置；自然语言只匹配已有示例，不迁移固定演示统计。`/dev/data-query` 保留为历史原型，正式验收以四个业务入口为准。范围与待联调项见 `docs/stages/data-query-migration.md`
 - AI 对话与系统管理在 `codex/migrate-ai-system-management` 推进（2026-10-23）：系统管理预览已确认，已按旧调用接入管理员资源审核与统计报表，真实记录、写入及下载待联调；不含用户侧申请、消息中心或用户角色 CRUD。下载任务与进度区复用 `shared/file-transfer/useDownloads`、`DownloadPanel`，业务提供取流函数，不跨 feature 导入。AI 本轮保留交互预览，以旧版布局与交互为基准适配项目样式规范；鉴权契约明确后再接入，不迁移前端共享账号密码、SSE 失败后自动重复提交及旧 Mapbox 适配。进度见 `docs/stages/ai-system-management-migration.md`
 - 消息中心按 ADR 0087 在 Header 下方以原生 Popover 展示，正式接口已接入，不保留独立业务页；`/dev/message-center` 与正式页面复用显示组件，只使用演示数据。由 app 装配消息与业务跳转，不跨 feature 导入；进入应用读取、打开弹框刷新，不后台轮询。已读成功后更新查询缓存，先取消旧列表读取；会话变化清理操作状态。真实写入与申请详情身份待联调，用户侧关联入口随资源申请迁移。范围与验证见 `docs/stages/message-center-migration.md`
 - 城市体检驾驶舱纳入阶段六，含自身的 Three.js 立体行政区地图；三维阶段（ADR 0078）只指现状底图的 Cesium 模块。先确认交互预览再分步实施，固定模拟指标与真实业务数据验收分开；入场按局部可见时长编排，不修改 GSAP 全局 ticker；图片保存复用 `shared/file-transfer`，缺少部署字体时沿用后备字体并保留卸载取消。范围、性能条件与基线见 `docs/modules/city-dashboard.md`

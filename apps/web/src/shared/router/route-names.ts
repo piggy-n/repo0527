@@ -13,6 +13,7 @@ export const RouteName = {
   devAiChat: 'dev-ai-chat',
   devSystemManagement: 'dev-system-management',
   devMessageCenter: 'dev-message-center',
+  devDataQuery: 'dev-data-query',
   currentMap: 'current-map',
   cityDashboard: 'city-dashboard',
   landChangeQuery: 'land-change-query',

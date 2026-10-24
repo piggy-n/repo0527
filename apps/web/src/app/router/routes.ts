@@ -12,6 +12,10 @@ export const loadCurrentMapPage = withMapRuntime(() =>
   import('@/pages/current-map/CurrentMapPage').then(({ CurrentMapPage }) => CurrentMapPage)
 );
 
+const loadDataQueryPage = withMapRuntime(() =>
+  import('@/pages/data-query/DataQueryPage').then(({ DataQueryPage }) => DataQueryPage)
+);
+
 // 尚未迁移的业务页，迁移后换成指向真实页面的完整路由记录；roles 不写时所有已登录用户都能访问
 const placeholder = (path: string, name: RouteName, title: string, roles?: readonly Role[]): RouteRecordRaw => ({
   path,
@@ -28,10 +32,34 @@ const businessRoutes: RouteRecordRaw[] = [
     component: loadCurrentMapPage,
     meta: { title: '现状底图', keepAlive: true }
   },
-  placeholder('land-change-query', RouteName.landChangeQuery, '国土变更调查查询'),
-  placeholder('space-monitoring-query', RouteName.spaceMonitoringQuery, '城市国土空间监测查询'),
-  placeholder('forest-grass-wetland-desert-query', RouteName.forestGrassWetlandDesertQuery, '森林草原湿地荒漠调查监测'),
-  placeholder('water-resource-basic-query', RouteName.waterResourceBasicQuery, '水资源基础调查'),
+  {
+    path: 'land-change-query',
+    name: RouteName.landChangeQuery,
+    component: loadDataQueryPage,
+    props: { module: 'land' },
+    meta: { title: '国土变更调查查询' }
+  },
+  {
+    path: 'space-monitoring-query',
+    name: RouteName.spaceMonitoringQuery,
+    component: loadDataQueryPage,
+    props: { module: 'city' },
+    meta: { title: '城市国土空间监测查询' }
+  },
+  {
+    path: 'forest-grass-wetland-desert-query',
+    name: RouteName.forestGrassWetlandDesertQuery,
+    component: loadDataQueryPage,
+    props: { module: 'forest' },
+    meta: { title: '森林草原湿地荒漠调查监测' }
+  },
+  {
+    path: 'water-resource-basic-query',
+    name: RouteName.waterResourceBasicQuery,
+    component: loadDataQueryPage,
+    props: { module: 'water' },
+    meta: { title: '水资源基础调查' }
+  },
   placeholder('space-monitoring-basic-statistics', RouteName.spaceMonitoringBasicStatistics, '城市国土空间监测基本统计'),
   placeholder('space-monitoring-indicators', RouteName.spaceMonitoringIndicators, '城市国土空间监测指标'),
   {
@@ -68,6 +96,14 @@ const businessRoutes: RouteRecordRaw[] = [
 // 开发页面：放在 pages/dev/<名称>/，路由名 dev<名称>，路径 /dev/<名称>（AGENTS.md）
 // 生产构建中 import.meta.env.DEV 为 false，这些路由连同页面代码都不会进入产物
 const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
+  {
+    path: '/dev/data-query',
+    name: RouteName.devDataQuery,
+    component: withMapRuntime(() =>
+      import('../previews/DataQueryPreview').then(({ DataQueryPreview }) => DataQueryPreview)
+    ),
+    meta: { title: '数据查询交互预览', public: true }
+  },
   {
     path: '/dev/message-center',
     name: RouteName.devMessageCenter,

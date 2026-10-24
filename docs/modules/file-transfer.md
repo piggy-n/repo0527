@@ -71,7 +71,7 @@ fetchFile(url, { query, fallbackName, fallbackType, signal, onDownloadProgress }
 saveFile(file);
 ```
 
-`getBlob` / `postBlob` 返回 `Promise<BinaryResponse>`；`fetchFile` 返回 `Promise<DownloadedFile>`，同时透传 `timeout`、`silent`；`saveFile` 不发请求、不弹提示。2026-10-23 增加系统管理实际需要的 POST 取流：`http.postBlob(url, body, options)` 共用既有解析器，`fetchFile(url, { method: 'post', ...options })` 用于无 body 的申请下载，省略 method 仍为 GET。
+`getBlob` / `postBlob` 返回 `Promise<BinaryResponse>`；`fetchFile` 返回 `Promise<DownloadedFile>`，同时透传 `timeout`、`silent`；`saveFile` 不发请求、不弹提示。2026-10-23 增加系统管理实际需要的 POST 取流：`http.postBlob(url, body, options)` 共用既有解析器。2026-10-24 数据查询导出通过 `fetchFile(url, { method: 'post', body, ...options })` 传递 JSON 或 FormData；省略 body 保持申请下载行为，省略 method 仍为 GET。查询导出属于读取，复用 `useDownloads` 的取消与会话核对。
 
 `useDownloads(request)` 接收业务取流函数，目标至少包含 id、name；返回任务列表、start、按 ID 重试、取消与清理。它负责按目标 ID 防重复、作用域 / 会话结束时取消，并在返回后复查中止信号；业务仍负责可下载条件。`DownloadPanel` 是文件管理与系统管理共用的进度区，文件管理适配器仅绑定 `fetchFileContent`。任务不保存列表记录或 Blob 到查询缓存，页面外不继续后台下载；系统管理切换栏目不卸载页面，因此下载继续。
 

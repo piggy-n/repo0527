@@ -97,6 +97,7 @@
 | [0085](0085-navigation-grid.md) | 导航网格：map-core 里的纯 TS 实现、Worker 构建、按区域着色的平面图 | 已接受（解决 0018 的 Worker 类型检查；步行时由谁构建、是否缓存由 0086 定） |
 | [0086](0086-first-person-walk.md) | 第一人称步行：会话里的步行意图、map-core 的步行者、场景接管键鼠 | 已接受（补充 0083、0085） |
 | [0087](0087-header-message-center.md) | 消息中心迁移为 Header 下方弹框 | 已接受 |
+| [0088](0088-data-query-snapshots.md) | 数据查询的条件快照与公共地图工具 | 已接受 |
 
 ## 模板
 

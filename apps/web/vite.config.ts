@@ -90,6 +90,7 @@ export default defineConfig(({ mode }) => {
             include: [
               'axios',
               '@tanstack/vue-query',
+              '@turf/boolean-intersects',
               'core-js/es/disposable-stack',
               'core-js/es/symbol/dispose',
               'element-plus/es/locale/lang/zh-cn',

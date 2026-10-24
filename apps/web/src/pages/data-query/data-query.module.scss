@@ -1,0 +1,150 @@
+@use 'ui' as ui;
+
+.workspace {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.overlays {
+  position: absolute;
+  inset: var(--space-lg);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--space-lg);
+  pointer-events: none;
+}
+
+.topArea {
+  display: flex;
+  align-items: flex-start;
+  min-height: 0;
+}
+
+.conditionPanel {
+  display: flex;
+  width: 320px;
+  max-width: calc(100% - 56px);
+  max-height: 100%;
+  pointer-events: auto;
+}
+
+.drawerBody {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+}
+
+.results {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  margin-right: 96px;
+  pointer-events: auto;
+}
+
+.withResults {
+  grid-template-rows: minmax(0, 1fr) minmax(300px, 40%);
+}
+
+.maximized {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  margin-right: 0;
+}
+
+.mapTools {
+  position: absolute;
+  right: 0;
+  inset-block: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-sm);
+
+  > * {
+    flex: none;
+    pointer-events: auto;
+  }
+}
+
+.mapControls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-sm);
+}
+
+.queryEntry {
+  pointer-events: auto;
+}
+
+.rightPanel {
+  display: flex;
+  width: 320px;
+  min-height: 0;
+  max-height: 100%;
+  margin-left: auto;
+  margin-right: 96px;
+  pointer-events: auto;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.drawingHint {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  max-width: calc(100% - 128px);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-container);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--font-size-xs);
+  transform: translateX(-50%);
+}
+
+@media (height < 700px) {
+  .withResults {
+    grid-template-rows: minmax(0, 1fr) minmax(300px, 50%);
+  }
+
+  .mapTools {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .mapControls {
+    align-self: flex-end;
+  }
+
+  .results,
+  .rightPanel {
+    margin-right: 144px;
+  }
+
+  .maximized {
+    margin-right: 0;
+  }
+}
+
+@media (width < ui.$compact) {
+  .withResults {
+    grid-template-rows: minmax(0, 1fr) minmax(360px, 55%);
+  }
+
+  .rightPanel {
+    position: absolute;
+    top: 48px;
+    left: 0;
+    width: min(320px, calc(100% - 96px));
+    max-height: calc(100% - 48px);
+    margin: 0;
+  }
+}

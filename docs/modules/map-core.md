@@ -155,6 +155,10 @@ session.tool.on('input', (event, view) => ...);  // 只读的输入，和当前�
 - 关掉了拖动平移的工具可以声明 `panModifier`（`'ctrl'` 或 `'meta'`）：按住这个键时左键拖动平移地图，这次拖动不交给工具（ADR 0056）。map-core 不判断平台，由使用方给出（`shared/map` 的 `currentPanKey()`）
 - 释放时让当前工具退出；之后登记、激活、转交输入都抛错
 
+### PolygonDrawTool（ADR 0088）
+
+数据查询新增的范围绘制独立于选择模型：`PolygonDrawTool`（ADR 0088）通过同一工具模型接收输入，提供矩形和多边形两种方式。它只返回预览顶点 / 完整 Polygon，不操作引擎或业务状态；使用方持有范围并推导样式。多边形由 Enter、双击或右键完成，Backspace 撤销点；Esc 沿用临时工具退出规则。完整范围检查 3～120 个顶点、自交及椭球面积，矩形拾取失败会清理未完成的拖拽状态。退出时清除预览，完成范围由使用方保留。
+
 ### SelectionModel（ADR 0047 第 4 节）
 
 ```ts

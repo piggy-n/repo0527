@@ -37,6 +37,7 @@ describe('路由表', () => {
       RouteName.devAiChat,
       RouteName.devSystemManagement,
       RouteName.devMessageCenter,
+      RouteName.devDataQuery,
       RouteName.devMap,
       RouteName.devResources,
       RouteName.devMapUi,

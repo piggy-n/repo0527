@@ -55,6 +55,7 @@ docs/
 └─ stages/                    各阶段的总结与学习笔记
    ├─ ai-system-management-migration.md AI 对话与系统管理：范围、交互预览与接入待办
    ├─ message-center-migration.md 消息中心：Header 弹框交互稿与接入计划
+   ├─ data-query-migration.md    数据查询：四模块迁移、条件快照、正式验收与待联调项
    ├─ stage-1-engineering-foundation.md  阶段一：工程基础
    ├─ stage-2-app-skeleton-and-auth.md   阶段二：应用骨架、数据层与鉴权
    ├─ stage-3-layout-and-first-list.md   阶段三：页面布局与第一个列表页
