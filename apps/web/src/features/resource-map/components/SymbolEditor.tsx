@@ -167,7 +167,8 @@ export const SymbolEditor = defineComponent({
           <ElRadioGroup
             size="small"
             modelValue={customizing.value ? CUSTOM : field.size}
-            onUpdate:modelValue={selectSize}>
+            onUpdate:modelValue={selectSize}
+          >
             {SIZE_LEVELS.map(level => (
               <ElRadioButton key={level} value={level}>
                 {level}
@@ -363,7 +364,8 @@ export const SymbolEditor = defineComponent({
               type="primary"
               size="small"
               disabled={!props.symbols.hasOverride(props.target)}
-              onClick={() => props.symbols.resetSymbol(props.target)}>
+              onClick={() => props.symbols.resetSymbol(props.target)}
+            >
               {props.resetLabel}
             </ElButton>
           </div>

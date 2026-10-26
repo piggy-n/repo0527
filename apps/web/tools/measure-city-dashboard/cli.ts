@@ -210,7 +210,11 @@ try {
   for (let round = 1; round <= ROUNDS; round++) {
     // 每轮新的上下文测冷启动；轮与轮依次进行，不并行争抢渲染资源
     // oxlint-disable-next-line no-await-in-loop -- 同上
-    const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion: 'no-preference', serviceWorkers: 'block' });
+    const context = await browser.newContext({
+      viewport: VIEWPORT,
+      reducedMotion: 'no-preference',
+      serviceWorkers: 'block'
+    });
     try {
       // oxlint-disable-next-line no-await-in-loop -- 同上
       results.push(...(await measureRound(context, baseURL, round)));

@@ -15,7 +15,12 @@ import styles from './DashboardView.module.scss';
 /** 驾驶舱装配只在该 feature 内共享状态，不与现状底图会话耦合 */
 export const DashboardView = defineComponent({
   name: 'DashboardView',
-  props: { forceFallback: { type: Boolean, default: false }, reducedMotion: { type: Boolean, default: false } },
+  props: {
+    /** 不创建三维场景，直接用二维地图；测试用 */
+    forceFallback: { type: Boolean, default: false },
+    /** 减少动画：入场直接到终态 */
+    reducedMotion: { type: Boolean, default: false }
+  },
   setup(props) {
     const model = useDashboard(createMockData(new Date().getFullYear()));
     const shell = ref<HTMLElement>();

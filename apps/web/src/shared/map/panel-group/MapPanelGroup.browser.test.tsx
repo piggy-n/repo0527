@@ -57,7 +57,8 @@ function setup(height: number, width = 320) {
             visible
             collapsible
             collapsed={collapsed.value}
-            onUpdate:collapsed={value => (collapsed.value = value)}>
+            onUpdate:collapsed={value => (collapsed.value = value)}
+          >
             {{ region: rows, coordinate: rows, boundaries: rows, legend: rows }}
           </MapPanelGroup>
         </div>

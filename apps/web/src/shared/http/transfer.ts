@@ -4,7 +4,13 @@ import type { AxiosProgressEvent } from 'axios';
 export interface TransferProgress {
   loaded: number;
   total: number | null;
+  /** 0～100 的整数，向下取整：只有全部传完才是 100 */
   percent: number | null;
+}
+
+/** 响应头或 Blob 的类型去掉参数（如 charset）后的小写 MIME；没有类型时是空字符串 */
+export function baseMimeType(contentType: string): string {
+  return contentType.split(';')[0].trim().toLowerCase();
 }
 
 /** 将底层进度转为业务无关的数据；active 为 false（请求已结束或中止）时不再上报 */
@@ -24,7 +30,8 @@ export function progressReporter(
     const progress: TransferProgress = {
       loaded: event.loaded,
       total,
-      percent: total === null ? null : Math.min(100, event.loaded / total * 100)
+      // 界面直接显示这个数；向下取整，差一点没传完时不会提前显示 100% 并进入"处理中"
+      percent: total === null ? null : Math.min(100, Math.floor(event.loaded / total * 100))
     };
     // 回调属于调用方，它抛错时只打印，不能打断传输
     try {

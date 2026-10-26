@@ -7,8 +7,8 @@
   padding: calc(16px * var(--ui-scale, 1)) calc(12px * var(--ui-scale, 1));
   border: 1px solid #fff;
   border-radius: 10px;
-  background: linear-gradient(145deg, rgba(247, 252, 255, .9), rgba(236, 246, 254, .8));
-  box-shadow: 0 4px 12px rgba(67, 142, 251, .12);
+  background: linear-gradient(145deg, rgba(247, 252, 255, 0.9), rgba(236, 246, 254, 0.8));
+  box-shadow: 0 4px 12px rgba(67, 142, 251, 0.12);
   color: #0e4894;
   overflow: auto;
   overscroll-behavior: contain;
@@ -37,12 +37,12 @@
   font-family: var(--dashboard-title-font);
   font-size: calc(20px * var(--ui-scale, 1));
   font-weight: 900;
-  background: linear-gradient(125deg, #bfe3ff 64%, rgba(207, 233, 254, .08) 64.5%);
+  background: linear-gradient(125deg, #bfe3ff 64%, rgba(207, 233, 254, 0.08) 64.5%);
   border-bottom-right-radius: 30px;
 
   > span {
     transform: skewX(-8deg);
-    letter-spacing: .05em;
+    letter-spacing: 0.05em;
   }
 }
 
@@ -64,7 +64,7 @@
     min-height: calc(50px * var(--ui-scale, 1));
     padding: 6px 10px;
     border-radius: 8px;
-    background: rgba(207, 233, 254, .25);
+    background: rgba(207, 233, 254, 0.25);
   }
 
   :global(.el-select__selection) {
@@ -179,8 +179,8 @@
   line-height: 1.5;
   font-size: calc(16px * var(--ui-scale, 1));
   background: linear-gradient(100deg, #cfe9fe, #ecf6fe);
-  box-shadow: 0 2px 5px rgba(67, 142, 251, .12);
-  transition: background .2s, color .2s, border-color .2s;
+  box-shadow: 0 2px 5px rgba(67, 142, 251, 0.12);
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
 
   &:hover {
     border-color: #89bfff;
@@ -190,7 +190,7 @@
 .filters button.selected {
   color: #fff;
   background: linear-gradient(100deg, #438efb, #4facfd);
-  box-shadow: 0 3px 7px rgba(67, 142, 251, .25);
+  box-shadow: 0 3px 7px rgba(67, 142, 251, 0.25);
 }
 
 .category {
@@ -200,7 +200,7 @@
     width: calc(24px * var(--ui-scale, 1));
     height: calc(24px * var(--ui-scale, 1));
     flex-shrink: 0;
-    transition: transform .25s;
+    transition: transform 0.25s;
   }
 
   &:hover > svg {

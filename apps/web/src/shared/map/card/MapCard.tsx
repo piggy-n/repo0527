@@ -31,7 +31,8 @@ export const MapCard = defineComponent({
           class={[styles.card, cover && styles.thumbnail, props.pressed && styles.pressed]}
           aria-label={props.name}
           aria-pressed={props.pressed}
-          onClick={() => emit('click')}>
+          onClick={() => emit('click')}
+        >
           <span class={[styles.media, cover && styles.covered]}>{cover ?? slots.icon?.()}</span>
           <span class={styles.label}>{props.label}</span>
         </button>

@@ -5,21 +5,20 @@ import { usePreferredReducedMotion, useResizeObserver } from '@vueuse/core';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { CITIES } from '../catalog';
 import { formatValue } from '../calculations';
-import type { ChartHover, Indicator } from '../model';
-import type { DashboardModel } from '../composables/useDashboard';
 import { createChartOption, isStacked } from '../charts/options';
+import { useCardNavigation } from '../composables/useCardNavigation';
+import type { DashboardModel } from '../composables/useDashboard';
+import { useImageExport } from '../composables/useImageExport';
+import { renderChartImage } from '../export/chart-export';
+import { imageWithTitle, saveImage } from '../export/image-export';
+import type { ChartHover, Comparison, Indicator } from '../model';
 import { DashboardPlot } from './DashboardPlot';
 import { TooltipTable } from './TooltipTable';
 import fonts from './DashboardFonts.module.scss';
 import styles from './DashboardCharts.module.scss';
-import { useImageExport } from '../composables/useImageExport';
-import { imageWithTitle, saveImage } from '../export/image-export';
-import { renderChartImage } from '../export/chart-export';
-import { useCardNavigation } from '../composables/useCardNavigation';
 
 export interface DashboardChartsHandle {
   locateIndicator(id: string, options?: { scroll?: boolean }): void;
-
   openDetail(context: { indicatorId: string; cityCode?: string | null }): void;
 }
 
@@ -34,8 +33,7 @@ export const DashboardCharts = defineComponent({
     reducedMotion: { type: Boolean, default: false }
   },
   emits: {
-    hover: (_context: ChartHover | null) => true,
-    select: (_id: string) => true
+    hover: (_context: ChartHover | null) => true
   },
   setup(props, { emit, expose }) {
     const list = ref<HTMLElement>();
@@ -119,10 +117,13 @@ export const DashboardCharts = defineComponent({
       detailHover.value = null;
     }
 
-    watch(() => props.model.state.value, () => {
-      emit('hover', null);
-      detailHover.value = null;
-    });
+    watch(
+      () => props.model.state.value,
+      () => {
+        emit('hover', null);
+        detailHover.value = null;
+      }
+    );
     watch(() => props.model.state.value.categoryId, closeDetail);
 
     /** 卡片和详情复用操作入口，下载状态按指标和视图分别记录 */
@@ -205,6 +206,63 @@ export const DashboardCharts = defineComponent({
       }
     }
 
+    // 详情里聚焦的城市；它不在当前的城市筛选里时也说明
+    function focusedCityText(): string {
+      const city = focusedCity.value;
+      if (!city) {
+        return '';
+      }
+      return props.model.cities.value.includes(city) ? `${city.name} · 当前查看城市` : `${city.name} · 未纳入当前城市筛选`;
+    }
+
+    function renderDetailPlot(selected: Indicator, comparison: readonly Comparison[]) {
+      const option = detailOption.value;
+      if (!comparison.length || !props.model.cities.value.length || !option) {
+        return <div class={styles.empty}>暂无比较数据</div>;
+      }
+      return (
+        <div ref={detailPlot} class={styles.detailPlot}>
+          <DashboardPlot
+            option={option}
+            cities={props.model.cities.value}
+            active={detailVisible.value}
+            description={`${selected.name}详情`}
+            onHover={code => (detailHover.value = code)}
+            onLegend={legend => (detailLegend.value = legend)}
+          />
+        </div>
+      );
+    }
+
+    function renderDetail(selected: Indicator, comparison: readonly Comparison[]) {
+      const { model } = props;
+      return (
+        <div class={styles.detail}>
+          <h2 class={styles.fullTitle}>
+            {selected.name}（{selected.unit}）
+          </h2>
+          <div class={styles.detailTools}>
+            <span>{focusedCityText()}</span>
+            {renderActions(selected, true)}
+          </div>
+          <div class={styles.detailScroll}>{renderDetailPlot(selected, comparison)}</div>
+          {hoveredCity.value && (
+            <div class={styles.detailTooltip}>
+              <TooltipTable
+                indicator={selected}
+                comparison={comparison}
+                cities={model.cities.value}
+                city={hoveredCity.value}
+                activeYear={model.state.value.activeYear}
+                chartType={model.preference(selected).type}
+                legend={detailLegend.value}
+              />
+            </div>
+          )}
+        </div>
+      );
+    }
+
     expose({ locateIndicator, openDetail });
     return () => {
       const model = props.model;
@@ -225,6 +283,8 @@ export const DashboardCharts = defineComponent({
             onScroll={() => emit('hover', null)}
           >
             {cards.value.map(({ indicator, comparison: cardComparison, option }, index) => {
+              // 定位中的卡片先不显示选中，定位结束再显示，免得滚动途中闪一下
+              const current = state.indicatorId === indicator.id && navigation.locatingId.value !== indicator.id;
               const latest = cardComparison.at(-1);
               const average = latest
                 ? formatValue(latest.average, indicator, true, Math.max(1, indicator.precision))
@@ -234,10 +294,7 @@ export const DashboardCharts = defineComponent({
                   key={`${state.categoryId}:${indicator.id}`}
                   data-chart-id={indicator.id}
                   data-enter="chart"
-                  class={[
-                    styles.card,
-                    state.indicatorId === indicator.id && navigation.locatingId.value !== indicator.id && styles.selected
-                  ]}
+                  class={[styles.card, current && styles.selected]}
                   aria-current={state.indicatorId === indicator.id ? 'true' : undefined}
                 >
                   <div class={styles.heading}>
@@ -245,10 +302,7 @@ export const DashboardCharts = defineComponent({
                       type="button"
                       class={styles.title}
                       title={`${indicator.name}（${indicator.unit}）`}
-                      onClick={() => {
-                        model.selectIndicator(indicator.id);
-                        emit('select', indicator.id);
-                      }}
+                      onClick={() => model.selectIndicator(indicator.id)}
                     >
                       {indicator.name}（{indicator.unit}）
                     </button>
@@ -299,44 +353,7 @@ export const DashboardCharts = defineComponent({
           >
             {{
               header: () => <MxTitle level="panel">指标图表详情</MxTitle>,
-              default: () => selected && <div class={styles.detail}>
-                <h2 class={styles.fullTitle}>{selected.name}（{selected.unit}）</h2>
-                <div class={styles.detailTools}>
-                  <span>{focusedCity.value?.name}{focusedCity.value && (
-                    model.cities.value.includes(focusedCity.value)
-                      ? ' · 当前查看城市' : ' · 未纳入当前城市筛选'
-                  )}</span>
-                  {renderActions(selected, true)}
-                </div>
-                <div class={styles.detailScroll}>
-                  {comparison.length && model.cities.value.length && detailOption.value ?
-                    <div ref={detailPlot} class={styles.detailPlot}>
-                      <DashboardPlot
-                        option={detailOption.value}
-                        cities={model.cities.value}
-                        active={detailVisible.value}
-                        description={`${selected.name}详情`}
-                        onHover={code => {
-                          detailHover.value = code;
-                        }}
-                        onLegend={legend => {
-                          detailLegend.value = legend;
-                        }}
-                      />
-                    </div> : <div class={styles.empty}>暂无比较数据</div>}
-                </div>
-                {hoveredCity.value && <div class={styles.detailTooltip}>
-                  <TooltipTable
-                    indicator={selected}
-                    comparison={comparison}
-                    cities={model.cities.value}
-                    city={hoveredCity.value}
-                    activeYear={state.activeYear}
-                    chartType={model.preference(selected).type}
-                    legend={detailLegend.value}
-                  />
-                </div>}
-              </div>,
+              default: () => selected && renderDetail(selected, comparison),
               footer: () => <ElButton onClick={closeDetail}>关闭</ElButton>
             }}
           </ElDialog>

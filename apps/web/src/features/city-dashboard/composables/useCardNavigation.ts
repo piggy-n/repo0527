@@ -200,17 +200,25 @@ export function useCardNavigation(list: Ref<HTMLElement | undefined>, options: C
       moveTo(targetIndex, true);
     }
   });
-  watch(options.category, () => {
-    gesture.reset();
-    touching = false;
-    touchingId.value = null;
-    moveTo(0, true);
-  }, { flush: 'post' });
-  watch(options.ready, ready => {
-    if (ready) {
+  watch(
+    options.category,
+    () => {
+      gesture.reset();
+      touching = false;
+      touchingId.value = null;
       moveTo(0, true);
-    }
-  }, { flush: 'post' });
+    },
+    { flush: 'post' }
+  );
+  watch(
+    options.ready,
+    ready => {
+      if (ready) {
+        moveTo(0, true);
+      }
+    },
+    { flush: 'post' }
+  );
   watch(visibility, () => {
     cancel();
     gesture.reset();

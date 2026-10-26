@@ -23,7 +23,8 @@ export interface ResourceStatus {
  * 配置错误时资源不画，只有它（原因由拥有者打印到控制台）；勾选了但级别不够时说明放大到几级，免得被当成加载失败；
  * 瓦片加载失败只知道至少有一张，不说"部分"
  */
-export function resourceStatuses({ checked, configError, tileError, minzoom, zoom }: ResourceStatusInput): ResourceStatus[] {
+export function resourceStatuses(input: ResourceStatusInput): ResourceStatus[] {
+  const { checked, configError, tileError, minzoom, zoom } = input;
   if (configError) {
     return [{ kind: 'config-error', level: 'error', text: '配置错误' }];
   }

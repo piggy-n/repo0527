@@ -31,7 +31,8 @@ export const BasemapPanel = defineComponent({
                   class={[styles.option, on && styles.on]}
                   aria-label={option.label}
                   aria-pressed={on}
-                  onClick={() => props.basemap.select(option.id)}>
+                  onClick={() => props.basemap.select(option.id)}
+                >
                   <span class={styles.frame}>
                     <BasemapThumbnail thumbnail={thumbnails[option.id]} />
                     {on && <SvgIcon class={styles.check} name="check" size={12} />}

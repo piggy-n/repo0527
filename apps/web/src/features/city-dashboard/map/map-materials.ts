@@ -3,9 +3,6 @@ import { Color, MeshPhongMaterial, ShaderMaterial } from 'three';
 import { gsap } from 'gsap';
 import { getMapColor, MAP_DEPTH, MAP_ENTRANCE, MAP_YEAR_TRANSITION } from './config';
 
-// 地图厚度共用同一常量，边界、标签与相机同步使用
-export { MAP_DEPTH } from './config';
-
 // 顶面与侧面分开着色，灰色状态也保留地图厚度
 export function createRegionMaterials(value: number | null, sweepUniforms: SweepUniforms, initial = false) {
   const color = new Color(initial ? MAP_ENTRANCE.color : getMapColor(value));
@@ -45,7 +42,8 @@ export function createRegionMaterials(value: number | null, sweepUniforms: Sweep
     // 低对比度表面纹理保留分级色，避免像整块纯色塑料
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
       #include <color_fragment>
-      float textureValue = dashboardNoise(vDashboardPosition * 0.08) * 0.65 + dashboardNoise(vDashboardPosition * 0.3) * 0.35;
+      float textureValue = dashboardNoise(vDashboardPosition * 0.08) * 0.65
+        + dashboardNoise(vDashboardPosition * 0.3) * 0.35;
       diffuseColor.rgb *= mix(1.0, 0.84 + textureValue * 0.36, uDataAvailable);
     `);
     shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', `

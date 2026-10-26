@@ -7,14 +7,14 @@ import { layoutMapLabels } from './label-layout';
 // 最小边界仍覆盖全部城市，额外小面和孔洞用于防止几何丢失
 function boundaries(): RegionGeometry[] {
   return CITIES.map((city, index) => {
-    const x = 118 + index * .1;
+    const x = 118 + index * 0.1;
     return {
       code: city.code,
       geometry: {
         type: 'Polygon',
         coordinates: [
-          [[x, 32], [x + .08, 32], [x + .08, 32.08], [x, 32.08], [x, 32]],
-          [[x + .02, 32.02], [x + .02, 32.04], [x + .04, 32.04], [x + .04, 32.02], [x + .02, 32.02]]
+          [[x, 32], [x + 0.08, 32], [x + 0.08, 32.08], [x, 32.08], [x, 32]],
+          [[x + 0.02, 32.02], [x + 0.02, 32.04], [x + 0.04, 32.04], [x + 0.04, 32.02], [x + 0.02, 32.02]]
         ]
       }
     };

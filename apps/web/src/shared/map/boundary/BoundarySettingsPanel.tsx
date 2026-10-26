@@ -12,11 +12,15 @@ export const BoundarySettingsPanel = defineComponent({
   },
   setup(props) {
     const opacityOpen = ref(false);
-    watch(() => props.active, active => {
-      if (!active) {
-        opacityOpen.value = false;
+    watch(
+      () => props.active,
+      active => {
+        if (!active) {
+          opacityOpen.value = false;
+        }
       }
-    });
+    );
+
     return () => (
       <BoundaryPanel boundaries={props.boundaries} showOpacity={opacityOpen.value}>
         {{

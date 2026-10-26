@@ -33,7 +33,10 @@ const MapUiSamples = defineComponent({
     height: { type: Number, required: true }
   },
   setup(props) {
-    const map = provideMap({ groups: ['resources'], camera: { center: [119.4, 32.9], zoom: 16, bearing: 0, pitch: 0 } });
+    const map = provideMap({
+      groups: ['resources'],
+      camera: { center: [119.4, 32.9], zoom: 16, bearing: 0, pitch: 0 }
+    });
     const catalog = shallowRef(SAMPLE_CATALOG);
     const symbols = useResourceSymbols({ catalog });
     const layers = useResourceLayers(map, { catalog, symbols });
@@ -99,7 +102,8 @@ const MapUiSamples = defineComponent({
                     labels={{ legend: '图例', boundaries: '行政区' }}
                     collapsed={collapsed.value}
                     collapsible
-                    onUpdate:collapsed={value => (collapsed.value = value)}>
+                    onUpdate:collapsed={value => (collapsed.value = value)}
+                  >
                     {{
                       legend: ({ active }: PanelSlotProps) => [
                         <ResourceLegend
@@ -148,14 +152,18 @@ const MapUiSamples = defineComponent({
                     opacity={basemap.opacity.value}
                     open={basemapOpen.value}
                     onUpdate:open={value => (basemapOpen.value = value)}
-                    onOpacityChange={basemap.setOpacity}>
+                    onOpacityChange={basemap.setOpacity}
+                  >
                     {{
                       reference: () => [
                         <MapCard
                           label={basemapOption(basemap.selected.value).shortLabel}
                           name={`底图：${basemapOption(basemap.selected.value).label}`}
-                          pressed={basemapOpen.value}>
-                          {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[basemap.selected.value]} />] }}
+                          pressed={basemapOpen.value}
+                        >
+                          {{
+                            cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[basemap.selected.value]} />]
+                          }}
                         </MapCard>
                       ],
                       default: () => [<BasemapPanel basemap={basemap} showOpacity={false} />]

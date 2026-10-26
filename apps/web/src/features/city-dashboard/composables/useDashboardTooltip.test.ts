@@ -10,13 +10,17 @@ const scopes: ReturnType<typeof effectScope>[] = [];
 function createTooltip() {
   const scope = effectScope();
   scopes.push(scope);
-  return scope.run(() => {
+  const created = scope.run(() => {
     const model = useDashboard(createMockData(2026));
     const visibility = ref<DocumentVisibilityState>('visible');
     const tooltip = useDashboardTooltip(model, visibility);
     const target = { indicatorId: model.indicator.value.id, cityCode: '320100' };
     return { model, visibility, tooltip, target, stop: () => scope.stop() };
-  })!;
+  });
+  if (!created) {
+    throw new Error('提示没有创建');
+  }
+  return created;
 }
 
 afterEach(() => {

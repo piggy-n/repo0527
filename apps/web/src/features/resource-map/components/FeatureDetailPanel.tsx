@@ -152,7 +152,8 @@ export const FeatureDetailPanel = defineComponent({
                 type="button"
                 class={styles.link}
                 aria-expanded={showEmpty.value}
-                onClick={() => (showEmpty.value = !showEmpty.value)}>
+                onClick={() => (showEmpty.value = !showEmpty.value)}
+              >
                 {showEmpty.value ? '收起没有值的字段' : '显示'}
               </button>
             </div>
@@ -192,7 +193,8 @@ export const FeatureDetailPanel = defineComponent({
             ref={containerProps.ref}
             class={styles.scroller}
             style={containerProps.style}
-            onScroll={containerProps.onScroll}>
+            onScroll={containerProps.onScroll}
+          >
             <ul class={styles.candidates} style={wrapperProps.value.style}>
               {visible.value.map(({ data: candidate, index }) => {
                 const label = featureLabel(code, candidate.properties);
@@ -261,7 +263,8 @@ export const FeatureDetailPanel = defineComponent({
             disabled={status?.kind !== 'ready'}
             aria-label="定位到要素"
             title="定位到要素"
-            onClick={props.pick.locate}>
+            onClick={props.pick.locate}
+          >
             <SvgIcon name="focus" size={16} />
           </button>
         );

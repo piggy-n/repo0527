@@ -450,7 +450,8 @@ export const DevThemePage = defineComponent({
               size="small"
               style={{ width: '48px' }}
               modelValue={layerYear.value}
-              onUpdate:modelValue={(value: number) => (layerYear.value = value)}>
+              onUpdate:modelValue={(value: number) => (layerYear.value = value)}
+            >
               {[2025, 2024, 2023].map(year => (
                 <ElOption key={year} label={String(year)} value={year} />
               ))}

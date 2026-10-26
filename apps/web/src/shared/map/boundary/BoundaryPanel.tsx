@@ -21,7 +21,8 @@ function renderSwatch(lines: readonly BoundarySwatchLine[]) {
       width={SWATCH_WIDTH}
       height={height}
       viewBox={`0 0 ${SWATCH_WIDTH} ${height}`}
-      aria-hidden="true">
+      aria-hidden="true"
+    >
       {lines.map(({ color, width, opacity, dasharray }, index) => (
         <line
           key={index}
@@ -70,7 +71,8 @@ export const BoundaryPanel = defineComponent({
               class={styles.levels}
               aria-label="行政区边界"
               modelValue={checked}
-              onUpdate:modelValue={changeVisible}>
+              onUpdate:modelValue={changeVisible}
+            >
               {options.map(option => (
                 <div key={option.id}>
                   <ElCheckbox value={option.id} aria-label={option.label}>

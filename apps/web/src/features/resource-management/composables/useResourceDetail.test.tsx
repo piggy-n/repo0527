@@ -9,6 +9,7 @@ import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { createTestJwtExpiringAt } from '@/shared/auth/testing';
 import { configureHttp } from '@/shared/http/configure';
+import { required } from '@/shared/testing/required';
 import type { ResourceAttribute, ResourceDirectory, ResourceRecord } from '../api';
 import { resourceManagementKeys } from '../queries';
 import { resourceDetailResponse, resourceDirectoryResponse } from '../test-data';
@@ -26,24 +27,40 @@ afterEach(() => {
 afterAll(() => server.close());
 
 function row(id = 'layer-1'): ResourceRecord {
-  return { id, name: '地类图斑', year: 2025, resourceName: '土地资源', datasetName: '数据集',
-    layerCode: 'LAYER', datasetCode: 'DATASET', hasSlice: true, enabled: true };
+  return {
+    id,
+    name: '地类图斑',
+    year: 2025,
+    resourceName: '土地资源',
+    datasetName: '数据集',
+    layerCode: 'LAYER',
+    datasetCode: 'DATASET',
+    hasSlice: true,
+    enabled: true
+  };
 }
 
 function backend() {
   const data = resourceDetailResponse().data;
   const state: {
-    failRead: boolean; failWrite: boolean; expiredRead: boolean; returned: number;
-    holdRead?: Promise<void>; holdWrite?: Promise<void>
+    failRead: boolean;
+    failWrite: boolean;
+    expiredRead: boolean;
+    returned: number;
+    holdRead?: Promise<void>;
+    holdWrite?: Promise<void>;
   } = {
-    failRead: false, failWrite: false, expiredRead: false, returned: 0
+    failRead: false,
+    failWrite: false,
+    expiredRead: false,
+    returned: 0
   };
   const reads: string[] = [];
   const writes: { id: string | null; resourceName: string | null; attributes: ResourceAttribute[] }[] = [];
   const aborted: string[] = [];
   server.use(
     mock.get('/backend/resource-management/layer/struct', async ({ request }) => {
-      const id = new URL(request.url).searchParams.get('id')!;
+      const id = new URL(request.url).searchParams.get('id') ?? '';
       reads.push(id);
       request.signal.addEventListener('abort', () => aborted.push(id));
       await state.holdRead;
@@ -62,7 +79,7 @@ function backend() {
       if (state.failWrite) {
         return HttpResponse.json({ code: 500, msg: '保存被拒绝' });
       }
-      data.resourceName = query.get('resourceName')!;
+      data.resourceName = query.get('resourceName') ?? '';
       // 仅模拟后端保存名称，其余字段由契约测试检查完整往返
       data.attributes.forEach((attribute, index) => {
         attribute.name = attributes[index]?.name ?? null;
@@ -82,10 +99,13 @@ function host() {
   clients.push(client);
   const tree = ref<ResourceDirectory[]>(resourceDirectoryResponse().data);
   let detail!: ReturnType<typeof useResourceDetail>;
-  const wrapper = mount(defineComponent({ setup() {
-    detail = useResourceDetail(tree);
-    return () => null;
-  } }), { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } });
+  const wrapper = mount(
+    defineComponent(() => {
+      detail = useResourceDetail(tree);
+      return () => null;
+    }),
+    { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } }
+  );
   return { detail, wrapper, client, session, tree };
 }
 
@@ -230,7 +250,7 @@ describe('资源详情与属性草稿', () => {
     await startEditing(detail);
     expect(detail.draft.value?.category).toBeNull();
     detail.setCategory('water');
-    tree.value[0].children![1].name = '水资源新名';
+    required(tree.value[0].children?.[1], '水资源目录').name = '水资源新名';
     expect(await detail.save()).toBe(false);
     expect(detail.error.value).toContain('请选择有效');
     detail.setCategory('water');

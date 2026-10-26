@@ -100,18 +100,21 @@ export const MapPanelGroup = defineComponent({
           class={[styles.group, props.collapsed && styles.collapsed]}
           style={shown ? undefined : { display: 'none' }}
           data-panel-group
-          onPointerdown={() => !props.collapsed && emit('activate')}>
+          onPointerdown={() => !props.collapsed && emit('activate')}
+        >
           {open.length > 0 && (
             <MxPanel floating headerTone="muted" title={title} flush={props.collapsed} class={styles.shell}>
               {{
                 actions: () => [
-                  props.collapsible && <ElButton
-                    link
-                    icon={props.collapsed ? ArrowDown : ArrowUp}
-                    aria-label={props.collapsed ? '展开功能面板' : '收起功能面板'}
-                    aria-expanded={!props.collapsed}
-                    onClick={() => emit('update:collapsed', !props.collapsed)}
-                  />,
+                  props.collapsible && (
+                    <ElButton
+                      link
+                      icon={props.collapsed ? ArrowDown : ArrowUp}
+                      aria-label={props.collapsed ? '展开功能面板' : '收起功能面板'}
+                      aria-expanded={!props.collapsed}
+                      onClick={() => emit('update:collapsed', !props.collapsed)}
+                    />
+                  ),
                   <ElButton
                     link
                     icon={Close}
@@ -132,7 +135,8 @@ export const MapPanelGroup = defineComponent({
                       aria-label={props.labels[id] ?? id}
                       class={styles.content}
                       style={!props.collapsed && id === current ? undefined : { display: 'none' }}
-                      data-panel={id}>
+                      data-panel={id}
+                    >
                       {slots[id]?.({ active: shown && !props.collapsed && pageActive.value && id === current })}
                     </div>
                   )),

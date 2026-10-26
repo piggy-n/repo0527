@@ -12,14 +12,12 @@ export function downloadFileName(disposition: string | null, fallbackName: strin
   let extended = '';
   let regular = '';
   const fields = disposition?.matchAll(/(?:^|;)\s*(filename\*?)\s*=\s*("(?:[^"\\]|\\.)*"|[^;]*)/gi) ?? [];
+  // 两个分组都是必有的，匹配到了就有值
   for (const [, key, raw] of fields) {
-    if (key === undefined || raw === undefined) {
-      continue;
-    }
     const value = raw.trim().replace(/^"|"$/g, '').replace(/\\(["\\])/g, '$1');
     if (key.toLowerCase() === 'filename*') {
       const match = /^utf-8'[^']*'(.*)$/i.exec(value);
-      if (match?.[1] !== undefined) {
+      if (match) {
         try {
           extended = cleanFileName(decodeURIComponent(match[1]));
         } catch {

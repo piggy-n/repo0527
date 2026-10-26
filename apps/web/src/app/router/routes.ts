@@ -47,7 +47,9 @@ const businessRoutes: RouteRecordRaw[] = [
     path: 'resource-management',
     name: RouteName.resourceManagement,
     component: () =>
-      import('@/pages/resource-management/ResourceManagementPage').then(({ ResourceManagementPage }) => ResourceManagementPage),
+      import('@/pages/resource-management/ResourceManagementPage').then(
+        ({ ResourceManagementPage }) => ResourceManagementPage
+      ),
     meta: { title: '资源管理', roles: [Role.admin] }
   },
   placeholder('resource-application', RouteName.resourceApplication, '资源申请', [Role.user]),
@@ -96,7 +98,8 @@ export const routes: RouteRecordRaw[] = [
   {
     path: '/city-dashboard',
     name: RouteName.cityDashboard,
-    component: () => import('@/pages/city-dashboard/CityDashboardPage').then(({ CityDashboardPage }) => CityDashboardPage),
+    component: () =>
+      import('@/pages/city-dashboard/CityDashboardPage').then(({ CityDashboardPage }) => CityDashboardPage),
     meta: { title: '城市体检驾驶舱' }
   },
   {

@@ -44,10 +44,15 @@ export const DashboardFilters = defineComponent({
       emit('locate', id);
     }
 
-    watch(() => props.model.state.value.categoryId, async () => {
-      await nextTick();
-      list.value?.scrollTo({ top: 0 });
-    });
+    // 换了指标类型，具体指标列表回到顶部；等列表按新类型渲染后再滚
+    watch(
+      () => props.model.state.value.categoryId,
+      async () => {
+        await nextTick();
+        list.value?.scrollTo({ top: 0 });
+      }
+    );
+
     return () => {
       const model = props.model;
       const state = model.state.value;
@@ -76,11 +81,7 @@ export const DashboardFilters = defineComponent({
           <section class={styles.group} data-filter-group>
             <div class={styles.headingRow}>
               {renderHeading('行政区划')}
-              <button
-                type="button"
-                class={styles.textButton}
-                onClick={toggleAllCities}
-              >
+              <button type="button" class={styles.textButton} onClick={toggleAllCities}>
                 {state.cityCodes.length === CITIES.length ? '清空' : '全选'}
               </button>
             </div>
@@ -94,8 +95,11 @@ export const DashboardFilters = defineComponent({
                   onClick={() => model.toggleCity(city.code)}
                 >
                   {city.name}
-                  {state.cityCodes.includes(city.code) &&
-                    <span class={styles.check}><SvgIcon name="check" size={12} /></span>}
+                  {state.cityCodes.includes(city.code) && (
+                    <span class={styles.check}>
+                      <SvgIcon name="check" size={12} />
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

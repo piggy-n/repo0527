@@ -13,6 +13,7 @@
 | Node.js | `24.x`，本地已验证 `24.16.0` | 自行安装或通过版本管理器切换；项目不会自动安装 Node |
 | pnpm | 声明 `^12`，当前锁定 `12.14.0` | 支持项目版本管理的 pnpm 会按锁文件选择版本 |
 | 项目依赖 | 使用已提交的锁文件 | 在根目录执行 `pnpm install --frozen-lockfile` |
+| Microsoft Visual C++ 运行库（仅 Windows） | x64 版 Visual C++ Redistributable 2015-2022 | 从微软官网下载安装；lint 依赖方向检查用到的 `unrs-resolver` 原生模块需要它 |
 
 以上版本核对于 2026-10-22。后续以根目录 [package.json](package.json) 的 `devEngines` 和 [pnpm-lock.yaml](pnpm-lock.yaml) 的 `packageManagerDependencies` 为准。Node 声明的是大版本范围，具体依赖还可能要求较新的小版本；新电脑建议使用已验证的 `24.16.0` 或更新的 24.x。
 
@@ -44,6 +45,10 @@ pnpm --version
 本项目通过 `devEngines.packageManager` 和锁文件管理 pnpm 版本，`onFail: download` 允许下载并使用项目要求的版本。很旧的 pnpm 不一定识别这一配置，首次接入直接安装上述版本更明确。进入项目后再执行 `pnpm --version`，确认实际使用的版本。
 
 如果 Windows 安装后仍调用旧版本，可用 `where.exe pnpm` 检查 PATH 中是否有多个入口，确认终端及 IDE 使用的是预期安装。不要通过修改项目版本声明来迁就本机旧环境，也不要执行项目的 pnpm 升级脚本来完成首次安装。
+
+### Windows 上 lint 报 Cannot find native binding
+
+`pnpm lint` 在 `boundaries(dependencies)` 规则上报 `Resolve error: Cannot find native binding`，而 `node_modules` 里已经有 `@unrs/resolver-binding-win32-x64-msvc`，多半是本机缺少 Visual C++ 运行库（`C:\Windows\System32` 下没有 `vcruntime140.dll`）。安装上表的运行库后重新打开终端即可，不需要重新安装依赖，也不要删除锁文件。
 
 ## 2. 拉取代码并安装依赖
 

@@ -31,25 +31,34 @@ describe('资源写入的会话边界', () => {
       vi.spyOn(api, 'importResourceExcel').mockResolvedValue(undefined)
     ];
     let submit!: () => Promise<unknown>;
-    const wrapper = mount(defineComponent({ setup() {
-      const directory = useResourceDirectoryMutation();
-      const detail = useResourceDetailMutation();
-      const status = useResourceStatusMutation();
-      const importer = useResourceImportMutation();
-      const operations = {
-        directory: () => directory.mutateAsync({ change: { kind: 'remove', id: 'one' }, token }),
-        detail: () => detail.mutateAsync({ change: { id: 'one', resourceName: '土地资源', attributes: [] }, token }),
-        status: () => status.mutateAsync({ id: 'one', enabled: true, token }),
-        import: () => importer.mutateAsync({ input: { file: new File(['test'], 'test.xlsx'), year: 2026 },
-          token, onProgress: () => undefined })
-      };
-      submit = operations[kind];
-      return () => null;
-    } }), { global: { plugins: [pinia, [VueQueryPlugin, { queryClient }]] } });
+    const wrapper = mount(
+      defineComponent(() => {
+        const directory = useResourceDirectoryMutation();
+        const detail = useResourceDetailMutation();
+        const status = useResourceStatusMutation();
+        const importer = useResourceImportMutation();
+        const operations = {
+          directory: () => directory.mutateAsync({ change: { kind: 'remove', id: 'one' }, token }),
+          detail: () => detail.mutateAsync({ change: { id: 'one', resourceName: '土地资源', attributes: [] }, token }),
+          status: () => status.mutateAsync({ id: 'one', enabled: true, token }),
+          import: () =>
+            importer.mutateAsync({
+              input: { file: new File(['test'], 'test.xlsx'), year: 2026 },
+              token,
+              onProgress: () => undefined
+            })
+        };
+        submit = operations[kind];
+        return () => null;
+      }),
+      { global: { plugins: [pinia, [VueQueryPlugin, { queryClient }]] } }
+    );
     try {
       const done = submit();
-      session.start({ token: createTestJwtExpiringAt(Date.now() + 7200000),
-        user: { loginName: 'second', role: Role.admin } });
+      session.start({
+        token: createTestJwtExpiringAt(Date.now() + 7200000),
+        user: { loginName: 'second', role: Role.admin }
+      });
       await expect(done).rejects.toMatchObject({ kind: 'canceled' });
       for (const request of requests) {
         expect(request).not.toHaveBeenCalled();

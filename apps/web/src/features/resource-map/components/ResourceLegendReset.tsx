@@ -22,7 +22,8 @@ export const ResourceLegendReset = defineComponent({
           title="恢复所有图层的默认样式？此操作会清除已保存的样式修改，包括未勾选图层。"
           width={256}
           hideIcon
-          onConfirm={() => props.symbols.resetAll()}>
+          onConfirm={() => props.symbols.resetAll()}
+        >
           {{
             reference: () => (
               <ElButton link type="primary" size="small">

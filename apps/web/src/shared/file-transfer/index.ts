@@ -1,4 +1,5 @@
 import { type BinaryRequestOptions, http } from '../http/client';
+import { baseMimeType } from '../http/transfer';
 import { downloadFileName } from './file-name';
 
 export type { TransferProgress } from '../http/client';
@@ -20,7 +21,7 @@ export async function fetchFile(url: string, options: FetchFileOptions): Promise
   const { fallbackName, fallbackType, ...requestOptions } = options;
   const response = await http.getBlob(url, requestOptions);
   // 只补缺失或通用的类型，不覆盖服务端明确给出的类型
-  const mime = (response.contentType ?? response.blob.type).split(';')[0]?.trim().toLowerCase();
+  const mime = baseMimeType(response.contentType ?? response.blob.type);
   const blob = fallbackType && (!mime || mime === 'application/octet-stream')
     ? new Blob([response.blob], { type: fallbackType })
     : response.blob;

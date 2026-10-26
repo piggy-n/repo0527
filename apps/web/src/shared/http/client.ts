@@ -10,7 +10,7 @@ import {
   TIMEOUT_ERROR_MESSAGE,
   UNAUTHORIZED_MESSAGE
 } from './messages';
-import { progressReporter, readBlobText, type TransferProgress } from './transfer';
+import { baseMimeType, progressReporter, readBlobText, type TransferProgress } from './transfer';
 
 export type { TransferProgress } from './transfer';
 
@@ -101,7 +101,7 @@ async function parseBinaryResponse(response: AxiosResponse<unknown>, signal: Abo
   }
   const contentType = responseHeader(response, 'content-type');
   const contentDisposition = responseHeader(response, 'content-disposition');
-  const mime = (contentType ?? blob.data.type).split(';')[0]?.trim().toLowerCase() ?? '';
+  const mime = baseMimeType(contentType ?? blob.data.type);
   const json = mime === 'application/json' || mime.endsWith('+json');
   const html = mime === 'text/html' || mime === 'application/xhtml+xml';
   const generic = !mime || mime === 'application/octet-stream' || mime === 'text/plain';

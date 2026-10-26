@@ -415,7 +415,8 @@ export function useFeaturePick(
       const candidates = serverCandidates(task.target, page.list);
       if (candidates.length > 0) {
         const serverPages = { geometry: task.geometry, loaded: 1, total: page.total };
-        found({ id: ++listIds, mode, target: task.target, candidates, pages: serverPages }, operation, true, how, signal);
+        const list = { id: ++listIds, mode, target: task.target, candidates, pages: serverPages };
+        found(list, operation, true, how, signal);
         return;
       }
     }

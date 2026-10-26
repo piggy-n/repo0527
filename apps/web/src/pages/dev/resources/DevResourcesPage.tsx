@@ -17,7 +17,18 @@ import styles from './DevResourcesPage.module.scss';
 const INITIAL_CAMERA: CameraState = { center: [119.4, 32.9], zoom: 6.5, bearing: 0, pitch: 0 };
 const JIANGSU_BOUNDS: ViewBounds = [116.35, 30.75, 121.98, 35.15];
 // 地图样式里的颜色是数据，交给 MapLibre 渲染，不走 CSS 令牌（与旧项目的配色板相同）
-const PALETTE = ['#D9433F', '#16B3B3', '#C74F9B', '#77A82E', '#B03A6B', '#2278BE', '#C79212', '#7A4FC0', '#E07B39', '#2FA663'];
+const PALETTE = [
+  '#D9433F',
+  '#16B3B3',
+  '#C74F9B',
+  '#77A82E',
+  '#B03A6B',
+  '#2278BE',
+  '#C79212',
+  '#7A4FC0',
+  '#E07B39',
+  '#2FA663'
+];
 const SOURCE_LAYER_EXCEPTIONS: Readonly<Record<string, string>> = {
   bgdc_czcdyd_2022: 'czcdyd',
   bgdc_dltb_czc_2021: 'dltb_czc_2021'
@@ -128,10 +139,19 @@ const GEOMETRY_FILTERS: Readonly<Record<Geometry, FilterSpecification>> = {
 const PAINTS: Readonly<Record<Geometry, (color: string) => LayerSpecification['paint']>> = {
   fill: color => ({ 'fill-color': color, 'fill-opacity': 0.5, 'fill-outline-color': color }),
   line: color => ({ 'line-color': color, 'line-width': 1.5 }),
-  circle: color => ({ 'circle-color': color, 'circle-radius': 4, 'circle-stroke-color': '#FFFFFF', 'circle-stroke-width': 1 })
+  circle: color => ({
+    'circle-color': color,
+    'circle-radius': 4,
+    'circle-stroke-color': '#FFFFFF',
+    'circle-stroke-width': 1
+  })
 };
 
-function resourcesGroup(resources: readonly Resource[], checked: ReadonlySet<string>, options: BuildOptions): StyleGroup {
+function resourcesGroup(
+  resources: readonly Resource[],
+  checked: ReadonlySet<string>,
+  options: BuildOptions
+): StyleGroup {
   const tileBase = new URL(`${appConfig.apiBaseUrl}/api/tiles/`, window.location.origin).href;
   const sources: Record<string, SourceSpecification> = {};
   const layers: LayerSpecification[] = [];
@@ -243,7 +263,8 @@ export const DevResourcesPage = defineComponent({
     const createMap = (options: MapLibreMapOptions) => {
       const created = new MapLibreMap(options);
       created.on('error', (event: ErrorEvent & { sourceId?: string }) => {
-        tileErrors.value = [{ sourceId: event.sourceId ?? '-', message: event.error.message }, ...tileErrors.value].slice(0, 20);
+        const latest = { sourceId: event.sourceId ?? '-', message: event.error.message };
+        tileErrors.value = [latest, ...tileErrors.value].slice(0, 20);
       });
       nativeMap = created;
       return created;
@@ -472,7 +493,8 @@ export const DevResourcesPage = defineComponent({
                   <ElCheckbox
                     key={resource.code}
                     modelValue={checked.value.has(resource.code)}
-                    onUpdate:modelValue={value => toggle(resource.code, Boolean(value))}>
+                    onUpdate:modelValue={value => toggle(resource.code, Boolean(value))}
+                  >
                     {resource.name}
                     <small>
                       {resource.code} · {resource.year}

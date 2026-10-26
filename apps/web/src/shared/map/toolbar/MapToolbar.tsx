@@ -78,7 +78,8 @@ export const MapToolbar = defineComponent({
           aria-label={label}
           aria-pressed={active || pressed}
           disabled={!tool && !run}
-          onClick={onClick}>
+          onClick={onClick}
+        >
           <SvgIcon name={icon} size={20} />
           {!props.compact && (
             <span class={styles.label}>
@@ -103,7 +104,8 @@ export const MapToolbar = defineComponent({
         ref={element}
         class={[styles.toolbar, props.compact && styles.compact, props.columns && styles.columns]}
         role="toolbar"
-        aria-orientation="vertical">
+        aria-orientation="vertical"
+      >
         {props.groups.map((group, index) => [
           index > 0 && <div key={`separator-${index}`} class={styles.separator} role="separator" />,
           ...group.map(renderButton)

@@ -10,7 +10,10 @@ function setupPreview() {
   vi.useFakeTimers();
   const completed = vi.fn<Parameters<typeof useUploadPreview>[0]>();
   const scope = effectScope();
-  const model = scope.run(() => useUploadPreview(completed))!;
+  const model = scope.run(() => useUploadPreview(completed));
+  if (!model) {
+    throw new Error('演示模型没有创建');
+  }
   model.open('policy-law-national');
   model.fields.year = '2025';
   model.fields.tag = '综合';

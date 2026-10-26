@@ -160,7 +160,7 @@ describe('FileManagementPage', () => {
     const wrapper = mountPage();
     await vi.waitFor(() => expect(mainPanel(wrapper).names).toHaveLength(2));
     const actions = wrapper.findAll('.el-table__body tr').map(row =>
-      row.findAll('td').at(-1)!.findAll('.cell > div > *').map(item => item.text())
+      row.findAll('td').at(-1)?.findAll('.cell > div > *').map(item => item.text())
     );
     expect(actions).toEqual([['预览', '下载', '删除'], ['仅下载', '下载', '删除']]);
   });

@@ -15,16 +15,16 @@
   pointer-events: none;
   border-radius: inherit;
   overflow: hidden;
-  mask-image: radial-gradient(ellipse at 50% 50%, #000 40%, rgba(0, 0, 0, .8) 75%, transparent 100%);
-  background: radial-gradient(ellipse at 50% 48%, rgba(207, 233, 254, .1), rgba(207, 233, 254, .6));
+  mask-image: radial-gradient(ellipse at 50% 50%, #000 40%, rgba(0, 0, 0, 0.8) 75%, transparent 100%);
+  background: radial-gradient(ellipse at 50% 48%, rgba(207, 233, 254, 0.1), rgba(207, 233, 254, 0.6));
 
   &::after {
     content: '';
     position: absolute;
     inset: 0;
-    opacity: .74;
+    opacity: 0.74;
     background: url('../assets/mapbg.webp') center / cover no-repeat;
-    mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, .7) 20%, #000 85%);
+    mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.7) 20%, #000 85%);
   }
 }
 
@@ -47,12 +47,12 @@
 }
 
 .frameLine {
-  stroke: rgba(255, 255, 255, .9);
+  stroke: rgba(255, 255, 255, 0.9);
   stroke-width: 1.2;
 }
 
 .frameSoft {
-  stroke: rgba(181, 224, 254, .32);
+  stroke: rgba(181, 224, 254, 0.32);
   stroke-width: 4;
 }
 
@@ -86,7 +86,7 @@
 .orbit .orbitOuter {
   stroke-width: 2.5;
   stroke-dasharray: 160 70 12 40;
-  opacity: .28;
+  opacity: 0.28;
   animation: orbit-turn 80s linear infinite;
 }
 
@@ -94,22 +94,24 @@
   stroke: #51b2fd;
   stroke-width: 3.5;
   stroke-dasharray: 80 160;
-  opacity: .4;
+  opacity: 0.4;
   animation: orbit-turn 55s linear infinite reverse;
 }
 
 .orbit .orbitTicks {
   stroke-width: 1.5;
   stroke-dasharray: 1 13;
-  opacity: .28;
+  opacity: 0.28;
 }
 
 .mist {
   position: absolute;
   inset: 16% -12% 2%;
   pointer-events: none;
-  opacity: .6;
-  background: radial-gradient(ellipse at 16% 65%, rgba(255, 255, 255, .8), transparent 34%), radial-gradient(ellipse at 84% 28%, rgba(255, 255, 255, .75), transparent 32%);
+  opacity: 0.6;
+  background:
+    radial-gradient(ellipse at 16% 65%, rgba(255, 255, 255, 0.8), transparent 34%),
+    radial-gradient(ellipse at 84% 28%, rgba(255, 255, 255, 0.75), transparent 32%);
   animation: mist-drift 24s ease-in-out infinite alternate;
 }
 
@@ -140,7 +142,7 @@
   gap: 14px;
   padding: 10px;
   border-radius: 10px;
-  background: rgba(181, 224, 247, .72);
+  background: rgba(181, 224, 247, 0.72);
 }
 
 .heading h2 {
@@ -189,7 +191,7 @@
   line {
     stroke: #fff;
     stroke-width: 1;
-    opacity: .8;
+    opacity: 0.8;
   }
 }
 
@@ -236,7 +238,7 @@
 
   > span {
     background: #c88e00;
-    box-shadow: 0 2px 8px rgba(14, 72, 148, .22);
+    box-shadow: 0 2px 8px rgba(14, 72, 148, 0.22);
   }
 }
 
@@ -248,7 +250,7 @@
   padding: calc(10px * var(--ui-scale, 1));
   border-radius: 9px;
   border: 1px solid #fff;
-  background: rgba(207, 233, 254, .78);
+  background: rgba(207, 233, 254, 0.78);
   font-size: max(11px, calc(14px * var(--ui-scale, 1)));
   line-height: 1.65;
 }
@@ -285,7 +287,7 @@
   padding: calc(11px * var(--ui-scale, 1)) calc(16px * var(--ui-scale, 1));
   border: 1px solid #fff;
   border-radius: 12px;
-  background: rgba(181, 224, 254, .85);
+  background: rgba(181, 224, 254, 0.85);
   pointer-events: auto;
 }
 
@@ -308,11 +310,11 @@
   height: 36px;
   flex-shrink: 0;
   border-radius: 9px;
-  transition: transform .2s, filter .2s;
+  transition: transform 0.2s, filter 0.2s;
 
   &:hover:not(:disabled) {
     transform: translateY(-1px);
-    filter: drop-shadow(0 2px 3px rgba(56, 146, 223, .25));
+    filter: drop-shadow(0 2px 3px rgba(56, 146, 223, 0.25));
   }
 
   &:active:not(:disabled) {
@@ -320,7 +322,7 @@
   }
 
   &:disabled {
-    opacity: .45;
+    opacity: 0.45;
     filter: grayscale(1);
   }
 }
@@ -361,7 +363,7 @@
   height: 100%;
   border-radius: inherit;
   background: #438efb;
-  transition: width .72s cubic-bezier(.215, .61, .355, 1);
+  transition: width 0.72s cubic-bezier(0.215, 0.61, 0.355, 1);
 }
 
 .trackThumb {
@@ -372,9 +374,9 @@
   border: 3px solid #fff;
   border-radius: 50%;
   background: #438efb;
-  box-shadow: 0 1px 4px rgba(14, 72, 148, .2);
+  box-shadow: 0 1px 4px rgba(14, 72, 148, 0.2);
   transform: translate(-50%, -50%);
-  transition: left .72s cubic-bezier(.215, .61, .355, 1);
+  transition: left 0.72s cubic-bezier(0.215, 0.61, 0.355, 1);
 }
 
 .track:focus-within .trackThumb {
@@ -400,7 +402,7 @@
   button {
     color: #75879a;
     white-space: nowrap;
-    transition: color .72s;
+    transition: color 0.72s;
   }
 
   button[aria-pressed='true'] {

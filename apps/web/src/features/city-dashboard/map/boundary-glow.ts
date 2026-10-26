@@ -2,14 +2,13 @@ import type { Shape } from 'three';
 import type { RegionMaterials } from './map-materials';
 import type { NumberUniform } from './types';
 import { CanvasTexture, DoubleSide, Mesh, PlaneGeometry, ShaderMaterial } from 'three';
-import { MAP_DEPTH } from './map-materials';
+import { MAP_DEPTH } from './config';
 
 // 将同市所有边界一次性描成圆角光带，避免密集拐点的宽三角带交叉形成毛刺
 export function createBoundaryGlow(shapes: readonly Shape[], materials: RegionMaterials, reveal: NumberUniform) {
-  const rings = shapes.flatMap(shape => [
-    shape,
-    ...shape.holes
-  ].map(ring => ring.getPoints())).filter(points => points.length >= 3);
+  const rings = shapes
+    .flatMap(shape => [shape, ...shape.holes].map(ring => ring.getPoints()))
+    .filter(points => points.length >= 3);
   if (!rings.length) {
     return null;
   }

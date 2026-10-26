@@ -49,7 +49,7 @@ function backend() {
     }),
     mock.post('/backend/resource-management/layer/status', async ({ request }) => {
       const query = new URL(request.url).searchParams;
-      const id = query.get('id')!;
+      const id = query.get('id') ?? '';
       const value = query.get('status') === 'true';
       let release!: () => void;
       const gate = new Promise<void>(resolve => {
@@ -80,11 +80,14 @@ async function host() {
   clients.push(client);
   let list!: ReturnType<typeof useResourceList>;
   let status!: ReturnType<typeof useResourceStatus>;
-  const wrapper = mount(defineComponent({ setup() {
-    list = useResourceList();
-    status = useResourceStatus(list.resources, () => !list.isError.value && !list.refreshing.value);
-    return () => null;
-  } }), { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } });
+  const wrapper = mount(
+    defineComponent(() => {
+      list = useResourceList();
+      status = useResourceStatus(list.resources, () => !list.isError.value && !list.refreshing.value);
+      return () => null;
+    }),
+    { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } }
+  );
   await vi.waitFor(() => expect(list.resources.value).toHaveLength(20));
   return { status, list, client, session, wrapper };
 }

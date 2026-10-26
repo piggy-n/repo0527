@@ -63,7 +63,8 @@ export const MeasureOverlay = defineComponent({
           key={key}
           class={[styles.label, measurementId && styles.result, styles[side]]}
           style={position(placedLabel.point)}
-          data-side={side}>
+          data-side={side}
+        >
           {caption && [<span class={styles.caption}>{caption}</span>, ' ']}
           {text}
           {measurementId && (
@@ -72,7 +73,8 @@ export const MeasureOverlay = defineComponent({
               class={styles.remove}
               aria-label="删除这条测量"
               title="删除这条测量"
-              onClick={() => props.measure.remove(measurementId)}>
+              onClick={() => props.measure.remove(measurementId)}
+            >
               <SvgIcon name="close" size={12} />
             </button>
           )}

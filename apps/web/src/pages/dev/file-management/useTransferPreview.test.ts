@@ -11,7 +11,11 @@ function setup<T>(create: () => T): T {
   vi.useFakeTimers();
   const scope = effectScope();
   scopes.push(scope);
-  return scope.run(create)!;
+  const model = scope.run(create);
+  if (!model) {
+    throw new Error('演示模型没有创建');
+  }
+  return model;
 }
 
 afterEach(() => {
@@ -35,7 +39,10 @@ describe('文件管理样例的演示模型', () => {
     void model.start(sample);
     void model.start({ ...sample, id: 'two' });
     expect(model.tasks.value).toHaveLength(2);
-    const first = model.tasks.value.find(task => task.file.id === 'one')!;
+    const first = model.tasks.value.find(task => task.file.id === 'one');
+    if (!first) {
+      throw new Error('没有文件 one 的任务');
+    }
     vi.advanceTimersByTime(1200);
     model.cancel(first);
     vi.advanceTimersByTime(6000);

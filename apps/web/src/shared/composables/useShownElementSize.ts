@@ -1,4 +1,9 @@
-import { type ElementSize, type MaybeComputedElementRef, type UseElementSizeOptions, useElementSize } from '@vueuse/core';
+import {
+  type ElementSize,
+  type MaybeComputedElementRef,
+  type UseElementSizeOptions,
+  useElementSize
+} from '@vueuse/core';
 import { type Ref, readonly, shallowRef, watch } from 'vue';
 import { usePageActive } from './usePageActive';
 

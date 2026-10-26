@@ -1,4 +1,4 @@
-import type { MapRegion, MapValues, SceneCallbacks, SweepUniforms } from './types';
+import type { LabelPosition, MapRegion, MapValues, SceneCallbacks, SweepUniforms } from './types';
 import type { RegionMaterials } from './map-materials';
 import {
   AmbientLight,
@@ -22,9 +22,9 @@ import {
 } from 'three';
 import { gsap } from 'gsap';
 import { polygonHull } from 'd3-polygon';
-import { createRegionMaterials, MAP_DEPTH, updateRegionMaterials } from './map-materials';
+import { createRegionMaterials, updateRegionMaterials } from './map-materials';
 import { createBoundaryGlow } from './boundary-glow';
-import { MAP_ENTRANCE } from './config';
+import { MAP_DEPTH, MAP_ENTRANCE } from './config';
 import { playVisibleTimeline } from '../animation/timeline-clock';
 
 // Three.js 生命周期只存在于独立地图容器中
@@ -120,11 +120,13 @@ export class JiangsuMapScene implements Disposable {
     this.mapGroup.updateMatrixWorld();
     // 用真实轮廓的凸包拟合镜头，避免空白包围盒四角挤小斜向省域
     const shapes = this.regions.flatMap(region => region.shapes);
-    const boundaryPoints = shapes.flatMap(shape => shape.getPoints().map(point => [point.x, point.y] as [number, number]));
-    const hull = polygonHull(boundaryPoints) || boundaryPoints;
-    this.cameraFitPoints = hull.flatMap(([x, y]) => [0, MAP_DEPTH].map(z => {
-      return new Vector3(x, y, z).applyMatrix4(this.mapGroup.matrixWorld);
-    }));
+    const boundaryPoints = shapes.flatMap(shape =>
+      shape.getPoints().map((point): [number, number] => [point.x, point.y])
+    );
+    const hull = polygonHull(boundaryPoints) ?? boundaryPoints;
+    this.cameraFitPoints = hull.flatMap(([x, y]) =>
+      [0, MAP_DEPTH].map(z => new Vector3(x, y, z).applyMatrix4(this.mapGroup.matrixWorld))
+    );
   }
 
   /** 监听登记与移除成对维护，统一交给资源栈释放 */
@@ -189,8 +191,11 @@ export class JiangsuMapScene implements Disposable {
     }
     const targets = [
       this.view,
-      ...[...this.objects.values()].flatMap(object =>
-        [object.materials.top.color, object.group.position, object.materials.hover])
+      ...[...this.objects.values()].flatMap(object => [
+        object.materials.top.color,
+        object.group.position,
+        object.materials.hover
+      ])
     ];
     // 时间线统一暂停其子动画；重复暂停子项会改变恢复后的相对起点
     gsap.getTweensOf(targets).forEach(tween => {
@@ -348,12 +353,12 @@ export class JiangsuMapScene implements Disposable {
       this.timeline = gsap.timeline({
         paused: true,
         onUpdate: () => {
-          this.objects.forEach(object => object.lines.forEach(line => {
-            line.geometry.setDrawRange(
-              0,
-              Math.ceil(line.geometry.attributes.position.count * this.outlineProgress.value)
-            );
-          }));
+          for (const object of this.objects.values()) {
+            for (const line of object.lines) {
+              const count = Math.ceil(line.geometry.attributes.position.count * this.outlineProgress.value);
+              line.geometry.setDrawRange(0, count);
+            }
+          }
           this.invalidate();
         },
         onComplete: () => {
@@ -468,8 +473,10 @@ export class JiangsuMapScene implements Disposable {
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     );
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hit = this.raycaster.intersectObjects(Array.from(this.objects.values()).map(object => object.mesh), false)[0];
-    const code: string | null = typeof hit?.object.userData.cityCode === 'string' ? hit.object.userData.cityCode : null;
+    const meshes = [...this.objects.values()].map(object => object.mesh);
+    const [hit] = this.raycaster.intersectObjects(meshes, false);
+    const cityCode: unknown = hit?.object.userData.cityCode;
+    const code = typeof cityCode === 'string' ? cityCode : null;
     if (hover) {
       this.hoverRegion(code);
     }
@@ -548,7 +555,7 @@ export class JiangsuMapScene implements Disposable {
     }
     const previousCode = this.hoverCode;
     this.hoverCode = code;
-    this.callbacks.onHover?.(code);
+    this.callbacks.onHover(code);
     this.container.style.cursor = code ? 'pointer' : 'grab';
     [previousCode, code].filter((value): value is string => value !== null).forEach(cityCode => {
       const object = this.objects.get(cityCode);
@@ -602,20 +609,26 @@ export class JiangsuMapScene implements Disposable {
       return;
     }
     this.labelKey = key;
-    const labels = this.regions.map(region => {
+    // 每个区划在 buildRegions 里都建了对象
+    const labels = this.regions.flatMap((region): LabelPosition[] => {
       const object = this.objects.get(region.code);
+      if (!object) {
+        return [];
+      }
       // 避让只使用无悬浮位移的锚点，Hover 偏移最后单独叠加
       const anchor = new Vector3(region.anchorPoint.x, region.anchorPoint.y, MAP_DEPTH + 0.8);
       const base = anchor.clone().applyMatrix4(this.mapGroup.matrixWorld).project(this.camera);
-      const point = anchor.applyMatrix4(object!.group.matrixWorld).project(this.camera);
-      return {
-        code: region.code,
-        name: region.name,
-        x: (base.x + 1) / 2 * this.width,
-        y: (1 - base.y) / 2 * this.height,
-        offsetX: (point.x - base.x) / 2 * this.width,
-        offsetY: (base.y - point.y) / 2 * this.height
-      };
+      const point = anchor.applyMatrix4(object.group.matrixWorld).project(this.camera);
+      return [
+        {
+          code: region.code,
+          name: region.name,
+          x: (base.x + 1) / 2 * this.width,
+          y: (1 - base.y) / 2 * this.height,
+          offsetX: (point.x - base.x) / 2 * this.width,
+          offsetY: (base.y - point.y) / 2 * this.height
+        }
+      ];
     });
     this.callbacks.onLabels(labels);
   }

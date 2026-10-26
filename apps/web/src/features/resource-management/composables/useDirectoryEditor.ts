@@ -4,8 +4,8 @@ import { ApiError } from '@/shared/http/errors';
 import type { ResourceDirectory, ResourceDirectoryChange } from '../api';
 import { useResourceDirectoryMutation } from '../queries';
 
-// 和旧页面的输入框一致
-const NAME_MAX_LENGTH = 20;
+/** 目录名称的最大长度，和旧页面的输入框一致 */
+export const DIRECTORY_NAME_MAX_LENGTH = 20;
 
 /** 打开弹窗时记下的节点快照：确认期间目录刷新了，也不能悄悄换成另一个节点 */
 interface DirectoryTarget {
@@ -81,7 +81,7 @@ export function useDirectoryEditor(tree: MaybeRefOrGetter<ResourceDirectory[]>) 
     if (!trimmed) {
       return '请输入目录名称';
     }
-    return trimmed.length > NAME_MAX_LENGTH ? `目录名称不能超过 ${NAME_MAX_LENGTH} 个字符` : '';
+    return trimmed.length > DIRECTORY_NAME_MAX_LENGTH ? `目录名称不能超过 ${DIRECTORY_NAME_MAX_LENGTH} 个字符` : '';
   }
 
   /** 返回是否完成写入；页面销毁或换了会话后不再返回成功，也不显示旧会话的错误 */

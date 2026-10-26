@@ -65,14 +65,16 @@ export const FileDownloadPanel = defineComponent({
 
     function renderTask(task: FileDownloadTask) {
       const percent = task.progress?.percent;
+      const statusClass = [
+        styles.taskStatus,
+        task.phase === 'error' && styles.error,
+        task.phase === 'done' && styles.success
+      ];
       return (
         <div key={task.file.id} class={styles.task}>
           <div class={styles.filename}>{task.file.name}</div>
           <div class={styles.taskDetails}>
-            <div
-              class={[styles.taskStatus, task.phase === 'error' && styles.error, task.phase === 'done' && styles.success]}
-              role="status"
-            >
+            <div class={statusClass} role="status">
               {statusText(task)}
             </div>
             <ElButton class="button-inline" link type="primary" size="small" onClick={() => toggleTask(task)}>

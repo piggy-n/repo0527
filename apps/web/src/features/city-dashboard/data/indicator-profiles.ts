@@ -165,6 +165,9 @@ const CITY_DRIVERS = {
   inland: [0.1, 0.2, 0.95, 0.05, -0.25, -0.75, -1, 0.65, -0.65, 0.45, -0.1, -0.2, 0.85]
 };
 
+// 演示不同轨道发展阶段：部分城市尚未配置，已有城市按独立批次扩展；顺序同 CITY_CODES
+const RAIL_MATURITY = [1.65, 0.9, 0.55, 0.68, 1.5, 0.42, 0, 0, 0, 0, 0, 0, 0];
+
 // 混合散列打散相邻城市与指标编码的相关性，固定年份下刷新仍得到同一组数据
 function randomFor(key: string): number {
   let hash = 2166136261;
@@ -178,9 +181,10 @@ function randomFor(key: string): number {
 
 // 各城市拥有独立的项目节奏、生源拐点和短期扰动，不套用同一正弦曲线
 export function createProfileValue(cityCode: string, indicator: Indicator, year: number): number {
-  const settings = INDICATOR_PROFILES[indicator.id] || profile(indicator.mockBase, 'size', 0.3, 0.01, 0.04);
+  const settings = INDICATOR_PROFILES[indicator.id] ?? profile(indicator.mockBase, 'size', 0.3, 0.01, 0.04);
   const cityIndex = CITY_CODES.indexOf(cityCode);
-  const driver = CITY_DRIVERS[settings.driver]?.[cityIndex] ?? 0;
+  // 不在名单里的城市（cityIndex 为 -1）没有特征
+  const driver = CITY_DRIVERS[settings.driver][cityIndex] ?? 0;
   const key = `${indicator.id}:${cityCode}`;
   const random = (suffix: string) => randomFor(`${key}:${suffix}`);
   const spatial = driver + (random('level') - 0.5) * 1.3;
@@ -190,25 +194,22 @@ export function createProfileValue(cityCode: string, indicator: Indicator, year:
   const noise = (random(`year:${year}`) - 0.5) * 1.2 + (random(`year:${year - 1}`) - 0.5) * 0.6;
   const disturbance = noise * settings.noise;
   const baseline = settings.base * Math.exp(spatial * settings.spread);
-  let value;
+  let value: number;
   if (settings.pattern === 'coverage') {
     const level = Math.max(0.15, Math.min(99.7, settings.base + spatial * settings.spread * 100)) / 100;
     value = 100 / (1 + Math.exp(-(Math.log(level / (1 - level)) + offset * rate + disturbance)));
   } else if (settings.pattern === 'rail') {
-    // 演示不同轨道发展阶段：部分城市尚未配置，已有城市按独立批次扩展
-    const maturity = [1.65, 0.9, 0.55, 0.68, 1.5, 0.42, 0, 0, 0, 0, 0, 0, 0][cityIndex] || 0;
+    const maturity = RAIL_MATURITY[cityIndex] ?? 0;
     const start = 2012 + Math.floor(random('opening') * 10);
-    const stages = Math.max(
-      0,
-      Math.floor((year - start) / 2) + 1
-    );
+    const stages = Math.max(0, Math.floor((year - start) / 2) + 1);
     value = maturity * settings.base * (1 - Math.exp(-stages * 0.28)) * (1 + disturbance);
   } else if (settings.pattern === 'risk') {
     // 积水点允许零值、局部集中与偶发回升，不强求各城市均匀分布
     const exposure = random('exposure');
     const event = random(`rain:${year}`);
     const surge = event > 0.85 ? 2.2 : 0.65 + event;
-    value = exposure < 0.2 && event < 0.7 ? 0 : baseline * Math.exp(offset * rate) * (0.25 + exposure ** 2 * 1.8) * surge;
+    const dry = exposure < 0.2 && event < 0.7;
+    value = dry ? 0 : baseline * Math.exp(offset * rate) * (0.25 + exposure ** 2 * 1.8) * surge;
   } else if (settings.pattern === 'project' || settings.pattern === 'distance') {
     const period = 2 + Math.floor(random('period') * 3);
     const phase = Math.floor(random('phase') * period);
@@ -216,7 +217,8 @@ export function createProfileValue(cityCode: string, indicator: Indicator, year:
     value = baseline * Math.exp(steps * period * rate + disturbance);
   } else if (settings.pattern === 'cohort') {
     const turningYear = 2019 + Math.floor(random('cohort') * 4);
-    const trajectory = (at: number) => (Math.min(at, turningYear) - 2016) * 0.015 + Math.max(0, at - turningYear) * rate;
+    const trajectory = (at: number) =>
+      (Math.min(at, turningYear) - 2016) * 0.015 + Math.max(0, at - turningYear) * rate;
     value = baseline * Math.exp(trajectory(year) - trajectory(2025) + disturbance);
   } else if (settings.pattern === 'flow') {
     const cycle = Math.floor((year + Math.floor(random('phase') * 3)) / 3);

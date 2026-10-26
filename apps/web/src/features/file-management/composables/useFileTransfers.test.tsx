@@ -11,6 +11,7 @@ import { createTestJwtExpiringAt } from '@/shared/auth/testing';
 import * as transfer from '@/shared/file-transfer';
 import { configureHttp } from '@/shared/http/configure';
 import { ApiError } from '@/shared/http/errors';
+import { required } from '@/shared/testing/required';
 import * as api from '../api';
 import { FilePreviewDialog } from '../components/FilePreviewDialog';
 import { FileDownloadPanel } from '../components/FileDownloadPanel';
@@ -50,14 +51,22 @@ function setup(renderDialog = false) {
   });
   let downloads!: ReturnType<typeof useFileDownloads>;
   let preview!: ReturnType<typeof useFilePreview>;
-  const wrapper = mount(defineComponent({ setup() {
-    downloads = useFileDownloads();
-    preview = useFilePreview();
-    return () => renderDialog ? <>
-      <FileDownloadPanel model={downloads} />
-      <FilePreviewDialog model={preview} downloads={downloads} />
-    </> : null;
-  } }), { global: { plugins: [pinia, [VueQueryPlugin, { queryClient }]] } });
+  const wrapper = mount(
+    defineComponent(() => {
+      downloads = useFileDownloads();
+      preview = useFilePreview();
+      if (!renderDialog) {
+        return () => null;
+      }
+      return () => (
+        <>
+          <FileDownloadPanel model={downloads} />
+          <FilePreviewDialog model={preview} downloads={downloads} />
+        </>
+      );
+    }),
+    { global: { plugins: [pinia, [VueQueryPlugin, { queryClient }]] } }
+  );
   cleanups.push(() => {
     if (!wrapper.vm.$.isUnmounted) {
       wrapper.unmount();
@@ -173,7 +182,7 @@ describe('文件下载', () => {
     const second = env.downloads.start({ ...file, id: 'two' });
     const preview = env.preview.open(file);
     expect(env.downloads.tasks.value[0]?.progress).toEqual({ loaded: 20, total: null, percent: null });
-    env.downloads.cancel(env.downloads.tasks.value.find(task => task.file.id === 'one')!);
+    env.downloads.cancel(required(env.downloads.tasks.value.find(task => task.file.id === 'one'), '文件 one 的下载任务'));
     expect(request.mock.calls.map(call => call[1].aborted)).toEqual([true, false, false]);
     env.preview.close();
     expect(request.mock.calls.map(call => call[1].aborted)).toEqual([true, false, true]);
@@ -192,21 +201,22 @@ describe('预览与会话边界', () => {
     vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['content']), fileName: 'test.docx' });
     await env.preview.open({ ...file, name: `测试文件.${type}`, type });
     expect(env.preview.content.value).not.toBeNull();
-    env.preview.rendered(env.preview.content.value!);
+    env.preview.rendered(required(env.preview.content.value, '预览内容'));
     await nextTick();
-    const dialog = document.querySelector('.el-dialog')!;
+    const dialog = required(document.querySelector('.el-dialog'), '预览弹窗');
     const labels = () => Array.from(dialog.querySelectorAll('button')).map(button => button.textContent?.trim());
     expect(labels()).not.toContain('适合宽度');
     expect(dialog.textContent).not.toContain('上下滚动阅读');
     expect(dialog.textContent).not.toContain('无法正常显示时可下载后查看');
-    const name = Array.from(dialog.querySelectorAll('span')).find(span => span.textContent === `测试文件.${type}`)!;
+    const spans = Array.from(dialog.querySelectorAll('span'));
+    const name = required(spans.find(span => span.textContent === `测试文件.${type}`), '文件名');
     expect(name.parentElement?.querySelector('.el-tag')?.textContent).toBe(type.toUpperCase());
-    dialog.querySelector<HTMLButtonElement>('[aria-label="缩小"]')!.click();
+    required(dialog.querySelector<HTMLButtonElement>('[aria-label="缩小"]'), '缩小按钮').click();
     await nextTick();
     expect(env.preview.zoom.value).toBe(75);
     env.preview.close();
     await env.preview.open({ ...file, id: 'two', type });
-    env.preview.rendered(env.preview.content.value!);
+    env.preview.rendered(required(env.preview.content.value, '预览内容'));
     await nextTick();
     expect(labels()).not.toContain('适合宽度');
     expect(env.preview.zoom.value).toBe(100);
@@ -217,12 +227,12 @@ describe('预览与会话边界', () => {
     vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['image']), fileName: 'image.png' });
     await env.preview.open({ ...file, type: 'png' });
     await nextTick();
-    const oldImage = document.querySelector('img')!;
+    const oldImage = required(document.querySelector('img'), '旧图片');
     expect(oldImage).not.toBeNull();
     Object.defineProperty(oldImage, 'naturalWidth', { value: 900 });
     await env.preview.open({ ...file, id: 'two', type: 'png' });
     await nextTick();
-    const nextImage = document.querySelector('img')!;
+    const nextImage = required(document.querySelector('img'), '新图片');
     expect(nextImage).not.toBe(oldImage);
     expect(nextImage.style.width).toBe('0px');
     oldImage.dispatchEvent(new Event('load'));
@@ -250,13 +260,13 @@ describe('预览与会话边界', () => {
     const env = setup();
     vi.spyOn(api, 'fetchFileContent').mockResolvedValue({ blob: new Blob(['pdf']), fileName: file.name });
     await env.preview.open(file);
-    const first = env.preview.content.value!;
+    const first = required(env.preview.content.value, '第一次的预览内容');
     expect(env.preview.phase.value).toBe('rendering');
     env.preview.rendered(first);
     expect(env.preview.phase.value).toBe('ready');
     await env.preview.open(file);
     expect(env.revokeUrl).toHaveBeenCalledTimes(1);
-    const second = env.preview.content.value!;
+    const second = required(env.preview.content.value, '第二次的预览内容');
     env.preview.renderFailed(first);
     expect(env.preview.content.value).toBe(second);
     env.preview.renderFailed(second);

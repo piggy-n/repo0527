@@ -1,15 +1,13 @@
 import type { Resource } from './catalog';
 import { classItems, legacyItem, OTHER_ITEM } from './classification';
-import {
-  LANDUSE_GROUPS,
-  LANDUSE_LEGACY_NAME_COLORS,
-  LANDUSE_MEANINGS,
-  LANDUSE_STATUS_GROUPS,
-  type LanduseClass,
-  type LanduseGroup
-} from './landuse';
+import { LANDUSE_GROUPS, LANDUSE_LEGACY_NAME_COLORS, LANDUSE_MEANINGS, type LanduseClass } from './landuse';
 import type { ResourceLayersState } from './resource-layers';
-import { noSymbolOverride, type ResourceSymbolOverride, type SymbolMode, type SymbolOverrideOf } from './resource-symbols';
+import {
+  noSymbolOverride,
+  type ResourceSymbolOverride,
+  type SymbolMode,
+  type SymbolOverrideOf
+} from './resource-symbols';
 import { classSymbol, resourceStyle, symbolModeOf, uniformSymbol } from './style-registry';
 import type { FillPattern } from './fill-patterns';
 import { isFillPattern, LINE_DASHES, type LineDash, type ResourceSymbol, sizePixels } from './symbols';
@@ -174,17 +172,6 @@ export function legendEntries(
   });
 }
 
-/** 条目的集合：只看有哪些资源，不看顺序 */
-export function legendEntrySet(entries: readonly LegendEntry[]): string {
-  return entries
-    .map(entry => entry.code)
-    .toSorted()
-    .join('|');
-}
-
-/** 地类图例的三种展示：表 A.1 现状分类、表 A.2 工作分类、全部平铺 */
-export type LanduseLegendView = 'status' | 'work' | 'all';
-
 export interface LanduseLegendItem {
   /** 分类样式里取值的键，预览按它取 */
   readonly key: string;
@@ -195,12 +182,15 @@ export interface LanduseLegendItem {
   readonly adjustable: boolean;
 }
 
-export interface LanduseLegendSection {
-  readonly key: string;
-  /** 一级类的编码；平铺、历史地类、未匹配时为 null */
-  readonly code: string | null;
+// 搜索时分组名命中就留下整组：搜"历史地类"列出全部历史地类
+interface LanduseLegendSection {
   readonly name: string;
   readonly items: readonly LanduseLegendItem[];
+}
+
+/** 地类的编码加名称，如"0101 水田"；历史地类和未匹配的地类没有编码，只写名称 */
+export function landuseItemLabel({ code, name }: LanduseLegendItem): string {
+  return code === null ? name : `${code} ${name}`;
 }
 
 function itemOf({ code, name, adjustable }: LanduseClass): LanduseLegendItem {
@@ -209,8 +199,6 @@ function itemOf({ code, name, adjustable }: LanduseClass): LanduseLegendItem {
 
 // 表 A.2 之外：历史地类按名称配色（编码没命中时，或城镇村按名称），都没命中时是兜底色（ADR 0041 第 2 节）
 const LEGACY_SECTION: LanduseLegendSection = {
-  key: 'legacy',
-  code: null,
   name: '历史地类',
   items: Object.keys(LANDUSE_LEGACY_NAME_COLORS).map(name => ({
     key: legacyItem(name),
@@ -222,8 +210,6 @@ const LEGACY_SECTION: LanduseLegendSection = {
 };
 
 const UNMATCHED_SECTION: LanduseLegendSection = {
-  key: 'unmatched',
-  code: null,
   name: '未匹配的地类',
   items: [
     {
@@ -236,27 +222,24 @@ const UNMATCHED_SECTION: LanduseLegendSection = {
   ]
 };
 
-function sectionsOf(view: LanduseLegendView): LanduseLegendSection[] {
-  if (view === 'all') {
-    const items = LANDUSE_GROUPS.flatMap(group => group.classes.map(itemOf));
-    return [{ key: 'all', code: null, name: '全部地类', items }];
-  }
-  const groups: readonly LanduseGroup[] = view === 'status' ? LANDUSE_STATUS_GROUPS : LANDUSE_GROUPS;
-  return groups.map(({ code, name, classes }) => ({ key: code, code, name, items: classes.map(itemOf) }));
-}
+// 表 A.2 的 69 个地类平铺（ADR 0074 不再按现状分类、工作分类分组），后面是历史地类和未匹配的地类
+const LANDUSE_SECTIONS: readonly LanduseLegendSection[] = [
+  { name: '全部地类', items: LANDUSE_GROUPS.flatMap(group => group.classes.map(itemOf)) },
+  LEGACY_SECTION,
+  UNMATCHED_SECTION
+];
 
 /**
- * 地类图例（ADR 0043 第 2 节）：按所选的展示分组，最后是历史地类和未匹配的地类。
- * 有关键字时（不区分大小写）留下编码或名称命中的地类；分组的编码或名称命中时留下整组；没有地类的分组不显示
+ * 地类图例的条目（ADR 0043 第 2 节、ADR 0074）：表 A.2 的地类、历史地类、未匹配的地类依次平铺
+ * 有关键字时（不区分大小写，去掉首尾空格）留下编码或名称命中的地类；分组名命中时留下整组
  */
-export function landuseLegend(view: LanduseLegendView, keyword = ''): LanduseLegendSection[] {
+export function landuseLegendItems(keyword = ''): LanduseLegendItem[] {
   const needle = keyword.trim().toLowerCase();
   const matches = (text: string | null) => text !== null && text.toLowerCase().includes(needle);
-  return [...sectionsOf(view), LEGACY_SECTION, UNMATCHED_SECTION].flatMap(section => {
-    if (needle === '' || matches(section.code) || matches(section.name)) {
-      return [section];
+  return LANDUSE_SECTIONS.flatMap(section => {
+    if (needle === '' || matches(section.name)) {
+      return section.items;
     }
-    const items = section.items.filter(item => matches(item.code) || matches(item.name));
-    return items.length > 0 ? [{ ...section, items }] : [];
+    return section.items.filter(item => matches(item.code) || matches(item.name));
   });
 }

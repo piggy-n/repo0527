@@ -29,6 +29,8 @@ function createValue(cityCode: string, indicator: Indicator, year: number): numb
     : value;
 }
 
+const keyOf = (year: number, cityCode: string, indicatorCode: string) => `${year}:${cityCode}:${indicatorCode}`;
+
 /** 进入驾驶舱时创建固定模拟记录，年份由调用方提供以便复核跨年稳定性 */
 export function createMockData(currentYear: number): DashboardData & { readonly records: readonly DashboardRecord[] } {
   if (!Number.isInteger(currentYear) || currentYear < 1) {
@@ -36,22 +38,28 @@ export function createMockData(currentYear: number): DashboardData & { readonly 
   }
   const latestYear = Math.max(currentYear, ...DASHBOARD_YEARS);
   const years = Array.from({ length: 10 }, (_, index) => latestYear - index);
-  const records: DashboardRecord[] = years.flatMap(year => INDICATORS.flatMap(indicator => CITIES.map(city => ({
-    year,
-    cityCode: city.code,
-    indicatorCode: indicator.id,
-    value: createValue(city.code, indicator, year),
-    unit: indicator.unit,
-    dataSource: 'mock' as const,
-    status: 'available' as const
-  }))));
-  const index = new Map(records.map(record => [
-    `${record.year}:${record.cityCode}:${record.indicatorCode}`,
-    record.value
-  ]));
+  const records: DashboardRecord[] = [];
+  for (const year of years) {
+    for (const indicator of INDICATORS) {
+      for (const city of CITIES) {
+        records.push({
+          year,
+          cityCode: city.code,
+          indicatorCode: indicator.id,
+          value: createValue(city.code, indicator, year),
+          unit: indicator.unit,
+          dataSource: 'mock',
+          status: 'available'
+        });
+      }
+    }
+  }
+  const index = new Map(
+    records.map(record => [keyOf(record.year, record.cityCode, record.indicatorCode), record.value])
+  );
   return {
     years,
     records,
-    value: (year, cityCode, indicatorCode) => index.get(`${year}:${cityCode}:${indicatorCode}`) ?? null
+    value: (year, cityCode, indicatorCode) => index.get(keyOf(year, cityCode, indicatorCode)) ?? null
   };
 }

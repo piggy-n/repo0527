@@ -59,7 +59,9 @@ export const CompactNav = defineComponent({
           ),
           dropdown: () => (
             <ElDropdownMenu>
-              {props.items.flatMap((item, index) => (item.kind === 'link' ? [link(item, item.icon)] : section(item, index)))}
+              {props.items.flatMap((item, index) =>
+                item.kind === 'link' ? [link(item, item.icon)] : section(item, index)
+              )}
             </ElDropdownMenu>
           )
         }}

@@ -5,7 +5,7 @@ import { computed, defineComponent, onUnmounted, type PropType, ref, type VNode,
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
-import { type LegendEntry, landuseLegend, legendEntries } from '../legend';
+import { type LegendEntry, landuseItemLabel, landuseLegendItems, legendEntries } from '../legend';
 import type { SymbolMode, SymbolTarget } from '../resource-symbols';
 import { INITIAL_LANDUSE_BROWSE, type LanduseBrowse, LanduseLegend } from './LanduseLegend';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
@@ -19,7 +19,7 @@ const MODES: readonly { readonly value: SymbolMode; readonly label: string }[] =
 ];
 
 // 平铺目录供图层设置选择地类，不改变地图按编码或名称匹配符号的规则
-const LANDUSE_ITEMS = landuseLegend('all').flatMap(section => section.items);
+const LANDUSE_ITEMS = landuseLegendItems();
 
 // 图层设置只保留可搜索的条目选择，分类分组不再占用浏览区
 const choicesOf = (entry: LegendEntry) => {
@@ -27,7 +27,7 @@ const choicesOf = (entry: LegendEntry) => {
     return LANDUSE_ITEMS.map(item => ({
       key: item.key,
       name: item.name,
-      label: [item.code, item.name].filter(Boolean).join(' ')
+      label: landuseItemLabel(item)
     }));
   }
   if (entry.kind === 'values') {
@@ -35,9 +35,6 @@ const choicesOf = (entry: LegendEntry) => {
   }
   return [];
 };
-
-/** 编辑目标：没有 item 时配置整个图层，有 item 时直接编辑单个图例 */
-type LegendEditing = SymbolTarget;
 
 // 按属性配色的条目在名称前显示前三个取值的颜色（设计稿 5D.5）
 const renderColors = (colors: readonly string[]) => (
@@ -68,8 +65,8 @@ export const ResourceLegend = defineComponent({
   setup(props, { emit }) {
     // 条目的展开是图例自己的界面状态，不持久化
     const expanded = ref<ReadonlySet<string>>(new Set());
-    // 资源级配置与图例浏览分开；同时只配置一个资源
-    const editing = ref<LegendEditing | null>(null);
+    // 资源级配置与图例浏览分开，同时只配置一个资源：没有 item 时配置整个图层，有 item 时直接编辑单个图例
+    const editing = ref<SymbolTarget | null>(null);
     // 图例根节点用于查找真实滚动容器
     const element = ref<HTMLElement>();
     // 每个图层设置中选中的分类项，与直接点击条目的编辑目标分开保存
@@ -94,7 +91,7 @@ export const ResourceLegend = defineComponent({
       }
       return parent;
     };
-    const openEditor = (target: LegendEditing) => {
+    const openEditor = (target: SymbolTarget) => {
       browseScroll = scrollContainer()?.scrollTop ?? 0;
       editing.value = target;
     };
@@ -118,7 +115,11 @@ export const ResourceLegend = defineComponent({
       }
     });
     // 外壳只在浏览视图提供全局恢复入口，关闭图例时清除外壳的编辑状态
-    watch(() => !!editingEntry.value, value => emit('editingChange', value), { immediate: true });
+    watch(
+      () => editingEntry.value !== undefined,
+      value => emit('editingChange', value),
+      { immediate: true }
+    );
     onUnmounted(() => emit('editingChange', false));
 
     const toggle = (code: string) => {
@@ -174,7 +175,8 @@ export const ResourceLegend = defineComponent({
         <div
           class={styles.configuration}
           data-legend-settings={entry.code}
-          style={{ '--legend-opacity': props.layers.state.value.displays.get(entry.code)?.opacity }}>
+          style={{ '--legend-opacity': props.layers.state.value.displays.get(entry.code)?.opacity }}
+        >
           <div class={styles.settingsHeading}>
             <ElButton class={styles.back} link size="small" icon={ArrowLeft} onClick={returnToLegend}>
               返回图例
@@ -188,7 +190,8 @@ export const ResourceLegend = defineComponent({
                 size="small"
                 aria-label="图层配色方式"
                 modelValue={entry.mode}
-                onUpdate:modelValue={value => selectMode(entry.code, value)}>
+                onUpdate:modelValue={value => selectMode(entry.code, value)}
+              >
                 {MODES.map(mode => (
                   <ElRadioButton key={mode.value} value={mode.value}>
                     {mode.label}
@@ -228,7 +231,8 @@ export const ResourceLegend = defineComponent({
               size="small"
               disabled={!props.symbols.isCustomized(entry.code)}
               aria-label={`恢复${entry.name}的默认符号`}
-              onClick={() => props.symbols.resetResource(entry.code)}>
+              onClick={() => props.symbols.resetResource(entry.code)}
+            >
               恢复本图层默认
             </ElButton>
           )}
@@ -260,14 +264,16 @@ export const ResourceLegend = defineComponent({
           key={entry.code}
           class={styles.entry}
           style={{ '--legend-opacity': props.layers.state.value.displays.get(entry.code)?.opacity }}
-          data-legend={entry.code}>
+          data-legend={entry.code}
+        >
           <div class={styles.row}>
             {uniform ? (
               <button
                 type="button"
                 class={[styles.summary, styles.uniformSummary]}
                 aria-label={`编辑${entry.name}图例`}
-                onClick={() => openEditor({ code: entry.code })}>
+                onClick={() => openEditor({ code: entry.code })}
+              >
                 {summary}
               </button>
             ) : (
@@ -276,7 +282,8 @@ export const ResourceLegend = defineComponent({
                 class={styles.summary}
                 aria-label={`${isOpen ? '收起' : '展开'}${entry.name}`}
                 aria-expanded={isOpen}
-                onClick={() => toggle(entry.code)}>
+                onClick={() => toggle(entry.code)}
+              >
                 {summary}
               </button>
             )}
@@ -286,7 +293,8 @@ export const ResourceLegend = defineComponent({
                 class={styles.configure}
                 aria-label={`编辑${entry.name}样式`}
                 title="样式设置"
-                onClick={() => openEditor({ code: entry.code })}>
+                onClick={() => openEditor({ code: entry.code })}
+              >
                 <SvgIcon name="symbol-settings" size={16} />
               </button>
             )}
@@ -298,14 +306,20 @@ export const ResourceLegend = defineComponent({
       );
     };
 
+    const renderBody = () => {
+      if (editingEntry.value) {
+        return renderConfiguration(editingEntry.value);
+      }
+      if (entries.value.length === 0) {
+        return <div class={styles.empty}>勾选资源后查看图例</div>;
+      }
+      return <ul class={styles.entries}>{entries.value.map(renderEntry)}</ul>;
+    };
+
     return () =>
       props.active ? (
         <div ref={element} class={styles.legend} data-resource-legend>
-          {editingEntry.value ? renderConfiguration(editingEntry.value) : entries.value.length > 0 ? (
-            <ul class={styles.entries}>{entries.value.map(renderEntry)}</ul>
-          ) : (
-            <div class={styles.empty}>勾选资源后查看图例</div>
-          )}
+          {renderBody()}
         </div>
       ) : null;
   }

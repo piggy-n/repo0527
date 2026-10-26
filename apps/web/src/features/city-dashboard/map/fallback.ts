@@ -11,14 +11,27 @@ import type { MapValues } from './types';
 
 use([MapChart, GeoComponent, LabelLayout, CanvasRenderer]);
 
+// ECharts 的事件按城市名称对应回编码，其他形状的事件不算
 function cityCode(event: unknown): string | null {
-  const name = event && typeof event === 'object' && 'name' in event ? event.name : null;
-  return CITIES.find(city => city.name === name)?.code ?? null;
+  if (typeof event !== 'object' || event === null || !('name' in event)) {
+    return null;
+  }
+  return CITIES.find(city => city.name === event.name)?.code ?? null;
+}
+
+// 简化地图上城市名称下面的数值；没有数值时只写名称
+function cityLabel(name: string, value: number | null | undefined, indicator: Indicator): string {
+  if (value === null || value === undefined) {
+    return name;
+  }
+  return `${name}\n${formatValue(value, indicator, indicator.unit.length <= 3)}`;
 }
 
 /** 二维降级沿用同一边界、值和色阶，不接入第二套地图服务 */
 export function createFallback(
-  container: HTMLElement, regions: DashboardRegions, hover: (code: string | null) => void,
+  container: HTMLElement,
+  regions: DashboardRegions,
+  hover: (code: string | null) => void,
   choose: (code: string) => void
 ) {
   registerMap('jiangsu-city-dashboard', regions.featureCollection);
@@ -50,12 +63,7 @@ export function createFallback(
           textBorderWidth: 3,
           formatter: item => {
             const city = CITIES.find(current => current.name === item.name);
-            const value = city ? values[city.code] : null;
-            return `${item.name}${value !== null && value !== undefined ? `\n${formatValue(
-              value,
-              indicator,
-              indicator.unit.length <= 3
-            )}` : ''}`;
+            return cityLabel(item.name, city ? values[city.code] : null, indicator);
           }
         },
         emphasis: { label: { color: '#0E4894' }, itemStyle: { borderColor: '#FFF', borderWidth: 2 } },

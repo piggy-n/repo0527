@@ -16,7 +16,8 @@ export const NavigationFailureNotice = defineComponent({
         width="min(420px, 90vw)"
         showClose={false}
         closeOnClickModal={false}
-        closeOnPressEscape={false}>
+        closeOnPressEscape={false}
+      >
         {{
           default: () => '页面暂时无法打开，请检查网络后重试。如果仍然失败，请刷新页面。',
           footer: () => (

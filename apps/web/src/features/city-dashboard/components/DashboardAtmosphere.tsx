@@ -19,39 +19,63 @@ const columns = Array.from({ length: 39 }, (_, index) => {
   };
 });
 
+// 入场时的蜂窝：按列错开淡出
+function renderHoneycomb() {
+  return (
+    <div class={styles.honeycomb} data-scene="honeycomb">
+      <svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+        {columns.map(column => (
+          <g key={column.id} style={{ animationDelay: `${Math.abs(column.id) * 0.055}s` }}>
+            {column.cells.map((points, index) => (
+              <polygon key={index} points={points} />
+            ))}
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+// 漂浮的光点：位置、大小和节奏按序号错开，固定不随机
+function renderParticle(index: number) {
+  return (
+    <i
+      key={index}
+      style={{
+        left: `${8 + index * 37 % 84}%`,
+        top: `${22 + index * 23 % 68}%`,
+        '--particle-size': `${index % 3 + 2}px`,
+        animationDuration: `${12 + index % 5 * 2}s`,
+        animationDelay: `${-index * 1.3}s`
+      }}
+    />
+  );
+}
+
+const PARTICLE_COUNT = 18;
+
 /** 环境层不接管鼠标与地图渲染，动画受页面可见性和减少动画控制 */
 export const DashboardAtmosphere = defineComponent({
   name: 'DashboardAtmosphere',
-  props: { entering: Boolean, reduced: Boolean },
+  props: {
+    entering: Boolean,
+    reduced: Boolean
+  },
   setup(props) {
     return () => (
       <div class={styles.atmosphere} aria-hidden="true">
         <div class={styles.wash} data-scene="wash" />
-        {props.entering && !props.reduced && <div class={styles.honeycomb} data-scene="honeycomb">
-          <svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">{columns.map(column =>
-            (
-              <g key={column.id} style={{ animationDelay: `${Math.abs(column.id) * 0.055}s` }}>
-                {column.cells.map((points, index) => <polygon key={index} points={points} />)}
-              </g>
-            ))}</svg>
-        </div>}
+        {props.entering && !props.reduced && renderHoneycomb()}
         <div class={styles.grid} data-scene="grid">
           <div />
         </div>
-        <div class={styles.haze} data-scene="haze"><i class={styles.hazeLeft} /><i class={styles.hazeRight} /></div>
-        <div class={styles.particles} data-scene="particles">{Array.from({ length: 18 }, (_, index) =>
-          (
-            <i
-              key={index}
-              style={{
-                left: `${8 + index * 37 % 84}%`,
-                top: `${22 + index * 23 % 68}%`,
-                '--particle-size': `${index % 3 + 2}px`,
-                animationDuration: `${12 + index % 5 * 2}s`,
-                animationDelay: `${-index * 1.3}s`
-              }}
-            />
-          ))}</div>
+        <div class={styles.haze} data-scene="haze">
+          <i class={styles.hazeLeft} />
+          <i class={styles.hazeRight} />
+        </div>
+        <div class={styles.particles} data-scene="particles">
+          {Array.from({ length: PARTICLE_COUNT }, (_, index) => renderParticle(index))}
+        </div>
       </div>
     );
   }

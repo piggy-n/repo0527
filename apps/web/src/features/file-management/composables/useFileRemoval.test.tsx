@@ -178,8 +178,10 @@ describe('useFileRemoval', () => {
     if (reason === 'unmount') {
       wrapper.unmount();
     } else {
-      useSessionStore().start({ token: createTestJwtExpiringAt(Date.now() + 7200000),
-        user: { loginName: 'new', role: Role.user } });
+      useSessionStore().start({
+        token: createTestJwtExpiringAt(Date.now() + 7200000),
+        user: { loginName: 'new', role: Role.user }
+      });
     }
     release();
     expect(await pending).toBe(false);

@@ -35,7 +35,8 @@ function renderStatus(statuses: readonly ResourceStatus[]) {
             tabindex={0}
             role="img"
             aria-label={statuses.map(status => status.text).join('；')}
-            data-status={top.kind}>
+            data-status={top.kind}
+          >
             <SvgIcon name={STATUS_ICONS[top.level]} size={14} />
           </span>
         ),
@@ -107,7 +108,8 @@ export const CheckedLayerList = defineComponent({
           size="small"
           modelValue={layer.year}
           aria-label={`${layer.name}的年份`}
-          onUpdate:modelValue={(year: number) => props.layers.setYear(layer.code, year)}>
+          onUpdate:modelValue={(year: number) => props.layers.setYear(layer.code, year)}
+        >
           {layer.years.map(year => (
             <ElOption key={year} label={String(year)} value={year} />
           ))}
@@ -136,7 +138,8 @@ export const CheckedLayerList = defineComponent({
               data-code={layer.code}
               aria-label={`调整叠放顺序：${layer.name}`}
               title="调整叠放顺序（上层优先显示）"
-              onKeydown={event => void onHandleKeydown(event, layer.code)}>
+              onKeydown={event => void onHandleKeydown(event, layer.code)}
+            >
               <span class={styles.rank}>{index + 1}</span>
               <SvgIcon class={styles.grip} name="drag-handle" size={16} />
             </button>
@@ -158,7 +161,8 @@ export const CheckedLayerList = defineComponent({
               class={styles.remove}
               aria-label={`取消勾选${layer.name}`}
               title="取消勾选"
-              onClick={() => owner.setChecked(layer.code, false)}>
+              onClick={() => owner.setChecked(layer.code, false)}
+            >
               <SvgIcon name="close" size={16} />
             </button>
           </div>

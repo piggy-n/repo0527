@@ -26,13 +26,9 @@ export interface MapLabel extends LabelPosition {
 
 export interface SceneCallbacks {
   onLabels(positions: LabelPosition[]): void;
-
   onHover(code: string | null): void;
-
   onCityPointer(code: string | null): void;
-
   onCityClick(code: string): void;
-
   onFailure(error: Error): void;
 }
 

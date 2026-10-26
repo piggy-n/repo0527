@@ -1,11 +1,11 @@
 # 迁移进度
 
-旧仓库：`C:\WebProject\yzt`，以 `master-demo` 分支为准。
+旧仓库：`C:\work\zhjsqdxin`，以 `master-demo` 分支为准。
 
 开始迁移一个模块时，在下表记下旧仓库 `master-demo` 当时的 commit 作为基线。之后查看旧仓库的新改动：
 
 ```bash
-cd C:\WebProject\yzt
+cd C:\work\zhjsqdxin
 git diff <基线>..master-demo -- <旧路径>
 ```
 

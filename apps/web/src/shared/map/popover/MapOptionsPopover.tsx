@@ -50,11 +50,14 @@ export const MapOptionsPopover = defineComponent({
       }
     });
     // 切到无底图时收起透明度，切回后按需重新展开
-    watch(() => props.opacity, opacity => {
-      if (opacity === null) {
-        opacityOpen.value = false;
+    watch(
+      () => props.opacity,
+      opacity => {
+        if (opacity === null) {
+          opacityOpen.value = false;
+        }
       }
-    });
+    );
     const toggle = () => emit('update:open', pageActive.value && !shown.value);
     // 在 Popper 写完位置后报告顶部；选项保持同一对象避免更新循环
     const popperOptions = {
@@ -89,7 +92,8 @@ export const MapOptionsPopover = defineComponent({
         popperStyle={{ padding: 0, maxWidth: 'calc(100vw - 112px)' }}
         popperOptions={popperOptions}
         visible={shown.value}
-        onUpdate:visible={ignoreVisibility}>
+        onUpdate:visible={ignoreVisibility}
+      >
         {{
           reference: () => <span class={styles.reference} onClick={toggle}>{slots.reference()}</span>,
           default: () => (

@@ -39,7 +39,8 @@ export const LayerOpacity = defineComponent({
           popperStyle={{ padding: 0 }}
           persistent={false}
           visible={popup.open.value}
-          onUpdate:visible={popup.setOpen}>
+          onUpdate:visible={popup.setOpen}
+        >
           {{
             reference: () => (
               <button
@@ -50,7 +51,8 @@ export const LayerOpacity = defineComponent({
                 aria-pressed={popup.open.value}
                 title={`透明度 ${percent.value}%`}
                 onMouseenter={popup.enter}
-                onMouseleave={popup.leave}>
+                onMouseleave={popup.leave}
+              >
                 <SvgIcon name="layer-opacity" size={16} />
               </button>
             ),

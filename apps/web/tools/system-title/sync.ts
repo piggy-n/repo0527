@@ -25,7 +25,8 @@ export function readOutlineSpec(outputPath: string): { text: string; letterSpaci
   if (typeof content !== 'object' || content === null || !('text' in content) || typeof content.text !== 'string') {
     return undefined;
   }
-  const letterSpacing = 'letterSpacing' in content && typeof content.letterSpacing === 'number' ? content.letterSpacing : 0;
+  const letterSpacing =
+    'letterSpacing' in content && typeof content.letterSpacing === 'number' ? content.letterSpacing : 0;
   return { text: content.text, letterSpacing };
 }
 

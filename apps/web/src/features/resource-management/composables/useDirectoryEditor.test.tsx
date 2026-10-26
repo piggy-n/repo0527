@@ -99,11 +99,14 @@ function host() {
   clients.push(client);
   let editor!: ReturnType<typeof useDirectoryEditor>;
   let list!: ReturnType<typeof useResourceList>;
-  const wrapper = mount(defineComponent({ setup() {
-    list = useResourceList();
-    editor = useDirectoryEditor(() => list.directoryQuery.data.value ?? []);
-    return () => null;
-  } }), { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } });
+  const wrapper = mount(
+    defineComponent(() => {
+      list = useResourceList();
+      editor = useDirectoryEditor(() => list.directoryQuery.data.value ?? []);
+      return () => null;
+    }),
+    { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } }
+  );
   return { editor, list, wrapper, client, session };
 }
 

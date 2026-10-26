@@ -222,6 +222,11 @@ export function useResourceLayers(
     setYearForAll,
     move,
     deriveGroup: () =>
-      resourcesGroup({ state: state.value, invalid: configErrors.value, tileBase, overrideOf: options.symbols?.overrideOf })
+      resourcesGroup({
+        state: state.value,
+        invalid: configErrors.value,
+        tileBase,
+        overrideOf: options.symbols?.overrideOf
+      })
   };
 }

@@ -22,8 +22,11 @@ describe('资源启停接口', () => {
     const received: unknown[] = [];
     configureHttp({ getHeaders: () => ({ Authorization: 'resource-session' }) });
     server.use(mock.post('/backend/resource-management/layer/status', async ({ request }) => {
-      received.push({ query: Object.fromEntries(new URL(request.url).searchParams), body: await request.text(),
-        authorization: request.headers.get('Authorization') });
+      received.push({
+        query: Object.fromEntries(new URL(request.url).searchParams),
+        body: await request.text(),
+        authorization: request.headers.get('Authorization')
+      });
       return HttpResponse.json({ code: 200 });
     }));
     await setResourceStatus('图层 / &?', true);
@@ -99,8 +102,18 @@ describe('资源目录写接口', () => {
     await changeResourceDirectory({ kind: 'rename', id: 'land', name: '新名称' });
     await changeResourceDirectory({ kind: 'remove', id: '目录 / &?' });
     expect(received).toEqual([
-      { action: 'add', query: null, body: JSON.stringify({ name: '水 / 土资源', code: '水 / 土资源',
-        parentId: 'base', public: false, sort: 0, children: [] }) },
+      {
+        action: 'add',
+        query: null,
+        body: JSON.stringify({
+          name: '水 / 土资源',
+          code: '水 / 土资源',
+          parentId: 'base',
+          public: false,
+          sort: 0,
+          children: []
+        })
+      },
       { action: 'edit', query: null, body: JSON.stringify({ id: 'land', name: '新名称' }) },
       { action: 'delete', query: '目录 / &?', body: '' }
     ]);
@@ -144,8 +157,12 @@ describe('资源管理读取接口', () => {
     const received: unknown[] = [];
     configureHttp({ getHeaders: () => ({ Authorization: 'test-resource-session' }) });
     server.use(mock.post('/backend/resource-management/layer/page', async ({ request }) => {
-      received.push({ body: await request.json(), query: new URL(request.url).search,
-        authorization: request.headers.get('Authorization'), contentType: request.headers.get('Content-Type') });
+      received.push({
+        body: await request.json(),
+        query: new URL(request.url).search,
+        authorization: request.headers.get('Authorization'),
+        contentType: request.headers.get('Content-Type')
+      });
       return HttpResponse.json(resourcePageResponse({ pageNum: 2 }));
     }));
 

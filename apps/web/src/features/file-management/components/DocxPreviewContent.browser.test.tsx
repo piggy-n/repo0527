@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
+import { required } from '@/shared/testing/required';
 import { DocxPreviewContent } from './DocxPreviewContent';
 import fixtureUrl from '../fixtures/sample.docx?url';
 
@@ -25,7 +26,7 @@ describe('DOCX 真实浏览器渲染', () => {
       await expect.poll(() => loaded.mock.calls.length + failed.mock.calls.length, { timeout: 10000 }).toBe(1);
       expect(failed).not.toHaveBeenCalled();
       const frame = wrapper.get('iframe').element as HTMLIFrameElement;
-      const body = frame.contentDocument!.body;
+      const body = required(frame.contentDocument, '阅读区的文档').body;
       expect(body.textContent).toContain('自然资源调查成果说明');
       expect(body.textContent).toContain('调查监测 · 测试页眉');
       expect(body.textContent).toContain('自建测试文档 · 测试页脚');
@@ -37,14 +38,14 @@ describe('DOCX 真实浏览器渲染', () => {
       expect(body.querySelector('iframe')).toBeNull();
       expect(frame.getAttribute('sandbox')).toBe('allow-same-origin');
       expect(document.querySelector('section.file-docx')).toBeNull();
-      const paper = body.querySelector<HTMLElement>('.file-docx-wrapper')!;
+      const paper = required(body.querySelector<HTMLElement>('.file-docx-wrapper'), '文档的外层容器');
       expect(Number(paper.style.zoom)).toBe(1);
       const desktopWidth = paper.getBoundingClientRect().width;
       host.style.width = '360px';
       await expect.poll(() => frame.getBoundingClientRect().width).toBe(360);
       expect(Number(paper.style.zoom)).toBe(1);
       expect(paper.getBoundingClientRect().width).toBe(desktopWidth);
-      expect(frame.contentDocument!.documentElement.scrollWidth).toBeGreaterThan(frame.clientWidth);
+      expect(body.ownerDocument.documentElement.scrollWidth).toBeGreaterThan(frame.clientWidth);
       await wrapper.setProps({ zoom: 150 });
       expect(paper.getBoundingClientRect().width).toBeCloseTo(desktopWidth * 1.5, 1);
       await wrapper.setProps({ zoom: 50 });

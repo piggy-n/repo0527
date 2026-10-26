@@ -153,7 +153,10 @@ const PREVIEW_TILES: Readonly<Record<FillPattern, number>> = {
 };
 
 /** 图例里的花纹预览：一个图块的 SVG 和它的边长，按同一份形状数据画（ADR 0045 第 3 节），平铺成背景 */
-export function patternPreviewSvg(pattern: FillPattern, color: string): { readonly svg: string; readonly size: number } {
+export function patternPreviewSvg(
+  pattern: FillPattern,
+  color: string
+): { readonly svg: string; readonly size: number } {
   const shape = PATTERN_SHAPES[pattern];
   const size = PREVIEW_TILES[pattern];
   const step = size / shape.divisions;

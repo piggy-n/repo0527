@@ -2,12 +2,13 @@ import { computed, defineComponent, ref, watch, type PropType } from 'vue';
 import { useResizeObserver } from '@vueuse/core';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { DashboardModel } from '../composables/useDashboard';
+import type { MapLabel } from '../map/types';
 import { useDashboardMap } from '../composables/useDashboardMap';
 import { useImageExport } from '../composables/useImageExport';
 import { imageWithTitle, saveImage } from '../export/image-export';
 import { drawMapLabels } from '../export/map-export';
 import { formatValue } from '../calculations';
-import { colorCoordinate, getMapColor } from '../map/config';
+import { mapLegendLevels } from '../map/config';
 import { DashboardTimeline } from './DashboardTimeline';
 import { DashboardMapFrame } from './DashboardMapFrame';
 import fonts from './DashboardFonts.module.scss';
@@ -24,7 +25,11 @@ export const DashboardMap = defineComponent({
     active: { type: Boolean, default: true },
     valuesVisible: { type: Boolean, default: true }
   },
-  emits: { hover: (_code: string | null) => true, detail: (_code: string) => true, settled: () => true },
+  emits: {
+    hover: (_code: string | null) => true,
+    detail: (_code: string) => true,
+    settled: () => true
+  },
   setup(props, { emit, slots }) {
     const canvas = ref<HTMLElement>();
     const heading = ref<HTMLElement>();
@@ -50,42 +55,20 @@ export const DashboardMap = defineComponent({
       }
     });
     // 入场终态统一收敛数值，低帧率下也不残留尚未完成的递增显示
-    watch(() => props.active, active => {
-      if (active && map.status.value === 'ready') {
-        map.settleValues();
+    watch(
+      () => props.active,
+      active => {
+        if (active && map.status.value === 'ready') {
+          map.settleValues();
+        }
       }
-    });
+    );
     const title = computed(() => {
       const { activeYear } = props.model.state.value;
       const { name, unit } = props.model.indicator.value;
       return activeYear === null ? '请选择年份' : `${activeYear}年江苏省${name}分布图（${unit}）`;
     });
-    const levels = computed(() => {
-      const classification = props.model.classification.value;
-      if (!classification.classCount) {
-        return [];
-      }
-      const boundaries = [classification.displayMin!, ...classification.breaks];
-      const precision = Math.min(20, Math.max(...[...boundaries, classification.displayMax!].map(value => {
-        const [coefficient, exponent = '0'] = String(value).split('e');
-        const [, fraction = ''] = coefficient.split('.');
-        return Math.max(0, fraction.length - Number(exponent));
-      })));
-      const format = (value: number) => formatValue(
-        value,
-        props.model.indicator.value,
-        props.model.indicator.value.unit === '%',
-        precision
-      );
-      return boundaries.map((min, index) => {
-        const max = classification.breaks[index] ?? classification.displayMax!;
-        const upperBound = `${index < boundaries.length - 1 ? '<' : ''}${format(max)}`;
-        return {
-          color: getMapColor(colorCoordinate(min, classification)),
-          label: min === max ? format(min) : `${format(min)} ~ ${upperBound}`
-        };
-      }).toReversed();
-    });
+    const levels = computed(() => mapLegendLevels(props.model.classification.value, props.model.indicator.value));
 
     /** 导出内容取点击时的快照，不受等待字体期间的筛选变化影响 */
     async function download(): Promise<void> {
@@ -101,6 +84,52 @@ export const DashboardMap = defineComponent({
       if (blob) {
         saveImage(blob, filename);
       }
+    }
+
+    // 三维地图上的城市标签：名称和数值，点开详情；避让后离开锚点的画一条引线
+    function renderLabel(label: MapLabel) {
+      const { model } = props;
+      const value = model.mapValues.value[label.code];
+      const indicator = model.indicator.value;
+      return (
+        <button
+          key={label.code}
+          type="button"
+          class={[styles.label, value === null && styles.empty, map.hovered.value === label.code && styles.hovered]}
+          style={{ left: `${label.x}px`, top: `${label.y}px` }}
+          aria-haspopup="dialog"
+          aria-label={`${label.name}，${formatValue(value, indicator)}，查看详情`}
+          onPointerenter={() => map.hover(label.code)}
+          onPointerleave={() => map.hover(null)}
+          onFocus={() => map.hover(label.code)}
+          onBlur={() => map.hover(null)}
+          onClick={() => {
+            map.hover(null);
+            emit('detail', label.code);
+          }}
+        >
+          <strong>{label.name}</strong>
+          {props.valuesVisible && value !== null && (
+            <span>{formatValue(map.displayValues.value[label.code], indicator, indicator.unit.length <= 3)}</span>
+          )}
+        </button>
+      );
+    }
+
+    function renderLabels() {
+      const labels = map.labels.value;
+      return (
+        <div class={styles.labels} style={{ '--map-label-scale': map.labelScale.value }}>
+          <svg class={styles.connectors} aria-hidden="true">
+            {labels
+              .filter(label => label.connected)
+              .map(label => (
+                <line key={label.code} x1={label.anchorX} y1={label.anchorY} x2={label.x} y2={label.y} />
+              ))}
+          </svg>
+          {labels.map(renderLabel)}
+        </div>
+      );
     }
 
     return () => {
@@ -143,53 +172,7 @@ export const DashboardMap = defineComponent({
               role="img"
               aria-label={`${model.indicator.value.name}${map.simple.value ? '二维' : '三维'}分布图`}
             />
-            {ready && !map.simple.value &&
-              <div class={styles.labels} style={{ '--map-label-scale': map.labelScale.value }}>
-                <svg class={styles.connectors} aria-hidden="true">
-                  {map.labels.value.filter(label => label.connected).map(label => (
-                    <line
-                      key={label.code}
-                      x1={label.anchorX}
-                      y1={label.anchorY}
-                      x2={label.x}
-                      y2={label.y}
-                    />
-                  ))}
-                </svg>
-                {map.labels.value.map(label => (
-                  <button
-                    key={label.code}
-                    type="button"
-                    class={[
-                      styles.label,
-                      model.mapValues.value[label.code] === null && styles.empty,
-                      map.hovered.value === label.code && styles.hovered
-                    ]}
-                    style={{ left: `${label.x}px`, top: `${label.y}px` }}
-                    aria-haspopup="dialog"
-                    aria-label={`${label.name}，${formatValue(
-                      model.mapValues.value[label.code],
-                      model.indicator.value
-                    )}，查看详情`}
-                    onPointerenter={() => map.hover(label.code)}
-                    onPointerleave={() => map.hover(null)}
-                    onFocus={() => map.hover(label.code)}
-                    onBlur={() => map.hover(null)}
-                    onClick={() => {
-                      map.hover(null);
-                      emit('detail', label.code);
-                    }}
-                  >
-                    <strong>{label.name}</strong>
-                    {props.valuesVisible && model.mapValues.value[label.code] !== null &&
-                      <span>{formatValue(
-                        map.displayValues.value[label.code],
-                        model.indicator.value,
-                        model.indicator.value.unit.length <= 3
-                      )}</span>}
-                  </button>
-                ))}
-              </div>}
+            {ready && !map.simple.value && renderLabels()}
             {map.status.value === 'failed' && (
               <div class={styles.failure} role="status">
                 <p>地图暂时无法显示</p>

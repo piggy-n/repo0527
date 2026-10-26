@@ -27,25 +27,36 @@ export function useDashboard(data: DashboardData) {
   });
   const preferences = shallowRef<ReadonlyMap<string, ChartPreference>>(new Map());
   const category = computed(() => CATEGORIES.find(item => item.id === state.value.categoryId) ?? CATEGORIES[0]);
-  const indicator = computed(() => category.value.indicators.find(item => item.id === state.value.indicatorId)
-    ?? category.value.indicators[0]);
+  const indicator = computed(() => {
+    const { indicators } = category.value;
+    return indicators.find(item => item.id === state.value.indicatorId) ?? indicators[0];
+  });
   const cityCodes = computed(() => state.value.cityCodes);
   const selectedYears = computed(() => state.value.years);
   const cities = computed(() => CITIES.filter(city => cityCodes.value.includes(city.code)));
   const comparisonYears = computed(() => selectedYears.value.toSorted((a, b) => a - b));
-  const comparisons = computed(() => new Map(category.value.indicators.map(item => [
-    item.id,
-    compareIndicator(data, item, comparisonYears.value, cities.value)
-  ])));
+  const comparisons = computed(() => {
+    const entries = category.value.indicators.map(
+      item => [item.id, compareIndicator(data, item, comparisonYears.value, cities.value)] as const
+    );
+    return new Map(entries);
+  });
   // 六个开放年份 × 全部城市是色阶基准，不跟随用户筛选变化
-  const classification = computed(() => createMapClassification(availableYears.flatMap(year =>
-    CITIES.map(city => data.value(year, city.code, indicator.value.id))
-  )));
-  const mapValues = computed(() => Object.fromEntries(CITIES.map(city => [
-    city.code,
-    state.value.activeYear !== null && state.value.cityCodes.includes(city.code)
-      ? data.value(state.value.activeYear, city.code, indicator.value.id) : null
-  ])));
+  const classification = computed(() => {
+    const { id } = indicator.value;
+    return createMapClassification(availableYears.flatMap(year => CITIES.map(city => data.value(year, city.code, id))));
+  });
+  // 地图只显示所选城市在当前年份的数值，其余城市为空
+  const mapValues = computed(() => {
+    const { activeYear, cityCodes: selected } = state.value;
+    const { id } = indicator.value;
+    return Object.fromEntries(
+      CITIES.map(city => {
+        const shown = activeYear !== null && selected.includes(city.code);
+        return [city.code, shown ? data.value(activeYear, city.code, id) : null];
+      })
+    );
+  });
 
   /** 比较年改变时优先保留当前地图年份，已移除则回到最新所选年 */
   function setYears(input: readonly number[]): void {

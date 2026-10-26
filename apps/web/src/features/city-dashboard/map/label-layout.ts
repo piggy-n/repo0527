@@ -69,11 +69,15 @@ export function layoutMapLabels(positions: readonly LabelPosition[], width: numb
   // 已确定的避让结果不参与 Hover 运算，避免牵动相邻城市
   return {
     scale,
-    labels: positions.map(position => {
-      const label = placed.find(item => item.code === position.code)!;
-      const dx = position.offsetX || 0;
-      const dy = position.offsetY || 0;
-      return { ...label, x: label.x + dx, y: label.y + dy, anchorX: label.anchorX + dx, anchorY: label.anchorY + dy };
+    labels: positions.flatMap(position => {
+      // 每个位置都放下了一个标签：候选里总有一个分数是有限的
+      const label = placed.find(item => item.code === position.code);
+      if (!label) {
+        return [];
+      }
+      const dx = position.offsetX ?? 0;
+      const dy = position.offsetY ?? 0;
+      return [{ ...label, x: label.x + dx, y: label.y + dy, anchorX: label.anchorX + dx, anchorY: label.anchorY + dy }];
     })
   };
 }

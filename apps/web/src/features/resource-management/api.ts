@@ -90,14 +90,15 @@ export type ResourceDirectoryChange =
 export function changeResourceDirectory(change: ResourceDirectoryChange) {
   const options = { schema: z.unknown(), silent: true };
   if (change.kind === 'add') {
-    return http.post('/resource-management/menu/add', {
+    const body = {
       name: change.name,
       code: change.name,
       parentId: change.parentId,
       public: false,
       sort: 0,
       children: []
-    }, options);
+    };
+    return http.post('/resource-management/menu/add', body, options);
   }
   if (change.kind === 'rename') {
     return http.post('/resource-management/menu/edit', { id: change.id, name: change.name }, options);

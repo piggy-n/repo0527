@@ -124,7 +124,8 @@ export const LocationOverlay = defineComponent({
         onPointermove={(event: PointerEvent) => gesture.move(client(event))}
         onPointerup={() => gesture.up()}
         onPointercancel={() => gesture.cancel()}
-        onContextmenu={(event: MouseEvent) => event.preventDefault()}>
+        onContextmenu={(event: MouseEvent) => event.preventDefault()}
+      >
         <svg class={styles.ring} viewBox="0 0 44 44" aria-hidden="true">
           <circle cx="22" cy="22" r="18" />
         </svg>
@@ -152,7 +153,8 @@ export const LocationOverlay = defineComponent({
           class={styles.iconButton}
           aria-label="关闭位置信息"
           title="关闭位置信息"
-          onClick={() => props.location.setInfoOpen(false)}>
+          onClick={() => props.location.setInfoOpen(false)}
+        >
           <SvgIcon name="close" size={14} />
         </button>
       );
@@ -161,7 +163,8 @@ export const LocationOverlay = defineComponent({
           ref={info}
           class={[styles.info, styles[placement.side]]}
           style={{ left: `${placement.left}px`, top: `${placement.top}px` }}
-          data-location-info={placement.side}>
+          data-location-info={placement.side}
+        >
           <span class={styles.caret} style={{ left: `${placement.caret}px` }} />
           <MxTitle class={styles.heading}>{{ default: () => '位置信息', extra: () => [closeButton] }}</MxTitle>
           {COPY_ROWS.map(({ format, label }) => {
@@ -176,7 +179,8 @@ export const LocationOverlay = defineComponent({
                   class={[styles.iconButton, done && styles.copied]}
                   aria-label={done ? `已复制${label}坐标` : `复制${label}坐标`}
                   title={done ? '已复制' : `复制${label}坐标`}
-                  onClick={() => void copy(value)}>
+                  onClick={() => void copy(value)}
+                >
                   <SvgIcon name={done ? 'check' : 'copy'} size={14} />
                 </button>
               </div>

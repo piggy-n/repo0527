@@ -20,7 +20,8 @@ export const OpacityToggle = defineComponent({
           class={[styles.button, props.open && styles.selected]}
           aria-label={`调整${props.label}透明度`}
           aria-pressed={props.open}
-          onClick={() => emit('update:open', !props.open)}>
+          onClick={() => emit('update:open', !props.open)}
+        >
           <SvgIcon name="layer-opacity" size={16} />
         </button>
       </ElTooltip>

@@ -14,7 +14,11 @@ export const EMPTY_CATALOG_ORDER: CatalogOrder = Object.freeze({});
  * 按记录的顺序排列子节点：记录里仍存在的按记录的顺序在前，记录里没有的（目录里新出现的）按原来的顺序排在后面，
  * 已经不在目录里的键忽略
  */
-export function orderedChildren<T>(children: readonly T[], keyOf: (child: T) => string, stored?: readonly string[]): T[] {
+export function orderedChildren<T>(
+  children: readonly T[],
+  keyOf: (child: T) => string,
+  stored?: readonly string[]
+): T[] {
   if (!stored || stored.length === 0) {
     return [...children];
   }

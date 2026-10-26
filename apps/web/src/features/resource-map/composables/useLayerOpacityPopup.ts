@@ -43,14 +43,18 @@ export function useLayerOpacityPopup(active: Readonly<Ref<boolean>>) {
   };
 
   // 捕获不冒泡的容器滚动；只在打开期间监听，卸载时由 VueUse 清理
-  const eventTarget = () => open.value ? window : null;
+  const eventTarget = () => (open.value ? window : null);
   useEventListener(eventTarget, 'scroll', () => setOpen(false), { capture: true, passive: true });
   useEventListener(eventTarget, ['pointerup', 'pointercancel'], endPointer, { capture: true });
-  watch(active, visible => {
-    if (!visible) {
-      setOpen(false);
-    }
-  }, { flush: 'sync' });
+  watch(
+    active,
+    visible => {
+      if (!visible) {
+        setOpen(false);
+      }
+    },
+    { flush: 'sync' }
+  );
 
   return { open: readonly(open), setOpen, enter, leave, beginPointer };
 }

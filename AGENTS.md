@@ -1,6 +1,6 @@
 # yzt 重构（repo0527）
 
-用 Vue 3 + TSX + TypeScript 重写 `C:\WebProject\yzt`（江苏省统一调查监测现状图，master-demo 分支）。
+用 Vue 3 + TSX + TypeScript 重写 `C:\work\zhjsqdxin`（江苏省统一调查监测现状图，master-demo 分支）。
 这是学习型重构：迁移的同时学习 Vue 3、TS、架构设计、面向对象与设计模式、monorepo 和前端工程化。
 
 ## 协作方式
@@ -47,7 +47,7 @@ apps/web/src/
 ├─ app/        应用装配：入口、路由、Pinia、全局插件、布局
 ├─ pages/      路由页面，只负责组合 features
 ├─ features/   按业务域划分：api.ts、queries.ts、store.ts、components/、composables/
-├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、加载耗时的标记（perf）、项目级的公共地图能力（map）
+├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、加载耗时的标记（perf）、项目级的公共地图能力（map）、只供测试的辅助（testing）
 └─ libs/       将来可拆到 packages/* 的模块，统一用 @yzt/<name> 导入
    ├─ utils/       @yzt/utils       纯 TS 工具，不依赖框架（目前是 Worker 通信层）
    ├─ ui/          @yzt/ui          Mx* 通用组件（布局、面板、区块、标题，ADR 0016）
@@ -122,6 +122,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 ### TypeScript 与 Vue
 
 - 避免 `any`；外部数据先用 `unknown` 接收，再收窄类型；只用于类型的导入写 `import type`
+- 不用非空断言（`value!`）：可能为空的值显式判断后提前返回或抛错；测试里缺少依赖的元素、作用域返回值时用 `shared/testing/required` 的 `required(value, '说明')` 抛出说明缺什么的错误，不在之后的属性访问上报错（见 `docs/stages/main-full-review.md`）
 - 组件用 `defineComponent` + TSX，样式用 `*.module.scss`
 - 不挂 `globalProperties`，不用 `getCurrentInstance().proxy`，不往 `window` 上挂对象，不使用 API 自动导入；依赖一律显式 `import` 或通过 provide / inject 获取
 - 跨组件通信按 props / emit → provide / inject → Pinia 的顺序选择，不使用无类型的字符串事件总线

@@ -293,7 +293,7 @@ Popover 的关闭规则、无滚动条布局及缩略图标签见 [ADR 0069](../
 
 ## 旧项目参考
 
-`C:\WebProject\yzt`，`master-demo` 分支，`src/views/` 下：
+`C:\work\zhjsqdxin`，`master-demo` 分支，`src/views/` 下：
 
 | 文件 | 看什么 |
 |---|---|

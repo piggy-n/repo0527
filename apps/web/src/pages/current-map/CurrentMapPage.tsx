@@ -15,10 +15,10 @@ import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { basemapOption } from '@/shared/map/basemap/basemap-style';
 import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
+import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
+import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
 import { MapCard } from '@/shared/map/card/MapCard';
-import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
-import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { CoordinateLocatePanel } from '@/shared/map/location/CoordinateLocatePanel';
 import { LocationOverlay } from '@/shared/map/location/LocationOverlay';
@@ -27,13 +27,13 @@ import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
 import { useMeasure } from '@/shared/map/measure/useMeasure';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
-import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { panelStackHeight } from '@/shared/map/panel-group/panel-stack';
+import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { usePanelStack } from '@/shared/map/panel-group/usePanelStack';
+import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
 import { MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
 import { MapStatusBar } from '@/shared/map/status-bar/MapStatusBar';
 import { useMapReadout } from '@/shared/map/status-bar/useMapReadout';
-import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
 import { RegionLocatePanel } from '@/shared/map/region/RegionLocatePanel';
 import { RegionScopeBar } from '@/shared/map/region/RegionScopeBar';
 import { regionClipGroup } from '@/shared/map/region/region-clip';
@@ -200,9 +200,11 @@ export const CurrentMapPage = defineComponent({
       legend: () => toggleFunction('legend')
     };
     // 当前显示用浅底，后台标签只标主色；左右让出或收起后不显示为当前面板
-    const pressed = computed(() => FUNCTION_PANELS.filter(id =>
-      sides.right.value && !stack.layout.value.collapsed.functions && functions.state.value.current === id
-    ));
+    const pressed = computed(() => {
+      const { current } = functions.state.value;
+      const shown = sides.right.value && !stack.layout.value.collapsed.functions;
+      return shown && current !== null ? [current] : [];
+    });
 
     // 当前底图的缩略图入口固定在地图控制栏下方
     const renderBasemapCard = () => {
@@ -217,13 +219,15 @@ export const CurrentMapPage = defineComponent({
             visible={sides.right.value}
             onTopChange={changeBasemapTop}
             onOpacityChange={basemap.setOpacity}
-            onUpdate:open={changeBasemapOpen}>
+            onUpdate:open={changeBasemapOpen}
+          >
             {{
               reference: () => [
                 <MapCard
                   label={current.shortLabel}
                   name={`${PANEL_LABELS.basemap}：${current.label}`}
-                  pressed={sides.right.value && basemapOpen.value}>
+                  pressed={sides.right.value && basemapOpen.value}
+                >
                   {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[current.id]} />] }}
                 </MapCard>
               ],
@@ -245,7 +249,8 @@ export const CurrentMapPage = defineComponent({
           ref={root}
           class={[styles.root, phone && styles.phone]}
           style={{ '--map-tools-width': toolbarColumns ? '72px' : '40px' }}
-          data-map-page={phone ? 'phone' : 'wide'}>
+          data-map-page={phone ? 'phone' : 'wide'}
+        >
           <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
           <MeasureOverlay measure={measure} />
           <LocationOverlay location={location} />
@@ -271,7 +276,8 @@ export const CurrentMapPage = defineComponent({
             <div ref={lane} class={styles.lane}>
               <div
                 class={styles.panelStack}
-                style={{ height: laneHeight.value > 0 ? `${stackHeight.value}px` : '100%' }}>
+                style={{ height: laneHeight.value > 0 ? `${stackHeight.value}px` : '100%' }}
+              >
                 <MapPanelGroup
                   class={styles.functions}
                   style={{
@@ -285,7 +291,8 @@ export const CurrentMapPage = defineComponent({
                   collapsible
                   collapsed={stack.layout.value.collapsed.functions}
                   onActivate={() => stack.activate('functions')}
-                  onUpdate:collapsed={value => stack.setCollapsed('functions', value)}>
+                  onUpdate:collapsed={value => stack.setCollapsed('functions', value)}
+                >
                   {{
                     boundaries: ({ active }: PanelSlotProps) => [
                       <BoundarySettingsPanel boundaries={boundaries} active={active} />

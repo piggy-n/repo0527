@@ -238,7 +238,8 @@ export const ResourceLayerPanel = defineComponent({
                 modelValue={undefined}
                 placeholder="批量设置年份"
                 aria-label="批量设置年份"
-                onUpdate:modelValue={(year: number) => props.layers.setYearForAll(year)}>
+                onUpdate:modelValue={(year: number) => props.layers.setYearForAll(year)}
+              >
                 {batchYears.value.map(year => (
                   <ElOption key={year} label={`${year} 年`} value={year} />
                 ))}
@@ -274,7 +275,8 @@ export const ResourceLayerPanel = defineComponent({
                 aria-valuenow={Math.round(props.layout.checkedRatio.value * 100)}
                 tabindex={0}
                 onPointerdown={onSplitterPointerDown}
-                onKeydown={onSplitterKeydown}>
+                onKeydown={onSplitterKeydown}
+              >
                 <span class={styles.splitterHandle}>
                   <SvgIcon name="splitter-handle" size={14} />
                 </span>
@@ -288,7 +290,8 @@ export const ResourceLayerPanel = defineComponent({
                   class={styles.checkedHead}
                   aria-label={checkedCollapsed.value ? '展开已勾选图层' : '收起已勾选图层'}
                   aria-expanded={!checkedCollapsed.value}
-                  onClick={() => (checkedCollapsed.value = !checkedCollapsed.value)}>
+                  onClick={() => (checkedCollapsed.value = !checkedCollapsed.value)}
+                >
                   <span class={styles.checkedTitle}>已勾选</span>
                   <span class={styles.badge}>{checkedCount.value}</span>
                   <span class={styles.checkedToggle}>{checkedCollapsed.value ? '展开' : '收起'}</span>
@@ -315,7 +318,8 @@ export const ResourceLayerPanel = defineComponent({
             type="button"
             class={styles.strip}
             aria-label="展开资源图层"
-            onClick={() => emit('update:collapsed', false)}>
+            onClick={() => emit('update:collapsed', false)}
+          >
             <SvgIcon class={styles.stripIcon} name="panel-expand" size={16} />
             <span class={styles.stripLabel}>资源图层</span>
           </button>
@@ -333,7 +337,8 @@ export const ResourceLayerPanel = defineComponent({
                         role="tab"
                         class={[styles.tab, tab.value === item.id && styles.currentTab]}
                         aria-selected={tab.value === item.id}
-                        onClick={() => (tab.value = item.id)}>
+                        onClick={() => (tab.value = item.id)}
+                      >
                         {item.label}
                       </button>
                     ))}
@@ -345,7 +350,8 @@ export const ResourceLayerPanel = defineComponent({
                   type="button"
                   class={styles.collapse}
                   aria-label="收起资源图层"
-                  onClick={() => emit('update:collapsed', true)}>
+                  onClick={() => emit('update:collapsed', true)}
+                >
                   <SvgIcon name="panel-collapse" size={16} />
                 </button>
               ),

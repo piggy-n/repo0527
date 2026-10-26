@@ -78,7 +78,8 @@ function setup(height: number, shown?: Ref<boolean>, expandChecked = true) {
       return () => (
         <div
           data-column
-          style={{ display: 'flex', flexDirection: 'column', width: '320px', height: `${height}px`, ...TOKENS }}>
+          style={{ display: 'flex', flexDirection: 'column', width: '320px', height: `${height}px`, ...TOKENS }}
+        >
           <ResourceLayerPanel layers={layers} catalogOrder={order} layout={layout} />
         </div>
       );

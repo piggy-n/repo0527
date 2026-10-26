@@ -5,11 +5,10 @@ import type { ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import {
-  type LanduseLegendView,
-  landuseLegend,
+  landuseItemLabel,
+  landuseLegendItems,
   type LegendEntry,
   legendEntries,
-  legendEntrySet,
   type LegendSwatch,
   SWATCH_LIMITS,
   swatchColor,
@@ -308,15 +307,6 @@ describe('legendEntries', () => {
   });
 });
 
-describe('legendEntrySet', () => {
-  it('只看有哪些资源，不看顺序', () => {
-    const entries = legendEntries(ALL, new Map());
-
-    expect(legendEntrySet(entries.toReversed())).toBe(legendEntrySet(entries));
-    expect(legendEntrySet(entries.slice(1))).not.toBe(legendEntrySet(entries));
-  });
-});
-
 describe('图例条目的年份（ADR 0052 第 3 节）', () => {
   it('条目带显示的年份；换年份后名称、符号和条目的集合都不变', () => {
     const hydl = ALL.displays.get('csxhjctb_hydl');
@@ -330,56 +320,49 @@ describe('图例条目的年份（ADR 0052 第 3 节）', () => {
     expect(entryOf(before, 'csxhjctb_hydl').year).toBe(2025);
     expect(entryOf(after, 'csxhjctb_hydl')).toStrictEqual({ ...entryOf(before, 'csxhjctb_hydl'), year: 2023 });
     expect(entryOf(before, 'szy_kt').year).toBe(2022);
-    expect(legendEntrySet(after)).toBe(legendEntrySet(before));
+    expect(after.map(entry => entry.code)).toStrictEqual(before.map(entry => entry.code));
   });
 });
 
-// 地类图例的轮廓："分组名:地类数"
-function outline(view: LanduseLegendView, keyword?: string): string[] {
-  return landuseLegend(view, keyword).map(section => `${section.name}:${section.items.length}`);
-}
+// 地类图例的名称列表，按显示顺序
+const names = (keyword?: string) => landuseLegendItems(keyword).map(item => item.name);
 
-describe('landuseLegend', () => {
-  it('三种展示：表 A.2 的 13 组、表 A.1 的 12 组、全部平铺；最后都是历史地类和未匹配的地类', () => {
-    expect(outline('work')).toHaveLength(15);
-    expect(outline('work').slice(0, 2)).toStrictEqual(['湿地:8', '耕地:3']);
-    expect(outline('status')).toHaveLength(14);
-    expect(outline('status').slice(0, 2)).toStrictEqual(['耕地:3', '园地:8']);
-    expect(outline('all')).toStrictEqual(['全部地类:69', '历史地类:6', '未匹配的地类:1']);
+describe('landuseLegendItems', () => {
+  it('平铺表 A.2 的 69 个地类，最后是 6 个历史地类和未匹配的地类（ADR 0074）', () => {
+    const items = landuseLegendItems();
+
+    expect(items).toHaveLength(76);
+    expect(items.slice(0, 2).map(item => item.code)).toStrictEqual(['0303', '0304']);
+    expect(items.at(-1)).toStrictEqual(expect.objectContaining({ key: '$other', code: null, name: '未匹配的地类' }));
   });
 
   it('地类带取值的键、含义和可调整的标记；历史地类的键是 legacy:名称，未匹配的地类是 $other', () => {
-    const [wetland] = landuseLegend('work');
-    const [unmatched] = landuseLegend('all', '未匹配');
+    const [mangrove] = landuseLegendItems();
 
-    expect(wetland?.items[0]).toStrictEqual({
+    expect(mangrove).toStrictEqual({
       key: '0303',
       code: '0303',
       name: '红树林地',
       meaning: '沿海生长红树植物的林地。',
       adjustable: false
     });
-    expect(landuseLegend('all', '0201K')[0]?.items[0]?.adjustable).toBe(true);
-    expect(unmatched?.items).toStrictEqual([expect.objectContaining({ key: '$other', code: null })]);
-    expect(landuseLegend('all', '城市用地').at(0)?.items[0]?.key).toBe('legacy:城市用地');
+    expect(landuseLegendItems('0201K')[0]?.adjustable).toBe(true);
+    expect(landuseLegendItems('城市用地')[0]?.key).toBe('legacy:城市用地');
   });
 
-  it('搜索编码或名称（不区分大小写、去掉首尾空格）；分组的编码或名称命中时留下整组', () => {
-    expect(outline('work', ' 0101 ')).toStrictEqual(['耕地:1']);
-    expect(outline('all', '05h1')).toStrictEqual(['全部地类:1']);
-    expect(outline('work', '林地')).toContain('林地:7');
-    expect(outline('status', '工矿仓储')).toStrictEqual(['工矿仓储用地:4']);
-    expect(outline('status', '06')).toContain('工矿仓储用地:4');
-    expect(outline('work', '城市')).toStrictEqual(['历史地类:1']);
-    expect(outline('work', '没有这个')).toStrictEqual([]);
+  it('搜索编码或名称（不区分大小写、去掉首尾空格）；分组名命中时留下整组', () => {
+    expect(names(' 0101 ')).toStrictEqual(['水田']);
+    expect(landuseLegendItems('05h1').map(item => item.code)).toStrictEqual(['05H1']);
+    expect(names('城市')).toStrictEqual(['城市用地']);
+    expect(names('历史地类')).toHaveLength(6);
+    expect(names('没有这个')).toStrictEqual([]);
   });
 
-  it('表 A.1 里物流仓储用地归工矿仓储用地、沼泽地归其他土地', () => {
-    const status = landuseLegend('status');
-    const namesIn = (name: string) => status.find(section => section.name === name)?.items.map(item => item.name);
+  it('编码加名称的写法：没有编码的只写名称', () => {
+    const [mangrove] = landuseLegendItems();
+    const [legacy] = landuseLegendItems('城市用地');
 
-    expect(namesIn('工矿仓储用地')).toContain('物流仓储用地');
-    expect(namesIn('其他土地')).toContain('沼泽地');
-    expect(namesIn('林地')).toContain('红树林地');
+    expect(mangrove && landuseItemLabel(mangrove)).toBe('0303 红树林地');
+    expect(legacy && landuseItemLabel(legacy)).toBe('城市用地');
   });
 });

@@ -194,35 +194,6 @@ export const URBAN_VILLAGE_CODE_NAMES: Readonly<Record<string, string>> = {
 /** 编码表的 69 个二级类，按一级类的顺序 */
 export const LANDUSE_CLASSES: readonly LanduseClass[] = LANDUSE_GROUPS.flatMap(group => group.classes);
 
-// 表 A.1（土地利用现状分类，GB/T 21010-2017）的一级类：没有"湿地"，湿地相关的地类归回林地、草地、工矿仓储、水域、其他土地
-const STATUS_GROUPS: readonly { readonly code: string; readonly name: string }[] = [
-  { code: '01', name: '耕地' },
-  { code: '02', name: '园地' },
-  { code: '03', name: '林地' },
-  { code: '04', name: '草地' },
-  { code: '05', name: '商业服务业用地' },
-  { code: '06', name: '工矿仓储用地' },
-  { code: '07', name: '住宅用地' },
-  { code: '08', name: '公共管理与公共服务用地' },
-  { code: '09', name: '特殊用地' },
-  { code: '10', name: '交通运输用地' },
-  { code: '11', name: '水域及水利设施用地' },
-  { code: '12', name: '其他土地' }
-];
-
-// 在表 A.1 里归属和编码前两位不同的二级类（旧项目列了 9 个，其中 7 个和按前两位的结果相同）
-const STATUS_GROUP_OVERRIDES = new Map([
-  ['0508', '06'],
-  ['1108', '12']
-]);
-
-/** 表 A.1 的分组（图例的"现状分类"）：复用表 A.2 的二级类和配色，只按现状分类的一级类重新分组 */
-export const LANDUSE_STATUS_GROUPS: readonly LanduseGroup[] = STATUS_GROUPS.map(({ code, name }) => ({
-  code,
-  name,
-  classes: LANDUSE_CLASSES.filter(item => (STATUS_GROUP_OVERRIDES.get(item.code) ?? item.code.slice(0, 2)) === code)
-}));
-
 /** 地类的含义（摘自《第三次全国国土调查土地分类》表 A.2），图例上的说明 */
 export const LANDUSE_MEANINGS: Readonly<Record<string, string>> = {
   '0303': '沿海生长红树植物的林地。',

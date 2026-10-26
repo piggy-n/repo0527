@@ -1,3 +1,7 @@
+// 停顿这么久（毫秒）或反向输入时开始新的手势；累计位移不到这么多像素时不翻页
+const GESTURE_PAUSE = 200;
+const GESTURE_DISTANCE = 18;
+
 /** 一串滚轮惯性只消费一步；200ms 停顿或反向输入开始新手势 */
 export class CardWheelGesture {
   private lastTime = -Infinity;
@@ -17,13 +21,13 @@ export class CardWheelGesture {
       return 0;
     }
     const direction = Math.sign(delta);
-    if (now - this.lastTime >= 200 || direction !== this.direction) {
+    if (now - this.lastTime >= GESTURE_PAUSE || direction !== this.direction) {
       this.reset();
     }
     this.lastTime = now;
     this.direction = direction;
     this.distance += Math.abs(delta);
-    if (this.consumed || this.distance < 18) {
+    if (this.consumed || this.distance < GESTURE_DISTANCE) {
       return 0;
     }
     this.consumed = true;
@@ -46,6 +50,8 @@ export function cardStops(tops: readonly number[], maximum: number): number[] {
 
 /** 原生触摸和聚焦滚动后，以最近停靠点作为下一次翻页起点 */
 export function nearestStop(stops: readonly number[], top: number): number {
-  return stops.reduce((nearest, position, index) =>
-    Math.abs(position - top) < Math.abs(stops[nearest] - top) ? index : nearest, 0);
+  return stops.reduce(
+    (nearest, position, index) => (Math.abs(position - top) < Math.abs(stops[nearest] - top) ? index : nearest),
+    0
+  );
 }

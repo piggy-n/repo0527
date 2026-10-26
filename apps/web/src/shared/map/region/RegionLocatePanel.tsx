@@ -86,7 +86,8 @@ export const RegionLocatePanel = defineComponent({
               type="button"
               class={[styles.chip, on && styles.chipOn]}
               aria-pressed={on}
-              onClick={() => toggle(region)}>
+              onClick={() => toggle(region)}
+            >
               {short ? shortRegionName(region.name) : region.name}
             </button>
           );
@@ -105,7 +106,8 @@ export const RegionLocatePanel = defineComponent({
                 type="button"
                 class={[styles.result, index === 0 && styles.first]}
                 aria-label={regionPath(region)}
-                onClick={() => choose(region)}>
+                onClick={() => choose(region)}
+              >
                 <span>{marked(region.name, keyword.value.trim())}</span>
                 <span class={styles.parent}>{marked(parentCityName(region) ?? '', keyword.value.trim())}</span>
               </button>

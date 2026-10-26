@@ -17,7 +17,12 @@ export function validateResourceExcel(file: Pick<File, 'name' | 'size'>): string
 export type ImportStage = 'idle' | 'sending' | 'processing' | 'success' | 'error';
 
 // 这几种失败不知道服务端有没有执行（请求可能已经到达），不能直接说失败
-const UNCERTAIN_FAILURES: ReadonlySet<ApiError['kind']> = new Set(['network', 'timeout', 'canceled', 'invalid-response']);
+const UNCERTAIN_FAILURES: ReadonlySet<ApiError['kind']> = new Set([
+  'network',
+  'timeout',
+  'canceled',
+  'invalid-response'
+]);
 
 function failureMessage(cause: unknown): string {
   if (!(cause instanceof ApiError)) {

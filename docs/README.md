@@ -84,6 +84,7 @@ docs/
    - [阶段五验收与后续修复](stages/stage-5-acceptance-review.md)
    - [城市体检驾驶舱独立验收](stages/city-dashboard-acceptance.md)
    - [阶段五之后的代码审查与整改](stages/post-5e-code-review.md)：继续迁移前先读，写法和会话核对的统一做法在这里
+   - [main 分支的第二次全面审查与整改](stages/main-full-review.md)：在上一篇之后读，写法指标、测试里取必需值的做法和仍待决定的事项在这里
 5. [commands.md](commands.md)：日常要用的命令
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明，并按 [UI 工作流程](design/ui-workflow.md) 完成交互原型和实际页面验证。

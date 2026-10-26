@@ -39,8 +39,12 @@ export const TooltipTable = defineComponent({
               </strong>
             )}
           </div>
-          <p class={styles.tooltipIndicator}>{props.indicator.name}（{props.indicator.unit}）</p>
-          {emptyMessage ? <p>{emptyMessage}</p> : (
+          <p class={styles.tooltipIndicator}>
+            {props.indicator.name}（{props.indicator.unit}）
+          </p>
+          {emptyMessage ? (
+            <p>{emptyMessage}</p>
+          ) : (
             <div class={styles.tableScroll}>
               <table>
                 <thead>

@@ -5,6 +5,25 @@ export function isValue(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+/** 去掉浮点运算的尾差（如 0.1 + 0.2），只保留 14 位有效数字 */
+export function trimFloat(value: number): number {
+  return Number(value.toPrecision(14));
+}
+
+/** 不小于 value 的 1、2、5 × 10ⁿ 中最小的一个，作为整齐的刻度或分档步长 */
+export function niceStep(value: number): number {
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const factor = [1, 2, 5, 10].find(item => item * magnitude >= value) ?? 10;
+  return trimFloat(factor * magnitude);
+}
+
+/** 数值写成十进制时的小数位数；按 String 的写法计算，科学计数法（如 1e-7）也算对 */
+export function decimalPlaces(value: number): number {
+  const [coefficient, exponent = '0'] = String(value).split('e');
+  const [, fraction = ''] = coefficient.split('.');
+  return Math.max(0, fraction.length - Number(exponent));
+}
+
 /** 每年独立计算所选城市的算术平均，空集不返回零 */
 export function compareIndicator(
   data: DashboardData,
@@ -12,18 +31,22 @@ export function compareIndicator(
   years: readonly number[],
   cities: readonly City[]
 ): Comparison[] {
-  return [...new Set(years)].toSorted((a, b) => a - b).map(year => {
-    const values = cities.map(city => data.value(
-      year,
-      city.code,
-      indicator.id
-    )).map(value => isValue(value) ? value : null);
-    const valid = values.filter(isValue);
-    const average = valid.length
-      ? Number((valid.reduce((sum, value) => sum + value, 0) / valid.length).toFixed(Math.max(1, indicator.precision)))
-      : null;
-    return { year, values, average };
-  });
+  // 均值至少保留一位小数，整数指标的均值也能看出差别
+  const averagePrecision = Math.max(1, indicator.precision);
+  return [...new Set(years)]
+    .toSorted((a, b) => a - b)
+    .map(year => {
+      const values = cities.map(city => {
+        const value = data.value(year, city.code, indicator.id);
+        return isValue(value) ? value : null;
+      });
+      const valid = values.filter(isValue);
+      if (valid.length === 0) {
+        return { year, values, average: null };
+      }
+      const sum = valid.reduce((total, value) => total + value, 0);
+      return { year, values, average: Number((sum / valid.length).toFixed(averagePrecision)) };
+    });
 }
 
 const formats = new Map<number, Intl.NumberFormat>();

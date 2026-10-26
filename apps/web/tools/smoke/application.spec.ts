@@ -43,6 +43,9 @@ test('登录到地图，切页期间改变尺寸，返回后复用画布并保�
   await page.getByRole('button', { name: '放大', exact: true }).click();
   await expect(level).toHaveAttribute('aria-label', new RegExp(`（${(precise + 1).toFixed(1).replace('.', '\\.')}）$`));
   const savedLevel = await level.getAttribute('aria-label');
+  if (savedLevel === null) {
+    throw new Error('当前层级没有无障碍名称');
+  }
   const canvas = page.locator('.maplibregl-canvas');
   const original = await canvas.elementHandle();
   expect(original).not.toBeNull();
@@ -57,7 +60,7 @@ test('登录到地图，切页期间改变尺寸，返回后复用画布并保�
     await readyMap(page);
     expect(await original.evaluate((element: { isConnected: boolean }) => element.isConnected)).toBe(true);
     await expect(search).toHaveValue('南京');
-    await expect(level).toHaveAttribute('aria-label', savedLevel!);
+    await expect(level).toHaveAttribute('aria-label', savedLevel);
     // 设备比例为 1，绘图缓冲区应随恢复后的 CSS 尺寸调整
     await expect.poll(async () => {
       const box = await canvas.boundingBox();

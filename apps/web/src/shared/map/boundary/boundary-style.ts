@@ -98,7 +98,8 @@ const SOURCES: Record<BoundaryLevel, GeoJSONSourceSpecification> = {
 const sourceId = (level: BoundaryLevel) => `boundaries-${level}`;
 
 // 核心线的 ID 就是 boundaries-province 等，色带、白边在后面加上部位
-const layerId = (level: BoundaryLevel, part: LinePart) => (part === 'line' ? sourceId(level) : `${sourceId(level)}-${part}`);
+const layerId = (level: BoundaryLevel, part: LinePart) =>
+  part === 'line' ? sourceId(level) : `${sourceId(level)}-${part}`;
 
 function lineLayer(level: BoundaryLevel, style: LineStyle, opacity: number): LineLayerSpecification {
   const { part, color, widths, opacity: base, blur, dasharray } = style;

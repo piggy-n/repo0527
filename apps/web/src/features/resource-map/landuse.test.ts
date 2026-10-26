@@ -5,7 +5,6 @@ import {
   LANDUSE_GROUPS,
   LANDUSE_LEGACY_NAME_COLORS,
   LANDUSE_MEANINGS,
-  LANDUSE_STATUS_GROUPS,
   URBAN_VILLAGE_CODE_NAMES
 } from './landuse';
 import { colorOf, defaultColorExpression, normalizeColor as color, parsesAsColor } from './test-expression';
@@ -36,17 +35,6 @@ describe('地类配色表与旧项目一致', () => {
     };
 
     expect(codeToName).toStrictEqual(legacy.codeToName);
-  });
-
-  it('表 A.1 的分组：12 个一级类，每个一级类下的二级类与旧项目一致，69 个二级类都有归属', () => {
-    const tree = LANDUSE_STATUS_GROUPS.map(({ code, name, classes }) => ({
-      code,
-      name,
-      children: classes.map(item => item.code)
-    }));
-
-    expect(tree).toStrictEqual(legacy.statusTree);
-    expect(LANDUSE_STATUS_GROUPS.flatMap(group => group.classes)).toHaveLength(69);
   });
 
   it('地类的含义：69 条与旧项目逐条一致，每个二级类都有', () => {

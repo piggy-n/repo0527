@@ -145,7 +145,10 @@ const CLASS_PATTERN_DARKEN = 0.4;
 /** 分类样式里一个取值的默认值：取值的颜色作主色，面的纹理颜色加深 */
 export function classDefaultSymbol(resource: Resource, item: ClassItem): ResourceSymbol {
   const symbol = colorSymbol(resource.geometry, item.color);
-  return symbol.geometry === 'fill' ? { ...symbol, patternColor: darkenColor(item.color, CLASS_PATTERN_DARKEN) } : symbol;
+  if (symbol.geometry !== 'fill') {
+    return symbol;
+  }
+  return { ...symbol, patternColor: darkenColor(item.color, CLASS_PATTERN_DARKEN) };
 }
 
 /** 统一样式叠加覆盖后的符号 */

@@ -64,7 +64,7 @@
   pointer-events: none;
   transform: scaleX(var(--title-rule, 1));
   background: linear-gradient(90deg, transparent, #51b2fd 25%, #fff, #51b2fd 75%, transparent);
-  box-shadow: 0 0 12px rgba(85, 224, 255, .7);
+  box-shadow: 0 0 12px rgba(85, 224, 255, 0.7);
 }
 
 .heading h1 {
@@ -73,7 +73,7 @@
   font-size: calc(49px * var(--ui-scale, 1));
   font-weight: 600;
   line-height: 1.35;
-  letter-spacing: .13em;
+  letter-spacing: 0.13em;
   text-align: center;
   color: #0750ad;
 }
@@ -90,7 +90,11 @@
 }
 
 .tooltip {
-  --tooltip-top: max(82px, calc(82px * var(--ui-scale, 1)), calc(18px * var(--ui-scale, 1) + var(--map-heading-height, 50px) + 12px));
+  --tooltip-top: max(
+    82px,
+    calc(82px * var(--ui-scale, 1)),
+    calc(18px * var(--ui-scale, 1) + var(--map-heading-height, 50px) + 12px)
+  );
   position: absolute;
   top: var(--tooltip-top);
   right: 12px;

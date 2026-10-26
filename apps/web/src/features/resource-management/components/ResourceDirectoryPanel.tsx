@@ -16,7 +16,7 @@ import { computed, defineComponent, onBeforeUnmount, type PropType, ref } from '
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { ResourceDirectory } from '../api';
-import { useDirectoryEditor } from '../composables/useDirectoryEditor';
+import { DIRECTORY_NAME_MAX_LENGTH, useDirectoryEditor } from '../composables/useDirectoryEditor';
 import { resourceDirectoryIcon } from '../directory-icons';
 import styles from './ResourceManagement.module.scss';
 
@@ -197,7 +197,7 @@ export const ResourceDirectoryPanel = defineComponent({
                     modelValue={editor.name.value}
                     onUpdate:modelValue={editor.setName}
                     placeholder="请输入目录名称"
-                    maxlength={20}
+                    maxlength={DIRECTORY_NAME_MAX_LENGTH}
                     showWordLimit
                     disabled={editor.pending.value}
                     onKeydown={(event: Event | KeyboardEvent) => {

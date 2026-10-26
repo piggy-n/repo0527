@@ -33,9 +33,13 @@ export const DashboardPlot = defineComponent({
     let mounted = false;
     let rendered = false;
     let keyboardCity = -1;
-    useIntersectionObserver(element, entries => {
-      visible.value = entries.some(entry => entry.isIntersecting);
-    }, { rootMargin: '120px 0px' });
+    useIntersectionObserver(
+      element,
+      entries => {
+        visible.value = entries.some(entry => entry.isIntersecting);
+      },
+      { rootMargin: '120px 0px' }
+    );
 
     function hide(): void {
       chart?.dispatchAction({ type: 'hideTip' });
@@ -79,9 +83,10 @@ export const DashboardPlot = defineComponent({
         chart.on('legendselectchanged', (event: unknown) => {
           const selected = objectValue(objectValue(event)?.selected);
           if (selected) {
-            emit('legend', Object.fromEntries(Object.entries(selected).filter(
+            const entries = Object.entries(selected).filter(
               (entry): entry is [string, boolean] => typeof entry[1] === 'boolean'
-            )));
+            );
+            emit('legend', Object.fromEntries(entries));
           }
           hide();
         });
@@ -120,13 +125,8 @@ export const DashboardPlot = defineComponent({
         hide();
         return;
       }
-      keyboardCity = Math.max(
-        0,
-        Math.min(
-          props.cities.length - 1,
-          keyboardCity + (event.key === 'ArrowRight' ? 1 : -1)
-        )
-      );
+      const step = event.key === 'ArrowRight' ? 1 : -1;
+      keyboardCity = Math.max(0, Math.min(props.cities.length - 1, keyboardCity + step));
       chart?.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: keyboardCity });
       emit('hover', props.cities[keyboardCity]?.code ?? null);
     }

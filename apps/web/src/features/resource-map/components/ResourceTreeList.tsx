@@ -73,7 +73,8 @@ export const ResourceTreeList = defineComponent({
           data-key={nodeKey(node)}
           aria-label={`调整目录顺序：${name}`}
           title="调整目录顺序"
-          onKeydown={event => void onHandleKeydown(event, index)}>
+          onKeydown={event => void onHandleKeydown(event, index)}
+        >
           <SvgIcon name="drag-handle" size={16} />
         </button>
       );
@@ -89,7 +90,8 @@ export const ResourceTreeList = defineComponent({
               <ElCheckbox
                 class={styles.checkbox}
                 modelValue={node.checked}
-                onUpdate:modelValue={value => owner.setChecked(node.code, value === true)}>
+                onUpdate:modelValue={value => owner.setChecked(node.code, value === true)}
+              >
                 <span class={styles.label}>
                   <SvgIcon class={styles.geometry} name={GEOMETRY_ICONS[node.geometry]} size={16} />
                   <span class={styles.name} title={node.name}>
@@ -127,7 +129,8 @@ export const ResourceTreeList = defineComponent({
               class={styles.checkbox}
               modelValue={node.checkState === 'all'}
               indeterminate={node.checkState === 'some'}
-              onUpdate:modelValue={value => owner.setCheckedMany(node.codes, value === true)}>
+              onUpdate:modelValue={value => owner.setCheckedMany(node.codes, value === true)}
+            >
               <span class={styles.name}>{node.name}</span>
             </ElCheckbox>
             <span class={styles.count}>{node.codes.length}</span>

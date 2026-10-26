@@ -30,7 +30,8 @@ export const PointerHint = defineComponent({
         ref={element}
         class={[styles.hint, styles[sides.value.x], styles[sides.value.y]]}
         style={{ left: `${props.point.x}px`, top: `${props.point.y}px` }}
-        data-pointer-hint={`${sides.value.x} ${sides.value.y}`}>
+        data-pointer-hint={`${sides.value.x} ${sides.value.y}`}
+      >
         {props.value && <strong class={styles.value}>{props.value}</strong>}
         {/* 有数值时说明都是次要的；没有时第一行是主要的操作 */}
         {props.lines.map((line, index) => (

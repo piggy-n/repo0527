@@ -20,9 +20,38 @@ export const DashboardTimeline = defineComponent({
       }
     }
 
+    // 只有一年时没有可拖动的轨道
+    function renderTrack(index: number) {
+      if (props.years.length <= 1) {
+        return <span class={styles.singleTrack} />;
+      }
+      const progress = Math.max(0, index) / (props.years.length - 1) * 100;
+      return (
+        <>
+          <span class={styles.trackVisual} aria-hidden="true">
+            <i class={styles.trackFill} style={{ width: `${progress}%` }} />
+            <i class={styles.trackThumb} style={{ left: `${progress}%` }} />
+          </span>
+          <input
+            type="range"
+            aria-label="切换地图年份"
+            aria-valuetext={`${props.activeYear}年`}
+            min={0}
+            max={props.years.length - 1}
+            value={Math.max(0, index)}
+            disabled={!props.ready}
+            onInput={event => {
+              if (event.currentTarget instanceof HTMLInputElement) {
+                select(Number(event.currentTarget.value));
+              }
+            }}
+          />
+        </>
+      );
+    }
+
     return () => {
       const index = props.years.indexOf(props.activeYear ?? 0);
-      const progress = props.years.length > 1 ? Math.max(0, index) / (props.years.length - 1) * 100 : 0;
       return (
         <div class={styles.timeline} aria-label="地图展示年份" data-reduced={props.reduced}>
           <button
@@ -35,28 +64,7 @@ export const DashboardTimeline = defineComponent({
             <SvgIcon name="dashboard-timeline-prev-color" size={36} />
           </button>
           <div class={styles.trackContent}>
-            <div class={styles.track}>
-              {props.years.length > 1 ? <>
-                <span class={styles.trackVisual} aria-hidden="true">
-                  <i class={styles.trackFill} style={{ width: `${progress}%` }} />
-                  <i class={styles.trackThumb} style={{ left: `${progress}%` }} />
-                </span>
-                <input
-                  type="range"
-                  aria-label="切换地图年份"
-                  aria-valuetext={`${props.activeYear}年`}
-                  min={0}
-                  max={props.years.length - 1}
-                  value={Math.max(0, index)}
-                  disabled={!props.ready}
-                  onInput={event => {
-                    if (event.currentTarget instanceof HTMLInputElement) {
-                      select(Number(event.currentTarget.value));
-                    }
-                  }}
-                />
-              </> : <span class={styles.singleTrack} />}
-            </div>
+            <div class={styles.track}>{renderTrack(index)}</div>
             <div class={styles.years}>
               {props.years.map(year => (
                 <button

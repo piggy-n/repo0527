@@ -89,7 +89,8 @@ export const CoordinateLocatePanel = defineComponent({
           size="small"
           aria-label="坐标的写法"
           modelValue={format.value}
-          onUpdate:modelValue={changeFormat}>
+          onUpdate:modelValue={changeFormat}
+        >
           {FORMATS.map(option => (
             <ElRadioButton key={option.value} value={option.value}>
               {option.label}
@@ -105,7 +106,8 @@ export const CoordinateLocatePanel = defineComponent({
             icon={Aim}
             aria-label="拾取"
             aria-pressed={picking.value}
-            onClick={togglePick}>
+            onClick={togglePick}
+          >
             {picking.value ? '拾取中' : '拾取'}
           </ElButton>
           <ElButton type="primary" icon={Position} onClick={input.submit}>

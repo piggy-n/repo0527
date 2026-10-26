@@ -18,8 +18,17 @@ const server = setupServer();
 const clients: QueryClient[] = [];
 const releases = new Set<() => void>();
 const file = () => new File(['固定测试内容'], '属性规范.XLSX');
-const row: ResourceRecord = { id: 'layer-1', name: '资源', year: 2024, datasetName: '数据集', resourceName: '土地资源',
-  layerCode: 'LAYER', datasetCode: 'DATASET', hasSlice: true, enabled: true };
+const row: ResourceRecord = {
+  id: 'layer-1',
+  name: '资源',
+  year: 2024,
+  datasetName: '数据集',
+  resourceName: '土地资源',
+  layerCode: 'LAYER',
+  datasetCode: 'DATASET',
+  hasSlice: true,
+  enabled: true
+};
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => {
   releases.forEach(release => release());
@@ -76,10 +85,13 @@ async function host() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
   clients.push(client);
   let detail!: ReturnType<typeof useResourceDetail>;
-  const wrapper = mount(defineComponent({ setup() {
-    detail = useResourceDetail(resourceDirectoryResponse().data);
-    return () => null;
-  } }), { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } });
+  const wrapper = mount(
+    defineComponent(() => {
+      detail = useResourceDetail(resourceDirectoryResponse().data);
+      return () => null;
+    }),
+    { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } }
+  );
   detail.open(row, 'land');
   await vi.waitFor(() => expect(detail.detail.value?.id).toBe(row.id));
   return { detail, importer: detail.importer, client, session, wrapper };

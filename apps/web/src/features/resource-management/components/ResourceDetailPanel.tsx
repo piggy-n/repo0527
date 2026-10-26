@@ -26,12 +26,15 @@ type MetadataItems = [label: string, value: string | number | null | undefined][
 // 宽度不超过 760 或高度不超过 700 时元数据默认收起，同一时间只展开一组，属性表留在主区
 const COMPACT_DETAIL_QUERY = '(max-width: 760px), (max-height: 700px)';
 
+// 空值和表格的全局样式一样显示 -
+const EMPTY_VALUE = '-';
+
 // 元数据固定占高：长值省略，点开看全文，不把属性表挤下去
 function renderMetadata(items: MetadataItems) {
   return (
     <dl class={styles.metadata}>
       {items.map(([label, value]) => {
-        const text = value === '' ? '—' : String(value ?? '—');
+        const text = value === null || value === undefined || value === '' ? EMPTY_VALUE : String(value);
         return (
           <div class={styles.metadataItem} key={label}>
             <dt>{label}</dt>
@@ -39,7 +42,7 @@ function renderMetadata(items: MetadataItems) {
               <ElPopover trigger="click" width={280} content={text}>
                 {{
                   reference: () => (
-                    <button class={styles.value} title={text} aria-label={`${label}：${text}`}>
+                    <button type="button" class={styles.value} title={text} aria-label={`${label}：${text}`}>
                       {text}
                     </button>
                   )
@@ -131,7 +134,7 @@ export const ResourceDetailPanel = defineComponent({
     function renderCategory(data: ResourceDetail) {
       const { owner } = props;
       if (!owner.editing.value) {
-        return <span>{data.resourceName || '—'}</span>;
+        return <span>{data.resourceName || EMPTY_VALUE}</span>;
       }
       return (
         <>
@@ -211,8 +214,24 @@ export const ResourceDetailPanel = defineComponent({
       );
     }
 
-    function renderAttributes(attributes: ResourceAttribute[]) {
+    // 编辑时是输入框；查看时没有名称就不渲染，单元格由表格的全局样式显示 -
+    function renderAttributeName({ row, $index }: { row: ResourceAttribute; $index: number }) {
       const { owner } = props;
+      if (!owner.editing.value) {
+        return row.name ? <span class={styles.attributeName}>{row.name}</span> : null;
+      }
+      return (
+        <ElInput
+          aria-label={`${row.code}字段名称`}
+          modelValue={row.name ?? ''}
+          disabled={owner.pending.value}
+          onUpdate:modelValue={value => owner.setName($index, value)}
+          placeholder="可为空"
+        />
+      );
+    }
+
+    function renderAttributes(attributes: ResourceAttribute[]) {
       return (
         <MxSection class={styles.attributes} title="属性结构描述表">
           {{
@@ -222,20 +241,7 @@ export const ResourceDetailPanel = defineComponent({
                 {renderImportStatus()}
                 <ElTable class={styles.attributeTable} height="100%" data={attributes} emptyText="暂无属性结构">
                   <ElTableColumn label="字段名称" minWidth="200">
-                    {{
-                      default: ({ row, $index }: { row: ResourceAttribute; $index: number }) =>
-                        owner.editing.value ? (
-                          <ElInput
-                            aria-label={`${row.code}字段名称`}
-                            modelValue={row.name ?? ''}
-                            disabled={owner.pending.value}
-                            onUpdate:modelValue={value => owner.setName($index, value)}
-                            placeholder="可为空"
-                          />
-                        ) : (
-                          <span class={styles.attributeName}>{row.name || '—'}</span>
-                        )
-                    }}
+                    {{ default: renderAttributeName }}
                   </ElTableColumn>
                   <ElTableColumn prop="code" label="字段代码" minWidth="130" />
                   <ElTableColumn prop="fieldType" label="字段类型" minWidth="100" />

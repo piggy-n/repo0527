@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { required } from '@/shared/testing/required';
 import { JiangsuMapScene } from './JiangsuMapScene';
 import { loadDashboardRegions } from './region-geometry';
 import { DashboardMap } from '../components/DashboardMap';
@@ -25,12 +26,13 @@ describe('驾驶舱真实地图引擎', () => {
   it('窄地图的多行标题与固定提示表格保留间距', async () => {
     const model = useDashboard(createMockData(2026));
     model.selectCategory('happiness');
-    const indicator = model.category.value.indicators.find(item => item.name.startsWith('每10万人拥有的博物馆'))!;
+    const { indicators } = model.category.value;
+    const indicator = required(indicators.find(item => item.name.startsWith('每10万人拥有的博物馆')), '博物馆指标');
     model.selectIndicator(indicator.id);
     const wrapper = mount(DashboardMap, {
       attachTo: host(),
       props: { model, reducedMotion: true, active: true, forceFallback: true },
-      attrs: { style: 'width:366px;height:600px;--ui-scale:.9' },
+      attrs: { style: 'width:366px;height:600px;--ui-scale:0.9' },
       slots: { default: () => <div class={viewStyles.tooltip} data-dashboard-tooltip>城市数据表格</div> }
     });
     try {
@@ -68,7 +70,7 @@ describe('驾驶舱真实地图引擎', () => {
       // 取样窗口确认无操作时没有引擎重绘，而非等待某个异步事件
       await new Promise(resolve => setTimeout(resolve, 250));
       expect(rendered.mock.calls.length).toBe(renders);
-      scene.updateValues(Object.fromEntries(data.regions.map(region => [region.code, 80])), .1);
+      scene.updateValues(Object.fromEntries(data.regions.map(region => [region.code, 80])), 0.1);
       await vi.waitFor(() => expect(rendered.mock.calls.length).toBeGreaterThan(renders));
       expect(labels.mock.calls.length).toBe(publications);
       vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
@@ -110,7 +112,7 @@ describe('驾驶舱真实地图引擎', () => {
       expect(canvas.width).toBe(1200);
       expect(canvas.height).toBe(1400);
       expect(labels.mock.lastCall?.[0]).toHaveLength(13);
-      const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+      const pixels = required(canvas.getContext('2d'), '二维画布').getImageData(0, 0, canvas.width, canvas.height).data;
       expect(pixels.some((value, index) => index % 4 === 3 && value > 0)).toBe(true);
       const pending = scene.playEntrance();
       scene.dispose();
@@ -137,11 +139,8 @@ describe('驾驶舱真实地图引擎', () => {
         mapElement.scrollTop = 100;
         expect(mapElement.scrollTop).toBe(0);
         const canvas = wrapper.get('canvas').element as HTMLCanvasElement;
-        const context = canvas.getContext('webgl2');
-        expect(context).not.toBeNull();
-        const extension = context!.getExtension('WEBGL_lose_context');
-        expect(extension).not.toBeNull();
-        extension!.loseContext();
+        const context = required(canvas.getContext('webgl2'), 'WebGL2 上下文');
+        required(context.getExtension('WEBGL_lose_context'), 'WEBGL_lose_context 扩展').loseContext();
         // oxlint-disable-next-line no-await-in-loop -- 本轮降级完成后才能验证释放及下一轮
         await vi.waitFor(() => expect(wrapper.text()).toContain('地图采用简化显示'));
         expect(wrapper.findAll('canvas')).toHaveLength(1);

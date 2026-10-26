@@ -1,12 +1,14 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
+import { required } from '@/shared/testing/required';
 import { createMockData } from '../data/mock-data';
 import { useDashboard } from '../composables/useDashboard';
 import { DashboardCharts, type DashboardChartsHandle } from './DashboardCharts';
 import { DashboardFilters } from './DashboardFilters';
 
 const hosts: HTMLElement[] = [];
+
 afterEach(() => {
   hosts.splice(0).forEach(host => host.remove());
 });
@@ -25,7 +27,8 @@ describe('驾驶舱真实列表布局', () => {
     expect(list.clientHeight).toBeGreaterThanOrEqual(130);
     expect(list.clientHeight).toBeLessThan(200);
     expect(list.scrollHeight).toBeGreaterThan(1000);
-    const longButton = [...list.querySelectorAll('button')].find(button => button.textContent.includes('每10万人'))!;
+    const buttons = [...list.querySelectorAll('button')];
+    const longButton = required(buttons.find(button => button.textContent.includes('每10万人')), '长名称的指标');
     expect(longButton.scrollHeight).toBeLessThanOrEqual(longButton.clientHeight + 1);
   });
 
@@ -65,10 +68,8 @@ describe('驾驶舱真实列表布局', () => {
     // 首次尺寸观察完成后再输入真实滚轮序列
     await vi.waitFor(() => expect(list.clientHeight).toBe(600));
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    const wheel = (deltaY: number, extra = {}) => list.dispatchEvent(new WheelEvent(
-      'wheel',
-      { deltaY, bubbles: true, cancelable: true, ...extra }
-    ));
+    const wheel = (deltaY: number, extra = {}) =>
+      list.dispatchEvent(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true, ...extra }));
     wheel(30);
     wheel(22);
     wheel(12);
@@ -79,10 +80,10 @@ describe('驾驶舱真实列表布局', () => {
     expect(wheel(100, { ctrlKey: true })).toBe(true);
     expect(wheel(10, { deltaX: 100 })).toBe(true);
     const handle = wrapper.vm as unknown as DashboardChartsHandle;
-    handle.locateIndicator(cards[5].dataset.chartId!);
-    handle.locateIndicator(cards[2].dataset.chartId!);
+    handle.locateIndicator(required(cards[5].dataset.chartId, '第 6 张卡片的指标'));
+    handle.locateIndicator(required(cards[2].dataset.chartId, '第 3 张卡片的指标'));
     await vi.waitFor(() => expect(Math.abs(list.scrollTop - cards[2].offsetTop)).toBeLessThan(2), { timeout: 5000 });
-    handle.locateIndicator(cards[6].dataset.chartId!);
+    handle.locateIndicator(required(cards[6].dataset.chartId, '第 7 张卡片的指标'));
     model.selectCategory('resilience');
     await vi.waitFor(() => expect(list.scrollTop).toBeLessThan(2));
     expect(list.style.scrollSnapType).toBe('');

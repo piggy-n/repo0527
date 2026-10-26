@@ -2,7 +2,7 @@ import { Search } from '@element-plus/icons-vue';
 import { ElInput } from 'element-plus';
 import { computed, defineComponent, type PropType, type VNode } from 'vue';
 import type { ResourceSymbols } from '../composables/useResourceSymbols';
-import { type LanduseLegendItem, type LegendSwatch, landuseLegend } from '../legend';
+import { type LanduseLegendItem, landuseItemLabel, landuseLegendItems, type LegendSwatch } from '../legend';
 import { LegendSwatchIcon } from './LegendSwatchIcon';
 import styles from './LanduseLegend.module.scss';
 
@@ -41,15 +41,14 @@ export const LanduseLegend = defineComponent({
       const swatch = props.swatches.get(item.key);
       const target = { code: props.code, item: item.key };
       return (
-        <li
-          key={item.key}
-          data-landuse={item.code ?? item.name}>
+        <li key={item.key} data-landuse={item.code ?? item.name}>
           <button
             type="button"
             class={styles.item}
-            title={`${item.code ?? ''} ${item.name}${item.adjustable ? '（可调整）' : ''}\n${item.meaning}`}
+            title={`${landuseItemLabel(item)}${item.adjustable ? '（可调整）' : ''}\n${item.meaning}`}
             aria-label={`编辑${item.name}样式`}
-            onClick={() => emit('edit', item.key)}>
+            onClick={() => emit('edit', item.key)}
+          >
             {swatch && <LegendSwatchIcon class={styles.swatch} swatch={swatch} />}
             <span class={styles.name}>{item.name}</span>
             {props.symbols.hasOverride(target) && <span class={styles.edited} title="改过符号" data-edited />}
@@ -57,7 +56,7 @@ export const LanduseLegend = defineComponent({
         </li>
       );
     };
-    const items = computed(() => landuseLegend('all', keyword.value).flatMap(section => section.items));
+    const items = computed(() => landuseLegendItems(keyword.value));
 
     return () => (
       <div class={styles.legend}>
@@ -71,7 +70,9 @@ export const LanduseLegend = defineComponent({
           onUpdate:modelValue={(value: string) => update({ keyword: value })}
         />
         {items.value.length === 0 && <div class={styles.empty}>没有找到地类</div>}
-        <ul class={styles.items} data-landuse-section="all">{items.value.map(renderItem)}</ul>
+        <ul class={styles.items} data-landuse-section="all">
+          {items.value.map(renderItem)}
+        </ul>
       </div>
     );
   }

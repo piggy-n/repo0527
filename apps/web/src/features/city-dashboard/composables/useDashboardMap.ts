@@ -58,10 +58,9 @@ export function useDashboardMap(
   function transition(duration = 0): void {
     tween?.kill();
     const target = { ...model.mapValues.value };
-    const colorValues = Object.fromEntries(CITIES.map(city => [
-      city.code,
-      colorCoordinate(target[city.code], model.classification.value)
-    ]));
+    const colorValues = Object.fromEntries(
+      CITIES.map(city => [city.code, colorCoordinate(target[city.code], model.classification.value)])
+    );
     const targetColors = Object.fromEntries(CITIES.map(city => [city.code, getMapColor(colorValues[city.code])]));
     scene?.updateValues(colorValues, duration);
     if (!duration) {
@@ -196,12 +195,15 @@ export function useDashboardMap(
     }
   }
 
-  watch([model.mapValues, model.classification], () => {
-    hover(null);
-    if (status.value === 'ready') {
-      transition(reduced.value ? 0 : MAP_YEAR_TRANSITION.duration);
+  watch(
+    [model.mapValues, model.classification],
+    () => {
+      hover(null);
+      if (status.value === 'ready') {
+        transition(reduced.value ? 0 : MAP_YEAR_TRANSITION.duration);
+      }
     }
-  });
+  );
   watch(fontRevision, updateFallback);
   watch(options.valuesVisible, value => {
     if (value && status.value === 'ready') {

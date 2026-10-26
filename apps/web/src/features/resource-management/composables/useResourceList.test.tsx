@@ -49,10 +49,10 @@ function createClient() {
 
 function mountList(queryClient = createClient()) {
   let list!: ReturnType<typeof useResourceList>;
-  const host = defineComponent({ setup() {
+  const host = defineComponent(() => {
     list = useResourceList();
     return () => null;
-  } });
+  });
   const wrapper = mount(host, { global: { plugins: [[VueQueryPlugin, { queryClient }]] } });
   return { list, queryClient, wrapper };
 }

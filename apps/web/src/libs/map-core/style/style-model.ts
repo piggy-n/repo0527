@@ -198,5 +198,4 @@ export class StyleModel<const G extends string> implements Disposable {
   #isGroupId(id: string): id is G {
     return (this.#order as readonly string[]).includes(id);
   }
-
 }

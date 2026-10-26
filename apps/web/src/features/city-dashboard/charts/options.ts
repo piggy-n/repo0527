@@ -5,7 +5,7 @@ import type { ChartPreference, City, Comparison, Indicator } from '../model';
 import { formatValue, isValue } from '../calculations';
 import { createValueAxisScale } from './axis-scale';
 import { AVERAGE_COLOR, yearColor } from './colors';
-import { createDetailLabelPlan } from './detail-labels';
+import { createDetailLabelPlan, type LabelPlacement } from './detail-labels';
 
 export type DashboardChartOption = ComposeOption<
   BarSeriesOption | LineSeriesOption | GridComponentOption | LegendComponentOption | TooltipComponentOption
@@ -29,47 +29,75 @@ export function isStacked(input: Pick<ChartInput, 'comparison' | 'preference'>):
   return input.preference.type === 'bar' && input.comparison.length > 3;
 }
 
+// 纵轴要容纳的值：堆叠时是每个城市正值、负值各自的累计，否则是各年的城市值和均值
+function axisValues(comparison: readonly Comparison[], cities: readonly City[], stacked: boolean): (number | null)[] {
+  if (!stacked) {
+    return comparison.flatMap(item => [...item.values, item.average]);
+  }
+  return cities.flatMap((_, index) => {
+    const valid = comparison.map(item => item.values[index]).filter(isValue);
+    if (valid.length === 0) {
+      return [];
+    }
+    const positive = valid.reduce((sum, value) => sum + Math.max(0, value), 0);
+    const negative = valid.reduce((sum, value) => sum + Math.min(0, value), 0);
+    return [positive, negative];
+  });
+}
+
+// 堆叠时纵轴是各年数值的累计
+function stackedAxisName(unit: string): string {
+  return unit === '1:X' ? '年度 X 值累计' : `年度值累计（${unit}）`;
+}
+
 /** 图表配置只依赖快照；均值始终取最新比较年，与地图时间轴无关 */
 export function createChartOption(input: ChartInput): DashboardChartOption {
   const { indicator, cities, comparison, preference, detail = false, focusedCity } = input;
   const density = detail ? 1 : input.density ?? 1;
   const fontSize = detail ? 16 : Math.max(12, 13 * density);
   const stacked = isStacked(input);
-  const latest = comparison.reduce<Comparison | undefined>((result, item) =>
-    !result || item.year > result.year ? item : result, undefined);
-  const values = stacked ? cities.flatMap((_, index) => {
-    const valid = comparison.map(item => item.values[index]).filter(isValue);
-    return valid.length ? [
-      valid.reduce((sum, value) => sum + Math.max(0, value), 0),
-      valid.reduce((sum, value) => sum + Math.min(0, value), 0)
-    ] : [];
-  }) : comparison.flatMap(item => [...item.values, item.average]);
+  const latest = comparison.reduce<Comparison | undefined>(
+    (result, item) => (!result || item.year > result.year ? item : result),
+    undefined
+  );
   const percentage = indicator.unit === '%' && !stacked;
-  const axis = createValueAxisScale(values, {
+  const axis = createValueAxisScale(axisValues(comparison, cities, stacked), {
     includeZero: preference.type === 'bar',
     integer: indicator.precision === 0,
     lowerBound: percentage ? 0 : undefined,
     upperBound: percentage ? 100 : undefined
   });
   const cityIndex = cities.findIndex(city => city.code === focusedCity);
-  const plan = detail && cityIndex >= 0 ? createDetailLabelPlan({
-    comparison: comparison.filter(item => preference.legend[String(item.year)] ?? true),
-    cityIndex,
-    cityCount: cities.length,
-    activeYear: input.activeYear ?? null,
-    chartType: preference.type,
-    stacked,
-    axis,
-    size: input.size ?? { width: 0, height: 0 },
-    formatValue: value => formatValue(value, indicator, false)
-  }) : {};
-  const series: (BarSeriesOption | LineSeriesOption)[] = comparison.map((item, seriesIndex) => {
+  let plan: Record<number, LabelPlacement> = {};
+  if (detail && cityIndex >= 0) {
+    plan = createDetailLabelPlan({
+      comparison: comparison.filter(item => preference.legend[String(item.year)] ?? true),
+      cityIndex,
+      cityCount: cities.length,
+      activeYear: input.activeYear ?? null,
+      chartType: preference.type,
+      stacked,
+      axis,
+      size: input.size ?? { width: 0, height: 0 },
+      formatValue: value => formatValue(value, indicator, false)
+    });
+  }
+  const symbolSize = detail ? 8 : 6 * density;
+  // 详情里聚焦的城市描边，其余城市变淡
+  const focusStyle = (index: number) => {
+    if (!focusedCity) {
+      return undefined;
+    }
+    const focused = cities[index].code === focusedCity;
+    return { opacity: focused ? 1 : 0.38, borderColor: focused ? '#C88E00' : undefined, borderWidth: focused ? 2 : 0 };
+  };
+  const series = comparison.map((item, seriesIndex): BarSeriesOption | LineSeriesOption => {
     const color = yearColor(item.year, preference.type);
     const showLabelYear = plan[item.year]?.compact || preference.type === 'line';
     const labelPrefix = showLabelYear ? `${item.year}年${stacked ? '\n' : ' '}` : '';
     const data = item.values.map((value, index) => ({
       value,
-      symbolSize: index === cityIndex ? 11 : detail ? 8 : 6 * density,
+      symbolSize: index === cityIndex ? 11 : symbolSize,
       label: {
         show: index === cityIndex && (plan[item.year]?.show ?? false),
         position: plan[item.year]?.position ?? 'top',
@@ -78,16 +106,12 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
         fontWeight: 600,
         fontSize: 15,
         lineHeight: 22,
-        backgroundColor: stacked ? 'rgba(14,72,148,.92)' : 'rgba(243,250,255,.94)',
+        backgroundColor: stacked ? 'rgba(14,72,148,0.92)' : 'rgba(243,250,255,0.94)',
         borderRadius: 3,
         padding: [2, 4],
         formatter: `${labelPrefix}${formatValue(value, indicator, false)}`
       },
-      itemStyle: focusedCity ? {
-        opacity: cities[index]?.code === focusedCity ? 1 : 0.38,
-        borderColor: cities[index]?.code === focusedCity ? '#C88E00' : undefined,
-        borderWidth: cities[index]?.code === focusedCity ? 2 : 0
-      } : undefined
+      itemStyle: focusStyle(index)
     }));
     const base = {
       id: `year-${item.year}`,
@@ -96,21 +120,22 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
       itemStyle: { color },
       labelLayout: { hideOverlap: true, dy: plan[item.year]?.offset[1] ?? 0 }
     };
-    return preference.type === 'bar'
-      ? {
+    if (preference.type === 'bar') {
+      return {
         ...base,
         type: 'bar',
         stack: stacked ? 'annual-comparison' : undefined,
         barMaxWidth: detail ? 32 : 18 * density,
         barGap: '15%'
-      }
-      : {
-        ...base,
-        type: 'line',
-        symbol: ['emptyCircle', 'emptyRect', 'emptyTriangle', 'emptyDiamond'][seriesIndex % 4],
-        symbolSize: detail ? 8 : 6 * density,
-        lineStyle: { color, width: 2.5 * density }
       };
+    }
+    return {
+      ...base,
+      type: 'line',
+      symbol: ['emptyCircle', 'emptyRect', 'emptyTriangle', 'emptyDiamond'][seriesIndex % 4],
+      symbolSize,
+      lineStyle: { color, width: 2.5 * density }
+    };
   });
   const showAverage = preference.showAverage && !stacked && latest;
   if (showAverage) {
@@ -125,6 +150,8 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
       lineStyle: { color: AVERAGE_COLOR, type: [3, 3], width: 1.6 * density, opacity: 0.92 }
     });
   }
+  // 堆叠时上方多留出纵轴名称的位置
+  const gridTop = stacked ? { detail: 64, card: 52 } : { detail: 46, card: 36 };
   return {
     animation: !input.reducedMotion,
     animationDuration: 750,
@@ -134,7 +161,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
     grid: {
       left: detail ? 18 : 8 * density,
       right: detail ? 30 : 12 * density,
-      top: detail ? (stacked ? 64 : 46) : (stacked ? 52 : 36) * density,
+      top: detail ? gridTop.detail : gridTop.card * density,
       bottom: detail ? 20 : 12 * density,
       containLabel: true
     },
@@ -160,7 +187,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
       showContent: false,
       axisPointer: {
         type: preference.type === 'bar' ? 'shadow' : 'line',
-        shadowStyle: { color: 'rgba(67,142,251,.08)' },
+        shadowStyle: { color: 'rgba(67,142,251,0.08)' },
         lineStyle: { color: '#89BFFF', type: 'dashed' }
       }
     },
@@ -192,7 +219,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
       min: axis.min,
       max: axis.max,
       interval: axis.interval,
-      name: stacked ? (indicator.unit === '1:X' ? '年度 X 值累计' : `年度值累计（${indicator.unit}）`) : '',
+      name: stacked ? stackedAxisName(indicator.unit) : '',
       nameGap: 10,
       nameTextStyle: { align: 'left', fontSize: Math.max(11, 12 * density) },
       axisLabel: {

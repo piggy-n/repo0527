@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { FileDownloadPanel } from '@/features/file-management/components/FileDownloadPanel';
 import type { FileDownloadTask, useFileDownloads } from '@/features/file-management/composables/useFileDownloads';
+import { required } from '@/shared/testing/required';
 import 'element-plus/dist/index.css';
 import './styles/index.scss';
 
@@ -52,7 +53,7 @@ describe('下载进度与项目主题的真实布局', () => {
         expect(statuses).toHaveLength(phases.length);
         for (const status of statuses) {
           const text = firstGlyph(status.element);
-          const button = status.element.parentElement!.querySelector('button')!;
+          const button = required(status.element.parentElement?.querySelector('button'), '操作按钮');
           const action = firstGlyph(button);
           expect(Math.abs(text.top - action.top)).toBeLessThan(1);
           expect(button.getBoundingClientRect().left).toBeGreaterThan(status.element.getBoundingClientRect().left);

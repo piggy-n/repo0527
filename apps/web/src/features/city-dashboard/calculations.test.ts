@@ -1,13 +1,16 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { CITIES, INDICATORS } from './catalog';
-import { compareIndicator, formatValue } from './calculations';
+import { compareIndicator, decimalPlaces, formatValue, niceStep, trimFloat } from './calculations';
 import { createMapClassification, getMapClassIndex } from './map-classification';
 import { createValueAxisScale } from './charts/axis-scale';
 import { createChartOption, isStacked } from './charts/options';
 import type { ChartPreference, DashboardData } from './model';
 
-const indicator = INDICATORS.find(item => item.id === 'A-15')!;
+const indicator = INDICATORS.find(item => item.id === 'A-15');
+if (!indicator) {
+  throw new Error('指标目录里没有 A-15');
+}
 
 describe('统计口径与展示计算', () => {
   it('忽略缺失值与非有限值，零值仍参与均值，空集返回 null', () => {
@@ -25,10 +28,7 @@ describe('统计口径与展示计算', () => {
     expect(classification.sampleCount).toBe(7);
     expect(classification.classCount).toBe(5);
     expect(classification.breaks).toHaveLength(4);
-    classification.breaks.forEach((boundary, index) => expect(getMapClassIndex(
-      boundary,
-      classification
-    )).toBe(index + 1));
+    expect(classification.breaks.map(boundary => getMapClassIndex(boundary, classification))).toEqual([1, 2, 3, 4]);
     expect(getMapClassIndex(-100, classification)).toBe(0);
     expect(getMapClassIndex(100, classification)).toBe(4);
     expect(getMapClassIndex(null, classification)).toBeNull();
@@ -42,7 +42,7 @@ describe('统计口径与展示计算', () => {
   });
 
   it.each([2, 3, 4])('有限观测值只分 %i 档，窄区间保留有效分界', count => {
-    const values = Array.from({ length: count }, (_, index) => .001 + index * .00001);
+    const values = Array.from({ length: count }, (_, index) => 0.001 + index * 0.00001);
     const classification = createMapClassification(values);
     expect(classification.classCount).toBe(count);
     expect(values.map(value => getMapClassIndex(value, classification))).toEqual(values.map((_, index) => index));
@@ -73,5 +73,16 @@ describe('统计口径与展示计算', () => {
     const line = createChartOption({ ...input, preference: { ...preference, type: 'line' } });
     expect(line.series).toHaveLength(5);
     expect(line.series).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'average', name: '2026均值' })]));
+  });
+});
+
+describe('数值工具', () => {
+  it('小数位数按十进制写法计算，科学计数法也算对', () => {
+    expect([0.125, 12, 1e-7, 2.5e-8].map(decimalPlaces)).toEqual([3, 0, 7, 9]);
+  });
+
+  it('去掉浮点尾差；整齐步长取不小于输入的 1、2、5 × 10ⁿ', () => {
+    expect(trimFloat(0.1 + 0.2)).toBe(0.3);
+    expect([0.13, 3, 7, 0.0004].map(niceStep)).toEqual([0.2, 5, 10, 0.0005]);
   });
 });

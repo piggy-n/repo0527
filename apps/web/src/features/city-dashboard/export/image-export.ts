@@ -76,11 +76,7 @@ export function imageWithTitle(image: HTMLCanvasElement, title: string, backgrou
   context.fillStyle = '#0F4FA6';
   context.textAlign = 'center';
   context.textBaseline = 'middle';
-  lines.forEach((line, index) => context.fillText(
-    line,
-    width / 2,
-    16 + (index + 0.5) * 34
-  ));
+  lines.forEach((line, index) => context.fillText(line, width / 2, 16 + (index + 0.5) * 34));
   context.drawImage(image, 0, headingHeight, width, image.height / ratio);
   return canvas;
 }
@@ -90,11 +86,17 @@ export function safeImageName(name: string): string {
   return `${name.replace(/[\p{Cc}<>:"/\\|?*]/gu, '-').slice(0, 150)}.png`;
 }
 
-export async function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-  return new Promise((
-    resolve,
-    reject
-  ) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('图片编码失败')), 'image/png'));
+export function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const encoded = (blob: Blob | null) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error('图片编码失败'));
+      }
+    };
+    canvas.toBlob(encoded, 'image/png');
+  });
 }
 
 export function saveImage(blob: Blob, name: string): void {

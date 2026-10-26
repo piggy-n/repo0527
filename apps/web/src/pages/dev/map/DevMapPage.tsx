@@ -164,7 +164,8 @@ function describe(error: unknown): string {
 }
 
 function formatCamera({ center: [lng, lat], zoom, bearing, pitch }: CameraState): string {
-  return `${lng.toFixed(4)}, ${lat.toFixed(4)} · z${zoom.toFixed(2)} · 方位 ${bearing.toFixed(1)}° · 俯角 ${pitch.toFixed(1)}°`;
+  const position = `${lng.toFixed(4)}, ${lat.toFixed(4)}`;
+  return `${position} · z${zoom.toFixed(2)} · 方位 ${bearing.toFixed(1)}° · 俯角 ${pitch.toFixed(1)}°`;
 }
 
 function formatPadding({ top, right, bottom, left }: OverlayPadding): string {
@@ -390,21 +391,24 @@ export const DevMapPage = defineComponent({
             <ElButton onClick={toggleHighlight}>{highlightIndex.value === undefined ? '高亮' : '移动高亮'}</ElButton>
             <ElButton
               disabled={highlightIndex.value === undefined}
-              onClick={() => (highlightIndex.value = undefined)}>
+              onClick={() => (highlightIndex.value = undefined)}
+            >
               清除高亮
             </ElButton>
             <ElButton onClick={switchVersion}>切换数据版本</ElButton>
             <ElButton onClick={switchVersionLate}>切换数据版本（选区晚一轮）</ElButton>
             <ElButton
               type={selectionBroken.value ? 'danger' : 'default'}
-              onClick={() => (selectionBroken.value = !selectionBroken.value)}>
+              onClick={() => (selectionBroken.value = !selectionBroken.value)}
+            >
               {selectionBroken.value ? '修好选区的推导' : '让选区的推导出错'}
             </ElButton>
             <ElButton onClick={flyToNanjing}>flyTo 南京</ElButton>
             <ElButton onClick={fitJiangsu}>fitBounds 江苏（避开悬浮面板）</ElButton>
             <ElButton
               type={invalidLayer.value ? 'danger' : 'default'}
-              onClick={() => (invalidLayer.value = !invalidLayer.value)}>
+              onClick={() => (invalidLayer.value = !invalidLayer.value)}
+            >
               {invalidLayer.value ? '去掉不合法的图层' : '提交不合法的图层'}
             </ElButton>
             <ElButton onClick={() => (overlayVisible.value = !overlayVisible.value)}>
@@ -413,7 +417,8 @@ export const DevMapPage = defineComponent({
             <ElButton onClick={() => canvasKey.value++}>重新创建视图</ElButton>
             <ElButton
               type={failNextCreation.value ? 'danger' : 'default'}
-              onClick={() => (failNextCreation.value = !failNextCreation.value)}>
+              onClick={() => (failNextCreation.value = !failNextCreation.value)}
+            >
               {failNextCreation.value ? '取消模拟引擎失败' : '下次创建视图时模拟引擎失败'}
             </ElButton>
             <ElButton disabled={errors.value.length === 0} onClick={() => (errors.value = [])}>
@@ -421,7 +426,8 @@ export const DevMapPage = defineComponent({
             </ElButton>
             <ElButton
               type={activeTool.value === PROBE_TOOL ? 'primary' : 'default'}
-              onClick={() => toggleTool(PROBE_TOOL)}>
+              onClick={() => toggleTool(PROBE_TOOL)}
+            >
               {activeTool.value === PROBE_TOOL ? '退出坐标拾取（或按 Esc）' : '坐标拾取'}
             </ElButton>
             <ElButton disabled={probes.value.length === 0} onClick={() => (probes.value = [])}>
@@ -429,7 +435,8 @@ export const DevMapPage = defineComponent({
             </ElButton>
             <ElButton
               type={activeTool.value === MEASURE_TOOL_IDS.distance ? 'primary' : 'default'}
-              onClick={() => toggleTool(MEASURE_TOOL_IDS.distance)}>
+              onClick={() => toggleTool(MEASURE_TOOL_IDS.distance)}
+            >
               测距
             </ElButton>
             <ElButton onClick={() => (stress.value = !stress.value)}>
