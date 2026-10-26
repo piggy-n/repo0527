@@ -1,7 +1,7 @@
 # vite.config.ts 配置说明
 
 对应文件：`apps/web/vite.config.ts`
-相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（libs 的 Sass 入口）
+相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（libs 的 Sass 入口）、ADR 0079（Cesium 的运行时文件）
 
 ## 整体结构
 
@@ -13,7 +13,7 @@
 
 | 配置 | 值 | 说明 |
 |---|---|---|
-| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`buildOutputPlugin` 只在构建时清理、检查产物，见下文 |
+| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`cesiumAssets`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`cesiumAssets` 提供 Cesium 的运行时文件，`buildOutputPlugin` 只在构建时清理、检查产物，都见下文 |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `css.preprocessorOptions.scss.loadPaths` | `[src/libs]` | libs 模块的 Sass 入口按模块名引用，见下文 |
 | `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
@@ -37,13 +37,32 @@ const generators =
 - `systemTitlePlugin` 从 `./tools/system-title/vite-plugin.ts` 导入，带 `.ts` 扩展名，因为同一份代码也由 Node 直接运行；`iconsPlugin` 从 workspace 包的 `@yzt/icons/tools` 入口导入
 - 同时开着多个开发服务器时，它们都会处理图标目录；`iconsPlugin` 对此做了容错，见 [modules/icons.md](../modules/icons.md)
 
+### Cesium 的运行时文件
+
+```ts
+const cesiumAssets = viteStaticCopy({
+  targets: [
+    {
+      src: 'node_modules/cesium/Build/Cesium/{Workers,Assets,ThirdParty}/**/*',
+      dest: 'cesium',
+      rename: { stripBase: 4 }
+    }
+  ]
+});
+```
+
+- Cesium 运行时按基础地址请求 Worker、资源（地球的贴图、着色器用到的数据）和第三方文件（Draco 解码等），这些文件不经过打包（ADR 0079 第 1 节）。`vite-plugin-static-copy` 构建时把它们复制到产物的 `cesium/`（2026-10-26 实测约 6.9 MB），开发服务器和测试时从 `node_modules` 直接提供，不复制、不入库
+- `stripBase: 4` 去掉 `node_modules/cesium/Build/Cesium` 四层目录，保留 `Workers`、`Assets`、`ThirdParty`；升级 Cesium 后核对这几个目录还在原来的位置
+- 所有模式都启用：浏览器测试用真实的 Cesium，同样从 `/cesium/` 加载
+- 基础地址由 app 的三维运行时设置为 `${BASE_URL}cesium/`（[modules/map-cesium.md](../modules/map-cesium.md)"运行时"），没有写进 `define`、也不用 `window.CESIUM_BASE_URL`
+
 ### 构建产物检查
 
 `tools/build-output/vite-plugin.ts` 的 `buildOutputPlugin` 只在 `build` 生效，每次公网、内网构建都会执行，不需要另跑命令：
 
 - Vite 复制 `public/` 后，在 `writeBundle` 清理当前输出目录内的 `design.local/`，源设计稿仍放在 `public/design.local/`。删除前确认输出目录与源码、`public` 不重叠，支持自定义 `outDir`
 - 检查全部分块的模块清单，禁止包含 `src/pages/dev/`；再检查磁盘文件，禁止残留 `Dev*Page` 文件和 `design.local`
-- 从入口分块沿静态 `imports` 检查依赖，禁止包含 `maplibre-gl`；不遍历动态导入，地图运行时仍可按需加载、预加载
+- 从入口分块沿静态 `imports` 检查依赖，禁止包含 MapLibre（`maplibre-gl`）和 Cesium（`cesium`、`@cesium/*`）；不遍历动态导入，地图运行时仍可按需加载、预加载。map-vue 的上下文会连带 maplibre-gl，所以给地图页注入三维运行时的那一层也放在地图页的分块里（ADR 0079 第 2 节）
 - 关闭天地图时，有效的 `VITE_TIANDITU_KEY` 必须为空；扫描文本产物，禁止残留按 `production` 模式读取的公网 key，错误只报告文件名。未调用的天地图地址模板允许保留，不以域名字符串代替运行时开关
 
 检查失败会让构建失败。本机部署构建和 CI 使用同一套检查；CI 同时执行公网和内网构建。
@@ -197,3 +216,4 @@ proxy: {
 - 修改插件的选项：测试的转换缓存不包含插件选项，先执行 `pnpm --filter @yzt/web exec vitest --clearCache` 再运行测试
 - 改动路径别名：只改 tsconfig 的 `paths`，不要在这里加 `resolve.alias`
 - 新增 libs 模块的 Sass 入口：放在模块根目录，命名 `_index.scss`，只放变量；`test.css.include` 的正则已经覆盖所有模块
+- 升级 Cesium：核对 `Build/Cesium` 下的三个目录和 `stripBase` 的层数，构建后产物的 `cesium/` 里能找到 `Workers/`、`Assets/`、`ThirdParty/`，再跑 map-cesium 的浏览器测试

@@ -66,7 +66,7 @@ serveWorker<TileProtocol>(self, {
 | 执行中的任务 | 取消消息到达时中止处理函数收到的 `signal`，它可以直接传给 `fetch` |
 | 计算 | `checkpoint()` 通过 `MessageChannel` 让出一次事件循环，再 `throwIfAborted()` |
 
-`safeReporter(report, label)` 从入口导出：包装外部传入的错误报告器，报告器自己抛错时改为打印到控制台（连同原始错误），调用方后续的状态转换和资源释放不受影响。MapLibre 视图和 map-vue 的 `provideMap` 在入口用它包装 `onError`。
+`safeReporter(report, label)` 从入口导出：包装外部传入的报告器，报告器自己抛错时改为打印到控制台（连同报告的内容），调用方后续的状态转换和资源释放不受影响。MapLibre 视图、三维视图和 map-vue 的 `provideMap` 在入口用它包装 `onError`；报告的内容的类型跟着回调走（泛型，默认 `unknown`），三维视图也用它包装 `onUnsupported`。
 
 `abortReason(signal)` 从入口导出，其他模块按同样的规则把 `signal.reason` 变成错误对象（map-vue 的 `whenReady` 在用）：`signal.reason` 的类型是 `any`，不是错误对象时改用 `AbortError`；判断时兼容 jsdom 里 `DOMException` 不是 `Error` 实例的情况。
 

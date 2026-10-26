@@ -87,6 +87,8 @@
 | [0075](0075-file-transfer-and-preview.md) | 公共文件传输与文件管理预览 | 已接受 |
 | [0076](0076-muted-panel-header.md) | 按需复用浅灰底面板标题栏 | 已接受 |
 | [0077](0077-city-dashboard-isolated-rendering.md) | 城市体检驾驶舱独立渲染与资源所有权 | 已接受 |
+| [0078](0078-3d-scope-and-interaction.md) | 三维阶段的范围与交互 | 已接受 |
+| [0079](0079-cesium-view-and-dimension-switch.md) | Cesium 运行时、三维视图与二三维切换 | 已接受（修正 0002 的 Cesium 版本） |
 
 ## 模板
 

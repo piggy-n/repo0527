@@ -115,7 +115,10 @@ basemap.selected.value;   // 当前底图
 basemap.opacity.value;    // 当前底图的透明度（0～1），无底图时为 null
 basemap.select('imagery');
 basemap.setOpacity(0.6);
+basemap.selectForDimension('3d'); // 切换二三维后选默认的底图
 ```
+
+- `selectForDimension(kind)`（ADR 0078 第 2 节）：三维选影像、二维选矢量；没有这种底图（关闭天地图）时不变。页面切换 `map.setDimension` 后调用
 
 - `useBasemap()` 默认读取 `appConfig.tianditu`，测试时传入 `{ tianditu }`；不传偏好的范围时不依赖组件的生命周期，没有要清理的东西。推导用的是 `createBasemapStyles(tianditu)` 的两个纯函数
 - 不用 Pinia：状态只在一个页面里共享，不带到其他地图页，同一页面上的两张地图互不影响（ADR 0031）
@@ -266,7 +269,8 @@ boundaries.setOpacity(0.6);
 - 指北针（ADR 0058，2026-10-16 用户要求）：在"缩小"下面，和放大、缩小在同一段。图标是多色的 `map-compass-color`（北半红、南半灰），用 `SvgIcon` 的 `rotate` 转 `-bearing`，指针总是指向地图上的正北。点击是一次新的相机操作（`runCameraOperation`），只交出 `flyTo({ bearing: 0, pitch: 0 })`，动画和放大缩小一样（`VIEW_BUTTON_DURATION`，300 ms）；不传中心，相机控制不换算避让的留白，中心和级别都不变。提示和无障碍名称是"指北针：恢复正北、垂直俯视"，转过时加上"（旋转 35°）"，角度的写法和状态栏一样（`visibleAngles`）；正北、没有俯仰时照常可以点
 - 层级向下取整（`levelOf`，加 1e-6 再取整），悬停和无障碍名称是"当前层级 13（13.6）"；面板的"放大至第 N 级显示"、点选的 14 级界限都按"级别 ≥ N"判断，所以不四舍五入
 - 放大、缩小每次 ±1（13.6 → 14.6），截断在缩放范围里，到头时按钮不可用；动画 300 ms。每次点击是一次新的相机操作（`beginCameraOperation`），记下这次的目标级别：上一次按钮缩放还没被作废时接着它的目标累计（连点两下就是 +2，不读动画的中间值），被别的相机操作（滚轮、拖动、默认视角、区划定位等）作废后从当时的级别算起。信号的中止不是响应式的，作废时清掉记下的目标，按钮的可用状态马上按当时的级别重新计算
-- 2D 是当前的一格；三维阶段之前 3D 外观照常、`aria-disabled`，提示"三维暂未开放"，点了没有效果
+- 2D 是当前的一格；页面不传 `dimension` 时（三维阶段之前）3D 外观照常、`aria-disabled`，提示"三维暂未开放"，点了没有效果
+- 页面传了 `dimension`（`ViewKind`）时两格都可用：当前的一格高亮，点另一格发出 `update:dimension`，点当前的不发；切换本身和切换时换底图都由页面决定（三维原型 `/dev/map-3d` 已使用，业务页在三维阶段接入）
 - 滚轮和触控板的缩放速率 `SCROLL_ZOOM_RATES`：滚轮 1/600、触控板 1/150（MapLibre 默认 1/450、1/100），首轮先调低灵敏度，用普通鼠标和触控板实际试过后再定。画布的 `scrollZoomRates` 只在创建地图时生效，由适配器设到 MapLibre 的 `scrollZoom` 上
 
 ## 状态栏（ADR 0053 第 5 节）
@@ -705,7 +709,7 @@ sides.activate('right');
 | `toolbar/MapToolbar.test.tsx` | 文字每行两个字；按分组显示按钮和分隔线；只显示图标时不渲染文字；工具按钮跟随当前工具、点击时激活；点击已激活的工具时退出；动作按钮调用回调、没有回调时不可用；按下的动作和当前工具样式不同 | jsdom |
 | `view-controls/zoom.test.ts` | 层级向下取整与浮点误差；目标级别 ±1 与截断、到头不能再缩放；累计的起点；按钮缩放每次 ±1、连续点击累计、被作废后重新开始、到头时不可用、被作废后恢复可用 | Node |
 | `view-controls/compass.test.ts` | 提示的写法（正北、转过、取整、358° 写成 -2°、只俯仰时不写）；图标的角度；点击只交出旋转和俯仰 0、正北时照常执行 | Node |
-| `view-controls/MapViewControls.test.tsx` | 层级与完整的提示；最大、最小级别时按钮不可用；指北针的位置、提示和图标的旋转；默认视角调用回调；三维暂未开放 | jsdom |
+| `view-controls/MapViewControls.test.tsx` | 层级与完整的提示；最大、最小级别时按钮不可用；指北针的位置、提示和图标的旋转；默认视角调用回调；三维暂未开放；给出当前视图时两格可用、只有点另一格才通知切换 | jsdom |
 | `status-bar/status-bar.test.ts` | 比例尺的整齐长度与线段长度、各级别都在 32～80 像素、距离不是正数时为 null；长度的单位；角度取整、为 0 时不显示、旋转在 -179～180；放不下时的取舍顺序、量不到宽度时全部显示 | Node |
 | `status-bar/useMapReadout.test.ts` | 视图不在就绪时没有比例尺和经纬度；比例尺的取样点和距离；鼠标下的点与画布中心；随投影修订号重新计算；拾取不到时为 null（用假的上下文） | Node |
 | `status-bar/MapStatusBar.test.tsx` | 比例尺和经纬度、按写法显示、"中心"、角度不为 0 时才显示、没有读数时不显示；按根元素和三把量尺量出的宽度取舍（`ResizeObserver` 替身） | jsdom |

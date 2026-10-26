@@ -30,8 +30,6 @@ export const MapCanvas = defineComponent({
     const state = injectMapState('MapCanvas');
     const container = ref<HTMLElement>();
     let view: MapLibreView<string> | undefined;
-    // 所在页面被 KeepAlive 缓存、切到别的页面期间（ADR 0063）
-    let deactivated = false;
 
     const createView = () => {
       if (!container.value) {
@@ -40,8 +38,8 @@ export const MapCanvas = defineComponent({
       const created = new MapLibreView({
         session: state.session,
         container: container.value,
-        // 停用期间重试时也以暂停状态创建，激活时再恢复
-        active: !deactivated,
+        // 页面停用期间、当前显示的是三维时以暂停状态创建，由上下文在需要时恢复（ADR 0063、0079 第 8 节）
+        active: state.shouldRun('2d'),
         mapOptions: props.mapOptions,
         scrollZoomRates: props.scrollZoomRates,
         createMap: props.createMap,
@@ -74,30 +72,32 @@ export const MapCanvas = defineComponent({
     };
 
     onMounted(createView);
-    // 引擎失败后重试：在同一个容器里重新创建视图（ADR 0030）
+    // 引擎失败后重试：在同一个容器里重新创建视图（ADR 0030）；当前显示的是三维时重试的是三维视图
     watch(state.retryRequests, () => {
+      if (state.context.dimension.value !== '2d') {
+        return;
+      }
       disposeView();
       createView();
     });
-    // 页面停用时暂停视图：隐藏期间的定位等恢复后再执行，工具收不到输入；恢复时视图先按容器调整画布（ADR 0063）
-    onDeactivated(() => {
-      deactivated = true;
-      view?.pause();
-    });
-    onActivated(() => {
-      if (!deactivated) {
-        return;
-      }
-      deactivated = false;
-      view?.resume();
-    });
+    // 页面停用时上下文暂停当前视图：隐藏期间的定位等恢复后再执行，工具收不到输入；恢复时视图先按容器调整画布（ADR 0063）
+    onDeactivated(() => state.setPageActive(false));
+    onActivated(() => state.setPageActive(true));
     // 早于 provideMap 所在组件的 onUnmounted：先释放视图，后释放会话
     onUnmounted(disposeView);
 
-    return () => (
-      <div class={styles.root} data-map-view-state={state.context.viewState.value}>
-        <div ref={container} class={styles.container} />
-      </div>
-    );
+    return () => {
+      // 显示三维时隐藏但保留尺寸，切回时不用重新量画布
+      const hidden = state.context.dimension.value !== '2d';
+      return (
+        <div
+          class={styles.root}
+          style={hidden ? { visibility: 'hidden' } : undefined}
+          data-map-view-state={state.context.viewState.value}
+        >
+          <div ref={container} class={styles.container} />
+        </div>
+      );
+    };
   }
 });

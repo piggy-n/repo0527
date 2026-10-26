@@ -1,4 +1,4 @@
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup, ViewKind } from '@yzt/map-core';
 import { computed, type ComputedRef, shallowRef } from 'vue';
 import { appConfig, type TiandituConfig } from '../../config/app-config';
 import type { PreferenceScope } from '../../storage/preference-scope';
@@ -33,6 +33,8 @@ export interface Basemap {
   readonly opacity: ComputedRef<number | null>;
   /** 选择底图；不可用的底图直接抛错 */
   readonly select: (id: BasemapId) => void;
+  /** 切换二三维后选默认的底图（ADR 0078 第 2 节）：三维影像、二维矢量；没有这种底图（关闭天地图）时不变 */
+  readonly selectForDimension: (kind: ViewKind) => void;
   /** 修改当前底图的透明度；不在 0～1 之间、或者无底图时直接抛错 */
   readonly setOpacity: (value: number) => void;
   /** 绑定到 basemap 分组 */
@@ -79,6 +81,13 @@ export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBa
     }
   };
 
+  const selectForDimension = (kind: ViewKind) => {
+    const id: BasemapId = kind === '3d' ? 'imagery' : 'vector';
+    if (options.some(option => option.id === id)) {
+      select(id);
+    }
+  };
+
   const setOpacity = (value: number) => {
     const current = state.value;
     if (current.selected === 'none') {
@@ -99,6 +108,7 @@ export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBa
     selected,
     opacity,
     select,
+    selectForDimension,
     setOpacity,
     deriveGroup: () => styles.basemapGroup(state.value),
     deriveLabelsGroup: () => styles.labelsGroup(state.value)

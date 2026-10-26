@@ -1,4 +1,5 @@
-import { MapCanvas, provideMap } from '@yzt/map-vue';
+import type { ViewKind } from '@yzt/map-core';
+import { CesiumCanvas, MapCanvas, provideMap, type UnsupportedLayer } from '@yzt/map-vue';
 import { computed, defineComponent, ref, watch } from 'vue';
 import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureDetailWindow';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
@@ -58,6 +59,11 @@ const PANEL_LABELS = {
 };
 
 type FunctionPanel = (typeof FUNCTION_PANELS)[number];
+
+// 三维跳过的图层（ADR 0079 第 7 节）：开发环境下每个图层提示一次，生产环境不提示
+const reportUnsupported = import.meta.env.DEV
+  ? ({ layerId, reason }: UnsupportedLayer) => console.warn(`[三维] 跳过图层 ${layerId}：${reason}`)
+  : undefined;
 
 // 地图操作、测量、定位、显示辅助、清理分组
 const TOOLBAR_GROUPS = [
@@ -186,6 +192,11 @@ export const CurrentMapPage = defineComponent({
         sides.activate('left');
       }
     };
+    // 切换二三维：底图跟着换成这种视图默认的（ADR 0078 第 2 节）
+    const switchDimension = (kind: ViewKind) => {
+      map.setDimension(kind);
+      basemap.selectForDimension(kind);
+    };
     // "清除"清掉地图上画的东西：测量结果和位置点；区划选择不算
     const clear = () => {
       measure.clear();
@@ -252,6 +263,7 @@ export const CurrentMapPage = defineComponent({
           data-map-page={phone ? 'phone' : 'wide'}
         >
           <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
+          <CesiumCanvas onUnsupported={reportUnsupported} />
           <MeasureOverlay measure={measure} />
           <LocationOverlay location={location} />
           <BoxSelectOverlay pick={pick} />
@@ -342,7 +354,12 @@ export const CurrentMapPage = defineComponent({
               </div>
               <div class={styles.stack}>
                 <div class={styles.controls}>
-                  <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
+                  <MapViewControls
+                    goToDefaultView={goToDefaultView}
+                    zoomRange={JIANGSU_ZOOM_RANGE}
+                    dimension={map.dimension.value}
+                    onUpdate:dimension={switchDimension}
+                  />
                 </div>
                 {renderBasemapCard()}
               </div>

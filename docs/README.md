@@ -39,7 +39,8 @@ docs/
 │  ├─ ui.md                   libs/ui：两个入口、窄屏断点、分栏布局、面板、区块、标题
 │  ├─ map-overview.md         地图架构总览：分层、贯穿全局的原则、按主题的现行 ADR 与修正关系、阅读顺序
 │  ├─ map-core.md             地图内核：用法、会话与 MapLibre 适配器的实现、实测行为、加载策略；附录为旧代码分析
-│  ├─ map-vue.md              libs/map-vue：地图与 Vue 的衔接（provideMap、样式绑定、MapCanvas、useMap、相机操作、定位可视区域）
+│  ├─ map-vue.md              libs/map-vue：地图与 Vue 的衔接（provideMap、样式绑定、MapCanvas、useMap、相机操作、定位可视区域、二三维切换）
+│  ├─ map-cesium.md           libs/map-cesium：三维视图（CesiumView、相机换算与精确还原、样式镜像的支持清单、拾取与投影）
 │  ├─ shared-map.md           shared/map：项目级的公共地图能力（底图、边界、默认视角、工具栏、测量、区划定位、坐标定位、状态提示）
 │  ├─ perf.md                 shared/perf：加载耗时的标记（LoadTrace、登录到地图）与实测脚本
 │  ├─ utils.md                libs/utils：Worker 通信层（协议、取消、故障、托管）、LatestController

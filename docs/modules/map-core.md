@@ -255,7 +255,7 @@ store.clear();
 - 任何路径开始新的一轮整体加载（`#rebuild`）时，状态是 `failed` 就先回到 `initializing`（先换 `whenReady()` 的 Promise 再通知）：失败后用新的提交重新加载，以及报错之后加载仍然完成、激活时追赶触发的重建，都是新的一轮。所以正确的实现里 `failed → failed` 走不到，表里的这条许可是第二道防线
 - 5C.0e 之后发现的回归（5C.0e 引入）：样式失败后，同一轮里收到新的提交（通知还在微任务里）和 `style.load`，激活时追赶触发重建，`setStyle` 抛错。重建时没有离开 `failed`，`failed(style) → failed(engine)` 被转换表拒绝，引擎失败随之丢失（原来的 `#fatal` 不受转换影响），之后的 `style.load` 又把视图带回 `ready`。修复是上面两条，先写了复现的用例
 - 不在表里的转换不执行，报给 `onError`（`MapLibreView 不能从 … 转换到 …`），状态保持不变。调用方都在 MapLibre 的事件处理里，抛错也只会被 `#guard` 接住，所以选择报告。它是第二道防线：上游的判断（如"引擎失败后不再处理 `style.load`"）写错时，状态仍然合法，错误被报告出来
-- 表在代码里只有一份（`TRANSITIONS`），测试另写一份作为判断标准，两份一致才说明实现照表执行
+- 表在代码里只有一份（`TRANSITIONS`，3D.1 起放在 `view/view-lifecycle.ts`，和 `deferred` 一起由入口导出，三维视图共用，ADR 0079），测试另写一份作为判断标准，两份一致才说明实现照表执行
 - 构造时用 `@yzt/utils` 的 `safeReporter` 包装 `onError`：外部的报告器自己抛错时改为打印到控制台，不打断状态转换（之前报告器在 `error` 事件里抛错，加载失败就判定不了，视图一直停在 `initializing`，异常还会冒进 MapLibre 的事件分发）
 - `whenReady()` 的 Promise 内部先挂一个空的 `catch`：没人等待时被拒绝不会报"未处理的拒绝"，等待的人照样收到错误
 - 释放时取消订阅、`map.remove()`，等待中的 `whenReady` 以 `AbortError` 结束

@@ -2,7 +2,15 @@ import type { FilterSpecification, LayerSpecification } from '@maplibre/maplibre
 import type { Feature, FeatureCollection, Polygon } from 'geojson';
 import { ElButton } from 'element-plus';
 import type { CameraState, LngLat, MapTool, ScreenPoint, StyleGroup, ViewBounds } from '@yzt/map-core';
-import { MapCanvas, type OverlayPadding, provideMap, useMap, useMapOverlay } from '@yzt/map-vue';
+import {
+  CesiumCanvas,
+  MapCanvas,
+  type OverlayPadding,
+  provideMap,
+  type UnsupportedLayer,
+  useMap,
+  useMapOverlay
+} from '@yzt/map-vue';
 import { computed, defineComponent, type PropType, ref, shallowRef } from 'vue';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
@@ -346,7 +354,10 @@ export const DevMapPage = defineComponent({
     map.registerTools({ [PROBE_TOOL]: createProbeTool(probe => (probes.value = [...probes.value.slice(-4), probe])) });
 
     const camera = map.useCamera();
-    const { viewState, activeTool } = map;
+    const { viewState, activeTool, dimension } = map;
+    // 三维跳过的图层（ADR 0079 第 7 节），按图层 ID
+    const skipped = shallowRef<readonly UnsupportedLayer[]>([]);
+    const recordSkipped = (layer: UnsupportedLayer) => (skipped.value = [...skipped.value, layer]);
     const toggleTool = (id: string) => (activeTool.value === id ? map.releaseTool(id) : map.activateTool(id));
 
     const nextVersion = (): DataVersion => (version.value === 0 ? 1 : 0);
@@ -403,6 +414,9 @@ export const DevMapPage = defineComponent({
             >
               {selectionBroken.value ? '修好选区的推导' : '让选区的推导出错'}
             </ElButton>
+            <ElButton onClick={() => map.setDimension(dimension.value === '2d' ? '3d' : '2d')}>
+              {dimension.value === '2d' ? '切换到三维' : '切换到二维'}
+            </ElButton>
             <ElButton onClick={flyToNanjing}>flyTo 南京</ElButton>
             <ElButton onClick={fitJiangsu}>fitBounds 江苏（避开悬浮面板）</ElButton>
             <ElButton
@@ -445,7 +459,11 @@ export const DevMapPage = defineComponent({
           </div>
           <dl class={styles.status} data-view-state={viewState.value}>
             <dt>视图</dt>
-            <dd>{viewState.value}</dd>
+            <dd data-dimension={dimension.value}>
+              {dimension.value} · {viewState.value}
+            </dd>
+            <dt>三维跳过</dt>
+            <dd data-skipped>{skipped.value.map(({ layerId }) => layerId).join('、') || '-'}</dd>
             <dt>会话相机</dt>
             <dd data-camera>{formatCamera(camera.value)}</dd>
             <dt>数据版本</dt>
@@ -462,6 +480,7 @@ export const DevMapPage = defineComponent({
         </header>
         <div class={styles.mapArea}>
           <MapCanvas key={canvasKey.value} createMap={failNextCreation.value ? failingCreateMap : undefined} />
+          <CesiumCanvas onUnsupported={recordSkipped} />
           {overlayVisible.value && <OverlayPanel />}
           {lastProbe.value && <ProbeLabel probe={lastProbe.value} />}
           <MeasureOverlay measure={measure} />

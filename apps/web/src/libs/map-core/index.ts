@@ -69,3 +69,4 @@ export type {
   PickSurface,
   ScreenPoint
 } from './view/view-input';
+export { canTransition, type Deferred, deferred, type LiveViewState } from './view/view-lifecycle';

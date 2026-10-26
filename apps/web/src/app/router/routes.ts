@@ -85,6 +85,12 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
     meta: { title: '地图界面交互样例', public: true }
   },
   {
+    path: '/dev/map-3d',
+    name: RouteName.devMap3d,
+    component: () => import('@/pages/dev/map-3d/DevMap3dPage').then(({ DevMap3dPage }) => DevMap3dPage),
+    meta: { title: '三维迁移交互原型', public: true }
+  },
+  {
     path: '/dev/resources',
     name: RouteName.devResources,
     component: withMapRuntime(() =>

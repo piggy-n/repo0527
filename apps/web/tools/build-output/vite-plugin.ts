@@ -8,6 +8,13 @@ function contains(directory: string, target: string): boolean {
   return path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path);
 }
 
+// 地图引擎只能经由动态导入出现：二维的 MapLibre、三维的 Cesium（含拆出的 @cesium/* 包）
+const MAP_ENGINES = [
+  { name: 'MapLibre', path: '/node_modules/maplibre-gl/' },
+  { name: 'Cesium', path: '/node_modules/cesium/' },
+  { name: 'Cesium', path: '/node_modules/@cesium/' }
+];
+
 /** 只检查入口的静态依赖，地图运行时的动态导入不在此范围 */
 function checkEntryImports(bundle: Rolldown.OutputBundle): void {
   const pending = Object.values(bundle).filter(item => item.type === 'chunk' && item.isEntry);
@@ -18,8 +25,9 @@ function checkEntryImports(bundle: Rolldown.OutputBundle): void {
       continue;
     }
     visited.add(chunk.fileName);
-    if (chunk.moduleIds.some(id => normalizePath(id).includes('/node_modules/maplibre-gl/'))) {
-      throw new Error(`[build-output] 入口静态依赖包含 MapLibre：${chunk.fileName}`);
+    const engine = MAP_ENGINES.find(({ path }) => chunk.moduleIds.some(id => normalizePath(id).includes(path)));
+    if (engine) {
+      throw new Error(`[build-output] 入口静态依赖包含 ${engine.name}：${chunk.fileName}`);
     }
     for (const name of chunk.imports) {
       const dependency = bundle[name];

@@ -3,6 +3,7 @@ import vueJsx from '@vitejs/plugin-vue-jsx';
 import { playwright } from '@vitest/browser-playwright';
 import { iconsPlugin } from '@yzt/icons/tools';
 import { loadEnv } from 'vite';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 // 与 vite 的 defineConfig 相同，只是类型里多了 test 字段
 import { configDefaults, defineConfig } from 'vitest/config';
 import { buildOutputPlugin } from './tools/build-output/vite-plugin.ts';
@@ -24,8 +25,21 @@ export default defineConfig(({ mode }) => {
           iconsPlugin(iconsPaths(process.cwd()))
         ];
 
+  // Cesium 按基础地址请求的 Worker、资源和第三方文件，复制到产物的 cesium/，开发服务器同样提供（ADR 0079 第 1 节）；
+  // 测试也要：浏览器测试用真实的 Cesium
+  const cesiumAssets = viteStaticCopy({
+    targets: [
+      {
+        src: 'node_modules/cesium/Build/Cesium/{Workers,Assets,ThirdParty}/**/*',
+        dest: 'cesium',
+        // 去掉 node_modules/cesium/Build/Cesium 四层，保留 Workers 等目录
+        rename: { stripBase: 4 }
+      }
+    ]
+  });
+
   return {
-    plugins: [vueJsx(), ...generators, buildOutputPlugin()],
+    plugins: [vueJsx(), ...generators, cesiumAssets, buildOutputPlugin()],
     resolve: {
       // 直接读取 tsconfig 的 paths，不再单独维护一份别名
       tsconfigPaths: true

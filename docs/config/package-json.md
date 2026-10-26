@@ -145,9 +145,15 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "@vueuse/core": "^15.0.0",
     "@yzt/icons": "workspace:*",
     "axios": "^1.20.0",
+    "cesium": "1.146.0",
     "core-js": "^3.50.0",
+    "d3-geo": "3.1.1",
+    "d3-polygon": "3.0.1",
+    "docx-preview": "0.4.1",
+    "echarts": "^5.6.0",
     "element-plus": "^2.14.6",
     "geographiclib-geodesic": "^2.2.0",
+    "gsap": "3.13.0",
     "idb-keyval": "^6.3.0",
     "jwt-decode": "^4.0.0",
     "maplibre-gl": "^6.12.0",
@@ -155,14 +161,18 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "pinia": "^4.0.3",
     "sm-crypto-v2": "^1.15.1",
     "sortablejs": "^1.15.7",
+    "three": "0.183.2",
     "vue": "^3.5.43",
     "vue-router": "^5.3.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/d3-geo": "3.1.1",
+    "@types/d3-polygon": "3.0.2",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^24.19.0",
     "@types/sortablejs": "^1.15.9",
+    "@types/three": "0.183.1",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
     "@vitest/browser-playwright": "^5.0.3",
     "@vue/test-utils": "^2.5.1",
@@ -173,6 +183,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "sass-embedded": "^1.105.0",
     "typescript": "7.0.2",
     "vite": "^8.3.1",
+    "vite-plugin-static-copy": "^4.1.1",
     "vitest": "^5.0.3"
   }
 }
@@ -210,6 +221,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `@vueuse/core` | 组合式工具集，按需具名导入，未用到的函数会被 tree-shake。目前在 `libs/ui` 的分栏布局中用 `useMediaQuery`（窄屏断点）、`useResizeObserver`（侧栏内容显示后写回滚动位置），两者都会在作用域销毁时自动移除监听。element-plus 2.14.6 内部依赖 15.0.0，所以这里也用 15，打包时只有一份；15.0.0 还没出过补丁版本，但它已经随 Element 在项目中运行，选 14 反而会多打包一份 | 手写 matchMedia、ResizeObserver 的封装 |
 | `vite` | 开发服务器与构建工具，8.x 内部使用 Rolldown 打包 | webpack、Rsbuild |
 | `@vitejs/plugin-vue-jsx` | 用 Babel 编译 Vue 的 TSX，支持 Vue 专有的 JSX 语义 | `@vitejs/plugin-vue`（SFC，ADR 0001 未采用） |
+| `vite-plugin-static-copy` | 把 Cesium 的 `Workers`、`Assets`、`ThirdParty` 复制到产物的 `cesium/`，开发服务器和测试时直接从 `node_modules` 提供（ADR 0079 第 1 节），见 [vite-config.md](vite-config.md)"Cesium 的运行时文件"。Cesium 官方的 Vite 示例用的也是它 | 在 `public/` 放一份副本（要入库或在安装后复制）、`vite-plugin-cesium`（第三方插件，通过全局的 `CESIUM_BASE_URL` 设置基础地址） |
 | `sass-embedded` | 编译 `*.module.scss`；通过嵌入协议调用原生 Dart Sass，比纯 JS 版 `sass` 快 | `sass`、Less、原生 CSS |
 | `@yzt/icons` | workspace 内部包（ADR 0014）。`workspace:*` 表示始终使用本仓库 `packages/icons` 的当前代码，pnpm 用符号链接连接，见 [internal-packages.md](internal-packages.md) | — |
 | `axios` | HTTP 请求，只在 `shared/http/client.ts` 中使用（ADR 0011） | ky、原生 fetch |
@@ -218,6 +230,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `jwt-decode` | 读取登录 token 的过期时间，只在 `shared/auth/token.ts` 中使用；不校验签名（ADR 0015） | 手写 base64url 解码 |
 | `sm-crypto-v2` | 登录密码的 SM2 加密，只在 `features/auth/password.ts` 中使用；底层是 `@noble/curves`，已与旧项目的 sm-crypto 交叉验证兼容（ADR 0015） | sm-crypto |
 | `maplibre-gl` | 二维地图（ADR 0002、0019），只在 map-core 的适配器和 app 的装配中导入。6.x 只提供 ESM，Worker 由 app 用 `?worker&url` 导入后交给 `setWorkerUrl`；依赖里的 `@types/geojson`、`@maplibre/maplibre-gl-style-spec` 不会暴露给应用，要用时自己声明，版本与它保持一致。主模块约 1 MB、Worker 510 KB，地图页必须懒加载 | mapbox-gl（2.0 起为专有许可）、OpenLayers |
+| `cesium` | 三维地图（ADR 0002、0079），只在 `libs/map-cesium` 和 app 的装配中导入（lint 检查）。不遵守语义化版本，精确锁定（ADR 0005）；`cesium` 是聚合包，代码在它依赖的 `@cesium/engine`、`@cesium/widgets` 里（1.146.0 对应 26.4.0、16.3.0）。本项目只用 engine 的 `CesiumWidget`，导入写 `cesium`。Worker、资源和第三方文件不经过打包，由 `vite-plugin-static-copy` 复制到产物的 `cesium/`；地图页第一次切到三维时才加载 | MapLibre 的地球投影（没有 3D Tiles、第一人称相机）、deck.gl |
 | `@maplibre/maplibre-gl-style-spec` | MapLibre 样式规范的工具：map-core 用它的 `diff` 对比样式快照（ADR 0022），以后在三维和 Worker 里求值表达式和过滤条件（ADR 0021、0024）。它本来就是 maplibre-gl 的依赖，pnpm 不允许使用没有声明的包，所以自己声明；版本范围与 maplibre-gl 声明的相同（`^26.4.4`），两者解析到同一个版本，只打包一份 | 手写求值器（旧项目的做法，ADR 0020） |
 | `@types/geojson` | GeoJSON 的类型，并提供全局命名空间 `GeoJSON`：style-spec 和 maplibre-gl 的声明文件依赖它，要在 tsconfig 的 `types` 中加载，否则相关类型会悄悄变成错误类型（见 [tsconfig.md](tsconfig.md)）。版本范围与 maplibre-gl 依赖的相同 | — |
 | `geographiclib-geodesic` | 椭球面上的距离和面积（ADR 0024 第 4 条、ADR 0035），只在 map-core 的测量中使用。Karney 算法的作者维护，MIT 许可，自带类型；只有 CommonJS 格式的压缩包（32 KB），由 Vite 预构建处理。参数是先纬度后经度，map-core 的封装负责转换 | geodesy（Vincenty，没有椭球面积）、turf（球面） |
@@ -250,4 +263,5 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 - 往根目录装依赖加 `-w`；精确锁定加 `-E`
 - 改了 `devEngines.runtime`：同步检查 CI 能否装到对应的 Node，`@types/node` 的大版本是否一致
 - 升级 `typescript`：根目录和 `apps/web` 两处同时改，保持同一版本；同时评估 `oxlint-tsgolint` 是否要跟着升
+- 升级 `cesium`：读 CHANGES.md 的 Breaking Changes，按大版本对待；核对 `buildModuleUrl.setBaseUrl` 仍然存在（`libs/map-cesium/runtime.ts` 的模块扩充）和静态文件的目录（[vite-config.md](vite-config.md)），再跑 map-cesium 的浏览器测试
 - 安装时出现 `ERR_PNPM_IGNORED_BUILDS`：在 `pnpm-workspace.yaml` 的 `allowBuilds` 里逐个决定，见 [pnpm-workspace.md](pnpm-workspace.md)

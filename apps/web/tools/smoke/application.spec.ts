@@ -20,7 +20,9 @@ async function readyMap(page: Page): Promise<void> {
 /** 找到实际的生产分块，避免写死内容哈希或请求顺序 */
 function chunkFile(prefix: string): string {
   const files = readdirSync(new URL('../../dist/assets/', import.meta.url));
-  const matches = files.filter(name => name.startsWith(`${prefix}-`) && name.endsWith('.js'));
+  // 名称后面只能是 8 位哈希（可能含 -）：map-runtime 不能匹配到 map-runtime-3d、map-runtime-provider
+  const pattern = new RegExp(`^${prefix}-[\\w-]{8}\\.js$`);
+  const matches = files.filter(name => pattern.test(name));
   expect(matches, `应有唯一的 ${prefix} 生产分块`).toHaveLength(1);
   return matches[0];
 }

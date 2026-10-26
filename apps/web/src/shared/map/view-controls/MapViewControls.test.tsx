@@ -70,4 +70,28 @@ describe('MapViewControls', () => {
     await button(wrapper, '三维').trigger('click');
     expect(button(wrapper, '二维').attributes('aria-pressed')).toBe('true');
   });
+
+  it('页面给出当前视图时两个按钮都可用：点另一个通知切换，点当前的不通知', async () => {
+    const camera: CameraState = { center: [119.4, 32.9], zoom: 10, bearing: 0, pitch: 0 };
+    const changed = vi.fn<(value: string) => void>();
+    const Page = defineComponent(() => {
+      provideMap({ groups: ['basemap'], camera });
+      return () => (
+        <MapViewControls
+          goToDefaultView={() => undefined}
+          zoomRange={RANGE}
+          dimension="3d"
+          onUpdate:dimension={changed}
+        />
+      );
+    });
+    const wrapper = mount(Page);
+
+    expect(button(wrapper, '三维').attributes('aria-pressed')).toBe('true');
+    expect(button(wrapper, '三维').attributes('aria-disabled')).toBeUndefined();
+    await button(wrapper, '三维').trigger('click');
+    expect(changed).not.toHaveBeenCalled();
+    await button(wrapper, '二维').trigger('click');
+    expect(changed).toHaveBeenCalledExactlyOnceWith('2d');
+  });
 });

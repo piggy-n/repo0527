@@ -468,7 +468,7 @@ describe('MapCanvas', () => {
     expect(errors).toEqual([tileError]);
   });
 
-  it('必须放在 provideMap 的组件里；一个上下文只能有一个画布，多出来的视图会被释放', () => {
+  it('必须放在 provideMap 的组件里；一个上下文只能有一个二维画布，多出来的视图会被释放', () => {
     // setup 抛错后 Vue 会提示组件没有渲染函数，这里不关心
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
@@ -489,7 +489,7 @@ describe('MapCanvas', () => {
       );
     });
 
-    expect(() => mount(TwoCanvases)).toThrow('一个地图上下文只能有一个画布');
+    expect(() => mount(TwoCanvases)).toThrow('一个地图上下文的每种视图只能有一个画布：2d');
     expect(maps.map(map => map.removed)).toEqual([false, true]);
   });
 

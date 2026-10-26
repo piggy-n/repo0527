@@ -36,7 +36,8 @@ describe('路由表', () => {
       RouteName.devFileManagement,
       RouteName.devMap,
       RouteName.devResources,
-      RouteName.devMapUi
+      RouteName.devMapUi,
+      RouteName.devMap3d
     ].toSorted());
   });
 

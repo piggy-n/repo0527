@@ -18,7 +18,7 @@ libs/map-core      地图会话（样式、相机、当前工具）、视图接�
 libs/utils         LatestController、safeReporter、Worker 通信层
 ```
 
-三维（`libs/map-cesium`）以后放在 map-core 之上，只能由 map-vue 动态导入。依赖方向由 lint 检查（ADR 0006）。
+三维（`libs/map-cesium`，3D.1 起，见 [map-cesium.md](map-cesium.md)）放在 map-core 之上，只能由 map-vue 动态导入；只有它和 app 能导入 `cesium`。依赖方向由 lint 检查（ADR 0006、0079）。
 
 ## 贯穿全局的几条原则
 

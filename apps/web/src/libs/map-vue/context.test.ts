@@ -14,6 +14,7 @@ import {
   type ToolView,
   type Unsubscribe,
   type ViewBounds,
+  type ViewKind,
   type ViewState
 } from '@yzt/map-core';
 import { describe, expect, it, vi } from 'vitest';
@@ -24,7 +25,10 @@ import { useMapOverlay } from './use-map';
 
 // 卸下之后仍会发事件的视图：MapLibreView 释放时会清空监听，接口本身并不保证这一点
 class FakeView implements MapView {
-  readonly kind = '2d';
+  readonly kind: ViewKind;
+  // 上下文让它暂停、恢复的次数；状态变化由用例用 emit 模拟
+  pauseCalls = 0;
+  resumeCalls = 0;
   readonly flyToCalls: Partial<CameraState>[] = [];
   readonly fitBoundsCalls: (FitBoundsOptions | undefined)[] = [];
   state: ViewState = 'initializing';
@@ -34,11 +38,19 @@ class FakeView implements MapView {
   ready: Promise<void> = Promise.resolve();
   readonly #listeners = new Map<string, Set<(payload: unknown) => void>>();
 
+  constructor(kind: ViewKind = '2d') {
+    this.kind = kind;
+  }
+
   whenReady(): Promise<void> {
     return this.ready;
   }
-  pause(): void {}
-  resume(): void {}
+  pause(): void {
+    this.pauseCalls++;
+  }
+  resume(): void {
+    this.resumeCalls++;
+  }
   flyTo(target: Partial<CameraState>): void {
     this.flyToCalls.push(target);
   }
@@ -982,5 +994,152 @@ describe('MapContextState 的定位可视区域', () => {
     expect(() => app.runWithContext(() => useMapOverlay(ref<HTMLElement>(), 'left'))).toThrow(
       'useMapOverlay 只能在组件的 setup 或 effectScope 中调用'
     );
+  });
+});
+
+describe('MapContextState 的二三维切换（ADR 0079 第 8 节）', () => {
+  it('默认二维；切到三维时二维暂停，还没有三维视图时是 idle，三维视图挂上后反映它', () => {
+    using env = setup();
+    const flat = new FakeView('2d');
+    env.state.attachView(flat, CANVAS);
+    flat.emit('ready');
+    expect(env.state.context.dimension.value).toBe('2d');
+
+    env.state.context.setDimension('3d');
+    expect(flat.pauseCalls).toBe(1);
+    expect(env.state.context.viewState.value).toBe('idle');
+    expect(env.state.context.view.value).toBeNull();
+
+    const globe = new FakeView('3d');
+    globe.state = 'ready';
+    env.state.attachView(globe, CANVAS);
+    expect(env.state.context.viewState.value).toBe('ready');
+    expect(env.state.context.view.value?.kind).toBe('3d');
+  });
+
+  it('切回二维：三维暂停、二维恢复；不是当前种类的视图的事件不反映到上下文', () => {
+    using env = setup();
+    const flat = new FakeView('2d');
+    const globe = new FakeView('3d');
+    env.state.attachView(flat, CANVAS);
+    flat.emit('ready');
+    env.state.attachView(globe, CANVAS);
+    const revision = env.state.context.projectionRevision.value;
+
+    // 三维不是当前的：它的状态、尺寸、数据源错误都不影响上下文
+    globe.emit('failed');
+    globe.resize();
+    globe.setSourceErrors(new Map([['basemap-imagery', new Error('404')]]));
+    expect(env.state.context.viewState.value).toBe('ready');
+    expect(env.state.context.projectionRevision.value).toBe(revision);
+    expect(env.state.context.sourceErrors.value).toBe(NO_SOURCE_ERRORS);
+
+    env.state.context.setDimension('3d');
+    expect(env.state.context.viewState.value).toBe('failed');
+    expect(globe.resumeCalls).toBe(1);
+    // 换了视图，屏幕投影跟着变
+    expect(env.state.context.projectionRevision.value).toBe(revision + 1);
+
+    env.state.context.setDimension('2d');
+    expect(globe.pauseCalls).toBe(1);
+    expect(flat.resumeCalls).toBe(1);
+    expect(env.state.context.view.value?.kind).toBe('2d');
+  });
+
+  it('同一种视图只能有一个画布，两种视图可以同时挂上；切到同一种不做任何事', () => {
+    using env = setup();
+    env.state.attachView(new FakeView('2d'), CANVAS);
+    env.state.attachView(new FakeView('3d'), CANVAS);
+
+    expect(() => env.state.attachView(new FakeView('3d'), CANVAS)).toThrow('每种视图只能有一个画布：3d');
+    const revision = env.state.context.projectionRevision.value;
+    env.state.context.setDimension('2d');
+    expect(env.state.context.projectionRevision.value).toBe(revision);
+  });
+
+  it('shouldRun：页面没有停用、并且是当前种类时才运行；停用时暂停当前视图，激活时恢复，重复调用不起作用', () => {
+    using env = setup();
+    const flat = new FakeView('2d');
+    env.state.attachView(flat, CANVAS);
+    expect(env.state.shouldRun('2d')).toBe(true);
+    expect(env.state.shouldRun('3d')).toBe(false);
+
+    env.state.setPageActive(false);
+    env.state.setPageActive(false);
+    expect(flat.pauseCalls).toBe(1);
+    expect(env.state.shouldRun('2d')).toBe(false);
+
+    // 停用期间切换种类：不恢复新的视图，也不再暂停旧的
+    const globe = new FakeView('3d');
+    env.state.attachView(globe, CANVAS);
+    env.state.context.setDimension('3d');
+    expect(globe.resumeCalls).toBe(0);
+    expect(flat.pauseCalls).toBe(1);
+
+    env.state.setPageActive(true);
+    expect(globe.resumeCalls).toBe(1);
+    expect(flat.resumeCalls).toBe(0);
+  });
+
+  it('等待中的相机操作：切到三维后，三维视图挂上并就绪时执行', () => {
+    using env = setup();
+    const flat = new FakeView('2d');
+    env.state.attachView(flat, CANVAS);
+    env.state.context.setDimension('3d');
+    const zooms: number[] = [];
+
+    env.state.context.runCameraOperation(camera => camera.flyTo({ zoom: 12 }));
+    const globe = new FakeView('3d');
+    env.state.attachView(globe, CANVAS);
+    expect(globe.flyToCalls).toStrictEqual([]);
+    globe.emit('ready');
+
+    zooms.push(...globe.flyToCalls.map(({ zoom }) => zoom ?? -1));
+    expect(zooms).toStrictEqual([12]);
+    expect(flat.flyToCalls).toStrictEqual([]);
+  });
+
+  it('等待中的二维视图在切到三维时以 AbortError 结束，三维就绪不算它就绪', async () => {
+    using env = setup();
+    const { view: flat } = pendingView();
+    env.state.attachView(flat, CANVAS);
+    const waiting = env.state.context.whenReady();
+
+    env.state.context.setDimension('3d');
+
+    expect(await settled(waiting)).toBe('AbortError');
+  });
+
+  it('切换种类时清掉鼠标位置：新视图的输入来了再跟踪', () => {
+    const frames: (() => void)[] = [];
+    const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
+    using session = new MapSession({ groups: ['basemap'], camera });
+    using state = new MapContextState(session, () => undefined, resolveOverlayOptions(), callback => {
+      frames.push(callback);
+      return () => undefined;
+    });
+    const flat = new FakeView('2d');
+    state.attachView(flat, CANVAS);
+    flat.emit('ready');
+    const toolView: ToolView = {
+      kind: '2d',
+      pick: () => ({ kind: 'miss' }),
+      project: () => null,
+      queryRendered: () => []
+    };
+    const move: MapInputEvent = {
+      type: 'move',
+      point: { x: 3, y: 4 },
+      button: 0,
+      clickCount: 0,
+      modifiers: { shift: false, ctrl: false, alt: false, meta: false }
+    };
+    session.tool.dispatch(move, toolView);
+    frames.splice(0).forEach(frame => frame());
+    expect(state.context.pointer.value).toStrictEqual({ x: 3, y: 4 });
+
+    state.context.setDimension('3d');
+
+    expect(state.context.pointer.value).toBeNull();
   });
 });

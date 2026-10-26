@@ -81,6 +81,10 @@ const animationFrame: FrameScheduler = callback => {
 
 /** 子孙组件通过 useMap 拿到的只读上下文 */
 export interface MapContext {
+  /** 当前显示二维还是三维（ADR 0079 第 8 节）：下面的视图、状态、失败、数据源错误、指针都只反映这一种视图 */
+  readonly dimension: Readonly<Ref<ViewKind>>;
+  /** 切换二维、三维：当前的视图暂停，另一种视图恢复；还没有这种视图时状态是 idle，等它的画布挂上 */
+  setDimension(kind: ViewKind): void;
   /** 就绪的视图，只在视图为 ready 时有值（ADR 0039 第 4 条） */
   readonly view: Readonly<ShallowRef<MapViewport | null>>;
   readonly viewState: Readonly<Ref<MapViewState>>;
@@ -211,7 +215,13 @@ export class MapContextState implements Disposable {
   readonly #operations = new WeakMap<AbortSignal, CameraOperation>();
   readonly #overlays = new Set<OverlayEntry>();
   readonly #overlayOptions: Required<OverlayOptions>;
-  #view: AttachedView | null = null;
+  // 每种视图一个画布；只有当前种类的视图生效，其他的暂停
+  readonly #views = new Map<ViewKind, AttachedView>();
+  readonly #dimension = ref<ViewKind>('2d');
+  // 所在页面没有被缓存停用（ADR 0063）：停用时所有视图都暂停
+  #pageActive = true;
+  // 当前视图换了（切换种类、卸下）时中止：绑定在旧视图上的等待以 AbortError 结束
+  #lease = new AbortController();
 
   constructor(
     session: MapSession<string>,
@@ -232,6 +242,8 @@ export class MapContextState implements Disposable {
     this.#unsubscribeCamera = session.camera.on('change', () => this.#projectionRevision.value++);
     this.#unsubscribeInput = session.tool.on('input', (event, kind) => this.#onInput(event, kind));
     this.context = Object.freeze({
+      dimension: shallowReadonly(this.#dimension),
+      setDimension: (kind: ViewKind) => this.#setDimension(kind),
       view: shallowReadonly(this.#viewport),
       viewState: shallowReadonly(this.#viewState),
       failure: shallowReadonly(this.#failure),
@@ -261,16 +273,37 @@ export class MapContextState implements Disposable {
     return this.#retryRequests;
   }
 
-  /** 画布组件挂载后挂上视图和它的容器（量可视区域用）；目前一个上下文只有一个视图 */
+  /** 画布创建这种视图时，视图应不应该运行：页面没有停用、并且是当前显示的种类；否则以暂停状态创建 */
+  shouldRun(kind: ViewKind): boolean {
+    return this.#pageActive && this.#dimension.value === kind;
+  }
+
+  /** 所在页面被 KeepAlive 停用、重新激活（ADR 0063）：停用时当前视图暂停，激活时恢复；各个画布都会调用，重复调用不起作用 */
+  setPageActive(active: boolean): void {
+    if (this.#pageActive === active) {
+      return;
+    }
+    this.#pageActive = active;
+    const current = this.#current;
+    if (current && active) {
+      current.view.resume();
+    } else if (current) {
+      current.view.pause();
+    }
+  }
+
+  /** 画布组件挂载后挂上视图和它的容器（量可视区域用）；每种视图只能有一个画布 */
   attachView(view: MapView, canvas: HTMLElement): void {
-    if (this.#view) {
-      throw new Error('一个地图上下文只能有一个画布');
+    if (this.#views.has(view.kind)) {
+      throw new Error(`一个地图上下文的每种视图只能有一个画布：${view.kind}`);
     }
     const viewport = createViewport(view);
+    // 不是当前种类的视图的事件不反映到上下文
     const unsubscribeState = view.on('statechange', state => {
-      this.#viewState.value = state;
-      this.#failure.value = view.failure;
-      this.#viewport.value = state === 'ready' ? viewport : null;
+      if (this.#current !== attached) {
+        return;
+      }
+      this.#syncView();
       if (state === 'ready') {
         this.#pending?.();
       } else {
@@ -278,40 +311,42 @@ export class MapContextState implements Disposable {
       }
     });
     // 画布尺寸变化时相机不变，投影变了
-    const unsubscribeResize = view.on('resize', () => this.#projectionRevision.value++);
-    const unsubscribeSourceErrors = view.on('sourceerrorchange', errors => (this.#sourceErrors.value = errors));
+    const unsubscribeResize = view.on('resize', () => {
+      if (this.#current === attached) {
+        this.#projectionRevision.value++;
+      }
+    });
+    const unsubscribeSourceErrors = view.on('sourceerrorchange', errors => {
+      if (this.#current === attached) {
+        this.#sourceErrors.value = errors;
+      }
+    });
     const unsubscribe = () => {
       unsubscribeState();
       unsubscribeResize();
       unsubscribeSourceErrors();
     };
     const attached: AttachedView = { view, viewport, canvas, unsubscribe, detached: new AbortController() };
-    this.#view = attached;
-    this.#viewState.value = view.state;
-    this.#failure.value = view.failure;
-    this.#sourceErrors.value = view.sourceErrors;
-    this.#viewport.value = view.state === 'ready' ? viewport : null;
-    for (const notify of this.#waiting) {
-      notify(attached);
-    }
-    if (view.state === 'ready') {
-      this.#pending?.();
+    this.#views.set(view.kind, attached);
+    if (this.#current === attached) {
+      this.#becomeCurrent(attached);
     }
   }
 
   /** 画布组件卸载、释放视图之前卸下 */
   detachView(view: MapView): void {
-    if (this.#view?.view !== view) {
+    const attached = this.#views.get(view.kind);
+    if (attached?.view !== view) {
       return;
     }
-    const attached = this.#view;
+    const wasCurrent = this.#current === attached;
     attached.unsubscribe();
-    this.#view = null;
-    this.#clearPointer();
-    this.#viewport.value = null;
-    this.#viewState.value = 'idle';
-    this.#failure.value = null;
-    this.#sourceErrors.value = NO_SOURCE_ERRORS;
+    this.#views.delete(view.kind);
+    if (wasCurrent) {
+      this.#clearPointer();
+      this.#syncView();
+      this.#renewLease();
+    }
     // 最后再中止：等待者的回调在微任务里执行，看到的已经是卸下之后的状态
     attached.detached.abort(new DOMException('等待的视图已被卸下或替换', 'AbortError'));
   }
@@ -331,6 +366,59 @@ export class MapContextState implements Disposable {
     this.#unsubscribeInput();
     this.#clearPointer();
     this.#lifetime.abort(new DOMException('地图上下文已释放', 'AbortError'));
+  }
+
+  get #current(): AttachedView | null {
+    return this.#views.get(this.#dimension.value) ?? null;
+  }
+
+  // 当前视图的状态、失败原因、数据源错误和受限入口；没有当前视图时是 idle
+  #syncView(): void {
+    const current = this.#current;
+    this.#viewState.value = current?.view.state ?? 'idle';
+    this.#failure.value = current?.view.failure ?? null;
+    this.#sourceErrors.value = current?.view.sourceErrors ?? NO_SOURCE_ERRORS;
+    this.#viewport.value = current?.view.state === 'ready' ? current.viewport : null;
+  }
+
+  // 成为当前视图：同步状态，交给等视图的人，就绪时执行等待中的相机操作
+  #becomeCurrent(attached: AttachedView): void {
+    this.#syncView();
+    for (const notify of this.#waiting) {
+      notify(attached);
+    }
+    if (attached.view.state === 'ready') {
+      this.#pending?.();
+    }
+  }
+
+  #renewLease(): void {
+    this.#lease.abort(new DOMException('等待的视图已被卸下或替换', 'AbortError'));
+    this.#lease = new AbortController();
+  }
+
+  // 切换种类：旧的当前视图暂停，新的恢复；投影跟着视图变了（ADR 0079 第 8 节）
+  #setDimension(kind: ViewKind): void {
+    if (this.#dimension.value === kind) {
+      return;
+    }
+    const previous = this.#current;
+    this.#dimension.value = kind;
+    this.#renewLease();
+    this.#clearPointer();
+    if (previous && this.#pageActive) {
+      previous.view.pause();
+    }
+    const next = this.#current;
+    this.#syncView();
+    this.#projectionRevision.value++;
+    if (!next) {
+      return;
+    }
+    if (this.#pageActive) {
+      next.view.resume();
+    }
+    this.#becomeCurrent(next);
   }
 
   // 只跟踪当前就绪视图的指针；按键不改变位置
@@ -408,7 +496,7 @@ export class MapContextState implements Disposable {
   }
 
   #readyView(): AttachedView | null {
-    return this.#viewState.value === 'ready' ? this.#view : null;
+    return this.#viewState.value === 'ready' ? this.#current : null;
   }
 
   // 相机控制每次调用都确认：回调还没返回、操作没被作废、视图仍是开始执行时那个就绪的视图
@@ -453,23 +541,23 @@ export class MapContextState implements Disposable {
 
   async #whenReady(signal?: AbortSignal): Promise<void> {
     const signals = signal ? [this.#lifetime.signal, signal] : [this.#lifetime.signal];
-    const attached = this.#view ?? (await this.#nextView(signals));
-    // 等的是这一个视图：它被卸下时立即结束，不等它自己的 whenReady
-    await abortable(attached.view.whenReady(), [...signals, attached.detached.signal]);
+    const attached = this.#current ?? (await this.#nextView(signals));
+    // 等的是这一个视图：它被卸下、不再是当前视图时立即结束，不等它自己的 whenReady
+    await abortable(attached.view.whenReady(), [...signals, attached.detached.signal, this.#lease.signal]);
     // 上面的等待结束时监听已经移除，到这里继续执行之前，就绪的同一轮里排在后面的回调可能中止了 signal 或卸下了视图：返回前再确认
     const aborted = signals.find(item => item.aborted);
     if (aborted) {
       throw abortReason(aborted);
     }
-    if (this.#view !== attached) {
+    if (this.#current !== attached) {
       throw new DOMException('等待的视图已被卸下或替换', 'AbortError');
     }
   }
 
   async #whenSettled(signal?: AbortSignal): Promise<void> {
     const signals = signal ? [this.#lifetime.signal, signal] : [this.#lifetime.signal];
-    const attached = this.#view ?? (await this.#nextView(signals));
-    const bound = [...signals, attached.detached.signal];
+    const attached = this.#current ?? (await this.#nextView(signals));
+    const bound = [...signals, attached.detached.signal, this.#lease.signal];
     // 等到视图之后、继续执行之前可能已经卸下（随后就会释放，不能再订阅）
     const aborted = bound.find(item => item.aborted);
     if (aborted) {
@@ -509,7 +597,7 @@ export class MapContextState implements Disposable {
   }
 
   #overlayPadding(): OverlayPadding {
-    const canvas = this.#view?.canvas.getBoundingClientRect();
+    const canvas = this.#current?.canvas.getBoundingClientRect();
     if (!canvas) {
       const { edgePadding } = this.#overlayOptions;
       return { top: edgePadding, right: edgePadding, bottom: edgePadding, left: edgePadding };

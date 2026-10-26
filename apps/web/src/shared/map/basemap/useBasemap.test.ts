@@ -55,6 +55,19 @@ describe('useBasemap', () => {
     expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
   });
 
+  it('切换二三维：三维选影像、二维选矢量；关闭天地图时保持无底图', () => {
+    const basemap = useBasemap({ tianditu: TIANDITU });
+
+    basemap.selectForDimension('3d');
+    expect(basemap.selected.value).toBe('imagery');
+    basemap.selectForDimension('2d');
+    expect(basemap.selected.value).toBe('vector');
+
+    const intranet = useBasemap({ tianditu: null });
+    intranet.selectForDimension('3d');
+    expect(intranet.selected.value).toBe('none');
+  });
+
   it('透明度作用于当前底图的底图和注记，每种底图各自记住', () => {
     const basemap = useBasemap({ tianditu: TIANDITU });
 

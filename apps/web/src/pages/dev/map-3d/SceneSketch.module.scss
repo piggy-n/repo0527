@@ -1,0 +1,282 @@
+// 原型的示意画面。这里的颜色模拟底图和模型的渲染结果，属于按数据画的图形，不是界面颜色，不用令牌
+
+.viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: #e8ecf2;
+  transition: background-color 0.7s ease;
+}
+
+// 三维时远处是天空
+.three {
+  background: linear-gradient(#a9c7ee, #dbe7f6 55%, #e8eef6);
+}
+
+.plane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  transform-style: preserve-3d;
+  transition: transform 0.7s ease;
+}
+
+.surface {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transition: opacity 0.3s ease;
+}
+
+// 平面带着三维变换，non-scaling-stroke 不生效：线宽按缩放倍数反算，屏幕上保持不变
+.province {
+  stroke-width: calc(1.5px * var(--inverse-scale));
+  transition: fill 0.7s ease;
+}
+
+.city {
+  fill: none;
+  stroke-width: calc(1px * var(--inverse-scale));
+}
+
+.vector {
+  .province {
+    fill: #f6f4ee;
+    stroke: #cb6690;
+  }
+
+  .city {
+    stroke: rgba(203, 102, 144, 0.55);
+    stroke-dasharray: calc(6px * var(--inverse-scale)) calc(4px * var(--inverse-scale));
+  }
+}
+
+.imagery {
+  .province {
+    fill: #4f6b4b;
+    stroke: #f2e3b3;
+  }
+
+  .city {
+    stroke: rgba(242, 227, 179, 0.6);
+  }
+}
+
+// 内网没有天地图：三维只有地球的底色
+.none {
+  .province {
+    fill: #dfe7f2;
+    stroke: #8796a8;
+  }
+
+  .city {
+    stroke: rgba(135, 150, 168, 0.7);
+  }
+}
+
+// 模型：五个面拼成的立体块，地下模型整体沉到地表以下
+.model {
+  position: absolute;
+  transform: translate(-50%, -50%) translateZ(var(--base));
+  transform-style: preserve-3d;
+}
+
+.top,
+.side {
+  position: absolute;
+  backface-visibility: visible;
+}
+
+.top {
+  inset: 0;
+  transform: translateZ(var(--rise));
+}
+
+.north,
+.south {
+  left: 0;
+  width: 100%;
+  height: var(--rise);
+  transform-origin: top;
+  transform: rotateX(90deg);
+}
+
+.north {
+  top: 0;
+}
+
+.south {
+  top: 100%;
+}
+
+.east,
+.west {
+  top: 0;
+  width: var(--rise);
+  height: 100%;
+  transform-origin: left;
+  transform: rotateY(-90deg);
+}
+
+.west {
+  left: 0;
+}
+
+.east {
+  left: 100%;
+}
+
+.oblique {
+  .top {
+    background: #d9c39b;
+  }
+
+  .side {
+    background: #a98f6a;
+  }
+}
+
+.white {
+  .top {
+    background: #f7f9fc;
+  }
+
+  .side {
+    background: #d3dae4;
+  }
+}
+
+.indoor {
+  .top {
+    background: #8dbdf0;
+  }
+
+  .side {
+    background: #5b8fc7;
+  }
+}
+
+.loading {
+  opacity: 0.45;
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  to {
+    opacity: 0.8;
+  }
+}
+
+// 名称牌：抵消平面的倾斜和缩放，始终正对屏幕、大小不变
+.label {
+  position: absolute;
+  transform-origin: 0 0;
+  transform:
+    translateZ(var(--top)) rotateX(calc(var(--tilt) * -1))
+    scale3d(var(--inverse-scale), var(--inverse-scale), var(--inverse-scale));
+  pointer-events: none;
+
+  > span {
+    position: absolute;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 1px 4px rgba(20, 52, 105, 0.24);
+    color: #1f2d3d;
+    font-size: 12px;
+    line-height: 18px;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translate(-50%, calc(-100% - 10px));
+  }
+}
+
+// 屏幕上的路线：平面的过渡结束后再出现，免得和移动中的画面对不上
+.route {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  animation: route-in 0.3s ease 0.7s both;
+
+  polyline {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.ahead {
+  stroke: #ffc53d;
+  stroke-width: 4;
+}
+
+.passed {
+  stroke: #f07c1b;
+  stroke-width: 5;
+}
+
+@keyframes route-in {
+  from {
+    opacity: 0;
+  }
+}
+
+// 路线上的当前位置
+.viewer {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #2f6fe4;
+  transform-origin: 0 0;
+  transform:
+    translateZ(0.1px) rotateX(calc(var(--tilt) * -1))
+    scale3d(var(--inverse-scale), var(--inverse-scale), var(--inverse-scale)) translate(-50%, -50%);
+}
+
+// 第一人称时盖上一张示意的站内画面
+.firstPerson {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(#2c3846 0 47%, #6c7884 47% 100%);
+}
+
+.corridor {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(#9fb3c8, #c7d3df);
+  clip-path: polygon(42% 38%, 58% 38%, 58% 58%, 42% 58%);
+}
+
+.crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  background:
+    linear-gradient(#fff, #fff) center / 2px 100% no-repeat,
+    linear-gradient(#fff, #fff) center / 100% 2px no-repeat;
+  opacity: 0.8;
+}
+
+.caption {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 12px;
+  transform: translateX(-50%);
+}

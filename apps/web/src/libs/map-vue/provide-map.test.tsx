@@ -216,7 +216,7 @@ describe('provideMap', () => {
 
         expect(() => mount(Page)).not.toThrow();
         expect(consoleError).toHaveBeenCalledWith(
-          '[map-vue] 错误报告器抛出了异常',
+          '[map-vue] 报告器抛出了异常',
           new Error('报告器出错'),
           expect.any(Error)
         );

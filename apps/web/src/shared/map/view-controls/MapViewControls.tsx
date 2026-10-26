@@ -1,3 +1,4 @@
+import type { ViewKind } from '@yzt/map-core';
 import { useMap } from '@yzt/map-vue';
 import { ElTooltip } from 'element-plus';
 import { defineComponent, type PropType, type VNode } from 'vue';
@@ -36,12 +37,54 @@ export const MapViewControls = defineComponent({
     /** 页面的 useDefaultView 给出的回调；不要在这里调用 useDefaultView（ADR 0033） */
     goToDefaultView: { type: Function as PropType<() => void>, required: true },
     /** 和画布的缩放范围相同 */
-    zoomRange: { type: Object as PropType<ZoomRange>, required: true }
+    zoomRange: { type: Object as PropType<ZoomRange>, required: true },
+    /** 当前是二维还是三维；不传时三维按钮不可用（三维阶段之前，ADR 0053 第 3 节） */
+    dimension: { type: String as PropType<ViewKind>, default: undefined }
   },
-  setup(props) {
+  emits: {
+    'update:dimension': (value: ViewKind) => value === '2d' || value === '3d'
+  },
+  setup(props, { emit }) {
     const map = useMap();
     const zoom = useZoomButtons(map, props.zoomRange);
     const compass = useCompassButton(map);
+
+    const dimensionButton = (value: ViewKind, label: string, text: string) => {
+      const current = props.dimension === value;
+      return (
+        <button
+          type="button"
+          class={[styles.button, current && styles.current]}
+          aria-label={label}
+          aria-pressed={current}
+          onClick={() => {
+            if (!current) {
+              emit('update:dimension', value);
+            }
+          }}
+        >
+          {text}
+        </button>
+      );
+    };
+
+    const renderDimension = () => {
+      if (props.dimension !== undefined) {
+        return [dimensionButton('2d', '二维', '2D'), dimensionButton('3d', '三维', '3D')];
+      }
+      return [
+        <button type="button" class={[styles.button, styles.current]} aria-label="二维" aria-pressed="true">
+          2D
+        </button>,
+        // 三维阶段之前点了没有效果（用户决定显示，ADR 0053 第 3 节）
+        withTip(
+          '三维暂未开放',
+          <button type="button" class={styles.button} aria-label="三维" aria-pressed="false" aria-disabled="true">
+            3D
+          </button>
+        )
+      ];
+    };
 
     return () => (
       <div class={styles.controls} role="toolbar" aria-label="地图视角" aria-orientation="vertical">
@@ -63,18 +106,7 @@ export const MapViewControls = defineComponent({
         <div class={styles.separator} role="separator" />
         {iconButton('默认视角', 'map-default-view', props.goToDefaultView)}
         <div class={styles.separator} role="separator" />
-        <div class={styles.dimension}>
-          <button type="button" class={[styles.button, styles.current]} aria-label="二维" aria-pressed="true">
-            2D
-          </button>
-          {/* 三维阶段之前点了没有效果（用户决定显示，ADR 0053 第 3 节） */}
-          {withTip(
-            '三维暂未开放',
-            <button type="button" class={styles.button} aria-label="三维" aria-pressed="false" aria-disabled="true">
-              3D
-            </button>
-          )}
-        </div>
+        <div class={styles.dimension}>{renderDimension()}</div>
       </div>
     );
   }

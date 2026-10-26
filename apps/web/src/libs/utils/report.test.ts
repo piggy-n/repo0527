@@ -22,9 +22,17 @@ describe('safeReporter', () => {
       }, 'test');
 
       expect(() => reportSafely(failure)).not.toThrow();
-      expect(consoleError).toHaveBeenCalledWith('[test] 错误报告器抛出了异常', reporterError, failure);
+      expect(consoleError).toHaveBeenCalledWith('[test] 报告器抛出了异常', reporterError, failure);
     } finally {
       consoleError.mockRestore();
     }
+  });
+
+  it('也能包装报告其他内容的回调，类型跟着回调走', () => {
+    const report = vi.fn<(layer: { id: string }) => void>();
+
+    safeReporter(report, 'test')({ id: 'boundary' });
+
+    expect(report).toHaveBeenCalledWith({ id: 'boundary' });
   });
 });

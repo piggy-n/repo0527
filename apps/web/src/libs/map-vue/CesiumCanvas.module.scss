@@ -1,0 +1,11 @@
+// 三维画布叠在二维画布上，页面的根元素是相对定位
+.root {
+  position: absolute;
+  inset: 0;
+}
+
+// 交给 Cesium 的容器：只用这一个静态 class，Cesium 在里面再建自己的元素
+.container {
+  width: 100%;
+  height: 100%;
+}
