@@ -1,4 +1,21 @@
 // 测试用的虚构记录，字段结构按 2026-10-21 实测接口；不携带真实用户或业务主键
+import type { ResourceRecord } from './api';
+
+/** 列表里的一行（校验后的字段），供只关心行数据的组件和组合式函数使用 */
+export function resourceRow(overrides: Partial<ResourceRecord> = {}): ResourceRecord {
+  return {
+    id: 'layer-1',
+    name: '地类图斑',
+    year: 2022,
+    datasetName: '年度调查数据集',
+    resourceName: '土地资源',
+    layerCode: 'dltb',
+    datasetCode: 'bgdc',
+    hasSlice: true,
+    enabled: true,
+    ...overrides
+  };
+}
 
 export function resourceDirectoryResponse() {
   return {

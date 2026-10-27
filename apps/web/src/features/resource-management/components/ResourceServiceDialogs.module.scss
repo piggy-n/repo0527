@@ -1,0 +1,156 @@
+// 标题和底栏固定，长列表在正文里滚动；上下各留 16
+.dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 32px);
+
+  :global(.el-dialog__header),
+  :global(.el-dialog__footer) {
+    flex: none;
+  }
+
+  :global(.el-dialog__body) {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  :global(.el-select) {
+    width: 100%;
+  }
+
+  :global(.el-form-item:last-child) {
+    margin-bottom: 0;
+  }
+}
+
+.listDialog {
+  width: min(640px, calc(100vw - 32px));
+}
+
+.formDialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.card {
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+// 名称在前、类型紧跟，长名称在自己的区域里换行
+.cardTitle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+
+  strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-strong);
+  }
+
+  :global(.el-tag) {
+    flex: none;
+  }
+}
+
+.status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-success);
+}
+
+.stopped {
+  color: var(--color-text-secondary);
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.address {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-neutral-bg-light);
+
+  :global(.el-button) {
+    flex: none;
+  }
+}
+
+.url {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-regular);
+}
+
+.cardBottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.actions {
+  display: flex;
+  margin-left: auto;
+  gap: var(--space-sm);
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+.confirmText {
+  margin: 0;
+  line-height: var(--line-height-base);
+  overflow-wrap: anywhere;
+}
+
+// 窄屏时状态换到名称下一行，名称和类型仍在同一行
+@media (max-width: 480px) {
+  .cardTop {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
+  .cardTitle {
+    flex-basis: 100%;
+  }
+}

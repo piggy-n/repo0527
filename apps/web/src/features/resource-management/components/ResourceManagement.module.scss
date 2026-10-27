@@ -73,6 +73,23 @@
   width: 100%;
 }
 
+.serviceCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+// 只有图标的小按钮，宽高一致
+.serviceAdd {
+  width: 24px;
+  padding: 0;
+}
+
 .dialog {
   width: min(560px, calc(100vw - 32px));
 }

@@ -7,7 +7,9 @@ import { DiscardChangesDialog } from '@/features/resource-management/components/
 import { ResourceDetailPanel } from '@/features/resource-management/components/ResourceDetailPanel';
 import { ResourceDirectoryPanel } from '@/features/resource-management/components/ResourceDirectoryPanel';
 import { ResourceFilterBar } from '@/features/resource-management/components/ResourceFilterBar';
+import { ResourceServiceDialogs } from '@/features/resource-management/components/ResourceServiceDialogs';
 import { ResourceTable } from '@/features/resource-management/components/ResourceTable';
+import { useLayerServices } from '@/features/resource-management/composables/useLayerServices';
 import { useResourceDetail } from '@/features/resource-management/composables/useResourceDetail';
 import { useResourceList } from '@/features/resource-management/composables/useResourceList';
 import { useResourceStatus } from '@/features/resource-management/composables/useResourceStatus';
@@ -23,6 +25,7 @@ export const ResourceManagementPage = defineComponent({
     const detail = useResourceDetail(() => directoryQuery.data.value ?? []);
     // 列表出错或刷新中时显示的状态可能已过时，不能启停
     const status = useResourceStatus(list.resources, () => !list.isError.value && !list.refreshing.value);
+    const services = useLayerServices();
     const session = useSessionStore();
     // 离开页面前确认未保存的修改；会话已结束（退出、过期）时直接放行，回到登录页
     onBeforeRouteLeave(() => !session.isActive() || detail.allowLeave());
@@ -89,9 +92,12 @@ export const ResourceManagementPage = defineComponent({
                 refreshing={list.refreshing.value}
                 error={list.isError.value}
                 statusPending={id => status.pending.has(id)}
+                serviceCount={services.count}
                 onToggle={row => void toggleStatus(row)}
                 onRetry={() => void list.refresh()}
                 onView={view}
+                onListServices={services.openList}
+                onAddService={services.openForm}
               />
             ],
             footer: () => (
@@ -141,6 +147,7 @@ export const ResourceManagementPage = defineComponent({
           }}
         </MxSplitLayout>
         <DiscardChangesDialog owner={detail} />
+        <ResourceServiceDialogs owner={services} />
       </>
     );
   }
