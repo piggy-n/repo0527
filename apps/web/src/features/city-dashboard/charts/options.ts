@@ -158,6 +158,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
     animationDurationUpdate: 550,
     animationEasing: 'cubicOut',
     textStyle: { fontFamily: 'Alibaba PuHuiTi, Microsoft YaHei, sans-serif', color: '#0F4FA6' },
+    // containLabel 由 runtime 注册的 LegacyGridContainLabel 按 ECharts 5 的算法排版，绘图区与验收时一致
     grid: {
       left: detail ? 18 : 8 * density,
       right: detail ? 30 : 12 * density,
@@ -165,6 +166,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
       bottom: detail ? 20 : 12 * density,
       containLabel: true
     },
+    // ECharts 6 换了默认主题，未选中图例和翻页的颜色沿用 5 的取值
     legend: {
       type: 'scroll',
       top: 2,
@@ -179,7 +181,12 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
         ...comparison.map(item => String(item.year)),
         ...(showAverage ? [`${latest.year}均值`] : [])
       ],
-      pageIconColor: '#438EFB'
+      inactiveColor: '#CCC',
+      inactiveBorderColor: '#CCC',
+      lineStyle: { inactiveColor: '#CCC' },
+      pageIconColor: '#438EFB',
+      pageIconInactiveColor: '#AAA',
+      pageTextStyle: { color: '#333' }
     },
     // 唯一 DOM 表格由组件呈现，ECharts 只计算指示线与城市索引
     tooltip: {
@@ -196,10 +203,12 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
       data: cities.map(city => city.name.replace(/市$/, '')),
       axisLine: { lineStyle: { color: '#B5D1E8' } },
       axisTick: { show: false },
+      // ECharts 5 的刻度标签继承全局文字颜色，6 的主题改成了灰色
       axisLabel: {
         interval: 0,
         rotate: !detail && cities.length > 8 ? 38 : 0,
         margin: 10,
+        color: '#0F4FA6',
         fontSize,
         formatter: (name: string, index: number) => detail && index === cityIndex ? `{focused|${name}}` : name,
         rich: {
@@ -223,6 +232,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
       nameGap: 10,
       nameTextStyle: { align: 'left', fontSize: Math.max(11, 12 * density) },
       axisLabel: {
+        color: '#0F4FA6',
         fontSize,
         hideOverlap: true,
         showMinLabel: true,

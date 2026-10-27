@@ -150,7 +150,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "d3-geo": "3.1.1",
     "d3-polygon": "3.0.1",
     "docx-preview": "0.4.1",
-    "echarts": "^5.6.0",
+    "echarts": "^6.1.0",
     "element-plus": "^2.14.6",
     "geographiclib-geodesic": "^2.2.0",
     "gsap": "3.13.0",

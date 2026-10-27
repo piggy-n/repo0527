@@ -66,7 +66,12 @@ export function createFallback(
             return cityLabel(item.name, city ? values[city.code] : null, indicator);
           }
         },
-        emphasis: { label: { color: '#0E4894' }, itemStyle: { borderColor: '#FFF', borderWidth: 2 } },
+        // 悬停和选中的颜色沿用 ECharts 5 的默认值，6 的主题改成了浅黄
+        emphasis: {
+          label: { color: '#0E4894' },
+          itemStyle: { areaColor: 'rgba(255,215,0,0.8)', borderColor: '#FFF', borderWidth: 2 }
+        },
+        select: { label: { color: 'rgb(100,0,0)' }, itemStyle: { color: 'rgba(255,215,0,0.8)' } },
         data: CITIES.map(city => ({
           name: city.name,
           value: values[city.code] ?? undefined,
