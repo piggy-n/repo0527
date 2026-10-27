@@ -1,3 +1,4 @@
+import { RoutePath } from '@yzt/map-core';
 import { findRegion } from '@/shared/map/region/region-catalog';
 import type { ManifestModel, SceneManifest } from './api';
 
@@ -16,6 +17,14 @@ export interface ModelEffect {
   readonly url: string;
 }
 
+/** 预置的漫游路线（ADR 0083 第 1 节）：path 是脚下地板的 [经度, 纬度, 椭球高]，length 是三维长度（米） */
+export interface ModelRoute {
+  readonly id: string;
+  readonly name: string;
+  readonly path: NonNullable<ManifestModel['routes']>[number]['path'];
+  readonly length: number;
+}
+
 /** 目录里的一个模型：地址都是绝对地址，带上市名 */
 export interface SceneModel {
   readonly id: string;
@@ -29,7 +38,7 @@ export interface SceneModel {
   /** 默认的效果：白膜的第一种 */
   readonly defaultEffect: string;
   readonly spawn: ManifestModel['spawn'];
-  readonly routes: NonNullable<ManifestModel['routes']>;
+  readonly routes: readonly ModelRoute[];
 }
 
 /** 按市分组的目录 */
@@ -64,7 +73,7 @@ export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string):
         : [{ id: '', label: '', url: resolve(model.tileset) }],
     defaultEffect: model.kind === 'white' ? model.effects[0].id : '',
     spawn: model.spawn,
-    routes: model.routes ?? []
+    routes: (model.routes ?? []).map(({ id, name, path }) => ({ id, name, path, length: new RoutePath(path).total }))
   }));
 }
 

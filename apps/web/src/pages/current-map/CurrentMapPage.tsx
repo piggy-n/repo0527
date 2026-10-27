@@ -1,3 +1,4 @@
+import { useEventListener } from '@vueuse/core';
 import type { ViewKind } from '@yzt/map-core';
 import { CesiumCanvas, MapCanvas, provideMap, type UnsupportedLayer } from '@yzt/map-vue';
 import { computed, defineComponent, KeepAlive, ref, watch } from 'vue';
@@ -12,9 +13,11 @@ import { useResourcePanelLayout } from '@/features/resource-map/composables/useR
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { SceneModelPanel } from '@/features/scene-models/components/SceneModelPanel';
+import { RoamBar } from '@/features/scene-models/components/RoamBar';
 import { UndergroundBar } from '@/features/scene-models/components/UndergroundBar';
 import { useSceneModels } from '@/features/scene-models/composables/useSceneModels';
 import { useSceneModelsQuery } from '@/features/scene-models/queries';
+import { usePageActive } from '@/shared/composables/usePageActive';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { basemapOption } from '@/shared/map/basemap/basemap-style';
@@ -212,11 +215,35 @@ export const CurrentMapPage = defineComponent({
     // 切换二三维：底图跟着换成这种视图默认的（ADR 0078 第 2 节）；切到二维结束钻地（ADR 0081 第 6 节）
     const switchDimension = (kind: ViewKind) => {
       if (kind === '2d') {
+        models.exitRoam();
         models.exitUnderground();
       }
       map.setDimension(kind);
       basemap.selectForDimension(kind);
     };
+    // 漫游接管鼠标，相当于一个工具：选了工具栏上的工具就退出（ADR 0078 第 6 节）
+    watch(map.activeTool, () => models.exitRoam());
+    // Esc 退出漫游；空格开始、暂停或继续，焦点在输入框、按钮上时不拦截；页面停用期间不响应
+    const pageActive = usePageActive();
+    useEventListener(window, 'keydown', (event: KeyboardEvent) => {
+      const phase = models.routePhase.value;
+      if (!pageActive.value || phase === null) {
+        return;
+      }
+      if (event.key === 'Escape') {
+        models.exitRoam();
+        return;
+      }
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (event.key === ' ' && !target?.closest('input, textarea, button, [role="radio"]')) {
+        event.preventDefault();
+        if (phase === 'playing') {
+          models.pauseRoute();
+        } else {
+          models.playRoute();
+        }
+      }
+    });
     // "清除"清掉地图上画的东西：测量结果和位置点；区划选择不算
     const clear = () => {
       measure.clear();
@@ -377,6 +404,7 @@ export const CurrentMapPage = defineComponent({
             </div>
             {scene && (
               <div class={[styles.underground, phone && styles.phoneUnderground]}>
+                <RoamBar models={models} />
                 <UndergroundBar models={models} />
               </div>
             )}

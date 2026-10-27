@@ -316,6 +316,16 @@
   font-size: var(--font-size-xs);
 }
 
+.dropdownArrow {
+  margin-left: 2px;
+}
+
+.routeLength {
+  margin-left: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
 .effect {
   width: 104px;
 }

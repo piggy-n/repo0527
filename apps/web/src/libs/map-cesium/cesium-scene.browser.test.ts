@@ -1,5 +1,5 @@
 import 'cesium/Build/Cesium/Widgets/CesiumWidget/CesiumWidget.css';
-import type { CameraState } from '@yzt/map-core';
+import { type CameraState, EYE_HEIGHT, RoutePath } from '@yzt/map-core';
 import type { GeoJSON, Position } from 'geojson';
 import { Cartesian3, Matrix4, Transforms } from 'cesium';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -503,5 +503,55 @@ describe('CesiumScene', () => {
     scene.setUnderground(null);
 
     await expect(waitForFrames(() => scene.eyeHeight() > 100)).resolves.toBe('ok');
+  }, 30000);
+
+  it('路线漫游：飞到起点停住，视点在地板上方一个眼高、朝着路线；播放时沿路线走，暂停时停住（ADR 0083）', async () => {
+    const scene = createScene();
+    // 往东 40 米、地板在椭球面上的直线
+    const route = new RoutePath([
+      [...MODEL_AT, 0],
+      [MODEL_AT[0] + 40 / 95_200, MODEL_AT[1], 0]
+    ]);
+    const progress: number[] = [];
+    scene.on('routeprogress', distance => progress.push(distance));
+
+    scene.startRoute(route);
+    await expect(waitForFrames(() => Math.abs(scene.eyeHeight() - EYE_HEIGHT) < 0.05)).resolves.toBe('ok');
+    await expect(waitForFrames(() => Math.abs((scene.readCamera()?.bearing ?? 0) - 90) < 1)).resolves.toBe('ok');
+
+    scene.setRoutePlayback({ playing: true, rate: 2 });
+    await expect(waitForFrames(() => (progress.at(-1) ?? 0) > 3)).resolves.toBe('ok');
+    scene.setRoutePlayback({ playing: false, rate: 2 });
+    const walked = progress.at(-1) ?? 0;
+    await expect(waitForFrames(() => true)).resolves.toBe('ok');
+
+    const [lng, lat] = scene.readCamera()?.center ?? [0, 0];
+    expect((lng - MODEL_AT[0]) * 95_200).toBeCloseTo(walked, 0);
+    expect(lat).toBeCloseTo(MODEL_AT[1], 6);
+    expect(scene.eyeHeight()).toBeCloseTo(EYE_HEIGHT, 1);
+    expect(progress.at(-1)).toBe(walked);
+  }, 30000);
+
+  it('路线漫游走到终点时报告并停下；结束后飞回开始前的位置', async () => {
+    const scene = createScene();
+    const before: CameraState = { center: MODEL_AT, zoom: 15, bearing: 0, pitch: 50 };
+    scene.jumpTo(before);
+    const startHeight = scene.eyeHeight();
+    let ended = false;
+    scene.on('routeend', () => {
+      ended = true;
+    });
+
+    scene.startRoute(new RoutePath([
+      [...MODEL_AT, 0],
+      [MODEL_AT[0], MODEL_AT[1] + 4 / 110_900, 0]
+    ]));
+    await expect(waitForFrames(() => Math.abs(scene.eyeHeight() - EYE_HEIGHT) < 0.05)).resolves.toBe('ok');
+    scene.setRoutePlayback({ playing: true, rate: 2 });
+    await expect(waitForFrames(() => ended)).resolves.toBe('ok');
+
+    scene.stopRoute(true);
+    await expect(waitForFrames(() => Math.abs(scene.eyeHeight() - startHeight) < 1)).resolves.toBe('ok');
+    expect(scene.readCamera()?.zoom).toBeCloseTo(before.zoom, 1);
   }, 30000);
 });

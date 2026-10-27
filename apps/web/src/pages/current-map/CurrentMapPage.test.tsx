@@ -23,7 +23,7 @@ import {
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { CesiumCanvas, MapCanvas, type SceneViewOptions } from '@yzt/map-vue';
 import { DOMWrapper, mount } from '@vue/test-utils';
-import { ElSlider } from 'element-plus';
+import { ElDropdown, ElSlider } from 'element-plus';
 import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { createPinia } from 'pinia';
@@ -586,7 +586,17 @@ function mockManifest() {
             cityCode: '320500',
             kind: 'indoor',
             underground: true,
-            tileset: 'SZ_3DT/tileset.json'
+            tileset: 'SZ_3DT/tileset.json',
+            routes: [
+              {
+                id: 'enter',
+                name: '进站乘车',
+                path: [
+                  [120.666, 31.3175, -5.1],
+                  [120.6662, 31.3175, -5.1]
+                ]
+              }
+            ]
           }
         ]
       });
@@ -1699,6 +1709,49 @@ describe('CurrentMapPage', () => {
       await switchTo(wrapper, '三维');
       expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
       expect(wrapper.get('[data-loaded="sz-station"]').text()).not.toContain('钻地');
+    });
+
+    it('路线漫游（ADR 0083）：从面板开始，空格开始、暂停；Esc、选工具、切到二维都退出', async () => {
+      mockManifest();
+      const page = await readyPage();
+      const { wrapper } = page;
+      await switchTo(wrapper, '三维');
+      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
+      await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
+      await settle();
+      const view = sceneOf(page);
+      view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
+      await nextTick();
+      const start = async () => {
+        wrapper.get('[data-loaded="sz-station"]').findComponent(ElDropdown).vm.$emit('command', 'enter');
+        await settle();
+      };
+      const key = async (value: string) => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: value }));
+        await settle();
+      };
+
+      await start();
+      expect(view.session.scene.current.roam).toMatchObject({ kind: 'route', playing: false, rate: 1, run: 0 });
+      expect(wrapper.find('[data-roam-bar]').exists()).toBe(true);
+      expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
+      await key(' ');
+      expect(view.session.scene.current.roam?.playing).toBe(true);
+      await key(' ');
+      expect(view.session.scene.current.roam?.playing).toBe(false);
+      await key('Escape');
+      expect(view.session.scene.current.roam).toBeUndefined();
+      expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
+
+      await start();
+      await button(wrapper, '测距').trigger('click');
+      await settle();
+      expect(view.session.scene.current.roam).toBeUndefined();
+
+      await button(wrapper, '移动').trigger('click');
+      await start();
+      await switchTo(wrapper, '二维');
+      expect(view.session.scene.current.roam).toBeUndefined();
     });
   });
 

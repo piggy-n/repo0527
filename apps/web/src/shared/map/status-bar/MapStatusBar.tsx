@@ -1,7 +1,7 @@
 import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
 import { useShownElementSize } from '../../composables/useShownElementSize';
 import { type CoordinateFormat, formatLngLat } from '../location/coordinate-format';
-import { eyeHeightLabel, fitStatusLayout, type ScaleBar, type StatusLayout, type ViewAngles } from './status-bar';
+import { eyeText, fitStatusLayout, type ScaleBar, type StatusLayout, type ViewAngles } from './status-bar';
 import type { MapReadout, ReadoutPosition } from './useMapReadout';
 import styles from './MapStatusBar.module.scss';
 
@@ -13,7 +13,7 @@ const scaleSegment = ({ width, label }: ScaleBar) => (
 );
 
 // 三维代替比例尺的一段（ADR 0080 第 6 节）
-const eyeSegment = (meters: number) => <span class={styles.segment}>视点高度 {eyeHeightLabel(meters)}</span>;
+const eyeSegment = (meters: number) => <span class={styles.segment}>{eyeText(meters)}</span>;
 
 // 旋转、俯仰都为 0 时没有这一段
 const anglesSegment = ({ bearing, pitch }: ViewAngles) =>

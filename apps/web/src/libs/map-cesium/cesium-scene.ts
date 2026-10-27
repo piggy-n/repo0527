@@ -4,6 +4,7 @@ import type {
   LngLat,
   MapPointerEvent,
   PickResult,
+  RoutePath,
   ScreenPoint,
   UndergroundView,
   Unsubscribe
@@ -49,6 +50,7 @@ import {
 } from './camera-math';
 import {
   type CreateScene,
+  type RoutePlayback,
   type SceneEvents,
   type SceneGestures,
   type SceneLike,
@@ -59,6 +61,7 @@ import {
 import type { OverlayLayer, OverlayShape, RgbaColor } from './overlay-plan';
 import { movableInPlace } from './overlay-update';
 import type { PreparedTileset } from './prepare-tileset';
+import { SceneRoute } from './scene-route';
 import { SceneTilesets } from './scene-tilesets';
 import { footprintOf, SceneUnderground } from './scene-underground';
 import type { ImageryPlan } from './scene-style';
@@ -158,6 +161,9 @@ export class CesiumScene implements SceneLike {
   #flying = false;
   readonly #tilesets: SceneTilesets;
   readonly #underground: SceneUnderground;
+  readonly #route: SceneRoute;
+  // 竖直视场角：平时对齐二维，路线漫游时换成室内用的（ADR 0083 第 3 节）
+  #fovy = MAPLIBRE_FOVY;
   // 钻地的要求；瓦片集加进来之前先记着，加进来再生效
   #undergroundView: UndergroundView | null = null;
   // 相机在动时不算画面稳定；相机、影像变了以后重新等一次
@@ -198,6 +204,16 @@ export class CesiumScene implements SceneLike {
       })
     );
     this.#underground = stack.use(new SceneUnderground(widget));
+    this.#route = stack.use(
+      new SceneRoute(widget, {
+        progress: distance => this.#emitter.emit('routeprogress', distance),
+        end: () => this.#emitter.emit('routeend'),
+        setFovy: fovy => {
+          this.#fovy = fovy ?? MAPLIBRE_FOVY;
+          this.#applyFov();
+        }
+      })
+    );
     const { scene, camera, canvas } = widget;
     scene.globe.baseColor = Color.fromCssColorString(DEFAULT_BASE_COLOR);
     // 地面大气会给影像蒙上一层颜色，和二维对不上
@@ -486,6 +502,24 @@ export class CesiumScene implements SceneLike {
     }
   }
 
+  startRoute(path: RoutePath): void {
+    this.#settled = false;
+    this.#route.start(path);
+  }
+
+  restartRoute(): void {
+    this.#route.restart();
+  }
+
+  setRoutePlayback(playback: RoutePlayback): void {
+    this.#route.setPlayback(playback);
+  }
+
+  stopRoute(back: boolean): void {
+    this.#settled = false;
+    this.#route.stop(back);
+  }
+
   setUnderground(underground: UndergroundView | null): void {
     this.#undergroundView = underground;
     this.#applyUnderground();
@@ -574,12 +608,12 @@ export class CesiumScene implements SceneLike {
     };
   }
 
-  // 竖直视场角对齐二维（ADR 0079 第 4 节）；Cesium 在宽屏时把 fov 当作水平视场角
+  // 竖直视场角平时对齐二维（ADR 0079 第 4 节）；Cesium 在宽屏时把 fov 当作水平视场角
   #applyFov(): void {
     const { width, height } = this.size();
     const { frustum } = this.#widget.camera;
     if (width > 0 && height > 0 && frustum instanceof PerspectiveFrustum) {
-      frustum.fov = frustumFov(MAPLIBRE_FOVY, width / height);
+      frustum.fov = frustumFov(this.#fovy, width / height);
     }
   }
 

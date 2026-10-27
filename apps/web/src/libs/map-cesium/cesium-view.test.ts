@@ -4,6 +4,9 @@ import {
   type MapInputEvent,
   type MapPointerEvent,
   MapSession,
+  type RoamStatus,
+  type RoutePath,
+  type RouteRoam,
   type SceneStatus,
   type StyleGroup,
   type TilesetLayer,
@@ -16,6 +19,7 @@ import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { CesiumScene } from './cesium-scene';
 import { CesiumView } from './cesium-view';
 import {
+  type RoutePlayback,
   type SceneEvents,
   type SceneGestures,
   type SceneLike,
@@ -52,6 +56,10 @@ class FakeScene implements SceneLike {
   readonly tilesets = new Map<string, TilesetOptions>();
   readonly removed: string[] = [];
   underground: UndergroundView | null = null;
+  // 路线漫游：正在播放的路线、播放状态和调用的先后
+  route: RoutePath | null = null;
+  playback: RoutePlayback | null = null;
+  readonly routeCalls: string[] = [];
   gestures: SceneGestures = { drag: true };
   cursor: string | undefined;
   rendering = true;
@@ -135,6 +143,25 @@ class FakeScene implements SceneLike {
 
   setUnderground(underground: UndergroundView | null): void {
     this.underground = underground;
+  }
+
+  startRoute(path: RoutePath): void {
+    this.route = path;
+    this.routeCalls.push('start');
+  }
+
+  restartRoute(): void {
+    this.routeCalls.push('restart');
+  }
+
+  setRoutePlayback(playback: RoutePlayback): void {
+    this.playback = playback;
+    this.routeCalls.push(`playback ${playback.playing} ${playback.rate}`);
+  }
+
+  stopRoute(back: boolean): void {
+    this.route = null;
+    this.routeCalls.push(`stop ${back}`);
   }
 
   pick() {
@@ -914,5 +941,185 @@ describe('CesiumView 的三维内容（ADR 0081）', () => {
 
     expect(signal.aborted).toBe(true);
     expect(view.sceneStatus.size).toBe(0);
+  });
+});
+
+// 往东约 20 米、再往北约 10 米的路线
+const ROUTE_PATH: RouteRoam['path'] = [
+  [120.666, 31.3175, -5.1],
+  [120.6662, 31.3175, -5.1],
+  [120.6662, 31.31759, -5.1]
+];
+
+const routeRoam = (extra: Partial<RouteRoam> = {}): RouteRoam => ({
+  kind: 'route',
+  id: 'enter',
+  path: ROUTE_PATH,
+  playing: false,
+  rate: 1,
+  run: 0,
+  ...extra
+});
+
+function roamSetup(options: Parameters<typeof setup>[0] = {}) {
+  const context = setup(options);
+  const statuses: (RoamStatus | null)[] = [];
+  context.view.onRoamStatusChange(status => statuses.push(status));
+  const roam = (value: RouteRoam | undefined) =>
+    context.session.scene.set({ tilesets: [], underground: null, ...(value ? { roam: value } : {}) });
+  return { ...context, statuses, roam };
+}
+
+describe('CesiumView 的路线漫游（ADR 0083）', () => {
+  it('会话里有了漫游：场景开始这条路线、按意图播放，报告从 0 开始的进度和总长', async () => {
+    const { scene, view, statuses, roam } = roamSetup();
+    await view.whenReady();
+
+    roam(routeRoam());
+    await settle();
+
+    expect(scene.routeCalls).toStrictEqual(['start', 'playback false 1']);
+    const total = scene.route?.total ?? 0;
+    expect(total).toBeGreaterThan(25);
+    expect(statuses).toStrictEqual([{ id: 'enter', run: 0, distance: 0, total, finished: false }]);
+    expect(view.roamStatus).toStrictEqual(statuses[0]);
+  });
+
+  it('走过的距离每变 0.5 米报告一次，到终点时报告走完', async () => {
+    const { scene, view, statuses, roam } = roamSetup();
+    await view.whenReady();
+    roam(routeRoam({ playing: true }));
+    await settle();
+    const total = scene.route?.total ?? 0;
+
+    for (const distance of [0.2, 0.4, 0.6, 0.9, 1.2, total]) {
+      scene.emit('routeprogress', distance);
+    }
+    scene.emit('routeend');
+
+    expect(statuses.map(status => status && [Number(status.distance.toFixed(1)), status.finished])).toStrictEqual([
+      [0, false],
+      [0.6, false],
+      [1.2, false],
+      [Number(total.toFixed(1)), false],
+      [Number(total.toFixed(1)), true]
+    ]);
+  });
+
+  it('重新开始回到起点；播放、倍速变了才改播放；换一条路线重新开始', async () => {
+    const { scene, view, statuses, roam } = roamSetup();
+    await view.whenReady();
+    roam(routeRoam({ playing: true }));
+    await settle();
+    scene.emit('routeprogress', 3);
+    scene.routeCalls.length = 0;
+
+    roam(routeRoam({ playing: true, run: 1 }));
+    await settle();
+    roam(routeRoam({ playing: false, run: 1 }));
+    await settle();
+    roam(routeRoam({ playing: false, run: 1, rate: 2 }));
+    await settle();
+    roam(routeRoam({ id: 'platform', playing: false, run: 1, rate: 2 }));
+    await settle();
+
+    expect(scene.routeCalls).toStrictEqual([
+      'restart',
+      'playback false 1',
+      'playback false 2',
+      'start',
+      'playback false 2'
+    ]);
+    expect(statuses.slice(-2).map(status => status && [status.id, status.run, status.distance])).toStrictEqual([
+      ['enter', 1, 0],
+      ['platform', 1, 0]
+    ]);
+  });
+
+  it('撤掉漫游：场景结束路线并飞回开始前的位置，进度变成 null', async () => {
+    const { scene, view, statuses, roam } = roamSetup();
+    await view.whenReady();
+    roam(routeRoam());
+    await settle();
+
+    roam(undefined);
+    await settle();
+
+    expect(scene.routeCalls.at(-1)).toBe('stop true');
+    expect(statuses.at(-1)).toBeNull();
+    expect(view.roamStatus).toBeNull();
+  });
+
+  it('漫游时相机的变化按 program 写回；按下鼠标、拖动不打断场景的飞行，也不开始新的相机操作', async () => {
+    const { session, scene, view, roam } = roamSetup();
+    await view.whenReady();
+    roam(routeRoam({ playing: true }));
+    await settle();
+    const operation = session.camera.operation;
+    const causes: string[] = [];
+    session.camera.on('change', ({ cause }) => causes.push(cause));
+    const cancelFlight = vi.spyOn(scene, 'cancelFlight');
+
+    scene.drag({ center: [120.6661, 31.3175], zoom: 20, bearing: 90, pitch: 85 });
+
+    expect(operation.aborted).toBe(false);
+    expect(causes).toStrictEqual(['program']);
+    expect(cancelFlight).not.toHaveBeenCalled();
+  });
+
+  it('页面开始别的定位：路线立即停下、不飞回，之后撤掉漫游时不再结束一次', async () => {
+    const { scene, view, roam } = roamSetup();
+    await view.whenReady();
+    roam(routeRoam({ playing: true }));
+    await settle();
+
+    view.flyTo({ center: [119, 32], zoom: 10 });
+    roam(undefined);
+    await settle();
+
+    expect(scene.routeCalls).toStrictEqual(['start', 'playback true 1', 'stop false']);
+    expect(scene.calls.at(-1)).toBe('flyTo');
+  });
+
+  it('暂停期间撤掉的漫游在恢复时结束：相机没被别的视图动过才飞回', async () => {
+    const { session, scene, view, roam } = roamSetup();
+    await view.whenReady();
+    roam(routeRoam());
+    await settle();
+
+    view.pause();
+    roam(undefined);
+    await settle();
+    expect(scene.routeCalls.at(-1)).toBe('playback false 1');
+    view.resume();
+    expect(scene.routeCalls.at(-1)).toBe('stop true');
+
+    roam(routeRoam({ id: 'again' }));
+    await settle();
+    view.pause();
+    roam(undefined);
+    session.camera.set({ center: [118, 32], zoom: 9, bearing: 0, pitch: 0 }, { view: '2d', cause: 'user' });
+    await settle();
+    view.resume();
+    expect(scene.routeCalls.at(-1)).toBe('stop false');
+  });
+
+  it('视图重建时会话里已经在漫游：创建后从起点接上', async () => {
+    const scene = new FakeScene();
+    const first = roamSetup({ scene });
+    await first.view.whenReady();
+    first.roam(routeRoam({ playing: true }));
+    await settle();
+    const rebuilt = new FakeScene();
+
+    const view = new CesiumView({
+      session: first.session,
+      container: document.createElement('div'),
+      createScene: () => rebuilt
+    });
+    views.push(view);
+    await view.whenReady();
+
+    expect(rebuilt.routeCalls).toStrictEqual(['start', 'playback true 1']);
   });
 });

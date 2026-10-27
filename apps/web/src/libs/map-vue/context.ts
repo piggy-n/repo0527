@@ -12,6 +12,7 @@ import {
   type PickResult,
   type RenderedFeature,
   type RenderedQueryOptions,
+  type RoamStatus,
   type ScreenBox,
   type SceneStatus,
   type ScreenPoint,
@@ -101,6 +102,8 @@ export interface MapContext {
   readonly sourceErrors: Readonly<ShallowRef<SourceErrors>>;
   /** 当前视图报告的三维内容状态（ADR 0081 第 2 节）；二维、没有视图时为空 */
   readonly sceneStatus: Readonly<ShallowRef<SceneStatus>>;
+  /** 当前视图报告的漫游进度（ADR 0083 第 2 节）；没有在漫游、二维、没有视图时为 null */
+  readonly roamStatus: Readonly<ShallowRef<RoamStatus | null>>;
   /** 引擎失败后重新创建视图；其他时候什么也不做（样式失败会在出现新版本时自动恢复） */
   retry(): void;
   /**
@@ -204,6 +207,7 @@ export class MapContextState implements Disposable {
   readonly #failure = shallowRef<MapViewFailure | null>(null);
   readonly #sourceErrors = shallowRef<SourceErrors>(NO_SOURCE_ERRORS);
   readonly #sceneStatus = shallowRef<SceneStatus>(NO_SCENE_STATUS);
+  readonly #roamStatus = shallowRef<RoamStatus | null>(null);
   readonly #retryRequests = ref(0);
   readonly #activeTool: Ref<string>;
   readonly #unsubscribeTool: () => void;
@@ -260,6 +264,7 @@ export class MapContextState implements Disposable {
       failure: shallowReadonly(this.#failure),
       sourceErrors: shallowReadonly(this.#sourceErrors),
       sceneStatus: shallowReadonly(this.#sceneStatus),
+      roamStatus: shallowReadonly(this.#roamStatus),
       retry: () => this.#retry(),
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
       whenSettled: (signal?: AbortSignal) => this.#whenSettled(signal),
@@ -339,11 +344,17 @@ export class MapContextState implements Disposable {
         this.#sceneStatus.value = status;
       }
     });
+    const unsubscribeRoamStatus = view.onRoamStatusChange?.(status => {
+      if (this.#current === attached) {
+        this.#roamStatus.value = status;
+      }
+    });
     const unsubscribe = () => {
       unsubscribeState();
       unsubscribeResize();
       unsubscribeSourceErrors();
       unsubscribeSceneStatus?.();
+      unsubscribeRoamStatus?.();
     };
     const attached: AttachedView = { view, viewport, canvas, unsubscribe, detached: new AbortController() };
     this.#views.set(view.kind, attached);
@@ -398,6 +409,7 @@ export class MapContextState implements Disposable {
     this.#failure.value = current?.view.failure ?? null;
     this.#sourceErrors.value = current?.view.sourceErrors ?? NO_SOURCE_ERRORS;
     this.#sceneStatus.value = current?.view.sceneStatus ?? NO_SCENE_STATUS;
+    this.#roamStatus.value = current?.view.roamStatus ?? null;
     this.#viewport.value = current?.view.state === 'ready' ? current.viewport : null;
   }
 

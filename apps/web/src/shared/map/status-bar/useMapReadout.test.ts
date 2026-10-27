@@ -83,6 +83,22 @@ describe('useMapReadout', () => {
     expect(lngLatOf(ctx.readout.position.value)).toStrictEqual(['118.80', '32.00']);
   });
 
+  it('三维视点在地表以下时不显示画布中心（相机的中心在视线穿出地面的远处）；鼠标在画布上时照常拾取', () => {
+    using ctx = setup();
+    ctx.view.value = ctx.sceneViewport;
+    ctx.eye.height = -3.6;
+    ctx.camera.value = { ...ctx.camera.value, pitch: 114 };
+    expect(ctx.readout.position.value).toBeNull();
+
+    ctx.pointer.value = { x: 600, y: 200 };
+    expect(lngLatOf(ctx.readout.position.value)).toStrictEqual(['119.80', '33.00']);
+
+    ctx.pointer.value = null;
+    ctx.eye.height = -0.4;
+    ctx.camera.value = { ...ctx.camera.value, pitch: 80 };
+    expect(ctx.readout.position.value).toStrictEqual({ lngLat: [118.8, 32], center: true });
+  });
+
   it('比例尺：在相机中心投影到的水平线上取相距 100 像素的两点，按椭球面算距离', () => {
     using ctx = setup();
     ctx.view.value = ctx.viewport;

@@ -1,6 +1,6 @@
 import type { CameraState, ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
-import type { SceneStatus } from '../scene/scene-content-model';
+import type { RoamStatus, SceneStatus } from '../scene/scene-content-model';
 import type { RenderedFeature, RenderedQueryOptions, ScreenBox } from './rendered-features';
 import type { LngLat, PickResult, ScreenPoint } from './view-input';
 
@@ -76,6 +76,10 @@ export interface MapView extends Disposable {
   readonly sceneStatus?: SceneStatus;
   /** 三维内容的状态变化；只有三维视图有这项能力 */
   onSceneStatusChange?(callback: (status: SceneStatus) => void): Unsubscribe;
+  /** 漫游的进度（ADR 0083 第 2 节），没有在漫游时为 null；只有三维视图有这项能力 */
+  readonly roamStatus?: RoamStatus | null;
+  /** 漫游的进度变化，最多 10 次每秒；只有三维视图有这项能力 */
+  onRoamStatusChange?(callback: (status: RoamStatus | null) => void): Unsubscribe;
   /** 状态或失败原因变化时触发 */
   on(event: 'statechange', callback: (state: ViewState) => void): Unsubscribe;
   /** 画布尺寸变化：相机不变，屏幕上的投影变了，按屏幕位置摆放的浮层要重新投影 */

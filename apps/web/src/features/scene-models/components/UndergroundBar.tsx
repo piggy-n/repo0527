@@ -8,7 +8,10 @@ import styles from './UndergroundBar.module.scss';
 const MAX_PERCENT = Math.round(MAX_SURFACE_OPACITY * 100);
 const PERCENT_STEP = 5;
 
-/** 钻地条（ADR 0081 第 6 节，原型 `/dev/map-3d`）：钻地期间在地图下方，调地表不透明度、退出钻地；不在钻地时不渲染 */
+/**
+ * 钻地条（ADR 0081 第 6 节，原型 `/dev/map-3d`）：钻地期间在地图下方，调地表不透明度、退出钻地；
+ * 不在钻地、正在漫游时不渲染（ADR 0083 第 4 节）
+ */
 export const UndergroundBar = defineComponent({
   name: 'UndergroundBar',
   props: {
@@ -18,7 +21,8 @@ export const UndergroundBar = defineComponent({
     const target = computed(() => {
       const choice = props.models.underground.value;
       const model = choice && props.models.models.value.find(item => item.id === choice.modelId);
-      return choice && model ? { name: model.name, percent: Math.round(choice.opacity * 100) } : null;
+      const roaming = props.models.roam.value !== null;
+      return choice && model && !roaming ? { name: model.name, percent: Math.round(choice.opacity * 100) } : null;
     });
     const change = (value: number | number[]) => {
       if (typeof value === 'number') {

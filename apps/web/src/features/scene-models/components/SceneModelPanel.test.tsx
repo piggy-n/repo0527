@@ -1,13 +1,14 @@
-import type { CameraState, SceneStatus } from '@yzt/map-core';
+import type { CameraState, RoamStatus, SceneStatus } from '@yzt/map-core';
 import { type CameraControl, provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
-import { ElOption, ElSelect, ElSlider } from 'element-plus';
+import { ElDropdown, ElDropdownItem, ElOption, ElRadioGroup, ElSelect, ElSlider } from 'element-plus';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref, shallowRef } from 'vue';
 import { required } from '@/shared/testing/required';
 import { sceneManifestSchema } from '../api';
 import { buildModelCatalog, type SceneModel } from '../catalog';
 import { type SceneModels, useSceneModels } from '../composables/useSceneModels';
+import { RoamBar } from './RoamBar';
 import { SceneModelPanel } from './SceneModelPanel';
 import { UndergroundBar } from './UndergroundBar';
 import styles from './SceneModelPanel.module.scss';
@@ -18,7 +19,22 @@ const CAMERA: CameraState = { center: [120.66, 31.31], zoom: 16, bearing: 0, pit
 const CATALOG = buildModelCatalog(
   sceneManifestSchema.parse({
     models: [
-      { id: 'station', name: '苏州站地下空间', cityCode: '320500', kind: 'indoor', underground: true, tileset: 'S.json' },
+      {
+        id: 'station',
+        name: '苏州站地下空间',
+        cityCode: '320500',
+        kind: 'indoor',
+        underground: true,
+        tileset: 'S.json',
+        // 往东约 95 米、再往北约 11 米
+        routes: [
+          {
+            id: 'enter',
+            name: '进站乘车',
+            path: [[120.666, 31.3175, -5.1], [120.667, 31.3175, -5.1], [120.667, 31.3176, -5.1]]
+          }
+        ]
+      },
       {
         id: 'white',
         name: '苏州白膜',
@@ -40,6 +56,7 @@ const CATALOG = buildModelCatalog(
 function mountPanel(catalog: readonly SceneModel[] | null = CATALOG) {
   const source = shallowRef(catalog ?? undefined);
   const sceneStatus = shallowRef<SceneStatus>(new Map());
+  const roamStatus = shallowRef<RoamStatus | null>(null);
   const flyTo = vi.fn<CameraControl['flyTo']>();
   const control = { flyTo } as unknown as CameraControl;
   const failed = ref(false);
@@ -48,7 +65,15 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG) {
   let owner: SceneModels | undefined;
   const Page = defineComponent(() => {
     provideMap({ groups: [], camera: CAMERA });
-    owner = useSceneModels({ sceneStatus, runCameraOperation: action => action(control) }, source);
+    owner = useSceneModels(
+      {
+        sceneStatus,
+        roamStatus,
+        runCameraOperation: action => action(control),
+        beginCameraOperation: () => ({ signal: new AbortController().signal, run: action => action(control) })
+      },
+      source
+    );
     const models = owner;
     return () => (
       <div>
@@ -59,6 +84,7 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG) {
           onRetry={onRetry}
           onUpdate:collapsed={value => (collapsed.value = value)}
         />
+        <RoamBar models={models} />
         <UndergroundBar models={models} />
       </div>
     );
@@ -73,12 +99,23 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG) {
     );
     return nextTick();
   };
-  return { wrapper, owner: required(owner, '页面没有创建拥有者'), source, failed, onRetry, collapsed, flyTo, report };
+  const progress = (distance: number, finished = false) => {
+    const roam = owner?.roam.value;
+    const total = owner?.models.value[0]?.routes[0]?.length ?? 0;
+    roamStatus.value = roam ? { id: roam.id, run: roam.run, distance, total, finished } : null;
+    return nextTick();
+  };
+  const ownerOf = required(owner, '页面没有创建拥有者');
+  return { wrapper, owner: ownerOf, source, failed, onRetry, collapsed, flyTo, report, progress };
 }
 
 function button(wrapper: VueWrapper, label: string, within = '') {
   return wrapper.get(`${within} button[aria-label="${label}"]`);
 }
+
+// 文字按钮（漫游操作条的开始、暂停等）
+const textButton = (wrapper: VueWrapper, label: string) =>
+  wrapper.findAll('button').find(item => item.text() === label);
 
 const check = (wrapper: VueWrapper, id: string, value: boolean) =>
   wrapper.get(`[data-model="${id}"] input[type="checkbox"]`).setValue(value);
@@ -208,5 +245,59 @@ describe('SceneModelPanel', () => {
     expect(wrapper.find('[data-model]').exists()).toBe(false);
     await button(wrapper, '展开三维模型').trigger('click');
     expect(collapsed.value).toBe(false);
+  });
+});
+
+describe('路线漫游的入口和操作条（ADR 0083）', () => {
+  it('加载完成、有路线的模型显示"路线漫游"，列出路线名和长度；选一条开始，行标漫游中，钻地条让给漫游操作条', async () => {
+    const { wrapper, owner, report } = mountPanel();
+    await check(wrapper, 'station', true);
+    expect(wrapper.get('[data-loaded="station"]').text()).not.toContain('路线漫游');
+    await report({ station: 'ready' });
+
+    const dropdown = wrapper.get('[data-loaded="station"]').findComponent(ElDropdown);
+    expect(dropdown.text()).toContain('路线漫游');
+    expect(dropdown.findAllComponents(ElDropdownItem).map(item => item.text())).toStrictEqual(['进站乘车106 m']);
+    dropdown.vm.$emit('command', 'enter');
+    await nextTick();
+
+    expect(owner.roam.value?.routeId).toBe('enter');
+    expect(wrapper.get('[data-loaded="station"]').text()).toContain('漫游中');
+    expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
+    const bar = wrapper.get('[data-roam-bar]');
+    expect(bar.text()).toContain('路线漫游 · 进站乘车');
+    expect(bar.text()).toContain('苏州站地下空间');
+    expect(bar.text()).toContain('0 m / 106 m · 剩余 1:06');
+    expect(textButton(wrapper, '开始')).toBeDefined();
+  });
+
+  it('操作条：开始后是暂停，走过一段后暂停是继续，到终点是重新开始；倍速改剩余时间；退出后换回钻地条', async () => {
+    const { wrapper, owner, report, progress } = mountPanel();
+    await check(wrapper, 'station', true);
+    await report({ station: 'ready' });
+    owner.startRoute('station', 'enter');
+    await nextTick();
+
+    await textButton(wrapper, '开始')?.trigger('click');
+    expect(owner.routePhase.value).toBe('playing');
+    await progress(53);
+    expect(wrapper.get('[data-roam-bar]').text()).toContain('53 m / 106 m · 剩余 0:33');
+    await textButton(wrapper, '暂停')?.trigger('click');
+    expect(textButton(wrapper, '继续')).toBeDefined();
+    expect(wrapper.get('[data-roam-bar]').text()).toContain('暂停时可拖动查看四周');
+
+    wrapper.get('[data-roam-bar]').findComponent(ElRadioGroup).vm.$emit('update:modelValue', 2);
+    await nextTick();
+    expect(owner.roam.value?.rate).toBe(2);
+    expect(wrapper.get('[data-roam-bar]').text()).toContain('剩余 0:17');
+
+    await progress(106, true);
+    expect(wrapper.get('[data-roam-bar]').text()).toContain('已到终点');
+    await textButton(wrapper, '重新开始')?.trigger('click');
+    expect(owner.roam.value).toMatchObject({ playing: true, run: 1 });
+
+    await textButton(wrapper, '退出漫游')?.trigger('click');
+    expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
+    expect(wrapper.get('[data-underground-bar]').text()).toContain('钻地观察 · 苏州站地下空间');
   });
 });

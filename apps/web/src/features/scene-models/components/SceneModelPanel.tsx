@@ -1,13 +1,28 @@
 import { ArrowDown, ArrowRight, ArrowUp, Loading, Search } from '@element-plus/icons-vue';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
-import { ElButton, ElCheckbox, ElIcon, ElInput, ElOption, ElSelect, ElTooltip } from 'element-plus';
+import {
+  ElButton,
+  ElCheckbox,
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu,
+  ElIcon,
+  ElInput,
+  ElOption,
+  ElSelect,
+  ElTooltip
+} from 'element-plus';
 import { computed, defineComponent, type PropType, ref } from 'vue';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import { groupByCity, MODEL_KIND_LABELS, type ModelCity, type SceneModel } from '../catalog';
 import type { SceneModels } from '../composables/useSceneModels';
 import styles from './SceneModelPanel.module.scss';
+
+function formatLength(meters: number): string {
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
+}
 
 // 行内的图标按钮，悬停提示名称
 function iconButton(label: string, icon: IconName, onClick: () => void, disabled = false) {
@@ -107,6 +122,32 @@ export const SceneModelPanel = defineComponent({
       );
     };
 
+    // 预置路线的下拉：选一条就开始漫游，停在起点（ADR 0083 第 4 节）
+    const renderRoutes = (model: SceneModel) => (
+      <ElDropdown trigger="click" onCommand={command => props.models.startRoute(model.id, String(command))}>
+        {{
+          default: () => (
+            <ElButton link type="primary" size="small">
+              路线漫游
+              <ElIcon class={styles.dropdownArrow}>
+                <ArrowDown />
+              </ElIcon>
+            </ElButton>
+          ),
+          dropdown: () => (
+            <ElDropdownMenu>
+              {model.routes.map(route => (
+                <ElDropdownItem key={route.id} command={route.id}>
+                  {route.name}
+                  <span class={styles.routeLength}>{formatLength(route.length)}</span>
+                </ElDropdownItem>
+              ))}
+            </ElDropdownMenu>
+          )
+        }}
+      </ElDropdown>
+    );
+
     const renderLoadedMeta = (model: SceneModel) => {
       const { models } = props;
       const state = models.stateOf(model.id);
@@ -128,6 +169,7 @@ export const SceneModelPanel = defineComponent({
           <span class={styles.meta}>
             {model.cityName} · {MODEL_KIND_LABELS[model.kind]}
           </span>
+          {model.routes.length > 0 && renderRoutes(model)}
           {model.kind === 'white' && (
             <ElSelect
               class={styles.effect}
@@ -145,6 +187,15 @@ export const SceneModelPanel = defineComponent({
       );
     };
 
+    // 漫游中优先于钻地
+    const renderTag = (id: string) => {
+      const { models } = props;
+      if (models.roam.value?.modelId === id) {
+        return <span class={styles.tag}>漫游中</span>;
+      }
+      return models.underground.value?.modelId === id ? <span class={styles.tag}>钻地</span> : null;
+    };
+
     const renderLoaded = (model: SceneModel) => {
       const { models } = props;
       const { id } = model;
@@ -154,7 +205,7 @@ export const SceneModelPanel = defineComponent({
             <span class={styles.loadedName} title={model.name}>
               {model.name}
             </span>
-            {models.underground.value?.modelId === id && <span class={styles.tag}>钻地</span>}
+            {renderTag(id)}
             <span class={styles.actions}>
               {iconButton('定位', 'focus', () => models.locate(id), models.stateOf(id) !== 'ready')}
               {iconButton('卸载', 'close', () => models.setChecked(id, false))}

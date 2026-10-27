@@ -1,7 +1,14 @@
 import { geodesicDistance, type LngLat } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
 import { computed, type ComputedRef } from 'vue';
-import { SCALE_SAMPLE_WIDTH, type ScaleBar, scaleBar, type ViewAngles, visibleAngles } from './status-bar';
+import {
+  belowSurface,
+  SCALE_SAMPLE_WIDTH,
+  type ScaleBar,
+  scaleBar,
+  type ViewAngles,
+  visibleAngles
+} from './status-bar';
 
 /** 状态栏的经纬度 */
 export interface ReadoutPosition {
@@ -44,6 +51,12 @@ export function useMapReadout(map: ReadoutSource): MapReadout {
     return left.kind === 'hit' && right.kind === 'hit' ? scaleBar(geodesicDistance(left.lngLat, right.lngLat)) : null;
   });
 
+  // 相机每次变化时读一次，三维的相机变化每帧都写回会话
+  const eye = computed(() => {
+    void camera.value;
+    return map.view.value?.eyeHeight() ?? null;
+  });
+
   // 鼠标在画布上时拾取它下面的点；不在时是画布中心，也就是相机的中心
   const position = computed((): ReadoutPosition | null => {
     void map.projectionRevision.value;
@@ -53,16 +66,12 @@ export function useMapReadout(map: ReadoutSource): MapReadout {
     }
     const pointer = map.pointer.value;
     if (!pointer) {
-      return { lngLat: camera.value.center, center: true };
+      // 视点在地表以下时，相机的中心是视线穿出椭球面的远处，不是画面中间看到的地方，不显示（原型 `/dev/map-3d`）
+      const height = eye.value;
+      return height !== null && belowSurface(height) ? null : { lngLat: camera.value.center, center: true };
     }
     const picked = view.pick(pointer);
     return picked.kind === 'hit' ? { lngLat: picked.lngLat, center: false } : null;
-  });
-
-  // 相机每次变化时读一次，三维的相机变化每帧都写回会话
-  const eye = computed(() => {
-    void camera.value;
-    return map.view.value?.eyeHeight() ?? null;
   });
 
   const angles = computed(() => visibleAngles(camera.value));

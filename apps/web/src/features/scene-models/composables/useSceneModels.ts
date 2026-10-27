@@ -1,4 +1,4 @@
-import type { SceneContent, TilesetStatus } from '@yzt/map-core';
+import type { RoamStatus, SceneContent, TilesetStatus } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
 import {
   computed,
@@ -18,13 +18,21 @@ import {
   loadStateOf,
   MAX_SURFACE_OPACITY,
   type ModelLoadState,
+  type RoamChoice,
+  ROUTE_RATES,
   type SceneModelsState,
   tilesetIdOf,
   type UndergroundChoice
 } from '../scene-content';
 
 /** 拥有者用到的上下文 */
-export type SceneModelsContext = Pick<MapContext, 'sceneStatus' | 'runCameraOperation'>;
+export type SceneModelsContext = Pick<
+  MapContext,
+  'sceneStatus' | 'roamStatus' | 'runCameraOperation' | 'beginCameraOperation'
+>;
+
+/** 路线漫游的阶段：停在起点、播放中、暂停、到了终点 */
+export type RoutePhase = 'ready' | 'playing' | 'paused' | 'finished';
 
 export interface SceneModels {
   /** 目录：清单还没到、失败时为空 */
@@ -47,13 +55,26 @@ export interface SceneModels {
   readonly retry: (id: string) => void;
   readonly setSurfaceOpacity: (opacity: number) => void;
   readonly exitUnderground: () => void;
+  /** 正在漫游的路线（ADR 0083） */
+  readonly roam: Readonly<ShallowRef<RoamChoice | null>>;
+  /** 这一次、这一遍漫游的进度；视图还没报告时为 null */
+  readonly roamStatus: ComputedRef<RoamStatus | null>;
+  readonly routePhase: ComputedRef<RoutePhase | null>;
+  /** 开始一条路线：一次新的相机操作，停在起点；之后有别的定位就退出。只有加载完成的模型能开始 */
+  readonly startRoute: (id: string, routeId: string) => void;
+  /** 开始、继续；到了终点从头再走一遍 */
+  readonly playRoute: () => void;
+  readonly pauseRoute: () => void;
+  readonly setRouteRate: (rate: number) => void;
+  /** 结束漫游；地下的模型保留钻地 */
+  readonly exitRoam: () => void;
   /** 绑定给会话的推导函数（ADR 0081 第 2 节） */
   readonly deriveContent: () => SceneContent;
 }
 
 /**
- * 三维模型的拥有者（ADR 0081）：持有勾选、白膜效果、重试、定位和钻地，推导会话的三维内容；
- * 状态来自上下文的 sceneStatus。参数不合法时抛错
+ * 三维模型的拥有者（ADR 0081、0083）：持有勾选、白膜效果、重试、定位、钻地和路线漫游，推导会话的三维内容；
+ * 状态来自上下文的 sceneStatus、roamStatus。参数不合法时抛错
  */
 export function useSceneModels(
   map: SceneModelsContext,
@@ -67,6 +88,10 @@ export function useSceneModels(
   const attempts = shallowRef<ReadonlyMap<string, number>>(new Map());
   const focus = shallowRef<string | null>(null);
   const underground = shallowRef<UndergroundChoice | null>(null);
+  const roam = shallowRef<RoamChoice | null>(null);
+  // 漫游开始时的相机操作：中止（有了别的定位）就退出漫游
+  let roamSignal: AbortSignal | null = null;
+  let roamCount = 0;
 
   const modelOf = (id: string): SceneModel => {
     const model = models.value.find(item => item.id === id);
@@ -104,6 +129,9 @@ export function useSceneModels(
     }
     if (focus.value === id) {
       focus.value = null;
+    }
+    if (roam.value?.modelId === id) {
+      exitRoam();
     }
   };
 
@@ -162,12 +190,98 @@ export function useSceneModels(
     underground.value = null;
   };
 
+  const roamStatus = computed(() => {
+    const current = roam.value;
+    const status = map.roamStatus.value;
+    return current && status?.id === current.id && status.run === current.run ? status : null;
+  });
+
+  const routePhase = computed((): RoutePhase | null => {
+    const current = roam.value;
+    if (!current) {
+      return null;
+    }
+    const status = roamStatus.value;
+    if (status?.finished) {
+      return 'finished';
+    }
+    if (current.playing) {
+      return 'playing';
+    }
+    return (status?.distance ?? 0) > 0 ? 'paused' : 'ready';
+  });
+
+  const releaseOperation = () => {
+    roamSignal?.removeEventListener('abort', exitRoam);
+    roamSignal = null;
+  };
+
+  function exitRoam(): void {
+    releaseOperation();
+    roam.value = null;
+  }
+
+  const startRoute = (id: string, routeId: string) => {
+    assertLoaded(id);
+    const model = modelOf(id);
+    if (!model.routes.some(route => route.id === routeId)) {
+      throw new Error(`模型 ${id} 没有路线 ${routeId}`);
+    }
+    if (loadStateOf(statusOf(model)) !== 'ready') {
+      throw new Error(`模型 ${id} 还不能漫游`);
+    }
+    releaseOperation();
+    const { signal } = map.beginCameraOperation();
+    const choice: RoamChoice = {
+      modelId: id,
+      routeId,
+      id: `${id}/${routeId}/${++roamCount}`,
+      playing: false,
+      rate: roam.value?.rate ?? 1,
+      run: 0
+    };
+    // 开始、退出时先撤掉上一次的监听，所以中止的一定是当前这次漫游
+    signal.addEventListener('abort', exitRoam, { once: true });
+    roamSignal = signal;
+    roam.value = choice;
+    focus.value = id;
+    // 地下的模型漫游时按钻地处理：相机能到地表以下（ADR 0083 第 4 节）
+    if (model.underground && underground.value?.modelId !== id) {
+      underground.value = { modelId: id, opacity: underground.value?.opacity ?? DEFAULT_SURFACE_OPACITY };
+    }
+  };
+
+  const updateRoam = (change: Partial<Pick<RoamChoice, 'playing' | 'rate' | 'run'>>) => {
+    const current = roam.value;
+    if (!current) {
+      throw new Error('没有在漫游');
+    }
+    roam.value = { ...current, ...change };
+  };
+
+  const playRoute = () => {
+    const current = roam.value;
+    if (routePhase.value === 'finished' && current) {
+      updateRoam({ playing: true, run: current.run + 1 });
+    } else {
+      updateRoam({ playing: true });
+    }
+  };
+
+  const setRouteRate = (rate: number) => {
+    if (!ROUTE_RATES.includes(rate)) {
+      throw new Error(`漫游的倍速只能是 ${ROUTE_RATES.join('、')}：${rate}`);
+    }
+    updateRoam({ rate });
+  };
+
   const state = (): SceneModelsState => ({
     loaded: loaded.value,
     effects: effects.value,
     shownEffects: shownEffects.value,
     attempts: attempts.value,
-    underground: underground.value
+    underground: underground.value,
+    roam: roam.value
   });
 
   return {
@@ -184,6 +298,14 @@ export function useSceneModels(
     retry,
     setSurfaceOpacity,
     exitUnderground,
+    roam: shallowReadonly(roam),
+    roamStatus,
+    routePhase,
+    startRoute,
+    playRoute,
+    pauseRoute: () => updateRoam({ playing: false }),
+    setRouteRate,
+    exitRoam,
     deriveContent: () => deriveSceneContent(models.value, state())
   };
 }

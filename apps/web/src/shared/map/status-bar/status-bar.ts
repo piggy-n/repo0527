@@ -33,6 +33,16 @@ export function eyeHeightLabel(meters: number): string {
   return `${Math.round(meters / 1000)} km`;
 }
 
+/** 三维代替比例尺的一段：视点在地表以下时写"视点在地表以下"（原型 `/dev/map-3d`，钻地、站内漫游时） */
+export function eyeText(meters: number): string {
+  return belowSurface(meters) ? `视点在地表以下 ${eyeHeightLabel(-meters)}` : `视点高度 ${eyeHeightLabel(meters)}`;
+}
+
+/** 视点在地表以下：取整后深 1 米以上 */
+export function belowSurface(meters: number): boolean {
+  return Math.round(-meters) > 0;
+}
+
 /** 取样两点的距离（米）换成比例尺：不超过 80 像素的整齐长度；距离不是正数时为 null */
 export function scaleBar(sampleMeters: number): ScaleBar | null {
   if (!(Number.isFinite(sampleMeters) && sampleMeters > 0)) {

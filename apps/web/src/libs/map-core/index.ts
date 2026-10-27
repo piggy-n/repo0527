@@ -31,14 +31,19 @@ export { type SelectedFeature, SelectionModel } from './selection/selection-mode
 export {
   EMPTY_SCENE_CONTENT,
   NO_SCENE_STATUS,
+  type RoamStatus,
+  type RouteRoam,
+  type RoutePoint,
   type SceneContent,
   SceneContentModel,
+  type SceneRoam,
   type SceneStatus,
   type TilesetLayer,
   type TilesetLighting,
   type TilesetStatus,
   type UndergroundView
 } from './scene/scene-content-model';
+export { EYE_HEIGHT, ROUTE_SPEED, RoutePath, type RoutePose, smoothAngle } from './scene/route-path';
 export { MapSession, type MapSessionOptions } from './session/map-session';
 export { diffSnapshot, diffStyle, type ImageCommand, type StyleCommand, type StyleSnapshot } from './style/diff-style';
 export type { StyleImage, StyleImages } from './style/style-image';

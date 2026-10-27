@@ -4,6 +4,7 @@ import type {
   LngLat,
   MapPointerEvent,
   PickResult,
+  RoutePath,
   ScreenPoint,
   TilesetLighting,
   UndergroundView,
@@ -24,6 +25,12 @@ export interface ScenePose {
 export interface TilesetOptions {
   readonly show: boolean;
   readonly lighting: TilesetLighting;
+}
+
+/** 路线漫游的播放（ADR 0083 第 3 节）：rate 是倍速 */
+export interface RoutePlayback {
+  readonly playing: boolean;
+  readonly rate: number;
 }
 
 /** 工具对相机控制的要求：drag 是左键拖动（地球上是旋转），为 false 时关掉 */
@@ -52,6 +59,10 @@ export interface SceneEvents {
   tilesetfailed: (id: string, error: unknown) => void;
   /** 瓦片集显示后，视野里的首批瓦片已到位（不在视野里时第一帧就到） */
   tilesetinitial: (id: string) => void;
+  /** 路线漫游走过的距离（米）：播放时每帧一次，回到起点时一次 */
+  routeprogress: (distance: number) => void;
+  /** 路线漫游走到了终点，已经停下 */
+  routeend: () => void;
   /** 渲染出错，渲染循环已经停下：引擎失败 */
   failure: (error: unknown) => void;
 }
@@ -103,6 +114,16 @@ export interface SceneLike extends Disposable {
   removeTileset(id: string): void;
   /** 钻地观察（ADR 0081 第 6 节）；瓦片集还没加进来时，等加进来再生效 */
   setUnderground(underground: UndergroundView | null): void;
+  /**
+   * 开始一条路线（ADR 0083 第 3 节）：飞到起点停住，接管相机的拖动、缩放和视场角；之前的路线一并结束。
+   * 播放时每帧推进，暂停时拖动转头看四周
+   */
+  startRoute(path: RoutePath): void;
+  /** 回到起点，按当前的播放状态 */
+  restartRoute(): void;
+  setRoutePlayback(playback: RoutePlayback): void;
+  /** 结束路线漫游，恢复视场角和相机控制；back 为 true 时飞回开始前的位置 */
+  stopRoute(back: boolean): void;
   setGestures(gestures: SceneGestures): void;
   setCursor(cursor: string | undefined): void;
   /** 让画布获得焦点，按键才能交给工具 */

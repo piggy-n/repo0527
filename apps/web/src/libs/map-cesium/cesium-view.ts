@@ -16,6 +16,9 @@ import {
   NO_SOURCE_ERRORS,
   type PickResult,
   type RenderedFeature,
+  type RoamStatus,
+  RoutePath,
+  type RouteRoam,
   type SceneStatus,
   type ScreenPoint,
   type SourceErrors,
@@ -77,7 +80,18 @@ interface CesiumViewEvents {
   settle: () => void;
   sourceerrorchange: (errors: SourceErrors) => void;
   scenestatuschange: (status: SceneStatus) => void;
+  roamstatuschange: (status: RoamStatus | null) => void;
 }
+
+// 正在播放的路线（ADR 0083 第 3 节）：roam 是最近应用的意图；被别的定位接管后 detached，撤掉时不再飞回
+interface RoamEntry {
+  roam: RouteRoam;
+  readonly path: RoutePath;
+  detached: boolean;
+}
+
+// 进度每变这么多米报告一次（最快 2× 时每秒约 6 次）
+const ROAM_REPORT_STEP = 0.5;
 
 // 一个瓦片集的加载（ADR 0081 第 2 节）：layer 是会话里最近的写法
 interface TilesetEntry {
@@ -139,6 +153,9 @@ export class CesiumView<const G extends string> implements MapView {
   readonly #groupShown = new Map<string, string>();
   #sceneStatus: SceneStatus = NO_SCENE_STATUS;
   #sceneStale = false;
+  // 路线漫游（ADR 0083）：场景里正在播放的，和报告出去的进度
+  #roam: RoamEntry | null = null;
+  #roamStatus: RoamStatus | null = null;
   // 交给工具的视图能力：只有拾取、投影和渲染要素查询（ADR 0034 第 2 条、ADR 0047 第 4 节）
   readonly #toolView: ToolView = Object.freeze({
     kind: '3d',
@@ -208,6 +225,8 @@ export class CesiumView<const G extends string> implements MapView {
       scene.on('imageryerror', (sourceId, error) => this.#recordSourceError(sourceId, error)),
       scene.on('tilesetfailed', (id, error) => this.#onTilesetFailed(id, error)),
       scene.on('tilesetinitial', id => this.#guard(() => this.#onTilesetInitial(scene, id))),
+      scene.on('routeprogress', distance => this.#onRouteProgress(distance)),
+      scene.on('routeend', () => this.#onRouteEnd()),
       scene.on('failure', error => this.#fail(error))
     ]) {
       stack.defer(unsubscribe);
@@ -223,6 +242,8 @@ export class CesiumView<const G extends string> implements MapView {
     this.#applyScene(scene);
     if (active) {
       this.#activate(scene);
+      // 视图重建时会话里可能已经在漫游：从起点接上
+      this.#applyRoam(scene, false);
     } else {
       scene.setRendering(false);
       this.#setState('paused');
@@ -249,6 +270,15 @@ export class CesiumView<const G extends string> implements MapView {
 
   onSceneStatusChange(callback: (status: SceneStatus) => void): Unsubscribe {
     return this.on('scenestatuschange', callback);
+  }
+
+  /** 路线漫游的进度（ADR 0083 第 2 节） */
+  get roamStatus(): RoamStatus | null {
+    return this.#roamStatus;
+  }
+
+  onRoamStatusChange(callback: (status: RoamStatus | null) => void): Unsubscribe {
+    return this.on('roamstatuschange', callback);
   }
 
   whenReady(): Promise<void> {
@@ -284,10 +314,14 @@ export class CesiumView<const G extends string> implements MapView {
     if (this.#styleStale) {
       this.#applyStyle(scene);
     }
+    // 暂停期间三维内容的变化在恢复相机以后再应用：结束钻地、漫游时从恢复后的相机出发；
+    // 撤掉的漫游只在相机能还原（没被别的视图移动过）时飞回开始前的位置
+    const back = this.#saved?.restorable === true;
+    this.#activate(scene);
     if (this.#sceneStale) {
       this.#applyScene(scene);
     }
-    this.#activate(scene);
+    this.#applyRoam(scene, back);
   }
 
   flyTo({ center, zoom, bearing, pitch }: Partial<CameraState>, { duration, padding }: FlyToOptions = {}): void {
@@ -301,6 +335,7 @@ export class CesiumView<const G extends string> implements MapView {
     };
     // 和二维一样，padding 只决定这一次把目标放在哪里，不留在相机上（ADR 0037）
     const placed = center ? { ...target, center: paddedCenter(center, target.zoom, target.bearing, padding) } : target;
+    this.#detachRoam(scene);
     this.#move(scene, 'program', () => scene.flyTo(placed, duration));
   }
 
@@ -311,6 +346,7 @@ export class CesiumView<const G extends string> implements MapView {
       maxZoom,
       pitch: pitch ?? this.#session.camera.current.pitch
     });
+    this.#detachRoam(scene);
     this.#move(scene, 'program', () => scene.flyTo(camera, duration));
   }
 
@@ -346,6 +382,8 @@ export class CesiumView<const G extends string> implements MapView {
     this.#failure = null;
     this.#sourceErrors = NO_SOURCE_ERRORS;
     this.#sceneStatus = NO_SCENE_STATUS;
+    this.#roam = null;
+    this.#roamStatus = null;
     this.#emitter.events = {};
     this.#stack.dispose();
   }
@@ -373,9 +411,9 @@ export class CesiumView<const G extends string> implements MapView {
     this.#writeCamera(scene, cause);
   }
 
-  // 用户在画布上按下鼠标、滚动滚轮：进行中的定位停下，接下来的移动是用户操作
+  // 用户在画布上按下鼠标、滚动滚轮：进行中的定位停下，接下来的移动是用户操作；漫游时相机归漫游管
   #onInteract(scene: SceneLike): void {
-    if (this.#state !== 'ready') {
+    if (this.#state !== 'ready' || this.#roaming()) {
       return;
     }
     scene.cancelFlight();
@@ -385,6 +423,10 @@ export class CesiumView<const G extends string> implements MapView {
   // 不是视图自己发起的移动就是用户操作：第一次变化时开始一次新的相机操作（ADR 0038）
   #onCameraChange(scene: SceneLike): void {
     if (this.#state !== 'ready') {
+      return;
+    }
+    if (this.#roaming()) {
+      this.#writeCamera(scene, 'program');
       return;
     }
     if (this.#motion === null) {
@@ -398,7 +440,7 @@ export class CesiumView<const G extends string> implements MapView {
     if (this.#state !== 'ready') {
       return;
     }
-    this.#writeCamera(scene, this.#motion ?? 'user');
+    this.#writeCamera(scene, this.#roaming() ? 'program' : (this.#motion ?? 'user'));
     this.#motion = null;
   }
 
@@ -520,6 +562,7 @@ export class CesiumView<const G extends string> implements MapView {
   #onSceneChange(scene: SceneLike): void {
     if (this.#state === 'ready') {
       this.#applyScene(scene);
+      this.#applyRoam(scene, true);
     } else if (this.#state === 'paused') {
       this.#sceneStale = true;
     }
@@ -647,6 +690,80 @@ export class CesiumView<const G extends string> implements MapView {
   #publishSceneStatus(): void {
     this.#sceneStatus = new Map([...this.#tilesets].map(([id, { status }]) => [id, status]));
     this.#emitter.emit('scenestatuschange', this.#sceneStatus);
+  }
+
+  // 场景在播放路线：相机的变化都是漫游引起的
+  #roaming(): boolean {
+    return this.#roam !== null && !this.#roam.detached;
+  }
+
+  // 按会话的漫游意图开始、重新开始、改播放或结束（ADR 0083 第 3 节）；只在就绪时调用，back 决定结束时是否飞回
+  #applyRoam(scene: SceneLike, back: boolean): void {
+    const wanted = this.#session.scene.current.roam;
+    const entry = this.#roam;
+    if (!wanted) {
+      if (entry) {
+        this.#roam = null;
+        if (!entry.detached) {
+          scene.stopRoute(back);
+        }
+        this.#publishRoam(null);
+      }
+      return;
+    }
+    if (!entry || entry.roam.id !== wanted.id) {
+      const path = new RoutePath(wanted.path);
+      this.#roam = { roam: wanted, path, detached: false };
+      scene.startRoute(path);
+      scene.setRoutePlayback({ playing: wanted.playing, rate: wanted.rate });
+      this.#publishRoam({ id: wanted.id, run: wanted.run, distance: 0, total: path.total, finished: false });
+      return;
+    }
+    const previous = entry.roam;
+    entry.roam = wanted;
+    if (entry.detached) {
+      return;
+    }
+    if (wanted.run !== previous.run) {
+      scene.restartRoute();
+      this.#publishRoam({ id: wanted.id, run: wanted.run, distance: 0, total: entry.path.total, finished: false });
+    }
+    if (wanted.playing !== previous.playing || wanted.rate !== previous.rate) {
+      scene.setRoutePlayback({ playing: wanted.playing, rate: wanted.rate });
+    }
+  }
+
+  // 页面开始了别的定位：路线立即停下、不飞回，相机交给这次定位；拥有者随后会撤掉漫游
+  #detachRoam(scene: SceneLike): void {
+    if (this.#roaming() && this.#roam) {
+      this.#roam.detached = true;
+      scene.stopRoute(false);
+    }
+  }
+
+  #onRouteProgress(distance: number): void {
+    const entry = this.#roam;
+    const status = this.#roamStatus;
+    if (!entry || entry.detached || !status) {
+      return;
+    }
+    const total = entry.path.total;
+    if (Math.abs(distance - status.distance) >= ROAM_REPORT_STEP || (distance >= total && status.distance < total)) {
+      this.#publishRoam({ ...status, distance: Math.min(distance, total) });
+    }
+  }
+
+  #onRouteEnd(): void {
+    const entry = this.#roam;
+    const status = this.#roamStatus;
+    if (entry && !entry.detached && status) {
+      this.#publishRoam({ ...status, distance: entry.path.total, finished: true });
+    }
+  }
+
+  #publishRoam(status: RoamStatus | null): void {
+    this.#roamStatus = status;
+    this.#emitter.emit('roamstatuschange', status);
   }
 
   // 只有就绪的视图把输入交给工具：二三维切换时只有当前显示的视图在转交（ADR 0034 第 3 条）；

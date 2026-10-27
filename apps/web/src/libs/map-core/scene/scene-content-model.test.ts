@@ -1,6 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { EMPTY_SCENE_CONTENT, type SceneContent, SceneContentModel, type TilesetLayer } from './scene-content-model';
+import {
+  EMPTY_SCENE_CONTENT,
+  type RouteRoam,
+  type SceneContent,
+  SceneContentModel,
+  type TilesetLayer
+} from './scene-content-model';
 
 const tileset = (id: string, extra: Partial<TilesetLayer> = {}): TilesetLayer => ({
   id,
@@ -12,6 +18,19 @@ const tileset = (id: string, extra: Partial<TilesetLayer> = {}): TilesetLayer =>
 });
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
+
+const roam = (extra: Partial<RouteRoam> = {}): RouteRoam => ({
+  kind: 'route',
+  id: 'enter',
+  path: [
+    [120.666, 31.3175, -5.1],
+    [120.6665, 31.3176, -10.06]
+  ],
+  playing: false,
+  rate: 1,
+  run: 0,
+  ...extra
+});
 
 describe('SceneContentModel', () => {
   it('开始是空的；替换后修订号加 1，同一轮的多次替换只通知一次最后的内容', async () => {
@@ -56,6 +75,25 @@ describe('SceneContentModel', () => {
     model.set(content);
 
     expect(model.current).toBe(content);
+  });
+
+  it('漫游：至少两个点、坐标是数、倍速是正数、遍数是非负整数（ADR 0083）', () => {
+    using model = new SceneContentModel();
+    const valid: SceneContent = { tilesets: [], underground: null, roam: roam({ playing: true, rate: 0.5, run: 2 }) };
+    model.set(valid);
+    expect(model.current).toBe(valid);
+
+    const invalid: [RouteRoam, string][] = [
+      [roam({ path: [[120.666, 31.3175, -5.1]] }), '路线少于两个点'],
+      [roam({ path: [[120.666, 31.3175, -5.1], [120.6665, Number.NaN, -5.1]] }), '有不是数的坐标'],
+      [roam({ rate: 0 }), '倍速不是正数'],
+      [roam({ rate: Number.POSITIVE_INFINITY }), '倍速不是正数'],
+      [roam({ run: 0.5 }), '遍数不是非负整数']
+    ];
+    for (const [route, message] of invalid) {
+      expect(() => model.set({ tilesets: [], underground: null, roam: route })).toThrow(message);
+    }
+    expect(model.current).toBe(valid);
   });
 
   it('不合法时抛错，状态和修订号都不变', () => {

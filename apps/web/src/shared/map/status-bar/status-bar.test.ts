@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { eyeHeightLabel, fitStatusLayout, formatLength, scaleBar, visibleAngles } from './status-bar';
+import {
+  belowSurface,
+  eyeHeightLabel,
+  eyeText,
+  fitStatusLayout,
+  formatLength,
+  scaleBar,
+  visibleAngles
+} from './status-bar';
 
 describe('scaleBar', () => {
   it('取不超过 80 像素的整齐长度，线段长度按每像素的米数换算', () => {
@@ -49,7 +57,16 @@ describe('eyeHeightLabel', () => {
     expect(eyeHeightLabel(2400)).toBe('2.4 km');
     expect(eyeHeightLabel(9960)).toBe('10 km');
     expect(eyeHeightLabel(420_300)).toBe('420 km');
-    expect(eyeHeightLabel(-3)).toBe('0 m');
+  });
+});
+
+describe('eyeText', () => {
+  it('地表以上写视点高度；在地表以下（取整后）写视点在地表以下多少米', () => {
+    expect(eyeText(120.4)).toBe('视点高度 120 m');
+    expect(eyeText(-0.4)).toBe('视点高度 0 m');
+    expect(eyeText(-3.4)).toBe('视点在地表以下 3 m');
+    expect(eyeText(-1250)).toBe('视点在地表以下 1.3 km');
+    expect([belowSurface(-0.4), belowSurface(-0.6), belowSurface(3)]).toStrictEqual([false, true, false]);
   });
 });
 

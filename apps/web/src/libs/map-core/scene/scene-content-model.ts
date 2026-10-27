@@ -25,10 +25,40 @@ export interface UndergroundView {
   readonly surfaceOpacity: number;
 }
 
+/** 路线上的一点：脚下地板的 [经度, 纬度, 椭球高]，视点在它上面一个眼高 */
+export type RoutePoint = readonly [lng: number, lat: number, floor: number];
+
+/** 路线漫游（ADR 0083 第 2 节）：拥有者持有意图，视图逐帧推进并报告进度 */
+export interface RouteRoam {
+  readonly kind: 'route';
+  /** 这一次漫游：换路线时换一个 */
+  readonly id: string;
+  readonly path: readonly RoutePoint[];
+  readonly playing: boolean;
+  /** 倍速，1 是步行的默认速度 */
+  readonly rate: number;
+  /** 重新开始时加 1，视图回到起点 */
+  readonly run: number;
+}
+
+/** 漫游；3D.4c 的步行漫游再加一种 */
+export type SceneRoam = RouteRoam;
+
 /** 三维独有的内容；二维视图不读 */
 export interface SceneContent {
   readonly tilesets: readonly TilesetLayer[];
   readonly underground: UndergroundView | null;
+  /** 没有漫游时不写 */
+  readonly roam?: SceneRoam;
+}
+
+/** 视图报告的漫游进度：属于哪一次漫游、第几遍，走过的和总的长度（米） */
+export interface RoamStatus {
+  readonly id: string;
+  readonly run: number;
+  readonly distance: number;
+  readonly total: number;
+  readonly finished: boolean;
 }
 
 /** 视图报告的瓦片集状态；就绪后带上让整个瓦片集进入画布的相机 */
@@ -48,7 +78,22 @@ interface SceneContentModelEvents {
   change: (content: SceneContent) => void;
 }
 
-function validate({ tilesets, underground }: SceneContent): void {
+function validateRoam({ id, path, rate, run }: SceneRoam): void {
+  if (path.length < 2) {
+    throw new Error(`漫游 ${id} 的路线少于两个点`);
+  }
+  if (!path.every(point => point.length === 3 && point.every(Number.isFinite))) {
+    throw new Error(`漫游 ${id} 的路线有不是数的坐标`);
+  }
+  if (!(rate > 0 && Number.isFinite(rate))) {
+    throw new Error(`漫游 ${id} 的倍速不是正数：${rate}`);
+  }
+  if (!Number.isInteger(run) || run < 0) {
+    throw new Error(`漫游 ${id} 的遍数不是非负整数：${run}`);
+  }
+}
+
+function validate({ tilesets, underground, roam }: SceneContent): void {
   const ids = new Set<string>();
   for (const { id, url, attempt } of tilesets) {
     if (ids.has(id)) {
@@ -70,6 +115,9 @@ function validate({ tilesets, underground }: SceneContent): void {
     if (!(surfaceOpacity >= 0 && surfaceOpacity <= 1)) {
       throw new Error(`地表不透明度不在 0～1 之间：${surfaceOpacity}`);
     }
+  }
+  if (roam) {
+    validateRoam(roam);
   }
 }
 

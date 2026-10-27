@@ -11,6 +11,7 @@ import {
   type PickResult,
   type RenderedFeature,
   type ScreenPoint,
+  type RoamStatus,
   type SceneStatus,
   type SourceErrors,
   type ToolView,
@@ -1002,7 +1003,9 @@ describe('MapContextState 的定位可视区域', () => {
 // 三维视图：另外报告三维内容的状态（ADR 0081 第 2 节）
 class SceneFakeView extends FakeView {
   sceneStatus: SceneStatus = NO_SCENE_STATUS;
+  roamStatus: RoamStatus | null = null;
   readonly #sceneListeners = new Set<(status: SceneStatus) => void>();
+  readonly #roamListeners = new Set<(status: RoamStatus | null) => void>();
 
   constructor() {
     super('3d');
@@ -1018,8 +1021,18 @@ class SceneFakeView extends FakeView {
     this.#sceneListeners.forEach(listener => listener(status));
   }
 
+  onRoamStatusChange(callback: (status: RoamStatus | null) => void): Unsubscribe {
+    this.#roamListeners.add(callback);
+    return () => this.#roamListeners.delete(callback);
+  }
+
+  setRoamStatus(status: RoamStatus | null): void {
+    this.roamStatus = status;
+    this.#roamListeners.forEach(listener => listener(status));
+  }
+
   get sceneListeners(): number {
-    return this.#sceneListeners.size;
+    return this.#sceneListeners.size + this.#roamListeners.size;
   }
 }
 
@@ -1047,6 +1060,25 @@ describe('MapContextState 的三维内容状态（ADR 0081 第 2 节）', () => 
 
     env.state.detachView(globe);
     expect(globe.sceneListeners).toBe(0);
+  });
+
+  it('漫游的进度同样只反映当前三维视图（ADR 0083）', () => {
+    using env = setup();
+    const flat = new FakeView('2d');
+    const globe = new SceneFakeView();
+    env.state.attachView(flat, CANVAS);
+    env.state.attachView(globe, CANVAS);
+    const walking: RoamStatus = { id: 'enter', run: 0, distance: 12, total: 120, finished: false };
+
+    globe.setRoamStatus(walking);
+    expect(env.state.context.roamStatus.value).toBeNull();
+    env.state.context.setDimension('3d');
+    expect(env.state.context.roamStatus.value).toBe(walking);
+    globe.setRoamStatus(null);
+    expect(env.state.context.roamStatus.value).toBeNull();
+    globe.setRoamStatus(walking);
+    env.state.context.setDimension('2d');
+    expect(env.state.context.roamStatus.value).toBeNull();
   });
 });
 
