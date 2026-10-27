@@ -132,6 +132,13 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
     meta: { title: '文件管理组件样例', public: true }
   },
   {
+    path: '/dev/resource-management',
+    name: RouteName.devResourceManagement,
+    component: () => import('@/pages/dev/resource-management/DevResourceManagementPage')
+      .then(({ DevResourceManagementPage }) => DevResourceManagementPage),
+    meta: { title: '资源管理组件样例', public: true }
+  },
+  {
     path: '/dev/theme',
     name: RouteName.devTheme,
     component: () => import('@/pages/dev/theme/DevThemePage').then(({ DevThemePage }) => DevThemePage),

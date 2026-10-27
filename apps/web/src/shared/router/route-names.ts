@@ -8,6 +8,7 @@ export const RouteName = {
   devResources: 'dev-resources',
   devMapUi: 'dev-map-ui',
   devFileManagement: 'dev-file-management',
+  devResourceManagement: 'dev-resource-management',
   devMap3d: 'dev-map-3d',
   devNavGrid: 'dev-nav-grid',
   devAiChat: 'dev-ai-chat',

@@ -34,6 +34,7 @@ describe('路由表', () => {
       RouteName.notFound,
       RouteName.devTheme,
       RouteName.devFileManagement,
+      RouteName.devResourceManagement,
       RouteName.devAiChat,
       RouteName.devSystemManagement,
       RouteName.devMessageCenter,
