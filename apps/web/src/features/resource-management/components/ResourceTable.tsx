@@ -103,11 +103,11 @@ export const ResourceTable = defineComponent({
             default: () => [
               <ElTableColumn prop="name" label="资源名称" minWidth="240" showOverflowTooltip />,
               <ElTableColumn prop="year" label="年份" width="80" align="center" />,
-              <ElTableColumn prop="datasetName" label="所属数据集" minWidth="170" showOverflowTooltip />,
-              <ElTableColumn label="地图服务" width="150" align="center">
+              <ElTableColumn prop="datasetName" label="所属数据集" minWidth="150" showOverflowTooltip />,
+              <ElTableColumn label="地图服务" width="130" align="center">
                 {{ default: ({ row }: { row: ResourceRecord }) => renderServices(row, 'map') }}
               </ElTableColumn>,
-              <ElTableColumn label="数据接口" width="150" align="center">
+              <ElTableColumn label="数据接口" width="130" align="center">
                 {{ default: ({ row }: { row: ResourceRecord }) => renderServices(row, 'interface') }}
               </ElTableColumn>,
               <ElTableColumn label="切片" width="80" align="center">
@@ -117,7 +117,7 @@ export const ResourceTable = defineComponent({
                   )
                 }}
               </ElTableColumn>,
-              <ElTableColumn label="启用状态" width="130" align="center">
+              <ElTableColumn label="启用状态" width="100" align="center">
                 {{
                   // 列表刷新中或出错时显示的状态可能已过时，不能启停
                   default: ({ row }: { row: ResourceRecord }) => (
