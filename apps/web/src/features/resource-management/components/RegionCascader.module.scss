@@ -1,0 +1,16 @@
+.cascader {
+  width: 100%;
+}
+
+// 三级菜单在窄屏放不下时在弹层里横向滚动，不撑出页面
+.popup {
+  max-width: calc(100vw - 32px);
+
+  :global(.el-cascader-panel) {
+    overflow-x: auto;
+  }
+
+  :global(.el-cascader-menu) {
+    flex: none;
+  }
+}

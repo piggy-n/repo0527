@@ -1,0 +1,4825 @@
+{
+  "title": "用地用海分类与国土调查工作分类知识图谱",
+  "description": "根据《数据.pdf》附录I表I重新整理的干净知识图谱数据。对应关系仅保留同名分类虚线关系。",
+  "source": "C:\\Users\\13273\\Desktop\\数据.pdf",
+  "notes": [
+    "PDF第6页与第7页右侧内容重复，生成数据时按一份处理。"
+  ],
+  "nodes": [
+    {
+      "id": "root",
+      "label": "用地用海分类与国土调查工作分类知识图谱",
+      "type": "root",
+      "system": "",
+      "level": null,
+      "code": "",
+      "name": "用地用海分类与国土调查工作分类知识图谱",
+      "levelName": "中心主题",
+      "parentId": null
+    },
+    {
+      "id": "survey",
+      "label": "国土调查工作分类",
+      "type": "system",
+      "system": "survey",
+      "level": null,
+      "code": "",
+      "name": "国土调查工作分类",
+      "levelName": "分类体系",
+      "parentId": "root"
+    },
+    {
+      "id": "planning",
+      "label": "国土空间调查、规划、用途管制用地用海分类",
+      "type": "system",
+      "system": "planning",
+      "level": null,
+      "code": "",
+      "name": "国土空间调查、规划、用途管制用地用海分类",
+      "levelName": "分类体系",
+      "parentId": "root"
+    },
+    {
+      "id": "S00",
+      "label": "00 湿地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "00",
+      "name": "湿地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S00-0303",
+      "label": "0303 红树林地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0303",
+      "name": "红树林地",
+      "levelName": "二级类",
+      "parentId": "S00"
+    },
+    {
+      "id": "S00-0304",
+      "label": "0304 森林沼泽",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0304",
+      "name": "森林沼泽",
+      "levelName": "二级类",
+      "parentId": "S00"
+    },
+    {
+      "id": "S00-0306",
+      "label": "0306 灌丛沼泽",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0306",
+      "name": "灌丛沼泽",
+      "levelName": "二级类",
+      "parentId": "S00"
+    },
+    {
+      "id": "S00-0402",
+      "label": "0402 沼泽草地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0402",
+      "name": "沼泽草地",
+      "levelName": "二级类",
+      "parentId": "S00"
+    },
+    {
+      "id": "S00-0603",
+      "label": "0603 盐田",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0603",
+      "name": "盐田",
+      "levelName": "二级类",
+      "parentId": "S00"
+    },
+    {
+      "id": "S00-1105",
+      "label": "1105 沿海滩涂",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1105",
+      "name": "沿海滩涂",
+      "levelName": "二级类",
+      "parentId": "S00"
+    },
+    {
+      "id": "S00-1106",
+      "label": "1106 内陆滩涂",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1106",
+      "name": "内陆滩涂",
+      "levelName": "二级类",
+      "parentId": "S00"
+    },
+    {
+      "id": "S00-1108",
+      "label": "1108 沼泽地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1108",
+      "name": "沼泽地",
+      "levelName": "二级类",
+      "parentId": "S00"
+    },
+    {
+      "id": "S01",
+      "label": "01 耕地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "01",
+      "name": "耕地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S01-0101",
+      "label": "0101 水田",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0101",
+      "name": "水田",
+      "levelName": "二级类",
+      "parentId": "S01"
+    },
+    {
+      "id": "S01-0102",
+      "label": "0102 水浇地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0102",
+      "name": "水浇地",
+      "levelName": "二级类",
+      "parentId": "S01"
+    },
+    {
+      "id": "S01-0103",
+      "label": "0103 旱地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0103",
+      "name": "旱地",
+      "levelName": "二级类",
+      "parentId": "S01"
+    },
+    {
+      "id": "S02",
+      "label": "02 园地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "02",
+      "name": "园地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S02-0201",
+      "label": "0201 果园",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0201",
+      "name": "果园",
+      "levelName": "二级类",
+      "parentId": "S02"
+    },
+    {
+      "id": "S02-0202",
+      "label": "0202 茶园",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0202",
+      "name": "茶园",
+      "levelName": "二级类",
+      "parentId": "S02"
+    },
+    {
+      "id": "S02-0203",
+      "label": "0203 橡胶园",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0203",
+      "name": "橡胶园",
+      "levelName": "二级类",
+      "parentId": "S02"
+    },
+    {
+      "id": "S02-0204",
+      "label": "0204 其他园地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0204",
+      "name": "其他园地",
+      "levelName": "二级类",
+      "parentId": "S02"
+    },
+    {
+      "id": "S03",
+      "label": "03 林地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "03",
+      "name": "林地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S03-0301",
+      "label": "0301 乔木林地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0301",
+      "name": "乔木林地",
+      "levelName": "二级类",
+      "parentId": "S03"
+    },
+    {
+      "id": "S03-0302",
+      "label": "0302 竹林地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0302",
+      "name": "竹林地",
+      "levelName": "二级类",
+      "parentId": "S03"
+    },
+    {
+      "id": "S03-0305",
+      "label": "0305 灌木林地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0305",
+      "name": "灌木林地",
+      "levelName": "二级类",
+      "parentId": "S03"
+    },
+    {
+      "id": "S03-0307",
+      "label": "0307 其他林地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0307",
+      "name": "其他林地",
+      "levelName": "二级类",
+      "parentId": "S03"
+    },
+    {
+      "id": "S04",
+      "label": "04 草地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "04",
+      "name": "草地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S04-0401",
+      "label": "0401 天然牧草地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0401",
+      "name": "天然牧草地",
+      "levelName": "二级类",
+      "parentId": "S04"
+    },
+    {
+      "id": "S04-0403",
+      "label": "0403 人工牧草地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0403",
+      "name": "人工牧草地",
+      "levelName": "二级类",
+      "parentId": "S04"
+    },
+    {
+      "id": "S04-0404",
+      "label": "0404 其他草地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0404",
+      "name": "其他草地",
+      "levelName": "二级类",
+      "parentId": "S04"
+    },
+    {
+      "id": "S05",
+      "label": "05 商业服务业用地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "05",
+      "name": "商业服务业用地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S05-05H1",
+      "label": "05H1 商业服务业设施用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "05H1",
+      "name": "商业服务业设施用地",
+      "levelName": "二级类",
+      "parentId": "S05"
+    },
+    {
+      "id": "S05-0508",
+      "label": "0508 物流仓储用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0508",
+      "name": "物流仓储用地",
+      "levelName": "二级类",
+      "parentId": "S05"
+    },
+    {
+      "id": "S06",
+      "label": "06 工矿用地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "06",
+      "name": "工矿用地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S06-0601",
+      "label": "0601 工业用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0601",
+      "name": "工业用地",
+      "levelName": "二级类",
+      "parentId": "S06"
+    },
+    {
+      "id": "S06-0602",
+      "label": "0602 采矿用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0602",
+      "name": "采矿用地",
+      "levelName": "二级类",
+      "parentId": "S06"
+    },
+    {
+      "id": "S07",
+      "label": "07 住宅用地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "07",
+      "name": "住宅用地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S07-0701",
+      "label": "0701 城镇住宅用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0701",
+      "name": "城镇住宅用地",
+      "levelName": "二级类",
+      "parentId": "S07"
+    },
+    {
+      "id": "S07-0702",
+      "label": "0702 农村宅基地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0702",
+      "name": "农村宅基地",
+      "levelName": "二级类",
+      "parentId": "S07"
+    },
+    {
+      "id": "S08",
+      "label": "08 公共管理与公共服务用地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "08",
+      "name": "公共管理与公共服务用地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S08-08H1",
+      "label": "08H1 机关团体新闻出版用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "08H1",
+      "name": "机关团体新闻出版用地",
+      "levelName": "二级类",
+      "parentId": "S08"
+    },
+    {
+      "id": "S08-08H2",
+      "label": "08H2 科教文卫用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "08H2",
+      "name": "科教文卫用地",
+      "levelName": "二级类",
+      "parentId": "S08"
+    },
+    {
+      "id": "S08-0809",
+      "label": "0809 公用设施用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0809",
+      "name": "公用设施用地",
+      "levelName": "二级类",
+      "parentId": "S08"
+    },
+    {
+      "id": "S08-0810",
+      "label": "0810 公园与绿地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "0810",
+      "name": "公园与绿地",
+      "levelName": "二级类",
+      "parentId": "S08"
+    },
+    {
+      "id": "S09",
+      "label": "09 特殊用地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "09",
+      "name": "特殊用地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S10",
+      "label": "10 交通运输用地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "10",
+      "name": "交通运输用地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S10-1001",
+      "label": "1001 铁路用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1001",
+      "name": "铁路用地",
+      "levelName": "二级类",
+      "parentId": "S10"
+    },
+    {
+      "id": "S10-1002",
+      "label": "1002 轨道交通用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1002",
+      "name": "轨道交通用地",
+      "levelName": "二级类",
+      "parentId": "S10"
+    },
+    {
+      "id": "S10-1003",
+      "label": "1003 公路用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1003",
+      "name": "公路用地",
+      "levelName": "二级类",
+      "parentId": "S10"
+    },
+    {
+      "id": "S10-1004",
+      "label": "1004 城镇村道路用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1004",
+      "name": "城镇村道路用地",
+      "levelName": "二级类",
+      "parentId": "S10"
+    },
+    {
+      "id": "S10-1005",
+      "label": "1005 交通服务场站用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1005",
+      "name": "交通服务场站用地",
+      "levelName": "二级类",
+      "parentId": "S10"
+    },
+    {
+      "id": "S10-1006",
+      "label": "1006 农村道路",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1006",
+      "name": "农村道路",
+      "levelName": "二级类",
+      "parentId": "S10"
+    },
+    {
+      "id": "S10-1007",
+      "label": "1007 机场用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1007",
+      "name": "机场用地",
+      "levelName": "二级类",
+      "parentId": "S10"
+    },
+    {
+      "id": "S10-1008",
+      "label": "1008 港口码头用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1008",
+      "name": "港口码头用地",
+      "levelName": "二级类",
+      "parentId": "S10"
+    },
+    {
+      "id": "S10-1009",
+      "label": "1009 管道运输用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1009",
+      "name": "管道运输用地",
+      "levelName": "二级类",
+      "parentId": "S10"
+    },
+    {
+      "id": "S11",
+      "label": "11 水域及水利设施用地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "11",
+      "name": "水域及水利设施用地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S11-1101",
+      "label": "1101 河流水面",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1101",
+      "name": "河流水面",
+      "levelName": "二级类",
+      "parentId": "S11"
+    },
+    {
+      "id": "S11-1102",
+      "label": "1102 湖泊水面",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1102",
+      "name": "湖泊水面",
+      "levelName": "二级类",
+      "parentId": "S11"
+    },
+    {
+      "id": "S11-1103",
+      "label": "1103 水库水面",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1103",
+      "name": "水库水面",
+      "levelName": "二级类",
+      "parentId": "S11"
+    },
+    {
+      "id": "S11-1104",
+      "label": "1104 坑塘水面",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1104",
+      "name": "坑塘水面",
+      "levelName": "二级类",
+      "parentId": "S11"
+    },
+    {
+      "id": "S11-1107",
+      "label": "1107 沟渠",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1107",
+      "name": "沟渠",
+      "levelName": "二级类",
+      "parentId": "S11"
+    },
+    {
+      "id": "S11-1109",
+      "label": "1109 水工建筑用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1109",
+      "name": "水工建筑用地",
+      "levelName": "二级类",
+      "parentId": "S11"
+    },
+    {
+      "id": "S11-1110",
+      "label": "1110 冰川及永久积雪",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1110",
+      "name": "冰川及永久积雪",
+      "levelName": "二级类",
+      "parentId": "S11"
+    },
+    {
+      "id": "S12",
+      "label": "12 其他土地",
+      "type": "survey-category",
+      "system": "survey",
+      "level": 1,
+      "code": "12",
+      "name": "其他土地",
+      "levelName": "一级类",
+      "parentId": "survey"
+    },
+    {
+      "id": "S12-1201",
+      "label": "1201 空闲地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1201",
+      "name": "空闲地",
+      "levelName": "二级类",
+      "parentId": "S12"
+    },
+    {
+      "id": "S12-1202",
+      "label": "1202 设施农用地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1202",
+      "name": "设施农用地",
+      "levelName": "二级类",
+      "parentId": "S12"
+    },
+    {
+      "id": "S12-1203",
+      "label": "1203 田坎",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1203",
+      "name": "田坎",
+      "levelName": "二级类",
+      "parentId": "S12"
+    },
+    {
+      "id": "S12-1204",
+      "label": "1204 盐碱地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1204",
+      "name": "盐碱地",
+      "levelName": "二级类",
+      "parentId": "S12"
+    },
+    {
+      "id": "S12-1205",
+      "label": "1205 沙地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1205",
+      "name": "沙地",
+      "levelName": "二级类",
+      "parentId": "S12"
+    },
+    {
+      "id": "S12-1206",
+      "label": "1206 裸土地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1206",
+      "name": "裸土地",
+      "levelName": "二级类",
+      "parentId": "S12"
+    },
+    {
+      "id": "S12-1207",
+      "label": "1207 裸岩石砾地",
+      "type": "survey-detail",
+      "system": "survey",
+      "level": 2,
+      "code": "1207",
+      "name": "裸岩石砾地",
+      "levelName": "二级类",
+      "parentId": "S12"
+    },
+    {
+      "id": "P01",
+      "label": "01 耕地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "01",
+      "name": "耕地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P01-0101",
+      "label": "0101 水田",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0101",
+      "name": "水田",
+      "levelName": "二级类",
+      "parentId": "P01"
+    },
+    {
+      "id": "P01-0102",
+      "label": "0102 水浇地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0102",
+      "name": "水浇地",
+      "levelName": "二级类",
+      "parentId": "P01"
+    },
+    {
+      "id": "P01-0103",
+      "label": "0103 旱地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0103",
+      "name": "旱地",
+      "levelName": "二级类",
+      "parentId": "P01"
+    },
+    {
+      "id": "P02",
+      "label": "02 园地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "02",
+      "name": "园地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P02-0201",
+      "label": "0201 果园",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0201",
+      "name": "果园",
+      "levelName": "二级类",
+      "parentId": "P02"
+    },
+    {
+      "id": "P02-0202",
+      "label": "0202 茶园",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0202",
+      "name": "茶园",
+      "levelName": "二级类",
+      "parentId": "P02"
+    },
+    {
+      "id": "P02-0203",
+      "label": "0203 橡胶园地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0203",
+      "name": "橡胶园地",
+      "levelName": "二级类",
+      "parentId": "P02"
+    },
+    {
+      "id": "P02-0204",
+      "label": "0204 油料园地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0204",
+      "name": "油料园地",
+      "levelName": "二级类",
+      "parentId": "P02"
+    },
+    {
+      "id": "P02-0205",
+      "label": "0205 其他园地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0205",
+      "name": "其他园地",
+      "levelName": "二级类",
+      "parentId": "P02"
+    },
+    {
+      "id": "P03",
+      "label": "03 林地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "03",
+      "name": "林地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P03-0301",
+      "label": "0301 乔木林地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0301",
+      "name": "乔木林地",
+      "levelName": "二级类",
+      "parentId": "P03"
+    },
+    {
+      "id": "P03-0302",
+      "label": "0302 竹林地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0302",
+      "name": "竹林地",
+      "levelName": "二级类",
+      "parentId": "P03"
+    },
+    {
+      "id": "P03-0303",
+      "label": "0303 灌木林地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0303",
+      "name": "灌木林地",
+      "levelName": "二级类",
+      "parentId": "P03"
+    },
+    {
+      "id": "P03-0304",
+      "label": "0304 其他林地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0304",
+      "name": "其他林地",
+      "levelName": "二级类",
+      "parentId": "P03"
+    },
+    {
+      "id": "P04",
+      "label": "04 草地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "04",
+      "name": "草地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P04-0401",
+      "label": "0401 天然牧草地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0401",
+      "name": "天然牧草地",
+      "levelName": "二级类",
+      "parentId": "P04"
+    },
+    {
+      "id": "P04-0402",
+      "label": "0402 人工牧草地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0402",
+      "name": "人工牧草地",
+      "levelName": "二级类",
+      "parentId": "P04"
+    },
+    {
+      "id": "P04-0403",
+      "label": "0403 其他草地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0403",
+      "name": "其他草地",
+      "levelName": "二级类",
+      "parentId": "P04"
+    },
+    {
+      "id": "P05",
+      "label": "05 湿地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "05",
+      "name": "湿地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P05-0501",
+      "label": "0501 森林沼泽",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0501",
+      "name": "森林沼泽",
+      "levelName": "二级类",
+      "parentId": "P05"
+    },
+    {
+      "id": "P05-0502",
+      "label": "0502 灌丛沼泽",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0502",
+      "name": "灌丛沼泽",
+      "levelName": "二级类",
+      "parentId": "P05"
+    },
+    {
+      "id": "P05-0503",
+      "label": "0503 沼泽草地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0503",
+      "name": "沼泽草地",
+      "levelName": "二级类",
+      "parentId": "P05"
+    },
+    {
+      "id": "P05-0504",
+      "label": "0504 其他沼泽地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0504",
+      "name": "其他沼泽地",
+      "levelName": "二级类",
+      "parentId": "P05"
+    },
+    {
+      "id": "P05-0505",
+      "label": "0505 沿海滩涂",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0505",
+      "name": "沿海滩涂",
+      "levelName": "二级类",
+      "parentId": "P05"
+    },
+    {
+      "id": "P05-0506",
+      "label": "0506 内陆滩涂",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0506",
+      "name": "内陆滩涂",
+      "levelName": "二级类",
+      "parentId": "P05"
+    },
+    {
+      "id": "P05-0507",
+      "label": "0507 红树林地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0507",
+      "name": "红树林地",
+      "levelName": "二级类",
+      "parentId": "P05"
+    },
+    {
+      "id": "P06",
+      "label": "06 农业设施建设用地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "06",
+      "name": "农业设施建设用地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P06-0601",
+      "label": "0601 农村道路",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0601",
+      "name": "农村道路",
+      "levelName": "二级类",
+      "parentId": "P06"
+    },
+    {
+      "id": "P06-0601-060101",
+      "label": "060101 村道用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "060101",
+      "name": "村道用地",
+      "levelName": "三级类",
+      "parentId": "P06-0601"
+    },
+    {
+      "id": "P06-0601-060102",
+      "label": "060102 田间道",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "060102",
+      "name": "田间道",
+      "levelName": "三级类",
+      "parentId": "P06-0601"
+    },
+    {
+      "id": "P06-0602",
+      "label": "0602 设施农用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0602",
+      "name": "设施农用地",
+      "levelName": "二级类",
+      "parentId": "P06"
+    },
+    {
+      "id": "P06-0602-060201",
+      "label": "060201 种植设施建设用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "060201",
+      "name": "种植设施建设用地",
+      "levelName": "三级类",
+      "parentId": "P06-0602"
+    },
+    {
+      "id": "P06-0602-060202",
+      "label": "060202 畜禽养殖设施建设用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "060202",
+      "name": "畜禽养殖设施建设用地",
+      "levelName": "三级类",
+      "parentId": "P06-0602"
+    },
+    {
+      "id": "P06-0602-060203",
+      "label": "060203 水产养殖设施建设用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "060203",
+      "name": "水产养殖设施建设用地",
+      "levelName": "三级类",
+      "parentId": "P06-0602"
+    },
+    {
+      "id": "P07",
+      "label": "07 居住用地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "07",
+      "name": "居住用地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P07-0701",
+      "label": "0701 城镇住宅用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0701",
+      "name": "城镇住宅用地",
+      "levelName": "二级类",
+      "parentId": "P07"
+    },
+    {
+      "id": "P07-0701-070101",
+      "label": "070101 一类城镇住宅用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "070101",
+      "name": "一类城镇住宅用地",
+      "levelName": "三级类",
+      "parentId": "P07-0701"
+    },
+    {
+      "id": "P07-0701-070102",
+      "label": "070102 二类城镇住宅用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "070102",
+      "name": "二类城镇住宅用地",
+      "levelName": "三级类",
+      "parentId": "P07-0701"
+    },
+    {
+      "id": "P07-0701-070103",
+      "label": "070103 三类城镇住宅用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "070103",
+      "name": "三类城镇住宅用地",
+      "levelName": "三级类",
+      "parentId": "P07-0701"
+    },
+    {
+      "id": "P07-0702",
+      "label": "0702 城镇社区服务设施用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0702",
+      "name": "城镇社区服务设施用地",
+      "levelName": "二级类",
+      "parentId": "P07"
+    },
+    {
+      "id": "P07-0703",
+      "label": "0703 农村宅基地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0703",
+      "name": "农村宅基地",
+      "levelName": "二级类",
+      "parentId": "P07"
+    },
+    {
+      "id": "P07-0703-070301",
+      "label": "070301 一类农村宅基地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "070301",
+      "name": "一类农村宅基地",
+      "levelName": "三级类",
+      "parentId": "P07-0703"
+    },
+    {
+      "id": "P07-0703-070302",
+      "label": "070302 二类农村宅基地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "070302",
+      "name": "二类农村宅基地",
+      "levelName": "三级类",
+      "parentId": "P07-0703"
+    },
+    {
+      "id": "P07-0704",
+      "label": "0704 农村社区服务设施用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0704",
+      "name": "农村社区服务设施用地",
+      "levelName": "二级类",
+      "parentId": "P07"
+    },
+    {
+      "id": "P08",
+      "label": "08 公共管理与公共服务用地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "08",
+      "name": "公共管理与公共服务用地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P08-0801",
+      "label": "0801 机关团体用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0801",
+      "name": "机关团体用地",
+      "levelName": "二级类",
+      "parentId": "P08"
+    },
+    {
+      "id": "P08-0802",
+      "label": "0802 科研用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0802",
+      "name": "科研用地",
+      "levelName": "二级类",
+      "parentId": "P08"
+    },
+    {
+      "id": "P08-0803",
+      "label": "0803 文化用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0803",
+      "name": "文化用地",
+      "levelName": "二级类",
+      "parentId": "P08"
+    },
+    {
+      "id": "P08-0803-080301",
+      "label": "080301 图书与展览用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080301",
+      "name": "图书与展览用地",
+      "levelName": "三级类",
+      "parentId": "P08-0803"
+    },
+    {
+      "id": "P08-0803-080302",
+      "label": "080302 文化活动用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080302",
+      "name": "文化活动用地",
+      "levelName": "三级类",
+      "parentId": "P08-0803"
+    },
+    {
+      "id": "P08-0804",
+      "label": "0804 教育用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0804",
+      "name": "教育用地",
+      "levelName": "二级类",
+      "parentId": "P08"
+    },
+    {
+      "id": "P08-0804-080401",
+      "label": "080401 高等教育用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080401",
+      "name": "高等教育用地",
+      "levelName": "三级类",
+      "parentId": "P08-0804"
+    },
+    {
+      "id": "P08-0804-080402",
+      "label": "080402 中等职业教育用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080402",
+      "name": "中等职业教育用地",
+      "levelName": "三级类",
+      "parentId": "P08-0804"
+    },
+    {
+      "id": "P08-0804-080403",
+      "label": "080403 中小学用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080403",
+      "name": "中小学用地",
+      "levelName": "三级类",
+      "parentId": "P08-0804"
+    },
+    {
+      "id": "P08-0804-080404",
+      "label": "080404 幼儿园用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080404",
+      "name": "幼儿园用地",
+      "levelName": "三级类",
+      "parentId": "P08-0804"
+    },
+    {
+      "id": "P08-0804-080405",
+      "label": "080405 其他教育用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080405",
+      "name": "其他教育用地",
+      "levelName": "三级类",
+      "parentId": "P08-0804"
+    },
+    {
+      "id": "P08-0805",
+      "label": "0805 体育用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0805",
+      "name": "体育用地",
+      "levelName": "二级类",
+      "parentId": "P08"
+    },
+    {
+      "id": "P08-0805-080501",
+      "label": "080501 体育场馆用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080501",
+      "name": "体育场馆用地",
+      "levelName": "三级类",
+      "parentId": "P08-0805"
+    },
+    {
+      "id": "P08-0805-080502",
+      "label": "080502 体育训练用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080502",
+      "name": "体育训练用地",
+      "levelName": "三级类",
+      "parentId": "P08-0805"
+    },
+    {
+      "id": "P08-0806",
+      "label": "0806 医疗卫生用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0806",
+      "name": "医疗卫生用地",
+      "levelName": "二级类",
+      "parentId": "P08"
+    },
+    {
+      "id": "P08-0806-080601",
+      "label": "080601 医院用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080601",
+      "name": "医院用地",
+      "levelName": "三级类",
+      "parentId": "P08-0806"
+    },
+    {
+      "id": "P08-0806-080602",
+      "label": "080602 基层医疗卫生设施用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080602",
+      "name": "基层医疗卫生设施用地",
+      "levelName": "三级类",
+      "parentId": "P08-0806"
+    },
+    {
+      "id": "P08-0806-080603",
+      "label": "080603 公共卫生用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080603",
+      "name": "公共卫生用地",
+      "levelName": "三级类",
+      "parentId": "P08-0806"
+    },
+    {
+      "id": "P08-0807",
+      "label": "0807 社会福利用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0807",
+      "name": "社会福利用地",
+      "levelName": "二级类",
+      "parentId": "P08"
+    },
+    {
+      "id": "P08-0807-080701",
+      "label": "080701 老年人社会福利用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080701",
+      "name": "老年人社会福利用地",
+      "levelName": "三级类",
+      "parentId": "P08-0807"
+    },
+    {
+      "id": "P08-0807-080702",
+      "label": "080702 儿童社会福利用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080702",
+      "name": "儿童社会福利用地",
+      "levelName": "三级类",
+      "parentId": "P08-0807"
+    },
+    {
+      "id": "P08-0807-080703",
+      "label": "080703 残疾人社会福利用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080703",
+      "name": "残疾人社会福利用地",
+      "levelName": "三级类",
+      "parentId": "P08-0807"
+    },
+    {
+      "id": "P08-0807-080704",
+      "label": "080704 其他社会福利用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "080704",
+      "name": "其他社会福利用地",
+      "levelName": "三级类",
+      "parentId": "P08-0807"
+    },
+    {
+      "id": "P09",
+      "label": "09 商业服务业用地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "09",
+      "name": "商业服务业用地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P09-0901",
+      "label": "0901 商业用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0901",
+      "name": "商业用地",
+      "levelName": "二级类",
+      "parentId": "P09"
+    },
+    {
+      "id": "P09-0901-090101",
+      "label": "090101 零售商业用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "090101",
+      "name": "零售商业用地",
+      "levelName": "三级类",
+      "parentId": "P09-0901"
+    },
+    {
+      "id": "P09-0901-090102",
+      "label": "090102 批发市场用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "090102",
+      "name": "批发市场用地",
+      "levelName": "三级类",
+      "parentId": "P09-0901"
+    },
+    {
+      "id": "P09-0901-090103",
+      "label": "090103 餐饮用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "090103",
+      "name": "餐饮用地",
+      "levelName": "三级类",
+      "parentId": "P09-0901"
+    },
+    {
+      "id": "P09-0901-090104",
+      "label": "090104 旅馆用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "090104",
+      "name": "旅馆用地",
+      "levelName": "三级类",
+      "parentId": "P09-0901"
+    },
+    {
+      "id": "P09-0901-090105",
+      "label": "090105 公用设施营业网点用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "090105",
+      "name": "公用设施营业网点用地",
+      "levelName": "三级类",
+      "parentId": "P09-0901"
+    },
+    {
+      "id": "P09-0902",
+      "label": "0902 商务金融用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0902",
+      "name": "商务金融用地",
+      "levelName": "二级类",
+      "parentId": "P09"
+    },
+    {
+      "id": "P09-0903",
+      "label": "0903 娱乐用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0903",
+      "name": "娱乐用地",
+      "levelName": "二级类",
+      "parentId": "P09"
+    },
+    {
+      "id": "P09-0904",
+      "label": "0904 其他商业服务业用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "0904",
+      "name": "其他商业服务业用地",
+      "levelName": "二级类",
+      "parentId": "P09"
+    },
+    {
+      "id": "P10",
+      "label": "10 工矿用地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "10",
+      "name": "工矿用地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P10-1001",
+      "label": "1001 工业用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1001",
+      "name": "工业用地",
+      "levelName": "二级类",
+      "parentId": "P10"
+    },
+    {
+      "id": "P10-1001-100101",
+      "label": "100101 一类工业用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "100101",
+      "name": "一类工业用地",
+      "levelName": "三级类",
+      "parentId": "P10-1001"
+    },
+    {
+      "id": "P10-1001-100102",
+      "label": "100102 二类工业用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "100102",
+      "name": "二类工业用地",
+      "levelName": "三级类",
+      "parentId": "P10-1001"
+    },
+    {
+      "id": "P10-1001-100103",
+      "label": "100103 三类工业用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "100103",
+      "name": "三类工业用地",
+      "levelName": "三级类",
+      "parentId": "P10-1001"
+    },
+    {
+      "id": "P10-1002",
+      "label": "1002 采矿用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1002",
+      "name": "采矿用地",
+      "levelName": "二级类",
+      "parentId": "P10"
+    },
+    {
+      "id": "P10-1003",
+      "label": "1003 盐田",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1003",
+      "name": "盐田",
+      "levelName": "二级类",
+      "parentId": "P10"
+    },
+    {
+      "id": "P11",
+      "label": "11 仓储用地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "11",
+      "name": "仓储用地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P11-1101",
+      "label": "1101 物流仓储用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1101",
+      "name": "物流仓储用地",
+      "levelName": "二级类",
+      "parentId": "P11"
+    },
+    {
+      "id": "P11-1101-110101",
+      "label": "110101 一类物流仓储用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "110101",
+      "name": "一类物流仓储用地",
+      "levelName": "三级类",
+      "parentId": "P11-1101"
+    },
+    {
+      "id": "P11-1101-110102",
+      "label": "110102 二类物流仓储用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "110102",
+      "name": "二类物流仓储用地",
+      "levelName": "三级类",
+      "parentId": "P11-1101"
+    },
+    {
+      "id": "P11-1101-110103",
+      "label": "110103 三类物流仓储用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "110103",
+      "name": "三类物流仓储用地",
+      "levelName": "三级类",
+      "parentId": "P11-1101"
+    },
+    {
+      "id": "P11-1102",
+      "label": "1102 储备库用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1102",
+      "name": "储备库用地",
+      "levelName": "二级类",
+      "parentId": "P11"
+    },
+    {
+      "id": "P12",
+      "label": "12 交通运输用地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "12",
+      "name": "交通运输用地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P12-1201",
+      "label": "1201 铁路用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1201",
+      "name": "铁路用地",
+      "levelName": "二级类",
+      "parentId": "P12"
+    },
+    {
+      "id": "P12-1202",
+      "label": "1202 公路用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1202",
+      "name": "公路用地",
+      "levelName": "二级类",
+      "parentId": "P12"
+    },
+    {
+      "id": "P12-1203",
+      "label": "1203 机场用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1203",
+      "name": "机场用地",
+      "levelName": "二级类",
+      "parentId": "P12"
+    },
+    {
+      "id": "P12-1204",
+      "label": "1204 港口码头用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1204",
+      "name": "港口码头用地",
+      "levelName": "二级类",
+      "parentId": "P12"
+    },
+    {
+      "id": "P12-1205",
+      "label": "1205 管道运输用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1205",
+      "name": "管道运输用地",
+      "levelName": "二级类",
+      "parentId": "P12"
+    },
+    {
+      "id": "P12-1206",
+      "label": "1206 城市轨道交通用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1206",
+      "name": "城市轨道交通用地",
+      "levelName": "二级类",
+      "parentId": "P12"
+    },
+    {
+      "id": "P12-1207",
+      "label": "1207 城镇村道路用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1207",
+      "name": "城镇村道路用地",
+      "levelName": "二级类",
+      "parentId": "P12"
+    },
+    {
+      "id": "P12-1208",
+      "label": "1208 交通场站用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1208",
+      "name": "交通场站用地",
+      "levelName": "二级类",
+      "parentId": "P12"
+    },
+    {
+      "id": "P12-1208-120801",
+      "label": "120801 对外交通场站用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "120801",
+      "name": "对外交通场站用地",
+      "levelName": "三级类",
+      "parentId": "P12-1208"
+    },
+    {
+      "id": "P12-1208-120802",
+      "label": "120802 公共交通场站用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "120802",
+      "name": "公共交通场站用地",
+      "levelName": "三级类",
+      "parentId": "P12-1208"
+    },
+    {
+      "id": "P12-1208-120803",
+      "label": "120803 社会停车场用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 3,
+      "code": "120803",
+      "name": "社会停车场用地",
+      "levelName": "三级类",
+      "parentId": "P12-1208"
+    },
+    {
+      "id": "P12-1209",
+      "label": "1209 其他交通设施用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1209",
+      "name": "其他交通设施用地",
+      "levelName": "二级类",
+      "parentId": "P12"
+    },
+    {
+      "id": "P13",
+      "label": "13 公用设施用地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "13",
+      "name": "公用设施用地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P13-1301",
+      "label": "1301 供水用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1301",
+      "name": "供水用地",
+      "levelName": "二级类",
+      "parentId": "P13"
+    },
+    {
+      "id": "P13-1302",
+      "label": "1302 排水用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1302",
+      "name": "排水用地",
+      "levelName": "二级类",
+      "parentId": "P13"
+    },
+    {
+      "id": "P13-1303",
+      "label": "1303 供电用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1303",
+      "name": "供电用地",
+      "levelName": "二级类",
+      "parentId": "P13"
+    },
+    {
+      "id": "P13-1304",
+      "label": "1304 供燃气用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1304",
+      "name": "供燃气用地",
+      "levelName": "二级类",
+      "parentId": "P13"
+    },
+    {
+      "id": "P13-1305",
+      "label": "1305 供热用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1305",
+      "name": "供热用地",
+      "levelName": "二级类",
+      "parentId": "P13"
+    },
+    {
+      "id": "P13-1306",
+      "label": "1306 通信用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1306",
+      "name": "通信用地",
+      "levelName": "二级类",
+      "parentId": "P13"
+    },
+    {
+      "id": "P13-1307",
+      "label": "1307 邮政用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1307",
+      "name": "邮政用地",
+      "levelName": "二级类",
+      "parentId": "P13"
+    },
+    {
+      "id": "P13-1308",
+      "label": "1308 广播电视设施用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1308",
+      "name": "广播电视设施用地",
+      "levelName": "二级类",
+      "parentId": "P13"
+    },
+    {
+      "id": "P13-1309",
+      "label": "1309 环卫用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1309",
+      "name": "环卫用地",
+      "levelName": "二级类",
+      "parentId": "P13"
+    },
+    {
+      "id": "P13-1310",
+      "label": "1310 消防用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1310",
+      "name": "消防用地",
+      "levelName": "二级类",
+      "parentId": "P13"
+    },
+    {
+      "id": "P13-1311",
+      "label": "1311 水工设施用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1311",
+      "name": "水工设施用地",
+      "levelName": "二级类",
+      "parentId": "P13"
+    },
+    {
+      "id": "P13-1312",
+      "label": "1312 其他公用设施用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1312",
+      "name": "其他公用设施用地",
+      "levelName": "二级类",
+      "parentId": "P13"
+    },
+    {
+      "id": "P14",
+      "label": "14 绿地与开敞空间用地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "14",
+      "name": "绿地与开敞空间用地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P14-1401",
+      "label": "1401 公园绿地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1401",
+      "name": "公园绿地",
+      "levelName": "二级类",
+      "parentId": "P14"
+    },
+    {
+      "id": "P14-1402",
+      "label": "1402 防护绿地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1402",
+      "name": "防护绿地",
+      "levelName": "二级类",
+      "parentId": "P14"
+    },
+    {
+      "id": "P14-1403",
+      "label": "1403 广场用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1403",
+      "name": "广场用地",
+      "levelName": "二级类",
+      "parentId": "P14"
+    },
+    {
+      "id": "P15",
+      "label": "15 特殊用地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "15",
+      "name": "特殊用地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P15-1501",
+      "label": "1501 军事设施用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1501",
+      "name": "军事设施用地",
+      "levelName": "二级类",
+      "parentId": "P15"
+    },
+    {
+      "id": "P15-1502",
+      "label": "1502 使领馆用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1502",
+      "name": "使领馆用地",
+      "levelName": "二级类",
+      "parentId": "P15"
+    },
+    {
+      "id": "P15-1503",
+      "label": "1503 宗教用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1503",
+      "name": "宗教用地",
+      "levelName": "二级类",
+      "parentId": "P15"
+    },
+    {
+      "id": "P15-1504",
+      "label": "1504 文物古迹用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1504",
+      "name": "文物古迹用地",
+      "levelName": "二级类",
+      "parentId": "P15"
+    },
+    {
+      "id": "P15-1505",
+      "label": "1505 监教场所用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1505",
+      "name": "监教场所用地",
+      "levelName": "二级类",
+      "parentId": "P15"
+    },
+    {
+      "id": "P15-1506",
+      "label": "1506 殡葬用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1506",
+      "name": "殡葬用地",
+      "levelName": "二级类",
+      "parentId": "P15"
+    },
+    {
+      "id": "P15-1507",
+      "label": "1507 其他特殊用地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1507",
+      "name": "其他特殊用地",
+      "levelName": "二级类",
+      "parentId": "P15"
+    },
+    {
+      "id": "P16",
+      "label": "16 留白用地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "16",
+      "name": "留白用地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P17",
+      "label": "17 陆地水域",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "17",
+      "name": "陆地水域",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P17-1701",
+      "label": "1701 河流水面",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1701",
+      "name": "河流水面",
+      "levelName": "二级类",
+      "parentId": "P17"
+    },
+    {
+      "id": "P17-1702",
+      "label": "1702 湖泊水面",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1702",
+      "name": "湖泊水面",
+      "levelName": "二级类",
+      "parentId": "P17"
+    },
+    {
+      "id": "P17-1703",
+      "label": "1703 水库水面",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1703",
+      "name": "水库水面",
+      "levelName": "二级类",
+      "parentId": "P17"
+    },
+    {
+      "id": "P17-1704",
+      "label": "1704 坑塘水面",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1704",
+      "name": "坑塘水面",
+      "levelName": "二级类",
+      "parentId": "P17"
+    },
+    {
+      "id": "P17-1705",
+      "label": "1705 沟渠",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1705",
+      "name": "沟渠",
+      "levelName": "二级类",
+      "parentId": "P17"
+    },
+    {
+      "id": "P17-1706",
+      "label": "1706 冰川及常年积雪",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1706",
+      "name": "冰川及常年积雪",
+      "levelName": "二级类",
+      "parentId": "P17"
+    },
+    {
+      "id": "P18",
+      "label": "18 渔业用海",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "18",
+      "name": "渔业用海",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P18-1801",
+      "label": "1801 渔业基础设施用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1801",
+      "name": "渔业基础设施用海",
+      "levelName": "二级类",
+      "parentId": "P18"
+    },
+    {
+      "id": "P18-1802",
+      "label": "1802 增养殖用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1802",
+      "name": "增养殖用海",
+      "levelName": "二级类",
+      "parentId": "P18"
+    },
+    {
+      "id": "P18-1803",
+      "label": "1803 捕捞海域",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1803",
+      "name": "捕捞海域",
+      "levelName": "二级类",
+      "parentId": "P18"
+    },
+    {
+      "id": "P18-1804",
+      "label": "1804 农林牧业用岛",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1804",
+      "name": "农林牧业用岛",
+      "levelName": "二级类",
+      "parentId": "P18"
+    },
+    {
+      "id": "P19",
+      "label": "19 工矿通信用海",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "19",
+      "name": "工矿通信用海",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P19-1901",
+      "label": "1901 工业用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1901",
+      "name": "工业用海",
+      "levelName": "二级类",
+      "parentId": "P19"
+    },
+    {
+      "id": "P19-1902",
+      "label": "1902 盐田用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1902",
+      "name": "盐田用海",
+      "levelName": "二级类",
+      "parentId": "P19"
+    },
+    {
+      "id": "P19-1903",
+      "label": "1903 固体矿产用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1903",
+      "name": "固体矿产用海",
+      "levelName": "二级类",
+      "parentId": "P19"
+    },
+    {
+      "id": "P19-1904",
+      "label": "1904 油气用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1904",
+      "name": "油气用海",
+      "levelName": "二级类",
+      "parentId": "P19"
+    },
+    {
+      "id": "P19-1905",
+      "label": "1905 可再生能源用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1905",
+      "name": "可再生能源用海",
+      "levelName": "二级类",
+      "parentId": "P19"
+    },
+    {
+      "id": "P19-1906",
+      "label": "1906 海底电缆管道用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "1906",
+      "name": "海底电缆管道用海",
+      "levelName": "二级类",
+      "parentId": "P19"
+    },
+    {
+      "id": "P20",
+      "label": "20 交通运输用海",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "20",
+      "name": "交通运输用海",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P20-2001",
+      "label": "2001 港口用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2001",
+      "name": "港口用海",
+      "levelName": "二级类",
+      "parentId": "P20"
+    },
+    {
+      "id": "P20-2002",
+      "label": "2002 航运用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2002",
+      "name": "航运用海",
+      "levelName": "二级类",
+      "parentId": "P20"
+    },
+    {
+      "id": "P20-2003",
+      "label": "2003 路桥隧道用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2003",
+      "name": "路桥隧道用海",
+      "levelName": "二级类",
+      "parentId": "P20"
+    },
+    {
+      "id": "P20-2004",
+      "label": "2004 机场用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2004",
+      "name": "机场用海",
+      "levelName": "二级类",
+      "parentId": "P20"
+    },
+    {
+      "id": "P20-2005",
+      "label": "2005 其他用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2005",
+      "name": "其他用海",
+      "levelName": "二级类",
+      "parentId": "P20"
+    },
+    {
+      "id": "P21",
+      "label": "21 游憩用海",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "21",
+      "name": "游憩用海",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P21-2101",
+      "label": "2101 风景旅游用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2101",
+      "name": "风景旅游用海",
+      "levelName": "二级类",
+      "parentId": "P21"
+    },
+    {
+      "id": "P21-2102",
+      "label": "2102 文体休闲娱乐用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2102",
+      "name": "文体休闲娱乐用海",
+      "levelName": "二级类",
+      "parentId": "P21"
+    },
+    {
+      "id": "P22",
+      "label": "22 特殊用海",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "22",
+      "name": "特殊用海",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P22-2201",
+      "label": "2201 军事用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2201",
+      "name": "军事用海",
+      "levelName": "二级类",
+      "parentId": "P22"
+    },
+    {
+      "id": "P22-2202",
+      "label": "2202 科研教育用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2202",
+      "name": "科研教育用海",
+      "levelName": "二级类",
+      "parentId": "P22"
+    },
+    {
+      "id": "P22-2203",
+      "label": "2203 海洋保护修复及海岸防护工程用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2203",
+      "name": "海洋保护修复及海岸防护工程用海",
+      "levelName": "二级类",
+      "parentId": "P22"
+    },
+    {
+      "id": "P22-2204",
+      "label": "2204 排污倾倒用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2204",
+      "name": "排污倾倒用海",
+      "levelName": "二级类",
+      "parentId": "P22"
+    },
+    {
+      "id": "P22-2205",
+      "label": "2205 水下文物保护用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2205",
+      "name": "水下文物保护用海",
+      "levelName": "二级类",
+      "parentId": "P22"
+    },
+    {
+      "id": "P22-2206",
+      "label": "2206 其他特殊用海",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2206",
+      "name": "其他特殊用海",
+      "levelName": "二级类",
+      "parentId": "P22"
+    },
+    {
+      "id": "P23",
+      "label": "23 其他土地",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "23",
+      "name": "其他土地",
+      "levelName": "一级类",
+      "parentId": "planning"
+    },
+    {
+      "id": "P23-2301",
+      "label": "2301 空闲地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2301",
+      "name": "空闲地",
+      "levelName": "二级类",
+      "parentId": "P23"
+    },
+    {
+      "id": "P23-2302",
+      "label": "2302 后备耕地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2302",
+      "name": "后备耕地",
+      "levelName": "二级类",
+      "parentId": "P23"
+    },
+    {
+      "id": "P23-2303",
+      "label": "2303 田坎",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2303",
+      "name": "田坎",
+      "levelName": "二级类",
+      "parentId": "P23"
+    },
+    {
+      "id": "P23-2304",
+      "label": "2304 盐碱地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2304",
+      "name": "盐碱地",
+      "levelName": "二级类",
+      "parentId": "P23"
+    },
+    {
+      "id": "P23-2305",
+      "label": "2305 沙地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2305",
+      "name": "沙地",
+      "levelName": "二级类",
+      "parentId": "P23"
+    },
+    {
+      "id": "P23-2306",
+      "label": "2306 裸土地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2306",
+      "name": "裸土地",
+      "levelName": "二级类",
+      "parentId": "P23"
+    },
+    {
+      "id": "P23-2307",
+      "label": "2307 裸岩石砾地",
+      "type": "planning-detail",
+      "system": "planning",
+      "level": 2,
+      "code": "2307",
+      "name": "裸岩石砾地",
+      "levelName": "二级类",
+      "parentId": "P23"
+    },
+    {
+      "id": "P24",
+      "label": "24 其他海域",
+      "type": "planning-category",
+      "system": "planning",
+      "level": 1,
+      "code": "24",
+      "name": "其他海域",
+      "levelName": "一级类",
+      "parentId": "planning"
+    }
+  ],
+  "edges": [
+    {
+      "source": "root",
+      "target": "survey",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "root",
+      "target": "planning",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S00",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S00",
+      "target": "S00-0303",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S00",
+      "target": "S00-0304",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S00",
+      "target": "S00-0306",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S00",
+      "target": "S00-0402",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S00",
+      "target": "S00-0603",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S00",
+      "target": "S00-1105",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S00",
+      "target": "S00-1106",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S00",
+      "target": "S00-1108",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S01",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S01",
+      "target": "S01-0101",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S01",
+      "target": "S01-0102",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S01",
+      "target": "S01-0103",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S02",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S02",
+      "target": "S02-0201",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S02",
+      "target": "S02-0202",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S02",
+      "target": "S02-0203",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S02",
+      "target": "S02-0204",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S03",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S03",
+      "target": "S03-0301",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S03",
+      "target": "S03-0302",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S03",
+      "target": "S03-0305",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S03",
+      "target": "S03-0307",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S04",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S04",
+      "target": "S04-0401",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S04",
+      "target": "S04-0403",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S04",
+      "target": "S04-0404",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S05",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S05",
+      "target": "S05-05H1",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S05",
+      "target": "S05-0508",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S06",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S06",
+      "target": "S06-0601",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S06",
+      "target": "S06-0602",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S07",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S07",
+      "target": "S07-0701",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S07",
+      "target": "S07-0702",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S08",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S08",
+      "target": "S08-08H1",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S08",
+      "target": "S08-08H2",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S08",
+      "target": "S08-0809",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S08",
+      "target": "S08-0810",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S09",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S10",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S10",
+      "target": "S10-1001",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S10",
+      "target": "S10-1002",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S10",
+      "target": "S10-1003",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S10",
+      "target": "S10-1004",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S10",
+      "target": "S10-1005",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S10",
+      "target": "S10-1006",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S10",
+      "target": "S10-1007",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S10",
+      "target": "S10-1008",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S10",
+      "target": "S10-1009",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S11",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S11",
+      "target": "S11-1101",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S11",
+      "target": "S11-1102",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S11",
+      "target": "S11-1103",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S11",
+      "target": "S11-1104",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S11",
+      "target": "S11-1107",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S11",
+      "target": "S11-1109",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S11",
+      "target": "S11-1110",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "survey",
+      "target": "S12",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S12",
+      "target": "S12-1201",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S12",
+      "target": "S12-1202",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S12",
+      "target": "S12-1203",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S12",
+      "target": "S12-1204",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S12",
+      "target": "S12-1205",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S12",
+      "target": "S12-1206",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S12",
+      "target": "S12-1207",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P01",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P01",
+      "target": "P01-0101",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P01",
+      "target": "P01-0102",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P01",
+      "target": "P01-0103",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P02",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P02",
+      "target": "P02-0201",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P02",
+      "target": "P02-0202",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P02",
+      "target": "P02-0203",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P02",
+      "target": "P02-0204",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P02",
+      "target": "P02-0205",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P03",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P03",
+      "target": "P03-0301",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P03",
+      "target": "P03-0302",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P03",
+      "target": "P03-0303",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P03",
+      "target": "P03-0304",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P04",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P04",
+      "target": "P04-0401",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P04",
+      "target": "P04-0402",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P04",
+      "target": "P04-0403",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P05",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P05",
+      "target": "P05-0501",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P05",
+      "target": "P05-0502",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P05",
+      "target": "P05-0503",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P05",
+      "target": "P05-0504",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P05",
+      "target": "P05-0505",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P05",
+      "target": "P05-0506",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P05",
+      "target": "P05-0507",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P06",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P06",
+      "target": "P06-0601",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P06-0601",
+      "target": "P06-0601-060101",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P06-0601",
+      "target": "P06-0601-060102",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P06",
+      "target": "P06-0602",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P06-0602",
+      "target": "P06-0602-060201",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P06-0602",
+      "target": "P06-0602-060202",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P06-0602",
+      "target": "P06-0602-060203",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P07",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P07",
+      "target": "P07-0701",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P07-0701",
+      "target": "P07-0701-070101",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P07-0701",
+      "target": "P07-0701-070102",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P07-0701",
+      "target": "P07-0701-070103",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P07",
+      "target": "P07-0702",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P07",
+      "target": "P07-0703",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P07-0703",
+      "target": "P07-0703-070301",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P07-0703",
+      "target": "P07-0703-070302",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P07",
+      "target": "P07-0704",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P08",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08",
+      "target": "P08-0801",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08",
+      "target": "P08-0802",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08",
+      "target": "P08-0803",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0803",
+      "target": "P08-0803-080301",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0803",
+      "target": "P08-0803-080302",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08",
+      "target": "P08-0804",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0804",
+      "target": "P08-0804-080401",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0804",
+      "target": "P08-0804-080402",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0804",
+      "target": "P08-0804-080403",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0804",
+      "target": "P08-0804-080404",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0804",
+      "target": "P08-0804-080405",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08",
+      "target": "P08-0805",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0805",
+      "target": "P08-0805-080501",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0805",
+      "target": "P08-0805-080502",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08",
+      "target": "P08-0806",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0806",
+      "target": "P08-0806-080601",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0806",
+      "target": "P08-0806-080602",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0806",
+      "target": "P08-0806-080603",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08",
+      "target": "P08-0807",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0807",
+      "target": "P08-0807-080701",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0807",
+      "target": "P08-0807-080702",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0807",
+      "target": "P08-0807-080703",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P08-0807",
+      "target": "P08-0807-080704",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P09",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P09",
+      "target": "P09-0901",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P09-0901",
+      "target": "P09-0901-090101",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P09-0901",
+      "target": "P09-0901-090102",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P09-0901",
+      "target": "P09-0901-090103",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P09-0901",
+      "target": "P09-0901-090104",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P09-0901",
+      "target": "P09-0901-090105",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P09",
+      "target": "P09-0902",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P09",
+      "target": "P09-0903",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P09",
+      "target": "P09-0904",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P10",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P10",
+      "target": "P10-1001",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P10-1001",
+      "target": "P10-1001-100101",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P10-1001",
+      "target": "P10-1001-100102",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P10-1001",
+      "target": "P10-1001-100103",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P10",
+      "target": "P10-1002",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P10",
+      "target": "P10-1003",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P11",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P11",
+      "target": "P11-1101",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P11-1101",
+      "target": "P11-1101-110101",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P11-1101",
+      "target": "P11-1101-110102",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P11-1101",
+      "target": "P11-1101-110103",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P11",
+      "target": "P11-1102",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P12",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P12",
+      "target": "P12-1201",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P12",
+      "target": "P12-1202",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P12",
+      "target": "P12-1203",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P12",
+      "target": "P12-1204",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P12",
+      "target": "P12-1205",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P12",
+      "target": "P12-1206",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P12",
+      "target": "P12-1207",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P12",
+      "target": "P12-1208",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P12-1208",
+      "target": "P12-1208-120801",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P12-1208",
+      "target": "P12-1208-120802",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P12-1208",
+      "target": "P12-1208-120803",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P12",
+      "target": "P12-1209",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P13",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P13",
+      "target": "P13-1301",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P13",
+      "target": "P13-1302",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P13",
+      "target": "P13-1303",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P13",
+      "target": "P13-1304",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P13",
+      "target": "P13-1305",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P13",
+      "target": "P13-1306",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P13",
+      "target": "P13-1307",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P13",
+      "target": "P13-1308",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P13",
+      "target": "P13-1309",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P13",
+      "target": "P13-1310",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P13",
+      "target": "P13-1311",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P13",
+      "target": "P13-1312",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P14",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P14",
+      "target": "P14-1401",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P14",
+      "target": "P14-1402",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P14",
+      "target": "P14-1403",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P15",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P15",
+      "target": "P15-1501",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P15",
+      "target": "P15-1502",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P15",
+      "target": "P15-1503",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P15",
+      "target": "P15-1504",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P15",
+      "target": "P15-1505",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P15",
+      "target": "P15-1506",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P15",
+      "target": "P15-1507",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P16",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P17",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P17",
+      "target": "P17-1701",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P17",
+      "target": "P17-1702",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P17",
+      "target": "P17-1703",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P17",
+      "target": "P17-1704",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P17",
+      "target": "P17-1705",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P17",
+      "target": "P17-1706",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P18",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P18",
+      "target": "P18-1801",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P18",
+      "target": "P18-1802",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P18",
+      "target": "P18-1803",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P18",
+      "target": "P18-1804",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P19",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P19",
+      "target": "P19-1901",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P19",
+      "target": "P19-1902",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P19",
+      "target": "P19-1903",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P19",
+      "target": "P19-1904",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P19",
+      "target": "P19-1905",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P19",
+      "target": "P19-1906",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P20",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P20",
+      "target": "P20-2001",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P20",
+      "target": "P20-2002",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P20",
+      "target": "P20-2003",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P20",
+      "target": "P20-2004",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P20",
+      "target": "P20-2005",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P21",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P21",
+      "target": "P21-2101",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P21",
+      "target": "P21-2102",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P22",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P22",
+      "target": "P22-2201",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P22",
+      "target": "P22-2202",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P22",
+      "target": "P22-2203",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P22",
+      "target": "P22-2204",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P22",
+      "target": "P22-2205",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P22",
+      "target": "P22-2206",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P23",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P23",
+      "target": "P23-2301",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P23",
+      "target": "P23-2302",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P23",
+      "target": "P23-2303",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P23",
+      "target": "P23-2304",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P23",
+      "target": "P23-2305",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P23",
+      "target": "P23-2306",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "P23",
+      "target": "P23-2307",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "planning",
+      "target": "P24",
+      "label": "包含",
+      "type": "contains",
+      "lineType": "solid"
+    },
+    {
+      "source": "S00",
+      "target": "P05",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S00-0303",
+      "target": "P05-0507",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S00-0304",
+      "target": "P05-0501",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S00-0306",
+      "target": "P05-0502",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S00-0402",
+      "target": "P05-0503",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S00-0603",
+      "target": "P10-1003",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S00-1105",
+      "target": "P05-0505",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S00-1106",
+      "target": "P05-0506",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S01",
+      "target": "P01",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S01-0101",
+      "target": "P01-0101",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S01-0102",
+      "target": "P01-0102",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S01-0103",
+      "target": "P01-0103",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S02",
+      "target": "P02",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S02-0201",
+      "target": "P02-0201",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S02-0202",
+      "target": "P02-0202",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S02-0204",
+      "target": "P02-0205",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S03",
+      "target": "P03",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S03-0301",
+      "target": "P03-0301",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S03-0302",
+      "target": "P03-0302",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S03-0305",
+      "target": "P03-0303",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S03-0307",
+      "target": "P03-0304",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S04",
+      "target": "P04",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S04-0401",
+      "target": "P04-0401",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S04-0403",
+      "target": "P04-0402",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S04-0404",
+      "target": "P04-0403",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S05",
+      "target": "P09",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S05-0508",
+      "target": "P11-1101",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S06",
+      "target": "P10",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S06-0601",
+      "target": "P10-1001",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S06-0602",
+      "target": "P10-1002",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S07-0701",
+      "target": "P07-0701",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S07-0702",
+      "target": "P07-0703",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S08",
+      "target": "P08",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S08-0809",
+      "target": "P13",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S09",
+      "target": "P15",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S10",
+      "target": "P12",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S10-1001",
+      "target": "P12-1201",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S10-1003",
+      "target": "P12-1202",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S10-1004",
+      "target": "P12-1207",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S10-1006",
+      "target": "P06-0601",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S10-1007",
+      "target": "P12-1203",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S10-1008",
+      "target": "P12-1204",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S10-1009",
+      "target": "P12-1205",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S11-1101",
+      "target": "P17-1701",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S11-1102",
+      "target": "P17-1702",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S11-1103",
+      "target": "P17-1703",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S11-1104",
+      "target": "P17-1704",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S11-1107",
+      "target": "P17-1705",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S12",
+      "target": "P23",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S12-1201",
+      "target": "P23-2301",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S12-1202",
+      "target": "P06-0602",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S12-1203",
+      "target": "P23-2303",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S12-1204",
+      "target": "P23-2304",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S12-1205",
+      "target": "P23-2305",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S12-1206",
+      "target": "P23-2306",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    },
+    {
+      "source": "S12-1207",
+      "target": "P23-2307",
+      "label": "对应",
+      "type": "mapping",
+      "lineType": "dashed"
+    }
+  ]
+}

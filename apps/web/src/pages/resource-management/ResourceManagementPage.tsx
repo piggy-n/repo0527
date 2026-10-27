@@ -1,14 +1,17 @@
+import { Connection } from '@element-plus/icons-vue';
 import { MxPanel, MxSplitLayout } from '@yzt/ui';
 import { ElAlert, ElButton, ElMessage, ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import type { ResourceRecord } from '@/features/resource-management/api';
+import { DataExtractionDialog } from '@/features/resource-management/components/DataExtractionDialog';
 import { DiscardChangesDialog } from '@/features/resource-management/components/DiscardChangesDialog';
 import { ResourceDetailPanel } from '@/features/resource-management/components/ResourceDetailPanel';
 import { ResourceDirectoryPanel } from '@/features/resource-management/components/ResourceDirectoryPanel';
 import { ResourceFilterBar } from '@/features/resource-management/components/ResourceFilterBar';
 import { ResourceServiceDialogs } from '@/features/resource-management/components/ResourceServiceDialogs';
 import { ResourceTable } from '@/features/resource-management/components/ResourceTable';
+import { useDataExtraction } from '@/features/resource-management/composables/useDataExtraction';
 import { useLayerServices } from '@/features/resource-management/composables/useLayerServices';
 import { useResourceDetail } from '@/features/resource-management/composables/useResourceDetail';
 import { useResourceList } from '@/features/resource-management/composables/useResourceList';
@@ -26,6 +29,7 @@ export const ResourceManagementPage = defineComponent({
     // 列表出错或刷新中时显示的状态可能已过时，不能启停
     const status = useResourceStatus(list.resources, () => !list.isError.value && !list.refreshing.value);
     const services = useLayerServices();
+    const extraction = useDataExtraction();
     const session = useSessionStore();
     // 离开页面前确认未保存的修改；会话已结束（退出、过期）时直接放行，回到登录页
     onBeforeRouteLeave(() => !session.isActive() || detail.allowLeave());
@@ -66,6 +70,11 @@ export const ResourceManagementPage = defineComponent({
           description={parent.value?.name}
         >
           {{
+            actions: () => (
+              <ElButton type="primary" icon={Connection} onClick={extraction.start}>
+                自助取数
+              </ElButton>
+            ),
             default: () => [
               <ResourceFilterBar
                 class={styles.filters}
@@ -148,6 +157,7 @@ export const ResourceManagementPage = defineComponent({
         </MxSplitLayout>
         <DiscardChangesDialog owner={detail} />
         <ResourceServiceDialogs owner={services} />
+        <DataExtractionDialog owner={extraction} />
       </>
     );
   }

@@ -1,0 +1,160 @@
+// 标题和底栏固定，正文在弹窗里滚动；上下各留 16
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+
+  :global(.el-dialog__header),
+  :global(.el-dialog__footer) {
+    flex: none;
+  }
+
+  :global(.el-dialog__body) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+// 第二步：左图右表单，条件栏宽度沿用旧页面的 384
+.wide {
+  width: min(1180px, calc(100vw - 32px));
+}
+
+.steps {
+  flex: none;
+  align-self: center;
+  width: min(540px, 100%);
+  margin-bottom: var(--space-lg);
+}
+
+.searchRow {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.hot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+  color: var(--color-text-secondary);
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 384px;
+  gap: var(--space-lg);
+  height: min(640px, 65dvh);
+  min-height: 0;
+}
+
+.graph {
+  min-width: 0;
+  min-height: 0;
+}
+
+// 条件栏单独滚动，右侧留出滚动条的位置
+.conditions {
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: var(--space-xs);
+}
+
+.node {
+  margin-bottom: var(--space-lg);
+  padding: var(--space-md);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary-bg-light);
+  overflow-wrap: anywhere;
+
+  strong {
+    color: var(--color-text-strong);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  p {
+    margin: var(--space-xs) 0 0;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-compact);
+  }
+}
+
+.nodeTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+
+  :global(.el-tag) {
+    flex: none;
+  }
+}
+
+.form {
+  :global(.el-select),
+  :global(.el-date-editor.el-input) {
+    width: 100%;
+  }
+
+  :global(.el-form-item:last-child) {
+    margin-bottom: 0;
+  }
+}
+
+// 标签行右侧放全选、清空：标签在上方时 Element 把宽度设为 fit-content，这一项改为占满整行
+.formatItem :global(.el-form-item__label) {
+  width: 100%;
+}
+
+.formatLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  :global(.el-button + .el-button) {
+    margin-left: var(--space-md);
+  }
+}
+
+.done {
+  margin: 0;
+  padding: var(--space-xl) 0;
+  color: var(--color-text-regular);
+  text-align: center;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+// 窄屏：关系图在上、条件在下，整个正文一起滚动；960 以下并排时关系图不到 500 宽
+@media (max-width: 960px) {
+  .workspace {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+  }
+
+  .graph {
+    flex: none;
+    height: 360px;
+  }
+
+  .conditions {
+    overflow-y: visible;
+    padding-right: 0;
+  }
+}

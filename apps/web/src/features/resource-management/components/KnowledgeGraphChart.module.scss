@@ -1,0 +1,38 @@
+.root {
+  position: relative;
+  height: 100%;
+  min-height: 320px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-container);
+}
+
+.canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+}
+
+.state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  color: var(--color-text-secondary);
+}
+
+// 缩放按钮在右上角，和图例同一行，不盖住节点
+.tools {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  display: flex;
+  gap: var(--space-xs);
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
