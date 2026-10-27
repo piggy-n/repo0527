@@ -12,7 +12,10 @@ export interface ReadoutPosition {
 
 /** 状态栏的读数（ADR 0053 第 5 节）：视图不在就绪、拾取不到时比例尺和经纬度为 null */
 export interface MapReadout {
+  /** 二维的比例尺；三维为 null，显示视点高度（ADR 0080 第 6 节） */
   readonly scale: ComputedRef<ScaleBar | null>;
+  /** 三维的视点高度，单位米；二维、视图不在就绪时为 null */
+  readonly eye: ComputedRef<number | null>;
   readonly position: ComputedRef<ReadoutPosition | null>;
   readonly angles: ComputedRef<ViewAngles>;
 }
@@ -28,6 +31,9 @@ export function useMapReadout(map: ReadoutSource): MapReadout {
   const scale = computed(() => {
     void map.projectionRevision.value;
     const view = map.view.value;
+    if (view?.kind === '3d') {
+      return null;
+    }
     const center = view?.project(camera.value.center);
     if (!view || !center) {
       return null;
@@ -53,7 +59,13 @@ export function useMapReadout(map: ReadoutSource): MapReadout {
     return picked.kind === 'hit' ? { lngLat: picked.lngLat, center: false } : null;
   });
 
+  // 相机每次变化时读一次，三维的相机变化每帧都写回会话
+  const eye = computed(() => {
+    void camera.value;
+    return map.view.value?.eyeHeight() ?? null;
+  });
+
   const angles = computed(() => visibleAngles(camera.value));
 
-  return { scale, position, angles };
+  return { scale, eye, position, angles };
 }

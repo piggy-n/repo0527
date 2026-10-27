@@ -239,7 +239,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `@turf/intersect` | 识别范围和区划求交（ADR 0051），只在 `shared/map/region/region-scope.ts` 中使用。turf v7 的单个包，自带类型；底层是 `polyclip-ts`（0.x，用 `bignumber.js` 做精确计算） | 差集、手写多边形裁剪 |
 | `@turf/boolean-intersects` | 要素的几何和区划范围是否相交（ADR 0051），只在 `shared/map/region/region-scope.ts` 中使用。turf v7 的单个包，处理点、线、面和多部分的几何 | 只判断要素的一个顶点 |
 | `@turf/bbox-clip` | 求交前先按识别范围的外包矩形裁掉区划远处的边（Sutherland–Hodgman），只在 `shared/map/region/region-scope.ts` 中使用；南京市界的求交从约 140 ms 降到 1～20 ms（见 modules/shared-map.md"区划裁剪"） | 直接求交、自己写矩形裁剪 |
-| `@turf/simplify` | 发给后端的几何放不进地址时用 Douglas-Peucker 算法简化（ADR 0051 第 4 节），只在 `features/resource-map/query-geometry.ts` 中使用；简化不保证结果有效，结果由同一个文件里的有效性检查把关 | 自己写简化 |
+| `@turf/simplify` | Douglas-Peucker 算法简化：发给后端的几何放不进地址时（ADR 0051 第 4 节，`features/resource-map/query-geometry.ts`，简化不保证结果有效，由同一个文件里的有效性检查把关）；三维的覆盖物按这一级的半个像素简化（ADR 0080 第 2 节，`libs/map-cesium/overlay-plan.ts`） | 自己写简化 |
 | `sortablejs` | 资源图层面板的拖动排序（ADR 0054）：目录顺序和"已勾选"的叠放顺序，只在 `shared/composables/useSortableList.ts` 中使用（测试可以导入它来模拟放下）。只认手柄、每个列表一个实例，放下后先把 DOM 还原，再把位置交给拥有者，由 Vue 重新渲染；MIT 许可，无依赖。没有用 `@vueuse/integrations` 的 `useSortable`：它默认直接改数组，我们的顺序在拥有者里，自己包一层更直接，也少一个依赖 | ElTree 自带的拖放、自己写指针事件（ADR 0054） |
 | `@types/sortablejs` | SortableJS 的类型（它不自带），只在开发时使用 | — |
 | `nanoevents` | 地图内核的带类型事件（ADR 0023）。实现只有 25 行，无依赖；`on` 返回取消订阅的函数，直接登记到释放栈。map-core 对外只暴露自己的 `Unsubscribe` 类型，不暴露它的类型 | mitt（`on` 不返回取消函数，2023 年后没有发布）、`EventTarget` |

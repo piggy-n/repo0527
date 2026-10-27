@@ -1,4 +1,13 @@
-import type { CameraState, LngLat, MapPointerEvent, PickResult, ScreenPoint, Unsubscribe } from '@yzt/map-core';
+import type {
+  CameraState,
+  ClientPoint,
+  LngLat,
+  MapPointerEvent,
+  PickResult,
+  ScreenPoint,
+  Unsubscribe
+} from '@yzt/map-core';
+import type { OverlayLayer } from './overlay-plan';
 import type { ImageryPlan } from './scene-style';
 
 /** 离开三维时记下的精确相机（地心坐标系）：视图只保存、原样还原，不解读（ADR 0020 第 5 条） */
@@ -50,16 +59,28 @@ export interface SceneLike extends Disposable {
   cancelFlight(): void;
   savePose(): ScenePose;
   restorePose(pose: ScenePose): void;
+  /**
+   * 临时拖动的一步（ADR 0080 第 4 节）：指针从 from 移到 to（客户区坐标），转动相机让 from 处的地面点来到 to 下面；
+   * 任一点没打到地球时不动
+   */
+  panBetween(from: ClientPoint, to: ClientPoint): void;
   /** 先模型、再地球；什么都没打到时是 miss（ADR 0024 第 2 条） */
   pick(point: ScreenPoint): PickResult;
   /** 点在地球背面或相机背后时为 null（ADR 0024 第 7 条） */
   project(lngLat: LngLat, height?: number): ScreenPoint | null;
   /** 画布的 CSS 尺寸 */
   size(): { readonly width: number; readonly height: number };
+  /** 相机在椭球面以上的高度，单位米 */
+  eyeHeight(): number;
   /** 影像图层整体替换：按 ID 增删改，按给出的顺序从下到上叠放 */
   setImagery(imagery: readonly ImageryPlan[]): void;
   /** 地球的底色；null 用场景的默认颜色 */
   setBaseColor(color: string | null): void;
+  /**
+   * 覆盖物整体替换（ADR 0080 第 1 节）：按图层 ID 增删改；同一个对象不重画，
+   * 样式和形状个数都没变时只改坐标
+   */
+  setOverlays(layers: readonly OverlayLayer[]): void;
   setGestures(gestures: SceneGestures): void;
   setCursor(cursor: string | undefined): void;
   /** 让画布获得焦点，按键才能交给工具 */

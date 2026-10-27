@@ -1,7 +1,10 @@
 import 'cesium/Build/Cesium/Widgets/CesiumWidget/CesiumWidget.css';
 import type { CameraState } from '@yzt/map-core';
+import type { GeoJSON, Position } from 'geojson';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { MAPLIBRE_FOVY, zoomToDistance } from './camera-math';
 import { CesiumScene } from './cesium-scene';
+import { type OverlayLayerSpecification, planOverlays } from './overlay-plan';
 import { setCesiumBaseUrl } from './runtime';
 import type { ImageryPlan } from './scene-style';
 
@@ -20,12 +23,12 @@ afterEach(() => {
   containers.splice(0).forEach(container => container.remove());
 });
 
-function createScene(width = 960, height = 640): CesiumScene {
+function createScene(width = 960, height = 640, preserveDrawingBuffer = false): CesiumScene {
   const container = document.createElement('div');
   container.style.cssText = `position: absolute; left: 0; top: 0; width: ${width}px; height: ${height}px`;
   document.body.append(container);
   containers.push(container);
-  const scene = new CesiumScene(container);
+  const scene = new CesiumScene(container, { preserveDrawingBuffer });
   scenes.push(scene);
   return scene;
 }
@@ -43,6 +46,133 @@ const missing = (id: string, extra: Partial<ImageryPlan> = {}): ImageryPlan => (
   show: true,
   ...extra
 });
+
+type Rgb = readonly [number, number, number];
+
+// 读画布上某个经纬度处的颜色；场景要用 preserveDrawingBuffer 创建
+function colorAt(scene: CesiumScene, lngLat: [number, number]): Rgb | null {
+  const canvas = containers.at(-1)?.querySelector('canvas');
+  const point = scene.project(lngLat);
+  if (!canvas || !point) {
+    return null;
+  }
+  const probe = document.createElement('canvas');
+  probe.width = canvas.width;
+  probe.height = canvas.height;
+  const context = probe.getContext('2d');
+  if (!context) {
+    return null;
+  }
+  context.drawImage(canvas, 0, 0);
+  const ratio = canvas.width / canvas.clientWidth;
+  const pixel = context.getImageData(Math.round(point.x * ratio), Math.round(point.y * ratio), 1, 1);
+  const [r = 0, g = 0, b = 0] = pixel.data;
+  return [r, g, b];
+}
+
+const near = (actual: Rgb | null, expected: Rgb) =>
+  actual !== null && actual.every((value, index) => Math.abs(value - (expected[index] ?? 0)) <= 24);
+
+// 每一帧检查一次，条件成立或超时结束；结束后不再检查。超时要比用例的时限短，画不出来时以断言失败
+async function waitForFrames(check: () => boolean, timeout = 10000): Promise<'ok' | 'timeout'> {
+  let frame = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const satisfied = new Promise<'ok'>(resolve => {
+    const poll = () => {
+      if (check()) {
+        resolve('ok');
+        return;
+      }
+      frame = requestAnimationFrame(poll);
+    };
+    poll();
+  });
+  const expired = new Promise<'timeout'>(resolve => {
+    timer = setTimeout(() => resolve('timeout'), timeout);
+  });
+  try {
+    return await Promise.race([satisfied, expired]);
+  } finally {
+    cancelAnimationFrame(frame);
+    clearTimeout(timer);
+  }
+}
+
+// 接下来的 count 帧里每帧检查一次，给出不满足的帧数
+function failingFrames(count: number, check: () => boolean): Promise<number> {
+  return new Promise(resolve => {
+    let failing = 0;
+    let remaining = count;
+    const step = () => {
+      if (!check()) {
+        failing++;
+      }
+      remaining--;
+      if (remaining === 0) {
+        resolve(failing);
+      } else {
+        requestAnimationFrame(step);
+      }
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+const WORLD: Position[] = [
+  [-180, -85.051129],
+  [180, -85.051129],
+  [180, 85.051129],
+  [-180, 85.051129],
+  [-180, -85.051129]
+];
+
+const HOLE: Position[] = [
+  [118.5, 31.6],
+  [119.5, 31.6],
+  [119.5, 32.4],
+  [118.5, 32.4],
+  [118.5, 31.6]
+];
+
+const overlayLayers = (lineWidth: number): OverlayLayerSpecification[] => [
+  { id: 'mask', type: 'fill', source: 'mask', paint: { 'fill-color': '#ff0000' } },
+  { id: 'line', type: 'line', source: 'line', paint: { 'line-color': '#0000ff', 'line-width': lineWidth } },
+  { id: 'point', type: 'circle', source: 'point', paint: { 'circle-color': '#00ff00', 'circle-radius': 10 } }
+];
+
+// 用和视图相同的推导得到形状：遮罩的外环是整个世界，线带相邻的重复点
+function overlayData(lineLatitude: number): Record<string, GeoJSON> {
+  return {
+    mask: { type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: [[WORLD, HOLE]] } },
+    line: {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [118, lineLatitude],
+          [118, lineLatitude],
+          [120, lineLatitude]
+        ]
+      }
+    },
+    point: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [119, 32] } }
+  };
+}
+
+function planLayers(lineLatitude: number, lineWidth = 8) {
+  const data = overlayData(lineLatitude);
+  return planOverlays(
+    overlayLayers(lineWidth).map((layer, order) => ({
+      layer,
+      order,
+      sourceId: layer.source,
+      data: data[layer.source] ?? ''
+    })),
+    ({ sourceId }) => data[sourceId],
+    8
+  );
+}
 
 describe('CesiumScene', () => {
   it('相机的写入和读回互逆：中心、缩放级、方位、俯角都还原，正俯视时方位不丢', () => {
@@ -89,6 +219,41 @@ describe('CesiumScene', () => {
     expect(scene.project([-61, -32])).toBeNull();
   });
 
+  it('临时拖动：from 处的地面点转到 to 下面，倾斜、旋转时也一样；指向天空时不动（ADR 0080 第 4 节）', () => {
+    // 容器在页面左上角，客户区坐标就是画布坐标
+    const scene = createScene();
+    const from = { x: 400, y: 300 };
+    const to = { x: 520, y: 360 };
+    const cameras: CameraState[] = [
+      { center: [119, 32], zoom: 9, bearing: 0, pitch: 0 },
+      { center: [120.6, 31.3], zoom: 12, bearing: 30, pitch: 50 }
+    ];
+
+    for (const camera of cameras) {
+      scene.jumpTo(camera);
+      const grabbed = scene.pick(from);
+      expect(grabbed.kind).toBe('hit');
+      scene.panBetween(from, to);
+
+      // 抓住的地面点现在投影在 to 上，不到半个像素
+      const landed = grabbed.kind === 'hit' ? scene.project(grabbed.lngLat) : null;
+      expect(Math.hypot((landed?.x ?? Number.NaN) - to.x, (landed?.y ?? Number.NaN) - to.y)).toBeLessThan(0.5);
+    }
+
+    scene.jumpTo({ center: [119, 32], zoom: 16, bearing: 0, pitch: 85 });
+    const before = scene.readCamera();
+    scene.panBetween({ x: 480, y: 2 }, { x: 480, y: 300 });
+    expect(scene.readCamera()).toStrictEqual(before);
+  });
+
+  it('视点高度：正俯视时等于按缩放级换算的相机距离（ADR 0080 第 6 节）', () => {
+    const scene = createScene();
+    scene.jumpTo({ center: [119, 32], zoom: 8, bearing: 0, pitch: 0 });
+
+    const expected = zoomToDistance(8, 32, 640, MAPLIBRE_FOVY);
+    expect(Math.abs(scene.eyeHeight() - expected) / expected).toBeLessThan(0.001);
+  });
+
   it('画布的尺寸就是容器的 CSS 尺寸', () => {
     const scene = createScene(720, 480);
 
@@ -114,4 +279,48 @@ describe('CesiumScene', () => {
     await expect(Promise.race([firstError.then(() => 'reported' as const), timeout])).resolves.toBe('reported');
     expect(new Set(errors)).toStrictEqual(new Set(['base-source']));
   });
+  it('覆盖物画在地球上：遮罩盖住洞外、洞里露出地球，线在遮罩上面，点在最上面；整个世界的遮罩不让渲染停下', async () => {
+    const scene = createScene(960, 640, true);
+    const failures: unknown[] = [];
+    scene.on('failure', error => failures.push(error));
+    scene.jumpTo({ center: [119, 32], zoom: 8, bearing: 0, pitch: 0 });
+
+    scene.setOverlays(planLayers(32.6));
+
+    const drawn = await waitForFrames(
+      () =>
+        near(colorAt(scene, [118.2, 31.3]), [255, 0, 0]) &&
+        near(colorAt(scene, [119.3, 31.8]), [0xdf, 0xe7, 0xf2]) &&
+        near(colorAt(scene, [119, 32.6]), [0, 0, 255]) &&
+        near(colorAt(scene, [119, 32]), [0, 255, 0])
+    );
+    expect(drawn).toBe('ok');
+    expect(failures).toStrictEqual([]);
+  }, 30000);
+
+  it('样式变了要重建：旧的线留到新的画好，重建期间每一帧都看得到线（ADR 0080 第 1 节）', async () => {
+    const scene = createScene(960, 640, true);
+    scene.jumpTo({ center: [119, 32], zoom: 8, bearing: 0, pitch: 0 });
+    scene.setOverlays(planLayers(32.6));
+    await expect(waitForFrames(() => near(colorAt(scene, [119, 32.6]), [0, 0, 255]))).resolves.toBe('ok');
+
+    scene.setOverlays(planLayers(32.6, 12));
+    const gaps = await failingFrames(90, () => near(colorAt(scene, [119, 32.6]), [0, 0, 255]));
+
+    expect(gaps).toBe(0);
+  }, 30000);
+
+  it('样式不变只改坐标：线移到新位置，原来的位置露出遮罩', async () => {
+    const scene = createScene(960, 640, true);
+    scene.jumpTo({ center: [119, 32], zoom: 8, bearing: 0, pitch: 0 });
+    scene.setOverlays(planLayers(32.6));
+    await expect(waitForFrames(() => near(colorAt(scene, [119, 32.6]), [0, 0, 255]))).resolves.toBe('ok');
+
+    scene.setOverlays(planLayers(31.3));
+
+    const moved = await waitForFrames(
+      () => near(colorAt(scene, [119, 31.3]), [0, 0, 255]) && near(colorAt(scene, [119, 32.6]), [255, 0, 0])
+    );
+    expect(moved).toBe('ok');
+  }, 30000);
 });

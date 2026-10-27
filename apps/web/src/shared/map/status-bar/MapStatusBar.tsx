@@ -1,7 +1,7 @@
 import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
 import { useShownElementSize } from '../../composables/useShownElementSize';
 import { type CoordinateFormat, formatLngLat } from '../location/coordinate-format';
-import { fitStatusLayout, type ScaleBar, type StatusLayout, type ViewAngles } from './status-bar';
+import { eyeHeightLabel, fitStatusLayout, type ScaleBar, type StatusLayout, type ViewAngles } from './status-bar';
 import type { MapReadout, ReadoutPosition } from './useMapReadout';
 import styles from './MapStatusBar.module.scss';
 
@@ -11,6 +11,9 @@ const scaleSegment = ({ width, label }: ScaleBar) => (
     {label}
   </span>
 );
+
+// 三维代替比例尺的一段（ADR 0080 第 6 节）
+const eyeSegment = (meters: number) => <span class={styles.segment}>视点高度 {eyeHeightLabel(meters)}</span>;
 
 // 旋转、俯仰都为 0 时没有这一段
 const anglesSegment = ({ bearing, pitch }: ViewAngles) =>
@@ -22,7 +25,8 @@ const anglesSegment = ({ bearing, pitch }: ViewAngles) =>
   );
 
 /**
- * 左下角的状态栏（ADR 0053 第 5 节，设计稿 5D.3）：比例尺、鼠标所在的经纬度、不为 0 的旋转和俯仰。
+ * 左下角的状态栏（ADR 0053 第 5 节，设计稿 5D.3）：比例尺（三维是视点高度，ADR 0080 第 6 节）、鼠标所在的经纬度、
+ * 不为 0 的旋转和俯仰。
  * 只显示、不拦截鼠标；三种排法的宽度由隐藏的量尺量出，放不下时按 fitStatusLayout 取舍
  */
 export const MapStatusBar = defineComponent({
@@ -60,10 +64,13 @@ export const MapStatusBar = defineComponent({
 
     // 按排法取出要显示的几段，段之间加分隔线；一段都没有时不显示
     const bar = (shown: StatusLayout) => {
-      const { scale, position, angles } = props.readout;
+      const { scale, eye, position, angles } = props.readout;
       const segments: VNode[] = [];
+      // 排法里的 scale-only 指只留第一段：二维是比例尺，三维是视点高度
       if (scale.value) {
         segments.push(scaleSegment(scale.value));
+      } else if (eye.value !== null) {
+        segments.push(eyeSegment(eye.value));
       }
       if (shown !== 'scale-only' && position.value) {
         segments.push(positionSegment(position.value));

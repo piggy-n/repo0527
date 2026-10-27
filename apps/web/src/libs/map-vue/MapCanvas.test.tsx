@@ -304,7 +304,7 @@ describe('MapCanvas', () => {
     expect(maps[0]?.removed).toBe(true);
   });
 
-  it('视图的受限入口：冻结，只有 kind、pick、project、queryRendered，转发给视图；移动相机通过相机操作', () => {
+  it('视图的受限入口：冻结，只有 kind、pick、project、queryRendered、eyeHeight，转发给视图；移动相机通过相机操作', () => {
     const { context, maps, session } = setup();
     maps[0]?.fire('style.load');
     const viewport = context.view.value;
@@ -313,7 +313,7 @@ describe('MapCanvas', () => {
     }
 
     expect(Object.isFrozen(viewport)).toBe(true);
-    expect(Object.keys(viewport).toSorted()).toEqual(['kind', 'pick', 'project', 'queryRendered']);
+    expect(Object.keys(viewport).toSorted()).toEqual(['eyeHeight', 'kind', 'pick', 'project', 'queryRendered']);
     expect(Symbol.dispose in viewport).toBe(false);
 
     context.runCameraOperation(camera => camera.flyTo({ center: [120.6, 31.3] }));
@@ -324,6 +324,8 @@ describe('MapCanvas', () => {
     expect(viewport.pick({ x: 100, y: 200 })).toStrictEqual({ kind: 'hit', surface: 'map', lngLat: [119, 31] });
     expect(viewport.project([119, 31])).toStrictEqual({ x: 100, y: 200 });
     expect(viewport.queryRendered({ x: 100, y: 200 }, { sources: ['missing'] })).toStrictEqual([]);
+    // 二维视图没有视点高度这项能力（ADR 0080 第 6 节）
+    expect(viewport.eyeHeight()).toBeNull();
   });
 
   it('只读：给 view、viewState、相机引用赋值不生效', () => {

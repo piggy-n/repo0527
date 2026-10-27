@@ -29,7 +29,7 @@
 | `maplibre/map-like.ts` | `MapLike`：适配器用到的 MapLibre 方法（窄接口）；连同方法签名用到的类型从入口导出，map-vue 的测试据此实现假地图 |
 | `maplibre/apply-style-command.ts` | `applyStyleCommand`：一条命令对应一次地图方法调用 |
 | `maplibre/maplibre-view.ts` | `MapLibreView`：二维视图，唯一写 MapLibre 地图的地方 |
-| `maplibre/modifier-pan.ts` | `ModifierPan`：按住修饰键临时拖动地图，截下这次按下、按位移平移、给出临时的光标（ADR 0056，适配器内部用，不导出） |
+| `view/modifier-pan.ts` | `ModifierPan`：按住修饰键临时拖动地图，截下这次按下、把指针的移动交给视图平移、给出临时的光标（ADR 0056、0080 第 4 节）；二维、三维的视图共用，从入口导出 |
 | `events.ts` | `Unsubscribe` 类型 |
 | `model-events.ts` | `ModelEvents`：会话各模型共用的事件与释放（ADR 0034 第 7 条），模块内部使用，不从入口导出 |
 
@@ -271,7 +271,7 @@ store.clear();
 - 工具的钩子抛错时由 `#guard` 交给 `onError`，不冒进 MapLibre 的事件分发
 - 释放时取消鼠标事件的订阅、移除按键监听（释放后的状态挡住了转交，所以测试直接确认 `removeEventListener` 被调用）
 
-**按住修饰键临时拖动（ADR 0056）**：由适配器内部的 `ModifierPan` 负责，和地图一起创建、一起释放。
+**按住修饰键临时拖动（ADR 0056）**：由 `ModifierPan` 负责，和地图一起创建、一起释放。它不认识引擎：视图给出画布容器、截下哪些按下事件（二维只有 `mousedown`，三维还有 Cesium 用的 `pointerdown`）和平移的函数 `pan(from, to)`（客户区坐标）；MapLibre 适配器按 `from - to` 的位移 `panBy`，三维见 [map-cesium.md](map-cesium.md)"输入与工具"。
 
 - 为什么要自己平移：所装 MapLibre（6.12）的拖动平移只认没按 Ctrl 的左键，左键加 Ctrl 是旋转和俯仰，而且只在按下时判断；打开它的拖动平移也拖不动
 - 开始：视图就绪、当前工具声明了 `panModifier`、左键按下时按着这个键。`ModifierPan` 在画布容器的捕获阶段截下这次按下（`stopPropagation`，不阻止默认行为，画布照常获得焦点）：MapLibre 在同一个元素的冒泡阶段监听按下，收不到它，所以不旋转、不俯仰，也不发出 `mousedown` 地图事件，工具不会开始框选
@@ -321,7 +321,7 @@ store.clear();
 | `applyStyleCommand` | 一条命令对应一次地图方法调用 | 假对象，jsdom |
 | `MapLibreView` | 生命周期、样式修订的跟踪、暂停恢复、出错重建、相机读写；状态转换的穷举短序列 | 注入 `createMap` 换成假地图，jsdom |
 | `MapLibreView`（`maplibre-view.browser.test.ts`） | 真实的 MapLibre（ADR 0040）：首次加载与俯角收敛后按 `sync` 写回、增量提交后画出要素且不整体重建、规范以外的图层属性触发整体重建、不合法的图层进入 `failed(style)` 后自动恢复、拾取与投影、画布尺寸变化；样式图片在首次加载、只改图片（换像素、换格式、去掉）、整体重建后都在，没有缺图；声明了 Ctrl 的工具按住 Ctrl 拖动是平移、不旋转，右键拖动照常旋转（对照："移动"里按住 Ctrl 拖动是 MapLibre 的旋转） | Chromium 无界面版，软件渲染 |
-| `ModifierPan` | 截下按下、按位移平移、结束的各种情况、吞掉的输入、光标的切换与通知、失焦、释放后不再监听 | 真实的 DOM 事件，jsdom |
+| `ModifierPan` | 截下按下（包括同一次按下的 `pointerdown` 和 `mousedown`）、交出指针移动、结束的各种情况、吞掉的输入、光标的切换与通知、失焦、释放后不再监听 | 真实的 DOM 事件，jsdom |
 | 真实 MapLibre | 渲染、Worker、事件、尺寸监听、中心点 | 开发页 `/dev/map`，浏览器 |
 
 - 工具模型的输入事件（5D.3）：先发出 `input` 再交给当前工具、按键也发出；监听者抛错时工具照样收到输入，错误抛给调用方。改坏 2 处（不发出、去掉 `try/finally`），连同默认关掉版权控件 1 处，全部由断言发现

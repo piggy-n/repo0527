@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { fitStatusLayout, formatLength, scaleBar, visibleAngles } from './status-bar';
+import { eyeHeightLabel, fitStatusLayout, formatLength, scaleBar, visibleAngles } from './status-bar';
 
 describe('scaleBar', () => {
   it('取不超过 80 像素的整齐长度，线段长度按每像素的米数换算', () => {
@@ -39,6 +39,17 @@ describe('formatLength', () => {
     expect(formatLength(500)).toBe('500 m');
     expect(formatLength(1000)).toBe('1 km');
     expect(formatLength(20000)).toBe('20 km');
+  });
+});
+
+describe('eyeHeightLabel', () => {
+  it('不到 1 km 写整米，不到 10 km 保留一位小数，再高写整千米；分档按取整后的值', () => {
+    expect(eyeHeightLabel(120.4)).toBe('120 m');
+    expect(eyeHeightLabel(999.6)).toBe('1.0 km');
+    expect(eyeHeightLabel(2400)).toBe('2.4 km');
+    expect(eyeHeightLabel(9960)).toBe('10 km');
+    expect(eyeHeightLabel(420_300)).toBe('420 km');
+    expect(eyeHeightLabel(-3)).toBe('0 m');
   });
 });
 

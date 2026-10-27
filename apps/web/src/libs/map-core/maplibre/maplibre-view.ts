@@ -24,7 +24,7 @@ import type { LngLat, MapInputEvent, MapPointerEvent, PickResult, ScreenPoint } 
 import { canTransition, deferred, type LiveViewState } from '../view/view-lifecycle';
 import { applyStyleCommand } from './apply-style-command';
 import type { MapLibreMapOptions, MapLike, MapMouseEventLike, MapMouseEventType, MapMoveEventLike } from './map-like';
-import { ModifierPan } from './modifier-pan';
+import { ModifierPan } from '../view/modifier-pan';
 
 export interface MapLibreViewOptions<G extends string> {
   readonly session: MapSession<G>;
@@ -208,7 +208,9 @@ export class MapLibreView<const G extends string> implements MapView {
     stack.defer(() => map.remove());
     this.#pan = stack.use(
       new ModifierPan({
-        map,
+        container: map.getCanvasContainer(),
+        // 地图内容跟着指针走，视野反向移动
+        pan: (from, to) => map.panBy([from.x - to.x, from.y - to.y], { animate: false }, { cause: 'user' }),
         modifier: () => (this.#state === 'ready' ? (this.#session.tool.activeTool.panModifier ?? null) : null),
         // 没有就绪时不应用光标，进入 ready 时按当前工具应用
         onCursorChange: () => {

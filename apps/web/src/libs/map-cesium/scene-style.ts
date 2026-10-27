@@ -1,4 +1,5 @@
 import type { LayerSpecification, SourceSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type { OverlayLayerSpecification, OverlaySpec } from './overlay-plan';
 import { type TileUrlTemplate, tileUrlTemplate } from './url-template';
 
 /** 一个影像图层：对应二维的一个 raster 图层 */
@@ -24,8 +25,13 @@ export interface SceneStylePlan {
   readonly imagery: readonly ImageryPlan[];
   /** 地球的底色；没有 background 图层时为 null，用场景的默认颜色 */
   readonly baseColor: string | null;
+  /** GeoJSON 覆盖物，按样式里的顺序；形状在数据就绪后按级别推导（ADR 0080 第 1 节） */
+  readonly overlays: readonly OverlaySpec[];
   readonly unsupported: readonly UnsupportedLayer[];
 }
+
+// 三维画不出来的样式属性：用了就整个图层跳过；清单外其他属性忽略（ADR 0080 第 1 节）
+const UNSUPPORTED_PAINT = ['line-pattern', 'line-gradient', 'fill-pattern'] as const;
 
 // MapLibre 的默认值：raster 数据源的瓦片 512 像素、0～22 级
 const DEFAULT_TILE_SIZE = 512;
@@ -42,7 +48,7 @@ function sourceReason(source: SourceSpecification | undefined): string {
   return `三维不支持 ${source?.type ?? '未知'} 数据源`;
 }
 
-// 本阶段只支持常量；表达式在 3D.2 用 style-spec 求值
+// 影像的透明度只支持常量；覆盖物的样式在 overlay-plan 里按要素求值
 function constantNumber(value: unknown, fallback: number): number | null {
   if (value === undefined) {
     return fallback;
@@ -97,12 +103,32 @@ function planBackground(layer: Extract<LayerSpecification, { type: 'background' 
   return { ok: true, value: color ?? null };
 }
 
-/** 从二维的样式推导三维的影像图层和地球底色，支持清单之外的图层列出原因（ADR 0024 第 10 节、ADR 0079 第 7 节） */
+function planOverlay(
+  layer: OverlayLayerSpecification,
+  source: SourceSpecification | undefined,
+  order: number
+): Result<OverlaySpec> {
+  if (source?.type !== 'geojson') {
+    return fail(sourceReason(source));
+  }
+  const paint: Readonly<Record<string, unknown>> = layer.paint ?? {};
+  const property = UNSUPPORTED_PAINT.find(name => name in paint);
+  if (property) {
+    return fail(`三维不支持 ${property}`);
+  }
+  return { ok: true, value: { layer, order, sourceId: layer.source, data: source.data } };
+}
+
+/**
+ * 从二维的样式推导三维的影像图层、地球底色和覆盖物，支持清单之外的图层列出原因
+ * （ADR 0024 第 10 节、ADR 0079 第 7 节、ADR 0080 第 1 节）
+ */
 export function planSceneStyle(style: StyleSpecification): SceneStylePlan {
   const imagery: ImageryPlan[] = [];
+  const overlays: OverlaySpec[] = [];
   const unsupported: UnsupportedLayer[] = [];
   let baseColor: string | null = null;
-  for (const layer of style.layers) {
+  for (const [order, layer] of style.layers.entries()) {
     if (layer.type === 'background') {
       const result = planBackground(layer);
       if (result.ok) {
@@ -121,9 +147,18 @@ export function planSceneStyle(style: StyleSpecification): SceneStylePlan {
       }
       continue;
     }
+    if (layer.type === 'line' || layer.type === 'fill' || layer.type === 'circle') {
+      const result = planOverlay(layer, style.sources[layer.source], order);
+      if (result.ok) {
+        overlays.push(result.value);
+      } else {
+        unsupported.push({ layerId: layer.id, reason: result.reason });
+      }
+      continue;
+    }
     const source = 'source' in layer ? style.sources[layer.source] : undefined;
     const reason = source?.type === 'vector' ? sourceReason(source) : `三维暂不支持 ${layer.type} 图层`;
     unsupported.push({ layerId: layer.id, reason });
   }
-  return { imagery, baseColor, unsupported };
+  return { imagery, baseColor, overlays, unsupported };
 }

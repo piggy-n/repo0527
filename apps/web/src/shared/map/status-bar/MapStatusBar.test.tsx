@@ -14,12 +14,14 @@ function fakeReadout() {
   const scale = shallowRef<ScaleBar | null>(SCALE);
   const position = shallowRef<ReadoutPosition | null>({ lngLat: POINT, center: false });
   const angles = shallowRef<ViewAngles>({ bearing: null, pitch: null });
+  const eye = shallowRef<number | null>(null);
   const readout: MapReadout = {
     scale: computed(() => scale.value),
+    eye: computed(() => eye.value),
     position: computed(() => position.value),
     angles: computed(() => angles.value)
   };
-  return { readout, scale, position, angles };
+  return { readout, scale, eye, position, angles };
 }
 
 function mountBar(format: CoordinateFormat = 'dms') {
@@ -44,6 +46,16 @@ describe('MapStatusBar', () => {
 
     await wrapper.setProps({ format: 'decimal' });
     expect(shown(wrapper)).toBe('10 km118.789800, 32.061400');
+  });
+
+  it('三维：比例尺换成视点高度，其余照旧（ADR 0080 第 6 节）', async () => {
+    const { wrapper, scale, eye } = mountBar('decimal');
+
+    scale.value = null;
+    eye.value = 420_300;
+    await nextTick();
+
+    expect(shown(wrapper)).toBe('视点高度 420 km118.789800, 32.061400');
   });
 
   it('鼠标不在画布上时，经纬度前面标"中心"', async () => {

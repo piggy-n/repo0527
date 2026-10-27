@@ -1,4 +1,13 @@
-import { type CameraState, type MapInputEvent, MapSession, type StyleGroup, type ToolView } from '@yzt/map-core';
+import {
+  type CameraState,
+  type ClientPoint,
+  type MapInputEvent,
+  type MapPointerEvent,
+  MapSession,
+  type StyleGroup,
+  type ToolView
+} from '@yzt/map-core';
+import type { Feature, FeatureCollection, GeoJSON } from 'geojson';
 import { createNanoEvents } from 'nanoevents';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { CesiumScene } from './cesium-scene';
@@ -10,6 +19,7 @@ import {
   type ScenePose,
   WebGLUnavailableError
 } from './scene-like';
+import type { OverlayLayer } from './overlay-plan';
 import type { ImageryPlan } from './scene-style';
 
 const START: CameraState = { center: [119.5, 33], zoom: 6.8, bearing: 0, pitch: 0 };
@@ -21,6 +31,9 @@ class FakeScene implements SceneLike {
   flyDuration: number | undefined;
   imagery: readonly ImageryPlan[] = [];
   baseColor: string | null = null;
+  overlays: readonly OverlayLayer[] = [];
+  overlayUpdates = 0;
+  readonly pans: (readonly [ClientPoint, ClientPoint])[] = [];
   gestures: SceneGestures = { drag: true };
   cursor: string | undefined;
   rendering = true;
@@ -71,6 +84,10 @@ class FakeScene implements SceneLike {
     this.restored = pose;
   }
 
+  panBetween(from: ClientPoint, to: ClientPoint): void {
+    this.pans.push([from, to]);
+  }
+
   pick() {
     return { kind: 'hit', surface: 'ellipsoid', lngLat: [119, 32], height: 0 } as const;
   }
@@ -83,12 +100,21 @@ class FakeScene implements SceneLike {
     return { width: 1000, height: 800 };
   }
 
+  eyeHeight(): number {
+    return 420000;
+  }
+
   setImagery(imagery: readonly ImageryPlan[]): void {
     this.imagery = imagery;
   }
 
   setBaseColor(color: string | null): void {
     this.baseColor = color;
+  }
+
+  setOverlays(layers: readonly OverlayLayer[]): void {
+    this.overlays = layers;
+    this.overlayUpdates++;
   }
 
   setGestures(gestures: SceneGestures): void {
@@ -134,12 +160,23 @@ class FakeScene implements SceneLike {
 
 const sessions: MapSession<'basemap' | 'boundaries'>[] = [];
 const views: CesiumView<'basemap' | 'boundaries'>[] = [];
+const containers: HTMLElement[] = [];
 afterEach(() => {
   views.splice(0).forEach(view => view[Symbol.dispose]());
   sessions.splice(0).forEach(session => session[Symbol.dispose]());
+  containers.splice(0).forEach(container => container.remove());
 });
 
-function setup({ active = true, scene = new FakeScene() } = {}) {
+type LoadGeoJson = (url: string, signal: AbortSignal) => Promise<unknown>;
+
+// 默认的下载函数直接失败：用例不发网络请求
+const noNetwork: LoadGeoJson = url => Promise.reject(new Error(`用例没有准备 ${url}`));
+
+function setup({
+  active = true,
+  scene = new FakeScene(),
+  loadGeoJson = noNetwork
+}: { active?: boolean; scene?: FakeScene; loadGeoJson?: LoadGeoJson } = {}) {
   const session = new MapSession({ groups: ['basemap', 'boundaries'], camera: START });
   sessions.push(session);
   session.style.setGroup('basemap', {
@@ -151,21 +188,35 @@ function setup({ active = true, scene = new FakeScene() } = {}) {
   });
   const onError = vi.fn<(error: unknown) => void>();
   const onUnsupported = vi.fn<(layer: { layerId: string; reason: string }) => void>();
+  // 挂到文档上：临时拖动在文档上监听移动和按键
+  const container = document.createElement('div');
+  document.body.append(container);
+  containers.push(container);
   const view = new CesiumView({
     session,
-    container: document.createElement('div'),
+    container,
     active,
     onError,
     onUnsupported,
-    createScene: () => scene
+    createScene: () => scene,
+    loadGeoJson
   });
   views.push(view);
   const changes: { view: string; cause: string }[] = [];
   session.camera.on('change', ({ view: kind, cause }) => changes.push({ view: kind, cause }));
-  return { session, scene, view, onError, onUnsupported, changes };
+  return { session, scene, view, container, onError, onUnsupported, changes };
 }
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
+
+// 按着 Ctrl 的松开、单击：临时拖动时不交给工具
+const ctrlInput = (type: 'up' | 'click'): MapPointerEvent => ({
+  type,
+  point: { x: 30, y: 15 },
+  button: 0,
+  clickCount: 1,
+  modifiers: { shift: false, ctrl: true, alt: false, meta: false }
+});
 
 describe('CesiumView', () => {
   it('真实的场景满足窄接口', () => {
@@ -360,8 +411,8 @@ describe('CesiumView', () => {
     const { session, view, onUnsupported } = setup();
     await view.whenReady();
     const boundaries: StyleGroup = {
-      sources: { line: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } },
-      layers: [{ id: 'boundaries-line', type: 'line', source: 'line' }]
+      sources: { names: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } },
+      layers: [{ id: 'boundaries-names', type: 'symbol', source: 'names' }]
     };
 
     session.style.setGroup('boundaries', boundaries);
@@ -369,7 +420,10 @@ describe('CesiumView', () => {
     session.style.setGroup('boundaries', { ...boundaries });
     await flush();
 
-    expect(onUnsupported).toHaveBeenCalledExactlyOnceWith({ layerId: 'boundaries-line', reason: '三维暂不支持 line 图层' });
+    expect(onUnsupported).toHaveBeenCalledExactlyOnceWith({
+      layerId: 'boundaries-names',
+      reason: '三维暂不支持 symbol 图层'
+    });
   });
 
   it('影像的瓦片错误按数据源记第一条，数据源移除时忘掉', async () => {
@@ -433,14 +487,228 @@ describe('CesiumView', () => {
     expect(scene.focused).toBe(1);
   });
 
+  it('按住修饰键临时拖动：截下这次按下，场景按指针位置平移，工具收不到松开和单击；光标是手型（ADR 0080 第 4 节）', async () => {
+    const { session, scene, view, container } = setup();
+    await view.whenReady();
+    const received: string[] = [];
+    session.tool.register('pick', {
+      persistent: true,
+      cursor: 'crosshair',
+      gestures: { dragPan: false },
+      panModifier: 'ctrl',
+      handleInput: (event: MapInputEvent) => {
+        received.push(event.type);
+      }
+    });
+    session.tool.activate('pick');
+    // Cesium 的相机控制在画布上收指针事件，工具的输入来自画布的鼠标事件
+    const canvas = document.createElement('canvas');
+    container.append(canvas);
+    const engineDowns: string[] = [];
+    canvas.addEventListener('pointerdown', ({ type }) => engineDowns.push(type));
+    canvas.addEventListener('mousedown', ({ type }) => engineDowns.push(type));
+    const press = { bubbles: true, cancelable: true, button: 0, ctrlKey: true, clientX: 10, clientY: 10 };
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }));
+    expect(scene.cursor).toBe('grab');
+    canvas.dispatchEvent(new MouseEvent('pointerdown', press));
+    canvas.dispatchEvent(new MouseEvent('mousedown', press));
+    expect(scene.cursor).toBe('grabbing');
+    canvas.dispatchEvent(new MouseEvent('mousemove', { ...press, clientX: 30, clientY: 15, buttons: 1 }));
+    document.dispatchEvent(new MouseEvent('mouseup', { ...press, clientX: 30, clientY: 15 }));
+    scene.emit('pointer', ctrlInput('up'));
+    scene.emit('pointer', ctrlInput('click'));
+
+    expect(engineDowns).toStrictEqual([]);
+    expect(scene.pans).toStrictEqual([
+      [
+        { x: 10, y: 10 },
+        { x: 30, y: 15 }
+      ]
+    ]);
+    expect(received).toStrictEqual([]);
+    expect(scene.cursor).toBe('grab');
+  });
+
   it('没有就绪时不能定位、拾取、投影；释放时同时释放场景', async () => {
     const { scene, view } = setup({ active: false });
     await view.whenReady();
 
     expect(() => view.flyTo({ zoom: 3 })).toThrow('只能在 ready 时');
     expect(() => view.pick({ x: 0, y: 0 })).toThrow('只能在 ready 时');
+    expect(() => view.eyeHeight()).toThrow('只能在 ready 时');
+    view.resume();
+    // 视点高度来自场景的相机（ADR 0080 第 6 节）
+    expect(view.eyeHeight()).toBe(420000);
     view[Symbol.dispose]();
     expect(view.state).toBe('disposed');
     expect(scene.disposed).toBe(true);
+  });
+});
+
+const LINE: Feature = {
+  type: 'Feature',
+  properties: {},
+  geometry: {
+    type: 'LineString',
+    coordinates: [
+      [118, 32],
+      [119, 33]
+    ]
+  }
+};
+
+const collection = (...features: Feature[]): FeatureCollection => ({ type: 'FeatureCollection', features });
+
+function cityLine(data: GeoJSON | string, paint: Record<string, unknown> = {}): StyleGroup {
+  return {
+    sources: { 'boundaries-city': { type: 'geojson', data } },
+    layers: [{ id: 'boundaries-city', type: 'line', source: 'boundaries-city', paint }]
+  };
+}
+
+function lineWidth(scene: FakeScene): number | undefined {
+  const shape = scene.overlays[0]?.shapes[0];
+  return shape?.kind === 'line' ? shape.width : undefined;
+}
+
+// 一次下载：用例决定什么时候到、到的是什么
+function pendingDownload() {
+  const calls: { url: string; signal: AbortSignal }[] = [];
+  let finish: ((value: unknown) => void) | undefined;
+  const loadGeoJson: LoadGeoJson = (url, signal) => {
+    calls.push({ url, signal });
+    return new Promise(resolve => {
+      finish = resolve;
+    });
+  };
+  return { calls, loadGeoJson, finish: (value: unknown) => finish?.(value) };
+}
+
+describe('CesiumView 的覆盖物（ADR 0080 第 1 节）', () => {
+  it('GeoJSON 图层推导成形状交给场景；只改了别的分组时覆盖物的图层还是同一个对象', async () => {
+    const { session, scene, view } = setup();
+    await view.whenReady();
+
+    session.style.setGroup('boundaries', cityLine(collection(LINE)));
+    await flush();
+    const [layer] = scene.overlays;
+    expect(layer?.id).toBe('boundaries-city');
+    expect(layer?.shapes).toHaveLength(1);
+
+    // 图层个数不变，覆盖物在样式里的位置也不变
+    session.style.setGroup('basemap', {
+      sources: {},
+      layers: [
+        { id: 'basemap-background', type: 'background', paint: { 'background-color': '#ffffff' } },
+        { id: 'basemap-other', type: 'background' }
+      ]
+    });
+    await flush();
+    expect(scene.baseColor).toBe('#ffffff');
+    expect(scene.overlays[0]).toBe(layer);
+  });
+
+  it('换了一个整数级别才重新推导：线宽跟着级别变，同一级里的缩放不重新推导', async () => {
+    const { session, scene, view } = setup();
+    await view.whenReady();
+    const width = ['interpolate', ['linear'], ['zoom'], 6, 1, 10, 5];
+    session.style.setGroup('boundaries', cityLine(collection(LINE), { 'line-width': width }));
+    await flush();
+    // 6.8 取整为 7
+    expect(lineWidth(scene)).toBe(2);
+    const updates = scene.overlayUpdates;
+
+    scene.drag({ ...START, zoom: 7.3 });
+    expect(scene.overlayUpdates).toBe(updates);
+    scene.drag({ ...START, zoom: 7.6 });
+    expect(lineWidth(scene)).toBe(3);
+  });
+
+  it('数据源是地址时下载，到了再画；两个数据源引用同一个地址只下载一次，样式再变也不重新下载', async () => {
+    const download = pendingDownload();
+    const { session, scene, view } = setup({ loadGeoJson: download.loadGeoJson });
+    await view.whenReady();
+    session.style.setGroup('boundaries', {
+      sources: {
+        'boundaries-a': { type: 'geojson', data: '/city.json' },
+        'boundaries-b': { type: 'geojson', data: '/city.json' }
+      },
+      layers: [
+        { id: 'boundaries-a', type: 'line', source: 'boundaries-a' },
+        { id: 'boundaries-b', type: 'line', source: 'boundaries-b' }
+      ]
+    });
+    await flush();
+    expect(download.calls.map(({ url }) => url)).toStrictEqual(['/city.json']);
+    expect(scene.overlays).toStrictEqual([]);
+
+    download.finish(collection(LINE));
+    await flush();
+    expect(scene.overlays.map(({ id, shapes }) => [id, shapes.length])).toStrictEqual([
+      ['boundaries-a', 1],
+      ['boundaries-b', 1]
+    ]);
+
+    session.style.setGroup('basemap', { sources: {}, layers: [] });
+    await flush();
+    expect(download.calls).toHaveLength(1);
+  });
+
+  it('下载失败、内容不是 GeoJSON 时按数据源记错误；不再引用后忘掉，再次引用时重新下载', async () => {
+    const failure = new Error('404');
+    const loadGeoJson = vi
+      .fn<LoadGeoJson>()
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce('<!doctype html>');
+    const { session, view } = setup({ loadGeoJson });
+    await view.whenReady();
+
+    session.style.setGroup('boundaries', cityLine('/city.json'));
+    await flush();
+    expect(view.sourceErrors).toStrictEqual(new Map([['boundaries-city', failure]]));
+
+    session.style.setGroup('boundaries', { sources: {}, layers: [] });
+    await flush();
+    expect(view.sourceErrors.size).toBe(0);
+
+    session.style.setGroup('boundaries', cityLine('/city.json'));
+    await flush();
+    expect(loadGeoJson).toHaveBeenCalledTimes(2);
+    const error = view.sourceErrors.get('boundaries-city');
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toHaveProperty('message', '/city.json 的内容不是 GeoJSON');
+  });
+
+  it('释放时取消下载，晚到的数据不再交给场景', async () => {
+    const download = pendingDownload();
+    const { session, scene, view } = setup({ loadGeoJson: download.loadGeoJson });
+    await view.whenReady();
+    session.style.setGroup('boundaries', cityLine('/city.json'));
+    await flush();
+    const updates = scene.overlayUpdates;
+
+    view[Symbol.dispose]();
+    expect(download.calls[0]?.signal.aborted).toBe(true);
+    download.finish(collection(LINE));
+    await flush();
+
+    expect(scene.overlayUpdates).toBe(updates);
+  });
+
+  it('暂停期间数据到了，恢复时再画', async () => {
+    const download = pendingDownload();
+    const { session, scene, view } = setup({ loadGeoJson: download.loadGeoJson });
+    await view.whenReady();
+    session.style.setGroup('boundaries', cityLine('/city.json'));
+    await flush();
+
+    view.pause();
+    download.finish(collection(LINE));
+    await flush();
+    expect(scene.overlays).toStrictEqual([]);
+
+    view.resume();
+    expect(scene.overlays.map(({ id }) => id)).toStrictEqual(['boundaries-city']);
   });
 });

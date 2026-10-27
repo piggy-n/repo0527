@@ -1,20 +1,36 @@
-import type { CameraState, LngLat, MapPointerEvent, PickResult, ScreenPoint, Unsubscribe } from '@yzt/map-core';
+import type {
+  CameraState,
+  ClientPoint,
+  LngLat,
+  MapPointerEvent,
+  PickResult,
+  ScreenPoint,
+  Unsubscribe
+} from '@yzt/map-core';
+import type { Position } from 'geojson';
 import {
   BoundingSphere,
+  CallbackProperty,
   Cartesian2,
   Cartesian3,
   Cartographic,
   Cesium3DTileFeature,
   Cesium3DTileset,
   CesiumWidget,
+  ClassificationType,
   Color,
+  ColorMaterialProperty,
+  ConstantPositionProperty,
   Ellipsoid,
   EllipsoidalOccluder,
+  type Entity,
   HeadingPitchRange,
   ImageryLayer,
   Math as CesiumMath,
   Matrix4,
   PerspectiveFrustum,
+  PolygonHierarchy,
+  PolylineDashMaterialProperty,
   RuntimeError,
   SceneTransforms,
   Transforms,
@@ -38,10 +54,16 @@ import {
   type ScenePose,
   WebGLUnavailableError
 } from './scene-like';
+import type { OverlayLayer, OverlayShape, RgbaColor } from './overlay-plan';
 import type { ImageryPlan } from './scene-style';
 
 // 没有 background 图层时地球的底色（旧项目的取值）
 const DEFAULT_BASE_COLOR = '#dfe7f2';
+
+// 两点几乎重合时不转动：叉积太小，转轴的方向不可靠（单位是米的平方）
+const MIN_PAN_AXIS = 1e-3;
+// 临时拖动的一步转几次：一次转动加一次修正
+const PAN_STEPS = 2;
 
 // 画布上的鼠标事件对应的工具输入，和二维相同（ADR 0034 第 1 条）
 const POINTER_TYPES = {
@@ -88,22 +110,82 @@ function tuple({ x, y, z }: Cartesian3): [number, number, number] {
   return [x, y, z];
 }
 
+// 一个形状画成的实体；live 之后坐标改由每帧读取 geometry，只改坐标时不重建（测量画线，ADR 0080 第 1 节）
+interface OverlayItem {
+  readonly entity: Entity;
+  geometry: Cartesian3[] | PolygonHierarchy;
+  live: boolean;
+}
+
+interface OverlayEntry {
+  layer: OverlayLayer;
+  readonly items: OverlayItem[];
+}
+
+function positionsOf(path: readonly Position[]): Cartesian3[] {
+  return Cartesian3.fromDegreesArray(path.flatMap(([lng = 0, lat = 0]) => [lng, lat]));
+}
+
+function hierarchyOf([outer = [], ...holes]: readonly (readonly Position[])[]): PolygonHierarchy {
+  return new PolygonHierarchy(
+    positionsOf(outer),
+    holes.map(hole => new PolygonHierarchy(positionsOf(hole)))
+  );
+}
+
+function colorOf([r, g, b, a]: RgbaColor): Color {
+  return new Color(r, g, b, a);
+}
+
+function sameColor(a: RgbaColor, b: RgbaColor): boolean {
+  return a.every((value, index) => value === b[index]);
+}
+
+// 样式完全相同的两个形状：坐标可以直接换，不用重建实体
+function sameStyle(a: OverlayShape, b: OverlayShape): boolean {
+  if (a.kind === 'line' && b.kind === 'line') {
+    return (
+      sameColor(a.color, b.color) &&
+      a.width === b.width &&
+      a.dash?.length === b.dash?.length &&
+      a.dash?.pattern === b.dash?.pattern
+    );
+  }
+  if (a.kind === 'polygon' && b.kind === 'polygon') {
+    return sameColor(a.color, b.color);
+  }
+  if (a.kind === 'point' && b.kind === 'point') {
+    return (
+      a.radius === b.radius &&
+      a.strokeWidth === b.strokeWidth &&
+      sameColor(a.color, b.color) &&
+      sameColor(a.strokeColor, b.strokeColor)
+    );
+  }
+  return false;
+}
+
 /** 唯一调用 Cesium 的门面（ADR 0079 第 3 节）：CesiumView 通过 SceneLike 使用它 */
 export class CesiumScene implements SceneLike {
   readonly #widget: CesiumWidget;
   readonly #emitter = createNanoEvents<SceneEvents>();
   readonly #stack: DisposableStack;
   readonly #imagery = new Map<string, ImageryEntry>();
+  readonly #overlays = new Map<string, OverlayEntry>();
+  // 被替换的图层的实体：留到新的画好再移除，重建期间不空白（ADR 0080 第 1 节）
+  #retiring: Entity[] = [];
   #flying = false;
   // 相机在动时不算画面稳定；相机、影像变了以后重新等一次
   #moving = false;
   #settled = false;
 
-  constructor(container: HTMLElement) {
+  /** preserveDrawingBuffer 只给浏览器测试读画布的像素用 */
+  constructor(container: HTMLElement, { preserveDrawingBuffer = false }: { preserveDrawingBuffer?: boolean } = {}) {
     using stack = new DisposableStack();
     let widget: CesiumWidget;
     try {
       widget = new CesiumWidget(container, {
+        contextOptions: { webgl: { preserveDrawingBuffer } },
         // 不请求 Cesium ion 的全球影像；底图由样式镜像（ADR 0079 第 7 节）
         baseLayer: false,
         // 星空要额外的贴图，天空的大气效果是着色器画的，保留
@@ -134,7 +216,12 @@ export class CesiumScene implements SceneLike {
 
     stack.defer(camera.changed.addEventListener(() => this.#onCameraChange()));
     stack.defer(camera.moveEnd.addEventListener(() => this.#onCameraIdle()));
-    stack.defer(scene.postRender.addEventListener(() => this.#checkSettled()));
+    stack.defer(
+      scene.postRender.addEventListener(() => {
+        this.#removeRetired();
+        this.#checkSettled();
+      })
+    );
     stack.defer(scene.renderError.addEventListener((_scene, error: unknown) => this.#emitter.emit('failure', error)));
     if (canvas.tabIndex < 0) {
       canvas.tabIndex = 0;
@@ -259,6 +346,28 @@ export class CesiumScene implements SceneLike {
     this.#widget.scene.requestRender();
   }
 
+  panBetween(from: ClientPoint, to: ClientPoint): void {
+    const { camera, canvas, scene } = this.#widget;
+    const box = canvas.getBoundingClientRect();
+    const target = new Cartesian2(to.x - box.left, to.y - box.top);
+    const start = camera.pickEllipsoid(new Cartesian2(from.x - box.left, from.y - box.top), Ellipsoid.WGS84);
+    let end = camera.pickEllipsoid(target, Ellipsoid.WGS84);
+    if (!start || !end) {
+      return;
+    }
+    // 绕地心转动相机：Camera.rotate 按右手定则转过 -angle，轴取 start × end 时，转后 to 下面是原来 from 下面的点。
+    // 椭球不是球，第一次转完有米级的偏差，再按 to 下面的新点修正一次
+    for (let step = 0; step < PAN_STEPS && end; step++) {
+      const axis = Cartesian3.cross(start, end, new Cartesian3());
+      if (Cartesian3.magnitude(axis) < MIN_PAN_AXIS) {
+        break;
+      }
+      camera.rotate(Cartesian3.normalize(axis, axis), Cartesian3.angleBetween(start, end));
+      end = camera.pickEllipsoid(target, Ellipsoid.WGS84);
+    }
+    scene.requestRender();
+  }
+
   pick({ x, y }: ScreenPoint): PickResult {
     const { scene, camera } = this.#widget;
     const position = new Cartesian2(x, y);
@@ -287,6 +396,10 @@ export class CesiumScene implements SceneLike {
     }
     const onScreen = SceneTransforms.worldToWindowCoordinates(scene, world);
     return onScreen ? { x: onScreen.x, y: onScreen.y } : null;
+  }
+
+  eyeHeight(): number {
+    return this.#widget.camera.positionCartographic.height;
   }
 
   size(): { width: number; height: number } {
@@ -320,6 +433,37 @@ export class CesiumScene implements SceneLike {
 
   setBaseColor(color: string | null): void {
     this.#widget.scene.globe.baseColor = Color.fromCssColorString(color ?? DEFAULT_BASE_COLOR);
+    this.#widget.scene.requestRender();
+  }
+
+  setOverlays(layers: readonly OverlayLayer[]): void {
+    const { entities } = this.#widget;
+    const ids = new Set(layers.map(({ id }) => id));
+    entities.suspendEvents();
+    try {
+      for (const [id, entry] of this.#overlays) {
+        if (!ids.has(id)) {
+          this.#removeOverlay(id, entry);
+        }
+      }
+      for (const layer of layers) {
+        const entry = this.#overlays.get(layer.id);
+        if (entry?.layer === layer) {
+          continue;
+        }
+        if (entry && this.#moveOverlay(entry, layer)) {
+          continue;
+        }
+        if (entry) {
+          this.#retiring.push(...entry.items.map(({ entity }) => entity));
+          this.#overlays.delete(layer.id);
+        }
+        this.#overlays.set(layer.id, { layer, items: layer.shapes.map(shape => this.#addShape(shape, layer.order)) });
+      }
+    } finally {
+      entities.resumeEvents();
+    }
+    this.#settled = false;
     this.#widget.scene.requestRender();
   }
 
@@ -417,8 +561,23 @@ export class CesiumScene implements SceneLike {
     this.#widget.scene.requestRender();
   }
 
+  // 所有实体都画好了才移除被替换的：在那之前新旧都在，半透明的线短暂地叠深一些
+  #removeRetired(): void {
+    if (this.#retiring.length === 0 || !this.#widget.dataSourceDisplay.ready) {
+      return;
+    }
+    for (const entity of this.#retiring) {
+      this.#widget.entities.remove(entity);
+    }
+    this.#retiring = [];
+    this.#widget.scene.requestRender();
+  }
+
+  // 相机停下、影像瓦片和覆盖物都画好了才算稳定
   #checkSettled(): void {
-    if (!this.#settled && !this.#moving && this.#widget.scene.globe.tilesLoaded) {
+    const { scene, dataSourceDisplay } = this.#widget;
+    const drawn = scene.globe.tilesLoaded && dataSourceDisplay.ready && this.#retiring.length === 0;
+    if (!this.#settled && !this.#moving && drawn) {
       this.#settled = true;
       this.#emitter.emit('settle');
     }
@@ -452,6 +611,92 @@ export class CesiumScene implements SceneLike {
     for (const [id, entry] of this.#imagery) {
       this.#removeEntry(id, entry);
     }
+  }
+
+  // 贴地的线和面按样式里的顺序叠放；点不被地球遮挡（ADR 0080 第 1 节）
+  #addShape(shape: OverlayShape, order: number): OverlayItem {
+    const { entities } = this.#widget;
+    if (shape.kind === 'line') {
+      const color = colorOf(shape.color);
+      const geometry = positionsOf(shape.path);
+      const material = shape.dash
+        ? new PolylineDashMaterialProperty({ color, dashLength: shape.dash.length, dashPattern: shape.dash.pattern })
+        : new ColorMaterialProperty(color);
+      const entity = entities.add({
+        polyline: { positions: geometry, width: shape.width, material, clampToGround: true, zIndex: order }
+      });
+      return { entity, geometry, live: false };
+    }
+    if (shape.kind === 'polygon') {
+      const geometry = hierarchyOf(shape.rings);
+      const entity = entities.add({
+        polygon: {
+          hierarchy: geometry,
+          material: colorOf(shape.color),
+          classificationType: ClassificationType.TERRAIN,
+          zIndex: order
+        }
+      });
+      return { entity, geometry, live: false };
+    }
+    const [position] = positionsOf([shape.position]);
+    const entity = entities.add({
+      position,
+      point: {
+        pixelSize: shape.radius * 2,
+        color: colorOf(shape.color),
+        outlineColor: colorOf(shape.strokeColor),
+        outlineWidth: shape.strokeWidth,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY
+      }
+    });
+    return { entity, geometry: position ? [position] : [], live: false };
+  }
+
+  // 样式和形状个数都没变：只换坐标。第一次换时改成每帧读取，之后的变化不再重建几何
+  #moveOverlay(entry: OverlayEntry, layer: OverlayLayer): boolean {
+    const { shapes } = layer;
+    const previous = entry.layer.shapes;
+    const restyled = shapes.some((shape, index) => !sameStyle(shape, previous[index] ?? shape));
+    if (shapes.length !== previous.length || restyled) {
+      return false;
+    }
+    for (const [index, shape] of shapes.entries()) {
+      const item = entry.items[index];
+      if (item) {
+        this.#moveShape(item, shape);
+      }
+    }
+    entry.layer = layer;
+    return true;
+  }
+
+  #moveShape(item: OverlayItem, shape: OverlayShape): void {
+    const { entity } = item;
+    if (shape.kind === 'point') {
+      // 点的位置本来就是每帧更新的，直接换
+      entity.position = new ConstantPositionProperty(positionsOf([shape.position])[0]);
+      return;
+    }
+    item.geometry = shape.kind === 'line' ? positionsOf(shape.path) : hierarchyOf(shape.rings);
+    if (item.live) {
+      return;
+    }
+    item.live = true;
+    const read = new CallbackProperty(() => item.geometry, false);
+    if (entity.polyline) {
+      entity.polyline.positions = read;
+    }
+    if (entity.polygon) {
+      entity.polygon.hierarchy = read;
+    }
+  }
+
+  #removeOverlay(id: string, entry: OverlayEntry): void {
+    for (const { entity } of entry.items) {
+      this.#widget.entities.remove(entity);
+    }
+    this.#overlays.delete(id);
   }
 }
 

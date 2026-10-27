@@ -1,31 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import type { PanModifier } from '../tool/tool-model';
-import type { MapPointerEvent } from '../view/view-input';
-import { ModifierPan } from './modifier-pan';
+import { type ClientPoint, ModifierPan, type ModifierPanOptions } from './modifier-pan';
+import type { MapPointerEvent } from './view-input';
 
 // 画布在画布容器里，挂到文档上：指针事件冒泡到文档，和真实页面一样
-function setup(initial: PanModifier | null = 'ctrl') {
+function setup(initial: PanModifier | null = 'ctrl', downEvents?: ModifierPanOptions['downEvents']) {
   const container = document.createElement('div');
   const canvas = document.createElement('canvas');
   container.append(canvas);
   document.body.append(container);
-  // MapLibre 在画布容器的冒泡阶段收到按下
+  // 引擎在画布容器的冒泡阶段收到按下：MapLibre 用 mousedown，Cesium 用 pointerdown
   const engineDowns: MouseEvent[] = [];
   container.addEventListener('mousedown', event => engineDowns.push(event));
-  const pans: unknown[][] = [];
+  container.addEventListener('pointerdown', event => engineDowns.push(event));
+  const pans: (readonly [ClientPoint, ClientPoint])[] = [];
   const errors: unknown[] = [];
   let modifier = initial;
   let cursorChanges = 0;
   let panFailure: Error | null = null;
   const pan = new ModifierPan({
-    map: {
-      getCanvasContainer: () => container,
-      panBy: (...args) => {
-        if (panFailure !== null) {
-          throw panFailure;
-        }
-        pans.push(args);
+    container,
+    ...(downEvents ? { downEvents } : {}),
+    pan: (from, to) => {
+      if (panFailure !== null) {
+        throw panFailure;
       }
+      pans.push([from, to]);
     },
     modifier: () => modifier,
     onCursorChange: () => cursorChanges++,
@@ -95,10 +95,16 @@ describe('ModifierPan', () => {
     // MapLibre 收不到这次按下：不旋转、不俯仰
     expect(ctx.engineDowns).toStrictEqual([]);
     expect(moved.defaultPrevented).toBe(true);
-    // 地图内容跟着指针走，视野反向移动；没有位移时不平移
+    // 每次移动给出上一个和这一个指针位置；没有位移时不平移
     expect(ctx.pans).toStrictEqual([
-      [[-10, 5], { animate: false }, { cause: 'user' }],
-      [[-20, 0], { animate: false }, { cause: 'user' }]
+      [
+        { x: 100, y: 100 },
+        { x: 110, y: 95 }
+      ],
+      [
+        { x: 110, y: 95 },
+        { x: 130, y: 95 }
+      ]
     ]);
   });
 
@@ -118,6 +124,28 @@ describe('ModifierPan', () => {
     expect(ctx.pans).toStrictEqual([]);
   });
 
+  it('takes over both events of the same press when pointerdown is among the down events, as Cesium needs', () => {
+    using ctx = setup('ctrl', ['pointerdown', 'mousedown']);
+    const pointerDown = (init: MouseEventInit = {}) =>
+      ctx.canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, ...init }));
+
+    pointerDown({ ctrlKey: true, clientX: 0, clientY: 0 });
+    press(ctx.canvas, { ctrlKey: true, clientX: 0, clientY: 0 });
+    move(ctx.canvas, 4, 3, { ctrlKey: true });
+    release(ctx.canvas);
+    // 不按修饰键的按下照常交给引擎，两种事件都到
+    pointerDown();
+    press(ctx.canvas);
+
+    expect(ctx.engineDowns.map(({ type }) => type)).toStrictEqual(['pointerdown', 'mousedown']);
+    expect(ctx.pans).toStrictEqual([
+      [
+        { x: 0, y: 0 },
+        { x: 4, y: 3 }
+      ]
+    ]);
+  });
+
   it('uses ⌘ when the modifier is meta', () => {
     using ctx = setup('meta');
 
@@ -127,7 +155,12 @@ describe('ModifierPan', () => {
     move(ctx.canvas, 5, 5, { metaKey: true });
 
     expect(ctx.engineDowns).toHaveLength(1);
-    expect(ctx.pans).toStrictEqual([[[-5, -5], { animate: false }, { cause: 'user' }]]);
+    expect(ctx.pans).toStrictEqual([
+      [
+        { x: 0, y: 0 },
+        { x: 5, y: 5 }
+      ]
+    ]);
   });
 
   it('ends the pan when the button was released outside the window, the modifier is withdrawn, on cancel and on blur', () => {

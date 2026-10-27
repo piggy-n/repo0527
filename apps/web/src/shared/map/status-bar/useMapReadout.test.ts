@@ -25,9 +25,13 @@ function fakeViewport(camera: { readonly value: CameraState }) {
       };
     },
     project: () => ({ x: 500, y: 300 }),
-    queryRendered: () => []
+    queryRendered: () => [],
+    eyeHeight: () => null
   };
-  return { viewport, projection, picks };
+  // 三维视图：同样的拾取，另外有视点高度（ADR 0080 第 6 节）
+  const eye = { height: 420_000 };
+  const sceneViewport: MapViewport = { ...viewport, kind: '3d', eyeHeight: () => eye.height };
+  return { viewport, sceneViewport, eye, projection, picks };
 }
 
 function setup() {
@@ -62,6 +66,21 @@ describe('useMapReadout', () => {
     expect(ctx.readout.scale.value).toBeNull();
     expect(ctx.readout.position.value).toBeNull();
     expect(ctx.readout.angles.value).toStrictEqual({ bearing: -15, pitch: 30 });
+  });
+
+  it('三维没有比例尺，显示视点高度：相机变化时重新读取；二维、视图不在就绪时为 null', () => {
+    using ctx = setup();
+    expect(ctx.readout.eye.value).toBeNull();
+    ctx.view.value = ctx.viewport;
+    expect(ctx.readout.eye.value).toBeNull();
+
+    ctx.view.value = ctx.sceneViewport;
+    expect(ctx.readout.scale.value).toBeNull();
+    expect(ctx.readout.eye.value).toBe(420_000);
+    ctx.eye.height = 2400;
+    ctx.camera.value = { ...ctx.camera.value, zoom: 14 };
+    expect(ctx.readout.eye.value).toBe(2400);
+    expect(lngLatOf(ctx.readout.position.value)).toStrictEqual(['118.80', '32.00']);
   });
 
   it('比例尺：在相机中心投影到的水平线上取相距 100 像素的两点，按椭球面算距离', () => {

@@ -11,6 +11,7 @@ import {
   type MapSession,
   type MapView,
   type MapViewFailure,
+  ModifierPan,
   NO_SOURCE_ERRORS,
   type PickResult,
   type RenderedFeature,
@@ -22,8 +23,10 @@ import {
   type ViewState
 } from '@yzt/map-core';
 import { safeReporter } from '@yzt/utils';
+import type { GeoJSON } from 'geojson';
 import { createNanoEvents } from 'nanoevents';
 import { fitBoundsCamera, paddedCenter } from './camera-fit';
+import { isGeoJson, type OverlaySpec, planOverlays } from './overlay-plan';
 import { type CreateScene, type SceneLike, type ScenePose, WebGLUnavailableError } from './scene-like';
 import { planSceneStyle, type UnsupportedLayer } from './scene-style';
 
@@ -38,6 +41,23 @@ export interface CesiumViewOptions<G extends string> {
   readonly onUnsupported?: (layer: UnsupportedLayer) => void;
   /** 创建场景：真实的是 createCesiumScene，测试时换成假场景 */
   readonly createScene: CreateScene;
+  /** 下载数据源地址上的 GeoJSON（ADR 0080 第 1 节）；默认用 fetch，测试时换掉 */
+  readonly loadGeoJson?: (url: string, signal: AbortSignal) => Promise<unknown>;
+}
+
+// 地址上的数据：每个地址下载一次
+type RemoteData =
+  | { readonly state: 'loading' }
+  | { readonly state: 'ready'; readonly data: GeoJSON }
+  | { readonly state: 'failed' };
+
+async function fetchGeoJson(url: string, signal: AbortSignal): Promise<unknown> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) {
+    throw new Error(`下载 ${url} 失败：${response.status}`);
+  }
+  const data: unknown = await response.json();
+  return data;
 }
 
 interface CesiumViewEvents {
@@ -65,6 +85,8 @@ export class CesiumView<const G extends string> implements MapView {
   readonly kind = '3d';
   readonly #session: MapSession<G>;
   readonly #scene: SceneLike | undefined;
+  // 按住修饰键临时拖动（ADR 0080 第 4 节）；场景没创建出来时没有
+  readonly #pan: ModifierPan | undefined;
   readonly #onError: (error: unknown) => void;
   readonly #onUnsupported: (layer: UnsupportedLayer) => void;
   readonly #emitter = createNanoEvents<CesiumViewEvents>();
@@ -80,6 +102,12 @@ export class CesiumView<const G extends string> implements MapView {
   #styleStale = false;
   #saved: SavedPose | null = null;
   readonly #reported = new Set<string>();
+  // 覆盖物：样式里的图层、按哪一级推导的、地址上的数据（ADR 0080 第 1 节）
+  #overlays: readonly OverlaySpec[] = [];
+  #overlayLevel: number | null = null;
+  readonly #remote = new Map<string, RemoteData>();
+  readonly #loadGeoJson: (url: string, signal: AbortSignal) => Promise<unknown>;
+  readonly #downloads = new AbortController();
   // 交给工具的视图能力：只有拾取、投影和渲染要素查询（ADR 0034 第 2 条、ADR 0047 第 4 节）
   readonly #toolView: ToolView = Object.freeze({
     kind: '3d',
@@ -94,13 +122,16 @@ export class CesiumView<const G extends string> implements MapView {
     active = true,
     onError = reportToConsole,
     onUnsupported = () => undefined,
-    createScene
+    createScene,
+    loadGeoJson = fetchGeoJson
   }: CesiumViewOptions<G>) {
     this.#session = session;
     this.#onError = safeReporter(onError, 'CesiumView');
     this.#onUnsupported = safeReporter(onUnsupported, 'CesiumView');
+    this.#loadGeoJson = loadGeoJson;
     using stack = new DisposableStack();
     stack.defer(() => this.#ready.reject(new DOMException('CesiumView 已释放', 'AbortError')));
+    stack.defer(() => this.#downloads.abort(new DOMException('CesiumView 已释放', 'AbortError')));
 
     let scene: SceneLike;
     try {
@@ -108,12 +139,33 @@ export class CesiumView<const G extends string> implements MapView {
     } catch (error) {
       // 例如不支持 WebGL：不抛出，交给 whenReady 和 statechange 表达
       this.#scene = undefined;
+      this.#pan = undefined;
       this.#stack = stack.move();
       this.#fail(error);
       return;
     }
     this.#scene = scene;
     stack.use(scene);
+    this.#pan = stack.use(
+      new ModifierPan({
+        container,
+        // Cesium 的相机控制用指针事件，工具的输入来自鼠标事件：同一次按下的两种事件都截下
+        downEvents: ['pointerdown', 'mousedown'],
+        pan: (from, to) => {
+          // 和用户按下鼠标一样：进行中的定位停下，接下来的移动是用户操作
+          this.#onInteract(scene);
+          scene.panBetween(from, to);
+        },
+        modifier: () => (this.#state === 'ready' ? (this.#session.tool.activeTool.panModifier ?? null) : null),
+        // 没有就绪时不应用光标，进入 ready 时按当前工具应用
+        onCursorChange: () => {
+          if (this.#state === 'ready') {
+            this.#applyCursor(scene);
+          }
+        },
+        guard: callback => this.#guard(callback)
+      })
+    );
     for (const unsubscribe of [
       scene.on('interact', () => this.#guard(() => this.#onInteract(scene))),
       scene.on('camerachange', () => this.#guard(() => this.#onCameraChange(scene))),
@@ -165,6 +217,7 @@ export class CesiumView<const G extends string> implements MapView {
     if (this.#state !== 'ready' || !scene) {
       return;
     }
+    this.#pan?.cancel();
     if (scene.flying) {
       scene.completeFlight();
       this.#writeCamera(scene, 'program');
@@ -219,6 +272,11 @@ export class CesiumView<const G extends string> implements MapView {
 
   project(lngLat: LngLat, height?: number): ScreenPoint | null {
     return this.#readyScene().project(lngLat, height);
+  }
+
+  /** 视点在椭球面以上的高度，状态栏显示（ADR 0080 第 6 节） */
+  eyeHeight(): number {
+    return this.#readyScene().eyeHeight();
   }
 
   /** 三维没有渲染要素可查（ADR 0047 第 4 节） */
@@ -304,8 +362,13 @@ export class CesiumView<const G extends string> implements MapView {
 
   #writeCamera(scene: SceneLike, cause: CameraCause): void {
     const camera = scene.readCamera();
-    if (camera) {
-      this.#session.camera.set(camera, { view: '3d', cause });
+    if (!camera) {
+      return;
+    }
+    this.#session.camera.set(camera, { view: '3d', cause });
+    // 覆盖物按整数级别求值，换了一级才重新推导（ADR 0080 第 1 节）
+    if (this.#overlays.length > 0 && Math.round(camera.zoom) !== this.#overlayLevel) {
+      this.#applyOverlays(scene);
     }
   }
 
@@ -323,27 +386,99 @@ export class CesiumView<const G extends string> implements MapView {
     const plan = planSceneStyle(this.#session.style.current);
     scene.setImagery(plan.imagery);
     scene.setBaseColor(plan.baseColor);
+    this.#overlays = plan.overlays;
+    this.#download(plan.overlays);
+    this.#applyOverlays(scene);
     for (const layer of plan.unsupported) {
       if (!this.#reported.has(layer.layerId)) {
         this.#reported.add(layer.layerId);
         this.#onUnsupported(layer);
       }
     }
-    const sources = new Set(plan.imagery.map(({ sourceId }) => sourceId));
+    const sources = new Set([...plan.imagery, ...plan.overlays].map(({ sourceId }) => sourceId));
     const remaining = [...this.#sourceErrors].filter(([sourceId]) => sources.has(sourceId));
     if (remaining.length !== this.#sourceErrors.size) {
       this.#setSourceErrors(remaining.length > 0 ? new Map(remaining) : NO_SOURCE_ERRORS);
     }
   }
 
-  // 只有就绪的视图把输入交给工具：二三维切换时只有当前显示的视图在转交（ADR 0034 第 3 条）
+  #applyOverlays(scene: SceneLike): void {
+    const level = Math.round(this.#session.camera.current.zoom);
+    this.#overlayLevel = level;
+    scene.setOverlays(planOverlays(this.#overlays, spec => this.#overlayData(spec), level));
+  }
+
+  #overlayData({ data }: OverlaySpec): GeoJSON | undefined {
+    if (typeof data !== 'string') {
+      return data;
+    }
+    const remote = this.#remote.get(data);
+    return remote?.state === 'ready' ? remote.data : undefined;
+  }
+
+  // 地址上的数据每个地址下载一次；失败的地址不再被样式引用时忘掉，再次引用时重新下载
+  #download(overlays: readonly OverlaySpec[]): void {
+    const urls = new Set(overlays.flatMap(({ data }) => (typeof data === 'string' ? [data] : [])));
+    for (const [url, remote] of this.#remote) {
+      if (remote.state === 'failed' && !urls.has(url)) {
+        this.#remote.delete(url);
+      }
+    }
+    for (const url of urls) {
+      if (!this.#remote.has(url)) {
+        this.#remote.set(url, { state: 'loading' });
+        void this.#downloadOne(url);
+      }
+    }
+  }
+
+  async #downloadOne(url: string): Promise<void> {
+    const { signal } = this.#downloads;
+    try {
+      const data = await this.#loadGeoJson(url, signal);
+      if (signal.aborted) {
+        return;
+      }
+      if (!isGeoJson(data)) {
+        throw new Error(`${url} 的内容不是 GeoJSON`);
+      }
+      this.#remote.set(url, { state: 'ready', data });
+      this.#onDownloaded();
+    } catch (error) {
+      if (signal.aborted) {
+        return;
+      }
+      this.#remote.set(url, { state: 'failed' });
+      // 引用这个地址的数据源都记一条错误，按二维的数据源 ID（ADR 0041）
+      for (const { sourceId, data } of this.#overlays) {
+        if (data === url) {
+          this.#recordSourceError(sourceId, error);
+        }
+      }
+    }
+  }
+
+  // 数据到了：就绪时立即画，暂停时等恢复
+  #onDownloaded(): void {
+    const scene = this.#scene;
+    if (this.#state === 'ready' && scene) {
+      this.#guard(() => this.#applyOverlays(scene));
+    } else if (this.#state === 'paused') {
+      this.#styleStale = true;
+    }
+  }
+
+  // 只有就绪的视图把输入交给工具：二三维切换时只有当前显示的视图在转交（ADR 0034 第 3 条）；
+  // 临时拖动的松开和派生的单击不交给工具（ADR 0056 第 2 节）
   #onInput(event: MapInputEvent): void {
-    if (this.#state === 'ready') {
+    if (this.#state === 'ready' && (event.type === 'key' || this.#pan?.swallows(event.type) !== true)) {
       this.#session.tool.dispatch(event, this.#toolView);
     }
   }
 
+  // 切换工具时结束临时拖动
   #onToolChange(scene: SceneLike): void {
+    this.#pan?.cancel();
     if (this.#state === 'ready') {
       this.#applyTool(scene);
     }
@@ -351,12 +486,19 @@ export class CesiumView<const G extends string> implements MapView {
 
   // 光标和手势是当前工具的声明（ADR 0079 第 6 节）；临时任务把焦点移到画布上，Esc 才能直接退出
   #applyTool(scene: SceneLike): void {
-    const { gestures, cursor, persistent } = this.#session.tool.activeTool;
-    scene.setCursor(cursor);
+    const { gestures, persistent } = this.#session.tool.activeTool;
+    this.#applyCursor(scene);
     scene.setGestures({ drag: gestures?.dragPan !== false });
     if (!persistent) {
       scene.focus();
     }
+  }
+
+  // 工具声明的光标，按住修饰键、临时拖动时换成手型（ADR 0056 第 2 节）
+  #applyCursor(scene: SceneLike): void {
+    const { cursor } = this.#session.tool.activeTool;
+    const shown = this.#pan?.cursor(cursor) ?? cursor ?? '';
+    scene.setCursor(shown === '' ? undefined : shown);
   }
 
   // 暂停时显示的是另一个视图，不算画面稳定

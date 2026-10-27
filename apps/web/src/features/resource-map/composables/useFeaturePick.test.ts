@@ -1,6 +1,6 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { bbox } from '@turf/bbox';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import type { Point, Polygon, Position } from 'geojson';
 import { HttpResponse, type JsonBodyType, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
@@ -90,6 +90,11 @@ const FAILURE = { success: false, code: 500, data: null, msg: '系统异常' };
 
 function rendered(sourceId: string, id: number): RenderedFeature {
   return { sourceId, layerId: sourceId, properties: { guid: guid(id), name: `要素 ${id}` } };
+}
+
+// 上下文里的就绪视图：工具视图加上视点高度，点选用不到
+function contextView(kind: ViewKind): MapViewport {
+  return { ...toolView([], kind), eyeHeight: () => null };
 }
 
 // 拾取：每像素 0.001 度，画布左上角是 (118, 33)；渲染要素按数据源返回给定的
@@ -186,7 +191,7 @@ function setup(
   const scope = shallowRef(initialScope);
   const select = vi.fn<MapContext['select']>();
   // 视图和指针：跟随提示要视图就绪、指针在画布上
-  const view = shallowRef<MapViewport | null>(toolView([], '2d'));
+  const view = shallowRef<MapViewport | null>(contextView('2d'));
   const mapPointer = shallowRef<ScreenPoint | null>(null);
   const map = { useCamera: () => fake.camera, select, view, pointer: mapPointer, ...fake };
   // 校验结果可以由用例中途改变
@@ -353,16 +358,23 @@ describe('useFeaturePick：识别', () => {
     expect(requests.map(({ layerCode }) => layerCode)).toStrictEqual(['bgdc_czcdyd_2022', 'bgdc_dltb_2022']);
   });
 
-  it('三维没有渲染要素：14 级以上能后端识别的资源仍查后端', async () => {
-    const requests = mockIdentify(layerCode =>
-      layerCode === 'bgdc_dltb_2022' ? page(2, [{ guid: guid(1) }, { guid: guid(2) }]) : page(0, [])
-    );
-    const { owner, send } = setup(16);
+  it('三维期间不识别：单击、框选都不发请求、不通知页面，二维的结果不变（ADR 0080 第 5 节）', async () => {
+    const requests = mockIdentify(() => page(2, [{ guid: guid(1) }, { guid: guid(2) }]));
+    const { owner, send, onIdentifyStart } = setup(16);
+    send(click(), [rendered(DLTB, 1), rendered(DLTB, 2)]);
+    const listed = owner.state.value;
+    onIdentifyStart.mockClear();
 
-    send(click(), [], '3d');
+    expect(send(click(), [], '3d')).toBe(false);
+    send(pointer('down', FROM), [], '3d');
+    send(pointer('move', TO), [], '3d');
+    send(pointer('up', TO), [], '3d');
+    await flushPromises();
 
-    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
-    expect(requests.map(({ layerCode }) => layerCode)).toStrictEqual(['bgdc_czcdyd_2022', 'bgdc_dltb_2022']);
+    expect(owner.state.value).toBe(listed);
+    expect(owner.boxDraft.value).toBeNull();
+    expect(onIdentifyStart).not.toHaveBeenCalled();
+    expect(requests).toStrictEqual([]);
   });
 
   it('点击位置没有要素时为 empty', async () => {
@@ -757,6 +769,20 @@ describe('useFeaturePick：框选', () => {
     expect(owner.hint.value).not.toBeNull();
   });
 
+  it('三维里提示点/框选不可用和怎样拖动地图，单击后照样显示（ADR 0080 第 5 节）', () => {
+    const { owner, pick, send, view, mapPointer } = setup(15);
+    view.value = contextView('3d');
+    mapPointer.value = { x: 50, y: 60 };
+    pick.activate?.();
+
+    send(click(), [], '3d');
+
+    expect(owner.hint.value).toStrictEqual({
+      point: { x: 50, y: 60 },
+      lines: ['三维模式暂不支持点/框选', '切换到二维后使用，按住 Ctrl 拖动地图']
+    });
+  });
+
   it('第一次单击识别后关闭提示，直到下次进入；临时拖动、Esc 不算用过', () => {
     const { owner, pick, send, mapPointer } = setup(15);
     mapPointer.value = { x: 50, y: 60 };
@@ -955,18 +981,6 @@ describe('useFeaturePick：框选', () => {
     ]);
     owner.loadMore();
     await vi.waitFor(() => expect(candidatesOf(owner)).toHaveLength(31));
-  });
-
-  it('三维视图：能后端识别的资源仍查后端', async () => {
-    const requests = mockIdentify(layerCode =>
-      layerCode === 'bgdc_dltb_2022' ? page(2, [{ guid: guid(1) }, { guid: guid(2) }]) : page(0, [])
-    );
-    const { owner, send } = setup(16);
-
-    dragBox(send, [], '3d');
-
-    await vi.waitFor(() => expect(kindOf(owner)).toBe('candidates'));
-    expect(requests.map(({ layerCode }) => layerCode)).toStrictEqual(['bgdc_czcdyd_2022', 'bgdc_dltb_2022']);
   });
 
   it('框选列表时会话选中列表里的全部要素，进入一个的详情时只有它，返回后恢复；单击的列表不算选中', async () => {

@@ -70,3 +70,4 @@ export type {
   ScreenPoint
 } from './view/view-input';
 export { canTransition, type Deferred, deferred, type LiveViewState } from './view/view-lifecycle';
+export { type ClientPoint, ModifierPan, type ModifierPanOptions } from './view/modifier-pan';

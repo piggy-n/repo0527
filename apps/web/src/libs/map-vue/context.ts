@@ -39,12 +39,17 @@ import {
   revealOffset
 } from './overlay';
 
-/** 就绪视图的受限入口：只有拾取、投影和渲染要素查询；移动相机通过相机操作（ADR 0028 第 5 条、ADR 0039 第 4 条、ADR 0047） */
+/**
+ * 就绪视图的受限入口：只有拾取、投影、渲染要素查询和视点高度；移动相机通过相机操作
+ * （ADR 0028 第 5 条、ADR 0039 第 4 条、ADR 0047、ADR 0080 第 6 节）
+ */
 export interface MapViewport {
   readonly kind: ViewKind;
   pick(point: ScreenPoint): PickResult;
   project(lngLat: LngLat, height?: number): ScreenPoint | null;
   queryRendered(area: ScreenPoint | ScreenBox, options: RenderedQueryOptions): readonly RenderedFeature[];
+  /** 视点在椭球面以上的高度，单位米；视图没有这项能力（二维）时为 null（ADR 0080 第 6 节） */
+  eyeHeight(): number | null;
 }
 
 /** 移动相机的能力，只在 run 的回调期间有效，之后调用抛错（ADR 0039 第 3 条） */
@@ -156,7 +161,8 @@ function createViewport(view: MapView): MapViewport {
     kind: view.kind,
     pick: (point: ScreenPoint) => view.pick(point),
     project: (lngLat: LngLat, height?: number) => view.project(lngLat, height),
-    queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => view.queryRendered(area, options)
+    queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => view.queryRendered(area, options),
+    eyeHeight: () => view.eyeHeight?.() ?? null
   });
 }
 

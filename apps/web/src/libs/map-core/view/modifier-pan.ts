@@ -1,17 +1,25 @@
 import type { PanModifier } from '../tool/tool-model';
-import type { MapPointerEvent } from '../view/view-input';
-import type { MapLike } from './map-like';
+import type { MapPointerEvent } from './view-input';
 
 // MouseEvent.buttons 里左键的位
 const LEFT_BUTTON_FLAG = 1;
 
-interface Point {
+/** 客户区坐标（MouseEvent 的 clientX、clientY） */
+export interface ClientPoint {
   readonly x: number;
   readonly y: number;
 }
 
 export interface ModifierPanOptions {
-  readonly map: Pick<MapLike, 'getCanvasContainer' | 'panBy'>;
+  /** 画布的容器：在它的捕获阶段截下按下，先于引擎和画布上的监听 */
+  readonly container: HTMLElement;
+  /**
+   * 截下哪些按下事件，默认只有 mousedown（MapLibre 的手势用鼠标事件）。
+   * 三维要加上 pointerdown：Cesium 的相机控制用指针事件，同一次按下的两种事件都要截下
+   */
+  readonly downEvents?: readonly ('mousedown' | 'pointerdown')[];
+  /** 指针从 from 移到 to：地图内容跟着指针走；from、to 相同时不调用 */
+  readonly pan: (from: ClientPoint, to: ClientPoint) => void;
   /** 现在按哪个键临时拖动：视图就绪、当前工具声明了修饰键时才有 */
   readonly modifier: () => PanModifier | null;
   /** 临时拖动的光标可能变了 */
@@ -20,7 +28,7 @@ export interface ModifierPanOptions {
   readonly guard: (callback: () => void) => void;
 }
 
-/** 按住修饰键临时拖动地图（ADR 0056 第 2 节）：截下这次按下、自己按位移平移，并给出临时的光标 */
+/** 按住修饰键临时拖动地图（ADR 0056 第 2 节、ADR 0080 第 4 节）：截下这次按下、自己平移，并给出临时的光标 */
 export class ModifierPan implements Disposable {
   readonly #options: ModifierPanOptions;
   readonly #listeners = new AbortController();
@@ -30,18 +38,20 @@ export class ModifierPan implements Disposable {
   // 别的左键按下（如框选）还没松开时不显示手型
   #leftDown = false;
   // 正在临时拖动时是上一次指针的位置（客户区坐标）
-  #last: Point | null = null;
+  #last: ClientPoint | null = null;
   // 最近一次按下是临时拖动：它的松开和派生的单击不交给工具，到下一次按下为止
   #swallowing = false;
   #cursor: 'grab' | 'grabbing' | null = null;
 
   constructor(options: ModifierPanOptions) {
     this.#options = options;
-    const container = options.map.getCanvasContainer();
+    const { container, downEvents = ['mousedown'] } = options;
     const document = container.ownerDocument;
     const listening = { capture: true, signal: this.#listeners.signal };
-    // 捕获阶段：先于 MapLibre 在画布容器冒泡阶段的监听，截下的按下它收不到
-    container.addEventListener('mousedown', this.#onMouseDown, listening);
+    // 捕获阶段：先于引擎在画布容器、画布上的监听，截下的按下它收不到
+    for (const type of downEvents) {
+      container.addEventListener(type, this.#onMouseDown, listening);
+    }
     // 指针移出画布后也要继续拖动、知道左键松开
     document.addEventListener('mousemove', this.#onMouseMove, listening);
     document.addEventListener('mouseup', this.#onMouseUp, listening);
@@ -75,11 +85,13 @@ export class ModifierPan implements Disposable {
   #onMouseDown = this.#guarded((event: MouseEvent) => {
     this.#readKeys(event);
     if (this.#last !== null) {
+      // 同一次按下的另一种事件（pointerdown 之后的 mousedown）一并截下
+      event.stopPropagation();
       return;
     }
     const modifier = this.#options.modifier();
     if (event.button === 0 && modifier !== null && this.#held(modifier)) {
-      // MapLibre 的手势和地图事件都收不到：不旋转、不俯仰，工具也不开始框选；不阻止默认行为，画布照常获得焦点
+      // 引擎的手势和地图事件都收不到：不旋转、不俯仰，工具也不开始框选；不阻止默认行为，画布照常获得焦点
       event.stopPropagation();
       this.#swallowing = true;
       this.#last = { x: event.clientX, y: event.clientY };
@@ -100,13 +112,11 @@ export class ModifierPan implements Disposable {
       if (!leftPressed || this.#options.modifier() === null) {
         this.#last = null;
       } else {
-        // 和 MapLibre 的拖动一样，拖动中不选中页面上的文字
+        // 和引擎自己的拖动一样，拖动中不选中页面上的文字
         event.preventDefault();
         this.#last = { x: event.clientX, y: event.clientY };
-        // 地图内容跟着指针走，视野反向移动
-        const offset: [number, number] = [last.x - event.clientX, last.y - event.clientY];
-        if (offset[0] !== 0 || offset[1] !== 0) {
-          this.#options.map.panBy(offset, { animate: false }, { cause: 'user' });
+        if (last.x !== event.clientX || last.y !== event.clientY) {
+          this.#options.pan(last, { x: event.clientX, y: event.clientY });
         }
       }
     }

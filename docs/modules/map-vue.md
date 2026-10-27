@@ -130,6 +130,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 | 内容 | 说明 |
 |---|---|
 | `dimension` | 当前显示的种类（`2d`、`3d`，默认二维）；下面各项都只反映这一种视图（ADR 0079 第 8 节） |
+| `view.value.eyeHeight()` | 就绪视图的视点高度（米），只有三维视图有，二维为 `null`；在相机变化时读取（ADR 0080 第 6 节） |
 | `setDimension(kind)` | 切换二维、三维：旧的当前视图暂停、新的恢复；切换时的业务（如换底图）由页面决定 |
 | `view` | 就绪视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`pick`、`project`、`queryRendered`（ADR 0047）；只在视图为 `ready` 时有值，同一个视图的入口始终是同一个对象（ADR 0039 第 4 条）。移动相机不在这里，通过相机操作 |
 | `viewState` | `idle`（没有视图）、`initializing`、`ready`、`paused`、`failed` |

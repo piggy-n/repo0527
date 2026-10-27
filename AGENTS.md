@@ -232,6 +232,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 会话的选择状态只存要素身份（数据源 + 业务主键），属性、几何、候选列表和详情留在 feature 的查询缓存里，高亮分组从选择和查询结果推导（ADR 0022、0047）
 - 只有 MapLibre 适配器能写二维地图（lint 只允许 `libs/map-core/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；Cesium 镜像会话状态，不实现二维的引擎接口；二三维共用的是生命周期、相机、输入、拾取、投影、渲染要素查询这几个视图接口（ADR 0024、0047；三维的渲染要素查询返回空数组）
 - Cesium 同样只在 `libs/map-cesium` 和 `app` 导入（lint 检查，包括 `cesium/Build/...` 和 `@cesium/*`）；`CesiumView` 只依赖窄接口 `SceneLike`，唯一调用 Cesium 的是 `CesiumScene`，测试注入假场景（ADR 0079）
+- 三维的 GeoJSON 覆盖物由 map-cesium 按样式自动镜像（line、fill、circle，按整级求值、简化到半个像素，ADR 0080），拥有者不为三维另写分组；`symbol`、`fill-pattern` 等清单外的写法三维不画。三维期间点/框选不识别；三维独有的读数（视点高度）用就绪视图的 `eyeHeight()`
 - 二三维切换用上下文的 `map.setDimension(kind)`：页面同时放 `<MapCanvas>` 和 `<CesiumCanvas>`，每种视图一个画布，上下文的 `view` 等只反映当前种类；切换时要做的业务（如 `basemap.selectForDimension`：三维默认影像、二维默认矢量）由页面在同一处调用。三维画布第一次切到三维时才加载，运行时由 app 的 `withMapRuntime` 通过 `MAP_RUNTIME` 注入，不在 `main.ts` 里安装（会把 maplibre-gl 带进入口，ADR 0079 第 2、8 节）
 - 地图页的路由组件用 `app/map-framework.ts` 的 `withMapRuntime` 包装：同时加载默认框架（`defaultMapFramework()`）的运行时和页面，都到了以后设置运行时、预热 Worker 池再返回页面；登录页空闲时 `app/map-preload.ts` 用同一个加载函数预加载，所以地图页分块的模块不在顶层做重的计算（ADR 0061）；交给 MapLibre 的容器元素只用静态 class，可变的 class 放在外层元素上，否则 Vue 会冲掉 MapLibre 自己加的 class
 - 地图页被缓存时（ADR 0063）：`MapCanvas` 在页面停用时暂停视图、激活时恢复，隐藏期间的定位等恢复后再执行；视图恢复时先按容器尺寸调整画布，暂停时进行中的定位动画直接到终点并写回会话；面板内容在页面停用时按隐藏处理（`active` 为 false）

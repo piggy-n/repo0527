@@ -1,6 +1,6 @@
 # map-cesium：三维视图
 
-`libs/map-cesium`（`@yzt/map-cesium`）是二维 MapLibre 适配器的三维对应：一个实现 `MapView` 的 `CesiumView`，镜像会话的样式、同步相机、把画布上的输入交给工具（ADR 0020、0024、0079）。三维阶段的范围与交互见 ADR 0078，分步计划见 [roadmap](../roadmap.md)"三维阶段的范围与取舍"。
+`libs/map-cesium`（`@yzt/map-cesium`）是二维 MapLibre 适配器的三维对应：一个实现 `MapView` 的 `CesiumView`，镜像会话的样式（栅格底图和 GeoJSON 覆盖物）、同步相机、把画布上的输入交给工具（ADR 0020、0024、0079、0080）。三维阶段的范围与交互见 ADR 0078，分步计划见 [roadmap](../roadmap.md)"三维阶段的范围与取舍"。
 
 ## 结构
 
@@ -9,9 +9,10 @@
 | `camera-math.ts` | 缩放级与距离互换、视场角对齐、正俯视与方位的处理 | 否 | node |
 | `camera-fit.ts` | 和二维一样的取景：`fitBoundsCamera`、带留白定位的 `paddedCenter` | 否 | node |
 | `url-template.ts` | 数据源的多个瓦片地址合成带 `{s}` 的模板 | 否 | node |
-| `scene-style.ts` | `planSceneStyle`：样式 → 影像图层、地球底色、不支持的图层 | 否 | node |
+| `scene-style.ts` | `planSceneStyle`：样式 → 影像图层、地球底色、覆盖物图层、不支持的图层 | 否 | node |
+| `overlay-plan.ts` | `planOverlays`：覆盖物图层和数据 → 形状（按整级求值样式、简化到半个像素、遮罩外环收成方框、去掉重复点） | 否 | node |
 | `scene-like.ts` | 窄接口 `SceneLike`、`ScenePose`、`WebGLUnavailableError` | 否 | — |
-| `cesium-view.ts` | `CesiumView`：生命周期、相机同步与精确还原、样式镜像、工具输入、数据源错误 | 否（只依赖 `SceneLike`） | jsdom，注入假场景 |
+| `cesium-view.ts` | `CesiumView`：生命周期、相机同步与精确还原、样式镜像、覆盖物数据的下载、工具输入与临时拖动、数据源错误、视点高度 | 否（只依赖 `SceneLike`） | jsdom，注入假场景 |
 | `cesium-scene.ts` | `CesiumScene`：唯一调用 Cesium 的门面 | 是 | 浏览器，真实 Cesium |
 | `runtime.ts` | `setCesiumBaseUrl` | 是 | 由 app 的测试覆盖 |
 
@@ -73,7 +74,7 @@
 |---|---|---|
 | `background` 图层 | 地球的底色，取常量的 `background-color`；没有时用 `#dfe7f2` | 3D.1 |
 | `raster` 数据源（直接给出 `tiles`、xyz）和 `raster` 图层 | `UrlTemplateImageryProvider` 的影像图层，按样式里的顺序叠放；`raster-opacity` 常量、`visibility`、数据源的 `tileSize`、`minzoom`、`maxzoom` | 3D.1 |
-| `geojson` 与 `line`、`fill`、`circle` | 贴地的线、面、点，表达式用 style-spec 求值 | 3D.2 |
+| `geojson` 与 `line`、`fill`、`circle` | 贴地的线、面，屏幕上固定大小的点；清单见 ADR 0080 第 1 节 | 3D.2 |
 | `vector`（MVT） | 不支持（本阶段，ADR 0078 第 1 节） | — |
 | 其他类型、清单外的属性和写法（TileJSON 地址、`{quadkey}` 等占位符、图层的级别范围、表达式） | 不支持 | — |
 
@@ -81,6 +82,17 @@
 - 天地图 `t0`～`t7` 的 8 个地址合成 `https://t{s}.tianditu.gov.cn/...`，子域名按原来的顺序
 - 不支持的图层通过 `onUnsupported` 报告，每个图层每个视图一次；库里不读环境变量，页面在开发环境下打印
 - 影像瓦片的加载错误按二维的数据源 ID 记在 `sourceErrors`，每个数据源记第一条，数据源移除时忘掉（ADR 0041）
+
+## 覆盖物（ADR 0080）
+
+- 分两步：`planOverlays` 从覆盖物图层、数据和整数级别推导出和 Cesium 无关的形状；`CesiumScene.setOverlays` 按形状增删改 Entity（贴地的线 `clampToGround`、按地表分类贴地的面、不被地球遮挡的点），贴地的线和面按样式里的顺序设 `zIndex`
+- 过滤条件用 style-spec 的 `featureFilter`，样式属性用 `normalizePropertyExpression` 按要素求值；只求三维用到的属性，写错的属性取默认值，不影响其他属性
+- 级别按 `Math.round(zoom)` 取整，换了一级才重新推导；图层、数据、级别和位置都没变时给出上次的结果对象，场景按对象判断哪些图层不用重画
+- 线和面按这一级的半个像素简化（`simplifyTolerance`）：省界 2 万个点的贴地线要几秒才建好，简化后 6 级约 1 千个点
+- 外环横跨整个世界的面（区划遮罩）收成方框（`shrinkWorldRing`），相邻的重复点去掉（`cleanPath`）：这两种情况都会让 Cesium 停止渲染
+- 样式不变、形状个数相同时只改坐标：第一次改时把坐标换成每帧读取的属性，测量画线时不重建；要重建的图层，旧的实体留到新的全部画好（`dataSourceDisplay.ready`）再移除，不会空白
+- 数据源的 `data` 是地址时由 `CesiumView` 下载，按地址缓存；下载或内容不是 GeoJSON 时按数据源 ID 记错误，地址不再被引用时忘掉，再次引用时重新下载；视图释放时取消下载。下载函数由构造参数 `loadGeoJson` 换掉，测试不发网络请求
+- 画面稳定（`settle`）要等影像瓦片和覆盖物都画好
 
 ## 拾取与投影
 
@@ -92,16 +104,21 @@
 
 - 画布上的 `mousedown`、`mousemove`、`mouseup`、`click`、`dblclick`、`mouseleave` 按二维的格式交给会话的工具模型，只在视图就绪时转交；画布获得焦点时的按键同样转交
 - 工具的 `dragPan: false` 关掉左键拖动（`enableRotate`、`enableTranslate`）；光标照工具的声明；临时任务把焦点移到画布上，Esc 才能直接退出
-- 修饰键临时平移（ADR 0056）在 3D.2 实现
+- 按住修饰键临时拖动（ADR 0056 第 2 节、ADR 0080 第 4 节）：和二维共用 map-core 的 `ModifierPan`，规则完全相同。Cesium 的相机控制用指针事件，所以截下同一次按下的 `pointerdown` 和 `mousedown`；平移由 `CesiumScene.panBetween` 绕地心转动相机，按下时抓住的地面点始终在指针下面（转一次再按新的点修正一次，误差不到半个像素）；Cesium 自己的修饰键手势不认 ⌘，Ctrl + 拖动还是倾斜，所以不借用
+
+## 视点高度（ADR 0080 第 6 节）
+
+`CesiumView.eyeHeight()` 是相机在椭球面以上的高度（米），是 `MapView` 的可选能力，二维没有。map-vue 的就绪视图入口 `eyeHeight()` 转给它，状态栏在三维里用它代替比例尺（[shared-map.md](shared-map.md)"状态栏"）。
 
 ## 测试
 
 - 纯函数在 node 下测；`CesiumView` 用假场景测生命周期、三种 `cause`、新的相机操作、精确还原的条件、暂停期间的样式、不支持图层只报告一次、数据源错误、工具输入、手势和焦点、释放
-- `cesium-scene.browser.test.ts` 用真实的 Cesium（Playwright 驱动的 Chromium，软件 WebGL）：相机互逆、拾取、投影、尺寸、影像图层的增删改和错误报告；只用本机的地址，不请求天地图
-- 改坏验证（2026-10-26）：去掉"只有 sync 才能还原"的判断，"二维被用户移动过"的用例断言失败；方位不归零时浏览器测试断言失败
+- `cesium-scene.browser.test.ts` 用真实的 Cesium（Playwright 驱动的 Chromium，软件 WebGL）：相机互逆、拾取、投影、尺寸、影像图层的增删改和错误报告；覆盖物读画布像素检查（遮罩、线、点的颜色和叠放，整个世界的遮罩不让渲染停下，只改坐标，重建期间每一帧都看得到线）；临时拖动后抓住的点在指针下；视点高度。只用本机的地址，不请求天地图；读像素的场景用 `preserveDrawingBuffer` 创建
+- `CesiumView` 的覆盖物：按整级重新推导、没变的图层是同一个对象、地址数据只下载一次、失败记错误并在不再引用后重新下载、释放时取消、暂停期间到的数据恢复后再画；临时拖动截下按下、松开和单击不交给工具、光标是手型
+- 改坏验证（2026-10-26）：去掉"只有 sync 才能还原"的判断，"二维被用户移动过"的用例断言失败；方位不归零时浏览器测试断言失败。3D.2：不收世界外环、只改坐标时不换几何、替换时立即移除旧实体、转动方向反了，浏览器测试都以断言失败；级别不取整、不简化、下载完不重画，单元测试断言失败
 
 ## 还没做的
 
-- GeoJSON 覆盖物的镜像、三维测量、修饰键平移、三维状态栏（3D.2）
-- 3D Tiles 模型、钻地（3D.3），漫游（3D.4）
+- 3D Tiles 模型、钻地（3D.3），漫游（3D.4）；有模型以后是否加 `spatial` 测量
+- 软件 WebGL 下区划遮罩上偶尔有一像素宽的细缝，在有显卡的机器、真实影像下再确认（ADR 0080 后果）
 - Cesium 是否预加载、三维期间二维是否继续保留（3D.5）

@@ -314,12 +314,15 @@ export const CurrentMapPage = defineComponent({
                         layers={resources}
                         symbols={symbols}
                         active={active}
+                        scene={map.dimension.value === '3d'}
                         onEditingChange={value => (legendEditing.value = value)}
                       />
                     ],
-                    'legend-footer': () => !legendEditing.value && symbols.overrides.value.size > 0
-                      ? [<ResourceLegendReset symbols={symbols} />]
-                      : [],
+                    // 三维时图例只有说明，不显示全部恢复默认（ADR 0080 第 5 节）
+                    'legend-footer': () =>
+                      !legendEditing.value && map.dimension.value === '2d' && symbols.overrides.value.size > 0
+                        ? [<ResourceLegendReset symbols={symbols} />]
+                        : [],
                     'region-locate': () => [<RegionLocatePanel region={region} />],
                     'coordinate-locate': ({ active }: PanelSlotProps) => [
                       <CoordinateLocatePanel location={location} active={active} />

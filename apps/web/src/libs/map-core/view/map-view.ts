@@ -69,6 +69,8 @@ export interface MapView extends Disposable {
   project(lngLat: LngLat, height?: number): ScreenPoint | null;
   /** 只在 ready 时可用：屏幕上的点或矩形里画出的要素，从上到下；三维没有渲染要素可查，返回空数组（ADR 0047 第 4 节） */
   queryRendered(area: ScreenPoint | ScreenBox, options: RenderedQueryOptions): readonly RenderedFeature[];
+  /** 只在 ready 时可用：视点（相机）在椭球面以上的高度，单位米；只有三维视图有这项能力（ADR 0080 第 6 节） */
+  eyeHeight?(): number;
   /** 状态或失败原因变化时触发 */
   on(event: 'statechange', callback: (state: ViewState) => void): Unsubscribe;
   /** 画布尺寸变化：相机不变，屏幕上的投影变了，按屏幕位置摆放的浮层要重新投影 */

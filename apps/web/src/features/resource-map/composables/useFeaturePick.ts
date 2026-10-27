@@ -53,7 +53,7 @@ import {
   queryCapabilityOf,
   serverCandidates
 } from '../feature-query';
-import { pickHintLines } from '../pick-hint';
+import { pickHintLines, scenePickHintLines } from '../pick-hint';
 import { type FeatureKey, useFeatureDetailQuery } from '../queries';
 import type { ResourceLayersState } from '../resource-layers';
 import { type BatchHighlight, selectionGroup } from '../selection-style';
@@ -252,6 +252,7 @@ export function useFeaturePick(
   // 按住 Ctrl（Mac 上 ⌘）临时拖动地图，提示里写同一个键（ADR 0056）
   const panKey = currentPanKey();
   const hintLines = pickHintLines(panKey);
+  const sceneHintLines = scenePickHintLines(panKey);
   // 鼠标旁的提示是否打开：进入点/框选时打开，单击或框选识别过一次后关闭，直到下次进入
   const hintOpen = shallowRef(false);
   // 详情到了以后要执行的定位
@@ -622,6 +623,10 @@ export function useFeaturePick(
   );
 
   const handleInput = (event: MapInputEvent, view: ToolView): boolean => {
+    // 三维期间不识别：资源图层不在三维显示，单击和框选什么也不做（ADR 0080 第 5 节）；Esc 照样清除二维的结果
+    if (view.kind === '3d' && event.type !== 'key' && event.type !== 'leave') {
+      return false;
+    }
     switch (event.type) {
       case 'down':
         if (event.button === 0) {
@@ -716,10 +721,11 @@ export function useFeaturePick(
     boxDraft: computed(() => drawingBox(gesture.value)),
     hint: computed(() => {
       const point = map.pointer.value;
-      if (!hintOpen.value || point === null || map.view.value === null || gesture.value.kind === 'drawing') {
+      const view = map.view.value;
+      if (!hintOpen.value || point === null || view === null || gesture.value.kind === 'drawing') {
         return null;
       }
-      return { point, lines: hintLines };
+      return { point, lines: view.kind === '3d' ? sceneHintLines : hintLines };
     }),
     detail,
     tools: { [FEATURE_PICK_TOOL]: pickTool },

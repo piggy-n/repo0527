@@ -40,6 +40,7 @@ function mountLegend() {
   let owner: ResourceLayers | undefined;
   let symbolsOwner: ResourceSymbols | undefined;
   const active = ref(true);
+  const scene = ref(false);
   const editing = ref(false);
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
@@ -54,6 +55,7 @@ function mountLegend() {
           layers={layers}
           symbols={symbols}
           active={active.value}
+          scene={scene.value}
           onEditingChange={value => {
             editing.value = value;
           }}
@@ -66,7 +68,7 @@ function mountLegend() {
   if (!owner || !symbolsOwner) {
     throw new Error('页面没有创建资源图层和符号的拥有者');
   }
-  return { wrapper, owner, symbols: symbolsOwner, active };
+  return { wrapper, owner, symbols: symbolsOwner, active, scene };
 }
 
 function button(wrapper: VueWrapper, label: string) {
@@ -130,6 +132,25 @@ describe('ResourceLegend', () => {
 
     active.value = true;
     await nextTick();
+    expect(wrapper.find('[data-legend-settings="szy_kt"] [data-symbol-editor]').exists()).toBe(true);
+  });
+
+  it('三维时只显示说明、丢弃取色预览；切回二维后编辑目标照旧（ADR 0080 第 5 节）', async () => {
+    const { wrapper, owner, symbols, scene } = mountLegend();
+    owner.setChecked('szy_kt', true);
+    await nextTick();
+    await button(wrapper, '编辑坑塘图例').trigger('click');
+    symbols.previewColor({ code: 'szy_kt' }, 'fillColor', 'rgba(0, 128, 0, 0.8)');
+
+    scene.value = true;
+    await nextTick();
+    expect(wrapper.get('[data-legend-scene-note]').text()).toBe('三维模式暂不显示资源图层，图例在切回二维后可用。');
+    expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
+    expect(symbols.preview.value).toBeNull();
+
+    scene.value = false;
+    await nextTick();
+    expect(wrapper.find('[data-legend-scene-note]').exists()).toBe(false);
     expect(wrapper.find('[data-legend-settings="szy_kt"] [data-symbol-editor]').exists()).toBe(true);
   });
 

@@ -220,6 +220,13 @@ button.summary {
   align-self: flex-end;
 }
 
+// 三维时代替图例的说明（ADR 0080 第 5 节，和三维原型一致）
+.sceneNote {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
 .empty {
   padding: var(--space-xl) 0;
   font-size: var(--font-size-base);

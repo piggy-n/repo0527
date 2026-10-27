@@ -65,7 +65,32 @@ describe('planSceneStyle', () => {
     expect(planSceneStyle(style({}, [])).baseColor).toBeNull();
   });
 
-  it('矢量瓦片、GeoJSON 的图层和清单外的写法列为不支持并说明原因，不进入影像', () => {
+  it('GeoJSON 的 line、fill、circle 图层按样式里的位置进入覆盖物，数据照原样带上（ADR 0080 第 1 节）', () => {
+    const shapes: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+    const sources: Record<string, SourceSpecification> = {
+      base: raster(['https://tiles.cn/{z}/{x}/{y}']),
+      shapes: { type: 'geojson', data: shapes },
+      remote: { type: 'geojson', data: '/city.json' }
+    };
+    const plan = planSceneStyle(
+      style(sources, [
+        { id: 'base', type: 'raster', source: 'base' },
+        { id: 'mask', type: 'fill', source: 'shapes', paint: { 'fill-color': '#f3f5f8' } },
+        { id: 'boundary', type: 'line', source: 'remote' },
+        { id: 'vertex', type: 'circle', source: 'shapes' }
+      ])
+    );
+
+    expect(plan.overlays.map(({ layer, order, sourceId, data }) => [layer.id, order, sourceId, data])).toStrictEqual([
+      ['mask', 1, 'shapes', shapes],
+      ['boundary', 2, 'remote', '/city.json'],
+      ['vertex', 3, 'shapes', shapes]
+    ]);
+    expect(plan.imagery.map(({ id }) => id)).toStrictEqual(['base']);
+    expect(plan.unsupported).toStrictEqual([]);
+  });
+
+  it('矢量瓦片、三维画不出来的覆盖物和清单外的写法列为不支持并说明原因，不进入影像和覆盖物', () => {
     const plan = planSceneStyle(
       style(
         {
@@ -77,7 +102,8 @@ describe('planSceneStyle', () => {
         },
         [
           { id: 'landuse', type: 'fill', source: 'tiles', 'source-layer': 'dltb' },
-          { id: 'boundary', type: 'line', source: 'shapes' },
+          { id: 'label', type: 'symbol', source: 'shapes' },
+          { id: 'hatched', type: 'fill', source: 'shapes', paint: { 'fill-pattern': 'hatch' } },
           { id: 'from-tilejson', type: 'raster', source: 'tilejson' },
           { id: 'by-quadkey', type: 'raster', source: 'quadkey' },
           { id: 'zoomed', type: 'raster', source: 'base', minzoom: 10 },
@@ -88,9 +114,11 @@ describe('planSceneStyle', () => {
     );
 
     expect(plan.imagery).toStrictEqual([]);
+    expect(plan.overlays).toStrictEqual([]);
     expect(plan.unsupported).toStrictEqual([
       { layerId: 'landuse', reason: '矢量瓦片（MVT）本阶段不在三维显示' },
-      { layerId: 'boundary', reason: '三维暂不支持 line 图层' },
+      { layerId: 'label', reason: '三维暂不支持 symbol 图层' },
+      { layerId: 'hatched', reason: '三维不支持 fill-pattern' },
       { layerId: 'from-tilejson', reason: '三维只支持直接给出 tiles 的 xyz 瓦片' },
       { layerId: 'by-quadkey', reason: '瓦片地址里有三维不支持的占位符' },
       { layerId: 'zoomed', reason: '三维不支持图层的级别范围' },

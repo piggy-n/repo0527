@@ -57,7 +57,9 @@ export const ResourceLegend = defineComponent({
     layers: { type: Object as PropType<ResourceLayers>, required: true },
     symbols: { type: Object as PropType<ResourceSymbols>, required: true },
     /** 正在显示；切到别的 Tab、让给另一边时为 false */
-    active: { type: Boolean, default: true }
+    active: { type: Boolean, default: true },
+    /** 当前显示的是三维：只显示说明，和隐藏时一样卸载条目和编辑器，浏览和编辑目标保留（ADR 0080 第 5 节） */
+    scene: { type: Boolean, default: false }
   },
   emits: {
     editingChange: (_editing: boolean) => true
@@ -319,7 +321,13 @@ export const ResourceLegend = defineComponent({
     return () =>
       props.active ? (
         <div ref={element} class={styles.legend} data-resource-legend>
-          {renderBody()}
+          {props.scene ? (
+            <p class={styles.sceneNote} data-legend-scene-note>
+              三维模式暂不显示资源图层，图例在切回二维后可用。
+            </p>
+          ) : (
+            renderBody()
+          )}
         </div>
       ) : null;
   }

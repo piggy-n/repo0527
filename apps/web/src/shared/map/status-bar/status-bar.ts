@@ -18,6 +18,21 @@ export function formatLength(meters: number): string {
   return meters >= 1000 ? `${meters / 1000} km` : `${meters} m`;
 }
 
+/**
+ * 三维的视点高度（ADR 0080 第 6 节）：不到 1 km 写整米，不到 10 km 保留一位小数，再高写整千米；
+ * 按取整后的值分档，不出现"1000 m""10.0 km"
+ */
+export function eyeHeightLabel(meters: number): string {
+  const rounded = Math.max(0, Math.round(meters));
+  if (rounded < 1000) {
+    return `${rounded} m`;
+  }
+  if (meters < 9950) {
+    return `${(meters / 1000).toFixed(1)} km`;
+  }
+  return `${Math.round(meters / 1000)} km`;
+}
+
 /** 取样两点的距离（米）换成比例尺：不超过 80 像素的整齐长度；距离不是正数时为 null */
 export function scaleBar(sampleMeters: number): ScaleBar | null {
   if (!(Number.isFinite(sampleMeters) && sampleMeters > 0)) {
