@@ -1,10 +1,12 @@
 import 'cesium/Build/Cesium/Widgets/CesiumWidget/CesiumWidget.css';
 import type { CameraState } from '@yzt/map-core';
 import type { GeoJSON, Position } from 'geojson';
+import { Cartesian3, Matrix4, Transforms } from 'cesium';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { MAPLIBRE_FOVY, zoomToDistance } from './camera-math';
 import { CesiumScene } from './cesium-scene';
 import { type OverlayLayerSpecification, planOverlays } from './overlay-plan';
+import type { PreparedTileset } from './prepare-tileset';
 import { setCesiumBaseUrl } from './runtime';
 import type { ImageryPlan } from './scene-style';
 
@@ -174,6 +176,107 @@ function planLayers(lineLatitude: number, lineWidth = 8) {
   );
 }
 
+// GLB 的块按 4 字节对齐要补的字节数
+const glbPadding = (length: number) => (4 - (length % 4)) % 4;
+
+// 一个红色、不受光照的立方体（glTF 2.0 的 GLB），边长 2 × half 米
+function boxGlb(half: number): Blob {
+  const h = half;
+  const positions = new Float32Array([
+    // z = -h 的四个角
+    -h, -h, -h, h, -h, -h, h, h, -h, -h, h, -h,
+    // z = h 的四个角
+    -h, -h, h, h, -h, h, h, h, h, -h, h, h
+  ]);
+  const indices = new Uint16Array([
+    0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6, 1, 2, 6, 1, 6, 5, 0, 4, 7, 0, 7, 3
+  ]);
+  const gltf = {
+    asset: { version: '2.0' },
+    extensionsUsed: ['KHR_materials_unlit'],
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ mesh: 0 }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }] }],
+    materials: [
+      {
+        pbrMetallicRoughness: { baseColorFactor: [1, 0, 0, 1], metallicFactor: 0 },
+        extensions: { KHR_materials_unlit: {} }
+      }
+    ],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 8, type: 'VEC3', min: [-h, -h, -h], max: [h, h, h] },
+      { bufferView: 1, componentType: 5123, count: 36, type: 'SCALAR' }
+    ],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: positions.byteLength, target: 34962 },
+      { buffer: 0, byteOffset: positions.byteLength, byteLength: indices.byteLength, target: 34963 }
+    ],
+    buffers: [{ byteLength: positions.byteLength + indices.byteLength }]
+  };
+  // 两个块都要按 4 字节对齐：JSON 补空格，二进制补 0
+  const json = new TextEncoder().encode(JSON.stringify(gltf));
+  const jsonChunk = new Uint8Array(json.length + glbPadding(json.length)).fill(0x20);
+  jsonChunk.set(json);
+  const binLength = positions.byteLength + indices.byteLength;
+  const binChunk = new Uint8Array(binLength + glbPadding(binLength));
+  binChunk.set(new Uint8Array(positions.buffer), 0);
+  binChunk.set(new Uint8Array(indices.buffer), positions.byteLength);
+  const header = new DataView(new ArrayBuffer(12 + 8 + jsonChunk.length + 8 + binChunk.length));
+  header.setUint32(0, 0x46546c67, true);
+  header.setUint32(4, 2, true);
+  header.setUint32(8, header.byteLength, true);
+  header.setUint32(12, jsonChunk.length, true);
+  header.setUint32(16, 0x4e4f534a, true);
+  new Uint8Array(header.buffer).set(jsonChunk, 20);
+  const binStart = 20 + jsonChunk.length;
+  header.setUint32(binStart, binChunk.length, true);
+  header.setUint32(binStart + 4, 0x004e4942, true);
+  new Uint8Array(header.buffer).set(binChunk, binStart + 8);
+  return new Blob([header.buffer], { type: 'model/gltf-binary' });
+}
+
+const MODEL_AT: [number, number] = [120.66, 31.31];
+const objectUrls: string[] = [];
+
+// 只有一个瓦片的瓦片集：立方体放在 MODEL_AT 的地面上；contentUri 不传时用本地生成的立方体
+function boxTileset(contentUri?: string): PreparedTileset {
+  const url = contentUri ?? URL.createObjectURL(boxGlb(40));
+  objectUrls.push(url);
+  const transform = Transforms.eastNorthUpToFixedFrame(Cartesian3.fromDegrees(...MODEL_AT, 0));
+  return {
+    asset: { version: '1.1' },
+    geometricError: 100,
+    root: {
+      transform: Matrix4.toArray(transform),
+      boundingVolume: { sphere: [0, 0, 0, 70] },
+      geometricError: 0,
+      refine: 'ADD',
+      content: { uri: url }
+    }
+  };
+}
+
+afterEach(() => {
+  objectUrls.splice(0).forEach(url => URL.revokeObjectURL(url));
+});
+
+// 下一次触发某个事件；和超时赛跑，结束后退订
+function nextEvent(scene: CesiumScene, event: 'tilesetfailed' | 'tilesetinitial', timeout = 10000) {
+  let unsubscribe: (() => void) | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const fired = new Promise<string>(resolve => {
+    unsubscribe = scene.on(event, (id: string) => resolve(id));
+  });
+  const expired = new Promise<'timeout'>(resolve => {
+    timer = setTimeout(() => resolve('timeout'), timeout);
+  });
+  return Promise.race([fired, expired]).finally(() => {
+    unsubscribe?.();
+    clearTimeout(timer);
+  });
+}
+
 describe('CesiumScene', () => {
   it('相机的写入和读回互逆：中心、缩放级、方位、俯角都还原，正俯视时方位不丢', () => {
     const scene = createScene();
@@ -322,5 +425,59 @@ describe('CesiumScene', () => {
       () => near(colorAt(scene, [119, 31.3]), [0, 0, 255]) && near(colorAt(scene, [119, 32.6]), [255, 0, 0])
     );
     expect(moved).toBe('ok');
+  }, 30000);
+  it('瓦片集建好后加进场景并画出来；给出的相机斜着看、让模型进入画布；首批瓦片到位时报告（ADR 0081）', async () => {
+    const scene = createScene(960, 640, true);
+    scene.jumpTo({ center: [119, 32], zoom: 8, bearing: 0, pitch: 0 });
+    const initial = nextEvent(scene, 'tilesetinitial');
+
+    const options = { show: true, lighting: 'sun' } as const;
+    const camera = await scene.addTileset('box', boxTileset(), options, new AbortController().signal);
+    expect(camera.center[0]).toBeCloseTo(MODEL_AT[0], 3);
+    expect(camera.center[1]).toBeCloseTo(MODEL_AT[1], 3);
+    expect(camera.pitch).toBe(55);
+
+    scene.jumpTo(camera);
+    await expect(initial).resolves.toBe('box');
+    await expect(waitForFrames(() => near(colorAt(scene, MODEL_AT), [255, 0, 0]))).resolves.toBe('ok');
+
+    scene.updateTileset('box', { show: false, lighting: 'sun' });
+    await expect(waitForFrames(() => !near(colorAt(scene, MODEL_AT), [255, 0, 0]))).resolves.toBe('ok');
+    scene.removeTileset('box');
+  }, 30000);
+
+  it('瓦片下载失败时报告；加进来之前中止的以中止的原因结束', async () => {
+    const scene = createScene();
+    scene.jumpTo({ center: MODEL_AT, zoom: 15, bearing: 0, pitch: 0 });
+    const failed = nextEvent(scene, 'tilesetfailed');
+    await scene.addTileset(
+      'missing',
+      boxTileset(`${window.location.origin}/__missing__/box.glb`),
+      { show: true, lighting: 'sun' },
+      new AbortController().signal
+    );
+    await expect(failed).resolves.toBe('missing');
+
+    const controller = new AbortController();
+    const adding = scene.addTileset('late', boxTileset(), { show: true, lighting: 'headlight' }, controller.signal);
+    controller.abort(new DOMException('卸载了', 'AbortError'));
+    await expect(adding).rejects.toThrow('卸载了');
+  }, 30000);
+
+  it('钻地：相机在地下时退出，先飞回地表上方（ADR 0081 第 6 节）', async () => {
+    const scene = createScene();
+    const options = { show: true, lighting: 'headlight' } as const;
+    const camera = await scene.addTileset('box', boxTileset(), options, new AbortController().signal);
+    scene.jumpTo(camera);
+    scene.setUnderground({ tilesetId: 'box', surfaceOpacity: 0.25 });
+    // 把相机放到地下 20 米
+    const below = Cartesian3.fromDegrees(...MODEL_AT, -20);
+    const pose = scene.savePose();
+    scene.restorePose({ ...pose, position: [below.x, below.y, below.z] });
+    expect(scene.eyeHeight()).toBeLessThan(0);
+
+    scene.setUnderground(null);
+
+    await expect(waitForFrames(() => scene.eyeHeight() > 100)).resolves.toBe('ok');
   }, 30000);
 });

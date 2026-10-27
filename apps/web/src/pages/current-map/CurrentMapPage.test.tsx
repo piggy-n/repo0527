@@ -2,6 +2,7 @@ import type { LayerSpecification, SourceSpecification } from '@maplibre/maplibre
 import type { Polygon } from 'geojson';
 import {
   type CameraEventData,
+  type CameraState,
   type GestureHandlerLike,
   geodesicDistance,
   type MapLibreMapOptions,
@@ -9,12 +10,18 @@ import {
   type MapMouseEventLike,
   type MapMouseEventType,
   type MapMoveEventLike,
+  type MapSession,
   type MapSubscription,
+  type MapView,
+  NO_SOURCE_ERRORS,
   type RenderedFeatureLike,
-  type ViewBounds
+  type SceneStatus,
+  type Unsubscribe,
+  type ViewBounds,
+  type ViewState
 } from '@yzt/map-core';
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
-import { MapCanvas } from '@yzt/map-vue';
+import { CesiumCanvas, MapCanvas, type SceneViewOptions } from '@yzt/map-vue';
 import { DOMWrapper, mount } from '@vue/test-utils';
 import { ElSlider } from 'element-plus';
 import { HttpResponse, http as mock } from 'msw';
@@ -28,6 +35,7 @@ import countyFile from '@/shared/map/boundary/data/jiangsu-county.json?raw';
 import { JIANGSU_BOUNDS } from '@/shared/map/jiangsu';
 import { formatCoordinate, formatLngLat } from '@/shared/map/location/coordinate-format';
 import { formatDistance } from '@/shared/map/measure/measure-labels';
+import { required } from '@/shared/testing/required';
 import { CurrentMapPage } from './CurrentMapPage';
 
 interface FakeEvent {
@@ -203,21 +211,85 @@ class FakeMap implements MapLike {
   }
 }
 
+/** 三维视图的替身：恢复即就绪；三维内容的状态由用例报告，记下定位 */
+class FakeSceneView implements MapView {
+  readonly kind = '3d';
+  state: ViewState = 'paused';
+  readonly failure = null;
+  readonly sourceErrors = NO_SOURCE_ERRORS;
+  sceneStatus: SceneStatus = new Map();
+  readonly flyToCalls: Partial<CameraState>[] = [];
+  readonly #states = new Set<(state: ViewState) => void>();
+  readonly #statuses = new Set<(status: SceneStatus) => void>();
+
+  constructor(readonly session: MapSession<string>) {}
+
+  whenReady(): Promise<void> {
+    return Promise.resolve();
+  }
+  pause(): void {
+    this.#set('paused');
+  }
+  resume(): void {
+    this.#set('ready');
+  }
+  flyTo(target: Partial<CameraState>): void {
+    this.flyToCalls.push(target);
+  }
+  fitBounds(): void {}
+  pick() {
+    return { kind: 'miss' } as const;
+  }
+  project() {
+    return null;
+  }
+  queryRendered() {
+    return [];
+  }
+
+  report(status: SceneStatus): void {
+    this.sceneStatus = status;
+    this.#statuses.forEach(listener => listener(status));
+  }
+
+  onSceneStatusChange(callback: (status: SceneStatus) => void): Unsubscribe {
+    this.#statuses.add(callback);
+    return () => this.#statuses.delete(callback);
+  }
+
+  on(event: string, callback: (state: never) => void): Unsubscribe {
+    if (event !== 'statechange') {
+      return () => undefined;
+    }
+    const listener = callback as (state: ViewState) => void;
+    this.#states.add(listener);
+    return () => this.#states.delete(listener);
+  }
+
+  [Symbol.dispose](): void {}
+
+  #set(state: ViewState): void {
+    this.state = state;
+    this.#states.forEach(listener => listener(state));
+  }
+}
+
 interface PageModules {
   readonly page: typeof CurrentMapPage;
   readonly canvas: typeof MapCanvas;
+  readonly sceneCanvas: typeof CesiumCanvas;
 }
 
-const STATIC_MODULES: PageModules = { page: CurrentMapPage, canvas: MapCanvas };
+const STATIC_MODULES: PageModules = { page: CurrentMapPage, canvas: MapCanvas, sceneCanvas: CesiumCanvas };
 
 // 区划边界的加载器是整个应用共用的，同一个文件只解析一次：重新导入页面，边界从没有缓存开始，像第一次打开页面
 async function freshModules(): Promise<PageModules> {
   vi.resetModules();
-  const [{ CurrentMapPage: page }, { MapCanvas: canvas }] = await Promise.all([
+  const [{ CurrentMapPage: page }, { MapCanvas: canvas, CesiumCanvas: sceneCanvas }] = await Promise.all([
     import('./CurrentMapPage'),
     import('@yzt/map-vue')
   ]);
-  return { page, canvas };
+  return { page, canvas, sceneCanvas };
 }
 
 /**
@@ -229,6 +301,7 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
   // keepAlive 时页面放在 KeepAlive 里，pageShown 为 false 时停用（缓存），和布局里一样（ADR 0063）
   const pageShown = ref(true);
   const maps: FakeMap[] = [];
+  const scenes: FakeSceneView[] = [];
   // 记录组件实际更新次数，验证高频输入不会带动整页或整份列表重渲染
   const updates = new Map<string, number>();
   let attempts = 0;
@@ -247,6 +320,17 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
     inheritAttrs: false,
     setup: (_, { attrs }) => () => <RealCanvas {...attrs} key={canvasKey.value} createMap={createMap} />
   });
+  // 三维画布同样换成注入了替身视图的同一个组件，第一次切到三维时才创建
+  const RealSceneCanvas = { ...modules.sceneCanvas, name: 'RealCesiumCanvas' } as typeof CesiumCanvas;
+  const createSceneView = ({ session }: SceneViewOptions) => {
+    const view = new FakeSceneView(session);
+    scenes.push(view);
+    return Promise.resolve(view);
+  };
+  const SceneCanvasWithFakeView = defineComponent({
+    inheritAttrs: false,
+    setup: (_, { attrs }) => () => <RealSceneCanvas {...attrs} createView={createSceneView} />
+  });
   // 每个页面用新的查询缓存，资源目录不在用例之间残留
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // 页面按会话创建偏好的范围；测试里没有登录，范围为 null，不读不写
@@ -257,7 +341,7 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
   const wrapper = mount(root, {
     global: {
       plugins: [createPinia(), [VueQueryPlugin, { queryClient }]],
-      stubs: { MapCanvas: CanvasWithFakeMap },
+      stubs: { MapCanvas: CanvasWithFakeMap, CesiumCanvas: SceneCanvasWithFakeView },
       mixins: [
         {
           updated(this: ComponentPublicInstance) {
@@ -270,7 +354,7 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
       ]
     }
   });
-  return { wrapper, maps, canvasKey, pageShown, updates };
+  return { wrapper, maps, scenes, canvasKey, pageShown, updates };
 }
 
 // 资源树默认返回测试数据（结构同实测）；用例可以换成失败的响应
@@ -487,6 +571,36 @@ async function pointer(wrapper: PageWrapper, type: string, clientX = 0, clientY 
   pin(wrapper).element.dispatchEvent(new MouseEvent(type, { bubbles: true, button: mouseButton, clientX, clientY }));
   await nextTick();
 }
+
+// 三维模型的清单：结构同入库的清单（ADR 0081）
+function mockManifest() {
+  let requests = 0;
+  server.use(
+    mock.get('*/3dt/manifest.json', () => {
+      requests++;
+      return HttpResponse.json({
+        models: [
+          {
+            id: 'sz-station',
+            name: '苏州站地下空间',
+            cityCode: '320500',
+            kind: 'indoor',
+            underground: true,
+            tileset: 'SZ_3DT/tileset.json'
+          }
+        ]
+      });
+    })
+  );
+  return () => requests;
+}
+
+async function switchTo(wrapper: ReturnType<typeof mountPage>['wrapper'], label: '二维' | '三维') {
+  await button(wrapper, label).trigger('click');
+  await settle();
+}
+
+const sceneOf = (page: ReturnType<typeof mountPage>) => required(page.scenes[0], '没有创建三维视图');
 
 describe('CurrentMapPage', () => {
   it('绑定底图、注记和边界，从下到上是底图、注记、省界', () => {
@@ -1519,6 +1633,73 @@ describe('CurrentMapPage', () => {
     );
     await wrapper.get('[data-feature-detail-panel] li button').trigger('click');
     expect(wrapper.get('[data-feature-detail-panel]').text()).toContain('返回列表');
+  });
+
+  describe('三维模型（ADR 0081）', () => {
+    const MODEL_CAMERA: CameraState = { center: [120.666, 31.3175], zoom: 17, bearing: 0, pitch: 55 };
+
+    it('三维时左侧换成三维模型面板、第一次切过去才读清单；两边的收起各自保留', async () => {
+      const requests = mockManifest();
+      const { wrapper } = await readyPage();
+      expect(wrapper.find('[data-resource-layer-panel]').exists()).toBe(true);
+      expect(requests()).toBe(0);
+
+      await switchTo(wrapper, '三维');
+      expect(wrapper.find('[data-resource-layer-panel]').exists()).toBe(false);
+      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
+      expect(requests()).toBe(1);
+
+      await button(wrapper, '收起三维模型').trigger('click');
+      await switchTo(wrapper, '二维');
+      expect(wrapper.find('button[aria-label="收起资源图层"]').exists()).toBe(true);
+      await switchTo(wrapper, '三维');
+      expect(wrapper.find('button[aria-label="展开三维模型"]').exists()).toBe(true);
+      expect(requests()).toBe(1);
+    });
+
+    it('切走的面板缓存起来：回来时搜索词这些界面状态还在', async () => {
+      mockManifest();
+      const { wrapper } = await readyPage();
+      await vi.waitFor(() => expect(wrapper.find('[data-resource="bgdc_dltb"]').exists()).toBe(true));
+      await wrapper.get('input[placeholder="搜索资源"]').setValue('坑塘');
+
+      await switchTo(wrapper, '三维');
+      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
+      await wrapper.get('input[placeholder="搜索模型或所属市"]').setValue('苏州');
+      await switchTo(wrapper, '二维');
+      expect(wrapper.get<HTMLInputElement>('input[placeholder="搜索资源"]').element.value).toBe('坑塘');
+      await switchTo(wrapper, '三维');
+      expect(wrapper.get<HTMLInputElement>('input[placeholder="搜索模型或所属市"]').element.value).toBe('苏州');
+    });
+
+    it('勾选交给三维视图；定位地下的模型时飞过去并进入钻地，切到二维结束钻地', async () => {
+      mockManifest();
+      const page = await readyPage();
+      const { wrapper } = page;
+      await switchTo(wrapper, '三维');
+      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
+
+      await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
+      await settle();
+      const view = sceneOf(page);
+      expect(view.session.scene.current.tilesets.map(({ id, lighting }) => [id, lighting])).toStrictEqual([
+        ['sz-station', 'headlight']
+      ]);
+
+      view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
+      await nextTick();
+      await button(wrapper, '定位').trigger('click');
+      await settle();
+      expect(view.flyToCalls.at(-1)).toMatchObject({ center: MODEL_CAMERA.center, zoom: 17, pitch: 55 });
+      expect(wrapper.get('[data-underground-bar]').text()).toContain('钻地观察 · 苏州站地下空间');
+      expect(view.session.scene.current.underground).toStrictEqual({ tilesetId: 'sz-station', surfaceOpacity: 0.25 });
+
+      await switchTo(wrapper, '二维');
+      expect(view.session.scene.current.underground).toBeNull();
+      await switchTo(wrapper, '三维');
+      expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
+      expect(wrapper.get('[data-loaded="sz-station"]').text()).not.toContain('钻地');
+    });
   });
 
   it('资源目录加载失败：列表显示失败和重试；重试期间显示加载中，成功后显示资源', async () => {

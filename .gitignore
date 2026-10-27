@@ -3,3 +3,6 @@ node_modules/
 dist/
 *.local
 apps/web/public/fonts/
+# 3DT 模型数据不入库，只放行清单（ADR 0081 第 1 节）
+apps/web/public/3dt/*
+!apps/web/public/3dt/manifest.json

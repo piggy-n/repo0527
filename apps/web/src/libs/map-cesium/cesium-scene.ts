@@ -5,6 +5,7 @@ import type {
   MapPointerEvent,
   PickResult,
   ScreenPoint,
+  UndergroundView,
   Unsubscribe
 } from '@yzt/map-core';
 import type { Position } from 'geojson';
@@ -52,13 +53,20 @@ import {
   type SceneGestures,
   type SceneLike,
   type ScenePose,
+  type TilesetOptions,
   WebGLUnavailableError
 } from './scene-like';
 import type { OverlayLayer, OverlayShape, RgbaColor } from './overlay-plan';
+import type { PreparedTileset } from './prepare-tileset';
+import { SceneTilesets } from './scene-tilesets';
+import { footprintOf, SceneUnderground } from './scene-underground';
 import type { ImageryPlan } from './scene-style';
 
 // 没有 background 图层时地球的底色（旧项目的取值）
 const DEFAULT_BASE_COLOR = '#dfe7f2';
+
+// 定位模型时的俯角（距竖直方向），和旧项目的 HeadingPitchRange(0, -35°) 一样
+const TILESET_PITCH = 55;
 
 // 两点几乎重合时不转动：叉积太小，转轴的方向不可靠（单位是米的平方）
 const MIN_PAN_AXIS = 1e-3;
@@ -175,6 +183,10 @@ export class CesiumScene implements SceneLike {
   // 被替换的图层的实体：留到新的画好再移除，重建期间不空白（ADR 0080 第 1 节）
   #retiring: Entity[] = [];
   #flying = false;
+  readonly #tilesets: SceneTilesets;
+  readonly #underground: SceneUnderground;
+  // 钻地的要求；瓦片集加进来之前先记着，加进来再生效
+  #undergroundView: UndergroundView | null = null;
   // 相机在动时不算画面稳定；相机、影像变了以后重新等一次
   #moving = false;
   #settled = false;
@@ -206,6 +218,13 @@ export class CesiumScene implements SceneLike {
     }
     this.#widget = widget;
     stack.defer(() => widget.destroy());
+    this.#tilesets = stack.use(
+      new SceneTilesets(widget, {
+        failed: (id, error) => this.#emitter.emit('tilesetfailed', id, error),
+        initial: id => this.#emitter.emit('tilesetinitial', id)
+      })
+    );
+    this.#underground = stack.use(new SceneUnderground(widget));
     const { scene, camera, canvas } = widget;
     scene.globe.baseColor = Color.fromCssColorString(DEFAULT_BASE_COLOR);
     // 地面大气会给影像蒙上一层颜色，和二维对不上
@@ -467,6 +486,37 @@ export class CesiumScene implements SceneLike {
     this.#widget.scene.requestRender();
   }
 
+  async addTileset(
+    id: string,
+    tileset: PreparedTileset,
+    options: TilesetOptions,
+    signal: AbortSignal
+  ): Promise<CameraState> {
+    const sphere = await this.#tilesets.add(id, tileset, options, signal);
+    if (this.#undergroundView?.tilesetId === id) {
+      this.#applyUnderground();
+    }
+    this.#settled = false;
+    return this.#cameraFor(sphere);
+  }
+
+  updateTileset(id: string, options: TilesetOptions): void {
+    this.#tilesets.update(id, options);
+    this.#settled = false;
+  }
+
+  removeTileset(id: string): void {
+    this.#tilesets.remove(id);
+    if (this.#undergroundView?.tilesetId === id) {
+      this.#applyUnderground();
+    }
+  }
+
+  setUnderground(underground: UndergroundView | null): void {
+    this.#undergroundView = underground;
+    this.#applyUnderground();
+  }
+
   setGestures({ drag }: SceneGestures): void {
     const controller = this.#widget.scene.screenSpaceCameraController;
     controller.enableRotate = drag;
@@ -517,6 +567,27 @@ export class CesiumScene implements SceneLike {
       distance
     );
     return { target: Cartesian3.fromDegrees(lng, lat), offset };
+  }
+
+  // 钻地的观察窗取自瓦片集的包围球；瓦片集不在时不钻地
+  #applyUnderground(): void {
+    const underground = this.#undergroundView;
+    const sphere = underground ? this.#tilesets.boundingSphere(underground.tilesetId) : undefined;
+    this.#underground.set(sphere ? footprintOf(sphere) : null, underground?.surfaceOpacity ?? 1);
+  }
+
+  // 让整个包围球进入画布的相机：竖直方向放下球的直径，和旧项目的 flyToBoundingSphere 一样斜着看
+  #cameraFor(sphere: BoundingSphere): CameraState {
+    const { height } = this.size();
+    const { longitude, latitude } = Cartographic.fromCartesian(sphere.center);
+    const lat = CesiumMath.toDegrees(latitude);
+    const distance = Math.max(1, sphere.radius / Math.sin(MAPLIBRE_FOVY / 2));
+    return {
+      center: [CesiumMath.toDegrees(longitude), lat],
+      zoom: distanceToZoom(distance, lat, Math.max(1, height), MAPLIBRE_FOVY),
+      bearing: 0,
+      pitch: TILESET_PITCH
+    };
   }
 
   #hit(surface: 'model' | 'ellipsoid', world: Cartesian3): PickResult {

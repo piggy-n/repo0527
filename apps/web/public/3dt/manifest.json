@@ -1,0 +1,25 @@
+{
+  "models": [
+    {
+      "id": "sz-station",
+      "name": "苏州站地下空间",
+      "cityCode": "320500",
+      "kind": "indoor",
+      "underground": true,
+      "tileset": "SZ_3DT/tileset.json",
+      "spawn": { "lng": 120.6660669, "lat": 31.317559, "height": -5.1, "heading": 76 }
+    },
+    {
+      "id": "sz-white",
+      "name": "苏州白膜",
+      "cityCode": "320500",
+      "kind": "white",
+      "underground": false,
+      "effects": [
+        { "id": "plain", "label": "无纹理", "tileset": "SZ_WhiteModel/plain/tileset.json" },
+        { "id": "window", "label": "内置效果1", "tileset": "SZ_WhiteModel/window/tileset.json" },
+        { "id": "tech", "label": "内置效果2", "tileset": "SZ_WhiteModel/tech/tileset.json" }
+      ]
+    }
+  ]
+}

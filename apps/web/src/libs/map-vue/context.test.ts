@@ -6,10 +6,12 @@ import {
   type MapView,
   type MapViewFailure,
   MapSession,
+  NO_SCENE_STATUS,
   NO_SOURCE_ERRORS,
   type PickResult,
   type RenderedFeature,
   type ScreenPoint,
+  type SceneStatus,
   type SourceErrors,
   type ToolView,
   type Unsubscribe,
@@ -994,6 +996,57 @@ describe('MapContextState 的定位可视区域', () => {
     expect(() => app.runWithContext(() => useMapOverlay(ref<HTMLElement>(), 'left'))).toThrow(
       'useMapOverlay 只能在组件的 setup 或 effectScope 中调用'
     );
+  });
+});
+
+// 三维视图：另外报告三维内容的状态（ADR 0081 第 2 节）
+class SceneFakeView extends FakeView {
+  sceneStatus: SceneStatus = NO_SCENE_STATUS;
+  readonly #sceneListeners = new Set<(status: SceneStatus) => void>();
+
+  constructor() {
+    super('3d');
+  }
+
+  onSceneStatusChange(callback: (status: SceneStatus) => void): Unsubscribe {
+    this.#sceneListeners.add(callback);
+    return () => this.#sceneListeners.delete(callback);
+  }
+
+  setSceneStatus(status: SceneStatus): void {
+    this.sceneStatus = status;
+    this.#sceneListeners.forEach(listener => listener(status));
+  }
+
+  get sceneListeners(): number {
+    return this.#sceneListeners.size;
+  }
+}
+
+describe('MapContextState 的三维内容状态（ADR 0081 第 2 节）', () => {
+  it('只反映当前三维视图的报告；切回二维时为空，再切回三维时取视图现在的状态；卸下时退订', () => {
+    using env = setup();
+    const flat = new FakeView('2d');
+    const globe = new SceneFakeView();
+    env.state.attachView(flat, CANVAS);
+    env.state.attachView(globe, CANVAS);
+    const loading: SceneStatus = new Map([['station', { state: 'loading' }]]);
+
+    // 二维是当前视图：三维的报告不反映
+    globe.setSceneStatus(loading);
+    expect(env.state.context.sceneStatus.value).toBe(NO_SCENE_STATUS);
+
+    env.state.context.setDimension('3d');
+    expect(env.state.context.sceneStatus.value).toBe(loading);
+    const failed: SceneStatus = new Map([['station', { state: 'failed', error: new Error('404') }]]);
+    globe.setSceneStatus(failed);
+    expect(env.state.context.sceneStatus.value).toBe(failed);
+
+    env.state.context.setDimension('2d');
+    expect(env.state.context.sceneStatus.value).toBe(NO_SCENE_STATUS);
+
+    env.state.detachView(globe);
+    expect(globe.sceneListeners).toBe(0);
   });
 });
 

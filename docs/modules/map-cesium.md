@@ -11,9 +11,12 @@
 | `url-template.ts` | 数据源的多个瓦片地址合成带 `{s}` 的模板 | 否 | node |
 | `scene-style.ts` | `planSceneStyle`：样式 → 影像图层、地球底色、覆盖物图层、不支持的图层 | 否 | node |
 | `overlay-plan.ts` | `planOverlays`：覆盖物图层和数据 → 形状（按整级求值样式、简化到半个像素、遮罩外环收成方框、去掉重复点） | 否 | node |
-| `scene-like.ts` | 窄接口 `SceneLike`、`ScenePose`、`WebGLUnavailableError` | 否 | — |
-| `cesium-view.ts` | `CesiumView`：生命周期、相机同步与精确还原、样式镜像、覆盖物数据的下载、工具输入与临时拖动、数据源错误、视点高度 | 否（只依赖 `SceneLike`） | jsdom，注入假场景 |
+| `prepare-tileset.ts` | `prepareTileset`：瓦片集的索引整理（外部索引并进来、空占位、目录外的引用、循环、几何误差、绝对地址），下载函数注入 | 否 | node |
+| `scene-like.ts` | 窄接口 `SceneLike`、`ScenePose`、`TilesetOptions`、`WebGLUnavailableError` | 否 | — |
+| `cesium-view.ts` | `CesiumView`：生命周期、相机同步与精确还原、样式镜像、覆盖物数据的下载、工具输入与临时拖动、数据源错误、视点高度、三维内容 | 否（只依赖 `SceneLike`） | jsdom，注入假场景 |
 | `cesium-scene.ts` | `CesiumScene`：唯一调用 Cesium 的门面 | 是 | 浏览器，真实 Cesium |
+| `scene-tilesets.ts` | `CesiumScene` 用的瓦片集：Blob 地址创建、参数、头灯光照、首批瓦片与失败的事件 | 是 | 随 `CesiumScene` 的浏览器测试 |
+| `scene-underground.ts` | `CesiumScene` 用的钻地：占地矩形、地表透明、土层与背景、退出时飞回地表上方 | 是 | 随 `CesiumScene` 的浏览器测试 |
 | `runtime.ts` | `setCesiumBaseUrl` | 是 | 由 app 的测试覆盖 |
 
 `CesiumView` 不导入 Cesium，靠构造参数 `createScene` 拿到场景：真实的是 `createCesiumScene`，测试换成假场景。`cesium-view.test.ts` 用 `expectTypeOf<CesiumScene>().toExtend<SceneLike>()` 检查真实的门面满足窄接口，和 MapLibre 适配器的 `MapLike` 一样（ADR 0079 第 3 节）。
@@ -91,7 +94,7 @@
 - 线和面按这一级的半个像素简化（`simplifyTolerance`）：省界 2 万个点的贴地线要几秒才建好，简化后 6 级约 1 千个点
 - 外环横跨整个世界的面（区划遮罩）收成方框（`shrinkWorldRing`），相邻的重复点去掉（`cleanPath`）：这两种情况都会让 Cesium 停止渲染
 - 样式不变、形状个数相同时只改坐标：第一次改时把坐标换成每帧读取的属性，测量画线时不重建；要重建的图层，旧的实体留到新的全部画好（`dataSourceDisplay.ready`）再移除，不会空白
-- 数据源的 `data` 是地址时由 `CesiumView` 下载，按地址缓存；下载或内容不是 GeoJSON 时按数据源 ID 记错误，地址不再被引用时忘掉，再次引用时重新下载；视图释放时取消下载。下载函数由构造参数 `loadGeoJson` 换掉，测试不发网络请求
+- 数据源的 `data` 是地址时由 `CesiumView` 下载，按地址缓存；下载或内容不是 GeoJSON 时按数据源 ID 记错误，地址不再被引用时忘掉，再次引用时重新下载；视图释放时取消下载。下载函数由构造参数 `loadJson` 换掉（瓦片集的索引也用它），测试不发网络请求
 - 画面稳定（`settle`）要等影像瓦片和覆盖物都画好
 
 ## 拾取与投影
@@ -110,15 +113,27 @@
 
 `CesiumView.eyeHeight()` 是相机在椭球面以上的高度（米），是 `MapView` 的可选能力，二维没有。map-vue 的就绪视图入口 `eyeHeight()` 转给它，状态栏在三维里用它代替比例尺（[shared-map.md](shared-map.md)"状态栏"）。
 
+## 三维内容（ADR 0081）
+
+会话的 `scene`（`SceneContentModel`，见 [map-core.md](map-core.md)）是三维独有的内容：瓦片集和钻地。`CesiumView` 镜像它，和样式一样暂停期间只记下"有变化"，恢复时再应用。
+
+- 按瓦片集 ID 比较：新的加载，不要的移除；地址或 `attempt` 变了先移除再重新加载；其余只改显示和光照（`updateTileset`）
+- 加载：`prepareTileset` 整理索引（下载用 `loadJson`）→ `SceneLike.addTileset` 建好并加进场景，返回建议的相机（包围球整个进入画布，俯角 55°）。中止的不报告；索引、建瓦片集、瓦片下载失败都记成 `failed`
+- 状态：`sceneStatus`（按 ID 的 `loading`、`ready` 带相机、`failed` 带错误），变化时发 `scenestatuschange`；`ready` 不等第一个瓦片可见，不在画面里的模型也能定位
+- 同组（白膜的各种效果）：要显示的那个首批瓦片到位（`tilesetinitial`）前，上一次显示的留着，到了再撤下
+- 钻地：`setUnderground` 交给场景，场景按瓦片集的包围球算占地矩形；瓦片集晚于钻地的要求建好时补上
+- 场景的做法沿用旧代码：瓦片集参数（`maximumScreenSpaceError: 16`、加大缓存、移动时不请求等）、头灯的 `CustomShader`；钻地时关掉碰撞、近裁剪面 0.1、地表在占地范围内按距离透明、相机在地下时换背景，退出时相机在地下的先飞回离地 120 米再恢复
+
 ## 测试
 
 - 纯函数在 node 下测；`CesiumView` 用假场景测生命周期、三种 `cause`、新的相机操作、精确还原的条件、暂停期间的样式、不支持图层只报告一次、数据源错误、工具输入、手势和焦点、释放
 - `cesium-scene.browser.test.ts` 用真实的 Cesium（Playwright 驱动的 Chromium，软件 WebGL）：相机互逆、拾取、投影、尺寸、影像图层的增删改和错误报告；覆盖物读画布像素检查（遮罩、线、点的颜色和叠放，整个世界的遮罩不让渲染停下，只改坐标，重建期间每一帧都看得到线）；临时拖动后抓住的点在指针下；视点高度。只用本机的地址，不请求天地图；读像素的场景用 `preserveDrawingBuffer` 创建
 - `CesiumView` 的覆盖物：按整级重新推导、没变的图层是同一个对象、地址数据只下载一次、失败记错误并在不再引用后重新下载、释放时取消、暂停期间到的数据恢复后再画；临时拖动截下按下、松开和单击不交给工具、光标是手型
+- 三维内容：`CesiumView` 用假场景测按 ID 增删、地址和重试次数变了重新加载、状态报告、暂停期间不应用、同组的替换、钻地交给场景、释放时中止加载；浏览器测试在测试里生成一个方块的 glTF 瓦片集，测加进场景并画出来、建议的相机、首批瓦片的报告、瓦片失败和中止、相机在地下时退出钻地
 - 改坏验证（2026-10-26）：去掉"只有 sync 才能还原"的判断，"二维被用户移动过"的用例断言失败；方位不归零时浏览器测试断言失败。3D.2：不收世界外环、只改坐标时不换几何、替换时立即移除旧实体、转动方向反了，浏览器测试都以断言失败；级别不取整、不简化、下载完不重画，单元测试断言失败
 
 ## 还没做的
 
-- 3D Tiles 模型、钻地（3D.3），漫游（3D.4）；有模型以后是否加 `spatial` 测量
+- 漫游（3D.4）；有模型以后是否加 `spatial` 测量
 - 软件 WebGL 下区划遮罩上偶尔有一像素宽的细缝，在有显卡的机器、真实影像下再确认（ADR 0080 后果）
 - Cesium 是否预加载、三维期间二维是否继续保留（3D.5）

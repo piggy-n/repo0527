@@ -1,5 +1,6 @@
 import type { CameraState, ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
+import type { SceneStatus } from '../scene/scene-content-model';
 import type { RenderedFeature, RenderedQueryOptions, ScreenBox } from './rendered-features';
 import type { LngLat, PickResult, ScreenPoint } from './view-input';
 
@@ -71,6 +72,10 @@ export interface MapView extends Disposable {
   queryRendered(area: ScreenPoint | ScreenBox, options: RenderedQueryOptions): readonly RenderedFeature[];
   /** 只在 ready 时可用：视点（相机）在椭球面以上的高度，单位米；只有三维视图有这项能力（ADR 0080 第 6 节） */
   eyeHeight?(): number;
+  /** 三维内容的加载状态（ADR 0081 第 2 节）；只有三维视图有这项能力 */
+  readonly sceneStatus?: SceneStatus;
+  /** 三维内容的状态变化；只有三维视图有这项能力 */
+  onSceneStatusChange?(callback: (status: SceneStatus) => void): Unsubscribe;
   /** 状态或失败原因变化时触发 */
   on(event: 'statechange', callback: (state: ViewState) => void): Unsubscribe;
   /** 画布尺寸变化：相机不变，屏幕上的投影变了，按屏幕位置摆放的浮层要重新投影 */

@@ -5,9 +5,12 @@ import type {
   MapPointerEvent,
   PickResult,
   ScreenPoint,
+  TilesetLighting,
+  UndergroundView,
   Unsubscribe
 } from '@yzt/map-core';
 import type { OverlayLayer } from './overlay-plan';
+import type { PreparedTileset } from './prepare-tileset';
 import type { ImageryPlan } from './scene-style';
 
 /** 离开三维时记下的精确相机（地心坐标系）：视图只保存、原样还原，不解读（ADR 0020 第 5 条） */
@@ -15,6 +18,12 @@ export interface ScenePose {
   readonly position: readonly [number, number, number];
   readonly direction: readonly [number, number, number];
   readonly up: readonly [number, number, number];
+}
+
+/** 瓦片集可以随时改的部分 */
+export interface TilesetOptions {
+  readonly show: boolean;
+  readonly lighting: TilesetLighting;
 }
 
 /** 工具对相机控制的要求：drag 是左键拖动（地球上是旋转），为 false 时关掉 */
@@ -39,6 +48,10 @@ export interface SceneEvents {
   settle: () => void;
   /** 影像图层的瓦片加载失败，按二维的数据源 ID 报告 */
   imageryerror: (sourceId: string, error: unknown) => void;
+  /** 瓦片集的瓦片加载失败（ADR 0081 第 2 节） */
+  tilesetfailed: (id: string, error: unknown) => void;
+  /** 瓦片集显示后，视野里的首批瓦片已到位（不在视野里时第一帧就到） */
+  tilesetinitial: (id: string) => void;
   /** 渲染出错，渲染循环已经停下：引擎失败 */
   failure: (error: unknown) => void;
 }
@@ -81,6 +94,15 @@ export interface SceneLike extends Disposable {
    * 样式和形状个数都没变时只改坐标
    */
   setOverlays(layers: readonly OverlayLayer[]): void;
+  /**
+   * 把整理好的索引交给 Cesium，建好后加进场景（ADR 0081 第 3 节），给出让整个瓦片集进入画布的相机；
+   * signal 中止时销毁建好的瓦片集、以中止的原因结束
+   */
+  addTileset(id: string, tileset: PreparedTileset, options: TilesetOptions, signal: AbortSignal): Promise<CameraState>;
+  updateTileset(id: string, options: TilesetOptions): void;
+  removeTileset(id: string): void;
+  /** 钻地观察（ADR 0081 第 6 节）；瓦片集还没加进来时，等加进来再生效 */
+  setUnderground(underground: UndergroundView | null): void;
   setGestures(gestures: SceneGestures): void;
   setCursor(cursor: string | undefined): void;
   /** 让画布获得焦点，按键才能交给工具 */

@@ -93,11 +93,12 @@ describe('框架', () => {
     expect(runtime).toStrictEqual({ setup: setupMapRuntime, prewarm: prewarmMapRuntime });
   });
 
+  // 第一次导入整个 Cesium：单独跑约 3 秒，全量测试的负载下会超过默认的 5 秒
   it('三维的运行时是 map-runtime-3d 的设置，没有要预热的', async () => {
     const runtime = await loadMapRuntime('3d');
     const { setupSceneRuntime } = await import('./map-runtime-3d');
 
     expect(runtime).toMatchObject({ setup: setupSceneRuntime });
     expect(runtime.prewarm()).toBeUndefined();
-  });
+  }, 20000);
 });

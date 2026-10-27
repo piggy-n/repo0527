@@ -18,12 +18,13 @@
 | `style/style-image.ts` | `StyleImage`：样式图片的类型，格式比较与校验（ADR 0045） |
 | `style/style-model.ts` | `StyleModel`：按分组组合样式，提交时修订号加 1，合并通知 |
 | `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause`；当前这次相机操作的信号（ADR 0038） |
-| `session/map-session.ts` | `MapSession`：组合样式、相机、当前工具与选择状态，统一释放 |
+| `session/map-session.ts` | `MapSession`：组合样式、相机、当前工具、选择状态与三维内容，统一释放 |
+| `scene/scene-content-model.ts` | `SceneContentModel`：三维独有的内容（瓦片集、钻地），整体替换、校验、合并通知；`SceneStatus` 等三维视图报告的类型（ADR 0081） |
 | `selection/selection-model.ts` | `SelectionModel`：选中的要素，只存数据源和业务主键（ADR 0047 第 4 节） |
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`PanModifier`、`ToolView` |
 | `measure/geodesic.ts` | 椭球面上的距离、累计距离、折线总长、多边形面积（geographiclib-geodesic，ADR 0035） |
 | `measure/measure-store.ts` | `MeasureStore`：测量的状态与测距、测面两个工具（ADR 0035） |
-| `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位、拾取、投影、渲染要素查询） |
+| `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位、拾取、投影、渲染要素查询）；三维的可选能力 `eyeHeight`、`sceneStatus` |
 | `view/rendered-features.ts` | 渲染要素查询的类型：`ScreenBox`、`RenderedQueryOptions`、`RenderedFeature`（ADR 0047 第 4 节） |
 | `view/view-input.ts` | 输入、拾取、投影的类型（ADR 0024 第 2、7、8 条） |
 | `maplibre/map-like.ts` | `MapLike`：适配器用到的 MapLibre 方法（窄接口）；连同方法签名用到的类型从入口导出，map-vue 的测试据此实现假地图 |
@@ -119,6 +120,12 @@ session[Symbol.dispose]();
 - 数值都没变时不通知；同步通知，不合并到微任务：相机本来每帧变一次，事件的 `cause` 要对得上触发它的那次调用
 - 不记录变化的次数：三维能否还原离开时的精确视角（ADR 0020 第 5 条），由三维视图在隐藏期间订阅相机事件、看 `cause` 判断（ADR 0039 第 5 条，原来的 `intentRevision` 已删除）
 - 相机操作（ADR 0038）：`beginOperation()` 开始一次新的操作，中止上一次的信号并返回这一次的；`operation` 读当前的信号；释放时中止。内部用 `@yzt/utils` 的 `LatestController`（ADR 0039 第 2 条）；释放时只中止当前的信号、不释放它，释放后 `beginOperation()` 已经由模型自己的检查抛错。用户开始拖动或缩放、用户发起的定位各是一次操作，由适配器和发起定位的拥有者调用；相机的变化本身不开始、也不中止操作。等待中的定位（如区划定位等边界）拿着开始时的信号，中止了就不再定位。5B 之后曾用相机的变化次数判断，相机没变的操作（目标就是当前视角）和动画的每一帧都会判断错
+
+### SceneContentModel（ADR 0081 第 2 节）
+
+- 会话的 `scene`：`{ tilesets, underground }`，和样式模型一样整体替换、每次替换修订号加 1、同一轮事件循环只通知一次；同一个对象不算变化
+- `set` 时校验：瓦片集 ID 不重复、地址是绝对地址（瓦片地址按它解析）、`attempt` 是非负整数、钻地指向已有的瓦片集、地表不透明度在 0～1；不合法时抛错，内容和修订号不变
+- 二维视图不读它；三维视图镜像它，按 ID 的状态通过可选的 `sceneStatus` / `onSceneStatusChange` 报告
 
 ### MapSession
 

@@ -4,8 +4,11 @@ import {
   type MapInputEvent,
   type MapPointerEvent,
   MapSession,
+  type SceneStatus,
   type StyleGroup,
-  type ToolView
+  type TilesetLayer,
+  type ToolView,
+  type UndergroundView
 } from '@yzt/map-core';
 import type { Feature, FeatureCollection, GeoJSON } from 'geojson';
 import { createNanoEvents } from 'nanoevents';
@@ -17,12 +20,22 @@ import {
   type SceneGestures,
   type SceneLike,
   type ScenePose,
+  type TilesetOptions,
   WebGLUnavailableError
 } from './scene-like';
 import type { OverlayLayer } from './overlay-plan';
+import type { PreparedTileset } from './prepare-tileset';
 import type { ImageryPlan } from './scene-style';
 
 const START: CameraState = { center: [119.5, 33], zoom: 6.8, bearing: 0, pitch: 0 };
+
+// 交给场景、还没建好的瓦片集：用例决定什么时候建好或失败
+interface PendingAdd {
+  readonly tileset: PreparedTileset;
+  readonly signal: AbortSignal;
+  readonly resolve: (camera: CameraState) => void;
+  readonly reject: (error: Error) => void;
+}
 
 /** 假场景：相机就是一个值，定位立即生效或停在动画里，事件由用例触发 */
 class FakeScene implements SceneLike {
@@ -34,6 +47,11 @@ class FakeScene implements SceneLike {
   overlays: readonly OverlayLayer[] = [];
   overlayUpdates = 0;
   readonly pans: (readonly [ClientPoint, ClientPoint])[] = [];
+  // 瓦片集：加进来还没建好的、建好的和它们的显示，钻地的要求
+  readonly adding = new Map<string, PendingAdd>();
+  readonly tilesets = new Map<string, TilesetOptions>();
+  readonly removed: string[] = [];
+  underground: UndergroundView | null = null;
   gestures: SceneGestures = { drag: true };
   cursor: string | undefined;
   rendering = true;
@@ -86,6 +104,37 @@ class FakeScene implements SceneLike {
 
   panBetween(from: ClientPoint, to: ClientPoint): void {
     this.pans.push([from, to]);
+  }
+
+  addTileset(id: string, tileset: PreparedTileset, options: TilesetOptions, signal: AbortSignal): Promise<CameraState> {
+    return new Promise((resolve, reject) => {
+      this.adding.set(id, {
+        tileset,
+        signal,
+        resolve: camera => {
+          this.adding.delete(id);
+          this.tilesets.set(id, options);
+          resolve(camera);
+        },
+        reject: error => {
+          this.adding.delete(id);
+          reject(error);
+        }
+      });
+    });
+  }
+
+  updateTileset(id: string, options: TilesetOptions): void {
+    this.tilesets.set(id, options);
+  }
+
+  removeTileset(id: string): void {
+    this.tilesets.delete(id);
+    this.removed.push(id);
+  }
+
+  setUnderground(underground: UndergroundView | null): void {
+    this.underground = underground;
   }
 
   pick() {
@@ -167,16 +216,16 @@ afterEach(() => {
   containers.splice(0).forEach(container => container.remove());
 });
 
-type LoadGeoJson = (url: string, signal: AbortSignal) => Promise<unknown>;
+type LoadJson = (url: string, signal: AbortSignal) => Promise<unknown>;
 
 // 默认的下载函数直接失败：用例不发网络请求
-const noNetwork: LoadGeoJson = url => Promise.reject(new Error(`用例没有准备 ${url}`));
+const noNetwork: LoadJson = url => Promise.reject(new Error(`用例没有准备 ${url}`));
 
 function setup({
   active = true,
   scene = new FakeScene(),
-  loadGeoJson = noNetwork
-}: { active?: boolean; scene?: FakeScene; loadGeoJson?: LoadGeoJson } = {}) {
+  loadJson = noNetwork
+}: { active?: boolean; scene?: FakeScene; loadJson?: LoadJson } = {}) {
   const session = new MapSession({ groups: ['basemap', 'boundaries'], camera: START });
   sessions.push(session);
   session.style.setGroup('basemap', {
@@ -199,7 +248,7 @@ function setup({
     onError,
     onUnsupported,
     createScene: () => scene,
-    loadGeoJson
+    loadJson
   });
   views.push(view);
   const changes: { view: string; cause: string }[] = [];
@@ -576,13 +625,13 @@ function lineWidth(scene: FakeScene): number | undefined {
 function pendingDownload() {
   const calls: { url: string; signal: AbortSignal }[] = [];
   let finish: ((value: unknown) => void) | undefined;
-  const loadGeoJson: LoadGeoJson = (url, signal) => {
+  const loadJson: LoadJson = (url, signal) => {
     calls.push({ url, signal });
     return new Promise(resolve => {
       finish = resolve;
     });
   };
-  return { calls, loadGeoJson, finish: (value: unknown) => finish?.(value) };
+  return { calls, loadJson, finish: (value: unknown) => finish?.(value) };
 }
 
 describe('CesiumView 的覆盖物（ADR 0080 第 1 节）', () => {
@@ -627,7 +676,7 @@ describe('CesiumView 的覆盖物（ADR 0080 第 1 节）', () => {
 
   it('数据源是地址时下载，到了再画；两个数据源引用同一个地址只下载一次，样式再变也不重新下载', async () => {
     const download = pendingDownload();
-    const { session, scene, view } = setup({ loadGeoJson: download.loadGeoJson });
+    const { session, scene, view } = setup({ loadJson: download.loadJson });
     await view.whenReady();
     session.style.setGroup('boundaries', {
       sources: {
@@ -657,11 +706,11 @@ describe('CesiumView 的覆盖物（ADR 0080 第 1 节）', () => {
 
   it('下载失败、内容不是 GeoJSON 时按数据源记错误；不再引用后忘掉，再次引用时重新下载', async () => {
     const failure = new Error('404');
-    const loadGeoJson = vi
-      .fn<LoadGeoJson>()
+    const loadJson = vi
+      .fn<LoadJson>()
       .mockRejectedValueOnce(failure)
       .mockResolvedValueOnce('<!doctype html>');
-    const { session, view } = setup({ loadGeoJson });
+    const { session, view } = setup({ loadJson });
     await view.whenReady();
 
     session.style.setGroup('boundaries', cityLine('/city.json'));
@@ -674,7 +723,7 @@ describe('CesiumView 的覆盖物（ADR 0080 第 1 节）', () => {
 
     session.style.setGroup('boundaries', cityLine('/city.json'));
     await flush();
-    expect(loadGeoJson).toHaveBeenCalledTimes(2);
+    expect(loadJson).toHaveBeenCalledTimes(2);
     const error = view.sourceErrors.get('boundaries-city');
     expect(error).toBeInstanceOf(Error);
     expect(error).toHaveProperty('message', '/city.json 的内容不是 GeoJSON');
@@ -682,7 +731,7 @@ describe('CesiumView 的覆盖物（ADR 0080 第 1 节）', () => {
 
   it('释放时取消下载，晚到的数据不再交给场景', async () => {
     const download = pendingDownload();
-    const { session, scene, view } = setup({ loadGeoJson: download.loadGeoJson });
+    const { session, scene, view } = setup({ loadJson: download.loadJson });
     await view.whenReady();
     session.style.setGroup('boundaries', cityLine('/city.json'));
     await flush();
@@ -698,7 +747,7 @@ describe('CesiumView 的覆盖物（ADR 0080 第 1 节）', () => {
 
   it('暂停期间数据到了，恢复时再画', async () => {
     const download = pendingDownload();
-    const { session, scene, view } = setup({ loadGeoJson: download.loadGeoJson });
+    const { session, scene, view } = setup({ loadJson: download.loadJson });
     await view.whenReady();
     session.style.setGroup('boundaries', cityLine('/city.json'));
     await flush();
@@ -710,5 +759,160 @@ describe('CesiumView 的覆盖物（ADR 0080 第 1 节）', () => {
 
     view.resume();
     expect(scene.overlays.map(({ id }) => id)).toStrictEqual(['boundaries-city']);
+  });
+});
+
+// 瓦片集的索引：只有一个瓦片
+const TILESET_INDEX = {
+  root: { boundingVolume: { sphere: [0, 0, 0, 10] }, geometricError: 0, content: { uri: 'a.b3dm' } }
+};
+const CAMERA_AT_MODEL: CameraState = { center: [120.66, 31.31], zoom: 16, bearing: 0, pitch: 55 };
+
+const tilesetUrl = (id: string) => `https://maps.test/3dt/${id}/tileset.json`;
+
+// 地址以 tileset.json 结尾的给出索引，其余的 404
+const indexLoader: LoadJson = url =>
+  url.endsWith('/tileset.json') && !url.includes('broken')
+    ? Promise.resolve(structuredClone(TILESET_INDEX))
+    : Promise.reject(new Error(`404 ${url}`));
+
+function tilesetLayer(id: string, extra: Partial<TilesetLayer> = {}): TilesetLayer {
+  return { id, url: tilesetUrl(id), show: true, lighting: 'sun', attempt: 0, ...extra };
+}
+
+// 白膜的两种效果，显示其中一种
+const whiteEffects = (shown: string) =>
+  ['plain', 'window'].map(id => tilesetLayer(id, { group: 'white', show: id === shown }));
+
+// 会话的通知、索引的下载、交给场景都要几轮
+async function settle(): Promise<void> {
+  for (let round = 0; round < 4; round++) {
+    // oxlint-disable-next-line no-await-in-loop -- 每一轮要等上一轮的宏任务结束，按轮数推进事件循环
+    await flush();
+  }
+}
+
+function pending(scene: FakeScene, id: string): PendingAdd {
+  const add = scene.adding.get(id);
+  if (!add) {
+    throw new Error(`瓦片集 ${id} 没有交给场景`);
+  }
+  return add;
+}
+
+describe('CesiumView 的三维内容（ADR 0081）', () => {
+  it('按 ID 加载瓦片集：整理好的索引交给场景，建好后报告就绪和定位用的相机', async () => {
+    const { session, scene, view } = setup({ loadJson: indexLoader });
+    await view.whenReady();
+    const reports: SceneStatus[] = [];
+    view.onSceneStatusChange(status => reports.push(status));
+
+    session.scene.set({ tilesets: [tilesetLayer('station', { lighting: 'headlight' })], underground: null });
+    await settle();
+    expect(view.sceneStatus.get('station')).toStrictEqual({ state: 'loading' });
+    expect(pending(scene, 'station').tileset.root.content?.uri).toBe('https://maps.test/3dt/station/a.b3dm');
+
+    pending(scene, 'station').resolve(CAMERA_AT_MODEL);
+    await flush();
+
+    expect(view.sceneStatus.get('station')).toStrictEqual({ state: 'ready', camera: CAMERA_AT_MODEL });
+    expect(scene.tilesets.get('station')).toStrictEqual({ show: true, lighting: 'headlight' });
+    expect(reports.map(status => status.get('station')?.state)).toStrictEqual(['loading', 'ready']);
+  });
+
+  it('去掉的从场景移除、进行中的加载中止；只改显示不重新加载；地址或重试次数变了重新加载', async () => {
+    const { session, scene, view } = setup({ loadJson: indexLoader });
+    await view.whenReady();
+    session.scene.set({ tilesets: [tilesetLayer('a'), tilesetLayer('b')], underground: null });
+    await settle();
+    pending(scene, 'a').resolve(CAMERA_AT_MODEL);
+    const loadingB = pending(scene, 'b').signal;
+
+    session.scene.set({ tilesets: [tilesetLayer('a', { show: false })], underground: null });
+    await settle();
+    expect(loadingB.aborted).toBe(true);
+    expect(scene.tilesets.get('a')).toStrictEqual({ show: false, lighting: 'sun' });
+    expect([...view.sceneStatus.keys()]).toStrictEqual(['a']);
+    expect(scene.removed).toStrictEqual([]);
+
+    session.scene.set({ tilesets: [tilesetLayer('a', { show: false, attempt: 1 })], underground: null });
+    await settle();
+    expect(scene.removed).toStrictEqual(['a']);
+    expect(view.sceneStatus.get('a')).toStrictEqual({ state: 'loading' });
+    expect(scene.adding.has('a')).toBe(true);
+  });
+
+  it('索引下载失败、建好后瓦片失败时报告失败，每个瓦片集记第一条', async () => {
+    const { session, scene, view } = setup({ loadJson: indexLoader });
+    await view.whenReady();
+    session.scene.set({ tilesets: [tilesetLayer('broken'), tilesetLayer('ok')], underground: null });
+    await settle();
+    pending(scene, 'ok').resolve(CAMERA_AT_MODEL);
+    await flush();
+    const first = new Error('瓦片 404');
+
+    scene.emit('tilesetfailed', 'ok', first);
+    scene.emit('tilesetfailed', 'ok', new Error('又一个'));
+
+    expect(view.sceneStatus.get('broken')).toMatchObject({ state: 'failed' });
+    expect(view.sceneStatus.get('ok')).toStrictEqual({ state: 'failed', error: first });
+  });
+
+  it('暂停期间三维内容的变化留到恢复时应用', async () => {
+    const { session, scene, view } = setup({ loadJson: indexLoader });
+    await view.whenReady();
+    view.pause();
+
+    session.scene.set({ tilesets: [tilesetLayer('a')], underground: null });
+    await settle();
+    expect(scene.adding.size).toBe(0);
+
+    view.resume();
+    await settle();
+    expect(scene.adding.has('a')).toBe(true);
+  });
+
+  it('同组的换显示：新的首批瓦片到位前留着旧的，到了再撤下（ADR 0081 第 5 节）', async () => {
+    const { session, scene, view } = setup({ loadJson: indexLoader });
+    await view.whenReady();
+    session.scene.set({ tilesets: whiteEffects('plain'), underground: null });
+    await settle();
+    pending(scene, 'plain').resolve(CAMERA_AT_MODEL);
+    pending(scene, 'window').resolve(CAMERA_AT_MODEL);
+    await flush();
+    scene.emit('tilesetinitial', 'plain');
+
+    session.scene.set({ tilesets: whiteEffects('window'), underground: null });
+    await settle();
+    expect(scene.tilesets.get('plain')?.show).toBe(true);
+    expect(scene.tilesets.get('window')?.show).toBe(true);
+
+    scene.emit('tilesetinitial', 'window');
+    expect(scene.tilesets.get('plain')?.show).toBe(false);
+    expect(scene.tilesets.get('window')?.show).toBe(true);
+  });
+
+  it('钻地的要求交给场景', async () => {
+    const { session, scene, view } = setup({ loadJson: indexLoader });
+    await view.whenReady();
+    const underground = { tilesetId: 'station', surfaceOpacity: 0.25 };
+
+    session.scene.set({ tilesets: [tilesetLayer('station')], underground });
+    await settle();
+
+    expect(scene.underground).toStrictEqual(underground);
+  });
+
+  it('释放时中止进行中的加载，状态清空', async () => {
+    const { session, scene, view } = setup({ loadJson: indexLoader });
+    await view.whenReady();
+    session.scene.set({ tilesets: [tilesetLayer('a')], underground: null });
+    await settle();
+    const { signal } = pending(scene, 'a');
+
+    view[Symbol.dispose]();
+
+    expect(signal.aborted).toBe(true);
+    expect(view.sceneStatus.size).toBe(0);
   });
 });

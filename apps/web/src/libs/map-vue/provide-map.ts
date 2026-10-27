@@ -3,6 +3,7 @@ import { safeReporter } from '@yzt/utils';
 import { getCurrentInstance, onBeforeMount, onBeforeUnmount, onUnmounted, provide } from 'vue';
 import { INTERNAL_MAP_CONTEXT, type MapContext, MapContextState } from './context';
 import { type OverlayOptions, resolveOverlayOptions } from './overlay';
+import { SceneBinder, type SceneDerivation } from './scene-binder';
 import { StyleBinder, type StyleDerivation } from './style-binder';
 
 export interface ProvideMapOptions<G extends string> extends MapSessionOptions<G> {
@@ -16,6 +17,8 @@ export interface ProvideMapOptions<G extends string> extends MapSessionOptions<G
 export interface MapHandle<G extends string> extends MapContext {
   /** 把推导函数绑定到分组；只能在同一个组件的 setup 中调用，一个分组只能绑定一次 */
   bindStyle(bindings: Partial<Readonly<Record<G, StyleDerivation>>>): void;
+  /** 把三维内容的推导函数绑定到会话（ADR 0081 第 2 节）；只能在同一个组件的 setup 中调用一次 */
+  bindScene(derive: SceneDerivation): void;
   /** 登记交互工具（ADR 0034）；只能在同一个组件的 setup 中调用，同一个 ID 只能登记一次，browse 是内置的移动 */
   registerTools(tools: Readonly<Record<string, MapTool>>): void;
 }
@@ -37,6 +40,7 @@ export function provideMap<const G extends string>(options: ProvideMapOptions<G>
   const overlayOptions = resolveOverlayOptions(options.overlay);
   const session = new MapSession(options);
   const binder = new StyleBinder(session.style, onError);
+  const sceneBinder = new SceneBinder(session.scene, onError);
   const state = new MapContextState(session, onError, overlayOptions);
   provide(INTERNAL_MAP_CONTEXT, state);
 
@@ -65,16 +69,25 @@ export function provideMap<const G extends string>(options: ProvideMapOptions<G>
   onBeforeMount(() => {
     registering = false;
     binder.start();
+    sceneBinder.start();
   });
   // 早于本组件的 scope.stop 和子组件卸载；卸载路径上的回调不抛错，否则后续的卸载钩子都不会执行
-  onBeforeUnmount(() => disposeSafely(binder, onError));
+  onBeforeUnmount(() => {
+    disposeSafely(binder, onError);
+    disposeSafely(sceneBinder, onError);
+  });
   // 晚于子组件的 onUnmounted：画布已经释放了视图，再结束等待者、释放会话
   onUnmounted(() => {
     disposeSafely(state, onError);
     disposeSafely(session, onError);
   });
 
-  const handle: MapHandle<G> = { ...state.context, bindStyle: bindings => binder.bind(bindings), registerTools };
+  const handle: MapHandle<G> = {
+    ...state.context,
+    bindStyle: bindings => binder.bind(bindings),
+    bindScene: derive => sceneBinder.bind(derive),
+    registerTools
+  };
   return Object.freeze(handle);
 }
 

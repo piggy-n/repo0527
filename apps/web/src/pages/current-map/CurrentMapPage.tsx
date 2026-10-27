@@ -1,6 +1,6 @@
 import type { ViewKind } from '@yzt/map-core';
 import { CesiumCanvas, MapCanvas, provideMap, type UnsupportedLayer } from '@yzt/map-vue';
-import { computed, defineComponent, ref, watch } from 'vue';
+import { computed, defineComponent, KeepAlive, ref, watch } from 'vue';
 import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureDetailWindow';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
@@ -11,6 +11,10 @@ import { useResourceLayers } from '@/features/resource-map/composables/useResour
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
+import { SceneModelPanel } from '@/features/scene-models/components/SceneModelPanel';
+import { UndergroundBar } from '@/features/scene-models/components/UndergroundBar';
+import { useSceneModels } from '@/features/scene-models/composables/useSceneModels';
+import { useSceneModelsQuery } from '@/features/scene-models/queries';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { basemapOption } from '@/shared/map/basemap/basemap-style';
@@ -108,6 +112,9 @@ export const CurrentMapPage = defineComponent({
     const location = useLocationPoint(map);
     // 状态栏的比例尺、经纬度和角度（ADR 0053 第 5 节）
     const readout = useMapReadout(map);
+    // 三维模型（ADR 0081）：第一次切到三维时才读清单
+    const sceneModelsQuery = useSceneModelsQuery(() => map.dimension.value === '3d');
+    const models = useSceneModels(map, sceneModelsQuery.data);
 
     // 业务状态仍由各自的拥有者持有，这里只组合窗口与排布
     const functions = usePanelGroup(FUNCTION_PANELS);
@@ -131,8 +138,13 @@ export const CurrentMapPage = defineComponent({
     // 资源面板的收起、分割线的位置和目录顺序按账号记住；窄屏时左右只显示一边，只推导显示，不改收起状态（ADR 0053 第 6、8 节）
     const panelLayout = useResourcePanelLayout({ preferences });
     const catalogOrder = useCatalogOrder({ preferences });
+    // 三维时左侧是三维模型面板，两个面板的收起各自保留（ADR 0081 第 7 节）；模型面板的不持久化
+    const modelsCollapsed = ref(false);
+    const leftCollapsed = computed(() =>
+      map.dimension.value === '3d' ? modelsCollapsed.value : panelLayout.collapsed.value
+    );
     const sides = useSideExclusion({
-      leftExpanded: () => !panelLayout.collapsed.value,
+      leftExpanded: () => !leftCollapsed.value,
       rightOpen: () => functions.state.value.open.length > 0 || basemapOpen.value || detailOpen.value
     });
 
@@ -169,6 +181,7 @@ export const CurrentMapPage = defineComponent({
       region: region.deriveGroup,
       measure: measure.deriveGroup
     });
+    map.bindScene(models.deriveContent);
 
     // 功能入口按显示状态开关；关闭定位面板不清掉区划和位置点
     // 按点击时右边是否显示决定：窄屏时让给了左边就是重新显示，不是关闭
@@ -185,15 +198,22 @@ export const CurrentMapPage = defineComponent({
         sides.activate('right');
       }
     };
-    // 展开资源面板算操作左边：窄屏时右边让出来
-    const changeResourcesCollapsed = (collapsed: boolean) => {
-      panelLayout.setCollapsed(collapsed);
+    // 展开左侧面板算操作左边：窄屏时右边让出来
+    const changeLeftCollapsed = (collapsed: boolean) => {
+      if (map.dimension.value === '3d') {
+        modelsCollapsed.value = collapsed;
+      } else {
+        panelLayout.setCollapsed(collapsed);
+      }
       if (!collapsed) {
         sides.activate('left');
       }
     };
-    // 切换二三维：底图跟着换成这种视图默认的（ADR 0078 第 2 节）
+    // 切换二三维：底图跟着换成这种视图默认的（ADR 0078 第 2 节）；切到二维结束钻地（ADR 0081 第 6 节）
     const switchDimension = (kind: ViewKind) => {
+      if (kind === '2d') {
+        models.exitUnderground();
+      }
       map.setDimension(kind);
       basemap.selectForDimension(kind);
     };
@@ -255,6 +275,7 @@ export const CurrentMapPage = defineComponent({
       const { phone, toolbarColumns } = layout.value;
       // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示
       const scopeShown = !phone || !sides.left.value;
+      const scene = map.dimension.value === '3d';
       return (
         <div
           ref={root}
@@ -275,15 +296,28 @@ export const CurrentMapPage = defineComponent({
               </div>
             )}
             <div class={styles.left}>
-              <ResourceLayerPanel
-                layers={resources}
-                catalogOrder={catalogOrder}
-                layout={panelLayout}
-                failed={catalogQuery.isError.value}
-                collapsed={!sides.left.value}
-                onRetry={() => void catalogQuery.refetch()}
-                onUpdate:collapsed={changeResourcesCollapsed}
-              />
+              {/* 二三维各一个面板：切走的缓存起来，回来时搜索、展开这些界面状态还在（停用期间按 ADR 0063 处理） */}
+              <KeepAlive>
+                {scene ? (
+                  <SceneModelPanel
+                    models={models}
+                    failed={sceneModelsQuery.isError.value}
+                    collapsed={!sides.left.value}
+                    onRetry={() => void sceneModelsQuery.refetch()}
+                    onUpdate:collapsed={changeLeftCollapsed}
+                  />
+                ) : (
+                  <ResourceLayerPanel
+                    layers={resources}
+                    catalogOrder={catalogOrder}
+                    layout={panelLayout}
+                    failed={catalogQuery.isError.value}
+                    collapsed={!sides.left.value}
+                    onRetry={() => void catalogQuery.refetch()}
+                    onUpdate:collapsed={changeLeftCollapsed}
+                  />
+                )}
+              </KeepAlive>
             </div>
             <div ref={lane} class={styles.lane}>
               <div
@@ -341,6 +375,11 @@ export const CurrentMapPage = defineComponent({
                 )}
               </div>
             </div>
+            {scene && (
+              <div class={[styles.underground, phone && styles.phoneUnderground]}>
+                <UndergroundBar models={models} />
+              </div>
+            )}
             <div class={styles.bottom}>
               <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
             </div>

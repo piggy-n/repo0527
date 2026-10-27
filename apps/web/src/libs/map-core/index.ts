@@ -28,6 +28,17 @@ export {
   MeasureStore
 } from './measure/measure-store';
 export { type SelectedFeature, SelectionModel } from './selection/selection-model';
+export {
+  EMPTY_SCENE_CONTENT,
+  NO_SCENE_STATUS,
+  type SceneContent,
+  SceneContentModel,
+  type SceneStatus,
+  type TilesetLayer,
+  type TilesetLighting,
+  type TilesetStatus,
+  type UndergroundView
+} from './scene/scene-content-model';
 export { MapSession, type MapSessionOptions } from './session/map-session';
 export { diffSnapshot, diffStyle, type ImageCommand, type StyleCommand, type StyleSnapshot } from './style/diff-style';
 export type { StyleImage, StyleImages } from './style/style-image';
