@@ -23,6 +23,7 @@
 | 每月检查依赖 | `pnpm deps:check` |
 | 范围内升级 | `pnpm deps:update:within-range` |
 | 大版本升级 | `pnpm deps:update:allow-major` |
+| 处理安全告警 | `pnpm audit` → `pnpm why -r <包>`，见"依赖维护" |
 | 升级 pnpm 自身 | `pnpm pnpm:update:project:latest` |
 
 ---
@@ -352,6 +353,18 @@ pnpm --filter @yzt/web test:smoke
 - **有可升级项时退出码是 1**，这是 `pnpm outdated` 的正常行为，不代表出错
 - `@types/node` 会一直显示可以升到 26，但它要跟随 Node 24，不要升
 - 列表里只是"可以升"，要不要升按 ADR 0005 的规则判断
+
+### 处理安全告警（`pnpm audit`）
+
+`pnpm audit` 列出有公告的依赖、受影响的版本和修复版本；GitHub 的 Dependabot 告警是同一批公告。按下面的顺序处理，能用前面的办法就不用后面的：
+
+1. 直接依赖：修复在当前大版本里时，在范围内升级（`pnpm update -r <包>`，会同时提高 `package.json` 的下限）；修复只在新的大版本里时，按 `deps:update:allow-major` 的规则先评估
+2. 间接依赖：先用 `pnpm why -r <包>` 找到是谁引入的。上层的范围已经允许修复版本时，`pnpm update -r <包>` 只在 lockfile 里重新解析
+3. 上层精确锁定了有问题的版本（例如 `eslint-plugin-boundaries` 锁定 `handlebars`）：升级上层到改了锁定的版本
+4. 以上都不行时，才在 `pnpm-workspace.yaml` 里加 `overrides`，并写明原因和什么时候删除
+5. 修复版本发布不满 3 天：用 `minimumReleaseAgeExclude` 临时豁免这个版本，冷却期过后删除（见 [config/pnpm-workspace.md](config/pnpm-workspace.md)）
+
+升级后再跑一次 `pnpm audit`，并跑 CI 的全部检查。lockfile 里可能残留以前装过、现在已经不用的可选 peer 依赖（例如 ADR 0010 对比时装过的 happy-dom 一直作为 vitest 的可选 peer 留着），上层重新解析后会自动去掉。
 
 ### `pnpm deps:update:within-range`
 
