@@ -35,6 +35,7 @@
 | 2 | 新增：字体与系统名称 SVG 轮廓、第一个 workspace 包 `@yzt/icons` | 设计规范与 UI 素材到位（ADR 0012～0014） |
 | 2 | 未做：存储适配器 | 会话需要同步读取，直接用 localStorage；IndexedDB 等到有需要持久化的大块数据时再做 |
 | 6 | 不迁移知识图谱（资源中心）；加入文件管理 | 迁移范围确认（见 AGENTS.md"迁移规则"） |
+| 6 | 资源管理"自助取数"用到的知识图谱数据和布局纳入迁移，独立的知识图谱页仍不迁移；关系图改用 ECharts | 用户确认（2026-10-27），ADR 0089 |
 | 3 | 先定页面布局规范、做 `libs/ui` 组件（3.1、3.2），再做列表页（3.3） | 列表页要用布局组件；先统一规范，避免每个页面各写一套 |
 | 4 → 3 | `tsconfig.libs.json` 和第一个 libs 模块提前到阶段三（`libs/ui`） | 布局组件是第一个可以拆出去的通用代码（ADR 0016） |
 | 3 | 新增 `MxSection`；引入 `@vueuse/core`，版本与 element-plus 内部依赖的一致（15）；抽屉内边距成为"页面不覆盖 `--el-*` 变量"的唯一例外 | 区块间距统一；媒体查询和尺寸监听不重复造轮子，也不打包两份；侧栏面板放进抽屉要贴边 |
@@ -114,6 +115,7 @@
 | 需要时 | `QueryForm`：日期范围这类 180 放不下的控件要加一种加宽的写法；会话结束时把 feature 的 store 一并重置（目前没有） | [modules/query-form.md](modules/query-form.md)、[modules/auth.md](modules/auth.md) |
 | 6 | 上传、下载统一成一套能力（统一的上传 / 下载方法或独立模块，包括进度、文件名、错误处理、预览前的 MIME 补齐），文件管理、数据下载（资源申请）、数据查询的导出共用，不再各自实现。旧项目在迁移范围内至少有 5 处各写各的下载：`libs/http-service.js` 的 blob 处理、`services/resource-application/applyApiService.js`（`downloadApplicationFile`、`downloadStatisticsReportFile`）、`downloadTaskService.js`（带进度）、文件管理 `FileManagementContent.vue`（`requestFileBlob`、`downloadBlob`）、数据查询 `space-monitoring-query/index.vue`（`downloadExportBlob`）；`FormData` 上传 3 处：文件管理上传弹窗、资源管理 Excel 导入、数据查询 | 本文（2026-10-08 提出） |
 | 6 | 页面内菜单（系统管理左栏）用 `ElMenu` 加变体还是做 `MxSideMenu`；宽屏时手动把侧栏收成窄条（基本统计页，可复用窄屏的窄条）；Header 下方消息弹框；旧页面左栏 296、348 归到 320 | [design/page-layout.md](design/page-layout.md) |
+| 联调时 | 资源管理下载申请 `/api/apply/create` 的成功 data 与失败信封、可申请图层的正式目录、处室 `jsdxzx` 的含义 | 同上 |
 | 7 | 部署（nginx 回退与接口转发，带 hash 的产物长期缓存、`index.html` 不缓存、开启压缩）；版本号格式 | [deployment.md](deployment.md)、ADR 0005 |
 | 7 | 确定部署的网络条件后复查字体的加载时机：目标网络明显慢于 Fast 4G 时，用 `measure:map-load` 比较推迟字体的做法 | ADR 0062 |
 | 待用户决定 | `tools/smoke` 里资源管理、文件管理、驾驶舱的业务流程用例超出 ADR 0065 的"最小冒烟"：写新 ADR 认可并约定范围，或移到阶段七的端到端测试；决定前不整理这几份用例的写法 | [审查报告](stages/post-5e-code-review.md)第四部分 |
@@ -769,6 +771,8 @@ UI 工作流程补充（2026-10-20）：用户确认将设计与验证流程固�
 资源管理 R5（2026-10-21）：按用户最终要求直接打开文件选择器，单个 file + 可选详情 year，复用公共 HTTP 上传；扩展名 / 空文件校验、编辑互斥、防重复、真实进度与处理阶段、失败重选、成功刷新列表 / 详情 / 年份及会话保护已接入。117 项相关测试、22 项固定接口生产冒烟、六尺寸检查、类型 / lint / 公网及内网构建通过；UI 修复独立提交 `c2289f4`，R5 另提交。用户允许暂按旧版成功 code 处理，未知 data 丢弃；5.xlsx 已只读检查，图层匹配、覆盖 / 部分成功、大小 / 年份规则仍待真实联调，详见 [模块记录](modules/resource-management.md)。未向真实后端导入，待原验收会话独立复测，不自行合入 main。
 
 资源管理本轮收尾（2026-10-21）：R5 实现提交 `3c1472b` 后，按用户意见将「导入」改为紧跟属性表标题的无图标 link 按钮，提示仅为「支持 .xlsx、.xls」，启停开关移除内部文字。重新通过 80 项资源管理单元测试、16 项资源管理生产冒烟、六尺寸实际布局、类型 / lint / 公网及内网构建。按用户本轮条件指示，R1～R5 前端迁移阶段性验收收尾；真实写入及未知 Excel 契约仍待联调，合入前由原验收会话独立复测，不自行合入 main。
+
+资源管理剩余能力（2026-10-27）：之前的 `codex/migrate-resource-capabilities` 基线早于两次代码整改、与最新 main 冲突，经评估改为从 main 新建 `claude/migrate-resource-capabilities` 重新迁移，复用图谱数据、旧布局坐标基准和算法。已完成地图服务 / 数据接口（前端内存）、自助取数（关系图用 ECharts，ADR 0089；提交仍只在前端）和下载申请（`POST /api/apply/create`），组件样例 `/dev/resource-management`。创建申请的返回、可申请图层目录待联调，见[资源管理模块](modules/resource-management.md)末尾。
 
 资源与文件管理联合复测（2026-10-21）：R5 基线 `b2cb4c0` 已同步最新 main `c635c7c`。修复资源写入调度前会话竞态、文件删除晚到成功与缓存刷新；导入格式提示紧跟按钮，图片仅下载，文档预览头部紧凑排列，未保存确认框统一浅灰标题栏。两个间接依赖的 3 条安全公告已用补丁版本解决，官方生产依赖审计通过。已通过 `40e1a8e` 合入本地 main，合入后 Web 1797 + 图标包 35 项测试、22 项生产冒烟、类型 / lint / 公网及内网构建通过；开发样例复用正式预览范围并完成补充复测。真实后端写入与 Excel 未知契约仍待联调。完整审查、页面验收及合入后全量结果见[联合验收报告](stages/resource-file-management-acceptance.md)。
 

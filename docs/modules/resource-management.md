@@ -28,9 +28,9 @@
 | 编辑 | 只编辑数据分类和属性的 `name`；字段代码、类型、长度及元数据只读；名称去首尾空白后允许为 null | 保留编辑范围；草稿与缓存分离；未保存离开提示；失败保留草稿 |
 | 图层启停 | `POST` 的 query 参数更新状态 | 按图层 ID 防重复；不同图层可分别进行；成功后刷新，失败保留原状态 |
 | Excel 导入 | 详情属性表处选择文件立即上传，带详情年份；成功后重新读属性 | 已按用户最终要求接入相同行为；增加已知文件校验、防重复、编辑互斥与相关缓存刷新，未知结果不解释数量 |
-| 地图服务、数据接口 | `useLayerServices.js` 的模块级 reactive 内存对象；无持久化接口，刷新丢失 | 待确认，不迁移为真实后端业务，原型不展示虚假的服务数量 |
-| 自助取数 | `LayerListPanel.vue` 引用 `resource-center/components/qushu/QushuDialog.vue`，进一步依赖知识图谱和取数服务 | 不扩入当前范围；知识图谱不在项目迁移范围内，记录实际入口供协调 |
-| 下载 | `LayerTable.vue` 打开 `ResourceApplyDialog`；用 datasetCode、layerCode、year 拼申请资源代码 | 这是数据申请，不是文件流下载；本批未包含，后续资源申请模块迁移时协调入口 |
+| 地图服务、数据接口 | `useLayerServices.js` 的模块级 reactive 内存对象；无持久化接口，刷新丢失 | 2026-10-27 迁移，同样只在前端内存，见文末"剩余能力" |
+| 自助取数 | `LayerListPanel.vue` 引用 `resource-center/components/qushu/QushuDialog.vue`，进一步依赖知识图谱和取数服务 | 2026-10-27 迁移搜索、关系图和条件；关系图改用 ECharts（ADR 0089），提交仍只在前端 |
+| 下载 | `LayerTable.vue` 打开 `ResourceApplyDialog`；用 datasetCode、layerCode、year 拼申请资源代码 | 2026-10-27 迁移申请提交；审核后的文件下载在申请列表，不在本页 |
 
 不迁移旧 `views/resource-management/`，也不迁移新页面未调用的旧实现。`saveLayerAttribute` / `rmEditLayerAttribute` 虽在新服务文件中定义，但当前详情实际调用的是 `saveLayerStruct`；不为未使用的 PUT 接口新增界面或第二套保存流程。
 
@@ -441,3 +441,43 @@ pnpm test:smoke
 - 详情 schema 去掉 `submitUnit`：2026-10-22 实测详情只有 `submit_unit`（旧页面读的 `submitUnit` 并不存在），"数据来源"只读 `submit_unit`
 - "放弃未保存的修改"的确认框从页面移到 feature 的 `DiscardChangesDialog`，页面只做组合；目录维护里用不到的 `parentName` 删除
 - 其余是写法：单行的 `if` 块和多语句的一行函数体全部展开，详情面板拆成几个渲染函数，非空断言和长串三元改成显式的判断
+
+## 剩余能力：附属服务、自助取数、下载申请（2026-10-27）
+
+分支 `claude/migrate-resource-capabilities`，从 main `c2222a6` 新建。之前在 `codex/migrate-resource-capabilities`（基线 `ea6bef0`，未合入）做过一版：基线早于两次代码整改（`5b4feaf`、`dda255d`），写法、过度防御和文档都不符合现行规范，与最新 main 有 7 处冲突。经评估，用户决定从 main 重新迁移：图谱数据、旧布局的坐标基准和算法复用过来，组件、组合式函数、样式和文档按规范重写。旧分支保留到本分支合入后再删。
+
+旧项目 `C:\work\zhjsqdxin`，`master-demo` 的 `b4f3987`；涉及的路径（`views/resource-management-new`、`components/resource-application`、`views/knowledge-graph-enterprise`、`views/resource-center/components/qushu`）和上次记录的 `6b4799b` 相同。
+
+### 地图服务、数据接口
+
+- 表格两列：数量按钮（0 个也能打开列表，有记录时地图服务用成功色、数据接口用警告色）和常显的加号（直接新增）
+- 列表弹窗 640 宽，长列表在弹窗里滚动；新增 / 编辑表单 460 宽，从列表打开时列表不关；删除用组件内的确认框，和目录删除的写法一致
+- 记录在 `useLayerServiceStore` 里，按资源 ID 和类别分开，离开页面再回来仍在、刷新丢失，换会话时清空；编辑的是副本，校验期间关闭或重开的表单不能保存
+- 地图服务的坐标系和格式按类型写死（WMS / WMTS 为 EPSG:4490，MVT / XYZ 为 EPSG:3857），只用于显示
+
+### 自助取数
+
+- 三步：搜索关键词 → 关系图里选节点、填条件 → 完成。宽屏左图右表单（条件栏 384 宽），960 以下上图下表单
+- 搜索：去掉首尾空白后必须含中文，按名称、简称和"编码 名称"标签匹配；旧页面"先按名称、进图后再按编号和名称各搜一次"的两段写法对这份数据结果相同，合成一次
+- 子图：命中节点到根的路径、直接子级（规划一级类再带三级类），以及有对应关系的节点的同样内容
+- 关系图见 ADR 0089；条件和默认值沿用旧页面，只要求至少一种数据格式；"上一步"保留条件、清掉选中的节点；每次打开都回到第一步和默认条件
+- 旧页面的"开始取数"只打印参数，没有接口；这里同样只保存条件快照、显示"已转到后台处理数据。"，**不代表后台处理过**
+
+### 下载申请
+
+- 表格操作列"下载"打开申请弹窗；数据名称取资源名称，主题图层按"数据集_图层_年份"的小写匹配六个可申请图层
+- 用户决定（2026-10-27）：对不上时留空、必须手动选择（旧页面悄悄换成学校点层）；默认结束时间为开始时间加一个月（旧代码本意如此，因日期拼接错误实际和开始相同）
+- 学校的两层可选五种格式，其余图层只有 Excel、SHP、GDB，切换图层时去掉不支持的格式；处室对管理员隐藏，固定发送 `jsdxzx`
+- `POST /api/apply/create`，JSON 正文 `applyName, receiverDeptCode, layerCode, startDate, endDate, xzqdm, dataFormats（小写逗号串）, applyPurpose`；提交中不能关闭和重复提交，失败保留填写的内容；会话按 `useSessionGuard` 核对
+- 审核通过后的文件下载（`POST /api/apply/download/{applyId}`）属于申请列表和系统管理，不在本页
+
+### 待联调与未做
+
+| 事项 | 现状 |
+|---|---|
+| `/api/apply/create` 的成功 data、失败信封 | 没有实测（不对真实后端做写操作），和导入一样只判断业务码、丢弃 data |
+| 可申请图层的正式目录、`jsdxzx` 的处室含义 | 沿用旧页面写死的值，等后端确认 |
+| 自助取数的提交接口 | 后端没有，前端只到完成页 |
+| 关系图的键盘操作 | 旧页面也没有，节点信息在右侧卡片和悬浮提示里 |
+
+组件样例：`/dev/resource-management`（只在开发环境），正式的表格和三个功能弹窗，申请结果用演示选项决定。

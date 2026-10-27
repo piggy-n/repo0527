@@ -29,6 +29,7 @@
 - tsconfig 不开启 `incremental`：TS 7.0.2 的增量检查在 `declare global` 文件变化后会给出过期结果（ADR 0009）
 - 二维地图用 MapLibre GL JS 6，只用具名导入；`setWorkerUrl`、CSS 这类全局设置由 app 懒加载完成（登录页空闲时预加载，或首次进入地图时）；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002、0019、0023、0061）
 - 三维地图用 Cesium，精确锁定版本（1.146.0，ADR 0002、0079）；Worker、资源等运行时文件由 `vite-plugin-static-copy` 复制到产物的 `cesium/`，基础地址由 app 的三维运行时设置
+- 资源管理"自助取数"的关系图用 ECharts 的 graph 系列，坐标用 d3-force 按旧页面的力导布局计算，不引入 G6（ADR 0089）
 - 距离和面积用 geographiclib-geodesic 按椭球面计算，不另写公式（ADR 0035）；其他几何计算按需安装 turf v7 的单个包，不用 `@turf/turf` 全家桶（ADR 0037）
 - 地图内核的事件用 nanoevents；资源释放用标准的 `Disposable` / `DisposableStack`，运行时由 `app/main.ts` 全局引入的 core-js 补齐（ADR 0023）
 - 浏览器目标用 Vite 默认值，不兼容旧浏览器，不引入 `@vitejs/plugin-legacy`
@@ -271,7 +272,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 系统管理只做管理员的资源审核与统计报表；下载用 `shared/file-transfer` 的 `useDownloads`、`DownloadPanel`，业务只提供取流函数。AI 对话目前只有 `/dev/ai-chat` 交互预览，鉴权契约明确后再接入，不迁移前端共享账号密码、SSE 失败后自动重复提交和旧 Mapbox 适配。范围与待联调项见 `docs/stages/ai-system-management-migration.md`
 - 消息中心（ADR 0087）在顶栏下方用原生 Popover 展示，不保留独立页面；消息和业务跳转由 app 装配，feature 不导入系统管理。进入应用读取一次、打开弹框时刷新，不后台轮询；已读写入成功后才更新查询缓存。范围与验证见 `docs/stages/message-center-migration.md`
 - 城市体检驾驶舱纳入阶段六，含自身的 Three.js 立体行政区地图；三维阶段（ADR 0078）只指现状底图的 Cesium 模块。先确认交互预览再分步实施，固定模拟指标与真实业务数据验收分开；入场按局部可见时长编排，不修改 GSAP 全局 ticker；图片保存复用 `shared/file-transfer`，缺少部署字体时沿用后备字体并保留卸载取消。范围、性能条件与基线见 `docs/modules/city-dashboard.md`
-- 只迁移旧项目中实际在用的模块。不迁移：资源中心（含知识图谱；但代码放在 `views/resource-center/` 下的文件管理要迁移）、资源共享、统计分析、旧版 resource-management、`views/sys` 与动态菜单路由、`/home` 测试页、mockjs、backend-switcher
+- 只迁移旧项目中实际在用的模块。不迁移：资源中心（含独立的知识图谱页；但代码放在 `views/resource-center/` 下的文件管理、资源管理"自助取数"用到的图谱数据和布局要迁移）、资源共享、统计分析、旧版 resource-management、`views/sys` 与动态菜单路由、`/home` 测试页、mockjs、backend-switcher
 - 先读懂旧模块的行为，再按新架构重写，不逐行照搬；类结构和算法有价值的，保留设计并补上类型
 - 按真实接口返回（先实际请求一次看结构）和 TypeScript 类型写逻辑，不照搬旧代码为各种假设情况写的兜底判断：zod schema 已经保证的字段不再判空，不写 `|| ''`、`Array.isArray(...) ? ... : []` 这类兜底；确实可能缺失的字段在 schema 里写 `.optional()`，由类型提示调用方处理
 - 开始迁移一个模块时，在 `docs/migration.md` 记下 yzt 的基线 commit，之后用 `git diff <基线>..master-demo -- <路径>` 同步旧仓库的新改动（旧仓库可能停在其他分支上，不写 `HEAD`）

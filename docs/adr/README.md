@@ -98,6 +98,7 @@
 | [0086](0086-first-person-walk.md) | 第一人称步行：会话里的步行意图、map-core 的步行者、场景接管键鼠 | 已接受（补充 0083、0085） |
 | [0087](0087-header-message-center.md) | 消息中心迁移为 Header 下方弹框 | 已接受 |
 | [0088](0088-data-query-snapshots.md) | 数据查询的条件快照与公共地图工具 | 已接受 |
+| [0089](0089-self-service-graph-with-echarts.md) | 自助取数的关系图用 ECharts，布局沿用旧页面的 D3 力导 | 已接受 |
 
 ## 模板
 
