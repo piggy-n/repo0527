@@ -1,6 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures.ts';
 
+// 软件渲染时装饰动画让导出排队十几秒（docs/modules/city-dashboard.md），入场由浏览器测试覆盖
+test.use({ reducedMotion: 'reduce' });
+
 test('驾驶舱需登录、独立懒加载，缺字体时地图详情及三类图片仍可导出', async ({ page }) => {
   test.setTimeout(90000);
   // 字体不入库，固定复现 Linux CI 及未部署字体的环境
