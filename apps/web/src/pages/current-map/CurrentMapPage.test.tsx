@@ -1711,7 +1711,53 @@ describe('CurrentMapPage', () => {
       expect(wrapper.get('[data-loaded="sz-station"]').text()).not.toContain('钻地');
     });
 
-    it('路线漫游（ADR 0083）：从面板开始，空格开始、暂停；Esc、选工具、切到二维都退出', async () => {
+    it('地下空间（ADR 0084）：隐藏工具栏、功能面板、底图、区划条和默认视角，切回移动；退出钻地后原样显示', async () => {
+      mockManifest();
+      stubBoundaryFetch();
+      const page = await readyPage();
+      const { wrapper } = page;
+      const labels = () => wrapper.findAll('button').map(item => item.attributes('aria-label') ?? item.text());
+      // 进入前：选了南京，开着区划定位和图例（图例在前），底图浮层打开，正在测距
+      await button(wrapper, '区划定位').trigger('click');
+      await button(wrapper, '南京').trigger('click');
+      await button(wrapper, '图例').trigger('click');
+      await wrapper.get('[data-map-cards] button:last-child').trigger('click');
+      await vi.waitFor(() => expect(optionsPopoverVisible('basemap')).toBe(true));
+      await switchTo(wrapper, '三维');
+      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
+      await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
+      await settle();
+      const view = sceneOf(page);
+      view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
+      await nextTick();
+      await button(wrapper, '测距').trigger('click');
+      expect(view.session.tool.active).toBe('measure-distance');
+      expect(shownPanels(wrapper)).toStrictEqual(['legend']);
+      expect(wrapper.get('[data-region-scope]').text()).toBe('江苏省›南京市回到全省');
+
+      await button(wrapper, '定位').trigger('click');
+      await settle();
+      expect(wrapper.find('[data-underground-bar]').exists()).toBe(true);
+      expect(view.session.tool.active).toBe('browse');
+      expect(labels()).not.toContain('测距');
+      expect(labels()).not.toContain('默认视角');
+      expect(labels()).toEqual(expect.arrayContaining(['放大', '缩小', '二维', '三维']));
+      expect(wrapper.find('[data-map-cards]').exists()).toBe(false);
+      expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
+      expect(wrapper.get('[data-panel-group]').isVisible()).toBe(false);
+      expect(optionsPopoverVisible('basemap')).toBe(false);
+
+      await button(wrapper, '退出钻地').trigger('click');
+      await settle();
+      expect(button(wrapper, '移动').attributes('aria-pressed')).toBe('true');
+      expect(labels()).toContain('默认视角');
+      expect(wrapper.get('[data-region-scope]').text()).toBe('江苏省›南京市回到全省');
+      expect(wrapper.get('[data-panel-group]').isVisible()).toBe(true);
+      expect(shownPanels(wrapper)).toStrictEqual(['legend']);
+      await vi.waitFor(() => expect(optionsPopoverVisible('basemap')).toBe(true));
+    });
+
+    it('路线漫游（ADR 0083）：从面板开始，空格开始、暂停；Esc、换成别的工具、切到二维都退出', async () => {
       mockManifest();
       const page = await readyPage();
       const { wrapper } = page;
@@ -1731,7 +1777,10 @@ describe('CurrentMapPage', () => {
         await settle();
       };
 
+      // 正在测距时开始：进入地下空间切回移动，漫游不因此退出（ADR 0084）
+      await button(wrapper, '测距').trigger('click');
       await start();
+      expect(view.session.tool.active).toBe('browse');
       expect(view.session.scene.current.roam).toMatchObject({ kind: 'route', playing: false, rate: 1, run: 0 });
       expect(wrapper.find('[data-roam-bar]').exists()).toBe(true);
       expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
@@ -1743,12 +1792,14 @@ describe('CurrentMapPage', () => {
       expect(view.session.scene.current.roam).toBeUndefined();
       expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
 
+      // 漫游地下的模型时工具栏隐藏；当前工具换成移动以外的照样退出
       await start();
-      await button(wrapper, '测距').trigger('click');
+      expect(wrapper.find('button[aria-label="测距"]').exists()).toBe(false);
+      view.session.tool.activate('measure-distance');
       await settle();
       expect(view.session.scene.current.roam).toBeUndefined();
 
-      await button(wrapper, '移动').trigger('click');
+      view.session.tool.activate('browse');
       await start();
       await switchTo(wrapper, '二维');
       expect(view.session.scene.current.roam).toBeUndefined();

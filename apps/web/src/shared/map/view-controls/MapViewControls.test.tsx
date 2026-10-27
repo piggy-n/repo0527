@@ -94,4 +94,19 @@ describe('MapViewControls', () => {
     await button(wrapper, '二维').trigger('click');
     expect(changed).toHaveBeenCalledExactlyOnceWith('2d');
   });
+
+  it('不显示默认视角时（地下空间，ADR 0084）连同它下面的分隔线一起去掉，其余照常', () => {
+    const camera: CameraState = { center: [119.4, 32.9], zoom: 10, bearing: 0, pitch: 0 };
+    const Page = defineComponent(() => {
+      provideMap({ groups: ['basemap'], camera });
+      return () => (
+        <MapViewControls goToDefaultView={() => undefined} zoomRange={RANGE} dimension="3d" defaultView={false} />
+      );
+    });
+    const wrapper = mount(Page);
+
+    const labels = wrapper.findAll('button').map(item => item.attributes('aria-label'));
+    expect(labels).toStrictEqual(['放大', '缩小', '指北针：恢复正北、垂直俯视', '二维', '三维']);
+    expect(wrapper.findAll('[role="separator"]')).toHaveLength(2);
+  });
 });

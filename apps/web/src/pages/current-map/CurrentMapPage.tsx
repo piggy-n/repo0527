@@ -1,5 +1,5 @@
 import { useEventListener } from '@vueuse/core';
-import type { ViewKind } from '@yzt/map-core';
+import { BROWSE_TOOL, type ViewKind } from '@yzt/map-core';
 import { CesiumCanvas, MapCanvas, provideMap, type UnsupportedLayer } from '@yzt/map-vue';
 import { computed, defineComponent, KeepAlive, ref, watch } from 'vue';
 import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureDetailWindow';
@@ -118,6 +118,9 @@ export const CurrentMapPage = defineComponent({
     // 三维模型（ADR 0081）：第一次切到三维时才读清单
     const sceneModelsQuery = useSceneModelsQuery(() => map.dimension.value === '3d');
     const models = useSceneModels(map, sceneModelsQuery.data);
+    // 地下空间（ADR 0084）：钻地中，包括漫游地下的模型（切到二维时结束钻地）；只隐藏不适用的入口，
+    // 功能面板、底图的开关和内容都保留，退出后原样显示
+    const undergroundSpace = computed(() => models.underground.value !== null);
 
     // 业务状态仍由各自的拥有者持有，这里只组合窗口与排布
     const functions = usePanelGroup(FUNCTION_PANELS);
@@ -221,8 +224,18 @@ export const CurrentMapPage = defineComponent({
       map.setDimension(kind);
       basemap.selectForDimension(kind);
     };
-    // 漫游接管鼠标，相当于一个工具：选了工具栏上的工具就退出（ADR 0078 第 6 节）
-    watch(map.activeTool, () => models.exitRoam());
+    // 进入地下空间时切回移动：测量、点选在地下不适用，退出后不恢复（ADR 0084）
+    watch(undergroundSpace, entered => {
+      if (entered) {
+        map.activateTool(BROWSE_TOOL);
+      }
+    });
+    // 漫游接管鼠标，相当于一个工具：选了工具栏上移动以外的工具就退出（ADR 0078 第 6 节）；进入地下空间时切回移动不算
+    watch(map.activeTool, tool => {
+      if (tool !== BROWSE_TOOL) {
+        models.exitRoam();
+      }
+    });
     // Esc 退出漫游；空格开始、暂停或继续，焦点在输入框、按钮上时不拦截；页面停用期间不响应
     const pageActive = usePageActive();
     useEventListener(window, 'keydown', (event: KeyboardEvent) => {
@@ -300,8 +313,9 @@ export const CurrentMapPage = defineComponent({
 
     return () => {
       const { phone, toolbarColumns } = layout.value;
-      // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示
-      const scopeShown = !phone || !sides.left.value;
+      const underground = undergroundSpace.value;
+      // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示；地下空间时区划不适用
+      const scopeShown = (!phone || !sides.left.value) && !underground;
       const scene = map.dimension.value === '3d';
       return (
         <div
@@ -360,7 +374,7 @@ export const CurrentMapPage = defineComponent({
                   }}
                   group={functions}
                   labels={PANEL_LABELS}
-                  visible={sides.right.value}
+                  visible={sides.right.value && !underground}
                   collapsible
                   collapsed={stack.layout.value.collapsed.functions}
                   onActivate={() => stack.activate('functions')}
@@ -412,26 +426,29 @@ export const CurrentMapPage = defineComponent({
               <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
             </div>
             <div class={styles.tools}>
-              <div class={styles.business}>
-                <MapToolbar
-                  groups={TOOLBAR_GROUPS}
-                  actions={toolbarActions}
-                  pressed={pressed.value}
-                  opened={functions.state.value.open}
-                  compact
-                  columns={toolbarColumns}
-                />
-              </div>
+              {!underground && (
+                <div class={styles.business}>
+                  <MapToolbar
+                    groups={TOOLBAR_GROUPS}
+                    actions={toolbarActions}
+                    pressed={pressed.value}
+                    opened={functions.state.value.open}
+                    compact
+                    columns={toolbarColumns}
+                  />
+                </div>
+              )}
               <div class={styles.stack}>
                 <div class={styles.controls}>
                   <MapViewControls
                     goToDefaultView={goToDefaultView}
                     zoomRange={JIANGSU_ZOOM_RANGE}
                     dimension={map.dimension.value}
+                    defaultView={!underground}
                     onUpdate:dimension={switchDimension}
                   />
                 </div>
-                {renderBasemapCard()}
+                {!underground && renderBasemapCard()}
               </div>
             </div>
           </div>

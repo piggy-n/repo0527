@@ -90,9 +90,10 @@
 | [0078](0078-3d-scope-and-interaction.md) | 三维阶段的范围与交互 | 已接受 |
 | [0079](0079-cesium-view-and-dimension-switch.md) | Cesium 运行时、三维视图与二三维切换 | 已接受（修正 0002 的 Cesium 版本） |
 | [0080](0080-3d-overlays-measure-and-status.md) | 三维的覆盖物、测量、临时拖动与状态栏 | 已接受（三维期间暂停 0048、0049 中三维的识别；第 1 节的只改坐标、等画好由 0082 修正） |
-| [0081](0081-3d-models-scene-content-and-underground.md) | 三维模型：3DT 清单、会话的三维内容与钻地 | 已接受 |
+| [0081](0081-3d-models-scene-content-and-underground.md) | 三维模型：3DT 清单、会话的三维内容与钻地 | 已接受（第 6 节钻地时隐藏白膜由 0084 改为隐藏地面上的模型） |
 | [0082](0082-3d-overlay-live-limit-and-rebuild-wait.md) | 三维覆盖物：只换坐标的点数上限、重建时等新实体画好 | 已接受（修正 0080 第 1 节） |
-| [0083](0083-3d-route-roam.md) | 三维路线漫游：清单里的路线、会话的漫游意图 | 已接受 |
+| [0083](0083-3d-route-roam.md) | 三维路线漫游：清单里的路线、会话的漫游意图 | 已接受（选工具退出漫游由 0084 改为移动以外的工具） |
+| [0084](0084-underground-space-entries-and-ground-models.md) | 地下空间时隐藏不适用的入口；钻地时隐藏地面上的模型；徐州倾斜摄影 | 已接受（修改 0081 第 6 节的钻地时隐藏白膜） |
 
 ## 模板
 

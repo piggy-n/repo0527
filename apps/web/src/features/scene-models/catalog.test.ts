@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import manifestText from '../../../public/3dt/manifest.json?raw';
 import { type SceneManifest, sceneManifestSchema } from './api';
 import { buildModelCatalog, groupByCity } from './catalog';
 
@@ -72,6 +73,22 @@ describe('sceneManifestSchema', () => {
     ];
 
     expect(invalid.filter(value => parse(value).success)).toStrictEqual([]);
+  });
+});
+
+describe('入库的清单（public/3dt/manifest.json）', () => {
+  it('通过校验，地址都在 3dt 目录下，路线有长度', () => {
+    const models = buildModelCatalog(sceneManifestSchema.parse(JSON.parse(manifestText)), MANIFEST_URL);
+
+    expect(models.map(({ id, cityName }) => [id, cityName])).toStrictEqual([
+      ['sz-station', '苏州市'],
+      ['sz-white', '苏州市'],
+      ['xz-gc', '徐州市']
+    ]);
+    const urls = models.flatMap(({ effects }) => effects.map(({ url }) => url));
+    expect(urls.every(url => url.startsWith('https://maps.test/yzt/3dt/'))).toBe(true);
+    const lengths = models.flatMap(({ routes }) => routes.map(({ length }) => Math.round(length)));
+    expect(lengths).toStrictEqual([121, 133, 58]);
   });
 });
 

@@ -1,4 +1,4 @@
-import type { MapTool, ViewKind } from '@yzt/map-core';
+import { BROWSE_TOOL, type MapTool, type ViewKind } from '@yzt/map-core';
 import { provideMap } from '@yzt/map-vue';
 import { useEventListener } from '@vueuse/core';
 import { ElRadioButton, ElRadioGroup, ElSwitch } from 'element-plus';
@@ -100,6 +100,14 @@ const MapPrototype = defineComponent({
     const boundaries = useBoundaries();
     const modelsCollapsed = ref(false);
 
+    // 地下空间：钻地中，或在地下的模型里漫游（真实页面漫游地下的模型时进入钻地，ADR 0083）；
+    // 只隐藏不适用的入口，功能面板和底图的开关、内容都保留，退出后原样显示
+    const undergroundSpace = computed(() => {
+      const roam = owner.roam.value;
+      const roamingUnderground = roam.kind !== 'idle' && owner.model(roam.modelId).underground;
+      return dimension.value === '3d' && (owner.underground.value !== null || roamingUnderground);
+    });
+
     const functions = usePanelGroup(FUNCTION_PANELS);
     const basemapOpen = ref(false);
     const leftCollapsed = computed(() =>
@@ -125,8 +133,18 @@ const MapPrototype = defineComponent({
       owner.focus.value = null;
     };
 
-    // 漫游接管鼠标，相当于一个工具：选了工具栏上的工具就退出漫游
-    watch(map.activeTool, () => owner.exitRoam());
+    // 进入地下空间时切回移动：测量、点选在地下不适用，退出后不恢复
+    watch(undergroundSpace, entered => {
+      if (entered) {
+        map.activateTool(BROWSE_TOOL);
+      }
+    });
+    // 漫游接管鼠标，相当于一个工具：选了工具栏上移动以外的工具就退出漫游（进入地下空间时切回移动不算）
+    watch(map.activeTool, tool => {
+      if (tool !== BROWSE_TOOL) {
+        owner.exitRoam();
+      }
+    });
 
     const toggleFunction = (id: FunctionPanel) => {
       sides.activate('right');
@@ -193,7 +211,9 @@ const MapPrototype = defineComponent({
         return ['第一视角', '眼高 1.6 m', '朝向 76°'];
       }
       if (roam.kind === 'route') {
-        return ['路线漫游', '视点高度 120 m', '俯仰 -20°'];
+        return owner.model(roam.modelId).underground
+          ? ['视点在地表以下 4 m', '俯仰 0°']
+          : ['视点高度 120 m', '俯仰 -20°'];
       }
       if (owner.underground.value) {
         return ['视点在地表以下 18 m', '俯仰 -35°'];
@@ -296,6 +316,7 @@ const MapPrototype = defineComponent({
     return () => {
       const { phone, toolbarColumns } = pageLayout.value;
       const pickUnsupported = dimension.value === '3d' && map.activeTool.value === FEATURE_PICK_TOOL;
+      const underground = undergroundSpace.value;
       return (
         <div
           ref={root}
@@ -316,7 +337,7 @@ const MapPrototype = defineComponent({
                   class={layout.functions}
                   group={functions}
                   labels={PANEL_LABELS}
-                  visible={sides.right.value}
+                  visible={sides.right.value && !underground}
                 >
                   {{
                     boundaries: ({ active }: PanelSlotProps) => [
@@ -341,26 +362,29 @@ const MapPrototype = defineComponent({
               </div>
             </div>
             <div class={layout.tools}>
-              <div class={layout.business}>
-                <MapToolbar
-                  groups={TOOLBAR_GROUPS}
-                  actions={toolbarActions}
-                  pressed={pressed.value}
-                  opened={functions.state.value.open}
-                  compact
-                  columns={toolbarColumns}
-                />
-              </div>
+              {!underground && (
+                <div class={layout.business}>
+                  <MapToolbar
+                    groups={TOOLBAR_GROUPS}
+                    actions={toolbarActions}
+                    pressed={pressed.value}
+                    opened={functions.state.value.open}
+                    compact
+                    columns={toolbarColumns}
+                  />
+                </div>
+              )}
               <div class={layout.stack}>
                 <div class={layout.controls}>
                   <MapViewControls
                     goToDefaultView={goToDefaultView}
                     zoomRange={JIANGSU_ZOOM_RANGE}
                     dimension={dimension.value}
+                    defaultView={!underground}
                     onUpdate:dimension={switchDimension}
                   />
                 </div>
-                {renderBasemapCard()}
+                {!underground && renderBasemapCard()}
               </div>
             </div>
           </div>

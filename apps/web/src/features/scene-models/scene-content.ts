@@ -54,7 +54,7 @@ export function currentTilesetId(model: SceneModel, effects: ReadonlyMap<string,
 
 /**
  * 推导会话的三维内容（ADR 0081 第 2、5、6 节）：勾选的模型各一个瓦片集，白膜显示过的效果都留着、只显示当前的；
- * 地下、室内的用头灯光照；钻地期间不显示白膜
+ * 地下、室内的用头灯光照；钻地期间不显示地面上的模型（白膜、倾斜摄影会挡住地下空间，ADR 0084）
  */
 export function deriveSceneContent(models: readonly SceneModel[], state: SceneModelsState): SceneContent {
   const byId = new Map(models.map(model => [model.id, model]));
@@ -74,7 +74,7 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
         continue;
       }
       const tilesetId = tilesetIdOf(model, effect.id);
-      const hidden = model.kind === 'white' && undergroundModel !== undefined;
+      const hidden = !model.underground && undergroundModel !== undefined;
       tilesets.push({
         id: tilesetId,
         url: effect.url,

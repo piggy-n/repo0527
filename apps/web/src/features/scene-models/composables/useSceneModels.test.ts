@@ -120,19 +120,24 @@ describe('useSceneModels', () => {
     expect(ctx.owner.stateOf('white')).toBe('loading');
   });
 
-  it('定位：就绪后飞到报告的相机；地下的模型进入钻地、钻地期间不显示白膜，定位地面上的模型结束钻地', () => {
+  it('定位：就绪后飞到报告的相机；地下的模型进入钻地、钻地期间不显示地面上的模型，定位地面上的模型结束钻地', () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.owner.setChecked('white', true);
+    ctx.owner.setChecked('city', true);
     expect(() => ctx.owner.locate('station')).toThrow('模型 station 还不能定位');
 
-    ctx.ready('station', 'white/plain');
+    ctx.ready('station', 'white/plain', 'city');
     ctx.owner.locate('station');
 
     expect(ctx.flyTo).toHaveBeenCalledWith(CAMERA);
     expect(ctx.owner.focus.value).toBe('station');
     expect(ctx.owner.deriveContent().underground).toStrictEqual({ tilesetId: 'station', surfaceOpacity: 0.25 });
-    expect(summary(ctx.owner.deriveContent()).find(([id]) => id === 'white/plain')?.[1]).toBe(false);
+    expect(summary(ctx.owner.deriveContent()).map(([id, show]) => [id, show])).toStrictEqual([
+      ['station', true],
+      ['white/plain', false],
+      ['city', false]
+    ]);
 
     ctx.owner.setSurfaceOpacity(0.6);
     ctx.owner.locate('white');

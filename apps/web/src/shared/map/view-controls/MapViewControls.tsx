@@ -39,7 +39,9 @@ export const MapViewControls = defineComponent({
     /** 和画布的缩放范围相同 */
     zoomRange: { type: Object as PropType<ZoomRange>, required: true },
     /** 当前是二维还是三维；不传时三维按钮不可用（三维阶段之前，ADR 0053 第 3 节） */
-    dimension: { type: String as PropType<ViewKind>, default: undefined }
+    dimension: { type: String as PropType<ViewKind>, default: undefined },
+    /** 显示默认视角；地下空间时页面传 false：飞到全省会离开模型 */
+    defaultView: { type: Boolean, default: true }
   },
   emits: {
     'update:dimension': (value: ViewKind) => value === '2d' || value === '3d'
@@ -104,8 +106,8 @@ export const MapViewControls = defineComponent({
           </button>
         )}
         <div class={styles.separator} role="separator" />
-        {iconButton('默认视角', 'map-default-view', props.goToDefaultView)}
-        <div class={styles.separator} role="separator" />
+        {props.defaultView && iconButton('默认视角', 'map-default-view', props.goToDefaultView)}
+        {props.defaultView && <div class={styles.separator} role="separator" />}
         <div class={styles.dimension}>{renderDimension()}</div>
       </div>
     );

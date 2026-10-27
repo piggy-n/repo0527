@@ -80,6 +80,14 @@
         { "id": "window", "label": "内置效果1", "tileset": "SZ_WhiteModel/window/tileset.json" },
         { "id": "tech", "label": "内置效果2", "tileset": "SZ_WhiteModel/tech/tileset.json" }
       ]
+    },
+    {
+      "id": "xz-gc",
+      "name": "徐州倾斜摄影",
+      "cityCode": "320300",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "XZ_GC_3DT/tileset.json"
     }
   ]
 }
