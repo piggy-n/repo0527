@@ -4,6 +4,7 @@ import { ElAlert, ElButton, ElMessage, ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import type { ResourceRecord } from '@/features/resource-management/api';
+import { DataApplicationDialog } from '@/features/resource-management/components/DataApplicationDialog';
 import { DataExtractionDialog } from '@/features/resource-management/components/DataExtractionDialog';
 import { DiscardChangesDialog } from '@/features/resource-management/components/DiscardChangesDialog';
 import { ResourceDetailPanel } from '@/features/resource-management/components/ResourceDetailPanel';
@@ -11,6 +12,7 @@ import { ResourceDirectoryPanel } from '@/features/resource-management/component
 import { ResourceFilterBar } from '@/features/resource-management/components/ResourceFilterBar';
 import { ResourceServiceDialogs } from '@/features/resource-management/components/ResourceServiceDialogs';
 import { ResourceTable } from '@/features/resource-management/components/ResourceTable';
+import { useDataApplication } from '@/features/resource-management/composables/useDataApplication';
 import { useDataExtraction } from '@/features/resource-management/composables/useDataExtraction';
 import { useLayerServices } from '@/features/resource-management/composables/useLayerServices';
 import { useResourceDetail } from '@/features/resource-management/composables/useResourceDetail';
@@ -30,6 +32,7 @@ export const ResourceManagementPage = defineComponent({
     const status = useResourceStatus(list.resources, () => !list.isError.value && !list.refreshing.value);
     const services = useLayerServices();
     const extraction = useDataExtraction();
+    const application = useDataApplication();
     const session = useSessionStore();
     // 离开页面前确认未保存的修改；会话已结束（退出、过期）时直接放行，回到登录页
     onBeforeRouteLeave(() => !session.isActive() || detail.allowLeave());
@@ -105,6 +108,7 @@ export const ResourceManagementPage = defineComponent({
                 onToggle={row => void toggleStatus(row)}
                 onRetry={() => void list.refresh()}
                 onView={view}
+                onApply={application.start}
                 onListServices={services.openList}
                 onAddService={services.openForm}
               />
@@ -158,6 +162,7 @@ export const ResourceManagementPage = defineComponent({
         <DiscardChangesDialog owner={detail} />
         <ResourceServiceDialogs owner={services} />
         <DataExtractionDialog owner={extraction} />
+        <DataApplicationDialog owner={application} />
       </>
     );
   }

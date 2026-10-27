@@ -10,7 +10,7 @@ import { LAYER_SERVICE_LABELS, type LayerServiceKind } from '../layer-services';
 import { ResourceStatusSwitch } from './ResourceStatusSwitch';
 import styles from './ResourceManagement.module.scss';
 
-/** 资源列表：加载状态、查看详情、启停和附属服务的入口；开关显示的值始终来自查询缓存里的记录 */
+/** 资源列表：加载状态，查看详情、启停、附属服务和下载申请的入口；开关显示的值始终来自查询缓存里的记录 */
 export const ResourceTable = defineComponent({
   name: 'ResourceTable',
   directives: { loading: vLoading },
@@ -27,6 +27,7 @@ export const ResourceTable = defineComponent({
     retry: () => true,
     view: (_row: ResourceRecord) => true,
     toggle: (_row: ResourceRecord) => true,
+    apply: (_row: ResourceRecord) => true,
     listServices: (_row: ResourceRecord, _kind: LayerServiceKind) => true,
     addService: (_row: ResourceRecord, _kind: LayerServiceKind) => true
   },
@@ -129,12 +130,17 @@ export const ResourceTable = defineComponent({
                   )
                 }}
               </ElTableColumn>,
-              <ElTableColumn label="操作" width="90" fixed={compact.value ? false : 'right'} align="center">
+              <ElTableColumn label="操作" width="120" fixed={compact.value ? false : 'right'} align="center">
                 {{
                   default: ({ row }: { row: ResourceRecord }) => (
-                    <ElButton link type="primary" onClick={() => emit('view', row)}>
-                      查看
-                    </ElButton>
+                    <>
+                      <ElButton link type="primary" onClick={() => emit('view', row)}>
+                        查看
+                      </ElButton>
+                      <ElButton link type="primary" onClick={() => emit('apply', row)}>
+                        下载
+                      </ElButton>
+                    </>
                   )
                 }}
               </ElTableColumn>

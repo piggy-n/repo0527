@@ -172,6 +172,31 @@ export function setResourceStatus(id: string, enabled: boolean) {
   });
 }
 
+/** 数据下载申请的正文，字段名沿用旧页面的 /api/apply/create 调用 */
+export interface DataApplication {
+  applyName: string;
+  receiverDeptCode: string;
+  layerCode: string;
+  startDate: string;
+  endDate: string;
+  /** 行政区划代码 */
+  xzqdm: string;
+  /** 小写逗号串，如 excel,shp */
+  dataFormats: string;
+  applyPurpose: string;
+}
+
+/**
+ * 提交数据下载申请（审核通过后在申请列表里下载，不在本页）。成功的 data 还没有实测，
+ * 和导入一样只判断业务码、丢弃 data，不推断申请编号（docs/modules/resource-management.md 的待联调）
+ */
+export function createDataApplication(application: DataApplication) {
+  return http.post('/api/apply/create', application, {
+    schema: z.unknown().transform(() => undefined),
+    silent: true
+  });
+}
+
 export interface ResourceExcelImport {
   file: File;
   year: number | null;

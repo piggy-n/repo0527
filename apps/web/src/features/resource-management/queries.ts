@@ -4,6 +4,8 @@ import { useSessionGuard } from '@/shared/auth/session-guard';
 import type { TransferProgress } from '@/shared/http/client';
 import {
   changeResourceDirectory,
+  createDataApplication,
+  type DataApplication,
   fetchResourceDetail,
   fetchResourceDirectory,
   fetchResourcePage,
@@ -214,6 +216,22 @@ export function useResourceImportMutation() {
           queryClient.invalidateQueries({ queryKey: resourceManagementKeys.years() })
         ]);
       }
+    }
+  });
+}
+
+export interface ApplicationSubmission {
+  application: DataApplication;
+  token: string | undefined;
+}
+
+/** 提交数据下载申请；本页没有申请列表，成功后不刷新缓存 */
+export function useDataApplicationMutation() {
+  const sessionGuard = useSessionGuard();
+  return useMutation({
+    mutationFn: ({ application, token }: ApplicationSubmission) => {
+      sessionGuard.assertCurrent(token);
+      return createDataApplication(application);
     }
   });
 }

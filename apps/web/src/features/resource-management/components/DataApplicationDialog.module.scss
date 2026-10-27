@@ -1,0 +1,37 @@
+// 标题和底栏固定，表单在弹窗里滚动；上下各留 16
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+
+  :global(.el-dialog__header),
+  :global(.el-dialog__footer) {
+    flex: none;
+  }
+
+  :global(.el-dialog__body) {
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+.form {
+  :global(.el-select),
+  :global(.el-date-editor.el-input) {
+    width: 100%;
+  }
+}
+
+// 开始、结束时间并排；窄屏上下排
+.timeRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-lg);
+}
+
+@media (max-width: 480px) {
+  .timeRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
