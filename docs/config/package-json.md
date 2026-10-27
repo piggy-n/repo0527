@@ -83,7 +83,7 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 ```json
 "devDependencies": {
   "eslint-import-resolver-typescript": "^4.4.5",
-  "eslint-plugin-boundaries": "^7.2.0",
+  "eslint-plugin-boundaries": "^7.2.1",
   "oxlint": "1.85.0",
   "oxlint-tsgolint": "7.0.2003",
   "typescript": "7.0.2"
@@ -94,7 +94,7 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 |---|---|---|
 | `oxlint` | 精确 | lint 主程序；依赖的 `jsPlugins` 处于 alpha 阶段，不承诺语义化版本 |
 | `oxlint-tsgolint` | 精确 | 类型感知规则，内置 Go 版 TS，要和 TS 一样精确锁定 |
-| `eslint-plugin-boundaries` | `^` | 依赖方向检查，通过 oxlint 的 `jsPlugins` 运行 |
+| `eslint-plugin-boundaries` | `^` | 依赖方向检查，通过 oxlint 的 `jsPlugins` 运行；它对 `handlebars`、`@boundaries/elements` 是精确依赖，这两个包的安全修复要随插件升级 |
 | `eslint-import-resolver-typescript` | `^` | 让 boundaries 按 tsconfig 的 `paths` 解析 `@/`、`@yzt/` |
 | `typescript` | 精确 | TS 不遵守语义化版本，小版本也可能带来新的类型错误 |
 
@@ -150,7 +150,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "d3-geo": "3.1.1",
     "d3-polygon": "3.0.1",
     "docx-preview": "0.4.1",
-    "echarts": "^5.6.0",
+    "echarts": "^6.1.0",
     "element-plus": "^2.14.6",
     "geographiclib-geodesic": "^2.2.0",
     "gsap": "3.13.0",
@@ -164,7 +164,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "three": "0.183.2",
     "vue": "^3.5.43",
     "vue-router": "^5.3.1",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/d3-geo": "3.1.1",
@@ -174,7 +174,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "@types/sortablejs": "^1.15.9",
     "@types/three": "0.183.1",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
-    "@vitest/browser-playwright": "^5.0.3",
+    "@vitest/browser-playwright": "^5.0.5",
     "@vue/test-utils": "^2.5.1",
     "jsdom": "^30.1.1",
     "msw": "^2.15.0",
@@ -182,9 +182,9 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "playwright": "^1.64.0",
     "sass-embedded": "^1.105.0",
     "typescript": "7.0.2",
-    "vite": "^8.3.1",
+    "vite": "^8.3.5",
     "vite-plugin-static-copy": "^4.1.1",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.5"
   }
 }
 ```
