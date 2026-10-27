@@ -413,6 +413,30 @@ describe('CesiumScene', () => {
     expect(gaps).toBe(0);
   }, 30000);
 
+  it('在相机变化的回调里重建（跨级重新推导就是这样）：换过坐标的线同样留到新的画好', async () => {
+    const scene = createScene(960, 640, true);
+    scene.jumpTo({ center: [119, 32], zoom: 8, bearing: 0, pitch: 0 });
+    scene.setOverlays(planLayers(32.6));
+    await expect(waitForFrames(() => near(colorAt(scene, [119, 32.6]), [0, 0, 255]))).resolves.toBe('ok');
+    // 只换坐标：线改成每帧读取，不再在 Cesium 的静态批次里（静态批次自己会把旧的留到新的建好）
+    scene.setOverlays(planLayers(31.3));
+    await expect(waitForFrames(() => near(colorAt(scene, [119, 31.3]), [0, 0, 255]))).resolves.toBe('ok');
+
+    let rebuilt = false;
+    const unsubscribe = scene.on('camerachange', () => {
+      if (!rebuilt) {
+        rebuilt = true;
+        scene.setOverlays(planLayers(31.3, 12));
+      }
+    });
+    scene.jumpTo({ center: [119.02, 32], zoom: 8, bearing: 0, pitch: 0 });
+    const gaps = await failingFrames(90, () => near(colorAt(scene, [119, 31.3]), [0, 0, 255]));
+    unsubscribe();
+
+    expect(rebuilt).toBe(true);
+    expect(gaps).toBe(0);
+  }, 30000);
+
   it('样式不变只改坐标：线移到新位置，原来的位置露出遮罩', async () => {
     const scene = createScene(960, 640, true);
     scene.jumpTo({ center: [119, 32], zoom: 8, bearing: 0, pitch: 0 });

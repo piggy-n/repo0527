@@ -134,6 +134,16 @@ export class SceneTilesets implements Disposable {
     return this.#entries.get(id)?.tileset.boundingSphere;
   }
 
+  /** 有显示着的瓦片集：没有时拾取模型注定落空 */
+  get anyShown(): boolean {
+    for (const { tileset } of this.#entries.values()) {
+      if (tileset.show) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   [Symbol.dispose](): void {
     this.#disposed = true;
     for (const id of this.#entries.keys()) {

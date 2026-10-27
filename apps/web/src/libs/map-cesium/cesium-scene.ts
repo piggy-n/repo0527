@@ -57,6 +57,7 @@ import {
   WebGLUnavailableError
 } from './scene-like';
 import type { OverlayLayer, OverlayShape, RgbaColor } from './overlay-plan';
+import { movableInPlace } from './overlay-update';
 import type { PreparedTileset } from './prepare-tileset';
 import { SceneTilesets } from './scene-tilesets';
 import { footprintOf, SceneUnderground } from './scene-underground';
@@ -145,34 +146,6 @@ function colorOf([r, g, b, a]: RgbaColor): Color {
   return new Color(r, g, b, a);
 }
 
-function sameColor(a: RgbaColor, b: RgbaColor): boolean {
-  return a.every((value, index) => value === b[index]);
-}
-
-// 样式完全相同的两个形状：坐标可以直接换，不用重建实体
-function sameStyle(a: OverlayShape, b: OverlayShape): boolean {
-  if (a.kind === 'line' && b.kind === 'line') {
-    return (
-      sameColor(a.color, b.color) &&
-      a.width === b.width &&
-      a.dash?.length === b.dash?.length &&
-      a.dash?.pattern === b.dash?.pattern
-    );
-  }
-  if (a.kind === 'polygon' && b.kind === 'polygon') {
-    return sameColor(a.color, b.color);
-  }
-  if (a.kind === 'point' && b.kind === 'point') {
-    return (
-      a.radius === b.radius &&
-      a.strokeWidth === b.strokeWidth &&
-      sameColor(a.color, b.color) &&
-      sameColor(a.strokeColor, b.strokeColor)
-    );
-  }
-  return false;
-}
-
 /** 唯一调用 Cesium 的门面（ADR 0079 第 3 节）：CesiumView 通过 SceneLike 使用它 */
 export class CesiumScene implements SceneLike {
   readonly #widget: CesiumWidget;
@@ -180,7 +153,7 @@ export class CesiumScene implements SceneLike {
   readonly #stack: DisposableStack;
   readonly #imagery = new Map<string, ImageryEntry>();
   readonly #overlays = new Map<string, OverlayEntry>();
-  // 被替换的图层的实体：留到新的画好再移除，重建期间不空白（ADR 0080 第 1 节）
+  // 被替换的图层的实体：留到新加的都画好再移除，重建期间不空白（ADR 0080 第 1 节、ADR 0082）
   #retiring: Entity[] = [];
   #flying = false;
   readonly #tilesets: SceneTilesets;
@@ -390,7 +363,8 @@ export class CesiumScene implements SceneLike {
   pick({ x, y }: ScreenPoint): PickResult {
     const { scene, camera } = this.#widget;
     const position = new Cartesian2(x, y);
-    if (scene.pickPositionSupported) {
+    // 拾取模型要多画一遍拾取缓冲再读像素，状态栏的经纬度每帧都拾取一次：没有显示着的模型时直接取椭球面
+    if (scene.pickPositionSupported && this.#tilesets.anyShown) {
       const picked: unknown = scene.pick(position);
       const world = isModel(picked) ? scene.pickPosition(position) : undefined;
       if (world) {
@@ -632,9 +606,10 @@ export class CesiumScene implements SceneLike {
     this.#widget.scene.requestRender();
   }
 
-  // 所有实体都画好了才移除被替换的：在那之前新旧都在，半透明的线短暂地叠深一些
+  // 新加的实体都画好了才移除被替换的：在那之前新旧都在，半透明的线短暂地叠深一些（ADR 0082 第 2 节）。
+  // 看 clock.canAnimate：CesiumWidget 每帧把 dataSourceDisplay.update 的结果写进去；dataSourceDisplay.ready 第一次就绪后一直为 true
   #removeRetired(): void {
-    if (this.#retiring.length === 0 || !this.#widget.dataSourceDisplay.ready) {
+    if (this.#retiring.length === 0 || !this.#widget.clock.canAnimate) {
       return;
     }
     for (const entity of this.#retiring) {
@@ -646,8 +621,8 @@ export class CesiumScene implements SceneLike {
 
   // 相机停下、影像瓦片和覆盖物都画好了才算稳定
   #checkSettled(): void {
-    const { scene, dataSourceDisplay } = this.#widget;
-    const drawn = scene.globe.tilesLoaded && dataSourceDisplay.ready && this.#retiring.length === 0;
+    const { scene, clock } = this.#widget;
+    const drawn = scene.globe.tilesLoaded && clock.canAnimate && this.#retiring.length === 0;
     if (!this.#settled && !this.#moving && drawn) {
       this.#settled = true;
       this.#emitter.emit('settle');
@@ -724,15 +699,12 @@ export class CesiumScene implements SceneLike {
     return { entity, geometry: position ? [position] : [], live: false };
   }
 
-  // 样式和形状个数都没变：只换坐标。第一次换时改成每帧读取，之后的变化不再重建几何
+  // 样式和形状个数都没变的小图层：只换坐标。第一次换时改成每帧读取，之后的变化不再重建几何（ADR 0082）
   #moveOverlay(entry: OverlayEntry, layer: OverlayLayer): boolean {
-    const { shapes } = layer;
-    const previous = entry.layer.shapes;
-    const restyled = shapes.some((shape, index) => !sameStyle(shape, previous[index] ?? shape));
-    if (shapes.length !== previous.length || restyled) {
+    if (!movableInPlace(entry.layer, layer)) {
       return false;
     }
-    for (const [index, shape] of shapes.entries()) {
+    for (const [index, shape] of layer.shapes.entries()) {
       const item = entry.items[index];
       if (item) {
         this.#moveShape(item, shape);

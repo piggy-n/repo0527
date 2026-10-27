@@ -89,8 +89,9 @@
 | [0077](0077-city-dashboard-isolated-rendering.md) | 城市体检驾驶舱独立渲染与资源所有权 | 已接受 |
 | [0078](0078-3d-scope-and-interaction.md) | 三维阶段的范围与交互 | 已接受 |
 | [0079](0079-cesium-view-and-dimension-switch.md) | Cesium 运行时、三维视图与二三维切换 | 已接受（修正 0002 的 Cesium 版本） |
-| [0080](0080-3d-overlays-measure-and-status.md) | 三维的覆盖物、测量、临时拖动与状态栏 | 已接受（三维期间暂停 0048、0049 中三维的识别） |
+| [0080](0080-3d-overlays-measure-and-status.md) | 三维的覆盖物、测量、临时拖动与状态栏 | 已接受（三维期间暂停 0048、0049 中三维的识别；第 1 节的只改坐标、等画好由 0082 修正） |
 | [0081](0081-3d-models-scene-content-and-underground.md) | 三维模型：3DT 清单、会话的三维内容与钻地 | 已接受 |
+| [0082](0082-3d-overlay-live-limit-and-rebuild-wait.md) | 三维覆盖物：只换坐标的点数上限、重建时等新实体画好 | 已接受（修正 0080 第 1 节） |
 
 ## 模板
 
