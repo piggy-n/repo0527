@@ -5,10 +5,10 @@ import { ElButton, ElMessage, ElOption, ElPagination, ElSelect, ElTable, ElTable
 import { computed, defineComponent, reactive, type Ref, ref } from 'vue';
 import { DEFAULT_CATEGORY_ID, findCategoryPath } from '@/features/file-management/categories';
 import { FileCategoryTree } from '@/features/file-management/components/FileCategoryTree';
+import { FileDownloadPanel } from '@/features/file-management/components/FileDownloadPanel';
 import { FileFilterBar } from '@/features/file-management/components/FileFilterBar';
 import { FilePreviewDialog } from '@/features/file-management/components/FilePreviewDialog';
 import { FileUploadDialog } from '@/features/file-management/components/FileUploadDialog';
-import { DownloadPanel } from '@/shared/file-transfer/DownloadPanel';
 import { TableSkeleton } from '@/shared/table/TableSkeleton';
 import {
   canPreviewSample,
@@ -265,7 +265,7 @@ export const DevFileManagementPage = defineComponent({
                     )
                   }}
                 </FileFilterBar>
-                <DownloadPanel model={downloads} />
+                <FileDownloadPanel model={downloads} />
                 {renderTable()}
               </>
             ),

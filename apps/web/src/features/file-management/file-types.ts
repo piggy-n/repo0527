@@ -1,7 +1,5 @@
 import type { FileRecord } from './api';
 
-export { formatFileBytes } from '@/shared/file-transfer/file-size';
-
 /** 传输只需要文件身份和取流参数，不复制整行业务数据 */
 export type FileTransferTarget = Pick<FileRecord, 'id' | 'name' | 'type' | 'objectKey'>;
 export type FilePreviewKind = 'docx' | 'pdf' | 'text' | 'image';
@@ -23,4 +21,12 @@ const types: Readonly<Record<string, { kind: FilePreviewKind; mime: string }>> =
 export function filePreviewType(type: string) {
   const extension = type.toLowerCase();
   return Object.hasOwn(types, extension) ? types[extension] : undefined;
+}
+
+/** 字节进度的简短显示，不推断缺失的总量 */
+export function formatFileBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  return bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`;
 }

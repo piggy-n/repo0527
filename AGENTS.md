@@ -269,9 +269,6 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 
 ## 迁移规则
 
-- 数据查询（ADR 0088）：表单草稿与已提交的查询快照分开，分页、地图和导出只用快照；高级查询与属性、空间、自然语言同级切换。范围绘制用 map-core 的 `PolygonDrawTool`，GUID 几何读取在 `shared/map`，导出复用 `shared/file-transfer`。没有旧配置的模块（森林草原湿地荒漠、水资源）只有地图壳，不臆造查询配置；自然语言只匹配旧版的示例。范围与待联调项见 `docs/stages/data-query-migration.md`
-- 系统管理只做管理员的资源审核与统计报表；下载用 `shared/file-transfer` 的 `useDownloads`、`DownloadPanel`，业务只提供取流函数。AI 对话目前只有 `/dev/ai-chat` 交互预览，鉴权契约明确后再接入，不迁移前端共享账号密码、SSE 失败后自动重复提交和旧 Mapbox 适配。范围与待联调项见 `docs/stages/ai-system-management-migration.md`
-- 消息中心（ADR 0087）在顶栏下方用原生 Popover 展示，不保留独立页面；消息和业务跳转由 app 装配，feature 不导入系统管理。进入应用读取一次、打开弹框时刷新，不后台轮询；已读写入成功后才更新查询缓存。范围与验证见 `docs/stages/message-center-migration.md`
 - 城市体检驾驶舱纳入阶段六，含自身的 Three.js 立体行政区地图；三维阶段（ADR 0078）只指现状底图的 Cesium 模块。先确认交互预览再分步实施，固定模拟指标与真实业务数据验收分开；入场按局部可见时长编排，不修改 GSAP 全局 ticker；图片保存复用 `shared/file-transfer`，缺少部署字体时沿用后备字体并保留卸载取消。范围、性能条件与基线见 `docs/modules/city-dashboard.md`
 - 只迁移旧项目中实际在用的模块。不迁移：资源中心（含独立的知识图谱页；但代码放在 `views/resource-center/` 下的文件管理、资源管理"自助取数"用到的图谱数据和布局要迁移）、资源共享、统计分析、旧版 resource-management、`views/sys` 与动态菜单路由、`/home` 测试页、mockjs、backend-switcher
 - 先读懂旧模块的行为，再按新架构重写，不逐行照搬；类结构和算法有价值的，保留设计并补上类型

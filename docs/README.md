@@ -53,10 +53,6 @@ docs/
 │  ├─ current-map-reference.md 现状底图交互样例：已验收组件、年份规则与复查路径
 │  └─ fonts.md                字体：来源、授权要点、存放位置、字重与性能
 └─ stages/                    各阶段的总结与学习笔记
-   ├─ ai-system-management-migration.md AI 对话与系统管理：范围、交互预览与接入待办
-   ├─ message-center-migration.md 消息中心：Header 弹框交互稿与接入计划
-   ├─ data-query-migration.md    数据查询：四模块迁移、条件快照、正式验收与待联调项
-   ├─ ai-system-management-merge-review.md 上面三个迁移合入 main 前的整理、整改与验证
    ├─ stage-1-engineering-foundation.md  阶段一：工程基础
    ├─ stage-2-app-skeleton-and-auth.md   阶段二：应用骨架、数据层与鉴权
    ├─ stage-3-layout-and-first-list.md   阶段三：页面布局与第一个列表页
@@ -90,7 +86,6 @@ docs/
    - [城市体检驾驶舱独立验收](stages/city-dashboard-acceptance.md)
    - [阶段五之后的代码审查与整改](stages/post-5e-code-review.md)：继续迁移前先读，写法和会话核对的统一做法在这里
    - [main 分支的第二次全面审查与整改](stages/main-full-review.md)：在上一篇之后读，写法指标、测试里取必需值的做法和仍待决定的事项在这里
-   - [系统管理、消息中心、数据查询合入前的整理与整改](stages/ai-system-management-merge-review.md)：按上面两篇的标准整改迁移分支，读取不另外核对会话的理由在这里
 5. [commands.md](commands.md)：日常要用的命令
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明，并按 [UI 工作流程](design/ui-workflow.md) 完成交互原型和实际页面验证。

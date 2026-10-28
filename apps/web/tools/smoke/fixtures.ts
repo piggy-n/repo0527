@@ -36,8 +36,6 @@ export const test = base.extend<{ localBackend: undefined }>({
         data = [];
       } else if (url.pathname === '/backend/file/page' && request.method() === 'GET') {
         data = { content: [], pageNo: 1, pageSize: 10, totalElements: 0, totalPages: 0 };
-      } else if (url.pathname === '/backend/api/message/list' && request.method() === 'POST') {
-        data = [];
       } else {
         unexpected.push(`未模拟接口：${request.method()} ${url.pathname}`);
         await route.abort('blockedbyclient');

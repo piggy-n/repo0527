@@ -300,7 +300,5 @@ export const http = {
   put: <Schema extends z.ZodType>(url: string, body: unknown, options: RequestOptions<Schema>) =>
     requestJson({ method: 'put', url, data: body }, options),
   getBlob: (url: string, options: BinaryRequestOptions = {}): Promise<BinaryResponse> =>
-    request({ method: 'get', url, responseType: 'blob' }, options, parseBinaryResponse),
-  postBlob: (url: string, body: unknown, options: BinaryRequestOptions = {}): Promise<BinaryResponse> =>
-    request({ method: 'post', url, data: body, responseType: 'blob' }, options, parseBinaryResponse)
+    request({ method: 'get', url, responseType: 'blob' }, options, parseBinaryResponse)
 };

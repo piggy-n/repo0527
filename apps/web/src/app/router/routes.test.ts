@@ -1,4 +1,4 @@
-import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router';
+import type { RouteRecordRaw } from 'vue-router';
 import { describe, expect, it } from 'vitest';
 import { Role } from '@/shared/auth/roles';
 import { RouteName } from '@/shared/router/route-names';
@@ -35,10 +35,6 @@ describe('路由表', () => {
       RouteName.devTheme,
       RouteName.devFileManagement,
       RouteName.devResourceManagement,
-      RouteName.devAiChat,
-      RouteName.devSystemManagement,
-      RouteName.devMessageCenter,
-      RouteName.devDataQuery,
       RouteName.devMap,
       RouteName.devResources,
       RouteName.devMapUi,
@@ -73,35 +69,6 @@ describe('路由表', () => {
       [RouteName.systemManagement]: [Role.admin],
       [RouteName.resourceApplication]: [Role.user]
     });
-  });
-
-  it('系统管理保留两个旧地址，共用管理员权限并通过 props 区分栏目', () => {
-    const router = createRouter({ history: createMemoryHistory(), routes });
-    const audit = router.resolve('/system-management');
-    const reports = router.resolve('/system-management/statistical-report');
-    expect(audit.name).toBe(RouteName.systemManagement);
-    expect(reports.name).toBe(RouteName.systemManagement);
-    expect(reports.meta.roles).toEqual([Role.admin]);
-    const record = records.find(item => item.name === RouteName.systemManagement);
-    const props = record?.props;
-    expect(typeof props).toBe('function');
-    if (typeof props !== 'function') {
-      throw new Error('系统管理需要通过路由 props 选择栏目');
-    }
-    expect(props({ ...audit, name: RouteName.systemManagement }))
-      .toEqual({ section: 'audit', applicationId: undefined });
-    expect(props({ ...reports, name: RouteName.systemManagement }))
-      .toEqual({ section: 'reports', applicationId: undefined });
-    expect(props({ ...audit, name: RouteName.systemManagement, query: { applicationId: 'one' } }))
-      .toMatchObject({ applicationId: 'one' });
-    expect(props({ ...audit, name: RouteName.systemManagement, query: { applicationId: ['one', 'two'] } }))
-      .toMatchObject({ applicationId: undefined });
-    expect(router.resolve('/system-management/unknown').name).toBe(RouteName.notFound);
-  });
-
-  it('消息中心由 Header 弹框承载，不保留独立页面', () => {
-    const router = createRouter({ history: createMemoryHistory(), routes });
-    expect(router.resolve('/message-center').name).toBe(RouteName.notFound);
   });
 
   it('驾驶舱独立懒加载，所有登录角色可访问且离开即释放', () => {

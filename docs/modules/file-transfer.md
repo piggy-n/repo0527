@@ -6,14 +6,13 @@
 
 依据：[HTTP](http.md)、[ADR 0011](../adr/0011-http-client-axios-zod-msw.md)、[ADR 0017](../adr/0017-server-state-with-tanstack-query.md)、[ADR 0039](../adr/0039-async-supersede-rules.md)。旧项目核对记录见 [迁移进度](../migration.md)。
 
-## 使用场景
+## 三个使用场景
 
 | 场景 | 实际调用与字段 | 公共部分 | 业务拥有者 |
 |---|---|---|---|
 | 文件上传 | `POST /file/upload`；一个 FormData 重复追加 `files`，共用 `year`、`categoryId`、`tag`，非空时追加 `remark` | FormData、整批字节进度、鉴权、超时、错误 | 文件分类、元数据校验、防重复、上传结果 schema、列表失效 |
 | 文件下载与预览取流 | `GET /file/download?objectKey=…`；实际不调用已声明的 `/file/preview` | 二进制响应、进度、文件名、MIME、取消、失败响应识别、浏览器保存 | objectKey、预览白名单、预览交互与生命周期 |
 | 资源管理 Excel 导入 | `POST /resource-management/layer/create-attribute-by-excel`；单个 `file`，可选 `year`，没有 layerId 字段；选择器接受 `.xlsx,.xls` | 复用 FormData 上传与进度 | Excel 类型校验、返回 schema、导入成功后刷新属性表 |
-| 系统管理下载 | 申请 `POST /api/apply/download/{id}`，报表 `GET /statistics/download?id=…` | 复用文件读取、下载任务、进度区、取消与重试 | 审核权限、准备状态、文件目标和后备名称 |
 
 `http.post` 沿用原来的 FormData body 与 zod 返回校验，新增公共进度接口。`http.getBlob` 提供独立的二进制解析路径，两者共用同一个 Axios 实例、请求配置、鉴权、超时及错误通知，不另建客户端。
 
@@ -71,9 +70,7 @@ fetchFile(url, { query, fallbackName, fallbackType, signal, onDownloadProgress }
 saveFile(file);
 ```
 
-`getBlob` / `postBlob` 返回 `Promise<BinaryResponse>`；`fetchFile` 返回 `Promise<DownloadedFile>`，同时透传 `timeout`、`silent`；`saveFile` 不发请求、不弹提示。2026-10-23 增加系统管理实际需要的 POST 取流：`http.postBlob(url, body, options)` 共用既有解析器。2026-10-24 数据查询导出通过 `fetchFile(url, { method: 'post', body, ...options })` 传递 JSON 或 FormData；省略 body 保持申请下载行为，省略 method 仍为 GET。查询导出属于读取，复用 `useDownloads` 的取消与会话核对。
-
-`useDownloads(request)` 接收业务取流函数，目标至少包含 id、name；返回任务列表、start、按 ID 重试、取消与清理。它负责按目标 ID 防重复、作用域 / 会话结束时取消，并在返回后复查中止信号；业务仍负责可下载条件。`DownloadPanel` 是文件管理与系统管理共用的进度区，文件管理适配器仅绑定 `fetchFileContent`。任务不保存列表记录或 Blob 到查询缓存，页面外不继续后台下载；系统管理切换栏目不卸载页面，因此下载继续。
+`getBlob` 返回 `Promise<BinaryResponse>`；`fetchFile` 返回 `Promise<DownloadedFile>`，同时透传 `timeout`、`silent`；`saveFile` 不发请求、不弹提示。公共基础第一版只提供这三个场景需要的 GET 文件流，未来遇到 POST 导出再扩展。
 
 文件管理业务接口 `fetchFileContent` 的调用方式：
 

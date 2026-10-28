@@ -1,22 +1,16 @@
 import { ArrowDown, ArrowRight } from '@element-plus/icons-vue';
 import { MxTitle } from '@yzt/ui';
 import { ElButton, ElProgress } from 'element-plus';
-import { computed, defineComponent, type PropType, ref, type Ref, useId } from 'vue';
-import { useDelayedFlag } from '../composables/useDelayedFlag';
-import { formatFileBytes } from './file-size';
-import type { DownloadPhase, DownloadTask } from './useDownloads';
-import styles from './DownloadPanel.module.scss';
+import { computed, defineComponent, type PropType, ref, useId } from 'vue';
+import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
+import type { FileDownloadPhase, FileDownloadTask, useFileDownloads } from '../composables/useFileDownloads';
+import { formatFileBytes } from '../file-types';
+import styles from './FileTransfer.module.scss';
 
-interface DownloadsModel {
-  tasks: Ref<readonly DownloadTask[]>;
-  isDownloading: (id: string) => boolean;
-  cancel: (task: DownloadTask) => void;
-  retry: (id: string) => Promise<void>;
-  clearFinished: () => void;
-}
+type FileDownloads = ReturnType<typeof useFileDownloads>;
 
 // 接收中有百分比时显示百分比；总量未知时只显示已接收的字节
-function receivingText({ progress }: DownloadTask): string {
+function receivingText({ progress }: FileDownloadTask): string {
   if (typeof progress?.percent === 'number') {
     return `正在接收 · ${progress.percent}%`;
   }
@@ -24,13 +18,13 @@ function receivingText({ progress }: DownloadTask): string {
 }
 
 // 文字固定的几种状态；接收中和失败另外拼
-const PHASE_TEXTS: Record<Exclude<DownloadPhase, 'receiving' | 'error'>, string> = {
+const PHASE_TEXTS: Record<Exclude<FileDownloadPhase, 'receiving' | 'error'>, string> = {
   checking: '文件已接收，正在检查下载内容',
   done: '已交给浏览器保存',
   canceled: '已取消本次下载'
 };
 
-function statusText(task: DownloadTask): string {
+function statusText(task: FileDownloadTask): string {
   if (task.phase === 'receiving') {
     return receivingText(task);
   }
@@ -38,10 +32,10 @@ function statusText(task: DownloadTask): string {
 }
 
 /** 下载进度区：放在表格上方，不依赖表格当前的行，筛选或翻页后仍能取消、重试本页发起的下载 */
-export const DownloadPanel = defineComponent({
-  name: 'DownloadPanel',
+export const FileDownloadPanel = defineComponent({
+  name: 'FileDownloadPanel',
   props: {
-    model: { type: Object as PropType<DownloadsModel>, required: true }
+    model: { type: Object as PropType<FileDownloads>, required: true }
   },
   setup(props) {
     // 默认收起；新增和完成任务都不改变用户选择的展开状态
@@ -54,22 +48,22 @@ export const DownloadPanel = defineComponent({
     // 进度条延迟出现，很快完成的下载不闪一下
     const showProgress = useDelayedFlag(() => runningCount.value > 0);
 
-    function toggleTask(task: DownloadTask) {
+    function toggleTask(task: FileDownloadTask) {
       if (props.model.isDownloading(task.file.id)) {
         props.model.cancel(task);
       } else {
-        void props.model.retry(task.file.id);
+        void props.model.start(task.file);
       }
     }
 
-    function actionLabel(task: DownloadTask): string {
+    function actionLabel(task: FileDownloadTask): string {
       if (props.model.isDownloading(task.file.id)) {
         return '取消';
       }
       return task.phase === 'done' ? '重新下载' : '重试';
     }
 
-    function renderTask(task: DownloadTask) {
+    function renderTask(task: FileDownloadTask) {
       const percent = task.progress?.percent;
       const statusClass = [
         styles.taskStatus,

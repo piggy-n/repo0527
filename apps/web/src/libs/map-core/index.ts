@@ -122,7 +122,6 @@ export {
   type StyleModelOptions,
   type StyleRoot
 } from './style/style-model';
-export { drawnPolygon, PolygonDrawTool, type PolygonDrawOptions } from './tool/polygon-draw-tool';
 export {
   BROWSE_TOOL,
   type Gestures,

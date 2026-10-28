@@ -12,10 +12,6 @@ export const loadCurrentMapPage = withMapRuntime(() =>
   import('@/pages/current-map/CurrentMapPage').then(({ CurrentMapPage }) => CurrentMapPage)
 );
 
-const loadDataQueryPage = withMapRuntime(() =>
-  import('@/pages/data-query/DataQueryPage').then(({ DataQueryPage }) => DataQueryPage)
-);
-
 // 尚未迁移的业务页，迁移后换成指向真实页面的完整路由记录；roles 不写时所有已登录用户都能访问
 const placeholder = (path: string, name: RouteName, title: string, roles?: readonly Role[]): RouteRecordRaw => ({
   path,
@@ -32,34 +28,10 @@ const businessRoutes: RouteRecordRaw[] = [
     component: loadCurrentMapPage,
     meta: { title: '现状底图', keepAlive: true }
   },
-  {
-    path: 'land-change-query',
-    name: RouteName.landChangeQuery,
-    component: loadDataQueryPage,
-    props: { module: 'land' },
-    meta: { title: '国土变更调查查询' }
-  },
-  {
-    path: 'space-monitoring-query',
-    name: RouteName.spaceMonitoringQuery,
-    component: loadDataQueryPage,
-    props: { module: 'city' },
-    meta: { title: '城市国土空间监测查询' }
-  },
-  {
-    path: 'forest-grass-wetland-desert-query',
-    name: RouteName.forestGrassWetlandDesertQuery,
-    component: loadDataQueryPage,
-    props: { module: 'forest' },
-    meta: { title: '森林草原湿地荒漠调查监测' }
-  },
-  {
-    path: 'water-resource-basic-query',
-    name: RouteName.waterResourceBasicQuery,
-    component: loadDataQueryPage,
-    props: { module: 'water' },
-    meta: { title: '水资源基础调查' }
-  },
+  placeholder('land-change-query', RouteName.landChangeQuery, '国土变更调查查询'),
+  placeholder('space-monitoring-query', RouteName.spaceMonitoringQuery, '城市国土空间监测查询'),
+  placeholder('forest-grass-wetland-desert-query', RouteName.forestGrassWetlandDesertQuery, '森林草原湿地荒漠调查监测'),
+  placeholder('water-resource-basic-query', RouteName.waterResourceBasicQuery, '水资源基础调查'),
   placeholder('space-monitoring-basic-statistics', RouteName.spaceMonitoringBasicStatistics, '城市国土空间监测基本统计'),
   placeholder('space-monitoring-indicators', RouteName.spaceMonitoringIndicators, '城市国土空间监测指标'),
   {
@@ -70,6 +42,7 @@ const businessRoutes: RouteRecordRaw[] = [
     meta: { title: '文件管理' }
   },
   placeholder('ai-chat', RouteName.aiChat, 'AI对话'),
+  placeholder('message-center', RouteName.messageCenter, '消息中心'),
   {
     path: 'resource-management',
     name: RouteName.resourceManagement,
@@ -80,50 +53,12 @@ const businessRoutes: RouteRecordRaw[] = [
     meta: { title: '资源管理', roles: [Role.admin] }
   },
   placeholder('resource-application', RouteName.resourceApplication, '资源申请', [Role.user]),
-  {
-    path: 'system-management/:section(statistical-report)?',
-    name: RouteName.systemManagement,
-    component: () => import('@/pages/system-management/SystemManagementPage')
-      .then(({ SystemManagementPage }) => SystemManagementPage),
-    props: route => ({
-      section: route.params.section === 'statistical-report' ? 'reports' : 'audit',
-      applicationId: typeof route.query.applicationId === 'string' ? route.query.applicationId : undefined
-    }),
-    meta: { title: '系统管理', roles: [Role.admin] }
-  }
+  placeholder('system-management', RouteName.systemManagement, '系统管理', [Role.admin])
 ];
 
 // 开发页面：放在 pages/dev/<名称>/，路由名 dev<名称>，路径 /dev/<名称>（AGENTS.md）
 // 生产构建中 import.meta.env.DEV 为 false，这些路由连同页面代码都不会进入产物
 const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
-  {
-    path: '/dev/data-query',
-    name: RouteName.devDataQuery,
-    component: withMapRuntime(() =>
-      import('../previews/DataQueryPreview').then(({ DataQueryPreview }) => DataQueryPreview)
-    ),
-    meta: { title: '数据查询交互预览', public: true }
-  },
-  {
-    path: '/dev/message-center',
-    name: RouteName.devMessageCenter,
-    component: () => import('../previews/MessageCenterPreview')
-      .then(({ MessageCenterPreview }) => MessageCenterPreview),
-    meta: { title: '消息中心弹框预览', public: true }
-  },
-  {
-    path: '/dev/ai-chat',
-    name: RouteName.devAiChat,
-    component: () => import('@/pages/dev/ai-chat/DevAiChatPage').then(({ DevAiChatPage }) => DevAiChatPage),
-    meta: { title: 'AI 对话交互预览', public: true }
-  },
-  {
-    path: '/dev/system-management',
-    name: RouteName.devSystemManagement,
-    component: () => import('@/pages/dev/system-management/DevSystemManagementPage')
-      .then(({ DevSystemManagementPage }) => DevSystemManagementPage),
-    meta: { title: '系统管理交互预览', public: true }
-  },
   {
     path: '/dev/file-management',
     name: RouteName.devFileManagement,

@@ -11,7 +11,6 @@
 | 文件 | 内容 |
 |---|---|
 | `map-status.ts` | `describeMapStatus(viewState, failure)`：由视图状态和失败原因推导要显示的内容（纯函数） |
-| `geometry-schema.ts`、`feature-geometry.ts` | GeoJSON 几何校验、GUID 校验与唯一几何读取；从资源地图提取，供现状底图和数据查询共用，不跨 feature 导入（ADR 0088） |
 | `MapStatusNotice.tsx` | 加载中与失败的提示：中间的卡片、上方的警告条（设计稿 5D.7） |
 | `pointer-hint/pointer-hint.ts` | 鼠标旁的提示在哪一侧：右边、下边放不下时翻到另一侧（纯函数，ADR 0055）；提示的内容 `PointerHintContent`（位置和各行） |
 | `pointer-hint/PointerHint.tsx` | 鼠标旁的提示：加粗的数值和操作说明，测量和拾取共用 |

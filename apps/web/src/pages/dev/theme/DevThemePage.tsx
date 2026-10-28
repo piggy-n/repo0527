@@ -1,14 +1,4 @@
-import {
-  Delete,
-  Document,
-  Download,
-  Plus,
-  Refresh,
-  RefreshLeft,
-  Search,
-  Tickets,
-  Upload
-} from '@element-plus/icons-vue';
+import { Delete, Download, Plus, Refresh, RefreshLeft, Search, Upload } from '@element-plus/icons-vue';
 import {
   ElAlert,
   ElButton,
@@ -18,10 +8,7 @@ import {
   ElForm,
   ElFormItem,
   ElInput,
-  ElIcon,
   ElLink,
-  ElMenu,
-  ElMenuItem,
   ElMessage,
   ElMessageBox,
   ElOption,
@@ -610,24 +597,6 @@ export const DevThemePage = defineComponent({
         <section class={styles.section}>
           <h2 class={styles.sectionTitle}>分栏布局（@yzt/ui 的 MxSplitLayout，视口窄于 1200 时侧栏收进抽屉）</h2>
           <SplitLayoutPreview />
-        </section>
-
-        <section class={styles.section}>
-          <h2 class={styles.sectionTitle}>菜单型侧栏（menu-panel，迁移预览）</h2>
-          <ElMenu class="menu-panel" defaultActive="audit" style={{ width: '200px' }}>
-            <ElMenuItem index="audit">
-              <ElIcon>
-                <Tickets />
-              </ElIcon>
-              资源审核
-            </ElMenuItem>
-            <ElMenuItem index="reports">
-              <ElIcon>
-                <Document />
-              </ElIcon>
-              统计报表
-            </ElMenuItem>
-          </ElMenu>
         </section>
       </div>
     );

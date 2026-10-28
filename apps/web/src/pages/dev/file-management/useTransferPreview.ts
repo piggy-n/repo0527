@@ -11,7 +11,6 @@ import docxUrl from '@/features/file-management/fixtures/sample.docx?url';
 import pdfUrl from '@/features/file-management/fixtures/sample.pdf?url';
 import pngUrl from '@/features/file-management/fixtures/sample.png?url';
 import type { TransferProgress } from '@/shared/file-transfer';
-import type { DownloadTask } from '@/shared/file-transfer/useDownloads';
 
 /** 样例文件：固定的元数据，不读取用户文件 */
 export interface PreviewSample extends FileTransferTarget {
@@ -51,7 +50,7 @@ function progressOf(percent: number, unknownTotal: boolean): TransferProgress {
 }
 
 /**
- * 下载演示使用正式 DownloadPanel，按 scene 模拟结果，不发请求、不保存文件
+ * 下载的演示：接口和 useFileDownloads 一样，交给正式的 FileDownloadPanel 显示；按 scene 模拟结果，不发请求、不保存文件
  */
 export function useDownloadSample() {
   const scene = ref<DownloadScene>('success');
@@ -92,7 +91,7 @@ export function useDownloadSample() {
     timers.set(file.id, timer);
   }
 
-  function cancel(task: DownloadTask) {
+  function cancel(task: FileDownloadTask) {
     stop(task.file.id);
     task.phase = 'canceled';
   }
@@ -133,14 +132,7 @@ export function useDownloadSample() {
 
   onScopeDispose(clearAll);
 
-  async function retry(id: string) {
-    const task = tasks.value.find(item => item.file.id === id);
-    if (task) {
-      await start(task.file);
-    }
-  }
-
-  const model: ReturnType<typeof useFileDownloads> = { tasks, start, retry, cancel, isDownloading, clearFinished };
+  const model: ReturnType<typeof useFileDownloads> = { tasks, start, cancel, isDownloading, clearFinished };
   return { ...model, scene, clearAll, showStates };
 }
 
