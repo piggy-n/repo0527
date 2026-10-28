@@ -2,8 +2,6 @@ import type { RoutePoint } from './scene-content-model';
 
 /** 眼高：视点在脚下地板上方的米数（ADR 0083 第 1 节） */
 export const EYE_HEIGHT = 1.6;
-/** 1× 的速度（米每秒），同步行漫游的默认速度 */
-export const ROUTE_SPEED = 1.6;
 // 朝向看前方这么远的点；俯仰不超过这么多度
 const LOOK_AHEAD = 4;
 const MAX_PITCH = 30;

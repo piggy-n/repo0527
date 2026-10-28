@@ -15,7 +15,7 @@ import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { SceneModelPanel } from '@/features/scene-models/components/SceneModelPanel';
 import { IndoorMapDialog } from '@/features/scene-models/components/IndoorMapDialog';
 import { IndoorMinimap } from '@/features/scene-models/components/IndoorMinimap';
-import { RoamBar } from '@/features/scene-models/components/RoamBar';
+import { RoamPanel } from '@/features/scene-models/components/RoamPanel';
 import { UndergroundBar } from '@/features/scene-models/components/UndergroundBar';
 import { useSceneModels } from '@/features/scene-models/composables/useSceneModels';
 import { useSceneModelsQuery } from '@/features/scene-models/queries';
@@ -122,9 +122,10 @@ export const CurrentMapPage = defineComponent({
     // 三维模型（ADR 0081）：第一次切到三维时才读清单
     const sceneModelsQuery = useSceneModelsQuery(() => map.dimension.value === '3d');
     const models = useSceneModels(map, sceneModelsQuery.data);
-    // 地下空间（ADR 0084）：钻地中，包括漫游地下的模型（切到二维时结束钻地）；只隐藏不适用的入口，
-    // 功能面板、底图的开关和内容都保留，退出后原样显示；状态栏和视图控件也隐藏，不能切回二维（ADR 0095）
-    const undergroundSpace = computed(() => models.underground.value !== null);
+    // 漫游中或在地下空间（钻地中，ADR 0084）：只留漫游面板（钻地条）和小地图，工具栏、功能面板、底图、区划条、
+    // 视图控件和状态栏都隐藏，不能勾选模型、不能切回二维（ADR 0095、0097）；只隐藏不改状态，退出后原样显示
+    const roaming = computed(() => models.roam.value !== null);
+    const lockedDown = computed(() => roaming.value || models.underground.value !== null);
 
     // 业务状态仍由各自的拥有者持有，这里只组合窗口与排布
     const functions = usePanelGroup(FUNCTION_PANELS);
@@ -229,13 +230,13 @@ export const CurrentMapPage = defineComponent({
       map.setDimension(kind);
       basemap.selectForDimension(kind);
     };
-    // 进入地下空间时切回移动：测量、点选在地下不适用，退出后不恢复（ADR 0084）
-    watch(undergroundSpace, entered => {
+    // 开始漫游、进入地下空间时切回移动：测量、点选在这时不适用，退出后不恢复（ADR 0084、0097）
+    watch(lockedDown, entered => {
       if (entered) {
         map.activateTool(BROWSE_TOOL);
       }
     });
-    // 漫游接管鼠标，相当于一个工具：选了工具栏上移动以外的工具就退出（ADR 0078 第 6 节）；进入地下空间时切回移动不算
+    // 漫游接管鼠标，相当于一个工具：选了移动以外的工具就退出（ADR 0078 第 6 节）；开始漫游时切回移动不算
     watch(map.activeTool, tool => {
       if (tool !== BROWSE_TOOL) {
         models.exitRoam();
@@ -320,10 +321,42 @@ export const CurrentMapPage = defineComponent({
       );
     };
 
+    // 左侧一个面板：三维漫游时是漫游面板，其余二三维各一个。模型面板、资源面板切走时缓存起来，回来时搜索、展开这些
+    // 界面状态还在（停用期间按 ADR 0063 处理）；漫游面板不缓存，每次漫游重新开始
+    const renderLeft = (scene: boolean) => {
+      if (scene && roaming.value) {
+        return (
+          <RoamPanel models={models} collapsed={!sides.left.value} onUpdate:collapsed={changeLeftCollapsed} />
+        );
+      }
+      if (scene) {
+        return (
+          <SceneModelPanel
+            models={models}
+            failed={sceneModelsQuery.isError.value}
+            collapsed={!sides.left.value}
+            onRetry={() => void sceneModelsQuery.refetch()}
+            onUpdate:collapsed={changeLeftCollapsed}
+          />
+        );
+      }
+      return (
+        <ResourceLayerPanel
+          layers={resources}
+          catalogOrder={catalogOrder}
+          layout={panelLayout}
+          failed={catalogQuery.isError.value}
+          collapsed={!sides.left.value}
+          onRetry={() => void catalogQuery.refetch()}
+          onUpdate:collapsed={changeLeftCollapsed}
+        />
+      );
+    };
+
     return () => {
       const { phone, toolbarColumns } = layout.value;
-      const underground = undergroundSpace.value;
-      // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示；地下空间时区划不适用
+      const underground = lockedDown.value;
+      // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示；漫游、地下空间时区划不适用
       const scopeShown = (!phone || !sides.left.value) && !underground;
       const scene = map.dimension.value === '3d';
       const indoorMap = models.indoorMap.value;
@@ -342,38 +375,19 @@ export const CurrentMapPage = defineComponent({
           <MeasureOverlay measure={measure} />
           <LocationOverlay location={location} />
           <BoxSelectOverlay pick={pick} />
+          {/* 浮层里的区域都带 key：好几个按条件出现，同时变化时（开始漫游、进入地下空间、窄屏时换边）Vue 会把没有 key 的
+              div 按类型配对，左侧面板的 KeepAlive 配到别的 div 上就被重建，搜索、展开这些状态丢失（2026-10-28 发现） */}
           <div class={styles.overlay}>
             {/* 当前区划放在第一个：和面板重叠时（窄屏）面板在上面 */}
             {scopeShown && (
-              <div class={styles.scope}>
+              <div key="scope" class={styles.scope}>
                 <RegionScopeBar region={region} />
               </div>
             )}
-            <div class={[styles.left, underground && styles.noStatus]}>
-              {/* 二三维各一个面板：切走的缓存起来，回来时搜索、展开这些界面状态还在（停用期间按 ADR 0063 处理） */}
-              <KeepAlive>
-                {scene ? (
-                  <SceneModelPanel
-                    models={models}
-                    failed={sceneModelsQuery.isError.value}
-                    collapsed={!sides.left.value}
-                    onRetry={() => void sceneModelsQuery.refetch()}
-                    onUpdate:collapsed={changeLeftCollapsed}
-                  />
-                ) : (
-                  <ResourceLayerPanel
-                    layers={resources}
-                    catalogOrder={catalogOrder}
-                    layout={panelLayout}
-                    failed={catalogQuery.isError.value}
-                    collapsed={!sides.left.value}
-                    onRetry={() => void catalogQuery.refetch()}
-                    onUpdate:collapsed={changeLeftCollapsed}
-                  />
-                )}
-              </KeepAlive>
+            <div key="left" class={[styles.left, underground && styles.noStatus]}>
+              <KeepAlive exclude={RoamPanel.name}>{renderLeft(scene)}</KeepAlive>
             </div>
-            <div ref={lane} class={styles.lane}>
+            <div key="lane" ref={lane} class={styles.lane}>
               <div
                 class={styles.panelStack}
                 style={{ height: laneHeight.value > 0 ? `${stackHeight.value}px` : '100%' }}
@@ -430,26 +444,25 @@ export const CurrentMapPage = defineComponent({
               </div>
             </div>
             {scene && (
-              <div class={[styles.underground, phone && styles.phoneUnderground]}>
-                <RoamBar models={models} />
+              <div key="underground" class={[styles.underground, phone && styles.phoneUnderground]}>
                 <UndergroundBar models={models} />
               </div>
             )}
             {/* 步行时的小地图在右上角：地下空间时那里的工具栏、功能面板都隐藏了（ADR 0087） */}
             {scene && indoorMap && walkPlayer && minimapShown && (
-              <div class={styles.minimap}>
+              <div key="minimap" class={styles.minimap}>
                 <IndoorMinimap map={indoorMap} player={walkPlayer} onOpen={models.openMap} />
               </div>
             )}
             {/* 状态栏在左下角、左侧面板下面（ADR 0095） */}
             {!underground && (
-              <div class={styles.bottom}>
+              <div key="bottom" class={styles.bottom}>
                 <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
               </div>
             )}
-            <div class={styles.tools}>
+            <div key="tools" class={styles.tools}>
               {!underground && (
-                <div class={styles.business}>
+                <div key="business" class={styles.business}>
                   <MapToolbar
                     groups={TOOLBAR_GROUPS}
                     actions={toolbarActions}
@@ -461,7 +474,7 @@ export const CurrentMapPage = defineComponent({
                 </div>
               )}
               {!underground && (
-                <div class={styles.stack}>
+                <div key="stack" class={styles.stack}>
                   <div class={styles.controls}>
                     <MapViewControls
                       goToDefaultView={goToDefaultView}

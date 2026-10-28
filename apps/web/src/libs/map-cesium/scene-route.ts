@@ -1,4 +1,4 @@
-import { ROUTE_SPEED, type RoutePath, type RoutePose, smoothAngle } from '@yzt/map-core';
+import { type RoutePath, type RoutePose, smoothAngle } from '@yzt/map-core';
 import { Cartesian3, Math as CesiumMath, type CesiumWidget } from 'cesium';
 import type { RoutePlayback } from './scene-like';
 import { keepInputsOff, releaseCamera, type RoamSaved, takeOverCamera } from './scene-roam-camera';
@@ -35,7 +35,8 @@ export class SceneRoute implements Disposable {
   #saved: RoamSaved | null = null;
   #distance = 0;
   #playing = false;
-  #rate = 1;
+  // 米/秒，开始时由视图设
+  #speed = 1;
   #flying = false;
   #last: number | null = null;
   // 相机现在的朝向和俯仰（度），暂停时转头的偏移
@@ -104,8 +105,8 @@ export class SceneRoute implements Disposable {
     this.#events.progress(0);
   }
 
-  setPlayback({ playing, rate }: RoutePlayback): void {
-    this.#rate = rate;
+  setPlayback({ playing, speed }: RoutePlayback): void {
+    this.#speed = speed;
     if (playing !== this.#playing) {
       this.#playing = playing && this.#path !== null && this.#distance < this.#path.total;
       this.#last = null;
@@ -161,7 +162,7 @@ export class SceneRoute implements Disposable {
     const dt = this.#last === null ? 0 : Math.min((now - this.#last) / 1000, MAX_FRAME);
     this.#last = now;
     if (this.#playing) {
-      this.#distance = Math.min(path.total, this.#distance + dt * ROUTE_SPEED * this.#rate);
+      this.#distance = Math.min(path.total, this.#distance + dt * this.#speed);
       this.#events.progress(this.#distance);
       if (this.#distance >= path.total) {
         this.#playing = false;

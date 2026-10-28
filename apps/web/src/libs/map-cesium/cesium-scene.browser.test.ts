@@ -581,9 +581,9 @@ describe('CesiumScene', () => {
     await expect(waitForFrames(() => Math.abs(scene.eyeHeight() - EYE_HEIGHT) < 0.05)).resolves.toBe('ok');
     await expect(waitForFrames(() => Math.abs((scene.readCamera()?.bearing ?? 0) - 90) < 1)).resolves.toBe('ok');
 
-    scene.setRoutePlayback({ playing: true, rate: 2 });
+    scene.setRoutePlayback({ playing: true, speed: 3.2 });
     await expect(waitForFrames(() => (progress.at(-1) ?? 0) > 3)).resolves.toBe('ok');
-    scene.setRoutePlayback({ playing: false, rate: 2 });
+    scene.setRoutePlayback({ playing: false, speed: 3.2 });
     const walked = progress.at(-1) ?? 0;
     await expect(waitForFrames(() => true)).resolves.toBe('ok');
 
@@ -609,7 +609,7 @@ describe('CesiumScene', () => {
       [MODEL_AT[0], MODEL_AT[1] + 4 / 110_900, 0]
     ]));
     await expect(waitForFrames(() => Math.abs(scene.eyeHeight() - EYE_HEIGHT) < 0.05)).resolves.toBe('ok');
-    scene.setRoutePlayback({ playing: true, rate: 2 });
+    scene.setRoutePlayback({ playing: true, speed: 3.2 });
     await expect(waitForFrames(() => ended)).resolves.toBe('ok');
 
     scene.stopRoute(true);

@@ -34,10 +34,10 @@ export interface TilesetOptions {
   readonly lighting: TilesetLighting;
 }
 
-/** 路线漫游的播放（ADR 0083 第 3 节）：rate 是倍速 */
+/** 路线漫游的播放（ADR 0083 第 3 节）：speed 是米/秒（ADR 0097 第 4 节） */
 export interface RoutePlayback {
   readonly playing: boolean;
-  readonly rate: number;
+  readonly speed: number;
 }
 
 /** 开始步行时交给场景的（ADR 0086 第 3 节）：出生点按相机和清单选，speed 是米/秒；人称和人物模型见 ADR 0090 */

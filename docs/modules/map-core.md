@@ -129,7 +129,7 @@ session[Symbol.dispose]();
 - 会话的 `scene`：`{ tilesets, underground, roam? }`，和样式模型一样整体替换、每次替换修订号加 1、同一轮事件循环只通知一次；同一个对象不算变化
 - `set` 时校验：瓦片集 ID 不重复、地址是绝对地址（瓦片地址按它解析）、`attempt` 是非负整数、钻地指向已有的瓦片集、地表不透明度在 0～1；不合法时抛错，内容和修订号不变
 - 二维视图不读它；三维视图镜像它，按 ID 的状态通过可选的 `sceneStatus` / `onSceneStatusChange` 报告
-- `roam`（ADR 0083）：路线漫游的意图 `{ kind: 'route', id, path, playing, rate, run }`，`path` 是脚下地板的 `[经度, 纬度, 椭球高]`；校验至少两个点、坐标是数、倍速是正数、遍数是非负整数。没有漫游时不写。三维视图通过可选的 `roamStatus` / `onRoamStatusChange` 报告进度
+- `roam`（ADR 0083）：路线漫游的意图 `{ kind: 'route', id, path, playing, speed, run }`，`path` 是脚下地板的 `[经度, 纬度, 椭球高]`；校验至少两个点、坐标是数、速度（米/秒，ADR 0097）是正数、遍数是非负整数。没有漫游时不写。三维视图通过可选的 `roamStatus` / `onRoamStatusChange` 报告进度
 
 ### MapSession
 

@@ -741,7 +741,7 @@ export class CesiumView<const G extends string> implements MapView {
       const path = new RoutePath(wanted.path);
       this.#roam = { kind: 'route', roam: wanted, path, detached: false };
       scene.startRoute(path);
-      scene.setRoutePlayback({ playing: wanted.playing, rate: wanted.rate });
+      scene.setRoutePlayback({ playing: wanted.playing, speed: wanted.speed });
       // 从步行换过来时步行的光标已经撤掉，换回工具的
       this.#applyCursor(scene);
       const { id, run } = wanted;
@@ -769,8 +769,8 @@ export class CesiumView<const G extends string> implements MapView {
       const { id, run } = wanted;
       this.#publishRoam({ kind: 'route', id, run, distance: 0, total: entry.path.total, finished: false });
     }
-    if (wanted.playing !== previous.playing || wanted.rate !== previous.rate) {
-      scene.setRoutePlayback({ playing: wanted.playing, rate: wanted.rate });
+    if (wanted.playing !== previous.playing || wanted.speed !== previous.speed) {
+      scene.setRoutePlayback({ playing: wanted.playing, speed: wanted.speed });
     }
   }
 

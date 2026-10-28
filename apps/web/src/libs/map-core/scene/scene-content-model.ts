@@ -38,8 +38,8 @@ export interface RouteRoam {
   readonly id: string;
   readonly path: readonly RoutePoint[];
   readonly playing: boolean;
-  /** 倍速，1 是步行的默认速度 */
-  readonly rate: number;
+  /** 米/秒，和步行用同一种单位（ADR 0097 第 4 节） */
+  readonly speed: number;
   /** 重新开始时加 1，视图回到起点 */
   readonly run: number;
 }
@@ -180,15 +180,15 @@ function validateRoam(roam: SceneRoam): void {
     validateWalk(roam);
     return;
   }
-  const { id, path, rate, run } = roam;
+  const { id, path, speed, run } = roam;
   if (path.length < 2) {
     throw new Error(`漫游 ${id} 的路线少于两个点`);
   }
   if (!path.every(point => point.length === 3 && point.every(Number.isFinite))) {
     throw new Error(`漫游 ${id} 的路线有不是数的坐标`);
   }
-  if (!(rate > 0 && Number.isFinite(rate))) {
-    throw new Error(`漫游 ${id} 的倍速不是正数：${rate}`);
+  if (!(speed > 0 && Number.isFinite(speed))) {
+    throw new Error(`漫游 ${id} 的速度不是正数：${speed}`);
   }
   if (!isCount(run)) {
     throw new Error(`漫游 ${id} 的遍数不是非负整数：${run}`);

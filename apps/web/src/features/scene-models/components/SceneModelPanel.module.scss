@@ -312,14 +312,9 @@
   font-size: var(--font-size-xs);
 }
 
-.dropdownArrow {
-  margin-left: 2px;
-}
-
-.routeLength {
-  margin-left: var(--space-sm);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
+// 漫游在第二行最右边（ADR 0097 第 1 节）
+.roam {
+  margin-left: auto;
 }
 
 .effect {

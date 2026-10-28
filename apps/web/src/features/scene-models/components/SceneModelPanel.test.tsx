@@ -9,14 +9,14 @@ import {
 } from '@yzt/map-core';
 import { type CameraControl, provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
-import { ElDropdown, ElDropdownItem, ElOption, ElRadioGroup, ElSelect, ElSlider } from 'element-plus';
+import { ElOption, ElSelect, ElSlider } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref, shallowRef } from 'vue';
 import { required } from '@/shared/testing/required';
 import { sceneManifestSchema } from '../api';
 import { buildModelCatalog, type SceneModel } from '../catalog';
 import { type SceneModels, useSceneModels } from '../composables/useSceneModels';
-import { RoamBar } from './RoamBar';
+import { RoamPanel } from './RoamPanel';
 import { SceneModelPanel } from './SceneModelPanel';
 import { UndergroundBar } from './UndergroundBar';
 
@@ -34,13 +34,14 @@ const CATALOG = buildModelCatalog(
         underground: true,
         tileset: 'S.json',
         spawn: { lng: 120.666, lat: 31.3175, height: -5.1, heading: 76 },
-        // 往东约 95 米、再往北约 11 米
+        // 进站乘车往东约 95 米、再往北约 11 米；站台漫步往东约 48 米
         routes: [
           {
             id: 'enter',
             name: '进站乘车',
             path: [[120.666, 31.3175, -5.1], [120.667, 31.3175, -5.1], [120.667, 31.3176, -5.1]]
-          }
+          },
+          { id: 'platform', name: '站台漫步', path: [[120.666, 31.3175, -10], [120.6665, 31.3175, -10]] }
         ]
       },
       {
@@ -61,8 +62,8 @@ const CATALOG = buildModelCatalog(
 );
 
 /**
- * 页面创建地图和拥有者，渲染面板和钻地条；状态报告和相机操作换成测试控制的。null 表示清单还没到；
- * personSwitch 是页面让操作条显示人称切换
+ * 页面创建地图和拥有者，和现状底图一样漫游时左侧是漫游面板、否则是模型面板，另有钻地条；状态报告和相机操作换成
+ * 测试控制的。null 表示清单还没到；personSwitch 是页面让漫游面板显示人称切换
  */
 function mountPanel(catalog: readonly SceneModel[] | null = CATALOG, { personSwitch = false } = {}) {
   const source = shallowRef(catalog ?? undefined);
@@ -92,14 +93,22 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG, { personSwi
     const models = owner;
     return () => (
       <div>
-        <SceneModelPanel
-          models={models}
-          failed={failed.value}
-          collapsed={collapsed.value}
-          onRetry={onRetry}
-          onUpdate:collapsed={value => (collapsed.value = value)}
-        />
-        <RoamBar models={models} personSwitch={personSwitch} />
+        {models.roam.value ? (
+          <RoamPanel
+            models={models}
+            personSwitch={personSwitch}
+            collapsed={collapsed.value}
+            onUpdate:collapsed={value => (collapsed.value = value)}
+          />
+        ) : (
+          <SceneModelPanel
+            models={models}
+            failed={failed.value}
+            collapsed={collapsed.value}
+            onRetry={onRetry}
+            onUpdate:collapsed={value => (collapsed.value = value)}
+          />
+        )}
         <UndergroundBar models={models} />
       </div>
     );
@@ -138,7 +147,7 @@ function button(wrapper: VueWrapper, label: string, within = '') {
   return wrapper.get(`${within} button[aria-label="${label}"]`);
 }
 
-// 文字按钮（漫游操作条的开始、暂停等）
+// 文字按钮（漫游面板的开始、暂停等）
 const textButton = (wrapper: VueWrapper, label: string) =>
   wrapper.findAll('button').find(item => item.text() === label);
 
@@ -272,57 +281,102 @@ describe('SceneModelPanel', () => {
   });
 });
 
-describe('路线漫游的入口和操作条（ADR 0083）', () => {
-  it('加载完成、有路线的模型显示"路线漫游"，列出路线名和长度；选一条开始，行标漫游中，钻地条让给漫游操作条', async () => {
+describe('漫游的入口和面板（ADR 0097）', () => {
+  it('加载完成、有出生点或路线的模型在第二行最右边有"漫游"；点了换成漫游面板，从步行开始；退出后换回模型面板', async () => {
     const { wrapper, owner, report } = mountPanel();
     await check(wrapper, 'station', true);
-    expect(wrapper.get('[data-loaded="station"]').text()).not.toContain('路线漫游');
-    await report({ station: 'ready' });
+    await check(wrapper, 'white', true);
+    expect(textButton(wrapper, '漫游')).toBeUndefined();
+    await report({ station: 'ready', 'white/plain': 'ready' });
+    expect(wrapper.get('[data-loaded="white"]').text()).not.toContain('漫游');
+    const entry = wrapper.get('[data-loaded="station"]').findAll('button').find(item => item.text() === '漫游');
+    expect(entry?.element.parentElement?.lastElementChild).toBe(entry?.element);
 
-    const dropdown = wrapper.get('[data-loaded="station"]').findComponent(ElDropdown);
-    expect(dropdown.text()).toContain('路线漫游');
-    expect(dropdown.findAllComponents(ElDropdownItem).map(item => item.text())).toStrictEqual(['进站乘车106 m']);
-    dropdown.vm.$emit('command', 'enter');
-    await nextTick();
-
-    expect(owner.roam.value).toMatchObject({ kind: 'route', routeId: 'enter' });
-    expect(wrapper.get('[data-loaded="station"]').text()).toContain('漫游中');
+    await entry?.trigger('click');
+    expect(owner.roam.value).toMatchObject({ kind: 'walk', modelId: 'station', speed: 4 });
+    expect(wrapper.find('[data-scene-model-panel]').exists()).toBe(false);
     expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
-    const bar = wrapper.get('[data-roam-bar]');
-    expect(bar.text()).toContain('路线漫游 · 进站乘车');
-    expect(bar.text()).toContain('苏州站地下空间');
-    expect(bar.text()).toContain('0 m / 106 m · 剩余 1:06');
-    expect(textButton(wrapper, '开始')).toBeDefined();
+    const panel = wrapper.get('[data-roam-panel]');
+    expect(panel.get('header').text()).toContain('漫游苏州站地下空间 · 室内');
+    expect(panel.get('[aria-label="漫游方式"] .is-active').text()).toBe('步行');
+    expect(panel.text()).toContain('正在分析站内空间 0%');
+
+    await textButton(wrapper, '退出漫游')?.trigger('click');
+    expect(owner.roam.value).toBeNull();
+    expect(wrapper.find('[data-roam-panel]').exists()).toBe(false);
+    expect(wrapper.find('[data-scene-model-panel]').exists()).toBe(true);
   });
 
-  it('操作条：开始后是暂停，走过一段后暂停是继续，到终点是重新开始；倍速改剩余时间；退出后换回钻地条', async () => {
+  it('没有出生点的模型从第一条路线开始，步行那一段不可用；选路线停在它的起点', async () => {
+    const [station, ...others] = CATALOG;
+    const { wrapper, owner, report } = mountPanel([{ ...required(station, '目录里没有车站'), spawn: undefined }, ...others]);
+    await check(wrapper, 'station', true);
+    await report({ station: 'ready' });
+
+    await textButton(wrapper, '漫游')?.trigger('click');
+    expect(owner.roam.value).toMatchObject({ kind: 'route', routeId: 'enter', playing: false, speed: 4 });
+    const panel = () => wrapper.get('[data-roam-panel]');
+    const modes = panel().findAll('[aria-label="漫游方式"] label');
+    expect(modes.map(mode => [mode.text(), mode.classes('is-disabled')])).toStrictEqual([
+      ['步行', true],
+      ['路线', false]
+    ]);
+    const routes = () => panel().findAll('[role="radio"][data-route]');
+    expect(routes().map(route => [route.text(), route.attributes('aria-checked')])).toStrictEqual([
+      ['进站乘车106 m', 'true'],
+      ['站台漫步48 m', 'false']
+    ]);
+    expect(panel().text()).toContain('0 m / 106 m · 剩余 0:27');
+
+    await routes()[1]?.trigger('click');
+    expect(owner.roam.value).toMatchObject({ kind: 'route', routeId: 'platform', playing: false });
+    expect(routes().map(route => route.attributes('aria-checked'))).toStrictEqual(['false', 'true']);
+  });
+
+  it('路线：开始后是暂停，走过一段后暂停是继续，到终点是重新开始；速度改剩余时间', async () => {
     const { wrapper, owner, report, progress } = mountPanel();
     await check(wrapper, 'station', true);
     await report({ station: 'ready' });
     owner.startRoute('station', 'enter');
     await nextTick();
+    const panel = () => wrapper.get('[data-roam-panel]');
 
     await textButton(wrapper, '开始')?.trigger('click');
     expect(owner.routePhase.value).toBe('playing');
     await progress(53);
-    expect(wrapper.get('[data-roam-bar]').text()).toContain('53 m / 106 m · 剩余 0:33');
+    expect(panel().text()).toContain('53 m / 106 m · 剩余 0:13');
     await textButton(wrapper, '暂停')?.trigger('click');
     expect(textButton(wrapper, '继续')).toBeDefined();
-    expect(wrapper.get('[data-roam-bar]').text()).toContain('暂停时可拖动查看四周');
+    expect(panel().text()).toContain('暂停时拖动查看四周，继续后回到路线视角');
 
-    wrapper.get('[data-roam-bar]').findComponent(ElRadioGroup).vm.$emit('update:modelValue', 2);
-    await nextTick();
-    expect(owner.roam.value).toMatchObject({ rate: 2 });
-    expect(wrapper.get('[data-roam-bar]').text()).toContain('剩余 0:17');
+    await panel().get('button[aria-label="加速"]').trigger('click');
+    expect(owner.roam.value).toMatchObject({ speed: 6 });
+    expect(panel().text()).toContain('剩余 0:09');
 
     await progress(106, true);
-    expect(wrapper.get('[data-roam-bar]').text()).toContain('已到终点');
+    expect(panel().text()).toContain('已到终点');
     await textButton(wrapper, '重新开始')?.trigger('click');
     expect(owner.roam.value).toMatchObject({ playing: true, run: 1 });
+  });
 
-    await textButton(wrapper, '退出漫游')?.trigger('click');
-    expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
-    expect(wrapper.get('[data-underground-bar]').text()).toContain('钻地观察 · 苏州站地下空间');
+  it('换方式：步行、路线之间切换，速度不变；面板可以收起成竖条', async () => {
+    const { wrapper, owner, report, collapsed } = mountPanel();
+    await check(wrapper, 'station', true);
+    await report({ station: 'ready' });
+    owner.startRoam('station');
+    owner.setSpeed(2.5);
+    await nextTick();
+    const modes = () => wrapper.get('[data-roam-panel] [aria-label="漫游方式"]');
+
+    await modes().findAll('input').at(1)?.setValue(true);
+    expect(owner.roam.value).toMatchObject({ kind: 'route', routeId: 'enter', speed: 2.5 });
+    expect(modes().get('.is-active').text()).toBe('路线');
+    await modes().findAll('input').at(0)?.setValue(true);
+    expect(owner.roam.value).toMatchObject({ kind: 'walk', speed: 2.5 });
+
+    await button(wrapper, '收起漫游').trigger('click');
+    expect(collapsed.value).toBe(true);
+    expect(wrapper.get('button[aria-label="展开漫游"]').text()).toBe('漫游');
   });
 });
 
@@ -350,40 +404,9 @@ const NAVIGATION: Navigation = {
 
 const flushBuild = () => new Promise(resolve => setTimeout(resolve, 0));
 
-describe('步行的入口和操作条（ADR 0086）', () => {
+describe('漫游面板里的步行（ADR 0086、0097）', () => {
   afterEach(() => {
     vi.useRealTimers();
-  });
-
-  it('清单里有出生点、加载完成的模型才有"步行漫游"；开始后操作条显示分析进度，可以取消', async () => {
-    const { wrapper, owner, report, builds } = mountPanel();
-    await check(wrapper, 'station', true);
-    await check(wrapper, 'white', true);
-    expect(textButton(wrapper, '步行漫游')).toBeUndefined();
-    await report({ station: 'ready', 'white/plain': 'ready' });
-    expect(wrapper.get('[data-loaded="white"]').text()).not.toContain('步行漫游');
-
-    await textButton(wrapper, '步行漫游')?.trigger('click');
-    expect(wrapper.get('[data-loaded="station"]').text()).toContain('漫游中');
-    const bar = wrapper.get('[data-roam-bar]');
-    expect(bar.text()).toContain('步行漫游 · 苏州站地下空间');
-    expect(bar.text()).toContain('正在分析站内空间 0%');
-    expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
-
-    await textButton(wrapper, '取消')?.trigger('click');
-    expect(owner.roam.value).toBeNull();
-    expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
-    expect(builds).toHaveLength(1);
-  });
-
-  it('地下的模型清单里没有出生点时也没有"步行漫游"', async () => {
-    const [station, ...others] = CATALOG;
-    const { wrapper, report } = mountPanel([{ ...required(station, '目录里没有车站'), spawn: undefined }, ...others]);
-    await check(wrapper, 'station', true);
-    await report({ station: 'ready' });
-
-    expect(wrapper.get('[data-loaded="station"]').text()).toContain('路线漫游');
-    expect(textButton(wrapper, '步行漫游')).toBeUndefined();
   });
 
   it('建好后进入站内、行走：调速、回到起始点、脱困改意图；提示几秒后消失，同样的提示再来一次重新显示', async () => {
@@ -393,38 +416,36 @@ describe('步行的入口和操作条（ADR 0086）', () => {
     owner.startWalk('station');
     builds[0]?.resolve(NAVIGATION);
     await flushBuild();
-    const bar = () => wrapper.get('[data-roam-bar]');
-    expect(bar().text()).toContain('正在进入站内…');
-    expect(textButton(wrapper, '取消')).toBeDefined();
+    const panel = () => wrapper.get('[data-roam-panel]');
+    expect(panel().text()).toContain('正在进入站内…');
 
     await walk('walking');
-    expect(bar().text()).toContain('4 m/s');
-    expect(bar().text()).toContain('W/A/S/D 行走');
-    expect(textButton(wrapper, '退出漫游')).toBeDefined();
-    await bar().get('button[aria-label="加速"]').trigger('click');
+    expect(panel().text()).toContain('4 m/s');
+    expect(panel().text()).toContain('W / A / S / D行走');
+    await panel().get('button[aria-label="加速"]').trigger('click');
     expect(owner.roam.value).toMatchObject({ speed: 6 });
     await textButton(wrapper, '默认')?.trigger('click');
     expect(owner.roam.value).toMatchObject({ speed: 4 });
-    await bar().get('button[aria-label="减速"]').trigger('click');
+    await panel().get('button[aria-label="减速"]').trigger('click');
     expect(owner.roam.value).toMatchObject({ speed: 2.5 });
     // 最慢一档时减速不可用
-    owner.setWalkSpeed(1);
+    owner.setSpeed(1);
     await nextTick();
-    await bar().get('button[aria-label="减速"]').trigger('click');
+    await panel().get('button[aria-label="减速"]').trigger('click');
     expect(owner.roam.value).toMatchObject({ speed: 0.5 });
-    expect(bar().get('button[aria-label="减速"]').attributes('disabled')).toBeDefined();
+    expect(panel().get('button[aria-label="减速"]').attributes('disabled')).toBeDefined();
     await textButton(wrapper, '回到起始点')?.trigger('click');
     await textButton(wrapper, '脱困')?.trigger('click');
     expect(owner.roam.value).toMatchObject({ respawn: 1, unstuck: 1 });
 
     vi.useFakeTimers();
     await walk('walking', 'open', 1);
-    expect(bar().text()).toContain('当前位置可以正常行走，无需脱困');
+    expect(panel().text()).toContain('当前位置可以正常行走，无需脱困');
     vi.advanceTimersByTime(3500);
     await nextTick();
-    expect(bar().text()).not.toContain('无需脱困');
+    expect(panel().text()).not.toContain('无需脱困');
     await walk('walking', 'open', 2);
-    expect(bar().text()).toContain('无需脱困');
+    expect(panel().text()).toContain('无需脱困');
   });
 
   it('人称切换由页面决定显示（ADR 0090）：默认没有，操作说明是第一人称的；显示时点第三人称改意图、换操作说明', async () => {
@@ -435,9 +456,9 @@ describe('步行的入口和操作条（ADR 0086）', () => {
     hidden.builds[0]?.resolve(NAVIGATION);
     await flushBuild();
     await hidden.walk('walking');
-    const hiddenBar = hidden.wrapper.get('[data-roam-bar]');
-    expect(hiddenBar.find('[aria-label="人称"]').exists()).toBe(false);
-    expect(hiddenBar.text()).toContain('右键拖动转向 · 滚轮缩放视野');
+    const hiddenPanel = hidden.wrapper.get('[data-roam-panel]');
+    expect(hiddenPanel.find('[aria-label="人称"]').exists()).toBe(false);
+    expect(hiddenPanel.text()).toContain('右键拖动转向滚轮缩放视野');
 
     const { wrapper, owner, report, builds, walk } = mountPanel(CATALOG, { personSwitch: true });
     await check(wrapper, 'station', true);
@@ -446,12 +467,12 @@ describe('步行的入口和操作条（ADR 0086）', () => {
     builds[0]?.resolve(NAVIGATION);
     await flushBuild();
     await walk('walking');
-    const bar = () => wrapper.get('[data-roam-bar]');
-    const views = bar().get('[aria-label="人称"]');
+    const panel = () => wrapper.get('[data-roam-panel]');
+    const views = panel().get('[aria-label="人称"]');
     expect(views.text()).toBe('第一人称第三人称');
     await views.findAll('input').at(1)?.setValue(true);
     expect(owner.roam.value).toMatchObject({ view: 'third' });
-    expect(bar().text()).toContain('右键拖动旋转视角 · 滚轮 / 中键拖动调远近');
+    expect(panel().text()).toContain('右键拖动旋转视角滚轮 / 中键拖动调远近');
   });
 
   it('分析失败可以重试；附近找不到能站的地方时提示，只能退出', async () => {
@@ -461,19 +482,19 @@ describe('步行的入口和操作条（ADR 0086）', () => {
     owner.startWalk('station');
     builds[0]?.reject(new Error('瓦片下载失败（404）'));
     await flushBuild();
-    const bar = () => wrapper.get('[data-roam-bar]');
-    expect(bar().text()).toContain('站内空间分析失败，请重试');
+    const panel = () => wrapper.get('[data-roam-panel]');
+    expect(panel().text()).toContain('站内空间分析失败，请重试');
 
     await textButton(wrapper, '重试')?.trigger('click');
     expect(builds).toHaveLength(2);
-    expect(bar().text()).toContain('正在分析站内空间');
+    expect(panel().text()).toContain('正在分析站内空间');
     builds[1]?.resolve(NAVIGATION);
     await flushBuild();
     await walk('failed');
-    expect(bar().text()).toContain('附近没有找到可以站立的室内位置');
+    expect(panel().text()).toContain('附近没有找到可以站立的室内位置');
     expect(textButton(wrapper, '重试')).toBeUndefined();
 
     await textButton(wrapper, '退出漫游')?.trigger('click');
-    expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
+    expect(wrapper.find('[data-roam-panel]').exists()).toBe(false);
   });
 });

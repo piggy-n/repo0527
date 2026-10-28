@@ -83,7 +83,7 @@ interface PendingBuild {
   readonly reject: (error: Error) => void;
 }
 
-function setup() {
+function setup(catalog = CATALOG) {
   const builds: PendingBuild[] = [];
   const loadNavigation = (url: string, { signal, onProgress }: Pick<PendingBuild, 'signal' | 'onProgress'>) =>
     new Promise<Navigation>((resolve, reject) => builds.push({ url, signal, onProgress, resolve, reject }));
@@ -103,7 +103,7 @@ function setup() {
   );
   const scope = effectScope();
   const owner = scope.run(() =>
-    useSceneModels({ sceneStatus, roamStatus, runCameraOperation, beginCameraOperation }, CATALOG, {
+    useSceneModels({ sceneStatus, roamStatus, runCameraOperation, beginCameraOperation }, catalog, {
       loadNavigation,
       avatarUrl: AVATAR_URL
     })
@@ -251,24 +251,24 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
     expect(() => ctx.owner.startRoute('station', 'nowhere')).toThrow('模型 station 没有路线 nowhere');
   });
 
-  it('开始：停在起点交给会话；地下的模型按钻地处理；播放、暂停、倍速改意图', () => {
+  it('开始：停在起点交给会话；地下的模型按钻地处理；播放、暂停、速度改意图', () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.ready('station');
 
     ctx.owner.startRoute('station', 'enter');
     const roam = ctx.owner.deriveContent().roam;
-    expect(roam).toMatchObject({ kind: 'route', playing: false, rate: 1, run: 0 });
+    expect(roam).toMatchObject({ kind: 'route', playing: false, speed: 4, run: 0 });
     expect(roam?.kind === 'route' && roam.path).toHaveLength(2);
     expect(ctx.owner.underground.value).toStrictEqual({ modelId: 'station', opacity: 0.25 });
     expect(ctx.owner.routePhase.value).toBe('ready');
 
     ctx.owner.playRoute();
     expect(ctx.owner.routePhase.value).toBe('playing');
-    ctx.owner.setRouteRate(2);
+    ctx.owner.setSpeed(2.5);
     ctx.owner.pauseRoute();
-    expect(ctx.owner.deriveContent().roam).toMatchObject({ playing: false, rate: 2, run: 0 });
-    expect(() => ctx.owner.setRouteRate(3)).toThrow('漫游的倍速只能是 0.5、1、2');
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ playing: false, speed: 2.5, run: 0 });
+    expect(() => ctx.owner.setSpeed(3)).toThrow('漫游速度只能是 0.5、1、1.6、2.5、4、6、8');
   });
 
   it('进度只认这一次、这一遍的；走过一段后暂停是 paused，到终点再播放从头走一遍', () => {
@@ -291,14 +291,14 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
     expect(ctx.owner.roamStatus.value).toBeNull();
   });
 
-  it('有了别的定位就退出漫游，保留钻地；换一条路线不会被上一条的信号退出，沿用选过的倍速', () => {
+  it('有了别的定位就退出漫游，保留钻地；换一条路线不会被上一条的信号退出，沿用选过的速度', () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.ready('station');
     ctx.owner.startRoute('station', 'enter');
-    ctx.owner.setRouteRate(2);
+    ctx.owner.setSpeed(2.5);
     ctx.owner.startRoute('station', 'platform');
-    expect(ctx.owner.roam.value).toMatchObject({ routeId: 'platform', rate: 2, playing: false });
+    expect(ctx.owner.roam.value).toMatchObject({ routeId: 'platform', speed: 2.5, playing: false });
 
     ctx.owner.locate('station');
     expect(ctx.owner.roam.value).toBeNull();
@@ -456,22 +456,23 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
     expect(ctx.owner.roam.value).toMatchObject({ view: 'third' });
   });
 
-  it('速度按档位、默认 4 m/s（ADR 0094），几次步行之间沿用；回到起始点、脱困把计数加 1；不在步行时调用抛错', async () => {
+  it('速度按档位、默认 4 m/s（ADR 0094），几次步行之间沿用；回到起始点、脱困把计数加 1；不在漫游、步行时调用抛错', async () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.ready('station');
     expect(() => ctx.owner.respawnWalk()).toThrow('没有在步行');
+    expect(() => ctx.owner.setSpeed(6)).toThrow('没有在漫游');
     ctx.owner.startWalk('station');
     ctx.builds[0]?.resolve(NAVIGATION);
     await flushBuild();
 
     expect(ctx.owner.deriveContent().roam).toMatchObject({ speed: 4 });
-    ctx.owner.setWalkSpeed(6);
+    ctx.owner.setSpeed(6);
     ctx.owner.respawnWalk();
     ctx.owner.unstuckWalk();
     ctx.owner.unstuckWalk();
     expect(ctx.owner.deriveContent().roam).toMatchObject({ speed: 6, respawn: 1, unstuck: 2 });
-    expect(() => ctx.owner.setWalkSpeed(3)).toThrow('步行速度只能是 0.5、1、1.6、2.5、4、6、8');
+    expect(() => ctx.owner.setSpeed(3)).toThrow('漫游速度只能是 0.5、1、1.6、2.5、4、6、8');
 
     ctx.owner.exitRoam();
     ctx.owner.startWalk('station');
@@ -493,6 +494,71 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
     expect(ctx.owner.roam.value).toMatchObject({ kind: 'route' });
     expect(ctx.builds[1]?.signal.aborted).toBe(true);
     expect(ctx.owner.walkStage.value).toBeNull();
+  });
+});
+
+describe('useSceneModels 的漫游入口与方式（ADR 0097）', () => {
+  // 只有路线、没有出生点的模型
+  const ROUTE_ONLY = buildModelCatalog(
+    sceneManifestSchema.parse({
+      models: [
+        {
+          id: 'square',
+          name: '广场',
+          cityCode: '320500',
+          kind: 'oblique',
+          underground: false,
+          tileset: 'Q/tileset.json',
+          routes: [{ id: 'loop', name: '环线', path: [[120.6, 31.3, 2], [120.601, 31.3, 2]] }]
+        }
+      ]
+    }),
+    'https://maps.test/3dt/manifest.json'
+  );
+
+  it('漫游：有出生点的从步行开始，只有路线的停在第一条路线的起点；都没有的抛错', () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.owner.setChecked('city', true);
+    ctx.ready('station', 'city');
+    ctx.owner.startRoam('station');
+    expect(ctx.owner.roam.value).toMatchObject({ kind: 'walk', modelId: 'station', speed: 4 });
+    expect(() => ctx.owner.startRoam('city')).toThrow('模型 city 既没有出生点也没有路线，不能漫游');
+
+    using route = setup(ROUTE_ONLY);
+    route.owner.setChecked('square', true);
+    route.ready('square');
+    route.owner.startRoam('square');
+    expect(route.owner.roam.value).toMatchObject({ kind: 'route', modelId: 'square', routeId: 'loop', playing: false });
+  });
+
+  it('换方式：同一个模型，速度不变；换回路线接着上次的路线，再次漫游也是；没在漫游、没有这种方式时抛错', () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.ready('station');
+    expect(() => ctx.owner.setRoamMode('route')).toThrow('没有在漫游');
+    ctx.owner.startRoam('station');
+    ctx.owner.setSpeed(6);
+
+    ctx.owner.setRoamMode('route');
+    expect(ctx.owner.roam.value).toMatchObject({ kind: 'route', routeId: 'enter', speed: 6 });
+    expect(ctx.builds[0]?.signal.aborted).toBe(true);
+    ctx.owner.startRoute('station', 'platform');
+    ctx.owner.setRoamMode('walk');
+    expect(ctx.owner.roam.value).toMatchObject({ kind: 'walk', modelId: 'station', speed: 6 });
+    ctx.owner.setRoamMode('route');
+    expect(ctx.owner.roam.value).toMatchObject({ kind: 'route', routeId: 'platform' });
+
+    // 同一种方式不重新开始
+    const current = ctx.owner.roam.value;
+    ctx.owner.setRoamMode('route');
+    expect(ctx.owner.roam.value).toBe(current);
+
+    using route = setup(ROUTE_ONLY);
+    route.owner.setChecked('square', true);
+    route.ready('square');
+    route.owner.startRoam('square');
+    expect(() => route.owner.setRoamMode('walk')).toThrow('模型 square 的清单里没有出生点，不能步行');
   });
 });
 

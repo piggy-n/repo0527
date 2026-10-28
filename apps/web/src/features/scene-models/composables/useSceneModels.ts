@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WALK_SPEED,
   type Navigation,
   type NavPoint,
   type RoamStatus,
@@ -9,7 +8,6 @@ import {
   type WalkNotice,
   type WalkPlayer,
   type WalkRoamStatus,
-  WALK_SPEEDS,
   type WalkView,
   WALK_VIEWS
 } from '@yzt/map-core';
@@ -30,14 +28,15 @@ import { buildFraction, type LoadNavigation, loadNavigation as defaultLoadNaviga
 import {
   currentEffect,
   currentTilesetId,
+  DEFAULT_ROAM_SPEED,
   DEFAULT_SURFACE_OPACITY,
   deriveSceneContent,
   loadStateOf,
   MAX_SURFACE_OPACITY,
   type ModelLoadState,
+  ROAM_SPEEDS,
   type RoamChoice,
   type RouteChoice,
-  ROUTE_RATES,
   type SceneModelsState,
   tilesetIdOf,
   type UndergroundChoice,
@@ -50,6 +49,9 @@ export type SceneModelsContext = Pick<
   MapContext,
   'sceneStatus' | 'roamStatus' | 'runCameraOperation' | 'beginCameraOperation'
 >;
+
+/** 漫游的方式：步行或路线，同一次漫游里在面板上切换（ADR 0097 第 2 节） */
+export type RoamMode = 'walk' | 'route';
 
 /** 路线漫游的阶段：停在起点、播放中、暂停、到了终点 */
 export type RoutePhase = 'ready' | 'playing' | 'paused' | 'finished';
@@ -98,6 +100,15 @@ export interface SceneModels {
   readonly exitUnderground: () => void;
   /** 正在进行的漫游：路线（ADR 0083）或步行（ADR 0086） */
   readonly roam: Readonly<ShallowRef<RoamChoice | null>>;
+  /**
+   * 已加载里的"漫游"（ADR 0097 第 1 节）：清单里有出生点的从步行开始，否则停在上次走的（没走过就是第一条）路线的起点；
+   * 只有加载完成、有出生点或路线的模型能开始
+   */
+  readonly startRoam: (id: string) => void;
+  /** 漫游面板上换方式：同一个模型，速度不变；换回路线时接着上次的路线。没在漫游、模型没有这种方式时抛错 */
+  readonly setRoamMode: (mode: RoamMode) => void;
+  /** 漫游的速度（米/秒，ADR 0097 第 4 节）：步行和路线共用，在几次漫游之间沿用；没在漫游、不是档位时抛错 */
+  readonly setSpeed: (speed: number) => void;
   /** 这一次（路线是这一遍）漫游的状态；视图还没报告时为 null */
   readonly roamStatus: ComputedRef<RoamStatus | null>;
   /** 路线漫游的阶段；没在路线漫游时为 null */
@@ -107,7 +118,6 @@ export interface SceneModels {
   /** 开始、继续；到了终点从头再走一遍 */
   readonly playRoute: () => void;
   readonly pauseRoute: () => void;
-  readonly setRouteRate: (rate: number) => void;
   /** 步行的阶段；没在步行时为 null */
   readonly walkStage: ComputedRef<WalkStage | null>;
   readonly walkNotice: ComputedRef<WalkNoticeState | null>;
@@ -118,7 +128,6 @@ export interface SceneModels {
   readonly startWalk: (id: string) => void;
   /** 导航网格建不出来时重新建 */
   readonly retryWalk: () => void;
-  readonly setWalkSpeed: (speed: number) => void;
   /** 换人称（ADR 0090）：在几次步行之间沿用 */
   readonly setWalkView: (view: WalkView) => void;
   readonly respawnWalk: () => void;
@@ -168,9 +177,11 @@ export function useSceneModels(
   let roamCount = 0;
   // 正在建的导航网格：结束步行、换一次漫游、卸载模型时中止
   let building: AbortController | null = null;
-  // 步行速度、人称在几次步行之间沿用
-  let walkSpeed = DEFAULT_WALK_SPEED;
+  // 漫游速度在几次漫游、两种方式之间沿用，人称在几次步行之间沿用
+  let roamSpeed = DEFAULT_ROAM_SPEED;
   let walkView: WalkView = 'first';
+  // 每个模型上次走的路线：从步行换回路线、再次漫游时接着用
+  const lastRoutes = new Map<string, string>();
 
   const modelOf = (id: string): SceneModel => {
     const model = models.value.find(item => item.id === id);
@@ -368,19 +379,19 @@ export function useSceneModels(
       throw new Error(`模型 ${id} 没有路线 ${routeId}`);
     }
     assertRoamable(model, '漫游');
-    const previous = roam.value;
+    lastRoutes.set(id, routeId);
     beginRoam(model, {
       kind: 'route',
       modelId: id,
       routeId,
       id: `${id}/${routeId}/${++roamCount}`,
       playing: false,
-      rate: previous?.kind === 'route' ? previous.rate : 1,
+      speed: roamSpeed,
       run: 0
     });
   };
 
-  const updateRoute = (change: Partial<Pick<RouteChoice, 'playing' | 'rate' | 'run'>>) => {
+  const updateRoute = (change: Partial<Pick<RouteChoice, 'playing' | 'run'>>) => {
     const current = roam.value;
     if (current?.kind !== 'route') {
       throw new Error('没有在路线漫游');
@@ -395,13 +406,6 @@ export function useSceneModels(
     } else {
       updateRoute({ playing: true });
     }
-  };
-
-  const setRouteRate = (rate: number) => {
-    if (!ROUTE_RATES.includes(rate)) {
-      throw new Error(`漫游的倍速只能是 ${ROUTE_RATES.join('、')}：${rate}`);
-    }
-    updateRoute({ rate });
   };
 
   // 白膜各种效果的几何一样，取当前的那一个
@@ -458,7 +462,7 @@ export function useSceneModels(
       kind: 'walk',
       modelId: id,
       id: `${id}/walk/${++roamCount}`,
-      speed: walkSpeed,
+      speed: roamSpeed,
       respawn: 0,
       unstuck: 0,
       paused: false,
@@ -487,12 +491,53 @@ export function useSceneModels(
     void build(modelOf(current.modelId), current.id);
   };
 
-  const setWalkSpeed = (speed: number) => {
-    const current = currentWalk();
-    if (!WALK_SPEEDS.includes(speed)) {
-      throw new Error(`步行速度只能是 ${WALK_SPEEDS.join('、')}：${speed}`);
+  // 上次走的路线还在清单里就接着用，否则第一条；没有路线时为 undefined
+  const routeFor = (model: SceneModel): string | undefined => {
+    const last = lastRoutes.get(model.id);
+    return model.routes.some(route => route.id === last) ? last : model.routes[0]?.id;
+  };
+
+  const startRoam = (id: string) => {
+    const model = modelOf(id);
+    const routeId = routeFor(model);
+    if (model.spawn) {
+      startWalk(id);
+    } else if (routeId !== undefined) {
+      startRoute(id, routeId);
+    } else {
+      throw new Error(`模型 ${id} 既没有出生点也没有路线，不能漫游`);
     }
-    walkSpeed = speed;
+  };
+
+  const setRoamMode = (mode: RoamMode) => {
+    const current = roam.value;
+    if (!current) {
+      throw new Error('没有在漫游');
+    }
+    if (current.kind === mode) {
+      return;
+    }
+    const model = modelOf(current.modelId);
+    if (mode === 'walk') {
+      startWalk(model.id);
+      return;
+    }
+    const routeId = routeFor(model);
+    if (routeId === undefined) {
+      throw new Error(`模型 ${model.id} 没有路线`);
+    }
+    startRoute(model.id, routeId);
+  };
+
+  const setSpeed = (speed: number) => {
+    const current = roam.value;
+    if (!current) {
+      throw new Error('没有在漫游');
+    }
+    if (!ROAM_SPEEDS.includes(speed)) {
+      throw new Error(`漫游速度只能是 ${ROAM_SPEEDS.join('、')}：${speed}`);
+    }
+    roamSpeed = speed;
     if (speed !== current.speed) {
       roam.value = { ...current, speed };
     }
@@ -573,17 +618,18 @@ export function useSceneModels(
     setSurfaceOpacity,
     exitUnderground,
     roam: shallowReadonly(roam),
+    startRoam,
+    setRoamMode,
+    setSpeed,
     roamStatus,
     routePhase,
     startRoute,
     playRoute,
     pauseRoute: () => updateRoute({ playing: false }),
-    setRouteRate,
     walkStage,
     walkNotice,
     startWalk,
     retryWalk,
-    setWalkSpeed,
     setWalkView,
     respawnWalk,
     unstuckWalk,

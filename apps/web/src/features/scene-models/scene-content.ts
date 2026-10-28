@@ -18,14 +18,14 @@ export interface UndergroundChoice {
 export const MAX_SURFACE_OPACITY = 0.6;
 export const DEFAULT_SURFACE_OPACITY = 0.25;
 
-/** 路线漫游（ADR 0083）：哪个模型的哪条路线；id 每次开始换一个，run 是第几遍 */
+/** 路线漫游（ADR 0083）：哪个模型的哪条路线；id 每次开始换一个，run 是第几遍；速度是米/秒（ADR 0097 第 4 节） */
 export interface RouteChoice {
   readonly kind: 'route';
   readonly modelId: string;
   readonly routeId: string;
   readonly id: string;
   readonly playing: boolean;
-  readonly rate: number;
+  readonly speed: number;
   readonly run: number;
 }
 
@@ -55,8 +55,10 @@ export function walkAvatarUrl(): string {
   return new URL(`${import.meta.env.BASE_URL}roam/Cesium_Man.glb`, window.location.href).href;
 }
 
-/** 路线漫游的倍速 */
-export const ROUTE_RATES: readonly number[] = [0.5, 1, 2];
+/** 漫游速度的档位（米/秒）：步行和路线共用，面板上逐档调（ADR 0097 第 4 节） */
+export const ROAM_SPEEDS: readonly number[] = [0.5, 1, 1.6, 2.5, 4, 6, 8];
+/** 第一次漫游的速度（ADR 0094），之后几次漫游、两种方式之间沿用 */
+export const DEFAULT_ROAM_SPEED = 4;
 
 /** 拥有者推导三维内容用到的状态 */
 export interface SceneModelsState {
@@ -153,8 +155,8 @@ function roamOf(
   if (!route) {
     return null;
   }
-  const { id, playing, rate, run } = roam;
-  return { kind: 'route', id, path: route.path, playing, rate, run };
+  const { id, playing, speed, run } = roam;
+  return { kind: 'route', id, path: route.path, playing, speed, run };
 }
 
 /** 面板显示的状态 */

@@ -1,28 +1,13 @@
 import { ArrowDown, ArrowRight, ArrowUp, Loading, Search } from '@element-plus/icons-vue';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
-import {
-  ElButton,
-  ElCheckbox,
-  ElDropdown,
-  ElDropdownItem,
-  ElDropdownMenu,
-  ElIcon,
-  ElInput,
-  ElOption,
-  ElSelect,
-  ElTooltip
-} from 'element-plus';
+import { ElButton, ElCheckbox, ElIcon, ElInput, ElOption, ElSelect, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref } from 'vue';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import { groupByCity, MODEL_KIND_LABELS, type ModelCity, type SceneModel } from '../catalog';
 import type { SceneModels } from '../composables/useSceneModels';
 import styles from './SceneModelPanel.module.scss';
-
-function formatLength(meters: number): string {
-  return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
-}
 
 // 行内的图标按钮，悬停提示名称
 function iconButton(label: string, icon: IconName, onClick: () => void, disabled = false) {
@@ -37,7 +22,7 @@ function iconButton(label: string, icon: IconName, onClick: () => void, disabled
 
 /**
  * 三维模型面板（ADR 0081 第 7 节，原型 `/dev/map-3d`）：三维时替换左侧的资源图层面板；目录勾选即加载，
- * "已加载"按勾选的先后定位、卸载、换白膜效果和重试。只显示拥有者的状态并调用它的操作；收起与否由页面给出。
+ * "已加载"按勾选的先后定位、卸载、换白膜效果、重试和开始漫游（ADR 0097 第 1 节：漫游时页面换成漫游面板）。只显示拥有者的状态并调用它的操作；收起与否由页面给出。
  * 会挡住定位，登记为贴左边的悬浮元素
  */
 export const SceneModelPanel = defineComponent({
@@ -122,32 +107,6 @@ export const SceneModelPanel = defineComponent({
       );
     };
 
-    // 预置路线的下拉：选一条就开始漫游，停在起点（ADR 0083 第 4 节）
-    const renderRoutes = (model: SceneModel) => (
-      <ElDropdown trigger="click" onCommand={command => props.models.startRoute(model.id, String(command))}>
-        {{
-          default: () => (
-            <ElButton link type="primary" size="small">
-              路线漫游
-              <ElIcon class={styles.dropdownArrow}>
-                <ArrowDown />
-              </ElIcon>
-            </ElButton>
-          ),
-          dropdown: () => (
-            <ElDropdownMenu>
-              {model.routes.map(route => (
-                <ElDropdownItem key={route.id} command={route.id}>
-                  {route.name}
-                  <span class={styles.routeLength}>{formatLength(route.length)}</span>
-                </ElDropdownItem>
-              ))}
-            </ElDropdownMenu>
-          )
-        }}
-      </ElDropdown>
-    );
-
     const renderLoadedMeta = (model: SceneModel) => {
       const { models } = props;
       const state = models.stateOf(model.id);
@@ -169,13 +128,6 @@ export const SceneModelPanel = defineComponent({
           <span class={styles.meta}>
             {model.cityName} · {MODEL_KIND_LABELS[model.kind]}
           </span>
-          {/* 清单里有出生点的才能步行（ADR 0086 第 5 节） */}
-          {model.spawn && (
-            <ElButton link type="primary" size="small" onClick={() => models.startWalk(model.id)}>
-              步行漫游
-            </ElButton>
-          )}
-          {model.routes.length > 0 && renderRoutes(model)}
           {model.kind === 'white' && (
             <ElSelect
               class={styles.effect}
@@ -189,18 +141,18 @@ export const SceneModelPanel = defineComponent({
               ))}
             </ElSelect>
           )}
+          {/* 有出生点或路线的才能漫游，在第二行最右边（ADR 0097 第 1 节） */}
+          {(model.spawn || model.routes.length > 0) && (
+            <ElButton class={styles.roam} size="small" type="primary" plain onClick={() => models.startRoam(model.id)}>
+              漫游
+            </ElButton>
+          )}
         </>
       );
     };
 
-    // 漫游中优先于钻地
-    const renderTag = (id: string) => {
-      const { models } = props;
-      if (models.roam.value?.modelId === id) {
-        return <span class={styles.tag}>漫游中</span>;
-      }
-      return models.underground.value?.modelId === id ? <span class={styles.tag}>钻地</span> : null;
-    };
+    const renderTag = (id: string) =>
+      props.models.underground.value?.modelId === id ? <span class={styles.tag}>钻地</span> : null;
 
     const renderLoaded = (model: SceneModel) => {
       const { models } = props;

@@ -168,7 +168,7 @@ class FakeScene implements SceneLike {
 
   setRoutePlayback(playback: RoutePlayback): void {
     this.playback = playback;
-    this.routeCalls.push(`playback ${playback.playing} ${playback.rate}`);
+    this.routeCalls.push(`playback ${playback.playing} ${playback.speed}`);
   }
 
   stopRoute(back: boolean): void {
@@ -1009,7 +1009,7 @@ const routeRoam = (extra: Partial<RouteRoam> = {}): RouteRoam => ({
   id: 'enter',
   path: ROUTE_PATH,
   playing: false,
-  rate: 1,
+  speed: 1,
   run: 0,
   ...extra
 });
@@ -1074,9 +1074,9 @@ describe('CesiumView 的路线漫游（ADR 0083）', () => {
     await settle();
     roam(routeRoam({ playing: false, run: 1 }));
     await settle();
-    roam(routeRoam({ playing: false, run: 1, rate: 2 }));
+    roam(routeRoam({ playing: false, run: 1, speed: 2 }));
     await settle();
-    roam(routeRoam({ id: 'platform', playing: false, run: 1, rate: 2 }));
+    roam(routeRoam({ id: 'platform', playing: false, run: 1, speed: 2 }));
     await settle();
 
     expect(scene.routeCalls).toStrictEqual([

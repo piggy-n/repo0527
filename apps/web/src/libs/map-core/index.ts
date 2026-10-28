@@ -93,7 +93,6 @@ export {
   chooseSpawn,
   type ClickRefusal,
   type ClickResolution,
-  DEFAULT_WALK_SPEED,
   headingToYaw,
   type MovePlan,
   planMove,
@@ -107,14 +106,13 @@ export {
   Walker,
   WALK_KEYS,
   type WalkPose,
-  WALK_SPEEDS,
   type WalkTarget,
   type WalkView,
   WALK_VIEWS,
   yawToHeading
 } from './scene/nav/walker';
 export { type LoadJson, type PreparedTile, type PreparedTileset, prepareTileset } from './scene/prepare-tileset';
-export { EYE_HEIGHT, ROUTE_SPEED, RoutePath, type RoutePose, smoothAngle } from './scene/route-path';
+export { EYE_HEIGHT, RoutePath, type RoutePose, smoothAngle } from './scene/route-path';
 export { MapSession, type MapSessionOptions } from './session/map-session';
 export { diffSnapshot, diffStyle, type ImageCommand, type StyleCommand, type StyleSnapshot } from './style/diff-style';
 export type { StyleImage, StyleImages } from './style/style-image';

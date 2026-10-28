@@ -23,7 +23,7 @@ import {
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { CesiumCanvas, MapCanvas, type SceneViewOptions } from '@yzt/map-vue';
 import { DOMWrapper, mount } from '@vue/test-utils';
-import { ElDropdown, ElSlider } from 'element-plus';
+import { ElSlider } from 'element-plus';
 import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { createPinia } from 'pinia';
@@ -604,6 +604,26 @@ function mockManifest() {
     })
   );
   return () => requests;
+}
+
+// 步行先建导航网格：这里让它的瓦片集请求失败，返回请求的次数
+function failNavigation() {
+  let requests = 0;
+  server.use(
+    mock.get('*/3dt/SZ_3DT/tileset.json', () => {
+      requests++;
+      return new HttpResponse(null, { status: 404 });
+    })
+  );
+  return () => requests;
+}
+
+// 已加载里点"漫游"（车站有出生点，从步行开始），再在漫游面板上换成路线
+async function startRoute(wrapper: ReturnType<typeof mountPage>['wrapper']) {
+  await button(wrapper, '漫游').trigger('click');
+  await settle();
+  await wrapper.get('[data-roam-panel] [aria-label="漫游方式"]').findAll('input').at(1)?.setValue(true);
+  await settle();
 }
 
 async function switchTo(wrapper: ReturnType<typeof mountPage>['wrapper'], label: '二维' | '三维') {
@@ -1765,8 +1785,9 @@ describe('CurrentMapPage', () => {
       await vi.waitFor(() => expect(optionsPopoverVisible('basemap')).toBe(true));
     });
 
-    it('路线漫游（ADR 0083）：从面板开始，空格开始、暂停；Esc、换成别的工具都退出；漫游期间没有二维的入口（ADR 0095）', async () => {
+    it('路线漫游（ADR 0083、0097）：在漫游面板上换成路线，空格开始、暂停；Esc、换成别的工具都退出；漫游期间没有二维的入口', async () => {
       mockManifest();
+      failNavigation();
       const page = await readyPage();
       const { wrapper } = page;
       await switchTo(wrapper, '三维');
@@ -1776,21 +1797,18 @@ describe('CurrentMapPage', () => {
       const view = sceneOf(page);
       view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
       await nextTick();
-      const start = async () => {
-        wrapper.get('[data-loaded="sz-station"]').findComponent(ElDropdown).vm.$emit('command', 'enter');
-        await settle();
-      };
+      const start = () => startRoute(wrapper);
       const key = async (value: string) => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: value }));
         await settle();
       };
 
-      // 正在测距时开始：进入地下空间切回移动，漫游不因此退出（ADR 0084）
+      // 正在测距时开始：开始漫游切回移动，漫游不因此退出（ADR 0084、0097）
       await button(wrapper, '测距').trigger('click');
       await start();
       expect(view.session.tool.active).toBe('browse');
-      expect(view.session.scene.current.roam).toMatchObject({ kind: 'route', playing: false, rate: 1, run: 0 });
-      expect(wrapper.find('[data-roam-bar]').exists()).toBe(true);
+      expect(view.session.scene.current.roam).toMatchObject({ kind: 'route', playing: false, speed: 4, run: 0 });
+      expect(wrapper.find('[data-roam-panel]').exists()).toBe(true);
       expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
       await key(' ');
       expect(view.session.scene.current.roam).toMatchObject({ playing: true });
@@ -1798,7 +1816,7 @@ describe('CurrentMapPage', () => {
       expect(view.session.scene.current.roam).toMatchObject({ playing: false });
       await key('Escape');
       expect(view.session.scene.current.roam).toBeUndefined();
-      expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
+      expect(wrapper.find('[data-roam-panel]').exists()).toBe(false);
 
       // 漫游地下的模型时工具栏隐藏；当前工具换成移动以外的照样退出
       await start();
@@ -1820,6 +1838,7 @@ describe('CurrentMapPage', () => {
 
     it('页面被缓存期间（ADR 0063）：在别的页面按空格、Esc 不作用到漫游；回来以后照常', async () => {
       mockManifest();
+      failNavigation();
       const page = await readyCachedPage();
       const { wrapper, pageShown } = page;
       await switchTo(wrapper, '三维');
@@ -1829,8 +1848,7 @@ describe('CurrentMapPage', () => {
       const view = sceneOf(page);
       view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
       await nextTick();
-      wrapper.get('[data-loaded="sz-station"]').findComponent(ElDropdown).vm.$emit('command', 'enter');
-      await settle();
+      await startRoute(wrapper);
       const key = async (value: string) => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: value }));
         await settle();
@@ -1850,15 +1868,9 @@ describe('CurrentMapPage', () => {
       expect(view.session.scene.current.roam).toBeUndefined();
     });
 
-    it('步行（ADR 0086）：从面板开始，分析站内空间失败时可以重试；Esc 退出，空格不拦截', async () => {
+    it('步行（ADR 0086、0097）：已加载里点"漫游"从步行开始，分析站内空间失败时可以重试；Esc 退出，空格不拦截', async () => {
       mockManifest();
-      let requests = 0;
-      server.use(
-        mock.get('*/3dt/SZ_3DT/tileset.json', () => {
-          requests++;
-          return new HttpResponse(null, { status: 404 });
-        })
-      );
+      const requests = failNavigation();
       const page = await readyPage();
       const { wrapper } = page;
       await switchTo(wrapper, '三维');
@@ -1869,22 +1881,76 @@ describe('CurrentMapPage', () => {
       view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
       await nextTick();
 
-      await button(wrapper, '步行漫游').trigger('click');
+      await button(wrapper, '漫游').trigger('click');
       await settle();
-      expect(wrapper.get('[data-roam-bar]').text()).toContain('步行漫游 · 苏州站地下空间');
-      // 进入地下空间：工具栏隐藏
+      expect(wrapper.get('[data-roam-panel]').text()).toContain('苏州站地下空间 · 室内');
+      // 漫游期间工具栏隐藏
       expect(wrapper.find('button[aria-label="测距"]').exists()).toBe(false);
-      await vi.waitFor(() => expect(wrapper.get('[data-roam-bar]').text()).toContain('站内空间分析失败，请重试'));
+      await vi.waitFor(() => expect(wrapper.get('[data-roam-panel]').text()).toContain('站内空间分析失败，请重试'));
       expect(view.session.scene.current.roam).toBeUndefined();
       await button(wrapper, '重试').trigger('click');
-      await vi.waitFor(() => expect(requests).toBe(2));
+      await vi.waitFor(() => expect(requests()).toBe(2));
 
       const space = new KeyboardEvent('keydown', { key: ' ', cancelable: true });
       window.dispatchEvent(space);
       expect(space.defaultPrevented).toBe(false);
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
       await settle();
-      expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
+      expect(wrapper.find('[data-roam-panel]').exists()).toBe(false);
+    });
+
+    it('漫游（ADR 0097）：左侧换成漫游面板，工具栏、功能面板、底图、视图控件和状态栏都隐藏，地面上的模型也一样；退出后原样显示，模型面板的搜索还在', async () => {
+      server.use(
+        mock.get('*/3dt/manifest.json', () =>
+          HttpResponse.json({
+            models: [
+              {
+                id: 'square',
+                name: '广场',
+                cityCode: '320500',
+                kind: 'oblique',
+                underground: false,
+                tileset: 'Q/tileset.json',
+                routes: [{ id: 'loop', name: '环线', path: [[120.6, 31.3, 2], [120.601, 31.3, 2]] }]
+              }
+            ]
+          })
+        )
+      );
+      const page = await readyPage();
+      const { wrapper } = page;
+      const labels = () => wrapper.findAll('button').map(item => item.attributes('aria-label') ?? item.text());
+      const search = () => wrapper.get<HTMLInputElement>('input[placeholder="搜索模型或所属市"]');
+      await button(wrapper, '图例').trigger('click');
+      await switchTo(wrapper, '三维');
+      await vi.waitFor(() => expect(wrapper.find('[data-model="square"]').exists()).toBe(true));
+      await search().setValue('广');
+      await wrapper.get('[data-model="square"] input[type="checkbox"]').setValue(true);
+      await settle();
+      const view = sceneOf(page);
+      view.report(new Map([['square', { state: 'ready', camera: MODEL_CAMERA }]]));
+      await nextTick();
+
+      await button(wrapper, '漫游').trigger('click');
+      await settle();
+      expect(view.session.scene.current.roam).toMatchObject({ kind: 'route', speed: 4 });
+      expect(view.session.scene.current.underground).toBeNull();
+      expect(wrapper.find('[data-scene-model-panel]').exists()).toBe(false);
+      expect(wrapper.get('[data-roam-panel]').text()).toContain('广场 · 倾斜摄影');
+      for (const label of ['测距', '图例', '放大', '二维', '三维', '默认视角']) {
+        expect(labels()).not.toContain(label);
+      }
+      expect(wrapper.find('[data-map-status-bar]').exists()).toBe(false);
+      expect(wrapper.find('[data-map-cards]').exists()).toBe(false);
+      expect(wrapper.get('[data-panel-group]').isVisible()).toBe(false);
+
+      await button(wrapper, '退出漫游').trigger('click');
+      await settle();
+      expect(wrapper.find('[data-roam-panel]').exists()).toBe(false);
+      expect(labels()).toEqual(expect.arrayContaining(['测距', '放大', '二维', '三维']));
+      expect(wrapper.find('[data-map-status-bar]').exists()).toBe(true);
+      expect(wrapper.get('[data-panel-group]').isVisible()).toBe(true);
+      expect(search().element.value).toBe('广');
     });
   });
 
