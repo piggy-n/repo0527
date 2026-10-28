@@ -1,3 +1,5 @@
+import { COMPACT_MEDIA_QUERY } from '@yzt/ui';
+import { useMediaQuery } from '@vueuse/core';
 import { ElButton, ElTable, ElTableColumn, vLoading } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
@@ -12,7 +14,10 @@ interface Row {
   $index: number;
 }
 
-/** 申请表格（管理员审核用）：占满父元素的剩余高度；没有值的单元格由表格的全局样式显示"-" */
+/**
+ * 申请表格（管理员审核用）：占满父元素的剩余高度；没有值的单元格由表格的全局样式显示"-"。
+ * 待审核的"审核"，其余"查看"；统计任务没有申请的字段，不能查看（ADR 0091）
+ */
 export const ApplicationTable = defineComponent({
   name: 'ApplicationTable',
   directives: { loading: vLoading },
@@ -26,12 +31,26 @@ export const ApplicationTable = defineComponent({
     error: { type: Boolean, required: true }
   },
   emits: {
-    retry: () => true
+    retry: () => true,
+    open: (_application: Application) => true
   },
   setup(props, { emit }) {
     // 骨架屏和遮罩都延迟显示：请求很快完成时什么都不出现，避免一闪而过
     const showSkeleton = useDelayedFlag(() => props.initialLoading);
     const showMask = useDelayedFlag(() => props.refreshing);
+    // 窄屏随表格滚动，避免固定的操作列盖住数据名称
+    const compact = useMediaQuery(COMPACT_MEDIA_QUERY);
+
+    function renderOpen(application: Application) {
+      if (application.status === 'table') {
+        return null;
+      }
+      return (
+        <ElButton link type="primary" onClick={() => emit('open', application)}>
+          {application.status === 'pending' ? '审核' : '查看'}
+        </ElButton>
+      );
+    }
 
     function renderEmpty() {
       if (showSkeleton.value) {
@@ -70,6 +89,12 @@ export const ApplicationTable = defineComponent({
             </ElTableColumn>,
             <ElTableColumn label="数据准备状态" width="130">
               {{ default: ({ row }: Row) => hasPrepareStep(row) && <PrepareStatusText status={row.prepare} /> }}
+            </ElTableColumn>,
+            <ElTableColumn label="操作" width="140" align="center" fixed={compact.value ? false : 'right'}>
+              {{
+                // 固定两格：各行的"审核 / 查看"和下载上下对齐
+                default: ({ row }: Row) => <div class={styles.actions}>{renderOpen(row)}</div>
+              }}
             </ElTableColumn>
           ],
           empty: renderEmpty

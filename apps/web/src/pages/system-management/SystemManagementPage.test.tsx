@@ -1,16 +1,22 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { flushPromises, mount } from '@vue/test-utils';
+import { ElMessage } from 'element-plus';
 import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
+import { createPinia, setActivePinia } from 'pinia';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { h } from 'vue';
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router';
 import {
   applicationPageResponse,
   approvedRecord,
+  envelope,
   pendingRecord,
   tableRecord
 } from '@/features/data-application/test-data';
+import { Role } from '@/shared/auth/roles';
+import { useSessionStore } from '@/shared/auth/session-store';
+import { createTestJwtExpiringAt } from '@/shared/auth/testing';
 import { RouteName } from '@/shared/router/route-names';
 import { SystemManagementPage } from './SystemManagementPage';
 
@@ -22,24 +28,49 @@ beforeEach(() => {
 });
 afterEach(() => {
   server.resetHandlers();
+  vi.restoreAllMocks();
   document.body.innerHTML = '';
+  localStorage.clear();
 });
 afterAll(() => server.close());
 
-// 一页里有待审核、准备中的、统计任务各一条；记下请求次数
-function mockList() {
-  const state = { requests: 0 };
+type RawRecord = Record<string, unknown>;
+
+// 一页里有待审核、准备中的、统计任务各一条；审核会改掉待审核那条的状态。记下列表、详情的请求次数和审核的参数
+function mockBackend() {
+  const records: RawRecord[] = [pendingRecord(), approvedRecord({ storage_status: 'processing' }), tableRecord()];
+  const state = { list: 0, detail: 0, audits: [] as Record<string, string>[] };
   server.use(
     mock.post('/backend/api/apply/list', () => {
-      state.requests += 1;
-      const list = [pendingRecord(), approvedRecord({ storage_status: 'processing' }), tableRecord()];
-      return HttpResponse.json(applicationPageResponse(list));
+      state.list += 1;
+      return HttpResponse.json(applicationPageResponse(records));
+    }),
+    mock.get('/backend/api/apply/:id', ({ params }) => {
+      state.detail += 1;
+      return HttpResponse.json(envelope(records.find(record => record.apply_id === params.id) ?? null));
+    }),
+    mock.post('/backend/api/apply/status/:id', ({ params, request }) => {
+      const query = Object.fromEntries(new URL(request.url).searchParams);
+      state.audits.push({ id: String(params.id), ...query });
+      const record = records.find(item => item.apply_id === params.id);
+      if (record) {
+        record.status = query.status;
+        record.remark = query.reason;
+      }
+      return HttpResponse.json(envelope(null));
     })
   );
   return state;
 }
 
-async function mountAt(name: RouteName) {
+async function mountAt(name: RouteName, query: Record<string, string> = {}) {
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  useSessionStore().start({
+    token: createTestJwtExpiringAt(Date.now() + 3600000),
+    user: { loginName: 'admin', role: Role.admin }
+  });
+  // 和 app 的路由表一样：资源审核的 props 带上查询参数 apply
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -47,7 +78,7 @@ async function mountAt(name: RouteName) {
         path: '/system-management',
         name: RouteName.systemManagement,
         component: SystemManagementPage,
-        props: { section: 'audit' }
+        props: route => ({ section: 'audit', applyId: typeof route.query.apply === 'string' ? route.query.apply : null })
       },
       {
         path: '/system-management/statistical-report',
@@ -57,10 +88,10 @@ async function mountAt(name: RouteName) {
       }
     ]
   });
-  await router.push({ name });
+  await router.push({ name, query });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = mount(() => h(RouterView), {
-    global: { plugins: [router, [VueQueryPlugin, { queryClient }]] },
+    global: { plugins: [pinia, router, [VueQueryPlugin, { queryClient }]] },
     attachTo: document.body
   });
   await flushPromises();
@@ -73,9 +104,18 @@ function rows() {
     [...row.querySelectorAll('td .cell')].map(cell => cell.textContent?.trim() ?? ''));
 }
 
+// 弹窗渲染在 body 下
+const dialog = () => document.querySelector<HTMLElement>('.el-dialog');
+const dialogOpen = () => {
+  const overlay = dialog()?.closest<HTMLElement>('.el-overlay');
+  return overlay !== null && overlay !== undefined && overlay.style.display !== 'none';
+};
+const button = (root: ParentNode | null | undefined, text: string) =>
+  [...(root?.querySelectorAll('button') ?? [])].find(item => item.textContent?.trim() === text);
+
 describe('SystemManagementPage', () => {
-  it('资源审核：标题、筛选栏和表格；没有值的单元格留空，由全局样式显示"-"', async () => {
-    mockList();
+  it('资源审核：标题、筛选栏和表格；没有值的单元格留空，由全局样式显示"-"；统计任务不能查看', async () => {
+    mockBackend();
     const { wrapper } = await mountAt(RouteName.systemManagement);
     await vi.waitFor(() => expect(rows()).toHaveLength(3));
 
@@ -86,21 +126,21 @@ describe('SystemManagementPage', () => {
       '数据准备状态'
     ]);
     expect(rows()).toEqual([
-      ['1', '拆除未尽区', '', '江苏省南京市', '2026-10-28 11:29:36', '待审核', ''],
-      ['2', '城镇村等用地', '王立', '江苏省', '2026-09-10 16:47:07', '审核通过', '正在处理'],
-      ['3', '', '王立', '', '', '统计任务', '未开始处理']
+      ['1', '拆除未尽区', '', '江苏省南京市', '2026-10-28 11:29:36', '待审核', '', '审核'],
+      ['2', '城镇村等用地', '王立', '江苏省', '2026-09-10 16:47:07', '审核通过', '正在处理', '查看'],
+      ['3', '', '王立', '', '', '统计任务', '未开始处理', '']
     ]);
   });
 
   it('统计报表栏目不请求申请列表；切回资源审核时再请求', async () => {
-    const backend = mockList();
+    const backend = mockBackend();
     const { router } = await mountAt(RouteName.systemManagementReports);
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(backend.requests).toBe(0);
+    expect(backend.list).toBe(0);
     expect(document.body.textContent).toContain('统计报表：迁移中');
 
     await router.push({ name: RouteName.systemManagement });
-    await vi.waitFor(() => expect(backend.requests).toBe(1));
+    await vi.waitFor(() => expect(backend.list).toBe(1));
   });
 
   it('列表加载失败时显示重试，点了重新请求', async () => {
@@ -119,8 +159,82 @@ describe('SystemManagementPage', () => {
     await vi.waitFor(() => expect(wrapper.text()).toContain('加载失败'));
 
     fail = false;
-    await wrapper.findAll('button').find(button => button.text() === '重试')?.trigger('click');
+    await wrapper.findAll('button').find(item => item.text() === '重试')?.trigger('click');
     await vi.waitFor(() => expect(rows()).toHaveLength(1));
     expect(requests).toBe(2);
+  });
+
+  it('点"审核"：地址带上 apply，弹窗先用列表里的这一行显示，同时再读一次详情', async () => {
+    mockBackend();
+    // 详情接口挂起：弹窗里有内容只能是列表里的那一行
+    const details: (() => void)[] = [];
+    server.use(
+      mock.get('/backend/api/apply/:id', async () => {
+        await new Promise<void>(resolve => {
+          details.push(resolve);
+        });
+        return HttpResponse.json(envelope(pendingRecord()));
+      })
+    );
+    const { router, wrapper } = await mountAt(RouteName.systemManagement);
+    await vi.waitFor(() => expect(rows()).toHaveLength(3));
+
+    await wrapper.findAll('.el-table__body button').find(item => item.text() === '审核')?.trigger('click');
+    await vi.waitFor(() => expect(router.currentRoute.value.query.apply).toBe('apply-pending'));
+    await vi.waitFor(() => expect(details).toHaveLength(1));
+    expect(dialogOpen()).toBe(true);
+    expect(dialog()?.querySelector('.el-dialog__header')?.textContent).toContain('审核申请');
+    expect(dialog()?.textContent).toContain('地类图斑');
+    expect(dialog()?.textContent).toContain('GDB');
+    details[0]?.();
+  });
+
+  it('不通过时必须填原因；提交后提示、关闭弹窗、去掉 apply，列表重新读取', async () => {
+    const backend = mockBackend();
+    const success = vi.spyOn(ElMessage, 'success');
+    const { router } = await mountAt(RouteName.systemManagement, { apply: 'apply-pending' });
+    await vi.waitFor(() => expect(button(dialog(), '提交审核')).toBeDefined());
+
+    [...(dialog()?.querySelectorAll<HTMLElement>('.el-radio') ?? [])][1]?.click();
+    await flushPromises();
+    button(dialog(), '提交审核')?.click();
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain('请填写不通过的原因'));
+    expect(backend.audits).toEqual([]);
+
+    const reason = dialog()?.querySelector('textarea');
+    if (!reason) {
+      throw new Error('没有原因的输入框');
+    }
+    reason.value = '  用途不明确 ';
+    reason.dispatchEvent(new Event('input'));
+    const listBefore = backend.list;
+    button(dialog(), '提交审核')?.click();
+
+    await vi.waitFor(() => expect(success).toHaveBeenCalledWith('已退回申请'));
+    expect(backend.audits).toEqual([{ id: 'apply-pending', status: 'rejected', reason: '用途不明确' }]);
+    await vi.waitFor(() => expect(router.currentRoute.value.query.apply).toBeUndefined());
+    await vi.waitFor(() => expect(dialogOpen()).toBe(false));
+    expect(backend.list).toBeGreaterThan(listBefore);
+    await vi.waitFor(() => expect(rows()[0]?.[5]).toBe('审核不通过'));
+  });
+
+  it('已经审核过的申请只查看：显示审核结果，没有底栏；关闭时去掉 apply', async () => {
+    mockBackend();
+    const { router } = await mountAt(RouteName.systemManagement, { apply: 'apply-approved' });
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain('审核结果'));
+
+    expect(dialog()?.querySelector('.el-dialog__header')?.textContent).toContain('申请详情');
+    expect(dialog()?.textContent).toContain('正在处理');
+    expect(button(dialog(), '提交审核')).toBeUndefined();
+
+    dialog()?.querySelector<HTMLElement>('.el-dialog__headerbtn')?.click();
+    await vi.waitFor(() => expect(router.currentRoute.value.query.apply).toBeUndefined());
+  });
+
+  it('从消息打开不存在的申请：说明不存在，没有底栏', async () => {
+    mockBackend();
+    await mountAt(RouteName.systemManagement, { apply: 'missing' });
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain('申请不存在或已被删除'));
+    expect(button(dialog(), '提交审核')).toBeUndefined();
   });
 });

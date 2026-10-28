@@ -26,7 +26,9 @@ function renderReports() {
 export const SystemManagementPage = defineComponent({
   name: 'SystemManagementPage',
   props: {
-    section: { type: String as PropType<SystemSection>, required: true }
+    section: { type: String as PropType<SystemSection>, required: true },
+    // 资源审核里打开的申请，来自查询参数 apply
+    applyId: { type: String as PropType<string | null>, default: null }
   },
   setup(props) {
     return () => (
@@ -37,7 +39,7 @@ export const SystemManagementPage = defineComponent({
               <SideNav label="系统管理" items={NAV_ITEMS} />
             </MxPanel>
           ),
-          default: () => (props.section === 'audit' ? <AuditSection /> : renderReports())
+          default: () => (props.section === 'audit' ? <AuditSection applyId={props.applyId} /> : renderReports())
         }}
       </MxSplitLayout>
     );

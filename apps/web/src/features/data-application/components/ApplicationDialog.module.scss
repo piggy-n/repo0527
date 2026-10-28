@@ -1,0 +1,61 @@
+// 标题和底栏固定，内容在弹窗里滚动；上下各留 16
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+
+  :global(.el-dialog__header),
+  :global(.el-dialog__footer) {
+    flex: none;
+  }
+
+  :global(.el-dialog__body) {
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+// 标签至少 4 个字宽，两列的值上下对齐；值过长时在自己的位置换行，不绕到标签下面
+.descriptions {
+  :global(.el-descriptions__label) {
+    display: inline-block;
+    min-width: 4em;
+    color: var(--color-text-secondary);
+    vertical-align: top;
+  }
+
+  :global(.el-descriptions__content) {
+    display: inline-block;
+    max-width: calc(100% - 4em - 16px);
+    color: var(--color-text-primary);
+    overflow-wrap: anywhere;
+    vertical-align: top;
+  }
+
+  // 最后一行不再留下边距，区块之间的间距交给 MxSection
+  :global(tr:last-child .el-descriptions__cell) {
+    padding-bottom: 0;
+  }
+}
+
+.formats {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.form {
+  :global(.el-form-item:last-child) {
+    margin-bottom: 0;
+  }
+}
+
+.message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  min-height: 120px;
+  color: var(--color-text-secondary);
+}

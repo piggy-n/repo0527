@@ -65,8 +65,19 @@ export function useApplicationQuery(id: MaybeRefOrGetter<string | null>) {
   );
 }
 
+/**
+ * 从列表打开申请时，先把列表里的这一行记成它的详情（字段相同），弹窗立刻有内容；
+ * 详情查询照常向后端读取最新的状态，返回后替换
+ */
+export function useSeedApplication() {
+  const queryClient = useQueryClient();
+  return (application: Application) => {
+    queryClient.setQueryData(applicationKeys.detail(application.id), application);
+  };
+}
+
 /** 写操作的参数都带上提交时的会话（useSessionGuard 的 capture） */
-interface AuditSubmission {
+export interface AuditSubmission {
   audit: ApplicationAudit;
   token: string | undefined;
 }

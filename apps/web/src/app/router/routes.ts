@@ -1,4 +1,4 @@
-import type { RouteRecordRaw } from 'vue-router';
+import type { RouteLocationNormalized, RouteRecordRaw } from 'vue-router';
 import { Role } from '@/shared/auth/roles';
 import { RouteName } from '@/shared/router/route-names';
 import { AppLayout } from '../layout/AppLayout';
@@ -7,9 +7,16 @@ import { withMapRuntime } from '../map-framework';
 const loadPlaceholder = () =>
   import('@/pages/placeholder/PlaceholderPage').then(({ PlaceholderPage }) => PlaceholderPage);
 
-// 系统管理的两个栏目是两个路由、同一个页面，栏目由 props 传入（ADR 0091）
+// 系统管理的两个栏目是两个路由、同一个页面，栏目由 props 传入；打开的申请是资源审核的查询参数 apply（ADR 0091）
 const loadSystemManagementPage = () =>
   import('@/pages/system-management/SystemManagementPage').then(({ SystemManagementPage }) => SystemManagementPage);
+
+/** 资源审核路由的 props：栏目和打开的申请 */
+export const auditRouteProps = (route: Pick<RouteLocationNormalized, 'query'>) => ({
+  section: 'audit',
+  // 空字符串和同名参数写了几次（数组）都不认
+  applyId: typeof route.query.apply === 'string' && route.query.apply !== '' ? route.query.apply : null
+});
 
 /** 现状底图的加载函数：路由和登录页的预加载共用（ADR 0061 第 3 节） */
 export const loadCurrentMapPage = withMapRuntime(() =>
@@ -60,7 +67,7 @@ const businessRoutes: RouteRecordRaw[] = [
     path: 'system-management',
     name: RouteName.systemManagement,
     component: loadSystemManagementPage,
-    props: { section: 'audit' },
+    props: auditRouteProps,
     meta: { title: '系统管理', roles: [Role.admin] }
   },
   {
