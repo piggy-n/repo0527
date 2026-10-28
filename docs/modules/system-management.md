@@ -18,7 +18,7 @@ features/data-application/    申请：接口、状态与文案、查询与审�
 features/statistics-report/   统计报表：接口、查询、列表与下载的组合式函数、筛选栏、表格
 features/message-center/      消息：接口、查询与已读、弹框的组合式函数 useMessageCenter、弹框里的 MessagePanel
 pages/system-management/      SystemManagementPage（分栏布局、SideNav）与资源审核栏目 AuditSection
-app/router、app/layout        两个路由；顶栏在统计报表上也选中"系统管理"；消息按钮与弹框（待实现）
+app/router、app/layout        两个路由；顶栏在统计报表上也选中"系统管理"；消息按钮与弹框 HeaderMessages
 ```
 
 区划选项（`REGION_OPTIONS`、`PROVINCE_PATH`）只有资源管理的申请表单用，留在 `features/resource-management/data-request.ts`。
@@ -168,7 +168,7 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 - 滚到距底部 120 以内接着显示（`useInfiniteScroll`）；换筛选回到列表顶部
 - 第一次请求的骨架屏延迟显示（`useDelayedFlag`）；失败时"加载失败 / 重试"；空的分"暂无消息"和"没有未读消息"；末尾是"继续滚动显示更多"或"共 N 条"
 
-顶栏的按钮、`ElPopover` 外壳、按角色把目标换成路由在 `app/layout`（下一步）。
+顶栏的按钮、`ElPopover` 外壳、把目标换成路由（能不能去看路由的 `meta.roles`）在 `app/layout` 的 `HeaderMessages`，见 [layout.md](layout.md) 的"消息按钮"。
 
 ### 验证（2026-10-28）
 
@@ -176,7 +176,8 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 - 浏览器测试 `MessagePanel.browser.test.tsx`：最高 480 时只有列表滚动，滚到底显示第二批，标题栏和筛选不动；消息少时按内容定高；343 宽时筛选在一行、长标题省略、时间完整、长正文换行、没有横向滚动。用缓存里放好的数据和真实的组合式函数，不发请求；截图只看了结构（测试里没有颜色令牌）
 - 改坏验证 30 处，都是断言失败。第一次没测出来或是超时的几处：全部已读改用整个缓存的 ID（测试里提交的恰好是全部未读，改成只提交一部分）、换"未读"不回到开头（未读不到一批，加多了数据）、应当立即返回的调用被挂起的请求拖到超时（改成和下一轮宏任务赛跑）、长正文不换行（原来的长串夹着汉字，本来就能断行）
 - 改了测不出来、确认是多余的写法，删掉了：业务按钮阻止冒泡、行上的回车只认行本身（同一条按 ID 只提交一次）；列表的 `flex: 1`、`min-height: 0`（滚动容器在纵向 flex 里本来就能压缩）；时间的 `flex: none`（标题的基准宽度是 0，先被压缩）；`loadMore` 到底后的判断；已读开始时的销毁判断
-- 没有验证：真实接口的已读和全部已读（写操作）；弹框放进真实顶栏后的样子（下一步）
+- 没有验证：真实接口的已读和全部已读（写操作）
+- 放进顶栏后（2026-10-28）：用浏览器测试挂载真实的 `AppHeader`、全局样式和普惠体，看了 1920 打开弹框、1440、1200、375 打开弹框的截图（不入库的 `apps/web/shots.local/`）。弹框的位置、宽度和最高由 `HeaderMessages.browser.test.tsx` 检查；真实登录后的页面没有看（不在这台机器上登录真实后端）
 
 ## 待联调
 

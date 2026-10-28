@@ -1,0 +1,49 @@
+// 消息按钮：和头像一样 32 的圆，悬停、打开时加白色半透明底（ADR 0092）
+.bell {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-inverse);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-inverse-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-text-inverse);
+    outline-offset: 2px;
+  }
+
+  :global(.el-badge) {
+    display: grid;
+  }
+
+  // 角标的中心压在铃铛图标的右上角：Element 默认整个放在锚点右边，"99+" 会盖住右边的用户名
+  :global(.el-badge__content.is-fixed) {
+    top: 2px;
+    right: 0;
+    transform: translate(50%, -50%);
+  }
+}
+
+.open,
+.open:hover {
+  background-color: var(--color-inverse-active);
+}
+
+// 弹框外壳：去掉 Element 的内边距，圆角和阴影按浮层规范，内容由 MessagePanel 负责
+.popper {
+  &:global(.el-popover.el-popper) {
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+  }
+}
