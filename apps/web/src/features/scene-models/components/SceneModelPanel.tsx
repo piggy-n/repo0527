@@ -151,9 +151,6 @@ export const SceneModelPanel = defineComponent({
       );
     };
 
-    const renderTag = (id: string) =>
-      props.models.underground.value?.modelId === id ? <span class={styles.tag}>钻地</span> : null;
-
     const renderLoaded = (model: SceneModel) => {
       const { models } = props;
       const { id } = model;
@@ -163,7 +160,6 @@ export const SceneModelPanel = defineComponent({
             <span class={styles.loadedName} title={model.name}>
               {model.name}
             </span>
-            {renderTag(id)}
             <span class={styles.actions}>
               {iconButton('定位', 'focus', () => models.locate(id), models.stateOf(id) !== 'ready')}
               {iconButton('卸载', 'close', () => models.setChecked(id, false))}

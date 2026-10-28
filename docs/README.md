@@ -89,6 +89,7 @@ docs/
    - [main 分支的第二次全面审查与整改](stages/main-full-review.md)：在上一篇之后读，写法指标、测试里取必需值的做法和仍待决定的事项在这里
    - [三维阶段：Cesium 三维、模型与漫游](stages/stage-3d-cesium-and-roaming.md)：二三维切换、覆盖物镜像、3DT 模型、漫游与导航网格、预加载与生产冒烟
    - [系统管理与消息的重新迁移](stages/system-message-migration.md)：Element 弹框的开关与过渡、同一个组件由真实数据和样例数据驱动、改坏验证测不出来时怎么办
+   - [现状底图的调整（2026-10-28）](stages/current-map-adjustments.md)：默认值记例外、两份顺序、意图里用用户看到的单位、没有 key 的兄弟节点怎样被重建、能推导的状态不另存
    - [城市国土空间监测指标的迁移](stages/space-monitoring-indicators-migration.md)：实测推翻旧代码的兜底假设、计算轮询按 ADR 0039 归类、查询结果标上 ID
 5. [commands.md](commands.md)：日常要用的命令
 

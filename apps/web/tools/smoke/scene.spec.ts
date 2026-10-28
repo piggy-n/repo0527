@@ -59,13 +59,12 @@ test('三维：二维稳定后预加载运行时，切到三维、加载模型�
     await expect(page.locator('.cesium-widget canvas')).toBeVisible();
     await expect(page.locator('[data-map-status]')).toHaveCount(0);
 
-    // 勾选生成的屋子，加载好以后定位：地下的模型进入钻地
+    // 勾选生成的屋子，加载好以后定位：地下的模型也只是飞过去，没有单独的钻地（ADR 0097）
     await page.locator('[data-model="smoke-room"] .el-checkbox').click();
     const loaded = page.locator('[data-loaded="smoke-room"]');
     const locate = loaded.getByRole('button', { name: '定位', exact: true });
     await expect(locate).toBeEnabled({ timeout: 60_000 });
     await locate.click();
-    await expect(page.locator('[data-underground-bar]')).toBeVisible();
 
     // 已加载里的"漫游"：有出生点的从步行开始，左侧换成漫游面板（ADR 0097）；
     // 导航网格在 Worker 里构建（产物里单独的分块），建好后飞进屋子
@@ -73,14 +72,13 @@ test('三维：二维稳定后预加载运行时，切到三维、加载模型�
     const bar = page.locator('[data-roam-panel]');
     await expect(bar.getByRole('button', { name: '回到起始点', exact: true })).toBeVisible({ timeout: 90_000 });
     expect(wasRequested(/\/assets\/nav-grid\.worker-[\w-]+\.js$/), '导航网格的 Worker 分块').toBe(true);
-    // 地下空间里没有状态栏和视图控件（ADR 0095）
+    // 漫游时没有状态栏和视图控件（ADR 0095、0097）
     await expect(page.locator('[data-map-status-bar]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: '二维', exact: true })).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(bar).toHaveCount(0);
 
-    // 退出钻地后回到二维：复用原来的画布
-    await page.locator('[data-underground-bar]').getByRole('button', { name: '退出钻地', exact: true }).click();
+    // 退出漫游同时回到地面，回到二维：复用原来的画布
     await page.getByRole('button', { name: '二维', exact: true }).click();
     await expect(flatCanvas).toBeVisible();
     expect(await original.evaluate((element: { isConnected: boolean }) => element.isConnected)).toBe(true);

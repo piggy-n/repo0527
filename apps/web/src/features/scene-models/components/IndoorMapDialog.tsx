@@ -36,7 +36,8 @@ import {
   screenToPlane,
   zoomCamera
 } from '../indoor-map/map-camera';
-import { drawLocator, drawPlayer, drawTarget, markerColors, rasterCanvas } from '../indoor-map/map-draw';
+import { drawLocator, drawPlayer, drawRoute, drawTarget, markerColors, rasterCanvas } from '../indoor-map/map-draw';
+import { type RouteTrack, trackOnLevel } from '../indoor-map/route-track';
 import styles from './IndoorMapDialog.module.scss';
 
 // +/− 每次缩放的倍数，滚轮每像素的缩放量
@@ -46,6 +47,8 @@ const WHEEL_ZOOM = 0.0015;
 const WHEEL_LINE = 33;
 const WHEEL_PAGE = 600;
 const HINT = '双击地图瞬移 · 拖动平移 · 滚轮缩放';
+// 路线漫游时不能瞬移（ADR 0097 第 6 节）
+const ROUTE_HINT = '拖动平移 · 滚轮缩放';
 // 提示显示这么久后换回操作说明（毫秒）
 const MESSAGE_DURATION = 2500;
 // 比例尺最长 160 像素
@@ -58,13 +61,18 @@ interface LevelImage {
 
 /**
  * 站内的完整地图（ADR 0087）：正北朝上，打开时显示人所在的那一层；顶部切换楼层，"定位到我"回到人所在的楼层和位置，
- * 拖动平移、滚轮或 +/− 缩放；双击某处瞬移到这一层离它最近的能站位置。点外面、×、Esc 关闭
+ * 拖动平移、滚轮或 +/− 缩放；双击某处瞬移到这一层离它最近的能站位置。点外面、×、Esc 关闭。
+ * 路线漫游时画出这一层上的路线，不能瞬移（ADR 0097 第 6 节）
  */
 export const IndoorMapDialog = defineComponent({
   name: 'IndoorMapDialog',
   props: {
     map: { type: Object as PropType<IndoorMap>, required: true },
-    player: { type: Object as PropType<MapPlayer>, required: true }
+    player: { type: Object as PropType<MapPlayer>, required: true },
+    /** 路线漫游时的路线；步行时没有 */
+    route: { type: Object as PropType<RouteTrack | null>, default: null },
+    /** 能双击瞬移：步行时能，路线漫游时不能 */
+    teleport: { type: Boolean, default: true }
   },
   emits: {
     teleport: (_spot: NavPoint) => true,
@@ -158,6 +166,12 @@ export const IndoorMapDialog = defineComponent({
       // 放得很大时保持格子清晰，不糊成一片
       context.imageSmoothingEnabled = image.raster.res * current.scale < 3;
       context.drawImage(image.canvas, x, y, box.width * current.scale, box.height * current.scale);
+      if (props.route) {
+        const lines = trackOnLevel(map, shown, props.route, here.value === shown ? player : null);
+        const screen = (line: readonly (readonly [number, number])[]) =>
+          line.map(([east, north]) => planeToScreen(current, size, east, north));
+        drawRoute(context, { all: lines.all.map(screen), passed: lines.passed.map(screen) }, 3, colors);
+      }
       // 人画在所在的那一层上；看别的楼层时只用淡淡的定位圈标出人的平面位置
       const [px, py] = planeToScreen(current, size, ...toPlane(map, player.x, player.y));
       context.save();
@@ -188,7 +202,9 @@ export const IndoorMapDialog = defineComponent({
         fitTo(level.value ?? here.value ?? props.map.levels[0]);
       }
     });
-    watch([camera, level, () => props.player, width, height], () => void nextTick(draw), { flush: 'post' });
+    watch([camera, level, () => props.player, () => props.route, width, height], () => void nextTick(draw), {
+      flush: 'post'
+    });
     onMounted(() => {
       root.value?.focus({ preventScroll: true });
       if (width.value > 0 && level.value) {
@@ -226,6 +242,10 @@ export const IndoorMapDialog = defineComponent({
       const current = camera.value;
       const shown = level.value;
       if (!current || !shown) {
+        return;
+      }
+      if (!props.teleport) {
+        flash('路线漫游时不能瞬移');
         return;
       }
       const [east, north] = screenToPlane(current, view(), ...localPoint(event));
@@ -305,7 +325,7 @@ export const IndoorMapDialog = defineComponent({
                 <div class={styles.tools}>
                   {renderLevels()}
                   <span class={[styles.hint, message.value && styles.message]} role="status">
-                    {message.value ?? HINT}
+                    {message.value ?? (props.teleport ? HINT : ROUTE_HINT)}
                   </span>
                   <ElButton size="small" icon={Aim} onClick={locate}>
                     定位到我
@@ -339,7 +359,7 @@ export const IndoorMapDialog = defineComponent({
                     class={styles.canvas}
                     width={Math.max(1, Math.round(width.value * dpr))}
                     height={Math.max(1, Math.round(height.value * dpr))}
-                    aria-label="站内地图，双击瞬移"
+                    aria-label={props.teleport ? '站内地图，双击瞬移' : '站内地图'}
                     onPointerdown={onPointerDown}
                     onPointermove={onPointerMove}
                     onPointerup={onPointerUp}

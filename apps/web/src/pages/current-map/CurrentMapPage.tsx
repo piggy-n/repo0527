@@ -16,7 +16,6 @@ import { SceneModelPanel } from '@/features/scene-models/components/SceneModelPa
 import { IndoorMapDialog } from '@/features/scene-models/components/IndoorMapDialog';
 import { IndoorMinimap } from '@/features/scene-models/components/IndoorMinimap';
 import { RoamPanel } from '@/features/scene-models/components/RoamPanel';
-import { UndergroundBar } from '@/features/scene-models/components/UndergroundBar';
 import { useSceneModels } from '@/features/scene-models/composables/useSceneModels';
 import { useSceneModelsQuery } from '@/features/scene-models/queries';
 import { usePageActive } from '@/shared/composables/usePageActive';
@@ -122,10 +121,9 @@ export const CurrentMapPage = defineComponent({
     // 三维模型（ADR 0081）：第一次切到三维时才读清单
     const sceneModelsQuery = useSceneModelsQuery(() => map.dimension.value === '3d');
     const models = useSceneModels(map, sceneModelsQuery.data);
-    // 漫游中或在地下空间（钻地中，ADR 0084）：只留漫游面板（钻地条）和小地图，工具栏、功能面板、底图、区划条、
-    // 视图控件和状态栏都隐藏，不能勾选模型、不能切回二维（ADR 0095、0097）；只隐藏不改状态，退出后原样显示
+    // 漫游中（地下空间只在漫游地下的模型时出现，ADR 0097）：只留漫游面板和小地图，工具栏、功能面板、底图、区划条、
+    // 视图控件和状态栏都隐藏，不能勾选模型、不能切回二维（ADR 0084、0095）；只隐藏不改状态，退出后原样显示
     const roaming = computed(() => models.roam.value !== null);
-    const lockedDown = computed(() => roaming.value || models.underground.value !== null);
 
     // 业务状态仍由各自的拥有者持有，这里只组合窗口与排布
     const functions = usePanelGroup(FUNCTION_PANELS);
@@ -220,18 +218,16 @@ export const CurrentMapPage = defineComponent({
         sides.activate('left');
       }
     };
-    // 切换二三维：底图跟着换成这种视图默认的（ADR 0078 第 2 节）；切到二维结束钻地和漫游（ADR 0081 第 6 节），
-    // 地下空间时页面上没有切换的入口（ADR 0095）
+    // 切换二三维：底图跟着换成这种视图默认的（ADR 0078 第 2 节）；切到二维结束漫游，漫游时页面上没有切换的入口（ADR 0097）
     const switchDimension = (kind: ViewKind) => {
       if (kind === '2d') {
         models.exitRoam();
-        models.exitUnderground();
       }
       map.setDimension(kind);
       basemap.selectForDimension(kind);
     };
-    // 开始漫游、进入地下空间时切回移动：测量、点选在这时不适用，退出后不恢复（ADR 0084、0097）
-    watch(lockedDown, entered => {
+    // 开始漫游时切回移动：测量、点选在漫游里不适用，退出后不恢复（ADR 0084、0097）
+    watch(roaming, entered => {
       if (entered) {
         map.activateTool(BROWSE_TOOL);
       }
@@ -258,7 +254,13 @@ export const CurrentMapPage = defineComponent({
       }
       const phase = models.routePhase.value;
       const target = event.target instanceof HTMLElement ? event.target : null;
-      if (phase !== null && event.key === ' ' && !target?.closest('input, textarea, button, [role="radio"]')) {
+      // 完整地图打开着时路线暂停，空格不让它走（ADR 0097 第 6 节）
+      if (
+        phase !== null &&
+        event.key === ' ' &&
+        !models.mapOpen.value &&
+        !target?.closest('input, textarea, button, [role="radio"]')
+      ) {
         event.preventDefault();
         if (phase === 'playing') {
           models.pauseRoute();
@@ -355,12 +357,13 @@ export const CurrentMapPage = defineComponent({
 
     return () => {
       const { phone, toolbarColumns } = layout.value;
-      const underground = lockedDown.value;
-      // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示；漫游、地下空间时区划不适用
+      const underground = roaming.value;
+      // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示；漫游时区划不适用
       const scopeShown = (!phone || !sides.left.value) && !underground;
       const scene = map.dimension.value === '3d';
       const indoorMap = models.indoorMap.value;
-      const walkPlayer = models.walkPlayer.value;
+      const player = models.roamPlayer.value;
+      const route = models.routeTrack.value;
       // 手机宽度时资源面板展开，小地图会压在面板上，同区划条一样先不显示（ADR 0087）
       const minimapShown = !phone || !sides.left.value;
       return (
@@ -443,15 +446,10 @@ export const CurrentMapPage = defineComponent({
                 )}
               </div>
             </div>
-            {scene && (
-              <div key="underground" class={[styles.underground, phone && styles.phoneUnderground]}>
-                <UndergroundBar models={models} />
-              </div>
-            )}
-            {/* 步行时的小地图在右上角：地下空间时那里的工具栏、功能面板都隐藏了（ADR 0087） */}
-            {scene && indoorMap && walkPlayer && minimapShown && (
+            {/* 漫游时的小地图在右上角：那里的工具栏、功能面板都隐藏了（ADR 0087、0097） */}
+            {scene && indoorMap && player && minimapShown && (
               <div key="minimap" class={styles.minimap}>
-                <IndoorMinimap map={indoorMap} player={walkPlayer} onOpen={models.openMap} />
+                <IndoorMinimap map={indoorMap} player={player} route={route} onOpen={models.openMap} />
               </div>
             )}
             {/* 状态栏在左下角、左侧面板下面（ADR 0095） */}
@@ -488,10 +486,12 @@ export const CurrentMapPage = defineComponent({
               )}
             </div>
           </div>
-          {scene && indoorMap && walkPlayer && models.mapOpen.value && (
+          {scene && indoorMap && player && models.mapOpen.value && (
             <IndoorMapDialog
               map={indoorMap}
-              player={walkPlayer}
+              player={player}
+              route={route}
+              teleport={models.roam.value?.kind === 'walk'}
               onTeleport={models.teleportWalk}
               onClose={models.closeMap}
             />

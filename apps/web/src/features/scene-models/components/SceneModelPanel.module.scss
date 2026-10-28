@@ -279,16 +279,6 @@
   white-space: nowrap;
 }
 
-.tag {
-  flex: none;
-  padding: 0 6px;
-  border-radius: 999px;
-  background-color: var(--color-primary-bg);
-  color: var(--color-primary);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-compact);
-}
-
 .actions {
   display: flex;
   flex: none;

@@ -25,6 +25,14 @@ describe('IndoorMapDialog', () => {
     expect(wrapper.text()).toContain('双击地图瞬移 · 拖动平移 · 滚轮缩放');
   });
 
+  it('路线漫游时不能瞬移（ADR 0097 第 6 节）：操作说明里没有双击瞬移', () => {
+    const wrapper = mount(IndoorMapDialog, { props: { map, player, teleport: false } });
+
+    expect(wrapper.text()).toContain('拖动平移 · 滚轮缩放');
+    expect(wrapper.text()).not.toContain('双击地图瞬移');
+    expect(wrapper.get('canvas').attributes('aria-label')).toBe('站内地图');
+  });
+
   it('×、点遮罩、Esc 关闭；点面板里面不关；Esc 不传到页面（页面上 Esc 是退出漫游）', async () => {
     const wrapper = mount(IndoorMapDialog, { props: { map, player }, attachTo: document.body });
     const onWindowKey = vi.fn<(event: KeyboardEvent) => void>();

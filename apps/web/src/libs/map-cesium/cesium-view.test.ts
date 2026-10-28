@@ -1062,7 +1062,7 @@ describe('CesiumView 的路线漫游（ADR 0083）', () => {
     ]);
   });
 
-  it('重新开始回到起点；播放、倍速变了才改播放；换一条路线重新开始', async () => {
+  it('重新开始回到起点；播放、速度变了才改播放；换一条路线重新开始', async () => {
     const { scene, view, statuses, roam } = roamSetup();
     await view.whenReady();
     roam(routeRoam({ playing: true }));

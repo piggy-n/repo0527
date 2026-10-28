@@ -13,7 +13,8 @@ import {
   toPlane
 } from '../indoor-map/indoor-map';
 import { scaleBar } from '../indoor-map/map-camera';
-import { drawPlayer, drawTarget, markerColors, rasterCanvas } from '../indoor-map/map-draw';
+import { drawPlayer, drawRoute, drawTarget, markerColors, rasterCanvas } from '../indoor-map/map-draw';
+import { type RouteTrack, trackOnLevel } from '../indoor-map/route-track';
 import styles from './IndoorMinimap.module.scss';
 
 /** 小地图的边长（CSS 像素） */
@@ -32,14 +33,16 @@ interface Sample {
 }
 
 /**
- * 步行时的小地图（ADR 0087，右上角 180 × 180）：以人为中心、正北朝上，显示人所在的楼层；
- * +/− 在 20～160 米之间逐档缩放；点地图打开完整地图
+ * 漫游时的小地图（ADR 0087，右上角 180 × 180）：以人为中心、正北朝上，显示人所在的楼层；
+ * +/− 在 20～160 米之间逐档缩放；点地图打开完整地图。路线漫游时画出这一层上的路线（ADR 0097 第 6 节）
  */
 export const IndoorMinimap = defineComponent({
   name: 'IndoorMinimap',
   props: {
     map: { type: Object as PropType<IndoorMap>, required: true },
-    player: { type: Object as PropType<MapPlayer>, required: true }
+    player: { type: Object as PropType<MapPlayer>, required: true },
+    /** 路线漫游时的路线；步行时没有 */
+    route: { type: Object as PropType<RouteTrack | null>, default: null }
   },
   emits: {
     open: () => true
@@ -88,6 +91,12 @@ export const IndoorMinimap = defineComponent({
         sample.meters * scale,
         sample.meters * scale
       );
+      if (props.route) {
+        const { all, passed } = trackOnLevel(map, current, props.route, player);
+        const screen = (line: readonly (readonly [number, number])[]) =>
+          line.map(([east, north]) => [(east - center[0]) * scale, (center[1] - north) * scale] as const);
+        drawRoute(context, { all: all.map(screen), passed: passed.map(screen) }, 3 * dpr, colors);
+      }
       if (player.target) {
         const [east, north] = toPlane(map, player.target.x, player.target.y);
         drawTarget(context, (east - center[0]) * scale, (center[1] - north) * scale, 3.5 * dpr, colors);
@@ -105,7 +114,7 @@ export const IndoorMinimap = defineComponent({
         sample = null;
       }
     );
-    watch([() => props.player, () => props.map, range], draw, { flush: 'post' });
+    watch([() => props.player, () => props.map, () => props.route, range], draw, { flush: 'post' });
 
     const step = (offset: number) => {
       const next = MINIMAP_RANGES[MINIMAP_RANGES.indexOf(range.value) + offset];
