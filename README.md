@@ -86,6 +86,7 @@ PROXY_TARGET=http://backend.example.com:18010
 `.env.local` 已被 Git 忽略，个人配置不提交。无需为了本机配置修改已提交的 `.env`。
 
 - `VITE_API_BASE_URL` 保持 `/backend`，浏览器请求由 Vite 转发到 `PROXY_TARGET`
+- AI 对话的后端是另一个服务：`/ai-backend` 转发到 `AI_PROXY_TARGET`（默认是旧项目的本机开发地址 `http://localhost:8090`），尚未联调，见 [docs/modules/ai-chat.md](docs/modules/ai-chat.md)
 - 若另一套后端的 SM2 登录公钥不同，在 `.env.local` 中一并覆盖 `VITE_LOGIN_PUBLIC_KEY`，值由后端维护者提供
 - 天地图开启时，需要有效的浏览器端 key，并确认使用地址符合该 key 的配置；需要自己的 key 时覆盖 `VITE_TIANDITU_KEY`
 - `VITE_` 开头的配置会进入前端产物，不填写账号密码、私钥或服务端密钥

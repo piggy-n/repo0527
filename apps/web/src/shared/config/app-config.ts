@@ -57,5 +57,7 @@ export const appConfig = {
     '不是有效的 SM2 公钥（应为 04 开头的 130 位十六进制）'
   ),
   /** 天地图；为 null 时不能向天地图发任何请求 */
-  tianditu: tianditu(import.meta.env.VITE_TIANDITU_ENABLED, import.meta.env.VITE_TIANDITU_KEY)
+  tianditu: tianditu(import.meta.env.VITE_TIANDITU_ENABLED, import.meta.env.VITE_TIANDITU_KEY),
+  /** AI 对话后端的基础地址，与 apiBaseUrl 是两个服务 */
+  aiApiBaseUrl: required('VITE_AI_API_BASE_URL', import.meta.env.VITE_AI_API_BASE_URL)
 } as const;

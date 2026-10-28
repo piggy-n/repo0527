@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => {
   // 前缀参数传空字符串，才能读到不带 VITE_ 前缀的 PROXY_TARGET；它只在这里使用，不会进入前端代码
   const env = loadEnv(mode, process.cwd(), '');
   const apiBaseUrl = env.VITE_API_BASE_URL;
+  const aiApiBaseUrl = env.VITE_AI_API_BASE_URL;
 
   // 这两个插件会改动源文件（生成标题轮廓、规范化图标）；测试只检查已提交的结果，不启用
   const generators =
@@ -59,6 +60,12 @@ export default defineConfig(({ mode }) => {
           target: env.PROXY_TARGET,
           changeOrigin: true,
           rewrite: path => path.slice(apiBaseUrl.length)
+        },
+        // AI 对话的后端是另一个服务（docs/modules/ai-chat.md）
+        [`${aiApiBaseUrl}/`]: {
+          target: env.AI_PROXY_TARGET,
+          changeOrigin: true,
+          rewrite: path => path.slice(aiApiBaseUrl.length)
         }
       }
     },
