@@ -12,16 +12,11 @@ import { SystemMenuPreview } from './SystemMenuPreview';
 import {
   type DownloadFeedback,
   type ListScene,
-  type MenuStyle,
   type SubmitScene,
   type TableRowMode,
   useSystemManagementDemo
 } from './useSystemManagementDemo';
 
-const MENU_STYLES: [MenuStyle, string][] = [
-  ['el-menu', 'ElMenu 变体'],
-  ['side-menu', '自写列表（MxSideMenu）']
-];
 const TABLE_ROW_MODES: [TableRowMode, string][] = [
   ['labeled', '标成"统计任务"'],
   ['legacy', '照旧显示为审核通过'],
@@ -77,7 +72,6 @@ export const DevSystemManagementPage = defineComponent({
     function renderControls() {
       return (
         <div class={styles.controls}>
-          {renderOption('菜单写法', demo.menuStyle.value, MENU_STYLES, value => (demo.menuStyle.value = value))}
           {renderOption('统计任务', demo.tableRowMode.value, TABLE_ROW_MODES, value => {
             demo.tableRowMode.value = value;
           })}
@@ -289,11 +283,7 @@ export const DevSystemManagementPage = defineComponent({
             {{
               aside: () => (
                 <MxPanel flush>
-                  <SystemMenuPreview
-                    menuStyle={demo.menuStyle.value}
-                    active={demo.section.value}
-                    onSelect={section => (demo.section.value = section)}
-                  />
+                  <SystemMenuPreview active={demo.section.value} onSelect={section => (demo.section.value = section)} />
                 </MxPanel>
               ),
               default: () => (demo.section.value === 'audit' ? renderAudit() : renderReports())

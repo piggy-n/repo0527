@@ -9,7 +9,6 @@ import {
 } from './samples';
 
 export type SystemSection = 'audit' | 'reports';
-export type MenuStyle = 'el-menu' | 'side-menu';
 // 申请列表里的统计任务：照旧显示为审核通过、标成统计任务、由后端排除
 export type TableRowMode = 'legacy' | 'labeled' | 'hidden';
 export type DownloadFeedback = 'progress' | 'spinner';
@@ -34,7 +33,6 @@ const emptyFilters = (): AuditFilters => ({ name: '', status: '', prepare: '' })
 
 /** 系统管理原型的演示数据：筛选、分页、审核和下载都在内存里，不请求接口 */
 export function useSystemManagementDemo() {
-  const menuStyle = ref<MenuStyle>('el-menu');
   const tableRowMode = ref<TableRowMode>('labeled');
   const downloadFeedback = ref<DownloadFeedback>('progress');
   const listScene = ref<ListScene>('normal');
@@ -207,7 +205,6 @@ export function useSystemManagementDemo() {
   });
 
   return {
-    menuStyle,
     tableRowMode,
     downloadFeedback,
     listScene,
