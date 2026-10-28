@@ -151,6 +151,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "d3-geo": "3.1.1",
     "d3-polygon": "3.0.1",
     "docx-preview": "0.4.1",
+    "dompurify": "^3.4.17",
     "echarts": "^6.1.0",
     "element-plus": "^2.14.6",
     "geographiclib-geodesic": "^2.2.0",
@@ -158,6 +159,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "idb-keyval": "^6.3.0",
     "jwt-decode": "^4.0.0",
     "maplibre-gl": "^6.12.0",
+    "marked": "^18.1.1",
     "nanoevents": "^10.0.0",
     "pinia": "^4.0.3",
     "sm-crypto-v2": "^1.15.1",
@@ -245,6 +247,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `d3-force` | 资源管理"自助取数"关系图的力导布局，坐标和旧页面一致（ADR 0089），只在 `features/resource-management/extraction/graph-layout.ts` 中使用，随关系图的运行时懒加载。精确锁定旧项目 D3 7.9 的子包版本，和 `d3-geo`、`d3-polygon` 一样；依赖 `d3-dispatch`、`d3-quadtree`、`d3-timer`。类型来自 `@types/d3-force` | ECharts 自带的力导（坐标和旧页面不同）、G6 4（ADR 0089） |
 | `sortablejs` | 资源图层面板的拖动排序（ADR 0054）：目录顺序和"已勾选"的叠放顺序，只在 `shared/composables/useSortableList.ts` 中使用（测试可以导入它来模拟放下）。只认手柄、每个列表一个实例，放下后先把 DOM 还原，再把位置交给拥有者，由 Vue 重新渲染；MIT 许可，无依赖。没有用 `@vueuse/integrations` 的 `useSortable`：它默认直接改数组，我们的顺序在拥有者里，自己包一层更直接，也少一个依赖 | ElTree 自带的拖放、自己写指针事件（ADR 0054） |
 | `@types/sortablejs` | SortableJS 的类型（它不自带），只在开发时使用 | — |
+| `marked` | AI 对话的回答是 Markdown（表格、列表、加粗），转成 HTML；只在 `features/ai-chat/markdown.ts` 中使用，随 AI 对话页懒加载。旧项目用的同一个库；自带类型，无依赖 | markdown-it |
+| `dompurify` | 净化 marked 转出的 HTML 再用 `innerHTML` 显示，标签白名单沿用旧项目，属性只留 `href`、`title`；只在 `features/ai-chat/markdown.ts` 中使用。旧项目用的同一个库，自带类型 | 只转义、不渲染 Markdown |
 | `nanoevents` | 地图内核的带类型事件（ADR 0023）。实现只有 25 行，无依赖；`on` 返回取消订阅的函数，直接登记到释放栈。map-core 对外只暴露自己的 `Unsubscribe` 类型，不暴露它的类型 | mitt（`on` 不返回取消函数，2023 年后没有发布）、`EventTarget` |
 | `core-js` | 补齐资源释放的标准接口：只在 `app/main.ts` 的最前面引入 `es/symbol/dispose`、`es/disposable-stack` 两个模块（ADR 0023）。入口包实测增加 21.8 KB（gzip 7.9 KB）。安装脚本不执行（见 pnpm-workspace.md）；lint 的 `no-unassigned-import` 已放行 `core-js/**` | 在 utils 里自己实现约 60 行 |
 | `msw` | 测试中在网络层模拟接口，只用 `msw/node`；安装脚本不放行（见 pnpm-workspace.md） | axios-mock-adapter |

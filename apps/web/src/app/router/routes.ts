@@ -52,7 +52,12 @@ const businessRoutes: RouteRecordRaw[] = [
       import('@/pages/file-management/FileManagementPage').then(({ FileManagementPage }) => FileManagementPage),
     meta: { title: '文件管理' }
   },
-  placeholder('ai-chat', RouteName.aiChat, 'AI对话'),
+  {
+    path: 'ai-chat',
+    name: RouteName.aiChat,
+    component: withMapRuntime(() => import('@/pages/ai-chat/AiChatPage').then(({ AiChatPage }) => AiChatPage)),
+    meta: { title: 'AI对话' }
+  },
   {
     path: 'resource-management',
     name: RouteName.resourceManagement,

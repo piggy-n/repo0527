@@ -1,5 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { useAiAuthStore } from '@/features/ai-chat/store';
 import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { createTestJwtExpiringAt } from '@/shared/auth/testing';
@@ -24,6 +25,14 @@ describe('endSession', () => {
 
     expect(useSessionStore().session).toBeNull();
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
+  });
+
+  it('同时清除 AI 后端的凭据', () => {
+    useAiAuthStore().setToken('ai-token');
+
+    endSession();
+
+    expect(useAiAuthStore().token).toBeNull();
   });
 
   it('取消进行中的查询', async () => {

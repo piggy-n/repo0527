@@ -1,3 +1,4 @@
+import { useAiAuthStore } from '@/features/ai-chat/store';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { queryClient } from './query-client';
 
@@ -5,5 +6,7 @@ import { queryClient } from './query-client';
 export function endSession(): void {
   // 清空查询缓存会同时取消进行中的查询：上一个账号的数据不会留给之后登录的账号，晚到的结果和错误提示也不会出现
   queryClient.clear();
+  // AI 后端的凭据随系统的登录会话一起清除（沿用旧项目）
+  useAiAuthStore().reset();
   useSessionStore().clear();
 }

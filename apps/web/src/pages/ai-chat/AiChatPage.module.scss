@@ -1,0 +1,40 @@
+// 主区纵向排列地图和结果：结果收起时只有标题行，展开时固定高度，最大化时地图让出空间、只留一条
+.mapSlot,
+.resultSlot {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mapSlot {
+  flex: 1;
+}
+
+.mapShrunk {
+  flex: 0 0 120px;
+}
+
+.resultSlot {
+  flex: none;
+}
+
+.expanded {
+  flex: 0 0 360px;
+}
+
+.maximized {
+  flex: 1;
+}
+
+// 地图区域，提示和控制栏以它为定位参照
+.map {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.controls {
+  position: absolute;
+  right: var(--space-lg);
+  bottom: var(--space-lg);
+}

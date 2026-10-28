@@ -1,0 +1,246 @@
+.root {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+// 提问靠右，头像在右侧，气泡按文字定宽
+.user {
+  flex-direction: row-reverse;
+
+  .body {
+    flex: 0 1 auto;
+    align-items: flex-end;
+    max-width: 80%;
+  }
+}
+
+.avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-xs);
+
+  .user & {
+    background-color: var(--color-primary-bg);
+    color: var(--color-primary);
+    font-weight: var(--font-weight-semibold);
+  }
+}
+
+// 回答占满头像右侧的宽度，里面可能有表格
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bubble {
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  overflow-wrap: anywhere;
+}
+
+.question {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  white-space: pre-wrap;
+}
+
+.answer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: var(--color-neutral-bg-light);
+  color: var(--color-text-primary);
+}
+
+.thinking {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+
+  span:last-child {
+    margin-left: 4px;
+  }
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  animation: blink 1.2s ease-in-out infinite;
+
+  &:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  &:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+}
+
+@keyframes blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+  }
+
+  40% {
+    opacity: 1;
+  }
+}
+
+.empty {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.error {
+  margin: 0;
+  color: var(--color-danger-text);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+// 回答的 Markdown：内容来自 marked，元素没有 CSS Modules 的类名，只能用 :global 选中
+.markdown {
+  min-width: 0;
+
+  :global {
+    p,
+    ul,
+    ol,
+    pre,
+    blockquote,
+    table {
+      margin: 0 0 8px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      margin: 0 0 8px;
+      color: var(--color-text-title);
+      font-size: var(--font-size-base);
+      font-weight: var(--font-weight-semibold);
+    }
+
+    ul,
+    ol {
+      padding-left: 20px;
+    }
+
+    a {
+      color: var(--color-primary);
+    }
+
+    code {
+      padding: 0 4px;
+      border-radius: var(--radius-sm);
+      background-color: var(--color-bg-container);
+      font-size: var(--font-size-xs);
+    }
+
+    pre {
+      padding: 8px;
+      overflow: auto;
+      border-radius: var(--radius-sm);
+      background-color: var(--color-bg-container);
+
+      code {
+        padding: 0;
+      }
+    }
+
+    blockquote {
+      padding-left: 8px;
+      border-left: 4px solid var(--color-border);
+      color: var(--color-text-regular);
+    }
+
+    hr {
+      margin: 8px 0;
+      border: 0;
+      border-top: 1px solid var(--color-divider);
+    }
+
+    // 宽表格在气泡里横向滚动
+    table {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+      border-collapse: collapse;
+      font-size: var(--font-size-xs);
+      line-height: var(--line-height-compact);
+    }
+
+    th,
+    td {
+      padding: 4px 8px;
+      border: 1px solid var(--color-border);
+      white-space: nowrap;
+    }
+
+    th {
+      background-color: var(--color-neutral-bg);
+      color: var(--color-text-title);
+      font-weight: var(--font-weight-semibold);
+    }
+
+    td {
+      background-color: var(--color-bg-container);
+    }
+  }
+}
+
+// 流式输出时在末尾显示光标
+.streaming > :last-child::after {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  background-color: var(--color-primary);
+  vertical-align: text-bottom;
+  animation: blink 1s step-end infinite;
+  content: '';
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background-color: var(--color-neutral-bg);
+}
