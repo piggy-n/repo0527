@@ -7,7 +7,7 @@ import { withMapRuntime } from '../map-framework';
 const loadPlaceholder = () =>
   import('@/pages/placeholder/PlaceholderPage').then(({ PlaceholderPage }) => PlaceholderPage);
 
-// 系统管理的两个栏目是两个路由、同一个页面，栏目由 props 传入；打开的申请是资源审核的查询参数 apply（ADR 0091）
+// 系统管理的两个栏目是两个路由、同一个页面，栏目由 props 传入；打开的申请是资源审核的查询参数 apply（ADR 0092）
 const loadSystemManagementPage = () =>
   import('@/pages/system-management/SystemManagementPage').then(({ SystemManagementPage }) => SystemManagementPage);
 

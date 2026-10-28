@@ -12,7 +12,7 @@ import { navigate } from '@/shared/router/navigate';
 import { MESSAGE_UNAVAILABLE, messageLocation } from '../message-routes';
 import styles from './HeaderMessages.module.scss';
 
-// 弹框顶边离顶栏下沿 8，左右、底边离窗口至少 16，最高 640（ADR 0092）
+// 弹框顶边离顶栏下沿 8，左右、底边离窗口至少 16，最高 640（ADR 0093）
 const GAP_BELOW_HEADER = 8;
 const GAP_TO_WINDOW = 16;
 const MAX_HEIGHT = 640;

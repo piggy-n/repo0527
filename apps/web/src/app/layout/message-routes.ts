@@ -1,7 +1,7 @@
 import type { MessageTarget } from '@/features/message-center/display';
 import { RouteName } from '@/shared/router/route-names';
 
-/** 消息指向的页面：申请在系统管理里用 ?apply= 打开，报表是统计报表栏目（ADR 0091、0092） */
+/** 消息指向的页面：申请在系统管理里用 ?apply= 打开，报表是统计报表栏目（ADR 0092、0093） */
 export function messageLocation(target: MessageTarget) {
   if (target.kind === 'reports') {
     return { name: RouteName.systemManagementReports };

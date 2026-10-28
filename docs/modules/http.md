@@ -70,7 +70,7 @@ export function queryFeaturesAt(layerCode: string, geometry: Point | Polygon, si
 
 上传继续使用 `http.post(url, formData, { schema, onUploadProgress, ... })`，由浏览器设置 multipart boundary，不手写 Content-Type。进度只暴露 `{ loaded, total, percent }`，总量未知时后两项为 null；发送 100% 不代表服务端成功。
 
-`http.getBlob(url, { query, signal, timeout, silent, onDownloadProgress })` 返回 `{ blob, contentType, contentDisposition }`，不传 JSON schema；`http.postBlob(url, body?, options)` 是 POST 的版本（数据申请的下载，ADR 0091）；二进制先检查响应类型和错误信封，再交出 Blob。取消、鉴权和超时仍经过同一个请求通道。文件名整理、MIME 后备值和触发浏览器保存使用 `shared/file-transfer`，完整接口、限制和三场景示例见 [file-transfer.md](file-transfer.md)。
+`http.getBlob(url, { query, signal, timeout, silent, onDownloadProgress })` 返回 `{ blob, contentType, contentDisposition }`，不传 JSON schema；`http.postBlob(url, body?, options)` 是 POST 的版本（数据申请的下载，ADR 0092）；二进制先检查响应类型和错误信封，再交出 Blob。取消、鉴权和超时仍经过同一个请求通道。文件名整理、MIME 后备值和触发浏览器保存使用 `shared/file-transfer`，完整接口、限制和三场景示例见 [file-transfer.md](file-transfer.md)。
 
 这些接口只中止网络传输，不撤销已经发生的服务端写入；上传与 Excel 导入的防重复、会话检查和刷新由各 feature 按 ADR 0039 持有。
 

@@ -12,7 +12,7 @@ export interface SideNavItem {
 }
 
 /**
- * 菜单型左栏的页面内导航（ADR 0091）：菜单项是 RouterLink，能用 Tab 聚焦、回车打开、在新标签页打开；
+ * 菜单型左栏的页面内导航（ADR 0092）：菜单项是 RouterLink，能用 Tab 聚焦、回车打开、在新标签页打开；
  * 当前页由 RouterLink 判断（不看查询参数），加 aria-current。放在 MxSplitLayout 的侧栏里，窄屏时在抽屉里点了就关闭抽屉
  */
 export const SideNav = defineComponent({

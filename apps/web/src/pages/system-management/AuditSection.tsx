@@ -18,7 +18,7 @@ const PAGE_SIZES = [10, 20, 50, 100];
 
 /**
  * 资源审核栏目：筛选、表格、分页，申请的详情、审核与下载；只在这个栏目显示时存在，切到统计报表时不再请求申请列表。
- * 打开的申请是路由的查询参数 apply（ADR 0091）：打开时 push，浏览器的后退能关掉弹窗；关闭时 replace 去掉它
+ * 打开的申请是路由的查询参数 apply（ADR 0092）：打开时 push，浏览器的后退能关掉弹窗；关闭时 replace 去掉它
  */
 export const AuditSection = defineComponent({
   name: 'AuditSection',

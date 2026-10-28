@@ -1,6 +1,6 @@
 import { districtsOf, JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 
-// 自助取数和下载申请的区划选项；图层、格式和时间格式在 shared/data-request，系统管理也用（ADR 0091）
+// 自助取数和下载申请的区划选项；图层、格式和时间格式在 shared/data-request，系统管理也用（ADR 0092）
 
 // 用 type 而不是 interface：Element 的级联选项带索引签名，只有对象类型别名能直接赋给它
 export type RegionOption = {

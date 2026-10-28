@@ -5,7 +5,7 @@ import { SideNav, type SideNavItem } from '@/shared/side-nav/SideNav';
 import { AuditSection } from './AuditSection';
 import { ReportsSection } from './ReportsSection';
 
-/** 系统管理的栏目，由路由的 props 传入（ADR 0091） */
+/** 系统管理的栏目，由路由的 props 传入（ADR 0092） */
 export type SystemSection = 'audit' | 'reports';
 
 const NAV_ITEMS: SideNavItem[] = [

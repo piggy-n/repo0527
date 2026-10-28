@@ -7,7 +7,7 @@ export const CATEGORY_LABELS: Record<MessageCategory, string> = {
   table: '统计报表'
 };
 
-/** 消息指向的业务；消息 feature 只给出目标，由 app 按角色换成路由（ADR 0092） */
+/** 消息指向的业务；消息 feature 只给出目标，由 app 按角色换成路由（ADR 0093） */
 export type MessageTarget = { kind: 'application'; applyId: string } | { kind: 'reports' };
 
 /** 消息的业务按钮 */

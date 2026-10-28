@@ -21,7 +21,7 @@ type ReadFile<Target> = (
 ) => Promise<DownloadedFile>;
 
 /**
- * 列表行内的下载（系统管理的申请和统计报表，ADR 0091）：按 ID 防重复，记下每行的进度，读完交给浏览器保存；
+ * 列表行内的下载（系统管理的申请和统计报表，ADR 0092）：按 ID 防重复，记下每行的进度，读完交给浏览器保存；
  * 不渲染、不提示。下载是只读操作：页面销毁、换会话都中止读取，晚到的内容不交给浏览器（同文件管理的 useFileDownloads）
  */
 export function useRowDownloads<Target>(identify: (target: Target) => string, read: ReadFile<Target>) {

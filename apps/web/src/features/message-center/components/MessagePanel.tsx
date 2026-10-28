@@ -26,7 +26,7 @@ const READ_OPTIONS: [ReadFilter, string][] = [
 
 const isReadFilter = (value: unknown): value is ReadFilter => value === 'all' || value === 'unread';
 
-/** 消息弹框的内容：浅灰标题栏（未读数、全部已读）、固定的筛选、滚动的消息列表（ADR 0092） */
+/** 消息弹框的内容：浅灰标题栏（未读数、全部已读）、固定的筛选、滚动的消息列表（ADR 0093） */
 export const MessagePanel = defineComponent({
   name: 'MessagePanel',
   props: {

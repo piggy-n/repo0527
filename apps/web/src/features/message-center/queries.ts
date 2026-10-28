@@ -10,7 +10,7 @@ export const messageKeys = {
   unread: () => [...messageKeys.all, 'unread'] as const
 };
 
-/** 未读数每隔多久刷新一次（ADR 0092） */
+/** 未读数每隔多久刷新一次（ADR 0093） */
 export const UNREAD_REFRESH_INTERVAL = 60_000;
 
 /**
@@ -87,7 +87,7 @@ interface ReadAllSubmission {
 
 /**
  * 全部已读。接口没有参数，由后端决定改哪些；本地只先改提交时看到的未读，之后到达的新消息等刷新后按服务端的结果显示
- * （和 ADR 0092 的出入见 docs/modules/system-management.md 的"全部已读"）
+ * （和 ADR 0093 的出入见 docs/modules/system-management.md 的"全部已读"）
  */
 export function useMarkAllReadMutation() {
   const queryClient = useQueryClient();

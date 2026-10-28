@@ -2,7 +2,7 @@ import { ElButton } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import styles from './DownloadButton.module.scss';
 
-/** 表格行、弹窗里的"下载"：下载中换成进度（"下载 35%"，总量未知时"下载中"），不能下载时置灰（ADR 0091） */
+/** 表格行、弹窗里的"下载"：下载中换成进度（"下载 35%"，总量未知时"下载中"），不能下载时置灰（ADR 0092） */
 export const DownloadButton = defineComponent({
   name: 'DownloadButton',
   props: {

@@ -18,7 +18,7 @@ export type AuditResult = { kind: 'success'; id: string; approved: boolean } | {
 const emptyForm = (): AuditForm => ({ approved: true, reason: '' });
 
 /**
- * 打开的申请（ID 来自路由的查询参数，ADR 0091）与审核：待审核的填审核意见，其余只查看，模式由申请当前的状态决定。
+ * 打开的申请（ID 来自路由的查询参数，ADR 0092）与审核：待审核的填审核意见，其余只查看，模式由申请当前的状态决定。
  * 提交期间不能重复提交；失败时保留填写的内容。不渲染、不跳转、不提示；send 默认是真实的审核接口，组件样例传入演示的提交
  */
 export function useApplicationReview(

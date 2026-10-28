@@ -1,7 +1,7 @@
 import { PREPARE_STATUS_LABELS, PREPARE_STATUSES } from '@/shared/data-request/prepare-status';
 import type { Application, AuditStatus } from './api';
 
-// 旧页面管理员看到的"申核通过"是错别字，统一为"审核"（ADR 0091）
+// 旧页面管理员看到的"申核通过"是错别字，统一为"审核"（ADR 0092）
 export const AUDIT_STATUS_LABELS: Record<AuditStatus, string> = {
   pending: '待审核',
   approved: '审核通过',

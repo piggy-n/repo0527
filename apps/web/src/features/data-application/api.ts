@@ -7,7 +7,7 @@ import { http, type TransferProgress } from '@/shared/http/client';
 // 字段按 2026-10-27 只读核对的真实返回（docs/migration.md）：没有值的字段整个键都不出现，所以写 optional 而不是 nullable；
 // 用不到的字段（user_id、receiver_dept_code、xzqdm、file_path、storage_progess 等）不声明，解析时丢弃
 
-/** 申请的状态；table 是后端混在申请表里的基本统计任务（ADR 0091） */
+/** 申请的状态；table 是后端混在申请表里的基本统计任务（ADR 0092） */
 const applicationStatusSchema = z.enum(['pending', 'approved', 'rejected', 'table']);
 
 export type ApplicationStatus = z.infer<typeof applicationStatusSchema>;

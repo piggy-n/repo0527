@@ -333,7 +333,7 @@ $tree-node: '.el-tree > .el-tree-node';
   }
 }
 
-// 列表页的分页（ADR 0091，原来写在资源管理页里）：标准分页控件，窄屏只换行，不裁掉页码、条数或跳页入口；
+// 列表页的分页（ADR 0092，原来写在资源管理页里）：标准分页控件，窄屏只换行，不裁掉页码、条数或跳页入口；
 // 用法 <ElPagination class="pagination-wrap">
 .el-pagination.pagination-wrap {
   min-width: 0;

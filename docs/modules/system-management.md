@@ -1,6 +1,6 @@
 # 系统管理与消息
 
-管理员的资源审核、申请详情、统计报表与下载，以及所有角色的消息弹框。决策见 [ADR 0091](../adr/0091-system-management.md)（系统管理）和 [ADR 0092](../adr/0092-header-message-popover.md)（消息）；旧代码与真实接口的核对见 [migration.md](../migration.md)"系统管理与消息中心：接口实测"。
+管理员的资源审核、申请详情、统计报表与下载，以及所有角色的消息弹框。决策见 [ADR 0092](../adr/0092-system-management.md)（系统管理）和 [ADR 0093](../adr/0093-header-message-popover.md)（消息）；旧代码与真实接口的核对见 [migration.md](../migration.md)"系统管理与消息中心：接口实测"。
 
 ## 分层
 
@@ -89,7 +89,7 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 - `/system-management`（`RouteName.systemManagement`）和 `/system-management/statistical-report`（`RouteName.systemManagementReports`）都指向 `SystemManagementPage`，栏目由路由 `props` 传入；两个路由间切换时页面不重建，侧栏的状态保留
 - 顶栏的"系统管理"写了 `alsoActiveOn: [systemManagementReports]`，宽屏导航和窄屏菜单在统计报表上也显示为选中
 - `SideNav`（`shared/side-nav`）：菜单项是 `RouterLink`，当前页由 `RouterLink` 判断（不看查询参数，打开申请时仍是当前页），加 `aria-current`；要放在 `MxSplitLayout` 的侧栏里，窄屏时在抽屉里点了就关闭抽屉。外观按 page-layout 的"菜单型左栏"
-- 删掉了 `message-center` 的占位路由和路由名（ADR 0092）
+- 删掉了 `message-center` 的占位路由和路由名（ADR 0093）
 
 ### 验证（2026-10-27）
 
@@ -145,7 +145,7 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 - **已读成功后**先改两个缓存（红点和角标马上变），再让两个查询失效、按服务端的结果刷新。不等刷新完成：结果已经显示，全量列表较大。弹框关着时全量查询不在用，只标为过期，下次打开再取
 - 写操作按 `useSessionGuard` 核对会话：发请求前换了会话就以取消结束，响应时已换会话不改缓存
 
-**全部已读和 ADR 0092 的出入**：ADR 写的是"只改提交时看到的未读，之后到达的新消息保持未读"，但接口没有参数，后端把当前账号的消息全部改成已读（旧页面也是这样调用）。前端只能做到本地先改提交时看到的那些，刷新后按服务端的结果显示：提交前后到达的新消息，刷新后也是已读。要严格做到需要后端接收 ID，记在"待联调"。
+**全部已读和 ADR 0093 的出入**：ADR 写的是"只改提交时看到的未读，之后到达的新消息保持未读"，但接口没有参数，后端把当前账号的消息全部改成已读（旧页面也是这样调用）。前端只能做到本地先改提交时看到的那些，刷新后按服务端的结果显示：提交前后到达的新消息，刷新后也是已读。要严格做到需要后端接收 ID，记在"待联调"。
 
 ### 弹框的状态（`useMessageCenter`）
 
@@ -164,7 +164,7 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 - 外层是 `MxPanel headerTone="muted" flush`（ADR 0076）：标题"消息"，说明"N 条未读"，操作区"全部已读"；筛选放在 `subheader`，只有列表滚动。最高取 CSS 变量 `--message-panel-max-height`，由 app 的弹框按顶栏位置算出
 - 一条消息：未读红点；类型标签（审批提醒 `warning`、资源消息 `primary`、统计报表 `info`）；标题（过长省略）；时间（`messageTime`：今天写"今天 时:分"，今年写"月-日 时:分"，更早写日期；"今天"按北京时间判断，悬停看完整时间）；完整正文（连续的字母数字也能换行）；业务按钮
 - 点一行或在行上按回车标为已读。业务按钮标为已读并发出 `open(target)`，由 app 关弹框、跳转；点击会冒泡到整行，同一条按 ID 只提交一次，所以不阻止冒泡
-- 业务按钮的文案和目标由 `display.ts` 的 `messageLink` 给出（ADR 0092 第 6 条）；`unavailableReason(target)` 返回原因时按钮禁用、旁边显示原因，由 app 按角色给出
+- 业务按钮的文案和目标由 `display.ts` 的 `messageLink` 给出（ADR 0093 第 6 条）；`unavailableReason(target)` 返回原因时按钮禁用、旁边显示原因，由 app 按角色给出
 - 滚到距底部 120 以内接着显示（`useInfiniteScroll`）；换筛选回到列表顶部
 - 第一次请求的骨架屏延迟显示（`useDelayedFlag`）；失败时"加载失败 / 重试"；空的分"暂无消息"和"没有未读消息"；末尾是"继续滚动显示更多"或"共 N 条"
 
@@ -184,5 +184,5 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 - 审核的成功返回、准备完成后的下载（文件名、类型、大小）、驳回原因：没有真实样本，不对真实后端做写操作
 - 统计报表的字段、类型和状态取值：分页接口目前没有记录
 - 统计任务请后端在审核列表里排除；待审核的申请没有申请人
-- 消息已读、全部已读的成功返回；全部已读请后端接收提交时看到的消息 ID，之后到达的新消息保持未读（ADR 0092）
+- 消息已读、全部已读的成功返回；全部已读请后端接收提交时看到的消息 ID，之后到达的新消息保持未读（ADR 0093）
 - 消息列表请后端加分页和未读数接口：现在每 60 秒传一次未读的整个列表，打开弹框传一次全部（当时约 225 KB）

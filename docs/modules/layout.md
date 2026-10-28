@@ -17,7 +17,7 @@ app/layout/
    ├─ HeaderNav.tsx       导航（按角色过滤、桌面导航）
    ├─ CompactNav.tsx      窄屏时的"菜单"下拉
    ├─ NavDropdown.tsx     "查询统计"的两级下拉
-   ├─ HeaderMessages.tsx  消息按钮与弹框（ADR 0092）
+   ├─ HeaderMessages.tsx  消息按钮与弹框（ADR 0093）
    └─ UserMenu.tsx        用户菜单与退出登录
 ```
 
@@ -63,7 +63,7 @@ app/layout/
 
 退出登录：`ElMessageBox.confirm('确定要退出登录吗？')` → `session.clear()` → `router.replace` 到登录页 → 提示"已退出登录"。取消时什么也不做。用 `replace`，退出后按后退键不会回到业务页（回去也会被路由守卫拦下）。
 
-## 消息按钮（ADR 0092）
+## 消息按钮（ADR 0093）
 
 `HeaderMessages` 放在用户菜单左边，和它间隔 8。消息的数据、筛选、已读和弹框里的内容在 `features/message-center`（见 [system-management.md](system-management.md) 的"消息"），这里只装配：
 

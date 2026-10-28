@@ -34,7 +34,7 @@ const REASON_MAX_LENGTH = 200;
 const EMPTY_VALUE = '-';
 const shown = (value: string | undefined) => (value === undefined || value === '' ? EMPTY_VALUE : value);
 
-/** 申请详情与审核（ADR 0091）：上面是申请信息，下面是审核意见（待审核）或审核结果；提交期间不能关闭 */
+/** 申请详情与审核（ADR 0092）：上面是申请信息，下面是审核意见（待审核）或审核结果；提交期间不能关闭 */
 export const ApplicationDialog = defineComponent({
   name: 'ApplicationDialog',
   props: {
@@ -251,7 +251,7 @@ export const ApplicationDialog = defineComponent({
     return () => (
       <ElDialog
         class={['dialog-panel-header', styles.dialog]}
-        // 弹窗开关跟着路由：打开的申请没了就关上（ADR 0091）
+        // 弹窗开关跟着路由：打开的申请没了就关上（ADR 0092）
         modelValue={owner.state.value !== 'closed'}
         // 点关闭、按 Esc 时立即通知页面去掉查询参数；Element 的 update:modelValue 要等淡出结束才发出，不用它。
         // 提交期间不关

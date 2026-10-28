@@ -1,4 +1,4 @@
-// 数据申请的共用清单：资源管理提交申请、系统管理审核申请都用（ADR 0091）；旧项目在 QushuNodeForm 和 ResourceApplyDialog 里各写了一份
+// 数据申请的共用清单：资源管理提交申请、系统管理审核申请都用（ADR 0092）；旧项目在 QushuNodeForm 和 ResourceApplyDialog 里各写了一份
 
 /** 可申请的主题图层；正式的可申请范围和代码目录还没有后端接口，沿用旧页面写死的六项 */
 export const DATA_LAYERS = [

@@ -17,7 +17,7 @@ const ITEMS: MenuItem[] = [
 ];
 
 /**
- * 系统管理的页面内菜单（ADR 0091 的 SideNav 的外观）。正式组件的菜单项是 RouterLink，这里只切换栏目；
+ * 系统管理的页面内菜单（ADR 0092 的 SideNav 的外观）。正式组件的菜单项是 RouterLink，这里只切换栏目；
  * 窄屏时在抽屉里选中一项后关闭抽屉
  */
 export const SystemMenuPreview = defineComponent({
