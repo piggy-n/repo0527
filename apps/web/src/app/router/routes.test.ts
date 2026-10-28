@@ -69,6 +69,7 @@ describe('路由表', () => {
     expect(Object.fromEntries(restricted)).toEqual({
       [RouteName.resourceManagement]: [Role.admin],
       [RouteName.systemManagement]: [Role.admin],
+      [RouteName.systemManagementReports]: [Role.admin],
       [RouteName.resourceApplication]: [Role.user]
     });
   });

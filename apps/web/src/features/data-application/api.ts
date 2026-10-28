@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { formatDateTime } from '@/shared/data-request/date-time';
+import { formatBeijingDateTime } from '@/shared/data-request/date-time';
 import { http } from '@/shared/http/client';
 
 // 字段按 2026-10-27 只读核对的真实返回（docs/migration.md）：没有值的字段整个键都不出现，所以写 optional 而不是 nullable；
@@ -18,8 +18,8 @@ const prepareStatusSchema = z.enum(['processing', 'success', 'timeout', 'failed'
 
 export type PrepareStatus = z.infer<typeof prepareStatusSchema>;
 
-// 带时区的时间，如 2026-10-28T03:29:36.527+00:00，显示为本地时间
-const dateTimeSchema = z.iso.datetime({ offset: true }).transform(value => formatDateTime(new Date(value)));
+// 带时区的时间，如 2026-10-28T03:29:36.527+00:00，显示为北京时间（和消息里的时间一致）
+const dateTimeSchema = z.iso.datetime({ offset: true }).transform(value => formatBeijingDateTime(new Date(value)));
 
 const applicationSchema = z
   .object({
@@ -60,12 +60,14 @@ const applicationSchema = z
 
 export type Application = z.infer<typeof applicationSchema>;
 
-// PageHelper 的分页结构，只取用得到的字段
+// PageHelper 的分页结构，只取用得到的字段。页码越界时后端改成最后一页并返回那一页的数据；
+// 没有数据时原样返回请求的页码，pages 是 0（2026-10-27 实测）
 const applicationPageSchema = z.object({
   list: z.array(applicationSchema),
   total: z.number().int().nonnegative(),
   pageNum: z.number().int().positive(),
-  pageSize: z.number().int().positive()
+  pageSize: z.number().int().positive(),
+  pages: z.number().int().nonnegative()
 });
 
 export type ApplicationPage = z.infer<typeof applicationPageSchema>;

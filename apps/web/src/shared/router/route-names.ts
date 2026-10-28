@@ -23,10 +23,10 @@ export const RouteName = {
   spaceMonitoringIndicators: 'space-monitoring-indicators',
   fileManagement: 'file-management',
   aiChat: 'ai-chat',
-  messageCenter: 'message-center',
   resourceManagement: 'resource-management',
   resourceApplication: 'resource-application',
-  systemManagement: 'system-management'
+  systemManagement: 'system-management',
+  systemManagementReports: 'system-management-reports'
 } as const;
 
 export type RouteName = (typeof RouteName)[keyof typeof RouteName];

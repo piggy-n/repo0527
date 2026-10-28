@@ -71,6 +71,12 @@ describe('CompactNav', () => {
     ]);
   });
 
+  it('一级项在同一页面的其他路由上也标出当前：系统管理的统计报表', async () => {
+    const rows = await openMenu(Role.admin, '/system-management/statistical-report');
+
+    expect(rows.filter(row => row.endsWith('(当前)'))).toEqual(['[图标] 系统管理 (当前)']);
+  });
+
   it('下拉项在第一项或最后一项时，外侧不加分隔线', async () => {
     const rows = await openMenu(Role.user, '/current-map', items => items.filter(item => item.kind === 'dropdown'));
 

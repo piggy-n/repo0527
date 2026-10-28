@@ -14,6 +14,17 @@ export const PREPARE_STATUS_LABELS: Record<PrepareStatus, string> = {
   failed: '处理失败'
 };
 
+/** 筛选栏的选项，顺序和旧页面一致 */
+export const AUDIT_STATUS_OPTIONS = (['pending', 'approved', 'rejected'] as const).map(value => ({
+  value,
+  label: AUDIT_STATUS_LABELS[value]
+}));
+
+export const PREPARE_STATUS_OPTIONS = (['processing', 'success', 'timeout', 'failed'] as const).map(value => ({
+  value,
+  label: PREPARE_STATUS_LABELS[value]
+}));
+
 /** 有数据准备这一步、但还没有准备状态时的文案 */
 export const PREPARE_WAITING_LABEL = '未开始处理';
 

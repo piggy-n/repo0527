@@ -34,10 +34,10 @@ git diff <基线>..master-demo -- <旧路径>
 | `POST /api/message/list`，传 `{}` | `data` 直接是数组，505 条、约 225 KB，按 `createTime` 倒序；`pageNum`、`pageSize` 被忽略；`isRead: 'false'` / `'true'` 的过滤有效（135 / 370 条）。没有未读数接口 |
 | 消息字段 | 全部记录同一组键；`isRead` 只见字符串；`category` 为 `table` 497、`resource` 7、`approval` 1；`taskStatus` 只有 `pending`、`approved`、`rejected`、`null`；`priority` 全为 0；`createTime` 是本地时间字符串 |
 | 消息与申请 | 没有 `applyId`，`taskId` 就是申请的 `apply_id`（三条用详情接口对上了）。"申请已过期"通知的 `taskStatus` 是 `rejected`，对应的申请却是审核通过、准备超时 |
-| `POST /api/apply/list` | 标准分页，共 35 条；没有值的字段整个键都不出现（不是 `null`）。`status`、`taskStatus`、`applyName`（模糊）都生效 |
+| `POST /api/apply/list` | 标准分页，共 35 条；没有值的字段整个键都不出现（不是 `null`）。`status`、`taskStatus`、`applyName`（模糊）都生效。页码越界时改成最后一页并返回那一页（请求 99 页，返回 `pageNum` 2）；没有数据时原样返回请求的页码，`pages` 是 0 |
 | 申请的状态 | `approved` 21、`pending` 1、`table` 13，没有 `rejected`；`storage_status` 只见 `timeout` 或没有，没有 `success`，下载无法用真实数据验证 |
 | `status: 'table'` | 13 条是基本统计的任务，没有图层、区划和用途；其中一条的 `apply_id` 等于用户 ID，没有名称和时间 |
-| 时间 | 申请的 `create_time`、`start_date`、`end_date` 是带 `+00:00` 的 ISO 串，要按本地时区显示 |
+| 时间 | 申请的 `create_time`、`start_date`、`end_date` 是带 `+00:00` 的 ISO 串；消息的 `createTime` 是北京时间的字符串（同一条申请 03:29Z 对应消息里的 11:29），申请的时间也按北京时间显示 |
 | `GET /api/apply/{id}` | 结构同列表行；ID 不存在时 `code 200`、`data: null` |
 | `POST /statistics/page` | 0 条（但有 497 条报表通知），报表列表和下载契约没有真实样本 |
 | `GET /statistics/download?id=不存在` | HTTP 200 加 JSON 信封 `code 40000 "任务不存在"` |

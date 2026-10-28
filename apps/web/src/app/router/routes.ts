@@ -7,6 +7,10 @@ import { withMapRuntime } from '../map-framework';
 const loadPlaceholder = () =>
   import('@/pages/placeholder/PlaceholderPage').then(({ PlaceholderPage }) => PlaceholderPage);
 
+// 系统管理的两个栏目是两个路由、同一个页面，栏目由 props 传入（ADR 0091）
+const loadSystemManagementPage = () =>
+  import('@/pages/system-management/SystemManagementPage').then(({ SystemManagementPage }) => SystemManagementPage);
+
 /** 现状底图的加载函数：路由和登录页的预加载共用（ADR 0061 第 3 节） */
 export const loadCurrentMapPage = withMapRuntime(() =>
   import('@/pages/current-map/CurrentMapPage').then(({ CurrentMapPage }) => CurrentMapPage)
@@ -42,7 +46,6 @@ const businessRoutes: RouteRecordRaw[] = [
     meta: { title: '文件管理' }
   },
   placeholder('ai-chat', RouteName.aiChat, 'AI对话'),
-  placeholder('message-center', RouteName.messageCenter, '消息中心'),
   {
     path: 'resource-management',
     name: RouteName.resourceManagement,
@@ -53,7 +56,20 @@ const businessRoutes: RouteRecordRaw[] = [
     meta: { title: '资源管理', roles: [Role.admin] }
   },
   placeholder('resource-application', RouteName.resourceApplication, '资源申请', [Role.user]),
-  placeholder('system-management', RouteName.systemManagement, '系统管理', [Role.admin])
+  {
+    path: 'system-management',
+    name: RouteName.systemManagement,
+    component: loadSystemManagementPage,
+    props: { section: 'audit' },
+    meta: { title: '系统管理', roles: [Role.admin] }
+  },
+  {
+    path: 'system-management/statistical-report',
+    name: RouteName.systemManagementReports,
+    component: loadSystemManagementPage,
+    props: { section: 'reports' },
+    meta: { title: '统计报表', roles: [Role.admin] }
+  }
 ];
 
 // 开发页面：放在 pages/dev/<名称>/，路由名 dev<名称>，路径 /dev/<名称>（AGENTS.md）

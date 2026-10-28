@@ -7,9 +7,9 @@ import { applicationPageResponse, approvedRecord, envelope, pendingRecord, table
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-// 接口给的是 UTC 时间，按北京时间显示；固定时区，结果不随运行测试的机器变化
+// 接口给的是 UTC 时间，按北京时间显示；把运行环境放在另一个时区，证明结果不随浏览器的时区变化
 beforeEach(() => {
-  vi.stubEnv('TZ', 'Asia/Shanghai');
+  vi.stubEnv('TZ', 'America/Los_Angeles');
 });
 afterEach(() => {
   server.resetHandlers();
@@ -36,7 +36,7 @@ describe('申请列表', () => {
     ]);
   });
 
-  it('蛇形字段转成界面字段：没有的键是 undefined，格式拆开，时间按本地时区', async () => {
+  it('蛇形字段转成界面字段：没有的键是 undefined，格式拆开，时间按北京时间', async () => {
     server.use(
       mock.post('/backend/api/apply/list', () =>
         HttpResponse.json(applicationPageResponse([pendingRecord(), approvedRecord()], { total: 35, pageNum: 2 })))
@@ -47,6 +47,7 @@ describe('申请列表', () => {
       total: 35,
       pageNum: 2,
       pageSize: 20,
+      pages: 2,
       list: [
         {
           id: 'apply-pending',

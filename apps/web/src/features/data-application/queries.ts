@@ -4,6 +4,7 @@ import { useSessionGuard } from '@/shared/auth/session-guard';
 import {
   type Application,
   type ApplicationAudit,
+  type ApplicationPage,
   type ApplicationPageParams,
   auditApplication,
   fetchApplication,
@@ -19,14 +20,24 @@ export const applicationKeys = {
   detail: (id: string) => [...applicationKeys.details(), id] as const
 };
 
-/** 申请列表的一页；换条件、翻页时保留上一次的数据，由表格显示遮罩（docs/modules/table.md） */
+/**
+ * 申请列表的一页；换条件、翻页时保留上一次的数据，由表格显示遮罩（docs/modules/table.md）。
+ * rememberPage 把后端修正过页码的结果记到修正后的页上，页码跟过去时不再请求一次
+ */
 export function useApplicationPageQuery(params: MaybeRefOrGetter<ApplicationPageParams>) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: computed(() => applicationKeys.page(toValue(params))),
     // 参数从 key 里取，请求用的参数和缓存的 key 一定一致
     queryFn: ({ queryKey: [, , page], signal }) => fetchApplicationPage(page, signal),
     placeholderData: keepPreviousData
   });
+
+  function rememberPage(pageParams: ApplicationPageParams, page: ApplicationPage) {
+    queryClient.setQueryData(applicationKeys.page(pageParams), page);
+  }
+
+  return { ...query, rememberPage };
 }
 
 /** 带上所属 ID 的一条申请：key 换了以后 data 要到下一轮调度才更新，读的一方按 ID 判断是不是自己要的那条 */
