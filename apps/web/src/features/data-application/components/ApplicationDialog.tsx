@@ -16,7 +16,7 @@ import {
   type FormInstance,
   type FormRules
 } from 'element-plus';
-import { computed, defineComponent, type PropType, ref } from 'vue';
+import { computed, defineComponent, type PropType, ref, shallowRef, watch, watchEffect } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { dataFormatLabel, dataLayerLabel } from '@/shared/data-request/catalog';
 import { PrepareStatusText } from '@/shared/data-request/PrepareStatusText';
@@ -54,9 +54,28 @@ export const ApplicationDialog = defineComponent({
     // 弹窗宽 640 放得下两列；更窄时每行一项
     const narrow = useMediaQuery('(width < 640px)');
     const columns = computed(() => (narrow.value ? 1 : 2));
+    // 弹窗里显示的内容：从提交审核到弹窗关上，审核结果会先刷新进来；关上以后弹窗还要淡出一会儿。
+    // 这两段时间保持原来的内容（holding），不闪成"审核结果"或"申请不存在"
+    const take = () => ({ state: owner.state.value, application: owner.application.value, mode: owner.mode.value });
+    const shownContent = shallowRef(take());
+    const holding = ref(false);
+    watch(
+      () => owner.state.value === 'closed',
+      closed => {
+        if (closed) {
+          holding.value = false;
+        }
+      }
+    );
+    watchEffect(() => {
+      if (owner.state.value !== 'closed' && !holding.value) {
+        shownContent.value = take();
+      }
+    });
+
     // 从消息打开时要先读详情；很快读完时不闪骨架屏
-    const showSkeleton = useDelayedFlag(() => owner.state.value === 'loading');
-    const title = computed(() => (owner.mode.value === 'audit' ? '审核申请' : '申请详情'));
+    const showSkeleton = useDelayedFlag(() => shownContent.value.state === 'loading');
+    const title = computed(() => (shownContent.value.mode === 'audit' ? '审核申请' : '申请详情'));
 
     const rules: FormRules = {
       reason: [
@@ -89,11 +108,16 @@ export const ApplicationDialog = defineComponent({
       if (!valid) {
         return;
       }
+      holding.value = true;
       const result = await owner.submit();
+      // 提交期间换成了别的申请时（如浏览器后退），不关掉那一条；要关的保持提交时的内容，直到弹窗关上
+      const closing = result?.kind === 'success' && owner.application.value?.id === result.id;
+      if (!closing) {
+        holding.value = false;
+      }
       if (result?.kind === 'success') {
         ElMessage.success(result.approved ? '已审核通过' : '已退回申请');
-        // 提交期间换成了别的申请时（如浏览器后退），不关掉那一条
-        if (owner.application.value?.id === result.id) {
+        if (closing) {
           emit('close');
         }
       } else if (result?.kind === 'error') {
@@ -208,8 +232,7 @@ export const ApplicationDialog = defineComponent({
     }
 
     function renderBody() {
-      const state = owner.state.value;
-      const application = owner.application.value;
+      const { state, application, mode } = shownContent.value;
       if (state === 'loading') {
         return showSkeleton.value ? <ElSkeleton rows={6} animated /> : null;
       }
@@ -228,12 +251,12 @@ export const ApplicationDialog = defineComponent({
       }
       return [
         renderInformation(application),
-        owner.mode.value === 'audit' ? renderAudit() : renderResult(application)
+        mode === 'audit' ? renderAudit() : renderResult(application)
       ];
     }
 
     function renderFooter() {
-      if (owner.state.value !== 'ready' || owner.mode.value !== 'audit') {
+      if (shownContent.value.state !== 'ready' || shownContent.value.mode !== 'audit') {
         return null;
       }
       return (
@@ -268,7 +291,7 @@ export const ApplicationDialog = defineComponent({
       >
         {{
           header: () => (
-            <MxTitle level="panel" description={owner.application.value?.name}>
+            <MxTitle level="panel" description={shownContent.value.application?.name}>
               {title.value}
             </MxTitle>
           ),
