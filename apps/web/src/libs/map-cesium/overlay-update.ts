@@ -1,3 +1,4 @@
+import type { Position } from 'geojson';
 import type { OverlayLayer, OverlayShape, RgbaColor } from './overlay-plan';
 
 /**
@@ -30,6 +31,28 @@ function sameStyle(a: OverlayShape, b: OverlayShape): boolean {
       sameColor(a.color, b.color) &&
       sameColor(a.strokeColor, b.strokeColor)
     );
+  }
+  return false;
+}
+
+function samePosition(a: Position, b: Position | undefined): boolean {
+  return b !== undefined && a.length === b.length && a.every((value, axis) => value === b[axis]);
+}
+
+function samePath(a: readonly Position[], b: readonly Position[] | undefined): boolean {
+  return b !== undefined && a.length === b.length && a.every((position, index) => samePosition(position, b[index]));
+}
+
+/** 两个形状的坐标完全相同：再推导一次（跨级、换了数据对象）坐标没变时不用动它，也不改成每帧读取（ADR 0099） */
+export function sameCoordinates(a: OverlayShape, b: OverlayShape): boolean {
+  if (a.kind === 'line' && b.kind === 'line') {
+    return samePath(a.path, b.path);
+  }
+  if (a.kind === 'polygon' && b.kind === 'polygon') {
+    return a.rings.length === b.rings.length && a.rings.every((ring, index) => samePath(ring, b.rings[index]));
+  }
+  if (a.kind === 'point' && b.kind === 'point') {
+    return samePosition(a.position, b.position);
   }
   return false;
 }

@@ -63,7 +63,7 @@ import {
   WebGLUnavailableError
 } from './scene-like';
 import type { OverlayLayer, OverlayShape, RgbaColor } from './overlay-plan';
-import { movableInPlace } from './overlay-update';
+import { movableInPlace, sameCoordinates } from './overlay-update';
 import { SceneRoute } from './scene-route';
 import { SceneWalk } from './scene-walk';
 import { SceneTilesets } from './scene-tilesets';
@@ -75,6 +75,9 @@ const DEFAULT_BASE_COLOR = '#dfe7f2';
 
 // 定位模型时的俯角（距竖直方向），和旧项目的 HeadingPitchRange(0, -35°) 一样
 const TILESET_PITCH = 55;
+
+// 只换坐标的形状停下这么久（毫秒）改回静态的实体：每帧读取的实体 Cesium 每帧重建几何、一直重画（ADR 0099）
+const LIVE_SETTLE_DELAY = 500;
 
 // 两点几乎重合时不转动：叉积太小，转轴的方向不可靠（单位是米的平方）
 const MIN_PAN_AXIS = 1e-3;
@@ -136,6 +139,8 @@ interface OverlayItem {
 interface OverlayEntry {
   layer: OverlayLayer;
   readonly items: OverlayItem[];
+  // 最后一次只换坐标的时刻（performance.now）；改回静态后为 null
+  movedAt: number | null;
 }
 
 function positionsOf(path: readonly Position[]): Cartesian3[] {
@@ -244,6 +249,8 @@ export class CesiumScene implements SceneLike {
       scene.postRender.addEventListener(() => {
         this.#removeRetired();
         this.#checkSettled();
+        // 放在移除之后：这一帧的 canAnimate 还没算上改回静态时新加的实体
+        this.#settleLive();
       })
     );
     stack.defer(scene.renderError.addEventListener((_scene, error: unknown) => this.#emitter.emit('failure', error)));
@@ -487,7 +494,11 @@ export class CesiumScene implements SceneLike {
           this.#retiring.push(...entry.items.map(({ entity }) => entity));
           this.#overlays.delete(layer.id);
         }
-        this.#overlays.set(layer.id, { layer, items: layer.shapes.map(shape => this.#addShape(shape, layer.order)) });
+        this.#overlays.set(layer.id, {
+          layer,
+          items: layer.shapes.map(shape => this.#addShape(shape, layer.order)),
+          movedAt: null
+        });
       }
     } finally {
       entities.resumeEvents();
@@ -793,19 +804,53 @@ export class CesiumScene implements SceneLike {
     return { entity, geometry: position ? [position] : [], live: false };
   }
 
-  // 样式和形状个数都没变的小图层：只换坐标。第一次换时改成每帧读取，之后的变化不再重建几何（ADR 0082）
+  // 样式和形状个数都没变的小图层：只换坐标。第一次换时改成每帧读取，之后的变化不再重建几何（ADR 0082）；
+  // 坐标没变的形状不动，线和面停下以后由 #settleLive 改回静态（ADR 0099）
   #moveOverlay(entry: OverlayEntry, layer: OverlayLayer): boolean {
     if (!movableInPlace(entry.layer, layer)) {
       return false;
     }
     for (const [index, shape] of layer.shapes.entries()) {
       const item = entry.items[index];
-      if (item) {
-        this.#moveShape(item, shape);
+      const previous = entry.layer.shapes[index];
+      if (!item || (previous && sameCoordinates(previous, shape))) {
+        continue;
+      }
+      this.#moveShape(item, shape);
+      if (shape.kind !== 'point') {
+        entry.movedAt = performance.now();
       }
     }
     entry.layer = layer;
     return true;
+  }
+
+  // 停下够久的图层把每帧读取的线和面换成静态的实体，旧的留到新的画好再移除（同重建，ADR 0099）
+  #settleLive(): void {
+    const now = performance.now();
+    const due = [...this.#overlays.values()].filter(
+      ({ movedAt }) => movedAt !== null && now - movedAt >= LIVE_SETTLE_DELAY
+    );
+    if (due.length === 0) {
+      return;
+    }
+    const { entities } = this.#widget;
+    entities.suspendEvents();
+    try {
+      for (const entry of due) {
+        entry.movedAt = null;
+        for (const [index, item] of entry.items.entries()) {
+          const shape = entry.layer.shapes[index];
+          if (item.live && shape) {
+            this.#retiring.push(item.entity);
+            entry.items[index] = this.#addShape(shape, entry.layer.order);
+          }
+        }
+      }
+    } finally {
+      entities.resumeEvents();
+    }
+    this.#widget.scene.requestRender();
   }
 
   #moveShape(item: OverlayItem, shape: OverlayShape): void {

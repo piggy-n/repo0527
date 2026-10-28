@@ -66,23 +66,22 @@ function colorAt(scene: CesiumScene, lngLat: [number, number]): Rgb | null {
   return point ? pixelAt(point) : null;
 }
 
-// 读画布上某个点的颜色
+// 读画布上某个点的颜色：只复制这一个像素，软件渲染下复制整张画布每次约 0.1 秒，逐帧检查时会拖慢用例
 function pixelAt(point: ScreenPoint): Rgb | null {
   const canvas = containers.at(-1)?.querySelector('canvas');
   if (!canvas) {
     return null;
   }
   const probe = document.createElement('canvas');
-  probe.width = canvas.width;
-  probe.height = canvas.height;
-  const context = probe.getContext('2d');
+  probe.width = 1;
+  probe.height = 1;
+  const context = probe.getContext('2d', { willReadFrequently: true });
   if (!context) {
     return null;
   }
-  context.drawImage(canvas, 0, 0);
   const ratio = canvas.width / canvas.clientWidth;
-  const pixel = context.getImageData(Math.round(point.x * ratio), Math.round(point.y * ratio), 1, 1);
-  const [r = 0, g = 0, b = 0] = pixel.data;
+  context.drawImage(canvas, Math.round(point.x * ratio), Math.round(point.y * ratio), 1, 1, 0, 0, 1, 1);
+  const [r = 0, g = 0, b = 0] = context.getImageData(0, 0, 1, 1).data;
   return [r, g, b];
 }
 
@@ -132,6 +131,38 @@ function failingFrames(count: number, check: () => boolean): Promise<number> {
     };
     requestAnimationFrame(step);
   });
+}
+
+// 数 Cesium 的绘制调用：包住画布的 WebGL 2 上下文（getContext 拿到的就是 Cesium 建的那一个）
+function countDraws(): () => number {
+  const gl = containers.at(-1)?.querySelector('canvas')?.getContext('webgl2');
+  if (!gl) {
+    throw new Error('画布上没有 Cesium 建的 WebGL 2 上下文');
+  }
+  let draws = 0;
+  const drawElements = gl.drawElements.bind(gl);
+  const drawArrays = gl.drawArrays.bind(gl);
+  gl.drawElements = (...args: Parameters<WebGL2RenderingContext['drawElements']>) => {
+    draws++;
+    drawElements(...args);
+  };
+  gl.drawArrays = (...args: Parameters<WebGL2RenderingContext['drawArrays']>) => {
+    draws++;
+    drawArrays(...args);
+  };
+  return () => draws;
+}
+
+// 每帧调用一次：连续 frames 次都没有新的绘制时为 true，就是场景停下了（requestRenderMode 不再重画）
+function idleFor(draws: () => number, frames: number): () => boolean {
+  let last = draws();
+  let idle = 0;
+  return () => {
+    const now = draws();
+    idle = now === last ? idle + 1 : 0;
+    last = now;
+    return idle >= frames;
+  };
 }
 
 const WORLD: Position[] = [
@@ -512,6 +543,46 @@ describe('CesiumScene', () => {
     );
     expect(moved).toBe('ok');
   }, 30000);
+
+  it('再推导一次、坐标没变的形状不动：不改成每帧读取，场景马上停下（ADR 0099）', async () => {
+    const scene = createScene(960, 640, true);
+    scene.jumpTo({ center: [119, 32], zoom: 8, bearing: 0, pitch: 0 });
+    scene.setOverlays(planLayers(32.6));
+    await expect(waitForFrames(() => near(colorAt(scene, [119, 32.6]), [0, 0, 255]))).resolves.toBe('ok');
+    const draws = countDraws();
+    await expect(waitForFrames(idleFor(draws, 10))).resolves.toBe('ok');
+
+    // 新的图层对象、同样的坐标：跨级重新推导时就是这样
+    scene.setOverlays(planLayers(32.6));
+    // 只有换图层时请求的那一次重画
+    const drawnFrames = await failingFrames(30, idleFor(draws, 1));
+
+    expect(drawnFrames).toBeLessThanOrEqual(2);
+    expect(near(colorAt(scene, [119, 32.6]), [0, 0, 255])).toBe(true);
+  }, 30000);
+
+  it('只换坐标的线停下以后改回静态的实体：场景不再每帧重画，线留在新的位置，换的时候每一帧都看得到（ADR 0099）', async () => {
+    const scene = createScene(960, 640, true);
+    scene.jumpTo({ center: [119, 32], zoom: 8, bearing: 0, pitch: 0 });
+    scene.setOverlays(planLayers(32.6));
+    await expect(waitForFrames(() => near(colorAt(scene, [119, 32.6]), [0, 0, 255]))).resolves.toBe('ok');
+    const draws = countDraws();
+
+    scene.setOverlays(planLayers(31.3));
+    await expect(waitForFrames(() => near(colorAt(scene, [119, 31.3]), [0, 0, 255]))).resolves.toBe('ok');
+    let gaps = 0;
+    const idle = idleFor(draws, 10);
+    const settled = await waitForFrames(() => {
+      if (!near(colorAt(scene, [119, 31.3]), [0, 0, 255])) {
+        gaps++;
+      }
+      return idle();
+    });
+
+    expect(settled).toBe('ok');
+    expect(gaps).toBe(0);
+    expect(near(colorAt(scene, [119, 32.6]), [255, 0, 0])).toBe(true);
+  }, 30000);
   it('瓦片集建好后加进场景并画出来；给出的相机斜着看、让模型进入画布；首批瓦片到位时报告（ADR 0081）', async () => {
     const scene = createScene(960, 640, true);
     scene.jumpTo({ center: [119, 32], zoom: 8, bearing: 0, pitch: 0 });
@@ -672,9 +743,11 @@ describe('CesiumScene', () => {
     expect(Math.abs(stepped.y - start.y)).toBeLessThan(0.05);
     expect(stepped.z).toBeCloseTo(start.z, 1);
 
-    // 一直走到墙：停在墙里面，身体半径 0.3 米按 0.2 米的格子取整，离墙 0.2～0.4 米（近裁剪面 0.1 米，不会切进墙）
+    // 一直走到墙：停在墙里面，身体半径 0.3 米按 0.2 米的格子取整，离墙 0.2～0.4 米（近裁剪面 0.1 米，不会切进墙）；
+    // 走到墙边后再按住 20 帧，墙不挡的话这段时间早就越过了离墙 0.15 米的界限
     pressKey('keydown', 'KeyW');
-    await failingFrames(150, () => true);
+    await expect(waitForFrames(() => enuOf(scene).x > 6 - 0.45, 20000)).resolves.toBe('ok');
+    await failingFrames(20, () => true);
     pressKey('keyup', 'KeyW');
     const stopped = enuOf(scene);
     expect(stopped.x).toBeGreaterThan(6 - 0.45);
@@ -763,7 +836,8 @@ describe('CesiumScene', () => {
     const pivotZ = -6 + EYE_HEIGHT + 0.25;
     const armEnd = (arm: number) =>
       new Cartesian3(player.x - arm * Math.cos(pitch), player.y, pivotZ + arm * Math.sin(pitch));
-    await expect(waitForFrames(() => Cartesian3.distance(enuOf(scene), armEnd(4)) < 0.05)).resolves.toBe('ok');
+    // 臂按帧缓动，每帧最多推进 0.1 秒，至少要 8 帧；软件渲染下这间屋子一帧可能要 1 秒，给 20 秒
+    await expect(waitForFrames(() => Cartesian3.distance(enuOf(scene), armEnd(4)) < 0.05, 20000)).resolves.toBe('ok');
     // 人物画在胸口高度的地方
     const chest = screenOfEnu(scene, new Cartesian3(player.x - 0.2, player.y, -6 + 1.2));
     await expect(waitForFrames(() => near(pixelAt(chest), [0, 255, 0]))).resolves.toBe('ok');

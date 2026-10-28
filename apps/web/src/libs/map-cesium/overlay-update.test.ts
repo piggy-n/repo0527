@@ -2,7 +2,7 @@
 import type { Position } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import type { LineShape, OverlayLayer, OverlayShape, PointShape, PolygonShape } from './overlay-plan';
-import { LIVE_POINT_LIMIT, movableInPlace } from './overlay-update';
+import { LIVE_POINT_LIMIT, movableInPlace, sameCoordinates } from './overlay-update';
 
 const BLUE = [0, 0, 1, 1] as const;
 const RED = [1, 0, 0, 1] as const;
@@ -67,5 +67,36 @@ describe('movableInPlace', () => {
     const points = Array.from({ length: LIVE_POINT_LIMIT + 1 }, (_, index) => point(30 + index / 1000));
     const moved = points.map(({ position: [lng = 0, lat = 0], ...rest }) => ({ ...rest, position: [lng, lat + 1] }));
     expect(movableInPlace(layer(...points), layer(...moved))).toBe(true);
+  });
+});
+
+describe('sameCoordinates', () => {
+  it('坐标逐个相同才算没变：线的折线、面的每个环、点的位置；样式不看', () => {
+    expect(sameCoordinates(line(32), line(32))).toBe(true);
+    expect(sameCoordinates(line(32), line(32, 3, 4))).toBe(true);
+    expect(sameCoordinates(polygon(32, 5), polygon(32, 5))).toBe(true);
+    expect(sameCoordinates(point(32), point(32))).toBe(true);
+
+    expect(sameCoordinates(line(32), line(31))).toBe(false);
+    expect(sameCoordinates(polygon(32, 5), polygon(31, 5))).toBe(false);
+    expect(sameCoordinates(point(32), point(31))).toBe(false);
+  });
+
+  it('点数、环数、坐标的维数不同都算变了；种类不同不算相同', () => {
+    expect(sameCoordinates(line(32, 3), line(32, 4))).toBe(false);
+    const shorter = { ...line(32, 3), path: line(32, 3).path.slice(0, 2) };
+    expect(sameCoordinates(line(32, 3), shorter)).toBe(false);
+    expect(sameCoordinates(shorter, line(32, 3))).toBe(false);
+    const holed = polygon(32, 5);
+    expect(sameCoordinates(holed, { ...holed, rings: [...holed.rings, holed.rings[0] ?? []] })).toBe(false);
+    expect(sameCoordinates(point(32), { ...point(32), position: [119, 32, 10] })).toBe(false);
+    expect(sameCoordinates(line(32), polygon(32, 3))).toBe(false);
+    expect(sameCoordinates(point(32), line(32))).toBe(false);
+  });
+
+  it('只差最后一个点的纬度也算变了', () => {
+    const before = line(32, 4);
+    const moved = before.path.map((position, index) => (index === 3 ? [position[0] ?? 0, 32.5] : position));
+    expect(sameCoordinates(before, { ...before, path: moved })).toBe(false);
   });
 });
