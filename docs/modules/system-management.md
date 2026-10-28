@@ -16,8 +16,11 @@ shared/side-nav/              菜单型左栏的页面内导航 SideNav
 features/data-application/    申请：接口、状态与文案、查询与审核、列表的组合式函数、筛选栏、表格、状态显示
                               （以后用户侧"数据下载"也在这里扩展）
 features/statistics-report/   统计报表：接口、查询、列表与下载的组合式函数、筛选栏、表格
-features/message-center/      消息：接口、查询与已读、弹框的组合式函数 useMessageCenter、弹框里的 MessagePanel
+features/message-center/      消息：接口、查询与已读、弹框的组合式函数 useMessageCenter（筛选与分批是 useMessageFilters）、
+                              弹框里的 MessagePanel
 pages/system-management/      SystemManagementPage（分栏布局、SideNav）与资源审核栏目 AuditSection
+pages/dev/system-management/  组件样例：正式组件加演示拥有者，数据固定（见下文"组件样例"）
+pages/dev/message-center/     组件样例：正式的 MessagePanel 加演示拥有者
 app/router、app/layout        两个路由；顶栏在统计报表上也选中"系统管理"；消息按钮与弹框 HeaderMessages
 ```
 
@@ -104,6 +107,7 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 - **`useSeedApplication`**：从列表打开时先把这一行记成它的详情（字段相同），弹窗立刻有内容，详情接口照常读取最新的状态；从消息打开时没有这一步，读取超过 300 毫秒才出骨架屏
 - **`ApplicationDialog`**：`dialog-panel-header` 加 `MxTitle`，宽 640（窄屏视口减 32）。"申请信息"是 `ElDescriptions`（窄于 640 时一列），标签至少 4 个字宽，值在自己的位置换行，没有值时显示"-"；图层名称、格式名称由 `shared/data-request` 的 `dataLayerLabel`、`dataFormatLabel` 换算。下面是"审核意见"（通过 / 不通过，不通过必须填原因，最多 200 字）或"审核结果"（审核状态、数据准备、不通过原因）。成功后提示"已审核通过"或"已退回申请"；提交期间换成了别的申请时不关那一条
 - **关闭**：Element 的弹窗要等淡出结束才发出 `update:modelValue`，所以点关闭、按 Esc 时在 `beforeClose` 里立即通知页面去掉 `apply`；弹窗的开关只跟着路由。提交期间不关
+- **显示的内容是快照**（2026-10-28 在组件样例里发现）：去掉 `apply` 以后 `state` 马上是 `closed`，但弹窗还要淡出约 300 毫秒，这时按"没有申请"渲染会闪成"申请不存在或已被删除"；提交成功时详情先刷新成审核通过，关上前会闪一下"审核结果"。弹窗显示一份内容的快照，从点"提交审核"到弹窗关上、以及关上后的淡出期间不更新（`holding`），关上以后再打开照常更新。`ApplicationDialog.test.tsx` 用真实的过渡测这两种情况（默认的过渡替身会跳过淡出，测不出来）
 
 ### 验证（2026-10-27）
 
@@ -149,7 +153,7 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 
 ### 弹框的状态（`useMessageCenter`）
 
-参数是弹框是否打开。返回：
+参数是弹框是否打开。筛选和分批是 `useMessageFilters(messages)`（只管前端的筛选，数据从哪里来由调用方决定），组件样例的演示拥有者也用它。返回：
 
 - `unreadCount`：角标和标题栏共用，还没取到时是 0
 - 筛选：`readFilter`（全部 / 未读）、`category`（全部类型或一种），`setReadFilter`、`setCategory` 换条件后从头显示
@@ -178,6 +182,24 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 - 改了测不出来、确认是多余的写法，删掉了：业务按钮阻止冒泡、行上的回车只认行本身（同一条按 ID 只提交一次）；列表的 `flex: 1`、`min-height: 0`（滚动容器在纵向 flex 里本来就能压缩）；时间的 `flex: none`（标题的基准宽度是 0，先被压缩）；`loadMore` 到底后的判断；已读开始时的销毁判断
 - 没有验证：真实接口的已读和全部已读（写操作）
 - 放进顶栏后（2026-10-28）：用浏览器测试挂载真实的 `AppHeader`、全局样式和普惠体，看了 1920 打开弹框、1440、1200、375 打开弹框的截图（不入库的 `apps/web/shots.local/`）。弹框的位置、宽度和最高由 `HeaderMessages.browser.test.tsx` 检查；真实登录后的页面没有看（不在这台机器上登录真实后端）
+
+## 组件样例（开发页）
+
+原型阶段的预览组件已删掉，两个开发页改为正式组件加页面里的演示拥有者（写法同 `/dev/file-management`）：数据固定，写操作只在内存里改，不请求接口，生产构建不包含。
+
+- **`/dev/system-management`**：和正式页面相同的分栏布局、`SideNav`、筛选栏、表格、详情与审核弹窗、分页。`useSystemManagementDemo` 给出申请和统计报表的列表与筛选、`ApplicationReviewOwner` 形状的审核拥有者、表格和弹窗共用的下载进度。演示选项：栏目、列表状态（正常、首次加载、刷新中、加载失败、没有数据）、审核提交（成功、失败、3 秒后成功）、"从消息打开"待审核或已退回的申请（先读取 1 秒）。左侧菜单链接到真实页面（要登录），所以用"栏目"切换，菜单不显示当前项
+- **`/dev/message-center`**：正式的 `MessagePanel` 放在和弹框一样的外框里（宽 `min(400px, 100vw - 32px)`、最高 640、浮层圆角和阴影）。`useMessageDemo` 和 `useMessageCenter` 同形，筛选和分批用同一个 `useMessageFilters`。演示选项：角色（普通用户的业务按钮禁用并说明原因）、列表状态、标记已读（成功、失败、2 秒后成功）、收到一条新消息；点业务按钮显示正式页面会去的地方。顶栏的按钮、弹框外壳和跳转在 `app/layout`，页面不能导入，要在登录后的顶栏里看
+- 测试：`useSystemManagementDemo.test.ts`、`useMessageDemo.test.ts`（筛选、审核与下载的演示行为，列表状态与已读失败）
+
+2026-10-28 在浏览器里实测：消息样例的标签、业务按钮、普通用户的禁用说明；系统管理样例的列表、从消息打开的读取、审核提交后弹窗关闭和行内状态。浏览器窗口 800 宽，看的是窄屏布局（侧栏收成窄条）。
+
+## 生产冒烟（`tools/smoke/system-management.spec.ts`）
+
+只用本地接口样本，内网构建后运行：
+
+- 管理员：角标是未读数（"消息，2 条未读"），弹框顶边离顶栏下沿 8、右边和按钮对齐、宽 400；点"去审核"后已读接口收到这一条、弹框关上、打开 `/system-management?apply=apply-001` 和"审核申请"弹窗，角标变成 1；取消后去掉 `apply`，切到统计报表栏目显示"暂无数据"
+- 普通用户：390 宽时弹框左右离窗口 16；"去审核""查看报表"禁用并说明原因；Esc 关闭，没有已读请求
+- 公共夹具 `fixtures.ts` 加了消息列表（空）：顶栏进入应用就取未读数，其他用例没有消息、不显示角标
 
 ## 待联调
 
