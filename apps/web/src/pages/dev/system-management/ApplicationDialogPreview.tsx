@@ -16,7 +16,7 @@ import {
   type FormRules
 } from 'element-plus';
 import { computed, defineComponent, type PropType, ref } from 'vue';
-import { DATA_LAYERS } from '@/features/resource-management/data-request';
+import { DATA_LAYERS } from '@/shared/data-request/catalog';
 import { AuditStatusTag, hasPrepareStep, PrepareStatusText } from './ApplicationStatus';
 import styles from './preview.module.scss';
 import type { ApplicationSample } from './samples';

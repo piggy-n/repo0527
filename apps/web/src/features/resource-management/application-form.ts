@@ -1,5 +1,7 @@
 import type { DataApplication, ResourceRecord } from './api';
-import { DATA_FORMATS, DATA_LAYERS, type DataFormat, formatDateTime, PROVINCE_PATH } from './data-request';
+import { DATA_FORMATS, DATA_LAYERS, type DataFormat } from '@/shared/data-request/catalog';
+import { formatDateTime } from '@/shared/data-request/date-time';
+import { PROVINCE_PATH } from './data-request';
 
 // 资源列表"下载"打开的数据申请，字段和规则沿用旧页面 ResourceApplyDialog
 

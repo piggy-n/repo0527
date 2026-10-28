@@ -1,4 +1,6 @@
-import { DATA_LAYERS, type DataFormat, formatDateTime, PROVINCE_PATH } from '../data-request';
+import { DATA_LAYERS, type DataFormat } from '@/shared/data-request/catalog';
+import { formatDateTime } from '@/shared/data-request/date-time';
+import { PROVINCE_PATH } from '../data-request';
 import type { KnowledgeNode } from './knowledge-graph';
 
 // 自助取数第二步右侧的条件，选项和默认值沿用旧页面 QushuNodeForm

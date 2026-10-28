@@ -16,7 +16,8 @@ import {
 import { defineComponent, type PropType, ref } from 'vue';
 import { APPLY_NAME_MAX_LENGTH, APPLY_PURPOSE_MAX_LENGTH } from '../application-form';
 import type { DataApplicationOwner } from '../composables/useDataApplication';
-import { DATA_LAYERS, type DataFormat, formatDateTime } from '../data-request';
+import { DATA_LAYERS, type DataFormat } from '@/shared/data-request/catalog';
+import { formatDateTime } from '@/shared/data-request/date-time';
 import styles from './DataApplicationDialog.module.scss';
 import { RegionCascader } from './RegionCascader';
 
