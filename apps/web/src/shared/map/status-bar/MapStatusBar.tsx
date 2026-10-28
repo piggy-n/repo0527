@@ -1,4 +1,4 @@
-import { EYE_HEIGHT } from '@yzt/map-core';
+import { EYE_HEIGHT, type WalkView } from '@yzt/map-core';
 import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
 import { useShownElementSize } from '../../composables/useShownElementSize';
 import { type CoordinateFormat, formatLngLat } from '../location/coordinate-format';
@@ -36,16 +36,16 @@ const anglesSegment = ({ bearing, pitch }: ViewAngles) =>
     </span>
   );
 
-// 步行时的三段：第一视角、眼高、朝向（原型 `/dev/map-3d`），放不下时同样先去掉后面的
-const firstPersonSegments = (heading: number) => [
-  <span class={styles.segment}>第一视角</span>,
-  <span class={styles.segment}>眼高 {EYE_HEIGHT} m</span>,
+// 步行时的几段：第一视角、眼高、朝向（原型 `/dev/map-3d`），第三人称没有眼高；放不下时同样先去掉后面的
+const walkingSegments = (view: WalkView, heading: number) => [
+  <span class={styles.segment}>{view === 'first' ? '第一视角' : '第三视角'}</span>,
+  ...(view === 'first' ? [<span class={styles.segment}>眼高 {EYE_HEIGHT} m</span>] : []),
   <span class={[styles.segment, styles.angles]}>朝向 {heading}°</span>
 ];
 
 /**
  * 左下角的状态栏（ADR 0053 第 5 节，设计稿 5D.3）：比例尺（三维是视点高度，ADR 0080 第 6 节）、鼠标所在的经纬度、
- * 不为 0 的旋转和俯仰；步行时是第一视角、眼高和朝向（ADR 0086 第 5 节）。
+ * 不为 0 的旋转和俯仰；步行时是人称、眼高（第一人称）和朝向（ADR 0086 第 5 节、ADR 0090）。
  * 只显示、不拦截鼠标；三种排法的宽度由隐藏的量尺量出，放不下时按 fitStatusLayout 取舍
  */
 export const MapStatusBar = defineComponent({
@@ -83,9 +83,10 @@ export const MapStatusBar = defineComponent({
 
     // 按排法取出要显示的几段
     const bar = (shown: StatusLayout) => {
-      const { scale, eye, position, angles, firstPerson } = props.readout;
-      if (firstPerson.value) {
-        return joined(firstPersonSegments(firstPerson.value.heading).slice(0, LAYOUT_SEGMENTS[shown]));
+      const { scale, eye, position, angles, walking } = props.readout;
+      if (walking.value) {
+        const { view, heading } = walking.value;
+        return joined(walkingSegments(view, heading).slice(0, LAYOUT_SEGMENTS[shown]));
       }
       const segments: VNode[] = [];
       // 排法里的 scale-only 指只留第一段：二维是比例尺，三维是视点高度

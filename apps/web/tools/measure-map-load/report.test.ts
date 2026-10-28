@@ -35,18 +35,29 @@ describe('步骤与应用一致', () => {
 });
 
 describe('parseOptions', () => {
-  it('默认三档网络各 5 次、停留 5 秒、用 Edge 有界面运行', () => {
+  it('默认测登录到地图：三档网络各 5 次、停留 5 秒、用 Edge 有界面运行、连真实后端', () => {
     expect(parseOptions([])).toStrictEqual({
+      scenario: 'login',
       builds: [{ name: 'dist', dir: 'dist' }],
       runs: 5,
       profiles: ['none', 'fast4g', 'slow4g'],
       dwell: 5000,
+      stay: 5000,
       cpu: 1,
       channel: 'msedge',
       headless: false,
       label: 'run',
       url: undefined,
-      timeout: 120000
+      timeout: 120000,
+      mockBackend: false
+    });
+  });
+
+  it('切到三维：二维停留多久、用不用假后端', () => {
+    expect(parseOptions(['--scenario', 'switch-3d', '--stay', '8000', '--mock-backend'])).toMatchObject({
+      scenario: 'switch-3d',
+      stay: 8000,
+      mockBackend: true
     });
   });
 
@@ -74,6 +85,8 @@ describe('parseOptions', () => {
     [['--profiles', 'fast4g,3g'], '--profiles'],
     [['--channel', 'firefox'], '--channel'],
     [['--label', 'a/b'], '--label'],
+    [['--scenario', 'route'], '--scenario'],
+    [['--stay', '-1'], '--stay'],
     [['--unknown'], 'unknown']
   ])('不合法的参数 %j 抛错', (argv, message) => {
     expect(() => parseOptions(argv)).toThrow(message);

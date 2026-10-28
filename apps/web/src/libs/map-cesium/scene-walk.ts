@@ -6,7 +6,9 @@ import {
   planMove,
   type Point3,
   resolveClick,
+  seeThroughAvatar,
   type SpawnContext,
+  startPitch,
   unstuckSpot,
   type VisibilityTest,
   walkAxes,
@@ -15,7 +17,9 @@ import {
   type WalkNotice,
   type WalkPhase,
   type WalkPlayer,
-  type WalkPose
+  type WalkPose,
+  WalkRig,
+  type WalkView
 } from '@yzt/map-core';
 import {
   Cartesian2,
@@ -29,9 +33,10 @@ import {
 } from 'cesium';
 import { keepInputsOff, releaseCamera, type RoamSaved, takeOverCamera } from './scene-roam-camera';
 import type { SceneWalkStart } from './scene-like';
+import { WalkAvatar } from './scene-walk-avatar';
 import { WalkMarker } from './scene-walk-marker';
 
-// 室内要比二维对齐时（约 37°）宽得多的竖直视场角；滚轮改视场角（相机不动，贴着墙缩放也不穿模），每像素滚动量约 0.12%
+// 室内要比二维对齐时（约 37°）宽得多的竖直视场角；第一人称滚轮改视场角（相机不动，贴着墙缩放也不穿模），每像素滚动量约 0.12%
 const WALK_FOVY = CesiumMath.toRadians(60);
 const MIN_FOVY = CesiumMath.toRadians(20);
 const MAX_FOVY = CesiumMath.toRadians(75);
@@ -40,7 +45,6 @@ const FOV_EASE = 12;
 // 方向键转向（每秒），右键拖动转向（默认视场角下每像素）
 const TURN_SPEED = CesiumMath.toRadians(90);
 const LOOK_SENSITIVITY = CesiumMath.toRadians(0.2);
-const START_PITCH = CesiumMath.toRadians(-6);
 const ENTER_FLIGHT = 2;
 // 一帧最多按这么多秒推进：页面停用、卡顿回来不跳一大段
 const MAX_FRAME = 0.1;
@@ -69,6 +73,8 @@ export interface SceneWalkEvents {
 
 interface Walking {
   readonly walker: Walker;
+  readonly rig: WalkRig;
+  readonly avatar: string;
   readonly toWorld: Matrix4;
   readonly toLocal: Matrix4;
   readonly spawn: WalkPose;
@@ -114,11 +120,27 @@ const isPointer = (event: Event): event is PointerEvent => event instanceof Poin
 const isWheel = (event: Event): event is WheelEvent => event instanceof WheelEvent;
 const any = (_event: Event): _event is Event => true;
 
+// 能打字的输入框：单选、复选、按钮这类不算，点完操作条上的人称切换不用先点一下地图就能接着走
+const TEXT_INPUTS = new Set([
+  'text',
+  'search',
+  'url',
+  'tel',
+  'email',
+  'password',
+  'number',
+  'date',
+  'datetime-local',
+  'month',
+  'time',
+  'week'
+]);
+
 function isEditable(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
-  );
+  if (target instanceof HTMLInputElement) {
+    return TEXT_INPUTS.has(target.type);
+  }
+  return target instanceof HTMLElement && (target.isContentEditable || ['TEXTAREA', 'SELECT'].includes(target.tagName));
 }
 
 // 在容器上按捕获阶段拦下，不让它们传到画布：Cesium 的相机控制即使关掉了也照样记录拖动和滚轮，
@@ -131,8 +153,9 @@ function swallow(event: Event): void {
 }
 
 /**
- * 第一人称步行的相机与键鼠（ADR 0086 第 3、4 节）：选出生点、飞进站内，之后每帧按 Walker 设相机。
- * W/A/S/D、方向键行走转向；左键点地面移动（落点光环、寻路、穿闸机或闪切），右键拖动转向，滚轮改视场角；
+ * 步行的相机与键鼠（ADR 0086 第 3、4 节）：选出生点、飞进站内，之后每帧按 Walker 和 WalkRig 设相机。
+ * W/A/S/D、方向键行走转向；左键点地面移动（落点光环、寻路、穿闸机或闪切），右键拖动转向；
+ * 滚轮、中键拖动在第一人称改视场角，在第三人称调相机远近，第三人称看得见人物（ADR 0090）。
  * 结束时还原视场角和相机控制，可以飞回开始前的位置
  */
 export class SceneWalk implements Disposable {
@@ -144,6 +167,7 @@ export class SceneWalk implements Disposable {
   // 行走期间的监听、光环和黑幕，结束时一起撤掉
   #input: DisposableStack | null = null;
   #marker: WalkMarker | null = null;
+  #avatar: WalkAvatar | null = null;
   #overlay: HTMLDivElement | null = null;
   #speed = 1;
   readonly #keys = new Set<string>();
@@ -181,7 +205,7 @@ export class SceneWalk implements Disposable {
    * 开始步行：接管相机（inherited 是路线换手过来时它记下的），选出生点，飞到出生点的视点高度；
    * 之前的步行一并结束。找不到出生点时报告 failed，相机停在原处，等结束时还原
    */
-  start({ navigation, spawn, speed }: SceneWalkStart, inherited: RoamSaved | null = null): void {
+  start({ navigation, spawn, speed, view, avatar }: SceneWalkStart, inherited: RoamSaved | null = null): void {
     this.#teardown();
     this.#saved = takeOverCamera(this.#widget, this.#saved ?? inherited);
     this.#speed = speed;
@@ -197,8 +221,10 @@ export class SceneWalk implements Disposable {
       return;
     }
     const walker = new Walker(grid, pose);
-    walker.look(pose.yaw, START_PITCH);
-    const walking: Walking = { walker, toWorld, toLocal, spawn: pose, phase: 'entering' };
+    walker.look(pose.yaw, startPitch(view));
+    // 臂从 0 开始：先飞到眼睛处，第三人称落地后相机再从眼睛处拉出去
+    const rig = new WalkRig(walker, view);
+    const walking: Walking = { walker, rig, avatar, toWorld, toLocal, spawn: pose, phase: 'entering' };
     this.#walking = walking;
     this.#fovy = WALK_FOVY;
     this.#zoomFovy = WALK_FOVY;
@@ -224,14 +250,28 @@ export class SceneWalk implements Disposable {
     this.#speed = speed;
   }
 
+  /** 换人称：相机沿弹簧臂滑出、收回；第三人称滚轮调远近，视场角回到默认 */
+  setView(view: WalkView): void {
+    const walking = this.#walking;
+    if (!walking || walking.rig.view === view) {
+      return;
+    }
+    walking.rig.setView(view);
+    if (view === 'third') {
+      this.#zoomFovy = WALK_FOVY;
+    }
+    this.#widget.scene.requestRender();
+  }
+
   /** 回到这次的出生点（闪切过去，看不到中间穿过的墙） */
   respawn(): void {
     const walking = this.#walking;
     if (walking?.phase === 'walking') {
-      const { walker, spawn } = walking;
+      const { walker, rig, spawn } = walking;
       this.#blinkTo(() => {
         walker.placeAt(spawn);
-        walker.look(spawn.yaw, START_PITCH);
+        walker.look(spawn.yaw, startPitch(rig.view));
+        rig.faceView();
       });
     }
   }
@@ -326,14 +366,14 @@ export class SceneWalk implements Disposable {
     this.#applied = null;
     this.#last = null;
     this.#marker = new WalkMarker(this.#widget.scene);
+    this.#avatar = new WalkAvatar(this.#widget.scene, walking.avatar, () => this.#events.notice('avatar-failed'));
     this.#attachInput();
     this.#events.phase('walking');
     this.#widget.scene.requestRender();
   }
 
-  // 视点和朝向在局部系里算，换到地心坐标：方向和上方向都按局部系的轴转过去，局部系不朝北时也对
-  #pose({ walker, toWorld }: Walking): { position: Cartesian3; direction: Cartesian3; up: Cartesian3 } {
-    const { x, y } = walker.position;
+  // 相机的位置和朝向在局部系里算，换到地心坐标：方向和上方向都按局部系的轴转过去，局部系不朝北时也对
+  #pose({ walker, rig, toWorld }: Walking): { position: Cartesian3; direction: Cartesian3; up: Cartesian3 } {
     const { yaw, pitch } = walker;
     const [sy, cy, sp, cp] = [Math.sin(yaw), Math.cos(yaw), Math.sin(pitch), Math.cos(pitch)];
     const axis = (vx: number, vy: number, vz: number) =>
@@ -342,7 +382,7 @@ export class SceneWalk implements Disposable {
         new Cartesian3()
       );
     return {
-      position: Matrix4.multiplyByPoint(toWorld, new Cartesian3(x, y, walker.eye), new Cartesian3()),
+      position: Matrix4.multiplyByPoint(toWorld, new Cartesian3(...rig.eye), new Cartesian3()),
       direction: axis(sy * cp, cy * cp, sp),
       up: axis(-sy * sp, -cy * sp, cp)
     };
@@ -357,7 +397,8 @@ export class SceneWalk implements Disposable {
     const now = performance.now();
     const dt = this.#last === null ? 0 : Math.min((now - this.#last) / 1000, MAX_FRAME);
     this.#last = now;
-    const { walker } = walking;
+    const { walker, rig } = walking;
+    const from = walker.position;
     const { forward, strafe, turn } = walkAxes(this.#keys);
     walker.turn(turn * TURN_SPEED * dt, 0);
     let moving = false;
@@ -374,13 +415,17 @@ export class SceneWalk implements Disposable {
       this.#marker?.hide();
     }
     const settling = walker.settleEye(dt);
+    const moved = rig.step(from, dt);
+    const { x, y, floor } = walker.position;
+    const animating =
+      this.#avatar?.update(walking.toWorld, { x, y, floor, yaw: rig.bodyYaw }, moved, dt, rig.avatarAlpha) ?? false;
     const zooming = this.#easeFov(dt);
     // 要在本帧挪相机之前：深度拾取读的是上一帧的深度，得配上一帧的相机
     this.#updateHover(now);
     this.#applyCamera(walking);
     this.#reportPlayer(walking);
     const marked = this.#marker?.update(now) ?? false;
-    if (this.#keys.size > 0 || moving || settling || zooming || marked) {
+    if (this.#keys.size > 0 || moving || settling || zooming || marked || rig.settling || animating) {
       this.#widget.scene.requestRender();
     } else {
       // 停下来以后，下一次动起来从 0 开始算时间
@@ -432,9 +477,8 @@ export class SceneWalk implements Disposable {
 
   // 没动就不改相机，免得每帧都触发相机变化
   #applyCamera(walking: Walking): void {
-    const { walker } = walking;
-    const { x, y } = walker.position;
-    const state = [x, y, walker.eye, walker.yaw, walker.pitch];
+    const { walker, rig } = walking;
+    const state = [...rig.eye, walker.yaw, walker.pitch];
     if (this.#applied?.every((value, index) => Math.abs(value - (state[index] ?? 0)) < 1e-5)) {
       return;
     }
@@ -599,8 +643,14 @@ export class SceneWalk implements Disposable {
     this.#zoomBy(event.deltaY * (event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? WHEEL_PAGE : scale));
   }
 
+  // 第一人称改视场角，第三人称调相机远近
   #zoomBy(pixels: number): void {
-    this.#zoomFovy = CesiumMath.clamp(this.#zoomFovy * Math.exp(pixels * ZOOM_SENSITIVITY), MIN_FOVY, MAX_FOVY);
+    const rig = this.#walking?.rig;
+    if (rig?.view === 'third') {
+      rig.zoom(pixels);
+    } else {
+      this.#zoomFovy = CesiumMath.clamp(this.#zoomFovy * Math.exp(pixels * ZOOM_SENSITIVITY), MIN_FOVY, MAX_FOVY);
+    }
     this.#widget.scene.requestRender();
   }
 
@@ -615,12 +665,26 @@ export class SceneWalk implements Disposable {
     if (walking?.phase !== 'walking') {
       return { kind: 'refuse', reason: 'not-standable' };
     }
-    const { scene } = this.#widget;
-    const world = scene.pickPositionSupported ? scene.pickPosition(position) : undefined;
-    return resolveClick(walking.walker, world ? localPoint(walking.toLocal, world) : null, this.#visible);
+    return resolveClick(walking.walker, this.#pickSurface(walking, position), this.#visible);
   }
 
-  // 从当前视点看过去，局部系里的 point 前面有没有不透明的东西挡着：投影到屏幕上读那个像素的深度；不在画面里算挡着
+  // 深度拾取到的表面（局部系）：点在第三人称的人物身上时，穿过人物找背后的表面；什么都没打到为 null
+  #pickSurface(walking: Walking, position: Cartesian2): Point3 | null {
+    const { scene, camera } = this.#widget;
+    const world = scene.pickPositionSupported ? scene.pickPosition(position) : undefined;
+    if (!world) {
+      return null;
+    }
+    const { walker, toLocal } = walking;
+    const picked = localPoint(toLocal, world);
+    if (!this.#avatar?.shown) {
+      return picked;
+    }
+    return seeThroughAvatar(walker.grid, walker.position, localPoint(toLocal, camera.positionWC), picked);
+  }
+
+  // 从当前视点看过去，局部系里的 point 前面有没有不透明的东西挡着：投影到屏幕上读那个像素的深度；不在画面里算挡着，
+  // 第三人称的人物不算
   readonly #visible: VisibilityTest = (point: Point3, tolerance: number) => {
     const walking = this.#walking;
     if (!walking) {
@@ -632,13 +696,12 @@ export class SceneWalk implements Disposable {
     if (!screen || screen.x < 0 || screen.y < 0 || screen.x > canvas.clientWidth || screen.y > canvas.clientHeight) {
       return false;
     }
-    const hit = scene.pickPositionSupported ? scene.pickPosition(screen) : undefined;
-    if (!hit) {
+    const surface = this.#pickSurface(walking, screen);
+    if (!surface) {
       return true;
     }
-    return (
-      Cartesian3.distance(camera.positionWC, hit) >= Cartesian3.distance(camera.positionWC, world) - tolerance
-    );
+    const eye = localPoint(walking.toLocal, camera.positionWC);
+    return distance(eye, surface) >= distance(eye, point) - tolerance;
   };
 
   // 点中能去的地面：落点亮起光环，走过去、穿过闸机，或者闪切；去不了的给提示
@@ -656,7 +719,7 @@ export class SceneWalk implements Disposable {
     this.#marker?.show(
       Matrix4.multiplyByTranslation(toWorld, new Cartesian3(target.x, target.y, target.floor), new Matrix4())
     );
-    const plan = planMove(walker, target, reachable, this.#visible);
+    const plan = planMove(walker, target, reachable, this.#visible, walking.rig.view);
     if (plan.kind === 'teleport') {
       this.#blinkTo(() => walker.placeAt(plan.spot));
     } else {
@@ -772,6 +835,8 @@ export class SceneWalk implements Disposable {
     this.#overlay = null;
     this.#marker?.[Symbol.dispose]();
     this.#marker = null;
+    this.#avatar?.[Symbol.dispose]();
+    this.#avatar = null;
     this.#walking = null;
     this.#reported = null;
     this.#paused = false;
@@ -786,4 +851,8 @@ export class SceneWalk implements Disposable {
 function localPoint(toLocal: Matrix4, world: Cartesian3): Point3 {
   const { x, y, z } = Matrix4.multiplyByPoint(toLocal, world, new Cartesian3());
   return [x, y, z];
+}
+
+function distance(a: Point3, b: Point3): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }

@@ -750,9 +750,9 @@ export class CesiumView<const G extends string> implements MapView {
     }
     this.#roam = { kind: 'walk', roam: wanted, detached: false };
     // 先报告进场：找不到出生点时，场景在 startWalk 里就报告 failed
-    this.#publishRoam({ kind: 'walk', id: wanted.id, phase: 'entering', notice: null, notices: 0, player: null });
-    const { navigation, spawn, speed } = wanted;
-    scene.startWalk({ navigation, spawn, speed });
+    const { id, navigation, spawn, speed, view, avatar } = wanted;
+    this.#publishRoam({ kind: 'walk', id, phase: 'entering', view, notice: null, notices: 0, player: null });
+    scene.startWalk({ navigation, spawn, speed, view, avatar });
     if (wanted.paused) {
       scene.setWalkPaused(true);
     }
@@ -774,7 +774,7 @@ export class CesiumView<const G extends string> implements MapView {
     }
   }
 
-  // 速度、暂停随时生效；回到出生点、脱困、瞬移的计数变了就做一次
+  // 速度、暂停、人称随时生效；回到出生点、脱困、瞬移的计数变了就做一次
   #updateWalk(scene: SceneLike, entry: Extract<RoamEntry, { kind: 'walk' }>, wanted: WalkRoam): void {
     const previous = entry.roam;
     entry.roam = wanted;
@@ -795,6 +795,13 @@ export class CesiumView<const G extends string> implements MapView {
     }
     if (wanted.teleport && wanted.teleport.count !== previous.teleport?.count) {
       scene.teleportWalk(wanted.teleport.spot);
+    }
+    if (wanted.view !== previous.view) {
+      scene.setWalkView(wanted.view);
+      const status = this.#walkStatus();
+      if (status) {
+        this.#publishRoam({ ...status, view: wanted.view });
+      }
     }
   }
 

@@ -15,7 +15,8 @@ import type {
   WalkNotice,
   WalkPhase,
   WalkPlayer,
-  WalkSpawnPoint
+  WalkSpawnPoint,
+  WalkView
 } from '@yzt/map-core';
 import type { OverlayLayer } from './overlay-plan';
 import type { ImageryPlan } from './scene-style';
@@ -39,11 +40,14 @@ export interface RoutePlayback {
   readonly rate: number;
 }
 
-/** 开始步行时交给场景的（ADR 0086 第 3 节）：出生点按相机和清单选，speed 是米/秒 */
+/** 开始步行时交给场景的（ADR 0086 第 3 节）：出生点按相机和清单选，speed 是米/秒；人称和人物模型见 ADR 0090 */
 export interface SceneWalkStart {
   readonly navigation: Navigation;
   readonly spawn: WalkSpawnPoint | null;
   readonly speed: number;
+  readonly view: WalkView;
+  /** 第三人称的人物模型（glTF 的绝对地址） */
+  readonly avatar: string;
 }
 
 /** 工具对相机控制的要求：drag 是左键拖动（地球上是旋转），为 false 时关掉 */
@@ -151,6 +155,8 @@ export interface SceneLike extends Disposable {
    */
   startWalk(walk: SceneWalkStart): void;
   setWalkSpeed(speed: number): void;
+  /** 换人称：相机沿弹簧臂滑出、收回 */
+  setWalkView(view: WalkView): void;
   /** 闪切回这次的出生点 */
   respawnWalk(): void;
   /** 挪到附近开阔的地面；不用、没有时报告提示 */

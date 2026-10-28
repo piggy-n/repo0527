@@ -6,7 +6,8 @@ import {
   type Navigation,
   navigationFrame,
   type RoamStatus,
-  type SceneStatus
+  type SceneStatus,
+  type WalkView
 } from '@yzt/map-core';
 import type { CameraControl } from '@yzt/map-vue';
 import { describe, expect, it, vi } from 'vitest';
@@ -49,6 +50,7 @@ const CATALOG = buildModelCatalog(
 );
 
 const CAMERA: CameraState = { center: [120.66, 31.31], zoom: 16, bearing: 0, pitch: 55 };
+const AVATAR_URL = 'https://maps.test/roam/Cesium_Man.glb';
 
 // 拥有者只把导航网格原样交给会话：一块空网格就够
 const NAVIGATION: Navigation = {
@@ -101,7 +103,10 @@ function setup() {
   );
   const scope = effectScope();
   const owner = scope.run(() =>
-    useSceneModels({ sceneStatus, roamStatus, runCameraOperation, beginCameraOperation }, CATALOG, { loadNavigation })
+    useSceneModels({ sceneStatus, roamStatus, runCameraOperation, beginCameraOperation }, CATALOG, {
+      loadNavigation,
+      avatarUrl: AVATAR_URL
+    })
   );
   if (!owner) {
     throw new Error('作用域没有运行');
@@ -375,16 +380,19 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
       respawn: 0,
       unstuck: 0,
       paused: false,
-      teleport: null
+      teleport: null,
+      view: 'first',
+      avatar: AVATAR_URL
     });
 
-    ctx.roamStatus.value = { kind: 'walk', id: 'other', phase: 'walking', notice: 'blocked', notices: 1, player: null };
+    const status = { kind: 'walk', view: 'first', player: null } as const;
+    ctx.roamStatus.value = { ...status, id: 'other', phase: 'walking', notice: 'blocked', notices: 1 };
     expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'entering' });
     expect(ctx.owner.walkNotice.value).toBeNull();
-    ctx.roamStatus.value = { kind: 'walk', id, phase: 'walking', notice: 'blocked', notices: 1, player: null };
+    ctx.roamStatus.value = { ...status, id, phase: 'walking', notice: 'blocked', notices: 1 };
     expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'walking' });
     expect(ctx.owner.walkNotice.value).toStrictEqual({ notice: 'blocked', count: 1 });
-    ctx.roamStatus.value = { kind: 'walk', id, phase: 'failed', notice: null, notices: 1, player: null };
+    ctx.roamStatus.value = { ...status, id, phase: 'failed', notice: null, notices: 1 };
     expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'failed', reason: 'spawn' });
   });
 
@@ -428,6 +436,28 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
     await flushBuild();
     ctx.owner.startWalk('station');
     expect(ctx.builds).toHaveLength(3);
+  });
+
+  it('人称默认第一人称，换了在几次步行之间沿用；不在步行、人称不对时抛错（ADR 0090）', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.ready('station');
+    expect(() => ctx.owner.setWalkView('third')).toThrow('没有在步行');
+    ctx.owner.startWalk('station');
+    ctx.builds[0]?.resolve(NAVIGATION);
+    await flushBuild();
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ view: 'first' });
+
+    ctx.owner.setWalkView('third');
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ view: 'third', avatar: AVATAR_URL });
+    const before = ctx.owner.roam.value;
+    ctx.owner.setWalkView('third');
+    expect(ctx.owner.roam.value).toBe(before);
+    expect(() => ctx.owner.setWalkView('top' as unknown as WalkView)).toThrow('人称只能是 first、third：top');
+
+    ctx.owner.exitRoam();
+    ctx.owner.startWalk('station');
+    expect(ctx.owner.roam.value).toMatchObject({ view: 'third' });
   });
 
   it('速度按档位、几次步行之间沿用；回到出生点、脱困把计数加 1；不在步行时调用抛错', async () => {
@@ -483,7 +513,7 @@ describe('useSceneModels 步行时的地图（ADR 0087）', () => {
     expect(ctx.owner.indoorMap.value?.grid).toBe(NAVIGATION.grid);
     expect(() => ctx.owner.openMap()).toThrow('还没有进到站内');
     const player = { x: 1, y: 2, floor: -5, yaw: 0, hfov: 1.5, target: null };
-    ctx.roamStatus.value = { kind: 'walk', id, phase: 'walking', notice: null, notices: 0, player };
+    ctx.roamStatus.value = { kind: 'walk', id, phase: 'walking', view: 'first', notice: null, notices: 0, player };
     expect(ctx.owner.walkPlayer.value).toBe(player);
 
     ctx.owner.openMap();
@@ -501,7 +531,8 @@ describe('useSceneModels 步行时的地图（ADR 0087）', () => {
     ctx.builds[0]?.resolve(NAVIGATION);
     await flushBuild();
     const id = ctx.owner.roam.value?.id ?? '';
-    ctx.roamStatus.value = { kind: 'walk', id, phase: 'walking', notice: null, notices: 0, player: null };
+    const status = { kind: 'walk', id, phase: 'walking', view: 'first', notice: null, notices: 0 } as const;
+    ctx.roamStatus.value = { ...status, player: null };
     ctx.owner.openMap();
 
     ctx.owner.teleportWalk({ x: 3, y: 4, floor: -10 });

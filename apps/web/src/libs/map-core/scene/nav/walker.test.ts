@@ -132,7 +132,7 @@ describe('点击移动', () => {
     if (click.kind !== 'go') {
       throw new Error('应该能去');
     }
-    const plan = planMove(walker, click.target, click.reachable, seeNothing);
+    const plan = planMove(walker, click.target, click.reachable, seeNothing, 'first');
     expect(plan.kind).toBe('route');
     if (plan.kind !== 'route') {
       throw new Error('应该沿路径走');
@@ -169,18 +169,17 @@ describe('点击移动', () => {
     expect(resolveClick(walker, [4.6, 2.6, 1], seeAll)).toStrictEqual({ kind: 'refuse', reason: 'not-standable' });
   });
 
-  it('墙那边的地面：近处、视点高度通畅就直线穿过去，否则闪切；穿过时地板按比例过渡，最后落在目标上', () => {
+  it('墙那边的地面：近处、视点高度通畅就直线穿过去，否则闪切；第三人称一律闪切；穿过时地板按比例过渡，最后落在目标上', () => {
     const walker = new Walker(closed, { x: 8, y: 3, floor: 0, yaw: EAST });
     const click = resolveClick(walker, [12, 3, 0], seeNothing);
     expect(click).toMatchObject({ kind: 'go', reachable: false, target: { direct: true } });
     if (click.kind !== 'go') {
       throw new Error('应该能去');
     }
-    expect(planMove(walker, click.target, false, seeNothing)).toStrictEqual({
-      kind: 'teleport',
-      spot: { x: click.target.x, y: click.target.y, floor: 0 }
-    });
-    const plan = planMove(walker, click.target, false, seeAll);
+    const teleport = { kind: 'teleport', spot: { x: click.target.x, y: click.target.y, floor: 0 } };
+    expect(planMove(walker, click.target, false, seeNothing, 'first')).toStrictEqual(teleport);
+    expect(planMove(walker, click.target, false, seeAll, 'third')).toStrictEqual(teleport);
+    const plan = planMove(walker, click.target, false, seeAll, 'first');
     if (plan.kind !== 'through') {
       throw new Error(`应该直线穿过去：${plan.kind}`);
     }
@@ -196,7 +195,7 @@ describe('点击移动', () => {
     if (click.kind !== 'go') {
       throw new Error('应该能去');
     }
-    expect(planMove(walker, click.target, click.reachable, seeAll).kind).toBe('teleport');
+    expect(planMove(walker, click.target, click.reachable, seeAll, 'first').kind).toBe('teleport');
   });
 
   it('点墙根反推出来的落点在别的区域：看不见就不去', () => {

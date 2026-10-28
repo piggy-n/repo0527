@@ -1,4 +1,4 @@
-import { geodesicDistance, type LngLat } from '@yzt/map-core';
+import { geodesicDistance, type LngLat, type WalkView } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
 import { computed, type ComputedRef } from 'vue';
 import {
@@ -25,8 +25,11 @@ export interface MapReadout {
   readonly eye: ComputedRef<number | null>;
   readonly position: ComputedRef<ReadoutPosition | null>;
   readonly angles: ComputedRef<ViewAngles>;
-  /** 步行时的第一视角：朝向（度，0～359 的整数）；不在步行时为 null，状态栏换成眼高和朝向（ADR 0086 第 5 节） */
-  readonly firstPerson: ComputedRef<{ readonly heading: number } | null>;
+  /**
+   * 步行时的人称和朝向（度，0～359 的整数）；不在步行时为 null，状态栏换成人称、眼高和朝向（ADR 0086 第 5 节），
+   * 第三人称不写眼高（ADR 0090）
+   */
+  readonly walking: ComputedRef<{ readonly view: WalkView; readonly heading: number } | null>;
 }
 
 /** 读数用到的上下文 */
@@ -79,15 +82,15 @@ export function useMapReadout(map: ReadoutSource): MapReadout {
   const angles = computed(() => visibleAngles(camera.value));
 
   // 朝向读视图的相机：视点在地下时会话的方位按画布中心对着的地面点算，不可靠
-  const firstPerson = computed(() => {
+  const walking = computed(() => {
     void camera.value;
     const status = map.roamStatus.value;
     const heading = map.view.value?.heading() ?? null;
     if (status?.kind !== 'walk' || status.phase !== 'walking' || heading === null) {
       return null;
     }
-    return { heading: Math.round(heading) % 360 };
+    return { view: status.view, heading: Math.round(heading) % 360 };
   });
 
-  return { scale, eye, position, angles, firstPerson };
+  return { scale, eye, position, angles, walking };
 }

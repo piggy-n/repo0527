@@ -16,7 +16,7 @@
 | `MapCanvas.tsx` | `<MapCanvas>`：二维地图画布，挂载后创建视图、卸载时释放 |
 | `CesiumCanvas.tsx` | `<CesiumCanvas>`：三维画布，第一次切到三维时加载运行时和 map-cesium 再创建视图 |
 | `failed-view.ts` | `FailedView`：框架加载失败时挂上的视图，一直处于引擎失败 |
-| `runtime.ts` | `MAP_RUNTIME`：app 提供"加载某个框架的运行时"的函数用的注入键 |
+| `runtime.ts` | `MAP_RUNTIME`：app 提供"加载某个框架的运行时"的函数用的注入键；`MAP_RUNTIME_PRELOAD`：app 提供"预加载某个框架的运行时"的函数（ADR 0091） |
 | `use-map.ts` | `useMap()`：子孙组件取只读上下文；`useMapOverlay()`：悬浮元素登记自己贴着的边 |
 
 ## 用法
@@ -122,6 +122,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 
 - 和 `<MapCanvas>` 并列放在页面里，外层绝对定位叠在同一块区域上（页面的根元素要相对定位）；当前显示的是二维时 `visibility: hidden`
 - 第一次切到三维时才加载：同时动态导入 `@yzt/map-cesium` 和调用注入的运行时加载函数（`MAP_RUNTIME`），都到了再创建 `CesiumView`；之后一直保留（ADR 0020 第 4 条）
+- 预加载（ADR 0091）：挂载时显示的是二维，就等上下文的 `whenSettled`（二维第一次画面稳定），那时三维视图还没有、也没在加载就调用注入的 `MAP_RUNTIME_PRELOAD`（`'3d'`），不等结果；等待期间切到三维、卸载时作废。什么时候真的加载（浏览器空闲、省流量模式跳过）由 app 决定，没有 provide 时不预加载
 - 视图总是以暂停状态创建，挂上后由 `shouldRun('3d')` 决定是否恢复：加载期间用户可能已经切回二维、页面也可能被停用
 - 加载失败（分块下载失败、没有注入运行时）时报告错误并挂上 `FailedView`：上下文照常显示引擎失败，`retry()` 重新加载；加载期间卸载时，加载到的视图直接释放、不挂上
 - props：`onUnsupported`（支持清单之外的图层，页面在开发环境下打印）；测试用的 `createView`
@@ -140,7 +141,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 | `failure` | 视图失败的原因（`MapViewFailure`），只在 `failed` 时有值，卸下视图时清空（ADR 0030） |
 | `sourceErrors` | 当前视图的数据源错误（`ReadonlyMap<数据源 ID, 错误>`，ADR 0041 第 5 节）：挂上视图时取它的记录、随 `sourceerrorchange` 更新；没有视图时是空表，替换视图（包括引擎失败后重试）后从新视图的记录开始，旧视图上的错误不留下。拥有者按数据源 ID 的前缀从中推导自己的"加载失败" |
 | `sceneStatus` | 当前视图报告的三维内容状态（按瓦片集 ID 的 `loading`、`ready` 带建议的相机、`failed` 带错误，ADR 0081）：只在当前视图是三维时有内容，二维、没有视图时是空表；切换、替换视图后取新视图的报告 |
-| `roamStatus` | 当前视图报告的漫游状态，按 `kind` 区分：路线的进度（ADR 0083）、步行的阶段、提示和人的位置（ADR 0086、0087）；没有在漫游、二维、没有视图时为 null |
+| `roamStatus` | 当前视图报告的漫游状态，按 `kind` 区分：路线的进度（ADR 0083）、步行的阶段、人称、提示和人的位置（ADR 0086、0087、0090）；没有在漫游、二维、没有视图时为 null |
 | `retry()` | 引擎失败后重新创建视图；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
 | `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@yzt/utils` 的 `abortReason`）。等待结束、返回之前 `signal` 中止或视图被卸下，同样以中止结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪。定位不用它，用相机操作 |
 | `whenSettled(signal?)` | 等到视图下一次画面稳定（视图的 `settle` 事件：没有动画，视野里的瓦片都已画出），用于加载耗时的标记（5E.1，见 [perf.md](perf.md)）。没有视图时等视图挂上；和 `whenReady` 一样绑定具体的视图实例，它被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束，`signal` 中止时以它的原因结束；结束时取消订阅。在 Promise 外面订阅，订阅本身出错（视图已释放）时以这个错误结束 |

@@ -1806,6 +1806,38 @@ describe('CurrentMapPage', () => {
       expect(view.session.scene.current.roam).toBeUndefined();
     });
 
+    it('页面被缓存期间（ADR 0063）：在别的页面按空格、Esc 不作用到漫游；回来以后照常', async () => {
+      mockManifest();
+      const page = await readyCachedPage();
+      const { wrapper, pageShown } = page;
+      await switchTo(wrapper, '三维');
+      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
+      await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
+      await settle();
+      const view = sceneOf(page);
+      view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
+      await nextTick();
+      wrapper.get('[data-loaded="sz-station"]').findComponent(ElDropdown).vm.$emit('command', 'enter');
+      await settle();
+      const key = async (value: string) => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: value }));
+        await settle();
+      };
+
+      pageShown.value = false;
+      await nextTick();
+      await key(' ');
+      await key('Escape');
+      expect(view.session.scene.current.roam).toMatchObject({ kind: 'route', playing: false });
+
+      pageShown.value = true;
+      await nextTick();
+      await key(' ');
+      expect(view.session.scene.current.roam).toMatchObject({ playing: true });
+      await key('Escape');
+      expect(view.session.scene.current.roam).toBeUndefined();
+    });
+
     it('步行（ADR 0086）：从面板开始，分析站内空间失败时可以重试；Esc 退出，空格不拦截', async () => {
       mockManifest();
       let requests = 0;

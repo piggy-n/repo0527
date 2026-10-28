@@ -19,7 +19,7 @@
 | 生产产物的浏览器冒烟 | `pnpm build:intranet` → `pnpm --filter @yzt/web test:smoke` |
 | 内网部署的构建 | `pnpm build:intranet` |
 | 预览构建产物 | `pnpm --filter @yzt/web preview` |
-| 实测"点击登录 → 地图第一次加载完成" | `pnpm --filter @yzt/web measure:map-load` |
+| 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter @yzt/web measure:map-load` |
 | 每月检查依赖 | `pnpm deps:check` |
 | 范围内升级 | `pnpm deps:update:within-range` |
 | 大版本升级 | `pnpm deps:update:allow-major` |
@@ -163,13 +163,13 @@ pnpm add -Dw -E some-tool
 
 ### `pnpm --filter @yzt/web measure:map-load`
 
-**作用**：实测"点击登录 → 地图第一次加载完成"在不同网络下的耗时，输出各步骤、各资源的中位数（5E.1）。
+**作用**：实测"点击登录 → 地图第一次加载完成"在不同网络下的耗时，输出各步骤、各资源的中位数（5E.1）；加 `--scenario switch-3d` 测进了地图以后第一次切到三维（3D.5a）。
 
 **什么时候用**：评估地图资源的加载策略（预加载、按需加载）前后各测一次；三维阶段、阶段七改了加载方式后复测。
 
 **执行了什么**：先 `vite build`，再由 Node 运行 `tools/measure-map-load/cli.ts`：用 `vite preview` 提供产物，Playwright 驱动本机的 Edge，每次用新的浏览器上下文打开登录页、停留几秒、登录、等到画面稳定；网络和 CPU 用 CDP 限速。原始数据写进 `tools/measure-map-load/results.local/`（不入库）。
 
-**注意事项**：要先在自己的终端设置环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD`；默认三档网络各 5 次，Slow 4G 每次约 20 秒，全部跑完约 5 分钟，期间会弹出浏览器窗口。对比几份构建时不用这个脚本（它会先构建 `dist`），直接运行 `cli.ts` 并给出 `--builds`。参数（次数、网络、停留时长、CPU 降速、多份构建等）和实测的前提见 [modules/perf.md](modules/perf.md)。
+**注意事项**：要先在自己的终端设置环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD`（加 `--mock-backend` 时不连后端、不用账号，配内网构建比较几种做法）；默认三档网络各 5 次，Slow 4G 每次约 20 秒，全部跑完约 5 分钟，期间会弹出浏览器窗口。对比几份构建时不用这个脚本（它会先构建 `dist`），直接运行 `cli.ts` 并给出 `--builds`。参数（次数、网络、停留时长、CPU 降速、多份构建等）和实测的前提见 [modules/perf.md](modules/perf.md)。
 
 ### `pnpm --filter @yzt/web icons`
 
@@ -290,13 +290,13 @@ pnpm --filter @yzt/web test:smoke
 
 ### `pnpm --filter @yzt/web test:smoke`
 
-**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）。
+**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）；三维（`scene.spec.ts`，3D.5c）检查二维稳定后预加载了三维运行时、切到三维画面稳定、加载一个生成的测试模型并定位、步行进站（导航网格的 Worker 分块），回到二维复用画布。
 
 **什么时候用**：先运行 `pnpm build:intranet`；修改加载、路由或页面缓存后运行，CI 在内网构建后自动执行。
 
 **执行了什么**：已有 Playwright Test 从 `tools/smoke/playwright.config.ts` 读取配置，自动启动并关闭 4173 端口上的产物预览；接口在浏览器中替换为固定响应，地图使用本地省界和真实引擎，未知接口与公网请求使测试失败。
 
-**注意事项**：需要已安装 Chromium；4173 端口须空闲，不复用已有服务。不会自动构建，不能在公网产物上运行；输出写入已忽略的 `apps/web/smoke-results.local/`，不依赖账号、私有字体或真实后端，不设毫秒性能门槛。`pnpm test` 不包含这组 `*.spec.ts` 用例。
+**注意事项**：需要已安装 Chromium；4173 端口须空闲，不复用已有服务。三维的模型数据不入库，冒烟拦下清单和瓦片，换成自己生成的一间 12 米见方的屋子（`tools/smoke/scene-model.ts`）；软件渲染下这个用例约 30 秒，用例的时限放到 3 分钟。不会自动构建，不能在公网产物上运行；输出写入已忽略的 `apps/web/smoke-results.local/`，不依赖账号、私有字体或真实后端，不设毫秒性能门槛。`pnpm test` 不包含这组 `*.spec.ts` 用例。
 
 ### `pnpm --filter @yzt/web test:watch`
 

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type Component, defineComponent } from 'vue';
 import { loginToMap } from '@/shared/perf/login-to-map';
+import { switchTo3d } from '@/shared/perf/switch-to-3d';
 import {
   defaultMapFramework,
   loadMapRuntime,
@@ -78,6 +79,17 @@ describe('prepareMapRuntime', () => {
     expect(load).toHaveBeenCalledWith('3d');
     expect(setup).toHaveBeenCalledOnce();
     expect(prewarm).not.toHaveBeenCalled();
+  });
+
+  it('三维的设置好以后记下切到三维的 runtime 步骤，二维的不记', async () => {
+    const steps: string[] = [];
+    vi.spyOn(switchTo3d, 'mark').mockImplementation(step => steps.push(step));
+    const runtime = { setup: () => undefined, prewarm: () => undefined };
+
+    await prepareMapRuntime('2d', () => Promise.resolve(runtime));
+    expect(steps).toStrictEqual([]);
+    await prepareMapRuntime('3d', () => Promise.resolve(runtime));
+    expect(steps).toStrictEqual(['runtime']);
   });
 });
 

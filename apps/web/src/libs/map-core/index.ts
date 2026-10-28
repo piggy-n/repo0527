@@ -88,6 +88,7 @@ export { NAV_DEFAULTS, type NavGridData, type NavMeta, type NavOptions, type Raw
 export { type NavFrame, navigationFrame, type Point3 } from './scene/nav/nav-frame';
 export { NavGrid, type NavGridSource, type NavPoint } from './scene/nav/nav-grid';
 export { findSpawn, type SpawnOptions } from './scene/nav/spawn';
+export { seeThroughAvatar, startPitch, WalkCycle, WalkRig } from './scene/nav/third-person';
 export {
   chooseSpawn,
   type ClickRefusal,
@@ -108,6 +109,8 @@ export {
   type WalkPose,
   WALK_SPEEDS,
   type WalkTarget,
+  type WalkView,
+  WALK_VIEWS,
   yawToHeading
 } from './scene/nav/walker';
 export { type LoadJson, type PreparedTile, type PreparedTileset, prepareTileset } from './scene/prepare-tileset';

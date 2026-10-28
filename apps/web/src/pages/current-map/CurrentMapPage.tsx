@@ -51,6 +51,7 @@ import { readyBoundary, useRegionLocate } from '@/shared/map/region/useRegionLoc
 import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { useMapLoadMarks } from '@/shared/map/useMapLoadMarks';
+import { useSwitchTo3dMarks } from '@/shared/map/useSwitchTo3dMarks';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
 import { usePreferenceScope } from '@/shared/storage/preference-scope';
@@ -96,6 +97,7 @@ export const CurrentMapPage = defineComponent({
     });
     // 登录后第一次进入时记下加载的耗时（docs/modules/perf.md）
     useMapLoadMarks(map);
+    useSwitchTo3dMarks(map);
     // 第一次就绪时按江苏的范围定位；基础组的"默认视角"、区划定位回到全省时回到这里
     const { goToDefaultView } = useDefaultView(map);
     // 业务组始终只显示图标，矮屏时分成两列；还量不到尺寸时按常规（ADR 0066）

@@ -1,5 +1,12 @@
 import { Close, RefreshLeft, VideoPause, VideoPlay } from '@element-plus/icons-vue';
-import { DEFAULT_WALK_SPEED, ROUTE_SPEED, type WalkNotice, WALK_SPEEDS } from '@yzt/map-core';
+import {
+  DEFAULT_WALK_SPEED,
+  ROUTE_SPEED,
+  type WalkNotice,
+  WALK_SPEEDS,
+  type WalkView,
+  WALK_VIEWS
+} from '@yzt/map-core';
 import { ElButton, ElProgress, ElRadioButton, ElRadioGroup, ElTooltip } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
@@ -19,7 +26,16 @@ const NOTICE_TEXT: Readonly<Record<WalkNotice, string>> = {
   hidden: '目标位置被遮挡，请点击看得见的地面',
   blocked: '前方受阻，已停下',
   open: '当前位置可以正常行走，无需脱困',
-  'no-open-ground': '附近没有开阔的地面，可以回到出生点'
+  'no-open-ground': '附近没有开阔的地面，可以回到出生点',
+  'avatar-failed': '人物模型加载失败，第三人称看不到人'
+};
+
+const VIEW_LABELS: Readonly<Record<WalkView, string>> = { first: '第一人称', third: '第三人称' };
+
+// 操作说明按人称：第一人称滚轮改视野，第三人称滚轮、中键拖动调相机远近
+const WALK_HINTS: Readonly<Record<WalkView, string>> = {
+  first: '左键点击地面移动 · 右键拖动转向 · 滚轮缩放视野 · W/A/S/D 行走 · Esc 退出',
+  third: '左键点击地面移动 · 右键拖动旋转视角 · 滚轮 / 中键拖动调远近 · W/A/S/D 行走 · Esc 退出'
 };
 
 const FAILED_TEXT: Readonly<Record<Extract<WalkStage, { kind: 'failed' }>['reason'], string>> = {
@@ -41,12 +57,14 @@ function formatTime(seconds: number): string {
 
 /**
  * 漫游的操作条（ADR 0083 第 4 节、ADR 0086 第 5 节，原型 `/dev/map-3d`）：漫游时在地图下方居中；不在漫游时不渲染。
- * 步行的小地图在 3D.4d 加
+ * 人称切换在速度那一行最前面，由页面决定显示（ADR 0090：第三人称暂不开放，页面上不显示）
  */
 export const RoamBar = defineComponent({
   name: 'RoamBar',
   props: {
-    models: { type: Object as PropType<SceneModels>, required: true }
+    models: { type: Object as PropType<SceneModels>, required: true },
+    /** 显示人称切换 */
+    personSwitch: { type: Boolean, default: false }
   },
   setup(props) {
     // 正在漫游的模型；目录里没有了（清单刷新）时不显示
@@ -180,6 +198,27 @@ export const RoamBar = defineComponent({
       );
     };
 
+    const renderView = (view: WalkView) => [
+      <ElRadioGroup
+        size="small"
+        aria-label="人称"
+        modelValue={view}
+        onUpdate:modelValue={value => {
+          const next = WALK_VIEWS.find(item => item === value);
+          if (next) {
+            props.models.setWalkView(next);
+          }
+        }}
+      >
+        {WALK_VIEWS.map(item => (
+          <ElRadioButton key={item} value={item}>
+            {VIEW_LABELS[item]}
+          </ElRadioButton>
+        ))}
+      </ElRadioGroup>,
+      <span class={styles.divider} />
+    ];
+
     const renderWalkBody = (stage: WalkStage, walk: WalkChoice) => {
       const { models } = props;
       if (stage.kind === 'preparing' || stage.kind === 'entering') {
@@ -208,6 +247,7 @@ export const RoamBar = defineComponent({
       return (
         <>
           <div class={styles.controls}>
+            {props.personSwitch && renderView(walk.view)}
             {renderSpeed(walk.speed)}
             <span class={styles.divider} />
             <ElButton link type="primary" size="small" onClick={models.respawnWalk}>
@@ -219,7 +259,7 @@ export const RoamBar = defineComponent({
               </ElButton>
             </ElTooltip>
           </div>
-          <p class={styles.hint}>左键点击地面移动 · 右键拖动转向 · 滚轮缩放视野 · W/A/S/D 行走 · Esc 退出</p>
+          <p class={styles.hint}>{WALK_HINTS[walk.view]}</p>
           {notice.value && (
             <p class={styles.message} role="status">
               {NOTICE_TEXT[notice.value]}

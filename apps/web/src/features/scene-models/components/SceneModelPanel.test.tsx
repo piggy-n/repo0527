@@ -61,8 +61,11 @@ const CATALOG = buildModelCatalog(
   'https://maps.test/3dt/manifest.json'
 );
 
-/** 页面创建地图和拥有者，渲染面板和钻地条；状态报告和相机操作换成测试控制的。null 表示清单还没到 */
-function mountPanel(catalog: readonly SceneModel[] | null = CATALOG) {
+/**
+ * 页面创建地图和拥有者，渲染面板和钻地条；状态报告和相机操作换成测试控制的。null 表示清单还没到；
+ * personSwitch 是页面让操作条显示人称切换
+ */
+function mountPanel(catalog: readonly SceneModel[] | null = CATALOG, { personSwitch = false } = {}) {
   const source = shallowRef(catalog ?? undefined);
   const sceneStatus = shallowRef<SceneStatus>(new Map());
   const roamStatus = shallowRef<RoamStatus | null>(null);
@@ -97,7 +100,7 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG) {
           onRetry={onRetry}
           onUpdate:collapsed={value => (collapsed.value = value)}
         />
-        <RoamBar models={models} />
+        <RoamBar models={models} personSwitch={personSwitch} />
         <UndergroundBar models={models} />
       </div>
     );
@@ -123,7 +126,9 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG) {
   const walk = (phase: 'entering' | 'walking' | 'failed', notice: WalkNotice | null = null, notices = 0) => {
     const roam = owner?.roam.value;
     roamStatus.value =
-      roam?.kind === 'walk' ? { kind: 'walk', id: roam.id, phase, notice, notices, player: null } : null;
+      roam?.kind === 'walk'
+        ? { kind: 'walk', id: roam.id, phase, view: roam.view, notice, notices, player: null }
+        : null;
     return nextTick();
   };
   const ownerOf = required(owner, '页面没有创建拥有者');
@@ -418,6 +423,33 @@ describe('步行的入口和操作条（ADR 0086）', () => {
     expect(bar().text()).not.toContain('无需脱困');
     await walk('walking', 'open', 2);
     expect(bar().text()).toContain('无需脱困');
+  });
+
+  it('人称切换由页面决定显示（ADR 0090）：默认没有，操作说明是第一人称的；显示时点第三人称改意图、换操作说明', async () => {
+    const hidden = mountPanel();
+    await check(hidden.wrapper, 'station', true);
+    await hidden.report({ station: 'ready' });
+    hidden.owner.startWalk('station');
+    hidden.builds[0]?.resolve(NAVIGATION);
+    await flushBuild();
+    await hidden.walk('walking');
+    const hiddenBar = hidden.wrapper.get('[data-roam-bar]');
+    expect(hiddenBar.find('[aria-label="人称"]').exists()).toBe(false);
+    expect(hiddenBar.text()).toContain('右键拖动转向 · 滚轮缩放视野');
+
+    const { wrapper, owner, report, builds, walk } = mountPanel(CATALOG, { personSwitch: true });
+    await check(wrapper, 'station', true);
+    await report({ station: 'ready' });
+    owner.startWalk('station');
+    builds[0]?.resolve(NAVIGATION);
+    await flushBuild();
+    await walk('walking');
+    const bar = () => wrapper.get('[data-roam-bar]');
+    const views = bar().get('[aria-label="人称"]');
+    expect(views.text()).toBe('第一人称第三人称');
+    await views.findAll('input').at(1)?.setValue(true);
+    expect(owner.roam.value).toMatchObject({ view: 'third' });
+    expect(bar().text()).toContain('右键拖动旋转视角 · 滚轮 / 中键拖动调远近');
   });
 
   it('分析失败可以重试；附近找不到能站的地方时提示，只能退出', async () => {

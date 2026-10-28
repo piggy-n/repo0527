@@ -157,24 +157,27 @@ describe('useMapReadout', () => {
   });
 });
 
-describe('useMapReadout 的第一视角（ADR 0086 第 5 节）', () => {
-  it('步行中才有：朝向取视图的相机、取整到 0～359；进场、失败、路线漫游时没有', () => {
+describe('useMapReadout 的步行（ADR 0086 第 5 节、ADR 0090）', () => {
+  it('步行中才有：人称取步行状态，朝向取视图的相机、取整到 0～359；进场、失败、路线漫游时没有', () => {
     using ctx = setup();
     ctx.view.value = ctx.sceneViewport;
-    expect(ctx.readout.firstPerson.value).toBeNull();
+    expect(ctx.readout.walking.value).toBeNull();
+    const walk = { kind: 'walk', id: 'walk-1', view: 'first', notice: null, notices: 0, player: null } as const;
 
-    ctx.roamStatus.value = { kind: 'walk', id: 'walk-1', phase: 'entering', notice: null, notices: 0, player: null };
-    expect(ctx.readout.firstPerson.value).toBeNull();
-    ctx.roamStatus.value = { kind: 'walk', id: 'walk-1', phase: 'walking', notice: null, notices: 0, player: null };
-    expect(ctx.readout.firstPerson.value).toStrictEqual({ heading: 0 });
+    ctx.roamStatus.value = { ...walk, phase: 'entering' };
+    expect(ctx.readout.walking.value).toBeNull();
+    ctx.roamStatus.value = { ...walk, phase: 'walking' };
+    expect(ctx.readout.walking.value).toStrictEqual({ view: 'first', heading: 0 });
 
     ctx.eye.heading = 75.6;
     ctx.camera.value = { ...ctx.camera.value, bearing: 76 };
-    expect(ctx.readout.firstPerson.value).toStrictEqual({ heading: 76 });
+    expect(ctx.readout.walking.value).toStrictEqual({ view: 'first', heading: 76 });
+    ctx.roamStatus.value = { ...walk, phase: 'walking', view: 'third' };
+    expect(ctx.readout.walking.value).toStrictEqual({ view: 'third', heading: 76 });
 
-    ctx.roamStatus.value = { kind: 'walk', id: 'walk-1', phase: 'failed', notice: null, notices: 0, player: null };
-    expect(ctx.readout.firstPerson.value).toBeNull();
+    ctx.roamStatus.value = { ...walk, phase: 'failed' };
+    expect(ctx.readout.walking.value).toBeNull();
     ctx.roamStatus.value = { kind: 'route', id: 'enter', run: 0, distance: 0, total: 10, finished: false };
-    expect(ctx.readout.firstPerson.value).toBeNull();
+    expect(ctx.readout.walking.value).toBeNull();
   });
 });

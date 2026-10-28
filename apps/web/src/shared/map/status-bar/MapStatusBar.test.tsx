@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils';
-import type { LngLat } from '@yzt/map-core';
+import type { LngLat, WalkView } from '@yzt/map-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, shallowRef } from 'vue';
 import type { CoordinateFormat } from '../location/coordinate-format';
@@ -15,15 +15,15 @@ function fakeReadout() {
   const position = shallowRef<ReadoutPosition | null>({ lngLat: POINT, center: false });
   const angles = shallowRef<ViewAngles>({ bearing: null, pitch: null });
   const eye = shallowRef<number | null>(null);
-  const firstPerson = shallowRef<{ heading: number } | null>(null);
+  const walking = shallowRef<{ view: WalkView; heading: number } | null>(null);
   const readout: MapReadout = {
     scale: computed(() => scale.value),
     eye: computed(() => eye.value),
     position: computed(() => position.value),
     angles: computed(() => angles.value),
-    firstPerson: computed(() => firstPerson.value)
+    walking: computed(() => walking.value)
   };
-  return { readout, scale, eye, position, angles, firstPerson };
+  return { readout, scale, eye, position, angles, walking };
 }
 
 function mountBar(format: CoordinateFormat = 'dms') {
@@ -149,14 +149,17 @@ describe('MapStatusBar 放不下时', () => {
   });
 });
 
-describe('MapStatusBar 的第一视角（ADR 0086 第 5 节）', () => {
-  it('步行时是第一视角、眼高和朝向，不显示视点高度、经纬度和角度', async () => {
-    const { wrapper, firstPerson, eye, angles } = mountBar();
+describe('MapStatusBar 的步行（ADR 0086 第 5 节、ADR 0090）', () => {
+  it('步行时是第一视角、眼高和朝向，不显示视点高度、经纬度和角度；第三人称没有眼高', async () => {
+    const { wrapper, walking, eye, angles } = mountBar();
     eye.value = -3.5;
     angles.value = { bearing: 76, pitch: -6 };
-    firstPerson.value = { heading: 76 };
+    walking.value = { view: 'first', heading: 76 };
     await nextTick();
-
     expect(shown(wrapper)).toBe('第一视角眼高 1.6 m朝向 76°');
+
+    walking.value = { view: 'third', heading: 80 };
+    await nextTick();
+    expect(shown(wrapper)).toBe('第三视角朝向 80°');
   });
 });

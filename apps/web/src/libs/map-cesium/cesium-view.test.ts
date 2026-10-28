@@ -18,7 +18,8 @@ import {
   type ToolView,
   type UndergroundView,
   type WalkPhase,
-  type WalkRoam
+  type WalkRoam,
+  type WalkView
 } from '@yzt/map-core';
 import type { Feature, FeatureCollection, GeoJSON } from 'geojson';
 import { createNanoEvents } from 'nanoevents';
@@ -183,6 +184,10 @@ class FakeScene implements SceneLike {
 
   setWalkSpeed(speed: number): void {
     this.walkCalls.push(`speed ${speed}`);
+  }
+
+  setWalkView(view: WalkView): void {
+    this.walkCalls.push(`view ${view}`);
   }
 
   respawnWalk(): void {
@@ -1210,6 +1215,8 @@ const walkRoam = (extra: Partial<WalkRoam> = {}): WalkRoam => ({
   unstuck: 0,
   paused: false,
   teleport: null,
+  view: 'first',
+  avatar: 'https://maps.test/roam/Cesium_Man.glb',
   ...extra
 });
 
@@ -1220,9 +1227,15 @@ describe('CesiumView 的步行（ADR 0086）', () => {
 
     roam(walkRoam());
     await settle();
-    expect(scene.walk).toStrictEqual({ navigation, spawn: walkRoam().spawn, speed: 1.6 });
+    expect(scene.walk).toStrictEqual({
+      navigation,
+      spawn: walkRoam().spawn,
+      speed: 1.6,
+      view: 'first',
+      avatar: 'https://maps.test/roam/Cesium_Man.glb'
+    });
     expect(statuses).toStrictEqual([
-      { kind: 'walk', id: 'walk-1', phase: 'entering', notice: null, notices: 0, player: null }
+      { kind: 'walk', id: 'walk-1', phase: 'entering', view: 'first', notice: null, notices: 0, player: null }
     ]);
 
     scene.emit('walkphase', 'walking');
@@ -1230,9 +1243,9 @@ describe('CesiumView 的步行（ADR 0086）', () => {
     scene.emit('walknotice', 'blocked');
 
     expect(statuses.slice(1)).toStrictEqual([
-      { kind: 'walk', id: 'walk-1', phase: 'walking', notice: null, notices: 0, player: null },
-      { kind: 'walk', id: 'walk-1', phase: 'walking', notice: 'blocked', notices: 1, player: null },
-      { kind: 'walk', id: 'walk-1', phase: 'walking', notice: 'blocked', notices: 2, player: null }
+      { kind: 'walk', id: 'walk-1', phase: 'walking', view: 'first', notice: null, notices: 0, player: null },
+      { kind: 'walk', id: 'walk-1', phase: 'walking', view: 'first', notice: 'blocked', notices: 1, player: null },
+      { kind: 'walk', id: 'walk-1', phase: 'walking', view: 'first', notice: 'blocked', notices: 2, player: null }
     ]);
     expect(view.roamStatus).toStrictEqual(statuses.at(-1));
   });
@@ -1272,6 +1285,27 @@ describe('CesiumView 的步行（ADR 0086）', () => {
     expect(scene.walkCalls).toStrictEqual(['start', 'speed 4', 'respawn', 'unstuck', 'stop true']);
     expect(scene.cursor).toBe('grab');
     expect(statuses.at(-1)).toBeNull();
+  });
+
+  it('人称变了就告诉场景，步行状态跟着换；没变不再调用（ADR 0090）', async () => {
+    const { scene, view, statuses, roam } = roamSetup();
+    await view.whenReady();
+    roam(walkRoam({ view: 'third' }));
+    await settle();
+    scene.emit('walkphase', 'walking');
+
+    roam(walkRoam({ view: 'first' }));
+    await settle();
+    roam(walkRoam({ view: 'first', speed: 4 }));
+    await settle();
+
+    expect(scene.walk).toMatchObject({ view: 'third' });
+    expect(scene.walkCalls).toStrictEqual(['start', 'view first', 'speed 4']);
+    expect(statuses.map(status => status?.kind === 'walk' && [status.phase, status.view])).toStrictEqual([
+      ['entering', 'third'],
+      ['walking', 'third'],
+      ['walking', 'first']
+    ]);
   });
 
   it('换一次漫游：路线换成步行、步行换成路线都直接开始新的，由场景结束上一个', async () => {
