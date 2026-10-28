@@ -70,8 +70,11 @@ describe('ResourceServiceDialogs', () => {
     await click(list, '新增');
     const form = dialog('新增地图服务');
     await click(form, '确定');
-    await vi.waitFor(() => expect(form.textContent).toContain('请输入服务名称'));
-    expect(form.textContent).toContain('请输入服务地址');
+    // Element 的表单项各自延迟 100 毫秒显示校验提示，两条提示可能不在同一轮出现，要一起等
+    await vi.waitFor(() => {
+      expect(form.textContent).toContain('请输入服务名称');
+      expect(form.textContent).toContain('请输入服务地址');
+    });
     expect(store.items(row.id, 'map')).toEqual([]);
 
     await fill(form, '请输入服务名称', '年度地图服务');
