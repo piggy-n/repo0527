@@ -1,6 +1,6 @@
 # tsconfig 配置说明
 
-对应文件：`apps/web/tsconfig.json`、`apps/web/tsconfig.app.json`、`apps/web/tsconfig.libs.json`、`apps/web/tsconfig.node.json`
+对应文件：`apps/web/tsconfig.json`、`apps/web/tsconfig.app.json`、`apps/web/tsconfig.libs.json`、`apps/web/tsconfig.worker.json`、`apps/web/tsconfig.node.json`
 相关决策：ADR 0003（TypeScript 7）、ADR 0004（模块边界）、ADR 0006（依赖方向检查）、ADR 0016（第一个 libs 模块）
 
 ## 为什么拆成多个文件
@@ -11,7 +11,8 @@
 |---|---|---|
 | `tsconfig.json` | 不检查任何文件，只列出引用 | — |
 | `tsconfig.app.json` | `src/` | DOM + `vite/client` + `geojson` |
-| `tsconfig.libs.json` | `src/libs/`（不含测试） | DOM + `geojson`，不加载 `vite/client`，没有 `@/*` |
+| `tsconfig.libs.json` | `src/libs/`（不含测试、Worker 入口） | DOM + `geojson`，不加载 `vite/client`，没有 `@/*` |
+| `tsconfig.worker.json` | `src/**/*.worker.ts` 及其依赖 | `webworker`，不含 DOM（ADR 0085） |
 | `tsconfig.node.json` | `vite.config.ts`、`tools/` | Node |
 
 这种写法叫 **solution 风格**：根 `tsconfig.json` 用 `"files": []` 表示自己不包含文件，再用 `references` 指向真正干活的配置。运行 `tsc -b`（build 模式）时，TS 会依次检查每个被引用的项目。
@@ -26,6 +27,7 @@
   "references": [
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.libs.json" },
+    { "path": "./tsconfig.worker.json" },
     { "path": "./tsconfig.node.json" }
   ]
 }
@@ -219,6 +221,25 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 **libs 被检查两次**：`tsconfig.app.json` 的 `include` 是整个 `src`，所以 libs 的源码也会按 app 的规则检查一遍。这是有意保留的：如果把 libs 从 app 配置中排除，app 就要通过项目引用使用 libs 的类型，被引用的项目必须开启 `composite`（隐含输出声明文件），配置会复杂很多。多一次检查的耗时可以忽略。
 
 **CSS Modules 的类型**：`*.module.scss` 的模块声明来自 `vite/client`，这份配置不加载它，所以在 `src/libs/css-modules.d.ts` 中单独声明（阶段三 3.2b 加入，与 `@yzt/icons` 包的做法相同）。`tsconfig.app.json` 用 `"exclude": ["src/libs/css-modules.d.ts"]` 排除这份文件，否则 app 配置会同时看到它和 `vite/client` 中的同名声明；那样也不会报错，但只是因为 `skipLibCheck` 跳过了 `.d.ts` 的检查。libs 配置自己写了 `exclude`，会整体覆盖继承来的值，所以仍然包含这份文件（已用 `tsc --listFilesOnly` 确认两份配置各自包含的文件）。
+
+## tsconfig.worker.json
+
+```json
+{
+  "extends": "./tsconfig.libs.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
+    "lib": ["es2023", "esnext.disposable", "webworker"]
+  },
+  "include": ["src/**/*.worker.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}
+```
+
+- 自己写的 Worker 要按 `webworker` 环境检查（ADR 0018 的待定事项，ADR 0085 解决）：入口里的 `self` 是 `DedicatedWorkerGlobalScope`，满足 `@yzt/utils` 的 `WorkerEndpoint`；DOM 环境里 `self` 是 `Window`，`postMessage` 的参数对不上
+- 入口文件和它导入的模块都在这里按 `webworker` 检查：Worker 里用到 DOM 的 API（`document`、`window`）会报错。`tsconfig.app.json`、`tsconfig.libs.json` 排除 `*.worker.ts`；入口导入的普通模块同时被两边检查，所以只能用两种环境都有的 API
+- 继承 `tsconfig.libs.json`：同样不加载 `vite/client`、没有 `@/*`，Worker 入口只放在 libs 里
+- `exclude` 要写：不写就继承 libs 的，里面有 `*.worker.ts`，会一个文件也不检查
 
 ## 修改时的检查清单
 

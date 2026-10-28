@@ -1,4 +1,4 @@
-import type { TilesetLighting } from '@yzt/map-core';
+import type { PreparedTileset, TilesetLighting } from '@yzt/map-core';
 import {
   type BoundingSphere,
   Cesium3DTileset,
@@ -8,7 +8,6 @@ import {
   ShadowMode,
   UniformType
 } from 'cesium';
-import type { PreparedTileset } from './prepare-tileset';
 import type { TilesetOptions } from './scene-like';
 
 // 沿用旧项目实测的参数（ADR 0081 第 3 节）：站内要最精细一级，显存约 200 MB，缓存要放大；移动时不请求、不预加载

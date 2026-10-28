@@ -43,6 +43,45 @@ export {
   type TilesetStatus,
   type UndergroundView
 } from './scene/scene-content-model';
+export {
+  DEFAULT_REGION_PALETTE,
+  type FloorMapView,
+  levelLegend,
+  localToPlane,
+  MINOR_REGION_COLOR,
+  OBSTACLE_COLOR,
+  planeBounds,
+  planeToLocal,
+  planRegions,
+  regionColorAt,
+  type RegionColor,
+  type RegionInfo,
+  type RegionPlan,
+  renderFloorMap,
+  type Rgb,
+  type RgbaImage
+} from './scene/nav/floor-map';
+export {
+  detectLevels,
+  levelBounds,
+  levelOf,
+  type LevelOptions,
+  MIN_REGION_CELLS,
+  type NavLevel,
+  nearestOnLevel,
+  nodeOnLevel
+} from './scene/nav/levels';
+export {
+  type BuildNavigationOptions,
+  buildNavigation,
+  type NavBuildProgress,
+  type Navigation
+} from './scene/nav/nav-build';
+export { NAV_DEFAULTS, type NavGridData, type NavMeta, type NavOptions, type RawNavGrid } from './scene/nav/nav-data';
+export { type NavFrame, navigationFrame } from './scene/nav/nav-frame';
+export { NavGrid, type NavGridSource, type NavPoint } from './scene/nav/nav-grid';
+export { findSpawn, type SpawnOptions } from './scene/nav/spawn';
+export { type LoadJson, type PreparedTile, type PreparedTileset, prepareTileset } from './scene/prepare-tileset';
 export { EYE_HEIGHT, ROUTE_SPEED, RoutePath, type RoutePose, smoothAngle } from './scene/route-path';
 export { MapSession, type MapSessionOptions } from './session/map-session';
 export { diffSnapshot, diffStyle, type ImageCommand, type StyleCommand, type StyleSnapshot } from './style/diff-style';

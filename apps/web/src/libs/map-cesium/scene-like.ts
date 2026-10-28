@@ -4,6 +4,7 @@ import type {
   LngLat,
   MapPointerEvent,
   PickResult,
+  PreparedTileset,
   RoutePath,
   ScreenPoint,
   TilesetLighting,
@@ -11,7 +12,6 @@ import type {
   Unsubscribe
 } from '@yzt/map-core';
 import type { OverlayLayer } from './overlay-plan';
-import type { PreparedTileset } from './prepare-tileset';
 import type { ImageryPlan } from './scene-style';
 
 /** 离开三维时记下的精确相机（地心坐标系）：视图只保存、原样还原，不解读（ADR 0020 第 5 条） */

@@ -12,7 +12,6 @@
 | `scene-style.ts` | `planSceneStyle`：样式 → 影像图层、地球底色、覆盖物图层、不支持的图层 | 否 | node |
 | `overlay-update.ts` | `movableInPlace`：图层再次推导时能不能只换坐标（样式、个数不变，线和面不超过 500 个点，ADR 0082） | 否 | node |
 | `overlay-plan.ts` | `planOverlays`：覆盖物图层和数据 → 形状（按整级求值样式、简化到半个像素、遮罩外环收成方框、去掉重复点） | 否 | node |
-| `prepare-tileset.ts` | `prepareTileset`：瓦片集的索引整理（外部索引并进来、空占位、目录外的引用、循环、几何误差、绝对地址），下载函数注入 | 否 | node |
 | `scene-like.ts` | 窄接口 `SceneLike`、`ScenePose`、`TilesetOptions`、`WebGLUnavailableError` | 否 | — |
 | `cesium-view.ts` | `CesiumView`：生命周期、相机同步与精确还原、样式镜像、覆盖物数据的下载、工具输入与临时拖动、数据源错误、视点高度、三维内容 | 否（只依赖 `SceneLike`） | jsdom，注入假场景 |
 | `cesium-scene.ts` | `CesiumScene`：唯一调用 Cesium 的门面 | 是 | 浏览器，真实 Cesium |
@@ -122,7 +121,7 @@
 会话的 `scene`（`SceneContentModel`，见 [map-core.md](map-core.md)）是三维独有的内容：瓦片集和钻地。`CesiumView` 镜像它，和样式一样暂停期间只记下"有变化"，恢复时再应用。
 
 - 按瓦片集 ID 比较：新的加载，不要的移除；地址或 `attempt` 变了先移除再重新加载；其余只改显示和光照（`updateTileset`）
-- 加载：`prepareTileset` 整理索引（下载用 `loadJson`）→ `SceneLike.addTileset` 建好并加进场景，返回建议的相机（包围球整个进入画布，俯角 55°）。中止的不报告；索引、建瓦片集、瓦片下载失败都记成 `failed`
+- 加载：`prepareTileset`（map-core，ADR 0085 从这里移过去）整理索引（下载用 `loadJson`）→ `SceneLike.addTileset` 建好并加进场景，返回建议的相机（包围球整个进入画布，俯角 55°）。中止的不报告；索引、建瓦片集、瓦片下载失败都记成 `failed`
 - 状态：`sceneStatus`（按 ID 的 `loading`、`ready` 带相机、`failed` 带错误），变化时发 `scenestatuschange`；`ready` 不等第一个瓦片可见，不在画面里的模型也能定位
 - 同组（白膜的各种效果）：要显示的那个首批瓦片到位（`tilesetinitial`）前，上一次显示的留着，到了再撤下
 - 钻地：`setUnderground` 交给场景，场景按瓦片集的包围球算占地矩形；瓦片集晚于钻地的要求建好时补上

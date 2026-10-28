@@ -4,6 +4,7 @@ import type {
   LngLat,
   MapPointerEvent,
   PickResult,
+  PreparedTileset,
   RoutePath,
   ScreenPoint,
   UndergroundView,
@@ -60,7 +61,6 @@ import {
 } from './scene-like';
 import type { OverlayLayer, OverlayShape, RgbaColor } from './overlay-plan';
 import { movableInPlace } from './overlay-update';
-import type { PreparedTileset } from './prepare-tileset';
 import { SceneRoute } from './scene-route';
 import { SceneTilesets } from './scene-tilesets';
 import { footprintOf, SceneUnderground } from './scene-underground';

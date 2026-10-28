@@ -22,5 +22,5 @@
     }
   },
   "include": ["src"],
-  "exclude": ["src/libs/css-modules.d.ts"]
+  "exclude": ["src/libs/css-modules.d.ts", "src/**/*.worker.ts"]
 }

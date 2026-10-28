@@ -21,6 +21,8 @@
 | `session/map-session.ts` | `MapSession`：组合样式、相机、当前工具、选择状态与三维内容，统一释放 |
 | `scene/scene-content-model.ts` | `SceneContentModel`：三维独有的内容（瓦片集、钻地、漫游），整体替换、校验、合并通知；`SceneStatus`、`RoamStatus` 等三维视图报告的类型（ADR 0081、0083） |
 | `scene/route-path.ts` | `RoutePath`：路线漫游的几何，累计三维长度、按走过的距离取视点和朝向；`smoothAngle`（ADR 0083） |
+| `scene/prepare-tileset.ts` | `prepareTileset`：3D Tiles 索引的整理（外部索引并进来、空占位、目录外的引用、循环、几何误差、绝对地址），下载函数注入（ADR 0081；导航网格也要用，从 map-cesium 移来，ADR 0085） |
+| `scene/nav/` | 导航网格（ADR 0085）：`b3dm.ts` 解析、`heightfield.ts` 高度场、`regions.ts` 区域、`nav-grid.ts` 查询（`NavGrid`）、`spawn.ts` 出生点、`levels.ts` 楼层、`floor-map.ts` 按区域着色的平面图、`nav-frame.ts` 坐标系、`nav-leaves.ts` 叶节点、`nav-build.ts` 构建流程；`nav-grid.worker.ts` 是 Worker 入口，处理函数在 `nav-worker-handlers.ts`；`nav-testing.ts` 只供测试 |
 | `selection/selection-model.ts` | `SelectionModel`：选中的要素，只存数据源和业务主键（ADR 0047 第 4 节） |
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`PanModifier`、`ToolView` |
 | `measure/geodesic.ts` | 椭球面上的距离、累计距离、折线总长、多边形面积（geographiclib-geodesic，ADR 0035） |
@@ -321,6 +323,19 @@ store.clear();
 - **MapLibre 的拖动平移在 `document` 上监听 `mousemove`、`mouseup`**（5B.3 验证时发现）：浏览器自动化的拖动操作、直接派发在 `window` 上的鼠标事件都不会让地图移动；在画布上派发、让事件冒泡上去才行。拖动后松手不触发 `click`（拖动距离超过 `clickTolerance`），工具不会把拖地图当成单击
 - **交给 MapLibre 的容器元素只能用静态 class**：MapLibre 会给容器加 `maplibregl-map` 等 class，它自己的 CSS 依赖它们；容器上的 class 绑定一变化，Vue 就会重设 `class` 属性把它们冲掉。阶段五写 map-vue 时同样遵守
 
+## 导航网格（ADR 0085）
+
+步行漫游用的 2.5D 高度场，迁自旧项目的 `navGrid.js`、`navGridWorker.js` 和 `indoorMap/levels.js`，规则和参数不变；在苏州站的数据上和旧代码逐格比对一致（地板、净空、区域编号和大小）。
+
+- 存储：每格最多 4 层地板，Int16 存高度（2 厘米）和"头顶有遮盖"，Uint8 存净空；按 32 × 32 格分块，空块不占内存。苏州站 3175 × 1075 格，地板格约 116 万
+- 区域（`labelRegions`）：身体半径 0.3 米的圆盘覆盖到的格子都有台阶（0.45 米）内的室内地板才能站人，相邻格落差在台阶内就连通；`NavGrid` 的行走碰撞、寻路、出生点都查同一份区域
+- 坐标系（`navigationFrame`）：瓦片集根节点的局部系，只支持旋转加平移；给出经纬度与局部坐标的互换、局部 y 轴的方位角（平面图按它旋转、保证正北朝上）和地面在局部系里的高度（楼层名用）
+- 构建（`buildNavigation`）：主线程按整理后的索引找叶节点（根节点自己的 transform 不算），最多同时下载 4 个、报告进度，ArrayBuffer 转移给 Worker；Worker 解析、构建、算区域，类型化数组转移回来。每次构建一个 `WorkerHost`，结束后释放。中止时下载和 Worker 都停下；一个瓦片下载失败就停下其余的
+- 楼层（`detectLevels`）：高度直方图里成片的地面、高差 2 米以内的并成一层，每层的范围到与上下层的中点；地下从上往下 -1F、-2F
+- 平面图（`planRegions`、`renderFloorMap`）：区域按面积从大到小分配调色板里的颜色，跳过同一层其他区域已用的颜色，100 平方米以下和分不到的用中性色；同一区域按自己的高度范围渐变；人站不下的地板灰色。画图时按方位角旋转，第 0 行在最北边。调色板见 [color-and-typography.md](../design/color-and-typography.md) 的"导航网格平面图"
+- 耗时（苏州站，23 个叶节点）：Node 单线程解析约 0.1 秒、高度场约 1.8 秒、区域约 3 秒；浏览器里从整理索引到着色完成约 2.5 秒
+- 实测页 `/dev/nav-grid`：选清单里的模型构建，按楼层看平面图和图例，叠加预置路线核对坐标系，鼠标处显示经纬度、地板和区域
+
 ## 测试
 
 | 层 | 内容 | 测试方式 |
@@ -398,7 +413,7 @@ store.clear();
 | 业务图层、底图、边界等拥有者（Manager），从自己的状态推导分组 | 阶段五、六，迁移现状底图和业务图层时 |
 | 框选的批量高亮：按 `guid` 过滤的图层还是 feature-state（选中的单个要素用完整几何的 GeoJSON 分组，ADR 0047） | 5C.6b |
 | Cesium 镜像与相机同步、三维样式的支持清单 | 做三维时（`libs/map-cesium`） |
-| 瓦片数据服务（基于 `@yzt/utils` 的 Worker 通信层） | 第一个 Worker 真实使用方出现时 |
+| 瓦片数据服务（基于 `@yzt/utils` 的 Worker 通信层；第一个真实使用方是导航网格，ADR 0085） | 接入 MVT 时 |
 
 ## 待定问题
 

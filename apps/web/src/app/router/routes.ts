@@ -91,6 +91,12 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
     meta: { title: '三维迁移交互原型', public: true }
   },
   {
+    path: '/dev/nav-grid',
+    name: RouteName.devNavGrid,
+    component: () => import('@/pages/dev/nav-grid/DevNavGridPage').then(({ DevNavGridPage }) => DevNavGridPage),
+    meta: { title: '导航网格实测', public: true }
+  },
+  {
     path: '/dev/resources',
     name: RouteName.devResources,
     component: withMapRuntime(() =>

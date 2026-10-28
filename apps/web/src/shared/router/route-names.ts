@@ -9,6 +9,7 @@ export const RouteName = {
   devMapUi: 'dev-map-ui',
   devFileManagement: 'dev-file-management',
   devMap3d: 'dev-map-3d',
+  devNavGrid: 'dev-nav-grid',
   currentMap: 'current-map',
   cityDashboard: 'city-dashboard',
   landChangeQuery: 'land-change-query',

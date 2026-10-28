@@ -19,7 +19,7 @@
 | `worker/yield.ts` | `yieldToEventLoop` |
 | `worker/testing.ts` | 只供测试使用：`TestEndpoint`、`connect`、`gate`、`settled`、`flushMessages` |
 
-两侧只依赖窄接口 `WorkerEndpoint`（`postMessage`、`addEventListener`，可选的 `start`、`terminate`）。`Worker`、`MessagePort` 和 Worker 里的 `self` 都满足它，所以 utils 不需要 `WebWorker` 环境的类型；真实的 Worker 入口文件出现时，再配置单独的 tsconfig（ADR 0018 的待定事项）。
+两侧只依赖窄接口 `WorkerEndpoint`（`postMessage`、`addEventListener`，可选的 `start`、`terminate`）。`Worker`、`MessagePort` 和 Worker 里的 `self` 都满足它，所以 utils 不需要 `WebWorker` 环境的类型。Worker 入口 `*.worker.ts` 由单独的 `tsconfig.worker.json` 按 `webworker` 环境检查（ADR 0085，见 [tsconfig.md](../config/tsconfig.md)）；入口只调用 `serveWorker`，处理函数放在普通模块里，测试用 MessageChannel 直接跑。第一个真实使用方是导航网格（`map-core/scene/nav`）。
 
 ### 用法
 

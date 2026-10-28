@@ -235,6 +235,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 三维的 GeoJSON 覆盖物由 map-cesium 按样式自动镜像（line、fill、circle，按整级求值、简化到半个像素，ADR 0080），拥有者不为三维另写分组；`symbol`、`fill-pattern` 等清单外的写法三维不画。三维期间点/框选不识别；三维独有的读数（视点高度）用就绪视图的 `eyeHeight()`
 - 三维独有的内容（3D Tiles 瓦片集、钻地、漫游）由会话的 `scene` 持有，页面用 `map.bindScene(() => SceneContent)` 绑定拥有者的推导函数（一个上下文只绑定一个）；瓦片集的状态从上下文的 `sceneStatus` 读，就绪时带建议的相机，定位用它做相机操作；漫游的进度从 `roamStatus` 读，漫游开始时开始一次相机操作，被别的定位作废就退出。模型清单 `public/3dt/manifest.json` 入库、模型数据不入库（ADR 0081、0083）
 - 地下空间（钻地中，包括漫游地下的模型）时页面隐藏业务工具栏、功能面板、底图、区划条和默认视角：只隐藏，不改各拥有者的状态，退出后原样显示；进入时切回移动，漫游只在换成移动以外的工具时退出；钻地期间不显示地面上的模型（ADR 0084）
+- 导航网格在 `map-core/scene/nav`，不依赖 Cesium、DOM：`buildNavigation` 在主线程下载叶节点瓦片、在 Worker 里构建；行走碰撞、寻路、平面图用同一份区域（`labels`）；平面图正北朝上（按根节点局部系的方位角旋转）、按区域着色（`planRegions`、`renderFloorMap`，ADR 0085）
 - 二三维切换用上下文的 `map.setDimension(kind)`：页面同时放 `<MapCanvas>` 和 `<CesiumCanvas>`，每种视图一个画布，上下文的 `view` 等只反映当前种类；切换时要做的业务（如 `basemap.selectForDimension`：三维默认影像、二维默认矢量）由页面在同一处调用。三维画布第一次切到三维时才加载，运行时由 app 的 `withMapRuntime` 通过 `MAP_RUNTIME` 注入，不在 `main.ts` 里安装（会把 maplibre-gl 带进入口，ADR 0079 第 2、8 节）
 - 地图页的路由组件用 `app/map-framework.ts` 的 `withMapRuntime` 包装：同时加载默认框架（`defaultMapFramework()`）的运行时和页面，都到了以后设置运行时、预热 Worker 池再返回页面；登录页空闲时 `app/map-preload.ts` 用同一个加载函数预加载，所以地图页分块的模块不在顶层做重的计算（ADR 0061）；交给 MapLibre 的容器元素只用静态 class，可变的 class 放在外层元素上，否则 Vue 会冲掉 MapLibre 自己加的 class
 - 地图页被缓存时（ADR 0063）：`MapCanvas` 在页面停用时暂停视图、激活时恢复，隐藏期间的定位等恢复后再执行；视图恢复时先按容器尺寸调整画布，暂停时进行中的定位动画直接到终点并写回会话；面板内容在页面停用时按隐藏处理（`active` 为 false）
@@ -244,7 +245,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 持有资源的对象实现 `Disposable`，监听和子对象都登记进内部的 `DisposableStack`；释放后等待中的操作以 `AbortError` 结束（ADR 0023）
 - 视图上的差异（如三维期间不画二维标注）由适配器自己处理，不改会话状态；框架独有的功能按能力声明，独有状态由各自的模块保管，切换框架时保留
 - 样式表达式和过滤条件在三维、Worker 里一律用 `@maplibre/maplibre-gl-style-spec` 求值，不手写求值器；它保证求值语义一致，不保证渲染效果一致，三维的支持范围按清单降级（ADR 0024）
-- 二维不自建渲染 Worker；主线程热点先实测再移出；自建的 Worker 一律用 `@yzt/utils` 的通信层（有类型的消息、`AbortSignal` 取消、归实例所有并可释放），取消分层与故障语义见 ADR 0025，用法见 `docs/modules/utils.md`；Worker 内的缓存不转移出去，对外只传复制品或一次性产物
+- 二维不自建渲染 Worker；主线程热点先实测再移出；自建的 Worker 一律用 `@yzt/utils` 的通信层（有类型的消息、`AbortSignal` 取消、归实例所有并可释放），取消分层与故障语义见 ADR 0025，用法见 `docs/modules/utils.md`；Worker 入口 `*.worker.ts` 只调用 `serveWorker`，处理函数放在普通模块里，入口由 `tsconfig.worker.json`（`webworker` 环境，不含 DOM）检查（ADR 0085）；Worker 内的缓存不转移出去，对外只传复制品或一次性产物
 
 ### 样式与设计规范
 

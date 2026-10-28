@@ -4,6 +4,7 @@ import {
   type MapInputEvent,
   type MapPointerEvent,
   MapSession,
+  type PreparedTileset,
   type RoamStatus,
   type RoutePath,
   type RouteRoam,
@@ -28,7 +29,6 @@ import {
   WebGLUnavailableError
 } from './scene-like';
 import type { OverlayLayer } from './overlay-plan';
-import type { PreparedTileset } from './prepare-tileset';
 import type { ImageryPlan } from './scene-style';
 
 const START: CameraState = { center: [119.5, 33], zoom: 6.8, bearing: 0, pitch: 0 };

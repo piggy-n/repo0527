@@ -15,6 +15,7 @@ import {
   NO_SCENE_STATUS,
   NO_SOURCE_ERRORS,
   type PickResult,
+  prepareTileset,
   type RenderedFeature,
   type RoamStatus,
   RoutePath,
@@ -34,7 +35,6 @@ import type { GeoJSON } from 'geojson';
 import { createNanoEvents } from 'nanoevents';
 import { fitBoundsCamera, paddedCenter } from './camera-fit';
 import { isGeoJson, type OverlaySpec, planOverlays } from './overlay-plan';
-import { prepareTileset } from './prepare-tileset';
 import {
   type CreateScene,
   type SceneLike,

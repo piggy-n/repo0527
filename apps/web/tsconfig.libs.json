@@ -8,5 +8,5 @@
     }
   },
   "include": ["src/libs"],
-  "exclude": ["src/libs/**/*.test.ts", "src/libs/**/*.test.tsx"]
+  "exclude": ["src/libs/**/*.test.ts", "src/libs/**/*.test.tsx", "src/**/*.worker.ts"]
 }

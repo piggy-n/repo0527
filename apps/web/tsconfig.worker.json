@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.libs.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
+    "lib": ["es2023", "esnext.disposable", "webworker"]
+  },
+  "include": ["src/**/*.worker.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}

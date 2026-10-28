@@ -1,12 +1,11 @@
 import 'cesium/Build/Cesium/Widgets/CesiumWidget/CesiumWidget.css';
-import { type CameraState, EYE_HEIGHT, RoutePath } from '@yzt/map-core';
+import { type CameraState, EYE_HEIGHT, type PreparedTileset, RoutePath } from '@yzt/map-core';
 import type { GeoJSON, Position } from 'geojson';
 import { Cartesian3, Matrix4, Transforms } from 'cesium';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { MAPLIBRE_FOVY, zoomToDistance } from './camera-math';
 import { CesiumScene } from './cesium-scene';
 import { type OverlayLayerSpecification, planOverlays } from './overlay-plan';
-import type { PreparedTileset } from './prepare-tileset';
 import { setCesiumBaseUrl } from './runtime';
 import type { ImageryPlan } from './scene-style';
 
