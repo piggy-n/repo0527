@@ -93,9 +93,14 @@ export function useIndicatorCalculation(options: IndicatorCalculationOptions): I
           return;
         }
         failures = 0;
-        update(signal, { phase: progress.finished ? 'finished' : 'running', progress });
-        if (progress.finished) {
-          return;
+        // 后端还没登记这次计算时没有进度：保留上一次查到的，接着查（同旧页面）
+        if (progress === null) {
+          update(signal, { phase: 'running' });
+        } else {
+          update(signal, { phase: progress.finished ? 'finished' : 'running', progress });
+          if (progress.finished) {
+            return;
+          }
         }
       } catch {
         if (signal.aborted) {

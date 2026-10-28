@@ -21,14 +21,14 @@ export interface IndicatorLeaf {
   readonly kind: 'leaf';
   /** 指标编码（接口的 dm），计算和选择都按它 */
   readonly code: string;
-  /** 后端的记录 ID，展示成果时按它请求 */
-  readonly dataId: string;
+  /** 成果的记录 ID，展示成果时按它请求；只有展示树（/tree/out）有 */
+  readonly dataId: string | null;
   readonly name: string;
   /** 接口标为禁用（sfjy）的指标不能选 */
   readonly disabled: boolean;
   /** 计算状态；接口没给时为 null，不显示标签 */
   readonly status: IndicatorStatus | null;
-  /** 计算结果的原文，如"分析结果:43.78%" */
+  /** 计算结果，如"40.04%" */
   readonly result: string | null;
   /** 失败等情况的原因 */
   readonly reason: string | null;
@@ -89,12 +89,4 @@ export function filterIndicatorTree(nodes: readonly IndicatorTreeNode[], keyword
       return children.length > 0 ? [{ ...node, children }] : [];
     });
   return walk(nodes);
-}
-
-/** 结果原文去掉"分析结果:"这样的前缀，只留数值和单位；没有冒号时原样返回 */
-export function indicatorResultValue(result: string): string {
-  const text = result.trim();
-  const index = Math.max(text.indexOf(':'), text.indexOf('：'));
-  const value = index >= 0 ? text.slice(index + 1).trim() : text;
-  return value === '' ? text : value;
 }

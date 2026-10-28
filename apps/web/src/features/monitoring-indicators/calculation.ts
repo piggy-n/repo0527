@@ -27,7 +27,7 @@ export interface CalculationRow {
   readonly code: string;
   readonly name: string;
   readonly status: CalculationRowStatus;
-  /** 完成时的结果原文 */
+  /** 完成时的结果，去掉了"分析结果:"前缀 */
   readonly result: string | null;
 }
 
@@ -73,6 +73,11 @@ export function calculationRowStatus(result: string): CalculationRowStatus {
     return 'completed';
   }
   return 'pending';
+}
+
+/** 进度接口的结果写成"分析结果:40.04%"，面板只显示数值和单位 */
+export function calculationResultValue(result: string): string {
+  return result.replace(/^分析结果[:：]\s*/, '');
 }
 
 /** 进度面板的每一行：按提交的指标顺序，进度里还没有的指标是待计算 */

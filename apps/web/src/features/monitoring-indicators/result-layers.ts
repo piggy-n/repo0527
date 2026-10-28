@@ -17,7 +17,7 @@ export interface ResultLayer {
   readonly geometry: ResultGeometry;
   /** 默认颜色 */
   readonly color: string;
-  /** 区划范围（urban）：垫在最下面 */
+  /** 区划范围（城区范围面、城市范围面）：垫在最下面 */
   readonly range: boolean;
 }
 
@@ -25,8 +25,8 @@ export interface ResultLayer {
 export interface IndicatorResult {
   /** 瓦片地址里的分析 ID */
   readonly analysisId: string;
-  /** 计算结果，去掉了"分析结果:"前缀；没有结果时为 null */
-  readonly value: string | null;
+  /** 计算结果，如"40.04%" */
+  readonly value: string;
   /** 按面板上的顺序：点、线、面、区划范围；地图上从下到上反过来叠 */
   readonly layers: readonly ResultLayer[];
 }
@@ -70,9 +70,9 @@ const NAMED_COLORS: readonly (readonly [string, string])[] = [
   ['区域范围', RANGE_COLOR]
 ];
 
-/** 区划范围的图层：接口里图层名是 urban，名称里带"城区范围""范围面" */
-export function isRangeLayer({ key, name }: ResultLayerSource): boolean {
-  return key === 'urban' || /城区范围|范围面/.test(name);
+/** 区划范围的图层：名称是"城区范围面"（cqjcfwa）或"城市范围面"（xzq） */
+export function isRangeLayer({ name }: ResultLayerSource): boolean {
+  return name.endsWith('范围面');
 }
 
 const DISPLAY_ORDER: Readonly<Record<ResultGeometry, number>> = { point: 0, line: 1, fill: 2 };

@@ -22,7 +22,6 @@ import {
   type IndicatorCategory,
   indicatorLeaves,
   type IndicatorLeaf,
-  indicatorResultValue,
   type IndicatorStatus,
   type IndicatorTreeNode
 } from '../indicator-tree';
@@ -67,7 +66,7 @@ const renderStatus = (leaf: IndicatorLeaf) => {
 const renderResult = (leaf: IndicatorLeaf) =>
   leaf.result !== null && (
     <span class={styles.result} title={leaf.result}>
-      {indicatorResultValue(leaf.result)}
+      {leaf.result}
     </span>
   );
 

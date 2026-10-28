@@ -1,16 +1,10 @@
 import { z } from 'zod';
 import { http } from '@/shared/http/client';
-import { calculationRowStatus, type CalculationProgress } from './calculation';
-import {
-  dedupeIndicators,
-  type IndicatorCategory,
-  indicatorResultValue,
-  type IndicatorStatus,
-  type IndicatorTreeNode
-} from './indicator-tree';
+import { calculationResultValue, calculationRowStatus, type CalculationProgress } from './calculation';
+import { dedupeIndicators, type IndicatorCategory, type IndicatorStatus, type IndicatorTreeNode } from './indicator-tree';
 import { type IndicatorResult, type ResultGeometry, resultLayersOf } from './result-layers';
 
-// 待实测：字段先按旧页面实际读取的写，真实返回核对后收紧（docs/migration.md）
+// 返回结构按 2026-10-28 的实测写，见 docs/migration.md 的"城市国土空间监测指标：接口实测"
 
 /** 指标树的来源：计算用全部指标（/tree/list），展示只要计算完成的（/tree/out） */
 export type IndicatorTreeSource = 'calculation' | 'result';
@@ -34,50 +28,47 @@ export interface IndicatorApi {
   /** 这些指标是否已有计算结果（重新计算前要确认） */
   verifyCalculation(params: CalculationParams): Promise<boolean>;
   startCalculation(params: CalculationParams): Promise<void>;
-  fetchProgress(params: CalculationParams, signal?: AbortSignal): Promise<CalculationProgress>;
-  /** 一个指标的成果，id 是指标树上的记录 ID */
+  /** 后端还没有这次计算的进度时为 null */
+  fetchProgress(params: CalculationParams, signal?: AbortSignal): Promise<CalculationProgress | null>;
+  /** 一个指标的成果，id 是展示树上的记录 ID */
   fetchResult(id: string, signal?: AbortSignal): Promise<IndicatorResult>;
 }
 
 interface RawIndicatorNode {
-  id?: string | null;
+  /** 只有展示树有 */
+  id?: string;
   dm: string;
   mc: string;
-  sfjy?: unknown;
-  status?: string | number | null;
-  result?: string | null;
-  reason?: string | null;
-  children?: RawIndicatorNode[] | null;
+  /** 指标的统计范围（城区、全域）；分类是 null */
+  bz: string | null;
+  /** 是否禁用：城市体检评估的指标是布尔，分类和综合分析指标是字符串；展示树没有 */
+  sfjy?: boolean | 'true' | 'false';
+  /** 计算树才有；综合分析指标是空字符串 */
+  status?: string;
+  /** 计算树的城市体检评估和展示树有，没有结果时是空字符串 */
+  result?: string;
+  reason?: string;
+  children: RawIndicatorNode[];
 }
 
 const rawNodeSchema: z.ZodType<RawIndicatorNode> = z.lazy(() =>
   z.object({
-    id: z.string().nullish(),
+    id: z.string().optional(),
     dm: z.string(),
     mc: z.string(),
-    sfjy: z.unknown().optional(),
-    status: z.union([z.string(), z.number()]).nullish(),
-    result: z.string().nullish(),
-    reason: z.string().nullish(),
-    children: z.array(rawNodeSchema).nullish()
+    bz: z.string().nullable(),
+    sfjy: z.union([z.boolean(), z.enum(['true', 'false'])]).optional(),
+    status: z.string().optional(),
+    result: z.string().optional(),
+    reason: z.string().optional(),
+    children: z.array(rawNodeSchema)
   })
 );
 
-const NUMBERED_STATUS: Readonly<Record<string, IndicatorStatus>> = {
-  '0': 'pending',
-  '1': 'processing',
-  '2': 'done',
-  '3': 'failed'
-};
-
-// 状态可能是文字或 0～3（旧页面两种都处理）
-function indicatorStatus(raw: string | number | null | undefined): IndicatorStatus | null {
-  const text = String(raw ?? '').trim();
-  if (text === '') {
+// 实测只有"未处理""已完成"，计算中和失败的说法沿用旧页面的判断
+function indicatorStatus(text: string | undefined): IndicatorStatus | null {
+  if (text === undefined || text === '') {
     return null;
-  }
-  if (/^\d+$/.test(text)) {
-    return NUMBERED_STATUS[text] ?? 'pending';
   }
   if (/失败|错误|异常/.test(text)) {
     return 'failed';
@@ -88,26 +79,37 @@ function indicatorStatus(raw: string | number | null | undefined): IndicatorStat
   return /正在|处理中|计算中|进行中/.test(text) ? 'processing' : 'pending';
 }
 
-const blankToNull = (text: string | null | undefined) => (text === undefined || text === null || text.trim() === '' ? null : text.trim());
+const emptyToNull = (text: string | undefined) => (text === undefined || text === '' ? null : text);
 
-function toNode(raw: RawIndicatorNode): IndicatorTreeNode {
-  const children = raw.children ?? [];
-  if (children.length > 0) {
-    return { kind: 'group', code: raw.dm, name: raw.mc, children: children.map(toNode) };
-  }
-  return {
-    kind: 'leaf',
-    code: raw.dm,
-    dataId: raw.id ?? '',
-    name: raw.mc,
-    disabled: Boolean(raw.sfjy),
-    status: indicatorStatus(raw.status),
-    result: blankToNull(raw.result),
-    reason: blankToNull(raw.reason)
-  };
+// 没有下级的分类（如综合分析指标的"福利设施普惠性"）没有统计范围，不是指标，不显示
+function toNodes(nodes: readonly RawIndicatorNode[]): IndicatorTreeNode[] {
+  return nodes.flatMap((node): IndicatorTreeNode[] => {
+    if (node.children.length > 0) {
+      return [{ kind: 'group', code: node.dm, name: node.mc, children: toNodes(node.children) }];
+    }
+    if (node.bz === null) {
+      return [];
+    }
+    return [
+      {
+        kind: 'leaf',
+        code: node.dm,
+        dataId: node.id ?? null,
+        name: node.mc,
+        disabled: node.sfjy === true || node.sfjy === 'true',
+        status: indicatorStatus(node.status),
+        result: emptyToNull(node.result),
+        reason: emptyToNull(node.reason)
+      }
+    ];
+  });
 }
 
-const treeSchema = z.array(rawNodeSchema).transform(nodes => dedupeIndicators(nodes.map(toNode)));
+// 展示树在这一年、这个范围没有成果时是 null；同一分类会重复出现多次，去重后只留一份
+const treeSchema = z
+  .array(rawNodeSchema)
+  .nullable()
+  .transform(nodes => dedupeIndicators(toNodes(nodes ?? [])));
 
 const TREE_PATHS: Readonly<Record<IndicatorTreeSource, string>> = {
   calculation: '/api/analysis/tree/list',
@@ -124,35 +126,34 @@ function verifyCalculation(params: CalculationParams) {
   return http.post('/api/analysis/verify', params, { schema: z.boolean(), silent: true });
 }
 
-// 开始计算的成功返回没有用到，只判断业务码；失败由全局提示显示原因
+// 开始计算是写操作，没有实测返回；只判断业务码，失败由全局提示显示原因
 const discardData = z.unknown().transform(() => undefined);
 
 function startCalculation(params: CalculationParams) {
   return http.post('/api/analysis/calculate', params, { schema: discardData });
 }
 
+// 另有 total、select、year、calculate 几个说明文字，和下面的指标行重复，不用
 const progressSchema = z
   .object({
-    ratio: z.number().nullish(),
-    status: z.string().nullish(),
-    calculate_data: z
-      .array(z.object({ code: z.string(), name: z.string().nullish(), result: z.string().nullish() }))
-      .nullish()
+    ratio: z.number(),
+    status: z.string(),
+    calculate_data: z.array(z.object({ code: z.string(), name: z.string(), result: z.string() }))
   })
-  .transform((data): CalculationProgress => {
-    const rows = (data.calculate_data ?? []).map(row => {
-      const result = (row.result ?? '').trim();
+  .nullable()
+  .transform((data): CalculationProgress | null => {
+    if (data === null) {
+      return null;
+    }
+    const rows = data.calculate_data.map(({ code, name, result }) => {
       const status = calculationRowStatus(result);
-      return { code: row.code, name: row.name ?? '', status, result: status === 'completed' ? result : null };
+      return { code, name, status, result: status === 'completed' ? calculationResultValue(result) : null };
     });
-    const resolved = rows.filter(row => row.status === 'completed' || row.status === 'failed').length;
-    const ratio = data.ratio ?? null;
-    const percent = ratio === null ? Math.round((resolved / Math.max(rows.length, 1)) * 100) : Math.round(ratio);
     return {
       rows,
-      percent: Math.min(100, Math.max(0, percent)),
-      finished: ratio === 100,
-      statusText: blankToNull(data.status)
+      percent: Math.min(100, Math.max(0, Math.round(data.ratio))),
+      finished: data.ratio === 100,
+      statusText: emptyToNull(data.status)
     };
   });
 
@@ -166,31 +167,20 @@ function fetchProgress(params: CalculationParams, signal?: AbortSignal) {
   });
 }
 
-// 几何类型是 Point、MultiLineString 这样的写法
-function resultGeometry(type: string): ResultGeometry {
-  const text = type.toUpperCase();
-  if (text.includes('POINT')) {
-    return 'point';
-  }
-  return text.includes('LINE') ? 'line' : 'fill';
-}
+const GEOMETRIES = { POINT: 'point', LINE: 'line', POLYGON: 'fill' } as const satisfies Record<string, ResultGeometry>;
 
 const resultSchema = z
   .object({
     id: z.string(),
-    result: z.string().nullish(),
-    layers: z.array(z.object({ gdbName: z.string(), chineseName: z.string().nullish(), geomType: z.string() }))
+    result: z.string(),
+    layers: z.array(z.object({ gdbName: z.string(), chineseName: z.string(), type: z.enum(['POINT', 'LINE', 'POLYGON']) }))
   })
   .transform(
     (data): IndicatorResult => ({
       analysisId: data.id,
-      value: blankToNull(data.result) === null ? null : indicatorResultValue(data.result ?? ''),
+      value: data.result,
       layers: resultLayersOf(
-        data.layers.map(layer => ({
-          key: layer.gdbName,
-          name: blankToNull(layer.chineseName) ?? layer.gdbName,
-          geometry: resultGeometry(layer.geomType)
-        }))
+        data.layers.map(layer => ({ key: layer.gdbName, name: layer.chineseName, geometry: GEOMETRIES[layer.type] }))
       )
     })
   );

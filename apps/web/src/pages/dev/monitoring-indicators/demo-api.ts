@@ -1,6 +1,10 @@
 import { reactive } from 'vue';
 import type { CalculationParams, IndicatorApi } from '@/features/monitoring-indicators/api';
-import { type CalculationProgress, calculationRowStatus } from '@/features/monitoring-indicators/calculation';
+import {
+  type CalculationProgress,
+  calculationResultValue,
+  calculationRowStatus
+} from '@/features/monitoring-indicators/calculation';
 import type {
   IndicatorCategory,
   IndicatorLeaf,
@@ -50,15 +54,15 @@ const coverage = (facility: string): ResultLayerSource[] => [
   { key: 'road', name: '路网', geometry: 'line' },
   { key: 'covered', name: '已覆盖城镇住宅及宅基地', geometry: 'fill' },
   { key: 'uncovered', name: '未覆盖城镇住宅及宅基地', geometry: 'fill' },
-  { key: 'range', name: `${facility}覆盖范围`, geometry: 'fill' },
-  { key: 'urban', name: '城区范围面', geometry: 'fill' }
+  { key: 'service_final', name: '覆盖范围', geometry: 'fill' },
+  { key: 'cqjcfwa', name: '城区范围面', geometry: 'fill' }
 ];
 
 const PARKS: readonly ResultLayerSource[] = [
   { key: 'entrance', name: '公园绿地出入口', geometry: 'point' },
   { key: 'square', name: '广场中心点', geometry: 'point' },
   { key: 'park', name: '公园绿地广场', geometry: 'fill' },
-  { key: 'urban', name: '城区范围面', geometry: 'fill' }
+  { key: 'cqjcfwa', name: '城区范围面', geometry: 'fill' }
 ];
 
 const indicator = (
@@ -84,7 +88,7 @@ function demoTrees(): Readonly<Record<IndicatorCategory, readonly DemoGroup[]>> 
         code: 'G-01',
         name: '生态宜居',
         children: [
-          indicator('A-01', '建成区绿化覆盖率(%)', 'done', { result: '分析结果:43.78%', layers: PARKS }),
+          indicator('A-01', '建成区绿化覆盖率(%)', 'done', { result: '43.78%', layers: PARKS }),
           indicator('A-02', '人均公园绿地面积(㎡)', 'pending', { layers: PARKS })
         ]
       },
@@ -107,7 +111,7 @@ function demoTrees(): Readonly<Record<IndicatorCategory, readonly DemoGroup[]>> 
             name: '教育便利性',
             children: [
               indicator('B-01', '社区幼儿园步行5分钟覆盖率(%)', 'done', {
-                result: '分析结果:70.12%',
+                result: '70.12%',
                 layers: coverage('幼儿园')
               })
             ]
@@ -145,7 +149,7 @@ function toNodes(nodes: readonly (DemoGroup | DemoIndicator)[], onlyDone: boolea
     const leaf: IndicatorLeaf = {
       kind: 'leaf',
       code: node.code,
-      dataId: `demo-${node.code}`,
+      dataId: onlyDone ? `demo-${node.code}` : null,
       name: node.name,
       disabled: node.disabled,
       status: onlyDone ? null : node.status,
@@ -195,13 +199,14 @@ export function createDemoApi(): { readonly api: IndicatorApi; readonly switches
         text = '正在处理';
       }
       const status = calculationRowStatus(text);
+      const result = status === 'completed' ? calculationResultValue(text) : null;
       // 结束的写回指标树，刷新后能看到
       if (item && (status === 'completed' || status === 'failed')) {
         item.status = status === 'completed' ? 'done' : 'failed';
-        item.result = status === 'completed' ? text : null;
+        item.result = result;
         item.reason = status === 'failed' ? '缺少避难场所数据' : null;
       }
-      return { code, name, status, result: status === 'completed' ? text : null };
+      return { code, name, status, result };
     });
     const resolved = rows.filter(row => row.status === 'completed' || row.status === 'failed').length;
     const percent = Math.round((resolved / rows.length) * 100);
@@ -232,11 +237,10 @@ export function createDemoApi(): { readonly api: IndicatorApi; readonly switches
           throw new Error('指标成果加载失败（样例）');
         }
         const item = byCode.get(id.replace(/^demo-/, ''));
-        if (item === undefined) {
-          throw new Error(`样例里没有 ${id}`);
+        if (item?.result === undefined || item.result === null) {
+          throw new Error(`样例里没有 ${id} 的成果`);
         }
-        const value = item.result === null ? null : item.result.replace(/^.*[:：]/, '');
-        return { analysisId: id, value, layers: resultLayersOf(item.layers) };
+        return { analysisId: id, value: item.result, layers: resultLayersOf(item.layers) };
       }, signal)
   };
   return { api, switches };

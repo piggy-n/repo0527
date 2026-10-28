@@ -12,7 +12,6 @@ import {
   calculationStatusText
 } from '../calculation';
 import type { IndicatorCalculation } from '../composables/useIndicatorCalculation';
-import { indicatorResultValue } from '../indicator-tree';
 import styles from './CalculationProgressPanel.module.scss';
 
 const ROW_TAGS: Readonly<Record<CalculationRowStatus, 'info' | 'primary' | 'success' | 'danger'>> = {
@@ -40,7 +39,7 @@ const renderStatus = ({ row }: Row) => (
 );
 
 const renderResult = ({ row }: Row) =>
-  row.result !== null && <span class={styles.result}>{indicatorResultValue(row.result)}</span>;
+  row.result !== null && <span class={styles.result}>{row.result}</span>;
 
 /**
  * 数据处理进度（计算页签，地图底部）：这次计算的条件、数量与进度条、每个指标的状态和结果。

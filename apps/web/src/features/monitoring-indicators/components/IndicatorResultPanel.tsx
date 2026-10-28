@@ -103,7 +103,7 @@ export const IndicatorResultPanel = defineComponent({
         <>
           <section class={styles.section}>
             <MxTitle>计算结果</MxTitle>
-            <div class={styles.value}>{state.result.value ?? '-'}</div>
+            <div class={styles.value}>{state.result.value}</div>
           </section>
           <section class={styles.section}>
             <MxTitle>行政区</MxTitle>
