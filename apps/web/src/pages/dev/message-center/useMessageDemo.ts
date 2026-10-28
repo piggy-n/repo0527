@@ -1,142 +1,102 @@
-import { ElMessage } from 'element-plus';
-import { computed, ref, shallowRef } from 'vue';
-import { type MessageAction, type Role } from './message-display';
-import { type MessageCategory, MESSAGE_SAMPLES, type MessageSample } from './samples';
+import { computed, reactive, ref, shallowRef } from 'vue';
+import type { Message } from '@/features/message-center/api';
+import type { MessageCenter } from '@/features/message-center/composables/useMessageCenter';
+import { useMessageFilters } from '@/features/message-center/composables/useMessageFilters';
+import { MESSAGE_SAMPLES } from './samples';
 
-export type DetailStyle = 'inline' | 'drill';
-export type UnavailableAction = 'disabled' | 'hidden';
 export type ListScene = 'normal' | 'loading' | 'error' | 'empty';
 export type ReadScene = 'success' | 'error' | 'slow';
-export type ReadFilter = 'all' | 'unread';
-export type CategoryFilter = MessageCategory | 'all';
 
-// 一次显示 20 条，滚到底再接着显示
-const PAGE = 20;
-
-// 演示用的"现在"，和固定数据的时间对应
-export const DEMO_NOW = new Date(2026, 9, 28, 12, 0, 0);
+export interface MessageDemoOptions {
+  // 已读失败时的提示；正式页面由全局提示显示接口给的原因
+  onReadError: (reason: string) => void;
+}
 
 const wait = (milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds));
+const asRead = (message: Message): Message => ({ ...message, read: true });
 
-/** 消息弹框原型的演示数据：已读只在内存里改，失败和慢由演示选项决定 */
-export function useMessageDemo() {
-  const role = ref<Role>('admin');
-  const detailStyle = ref<DetailStyle>('inline');
-  const unavailableAction = ref<UnavailableAction>('disabled');
-  const countReports = ref(true);
+/**
+ * 消息组件样例的拥有者：和 useMessageCenter 的形状相同，交给正式的 MessagePanel；筛选和分批用同一个 useMessageFilters，
+ * 数据是固定的，已读只在内存里改，列表状态和已读的结果由演示选项决定，不请求接口
+ */
+export function useMessageDemo({ onReadError }: MessageDemoOptions) {
   const listScene = ref<ListScene>('normal');
   const readScene = ref<ReadScene>('success');
-
-  const messages = shallowRef<MessageSample[]>(structuredClone(MESSAGE_SAMPLES));
-  const readFilter = ref<ReadFilter>('all');
-  const category = ref<CategoryFilter>('all');
-  const visibleCount = ref(PAGE);
-  const selectedId = ref<string | null>(null);
-  const pendingIds = ref<ReadonlySet<string>>(new Set());
+  const messages = shallowRef<Message[]>(structuredClone(MESSAGE_SAMPLES));
+  const reading = reactive(new Set<string>());
   const readingAll = ref(false);
-  const lastNavigation = ref('');
 
-  // 普通用户没有审批提醒
-  const ownMessages = computed(() =>
-    listScene.value === 'empty' || listScene.value === 'error' || listScene.value === 'loading'
-      ? []
-      : messages.value.filter(message => role.value === 'admin' || message.category !== 'approval')
-  );
+  const shown = computed(() => (listScene.value === 'normal' ? messages.value : []));
+  const filters = useMessageFilters(shown);
+  const unreadIds = computed(() => shown.value.filter(message => !message.read).map(message => message.id));
 
-  const filtered = computed(() =>
-    ownMessages.value.filter(message => {
-      if (readFilter.value === 'unread' && message.read) {
-        return false;
-      }
-      return category.value === 'all' || message.category === category.value;
-    })
-  );
-  const visible = computed(() => filtered.value.slice(0, visibleCount.value));
-  const hasMore = computed(() => visibleCount.value < filtered.value.length);
-  // 角标是否计入报表通知由演示选项决定
-  const countsInBadge = (message: MessageSample) => countReports.value || message.category !== 'table';
-  const unreadCount = computed(() => ownMessages.value.filter(message => !message.read && countsInBadge(message)).length);
-  const anyUnread = computed(() => ownMessages.value.some(message => !message.read));
-  const selected = computed(() => messages.value.find(message => message.id === selectedId.value));
-
-  function setFilter(read: ReadFilter, nextCategory: CategoryFilter) {
-    readFilter.value = read;
-    category.value = nextCategory;
-    visibleCount.value = PAGE;
-  }
-
-  function loadMore() {
-    if (hasMore.value) {
-      visibleCount.value += PAGE;
-    }
-  }
-
-  function replace(ids: ReadonlySet<string>) {
-    messages.value = messages.value.map(message => (ids.has(message.id) ? { ...message, read: true } : message));
+  function settle(ids: ReadonlySet<string>) {
+    messages.value = messages.value.map(message => (ids.has(message.id) ? asRead(message) : message));
   }
 
   async function request() {
     await wait(readScene.value === 'slow' ? 2000 : 300);
     if (readScene.value === 'error') {
-      throw new Error('演示：标记已读失败');
+      throw new Error('消息不存在');
     }
   }
 
-  /** 标记一条已读；成功后才去掉红点，失败时保留未读 */
-  async function markRead(message: MessageSample) {
-    if (message.read || pendingIds.value.has(message.id) || readingAll.value) {
-      return;
+  async function markRead(message: Message): Promise<boolean> {
+    if (message.read || reading.has(message.id) || readingAll.value) {
+      return false;
     }
-    pendingIds.value = new Set([...pendingIds.value, message.id]);
+    reading.add(message.id);
     try {
       await request();
-      replace(new Set([message.id]));
+      settle(new Set([message.id]));
+      return true;
     } catch {
-      ElMessage.error('标记已读失败，请重试');
+      onReadError('消息不存在');
+      return false;
     } finally {
-      const next = new Set(pendingIds.value);
-      next.delete(message.id);
-      pendingIds.value = next;
+      reading.delete(message.id);
     }
   }
 
-  /** 全部已读：只改提交时看到的未读，之后到达的新消息保持未读 */
-  async function markAllRead() {
-    if (readingAll.value) {
-      return;
+  async function markAllRead(): Promise<boolean> {
+    const ids = unreadIds.value;
+    if (ids.length === 0 || readingAll.value || reading.size > 0) {
+      return false;
     }
-    const ids = new Set(ownMessages.value.filter(message => !message.read).map(message => message.id));
     readingAll.value = true;
     try {
       await request();
-      replace(ids);
+      settle(new Set(ids));
+      return true;
     } catch {
-      ElMessage.error('全部已读失败，请重试');
+      onReadError('服务异常');
+      return false;
     } finally {
       readingAll.value = false;
     }
   }
 
-  function select(message: MessageSample) {
-    selectedId.value = message.id;
-    void markRead(message);
-  }
+  const center: MessageCenter = {
+    // 角标不受列表状态影响：正式页面里它来自单独的未读查询
+    unreadCount: computed(() => messages.value.filter(message => !message.read).length),
+    ...filters,
+    initialLoading: computed(() => listScene.value === 'loading'),
+    loadFailed: computed(() => listScene.value === 'error'),
+    retry: () => {
+      listScene.value = 'normal';
+    },
+    isReading: (id: string) => reading.has(id),
+    readingAll: computed(() => readingAll.value),
+    canReadAll: computed(() => unreadIds.value.length > 0 && !readingAll.value && reading.size === 0),
+    markRead,
+    markAllRead
+  };
 
-  function back() {
-    selectedId.value = null;
-  }
-
-  function navigate(message: MessageSample, action: MessageAction) {
-    void markRead(message);
-    lastNavigation.value = action.path;
-    selectedId.value = null;
-  }
-
-  // 模拟下一次轮询带回一条新的审批提醒
+  // 模拟下一次刷新带回一条新的审批提醒
   let incoming = 0;
   function receive() {
     incoming += 1;
-    const message: MessageSample = {
+    const message: Message = {
       id: `msg-incoming-${incoming}`,
       category: 'approval',
       title: '数据申请待审核',
@@ -148,33 +108,5 @@ export function useMessageDemo() {
     messages.value = [message, ...messages.value];
   }
 
-  return {
-    role,
-    detailStyle,
-    unavailableAction,
-    countReports,
-    listScene,
-    readScene,
-    readFilter,
-    category,
-    visible,
-    filteredCount: computed(() => filtered.value.length),
-    hasMore,
-    unreadCount,
-    anyUnread,
-    selected,
-    pendingIds,
-    readingAll,
-    lastNavigation,
-    setFilter,
-    loadMore,
-    markRead,
-    markAllRead,
-    select,
-    back,
-    navigate,
-    receive
-  };
+  return { center, listScene, readScene, receive };
 }
-
-export type MessageDemo = ReturnType<typeof useMessageDemo>;

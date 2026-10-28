@@ -4,7 +4,8 @@ import { ElButton, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSkeleton, 
 import { defineComponent, type PropType, ref, watch } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import type { Message, MessageCategory } from '../api';
-import type { CategoryFilter, MessageCenter, ReadFilter } from '../composables/useMessageCenter';
+import type { MessageCenter } from '../composables/useMessageCenter';
+import type { CategoryFilter, ReadFilter } from '../composables/useMessageFilters';
 import { CATEGORY_LABELS, messageLink, messageTime, type MessageTarget } from '../display';
 import styles from './MessagePanel.module.scss';
 

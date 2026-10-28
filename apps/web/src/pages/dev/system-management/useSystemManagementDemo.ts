@@ -1,245 +1,212 @@
-import { ElMessage } from 'element-plus';
-import { computed, onScopeDispose, reactive, ref, shallowRef } from 'vue';
-import {
-  APPLICATION_SAMPLES,
-  type ApplicationSample,
-  type AuditStatus,
-  type PrepareStatus,
-  REPORT_SAMPLES
-} from './samples';
+import { computed, reactive, ref, shallowRef } from 'vue';
+import type { Application, ApplicationFilters } from '@/features/data-application/api';
+import type {
+  ApplicationReviewOwner,
+  AuditForm,
+  AuditResult,
+  ReviewState
+} from '@/features/data-application/composables/useApplicationReview';
+import type { Report, ReportFilters } from '@/features/statistics-report/api';
+import type { RowDownloadState } from '@/shared/file-transfer/useRowDownloads';
+import { APPLICATION_SAMPLES, REPORT_SAMPLES } from './samples';
 
 export type SystemSection = 'audit' | 'reports';
-// 申请列表里的统计任务：照旧显示为审核通过、标成统计任务、由后端排除
-export type TableRowMode = 'legacy' | 'labeled' | 'hidden';
-export type DownloadFeedback = 'progress' | 'spinner';
 export type ListScene = 'normal' | 'loading' | 'refreshing' | 'error' | 'empty';
 export type SubmitScene = 'success' | 'error' | 'slow';
-export type DialogMode = 'view' | 'audit';
-
-export interface AuditFilters {
-  name: string;
-  status: AuditStatus | '';
-  prepare: PrepareStatus | '';
-}
-
-export interface AuditForm {
-  approved: boolean;
-  reason: string;
-}
 
 const wait = (milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds));
 
-const emptyFilters = (): AuditFilters => ({ name: '', status: '', prepare: '' });
+const emptyApplicationFilters = (): ApplicationFilters => ({ name: '', status: '', prepare: '' });
 
-/** 系统管理原型的演示数据：筛选、分页、审核和下载都在内存里，不请求接口 */
+function matches(application: Application, filters: ApplicationFilters): boolean {
+  const name = filters.name.trim();
+  return (
+    (name === '' || (application.name ?? '').includes(name)) &&
+    (filters.status === '' || application.status === filters.status) &&
+    (filters.prepare === '' || application.prepare === filters.prepare)
+  );
+}
+
+// 分页：页码、每页条数、总数；换条件时回到第 1 页
+function usePager() {
+  const pageNum = ref(1);
+  const pageSize = ref(20);
+  return {
+    pageNum,
+    pageSize,
+    firstSerial: computed(() => (pageNum.value - 1) * pageSize.value + 1),
+    pageOf: <T>(rows: readonly T[]): T[] =>
+      rows.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value),
+    changePageSize: (size: number) => {
+      pageSize.value = size;
+      pageNum.value = 1;
+    }
+  };
+}
+
+// 下载：一行一份进度，在内存里每 300 毫秒涨 20%，表格和弹窗共用
+function useDemoDownloads() {
+  const progress = reactive(new Map<string, number>());
+  const state: RowDownloadState = {
+    isDownloading: id => progress.has(id),
+    percentOf: id => progress.get(id) ?? null
+  };
+
+  /** 开始下载，返回是否完成；同一行下载中时直接返回 false */
+  function start(id: string): Promise<boolean> {
+    if (progress.has(id)) {
+      return Promise.resolve(false);
+    }
+    progress.set(id, 0);
+    return new Promise(resolve => {
+      const timer = setInterval(() => {
+        const next = (progress.get(id) ?? 0) + 20;
+        if (next > 100) {
+          clearInterval(timer);
+          progress.delete(id);
+          resolve(true);
+          return;
+        }
+        progress.set(id, next);
+      }, 300);
+    });
+  }
+
+  return { state, start };
+}
+
+/**
+ * 系统管理组件样例的数据与拥有者：申请、统计报表的列表和筛选，打开的申请与审核，下载进度；都是固定数据，
+ * 审核和下载只在内存里改，列表状态、审核结果由演示选项决定，不请求接口
+ */
 export function useSystemManagementDemo() {
-  const tableRowMode = ref<TableRowMode>('labeled');
-  const downloadFeedback = ref<DownloadFeedback>('progress');
+  const section = ref<SystemSection>('audit');
   const listScene = ref<ListScene>('normal');
   const submitScene = ref<SubmitScene>('success');
-  const showApplicant = ref(true);
-  const section = ref<SystemSection>('audit');
+  const applications = shallowRef<Application[]>(structuredClone(APPLICATION_SAMPLES));
+  const downloads = useDemoDownloads();
 
-  // 审核会改变状态，所以复制一份
-  const applications = ref<ApplicationSample[]>(structuredClone(APPLICATION_SAMPLES));
+  // 列表：样例按演示的列表状态显示，筛选点"查询"才生效
+  const rowsFor = <T>(rows: readonly T[]) => (listScene.value === 'normal' || listScene.value === 'refreshing' ? rows : []);
+  const auditForm = reactive(emptyApplicationFilters());
+  const auditApplied = ref(emptyApplicationFilters());
+  const auditPager = usePager();
+  const auditRows = computed(() =>
+    rowsFor(applications.value.filter(application => matches(application, auditApplied.value)))
+  );
 
-  const auditForm = reactive(emptyFilters());
-  const auditApplied = shallowRef(emptyFilters());
-  const auditPage = ref(1);
-  const reportName = ref('');
+  const reportForm = reactive<ReportFilters>({ name: '' });
   const reportApplied = ref('');
-  const reportPage = ref(1);
-  const pageSize = ref(20);
+  const reportPager = usePager();
+  const reportRows = computed(() =>
+    rowsFor(REPORT_SAMPLES.filter(report => report.name.includes(reportApplied.value)))
+  );
 
-  const filteredApplications = computed(() => {
-    const { name, status, prepare } = auditApplied.value;
-    return applications.value.filter(row => {
-      if (tableRowMode.value === 'hidden' && row.status === 'table') {
-        return false;
-      }
-      if (name && !row.name?.includes(name)) {
-        return false;
-      }
-      if (status && row.status !== status && !(status === 'approved' && row.status === 'table')) {
-        return false;
-      }
-      return !prepare || row.prepare === prepare;
-    });
-  });
-
-  const filteredReports = computed(() => REPORT_SAMPLES.filter(row => row.name.includes(reportApplied.value)));
-
-  const hasRows = computed(() => listScene.value === 'normal' || listScene.value === 'refreshing');
-  const initialLoading = computed(() => listScene.value === 'loading');
-  const refreshing = computed(() => listScene.value === 'refreshing');
-  const error = computed(() => listScene.value === 'error');
-
-  function pageOf<T>(rows: T[], page: number): T[] {
-    if (!hasRows.value) {
-      return [];
+  const audit = {
+    form: auditForm,
+    pager: auditPager,
+    rows: computed(() => auditPager.pageOf(auditRows.value)),
+    total: computed(() => auditRows.value.length),
+    search: () => {
+      auditApplied.value = { ...auditForm };
+      auditPager.pageNum.value = 1;
+    },
+    reset: () => {
+      Object.assign(auditForm, emptyApplicationFilters());
+      auditApplied.value = emptyApplicationFilters();
+      auditPager.pageNum.value = 1;
     }
-    const start = (page - 1) * pageSize.value;
-    return rows.slice(start, start + pageSize.value);
-  }
+  };
 
-  const auditRows = computed(() => pageOf(filteredApplications.value, auditPage.value));
-  const auditTotal = computed(() => (hasRows.value ? filteredApplications.value.length : 0));
-  const reportRows = computed(() => pageOf(filteredReports.value, reportPage.value));
-  const reportTotal = computed(() => (hasRows.value ? filteredReports.value.length : 0));
+  const reports = {
+    form: reportForm,
+    pager: reportPager,
+    rows: computed<Report[]>(() => reportPager.pageOf(reportRows.value)),
+    total: computed(() => reportRows.value.length),
+    search: () => {
+      reportApplied.value = reportForm.name.trim();
+      reportPager.pageNum.value = 1;
+    },
+    reset: () => {
+      reportForm.name = '';
+      reportApplied.value = '';
+      reportPager.pageNum.value = 1;
+    }
+  };
 
-  function searchAudit() {
-    auditApplied.value = { ...auditForm };
-    auditPage.value = 1;
-  }
-
-  function resetAudit() {
-    Object.assign(auditForm, emptyFilters());
-    searchAudit();
-  }
-
-  function searchReports() {
-    reportApplied.value = reportName.value.trim();
-    reportPage.value = 1;
-  }
-
-  function resetReports() {
-    reportName.value = '';
-    searchReports();
-  }
-
-  function changePageSize(size: number) {
-    pageSize.value = size;
-    auditPage.value = 1;
-    reportPage.value = 1;
-  }
-
-  // 正式页面里打开的申请是路由的查询参数 ?apply=<id>，这里用一个 ref 代替
+  // 打开的申请：正式页面里是路由的查询参数 apply；从消息打开时先读取一会儿，不先用列表的数据
   const openId = ref<string | null>(null);
   const detailLoading = ref(false);
-  const submitting = ref(false);
   const form = reactive<AuditForm>({ approved: true, reason: '' });
+  const pending = ref(false);
+  const opened = computed(() => applications.value.find(application => application.id === openId.value) ?? null);
 
-  const current = computed(() => applications.value.find(row => row.id === openId.value));
-  // 弹窗的模式由申请当前的状态决定，不由入口决定：已经审核过的申请从"去审核"进来也只能查看
-  const mode = computed<DialogMode>(() => (current.value?.status === 'pending' ? 'audit' : 'view'));
+  const state = computed<ReviewState>(() => {
+    if (openId.value === null) {
+      return 'closed';
+    }
+    if (detailLoading.value) {
+      return 'loading';
+    }
+    return opened.value ? 'ready' : 'missing';
+  });
 
-  // 从消息进来时要先读详情，用定时器模拟读取的耗时；再次打开时作废上一次
-  let loadTimer: number | undefined;
-
-  function open(id: string, loadMilliseconds = 0) {
+  async function open(id: string, loadMilliseconds = 0) {
     openId.value = id;
-    form.approved = true;
-    form.reason = '';
-    window.clearTimeout(loadTimer);
-    detailLoading.value = loadMilliseconds > 0;
+    Object.assign(form, { approved: true, reason: '' });
     if (loadMilliseconds > 0) {
-      loadTimer = window.setTimeout(() => {
-        detailLoading.value = false;
-      }, loadMilliseconds);
+      detailLoading.value = true;
+      await wait(loadMilliseconds);
+      detailLoading.value = false;
     }
   }
 
   function close() {
-    if (!submitting.value) {
-      openId.value = null;
-    }
+    openId.value = null;
   }
 
-  async function submit() {
-    const target = current.value;
-    if (!target || submitting.value) {
-      return;
+  function settle(id: string, approved: boolean, reason: string) {
+    applications.value = applications.value.map(application =>
+      application.id === id ? settled(application, approved, reason) : application
+    );
+  }
+
+  async function submit(): Promise<AuditResult> {
+    const current = opened.value;
+    if (!current || current.status !== 'pending' || pending.value) {
+      return null;
     }
-    submitting.value = true;
+    pending.value = true;
     try {
-      await wait(submitScene.value === 'slow' ? 3000 : 600);
+      await wait(submitScene.value === 'slow' ? 3000 : 400);
       if (submitScene.value === 'error') {
-        ElMessage.error('演示：审核提交失败，请重试');
-        return;
+        return { kind: 'error', message: '审核提交失败，请重试' };
       }
-      if (form.approved) {
-        target.status = 'approved';
-        target.prepare = 'processing';
-      } else {
-        target.status = 'rejected';
-        target.reason = form.reason.trim();
-      }
-      ElMessage.success(form.approved ? '已审核通过，数据开始准备' : '已退回申请');
-      openId.value = null;
+      settle(current.id, form.approved, form.reason.trim());
+      return { kind: 'success', id: current.id, approved: form.approved };
     } finally {
-      submitting.value = false;
+      pending.value = false;
     }
   }
 
-  // 下载的进度按行记录；正式页面由 shared/file-transfer 报告真实进度
-  const downloads = ref<Record<string, number>>({});
-  const timers = new Map<string, number>();
-
-  function download(id: string) {
-    if (timers.has(id)) {
-      return;
-    }
-    downloads.value = { ...downloads.value, [id]: 0 };
-    const timer = window.setInterval(() => {
-      const percent = Math.min(100, (downloads.value[id] ?? 0) + 6 + Math.floor(Math.random() * 6));
-      if (percent < 100) {
-        downloads.value = { ...downloads.value, [id]: percent };
-        return;
-      }
-      window.clearInterval(timer);
-      timers.delete(id);
-      const { [id]: _done, ...rest } = downloads.value;
-      downloads.value = rest;
-      ElMessage.success('下载完成，已交给浏览器保存');
-    }, 200);
-    timers.set(id, timer);
-  }
-
-  const downloadPercent = (id: string): number | undefined => downloads.value[id];
-
-  onScopeDispose(() => {
-    for (const timer of timers.values()) {
-      window.clearInterval(timer);
-    }
-    window.clearTimeout(loadTimer);
-  });
-
-  return {
-    tableRowMode,
-    downloadFeedback,
-    listScene,
-    submitScene,
-    showApplicant,
-    section,
-    auditForm,
-    auditPage,
-    auditRows,
-    auditTotal,
-    reportName,
-    reportPage,
-    reportRows,
-    reportTotal,
-    pageSize,
-    initialLoading,
-    refreshing,
-    error,
-    searchAudit,
-    resetAudit,
-    searchReports,
-    resetReports,
-    changePageSize,
-    openId,
-    current,
-    mode,
-    detailLoading,
-    submitting,
+  const review: ApplicationReviewOwner = {
+    application: opened,
+    state,
+    mode: computed(() => (opened.value?.status === 'pending' ? 'audit' : 'view')),
     form,
-    open,
-    close,
+    pending,
     submit,
-    download,
-    downloadPercent
+    retry: () => undefined
   };
+
+  return { section, listScene, submitScene, audit, reports, review, open, close, downloads };
+}
+
+// 审核以后的申请：通过的开始准备数据，不通过的记下原因
+function settled(application: Application, approved: boolean, reason: string): Application {
+  return approved
+    ? { ...application, status: 'approved', reason: '', prepare: 'processing' }
+    : { ...application, status: 'rejected', reason };
 }
 
 export type SystemManagementDemo = ReturnType<typeof useSystemManagementDemo>;

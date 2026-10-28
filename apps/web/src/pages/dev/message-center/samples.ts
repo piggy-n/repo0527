@@ -1,25 +1,7 @@
-// 消息弹框原型的固定数据：字段按 2026-10-27 只读核对的真实接口整理（docs/migration.md），人名是虚构的。
+import type { Message } from '@/features/message-center/api';
+
+// 消息组件样例的固定数据：字段按 2026-10-27 只读核对的真实接口整理（docs/migration.md），人名是虚构的。
 // 真实接口一次返回全部消息（当时 505 条，497 条是报表通知），没有分页和未读数接口
-
-export type MessageCategory = 'approval' | 'resource' | 'table';
-
-export interface MessageSample {
-  id: string;
-  category: MessageCategory;
-  title: string;
-  content: string;
-  // 接口给的是本地时间的字符串 YYYY-MM-DD HH:mm:ss
-  createdAt: string;
-  read: boolean;
-  // 接口字段叫 taskId，实际是申请的 apply_id
-  applyId?: string;
-}
-
-export const CATEGORY_LABELS: Record<MessageCategory, string> = {
-  approval: '审批提醒',
-  resource: '资源消息',
-  table: '统计报表'
-};
 
 const REPORT_NAMES = [
   '基本统计报表_区级',
@@ -36,7 +18,7 @@ const REPORT_NAMES = [
 
 const pad = (value: number) => String(value).padStart(2, '0');
 
-const businessMessages: MessageSample[] = [
+const businessMessages: Message[] = [
   {
     id: 'msg-approval-1',
     category: 'approval',
@@ -94,20 +76,21 @@ const businessMessages: MessageSample[] = [
 ];
 
 // 报表通知每次统计任务完成都会发一条，数量远多于业务消息
-const reportMessages: MessageSample[] = Array.from({ length: 140 }, (_, index) => {
+const reportMessages: Message[] = Array.from({ length: 140 }, (_, index) => {
   const day = 14 - Math.floor(index / 12);
   const minute = 59 - (index % 12) * 4;
   return {
     id: `msg-table-${index + 1}`,
     category: 'table',
     title: '报表分析通知',
-    content: REPORT_NAMES[index % REPORT_NAMES.length],
+    content: REPORT_NAMES[index % REPORT_NAMES.length] ?? '',
     createdAt: `2026-${day > 0 ? '10' : '09'}-${pad(day > 0 ? day : day + 30)} 14:${pad(minute)}:00`,
-    read: index % 3 !== 0
+    read: index % 3 !== 0,
+    applyId: null
   };
 });
 
 /** 按时间倒序，和接口一致 */
-export const MESSAGE_SAMPLES: MessageSample[] = [...businessMessages, ...reportMessages].toSorted((a, b) =>
+export const MESSAGE_SAMPLES: Message[] = [...businessMessages, ...reportMessages].toSorted((a, b) =>
   b.createdAt.localeCompare(a.createdAt)
 );

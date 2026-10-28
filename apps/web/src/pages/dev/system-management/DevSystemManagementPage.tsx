@@ -1,30 +1,19 @@
-import { RefreshLeft, Search } from '@element-plus/icons-vue';
 import { MxPanel, MxSplitLayout } from '@yzt/ui';
-import { ElButton, ElFormItem, ElInput, ElOption, ElPagination, ElSelect, ElSwitch } from 'element-plus';
-import { computed, defineComponent, type VNode } from 'vue';
-import { QueryForm } from '@/shared/query-form/QueryForm';
-import { ApplicationDialogPreview } from './ApplicationDialogPreview';
-import { ApplicationTablePreview } from './ApplicationTablePreview';
+import { ElButton, ElMessage, ElOption, ElPagination, ElSelect } from 'element-plus';
+import { computed, defineComponent } from 'vue';
+import { ApplicationDialog } from '@/features/data-application/components/ApplicationDialog';
+import { ApplicationFilterBar } from '@/features/data-application/components/ApplicationFilterBar';
+import { ApplicationTable } from '@/features/data-application/components/ApplicationTable';
+import { ReportFilterBar } from '@/features/statistics-report/components/ReportFilterBar';
+import { ReportTable } from '@/features/statistics-report/components/ReportTable';
+import { RouteName } from '@/shared/router/route-names';
+import { SideNav, type SideNavItem } from '@/shared/side-nav/SideNav';
 import styles from './preview.module.scss';
-import { ReportTablePreview } from './ReportTablePreview';
-import { AUDIT_STATUS_OPTIONS, type AuditStatus, PREPARE_STATUS_OPTIONS, type PrepareStatus } from './samples';
-import { SystemMenuPreview } from './SystemMenuPreview';
-import {
-  type DownloadFeedback,
-  type ListScene,
-  type SubmitScene,
-  type TableRowMode,
-  useSystemManagementDemo
-} from './useSystemManagementDemo';
+import { type ListScene, type SubmitScene, type SystemSection, useSystemManagementDemo } from './useSystemManagementDemo';
 
-const TABLE_ROW_MODES: [TableRowMode, string][] = [
-  ['labeled', '标成"统计任务"'],
-  ['legacy', '照旧显示为审核通过'],
-  ['hidden', '后端排除，不显示']
-];
-const DOWNLOAD_FEEDBACKS: [DownloadFeedback, string][] = [
-  ['progress', '行内百分比'],
-  ['spinner', '按钮转圈']
+const SECTIONS: [SystemSection, string][] = [
+  ['audit', '资源审核'],
+  ['reports', '统计报表']
 ];
 const LIST_SCENES: [ListScene, string][] = [
   ['normal', '正常'],
@@ -39,11 +28,13 @@ const SUBMIT_SCENES: [SubmitScene, string][] = [
   ['slow', '3 秒后成功']
 ];
 
-const PAGE_SIZES = [10, 20, 50, 100];
+// 和正式页面相同；菜单项链接到真实的页面
+const NAV_ITEMS: SideNavItem[] = [
+  { label: '资源审核', icon: 'menu-audit', route: RouteName.systemManagement },
+  { label: '统计报表', icon: 'menu-report', route: RouteName.systemManagementReports }
+];
 
-// 输入法选字时按的回车只是确认候选词，不查询
-const isSubmitKey = (event: Event | KeyboardEvent) =>
-  event instanceof KeyboardEvent && event.key === 'Enter' && !event.isComposing;
+const PAGE_SIZES = [10, 20, 50, 100];
 
 // 演示选项：一个标签加一个小号下拉
 function renderOption<T extends string>(label: string, value: T, options: [T, string][], update: (value: T) => void) {
@@ -59,42 +50,107 @@ function renderOption<T extends string>(label: string, value: T, options: [T, st
   );
 }
 
-/** 系统管理的交互原型：真实的分栏布局、面板、查询表单和 Element 组件，数据是固定的，不请求接口 */
+/** 系统管理的组件样例：和正式页面相同的布局与正式组件（筛选栏、表格、详情与审核弹窗、分页），数据固定，不请求接口 */
 export const DevSystemManagementPage = defineComponent({
   name: 'DevSystemManagementPage',
   setup() {
     const demo = useSystemManagementDemo();
     const address = computed(() => {
       const path = demo.section.value === 'audit' ? '/system-management' : '/system-management/statistical-report';
-      return demo.openId.value ? `${path}?apply=${demo.openId.value}` : path;
+      const id = demo.review.state.value === 'closed' ? null : demo.review.application.value?.id;
+      return id ? `${path}?apply=${id}` : path;
     });
 
-    function renderControls() {
+    async function download(id: string) {
+      if (await demo.downloads.start(id)) {
+        ElMessage.success('已交给浏览器下载');
+      }
+    }
+
+    function renderPagination(pager: typeof demo.audit.pager, total: number) {
       return (
-        <div class={styles.controls}>
-          {renderOption('统计任务', demo.tableRowMode.value, TABLE_ROW_MODES, value => {
-            demo.tableRowMode.value = value;
-          })}
-          {renderOption('下载反馈', demo.downloadFeedback.value, DOWNLOAD_FEEDBACKS, value => {
-            demo.downloadFeedback.value = value;
-          })}
-          {renderOption('列表状态', demo.listScene.value, LIST_SCENES, value => (demo.listScene.value = value))}
-          {renderOption('审核提交', demo.submitScene.value, SUBMIT_SCENES, value => (demo.submitScene.value = value))}
-          <div class={styles.control}>
-            <span>申请人列</span>
-            <ElSwitch
-              modelValue={demo.showApplicant.value}
-              onUpdate:modelValue={(value: string | number | boolean) => (demo.showApplicant.value = value === true)}
-              size="small"
-            />
-          </div>
-          <ElButton size="small" onClick={() => demo.open('apply-001', 1000)}>
-            从消息打开待审核的申请
-          </ElButton>
-          <ElButton size="small" onClick={() => demo.open('apply-006', 1000)}>
-            从消息打开已退回的申请
-          </ElButton>
-        </div>
+        <ElPagination
+          class="pagination-wrap"
+          currentPage={pager.pageNum.value}
+          pageSize={pager.pageSize.value}
+          total={total}
+          pageSizes={PAGE_SIZES}
+          pagerCount={5}
+          layout="total, sizes, prev, pager, next, jumper"
+          onUpdate:current-page={(page: number) => {
+            pager.pageNum.value = page;
+          }}
+          onUpdate:page-size={pager.changePageSize}
+        />
+      );
+    }
+
+    function renderAudit() {
+      const { audit, listScene } = demo;
+      return (
+        <MxPanel headerTone="muted" title="资源审核">
+          {{
+            default: () => [
+              <ApplicationFilterBar
+                class={styles.filters}
+                model={audit.form}
+                onSearch={audit.search}
+                onReset={audit.reset}
+              />,
+              <ApplicationTable
+                applications={audit.rows.value}
+                firstSerial={audit.pager.firstSerial.value}
+                initialLoading={listScene.value === 'loading'}
+                refreshing={listScene.value === 'refreshing'}
+                error={listScene.value === 'error'}
+                onRetry={() => {
+                  listScene.value = 'normal';
+                }}
+                onOpen={application => void demo.open(application.id)}
+                downloads={demo.downloads.state}
+                onDownload={application => void download(application.id)}
+              />,
+              <ApplicationDialog
+                owner={demo.review}
+                downloads={demo.downloads.state}
+                onClose={demo.close}
+                onDownload={application => void download(application.id)}
+              />
+            ],
+            footer: () => renderPagination(audit.pager, audit.total.value)
+          }}
+        </MxPanel>
+      );
+    }
+
+    function renderReports() {
+      const { reports, listScene } = demo;
+      return (
+        <MxPanel headerTone="muted" title="统计报表">
+          {{
+            default: () => [
+              <ReportFilterBar
+                class={styles.filters}
+                model={reports.form}
+                onSearch={reports.search}
+                onReset={reports.reset}
+              />,
+              <ReportTable
+                reports={reports.rows.value}
+                firstSerial={reports.pager.firstSerial.value}
+                initialLoading={listScene.value === 'loading'}
+                refreshing={listScene.value === 'refreshing'}
+                error={listScene.value === 'error'}
+                onRetry={() => {
+                  listScene.value = 'normal';
+                }}
+                downloads={demo.downloads.state}
+                onDownload={report => void download(report.id)}
+              />
+            ],
+            footer: () => renderPagination(reports.pager, reports.total.value)
+          }}
+        </MxPanel>
       );
     }
 
@@ -102,176 +158,32 @@ export const DevSystemManagementPage = defineComponent({
     function renderHeader() {
       return (
         <header class={styles.header}>
-          <h1>系统管理 · 交互原型</h1>
+          <h1>系统管理 · 组件样例</h1>
           <p class={styles.hint}>
-            布局、面板、查询表单、表格和弹窗都是真实组件；数据是按真实接口整理的固定数据，审核和下载只在内存里演示。
-            正式页面里栏目是两个路由，打开的申请是查询参数，当前地址：<code>{address.value}</code>
+            布局、页面内菜单、筛选栏、表格、详情与审核弹窗都是正式组件；数据固定，审核和下载只在内存里演示。左侧菜单链接到真实页面，
+            这里用"栏目"切换。正式页面的地址：<code>{address.value}</code>
           </p>
           <details class={styles.options} open>
             <summary>演示选项</summary>
-            {renderControls()}
+            <div class={styles.controls}>
+              {renderOption('栏目', demo.section.value, SECTIONS, value => {
+                demo.section.value = value;
+              })}
+              {renderOption('列表状态', demo.listScene.value, LIST_SCENES, value => {
+                demo.listScene.value = value;
+              })}
+              {renderOption('审核提交', demo.submitScene.value, SUBMIT_SCENES, value => {
+                demo.submitScene.value = value;
+              })}
+              <ElButton size="small" onClick={() => void demo.open('apply-001', 1000)}>
+                从消息打开待审核的申请
+              </ElButton>
+              <ElButton size="small" onClick={() => void demo.open('apply-006', 1000)}>
+                从消息打开已退回的申请
+              </ElButton>
+            </div>
           </details>
         </header>
-      );
-    }
-
-    function renderAuditFilters() {
-      const form = demo.auditForm;
-      return (
-        <QueryForm class={styles.filters} labelChars={6}>
-          {{
-            default: () => [
-              <ElFormItem label="数据名称">
-                <ElInput
-                  modelValue={form.name}
-                  onUpdate:modelValue={(value: string) => (form.name = value)}
-                  placeholder="请输入数据名称"
-                  clearable
-                  onKeydown={(event: Event | KeyboardEvent) => {
-                    if (isSubmitKey(event)) {
-                      demo.searchAudit();
-                    }
-                  }}
-                />
-              </ElFormItem>,
-              <ElFormItem label="审核状态">
-                <ElSelect
-                  modelValue={form.status}
-                  onUpdate:modelValue={(value: AuditStatus | undefined) => (form.status = value ?? '')}
-                  placeholder="全部"
-                  clearable
-                >
-                  {AUDIT_STATUS_OPTIONS.map(([value, label]) => (
-                    <ElOption key={value} value={value} label={label} />
-                  ))}
-                </ElSelect>
-              </ElFormItem>,
-              <ElFormItem label="数据准备状态">
-                <ElSelect
-                  modelValue={form.prepare}
-                  onUpdate:modelValue={(value: PrepareStatus | undefined) => (form.prepare = value ?? '')}
-                  placeholder="全部"
-                  clearable
-                >
-                  {PREPARE_STATUS_OPTIONS.map(([value, label]) => (
-                    <ElOption key={value} value={value} label={label} />
-                  ))}
-                </ElSelect>
-              </ElFormItem>
-            ],
-            actions: () => [
-              <ElButton type="primary" icon={Search} onClick={demo.searchAudit}>
-                查询
-              </ElButton>,
-              <ElButton icon={RefreshLeft} onClick={demo.resetAudit}>
-                重置
-              </ElButton>
-            ]
-          }}
-        </QueryForm>
-      );
-    }
-
-    function renderReportFilters() {
-      return (
-        <QueryForm class={styles.filters} labelChars={4}>
-          {{
-            default: () => [
-              <ElFormItem label="报表名称">
-                <ElInput
-                  modelValue={demo.reportName.value}
-                  onUpdate:modelValue={(value: string) => (demo.reportName.value = value)}
-                  placeholder="请输入报表名称"
-                  clearable
-                  onKeydown={(event: Event | KeyboardEvent) => {
-                    if (isSubmitKey(event)) {
-                      demo.searchReports();
-                    }
-                  }}
-                />
-              </ElFormItem>
-            ],
-            actions: () => [
-              <ElButton type="primary" icon={Search} onClick={demo.searchReports}>
-                查询
-              </ElButton>,
-              <ElButton icon={RefreshLeft} onClick={demo.resetReports}>
-                重置
-              </ElButton>
-            ]
-          }}
-        </QueryForm>
-      );
-    }
-
-    function renderPagination(page: number, total: number, update: (page: number) => void): VNode {
-      return (
-        <ElPagination
-          class={styles.pagination}
-          currentPage={page}
-          pageSize={demo.pageSize.value}
-          total={total}
-          pageSizes={PAGE_SIZES}
-          pagerCount={5}
-          layout="total, sizes, prev, pager, next, jumper"
-          onUpdate:current-page={update}
-          onUpdate:page-size={demo.changePageSize}
-        />
-      );
-    }
-
-    function renderAudit() {
-      const firstSerial = (demo.auditPage.value - 1) * demo.pageSize.value + 1;
-      return (
-        <MxPanel headerTone="muted" title="资源审核">
-          {{
-            default: () => [
-              renderAuditFilters(),
-              <ApplicationTablePreview
-                rows={demo.auditRows.value}
-                firstSerial={firstSerial}
-                showApplicant={demo.showApplicant.value}
-                tableRowMode={demo.tableRowMode.value}
-                downloadFeedback={demo.downloadFeedback.value}
-                downloadPercent={demo.downloadPercent}
-                initialLoading={demo.initialLoading.value}
-                refreshing={demo.refreshing.value}
-                error={demo.error.value}
-                onOpen={row => demo.open(row.id)}
-                onDownload={row => demo.download(row.id)}
-                onRetry={() => (demo.listScene.value = 'normal')}
-              />
-            ],
-            footer: () =>
-              renderPagination(demo.auditPage.value, demo.auditTotal.value, page => (demo.auditPage.value = page))
-          }}
-        </MxPanel>
-      );
-    }
-
-    function renderReports() {
-      const firstSerial = (demo.reportPage.value - 1) * demo.pageSize.value + 1;
-      return (
-        <MxPanel headerTone="muted" title="统计报表">
-          {{
-            default: () => [
-              renderReportFilters(),
-              <ReportTablePreview
-                rows={demo.reportRows.value}
-                firstSerial={firstSerial}
-                downloadFeedback={demo.downloadFeedback.value}
-                downloadPercent={demo.downloadPercent}
-                initialLoading={demo.initialLoading.value}
-                refreshing={demo.refreshing.value}
-                error={demo.error.value}
-                onDownload={row => demo.download(row.id)}
-                onRetry={() => (demo.listScene.value = 'normal')}
-              />
-            ],
-            footer: () =>
-              renderPagination(demo.reportPage.value, demo.reportTotal.value, page => (demo.reportPage.value = page))
-          }}
-        </MxPanel>
       );
     }
 
@@ -283,14 +195,13 @@ export const DevSystemManagementPage = defineComponent({
             {{
               aside: () => (
                 <MxPanel flush>
-                  <SystemMenuPreview active={demo.section.value} onSelect={section => (demo.section.value = section)} />
+                  <SideNav label="系统管理" items={NAV_ITEMS} />
                 </MxPanel>
               ),
               default: () => (demo.section.value === 'audit' ? renderAudit() : renderReports())
             }}
           </MxSplitLayout>
         </div>
-        <ApplicationDialogPreview demo={demo} />
       </main>
     );
   }

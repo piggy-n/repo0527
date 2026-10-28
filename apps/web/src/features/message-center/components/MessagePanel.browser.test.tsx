@@ -6,7 +6,8 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import { required } from '@/shared/testing/required';
 import type { Message } from '../api';
-import { MESSAGE_BATCH, useMessageCenter } from '../composables/useMessageCenter';
+import { useMessageCenter } from '../composables/useMessageCenter';
+import { MESSAGE_BATCH } from '../composables/useMessageFilters';
 import { messageKeys } from '../queries';
 import { MessagePanel } from './MessagePanel';
 

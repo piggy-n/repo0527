@@ -16,7 +16,8 @@ import {
   resourceMessage,
   tableMessage
 } from '../test-data';
-import { MESSAGE_BATCH, type MessageCenter, useMessageCenter } from './useMessageCenter';
+import { type MessageCenter, useMessageCenter } from './useMessageCenter';
+import { MESSAGE_BATCH } from './useMessageFilters';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
