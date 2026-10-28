@@ -34,6 +34,9 @@ export const test = base.extend<{ localBackend: undefined }>({
       } else if (url.pathname === '/backend/resource-map/base/tree' && request.method() === 'GET') {
         // 空目录不请求业务瓦片，地图仍用真实引擎和构建内的省界 GeoJSON
         data = [];
+      } else if (url.pathname === '/backend/api/message/list' && request.method() === 'POST') {
+        // 顶栏的消息按钮进入应用就取未读数；没有消息时不显示角标
+        data = [];
       } else if (url.pathname === '/backend/file/page' && request.method() === 'GET') {
         data = { content: [], pageNo: 1, pageSize: 10, totalElements: 0, totalPages: 0 };
       } else {
