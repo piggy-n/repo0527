@@ -9,6 +9,7 @@ import { arrowStep } from '../keyboard';
 import { type CheckedLayer, checkedDropTarget, checkedLayers, moveTarget } from '../layer-panel';
 import { type ResourceStatus, type ResourceStatusLevel, resourceStatuses } from '../resource-status';
 import styles from './CheckedLayerList.module.scss';
+import { focusMoveButton, LayerMoveButtons, type MoveDirection } from './LayerMoveButtons';
 import { LayerOpacity } from './LayerOpacity';
 
 const HANDLE = '[data-drag-handle="checked"]';
@@ -56,8 +57,8 @@ function renderStatus(statuses: readonly ResourceStatus[]) {
 }
 
 /**
- * "已选择图层"（ADR 0053 第 6 节）：按叠放顺序从上到下，拖动手柄调整叠放顺序（上层优先显示），交给拥有者的 move；
- * 每一行是年份、名称、状态图标、透明度、取消勾选。状态只显示最严重的图标，悬停时列出全部（ADR 0059）
+ * "已选择图层"（ADR 0053 第 6 节）：按叠放顺序从上到下，拖动手柄和上移、下移（ADR 0096）调整叠放顺序（上层优先显示），
+ * 交给拥有者的 move；每一行是年份、名称、状态图标、透明度、上移下移、取消勾选。状态只显示最严重的图标，悬停时列出全部（ADR 0059）
  */
 export const CheckedLayerList = defineComponent({
   name: 'CheckedLayerList',
@@ -99,6 +100,13 @@ export const CheckedLayerList = defineComponent({
       await nextTick();
       const handles = list.value?.querySelectorAll<HTMLElement>(HANDLE) ?? [];
       [...handles].find(handle => handle.dataset.code === code)?.focus();
+    };
+
+    // 上移、下移一位；移动后焦点回到这一行的按钮上
+    const onMoveButton = async (code: string, direction: MoveDirection) => {
+      moveTo(code, moveTarget(props.layers.state.value, code, direction));
+      await nextTick();
+      focusMoveButton(list.value?.querySelector(`[data-layer="${code}"]`), direction);
     };
 
     const renderYear = (layer: CheckedLayer) =>
@@ -155,6 +163,13 @@ export const CheckedLayerList = defineComponent({
               name={layer.name}
               modelValue={layer.opacity}
               onUpdate:modelValue={value => owner.setOpacity(layer.code, value)}
+            />
+            <LayerMoveButtons
+              name={layer.name}
+              order="stacking"
+              canUp={index > 0}
+              canDown={index < items.value.length - 1}
+              onMove={direction => void onMoveButton(layer.code, direction)}
             />
             <button
               type="button"

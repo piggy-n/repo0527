@@ -209,10 +209,12 @@ describe('ResourceLayerPanel', () => {
     expect(wrapper.get(`${land} .el-checkbox__input`).classes()).toContain('is-indeterminate');
   });
 
-  it('搜索：只显示命中的资源并展开它的路径，不能拖动；没有命中时提示', async () => {
+  it('搜索：只显示命中的资源并展开它的路径，不能拖动、上移下移；没有命中时提示', async () => {
     const { wrapper } = await mountPanel();
     const input = wrapper.get('input[placeholder="搜索资源"]');
+    const treeMoves = () => wrapper.findAll('[data-resource] [data-move], [data-category] [data-move]');
     expect(wrapper.findAll('button[title="调整目录顺序"]').length).toBeGreaterThan(0);
+    expect(treeMoves().length).toBeGreaterThan(0);
 
     const rootList = wrapper.get('[data-resource-layer-panel] ul').element;
     expect(rootList instanceof HTMLElement && SortableJS.get(rootList)?.option('disabled')).toBe(false);
@@ -220,6 +222,7 @@ describe('ResourceLayerPanel', () => {
     await input.setValue('坑塘');
     expect(visibleResources(wrapper)).toStrictEqual(['szy_kt']);
     expect(wrapper.findAll('button[title="调整目录顺序"]')).toHaveLength(0);
+    expect(treeMoves()).toHaveLength(0);
     expect(rootList instanceof HTMLElement && SortableJS.get(rootList)?.option('disabled')).toBe(true);
 
     await input.setValue('没有这个');
@@ -243,6 +246,61 @@ describe('ResourceLayerPanel', () => {
 
     expect(checkedOrder(wrapper)).toStrictEqual(stacking);
     expect(owner.state.value.order.slice(0, 3)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
+  });
+
+  it('目录顺序：拖动手柄在复选框前面，行末的上移、下移在同一个分类下换位，不改叠放顺序；到头时不可用，焦点留在这一行（ADR 0096）', async () => {
+    const { wrapper, owner, order } = await mountPanel(CATALOG, true);
+    owner.setChecked('csxhjctb_hydl', true);
+    await nextTick();
+    const stacking = checkedOrder(wrapper);
+    const row = wrapper.get('[data-resource="bgdc_dltb"] > div').element;
+    const parts = [...row.children].map(child =>
+      child.querySelector('input[type="checkbox"]') ? 'checkbox' : (child.getAttribute('aria-label') ?? '')
+    );
+    expect(parts.indexOf('调整目录顺序：地类图斑')).toBe(parts.indexOf('checkbox') - 1);
+    expect(button(wrapper, '目录里上移：地类图斑').attributes('disabled')).toBeDefined();
+    expect(button(wrapper, '目录里下移：水域线层').attributes('disabled')).toBeDefined();
+
+    await button(wrapper, '目录里下移：地类图斑').trigger('click');
+    expect(visibleResources(wrapper)).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl']);
+    expect(order.order.value).toStrictEqual({ [LAND]: ['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl'] });
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('目录里下移：地类图斑');
+
+    // 到了最后一位：下移不可用，焦点换到上移
+    await button(wrapper, '目录里下移：地类图斑').trigger('click');
+    expect(visibleResources(wrapper)).toStrictEqual(['bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb']);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('目录里上移：地类图斑');
+
+    // 分类同样只在同一个父节点下换位
+    await button(wrapper, '目录里下移：土地资源').trigger('click');
+    expect(order.order.value['基础库']).toStrictEqual(['基础库 / 水资源', LAND]);
+
+    expect(checkedOrder(wrapper)).toStrictEqual(stacking);
+    expect(owner.state.value.order.slice(0, 3)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
+  });
+
+  it('"已选择图层"：行末的上移、下移调整叠放顺序，越过没勾选的资源，不改目录顺序；到头时不可用（ADR 0096）', async () => {
+    const { wrapper, owner, order } = await mountPanel(CATALOG, true);
+    // 叠放顺序是地类图斑、村级调查区（没勾选）、水域线层、坑塘
+    owner.setChecked('csxhjctb_hydl', true);
+    owner.setChecked('szy_kt', true);
+    await nextTick();
+    expect(button(wrapper, '上移一层：地类图斑').attributes('disabled')).toBeDefined();
+    expect(button(wrapper, '下移一层：坑塘').attributes('disabled')).toBeDefined();
+
+    await button(wrapper, '上移一层：水域线层').trigger('click');
+    expect(checkedOrder(wrapper)).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'szy_kt']);
+    expect(owner.state.value.order).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq', 'szy_kt']);
+    // 到了最上面：上移不可用，焦点换到下移
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('下移一层：水域线层');
+
+    await button(wrapper, '下移一层：地类图斑').trigger('click');
+    expect(checkedOrder(wrapper)).toStrictEqual(['csxhjctb_hydl', 'szy_kt', 'bgdc_dltb']);
+    expect(owner.state.value.order).toStrictEqual(['csxhjctb_hydl', 'bgdc_cjdcq', 'szy_kt', 'bgdc_dltb']);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('上移一层：地类图斑');
+
+    expect(visibleResources(wrapper)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
+    expect(order.order.value).toStrictEqual({});
   });
 
   it('"已选择图层"：拖动或在手柄上按方向键调整叠放顺序，不改目录顺序', async () => {

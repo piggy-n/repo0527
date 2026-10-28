@@ -9,6 +9,7 @@ import type { ResourceLayers } from '../composables/useResourceLayers';
 import { arrowStep } from '../keyboard';
 import { nodeKey, type PanelNode } from '../layer-panel';
 import styles from './ResourceTreeList.module.scss';
+import { focusMoveButton, LayerMoveButtons, type MoveDirection } from './LayerMoveButtons';
 import { LayerOpacity } from './LayerOpacity';
 
 const GEOMETRY_ICONS: Readonly<Record<ResourceGeometry, IconName>> = {
@@ -19,8 +20,8 @@ const GEOMETRY_ICONS: Readonly<Record<ResourceGeometry, IconName>> = {
 
 /**
  * 目录树里一个父节点下的子节点（ADR 0053 第 6 节）：分类可以展开，资源名称前是几何类型的图标。
- * 拖动手柄只在同一个父节点下调整目录顺序，交给目录顺序的拥有者；搜索期间不能拖。每一层一个拖动实例，
- * 手柄按层级区分，免得外层的实例接手里层的拖动
+ * 拖动手柄（复选框前面）和行末的上移、下移只在同一个父节点下调整目录顺序，交给目录顺序的拥有者，不改叠放顺序（ADR 0096）；
+ * 搜索期间不能调整。每一层一个拖动实例，手柄按层级区分，免得外层的实例接手里层的拖动
  */
 export const ResourceTreeList = defineComponent({
   name: 'ResourceTreeList',
@@ -50,6 +51,24 @@ export const ResourceTreeList = defineComponent({
       onMove: move
     });
 
+    // 这一层里某个节点的行（li）
+    const rowOf = (key: string) =>
+      [...(list.value?.children ?? [])].find(
+        item => item instanceof HTMLElement && (item.dataset.resource ?? item.dataset.category) === key
+      );
+
+    // 上移、下移一位；移动后列表重新渲染，焦点回到这一行的按钮上
+    const onMoveButton = async (index: number, direction: MoveDirection) => {
+      const node = props.nodes[index];
+      if (!node) {
+        return;
+      }
+      const key = nodeKey(node);
+      move(index, index + (direction === 'up' ? -1 : 1));
+      await nextTick();
+      focusMoveButton(rowOf(key)?.firstElementChild, direction);
+    };
+
     // 手柄上按上下方向键移动一位；移动后列表重新渲染，焦点回到这个手柄上
     const onHandleKeydown = async (event: KeyboardEvent, index: number) => {
       const to = index + arrowStep(event);
@@ -63,6 +82,17 @@ export const ResourceTreeList = defineComponent({
       const handles = list.value?.querySelectorAll<HTMLElement>(handleSelector) ?? [];
       [...handles].find(handle => handle.dataset.key === key)?.focus();
     };
+
+    const renderMoves = (index: number, name: string) =>
+      !props.searching && (
+        <LayerMoveButtons
+          name={name}
+          order="catalog"
+          canUp={index > 0}
+          canDown={index < props.nodes.length - 1}
+          onMove={direction => void onMoveButton(index, direction)}
+        />
+      );
 
     const renderHandle = (node: PanelNode, index: number, name: string) =>
       !props.searching && (
@@ -87,6 +117,7 @@ export const ResourceTreeList = defineComponent({
           <li key={node.code} data-sortable-item data-resource={node.code}>
             <div class={styles.row}>
               <span class={styles.leafPad} />
+              {renderHandle(node, index, node.name)}
               <ElCheckbox
                 class={styles.checkbox}
                 modelValue={node.checked}
@@ -107,7 +138,7 @@ export const ResourceTreeList = defineComponent({
                   onUpdate:modelValue={value => owner.setOpacity(node.code, value)}
                 />
               )}
-              {renderHandle(node, index, node.name)}
+              {renderMoves(index, node.name)}
             </div>
           </li>
         );
@@ -125,6 +156,7 @@ export const ResourceTreeList = defineComponent({
               disabled={props.searching}
               onClick={() => emit('toggle', node.id)}
             />
+            {renderHandle(node, index, node.name)}
             <ElCheckbox
               class={styles.checkbox}
               modelValue={node.checkState === 'all'}
@@ -134,7 +166,7 @@ export const ResourceTreeList = defineComponent({
               <span class={styles.name}>{node.name}</span>
             </ElCheckbox>
             <span class={styles.count}>{node.codes.length}</span>
-            {renderHandle(node, index, node.name)}
+            {renderMoves(index, node.name)}
           </div>
           {open && (
             <ResourceTreeList

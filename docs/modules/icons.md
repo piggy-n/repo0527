@@ -166,6 +166,7 @@ packages/icons/
 | `map-compass-color` | 自制（ADR 0058） | 基础组的指北针：北半 `#E64B4B`、南半 `#9AA5B8`（`--color-danger`、`--color-text-placeholder` 的色值），多色图标不随令牌变化 |
 | `geometry-polygon` / `geometry-line` / `geometry-point` | `polygon` / `line` / `circle-dot` | 资源的几何类型：面、线、点 |
 | `drag-handle` | `grip-vertical` | 拖动排序的手柄 |
+| `move-up` / `move-down` | `arrow-up` / `arrow-down` | 资源图层面板的上移、下移（ADR 0096） |
 | `splitter-handle` | `menu-2` | 可拖动的分割线中间的手柄 |
 | `panel-collapse` / `panel-expand` | `layout-sidebar-left-collapse` / `layout-sidebar-left-expand` | 收起、展开左侧的面板 |
 | `close` | `x` | 取消勾选、关闭 |

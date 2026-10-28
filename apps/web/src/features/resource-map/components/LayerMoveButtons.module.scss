@@ -1,0 +1,45 @@
+// 上移、下移（ADR 0096）：两个 18 × 24 的图标按钮紧挨着，和透明度入口一样只跟随行悬停或键盘聚焦显示；
+// 比透明度入口窄，资源树里九个字的名称不用省略
+.root {
+  display: inline-flex;
+  flex: none;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  opacity: var(--resource-action-opacity, 0);
+  pointer-events: var(--resource-action-pointer-events, none);
+
+  &:hover:not(:disabled) {
+    background-color: var(--color-primary-bg);
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+    outline: 2px solid var(--color-primary-border-hover);
+  }
+
+  &:disabled {
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
+  }
+}
+
+@media (hover: none) {
+  .button {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}

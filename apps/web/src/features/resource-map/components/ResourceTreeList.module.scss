@@ -38,7 +38,7 @@
     background-color: var(--color-primary-bg-light);
   }
 
-  // 拖动手柄在悬停或获得焦点时出现
+  // 复选框前面的拖动手柄在悬停或获得焦点时出现（ADR 0096）
   &:hover .handle,
   .handle:focus-visible {
     opacity: 1;
@@ -116,12 +116,13 @@
   color: var(--color-danger);
 }
 
+// 复选框前面的手柄宽 16，和行末的上移、下移一起给名称多留位置（ADR 0096）
 .handle {
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 20px;
+  width: 16px;
   height: 24px;
   padding: 0;
   border: 0;
