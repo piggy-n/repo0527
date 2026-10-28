@@ -6,6 +6,9 @@ import type { useApplicationAudit } from '../composables/useApplicationAudit';
 import { auditLabels, taskLabel } from '../presentation';
 import styles from './system-management.module.scss';
 
+// 空值和表格的全局样式一致，显示"-"
+const EMPTY_VALUE = '-';
+
 // 组件只需触发重试，不依赖查询库的返回对象，固定数据预览也复用同一弹窗
 export type ApplicationAuditModel = Omit<ReturnType<typeof useApplicationAudit>, 'retry'> & {
   retry: () => Promise<unknown>;
@@ -27,10 +30,21 @@ export const ApplicationAuditDialog = defineComponent({
     function renderDetail() {
       const model = props.model;
       if (model.loadFailed.value) {
-        return <div role="alert">申请详情加载失败 <ElButton link type="primary" onClick={model.retry}>重试</ElButton></div>;
+        return (
+          <div role="alert">
+            申请详情加载失败
+            <ElButton link type="primary" onClick={model.retry}>
+              重试
+            </ElButton>
+          </div>
+        );
       }
       if (model.loading.value) {
-        return <div class={styles.detailLoading}>{skeleton.value && <ElSkeleton rows={5} animated />}</div>;
+        return (
+          <div class={styles.detailLoading}>
+            {skeleton.value && <ElSkeleton rows={5} animated />}
+          </div>
+        );
       }
       const detail = model.detail.value;
       if (!detail) {
@@ -39,16 +53,30 @@ export const ApplicationAuditDialog = defineComponent({
       return (
         <>
           <dl class={styles.details}>
-            <dt>申请处室</dt><dd>{detail.receiver_dept_name || '—'}</dd>
-            <dt>数据名称</dt><dd>{detail.apply_name}</dd>
-            <dt>资源标识</dt><dd>{detail.layer_code || '—'}</dd>
-            <dt>行政区划</dt><dd>{detail.xzqmc || '—'}</dd>
-            <dt>时间范围</dt><dd>{detail.start_date || '—'} 至 {detail.end_date || '—'}</dd>
-            <dt>导出格式</dt><dd>{detail.data_formats || '—'}</dd>
-            <dt>申请用途</dt><dd>{detail.apply_purpose || '—'}</dd>
-            <dt>审核状态</dt><dd>{auditLabels[detail.status]}</dd>
-            <dt>准备状态</dt><dd>{taskLabel(detail.storage_status)}</dd>
-            {detail.status === 'rejected' && <><dt>不通过原因</dt><dd>{detail.remark || '—'}</dd></>}
+            <dt>申请处室</dt>
+            <dd>{detail.receiver_dept_name || EMPTY_VALUE}</dd>
+            <dt>数据名称</dt>
+            <dd>{detail.apply_name}</dd>
+            <dt>资源标识</dt>
+            <dd>{detail.layer_code || EMPTY_VALUE}</dd>
+            <dt>行政区划</dt>
+            <dd>{detail.xzqmc || EMPTY_VALUE}</dd>
+            <dt>时间范围</dt>
+            <dd>
+              {detail.start_date || EMPTY_VALUE} 至 {detail.end_date || EMPTY_VALUE}
+            </dd>
+            <dt>导出格式</dt>
+            <dd>{detail.data_formats || EMPTY_VALUE}</dd>
+            <dt>申请用途</dt>
+            <dd>{detail.apply_purpose || EMPTY_VALUE}</dd>
+            <dt>审核状态</dt>
+            <dd>{auditLabels[detail.status]}</dd>
+            <dt>准备状态</dt>
+            <dd>{taskLabel(detail.storage_status) || EMPTY_VALUE}</dd>
+            {detail.status === 'rejected' && [
+              <dt>不通过原因</dt>,
+              <dd>{detail.remark || EMPTY_VALUE}</dd>
+            ]}
           </dl>
           {model.editable.value && (
             <div class={styles.decision}>

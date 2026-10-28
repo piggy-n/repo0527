@@ -22,12 +22,16 @@ const SystemSectionContent = defineComponent({
     const audit = useApplicationAudit();
 
     // 消息入口只负责打开详情，审核权限仍由服务端详情状态决定；消费后清除一次性参数
-    watch(() => props.applicationId, id => {
-      if (props.section === 'audit' && id) {
-        audit.open(id);
-        void navigate(router, { name: RouteName.systemManagement, params: { section: '' }, replace: true });
-      }
-    }, { immediate: true });
+    watch(
+      () => props.applicationId,
+      id => {
+        if (props.section === 'audit' && id) {
+          audit.open(id);
+          void navigate(router, { name: RouteName.systemManagement, params: { section: '' }, replace: true });
+        }
+      },
+      { immediate: true }
+    );
 
     function select(section: SystemSection) {
       void navigate(router, {

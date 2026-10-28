@@ -1,7 +1,12 @@
 import { ElButton, ElOption, ElSelect } from 'element-plus';
 import { computed, defineComponent, reactive, ref } from 'vue';
 import type {
-  Application, AuditDecision, SystemDownloadTarget, SystemFilters, SystemRow, SystemSection
+  Application,
+  AuditDecision,
+  SystemDownloadTarget,
+  SystemFilters,
+  SystemRow,
+  SystemSection
 } from '@/features/system-management/api';
 import type { ApplicationAuditModel } from '@/features/system-management/components/ApplicationAuditDialog';
 import { SystemManagementView } from '@/features/system-management/components/SystemManagementView';
@@ -96,8 +101,11 @@ export const ComponentPreview = defineComponent({
     }
 
     const list: ReturnType<typeof useSystemList> = {
-      form, rows, pageNum, pageSize,
-      total: computed(() => scene.value === 'normal' ? filtered.value.length : 0),
+      form,
+      rows,
+      pageNum,
+      pageSize,
+      total: computed(() => (scene.value === 'normal' ? filtered.value.length : 0)),
       initialLoading: computed(() => scene.value === 'loading'),
       refreshing: computed(() => false),
       isError: computed(() => scene.value === 'error'),
@@ -112,7 +120,11 @@ export const ComponentPreview = defineComponent({
       }
     };
     const audit: ApplicationAuditModel = {
-      selectedId, detail, decision, reason, failure,
+      selectedId,
+      detail,
+      decision,
+      reason,
+      failure,
       submitting: ref(false),
       editable: computed(() => detail.value?.status === 'pending'),
       loading: ref(false),

@@ -1,6 +1,6 @@
 import { Document, RefreshLeft, Search, Tickets } from '@element-plus/icons-vue';
-import { MxPanel, MxSplitLayout, MxTitle } from '@yzt/ui';
 import { useMediaQuery } from '@vueuse/core';
+import { MxPanel, MxSplitLayout, MxTitle } from '@yzt/ui';
 import {
   ElButton,
   ElDialog,

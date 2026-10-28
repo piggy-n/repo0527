@@ -1,5 +1,5 @@
-import { COMPACT_MEDIA_QUERY } from '@yzt/ui';
 import { useMediaQuery } from '@vueuse/core';
+import { COMPACT_MEDIA_QUERY } from '@yzt/ui';
 import { ElButton, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
@@ -38,7 +38,14 @@ export const SystemTable = defineComponent({
         return skeleton.value ? <TableSkeleton /> : '';
       }
       if (props.failed) {
-        return <div>加载失败 <ElButton link type="primary" onClick={() => emit('retry')}>重试</ElButton></div>;
+        return (
+          <div>
+            加载失败
+            <ElButton link type="primary" onClick={() => emit('retry')}>
+              重试
+            </ElButton>
+          </div>
+        );
       }
       return '暂无符合条件的数据';
     }
@@ -68,37 +75,41 @@ export const SystemTable = defineComponent({
             />,
             props.section === 'audit' && (
               <ElTableColumn label="审核状态" width="112">
-                {{ default: ({ row }: RowSlot) => row.kind === 'audit' && (
-                  <ElTag type={auditTypes[row.status]}>{auditLabels[row.status]}</ElTag>
-                ) }}
+                {{
+                  default: ({ row }: RowSlot) => row.kind === 'audit' && (
+                    <ElTag type={auditTypes[row.status]}>{auditLabels[row.status]}</ElTag>
+                  )
+                }}
               </ElTableColumn>
             ),
             <ElTableColumn label="数据准备状态" width="112" showOverflowTooltip>
               {{ default: ({ row }: RowSlot) => taskLabel(row.kind === 'audit' ? row.storage_status : row.status) }}
             </ElTableColumn>,
             <ElTableColumn label="操作" width="120" align="center" fixed={compact.value ? false : 'right'}>
-              {{ default: ({ row }: RowSlot) => (
-                <div class={styles.actions}>
-                  {row.kind === 'audit' && (
+              {{
+                default: ({ row }: RowSlot) => (
+                  <div class={styles.actions}>
+                    {row.kind === 'audit' && (
+                      <ElButton
+                        link
+                        type="primary"
+                        disabled={row.status === 'table'}
+                        onClick={() => emit('open', row.apply_id)}
+                      >
+                        {row.status === 'pending' ? '审核' : '查看'}
+                      </ElButton>
+                    )}
                     <ElButton
                       link
                       type="primary"
-                      disabled={row.status === 'table'}
-                      onClick={() => emit('open', row.apply_id)}
+                      disabled={!canDownload(row) || props.isDownloading(downloadTarget(row).id)}
+                      onClick={() => emit('download', row)}
                     >
-                      {row.status === 'pending' ? '审核' : '查看'}
+                      下载
                     </ElButton>
-                  )}
-                  <ElButton
-                    link
-                    type="primary"
-                    disabled={!canDownload(row) || props.isDownloading(downloadTarget(row).id)}
-                    onClick={() => emit('download', row)}
-                  >
-                    下载
-                  </ElButton>
-                </div>
-              ) }}
+                  </div>
+                )
+              }}
             </ElTableColumn>
           ],
           empty: renderEmpty

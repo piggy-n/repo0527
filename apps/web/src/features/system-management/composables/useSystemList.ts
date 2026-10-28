@@ -73,10 +73,17 @@ export function useSystemList(section: SystemSection) {
   }
 
   return {
-    form, rows, total, pageNum, pageSize,
+    form,
+    rows,
+    total,
+    pageNum,
+    pageSize,
     initialLoading: query.isLoading,
     refreshing,
     isError: query.isError,
-    refresh, search, reset, changePageSize
+    refresh,
+    search,
+    reset,
+    changePageSize
   };
 }

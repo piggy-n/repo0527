@@ -12,7 +12,10 @@ export const SystemFilters = defineComponent({
     form: { type: Object as PropType<Filters>, required: true },
     audit: Boolean
   },
-  emits: { search: () => true, reset: () => true },
+  emits: {
+    search: () => true,
+    reset: () => true
+  },
   setup(props, { emit }) {
     return () => (
       <QueryForm labelChars={6}>
@@ -59,8 +62,12 @@ export const SystemFilters = defineComponent({
             )
           ],
           actions: () => [
-            <ElButton type="primary" icon={Search} onClick={() => emit('search')}>查询</ElButton>,
-            <ElButton icon={RefreshLeft} onClick={() => emit('reset')}>重置</ElButton>
+            <ElButton type="primary" icon={Search} onClick={() => emit('search')}>
+              查询
+            </ElButton>,
+            <ElButton icon={RefreshLeft} onClick={() => emit('reset')}>
+              重置
+            </ElButton>
           ]
         }}
       </QueryForm>

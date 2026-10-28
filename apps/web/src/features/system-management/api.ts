@@ -63,17 +63,17 @@ export interface SystemPageRequest extends SystemFilters {
 export async function fetchSystemPage(request: SystemPageRequest, signal?: AbortSignal): Promise<SystemPage> {
   const { pageNum, pageSize, name, status, taskStatus } = request;
   if (request.section === 'reports') {
-    return http.post('/statistics/page', { pageNum, pageSize, name }, {
-      schema: reportPageSchema, signal, silent: true
-    });
+    const options = { schema: reportPageSchema, signal, silent: true };
+    return http.post('/statistics/page', { pageNum, pageSize, name }, options);
   }
-  return http.post('/api/apply/list', {
+  const body = {
     pageNum,
     pageSize,
     applyName: name,
     status: status === 'all' ? '' : status,
     taskStatus: taskStatus === 'all' ? '' : taskStatus
-  }, { schema: applicationPageSchema, signal, silent: true });
+  };
+  return http.post('/api/apply/list', body, { schema: applicationPageSchema, signal, silent: true });
 }
 
 /** 详情必须属于请求的申请，失败不退回列表摘要 */

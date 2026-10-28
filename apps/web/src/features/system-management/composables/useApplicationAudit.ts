@@ -27,11 +27,16 @@ export function useApplicationAudit() {
     selectedId.value = undefined;
   }
 
-  watch(selectedId, () => {
-    decision.value = '';
-    reason.value = '';
-    failure.value = '';
-  }, { flush: 'sync' });
+  watch(
+    selectedId,
+    () => {
+      decision.value = '';
+      reason.value = '';
+      failure.value = '';
+    },
+    { flush: 'sync' }
+  );
+  // 换会话后旧申请的弹窗不再留着
   watch(() => session.token, close, { flush: 'sync' });
   onScopeDispose(() => {
     disposed = true;
@@ -65,10 +70,9 @@ export function useApplicationAudit() {
     const id = selectedId.value;
     submitting.value = true;
     try {
-      const current = await mutation.mutateAsync({
-        input: { id, status: decision.value, reason: reason.value.trim() }, token
-      });
-      if (!current || !guard.isCurrent(token) || disposed || selectedId.value !== id) {
+      const input = { id, status: decision.value, reason: reason.value.trim() };
+      await mutation.mutateAsync({ input, token });
+      if (disposed || !guard.isCurrent(token) || selectedId.value !== id) {
         return false;
       }
       close();
@@ -84,10 +88,18 @@ export function useApplicationAudit() {
   }
 
   return {
-    selectedId, detail, decision, reason, failure, submitting, editable,
+    selectedId,
+    detail,
+    decision,
+    reason,
+    failure,
+    submitting,
+    editable,
     loading: query.isFetching,
     loadFailed: query.isError,
     retry: query.refetch,
-    open, close, submit
+    open,
+    close,
+    submit
   };
 }

@@ -1,6 +1,6 @@
 import { Document, Tickets } from '@element-plus/icons-vue';
-import { MxPanel, MxSplitLayout } from '@yzt/ui';
 import { useMediaQuery } from '@vueuse/core';
+import { MxPanel, MxSplitLayout } from '@yzt/ui';
 import { ElButton, ElIcon, ElMenu, ElMenuItem, ElPagination } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { DownloadPanel } from '@/shared/file-transfer/DownloadPanel';
@@ -45,8 +45,18 @@ export const SystemManagementView = defineComponent({
                     defaultActive={props.section}
                     onSelect={value => emit('select', value === 'reports' ? 'reports' : 'audit')}
                   >
-                    <ElMenuItem index="audit"><ElIcon><Tickets /></ElIcon>资源审核</ElMenuItem>
-                    <ElMenuItem index="reports"><ElIcon><Document /></ElIcon>统计报表</ElMenuItem>
+                    <ElMenuItem index="audit">
+                      <ElIcon>
+                        <Tickets />
+                      </ElIcon>
+                      资源审核
+                    </ElMenuItem>
+                    <ElMenuItem index="reports">
+                      <ElIcon>
+                        <Document />
+                      </ElIcon>
+                      统计报表
+                    </ElMenuItem>
                   </ElMenu>
                 </MxPanel>
               ),
@@ -66,7 +76,9 @@ export const SystemManagementView = defineComponent({
                       list.isError.value && list.rows.value.length > 0 && (
                         <div class={styles.refreshError} role="alert">
                           刷新失败，当前显示上次的数据
-                          <ElButton link type="primary" onClick={list.refresh}>重试</ElButton>
+                          <ElButton link type="primary" onClick={list.refresh}>
+                            重试
+                          </ElButton>
                         </div>
                       ),
                       <SystemTable

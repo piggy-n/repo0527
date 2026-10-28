@@ -34,10 +34,13 @@ function setup() {
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   let audit!: ReturnType<typeof useApplicationAudit>;
-  const wrapper = mount(defineComponent({ setup() {
-    audit = useApplicationAudit();
-    return () => null;
-  } }), { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } });
+  const wrapper = mount(
+    defineComponent(() => {
+      audit = useApplicationAudit();
+      return () => null;
+    }),
+    { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } }
+  );
   cleanups.push(() => {
     wrapper.unmount();
     client.clear();

@@ -31,17 +31,23 @@ export function useApplicationQuery(id: Ref<string | undefined>) {
   }));
 }
 
+/** 写操作的参数带上提交时的会话（useSessionGuard 的 capture） */
+interface AuditSubmission {
+  input: AuditInput;
+  token: string | undefined;
+}
+
+/** 审核不随弹窗关闭取消；旧会话的结果不刷新新会话的缓存 */
 export function useAuditMutation() {
   const guard = useSessionGuard();
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async ({ input, token }: { input: AuditInput; token: string | undefined }) => {
+    mutationFn: ({ input, token }: AuditSubmission) => {
       guard.assertCurrent(token);
-      await auditApplication(input);
-      return guard.isCurrent(token);
+      return auditApplication(input);
     },
-    onSuccess: (current, { input }) => {
-      if (current) {
+    onSuccess: (_result, { input, token }) => {
+      if (guard.isCurrent(token)) {
         void client.invalidateQueries({ queryKey: listKey });
         void client.invalidateQueries({ queryKey: detailKey(input.id) });
       }

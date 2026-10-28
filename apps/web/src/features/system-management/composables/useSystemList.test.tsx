@@ -18,10 +18,13 @@ afterEach(() => {
 function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let list!: ReturnType<typeof useSystemList>;
-  const wrapper = mount(defineComponent({ setup() {
-    list = useSystemList('audit');
-    return () => null;
-  } }), { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } });
+  const wrapper = mount(
+    defineComponent(() => {
+      list = useSystemList('audit');
+      return () => null;
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } }
+  );
   cleanups.push(() => {
     wrapper.unmount();
     client.clear();
@@ -30,10 +33,16 @@ function setup() {
 }
 
 function page(total = 45) {
-  return HttpResponse.json({ code: 200, data: {
-    list: [{ apply_id: 'one', apply_name: '成果', status: 'pending' }],
-    total, pageNum: 1, pageSize: 20, pages: Math.ceil(total / 20)
-  } });
+  return HttpResponse.json({
+    code: 200,
+    data: {
+      list: [{ apply_id: 'one', apply_name: '成果', status: 'pending' }],
+      total,
+      pageNum: 1,
+      pageSize: 20,
+      pages: Math.ceil(total / 20)
+    }
+  });
 }
 
 describe('系统管理筛选与分页', () => {
