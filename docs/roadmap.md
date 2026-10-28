@@ -114,7 +114,7 @@
 | 需要时 | 运行中 WebGL 上下文丢失（`webglcontextlost`）的处理：适配器目前没有处理，真实环境里遇到再做 | ADR 0030 |
 | 需要时 | `QueryForm`：日期范围这类 180 放不下的控件要加一种加宽的写法；会话结束时把 feature 的 store 一并重置（目前没有） | [modules/query-form.md](modules/query-form.md)、[modules/auth.md](modules/auth.md) |
 | 6 | 上传、下载统一成一套能力（统一的上传 / 下载方法或独立模块，包括进度、文件名、错误处理、预览前的 MIME 补齐），文件管理、数据下载（资源申请）、数据查询的导出共用，不再各自实现。旧项目在迁移范围内至少有 5 处各写各的下载：`libs/http-service.js` 的 blob 处理、`services/resource-application/applyApiService.js`（`downloadApplicationFile`、`downloadStatisticsReportFile`）、`downloadTaskService.js`（带进度）、文件管理 `FileManagementContent.vue`（`requestFileBlob`、`downloadBlob`）、数据查询 `space-monitoring-query/index.vue`（`downloadExportBlob`）；`FormData` 上传 3 处：文件管理上传弹窗、资源管理 Excel 导入、数据查询 | 本文（2026-10-08 提出） |
-| 6 | 页面内菜单（系统管理左栏）用 `ElMenu` 加变体还是做 `MxSideMenu`；宽屏时手动把侧栏收成窄条（基本统计页，可复用窄屏的窄条）；单列居中（消息中心）；旧页面左栏 296、348 归到 320 | [design/page-layout.md](design/page-layout.md) |
+| 6 | 宽屏时手动把侧栏收成窄条（基本统计页，可复用窄屏的窄条）；旧页面左栏 296、348 归到 320。页面内菜单已定为 `shared` 的 `SideNav`（ADR 0091），消息改为顶栏弹框（ADR 0092） | [design/page-layout.md](design/page-layout.md) |
 | 联调时 | 资源管理下载申请 `/api/apply/create` 的成功 data 与失败信封、可申请图层的正式目录、处室 `jsdxzx` 的含义 | 同上 |
 | 7 | 部署（nginx 回退与接口转发，带 hash 的产物长期缓存、`index.html` 不缓存、开启压缩）；版本号格式 | [deployment.md](deployment.md)、ADR 0005 |
 | 7 | 确定部署的网络条件后复查字体的加载时机：目标网络明显慢于 Fast 4G 时，用 `measure:map-load` 比较推迟字体的做法 | ADR 0062 |
@@ -774,7 +774,7 @@ UI 工作流程补充（2026-10-20）：用户确认将设计与验证流程固�
 
 资源管理剩余能力（2026-10-27）：之前的 `codex/migrate-resource-capabilities` 基线早于两次代码整改、与最新 main 冲突，经评估改为从 main 新建 `claude/migrate-resource-capabilities` 重新迁移，复用图谱数据、旧布局坐标基准和算法。已完成地图服务 / 数据接口（前端内存）、自助取数（关系图用 ECharts，ADR 0089；提交仍只在前端）和下载申请（`POST /api/apply/create`），组件样例 `/dev/resource-management`。创建申请的返回、可申请图层目录待联调，见[资源管理模块](modules/resource-management.md)末尾。
 
-系统管理与消息中心重新迁移（2026-10-27）：上一版合入后因写法不达标由 `6dda705` 撤回，这次从 main `6e2d606` 新建 `migrate-system-message`，不沿用上一版的代码、测试和文档。范围是管理员的资源审核、申请详情、统计报表与下载，以及消息（列表、未读、已读、业务跳转）；消息不再是独立页面，改为顶栏按钮下方的弹框。旧代码与真实接口的只读核对见 [migration.md](migration.md)"系统管理与消息中心：接口实测"。交互原型 `/dev/system-management`、`/dev/message-center` 待用户确认，其中页面内菜单（`ElMenu` 变体或 `MxSideMenu`）、列表与详情的两种写法、统计任务行的显示做成了可切换。
+系统管理与消息中心重新迁移（2026-10-27）：上一版合入后因写法不达标由 `6dda705` 撤回，这次从 main `6e2d606` 新建 `migrate-system-message`，不沿用上一版的代码、测试和文档。范围是管理员的资源审核、申请详情、统计报表与下载，以及消息（列表、未读、已读、业务跳转）；消息不再是独立页面，改为顶栏按钮下方的弹框。旧代码与真实接口的只读核对见 [migration.md](migration.md)"系统管理与消息中心：接口实测"。交互原型 `/dev/system-management`、`/dev/message-center` 中可切换的几项由用户按推荐确认，写成 [ADR 0091](adr/0091-system-management.md)（页面内菜单用 `shared` 的 `SideNav`：原型推荐的竖排 `ElMenu` 实测没有键盘导航，用户改选；两个路由、打开的申请是查询参数、统计任务标成"统计任务"）和 [ADR 0092](adr/0092-header-message-popover.md)（顶栏按钮下方的 `ElPopover`、列表里看全文、页面可见时每 60 秒刷新未读数）。
 
 资源与文件管理联合复测（2026-10-21）：R5 基线 `b2cb4c0` 已同步最新 main `c635c7c`。修复资源写入调度前会话竞态、文件删除晚到成功与缓存刷新；导入格式提示紧跟按钮，图片仅下载，文档预览头部紧凑排列，未保存确认框统一浅灰标题栏。两个间接依赖的 3 条安全公告已用补丁版本解决，官方生产依赖审计通过。已通过 `40e1a8e` 合入本地 main，合入后 Web 1797 + 图标包 35 项测试、22 项生产冒烟、类型 / lint / 公网及内网构建通过；开发样例复用正式预览范围并完成补充复测。真实后端写入与 Excel 未知契约仍待联调。完整审查、页面验收及合入后全量结果见[联合验收报告](stages/resource-file-management-acceptance.md)。
 
