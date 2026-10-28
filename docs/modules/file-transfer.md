@@ -70,7 +70,24 @@ fetchFile(url, { query, fallbackName, fallbackType, signal, onDownloadProgress }
 saveFile(file);
 ```
 
-`getBlob` 返回 `Promise<BinaryResponse>`；`fetchFile` 返回 `Promise<DownloadedFile>`，同时透传 `timeout`、`silent`；`saveFile` 不发请求、不弹提示。公共基础第一版只提供这三个场景需要的 GET 文件流，未来遇到 POST 导出再扩展。
+`getBlob` 返回 `Promise<BinaryResponse>`；`fetchFile` 返回 `Promise<DownloadedFile>`，同时透传 `timeout`、`silent`；`saveFile` 不发请求、不弹提示。公共基础第一版只提供这三个场景需要的 GET 文件流。
+
+2026-10-27 系统管理迁移时加上 POST（ADR 0091）：数据申请的下载接口是 `POST /api/apply/download/{id}`、没有正文。`http.postBlob(url, body?, options)` 和 `getBlob` 走同一个请求通道、同样识别错误信封；`fetchFile` 加 `method: 'post'`（默认 `get`），不支持正文，以后遇到带正文的 POST 导出再扩展。
+
+### 4. 列表行内的下载（`useRowDownloads`、`DownloadButton`）
+
+系统管理的申请和统计报表在表格行里、弹窗里直接下载，不像文件管理那样有下载区：
+
+```ts
+const downloads = useRowDownloads((row: Report) => row.id, fetchReportFile);
+const result = await downloads.start(row); // { kind: 'done' } | { kind: 'error', message } | null
+downloads.isDownloading(row.id);
+downloads.percentOf(row.id); // 0～100，还没有进度或总量未知时是 null
+```
+
+- 按 ID 防重复；读完交给 `saveFile`，界面提示由页面根据结果决定（`null` 表示没开始，或页面销毁、换会话中止，不提示）
+- 下载是只读操作：页面销毁、换会话（`session.token` 变化）都中止读取，晚到的内容不交给浏览器保存，和文件管理的 `useFileDownloads` 一样
+- `DownloadButton` 是行内的"下载"：下载中换成进度文字（"下载 35%"，总量未知时"下载中"，`role="status"`），不能下载时置灰。140 宽、两格的操作列里"下载 100%"也放得下（`ApplicationTable.browser.test.tsx`）
 
 文件管理业务接口 `fetchFileContent` 的调用方式：
 

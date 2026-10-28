@@ -39,7 +39,7 @@ git diff <基线>..master-demo -- <旧路径>
 | `status: 'table'` | 13 条是基本统计的任务，没有图层、区划和用途；其中一条的 `apply_id` 等于用户 ID，没有名称和时间 |
 | 时间 | 申请的 `create_time`、`start_date`、`end_date` 是带 `+00:00` 的 ISO 串；消息的 `createTime` 是北京时间的字符串（同一条申请 03:29Z 对应消息里的 11:29），申请的时间也按北京时间显示 |
 | `GET /api/apply/{id}` | 结构同列表行；ID 不存在时 `code 200`、`data: null` |
-| `POST /statistics/page` | 0 条（但有 497 条报表通知），报表列表和下载契约没有真实样本 |
+| `POST /statistics/page` | 0 条（但有 497 条报表通知），报表列表和下载契约没有真实样本；字段按旧页面读的写（`id`、`name`、`year`、`startTime`、`finishTime`、`status`），待联调核对 |
 | `GET /statistics/download?id=不存在` | HTTP 200 加 JSON 信封 `code 40000 "任务不存在"` |
 
 后端的问题（不为它们调整方案）：审批提醒正文是"nullnull于…"，申请人为空；待审核的申请没有 `user_name`，审核列表的申请人列显示"-"；消息列表不分页、没有未读数接口，未读角标只能取 `isRead: 'false'` 的整个列表；统计任务混在申请表里。

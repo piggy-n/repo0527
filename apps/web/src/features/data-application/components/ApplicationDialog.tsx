@@ -19,11 +19,14 @@ import {
 import { computed, defineComponent, type PropType, ref } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { dataFormatLabel, dataLayerLabel } from '@/shared/data-request/catalog';
+import { PrepareStatusText } from '@/shared/data-request/PrepareStatusText';
+import { DownloadButton } from '@/shared/file-transfer/DownloadButton';
+import type { RowDownloadState } from '@/shared/file-transfer/useRowDownloads';
 import type { Application } from '../api';
 import type { ApplicationReviewOwner } from '../composables/useApplicationReview';
-import { hasPrepareStep } from '../status';
+import { canDownload, hasPrepareStep } from '../status';
 import styles from './ApplicationDialog.module.scss';
-import { AuditStatusTag, PrepareStatusText } from './ApplicationStatus';
+import { AuditStatusTag } from './ApplicationStatus';
 
 const REASON_MAX_LENGTH = 200;
 
@@ -35,10 +38,13 @@ const shown = (value: string | undefined) => (value === undefined || value === '
 export const ApplicationDialog = defineComponent({
   name: 'ApplicationDialog',
   props: {
-    owner: { type: Object as PropType<ApplicationReviewOwner>, required: true }
+    owner: { type: Object as PropType<ApplicationReviewOwner>, required: true },
+    // 和列表共用下载的状态：在哪里点下载，两边都显示进度
+    downloads: { type: Object as PropType<RowDownloadState>, required: true }
   },
   emits: {
-    close: () => true
+    close: () => true,
+    download: (_application: Application) => true
   },
   setup(props, { emit }) {
     const owner = props.owner;
@@ -138,7 +144,15 @@ export const ApplicationDialog = defineComponent({
             </ElDescriptionsItem>
             {hasPrepareStep(application) && (
               <ElDescriptionsItem label="数据准备">
-                <PrepareStatusText status={application.prepare} />
+                <span class={styles.prepare}>
+                  <PrepareStatusText status={application.prepare} />
+                  <DownloadButton
+                    downloading={props.downloads.isDownloading(application.id)}
+                    percent={props.downloads.percentOf(application.id)}
+                    disabled={!canDownload(application)}
+                    onClick={() => emit('download', application)}
+                  />
+                </span>
               </ElDescriptionsItem>
             )}
             {application.status === 'rejected' && (

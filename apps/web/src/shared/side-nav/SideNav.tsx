@@ -1,8 +1,8 @@
 import { useSplitLayout } from '@yzt/ui';
 import { defineComponent, type PropType } from 'vue';
 import { RouterLink } from 'vue-router';
-import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
-import type { RouteName } from '@/shared/router/route-names';
+import { type IconName, SvgIcon } from '../icons/SvgIcon';
+import type { RouteName } from '../router/route-names';
 import styles from './SideNav.module.scss';
 
 export interface SideNavItem {

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { formatBeijingDateTime } from '@/shared/data-request/date-time';
-import { http } from '@/shared/http/client';
+import { PREPARE_STATUSES, type PrepareStatus } from '@/shared/data-request/prepare-status';
+import { fetchFile } from '@/shared/file-transfer';
+import { http, type TransferProgress } from '@/shared/http/client';
 
 // 字段按 2026-10-27 只读核对的真实返回（docs/migration.md）：没有值的字段整个键都不出现，所以写 optional 而不是 nullable；
 // 用不到的字段（user_id、receiver_dept_code、xzqdm、file_path、storage_progess 等）不声明，解析时丢弃
@@ -13,10 +15,8 @@ export type ApplicationStatus = z.infer<typeof applicationStatusSchema>;
 /** 审核的结果，筛选条件也用它 */
 export type AuditStatus = Exclude<ApplicationStatus, 'table'>;
 
-/** 数据准备的状态（storage_status）；取值沿用旧页面的筛选项，实测只见过 timeout，没有这个字段时还没开始准备 */
-const prepareStatusSchema = z.enum(['processing', 'success', 'timeout', 'failed']);
-
-export type PrepareStatus = z.infer<typeof prepareStatusSchema>;
+// 数据准备的状态（storage_status，shared/data-request 的 prepare-status）；没有这个字段时还没开始准备
+const prepareStatusSchema = z.enum(PREPARE_STATUSES);
 
 // 带时区的时间，如 2026-10-28T03:29:36.527+00:00，显示为北京时间（和消息里的时间一致）
 const dateTimeSchema = z.iso.datetime({ offset: true }).transform(value => formatBeijingDateTime(new Date(value)));
@@ -122,6 +122,24 @@ export function auditApplication(audit: ApplicationAudit) {
   return http.post(`/api/apply/status/${encodeURIComponent(audit.id)}`, undefined, {
     query: { status: audit.approved ? 'approved' : 'rejected', reason: audit.approved ? '' : audit.reason },
     schema: z.unknown().transform(() => undefined),
+    silent: true
+  });
+}
+
+/**
+ * 下载准备好的数据：POST、没有正文（旧页面的调用）。还没有准备完成的真实样本，文件名和响应头待联调；
+ * 出错时不弹全局提示，由页面提示
+ */
+export function fetchApplicationFile(
+  application: Pick<Application, 'id' | 'name'>,
+  signal: AbortSignal,
+  onProgress: (progress: TransferProgress) => void
+) {
+  return fetchFile(`/api/apply/download/${encodeURIComponent(application.id)}`, {
+    method: 'post',
+    fallbackName: `${application.name ?? '申请的数据'}.zip`,
+    signal,
+    onDownloadProgress: onProgress,
     silent: true
   });
 }

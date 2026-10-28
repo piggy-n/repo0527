@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router';
-import { RouteName } from '@/shared/router/route-names';
+import { RouteName } from '../router/route-names';
 import { SideNav, type SideNavItem } from './SideNav';
 
 afterEach(() => {

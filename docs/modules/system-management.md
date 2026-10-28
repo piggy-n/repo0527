@@ -7,11 +7,15 @@
 ```
 shared/data-request/          数据申请的共用清单：资源管理提交申请、系统管理审核申请都用
 ├─ catalog.ts                 可申请的主题图层（DATA_LAYERS）、数据格式（DATA_FORMATS）
-└─ date-time.ts               表单的本地时间格式（formatDateTime）、按北京时间显示（formatBeijingDateTime）
+├─ date-time.ts               表单的本地时间格式（formatDateTime）、按北京时间显示（formatBeijingDateTime）
+├─ prepare-status.ts          数据准备的状态（申请和统计报表共用）
+└─ PrepareStatusText.tsx      数据准备状态的图标和文案
+shared/table/usePagedList.ts  后端是 PageHelper 的列表（申请、统计报表共用）
+shared/file-transfer/         useRowDownloads（行内下载）、DownloadButton；shared/http 加了 postBlob
 shared/side-nav/              菜单型左栏的页面内导航 SideNav
 features/data-application/    申请：接口、状态与文案、查询与审核、列表的组合式函数、筛选栏、表格、状态显示
                               （以后用户侧"数据下载"也在这里扩展）
-features/statistics-report/   统计报表：分页与下载（待实现）
+features/statistics-report/   统计报表：接口、查询、列表与下载的组合式函数、筛选栏、表格
 features/message-center/      消息：接口、查询、已读与弹框里的组件（待实现）
 pages/system-management/      SystemManagementPage（分栏布局、SideNav）与资源审核栏目 AuditSection
 app/router、app/layout        两个路由；顶栏在统计报表上也选中"系统管理"；消息按钮与弹框（待实现）
@@ -73,12 +77,12 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 
 ## 资源审核列表
 
-- **`useApplicationList`**：筛选表单点"查询"才生效，名称去掉首尾空格，回到第 1 页；条件没变时点查询也重新请求；改每页条数回到第 1 页。和文件管理的 `useFileList` 同一套做法（每组条件记下总数、两种加载状态）；页码修正同资源管理的 `useResourceList`：后端（PageHelper）把越界的页码改成最后一页时页码跟过去，并用 `rememberPage` 把结果记到修正后的页上；没有数据时 `pages` 是 0，回到第 1 页
+- **`useApplicationList`**：`shared/table` 的 `usePagedList`（见 [table.md](table.md)）加上申请的条件。筛选表单点"查询"才生效，名称去掉首尾空格，回到第 1 页；条件没变时点查询也重新请求；改每页条数回到第 1 页；后端（PageHelper）把越界的页码改成最后一页时页码跟过去，没有数据时回到第 1 页
 - **`ApplicationFilterBar`**：数据名称、审核状态、数据准备状态，`QueryForm`（标签 6 个字宽）
-- **`ApplicationTable`**：序号、数据名称、申请人、行政区划、申请时间、审核状态、数据准备状态；数据准备状态只有审核通过的申请和统计任务才有，其余单元格留空，由表格的全局样式显示"-"。操作列固定两格：待审核的"审核"、其余"查看"（统计任务没有）；下载在后面一步加入
+- **`ApplicationTable`**：序号、数据名称、申请人、行政区划、申请时间、审核状态、数据准备状态；数据准备状态只有审核通过的申请和统计任务才有，其余单元格留空，由表格的全局样式显示"-"。操作列固定两格：待审核的"审核"、其余"查看"（统计任务没有）；有数据准备这一步的有"下载"，准备完成才能点
 - **`AuditSection`**（页面里）：组合上面三个和分页（`pagination-wrap`）；只在资源审核栏目显示时存在，统计报表栏目不请求申请列表
 
-文件管理、资源管理和这里的列表组合式函数现在是同一套分页逻辑写了三遍，差别只在参数和页码的修正规则；以后可以抽成公共的分页列表，这次不动另两个模块。
+申请和统计报表的列表共用 `usePagedList`；文件管理（Spring 分页）、资源管理（按目录）仍是各自的写法，这次没有改。
 
 ## 页面与路由
 
@@ -86,7 +90,6 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 - 顶栏的"系统管理"写了 `alsoActiveOn: [systemManagementReports]`，宽屏导航和窄屏菜单在统计报表上也显示为选中
 - `SideNav`（`shared/side-nav`）：菜单项是 `RouterLink`，当前页由 `RouterLink` 判断（不看查询参数，打开申请时仍是当前页），加 `aria-current`；要放在 `MxSplitLayout` 的侧栏里，窄屏时在抽屉里点了就关闭抽屉。外观按 page-layout 的"菜单型左栏"
 - 删掉了 `message-center` 的占位路由和路由名（ADR 0092）
-- 统计报表栏目目前是"迁移中"的占位，下一步接入
 
 ### 验证（2026-10-27）
 
@@ -109,7 +112,22 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 - 改坏验证 12 处（空的 apply 也认、不核对结果的 ID、换申请不清意见、原因不去空格、销毁或换会话后仍报告成功、都按审核模式、非待审核也提交、不通过不要求原因、成功后不关、点关闭不去掉 apply、打开时不先用列表数据、统计任务也能查看），都是断言失败。"打开时不先用列表数据"第一次没测出来：详情接口在同一轮里就返回了，改成让详情接口挂起后才能区分
 - 没有验证：真实页面里的弹窗（这次用户的开发服务占着 5273，登录会话在那个地址下，没有把登录凭据转到别的地址），真实的审核提交（不对真实后端做写操作）
 
+## 下载与统计报表
+
+- **下载**：`shared/file-transfer` 的 `useRowDownloads` 和 `DownloadButton`（见 [file-transfer.md](file-transfer.md)）。申请用 `fetchApplicationFile`（`POST /api/apply/download/{id}`，`http.postBlob`），报表用 `fetchReportFile`（`GET /statistics/download?id=`）；没有响应头的文件名时用名称加 `.zip`（旧页面的写法）。列表和弹窗共用同一份下载状态，在哪里点都显示进度；结果由页面提示（"已交给浏览器下载"或失败原因）
+- **数据准备的状态**放在 `shared/data-request`（`prepare-status.ts`、`PrepareStatusText`）：申请的 `storage_status` 和报表的 `status` 是同一套取值，旧页面用同一个函数换算
+- **统计报表**（`features/statistics-report`）：`POST /statistics/page`（正文 `name`、`pageNum`、`pageSize`）、`useReportList`（`usePagedList`，名称去掉首尾空格）、`ReportFilterBar`（报表名称）、`ReportTable`（序号、年份、报表名称、开始时间、完成时间、状态、下载）。**没有真实样本**：2026-10-27 只读核对时一条记录都没有，字段按旧页面读的写（`id`、`name`、`year`、`startTime`、`finishTime`、`status`），年份统一成字符串、时间原样显示；状态是字符串，认得数据准备的四个值，其他的原样显示；`status` 是 `success` 才能下载
+- **`ReportsSection`**（页面里）：只在统计报表栏目显示时存在
+
+### 验证（2026-10-27）
+
+- 单元测试：`http.postBlob`、`fetchFile` 的 `method`、`useRowDownloads`（进度、防重复、失败、页面销毁和换会话中止）、`DownloadButton`、统计报表的接口、页面（申请的下载按钮哪些能点、列表和弹窗里下载、统计报表的表格和下载）
+- 浏览器测试 `ApplicationTable.browser.test.tsx`：操作列两格里"查看"和"下载 100%"都放得下；把操作列改窄到 100 时断言失败
+- 改坏验证 12 处：postBlob 用 GET、忽略 method、不防重复、换会话不中止、销毁不中止、中止后仍保存、总量未知也显示百分比、没准备好也能下载、报表没完成也能下载、弹窗里的下载不响应、年份不转字符串、申请下载用 GET，都是断言失败。"postBlob 用 GET"第一次是没有模拟的请求报错、"不防重复"第一次是超时，改成接住所有方法、和下一轮的等待赛跑后才是断言失败
+- 没有验证：真实的下载（没有准备完成的申请，统计报表没有记录），下载响应的文件名和类型
+
 ## 待联调
 
-- 审核的成功返回、准备完成后的下载、驳回原因：没有真实样本，不对真实后端做写操作
+- 审核的成功返回、准备完成后的下载（文件名、类型、大小）、驳回原因：没有真实样本，不对真实后端做写操作
+- 统计报表的字段、类型和状态取值：分页接口目前没有记录
 - 统计任务请后端在审核列表里排除；待审核的申请没有申请人

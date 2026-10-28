@@ -1,8 +1,9 @@
 import { RefreshLeft, Search } from '@element-plus/icons-vue';
 import { ElButton, ElFormItem, ElInput, ElOption, ElSelect } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
+import type { PrepareStatus } from '@/shared/data-request/prepare-status';
 import { QueryForm } from '@/shared/query-form/QueryForm';
-import type { ApplicationFilters, AuditStatus, PrepareStatus } from '../api';
+import type { ApplicationFilters, AuditStatus } from '../api';
 import { AUDIT_STATUS_OPTIONS, PREPARE_STATUS_OPTIONS } from '../status';
 
 /** 申请列表的筛选栏：编辑表单不触发请求，点"查询"或在名称框按回车才生效 */

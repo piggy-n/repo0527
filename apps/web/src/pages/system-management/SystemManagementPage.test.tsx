@@ -14,6 +14,7 @@ import {
   pendingRecord,
   tableRecord
 } from '@/features/data-application/test-data';
+import { reportPageResponse, reportRecord } from '@/features/statistics-report/test-data';
 import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { createTestJwtExpiringAt } from '@/shared/auth/testing';
@@ -29,6 +30,7 @@ beforeEach(() => {
 afterEach(() => {
   server.resetHandlers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   document.body.innerHTML = '';
   localStorage.clear();
 });
@@ -36,10 +38,17 @@ afterAll(() => server.close());
 
 type RawRecord = Record<string, unknown>;
 
-// 一页里有待审核、准备中的、统计任务各一条；审核会改掉待审核那条的状态。记下列表、详情的请求次数和审核的参数
+// 申请：待审核、准备中、准备完成、统计任务各一条，审核会改掉待审核那条的状态；报表：处理完成、处理中各一条。
+// 记下列表、详情、报表的请求次数，审核的参数和下载的请求
 function mockBackend() {
-  const records: RawRecord[] = [pendingRecord(), approvedRecord({ storage_status: 'processing' }), tableRecord()];
-  const state = { list: 0, detail: 0, audits: [] as Record<string, string>[] };
+  const records: RawRecord[] = [
+    pendingRecord(),
+    approvedRecord({ storage_status: 'processing' }),
+    approvedRecord({ apply_id: 'apply-ready', apply_name: '医疗机构面层', storage_status: 'success' }),
+    tableRecord()
+  ];
+  const reports = [reportRecord(), reportRecord({ id: 'report-2', name: '汇总统计报表_市级', status: 'processing' })];
+  const state = { list: 0, detail: 0, reports: 0, audits: [] as Record<string, string>[], downloads: [] as string[] };
   server.use(
     mock.post('/backend/api/apply/list', () => {
       state.list += 1;
@@ -58,9 +67,36 @@ function mockBackend() {
         record.remark = query.reason;
       }
       return HttpResponse.json(envelope(null));
+    }),
+    mock.post('/backend/statistics/page', () => {
+      state.reports += 1;
+      return HttpResponse.json(reportPageResponse(reports));
+    }),
+    mock.post('/backend/api/apply/download/:id', ({ params }) => {
+      state.downloads.push(`POST ${String(params.id)}`);
+      return new HttpResponse('数据', { headers: { 'Content-Type': 'application/zip' } });
+    }),
+    mock.get('/backend/statistics/download', ({ request }) => {
+      state.downloads.push(`GET ${new URL(request.url).searchParams.get('id') ?? ''}`);
+      return new HttpResponse('报表', { headers: { 'Content-Type': 'application/zip' } });
     })
   );
   return state;
+}
+
+// 记下交给浏览器保存的文件名；jsdom 没有 URL.createObjectURL
+function stubSave() {
+  const saved: string[] = [];
+  // 只补上保存要用的两个静态方法，new URL 照常可用（接口模拟要用）
+  class TestURL extends URL {
+    static override createObjectURL = () => 'blob:test';
+    static override revokeObjectURL = () => undefined;
+  }
+  vi.stubGlobal('URL', TestURL);
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+    saved.push(this.download);
+  });
+  return saved;
 }
 
 async function mountAt(name: RouteName, query: Record<string, string> = {}) {
@@ -78,7 +114,10 @@ async function mountAt(name: RouteName, query: Record<string, string> = {}) {
         path: '/system-management',
         name: RouteName.systemManagement,
         component: SystemManagementPage,
-        props: route => ({ section: 'audit', applyId: typeof route.query.apply === 'string' ? route.query.apply : null })
+        props: route => ({
+          section: 'audit',
+          applyId: typeof route.query.apply === 'string' ? route.query.apply : null
+        })
       },
       {
         path: '/system-management/statistical-report',
@@ -117,7 +156,7 @@ describe('SystemManagementPage', () => {
   it('资源审核：标题、筛选栏和表格；没有值的单元格留空，由全局样式显示"-"；统计任务不能查看', async () => {
     mockBackend();
     const { wrapper } = await mountAt(RouteName.systemManagement);
-    await vi.waitFor(() => expect(rows()).toHaveLength(3));
+    await vi.waitFor(() => expect(rows()).toHaveLength(4));
 
     expect(wrapper.find('h2').text()).toBe('资源审核');
     expect(wrapper.findAll('.el-form-item__label').map(label => label.text())).toEqual([
@@ -127,17 +166,57 @@ describe('SystemManagementPage', () => {
     ]);
     expect(rows()).toEqual([
       ['1', '拆除未尽区', '', '江苏省南京市', '2026-10-28 11:29:36', '待审核', '', '审核'],
-      ['2', '城镇村等用地', '王立', '江苏省', '2026-09-10 16:47:07', '审核通过', '正在处理', '查看'],
-      ['3', '', '王立', '', '', '统计任务', '未开始处理', '']
+      ['2', '城镇村等用地', '王立', '江苏省', '2026-09-10 16:47:07', '审核通过', '正在处理', '查看下载'],
+      ['3', '医疗机构面层', '王立', '江苏省', '2026-09-10 16:47:07', '审核通过', '处理完成', '查看下载'],
+      ['4', '', '王立', '', '', '统计任务', '未开始处理', '下载']
     ]);
   });
 
-  it('统计报表栏目不请求申请列表；切回资源审核时再请求', async () => {
+  it('下载：准备完成的才能点，用 POST 读取后交给浏览器保存；没准备好的置灰', async () => {
     const backend = mockBackend();
-    const { router } = await mountAt(RouteName.systemManagementReports);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    const saved = stubSave();
+    const success = vi.spyOn(ElMessage, 'success');
+    await mountAt(RouteName.systemManagement);
+    await vi.waitFor(() => expect(rows()).toHaveLength(4));
+    const downloadButtons = [...document.querySelectorAll<HTMLButtonElement>('.el-table__body button')].filter(
+      item => item.textContent?.trim() === '下载'
+    );
+    expect(downloadButtons.map(item => item.disabled)).toEqual([true, false, true]);
+
+    downloadButtons[1]?.click();
+    await vi.waitFor(() => expect(success).toHaveBeenCalledWith('已交给浏览器下载'));
+    expect(backend.downloads).toEqual(['POST apply-ready']);
+    expect(saved).toEqual(['医疗机构面层.zip']);
+  });
+
+  it('查看准备完成的申请：弹窗里也能下载', async () => {
+    const backend = mockBackend();
+    const saved = stubSave();
+    await mountAt(RouteName.systemManagement, { apply: 'apply-ready' });
+    await vi.waitFor(() => expect(button(dialog(), '下载')).toBeDefined());
+
+    button(dialog(), '下载')?.click();
+    await vi.waitFor(() => expect(saved).toEqual(['医疗机构面层.zip']));
+    expect(backend.downloads).toEqual(['POST apply-ready']);
+  });
+
+  it('统计报表：不请求申请列表；表格和下载，处理完成的才能下载；切回资源审核时再请求申请列表', async () => {
+    const backend = mockBackend();
+    const saved = stubSave();
+    const { router, wrapper } = await mountAt(RouteName.systemManagementReports);
+    await vi.waitFor(() => expect(rows()).toHaveLength(2));
     expect(backend.list).toBe(0);
-    expect(document.body.textContent).toContain('统计报表：迁移中');
+    expect(wrapper.find('h2').text()).toBe('统计报表');
+    expect(rows()).toEqual([
+      ['1', '2024', '基本统计报表_省级', '2026-10-14 14:20:00', '2026-10-14 14:23:45', '处理完成', '下载'],
+      ['2', '2024', '汇总统计报表_市级', '2026-10-14 14:20:00', '2026-10-14 14:23:45', '正在处理', '下载']
+    ]);
+    const downloadButtons = [...document.querySelectorAll<HTMLButtonElement>('.el-table__body button')];
+    expect(downloadButtons.map(item => item.disabled)).toEqual([false, true]);
+
+    downloadButtons[0]?.click();
+    await vi.waitFor(() => expect(saved).toEqual(['基本统计报表_省级.zip']));
+    expect(backend.downloads).toEqual(['GET report-1']);
 
     await router.push({ name: RouteName.systemManagement });
     await vi.waitFor(() => expect(backend.list).toBe(1));
@@ -177,7 +256,7 @@ describe('SystemManagementPage', () => {
       })
     );
     const { router, wrapper } = await mountAt(RouteName.systemManagement);
-    await vi.waitFor(() => expect(rows()).toHaveLength(3));
+    await vi.waitFor(() => expect(rows()).toHaveLength(4));
 
     await wrapper.findAll('.el-table__body button').find(item => item.text() === '审核')?.trigger('click');
     await vi.waitFor(() => expect(router.currentRoute.value.query.apply).toBe('apply-pending'));

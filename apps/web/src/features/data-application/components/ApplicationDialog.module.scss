@@ -45,6 +45,13 @@
   gap: var(--space-xs);
 }
 
+// 准备状态和下载在同一行
+.prepare {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
 .form {
   :global(.el-form-item:last-child) {
     margin-bottom: 0;

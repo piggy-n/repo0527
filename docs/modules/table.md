@@ -45,6 +45,20 @@
 
 演变：第一版直接用当前数据的总数，翻页失败会跳回第 1 页；第二版只记一个值、换了条件就清空，"离开后重新进入"和"条件不变再点查询"两种情况记不回来（请求的页码 1、1、3、1）；第三版按条件记录，但仍会被旧缓存的总页数修正页码（总数先减少、再增加后，第 3 页被跳回第 2 页）；第四版只认请求结束时的数据，但请求失败后保留的旧缓存也是"请求结束时的数据"，而且重新进入列表时要等后台刷新成功才有总数，这两种情况下翻页失败仍会改页码。以上情况都有页面测试。
 
+### 后端是 PageHelper 的列表：`usePagedList`
+
+系统管理的申请列表和统计报表（2026-10-27）用 `shared/table/usePagedList`，做法同上，多一条 PageHelper 的规则：页码越界时后端改成最后一页并返回那一页的数据，没有数据时原样返回请求的页码、`pages` 是 0（实测）。请求成功后页码跟着后端返回的页码（`min(pageNum, max(pages, 1))`），并用查询提供的 `rememberPage` 把结果记到修正后的页上，页码跟过去时不再请求一次（同资源管理的 `useResourceList`）。
+
+```ts
+const list = usePagedList({
+  emptyFilters: () => ({ name: '' }),
+  normalize: filters => ({ name: filters.name.trim() }), // 点"查询"时整理条件
+  useQuery: useReportPageQuery // 返回 useQuery 的结果加上 rememberPage
+});
+```
+
+返回筛选表单、页码、每页条数、当前页的结果（`page`）、总数、两种加载状态和 `search`、`resetFilters`、`changePageSize`、`refresh`。行为由 `useApplicationList.test.tsx` 覆盖（9 项，包括越界和空结果）。文件管理（Spring 分页）和资源管理（按目录）仍是各自的写法，没有改。
+
 ## TableSkeleton
 
 ```tsx

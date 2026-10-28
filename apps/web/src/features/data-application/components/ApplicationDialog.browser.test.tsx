@@ -62,7 +62,8 @@ afterEach(async () => {
 });
 
 async function open() {
-  mounted.push(mount(ApplicationDialog, { props: { owner: owner() }, attachTo: document.body }));
+  const downloads = { isDownloading: () => false, percentOf: () => null };
+  mounted.push(mount(ApplicationDialog, { props: { owner: owner(), downloads }, attachTo: document.body }));
   await nextTick();
   await expect.poll(() => document.querySelector('.el-dialog .el-descriptions')).not.toBeNull();
   const dialog = document.querySelector<HTMLElement>('.el-dialog');

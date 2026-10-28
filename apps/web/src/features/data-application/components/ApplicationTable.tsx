@@ -3,10 +3,13 @@ import { useMediaQuery } from '@vueuse/core';
 import { ElButton, ElTable, ElTableColumn, vLoading } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
+import { PrepareStatusText } from '@/shared/data-request/PrepareStatusText';
+import { DownloadButton } from '@/shared/file-transfer/DownloadButton';
+import type { RowDownloadState } from '@/shared/file-transfer/useRowDownloads';
 import { TableSkeleton } from '@/shared/table/TableSkeleton';
 import type { Application } from '../api';
-import { hasPrepareStep } from '../status';
-import { AuditStatusTag, PrepareStatusText } from './ApplicationStatus';
+import { canDownload, hasPrepareStep } from '../status';
+import { AuditStatusTag } from './ApplicationStatus';
 import styles from './ApplicationTable.module.scss';
 
 interface Row {
@@ -16,7 +19,7 @@ interface Row {
 
 /**
  * 申请表格（管理员审核用）：占满父元素的剩余高度；没有值的单元格由表格的全局样式显示"-"。
- * 待审核的"审核"，其余"查看"；统计任务没有申请的字段，不能查看（ADR 0091）
+ * 待审核的"审核"，其余"查看"；统计任务没有申请的字段，不能查看。有数据准备这一步的才有下载，准备完成才能点（ADR 0091）
  */
 export const ApplicationTable = defineComponent({
   name: 'ApplicationTable',
@@ -28,11 +31,13 @@ export const ApplicationTable = defineComponent({
     // 两种加载状态见 docs/modules/table.md：没有数据时显示骨架屏，显示着旧数据时显示遮罩
     initialLoading: { type: Boolean, required: true },
     refreshing: { type: Boolean, required: true },
-    error: { type: Boolean, required: true }
+    error: { type: Boolean, required: true },
+    downloads: { type: Object as PropType<RowDownloadState>, required: true }
   },
   emits: {
     retry: () => true,
-    open: (_application: Application) => true
+    open: (_application: Application) => true,
+    download: (_application: Application) => true
   },
   setup(props, { emit }) {
     // 骨架屏和遮罩都延迟显示：请求很快完成时什么都不出现，避免一闪而过
@@ -49,6 +54,20 @@ export const ApplicationTable = defineComponent({
         <ElButton link type="primary" onClick={() => emit('open', application)}>
           {application.status === 'pending' ? '审核' : '查看'}
         </ElButton>
+      );
+    }
+
+    function renderDownload(application: Application) {
+      if (!hasPrepareStep(application)) {
+        return null;
+      }
+      return (
+        <DownloadButton
+          downloading={props.downloads.isDownloading(application.id)}
+          percent={props.downloads.percentOf(application.id)}
+          disabled={!canDownload(application)}
+          onClick={() => emit('download', application)}
+        />
       );
     }
 
@@ -93,7 +112,12 @@ export const ApplicationTable = defineComponent({
             <ElTableColumn label="操作" width="140" align="center" fixed={compact.value ? false : 'right'}>
               {{
                 // 固定两格：各行的"审核 / 查看"和下载上下对齐
-                default: ({ row }: Row) => <div class={styles.actions}>{renderOpen(row)}</div>
+                default: ({ row }: Row) => (
+                  <div class={styles.actions}>
+                    <span>{renderOpen(row)}</span>
+                    <span>{renderDownload(row)}</span>
+                  </div>
+                )
               }}
             </ElTableColumn>
           ],
