@@ -38,6 +38,10 @@ export type ProfileName = keyof typeof NETWORK_PROFILES;
 const CHANNELS = ['msedge', 'chrome', 'chromium'] as const;
 export type Channel = (typeof CHANNELS)[number];
 
+/** 测什么：登录到地图第一次加载完成，或者进了地图以后第一次切到三维 */
+const SCENARIOS = ['login', 'switch-3d'] as const;
+export type Scenario = (typeof SCENARIOS)[number];
+
 /** 一份要测的构建：名称用在报告里，目录相对 apps/web */
 export interface Build {
   readonly name: string;
@@ -45,12 +49,15 @@ export interface Build {
 }
 
 export interface MeasureOptions {
+  readonly scenario: Scenario;
   /** 要测的构建；有多份时交替测量，第一份是对比的参照 */
   readonly builds: readonly Build[];
   readonly runs: number;
   readonly profiles: readonly ProfileName[];
   /** 登录页停留的毫秒数，模拟输入账号密码的时间 */
   readonly dwell: number;
+  /** 切到三维之前在二维地图上停留的毫秒数（从二维画面稳定算起），模拟先看一会儿二维；预加载在这段时间里进行 */
+  readonly stay: number;
   /** CPU 降速倍数，1 是不降速 */
   readonly cpu: number;
   readonly channel: Channel;
@@ -59,8 +66,10 @@ export interface MeasureOptions {
   readonly label: string;
   /** 已经在运行的服务器地址；不给时由脚本启动 vite preview */
   readonly url: string | undefined;
-  /** 每一次从点击登录到画面稳定最多等多久（毫秒） */
+  /** 每一次从点击登录到画面稳定最多等多久（毫秒）；切到三维的也等这么久 */
   readonly timeout: number;
+  /** 不连后端：登录、资源目录用假的回应，不用账号；配内网构建（不请求天地图）比较几种做法 */
+  readonly mockBackend: boolean;
 }
 
 function isProfileName(name: string): name is ProfileName {
@@ -69,6 +78,10 @@ function isProfileName(name: string): name is ProfileName {
 
 function isChannel(name: string): name is Channel {
   return (CHANNELS as readonly string[]).includes(name);
+}
+
+function isScenario(name: string): name is Scenario {
+  return (SCENARIOS as readonly string[]).includes(name);
 }
 
 const NAME = /^[\w-]+$/;
@@ -105,18 +118,24 @@ export function parseOptions(argv: readonly string[]): MeasureOptions {
     args,
     strict: true,
     options: {
+      scenario: { type: 'string', default: 'login' },
       builds: { type: 'string' },
       runs: { type: 'string', default: '5' },
       profiles: { type: 'string', default: 'none,fast4g,slow4g' },
       dwell: { type: 'string', default: '5000' },
+      stay: { type: 'string', default: '5000' },
       cpu: { type: 'string', default: '1' },
       channel: { type: 'string', default: 'msedge' },
       headless: { type: 'boolean', default: false },
       label: { type: 'string', default: 'run' },
       url: { type: 'string' },
-      timeout: { type: 'string', default: '120000' }
+      timeout: { type: 'string', default: '120000' },
+      'mock-backend': { type: 'boolean', default: false }
     }
   });
+  if (!isScenario(values.scenario)) {
+    throw new Error(`--scenario 只能是 ${SCENARIOS.join('、')}，收到 ${values.scenario}`);
+  }
   const profiles = values.profiles.split(',').map(name => name.trim());
   const unknown = profiles.filter(name => !isProfileName(name));
   if (unknown.length > 0 || profiles.length === 0) {
@@ -132,16 +151,19 @@ export function parseOptions(argv: readonly string[]): MeasureOptions {
     throw new Error('--url 和 --builds 不能同时给出：给了地址时测的是那个服务器');
   }
   return {
+    scenario: values.scenario,
     builds: values.builds === undefined ? [{ name: 'dist', dir: 'dist' }] : parseBuilds(values.builds),
     runs: integerAtLeast(values.runs, 1, 'runs'),
     profiles: profiles.filter(isProfileName),
     dwell: integerAtLeast(values.dwell, 0, 'dwell'),
+    stay: integerAtLeast(values.stay, 0, 'stay'),
     cpu: integerAtLeast(values.cpu, 1, 'cpu'),
     channel: values.channel,
     headless: values.headless,
     label: values.label,
     url: values.url,
-    timeout: integerAtLeast(values.timeout, 1000, 'timeout')
+    timeout: integerAtLeast(values.timeout, 1000, 'timeout'),
+    mockBackend: values['mock-backend']
   };
 }
 
@@ -248,7 +270,7 @@ export function summarizeRun(raw: RawRun): RunSummary {
   };
 }
 
-function sum(values: readonly number[]): number {
+export function sum(values: readonly number[]): number {
   return values.reduce((total, value) => total + value, 0);
 }
 
@@ -262,10 +284,12 @@ export function median(values: readonly number[]): number | undefined {
   return sorted.length % 2 === 1 ? sorted[middle] : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
 }
 
-const ms = (value: number | undefined) => (value === undefined ? '—' : String(Math.round(value)));
-const kb = (bytes: number | undefined) => (bytes === undefined ? '—' : `${Math.round(bytes / 1024)} KB`);
+/** 毫秒取整，没有数据时是破折号 */
+export const ms = (value: number | undefined) => (value === undefined ? '—' : String(Math.round(value)));
+export const kb = (bytes: number | undefined) => (bytes === undefined ? '—' : `${Math.round(bytes / 1024)} KB`);
 
-function medianOf<T>(runs: readonly T[], pick: (run: T) => number | undefined | null): number | undefined {
+/** 几次里取到的数的中位数，取不到的不算 */
+export function medianOf<T>(runs: readonly T[], pick: (run: T) => number | undefined | null): number | undefined {
   return median(runs.map(pick).filter((value): value is number => typeof value === 'number'));
 }
 
@@ -343,8 +367,8 @@ export interface BuildResult {
   readonly profiles: readonly ProfileResult[];
 }
 
-// 和参照的差：负数是更快
-function delta(value: number | undefined, reference: number | undefined): string {
+/** 和参照的差：负数是更快 */
+export function delta(value: number | undefined, reference: number | undefined): string {
   if (value === undefined || reference === undefined) {
     return '';
   }

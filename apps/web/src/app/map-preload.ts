@@ -24,6 +24,20 @@ function browserSaveData(): boolean {
 }
 
 /**
+ * 地图页里预加载另一个框架的运行时（ADR 0091）：画布请求时，浏览器空闲时调用 load；规则同登录页的预加载，
+ * 省流量模式时跳过，失败时不提示、不重试，切换时照常加载
+ */
+export function preloadRuntimeWhenIdle(load: () => Promise<unknown>, options: MapPreloadOptions = {}): void {
+  const { whenIdle = whenBrowserIdle, saveData = browserSaveData } = options;
+  if (saveData()) {
+    return;
+  }
+  whenIdle(() => {
+    load().catch(() => undefined);
+  });
+}
+
+/**
  * 登录页预加载地图页（ADR 0061 第 3 节）：第一次进入登录页后，浏览器空闲时调用 load（路由用的同一个加载函数）。
  * 省流量模式时跳过；失败时不提示、不重试，进入地图路由时照常加载
  */

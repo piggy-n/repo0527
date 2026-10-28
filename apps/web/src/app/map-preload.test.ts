@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import { RouteName } from '@/shared/router/route-names';
-import { type MapPreloadOptions, setupMapPreload } from './map-preload';
+import { type MapPreloadOptions, preloadRuntimeWhenIdle, setupMapPreload } from './map-preload';
 
 const Empty = { render: () => null };
 
@@ -121,5 +121,29 @@ describe('setupMapPreload', () => {
     vi.advanceTimersByTime(2000);
 
     expect(skipped).not.toHaveBeenCalled();
+  });
+});
+
+describe('preloadRuntimeWhenIdle', () => {
+  it('浏览器空闲时才加载；省流量模式时跳过（ADR 0091）', () => {
+    const idle: (() => void)[] = [];
+    const load = vi.fn<() => Promise<void>>(() => Promise.resolve());
+    preloadRuntimeWhenIdle(load, { whenIdle: callback => idle.push(callback), saveData: () => false });
+    expect(load).not.toHaveBeenCalled();
+    idle[0]?.();
+    expect(load).toHaveBeenCalledTimes(1);
+
+    const skipped = vi.fn<() => Promise<void>>(() => Promise.resolve());
+    preloadRuntimeWhenIdle(skipped, { whenIdle: callback => idle.push(callback), saveData: () => true });
+    expect(idle).toHaveLength(1);
+  });
+
+  it('加载失败时不抛出，拒绝有人处理', async () => {
+    const failed = Promise.reject(new Error('分块加载失败'));
+    const handled = vi.spyOn(failed, 'catch');
+    preloadRuntimeWhenIdle(() => failed, { whenIdle: callback => callback(), saveData: () => false });
+    await flush();
+
+    expect(handled).toHaveBeenCalledTimes(1);
   });
 });

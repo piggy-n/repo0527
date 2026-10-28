@@ -8,9 +8,11 @@ import {
 } from '@yzt/map-core';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent, nextTick, ref } from 'vue';
+import { defineComponent, nextTick, onMounted, provide, ref } from 'vue';
 import { CesiumCanvas, type SceneViewOptions } from './CesiumCanvas';
 import { type MapHandle, provideMap } from './provide-map';
+import { MAP_RUNTIME_PRELOAD, type MapRuntimePreloader } from './runtime';
+import { injectMapState } from './use-map';
 
 const CAMERA: CameraState = { center: [119.5, 33], zoom: 6.8, bearing: 0, pitch: 0 };
 
@@ -221,5 +223,134 @@ describe('CesiumCanvas', () => {
     await nextTick();
 
     expect(createView.mock.calls[0]?.[0].onUnsupported).toBe(onUnsupported);
+  });
+});
+
+/** 假二维视图：恢复时进入 ready，由用例决定什么时候画面稳定 */
+class FakeFlatView implements MapView {
+  readonly kind = '2d';
+  state: ViewState = 'paused';
+  failure = null;
+  sourceErrors: SourceErrors = NO_SOURCE_ERRORS;
+  readonly #listeners = new Map<string, Set<(value: never) => void>>();
+
+  whenReady(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  pause(): void {
+    this.state = 'paused';
+    this.#emit('statechange', 'paused');
+  }
+
+  resume(): void {
+    this.state = 'ready';
+    this.#emit('statechange', 'ready');
+  }
+
+  settle(): void {
+    this.#emit('settle', undefined);
+  }
+
+  flyTo(): void {}
+  fitBounds(): void {}
+  pick() {
+    return { kind: 'miss' } as const;
+  }
+  project() {
+    return null;
+  }
+  queryRendered() {
+    return [];
+  }
+
+  on(event: string, callback: (value: never) => void): Unsubscribe {
+    const listeners = this.#listeners.get(event) ?? new Set();
+    listeners.add(callback);
+    this.#listeners.set(event, listeners);
+    return () => listeners.delete(callback);
+  }
+
+  [Symbol.dispose](): void {}
+
+  #emit(event: string, value: unknown): void {
+    this.#listeners.get(event)?.forEach(listener => (listener as (value: unknown) => void)(value));
+  }
+}
+
+// 页面放一个挂着假二维视图的画布和三维画布，provide 预加载的函数
+function setupPreload() {
+  const preload = vi.fn<MapRuntimePreloader>();
+  const flat = new FakeFlatView();
+  const factory = controlledFactory();
+  const shown = ref(true);
+  let handle: MapHandle<'basemap'> | undefined;
+  const FlatCanvas = defineComponent(() => {
+    const state = injectMapState('FlatCanvas');
+    const element = ref<HTMLElement>();
+    onMounted(() => {
+      if (element.value) {
+        state.attachView(flat, element.value);
+        flat.resume();
+      }
+    });
+    return () => <div ref={element} />;
+  });
+  mount(
+    defineComponent(() => {
+      handle = provideMap({ groups: ['basemap'], camera: CAMERA });
+      provide(MAP_RUNTIME_PRELOAD, preload);
+      return () => (
+        <div>
+          <FlatCanvas />
+          {shown.value && <CesiumCanvas createView={factory.createView} />}
+        </div>
+      );
+    })
+  );
+  if (!handle) {
+    throw new Error('没有创建地图句柄');
+  }
+  return { preload, flat, factory, shown, map: handle };
+}
+
+describe('CesiumCanvas 的预加载（ADR 0091）', () => {
+
+  it('二维第一次画面稳定以后请 app 预加载三维的运行时，只请求一次', async () => {
+    const { preload, flat } = setupPreload();
+    await flush();
+    expect(preload).not.toHaveBeenCalled();
+
+    flat.settle();
+    await flush();
+    flat.settle();
+    await flush();
+
+    expect(preload.mock.calls).toStrictEqual([['3d']]);
+  });
+
+  it('二维稳定之前就切到三维：不预加载，切换时照常加载', async () => {
+    const { preload, flat, factory, map } = setupPreload();
+    await flush();
+
+    map.setDimension('3d');
+    await nextTick();
+    flat.settle();
+    await flush();
+
+    expect(preload).not.toHaveBeenCalled();
+    expect(factory.requests).toHaveLength(1);
+  });
+
+  it('三维画布卸载以后不再预加载', async () => {
+    const { preload, flat, shown } = setupPreload();
+    await flush();
+
+    shown.value = false;
+    await nextTick();
+    flat.settle();
+    await flush();
+
+    expect(preload).not.toHaveBeenCalled();
   });
 });

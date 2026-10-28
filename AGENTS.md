@@ -241,7 +241,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 步行时的室内地图（小地图、完整地图）在 `features/scene-models`：楼层和着色用 `indoorMapOf` 按导航网格缓存，人的位置来自步行状态的 `player`；完整地图打开时用步行意图的 `paused` 暂停，双击瞬移用 `teleport` 计数；地图的取景、缩放是纯函数（ADR 0087）
 - 第三人称（ADR 0090）：人称是步行意图的 `view`，相机的挂法（弹簧臂、防穿墙、转身、淡出）在 map-core 的 `WalkRig`，人物模型 `public/roam/Cesium_Man.glb`（CC BY 4.0，署名见同目录 `CREDITS.txt`）由拥有者给出地址；入口暂不开放，现状底图页不给 `RoamBar` 传 `personSwitch`
 - 二三维切换用上下文的 `map.setDimension(kind)`：页面同时放 `<MapCanvas>` 和 `<CesiumCanvas>`，每种视图一个画布，上下文的 `view` 等只反映当前种类；切换时要做的业务（如 `basemap.selectForDimension`：三维默认影像、二维默认矢量）由页面在同一处调用。三维画布第一次切到三维时才加载，运行时由 app 的 `withMapRuntime` 通过 `MAP_RUNTIME` 注入，不在 `main.ts` 里安装（会把 maplibre-gl 带进入口，ADR 0079 第 2、8 节）
-- 地图页的路由组件用 `app/map-framework.ts` 的 `withMapRuntime` 包装：同时加载默认框架（`defaultMapFramework()`）的运行时和页面，都到了以后设置运行时、预热 Worker 池再返回页面；登录页空闲时 `app/map-preload.ts` 用同一个加载函数预加载，所以地图页分块的模块不在顶层做重的计算（ADR 0061）；交给 MapLibre 的容器元素只用静态 class，可变的 class 放在外层元素上，否则 Vue 会冲掉 MapLibre 自己加的 class
+- 地图页的路由组件用 `app/map-framework.ts` 的 `withMapRuntime` 包装：同时加载默认框架（`defaultMapFramework()`）的运行时和页面，都到了以后设置运行时、预热 Worker 池再返回页面；登录页空闲时 `app/map-preload.ts` 用同一个加载函数预加载，所以地图页分块的模块不在顶层做重的计算（ADR 0061）；二维第一次画面稳定后由三维画布请 app 空闲时预加载三维运行时（`MAP_RUNTIME_PRELOAD`，省流量模式跳过，ADR 0091）；交给 MapLibre 的容器元素只用静态 class，可变的 class 放在外层元素上，否则 Vue 会冲掉 MapLibre 自己加的 class
 - 地图页被缓存时（ADR 0063）：`MapCanvas` 在页面停用时暂停视图、激活时恢复，隐藏期间的定位等恢复后再执行；视图恢复时先按容器尺寸调整画布，暂停时进行中的定位动画直接到终点并写回会话；面板内容在页面停用时按隐藏处理（`active` 为 false）
 - 相机事件带 `view` 和 `cause`（`user` / `program` / `sync`），不用时间窗口判断回声（ADR 0024）
 - 一个不合法的图层会让整个视图进入 `failed`，样式出现新版本时自动恢复（ADR 0026）；来自后端等外部配置的图层，由拥有者在配置变化时先校验自己的分组，不合法的不提交给会话

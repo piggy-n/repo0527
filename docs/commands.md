@@ -19,7 +19,7 @@
 | 生产产物的浏览器冒烟 | `pnpm build:intranet` → `pnpm --filter @yzt/web test:smoke` |
 | 内网部署的构建 | `pnpm build:intranet` |
 | 预览构建产物 | `pnpm --filter @yzt/web preview` |
-| 实测"点击登录 → 地图第一次加载完成" | `pnpm --filter @yzt/web measure:map-load` |
+| 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter @yzt/web measure:map-load` |
 | 每月检查依赖 | `pnpm deps:check` |
 | 范围内升级 | `pnpm deps:update:within-range` |
 | 大版本升级 | `pnpm deps:update:allow-major` |
@@ -163,13 +163,13 @@ pnpm add -Dw -E some-tool
 
 ### `pnpm --filter @yzt/web measure:map-load`
 
-**作用**：实测"点击登录 → 地图第一次加载完成"在不同网络下的耗时，输出各步骤、各资源的中位数（5E.1）。
+**作用**：实测"点击登录 → 地图第一次加载完成"在不同网络下的耗时，输出各步骤、各资源的中位数（5E.1）；加 `--scenario switch-3d` 测进了地图以后第一次切到三维（3D.5a）。
 
 **什么时候用**：评估地图资源的加载策略（预加载、按需加载）前后各测一次；三维阶段、阶段七改了加载方式后复测。
 
 **执行了什么**：先 `vite build`，再由 Node 运行 `tools/measure-map-load/cli.ts`：用 `vite preview` 提供产物，Playwright 驱动本机的 Edge，每次用新的浏览器上下文打开登录页、停留几秒、登录、等到画面稳定；网络和 CPU 用 CDP 限速。原始数据写进 `tools/measure-map-load/results.local/`（不入库）。
 
-**注意事项**：要先在自己的终端设置环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD`；默认三档网络各 5 次，Slow 4G 每次约 20 秒，全部跑完约 5 分钟，期间会弹出浏览器窗口。对比几份构建时不用这个脚本（它会先构建 `dist`），直接运行 `cli.ts` 并给出 `--builds`。参数（次数、网络、停留时长、CPU 降速、多份构建等）和实测的前提见 [modules/perf.md](modules/perf.md)。
+**注意事项**：要先在自己的终端设置环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD`（加 `--mock-backend` 时不连后端、不用账号，配内网构建比较几种做法）；默认三档网络各 5 次，Slow 4G 每次约 20 秒，全部跑完约 5 分钟，期间会弹出浏览器窗口。对比几份构建时不用这个脚本（它会先构建 `dist`），直接运行 `cli.ts` 并给出 `--builds`。参数（次数、网络、停留时长、CPU 降速、多份构建等）和实测的前提见 [modules/perf.md](modules/perf.md)。
 
 ### `pnpm --filter @yzt/web icons`
 

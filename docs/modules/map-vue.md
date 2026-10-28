@@ -16,7 +16,7 @@
 | `MapCanvas.tsx` | `<MapCanvas>`：二维地图画布，挂载后创建视图、卸载时释放 |
 | `CesiumCanvas.tsx` | `<CesiumCanvas>`：三维画布，第一次切到三维时加载运行时和 map-cesium 再创建视图 |
 | `failed-view.ts` | `FailedView`：框架加载失败时挂上的视图，一直处于引擎失败 |
-| `runtime.ts` | `MAP_RUNTIME`：app 提供"加载某个框架的运行时"的函数用的注入键 |
+| `runtime.ts` | `MAP_RUNTIME`：app 提供"加载某个框架的运行时"的函数用的注入键；`MAP_RUNTIME_PRELOAD`：app 提供"预加载某个框架的运行时"的函数（ADR 0091） |
 | `use-map.ts` | `useMap()`：子孙组件取只读上下文；`useMapOverlay()`：悬浮元素登记自己贴着的边 |
 
 ## 用法
@@ -122,6 +122,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 
 - 和 `<MapCanvas>` 并列放在页面里，外层绝对定位叠在同一块区域上（页面的根元素要相对定位）；当前显示的是二维时 `visibility: hidden`
 - 第一次切到三维时才加载：同时动态导入 `@yzt/map-cesium` 和调用注入的运行时加载函数（`MAP_RUNTIME`），都到了再创建 `CesiumView`；之后一直保留（ADR 0020 第 4 条）
+- 预加载（ADR 0091）：挂载时显示的是二维，就等上下文的 `whenSettled`（二维第一次画面稳定），那时三维视图还没有、也没在加载就调用注入的 `MAP_RUNTIME_PRELOAD`（`'3d'`），不等结果；等待期间切到三维、卸载时作废。什么时候真的加载（浏览器空闲、省流量模式跳过）由 app 决定，没有 provide 时不预加载
 - 视图总是以暂停状态创建，挂上后由 `shouldRun('3d')` 决定是否恢复：加载期间用户可能已经切回二维、页面也可能被停用
 - 加载失败（分块下载失败、没有注入运行时）时报告错误并挂上 `FailedView`：上下文照常显示引擎失败，`retry()` 重新加载；加载期间卸载时，加载到的视图直接释放、不挂上
 - props：`onUnsupported`（支持清单之外的图层，页面在开发环境下打印）；测试用的 `createView`

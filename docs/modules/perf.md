@@ -35,6 +35,19 @@ trace.mark('session');  // 记下 login-to-map:session，并量出从 start 到�
 
 步骤的清单是 `LOGIN_TO_MAP_STEPS`，实测脚本的 `STEPS` 和它一致（`tools/measure-map-load/report.test.ts` 保证）；加步骤时两边一起改。
 
+### 切到三维（`switchTo3d`，3D.5a）
+
+第一次切到三维时才加载 Cesium（ADR 0079 第 2 节），是否预加载按实测决定。每次点"三维"开始一轮：
+
+| 步骤 | 时刻 | 在哪里记 |
+|---|---|---|
+| 开始 `start` | 点"三维"：上下文的 `dimension` 变成 `3d` 的同一刻（同步侦听） | `shared/map/useSwitchTo3dMarks` |
+| `runtime` | 三维运行时（map-cesium 的分块，含 Cesium）加载完、设置好；之后再切换不加载，这一步不记 | `app/map-framework.ts` 的 `prepareMapRuntime` |
+| `view-ready` | 三维视图就绪 | `useSwitchTo3dMarks` |
+| `settled` | 三维第一次画面稳定（场景的 `settle`：相机停下、视野里的瓦片都已画出） | `useSwitchTo3dMarks` |
+
+步骤的清单是 `SWITCH_TO_3D_STEPS`，实测脚本的 `SCENE_STEPS` 和它一致（`tools/measure-map-load/scene-report.test.ts` 保证）。切回二维、页面卸载时停止等待，这一轮停在已经记下的步骤；上下文的当前视图按种类取，切过去时三维视图还没挂上，`whenReady` 等的就是新挂上的三维视图。
+
 ### 画面稳定
 
 视图就绪对应 MapLibre 的 `style.load`，这时瓦片还没到；用户看到完整的地图是在 `idle` 之后。所以：
@@ -77,7 +90,12 @@ pnpm --filter @yzt/web exec node tools/measure-map-load/cli.ts --runs 3 --label 
 | `--headless` | 不加 | 加上时无界面运行；默认有界面，用真实的 GPU 渲染 |
 | `--label` | `run` | 结果文件名的前缀，如 `baseline`、`preload` |
 | `--url` | — | 已经在运行的服务器；不给时由脚本启动 `vite preview`；不能和 `--builds` 一起用 |
-| `--timeout` | 120000 | 每一次从点击登录到画面稳定最多等多久 |
+| `--timeout` | 120000 | 每一次从点击登录到画面稳定最多等多久；切到三维的也等这么久 |
+| `--scenario` | `login` | `login` 测登录到地图；`switch-3d` 测进了地图以后第一次切到三维（3D.5a） |
+| `--stay` | 5000 | `switch-3d`：二维画面稳定以后停留多少毫秒再点"三维"，模拟先看一会儿二维；预加载在这段时间里进行 |
+| `--mock-backend` | 不加 | 不连后端：在浏览器里拦下 `/backend` 的请求，登录给假的 token、资源目录为空，不用账号；配内网构建（不请求天地图）时整个实测不出本机，用来比较几种做法的相对差别 |
+
+`switch-3d` 每一次：新的浏览器上下文、限速、登录，等到 `login-to-map:settled`，停留 `--stay` 毫秒，读一次 JS 堆（CDP 的 `JSHeapUsedSize`，先回收），点"三维"，等到 `switch-to-3d:settled`，再读一次 JS 堆。输出的表：步骤；map-cesium 分块、Cesium 运行时文件（复制到产物 `cesium/` 的 Worker 脚本和资源）的完成时刻；停留期间和点了以后各下载了多少；JS 堆增加多少；二维停留期间的长任务（预加载执行脚本会不会卡住二维）。
 
 两档限速取 Chrome DevTools 的预设（DevTools 按 0.9 折算吞吐量、放大延迟）：
 
@@ -239,3 +257,54 @@ Slow 4G 下的资源（毫秒，从发出登录请求算起）：
 - **final 对照 ADR 0061 的验收标准**：Fast 4G 的画面稳定 2223 ms，和 prewarm 的 2209 ms 相当；Slow 4G 的视图就绪 2039 ms，比只预加载（约 3.5 s）和 prewarm（4336 ms）都早。Slow 4G 的画面稳定 12493 ms，比 prewarm 慢 0.7 s，没达到"不差于约 11.8 s"：Worker 脚本推迟到两个分块之后才下载，省界跟着晚到；但天地图瓦片早了 2.3 s 画完，看得见的底图先到，只有省界的线晚了
 - **字体的时机**：推迟 SemiBold 在 Slow 4G 下快 1.6 s，两个字重都推迟快 5.1 s（视图就绪 0.8 s，Regular 不再和预加载抢带宽）；Fast 4G、不限速只快几十毫秒
 - **用户的决定**：保留 final（看得见的底图先到，Slow 4G 的画面稳定没达到 ADR 0061 的验收标准，记在这里）；字体不推迟（[ADR 0062](../adr/0062-font-loading-not-deferred.md)：收益只在慢网络的第一次访问，代价每次访问都有）
+
+## 3D.5a 切到三维的实测（2026-10-27，ADR 0091）
+
+内网构建（不请求天地图，三维没有影像）、`--mock-backend`、无界面 Edge（`--headless`）、登录页停留 2 秒、二维稳定后停留 5 秒（`--stay 5000`），三份构建交替测量，每档 3 次取中位数，原始数据 `results.local/switch3d-2026-10-28T05-07-17.316Z.json`。除了 baseline，每份都是对地图页的一处本地改动，构建后还原，不提交：
+
+| 构建 | 改动 |
+|---|---|
+| baseline | 当时的 `main`：第一次切到三维时才加载 |
+| idle | 二维第一次画面稳定后，`requestIdleCallback`（超时 2 秒）调用注入的运行时加载函数加载三维运行时 |
+| idle-warm | 在 idle 上，运行时加载完再 `fetch` 第一次切换会用到的 14 个 Cesium 文件（Worker 脚本和资源），看预取它们的上限 |
+
+三维画面稳定（毫秒，从点"三维"算起，括号里是和 baseline 的差）：
+
+| 构建 | 不限速 | Fast 4G | Slow 4G |
+|---|---|---|---|
+| baseline | 2271 | 8861 | 49400 |
+| idle | 2221（-50） | 7457（-1404） | 44896（-4503） |
+| idle-warm | 2089（-182） | 7258（-1603） | 47702（-1698） |
+
+三维运行时（毫秒）：
+
+| 构建 | 不限速 | Fast 4G | Slow 4G |
+|---|---|---|---|
+| baseline | 168 | 3436 | 18256 |
+| idle | 21 | 13 | 13187 |
+| idle-warm | 13 | 12 | 13182 |
+
+baseline 的资源（毫秒，从点"三维"算起；括号里是压缩后的大小）：
+
+| 网络 | map-cesium 分块 | Cesium 文件（最后一个） | 点了以后下载 | JS 堆增加 |
+|---|---|---|---|---|
+| 不限速 | 110（1029 KB） | 1465（64 次请求） | 3407 KB | 13.4 MB |
+| Fast 4G | 3373（1029 KB） | 8482（64 次请求） | 13893 KB | 13.5 MB |
+| Slow 4G | 18188（1029 KB） | 48859（64 次请求） | 3407 KB | 13.8 MB |
+
+看到的：
+
+- **预加载运行时**：分块在停留期间下完时，点了以后运行时 13 ms 就可用，Fast 4G 的三维画面稳定快 1.4 s；Slow 4G 下 5 秒不够下完，提前开始仍快 4.5 s。二维停留期间三份构建都没有长任务，idle 停留期间多下载约 1 MB；JS 堆的增加从 13.4 MB 变成 8.6 MB（约 5 MB 是 Cesium 的模块，预加载以后二维期间就占着）
+- **预取 Cesium 的文件**：只多快约 0.2 s，Slow 4G 抢带宽反而更慢；不做
+- **剩下的时间**：不限速时视图就绪（约 0.2 s）到画面稳定约 2 s，是 Cesium 的启动、建 Worker 和第一次绘制（软件渲染）；Fast 4G 下"点了以后下载"里有两个各约 5 MB 的正文字体（登录后还没下完，三维画面稳定时 SemiBold 仍在下载）。第一次切换取 14 种 Cesium 文件，每个 Worker 各取一遍，共 64 次请求；预览服务器给 `no-cache`，每次都要往返
+- **三维覆盖物又下载了一次省界**（139 KB）：二维在 Worker 里下载过，生产给 `assets/` 配长缓存后从缓存取
+- 第一轮实测里 Slow 4G 的一次卡住了 9 分钟：Playwright 的操作默认不限时，点"三维"一直在等；之后给页面操作设了 `--timeout`，点不了时这一次不算并留下截图，重测没有再出现
+
+实现后（`CesiumCanvas` 在二维稳定后调用 `MAP_RUNTIME_PRELOAD`，app 空闲时加载）和 baseline 交替复测，不限速、Fast 4G 各 3 次：
+
+| 构建 | 不限速 | Fast 4G |
+|---|---|---|
+| baseline | 3045 | 8876 |
+| preload | 3052（+7） | 7504（-1372） |
+
+三维运行时 Fast 4G 从 3464 ms 变成 12 ms，停留期间下载约 1 MB、没有长任务，和 idle 一致（这一轮不限速的画面稳定两份都在 3 s 左右，比上一轮慢约 0.8 s，是机器的波动）。

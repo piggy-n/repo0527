@@ -1,5 +1,7 @@
 import type { Component } from 'vue';
 import { loginToMap } from '@/shared/perf/login-to-map';
+import { preloadRuntimeWhenIdle } from './map-preload';
+import { switchTo3d } from '@/shared/perf/switch-to-3d';
 
 /** 地图框架：二维是 MapLibre，三维是 Cesium（ADR 0061 第 1 节、ADR 0079 第 2 节） */
 export type MapFramework = '2d' | '3d';
@@ -35,13 +37,19 @@ export function loadMapRuntime(framework: MapFramework): Promise<MapRuntime> {
   return RUNTIME_LOADERS[framework]();
 }
 
-/** 加载框架的运行时并做好设置；地图页的画布第一次需要另一个框架时调用（ADR 0079 第 2 节）。重复调用时模块已在模块表里，设置也只做一次 */
+/**
+ * 加载框架的运行时并做好设置；地图页的画布第一次需要另一个框架时调用（ADR 0079 第 2 节）。重复调用时模块已在模块表里，设置也只做一次。
+ * 三维的记下切到三维的 runtime 步骤（docs/modules/perf.md）
+ */
 export async function prepareMapRuntime(
   framework: MapFramework,
   load: (framework: MapFramework) => Promise<MapRuntime> = loadMapRuntime
 ): Promise<void> {
   const runtime = await load(framework);
   runtime.setup();
+  if (framework === '3d') {
+    switchTo3d.mark('runtime');
+  }
 }
 
 /**
@@ -63,6 +71,10 @@ export function withMapRuntime(
     // 两个分块都下完再预热：Worker 脚本不和它们抢带宽（实验里提前预热让 Slow 4G 的视图就绪晚了 0.8 秒）
     runtime.prewarm();
     loginToMap.mark('runtime');
-    return withRuntimeLoader(page, framework => prepareMapRuntime(framework));
+    return withRuntimeLoader(
+      page,
+      framework => prepareMapRuntime(framework),
+      framework => preloadRuntimeWhenIdle(() => prepareMapRuntime(framework))
+    );
   };
 }
