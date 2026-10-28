@@ -39,7 +39,9 @@ describe('路由表', () => {
       RouteName.devResources,
       RouteName.devMapUi,
       RouteName.devMap3d,
-      RouteName.devNavGrid
+      RouteName.devNavGrid,
+      RouteName.devSystemManagement,
+      RouteName.devMessageCenter
     ].toSorted());
   });
 

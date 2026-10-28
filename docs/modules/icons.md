@@ -180,6 +180,7 @@ packages/icons/
 | `warning` | `alert-triangle` | 警告、出错的提示条 |
 | `copy` | `copy` | 复制 |
 | `location-pin` | `map-pin`（实心，`icons/filled/`） | 坐标定位点的图钉；实心图标的根元素是 `fill="currentColor"`，没有描边 |
+| `header-bell` | `bell` | 顶栏右侧的消息按钮（2026-10-27 加入，消息弹框原型在用） |
 
 以后再加 Tabler 的图标照同样的做法，并补进这张表。
 

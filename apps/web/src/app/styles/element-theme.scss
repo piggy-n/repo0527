@@ -333,6 +333,38 @@ $tree-node: '.el-tree > .el-tree-node';
   }
 }
 
+// 页面内菜单（分栏布局的菜单型左栏）的候选写法，系统管理原型在用，和 /dev/system-management 的自写列表对比后再定：
+// 项高 44、16 号字、图标 18、圆角 4、项之间 4；当前项浅蓝底、主色、半粗，悬停更浅的蓝底（docs/design/page-layout.md"菜单型左栏"）
+.el-menu.menu-side {
+  --el-menu-item-height: 44px;
+  --el-menu-item-font-size: var(--font-size-lg);
+  --el-menu-base-level-padding: var(--space-md);
+  --el-menu-icon-width: 18px;
+  --el-menu-text-color: var(--color-text-primary);
+  --el-menu-hover-text-color: var(--color-text-primary);
+  --el-menu-hover-bg-color: var(--color-primary-bg-light);
+  --el-menu-active-color: var(--color-primary);
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  border-right: 0;
+
+  .el-menu-item {
+    border-radius: var(--radius-sm);
+
+    .el-icon {
+      margin-right: var(--space-sm);
+      font-size: 18px;
+    }
+
+    &.is-active {
+      background-color: var(--color-primary-bg);
+      font-weight: var(--font-weight-semibold);
+    }
+  }
+}
+
 // 浏览器自动填充账号密码后，会用带 !important 的样式把输入框改成浅蓝底，页面样式无法直接改回；
 // 用与输入框同色的内阴影盖住它，文字颜色也改回输入框的颜色（原理见 docs/design/theme.md）
 .el-input__inner:autofill {

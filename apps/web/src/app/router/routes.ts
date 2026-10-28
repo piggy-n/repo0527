@@ -74,6 +74,20 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
     meta: { title: '资源管理组件样例', public: true }
   },
   {
+    path: '/dev/system-management',
+    name: RouteName.devSystemManagement,
+    component: () => import('@/pages/dev/system-management/DevSystemManagementPage')
+      .then(({ DevSystemManagementPage }) => DevSystemManagementPage),
+    meta: { title: '系统管理交互原型', public: true }
+  },
+  {
+    path: '/dev/message-center',
+    name: RouteName.devMessageCenter,
+    component: () => import('@/pages/dev/message-center/DevMessageCenterPage')
+      .then(({ DevMessageCenterPage }) => DevMessageCenterPage),
+    meta: { title: '消息弹框交互原型', public: true }
+  },
+  {
     path: '/dev/theme',
     name: RouteName.devTheme,
     component: () => import('@/pages/dev/theme/DevThemePage').then(({ DevThemePage }) => DevThemePage),

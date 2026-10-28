@@ -11,6 +11,8 @@ export const RouteName = {
   devResourceManagement: 'dev-resource-management',
   devMap3d: 'dev-map-3d',
   devNavGrid: 'dev-nav-grid',
+  devSystemManagement: 'dev-system-management',
+  devMessageCenter: 'dev-message-center',
   currentMap: 'current-map',
   cityDashboard: 'city-dashboard',
   landChangeQuery: 'land-change-query',
