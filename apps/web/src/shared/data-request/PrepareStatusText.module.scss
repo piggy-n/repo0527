@@ -1,0 +1,26 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.waiting {
+  color: var(--color-text-secondary);
+}
+
+.processing {
+  color: var(--color-primary);
+}
+
+.success {
+  color: var(--color-success-text);
+}
+
+.timeout {
+  color: var(--color-warning);
+}
+
+.failed {
+  color: var(--color-danger);
+}

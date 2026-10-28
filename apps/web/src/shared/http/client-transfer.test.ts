@@ -31,6 +31,30 @@ describe('FormData 上传', () => {
 });
 
 describe('二进制响应', () => {
+  it('postBlob 用 POST、不带正文，同样识别错误信封', async () => {
+    const requests: { method: string; body: string }[] = [];
+    server.use(
+      // 所有方法都接住，用错了方法时是断言失败，不是没有模拟的请求
+      mock.all('/backend/download/:id', async ({ request, params }) => {
+        requests.push({ method: request.method, body: await request.text() });
+        if (params.id === 'missing') {
+          return HttpResponse.json({ code: 40000, msg: '文件不存在' });
+        }
+        return new HttpResponse('内容', { headers: { 'Content-Type': 'application/zip' } });
+      })
+    );
+
+    const result = await http.postBlob('/download/apply-1');
+    expect(result.contentType).toBe('application/zip');
+    expect(result.blob.size).toBe(new Blob(['内容']).size);
+    await expect(http.postBlob('/download/missing', undefined, { silent: true }))
+      .rejects.toMatchObject({ kind: 'business', message: '文件不存在' });
+    expect(requests).toEqual([
+      { method: 'POST', body: '' },
+      { method: 'POST', body: '' }
+    ]);
+  });
+
   it('保留文件字节、响应头、查询参数和鉴权，汇报接收进度', async () => {
     // MSW 的 XHR Blob 响应会经过文本解码；非 UTF-8 字节由真实浏览器用例验证
     const bytes = Uint8Array.from([0, 1, 2, 3, 9]);

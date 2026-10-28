@@ -4,7 +4,7 @@ import { defineComponent, type PropType } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import { navigate } from '@/shared/router/navigate';
-import type { NavDropdown, NavItem, NavLinkTarget } from '../menus';
+import { isNavItemActive, type NavDropdown, type NavItem, type NavLinkTarget } from '../menus';
 import styles from './HeaderNav.module.scss';
 
 const divider = (key: string) => <li key={key} role="separator" class={styles.compactDivider} />;
@@ -19,11 +19,11 @@ export const CompactNav = defineComponent({
     const router = useRouter();
     const route = useRoute();
 
-    // 一级项传入图标；子页面不带图标，靠缩进表示层级
-    const link = ({ label, route: target }: NavLinkTarget, icon?: IconName) => (
+    // 一级项传入图标和是否选中（同页的其他路由也算）；子页面不带图标，靠缩进表示层级
+    const link = ({ label, route: target }: NavLinkTarget, icon?: IconName, active = target === route.name) => (
       <ElDropdownItem
         key={target}
-        class={[!icon && styles.compactNested, target === route.name && styles.compactActive]}
+        class={[!icon && styles.compactNested, active && styles.compactActive]}
         onClick={() => void navigate(router, { name: target })}
       >
         {icon && <SvgIcon class={styles.compactIcon} name={icon} size={16} />}
@@ -60,7 +60,7 @@ export const CompactNav = defineComponent({
           dropdown: () => (
             <ElDropdownMenu>
               {props.items.flatMap((item, index) =>
-                item.kind === 'link' ? [link(item, item.icon)] : section(item, index)
+                item.kind === 'link' ? [link(item, item.icon, isNavItemActive(item, route.name))] : section(item, index)
               )}
             </ElDropdownMenu>
           )

@@ -19,7 +19,7 @@ import {
 import { defineComponent, type PropType } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { DataExtractionOwner, ExtractionStep } from '../composables/useDataExtraction';
-import { DATA_FORMATS, DATA_LAYERS } from '../data-request';
+import { DATA_FORMATS, DATA_LAYERS } from '@/shared/data-request/catalog';
 import { DATA_NAMES, HOT_KEYWORDS, PURPOSE_MAX_LENGTH } from '../extraction/extraction-form';
 import styles from './DataExtractionDialog.module.scss';
 import { KnowledgeGraphChart } from './KnowledgeGraphChart';

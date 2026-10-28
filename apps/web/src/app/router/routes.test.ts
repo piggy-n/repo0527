@@ -2,7 +2,7 @@ import type { RouteRecordRaw } from 'vue-router';
 import { describe, expect, it } from 'vitest';
 import { Role } from '@/shared/auth/roles';
 import { RouteName } from '@/shared/router/route-names';
-import { routes } from './routes';
+import { auditRouteProps, routes } from './routes';
 
 function flatten(records: readonly RouteRecordRaw[]): RouteRecordRaw[] {
   return records.flatMap(record => [record, ...flatten(record.children ?? [])]);
@@ -39,7 +39,9 @@ describe('路由表', () => {
       RouteName.devResources,
       RouteName.devMapUi,
       RouteName.devMap3d,
-      RouteName.devNavGrid
+      RouteName.devNavGrid,
+      RouteName.devSystemManagement,
+      RouteName.devMessageCenter
     ].toSorted());
   });
 
@@ -67,8 +69,18 @@ describe('路由表', () => {
     expect(Object.fromEntries(restricted)).toEqual({
       [RouteName.resourceManagement]: [Role.admin],
       [RouteName.systemManagement]: [Role.admin],
+      [RouteName.systemManagementReports]: [Role.admin],
       [RouteName.resourceApplication]: [Role.user]
     });
+  });
+
+  it('系统管理的资源审核把查询参数 apply 交给页面；空值和写了几次的不认', () => {
+    expect(records.find(({ name }) => name === RouteName.systemManagement)?.props).toBe(auditRouteProps);
+
+    expect(auditRouteProps({ query: { apply: 'apply-1' } })).toEqual({ section: 'audit', applyId: 'apply-1' });
+    expect(auditRouteProps({ query: {} })).toEqual({ section: 'audit', applyId: null });
+    expect(auditRouteProps({ query: { apply: '' } })).toEqual({ section: 'audit', applyId: null });
+    expect(auditRouteProps({ query: { apply: ['a', 'b'] } })).toEqual({ section: 'audit', applyId: null });
   });
 
   it('驾驶舱独立懒加载，所有登录角色可访问且离开即释放', () => {

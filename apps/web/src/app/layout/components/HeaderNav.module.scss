@@ -145,9 +145,10 @@
   list-style: none;
 }
 
+// 加上消息按钮后，管理员的顶栏在 1440 宽时要 1450，内边距从 14 改成 12 才放得下（docs/modules/layout.md）
 @media (width < #{breakpoints.$nav-icons}) {
   .item {
-    padding: 0 14px;
+    padding: 0 12px;
   }
 
   .icon {

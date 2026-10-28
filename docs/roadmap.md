@@ -108,13 +108,13 @@
 | 三维 | 3D.1 已做：Cesium 运行时作为第二个框架加载函数接入；实现镜像前写出三维样式的支持清单与降级规则（ADR 0079 第 7 节）；拾取按模型、椭球报告命中表面（本阶段没有地形）；相机同步只用公开 API。3D.5a 已定（ADR 0091）：不做悬停时加载，二维稳定后空闲时预加载运行时；不预取 Cesium 的静态资源；三维期间二维保留。三维接入 MVT 时再做：MVT 解码的 `@mapbox/vector-tile`、`pbf` 对齐 maplibre-gl 依赖的版本；三维点选改用瓦片数据服务，不再先对齐二维；瓦片数据服务与 MapLibre 之间避免重复下载的做法 | ADR 0019、0020、0021、0024、0091 |
 | 三维 | 3D.1 已做：工具模型的 `dragPan` 在三维映射成 Cesium 的旋转、平移开关；还原精确视角的条件由三维视图订阅相机事件、看 `cause` 判断。还没做（三维阶段没有做，移到阶段七）：`MapView` 的约定写成可复用的契约测试，二三维视图都跑 | ADR 0039、本文 |
 | 6 | AI 对话：AI 后端登录不再在前端写死账号密码 | ADR 0015 |
-| 6 | 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像、消息铃铛 | [modules/layout.md](modules/layout.md) |
+| 6 | 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像（消息铃铛已随系统管理与消息中心做成顶栏弹框，ADR 0093） | [modules/layout.md](modules/layout.md) |
 | 6 | 文件管理：上传、下载进度与预览已接入并完成本地验证；真实后端及业务文档待恢复后验收 | ADR 0011、0075、[migration.md](migration.md) |
 | 6 | 其他列表页套用阶段三的通用规则：`QueryForm`、加载状态的三种情况与 `TableSkeleton`、表格空值、操作按钮图标 | [modules/query-form.md](modules/query-form.md)、[modules/table.md](modules/table.md) |
 | 需要时 | 运行中 WebGL 上下文丢失（`webglcontextlost`）的处理：适配器目前没有处理，真实环境里遇到再做 | ADR 0030 |
 | 需要时 | `QueryForm`：日期范围这类 180 放不下的控件要加一种加宽的写法；会话结束时把 feature 的 store 一并重置（目前没有） | [modules/query-form.md](modules/query-form.md)、[modules/auth.md](modules/auth.md) |
 | 6 | 上传、下载统一成一套能力（统一的上传 / 下载方法或独立模块，包括进度、文件名、错误处理、预览前的 MIME 补齐），文件管理、数据下载（资源申请）、数据查询的导出共用，不再各自实现。旧项目在迁移范围内至少有 5 处各写各的下载：`libs/http-service.js` 的 blob 处理、`services/resource-application/applyApiService.js`（`downloadApplicationFile`、`downloadStatisticsReportFile`）、`downloadTaskService.js`（带进度）、文件管理 `FileManagementContent.vue`（`requestFileBlob`、`downloadBlob`）、数据查询 `space-monitoring-query/index.vue`（`downloadExportBlob`）；`FormData` 上传 3 处：文件管理上传弹窗、资源管理 Excel 导入、数据查询 | 本文（2026-10-08 提出） |
-| 6 | 页面内菜单（系统管理左栏）用 `ElMenu` 加变体还是做 `MxSideMenu`；宽屏时手动把侧栏收成窄条（基本统计页，可复用窄屏的窄条）；单列居中（消息中心）；旧页面左栏 296、348 归到 320 | [design/page-layout.md](design/page-layout.md) |
+| 6 | 宽屏时手动把侧栏收成窄条（基本统计页，可复用窄屏的窄条）；旧页面左栏 296、348 归到 320。页面内菜单已定为 `shared` 的 `SideNav`（ADR 0092），消息改为顶栏弹框（ADR 0093） | [design/page-layout.md](design/page-layout.md) |
 | 联调时 | 资源管理下载申请 `/api/apply/create` 的成功 data 与失败信封、可申请图层的正式目录、处室 `jsdxzx` 的含义 | 同上 |
 | 7 | 部署（nginx 回退与接口转发，带 hash 的产物长期缓存、`index.html` 不缓存、开启压缩）；版本号格式 | [deployment.md](deployment.md)、ADR 0005 |
 | 7 | 给 `cesium/` 配缓存（每个 Worker 都会请求一遍同一个脚本；带哈希的长缓存，不带哈希的协商缓存），有显卡的机器上复测第一次切到三维（3D.5a 在无界面浏览器里测，视图就绪以后约 2 秒是 Cesium 的启动和第一次绘制） | ADR 0091、[deployment.md](deployment.md) |
@@ -774,6 +774,17 @@ UI 工作流程补充（2026-10-20）：用户确认将设计与验证流程固�
 资源管理本轮收尾（2026-10-21）：R5 实现提交 `3c1472b` 后，按用户意见将「导入」改为紧跟属性表标题的无图标 link 按钮，提示仅为「支持 .xlsx、.xls」，启停开关移除内部文字。重新通过 80 项资源管理单元测试、16 项资源管理生产冒烟、六尺寸实际布局、类型 / lint / 公网及内网构建。按用户本轮条件指示，R1～R5 前端迁移阶段性验收收尾；真实写入及未知 Excel 契约仍待联调，合入前由原验收会话独立复测，不自行合入 main。
 
 资源管理剩余能力（2026-10-27）：之前的 `codex/migrate-resource-capabilities` 基线早于两次代码整改、与最新 main 冲突，经评估改为从 main 新建 `claude/migrate-resource-capabilities` 重新迁移，复用图谱数据、旧布局坐标基准和算法。已完成地图服务 / 数据接口（前端内存）、自助取数（关系图用 ECharts，ADR 0089；提交仍只在前端）和下载申请（`POST /api/apply/create`），组件样例 `/dev/resource-management`。创建申请的返回、可申请图层目录待联调，见[资源管理模块](modules/resource-management.md)末尾。
+
+系统管理与消息中心重新迁移（2026-10-27）：上一版合入后因写法不达标由 `6dda705` 撤回，这次从 main `6e2d606` 新建 `migrate-system-message`，不沿用上一版的代码、测试和文档。范围是管理员的资源审核、申请详情、统计报表与下载，以及消息（列表、未读、已读、业务跳转）；消息不再是独立页面，改为顶栏按钮下方的弹框。旧代码与真实接口的只读核对见 [migration.md](migration.md)"系统管理与消息中心：接口实测"。交互原型 `/dev/system-management`、`/dev/message-center` 中可切换的几项由用户按推荐确认，写成 [ADR 0092](adr/0092-system-management.md)（页面内菜单用 `shared` 的 `SideNav`：原型推荐的竖排 `ElMenu` 实测没有键盘导航，用户改选；两个路由、打开的申请是查询参数、统计任务标成"统计任务"）和 [ADR 0093](adr/0093-header-message-popover.md)（顶栏按钮下方的 `ElPopover`、列表里看全文、页面可见时每 60 秒刷新未读数）。
+
+系统管理与消息中心实现完成（2026-10-28）：七步依次完成资源审核列表、详情与审核弹窗、下载与统计报表、消息的 feature、顶栏的消息按钮与弹框，以及收尾。调整：
+
+- main 合入了三维的 0090、0091，本分支的两份 ADR 改号为 0092、0093
+- 加消息按钮后重新测量顶栏，1440～1679 一档的导航内边距从 14 改成 12，断点不变；"99+" 角标改为压在铃铛右上角
+- 全部已读的接口没有参数、后端改全部，做不到 ADR 0093 的"之后到达的新消息保持未读"，记为待联调
+- 开发页改为正式组件加演示拥有者；由此发现审核弹窗在淡出和提交成功时会闪一下别的内容，已修
+
+类型检查、lint（依赖方向规则在这台机器上跑不了）、Web 269 个文件 2305 项测试、公网与内网构建、生产冒烟 27 项通过；合进最新 main（`53a771c`）后重跑，Web 272 个文件 2342 项测试、两种构建、生产冒烟 28 项通过。真实后端的写操作、真实下载和统计报表数据待联调；顶栏角标与中间一档的内边距待用户验收；没有合入 main。见[阶段笔记](stages/system-message-migration.md)。
 
 资源与文件管理联合复测（2026-10-21）：R5 基线 `b2cb4c0` 已同步最新 main `c635c7c`。修复资源写入调度前会话竞态、文件删除晚到成功与缓存刷新；导入格式提示紧跟按钮，图片仅下载，文档预览头部紧凑排列，未保存确认框统一浅灰标题栏。两个间接依赖的 3 条安全公告已用补丁版本解决，官方生产依赖审计通过。已通过 `40e1a8e` 合入本地 main，合入后 Web 1797 + 图标包 35 项测试、22 项生产冒烟、类型 / lint / 公网及内网构建通过；开发样例复用正式预览范围并完成补充复测。真实后端写入与 Excel 未知契约仍待联调。完整审查、页面验收及合入后全量结果见[联合验收报告](stages/resource-file-management-acceptance.md)。
 

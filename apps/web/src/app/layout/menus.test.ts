@@ -60,6 +60,14 @@ describe('isNavItemActive', () => {
     expect(currentMap && isNavItemActive(currentMap, RouteName.fileManagement)).toBe(false);
   });
 
+  it('链接项在同一页面的其他路由上也选中：系统管理的统计报表', () => {
+    const system = navItems.find(item => item.label === '系统管理');
+
+    expect(system && isNavItemActive(system, RouteName.systemManagementReports)).toBe(true);
+    expect(system && isNavItemActive(system, RouteName.systemManagement)).toBe(true);
+    expect(system && isNavItemActive(system, RouteName.resourceManagement)).toBe(false);
+  });
+
   it('下拉项在其中任一页面时选中', () => {
     expect(query && isNavItemActive(query, RouteName.spaceMonitoringIndicators)).toBe(true);
     expect(query && isNavItemActive(query, RouteName.currentMap)).toBe(false);

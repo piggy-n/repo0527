@@ -1,0 +1,76 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100dvh;
+  min-height: 480px;
+  background-color: var(--color-bg-page);
+}
+
+.controlsBar {
+  flex: none;
+  padding: var(--space-md) var(--space-xl) var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-bg-container);
+
+  h1 {
+    margin: 0 0 var(--space-xs);
+    color: var(--color-text-title);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  code {
+    color: var(--color-primary);
+  }
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-lg);
+  margin-top: var(--space-sm);
+  font-size: var(--font-size-xs);
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-regular);
+
+  :global(.el-select) {
+    width: 140px;
+  }
+}
+
+// 弹框打开时的位置：右上角，左右、底边离窗口 16
+.stage {
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
+  align-items: flex-start;
+  min-height: 0;
+  padding: var(--space-sm) var(--space-lg) var(--space-lg);
+}
+
+// 和 HeaderMessages 的弹框外壳一样：宽 min(400px, 100vw - 32px)，最高 640，圆角和阴影按浮层规范
+.frame {
+  --message-panel-max-height: none;
+
+  display: flex;
+  flex-direction: column;
+  width: min(400px, 100%);
+  max-height: min(640px, 100%);
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}

@@ -11,6 +11,8 @@ export const RouteName = {
   devResourceManagement: 'dev-resource-management',
   devMap3d: 'dev-map-3d',
   devNavGrid: 'dev-nav-grid',
+  devSystemManagement: 'dev-system-management',
+  devMessageCenter: 'dev-message-center',
   currentMap: 'current-map',
   cityDashboard: 'city-dashboard',
   landChangeQuery: 'land-change-query',
@@ -21,10 +23,10 @@ export const RouteName = {
   spaceMonitoringIndicators: 'space-monitoring-indicators',
   fileManagement: 'file-management',
   aiChat: 'ai-chat',
-  messageCenter: 'message-center',
   resourceManagement: 'resource-management',
   resourceApplication: 'resource-application',
-  systemManagement: 'system-management'
+  systemManagement: 'system-management',
+  systemManagementReports: 'system-management-reports'
 } as const;
 
 export type RouteName = (typeof RouteName)[keyof typeof RouteName];

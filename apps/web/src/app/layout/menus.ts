@@ -12,6 +12,8 @@ export interface NavLinkTarget {
 export interface NavLink extends NavLinkTarget {
   kind: 'link';
   icon: IconName;
+  // 同一个页面的其他路由，在这些路由上也显示为选中（如系统管理的统计报表）
+  alsoActiveOn?: readonly RouteName[];
 }
 
 /** 两级下拉面板中的一组页面 */
@@ -60,7 +62,13 @@ export const navItems: readonly NavItem[] = [
   },
   { kind: 'link', label: '数据下载', icon: 'nav-download', route: RouteName.resourceApplication },
   { kind: 'link', label: '文件管理', icon: 'nav-files', route: RouteName.fileManagement },
-  { kind: 'link', label: '系统管理', icon: 'nav-system', route: RouteName.systemManagement },
+  {
+    kind: 'link',
+    label: '系统管理',
+    icon: 'nav-system',
+    route: RouteName.systemManagement,
+    alsoActiveOn: [RouteName.systemManagementReports]
+  },
   { kind: 'link', label: 'AI对话', icon: 'nav-ai', route: RouteName.aiChat }
 ];
 
@@ -82,10 +90,10 @@ export function visibleNavItems(items: readonly NavItem[], role: Role, rolesOf: 
   });
 }
 
-/** 导航项是否对应当前页面；下拉面板中任一页面是当前页面时也算 */
+/** 导航项是否对应当前页面；链接项的同页路由、下拉面板中任一页面是当前页面时也算 */
 export function isNavItemActive(item: NavItem, current: RouteRecordNameGeneric | null | undefined): boolean {
   if (item.kind === 'link') {
-    return item.route === current;
+    return item.route === current || item.alsoActiveOn?.some(route => route === current) === true;
   }
   return item.groups.some(group => group.links.some(link => link.route === current));
 }

@@ -28,6 +28,7 @@ docs/
 │  ├─ http.md                 shared/http：HTTP 客户端、ApiError、回调注入
 │  ├─ file-transfer.md        公共上传进度、二进制下载、文件名与取消语义
 │  ├─ file-management.md      文件管理迁移边界、上传交互原型与验证记录
+│  ├─ system-management.md    系统管理与消息：分层、申请与消息的数据层、待联调
 │  ├─ city-dashboard.md       城市体检驾驶舱：旧版口径、依赖评估、分步迁移与交互预览
 │  ├─ auth.md                 鉴权：会话、角色、页面权限、路由守卫、登录接口与表单
 │  ├─ storage.md              shared/storage：偏好的持久化（键值存储、偏好的范围、恢复与写入）
@@ -87,6 +88,7 @@ docs/
    - [阶段五之后的代码审查与整改](stages/post-5e-code-review.md)：继续迁移前先读，写法和会话核对的统一做法在这里
    - [main 分支的第二次全面审查与整改](stages/main-full-review.md)：在上一篇之后读，写法指标、测试里取必需值的做法和仍待决定的事项在这里
    - [三维阶段：Cesium 三维、模型与漫游](stages/stage-3d-cesium-and-roaming.md)：二三维切换、覆盖物镜像、3DT 模型、漫游与导航网格、预加载与生产冒烟
+   - [系统管理与消息的重新迁移](stages/system-message-migration.md)：Element 弹框的开关与过渡、同一个组件由真实数据和样例数据驱动、改坏验证测不出来时怎么办
 5. [commands.md](commands.md)：日常要用的命令
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明，并按 [UI 工作流程](design/ui-workflow.md) 完成交互原型和实际页面验证。

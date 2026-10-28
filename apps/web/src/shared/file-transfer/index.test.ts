@@ -32,6 +32,19 @@ describe('文件读取', () => {
     expect(result.blob.type).toBe('application/pdf');
   });
 
+  it('method 为 post 时用 POST 读取', async () => {
+    const methods: string[] = [];
+    server.use(
+      mock.all('/backend/file', ({ request }) => {
+        methods.push(request.method);
+        return new HttpResponse('文件', { headers: { 'Content-Type': 'application/zip' } });
+      })
+    );
+    await fetchFile('/file', { fallbackName: '数据.zip', method: 'post' });
+    await fetchFile('/file', { fallbackName: '数据.zip' });
+    expect(methods).toEqual(['POST', 'GET']);
+  });
+
   it('不会通过 MIME 补齐掩盖错误信封', async () => {
     server.use(mock.get('/backend/file', () => HttpResponse.json({ code: 40000, msg: '文件不存在' })));
     await expect(fetchFile('/file', { fallbackName: '资料.pdf', fallbackType: 'application/pdf' }))

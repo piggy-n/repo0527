@@ -1,0 +1,6 @@
+// 和链接按钮同样的字号和颜色，宽度不超过表格操作列的一格
+.progress {
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}

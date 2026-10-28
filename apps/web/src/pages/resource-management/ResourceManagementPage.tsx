@@ -115,7 +115,7 @@ export const ResourceManagementPage = defineComponent({
             ],
             footer: () => (
               <ElPagination
-                class={styles.pagination}
+                class="pagination-wrap"
                 currentPage={list.pageNum.value}
                 pageSize={list.pageSize.value}
                 total={list.total.value}

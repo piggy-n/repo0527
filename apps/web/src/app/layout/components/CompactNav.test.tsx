@@ -1,28 +1,14 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router';
+import { createMemoryHistory, createRouter } from 'vue-router';
 import { Role } from '@/shared/auth/roles';
-import { routes } from '../../router/routes';
+import { routesWithoutPages } from '../../router/test-routes';
 import { type NavItem, navItems, visibleNavItems } from '../menus';
 import { CompactNav } from './CompactNav';
 
-const Empty = { render: () => null };
-
-// 导航只用路由的名称和 meta：页面换成空组件，导航时不加载页面分块（地图页会预热 Worker 池，jsdom 里没有 Worker）
-function withoutPages(records: readonly RouteRecordRaw[]): RouteRecordRaw[] {
-  return records.map(
-    record =>
-      ({
-        ...record,
-        ...(record.component ? { component: Empty } : {}),
-        ...(record.children ? { children: withoutPages(record.children) } : {})
-      }) as RouteRecordRaw
-  );
-}
-
 // 打开下拉菜单，返回菜单中每一行的类型与文字；菜单内容渲染在 body 下
 async function openMenu(role: Role, path: string, pick: (items: NavItem[]) => NavItem[] = items => items) {
-  const router = createRouter({ history: createMemoryHistory(), routes: withoutPages(routes) });
+  const router = createRouter({ history: createMemoryHistory(), routes: routesWithoutPages() });
   await router.push(path);
   const items = pick(visibleNavItems(navItems, role, name => router.resolve({ name }).meta.roles));
   const wrapper = mount(CompactNav, { props: { items }, global: { plugins: [router] }, attachTo: document.body });
@@ -69,6 +55,12 @@ describe('CompactNav', () => {
       '[图标] 系统管理',
       '[图标] AI对话'
     ]);
+  });
+
+  it('一级项在同一页面的其他路由上也标出当前：系统管理的统计报表', async () => {
+    const rows = await openMenu(Role.admin, '/system-management/statistical-report');
+
+    expect(rows.filter(row => row.endsWith('(当前)'))).toEqual(['[图标] 系统管理 (当前)']);
   });
 
   it('下拉项在第一项或最后一项时，外侧不加分隔线', async () => {

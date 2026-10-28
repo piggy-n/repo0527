@@ -1,0 +1,54 @@
+// 菜单型左栏（docs/design/page-layout.md）：面板无头部、内边距 8；项高 44、16 号字、图标 18、圆角 4、项之间 4；
+// 当前项浅蓝底、主色、半粗，悬停更浅的蓝底，和顶部下拉菜单的配色一致
+.root {
+  padding: var(--space-sm);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  height: 44px;
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
+  text-decoration: none;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+  }
+}
+
+.active,
+.active:hover {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.icon {
+  flex: none;
+}
+
+// 名称过长时省略
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
