@@ -54,7 +54,7 @@ $status-bar-height: 24px;
   }
 }
 
-// 地下空间不显示状态栏，面板可以到底
+// 漫游时不显示状态栏，面板可以到底（ADR 0095、0097）
 .left.noStatus {
   padding-bottom: 0;
 }
@@ -91,28 +91,6 @@ $status-bar-height: 24px;
 
 .panelStack > .functions {
   flex-shrink: 0;
-}
-
-// 钻地条在中间一列底部居中、底图卡片一行的上方（原型 /dev/map-3d）
-.underground {
-  grid-row: 1 / 3;
-  grid-column: 2;
-  align-self: end;
-  justify-self: center;
-  display: flex;
-  justify-content: center;
-  min-width: 0;
-  max-width: 100%;
-
-  > * {
-    pointer-events: auto;
-  }
-}
-
-// 手机宽度时中间一列可能没有宽度（左侧面板展开）：横跨左边两列、盖在面板上面，不挡右边一列的视图切换
-.phoneUnderground {
-  z-index: 1;
-  grid-column: 1 / 3;
 }
 
 // 步行时的小地图在右上角，横跨中间一列和工具栏一列靠右（ADR 0087）

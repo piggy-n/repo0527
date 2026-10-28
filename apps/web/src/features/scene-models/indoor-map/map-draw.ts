@@ -95,6 +95,42 @@ export function drawLocator(context: CanvasRenderingContext2D, radius: number, c
   context.restore();
 }
 
+/** 画布上的一条折线（像素） */
+export type ScreenLine = readonly (readonly [x: number, y: number])[];
+
+/**
+ * 路线（ADR 0097 第 6 节）：整条是主色的细虚线，走过的一段是主色的粗实线，都先垫一层底色的描边，
+ * 按区域着色的平面图上也看得清；坐标已经换成画布上的点，width 是实线的粗细
+ */
+export function drawRoute(
+  context: CanvasRenderingContext2D,
+  { all, passed }: { readonly all: readonly ScreenLine[]; readonly passed: readonly ScreenLine[] },
+  width: number,
+  colors: MarkerColors
+): void {
+  const stroke = (lines: readonly ScreenLine[], lineWidth: number, color: string) => {
+    context.lineWidth = lineWidth;
+    context.strokeStyle = color;
+    context.beginPath();
+    for (const line of lines) {
+      line.forEach(([x, y], index) => (index === 0 ? context.moveTo(x, y) : context.lineTo(x, y)));
+    }
+    context.stroke();
+  };
+  const thin = Math.max(1.5, width * 0.6);
+  const casing = Math.max(2, width * 0.7);
+  context.save();
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  context.setLineDash([thin * 2.5, thin * 2]);
+  stroke(all, thin + casing, colors.outline);
+  stroke(all, thin, colors.player);
+  context.setLineDash([]);
+  stroke(passed, width + casing, colors.outline);
+  stroke(passed, width, colors.player);
+  context.restore();
+}
+
 /** 点击移动的落点 */
 export function drawTarget(
   context: CanvasRenderingContext2D,

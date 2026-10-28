@@ -9,7 +9,7 @@ import {
 } from '@yzt/map-core';
 import { type CameraControl, provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
-import { ElOption, ElSelect, ElSlider } from 'element-plus';
+import { ElOption, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref, shallowRef } from 'vue';
 import { required } from '@/shared/testing/required';
@@ -18,7 +18,6 @@ import { buildModelCatalog, type SceneModel } from '../catalog';
 import { type SceneModels, useSceneModels } from '../composables/useSceneModels';
 import { RoamPanel } from './RoamPanel';
 import { SceneModelPanel } from './SceneModelPanel';
-import { UndergroundBar } from './UndergroundBar';
 
 const CAMERA: CameraState = { center: [120.66, 31.31], zoom: 16, bearing: 0, pitch: 55 };
 
@@ -62,7 +61,7 @@ const CATALOG = buildModelCatalog(
 );
 
 /**
- * 页面创建地图和拥有者，和现状底图一样漫游时左侧是漫游面板、否则是模型面板，另有钻地条；状态报告和相机操作换成
+ * 页面创建地图和拥有者，和现状底图一样漫游时左侧是漫游面板、否则是模型面板；状态报告和相机操作换成
  * 测试控制的。null 表示清单还没到；personSwitch 是页面让漫游面板显示人称切换
  */
 function mountPanel(catalog: readonly SceneModel[] | null = CATALOG, { personSwitch = false } = {}) {
@@ -109,7 +108,6 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG, { personSwi
             onUpdate:collapsed={value => (collapsed.value = value)}
           />
         )}
-        <UndergroundBar models={models} />
       </div>
     );
   });
@@ -218,29 +216,16 @@ describe('SceneModelPanel', () => {
     expect(button(wrapper, '定位', '[data-loaded="city"]').attributes('disabled')).toBeUndefined();
   });
 
-  it('定位：飞到报告的相机；地下的模型标上钻地，钻地条可以调地表不透明度、退出钻地', async () => {
+  it('定位：飞到报告的相机；地下的模型也只是飞过去，没有钻地的标签（ADR 0097 第 5 节）', async () => {
     const { wrapper, owner, flyTo, report } = mountPanel();
     await check(wrapper, 'station', true);
     await report({ station: 'ready' });
-    expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
 
     await button(wrapper, '定位', '[data-loaded="station"]').trigger('click');
 
     expect(flyTo).toHaveBeenCalledWith(CAMERA);
-    expect(wrapper.get('[data-loaded="station"]').text()).toContain('钻地');
-    const bar = wrapper.get('[data-underground-bar]');
-    expect(bar.text()).toContain('钻地观察 · 苏州站地下空间');
-    expect(bar.text()).toContain('25%');
-    expect(bar.findComponent(ElSlider).props()).toMatchObject({ min: 0, max: 60, step: 5, modelValue: 25 });
-
-    bar.findComponent(ElSlider).vm.$emit('update:modelValue', 40);
-    await nextTick();
-    expect(owner.underground.value?.opacity).toBe(0.4);
-    expect(wrapper.get('[data-underground-bar]').text()).toContain('40%');
-
-    await wrapper.findAll('[data-underground-bar] button').find(item => item.text() === '退出钻地')?.trigger('click');
-    expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
     expect(wrapper.get('[data-loaded="station"]').text()).not.toContain('钻地');
+    expect(owner.deriveContent().underground).toBeNull();
   });
 
   it('白膜就绪后可以换效果；卸载从已加载里去掉并取消勾选，全部卸载后不显示已加载', async () => {
@@ -295,7 +280,6 @@ describe('漫游的入口和面板（ADR 0097）', () => {
     await entry?.trigger('click');
     expect(owner.roam.value).toMatchObject({ kind: 'walk', modelId: 'station', speed: 4 });
     expect(wrapper.find('[data-scene-model-panel]').exists()).toBe(false);
-    expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
     const panel = wrapper.get('[data-roam-panel]');
     expect(panel.get('header').text()).toContain('漫游苏州站地下空间 · 室内');
     expect(panel.get('[aria-label="漫游方式"] .is-active').text()).toBe('步行');

@@ -9,14 +9,8 @@ import type {
 } from '@yzt/map-core';
 import type { SceneModel } from './catalog';
 
-/** 钻地观察：哪个模型，地表不透明度 0～0.6（ADR 0078 第 5 节、ADR 0081 第 6 节） */
-export interface UndergroundChoice {
-  readonly modelId: string;
-  readonly opacity: number;
-}
-
-export const MAX_SURFACE_OPACITY = 0.6;
-export const DEFAULT_SURFACE_OPACITY = 0.25;
+/** 漫游地下的模型时地表的不透明度（ADR 0097 第 5 节：没有单独的钻地，不能调） */
+export const SURFACE_OPACITY = 0.25;
 
 /** 路线漫游（ADR 0083）：哪个模型的哪条路线；id 每次开始换一个，run 是第几遍；速度是米/秒（ADR 0097 第 4 节） */
 export interface RouteChoice {
@@ -70,7 +64,7 @@ export interface SceneModelsState {
   readonly shownEffects: ReadonlyMap<string, readonly string[]>;
   /** 按瓦片集 ID 的重试次数 */
   readonly attempts: ReadonlyMap<string, number>;
-  readonly underground: UndergroundChoice | null;
+  /** 正在进行的漫游：漫游地下的模型时在地下空间 */
   readonly roam: RoamChoice | null;
   /** 按模型 ID 建好的导航网格 */
   readonly navigations: ReadonlyMap<string, Navigation>;
@@ -95,12 +89,13 @@ export function currentTilesetId(model: SceneModel, effects: ReadonlyMap<string,
 
 /**
  * 推导会话的三维内容（ADR 0081 第 2、5、6 节）：勾选的模型各一个瓦片集，白膜显示过的效果都留着、只显示当前的；
- * 地下、室内的用头灯光照；钻地期间不显示地面上的模型（白膜、倾斜摄影会挡住地下空间，ADR 0084）
+ * 地下、室内的用头灯光照。漫游地下的模型时在地下空间（ADR 0097 第 5 节）：地表固定半透明，
+ * 不显示地面上的模型（白膜、倾斜摄影会挡住地下空间，ADR 0084）
  */
 export function deriveSceneContent(models: readonly SceneModel[], state: SceneModelsState): SceneContent {
   const byId = new Map(models.map(model => [model.id, model]));
-  const choice = state.underground;
-  const undergroundModel = choice && state.loaded.includes(choice.modelId) ? byId.get(choice.modelId) : undefined;
+  const roaming = state.roam && state.loaded.includes(state.roam.modelId) ? byId.get(state.roam.modelId) : undefined;
+  const undergroundModel = roaming?.underground ? roaming : undefined;
   const tilesets: TilesetLayer[] = [];
   for (const id of state.loaded) {
     const model = byId.get(id);
@@ -126,10 +121,9 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
       });
     }
   }
-  const underground =
-    choice && undergroundModel
-      ? { tilesetId: currentTilesetId(undergroundModel, state.effects), surfaceOpacity: choice.opacity }
-      : null;
+  const underground = undergroundModel
+    ? { tilesetId: currentTilesetId(undergroundModel, state.effects), surfaceOpacity: SURFACE_OPACITY }
+    : null;
   const roam = roamOf(byId, state);
   return roam ? { tilesets, underground, roam } : { tilesets, underground };
 }

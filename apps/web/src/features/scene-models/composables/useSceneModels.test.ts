@@ -12,6 +12,7 @@ import {
 import type { CameraControl } from '@yzt/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { effectScope, shallowRef } from 'vue';
+import { required } from '@/shared/testing/required';
 import { sceneManifestSchema } from '../api';
 import { buildModelCatalog } from '../catalog';
 import { type SceneModelsContext, useSceneModels } from './useSceneModels';
@@ -168,7 +169,7 @@ describe('useSceneModels', () => {
     expect(ctx.owner.stateOf('white')).toBe('loading');
   });
 
-  it('定位：就绪后飞到报告的相机；地下的模型进入钻地、钻地期间不显示地面上的模型，定位地面上的模型结束钻地', () => {
+  it('定位：就绪后飞到报告的相机；没有单独的钻地，地下的模型也只是飞过去（ADR 0097 第 5 节）', () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.owner.setChecked('white', true);
@@ -179,33 +180,22 @@ describe('useSceneModels', () => {
     ctx.owner.locate('station');
 
     expect(ctx.flyTo).toHaveBeenCalledWith(CAMERA);
-    expect(ctx.owner.deriveContent().underground).toStrictEqual({ tilesetId: 'station', surfaceOpacity: 0.25 });
+    expect(ctx.owner.deriveContent().underground).toBeNull();
     expect(summary(ctx.owner.deriveContent()).map(([id, show]) => [id, show])).toStrictEqual([
       ['station', true],
-      ['white/plain', false],
-      ['city', false]
+      ['white/plain', true],
+      ['city', true]
     ]);
-
-    ctx.owner.setSurfaceOpacity(0.6);
-    ctx.owner.locate('white');
-    expect(ctx.owner.underground.value).toBeNull();
-    expect(ctx.owner.deriveContent().underground).toBeNull();
-    // 下一次进入钻地从默认的不透明度开始
-    ctx.owner.locate('station');
-    expect(ctx.owner.underground.value?.opacity).toBe(0.25);
   });
 
-  it('卸载时一起结束这个模型的钻地，忘掉效果和重试次数', () => {
+  it('卸载时忘掉效果和重试次数', () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.ready('station');
-    ctx.owner.locate('station');
     ctx.owner.retry('station');
     expect(ctx.owner.deriveContent().tilesets[0]?.attempt).toBe(1);
 
     ctx.owner.setChecked('station', false);
-    expect(ctx.owner.underground.value).toBeNull();
-
     ctx.owner.setChecked('station', true);
     expect(ctx.owner.deriveContent().tilesets[0]?.attempt).toBe(0);
   });
@@ -224,20 +214,12 @@ describe('useSceneModels', () => {
     ]);
   });
 
-  it('参数不合法时抛错：没有的模型和效果、没加载、不是白膜、不在钻地、不透明度超出 0～0.6', () => {
+  it('参数不合法时抛错：没有的模型和效果、没加载、不是白膜', () => {
     using ctx = setup();
     expect(() => ctx.owner.setChecked('nothing', true)).toThrow('目录里没有模型 nothing');
     expect(() => ctx.owner.locate('city')).toThrow('模型 city 没有加载');
     expect(() => ctx.owner.setEffect('city', '')).toThrow('模型 city 没有效果');
     expect(() => ctx.owner.setEffect('white', 'tech')).toThrow('模型 white 没有效果 tech');
-    expect(() => ctx.owner.setSurfaceOpacity(0.3)).toThrow('没有在钻地');
-
-    ctx.owner.setChecked('station', true);
-    ctx.ready('station');
-    ctx.owner.locate('station');
-    expect(() => ctx.owner.setSurfaceOpacity(0.7)).toThrow('地表不透明度不在 0～0.6 之间');
-    ctx.owner.exitUnderground();
-    expect(ctx.owner.underground.value).toBeNull();
   });
 });
 
@@ -251,7 +233,7 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
     expect(() => ctx.owner.startRoute('station', 'nowhere')).toThrow('模型 station 没有路线 nowhere');
   });
 
-  it('开始：停在起点交给会话；地下的模型按钻地处理；播放、暂停、速度改意图', () => {
+  it('开始：停在起点交给会话；漫游地下的模型时在地下空间，地面上的模型不显示；播放、暂停、速度改意图', () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.ready('station');
@@ -260,7 +242,7 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
     const roam = ctx.owner.deriveContent().roam;
     expect(roam).toMatchObject({ kind: 'route', playing: false, speed: 4, run: 0 });
     expect(roam?.kind === 'route' && roam.path).toHaveLength(2);
-    expect(ctx.owner.underground.value).toStrictEqual({ modelId: 'station', opacity: 0.25 });
+    expect(ctx.owner.deriveContent().underground).toStrictEqual({ tilesetId: 'station', surfaceOpacity: 0.25 });
     expect(ctx.owner.routePhase.value).toBe('ready');
 
     ctx.owner.playRoute();
@@ -291,7 +273,7 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
     expect(ctx.owner.roamStatus.value).toBeNull();
   });
 
-  it('有了别的定位就退出漫游，保留钻地；换一条路线不会被上一条的信号退出，沿用选过的速度', () => {
+  it('有了别的定位就退出漫游、回到地面；换一条路线不会被上一条的信号退出，沿用选过的速度', () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.ready('station');
@@ -303,10 +285,10 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
     ctx.owner.locate('station');
     expect(ctx.owner.roam.value).toBeNull();
     expect(ctx.owner.deriveContent().roam).toBeUndefined();
-    expect(ctx.owner.underground.value?.modelId).toBe('station');
+    expect(ctx.owner.deriveContent().underground).toBeNull();
   });
 
-  it('退出、卸载这个模型都结束漫游；退出后保留钻地', () => {
+  it('退出、卸载这个模型都结束漫游；退出后回到地面（ADR 0097 第 5 节）', () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.ready('station');
@@ -314,7 +296,7 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
 
     ctx.owner.exitRoam();
     expect(ctx.owner.roam.value).toBeNull();
-    expect(ctx.owner.underground.value?.modelId).toBe('station');
+    expect(ctx.owner.deriveContent().underground).toBeNull();
     expect(() => ctx.owner.playRoute()).toThrow('没有在路线漫游');
 
     ctx.owner.startRoute('station', 'enter');
@@ -326,7 +308,7 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
 const flushBuild = () => new Promise(resolve => setTimeout(resolve, 0));
 
 describe('useSceneModels 的步行（ADR 0086）', () => {
-  it('只有加载完成、清单里有出生点的模型能开始；地下的模型按钻地处理', () => {
+  it('只有加载完成、清单里有出生点的模型能开始；漫游地下的模型时在地下空间', () => {
     using ctx = setup();
     expect(() => ctx.owner.startWalk('station')).toThrow('模型 station 没有加载');
     ctx.owner.setChecked('station', true);
@@ -344,7 +326,7 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
       respawn: 0,
       unstuck: 0
     });
-    expect(ctx.owner.underground.value).toStrictEqual({ modelId: 'station', opacity: 0.25 });
+    expect(ctx.owner.deriveContent().underground).toStrictEqual({ tilesetId: 'station', surfaceOpacity: 0.25 });
     expect(ctx.owner.routePhase.value).toBeNull();
   });
 
@@ -479,7 +461,7 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
     expect(ctx.owner.roam.value).toMatchObject({ speed: 6, respawn: 0, unstuck: 0 });
   });
 
-  it('有了别的定位就退出步行，正在建的一并中止；开始路线漫游也结束步行', () => {
+  it('有了别的定位就退出步行，正在建的一并中止；开始路线漫游也结束步行，同一个模型的导航网格接着建（ADR 0097 第 6 节）', () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.ready('station');
@@ -492,7 +474,8 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
     ctx.owner.startWalk('station');
     ctx.owner.startRoute('station', 'enter');
     expect(ctx.owner.roam.value).toMatchObject({ kind: 'route' });
-    expect(ctx.builds[1]?.signal.aborted).toBe(true);
+    expect(ctx.builds).toHaveLength(2);
+    expect(ctx.builds[1]?.signal.aborted).toBe(false);
     expect(ctx.owner.walkStage.value).toBeNull();
   });
 });
@@ -542,7 +525,6 @@ describe('useSceneModels 的漫游入口与方式（ADR 0097）', () => {
 
     ctx.owner.setRoamMode('route');
     expect(ctx.owner.roam.value).toMatchObject({ kind: 'route', routeId: 'enter', speed: 6 });
-    expect(ctx.builds[0]?.signal.aborted).toBe(true);
     ctx.owner.startRoute('station', 'platform');
     ctx.owner.setRoamMode('walk');
     expect(ctx.owner.roam.value).toMatchObject({ kind: 'walk', modelId: 'station', speed: 6 });
@@ -562,6 +544,105 @@ describe('useSceneModels 的漫游入口与方式（ADR 0097）', () => {
   });
 });
 
+describe('useSceneModels 路线漫游时的地图（ADR 0097 第 6 节）', () => {
+  it('室内的模型开始路线漫游时建导航网格，路线不等它；建好后有室内地图、人和路线，人按走过的米数在路线上', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.ready('station');
+    ctx.owner.startRoute('station', 'enter');
+    expect(ctx.builds).toHaveLength(1);
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ kind: 'route', playing: false });
+    expect([ctx.owner.indoorMap.value, ctx.owner.roamPlayer.value, ctx.owner.routeTrack.value]).toStrictEqual([
+      null,
+      null,
+      null
+    ]);
+
+    ctx.builds[0]?.resolve(NAVIGATION);
+    await flushBuild();
+    expect(ctx.owner.indoorMap.value?.grid).toBe(NAVIGATION.grid);
+    const track = required(ctx.owner.routeTrack.value, '没有路线');
+    const [start, end] = track.points;
+    expect(track.walked).toBe(0);
+    expect(end?.distance).toBeCloseTo(19, 0);
+    expect(ctx.owner.roamPlayer.value).toMatchObject({ target: null });
+    expect(ctx.owner.roamPlayer.value?.x).toBeCloseTo(start?.x ?? Number.NaN, 3);
+    expect(ctx.owner.roamPlayer.value?.floor).toBeCloseTo(start?.floor ?? Number.NaN, 3);
+
+    const id = ctx.owner.roam.value?.id ?? '';
+    ctx.roamStatus.value = { kind: 'route', id, run: 0, distance: 19, total: 19, finished: true };
+    expect(ctx.owner.routeTrack.value?.walked).toBe(19);
+    expect(ctx.owner.roamPlayer.value?.x).toBeCloseTo(end?.x ?? Number.NaN, 1);
+  });
+
+  it('同一个模型换方式时还在建的导航网格接着建，不重新下载；退出漫游时中止；地面上的模型路线漫游不建', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.ready('station');
+    ctx.owner.startWalk('station');
+    ctx.owner.setRoamMode('route');
+    ctx.owner.setRoamMode('walk');
+    expect(ctx.builds).toHaveLength(1);
+    expect(ctx.builds[0]?.signal.aborted).toBe(false);
+    ctx.owner.exitRoam();
+    expect(ctx.builds[0]?.signal.aborted).toBe(true);
+
+    using square = setup(
+      buildModelCatalog(
+        sceneManifestSchema.parse({
+          models: [
+            {
+              id: 'square',
+              name: '广场',
+              cityCode: '320500',
+              kind: 'oblique',
+              underground: false,
+              tileset: 'Q/tileset.json',
+              routes: [{ id: 'loop', name: '环线', path: [[120.6, 31.3, 2], [120.601, 31.3, 2]] }]
+            }
+          ]
+        }),
+        'https://maps.test/3dt/manifest.json'
+      )
+    );
+    square.owner.setChecked('square', true);
+    square.ready('square');
+    square.owner.startRoam('square');
+    expect(square.builds).toHaveLength(0);
+    expect(() => square.owner.openMap()).toThrow('站内地图还没有准备好');
+  });
+
+  it('完整地图：建好以后才能打开；打开时路线暂停，关上时打开前在播放就接着播放；不能瞬移', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.ready('station');
+    ctx.owner.startRoute('station', 'enter');
+    expect(() => ctx.owner.openMap()).toThrow('站内地图还没有准备好，不能打开完整地图');
+    ctx.builds[0]?.resolve(NAVIGATION);
+    await flushBuild();
+
+    ctx.owner.playRoute();
+    ctx.owner.openMap();
+    expect(ctx.owner.mapOpen.value).toBe(true);
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ playing: false });
+    expect(() => ctx.owner.teleportWalk({ x: 1, y: 2, floor: -5 })).toThrow('没有在步行');
+    ctx.owner.closeMap();
+    expect(ctx.owner.mapOpen.value).toBe(false);
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ playing: true });
+
+    // 暂停时打开、关上，仍是暂停
+    ctx.owner.pauseRoute();
+    ctx.owner.openMap();
+    ctx.owner.closeMap();
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ playing: false });
+
+    // 打开着时退出，再开始的路线不带着地图
+    ctx.owner.openMap();
+    ctx.owner.startRoute('station', 'platform');
+    expect(ctx.owner.mapOpen.value).toBe(false);
+  });
+});
+
 describe('useSceneModels 步行时的地图（ADR 0087）', () => {
   it('导航网格建好以后有室内地图；进到站内以后才能打开完整地图，打开时步行暂停', async () => {
     using ctx = setup();
@@ -577,7 +658,7 @@ describe('useSceneModels 步行时的地图（ADR 0087）', () => {
     expect(() => ctx.owner.openMap()).toThrow('还没有进到站内');
     const player = { x: 1, y: 2, floor: -5, yaw: 0, hfov: 1.5, target: null };
     ctx.roamStatus.value = { kind: 'walk', id, phase: 'walking', view: 'first', notice: null, notices: 0, player };
-    expect(ctx.owner.walkPlayer.value).toBe(player);
+    expect(ctx.owner.roamPlayer.value).toBe(player);
 
     ctx.owner.openMap();
     expect(ctx.owner.mapOpen.value).toBe(true);

@@ -1703,7 +1703,7 @@ describe('CurrentMapPage', () => {
       expect(wrapper.get<HTMLInputElement>('input[placeholder="搜索模型或所属市"]').element.value).toBe('苏州');
     });
 
-    it('勾选交给三维视图；定位地下的模型时飞过去并进入钻地，钻地期间没有二维的入口（ADR 0095）', async () => {
+    it('勾选交给三维视图；定位地下的模型只飞过去，没有单独的钻地（ADR 0097 第 5 节）', async () => {
       mockManifest();
       const page = await readyPage();
       const { wrapper } = page;
@@ -1722,22 +1722,14 @@ describe('CurrentMapPage', () => {
       await button(wrapper, '定位').trigger('click');
       await settle();
       expect(view.flyToCalls.at(-1)).toMatchObject({ center: MODEL_CAMERA.center, zoom: 17, pitch: 55 });
-      expect(wrapper.get('[data-underground-bar]').text()).toContain('钻地观察 · 苏州站地下空间');
-      expect(view.session.scene.current.underground).toStrictEqual({ tilesetId: 'sz-station', surfaceOpacity: 0.25 });
-
-      expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(false);
-
-      await button(wrapper, '退出钻地').trigger('click');
-      await settle();
       expect(view.session.scene.current.underground).toBeNull();
       expect(wrapper.get('[data-loaded="sz-station"]').text()).not.toContain('钻地');
-      await switchTo(wrapper, '二维');
-      await switchTo(wrapper, '三维');
-      expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
+      expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(true);
     });
 
-    it('地下空间（ADR 0084、0095）：隐藏工具栏、功能面板、底图、区划条、视图控件和状态栏，切回移动；退出钻地后原样显示', async () => {
+    it('漫游地下的模型（ADR 0084、0095、0097）：在地下空间，隐藏工具栏、功能面板、底图、区划条、视图控件和状态栏，切回移动；退出漫游回到地面、原样显示', async () => {
       mockManifest();
+      failNavigation();
       stubBoundaryFetch();
       const page = await readyPage();
       const { wrapper } = page;
@@ -1760,9 +1752,9 @@ describe('CurrentMapPage', () => {
       expect(shownPanels(wrapper)).toStrictEqual(['legend']);
       expect(wrapper.get('[data-region-scope]').text()).toBe('江苏省›南京市回到全省');
 
-      await button(wrapper, '定位').trigger('click');
+      await button(wrapper, '漫游').trigger('click');
       await settle();
-      expect(wrapper.find('[data-underground-bar]').exists()).toBe(true);
+      expect(view.session.scene.current.underground).toStrictEqual({ tilesetId: 'sz-station', surfaceOpacity: 0.25 });
       expect(view.session.tool.active).toBe('browse');
       expect(labels()).not.toContain('测距');
       for (const label of ['默认视角', '放大', '缩小', '二维', '三维']) {
@@ -1774,8 +1766,9 @@ describe('CurrentMapPage', () => {
       expect(wrapper.get('[data-panel-group]').isVisible()).toBe(false);
       expect(optionsPopoverVisible('basemap')).toBe(false);
 
-      await button(wrapper, '退出钻地').trigger('click');
+      await button(wrapper, '退出漫游').trigger('click');
       await settle();
+      expect(view.session.scene.current.underground).toBeNull();
       expect(button(wrapper, '移动').attributes('aria-pressed')).toBe('true');
       expect(labels()).toEqual(expect.arrayContaining(['默认视角', '放大', '缩小', '二维', '三维']));
       expect(wrapper.find('[data-map-status-bar]').exists()).toBe(true);
@@ -1809,7 +1802,6 @@ describe('CurrentMapPage', () => {
       expect(view.session.tool.active).toBe('browse');
       expect(view.session.scene.current.roam).toMatchObject({ kind: 'route', playing: false, speed: 4, run: 0 });
       expect(wrapper.find('[data-roam-panel]').exists()).toBe(true);
-      expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
       await key(' ');
       expect(view.session.scene.current.roam).toMatchObject({ playing: true });
       await key(' ');
@@ -1828,11 +1820,9 @@ describe('CurrentMapPage', () => {
       view.session.tool.activate('browse');
       await start();
       expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(false);
-      // 退出漫游后仍在钻地（第 6 步改为一并退出），退出钻地后才能切回二维
+      // 退出漫游同时回到地面，马上能切回二维（ADR 0097 第 5 节）
       await key('Escape');
-      expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(false);
-      await button(wrapper, '退出钻地').trigger('click');
-      await settle();
+      expect(view.session.scene.current.underground).toBeNull();
       expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(true);
     });
 
