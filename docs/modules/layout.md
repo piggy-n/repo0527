@@ -67,7 +67,7 @@ app/layout/
 
 `HeaderMessages` 放在用户菜单左边，和它间隔 8。消息的数据、筛选、已读和弹框里的内容在 `features/message-center`（见 [system-management.md](system-management.md) 的"消息"），这里只装配：
 
-- **按钮**：32 的圆，`header-bell` 图标 20，悬停加 `--color-inverse-hover` 底，打开时 `--color-inverse-active` 底。`ElBadge` 显示未读数（超过 99 是 99+，0 时不显示），按钮的名称是"消息，N 条未读"。角标的中心压在铃铛图标的右上角：Element 默认把角标整个放在锚点右边，"99+" 宽 34px，会盖住右边的用户名；代价是"99+" 时铃铛被盖住大半（待验收）
+- **按钮**：32 的圆，`header-bell` 图标 20，悬停加 `--color-inverse-hover` 底，打开时 `--color-inverse-active` 底。`ElBadge` 显示未读数（超过 99 是 99+，0 时不显示），按钮的名称是"消息，N 条未读"。角标的中心压在铃铛图标的右上角：Element 默认把角标整个放在锚点右边，"99+" 宽 34px，会盖住右边的用户名；代价是"99+" 时铃铛被盖住大半（2026-10-28 验收通过）
 - **弹框**：`ElPopover`，`role="dialog"`（Element 据此给按钮加上 `aria-haspopup`、`aria-expanded`、`aria-controls`），点击触发、`bottom-end`。打开时（`before-enter`）现量顶栏和按钮的下沿，顶边离顶栏下沿 8；宽 `min(400px, 100vw - 32px)`，最高 `min(640px, 视口高 - 顶栏下沿 - 24px)`，用 CSS 变量 `--message-panel-max-height` 交给面板；窄屏时 Popper 的 `preventOverflow` 让左右至少离窗口 16。`AppHeader` 把自己的元素传给它作为 `header`
 - **开关**：`ElPopover` 的 `visible` 不能受控（不把 `update:visible` 传给内部的 tooltip），关闭用它暴露的 `hide()`，开关状态跟着 `before-enter`、`before-leave` 记下；这个状态也是 `useMessageCenter` 的参数，打开时才取全部消息。点击触发的弹框不响应 Esc，自己监听，关闭后焦点回到按钮
 - **跳转**：`message-routes.ts` 的 `messageLocation` 把目标换成路由（申请是系统管理的 `?apply=`，报表是统计报表栏目）；能不能去由路由的 `meta.roles` 决定，和顶部导航一致，去不了时按钮禁用、写"数据下载页面迁移后可用"。点业务按钮先 `hide()`，再用 `navigate` 跳转
