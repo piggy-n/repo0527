@@ -44,7 +44,16 @@ const businessRoutes: RouteRecordRaw[] = [
   placeholder('forest-grass-wetland-desert-query', RouteName.forestGrassWetlandDesertQuery, '森林草原湿地荒漠调查监测'),
   placeholder('water-resource-basic-query', RouteName.waterResourceBasicQuery, '水资源基础调查'),
   placeholder('space-monitoring-basic-statistics', RouteName.spaceMonitoringBasicStatistics, '城市国土空间监测基本统计'),
-  placeholder('space-monitoring-indicators', RouteName.spaceMonitoringIndicators, '城市国土空间监测指标'),
+  {
+    path: 'space-monitoring-indicators',
+    name: RouteName.spaceMonitoringIndicators,
+    component: withMapRuntime(() =>
+      import('@/pages/space-monitoring-indicators/SpaceMonitoringIndicatorsPage').then(
+        ({ SpaceMonitoringIndicatorsPage }) => SpaceMonitoringIndicatorsPage
+      )
+    ),
+    meta: { title: '城市国土空间监测指标' }
+  },
   {
     path: 'file-management',
     name: RouteName.fileManagement,
@@ -109,6 +118,16 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
     component: () => import('@/pages/dev/message-center/DevMessageCenterPage')
       .then(({ DevMessageCenterPage }) => DevMessageCenterPage),
     meta: { title: '消息组件样例', public: true }
+  },
+  {
+    path: '/dev/monitoring-indicators',
+    name: RouteName.devMonitoringIndicators,
+    component: withMapRuntime(() =>
+      import('@/pages/dev/monitoring-indicators/DevMonitoringIndicatorsPage').then(
+        ({ DevMonitoringIndicatorsPage }) => DevMonitoringIndicatorsPage
+      )
+    ),
+    meta: { title: '监测指标组件样例', public: true }
   },
   {
     path: '/dev/theme',

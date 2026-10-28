@@ -1,0 +1,86 @@
+// 数据处理进度：常规高 360，地图区域矮时跟着变矮；最大化占满所在区域，收起只留 48 高的标题行
+
+.panel {
+  flex: none;
+  height: min(360px, 100%);
+}
+
+.maximized {
+  height: 100%;
+}
+
+.collapsed {
+  height: auto;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-height: 0;
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
+}
+
+// 摘要两列，"当前状态"独占一行
+.summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm) var(--space-lg);
+  margin: 0;
+
+  > div {
+    display: flex;
+    gap: var(--space-sm);
+    min-width: 0;
+  }
+
+  dt {
+    flex: none;
+    color: var(--color-text-secondary);
+  }
+
+  dd {
+    min-width: 0;
+    margin: 0;
+    color: var(--color-text-primary);
+  }
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.danger {
+  color: var(--color-danger-text);
+}
+
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-lg);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+}
+
+.progress {
+  flex: 1;
+  min-width: 160px;
+}
+
+.table {
+  flex: 1;
+  min-height: 0;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.result {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}

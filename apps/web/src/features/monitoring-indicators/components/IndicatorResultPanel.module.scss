@@ -1,0 +1,99 @@
+// 指标成果：宽 320 由所在的列给出，按内容定高，最高到列的高度、内容在内部滚动；收起只留 48 高的标题行
+
+.window {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 48px;
+}
+
+.collapsed {
+  flex: none;
+}
+
+.shell {
+  max-height: 100%;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+// 计算结果：主色大字，同旧页面的突出显示
+.value {
+  padding: var(--space-xs) 0;
+  color: var(--color-primary);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-compact);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.message {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.layers {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.layer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 32px;
+}
+
+// 复选框占满剩下的宽度，名称放不下时省略
+.checkbox {
+  flex: 1;
+  min-width: 0;
+  margin-right: 0;
+
+  :global(.el-checkbox__label) {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.picker {
+  flex: none;
+}
+
+// 旗子和小号取色器一样大，不能改色
+.flag {
+  flex: none;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+}
+
+.reset {
+  flex: none;
+  margin-left: 0;
+}
+
+// 没改过颜色时占着位置不显示，各行的色块对齐
+.hidden {
+  visibility: hidden;
+}

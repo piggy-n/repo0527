@@ -1,0 +1,180 @@
+// 指标面板：宽 320，占满所在列的高度，指标树在内部滚动；标题、页签、收起和竖条同资源图层面板
+
+// 收起后只有竖条，按竖条的高度
+.root {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 0;
+}
+
+.panel {
+  flex: 1;
+  box-sizing: border-box;
+  width: 320px;
+  max-width: 100%;
+
+  > header {
+    margin-bottom: var(--space-sm);
+  }
+}
+
+// 标题后面紧跟页签；MxTitle 默认占满剩下的宽度，这里按内容
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+
+  > :first-child {
+    flex: none;
+  }
+}
+
+.tabs {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: -6px;
+  padding-bottom: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.currentTab {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+
+  &::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: -6px;
+    left: 0;
+    height: 2px;
+    border-radius: 999px;
+    background-color: var(--color-primary);
+  }
+}
+
+.collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-height: 0;
+}
+
+.conditions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg);
+}
+
+// 标签按文字宽度，控件占满剩下的宽度
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.label {
+  flex: none;
+  width: 56px;
+  color: var(--color-text-regular);
+}
+
+.control {
+  flex: 1;
+  min-width: 0;
+
+  // ElDatePicker 的输入框默认有固定宽度
+  &:global(.el-date-editor) {
+    width: auto;
+  }
+}
+
+.tree {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  width: 100%;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-divider);
+}
+
+// 禁用的按钮不触发提示，外面包一层接收悬停
+.start {
+  display: inline-flex;
+}
+
+.strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 40px;
+  padding: 10px 0 14px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-strong);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+.stripIcon {
+  color: var(--color-primary);
+}
+
+.stripLabel {
+  letter-spacing: 2px;
+  writing-mode: vertical-rl;
+}

@@ -13,6 +13,7 @@ export const RouteName = {
   devNavGrid: 'dev-nav-grid',
   devSystemManagement: 'dev-system-management',
   devMessageCenter: 'dev-message-center',
+  devMonitoringIndicators: 'dev-monitoring-indicators',
   currentMap: 'current-map',
   cityDashboard: 'city-dashboard',
   landChangeQuery: 'land-change-query',

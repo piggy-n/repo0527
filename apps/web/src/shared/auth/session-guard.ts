@@ -1,6 +1,9 @@
 import { ApiError } from '../http/errors';
 import { useSessionStore } from './session-store';
 
+/** 会话核对的三个操作，需要替换的地方（如组件样例）按它实现 */
+export type SessionGuard = ReturnType<typeof useSessionGuard>;
+
 /**
  * 服务端写操作的会话核对（AGENTS.md"接口请求"）：提交时记下 token，mutationFn 发请求前 assertCurrent，响应后 isCurrent。
  * 退出、换账号、其他标签页重新登录都会换掉 token；只是过期不算，下一个请求由 shared/http 按登录过期统一处理
