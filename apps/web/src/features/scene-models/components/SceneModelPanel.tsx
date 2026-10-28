@@ -169,6 +169,12 @@ export const SceneModelPanel = defineComponent({
           <span class={styles.meta}>
             {model.cityName} · {MODEL_KIND_LABELS[model.kind]}
           </span>
+          {/* 清单里有出生点的才能步行（ADR 0086 第 5 节） */}
+          {model.spawn && (
+            <ElButton link type="primary" size="small" onClick={() => models.startWalk(model.id)}>
+              步行漫游
+            </ElButton>
+          )}
           {model.routes.length > 0 && renderRoutes(model)}
           {model.kind === 'white' && (
             <ElSelect

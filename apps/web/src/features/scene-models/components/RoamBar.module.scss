@@ -1,4 +1,4 @@
-// 路线漫游的操作条：浮在地图下方居中（原型 /dev/map-3d），样式同钻地条；放不下时控件折行
+// 漫游的操作条：浮在地图下方居中（原型 /dev/map-3d），样式同钻地条；放不下时控件折行
 
 .bar {
   box-sizing: border-box;
@@ -40,6 +40,48 @@
   align-items: center;
   gap: var(--space-sm) var(--space-md);
   margin-top: var(--space-sm);
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+// 步行的速度：减、当前值、加、默认
+.speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+
+  b {
+    min-width: 56px;
+    color: var(--color-text-title);
+    font-weight: var(--font-weight-semibold);
+    text-align: center;
+  }
+}
+
+.divider {
+  width: 1px;
+  height: 14px;
+  background-color: var(--color-divider);
+}
+
+// 分析站内空间、进入站内时的进度
+.preparing {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--space-sm);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+}
+
+.error {
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
 }
 
 .progress {
@@ -54,8 +96,14 @@
   white-space: nowrap;
 }
 
-.hint {
+.hint,
+.message {
   margin: var(--space-sm) 0 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
+}
+
+// 步行中的提示
+.message {
+  color: var(--color-primary);
 }

@@ -1,15 +1,27 @@
-import type { RoamStatus, SceneContent, TilesetStatus } from '@yzt/map-core';
+import {
+  DEFAULT_WALK_SPEED,
+  type Navigation,
+  type RoamStatus,
+  type RouteRoamStatus,
+  type SceneContent,
+  type TilesetStatus,
+  type WalkNotice,
+  type WalkRoamStatus,
+  WALK_SPEEDS
+} from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
 import {
   computed,
   type ComputedRef,
   type MaybeRefOrGetter,
+  onScopeDispose,
   type ShallowRef,
   shallowReadonly,
   shallowRef,
   toValue
 } from 'vue';
 import type { SceneModel } from '../catalog';
+import { buildFraction, type LoadNavigation, loadNavigation as defaultLoadNavigation } from '../navigation';
 import {
   currentEffect,
   currentTilesetId,
@@ -19,10 +31,12 @@ import {
   MAX_SURFACE_OPACITY,
   type ModelLoadState,
   type RoamChoice,
+  type RouteChoice,
   ROUTE_RATES,
   type SceneModelsState,
   tilesetIdOf,
-  type UndergroundChoice
+  type UndergroundChoice,
+  type WalkChoice
 } from '../scene-content';
 
 /** 拥有者用到的上下文 */
@@ -33,6 +47,27 @@ export type SceneModelsContext = Pick<
 
 /** 路线漫游的阶段：停在起点、播放中、暂停、到了终点 */
 export type RoutePhase = 'ready' | 'playing' | 'paused' | 'finished';
+
+/**
+ * 步行的阶段（ADR 0086 第 5 节）：分析站内空间（建导航网格，progress 是 0～1）、飞进站内、行走中；
+ * 失败分两种：导航网格建不出来（可以重试）、附近找不到能站的地方
+ */
+export type WalkStage =
+  | { readonly kind: 'preparing'; readonly progress: number }
+  | { readonly kind: 'entering' }
+  | { readonly kind: 'walking' }
+  | { readonly kind: 'failed'; readonly reason: 'build' | 'spawn' };
+
+/** 步行中最近的一条提示；count 每来一条加 1，同样的提示再来一次也能看出来 */
+export interface WalkNoticeState {
+  readonly notice: WalkNotice;
+  readonly count: number;
+}
+
+export interface SceneModelsOptions {
+  /** 建导航网格；默认读索引、下载瓦片、在 Worker 里构建，测试时换掉 */
+  readonly loadNavigation?: LoadNavigation;
+}
 
 export interface SceneModels {
   /** 目录：清单还没到、失败时为空 */
@@ -55,10 +90,11 @@ export interface SceneModels {
   readonly retry: (id: string) => void;
   readonly setSurfaceOpacity: (opacity: number) => void;
   readonly exitUnderground: () => void;
-  /** 正在漫游的路线（ADR 0083） */
+  /** 正在进行的漫游：路线（ADR 0083）或步行（ADR 0086） */
   readonly roam: Readonly<ShallowRef<RoamChoice | null>>;
-  /** 这一次、这一遍漫游的进度；视图还没报告时为 null */
+  /** 这一次（路线是这一遍）漫游的状态；视图还没报告时为 null */
   readonly roamStatus: ComputedRef<RoamStatus | null>;
+  /** 路线漫游的阶段；没在路线漫游时为 null */
   readonly routePhase: ComputedRef<RoutePhase | null>;
   /** 开始一条路线：一次新的相机操作，停在起点；之后有别的定位就退出。只有加载完成的模型能开始 */
   readonly startRoute: (id: string, routeId: string) => void;
@@ -66,19 +102,38 @@ export interface SceneModels {
   readonly playRoute: () => void;
   readonly pauseRoute: () => void;
   readonly setRouteRate: (rate: number) => void;
-  /** 结束漫游；地下的模型保留钻地 */
+  /** 步行的阶段；没在步行时为 null */
+  readonly walkStage: ComputedRef<WalkStage | null>;
+  readonly walkNotice: ComputedRef<WalkNoticeState | null>;
+  /**
+   * 开始步行：一次新的相机操作，导航网格没建过就先建（建好的按模型留着），建好后交给会话；之后有别的定位就退出。
+   * 只有加载完成、清单里有出生点的模型能开始
+   */
+  readonly startWalk: (id: string) => void;
+  /** 导航网格建不出来时重新建 */
+  readonly retryWalk: () => void;
+  readonly setWalkSpeed: (speed: number) => void;
+  readonly respawnWalk: () => void;
+  readonly unstuckWalk: () => void;
+  /** 结束漫游（步行时还在建的导航网格一并中止）；地下的模型保留钻地 */
   readonly exitRoam: () => void;
   /** 绑定给会话的推导函数（ADR 0081 第 2 节） */
   readonly deriveContent: () => SceneContent;
 }
 
+// 正在建的导航网格：属于哪一次步行，进度或失败
+type WalkBuild =
+  | { readonly walkId: string; readonly state: 'building'; readonly progress: number }
+  | { readonly walkId: string; readonly state: 'failed'; readonly error: unknown };
+
 /**
- * 三维模型的拥有者（ADR 0081、0083）：持有勾选、白膜效果、重试、定位、钻地和路线漫游，推导会话的三维内容；
+ * 三维模型的拥有者（ADR 0081、0083、0086）：持有勾选、白膜效果、重试、定位、钻地和漫游，推导会话的三维内容；
  * 状态来自上下文的 sceneStatus、roamStatus。参数不合法时抛错
  */
 export function useSceneModels(
   map: SceneModelsContext,
-  catalog: MaybeRefOrGetter<readonly SceneModel[] | undefined>
+  catalog: MaybeRefOrGetter<readonly SceneModel[] | undefined>,
+  { loadNavigation = defaultLoadNavigation }: SceneModelsOptions = {}
 ): SceneModels {
   const models = computed(() => toValue(catalog) ?? []);
   const hasCatalog = computed(() => toValue(catalog) !== undefined);
@@ -89,9 +144,15 @@ export function useSceneModels(
   const focus = shallowRef<string | null>(null);
   const underground = shallowRef<UndergroundChoice | null>(null);
   const roam = shallowRef<RoamChoice | null>(null);
+  const navigations = shallowRef<ReadonlyMap<string, Navigation>>(new Map());
+  const walkBuild = shallowRef<WalkBuild | null>(null);
   // 漫游开始时的相机操作：中止（有了别的定位）就退出漫游
   let roamSignal: AbortSignal | null = null;
   let roamCount = 0;
+  // 正在建的导航网格：结束步行、换一次漫游、卸载模型时中止
+  let building: AbortController | null = null;
+  // 步行速度在几次步行之间沿用
+  let walkSpeed = DEFAULT_WALK_SPEED;
 
   const modelOf = (id: string): SceneModel => {
     const model = models.value.find(item => item.id === id);
@@ -120,10 +181,13 @@ export function useSceneModels(
       return;
     }
     loaded.value = loaded.value.filter(item => item !== id);
-    // 卸载时这个模型的效果、重试次数一起忘掉；在它里面钻地、定位过的一并结束
+    // 卸载时这个模型的效果、重试次数、导航网格一起忘掉；在它里面钻地、定位、漫游过的一并结束
     shownEffects.value = new Map([...shownEffects.value].filter(([modelId]) => modelId !== id));
     const tilesetIds = new Set(model.effects.map(effect => tilesetIdOf(model, effect.id)));
     attempts.value = new Map([...attempts.value].filter(([tilesetId]) => !tilesetIds.has(tilesetId)));
+    if (navigations.value.has(id)) {
+      navigations.value = new Map([...navigations.value].filter(([modelId]) => modelId !== id));
+    }
     if (underground.value?.modelId === id) {
       underground.value = null;
     }
@@ -190,18 +254,30 @@ export function useSceneModels(
     underground.value = null;
   };
 
-  const roamStatus = computed(() => {
+  // 视图报告的是这一次（路线还要是这一遍）漫游才算
+  const roamStatus = computed((): RoamStatus | null => {
     const current = roam.value;
     const status = map.roamStatus.value;
-    return current && status?.id === current.id && status.run === current.run ? status : null;
+    if (!current || status?.kind !== current.kind || status.id !== current.id) {
+      return null;
+    }
+    return status.kind === 'route' && current.kind === 'route' && status.run !== current.run ? null : status;
   });
+
+  const routeStatus = computed((): RouteRoamStatus | null =>
+    roamStatus.value?.kind === 'route' ? roamStatus.value : null
+  );
+
+  const walkStatus = computed((): WalkRoamStatus | null =>
+    roamStatus.value?.kind === 'walk' ? roamStatus.value : null
+  );
 
   const routePhase = computed((): RoutePhase | null => {
     const current = roam.value;
-    if (!current) {
+    if (current?.kind !== 'route') {
       return null;
     }
-    const status = roamStatus.value;
+    const status = routeStatus.value;
     if (status?.finished) {
       return 'finished';
     }
@@ -211,15 +287,66 @@ export function useSceneModels(
     return (status?.distance ?? 0) > 0 ? 'paused' : 'ready';
   });
 
+  const walkStage = computed((): WalkStage | null => {
+    const current = roam.value;
+    if (current?.kind !== 'walk') {
+      return null;
+    }
+    const build = walkBuild.value;
+    if (build?.walkId === current.id && build.state === 'failed') {
+      return { kind: 'failed', reason: 'build' };
+    }
+    if (!navigations.value.has(current.modelId)) {
+      const progress = build?.walkId === current.id && build.state === 'building' ? build.progress : 0;
+      return { kind: 'preparing', progress };
+    }
+    const phase = walkStatus.value?.phase ?? 'entering';
+    return phase === 'failed' ? { kind: 'failed', reason: 'spawn' } : { kind: phase };
+  });
+
+  const walkNotice = computed((): WalkNoticeState | null => {
+    const status = walkStatus.value;
+    return status?.notice ? { notice: status.notice, count: status.notices } : null;
+  });
+
   const releaseOperation = () => {
     roamSignal?.removeEventListener('abort', exitRoam);
     roamSignal = null;
   };
 
+  const stopBuilding = () => {
+    building?.abort();
+    building = null;
+    walkBuild.value = null;
+  };
+
   function exitRoam(): void {
     releaseOperation();
+    stopBuilding();
     roam.value = null;
   }
+  onScopeDispose(stopBuilding);
+
+  // 开始一次漫游：一次新的相机操作，之后有别的定位就退出；地下的模型漫游时按钻地处理，相机能到地表以下
+  const beginRoam = (model: SceneModel, choice: RoamChoice) => {
+    releaseOperation();
+    stopBuilding();
+    const { signal } = map.beginCameraOperation();
+    // 开始、退出时先撤掉上一次的监听，所以中止的一定是当前这次漫游
+    signal.addEventListener('abort', exitRoam, { once: true });
+    roamSignal = signal;
+    roam.value = choice;
+    focus.value = model.id;
+    if (model.underground && underground.value?.modelId !== model.id) {
+      underground.value = { modelId: model.id, opacity: underground.value?.opacity ?? DEFAULT_SURFACE_OPACITY };
+    }
+  };
+
+  const assertRoamable = (model: SceneModel, what: string) => {
+    if (loadStateOf(statusOf(model)) !== 'ready') {
+      throw new Error(`模型 ${model.id} 还不能${what}`);
+    }
+  };
 
   const startRoute = (id: string, routeId: string) => {
     assertLoaded(id);
@@ -227,44 +354,33 @@ export function useSceneModels(
     if (!model.routes.some(route => route.id === routeId)) {
       throw new Error(`模型 ${id} 没有路线 ${routeId}`);
     }
-    if (loadStateOf(statusOf(model)) !== 'ready') {
-      throw new Error(`模型 ${id} 还不能漫游`);
-    }
-    releaseOperation();
-    const { signal } = map.beginCameraOperation();
-    const choice: RoamChoice = {
+    assertRoamable(model, '漫游');
+    const previous = roam.value;
+    beginRoam(model, {
+      kind: 'route',
       modelId: id,
       routeId,
       id: `${id}/${routeId}/${++roamCount}`,
       playing: false,
-      rate: roam.value?.rate ?? 1,
+      rate: previous?.kind === 'route' ? previous.rate : 1,
       run: 0
-    };
-    // 开始、退出时先撤掉上一次的监听，所以中止的一定是当前这次漫游
-    signal.addEventListener('abort', exitRoam, { once: true });
-    roamSignal = signal;
-    roam.value = choice;
-    focus.value = id;
-    // 地下的模型漫游时按钻地处理：相机能到地表以下（ADR 0083 第 4 节）
-    if (model.underground && underground.value?.modelId !== id) {
-      underground.value = { modelId: id, opacity: underground.value?.opacity ?? DEFAULT_SURFACE_OPACITY };
-    }
+    });
   };
 
-  const updateRoam = (change: Partial<Pick<RoamChoice, 'playing' | 'rate' | 'run'>>) => {
+  const updateRoute = (change: Partial<Pick<RouteChoice, 'playing' | 'rate' | 'run'>>) => {
     const current = roam.value;
-    if (!current) {
-      throw new Error('没有在漫游');
+    if (current?.kind !== 'route') {
+      throw new Error('没有在路线漫游');
     }
     roam.value = { ...current, ...change };
   };
 
   const playRoute = () => {
     const current = roam.value;
-    if (routePhase.value === 'finished' && current) {
-      updateRoam({ playing: true, run: current.run + 1 });
+    if (routePhase.value === 'finished' && current?.kind === 'route') {
+      updateRoute({ playing: true, run: current.run + 1 });
     } else {
-      updateRoam({ playing: true });
+      updateRoute({ playing: true });
     }
   };
 
@@ -272,7 +388,106 @@ export function useSceneModels(
     if (!ROUTE_RATES.includes(rate)) {
       throw new Error(`漫游的倍速只能是 ${ROUTE_RATES.join('、')}：${rate}`);
     }
-    updateRoam({ rate });
+    updateRoute({ rate });
+  };
+
+  // 白膜各种效果的几何一样，取当前的那一个
+  const currentEffectUrl = (model: SceneModel): string => {
+    const effectId = currentEffect(model, effects.value);
+    const effect = model.effects.find(item => item.id === effectId);
+    if (!effect) {
+      throw new Error(`模型 ${model.id} 没有效果 ${effectId}`);
+    }
+    return effect.url;
+  };
+
+  // 建好的放进按模型的导航网格里；中止的不写入，失败的显示在操作条上
+  const build = async (model: SceneModel, walkId: string) => {
+    stopBuilding();
+    const controller = new AbortController();
+    building = controller;
+    const { signal } = controller;
+    walkBuild.value = { walkId, state: 'building', progress: 0 };
+    try {
+      const navigation = await loadNavigation(currentEffectUrl(model), {
+        signal,
+        onProgress: progress => {
+          if (!signal.aborted) {
+            walkBuild.value = { walkId, state: 'building', progress: buildFraction(progress) };
+          }
+        }
+      });
+      if (signal.aborted) {
+        return;
+      }
+      building = null;
+      walkBuild.value = null;
+      navigations.value = new Map([...navigations.value, [model.id, navigation]]);
+    } catch (error) {
+      if (signal.aborted) {
+        return;
+      }
+      building = null;
+      walkBuild.value = { walkId, state: 'failed', error };
+    }
+  };
+
+  const startWalk = (id: string) => {
+    assertLoaded(id);
+    const model = modelOf(id);
+    if (!model.spawn) {
+      throw new Error(`模型 ${id} 的清单里没有出生点，不能步行`);
+    }
+    assertRoamable(model, '步行');
+    const choice: WalkChoice = {
+      kind: 'walk',
+      modelId: id,
+      id: `${id}/walk/${++roamCount}`,
+      speed: walkSpeed,
+      respawn: 0,
+      unstuck: 0
+    };
+    beginRoam(model, choice);
+    if (!navigations.value.has(id)) {
+      void build(model, choice.id);
+    }
+  };
+
+  const currentWalk = (): WalkChoice => {
+    const current = roam.value;
+    if (current?.kind !== 'walk') {
+      throw new Error('没有在步行');
+    }
+    return current;
+  };
+
+  const retryWalk = () => {
+    const current = currentWalk();
+    if (walkStage.value?.kind !== 'failed' || walkStage.value.reason !== 'build') {
+      throw new Error('导航网格没有失败，不用重试');
+    }
+    void build(modelOf(current.modelId), current.id);
+  };
+
+  const setWalkSpeed = (speed: number) => {
+    const current = currentWalk();
+    if (!WALK_SPEEDS.includes(speed)) {
+      throw new Error(`步行速度只能是 ${WALK_SPEEDS.join('、')}：${speed}`);
+    }
+    walkSpeed = speed;
+    if (speed !== current.speed) {
+      roam.value = { ...current, speed };
+    }
+  };
+
+  const respawnWalk = () => {
+    const current = currentWalk();
+    roam.value = { ...current, respawn: current.respawn + 1 };
+  };
+
+  const unstuckWalk = () => {
+    const current = currentWalk();
+    roam.value = { ...current, unstuck: current.unstuck + 1 };
   };
 
   const state = (): SceneModelsState => ({
@@ -281,7 +496,8 @@ export function useSceneModels(
     shownEffects: shownEffects.value,
     attempts: attempts.value,
     underground: underground.value,
-    roam: roam.value
+    roam: roam.value,
+    navigations: navigations.value
   });
 
   return {
@@ -303,8 +519,15 @@ export function useSceneModels(
     routePhase,
     startRoute,
     playRoute,
-    pauseRoute: () => updateRoam({ playing: false }),
+    pauseRoute: () => updateRoute({ playing: false }),
     setRouteRate,
+    walkStage,
+    walkNotice,
+    startWalk,
+    retryWalk,
+    setWalkSpeed,
+    respawnWalk,
+    unstuckWalk,
     exitRoam,
     deriveContent: () => deriveSceneContent(models.value, state())
   };

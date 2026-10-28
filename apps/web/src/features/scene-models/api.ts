@@ -78,3 +78,8 @@ export function sceneManifestUrl(): string {
 export function fetchSceneManifest(signal?: AbortSignal) {
   return http.get(sceneManifestUrl(), { schema: sceneManifestSchema, envelope: false, signal, silent: true });
 }
+
+/** 读瓦片集的索引（tileset.json）：内容由 map-core 的 prepareTileset 校验整理；失败由步行操作条显示 */
+export function fetchTilesetJson(url: string, signal: AbortSignal) {
+  return http.get(url, { schema: z.unknown(), envelope: false, signal, silent: true });
+}

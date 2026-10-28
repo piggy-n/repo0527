@@ -25,10 +25,12 @@ export interface MapReadout {
   readonly eye: ComputedRef<number | null>;
   readonly position: ComputedRef<ReadoutPosition | null>;
   readonly angles: ComputedRef<ViewAngles>;
+  /** 步行时的第一视角：朝向（度，0～359 的整数）；不在步行时为 null，状态栏换成眼高和朝向（ADR 0086 第 5 节） */
+  readonly firstPerson: ComputedRef<{ readonly heading: number } | null>;
 }
 
 /** 读数用到的上下文 */
-export type ReadoutSource = Pick<MapContext, 'view' | 'pointer' | 'projectionRevision' | 'useCamera'>;
+export type ReadoutSource = Pick<MapContext, 'view' | 'pointer' | 'projectionRevision' | 'useCamera' | 'roamStatus'>;
 
 /** 从地图上下文推导状态栏的读数，在组件的 setup 中调用；随鼠标、相机、画布尺寸和视图变化重新计算 */
 export function useMapReadout(map: ReadoutSource): MapReadout {
@@ -76,5 +78,16 @@ export function useMapReadout(map: ReadoutSource): MapReadout {
 
   const angles = computed(() => visibleAngles(camera.value));
 
-  return { scale, eye, position, angles };
+  // 朝向读视图的相机：视点在地下时会话的方位按画布中心对着的地面点算，不可靠
+  const firstPerson = computed(() => {
+    void camera.value;
+    const status = map.roamStatus.value;
+    const heading = map.view.value?.heading() ?? null;
+    if (status?.kind !== 'walk' || status.phase !== 'walking' || heading === null) {
+      return null;
+    }
+    return { heading: Math.round(heading) % 360 };
+  });
+
+  return { scale, eye, position, angles, firstPerson };
 }

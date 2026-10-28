@@ -3,13 +3,17 @@ import type {
   ClientPoint,
   LngLat,
   MapPointerEvent,
+  Navigation,
   PickResult,
   PreparedTileset,
   RoutePath,
   ScreenPoint,
   TilesetLighting,
   UndergroundView,
-  Unsubscribe
+  Unsubscribe,
+  WalkNotice,
+  WalkPhase,
+  WalkSpawnPoint
 } from '@yzt/map-core';
 import type { OverlayLayer } from './overlay-plan';
 import type { ImageryPlan } from './scene-style';
@@ -31,6 +35,13 @@ export interface TilesetOptions {
 export interface RoutePlayback {
   readonly playing: boolean;
   readonly rate: number;
+}
+
+/** 开始步行时交给场景的（ADR 0086 第 3 节）：出生点按相机和清单选，speed 是米/秒 */
+export interface SceneWalkStart {
+  readonly navigation: Navigation;
+  readonly spawn: WalkSpawnPoint | null;
+  readonly speed: number;
 }
 
 /** 工具对相机控制的要求：drag 是左键拖动（地球上是旋转），为 false 时关掉 */
@@ -63,6 +74,10 @@ export interface SceneEvents {
   routeprogress: (distance: number) => void;
   /** 路线漫游走到了终点，已经停下 */
   routeend: () => void;
+  /** 步行的阶段：开始时 entering 或 failed，飞到出生点后 walking */
+  walkphase: (phase: WalkPhase) => void;
+  /** 步行中的提示 */
+  walknotice: (notice: WalkNotice) => void;
   /** 渲染出错，渲染循环已经停下：引擎失败 */
   failure: (error: unknown) => void;
 }
@@ -96,6 +111,8 @@ export interface SceneLike extends Disposable {
   size(): { readonly width: number; readonly height: number };
   /** 相机在椭球面以上的高度，单位米 */
   eyeHeight(): number;
+  /** 相机的朝向：度，正北为 0、顺时针，0～360 */
+  heading(): number;
   /** 影像图层整体替换：按 ID 增删改，按给出的顺序从下到上叠放 */
   setImagery(imagery: readonly ImageryPlan[]): void;
   /** 地球的底色；null 用场景的默认颜色 */
@@ -115,7 +132,7 @@ export interface SceneLike extends Disposable {
   /** 钻地观察（ADR 0081 第 6 节）；瓦片集还没加进来时，等加进来再生效 */
   setUnderground(underground: UndergroundView | null): void;
   /**
-   * 开始一条路线（ADR 0083 第 3 节）：飞到起点停住，接管相机的拖动、缩放和视场角；之前的路线一并结束。
+   * 开始一条路线（ADR 0083 第 3 节）：飞到起点停住，接管相机的拖动、缩放和视场角；之前的路线、步行一并结束。
    * 播放时每帧推进，暂停时拖动转头看四周
    */
   startRoute(path: RoutePath): void;
@@ -124,6 +141,18 @@ export interface SceneLike extends Disposable {
   setRoutePlayback(playback: RoutePlayback): void;
   /** 结束路线漫游，恢复视场角和相机控制；back 为 true 时飞回开始前的位置 */
   stopRoute(back: boolean): void;
+  /**
+   * 开始步行（ADR 0086 第 3 节）：选出生点、飞进站内，接管键鼠、相机控制和视场角；之前的路线、步行一并结束，
+   * 结束时回到它们开始前的位置。找不到出生点时报告 failed
+   */
+  startWalk(walk: SceneWalkStart): void;
+  setWalkSpeed(speed: number): void;
+  /** 闪切回这次的出生点 */
+  respawnWalk(): void;
+  /** 挪到附近开阔的地面；不用、没有时报告提示 */
+  unstuckWalk(): void;
+  /** 结束步行，恢复视场角、相机控制和光标；back 为 true 时飞回开始前的位置 */
+  stopWalk(back: boolean): void;
   setGestures(gestures: SceneGestures): void;
   setCursor(cursor: string | undefined): void;
   /** 让画布获得焦点，按键才能交给工具 */

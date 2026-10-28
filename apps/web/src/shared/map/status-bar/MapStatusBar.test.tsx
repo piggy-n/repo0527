@@ -15,13 +15,15 @@ function fakeReadout() {
   const position = shallowRef<ReadoutPosition | null>({ lngLat: POINT, center: false });
   const angles = shallowRef<ViewAngles>({ bearing: null, pitch: null });
   const eye = shallowRef<number | null>(null);
+  const firstPerson = shallowRef<{ heading: number } | null>(null);
   const readout: MapReadout = {
     scale: computed(() => scale.value),
     eye: computed(() => eye.value),
     position: computed(() => position.value),
-    angles: computed(() => angles.value)
+    angles: computed(() => angles.value),
+    firstPerson: computed(() => firstPerson.value)
   };
-  return { readout, scale, eye, position, angles };
+  return { readout, scale, eye, position, angles, firstPerson };
 }
 
 function mountBar(format: CoordinateFormat = 'dms') {
@@ -144,5 +146,17 @@ describe('MapStatusBar 放不下时', () => {
 
     await resize(wrapper, 188, [443, 322, 133]);
     expect(shown(wrapper)).toBe('10 km');
+  });
+});
+
+describe('MapStatusBar 的第一视角（ADR 0086 第 5 节）', () => {
+  it('步行时是第一视角、眼高和朝向，不显示视点高度、经纬度和角度', async () => {
+    const { wrapper, firstPerson, eye, angles } = mountBar();
+    eye.value = -3.5;
+    angles.value = { bearing: 76, pitch: -6 };
+    firstPerson.value = { heading: 76 };
+    await nextTick();
+
+    expect(shown(wrapper)).toBe('第一视角眼高 1.6 m朝向 76°');
   });
 });

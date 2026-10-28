@@ -587,6 +587,7 @@ function mockManifest() {
             kind: 'indoor',
             underground: true,
             tileset: 'SZ_3DT/tileset.json',
+            spawn: { lng: 120.666, lat: 31.3175, height: -5.1, heading: 76 },
             routes: [
               {
                 id: 'enter',
@@ -1785,9 +1786,9 @@ describe('CurrentMapPage', () => {
       expect(wrapper.find('[data-roam-bar]').exists()).toBe(true);
       expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
       await key(' ');
-      expect(view.session.scene.current.roam?.playing).toBe(true);
+      expect(view.session.scene.current.roam).toMatchObject({ playing: true });
       await key(' ');
-      expect(view.session.scene.current.roam?.playing).toBe(false);
+      expect(view.session.scene.current.roam).toMatchObject({ playing: false });
       await key('Escape');
       expect(view.session.scene.current.roam).toBeUndefined();
       expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
@@ -1803,6 +1804,43 @@ describe('CurrentMapPage', () => {
       await start();
       await switchTo(wrapper, '二维');
       expect(view.session.scene.current.roam).toBeUndefined();
+    });
+
+    it('步行（ADR 0086）：从面板开始，分析站内空间失败时可以重试；Esc 退出，空格不拦截', async () => {
+      mockManifest();
+      let requests = 0;
+      server.use(
+        mock.get('*/3dt/SZ_3DT/tileset.json', () => {
+          requests++;
+          return new HttpResponse(null, { status: 404 });
+        })
+      );
+      const page = await readyPage();
+      const { wrapper } = page;
+      await switchTo(wrapper, '三维');
+      await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
+      await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
+      await settle();
+      const view = sceneOf(page);
+      view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
+      await nextTick();
+
+      await button(wrapper, '步行漫游').trigger('click');
+      await settle();
+      expect(wrapper.get('[data-roam-bar]').text()).toContain('步行漫游 · 苏州站地下空间');
+      // 进入地下空间：工具栏隐藏
+      expect(wrapper.find('button[aria-label="测距"]').exists()).toBe(false);
+      await vi.waitFor(() => expect(wrapper.get('[data-roam-bar]').text()).toContain('站内空间分析失败，请重试'));
+      expect(view.session.scene.current.roam).toBeUndefined();
+      await button(wrapper, '重试').trigger('click');
+      await vi.waitFor(() => expect(requests).toBe(2));
+
+      const space = new KeyboardEvent('keydown', { key: ' ', cancelable: true });
+      window.dispatchEvent(space);
+      expect(space.defaultPrevented).toBe(false);
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      await settle();
+      expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
     });
   });
 

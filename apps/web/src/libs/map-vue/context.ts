@@ -53,6 +53,8 @@ export interface MapViewport {
   queryRendered(area: ScreenPoint | ScreenBox, options: RenderedQueryOptions): readonly RenderedFeature[];
   /** 视点在椭球面以上的高度，单位米；视图没有这项能力（二维）时为 null（ADR 0080 第 6 节） */
   eyeHeight(): number | null;
+  /** 视点的朝向（度，正北为 0、顺时针）；视图没有这项能力（二维）时为 null（ADR 0086 第 5 节） */
+  heading(): number | null;
 }
 
 /** 移动相机的能力，只在 run 的回调期间有效，之后调用抛错（ADR 0039 第 3 条） */
@@ -169,7 +171,8 @@ function createViewport(view: MapView): MapViewport {
     pick: (point: ScreenPoint) => view.pick(point),
     project: (lngLat: LngLat, height?: number) => view.project(lngLat, height),
     queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => view.queryRendered(area, options),
-    eyeHeight: () => view.eyeHeight?.() ?? null
+    eyeHeight: () => view.eyeHeight?.() ?? null,
+    heading: () => view.heading?.() ?? null
   });
 }
 

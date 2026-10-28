@@ -1,6 +1,7 @@
 import type { CameraState } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 import { ModelEvents } from '../model-events';
+import type { Navigation } from './nav/nav-build';
 
 /** 瓦片集的光照：地面上的按太阳，地下、室内用以相机为光源的头灯（ADR 0081 第 3 节） */
 export type TilesetLighting = 'sun' | 'headlight';
@@ -41,8 +42,32 @@ export interface RouteRoam {
   readonly run: number;
 }
 
-/** 漫游；3D.4c 的步行漫游再加一种 */
-export type SceneRoam = RouteRoam;
+/** 清单里步行的出生点：脚下地板的经纬度、椭球高，朝向（度，正北为 0、顺时针） */
+export interface WalkSpawnPoint {
+  readonly lng: number;
+  readonly lat: number;
+  readonly height: number;
+  readonly heading: number;
+}
+
+/**
+ * 步行漫游（ADR 0086 第 2 节）：拥有者建好导航网格交给会话，视图选出生点、接管键鼠逐帧行走；
+ * 回到出生点、脱困是一次性的命令，写成计数，加 1 就做一次
+ */
+export interface WalkRoam {
+  readonly kind: 'walk';
+  /** 这一次步行：每次开始换一个 */
+  readonly id: string;
+  /** 建好后不再修改 */
+  readonly navigation: Navigation;
+  readonly spawn: WalkSpawnPoint | null;
+  /** 步行速度，米/秒 */
+  readonly speed: number;
+  readonly respawn: number;
+  readonly unstuck: number;
+}
+
+export type SceneRoam = RouteRoam | WalkRoam;
 
 /** 三维独有的内容；二维视图不读 */
 export interface SceneContent {
@@ -52,14 +77,35 @@ export interface SceneContent {
   readonly roam?: SceneRoam;
 }
 
-/** 视图报告的漫游进度：属于哪一次漫游、第几遍，走过的和总的长度（米） */
-export interface RoamStatus {
+/** 视图报告的路线漫游进度：属于哪一次漫游、第几遍，走过的和总的长度（米） */
+export interface RouteRoamStatus {
+  readonly kind: 'route';
   readonly id: string;
   readonly run: number;
   readonly distance: number;
   readonly total: number;
   readonly finished: boolean;
 }
+
+/** 步行的阶段：飞进站内、行走中、附近找不到能站的地方（failed） */
+export type WalkPhase = 'entering' | 'walking' | 'failed';
+
+/**
+ * 步行中的提示：没点到能站的地面（not-standable）、落点被挡住（hidden）、点击移动途中受阻（blocked）、
+ * 当前位置开阔不用脱困（open）、附近没有开阔的地面（no-open-ground）
+ */
+export type WalkNotice = 'not-standable' | 'hidden' | 'blocked' | 'open' | 'no-open-ground';
+
+/** 视图报告的步行状态；notices 每来一条提示加 1，同样的提示再来一次也能看出来 */
+export interface WalkRoamStatus {
+  readonly kind: 'walk';
+  readonly id: string;
+  readonly phase: WalkPhase;
+  readonly notice: WalkNotice | null;
+  readonly notices: number;
+}
+
+export type RoamStatus = RouteRoamStatus | WalkRoamStatus;
 
 /** 视图报告的瓦片集状态；就绪后带上让整个瓦片集进入画布的相机 */
 export type TilesetStatus =
@@ -78,7 +124,26 @@ interface SceneContentModelEvents {
   change: (content: SceneContent) => void;
 }
 
-function validateRoam({ id, path, rate, run }: SceneRoam): void {
+const isCount = (value: number) => Number.isInteger(value) && value >= 0;
+
+function validateWalk({ id, spawn, speed, respawn, unstuck }: WalkRoam): void {
+  if (!(speed > 0 && Number.isFinite(speed))) {
+    throw new Error(`步行 ${id} 的速度不是正数：${speed}`);
+  }
+  if (!isCount(respawn) || !isCount(unstuck)) {
+    throw new Error(`步行 ${id} 的回到出生点、脱困次数不是非负整数`);
+  }
+  if (spawn && ![spawn.lng, spawn.lat, spawn.height, spawn.heading].every(Number.isFinite)) {
+    throw new Error(`步行 ${id} 的出生点有不是数的坐标`);
+  }
+}
+
+function validateRoam(roam: SceneRoam): void {
+  if (roam.kind === 'walk') {
+    validateWalk(roam);
+    return;
+  }
+  const { id, path, rate, run } = roam;
   if (path.length < 2) {
     throw new Error(`漫游 ${id} 的路线少于两个点`);
   }
@@ -88,7 +153,7 @@ function validateRoam({ id, path, rate, run }: SceneRoam): void {
   if (!(rate > 0 && Number.isFinite(rate))) {
     throw new Error(`漫游 ${id} 的倍速不是正数：${rate}`);
   }
-  if (!Number.isInteger(run) || run < 0) {
+  if (!isCount(run)) {
     throw new Error(`漫游 ${id} 的遍数不是非负整数：${run}`);
   }
 }

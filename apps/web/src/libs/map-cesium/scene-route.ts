@@ -1,6 +1,7 @@
 import { ROUTE_SPEED, type RoutePath, type RoutePose, smoothAngle } from '@yzt/map-core';
 import { Cartesian3, Math as CesiumMath, type CesiumWidget } from 'cesium';
 import type { RoutePlayback } from './scene-like';
+import { keepInputsOff, releaseCamera, type RoamSaved, takeOverCamera } from './scene-roam-camera';
 
 // 室内需要比二维对齐时（约 37°）宽得多的竖直视场角
 const ROAM_FOVY = CesiumMath.toRadians(60);
@@ -12,23 +13,14 @@ const MAX_FRAME = 0.1;
 // 暂停时拖动转头：每像素多少度，俯仰的范围
 const LOOK_SENSITIVITY = 0.2;
 const MAX_LOOK_PITCH = 60;
-// 飞到起点、飞回开始前的位置的秒数
+// 飞到起点的秒数
 const START_FLIGHT = 1.5;
-const BACK_FLIGHT = 1.2;
 
 export interface SceneRouteEvents {
   readonly progress: (distance: number) => void;
   readonly end: () => void;
   /** 换竖直视场角（弧度）；null 换回场景默认的 */
   readonly setFovy: (fovy: number | null) => void;
-}
-
-// 开始漫游前的相机和相机控制，结束时还原
-interface Saved {
-  readonly position: Cartesian3;
-  readonly direction: Cartesian3;
-  readonly up: Cartesian3;
-  readonly inputs: boolean;
 }
 
 /**
@@ -40,7 +32,7 @@ export class SceneRoute implements Disposable {
   readonly #events: SceneRouteEvents;
   readonly #stack = new DisposableStack();
   #path: RoutePath | null = null;
-  #saved: Saved | null = null;
+  #saved: RoamSaved | null = null;
   #distance = 0;
   #playing = false;
   #rate = 1;
@@ -77,17 +69,10 @@ export class SceneRoute implements Disposable {
     return this.#path !== null;
   }
 
-  start(path: RoutePath): void {
-    const { camera, scene } = this.#widget;
-    if (!this.#saved) {
-      this.#saved = {
-        position: Cartesian3.clone(camera.positionWC),
-        direction: Cartesian3.clone(camera.directionWC),
-        up: Cartesian3.clone(camera.upWC),
-        inputs: scene.screenSpaceCameraController.enableInputs
-      };
-    }
-    scene.screenSpaceCameraController.enableInputs = false;
+  /** 开始一条路线：之前的路线一并结束；inherited 是步行换手过来时它记下的相机 */
+  start(path: RoutePath, inherited: RoamSaved | null = null): void {
+    const { camera } = this.#widget;
+    this.#saved = takeOverCamera(this.#widget, this.#saved ?? inherited);
     this.#events.setFovy(ROAM_FOVY);
     this.#path = path;
     this.#distance = 0;
@@ -130,27 +115,22 @@ export class SceneRoute implements Disposable {
   }
 
   stop(back: boolean): void {
-    const saved = this.#saved;
-    if (!saved) {
-      return;
+    const saved = this.handOff();
+    if (saved) {
+      this.#events.setFovy(null);
+      releaseCamera(this.#widget, saved, back);
     }
-    const { camera, scene } = this.#widget;
+  }
+
+  /** 交给步行：停下路线，不还原相机，给出开始路线前记下的相机；没有在漫游时为 null */
+  handOff(): RoamSaved | null {
+    const saved = this.#saved;
     this.#path = null;
     this.#saved = null;
     this.#playing = false;
     this.#flying = false;
     this.#drag = null;
-    scene.screenSpaceCameraController.enableInputs = saved.inputs;
-    this.#events.setFovy(null);
-    camera.cancelFlight();
-    if (back) {
-      camera.flyTo({
-        destination: saved.position,
-        orientation: { direction: saved.direction, up: saved.up },
-        duration: BACK_FLIGHT
-      });
-    }
-    scene.requestRender();
+    return saved;
   }
 
   [Symbol.dispose](): void {
@@ -176,6 +156,7 @@ export class SceneRoute implements Disposable {
     if (!path || this.#flying) {
       return;
     }
+    keepInputsOff(this.#widget);
     const now = performance.now();
     const dt = this.#last === null ? 0 : Math.min((now - this.#last) / 1000, MAX_FRAME);
     this.#last = now;

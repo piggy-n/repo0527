@@ -1,12 +1,20 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import { buildNavGrid } from './nav/heightfield';
+import { navigationFrame, translation } from './nav/nav-frame';
+import { NavGrid } from './nav/nav-grid';
+import { floorQuad, triangles } from './nav/nav-testing';
+import { labelRegions } from './nav/regions';
 import {
   EMPTY_SCENE_CONTENT,
   type RouteRoam,
   type SceneContent,
   SceneContentModel,
-  type TilesetLayer
+  type TilesetLayer,
+  type WalkRoam
 } from './scene-content-model';
+
+const frame = navigationFrame(Array.from(translation(-2_700_000, 4_700_000, 3_300_000)));
 
 const tileset = (id: string, extra: Partial<TilesetLayer> = {}): TilesetLayer => ({
   id,
@@ -92,6 +100,37 @@ describe('SceneContentModel', () => {
     ];
     for (const [route, message] of invalid) {
       expect(() => model.set({ tilesets: [], underground: null, roam: route })).toThrow(message);
+    }
+    expect(model.current).toBe(valid);
+  });
+
+  it('步行：速度是正数，回到出生点、脱困的次数是非负整数，出生点的坐标是数（ADR 0086）', () => {
+    using model = new SceneContentModel();
+    const navigation = { grid: new NavGrid(labelRegions(buildNavGrid([triangles(floorQuad(0, 0, 4, 4, 0))]))), frame };
+    const walk = (extra: Partial<WalkRoam> = {}): WalkRoam => ({
+      kind: 'walk',
+      id: 'walk-1',
+      navigation,
+      spawn: { lng: 120.666, lat: 31.3175, height: -5.1, heading: 76 },
+      speed: 1.6,
+      respawn: 0,
+      unstuck: 0,
+      ...extra
+    });
+    const walking = walk({ spawn: null, respawn: 2, unstuck: 1 });
+    const valid: SceneContent = { tilesets: [], underground: null, roam: walking };
+    model.set(valid);
+    expect(model.current).toBe(valid);
+
+    const invalid: [WalkRoam, string][] = [
+      [walk({ speed: 0 }), '速度不是正数'],
+      [walk({ speed: Number.NaN }), '速度不是正数'],
+      [walk({ respawn: -1 }), '次数不是非负整数'],
+      [walk({ unstuck: 0.5 }), '次数不是非负整数'],
+      [walk({ spawn: { lng: 120.666, lat: Number.NaN, height: -5.1, heading: 76 } }), '出生点有不是数的坐标']
+    ];
+    for (const [invalidWalk, message] of invalid) {
+      expect(() => model.set({ tilesets: [], underground: null, roam: invalidWalk })).toThrow(message);
     }
     expect(model.current).toBe(valid);
   });

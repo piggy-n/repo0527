@@ -1,4 +1,4 @@
-import type { SceneContent, SceneRoam, TilesetLayer, TilesetStatus } from '@yzt/map-core';
+import type { Navigation, SceneContent, SceneRoam, TilesetLayer, TilesetStatus } from '@yzt/map-core';
 import type { SceneModel } from './catalog';
 
 /** 钻地观察：哪个模型，地表不透明度 0～0.6（ADR 0078 第 5 节、ADR 0081 第 6 节） */
@@ -11,7 +11,8 @@ export const MAX_SURFACE_OPACITY = 0.6;
 export const DEFAULT_SURFACE_OPACITY = 0.25;
 
 /** 路线漫游（ADR 0083）：哪个模型的哪条路线；id 每次开始换一个，run 是第几遍 */
-export interface RoamChoice {
+export interface RouteChoice {
+  readonly kind: 'route';
   readonly modelId: string;
   readonly routeId: string;
   readonly id: string;
@@ -19,6 +20,18 @@ export interface RoamChoice {
   readonly rate: number;
   readonly run: number;
 }
+
+/** 步行（ADR 0086）：哪个模型、速度（米/秒），回到出生点、脱困的次数；导航网格建好以前不交给会话 */
+export interface WalkChoice {
+  readonly kind: 'walk';
+  readonly modelId: string;
+  readonly id: string;
+  readonly speed: number;
+  readonly respawn: number;
+  readonly unstuck: number;
+}
+
+export type RoamChoice = RouteChoice | WalkChoice;
 
 /** 路线漫游的倍速 */
 export const ROUTE_RATES: readonly number[] = [0.5, 1, 2];
@@ -35,6 +48,8 @@ export interface SceneModelsState {
   readonly attempts: ReadonlyMap<string, number>;
   readonly underground: UndergroundChoice | null;
   readonly roam: RoamChoice | null;
+  /** 按模型 ID 建好的导航网格 */
+  readonly navigations: ReadonlyMap<string, Navigation>;
 }
 
 /** 瓦片集的 ID：白膜每种效果一个，其他模型一个 */
@@ -93,12 +108,21 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
   return roam ? { tilesets, underground, roam } : { tilesets, underground };
 }
 
-// 漫游的模型还勾选着、路线还在时才交给会话
-function roamOf(byId: ReadonlyMap<string, SceneModel>, { roam, loaded }: SceneModelsState): SceneRoam | null {
-  if (!roam || !loaded.includes(roam.modelId)) {
+// 漫游的模型还勾选着、路线还在时才交给会话；步行要等导航网格建好
+function roamOf(
+  byId: ReadonlyMap<string, SceneModel>,
+  { roam, loaded, navigations }: SceneModelsState
+): SceneRoam | null {
+  const model = roam && loaded.includes(roam.modelId) ? byId.get(roam.modelId) : undefined;
+  if (!roam || !model) {
     return null;
   }
-  const route = byId.get(roam.modelId)?.routes.find(item => item.id === roam.routeId);
+  if (roam.kind === 'walk') {
+    const navigation = navigations.get(model.id);
+    const { id, speed, respawn, unstuck } = roam;
+    return navigation ? { kind: 'walk', id, navigation, spawn: model.spawn ?? null, speed, respawn, unstuck } : null;
+  }
+  const route = model.routes.find(item => item.id === roam.routeId);
   if (!route) {
     return null;
   }

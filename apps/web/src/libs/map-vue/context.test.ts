@@ -1002,6 +1002,13 @@ describe('MapContextState 的定位可视区域', () => {
 
 // 三维视图：另外报告三维内容的状态（ADR 0081 第 2 节）
 class SceneFakeView extends FakeView {
+  // 视点在地下 3.4 米、朝东偏北
+  eyeHeight(): number {
+    return -3.4;
+  }
+  heading(): number {
+    return 76;
+  }
   sceneStatus: SceneStatus = NO_SCENE_STATUS;
   roamStatus: RoamStatus | null = null;
   readonly #sceneListeners = new Set<(status: SceneStatus) => void>();
@@ -1037,6 +1044,18 @@ class SceneFakeView extends FakeView {
 }
 
 describe('MapContextState 的三维内容状态（ADR 0081 第 2 节）', () => {
+  it('就绪的三维视图的受限入口转发视点高度和朝向（ADR 0080 第 6 节、ADR 0086）', () => {
+    using env = setup();
+    const globe = new SceneFakeView();
+    env.state.attachView(globe, CANVAS);
+    env.state.context.setDimension('3d');
+    globe.emit('ready');
+
+    const viewport = env.state.context.view.value;
+    expect(viewport?.eyeHeight()).toBe(-3.4);
+    expect(viewport?.heading()).toBe(76);
+  });
+
   it('只反映当前三维视图的报告；切回二维时为空，再切回三维时取视图现在的状态；卸下时退订', () => {
     using env = setup();
     const flat = new FakeView('2d');
@@ -1068,7 +1087,7 @@ describe('MapContextState 的三维内容状态（ADR 0081 第 2 节）', () => 
     const globe = new SceneFakeView();
     env.state.attachView(flat, CANVAS);
     env.state.attachView(globe, CANVAS);
-    const walking: RoamStatus = { id: 'enter', run: 0, distance: 12, total: 120, finished: false };
+    const walking: RoamStatus = { kind: 'route', id: 'enter', run: 0, distance: 12, total: 120, finished: false };
 
     globe.setRoamStatus(walking);
     expect(env.state.context.roamStatus.value).toBeNull();

@@ -1,9 +1,21 @@
+import { EYE_HEIGHT } from '@yzt/map-core';
 import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
 import { useShownElementSize } from '../../composables/useShownElementSize';
 import { type CoordinateFormat, formatLngLat } from '../location/coordinate-format';
 import { eyeText, fitStatusLayout, type ScaleBar, type StatusLayout, type ViewAngles } from './status-bar';
 import type { MapReadout, ReadoutPosition } from './useMapReadout';
 import styles from './MapStatusBar.module.scss';
+
+// 每种排法最多显示几段
+const LAYOUT_SEGMENTS: Readonly<Record<StatusLayout, number>> = { full: 3, 'no-angles': 2, 'scale-only': 1 };
+
+// 段之间加分隔线；一段都没有时不显示
+const joined = (segments: readonly VNode[]) =>
+  segments.length === 0 ? null : (
+    <div class={styles.bar}>
+      {segments.flatMap((segment, index) => (index === 0 ? [segment] : [<span class={styles.divider} />, segment]))}
+    </div>
+  );
 
 const scaleSegment = ({ width, label }: ScaleBar) => (
   <span class={styles.segment}>
@@ -24,9 +36,16 @@ const anglesSegment = ({ bearing, pitch }: ViewAngles) =>
     </span>
   );
 
+// 步行时的三段：第一视角、眼高、朝向（原型 `/dev/map-3d`），放不下时同样先去掉后面的
+const firstPersonSegments = (heading: number) => [
+  <span class={styles.segment}>第一视角</span>,
+  <span class={styles.segment}>眼高 {EYE_HEIGHT} m</span>,
+  <span class={[styles.segment, styles.angles]}>朝向 {heading}°</span>
+];
+
 /**
  * 左下角的状态栏（ADR 0053 第 5 节，设计稿 5D.3）：比例尺（三维是视点高度，ADR 0080 第 6 节）、鼠标所在的经纬度、
- * 不为 0 的旋转和俯仰。
+ * 不为 0 的旋转和俯仰；步行时是第一视角、眼高和朝向（ADR 0086 第 5 节）。
  * 只显示、不拦截鼠标；三种排法的宽度由隐藏的量尺量出，放不下时按 fitStatusLayout 取舍
  */
 export const MapStatusBar = defineComponent({
@@ -62,9 +81,12 @@ export const MapStatusBar = defineComponent({
       </span>
     );
 
-    // 按排法取出要显示的几段，段之间加分隔线；一段都没有时不显示
+    // 按排法取出要显示的几段
     const bar = (shown: StatusLayout) => {
-      const { scale, eye, position, angles } = props.readout;
+      const { scale, eye, position, angles, firstPerson } = props.readout;
+      if (firstPerson.value) {
+        return joined(firstPersonSegments(firstPerson.value.heading).slice(0, LAYOUT_SEGMENTS[shown]));
+      }
       const segments: VNode[] = [];
       // 排法里的 scale-only 指只留第一段：二维是比例尺，三维是视点高度
       if (scale.value) {
@@ -79,14 +101,7 @@ export const MapStatusBar = defineComponent({
       if (angleSegment) {
         segments.push(angleSegment);
       }
-      if (segments.length === 0) {
-        return null;
-      }
-      return (
-        <div class={styles.bar}>
-          {segments.flatMap((segment, index) => (index === 0 ? [segment] : [<span class={styles.divider} />, segment]))}
-        </div>
-      );
+      return joined(segments);
     };
 
     return () => (

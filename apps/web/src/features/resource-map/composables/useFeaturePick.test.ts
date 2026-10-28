@@ -94,7 +94,7 @@ function rendered(sourceId: string, id: number): RenderedFeature {
 
 // 上下文里的就绪视图：工具视图加上视点高度，点选用不到
 function contextView(kind: ViewKind): MapViewport {
-  return { ...toolView([], kind), eyeHeight: () => null };
+  return { ...toolView([], kind), eyeHeight: () => null, heading: () => null };
 }
 
 // 拾取：每像素 0.001 度，画布左上角是 (118, 33)；渲染要素按数据源返回给定的

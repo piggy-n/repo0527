@@ -133,6 +133,12 @@ export class SceneTilesets implements Disposable {
     return this.#entries.get(id)?.tileset.boundingSphere;
   }
 
+  /** 步行时按距离压暗远处，增加通道的纵深（旧项目的做法）；平时关掉，俯瞰整座车站时不发灰 */
+  setInteriorFog(enabled: boolean): void {
+    this.#headlight.setUniform('uFog', enabled ? 1 : 0);
+    this.#widget.scene.requestRender();
+  }
+
   /** 有显示着的瓦片集：没有时拾取模型注定落空 */
   get anyShown(): boolean {
     for (const { tileset } of this.#entries.values()) {

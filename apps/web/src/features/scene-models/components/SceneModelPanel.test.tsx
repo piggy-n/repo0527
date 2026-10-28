@@ -1,8 +1,16 @@
-import type { CameraState, RoamStatus, SceneStatus } from '@yzt/map-core';
+import {
+  type CameraState,
+  NavGrid,
+  type Navigation,
+  navigationFrame,
+  type RoamStatus,
+  type SceneStatus,
+  type WalkNotice
+} from '@yzt/map-core';
 import { type CameraControl, provideMap } from '@yzt/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { ElDropdown, ElDropdownItem, ElOption, ElRadioGroup, ElSelect, ElSlider } from 'element-plus';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref, shallowRef } from 'vue';
 import { required } from '@/shared/testing/required';
 import { sceneManifestSchema } from '../api';
@@ -26,6 +34,7 @@ const CATALOG = buildModelCatalog(
         kind: 'indoor',
         underground: true,
         tileset: 'S.json',
+        spawn: { lng: 120.666, lat: 31.3175, height: -5.1, heading: 76 },
         // 往东约 95 米、再往北约 11 米
         routes: [
           {
@@ -62,6 +71,9 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG) {
   const failed = ref(false);
   const onRetry = vi.fn<() => void>();
   const collapsed = ref(false);
+  // 建导航网格换成用例控制的
+  const builds: { resolve: (navigation: Navigation) => void; reject: (error: Error) => void }[] = [];
+  const loadNavigation = () => new Promise<Navigation>((resolve, reject) => builds.push({ resolve, reject }));
   let owner: SceneModels | undefined;
   const Page = defineComponent(() => {
     provideMap({ groups: [], camera: CAMERA });
@@ -72,7 +84,8 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG) {
         runCameraOperation: action => action(control),
         beginCameraOperation: () => ({ signal: new AbortController().signal, run: action => action(control) })
       },
-      source
+      source,
+      { loadNavigation }
     );
     const models = owner;
     return () => (
@@ -102,11 +115,18 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG) {
   const progress = (distance: number, finished = false) => {
     const roam = owner?.roam.value;
     const total = owner?.models.value[0]?.routes[0]?.length ?? 0;
-    roamStatus.value = roam ? { id: roam.id, run: roam.run, distance, total, finished } : null;
+    roamStatus.value =
+      roam?.kind === 'route' ? { kind: 'route', id: roam.id, run: roam.run, distance, total, finished } : null;
+    return nextTick();
+  };
+  // 步行时视图报告的阶段和提示
+  const walk = (phase: 'entering' | 'walking' | 'failed', notice: WalkNotice | null = null, notices = 0) => {
+    const roam = owner?.roam.value;
+    roamStatus.value = roam?.kind === 'walk' ? { kind: 'walk', id: roam.id, phase, notice, notices } : null;
     return nextTick();
   };
   const ownerOf = required(owner, '页面没有创建拥有者');
-  return { wrapper, owner: ownerOf, source, failed, onRetry, collapsed, flyTo, report, progress };
+  return { wrapper, owner: ownerOf, source, failed, onRetry, collapsed, flyTo, report, progress, builds, walk };
 }
 
 function button(wrapper: VueWrapper, label: string, within = '') {
@@ -261,7 +281,7 @@ describe('路线漫游的入口和操作条（ADR 0083）', () => {
     dropdown.vm.$emit('command', 'enter');
     await nextTick();
 
-    expect(owner.roam.value?.routeId).toBe('enter');
+    expect(owner.roam.value).toMatchObject({ kind: 'route', routeId: 'enter' });
     expect(wrapper.get('[data-loaded="station"]').text()).toContain('漫游中');
     expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
     const bar = wrapper.get('[data-roam-bar]');
@@ -288,7 +308,7 @@ describe('路线漫游的入口和操作条（ADR 0083）', () => {
 
     wrapper.get('[data-roam-bar]').findComponent(ElRadioGroup).vm.$emit('update:modelValue', 2);
     await nextTick();
-    expect(owner.roam.value?.rate).toBe(2);
+    expect(owner.roam.value).toMatchObject({ rate: 2 });
     expect(wrapper.get('[data-roam-bar]').text()).toContain('剩余 0:17');
 
     await progress(106, true);
@@ -299,5 +319,126 @@ describe('路线漫游的入口和操作条（ADR 0083）', () => {
     await textButton(wrapper, '退出漫游')?.trigger('click');
     expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
     expect(wrapper.get('[data-underground-bar]').text()).toContain('钻地观察 · 苏州站地下空间');
+  });
+});
+
+// 一块空网格：面板只把它交给会话
+const NAVIGATION: Navigation = {
+  grid: new NavGrid({
+    meta: {
+      minX: 0,
+      minY: 0,
+      cellSize: 0.2,
+      width: 1,
+      height: 1,
+      chunksX: 1,
+      chunksY: 1,
+      maxLevels: 4,
+      floorCells: 0,
+      droppedLevels: 0
+    },
+    chunkIndex: Int32Array.of(-1),
+    data: new Int16Array(0),
+    headroom: new Uint8Array(0)
+  }),
+  frame: navigationFrame([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2_700_000, 4_700_000, 3_300_000, 1])
+};
+
+const flushBuild = () => new Promise(resolve => setTimeout(resolve, 0));
+
+describe('步行的入口和操作条（ADR 0086）', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('清单里有出生点、加载完成的模型才有"步行漫游"；开始后操作条显示分析进度，可以取消', async () => {
+    const { wrapper, owner, report, builds } = mountPanel();
+    await check(wrapper, 'station', true);
+    await check(wrapper, 'white', true);
+    expect(textButton(wrapper, '步行漫游')).toBeUndefined();
+    await report({ station: 'ready', 'white/plain': 'ready' });
+    expect(wrapper.get('[data-loaded="white"]').text()).not.toContain('步行漫游');
+
+    await textButton(wrapper, '步行漫游')?.trigger('click');
+    expect(wrapper.get('[data-loaded="station"]').text()).toContain('漫游中');
+    const bar = wrapper.get('[data-roam-bar]');
+    expect(bar.text()).toContain('步行漫游 · 苏州站地下空间');
+    expect(bar.text()).toContain('正在分析站内空间 0%');
+    expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
+
+    await textButton(wrapper, '取消')?.trigger('click');
+    expect(owner.roam.value).toBeNull();
+    expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
+    expect(builds).toHaveLength(1);
+  });
+
+  it('地下的模型清单里没有出生点时也没有"步行漫游"', async () => {
+    const [station, ...others] = CATALOG;
+    const { wrapper, report } = mountPanel([{ ...required(station, '目录里没有车站'), spawn: undefined }, ...others]);
+    await check(wrapper, 'station', true);
+    await report({ station: 'ready' });
+
+    expect(wrapper.get('[data-loaded="station"]').text()).toContain('路线漫游');
+    expect(textButton(wrapper, '步行漫游')).toBeUndefined();
+  });
+
+  it('建好后进入站内、行走：调速、回到出生点、脱困改意图；提示几秒后消失，同样的提示再来一次重新显示', async () => {
+    const { wrapper, owner, report, builds, walk } = mountPanel();
+    await check(wrapper, 'station', true);
+    await report({ station: 'ready' });
+    owner.startWalk('station');
+    builds[0]?.resolve(NAVIGATION);
+    await flushBuild();
+    const bar = () => wrapper.get('[data-roam-bar]');
+    expect(bar().text()).toContain('正在进入站内…');
+    expect(textButton(wrapper, '取消')).toBeDefined();
+
+    await walk('walking');
+    expect(bar().text()).toContain('1.6 m/s');
+    expect(bar().text()).toContain('W/A/S/D 行走');
+    expect(textButton(wrapper, '退出漫游')).toBeDefined();
+    await bar().get('button[aria-label="加速"]').trigger('click');
+    expect(owner.roam.value).toMatchObject({ speed: 2.5 });
+    await textButton(wrapper, '默认')?.trigger('click');
+    expect(owner.roam.value).toMatchObject({ speed: 1.6 });
+    await bar().get('button[aria-label="减速"]').trigger('click');
+    await bar().get('button[aria-label="减速"]').trigger('click');
+    expect(owner.roam.value).toMatchObject({ speed: 0.5 });
+    expect(bar().get('button[aria-label="减速"]').attributes('disabled')).toBeDefined();
+    await textButton(wrapper, '回到出生点')?.trigger('click');
+    await textButton(wrapper, '脱困')?.trigger('click');
+    expect(owner.roam.value).toMatchObject({ respawn: 1, unstuck: 1 });
+
+    vi.useFakeTimers();
+    await walk('walking', 'open', 1);
+    expect(bar().text()).toContain('当前位置可以正常行走，无需脱困');
+    vi.advanceTimersByTime(3500);
+    await nextTick();
+    expect(bar().text()).not.toContain('无需脱困');
+    await walk('walking', 'open', 2);
+    expect(bar().text()).toContain('无需脱困');
+  });
+
+  it('分析失败可以重试；附近找不到能站的地方时提示，只能退出', async () => {
+    const { wrapper, owner, report, builds, walk } = mountPanel();
+    await check(wrapper, 'station', true);
+    await report({ station: 'ready' });
+    owner.startWalk('station');
+    builds[0]?.reject(new Error('瓦片下载失败（404）'));
+    await flushBuild();
+    const bar = () => wrapper.get('[data-roam-bar]');
+    expect(bar().text()).toContain('站内空间分析失败，请重试');
+
+    await textButton(wrapper, '重试')?.trigger('click');
+    expect(builds).toHaveLength(2);
+    expect(bar().text()).toContain('正在分析站内空间');
+    builds[1]?.resolve(NAVIGATION);
+    await flushBuild();
+    await walk('failed');
+    expect(bar().text()).toContain('附近没有找到可以站立的室内位置');
+    expect(textButton(wrapper, '重试')).toBeUndefined();
+
+    await textButton(wrapper, '退出漫游')?.trigger('click');
+    expect(wrapper.find('[data-roam-bar]').exists()).toBe(false);
   });
 });

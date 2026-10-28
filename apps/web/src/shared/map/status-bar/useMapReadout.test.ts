@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { CameraState, LngLat, PickResult, ScreenPoint } from '@yzt/map-core';
+import type { CameraState, LngLat, PickResult, RoamStatus, ScreenPoint } from '@yzt/map-core';
 import type { MapViewport } from '@yzt/map-vue';
 import { describe, expect, it } from 'vitest';
 import { effectScope, ref, shallowRef } from 'vue';
@@ -26,11 +26,17 @@ function fakeViewport(camera: { readonly value: CameraState }) {
     },
     project: () => ({ x: 500, y: 300 }),
     queryRendered: () => [],
-    eyeHeight: () => null
+    eyeHeight: () => null,
+    heading: () => null
   };
-  // 三维视图：同样的拾取，另外有视点高度（ADR 0080 第 6 节）
-  const eye = { height: 420_000 };
-  const sceneViewport: MapViewport = { ...viewport, kind: '3d', eyeHeight: () => eye.height };
+  // 三维视图：同样的拾取，另外有视点高度（ADR 0080 第 6 节）和朝向
+  const eye = { height: 420_000, heading: 359.6 };
+  const sceneViewport: MapViewport = {
+    ...viewport,
+    kind: '3d',
+    eyeHeight: () => eye.height,
+    heading: () => eye.heading
+  };
   return { viewport, sceneViewport, eye, projection, picks };
 }
 
@@ -39,9 +45,12 @@ function setup() {
   const view = shallowRef<MapViewport | null>(null);
   const pointer = shallowRef<ScreenPoint | null>(null);
   const projectionRevision = ref(0);
+  const roamStatus = shallowRef<RoamStatus | null>(null);
   const fake = fakeViewport(camera);
   const scope = effectScope();
-  const readout = scope.run(() => useMapReadout({ view, pointer, projectionRevision, useCamera: () => camera }));
+  const readout = scope.run(() =>
+    useMapReadout({ view, pointer, projectionRevision, roamStatus, useCamera: () => camera })
+  );
   if (!readout) {
     throw new Error('作用域没有运行');
   }
@@ -51,6 +60,7 @@ function setup() {
     view,
     pointer,
     projectionRevision,
+    roamStatus,
     ...fake,
     [Symbol.dispose]: () => scope.stop()
   };
@@ -144,5 +154,27 @@ describe('useMapReadout', () => {
 
     expect(ctx.readout.scale.value).toBeNull();
     expect(ctx.readout.position.value).toBeNull();
+  });
+});
+
+describe('useMapReadout 的第一视角（ADR 0086 第 5 节）', () => {
+  it('步行中才有：朝向取视图的相机、取整到 0～359；进场、失败、路线漫游时没有', () => {
+    using ctx = setup();
+    ctx.view.value = ctx.sceneViewport;
+    expect(ctx.readout.firstPerson.value).toBeNull();
+
+    ctx.roamStatus.value = { kind: 'walk', id: 'walk-1', phase: 'entering', notice: null, notices: 0 };
+    expect(ctx.readout.firstPerson.value).toBeNull();
+    ctx.roamStatus.value = { kind: 'walk', id: 'walk-1', phase: 'walking', notice: null, notices: 0 };
+    expect(ctx.readout.firstPerson.value).toStrictEqual({ heading: 0 });
+
+    ctx.eye.heading = 75.6;
+    ctx.camera.value = { ...ctx.camera.value, bearing: 76 };
+    expect(ctx.readout.firstPerson.value).toStrictEqual({ heading: 76 });
+
+    ctx.roamStatus.value = { kind: 'walk', id: 'walk-1', phase: 'failed', notice: null, notices: 0 };
+    expect(ctx.readout.firstPerson.value).toBeNull();
+    ctx.roamStatus.value = { kind: 'route', id: 'enter', run: 0, distance: 0, total: 10, finished: false };
+    expect(ctx.readout.firstPerson.value).toBeNull();
   });
 });

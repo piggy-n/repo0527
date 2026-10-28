@@ -20,6 +20,7 @@ import {
   type RoamStatus,
   RoutePath,
   type RouteRoam,
+  type SceneRoam,
   type SceneStatus,
   type ScreenPoint,
   type SourceErrors,
@@ -28,7 +29,11 @@ import {
   type ToolView,
   type Unsubscribe,
   type ViewBounds,
-  type ViewState
+  type ViewState,
+  type WalkNotice,
+  type WalkPhase,
+  type WalkRoam,
+  type WalkRoamStatus
 } from '@yzt/map-core';
 import { safeReporter } from '@yzt/utils';
 import type { GeoJSON } from 'geojson';
@@ -83,12 +88,11 @@ interface CesiumViewEvents {
   roamstatuschange: (status: RoamStatus | null) => void;
 }
 
-// 正在播放的路线（ADR 0083 第 3 节）：roam 是最近应用的意图；被别的定位接管后 detached，撤掉时不再飞回
-interface RoamEntry {
-  roam: RouteRoam;
-  readonly path: RoutePath;
-  detached: boolean;
-}
+// 场景里正在进行的漫游（ADR 0083 第 3 节、ADR 0086 第 3 节）：roam 是最近应用的意图；
+// 被别的定位接管后 detached，撤掉时不再飞回
+type RoamEntry =
+  | { readonly kind: 'route'; roam: RouteRoam; readonly path: RoutePath; detached: boolean }
+  | { readonly kind: 'walk'; roam: WalkRoam; detached: boolean };
 
 // 进度每变这么多米报告一次（最快 2× 时每秒约 6 次）
 const ROAM_REPORT_STEP = 0.5;
@@ -153,7 +157,7 @@ export class CesiumView<const G extends string> implements MapView {
   readonly #groupShown = new Map<string, string>();
   #sceneStatus: SceneStatus = NO_SCENE_STATUS;
   #sceneStale = false;
-  // 路线漫游（ADR 0083）：场景里正在播放的，和报告出去的进度
+  // 漫游（ADR 0083、0086）：场景里正在进行的，和报告出去的进度、状态
   #roam: RoamEntry | null = null;
   #roamStatus: RoamStatus | null = null;
   // 交给工具的视图能力：只有拾取、投影和渲染要素查询（ADR 0034 第 2 条、ADR 0047 第 4 节）
@@ -227,6 +231,8 @@ export class CesiumView<const G extends string> implements MapView {
       scene.on('tilesetinitial', id => this.#guard(() => this.#onTilesetInitial(scene, id))),
       scene.on('routeprogress', distance => this.#onRouteProgress(distance)),
       scene.on('routeend', () => this.#onRouteEnd()),
+      scene.on('walkphase', phase => this.#onWalkPhase(phase)),
+      scene.on('walknotice', notice => this.#onWalkNotice(notice)),
       scene.on('failure', error => this.#fail(error))
     ]) {
       stack.defer(unsubscribe);
@@ -272,7 +278,7 @@ export class CesiumView<const G extends string> implements MapView {
     return this.on('scenestatuschange', callback);
   }
 
-  /** 路线漫游的进度（ADR 0083 第 2 节） */
+  /** 路线漫游的进度、步行的状态（ADR 0083 第 2 节、ADR 0086 第 2 节） */
   get roamStatus(): RoamStatus | null {
     return this.#roamStatus;
   }
@@ -361,6 +367,11 @@ export class CesiumView<const G extends string> implements MapView {
   /** 视点在椭球面以上的高度，状态栏显示（ADR 0080 第 6 节） */
   eyeHeight(): number {
     return this.#readyScene().eyeHeight();
+  }
+
+  /** 视点的朝向，步行时状态栏显示（ADR 0086 第 5 节） */
+  heading(): number {
+    return this.#readyScene().heading();
   }
 
   /** 三维没有渲染要素可查（ADR 0047 第 4 节） */
@@ -692,12 +703,13 @@ export class CesiumView<const G extends string> implements MapView {
     this.#emitter.emit('scenestatuschange', this.#sceneStatus);
   }
 
-  // 场景在播放路线：相机的变化都是漫游引起的
+  // 场景在漫游：相机的变化都是漫游引起的
   #roaming(): boolean {
     return this.#roam !== null && !this.#roam.detached;
   }
 
-  // 按会话的漫游意图开始、重新开始、改播放或结束（ADR 0083 第 3 节）；只在就绪时调用，back 决定结束时是否飞回
+  // 按会话的漫游意图开始、改变或结束（ADR 0083 第 3 节、ADR 0086 第 3 节）；只在就绪时调用，back 决定结束时是否飞回。
+  // 换了一次漫游（ID 或种类变了）时直接开始新的：场景结束上一个，结束新的时回到最初的位置
   #applyRoam(scene: SceneLike, back: boolean): void {
     const wanted = this.#session.scene.current.roam;
     const entry = this.#roam;
@@ -705,20 +717,43 @@ export class CesiumView<const G extends string> implements MapView {
       if (entry) {
         this.#roam = null;
         if (!entry.detached) {
-          scene.stopRoute(back);
+          this.#stopRoam(scene, entry.kind, back);
         }
         this.#publishRoam(null);
       }
       return;
     }
-    if (!entry || entry.roam.id !== wanted.id) {
-      const path = new RoutePath(wanted.path);
-      this.#roam = { roam: wanted, path, detached: false };
-      scene.startRoute(path);
-      scene.setRoutePlayback({ playing: wanted.playing, rate: wanted.rate });
-      this.#publishRoam({ id: wanted.id, run: wanted.run, distance: 0, total: path.total, finished: false });
+    if (!entry || entry.kind !== wanted.kind || entry.roam.id !== wanted.id) {
+      this.#startRoam(scene, wanted);
       return;
     }
+    if (entry.kind === 'route' && wanted.kind === 'route') {
+      this.#updateRoute(scene, entry, wanted);
+    } else if (entry.kind === 'walk' && wanted.kind === 'walk') {
+      this.#updateWalk(scene, entry, wanted);
+    }
+  }
+
+  #startRoam(scene: SceneLike, wanted: SceneRoam): void {
+    if (wanted.kind === 'route') {
+      const path = new RoutePath(wanted.path);
+      this.#roam = { kind: 'route', roam: wanted, path, detached: false };
+      scene.startRoute(path);
+      scene.setRoutePlayback({ playing: wanted.playing, rate: wanted.rate });
+      // 从步行换过来时步行的光标已经撤掉，换回工具的
+      this.#applyCursor(scene);
+      const { id, run } = wanted;
+      this.#publishRoam({ kind: 'route', id, run, distance: 0, total: path.total, finished: false });
+      return;
+    }
+    this.#roam = { kind: 'walk', roam: wanted, detached: false };
+    // 先报告进场：找不到出生点时，场景在 startWalk 里就报告 failed
+    this.#publishRoam({ kind: 'walk', id: wanted.id, phase: 'entering', notice: null, notices: 0 });
+    const { navigation, spawn, speed } = wanted;
+    scene.startWalk({ navigation, spawn, speed });
+  }
+
+  #updateRoute(scene: SceneLike, entry: Extract<RoamEntry, { kind: 'route' }>, wanted: RouteRoam): void {
     const previous = entry.roam;
     entry.roam = wanted;
     if (entry.detached) {
@@ -726,25 +761,55 @@ export class CesiumView<const G extends string> implements MapView {
     }
     if (wanted.run !== previous.run) {
       scene.restartRoute();
-      this.#publishRoam({ id: wanted.id, run: wanted.run, distance: 0, total: entry.path.total, finished: false });
+      const { id, run } = wanted;
+      this.#publishRoam({ kind: 'route', id, run, distance: 0, total: entry.path.total, finished: false });
     }
     if (wanted.playing !== previous.playing || wanted.rate !== previous.rate) {
       scene.setRoutePlayback({ playing: wanted.playing, rate: wanted.rate });
     }
   }
 
-  // 页面开始了别的定位：路线立即停下、不飞回，相机交给这次定位；拥有者随后会撤掉漫游
+  // 速度随时生效；回到出生点、脱困的计数变了就做一次
+  #updateWalk(scene: SceneLike, entry: Extract<RoamEntry, { kind: 'walk' }>, wanted: WalkRoam): void {
+    const previous = entry.roam;
+    entry.roam = wanted;
+    if (entry.detached) {
+      return;
+    }
+    if (wanted.speed !== previous.speed) {
+      scene.setWalkSpeed(wanted.speed);
+    }
+    if (wanted.respawn !== previous.respawn) {
+      scene.respawnWalk();
+    }
+    if (wanted.unstuck !== previous.unstuck) {
+      scene.unstuckWalk();
+    }
+  }
+
+  // 步行的光标是它自己设的，结束后换回工具的
+  #stopRoam(scene: SceneLike, kind: RoamEntry['kind'], back: boolean): void {
+    if (kind === 'route') {
+      scene.stopRoute(back);
+      return;
+    }
+    scene.stopWalk(back);
+    this.#applyCursor(scene);
+  }
+
+  // 页面开始了别的定位：漫游立即停下、不飞回，相机交给这次定位；拥有者随后会撤掉漫游
   #detachRoam(scene: SceneLike): void {
-    if (this.#roaming() && this.#roam) {
-      this.#roam.detached = true;
-      scene.stopRoute(false);
+    const entry = this.#roam;
+    if (entry && !entry.detached) {
+      entry.detached = true;
+      this.#stopRoam(scene, entry.kind, false);
     }
   }
 
   #onRouteProgress(distance: number): void {
     const entry = this.#roam;
     const status = this.#roamStatus;
-    if (!entry || entry.detached || !status) {
+    if (entry?.kind !== 'route' || entry.detached || status?.kind !== 'route') {
       return;
     }
     const total = entry.path.total;
@@ -756,8 +821,31 @@ export class CesiumView<const G extends string> implements MapView {
   #onRouteEnd(): void {
     const entry = this.#roam;
     const status = this.#roamStatus;
-    if (entry && !entry.detached && status) {
+    if (entry?.kind === 'route' && !entry.detached && status?.kind === 'route') {
       this.#publishRoam({ ...status, distance: entry.path.total, finished: true });
+    }
+  }
+
+  // 只报告当前这次、没被接管的步行
+  #walkStatus(): WalkRoamStatus | null {
+    const entry = this.#roam;
+    const status = this.#roamStatus;
+    return entry?.kind === 'walk' && !entry.detached && status?.kind === 'walk' && status.id === entry.roam.id
+      ? status
+      : null;
+  }
+
+  #onWalkPhase(phase: WalkPhase): void {
+    const status = this.#walkStatus();
+    if (status && status.phase !== phase) {
+      this.#publishRoam({ ...status, phase });
+    }
+  }
+
+  #onWalkNotice(notice: WalkNotice): void {
+    const status = this.#walkStatus();
+    if (status) {
+      this.#publishRoam({ ...status, notice, notices: status.notices + 1 });
     }
   }
 

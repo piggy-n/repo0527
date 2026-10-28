@@ -1,5 +1,12 @@
 import 'cesium/Build/Cesium/Widgets/CesiumWidget/CesiumWidget.css';
-import { type CameraState, EYE_HEIGHT, type PreparedTileset, RoutePath } from '@yzt/map-core';
+import {
+  buildNavigation,
+  type CameraState,
+  EYE_HEIGHT,
+  type PreparedTileset,
+  RoutePath,
+  type WalkPhase
+} from '@yzt/map-core';
 import type { GeoJSON, Position } from 'geojson';
 import { Cartesian3, Matrix4, Transforms } from 'cesium';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -259,6 +266,34 @@ function boxTileset(contentUri?: string): PreparedTileset {
 afterEach(() => {
   objectUrls.splice(0).forEach(url => URL.revokeObjectURL(url));
 });
+
+// GLB 包成 b3dm：28 字节的头、只有 BATCH_LENGTH 的特征表（按 8 字节对齐），没有批量表
+async function b3dmOf(glb: Blob): Promise<ArrayBuffer> {
+  const body = new Uint8Array(await glb.arrayBuffer());
+  const featureText = JSON.stringify({ BATCH_LENGTH: 0 });
+  const feature = new TextEncoder().encode(featureText.padEnd(Math.ceil(featureText.length / 8) * 8, ' '));
+  const out = new ArrayBuffer(28 + feature.length + body.length);
+  const view = new DataView(out);
+  new Uint8Array(out).set(new TextEncoder().encode('b3dm'), 0);
+  view.setUint32(4, 1, true);
+  view.setUint32(8, out.byteLength, true);
+  view.setUint32(12, feature.length, true);
+  new Uint8Array(out).set(feature, 28);
+  new Uint8Array(out).set(body, 28 + feature.length);
+  return out;
+}
+
+// 相机在 MODEL_AT 的东北天坐标系里的位置（米）
+function enuOf(scene: CesiumScene): Cartesian3 {
+  const toEnu = Matrix4.inverseTransformation(
+    Transforms.eastNorthUpToFixedFrame(Cartesian3.fromDegrees(...MODEL_AT, 0)),
+    new Matrix4()
+  );
+  return Matrix4.multiplyByPoint(toEnu, new Cartesian3(...scene.savePose().position), new Cartesian3());
+}
+
+const pressKey = (type: 'keydown' | 'keyup', code: string) =>
+  window.dispatchEvent(new KeyboardEvent(type, { code, key: code.slice(-1).toLowerCase() }));
 
 // 下一次触发某个事件；和超时赛跑，结束后退订
 function nextEvent(scene: CesiumScene, event: 'tilesetfailed' | 'tilesetinitial', timeout = 10000) {
@@ -553,4 +588,102 @@ describe('CesiumScene', () => {
     await expect(waitForFrames(() => Math.abs(scene.eyeHeight() - startHeight) < 1)).resolves.toBe('ok');
     expect(scene.readCamera()?.zoom).toBeCloseTo(before.zoom, 1);
   }, 30000);
+
+  it('路线漫游暂停时滚轮不移动相机：飞到起点后 Cesium 的相机控制仍然关着，路线每帧也停在原处', async () => {
+    const scene = createScene();
+    scene.startRoute(new RoutePath([
+      [...MODEL_AT, 0],
+      [MODEL_AT[0] + 40 / 95_200, MODEL_AT[1], 0]
+    ]));
+    await expect(waitForFrames(() => Math.abs(scene.eyeHeight() - EYE_HEIGHT) < 0.05)).resolves.toBe('ok');
+    // flyTo 结束后 Cesium 才把相机控制打开，等它过去
+    await failingFrames(3, () => true);
+    const before = enuOf(scene);
+
+    // 往外滚（拉远）：贴着地面时往里滚有最小距离，本来就不动
+    containers.at(-1)?.querySelector('canvas')?.dispatchEvent(
+      new WheelEvent('wheel', { deltaY: 1200, clientX: 480, clientY: 320, bubbles: true, cancelable: true })
+    );
+    await failingFrames(30, () => true);
+
+    expect(Cartesian3.distance(enuOf(scene), before)).toBeLessThan(0.01);
+  }, 30000);
+
+  it('步行：从清单的出生点飞进去，视点在地板上方一个眼高；按住 W 往前走、碰到墙停下；结束后飞回（ADR 0086）', async () => {
+    const scene = createScene();
+    const navigation = await walkRoom(scene);
+    scene.jumpTo({ center: MODEL_AT, zoom: 15, bearing: 0, pitch: 50 });
+    const startHeight = scene.eyeHeight();
+    const phases: WalkPhase[] = [];
+    scene.on('walkphase', phase => phases.push(phase));
+
+    scene.startWalk({ navigation, spawn: { lng: MODEL_AT[0], lat: MODEL_AT[1], height: -6, heading: 90 }, speed: 4 });
+    await expect(waitForFrames(() => phases.includes('walking'))).resolves.toBe('ok');
+    expect(phases).toStrictEqual(['entering', 'walking']);
+    const start = enuOf(scene);
+    expect(start.z).toBeCloseTo(-6 + EYE_HEIGHT, 1);
+    expect(Math.hypot(start.x, start.y)).toBeLessThan(0.3);
+    // 朝着清单的朝向（正东），微微低头
+    const toEnu = Matrix4.inverseTransformation(
+      Transforms.eastNorthUpToFixedFrame(Cartesian3.fromDegrees(...MODEL_AT, 0)),
+      new Matrix4()
+    );
+    const facing = Matrix4.multiplyByPointAsVector(
+      toEnu,
+      new Cartesian3(...scene.savePose().direction),
+      new Cartesian3()
+    );
+    expect(facing.x).toBeGreaterThan(0.99);
+    expect(facing.z).toBeLessThan(-0.05);
+
+    // 朝东走一小段：往东挪、高度不变（出生点在格子中心，和原点差不到一格）
+    pressKey('keydown', 'KeyW');
+    await expect(waitForFrames(() => enuOf(scene).x > start.x + 1)).resolves.toBe('ok');
+    pressKey('keyup', 'KeyW');
+    const stepped = enuOf(scene);
+    expect(Math.abs(stepped.y - start.y)).toBeLessThan(0.05);
+    expect(stepped.z).toBeCloseTo(start.z, 1);
+
+    // 一直走到墙：停在墙里面，身体半径 0.3 米按 0.2 米的格子取整，离墙 0.2～0.4 米（近裁剪面 0.1 米，不会切进墙）
+    pressKey('keydown', 'KeyW');
+    await failingFrames(150, () => true);
+    pressKey('keyup', 'KeyW');
+    const stopped = enuOf(scene);
+    expect(stopped.x).toBeGreaterThan(6 - 0.45);
+    expect(stopped.x).toBeLessThan(6 - 0.15);
+
+    scene.stopWalk(true);
+    await expect(waitForFrames(() => Math.abs(scene.eyeHeight() - startHeight) < 1)).resolves.toBe('ok');
+  }, 60000);
+
+  it('路线漫游中直接开始步行：结束步行时回到开始路线前的位置，不是路线上', async () => {
+    const scene = createScene();
+    const navigation = await walkRoom(scene);
+    scene.jumpTo({ center: MODEL_AT, zoom: 15, bearing: 0, pitch: 50 });
+    const startHeight = scene.eyeHeight();
+    scene.startRoute(new RoutePath([
+      [MODEL_AT[0], MODEL_AT[1], -6],
+      [MODEL_AT[0] + 4 / 95_200, MODEL_AT[1], -6]
+    ]));
+    await expect(waitForFrames(() => Math.abs(scene.eyeHeight() - (EYE_HEIGHT - 6)) < 0.05)).resolves.toBe('ok');
+    const phases: WalkPhase[] = [];
+    scene.on('walkphase', phase => phases.push(phase));
+
+    scene.startWalk({ navigation, spawn: { lng: MODEL_AT[0], lat: MODEL_AT[1], height: -6, heading: 0 }, speed: 1.6 });
+    await expect(waitForFrames(() => phases.includes('walking'))).resolves.toBe('ok');
+    scene.stopWalk(true);
+
+    await expect(waitForFrames(() => Math.abs(scene.eyeHeight() - startHeight) < 1)).resolves.toBe('ok');
+  }, 60000);
 });
+
+// 12 米见方的盒子当作一间屋子：地板在地面以下 6 米，顶板在地面以上 6 米；加进场景、钻地，给出它的导航网格
+async function walkRoom(scene: CesiumScene) {
+  const glb = boxGlb(6);
+  const prepared = boxTileset(URL.createObjectURL(glb));
+  const signal = new AbortController().signal;
+  const navigation = await buildNavigation(prepared, { signal, download: () => b3dmOf(glb) });
+  await scene.addTileset('box', prepared, { show: true, lighting: 'headlight' }, signal);
+  scene.setUnderground({ tilesetId: 'box', surfaceOpacity: 0.25 });
+  return navigation;
+}

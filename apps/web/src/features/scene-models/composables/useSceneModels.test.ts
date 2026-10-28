@@ -1,5 +1,13 @@
 // @vitest-environment node
-import type { CameraState, RoamStatus, SceneStatus } from '@yzt/map-core';
+import {
+  type CameraState,
+  type NavBuildProgress,
+  NavGrid,
+  type Navigation,
+  navigationFrame,
+  type RoamStatus,
+  type SceneStatus
+} from '@yzt/map-core';
 import type { CameraControl } from '@yzt/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { effectScope, shallowRef } from 'vue';
@@ -17,6 +25,7 @@ const CATALOG = buildModelCatalog(
         kind: 'indoor',
         underground: true,
         tileset: 'S/tileset.json',
+        spawn: { lng: 120.666, lat: 31.3175, height: -5.1, heading: 76 },
         routes: [
           { id: 'enter', name: '进站', path: [[120.666, 31.3175, -5.1], [120.6662, 31.3175, -5.1]] },
           { id: 'platform', name: '站台', path: [[120.666, 31.3175, -10], [120.666, 31.3176, -10]] }
@@ -41,7 +50,41 @@ const CATALOG = buildModelCatalog(
 
 const CAMERA: CameraState = { center: [120.66, 31.31], zoom: 16, bearing: 0, pitch: 55 };
 
+// 拥有者只把导航网格原样交给会话：一块空网格就够
+const NAVIGATION: Navigation = {
+  grid: new NavGrid({
+    meta: {
+      minX: 0,
+      minY: 0,
+      cellSize: 0.2,
+      width: 1,
+      height: 1,
+      chunksX: 1,
+      chunksY: 1,
+      maxLevels: 4,
+      floorCells: 0,
+      droppedLevels: 0
+    },
+    chunkIndex: Int32Array.of(-1),
+    data: new Int16Array(0),
+    headroom: new Uint8Array(0)
+  }),
+  frame: navigationFrame([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2_700_000, 4_700_000, 3_300_000, 1])
+};
+
+// 建导航网格换成用例控制的：记下每次请求，由用例决定建好、失败
+interface PendingBuild {
+  readonly url: string;
+  readonly signal: AbortSignal;
+  readonly onProgress: (progress: NavBuildProgress) => void;
+  readonly resolve: (navigation: Navigation) => void;
+  readonly reject: (error: Error) => void;
+}
+
 function setup() {
+  const builds: PendingBuild[] = [];
+  const loadNavigation = (url: string, { signal, onProgress }: Pick<PendingBuild, 'signal' | 'onProgress'>) =>
+    new Promise<Navigation>((resolve, reject) => builds.push({ url, signal, onProgress, resolve, reject }));
   const sceneStatus = shallowRef<SceneStatus>(new Map());
   const roamStatus = shallowRef<RoamStatus | null>(null);
   const flyTo = vi.fn<CameraControl['flyTo']>();
@@ -58,7 +101,7 @@ function setup() {
   );
   const scope = effectScope();
   const owner = scope.run(() =>
-    useSceneModels({ sceneStatus, roamStatus, runCameraOperation, beginCameraOperation }, CATALOG)
+    useSceneModels({ sceneStatus, roamStatus, runCameraOperation, beginCameraOperation }, CATALOG, { loadNavigation })
   );
   if (!owner) {
     throw new Error('作用域没有运行');
@@ -67,7 +110,7 @@ function setup() {
     sceneStatus.value = new Map(ids.map(id => [id, { state: 'ready', camera: CAMERA }]));
   };
   const dispose = () => scope.stop();
-  return { owner, sceneStatus, roamStatus, flyTo, runCameraOperation, ready, [Symbol.dispose]: dispose };
+  return { owner, sceneStatus, roamStatus, flyTo, runCameraOperation, ready, builds, [Symbol.dispose]: dispose };
 }
 
 const summary = ({ tilesets }: ReturnType<ReturnType<typeof setup>['owner']['deriveContent']>) =>
@@ -213,7 +256,7 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
     ctx.owner.startRoute('station', 'enter');
     const roam = ctx.owner.deriveContent().roam;
     expect(roam).toMatchObject({ kind: 'route', playing: false, rate: 1, run: 0 });
-    expect(roam?.path).toHaveLength(2);
+    expect(roam?.kind === 'route' && roam.path).toHaveLength(2);
     expect(ctx.owner.underground.value).toStrictEqual({ modelId: 'station', opacity: 0.25 });
     expect(ctx.owner.focus.value).toBe('station');
     expect(ctx.owner.routePhase.value).toBe('ready');
@@ -233,13 +276,13 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
     ctx.owner.startRoute('station', 'enter');
     const id = ctx.owner.roam.value?.id ?? '';
 
-    ctx.roamStatus.value = { id: 'other', run: 0, distance: 5, total: 19, finished: false };
+    ctx.roamStatus.value = { kind: 'route', id: 'other', run: 0, distance: 5, total: 19, finished: false };
     expect(ctx.owner.roamStatus.value).toBeNull();
-    ctx.roamStatus.value = { id, run: 0, distance: 5, total: 19, finished: false };
+    ctx.roamStatus.value = { kind: 'route', id, run: 0, distance: 5, total: 19, finished: false };
     expect(ctx.owner.routePhase.value).toBe('paused');
 
     ctx.owner.playRoute();
-    ctx.roamStatus.value = { id, run: 0, distance: 19, total: 19, finished: true };
+    ctx.roamStatus.value = { kind: 'route', id, run: 0, distance: 19, total: 19, finished: true };
     expect(ctx.owner.routePhase.value).toBe('finished');
     ctx.owner.playRoute();
     expect(ctx.owner.deriveContent().roam).toMatchObject({ playing: true, run: 1 });
@@ -270,10 +313,156 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
     ctx.owner.exitRoam();
     expect(ctx.owner.roam.value).toBeNull();
     expect(ctx.owner.underground.value?.modelId).toBe('station');
-    expect(() => ctx.owner.playRoute()).toThrow('没有在漫游');
+    expect(() => ctx.owner.playRoute()).toThrow('没有在路线漫游');
 
     ctx.owner.startRoute('station', 'enter');
     ctx.owner.setChecked('station', false);
     expect(ctx.owner.roam.value).toBeNull();
+  });
+});
+
+const flushBuild = () => new Promise(resolve => setTimeout(resolve, 0));
+
+describe('useSceneModels 的步行（ADR 0086）', () => {
+  it('只有加载完成、清单里有出生点的模型能开始；地下的模型按钻地处理', () => {
+    using ctx = setup();
+    expect(() => ctx.owner.startWalk('station')).toThrow('模型 station 没有加载');
+    ctx.owner.setChecked('station', true);
+    ctx.owner.setChecked('city', true);
+    expect(() => ctx.owner.startWalk('station')).toThrow('模型 station 还不能步行');
+    ctx.ready('station', 'city');
+    expect(() => ctx.owner.startWalk('city')).toThrow('模型 city 的清单里没有出生点，不能步行');
+
+    ctx.owner.startWalk('station');
+
+    expect(ctx.owner.roam.value).toMatchObject({
+      kind: 'walk',
+      modelId: 'station',
+      speed: 1.6,
+      respawn: 0,
+      unstuck: 0
+    });
+    expect(ctx.owner.underground.value).toStrictEqual({ modelId: 'station', opacity: 0.25 });
+    expect(ctx.owner.focus.value).toBe('station');
+    expect(ctx.owner.routePhase.value).toBeNull();
+  });
+
+  it('先建导航网格并报告进度，建好以后才交给会话；之后按视图报告的阶段和提示', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.ready('station');
+    ctx.owner.startWalk('station');
+    const id = ctx.owner.roam.value?.id ?? '';
+    const [build] = ctx.builds;
+
+    expect(build?.url).toBe('https://maps.test/3dt/S/tileset.json');
+    expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'preparing', progress: 0 });
+    expect(ctx.owner.deriveContent().roam).toBeUndefined();
+    build?.onProgress({ stage: 'download', done: 1, total: 2 });
+    expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'preparing', progress: 0.4 });
+    build?.onProgress({ stage: 'build' });
+    expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'preparing', progress: 0.9 });
+
+    build?.resolve(NAVIGATION);
+    await flushBuild();
+    expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'entering' });
+    expect(ctx.owner.deriveContent().roam).toStrictEqual({
+      kind: 'walk',
+      id,
+      navigation: NAVIGATION,
+      spawn: { lng: 120.666, lat: 31.3175, height: -5.1, heading: 76 },
+      speed: 1.6,
+      respawn: 0,
+      unstuck: 0
+    });
+
+    ctx.roamStatus.value = { kind: 'walk', id: 'other', phase: 'walking', notice: 'blocked', notices: 1 };
+    expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'entering' });
+    expect(ctx.owner.walkNotice.value).toBeNull();
+    ctx.roamStatus.value = { kind: 'walk', id, phase: 'walking', notice: 'blocked', notices: 1 };
+    expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'walking' });
+    expect(ctx.owner.walkNotice.value).toStrictEqual({ notice: 'blocked', count: 1 });
+    ctx.roamStatus.value = { kind: 'walk', id, phase: 'failed', notice: null, notices: 1 };
+    expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'failed', reason: 'spawn' });
+  });
+
+  it('建好的导航网格按模型留着：再步行不用重建；卸载模型时丢掉', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.ready('station');
+    ctx.owner.startWalk('station');
+    ctx.builds[0]?.resolve(NAVIGATION);
+    await flushBuild();
+    ctx.owner.exitRoam();
+
+    ctx.owner.startWalk('station');
+    expect(ctx.builds).toHaveLength(1);
+    expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'entering' });
+
+    ctx.owner.setChecked('station', false);
+    expect(ctx.owner.roam.value).toBeNull();
+    ctx.owner.setChecked('station', true);
+    ctx.owner.startWalk('station');
+    expect(ctx.builds).toHaveLength(2);
+  });
+
+  it('建不出来时显示失败、可以重试；退出时中止正在建的，晚到的结果不写入', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.ready('station');
+    ctx.owner.startWalk('station');
+    expect(() => ctx.owner.retryWalk()).toThrow('导航网格没有失败，不用重试');
+
+    ctx.builds[0]?.reject(new Error('瓦片下载失败（404）'));
+    await flushBuild();
+    expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'failed', reason: 'build' });
+    ctx.owner.retryWalk();
+    expect(ctx.builds).toHaveLength(2);
+    expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'preparing', progress: 0 });
+
+    ctx.owner.exitRoam();
+    expect(ctx.builds[1]?.signal.aborted).toBe(true);
+    ctx.builds[1]?.resolve(NAVIGATION);
+    await flushBuild();
+    ctx.owner.startWalk('station');
+    expect(ctx.builds).toHaveLength(3);
+  });
+
+  it('速度按档位、几次步行之间沿用；回到出生点、脱困把计数加 1；不在步行时调用抛错', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.ready('station');
+    expect(() => ctx.owner.respawnWalk()).toThrow('没有在步行');
+    ctx.owner.startWalk('station');
+    ctx.builds[0]?.resolve(NAVIGATION);
+    await flushBuild();
+
+    ctx.owner.setWalkSpeed(4);
+    ctx.owner.respawnWalk();
+    ctx.owner.unstuckWalk();
+    ctx.owner.unstuckWalk();
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ speed: 4, respawn: 1, unstuck: 2 });
+    expect(() => ctx.owner.setWalkSpeed(3)).toThrow('步行速度只能是 0.5、1、1.6、2.5、4、6、8');
+
+    ctx.owner.exitRoam();
+    ctx.owner.startWalk('station');
+    expect(ctx.owner.roam.value).toMatchObject({ speed: 4, respawn: 0, unstuck: 0 });
+  });
+
+  it('有了别的定位就退出步行，正在建的一并中止；开始路线漫游也结束步行', () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.ready('station');
+    ctx.owner.startWalk('station');
+
+    ctx.owner.locate('station');
+    expect(ctx.owner.roam.value).toBeNull();
+    expect(ctx.builds[0]?.signal.aborted).toBe(true);
+
+    ctx.owner.startWalk('station');
+    ctx.owner.startRoute('station', 'enter');
+    expect(ctx.owner.roam.value).toMatchObject({ kind: 'route' });
+    expect(ctx.builds[1]?.signal.aborted).toBe(true);
+    expect(ctx.owner.walkStage.value).toBeNull();
   });
 });

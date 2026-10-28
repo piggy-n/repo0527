@@ -4,15 +4,20 @@ import {
   type MapInputEvent,
   type MapPointerEvent,
   MapSession,
+  NavGrid,
+  navigationFrame,
   type PreparedTileset,
   type RoamStatus,
   type RoutePath,
   type RouteRoam,
+  type SceneRoam,
   type SceneStatus,
   type StyleGroup,
   type TilesetLayer,
   type ToolView,
-  type UndergroundView
+  type UndergroundView,
+  type WalkPhase,
+  type WalkRoam
 } from '@yzt/map-core';
 import type { Feature, FeatureCollection, GeoJSON } from 'geojson';
 import { createNanoEvents } from 'nanoevents';
@@ -25,6 +30,7 @@ import {
   type SceneGestures,
   type SceneLike,
   type ScenePose,
+  type SceneWalkStart,
   type TilesetOptions,
   WebGLUnavailableError
 } from './scene-like';
@@ -60,6 +66,10 @@ class FakeScene implements SceneLike {
   route: RoutePath | null = null;
   playback: RoutePlayback | null = null;
   readonly routeCalls: string[] = [];
+  // 步行：开始时交来的、调用的先后；startPhase 是开始时场景报告的阶段（找不到出生点时是 failed）
+  walk: SceneWalkStart | null = null;
+  readonly walkCalls: string[] = [];
+  startPhase: WalkPhase = 'entering';
   gestures: SceneGestures = { drag: true };
   cursor: string | undefined;
   rendering = true;
@@ -164,6 +174,31 @@ class FakeScene implements SceneLike {
     this.routeCalls.push(`stop ${back}`);
   }
 
+  startWalk(walk: SceneWalkStart): void {
+    this.walk = walk;
+    this.walkCalls.push('start');
+    this.emit('walkphase', this.startPhase);
+  }
+
+  setWalkSpeed(speed: number): void {
+    this.walkCalls.push(`speed ${speed}`);
+  }
+
+  respawnWalk(): void {
+    this.walkCalls.push('respawn');
+  }
+
+  unstuckWalk(): void {
+    this.walkCalls.push('unstuck');
+  }
+
+  stopWalk(back: boolean): void {
+    this.walk = null;
+    this.walkCalls.push(`stop ${back}`);
+    // 和真实的场景一样，步行结束时光标清空
+    this.cursor = undefined;
+  }
+
   pick() {
     return { kind: 'hit', surface: 'ellipsoid', lngLat: [119, 32], height: 0 } as const;
   }
@@ -178,6 +213,10 @@ class FakeScene implements SceneLike {
 
   eyeHeight(): number {
     return 420000;
+  }
+
+  heading(): number {
+    return 76;
   }
 
   setImagery(imagery: readonly ImageryPlan[]): void {
@@ -965,7 +1004,7 @@ function roamSetup(options: Parameters<typeof setup>[0] = {}) {
   const context = setup(options);
   const statuses: (RoamStatus | null)[] = [];
   context.view.onRoamStatusChange(status => statuses.push(status));
-  const roam = (value: RouteRoam | undefined) =>
+  const roam = (value: SceneRoam | undefined) =>
     context.session.scene.set({ tilesets: [], underground: null, ...(value ? { roam: value } : {}) });
   return { ...context, statuses, roam };
 }
@@ -981,7 +1020,7 @@ describe('CesiumView 的路线漫游（ADR 0083）', () => {
     expect(scene.routeCalls).toStrictEqual(['start', 'playback false 1']);
     const total = scene.route?.total ?? 0;
     expect(total).toBeGreaterThan(25);
-    expect(statuses).toStrictEqual([{ id: 'enter', run: 0, distance: 0, total, finished: false }]);
+    expect(statuses).toStrictEqual([{ kind: 'route', id: 'enter', run: 0, distance: 0, total, finished: false }]);
     expect(view.roamStatus).toStrictEqual(statuses[0]);
   });
 
@@ -997,7 +1036,10 @@ describe('CesiumView 的路线漫游（ADR 0083）', () => {
     }
     scene.emit('routeend');
 
-    expect(statuses.map(status => status && [Number(status.distance.toFixed(1)), status.finished])).toStrictEqual([
+    const progress = statuses.map(
+      status => status?.kind === 'route' && [Number(status.distance.toFixed(1)), status.finished]
+    );
+    expect(progress).toStrictEqual([
       [0, false],
       [0.6, false],
       [1.2, false],
@@ -1030,7 +1072,10 @@ describe('CesiumView 的路线漫游（ADR 0083）', () => {
       'start',
       'playback false 2'
     ]);
-    expect(statuses.slice(-2).map(status => status && [status.id, status.run, status.distance])).toStrictEqual([
+    const restarted = statuses
+      .slice(-2)
+      .map(status => status?.kind === 'route' && [status.id, status.run, status.distance]);
+    expect(restarted).toStrictEqual([
       ['enter', 1, 0],
       ['platform', 1, 0]
     ]);
@@ -1121,5 +1166,137 @@ describe('CesiumView 的路线漫游（ADR 0083）', () => {
     await view.whenReady();
 
     expect(rebuilt.routeCalls).toStrictEqual(['start', 'playback true 1']);
+  });
+});
+
+// 场景只把导航网格原样交下去：一块空网格就够，局部系的原点在苏州站附近
+const navigation = {
+  grid: new NavGrid({
+    meta: {
+      minX: 0,
+      minY: 0,
+      cellSize: 0.2,
+      width: 1,
+      height: 1,
+      chunksX: 1,
+      chunksY: 1,
+      maxLevels: 4,
+      floorCells: 0,
+      droppedLevels: 0
+    },
+    chunkIndex: Int32Array.of(-1),
+    data: new Int16Array(0),
+    headroom: new Uint8Array(0)
+  }),
+  frame: navigationFrame([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -2_700_000, 4_700_000, 3_300_000, 1])
+};
+
+const walkRoam = (extra: Partial<WalkRoam> = {}): WalkRoam => ({
+  kind: 'walk',
+  id: 'walk-1',
+  navigation,
+  spawn: { lng: 120.6660669, lat: 31.317559, height: -5.1, heading: 76 },
+  speed: 1.6,
+  respawn: 0,
+  unstuck: 0,
+  ...extra
+});
+
+describe('CesiumView 的步行（ADR 0086）', () => {
+  it('会话里有了步行：场景开始步行，报告进场；飞到出生点后报告行走，提示每来一条计数加 1', async () => {
+    const { scene, view, statuses, roam } = roamSetup();
+    await view.whenReady();
+
+    roam(walkRoam());
+    await settle();
+    expect(scene.walk).toStrictEqual({ navigation, spawn: walkRoam().spawn, speed: 1.6 });
+    expect(statuses).toStrictEqual([{ kind: 'walk', id: 'walk-1', phase: 'entering', notice: null, notices: 0 }]);
+
+    scene.emit('walkphase', 'walking');
+    scene.emit('walknotice', 'blocked');
+    scene.emit('walknotice', 'blocked');
+
+    expect(statuses.slice(1)).toStrictEqual([
+      { kind: 'walk', id: 'walk-1', phase: 'walking', notice: null, notices: 0 },
+      { kind: 'walk', id: 'walk-1', phase: 'walking', notice: 'blocked', notices: 1 },
+      { kind: 'walk', id: 'walk-1', phase: 'walking', notice: 'blocked', notices: 2 }
+    ]);
+    expect(view.roamStatus).toStrictEqual(statuses.at(-1));
+  });
+
+  it('附近找不到出生点：场景开始时就报告 failed，状态停在 failed', async () => {
+    const scene = new FakeScene();
+    scene.startPhase = 'failed';
+    const { view, statuses, roam } = roamSetup({ scene });
+    await view.whenReady();
+
+    roam(walkRoam());
+    await settle();
+
+    expect(statuses.at(-1)).toMatchObject({ kind: 'walk', phase: 'failed' });
+  });
+
+  it('速度变了就改；回到出生点、脱困的计数变了才做一次；撤掉时结束步行、飞回，光标换回工具的', async () => {
+    const { session, scene, view, statuses, roam } = roamSetup();
+    await view.whenReady();
+    session.tool.register('look', { persistent: true, cursor: 'grab' });
+    session.tool.activate('look');
+    roam(walkRoam());
+    await settle();
+
+    roam(walkRoam({ speed: 4 }));
+    await settle();
+    roam(walkRoam({ speed: 4, respawn: 1 }));
+    await settle();
+    roam(walkRoam({ speed: 4, respawn: 1, unstuck: 1 }));
+    await settle();
+    roam(walkRoam({ speed: 4, respawn: 1, unstuck: 1 }));
+    await settle();
+    scene.cursor = 'not-allowed';
+    roam(undefined);
+    await settle();
+
+    expect(scene.walkCalls).toStrictEqual(['start', 'speed 4', 'respawn', 'unstuck', 'stop true']);
+    expect(scene.cursor).toBe('grab');
+    expect(statuses.at(-1)).toBeNull();
+  });
+
+  it('换一次漫游：路线换成步行、步行换成路线都直接开始新的，由场景结束上一个', async () => {
+    const { scene, view, statuses, roam } = roamSetup();
+    await view.whenReady();
+    roam(routeRoam());
+    await settle();
+
+    roam(walkRoam());
+    await settle();
+    roam(walkRoam({ id: 'walk-2' }));
+    await settle();
+    roam(routeRoam({ id: 'platform' }));
+    await settle();
+
+    expect(scene.routeCalls).toStrictEqual(['start', 'playback false 1', 'start', 'playback false 1']);
+    expect(scene.walkCalls).toStrictEqual(['start', 'start']);
+    expect(statuses.map(status => status && [status.kind, status.id])).toStrictEqual([
+      ['route', 'enter'],
+      ['walk', 'walk-1'],
+      ['walk', 'walk-2'],
+      ['route', 'platform']
+    ]);
+  });
+
+  it('页面开始别的定位：步行立即结束、不飞回；之后场景再报告的阶段、提示不再算数', async () => {
+    const { scene, view, statuses, roam } = roamSetup();
+    await view.whenReady();
+    roam(walkRoam());
+    await settle();
+
+    view.flyTo({ center: [119, 32], zoom: 10 });
+    scene.emit('walkphase', 'walking');
+    scene.emit('walknotice', 'open');
+    roam(undefined);
+    await settle();
+
+    expect(scene.walkCalls).toStrictEqual(['start', 'stop false']);
+    expect(statuses.map(status => status?.kind === 'walk' && status.phase)).toStrictEqual(['entering', false]);
   });
 });

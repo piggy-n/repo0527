@@ -236,19 +236,19 @@ export const CurrentMapPage = defineComponent({
         models.exitRoam();
       }
     });
-    // Esc 退出漫游；空格开始、暂停或继续，焦点在输入框、按钮上时不拦截；页面停用期间不响应
+    // Esc 退出漫游（路线和步行）；空格开始、暂停或继续路线，焦点在输入框、按钮上时不拦截；页面停用期间不响应
     const pageActive = usePageActive();
     useEventListener(window, 'keydown', (event: KeyboardEvent) => {
-      const phase = models.routePhase.value;
-      if (!pageActive.value || phase === null) {
+      if (!pageActive.value || models.roam.value === null) {
         return;
       }
       if (event.key === 'Escape') {
         models.exitRoam();
         return;
       }
+      const phase = models.routePhase.value;
       const target = event.target instanceof HTMLElement ? event.target : null;
-      if (event.key === ' ' && !target?.closest('input, textarea, button, [role="radio"]')) {
+      if (phase !== null && event.key === ' ' && !target?.closest('input, textarea, button, [role="radio"]')) {
         event.preventDefault();
         if (phase === 'playing') {
           models.pauseRoute();

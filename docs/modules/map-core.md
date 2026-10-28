@@ -19,15 +19,15 @@
 | `style/style-model.ts` | `StyleModel`：按分组组合样式，提交时修订号加 1，合并通知 |
 | `camera/camera-model.ts` | `CameraModel`：二三维共用的相机状态，事件带 `view` 和 `cause`；当前这次相机操作的信号（ADR 0038） |
 | `session/map-session.ts` | `MapSession`：组合样式、相机、当前工具、选择状态与三维内容，统一释放 |
-| `scene/scene-content-model.ts` | `SceneContentModel`：三维独有的内容（瓦片集、钻地、漫游），整体替换、校验、合并通知；`SceneStatus`、`RoamStatus` 等三维视图报告的类型（ADR 0081、0083） |
+| `scene/scene-content-model.ts` | `SceneContentModel`：三维独有的内容（瓦片集、钻地、路线漫游或步行），整体替换、校验、合并通知；`SceneStatus`、按种类区分的 `RoamStatus` 等三维视图报告的类型（ADR 0081、0083、0086） |
 | `scene/route-path.ts` | `RoutePath`：路线漫游的几何，累计三维长度、按走过的距离取视点和朝向；`smoothAngle`（ADR 0083） |
 | `scene/prepare-tileset.ts` | `prepareTileset`：3D Tiles 索引的整理（外部索引并进来、空占位、目录外的引用、循环、几何误差、绝对地址），下载函数注入（ADR 0081；导航网格也要用，从 map-cesium 移来，ADR 0085） |
-| `scene/nav/` | 导航网格（ADR 0085）：`b3dm.ts` 解析、`heightfield.ts` 高度场、`regions.ts` 区域、`nav-grid.ts` 查询（`NavGrid`）、`spawn.ts` 出生点、`levels.ts` 楼层、`floor-map.ts` 按区域着色的平面图、`nav-frame.ts` 坐标系、`nav-leaves.ts` 叶节点、`nav-build.ts` 构建流程；`nav-grid.worker.ts` 是 Worker 入口，处理函数在 `nav-worker-handlers.ts`；`nav-testing.ts` 只供测试 |
+| `scene/nav/` | 导航网格（ADR 0085）：`b3dm.ts` 解析、`heightfield.ts` 高度场、`regions.ts` 区域、`nav-grid.ts` 查询（`NavGrid`）、`spawn.ts` 出生点、`levels.ts` 楼层、`floor-map.ts` 按区域着色的平面图、`nav-frame.ts` 坐标系、`nav-leaves.ts` 叶节点、`nav-build.ts` 构建流程；`nav-grid.worker.ts` 是 Worker 入口，处理函数在 `nav-worker-handlers.ts`；`walker.ts` 第一人称的步行者和点击、脱困、出生点的规则（ADR 0086）；`nav-testing.ts` 只供测试 |
 | `selection/selection-model.ts` | `SelectionModel`：选中的要素，只存数据源和业务主键（ADR 0047 第 4 节） |
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`PanModifier`、`ToolView` |
 | `measure/geodesic.ts` | 椭球面上的距离、累计距离、折线总长、多边形面积（geographiclib-geodesic，ADR 0035） |
 | `measure/measure-store.ts` | `MeasureStore`：测量的状态与测距、测面两个工具（ADR 0035） |
-| `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位、拾取、投影、渲染要素查询）；三维的可选能力 `eyeHeight`、`sceneStatus` |
+| `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位、拾取、投影、渲染要素查询）；三维的可选能力 `eyeHeight`、`heading`、`sceneStatus`、`roamStatus` |
 | `view/rendered-features.ts` | 渲染要素查询的类型：`ScreenBox`、`RenderedQueryOptions`、`RenderedFeature`（ADR 0047 第 4 节） |
 | `view/view-input.ts` | 输入、拾取、投影的类型（ADR 0024 第 2、7、8 条） |
 | `maplibre/map-like.ts` | `MapLike`：适配器用到的 MapLibre 方法（窄接口）；连同方法签名用到的类型从入口导出，map-vue 的测试据此实现假地图 |
@@ -335,6 +335,17 @@ store.clear();
 - 平面图（`planRegions`、`renderFloorMap`）：区域按面积从大到小分配调色板里的颜色，跳过同一层其他区域已用的颜色，100 平方米以下和分不到的用中性色；同一区域按自己的高度范围渐变；人站不下的地板灰色。画图时按方位角旋转，第 0 行在最北边。调色板见 [color-and-typography.md](../design/color-and-typography.md) 的"导航网格平面图"
 - 耗时（苏州站，23 个叶节点）：Node 单线程解析约 0.1 秒、高度场约 1.8 秒、区域约 3 秒；浏览器里从整理索引到着色完成约 2.5 秒
 - 实测页 `/dev/nav-grid`：选清单里的模型构建，按楼层看平面图和图例，叠加预置路线核对坐标系，鼠标处显示经纬度、地板和区域
+
+## 第一人称步行（ADR 0086）
+
+迁自旧项目 `FirstPersonRoam.js` 的第一人称部分，规则和参数不变；Cesium 那一半（键鼠、深度拾取、相机）在 map-cesium 的 `scene-walk.ts`。
+
+- 会话的意图 `WalkRoam`：导航网格、清单的出生点、速度，回到出生点和脱困写成计数（加 1 就做一次）；视图报告 `{ kind: 'walk', phase, notice, notices }`
+- `Walker`：局部系里的位置、楼层、视点高度和朝向。`walk` 每 0.1 米做一次 `moveFloor` 碰撞，被挡时偏转 0、±0.5、±1 弧度顺墙滑；`follow` 沿点击的路径走，穿闸机的直线不做碰撞、地板按比例过渡；`settleEye` 让视点平滑跟随地板，偏差夹在 -0.4～+0.15 米；俯仰限制在 ±80°
+- `resolveClick`：深度拾取到的点附近有高度差不多的地板算直接点中，否则在下 0.6 米到上 0.3 米之间找；优先和脚下同一区域；高差超过 0.5 米的小区域不去，点墙根反推出来的、在别的区域的要看得见才去。遮挡由调用方注入的 `VisibilityTest` 判断
+- `planMove`：同一区域寻路（最多 150 万节点）后拉直；走不到的同一层、10 米内、中间站不住的不超过 3 米、视点高度看得见就直线穿过，否则闪切
+- `unstuckSpot`、`chooseSpawn`：脱困找 30 米内开阔（0.6 米内都能站、区域 100 平方米以上）的地面；出生点依次看相机是否已在站内地下、是否贴近地面对着模型、清单的出生点、模型中心，"最上面一层"按地面高度往下 2 米以内算
+- `headingToYaw`、`yawToHeading`：清单的朝向（正北为 0）和局部系偏航的换算，局部 y 轴的方位角来自 `navigationFrame`
 
 ## 测试
 

@@ -56,12 +56,14 @@ import {
   type SceneGestures,
   type SceneLike,
   type ScenePose,
+  type SceneWalkStart,
   type TilesetOptions,
   WebGLUnavailableError
 } from './scene-like';
 import type { OverlayLayer, OverlayShape, RgbaColor } from './overlay-plan';
 import { movableInPlace } from './overlay-update';
 import { SceneRoute } from './scene-route';
+import { SceneWalk } from './scene-walk';
 import { SceneTilesets } from './scene-tilesets';
 import { footprintOf, SceneUnderground } from './scene-underground';
 import type { ImageryPlan } from './scene-style';
@@ -162,7 +164,8 @@ export class CesiumScene implements SceneLike {
   readonly #tilesets: SceneTilesets;
   readonly #underground: SceneUnderground;
   readonly #route: SceneRoute;
-  // 竖直视场角：平时对齐二维，路线漫游时换成室内用的（ADR 0083 第 3 节）
+  readonly #walk: SceneWalk;
+  // 竖直视场角：平时对齐二维，漫游时换成室内用的（ADR 0083 第 3 节、ADR 0086 第 3 节）
   #fovy = MAPLIBRE_FOVY;
   // 钻地的要求；瓦片集加进来之前先记着，加进来再生效
   #undergroundView: UndergroundView | null = null;
@@ -208,6 +211,16 @@ export class CesiumScene implements SceneLike {
       new SceneRoute(widget, {
         progress: distance => this.#emitter.emit('routeprogress', distance),
         end: () => this.#emitter.emit('routeend'),
+        setFovy: fovy => {
+          this.#fovy = fovy ?? MAPLIBRE_FOVY;
+          this.#applyFov();
+        }
+      })
+    );
+    this.#walk = stack.use(
+      new SceneWalk(widget, {
+        phase: phase => this.#emitter.emit('walkphase', phase),
+        notice: notice => this.#emitter.emit('walknotice', notice),
         setFovy: fovy => {
           this.#fovy = fovy ?? MAPLIBRE_FOVY;
           this.#applyFov();
@@ -411,6 +424,10 @@ export class CesiumScene implements SceneLike {
     return this.#widget.camera.positionCartographic.height;
   }
 
+  heading(): number {
+    return CesiumMath.toDegrees(this.#widget.camera.heading);
+  }
+
   size(): { width: number; height: number } {
     const { canvas } = this.#widget;
     return { width: canvas.clientWidth, height: canvas.clientHeight };
@@ -504,7 +521,9 @@ export class CesiumScene implements SceneLike {
 
   startRoute(path: RoutePath): void {
     this.#settled = false;
-    this.#route.start(path);
+    const inherited = this.#walk.handOff();
+    this.#tilesets.setInteriorFog(false);
+    this.#route.start(path, inherited);
   }
 
   restartRoute(): void {
@@ -518,6 +537,31 @@ export class CesiumScene implements SceneLike {
   stopRoute(back: boolean): void {
     this.#settled = false;
     this.#route.stop(back);
+  }
+
+  startWalk(walk: SceneWalkStart): void {
+    this.#settled = false;
+    const inherited = this.#route.handOff();
+    this.#tilesets.setInteriorFog(true);
+    this.#walk.start(walk, inherited);
+  }
+
+  setWalkSpeed(speed: number): void {
+    this.#walk.setSpeed(speed);
+  }
+
+  respawnWalk(): void {
+    this.#walk.respawn();
+  }
+
+  unstuckWalk(): void {
+    this.#walk.unstuck();
+  }
+
+  stopWalk(back: boolean): void {
+    this.#settled = false;
+    this.#tilesets.setInteriorFog(false);
+    this.#walk.stop(back);
   }
 
   setUnderground(underground: UndergroundView | null): void {
@@ -541,6 +585,7 @@ export class CesiumScene implements SceneLike {
 
   setRendering(active: boolean): void {
     this.#widget.useDefaultRenderLoop = active;
+    this.#walk.setActive(active);
     if (active) {
       this.#widget.scene.requestRender();
     }
