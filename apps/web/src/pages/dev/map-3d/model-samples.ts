@@ -7,8 +7,6 @@ export interface ModelRoute {
   readonly name: string;
   /** 路线长度，米 */
   readonly length: number;
-  /** 1 倍速走完的时长，秒 */
-  readonly duration: number;
   /** 途经点 [经度, 纬度] */
   readonly path: readonly (readonly [number, number])[];
 }
@@ -24,7 +22,7 @@ export interface ModelEntry {
   readonly cityCode: string;
   readonly cityName: string;
   readonly kind: ModelKind;
-  /** 模型在地表以下，定位时进入钻地观察 */
+  /** 模型在地表以下：漫游时进入地下空间，没有单独的钻地（2026-10-28 的漫游原型） */
   readonly underground: boolean;
   /** 有室内步行用的出生点，可以第一视角漫游 */
   readonly walkable: boolean;
@@ -76,14 +74,12 @@ export const SAMPLE_MODELS: readonly ModelEntry[] = [
         id: 'nj-zhongshan',
         name: '中山路—新街口',
         length: 2600,
-        duration: 90,
         path: offsetPath(XINJIEKOU, [[0, -1300], [60, -400], [0, 0], [-80, 600], [-40, 1300]])
       },
       {
         id: 'nj-hanzhong',
         name: '汉中路沿线',
         length: 1800,
-        duration: 60,
         path: offsetPath(XINJIEKOU, [[-900, -60], [-300, -20], [0, 0], [600, 40], [900, 80]])
       }
     ],
@@ -119,7 +115,6 @@ export const SAMPLE_MODELS: readonly ModelEntry[] = [
         id: 'nj-south-entry',
         name: '进站流线',
         length: 420,
-        duration: 60,
         path: offsetPath(NANJING_SOUTH, [[-200, -120], [-60, -100], [0, 0], [120, 60], [200, 140]])
       }
     ],
@@ -130,7 +125,7 @@ export const SAMPLE_MODELS: readonly ModelEntry[] = [
   },
   {
     id: 'sz-station',
-    name: '苏州站地铁站厅',
+    name: '星海广场站',
     cityCode: '320500',
     cityName: '苏州市',
     kind: 'indoor',
@@ -138,11 +133,22 @@ export const SAMPLE_MODELS: readonly ModelEntry[] = [
     walkable: true,
     routes: [
       {
-        id: 'sz-station-patrol',
-        name: '站厅巡检',
-        length: 320,
-        duration: 45,
-        path: offsetPath(SUZHOU_STATION, [[-140, -60], [-40, -20], [0, 0], [80, 40], [140, 90]])
+        id: 'sz-station-enter',
+        name: '进站乘车',
+        length: 180,
+        path: offsetPath(SUZHOU_STATION, [[-90, -20], [-30, -30], [10, 0], [10, 30], [70, 50]])
+      },
+      {
+        id: 'sz-station-concourse',
+        name: '站厅巡览',
+        length: 120,
+        path: offsetPath(SUZHOU_STATION, [[-110, -10], [-20, 10], [40, 20], [60, 50]])
+      },
+      {
+        id: 'sz-station-platform',
+        name: '站台漫步',
+        length: 90,
+        path: offsetPath(SUZHOU_STATION, [[-20, -10], [30, 0], [70, 10]])
       }
     ],
     effects: [],
@@ -177,7 +183,6 @@ export const SAMPLE_MODELS: readonly ModelEntry[] = [
         id: 'sz-jinji-loop',
         name: '环金鸡湖',
         length: 7100,
-        duration: 180,
         path: offsetPath(JINJI_LAKE, [
           [-1500, 0],
           [-900, 1300],
@@ -235,7 +240,6 @@ export const SAMPLE_MODELS: readonly ModelEntry[] = [
         id: 'yz-scenic',
         name: '景区游线',
         length: 3200,
-        duration: 120,
         path: offsetPath(SLENDER_WEST_LAKE, [[-700, -900], [-400, -300], [0, 0], [300, 500], [200, 1000]])
       }
     ],

@@ -1,0 +1,104 @@
+// 原型：180 × 180 的小地图示意，外观按 /dev/nav-grid 确认过的小地图（ADR 0087）
+
+.root {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-regular);
+  cursor: pointer;
+}
+
+.map {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hall {
+  fill: var(--color-primary-bg);
+  stroke: var(--color-primary-border);
+}
+
+.room {
+  fill: var(--color-success-bg);
+  stroke: var(--color-border);
+}
+
+.platform {
+  fill: var(--color-neutral-bg);
+  stroke: var(--color-border);
+}
+
+.ahead {
+  fill: none;
+  stroke: var(--color-text-placeholder);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+.passed {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cone {
+  fill: var(--color-primary);
+  opacity: 0.18;
+}
+
+.player {
+  fill: var(--color-primary);
+  stroke: var(--color-text-inverse);
+  stroke-width: 1;
+}
+
+.floor {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.scale {
+  position: absolute;
+  bottom: 6px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  i {
+    width: 24px;
+    height: 4px;
+    border: 1.5px solid var(--color-text-strong);
+    border-top: 0;
+  }
+}
+
+.zoom {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  button {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background-color: var(--color-bg-container);
+    color: var(--color-text-regular);
+    cursor: pointer;
+  }
+}

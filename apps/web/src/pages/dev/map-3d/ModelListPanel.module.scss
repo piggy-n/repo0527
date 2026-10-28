@@ -262,10 +262,6 @@
 }
 
 // 最近定位或正在漫游的模型
-.focused {
-  box-shadow: inset 3px 0 0 var(--color-primary);
-}
-
 .loadedHead {
   display: flex;
   align-items: center;
@@ -281,16 +277,6 @@
   font-size: var(--font-size-base);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.tag {
-  flex: none;
-  padding: 0 6px;
-  border-radius: 999px;
-  background-color: var(--color-primary-bg);
-  color: var(--color-primary);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-compact);
 }
 
 .actions {
@@ -316,14 +302,9 @@
   font-size: var(--font-size-xs);
 }
 
-.dropdownArrow {
-  margin-left: 2px;
-}
-
-.routeLength {
-  margin-left: var(--space-sm);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
+// 漫游在第二行最右边（2026-10-28 原型）
+.roam {
+  margin-left: auto;
 }
 
 .effect {

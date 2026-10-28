@@ -1,0 +1,208 @@
+// 原型（2026-10-28）：漫游面板和三维模型面板同宽、同样的标题栏和收起竖条，按内容定高
+
+.root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel {
+  box-sizing: border-box;
+  width: 320px;
+  max-width: 100%;
+}
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: -2px;
+  }
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-regular);
+}
+
+// 两种方式等分整行
+.modes {
+  display: flex;
+
+  :global(.el-radio-button) {
+    flex: 1;
+  }
+
+  :global(.el-radio-button__inner) {
+    width: 100%;
+  }
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+.label {
+  width: 28px;
+  color: var(--color-text-secondary);
+}
+
+.speed {
+  min-width: 52px;
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.muted {
+  color: var(--color-text-secondary);
+}
+
+.distance {
+  font-variant-numeric: tabular-nums;
+}
+
+.message {
+  margin: 0;
+  color: var(--color-primary);
+}
+
+// 预置路线：一条一行，当前的浅蓝底
+.routes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.route {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-regular);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: -2px;
+  }
+}
+
+.currentRoute {
+  background-color: var(--color-primary-bg);
+  box-shadow: inset 0 0 0 1px var(--color-primary-border);
+  color: var(--color-primary);
+}
+
+.routeName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// 操作说明：按键一列、作用一列，分隔线上方
+.hints {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px var(--space-md);
+  margin: 0;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-divider);
+  color: var(--color-text-secondary);
+
+  dt {
+    color: var(--color-text-regular);
+  }
+
+  dd {
+    margin: 0;
+  }
+}
+
+.strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 40px;
+  padding: 10px 0 14px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-strong);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+.stripIcon {
+  color: var(--color-primary);
+}
+
+.stripLabel {
+  letter-spacing: 2px;
+  writing-mode: vertical-rl;
+}

@@ -1,11 +1,14 @@
 import { computed, onScopeDispose, ref, shallowRef } from 'vue';
 import { LONG_NAME_MODEL, type ModelEntry, SAMPLE_MODELS } from './model-samples';
 
-// 原型的演示拥有者：加载、定位、钻地和两种漫游都只改这里的状态，示意画面和面板按状态显示；不加载真实模型
+// 原型的演示拥有者：加载、定位和漫游都只改这里的状态，示意画面和面板按状态显示；不加载真实模型。
+// 2026-10-28 的漫游原型：没有单独的钻地，漫游地下的模型时才在地下；步行和路线是同一次漫游的两种方式，速度共用
 
 export type ManifestState = 'loading' | 'failed' | 'ready';
 
 export type LoadStatus = 'loading' | 'ready' | 'failed';
+
+export type RoamMode = 'walk' | 'route';
 
 export type WalkPhase = 'preparing' | 'entering' | 'walking';
 
@@ -24,17 +27,17 @@ export type RoamState =
 
 export interface UndergroundState {
   readonly modelId: string;
-  /** 地表不透明度，0～0.6 */
+  /** 地表不透明度：漫游地下的模型时固定半透明 */
   readonly opacity: number;
 }
 
 export type DemoScenario = 'normal' | 'long' | 'empty' | 'failed';
 
-/** 步行速度档位（米/秒），沿用旧项目的档位 */
-export const WALK_SPEEDS = [0.5, 1, 1.6, 2.5, 4, 6, 8] as const;
-export const DEFAULT_WALK_SPEED = 4;
-export const ROUTE_RATES = [0.5, 1, 2] as const;
+/** 漫游速度档位（米/秒），步行和路线共用，默认 4 */
+export const ROAM_SPEEDS = [0.5, 1, 1.6, 2.5, 4, 6, 8] as const;
+export const DEFAULT_ROAM_SPEED = 4;
 
+const UNDERGROUND_OPACITY = 0.25;
 const LOAD_DELAY = 1200;
 const PREPARE_STEP = 0.06;
 const PREPARE_INTERVAL = 100;
@@ -46,11 +49,12 @@ export function useModelDemo() {
   const models = shallowRef<readonly ModelEntry[]>(SAMPLE_MODELS);
   const loads = shallowRef<ReadonlyMap<string, LoadStatus>>(new Map());
   const effects = shallowRef<ReadonlyMap<string, string>>(new Map());
+  // 示意画面的相机对着的模型（定位、漫游）
   const focus = ref<string | null>(null);
-  const underground = shallowRef<UndergroundState | null>(null);
   const roam = shallowRef<RoamState>({ kind: 'idle' });
-  const walkSpeed = ref<number>(DEFAULT_WALK_SPEED);
-  const routeRate = ref<number>(1);
+  const speed = ref<number>(DEFAULT_ROAM_SPEED);
+  // 每个模型上次走的路线，从步行切回路线时接着用
+  const lastRoutes = new Map<string, string>();
   const message = ref('');
   // 演示开关：下一次加载失败
   const failNext = ref(false);
@@ -77,6 +81,17 @@ export function useModelDemo() {
     }
     return found;
   };
+
+  const roamingModel = computed(() => {
+    const current = roam.value;
+    return current.kind === 'idle' ? null : model(current.modelId);
+  });
+
+  // 地下空间只在漫游地下的模型时出现；退出漫游就回到地面
+  const underground = computed((): UndergroundState | null => {
+    const current = roamingModel.value;
+    return current?.underground ? { modelId: current.id, opacity: UNDERGROUND_OPACITY } : null;
+  });
 
   const setLoad = (id: string, status: LoadStatus | null) => {
     const next = new Map(loads.value);
@@ -128,16 +143,9 @@ export function useModelDemo() {
     roam.value = { kind: 'idle' };
   }
 
-  function leaveUnderground() {
-    underground.value = null;
-  }
-
   function unload(id: string) {
-    if (roam.value.kind !== 'idle' && roam.value.modelId === id) {
+    if (roamingModel.value?.id === id) {
       exitRoam();
-    }
-    if (underground.value?.modelId === id) {
-      leaveUnderground();
     }
     if (focus.value === id) {
       focus.value = null;
@@ -151,25 +159,13 @@ export function useModelDemo() {
     }
   }
 
-  // 地下模型定位时进入钻地观察，地表半透明
+  // 定位只飞过去；地下的模型在地表以下，从地面上看不到（没有单独的钻地）
   function locate(id: string) {
     focus.value = id;
-    if (model(id).underground && underground.value?.modelId !== id) {
-      underground.value = { modelId: id, opacity: 0.3 };
-    } else if (!model(id).underground) {
-      leaveUnderground();
-    }
   }
 
-  function setSurfaceOpacity(opacity: number) {
-    if (underground.value) {
-      underground.value = { ...underground.value, opacity };
-    }
-  }
-
-  function startWalk(id: string) {
-    exitRoam();
-    locate(id);
+  const startWalk = (id: string) => {
+    stopPlayback();
     roam.value = { kind: 'walk', modelId: id, phase: 'preparing', progress: 0 };
     prepareTimer = setInterval(() => {
       const current = roam.value;
@@ -190,11 +186,50 @@ export function useModelDemo() {
         }
       });
     }, PREPARE_INTERVAL);
+  };
+
+  // 选一条路线：停在起点，等用户开始
+  function startRoute(id: string, routeId: string) {
+    stopPlayback();
+    lastRoutes.set(id, routeId);
+    roam.value = { kind: 'route', modelId: id, routeId, phase: 'ready', progress: 0 };
   }
 
-  function changeWalkSpeed(step: 1 | -1) {
-    const index = WALK_SPEEDS.findIndex(speed => speed === walkSpeed.value);
-    walkSpeed.value = WALK_SPEEDS[Math.min(WALK_SPEEDS.length - 1, Math.max(0, index + step))];
+  const routeIdFor = (entry: ModelEntry) => lastRoutes.get(entry.id) ?? entry.routes[0]?.id;
+
+  /** 已加载里的"漫游"：能步行的从步行开始，只有路线的停在第一条路线的起点 */
+  function startRoam(id: string) {
+    const entry = model(id);
+    focus.value = id;
+    const routeId = routeIdFor(entry);
+    if (entry.walkable) {
+      startWalk(id);
+    } else if (routeId !== undefined) {
+      startRoute(id, routeId);
+    }
+  }
+
+  /** 漫游面板里切换方式：同一个模型，速度不变 */
+  function setMode(mode: RoamMode) {
+    const current = roamingModel.value;
+    if (!current || roam.value.kind === mode) {
+      return;
+    }
+    const routeId = routeIdFor(current);
+    if (mode === 'walk') {
+      startWalk(current.id);
+    } else if (routeId !== undefined) {
+      startRoute(current.id, routeId);
+    }
+  }
+
+  function changeSpeed(step: 1 | -1) {
+    const index = ROAM_SPEEDS.findIndex(item => item === speed.value);
+    speed.value = ROAM_SPEEDS[Math.min(ROAM_SPEEDS.length - 1, Math.max(0, index + step))];
+  }
+
+  function resetSpeed() {
+    speed.value = DEFAULT_ROAM_SPEED;
   }
 
   function resetSpawn() {
@@ -205,13 +240,6 @@ export function useModelDemo() {
     say('已挪到附近最近的开阔地面');
   }
 
-  function startRoute(id: string, routeId: string) {
-    exitRoam();
-    focus.value = id;
-    leaveUnderground();
-    roam.value = { kind: 'route', modelId: id, routeId, phase: 'ready', progress: 0 };
-  }
-
   const routeOf = (state: RoamState) => {
     if (state.kind !== 'route') {
       return undefined;
@@ -219,6 +247,7 @@ export function useModelDemo() {
     return model(state.modelId).routes.find(route => route.id === state.routeId);
   };
 
+  // 按速度（米/秒）和路线长度推进
   const tick = (last: number) => (now: number) => {
     const current = roam.value;
     const route = routeOf(current);
@@ -226,7 +255,7 @@ export function useModelDemo() {
       frame = undefined;
       return;
     }
-    const step = (((now - last) / 1000) * routeRate.value) / route.duration;
+    const step = (((now - last) / 1000) * speed.value) / route.length;
     const progress = Math.min(1, current.progress + step);
     roam.value = { ...current, progress, phase: progress >= 1 ? 'finished' : 'playing' };
     frame = progress >= 1 ? undefined : requestAnimationFrame(tick(now));
@@ -261,7 +290,6 @@ export function useModelDemo() {
   // 演示场景：清单正常、带长名称、空清单、清单加载失败
   function setScenario(scenario: DemoScenario) {
     exitRoam();
-    leaveUnderground();
     focus.value = null;
     loads.value = new Map();
     manifest.value = scenario === 'failed' ? 'failed' : 'ready';
@@ -295,8 +323,8 @@ export function useModelDemo() {
     focus,
     underground,
     roam,
-    walkSpeed,
-    routeRate,
+    roamingModel,
+    speed,
     message,
     failNext,
     model,
@@ -306,13 +334,13 @@ export function useModelDemo() {
     unload,
     retry,
     locate,
-    leaveUnderground,
-    setSurfaceOpacity,
-    startWalk,
-    changeWalkSpeed,
+    startRoam,
+    setMode,
+    startRoute,
+    changeSpeed,
+    resetSpeed,
     resetSpawn,
     unstuck,
-    startRoute,
     play,
     pause,
     exitRoam,

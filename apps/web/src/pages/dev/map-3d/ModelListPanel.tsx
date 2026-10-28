@@ -1,21 +1,10 @@
 import { ArrowDown, ArrowRight, ArrowUp, Loading, Search } from '@element-plus/icons-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
-import {
-  ElButton,
-  ElCheckbox,
-  ElDropdown,
-  ElDropdownItem,
-  ElDropdownMenu,
-  ElIcon,
-  ElInput,
-  ElOption,
-  ElSelect,
-  ElTooltip
-} from 'element-plus';
+import { ElButton, ElCheckbox, ElIcon, ElInput, ElOption, ElSelect, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref } from 'vue';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
-import { MODEL_KIND_LABELS, type ModelEntry, type ModelRoute } from './model-samples';
+import { MODEL_KIND_LABELS, type ModelEntry } from './model-samples';
 import type { LoadStatus, ModelDemo } from './useModelDemo';
 import styles from './ModelListPanel.module.scss';
 
@@ -36,10 +25,6 @@ function groupByCity(models: readonly ModelEntry[]): CityGroup[] {
   return [...groups].map(([code, { name, models: items }]) => ({ code, name, models: items }));
 }
 
-function formatLength(meters: number): string {
-  return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${meters} m`;
-}
-
 // 行内的图标按钮，悬停提示名称
 function iconButton(label: string, icon: IconName, onClick: () => void, disabled = false) {
   return (
@@ -51,7 +36,10 @@ function iconButton(label: string, icon: IconName, onClick: () => void, disabled
   );
 }
 
-/** 原型：三维时替换左侧的资源图层面板；目录勾选即加载，"已加载"里定位、漫游和卸载 */
+/**
+ * 原型：三维时替换左侧的资源图层面板；目录勾选即加载，"已加载"里定位、卸载，能漫游的模型在第二行右边有"漫游"
+ * （2026-10-28：合并原来的"步行漫游""路线漫游"，进入后左侧换成漫游面板）
+ */
 export const ModelListPanel = defineComponent({
   name: 'ModelListPanel',
   props: {
@@ -129,31 +117,6 @@ export const ModelListPanel = defineComponent({
       );
     };
 
-    const renderRoutes = (model: ModelEntry) => (
-      <ElDropdown trigger="click" onCommand={command => props.owner.startRoute(model.id, String(command))}>
-        {{
-          default: () => (
-            <ElButton link type="primary" size="small">
-              路线漫游
-              <ElIcon class={styles.dropdownArrow}>
-                <ArrowDown />
-              </ElIcon>
-            </ElButton>
-          ),
-          dropdown: () => (
-            <ElDropdownMenu>
-              {model.routes.map((route: ModelRoute) => (
-                <ElDropdownItem key={route.id} command={route.id}>
-                  {route.name}
-                  <span class={styles.routeLength}>{formatLength(route.length)}</span>
-                </ElDropdownItem>
-              ))}
-            </ElDropdownMenu>
-          )
-        }}
-      </ElDropdown>
-    );
-
     const renderLoadedMeta = (model: ModelEntry, status: LoadStatus) => {
       const { owner } = props;
       if (status === 'loading') {
@@ -174,12 +137,6 @@ export const ModelListPanel = defineComponent({
           <span class={styles.meta}>
             {model.cityName} · {MODEL_KIND_LABELS[model.kind]}
           </span>
-          {model.walkable && (
-            <ElButton link type="primary" size="small" onClick={() => owner.startWalk(model.id)}>
-              步行漫游
-            </ElButton>
-          )}
-          {model.routes.length > 0 && renderRoutes(model)}
           {model.effects.length > 0 && (
             <ElSelect
               class={styles.effect}
@@ -193,6 +150,11 @@ export const ModelListPanel = defineComponent({
               ))}
             </ElSelect>
           )}
+          {(model.walkable || model.routes.length > 0) && (
+            <ElButton class={styles.roam} size="small" type="primary" plain onClick={() => owner.startRoam(model.id)}>
+              漫游
+            </ElButton>
+          )}
         </>
       );
     };
@@ -200,16 +162,12 @@ export const ModelListPanel = defineComponent({
     const renderLoaded = ({ id, status }: { id: string; status: LoadStatus }) => {
       const { owner } = props;
       const model = owner.model(id);
-      const roam = owner.roam.value;
-      const roaming = roam.kind !== 'idle' && roam.modelId === id;
       return (
-        <li key={id} class={[styles.loadedRow, owner.focus.value === id && styles.focused]}>
+        <li key={id} class={styles.loadedRow}>
           <div class={styles.loadedHead}>
             <span class={styles.loadedName} title={model.name}>
               {model.name}
             </span>
-            {roaming && <span class={styles.tag}>漫游中</span>}
-            {owner.underground.value?.modelId === id && !roaming && <span class={styles.tag}>钻地</span>}
             <span class={styles.actions}>
               {iconButton('定位', 'focus', () => owner.locate(id), status !== 'ready')}
               {iconButton('卸载', 'close', () => owner.unload(id))}

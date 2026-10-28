@@ -31,8 +31,9 @@ import { RouteName } from '@/shared/router/route-names';
 import layout from '../../current-map/CurrentMapPage.module.scss';
 import { mapPageLayout } from '../../current-map/map-page-layout';
 import { SAMPLE_CATALOG, SAMPLE_THUMBNAILS } from '../map-ui/samples';
+import { MinimapSketch } from './MinimapSketch';
 import { ModelListPanel } from './ModelListPanel';
-import { RoamBar } from './RoamBar';
+import { RoamPanel } from './RoamPanel';
 import { SceneSketch } from './SceneSketch';
 import { type DemoScenario, type ModelDemo, useModelDemo } from './useModelDemo';
 import styles from './DevMap3dPage.module.scss';
@@ -100,13 +101,9 @@ const MapPrototype = defineComponent({
     const boundaries = useBoundaries();
     const modelsCollapsed = ref(false);
 
-    // 地下空间：钻地中，或在地下的模型里漫游（真实页面漫游地下的模型时进入钻地，ADR 0083）；
-    // 只隐藏不适用的入口，功能面板和底图的开关、内容都保留，退出后原样显示
-    const undergroundSpace = computed(() => {
-      const roam = owner.roam.value;
-      const roamingUnderground = roam.kind !== 'idle' && owner.model(roam.modelId).underground;
-      return dimension.value === '3d' && (owner.underground.value !== null || roamingUnderground);
-    });
+    // 漫游中（2026-10-28 的漫游原型）：左侧换成漫游面板，工具栏、功能面板、底图、视图控件和状态栏都隐藏，
+    // 不能勾选模型、不能切二维；只隐藏不改状态，退出漫游后原样显示。没有单独的钻地，地下只在漫游地下的模型时出现
+    const roaming = computed(() => dimension.value === '3d' && owner.roam.value.kind !== 'idle');
 
     const functions = usePanelGroup(FUNCTION_PANELS);
     const basemapOpen = ref(false);
@@ -121,7 +118,6 @@ const MapPrototype = defineComponent({
     // 二维切三维默认影像，三维切二维默认矢量（ADR 0078 第 2 节）；没有这种底图时（内网）保持原样
     const switchDimension = (next: ViewKind) => {
       owner.exitRoam();
-      owner.leaveUnderground();
       dimension.value = next;
       basemap.selectForDimension(next);
     };
@@ -129,17 +125,16 @@ const MapPrototype = defineComponent({
     // 示意画面回到全省的俯视
     const goToDefaultView = () => {
       owner.exitRoam();
-      owner.leaveUnderground();
       owner.focus.value = null;
     };
 
-    // 进入地下空间时切回移动：测量、点选在地下不适用，退出后不恢复
-    watch(undergroundSpace, entered => {
+    // 开始漫游时切回移动：测量、点选在漫游里不适用，退出后不恢复
+    watch(roaming, entered => {
       if (entered) {
         map.activateTool(BROWSE_TOOL);
       }
     });
-    // 漫游接管鼠标，相当于一个工具：选了工具栏上移动以外的工具就退出漫游（进入地下空间时切回移动不算）
+    // 漫游接管鼠标，相当于一个工具：选了移动以外的工具就退出漫游（开始漫游时切回移动不算）
     watch(map.activeTool, tool => {
       if (tool !== BROWSE_TOOL) {
         owner.exitRoam();
@@ -200,23 +195,11 @@ const MapPrototype = defineComponent({
       }
     });
 
-    // 状态栏：二维是比例尺和中心，三维是视点高度、中心和俯仰；第一人称是眼高和朝向
+    // 状态栏：二维是比例尺和中心，三维是视点高度、中心和俯仰；漫游时不显示
     const readout = computed((): string[] => {
-      const roam = owner.roam.value;
       const center = '中心 119.50°E, 33.00°N';
       if (dimension.value === '2d') {
         return ['比例尺 50 km', center];
-      }
-      if (roam.kind === 'walk' && roam.phase === 'walking') {
-        return ['第一视角', '眼高 1.6 m', '朝向 76°'];
-      }
-      if (roam.kind === 'route') {
-        return owner.model(roam.modelId).underground
-          ? ['视点在地表以下 4 m', '俯仰 0°']
-          : ['视点高度 120 m', '俯仰 -20°'];
-      }
-      if (owner.underground.value) {
-        return ['视点在地表以下 18 m', '俯仰 -35°'];
       }
       if (owner.focus.value !== null) {
         return ['视点高度 2.4 km', center, '俯仰 -32°'];
@@ -231,38 +214,10 @@ const MapPrototype = defineComponent({
       return [<ResourceLegend layers={resources} symbols={symbols} active={active} />];
     };
 
-    const renderUnderground = () => {
-      const state = owner.underground.value;
-      if (!state || owner.roam.value.kind !== 'idle') {
-        return null;
-      }
-      return (
-        <div class={styles.underground} role="region" aria-label="钻地观察">
-          <strong>钻地观察 · {owner.model(state.modelId).name}</strong>
-          <label class={styles.opacity}>
-            地表不透明度
-            <input
-              type="range"
-              min={0}
-              max={60}
-              step={5}
-              value={Math.round(state.opacity * 100)}
-              onInput={event => {
-                if (event.target instanceof HTMLInputElement) {
-                  owner.setSurfaceOpacity(Number(event.target.value) / 100);
-                }
-              }}
-            />
-            <span>{Math.round(state.opacity * 100)}%</span>
-          </label>
-          <button type="button" class={styles.textButton} onClick={owner.leaveUnderground}>
-            退出钻地
-          </button>
-        </div>
-      );
-    };
-
     const renderLeft = () => {
+      if (roaming.value) {
+        return <RoamPanel owner={owner} collapsed={!sides.left.value} onUpdate:collapsed={changeLeftCollapsed} />;
+      }
       if (dimension.value === '3d') {
         return (
           <ModelListPanel
@@ -316,7 +271,13 @@ const MapPrototype = defineComponent({
     return () => {
       const { phone, toolbarColumns } = pageLayout.value;
       const pickUnsupported = dimension.value === '3d' && map.activeTool.value === FEATURE_PICK_TOOL;
-      const underground = undergroundSpace.value;
+      const roamingNow = roaming.value;
+      const roam = owner.roam.value;
+      // 小地图：步行进到站内以后、路线漫游一开始就有；手机宽度时漫游面板展开就不显示
+      const minimapShown =
+        roamingNow &&
+        (roam.kind === 'route' || (roam.kind === 'walk' && roam.phase === 'walking')) &&
+        (!phone || !sides.left.value);
       return (
         <div
           ref={root}
@@ -330,14 +291,14 @@ const MapPrototype = defineComponent({
             pickUnsupported={pickUnsupported}
           />
           <div class={layout.overlay}>
-            <div class={layout.left}>{renderLeft()}</div>
+            <div class={[layout.left, roamingNow && layout.noStatus]}>{renderLeft()}</div>
             <div class={layout.lane}>
               <div class={layout.panelStack}>
                 <MapPanelGroup
                   class={layout.functions}
                   group={functions}
                   labels={PANEL_LABELS}
-                  visible={sides.right.value && !underground}
+                  visible={sides.right.value && !roamingNow}
                 >
                   {{
                     boundaries: ({ active }: PanelSlotProps) => [
@@ -350,19 +311,22 @@ const MapPrototype = defineComponent({
                 </MapPanelGroup>
               </div>
             </div>
-            <div class={[styles.roam, phone && styles.phoneRoam]}>
-              {renderUnderground()}
-              <RoamBar owner={owner} phone={phone} />
-            </div>
-            <div class={layout.bottom}>
-              <div class={[layout.status, styles.status]} role="status">
-                {readout.value.map(text => (
-                  <span key={text}>{text}</span>
-                ))}
+            {minimapShown && (
+              <div class={layout.minimap}>
+                <MinimapSketch owner={owner} />
               </div>
-            </div>
+            )}
+            {!roamingNow && (
+              <div class={layout.bottom}>
+                <div class={[layout.status, styles.status]} role="status">
+                  {readout.value.map(text => (
+                    <span key={text}>{text}</span>
+                  ))}
+                </div>
+              </div>
+            )}
             <div class={layout.tools}>
-              {!underground && (
+              {!roamingNow && (
                 <div class={layout.business}>
                   <MapToolbar
                     groups={TOOLBAR_GROUPS}
@@ -374,18 +338,19 @@ const MapPrototype = defineComponent({
                   />
                 </div>
               )}
-              <div class={layout.stack}>
-                <div class={layout.controls}>
-                  <MapViewControls
-                    goToDefaultView={goToDefaultView}
-                    zoomRange={JIANGSU_ZOOM_RANGE}
-                    dimension={dimension.value}
-                    defaultView={!underground}
-                    onUpdate:dimension={switchDimension}
-                  />
+              {!roamingNow && (
+                <div class={layout.stack}>
+                  <div class={layout.controls}>
+                    <MapViewControls
+                      goToDefaultView={goToDefaultView}
+                      zoomRange={JIANGSU_ZOOM_RANGE}
+                      dimension={dimension.value}
+                      onUpdate:dimension={switchDimension}
+                    />
+                  </div>
+                  {renderBasemapCard()}
                 </div>
-                {!underground && renderBasemapCard()}
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -394,7 +359,10 @@ const MapPrototype = defineComponent({
   }
 });
 
-/** 三维迁移的交互原型：真实的地图页外壳与工具栏，加上原型的模型列表、漫游操作条和示意画面 */
+/**
+ * 三维迁移的交互原型：真实的地图页外壳与工具栏，加上原型的模型列表、漫游面板、小地图和示意画面
+ * （2026-10-28 改为漫游面板，替换原来地图下方的漫游条和钻地条）
+ */
 export const DevMap3dPage = defineComponent({
   name: 'DevMap3dPage',
   setup() {
@@ -419,7 +387,9 @@ export const DevMap3dPage = defineComponent({
       <main class={styles.page}>
         <header class={styles.bar}>
           <strong>三维迁移 · 交互原型</strong>
-          <span class={styles.muted}>示意画面不是三维引擎；清单为固定样例，加载与漫游都是模拟</span>
+          <span class={styles.muted}>
+            示意画面不是三维引擎；清单为固定样例，加载与漫游都是模拟。切到三维、勾选"星海广场站"，在"已加载"里点"漫游"
+          </span>
           <span class={styles.group}>
             清单
             <ElRadioGroup size="small" modelValue={scenario.value} onUpdate:modelValue={changeScenario}>
