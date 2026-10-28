@@ -352,15 +352,24 @@ const DirectoryTree = defineComponent({
   }
 });
 
-/** libs/ui 的分栏布局：侧栏 320，窄屏（视口 < 1200）时侧栏收进抽屉 */
+/** libs/ui 的分栏布局：侧栏 320，窄屏（视口 < 1200）时侧栏收进抽屉；collapsible 时宽屏也能收成窄条 */
 export const SplitLayoutPreview = defineComponent({
   name: 'SplitLayoutPreview',
-  setup() {
+  props: {
+    collapsible: Boolean
+  },
+  setup(props) {
     const directory = ref('自然资源调查类');
     const parents = ref('技术标准规范 / 国家/行业现行技术规程、标准、规范');
+    const collapsed = ref(false);
     return () => (
       <div class={styles.layoutDemo}>
-        <MxSplitLayout asideLabel="文件目录">
+        <MxSplitLayout
+          asideLabel="文件目录"
+          collapsible={props.collapsible}
+          collapsed={collapsed.value}
+          onUpdate:collapsed={value => (collapsed.value = value)}
+        >
           {{
             aside: () => (
               <MxPanel title="文件目录">

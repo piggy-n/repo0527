@@ -162,6 +162,8 @@ Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不�
 |---|---|
 | `asideType` | `'panel'`（默认）：侧栏 320，放目录树、筛选条件；`'menu'`：侧栏 200，放页面内菜单。页面不写任意宽度 |
 | `asideLabel` | 必填，侧栏的名称。竖排显示在窄屏的窄条上，也是抽屉的无障碍名称、关闭按钮的 `aria-label`（"关闭文件目录"） |
+| `collapsible` | 宽屏时侧栏也能收成窄条（基本统计页，ADR 0100）；默认不开启 |
+| `collapsed` | 宽屏时侧栏是否收起，由页面持有，配合 `onUpdate:collapsed`；没开启 `collapsible` 或窄屏时不起作用 |
 | `aside` | 侧栏内容，一般是一个 `MxPanel` |
 | `default` | 主区内容，纵向排列，面板之间 `--space-lg` |
 
@@ -177,11 +179,27 @@ Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不�
 - 打开入口由布局统一渲染，页面不用放按钮，主区面板的标题行只放标题（3.3 验收后从"主区面板头部的打开按钮"改为窄条，原因见 [page-layout.md](../design/page-layout.md) 的"窄屏"）
 - 回到宽屏时，如果抽屉开着就关闭，内容移回侧栏
 
+### 宽屏收起（collapsible）
+
+开启 `collapsible` 后（ADR 0100）：
+
+- 宽屏时侧栏最外层的面板在标题栏右边出现收起按钮（`Fold` 图标，`aria-label` 是"收起文件目录"），嵌套的面板没有
+- 收起后侧栏只隐藏、不卸载，换成窄屏用的那条窄条；点窄条在原位展开，不打开抽屉。窄条的 `aria-expanded` 是 false
+- 收起状态由页面持有：按钮和窄条只发出 `update:collapsed`，页面决定是否采纳（基本统计页提交后自己收起）
+- 窄屏时照常收进抽屉，收起状态不起作用，抽屉里只有关闭按钮
+- 收起、展开时侧栏的滚动位置照常保留
+
+```tsx
+<MxSplitLayout asideLabel="统计报表计算" collapsible collapsed={collapsed.value} onUpdate:collapsed={change}>
+```
+
 ### 读取布局状态：useSplitLayout
 
 ```ts
-const { compact, asideOpen, asideLabel, openAside, closeAside } = useSplitLayout();
+const { compact, asideOpen, asideLabel, openAside, closeAside, collapsible, collapseAside } = useSplitLayout();
 ```
+
+`collapsible` 只在宽屏且页面开启时为 true；`collapseAside` 发出 `update:collapsed`（收起由页面决定）。
 
 布局里的任何组件都可以调用，例如目录树在窄屏下选中一项后关闭抽屉（是否关闭由页面决定：导航类关闭，筛选类保持打开）：
 

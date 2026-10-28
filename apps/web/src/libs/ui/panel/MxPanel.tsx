@@ -1,4 +1,4 @@
-import { Close } from '@element-plus/icons-vue';
+import { Close, Fold } from '@element-plus/icons-vue';
 import { ElButton } from 'element-plus';
 import { computed, defineComponent, inject, provide, type PropType, type SlotsType, type VNode } from 'vue';
 import { asideRegionKey, splitLayoutKey } from '../split-layout/context';
@@ -39,6 +39,8 @@ export const MxPanel = defineComponent({
     provide(asideRegionKey, false);
 
     const inDrawer = computed(() => isAsideRoot && layout?.compact.value === true);
+    // 宽屏时布局允许收起侧栏：侧栏最外层的面板放收起按钮
+    const collapsible = computed(() => isAsideRoot && layout?.collapsible.value === true);
 
     const renderIcon = () => {
       const icon = slots.icon?.();
@@ -48,7 +50,7 @@ export const MxPanel = defineComponent({
     return () => {
       const actions = slots.actions?.();
       const custom = slots.header?.();
-      const hasHeader = Boolean(props.title || custom || actions || inDrawer.value);
+      const hasHeader = Boolean(props.title || custom || actions || inDrawer.value || collapsible.value);
       return (
         <section class={[styles.root, props.floating && styles.floating, inDrawer.value && styles.inDrawer]}>
           {hasHeader && (
@@ -59,9 +61,17 @@ export const MxPanel = defineComponent({
                   {{ default: () => props.title, icon: slots.icon && renderIcon }}
                 </MxTitle>
               )}
-              {(actions || inDrawer.value) && (
+              {(actions || inDrawer.value || collapsible.value) && (
                 <div class={styles.actions}>
                   {actions}
+                  {collapsible.value && layout && (
+                    <ElButton
+                      link
+                      icon={Fold}
+                      aria-label={`收起${layout.asideLabel.value}`}
+                      onClick={layout.collapseAside}
+                    />
+                  )}
                   {inDrawer.value && layout && (
                     <ElButton
                       link

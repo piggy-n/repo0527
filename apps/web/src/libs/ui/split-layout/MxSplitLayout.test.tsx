@@ -69,6 +69,35 @@ function mountLayout(asideType?: 'menu' | 'panel') {
   );
 }
 
+// 页面持有收起状态：像页面一样按布局发出的事件改
+function mountCollapsible(initial: boolean) {
+  const collapsed = ref(initial);
+  const wrapper = mount(
+    () => (
+      <MxSplitLayout
+        asideLabel="文件目录"
+        collapsible
+        collapsed={collapsed.value}
+        onUpdate:collapsed={value => (collapsed.value = value)}
+      >
+        {{
+          aside: () => (
+            <MxPanel title="文件目录">
+              <Counter />
+              <MxPanel title="嵌套面板">内容</MxPanel>
+            </MxPanel>
+          ),
+          default: () => <MxPanel title="文件列表">表格</MxPanel>
+        }}
+      </MxSplitLayout>
+    ),
+    { attachTo: document.body }
+  );
+  return { wrapper, collapsed };
+}
+
+const collapseButtons = (wrapper: ReturnType<typeof mountLayout>) => wrapper.findAll('button[aria-label="收起文件目录"]');
+
 const counterPlace = (wrapper: ReturnType<typeof mountLayout>) => {
   const counter = wrapper.find('[data-test="counter"]').element;
   return counter.closest('.el-drawer') ? 'drawer' : counter.closest('aside') ? 'aside' : 'other';
@@ -93,6 +122,57 @@ describe('MxSplitLayout', () => {
     expect(wrapper.find('aside').attributes('style')).toContain('width: 320px');
     expect(toggleButtons(wrapper)).toHaveLength(0);
     expect(closeButtons(wrapper)).toHaveLength(0);
+  });
+
+  it('宽屏可收起：只有侧栏最外层的面板有收起按钮，收起后侧栏隐藏、换成窄条，点窄条在原位展开、状态保留', async () => {
+    stubViewport(false);
+    const { wrapper, collapsed } = mountCollapsible(false);
+    await flushPromises();
+    await wrapper.find('[data-test="increase"]').trigger('click');
+
+    expect(collapseButtons(wrapper)).toHaveLength(1);
+    expect(toggleButtons(wrapper)).toHaveLength(0);
+    await collapseButtons(wrapper)[0]?.trigger('click');
+    await flushPromises();
+
+    expect(collapsed.value).toBe(true);
+    expect(wrapper.find('aside').classes().some(name => name.includes('hidden'))).toBe(true);
+    expect(toggleButtons(wrapper)).toHaveLength(1);
+    expect(toggleButtons(wrapper)[0]?.attributes('aria-expanded')).toBe('false');
+    await toggleButtons(wrapper)[0]?.trigger('click');
+    await flushPromises();
+
+    expect(collapsed.value).toBe(false);
+    expect(counterPlace(wrapper)).toBe('aside');
+    expect(wrapper.find('[data-test="increase"]').text()).toBe('1');
+    expect(mounts).toBe(1);
+  });
+
+  it('没开启 collapsible 时宽屏没有收起按钮，collapsed 不起作用', async () => {
+    stubViewport(false);
+    const wrapper = mount(() => (
+      <MxSplitLayout asideLabel="文件目录" collapsed>
+        {{ aside: () => <MxPanel title="文件目录">目录</MxPanel>, default: () => <MxPanel title="文件列表">表格</MxPanel> }}
+      </MxSplitLayout>
+    ));
+    await flushPromises();
+
+    expect(collapseButtons(wrapper)).toHaveLength(0);
+    expect(wrapper.find('aside').classes().some(name => name.includes('hidden'))).toBe(false);
+    expect(toggleButtons(wrapper)).toHaveLength(0);
+  });
+
+  it('窄屏时照常用抽屉：收起的状态不影响，抽屉里只有关闭按钮', async () => {
+    stubViewport(true);
+    const { wrapper, collapsed } = mountCollapsible(true);
+    await flushPromises();
+    await toggleButtons(wrapper)[0]?.trigger('click');
+    await flushPromises();
+
+    expect(collapsed.value).toBe(true);
+    expect(counterPlace(wrapper)).toBe('drawer');
+    expect(collapseButtons(wrapper)).toHaveLength(0);
+    expect(closeButtons(wrapper)).toHaveLength(1);
   });
 
   it('菜单型侧栏宽 200', async () => {

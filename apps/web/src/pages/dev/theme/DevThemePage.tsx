@@ -599,6 +599,11 @@ export const DevThemePage = defineComponent({
           <h2 class={styles.sectionTitle}>分栏布局（@yzt/ui 的 MxSplitLayout，视口窄于 1200 时侧栏收进抽屉）</h2>
           <SplitLayoutPreview />
         </section>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>宽屏可收起的侧栏（MxSplitLayout 的 collapsible，侧栏面板的收起按钮、原位展开的窄条）</h2>
+          <SplitLayoutPreview collapsible />
+        </section>
       </div>
     );
   }

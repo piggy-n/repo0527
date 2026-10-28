@@ -31,24 +31,36 @@ const AsideRegion = defineComponent({
   }
 });
 
-/** 分栏布局：侧栏加主区，四周统一间距；窄屏时侧栏收成左侧的窄条，点击后在抽屉中打开，内容移动而不重建（docs/modules/ui.md） */
+/**
+ * 分栏布局：侧栏加主区，四周统一间距；窄屏时侧栏收成左侧的窄条，点击后在抽屉中打开，内容移动而不重建。
+ * 开启 collapsible 后，宽屏时也能把侧栏收成同样的窄条，点击在原位展开（docs/modules/ui.md）
+ */
 export const MxSplitLayout = defineComponent({
   name: 'MxSplitLayout',
   props: {
     asideType: { type: String as PropType<SplitLayoutAsideType>, default: 'panel' },
-    asideLabel: { type: String, required: true }
+    asideLabel: { type: String, required: true },
+    /** 宽屏时侧栏可以收起：侧栏的面板出现收起按钮 */
+    collapsible: Boolean,
+    /** 宽屏时侧栏收成窄条；由页面持有，配合 onUpdate:collapsed */
+    collapsed: Boolean
+  },
+  emits: {
+    'update:collapsed': (collapsed: boolean) => typeof collapsed === 'boolean'
   },
   slots: Object as SlotsType<{
     default?: () => VNode[];
     aside?: () => VNode[];
   }>,
-  setup(props, { slots }) {
+  setup(props, { slots, emit }) {
     const compact = useMediaQuery(COMPACT_MEDIA_QUERY);
     const asideOpen = ref(false);
     const asideContent = ref<HTMLElement>();
     const drawerTarget = ref<HTMLElement>();
     // 抽屉第一次打开前不渲染内容区，没有目标元素，侧栏内容先留在隐藏的侧栏里
     const inDrawer = computed(() => compact.value && drawerTarget.value !== undefined);
+    // 宽屏收起只看页面给的状态；窄屏时侧栏总在抽屉里，不受它影响
+    const collapsedWide = computed(() => props.collapsible && props.collapsed && !compact.value);
 
     const openAside = () => {
       asideOpen.value = true;
@@ -61,7 +73,9 @@ export const MxSplitLayout = defineComponent({
       asideOpen: computed(() => asideOpen.value),
       asideLabel: computed(() => props.asideLabel),
       openAside,
-      closeAside
+      closeAside,
+      collapsible: computed(() => props.collapsible && !compact.value),
+      collapseAside: () => emit('update:collapsed', true)
     });
 
     watch(compact, value => {
@@ -78,7 +92,7 @@ export const MxSplitLayout = defineComponent({
         saved = undefined;
       }
     };
-    const changes = [compact, asideOpen, inDrawer];
+    const changes = [compact, asideOpen, inDrawer, collapsedWide];
     watch(
       changes,
       () => {
@@ -95,17 +109,27 @@ export const MxSplitLayout = defineComponent({
 
     return () => {
       const width = ASIDE_WIDTHS[props.asideType];
+      // 窄屏点窄条打开抽屉；宽屏收起时点窄条在原位展开
+      const expand = compact.value ? openAside : () => emit('update:collapsed', false);
       return (
         <div class={styles.root}>
-          <aside class={[styles.aside, compact.value && styles.hidden]} style={{ width: `${width}px` }}>
+          <aside
+            class={[styles.aside, (compact.value || collapsedWide.value) && styles.hidden]}
+            style={{ width: `${width}px` }}
+          >
             <Teleport to={drawerTarget.value} disabled={!inDrawer.value}>
               <div ref={asideContent} class={styles.asideContent}>
                 <AsideRegion>{slots.aside?.()}</AsideRegion>
               </div>
             </Teleport>
           </aside>
-          {compact.value && (
-            <button type="button" class={styles.rail} aria-expanded={asideOpen.value} onClick={openAside}>
+          {(compact.value || collapsedWide.value) && (
+            <button
+              type="button"
+              class={styles.rail}
+              aria-expanded={compact.value ? asideOpen.value : false}
+              onClick={expand}
+            >
               <ElIcon>
                 <Expand />
               </ElIcon>
