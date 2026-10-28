@@ -2,15 +2,20 @@ import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { http } from '@/shared/http/client';
-import { downloadQuery, fetchQueryPage, fetchQueryShapes } from './api';
+import { required } from '@/shared/testing/required';
+import { downloadQuery, fetchQueryPage, fetchQueryShapes, type QueryDownload } from './api';
 import { QUERY_LAYERS } from './config';
 import type { QuerySnapshot } from './types';
 
 const server = setupServer();
 const signal = new AbortController().signal;
 const snapshot: QuerySnapshot = {
-  id: 'query', layer: QUERY_LAYERS.land[0], mode: 'attribute', conditions: "CZCLX IN ('201')",
-  scope: { kind: 'region', code: '320100' }, signature: ''
+  id: 'query',
+  layer: QUERY_LAYERS.land[0],
+  mode: 'attribute',
+  conditions: "CZCLX IN ('201')",
+  scope: { kind: 'region', code: '320100' },
+  signature: ''
 };
 const polygon = { type: 'Polygon' as const, coordinates: [[[119, 33], [119.1, 33], [119, 33.1], [119, 33]]] };
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
@@ -28,8 +33,12 @@ describe('数据查询调用契约', () => {
       return HttpResponse.json({ total: 21, list: [{ czclx: '201' }] });
     }));
     expect(await fetchQueryPage(snapshot, 2, signal)).toEqual({ total: 21, list: [{ czclx: '201' }] });
-    expect(Object.fromEntries(received!)).toMatchObject({
-      layerCode: 'bgdc_czcdyd_2022', xzqdm: '320100', conditions: "CZCLX IN ('201')", pageNum: '2', pageSize: '20'
+    expect(Object.fromEntries(required(received, '分页请求的参数'))).toMatchObject({
+      layerCode: 'bgdc_czcdyd_2022',
+      xzqdm: '320100',
+      conditions: "CZCLX IN ('201')",
+      pageNum: '2',
+      pageSize: '20'
     });
   });
 
@@ -67,11 +76,14 @@ describe('数据查询调用契约', () => {
     let body: unknown;
     server.use(mock.post('/backend/api/export/region', async ({ request }) => {
       body = await request.json();
-      return new HttpResponse('excel', { headers: {
-        'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="result.xlsx"'
-      } });
+      return new HttpResponse('excel', {
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Disposition': 'attachment; filename="result.xlsx"'
+        }
+      });
     }));
-    const target = { id: 'download', name: '查询结果', snapshot, formats: ['excel'] };
+    const target: QueryDownload = { id: 'download', name: '查询结果', snapshot, formats: ['excel'] };
     expect((await downloadQuery(target, signal, vi.fn())).fileName).toBe('result.xlsx');
     expect(body).toMatchObject({ xzqdm: '320100', conditions: snapshot.conditions, format: 'excel', fileName: '查询结果' });
     server.use(mock.post('/backend/api/export/region', () => HttpResponse.json({ code: 500, msg: '导出失败' })));
@@ -86,10 +98,13 @@ describe('数据查询调用契约', () => {
     }));
     const file = new File(['范围'], '原始范围.shp');
     const post = vi.spyOn(http, 'postBlob');
-    await downloadQuery({
-      id: 'shp', name: '范围结果', formats: ['shp', 'gdb'],
+    const target: QueryDownload = {
+      id: 'shp',
+      name: '范围结果',
+      formats: ['shp', 'gdb'],
       snapshot: { ...snapshot, scope: { kind: 'shp', file } }
-    }, signal, vi.fn());
+    };
+    await downloadQuery(target, signal, vi.fn());
     expect(body).toContain('name="format"\r\n\r\nshp,gdb');
     const form = post.mock.calls[0][1] as FormData;
     expect(form.get('file')).toBe(file);

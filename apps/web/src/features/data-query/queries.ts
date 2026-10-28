@@ -1,45 +1,44 @@
-import { useQuery } from '@tanstack/vue-query';
+import { skipToken, useQuery } from '@tanstack/vue-query';
 import { computed, type Ref } from 'vue';
-import { useSessionGuard } from '@/shared/auth/session-guard';
-import { useSessionStore } from '@/shared/auth/session-store';
-import { fetchQueryPage, fetchQueryShapes } from './api';
+import { fetchQueryPage, fetchQueryShapes, type QueryPage, type QueryRecord, type QueryShapes } from './api';
 import type { QuerySnapshot } from './types';
 
-/** 查询缓存只持有服务端结果，表单与快照由拥有者管理；新查询使用新身份 */
+/** 数据查询的 query key 只在这里拼；快照身份每次查询都不同 */
+export const dataQueryKeys = {
+  all: ['data-query'] as const,
+  page: (id: string, page: number) => [...dataQueryKeys.all, id, page] as const,
+  shapes: (id: string) => [...dataQueryKeys.all, id, 'geometry'] as const,
+  detail: (id: string, record: QueryRecord | null) => [...dataQueryKeys.all, id, 'detail', record] as const
+};
+
+/**
+ * 查询缓存只持有服务端结果，表单与快照由拥有者管理。
+ * 和其他读取一样不另外核对会话：会话结束时 endSession 清空缓存，进行中的读取随之取消
+ */
 export function useDataQueries(snapshot: Ref<QuerySnapshot | null>, page: Ref<number>) {
-  const session = useSessionStore();
-  const guard = useSessionGuard();
   const pageQuery = useQuery(computed(() => {
     const request = snapshot.value;
     const pageNumber = page.value;
-    const token = guard.capture();
     return {
-      queryKey: ['data-query', session.user?.loginName, request?.id, pageNumber],
-      enabled: request !== null && token !== undefined,
+      queryKey: dataQueryKeys.page(request?.id ?? '', pageNumber),
+      queryFn: request
+        ? ({ signal }: { signal: AbortSignal }) => fetchQueryPage(request, pageNumber, signal)
+        : skipToken,
       gcTime: 0,
-      queryFn: async ({ signal }: { signal: AbortSignal }) => {
-        guard.assertCurrent(token);
-        const value = await fetchQueryPage(request!, pageNumber, signal);
-        guard.assertCurrent(token);
-        return value;
-      },
-      select: (value: Awaited<ReturnType<typeof fetchQueryPage>>) => ({ id: request!.id, page: pageNumber, value })
+      // 缓存里只存结果，读出时标上属于哪次查询的哪一页
+      select: (value: QueryPage) => ({ id: request?.id, page: pageNumber, value })
     };
   }));
   const shapesQuery = useQuery(computed(() => {
     const request = snapshot.value;
-    const token = guard.capture();
     return {
-      queryKey: ['data-query', session.user?.loginName, request?.id, 'geometry'],
-      enabled: request !== null && request.scope.kind !== 'region' && token !== undefined,
+      queryKey: dataQueryKeys.shapes(request?.id ?? ''),
+      // 按行政区查询时地图用筛选过的瓦片，不读取完整几何
+      queryFn: request && request.scope.kind !== 'region'
+        ? ({ signal }: { signal: AbortSignal }) => fetchQueryShapes(request, signal)
+        : skipToken,
       gcTime: 0,
-      queryFn: async ({ signal }: { signal: AbortSignal }) => {
-        guard.assertCurrent(token);
-        const value = await fetchQueryShapes(request!, signal);
-        guard.assertCurrent(token);
-        return value;
-      },
-      select: (value: Awaited<ReturnType<typeof fetchQueryShapes>>) => ({ id: request!.id, value })
+      select: (value: QueryShapes) => ({ id: request?.id, value })
     };
   }));
   const result = computed(() => {

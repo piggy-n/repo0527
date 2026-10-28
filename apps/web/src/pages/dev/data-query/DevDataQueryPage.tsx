@@ -1,8 +1,8 @@
 import { Close, Expand } from '@element-plus/icons-vue';
+import { useMediaQuery } from '@vueuse/core';
 import { MapCanvas, provideMap, useMap, useMapOverlay } from '@yzt/map-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
 import { ElButton, ElDrawer, ElEmpty, ElOption, ElSelect } from 'element-plus';
-import { useMediaQuery } from '@vueuse/core';
 import { defineComponent, type PropType, ref, type SlotsType, type VNode, watch } from 'vue';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
@@ -69,8 +69,10 @@ const QueryWorkspace = defineComponent({
                         ),
                         default: () => (
                           <>
-                            <MxTitle>{selected.value!.name}</MxTitle>
-                            <p>{selected.value!.region} · {selected.value!.area} 平方米</p>
+                            <MxTitle>{selected.value?.name}</MxTitle>
+                            <p>
+                              {selected.value?.region} · {selected.value?.area} 平方米
+                            </p>
                           </>
                         )
                       }}

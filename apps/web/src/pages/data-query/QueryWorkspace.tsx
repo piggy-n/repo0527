@@ -1,16 +1,16 @@
 import { Expand } from '@element-plus/icons-vue';
+import { useMediaQuery } from '@vueuse/core';
 import { MapCanvas, useMapOverlay } from '@yzt/map-vue';
 import { MxPanel } from '@yzt/ui';
-import { useMediaQuery } from '@vueuse/core';
 import { ElButton, ElDrawer, ElEmpty } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, watch } from 'vue';
 import { QueryConditions } from '@/features/data-query/components/QueryConditions';
 import { QueryDetail } from '@/features/data-query/components/QueryDetail';
 import { QueryResults } from '@/features/data-query/components/QueryResults';
-import { MODULE_LABELS } from '@/features/data-query/config';
 import type { DataQuery } from '@/features/data-query/composables/useDataQuery';
 import type { useQueryDetail } from '@/features/data-query/composables/useQueryDetail';
 import type { QueryDrawing } from '@/features/data-query/composables/useQueryDrawing';
+import { MODULE_LABELS } from '@/features/data-query/config';
 import type { QueryModule } from '@/features/data-query/types';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { basemapOption } from '@/shared/map/basemap/basemap-style';
@@ -47,7 +47,11 @@ interface QueryMapTools {
 const FUNCTIONS = ['boundaries', 'region-locate', 'coordinate-locate'] as const;
 const LABELS = { boundaries: '行政区', 'region-locate': '区划定位', 'coordinate-locate': '坐标定位' };
 const GROUPS = [
-  ['browse'], ['measure-distance', 'measure-area'], ['region-locate', 'coordinate-locate'], ['boundaries'], ['clear']
+  ['browse'],
+  ['measure-distance', 'measure-area'],
+  ['region-locate', 'coordinate-locate'],
+  ['boundaries'],
+  ['clear']
 ] as const;
 
 /** 只组合条件、结果和公共地图工具，悬浮尺寸交给地图避让计算 */
@@ -95,6 +99,32 @@ export const QueryWorkspace = defineComponent({
       }
     };
 
+    // 没有查询配置的模块只显示地图壳；窄屏时条件放进抽屉，这里只留入口
+    function renderConditions() {
+      const { model, drawing } = props;
+      if (!model.layers.value.length) {
+        return (
+          <div class={styles.conditionPanel}>
+            <MxPanel title={MODULE_LABELS[props.module]} headerTone="muted" floating>
+              <ElEmpty description="查询功能待建设" imageSize={64} />
+            </MxPanel>
+          </div>
+        );
+      }
+      if (compact.value) {
+        return (
+          <ElButton class={styles.queryEntry} icon={Expand} onClick={() => (model.formOpen.value = true)}>
+            查询条件
+          </ElButton>
+        );
+      }
+      return (
+        <div ref={conditionPanel} class={styles.conditionPanel}>
+          <QueryConditions model={model} drawing={drawing} />
+        </div>
+      );
+    }
+
     return () => {
       const { model, drawing, detail, tools } = props;
       const available = model.layers.value.length > 0;
@@ -106,23 +136,7 @@ export const QueryWorkspace = defineComponent({
           <LocationOverlay location={tools.location} />
           <div class={[styles.overlays, model.resultOpen.value && styles.withResults]}>
             <div class={styles.topArea}>
-              {available ? (
-                compact.value ? (
-                  <ElButton class={styles.queryEntry} icon={Expand} onClick={() => (model.formOpen.value = true)}>
-                    查询条件
-                  </ElButton>
-                ) : (
-                  <div ref={conditionPanel} class={styles.conditionPanel}>
-                    <QueryConditions model={model} drawing={drawing} />
-                  </div>
-                )
-              ) : (
-                <div class={styles.conditionPanel}>
-                  <MxPanel title={MODULE_LABELS[props.module]} headerTone="muted" floating>
-                    <ElEmpty description="查询功能待建设" imageSize={64} />
-                  </MxPanel>
-                </div>
-              )}
+              {renderConditions()}
               <div ref={detailPanel} class={styles.rightPanel}>
                 {model.selected.value && <QueryDetail model={model} detail={detail} />}
                 <MapPanelGroup
@@ -168,9 +182,9 @@ export const QueryWorkspace = defineComponent({
                           name={`底图：${current.value.label}`}
                           pressed={basemapOpen.value}
                         >
-                          {{ cover: () => [
-                            <BasemapThumbnail thumbnail={tools.basemap.thumbnails[current.value.id]} />
-                          ] }}
+                          {{
+                            cover: () => [<BasemapThumbnail thumbnail={tools.basemap.thumbnails[current.value.id]} />]
+                          }}
                         </MapCard>
                       ],
                       default: () => [<BasemapPanel basemap={tools.basemap} showOpacity={false} />]

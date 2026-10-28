@@ -1,16 +1,21 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { required } from '@/shared/testing/required';
 import { QUERY_LAYERS } from './config';
 import { recordText, resultColumns } from './result-fields';
 
 describe('查询结果的字段与文本', () => {
   it('使用业务字段和公共名称，排除几何并保留额外返回字段', () => {
     const layer = QUERY_LAYERS.city[0];
-    const name = layer.fields.find(field => field.code === 'NAME')!;
-    expect(resultColumns(layer, [
-      { name: '学校', geom: '长坐标', BSM: '001' }, { name: '学校二', extra: '新增属性' }
-    ])).toEqual([
-      { code: 'name', label: name.label }, { code: 'BSM', label: '标识码' }, { code: 'extra', label: 'extra' }
+    const name = required(layer.fields.find(field => field.code === 'NAME'), '学校名称字段');
+    const rows = [
+      { name: '学校', geom: '长坐标', BSM: '001' },
+      { name: '学校二', extra: '新增属性' }
+    ];
+    expect(resultColumns(layer, rows)).toEqual([
+      { code: 'name', label: name.label },
+      { code: 'BSM', label: '标识码' },
+      { code: 'extra', label: 'extra' }
     ]);
   });
 

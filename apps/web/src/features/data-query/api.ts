@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { fetchFile, type TransferProgress } from '@/shared/file-transfer';
 import { http } from '@/shared/http/client';
 import { geometryTextSchema } from '@/shared/map/geometry-schema';
-import type { QuerySnapshot } from './types';
 import { PAGE_SIZE } from './config';
+import type { ExportFormat, QueryScope, QuerySnapshot } from './types';
 
 const recordSchema = z.record(z.string(), z.unknown());
 // 与现状底图相同的查询契约，成功响应没有 code/data 信封（ADR 0047）
@@ -11,6 +11,7 @@ const pageSchema = z.object({ total: z.number().int().nonnegative(), list: z.arr
 const shapesSchema = z.array(z.object({ geom: geometryTextSchema }));
 export type QueryRecord = z.infer<typeof recordSchema>;
 export type QueryPage = z.infer<typeof pageSchema>;
+export type QueryShapes = z.infer<typeof shapesSchema>;
 
 /** JSON 和文件请求共用同一份快照参数 */
 export function requestParameters(snapshot: QuerySnapshot) {
@@ -59,18 +60,32 @@ export interface QueryDownload {
   id: string;
   name: string;
   snapshot: QuerySnapshot;
-  formats: readonly string[];
+  formats: readonly ExportFormat[];
 }
 
+// 导出接口按查询范围区分
+const EXPORT_ENDPOINTS: Record<QueryScope['kind'], string> = {
+  region: 'region',
+  geometry: 'geojson',
+  shp: 'shp'
+};
+
 /** 导出是按快照取文件，可取消；任务和错误状态交给公共下载组件 */
-export function downloadQuery(target: QueryDownload, signal: AbortSignal, onProgress: (p: TransferProgress) => void) {
+export function downloadQuery(
+  target: QueryDownload,
+  signal: AbortSignal,
+  onProgress: (progress: TransferProgress) => void
+) {
   const { snapshot, formats, name } = target;
   const extra = { format: formats.join(','), fileName: name };
-  const scope = snapshot.scope.kind;
-  const endpoint = scope === 'region' ? 'region' : scope === 'geometry' ? 'geojson' : 'shp';
-  const body = scope === 'shp' ? shpBody(snapshot, extra) : { ...requestParameters(snapshot), ...extra };
+  const body = snapshot.scope.kind === 'shp' ? shpBody(snapshot, extra) : { ...requestParameters(snapshot), ...extra };
   const extension = formats.length === 1 && formats[0] === 'excel' ? 'xlsx' : 'zip';
-  return fetchFile(`/api/export/${endpoint}`, {
-    method: 'post', body, signal, silent: true, onDownloadProgress: onProgress, fallbackName: `${name}.${extension}`
+  return fetchFile(`/api/export/${EXPORT_ENDPOINTS[snapshot.scope.kind]}`, {
+    method: 'post',
+    body,
+    signal,
+    silent: true,
+    onDownloadProgress: onProgress,
+    fallbackName: `${name}.${extension}`
   });
 }

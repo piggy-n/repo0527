@@ -3,6 +3,7 @@ import type { MapContext } from '@yzt/map-vue';
 import type { FeatureCollection, Polygon } from 'geojson';
 import { computed, onScopeDispose, shallowRef } from 'vue';
 import { currentPanKey } from '@/shared/map/pan-key';
+import { RESULT_COLOR } from '../map-style';
 
 const RECTANGLE = 'query-rectangle';
 const POLYGON = 'query-polygon';
@@ -57,10 +58,19 @@ export function useQueryDrawing(map: MapContext) {
     return {
       sources: { 'query-draw-source': { type: 'geojson', data } },
       layers: [
-        { id: 'query-draw-fill', source: 'query-draw-source', type: 'fill',
-          filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#577CFF', 'fill-opacity': 0.12 } },
-        { id: 'query-draw-line', source: 'query-draw-source', type: 'line',
-          paint: { 'line-color': '#577CFF', 'line-width': 2, 'line-dasharray': [3, 2] } }
+        {
+          id: 'query-draw-fill',
+          source: 'query-draw-source',
+          type: 'fill',
+          filter: ['==', ['geometry-type'], 'Polygon'],
+          paint: { 'fill-color': RESULT_COLOR, 'fill-opacity': 0.12 }
+        },
+        {
+          id: 'query-draw-line',
+          source: 'query-draw-source',
+          type: 'line',
+          paint: { 'line-color': RESULT_COLOR, 'line-width': 2, 'line-dasharray': [3, 2] }
+        }
       ]
     };
   }

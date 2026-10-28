@@ -8,6 +8,8 @@ import { defineComponent, nextTick, ref, shallowRef } from 'vue';
 import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { createTestJwtExpiringAt } from '@/shared/auth/testing';
+import { required } from '@/shared/testing/required';
+import * as api from '../api';
 import type { QueryModule } from '../types';
 import { useDataQuery } from './useDataQuery';
 import type { QueryDrawing } from './useQueryDrawing';
@@ -26,24 +28,30 @@ function setup() {
   const pinia = createPinia();
   setActivePinia(pinia);
   const session = useSessionStore();
-  session.start({ token: createTestJwtExpiringAt(Date.now() + 3600000), user: { loginName: 'test', role: Role.admin } });
+  session.start({
+    token: createTestJwtExpiringAt(Date.now() + 3600000),
+    user: { loginName: 'test', role: Role.admin }
+  });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const drawing: Pick<QueryDrawing, 'geometry' | 'stop' | 'clear'> = {
-    geometry: shallowRef(null), stop: vi.fn<() => void>(), clear: vi.fn<() => void>()
+    geometry: shallowRef(null),
+    stop: vi.fn<() => void>(),
+    clear: vi.fn<() => void>()
   };
   const module = ref<QueryModule>('city');
-  let model!: ReturnType<typeof useDataQuery>;
-  const wrapper = mount(defineComponent({
-    setup() {
+  let model: ReturnType<typeof useDataQuery> | undefined;
+  const wrapper = mount(
+    defineComponent(() => {
       model = useDataQuery(module, drawing);
       return () => null;
-    }
-  }), { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } });
+    }),
+    { global: { plugins: [pinia, [VueQueryPlugin, { queryClient: client }]] } }
+  );
   cleanups.push(() => {
     wrapper.unmount();
     client.clear();
   });
-  return { model, module, drawing, session, wrapper, client };
+  return { model: required(model, '数据查询的拥有者'), module, drawing, session, wrapper, client };
 }
 
 describe('数据查询快照与异步状态', () => {
@@ -121,7 +129,9 @@ describe('数据查询快照与异步状态', () => {
 
   it.each(['reset', 'session', 'unmount'] as const)('请求中 %s 会取消读取，晚到结果不复活', async action => {
     let release!: () => void;
-    const waiting = new Promise<void>(resolve => (release = resolve));
+    const waiting = new Promise<void>(resolve => {
+      release = resolve;
+    });
     cleanups.push(release);
     let received = false;
     server.use(mock.get('/backend/api/query/attr/page', async () => {
@@ -129,22 +139,54 @@ describe('数据查询快照与异步状态', () => {
       await waiting;
       return HttpResponse.json({ total: 1, list: [{ name: '迟到结果' }] });
     }));
+    const fetchPage = vi.spyOn(api, 'fetchQueryPage');
+    cleanups.push(() => fetchPage.mockRestore());
     const { model, session, wrapper, client } = setup();
     model.search();
     await vi.waitFor(() => expect(received).toBe(true));
-    const pending = client.getQueryCache().find({ queryKey: ['data-query', 'test', model.submitted.value!.id, 1] });
+    const [, , signal] = required(fetchPage.mock.calls[0], '分页读取的调用');
     if (action === 'reset') {
       model.reset();
     } else if (action === 'session') {
+      // 和 app 的 endSession 一样：先清空查询缓存，再清空会话
+      client.clear();
       session.clear();
     } else {
       wrapper.unmount();
     }
-    // MSW 的 XHR request.signal 不转发取消；被取消的查询立即退回 idle，而非等响应才结束
-    await vi.waitFor(() => expect(pending?.state.fetchStatus).toBe('idle'));
+    // MSW 的 XHR request.signal 不转发取消，直接看交给接口函数的信号；重置后查询要到下一轮调度才换 key
+    await vi.waitFor(() => expect(signal.aborted).toBe(true));
     release();
     await nextTick();
     expect(model.result.value).toBeUndefined();
+  });
+
+  it('普通 HTTP 的内网没有 crypto.randomUUID，仍能提交查询', async () => {
+    server.use(mock.get('/backend/api/query/attr/page', () => HttpResponse.json({ total: 1, list: [{ name: '学校' }] })));
+    // 非安全上下文只有 getRandomValues，没有 randomUUID
+    vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    cleanups.push(() => vi.unstubAllGlobals());
+    const { model } = setup();
+    expect(model.search()).toBe(true);
+    expect(model.error.value).toBe('');
+    await vi.waitFor(() => expect(model.result.value?.total).toBe(1));
+  });
+
+  it('同一账号在其他标签页重新登录只换了 token，条件和结果保留', async () => {
+    server.use(mock.get('/backend/api/query/attr/page', () => HttpResponse.json({ total: 1, list: [{ name: '学校' }] })));
+    const { model, session } = setup();
+    model.region.value = '320102';
+    model.search();
+    await vi.waitFor(() => expect(model.result.value?.total).toBe(1));
+    const submitted = model.submitted.value;
+    session.start({
+      token: createTestJwtExpiringAt(Date.now() + 7200000),
+      user: { loginName: 'test', role: Role.admin }
+    });
+    await nextTick();
+    expect(model.region.value).toBe('320102');
+    expect(model.submitted.value).toBe(submitted);
+    expect(model.result.value?.total).toBe(1);
   });
 
   it('切换模块重置旧图层与条件，后两个模块没有伪造配置', async () => {

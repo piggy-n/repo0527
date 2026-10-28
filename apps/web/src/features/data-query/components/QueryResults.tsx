@@ -1,15 +1,24 @@
 import { ArrowDown, ArrowUp, Download, FullScreen, ScaleToOriginal } from '@element-plus/icons-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
 import {
-  ElButton, ElCheckbox, ElCheckboxGroup, ElDialog, ElEmpty, ElPagination, ElTable, ElTableColumn
+  ElButton,
+  ElCheckbox,
+  ElCheckboxGroup,
+  ElDialog,
+  ElEmpty,
+  ElPagination,
+  ElTable,
+  ElTableColumn,
+  type CheckboxGroupValueType
 } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, watch } from 'vue';
 import { DownloadPanel } from '@/shared/file-transfer/DownloadPanel';
 import { TableSkeleton } from '@/shared/table/TableSkeleton';
-import { PAGE_SIZE } from '../config';
 import type { QueryRecord } from '../api';
 import type { DataQuery } from '../composables/useDataQuery';
+import { EXPORT_FORMATS, PAGE_SIZE } from '../config';
 import { recordText, resultColumns } from '../result-fields';
+import type { ExportFormat } from '../types';
 import styles from './query.module.scss';
 
 /** 结果区只读已提交条件，导出任务使用公共进度与取消入口 */
@@ -18,12 +27,19 @@ export const QueryResults = defineComponent({
   props: { model: { type: Object as PropType<DataQuery>, required: true } },
   setup(props) {
     const exportOpen = ref(false);
-    const formats = ref<string[]>(['excel']);
+    const formats = ref<ExportFormat[]>(['excel']);
     const columns = computed(() => resultColumns(
       props.model.submitted.value?.layer,
       props.model.result.value?.list ?? []
     ));
     watch(() => props.model.submitted.value, () => (exportOpen.value = false));
+
+    function renderEmpty() {
+      if (props.model.busy.value) {
+        return <TableSkeleton />;
+      }
+      return <ElEmpty imageSize={48} description="没有符合条件的数据" />;
+    }
 
     function renderBody() {
       const model = props.model;
@@ -59,9 +75,7 @@ export const QueryResults = defineComponent({
                 </ElTableColumn>
               ))
             ],
-            empty: () => model.busy.value
-              ? <TableSkeleton />
-              : <ElEmpty imageSize={48} description="没有符合条件的数据" />
+            empty: renderEmpty
           }}
         </ElTable>
       );
@@ -146,7 +160,9 @@ export const QueryResults = defineComponent({
                   <p>{model.summary.value}</p>
                   <ElCheckboxGroup
                     modelValue={formats.value}
-                    onUpdate:modelValue={value => (formats.value = value as string[])}
+                    onUpdate:modelValue={(value: CheckboxGroupValueType) => {
+                      formats.value = EXPORT_FORMATS.filter(format => value.includes(format));
+                    }}
                   >
                     <ElCheckbox value="excel">Excel</ElCheckbox>
                     <ElCheckbox value="shp">SHP</ElCheckbox>
@@ -165,7 +181,9 @@ export const QueryResults = defineComponent({
                     model.exportResults(formats.value);
                     exportOpen.value = false;
                   }}
-                >导出</ElButton>
+                >
+                  导出
+                </ElButton>
               ]
             }}
           </ElDialog>

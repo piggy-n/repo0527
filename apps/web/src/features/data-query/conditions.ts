@@ -8,7 +8,11 @@ export function quoteValue(value: string | number): string {
 }
 
 /** 字段来自固定配置，不接受表单自定义字段名；0 是有效数值 */
-export function buildConditions(layer: QueryLayer, conditions: readonly QueryCondition[], relation: 'AND' | 'OR'): string {
+export function buildConditions(
+  layer: QueryLayer,
+  conditions: readonly QueryCondition[],
+  relation: 'AND' | 'OR'
+): string {
   const expressions: string[] = [];
   for (const { code, value, operator } of conditions) {
     const field = layer.fields.find(item => item.code === code);
@@ -18,9 +22,10 @@ export function buildConditions(layer: QueryLayer, conditions: readonly QueryCon
     if (value === '' || (Array.isArray(value) && !value.length)) {
       continue;
     }
-    if (field.options) {
+    const { options } = field;
+    if (options) {
       const values = Array.isArray(value) ? value : [String(value)];
-      if (values.some(item => !field.options!.some(option => option.code === item))) {
+      if (values.some(item => !options.some(option => option.code === item))) {
         throw new Error(`${field.label}包含无效选项`);
       }
       expressions.push(`${code} IN (${values.map(quoteValue).join(', ')})`);
@@ -46,7 +51,8 @@ export function advancedConditions(text: string): string {
     throw new Error('请填写查询条件');
   }
   const outsideStrings = expression.replace(/'(?:''|[^'])*'/g, '');
-  if (outsideStrings.includes("'") || /;|--|\/\*|\b(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|UNION)\b/i.test(outsideStrings)) {
+  const statement = /;|--|\/\*|\b(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|UNION)\b/i;
+  if (outsideStrings.includes("'") || statement.test(outsideStrings)) {
     throw new Error('请填写完整的筛选条件，不包含 SQL 语句、注释或分号');
   }
   return expression;

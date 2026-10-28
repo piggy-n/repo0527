@@ -1,18 +1,35 @@
-import { computed, ref, shallowRef, watch, type Ref } from 'vue';
-import { useSessionStore } from '@/shared/auth/session-store';
+import { computed, ref, type Ref, shallowRef, watch } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { useDownloads } from '@/shared/file-transfer/useDownloads';
 import { findRegion } from '@/shared/map/region/region-catalog';
 import { downloadQuery, type QueryRecord } from '../api';
-import { NATURAL_RULES, PAGE_SIZE, QUERY_LAYERS } from '../config';
 import { advancedConditions, buildConditions, matchNatural, regionName } from '../conditions';
+import { NATURAL_RULES, PAGE_SIZE, QUERY_LAYERS } from '../config';
 import { useDataQueries } from '../queries';
-import type { FieldValue, QueryCondition, QueryMode, QueryModule, QuerySnapshot, SpatialMethod } from '../types';
+import type {
+  ExportFormat,
+  FieldValue,
+  QueryCondition,
+  QueryMode,
+  QueryModule,
+  QueryScope,
+  QuerySnapshot,
+  SpatialMethod
+} from '../types';
 import type { QueryDrawing } from './useQueryDrawing';
+
+// 快照身份只用作查询缓存的 key，用递增的序号：普通 HTTP 的内网没有 crypto.randomUUID
+let snapshotCount = 0;
+
+function scopeLabel(scope: QueryScope): string {
+  if (scope.kind === 'region') {
+    return regionName(scope.code);
+  }
+  return scope.kind === 'shp' ? scope.file.name : '所选范围';
+}
 
 /** 编辑条件和执行快照分离，翻页、导出与地图始终使用同一轮查询参数 */
 export function useDataQuery(module: Ref<QueryModule>, drawing: Pick<QueryDrawing, 'geometry' | 'stop' | 'clear'>) {
-  const session = useSessionStore();
   const layers = computed(() => QUERY_LAYERS[module.value]);
   const layerCode = ref(layers.value[0]?.code ?? '');
   const layer = computed(() => layers.value.find(item => item.code === layerCode.value));
@@ -38,8 +55,18 @@ export function useDataQuery(module: Ref<QueryModule>, drawing: Pick<QueryDrawin
   const loading = useDelayedFlag(() => submitted.value !== null && queries.pageQuery.isFetching.value);
   const busy = computed(() => submitted.value !== null && queries.pageQuery.isFetching.value);
   const signature = computed(() => JSON.stringify([
-    layerCode.value, mode.value, region.value, conditions.value, relation.value, advanced.value, natural.value,
-    method.value, drawing.geometry.value, file.value?.name, file.value?.lastModified, file.value?.size
+    layerCode.value,
+    mode.value,
+    region.value,
+    conditions.value,
+    relation.value,
+    advanced.value,
+    natural.value,
+    method.value,
+    drawing.geometry.value,
+    file.value?.name,
+    file.value?.lastModified,
+    file.value?.size
   ]));
   const changed = computed(() => {
     const snapshot = submitted.value;
@@ -48,12 +75,7 @@ export function useDataQuery(module: Ref<QueryModule>, drawing: Pick<QueryDrawin
   });
   const summary = computed(() => {
     const request = submitted.value;
-    if (!request) {
-      return '';
-    }
-    const scope = request.scope.kind === 'region' ? regionName(request.scope.code) :
-      request.scope.kind === 'shp' ? request.scope.file.name : '所选范围';
-    return `${request.layer.label} · ${scope}`;
+    return request ? `${request.layer.label} · ${scopeLabel(request.scope)}` : '';
   });
   const expression = computed(() => {
     if (!layer.value) {
@@ -135,7 +157,7 @@ export function useDataQuery(module: Ref<QueryModule>, drawing: Pick<QueryDrawin
       } else if (mode.value === 'advanced') {
         filter = advancedConditions(advanced.value);
       }
-      let scope: QuerySnapshot['scope'] = { kind: 'region', code: regionCode };
+      let scope: QueryScope = { kind: 'region', code: regionCode };
       if (mode.value === 'spatial') {
         if (method.value === 'shp') {
           if (!file.value || !/\.(shp|zip)$/i.test(file.value.name) || file.value.size === 0) {
@@ -149,8 +171,14 @@ export function useDataQuery(module: Ref<QueryModule>, drawing: Pick<QueryDrawin
           scope = { kind: 'geometry', geometry: drawing.geometry.value };
         }
       }
+      snapshotCount += 1;
       submitted.value = {
-        id: crypto.randomUUID(), layer: target, mode: mode.value, conditions: filter, scope, signature: signature.value
+        id: String(snapshotCount),
+        layer: target,
+        mode: mode.value,
+        conditions: filter,
+        scope,
+        signature: signature.value
       };
       resultOpen.value = true;
       return true;
@@ -160,17 +188,16 @@ export function useDataQuery(module: Ref<QueryModule>, drawing: Pick<QueryDrawin
     }
   }
 
-  function exportResults(formats: readonly string[]) {
+  function exportResults(formats: readonly ExportFormat[]) {
     const snapshot = submitted.value;
     if (!snapshot || !queries.result.value?.total || !formats.length) {
       return;
     }
-    const allowed = ['excel', 'shp', 'gdb'].filter(format => formats.includes(format));
-    if (allowed.length !== formats.length) {
-      return;
-    }
     void downloads.start({
-      id: `${snapshot.id}:${allowed.join(',')}`, name: `${snapshot.layer.label}查询结果`, snapshot, formats: allowed
+      id: `${snapshot.id}:${formats.join(',')}`,
+      name: `${snapshot.layer.label}查询结果`,
+      snapshot,
+      formats
     });
   }
 
@@ -195,12 +222,39 @@ export function useDataQuery(module: Ref<QueryModule>, drawing: Pick<QueryDrawin
       page.value = Math.min(page.value, Math.max(1, Math.ceil(result.total / PAGE_SIZE)));
     }
   });
-  watch(() => session.token, reset, { flush: 'sync' });
 
   return {
-    layers, layer, layerCode, mode, region, conditions, relation, advanced, natural, method, file, error,
-    formOpen, resultOpen, maximized, page, total, submitted, selected, downloads, loading, busy, changed, summary,
-    expression, examples, ...queries, reset, search, addCondition, exportResults
+    layers,
+    layer,
+    layerCode,
+    mode,
+    region,
+    conditions,
+    relation,
+    advanced,
+    natural,
+    method,
+    file,
+    error,
+    formOpen,
+    resultOpen,
+    maximized,
+    page,
+    total,
+    submitted,
+    selected,
+    downloads,
+    loading,
+    busy,
+    changed,
+    summary,
+    expression,
+    examples,
+    ...queries,
+    reset,
+    search,
+    addCondition,
+    exportResults
   };
 }
 

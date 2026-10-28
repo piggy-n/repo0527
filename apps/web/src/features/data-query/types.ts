@@ -4,6 +4,7 @@ export type QueryModule = 'land' | 'city' | 'forest' | 'water';
 export type QueryMode = 'attribute' | 'spatial' | 'natural' | 'advanced';
 export type SpatialMethod = 'rectangle' | 'polygon' | 'shp';
 export type FieldValue = string | number | string[];
+export type ExportFormat = 'excel' | 'shp' | 'gdb';
 
 /** 配置描述业务字段；表单值由查询拥有者单独维护 */
 export interface QueryField {

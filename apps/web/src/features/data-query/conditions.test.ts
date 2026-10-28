@@ -1,9 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { required } from '@/shared/testing/required';
 import { advancedConditions, buildConditions, matchNatural } from './conditions';
 import { QUERY_LAYERS } from './config';
 import { queryLayerGroup } from './map-style';
 import { recordText, resultColumns } from './result-fields';
+import type { QuerySnapshot } from './types';
 
 const SCHOOL = QUERY_LAYERS.city[0];
 
@@ -40,7 +42,9 @@ describe('数据查询条件', () => {
 
   it('自然语言具体示例不会被全省宽泛规则覆盖，未知描述明确拒绝', () => {
     expect(matchNatural('city', '查询南京市学校点层中类型为小学、高级中学的数据')).toMatchObject({
-      region: '320100', layerCode: SCHOOL.code, conditions: "TYPE IN ('小学', '高级中学')"
+      region: '320100',
+      layerCode: SCHOOL.code,
+      conditions: "TYPE IN ('小学', '高级中学')"
     });
     expect(() => matchNatural('city', '查询南京市所有医院')).toThrow('当前仅支持');
   });
@@ -50,13 +54,18 @@ describe('数据查询条件', () => {
       expect(new Set(layer.fields.map(field => field.code)).size).toBe(layer.fields.length);
     }
     expect(QUERY_LAYERS.land[0].sourceLayer).toBe('czcdyd');
-    const group = queryLayerGroup(SCHOOL, {
-      id: 'one', layer: SCHOOL, conditions: "NAME LIKE '%小学&中学%'", mode: 'advanced',
-      scope: { kind: 'region', code: '320102' }, signature: ''
-    }, 'http://localhost/backend');
-    const source = group.sources['query-layer-source'];
+    const snapshot: QuerySnapshot = {
+      id: 'one',
+      layer: SCHOOL,
+      conditions: "NAME LIKE '%小学&中学%'",
+      mode: 'advanced',
+      scope: { kind: 'region', code: '320102' },
+      signature: ''
+    };
+    const source = queryLayerGroup(SCHOOL, snapshot, 'http://localhost/backend').sources['query-layer-source'];
     expect(source.type).toBe('vector');
-    const params = new URL(source.type === 'vector' ? source.tiles![0] : 'http://invalid/').searchParams;
+    const tile = source.type === 'vector' ? source.tiles?.[0] : undefined;
+    const params = new URL(required(tile, '查询图层的瓦片地址')).searchParams;
     expect(params.get('conditions')).toBe("NAME LIKE '%小学&中学%'");
     expect(params.get('xzqdm')).toBe('320102');
     expect(params.get('z')).toBe('{z}');

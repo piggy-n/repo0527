@@ -25,7 +25,7 @@ export function useQueryPreview() {
   const submitted = shallowRef<{ title: string; signature: string; mode: QueryMode }>();
   const layers = computed(() => LAYERS[module.value]);
   const layer = computed(() => layers.value.find(item => item.code === layerCode.value));
-  const title = computed(() => MODULES.find(item => item.value === module.value)!.label);
+  const title = computed(() => MODULES.find(item => item.value === module.value)?.label ?? '');
   const selectedField = computed(() => layer.value?.fields.find(item => item.code === fieldCode.value));
   const expression = computed(() => conditionCodes.value.filter(code => values[code]).map(code =>
     `${code} = '${values[code].replaceAll("'", "''")}'`
@@ -95,7 +95,7 @@ export function useQueryPreview() {
       error.value = '请填写查询条件';
       return;
     }
-    const modeName = MODES.find(item => item.value === mode.value)!.label;
+    const modeName = MODES.find(item => item.value === mode.value)?.label ?? '';
     submitted.value = {
       title: mode.value === 'natural' ? `${modeName} · 示例结果` :
         `${layer.value.label} · ${modeName} · ${mode.value === 'spatial' ? '所选范围' : region.value}`,

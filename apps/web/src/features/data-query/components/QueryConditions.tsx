@@ -1,15 +1,23 @@
 import { ArrowDown, ArrowUp, Close, Plus, RefreshLeft, Search, Upload } from '@element-plus/icons-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
 import {
-  ElButton, ElDatePicker, ElForm, ElFormItem, ElInput, ElOption, ElSegmented, ElSelect, ElTreeSelect
+  ElButton,
+  ElDatePicker,
+  ElForm,
+  ElFormItem,
+  ElInput,
+  ElOption,
+  ElSegmented,
+  ElSelect,
+  ElTreeSelect
 } from 'element-plus';
 import { defineComponent, type PropType, ref, watch } from 'vue';
 import { districtsOf, JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
-import { QUERY_MODES } from '../config';
-import { quoteValue } from '../conditions';
 import type { DataQuery } from '../composables/useDataQuery';
 import type { QueryDrawing } from '../composables/useQueryDrawing';
-import type { FieldValue, QueryCondition, QueryField, QueryMode, SpatialMethod } from '../types';
+import { quoteValue } from '../conditions';
+import { QUERY_MODES } from '../config';
+import type { FieldValue, QueryCondition, QueryField, QueryLayer, QueryMode, SpatialMethod } from '../types';
 import styles from './query.module.scss';
 
 // 目录只使用项目本地区划，不另发天地图请求
@@ -23,6 +31,8 @@ const REGION_OPTIONS = [{
   }))
 }];
 const OPERATORS = ['=', '<>', '>', '<', '>=', '<=', 'LIKE', 'AND', 'OR', 'NOT', '(', ')'];
+// 比较方式里显示成中文的运算符，其余原样显示
+const OPERATOR_LABELS: Readonly<Record<string, string>> = { LIKE: '包含', NOT: '不包含' };
 
 /** 四种查询共享面板与操作区，内容长时只滚动表单 */
 export const QueryConditions = defineComponent({
@@ -37,10 +47,14 @@ export const QueryConditions = defineComponent({
     const fieldCode = ref('');
     const expressionShown = ref(false);
     const fileInput = ref<HTMLInputElement>();
-    watch(() => props.model.layerCode.value, () => {
-      fieldCode.value = props.model.layer.value?.fields[0]?.code ?? '';
-      adding.value = false;
-    }, { immediate: true });
+    watch(
+      () => props.model.layerCode.value,
+      () => {
+        fieldCode.value = props.model.layer.value?.fields[0]?.code ?? '';
+        adding.value = false;
+      },
+      { immediate: true }
+    );
 
     function submit() {
       if (props.model.search() && props.compact) {
@@ -96,9 +110,8 @@ export const QueryConditions = defineComponent({
       );
     }
 
-    function renderAttribute() {
+    function renderAttribute({ fields }: QueryLayer) {
       const model = props.model;
-      const fields = model.layer.value!.fields;
       return (
         <>
           {model.conditions.value.length > 1 && (
@@ -111,7 +124,11 @@ export const QueryConditions = defineComponent({
             </ElFormItem>
           )}
           {model.conditions.value.map(condition => {
-            const field = fields.find(item => item.code === condition.code)!;
+            // 换图层时条件随之重置，找不到字段的条件不显示
+            const field = fields.find(item => item.code === condition.code);
+            if (!field) {
+              return null;
+            }
             return (
               <ElFormItem key={condition.code} label={field.label}>
                 <div class={styles.condition}>
@@ -126,7 +143,7 @@ export const QueryConditions = defineComponent({
                         <ElOption
                           key={operator}
                           value={operator}
-                          label={operator === 'LIKE' ? '包含' : operator === 'NOT' ? '不包含' : operator}
+                          label={OPERATOR_LABELS[operator] ?? operator}
                         />
                       ))}
                     </ElSelect>
@@ -167,7 +184,9 @@ export const QueryConditions = defineComponent({
               icon={Plus}
               disabled={model.conditions.value.length === fields.length}
               onClick={() => (adding.value = true)}
-            >添加查询条件</ElButton>
+            >
+              添加查询条件
+            </ElButton>
           )}
           <div class={styles.expression}>
             <ElButton link onClick={() => (expressionShown.value = !expressionShown.value)}>
@@ -179,9 +198,8 @@ export const QueryConditions = defineComponent({
       );
     }
 
-    function renderAdvanced() {
+    function renderAdvanced({ fields }: QueryLayer) {
       const model = props.model;
-      const fields = model.layer.value!.fields;
       const selected = fields.find(field => field.code === fieldCode.value);
       const append = (text: string) => (model.advanced.value += `${model.advanced.value ? ' ' : ''}${text}`);
       return (
@@ -235,6 +253,14 @@ export const QueryConditions = defineComponent({
           <p class={styles.hint}>只填写筛选条件，图层与行政区划使用上方选择。</p>
         </>
       );
+    }
+
+    function drawLabel() {
+      const { drawing } = props;
+      if (drawing.active.value) {
+        return '取消绘制';
+      }
+      return drawing.geometry.value ? '重新绘制' : '开始绘制';
     }
 
     function renderSpatial() {
@@ -291,7 +317,9 @@ export const QueryConditions = defineComponent({
                     }
                   }
                 }}
-              >{drawing.active.value ? '取消绘制' : drawing.geometry.value ? '重新绘制' : '开始绘制'}</ElButton>
+              >
+                {drawLabel()}
+              </ElButton>
               {drawing.geometry.value && <ElButton link onClick={drawing.clear}>清除范围</ElButton>}
               {drawing.error.value && <p role="alert" class={styles.error}>{drawing.error.value}</p>}
             </div>
@@ -300,15 +328,23 @@ export const QueryConditions = defineComponent({
       );
     }
 
+    function toggleIcon() {
+      if (props.compact) {
+        return Close;
+      }
+      return props.model.formOpen.value ? ArrowUp : ArrowDown;
+    }
+
     return () => {
       const model = props.model;
+      const currentLayer = model.layer.value;
       return (
         <MxPanel title="数据查询" class={styles.panel} headerTone="muted" floating flush={!model.formOpen.value}>
           {{
             actions: () => (
               <ElButton
                 link
-                icon={props.compact ? Close : model.formOpen.value ? ArrowUp : ArrowDown}
+                icon={toggleIcon()}
                 aria-label={model.formOpen.value ? '收起查询条件' : '展开查询条件'}
                 onClick={() => {
                   props.drawing.stop();
@@ -358,8 +394,8 @@ export const QueryConditions = defineComponent({
                     />
                   </ElFormItem>
                 )}
-                {model.mode.value === 'attribute' && renderAttribute()}
-                {model.mode.value === 'advanced' && renderAdvanced()}
+                {model.mode.value === 'attribute' && currentLayer && renderAttribute(currentLayer)}
+                {model.mode.value === 'advanced' && currentLayer && renderAdvanced(currentLayer)}
                 {model.mode.value === 'spatial' && renderSpatial()}
                 {model.mode.value === 'natural' && (
                   <>
@@ -380,7 +416,9 @@ export const QueryConditions = defineComponent({
                         class={styles.example}
                         key={example.text}
                         onClick={() => (model.natural.value = example.text)}
-                      >{example.text}</button>
+                      >
+                        {example.text}
+                      </button>
                     ))}
                     <p class={styles.hint}>当前支持以上示例，其他条件请使用属性或高级查询。</p>
                   </>
@@ -396,7 +434,9 @@ export const QueryConditions = defineComponent({
                   loading={model.loading.value}
                   disabled={model.busy.value}
                   onClick={submit}
-                >查询</ElButton>
+                >
+                  查询
+                </ElButton>
                 <ElButton icon={RefreshLeft} onClick={model.reset}>重置</ElButton>
               </div>
             ) : undefined

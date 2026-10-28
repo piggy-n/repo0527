@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, Close, Plus, RefreshLeft, Search, Upload } from '@e
 import { MxPanel, MxTitle } from '@yzt/ui';
 import { ElButton, ElForm, ElFormItem, ElInput, ElOption, ElSegmented, ElSelect } from 'element-plus';
 import { defineComponent, type PropType, ref, watch } from 'vue';
-import { MODES, type QueryMode } from './preview-data';
+import { MODES, type PreviewLayer, type QueryMode } from './preview-data';
 import type { QueryPreviewModel } from './useQueryPreview';
 import styles from './preview.module.scss';
 
@@ -23,7 +23,7 @@ export const QueryConditionsPreview = defineComponent({
       fileName.value = '';
     });
 
-    function renderAttribute() {
+    function renderAttribute({ fields }: PreviewLayer) {
       const model = props.model;
       return (
         <>
@@ -37,7 +37,10 @@ export const QueryConditionsPreview = defineComponent({
             </ElFormItem>
           )}
           {model.conditionCodes.value.map(code => {
-            const field = model.layer.value!.fields.find(item => item.code === code)!;
+            const field = fields.find(item => item.code === code);
+            if (!field) {
+              return null;
+            }
             return (
               <ElFormItem label={field.label} key={code}>
                 <div class={styles.condition}>
@@ -81,7 +84,7 @@ export const QueryConditionsPreview = defineComponent({
                 adding.value = false;
               }}
             >
-              {model.layer.value!.fields.filter(field => !model.conditionCodes.value.includes(field.code))
+              {fields.filter(field => !model.conditionCodes.value.includes(field.code))
                 .map(field => <ElOption label={field.label} value={field.code} key={field.code} />)}
             </ElSelect>
           ) : (
@@ -89,7 +92,7 @@ export const QueryConditionsPreview = defineComponent({
               link
               type="primary"
               icon={Plus}
-              disabled={model.conditionCodes.value.length === model.layer.value!.fields.length}
+              disabled={model.conditionCodes.value.length === fields.length}
               onClick={() => (adding.value = true)}
             >添加查询条件</ElButton>
           )}
@@ -103,7 +106,7 @@ export const QueryConditionsPreview = defineComponent({
       );
     }
 
-    function renderAdvanced() {
+    function renderAdvanced({ fields }: PreviewLayer) {
       const model = props.model;
       return (
         <>
@@ -114,7 +117,7 @@ export const QueryConditionsPreview = defineComponent({
                 modelValue={model.fieldCode.value}
                 onUpdate:modelValue={(value: string) => (model.fieldCode.value = value)}
               >
-                {model.layer.value!.fields.map(field => (
+                {fields.map(field => (
                   <ElOption label={`${field.label} · ${field.code}`} value={field.code} key={field.code} />
                 ))}
               </ElSelect>
@@ -242,8 +245,8 @@ export const QueryConditionsPreview = defineComponent({
                     </ElSelect>
                   </ElFormItem>
                 )}
-                {model.mode.value === 'attribute' && renderAttribute()}
-                {model.mode.value === 'advanced' && renderAdvanced()}
+                {model.mode.value === 'attribute' && model.layer.value && renderAttribute(model.layer.value)}
+                {model.mode.value === 'advanced' && model.layer.value && renderAdvanced(model.layer.value)}
                 {model.mode.value === 'spatial' && renderSpatial()}
                 {model.mode.value === 'natural' && (
                   <>

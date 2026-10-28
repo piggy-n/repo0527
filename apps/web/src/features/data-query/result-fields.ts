@@ -2,8 +2,15 @@ import type { QueryRecord } from './api';
 import type { QueryLayer } from './types';
 
 const COMMON_LABELS: Readonly<Record<string, string>> = {
-  guid: '要素主键', sjnf: '年份', areacode: '行政区代码', intersect_region_code: '相交区划代码',
-  region_code: '行政区代码', wybm: '唯一编码', bsm: '标识码', ysdm: '要素代码', bz: '备注'
+  guid: '要素主键',
+  sjnf: '年份',
+  areacode: '行政区代码',
+  intersect_region_code: '相交区划代码',
+  region_code: '行政区代码',
+  wybm: '唯一编码',
+  bsm: '标识码',
+  ysdm: '要素代码',
+  bz: '备注'
 };
 
 /** 几何单独用于地图，不把长坐标串放进表格 */

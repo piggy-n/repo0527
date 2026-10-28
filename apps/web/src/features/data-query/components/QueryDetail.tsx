@@ -7,6 +7,9 @@ import type { useQueryDetail } from '../composables/useQueryDetail';
 import { recordText, resultColumns } from '../result-fields';
 import styles from './query.module.scss';
 
+// 空值和表格的全局样式一致，显示"-"
+const EMPTY_VALUE = '-';
+
 /** 选中记录的完整属性；定位失败不隐藏已取得的属性 */
 export const QueryDetail = defineComponent({
   name: 'QueryDetail',
@@ -37,7 +40,8 @@ export const QueryDetail = defineComponent({
                 <dl class={styles.attributes}>
                   {resultColumns(props.model.submitted.value?.layer, [record]).map(column => (
                     <div key={column.code}>
-                      <dt>{column.label}</dt><dd>{recordText(record[column.code])}</dd>
+                      <dt>{column.label}</dt>
+                      <dd>{recordText(record[column.code]) || EMPTY_VALUE}</dd>
                     </div>
                   ))}
                 </dl>

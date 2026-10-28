@@ -3,7 +3,7 @@ import { computed, defineComponent, type PropType, toRef } from 'vue';
 import { useDataQuery } from '@/features/data-query/composables/useDataQuery';
 import { useQueryDetail } from '@/features/data-query/composables/useQueryDetail';
 import { useQueryDrawing } from '@/features/data-query/composables/useQueryDrawing';
-import { geometryGroup, queryLayerGroup } from '@/features/data-query/map-style';
+import { geometryGroup, queryLayerGroup, RESULT_COLOR, SELECTION_COLOR } from '@/features/data-query/map-style';
 import type { QueryModule } from '@/features/data-query/types';
 import { appConfig } from '@/shared/config/app-config';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
@@ -21,8 +21,17 @@ export const DataQueryPage = defineComponent({
   props: { module: { type: String as PropType<QueryModule>, required: true } },
   setup(props) {
     const map = provideMap({
-      groups: ['basemap', 'query-layer', 'query-results', 'query-selection', 'basemap-labels',
-        'boundaries', 'region', 'query-draw', 'measure'],
+      groups: [
+        'basemap',
+        'query-layer',
+        'query-results',
+        'query-selection',
+        'basemap-labels',
+        'boundaries',
+        'region',
+        'query-draw',
+        'measure'
+      ],
       camera: JIANGSU_CAMERA
     });
     const { goToDefaultView } = useDefaultView(map);
@@ -36,7 +45,8 @@ export const DataQueryPage = defineComponent({
     const model = useDataQuery(toRef(props, 'module'), drawing);
     const detail = useQueryDetail(map, model);
     const apiBase = new URL(appConfig.apiBaseUrl, window.location.origin).href.replace(/\/$/, '');
-    const selectedShapes = computed(() => detail.geometry.value ? [detail.geometry.value] : []);
+    const resultShapes = computed(() => model.shapes.value?.map(row => row.geom) ?? []);
+    const selectedShapes = computed(() => (detail.geometry.value ? [detail.geometry.value] : []));
     map.registerTools(drawing.tools);
     map.registerTools(location.tools);
     map.registerTools(measure.tools);
@@ -48,8 +58,8 @@ export const DataQueryPage = defineComponent({
       measure: measure.deriveGroup,
       'query-draw': drawing.deriveGroup,
       'query-layer': () => queryLayerGroup(model.layer.value, model.submitted.value, apiBase),
-      'query-results': () => geometryGroup('query-results', model.shapes.value?.map(row => row.geom) ?? [], '#577CFF'),
-      'query-selection': () => geometryGroup('query-selection', selectedShapes.value, '#FF9C40')
+      'query-results': () => geometryGroup('query-results', resultShapes.value, RESULT_COLOR),
+      'query-selection': () => geometryGroup('query-selection', selectedShapes.value, SELECTION_COLOR)
     });
     const mapTools = { basemap, boundaries, region, location, measure, goToDefaultView };
     return () => (
