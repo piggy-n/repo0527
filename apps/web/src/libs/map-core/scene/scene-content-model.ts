@@ -2,6 +2,7 @@ import type { CameraState } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 import { ModelEvents } from '../model-events';
 import type { Navigation } from './nav/nav-build';
+import type { NavPoint } from './nav/nav-grid';
 
 /** 瓦片集的光照：地面上的按太阳，地下、室内用以相机为光源的头灯（ADR 0081 第 3 节） */
 export type TilesetLighting = 'sun' | 'headlight';
@@ -65,6 +66,10 @@ export interface WalkRoam {
   readonly speed: number;
   readonly respawn: number;
   readonly unstuck: number;
+  /** 完整地图打开时暂停：不响应键鼠（ADR 0087） */
+  readonly paused: boolean;
+  /** 在完整地图上双击的瞬移：count 每次加 1，闪切到 spot（导航网格的局部系） */
+  readonly teleport: { readonly count: number; readonly spot: NavPoint } | null;
 }
 
 export type SceneRoam = RouteRoam | WalkRoam;
@@ -96,13 +101,27 @@ export type WalkPhase = 'entering' | 'walking' | 'failed';
  */
 export type WalkNotice = 'not-standable' | 'hidden' | 'blocked' | 'open' | 'no-open-ground';
 
-/** 视图报告的步行状态；notices 每来一条提示加 1，同样的提示再来一次也能看出来 */
+/** 步行中的人（导航网格的局部系）：位置和脚下的地板、朝向（局部偏航，弧度）、水平视场角（弧度）、点击移动的落点 */
+export interface WalkPlayer {
+  readonly x: number;
+  readonly y: number;
+  readonly floor: number;
+  readonly yaw: number;
+  readonly hfov: number;
+  readonly target: { readonly x: number; readonly y: number } | null;
+}
+
+/**
+ * 视图报告的步行状态；notices 每来一条提示加 1，同样的提示再来一次也能看出来；
+ * player 是人现在的位置和朝向，进到站内以后每帧变了就报告（小地图用，ADR 0087）
+ */
 export interface WalkRoamStatus {
   readonly kind: 'walk';
   readonly id: string;
   readonly phase: WalkPhase;
   readonly notice: WalkNotice | null;
   readonly notices: number;
+  readonly player: WalkPlayer | null;
 }
 
 export type RoamStatus = RouteRoamStatus | WalkRoamStatus;
@@ -126,7 +145,7 @@ interface SceneContentModelEvents {
 
 const isCount = (value: number) => Number.isInteger(value) && value >= 0;
 
-function validateWalk({ id, spawn, speed, respawn, unstuck }: WalkRoam): void {
+function validateWalk({ id, spawn, speed, respawn, unstuck, teleport }: WalkRoam): void {
   if (!(speed > 0 && Number.isFinite(speed))) {
     throw new Error(`步行 ${id} 的速度不是正数：${speed}`);
   }
@@ -135,6 +154,12 @@ function validateWalk({ id, spawn, speed, respawn, unstuck }: WalkRoam): void {
   }
   if (spawn && ![spawn.lng, spawn.lat, spawn.height, spawn.heading].every(Number.isFinite)) {
     throw new Error(`步行 ${id} 的出生点有不是数的坐标`);
+  }
+  if (teleport) {
+    const { count, spot } = teleport;
+    if (!isCount(count) || ![spot.x, spot.y, spot.floor].every(Number.isFinite)) {
+      throw new Error(`步行 ${id} 的瞬移次数不是非负整数，或者位置有不是数的坐标`);
+    }
   }
 }
 

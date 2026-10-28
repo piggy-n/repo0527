@@ -17,9 +17,11 @@ import { computed, defineComponent, nextTick, ref, shallowRef, watch } from 'vue
 import type { SceneModel } from '@/features/scene-models/catalog';
 import { useSceneModelsQuery } from '@/features/scene-models/queries';
 import { type NavGridResult, useNavGridBuild } from './useNavGridBuild';
+import { WalkMapPreview } from './WalkMapPreview';
 import styles from './DevNavGridPage.module.scss';
 
-// 导航网格的实测页（ADR 0085 第 6 节）：构建清单里模型的导航网格，按楼层看正北朝上、按区域着色的平面图，叠加预置路线
+// 导航网格的实测页（ADR 0085 第 6 节）：构建清单里模型的导航网格，按楼层看正北朝上、按区域着色的平面图，叠加预置路线；
+// 另有步行地图（小地图、完整地图）的组件预览（ADR 0087）
 
 /** 平面图每像素 0.2 米，同网格的格子 */
 const RES = 0.2;
@@ -104,6 +106,8 @@ export const DevNavGridPage = defineComponent({
     const levelIndex = ref(0);
     const showRoutes = ref(true);
     const zoom = ref<Zoom>('fit');
+    // 看平面图，还是步行地图的预览
+    const mode = ref<'plan' | 'walk'>('plan');
     const viewport = ref<HTMLElement>();
     const canvas = ref<HTMLCanvasElement>();
     const { width: viewportWidth } = useElementSize(viewport);
@@ -127,9 +131,10 @@ export const DevNavGridPage = defineComponent({
       levelIndex.value = 0;
       hover.value = null;
     });
+    // 换了楼层，或者从预览切回来、画布重新挂上时重画
     watch(
-      floor,
-      async image => {
+      [floor, canvas],
+      async ([image]) => {
         await nextTick();
         if (image) {
           canvas.value?.getContext('2d')?.putImageData(image.image, 0, 0);
@@ -323,6 +328,17 @@ export const DevNavGridPage = defineComponent({
             <ElButton type="primary" loading={building} disabled={!selected.value} onClick={startBuild}>
               构建导航网格
             </ElButton>
+            {current && (
+              <ElRadioGroup
+                modelValue={mode.value}
+                onUpdate:modelValue={(value: unknown) => {
+                  mode.value = value === 'walk' ? 'walk' : 'plan';
+                }}
+              >
+                <ElRadioButton value="plan">平面图</ElRadioButton>
+                <ElRadioButton value="walk">步行地图预览</ElRadioButton>
+              </ElRadioGroup>
+            )}
             <span class={styles.status}>{renderStatus()}</span>
           </header>
           <div class={styles.body}>
@@ -382,8 +398,12 @@ export const DevNavGridPage = defineComponent({
                 </section>
               )}
             </aside>
-            <section ref={viewport} class={styles.viewport}>
-              {renderMap()}
+            <section ref={viewport} class={[styles.viewport, mode.value === 'walk' && styles.previewHost]}>
+              {mode.value === 'walk' && current ? (
+                <WalkMapPreview result={current} model={selected.value} />
+              ) : (
+                renderMap()
+              )}
             </section>
           </div>
           <footer class={styles.readout}>{hover.value ?? '鼠标移到平面图上查看经纬度、地板高度和区域'}</footer>

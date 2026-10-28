@@ -4,6 +4,7 @@ import type {
   LngLat,
   MapPointerEvent,
   Navigation,
+  NavPoint,
   PickResult,
   PreparedTileset,
   RoutePath,
@@ -13,6 +14,7 @@ import type {
   Unsubscribe,
   WalkNotice,
   WalkPhase,
+  WalkPlayer,
   WalkSpawnPoint
 } from '@yzt/map-core';
 import type { OverlayLayer } from './overlay-plan';
@@ -78,6 +80,8 @@ export interface SceneEvents {
   walkphase: (phase: WalkPhase) => void;
   /** 步行中的提示 */
   walknotice: (notice: WalkNotice) => void;
+  /** 步行中人的位置、朝向变了（ADR 0087） */
+  walkplayer: (player: WalkPlayer) => void;
   /** 渲染出错，渲染循环已经停下：引擎失败 */
   failure: (error: unknown) => void;
 }
@@ -151,6 +155,10 @@ export interface SceneLike extends Disposable {
   respawnWalk(): void;
   /** 挪到附近开阔的地面；不用、没有时报告提示 */
   unstuckWalk(): void;
+  /** 闪切到 spot（导航网格的局部系） */
+  teleportWalk(spot: NavPoint): void;
+  /** 完整地图打开时暂停：不响应键鼠 */
+  setWalkPaused(paused: boolean): void;
   /** 结束步行，恢复视场角、相机控制和光标；back 为 true 时飞回开始前的位置 */
   stopWalk(back: boolean): void;
   setGestures(gestures: SceneGestures): void;

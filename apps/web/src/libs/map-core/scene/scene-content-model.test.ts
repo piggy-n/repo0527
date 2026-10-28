@@ -104,7 +104,8 @@ describe('SceneContentModel', () => {
     expect(model.current).toBe(valid);
   });
 
-  it('步行：速度是正数，回到出生点、脱困的次数是非负整数，出生点的坐标是数（ADR 0086）', () => {
+  it('步行：速度是正数，回到出生点、脱困、瞬移的次数是非负整数，出生点、瞬移的坐标是数（ADR 0086、0087）', () => {
+    const spot = { x: 1, y: 2, floor: -5 };
     using model = new SceneContentModel();
     const navigation = { grid: new NavGrid(labelRegions(buildNavGrid([triangles(floorQuad(0, 0, 4, 4, 0))]))), frame };
     const walk = (extra: Partial<WalkRoam> = {}): WalkRoam => ({
@@ -115,9 +116,11 @@ describe('SceneContentModel', () => {
       speed: 1.6,
       respawn: 0,
       unstuck: 0,
+      paused: false,
+      teleport: null,
       ...extra
     });
-    const walking = walk({ spawn: null, respawn: 2, unstuck: 1 });
+    const walking = walk({ spawn: null, respawn: 2, unstuck: 1, paused: true, teleport: { count: 3, spot } });
     const valid: SceneContent = { tilesets: [], underground: null, roam: walking };
     model.set(valid);
     expect(model.current).toBe(valid);
@@ -127,7 +130,9 @@ describe('SceneContentModel', () => {
       [walk({ speed: Number.NaN }), '速度不是正数'],
       [walk({ respawn: -1 }), '次数不是非负整数'],
       [walk({ unstuck: 0.5 }), '次数不是非负整数'],
-      [walk({ spawn: { lng: 120.666, lat: Number.NaN, height: -5.1, heading: 76 } }), '出生点有不是数的坐标']
+      [walk({ spawn: { lng: 120.666, lat: Number.NaN, height: -5.1, heading: 76 } }), '出生点有不是数的坐标'],
+      [walk({ teleport: { count: -1, spot } }), '瞬移次数不是非负整数'],
+      [walk({ teleport: { count: 1, spot: { ...spot, floor: Number.NaN } } }), '位置有不是数的坐标']
     ];
     for (const [invalidWalk, message] of invalid) {
       expect(() => model.set({ tilesets: [], underground: null, roam: invalidWalk })).toThrow(message);

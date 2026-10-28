@@ -1,11 +1,13 @@
 import {
   DEFAULT_WALK_SPEED,
   type Navigation,
+  type NavPoint,
   type RoamStatus,
   type RouteRoamStatus,
   type SceneContent,
   type TilesetStatus,
   type WalkNotice,
+  type WalkPlayer,
   type WalkRoamStatus,
   WALK_SPEEDS
 } from '@yzt/map-core';
@@ -21,6 +23,7 @@ import {
   toValue
 } from 'vue';
 import type { SceneModel } from '../catalog';
+import { type IndoorMap, indoorMapOf } from '../indoor-map/indoor-map';
 import { buildFraction, type LoadNavigation, loadNavigation as defaultLoadNavigation } from '../navigation';
 import {
   currentEffect,
@@ -115,6 +118,16 @@ export interface SceneModels {
   readonly setWalkSpeed: (speed: number) => void;
   readonly respawnWalk: () => void;
   readonly unstuckWalk: () => void;
+  /** 步行模型的室内地图（ADR 0087）：导航网格建好以后才有 */
+  readonly indoorMap: ComputedRef<IndoorMap | null>;
+  /** 视图报告的人的位置和朝向：进到站内以后才有 */
+  readonly walkPlayer: ComputedRef<WalkPlayer | null>;
+  /** 完整地图打开着：步行暂停 */
+  readonly mapOpen: ComputedRef<boolean>;
+  readonly openMap: () => void;
+  readonly closeMap: () => void;
+  /** 在完整地图上双击：闪切到 spot（导航网格的局部系），关掉完整地图 */
+  readonly teleportWalk: (spot: NavPoint) => void;
   /** 结束漫游（步行时还在建的导航网格一并中止）；地下的模型保留钻地 */
   readonly exitRoam: () => void;
   /** 绑定给会话的推导函数（ADR 0081 第 2 节） */
@@ -420,6 +433,8 @@ export function useSceneModels(
       if (signal.aborted) {
         return;
       }
+      // 楼层和着色也在分析站内空间时算好，进到站内再算会顿一下
+      indoorMapOf(navigation);
       building = null;
       walkBuild.value = null;
       navigations.value = new Map([...navigations.value, [model.id, navigation]]);
@@ -445,7 +460,9 @@ export function useSceneModels(
       id: `${id}/walk/${++roamCount}`,
       speed: walkSpeed,
       respawn: 0,
-      unstuck: 0
+      unstuck: 0,
+      paused: false,
+      teleport: null
     };
     beginRoam(model, choice);
     if (!navigations.value.has(id)) {
@@ -490,6 +507,35 @@ export function useSceneModels(
     roam.value = { ...current, unstuck: current.unstuck + 1 };
   };
 
+  const indoorMap = computed((): IndoorMap | null => {
+    const current = roam.value;
+    const navigation = current?.kind === 'walk' ? navigations.value.get(current.modelId) : undefined;
+    return navigation ? indoorMapOf(navigation) : null;
+  });
+
+  const walkPlayer = computed(() => walkStatus.value?.player ?? null);
+
+  const mapOpen = computed(() => roam.value?.kind === 'walk' && roam.value.paused);
+
+  // 完整地图只在进到站内以后打开；打开、关上时暂停、继续步行
+  const setMapOpen = (open: boolean) => {
+    const current = currentWalk();
+    if (open && walkStage.value?.kind !== 'walking') {
+      throw new Error('还没有进到站内，不能打开完整地图');
+    }
+    if (current.paused !== open) {
+      roam.value = { ...current, paused: open };
+    }
+  };
+
+  const teleportWalk = (spot: NavPoint) => {
+    const current = currentWalk();
+    if (![spot.x, spot.y, spot.floor].every(Number.isFinite)) {
+      throw new Error(`瞬移的位置有不是数的坐标：${spot.x}, ${spot.y}, ${spot.floor}`);
+    }
+    roam.value = { ...current, paused: false, teleport: { count: (current.teleport?.count ?? 0) + 1, spot } };
+  };
+
   const state = (): SceneModelsState => ({
     loaded: loaded.value,
     effects: effects.value,
@@ -528,6 +574,12 @@ export function useSceneModels(
     setWalkSpeed,
     respawnWalk,
     unstuckWalk,
+    indoorMap,
+    walkPlayer,
+    mapOpen,
+    openMap: () => setMapOpen(true),
+    closeMap: () => setMapOpen(false),
+    teleportWalk,
     exitRoam,
     deriveContent: () => deriveSceneContent(models.value, state())
   };

@@ -111,6 +111,13 @@
   overflow: auto;
 }
 
+// 步行地图预览：占满右边，不滚动
+.previewHost {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .empty {
   color: var(--color-text-secondary);
 }

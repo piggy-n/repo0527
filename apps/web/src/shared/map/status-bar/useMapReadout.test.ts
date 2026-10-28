@@ -163,16 +163,16 @@ describe('useMapReadout 的第一视角（ADR 0086 第 5 节）', () => {
     ctx.view.value = ctx.sceneViewport;
     expect(ctx.readout.firstPerson.value).toBeNull();
 
-    ctx.roamStatus.value = { kind: 'walk', id: 'walk-1', phase: 'entering', notice: null, notices: 0 };
+    ctx.roamStatus.value = { kind: 'walk', id: 'walk-1', phase: 'entering', notice: null, notices: 0, player: null };
     expect(ctx.readout.firstPerson.value).toBeNull();
-    ctx.roamStatus.value = { kind: 'walk', id: 'walk-1', phase: 'walking', notice: null, notices: 0 };
+    ctx.roamStatus.value = { kind: 'walk', id: 'walk-1', phase: 'walking', notice: null, notices: 0, player: null };
     expect(ctx.readout.firstPerson.value).toStrictEqual({ heading: 0 });
 
     ctx.eye.heading = 75.6;
     ctx.camera.value = { ...ctx.camera.value, bearing: 76 };
     expect(ctx.readout.firstPerson.value).toStrictEqual({ heading: 76 });
 
-    ctx.roamStatus.value = { kind: 'walk', id: 'walk-1', phase: 'failed', notice: null, notices: 0 };
+    ctx.roamStatus.value = { kind: 'walk', id: 'walk-1', phase: 'failed', notice: null, notices: 0, player: null };
     expect(ctx.readout.firstPerson.value).toBeNull();
     ctx.roamStatus.value = { kind: 'route', id: 'enter', run: 0, distance: 0, total: 10, finished: false };
     expect(ctx.readout.firstPerson.value).toBeNull();

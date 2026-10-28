@@ -1,0 +1,48 @@
+// 步行地图的预览：上面一行说明和读数，下面是代替三维画面的舞台，小地图在右上角（同真实页面的位置）
+
+.preview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-height: 0;
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+}
+
+.readout {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-strong);
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 420px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: linear-gradient(var(--color-text-regular), var(--color-text-title));
+}
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-lg);
+  pointer-events: none;
+}
+
+.minimap {
+  position: absolute;
+  top: var(--space-lg);
+  right: var(--space-lg);
+}

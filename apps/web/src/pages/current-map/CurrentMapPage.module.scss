@@ -105,6 +105,18 @@
   grid-column: 1 / 3;
 }
 
+// 步行时的小地图在右上角，横跨中间一列和工具栏一列靠右（ADR 0087）
+.minimap {
+  grid-row: 1;
+  grid-column: 2 / 4;
+  justify-self: end;
+  align-self: start;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
 // 状态栏位于资源面板右侧，底图入口移至最右列
 .bottom {
   grid-row: 3;

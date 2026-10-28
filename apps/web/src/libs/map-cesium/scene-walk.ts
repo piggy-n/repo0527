@@ -2,6 +2,7 @@ import {
   chooseSpawn,
   type ClickResolution,
   headingToYaw,
+  type NavPoint,
   planMove,
   type Point3,
   resolveClick,
@@ -13,6 +14,7 @@ import {
   WALK_KEYS,
   type WalkNotice,
   type WalkPhase,
+  type WalkPlayer,
   type WalkPose
 } from '@yzt/map-core';
 import {
@@ -59,6 +61,8 @@ const WHEEL_PAGE = 600;
 export interface SceneWalkEvents {
   readonly phase: (phase: WalkPhase) => void;
   readonly notice: (notice: WalkNotice) => void;
+  /** 人的位置、朝向、视场角或落点变了 */
+  readonly player: (player: WalkPlayer) => void;
   /** 换竖直视场角（弧度）；null 换回场景默认的 */
   readonly setFovy: (fovy: number | null) => void;
 }
@@ -156,6 +160,10 @@ export class SceneWalk implements Disposable {
   #hoverTimer: ReturnType<typeof setTimeout> | undefined;
   #blink: Blink | null = null;
   #rendering = true;
+  // 完整地图打开时暂停：不响应键鼠（ADR 0087）
+  #paused = false;
+  // 上次报告的人
+  #reported: WalkPlayer | null = null;
 
   constructor(widget: CesiumWidget, events: SceneWalkEvents) {
     this.#widget = widget;
@@ -239,6 +247,26 @@ export class SceneWalk implements Disposable {
       this.#blinkTo(() => walking.walker.placeAt(result.spot));
     } else {
       this.#events.notice(result.kind === 'open' ? 'open' : 'no-open-ground');
+    }
+  }
+
+  /** 闪切到 spot（完整地图上双击的位置） */
+  teleport(spot: NavPoint): void {
+    const walking = this.#walking;
+    if (walking?.phase === 'walking') {
+      this.#blinkTo(() => walking.walker.placeAt(spot));
+    }
+  }
+
+  /** 完整地图打开时暂停：忘掉按着的键、拖动和悬停，不再响应键鼠；点击移动的路径照常走完 */
+  setPaused(paused: boolean): void {
+    this.#paused = paused;
+    if (paused) {
+      this.#keys.clear();
+      this.#press = null;
+      this.#look = null;
+      this.#hover = null;
+      this.#setCursor('');
     }
   }
 
@@ -350,6 +378,7 @@ export class SceneWalk implements Disposable {
     // 要在本帧挪相机之前：深度拾取读的是上一帧的深度，得配上一帧的相机
     this.#updateHover(now);
     this.#applyCamera(walking);
+    this.#reportPlayer(walking);
     const marked = this.#marker?.update(now) ?? false;
     if (this.#keys.size > 0 || moving || settling || zooming || marked) {
       this.#widget.scene.requestRender();
@@ -371,6 +400,34 @@ export class SceneWalk implements Disposable {
     this.#events.setFovy(this.#fovy);
     this.#revision++;
     return true;
+  }
+
+  // 人的位置、朝向、视场角、落点变了才报告；水平视场角按画布的宽高比由竖直的换算
+  #reportPlayer({ walker }: Walking): void {
+    const { x, y, floor } = walker.position;
+    const destination = walker.destination;
+    const { canvas } = this.#widget;
+    const aspect = canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 1;
+    const player: WalkPlayer = {
+      x,
+      y,
+      floor,
+      yaw: walker.yaw,
+      hfov: 2 * Math.atan(Math.tan(this.#fovy / 2) * aspect),
+      target: destination ? { x: destination.x, y: destination.y } : null
+    };
+    const last = this.#reported;
+    const same =
+      last !== null &&
+      [last.x - x, last.y - y, last.floor - floor, last.yaw - player.yaw, last.hfov - player.hfov].every(
+        difference => Math.abs(difference) < 1e-4
+      ) &&
+      last.target?.x === player.target?.x &&
+      last.target?.y === player.target?.y;
+    if (!same) {
+      this.#reported = player;
+      this.#events.player(player);
+    }
   }
 
   // 没动就不改相机，免得每帧都触发相机变化
@@ -429,6 +486,7 @@ export class SceneWalk implements Disposable {
   #onKeyDown(event: KeyboardEvent): void {
     if (
       !this.#rendering ||
+      this.#paused ||
       event.ctrlKey ||
       event.metaKey ||
       event.altKey ||
@@ -446,6 +504,9 @@ export class SceneWalk implements Disposable {
 
   #onPointerDown(event: PointerEvent): void {
     swallow(event);
+    if (this.#paused) {
+      return;
+    }
     if (event.button === 0) {
       const position = this.#canvasPoint(event);
       this.#press = {
@@ -474,6 +535,9 @@ export class SceneWalk implements Disposable {
       press.moved = Math.max(press.moved, Math.hypot(event.clientX - press.x, event.clientY - press.y));
     }
     const look = this.#look;
+    if (this.#paused) {
+      return;
+    }
     if (!look) {
       this.#hover = { position: this.#canvasPoint(event), dirty: true, revision: -1 };
       this.#updateHover(performance.now());
@@ -528,7 +592,7 @@ export class SceneWalk implements Disposable {
 
   #onWheel(event: WheelEvent): void {
     swallow(event);
-    if (this.#blink) {
+    if (this.#blink || this.#paused) {
       return;
     }
     const scale = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? WHEEL_LINE : 1;
@@ -709,6 +773,8 @@ export class SceneWalk implements Disposable {
     this.#marker?.[Symbol.dispose]();
     this.#marker = null;
     this.#walking = null;
+    this.#reported = null;
+    this.#paused = false;
     this.#keys.clear();
     this.#press = null;
     this.#look = null;

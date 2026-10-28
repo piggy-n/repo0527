@@ -1,0 +1,97 @@
+// 步行时的小地图：右上角 180 × 180，浮层样式同地图上的面板；层名在左上，比例尺在左下，缩放在右下
+
+.minimap {
+  position: relative;
+  box-sizing: border-box;
+  width: 180px;
+  height: 180px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: zoom-in;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: -2px;
+  }
+}
+
+// 层名和比例尺压在地图上，不挡点击
+.level,
+.scale {
+  position: absolute;
+  left: 8px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-mask);
+  color: var(--color-text-strong);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  pointer-events: none;
+}
+
+.level {
+  top: 8px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.scale {
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+
+  i {
+    height: 4px;
+    border: 1px solid var(--color-text-strong);
+    border-top: 0;
+  }
+}
+
+.zoom {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.zoomButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text-regular);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
+  }
+}

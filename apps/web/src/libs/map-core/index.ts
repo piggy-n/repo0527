@@ -45,6 +45,7 @@ export {
   type UndergroundView,
   type WalkNotice,
   type WalkPhase,
+  type WalkPlayer,
   type WalkRoam,
   type WalkRoamStatus,
   type WalkSpawnPoint

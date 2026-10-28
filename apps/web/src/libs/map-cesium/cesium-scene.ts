@@ -3,6 +3,7 @@ import type {
   ClientPoint,
   LngLat,
   MapPointerEvent,
+  NavPoint,
   PickResult,
   PreparedTileset,
   RoutePath,
@@ -221,6 +222,7 @@ export class CesiumScene implements SceneLike {
       new SceneWalk(widget, {
         phase: phase => this.#emitter.emit('walkphase', phase),
         notice: notice => this.#emitter.emit('walknotice', notice),
+        player: player => this.#emitter.emit('walkplayer', player),
         setFovy: fovy => {
           this.#fovy = fovy ?? MAPLIBRE_FOVY;
           this.#applyFov();
@@ -556,6 +558,14 @@ export class CesiumScene implements SceneLike {
 
   unstuckWalk(): void {
     this.#walk.unstuck();
+  }
+
+  teleportWalk(spot: NavPoint): void {
+    this.#walk.teleport(spot);
+  }
+
+  setWalkPaused(paused: boolean): void {
+    this.#walk.setPaused(paused);
   }
 
   stopWalk(back: boolean): void {

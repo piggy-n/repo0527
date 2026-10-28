@@ -32,6 +32,7 @@ import {
   type ViewState,
   type WalkNotice,
   type WalkPhase,
+  type WalkPlayer,
   type WalkRoam,
   type WalkRoamStatus
 } from '@yzt/map-core';
@@ -233,6 +234,7 @@ export class CesiumView<const G extends string> implements MapView {
       scene.on('routeend', () => this.#onRouteEnd()),
       scene.on('walkphase', phase => this.#onWalkPhase(phase)),
       scene.on('walknotice', notice => this.#onWalkNotice(notice)),
+      scene.on('walkplayer', player => this.#onWalkPlayer(player)),
       scene.on('failure', error => this.#fail(error))
     ]) {
       stack.defer(unsubscribe);
@@ -748,9 +750,12 @@ export class CesiumView<const G extends string> implements MapView {
     }
     this.#roam = { kind: 'walk', roam: wanted, detached: false };
     // 先报告进场：找不到出生点时，场景在 startWalk 里就报告 failed
-    this.#publishRoam({ kind: 'walk', id: wanted.id, phase: 'entering', notice: null, notices: 0 });
+    this.#publishRoam({ kind: 'walk', id: wanted.id, phase: 'entering', notice: null, notices: 0, player: null });
     const { navigation, spawn, speed } = wanted;
     scene.startWalk({ navigation, spawn, speed });
+    if (wanted.paused) {
+      scene.setWalkPaused(true);
+    }
   }
 
   #updateRoute(scene: SceneLike, entry: Extract<RoamEntry, { kind: 'route' }>, wanted: RouteRoam): void {
@@ -769,7 +774,7 @@ export class CesiumView<const G extends string> implements MapView {
     }
   }
 
-  // 速度随时生效；回到出生点、脱困的计数变了就做一次
+  // 速度、暂停随时生效；回到出生点、脱困、瞬移的计数变了就做一次
   #updateWalk(scene: SceneLike, entry: Extract<RoamEntry, { kind: 'walk' }>, wanted: WalkRoam): void {
     const previous = entry.roam;
     entry.roam = wanted;
@@ -784,6 +789,12 @@ export class CesiumView<const G extends string> implements MapView {
     }
     if (wanted.unstuck !== previous.unstuck) {
       scene.unstuckWalk();
+    }
+    if (wanted.paused !== previous.paused) {
+      scene.setWalkPaused(wanted.paused);
+    }
+    if (wanted.teleport && wanted.teleport.count !== previous.teleport?.count) {
+      scene.teleportWalk(wanted.teleport.spot);
     }
   }
 
@@ -839,6 +850,13 @@ export class CesiumView<const G extends string> implements MapView {
     const status = this.#walkStatus();
     if (status && status.phase !== phase) {
       this.#publishRoam({ ...status, phase });
+    }
+  }
+
+  #onWalkPlayer(player: WalkPlayer): void {
+    const status = this.#walkStatus();
+    if (status) {
+      this.#publishRoam({ ...status, player });
     }
   }
 

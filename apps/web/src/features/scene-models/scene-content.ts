@@ -1,4 +1,4 @@
-import type { Navigation, SceneContent, SceneRoam, TilesetLayer, TilesetStatus } from '@yzt/map-core';
+import type { Navigation, NavPoint, SceneContent, SceneRoam, TilesetLayer, TilesetStatus } from '@yzt/map-core';
 import type { SceneModel } from './catalog';
 
 /** 钻地观察：哪个模型，地表不透明度 0～0.6（ADR 0078 第 5 节、ADR 0081 第 6 节） */
@@ -21,7 +21,10 @@ export interface RouteChoice {
   readonly run: number;
 }
 
-/** 步行（ADR 0086）：哪个模型、速度（米/秒），回到出生点、脱困的次数；导航网格建好以前不交给会话 */
+/**
+ * 步行（ADR 0086）：哪个模型、速度（米/秒），回到出生点、脱困的次数；完整地图打开时暂停，在上面双击的瞬移（ADR 0087）。
+ * 导航网格建好以前不交给会话
+ */
 export interface WalkChoice {
   readonly kind: 'walk';
   readonly modelId: string;
@@ -29,6 +32,8 @@ export interface WalkChoice {
   readonly speed: number;
   readonly respawn: number;
   readonly unstuck: number;
+  readonly paused: boolean;
+  readonly teleport: { readonly count: number; readonly spot: NavPoint } | null;
 }
 
 export type RoamChoice = RouteChoice | WalkChoice;
@@ -119,8 +124,9 @@ function roamOf(
   }
   if (roam.kind === 'walk') {
     const navigation = navigations.get(model.id);
-    const { id, speed, respawn, unstuck } = roam;
-    return navigation ? { kind: 'walk', id, navigation, spawn: model.spawn ?? null, speed, respawn, unstuck } : null;
+    const { id, speed, respawn, unstuck, paused, teleport } = roam;
+    const spawn = model.spawn ?? null;
+    return navigation ? { kind: 'walk', id, navigation, spawn, speed, respawn, unstuck, paused, teleport } : null;
   }
   const route = model.routes.find(item => item.id === roam.routeId);
   if (!route) {

@@ -122,7 +122,8 @@ function mountPanel(catalog: readonly SceneModel[] | null = CATALOG) {
   // 步行时视图报告的阶段和提示
   const walk = (phase: 'entering' | 'walking' | 'failed', notice: WalkNotice | null = null, notices = 0) => {
     const roam = owner?.roam.value;
-    roamStatus.value = roam?.kind === 'walk' ? { kind: 'walk', id: roam.id, phase, notice, notices } : null;
+    roamStatus.value =
+      roam?.kind === 'walk' ? { kind: 'walk', id: roam.id, phase, notice, notices, player: null } : null;
     return nextTick();
   };
   const ownerOf = required(owner, '页面没有创建拥有者');

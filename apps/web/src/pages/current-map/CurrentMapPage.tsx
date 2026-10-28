@@ -13,6 +13,8 @@ import { useResourcePanelLayout } from '@/features/resource-map/composables/useR
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
 import { useResourceCatalogQuery } from '@/features/resource-map/queries';
 import { SceneModelPanel } from '@/features/scene-models/components/SceneModelPanel';
+import { IndoorMapDialog } from '@/features/scene-models/components/IndoorMapDialog';
+import { IndoorMinimap } from '@/features/scene-models/components/IndoorMinimap';
 import { RoamBar } from '@/features/scene-models/components/RoamBar';
 import { UndergroundBar } from '@/features/scene-models/components/UndergroundBar';
 import { useSceneModels } from '@/features/scene-models/composables/useSceneModels';
@@ -236,14 +238,18 @@ export const CurrentMapPage = defineComponent({
         models.exitRoam();
       }
     });
-    // Esc 退出漫游（路线和步行）；空格开始、暂停或继续路线，焦点在输入框、按钮上时不拦截；页面停用期间不响应
+    // Esc 先关站内地图，再退出漫游（路线和步行）；空格开始、暂停或继续路线，焦点在输入框、按钮上时不拦截；页面停用期间不响应
     const pageActive = usePageActive();
     useEventListener(window, 'keydown', (event: KeyboardEvent) => {
       if (!pageActive.value || models.roam.value === null) {
         return;
       }
       if (event.key === 'Escape') {
-        models.exitRoam();
+        if (models.mapOpen.value) {
+          models.closeMap();
+        } else {
+          models.exitRoam();
+        }
         return;
       }
       const phase = models.routePhase.value;
@@ -317,6 +323,10 @@ export const CurrentMapPage = defineComponent({
       // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示；地下空间时区划不适用
       const scopeShown = (!phone || !sides.left.value) && !underground;
       const scene = map.dimension.value === '3d';
+      const indoorMap = models.indoorMap.value;
+      const walkPlayer = models.walkPlayer.value;
+      // 手机宽度时资源面板展开，小地图会压在面板上，同区划条一样先不显示（ADR 0087）
+      const minimapShown = !phone || !sides.left.value;
       return (
         <div
           ref={root}
@@ -422,6 +432,12 @@ export const CurrentMapPage = defineComponent({
                 <UndergroundBar models={models} />
               </div>
             )}
+            {/* 步行时的小地图在右上角：地下空间时那里的工具栏、功能面板都隐藏了（ADR 0087） */}
+            {scene && indoorMap && walkPlayer && minimapShown && (
+              <div class={styles.minimap}>
+                <IndoorMinimap map={indoorMap} player={walkPlayer} onOpen={models.openMap} />
+              </div>
+            )}
             <div class={styles.bottom}>
               <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
             </div>
@@ -452,6 +468,14 @@ export const CurrentMapPage = defineComponent({
               </div>
             </div>
           </div>
+          {scene && indoorMap && walkPlayer && models.mapOpen.value && (
+            <IndoorMapDialog
+              map={indoorMap}
+              player={walkPlayer}
+              onTeleport={models.teleportWalk}
+              onClose={models.closeMap}
+            />
+          )}
           <MapStatusNotice />
         </div>
       );

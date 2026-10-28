@@ -5,7 +5,8 @@ import {
   EYE_HEIGHT,
   type PreparedTileset,
   RoutePath,
-  type WalkPhase
+  type WalkPhase,
+  type WalkPlayer
 } from '@yzt/map-core';
 import type { GeoJSON, Position } from 'geojson';
 import { Cartesian3, Matrix4, Transforms } from 'cesium';
@@ -654,6 +655,38 @@ describe('CesiumScene', () => {
 
     scene.stopWalk(true);
     await expect(waitForFrames(() => Math.abs(scene.eyeHeight() - startHeight) < 1)).resolves.toBe('ok');
+  }, 60000);
+
+  it('步行：报告人的位置；完整地图打开（暂停）时按键不走；瞬移闪切到指定的位置（ADR 0087）', async () => {
+    const scene = createScene();
+    const navigation = await walkRoom(scene);
+    scene.jumpTo({ center: MODEL_AT, zoom: 15, bearing: 0, pitch: 50 });
+    const phases: WalkPhase[] = [];
+    const players: WalkPlayer[] = [];
+    scene.on('walkphase', phase => phases.push(phase));
+    scene.on('walkplayer', player => players.push(player));
+
+    scene.startWalk({ navigation, spawn: { lng: MODEL_AT[0], lat: MODEL_AT[1], height: -6, heading: 90 }, speed: 4 });
+    await expect(waitForFrames(() => phases.includes('walking') && players.length > 0)).resolves.toBe('ok');
+    const first = players.at(-1);
+    expect(first).toMatchObject({ floor: -6, target: null });
+    expect(first?.yaw).toBeCloseTo(Math.PI / 2, 6);
+    // 960 × 640 的画布、竖直 60°：水平视场角约 81°
+    expect(first?.hfov).toBeCloseTo(2 * Math.atan(Math.tan(Math.PI / 6) * 1.5), 6);
+    const start = enuOf(scene);
+
+    scene.setWalkPaused(true);
+    pressKey('keydown', 'KeyW');
+    await failingFrames(30, () => true);
+    pressKey('keyup', 'KeyW');
+    expect(enuOf(scene).x).toBeCloseTo(start.x, 3);
+
+    scene.setWalkPaused(false);
+    scene.teleportWalk({ x: 3, y: -3, floor: -6 });
+    await expect(
+      waitForFrames(() => Math.abs(enuOf(scene).x - 3) < 0.01 && Math.abs(enuOf(scene).y + 3) < 0.01)
+    ).resolves.toBe('ok');
+    expect(players.at(-1)).toMatchObject({ x: 3, y: -3, floor: -6 });
   }, 60000);
 
   it('路线漫游中直接开始步行：结束步行时回到开始路线前的位置，不是路线上', async () => {

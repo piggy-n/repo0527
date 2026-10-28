@@ -6,6 +6,7 @@ import {
   MapSession,
   NavGrid,
   navigationFrame,
+  type NavPoint,
   type PreparedTileset,
   type RoamStatus,
   type RoutePath,
@@ -190,6 +191,14 @@ class FakeScene implements SceneLike {
 
   unstuckWalk(): void {
     this.walkCalls.push('unstuck');
+  }
+
+  teleportWalk({ x, y, floor }: NavPoint): void {
+    this.walkCalls.push(`teleport ${x},${y},${floor}`);
+  }
+
+  setWalkPaused(paused: boolean): void {
+    this.walkCalls.push(`paused ${paused}`);
   }
 
   stopWalk(back: boolean): void {
@@ -1199,6 +1208,8 @@ const walkRoam = (extra: Partial<WalkRoam> = {}): WalkRoam => ({
   speed: 1.6,
   respawn: 0,
   unstuck: 0,
+  paused: false,
+  teleport: null,
   ...extra
 });
 
@@ -1210,16 +1221,18 @@ describe('CesiumView 的步行（ADR 0086）', () => {
     roam(walkRoam());
     await settle();
     expect(scene.walk).toStrictEqual({ navigation, spawn: walkRoam().spawn, speed: 1.6 });
-    expect(statuses).toStrictEqual([{ kind: 'walk', id: 'walk-1', phase: 'entering', notice: null, notices: 0 }]);
+    expect(statuses).toStrictEqual([
+      { kind: 'walk', id: 'walk-1', phase: 'entering', notice: null, notices: 0, player: null }
+    ]);
 
     scene.emit('walkphase', 'walking');
     scene.emit('walknotice', 'blocked');
     scene.emit('walknotice', 'blocked');
 
     expect(statuses.slice(1)).toStrictEqual([
-      { kind: 'walk', id: 'walk-1', phase: 'walking', notice: null, notices: 0 },
-      { kind: 'walk', id: 'walk-1', phase: 'walking', notice: 'blocked', notices: 1 },
-      { kind: 'walk', id: 'walk-1', phase: 'walking', notice: 'blocked', notices: 2 }
+      { kind: 'walk', id: 'walk-1', phase: 'walking', notice: null, notices: 0, player: null },
+      { kind: 'walk', id: 'walk-1', phase: 'walking', notice: 'blocked', notices: 1, player: null },
+      { kind: 'walk', id: 'walk-1', phase: 'walking', notice: 'blocked', notices: 2, player: null }
     ]);
     expect(view.roamStatus).toStrictEqual(statuses.at(-1));
   });
@@ -1298,5 +1311,49 @@ describe('CesiumView 的步行（ADR 0086）', () => {
 
     expect(scene.walkCalls).toStrictEqual(['start', 'stop false']);
     expect(statuses.map(status => status?.kind === 'walk' && status.phase)).toStrictEqual(['entering', false]);
+  });
+});
+
+describe('CesiumView 步行时的小地图与完整地图（ADR 0087）', () => {
+  const player = { x: 5, y: 6, floor: -5, yaw: 0.3, hfov: 1.6, target: null };
+
+  it('场景报告的人的位置写进步行状态；被别的定位接管后不再算数', async () => {
+    const { scene, view, statuses, roam } = roamSetup();
+    await view.whenReady();
+    roam(walkRoam());
+    await settle();
+
+    scene.emit('walkplayer', player);
+    expect(view.roamStatus).toMatchObject({ kind: 'walk', player });
+
+    view.flyTo({ center: [119, 32], zoom: 10 });
+    scene.emit('walkplayer', { ...player, x: 9 });
+    expect(statuses.at(-1)).toMatchObject({ player: { x: 5 } });
+  });
+
+  it('暂停变了就告诉场景；瞬移的计数变了才闪切一次；一开始就暂停的步行开始后立即暂停', async () => {
+    const { scene, view, roam } = roamSetup();
+    await view.whenReady();
+    roam(walkRoam());
+    await settle();
+    const spot = { x: 3, y: 4, floor: -10 };
+
+    roam(walkRoam({ paused: true }));
+    await settle();
+    roam(walkRoam({ paused: false, teleport: { count: 1, spot } }));
+    await settle();
+    roam(walkRoam({ paused: false, teleport: { count: 1, spot } }));
+    await settle();
+    roam(walkRoam({ id: 'walk-2', paused: true }));
+    await settle();
+
+    expect(scene.walkCalls).toStrictEqual([
+      'start',
+      'paused true',
+      'paused false',
+      'teleport 3,4,-10',
+      'start',
+      'paused true'
+    ]);
   });
 });

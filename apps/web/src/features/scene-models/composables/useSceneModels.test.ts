@@ -373,16 +373,18 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
       spawn: { lng: 120.666, lat: 31.3175, height: -5.1, heading: 76 },
       speed: 1.6,
       respawn: 0,
-      unstuck: 0
+      unstuck: 0,
+      paused: false,
+      teleport: null
     });
 
-    ctx.roamStatus.value = { kind: 'walk', id: 'other', phase: 'walking', notice: 'blocked', notices: 1 };
+    ctx.roamStatus.value = { kind: 'walk', id: 'other', phase: 'walking', notice: 'blocked', notices: 1, player: null };
     expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'entering' });
     expect(ctx.owner.walkNotice.value).toBeNull();
-    ctx.roamStatus.value = { kind: 'walk', id, phase: 'walking', notice: 'blocked', notices: 1 };
+    ctx.roamStatus.value = { kind: 'walk', id, phase: 'walking', notice: 'blocked', notices: 1, player: null };
     expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'walking' });
     expect(ctx.owner.walkNotice.value).toStrictEqual({ notice: 'blocked', count: 1 });
-    ctx.roamStatus.value = { kind: 'walk', id, phase: 'failed', notice: null, notices: 1 };
+    ctx.roamStatus.value = { kind: 'walk', id, phase: 'failed', notice: null, notices: 1, player: null };
     expect(ctx.owner.walkStage.value).toStrictEqual({ kind: 'failed', reason: 'spawn' });
   });
 
@@ -464,5 +466,52 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
     expect(ctx.owner.roam.value).toMatchObject({ kind: 'route' });
     expect(ctx.builds[1]?.signal.aborted).toBe(true);
     expect(ctx.owner.walkStage.value).toBeNull();
+  });
+});
+
+describe('useSceneModels 步行时的地图（ADR 0087）', () => {
+  it('导航网格建好以后有室内地图；进到站内以后才能打开完整地图，打开时步行暂停', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.ready('station');
+    ctx.owner.startWalk('station');
+    expect(ctx.owner.indoorMap.value).toBeNull();
+    ctx.builds[0]?.resolve(NAVIGATION);
+    await flushBuild();
+    const id = ctx.owner.roam.value?.id ?? '';
+
+    expect(ctx.owner.indoorMap.value?.grid).toBe(NAVIGATION.grid);
+    expect(() => ctx.owner.openMap()).toThrow('还没有进到站内');
+    const player = { x: 1, y: 2, floor: -5, yaw: 0, hfov: 1.5, target: null };
+    ctx.roamStatus.value = { kind: 'walk', id, phase: 'walking', notice: null, notices: 0, player };
+    expect(ctx.owner.walkPlayer.value).toBe(player);
+
+    ctx.owner.openMap();
+    expect(ctx.owner.mapOpen.value).toBe(true);
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ paused: true });
+    ctx.owner.closeMap();
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ paused: false });
+  });
+
+  it('在完整地图上双击：瞬移计数加 1、带上位置，完整地图关上；退出步行后不再有地图', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('station', true);
+    ctx.ready('station');
+    ctx.owner.startWalk('station');
+    ctx.builds[0]?.resolve(NAVIGATION);
+    await flushBuild();
+    const id = ctx.owner.roam.value?.id ?? '';
+    ctx.roamStatus.value = { kind: 'walk', id, phase: 'walking', notice: null, notices: 0, player: null };
+    ctx.owner.openMap();
+
+    ctx.owner.teleportWalk({ x: 3, y: 4, floor: -10 });
+    ctx.owner.teleportWalk({ x: 5, y: 6, floor: -5 });
+
+    expect(ctx.owner.mapOpen.value).toBe(false);
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ teleport: { count: 2, spot: { x: 5, y: 6, floor: -5 } } });
+    expect(() => ctx.owner.teleportWalk({ x: Number.NaN, y: 0, floor: 0 })).toThrow('瞬移的位置有不是数的坐标');
+    ctx.owner.exitRoam();
+    expect(ctx.owner.indoorMap.value).toBeNull();
+    expect(ctx.owner.mapOpen.value).toBe(false);
   });
 });
