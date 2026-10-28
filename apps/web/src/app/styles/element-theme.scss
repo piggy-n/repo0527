@@ -333,6 +333,58 @@ $tree-node: '.el-tree > .el-tree-node';
   }
 }
 
+// 列表页的分页（ADR 0091，原来写在资源管理页里）：标准分页控件，窄屏只换行，不裁掉页码、条数或跳页入口；
+// 用法 <ElPagination class="pagination-wrap">
+.el-pagination.pagination-wrap {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: var(--space-sm);
+}
+
+// 窄于 760 时排成三行：总数和每页条数；上一页、页码、下一页；跳页。上下页和页码保持同一行，
+// 避免普通 flex 换行把上一页留在条数选择旁
+@media (width <= 760px) {
+  .el-pagination.pagination-wrap {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) 32px;
+    width: 100%;
+    column-gap: 0;
+
+    > * {
+      margin: 0;
+    }
+
+    .el-pagination__total {
+      grid-area: 1 / 1 / 2 / 3;
+      justify-self: start;
+    }
+
+    .el-pagination__sizes {
+      grid-area: 1 / 2 / 2 / 4;
+      justify-self: end;
+    }
+
+    .btn-prev {
+      grid-area: 2 / 1;
+    }
+
+    .el-pager {
+      grid-area: 2 / 2;
+      justify-self: center;
+    }
+
+    .btn-next {
+      grid-area: 2 / 3;
+    }
+
+    .el-pagination__jump {
+      grid-area: 3 / 1 / 4 / 4;
+      justify-self: end;
+    }
+  }
+}
+
 // 浏览器自动填充账号密码后，会用带 !important 的样式把输入框改成浅蓝底，页面样式无法直接改回；
 // 用与输入框同色的内阴影盖住它，文字颜色也改回输入框的颜色（原理见 docs/design/theme.md）
 .el-input__inner:autofill {

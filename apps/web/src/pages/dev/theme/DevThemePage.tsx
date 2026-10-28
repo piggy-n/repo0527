@@ -569,13 +569,14 @@ export const DevThemePage = defineComponent({
             <ElTableColumn prop="remark" label="备注" showOverflowTooltip />
           </ElTable>
           <ElPagination
-            class={styles.pagination}
+            class={['pagination-wrap', styles.pagination]}
             currentPage={currentPage.value}
             onUpdate:current-page={(value: number) => {
               currentPage.value = value;
             }}
             total={50}
-            layout="total, prev, pager, next, jumper"
+            pageSizes={[10, 20, 50, 100]}
+            layout="total, sizes, prev, pager, next, jumper"
           />
         </section>
 
