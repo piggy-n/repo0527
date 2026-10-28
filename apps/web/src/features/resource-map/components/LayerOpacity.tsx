@@ -8,7 +8,7 @@ import styles from './LayerOpacity.module.scss';
 // 操作按钮和滑块不触发资源行的选择或拖动
 const stop = (event: Event) => event.stopPropagation();
 
-/** 资源树和已勾选列表共用的透明度浮层；数值由图层拥有者持有，100% 表示完全显示 */
+/** 资源树和"已选择图层"列表共用的透明度浮层；数值由图层拥有者持有，100% 表示完全显示 */
 export const LayerOpacity = defineComponent({
   name: 'LayerOpacity',
   props: {

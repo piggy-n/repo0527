@@ -85,7 +85,8 @@ function setup(width: number) {
 describe('ResourceLegend（真实布局）', () => {
   it.each([320, 280, 240])('%s 像素面板完整显示名称、符号，浏览和编辑均不横向溢出', async width => {
     using ctx = setup(width);
-    await ctx.wrapper.get('[aria-label="展开地类图斑"]').trigger('click');
+    // 复合图例默认展开（ADR 0094）
+    expect(ctx.wrapper.find('[aria-label="收起地类图斑"]').exists()).toBe(true);
     const items = ctx.wrapper.findAll('[data-landuse] button');
     expect(items).toHaveLength(76);
     expect(ctx.scroller.scrollWidth).toBe(ctx.scroller.clientWidth);
@@ -114,7 +115,6 @@ describe('ResourceLegend（真实布局）', () => {
 
   it('点击可见条目进入编辑后回到列表原滚动位置，鼠标移出时设置入口隐藏', async () => {
     using ctx = setup(320);
-    await ctx.wrapper.get('[aria-label="展开地类图斑"]').trigger('click');
     ctx.scroller.scrollTop = 180;
     const bounds = ctx.scroller.getBoundingClientRect();
     const visible = ctx.wrapper.findAll('[data-landuse] button').find(item => {
@@ -158,7 +158,6 @@ describe('ResourceLegend（真实布局）', () => {
       throw new Error('没有全部恢复默认入口');
     }
     expect(reset.getBoundingClientRect().top - footer.getBoundingClientRect().top).toBe(12);
-    await ctx.wrapper.get('[aria-label="展开地类图斑"]').trigger('click');
     const before = footer.getBoundingClientRect().top;
     ctx.scroller.scrollTop = 200;
     expect(footer.getBoundingClientRect().top).toBe(before);

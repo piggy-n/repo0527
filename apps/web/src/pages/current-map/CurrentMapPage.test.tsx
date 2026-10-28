@@ -540,7 +540,7 @@ function resourceRow(wrapper: PageWrapper, code: string): ReturnType<PageWrapper
   return wrapper.get(`[data-resource="${code}"]`);
 }
 
-// "已勾选"区里某个资源的一行：提示、透明度、顺序都在这里
+// "已选择图层"区里某个资源的一行：提示、透明度、顺序都在这里
 function layerRow(wrapper: PageWrapper, code: string): ReturnType<PageWrapper['get']> {
   return wrapper.get(`[data-layer="${code}"]`);
 }
@@ -1347,10 +1347,10 @@ describe('CurrentMapPage', () => {
     expect(map.addedLayers).toContainEqual(['resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
   });
 
-  it('平移和同一级内缩放不更新已勾选列表，跨过最小级别才更新提示', async () => {
+  it('平移和同一级内缩放不更新"已选择图层"列表，跨过最小级别才更新提示', async () => {
     const { wrapper, map, updates } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
-    await button(wrapper, '展开已勾选图层').trigger('click');
+    await button(wrapper, '展开已选择图层').trigger('click');
     await resourceRow(wrapper, 'bgdc_cjdcq').get('input').setValue(true);
     map.moveTo([119, 32], 8, {});
     await settle();
@@ -1376,7 +1376,7 @@ describe('CurrentMapPage', () => {
   it('勾选了但级别不够的资源在状态图标里提示放大到几级；瓦片加载失败标在对应资源的图标上（ADR 0059）', async () => {
     const { wrapper, map } = await readyPage();
     await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
-    await button(wrapper, '展开已勾选图层').trigger('click');
+    await button(wrapper, '展开已选择图层').trigger('click');
     expect(wrapper.find('[data-layer="bgdc_cjdcq"]').exists()).toBe(false);
 
     await resourceRow(wrapper, 'bgdc_cjdcq').get('input').setValue(true);

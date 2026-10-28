@@ -2,7 +2,7 @@
   "models": [
     {
       "id": "sz-station",
-      "name": "苏州站地下空间",
+      "name": "星海广场站",
       "cityCode": "320500",
       "kind": "indoor",
       "underground": true,

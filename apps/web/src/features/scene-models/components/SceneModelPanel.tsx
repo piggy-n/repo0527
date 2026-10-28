@@ -206,7 +206,7 @@ export const SceneModelPanel = defineComponent({
       const { models } = props;
       const { id } = model;
       return (
-        <li key={id} class={[styles.loadedRow, models.focus.value === id && styles.focused]} data-loaded={id}>
+        <li key={id} class={styles.loadedRow} data-loaded={id}>
           <div class={styles.loadedHead}>
             <span class={styles.loadedName} title={model.name}>
               {model.name}

@@ -225,7 +225,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 区划裁剪按区划边界的几何，不按要素属性里的区划代码过滤（业务数据的代码和区划目录对不上）：区划外用 `region-clip` 分组的遮罩盖住；显示和查询的范围都取 `readyBoundary`；点选、框选的渲染要素先按范围过滤再去重、计数，发给后端的几何只用 `query-geometry.ts` 的 `queryGeometry` 整理（误差不超过 2 像素、有效、最多 120 个坐标），整理不出来时提示范围太复杂（ADR 0051）
 - 地图页的区域按 ADR 0070：行政区、图例、区划定位、坐标定位共用 `usePanelGroup` + `MapPanelGroup`，查询详情由独立 `FeatureDetailWindow` 展示，底图保留按钮左侧的 `MapOptionsPopover`；外壳负责标题、关闭和悬浮元素登记，内容不重复处理。功能入口打开时标签前移，直接点标签只切换；统一关闭只影响功能组。功能与详情同列上下排列，布局由 `panelStackLayout`、`usePanelStack` 管理，空间不足只收起非当前内容。有临时交互的内容接收 `active`，隐藏或收起时结束交互，关闭时卸载；窄屏仍由 `useSideExclusion` 决定最后操作的一边
 - 地图页的界面按 5D 的设计稿（ADR 0053～0055）及后续已确认调整：当前工具、面板开关、视图状态、失败原因等仍是组合式函数、store 或纯函数里的数据，组件只显示和调用，测试放在逻辑上；随尺寸变化的排法写成纯函数（如 `mapPageLayout`、`fitStatusLayout`），组件只交给它量到的尺寸。新的界面块先出可操作的 HTML 原型（`public/design.local/`，不入库）或真实组件预览，用户确认后再实现，按 `docs/design/ui-workflow.md` 验证
-- 现状底图已确认的界面细节（已勾选区域、透明度浮层、图例的浏览与编辑、功能容器与标签、底图 Popover、地图 Tooltip、区划定位、标题栏底色）记在 `docs/design/current-map-reference.md` 的"已确认的界面细节"，改这些界面前先读，用户确认新的调整后同步更新那里
+- 现状底图已确认的界面细节（已选择图层区域、透明度浮层、图例的浏览与编辑、功能容器与标签、底图 Popover、地图 Tooltip、区划定位、标题栏底色）记在 `docs/design/current-map-reference.md` 的"已确认的界面细节"，改这些界面前先读，用户确认新的调整后同步更新那里
 - 接收外部回调的模块（如 `onError`）在入口用 `@yzt/utils` 的 `safeReporter` 包装：回调自己抛错不能打断内部的状态转换和资源释放
 - 地图的加载与失败提示由 `shared/map` 的 `describeMapStatus` 推导，界面只负责显示；引擎失败用上下文的 `retry()` 重建，不在页面里换画布的 `key`（ADR 0030）
 - 地图上跟着鼠标的提示用 `shared/map/pointer-hint` 的 `PointerHint`（靠边时翻到另一侧），不在各个浮层里各写一套；挂在地图上某一点的卡片（如位置信息）只放在可视区域里（上下文的 `overlayPadding()`，ADR 0055）

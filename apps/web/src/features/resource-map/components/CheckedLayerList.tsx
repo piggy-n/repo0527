@@ -56,7 +56,7 @@ function renderStatus(statuses: readonly ResourceStatus[]) {
 }
 
 /**
- * "已勾选"（ADR 0053 第 6 节）：按叠放顺序从上到下，拖动手柄调整叠放顺序（上层优先显示），交给拥有者的 move；
+ * "已选择图层"（ADR 0053 第 6 节）：按叠放顺序从上到下，拖动手柄调整叠放顺序（上层优先显示），交给拥有者的 move；
  * 每一行是年份、名称、状态图标、透明度、取消勾选。状态只显示最严重的图标，悬停时列出全部（ADR 0059）
  */
 export const CheckedLayerList = defineComponent({

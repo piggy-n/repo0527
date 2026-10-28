@@ -224,7 +224,7 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 | `input-filled` | `<ElInput class="input-filled">` | `primary-border` 浅蓝底、无边框；悬停 `primary-border-hover`、聚焦 `primary` 描边；48px 高、16px 字、`--radius-md` 圆角；占位符和图标用 `primary` | 登录页 |
 | `button-xl` | `<ElButton class="button-xl">` | 48px 高、16px 半粗、`--radius-md` 圆角；颜色沿用按钮的 `type` | 登录页 |
 | `button-inline` | `<ElButton class="button-inline" link size="small">` | 使用项目字体，与同一行状态文字按基线对齐；其他外观由 `type` 和 `size` 决定 | 文件管理下载状态行，由文件管理分支维护 |
-| `select-no-arrow` | `<ElSelect class="select-no-arrow">` | 不显示右侧的下拉箭头，点击照常弹出选项 | 地图页"已勾选"的年份（2026-10-16 用户要求） |
+| `select-no-arrow` | `<ElSelect class="select-no-arrow">` | 不显示右侧的下拉箭头，点击照常弹出选项 | 地图页"已选择图层"的年份（2026-10-16 用户要求） |
 | `radio-group-block` | `<ElRadioGroup class="radio-group-block">` | 占满宽度，各项等宽 | 地图页坐标定位的写法切换 |
 | `dialog-panel-header` | `<ElDialog class="dialog-panel-header">`，`header` 插槽用 `<MxTitle level="panel">` | 浅灰标题栏横向铺满，最小高 48、左侧 16、右侧预留 48 关闭区；内容内边距 16，底部 `0 16 16`；不加独立阴影或渐变 | 资源管理新增 / 重命名目录、文件上传 / 预览；真实样例在 `/dev/theme` 的「灰底标题弹窗」 |
 | `form-query` | 由 `shared/query-form` 的 `QueryForm` 加在 `ElForm` 上，页面不直接写 | 条件区（`form-query__fields`）从左到右排列、换行；控件宽 180，日期选择器去掉默认的 220 固定宽度；表单项不留底部外边距；按钮行（`form-query__actions`）默认在条件区下方，`form-query__extra` 靠右。条件换行时加 `form-query--aligned`：标签改为块级并两端对齐（`text-align-last: justify`），宽度由 `QueryForm` 设置；条件和按钮都放得下一行时加 `form-query--inline`：条件区和按钮行排成一行，按钮行占满剩下的宽度，extra 在最右端 | 列表页的筛选栏，规则见 [page-layout.md](page-layout.md) 的"筛选栏" |

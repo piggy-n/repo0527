@@ -84,8 +84,6 @@ export interface SceneModels {
   readonly hasCatalog: ComputedRef<boolean>;
   /** 勾选的模型，按勾选的先后 */
   readonly loaded: Readonly<ShallowRef<readonly string[]>>;
-  /** 最近定位的模型 */
-  readonly focus: Readonly<ShallowRef<string | null>>;
   readonly underground: Readonly<ShallowRef<UndergroundChoice | null>>;
   /** 模型当前显示的瓦片集的状态；没勾选、还没有报告时是 loading */
   readonly stateOf: (id: string) => ModelLoadState;
@@ -161,7 +159,6 @@ export function useSceneModels(
   const effects = shallowRef<ReadonlyMap<string, string>>(new Map());
   const shownEffects = shallowRef<ReadonlyMap<string, readonly string[]>>(new Map());
   const attempts = shallowRef<ReadonlyMap<string, number>>(new Map());
-  const focus = shallowRef<string | null>(null);
   const underground = shallowRef<UndergroundChoice | null>(null);
   const roam = shallowRef<RoamChoice | null>(null);
   const navigations = shallowRef<ReadonlyMap<string, Navigation>>(new Map());
@@ -202,7 +199,7 @@ export function useSceneModels(
       return;
     }
     loaded.value = loaded.value.filter(item => item !== id);
-    // 卸载时这个模型的效果、重试次数、导航网格一起忘掉；在它里面钻地、定位、漫游过的一并结束
+    // 卸载时这个模型的效果、重试次数、导航网格一起忘掉；在它里面钻地、漫游过的一并结束
     shownEffects.value = new Map([...shownEffects.value].filter(([modelId]) => modelId !== id));
     const tilesetIds = new Set(model.effects.map(effect => tilesetIdOf(model, effect.id)));
     attempts.value = new Map([...attempts.value].filter(([tilesetId]) => !tilesetIds.has(tilesetId)));
@@ -211,9 +208,6 @@ export function useSceneModels(
     }
     if (underground.value?.modelId === id) {
       underground.value = null;
-    }
-    if (focus.value === id) {
-      focus.value = null;
     }
     if (roam.value?.modelId === id) {
       exitRoam();
@@ -246,7 +240,6 @@ export function useSceneModels(
     }
     const { camera } = status;
     map.runCameraOperation(control => control.flyTo(camera));
-    focus.value = id;
     underground.value = model.underground
       ? { modelId: id, opacity: underground.value?.opacity ?? DEFAULT_SURFACE_OPACITY }
       : null;
@@ -357,7 +350,6 @@ export function useSceneModels(
     signal.addEventListener('abort', exitRoam, { once: true });
     roamSignal = signal;
     roam.value = choice;
-    focus.value = model.id;
     if (model.underground && underground.value?.modelId !== model.id) {
       underground.value = { modelId: model.id, opacity: underground.value?.opacity ?? DEFAULT_SURFACE_OPACITY };
     }
@@ -571,7 +563,6 @@ export function useSceneModels(
     models,
     hasCatalog,
     loaded: shallowReadonly(loaded),
-    focus: shallowReadonly(focus),
     underground: shallowReadonly(underground),
     stateOf: id => (loaded.value.includes(id) ? loadStateOf(statusOf(modelOf(id))) : 'loading'),
     effectOf: id => currentEffect(modelOf(id), effects.value),

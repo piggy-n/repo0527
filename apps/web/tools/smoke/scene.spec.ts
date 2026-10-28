@@ -70,7 +70,7 @@ test('三维：二维稳定后预加载运行时，切到三维、加载模型�
     // 步行：导航网格在 Worker 里构建（产物里单独的分块），建好后飞进屋子
     await loaded.getByRole('button', { name: '步行漫游', exact: true }).click();
     const bar = page.locator('[data-roam-bar]');
-    await expect(bar.getByRole('button', { name: '回到出生点', exact: true })).toBeVisible({ timeout: 90_000 });
+    await expect(bar.getByRole('button', { name: '回到起始点', exact: true })).toBeVisible({ timeout: 90_000 });
     expect(wasRequested(/\/assets\/nav-grid\.worker-[\w-]+\.js$/), '导航网格的 Worker 分块').toBe(true);
     await expect(page.locator('[data-map-status-bar]')).toContainText('第一视角');
     await page.keyboard.press('Escape');

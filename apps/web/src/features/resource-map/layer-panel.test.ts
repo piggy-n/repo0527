@@ -131,7 +131,12 @@ describe('panelTree', () => {
 describe('expandedByDefault', () => {
   it('展开含有勾选资源的分类', () => {
     expect(expandedByDefault(panelTree(INITIAL))).toStrictEqual(new Set(['基础库', '基础库 / 土地资源']));
-    expect(expandedByDefault(panelTree(withChecked(INITIAL, ['bgdc_dltb'], false)))).toStrictEqual(new Set());
+  });
+
+  it('一个也没有勾选时展开全部分类（ADR 0094）', () => {
+    expect(expandedByDefault(panelTree(withChecked(INITIAL, ['bgdc_dltb'], false)))).toStrictEqual(
+      new Set(['基础库', '基础库 / 土地资源', '基础库 / 水资源', '三区三线'])
+    );
   });
 });
 
@@ -222,13 +227,13 @@ describe('checkedDropTarget', () => {
     return checkedLayers({ ...state, order }).map(item => item.code);
   }
 
-  it('拖到已勾选里的第几位，就交给拥有者那个位置上原来的资源所在的位置；中间没勾选的不算', () => {
+  it('拖到"已选择图层"里的第几位，就交给拥有者那个位置上原来的资源所在的位置；中间没勾选的不算', () => {
     expect(dropped('poi', 0)).toStrictEqual(['poi', 'bgdc_dltb', 'bgdc_cjdcqjx']);
     expect(dropped('bgdc_dltb', 2)).toStrictEqual(['bgdc_cjdcqjx', 'poi', 'bgdc_dltb']);
     expect(dropped('bgdc_dltb', 1)).toStrictEqual(['bgdc_cjdcqjx', 'bgdc_dltb', 'poi']);
   });
 
-  it('位置不变、不在已勾选里时为 null；位置越界时抛错', () => {
+  it('位置不变、不在"已选择图层"里时为 null；位置越界时抛错', () => {
     expect(checkedDropTarget(state, 'poi', 2)).toBeNull();
     expect(checkedDropTarget(state, 'szy_kt', 0)).toBeNull();
     expect(() => checkedDropTarget(state, 'poi', 3)).toThrow(RangeError);

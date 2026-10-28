@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { PreferenceScope } from '@/shared/storage/preference-scope';
 import { usePreference } from '@/shared/storage/use-preference';
 
-/** 资源图层面板的布局（ADR 0053 第 6 节）：是否收起、"已勾选"区占可用高度的比例 */
+/** 资源图层面板的布局（ADR 0053 第 6 节）：是否收起、"已选择图层"区占可用高度的比例 */
 export interface ResourcePanelLayoutState {
   readonly collapsed: boolean;
   /** 0～1；显示时再按两边的最小高度限制 */

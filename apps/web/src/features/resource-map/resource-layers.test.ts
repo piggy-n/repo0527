@@ -6,6 +6,7 @@ import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import {
   batchYearOptions,
+  hasYearData,
   EMPTY_RESOURCE_LAYERS,
   mergeDisplayState,
   isResourceBodyLayer,
@@ -352,11 +353,16 @@ describe('validateCatalog', () => {
 describe('批量设置年份（ADR 0052 第 2 节）', () => {
   const initial = mergeDisplayState(EMPTY_RESOURCE_LAYERS, CATALOG);
 
-  it('可选的年份：多年份资源的年份并集，新的在前；只出现在单年份资源里的不列出；目录还没加载时没有', () => {
+  it('可选的年份：多年份资源的年份并集加上固定的 2020、2021（ADR 0094），新的在前；只出现在单年份资源里的其他年份不列出；目录还没加载时没有', () => {
     // 2022 只有地类图斑、村级调查区界线（单年份），不列出；2025 有水域线层（多年份）
-    expect(batchYearOptions(CATALOG)).toStrictEqual([2025, 2024, 2023]);
-    expect(batchYearOptions(catalogOf(DLTB, GYSSP))).toStrictEqual([]);
+    expect(batchYearOptions(CATALOG)).toStrictEqual([2025, 2024, 2023, 2021, 2020]);
+    expect(batchYearOptions(catalogOf(DLTB, GYSSP))).toStrictEqual([2021, 2020]);
     expect(batchYearOptions(null)).toStrictEqual([]);
+  });
+
+  it('目录里是否有资源有这一年的数据：单年份的也算', () => {
+    expect([2022, 2025, 2021].map(year => hasYearData(CATALOG, year))).toStrictEqual([true, true, false]);
+    expect(hasYearData(null, 2024)).toBe(false);
   });
 
   it('有这一年的资源不论是否勾选都切过去，没有的不变；勾选、透明度、顺序不变', () => {
@@ -372,14 +378,15 @@ describe('批量设置年份（ADR 0052 第 2 节）', () => {
     expect(next.catalog).toBe(state.catalog);
   });
 
-  it('没有资源要改时返回原来的状态；没有任何资源有这一年、目录还没加载时抛错', () => {
+  it('没有资源要改时返回原来的状态，没有任何资源有这一年、目录还没加载时也是（ADR 0094）；年份不是整数时抛错', () => {
     // 2022 只有地类图斑和村级调查区界线有，它们本来就是 2022
     expect(withYearForAll(initial, 2022)).toBe(initial);
     const at2024 = withYearForAll(initial, 2024);
     expect(at2024).not.toBe(initial);
     expect(withYearForAll(at2024, 2024)).toBe(at2024);
 
-    expect(() => withYearForAll(initial, 2021)).toThrow('没有资源有 2021 年的数据');
-    expect(() => withYearForAll(EMPTY_RESOURCE_LAYERS, 2024)).toThrow(RangeError);
+    expect(withYearForAll(initial, 2021)).toBe(initial);
+    expect(withYearForAll(EMPTY_RESOURCE_LAYERS, 2024)).toBe(EMPTY_RESOURCE_LAYERS);
+    expect(() => withYearForAll(initial, 2023.5)).toThrow('年份应是整数，收到 2023.5');
   });
 });

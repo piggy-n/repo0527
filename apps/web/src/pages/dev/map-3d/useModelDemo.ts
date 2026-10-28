@@ -32,7 +32,7 @@ export type DemoScenario = 'normal' | 'long' | 'empty' | 'failed';
 
 /** 步行速度档位（米/秒），沿用旧项目的档位 */
 export const WALK_SPEEDS = [0.5, 1, 1.6, 2.5, 4, 6, 8] as const;
-export const DEFAULT_WALK_SPEED = 1.6;
+export const DEFAULT_WALK_SPEED = 4;
 export const ROUTE_RATES = [0.5, 1, 2] as const;
 
 const LOAD_DELAY = 1200;
@@ -198,7 +198,7 @@ export function useModelDemo() {
   }
 
   function resetSpawn() {
-    say('已回到出生点');
+    say('已回到起始点');
   }
 
   function unstuck() {

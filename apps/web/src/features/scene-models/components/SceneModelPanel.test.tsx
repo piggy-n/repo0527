@@ -19,7 +19,6 @@ import { type SceneModels, useSceneModels } from '../composables/useSceneModels'
 import { RoamBar } from './RoamBar';
 import { SceneModelPanel } from './SceneModelPanel';
 import { UndergroundBar } from './UndergroundBar';
-import styles from './SceneModelPanel.module.scss';
 
 const CAMERA: CameraState = { center: [120.66, 31.31], zoom: 16, bearing: 0, pitch: 55 };
 
@@ -210,7 +209,7 @@ describe('SceneModelPanel', () => {
     expect(button(wrapper, '定位', '[data-loaded="city"]').attributes('disabled')).toBeUndefined();
   });
 
-  it('定位：飞到报告的相机并标为当前；地下的模型标上钻地，钻地条可以调地表不透明度、退出钻地', async () => {
+  it('定位：飞到报告的相机；地下的模型标上钻地，钻地条可以调地表不透明度、退出钻地', async () => {
     const { wrapper, owner, flyTo, report } = mountPanel();
     await check(wrapper, 'station', true);
     await report({ station: 'ready' });
@@ -219,7 +218,6 @@ describe('SceneModelPanel', () => {
     await button(wrapper, '定位', '[data-loaded="station"]').trigger('click');
 
     expect(flyTo).toHaveBeenCalledWith(CAMERA);
-    expect(wrapper.get('[data-loaded="station"]').classes()).toContain(styles.focused);
     expect(wrapper.get('[data-loaded="station"]').text()).toContain('钻地');
     const bar = wrapper.get('[data-underground-bar]');
     expect(bar.text()).toContain('钻地观察 · 苏州站地下空间');
@@ -388,7 +386,7 @@ describe('步行的入口和操作条（ADR 0086）', () => {
     expect(textButton(wrapper, '步行漫游')).toBeUndefined();
   });
 
-  it('建好后进入站内、行走：调速、回到出生点、脱困改意图；提示几秒后消失，同样的提示再来一次重新显示', async () => {
+  it('建好后进入站内、行走：调速、回到起始点、脱困改意图；提示几秒后消失，同样的提示再来一次重新显示', async () => {
     const { wrapper, owner, report, builds, walk } = mountPanel();
     await check(wrapper, 'station', true);
     await report({ station: 'ready' });
@@ -400,18 +398,22 @@ describe('步行的入口和操作条（ADR 0086）', () => {
     expect(textButton(wrapper, '取消')).toBeDefined();
 
     await walk('walking');
-    expect(bar().text()).toContain('1.6 m/s');
+    expect(bar().text()).toContain('4 m/s');
     expect(bar().text()).toContain('W/A/S/D 行走');
     expect(textButton(wrapper, '退出漫游')).toBeDefined();
     await bar().get('button[aria-label="加速"]').trigger('click');
-    expect(owner.roam.value).toMatchObject({ speed: 2.5 });
+    expect(owner.roam.value).toMatchObject({ speed: 6 });
     await textButton(wrapper, '默认')?.trigger('click');
-    expect(owner.roam.value).toMatchObject({ speed: 1.6 });
+    expect(owner.roam.value).toMatchObject({ speed: 4 });
     await bar().get('button[aria-label="减速"]').trigger('click');
+    expect(owner.roam.value).toMatchObject({ speed: 2.5 });
+    // 最慢一档时减速不可用
+    owner.setWalkSpeed(1);
+    await nextTick();
     await bar().get('button[aria-label="减速"]').trigger('click');
     expect(owner.roam.value).toMatchObject({ speed: 0.5 });
     expect(bar().get('button[aria-label="减速"]').attributes('disabled')).toBeDefined();
-    await textButton(wrapper, '回到出生点')?.trigger('click');
+    await textButton(wrapper, '回到起始点')?.trigger('click');
     await textButton(wrapper, '脱困')?.trigger('click');
     expect(owner.roam.value).toMatchObject({ respawn: 1, unstuck: 1 });
 

@@ -5,7 +5,7 @@ import { findSpawn } from './spawn';
 
 /** 步行速度的档位（米/秒），面板上逐档调 */
 export const WALK_SPEEDS: readonly number[] = [0.5, 1, 1.6, 2.5, 4, 6, 8];
-export const DEFAULT_WALK_SPEED = 1.6;
+export const DEFAULT_WALK_SPEED = 4;
 /** 键盘行走、转向用到的键（KeyboardEvent.code） */
 export const WALK_KEYS: ReadonlySet<string> = new Set([
   'KeyW',

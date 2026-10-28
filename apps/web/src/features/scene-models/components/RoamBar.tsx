@@ -26,7 +26,7 @@ const NOTICE_TEXT: Readonly<Record<WalkNotice, string>> = {
   hidden: '目标位置被遮挡，请点击看得见的地面',
   blocked: '前方受阻，已停下',
   open: '当前位置可以正常行走，无需脱困',
-  'no-open-ground': '附近没有开阔的地面，可以回到出生点',
+  'no-open-ground': '附近没有开阔的地面，可以回到起始点',
   'avatar-failed': '人物模型加载失败，第三人称看不到人'
 };
 
@@ -251,7 +251,7 @@ export const RoamBar = defineComponent({
             {renderSpeed(walk.speed)}
             <span class={styles.divider} />
             <ElButton link type="primary" size="small" onClick={models.respawnWalk}>
-              回到出生点
+              回到起始点
             </ElButton>
             <ElTooltip {...MAP_TOOLTIP_PROPS} content="被卡住时挪到附近最近的开阔地面" placement="top">
               <ElButton link type="primary" size="small" onClick={models.unstuckWalk}>

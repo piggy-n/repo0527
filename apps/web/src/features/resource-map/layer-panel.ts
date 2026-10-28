@@ -88,13 +88,22 @@ export function panelTree(
   return orderedChildren(roots, nodeKey, order[CATALOG_ROOT]);
 }
 
-/** 默认展开的分类：含有勾选资源的分类（同旧项目），进入页面时勾选的资源看得见 */
-export function expandedByDefault(tree: readonly PanelNode[]): Set<string> {
-  return new Set(
-    tree.flatMap(node =>
-      node.kind === 'category' && node.checkState !== 'none' ? [node.id, ...expandedByDefault(node.children)] : []
-    )
+// 子树里要展开的分类：all 为 true 时全部，否则只要含有勾选资源的
+function expandedCategories(tree: readonly PanelNode[], all: boolean): string[] {
+  return tree.flatMap(node =>
+    node.kind === 'category' && (all || node.checkState !== 'none')
+      ? [node.id, ...expandedCategories(node.children, all)]
+      : []
   );
+}
+
+/**
+ * 默认展开的分类：含有勾选资源的分类（同旧项目），进入页面时勾选的资源看得见；
+ * 一个资源也没有勾选时展开全部（ADR 0094）
+ */
+export function expandedByDefault(tree: readonly PanelNode[]): Set<string> {
+  const anyChecked = tree.some(node => (node.kind === 'category' ? node.checkState !== 'none' : node.checked));
+  return new Set(expandedCategories(tree, !anyChecked));
 }
 
 export interface CheckedLayer {
@@ -122,8 +131,8 @@ export function checkedLayers(state: ResourceLayersState): CheckedLayer[] {
 }
 
 /**
- * 在"已勾选"里拖到第 to 位（放下后在已勾选的列表里的位置）时交给拥有者 move 的位置：移到那个位置上原来的已勾选资源所在的位置，
- * 中间没勾选的资源不算。位置不变、不在已勾选里时为 null；位置越界时抛错
+ * 在"已选择图层"里拖到第 to 位（放下后在已勾选的列表里的位置）时交给拥有者 move 的位置：移到那个位置上原来的已勾选资源所在的位置，
+ * 中间没勾选的资源不算。位置不变、不在"已选择图层"里时为 null；位置越界时抛错
  */
 export function checkedDropTarget(state: ResourceLayersState, code: string, to: number): number | null {
   const codes = checkedLayers(state).map(layer => layer.code);

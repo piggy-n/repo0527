@@ -86,7 +86,7 @@ async function mountPanel(
   // 拖动的实例在挂载后的下一轮渲染里建
   await nextTick();
   if (catalog && expandChecked) {
-    await wrapper.get('[aria-label="展开已勾选图层"]').trigger('click');
+    await wrapper.get('[aria-label="展开已选择图层"]').trigger('click');
   }
   if (!owners) {
     throw new Error('页面没有创建拥有者');
@@ -128,16 +128,16 @@ afterEach(() => {
 });
 
 describe('ResourceLayerPanel', () => {
-  it('已勾选默认收起；整行入口展开和再次收起，图层状态不变', async () => {
+  it('已选择图层默认收起；整行入口展开和再次收起，图层状态不变', async () => {
     const { wrapper, owner } = await mountPanel(CATALOG, false, undefined, false);
     const before = owner.state.value;
     expect(checkedOrder(wrapper)).toStrictEqual([]);
     expect(wrapper.find('[role="separator"]').exists()).toBe(false);
     expect(wrapper.get(`.${styles.checkedToggle}`).text()).toBe('展开');
-    await button(wrapper, '展开已勾选图层').trigger('click');
+    await button(wrapper, '展开已选择图层').trigger('click');
     expect(checkedOrder(wrapper)).toStrictEqual(['bgdc_dltb']);
     expect(wrapper.get(`.${styles.checkedToggle}`).text()).toBe('收起');
-    await button(wrapper, '收起已勾选图层').trigger('click');
+    await button(wrapper, '收起已选择图层').trigger('click');
     expect(checkedOrder(wrapper)).toStrictEqual([]);
     expect(owner.state.value).toBe(before);
   });
@@ -151,7 +151,7 @@ describe('ResourceLayerPanel', () => {
 
     owner.setChecked('bgdc_cjdcq', true);
     await nextTick();
-    expect(button(wrapper, '展开已勾选图层').attributes('aria-expanded')).toBe('false');
+    expect(button(wrapper, '展开已选择图层').attributes('aria-expanded')).toBe('false');
     expect(wrapper.get(`.${styles.badge}`).text()).toBe('1');
     expect(checkedOrder(wrapper)).toStrictEqual([]);
 
@@ -245,9 +245,9 @@ describe('ResourceLayerPanel', () => {
     expect(owner.state.value.order.slice(0, 3)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
   });
 
-  it('"已勾选"：拖动或在手柄上按方向键调整叠放顺序，不改目录顺序', async () => {
+  it('"已选择图层"：拖动或在手柄上按方向键调整叠放顺序，不改目录顺序', async () => {
     const { wrapper, owner, order } = await mountPanel(CATALOG, true);
-    // 叠放顺序是地类图斑、村级调查区（没勾选）、水域线层、坑塘：已勾选里的位置和叠放顺序里的位置不同
+    // 叠放顺序是地类图斑、村级调查区（没勾选）、水域线层、坑塘："已选择图层"里的位置和叠放顺序里的位置不同
     owner.setChecked('csxhjctb_hydl', true);
     owner.setChecked('szy_kt', true);
     await nextTick();
@@ -408,7 +408,7 @@ describe('ResourceLayerPanel：年份（ADR 0052）', () => {
   it('批量设置年份：选完就执行、选择框回到空，连续两次选同一年都执行；下拉里只有年份', async () => {
     const { wrapper, owner } = await mountPanel();
     expect(batchSelect(wrapper).findAllComponents(ElOption).map(option => option.props('value'))).toStrictEqual([
-      2025, 2024, 2023
+      2025, 2024, 2023, 2021, 2020
     ]);
     expect(document.querySelector('.el-select-dropdown__footer')).toBeNull();
 
@@ -423,10 +423,22 @@ describe('ResourceLayerPanel：年份（ADR 0052）', () => {
     expect(owner.state.value.displays.get('csxhjctb_hydl')?.year).toBe(2023);
   });
 
-  it('没有多年份的资源时不显示批量设置', async () => {
+  it('选了没有资源有数据的年份：提示，图层不变（ADR 0094）', async () => {
+    const { owner } = await mountPanel();
+    const before = yearsOf(owner);
+
+    await pickOption('2020 年');
+
+    expect(yearsOf(owner)).toStrictEqual(before);
+    expect(document.body.textContent).toContain('没有资源有 2020 年的数据，图层保持不变');
+  });
+
+  it('没有多年份的资源时只有固定的 2021、2020（ADR 0094）', async () => {
     const single = buildCatalog([{ code: null, name: '基础库', children: [layer('bgdc_dltb', '地类图斑')] }]);
     const { wrapper } = await mountPanel(single);
 
-    expect(wrapper.findAllComponents(ElSelect)).toHaveLength(0);
+    expect(batchSelect(wrapper).findAllComponents(ElOption).map(option => option.props('value'))).toStrictEqual([
+      2021, 2020
+    ]);
   });
 });

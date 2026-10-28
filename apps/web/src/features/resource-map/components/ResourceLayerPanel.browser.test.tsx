@@ -90,7 +90,7 @@ function setup(height: number, shown?: Ref<boolean>, expandChecked = true) {
     { attachTo: host }
   );
   if (expandChecked) {
-    const toggle = wrapper.get('[aria-label="展开已勾选图层"]').element;
+    const toggle = wrapper.get('[aria-label="展开已选择图层"]').element;
     if (toggle instanceof HTMLButtonElement) {
       toggle.click();
     }
@@ -127,7 +127,7 @@ async function collapseAll(wrapper: VueWrapper) {
   for (;;) {
     const button = wrapper.findAll('button').find(candidate => {
       const label = candidate.attributes('aria-label');
-      return label !== undefined && label.startsWith('收起') && !['收起资源图层', '收起已勾选图层'].includes(label);
+      return label !== undefined && label.startsWith('收起') && !['收起资源图层', '收起已选择图层'].includes(label);
     });
     if (!button) {
       return;
@@ -137,13 +137,13 @@ async function collapseAll(wrapper: VueWrapper) {
   }
 }
 
-// 目录、分割线、"已勾选"三块的位置
+// 目录、分割线、"已选择图层"三块的位置
 function areas(wrapper: VueWrapper) {
   const separator = wrapper.get('[role="separator"]').element;
   const tree = separator.previousElementSibling;
   const checked = separator.nextElementSibling;
   if (!(separator instanceof HTMLElement) || !tree || !checked) {
-    throw new Error('没有找到目录和"已勾选"');
+    throw new Error('没有找到目录和"已选择图层"');
   }
   return {
     separator,
@@ -168,11 +168,11 @@ function measure(wrapper: VueWrapper) {
   const tree = wrapper.get('[role="separator"]').element.previousElementSibling;
   const checked = wrapper.get('[role="separator"]').element.nextElementSibling;
   if (!(tree instanceof HTMLElement) || !(checked instanceof HTMLElement)) {
-    throw new Error('没有找到目录和"已勾选"');
+    throw new Error('没有找到目录和"已选择图层"');
   }
   const list = checked.lastElementChild;
   if (!(list instanceof HTMLElement)) {
-    throw new Error('没有找到"已勾选"的列表');
+    throw new Error('没有找到"已选择图层"的列表');
   }
   return {
     panelHeight: panel.getBoundingClientRect().height,
@@ -234,17 +234,17 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     const panel = ctx.wrapper.get('[data-resource-layer-panel]').element;
     expect(ctx.wrapper.find('[role="separator"]').exists()).toBe(false);
     expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(360);
-    await ctx.wrapper.get('[aria-label="展开已勾选图层"]').trigger('click');
+    await ctx.wrapper.get('[aria-label="展开已选择图层"]').trigger('click');
     await frames(4);
     expect(ctx.wrapper.find('[role="separator"]').exists()).toBe(true);
-    await ctx.wrapper.get('[aria-label="收起已勾选图层"]').trigger('click');
+    await ctx.wrapper.get('[aria-label="收起已选择图层"]').trigger('click');
     await frames(4);
     expect(panel.getBoundingClientRect().height).toBeLessThanOrEqual(360);
     expect(ctx.layout.checkedRatio.value).toBe(ratio);
     expect(ctx.loopErrors).toStrictEqual([]);
   });
 
-  it.each([false, true])('已勾选展开为 %s 时清空资源：目录获得全部剩余高度，重新勾选恢复布局', async expanded => {
+  it.each([false, true])('已选择图层展开为 %s 时清空资源：目录获得全部剩余高度，重新勾选恢复布局', async expanded => {
     using ctx = setup(360, undefined, expanded);
     await frames(4);
     const tree = ctx.wrapper.get(`.${styles.tree}`).element;
@@ -268,7 +268,7 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     expect(ctx.loopErrors).toStrictEqual([]);
   });
 
-  it('目录都收起时面板跟着内容变矮："已勾选"完整显示，目录和"已勾选"都没有滚动（2026-10-16 用户发现）', async () => {
+  it('目录都收起时面板跟着内容变矮："已选择图层"完整显示，目录和"已选择图层"都没有滚动（2026-10-16 用户发现）', async () => {
     using ctx = setup(700);
     await frames(3);
 
@@ -302,7 +302,7 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     expect(ctx.loopErrors).toEqual([]);
   });
 
-  it('放不下时面板占满所在的列，目录滚动，"已勾选"不滚动', async () => {
+  it('放不下时面板占满所在的列，目录滚动，"已选择图层"不滚动', async () => {
     using ctx = setup(360);
     await frames(6);
 
@@ -386,7 +386,7 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     }
   );
 
-  it('分割线上按方向键：往上一步"已勾选"高可用高度的 5%', async () => {
+  it('分割线上按方向键：往上一步"已选择图层"高可用高度的 5%', async () => {
     using ctx = setup(600);
     ctx.layers.setCheckedMany(MANY, true);
     await frames(4);
@@ -402,7 +402,7 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     expect(areas(ctx.wrapper).checked).toBeCloseTo(before.checked, 0);
   });
 
-  it('"已勾选"只有一行时照常拖动：按分割线的位置分，下面留白（2026-10-16 用户要求分割线能正常使用）', async () => {
+  it('"已选择图层"只有一行时照常拖动：按分割线的位置分，下面留白（2026-10-16 用户要求分割线能正常使用）', async () => {
     using ctx = setup(600);
     await frames(4);
     const before = areas(ctx.wrapper);
@@ -421,7 +421,7 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     expect(ctx.loopErrors).toEqual([]);
   });
 
-  it('目录已经全部显示时：往下拖不动，往上拖让目录滚动、"已勾选"变高', async () => {
+  it('目录已经全部显示时：往下拖不动，往上拖让目录滚动、"已选择图层"变高', async () => {
     using ctx = setup(600);
     ctx.layers.setCheckedMany(MANY, true);
     await frames(3);
@@ -451,7 +451,7 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     await frames(3);
     await collapseAll(fits.wrapper);
     await frames(4);
-    // 目录收起到 2 行，"已勾选"放不下
+    // 目录收起到 2 行，"已选择图层"放不下
     using short = setup(600);
     short.layers.setCheckedMany(MANY, true);
     await frames(3);
@@ -474,7 +474,7 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     }
   });
 
-  it('分割线的线上下离目录、"已勾选"的标题一样远', async () => {
+  it('分割线的线上下离目录、"已选择图层"的标题一样远', async () => {
     using ctx = setup(700);
     await frames(3);
     await collapseAll(ctx.wrapper);
@@ -485,7 +485,7 @@ describe('ResourceLayerPanel（真实的布局）', () => {
     // 分割线两侧的容器边缘等距，标题内边距由整行按钮提供
     const title = separator.nextElementSibling?.firstElementChild?.getBoundingClientRect();
     if (!tree || !title) {
-      throw new Error('没有找到目录和"已勾选"的标题');
+      throw new Error('没有找到目录和"已选择图层"的标题');
     }
     // 线是分割线的 ::before
     const line = getComputedStyle(separator, '::before');

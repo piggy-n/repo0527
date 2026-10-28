@@ -179,7 +179,6 @@ describe('useSceneModels', () => {
     ctx.owner.locate('station');
 
     expect(ctx.flyTo).toHaveBeenCalledWith(CAMERA);
-    expect(ctx.owner.focus.value).toBe('station');
     expect(ctx.owner.deriveContent().underground).toStrictEqual({ tilesetId: 'station', surfaceOpacity: 0.25 });
     expect(summary(ctx.owner.deriveContent()).map(([id, show]) => [id, show])).toStrictEqual([
       ['station', true],
@@ -196,7 +195,7 @@ describe('useSceneModels', () => {
     expect(ctx.owner.underground.value?.opacity).toBe(0.25);
   });
 
-  it('卸载时一起结束这个模型的钻地、定位，忘掉效果和重试次数', () => {
+  it('卸载时一起结束这个模型的钻地，忘掉效果和重试次数', () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.ready('station');
@@ -206,7 +205,6 @@ describe('useSceneModels', () => {
 
     ctx.owner.setChecked('station', false);
     expect(ctx.owner.underground.value).toBeNull();
-    expect(ctx.owner.focus.value).toBeNull();
 
     ctx.owner.setChecked('station', true);
     expect(ctx.owner.deriveContent().tilesets[0]?.attempt).toBe(0);
@@ -253,7 +251,7 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
     expect(() => ctx.owner.startRoute('station', 'nowhere')).toThrow('模型 station 没有路线 nowhere');
   });
 
-  it('开始：停在起点交给会话；地下的模型按钻地处理、标为当前；播放、暂停、倍速改意图', () => {
+  it('开始：停在起点交给会话；地下的模型按钻地处理；播放、暂停、倍速改意图', () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.ready('station');
@@ -263,7 +261,6 @@ describe('useSceneModels 的路线漫游（ADR 0083）', () => {
     expect(roam).toMatchObject({ kind: 'route', playing: false, rate: 1, run: 0 });
     expect(roam?.kind === 'route' && roam.path).toHaveLength(2);
     expect(ctx.owner.underground.value).toStrictEqual({ modelId: 'station', opacity: 0.25 });
-    expect(ctx.owner.focus.value).toBe('station');
     expect(ctx.owner.routePhase.value).toBe('ready');
 
     ctx.owner.playRoute();
@@ -343,12 +340,11 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
     expect(ctx.owner.roam.value).toMatchObject({
       kind: 'walk',
       modelId: 'station',
-      speed: 1.6,
+      speed: 4,
       respawn: 0,
       unstuck: 0
     });
     expect(ctx.owner.underground.value).toStrictEqual({ modelId: 'station', opacity: 0.25 });
-    expect(ctx.owner.focus.value).toBe('station');
     expect(ctx.owner.routePhase.value).toBeNull();
   });
 
@@ -376,7 +372,7 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
       id,
       navigation: NAVIGATION,
       spawn: { lng: 120.666, lat: 31.3175, height: -5.1, heading: 76 },
-      speed: 1.6,
+      speed: 4,
       respawn: 0,
       unstuck: 0,
       paused: false,
@@ -460,7 +456,7 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
     expect(ctx.owner.roam.value).toMatchObject({ view: 'third' });
   });
 
-  it('速度按档位、几次步行之间沿用；回到出生点、脱困把计数加 1；不在步行时调用抛错', async () => {
+  it('速度按档位、默认 4 m/s（ADR 0094），几次步行之间沿用；回到起始点、脱困把计数加 1；不在步行时调用抛错', async () => {
     using ctx = setup();
     ctx.owner.setChecked('station', true);
     ctx.ready('station');
@@ -469,16 +465,17 @@ describe('useSceneModels 的步行（ADR 0086）', () => {
     ctx.builds[0]?.resolve(NAVIGATION);
     await flushBuild();
 
-    ctx.owner.setWalkSpeed(4);
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ speed: 4 });
+    ctx.owner.setWalkSpeed(6);
     ctx.owner.respawnWalk();
     ctx.owner.unstuckWalk();
     ctx.owner.unstuckWalk();
-    expect(ctx.owner.deriveContent().roam).toMatchObject({ speed: 4, respawn: 1, unstuck: 2 });
+    expect(ctx.owner.deriveContent().roam).toMatchObject({ speed: 6, respawn: 1, unstuck: 2 });
     expect(() => ctx.owner.setWalkSpeed(3)).toThrow('步行速度只能是 0.5、1、1.6、2.5、4、6、8');
 
     ctx.owner.exitRoam();
     ctx.owner.startWalk('station');
-    expect(ctx.owner.roam.value).toMatchObject({ speed: 4, respawn: 0, unstuck: 0 });
+    expect(ctx.owner.roam.value).toMatchObject({ speed: 6, respawn: 0, unstuck: 0 });
   });
 
   it('有了别的定位就退出步行，正在建的一并中止；开始路线漫游也结束步行', () => {

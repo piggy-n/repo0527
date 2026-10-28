@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, Search } from '@element-plus/icons-vue';
 import { useResizeObserver } from '@vueuse/core';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
-import { ElButton, ElIcon, ElInput, ElOption, ElSelect } from 'element-plus';
+import { ElButton, ElIcon, ElInput, ElMessage, ElOption, ElSelect } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
 import { usePageActive } from '@/shared/composables/usePageActive';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
@@ -14,7 +14,7 @@ import type { ResourcePanelLayout } from '../composables/useResourcePanelLayout'
 import { arrowStep } from '../keyboard';
 import { checkedLayers, expandedByDefault, panelTree } from '../layer-panel';
 import { ratioForCheckedHeight, splitLists } from '../panel-split';
-import { batchYearOptions } from '../resource-layers';
+import { batchYearOptions, hasYearData } from '../resource-layers';
 import { CheckedLayerList } from './CheckedLayerList';
 import { ResourceTreeList } from './ResourceTreeList';
 import styles from './ResourceLayerPanel.module.scss';
@@ -33,7 +33,7 @@ const SPLITTER_HEIGHT = 24;
 const RATIO_STEP = 0.05;
 
 /**
- * 资源图层面板（ADR 0053 第 6 节、ADR 0060，设计稿 5D.2）：目录树负责浏览、勾选和目录顺序，"已勾选"按叠放顺序调整顺序、年份和透明度，
+ * 资源图层面板（ADR 0053 第 6 节、ADR 0060，设计稿 5D.2）：目录树负责浏览、勾选和目录顺序，"已选择图层"按叠放顺序调整顺序、年份和透明度，
  * 两区之间的分割线可以拖动。只显示拥有者的状态并调用它们的操作；收起和分割线的位置由面板布局的拥有者记住，
  * 窄屏时让给右边由页面决定，所以收起与否由页面通过 collapsed 给出。会挡住定位，登记为贴左边的悬浮元素
  */
@@ -70,6 +70,13 @@ export const ResourceLayerPanel = defineComponent({
     const hasChecked = computed(() => checkedCount.value > 0);
     const checkedExpanded = computed(() => hasChecked.value && !checkedCollapsed.value);
     const batchYears = computed(() => batchYearOptions(props.layers.state.value.catalog));
+    // 固定列出的年份可能还没有数据：选了提示，图层不变（ADR 0094）
+    const setYearForAll = (year: number) => {
+      props.layers.setYearForAll(year);
+      if (!hasYearData(props.layers.state.value.catalog, year)) {
+        ElMessage.info(`没有资源有 ${year} 年的数据，图层保持不变`);
+      }
+    };
 
     // 目录第一次到达时展开含有勾选资源的分类；之后目录刷新不改用户的展开
     watch(
@@ -153,7 +160,7 @@ export const ResourceLayerPanel = defineComponent({
     );
     onScopeDispose(() => stopSplitterDrag?.());
 
-    // 拖动分割线：按住后跟着指针改"已勾选"区的高度，松开时结束
+    // 拖动分割线：按住后跟着指针改"已选择图层"区的高度，松开时结束
     const onSplitterPointerDown = (event: PointerEvent) => {
       if (event.button !== 0 || !adjustable.value || !(event.currentTarget instanceof HTMLElement)) {
         return;
@@ -194,7 +201,7 @@ export const ResourceLayerPanel = defineComponent({
       splitter.addEventListener('lostpointercapture', onEnd);
     };
 
-    // 分割线上按上下方向键：往上是"已勾选"区变高
+    // 分割线上按上下方向键：往上是"已选择图层"区变高
     const onSplitterKeydown = (event: KeyboardEvent) => {
       const step = arrowStep(event);
       if (step === 0 || !adjustable.value) {
@@ -238,7 +245,7 @@ export const ResourceLayerPanel = defineComponent({
                 modelValue={undefined}
                 placeholder="批量设置年份"
                 aria-label="批量设置年份"
-                onUpdate:modelValue={(year: number) => props.layers.setYearForAll(year)}
+                onUpdate:modelValue={setYearForAll}
               >
                 {batchYears.value.map(year => (
                   <ElOption key={year} label={`${year} 年`} value={year} />
@@ -270,7 +277,7 @@ export const ResourceLayerPanel = defineComponent({
                 class={[styles.splitter, !adjustable.value && styles.fixed]}
                 role="separator"
                 aria-orientation="horizontal"
-                aria-label="调整目录和已勾选的高度"
+                aria-label="调整目录和已选择图层的高度"
                 aria-disabled={!adjustable.value}
                 aria-valuenow={Math.round(props.layout.checkedRatio.value * 100)}
                 tabindex={0}
@@ -288,11 +295,11 @@ export const ResourceLayerPanel = defineComponent({
                   ref={checkedHead}
                   type="button"
                   class={styles.checkedHead}
-                  aria-label={checkedCollapsed.value ? '展开已勾选图层' : '收起已勾选图层'}
+                  aria-label={checkedCollapsed.value ? '展开已选择图层' : '收起已选择图层'}
                   aria-expanded={!checkedCollapsed.value}
                   onClick={() => (checkedCollapsed.value = !checkedCollapsed.value)}
                 >
-                  <span class={styles.checkedTitle}>已勾选</span>
+                  <span class={styles.checkedTitle}>已选择图层</span>
                   <span class={styles.badge}>{checkedCount.value}</span>
                   <span class={styles.checkedToggle}>{checkedCollapsed.value ? '展开' : '收起'}</span>
                   <ElIcon>{checkedCollapsed.value ? <ArrowUp /> : <ArrowDown />}</ElIcon>

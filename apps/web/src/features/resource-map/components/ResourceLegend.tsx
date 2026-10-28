@@ -47,7 +47,7 @@ const renderColors = (colors: readonly string[]) => (
 
 /**
  * 资源图层的图例（ADR 0043、0044，设计稿 5D.5）：勾选的资源按叠放顺序各一条，内容从样式登记表和符号覆盖推导，
- * 不读地图、不等视图就绪；复杂图例默认显示多色块摘要，展开查看完整符号，配置由独立按钮打开（ADR 0066）。
+ * 不读地图、不等视图就绪；复合图例默认展开、可以收起成多色块摘要，配置由独立按钮打开（ADR 0066、0094）。
  * 放在功能面板的 Tab 里，标题、开关和登记由外壳负责；隐藏时不渲染条目，编辑器、取色器和弹出层随之卸载，丢弃取色预览；
  * 浏览状态、编辑目标留在这里，再显示时照旧；浏览和编辑共用面板，返回时恢复搜索、展开和滚动位置
  */
@@ -65,8 +65,8 @@ export const ResourceLegend = defineComponent({
     editingChange: (_editing: boolean) => true
   },
   setup(props, { emit }) {
-    // 条目的展开是图例自己的界面状态，不持久化
-    const expanded = ref<ReadonlySet<string>>(new Set());
+    // 条目的收起是图例自己的界面状态，不持久化：复合图例默认展开，记下用户收起的
+    const collapsed = ref<ReadonlySet<string>>(new Set());
     // 资源级配置与图例浏览分开，同时只配置一个资源：没有 item 时配置整个图层，有 item 时直接编辑单个图例
     const editing = ref<SymbolTarget | null>(null);
     // 图例根节点用于查找真实滚动容器
@@ -125,11 +125,11 @@ export const ResourceLegend = defineComponent({
     onUnmounted(() => emit('editingChange', false));
 
     const toggle = (code: string) => {
-      const next = new Set(expanded.value);
+      const next = new Set(collapsed.value);
       if (!next.delete(code)) {
         next.add(code);
       }
-      expanded.value = next;
+      collapsed.value = next;
     };
 
     const selectMode = (code: string, value: unknown) => {
@@ -242,9 +242,9 @@ export const ResourceLegend = defineComponent({
       );
     };
 
-    // 复杂图例保留多色块摘要；单一符号直接展示，配置按钮不承担展开图例的动作
+    // 复合图例收起时显示多色块摘要；单一符号直接展示，配置按钮不承担展开图例的动作
     const renderEntry = (entry: LegendEntry): VNode => {
-      const isOpen = expanded.value.has(entry.code);
+      const isOpen = !collapsed.value.has(entry.code);
       const uniform = entry.kind === 'symbol' || entry.mode === 'uniform';
       const summary = (
         <>

@@ -78,7 +78,7 @@ const MapUiSamples = defineComponent({
         <div class={styles.grid}>
           <section class={styles.sample}>
             <MxTitle level="panel">资源列表</MxTitle>
-            <p class={styles.note}>勾选、搜索、年份、排序和透明度均可操作。已勾选默认收起。</p>
+            <p class={styles.note}>勾选、搜索、年份、排序和透明度均可操作。已选择图层默认收起。</p>
             <div class={styles.stage}>
               <div class={styles.resourceColumn}>
                 <ResourceLayerPanel

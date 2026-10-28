@@ -222,7 +222,7 @@ describe('useResourceLayers', () => {
     expect(fillColors.value).toStrictEqual(['red', landuse]);
   });
 
-  it('批量设置年份：只替换一次状态，推导用新的年份；没有资源要改时不替换；没有任何资源有这一年时抛错、状态不变', async () => {
+  it('批量设置年份：只替换一次状态，推导用新的年份；没有资源要改、没有任何资源有这一年时不替换（ADR 0094）', async () => {
     using ctx = await loaded();
     ctx.owner.setChecked('csxhjctb_hydl', true);
     let replaced = 0;
@@ -243,7 +243,8 @@ describe('useResourceLayers', () => {
     ctx.owner.setYearForAll(2023);
     expect(replaced).toBe(1);
     const before = ctx.owner.state.value;
-    expect(() => ctx.owner.setYearForAll(2030)).toThrow('没有资源有 2030 年的数据');
+    ctx.owner.setYearForAll(2030);
+    expect(replaced).toBe(1);
     expect(ctx.owner.state.value).toBe(before);
     stop();
   });

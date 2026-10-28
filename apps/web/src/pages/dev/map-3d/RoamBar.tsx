@@ -115,7 +115,7 @@ export const RoamBar = defineComponent({
             </span>
             <span class={styles.divider} />
             <ElButton link type="primary" size="small" onClick={owner.resetSpawn}>
-              回到出生点
+              回到起始点
             </ElButton>
             <ElTooltip {...MAP_TOOLTIP_PROPS} content="被卡住时挪到附近最近的开阔地面" placement="top">
               <ElButton link type="primary" size="small" onClick={owner.unstuck}>

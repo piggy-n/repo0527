@@ -281,7 +281,7 @@ $tree-node: '.el-tree > .el-tree-node';
   box-shadow: inset 0 0 0 1px var(--color-divider);
 }
 
-// 不带下拉箭头的选择框，点击照常弹出选项（地图页"已勾选"的年份）；用法 <ElSelect class="select-no-arrow">
+// 不带下拉箭头的选择框，点击照常弹出选项（地图页"已选择图层"的年份）；用法 <ElSelect class="select-no-arrow">
 .el-select.select-no-arrow .el-select__suffix {
   display: none;
 }

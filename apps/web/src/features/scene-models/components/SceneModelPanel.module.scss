@@ -188,7 +188,7 @@
   font-size: var(--font-size-xs);
 }
 
-// "已加载"：和资源面板的"已勾选"同样的整行开关
+// "已加载"：和资源面板的"已选择图层"同样的整行开关
 .loaded {
   display: flex;
   flex: none;
@@ -262,10 +262,6 @@
 }
 
 // 最近定位的模型
-.focused {
-  box-shadow: inset 3px 0 0 var(--color-primary);
-}
-
 .loadedHead {
   display: flex;
   align-items: center;

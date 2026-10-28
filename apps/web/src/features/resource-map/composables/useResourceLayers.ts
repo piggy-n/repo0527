@@ -54,7 +54,7 @@ export interface ResourceLayers {
   readonly setYear: (code: string, year: number) => void;
   /**
    * 批量设置年份（ADR 0052 第 2 节）：有这一年的资源不论是否勾选都切过去，其他不变，只替换一次状态；
-   * 没有任何资源有这一年时抛错
+   * 没有任何资源有这一年时什么也不改（ADR 0094），年份不是整数时抛错
    */
   readonly setYearForAll: (year: number) => void;
   /** 移到面板上的第 index 位（0 在最上面，画在最上层）；位置越界时抛错 */

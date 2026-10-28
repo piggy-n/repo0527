@@ -121,10 +121,19 @@ export function mergeDisplayState(previous: ResourceLayersState, catalog: Resour
   return { catalog, displays, order: mergedOrder(previous.order, catalog) };
 }
 
-/** 批量设置年份可选的年份（ADR 0052 第 2 节）：多年份资源的年份并集，新的在前；只出现在单年份资源里的不列出 */
+// 批量设置年份固定列出的年份（ADR 0094）：数据里还没有时也列出
+const FIXED_BATCH_YEARS: readonly number[] = [2020, 2021];
+
+/**
+ * 批量设置年份可选的年份（ADR 0052 第 2 节、ADR 0094）：多年份资源的年份并集，加上固定的 2020、2021，新的在前；
+ * 其他只出现在单年份资源里的年份不列出；目录还没加载时没有
+ */
 export function batchYearOptions(catalog: ResourceCatalog | null): number[] {
-  const years = new Set<number>();
-  for (const resource of catalog?.resources.values() ?? []) {
+  if (!catalog) {
+    return [];
+  }
+  const years = new Set(FIXED_BATCH_YEARS);
+  for (const resource of catalog.resources.values()) {
     if (resource.years.length > 1) {
       resource.years.forEach(year => years.add(year));
     }
@@ -132,18 +141,22 @@ export function batchYearOptions(catalog: ResourceCatalog | null): number[] {
   return [...years].toSorted((a, b) => b - a);
 }
 
+/** 目录里是否有资源有这一年的数据 */
+export function hasYearData(catalog: ResourceCatalog | null, year: number): boolean {
+  return [...(catalog?.resources.values() ?? [])].some(resource => resource.years.includes(year));
+}
+
 /**
  * 批量设置年份后的显示状态（ADR 0052 第 2 节）：有这一年的资源不论是否勾选都切过去，其他不变；
- * 没有资源要改时返回原来的状态对象，没有任何资源有这一年时抛错
+ * 没有资源要改时（包括没有任何资源有这一年，ADR 0094）返回原来的状态对象；年份不是整数时抛错
  */
 export function withYearForAll(state: ResourceLayersState, year: number): ResourceLayersState {
-  const resources = [...(state.catalog?.resources.values() ?? [])];
-  if (!resources.some(resource => resource.years.includes(year))) {
-    throw new RangeError(`没有资源有 ${year} 年的数据`);
+  if (!Number.isInteger(year)) {
+    throw new RangeError(`年份应是整数，收到 ${year}`);
   }
   const displays = new Map(state.displays);
   let changed = false;
-  for (const { code, years } of resources) {
+  for (const { code, years } of state.catalog?.resources.values() ?? []) {
     const display = displays.get(code);
     if (display && years.includes(year) && display.year !== year) {
       displays.set(code, { ...display, year });
