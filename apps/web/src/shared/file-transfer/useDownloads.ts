@@ -59,7 +59,10 @@ export function useDownloads<Target extends DownloadTarget>(request: DownloadReq
     const { signal } = controller;
     // 复制一份：表格换页、刷新后，任务仍指向发起时的文件
     const task = shallowReactive<DownloadTask<Target>>({
-      file: { ...file }, phase: 'receiving', progress: null, failure: ''
+      file: { ...file },
+      phase: 'receiving',
+      progress: null,
+      failure: ''
     });
     running.set(file.id, { task, controller });
     // 同一文件重新下载时替换它的旧任务，新任务排在最前

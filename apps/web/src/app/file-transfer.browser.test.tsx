@@ -1,11 +1,11 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
-import { DownloadPanel } from '@/shared/file-transfer/DownloadPanel';
 import type { FileDownloadTask, useFileDownloads } from '@/features/file-management/composables/useFileDownloads';
+import { DownloadPanel } from '@/shared/file-transfer/DownloadPanel';
 import { required } from '@/shared/testing/required';
-import 'element-plus/dist/index.css';
 import './styles/index.scss';
+import 'element-plus/dist/index.css';
 
 type DownloadModel = ReturnType<typeof useFileDownloads>;
 

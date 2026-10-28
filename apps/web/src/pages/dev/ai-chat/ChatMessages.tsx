@@ -81,7 +81,9 @@ export const ChatMessages = defineComponent({
         {props.failed && (
           <div class={styles.failure} role="alert">
             连接中断，请稍后重新发送。
-            <ElButton link type="primary" onClick={() => emit('retry')}>重试</ElButton>
+            <ElButton link type="primary" onClick={() => emit('retry')}>
+              重试
+            </ElButton>
           </div>
         )}
       </div>

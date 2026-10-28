@@ -9,12 +9,12 @@ import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { createTestJwtExpiringAt } from '@/shared/auth/testing';
 import * as transfer from '@/shared/file-transfer';
+import { DownloadPanel } from '@/shared/file-transfer/DownloadPanel';
 import { configureHttp } from '@/shared/http/configure';
 import { ApiError } from '@/shared/http/errors';
 import { required } from '@/shared/testing/required';
 import * as api from '../api';
 import { FilePreviewDialog } from '../components/FilePreviewDialog';
-import { DownloadPanel } from '@/shared/file-transfer/DownloadPanel';
 import { useFileDownloads } from './useFileDownloads';
 import { useFilePreview } from './useFilePreview';
 

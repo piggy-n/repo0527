@@ -3,8 +3,8 @@ import { MxTitle } from '@yzt/ui';
 import { ElButton, ElProgress } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type Ref, useId } from 'vue';
 import { useDelayedFlag } from '../composables/useDelayedFlag';
-import type { DownloadPhase, DownloadTask } from './useDownloads';
 import { formatFileBytes } from './file-size';
+import type { DownloadPhase, DownloadTask } from './useDownloads';
 import styles from './DownloadPanel.module.scss';
 
 interface DownloadsModel {

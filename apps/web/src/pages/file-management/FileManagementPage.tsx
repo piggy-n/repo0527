@@ -3,7 +3,6 @@ import { ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { findCategoryPath } from '@/features/file-management/categories';
 import { FileCategoryTree } from '@/features/file-management/components/FileCategoryTree';
-import { DownloadPanel } from '@/shared/file-transfer/DownloadPanel';
 import { FileFilterBar } from '@/features/file-management/components/FileFilterBar';
 import { FilePreviewDialog } from '@/features/file-management/components/FilePreviewDialog';
 import { FileTable } from '@/features/file-management/components/FileTable';
@@ -11,6 +10,7 @@ import { FileUploadButton } from '@/features/file-management/components/FileUplo
 import { useFileDownloads } from '@/features/file-management/composables/useFileDownloads';
 import { useFileList } from '@/features/file-management/composables/useFileList';
 import { useFilePreview } from '@/features/file-management/composables/useFilePreview';
+import { DownloadPanel } from '@/shared/file-transfer/DownloadPanel';
 import styles from './FileManagementPage.module.scss';
 
 /** 文件管理：左侧分类树；右侧筛选、上传入口、下载进度、表格与分页，预览在弹窗里 */
