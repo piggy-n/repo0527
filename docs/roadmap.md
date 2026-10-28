@@ -114,7 +114,7 @@
 | 需要时 | 运行中 WebGL 上下文丢失（`webglcontextlost`）的处理：适配器目前没有处理，真实环境里遇到再做 | ADR 0030 |
 | 需要时 | `QueryForm`：日期范围这类 180 放不下的控件要加一种加宽的写法；会话结束时把 feature 的 store 一并重置（目前没有） | [modules/query-form.md](modules/query-form.md)、[modules/auth.md](modules/auth.md) |
 | 6 | 上传、下载统一成一套能力（统一的上传 / 下载方法或独立模块，包括进度、文件名、错误处理、预览前的 MIME 补齐），文件管理、数据下载（资源申请）、数据查询的导出共用，不再各自实现。旧项目在迁移范围内至少有 5 处各写各的下载：`libs/http-service.js` 的 blob 处理、`services/resource-application/applyApiService.js`（`downloadApplicationFile`、`downloadStatisticsReportFile`）、`downloadTaskService.js`（带进度）、文件管理 `FileManagementContent.vue`（`requestFileBlob`、`downloadBlob`）、数据查询 `space-monitoring-query/index.vue`（`downloadExportBlob`）；`FormData` 上传 3 处：文件管理上传弹窗、资源管理 Excel 导入、数据查询 | 本文（2026-10-08 提出） |
-| 6 | 宽屏时手动把侧栏收成窄条（基本统计页，可复用窄屏的窄条）；旧页面左栏 296、348 归到 320。页面内菜单已定为 `shared` 的 `SideNav`（ADR 0092），消息改为顶栏弹框（ADR 0093） | [design/page-layout.md](design/page-layout.md) |
+| 6 | 已完成：宽屏时手动把侧栏收成窄条是 `MxSplitLayout` 的 `collapsible`（基本统计页，ADR 0100），收起、展开的图标等用户给出设计图标后替换；旧页面左栏 296、348 归到 320。页面内菜单已定为 `shared` 的 `SideNav`（ADR 0092），消息改为顶栏弹框（ADR 0093） | [design/page-layout.md](design/page-layout.md)、[modules/ui.md](modules/ui.md) |
 | 联调时 | 资源管理下载申请 `/api/apply/create` 的成功 data 与失败信封、可申请图层的正式目录、处室 `jsdxzx` 的含义 | 同上 |
 | 7 | 部署（nginx 回退与接口转发，带 hash 的产物长期缓存、`index.html` 不缓存、开启压缩）；版本号格式 | [deployment.md](deployment.md)、ADR 0005 |
 | 7 | 给 `cesium/` 配缓存（每个 Worker 都会请求一遍同一个脚本；带哈希的长缓存，不带哈希的协商缓存），有显卡的机器上复测第一次切到三维（3D.5a 在无界面浏览器里测，视图就绪以后约 2 秒是 Cesium 的启动和第一次绘制） | ADR 0091、[deployment.md](deployment.md) |
@@ -815,6 +815,8 @@ UI 工作流程补充（2026-10-20）：用户确认将设计与验证流程固�
 类型检查、lint（依赖方向规则在这台机器上跑不了）、Web 269 个文件 2305 项测试、公网与内网构建、生产冒烟 27 项通过；合进最新 main（`53a771c`）后重跑，Web 272 个文件 2342 项测试、两种构建、生产冒烟 28 项通过。真实后端的写操作、真实下载和统计报表数据待联调；2026-10-28 用户验收通过（包括顶栏角标与中间一档的内边距），由 `ddc2d6c` 合入本地 main，合入后在这个提交上重跑全部检查通过；没有推送。见[阶段笔记](stages/system-message-migration.md)。
 
 城市国土空间监测指标（2026-10-28）：分支 `migrate-space-monitoring-indicators`（main 基线 `0cfef2c`，旧项目 `b4f3987`），按"最小必要迁移"完成：画布型页面、条件 / 指标树 / 计算 / 成果四类拥有者、计算的轮询与成果图层（ADR 0098）。用户当天在 `/dev/monitoring-indicators` 确认布局和取舍；只读实测接口后按真实返回收紧解析，发现旧页面因 `Boolean("false")` 把综合分析指标全部禁用，新页面按真假值解析。合进最新 main（`74b2fc0`）后：类型检查、lint（依赖方向规则在这台机器上跑不了）、单元 260 个文件与浏览器 24 个文件的测试、公网与内网构建、生产冒烟 29 项通过；在真实后端上看过正式页面（2025 年南京的计算树与综合分析指标、展示树、成果面板与定位、处理前验证的确认框）。待联调：后端没有成果瓦片的数据，地图上的指标图层没有真实数据；开始计算是写操作，没有调用过，综合分析指标能否计算未知。2026-10-28 用户验收通过，快进合入本地 main，没有推送。见[阶段笔记](stages/space-monitoring-indicators-migration.md)。
+
+城市国土空间监测基本统计（2026-10-28）：分支 `migrate-space-monitoring-statistics`（main 基线 `b96499c`，旧项目 `b4f3987`），按"最小必要迁移"完成：分栏型页面，报表、总览、计算三个拥有者；轮询交给查询库的 `refetchInterval`，计划里的 `LatestController` 用不上（换条件就是换查询键）；提交后的跟踪是纯函数的状态机；`MxSplitLayout` 加宽屏收起（ADR 0100）。用户当天在 `/dev/monitoring-statistics` 确认布局和取舍。类型检查、lint（依赖方向规则在这台机器上跑不了，其余规则通过）、单元 270 个文件 2365 项与浏览器 24 个文件 114 项的测试、图标包 35 项、公网与内网构建、生产冒烟 31 项通过。待办：在真实后端上看正式页面；收起、展开侧栏的两个图标等用户提供；开始统计是写操作，没有调用过；后端的几个数量对不上（见 migration.md）。见[阶段笔记](stages/space-monitoring-statistics-migration.md)。
 
 资源与文件管理联合复测（2026-10-21）：R5 基线 `b2cb4c0` 已同步最新 main `c635c7c`。修复资源写入调度前会话竞态、文件删除晚到成功与缓存刷新；导入格式提示紧跟按钮，图片仅下载，文档预览头部紧凑排列，未保存确认框统一浅灰标题栏。两个间接依赖的 3 条安全公告已用补丁版本解决，官方生产依赖审计通过。已通过 `40e1a8e` 合入本地 main，合入后 Web 1797 + 图标包 35 项测试、22 项生产冒烟、类型 / lint / 公网及内网构建通过；开发样例复用正式预览范围并完成补充复测。真实后端写入与 Excel 未知契约仍待联调。完整审查、页面验收及合入后全量结果见[联合验收报告](stages/resource-file-management-acceptance.md)。
 

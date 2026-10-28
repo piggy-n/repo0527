@@ -91,6 +91,7 @@ docs/
    - [系统管理与消息的重新迁移](stages/system-message-migration.md)：Element 弹框的开关与过渡、同一个组件由真实数据和样例数据驱动、改坏验证测不出来时怎么办
    - [现状底图的调整（2026-10-28）](stages/current-map-adjustments.md)：默认值记例外、两份顺序、意图里用用户看到的单位、没有 key 的兄弟节点怎样被重建、能推导的状态不另存
    - [城市国土空间监测指标的迁移](stages/space-monitoring-indicators-migration.md)：实测推翻旧代码的兜底假设、计算轮询按 ADR 0039 归类、查询结果标上 ID
+   - [城市国土空间监测基本统计的迁移](stages/space-monitoring-statistics-migration.md)：轮询交给查询库、跟踪写成纯函数的状态机、宽屏收起侧栏放进组件库
 5. [commands.md](commands.md)：日常要用的命令
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明，并按 [UI 工作流程](design/ui-workflow.md) 完成交互原型和实际页面验证。
