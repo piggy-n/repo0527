@@ -62,7 +62,15 @@ export function useMessagePreview() {
   }
 
   const model: MessageViewModel = {
-    open, readFilter, category, selectedId, selected, limit, messages, unreadCount, filtered,
+    open,
+    readFilter,
+    category,
+    selectedId,
+    selected,
+    limit,
+    messages,
+    unreadCount,
+    filtered,
     visible: computed(() => filtered.value.slice(0, limit.value)),
     readingAll: ref(false),
     allError: ref(''),

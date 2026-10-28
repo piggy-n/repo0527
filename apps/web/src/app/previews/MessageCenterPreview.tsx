@@ -1,5 +1,5 @@
-import { defineComponent } from 'vue';
 import { ElMessage } from 'element-plus';
+import { defineComponent } from 'vue';
 import { MessageCenterView } from '@/features/message-center/components/MessageCenterView';
 import {
   DevMessageCenterPage,
@@ -16,16 +16,18 @@ export const MessageCenterPreview = defineComponent({
         {{
           header: ({ model }: MessagePreviewHeader) => (
             <AppHeader>
-              {{ actions: ({ headerBottom }: HeaderActions) => (
-                <MessageCenterView
-                  model={model}
-                  headerBottom={headerBottom}
-                  navigate={async target => {
-                    ElMessage.info(target.kind === 'reports' ? '演示：进入统计报表' : '演示：进入相关申请');
-                    return true;
-                  }}
-                />
-              ) }}
+              {{
+                actions: ({ headerBottom }: HeaderActions) => (
+                  <MessageCenterView
+                    model={model}
+                    headerBottom={headerBottom}
+                    navigate={async target => {
+                      ElMessage.info(target.kind === 'reports' ? '演示：进入统计报表' : '演示：进入相关申请');
+                      return true;
+                    }}
+                  />
+                )
+              }}
             </AppHeader>
           )
         }}

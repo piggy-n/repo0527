@@ -30,7 +30,11 @@ export const MessageList = defineComponent({
     const skeleton = useDelayedFlag(() => props.loading);
     return () => {
       if (props.loading) {
-        return <div class={styles.state} aria-busy="true">{skeleton.value && <ElSkeleton rows={7} animated />}</div>;
+        return (
+          <div class={styles.state} aria-busy="true">
+            {skeleton.value && <ElSkeleton rows={7} animated />}
+          </div>
+        );
       }
       if (props.failed) {
         return (

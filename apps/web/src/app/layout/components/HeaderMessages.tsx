@@ -18,9 +18,12 @@ const MessageSession = defineComponent({
     const router = useRouter();
     const route = useRoute();
     const unavailable = computed(() => session.user?.role === Role.admin ? '' : '用户侧关联业务尚未迁移');
-    watch(() => route.fullPath, () => {
-      model.open.value = false;
-    });
+    watch(
+      () => route.fullPath,
+      () => {
+        model.open.value = false;
+      }
+    );
 
     function openRelated(target: MessageTarget) {
       if (unavailable.value) {

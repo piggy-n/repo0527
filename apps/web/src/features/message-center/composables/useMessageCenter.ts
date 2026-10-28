@@ -52,31 +52,40 @@ export function useMessageCenter() {
       allError.value = '';
     }
   });
-  watch(() => session.token, () => {
-    open.value = false;
-    selectedId.value = undefined;
-    readFilter.value = 'all';
-    category.value = 'all';
-    limit.value = 20;
-  }, { flush: 'sync' });
+  watch(
+    () => session.token,
+    () => {
+      open.value = false;
+      selectedId.value = undefined;
+      readFilter.value = 'all';
+      category.value = 'all';
+      limit.value = 20;
+    },
+    { flush: 'sync' }
+  );
   onScopeDispose(() => {
     disposed = true;
   });
 
+  // 被取消的写操作（会话已变）不提示；页面关了、换了会话也不再显示错误
+  function shouldReport(error: unknown, token: string | undefined): boolean {
+    const canceled = error instanceof ApiError && error.kind === 'canceled';
+    return !disposed && open.value && guard.isCurrent(token) && !canceled;
+  }
+
   async function read(id: string) {
     const message = messages.value.find(item => item.msgId === id);
-    if (disposed || !message || message.isRead || reading.has(id) || readingAll.value) {
+    const account = session.user?.loginName;
+    if (disposed || !account || !message || message.isRead || reading.has(id) || readingAll.value) {
       return;
     }
     const token = guard.capture();
-    const account = session.user!.loginName;
     reading.add(id);
     readErrors.delete(id);
     try {
       await mutation.mutateAsync({ id, ids: [id], account, token });
     } catch (error) {
-      if (!disposed && open.value && guard.isCurrent(token) &&
-        !(error instanceof ApiError && error.kind === 'canceled')) {
+      if (shouldReport(error, token)) {
         readErrors.set(id, '标记已读失败，请重试');
       }
     } finally {
@@ -90,19 +99,18 @@ export function useMessageCenter() {
   }
 
   async function readAll() {
-    if (disposed || !canReadAll.value) {
+    const account = session.user?.loginName;
+    if (disposed || !account || !canReadAll.value) {
       return;
     }
     const token = guard.capture();
-    const account = session.user!.loginName;
     const ids = messages.value.filter(message => !message.isRead).map(message => message.msgId);
     readingAll.value = true;
     allError.value = '';
     try {
       await mutation.mutateAsync({ ids, account, token });
     } catch (error) {
-      if (!disposed && open.value && guard.isCurrent(token) &&
-        !(error instanceof ApiError && error.kind === 'canceled')) {
+      if (shouldReport(error, token)) {
         allError.value = '全部标记已读失败，请重试';
       }
     } finally {
@@ -111,14 +119,28 @@ export function useMessageCenter() {
   }
 
   return {
-    open, readFilter, category, limit, selectedId, selected, messages, filtered, visible, unreadCount,
-    readingAll, canReadAll, allError, selectedError,
+    open,
+    readFilter,
+    category,
+    limit,
+    selectedId,
+    selected,
+    messages,
+    filtered,
+    visible,
+    unreadCount,
+    readingAll,
+    canReadAll,
+    allError,
+    selectedError,
     loading: query.isLoading,
     refreshing: query.isFetching,
     failed: query.isError,
     isReading: (id: string) => reading.has(id),
     refresh: () => query.refetch(),
-    read, select, readAll
+    read,
+    select,
+    readAll
   };
 }
 
