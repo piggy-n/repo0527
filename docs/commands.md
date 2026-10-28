@@ -290,13 +290,13 @@ pnpm --filter @yzt/web test:smoke
 
 ### `pnpm --filter @yzt/web test:smoke`
 
-**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）。
+**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）；三维（`scene.spec.ts`，3D.5c）检查二维稳定后预加载了三维运行时、切到三维画面稳定、加载一个生成的测试模型并定位、步行进站（导航网格的 Worker 分块），回到二维复用画布。
 
 **什么时候用**：先运行 `pnpm build:intranet`；修改加载、路由或页面缓存后运行，CI 在内网构建后自动执行。
 
 **执行了什么**：已有 Playwright Test 从 `tools/smoke/playwright.config.ts` 读取配置，自动启动并关闭 4173 端口上的产物预览；接口在浏览器中替换为固定响应，地图使用本地省界和真实引擎，未知接口与公网请求使测试失败。
 
-**注意事项**：需要已安装 Chromium；4173 端口须空闲，不复用已有服务。不会自动构建，不能在公网产物上运行；输出写入已忽略的 `apps/web/smoke-results.local/`，不依赖账号、私有字体或真实后端，不设毫秒性能门槛。`pnpm test` 不包含这组 `*.spec.ts` 用例。
+**注意事项**：需要已安装 Chromium；4173 端口须空闲，不复用已有服务。三维的模型数据不入库，冒烟拦下清单和瓦片，换成自己生成的一间 12 米见方的屋子（`tools/smoke/scene-model.ts`）；软件渲染下这个用例约 30 秒，用例的时限放到 3 分钟。不会自动构建，不能在公网产物上运行；输出写入已忽略的 `apps/web/smoke-results.local/`，不依赖账号、私有字体或真实后端，不设毫秒性能门槛。`pnpm test` 不包含这组 `*.spec.ts` 用例。
 
 ### `pnpm --filter @yzt/web test:watch`
 
