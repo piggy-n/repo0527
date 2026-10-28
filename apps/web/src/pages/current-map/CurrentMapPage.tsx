@@ -123,7 +123,7 @@ export const CurrentMapPage = defineComponent({
     const sceneModelsQuery = useSceneModelsQuery(() => map.dimension.value === '3d');
     const models = useSceneModels(map, sceneModelsQuery.data);
     // 地下空间（ADR 0084）：钻地中，包括漫游地下的模型（切到二维时结束钻地）；只隐藏不适用的入口，
-    // 功能面板、底图的开关和内容都保留，退出后原样显示
+    // 功能面板、底图的开关和内容都保留，退出后原样显示；状态栏和视图控件也隐藏，不能切回二维（ADR 0095）
     const undergroundSpace = computed(() => models.underground.value !== null);
 
     // 业务状态仍由各自的拥有者持有，这里只组合窗口与排布
@@ -219,7 +219,8 @@ export const CurrentMapPage = defineComponent({
         sides.activate('left');
       }
     };
-    // 切换二三维：底图跟着换成这种视图默认的（ADR 0078 第 2 节）；切到二维结束钻地（ADR 0081 第 6 节）
+    // 切换二三维：底图跟着换成这种视图默认的（ADR 0078 第 2 节）；切到二维结束钻地和漫游（ADR 0081 第 6 节），
+    // 地下空间时页面上没有切换的入口（ADR 0095）
     const switchDimension = (kind: ViewKind) => {
       if (kind === '2d') {
         models.exitRoam();
@@ -348,7 +349,7 @@ export const CurrentMapPage = defineComponent({
                 <RegionScopeBar region={region} />
               </div>
             )}
-            <div class={styles.left}>
+            <div class={[styles.left, underground && styles.noStatus]}>
               {/* 二三维各一个面板：切走的缓存起来，回来时搜索、展开这些界面状态还在（停用期间按 ADR 0063 处理） */}
               <KeepAlive>
                 {scene ? (
@@ -440,9 +441,12 @@ export const CurrentMapPage = defineComponent({
                 <IndoorMinimap map={indoorMap} player={walkPlayer} onOpen={models.openMap} />
               </div>
             )}
-            <div class={styles.bottom}>
-              <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
-            </div>
+            {/* 状态栏在左下角、左侧面板下面（ADR 0095） */}
+            {!underground && (
+              <div class={styles.bottom}>
+                <MapStatusBar class={styles.status} readout={readout} format={location.state.value.format} />
+              </div>
+            )}
             <div class={styles.tools}>
               {!underground && (
                 <div class={styles.business}>
@@ -456,18 +460,19 @@ export const CurrentMapPage = defineComponent({
                   />
                 </div>
               )}
-              <div class={styles.stack}>
-                <div class={styles.controls}>
-                  <MapViewControls
-                    goToDefaultView={goToDefaultView}
-                    zoomRange={JIANGSU_ZOOM_RANGE}
-                    dimension={map.dimension.value}
-                    defaultView={!underground}
-                    onUpdate:dimension={switchDimension}
-                  />
+              {!underground && (
+                <div class={styles.stack}>
+                  <div class={styles.controls}>
+                    <MapViewControls
+                      goToDefaultView={goToDefaultView}
+                      zoomRange={JIANGSU_ZOOM_RANGE}
+                      dimension={map.dimension.value}
+                      onUpdate:dimension={switchDimension}
+                    />
+                  </div>
+                  {renderBasemapCard()}
                 </div>
-                {!underground && renderBasemapCard()}
-              </div>
+              )}
             </div>
           </div>
           {scene && indoorMap && walkPlayer && models.mapOpen.value && (

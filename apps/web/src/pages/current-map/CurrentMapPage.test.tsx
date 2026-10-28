@@ -1683,7 +1683,7 @@ describe('CurrentMapPage', () => {
       expect(wrapper.get<HTMLInputElement>('input[placeholder="搜索模型或所属市"]').element.value).toBe('苏州');
     });
 
-    it('勾选交给三维视图；定位地下的模型时飞过去并进入钻地，切到二维结束钻地', async () => {
+    it('勾选交给三维视图；定位地下的模型时飞过去并进入钻地，钻地期间没有二维的入口（ADR 0095）', async () => {
       mockManifest();
       const page = await readyPage();
       const { wrapper } = page;
@@ -1705,14 +1705,18 @@ describe('CurrentMapPage', () => {
       expect(wrapper.get('[data-underground-bar]').text()).toContain('钻地观察 · 苏州站地下空间');
       expect(view.session.scene.current.underground).toStrictEqual({ tilesetId: 'sz-station', surfaceOpacity: 0.25 });
 
-      await switchTo(wrapper, '二维');
+      expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(false);
+
+      await button(wrapper, '退出钻地').trigger('click');
+      await settle();
       expect(view.session.scene.current.underground).toBeNull();
+      expect(wrapper.get('[data-loaded="sz-station"]').text()).not.toContain('钻地');
+      await switchTo(wrapper, '二维');
       await switchTo(wrapper, '三维');
       expect(wrapper.find('[data-underground-bar]').exists()).toBe(false);
-      expect(wrapper.get('[data-loaded="sz-station"]').text()).not.toContain('钻地');
     });
 
-    it('地下空间（ADR 0084）：隐藏工具栏、功能面板、底图、区划条和默认视角，切回移动；退出钻地后原样显示', async () => {
+    it('地下空间（ADR 0084、0095）：隐藏工具栏、功能面板、底图、区划条、视图控件和状态栏，切回移动；退出钻地后原样显示', async () => {
       mockManifest();
       stubBoundaryFetch();
       const page = await readyPage();
@@ -1741,8 +1745,10 @@ describe('CurrentMapPage', () => {
       expect(wrapper.find('[data-underground-bar]').exists()).toBe(true);
       expect(view.session.tool.active).toBe('browse');
       expect(labels()).not.toContain('测距');
-      expect(labels()).not.toContain('默认视角');
-      expect(labels()).toEqual(expect.arrayContaining(['放大', '缩小', '二维', '三维']));
+      for (const label of ['默认视角', '放大', '缩小', '二维', '三维']) {
+        expect(labels()).not.toContain(label);
+      }
+      expect(wrapper.find('[data-map-status-bar]').exists()).toBe(false);
       expect(wrapper.find('[data-map-cards]').exists()).toBe(false);
       expect(wrapper.find('[data-region-scope]').exists()).toBe(false);
       expect(wrapper.get('[data-panel-group]').isVisible()).toBe(false);
@@ -1751,14 +1757,15 @@ describe('CurrentMapPage', () => {
       await button(wrapper, '退出钻地').trigger('click');
       await settle();
       expect(button(wrapper, '移动').attributes('aria-pressed')).toBe('true');
-      expect(labels()).toContain('默认视角');
+      expect(labels()).toEqual(expect.arrayContaining(['默认视角', '放大', '缩小', '二维', '三维']));
+      expect(wrapper.find('[data-map-status-bar]').exists()).toBe(true);
       expect(wrapper.get('[data-region-scope]').text()).toBe('江苏省›南京市回到全省');
       expect(wrapper.get('[data-panel-group]').isVisible()).toBe(true);
       expect(shownPanels(wrapper)).toStrictEqual(['legend']);
       await vi.waitFor(() => expect(optionsPopoverVisible('basemap')).toBe(true));
     });
 
-    it('路线漫游（ADR 0083）：从面板开始，空格开始、暂停；Esc、换成别的工具、切到二维都退出', async () => {
+    it('路线漫游（ADR 0083）：从面板开始，空格开始、暂停；Esc、换成别的工具都退出；漫游期间没有二维的入口（ADR 0095）', async () => {
       mockManifest();
       const page = await readyPage();
       const { wrapper } = page;
@@ -1802,8 +1809,13 @@ describe('CurrentMapPage', () => {
 
       view.session.tool.activate('browse');
       await start();
-      await switchTo(wrapper, '二维');
-      expect(view.session.scene.current.roam).toBeUndefined();
+      expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(false);
+      // 退出漫游后仍在钻地（第 6 步改为一并退出），退出钻地后才能切回二维
+      await key('Escape');
+      expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(false);
+      await button(wrapper, '退出钻地').trigger('click');
+      await settle();
+      expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(true);
     });
 
     it('页面被缓存期间（ADR 0063）：在别的页面按空格、Esc 不作用到漫游；回来以后照常', async () => {

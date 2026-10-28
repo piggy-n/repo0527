@@ -72,11 +72,14 @@ test('三维：二维稳定后预加载运行时，切到三维、加载模型�
     const bar = page.locator('[data-roam-bar]');
     await expect(bar.getByRole('button', { name: '回到起始点', exact: true })).toBeVisible({ timeout: 90_000 });
     expect(wasRequested(/\/assets\/nav-grid\.worker-[\w-]+\.js$/), '导航网格的 Worker 分块').toBe(true);
-    await expect(page.locator('[data-map-status-bar]')).toContainText('第一视角');
+    // 地下空间里没有状态栏和视图控件（ADR 0095）
+    await expect(page.locator('[data-map-status-bar]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '二维', exact: true })).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(bar).toHaveCount(0);
 
-    // 回到二维：复用原来的画布
+    // 退出钻地后回到二维：复用原来的画布
+    await page.locator('[data-underground-bar]').getByRole('button', { name: '退出钻地', exact: true }).click();
     await page.getByRole('button', { name: '二维', exact: true }).click();
     await expect(flatCanvas).toBeVisible();
     expect(await original.evaluate((element: { isConnected: boolean }) => element.isConnected)).toBe(true);
