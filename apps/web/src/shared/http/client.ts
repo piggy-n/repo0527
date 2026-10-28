@@ -64,7 +64,7 @@ export interface BinaryResponse {
   contentDisposition: string | null;
 }
 
-// 两种进度只在各自的入口开放（上传在 JSON 接口，下载在 getBlob），内部的请求函数一并接收
+// 两种进度只在各自的入口开放（上传在 JSON 接口，下载在 getBlob、postBlob），内部的请求函数一并接收
 interface TransferRequestOptions extends HttpRequestOptions {
   onUploadProgress?: (progress: TransferProgress) => void;
   onDownloadProgress?: (progress: TransferProgress) => void;
@@ -300,5 +300,8 @@ export const http = {
   put: <Schema extends z.ZodType>(url: string, body: unknown, options: RequestOptions<Schema>) =>
     requestJson({ method: 'put', url, data: body }, options),
   getBlob: (url: string, options: BinaryRequestOptions = {}): Promise<BinaryResponse> =>
-    request({ method: 'get', url, responseType: 'blob' }, options, parseBinaryResponse)
+    request({ method: 'get', url, responseType: 'blob' }, options, parseBinaryResponse),
+  /** 用 POST 读取文件（如数据申请的下载）；body 为 undefined 时不发正文 */
+  postBlob: (url: string, body?: unknown, options: BinaryRequestOptions = {}): Promise<BinaryResponse> =>
+    request({ method: 'post', url, data: body, responseType: 'blob' }, options, parseBinaryResponse)
 };
