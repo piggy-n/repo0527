@@ -89,6 +89,7 @@ docs/
    - [main 分支的第二次全面审查与整改](stages/main-full-review.md)：在上一篇之后读，写法指标、测试里取必需值的做法和仍待决定的事项在这里
    - [三维阶段：Cesium 三维、模型与漫游](stages/stage-3d-cesium-and-roaming.md)：二三维切换、覆盖物镜像、3DT 模型、漫游与导航网格、预加载与生产冒烟
    - [系统管理与消息的重新迁移](stages/system-message-migration.md)：Element 弹框的开关与过渡、同一个组件由真实数据和样例数据驱动、改坏验证测不出来时怎么办
+   - [城市国土空间监测指标的迁移](stages/space-monitoring-indicators-migration.md)：实测推翻旧代码的兜底假设、计算轮询按 ADR 0039 归类、查询结果标上 ID
 5. [commands.md](commands.md)：日常要用的命令
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明，并按 [UI 工作流程](design/ui-workflow.md) 完成交互原型和实际页面验证。
