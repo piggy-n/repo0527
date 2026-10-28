@@ -64,8 +64,10 @@ export const MxPanel = defineComponent({
               {(actions || inDrawer.value || collapsible.value) && (
                 <div class={styles.actions}>
                   {actions}
+                  {/* 宽窄屏切换时收起和关闭按钮同时换，带 key 免得按顺序配对成同一个按钮 */}
                   {collapsible.value && layout && (
                     <ElButton
+                      key="collapse"
                       link
                       icon={Fold}
                       aria-label={`收起${layout.asideLabel.value}`}
@@ -74,6 +76,7 @@ export const MxPanel = defineComponent({
                   )}
                   {inDrawer.value && layout && (
                     <ElButton
+                      key="close"
                       link
                       icon={Close}
                       aria-label={`关闭${layout.asideLabel.value}`}

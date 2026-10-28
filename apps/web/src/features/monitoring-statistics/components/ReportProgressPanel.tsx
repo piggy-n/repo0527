@@ -43,17 +43,22 @@ export const ReportProgressPanel = defineComponent({
       return (
         <MxPanel title="当前报表进度">
           {{
+            // 查询中和更新时间常在同一轮里一起变，带 key 免得两个 span 按顺序互换
             actions: () => [
               report.polling.value && (
-                <span class={[styles.meta, styles.active]} role="status">
+                <span key="activity" class={[styles.meta, styles.active]} role="status">
                   <ElIcon class={styles.spin}>
                     <Loading />
                   </ElIcon>
                   {ACTIVITY_TEXT[report.activity.value]}
                 </span>
               ),
-              report.updatedAt.value !== null && <span class={styles.meta}>{report.updatedAt.value} 更新</span>,
-              <ElButton icon={RefreshRight} onClick={() => emit('refresh')}>
+              report.updatedAt.value !== null && (
+                <span key="updated" class={styles.meta}>
+                  {report.updatedAt.value} 更新
+                </span>
+              ),
+              <ElButton key="refresh" icon={RefreshRight} onClick={() => emit('refresh')}>
                 刷新
               </ElButton>
             ],
