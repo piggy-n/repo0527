@@ -72,9 +72,13 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
 
     const collapsed = ref(false);
     const basemapOpen = ref(false);
+    // 窄屏时指标面板和其余的面板（底图、成果、进度）只显示最后操作的一边
     const sides = useSideExclusion({
       leftExpanded: () => !collapsed.value,
-      rightOpen: () => basemapOpen.value || (tab.value === 'result' && result.state.value.kind !== 'none')
+      rightOpen: () =>
+        basemapOpen.value ||
+        (tab.value === 'result' && result.state.value.kind !== 'none') ||
+        (tab.value === 'calculation' && calculation.task.value !== null)
     });
 
     // 切换页签时展示回到没有选择的状态，再进展示页签要重新选（同旧页面）
@@ -97,11 +101,19 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
         sides.activate('right');
       }
     };
-    // 选了指标看成果算操作右边：窄屏时成果显示出来
+    // 选了指标看成果、开始一次计算都算操作右边：窄屏时成果、进度显示出来
     watch(
       () => resultTree.picked.value[0]?.code,
       code => {
         if (code !== undefined) {
+          sides.activate('right');
+        }
+      }
+    );
+    watch(
+      () => calculation.task.value?.request,
+      request => {
+        if (request !== undefined) {
           sides.activate('right');
         }
       }
@@ -159,7 +171,7 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
             </div>
           )}
           {tab.value === 'calculation' && (
-            <div key="progress" class={styles.progress}>
+            <div key="progress" class={styles.progress} v-show={sides.right.value}>
               <CalculationProgressPanel calculation={calculation} />
             </div>
           )}

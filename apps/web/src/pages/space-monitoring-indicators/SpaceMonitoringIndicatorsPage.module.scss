@@ -1,3 +1,5 @@
+@use 'ui';
+
 // 画布型页面：地图撑满内容区，浮层的网格同现状底图（ADR 0053）：左列是指标面板，中间是成果和进度，右列是基础组和底图卡
 .root {
   position: relative;
@@ -57,6 +59,12 @@
 
   > * {
     pointer-events: auto;
+  }
+
+  // 窄屏时左边只剩竖条，进度停在底图卡上方，右边不再让位，宽度留给表格
+  @media (width < #{ui.$compact}) {
+    grid-row: 1 / 3;
+    margin-right: 0;
   }
 }
 

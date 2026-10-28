@@ -114,7 +114,7 @@ export const IndicatorPanel = defineComponent({
     const renderConditions = () => (
       <section class={styles.conditions}>
         <MxTitle>计算设置</MxTitle>
-        <label class={styles.field}>
+        <div class={styles.field}>
           <span class={styles.label}>年份</span>
           <ElDatePicker
             class={styles.control}
@@ -125,8 +125,8 @@ export const IndicatorPanel = defineComponent({
             placeholder="请选择年份"
             onUpdate:modelValue={(value: string | null) => props.conditions.setYear(value ? Number(value) : null)}
           />
-        </label>
-        <label class={styles.field}>
+        </div>
+        <div class={styles.field}>
           <span class={styles.label}>监测范围</span>
           <ElCascader
             class={styles.control}
@@ -137,7 +137,7 @@ export const IndicatorPanel = defineComponent({
             placeholder="请选择市或区县"
             onUpdate:modelValue={value => props.conditions.setRegion(typeof value === 'string' ? value : null)}
           />
-        </label>
+        </div>
       </section>
     );
 

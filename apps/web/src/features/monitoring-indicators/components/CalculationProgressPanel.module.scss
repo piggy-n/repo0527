@@ -22,10 +22,10 @@
   padding: var(--space-md) var(--space-lg) var(--space-lg);
 }
 
-// 摘要两列，"当前状态"独占一行
+// 摘要两列，"当前状态"独占一行；面板窄（窄屏）时一列
 .summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: var(--space-sm) var(--space-lg);
   margin: 0;
 
