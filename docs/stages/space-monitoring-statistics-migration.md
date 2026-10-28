@@ -1,6 +1,6 @@
 # 城市国土空间监测基本统计的迁移
 
-日期：2026-10-28。分支 `migrate-space-monitoring-statistics`，从 main `b96499c` 切出；旧项目基线 `master-demo` 的 `b4f3987`。决策见 [ADR 0100](../adr/0100-space-monitoring-statistics.md)，用法见 [modules/monitoring-statistics.md](../modules/monitoring-statistics.md)，接口实测和与旧页面的差异见 [migration.md](../migration.md)。
+日期：2026-10-28。分支 `migrate-space-monitoring-statistics`，从 main `b96499c` 切出；旧项目基线 `master-demo` 的 `b4f3987`。当天用户验收通过，快进合入本地 main（合入前 main 在 `b96499c`），没有推送。决策见 [ADR 0100](../adr/0100-space-monitoring-statistics.md)，用法见 [modules/monitoring-statistics.md](../modules/monitoring-statistics.md)，接口实测和与旧页面的差异见 [migration.md](../migration.md)。
 
 本次按"最小必要迁移"做：保留旧页面的功能、规则和交互，界面换成新项目的规范，不扩展功能。
 
