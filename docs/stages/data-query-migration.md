@@ -2,6 +2,8 @@
 
 2026-10-23 开始，继续在 `codex/migrate-ai-system-management` 推进。迁移前已按要求提交消息中心：`6f220d1`（未推送）。2026-10-24 用户确认交互后，已替换四个正式业务入口；后两个模块按确认范围迁移地图壳，查询能力记录待补。决策见 [ADR 0088](../adr/0088-data-query-snapshots.md)。
 
+> 2026-10-27：合入 main 前重新基于 main（`58bb550`），文中的 `6f220d1` 现为 `b40dbcc`、本篇的提交现为 `03715ce`；ADR 由 0079 改号为 0088。整改（含内网缺少 `crypto.randomUUID` 时查询失败的修复）见[合入前的整理与整改](ai-system-management-merge-review.md)。
+
 ## 旧版范围核对
 
 旧仓库 `C:\WebProject\yzt`，`master-demo` 基线 `6b4799b922efb2ed276cc28122fbe78527234b75`。核对了路由、`views/space-monitoring-query/` 主页面与配置、`views/data-query-map/`、`api/query/query-api.js`，并通过浏览器查看旧查询页面与高级查询入口。

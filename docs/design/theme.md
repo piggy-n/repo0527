@@ -227,6 +227,7 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 | `select-no-arrow` | `<ElSelect class="select-no-arrow">` | 不显示右侧的下拉箭头，点击照常弹出选项 | 地图页"已勾选"的年份（2026-10-16 用户要求） |
 | `radio-group-block` | `<ElRadioGroup class="radio-group-block">` | 占满宽度，各项等宽 | 地图页坐标定位的写法切换 |
 | `dialog-panel-header` | `<ElDialog class="dialog-panel-header">`，`header` 插槽用 `<MxTitle level="panel">` | 浅灰标题栏横向铺满，最小高 48、左侧 16、右侧预留 48 关闭区；内容内边距 16，底部 `0 16 16`；不加独立阴影或渐变 | 资源管理新增 / 重命名目录、文件上传 / 预览；真实样例在 `/dev/theme` 的「灰底标题弹窗」 |
+| `menu-panel` | `<ElMenu class="menu-panel">`，放在无头部的 `MxPanel flush` 里 | 按 [page-layout.md](page-layout.md) 的菜单型左栏：内边距 8；菜单项高 44、16px 字、图标 18、`--radius-sm` 圆角，项之间 `--space-xs`；当前项 `--color-primary-bg` 底、主色文字、600 字重，悬停 `--color-primary-bg-light`；去掉 Element 的右边框 | 系统管理 |
 | `form-query` | 由 `shared/query-form` 的 `QueryForm` 加在 `ElForm` 上，页面不直接写 | 条件区（`form-query__fields`）从左到右排列、换行；控件宽 180，日期选择器去掉默认的 220 固定宽度；表单项不留底部外边距；按钮行（`form-query__actions`）默认在条件区下方，`form-query__extra` 靠右。条件换行时加 `form-query--aligned`：标签改为块级并两端对齐（`text-align-last: justify`），宽度由 `QueryForm` 设置；条件和按钮都放得下一行时加 `form-query--inline`：条件区和按钮行排成一行，按钮行占满剩下的宽度，extra 在最右端 | 列表页的筛选栏，规则见 [page-layout.md](page-layout.md) 的"筛选栏" |
 
 `form-query__fields`、`form-query__actions`、`form-query__buttons`、`form-query__extra`、`form-query--aligned`、`form-query--inline` 不是 Element 组件的类，所以不写成 `.el-xxx.变体名`。Element 的标签默认是 `inline-flex`，文字是匿名的弹性项目，`text-align` 对它不起作用，所以变体里把标签改成了块级。

@@ -2,6 +2,8 @@
 
 2026-10-23 开始。分支 `codex/migrate-ai-system-management`，新项目起点 `5b4feaf`；使用当前 checkout，不修改其他迁移 worktree。旧项目 `master-demo` 基线 `6b4799b922efb2ed276cc28122fbe78527234b75`，只参考实际在用的入口，不处理旧仓库未提交修改。
 
+> 2026-10-27：合入 main 前重新基于 main（`58bb550`），本篇的提交现为 `4a1b58e`；之后按两次审查的标准整改，见[合入前的整理与整改](ai-system-management-merge-review.md)。
+
 ## 范围与实施顺序
 
 | 步骤 | 内容 | 当前状态 |

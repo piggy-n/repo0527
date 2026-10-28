@@ -2,6 +2,8 @@
 
 2026-10-23，继续在 `codex/migrate-ai-system-management` 推进。此前系统管理与 AI 预览已提交为 `067fcb5`；用户已确认消息弹框方案，正式 Header 已接入列表、已读操作和管理员业务入口，独立消息页面已移除。决策见 [ADR 0087](../adr/0087-header-message-center.md)。
 
+> 2026-10-27：合入 main 前重新基于 main（`58bb550`），文中的 `067fcb5` 现为 `4a1b58e`、本篇的提交现为 `b40dbcc`；ADR 由 0078 改号为 0087。整改见[合入前的整理与整改](ai-system-management-merge-review.md)。
+
 ## 范围与旧版基线
 
 用户要求消息中心不再作为独立页面，改为 Header 下方的弹框。现状底图三维继续暂缓，AI 鉴权与系统管理真实数据联调不扩入本轮。
