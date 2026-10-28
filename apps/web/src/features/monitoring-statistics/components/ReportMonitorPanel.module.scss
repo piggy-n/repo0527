@@ -1,0 +1,85 @@
+// 监控表格占满面板剩下的高度，表格在自己里面滚动
+
+.panel {
+  flex: 1;
+  min-height: 0;
+}
+
+// 状态筛选在标题下面单独一行，窄时换行
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-bottom: 12px;
+}
+
+.table {
+  height: 100%;
+  min-height: 0;
+}
+
+.skeleton {
+  padding: var(--space-lg);
+}
+
+.text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  color: var(--color-text-disabled);
+}
+
+.cause {
+  color: var(--color-danger-text);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+}
+
+.completed {
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.processing {
+  background-color: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+.failed {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+.notStarted {
+  background-color: var(--color-neutral-bg);
+  color: var(--color-text-regular);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-secondary);
+}

@@ -1,0 +1,124 @@
+// 统计报表计算（左栏）：内容在面板里滚动，按钮固定在底部
+
+.panel {
+  flex: 1;
+  min-height: 0;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.label {
+  flex: none;
+  width: 84px;
+  color: var(--color-text-regular);
+}
+
+.control {
+  flex: 1;
+  min-width: 0;
+}
+
+// 一个报表一块：报表名称是分组的勾选，下面是等级
+.group {
+  padding: var(--space-sm) 12px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+
+.disabled {
+  background-color: var(--color-neutral-bg-light);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.off {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.levels {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-lg);
+  padding-left: 24px;
+}
+
+.submit {
+  width: 100%;
+}
+
+// 确认框里的已有任务列表
+.confirm {
+  p {
+    margin: 0 0 var(--space-sm);
+  }
+}
+
+.confirmList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  margin: 0 0 var(--space-sm);
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: 4px var(--space-sm);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-neutral-bg-light);
+  }
+}
+
+.confirmStatus {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.completed {
+  color: var(--color-success-text);
+}
+
+.processing {
+  color: var(--color-primary);
+}
+
+.failed {
+  color: var(--color-danger-text);
+}
+
+.unknown {
+  color: var(--color-warning);
+}
+
+.muted {
+  color: var(--color-text-secondary);
+}
+
+.warning {
+  color: var(--color-warning);
+}

@@ -1,0 +1,105 @@
+.meta {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+// 主区很窄时矩阵横向滚动，不把状态挤成省略号
+.scroll {
+  overflow-x: auto;
+}
+
+.matrix {
+  width: 100%;
+  min-width: 440px;
+  border-collapse: collapse;
+  table-layout: fixed;
+
+  th,
+  td {
+    height: 40px;
+    padding: 0 4px;
+    border-bottom: 1px solid var(--color-border-light);
+    text-align: center;
+  }
+
+  thead th {
+    background-color: var(--color-neutral-bg-light);
+    color: var(--color-text-secondary);
+    font-weight: var(--font-weight-medium);
+  }
+
+  // 报表名称一列靠左，放不下时省略
+  tbody th {
+    overflow: hidden;
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-regular);
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  thead th:first-child {
+    width: 28%;
+    text-align: left;
+  }
+}
+
+.disabledRow th {
+  color: var(--color-text-secondary);
+}
+
+.chip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 6px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.none,
+.off {
+  color: var(--color-text-disabled);
+}
+
+.action {
+  background-color: var(--color-neutral-bg);
+  color: var(--color-text-regular);
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--color-primary-border-hover);
+  }
+}
+
+.completed {
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.processing {
+  background-color: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+.failed {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+// 当前查看的组合
+.current {
+  border-color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-danger-text);
+}

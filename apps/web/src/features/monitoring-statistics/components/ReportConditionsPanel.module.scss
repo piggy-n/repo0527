@@ -1,0 +1,30 @@
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.label {
+  flex: none;
+  color: var(--color-text-regular);
+}
+
+.year {
+  width: 180px;
+}
+
+.skeleton {
+  flex: 1;
+  max-width: 240px;
+}
+
+.empty {
+  color: var(--color-text-secondary);
+}

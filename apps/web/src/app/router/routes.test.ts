@@ -42,7 +42,8 @@ describe('路由表', () => {
       RouteName.devNavGrid,
       RouteName.devSystemManagement,
       RouteName.devMessageCenter,
-      RouteName.devMonitoringIndicators
+      RouteName.devMonitoringIndicators,
+      RouteName.devMonitoringStatistics
     ].toSorted());
   });
 

@@ -1,0 +1,133 @@
+.meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.active {
+  color: var(--color-primary);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+// 旁边放不下四个数量时排到环形下面
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-lg) var(--space-xl);
+}
+
+.ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.percent {
+  color: var(--color-text-title);
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.muted {
+  color: var(--color-text-disabled);
+}
+
+.unit {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+// 四个数量两列排
+.stats {
+  display: grid;
+  flex: 1 1 240px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 12px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-neutral-bg-light);
+}
+
+.statIcon {
+  flex: none;
+}
+
+.statLabel {
+  flex: 1;
+  color: var(--color-text-regular);
+}
+
+.statCount {
+  color: var(--color-text-title);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.completed .statIcon {
+  color: var(--color-success);
+}
+
+.failed .statIcon {
+  color: var(--color-danger);
+}
+
+.processing .statIcon {
+  color: var(--color-primary);
+}
+
+.notStarted .statIcon {
+  color: var(--color-text-secondary);
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) 12px;
+  border-radius: var(--radius-md);
+}
+
+.info {
+  background-color: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+.warning {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.error {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}

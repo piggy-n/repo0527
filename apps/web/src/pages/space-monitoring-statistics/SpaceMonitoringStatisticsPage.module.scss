@@ -1,0 +1,41 @@
+// 主区：上面两列（查看条件和进度、总览），下面的监控表格占满剩下的高度；主区太窄时排成一列、整体滚动
+.content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-height: 0;
+  overflow-y: auto;
+  container-type: inline-size;
+}
+
+.top {
+  display: grid;
+  flex: none;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: var(--space-lg);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-width: 0;
+}
+
+// 排成一列后放不下，监控表格给固定高度，主区滚动
+@container (width < 760px) {
+  .top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  // 面板按内容的高度，不再平分左列
+  .column > * {
+    flex: none;
+  }
+
+  .monitor {
+    flex: none;
+    height: 480px;
+  }
+}
