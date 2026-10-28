@@ -17,10 +17,14 @@ import { MxPanel, MxSection, MxSplitLayout, MxTitle, useSplitLayout } from '@yzt
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import styles from './UiComponentsPreview.module.scss';
 
-/** libs/ui 的标题：两个层级、自定义图标、extra、省略 */
+const descriptionWidths = [480, 320, 200, 140];
+
+/** libs/ui 的标题：两个层级、自定义图标、extra、说明、省略 */
 export const TitlePreview = defineComponent({
   name: 'TitlePreview',
   setup() {
+    const width = ref(320);
+
     return () => (
       <div class={styles.titleGrid}>
         <div class={styles.stack}>
@@ -67,6 +71,45 @@ export const TitlePreview = defineComponent({
             }}
           </MxTitle>
           <span class={styles.muted}>↑ 宽 300 时标题省略，"更多"保持完整</span>
+        </div>
+        <div class={[styles.stack, styles.fullRow]}>
+          <ElRadioGroup
+            size="small"
+            modelValue={width.value}
+            onUpdate:modelValue={value => {
+              width.value = Number(value);
+            }}
+          >
+            {descriptionWidths.map(value => (
+              <ElRadioButton key={value} value={value}>
+                {`宽 ${value}`}
+              </ElRadioButton>
+            ))}
+          </ElRadioGroup>
+          <div class={styles.resizable} style={{ width: `${width.value}px` }}>
+            <MxTitle level="panel" description="技术标准规范 / 地方补充技术规定/细则">
+              {{
+                default: () => '监测类',
+                extra: () => (
+                  <ElButton size="small" icon={Refresh}>
+                    刷新
+                  </ElButton>
+                )
+              }}
+            </MxTitle>
+            <MxTitle level="panel" description="南京市 2025 年度国土变更调查成果">
+              数据申请提交
+            </MxTitle>
+            <MxTitle description="技术标准规范">
+              {{
+                default: () => '国家/行业现行技术规程、标准、规范 · 自然资源调查类',
+                extra: () => <ElLink type="primary">更多</ElLink>
+              }}
+            </MxTitle>
+          </div>
+          <span class={styles.muted}>
+            ↑ 带说明（description）：说明先省略，标题保持完整；标题自己放不下时才省略，extra 始终完整。也可以拖动右下角改宽度
+          </span>
         </div>
       </div>
     );
@@ -256,6 +299,8 @@ export const PanelPreview = defineComponent({
 interface DirectoryNode {
   id: string;
   label: string;
+  // 叶子节点的上级路径，和文件管理页一样作为面板标题的说明
+  parents?: string;
   children?: DirectoryNode[];
 }
 
@@ -271,22 +316,26 @@ const directories: DirectoryNode[] = [
   children: (groups as string[]).map(group => ({
     id: group,
     label: group,
-    children: ['自然资源调查类', '监测类', '数据库类', '其他'].map(leaf => ({ id: `${group}/${leaf}`, label: leaf }))
+    children: ['自然资源调查类', '监测类', '数据库类', '其他'].map(leaf => ({
+      id: `${group}/${leaf}`,
+      label: leaf,
+      parents: `${String(label)} / ${group}`
+    }))
   }))
 }));
 
 // 侧栏里的目录树：选中叶子节点后，窄屏时关闭抽屉
 const DirectoryTree = defineComponent({
   name: 'DirectoryTree',
-  emits: { select: (_label: string) => true },
+  emits: { select: (_label: string, _parents: string) => true },
   setup(_, { emit }) {
     const { compact, closeAside } = useSplitLayout();
     // ElTree 传入的节点数据类型是 Record<string, any>，这里只声明用到的字段再收窄
-    const select = (node: { label?: unknown; children?: unknown }) => {
-      if (node.children || typeof node.label !== 'string') {
+    const select = (node: { label?: unknown; parents?: unknown; children?: unknown }) => {
+      if (node.children || typeof node.label !== 'string' || typeof node.parents !== 'string') {
         return;
       }
-      emit('select', node.label);
+      emit('select', node.label, node.parents);
       if (compact.value) {
         closeAside();
       }
@@ -308,6 +357,7 @@ export const SplitLayoutPreview = defineComponent({
   name: 'SplitLayoutPreview',
   setup() {
     const directory = ref('自然资源调查类');
+    const parents = ref('技术标准规范 / 国家/行业现行技术规程、标准、规范');
     return () => (
       <div class={styles.layoutDemo}>
         <MxSplitLayout asideLabel="文件目录">
@@ -315,14 +365,15 @@ export const SplitLayoutPreview = defineComponent({
             aside: () => (
               <MxPanel title="文件目录">
                 <DirectoryTree
-                  onSelect={label => {
+                  onSelect={(label, path) => {
                     directory.value = label;
+                    parents.value = path;
                   }}
                 />
               </MxPanel>
             ),
             default: () => (
-              <MxPanel title={directory.value}>
+              <MxPanel title={directory.value} description={parents.value}>
                 {{
                   actions: () => (
                     <ElButton type="primary" icon={Upload}>

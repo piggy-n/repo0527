@@ -41,8 +41,20 @@
   font-size: 16px;
 }
 
-.text {
+// 标题和说明：宽度是竖杠与 extra 之间的空间，只有它收缩；见 docs/modules/ui.md 的"标题和说明的收缩顺序"
+.content {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-sm);
   min-width: 0;
+  overflow: hidden;
+}
+
+// 不收缩，最宽占满 .content；只有自己都放不下时才省略。说明已缩到 0 时，剩下的间距由 .content 裁掉
+.text {
+  flex: none;
+  max-width: 100%;
   margin: 0;
   overflow: hidden;
   font-size: inherit;
@@ -52,9 +64,9 @@
   white-space: nowrap;
 }
 
-// 收缩系数远大于标题：空间不够时它先缩到 0（省略），之后才轮到标题
+// .content 里唯一能收缩的项目：空间不够时先缩到 0（省略）
 .description {
-  flex: 0 1000 auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--color-text-secondary);

@@ -62,10 +62,22 @@ Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不�
 |---|---|
 | `level` | `'panel'`：面板标题，16/600，渲染为 `h2`；`'section'`（默认）：区块标题，14/600，渲染为 `h3`。单独使用时基本是区块标题，面板标题一般由 `MxPanel` 渲染 |
 | `default` | 标题文字，过长时省略 |
+| `description` | 紧跟在标题后面的灰色说明（12px、`text-secondary`），例如分类的上级路径；悬停显示全文。收缩顺序见下文 |
 | `icon` | 替换左侧的竖杠。大小跟随标题层级的字号（面板 20、区块 16），颜色为主色；`SvgIcon`、`ElIcon` 默认都是 `1em`，不用传 `size` |
 | `extra` | 放在右侧，不参与省略 |
 
-结构：外层 `div` 里依次是竖杠或图标、标题元素、`extra`。`extra` 不放在 `h2` / `h3` 里，读屏软件读标题时不会带上"全选""刷新"这类操作；竖杠和图标是装饰，设置了 `aria-hidden`。
+结构：外层 `div` 里依次是竖杠或图标、包住标题元素和说明的 `div`、`extra`。`extra` 不放在 `h2` / `h3` 里，读屏软件读标题时不会带上"全选""刷新"这类操作；竖杠和图标是装饰，设置了 `aria-hidden`。
+
+### 标题和说明的收缩顺序
+
+空间不够时：说明先省略到 0，标题保持完整；只有标题自己放不下时才省略标题；竖杠和 `extra` 不收缩。
+
+- 包住标题和说明的 `div` 是外层唯一能收缩的项目，宽度就是竖杠与 `extra` 之间的空间
+- 标题 `flex: none; max-width: 100%`：不参与收缩，最宽占满这块空间；说明是这块空间里唯一能收缩的项目
+- 说明缩到 0 后，它前面的间距还在，标题加间距会超出 8；这一层 `overflow: hidden` 把间距裁掉，标题仍能用满这块空间
+- 不用收缩系数区分先后（以前是标题 1、说明 1000）：flex 按"基准宽度 × 收缩系数"的比例分摊，标题总会分到一点。测得标题少 0.05 像素也会出现省略号，"数据申请提交"显示成"数据申请…"
+- 说明从 0 开始增长（`flex: 1 1 0` 加 `max-width: max-content`）也能保证先后，但缩到 0 时间距仍在，标题会提前 8 像素被省略；grid 的列间距对空轨道同样生效，没有说明或 `extra` 时还要换几套模板。所以选了包一层
+- 真实布局的检查在 `MxTitle.browser.test.tsx`：按亚像素比较标题宽度，并检查标题自己放不下时占满到 `extra` 前的间距
 
 组件不设外边距：它会出现在面板头部这类 flex 容器里，由使用方决定间距。"区块标题 + 内容"的组合用 `MxSection`，间距由它负责。
 
@@ -109,7 +121,7 @@ Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不�
 |---|---|
 | `title` | 面板标题，用 `MxTitle level="panel"` 渲染 |
 | `headerTone` | `'plain'`（默认）保留容器底色；`'muted'` 使用浅灰主标题栏，普通内容上留 16，`floating` 内容上留 8，`flush` 不追加留白（ADR 0076） |
-| `description` | 紧跟在标题后面的灰色说明（12px、`text-secondary`），例如分类的上级路径；空间不够时先省略它，标题保持完整（收缩系数远大于标题），悬停显示全文。`MxTitle` 也有同名属性 |
+| `description` | 紧跟在标题后面的灰色说明，交给 `MxTitle` 的同名属性：空间不够时先省略到 0，标题保持完整，悬停显示全文 |
 | `flush` | 去掉内容区的内边距：表格贴边、放地图、内容自带内边距时使用 |
 | `iconTile` | 卡片头部：`icon` 放在 24 的浅底方块里，图标 16。只用于同一页有多张并列卡片、需要用图标区分的场合 |
 | `floating` | 浮在地图上的外观（ADR 0053）：`--color-bg-mask` 底、`--shadow-md`，`flex: 0 1 auto` 按内容定高，放不下时由容器压缩、内容区滚动 |
@@ -237,7 +249,7 @@ TSX 中给组件传多个插槽时，子元素写成对象：`{{ default: () => 
 
 | 组件 | 变量 |
 |---|---|
-| `MxTitle` | `--color-primary`、`--color-text-strong`、`--color-text-title`、`--color-text-primary`、`--font-size-lg`、`--font-size-base`、`--font-weight-semibold`、`--space-sm` |
+| `MxTitle` | `--color-primary`、`--color-text-strong`、`--color-text-title`、`--color-text-primary`、`--color-text-secondary`、`--font-size-lg`、`--font-size-base`、`--font-size-xs`、`--font-weight-semibold`、`--font-weight-regular`、`--space-sm` |
 | `MxSection` | `--space-md`、`--space-lg`（另外通过 `MxTitle` 用到它的变量） |
 | `MxPanel` | `--color-bg-container`、`--color-primary-bg`、`--color-divider`、`--shadow-sm`、`--radius-md`、`--radius-sm`、`--space-lg`、`--space-sm` |
 | `MxSplitLayout` | `--space-lg`；另外把 Element 抽屉的 `--el-drawer-padding-primary` 设为 0（见上文"抽屉的内边距"） |

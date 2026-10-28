@@ -28,12 +28,14 @@ export const MxTitle = defineComponent({
           ) : (
             <span class={styles.mark} aria-hidden="true" />
           )}
-          <Heading class={styles.text}>{slots.default?.()}</Heading>
-          {props.description && (
-            <span class={styles.description} title={props.description}>
-              {props.description}
-            </span>
-          )}
+          <div class={styles.content}>
+            <Heading class={styles.text}>{slots.default?.()}</Heading>
+            {props.description && (
+              <span class={styles.description} title={props.description}>
+                {props.description}
+              </span>
+            )}
+          </div>
           {slots.extra && <div class={styles.extra}>{slots.extra()}</div>}
         </div>
       );
