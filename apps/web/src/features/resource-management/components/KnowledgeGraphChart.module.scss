@@ -24,15 +24,54 @@
   color: var(--color-text-secondary);
 }
 
-// 缩放按钮在右上角，和图例同一行，不盖住节点
+// 视角按钮在右下角竖排成一组，外观沿用地图页的基础组（shared/map/view-controls）：宽 40，按钮 32 × 32
 .tools {
   position: absolute;
-  top: var(--space-sm);
-  right: var(--space-sm);
+  right: var(--space-md);
+  bottom: var(--space-md);
   display: flex;
-  gap: var(--space-xs);
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 40px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+}
 
-  :global(.el-button + .el-button) {
-    margin-left: 0;
+.tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-regular);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
   }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    background: transparent;
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
+  }
+}
+
+.separator {
+  flex: none;
+  height: 1px;
+  margin: 4px 6px;
+  background-color: var(--color-divider);
 }

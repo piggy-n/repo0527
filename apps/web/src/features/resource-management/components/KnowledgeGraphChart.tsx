@@ -1,8 +1,9 @@
-import { Aim, ZoomIn, ZoomOut } from '@element-plus/icons-vue';
 import { useResizeObserver } from '@vueuse/core';
 import type { ECElementEvent, ECharts } from 'echarts/core';
-import { ElButton } from 'element-plus';
+import { ElButton, ElTooltip } from 'element-plus';
 import { defineComponent, nextTick, onMounted, onScopeDispose, type PropType, ref, watch } from 'vue';
+import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
+import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import type { ChartTheme } from '../extraction/graph-chart';
 import type * as GraphRuntime from '../extraction/graph-runtime';
 import type { KnowledgeGraph, KnowledgeNode } from '../extraction/knowledge-graph';
@@ -139,19 +140,34 @@ export const KnowledgeGraphChart = defineComponent({
       );
     }
 
-    return () => {
-      const ready = state.value === 'ready';
+    // 只有图标，悬停在左边提示名称，和地图页的基础组一致
+    function toolButton(label: string, icon: IconName, action: () => void) {
       return (
-        <div class={styles.root}>
-          <div ref={host} class={styles.canvas} role="img" aria-label="取数关系图" />
-          {renderState()}
-          <div class={styles.tools}>
-            <ElButton icon={ZoomIn} circle aria-label="放大" disabled={!ready} onClick={() => zoomBy(ZOOM_STEP)} />
-            <ElButton icon={ZoomOut} circle aria-label="缩小" disabled={!ready} onClick={() => zoomBy(1 / ZOOM_STEP)} />
-            <ElButton icon={Aim} circle aria-label="适配全图" disabled={!ready} onClick={reset} />
-          </div>
-        </div>
+        <ElTooltip {...MAP_TOOLTIP_PROPS} content={label} placement="left">
+          <button
+            type="button"
+            class={styles.tool}
+            aria-label={label}
+            disabled={state.value !== 'ready'}
+            onClick={action}
+          >
+            <SvgIcon name={icon} size={20} />
+          </button>
+        </ElTooltip>
       );
-    };
+    }
+
+    return () => (
+      <div class={styles.root}>
+        <div ref={host} class={styles.canvas} role="img" aria-label="取数关系图" />
+        {renderState()}
+        <div class={styles.tools} role="toolbar" aria-label="关系图视角" aria-orientation="vertical">
+          {toolButton('放大', 'map-zoom-in', () => zoomBy(ZOOM_STEP))}
+          {toolButton('缩小', 'map-zoom-out', () => zoomBy(1 / ZOOM_STEP))}
+          <div class={styles.separator} role="separator" />
+          {toolButton('适配全图', 'map-default-view', reset)}
+        </div>
+      </div>
+    );
   }
 });

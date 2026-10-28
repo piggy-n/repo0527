@@ -17,13 +17,13 @@ export interface ChartTheme {
   warning: string;
 }
 
-// 图例左边距和右侧留给缩放按钮的宽度
-const LEGEND_LEFT = 12;
-const LEGEND_RIGHT = 128;
+// 图例在左上角竖排，离画布边缘 12；缩放按钮在右下角（组件里的浮层）
+const LEGEND_INSET = 12;
 // 名称最宽 8 个字，超出换行，不截断
 const LABEL_WIDTH = 112;
-// 画布四周留白：左右放得下名称的一半，上面是图例，下面是最低一行节点的名称
-const PADDING = { top: 64, right: 72, bottom: 48, left: 72 };
+// 画布四周留白：上面放得下最大的节点圆，下面是最低一行节点的名称；右边让出缩放按钮那一列（52）和名称的一半（56），
+// 适配全图时名称不进按钮下面；左边对称，图例只占左上角约 160 高，节点很少落在那个角上
+const PADDING = { top: 48, right: 116, bottom: 48, left: 116 };
 // 节点圆按布局里的直径和适配全图的比例缩放，和旧页面的几何一致、互不重叠；节点少时最多缩到一半
 const MAX_NODE_SCALE = 0.5;
 const MIN_NODE_SIZE = 10;
@@ -95,12 +95,12 @@ export function knowledgeChartOption(
         return nodeTooltip(graph.nodes[item.dataIndex]);
       }
     },
-    // 一行放不下时翻页，不压到关系图上；右上角留给缩放按钮。图例同时给 left 和 right 时 ECharts 会丢掉 right，宽度要直接给
+    // 七类一列排下，关系图最矮 320 时也不用翻页
     legend: {
-      type: 'scroll',
-      top: 14,
-      left: LEGEND_LEFT,
-      width: viewport.width - LEGEND_LEFT - LEGEND_RIGHT,
+      orient: 'vertical',
+      top: LEGEND_INSET,
+      left: LEGEND_INSET,
+      itemGap: 8,
       itemWidth: 10,
       itemHeight: 10,
       icon: 'circle',

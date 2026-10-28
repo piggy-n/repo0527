@@ -123,7 +123,7 @@ describe('useDataExtraction', () => {
 });
 
 describe('DataExtractionDialog', () => {
-  it('热门词进入第二步，显示条件和底栏；全选、清空格式；开始取数后显示完成页', async () => {
+  it('热门词进入第二步，显示条件和底栏；全选、清空格式；开始取数后显示完成页，完成页没有底栏', async () => {
     const { owner } = host();
     owner.start();
     await flushPromises();
@@ -141,9 +141,9 @@ describe('DataExtractionDialog', () => {
 
     await click('全选');
     await click('开始取数');
-    expect(dialog().textContent).toContain('已转到后台处理数据。');
-    await click('完成');
-    expect(owner.open.value).toBe(false);
+    expect(owner.step.value).toBe('done');
+    expect(dialog().querySelector('[role="status"]')?.textContent).toBe('已转到后台处理数据');
+    expect(dialog().querySelector('.el-dialog__footer')).toBeNull();
   });
 
   it('输入法选字时的回车不搜索，普通回车搜索', async () => {

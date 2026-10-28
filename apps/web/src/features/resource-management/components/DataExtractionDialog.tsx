@@ -17,6 +17,7 @@ import {
   ElTag
 } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
+import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { DataExtractionOwner, ExtractionStep } from '../composables/useDataExtraction';
 import { DATA_FORMATS, DATA_LAYERS } from '../data-request';
 import { DATA_NAMES, HOT_KEYWORDS, PURPOSE_MAX_LENGTH } from '../extraction/extraction-form';
@@ -164,6 +165,7 @@ export const DataExtractionDialog = defineComponent({
               label: renderFormatLabel,
               default: () => (
                 <ElCheckboxGroup
+                  class={styles.formats}
                   modelValue={form.formats}
                   // 按选项的固定顺序保存，和点选的先后无关
                   onUpdate:modelValue={value => (form.formats = DATA_FORMATS.filter(format => value.includes(format)))}
@@ -198,7 +200,10 @@ export const DataExtractionDialog = defineComponent({
       if (step === 'done') {
         return (
           <p class={styles.done} role="status">
-            已转到后台处理数据。
+            <span class={styles.doneIcon}>
+              <SvgIcon name="check" size={16} />
+            </span>
+            已转到后台处理数据
           </p>
         );
       }
@@ -220,15 +225,8 @@ export const DataExtractionDialog = defineComponent({
       );
     }
 
-    // 第一步没有底栏
+    // 只有第二步有底栏；完成页只用标题栏的关闭
     function renderFooter() {
-      if (owner.step.value === 'done') {
-        return (
-          <ElButton type="primary" onClick={owner.close}>
-            完成
-          </ElButton>
-        );
-      }
       return (
         <div class={styles.footer}>
           <ElButton onClick={owner.back}>上一步</ElButton>
@@ -269,7 +267,7 @@ export const DataExtractionDialog = defineComponent({
               {renderBody()}
             </>
           ),
-          footer: owner.step.value === 'search' ? undefined : renderFooter
+          footer: owner.step.value === 'graph' ? renderFooter : undefined
         }}
       </ElDialog>
     );

@@ -69,7 +69,7 @@
 }
 
 .node {
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
   padding: var(--space-md);
   border: 1px solid var(--color-primary-border);
   border-radius: var(--radius-md);
@@ -100,10 +100,15 @@
   }
 }
 
+// 这个表单没有校验提示，表单项之间不用留 Element 默认 18 的提示位置；1080P 下条件栏不用滚动
 .form {
   :global(.el-select),
   :global(.el-date-editor.el-input) {
     width: 100%;
+  }
+
+  :global(.el-form-item) {
+    margin-bottom: var(--space-md);
   }
 
   :global(.el-form-item:last-child) {
@@ -126,11 +131,39 @@
   }
 }
 
+// 五种格式排一行：去掉复选框自带的 30 右外边距，改用间距
+.formats {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-lg);
+
+  :global(.el-checkbox) {
+    margin-right: 0;
+  }
+}
+
 .done {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
   margin: 0;
-  padding: var(--space-xl) 0;
-  color: var(--color-text-regular);
-  text-align: center;
+  padding: var(--space-xs) 0;
+  color: var(--color-text-strong);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.doneIcon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .footer {

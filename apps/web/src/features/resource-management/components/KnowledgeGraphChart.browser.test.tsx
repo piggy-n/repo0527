@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils';
 import type { GraphSeriesOption } from 'echarts/charts';
+import type { LegendComponentOption } from 'echarts/components';
 import { type ECharts, getInstanceByDom } from 'echarts/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
@@ -16,9 +17,9 @@ afterEach(() => {
 
 const graph = searchContext(searchKnowledgeNodes('耕地'));
 
-async function mountChart() {
+async function mountChart(width = 760, height = 520) {
   const host = document.createElement('div');
-  host.style.cssText = 'width:760px;height:520px';
+  host.style.cssText = `width:${width}px;height:${height}px`;
   document.body.append(host);
   hosts.push(host);
   const wrapper = mount(KnowledgeGraphChart, { attachTo: host, props: { graph, keyword: '耕地' } });
@@ -81,6 +82,17 @@ describe('KnowledgeGraphChart（真实 ECharts）', () => {
     expect(zoom(chart)).toBeCloseTo(1.5625, 3);
     await wrapper.get('button[aria-label="适配全图"]').trigger('click');
     expect(zoom(chart)).toBe(1);
+  });
+
+  it('图例在左上角竖排；适配全图时节点名称不进右下角按钮那一列', async () => {
+    // 窄而高的画布，适配全图时关系图左右顶到留白的边上
+    const { canvasHost, chart } = await mountChart(420, 640);
+    const [legend] = chart.getOption().legend as LegendComponentOption[];
+    // 名称宽 112、以节点为中心；按钮那一列是右边距 12 加宽 40（测试里不加载组件样式，按样式表里的值算）
+    const labelRight = Math.max(...graph.nodes.map(node => nodePixel(chart, node.id)[0])) + 56;
+
+    expect(legend).toMatchObject({ orient: 'vertical', left: 12, top: 12 });
+    expect(labelRight).toBeLessThanOrEqual(canvasHost.clientWidth - 52);
   });
 
   it('卸载时释放 ECharts 实例', async () => {
