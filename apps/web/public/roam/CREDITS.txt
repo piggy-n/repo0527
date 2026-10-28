@@ -1,0 +1,10 @@
+Cesium_Man.glb
+
+Cesium Man, (c) 2017 Cesium (https://cesium.com), licensed under
+Creative Commons Attribution 4.0 International (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/legalcode
+
+Source: KhronosGroup/glTF-Sample-Assets, Models/CesiumMan
+(also shipped in CesiumGS/cesium, Apps/SampleData/models/CesiumMan).
+The Cesium logo on the model is a trademark of Cesium.
+Used unmodified as the third-person walking avatar.

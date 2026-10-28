@@ -1,4 +1,12 @@
-import type { Navigation, NavPoint, SceneContent, SceneRoam, TilesetLayer, TilesetStatus } from '@yzt/map-core';
+import type {
+  Navigation,
+  NavPoint,
+  SceneContent,
+  SceneRoam,
+  TilesetLayer,
+  TilesetStatus,
+  WalkView
+} from '@yzt/map-core';
 import type { SceneModel } from './catalog';
 
 /** 钻地观察：哪个模型，地表不透明度 0～0.6（ADR 0078 第 5 节、ADR 0081 第 6 节） */
@@ -22,8 +30,8 @@ export interface RouteChoice {
 }
 
 /**
- * 步行（ADR 0086）：哪个模型、速度（米/秒），回到出生点、脱困的次数；完整地图打开时暂停，在上面双击的瞬移（ADR 0087）。
- * 导航网格建好以前不交给会话
+ * 步行（ADR 0086）：哪个模型、速度（米/秒），回到出生点、脱困的次数；完整地图打开时暂停，在上面双击的瞬移（ADR 0087）；
+ * 人称（ADR 0090）。导航网格建好以前不交给会话
  */
 export interface WalkChoice {
   readonly kind: 'walk';
@@ -34,9 +42,18 @@ export interface WalkChoice {
   readonly unstuck: number;
   readonly paused: boolean;
   readonly teleport: { readonly count: number; readonly spot: NavPoint } | null;
+  readonly view: WalkView;
 }
 
 export type RoamChoice = RouteChoice | WalkChoice;
+
+/**
+ * 第三人称的人物模型（ADR 0090 第 4 节）：Cesium 官方示例模型 Cesium Man，随应用部署在 `${BASE_URL}roam/` 下，
+ * 来源和许可见 docs/modules/map-cesium.md
+ */
+export function walkAvatarUrl(): string {
+  return new URL(`${import.meta.env.BASE_URL}roam/Cesium_Man.glb`, window.location.href).href;
+}
 
 /** 路线漫游的倍速 */
 export const ROUTE_RATES: readonly number[] = [0.5, 1, 2];
@@ -55,6 +72,8 @@ export interface SceneModelsState {
   readonly roam: RoamChoice | null;
   /** 按模型 ID 建好的导航网格 */
   readonly navigations: ReadonlyMap<string, Navigation>;
+  /** 第三人称的人物模型的绝对地址 */
+  readonly avatar: string;
 }
 
 /** 瓦片集的 ID：白膜每种效果一个，其他模型一个 */
@@ -116,7 +135,7 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
 // 漫游的模型还勾选着、路线还在时才交给会话；步行要等导航网格建好
 function roamOf(
   byId: ReadonlyMap<string, SceneModel>,
-  { roam, loaded, navigations }: SceneModelsState
+  { roam, loaded, navigations, avatar }: SceneModelsState
 ): SceneRoam | null {
   const model = roam && loaded.includes(roam.modelId) ? byId.get(roam.modelId) : undefined;
   if (!roam || !model) {
@@ -124,9 +143,11 @@ function roamOf(
   }
   if (roam.kind === 'walk') {
     const navigation = navigations.get(model.id);
-    const { id, speed, respawn, unstuck, paused, teleport } = roam;
+    const { id, speed, respawn, unstuck, paused, teleport, view } = roam;
     const spawn = model.spawn ?? null;
-    return navigation ? { kind: 'walk', id, navigation, spawn, speed, respawn, unstuck, paused, teleport } : null;
+    return navigation
+      ? { kind: 'walk', id, navigation, spawn, speed, respawn, unstuck, paused, teleport, view, avatar }
+      : null;
   }
   const route = model.routes.find(item => item.id === roam.routeId);
   if (!route) {

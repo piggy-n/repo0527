@@ -104,7 +104,7 @@ describe('SceneContentModel', () => {
     expect(model.current).toBe(valid);
   });
 
-  it('步行：速度是正数，回到出生点、脱困、瞬移的次数是非负整数，出生点、瞬移的坐标是数（ADR 0086、0087）', () => {
+  it('步行：速度是正数，回到出生点、脱困、瞬移的次数是非负整数，出生点、瞬移的坐标是数，人称、人物模型地址对（ADR 0086、0087、0090）', () => {
     const spot = { x: 1, y: 2, floor: -5 };
     using model = new SceneContentModel();
     const navigation = { grid: new NavGrid(labelRegions(buildNavGrid([triangles(floorQuad(0, 0, 4, 4, 0))]))), frame };
@@ -118,9 +118,12 @@ describe('SceneContentModel', () => {
       unstuck: 0,
       paused: false,
       teleport: null,
+      view: 'first',
+      avatar: 'https://maps.test/roam/Cesium_Man.glb',
       ...extra
     });
-    const walking = walk({ spawn: null, respawn: 2, unstuck: 1, paused: true, teleport: { count: 3, spot } });
+    const teleport = { count: 3, spot };
+    const walking = walk({ spawn: null, respawn: 2, unstuck: 1, paused: true, teleport, view: 'third' });
     const valid: SceneContent = { tilesets: [], underground: null, roam: walking };
     model.set(valid);
     expect(model.current).toBe(valid);
@@ -132,7 +135,10 @@ describe('SceneContentModel', () => {
       [walk({ unstuck: 0.5 }), '次数不是非负整数'],
       [walk({ spawn: { lng: 120.666, lat: Number.NaN, height: -5.1, heading: 76 } }), '出生点有不是数的坐标'],
       [walk({ teleport: { count: -1, spot } }), '瞬移次数不是非负整数'],
-      [walk({ teleport: { count: 1, spot: { ...spot, floor: Number.NaN } } }), '位置有不是数的坐标']
+      [walk({ teleport: { count: 1, spot: { ...spot, floor: Number.NaN } } }), '位置有不是数的坐标'],
+      // 故意给出类型以外的人称，检查运行时校验
+      [walk({ view: 'top' as unknown as WalkRoam['view'] }), '人称不对：top'],
+      [walk({ avatar: '/roam/Cesium_Man.glb' }), '人物模型地址不是绝对地址']
     ];
     for (const [invalidWalk, message] of invalid) {
       expect(() => model.set({ tilesets: [], underground: null, roam: invalidWalk })).toThrow(message);

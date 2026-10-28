@@ -5,11 +5,13 @@ import {
   EYE_HEIGHT,
   type PreparedTileset,
   RoutePath,
+  type ScreenPoint,
+  type WalkNotice,
   type WalkPhase,
   type WalkPlayer
 } from '@yzt/map-core';
 import type { GeoJSON, Position } from 'geojson';
-import { Cartesian3, Matrix4, Transforms } from 'cesium';
+import { Cartesian3, Math as CesiumMath, Matrix4, Transforms } from 'cesium';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { MAPLIBRE_FOVY, zoomToDistance } from './camera-math';
 import { CesiumScene } from './cesium-scene';
@@ -60,9 +62,14 @@ type Rgb = readonly [number, number, number];
 
 // 读画布上某个经纬度处的颜色；场景要用 preserveDrawingBuffer 创建
 function colorAt(scene: CesiumScene, lngLat: [number, number]): Rgb | null {
-  const canvas = containers.at(-1)?.querySelector('canvas');
   const point = scene.project(lngLat);
-  if (!canvas || !point) {
+  return point ? pixelAt(point) : null;
+}
+
+// 读画布上某个点的颜色
+function pixelAt(point: ScreenPoint): Rgb | null {
+  const canvas = containers.at(-1)?.querySelector('canvas');
+  if (!canvas) {
     return null;
   }
   const probe = document.createElement('canvas');
@@ -186,14 +193,17 @@ function planLayers(lineLatitude: number, lineWidth = 8) {
 // GLB 的块按 4 字节对齐要补的字节数
 const glbPadding = (length: number) => (4 - (length % 4)) % 4;
 
-// 一个红色、不受光照的立方体（glTF 2.0 的 GLB），边长 2 × half 米
-function boxGlb(half: number): Blob {
-  const h = half;
+type Vec3 = readonly [number, number, number];
+
+// 一个不受光照的长方体（glTF 2.0 的 GLB，y 朝上），min、max 是两个对角（米），默认红色
+function boxGlb(min: Vec3, max: Vec3, color: readonly [number, number, number, number] = [1, 0, 0, 1]): Blob {
+  const [x0, y0, z0] = min;
+  const [x1, y1, z1] = max;
   const positions = new Float32Array([
-    // z = -h 的四个角
-    -h, -h, -h, h, -h, -h, h, h, -h, -h, h, -h,
-    // z = h 的四个角
-    -h, -h, h, h, -h, h, h, h, h, -h, h, h
+    // z = z0 的四个角
+    x0, y0, z0, x1, y0, z0, x1, y1, z0, x0, y1, z0,
+    // z = z1 的四个角
+    x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1
   ]);
   const indices = new Uint16Array([
     0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6, 1, 2, 6, 1, 6, 5, 0, 4, 7, 0, 7, 3
@@ -207,12 +217,12 @@ function boxGlb(half: number): Blob {
     meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }] }],
     materials: [
       {
-        pbrMetallicRoughness: { baseColorFactor: [1, 0, 0, 1], metallicFactor: 0 },
+        pbrMetallicRoughness: { baseColorFactor: color, metallicFactor: 0 },
         extensions: { KHR_materials_unlit: {} }
       }
     ],
     accessors: [
-      { bufferView: 0, componentType: 5126, count: 8, type: 'VEC3', min: [-h, -h, -h], max: [h, h, h] },
+      { bufferView: 0, componentType: 5126, count: 8, type: 'VEC3', min, max },
       { bufferView: 1, componentType: 5123, count: 36, type: 'SCALAR' }
     ],
     bufferViews: [
@@ -243,12 +253,15 @@ function boxGlb(half: number): Blob {
   return new Blob([header.buffer], { type: 'model/gltf-binary' });
 }
 
+// 边长 2 × half 米、中心在原点的红色立方体
+const cubeGlb = (half: number) => boxGlb([-half, -half, -half], [half, half, half]);
+
 const MODEL_AT: [number, number] = [120.66, 31.31];
 const objectUrls: string[] = [];
 
 // 只有一个瓦片的瓦片集：立方体放在 MODEL_AT 的地面上；contentUri 不传时用本地生成的立方体
 function boxTileset(contentUri?: string): PreparedTileset {
-  const url = contentUri ?? URL.createObjectURL(boxGlb(40));
+  const url = contentUri ?? URL.createObjectURL(cubeGlb(40));
   objectUrls.push(url);
   const transform = Transforms.eastNorthUpToFixedFrame(Cartesian3.fromDegrees(...MODEL_AT, 0));
   return {
@@ -295,6 +308,20 @@ function enuOf(scene: CesiumScene): Cartesian3 {
 
 const pressKey = (type: 'keydown' | 'keyup', code: string) =>
   window.dispatchEvent(new KeyboardEvent(type, { code, key: code.slice(-1).toLowerCase() }));
+
+// 在页面上的某个元素里按 W：冒泡到窗口
+const pressW = (target: HTMLElement, type: 'keydown' | 'keyup') =>
+  target.dispatchEvent(new KeyboardEvent(type, { code: 'KeyW', key: 'w', bubbles: true }));
+
+// 页面上一个获得焦点的输入框，用例结束时和容器一起移除
+function focusedInput(type: string): HTMLInputElement {
+  const input = document.createElement('input');
+  input.type = type;
+  document.body.append(input);
+  containers.push(input);
+  input.focus();
+  return input;
+}
 
 // 下一次触发某个事件；和超时赛跑，结束后退订
 function nextEvent(scene: CesiumScene, event: 'tilesetfailed' | 'tilesetinitial', timeout = 10000) {
@@ -618,7 +645,7 @@ describe('CesiumScene', () => {
     const phases: WalkPhase[] = [];
     scene.on('walkphase', phase => phases.push(phase));
 
-    scene.startWalk({ navigation, spawn: { lng: MODEL_AT[0], lat: MODEL_AT[1], height: -6, heading: 90 }, speed: 4 });
+    scene.startWalk({ navigation, spawn: EAST_SPAWN, speed: 4, view: 'first', avatar: NO_AVATAR });
     await expect(waitForFrames(() => phases.includes('walking'))).resolves.toBe('ok');
     expect(phases).toStrictEqual(['entering', 'walking']);
     const start = enuOf(scene);
@@ -666,7 +693,7 @@ describe('CesiumScene', () => {
     scene.on('walkphase', phase => phases.push(phase));
     scene.on('walkplayer', player => players.push(player));
 
-    scene.startWalk({ navigation, spawn: { lng: MODEL_AT[0], lat: MODEL_AT[1], height: -6, heading: 90 }, speed: 4 });
+    scene.startWalk({ navigation, spawn: EAST_SPAWN, speed: 4, view: 'first', avatar: NO_AVATAR });
     await expect(waitForFrames(() => phases.includes('walking') && players.length > 0)).resolves.toBe('ok');
     const first = players.at(-1);
     expect(first).toMatchObject({ floor: -6, target: null });
@@ -689,6 +716,105 @@ describe('CesiumScene', () => {
     expect(players.at(-1)).toMatchObject({ x: 3, y: -3, floor: -6 });
   }, 60000);
 
+  it('步行：焦点在单选按钮上（操作条的人称切换）照样行走，在能打字的输入框里不走', async () => {
+    const scene = createScene();
+    const navigation = await walkRoom(scene);
+    scene.jumpTo({ center: MODEL_AT, zoom: 15, bearing: 0, pitch: 50 });
+    const phases: WalkPhase[] = [];
+    scene.on('walkphase', phase => phases.push(phase));
+    scene.startWalk({ navigation, spawn: EAST_SPAWN, speed: 4, view: 'first', avatar: NO_AVATAR });
+    await expect(waitForFrames(() => phases.includes('walking'))).resolves.toBe('ok');
+
+    const text = focusedInput('text');
+    const start = enuOf(scene);
+    pressW(text, 'keydown');
+    await failingFrames(30, () => true);
+    pressW(text, 'keyup');
+    expect(enuOf(scene).x).toBeCloseTo(start.x, 3);
+
+    const radio = focusedInput('radio');
+    pressW(radio, 'keydown');
+    await expect(waitForFrames(() => enuOf(scene).x > start.x + 0.5)).resolves.toBe('ok');
+    pressW(radio, 'keyup');
+  }, 60000);
+
+  it('第三人称：相机从眼睛处拉到人后上方，看得见人；点在人身上穿过去走到背后的地面；滚轮拉近；切回第一人称回到眼睛（ADR 0090）', async () => {
+    const scene = createScene(960, 640, true);
+    const navigation = await walkRoom(scene);
+    scene.jumpTo({ center: MODEL_AT, zoom: 15, bearing: 0, pitch: 50 });
+    const phases: WalkPhase[] = [];
+    const players: WalkPlayer[] = [];
+    const notices: WalkNotice[] = [];
+    scene.on('walkphase', phase => phases.push(phase));
+    scene.on('walkplayer', player => players.push(player));
+    scene.on('walknotice', notice => notices.push(notice));
+    // 绿色的柱子当作人物：站在地板上，缩放到 1.72 米高
+    const avatar = URL.createObjectURL(boxGlb([-0.25, 0, -0.25], [0.25, 1.51, 0.25], [0, 1, 0, 1]));
+    objectUrls.push(avatar);
+
+    scene.startWalk({ navigation, spawn: EAST_SPAWN, speed: 4, view: 'third', avatar });
+    await expect(waitForFrames(() => phases.includes('walking') && players.length > 0)).resolves.toBe('ok');
+    const player = players.at(-1);
+    if (!player) {
+      throw new Error('没有报告人的位置');
+    }
+    // 朝东俯看 18°：相机在人西边 4 米的臂上，绕点比眼睛高 0.25 米
+    const pitch = CesiumMath.toRadians(18);
+    const pivotZ = -6 + EYE_HEIGHT + 0.25;
+    const armEnd = (arm: number) =>
+      new Cartesian3(player.x - arm * Math.cos(pitch), player.y, pivotZ + arm * Math.sin(pitch));
+    await expect(waitForFrames(() => Cartesian3.distance(enuOf(scene), armEnd(4)) < 0.05)).resolves.toBe('ok');
+    // 人物画在胸口高度的地方
+    const chest = screenOfEnu(scene, new Cartesian3(player.x - 0.2, player.y, -6 + 1.2));
+    await expect(waitForFrames(() => near(pixelAt(chest), [0, 255, 0]))).resolves.toBe('ok');
+
+    // 点在人身上：不当成"没点到地面"，穿过人物落到人前方的地板上
+    const canvas = containers.at(-1)?.querySelector('canvas');
+    const pointer = (type: string) =>
+      canvas?.dispatchEvent(
+        new PointerEvent(type, { clientX: chest.x, clientY: chest.y, button: 0, pointerId: 1, bubbles: true })
+      );
+    pointer('pointerdown');
+    pointer('pointerup');
+    await expect(waitForFrames(() => players.at(-1)?.target !== null)).resolves.toBe('ok');
+    expect(notices).toStrictEqual([]);
+    expect(players.find(item => item.target)?.target?.x).toBeGreaterThan(player.x + 1);
+    await expect(waitForFrames(() => players.at(-1)?.target === null)).resolves.toBe('ok');
+
+    // 往里滚拉近：臂缩到最短的 1.5 米
+    const walked = players.at(-1) ?? player;
+    canvas?.dispatchEvent(new WheelEvent('wheel', { deltaY: -3000, bubbles: true, cancelable: true }));
+    await expect(
+      waitForFrames(() => {
+        const eye = new Cartesian3(walked.x, walked.y, pivotZ);
+        return Math.abs(Cartesian3.distance(enuOf(scene), eye) - 1.5) < 0.05;
+      })
+    ).resolves.toBe('ok');
+
+    scene.setWalkView('first');
+    const eye = new Cartesian3(walked.x, walked.y, -6 + EYE_HEIGHT);
+    await expect(waitForFrames(() => Cartesian3.distance(enuOf(scene), eye) < 0.01)).resolves.toBe('ok');
+    scene.stopWalk(false);
+  }, 60000);
+
+  it('第三人称的人物模型加载失败：报告一次提示，相机照样挂在人后上方（ADR 0090）', async () => {
+    const scene = createScene();
+    const navigation = await walkRoom(scene);
+    scene.jumpTo({ center: MODEL_AT, zoom: 15, bearing: 0, pitch: 50 });
+    const phases: WalkPhase[] = [];
+    const notices: WalkNotice[] = [];
+    scene.on('walkphase', phase => phases.push(phase));
+    scene.on('walknotice', notice => notices.push(notice));
+
+    scene.startWalk({ navigation, spawn: EAST_SPAWN, speed: 4, view: 'third', avatar: NO_AVATAR });
+    await expect(waitForFrames(() => notices.length > 0)).resolves.toBe('ok');
+    await failingFrames(30, () => true);
+
+    expect(phases).toStrictEqual(['entering', 'walking']);
+    expect(notices).toStrictEqual(['avatar-failed']);
+    expect(enuOf(scene).z).toBeGreaterThan(-6 + EYE_HEIGHT + 1);
+  }, 60000);
+
   it('路线漫游中直接开始步行：结束步行时回到开始路线前的位置，不是路线上', async () => {
     const scene = createScene();
     const navigation = await walkRoom(scene);
@@ -702,7 +828,8 @@ describe('CesiumScene', () => {
     const phases: WalkPhase[] = [];
     scene.on('walkphase', phase => phases.push(phase));
 
-    scene.startWalk({ navigation, spawn: { lng: MODEL_AT[0], lat: MODEL_AT[1], height: -6, heading: 0 }, speed: 1.6 });
+    const spawn = { ...EAST_SPAWN, heading: 0 };
+    scene.startWalk({ navigation, spawn, speed: 1.6, view: 'first', avatar: NO_AVATAR });
     await expect(waitForFrames(() => phases.includes('walking'))).resolves.toBe('ok');
     scene.stopWalk(true);
 
@@ -710,9 +837,38 @@ describe('CesiumScene', () => {
   }, 60000);
 });
 
+// 屋子中心地板上朝东的出生点；第一人称不加载人物模型，给一个本地不存在的地址
+const EAST_SPAWN = { lng: MODEL_AT[0], lat: MODEL_AT[1], height: -6, heading: 90 };
+const NO_AVATAR = `${window.location.origin}/__missing__/avatar.glb`;
+
+// 步行时 MODEL_AT 的东北天坐标系里的点在画布上的位置：按相机和步行的竖直视场角 60° 透视投影
+// （scene.project 不投影地面以下的点）
+function screenOfEnu(scene: CesiumScene, enu: Cartesian3): ScreenPoint {
+  const toWorld = Transforms.eastNorthUpToFixedFrame(Cartesian3.fromDegrees(...MODEL_AT, 0));
+  const pose = scene.savePose();
+  const direction = new Cartesian3(...pose.direction);
+  const up = new Cartesian3(...pose.up);
+  const right = Cartesian3.cross(direction, up, new Cartesian3());
+  const offset = Cartesian3.subtract(
+    Matrix4.multiplyByPoint(toWorld, enu, new Cartesian3()),
+    new Cartesian3(...pose.position),
+    new Cartesian3()
+  );
+  const depth = Cartesian3.dot(offset, direction);
+  if (depth <= 0) {
+    throw new Error('这个点在相机背后');
+  }
+  const { width, height } = scene.size();
+  const focal = height / 2 / Math.tan(CesiumMath.toRadians(30));
+  return {
+    x: width / 2 + (Cartesian3.dot(offset, right) / depth) * focal,
+    y: height / 2 - (Cartesian3.dot(offset, up) / depth) * focal
+  };
+}
+
 // 12 米见方的盒子当作一间屋子：地板在地面以下 6 米，顶板在地面以上 6 米；加进场景、钻地，给出它的导航网格
 async function walkRoom(scene: CesiumScene) {
-  const glb = boxGlb(6);
+  const glb = cubeGlb(6);
   const prepared = boxTileset(URL.createObjectURL(glb));
   const signal = new AbortController().signal;
   const navigation = await buildNavigation(prepared, { signal, download: () => b3dmOf(glb) });

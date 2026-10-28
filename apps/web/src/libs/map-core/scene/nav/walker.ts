@@ -43,6 +43,11 @@ const OPEN_RADIUS = 0.6;
 // 进站时的出生点：相机贴近地面（椭球面以上不到这么高）时，从画布中心对着的地方下去
 const NEAR_GROUND = 200;
 
+/** 步行的人称（ADR 0090）：第一人称相机在眼睛上，第三人称挂在人后上方的弹簧臂上（WalkRig） */
+export type WalkView = 'first' | 'third';
+
+export const WALK_VIEWS: readonly WalkView[] = ['first', 'third'];
+
 /** 站的位置和朝向：yaw 是局部系里的偏航（弧度，从局部 y 轴顺时针） */
 export interface WalkPose extends NavPoint {
   readonly yaw: number;
@@ -93,7 +98,7 @@ export function walkAxes(keys: ReadonlySet<string>): { forward: number; strafe: 
 }
 
 /**
- * 第一人称的步行者（ADR 0086 第 3 节）：在导航网格的局部系里，持有脚下的位置、视点高度和朝向。
+ * 步行者（ADR 0086 第 3 节）：在导航网格的局部系里，持有脚下的位置、视点高度和视线的朝向（第三人称是相机绕人的朝向）。
  * 键盘行走和点击移动都按 moveFloor 逐段碰撞：墙、柱子、站台边缘挡住，楼梯按每格地板高度逐级爬升
  */
 export class Walker {
@@ -104,6 +109,8 @@ export class Walker {
   #eye = 0;
   #yaw = 0;
   #pitch = 0;
+  #minPitch = -MAX_PITCH;
+  #maxPitch = MAX_PITCH;
   #route: WalkRoute | null = null;
 
   constructor(grid: NavGrid, pose: WalkPose) {
@@ -144,10 +151,17 @@ export class Walker {
     this.#eye = floor + EYE_HEIGHT;
   }
 
-  /** 设朝向：俯仰限制在 ±80° */
+  /** 设朝向：俯仰限制在范围里（默认 ±80°） */
   look(yaw: number, pitch: number): void {
     this.#yaw = yaw;
-    this.#pitch = clamp(pitch, -MAX_PITCH, MAX_PITCH);
+    this.#pitch = clamp(pitch, this.#minPitch, this.#maxPitch);
+  }
+
+  /** 俯仰的范围（弧度）：第三人称的窄一些；现在的俯仰随即夹到范围里 */
+  limitPitch(min: number, max: number): void {
+    this.#minPitch = min;
+    this.#maxPitch = max;
+    this.look(this.#yaw, this.#pitch);
   }
 
   turn(yaw: number, pitch: number): void {
@@ -320,14 +334,22 @@ export type MovePlan =
 
 /**
  * 点中能去的地面以后怎么过去：同一区域里寻路后沿路径走；走不到的（隔着闸机、栏杆、楼板开口，或在别的楼层）
- * 同一层、离得近、中间站不住的只有一小段，并且视点高度这一段没东西挡着，就直线滑过去，否则闪切
+ * 同一层、离得近、中间站不住的只有一小段，并且视点高度这一段没东西挡着，就直线滑过去，否则闪切。
+ * 第三人称一律闪切：看得见人，滑过去就是人从闸机柜体里穿过去（ADR 0090 第 2 节）
  */
-export function planMove(walker: Walker, target: WalkTarget, reachable: boolean, visible: VisibilityTest): MovePlan {
+export function planMove(
+  walker: Walker,
+  target: WalkTarget,
+  reachable: boolean,
+  visible: VisibilityTest,
+  view: WalkView
+): MovePlan {
   const { grid } = walker;
   const here = walker.position;
   const spot: NavPoint = { x: target.x, y: target.y, floor: target.floor };
   if (!reachable) {
     const through =
+      view === 'first' &&
       Math.abs(spot.floor - here.floor) <= THROUGH_MAX_RISE &&
       Math.hypot(spot.x - here.x, spot.y - here.y) <= THROUGH_MAX_DISTANCE &&
       grid.blockedLength(here, spot) <= THROUGH_MAX_BLOCKED &&

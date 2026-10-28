@@ -145,7 +145,7 @@ export const WalkMapPreview = defineComponent({
         return;
       }
       const reachable = current.grid.componentOf(spot.index) === current.grid.componentAt(x, y, floor);
-      const plan = planMove(current, { ...spot, direct: true }, reachable, () => true);
+      const plan = planMove(current, { ...spot, direct: true }, reachable, () => true, 'first');
       if (plan.kind === 'teleport') {
         current.placeAt(plan.spot);
       } else {

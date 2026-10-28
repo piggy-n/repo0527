@@ -9,7 +9,8 @@ import type {
   RoutePath,
   ScreenPoint,
   UndergroundView,
-  Unsubscribe
+  Unsubscribe,
+  WalkView
 } from '@yzt/map-core';
 import type { Position } from 'geojson';
 import {
@@ -550,6 +551,10 @@ export class CesiumScene implements SceneLike {
 
   setWalkSpeed(speed: number): void {
     this.#walk.setSpeed(speed);
+  }
+
+  setWalkView(view: WalkView): void {
+    this.#walk.setView(view);
   }
 
   respawnWalk(): void {

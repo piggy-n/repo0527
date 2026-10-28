@@ -28,9 +28,9 @@ const TILESET_OPTIONS = {
 
 /**
  * 地下、室内的"头灯"光照（旧项目的做法）：以相机为光源，正对视线的面亮、斜掠的面暗，和时间无关；
- * 模型的材质是双面的，法线用屏幕空间导数求
+ * 模型的材质是双面的，法线用屏幕空间导数求。第三人称的人物也用它，站内明暗一致
  */
-function createHeadlightShader(): CustomShader {
+export function createHeadlightShader(): CustomShader {
   return new CustomShader({
     lightingModel: LightingModel.UNLIT,
     uniforms: { uFog: { type: UniformType.FLOAT, value: 0 } },

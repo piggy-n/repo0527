@@ -9,7 +9,9 @@ import {
   type WalkNotice,
   type WalkPlayer,
   type WalkRoamStatus,
-  WALK_SPEEDS
+  WALK_SPEEDS,
+  type WalkView,
+  WALK_VIEWS
 } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
 import {
@@ -39,6 +41,7 @@ import {
   type SceneModelsState,
   tilesetIdOf,
   type UndergroundChoice,
+  walkAvatarUrl,
   type WalkChoice
 } from '../scene-content';
 
@@ -70,6 +73,8 @@ export interface WalkNoticeState {
 export interface SceneModelsOptions {
   /** 建导航网格；默认读索引、下载瓦片、在 Worker 里构建，测试时换掉 */
   readonly loadNavigation?: LoadNavigation;
+  /** 第三人称的人物模型的绝对地址；默认随应用部署的 Cesium Man */
+  readonly avatarUrl?: string;
 }
 
 export interface SceneModels {
@@ -116,6 +121,8 @@ export interface SceneModels {
   /** 导航网格建不出来时重新建 */
   readonly retryWalk: () => void;
   readonly setWalkSpeed: (speed: number) => void;
+  /** 换人称（ADR 0090）：在几次步行之间沿用 */
+  readonly setWalkView: (view: WalkView) => void;
   readonly respawnWalk: () => void;
   readonly unstuckWalk: () => void;
   /** 步行模型的室内地图（ADR 0087）：导航网格建好以后才有 */
@@ -146,7 +153,7 @@ type WalkBuild =
 export function useSceneModels(
   map: SceneModelsContext,
   catalog: MaybeRefOrGetter<readonly SceneModel[] | undefined>,
-  { loadNavigation = defaultLoadNavigation }: SceneModelsOptions = {}
+  { loadNavigation = defaultLoadNavigation, avatarUrl = walkAvatarUrl() }: SceneModelsOptions = {}
 ): SceneModels {
   const models = computed(() => toValue(catalog) ?? []);
   const hasCatalog = computed(() => toValue(catalog) !== undefined);
@@ -164,8 +171,9 @@ export function useSceneModels(
   let roamCount = 0;
   // 正在建的导航网格：结束步行、换一次漫游、卸载模型时中止
   let building: AbortController | null = null;
-  // 步行速度在几次步行之间沿用
+  // 步行速度、人称在几次步行之间沿用
   let walkSpeed = DEFAULT_WALK_SPEED;
+  let walkView: WalkView = 'first';
 
   const modelOf = (id: string): SceneModel => {
     const model = models.value.find(item => item.id === id);
@@ -462,7 +470,8 @@ export function useSceneModels(
       respawn: 0,
       unstuck: 0,
       paused: false,
-      teleport: null
+      teleport: null,
+      view: walkView
     };
     beginRoam(model, choice);
     if (!navigations.value.has(id)) {
@@ -494,6 +503,17 @@ export function useSceneModels(
     walkSpeed = speed;
     if (speed !== current.speed) {
       roam.value = { ...current, speed };
+    }
+  };
+
+  const setWalkView = (view: WalkView) => {
+    const current = currentWalk();
+    if (!WALK_VIEWS.includes(view)) {
+      throw new Error(`人称只能是 ${WALK_VIEWS.join('、')}：${view}`);
+    }
+    walkView = view;
+    if (view !== current.view) {
+      roam.value = { ...current, view };
     }
   };
 
@@ -543,7 +563,8 @@ export function useSceneModels(
     attempts: attempts.value,
     underground: underground.value,
     roam: roam.value,
-    navigations: navigations.value
+    navigations: navigations.value,
+    avatar: avatarUrl
   });
 
   return {
@@ -572,6 +593,7 @@ export function useSceneModels(
     startWalk,
     retryWalk,
     setWalkSpeed,
+    setWalkView,
     respawnWalk,
     unstuckWalk,
     indoorMap,

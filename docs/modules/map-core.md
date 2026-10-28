@@ -22,7 +22,7 @@
 | `scene/scene-content-model.ts` | `SceneContentModel`：三维独有的内容（瓦片集、钻地、路线漫游或步行），整体替换、校验、合并通知；`SceneStatus`、按种类区分的 `RoamStatus` 等三维视图报告的类型（ADR 0081、0083、0086） |
 | `scene/route-path.ts` | `RoutePath`：路线漫游的几何，累计三维长度、按走过的距离取视点和朝向；`smoothAngle`（ADR 0083） |
 | `scene/prepare-tileset.ts` | `prepareTileset`：3D Tiles 索引的整理（外部索引并进来、空占位、目录外的引用、循环、几何误差、绝对地址），下载函数注入（ADR 0081；导航网格也要用，从 map-cesium 移来，ADR 0085） |
-| `scene/nav/` | 导航网格（ADR 0085）：`b3dm.ts` 解析、`heightfield.ts` 高度场、`regions.ts` 区域、`nav-grid.ts` 查询（`NavGrid`）、`spawn.ts` 出生点、`levels.ts` 楼层、`floor-map.ts` 按区域着色的平面图、`nav-frame.ts` 坐标系、`nav-leaves.ts` 叶节点、`nav-build.ts` 构建流程；`nav-grid.worker.ts` 是 Worker 入口，处理函数在 `nav-worker-handlers.ts`；`walker.ts` 第一人称的步行者和点击、脱困、出生点的规则（ADR 0086）；`nav-testing.ts` 只供测试 |
+| `scene/nav/` | 导航网格（ADR 0085）：`b3dm.ts` 解析、`heightfield.ts` 高度场、`regions.ts` 区域、`nav-grid.ts` 查询（`NavGrid`）、`spawn.ts` 出生点、`levels.ts` 楼层、`floor-map.ts` 按区域着色的平面图、`nav-frame.ts` 坐标系、`nav-leaves.ts` 叶节点、`nav-build.ts` 构建流程；`nav-grid.worker.ts` 是 Worker 入口，处理函数在 `nav-worker-handlers.ts`；`walker.ts` 步行者和点击、脱困、出生点的规则（ADR 0086）；`third-person.ts` 第三人称的弹簧臂、点穿人物和步态（ADR 0090）；`nav-testing.ts` 只供测试 |
 | `selection/selection-model.ts` | `SelectionModel`：选中的要素，只存数据源和业务主键（ADR 0047 第 4 节） |
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`PanModifier`、`ToolView` |
 | `measure/geodesic.ts` | 椭球面上的距离、累计距离、折线总长、多边形面积（geographiclib-geodesic，ADR 0035） |
@@ -347,11 +347,22 @@ store.clear();
 - `unstuckSpot`、`chooseSpawn`：脱困找 30 米内开阔（0.6 米内都能站、区域 100 平方米以上）的地面；出生点依次看相机是否已在站内地下、是否贴近地面对着模型、清单的出生点、模型中心，"最上面一层"按地面高度往下 2 米以内算
 - `headingToYaw`、`yawToHeading`：清单的朝向（正北为 0）和局部系偏航的换算，局部 y 轴的方位角来自 `navigationFrame`
 
+## 第三人称（ADR 0090）
+
+迁自旧项目 `FirstPersonRoam.js` 的第三人称部分和 `RoamAvatar.js` 的步态，参数不变；入口暂不开放（页面上只有第一人称）。
+
+- 会话的 `WalkRoam` 有 `view`（`first` | `third`）和人物模型的绝对地址 `avatar`；步行状态的 `view` 是视图正在用的人称
+- `WalkRig`：相机的挂法。第一人称臂长为 0，相机在眼睛上；第三人称绕的点比眼睛高 0.25 米，默认离人 4 米（`zoom` 在 1.5～8 米之间调），沿视线反方向每 0.1 米查一次 `NavGrid.isFree`（四周留 0.25 米），被挡时立即缩短、挡的过去了慢慢放回；切换时沿臂滑出、收回。俯仰第三人称 -75°～25°（`Walker.limitPitch`），切过去时至少俯看 18°（`startPitch`）；人走动时每秒最多转 540° 朝向走的方向；相机离人 0.6～1.4 米之间人淡入淡出（`avatarAlpha`）
+- `planMove` 的第五个参数是人称：第三人称走不到的地方一律闪切，不直线滑过去
+- `seeThroughAvatar`：拾取点在人身上（离脚下 0.5 米以内、地板以上 0.05～1.9 米）时，从相机顺着视线每 0.05 米找第一个不是空处的地方
+- `WalkCycle`：步态的相位按走过的距离推进（1.5 米一个周期），停下后以每秒 1.5 个周期把这一步走完，到两腿交错的时刻（0.25、0.75……）停
+
 ## 测试
 
 | 层 | 内容 | 测试方式 |
 |---|---|---|
 | 会话 | `diffStyle`、`StyleModel`、`CameraModel`、`MapSession` | 纯 TS，jsdom |
+| 第三人称 | `WalkRig` 的臂长伸缩与防穿墙、人称切换、转身、调远近，`seeThroughAvatar`，`WalkCycle` | 纯 TS，Node |
 | 测量 | `geodesic`（与 WGS84 的已知弧长、矩形面积对比）、`MeasureStore`（单击、双击、`clickCount`、预览点、Esc、退出、删除与清除、两个工具共用） | 纯 TS，Node |
 | `applyStyleCommand` | 一条命令对应一次地图方法调用 | 假对象，jsdom |
 | `MapLibreView` | 生命周期、样式修订的跟踪、暂停恢复、出错重建、相机读写；状态转换的穷举短序列 | 注入 `createMap` 换成假地图，jsdom |

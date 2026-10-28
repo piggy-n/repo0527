@@ -13,8 +13,7 @@
   }
 }
 
-.bar,
-.fullMap {
+.bar {
   box-sizing: border-box;
   width: 560px;
   max-width: 100%;
@@ -22,17 +21,6 @@
   border-radius: var(--radius-md);
   background-color: var(--color-bg-mask);
   box-shadow: var(--shadow-md);
-}
-
-// 步行漫游：左边小地图，右边操作
-.withPlan {
-  display: flex;
-  gap: var(--space-md);
-}
-
-.main {
-  flex: 1;
-  min-width: 0;
 }
 
 .head {
@@ -125,57 +113,9 @@
   color: var(--color-primary);
 }
 
-.planButton {
-  flex: none;
-  padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--color-bg-container);
-  cursor: zoom-in;
-
-  &:focus-visible {
-    outline: 2px solid var(--color-primary-border-hover);
-    outline-offset: 1px;
-  }
-}
-
-.plan {
-  display: block;
-  width: 120px;
-  height: 84px;
-}
-
-.planLarge {
-  display: block;
-  width: 100%;
-  height: auto;
-  margin-top: var(--space-sm);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--color-bg-container);
-  cursor: crosshair;
-}
-
-.room {
-  fill: var(--color-primary-bg);
-  stroke: var(--color-primary-border);
-}
-
-.me {
-  fill: var(--color-primary);
-  stroke: var(--color-bg-container);
-  stroke-width: 2;
-}
-
-// 手机宽度（页面按 mapPageLayout 给出）：小地图缩小，内边距收紧
+// 手机宽度（页面按 mapPageLayout 给出）：内边距收紧
 .phone {
-  .bar,
-  .fullMap {
+  .bar {
     padding: var(--space-sm) var(--space-md);
-  }
-
-  .plan {
-    width: 80px;
-    height: 56px;
   }
 }
