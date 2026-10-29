@@ -74,7 +74,11 @@ const pointer = (type: MapPointerEvent['type'], x: number, y: number): MapPointe
 
 function setup(topicId: TopicId = 'space-monitoring') {
   const fitBounds = vi.fn<CameraControl['fitBounds']>();
-  const control: CameraControl = { fitBounds, flyTo: vi.fn(), reveal: vi.fn() };
+  const control: CameraControl = {
+    fitBounds,
+    flyTo: vi.fn<CameraControl['flyTo']>(),
+    reveal: vi.fn<CameraControl['reveal']>()
+  };
   const beginCameraOperation = (): CameraOperation => {
     const controller = new AbortController();
     return { signal: controller.signal, run: action => action(control) };
@@ -96,7 +100,7 @@ function setup(topicId: TopicId = 'space-monitoring') {
     }
   };
   const loader: RegionBoundaryLoader = {
-    load: async region => ({ code: region.code, polygons: [], bounds: NANJING }),
+    load: async region => ({ code: region.code, geometry: { type: 'Polygon', coordinates: [] }, bounds: NANJING }),
     districtCodeAt: async () => null
   };
   const drawn: SubmitResult[] = [];

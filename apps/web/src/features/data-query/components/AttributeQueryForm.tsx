@@ -145,15 +145,15 @@ export const AttributeQueryForm = defineComponent({
         ];
       }
       return (
-          <ElDatePicker
-            class={[formStyles.control, styles.date]}
-            modelValue={text === '' ? undefined : text}
-            type="date"
-            valueFormat="YYYY-MM-DD"
-            placeholder="请选择日期"
-            onUpdate:modelValue={(next: string | null) => update(key, { value: next ?? '' })}
-          />
-        );
+        <ElDatePicker
+          class={[formStyles.control, styles.date]}
+          modelValue={text === '' ? undefined : text}
+          type="date"
+          valueFormat="YYYY-MM-DD"
+          placeholder="请选择日期"
+          onUpdate:modelValue={(next: string | null) => update(key, { value: next ?? '' })}
+        />
+      );
     };
 
     const renderAdd = () => {

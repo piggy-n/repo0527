@@ -38,6 +38,8 @@ const SHP: QueryRequest = {
 };
 
 const params = (request: Request) => Object.fromEntries(new URL(request.url).searchParams);
+// 导出接口返回的文件流
+const zipResponse = () => new HttpResponse('PK', { headers: { 'Content-Type': 'application/zip' } });
 
 // 交给公共层的 FormData 的各项；jsdom 与 Node 的 File 不兼容，不在 MSW 里解析 multipart（同文件管理的上传测试）
 const entries = (body: unknown) =>
@@ -109,17 +111,16 @@ describe('导出', () => {
   it('属性类按区划导出，画的范围按几何导出，格式用逗号连接；shp 把文件再传一次', async () => {
     const bodies: unknown[] = [];
     const postBlob = vi.spyOn(http, 'postBlob');
-    const file = () => new HttpResponse('PK', { headers: { 'Content-Type': 'application/zip' } });
     server.use(
       mock.post('/backend/api/export/region', async ({ request }) => {
         bodies.push(await request.json());
-        return file();
+        return zipResponse();
       }),
       mock.post('/backend/api/export/geojson', async ({ request }) => {
         bodies.push(await request.json());
-        return file();
+        return zipResponse();
       }),
-      mock.post('/backend/api/export/shp', file)
+      mock.post('/backend/api/export/shp', zipResponse)
     );
     const region = await exportResult(ATTRIBUTE, ['excel', 'shp'], '学校点层');
     await exportResult(GEOMETRY, ['gdb'], '学校点层');
