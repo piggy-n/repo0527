@@ -75,6 +75,8 @@ const businessRoutes: RouteRecordRaw[] = [
     component: withMapRuntime(() => import('@/pages/ai-chat/AiChatPage').then(({ AiChatPage }) => AiChatPage)),
     meta: { title: 'AI对话' }
   },
+  // 页面分步开发（docs/modules/indicator-simulation.md），完成前先用占位页
+  placeholder('indicator-simulation', RouteName.indicatorSimulation, '指标智能推演'),
   {
     path: 'resource-management',
     name: RouteName.resourceManagement,

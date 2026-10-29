@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
@@ -35,7 +35,7 @@ describe('HeaderNav', () => {
     const wrapper = await mountNav(Role.admin, '/current-map');
 
     expect(desktopNav(wrapper)).toEqual({
-      labels: ['资源管理', '现状底图', '查询统计', '文件管理', '系统管理', 'AI对话'],
+      labels: ['资源管理', '现状底图', '查询统计', '文件管理', '系统管理', '智能体'],
       active: '现状底图'
     });
   });
@@ -44,9 +44,26 @@ describe('HeaderNav', () => {
     const wrapper = await mountNav(Role.user, '/land-change-query');
 
     expect(desktopNav(wrapper)).toEqual({
-      labels: ['现状底图', '查询统计', '数据下载', '文件管理', 'AI对话'],
+      labels: ['现状底图', '查询统计', '数据下载', '文件管理', '智能体'],
       active: '查询统计'
     });
+  });
+
+  it('智能体在它的页面上选中，展开后只有一列页面、没有分组', async () => {
+    const wrapper = await mountNav(Role.user, '/indicator-simulation');
+    expect(desktopNav(wrapper).active).toBe('智能体');
+
+    const agent = wrapper.findAll('button').find(button => button.text() === '智能体');
+    await agent?.trigger('click');
+    await vi.waitFor(() => expect(document.querySelector('[class*="_single_"]')).not.toBeNull());
+
+    const panel = document.querySelector('[class*="_single_"]');
+    expect([...(panel?.querySelectorAll('a') ?? [])].map(link => [link.textContent, link.getAttribute('href')])).toEqual([
+      ['AI对话', '/ai-chat'],
+      ['指标智能推演', '/indicator-simulation']
+    ]);
+    // 查询统计的面板也渲染在 body 下，只看智能体所在的弹层
+    expect(panel?.closest('.el-popper')?.querySelector('[class*="_groups_"]')).toBeNull();
   });
 
   it('链接项渲染为指向对应页面的链接', async () => {

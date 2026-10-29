@@ -25,6 +25,7 @@ export const RouteName = {
   spaceMonitoringIndicators: 'space-monitoring-indicators',
   fileManagement: 'file-management',
   aiChat: 'ai-chat',
+  indicatorSimulation: 'indicator-simulation',
   resourceManagement: 'resource-management',
   resourceApplication: 'resource-application',
   systemManagement: 'system-management',

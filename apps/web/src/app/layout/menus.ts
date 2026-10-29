@@ -30,8 +30,16 @@ export interface NavDropdown {
   groups: NavGroup[];
 }
 
-// kind 区分两种导航项，判断 kind 后 TS 会收窄到对应的类型
-export type NavItem = NavLink | NavDropdown;
+/** 点击后展开一层下拉的导航项：页面少、不分组（如"智能体"） */
+export interface NavMenu {
+  kind: 'menu';
+  label: string;
+  icon: IconName;
+  links: NavLinkTarget[];
+}
+
+// kind 区分三种导航项，判断 kind 后 TS 会收窄到对应的类型
+export type NavItem = NavLink | NavDropdown | NavMenu;
 
 // 顶部导航，顺序沿用旧项目：按角色过滤后，正好是两种角色各自的顺序
 export const navItems: readonly NavItem[] = [
@@ -69,19 +77,31 @@ export const navItems: readonly NavItem[] = [
     route: RouteName.systemManagement,
     alsoActiveOn: [RouteName.systemManagementReports]
   },
-  { kind: 'link', label: 'AI对话', icon: 'nav-ai', route: RouteName.aiChat }
+  {
+    kind: 'menu',
+    label: '智能体',
+    icon: 'nav-ai',
+    links: [
+      { label: 'AI对话', route: RouteName.aiChat },
+      { label: '指标智能推演', route: RouteName.indicatorSimulation }
+    ]
+  }
 ];
 
 /** 页面允许的角色，由调用方从路由的 meta.roles 取得 */
 export type RolesOf = (route: RouteName) => readonly Role[] | undefined;
 
-/** 按角色过滤导航；下拉面板中没有权限的页面去掉，整组或整项都没有页面时一并去掉 */
+/** 按角色过滤导航；下拉中没有权限的页面去掉，整组或整项都没有页面时一并去掉 */
 export function visibleNavItems(items: readonly NavItem[], role: Role, rolesOf: RolesOf): NavItem[] {
   const allowed = ({ route }: NavLinkTarget) => canAccess(role, rolesOf(route));
 
   return items.flatMap((item): NavItem[] => {
     if (item.kind === 'link') {
       return allowed(item) ? [item] : [];
+    }
+    if (item.kind === 'menu') {
+      const links = item.links.filter(allowed);
+      return links.length > 0 ? [{ ...item, links }] : [];
     }
     const groups = item.groups
       .map(group => ({ ...group, links: group.links.filter(allowed) }))
@@ -95,5 +115,10 @@ export function isNavItemActive(item: NavItem, current: RouteRecordNameGeneric |
   if (item.kind === 'link') {
     return item.route === current || item.alsoActiveOn?.some(route => route === current) === true;
   }
-  return item.groups.some(group => group.links.some(link => link.route === current));
+  return linksOf(item).some(link => link.route === current);
+}
+
+/** 下拉项里的全部页面 */
+export function linksOf(item: NavDropdown | NavMenu): NavLinkTarget[] {
+  return item.kind === 'menu' ? item.links : item.groups.flatMap(group => group.links);
 }
