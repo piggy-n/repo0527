@@ -8,6 +8,8 @@ import styles from './FlowChart.module.scss';
 
 const { nodeWidth, nodeHeight, columnGap, padX } = FLOW_LAYOUT;
 const HIDDEN: NodeFrame = { status: 'hidden', progress: 0 };
+// 评价分级的节点：完成后点了看这项指标的结果
+const EVAL_PREFIX = 'eval:';
 
 // 连线：从上一个节点的右边到下一个节点的左边，水平进出
 function curve(a: FlowNode, b: FlowNode): string {
@@ -21,7 +23,7 @@ function curve(a: FlowNode, b: FlowNode): string {
 
 /**
  * 推演流程图：节点从父节点处长出，连线先描出再有光点流向正在执行的节点；镜头跟随正在执行的一列，
- * 也可以看全览或拖动画布。节点状态由 flowFrame 按推演进度算出，组件只画
+ * 也可以看全览或拖动画布。节点状态由 flowFrame 按推演进度算出，组件只画；完成后评价节点可以点
  */
 export const FlowChart = defineComponent({
   name: 'FlowChart',
@@ -36,8 +38,12 @@ export const FlowChart = defineComponent({
     /** 右边被浮层（人工干预）挡住的宽度：镜头只用左边的部分 */
     reserveRight: { type: Number, default: 0 }
   },
+  emits: {
+    /** 完成后点了评价节点：看这项指标的结果 */
+    pick: (indicatorId: string) => typeof indicatorId === 'string'
+  },
   slots: Object as SlotsType<{ default?: () => VNode | VNode[] | null }>,
-  setup(props, { slots }) {
+  setup(props, { emit, slots }) {
     const canvas = ref<HTMLElement>();
     const size = useShownElementSize(canvas);
     const view = ref<FlowView | 'free'>('follow');
@@ -131,6 +137,14 @@ export const FlowChart = defineComponent({
             {node.detail}
           </span>
           <i class={styles.progress} />
+          {props.done && node.key.startsWith(EVAL_PREFIX) && (
+            <button
+              type="button"
+              class={styles.pick}
+              aria-label={`看${node.label}的结果`}
+              onClick={() => emit('pick', node.key.slice(EVAL_PREFIX.length))}
+            />
+          )}
         </div>
       );
     };

@@ -1,35 +1,31 @@
-// 结果地图的工具与图例：图例在左下，着色和年度在图例与右侧面板之间居中靠下
+// 结果地图的工具与图例（第五版原型）：左下一张卡片，上面是着色和年度，下面是图例；放大到一个市时左上是返回
 .root {
-  // 图例定宽，说明换行；工具从它右边开始排，不会叠在一起
-  --legend-width: 200px;
-
   position: absolute;
   inset: 0;
+  z-index: 3;
   pointer-events: none;
 }
 
-.tools {
+.back {
   position: absolute;
-  right: var(--right-edge);
-  bottom: var(--space-lg);
-  left: calc(var(--left-edge) + var(--legend-width) + var(--space-md));
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-sm);
+  top: var(--space-md);
+  left: var(--space-md);
+  pointer-events: auto;
 
-  > * {
+  :global(.el-button) {
     box-shadow: var(--shadow-sm);
-    pointer-events: auto;
   }
 }
 
-.legend {
+.card {
   position: absolute;
-  bottom: var(--space-lg);
-  left: var(--left-edge);
+  bottom: var(--space-md);
+  left: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
   box-sizing: border-box;
-  width: var(--legend-width);
+  max-width: 224px;
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-md);
   background: var(--color-bg-mask);
@@ -39,10 +35,22 @@
   pointer-events: auto;
 }
 
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
 .title {
-  margin-bottom: 4px;
   color: var(--color-text-strong);
   font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-compact);
+}
+
+.subtitle {
+  margin-bottom: 4px;
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-compact);
 }
 
 .row {
@@ -53,7 +61,9 @@
 }
 
 .gap {
-  margin-top: 6px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--color-border-dashed);
 }
 
 .block {

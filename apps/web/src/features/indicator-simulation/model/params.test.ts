@@ -11,8 +11,7 @@ import {
   scenarioKeys,
   serviceMeters,
   signedPercent,
-  type SimulationParams,
-  withParam
+  type SimulationParams
 } from './params';
 
 const conditions = { years: [2026], cityCodes: ['320100'], indicatorIds: ['B-65', 'A-39', 'A-31'] };
@@ -37,11 +36,6 @@ describe('changedParams', () => {
     expect(changedParams(base, reversed)).toEqual([]);
   });
 
-  it('把一项参数换成另一组的取值', () => {
-    const next = withPatch({ rule: 'old', popChange: 10 });
-
-    expect(withParam(base, 'rule', next)).toEqual(withPatch({ rule: 'old' }));
-  });
 });
 
 describe('参数作用于哪些指标', () => {

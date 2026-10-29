@@ -51,7 +51,7 @@ describe('useSimulationMap', () => {
     await clock.advance(10_000);
     await settle();
     expect(map.data.value).toBeNull();
-    expect([map.deriveDistricts(), map.deriveFacilities(), map.deriveAlerts()]).toEqual([empty, empty, empty]);
+    expect([map.deriveDistricts(), map.deriveFacilities(), map.deriveHighlight()]).toEqual([empty, empty, empty]);
     expect(moves).toEqual([]);
 
     await clock.advance(ENOUGH);
@@ -60,39 +60,62 @@ describe('useSimulationMap', () => {
     expect(moves).toEqual([{ kind: 'fit', bounds, maxZoom: 10 }]);
     const cities = map.labels.value;
     expect(cities).toHaveLength(13);
-    expect(cities[0]?.text).toBe('南京 47.7%');
+    expect(cities[0]).toMatchObject({ cityCode: '320100', name: '南京', value: '47.7%' });
     expect(map.deriveDistricts().layers.length).toBeGreaterThan(0);
   });
 
-  it('结果阶段按选择着色：数值、达标，换指标时标注跟着换；干预预览的区县描虚线', async () => {
+  it('按选择着色：数值、达标，换指标时标注跟着换；悬停的市描边；鼠标下的区县有提示', async () => {
     using ctx = await setup();
     const { run, map, result, calculator, clock } = ctx;
     run.start(sampleComposition(), calculator);
     await clock.advance(ENOUGH);
     await settle();
     const fills = () => new Set(map.data.value?.districts.features.map(feature => feature.properties.fill));
-    const previewed = () =>
-      map.data.value?.districts.features.filter(feature => feature.properties.preview).map(feature => feature.properties.code);
 
     expect([...fills()].every(color => (VALUE_COLORS as readonly string[]).includes(color))).toBe(true);
     result.select({ mode: 'pass' });
     expect([...fills()].every(color => Object.values<string>(PASS_COLORS).includes(color))).toBe(true);
     result.select({ indicatorId: 'A-39' });
-    expect(map.labels.value[0]?.text).toBe('南京 12.26 m²');
+    expect(map.labels.value[0]?.value).toBe('12.26 m²');
 
-    expect(map.deriveAlerts()).toEqual(empty);
-    result.setPreview({ ...run.state.value.params, popChange: 20 });
-    expect(result.preview.value.size).toBeGreaterThan(0);
-    expect(map.deriveAlerts().layers).toHaveLength(1);
-    expect(previewed()).toEqual([...result.preview.value]);
-    result.setPreview(null);
-    expect(map.deriveAlerts()).toEqual(empty);
-    expect(previewed()).toEqual([]);
+    expect(map.deriveHighlight().layers[0]).toMatchObject({ filter: ['==', ['get', 'cityCode'], ''] });
+    result.setHoverCity('320500');
+    expect(map.deriveHighlight().layers[0]).toMatchObject({ filter: ['==', ['get', 'cityCode'], '320500'] });
+
+    const district = required(map.data.value?.districts.features[0], '第一个区县').properties.code;
+    expect(map.describeDistrict(district)?.text).toMatch(/^\d+\.\d{2} m² · (达标|接近达标|未达标)$/);
+    expect(map.describeDistrict('000000')).toBeNull();
   });
 
-  it('换条件重新推演：完成后镜头再移到新的范围', async () => {
+  it('放大到一个市时镜头移到这个市、画出设施和服务圈，回到整个范围时移回来；换着色不动镜头', async () => {
     using ctx = await setup();
-    const { run, calculator, clock, moves } = ctx;
+    const { run, map, result, calculator, clock, moves } = ctx;
+    run.start(sampleComposition(), calculator);
+    await clock.advance(ENOUGH);
+    await settle();
+    const data = required(map.data.value, '地图数据');
+    const suzhou = required(
+      data.cities.find(city => city.code === '320500'),
+      '苏州市'
+    );
+    expect(map.deriveFacilities()).toEqual(empty);
+
+    result.select({ cityCode: '320500' });
+    await settle();
+    expect(map.deriveFacilities().layers.map(layer => layer.id)).toEqual(['simulation-facilities-ring', 'simulation-facilities-point']);
+    result.select({ mode: 'pass' });
+    await settle();
+    result.select({ cityCode: null });
+    await settle();
+    expect(moves.slice(1)).toEqual([
+      { kind: 'fit', bounds: suzhou.bounds, maxZoom: 11 },
+      { kind: 'fit', bounds: data.bounds, maxZoom: 10 }
+    ]);
+  });
+
+  it('换条件重新推演：完成后镜头再移到新的范围；范围只有一个市时直接画设施', async () => {
+    using ctx = await setup();
+    const { run, map, calculator, clock, moves } = ctx;
     run.start(sampleComposition(), calculator);
     await clock.advance(ENOUGH);
     await settle();
@@ -100,5 +123,6 @@ describe('useSimulationMap', () => {
     await clock.advance(ENOUGH);
     await settle();
     expect(moves).toHaveLength(2);
+    expect(map.deriveFacilities().layers.length).toBeGreaterThan(0);
   });
 });

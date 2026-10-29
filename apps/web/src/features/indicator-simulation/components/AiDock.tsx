@@ -14,12 +14,13 @@ const WARNINGS: Readonly<Record<Exclude<SendOutcome, 'sent'>, string>> = {
 const RUN_HINTS: Readonly<Record<RunConversation['phase']['value'], string>> = {
   running: '推演中 · 随时可以打断：暂停、改参数、调整范围或指标',
   paused: '已暂停 · 说"继续"接着推演，也可以先改参数或范围',
-  done: '推演完成 · 继续对话会在这一版的基础上重新推演'
+  done: '推演完成 · 看哪个市、怎么着色只换视图；改参数、范围或指标会重新推演'
 };
 
 /**
  * 页面底部的 AI 对话栏：条件编排时写推演指令（刷新换示例、发送后 AI 逐个节点编排）；推演和结果阶段对推演说话，
- * 上方是按当前条件给的快捷说法。回车发送（输入法选字时不算），Shift + 回车换行，输入框随内容长到三行
+ * 上方是按当前条件给的快捷说法；看结果时左侧没有时间线，AI 的回复写在输入框下面。
+ * 回车发送（输入法选字时不算），Shift + 回车换行，输入框随内容长到三行
  */
 export const AiDock = defineComponent({
   name: 'AiDock',
@@ -75,6 +76,7 @@ export const AiDock = defineComponent({
       const { conversation, composer } = props;
       const sending = busy.value;
       const phase = conversation?.phase.value;
+      const reply = conversation?.reply.value ?? null;
       let hint: string;
       if (phase) {
         hint = RUN_HINTS[phase];
@@ -104,7 +106,7 @@ export const AiDock = defineComponent({
                 placeholder={
                   conversation
                     ? phase === 'done'
-                      ? '还想看什么？例如：改成旧规程、加上苏州市'
+                      ? '还想看什么？例如：看苏州市、按达标着色、改成旧规程'
                       : '对推演说话：暂停、改成相交即算、加上苏州市…'
                     : '输入推演指令，例如：推演 2025 年南京市社区卫生服务设施步行15分钟覆盖率'
                 }
@@ -121,7 +123,16 @@ export const AiDock = defineComponent({
                 {sending ? '编排中' : '发送'}
               </ElButton>
             </div>
-            <p class={styles.hint}>{hint}</p>
+            {reply ? (
+              <p key="reply" class={[styles.hint, styles.reply]} role="status">
+                <span class={styles.replyOrb} aria-hidden="true" />
+                {reply}
+              </p>
+            ) : (
+              <p key="hint" class={styles.hint}>
+                {hint}
+              </p>
+            )}
           </div>
         </footer>
       );

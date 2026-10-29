@@ -1,15 +1,17 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { effectScope } from 'vue';
+import { effectScope, ref } from 'vue';
 import { required } from '@/shared/testing/required';
 import { type Composition, sampleComposition } from '../compose/composition';
 import { ManualClock } from '../engine/test-clock';
 import { createCalculator } from '../model/calculator';
 import { defaultParams } from '../model/params';
 import { loadTestAtlas } from '../model/test-atlas';
+import type { RunView } from '../result/result-view';
 import { useComposition } from './useComposition';
 import { type LogEntry, useReasoningLog } from './useReasoningLog';
 import { useRunConversation } from './useRunConversation';
+import { useSimulationResult } from './useSimulationResult';
 import { useSimulationRun } from './useSimulationRun';
 import { useUserPause } from './useUserPause';
 
@@ -30,7 +32,10 @@ async function setup() {
       const owner = useComposition(composition);
       const log = useReasoningLog(run, () => clock.now());
       const userPause = useUserPause(run);
-      return { run, owner, log, userPause, conversation: useRunConversation(run, owner, userPause, log) };
+      const result = useSimulationResult(run);
+      const view = ref<RunView>('flow');
+      const viewer = { selection: result.selection, view, select: result.select, show: (next: RunView) => (view.value = next) };
+      return { run, owner, log, userPause, result, view, conversation: useRunConversation(run, owner, userPause, log, viewer) };
     }),
     '推演和对话'
   );
@@ -38,7 +43,7 @@ async function setup() {
     owned.log.begin('推演南京市的两项指标');
     owned.run.start(composition, calculator);
   };
-  return { ...owned, clock, start, [Symbol.dispose]: () => scope.stop() };
+  return { ...owned, calculator, clock, start, [Symbol.dispose]: () => scope.stop() };
 }
 
 // 时间线上最后一条 AI 的回复
@@ -167,5 +172,50 @@ describe('useRunConversation', () => {
     expect(conversation.suggestions.value).toContain('按旧规程推演');
     run.restart(sampleComposition());
     expect(conversation.suggestions.value).toContain('去掉人均公园绿地');
+  });
+
+  it('完成后看结果的说法只换结果和视图，不重新推演；看结果时对话栏有回复，快捷说法先给看结果的', async () => {
+    using ctx = await setup();
+    const { conversation, run, result, view, calculator, clock, log } = ctx;
+    run.start(
+      { ...composition, conditions: { years: [2024, 2025], cityCodes: ['320100', '320500'], indicatorIds: ['A-31', 'A-39'] } },
+      calculator
+    );
+    await clock.advance(ENOUGH);
+    const { versions } = run.state.value;
+
+    conversation.send('看苏州市');
+    expect([result.selection.value?.cityCode, view.value]).toEqual(['320500', 'result']);
+    expect(conversation.reply.value).toBe('放大到苏州市，设施和服务范围放大后显示。');
+    expect(conversation.suggestions.value.slice(0, 4)).toEqual(['看南京市', '按达标着色', '看人均公园绿地', '回看推演流程']);
+    conversation.send('按达标着色');
+    conversation.send('看 2024 年');
+    conversation.send('看人均公园绿地');
+    conversation.send('回到推演范围');
+    expect(result.selection.value).toEqual({ indicatorId: 'A-39', year: 2024, mode: 'pass', cityCode: null });
+    expect(conversation.reply.value).toBe('回到整个推演范围。');
+
+    conversation.send('回看推演流程');
+    expect(view.value).toBe('flow');
+    expect(conversation.reply.value).toBeNull();
+    expect(lastReply(log.entries.value)).toBe('回到推演流程。点标题栏的"推演结果"再回来。');
+    expect(run.state.value.versions).toBe(versions);
+  });
+
+  it('完成后：范围外的城市按改条件重算；只有一个市时说范围就是它；听不懂时给出看结果和改推演的说法', async () => {
+    using ctx = await setup();
+    const { conversation, run, clock, start, log } = ctx;
+    start();
+    await clock.advance(ENOUGH);
+
+    conversation.send('看南京市');
+    expect(conversation.reply.value).toBe('推演范围就是南京市。');
+    conversation.send('今天天气怎么样');
+    expect(conversation.reply.value).toContain('看结果可以说');
+    conversation.send('看无锡市');
+    expect(run.state.value.conditions?.cityCodes).toEqual(['320100', '320200']);
+    // 改了就重新推演：回复只记在时间线上（回到流程图由页面按推演状态切换）
+    expect(lastReply(log.entries.value)).toContain('从「条件解析」重算');
+    expect(conversation.reply.value).toBeNull();
   });
 });

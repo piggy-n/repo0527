@@ -1,5 +1,5 @@
 import { simulationIndicator } from '../model/indicators';
-import { describeParam, PARAM_LABELS, type ParamKey, type SimulationConditions, type SimulationParams } from '../model/params';
+import type { SimulationConditions } from '../model/params';
 
 /** 带强调的一段文字：强调的部分是推演得出的数字和对象 */
 export type RichPart = string | { readonly em: string };
@@ -30,15 +30,3 @@ const coverageIds = ({ indicatorIds }: SimulationConditions): string[] =>
 /** 主指标：第一项覆盖率类，没有时是第一项指标；样例和结论围绕它 */
 export const primaryIndicator = (conditions: SimulationConditions): string =>
   coverageIds(conditions)[0] ?? conditions.indicatorIds[0] ?? '';
-
-/** 参数项的改动说明，如"计算规程 新规程 → 旧规程" */
-export function describeChanges(
-  keys: readonly ParamKey[],
-  from: SimulationParams,
-  to: SimulationParams,
-  conditions: SimulationConditions
-): string[] {
-  return keys.map(
-    key => `${PARAM_LABELS[key]} ${describeParam(key, from, conditions)} → ${describeParam(key, to, conditions)}`
-  );
-}

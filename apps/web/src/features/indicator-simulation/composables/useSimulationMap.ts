@@ -2,40 +2,50 @@ import type { LngLat, StyleGroup } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
 import { computed, type ComputedRef, type Ref, watch } from 'vue';
 import { formatValue } from '../format';
-import type { PassState } from '../model/analysis';
+import { indicatorResult, type PassState, passState } from '../model/analysis';
 import { type MapData, mapData } from '../map/map-data';
-import { alertsGroup, districtsGroup, facilitiesGroup, type MapFrame, maskGroup } from '../map/map-frame';
+import { districtsGroup, facilitiesGroup, highlightGroup, type MapFrame, maskGroup } from '../map/map-frame';
 import { simulationIndicator } from '../model/indicators';
 import { reducedMotion } from '../motion';
+import { PASS_TEXT } from '../result/result-view';
 import type { SimulationResult } from './useSimulationResult';
 import type { SimulationRun } from './useSimulationRun';
 
-/** 地图上的文字标注：各市的值 */
+/** 地图上的城市标注：点了放大到这个市 */
 export interface MapLabel {
-  readonly key: string;
+  readonly cityCode: string;
   readonly lngLat: LngLat;
-  readonly text: string;
+  /** 去掉"市"的名称 */
+  readonly name: string;
+  readonly value: string;
   /** 城市值的达标状态 */
   readonly state: PassState;
 }
 
+/** 鼠标下的区县：名称、值和达标 */
+export interface DistrictHint {
+  readonly name: string;
+  readonly text: string;
+}
+
 export interface SimulationMap {
-  /** 正在看的一版的地图数据；还没有结果时为 null */
+  /** 结果的地图数据；还没有结果时为 null */
   readonly data: Readonly<Ref<MapData | null>>;
   readonly labels: ComputedRef<readonly MapLabel[]>;
+  /** 推演范围里的区县的提示；不在范围里、没有结果时为 null */
+  readonly describeDistrict: (code: string) => DistrictHint | null;
   readonly deriveDistricts: () => StyleGroup;
   readonly deriveMask: () => StyleGroup;
   readonly deriveFacilities: () => StyleGroup;
-  readonly deriveAlerts: () => StyleGroup;
+  readonly deriveHighlight: () => StyleGroup;
 }
 
 // 结果的地图：数值全部显示，设施和服务圈都在
-const SHOWN: MapFrame = { density: null, scan: 1, rain: 1, ring: 1, alert: null };
-const PREVIEWING: MapFrame = { ...SHOWN, alert: { kind: 'preview', opacity: 1 } };
+const SHOWN: MapFrame = { density: null, scan: 1, rain: 1, ring: 1 };
 
 /**
- * 结果展示的地图：按结果的选择显示（哪一版、年度、着色），人工干预的预览描虚线，各市标出值和达标；
- * 推演阶段不显示地图（原型 v4），有了结果时镜头移到推演范围
+ * 结果展示的地图：按结果的选择显示（指标、年度、着色），各市标出值和达标，悬停的市描边；
+ * 放大到一个市时画设施和服务圈；有了结果时镜头移到推演范围，放大到一个市时移到这个市，回到整个范围时再移回来
  */
 export function useSimulationMap(
   run: SimulationRun,
@@ -45,7 +55,7 @@ export function useSimulationMap(
   const state = run.state;
   const conditions = computed(() => state.value.conditions);
 
-  // 结果阶段看的一版：完成时有选择才算
+  // 完成时才显示：重新推演的过程中看流程图，地图不跟着变
   const viewing = computed(() => {
     const selection = result.selection.value;
     const version = result.version.value;
@@ -60,47 +70,70 @@ export function useSimulationMap(
       return null;
     }
     const { selection, version, coloring } = current;
-    const preview = result.preview.value;
-    return mapData(calculator, conditions.value, version.params, selection.indicatorId, {
-      year: selection.year,
-      fill: coloring.fill,
-      preview: preview.size > 0 ? preview : undefined
-    });
+    return mapData(calculator, conditions.value, version.params, selection.indicatorId, { year: selection.year, fill: coloring.fill });
   });
-  const frame = computed(() => (data.value === null ? null : result.preview.value.size > 0 ? PREVIEWING : SHOWN));
+  const frame = computed(() => (data.value === null ? null : SHOWN));
+  // 设施和服务圈只在放大到一个市（或范围只有一个市）时画：按级别分不开，两个市的范围和一个市只差半级
+  const focused = computed(() => {
+    const current = viewing.value;
+    return current !== null && (current.selection.cityCode !== null || conditions.value?.cityCodes.length === 1);
+  });
 
   const labels = computed((): MapLabel[] => {
-    const current = data.value;
     const selection = viewing.value?.selection;
-    if (!current || !selection) {
+    if (!data.value || !selection) {
       return [];
     }
     const indicator = simulationIndicator(selection.indicatorId);
-    return current.cities.map(city => ({
-      key: city.code,
+    return data.value.cities.map(city => ({
+      cityCode: city.code,
       lngLat: city.center,
-      text: `${city.name.replace(/市$/, '')} ${formatValue(city.value, indicator)}`,
+      name: city.name.replace(/市$/, ''),
+      value: formatValue(city.value, indicator),
       state: city.state
     }));
   });
 
-  // 有了结果（第一版，或换条件后的新一轮）时，镜头移到推演范围：重新推演时先回到没有结果，换版本、换选择时条件不变
+  // 区县的值按选择的指标和年度
+  const districts = computed(() => {
+    const current = viewing.value;
+    if (!current) {
+      return new Map<string, DistrictHint>();
+    }
+    const { indicatorId, year } = current.selection;
+    const indicator = simulationIndicator(indicatorId);
+    const outcome = indicatorResult(current.version.result[year]?.indicators ?? {}, indicatorId);
+    return new Map(
+      outcome.rows.map((row): [string, DistrictHint] => [
+        row.code,
+        { name: row.name, text: `${formatValue(row.value, indicator)} · ${PASS_TEXT[passState(row.value, outcome.target)]}` }
+      ])
+    );
+  });
+
+  // 有了结果（第一次，或重新推演完成）、换放大的市时移镜头；换指标、年度、着色时不动
   watch(
-    () => (viewing.value ? conditions.value : null),
-    next => {
+    [() => (viewing.value ? conditions.value : null), () => viewing.value?.selection.cityCode ?? null],
+    ([next, cityCode]) => {
       const current = data.value;
-      if (next && current) {
-        map.runCameraOperation(camera => camera.fitBounds(current.bounds, { maxZoom: 10, duration: reducedMotion() ? 0 : 900 }));
+      if (!next || !current) {
+        return;
       }
+      const city = current.cities.find(item => item.code === cityCode);
+      const duration = reducedMotion() ? 0 : 900;
+      map.runCameraOperation(camera =>
+        camera.fitBounds(city ? city.bounds : current.bounds, { maxZoom: city ? 11 : 10, duration })
+      );
     }
   );
 
   return {
     data,
     labels,
+    describeDistrict: code => districts.value.get(code) ?? null,
     deriveDistricts: () => districtsGroup(data.value, frame.value),
     deriveMask: () => maskGroup(data.value),
-    deriveFacilities: () => facilitiesGroup(data.value, frame.value),
-    deriveAlerts: () => alertsGroup(data.value, frame.value)
+    deriveFacilities: () => facilitiesGroup(focused.value ? data.value : null, frame.value),
+    deriveHighlight: () => highlightGroup(data.value, result.hoverCity.value)
   };
 }

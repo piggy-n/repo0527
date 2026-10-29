@@ -110,11 +110,6 @@ export function changedParams(from: SimulationParams, to: SimulationParams): Par
   return PARAM_KEYS.filter(key => (key === 'targets' ? !sameNumbers(from.targets, to.targets) : from[key] !== to[key]));
 }
 
-/** 把一项参数换成 source 的取值 */
-export function withParam(params: SimulationParams, key: ParamKey, source: SimulationParams): SimulationParams {
-  return { ...params, [key]: source[key] };
-}
-
 /** 带正负号的百分比，如"+10%""−5%""0%" */
 export const signedPercent = (value: number): string => `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value)}%`;
 

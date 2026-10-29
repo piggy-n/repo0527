@@ -5,13 +5,12 @@ import type {
   LayerSpecification
 } from '@maplibre/maplibre-gl-style-spec';
 import {
-  ALERT_COLOR,
   DENSITY_COLOR,
   DISTRICT_LINE_COLOR,
   FACILITY_COLOR,
   FACILITY_RING_COLOR,
+  HIGHLIGHT_COLOR,
   MASK_COLOR,
-  PASS_COLORS,
   PENDING_COLOR
 } from './colors';
 import type { MapData } from './map-data';
@@ -29,8 +28,6 @@ export interface MapFrame {
   readonly rain: number | null;
   /** 服务圈的扩散 0～1 */
   readonly ring: number;
-  /** 区县描边：评价分级的未达标（闪烁）、结果阶段人工干预的预览（虚线） */
-  readonly alert: { readonly kind: 'fail' | 'preview'; readonly opacity: number } | null;
 }
 
 const POLYGONS: FilterSpecification = ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false];
@@ -54,7 +51,7 @@ const ringRadius = (meters: number, scale: number): ExpressionSpecification => {
 export const DISTRICTS_GROUP = 'simulation-districts';
 export const MASK_GROUP = 'simulation-mask';
 export const FACILITIES_GROUP = 'simulation-facilities';
-export const ALERTS_GROUP = 'simulation-alerts';
+export const HIGHLIGHT_GROUP = 'simulation-highlight';
 
 /** 区县：人口密度、待计算、数值颜色三层填充和分隔线 */
 export function districtsGroup(data: MapData | null, frame: MapFrame | null): StyleGroup {
@@ -121,7 +118,7 @@ export function maskGroup(data: MapData | null): StyleGroup {
   };
 }
 
-/** 设施点和服务圈 */
+/** 设施点和服务圈（只在放大到一个市时交给它数据，见 useSimulationMap） */
 export function facilitiesGroup(data: MapData | null, frame: MapFrame | null): StyleGroup {
   if (!data || !frame || frame.rain === null) {
     return EMPTY;
@@ -133,7 +130,6 @@ export function facilitiesGroup(data: MapData | null, frame: MapFrame | null): S
       id: `${source}-ring`,
       type: 'circle',
       source,
-      minzoom: 8.5,
       paint: {
         'circle-radius': ringRadius(data.ringMeters, frame.ring),
         'circle-color': FACILITY_RING_COLOR,
@@ -161,29 +157,22 @@ export function facilitiesGroup(data: MapData | null, frame: MapFrame | null): S
   return { sources: { [source]: { type: 'geojson', data: data.facilities } }, layers };
 }
 
-const ALERT_COLORS = { fail: PASS_COLORS.fail, preview: ALERT_COLOR } as const;
-
-/** 区县描边：未达标红色闪烁，干预预览琥珀色虚线；放在边界之上 */
-export function alertsGroup(data: MapData | null, frame: MapFrame | null): StyleGroup {
-  if (!data || !frame?.alert) {
+/**
+ * 悬停的市描出边界，放在边界之上；没有悬停时过滤条件不匹配任何区县：数据源和图层一直在，悬停只改过滤条件
+ */
+export function highlightGroup(data: MapData | null, cityCode: string | null): StyleGroup {
+  if (!data) {
     return EMPTY;
   }
-  const { kind, opacity } = frame.alert;
   return {
-    sources: { [ALERTS_GROUP]: { type: 'geojson', data: data.districts } },
+    sources: { [HIGHLIGHT_GROUP]: { type: 'geojson', data: data.districts } },
     layers: [
       {
-        id: `${ALERTS_GROUP}-line`,
+        id: `${HIGHLIGHT_GROUP}-line`,
         type: 'line',
-        source: ALERTS_GROUP,
-        filter: ['==', ['get', kind], true],
-        paint: {
-          'line-color': ALERT_COLORS[kind],
-          'line-width': kind === 'preview' ? 2.2 : 2.6,
-          'line-opacity': opacity,
-          // 虚线是常量，不在常量和按要素取值之间切换（ADR 0046）
-          ...(kind === 'preview' ? { 'line-dasharray': [2, 1.5] } : {})
-        }
+        source: HIGHLIGHT_GROUP,
+        filter: ['==', ['get', 'cityCode'], cityCode ?? ''],
+        paint: { 'line-color': HIGHLIGHT_COLOR, 'line-width': 2 }
       }
     ]
   };

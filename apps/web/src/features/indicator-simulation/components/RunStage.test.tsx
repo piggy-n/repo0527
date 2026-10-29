@@ -1,10 +1,14 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import { provideMap } from '@yzt/map-vue';
 import { afterEach, describe, expect, it } from 'vitest';
-import { defineComponent } from 'vue';
+import { defineComponent, ref } from 'vue';
+import { JIANGSU_CAMERA } from '@/shared/map/jiangsu';
 import { required } from '@/shared/testing/required';
 import { type Composition, sampleComposition } from '../compose/composition';
 import { type ReasoningLog, useReasoningLog } from '../composables/useReasoningLog';
 import { useRunFlow } from '../composables/useRunFlow';
+import { useSimulationMap } from '../composables/useSimulationMap';
+import { type SimulationResult, useSimulationResult } from '../composables/useSimulationResult';
 import { type SimulationRun, useSimulationRun } from '../composables/useSimulationRun';
 import { useUserPause } from '../composables/useUserPause';
 import { ManualClock } from '../engine/test-clock';
@@ -12,6 +16,7 @@ import { THINK_MS } from '../flow/frame';
 import { createCalculator } from '../model/calculator';
 import { defaultParams } from '../model/params';
 import { loadTestAtlas } from '../model/test-atlas';
+import type { RunView } from '../result/result-view';
 import { FlowChart } from './FlowChart';
 import { ReasoningPanel } from './ReasoningPanel';
 import { RunStage } from './RunStage';
@@ -25,14 +30,20 @@ async function mountRun(composition: Composition = sampleComposition()) {
   const clock = new ManualClock();
   let run: SimulationRun | undefined;
   let log: ReasoningLog | undefined;
+  let owner: SimulationResult | undefined;
+  const view = ref<RunView>('flow');
   const Host = defineComponent({
-    emits: { showResult: () => true },
-    setup(_, { emit }) {
+    setup() {
       const owned = useSimulationRun(clock);
       run = owned;
       log = useReasoningLog(owned);
       const flow = useRunFlow(owned);
       const userPause = useUserPause(owned);
+      // 只有会话没有画布（MapCanvas 换成空的）：地图的分组照常推导，镜头操作等视图就绪（测试里不会就绪）
+      const map = provideMap({ groups: [], camera: JIANGSU_CAMERA });
+      const result = useSimulationResult(owned);
+      owner = result;
+      const simulationMap = useSimulationMap(owned, map, result);
       return () => (
         <RunStage
           run={owned}
@@ -40,17 +51,20 @@ async function mountRun(composition: Composition = sampleComposition()) {
           flow={flow}
           log={log ?? useReasoningLog(owned)}
           userPause={userPause}
-          onShowResult={() => emit('showResult')}
+          result={result}
+          simulationMap={simulationMap}
+          view={view.value}
+          onUpdate:view={next => (view.value = next)}
         />
       );
     }
   });
-  const wrapper = mount(Host, { attachTo: document.body });
+  const wrapper = mount(Host, { attachTo: document.body, global: { stubs: { MapCanvas: true } } });
   const started = required(run, '推演的拥有者');
   required(log, '时间线').begin('推演全省三项指标');
   started.start(composition, calculator);
   await flushPromises();
-  return { wrapper, run: started, clock };
+  return { wrapper, run: started, result: required(owner, '结果的拥有者'), view, clock };
 }
 
 type Mounted = Awaited<ReturnType<typeof mountRun>>;
@@ -70,6 +84,13 @@ const advance = async ({ clock }: Mounted, ms: number) => {
   await clock.advance(ms);
   await flushPromises();
 };
+const titles = ({ wrapper }: Mounted) => wrapper.findAll('h2').map(title => title.text());
+// 左侧推演结果的一条指标
+const item = ({ wrapper }: Mounted, name: string) =>
+  required(
+    wrapper.findAll('[aria-expanded]').find(head => head.text().startsWith(name)),
+    `"${name}"这一条`
+  );
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -125,26 +146,82 @@ describe('RunStage', () => {
     expect(run.state.value.paused).toBe(false);
   });
 
-  it('完成后节点都完成，时间线每步收成摘要、点开看全文；底部卡片点"查看结果"进入结果展示', async () => {
+  it('完成后节点都完成，时间线每步收成摘要；标题栏只留阶段和视图切换，地图这时才挂上', async () => {
     const mounted = await mountRun();
     const { wrapper } = mounted;
+    expect(wrapper.find('map-canvas-stub').exists()).toBe(false);
     await advance(mounted, ENOUGH);
 
     expect(new Set(Object.values(nodes(mounted)))).toEqual(new Set(['done']));
-    expect(Object.keys(nodes(mounted))).toContain('eval:B-65');
     const parse = required(
-      wrapper.findAll('[class*="_timeline_"] > li').find(item => item.text().startsWith('条件解析')),
+      wrapper.findAll('[class*="_timeline_"] > li').find(entry => entry.text().startsWith('条件解析')),
       '条件解析这一条'
     );
     expect(parse.text()).toBe('条件解析完成2026 年 · 全省 · 3 项');
     await parse.get('button').trigger('click');
     expect(parse.text()).toContain('理解指令：推演 2026 年全省的 3 项指标。');
-    expect(wrapper.get('[role="status"]').text()).toBe('推演完成');
+
+    expect(wrapper.find('[role="status"]').exists()).toBe(false);
+    expect(['暂停', '人工干预', '停止'].map(text => wrapper.findAll('button').some(found => found.text() === text))).toEqual([false, false, false]);
+    expect(wrapper.get('[aria-label="主区视图"]').text()).toBe('推演流程推演结果');
+    expect(wrapper.find('map-canvas-stub').exists()).toBe(true);
+  });
+
+  it('查看结果：左侧换成推演结果、主区换成地图；每项指标写结果和达标，选中的展开各市；切回推演流程时是 AI 推理', async () => {
+    const mounted = await mountRun();
+    const { wrapper, view } = mounted;
+    await advance(mounted, ENOUGH);
 
     await button(mounted, '查看结果').trigger('click');
-    expect(wrapper.emitted('showResult')).toHaveLength(1);
+    expect(view.value).toBe('result');
+    expect(titles(mounted)).toContain('推演结果');
+    expect(titles(mounted)).not.toContain('AI 推理');
+    expect(item(mounted, '公园绿地覆盖率').text()).toBe('公园绿地覆盖率66.6%目标 ≥ 70.0%达标 5/13 市');
+    expect(item(mounted, '公园绿地覆盖率').attributes('aria-expanded')).toBe('true');
+    expect(wrapper.findAll('[aria-label^="放大到"]').filter(row => row.element.tagName === 'BUTTON')).not.toHaveLength(0);
+    expect(wrapper.get('[aria-label="图例"]').text()).toContain('公园绿地覆盖率2026 年 · 单位 %');
+
+    await wrapper.get('[aria-label="主区视图"] input[value="flow"]').setValue(true);
+    expect(view.value).toBe('flow');
+    expect(titles(mounted)).toContain('AI 推理');
+  });
+
+  it('看结果：换指标、着色、悬停一市（地图描边）、点一市放大、返回推演范围；重新编排回到条件编排', async () => {
+    const mounted = await mountRun({ ...sampleComposition(), conditions: { ...sampleComposition().conditions, years: [2025, 2026] } });
+    const { wrapper, result, run } = mounted;
+    await advance(mounted, ENOUGH);
+    await button(mounted, '查看结果').trigger('click');
+
+    await item(mounted, '人均公园绿地').trigger('click');
+    await wrapper.get('[aria-label="地图着色"] input[value="pass"]').setValue(true);
+    await wrapper.get('[aria-label="年度"] input[value="2025"]').setValue(true);
+    expect(result.selection.value).toEqual({ indicatorId: 'A-39', year: 2025, mode: 'pass', cityCode: null });
+    expect(item(mounted, '人均公园绿地').attributes('aria-expanded')).toBe('true');
+    expect(wrapper.get('[aria-label="图例"]').text()).toContain('2025 年 · 目标 ≥ 15 m²');
+
+    const suzhou = required(
+      wrapper.findAll('button[aria-label="放大到苏州"]').at(0),
+      '苏州这一行'
+    );
+    await suzhou.trigger('mouseenter');
+    expect(result.hoverCity.value).toBe('320500');
+    await suzhou.trigger('click');
+    expect(result.selection.value?.cityCode).toBe('320500');
+    await button(mounted, '返回推演范围').trigger('click');
+    expect(result.selection.value?.cityCode).toBeNull();
+
     await button(mounted, '重新编排').trigger('click');
-    expect(mounted.run.state.value.status).toBe('idle');
+    expect(run.state.value.status).toBe('idle');
+  });
+
+  it('完成后点流程图的评价节点：看这项指标的结果', async () => {
+    const mounted = await mountRun();
+    const { wrapper, result, view } = mounted;
+    await advance(mounted, ENOUGH);
+
+    await wrapper.get('[aria-label="看人均公园绿地的结果"]').trigger('click');
+    expect(view.value).toBe('result');
+    expect(result.selection.value?.indicatorId).toBe('A-39');
   });
 
   it('干预重算：受影响的节点标为待更新，时间线旧的一条标"已调整"，重算时另加一条', async () => {
@@ -166,7 +243,7 @@ describe('RunStage', () => {
     const { wrapper } = mounted;
     await advance(mounted, ENOUGH);
     const prep = required(
-      wrapper.findAll('[class*="_timeline_"] > li').find(item => item.text().startsWith('数据准备')),
+      wrapper.findAll('[class*="_timeline_"] > li').find(entry => entry.text().startsWith('数据准备')),
       '数据准备这一条'
     );
     await prep.trigger('mouseenter');

@@ -18,19 +18,16 @@ export interface DistrictProperties {
   readonly cityRank: number;
   /** 中心经度在推演范围里从西到东的位置：计算时扫描带按它经过 */
   readonly lngRank: number;
-  /** 主指标在最新年度的颜色 */
+  /** 所选指标、年度和着色下的颜色 */
   readonly fill: string;
-  /** 没有达到目标值（评价分级时闪烁） */
-  readonly fail: boolean;
-  /** 人工干预预览：改了参数后达标状态会变（结果阶段描虚线） */
-  readonly preview: boolean;
 }
 
-/** 城市标注：位置、名称、主指标的值与达标 */
+/** 城市标注：位置、名称、所选指标的值与达标，以及放大到这个市时的范围 */
 export interface MapCity {
   readonly code: string;
   readonly name: string;
   readonly center: readonly [number, number];
+  readonly bounds: ViewBounds;
   readonly value: number;
   readonly state: PassState;
 }
@@ -77,15 +74,14 @@ const feature = <G extends Feature['geometry'], P>(geometry: G, properties: P): 
   properties
 });
 
-/** 结果阶段可以换年度、换着色、标出预览的区县；推演时是最新年度、按数值分级 */
+/** 结果展示可以换年度、换着色；不传时是最新年度、按数值分级 */
 export interface MapDataOptions {
   readonly year?: number;
   /** 区县的颜色；不传时按五档数值分级 */
   readonly fill?: (row: DistrictResult) => string;
-  readonly preview?: ReadonlySet<string>;
 }
 
-/** 一轮推演（或结果阶段看的一版）的地图数据；同样的输入得到同样的数据 */
+/** 结果展示的地图数据；同样的输入得到同样的数据 */
 export function mapData(
   calculator: Calculator,
   conditions: SimulationConditions,
@@ -115,9 +111,7 @@ export function mapData(
       density: 0.12 + 0.4 * Math.sqrt((densities.get(district.code) ?? 0) / maxDensity),
       cityRank: cityRanks.get(district.cityCode) ?? 0,
       lngRank: lngRanks.get(district) ?? 0,
-      fill: row ? fill(row) : PENDING_COLOR,
-      fail: row !== undefined && !row.pass,
-      preview: options.preview?.has(district.code) ?? false
+      fill: row ? fill(row) : PENDING_COLOR
     });
   });
 
@@ -155,7 +149,7 @@ export function mapData(
         members.reduce((sum, district) => sum + district.center[1], 0) / Math.max(1, members.length)
       ];
       const name = JIANGSU_CITIES.find(item => item.code === city.code)?.name ?? city.name;
-      return { code: city.code, name, center, value: city.value, state: passState(city.value, result.target) };
+      return { code: city.code, name, center, bounds: districtBounds(members), value: city.value, state: passState(city.value, result.target) };
     }),
     sample: urban[0] ?? firstCity[0] ?? null
   };

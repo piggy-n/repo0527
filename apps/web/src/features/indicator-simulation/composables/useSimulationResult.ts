@@ -1,121 +1,93 @@
 import { computed, type ComputedRef, type Ref, shallowRef, watch } from 'vue';
 import type { SimulationVersion } from '../engine/engine';
-import type { SimulationParams } from '../model/params';
 import {
-  type Comparison,
-  comparisonOf,
-  initialSelection,
   type MapColoring,
   mapColoring,
-  previewChanges,
-  type ResultSelection,
-  type ResultSummary,
-  resultSummary
+  type Rank,
+  rankOf,
+  resolveSelection,
+  type ResultItem,
+  resultItems,
+  type ResultSelection
 } from '../result/result-view';
 import type { SimulationRun } from './useSimulationRun';
 
-/** 结果阶段的拥有者：看哪一版、和谁比、哪项指标和年度、地图着色，以及人工干预的预览 */
+/** 结果展示的拥有者：看哪项指标、哪一年、怎么着色、放大到哪个市，以及悬停的市；结果总是最新的一版 */
 export interface SimulationResult {
-  readonly selection: Readonly<Ref<ResultSelection | null>>;
+  /** 还没有结果时为 null */
+  readonly selection: ComputedRef<ResultSelection | null>;
   readonly version: ComputedRef<SimulationVersion | null>;
-  readonly comparison: ComputedRef<Comparison | null>;
-  readonly summary: ComputedRef<ResultSummary | null>;
+  /** 左侧每项指标的结果 */
+  readonly items: ComputedRef<readonly ResultItem[]>;
+  /** 选中指标的各市（一个市时是各区县）结果 */
+  readonly rank: ComputedRef<Rank | null>;
   readonly coloring: ComputedRef<MapColoring | null>;
-  /** 预览中达标状态会变的区县 */
-  readonly preview: Readonly<Ref<ReadonlySet<string>>>;
-  /** 改选择；不合法的值抛错，对比的一方不能是正在看的一版（改成标准口径） */
-  readonly select: (patch: Partial<Omit<ResultSelection, 'viewIndex'>>) => void;
-  /** 看另一版：对比改成它所基于的版本 */
-  readonly viewVersion: (index: number) => void;
-  /** 人工干预的草稿；null 是关掉预览 */
-  readonly setPreview: (draft: SimulationParams | null) => void;
+  /** 悬停中的市：地图上描出它的边界 */
+  readonly hoverCity: Readonly<Ref<string | null>>;
+  /** 改选择；不在条件里的指标、年度、市抛错 */
+  readonly select: (patch: Partial<ResultSelection>) => void;
+  readonly setHoverCity: (cityCode: string | null) => void;
 }
-
-const EMPTY: ReadonlySet<string> = new Set();
 
 export function useSimulationResult(run: SimulationRun): SimulationResult {
   const state = run.state;
-  const selection = shallowRef<ResultSelection | null>(null);
-  const preview = shallowRef<ReadonlySet<string>>(EMPTY);
-  const conditions = computed(() => state.value.conditions);
-  const versions = computed(() => state.value.versions);
-
-  // 新的一版生成后看它；回到空闲时清空
+  // 只存用户选过的；重新推演后还在条件里的沿用（resolveSelection），回到条件编排时清空
+  const chosen = shallowRef<Partial<ResultSelection>>({});
+  const hoverCity = shallowRef<string | null>(null);
   watch(
-    () => versions.value.length,
-    () => {
-      selection.value = initialSelection(state.value);
-      preview.value = EMPTY;
+    () => state.value.status === 'idle',
+    idle => {
+      if (idle) {
+        chosen.value = {};
+        hoverCity.value = null;
+      }
     }
   );
 
-  const version = computed(() => (selection.value ? (versions.value[selection.value.viewIndex] ?? null) : null));
-  const comparison = computed(() => {
-    const calculator = run.calculator.value;
-    if (!calculator || !conditions.value || !selection.value) {
-      return null;
-    }
-    return comparisonOf(calculator, conditions.value, versions.value, selection.value.compare);
-  });
-  const summary = computed(() => {
-    const calculator = run.calculator.value;
+  const version = computed(() => state.value.versions.at(-1) ?? null);
+  const selection = computed(() => resolveSelection(state.value, chosen.value));
+  const items = computed(() => {
+    const { conditions } = state.value;
     const current = selection.value;
-    if (!calculator || !conditions.value || !current || !version.value || !comparison.value) {
-      return null;
-    }
-    return resultSummary(calculator, conditions.value, version.value, comparison.value, current.indicatorId, current.year);
+    return version.value && conditions && current ? resultItems(version.value, conditions, current.year) : [];
+  });
+  const rank = computed(() => {
+    const { conditions } = state.value;
+    const current = selection.value;
+    return version.value && conditions && current ? rankOf(version.value, conditions, current.indicatorId, current.year) : null;
   });
   const coloring = computed(() => {
     const calculator = run.calculator.value;
-    if (!calculator || !conditions.value || !selection.value || !version.value || !comparison.value) {
-      return null;
-    }
-    return mapColoring(calculator, conditions.value, selection.value, version.value, comparison.value);
+    const { conditions } = state.value;
+    const current = selection.value;
+    return calculator && version.value && conditions && current ? mapColoring(calculator, conditions, current, version.value) : null;
   });
-
-  const requireSelection = (): ResultSelection => {
-    if (!selection.value) {
-      throw new Error('还没有推演结果');
-    }
-    return selection.value;
-  };
-
-  const select: SimulationResult['select'] = patch => {
-    const current = requireSelection();
-    const next = { ...current, ...patch };
-    const { indicatorIds = [], years = [] } = conditions.value ?? {};
-    if (!indicatorIds.includes(next.indicatorId) || !years.includes(next.year)) {
-      throw new Error(`没有指标 ${next.indicatorId} 或年度 ${next.year}`);
-    }
-    if (next.compare !== 'default' && versions.value[next.compare] === undefined) {
-      throw new Error(`没有第 ${next.compare} 个版本`);
-    }
-    selection.value = next.compare === next.viewIndex ? { ...next, compare: 'default' } : next;
-  };
 
   return {
     selection,
     version,
-    comparison,
-    summary,
+    items,
+    rank,
     coloring,
-    preview,
-    select,
-    viewVersion: index => {
-      const target = versions.value[index];
-      if (!target) {
-        throw new Error(`没有第 ${index} 个版本`);
-      }
-      selection.value = { ...requireSelection(), viewIndex: index, compare: target.baseIndex ?? 'default' };
-    },
-    setPreview: draft => {
-      const calculator = run.calculator.value;
+    hoverCity,
+    select: patch => {
       const current = selection.value;
-      if (!draft || !calculator || !conditions.value || !current || !version.value) {
-        preview.value = EMPTY;
-        return;
+      const { conditions } = state.value;
+      if (!current || !conditions) {
+        throw new Error('还没有推演结果');
       }
-      preview.value = previewChanges(calculator, conditions.value, version.value.params, draft, current.indicatorId, current.year);
+      const next = { ...current, ...patch };
+      if (
+        !conditions.indicatorIds.includes(next.indicatorId) ||
+        !conditions.years.includes(next.year) ||
+        (next.cityCode !== null && !conditions.cityCodes.includes(next.cityCode))
+      ) {
+        throw new Error(`推演条件里没有指标 ${next.indicatorId}、${next.year} 年或市 ${next.cityCode}`);
+      }
+      chosen.value = next;
+    },
+    setHoverCity: cityCode => {
+      hoverCity.value = cityCode;
     }
   };
 }

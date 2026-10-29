@@ -1,4 +1,4 @@
-// AI 推演阶段（原型 v4）：和条件编排一样的分栏布局，左侧 AI 推理，右侧推演流程图
+// AI 推演与结果展示（原型 v4、v5）：和条件编排一样的分栏布局；推演时左侧 AI 推理、主区流程图，看结果时左侧推演结果、主区地图
 .root {
   position: relative;
   height: 100%;
@@ -7,6 +7,36 @@
 .panel {
   flex: 1;
   min-height: 0;
+}
+
+// 流程图和地图叠在面板的内容区里，不在看的一层隐藏但保留尺寸
+.stack {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  transition: opacity 0.3s ease;
+}
+
+// 淡出后再隐藏
+.concealed {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.3s ease,
+    visibility 0s linear 0.3s;
+}
+
+// 完成后标题栏右边是"推演流程 / 推演结果"
+.views {
+  margin-left: auto;
 }
 
 .state {
@@ -32,10 +62,6 @@
 
 .pausedDot {
   background: var(--color-warning);
-}
-
-.doneDot {
-  background: var(--color-primary);
 }
 
 @keyframes beat {
@@ -130,6 +156,11 @@
 }
 
 :global(.simulation-still) {
+  .layer,
+  .concealed {
+    transition: none;
+  }
+
   .runningDot,
   .doneCard {
     animation: none;

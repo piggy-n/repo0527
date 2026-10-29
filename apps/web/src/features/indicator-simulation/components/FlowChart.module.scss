@@ -372,3 +372,19 @@
     transition: none;
   }
 }
+
+// 完成后评价节点上盖一层透明按钮：点了看这项指标的结果（按钮不触发拖动画布）
+.pick {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: -2px;
+  }
+}

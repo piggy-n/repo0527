@@ -1,0 +1,279 @@
+// 结果展示的左侧（第五版原型）：每项指标一条，选中的一条展开各市；底部整行的"重新编排"
+.panel {
+  flex: 1;
+  min-height: 0;
+}
+
+.scope {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: var(--space-xs) var(--space-lg) var(--space-md);
+  list-style: none;
+}
+
+.item {
+  flex: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-container);
+  transition: border-color 0.2s;
+  animation: rise 0.3s ease-out both;
+
+  &:hover {
+    border-color: var(--color-primary-border-hover);
+  }
+}
+
+.selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg-lighter);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+
+  &:hover {
+    border-color: var(--color-primary);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+
+// 收起时名称和结果一行；选中时结果单独一行、用结果数值的字号
+.head {
+  display: grid;
+  grid-template-areas:
+    'name value'
+    'meta meta';
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--space-sm);
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  .selected & {
+    grid-template-areas:
+      'name name'
+      'value value'
+      'meta meta';
+    cursor: default;
+  }
+}
+
+.name {
+  display: flex;
+  grid-area: name;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--color-text-title);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-base);
+
+  > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.scenario {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-scenario-bg);
+  color: var(--color-scenario);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-tag);
+}
+
+.value {
+  grid-area: value;
+  align-self: center;
+  color: var(--color-text-title);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+
+  .selected & {
+    color: var(--color-primary);
+    font-size: var(--font-size-display);
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 1px;
+  }
+}
+
+.meta {
+  display: flex;
+  grid-area: meta;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  white-space: nowrap;
+}
+
+// 达标三态：达标主色、接近琥珀、未达标红
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: var(--font-weight-semibold);
+
+  i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  &.pass {
+    color: var(--color-primary);
+  }
+
+  &.near {
+    color: var(--color-warning-text);
+  }
+
+  &.fail {
+    color: var(--color-danger);
+  }
+}
+
+// 各市：条长是数值，竖线是目标
+.detail {
+  padding: 0 4px 8px;
+}
+
+.rankHead {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 8px;
+  padding: var(--space-sm) 0 2px;
+  border-top: 1px dashed var(--color-border-dashed);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.rank {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+// 市的一行是按钮（默认 border-box），区县的一行是 li：统一按 border-box，不然 li 的内边距会撑出卡片
+.row {
+  display: grid;
+  grid-template-columns: 64px 1fr 72px;
+  align-items: center;
+  gap: var(--space-sm);
+  box-sizing: border-box;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--font-size-xs);
+  text-align: left;
+}
+
+button.row {
+  cursor: pointer;
+
+  &:hover {
+    background: var(--color-primary-bg);
+  }
+}
+
+.lit {
+  background: var(--color-primary-bg);
+}
+
+.rankName {
+  overflow: hidden;
+  color: var(--color-text-title);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-neutral-bg);
+
+  i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: inherit;
+    transition: width 0.3s;
+  }
+
+  .pass {
+    background: var(--color-primary);
+  }
+
+  .near {
+    background: var(--color-warning);
+  }
+
+  .fail {
+    background: var(--color-danger);
+  }
+
+  // 目标的竖线
+  &::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    left: var(--target);
+    width: 2px;
+    border-radius: 1px;
+    background: var(--color-text-strong);
+  }
+}
+
+.rankValue {
+  color: var(--color-text-title);
+  font-weight: var(--font-weight-semibold);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.recompose {
+  flex: 1;
+}
+
+// 减少动画（由 motion.ts 决定，现在总是播放）
+:global(.simulation-still) {
+  .item {
+    animation: none;
+  }
+
+  .bar i {
+    transition: none;
+  }
+}

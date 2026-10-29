@@ -89,6 +89,30 @@
   text-align: center;
 }
 
+// 看结果时 AI 的回复：小圆球加上回复的话，颜色比提示深一档
+.reply {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--color-text-regular);
+}
+
+.replyOrb {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 200deg,
+    var(--color-primary),
+    var(--color-ai-violet),
+    var(--color-ai-cyan),
+    var(--color-primary)
+  );
+  box-shadow: 0 0 0 2px var(--color-ai-glow);
+}
+
 // 快捷说法：点了直接发送
 .suggestions {
   display: flex;

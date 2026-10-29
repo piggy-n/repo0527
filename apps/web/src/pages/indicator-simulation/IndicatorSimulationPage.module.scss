@@ -1,33 +1,18 @@
-// 上面是阶段，下面是横跨全宽的 AI 对话栏；内容区不是弹性容器，用 height: 100% 占满（推演阶段全是绝对定位，没有内容撑开）
+// 上面是阶段，下面是横跨全宽的 AI 对话栏；内容区不是弹性容器，用 height: 100% 占满（阶段是绝对定位，没有内容撑开）
 .root {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
-// 地图铺满阶段区，两个阶段叠在上面（page-layout.md"画布型"）
+// 两个阶段叠在这里；结果的地图在推演阶段的主区里
 .stages {
   position: relative;
   flex: 1;
   min-height: 0;
 }
 
-.map {
-  position: absolute;
-  inset: 0;
-  transition: opacity 0.45s ease;
-}
-
-// 条件编排时地图不显示，保留尺寸，回到推演时不用重新排版；淡出后再隐藏
-.hidden {
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 0.45s ease,
-    visibility 0s linear 0.45s;
-}
-
-// 条件编排和推演之间淡入淡出：AI 编排完成自动开始推演时，编排图淡出，地图和推演面板淡入
+// 条件编排和推演之间淡入淡出：AI 编排完成自动开始推演时，编排图淡出，推演阶段淡入
 .stageEnterActive,
 .stageLeaveActive {
   transition: opacity 0.45s ease;
@@ -48,8 +33,6 @@
 
 // 减少动画（由 motion.ts 决定，现在总是播放）
 :global(.simulation-still) {
-  .map,
-  .hidden,
   .stageEnterActive,
   .stageLeaveActive {
     transition: none;
