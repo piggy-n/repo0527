@@ -1,4 +1,4 @@
-import type { Indicator } from '../model';
+import type { Indicator } from './catalog';
 
 type Driver = keyof typeof CITY_DRIVERS;
 type Pattern = 'steady' | 'coverage' | 'rail' | 'risk' | 'project' | 'distance' | 'cohort' | 'flow';

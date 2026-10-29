@@ -1,5 +1,5 @@
-import rawIndicators from './data/indicator-catalog.json';
-import type { CategoryId, City, Indicator } from './model';
+import { type Indicator, INDICATOR_CATEGORIES, type IndicatorCategory, INDICATORS } from '@/shared/city-indicators/catalog';
+import type { City } from './model';
 
 /** 页面开放年份保持旧配置，独立于模拟记录的十年范围 */
 export const DASHBOARD_YEARS: readonly number[] = [2026, 2025, 2024, 2023, 2022, 2021];
@@ -21,22 +21,16 @@ export const CITIES: readonly City[] = [
   { code: '321300', name: '宿迁市', anchor: [118.46, 33.96] }
 ];
 
-export const INDICATORS: readonly Indicator[] = rawIndicators;
+// 指标目录与四个分类在 shared/city-indicators，指标智能推演也用（ADR 0102）
+export { INDICATORS };
 
-export interface IndicatorCategory {
-  readonly id: CategoryId;
-  readonly name: string;
+export interface DashboardCategory extends IndicatorCategory {
   readonly indicators: readonly Indicator[];
 }
 
 /** 四类指标只持有目录引用，不复制或生成展示值 */
-export const CATEGORIES: readonly IndicatorCategory[] = [
-  { id: 'resilience', name: '安全韧性' },
-  { id: 'innovation', name: '创新高效/开放繁荣' },
-  { id: 'happiness', name: '共享幸福' },
-  { id: 'coordination', name: '协调节约' }
-].map(category => ({
-  id: category.id as CategoryId,
-  name: category.name,
-  indicators: INDICATORS.filter(indicator => indicator.categoryId === category.id)
+export const CATEGORIES: readonly DashboardCategory[] = INDICATOR_CATEGORIES.map(({ id, name }) => ({
+  id,
+  name,
+  indicators: INDICATORS.filter(indicator => indicator.categoryId === id)
 }));

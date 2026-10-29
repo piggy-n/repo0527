@@ -41,22 +41,12 @@ describe('驾驶舱固定模拟数据迁移基线', () => {
     expect(await digest(classifications)).toBe(baseline.classificationsSha256);
   });
 
+  // 合计与分项、并集与交集的约束在 shared/city-indicators/mock-value.test.ts
   it('跨自然年后既有年份的模拟值不漂移', () => {
     const nextYear = createMockData(2027);
     expect(nextYear.years).toEqual([2027, 2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018]);
     for (const record of data.records.filter(item => item.year >= 2018)) {
       expect(nextYear.value(record.year, record.cityCode, record.indicatorCode)).toBe(record.value);
-    }
-  });
-
-  it('建筑合计等于分项且生活圈并集不小于交集', () => {
-    for (const city of CITIES) {
-      for (const year of data.years) {
-        const value = (id: string) => data.value(year, city.code, id) ?? NaN;
-        expect(value('A-16')).toBe(value('D02-3-1') + value('D02-3-2'));
-        expect(value('G01-6')).toBe(value('G01-6-1') + value('G01-6-2'));
-        expect(value('A09-2')).toBeGreaterThanOrEqual(value('A-30'));
-      }
     }
   });
 });

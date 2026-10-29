@@ -49,7 +49,7 @@ apps/web/src/
 ├─ app/        应用装配：入口、路由、Pinia、全局插件、布局
 ├─ pages/      路由页面，只负责组合 features
 ├─ features/   按业务域划分：api.ts、queries.ts、store.ts、components/、composables/
-├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、加载耗时的标记（perf）、项目级的公共地图能力（map）、只供测试的辅助（testing）
+├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、加载耗时的标记（perf）、项目级的公共地图能力（map）、城市体检指标的目录与模拟值（city-indicators）、只供测试的辅助（testing）
 └─ libs/       将来可拆到 packages/* 的模块，统一用 @yzt/<name> 导入
    ├─ utils/       @yzt/utils       纯 TS 工具，不依赖框架（目前是 Worker 通信层）
    ├─ ui/          @yzt/ui          Mx* 通用组件（布局、面板、区块、标题，ADR 0016）
