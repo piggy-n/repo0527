@@ -151,13 +151,18 @@ describe('mapColoring', () => {
     }
   });
 
-  it('差值：和对比的一方逐个区县比，上升为绿、下降为红；值都相同时说明原因', async () => {
+  it('差值：和对比的一方逐个区县比，上升为红、下降为绿；值都相同时说明原因', async () => {
     const { calculator, versions, v2 } = await setup();
     const selection = { viewIndex: 1, compare: 0, indicatorId: 'B-65', year: 2026, mode: 'diff' } as const;
     const { fill, legend } = mapColoring(calculator, conditions, selection, v2, comparisonOf(calculator, conditions, versions, 0));
 
     expect(legend.title).toBe('较 v1 变化（百分点）');
     expect(legend.entries.map(entry => entry.color)).toEqual(DIFF_COLORS.toReversed());
+    // 明显上升是红色、明显下降是绿色
+    expect([legend.entries[0], legend.entries[4]]).toEqual([
+      { color: '#d9574e', text: '明显上升', shape: 'block' },
+      { color: '#2f9e74', text: '明显下降', shape: 'block' }
+    ]);
     expect(legend.note).toBeNull();
     const before = new Map(rowsOf(calculator, defaultParams()).map(row => [row.code, row.value]));
     const rows = rowsOf(calculator, suggested);

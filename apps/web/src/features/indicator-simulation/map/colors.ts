@@ -28,8 +28,8 @@ export function valueColor(value: number, breaks: readonly number[]): string {
   return VALUE_COLORS[index === -1 ? VALUE_COLORS.length - 1 : index] ?? VALUE_COLORS[0];
 }
 
-/** 差值五档：下降红、不变灰、上升绿 */
-export const DIFF_COLORS = ['#d9574e', '#f2a59d', '#eef1f5', '#9bd5bd', '#2f9e74'] as const;
+/** 差值五档：下降绿、不变灰、上升红（数值上升红色、下降绿色，同结果面板） */
+export const DIFF_COLORS = ['#2f9e74', '#9bd5bd', '#eef1f5', '#f2a59d', '#d9574e'] as const;
 
 /** 差值的四个分界：以最大变化量的三分之一为一档，变化很小时算不变 */
 export function diffEdges(maxAbs: number): readonly number[] {

@@ -101,12 +101,13 @@
   white-space: nowrap;
 }
 
+// 数值上升红色、下降绿色，同参数预估（2026-10-29 用户确认）
 .up {
-  color: var(--color-success-text);
+  color: var(--color-danger);
 }
 
 .down {
-  color: var(--color-danger);
+  color: var(--color-success-text);
 }
 
 .flat {
