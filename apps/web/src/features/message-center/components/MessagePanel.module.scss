@@ -16,8 +16,9 @@
 }
 
 // 弹框到了最高时列表被压缩、自己滚动：滚动容器的最小高度默认是 0，不用另写 flex、min-height
+// 卡片的左右边缘和上面的筛选对齐
 .list {
-  padding: 0 var(--space-sm) var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-lg);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -42,18 +43,19 @@
   text-align: center;
 }
 
-// 一条消息：左边未读点，右边标题行、正文、业务按钮；悬停加浅底
+// 一条消息一张卡片（同旧项目的消息卡片）：左列未读点；中间是标题行和正文；右列是时间，业务按钮在它下方、右对齐
 .message {
   display: grid;
-  grid-template-columns: 8px minmax(0, 1fr);
-  column-gap: var(--space-sm);
-  padding: var(--space-md) var(--space-sm);
-  border-radius: var(--radius-sm);
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'dot head time'
+    '. content action'
+    '. reason reason';
+  gap: var(--space-xs) var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
   cursor: pointer;
-
-  &:hover {
-    background-color: var(--color-primary-bg-lighter);
-  }
 
   &:focus-visible {
     outline: 2px solid var(--color-primary);
@@ -61,58 +63,82 @@
   }
 
   & + & {
-    border-top: 1px solid var(--color-border-light);
+    margin-top: var(--space-sm);
+  }
+}
+
+.unread {
+  border-color: var(--color-primary-border);
+  background-color: var(--color-bg-container);
+
+  &:hover {
+    border-color: var(--color-primary-border-hover);
+    background-color: var(--color-primary-bg-lighter);
+  }
+}
+
+// 已读：浅灰底，标题和正文换成次要色
+.read {
+  border-color: var(--color-border-light);
+  background-color: var(--color-neutral-bg-light);
+
+  &:hover {
+    border-color: var(--color-border);
   }
 }
 
 .dot {
+  grid-area: dot;
   width: 8px;
   height: 8px;
-  margin-top: 8px;
+  margin-top: 7px;
   border-radius: 50%;
 }
 
 .unread .dot {
-  background-color: var(--color-danger);
+  background-color: var(--color-primary);
 }
 
-.main {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  min-width: 0;
-}
-
+// 标题按内容宽度、放不下时先省略，类型标签紧跟在后面、始终完整
 .head {
   display: flex;
+  grid-area: head;
   align-items: center;
   gap: var(--space-sm);
   min-width: 0;
+  min-height: 22px;
+
+  :global(.el-tag) {
+    flex: none;
+  }
 }
 
 .title {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: var(--color-text-regular);
+  color: var(--color-text-title);
   font-size: var(--font-size-base);
-  font-weight: var(--font-weight-regular);
+  font-weight: var(--font-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.unread .title {
-  color: var(--color-text-title);
-  font-weight: var(--font-weight-semibold);
+.read .title {
+  color: var(--color-text-regular);
+  font-weight: var(--font-weight-regular);
 }
 
-// 标题的基准宽度是 0、先被压缩，时间不会被挤
 .time {
+  grid-area: time;
+  align-self: center;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
+  text-align: right;
+  white-space: nowrap;
 }
 
 .content {
+  grid-area: content;
   margin: 0;
   color: var(--color-text-regular);
   font-size: var(--font-size-xs);
@@ -120,13 +146,20 @@
   overflow-wrap: anywhere;
 }
 
-.actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+.read .content {
+  color: var(--color-text-secondary);
+}
+
+.action {
+  grid-area: action;
+  align-self: start;
+  justify-self: end;
+  height: var(--line-height-compact);
 }
 
 .unavailable {
+  grid-area: reason;
+  justify-self: end;
   color: var(--color-text-placeholder);
   font-size: var(--font-size-xs);
 }

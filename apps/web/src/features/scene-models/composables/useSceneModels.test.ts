@@ -11,7 +11,7 @@ import {
 } from '@yzt/map-core';
 import type { CameraControl } from '@yzt/map-vue';
 import { describe, expect, it, vi } from 'vitest';
-import { effectScope, shallowRef } from 'vue';
+import { effectScope, nextTick, shallowRef } from 'vue';
 import { required } from '@/shared/testing/required';
 import { sceneManifestSchema } from '../api';
 import { buildModelCatalog } from '../catalog';
@@ -92,12 +92,20 @@ function setup(catalog = CATALOG) {
   const roamStatus = shallowRef<RoamStatus | null>(null);
   const flyTo = vi.fn<CameraControl['flyTo']>();
   const control = { flyTo } as unknown as CameraControl;
-  // 和上下文一样：开始一次新的相机操作时，上一次的信号中止
+  // 和上下文一样：开始一次新的相机操作时，上一次的信号中止，被作废的操作 run 时放弃
   let current = new AbortController();
   const beginCameraOperation = vi.fn<SceneModelsContext['beginCameraOperation']>(() => {
     current.abort(new DOMException('有新的相机操作', 'AbortError'));
     current = new AbortController();
-    return { signal: current.signal, run: action => action(control) };
+    const { signal } = current;
+    return {
+      signal,
+      run: action => {
+        if (!signal.aborted) {
+          action(control);
+        }
+      }
+    };
   });
   const runCameraOperation = vi.fn<SceneModelsContext['runCameraOperation']>(action =>
     beginCameraOperation().run(action)
@@ -186,6 +194,52 @@ describe('useSceneModels', () => {
       ['white/plain', true],
       ['city', true]
     ]);
+  });
+
+  it('单独勾选一个模型时就绪后飞过去；多选、取消勾选、有了别的定位时不动相机', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('city', true);
+    await nextTick();
+    expect(ctx.flyTo).not.toHaveBeenCalled();
+    ctx.ready('city');
+    await nextTick();
+    expect(ctx.flyTo).toHaveBeenCalledExactlyOnceWith(CAMERA);
+
+    // 多选：后勾选的不飞；取消勾选剩下一个也不飞
+    ctx.owner.setChecked('white', true);
+    ctx.ready('city', 'white/plain');
+    ctx.owner.setChecked('city', false);
+    await nextTick();
+    expect(ctx.flyTo).toHaveBeenCalledOnce();
+
+    // 单独勾选、还没就绪时又勾选了别的
+    ctx.owner.setChecked('white', false);
+    ctx.owner.setChecked('station', true);
+    ctx.owner.setChecked('city', true);
+    ctx.ready('station', 'city');
+    await nextTick();
+    expect(ctx.flyTo).toHaveBeenCalledOnce();
+
+    // 单独勾选、还没就绪时有了别的定位
+    ctx.owner.setChecked('station', false);
+    ctx.owner.setChecked('city', false);
+    ctx.sceneStatus.value = new Map();
+    ctx.owner.setChecked('white', true);
+    ctx.runCameraOperation(() => {});
+    ctx.ready('white/plain');
+    await nextTick();
+    expect(ctx.flyTo).toHaveBeenCalledOnce();
+  });
+
+  it('单独勾选的模型加载失败后重试，就绪时照样飞过去', async () => {
+    using ctx = setup();
+    ctx.owner.setChecked('city', true);
+    ctx.sceneStatus.value = new Map([['city', { state: 'failed', error: new Error('404') }]]);
+    await nextTick();
+    ctx.owner.retry('city');
+    ctx.ready('city');
+    await nextTick();
+    expect(ctx.flyTo).toHaveBeenCalledExactlyOnceWith(CAMERA);
   });
 
   it('卸载时忘掉效果和重试次数', () => {

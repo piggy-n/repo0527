@@ -71,7 +71,7 @@
     },
     {
       "id": "sz-white",
-      "name": "苏州白膜",
+      "name": "星海广场周边建筑白模",
       "cityCode": "320500",
       "kind": "white",
       "underground": false,
@@ -83,7 +83,7 @@
     },
     {
       "id": "xz-gc",
-      "name": "徐州倾斜摄影",
+      "name": "彭城广场",
       "cityCode": "320300",
       "kind": "oblique",
       "underground": false,

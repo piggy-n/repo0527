@@ -152,7 +152,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 表格行内操作（如删除）的进行中状态按行 ID 记录，不用单个 mutation 的 `variables` / `isPending` 判断是哪一行；操作入口对同一行防重复
 - 回车触发提交或查询时排除输入法选字：`event.key === 'Enter' && !event.isComposing`
 - `ElColorPicker` 拖动时的 `active-change` 只设临时预览，确认（`change`）才写入；它没有关闭事件，Esc、点外面时把颜色重置回 `modelValue` 并再发一次 `active-change`，所以由拥有者规定"预览等于确认过的值就是没有预览"，`modelValue` 绑确认过的值、不含预览；取色器随组件卸载时什么也不报，编辑器卸载、换了目标时丢弃自己目标的预览（ADR 0044，写法见 `features/resource-map/components/SymbolEditor.tsx`）
-- 列表的加载状态按 `docs/modules/table.md` 区分：没有数据时用 `shared/table` 的 `TableSkeleton`，显示着旧数据时用延迟遮罩，后台刷新当前条件的缓存不提示；遮罩不要直接跟着 `isFetching`
+- 列表的加载状态按 `docs/modules/table.md` 区分：没有数据时用 `shared/table` 的 `TableSkeleton`，显示着旧数据时用延迟遮罩，后台刷新当前条件的缓存不提示；遮罩不要直接跟着 `isFetching`；加载失败、没有数据可显示时用 `TableLoadError`（居中的说明和重试）
 - 给组件传 `id` 等未声明的透传属性会报类型错误（组件只接受声明的 props 和 `class`、`style`），需要标记时用 `data-*`
 - 拖动排序用 `shared/composables` 的 `useSortableList`，不直接导入 `sortablejs`（测试模拟放下时除外）：放下后由它还原 DOM，顺序交给拥有者，Vue 按数据重新渲染；只能按住手柄拖，手柄同时支持上下方向键（ADR 0054）
 - `useVirtualList` 这类把数据放进深层 `ref` 的工具，给出的行是响应式代理；交给按对象身份比较的拥有者（如点选的 `choose`）前按序号取原数组里的对象；同一个虚拟列表先后显示两轮结果时容器不重新挂载、滚动位置保留，新一轮按列表的身份显式回到顶部（写法见 `features/resource-map/components/FeatureDetailPanel.tsx`）

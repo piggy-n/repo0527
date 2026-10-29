@@ -16,6 +16,7 @@
   text-align: center;
 }
 
+// 助手头像是位图（images/assistant.webp），放在浅蓝圆底上（primary-bg 在白底上看不出来，用 primary-border）
 .robot {
   display: grid;
   place-items: center;
@@ -23,9 +24,14 @@
   height: 56px;
   margin-bottom: 12px;
   border-radius: 50%;
-  background-color: var(--color-primary);
-  color: var(--color-text-inverse);
+  background-color: var(--color-primary-border);
   box-shadow: var(--shadow-sm);
+}
+
+.robotImage {
+  display: block;
+  width: 40px;
+  height: auto;
 }
 
 .greeting {
