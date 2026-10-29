@@ -1,4 +1,5 @@
 import type { Indicator } from './catalog';
+import { stableRandom } from './stable-random';
 
 type Driver = keyof typeof CITY_DRIVERS;
 type Pattern = 'steady' | 'coverage' | 'rail' | 'risk' | 'project' | 'distance' | 'cohort' | 'flow';
@@ -168,17 +169,6 @@ const CITY_DRIVERS = {
 // 演示不同轨道发展阶段：部分城市尚未配置，已有城市按独立批次扩展；顺序同 CITY_CODES
 const RAIL_MATURITY = [1.65, 0.9, 0.55, 0.68, 1.5, 0.42, 0, 0, 0, 0, 0, 0, 0];
 
-// 混合散列打散相邻城市与指标编码的相关性，固定年份下刷新仍得到同一组数据
-function randomFor(key: string): number {
-  let hash = 2166136261;
-  for (const character of key) {
-    hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
-  }
-  hash = Math.imul(hash ^ (hash >>> 16), 2246822507);
-  hash = Math.imul(hash ^ (hash >>> 13), 3266489909);
-  return ((hash ^ (hash >>> 16)) >>> 0) / 4294967296;
-}
-
 // 各城市拥有独立的项目节奏、生源拐点和短期扰动，不套用同一正弦曲线
 export function createProfileValue(cityCode: string, indicator: Indicator, year: number): number {
   const settings = INDICATOR_PROFILES[indicator.id] ?? profile(indicator.mockBase, 'size', 0.3, 0.01, 0.04);
@@ -186,7 +176,8 @@ export function createProfileValue(cityCode: string, indicator: Indicator, year:
   // 不在名单里的城市（cityIndex 为 -1）没有特征
   const driver = CITY_DRIVERS[settings.driver][cityIndex] ?? 0;
   const key = `${indicator.id}:${cityCode}`;
-  const random = (suffix: string) => randomFor(`${key}:${suffix}`);
+  // 混合散列打散相邻城市与指标编码的相关性，固定年份下刷新仍得到同一组数据
+  const random = (suffix: string) => stableRandom(`${key}:${suffix}`);
   const spatial = driver + (random('level') - 0.5) * 1.3;
   const rate = settings.change * (0.4 + random('rate') * 1.2);
   // 固定 2025 为参数锚点，跨自然年后既有年份的 Mock 数值不漂移

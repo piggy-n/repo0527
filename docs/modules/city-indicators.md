@@ -7,7 +7,8 @@ shared/city-indicators/
 ├─ indicator-catalog.json   96 项指标（旧项目 data.json、data2.json 归并，口径见 city-dashboard.md"数据口径"）
 ├─ catalog.ts               Indicator、CategoryId 类型，INDICATORS，INDICATOR_CATEGORIES（四类及名称），requireIndicator
 ├─ indicator-profiles.ts    每项指标的参考量级、城市特征、年变化与演变方式，createProfileValue（内部使用）
-└─ mock-value.ts            mockIndicatorValue(cityCode, indicator, year)
+├─ mock-value.ts            mockIndicatorValue(cityCode, indicator, year)
+└─ stable-random.ts         stableRandom(key)：按键的固定伪随机数，生成规则和推演模型的区县分解、撒点共用
 ```
 
 ## 用法
