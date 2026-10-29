@@ -470,8 +470,9 @@ export class CesiumView<const G extends string> implements MapView {
       return;
     }
     this.#session.camera.set(camera, { view: '3d', cause });
-    // 覆盖物按整数级别求值，换了一级才重新推导（ADR 0080 第 1 节）
-    if (this.#overlays.length > 0 && Math.round(camera.zoom) !== this.#overlayLevel) {
+    // 覆盖物按整数级别求值，换了一级才重新推导（ADR 0080 第 1 节）。漫游时不重新推导（ADR 0103）：相机在地下，
+    // 画布中心的视线从地球另一侧穿出，级别随视线上下在 3～26 之间跳，每跳一级重建一次边界，Worker 的内存会耗尽
+    if (this.#overlays.length > 0 && !this.#roaming() && Math.round(camera.zoom) !== this.#overlayLevel) {
       this.#applyOverlays(scene);
     }
   }

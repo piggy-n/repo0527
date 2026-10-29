@@ -16,7 +16,7 @@
   text-align: center;
 }
 
-// 助手头像是位图（images/assistant.webp），放在浅蓝圆底上（primary-bg 在白底上看不出来，用 primary-border）
+// 助手头像是位图（images/assistant.webp），放在主色圆底上（ADR 0103）
 .robot {
   display: grid;
   place-items: center;
@@ -24,7 +24,7 @@
   height: 56px;
   margin-bottom: 12px;
   border-radius: 50%;
-  background-color: var(--color-primary-border);
+  background-color: var(--color-primary);
   box-shadow: var(--shadow-sm);
 }
 

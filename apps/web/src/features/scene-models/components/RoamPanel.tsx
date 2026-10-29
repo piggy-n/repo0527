@@ -1,4 +1,4 @@
-import { Close, Minus, Plus, RefreshLeft, VideoPause, VideoPlay } from '@element-plus/icons-vue';
+import { Close, Minus, Plus, Rank, RefreshLeft, VideoPause, VideoPlay } from '@element-plus/icons-vue';
 import { type WalkNotice, type WalkView, WALK_VIEWS } from '@yzt/map-core';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel } from '@yzt/ui';
@@ -234,13 +234,13 @@ export const RoamPanel = defineComponent({
           <div class={styles.section}>
             {props.personSwitch && renderView(walk.view)}
             {renderSpeed(walk.speed)}
-            {/* 回到起始点是常用的恢复操作，脱困只在卡住时用，做成次要的文字按钮 */}
+            {/* 回到起始点是常用的恢复操作（浅色主色），脱困只在卡住时用（默认按钮，ADR 0103） */}
             <div class={styles.row}>
               <ElButton size="small" type="primary" plain icon={RefreshLeft} onClick={models.respawnWalk}>
                 回到起始点
               </ElButton>
               <ElTooltip {...MAP_TOOLTIP_PROPS} content="被卡住时挪到附近最近的开阔地面" placement="top">
-                <ElButton size="small" link onClick={models.unstuckWalk}>
+                <ElButton size="small" icon={Rank} onClick={models.unstuckWalk}>
                   脱困
                 </ElButton>
               </ElTooltip>

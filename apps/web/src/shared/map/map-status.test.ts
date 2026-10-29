@@ -37,6 +37,13 @@ describe('describeMapStatus', () => {
     });
   });
 
+  it('Worker 传回的异常是带 message 的普通对象：技术细节取 message，不显示 [object Object]', () => {
+    const error = { name: 'RangeError', message: 'Array buffer allocation failed', stack: 'RangeError: …' };
+    const status = describeMapStatus('failed', { kind: 'engine', cause: 'unknown', error });
+
+    expect(status).toMatchObject({ kind: 'engine-failed', technical: 'Array buffer allocation failed' });
+  });
+
   it('处于 failed 却没有原因时按引擎失败处理；不是 Error 的原因转成文字', () => {
     expect(describeMapStatus('failed', null)).toMatchObject({ kind: 'engine-failed' });
     expect(describeMapStatus('failed', null)).not.toHaveProperty('technical');

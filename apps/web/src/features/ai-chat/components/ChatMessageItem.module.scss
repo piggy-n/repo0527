@@ -22,7 +22,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background-color: var(--color-primary-border);
+  background-color: var(--color-primary);
   font-size: var(--font-size-xs);
 
   .user & {
@@ -32,7 +32,7 @@
   }
 }
 
-// 助手头像是位图（images/assistant.webp），在 32 的浅蓝圆底（同欢迎语）里显示 24 宽
+// 助手头像是位图（images/assistant.webp），在 32 的主色圆底（同欢迎语）里显示 24 宽
 .avatarImage {
   display: block;
   width: 24px;
