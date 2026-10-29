@@ -145,8 +145,8 @@ const DataQueryView = defineComponent({
 });
 
 /**
- * 数据查询（查询统计菜单下的四个页面共用，专题由路由的 props 给出）。四个路由是同一个组件实例，
- * 换专题时按专题加 key 整页重建：条件、结果、地图都不带到另一个专题（同旧页面的 resetQueryModuleState）
+ * 数据查询（查询统计菜单下的四个页面共用，专题由路由的 props 给出）。专题变了按专题加 key 整页重建，条件、结果、
+ * 地图都不带过去（同旧页面的 resetQueryModuleState）；四个路由各自经 withMapRuntime 包一层，切路由本来就重建，实测页换专题靠这个 key
  */
 export const DataQueryPage = defineComponent({
   name: 'DataQueryPage',
