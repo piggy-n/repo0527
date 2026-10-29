@@ -15,6 +15,8 @@ import {
 import { defineComponent, ref } from 'vue';
 import { MxPanel, MxSection, MxSplitLayout, MxTitle, useSplitLayout } from '@yzt/ui';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
+import collapsedHandle from '../../space-monitoring-statistics/images/panel-handle-collapsed.webp';
+import expandedHandle from '../../space-monitoring-statistics/images/panel-handle-expanded.webp';
 import styles from './UiComponentsPreview.module.scss';
 
 const descriptionWidths = [480, 320, 200, 140];
@@ -352,16 +354,32 @@ const DirectoryTree = defineComponent({
   }
 });
 
-/** libs/ui 的分栏布局：侧栏 320，窄屏（视口 < 1200）时侧栏收进抽屉；collapsible 时宽屏也能收成窄条 */
+/**
+ * libs/ui 的分栏布局：侧栏 320，窄屏（视口 < 1200）时侧栏收进抽屉；collapsible 时宽屏也能收成窄条，
+ * handles 时收起把手和窄条换成基本统计页的设计图
+ */
 export const SplitLayoutPreview = defineComponent({
   name: 'SplitLayoutPreview',
   props: {
-    collapsible: Boolean
+    collapsible: Boolean,
+    handles: Boolean
   },
   setup(props) {
     const directory = ref('自然资源调查类');
     const parents = ref('技术标准规范 / 国家/行业现行技术规程、标准、规范');
     const collapsed = ref(false);
+    const handleSlots = () =>
+      props.handles
+        ? {
+            rail: () => (
+              <span class={styles.railHandle}>
+                <img class={styles.railImage} src={collapsedHandle} alt="" />
+                <span class={styles.railLabel}>文件目录</span>
+              </span>
+            ),
+            collapse: () => <img class={styles.collapseHandle} src={expandedHandle} alt="" />
+          }
+        : {};
     return () => (
       <div class={styles.layoutDemo}>
         <MxSplitLayout
@@ -371,6 +389,7 @@ export const SplitLayoutPreview = defineComponent({
           onUpdate:collapsed={value => (collapsed.value = value)}
         >
           {{
+            ...handleSlots(),
             aside: () => (
               <MxPanel title="文件目录">
                 <DirectoryTree

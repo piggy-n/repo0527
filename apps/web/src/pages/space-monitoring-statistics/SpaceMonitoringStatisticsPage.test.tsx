@@ -100,13 +100,16 @@ describe('SpaceMonitoringStatisticsPage', () => {
     expect(wrapper.text()).toContain('共1个报表');
   });
 
-  it('左栏默认收起；展开后提交、确认，左栏再收起', async () => {
+  it('左栏默认收起，收起、展开的把手是设计图；展开后提交、确认，左栏再收起', async () => {
     vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as MessageBoxData);
     const { wrapper } = await mountPage(Role.admin);
     expect(asideHidden(wrapper)).toBe(true);
 
-    await button(wrapper, '统计报表计算').trigger('click');
+    const rail = button(wrapper, '统计报表计算');
+    expect(rail.find('img').exists()).toBe(true);
+    await rail.trigger('click');
     expect(asideHidden(wrapper)).toBe(false);
+    expect(wrapper.find('button[aria-label="收起统计报表计算"] img').exists()).toBe(true);
     const all = required(
       wrapper.findAll('.el-checkbox').find(item => item.text() === '全选'),
       '全选'

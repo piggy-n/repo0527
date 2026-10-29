@@ -143,3 +143,39 @@
   border-radius: var(--radius-md);
   background: linear-gradient(180deg, var(--color-bg-page-top) 0%, var(--color-bg-page) 120px);
 }
+
+// 自定义把手的样例：写法同基本统计页
+.railHandle {
+  position: relative;
+  display: block;
+}
+
+.railImage {
+  display: block;
+  width: 80px;
+  height: 277px;
+}
+
+.railLabel {
+  position: absolute;
+  top: 16px;
+  right: 5px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 146px;
+  color: var(--color-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 2px;
+  line-height: 1;
+  writing-mode: vertical-rl;
+}
+
+.collapseHandle {
+  display: block;
+  width: 131px;
+  height: 49px;
+  margin-top: -8px;
+}

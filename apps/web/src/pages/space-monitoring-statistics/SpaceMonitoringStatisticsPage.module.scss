@@ -23,6 +23,44 @@
   min-width: 0;
 }
 
+// 两张把手图按 2 倍尺寸导出，这里是显示尺寸（同旧页面）
+.railHandle {
+  position: relative;
+  display: block;
+}
+
+.railImage {
+  display: block;
+  width: 80px;
+  height: 277px;
+}
+
+// 名称压在竖条上部的浅色区域（旧页面的位置），浅色区域右边有 5 的阴影
+.railLabel {
+  position: absolute;
+  top: 16px;
+  right: 5px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 146px;
+  color: var(--color-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 2px;
+  line-height: 1;
+  writing-mode: vertical-rl;
+}
+
+// 贴在侧栏右上角，比面板的上边高出 8（同旧页面）
+.collapseHandle {
+  display: block;
+  width: 131px;
+  height: 49px;
+  margin-top: -8px;
+}
+
 // 排成一列后放不下，监控表格给固定高度，主区滚动
 @container (width < 760px) {
   .top {

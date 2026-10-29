@@ -9,10 +9,25 @@
 
 // 宽度由组件按档位以内联样式设置
 .aside {
+  position: relative;
   display: flex;
   flex: none;
   flex-direction: column;
   min-height: 0;
+}
+
+// 页面给的收起把手：贴在侧栏右上角，外观全由内容决定，可以往上超出侧栏（不超过布局的内边距）
+.collapseHandle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  line-height: 0;
+  cursor: pointer;
 }
 
 .hidden {
@@ -52,6 +67,17 @@
 .railLabel {
   letter-spacing: 2px;
   writing-mode: vertical-rl;
+}
+
+// 页面给的窄条内容（如设计图）：去掉默认的底色、阴影和内边距，大小随内容，竖直居中
+.customRail {
+  align-self: center;
+  width: auto;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  line-height: 0;
 }
 
 .main {

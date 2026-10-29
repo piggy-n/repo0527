@@ -166,6 +166,8 @@ Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不�
 | `collapsed` | 宽屏时侧栏是否收起，由页面持有，配合 `onUpdate:collapsed`；没开启 `collapsible` 或窄屏时不起作用 |
 | `aside` | 侧栏内容，一般是一个 `MxPanel` |
 | `default` | 主区内容，纵向排列，面板之间 `--space-lg` |
+| `rail` | 可选，宽屏收起时窄条里的内容，代替图标和竖排名称（ADR 0101）；窄屏不用 |
+| `collapse` | 可选，宽屏展开时的收起把手，贴在侧栏右上角，代替面板里的收起按钮（ADR 0101） |
 
 布局占满父元素（`height: 100%`），四周和两栏之间都是 `--space-lg`；页面本身不滚动，面板在内部滚动。前提是父元素有确定的高度：`AppLayout` 的内容区是占满剩余高度的 flex 子项，满足这个条件，业务页面直接把布局放在页面根部即可（3.3 做第一个真实页面时验证）。
 
@@ -193,13 +195,34 @@ Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不�
 <MxSplitLayout asideLabel="统计报表计算" collapsible collapsed={collapsed.value} onUpdate:collapsed={change}>
 ```
 
+### 页面给出把手（rail、collapse 插槽）
+
+默认的收起按钮和窄条用 Element 的图标。页面要用设计图时（基本统计页，ADR 0101），通过插槽只给外观，按钮、点击、`aria-expanded`、宽窄屏的切换仍由布局负责：
+
+- `rail`：宽屏收起时窄条里的内容。窄条去掉底色、阴影和内边距，大小随内容、竖直居中；内容可以只是图片，可访问名称由布局用 `aria-label`（`asideLabel`）给出
+- `collapse`：宽屏展开时的收起把手，布局把它绝对定位在侧栏右上角，内容可以用负的 `margin-top` 往上超出侧栏（不超过布局的内边距 16）；`aria-label` 是"收起 + 侧栏名称"。有它时侧栏面板不再放默认的收起按钮
+- 窄屏时两个插槽都不用：仍是 40 宽的默认窄条和抽屉，抽屉里只有关闭按钮
+
+```tsx
+<MxSplitLayout asideLabel="统计报表计算" collapsible collapsed={collapsed.value} onUpdate:collapsed={change}>
+  {{
+    aside: () => <StatisticsCalculationPanel calculation={calculation} />,
+    rail: () => <img class={styles.railImage} src={collapsedHandle} alt="" />,
+    collapse: () => <img class={styles.collapseHandle} src={expandedHandle} alt="" />,
+    default: () => ...
+  }}
+</MxSplitLayout>
+```
+
+`/dev/theme` 的"自定义收起把手和窄条"是可以操作的样例。
+
 ### 读取布局状态：useSplitLayout
 
 ```ts
-const { compact, asideOpen, asideLabel, openAside, closeAside, collapsible, collapseAside } = useSplitLayout();
+const { compact, asideOpen, asideLabel, openAside, closeAside, collapseInPanel, collapseAside } = useSplitLayout();
 ```
 
-`collapsible` 只在宽屏且页面开启时为 true；`collapseAside` 发出 `update:collapsed`（收起由页面决定）。
+`collapseInPanel` 在宽屏、页面开启 `collapsible`、没有用 `collapse` 插槽给出把手时为 true，`MxPanel` 据此放收起按钮；`collapseAside` 发出 `update:collapsed`（收起由页面决定）。
 
 布局里的任何组件都可以调用，例如目录树在窄屏下选中一项后关闭抽屉（是否关闭由页面决定：导航类关闭，筛选类保持打开）：
 

@@ -39,8 +39,8 @@ export const MxPanel = defineComponent({
     provide(asideRegionKey, false);
 
     const inDrawer = computed(() => isAsideRoot && layout?.compact.value === true);
-    // 宽屏时布局允许收起侧栏：侧栏最外层的面板放收起按钮
-    const collapsible = computed(() => isAsideRoot && layout?.collapsible.value === true);
+    // 宽屏时布局允许收起侧栏、页面没有给出把手：侧栏最外层的面板放收起按钮
+    const collapsible = computed(() => isAsideRoot && layout?.collapseInPanel.value === true);
 
     const renderIcon = () => {
       const icon = slots.icon?.();
