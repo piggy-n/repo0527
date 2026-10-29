@@ -39,3 +39,4 @@ components/          查询面板（外壳和四个页签的表单）、结果�
 - 编排：`composables/useDataQuery.test.ts`（页签切换、各页签的提交检查、画完直接查询、高级查询的后备区划、自然语言的解析与作废）
 - 面板：`components/QueryPanel.test.tsx`
 - 真实引擎：`app/data-query-layers.browser.test.ts`（结果的点、面和画的范围在 MapLibre 上画得出来）
+- 生产冒烟：`tools/smoke/data-query.spec.ts`，本地固定接口（查询成功时没有信封，照真实返回）。属性查询：预览瓦片是全省、不带条件，查询后结果表、条数、带条件的结果瓦片，导出 Excel 的请求体和下载的文件名；空间查询：在真实引擎上拖框，画完直接查询、报命中数，发给后端的是闭合矩形；从顶栏切专题：整页重建（条件、结果不带过去，原来的画布已移除），建设中的专题没有页签
