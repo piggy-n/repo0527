@@ -12,7 +12,7 @@ import {
   type WalkView,
   WALK_VIEWS
 } from '@yzt/map-core';
-import type { MapContext } from '@yzt/map-vue';
+import type { CameraOperation, MapContext } from '@yzt/map-vue';
 import {
   computed,
   type ComputedRef,
@@ -21,7 +21,8 @@ import {
   type ShallowRef,
   shallowReadonly,
   shallowRef,
-  toValue
+  toValue,
+  watch
 } from 'vue';
 import type { SceneModel } from '../catalog';
 import { type IndoorMap, indoorMapOf } from '../indoor-map/indoor-map';
@@ -88,6 +89,7 @@ export interface SceneModels {
   /** 模型当前显示的瓦片集的状态；没勾选、还没有报告时是 loading */
   readonly stateOf: (id: string) => ModelLoadState;
   readonly effectOf: (id: string) => string;
+  /** 勾选后只有这一个模型时，等它就绪后飞过去；多选、取消勾选不动相机 */
   readonly setChecked: (id: string, checked: boolean) => void;
   readonly setEffect: (id: string, effectId: string) => void;
   /** 一次新的相机操作：飞到模型；地下的模型也只是飞过去，没有单独的钻地（ADR 0097 第 5 节） */
@@ -176,6 +178,8 @@ export function useSceneModels(
   const navigationBuild = shallowRef<NavigationBuild | null>(null);
   // 路线漫游时打开完整地图：记下打开前是否在播放，关上时接着播放
   const routeMap = shallowRef<{ readonly resume: boolean } | null>(null);
+  // 单独勾选的模型等就绪后要飞过去：勾选时开始的相机操作，再勾选别的、取消勾选时放弃，有了别的定位时由 run 放弃
+  const pendingLocate = shallowRef<{ readonly modelId: string; readonly operation: CameraOperation } | null>(null);
   // 漫游开始时的相机操作：中止（有了别的定位）就退出漫游
   let roamSignal: AbortSignal | null = null;
   let roamCount = 0;
@@ -211,8 +215,10 @@ export function useSceneModels(
     }
     if (checked) {
       loaded.value = [...loaded.value, id];
+      pendingLocate.value = loaded.value.length === 1 ? { modelId: id, operation: map.beginCameraOperation() } : null;
       return;
     }
+    pendingLocate.value = null;
     loaded.value = loaded.value.filter(item => item !== id);
     // 卸载时这个模型的效果、重试次数、导航网格一起忘掉；在它里面漫游的一并结束
     shownEffects.value = new Map([...shownEffects.value].filter(([modelId]) => modelId !== id));
@@ -252,6 +258,23 @@ export function useSceneModels(
     const { camera } = status;
     map.runCameraOperation(control => control.flyTo(camera));
   };
+
+  // 加载失败时继续等，重试后就绪的照样飞过去
+  watch(
+    () => {
+      const pending = pendingLocate.value;
+      const model = pending && models.value.find(item => item.id === pending.modelId);
+      return model ? statusOf(model) : undefined;
+    },
+    status => {
+      const pending = pendingLocate.value;
+      if (pending && status?.state === 'ready') {
+        pendingLocate.value = null;
+        const { camera } = status;
+        pending.operation.run(control => control.flyTo(camera));
+      }
+    }
+  );
 
   const retry = (id: string) => {
     assertLoaded(id);

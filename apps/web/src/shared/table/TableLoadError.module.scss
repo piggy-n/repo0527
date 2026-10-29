@@ -1,0 +1,7 @@
+// Element 的空状态文字区域只占表体一半宽、居中，这里在它里面再水平居中
+.root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+}

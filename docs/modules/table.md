@@ -22,6 +22,8 @@
 
 写法见 `features/file-management/composables/useFileList.ts`（`initialLoading`、`refreshing`、`refresh`）和 `components/FileTable.tsx`。
 
+加载失败、没有可显示的数据时，`empty` 插槽放 `TableLoadError`（说明默认"加载失败"、按钮默认"重试"，点了发出 `retry`）。Element 的空状态文字区域只占表体一半宽，说明和按钮在它里面再水平居中；以前三张表各写一份没有居中，看起来偏左（2026-10-28 用户反馈，统一成这个组件）。显示着旧数据时刷新失败仍按各页面的提示条处理。
+
 ## 分页器的总数与页码修正
 
 `ElPagination` 收到的总数小于当前页需要的数量时，会自己把当前页改小，页面随之请求那一页。所以要分清两种数据：本次请求成功返回的结果，和缓存里的旧数据（请求还没结束时先显示的缓存、请求失败后 Vue Query 保留的旧数据）。修正页码只用前者；交给分页器的总数优先用前者，本组条件还没有成功过时先用缓存初始化：

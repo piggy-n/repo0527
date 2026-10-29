@@ -68,7 +68,8 @@ rgba(89,126,247, 0.10) 标签底      0.14 标签底    0.32 滚动条滑块
 | --- | --- | --- |
 | `text-inverse` | `#FFFFFF` | 深色背景（顶部导航）上的文字与图标 |
 | `inverse-hover` | `rgba(255,255,255,0.1)` | 深色背景上的悬停底色 |
-| `inverse-active` | `rgba(255,255,255,0.3)` | 深色背景上选中项的高亮（渐变的最亮处） |
+| `inverse-active` | `rgba(255,255,255,0.3)` | 深色背景上选中项的高亮（渐变的最亮处）；顶栏头像、消息按钮的圆底 |
+| `inverse-strong` | `rgba(255,255,255,0.4)` | 已有 `inverse-active` 圆底的按钮在悬停、打开时的底色（顶栏消息按钮，2026-10-28 补充） |
 
 ---
 
@@ -141,6 +142,7 @@ body {
 | --- |--------| --- | --- | --- |
 | 系统标题 | `28px` | `normal` | 优设标题黑 | 头部系统名、登录页标题 |
 | 结果数值 | `30px` | `700` | 普惠体 | 指标计算结果等大数字，可加 `letter-spacing: 1px` |
+| 竖排入口 | `18px` | `600` | 普惠体 | 基本统计左栏收起后的竖排名称（2026-10-28 补充） |
 | 面板标题 | `16px` | `600` | 普惠体 | 进度面板标题、导航文字 |
 | 区块标题 | `14px` | `600` | 普惠体 | 分组标题、区块小标题 |
 | 正文 | `14px` | `400` | 普惠体 | 表格内容、表单文本 |
@@ -231,6 +233,7 @@ body {
   --color-text-inverse: #ffffff;
   --color-inverse-hover: rgba(255, 255, 255, 0.1);
   --color-inverse-active: rgba(255, 255, 255, 0.3);
+  --color-inverse-strong: rgba(255, 255, 255, 0.4);
 
   /* 边框与背景 */
   --color-border: #e6ebf3;
@@ -256,6 +259,7 @@ body {
   --font-family-base: 'Alibaba PuHuiTi', 'Microsoft YaHei', sans-serif;
   --font-size-display: 30px;
   --font-size-title: 28px;
+  --font-size-xl: 18px;
   --font-size-lg: 16px;
   --font-size-base: 14px;
   --font-size-xs: 12px;

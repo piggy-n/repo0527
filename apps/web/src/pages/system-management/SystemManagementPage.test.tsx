@@ -158,7 +158,7 @@ describe('SystemManagementPage', () => {
     const { wrapper } = await mountAt(RouteName.systemManagement);
     await vi.waitFor(() => expect(rows()).toHaveLength(4));
 
-    expect(wrapper.find('h2').text()).toBe('资源审核');
+    expect(wrapper.findAll('h2').map(title => title.text())).toStrictEqual(['系统管理', '资源审核']);
     expect(wrapper.findAll('.el-form-item__label').map(label => label.text())).toEqual([
       '数据名称',
       '审核状态',
@@ -206,7 +206,7 @@ describe('SystemManagementPage', () => {
     const { router, wrapper } = await mountAt(RouteName.systemManagementReports);
     await vi.waitFor(() => expect(rows()).toHaveLength(2));
     expect(backend.list).toBe(0);
-    expect(wrapper.find('h2').text()).toBe('统计报表');
+    expect(wrapper.findAll('h2').map(title => title.text())).toStrictEqual(['系统管理', '统计报表']);
     expect(rows()).toEqual([
       ['1', '2024', '基本统计报表_省级', '2026-10-14 14:20:00', '2026-10-14 14:23:45', '处理完成', '下载'],
       ['2', '2024', '汇总统计报表_市级', '2026-10-14 14:20:00', '2026-10-14 14:23:45', '正在处理', '下载']

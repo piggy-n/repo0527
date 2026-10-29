@@ -1,4 +1,4 @@
-// 消息按钮：和头像一样 32 的圆，悬停、打开时加白色半透明底（ADR 0093）
+// 消息按钮：和头像一样 32 的圆、同样的白色半透明底，铃铛 22；悬停、打开时底色更亮（ADR 0093、0102）
 .bell {
   display: grid;
   place-items: center;
@@ -7,12 +7,12 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: transparent;
+  background-color: var(--color-inverse-active);
   color: var(--color-text-inverse);
   cursor: pointer;
 
   &:hover {
-    background-color: var(--color-inverse-hover);
+    background-color: var(--color-inverse-strong);
   }
 
   &:focus-visible {
@@ -34,7 +34,7 @@
 
 .open,
 .open:hover {
-  background-color: var(--color-inverse-active);
+  background-color: var(--color-inverse-strong);
 }
 
 // 弹框外壳：去掉 Element 的内边距，圆角和阴影按浮层规范，内容由 MessagePanel 负责

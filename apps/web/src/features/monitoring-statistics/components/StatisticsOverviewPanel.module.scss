@@ -91,9 +91,10 @@
   color: var(--color-danger-text);
 }
 
-// 当前查看的组合
+// 当前查看的组合：2 的主色外框，和标签之间空出 1
 .current {
-  border-color: var(--color-primary);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
   font-weight: var(--font-weight-semibold);
 }
 

@@ -34,21 +34,23 @@
   min-width: 0;
 }
 
-// 一个报表一块：报表名称是分组的勾选，下面是等级
+// 一个报表一块：浅灰底的一行是报表名称（分组的勾选），下面一行是等级；暂未开放的只有灰底一行
 .group {
-  padding: var(--space-sm) 12px;
+  overflow: hidden;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
-}
-
-.disabled {
-  background-color: var(--color-neutral-bg-light);
 }
 
 .groupHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 12px;
+  background-color: var(--color-neutral-bg-light);
+
+  :global(.el-checkbox) {
+    margin-right: 0;
+  }
 }
 
 .off {
@@ -56,11 +58,20 @@
   font-size: var(--font-size-xs);
 }
 
+// 等级和报表名称的文字对齐（复选框 14 加文字前的 8），四级排在一行
 .levels {
   display: flex;
   flex-wrap: wrap;
-  column-gap: var(--space-lg);
-  padding-left: 24px;
+  column-gap: 12px;
+  padding: 0 12px 0 34px;
+
+  :global(.el-checkbox) {
+    margin-right: 0;
+  }
+
+  :global(.el-checkbox__label) {
+    padding-left: 6px;
+  }
 }
 
 .submit {

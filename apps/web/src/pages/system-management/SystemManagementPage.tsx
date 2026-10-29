@@ -26,7 +26,7 @@ export const SystemManagementPage = defineComponent({
       <MxSplitLayout asideType="menu" asideLabel="系统管理">
         {{
           aside: () => (
-            <MxPanel flush>
+            <MxPanel flush headerTone="muted" title="系统管理">
               <SideNav label="系统管理" items={NAV_ITEMS} />
             </MxPanel>
           ),

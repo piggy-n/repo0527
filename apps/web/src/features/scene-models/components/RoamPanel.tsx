@@ -1,8 +1,8 @@
-import { Close, RefreshLeft, VideoPause, VideoPlay } from '@element-plus/icons-vue';
+import { Close, Minus, Plus, RefreshLeft, VideoPause, VideoPlay } from '@element-plus/icons-vue';
 import { type WalkNotice, type WalkView, WALK_VIEWS } from '@yzt/map-core';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel } from '@yzt/ui';
-import { ElButton, ElProgress, ElRadioButton, ElRadioGroup, ElTooltip } from 'element-plus';
+import { ElButton, ElIcon, ElProgress, ElRadioButton, ElRadioGroup, ElTooltip } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
@@ -146,13 +146,29 @@ export const RoamPanel = defineComponent({
       return (
         <div class={styles.row}>
           <span class={styles.label}>速度</span>
-          <ElButton size="small" aria-label="减速" disabled={index <= 0} onClick={() => step(-1)}>
-            −
-          </ElButton>
-          <b class={styles.speed}>{speed} m/s</b>
-          <ElButton size="small" aria-label="加速" disabled={index >= ROAM_SPEEDS.length - 1} onClick={() => step(1)}>
-            +
-          </ElButton>
+          <span class={styles.stepper}>
+            <button type="button" class={styles.step} aria-label="减速" disabled={index <= 0} onClick={() => step(-1)}>
+              <ElIcon>
+                <Minus />
+              </ElIcon>
+            </button>
+            <span class={styles.speed}>
+              {speed}
+              {/* 前面的空格让读出来的文字是"4 m/s"，画面上的间距由 gap 给出 */}
+              <small class={styles.unit}> m/s</small>
+            </span>
+            <button
+              type="button"
+              class={styles.step}
+              aria-label="加速"
+              disabled={index >= ROAM_SPEEDS.length - 1}
+              onClick={() => step(1)}
+            >
+              <ElIcon>
+                <Plus />
+              </ElIcon>
+            </button>
+          </span>
           <ElButton
             link
             type="primary"
@@ -218,12 +234,13 @@ export const RoamPanel = defineComponent({
           <div class={styles.section}>
             {props.personSwitch && renderView(walk.view)}
             {renderSpeed(walk.speed)}
+            {/* 回到起始点是常用的恢复操作，脱困只在卡住时用，做成次要的文字按钮 */}
             <div class={styles.row}>
-              <ElButton size="small" onClick={models.respawnWalk}>
+              <ElButton size="small" type="primary" plain icon={RefreshLeft} onClick={models.respawnWalk}>
                 回到起始点
               </ElButton>
               <ElTooltip {...MAP_TOOLTIP_PROPS} content="被卡住时挪到附近最近的开阔地面" placement="top">
-                <ElButton size="small" onClick={models.unstuckWalk}>
+                <ElButton size="small" link onClick={models.unstuckWalk}>
                   脱困
                 </ElButton>
               </ElTooltip>

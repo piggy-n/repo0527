@@ -3,6 +3,7 @@ import { useMediaQuery } from '@vueuse/core';
 import { ElButton, ElMessage, ElMessageBox, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus';
 import { defineComponent, onBeforeUnmount, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
+import { TableLoadError } from '@/shared/table/TableLoadError';
 import { TableSkeleton } from '@/shared/table/TableSkeleton';
 import type { FileRecord } from '../api';
 import { useFileRemoval } from '../composables/useFileRemoval';
@@ -115,14 +116,7 @@ export const FileTable = defineComponent({
               return '';
             }
             if (props.error) {
-              return (
-                <div class={styles.error}>
-                  加载失败
-                  <ElButton link type="primary" onClick={() => emit('retry')}>
-                    重试
-                  </ElButton>
-                </div>
-              );
+              return <TableLoadError onRetry={() => emit('retry')} />;
             }
             return '暂无数据';
           }

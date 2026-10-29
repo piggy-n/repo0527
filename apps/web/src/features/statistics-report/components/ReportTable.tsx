@@ -1,12 +1,13 @@
 import { COMPACT_MEDIA_QUERY } from '@yzt/ui';
 import { useMediaQuery } from '@vueuse/core';
-import { ElButton, ElTable, ElTableColumn, vLoading } from 'element-plus';
+import { ElTable, ElTableColumn, vLoading } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { isPrepareStatus } from '@/shared/data-request/prepare-status';
 import { PrepareStatusText } from '@/shared/data-request/PrepareStatusText';
 import { DownloadButton } from '@/shared/file-transfer/DownloadButton';
 import type { RowDownloadState } from '@/shared/file-transfer/useRowDownloads';
+import { TableLoadError } from '@/shared/table/TableLoadError';
 import { TableSkeleton } from '@/shared/table/TableSkeleton';
 import type { Report } from '../api';
 import styles from './ReportTable.module.scss';
@@ -55,14 +56,7 @@ export const ReportTable = defineComponent({
         return '';
       }
       if (props.error) {
-        return (
-          <div class={styles.error}>
-            加载失败
-            <ElButton link type="primary" onClick={() => emit('retry')}>
-              重试
-            </ElButton>
-          </div>
-        );
+        return <TableLoadError onRetry={() => emit('retry')} />;
       }
       return '暂无数据';
     }
