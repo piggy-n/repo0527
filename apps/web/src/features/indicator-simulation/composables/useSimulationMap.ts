@@ -3,11 +3,13 @@ import type { LngLat, StyleGroup } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
 import { computed, type ComputedRef, type Ref, ref, watch } from 'vue';
 import { formatValue } from '../format';
+import type { PassState } from '../model/analysis';
 import { districtBounds, type MapData, mapData } from '../map/map-data';
 import { alertsGroup, districtsGroup, facilitiesGroup, type MapFrame, mapFrame, maskGroup } from '../map/map-frame';
 import { simulationIndicator } from '../model/indicators';
 import { primaryIndicator } from '../run/narrative';
 import { inProgress } from '../run/run-view';
+import type { SimulationResult } from './useSimulationResult';
 import type { SimulationRun } from './useSimulationRun';
 
 /** 地图上的文字标注：缺失人口的区县、评价后的城市值 */
@@ -16,8 +18,8 @@ export interface MapLabel {
   readonly lngLat: LngLat;
   readonly text: string;
   readonly kind: 'missing' | 'city';
-  /** 城市值是否达标 */
-  readonly pass?: boolean;
+  /** 城市值的达标状态 */
+  readonly state?: PassState;
 }
 
 /** 镜头跟随推演的几个位置：推演范围、缺失的区县、空间分析的样例 */
@@ -51,17 +53,40 @@ const sameFrame = (a: MapFrame | null, b: MapFrame | null): boolean =>
     a.alert?.opacity === b.alert?.opacity);
 
 /** 推演的地图：数据每轮换一次，演出按步骤进度逐帧推导；镜头在推演的几个关键处移动，用户移动地图后停止跟随 */
-export function useSimulationMap(run: SimulationRun, map: Pick<MapContext, 'runCameraOperation'>): SimulationMap {
+/** 推演的地图；result 给出时，完成后按结果阶段的选择显示（哪一版、年度、着色、预览） */
+export function useSimulationMap(
+  run: SimulationRun,
+  map: Pick<MapContext, 'runCameraOperation'>,
+  result: SimulationResult | null = null
+): SimulationMap {
   const state = run.state;
   const motion = usePreferredReducedMotion();
   const conditions = computed(() => state.value.conditions);
   const params = computed(() => state.value.params);
   const active = computed(() => state.value.status !== 'idle');
 
+  // 结果阶段看的一版：完成时有选择才算
+  const viewing = computed(() => {
+    const selection = result?.selection.value;
+    const version = result?.version.value;
+    const coloring = result?.coloring.value;
+    return state.value.status === 'done' && selection && version && coloring ? { selection, version, coloring } : null;
+  });
+  const preview = computed(() => (viewing.value ? (result?.preview.value ?? null) : null));
+
   const data = computed((): MapData | null => {
     const calculator = run.calculator.value;
     if (!active.value || !calculator || !conditions.value) {
       return null;
+    }
+    const current = viewing.value;
+    if (current) {
+      const { selection, version, coloring } = current;
+      return mapData(calculator, conditions.value, version.params, selection.indicatorId, {
+        year: selection.year,
+        fill: coloring.fill,
+        preview: preview.value ?? undefined
+      });
     }
     return mapData(calculator, conditions.value, params.value, primaryIndicator(conditions.value));
   });
@@ -69,7 +94,12 @@ export function useSimulationMap(run: SimulationRun, map: Pick<MapContext, 'runC
   // 每帧都会重新计算，值没变时保留原来的对象，样式不重新推导
   let last: MapFrame | null = null;
   const frame = computed((): MapFrame | null => {
-    const next = active.value ? mapFrame(state.value, run.progress) : null;
+    let next = active.value ? mapFrame(state.value, run.progress) : null;
+    // 结果阶段：数值全部显示，设施和服务圈都在，干预预览描虚线
+    if (viewing.value) {
+      const previewing = (preview.value?.size ?? 0) > 0;
+      next = { density: null, scan: 1, rain: 1, ring: 1, alert: previewing ? { kind: 'preview', opacity: 1 } : null };
+    }
     if (!sameFrame(last, next)) {
       last = next;
     }
@@ -94,13 +124,13 @@ export function useSimulationMap(run: SimulationRun, map: Pick<MapContext, 'runC
     if (!evaluated) {
       return [];
     }
-    const indicator = simulationIndicator(primaryIndicator(conditions.value));
+    const indicator = simulationIndicator(viewing.value?.selection.indicatorId ?? primaryIndicator(conditions.value));
     return current.cities.map(city => ({
       key: city.code,
       lngLat: city.center,
       text: `${city.name.replace(/市$/, '')} ${formatValue(city.value, indicator)}`,
       kind: 'city',
-      pass: city.pass
+      state: city.state
     }));
   });
 

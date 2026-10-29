@@ -385,6 +385,37 @@
   }
 }
 
+// 结果阶段的推演概览：每行只留名称和标记
+.compact {
+  .step {
+    grid-template-columns: 22px minmax(0, 1fr);
+    padding-bottom: 2px;
+    animation: none;
+
+    &:not(:last-child)::before {
+      top: 25px;
+      left: 10px;
+    }
+  }
+
+  .dot {
+    width: 22px;
+    height: 22px;
+    margin-top: 3px;
+    font-size: var(--font-size-xs);
+  }
+
+  .main {
+    padding: 3px var(--space-sm);
+  }
+
+  .sub,
+  .substeps,
+  .bar {
+    display: none;
+  }
+}
+
 @keyframes step-in {
   from {
     opacity: 0;

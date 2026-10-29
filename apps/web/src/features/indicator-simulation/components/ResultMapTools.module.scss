@@ -1,0 +1,85 @@
+// 结果地图的工具与图例：图例在左下，着色和年度在图例与右侧面板之间居中靠下
+.root {
+  // 图例定宽，说明换行；工具从它右边开始排，不会叠在一起
+  --legend-width: 200px;
+
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tools {
+  position: absolute;
+  right: var(--right-edge);
+  bottom: var(--space-lg);
+  left: calc(var(--left-edge) + var(--legend-width) + var(--space-md));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-sm);
+
+  > * {
+    box-shadow: var(--shadow-sm);
+    pointer-events: auto;
+  }
+}
+
+.legend {
+  position: absolute;
+  bottom: var(--space-lg);
+  left: var(--left-edge);
+  box-sizing: border-box;
+  width: var(--legend-width);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  pointer-events: auto;
+}
+
+.title {
+  margin-bottom: 4px;
+  color: var(--color-text-strong);
+  font-weight: var(--font-weight-semibold);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 20px;
+}
+
+.gap {
+  margin-top: 6px;
+}
+
+.block {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  margin: 0 3px;
+  border: 1px solid var(--color-bg-container);
+  border-radius: 50%;
+}
+
+// 服务圈：绿色描边的浅圈（与地图上的颜色一致）
+.ring {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--color-success);
+  border-radius: 50%;
+  background: var(--color-success-bg);
+}
+
+.note {
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+}

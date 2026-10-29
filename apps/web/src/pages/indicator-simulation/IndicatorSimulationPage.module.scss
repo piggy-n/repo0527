@@ -1,10 +1,7 @@
-// 地图铺满内容区，两个阶段叠在上面（page-layout.md"画布型"）
+// 地图铺满内容区，两个阶段叠在上面（page-layout.md"画布型"）；内容区不是弹性容器，用 height: 100% 占满（推演阶段全是绝对定位，没有内容撑开）
 .root {
   position: relative;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
+  height: 100%;
 }
 
 .map {

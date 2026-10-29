@@ -1,0 +1,181 @@
+// 推演结果：版式取自确认的第二版原型
+.panel {
+  min-height: 0;
+}
+
+.compare {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.select {
+  width: 104px;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-height: 0;
+  overflow: auto;
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+.tabs {
+  display: flex;
+  flex: none;
+  gap: var(--space-md);
+  margin: 0 calc(-1 * var(--space-lg));
+  padding: 0 var(--space-lg);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-border-light);
+  scrollbar-width: thin;
+}
+
+.tab {
+  flex: none;
+  height: 38px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--color-text-regular);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &[aria-selected='true'] {
+    border-bottom-color: var(--color-primary);
+    color: var(--color-primary);
+    font-weight: var(--font-weight-semibold);
+  }
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.kpi {
+  min-width: 0;
+  padding: var(--space-sm) 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-neutral-bg-light);
+}
+
+.kpiLabel {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kpiValue {
+  overflow: hidden;
+  color: var(--color-text-title);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 26px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  small {
+    margin-left: 2px;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-regular);
+  }
+}
+
+.kpiDelta {
+  overflow: hidden;
+  font-size: var(--font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.up {
+  color: var(--color-success-text);
+}
+
+.down {
+  color: var(--color-danger);
+}
+
+.flat {
+  color: var(--color-text-secondary);
+}
+
+// AI 结论：主色到紫色的浅渐变底
+.insight {
+  padding: 10px var(--space-md);
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--color-primary-alpha-10), var(--color-primary-alpha-5));
+
+  p {
+    margin: 4px 0 0;
+    color: var(--color-text-regular);
+    font-size: var(--font-size-xs);
+    line-height: 20px;
+  }
+
+  :global(.el-button) {
+    margin-top: var(--space-sm);
+  }
+}
+
+.insightTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.extra {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+}
+
+.empty {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.attribution {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px var(--space-sm);
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--color-border);
+    font-size: var(--font-size-xs);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  b {
+    color: var(--color-text-strong);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  span:nth-of-type(n + 2) {
+    color: var(--color-text-secondary);
+  }
+}

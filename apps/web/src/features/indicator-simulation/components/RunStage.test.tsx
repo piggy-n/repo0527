@@ -1,39 +1,62 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { provideMap } from '@yzt/map-vue';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { required } from '@/shared/testing/required';
 import { defaultComposition } from '../compose/composition';
 import { JIANGSU_CAMERA } from '@/shared/map/jiangsu';
 import { useSimulationMap } from '../composables/useSimulationMap';
+import { type SimulationResult, useSimulationResult } from '../composables/useSimulationResult';
 import { type SimulationRun, useSimulationRun } from '../composables/useSimulationRun';
 import { ManualClock } from '../engine/test-clock';
 import { createCalculator } from '../model/calculator';
 import { loadTestAtlas } from '../model/test-atlas';
+import { previewChanges } from '../result/result-view';
 import { RunStage } from './RunStage';
 
-// 默认时长下数据核查在 7300 毫秒处停下来问
-const QC_CHECKPOINT_AT = 7300;
+// ECharts 在 jsdom 里没有画布，这里只检查图表的分区和配置是否给出，图表本身在页面验收
+vi.mock('./SimulationChart', async () => {
+  const vue = await import('vue');
+  return {
+    SimulationChart: vue.defineComponent({
+      name: 'SimulationChart',
+      props: { label: { type: String, required: true } },
+      setup: props => () => <div data-chart={props.label} />
+    })
+  };
+});
 
-async function mountRun() {
+// 默认时长下数据核查在 7300 毫秒处停下来问；确认后 1200 到空间分析，再确认后 13600 完成
+const QC_CHECKPOINT_AT = 7300;
+const AFTER_QC = 1200;
+const AFTER_SPATIAL = 13_600;
+// 干预后重算到完成足够长的时间
+const RERUN_ENOUGH = 30_000;
+
+async function mountRun(composition = defaultComposition()) {
   const calculator = createCalculator(await loadTestAtlas());
   const clock = new ManualClock();
   let run: SimulationRun | undefined;
+  let owner: SimulationResult | undefined;
   const Host = defineComponent({
     setup() {
       const owned = useSimulationRun(clock);
       run = owned;
       // 只有会话没有画布：地图的分组照常推导，镜头操作等视图就绪（测试里不会就绪）
       const map = provideMap({ groups: [], camera: JIANGSU_CAMERA });
-      const simulationMap = useSimulationMap(owned, map);
-      return () => <RunStage run={owned} model={{ status: 'ready', calculator }} simulationMap={simulationMap} />;
+      const result = useSimulationResult(owned);
+      owner = result;
+      const simulationMap = useSimulationMap(owned, map, result);
+      return () => (
+        <RunStage run={owned} model={{ status: 'ready', calculator }} simulationMap={simulationMap} result={result} />
+      );
     }
   });
   const wrapper = mount(Host, { attachTo: document.body });
   const started = required(run, '推演的拥有者');
-  started.start(defaultComposition(), calculator);
+  started.start(composition, calculator);
   await flushPromises();
-  return { wrapper, run: started, clock };
+  return { wrapper, run: started, result: required(owner, '结果的拥有者'), clock };
 }
 
 type Mounted = Awaited<ReturnType<typeof mountRun>>;
@@ -45,6 +68,16 @@ const button = ({ wrapper }: Mounted, text: string) =>
     wrapper.findAll('button').find(item => item.text() === text),
     `"${text}"按钮`
   );
+
+// 两个确认点都按默认确认，推演到完成
+async function runToDone({ run, clock }: Mounted) {
+  await clock.advance(QC_CHECKPOINT_AT);
+  run.resolveCheckpoint({ step: 'qc', missing: { kind: 'impute' } });
+  await clock.advance(AFTER_QC);
+  run.resolveCheckpoint({ step: 'spatial' });
+  await clock.advance(AFTER_SPATIAL);
+  await flushPromises();
+}
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -132,5 +165,111 @@ describe('RunStage', () => {
     await clock.advance(QC_CHECKPOINT_AT);
     expect(wrapper.find('[aria-label="展开当前步骤"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('需要你确认');
+  });
+});
+
+// 结果阶段用两个年度，才有多年度对比和年度切换
+const twoYears = () => ({
+  ...defaultComposition(),
+  conditions: { ...defaultComposition().conditions, years: [2025, 2026] }
+});
+const titles = ({ wrapper }: Mounted) => wrapper.findAll('h2').map(title => title.text());
+// 推演概览里的版本按钮
+const versions = ({ wrapper }: Mounted) =>
+  wrapper.findAll('button[aria-pressed]').filter(item => /^v\d/.test(item.text()));
+
+describe('RunStage 结果阶段', () => {
+  it('完成后左侧是推演概览，右侧是推演结果；数字、结论和图表的分区都出现', async () => {
+    const mounted = await mountRun(twoYears());
+    await runToDone(mounted);
+    const { wrapper } = mounted;
+
+    expect(titles(mounted)).toEqual(expect.arrayContaining(['推演概览', '推演结果']));
+    expect(wrapper.text()).toContain('2025、2026 年');
+    expect(versions(mounted).map(item => item.text())).toEqual(['v1编排时的参数']);
+    expect(wrapper.text()).toContain('64.6%');
+    expect(wrapper.text()).toContain('5/ 13');
+    expect(wrapper.text()).toContain('AI 结论');
+    expect(wrapper.findAll('[data-chart]').map(chart => chart.attributes('data-chart'))).toEqual(['多年度对比', '城市对比', '参数敏感性']);
+    expect(wrapper.text()).toContain('变化归因');
+    expect(wrapper.get('[aria-label="图例"]').text()).toContain('2026 年 · 公园绿地覆盖率（%）');
+  });
+
+  it('只有一个年度时没有多年度对比和年度切换', async () => {
+    const mounted = await mountRun();
+    await runToDone(mounted);
+
+    expect(mounted.wrapper.findAll('[data-chart]').map(chart => chart.attributes('data-chart'))).toEqual(['城市对比', '参数敏感性']);
+    expect(mounted.wrapper.find('[aria-label="年度"]').exists()).toBe(false);
+  });
+
+  it('切换指标、着色和年度，图例跟着变', async () => {
+    const mounted = await mountRun(twoYears());
+    await runToDone(mounted);
+    const { wrapper, result } = mounted;
+
+    const tab = required(
+      wrapper.findAll('[role="tab"]').find(item => item.text() === '人均公园绿地'),
+      '人均公园绿地的页签'
+    );
+    await tab.trigger('click');
+    expect(tab.attributes('aria-selected')).toBe('true');
+    await wrapper.get('[aria-label="地图着色"] input[value="pass"]').setValue(true);
+    await wrapper.get('[aria-label="年度"] input[value="2025"]').setValue(true);
+    expect(result.selection.value).toMatchObject({ indicatorId: 'A-39', mode: 'pass', year: 2025 });
+    expect(wrapper.get('[aria-label="图例"]').text()).toContain('对照演示目标 15 m²');
+  });
+
+  it('按建议情景再推演：生成 v2 并看它，和 v1 比；点 v1 换回去', async () => {
+    const mounted = await mountRun();
+    await runToDone(mounted);
+    const { wrapper, run, clock } = mounted;
+
+    await button(mounted, '按此情景再推演').trigger('click');
+    expect(run.state.value.params.newFacilities).toBe(20);
+    expect(titles(mounted)).not.toContain('推演结果');
+    await clock.advance(RERUN_ENOUGH);
+    await flushPromises();
+
+    expect(versions(mounted).map(item => [item.text().slice(0, 2), item.attributes('aria-pressed')])).toEqual([
+      ['v1', 'false'],
+      ['v2', 'true']
+    ]);
+    expect(wrapper.text()).toContain('70.3%');
+    expect(wrapper.text()).toContain('v1 → v2');
+    await versions(mounted)[0]?.trigger('click');
+    expect(versions(mounted)[0]?.attributes('aria-pressed')).toBe('true');
+    expect(wrapper.text()).toContain('64.6%');
+  });
+
+  it('点推演概览的一步回看，在推演结果左边打开；再点一次收起', async () => {
+    const mounted = await mountRun();
+    await runToDone(mounted);
+    const { wrapper } = mounted;
+
+    await wrapper.findAll('section li button')[0]?.trigger('click');
+    expect(titles(mounted)).toEqual(expect.arrayContaining(['条件解析', '推演结果']));
+    await wrapper.findAll('section li button')[0]?.trigger('click');
+    expect(titles(mounted)).not.toContain('条件解析');
+  });
+
+  it('结果阶段的人工干预：基于正在看的一版，草稿改变达标状态时地图预览这些区县', async () => {
+    const mounted = await mountRun();
+    await runToDone(mounted);
+    const { wrapper, result, run } = mounted;
+
+    await button(mounted, '人工干预').trigger('click');
+    expect(wrapper.text()).toContain('基于 v1 调整，生成新版本');
+    expect(result.preview.value.size).toBe(0);
+    await wrapper.get('[aria-label="设施纳入口径"] input[value="all"]').setValue(true);
+    const calculator = required(run.calculator.value, '计算器');
+    const conditions = required(run.state.value.conditions, '推演条件');
+    const from = run.state.value.params;
+    const expected = previewChanges(calculator, conditions, from, { ...from, facilityScope: 'all' }, 'B-65', 2026);
+    expect(expected.size).toBeGreaterThan(0);
+    expect(result.preview.value).toEqual(expected);
+
+    await wrapper.get('[aria-label="关闭人工干预"]').trigger('click');
+    expect(result.preview.value.size).toBe(0);
   });
 });

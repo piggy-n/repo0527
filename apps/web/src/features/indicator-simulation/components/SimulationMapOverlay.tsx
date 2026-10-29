@@ -38,7 +38,7 @@ export const SimulationMapOverlay = defineComponent({
                   class={[styles.label, styles[label.kind]]}
                   style={{ left: `${point.x}px`, top: `${point.y}px` }}
                 >
-                  {label.kind === 'city' && <i class={label.pass ? styles.pass : styles.fail} />}
+                  {label.kind === 'city' && <i class={styles[label.state ?? 'fail']} />}
                   {label.text}
                 </div>
               );

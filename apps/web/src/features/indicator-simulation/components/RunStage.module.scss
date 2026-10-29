@@ -3,6 +3,8 @@
   // 阶段条和人工干预在两侧面板之间居中
   --left-edge: calc(var(--space-lg) + 320px + var(--space-md));
   --right-edge: calc(var(--space-lg) + 320px + var(--space-md));
+  // 阶段条的高度由组件量出，换行时变高
+  --bar-height: 40px;
 
   // 叠在地图上：空白处的鼠标交给地图，面板自己接收
   position: absolute;
@@ -21,6 +23,7 @@
 
 .left,
 .right,
+.review,
 .intervene {
   position: absolute;
   bottom: var(--space-lg);
@@ -46,8 +49,16 @@
   width: 320px;
 }
 
+// 结果阶段回看某一步：阶段条下面、推演结果左边
+.review {
+  top: calc(var(--space-lg) + var(--bar-height) + var(--space-md));
+  right: calc(var(--space-lg) + 320px + var(--space-md));
+  z-index: 6;
+  width: 320px;
+}
+
 .intervene {
-  top: calc(var(--space-lg) + 40px + var(--space-md));
+  top: calc(var(--space-lg) + var(--bar-height) + var(--space-md));
   right: var(--right-edge);
   left: var(--left-edge);
   z-index: 8;

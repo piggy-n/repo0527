@@ -34,20 +34,30 @@ export const InterventionPanel = defineComponent({
     run: { type: Object as PropType<SimulationRun>, required: true },
     model: { type: Object as PropType<SimulationModel>, required: true },
     /** 最新年度缺失人口的区县：数据核查决定过以后才能在这里改 */
-    missing: { type: Array as PropType<readonly MissingPopulation[]>, default: () => [] }
+    missing: { type: Array as PropType<readonly MissingPopulation[]>, default: () => [] },
+    /** 结果阶段基于哪一版调整；推演中不传，基于当前参数 */
+    baseIndex: { type: Number, default: undefined }
   },
   emits: {
     applied: (outcome: ApplyOutcome) => typeof outcome === 'string',
+    /** 草稿变了：结果阶段在地图上预览达标会变的区县 */
+    preview: (draft: SimulationParams) => typeof draft === 'object',
     close: () => true
   },
   setup(props, { emit }) {
-    // 打开时的参数是基准，关闭时卸载、草稿丢弃
-    const base = props.run.state.value.params;
+    // 打开时的参数是基准（结果阶段是所基于那一版的参数），关闭时卸载、草稿丢弃
+    const { versions, params } = props.run.state.value;
+    const base = props.baseIndex === undefined ? params : (versions[props.baseIndex]?.params ?? params);
     const draft = shallowRef<SimulationParams>(base);
-    const plan = computed(() => props.run.planApply(draft.value));
+    const options = () => (props.baseIndex === undefined ? {} : { baseIndex: props.baseIndex });
+    const plan = computed(() => props.run.planApply(draft.value, options()));
+    const update = (next: SimulationParams) => {
+      draft.value = next;
+      emit('preview', next);
+    };
 
     const apply = () => {
-      const outcome = props.run.apply(draft.value);
+      const outcome = props.run.apply(draft.value, options());
       emit('applied', outcome);
     };
 
@@ -83,7 +93,7 @@ export const InterventionPanel = defineComponent({
                       conditions={conditions}
                       missing={state.value.decided.qc ? props.missing : []}
                       modelValue={draft.value}
-                      onUpdate:modelValue={params => (draft.value = params)}
+                      onUpdate:modelValue={update}
                     />
                   </section>
                 ))}
@@ -91,7 +101,9 @@ export const InterventionPanel = defineComponent({
             ),
             footer: () => [
               <span key="hint" class={styles.hint}>
-                {inProgress(state.value.status) ? '推演已暂停，关闭后继续' : '基于最新一版调整，生成新版本'}
+                {inProgress(state.value.status)
+                  ? '推演已暂停，关闭后继续'
+                  : `基于 ${state.value.versions[props.baseIndex ?? state.value.versions.length - 1]?.label ?? '最新一版'} 调整，生成新版本`}
               </span>,
               <ElButton key="cancel" onClick={() => emit('close')}>
                 取消

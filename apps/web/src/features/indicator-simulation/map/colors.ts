@@ -27,3 +27,17 @@ export function valueColor(value: number, breaks: readonly number[]): string {
   const index = breaks.findIndex(edge => value < edge);
   return VALUE_COLORS[index === -1 ? VALUE_COLORS.length - 1 : index] ?? VALUE_COLORS[0];
 }
+
+/** 差值五档：下降红、不变灰、上升绿 */
+export const DIFF_COLORS = ['#d9574e', '#f2a59d', '#eef1f5', '#9bd5bd', '#2f9e74'] as const;
+
+/** 差值的四个分界：以最大变化量的三分之一为一档，变化很小时算不变 */
+export function diffEdges(maxAbs: number): readonly number[] {
+  const step = Math.max(maxAbs / 3, 0.05);
+  return [-2 * step, -step / 3, step / 3, 2 * step];
+}
+
+export function diffColor(delta: number, edges: readonly number[]): string {
+  const index = edges.findIndex(edge => delta < edge);
+  return DIFF_COLORS[index === -1 ? DIFF_COLORS.length - 1 : index] ?? DIFF_COLORS[2];
+}

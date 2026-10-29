@@ -1,5 +1,5 @@
 import { MxPanel } from '@yzt/ui';
-import { defineComponent, type PropType } from 'vue';
+import { defineComponent, type PropType, type SlotsType, type VNode } from 'vue';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import type { EngineState } from '../engine/engine';
 import { STEP_GROUPS, type StepGroupId, type StepId } from '../engine/steps';
@@ -38,13 +38,22 @@ export const StepsPanel = defineComponent({
     /** 一行的记录（取完成后的摘要）；还没有计算器时为 null */
     recordOf: { type: Function as PropType<(group: StepGroupId) => StepRecord | null>, required: true },
     /** 右上正在显示的一行 */
-    selected: { type: String as PropType<StepGroupId | null>, default: null }
+    selected: { type: String as PropType<StepGroupId | null>, default: null },
+    title: { type: String, default: 'AI 推演' },
+    /** 结果阶段的推演概览：每行只留名称和标记 */
+    compact: Boolean
   },
+  slots: Object as SlotsType<{
+    /** 步骤列表前面：推演概览的条件 */
+    before?: () => VNode[];
+    /** 步骤列表后面：推演概览的版本 */
+    after?: () => VNode[];
+  }>,
   emits: {
     select: (group: StepGroupId) => typeof group === 'string',
     collapse: () => true
   },
-  setup(props, { emit }) {
+  setup(props, { emit, slots }) {
     const bar = (step: StepId) => (
       <i class={styles.bar}>
         <b style={{ transform: `scaleX(${props.progress(step)})` }} />
@@ -101,7 +110,7 @@ export const StepsPanel = defineComponent({
       const visible = visibleGroups(state);
       const next = nextGroup(state);
       return (
-        <MxPanel class={styles.panel} title="AI 推演" headerTone="muted" floating>
+        <MxPanel class={styles.panel} title={props.title} headerTone="muted" floating>
           {{
             icon: () => <SvgIcon name="simulation-ai" />,
             actions: () => [
@@ -119,7 +128,8 @@ export const StepsPanel = defineComponent({
               </button>
             ],
             default: () => (
-              <div class={styles.body}>
+              <div class={[styles.body, props.compact && styles.compact]}>
+                {slots.before?.()}
                 {state.status === 'planning' && (
                   <div key="planning" class={styles.planning}>
                     <span class={styles.orb} />
@@ -146,6 +156,7 @@ export const StepsPanel = defineComponent({
                     </li>
                   )}
                 </ol>
+                {slots.after?.()}
               </div>
             )
           }}

@@ -2,9 +2,11 @@ import { Back, CircleClose, Operation } from '@element-plus/icons-vue';
 import { useMapOverlay } from '@yzt/map-vue';
 import { ElButton, ElMessage, ElPopconfirm } from 'element-plus';
 import { computed, type ComputedRef, defineComponent, onBeforeUnmount, type PropType, ref, watch } from 'vue';
+import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { SimulationMap } from '../composables/useSimulationMap';
 import type { SimulationModel } from '../composables/useSimulationModel';
+import type { SimulationResult } from '../composables/useSimulationResult';
 import type { SimulationRun } from '../composables/useSimulationRun';
 import type { ApplyOutcome, MissingPopulation } from '../engine/engine';
 import { STEP_GROUPS, type StepGroupId } from '../engine/steps';
@@ -12,6 +14,9 @@ import { describeChanges, type NarrativeInput, type StepRecord, stepRecord } fro
 import { currentGroup, doneCount, groupStatus, inProgress, stepGroup } from '../run/run-view';
 import { DetailPanel } from './DetailPanel';
 import { InterventionPanel } from './InterventionPanel';
+import { ResultMapTools } from './ResultMapTools';
+import { ResultsPanel } from './ResultsPanel';
+import { RunConditions, RunVersions } from './RunOverview';
 import styles from './RunStage.module.scss';
 import { SimulationMapOverlay } from './SimulationMapOverlay';
 import { StageStepper } from './StageStepper';
@@ -24,14 +29,18 @@ const APPLIED_MESSAGES: Readonly<Record<ApplyOutcome, string | null>> = {
   rerun: '已按调整重新推演'
 };
 
-/** AI 推演阶段：浮在地图上的左侧步骤、右上当前步骤、顶部阶段条和人工干预，以及地图上的扫描带和标注 */
+/**
+ * AI 推演与结果阶段：浮在地图上的左侧步骤（完成后是推演概览）、右上当前步骤（完成后是推演结果）、顶部阶段条和人工干预，
+ * 以及地图上的扫描带、标注和结果地图的工具与图例
+ */
 export const RunStage = defineComponent({
   name: 'RunStage',
   props: {
     run: { type: Object as PropType<SimulationRun>, required: true },
     model: { type: Object as PropType<SimulationModel>, required: true },
     /** 推演的地图；页面在地图上层放这个阶段 */
-    simulationMap: { type: Object as PropType<SimulationMap>, required: true }
+    simulationMap: { type: Object as PropType<SimulationMap>, required: true },
+    result: { type: Object as PropType<SimulationResult>, required: true }
   },
   setup(props) {
     const { run } = props;
@@ -49,6 +58,8 @@ export const RunStage = defineComponent({
     useMapOverlay(leftPanel, 'left');
     useMapOverlay(rightPanel, 'right');
     useMapOverlay(bar, 'top');
+    // 阶段条放不下一行时换行，人工干预和回看的面板排在它下面
+    const { height: barHeight } = useShownElementSize(bar, { width: 0, height: 40 });
 
     // 叙述只随这些变化，状态里其余的变化（步骤推进）不重新生成
     const conditions = computed(() => state.value.conditions);
@@ -77,6 +88,8 @@ export const RunStage = defineComponent({
     ) as Record<StepGroupId, ComputedRef<StepRecord | null>>;
     const recordOf = (group: StepGroupId) => records[group].value;
 
+    // 完成且有了结果的选择：右侧换成推演结果，左侧换成推演概览
+    const resultPhase = computed(() => state.value.status === 'done' && props.result.selection.value !== null);
     const current = computed(() => currentGroup(state.value));
     const shown = computed(() => pinned.value ?? current.value ?? 'parse');
     const reviewing = computed(() => pinned.value !== null && pinned.value !== current.value);
@@ -131,8 +144,13 @@ export const RunStage = defineComponent({
       ElMessage.success('已停止推演，编排的条件已保留');
     };
 
-    const onApplied = (outcome: ApplyOutcome) => {
+    const closeIntervene = () => {
       intervening.value = false;
+      props.result.setPreview(null);
+    };
+
+    const onApplied = (outcome: ApplyOutcome) => {
+      closeIntervene();
       // 重算时跟随当前步骤，不停在回看的那一行
       if (outcome === 'rerun') {
         pinned.value = null;
@@ -185,6 +203,24 @@ export const RunStage = defineComponent({
       );
     };
 
+    // 推演概览的条件和版本：只在结果阶段
+    const renderConditions = () =>
+      resultPhase.value && conditions.value ? <RunConditions conditions={conditions.value} /> : null;
+    const renderVersions = () => {
+      const selection = props.result.selection.value;
+      if (!resultPhase.value || !conditions.value || !selection) {
+        return null;
+      }
+      return (
+        <RunVersions
+          versions={state.value.versions}
+          conditions={conditions.value}
+          viewing={selection.viewIndex}
+          onView={index => props.result.viewVersion(index)}
+        />
+      );
+    };
+
     const renderSteps = () =>
       stepsCollapsed.value ? (
         <button
@@ -206,17 +242,79 @@ export const RunStage = defineComponent({
             state={state.value}
             progress={run.progress}
             recordOf={recordOf}
-            selected={shown.value}
+            selected={resultPhase.value ? pinned.value : shown.value}
+            title={resultPhase.value ? '推演概览' : 'AI 推演'}
+            compact={resultPhase.value}
             onSelect={group => {
-              pinned.value = group === current.value ? null : group;
+              // 结果阶段点一行回看，再点一次收起；推演中点当前行回到跟随
+              if (resultPhase.value) {
+                pinned.value = pinned.value === group ? null : group;
+              } else {
+                pinned.value = group === current.value ? null : group;
+              }
               detailCollapsed.value = false;
             }}
             onCollapse={() => (stepsCollapsed.value = true)}
-          />
+          >
+            {{ before: renderConditions, after: renderVersions }}
+          </StepsPanel>
         </div>
       );
 
+    const renderDetailPanel = (group: StepGroupId) => (
+      <DetailPanel
+        state={state.value}
+        progress={run.progress}
+        group={group}
+        record={recordOf(group)}
+        reviewing={reviewing.value || resultPhase.value}
+        note={note.value}
+        onResolve={decision => run.resolveCheckpoint(decision)}
+        onAdjust={() => (intervening.value = true)}
+        onBack={() => (pinned.value = null)}
+        onCollapse={() => {
+          if (resultPhase.value) {
+            pinned.value = null;
+          } else {
+            detailCollapsed.value = true;
+          }
+        }}
+      />
+    );
+
+    const suggest = () => {
+      if (props.result.applySuggestion() === 'rerun') {
+        pinned.value = null;
+        ElMessage.success('已按建议情景重新推演');
+      }
+    };
+
+    // 结果阶段：右侧是推演结果，回看某一步时详情在它左边
+    const renderResult = () => {
+      if (!conditions.value) {
+        return null;
+      }
+      return [
+        <div key="results" ref={rightPanel} class={styles.right}>
+          <ResultsPanel
+            result={props.result}
+            conditions={conditions.value}
+            versions={state.value.versions}
+            onSuggest={suggest}
+          />
+        </div>,
+        pinned.value !== null && (
+          <div key="review" class={styles.review}>
+            {renderDetailPanel(pinned.value)}
+          </div>
+        )
+      ];
+    };
+
     const renderDetail = () => {
+      if (resultPhase.value) {
+        return renderResult();
+      }
       const checkpoint = state.value.checkpoint !== null;
       if (detailCollapsed.value) {
         return (
@@ -234,18 +332,7 @@ export const RunStage = defineComponent({
       }
       return (
         <div key="detail" ref={rightPanel} class={styles.right}>
-          <DetailPanel
-            state={state.value}
-            progress={run.progress}
-            group={shown.value}
-            record={recordOf(shown.value)}
-            reviewing={reviewing.value}
-            note={note.value}
-            onResolve={decision => run.resolveCheckpoint(decision)}
-            onAdjust={() => (intervening.value = true)}
-            onBack={() => (pinned.value = null)}
-            onCollapse={() => (detailCollapsed.value = true)}
-          />
+          {renderDetailPanel(shown.value)}
         </div>
       );
     };
@@ -257,10 +344,14 @@ export const RunStage = defineComponent({
           stepsCollapsed.value && styles.stepsCollapsed,
           detailCollapsed.value && styles.detailCollapsed
         ]}
+        style={{ '--bar-height': `${barHeight.value}px` }}
         data-status={state.value.status}
         data-current={current.value === null ? undefined : groupStatus(current.value, state.value.steps)}
       >
         <SimulationMapOverlay simulationMap={props.simulationMap} running={inProgress(state.value.status)} />
+        {resultPhase.value && conditions.value && (
+          <ResultMapTools key="tools" result={props.result} conditions={conditions.value} />
+        )}
         {renderSteps()}
         {renderDetail()}
         {renderBar()}
@@ -270,8 +361,14 @@ export const RunStage = defineComponent({
               run={run}
               model={props.model}
               missing={missing.value}
+              baseIndex={resultPhase.value ? props.result.selection.value?.viewIndex : undefined}
               onApplied={onApplied}
-              onClose={() => (intervening.value = false)}
+              onPreview={draft => {
+                if (resultPhase.value) {
+                  props.result.setPreview(draft);
+                }
+              }}
+              onClose={closeIntervene}
             />
           </div>
         )}

@@ -32,8 +32,8 @@ export interface MapFrame {
   readonly rain: number | null;
   /** 服务圈的扩散 0～1 */
   readonly ring: number;
-  /** 区县描边：数据核查的缺失、评价分级的未达标（闪烁） */
-  readonly alert: { readonly kind: 'missing' | 'fail'; readonly opacity: number } | null;
+  /** 区县描边：数据核查的缺失、评价分级的未达标（闪烁）、结果阶段人工干预的预览（虚线） */
+  readonly alert: { readonly kind: 'missing' | 'fail' | 'preview'; readonly opacity: number } | null;
 }
 
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
@@ -203,7 +203,9 @@ export function facilitiesGroup(data: MapData | null, frame: MapFrame | null): S
   return { sources: { [source]: { type: 'geojson', data: data.facilities } }, layers };
 }
 
-/** 区县描边：缺失人口琥珀色，未达标红色闪烁；放在边界之上 */
+const ALERT_COLORS = { missing: ALERT_COLOR, fail: PASS_COLORS.fail, preview: ALERT_COLOR } as const;
+
+/** 区县描边：缺失人口琥珀色，未达标红色闪烁，干预预览琥珀色虚线；放在边界之上 */
 export function alertsGroup(data: MapData | null, frame: MapFrame | null): StyleGroup {
   if (!data || !frame?.alert) {
     return EMPTY;
@@ -218,9 +220,11 @@ export function alertsGroup(data: MapData | null, frame: MapFrame | null): Style
         source: ALERTS_GROUP,
         filter: ['==', ['get', kind], true],
         paint: {
-          'line-color': kind === 'missing' ? ALERT_COLOR : PASS_COLORS.fail,
-          'line-width': 2.6,
-          'line-opacity': opacity
+          'line-color': ALERT_COLORS[kind],
+          'line-width': kind === 'preview' ? 2.2 : 2.6,
+          'line-opacity': opacity,
+          // 虚线是常量，不在常量和按要素取值之间切换（ADR 0046）
+          ...(kind === 'preview' ? { 'line-dasharray': [2, 1.5] } : {})
         }
       }
     ]
