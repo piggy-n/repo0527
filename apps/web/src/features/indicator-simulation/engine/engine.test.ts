@@ -249,6 +249,7 @@ describe('推演中的人工干预', () => {
     expect(engine.apply(withPatch({ popCaliber: 'registered' }))).toBe('rerun');
     expect(engine.state.status).toBe('running');
     expect(engine.state.restart).toBe('pop');
+    expect(engine.state.adjustment).toEqual({ from: defaultParams(), changes: ['popCaliber'] });
     expect(engine.state.checkpoint).toBeNull();
     expect(statuses(engine)).toEqual({
       parse: 'reused',
@@ -313,6 +314,39 @@ describe('推演中的人工干预', () => {
     expect(engine.state.steps.land.status).toBe('done');
     await clock.advance(800);
     expect(engine.state.steps.qc.status).toBe('running');
+  });
+});
+
+describe('planApply', () => {
+  it('只说会怎样处理，不改状态', async () => {
+    using ctx = await setup();
+    const { engine, advanceTo } = ctx;
+    engine.start(conditions, defaultParams());
+    await advanceTo(QC_CHECKPOINT_AT);
+    const { revision } = engine.state;
+
+    expect(engine.planApply(withPatch({ walkSpeed: 75 }))).toEqual({
+      outcome: 'saved',
+      restart: 'spatial',
+      changes: ['walkSpeed'],
+      baseIndex: null
+    });
+    expect(engine.planApply(withPatch({ missing: { kind: 'exclude' } })).outcome).toBe('resolved');
+    expect(engine.planApply(withPatch({ popCaliber: 'registered' })).outcome).toBe('rerun');
+    expect(engine.planApply(defaultParams()).outcome).toBe('unchanged');
+    expect(engine.state.revision).toBe(revision);
+  });
+
+  it('结果阶段：改动按所基于的版本，重算起点按上一轮的参数', async () => {
+    using ctx = await setup();
+    const { engine } = ctx;
+    await runToDone(ctx);
+    expect(engine.planApply(withPatch({ targets: { ...defaultParams().targets, 'B-65': 75 } }))).toEqual({
+      outcome: 'rerun',
+      restart: 'evaluate',
+      changes: ['targets'],
+      baseIndex: 0
+    });
   });
 });
 

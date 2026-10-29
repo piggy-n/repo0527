@@ -1,10 +1,13 @@
 import { ElCheckTag, ElInputNumber, ElRadioButton, ElRadioGroup, ElSlider } from 'element-plus';
 import { defineComponent, type PropType, type VNodeChild } from 'vue';
-import { simulationIndicator } from '../model/indicators';
+import type { MissingPopulation } from '../engine/engine';
+import { simulationIndicator, walkMinutes } from '../model/indicators';
 import {
   CALIBER_LABELS,
   type FacilityScope,
   inScenario,
+  MISSING_LABELS,
+  type MissingTreatment,
   NEW_FACILITIES_RANGE,
   PARAM_LABELS,
   type ParamKey,
@@ -18,6 +21,7 @@ import styles from './ParamFields.module.scss';
 
 const CALIBERS: readonly PopulationCaliber[] = ['resident', 'registered'];
 const SCOPES: readonly FacilityScope[] = ['all', 'standard', 'large'];
+const MISSING_KINDS: readonly MissingTreatment['kind'][] = ['impute', 'exclude', 'manual'];
 
 // 单选组的值换回选项；不在选项里的忽略
 const pick = <T extends string>(options: readonly T[], value: unknown): T | undefined =>
@@ -25,14 +29,7 @@ const pick = <T extends string>(options: readonly T[], value: unknown): T | unde
 
 // 步行类覆盖率各自的服务半径
 function radiiText(conditions: SimulationConditions, walkSpeed: number): string {
-  const minutes = [
-    ...new Set(
-      conditions.indicatorIds.flatMap(id => {
-        const indicator = simulationIndicator(id);
-        return indicator.model === 'coverage' && indicator.reach.kind === 'walk' ? [indicator.reach.minutes] : [];
-      })
-    )
-  ].toSorted((a, b) => a - b);
+  const minutes = walkMinutes(conditions.indicatorIds);
   if (minutes.length === 0) {
     return '所选指标没有步行类覆盖率，不受影响';
   }
@@ -56,7 +53,9 @@ export const ParamFields = defineComponent({
   props: {
     keys: { type: Array as PropType<readonly ParamKey[]>, required: true },
     conditions: { type: Object as PropType<SimulationConditions>, required: true },
-    modelValue: { type: Object as PropType<SimulationParams>, required: true }
+    modelValue: { type: Object as PropType<SimulationParams>, required: true },
+    /** 最新年度缺失人口的区县：数据核查发现后才有，缺失数据处理按它编辑 */
+    missing: { type: Array as PropType<readonly MissingPopulation[]>, default: () => [] }
   },
   emits: {
     'update:modelValue': (params: SimulationParams) => typeof params === 'object'
@@ -74,6 +73,69 @@ export const ParamFields = defineComponent({
       }
       const ids = conditions.indicatorIds.filter(item => scope.has(item));
       update({ scenarioIds: ids.length === conditions.indicatorIds.length ? null : ids });
+    };
+
+    // 手动填写的人口：没填过的用插补值
+    const manualValues = (): Readonly<Record<string, number>> => {
+      const { missing, modelValue } = props;
+      const filled = modelValue.missing.kind === 'manual' ? modelValue.missing.values : {};
+      return Object.fromEntries(
+        missing.map(({ district, imputed }) => [district.code, filled[district.code] ?? imputed])
+      );
+    };
+
+    const renderMissing = (): VNodeChild => {
+      const { missing, modelValue: params } = props;
+      if (missing.length === 0) {
+        return field('missing', <p class={styles.note}>数据核查发现缺失后可调整</p>);
+      }
+      const values = manualValues();
+      return field(
+        'missing',
+        <>
+          <ElRadioGroup
+            size="small"
+            modelValue={params.missing.kind}
+            aria-label={PARAM_LABELS.missing}
+            onUpdate:modelValue={value => {
+              const kind = pick(MISSING_KINDS, value);
+              if (kind) {
+                update({ missing: kind === 'manual' ? { kind, values } : { kind } });
+              }
+            }}
+          >
+            {MISSING_KINDS.map(kind => (
+              <ElRadioButton key={kind} value={kind}>
+                {MISSING_LABELS[kind]}
+              </ElRadioButton>
+            ))}
+          </ElRadioGroup>
+          {params.missing.kind === 'manual' && (
+            <div class={styles.targets}>
+              {missing.map(({ district }) => [
+                <span key={`${district.code}-label`}>{district.name}（万人）</span>,
+                <ElInputNumber
+                  key={district.code}
+                  class={styles.number}
+                  size="small"
+                  controlsPosition="right"
+                  modelValue={values[district.code]}
+                  min={0.1}
+                  step={0.1}
+                  precision={1}
+                  aria-label={`${district.name}的人口（万人）`}
+                  onUpdate:modelValue={value => {
+                    if (typeof value === 'number' && Number.isFinite(value)) {
+                      update({ missing: { kind: 'manual', values: { ...values, [district.code]: value } } });
+                    }
+                  }}
+                />
+              ])}
+            </div>
+          )}
+          <p class={styles.note}>剔除的区县不参与汇总；手动填写核实后的人口</p>
+        </>
+      );
     };
 
     const render = (key: ParamKey): VNodeChild => {
@@ -211,7 +273,7 @@ export const ParamFields = defineComponent({
         case 'missing':
           break;
       }
-      return null;
+      return renderMissing();
     };
 
     return () => <div class={styles.root}>{props.keys.map(render)}</div>;

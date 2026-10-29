@@ -47,6 +47,7 @@ Element    --el-color-*、--el-text-color-* ……                  element-them
 | Info 不透明浅底 | `--color-info-bg-solid` | 第 3 节 |
 | Success 深色文本 / 实心 / 不透明浅底 / 悬停底 | `--color-success-text`、`-solid`、`-bg-solid`、`-bg-hover` | 第 3 节 |
 | Danger 深色文本 / 不透明浅底 | `--color-danger-text`、`--color-danger-bg-solid` | 第 3 节 |
+| Warning 深色文本 | `--color-warning-text`（`#B46B00`） | 2026-10-28 补充：`--color-warning` 在 `--color-warning-bg` 上对比度不够，浅底上的警示文字用它（指标智能推演的确认点、待更新） |
 | 极小文字 10px | `--font-size-xxs` | 第 5.2 节 |
 | 行高 22 / 18 / 16px | `--line-height-base`、`-compact`、`-tag` | 第 5.2 节 |
 | 登录卡片的蓝色投影 | `--shadow-primary-lg` | 第 6 节，2026-09-30 补充 |

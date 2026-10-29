@@ -639,6 +639,17 @@
     },
     "body": "<rect width=\"16\" height=\"15\" x=\"4\" y=\"5\" rx=\"2\"/><path d=\"M4 10h16M8 3v4m8-4v4\"/>"
   },
+  "simulation-compute": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<rect width=\"14\" height=\"18\" x=\"5\" y=\"3\" rx=\"2\"/><path d=\"M8 7h8v3H8zm.5 7h.01M12 14h.01m3.49 0h.01M8.5 17.5h.01m3.49 0h.01m3.49 0h.01\"/>"
+  },
   "simulation-coverage": {
     "viewBox": "0 0 24 24",
     "attrs": {
@@ -649,6 +660,17 @@
       "stroke-linejoin": "round"
     },
     "body": "<circle cx=\"12\" cy=\"12\" r=\"7.5\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/>"
+  },
+  "simulation-data": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<ellipse cx=\"12\" cy=\"6\" rx=\"7\" ry=\"2.8\"/><path d=\"M5 6v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6\"/><path d=\"M5 12v6c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-6\"/>"
   },
   "simulation-indicator": {
     "viewBox": "0 0 24 24",
@@ -661,6 +683,17 @@
     },
     "body": "<path d=\"M5 19V9m5 10V5m5 14v-7m5 7V8\"/>"
   },
+  "simulation-parse": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<path d=\"M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2\"/><rect width=\"6\" height=\"4\" x=\"9\" y=\"3\" rx=\"1\"/><path d=\"M9 12h6m-6 4h4\"/>"
+  },
   "simulation-per-capita": {
     "viewBox": "0 0 24 24",
     "attrs": {
@@ -672,6 +705,17 @@
     },
     "body": "<rect width=\"14\" height=\"14\" x=\"5\" y=\"5\" rx=\"2\"/><path d=\"m9 15 6-6\"/>"
   },
+  "simulation-qc": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<path d=\"m12 3 7 3v5c0 4.4-3 8.1-7 10-4-1.9-7-5.6-7-10V6z\"/><path d=\"m9 12 2 2 4-4\"/>"
+  },
   "simulation-region": {
     "viewBox": "0 0 24 24",
     "attrs": {
@@ -682,6 +726,17 @@
       "stroke-linejoin": "round"
     },
     "body": "<path d=\"m4 7 5-2.5L15 7l5-2.5v13L15 20l-6-2.5L4 20zm5-2.5v13M15 7v13\"/>"
+  },
+  "simulation-spatial": {
+    "viewBox": "0 0 24 24",
+    "attrs": {
+      "fill": "none",
+      "stroke": "currentColor",
+      "stroke-width": "1.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    "body": "<circle cx=\"12\" cy=\"12\" r=\"8.5\"/><circle cx=\"12\" cy=\"12\" r=\"4.5\"/><path d=\"m12 12 6-6\"/>"
   },
   "simulation-tune": {
     "viewBox": "0 0 24 24",

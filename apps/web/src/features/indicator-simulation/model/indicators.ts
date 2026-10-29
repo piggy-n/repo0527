@@ -91,6 +91,15 @@ export const INDICATOR_GROUPS: readonly (IndicatorCategory & { readonly indicato
 /** 步行类覆盖率：服务半径随步行速度变化 */
 export const isWalkCoverage = (indicator: SimulationIndicator): boolean => indicator.model === 'coverage' && indicator.reach.kind === 'walk';
 
+/** 所选指标里步行类覆盖率的分钟数，去重、从小到大 */
+export function walkMinutes(indicatorIds: readonly string[]): number[] {
+  const minutes = indicatorIds.flatMap(id => {
+    const indicator = simulationIndicator(id);
+    return indicator.model === 'coverage' && indicator.reach.kind === 'walk' ? [indicator.reach.minutes] : [];
+  });
+  return [...new Set(minutes)].toSorted((a, b) => a - b);
+}
+
 /** 服务半径（米）；人均类没有服务半径 */
 export function reachMeters(indicator: SimulationIndicator, walkSpeed: number): number | null {
   if (indicator.model !== 'coverage') {

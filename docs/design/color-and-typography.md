@@ -220,6 +220,7 @@ AI 推演的过程色和"规划新增设施"情景色，只用于指标智能推
 | `--color-scenario-light` | `#A593FF` | 规划新增设施：编排图上作用范围的虚线 |
 
 - AI 渐变按"主色 → ai-violet → ai-cyan → 主色"的锥形渐变旋转；减少动画时不转
+- 确认点、待更新这类警示用 `--color-warning-bg` 浅底配 `--color-warning-text`（`#B46B00`）文字，边框、圆点用 `--color-warning`
 - 编排图的连线用 `--color-primary-border`，条件齐全后用 `--color-primary-border-hover` 并流动；画布底色 `--color-primary-bg-lighter`、网点 `--color-border-dashed`，都是已有令牌
 
 ## 7. CSS 变量落地

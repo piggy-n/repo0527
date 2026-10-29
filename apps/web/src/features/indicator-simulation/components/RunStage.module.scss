@@ -1,0 +1,194 @@
+// AI 推演阶段的排布：浮在画布上的左侧步骤、右上当前步骤、顶部阶段条（page-layout.md"画布型"）
+.root {
+  // 阶段条和人工干预在两侧面板之间居中
+  --left-edge: calc(var(--space-lg) + 320px + var(--space-md));
+  --right-edge: calc(var(--space-lg) + 320px + var(--space-md));
+
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.stepsCollapsed {
+  --left-edge: calc(var(--space-lg) + 40px + var(--space-md));
+}
+
+.detailCollapsed {
+  --right-edge: calc(var(--space-lg) + 200px + var(--space-md));
+}
+
+// 地图在 S7 接入，先用编排图的网点画布
+.canvas {
+  position: absolute;
+  inset: 0;
+  background-color: var(--color-primary-bg-lighter);
+  background-image: radial-gradient(circle, var(--color-border-dashed) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.left,
+.right,
+.intervene {
+  position: absolute;
+  bottom: var(--space-lg);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.left {
+  top: var(--space-lg);
+  left: var(--space-lg);
+  width: 320px;
+}
+
+.right {
+  top: var(--space-lg);
+  right: var(--space-lg);
+  width: 320px;
+}
+
+.intervene {
+  top: calc(var(--space-lg) + 40px + var(--space-md));
+  right: var(--right-edge);
+  left: var(--left-edge);
+  z-index: 8;
+  align-items: center;
+
+  > * {
+    width: min(400px, 100%);
+  }
+}
+
+.bar {
+  position: absolute;
+  top: var(--space-lg);
+  right: var(--right-edge);
+  left: var(--left-edge);
+  z-index: 7;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-sm);
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-mask);
+  box-shadow: var(--shadow-sm);
+}
+
+.barButton {
+  height: 40px;
+  box-shadow: var(--shadow-sm);
+}
+
+// 间距由阶段条的 gap 负责，去掉 Element 相邻按钮的左外边距；1200 宽时两侧面板之间刚好放下一行
+.bar > .barButton + .barButton {
+  margin-left: 0;
+}
+
+// 收起后的左侧窄条
+.strip {
+  position: absolute;
+  top: var(--space-lg);
+  left: var(--space-lg);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 40px;
+  padding: var(--space-md) 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-strong);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-primary);
+  }
+}
+
+.stripLabel {
+  font-weight: var(--font-weight-semibold);
+  writing-mode: vertical-rl;
+}
+
+.stripCount {
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+}
+
+// 收起后的右上胶囊；需要确认时描一圈琥珀色
+.pill {
+  position: absolute;
+  top: var(--space-lg);
+  right: var(--space-lg);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  max-width: 200px;
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-strong);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.attention {
+  box-shadow:
+    0 0 0 2px var(--color-warning),
+    var(--shadow-md);
+}
+
+.pillText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pulse {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-ai-cyan);
+  box-shadow: 0 0 6px 2px var(--color-ai-glow);
+  animation: blink 1.2s ease-in-out infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}

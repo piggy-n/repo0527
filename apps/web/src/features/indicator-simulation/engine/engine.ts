@@ -82,6 +82,8 @@ export interface EngineState {
   readonly steps: Readonly<Record<StepId, StepState>>;
   /** 干预后从哪一步重算；第一轮为 null */
   readonly restart: StepId | null;
+  /** 引起这一轮重算的干预：改之前的参数和改了的参数项；第一轮为 null */
+  readonly adjustment: { readonly from: SimulationParams; readonly changes: readonly ParamKey[] } | null;
   readonly checkpoint: Checkpoint | null;
   /** 确认点已经由人决定过（确认或干预过它的参数），之后不再停下来问 */
   readonly decided: Readonly<Record<CheckpointStep, boolean>>;
@@ -92,6 +94,14 @@ export interface EngineState {
 
 /** 干预的结果：参数没变；保存到还没执行的步骤；作为当前确认点的决定；从某一步重算 */
 export type ApplyOutcome = 'unchanged' | 'saved' | 'resolved' | 'rerun';
+
+/** 一次干预会怎样处理：结果、从哪一步起生效或重算、改了哪些参数项、结果阶段基于哪一版 */
+export interface ApplyPlan {
+  readonly outcome: ApplyOutcome;
+  readonly restart: StepId | null;
+  readonly changes: readonly ParamKey[];
+  readonly baseIndex: number | null;
+}
 
 /** 引擎用到的计算 */
 export type EngineCalculator = Pick<Calculator, 'missingDistricts' | 'imputedPopulation' | 'compute'>;
@@ -136,11 +146,17 @@ function initialState(paused: boolean): Omit<EngineState, 'revision'> {
     baseIndex: null,
     steps: mapSteps(() => ({ status: 'waiting', human: false })),
     restart: null,
+    adjustment: null,
     checkpoint: null,
     decided: { qc: false, spatial: false },
     versions: [],
     error: null
   };
+}
+
+/** 还没开始推演时的状态 */
+export function idleEngineState(): EngineState {
+  return { ...initialState(false), revision: 0 };
 }
 
 function assertConditions({ years, cityCodes, indicatorIds }: SimulationConditions): void {
@@ -161,7 +177,7 @@ export class SimulationEngine implements Disposable {
   // 进行中的步骤累计了多久、最近一次从什么时候开始计时（等人确认时不计时），用来算进度
   readonly #timing = new Map<StepId, { elapsed: number; since: number | null }>();
   #pending: Pending | null = null;
-  #state: EngineState = { ...initialState(false), revision: 0 };
+  #state: EngineState = idleEngineState();
   #disposed = false;
 
   constructor({ calculator, clock = systemClock }: EngineOptions) {
@@ -237,10 +253,41 @@ export class SimulationEngine implements Disposable {
    * 完成后基于某一版（默认最新一版）调整，重算出新的版本
    */
   apply(next: SimulationParams, options: { readonly baseIndex?: number } = {}): ApplyOutcome {
+    const plan = this.planApply(next, options);
+    const marked = { params: next, ...this.#marked(plan.changes) };
+    switch (plan.outcome) {
+      case 'unchanged':
+        return 'unchanged';
+      case 'saved':
+        this.#set(marked);
+        return 'saved';
+      case 'resolved':
+        if (this.#pending) {
+          this.#continue(this.#pending, marked);
+        }
+        return 'resolved';
+      case 'rerun':
+        break;
+    }
+    const base = plan.baseIndex === null ? undefined : this.#state.versions[plan.baseIndex];
+    this.#rerun(plan.restart, marked, base ? { baseParams: base.params, baseIndex: base.index } : {});
+    return 'rerun';
+  }
+
+  /** 干预会怎样处理，不改状态：界面据此写按钮和说明；规则见 apply */
+  planApply(next: SimulationParams, options: { readonly baseIndex?: number } = {}): ApplyPlan {
     this.#assertAlive();
-    const { status, params, versions } = this.#state;
+    const { status, params, versions, steps } = this.#state;
     if (status === 'done') {
-      return this.#applyToResult(next, options.baseIndex ?? versions.length - 1);
+      const baseIndex = options.baseIndex ?? versions.length - 1;
+      const base = versions[baseIndex];
+      if (base === undefined) {
+        throw new Error(`没有第 ${baseIndex} 个版本`);
+      }
+      const changes = changedParams(base.params, next);
+      // 版本记录相对所基于版本的改动；哪些步骤能复用要和上一轮实际用的参数比
+      const restart = restartStep(changedParams(params, next));
+      return { outcome: changes.length === 0 ? 'unchanged' : 'rerun', restart, changes, baseIndex };
     }
     if (status !== 'planning' && status !== 'running' && status !== 'checkpoint') {
       throw new Error('推演没有在进行');
@@ -250,21 +297,15 @@ export class SimulationEngine implements Disposable {
     }
     const changes = changedParams(params, next);
     const restart = restartStep(changes);
+    const plan = (outcome: ApplyOutcome): ApplyPlan => ({ outcome, restart, changes, baseIndex: null });
     if (restart === null) {
-      return 'unchanged';
+      return plan('unchanged');
     }
-    const marked = { params: next, ...this.#marked(changes) };
-    const restartStatus = this.#state.steps[restart].status;
+    const restartStatus = steps[restart].status;
     if (restartStatus === 'waiting' || restartStatus === 'stale') {
-      this.#set(marked);
-      return 'saved';
+      return plan('saved');
     }
-    if (this.#pending?.step === restart) {
-      this.#continue(this.#pending, marked);
-      return 'resolved';
-    }
-    this.#rerun(restart, marked, {});
-    return 'rerun';
+    return plan(this.#pending?.step === restart ? 'resolved' : 'rerun');
   }
 
   /** 步骤的进度 0～1，按时钟实时计算：等待中、待更新为 0，完成、复用为 1 */
@@ -289,21 +330,6 @@ export class SimulationEngine implements Disposable {
     this.#pending = null;
     this.#runs[Symbol.dispose]();
     this.#emitter.events = {};
-  }
-
-  #applyToResult(next: SimulationParams, baseIndex: number): ApplyOutcome {
-    const base = this.#state.versions[baseIndex];
-    if (base === undefined) {
-      throw new Error(`没有第 ${baseIndex} 个版本`);
-    }
-    const changes = changedParams(base.params, next);
-    if (changes.length === 0) {
-      return 'unchanged';
-    }
-    // 版本记录相对所基于版本的改动；哪些步骤能复用要和上一轮实际用的参数比
-    const restart = restartStep(changedParams(this.#state.params, next));
-    this.#rerun(restart, { params: next, ...this.#marked(changes) }, { baseParams: base.params, baseIndex });
-    return 'rerun';
   }
 
   // 改动的参数项所属的步骤标为人工；属于确认点的，确认点算作已决定
@@ -334,11 +360,13 @@ export class SimulationEngine implements Disposable {
     for (const id of affected) {
       this.#timing.delete(id);
     }
+    const from = this.#state.params;
     this.#set({
       ...base,
       ...patch,
       status: 'running',
       restart,
+      adjustment: { from, changes: changedParams(from, patch.params) },
       checkpoint: null,
       steps: mapSteps(id => {
         const step = patch.steps[id];

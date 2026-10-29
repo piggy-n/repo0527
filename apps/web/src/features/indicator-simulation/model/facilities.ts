@@ -111,3 +111,15 @@ export function createFacilityLayout(calculator: Calculator): FacilityLayout {
     }
   };
 }
+
+const layouts = new WeakMap<Calculator, FacilityLayout>();
+
+/** 同一个计算器共用一份设施撒点：叙述、地图都从这里取，缓存不重复 */
+export function facilityLayoutOf(calculator: Calculator): FacilityLayout {
+  let layout = layouts.get(calculator);
+  if (!layout) {
+    layout = createFacilityLayout(calculator);
+    layouts.set(calculator, layout);
+  }
+  return layout;
+}
