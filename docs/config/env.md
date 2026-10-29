@@ -30,6 +30,8 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_TIANDITU_ENABLED` | `true` | `appConfig.tianditu` | 天地图开关（ADR 0031）。不能访问公网的内网部署设为 `false`，地图不再向天地图发任何请求 |
 | `VITE_TIANDITU_KEY` | `13745b…8974`（32 位） | `appConfig.tianditu.key` | 天地图的浏览器端 key，开启时必填，关闭时不读。它本来就写在每个瓦片地址里，防盗用靠天地图控制台的域名白名单和配额 |
 | `PROXY_TARGET` | `http://192.168.1.180:18010` | 只在 `vite.config.ts` | 开发服务器与 `vite preview` 的代理目标 |
+| `VITE_AI_API_BASE_URL` | `/ai-backend` | `vite.config.ts`（代理前缀）、`appConfig.aiApiBaseUrl` | AI 对话后端的基础地址。AI 后端是另一个服务（Bearer 鉴权、没有信封），同样走同源代理，见 [modules/ai-chat.md](../modules/ai-chat.md) |
+| `AI_PROXY_TARGET` | `http://localhost:8090` | 只在 `vite.config.ts` | AI 后端的代理目标，沿用旧项目的本机开发地址，尚未联调 |
 
 ## 两类变量
 
@@ -38,7 +40,7 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 - 不能在 `VITE_` 变量里放密钥、口令，任何人都能在浏览器里看到
 - 改值后要重新构建，部署后不能再改
 
-**不带前缀的变量只在 `vite.config.ts` 里可用。** 通过 `loadEnv(mode, process.cwd(), '')` 读取（第三个参数为空字符串表示读取全部变量）。`PROXY_TARGET` 属于这一类，已验证产物中不包含它的值。
+**不带前缀的变量只在 `vite.config.ts` 里可用。** 通过 `loadEnv(mode, process.cwd(), '')` 读取（第三个参数为空字符串表示读取全部变量）。`PROXY_TARGET`、`AI_PROXY_TARGET` 属于这一类，已验证产物中不包含 `PROXY_TARGET` 的值。
 
 ## 类型与校验
 
@@ -63,4 +65,4 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 ## 修改时的检查清单
 
 - 新增变量：先想清楚它会不会写进产物（`VITE_` 前缀）；在 `import-meta-env.ts` 中声明类型，在 `app-config.ts` 中读取和校验；更新本文的变量表
-- 新增后端（如 AI 对话、文件管理使用的其他后端）：按 ADR 0008 增加新的前缀变量和 `vite.config.ts` 中的代理规则，并更新 `docs/deployment.md` 的 nginx 示例
+- 新增后端（如文件管理使用的其他后端）：按 ADR 0008 增加新的前缀变量和 `vite.config.ts` 中的代理规则，并更新 `docs/deployment.md` 的 nginx 示例；AI 对话已按这个做法加了 `VITE_AI_API_BASE_URL` 和 `AI_PROXY_TARGET`

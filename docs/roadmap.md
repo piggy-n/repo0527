@@ -107,7 +107,7 @@
 | 第一个 Worker 真实使用方出现时 | Worker 池的调度、缓存淘汰、内存预算用真实瓦片验证；真实 Worker 在 Vite 下的打包与加载在 `/dev` 开发页验证；瓦片目前不校验 token、与用户无关（2026-10-09 实测，见 [migration.md](migration.md)），此前仍向后端确认以后是否会按权限过滤 | ADR 0025 |
 | 三维 | 3D.1 已做：Cesium 运行时作为第二个框架加载函数接入；实现镜像前写出三维样式的支持清单与降级规则（ADR 0079 第 7 节）；拾取按模型、椭球报告命中表面（本阶段没有地形）；相机同步只用公开 API。3D.5a 已定（ADR 0091）：不做悬停时加载，二维稳定后空闲时预加载运行时；不预取 Cesium 的静态资源；三维期间二维保留。三维接入 MVT 时再做：MVT 解码的 `@mapbox/vector-tile`、`pbf` 对齐 maplibre-gl 依赖的版本；三维点选改用瓦片数据服务，不再先对齐二维；瓦片数据服务与 MapLibre 之间避免重复下载的做法 | ADR 0019、0020、0021、0024、0091 |
 | 三维 | 3D.1 已做：工具模型的 `dragPan` 在三维映射成 Cesium 的旋转、平移开关；还原精确视角的条件由三维视图订阅相机事件、看 `cause` 判断。还没做（三维阶段没有做，移到阶段七）：`MapView` 的约定写成可复用的契约测试，二三维视图都跑 | ADR 0039、本文 |
-| 6 | AI 对话：AI 后端登录不再在前端写死账号密码 | ADR 0015 |
+| 6 | AI 对话：AI 后端登录不再在前端写死账号密码。2026-10-28 最小迁移时只迁了登录接口和 token 的存放，前端不写账号，账号来源等后端方案；联调核对接口、恢复临时静默的提示、MVT 结果、重构时统一进 `shared/http` 等待办见 [modules/ai-chat.md](modules/ai-chat.md)"待办" | ADR 0015、[modules/ai-chat.md](modules/ai-chat.md) |
 | 6 | 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像（消息铃铛已随系统管理与消息中心做成顶栏弹框，ADR 0093） | [modules/layout.md](modules/layout.md) |
 | 6 | 文件管理：上传、下载进度与预览已接入并完成本地验证；真实后端及业务文档待恢复后验收 | ADR 0011、0075、[migration.md](migration.md) |
 | 6 | 其他列表页套用阶段三的通用规则：`QueryForm`、加载状态的三种情况与 `TableSkeleton`、表格空值、操作按钮图标 | [modules/query-form.md](modules/query-form.md)、[modules/table.md](modules/table.md) |
@@ -836,7 +836,7 @@ UI 工作流程补充（2026-10-20）：用户确认将设计与验证流程固�
 | 城市国土空间监测基本统计 | `space-monitoring-basic-statistics` | 全部 | `views/space-monitoring-statistics` |
 | 城市国土空间监测指标 | `space-monitoring-indicators` | 全部 | `views/space-monitoring-indicators` |
 | 文件管理 | `file-management` | 全部 | `views/resource-center/file-management.vue` |
-| AI 对话 | `ai-chat` | 全部 | `views/ai-chat` |
+| AI 对话（2026-10-28 最小迁移，接口未联调） | `ai-chat` | 全部 | `views/ai-chat` |
 | 消息中心 | `message-center` | 全部 | `views/message-center` |
 | 资源管理 | `resource-management` | 管理员 | `views/resource-management-new` |
 | 系统管理 | `system-management` | 管理员 | `views/system-management` |
@@ -846,7 +846,7 @@ UI 工作流程补充（2026-10-20）：用户确认将设计与验证流程固�
 
 ### 剩余模块的迁移计划（2026-10-23）
 
-AI 对话和消息中心暂不迁移（用户 2026-10-23 确认）。剩下的按依赖分成四组，每组单独一个会话：从读旧代码、记基线开始，先出可操作的原型（`/dev/<名称>`）请用户确认，再分步实现；写法以 `stage-5e` 之前的代码和[审查报告](stages/post-5e-code-review.md)为准。行数是旧项目 `master-demo`（`6b4799b`）的规模，用来估工作量。
+AI 对话和消息中心暂不迁移（用户 2026-10-23 确认；消息中心已随系统管理迁移，AI 对话 2026-10-28 按用户要求在分支 `migrate-ai-chat` 做了最小迁移：AI 后端不能联调、以后要重构，只保留核心功能和交互，地图只做 GeoJSON 结果，范围与待办见 [modules/ai-chat.md](modules/ai-chat.md)）。剩下的按依赖分成四组，每组单独一个会话：从读旧代码、记基线开始，先出可操作的原型（`/dev/<名称>`）请用户确认，再分步实现；写法以 `stage-5e` 之前的代码和[审查报告](stages/post-5e-code-review.md)为准。行数是旧项目 `master-demo`（`6b4799b`）的规模，用来估工作量。
 
 | 顺序 | 分组 | 旧代码 | 依赖与注意 |
 |---|---|---|---|

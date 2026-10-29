@@ -1,0 +1,158 @@
+.root {
+  border-radius: var(--radius-sm);
+  background-color: var(--color-primary-bg-lighter);
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-regular);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: -2px;
+  }
+}
+
+.summaryText {
+  flex: 1;
+  min-width: 0;
+}
+
+.toggle {
+  flex: none;
+  color: var(--color-primary);
+}
+
+.marker {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: var(--color-text-inverse);
+  font-size: 10px;
+
+  &.running {
+    background-color: var(--color-primary-bg);
+    color: var(--color-primary);
+    font-size: 12px;
+  }
+
+  &.succeeded {
+    background-color: var(--color-success-solid);
+  }
+
+  &.failed {
+    background-color: var(--color-danger);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// 时间线：每步左侧是状态点，点之间用竖线相连
+.list {
+  margin: 0;
+  padding: 0 8px 8px;
+  list-style: none;
+}
+
+.step {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  padding-bottom: 8px;
+
+  &:not(:last-child)::before {
+    position: absolute;
+    top: 18px;
+    bottom: 0;
+    left: 7.5px;
+    width: 1px;
+    background-color: var(--color-border);
+    content: '';
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+
+  > .marker {
+    margin-top: 1px;
+  }
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.name {
+  min-width: 0;
+  color: var(--color-text-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.state {
+  flex: none;
+  color: var(--color-text-secondary);
+
+  &.failed {
+    color: var(--color-danger-text);
+  }
+}
+
+.description {
+  margin: 2px 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  overflow-wrap: anywhere;
+}
+
+.json {
+  max-height: 160px;
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-danger-bg-solid);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

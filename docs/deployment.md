@@ -36,6 +36,14 @@ server {
         proxy_pass http://<后端地址>/;
     }
 
+    # AI 对话的后端（另一个服务）：同样去掉前缀；回答用 SSE 推送，关掉缓冲才能逐段到达，
+    # 回答可能要几分钟，读超时放长。AI 后端的部署地址、内网是否部署尚未确定（docs/modules/ai-chat.md）
+    location /ai-backend/ {
+        proxy_pass http://<AI 后端地址>/;
+        proxy_buffering off;
+        proxy_read_timeout 30m;
+    }
+
     # 页面：history 模式下，未知路径回退到 index.html，由前端路由处理（ADR 0007）
     location / {
         try_files $uri $uri/ /index.html;

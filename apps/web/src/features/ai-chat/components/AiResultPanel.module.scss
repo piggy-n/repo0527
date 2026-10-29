@@ -1,0 +1,49 @@
+.download {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-primary);
+  font-size: var(--font-size-base);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--color-primary-hover);
+  }
+}
+
+// 图表和表格各占一块，两者都有时左右并排；每块的标题固定，图表、表格占满剩余高度
+.body {
+  display: grid;
+  flex: 1;
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--space-lg);
+  min-height: 0;
+  padding: var(--space-lg);
+}
+
+.both {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+  min-height: 0;
+
+  // MxTitle 在横排的标题行里占满剩余宽度（flex: 1），竖排时会被拉高，这里按内容定高
+  > .blockTitle {
+    flex: none;
+  }
+}
+
+.count {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.table {
+  flex: 1;
+  min-height: 0;
+}

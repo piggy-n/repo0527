@@ -30,6 +30,7 @@
 - 二维地图用 MapLibre GL JS 6，只用具名导入；`setWorkerUrl`、CSS 这类全局设置由 app 懒加载完成（登录页空闲时预加载，或首次进入地图时）；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002、0019、0023、0061）
 - 三维地图用 Cesium，精确锁定版本（1.146.0，ADR 0002、0079）；Worker、资源等运行时文件由 `vite-plugin-static-copy` 复制到产物的 `cesium/`，基础地址由 app 的三维运行时设置
 - 资源管理"自助取数"的关系图用 ECharts 的 graph 系列，坐标用 d3-force 按旧页面的力导布局计算，不引入 G6（ADR 0089）
+- AI 对话回答的 Markdown 用 marked 转换、DOMPurify 净化后显示，只在 `features/ai-chat/markdown.ts` 中使用
 - 距离和面积用 geographiclib-geodesic 按椭球面计算，不另写公式（ADR 0035）；其他几何计算按需安装 turf v7 的单个包，不用 `@turf/turf` 全家桶（ADR 0037）
 - 地图内核的事件用 nanoevents；资源释放用标准的 `Disposable` / `DisposableStack`，运行时由 `app/main.ts` 全局引入的 core-js 补齐（ADR 0023）
 - 浏览器目标用 Vite 默认值，不兼容旧浏览器，不引入 `@vitejs/plugin-legacy`
@@ -200,6 +201,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 查询和变更写在 `features/<域>/queries.ts`，用 TanStack Vue Query 的 `useQuery` / `useMutation`；`queryFn` 把收到的 `signal` 交给接口函数，组件不直接拼 query key；接口数据由查询缓存持有，不放进 Pinia，组件里也不另存一份
 - 服务端写操作用 `shared/auth/session-guard` 的 `useSessionGuard` 核对会话：提交时 `capture()`，`mutationFn` 发请求前 `assertCurrent()`（调度期间换了会话就不用新凭据发送旧操作），响应后 `isCurrent()`（旧会话不刷新新缓存、不报告成功）；已发出的写操作不随卸载取消。只是过期不算换会话，组合式函数不另外判断 `isActive()`，由 shared/http 在发请求前统一按登录过期处理；路由已限定的角色也不在组合式函数里重复判断
 - shared/http 不依赖路由、UI 和鉴权，这些由 `app/http.ts` 通过 `configureHttp` 注入
+- 例外：AI 对话的后端是第二个服务（同源 `/ai-backend`、Bearer、没有信封、SSE），最小迁移时暂由 `features/ai-chat/ai-client.ts` 用 `fetch` 请求，错误仍转成 `ApiError`，AI 的 401 不结束系统会话；重构时统一进 shared/http，其他模块不照搬（见 `docs/modules/ai-chat.md`）
 - `useQuery` 的 key 变化后，`data` 要到下一轮调度才换成新 key 的结果；同步读取或在侦听里要知道结果属于哪个 key 时，用 `select` 给结果标上 key 再比较（写法见 `features/resource-map/queries.ts` 的 `useFeatureDetailQuery`）
 
 ### 地图（ADR 0020～0063，三维见 ADR 0078、0079，总览见 `docs/modules/map-overview.md`，设计见 `docs/modules/map-core.md`、`docs/modules/map-vue.md`、`docs/modules/map-cesium.md`、`docs/modules/shared-map.md`）

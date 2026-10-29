@@ -17,7 +17,7 @@
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `css.preprocessorOptions.scss.loadPaths` | `[src/libs]` | libs 模块的 Sass 入口按模块名引用，见下文 |
 | `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
-| `server.proxy` | `/backend/` → `PROXY_TARGET` | 同源代理，见下文 |
+| `server.proxy` | `/backend/` → `PROXY_TARGET`；`/ai-backend/` → `AI_PROXY_TARGET` | 同源代理，见下文 |
 | `test` | 见下文 | Vitest 的配置（ADR 0010） |
 
 ### 生成类插件（generators）
@@ -197,6 +197,8 @@ proxy: {
 `vite preview` 的 `preview.proxy` 默认沿用 `server.proxy`，所以 `PROXY_TARGET` 写在所有模式共用的 `.env` 里，而不是 `.env.development`，本地预览生产构建时也能连到后端。
 
 已验证：通过开发服务器请求 `/backend/system/upms/user/detail`，后端返回 `{"code":401,"msg":"用户未登录"}`；和接口同名的页面路径 `/resource-management` 仍然返回页面。
+
+AI 对话的后端是另一个服务，用同样的写法加了第二条：`/ai-backend/` → `AI_PROXY_TARGET`，去掉 `/ai-backend` 前缀（变量见 [env.md](env.md)，模块见 [modules/ai-chat.md](../modules/ai-chat.md)）。2026-10-28 验收时把两个目标都指向本机的模拟接口，确认 `/ai-backend/api/sessions` 转到了 AI 的目标；真实的 AI 后端还没有联调。
 
 ### 开发服务器的端口
 
