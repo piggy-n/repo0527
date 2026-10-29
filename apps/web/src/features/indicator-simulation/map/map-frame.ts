@@ -4,8 +4,6 @@ import type {
   FilterSpecification,
   LayerSpecification
 } from '@maplibre/maplibre-gl-style-spec';
-import type { EngineState } from '../engine/engine';
-import type { StepId } from '../engine/steps';
 import {
   ALERT_COLOR,
   DENSITY_COLOR,
@@ -19,8 +17,8 @@ import {
 import type { MapData } from './map-data';
 
 /**
- * 地图在这一刻的演出，全部由步骤的状态和进度算出（ADR 0105 第 5、6 条）：数据只在每轮换一次，
- * 动画只改图层里的阈值和不透明度（paint），不重新切片
+ * 地图怎样显示数据：推演阶段的演出去掉后（原型 v4，地图只在结果展示时显示），结果阶段是全部显示的一帧；
+ * 阈值仍写在图层里，数据只在换一版、换选择时换
  */
 export interface MapFrame {
   /** 人口密度底色：所在市的排序 ≤ 它的区县点亮；null 是不显示 */
@@ -33,43 +31,6 @@ export interface MapFrame {
   readonly ring: number;
   /** 区县描边：评价分级的未达标（闪烁）、结果阶段人工干预的预览（虚线） */
   readonly alert: { readonly kind: 'fail' | 'preview'; readonly opacity: number } | null;
-}
-
-const clamp = (value: number) => Math.min(1, Math.max(0, value));
-const easeOut = (t: number) => 1 - (1 - t) ** 2;
-
-/**
- * 这一刻的演出：先后是人口（按市点亮）→ 设施落点 → 服务圈扩散 → 扫描出数值 → 未达标闪烁。
- * still 是减少动画：每一段开始就是终态，未达标的描边不闪
- */
-export function mapFrame(state: EngineState, progress: (step: StepId) => number, still = false): MapFrame {
-  const status = (step: StepId) => state.steps[step].status;
-  const started = (step: StepId) => status(step) !== 'waiting' && status(step) !== 'stale';
-  const finished = (step: StepId) => status(step) === 'done' || status(step) === 'reused';
-  // 进度条到某一段时完成：t 从 from 到 to 映射成 0～1
-  const span = (step: StepId, from: number, to: number) =>
-    finished(step) || still ? 1 : clamp((progress(step) - from) / (to - from));
-
-  let density: number | null = null;
-  if (started('pop') && !finished('qc')) {
-    density = span('pop', 0, 0.8);
-  }
-  const rain = started('poi') && !started('compute') ? span('poi', 0, 0.75) ** 2 : null;
-  const ring = started('spatial') ? easeOut(span('spatial', 0.1, 0.45)) : 0;
-  let scan: number | null = null;
-  if (started('compute')) {
-    scan = span('compute', 0, 0.85);
-  }
-
-  let alert: MapFrame['alert'] = null;
-  if (status('evaluate') === 'running') {
-    // 0.15～0.75 之间闪四下
-    const t = (progress('evaluate') - 0.15) / 0.6;
-    if (t >= 0 && t <= 1) {
-      alert = { kind: 'fail', opacity: still ? 1 : (1 - Math.cos(t * 8 * Math.PI)) / 2 };
-    }
-  }
-  return { density, scan, rain, ring, alert };
 }
 
 const POLYGONS: FilterSpecification = ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false];

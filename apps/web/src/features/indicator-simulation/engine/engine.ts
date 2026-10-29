@@ -5,12 +5,12 @@ import { simulationIndicator } from '../model/indicators';
 import { changedParams, defaultParams, type ParamKey, type SimulationConditions, type SimulationParams } from '../model/params';
 import { type Clock, PausableClock, systemClock } from './clock';
 import {
+  BASE_DURATIONS,
   downstream,
   PARAM_STEP,
   PLANNING_DURATION,
   RERUN_DELAY,
   restartStep,
-  stepDefinition,
   type StepDefinition,
   type StepId,
   STEPS
@@ -26,6 +26,8 @@ export interface StepState {
   readonly status: StepStatus;
   /** 这一步用过人工干预的参数 */
   readonly human: boolean;
+  /** 上一轮执行过、这一轮要重算（待更新或重算中）；完成后清除 */
+  readonly redo: boolean;
 }
 
 export interface SimulationVersion {
@@ -48,6 +50,10 @@ export interface EngineState {
   /** 页面停用、打开人工干预时暂停，和 status 互不影响 */
   readonly paused: boolean;
   readonly conditions: SimulationConditions | null;
+  /** 上一轮的条件：干预重算时和本轮相同，换条件重算时是换之前的；第一轮为 null */
+  readonly previousConditions: SimulationConditions | null;
+  /** 这一轮各步的时长（毫秒），进度按它算 */
+  readonly durations: Readonly<Record<StepId, number>>;
   /** 这一轮的参数，推演中的干预会改它 */
   readonly params: SimulationParams;
   /** 这一轮的基准：开始时的参数，或结果阶段干预时基于的版本 */
@@ -81,6 +87,8 @@ export interface EngineOptions {
   readonly calculator: EngineCalculator;
   /** 默认用系统时间；测试注入手动推进的时钟 */
   readonly clock?: Clock;
+  /** 按条件和参数给出各步的时长（推理的话越多越长）；不给时用基础时长 */
+  readonly durations?: (conditions: SimulationConditions, params: SimulationParams) => Readonly<Record<StepId, number>>;
 }
 
 interface EngineEvents {
@@ -105,10 +113,12 @@ function initialState(paused: boolean): Omit<EngineState, 'revision'> {
     status: 'idle',
     paused,
     conditions: null,
+    previousConditions: null,
+    durations: BASE_DURATIONS,
     params,
     baseParams: params,
     baseIndex: null,
-    steps: mapSteps(() => ({ status: 'waiting', human: false })),
+    steps: mapSteps(() => ({ status: 'waiting', human: false, redo: false })),
     restart: null,
     adjustment: null,
     versions: [],
@@ -133,6 +143,7 @@ function assertConditions({ years, cityCodes, indicatorIds }: SimulationConditio
 /** 推演引擎：步骤的先后与并行、干预后的失效与复用、版本；时间来自注入的时钟，动效只按状态演出 */
 export class SimulationEngine implements Disposable {
   readonly #calculator: EngineCalculator;
+  readonly #durations: EngineOptions['durations'];
   readonly #clock: PausableClock;
   readonly #emitter = createNanoEvents<EngineEvents>();
   readonly #runs = new LatestController();
@@ -141,8 +152,9 @@ export class SimulationEngine implements Disposable {
   #state: EngineState = idleEngineState();
   #disposed = false;
 
-  constructor({ calculator, clock = systemClock }: EngineOptions) {
+  constructor({ calculator, clock = systemClock, durations }: EngineOptions) {
     this.#calculator = calculator;
+    this.#durations = durations;
     this.#clock = new PausableClock(clock);
   }
 
@@ -165,10 +177,45 @@ export class SimulationEngine implements Disposable {
       ...initialState(this.#state.paused),
       status: 'planning',
       conditions,
+      durations: this.#durationsOf(conditions, params),
       params,
       baseParams: params
     });
     this.#launch(this.#run(conditions, new Set(STEPS.map(({ id }) => id)), PLANNING_DURATION, signal), signal);
+  }
+
+  /**
+   * 推演中或完成后换条件（范围、指标、年度）：开始过的步骤标为待更新，从条件解析重算；
+   * 已有的版本按旧条件算出，一并作废，基准换成这次的参数
+   */
+  restart(conditions: SimulationConditions, params: SimulationParams): void {
+    this.#assertAlive();
+    assertConditions(conditions);
+    const { status, conditions: before, steps, params: from } = this.#state;
+    if (status === 'idle' || !before) {
+      throw new Error('推演没有开始');
+    }
+    const signal = this.#runs.next();
+    this.#started.clear();
+    this.#set({
+      status: 'running',
+      conditions,
+      previousConditions: before,
+      durations: this.#durationsOf(conditions, params),
+      params,
+      baseParams: params,
+      baseIndex: null,
+      versions: [],
+      restart: 'parse',
+      adjustment: { from, changes: changedParams(from, params) },
+      error: null,
+      steps: mapSteps(id =>
+        started(steps[id].status)
+          ? { status: 'stale', human: false, redo: true }
+          : { status: 'waiting', human: false, redo: false }
+      )
+    });
+    this.#launch(this.#run(conditions, new Set(STEPS.map(({ id }) => id)), RERUN_DELAY, signal), signal);
   }
 
   /** 停止推演，回到空闲；暂停不受影响 */
@@ -203,7 +250,7 @@ export class SimulationEngine implements Disposable {
       case 'unchanged':
         return 'unchanged';
       case 'saved':
-        this.#set(marked);
+        this.#set({ ...marked, durations: this.#pendingDurations(next) });
         return 'saved';
       case 'rerun':
         break;
@@ -254,7 +301,7 @@ export class SimulationEngine implements Disposable {
     if (startedAt === undefined || status === 'waiting' || status === 'stale') {
       return 0;
     }
-    return Math.min(1, (this.#clock.now() - startedAt) / stepDefinition(id).duration);
+    return Math.min(1, (this.#clock.now() - startedAt) / this.#state.durations[id]);
   }
 
   [Symbol.dispose](): void {
@@ -264,6 +311,22 @@ export class SimulationEngine implements Disposable {
     this.#disposed = true;
     this.#runs[Symbol.dispose]();
     this.#emitter.events = {};
+  }
+
+  #durationsOf(conditions: SimulationConditions, params: SimulationParams): Readonly<Record<StepId, number>> {
+    return this.#durations?.(conditions, params) ?? BASE_DURATIONS;
+  }
+
+  // 保存到还没执行的步骤：进行中的步骤保持原来的时长，进度不跳
+  #pendingDurations(params: SimulationParams): Readonly<Record<StepId, number>> {
+    const { conditions, durations, steps } = this.#state;
+    if (!conditions) {
+      return durations;
+    }
+    const next = this.#durationsOf(conditions, params);
+    return Object.fromEntries(
+      STEPS.map(({ id }) => [id, steps[id].status === 'running' ? durations[id] : next[id]])
+    ) as Record<StepId, number>;
   }
 
   // 改动的参数项所属的步骤标为人工
@@ -295,14 +358,16 @@ export class SimulationEngine implements Disposable {
       ...base,
       ...patch,
       status: 'running',
+      previousConditions: conditions,
+      durations: this.#durationsOf(conditions, patch.params),
       restart,
       adjustment: { from, changes: changedParams(from, patch.params) },
       steps: mapSteps(id => {
         const step = patch.steps[id];
         if (!affected.has(id)) {
-          return { ...step, status: 'reused' };
+          return { ...step, status: 'reused', redo: false };
         }
-        return { ...step, status: started(step.status) ? 'stale' : 'waiting' };
+        return started(step.status) ? { ...step, status: 'stale', redo: true } : { ...step, status: 'waiting', redo: false };
       })
     });
     this.#launch(this.#run(conditions, affected, RERUN_DELAY, signal), signal);
@@ -343,7 +408,7 @@ export class SimulationEngine implements Disposable {
   async #execute(step: StepDefinition, signal: AbortSignal): Promise<void> {
     this.#started.set(step.id, this.#clock.now());
     this.#setStep(step.id, 'running');
-    await this.#sleep(step.duration, signal);
+    await this.#sleep(this.#state.durations[step.id], signal);
     this.#started.delete(step.id);
     this.#setStep(step.id, 'done');
   }
@@ -367,7 +432,10 @@ export class SimulationEngine implements Disposable {
   }
 
   #setStep(id: StepId, status: StepStatus): void {
-    this.#set({ steps: { ...this.#state.steps, [id]: { ...this.#state.steps[id], status } } });
+    const step = this.#state.steps[id];
+    // 重算完成，不再是"要重算"
+    const redo = status === 'done' ? false : step.redo;
+    this.#set({ steps: { ...this.#state.steps, [id]: { ...step, status, redo } } });
   }
 
   #syncPaused(): void {

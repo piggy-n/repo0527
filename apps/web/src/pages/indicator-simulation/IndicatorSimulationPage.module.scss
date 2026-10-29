@@ -1,7 +1,15 @@
-// 地图铺满内容区，两个阶段叠在上面（page-layout.md"画布型"）；内容区不是弹性容器，用 height: 100% 占满（推演阶段全是绝对定位，没有内容撑开）
+// 上面是阶段，下面是横跨全宽的 AI 对话栏；内容区不是弹性容器，用 height: 100% 占满（推演阶段全是绝对定位，没有内容撑开）
 .root {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   height: 100%;
+}
+
+// 地图铺满阶段区，两个阶段叠在上面（page-layout.md"画布型"）
+.stages {
+  position: relative;
+  flex: 1;
+  min-height: 0;
 }
 
 .map {

@@ -9,6 +9,7 @@ import { usePromptComposer } from '../composables/usePromptComposer';
 import type { SimulationModel } from '../composables/useSimulationModel';
 import { type Calculator, createCalculator } from '../model/calculator';
 import { loadTestAtlas } from '../model/test-atlas';
+import { AiDock } from './AiDock';
 import { ComposeStage } from './ComposeStage';
 
 let calculator: Calculator;
@@ -17,7 +18,7 @@ beforeAll(async () => {
 });
 const ready = (): SimulationModel => ({ status: 'ready', calculator });
 
-// 页面一样：编排完成后开始推演
+// 和页面一样：底部是对话栏，编排完成后开始推演
 function mountStage(initial: Composition = sampleComposition(), model: SimulationModel = ready()) {
   let owner: CompositionOwner | undefined;
   const Host = defineComponent({
@@ -27,7 +28,12 @@ function mountStage(initial: Composition = sampleComposition(), model: Simulatio
       const composition = useComposition(initial);
       owner = composition;
       const composer = usePromptComposer(composition, { onComposed: () => emit('start') });
-      return () => <ComposeStage composition={composition} composer={composer} model={props.model} onStart={() => emit('start')} />;
+      return () => (
+        <div>
+          <ComposeStage composition={composition} composer={composer} model={props.model} onStart={() => emit('start')} />
+          <AiDock composer={composer} />
+        </div>
+      );
     }
   });
   const wrapper = mount(Host, { props: { model }, attachTo: document.body });

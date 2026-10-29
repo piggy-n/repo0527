@@ -146,7 +146,7 @@ describe('推演中的人工干预', () => {
 
     expect(engine.apply(withPatch({ rule: 'old' }))).toBe('saved');
     expect(engine.state.params.rule).toBe('old');
-    expect(engine.state.steps.spatial).toEqual({ status: 'waiting', human: true });
+    expect(engine.state.steps.spatial).toEqual({ status: 'waiting', human: true, redo: false });
     expect(engine.state.steps.parse.status).toBe('running');
     expect(base.status).toBe('idle');
 
@@ -385,5 +385,91 @@ describe('暂停、停止、释放', () => {
     expect(listener).not.toHaveBeenCalled();
     expect(() => engine.start(conditions, defaultParams())).toThrow('已释放');
     expect(() => engine.on('change', listener)).toThrow('已释放');
+  });
+});
+
+// 条件解析 4000，其余按基础时长；相交即算时空间分析变成 9000
+const durationsOf = (_: SimulationConditions, params: SimulationParams) => {
+  const base = Object.fromEntries(STEPS.map(step => [step.id, step.duration])) as Record<StepId, number>;
+  return { ...base, parse: 4000, spatial: params.recognition === 'intersect' ? 9000 : base.spatial };
+};
+
+describe('按内容给的时长', () => {
+  it('各步按给出的时长推进，进度按它算；保存参数时进行中的一步不改时长', async () => {
+    const calculator = createCalculator(await loadTestAtlas());
+    const clock = new ManualClock();
+    using engine = new SimulationEngine({ calculator, clock, durations: durationsOf });
+    engine.start(conditions, defaultParams());
+    expect(engine.state.durations.parse).toBe(4000);
+    await clock.advance(PLANNING_DURATION + 2000);
+    expect(engine.progress('parse')).toBeCloseTo(0.5, 6);
+
+    expect(engine.apply(withPatch({ recognition: 'intersect' }))).toBe('saved');
+    expect([engine.state.durations.parse, engine.state.durations.spatial]).toEqual([4000, 9000]);
+  });
+});
+
+describe('重算的标记', () => {
+  it('干预重算时开始过的步骤标为要重算，重算完成后清除；没开始过的不标', async () => {
+    using ctx = await setup();
+    const { engine, advanceTo, clock } = ctx;
+    engine.start(conditions, defaultParams());
+    await advanceTo(SPATIAL_AT + 100);
+    engine.apply(withPatch({ popChange: 10 }));
+
+    expect([engine.state.steps.pop, engine.state.steps.qc, engine.state.steps.compute]).toMatchObject([
+      { status: 'stale', redo: true },
+      { status: 'stale', redo: true },
+      { status: 'waiting', redo: false }
+    ]);
+    expect(engine.state.steps.parse).toMatchObject({ status: 'reused', redo: false });
+    expect(engine.state.previousConditions).toBe(conditions);
+    await clock.advance(RERUN_DELAY + 100);
+    expect(engine.state.steps.pop).toMatchObject({ status: 'running', redo: true });
+    await clock.advance(FROM_SPATIAL + SPATIAL_AT);
+    expect(engine.state.status).toBe('done');
+    expect(STEPS.some(({ id }) => engine.state.steps[id].redo)).toBe(false);
+  });
+});
+
+describe('换条件重算', () => {
+  const moreCities: SimulationConditions = { ...conditions, cityCodes: ['320100', '320500'], indicatorIds: ['A-31'] };
+
+  it('开始过的步骤标为待更新，从条件解析重算；记下换之前的条件，版本作废', async () => {
+    using ctx = await setup();
+    const { engine, clock, advanceTo } = ctx;
+    await runToDone(ctx);
+    expect(engine.state.versions).toHaveLength(1);
+
+    const params = withPatch({ rule: 'old' });
+    engine.restart(moreCities, params);
+    expect(engine.state).toMatchObject({
+      status: 'running',
+      conditions: moreCities,
+      previousConditions: conditions,
+      params,
+      baseParams: params,
+      versions: [],
+      restart: 'parse',
+      adjustment: { from: defaultParams(), changes: ['rule'] }
+    });
+    expect(new Set(Object.values(statuses(engine)))).toEqual(new Set(['stale']));
+
+    await clock.advance(RERUN_DELAY);
+    expect(engine.state.steps.parse).toMatchObject({ status: 'running', redo: true });
+    await advanceTo(clock.now() + DONE_AT);
+    expect(engine.state.status).toBe('done');
+    expect(engine.state.versions.map(version => version.label)).toEqual(['v1']);
+  });
+
+  it('推演中换条件：没开始过的步骤仍是等待；还没开始推演时不能换', async () => {
+    using ctx = await setup();
+    const { engine, advanceTo } = ctx;
+    expect(() => engine.restart(moreCities, defaultParams())).toThrow('推演没有开始');
+    engine.start(conditions, defaultParams());
+    await advanceTo(QC_AT + 100);
+    engine.restart(moreCities, defaultParams());
+    expect(statusesOf(['parse', 'qc', 'spatial'], engine)).toEqual(['stale', 'stale', 'waiting']);
+    expect(() => engine.restart({ ...moreCities, indicatorIds: [] }, defaultParams())).toThrow('推演条件不完整');
   });
 });

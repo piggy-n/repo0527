@@ -1,14 +1,20 @@
 import { MapCanvas, provideMap } from '@yzt/map-vue';
-import { defineComponent, Transition } from 'vue';
+import { computed, defineComponent, ref, Transition, watch } from 'vue';
+import { AiDock } from '@/features/indicator-simulation/components/AiDock';
 import { ComposeStage } from '@/features/indicator-simulation/components/ComposeStage';
+import { ResultStage } from '@/features/indicator-simulation/components/ResultStage';
 import { RunStage } from '@/features/indicator-simulation/components/RunStage';
 import { useComposition } from '@/features/indicator-simulation/composables/useComposition';
 import { usePauseWhileInactive } from '@/features/indicator-simulation/composables/usePauseWhileInactive';
 import { usePromptComposer } from '@/features/indicator-simulation/composables/usePromptComposer';
+import { useReasoningLog } from '@/features/indicator-simulation/composables/useReasoningLog';
+import { useRunConversation } from '@/features/indicator-simulation/composables/useRunConversation';
+import { useRunFlow } from '@/features/indicator-simulation/composables/useRunFlow';
 import { useSimulationMap } from '@/features/indicator-simulation/composables/useSimulationMap';
 import { useSimulationModel } from '@/features/indicator-simulation/composables/useSimulationModel';
 import { useSimulationResult } from '@/features/indicator-simulation/composables/useSimulationResult';
 import { useSimulationRun } from '@/features/indicator-simulation/composables/useSimulationRun';
+import { useUserPause } from '@/features/indicator-simulation/composables/useUserPause';
 import { reducedMotion, STILL_CLASS } from '@/features/indicator-simulation/motion';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
@@ -19,11 +25,10 @@ import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
 import styles from './IndicatorSimulationPage.module.scss';
 
 /**
- * 指标智能推演（ADR 0105）：条件编排 → AI 推演 → 结果展示，全部是确定性的模拟数据，不请求后端。
- * 打开时编排是空的，由 AI 推演指令或手动点选编排；AI 按指令逐个节点编排完成后自动开始推演，两个阶段之间淡入淡出。
- * 参数取自 Excel 的计算方法，偏离标准口径的是模拟情景。
- * 地图一直在下层，条件编排时隐藏；推演阶段的面板浮在地图上。地图不读写偏好，显示省界和市界。
- * 完成后右侧是推演结果，可以换版本、对比、换年度和着色；切到别的页面时缓存，推演暂停（docs/modules/indicator-simulation.md）
+ * 指标智能推演（ADR 0105、0106）：条件编排 → AI 推演 → 结果展示，全部是确定性的模拟数据，不请求后端。
+ * 打开时编排是空的，由底部对话栏的推演指令或手动点选编排；AI 按指令逐个节点编排完成后自动开始推演。
+ * AI 推演阶段左侧是 AI 推理，右侧是推演流程图；完成后点"查看结果"进入结果展示，地图只在结果展示时显示，不读写偏好。
+ * 阶段之间淡入淡出；切到别的页面时缓存，推演暂停（docs/modules/indicator-simulation.md）
  */
 export const IndicatorSimulationPage = defineComponent({
   name: 'IndicatorSimulationPage',
@@ -32,6 +37,9 @@ export const IndicatorSimulationPage = defineComponent({
     const { model, retry } = useSimulationModel();
     const run = useSimulationRun();
     const result = useSimulationResult(run);
+    const flow = useRunFlow(run);
+    const log = useReasoningLog(run);
+    const userPause = useUserPause(run);
     usePauseWhileInactive(run, usePageActive());
 
     // 区县的填充在底图之上、注记之下；遮罩盖住范围外，边界在上面，描边最上
@@ -61,25 +69,82 @@ export const IndicatorSimulationPage = defineComponent({
       'simulation-alerts': simulationMap.deriveAlerts
     });
 
-    const start = () => {
+    // 推演完成后看结果；重新推演时回到流程图
+    const showingResult = ref(false);
+    watch(
+      () => run.state.value.status,
+      status => {
+        if (status !== 'done') {
+          showingResult.value = false;
+        }
+      }
+    );
+    const view = computed(() => {
+      const { status } = run.state.value;
+      if (status === 'idle') {
+        return 'compose';
+      }
+      return status === 'done' && showingResult.value ? 'result' : 'run';
+    });
+
+    // 开始推演：按指令编排完成的，时间线先写上这句指令
+    const startWith = (instruction: string | null) => {
       const current = model.value;
       if (current.status === 'ready') {
+        log.begin(instruction);
         run.start(composition.state.value, current.calculator);
       }
     };
     // 指令的文字在推演后回到编排时还在；AI 编排完成后直接开始推演（区县数据还没好时停在编排图，由用户点开始）
-    const composer = usePromptComposer(composition, { still: reducedMotion, onComposed: start });
+    const composer = usePromptComposer(composition, { still: reducedMotion, onComposed: () => startWith(composer.text.value) });
+    // 推演和结果阶段的对话：暂停、继续、停止，改参数或条件
+    const conversation = useRunConversation(run, composition, userPause, log);
 
-    return () => {
-      const composing = run.state.value.status === 'idle';
+    const renderStage = () => {
+      switch (view.value) {
+        case 'compose':
+          return (
+            <ComposeStage
+              key="compose"
+              composition={composition}
+              composer={composer}
+              model={model.value}
+              onStart={() => startWith(null)}
+              onRetry={retry}
+            />
+          );
+        case 'run':
+          return (
+            <RunStage
+              key="run"
+              run={run}
+              model={model.value}
+              flow={flow}
+              log={log}
+              userPause={userPause}
+              onShowResult={() => (showingResult.value = true)}
+            />
+          );
+        case 'result':
+          break;
+      }
       return (
-        <div class={[styles.root, reducedMotion() && STILL_CLASS]}>
-          {/* 用户自己拖动、缩放地图后，镜头不再跟随推演 */}
-          <div
-            class={[styles.map, composing && styles.hidden]}
-            onPointerdown={simulationMap.stopFollowing}
-            onWheel={simulationMap.stopFollowing}
-          >
+        <ResultStage
+          key="result"
+          run={run}
+          model={model.value}
+          simulationMap={simulationMap}
+          result={result}
+          onShowFlow={() => (showingResult.value = false)}
+        />
+      );
+    };
+
+    return () => (
+      <div class={[styles.root, reducedMotion() && STILL_CLASS]}>
+        <div class={styles.stages}>
+          {/* 地图只在结果展示时显示；隐藏时保留尺寸，回到结果时不用重新排版 */}
+          <div class={[styles.map, view.value !== 'result' && styles.hidden]}>
             <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
             <MapStatusNotice />
           </div>
@@ -89,21 +154,11 @@ export const IndicatorSimulationPage = defineComponent({
             leaveActiveClass={styles.stageLeaveActive}
             leaveToClass={styles.stageLeaveTo}
           >
-            {composing ? (
-              <ComposeStage
-                key="compose"
-                composition={composition}
-                composer={composer}
-                model={model.value}
-                onStart={start}
-                onRetry={retry}
-              />
-            ) : (
-              <RunStage key="run" run={run} model={model.value} simulationMap={simulationMap} result={result} />
-            )}
+            {renderStage()}
           </Transition>
         </div>
-      );
-    };
+        <AiDock composer={composer} conversation={view.value === 'compose' ? null : conversation} />
+      </div>
+    );
   }
 });

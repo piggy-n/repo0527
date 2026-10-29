@@ -4,13 +4,12 @@ import type { CompositionOwner } from '../composables/useComposition';
 import { useConditionDrag } from '../composables/useConditionDrag';
 import type { PromptComposer } from '../composables/usePromptComposer';
 import type { SimulationModel } from '../composables/useSimulationModel';
-import { AiPromptPanel } from './AiPromptPanel';
 import { ComposeBoard } from './ComposeBoard';
 import { ConditionLibrary } from './ConditionLibrary';
 import styles from './ComposeStage.module.scss';
 
 /**
- * 条件编排阶段：左侧上方 AI 推演指令、下方推演条件，右侧编排图；条件到编排图的拖放在这里接上。
+ * 条件编排阶段：左侧推演条件，右侧编排图；条件到编排图的拖放在这里接上。AI 推演指令在页面底部的对话栏，
  * AI 按指令编排期间，推演条件和编排图不接收操作
  */
 export const ComposeStage = defineComponent({
@@ -32,12 +31,7 @@ export const ComposeStage = defineComponent({
       return (
         <MxSplitLayout asideLabel="推演条件">
           {{
-            aside: () => (
-              <div class={styles.aside}>
-                <AiPromptPanel composer={props.composer} />
-                <ConditionLibrary class={locked} composition={props.composition} drag={drag} />
-              </div>
-            ),
+            aside: () => <ConditionLibrary class={locked} composition={props.composition} drag={drag} />,
             default: () => (
               <ComposeBoard
                 class={locked}

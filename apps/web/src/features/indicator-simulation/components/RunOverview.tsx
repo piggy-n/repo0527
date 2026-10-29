@@ -33,7 +33,6 @@ export const RunConditions = defineComponent({
               </span>
             ))}
           </div>
-          <div class={[styles.label, styles.steps]}>推演步骤 · 点击回看</div>
         </div>
       );
     };

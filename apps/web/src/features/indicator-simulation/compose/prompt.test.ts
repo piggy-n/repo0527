@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { defaultParams } from '../model/params';
 import { emptyComposition } from './composition';
-import { describeComposition, parsePrompt, PROMPT_EXAMPLES } from './prompt';
+import { describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from './prompt';
 
 const ALL = JIANGSU_CITIES.map(city => city.code);
 const parsed = (text: string) => {
@@ -82,5 +82,33 @@ describe('describeComposition', () => {
     const composition = parsed('推演 2025 年南京市、苏州市、无锡市社区卫生服务设施覆盖率和人均公园绿地面积');
     expect(describeComposition(composition)).toBe('推演 2025 年南京市等 3 个市社区卫生服务设施步行15分钟覆盖率等 2 项指标');
     expect(describeComposition({ ...composition, conditions: { ...composition.conditions, cityCodes: ALL } })).toContain('年全省');
+  });
+});
+
+// 可重复的随机数（线性同余），每个种子一串
+const seeded = (seed: number) => {
+  let state = seed;
+  return () => {
+    state = (state * 1_664_525 + 1_013_904_223) % 4_294_967_296;
+    return state / 4_294_967_296;
+  };
+};
+
+describe('randomPrompt', () => {
+  it('一定有社区卫生覆盖率，排在第一；城市、年度、指标、参数的组合各不相同', () => {
+    const texts = Array.from({ length: 40 }, (_, index) => randomPrompt(seeded(index + 1)));
+    const results = texts.map(text => parsed(text));
+    expect(results.every(item => item.conditions.indicatorIds[0] === 'A-31')).toBe(true);
+    expect(new Set(texts).size).toBeGreaterThan(30);
+    expect(new Set(results.map(item => item.conditions.cityCodes.join())).size).toBeGreaterThan(10);
+    expect(new Set(results.map(item => item.conditions.years.join())).size).toBeGreaterThan(5);
+    expect(new Set(results.map(item => item.conditions.indicatorIds.length))).toEqual(new Set([1, 2, 3]));
+    const scenarios = new Set(results.map(({ params }) => `${params.rule}/${params.recognition}/${params.popChange}`));
+    expect(scenarios.size).toBeGreaterThan(3);
+  });
+
+  it('和要避开的话重复时重新组合', () => {
+    const once = randomPrompt(seeded(7));
+    expect(randomPrompt(seeded(7), [once])).not.toBe(once);
   });
 });

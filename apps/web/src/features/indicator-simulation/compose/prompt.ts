@@ -27,8 +27,8 @@ function indicatorKeywords(): { readonly id: string; readonly word: string }[] {
   }).toSorted((a, b) => b.word.length - a.word.length);
 }
 
-// 长的关键词先匹配，已经匹配的位置不再给短的用（"人均公共停车场"不会再算成"公共停车场"）；按在句子里出现的先后排
-function findIndicators(text: string): string[] {
+/** 句子里提到的指标：长的关键词先匹配，已经匹配的位置不再给短的用（"人均公共停车场"不会再算成"公共停车场"）；按出现的先后排 */
+export function findIndicators(text: string): string[] {
   const taken: (readonly [number, number])[] = [];
   const found: { readonly id: string; readonly at: number }[] = [];
   for (const { id, word } of indicatorKeywords()) {
@@ -65,6 +65,13 @@ function findParams(text: string, indicatorIds: readonly string[]): SimulationPa
   };
 }
 
+/** 句子里提到的城市（按区划目录排序）；写了"全省""江苏"时是全部 13 个市 */
+export function findCities(text: string): string[] {
+  return /全省|江苏/.test(text)
+    ? [...ALL_CITIES]
+    : JIANGSU_CITIES.filter(city => text.includes(shortRegionName(city.name))).map(city => city.code);
+}
+
 /** 解析一句推演指令：年份（没写按 2025）、城市或全省（没写按全省）、指标、参数；认不出指标时为 null */
 export function parsePrompt(input: string): Composition | null {
   const text = input.replace(/\s+/g, '');
@@ -75,9 +82,7 @@ export function parsePrompt(input: string): Composition | null {
   const years = [...new Set([...text.matchAll(/20\d{2}/g)].map(match => Number(match[0])))]
     .filter(year => SIMULATION_YEARS.includes(year))
     .toSorted((a, b) => b - a);
-  const cityCodes = /全省|江苏/.test(text)
-    ? ALL_CITIES
-    : JIANGSU_CITIES.filter(city => text.includes(shortRegionName(city.name))).map(city => city.code);
+  const cityCodes = findCities(text);
   return {
     conditions: {
       years: years.length > 0 ? years : [DEFAULT_YEAR],
@@ -114,4 +119,51 @@ export function describeComposition({ conditions, params }: Composition): string
   ];
   const yearsText = years.toSorted((a, b) => a - b).join('、');
   return `${ways.length > 0 ? `按${ways.join('、')}，` : ''}推演 ${yearsText} 年${scope}${subject}`;
+}
+
+/** 随机指令里一定有的指标：社区卫生服务设施覆盖率，计算规程、覆盖认定都能演示 */
+export const ANCHOR_INDICATOR = 'A-31';
+
+// 从列表里不重复地取 count 个，保持原来的先后
+function sampleOf<T>(items: readonly T[], count: number, random: () => number): T[] {
+  const pool = items.map((item, index) => ({ item, index }));
+  const picked: { item: T; index: number }[] = [];
+  while (picked.length < count && pool.length > 0) {
+    const [one] = pool.splice(Math.min(pool.length - 1, Math.floor(random() * pool.length)), 1);
+    if (one) {
+      picked.push(one);
+    }
+  }
+  return picked.toSorted((a, b) => a.index - b.index).map(one => one.item);
+}
+
+const joinNames = (names: readonly string[]): string =>
+  names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join('、')}和${names.at(-1) ?? ''}`;
+
+/**
+ * 刷新时换上的一句指令：一定有社区卫生服务设施覆盖率，再随机配一两个年度、一到三个市或全省、另外 0～2 项指标，
+ * 以及所选指标用得上的一项参数（也可能是标准口径）；和 avoid 里的话重复时重新组合。解析这句话得到同样的编排
+ */
+export function randomPrompt(random: () => number, avoid: readonly string[] = []): string {
+  let text = '';
+  for (let attempt = 0; attempt < 10 && (text === '' || avoid.includes(text)); attempt++) {
+    const years = sampleOf(SIMULATION_YEARS, random() < 0.7 ? 1 : 2, random).toSorted((a, b) => a - b);
+    const cities = random() < 0.15 ? null : sampleOf(JIANGSU_CITIES, 1 + Math.floor(random() * 3), random);
+    const others = SIMULATION_INDICATORS.filter(item => item.id !== ANCHOR_INDICATOR);
+    const indicators = [simulationIndicator(ANCHOR_INDICATOR), ...sampleOf(others, Math.floor(random() * 3), random)];
+    const ways = ['旧规程', '相交', ...(indicators.some(item => item.model === 'perCapita') ? ['人口'] : []), '标准'];
+    const way = ways[Math.min(ways.length - 1, Math.floor(random() * ways.length))];
+    const percent = (1 + Math.floor(random() * 4)) * POP_CHANGE_RANGE.step;
+    const phrase =
+      way === '旧规程'
+        ? '按卫生服务站步行 5 分钟的旧规程，'
+        : way === '相交'
+          ? '按“相交即算”的覆盖认定，'
+          : way === '人口'
+            ? `按常住人口${random() < 0.5 ? '增加' : '减少'} ${percent}%，`
+            : '';
+    const scope = cities === null ? '全省' : cities.map(city => city.name).join('、');
+    text = `${phrase}推演 ${years.join('、')} 年${scope}${joinNames(indicators.map(item => item.name))}`;
+  }
+  return text;
 }

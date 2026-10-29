@@ -1,26 +1,10 @@
-// 叠在地图上的扫描带和标注：版式取自确认的第二版原型
+// 叠在结果地图上的城市标注：版式取自确认的第二版原型
 .root {
   position: absolute;
   inset: 0;
   z-index: 2;
   overflow: hidden;
   pointer-events: none;
-}
-
-// 扫描带的右边缘在当前扫描到的经度，向左渐隐
-.scan {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -160px;
-  width: 160px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--color-ai-glow) 70%,
-    var(--color-primary-alpha-32) 98%,
-    var(--color-bg-container)
-  );
 }
 
 .label {
@@ -59,25 +43,6 @@
 
 .fail {
   background: var(--color-danger);
-}
-
-.follow {
-  position: absolute;
-  bottom: var(--space-lg);
-  left: 50%;
-  height: 32px;
-  padding: 0 var(--space-md);
-  border: 0;
-  border-radius: 999px;
-  background: var(--color-bg-mask);
-  box-shadow: var(--shadow-md);
-  color: var(--color-primary);
-  font: inherit;
-  font-size: var(--font-size-xs);
-  white-space: nowrap;
-  transform: translateX(-50%);
-  cursor: pointer;
-  pointer-events: auto;
 }
 
 @keyframes label-in {

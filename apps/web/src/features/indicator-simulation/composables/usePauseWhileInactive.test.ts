@@ -9,7 +9,7 @@ import { loadTestAtlas } from '../model/test-atlas';
 import { usePauseWhileInactive } from './usePauseWhileInactive';
 import { useSimulationRun } from './useSimulationRun';
 
-// 默认时长：规划 1300 后开始条件解析，条件解析 1800
+// 规划 1300 后开始条件解析；条件解析的时长按推理的话多少给，不短于 1800
 const PLANNING = 1300;
 
 async function setup() {
@@ -45,7 +45,7 @@ describe('usePauseWhileInactive', () => {
     active.value = true;
     expect(run.state.value.paused).toBe(false);
     await clock.advance(450);
-    expect(run.progress('parse')).toBeCloseTo(before + 0.25, 6);
+    expect(run.progress('parse')).toBeCloseTo(before + 450 / run.state.value.durations.parse, 6);
   });
 
   it('和人工干预的暂停互不影响：停用又激活后，干预还没关时仍然暂停', async () => {

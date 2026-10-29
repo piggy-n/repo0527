@@ -23,7 +23,9 @@ describe('useSimulationRun', () => {
     expect(run.calculator.value).toBe(calculator);
     await clock.advance(1300 + 900);
     expect(run.state.value.status).toBe('running');
-    expect(run.progress('parse')).toBeCloseTo(0.5, 6);
+    // 时长按推理的话多少给，进度按它算
+    expect(run.state.value.durations.parse).toBeGreaterThan(1800);
+    expect(run.progress('parse')).toBeCloseTo(900 / run.state.value.durations.parse, 6);
 
     scope.stop();
     expect(clock.pending).toBe(0);

@@ -1,194 +1,137 @@
-// AI 推演阶段的排布：浮在画布上的左侧步骤、右上当前步骤、顶部阶段条（page-layout.md"画布型"）
+// AI 推演阶段（原型 v4）：和条件编排一样的分栏布局，左侧 AI 推理，右侧推演流程图
 .root {
-  // 阶段条和人工干预在两侧面板之间居中
-  --left-edge: calc(var(--space-lg) + 320px + var(--space-md));
-  --right-edge: calc(var(--space-lg) + 320px + var(--space-md));
-  // 阶段条的高度由组件量出，换行时变高
-  --bar-height: 40px;
-
-  // 叠在地图上：空白处的鼠标交给地图，面板自己接收
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
+  position: relative;
+  height: 100%;
 }
 
-.stepsCollapsed {
-  --left-edge: calc(var(--space-lg) + 40px + var(--space-md));
+.panel {
+  flex: 1;
+  min-height: 0;
 }
 
-.detailCollapsed {
-  --right-edge: calc(var(--space-lg) + 200px + var(--space-md));
-}
-
-.left,
-.right,
-.review,
-.intervene {
-  position: absolute;
-  bottom: var(--space-lg);
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  pointer-events: none;
-
-  > * {
-    pointer-events: auto;
-  }
-}
-
-.left {
-  top: var(--space-lg);
-  left: var(--space-lg);
-  width: 320px;
-}
-
-.right {
-  top: var(--space-lg);
-  right: var(--space-lg);
-  width: 320px;
-}
-
-// 结果阶段回看某一步：阶段条下面、推演结果左边
-.review {
-  top: calc(var(--space-lg) + var(--bar-height) + var(--space-md));
-  right: calc(var(--space-lg) + 320px + var(--space-md));
-  z-index: 6;
-  width: 320px;
-}
-
-.intervene {
-  top: calc(var(--space-lg) + var(--bar-height) + var(--space-md));
-  right: var(--right-edge);
-  left: var(--left-edge);
-  z-index: 8;
+.state {
+  display: inline-flex;
   align-items: center;
-
-  > * {
-    width: min(400px, 100%);
-  }
-}
-
-.bar {
-  position: absolute;
-  top: var(--space-lg);
-  right: var(--right-edge);
-  left: var(--left-edge);
-  z-index: 7;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-sm);
-  pointer-events: none;
-
-  > * {
-    pointer-events: auto;
-  }
-}
-
-.stepper {
-  display: flex;
-  align-items: center;
-  height: 40px;
-  padding: 0 var(--space-md);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-mask);
-  box-shadow: var(--shadow-sm);
-}
-
-.barButton {
-  height: 40px;
-  box-shadow: var(--shadow-sm);
-}
-
-// 间距由阶段条的 gap 负责，去掉 Element 相邻按钮的左外边距；1200 宽时两侧面板之间刚好放下一行
-.bar > .barButton + .barButton {
-  margin-left: 0;
-}
-
-// 收起后的左侧窄条
-.strip {
-  position: absolute;
-  top: var(--space-lg);
-  left: var(--space-lg);
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-sm);
-  width: 40px;
-  padding: var(--space-md) 0;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-mask);
-  box-shadow: var(--shadow-md);
-  color: var(--color-text-strong);
-  font: inherit;
-  cursor: pointer;
-  pointer-events: auto;
-
-  &:hover {
-    color: var(--color-primary);
-  }
-}
-
-.stripLabel {
-  font-weight: var(--font-weight-semibold);
-  writing-mode: vertical-rl;
-}
-
-.stripCount {
-  color: var(--color-primary);
+  gap: 6px;
+  margin-left: auto;
+  color: var(--color-text-regular);
   font-size: var(--font-size-xs);
-}
-
-// 收起后的右上胶囊；需要确认时描一圈琥珀色
-.pill {
-  position: absolute;
-  top: var(--space-lg);
-  right: var(--space-lg);
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  max-width: 200px;
-  height: 40px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-mask);
-  box-shadow: var(--shadow-md);
-  color: var(--color-text-strong);
-  font: inherit;
   white-space: nowrap;
-  cursor: pointer;
-  pointer-events: auto;
 }
 
-.pillText {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pulse {
-  flex: none;
+.stateDot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--color-ai-cyan);
-  box-shadow: 0 0 6px 2px var(--color-ai-glow);
-  animation: blink 1.2s ease-in-out infinite;
 }
 
-@keyframes blink {
+.runningDot {
+  background: var(--color-primary);
+  animation: beat 1.2s ease-in-out infinite;
+}
+
+.pausedDot {
+  background: var(--color-warning);
+}
+
+.doneDot {
+  background: var(--color-primary);
+}
+
+@keyframes beat {
   50% {
-    opacity: 0.25;
+    box-shadow: 0 0 0 4px var(--color-primary-alpha-10);
   }
 }
 
-// 减少动画（由 motion.ts 决定，现在总是播放）
+// 间距由 gap 负责，去掉 Element 相邻按钮的左外边距
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+// 推演完成：流程图底部居中的卡片
+.doneCard {
+  position: absolute;
+  bottom: var(--space-lg);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  // 两侧各让出右下角视图切换的宽度，窄时不压住它
+  max-width: calc(100% - 256px);
+  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-container);
+  box-shadow: var(--shadow-md);
+  transform: translateX(-50%);
+  cursor: default;
+  animation: rise 0.35s ease-out both;
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+.orb {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 200deg,
+    var(--color-primary),
+    var(--color-ai-violet),
+    var(--color-ai-cyan),
+    var(--color-primary)
+  );
+  box-shadow: 0 0 0 3px var(--color-ai-glow);
+}
+
+.doneText {
+  min-width: 0;
+
+  b {
+    color: var(--color-text-title);
+  }
+
+  p {
+    margin: 0;
+    overflow: hidden;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-compact);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+// 人工干预：流程图右上角，标题栏下面，不挡住正在生长的树
+.intervene {
+  position: absolute;
+  top: calc(var(--space-lg) + 48px + var(--space-md));
+  right: calc(var(--space-lg) + var(--space-md));
+  z-index: 8;
+  width: min(400px, calc(100% - 2 * var(--space-lg)));
+  max-height: calc(100% - 2 * var(--space-lg) - 48px - var(--space-md));
+  display: flex;
+  flex-direction: column;
+}
+
 :global(.simulation-still) {
-  .pulse {
+  .runningDot,
+  .doneCard {
     animation: none;
   }
 }

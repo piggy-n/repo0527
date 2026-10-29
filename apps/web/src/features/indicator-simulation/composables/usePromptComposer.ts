@@ -2,7 +2,7 @@ import { LatestController } from '@yzt/utils';
 import { computed, type ComputedRef, onScopeDispose, type Ref, ref, shallowRef, watch } from 'vue';
 import { buildSteps } from '../compose/build';
 import { type Composition, emptyComposition } from '../compose/composition';
-import { describeComposition, parsePrompt, PROMPT_EXAMPLES } from '../compose/prompt';
+import { describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from '../compose/prompt';
 import type { CompositionOwner } from './useComposition';
 
 /** 发送的结果：输入框是空的、认不出指标、开始编排 */
@@ -30,7 +30,7 @@ export interface PromptComposer {
   readonly sending: ComputedRef<boolean>;
   /** 用户输入 */
   setText(text: string): void;
-  /** 随机换成另外两条示例中的一条，只换文字，发送后才编排 */
+  /** 换成随机组合的一句指令（一定有社区卫生服务设施覆盖率，不和当前的重复），只换文字，发送后才编排 */
   refresh(): void;
   send(): SendOutcome;
 }
@@ -82,7 +82,8 @@ export function usePromptComposer(composition: CompositionOwner, options: Prompt
   const text = ref(PROMPT_EXAMPLES[0] ?? '');
   const typing = ref(false);
   const building = shallowRef<BuildState | null>(null);
-  let example = 0;
+  // 正在逐字打出的那句：打到一半发送时按整句发送
+  let typingTarget = '';
   // 输入框里是不是当前编排的描述
   let synced = false;
   // 这里自己在改编排：侦听里据此区分手动修改
@@ -136,6 +137,7 @@ export function usePromptComposer(composition: CompositionOwner, options: Prompt
   );
 
   const typeOut = async (target: string) => {
+    typingTarget = target;
     const signal = typeRun.next();
     if (still()) {
       typing.value = false;
@@ -189,16 +191,14 @@ export function usePromptComposer(composition: CompositionOwner, options: Prompt
       text.value = value;
     },
     refresh: () => {
-      const others = PROMPT_EXAMPLES.map((_, index) => index).filter(index => index !== example);
-      example = others[Math.min(others.length - 1, Math.floor(random() * others.length))] ?? 0;
       synced = false;
-      void typeOut(PROMPT_EXAMPLES[example] ?? '');
+      void typeOut(randomPrompt(random, [text.value, typingTarget]));
     },
     send: () => {
       // 示例还没打完就发送：按整句发送
       if (typing.value) {
         stopTyping();
-        text.value = PROMPT_EXAMPLES[example] ?? text.value;
+        text.value = typingTarget;
       }
       if (text.value.trim() === '') {
         return 'empty';

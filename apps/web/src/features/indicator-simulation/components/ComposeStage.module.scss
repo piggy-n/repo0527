@@ -1,12 +1,3 @@
-// 侧栏两块面板上下排：AI 推演指令按内容定高，推演条件占满剩余高度（只有指标列表滚动）
-.aside {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--space-lg);
-  min-height: 0;
-}
-
 // AI 按指令编排期间：推演条件和编排图只看不点，编排完成后恢复
 .locked {
   pointer-events: none;

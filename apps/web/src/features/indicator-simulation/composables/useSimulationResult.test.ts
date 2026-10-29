@@ -11,11 +11,11 @@ import { previewChanges } from '../result/result-view';
 import { useSimulationResult } from './useSimulationResult';
 import { useSimulationRun } from './useSimulationRun';
 
-// 默认时长：开始后 22100 完成，数据核查在 6100 时进行中
-const DONE_AT = 22_100;
+// 各步的时长按推理的话多少给：推进这么久一定推演完；6100 时还在推演中
+const DONE_AT = 120_000;
 const QC_AT = 6100;
 // 干预后重算到完成足够长的时间
-const RERUN_ENOUGH = 30_000;
+const RERUN_ENOUGH = 120_000;
 
 const composition = { ...sampleComposition(), conditions: { ...sampleComposition().conditions, years: [2025, 2026] } };
 // 相交即算：公园绿地覆盖率上升

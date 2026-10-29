@@ -45,6 +45,11 @@ export const STEP_GROUPS: readonly StepGroup[] = [
   { id: 'report', name: '结论生成', steps: ['report'] }
 ];
 
+/** 各步的基础时长（毫秒）：引擎没有按内容给时长时用它 */
+export const BASE_DURATIONS: Readonly<Record<StepId, number>> = Object.fromEntries(
+  STEPS.map(step => [step.id, step.duration])
+) as Record<StepId, number>;
+
 /** 开始推演后先"规划步骤"多久（毫秒） */
 export const PLANNING_DURATION = 1300;
 

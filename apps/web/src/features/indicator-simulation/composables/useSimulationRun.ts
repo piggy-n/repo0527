@@ -10,6 +10,8 @@ import {
   SimulationEngine
 } from '../engine/engine';
 import type { StepId } from '../engine/steps';
+import { flowDurations } from '../flow/frame';
+import { flowPlan } from '../flow/plan';
 import type { Calculator } from '../model/calculator';
 import type { SimulationParams } from '../model/params';
 import { inProgress } from '../run/run-view';
@@ -22,6 +24,8 @@ export interface SimulationRun {
   /** 步骤的进度 0～1；在渲染和计算属性里读取时每帧刷新 */
   readonly progress: (step: StepId) => number;
   readonly start: (composition: Composition, calculator: Calculator) => void;
+  /** 推演中或完成后换条件：从条件解析重算，已有的版本作废 */
+  readonly restart: (composition: Composition) => void;
   readonly stop: () => void;
   readonly planApply: (next: SimulationParams, options?: { readonly baseIndex?: number }) => ApplyPlan;
   readonly apply: (next: SimulationParams, options?: { readonly baseIndex?: number }) => ApplyOutcome;
@@ -42,7 +46,12 @@ export function useSimulationRun(clock?: Clock): SimulationRun {
       return engine;
     }
     engine?.[Symbol.dispose]();
-    const created = new SimulationEngine({ calculator: next, clock });
+    // 各步的时长按推理的话多少给，打字的速度不变
+    const created = new SimulationEngine({
+      calculator: next,
+      clock,
+      durations: (conditions, params) => flowDurations(flowPlan({ calculator: next, conditions, params }))
+    });
     created.on('change', snapshot => {
       state.value = snapshot;
     });
@@ -80,6 +89,7 @@ export function useSimulationRun(clock?: Clock): SimulationRun {
       return engine && tick >= 0 ? engine.progress(step) : 0;
     },
     start: (composition, next) => engineFor(next).start(composition.conditions, composition.params),
+    restart: composition => requireEngine().restart(composition.conditions, composition.params),
     stop: () => requireEngine().stop(),
     planApply: (next, options) => requireEngine().planApply(next, options),
     apply: (next, options) => requireEngine().apply(next, options),

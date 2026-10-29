@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope } from 'vue';
 import { required } from '@/shared/testing/required';
 import { emptyComposition, sampleComposition } from '../compose/composition';
-import { describeComposition, parsePrompt, PROMPT_EXAMPLES } from '../compose/prompt';
+import { describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from '../compose/prompt';
 import { type PromptComposerOptions, usePromptComposer } from './usePromptComposer';
 import { useComposition } from './useComposition';
 
@@ -15,7 +15,7 @@ const LAUNCH = 1000;
 const FIRST_STEPS = 7;
 const FIRST_DONE = THINK + STEP * (FIRST_STEPS - 1) + LAUNCH;
 
-const [first = '', second = '', third = ''] = PROMPT_EXAMPLES;
+const [first = '', second = ''] = PROMPT_EXAMPLES;
 
 function setup(options: PromptComposerOptions = {}) {
   const composed = vi.fn<() => void>();
@@ -134,34 +134,33 @@ describe('usePromptComposer 输入框的文字', () => {
     expect(composer.text.value).toBe(text);
   });
 
-  it('刷新换成另外两条示例中的一条，逐字打出；打到一半发送按整句发送', async () => {
+  it('刷新换成随机组合的一句（一定有社区卫生覆盖率，不和当前的重复），逐字打出；打到一半发送按整句发送', async () => {
     using ctx = setup({ random: () => 0.99 });
     const { composer, composition } = ctx;
+    const target = randomPrompt(() => 0.99, [first, '']);
+    expect(target).not.toBe(first);
 
     composer.refresh();
     expect(composer.typing.value).toBe(true);
-    expect(composer.text.value).toBe(third.slice(0, 1));
+    expect(composer.text.value).toBe(target.slice(0, 1));
     await vi.advanceTimersByTimeAsync(20 * 3);
-    expect(composer.text.value).toBe(third.slice(0, 4));
+    expect(composer.text.value).toBe(target.slice(0, 4));
 
     expect(composer.send()).toBe('sent');
     expect(composer.typing.value).toBe(false);
-    expect(composer.text.value).toBe(third);
-    await vi.advanceTimersByTimeAsync(FIRST_DONE);
-    expect(composition.state.value).toEqual(parsePrompt(third));
-
-    // 不会换回同一条：另外两条里取后一条
-    composer.refresh();
-    expect(composer.text.value).toBe(second.slice(0, 1));
+    expect(composer.text.value).toBe(target);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(composition.state.value).toEqual(parsePrompt(target));
+    expect(composition.state.value.conditions.indicatorIds[0]).toBe('A-31');
   });
 
-  it('减少动画时换上的示例直接出现；编排照样一个节点一个节点地出现', async () => {
+  it('减少动画时换上的话直接出现；编排照样一个节点一个节点地出现', async () => {
     using ctx = setup({ random: () => 0, still: () => true });
     const { composer } = ctx;
 
     composer.refresh();
     expect(composer.typing.value).toBe(false);
-    expect(composer.text.value).toBe(second);
+    expect(composer.text.value).toBe(randomPrompt(() => 0, [first, '']));
 
     composer.send();
     await vi.advanceTimersByTimeAsync(THINK);
