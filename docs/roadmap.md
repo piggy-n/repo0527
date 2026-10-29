@@ -867,7 +867,7 @@ UI 工作流程补充（2026-10-20）：用户确认将设计与验证流程固�
 |---|---|---|---|
 | 城市体检驾驶舱（独立布局，前端迁移已验收） | `/city-dashboard`，无菜单入口 | 全部登录角色 | `views/city-dashboard` |
 | 现状底图 | `current-map` | 全部 | `views/current-map-new` |
-| 数据查询（国土变更、城市国土空间监测、森林草原湿地荒漠、水资源；2026-10-28 迁移，分支 `migrate-data-query`，导出待登录后验收） | `*-query` | 全部 | `views/space-monitoring-query`、`views/data-query-map`（ADR 0104，[modules/data-query.md](modules/data-query.md)） |
+| 数据查询（国土变更、城市国土空间监测、森林草原湿地荒漠、水资源；2026-10-28 迁移，2026-10-29 验收合入 main，导出待登录后验收） | `*-query` | 全部 | `views/space-monitoring-query`、`views/data-query-map`（ADR 0104，[modules/data-query.md](modules/data-query.md)） |
 | 城市国土空间监测基本统计 | `space-monitoring-basic-statistics` | 全部 | `views/space-monitoring-statistics` |
 | 城市国土空间监测指标 | `space-monitoring-indicators` | 全部 | `views/space-monitoring-indicators` |
 | 文件管理 | `file-management` | 全部 | `views/resource-center/file-management.vue` |
