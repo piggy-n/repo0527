@@ -1,0 +1,18 @@
+// 地图铺满内容区，两个阶段叠在上面（page-layout.md"画布型"）
+.root {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.map {
+  position: absolute;
+  inset: 0;
+}
+
+// 条件编排时地图不显示，保留尺寸，回到推演时不用重新排版
+.hidden {
+  visibility: hidden;
+}

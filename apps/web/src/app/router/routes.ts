@@ -79,10 +79,11 @@ const businessRoutes: RouteRecordRaw[] = [
   {
     path: 'indicator-simulation',
     name: RouteName.indicatorSimulation,
-    component: () =>
+    component: withMapRuntime(() =>
       import('@/pages/indicator-simulation/IndicatorSimulationPage').then(
         ({ IndicatorSimulationPage }) => IndicatorSimulationPage
-      ),
+      )
+    ),
     meta: { title: '指标智能推演' }
   },
   {
@@ -154,10 +155,11 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
   {
     path: '/dev/indicator-simulation',
     name: RouteName.devIndicatorSimulation,
-    component: () =>
+    component: withMapRuntime(() =>
       import('@/pages/dev/indicator-simulation/DevIndicatorSimulationPage').then(
         ({ DevIndicatorSimulationPage }) => DevIndicatorSimulationPage
-      ),
+      )
+    ),
     meta: { title: '指标智能推演组件样例', public: true }
   },
   {

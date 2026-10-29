@@ -1,8 +1,11 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import { provideMap } from '@yzt/map-vue';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import { required } from '@/shared/testing/required';
 import { defaultComposition } from '../compose/composition';
+import { JIANGSU_CAMERA } from '@/shared/map/jiangsu';
+import { useSimulationMap } from '../composables/useSimulationMap';
 import { type SimulationRun, useSimulationRun } from '../composables/useSimulationRun';
 import { ManualClock } from '../engine/test-clock';
 import { createCalculator } from '../model/calculator';
@@ -20,7 +23,10 @@ async function mountRun() {
     setup() {
       const owned = useSimulationRun(clock);
       run = owned;
-      return () => <RunStage run={owned} model={{ status: 'ready', calculator }} />;
+      // 只有会话没有画布：地图的分组照常推导，镜头操作等视图就绪（测试里不会就绪）
+      const map = provideMap({ groups: [], camera: JIANGSU_CAMERA });
+      const simulationMap = useSimulationMap(owned, map);
+      return () => <RunStage run={owned} model={{ status: 'ready', calculator }} simulationMap={simulationMap} />;
     }
   });
   const wrapper = mount(Host, { attachTo: document.body });

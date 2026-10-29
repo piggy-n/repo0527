@@ -4,10 +4,11 @@
   --left-edge: calc(var(--space-lg) + 320px + var(--space-md));
   --right-edge: calc(var(--space-lg) + 320px + var(--space-md));
 
-  position: relative;
-  flex: 1;
-  min-height: 0;
+  // 叠在地图上：空白处的鼠标交给地图，面板自己接收
+  position: absolute;
+  inset: 0;
   overflow: hidden;
+  pointer-events: none;
 }
 
 .stepsCollapsed {
@@ -16,15 +17,6 @@
 
 .detailCollapsed {
   --right-edge: calc(var(--space-lg) + 200px + var(--space-md));
-}
-
-// 地图在 S7 接入，先用编排图的网点画布
-.canvas {
-  position: absolute;
-  inset: 0;
-  background-color: var(--color-primary-bg-lighter);
-  background-image: radial-gradient(circle, var(--color-border-dashed) 1px, transparent 1px);
-  background-size: 18px 18px;
 }
 
 .left,
@@ -122,6 +114,7 @@
   color: var(--color-text-strong);
   font: inherit;
   cursor: pointer;
+  pointer-events: auto;
 
   &:hover {
     color: var(--color-primary);
@@ -158,6 +151,7 @@
   font: inherit;
   white-space: nowrap;
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .attention {

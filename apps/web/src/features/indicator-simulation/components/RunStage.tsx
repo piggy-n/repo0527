@@ -1,7 +1,9 @@
 import { Back, CircleClose, Operation } from '@element-plus/icons-vue';
+import { useMapOverlay } from '@yzt/map-vue';
 import { ElButton, ElMessage, ElPopconfirm } from 'element-plus';
 import { computed, type ComputedRef, defineComponent, onBeforeUnmount, type PropType, ref, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
+import type { SimulationMap } from '../composables/useSimulationMap';
 import type { SimulationModel } from '../composables/useSimulationModel';
 import type { SimulationRun } from '../composables/useSimulationRun';
 import type { ApplyOutcome, MissingPopulation } from '../engine/engine';
@@ -11,6 +13,7 @@ import { currentGroup, doneCount, groupStatus, inProgress, stepGroup } from '../
 import { DetailPanel } from './DetailPanel';
 import { InterventionPanel } from './InterventionPanel';
 import styles from './RunStage.module.scss';
+import { SimulationMapOverlay } from './SimulationMapOverlay';
 import { StageStepper } from './StageStepper';
 import { StepsPanel } from './StepsPanel';
 
@@ -21,12 +24,14 @@ const APPLIED_MESSAGES: Readonly<Record<ApplyOutcome, string | null>> = {
   rerun: '已按调整重新推演'
 };
 
-/** AI 推演阶段：左侧步骤、右上当前步骤、顶部阶段条和人工干预；地图在 S7 接入，现在是空白画布 */
+/** AI 推演阶段：浮在地图上的左侧步骤、右上当前步骤、顶部阶段条和人工干预，以及地图上的扫描带和标注 */
 export const RunStage = defineComponent({
   name: 'RunStage',
   props: {
     run: { type: Object as PropType<SimulationRun>, required: true },
-    model: { type: Object as PropType<SimulationModel>, required: true }
+    model: { type: Object as PropType<SimulationModel>, required: true },
+    /** 推演的地图；页面在地图上层放这个阶段 */
+    simulationMap: { type: Object as PropType<SimulationMap>, required: true }
   },
   setup(props) {
     const { run } = props;
@@ -36,6 +41,14 @@ export const RunStage = defineComponent({
     // 点左侧回看的一行；null 是跟随当前
     const pinned = ref<StepGroupId | null>(null);
     const intervening = ref(false);
+
+    // 贴边的面板登记给地图，镜头定位时避开（ADR 0029）
+    const leftPanel = ref<HTMLElement>();
+    const rightPanel = ref<HTMLElement>();
+    const bar = ref<HTMLElement>();
+    useMapOverlay(leftPanel, 'left');
+    useMapOverlay(rightPanel, 'right');
+    useMapOverlay(bar, 'top');
 
     // 叙述只随这些变化，状态里其余的变化（步骤推进）不重新生成
     const conditions = computed(() => state.value.conditions);
@@ -133,7 +146,7 @@ export const RunStage = defineComponent({
     const renderBar = () => {
       const running = inProgress(state.value.status);
       return (
-        <div class={styles.bar}>
+        <div ref={bar} class={styles.bar}>
           <div class={styles.stepper}>
             <StageStepper phase={state.value.status === 'done' ? 'result' : 'running'} />
           </div>
@@ -188,7 +201,7 @@ export const RunStage = defineComponent({
           </span>
         </button>
       ) : (
-        <div key="steps" class={styles.left}>
+        <div key="steps" ref={leftPanel} class={styles.left}>
           <StepsPanel
             state={state.value}
             progress={run.progress}
@@ -220,7 +233,7 @@ export const RunStage = defineComponent({
         );
       }
       return (
-        <div key="detail" class={styles.right}>
+        <div key="detail" ref={rightPanel} class={styles.right}>
           <DetailPanel
             state={state.value}
             progress={run.progress}
@@ -247,7 +260,7 @@ export const RunStage = defineComponent({
         data-status={state.value.status}
         data-current={current.value === null ? undefined : groupStatus(current.value, state.value.steps)}
       >
-        <div class={styles.canvas} />
+        <SimulationMapOverlay simulationMap={props.simulationMap} running={inProgress(state.value.status)} />
         {renderSteps()}
         {renderDetail()}
         {renderBar()}
