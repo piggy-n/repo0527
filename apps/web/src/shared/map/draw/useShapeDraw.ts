@@ -145,7 +145,8 @@ export function useShapeDraw(
           begin();
         }
         if (polygon) {
-          complete('rectangle', { kind: 'rectangle', polygon, pixelSize: pixelSizeAt(event.point, view.pick) });
+          const pixelSize = pixelSizeAt(event.point, point => view.pick(point));
+          complete('rectangle', { kind: 'rectangle', polygon, pixelSize });
         }
         return true;
       }
@@ -160,8 +161,9 @@ export function useShapeDraw(
         return true;
       case 'click':
       case 'dblclick':
-        return false;
+        break;
     }
+    return false;
   };
 
   const handlePolygon = (event: MapInputEvent, view: ToolView): boolean => {
@@ -204,7 +206,7 @@ export function useShapeDraw(
         complete('polygon', {
           kind: 'polygon',
           polygon: polygonOf(current.points),
-          pixelSize: pixelSizeAt(event.point, view.pick)
+          pixelSize: pixelSizeAt(event.point, point => view.pick(point))
         });
         return true;
       case 'key':
@@ -216,8 +218,9 @@ export function useShapeDraw(
         return true;
       case 'down':
       case 'up':
-        return false;
+        break;
     }
+    return false;
   };
 
   // 只在二维画；三维期间的输入不处理（数据查询页没有三维，留作保护）

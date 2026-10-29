@@ -62,7 +62,7 @@ const LAYERS: readonly LayerSpecification[] = [
     id: 'draw-fill',
     type: 'fill',
     source: SOURCE,
-    filter: ['all', byStatus('completed'), ['==', ['geometry-type'], 'Polygon']],
+    filter: ['all', ['==', ['get', 'status'], 'completed'], ['==', ['geometry-type'], 'Polygon']],
     paint: { 'fill-color': COMPLETED_COLOR, 'fill-opacity': 0.12 }
   },
   {
