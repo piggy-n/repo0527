@@ -1,0 +1,67 @@
+// 即时预估：版式取自确认的第二版原型
+.root {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-bg-light);
+  font-size: var(--font-size-xs);
+  line-height: 20px;
+}
+
+.head {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 var(--space-sm);
+  padding: 4px 0;
+
+  & + & {
+    border-top: 1px dashed var(--color-primary-border);
+  }
+}
+
+.name {
+  overflow: hidden;
+  color: var(--color-text-regular);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pass {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.values {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+
+  b {
+    color: var(--color-text-strong);
+    font-size: var(--font-size-base);
+  }
+}
+
+.up {
+  color: var(--color-success);
+}
+
+.down {
+  color: var(--color-danger);
+}
+
+.flat {
+  color: var(--color-text-secondary);
+}
+
+.status,
+.note {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+}

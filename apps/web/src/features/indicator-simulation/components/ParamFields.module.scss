@@ -1,0 +1,62 @@
+// 参数编辑项：版式取自确认的第二版原型
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: var(--color-text-strong);
+  font-size: var(--font-size-base);
+}
+
+.value {
+  margin-left: auto;
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.subLabel {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: var(--space-sm) 0 6px;
+  color: var(--color-text-strong);
+  font-size: var(--font-size-xs);
+}
+
+.note {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+
+  .subLabel & {
+    margin: 0;
+  }
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.targets {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  align-items: center;
+  gap: 6px var(--space-sm);
+  margin-top: var(--space-sm);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+}
+
+.number {
+  width: 100%;
+}

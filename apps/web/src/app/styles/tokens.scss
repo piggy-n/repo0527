@@ -51,7 +51,14 @@ $colors: (
   'danger-bg-solid': #ffecec,
   'neutral': #8a94a6,
   'neutral-bg': #eef1f5,
-  'neutral-bg-light': #f1f4f8
+  'neutral-bg-light': #f1f4f8,
+
+  // 规范补充：指标智能推演的 AI 渐变（与主色组成三色）和规划新增情景（ADR 0102）
+  'ai-violet': #8b7bff,
+  'ai-cyan': #3ec5f2,
+  'ai-glow': rgba(89, 126, 247, 0.22),
+  'scenario': #7a5cff,
+  'scenario-light': #a593ff
 );
 
 // 主色透明度梯度，键是百分比

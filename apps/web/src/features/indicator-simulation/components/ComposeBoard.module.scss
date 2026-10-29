@@ -1,0 +1,475 @@
+// 编排图：版式取自确认的第二版原型；颜色见 color-and-typography.md 第 6.3 节
+@property --orb-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.panel {
+  min-width: 0;
+}
+
+.note {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background-color: var(--color-primary-bg-lighter);
+  background-image: radial-gradient(circle, var(--color-border-dashed) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+// 块级容器里按画布宽度排；放在纵向 flex 里会按内容的最小宽度撑宽
+.lanes {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  min-height: 100%;
+  // 宽屏下按比例分，窄到 1200 断点（主区 832）时各列取最小宽度，刚好放下不出横向滚动
+  grid-template-columns:
+    minmax(100px, 12fr) minmax(140px, 19fr) minmax(180px, 24fr)
+    minmax(150px, 20fr) minmax(126px, 17fr);
+  grid-template-rows: auto 1fr;
+  column-gap: clamp(24px, 2vw, 40px);
+  min-width: 828px;
+  padding: 14px var(--space-lg) var(--space-lg);
+}
+
+.links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.link {
+  fill: none;
+  stroke: var(--color-primary-border);
+  stroke-width: 1.5;
+  transition:
+    stroke 0.2s,
+    opacity 0.2s;
+
+  .ready &:not(.scenario) {
+    stroke: var(--color-primary-border-hover);
+    stroke-dasharray: 6 6;
+    animation: flow 1.2s linear infinite;
+  }
+
+  // 悬停时其余连线变淡，相关的点亮
+  .hovering &:not(.lit) {
+    opacity: 0.25;
+  }
+
+  .lanes &.lit {
+    stroke: var(--color-primary);
+    stroke-width: 2;
+  }
+}
+
+.scenario {
+  stroke: var(--color-scenario-light);
+  stroke-dasharray: 4 4;
+}
+
+.laneHead {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.lane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0 -6px;
+  padding: var(--space-sm) 6px;
+  border: 1px dashed transparent;
+  border-radius: var(--radius-lg);
+  transition:
+    background-color 0.2s,
+    border-color 0.2s;
+
+  // 拖动条件时，能放下它的那一列高亮
+  .canvas[data-drop='years'] &[data-lane='years'],
+  .canvas[data-drop='region'] &[data-lane='region'],
+  .canvas[data-drop='indicators'] &[data-lane='indicators'] {
+    border-color: var(--color-primary-border-hover);
+    background: var(--color-primary-alpha-5);
+  }
+
+  .canvas.over[data-drop='years'] &[data-lane='years'],
+  .canvas.over[data-drop='region'] &[data-lane='region'],
+  .canvas.over[data-drop='indicators'] &[data-lane='indicators'] {
+    background: var(--color-primary-alpha-10);
+  }
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  min-height: 60px;
+  padding: 0 var(--space-sm);
+  border: 1px dashed var(--color-border-dashed);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-mask);
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+.node {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-container);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  text-align: left;
+  transition:
+    opacity 0.2s,
+    border-color 0.2s;
+
+  b {
+    overflow: hidden;
+    color: var(--color-text-strong);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover .remove,
+  &:focus-within .remove {
+    opacity: 1;
+  }
+}
+
+.dimmed {
+  opacity: 0.45;
+}
+
+.related {
+  border-color: var(--color-primary-border-hover);
+}
+
+.icon {
+  flex: none;
+  color: var(--color-primary);
+  font-size: var(--font-size-lg);
+}
+
+.meta {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.remove {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-xs);
+  opacity: 0;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--color-danger-bg-solid);
+    color: var(--color-danger);
+  }
+
+  &:focus-visible {
+    opacity: 1;
+  }
+}
+
+// 年份节点窄，移除按钮浮在右侧，不占年份的位置
+.year {
+  height: 40px;
+
+  .remove {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+
+    &:not(:hover) {
+      background: var(--color-bg-container);
+    }
+  }
+}
+
+.region {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: var(--space-sm) 10px;
+}
+
+// 放不下时先省略区县数，范围名称保持完整
+.regionHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  b {
+    flex: none;
+  }
+}
+
+.cityTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cityTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  padding: 0 2px 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+
+  button {
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    font-size: var(--font-size-xxs);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--color-primary-alpha-28);
+    }
+  }
+}
+
+.indicator {
+  height: 54px;
+  padding-left: 4px;
+}
+
+.handle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-base);
+  cursor: grab;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+}
+
+.scenarioTag {
+  color: var(--color-scenario);
+  font-style: normal;
+}
+
+.paramSlot {
+  display: block;
+}
+
+.param {
+  width: 100%;
+  height: 52px;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 2px;
+  }
+}
+
+.edit {
+  flex: none;
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-lg);
+
+  .param:hover &,
+  .param:focus-visible & {
+    color: var(--color-primary);
+  }
+}
+
+.output {
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: var(--space-md);
+  text-align: center;
+
+  .meta {
+    white-space: normal;
+  }
+}
+
+.armed {
+  border-color: transparent;
+  box-shadow:
+    0 0 0 1px var(--color-primary-border),
+    0 0 0 5px var(--color-ai-glow),
+    var(--shadow-lg);
+}
+
+.orbWrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 2px;
+  color: var(--color-primary);
+}
+
+// 主色 → 紫 → 青的锥形渐变环，条件齐全时转起来
+.orb {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from var(--orb-angle),
+    var(--color-primary),
+    var(--color-ai-violet),
+    var(--color-ai-cyan),
+    var(--color-primary)
+  );
+  opacity: 0.35;
+  // 遮罩只看透明度，挖空中间留一圈环
+  mask: radial-gradient(circle, transparent 17px, var(--color-primary) 18px);
+
+  .armed & {
+    opacity: 1;
+    animation: spin 1.2s linear infinite;
+  }
+}
+
+.start {
+  width: 100%;
+  margin-top: 6px;
+}
+
+// 节点出现时弹出，换位置时平移（TransitionGroup）
+.enterFrom {
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+.enterActive {
+  transition:
+    opacity 0.3s,
+    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.move {
+  transition: transform 0.35s ease-out;
+}
+
+.flashEven {
+  animation: flash-even 0.8s ease-out;
+}
+
+.flashOdd {
+  animation: flash-odd 0.8s ease-out;
+}
+
+@keyframes flash-even {
+  from {
+    box-shadow: 0 0 0 6px var(--color-ai-glow);
+  }
+}
+
+@keyframes flash-odd {
+  from {
+    box-shadow: 0 0 0 6px var(--color-ai-glow);
+  }
+}
+
+@keyframes flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+@keyframes spin {
+  to {
+    --orb-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ready .link,
+  .armed .orb,
+  .flashEven,
+  .flashOdd {
+    animation: none;
+  }
+
+  .enterActive,
+  .move {
+    transition: none;
+  }
+}

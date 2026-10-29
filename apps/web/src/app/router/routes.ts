@@ -75,8 +75,16 @@ const businessRoutes: RouteRecordRaw[] = [
     component: withMapRuntime(() => import('@/pages/ai-chat/AiChatPage').then(({ AiChatPage }) => AiChatPage)),
     meta: { title: 'AI对话' }
   },
-  // 页面分步开发（docs/modules/indicator-simulation.md），完成前先用占位页
-  placeholder('indicator-simulation', RouteName.indicatorSimulation, '指标智能推演'),
+  // 页面分步开发（docs/modules/indicator-simulation.md）
+  {
+    path: 'indicator-simulation',
+    name: RouteName.indicatorSimulation,
+    component: () =>
+      import('@/pages/indicator-simulation/IndicatorSimulationPage').then(
+        ({ IndicatorSimulationPage }) => IndicatorSimulationPage
+      ),
+    meta: { title: '指标智能推演' }
+  },
   {
     path: 'resource-management',
     name: RouteName.resourceManagement,
@@ -142,6 +150,15 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
         ({ DevMonitoringStatisticsPage }) => DevMonitoringStatisticsPage
       ),
     meta: { title: '基本统计组件样例', public: true }
+  },
+  {
+    path: '/dev/indicator-simulation',
+    name: RouteName.devIndicatorSimulation,
+    component: () =>
+      import('@/pages/dev/indicator-simulation/DevIndicatorSimulationPage').then(
+        ({ DevIndicatorSimulationPage }) => DevIndicatorSimulationPage
+      ),
+    meta: { title: '指标智能推演组件样例', public: true }
   },
   {
     path: '/dev/monitoring-indicators',

@@ -1,7 +1,7 @@
 import { geodesicArea, type LngLat, type ViewBounds } from '@yzt/map-core';
 import type { MultiPolygon, Polygon, Position } from 'geojson';
-import type { Region } from '@/shared/map/region/region-catalog';
-import type { RegionBoundary } from '@/shared/map/region/region-geometry';
+import { districtsOf, JIANGSU_CITIES, type Region } from '@/shared/map/region/region-catalog';
+import type { RegionBoundary, RegionBoundaryLoader } from '@/shared/map/region/region-geometry';
 import { cached } from './cache';
 
 /** 推演用的一个区县：区划目录的名称和所在市，加上从县界算出的面积、中心和范围 */
@@ -85,4 +85,11 @@ export function createDistrictAtlas(shapes: readonly DistrictShape[]): DistrictA
     },
     inCities
   };
+}
+
+/** 用边界加载器取全省 95 个区县的县界，建推演范围 */
+export async function loadDistrictAtlas(loader: Pick<RegionBoundaryLoader, 'load'>): Promise<DistrictAtlas> {
+  const regions = JIANGSU_CITIES.flatMap(city => districtsOf(city.code));
+  const shapes = await Promise.all(regions.map(async region => ({ region, boundary: await loader.load(region) })));
+  return createDistrictAtlas(shapes);
 }
