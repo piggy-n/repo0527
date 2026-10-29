@@ -1,6 +1,7 @@
 import { booleanPointInPolygon } from '@turf/boolean-point-in-polygon';
 import { simplify } from '@turf/simplify';
 import type { MultiPolygon, Polygon, Position } from 'geojson';
+import type { PickResult, ScreenBox, ScreenPoint } from '@yzt/map-core';
 
 // 发给后端范围查询的几何（ADR 0051 第 4 节）：几何放在 GET 地址里（约 8 KB 封顶），而且必须是有效的多边形
 
@@ -183,4 +184,44 @@ export function queryGeometry(area: Polygonal, pixelSize: number | null): Polygo
     }
   }
   return null;
+}
+
+/** 拾取到的经纬度；拾取不到时为 null */
+export function lngLatAt(pick: (point: ScreenPoint) => PickResult, point: ScreenPoint): Position | null {
+  const result = pick(point);
+  return result.kind === 'hit' ? [...result.lngLat] : null;
+}
+
+/** 屏幕矩形四角（左上起顺时针）拾取到的闭合多边形，起点和终点可以在任意方向；有一角拾取不到时为 null */
+export function screenBoxPolygon(box: ScreenBox, pick: (point: ScreenPoint) => PickResult): Polygon | null {
+  const [left, right] = [Math.min(box.from.x, box.to.x), Math.max(box.from.x, box.to.x)];
+  const [top, bottom] = [Math.min(box.from.y, box.to.y), Math.max(box.from.y, box.to.y)];
+  const corners = [
+    { x: left, y: top },
+    { x: right, y: top },
+    { x: right, y: bottom },
+    { x: left, y: bottom }
+  ].map(corner => lngLatAt(pick, corner));
+  const ring = corners.filter(corner => corner !== null);
+  const [first] = ring;
+  if (ring.length !== corners.length || !first) {
+    return null;
+  }
+  return { type: 'Polygon', coordinates: [[...ring, first]] };
+}
+
+// 两个经纬度当作平面坐标的距离
+function planarDistance([x1 = 0, y1 = 0]: Position, [x2 = 0, y2 = 0]: Position): number {
+  return Math.hypot(x2 - x1, y2 - y1);
+}
+
+/** 一个屏幕像素在这个点附近对应的经纬度距离，横竖两个方向取较小的；拾取不到时为 null（ADR 0051 第 4 节） */
+export function pixelSizeAt(point: ScreenPoint, pick: (point: ScreenPoint) => PickResult): number | null {
+  const center = lngLatAt(pick, point);
+  const right = lngLatAt(pick, { x: point.x + 1, y: point.y });
+  const below = lngLatAt(pick, { x: point.x, y: point.y + 1 });
+  if (!center || !right || !below) {
+    return null;
+  }
+  return Math.min(planarDistance(center, right), planarDistance(center, below));
 }
