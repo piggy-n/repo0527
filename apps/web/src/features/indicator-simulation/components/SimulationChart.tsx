@@ -1,6 +1,6 @@
-import { useResizeObserver } from '@vueuse/core';
 import type { ECharts } from 'echarts/core';
 import { defineComponent, onBeforeUnmount, onMounted, type PropType, ref, watch } from 'vue';
+import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { createChart } from '../result/chart-runtime';
 import type { SimulationChartOption } from '../result/chart-options';
 
@@ -26,7 +26,13 @@ export const SimulationChart = defineComponent({
       () => props.option,
       option => instance?.setOption(option, { notMerge: true })
     );
-    useResizeObserver(container, () => instance?.resize());
+    // 页面被缓存期间量到的 0 不算，回来后不按 0 重排
+    const { width, height } = useShownElementSize(container);
+    watch([width, height], ([nextWidth, nextHeight]) => {
+      if (nextWidth > 0 && nextHeight > 0) {
+        instance?.resize();
+      }
+    });
     onBeforeUnmount(() => {
       instance?.dispose();
       instance = null;

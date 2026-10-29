@@ -16,6 +16,7 @@ import {
   type VNodeChild,
   watch
 } from 'vue';
+import { usePageActive } from '@/shared/composables/usePageActive';
 import { useSortableList } from '@/shared/composables/useSortableList';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import { districtsOf, JIANGSU_CITIES, shortRegionName } from '@/shared/map/region/region-catalog';
@@ -104,6 +105,7 @@ export const ComposeBoard = defineComponent({
     // 拖入已有的条件时闪一下；次数的奇偶换动画名，同一个节点连续闪也会重新播放
     const flash = ref({ key: '', count: 0 });
     const motion = usePreferredReducedMotion();
+    const pageActive = usePageActive();
 
     const conditions = computed(() => props.composition.state.value.conditions);
     const params = computed(() => props.composition.state.value.params);
@@ -111,10 +113,10 @@ export const ComposeBoard = defineComponent({
     const related = computed(() => relatedNodes(hovered.value, conditions.value, params.value));
     const missing = computed(() => missingConditions(conditions.value));
 
-    // 量出节点相对连线层的位置；包含动画中的变换，连线跟着动画走
+    // 量出节点相对连线层的位置；包含动画中的变换，连线跟着动画走。页面被缓存期间量到的都是 0，保留原来的位置
     const measure = () => {
       const container = lanes.value;
-      if (!container) {
+      if (!container || !pageActive.value) {
         return;
       }
       const origin = container.getBoundingClientRect();

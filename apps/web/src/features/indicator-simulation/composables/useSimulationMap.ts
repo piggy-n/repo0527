@@ -94,7 +94,7 @@ export function useSimulationMap(
   // 每帧都会重新计算，值没变时保留原来的对象，样式不重新推导
   let last: MapFrame | null = null;
   const frame = computed((): MapFrame | null => {
-    let next = active.value ? mapFrame(state.value, run.progress) : null;
+    let next = active.value ? mapFrame(state.value, run.progress, motion.value === 'reduce') : null;
     // 结果阶段：数值全部显示，设施和服务圈都在，干预预览描虚线
     if (viewing.value) {
       const previewing = (preview.value?.size ?? 0) > 0;

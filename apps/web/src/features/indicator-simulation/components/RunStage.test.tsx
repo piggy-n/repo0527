@@ -273,3 +273,54 @@ describe('RunStage 结果阶段', () => {
     expect(result.preview.value.size).toBe(0);
   });
 });
+
+// jsdom 没有 matchMedia；按窄屏回答
+const narrow = () =>
+  vi.stubGlobal('matchMedia', (media: string) => ({
+    media,
+    matches: true,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined
+  }));
+
+describe('RunStage 窄屏', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('左右只显示最后操作的一边：开始时看当前步骤，展开步骤后当前步骤收成胶囊，点一行又回到右边', async () => {
+    narrow();
+    const mounted = await mountRun();
+    const { wrapper, clock } = mounted;
+    await clock.advance(1300);
+    expect(wrapper.find('[aria-label="展开推演步骤"]').exists()).toBe(true);
+    expect(wrapper.find('[aria-label="展开当前步骤"]').exists()).toBe(false);
+
+    await wrapper.get('[aria-label="展开推演步骤"]').trigger('click');
+    expect(wrapper.find('[aria-label="展开推演步骤"]').exists()).toBe(false);
+    expect(wrapper.get('[aria-label="展开当前步骤"]').text()).toContain('条件解析');
+
+    await wrapper.findAll('section li button')[0]?.trigger('click');
+    expect(wrapper.find('[aria-label="展开推演步骤"]').exists()).toBe(true);
+    expect(wrapper.find('[aria-label="展开当前步骤"]').exists()).toBe(false);
+  });
+
+  it('需要确认时换到右边；结果阶段看推演概览时，推演结果收成胶囊', async () => {
+    narrow();
+    const mounted = await mountRun();
+    const { wrapper, clock } = mounted;
+    await wrapper.get('[aria-label="展开推演步骤"]').trigger('click');
+    await clock.advance(QC_CHECKPOINT_AT);
+    expect(wrapper.text()).toContain('需要你确认');
+    expect(wrapper.find('[aria-label="展开推演步骤"]').exists()).toBe(true);
+
+    await runToDone(mounted);
+    expect(titles(mounted)).toContain('推演结果');
+    await wrapper.get('[aria-label="展开推演步骤"]').trigger('click');
+    expect(titles(mounted)).toContain('推演概览');
+    expect(titles(mounted)).not.toContain('推演结果');
+    await wrapper.get('[aria-label="展开推演结果"]').trigger('click');
+    expect(titles(mounted)).toContain('推演结果');
+    expect(wrapper.get('[aria-label="展开推演步骤"]').text()).toContain('推演概览');
+  });
+});

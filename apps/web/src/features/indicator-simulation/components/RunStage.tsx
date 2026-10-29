@@ -4,6 +4,7 @@ import { ElButton, ElMessage, ElPopconfirm } from 'element-plus';
 import { computed, type ComputedRef, defineComponent, onBeforeUnmount, type PropType, ref, watch } from 'vue';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
+import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
 import type { SimulationMap } from '../composables/useSimulationMap';
 import type { SimulationModel } from '../composables/useSimulationModel';
 import type { SimulationResult } from '../composables/useSimulationResult';
@@ -90,6 +91,19 @@ export const RunStage = defineComponent({
 
     // 完成且有了结果的选择：右侧换成推演结果，左侧换成推演概览
     const resultPhase = computed(() => state.value.status === 'done' && props.result.selection.value !== null);
+    // 窄屏时左右只显示最后操作的一边（ADR 0053 第 8 节），另一边显示成窄条或胶囊；不改两边各自的收起状态
+    const sides = useSideExclusion({
+      leftExpanded: () => !stepsCollapsed.value,
+      rightOpen: () => resultPhase.value || !detailCollapsed.value
+    });
+    const expandSteps = () => {
+      stepsCollapsed.value = false;
+      sides.activate('left');
+    };
+    const expandRight = () => {
+      detailCollapsed.value = false;
+      sides.activate('right');
+    };
     const current = computed(() => currentGroup(state.value));
     const shown = computed(() => pinned.value ?? current.value ?? 'parse');
     const reviewing = computed(() => pinned.value !== null && pinned.value !== current.value);
@@ -124,7 +138,7 @@ export const RunStage = defineComponent({
       () => state.value.checkpoint,
       checkpoint => {
         if (checkpoint) {
-          detailCollapsed.value = false;
+          expandRight();
           pinned.value = null;
         }
       }
@@ -222,16 +236,10 @@ export const RunStage = defineComponent({
     };
 
     const renderSteps = () =>
-      stepsCollapsed.value ? (
-        <button
-          key="strip"
-          type="button"
-          class={styles.strip}
-          aria-label="展开推演步骤"
-          onClick={() => (stepsCollapsed.value = false)}
-        >
+      !sides.left.value ? (
+        <button key="strip" type="button" class={styles.strip} aria-label="展开推演步骤" onClick={expandSteps}>
           <SvgIcon name="panel-expand" />
-          <span class={styles.stripLabel}>AI 推演</span>
+          <span class={styles.stripLabel}>{resultPhase.value ? '推演概览' : 'AI 推演'}</span>
           <span class={styles.stripCount}>
             {doneCount(state.value)}/{STEP_GROUPS.length}
           </span>
@@ -252,7 +260,7 @@ export const RunStage = defineComponent({
               } else {
                 pinned.value = group === current.value ? null : group;
               }
-              detailCollapsed.value = false;
+              expandRight();
             }}
             onCollapse={() => (stepsCollapsed.value = true)}
           >
@@ -312,18 +320,26 @@ export const RunStage = defineComponent({
     };
 
     const renderDetail = () => {
+      if (resultPhase.value && !sides.right.value) {
+        return (
+          <button key="results-pill" type="button" class={styles.pill} aria-label="展开推演结果" onClick={expandRight}>
+            <SvgIcon name="simulation-indicator" />
+            <span class={styles.pillText}>推演结果</span>
+          </button>
+        );
+      }
       if (resultPhase.value) {
         return renderResult();
       }
       const checkpoint = state.value.checkpoint !== null;
-      if (detailCollapsed.value) {
+      if (!sides.right.value) {
         return (
           <button
             key="pill"
             type="button"
             class={[styles.pill, checkpoint && styles.attention]}
             aria-label="展开当前步骤"
-            onClick={() => (detailCollapsed.value = false)}
+            onClick={expandRight}
           >
             <span class={styles.pulse} />
             <span class={styles.pillText}>当前步骤 · {stepGroup(shown.value).name}</span>
@@ -341,8 +357,8 @@ export const RunStage = defineComponent({
       <div
         class={[
           styles.root,
-          stepsCollapsed.value && styles.stepsCollapsed,
-          detailCollapsed.value && styles.detailCollapsed
+          !sides.left.value && styles.stepsCollapsed,
+          !sides.right.value && styles.detailCollapsed
         ]}
         style={{ '--bar-height': `${barHeight.value}px` }}
         data-status={state.value.status}

@@ -39,14 +39,17 @@ export interface MapFrame {
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
 const easeOut = (t: number) => 1 - (1 - t) ** 2;
 
-/** 这一刻的演出：先后是人口（按市点亮）→ 设施落点 → 核查描出缺失 → 服务圈扩散 → 扫描出数值 → 未达标闪烁 */
-export function mapFrame(state: EngineState, progress: (step: StepId) => number): MapFrame {
+/**
+ * 这一刻的演出：先后是人口（按市点亮）→ 设施落点 → 核查描出缺失 → 服务圈扩散 → 扫描出数值 → 未达标闪烁。
+ * still 是减少动画：每一段开始就是终态，未达标的描边不闪
+ */
+export function mapFrame(state: EngineState, progress: (step: StepId) => number, still = false): MapFrame {
   const status = (step: StepId) => state.steps[step].status;
   const started = (step: StepId) => status(step) !== 'waiting' && status(step) !== 'stale';
   const finished = (step: StepId) => status(step) === 'done' || status(step) === 'reused';
   // 进度条到某一段时完成：t 从 from 到 to 映射成 0～1
   const span = (step: StepId, from: number, to: number) =>
-    finished(step) ? 1 : clamp((progress(step) - from) / (to - from));
+    finished(step) || still ? 1 : clamp((progress(step) - from) / (to - from));
 
   let density: number | null = null;
   if (started('pop') && !finished('qc')) {
@@ -68,7 +71,7 @@ export function mapFrame(state: EngineState, progress: (step: StepId) => number)
     // 0.15～0.75 之间闪四下
     const t = (progress('evaluate') - 0.15) / 0.6;
     if (t >= 0 && t <= 1) {
-      alert = { kind: 'fail', opacity: (1 - Math.cos(t * 8 * Math.PI)) / 2 };
+      alert = { kind: 'fail', opacity: still ? 1 : (1 - Math.cos(t * 8 * Math.PI)) / 2 };
     }
   }
   return { density, scan, rain, ring, alert };

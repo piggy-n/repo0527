@@ -48,6 +48,19 @@ describe('mapFrame', () => {
     expect(mapFrame(stateWith({ ...before, compute: 'done', evaluate: 'running' }), at({ evaluate: 0.9 })).alert).toBeNull();
   });
 
+  it('减少动画：每一段开始就是终态，未达标的描边不闪', () => {
+    const prep = mapFrame(stateWith({ parse: 'done', pop: 'running', poi: 'running' }), at({ pop: 0.1, poi: 0.1 }), true);
+    expect([prep.density, prep.rain]).toEqual([1, 1]);
+    const spatial = mapFrame(stateWith({ ...DONE_TO_POI, qc: 'done', spatial: 'running' }), at({ spatial: 0.05 }), true);
+    expect(spatial.ring).toBe(1);
+    const before = { ...DONE_TO_POI, qc: 'done', spatial: 'done' } as const;
+    expect(mapFrame(stateWith({ ...before, compute: 'running' }), at({ compute: 0.1 }), true).scan).toBe(1);
+    const flashes = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7].map(
+      evaluate => mapFrame(stateWith({ ...before, compute: 'done', evaluate: 'running' }), at({ evaluate }), true).alert
+    );
+    expect(flashes).toEqual(Array.from({ length: 6 }, () => ({ kind: 'fail', opacity: 1 })));
+  });
+
   it('没开始时什么都不显示', () => {
     expect(mapFrame(idleEngineState(), at({}))).toEqual({ density: null, scan: null, rain: null, ring: 0, alert: null });
   });
