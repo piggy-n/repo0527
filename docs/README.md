@@ -29,6 +29,7 @@ docs/
 │  ├─ file-transfer.md        公共上传进度、二进制下载、文件名与取消语义
 │  ├─ file-management.md      文件管理迁移边界、上传交互原型与验证记录
 │  ├─ system-management.md    系统管理与消息：分层、申请与消息的数据层、待联调
+│  ├─ data-query.md           数据查询：四个页面共用的组件、四个页签的拥有者与规则、测试
 │  ├─ city-dashboard.md       城市体检驾驶舱：旧版口径、依赖评估、分步迁移与交互预览
 │  ├─ auth.md                 鉴权：会话、角色、页面权限、路由守卫、登录接口与表单
 │  ├─ storage.md              shared/storage：偏好的持久化（键值存储、偏好的范围、恢复与写入）
