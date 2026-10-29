@@ -145,6 +145,8 @@ Vitest 5 运行结束时会打印各部分所占的比例：导入 32～36%、�
 
 **Node 环境**：在 Node 环境下也能通过的测试文件——纯逻辑、libs 的会话与 Worker 通信层、`tools/` 下的 Node 脚本——在第一行写 `// @vitest-environment node`。忘了写只是慢一点；写了但实际用到 DOM，会因为 `document` 未定义而直接失败，不会悄悄通过。Node 和 jsdom 有细小差别，例如 `DOMException` 在 Node 和浏览器里都是 `Error` 的实例，在 jsdom 里不是（Worker 通信层的错误处理两种都兼容）。
 
+**大库在文件开头导入**：Vitest 不转换也不预构建 Cesium，交给 Node 直接加载，入口转到 `@cesium/engine`、`@cesium/widgets` 约 1400 个 ESM 文件。单独导入约 2～3 秒、内存多约 115 MB；2026-10-28/29 全量测试的负载下，`map-framework.test.ts` 在用例里第一次导入它用了 28～41 秒，超过用例的超时。Vitest 不给收集阶段（导入测试文件和它的静态依赖）计时，只限制 Worker 启动的时间（2026-10-29 读 Vitest 5.0.5 的源码确认），所以要导入整个大库的测试在文件开头静态导入，用例里的动态导入拿到的是模块表里已有的模块，不靠加大用例的超时。`map-runtime-3d.test.ts` 一开始就是静态导入，没有出现过超时。
+
 ### Sass 的 loadPaths
 
 ```ts
