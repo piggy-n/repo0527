@@ -1,3 +1,4 @@
+import { MxTitle } from '@yzt/ui';
 import { ElCheckTag, ElInputNumber, ElRadioButton, ElRadioGroup, ElSlider } from 'element-plus';
 import { defineComponent, type PropType, type VNodeChild } from 'vue';
 import type { MissingPopulation } from '../engine/engine';
@@ -36,14 +37,16 @@ function radiiText(conditions: SimulationConditions, walkSpeed: number): string 
   return `服务半径：${minutes.map(value => `${value} 分钟 ${value * walkSpeed} 米`).join('，')}`;
 }
 
-// 一项参数：名称、右侧的当前值、编辑控件
-const field = (key: ParamKey, content: VNodeChild, value?: string) => (
+// 一项参数：区块标题（可带紧跟的灰色说明）、右侧的当前值，下面是编辑控件
+const field = (key: ParamKey, content: VNodeChild, value?: string, description?: string) => (
   <div key={key} class={styles.field}>
-    <div class={styles.label}>
-      {PARAM_LABELS[key]}
-      {value !== undefined && <span class={styles.value}>{value}</span>}
-    </div>
-    {content}
+    <MxTitle description={description}>
+      {{
+        default: () => PARAM_LABELS[key],
+        extra: value === undefined ? undefined : () => <span class={styles.value}>{value}</span>
+      }}
+    </MxTitle>
+    <div>{content}</div>
   </div>
 );
 
@@ -170,6 +173,8 @@ export const ParamFields = defineComponent({
             key,
             <>
               <ElSlider
+                class={styles.slider}
+                size="small"
                 modelValue={params.walkSpeed}
                 min={WALK_SPEED_RANGE.min}
                 max={WALK_SPEED_RANGE.max}
@@ -212,6 +217,8 @@ export const ParamFields = defineComponent({
             key,
             <>
               <ElSlider
+                class={styles.slider}
+                size="small"
                 modelValue={params.newFacilities}
                 min={NEW_FACILITIES_RANGE.min}
                 max={NEW_FACILITIES_RANGE.max}
@@ -242,7 +249,6 @@ export const ParamFields = defineComponent({
           return field(
             key,
             <>
-              <p class={styles.note}>只影响达标判断，不重算数值</p>
               <div class={styles.targets}>
                 {conditions.indicatorIds.map(id => {
                   const indicator = simulationIndicator(id);
@@ -258,7 +264,7 @@ export const ParamFields = defineComponent({
                       min={indicator.unit === '%' ? 1 : 0.1}
                       max={indicator.unit === '%' ? 100 : undefined}
                       step={indicator.unit === '%' ? 1 : 0.1}
-                      aria-label={`${label}的演示目标值`}
+                      aria-label={`${label}的目标值`}
                       onUpdate:modelValue={value => {
                         if (typeof value === 'number' && Number.isFinite(value)) {
                           update({ targets: { ...params.targets, [id]: value } });
@@ -268,7 +274,9 @@ export const ParamFields = defineComponent({
                   ];
                 })}
               </div>
-            </>
+            </>,
+            undefined,
+            '影响达标判断'
           );
         case 'missing':
           break;

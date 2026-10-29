@@ -66,7 +66,7 @@ export const PARAM_LABELS: Readonly<Record<ParamKey, string>> = {
   walkSpeed: '步行速度',
   facilityScope: '设施纳入口径',
   newFacilities: '规划新增设施',
-  targets: '演示目标值'
+  targets: '目标值'
 };
 
 export const CALIBER_LABELS: Readonly<Record<PopulationCaliber, string>> = { resident: '常住人口', registered: '户籍人口' };

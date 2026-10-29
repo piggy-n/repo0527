@@ -1,9 +1,8 @@
-import { Search } from '@element-plus/icons-vue';
-import { MxPanel, MxSection } from '@yzt/ui';
-import { ElCheckbox, ElInput } from 'element-plus';
+import { Delete, Search } from '@element-plus/icons-vue';
+import { MxPanel, MxTitle } from '@yzt/ui';
+import { ElButton, ElCheckbox, ElInput } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNodeChild } from 'vue';
 import type { CategoryId } from '@/shared/city-indicators/catalog';
-import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { JIANGSU_CITIES, shortRegionName } from '@/shared/map/region/region-catalog';
 import { searchIndicators, SIMULATION_YEARS } from '../compose/composition';
 import type { CompositionOwner } from '../composables/useComposition';
@@ -25,7 +24,15 @@ const chipKey = (item: DragItem): string => {
   return `indicators:${item.id}`;
 };
 
-/** 条件库：年度、城市、指标都可以点选，也可以拖到编排图上 */
+// 一个模块：区块标题、右侧的补充，下面是内容；间距比 MxSection 紧凑，指标模块撑满剩余高度
+const section = (title: string, extra: VNodeChild, content: VNodeChild, fill = false) => (
+  <section class={[styles.section, fill && styles.fill]}>
+    <MxTitle>{{ default: () => title, extra: () => extra }}</MxTitle>
+    {content}
+  </section>
+);
+
+/** 条件库：年度、城市、指标都可以点选，也可以拖到编排图上；年度和范围固定在上面，只有指标列表滚动 */
 export const ConditionLibrary = defineComponent({
   name: 'ConditionLibrary',
   props: {
@@ -104,17 +111,18 @@ export const ConditionLibrary = defineComponent({
       const { composition } = props;
       const { indicatorIds } = composition.state.value.conditions;
       const searching = keyword.value.trim() !== '';
-      return (
-        <div>
-          <ElInput
-            class={styles.search}
-            modelValue={keyword.value}
-            placeholder="搜索指标"
-            aria-label="搜索指标"
-            prefixIcon={Search}
-            clearable
-            onUpdate:modelValue={(value: string) => (keyword.value = value)}
-          />
+      return [
+        <ElInput
+          key="search"
+          class={styles.search}
+          modelValue={keyword.value}
+          placeholder="搜索指标"
+          aria-label="搜索指标"
+          prefixIcon={Search}
+          clearable
+          onUpdate:modelValue={(value: string) => (keyword.value = value)}
+        />,
+        <div key="list" class={styles.list}>
           {groups.value.length === 0 && <p class={styles.empty}>没有匹配的指标</p>}
           {groups.value.map(group => {
             const open = searching || !folded.value.has(group.id);
@@ -141,13 +149,7 @@ export const ConditionLibrary = defineComponent({
                         { kind: 'indicators', id: item.id },
                         indicatorIds.includes(item.id),
                         () => composition.toggleIndicator(item.id),
-                        [
-                          <SvgIcon
-                            class={styles.type}
-                            name={item.model === 'coverage' ? 'simulation-coverage' : 'simulation-per-capita'}
-                          />,
-                          <span class={styles.name}>{item.short}</span>
-                        ],
+                        <span class={styles.name}>{item.short}</span>,
                         indicatorTitle(item)
                       )
                     )}
@@ -156,18 +158,8 @@ export const ConditionLibrary = defineComponent({
               </div>
             );
           })}
-          <div class={styles.legend}>
-            <span>
-              <SvgIcon name="simulation-coverage" />
-              覆盖率类
-            </span>
-            <span>
-              <SvgIcon name="simulation-per-capita" />
-              人均类
-            </span>
-          </div>
         </div>
-      );
+      ];
     };
 
     return () => {
@@ -175,34 +167,28 @@ export const ConditionLibrary = defineComponent({
       const { cityCodes, indicatorIds } = composition.state.value.conditions;
       const all = cityCodes.length === JIANGSU_CITIES.length;
       return (
-        <MxPanel class={styles.panel} title="条件库" description="点选或拖到右侧" headerTone="muted">
+        <MxPanel class={styles.panel} title="条件库" headerTone="muted" flush>
           {{
-            icon: () => <SvgIcon name="simulation-ai" />,
+            actions: () => (
+              <ElButton link type="primary" icon={Delete} onClick={() => composition.clear()}>
+                清空
+              </ElButton>
+            ),
             default: () => (
               <div class={styles.body}>
-                <MxSection title="监测年份">
-                  {{ extra: () => <span class={styles.extra}>可多选</span>, default: renderYears }}
-                </MxSection>
-                <MxSection title="监测范围">
-                  {{
-                    extra: () => (
-                      <ElCheckbox
-                        modelValue={all}
-                        indeterminate={cityCodes.length > 0 && !all}
-                        onChange={value => composition.setAllCities(value === true)}
-                      >
-                        全省
-                      </ElCheckbox>
-                    ),
-                    default: renderCities
-                  }}
-                </MxSection>
-                <MxSection title="监测指标">
-                  {{
-                    extra: () => <span class={styles.extra}>已选 {indicatorIds.length}</span>,
-                    default: renderIndicators
-                  }}
-                </MxSection>
+                {section('监测年份', <span class={styles.extra}>可多选</span>, renderYears())}
+                {section(
+                  '监测范围',
+                  <ElCheckbox
+                    modelValue={all}
+                    indeterminate={cityCodes.length > 0 && !all}
+                    onChange={value => composition.setAllCities(value === true)}
+                  >
+                    全省
+                  </ElCheckbox>,
+                  renderCities()
+                )}
+                {section('监测指标', <span class={styles.extra}>已选 {indicatorIds.length}</span>, renderIndicators(), true)}
               </div>
             )
           }}

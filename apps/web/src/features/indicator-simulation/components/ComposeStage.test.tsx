@@ -128,13 +128,22 @@ describe('ComposeStage', () => {
     expect(dialog.textContent).toContain('区县数据加载中');
   });
 
-  it('清空：只剩 AI 推演', async () => {
+  it('清空在条件库的标题栏：点了只剩 AI 推演', async () => {
     const { wrapper } = mountStage();
     const clear = required(
       wrapper.findAll('button').find(button => button.text() === '清空'),
       '清空按钮'
     );
+    expect(clear.element.closest('section')?.querySelector('h2')?.textContent).toBe('条件库');
     await clear.trigger('click');
     expect(wrapper.findAll('[data-node]').map(node => node.attributes('data-node'))).toEqual(['output']);
+  });
+
+  it('指标节点：名称后面括号写单位，下面只有灰色的编号', () => {
+    const { wrapper } = mountStage();
+    const node = wrapper.get('[data-node="indicators:A-39"]');
+
+    expect(node.get('b').text()).toBe('人均公园绿地面积（m²）');
+    expect(node.get('[class*="_meta_"]').text()).toBe('A-39');
   });
 });

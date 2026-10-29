@@ -1,22 +1,24 @@
-// 即时预估：版式取自确认的第二版原型
+// 即时预估：标题用区块标题，下面是浅蓝面板；指标名称和改后的值最突出，其余用次要文字
 .root {
-  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.panel {
+  padding: var(--space-xs) var(--space-md);
   border-radius: var(--radius-md);
   background: var(--color-primary-bg-light);
   font-size: var(--font-size-xs);
-  line-height: 20px;
-}
-
-.head {
-  color: var(--color-primary);
-  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-compact);
 }
 
 .row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0 var(--space-sm);
-  padding: 4px 0;
+  align-items: baseline;
+  gap: 2px var(--space-sm);
+  padding: var(--space-sm) 0;
 
   & + & {
     border-top: 1px dashed var(--color-primary-border);
@@ -25,7 +27,9 @@
 
 .name {
   overflow: hidden;
-  color: var(--color-text-regular);
+  color: var(--color-text-title);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -40,20 +44,23 @@
   grid-column: 1 / -1;
   align-items: baseline;
   gap: 6px;
+  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
 
   b {
     color: var(--color-text-strong);
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
   }
 }
 
+// 数值上升红色、下降绿色（2026-10-29 用户确认的展示规则）
 .up {
-  color: var(--color-success);
+  color: var(--color-danger);
 }
 
 .down {
-  color: var(--color-danger);
+  color: var(--color-success);
 }
 
 .flat {
@@ -62,6 +69,11 @@
 
 .status,
 .note {
-  margin: 4px 0 0;
+  margin: 0;
+  padding: var(--space-sm) 0;
   color: var(--color-text-secondary);
+}
+
+.note {
+  border-top: 1px dashed var(--color-primary-border);
 }

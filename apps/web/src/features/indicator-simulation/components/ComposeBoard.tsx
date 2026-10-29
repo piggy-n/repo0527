@@ -1,4 +1,4 @@
-import { Delete, VideoPlay } from '@element-plus/icons-vue';
+import { VideoPlay } from '@element-plus/icons-vue';
 import { usePreferredReducedMotion, useResizeObserver } from '@vueuse/core';
 import { MxPanel } from '@yzt/ui';
 import { ElButton, ElPopover } from 'element-plus';
@@ -38,7 +38,7 @@ import type { ConditionDrag, DragItem } from '../composables/useConditionDrag';
 import type { SimulationModel } from '../composables/useSimulationModel';
 import { STEP_GROUPS } from '../engine/steps';
 import { reachText, simulationIndicator } from '../model/indicators';
-import { inScenario, PARAM_LABELS, type ParamKey, type SimulationParams } from '../model/params';
+import { PARAM_LABELS, type ParamKey, type SimulationParams } from '../model/params';
 import styles from './ComposeBoard.module.scss';
 import { ParamPopover } from './ParamPopover';
 import { StageStepper } from './StageStepper';
@@ -330,7 +330,6 @@ export const ComposeBoard = defineComponent({
           {indicatorIds.map(id => {
             const key = indicatorNode(id);
             const indicator = simulationIndicator(id);
-            const scenario = params.value.newFacilities > 0 && inScenario(params.value, id);
             return (
               <div
                 key={key}
@@ -350,11 +349,10 @@ export const ComposeBoard = defineComponent({
                   <SvgIcon name="drag-handle" />
                 </button>
                 <div class={styles.text}>
-                  <b title={indicator.name}>{indicator.name}</b>
-                  <span class={styles.meta}>
-                    {indicator.id} · {indicator.unit} · {reachText(indicator)}
-                    {scenario && <em class={styles.scenarioTag}> · 新增 {params.value.newFacilities}%</em>}
-                  </span>
+                  <b class={styles.indicatorName} title={`${indicator.name}（${reachText(indicator)}）`}>
+                    <span>{indicator.name}</span>（{indicator.unit}）
+                  </b>
+                  <span class={styles.meta}>{indicator.id}</span>
                 </div>
                 {removeButton(indicator.name, () => props.composition.removeIndicator(id))}
               </div>
@@ -493,14 +491,6 @@ export const ComposeBoard = defineComponent({
         <MxPanel class={styles.panel} headerTone="muted" flush>
           {{
             header: () => <StageStepper phase="compose" />,
-            actions: () => [
-              <span key="note" class={styles.note}>
-                {ready ? '条件已齐全，可以开始推演' : '点选或拖入条件，右侧自动连成推演链路'}
-              </span>,
-              <ElButton key="clear" icon={Delete} onClick={() => props.composition.clear()}>
-                清空
-              </ElButton>
-            ],
             default: () => (
               <div
                 ref={canvas}

@@ -55,7 +55,6 @@ export const ParamPopover = defineComponent({
               conditions={props.conditions}
               base={props.params}
               draft={draft.value}
-              note={changed.value ? '保存到计算参数，开始推演时使用' : '参数未变化'}
             />
             <ParamFields
               class={styles.fields}
@@ -66,7 +65,6 @@ export const ParamPopover = defineComponent({
             />
           </div>
           <div class={styles.footer}>
-            <span class={styles.hint}>预估按同一模型即时计算</span>
             <ElButton onClick={() => emit('cancel')}>取消</ElButton>
             <ElButton type="primary" disabled={!changed.value} onClick={() => emit('apply', draft.value)}>
               确定

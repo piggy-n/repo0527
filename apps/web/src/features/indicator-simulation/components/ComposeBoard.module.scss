@@ -9,12 +9,6 @@
   min-width: 0;
 }
 
-.note {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  white-space: nowrap;
-}
-
 .canvas {
   flex: 1;
   min-height: 0;
@@ -31,13 +25,15 @@
   box-sizing: border-box;
   display: grid;
   min-height: 100%;
-  // 宽屏下按比例分，窄到 1200 断点（主区 832）时各列取最小宽度，刚好放下不出横向滚动
+  // 宽屏下按比例分，窄到 1200 断点（主区 832）时各列取最小宽度，刚好放下不出横向滚动；
+  // 监测范围的城市每行 5 个，这一列最少 240，其余几列按各自节点的内容收紧
+  // 1200 宽时列间距 20：最小宽度合计 720 + 间距 80 + 左右内边距 32 = 832
   grid-template-columns:
-    minmax(100px, 12fr) minmax(140px, 19fr) minmax(180px, 24fr)
-    minmax(150px, 20fr) minmax(126px, 17fr);
+    minmax(88px, 11fr) minmax(240px, 26fr) minmax(156px, 23fr)
+    minmax(128px, 18fr) minmax(108px, 16fr);
   grid-template-rows: auto 1fr;
-  column-gap: clamp(24px, 2vw, 40px);
-  min-width: 828px;
+  column-gap: clamp(20px, 1.6vw, 40px);
+  min-width: 832px;
   padding: 14px var(--space-lg) var(--space-lg);
 }
 
@@ -80,14 +76,20 @@
   stroke-dasharray: 4 4;
 }
 
+// 列标题：比节点里的说明高一级，和区块标题同字号、同色
 .laneHead {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   margin-bottom: var(--space-sm);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
+  color: var(--color-text-title);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+
+  svg {
+    color: var(--color-primary);
+  }
 }
 
 .lane {
@@ -223,10 +225,13 @@
   }
 }
 
-// 年份节点窄，移除按钮浮在右侧，不占年份的位置
+// 年份、指标节点的移除按钮浮在右侧，不占名称的位置
 .year {
   height: 40px;
+}
 
+.year,
+.indicator {
   .remove {
     position: absolute;
     top: 50%;
@@ -257,45 +262,73 @@
   }
 }
 
+// 城市每行 5 个，等宽；移除的叉平时不显示，悬停或键盘聚焦时浮在右上角，不占名称的位置（同节点上的叉）
 .cityTags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-xs);
 }
 
 .cityTag {
-  display: inline-flex;
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
+  min-width: 0;
   height: 22px;
-  padding: 0 2px 0 6px;
+  padding: 0 2px;
   border-radius: var(--radius-sm);
   background: var(--color-primary-bg);
   color: var(--color-primary);
   font-size: var(--font-size-xs);
+  white-space: nowrap;
 
   button {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    z-index: 1;
     display: grid;
     place-items: center;
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     padding: 0;
-    border: 0;
+    border: 1px solid var(--color-border);
     border-radius: 50%;
-    background: transparent;
-    color: inherit;
+    background: var(--color-bg-container);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-xxs);
+    opacity: 0;
     cursor: pointer;
 
     &:hover {
-      background: var(--color-primary-alpha-28);
+      border-color: var(--color-danger);
+      background: var(--color-danger-bg-solid);
+      color: var(--color-danger);
     }
+  }
+
+  &:hover button,
+  button:focus-visible {
+    opacity: 1;
   }
 }
 
 .indicator {
   height: 54px;
   padding-left: 4px;
+}
+
+// 名称放不下时只省略名称，括号里的单位一直完整
+.node .indicatorName {
+  display: flex;
+  min-width: 0;
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .handle {
@@ -317,11 +350,6 @@
     background: var(--color-primary-bg-light);
     color: var(--color-primary);
   }
-}
-
-.scenarioTag {
-  color: var(--color-scenario);
-  font-style: normal;
 }
 
 .paramSlot {

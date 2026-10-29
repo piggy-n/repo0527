@@ -49,21 +49,15 @@
 }
 
 .fields {
-  margin-top: var(--space-md);
+  margin-top: var(--space-lg);
 }
 
 .footer {
   display: flex;
   flex: none;
   align-items: center;
+  justify-content: flex-end;
   padding: var(--space-md) var(--space-lg);
   border-top: 1px solid var(--color-border-light);
 }
 
-// 两个按钮之间的间距用 Element 的默认值
-.hint {
-  flex: 1;
-  margin-right: var(--space-sm);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-}

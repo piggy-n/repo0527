@@ -1,22 +1,26 @@
-// 参数编辑项：版式取自确认的第二版原型
+// 参数编辑项：名称用区块标题（MxTitle），参数之间 16、标题与控件之间 8
 .root {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: var(--space-lg);
 }
 
-.label {
+.field {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin-bottom: 6px;
-  color: var(--color-text-strong);
-  font-size: var(--font-size-base);
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+// 滑块两端留出圆点的位置，不贴着容器边（同图层透明度的滑块）；Element 的滑块宽 100%，内边距要算在宽度里
+.slider {
+  box-sizing: border-box;
+  padding: 0 var(--space-sm);
 }
 
 .value {
-  margin-left: auto;
   color: var(--color-primary);
+  font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
@@ -52,7 +56,6 @@
   grid-template-columns: minmax(0, 1fr) 104px;
   align-items: center;
   gap: 6px var(--space-sm);
-  margin-top: var(--space-sm);
   color: var(--color-text-regular);
   font-size: var(--font-size-xs);
 }
