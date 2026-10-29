@@ -909,7 +909,57 @@ describe('CesiumScene', () => {
 
     await expect(waitForFrames(() => Math.abs(scene.eyeHeight() - startHeight) < 1)).resolves.toBe('ok');
   }, 60000);
+
+  it('换一条路线：已经在路线上时闪切到新的起点，相机不升高（ADR 0103）', async () => {
+    const scene = createScene();
+    scene.startRoute(routeAt(0));
+    await expect(waitForFrames(() => Math.abs(enuOf(scene).z - (EYE_HEIGHT - 6)) < 0.05)).resolves.toBe('ok');
+    let highest = -Infinity;
+
+    // flyTo 在地面以下飞时总要先升到地面以上（这么远时十几米）再落下来
+    scene.startRoute(routeAt(60));
+    await expect(
+      waitForFrames(() => {
+        highest = Math.max(highest, enuOf(scene).z);
+        return Math.abs(enuOf(scene).x - 60) < 0.05;
+      })
+    ).resolves.toBe('ok');
+
+    expect(highest).toBeLessThan(EYE_HEIGHT - 6 + 0.05);
+  }, 30000);
+
+  it('路线换成步行在原地开始、步行换成路线闪切到起点：相机都不升到屋子外面（ADR 0103）', async () => {
+    const scene = createScene();
+    const navigation = await walkRoom(scene);
+    scene.startRoute(routeAt(-4));
+    await expect(waitForFrames(() => Math.abs(enuOf(scene).z - (EYE_HEIGHT - 6)) < 0.05)).resolves.toBe('ok');
+    const phases: WalkPhase[] = [];
+    scene.on('walkphase', phase => phases.push(phase));
+    let highest = -Infinity;
+    const track = (done: () => boolean) => () => {
+      highest = Math.max(highest, enuOf(scene).z);
+      return done();
+    };
+
+    // 相机已经在屋子里：出生点选在脚下，不用清单的出生点
+    scene.startWalk({ navigation, spawn: EAST_SPAWN, speed: 1.6, view: 'first', avatar: NO_AVATAR });
+    expect(phases).toStrictEqual(['entering', 'walking']);
+    await expect(waitForFrames(track(() => true))).resolves.toBe('ok');
+    expect(enuOf(scene).x).toBeCloseTo(-4, 0);
+    scene.startRoute(routeAt(3));
+    await expect(waitForFrames(track(() => Math.abs(enuOf(scene).x - 3) < 0.05))).resolves.toBe('ok');
+
+    expect(highest).toBeLessThan(EYE_HEIGHT - 6 + 0.3);
+  }, 60000);
 });
+
+// MODEL_AT 往东 east 米处起、地板在地面以下 6 米、往东 2 米的路线
+function routeAt(east: number): RoutePath {
+  return new RoutePath([
+    [MODEL_AT[0] + east / 95_200, MODEL_AT[1], -6],
+    [MODEL_AT[0] + (east + 2) / 95_200, MODEL_AT[1], -6]
+  ]);
+}
 
 // 屋子中心地板上朝东的出生点；第一人称不加载人物模型，给一个本地不存在的地址
 const EAST_SPAWN = { lng: MODEL_AT[0], lat: MODEL_AT[1], height: -6, heading: 90 };

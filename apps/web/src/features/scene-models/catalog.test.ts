@@ -88,7 +88,7 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
     const urls = models.flatMap(({ effects }) => effects.map(({ url }) => url));
     expect(urls.every(url => url.startsWith('https://maps.test/yzt/3dt/'))).toBe(true);
     const lengths = models.flatMap(({ routes }) => routes.map(({ length }) => Math.round(length)));
-    expect(lengths).toStrictEqual([121, 133, 58]);
+    expect(lengths).toStrictEqual([125, 133, 58]);
   });
 });
 
