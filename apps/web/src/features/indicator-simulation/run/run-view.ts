@@ -7,7 +7,6 @@ export type GroupStatus = StepStatus;
 export const STATUS_LABELS: Readonly<Record<GroupStatus, string>> = {
   waiting: '',
   running: '进行中',
-  checkpoint: '需确认',
   done: '完成',
   reused: '复用',
   stale: '待更新'
@@ -21,18 +20,12 @@ const RUNNING_TEXT: Readonly<Record<StepId, string>> = {
   qc: '核查数据完整性…',
   spatial: '生成服务圈、叠加分析…',
   compute: '逐区县计算…',
-  evaluate: '对照演示目标…',
+  evaluate: '对照目标值…',
   report: '撰写结论…'
 };
 
-const CHECKPOINT_TEXT: Readonly<Partial<Record<StepId, string>>> = {
-  qc: '等待你确认缺失处理',
-  spatial: '等待你确认参数'
-};
-
-/** 推演在进行（规划、执行、等人确认） */
-export const inProgress = (status: EngineState['status']): boolean =>
-  status === 'planning' || status === 'running' || status === 'checkpoint';
+/** 推演在进行（规划、执行） */
+export const inProgress = (status: EngineState['status']): boolean => status === 'planning' || status === 'running';
 
 export function stepGroup(id: StepGroupId): StepGroup {
   const group = STEP_GROUPS.find(item => item.id === id);
@@ -50,10 +43,10 @@ export const groupOfStep = (step: StepId): StepGroup => {
   return group;
 };
 
-/** 汇总一行的状态：等人确认、进行中、待更新优先；全部复用才是复用 */
+/** 汇总一行的状态：进行中、待更新优先；全部复用才是复用 */
 export function groupStatus(group: StepGroupId, steps: EngineState['steps']): GroupStatus {
   const statuses = stepGroup(group).steps.map(id => steps[id].status);
-  const first = (['checkpoint', 'running', 'stale'] as const).find(status => statuses.includes(status));
+  const first = (['running', 'stale'] as const).find(status => statuses.includes(status));
   if (first) {
     return first;
   }
@@ -78,12 +71,9 @@ export function nextGroup(state: EngineState): StepGroupId | null {
   return STEP_GROUPS.find(group => groupStatus(group.id, state.steps) === 'waiting')?.id ?? null;
 }
 
-/** 当前的一行：正在执行或等人确认的；干预后等待重算时是重算起点所在的一行 */
+/** 当前的一行：正在执行的；干预后等待重算时是重算起点所在的一行 */
 export function currentGroup(state: EngineState): StepGroupId | null {
-  const active = STEP_GROUPS.find(group => {
-    const status = groupStatus(group.id, state.steps);
-    return status === 'running' || status === 'checkpoint';
-  });
+  const active = STEP_GROUPS.find(group => groupStatus(group.id, state.steps) === 'running');
   if (active) {
     return active.id;
   }
@@ -107,8 +97,6 @@ export function stepText(step: StepId, state: EngineState, summary: string | und
       return '等待';
     case 'running':
       return state.paused ? '已暂停' : RUNNING_TEXT[step];
-    case 'checkpoint':
-      return CHECKPOINT_TEXT[step] ?? '等待确认';
     case 'stale':
       return '等待更新';
     case 'done':
@@ -148,8 +136,6 @@ export function planText(plan: ApplyPlan): string {
   switch (plan.outcome) {
     case 'saved':
       return `「${name}」尚未执行，保存后执行到这一步时生效`;
-    case 'resolved':
-      return `作为「${name}」的确认，接着推演`;
     case 'rerun':
       break;
   }

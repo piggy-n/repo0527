@@ -14,13 +14,12 @@ import {
   FACILITY_RING_COLOR,
   MASK_COLOR,
   PASS_COLORS,
-  PENDING_COLOR,
-  PLANNED_COLOR
+  PENDING_COLOR
 } from './colors';
 import type { MapData } from './map-data';
 
 /**
- * 地图在这一刻的演出，全部由步骤的状态和进度算出（ADR 0102 第 5、6 条）：数据只在每轮换一次，
+ * 地图在这一刻的演出，全部由步骤的状态和进度算出（ADR 0105 第 5、6 条）：数据只在每轮换一次，
  * 动画只改图层里的阈值和不透明度（paint），不重新切片
  */
 export interface MapFrame {
@@ -32,15 +31,15 @@ export interface MapFrame {
   readonly rain: number | null;
   /** 服务圈的扩散 0～1 */
   readonly ring: number;
-  /** 区县描边：数据核查的缺失、评价分级的未达标（闪烁）、结果阶段人工干预的预览（虚线） */
-  readonly alert: { readonly kind: 'missing' | 'fail' | 'preview'; readonly opacity: number } | null;
+  /** 区县描边：评价分级的未达标（闪烁）、结果阶段人工干预的预览（虚线） */
+  readonly alert: { readonly kind: 'fail' | 'preview'; readonly opacity: number } | null;
 }
 
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
 const easeOut = (t: number) => 1 - (1 - t) ** 2;
 
 /**
- * 这一刻的演出：先后是人口（按市点亮）→ 设施落点 → 核查描出缺失 → 服务圈扩散 → 扫描出数值 → 未达标闪烁。
+ * 这一刻的演出：先后是人口（按市点亮）→ 设施落点 → 服务圈扩散 → 扫描出数值 → 未达标闪烁。
  * still 是减少动画：每一段开始就是终态，未达标的描边不闪
  */
 export function mapFrame(state: EngineState, progress: (step: StepId) => number, still = false): MapFrame {
@@ -63,11 +62,7 @@ export function mapFrame(state: EngineState, progress: (step: StepId) => number,
   }
 
   let alert: MapFrame['alert'] = null;
-  const qcAsking =
-    status('qc') === 'checkpoint' || (status('qc') === 'running' && !state.decided.qc && progress('qc') >= 0.35);
-  if (qcAsking) {
-    alert = { kind: 'missing', opacity: 1 };
-  } else if (status('evaluate') === 'running') {
+  if (status('evaluate') === 'running') {
     // 0.15～0.75 之间闪四下
     const t = (progress('evaluate') - 0.15) / 0.6;
     if (t >= 0 && t <= 1) {
@@ -165,13 +160,12 @@ export function maskGroup(data: MapData | null): StyleGroup {
   };
 }
 
-/** 设施点和服务圈：现状绿色，规划新增紫色 */
+/** 设施点和服务圈 */
 export function facilitiesGroup(data: MapData | null, frame: MapFrame | null): StyleGroup {
   if (!data || !frame || frame.rain === null) {
     return EMPTY;
   }
   const source = FACILITIES_GROUP;
-  const planned: ExpressionSpecification = ['get', 'planned'];
   const layers: LayerSpecification[] = [];
   if (frame.ring > 0 && data.ringMeters > 0) {
     layers.push({
@@ -181,9 +175,9 @@ export function facilitiesGroup(data: MapData | null, frame: MapFrame | null): S
       minzoom: 8.5,
       paint: {
         'circle-radius': ringRadius(data.ringMeters, frame.ring),
-        'circle-color': ['case', planned, PLANNED_COLOR, FACILITY_RING_COLOR],
+        'circle-color': FACILITY_RING_COLOR,
         'circle-opacity': 0.12,
-        'circle-stroke-color': ['case', planned, PLANNED_COLOR, FACILITY_RING_COLOR],
+        'circle-stroke-color': FACILITY_RING_COLOR,
         'circle-stroke-width': 1,
         'circle-stroke-opacity': 0.55,
         'circle-pitch-alignment': 'map'
@@ -196,7 +190,7 @@ export function facilitiesGroup(data: MapData | null, frame: MapFrame | null): S
     source,
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 0.9, 9, 1.8, 12, 3.5, 15, 5],
-      'circle-color': ['case', planned, PLANNED_COLOR, FACILITY_COLOR],
+      'circle-color': FACILITY_COLOR,
       'circle-opacity': within('rank', frame.rain, 1, 0),
       'circle-stroke-color': DISTRICT_LINE_COLOR,
       'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 8, 0, 11, 1],
@@ -206,9 +200,9 @@ export function facilitiesGroup(data: MapData | null, frame: MapFrame | null): S
   return { sources: { [source]: { type: 'geojson', data: data.facilities } }, layers };
 }
 
-const ALERT_COLORS = { missing: ALERT_COLOR, fail: PASS_COLORS.fail, preview: ALERT_COLOR } as const;
+const ALERT_COLORS = { fail: PASS_COLORS.fail, preview: ALERT_COLOR } as const;
 
-/** 区县描边：缺失人口琥珀色，未达标红色闪烁，干预预览琥珀色虚线；放在边界之上 */
+/** 区县描边：未达标红色闪烁，干预预览琥珀色虚线；放在边界之上 */
 export function alertsGroup(data: MapData | null, frame: MapFrame | null): StyleGroup {
   if (!data || !frame?.alert) {
     return EMPTY;

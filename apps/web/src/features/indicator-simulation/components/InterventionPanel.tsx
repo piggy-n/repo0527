@@ -4,37 +4,36 @@ import { computed, defineComponent, type PropType, shallowRef } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { SimulationRun } from '../composables/useSimulationRun';
 import type { SimulationModel } from '../composables/useSimulationModel';
-import type { ApplyOutcome, MissingPopulation } from '../engine/engine';
-import { stepDefinition, type StepId } from '../engine/steps';
+import type { ApplyOutcome } from '../engine/engine';
+import { PARAM_STEP, stepDefinition, type StepId } from '../engine/steps';
 import { inProgress, planText } from '../run/run-view';
-import type { ParamKey, SimulationParams } from '../model/params';
+import { type ParamKey, paramsOf, type SimulationParams } from '../model/params';
 import styles from './InterventionPanel.module.scss';
 import { ParamEstimate } from './ParamEstimate';
 import { ParamFields } from './ParamFields';
 
-// 参数按用到它的步骤分组，顺序同推演
-const GROUPS: readonly { readonly step: StepId; readonly keys: readonly ParamKey[] }[] = [
-  { step: 'pop', keys: ['popCaliber'] },
-  { step: 'qc', keys: ['missing'] },
-  { step: 'spatial', keys: ['walkSpeed', 'facilityScope', 'newFacilities'] },
-  { step: 'evaluate', keys: ['targets'] }
-];
-
 const BUTTON_LABELS: Readonly<Record<ApplyOutcome, string>> = {
   unchanged: '应用',
   saved: '保存',
-  resolved: '确定',
   rerun: '应用并重算'
 };
 
-/** 人工干预：推演中打开时暂停，改参数时即时预估，按引擎的规则保存、作为确认或重算 */
+// 所选指标用得上的参数，按用到它的步骤分组，顺序同推演
+function groupsOf(indicatorIds: readonly string[]): { readonly step: StepId; readonly keys: ParamKey[] }[] {
+  const groups = new Map<StepId, ParamKey[]>();
+  for (const key of paramsOf(indicatorIds)) {
+    const step = PARAM_STEP[key];
+    groups.set(step, [...(groups.get(step) ?? []), key]);
+  }
+  return [...groups].map(([step, keys]) => ({ step, keys }));
+}
+
+/** 人工干预：推演中打开时暂停，改参数时即时预估，按引擎的规则保存或重算 */
 export const InterventionPanel = defineComponent({
   name: 'InterventionPanel',
   props: {
     run: { type: Object as PropType<SimulationRun>, required: true },
     model: { type: Object as PropType<SimulationModel>, required: true },
-    /** 最新年度缺失人口的区县：数据核查决定过以后才能在这里改 */
-    missing: { type: Array as PropType<readonly MissingPopulation[]>, default: () => [] },
     /** 结果阶段基于哪一版调整；推演中不传，基于当前参数 */
     baseIndex: { type: Number, default: undefined }
   },
@@ -85,13 +84,12 @@ export const InterventionPanel = defineComponent({
                   draft={draft.value}
                   note={planText(plan.value)}
                 />
-                {GROUPS.map(group => (
+                {groupsOf(conditions.indicatorIds).map(group => (
                   <section key={group.step} class={styles.group}>
                     <h4>{stepDefinition(group.step).name}</h4>
                     <ParamFields
                       keys={group.keys}
                       conditions={conditions}
-                      missing={state.value.decided.qc ? props.missing : []}
                       modelValue={draft.value}
                       onUpdate:modelValue={update}
                     />

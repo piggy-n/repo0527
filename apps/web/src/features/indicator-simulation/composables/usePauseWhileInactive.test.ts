@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { effectScope, ref } from 'vue';
 import { required } from '@/shared/testing/required';
-import { defaultComposition } from '../compose/composition';
+import { sampleComposition } from '../compose/composition';
 import { ManualClock } from '../engine/test-clock';
 import { createCalculator } from '../model/calculator';
 import { loadTestAtlas } from '../model/test-atlas';
@@ -32,7 +32,7 @@ describe('usePauseWhileInactive', () => {
   it('停用期间推演暂停、进度不走，回来后从停下的地方继续', async () => {
     using ctx = await setup();
     const { run, calculator, clock, active } = ctx;
-    run.start(defaultComposition(), calculator);
+    run.start(sampleComposition(), calculator);
     await clock.advance(PLANNING + 900);
     const before = run.progress('parse');
 
@@ -51,7 +51,7 @@ describe('usePauseWhileInactive', () => {
   it('和人工干预的暂停互不影响：停用又激活后，干预还没关时仍然暂停', async () => {
     using ctx = await setup();
     const { run, calculator, clock, active } = ctx;
-    run.start(defaultComposition(), calculator);
+    run.start(sampleComposition(), calculator);
     await clock.advance(PLANNING);
     const resumeIntervention = run.pause();
 

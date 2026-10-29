@@ -1,7 +1,7 @@
 import { onScopeDispose, type Ref, watch } from 'vue';
 import type { SimulationRun } from './useSimulationRun';
 
-/** 页面停用（被缓存、切到别的页面）期间推演暂停，回来后从停下的地方继续（ADR 0102 第 9 条） */
+/** 页面停用（被缓存、切到别的页面）期间推演暂停，回来后从停下的地方继续（ADR 0105 第 9 条） */
 export function usePauseWhileInactive(run: Pick<SimulationRun, 'pause'>, active: Readonly<Ref<boolean>>): void {
   let resume: (() => void) | null = null;
   const release = () => {

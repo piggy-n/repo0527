@@ -1,15 +1,19 @@
 import type { Calculator, IndicatorResult } from './calculator';
-import { isWalkCoverage, simulationIndicator } from './indicators';
+import { simulationIndicator } from './indicators';
 import {
   changedParams,
   defaultParams,
   describeParam,
-  inScenario,
-  NEW_FACILITIES_RANGE,
+  paramApplies,
   type ParamKey,
+  POP_CHANGE_RANGE,
+  RECOGNITION_LABELS,
+  type Recognition,
+  type Rule,
+  RULE_LABELS,
   type SimulationConditions,
   type SimulationParams,
-  WALK_SPEED_RANGE
+  withParam
 } from './params';
 
 /** 达标、接近（差距在目标值的 5% 以内）、未达标 */
@@ -48,8 +52,10 @@ export function contributions(
   const resultOf = (params: SimulationParams) => indicatorResult(calculator.computeYear(single, params, year).indicators, indicatorId);
   let current = from;
   let before = resultOf(current);
-  // 别的指标改了目标值，和这项指标无关
-  const keys = changedParams(from, to).filter(key => key !== 'targets' || from.targets[indicatorId] !== to.targets[indicatorId]);
+  // 对这项指标不起作用的参数、别的指标改了目标值，都和这项指标无关
+  const keys = changedParams(from, to).filter(
+    key => paramApplies(key, indicatorId) && (key !== 'targets' || from.targets[indicatorId] !== to.targets[indicatorId])
+  );
   return keys.map(key => {
     current = withParam(current, key, to);
     const after = resultOf(current);
@@ -65,31 +71,26 @@ export function contributions(
   });
 }
 
-// 把一项参数换成 source 的取值；规划新增连同它的作用范围一起换
-function withParam(params: SimulationParams, key: ParamKey, source: SimulationParams): SimulationParams {
-  switch (key) {
-    case 'popCaliber':
-      return { ...params, popCaliber: source.popCaliber };
-    case 'missing':
-      return { ...params, missing: source.missing };
-    case 'walkSpeed':
-      return { ...params, walkSpeed: source.walkSpeed };
-    case 'facilityScope':
-      return { ...params, facilityScope: source.facilityScope };
-    case 'newFacilities':
-      return { ...params, newFacilities: source.newFacilities, scenarioIds: source.scenarioIds };
-    case 'targets':
-      break;
-  }
-  return { ...params, targets: source.targets };
+/** 参数敏感性的一个情景：计算规程、覆盖认定的一种组合 */
+export interface SensitivityOption {
+  readonly label: string;
+  readonly value: number;
+  readonly current: boolean;
+  readonly standard: boolean;
 }
 
-/** 敏感性曲线：步行类覆盖率看步行速度，其余看规划新增（这项指标算进作用范围） */
-export interface Sensitivity {
-  readonly key: 'walkSpeed' | 'newFacilities';
-  readonly points: readonly (readonly [x: number, value: number])[];
-  readonly current: number;
-}
+/**
+ * 参数敏感性：这项指标自己的参数取不同值时的全省值。人均类按常住人口变化画曲线，
+ * 住宅用地覆盖率列出计算规程、覆盖认定的各种组合；没有可调参数（城区面积覆盖率）时为 null
+ */
+export type Sensitivity =
+  | { readonly kind: 'curve'; readonly points: readonly (readonly [x: number, value: number])[]; readonly current: number }
+  | {
+      readonly kind: 'options';
+      /** 取不同值的参数：计算规程、覆盖认定中这项指标用得上的 */
+      readonly keys: readonly ParamKey[];
+      readonly options: readonly SensitivityOption[];
+    };
 
 export function sensitivity(
   calculator: Calculator,
@@ -97,70 +98,44 @@ export function sensitivity(
   params: SimulationParams,
   indicatorId: string,
   year: number
-): Sensitivity {
-  const walk = isWalkCoverage(simulationIndicator(indicatorId));
-  const range = walk ? WALK_SPEED_RANGE : NEW_FACILITIES_RANGE;
+): Sensitivity | null {
   const single = { ...conditions, indicatorIds: [indicatorId] };
-  const withScenario = params.scenarioIds === null || inScenario(params, indicatorId) ? params.scenarioIds : [...params.scenarioIds, indicatorId];
-  const points: (readonly [number, number])[] = [];
-  for (let x = range.min; x <= range.max; x += range.step) {
-    const next: SimulationParams = walk ? { ...params, walkSpeed: x } : { ...params, newFacilities: x, scenarioIds: withScenario };
-    points.push([x, indicatorResult(calculator.computeYear(single, next, year).indicators, indicatorId).value]);
+  const valueOf = (next: SimulationParams) => indicatorResult(calculator.computeYear(single, next, year).indicators, indicatorId).value;
+  if (paramApplies('popChange', indicatorId)) {
+    const points: (readonly [number, number])[] = [];
+    for (let x = POP_CHANGE_RANGE.min; x <= POP_CHANGE_RANGE.max; x += POP_CHANGE_RANGE.step) {
+      points.push([x, valueOf({ ...params, popChange: x })]);
+    }
+    return { kind: 'curve', points, current: params.popChange };
   }
-  return {
-    key: walk ? 'walkSpeed' : 'newFacilities',
-    points,
-    current: walk ? params.walkSpeed : inScenario(params, indicatorId) ? params.newFacilities : 0
-  };
-}
-
-/** 同一种设施的已选指标：新增公园绿地同时影响覆盖率和人均值 */
-export function sameFacility(conditions: SimulationConditions, indicatorId: string): string[] {
-  const { facility } = simulationIndicator(indicatorId);
-  return conditions.indicatorIds.filter(id => simulationIndicator(id).facility === facility);
-}
-
-/** 建议情景：规划新增多少这类设施；reached 为 false 时是新增到上限也达不到的"上限情景" */
-export interface Suggestion {
-  readonly add: number;
-  readonly scenarioIds: readonly string[];
-  readonly before: IndicatorResult;
-  readonly after: IndicatorResult;
-  readonly reached: boolean;
-}
-
-/**
- * 在 0～50% 的新增设施里，找最小的、能让全省达标或多约四分之一的市达标的比例；
- * 都做不到时给出新增 50% 的效果，没有提升时没有建议；全部达标时也没有建议
- */
-export function suggestion(
-  calculator: Calculator,
-  conditions: SimulationConditions,
-  params: SimulationParams,
-  indicatorId: string,
-  year: number
-): Suggestion | null {
-  const resultOf = (next: SimulationParams) => indicatorResult(calculator.computeYear(conditions, next, year).indicators, indicatorId);
-  const before = resultOf(params);
-  const start = inScenario(params, indicatorId) ? params.newFacilities : 0;
-  if (before.passCount === before.total || start >= NEW_FACILITIES_RANGE.max) {
+  const rules: readonly Rule[] = paramApplies('rule', indicatorId) ? ['new', 'old'] : [params.rule];
+  const recognitions: readonly Recognition[] = paramApplies('recognition', indicatorId) ? ['half', 'intersect'] : [params.recognition];
+  if (rules.length * recognitions.length === 1) {
     return null;
   }
-  const scenarioIds = sameFacility(conditions, indicatorId);
-  const need = Math.max(1, Math.min(3, Math.ceil(before.total / 4)));
-  let after = before;
-  let add = start;
-  while (add < NEW_FACILITIES_RANGE.max) {
-    add = Math.min(NEW_FACILITIES_RANGE.max, add + NEW_FACILITIES_RANGE.step);
-    after = resultOf({ ...params, newFacilities: add, scenarioIds });
-    if (after.value >= after.target || after.passCount - before.passCount >= need) {
-      return { add, scenarioIds, before, after, reached: true };
-    }
-  }
-  return after.value > before.value ? { add, scenarioIds, before, after, reached: false } : null;
+  const standard = defaultParams();
+  const options = rules.flatMap(rule =>
+    recognitions.map((recognition): SensitivityOption => {
+      const changed = [
+        ...(rule === standard.rule ? [] : [RULE_LABELS[rule]]),
+        ...(recognition === standard.recognition ? [] : [RECOGNITION_LABELS[recognition]])
+      ];
+      return {
+        label: changed.length === 0 ? '标准口径' : changed.join(' + '),
+        value: valueOf({ ...params, rule, recognition }),
+        current: rule === params.rule && recognition === params.recognition,
+        standard: changed.length === 0
+      };
+    })
+  );
+  const keys: ParamKey[] = [
+    ...(rules.length > 1 ? ['rule' as const] : []),
+    ...(recognitions.length > 1 ? ['recognition' as const] : [])
+  ];
+  return { kind: 'options', keys, options };
 }
 
-/** 地图分级的断点：所选年度在默认参数下的区县值取五档分位数，年度、版本之间的颜色可比 */
+/** 地图分级的断点：所选年度在标准口径下的区县值取五档分位数，年度、版本之间的颜色可比 */
 export function valueBreaks(calculator: Calculator, conditions: SimulationConditions, indicatorId: string): readonly number[] {
   const single = { ...conditions, indicatorIds: [indicatorId] };
   const values = conditions.years

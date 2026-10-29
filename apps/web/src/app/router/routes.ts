@@ -75,7 +75,7 @@ const businessRoutes: RouteRecordRaw[] = [
     component: withMapRuntime(() => import('@/pages/ai-chat/AiChatPage').then(({ AiChatPage }) => AiChatPage)),
     meta: { title: 'AI对话' }
   },
-  // 切到别的页面再回来，推演和结果都还在；停用期间推演暂停（ADR 0102 第 9 条）
+  // 切到别的页面再回来，推演和结果都还在；停用期间推演暂停（ADR 0105 第 9 条）
   {
     path: 'indicator-simulation',
     name: RouteName.indicatorSimulation,

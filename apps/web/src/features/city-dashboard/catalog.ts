@@ -21,7 +21,7 @@ export const CITIES: readonly City[] = [
   { code: '321300', name: '宿迁市', anchor: [118.46, 33.96] }
 ];
 
-// 指标目录与四个分类在 shared/city-indicators，指标智能推演也用（ADR 0102）
+// 指标目录与四个分类在 shared/city-indicators，指标智能推演也用（ADR 0105）
 export { INDICATORS };
 
 export interface DashboardCategory extends IndicatorCategory {

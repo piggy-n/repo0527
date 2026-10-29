@@ -31,11 +31,8 @@ describe('mapFrame', () => {
     expect(mapFrame(stateWith({ ...DONE_TO_POI, qc: 'done', spatial: 'done', compute: 'running' }), at({})).rain).toBeNull();
   });
 
-  it('数据核查停下来问时描出缺失的区县，决定后不再描', () => {
-    const asking = stateWith({ ...DONE_TO_POI, qc: 'checkpoint' });
-    expect(mapFrame(asking, at({ qc: 0.5 })).alert).toEqual({ kind: 'missing', opacity: 1 });
-    const decided = stateWith({ ...DONE_TO_POI, qc: 'running' }, { decided: { qc: true, spatial: false } });
-    expect(mapFrame(decided, at({ qc: 0.6 })).alert).toBeNull();
+  it('数据核查时不描区县', () => {
+    expect(mapFrame(stateWith({ ...DONE_TO_POI, qc: 'running' }), at({ qc: 0.6 })).alert).toBeNull();
   });
 
   it('计算时扫描，完成后全部显示数值；评价分级时未达标的闪烁', () => {
@@ -67,7 +64,7 @@ describe('mapFrame', () => {
 });
 
 describe('分组', () => {
-  const frame: MapFrame = { density: 0.5, scan: 0.3, rain: 0.2, ring: 1, alert: { kind: 'missing', opacity: 1 } };
+  const frame: MapFrame = { density: 0.5, scan: 0.3, rain: 0.2, ring: 1, alert: { kind: 'fail', opacity: 1 } };
 
   it('数据不变时动画只改图层里的阈值，数据源是同一个对象', async () => {
     const calculator = createCalculator(await loadTestAtlas());
@@ -84,7 +81,7 @@ describe('分组', () => {
     expect(JSON.stringify(b.layers[2])).toContain('0.6');
     expect(facilitiesGroup(data, frame).layers.map(layer => layer.id)).toEqual(['simulation-facilities-ring', 'simulation-facilities-point']);
     expect(facilitiesGroup(data, { ...frame, ring: 0 }).layers.map(layer => layer.id)).toEqual(['simulation-facilities-point']);
-    expect(alertsGroup(data, frame).layers[0]).toMatchObject({ filter: ['==', ['get', 'missing'], true] });
+    expect(alertsGroup(data, frame).layers[0]).toMatchObject({ filter: ['==', ['get', 'fail'], true] });
     expect(maskGroup(data).layers).toHaveLength(1);
   });
 

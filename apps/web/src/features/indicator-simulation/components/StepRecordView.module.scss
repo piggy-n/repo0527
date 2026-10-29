@@ -191,7 +191,8 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+// 减少动画（由 motion.ts 决定，现在总是播放）
+:global(.simulation-still) {
   .tool::before,
   .typing::after {
     animation: none;

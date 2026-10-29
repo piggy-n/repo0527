@@ -2,7 +2,6 @@ import { MxTitle } from '@yzt/ui';
 import { ElButton } from 'element-plus';
 import { computed, defineComponent, type PropType, shallowRef } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
-import type { SimulationModel } from '../composables/useSimulationModel';
 import {
   changedParams,
   PARAM_LABELS,
@@ -10,20 +9,20 @@ import {
   type SimulationConditions,
   type SimulationParams
 } from '../model/params';
-import { ParamEstimate } from './ParamEstimate';
 import { ParamFields } from './ParamFields';
 import styles from './ParamPopover.module.scss';
 
-/** 编排图上参数节点的编辑浮层：改一项参数，即时预估，确定后才交给拥有者 */
+/** 编排图上参数节点的编辑浮层：只改这一项参数，草稿交给编排图预估，确定后才交给拥有者 */
 export const ParamPopover = defineComponent({
   name: 'ParamPopover',
   props: {
     paramKey: { type: String as PropType<ParamKey>, required: true },
-    model: { type: Object as PropType<SimulationModel>, required: true },
     conditions: { type: Object as PropType<SimulationConditions>, required: true },
     params: { type: Object as PropType<SimulationParams>, required: true }
   },
   emits: {
+    /** 草稿变了：编排图下方的预估按它显示 */
+    preview: (params: SimulationParams) => typeof params === 'object',
     apply: (params: SimulationParams) => typeof params === 'object',
     cancel: () => true
   },
@@ -31,6 +30,10 @@ export const ParamPopover = defineComponent({
     // 浮层关闭时卸载，草稿随之丢弃
     const draft = shallowRef(props.params);
     const changed = computed(() => changedParams(props.params, draft.value).length > 0);
+    const update = (next: SimulationParams) => {
+      draft.value = next;
+      emit('preview', next);
+    };
 
     const onKeydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -50,18 +53,12 @@ export const ParamPopover = defineComponent({
             </button>
           </div>
           <div class={styles.body}>
-            <ParamEstimate
-              model={props.model}
-              conditions={props.conditions}
-              base={props.params}
-              draft={draft.value}
-            />
             <ParamFields
-              class={styles.fields}
+              bare
               keys={[props.paramKey]}
               conditions={props.conditions}
               modelValue={draft.value}
-              onUpdate:modelValue={params => (draft.value = params)}
+              onUpdate:modelValue={update}
             />
           </div>
           <div class={styles.footer}>

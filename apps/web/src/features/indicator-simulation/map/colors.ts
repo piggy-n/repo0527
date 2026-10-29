@@ -6,17 +6,13 @@ export const VALUE_COLORS = ['#dfe8ff', '#b4c8ff', '#7f9ff6', '#4f72e3', '#2c4bb
 export const PASS_COLORS = { pass: '#3aa776', near: '#f2b84b', fail: '#e5675c' } as const;
 /** 计算中还没扫到的区县 */
 export const PENDING_COLOR = '#c8d2e2';
-/** 剔除的区县 */
-export const EXCLUDED_COLOR = '#aab3c0';
-/** 缺失人口的描边（--color-warning） */
+/** 人工干预预览的描边（--color-warning） */
 export const ALERT_COLOR = '#f0a020';
 /** 人口密度的底色（--color-ai-violet 系） */
 export const DENSITY_COLOR = '#9d8cff';
-/** 现状设施与它的服务圈 */
+/** 设施与它的服务圈 */
 export const FACILITY_COLOR = '#1f7a58';
 export const FACILITY_RING_COLOR = '#2f9e74';
-/** 规划新增设施（--color-scenario） */
-export const PLANNED_COLOR = '#7a5cff';
 /** 推演范围以外的遮罩（--color-bg-page） */
 export const MASK_COLOR = '#f3f5f9';
 /** 区县之间的分隔线 */

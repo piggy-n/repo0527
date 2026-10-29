@@ -305,23 +305,6 @@
   }
 }
 
-.checkpoint {
-  > .dot {
-    background: var(--color-warning);
-    color: var(--color-text-inverse);
-    animation: pulse 1.6s ease-out infinite;
-  }
-
-  > .main .bar {
-    opacity: 1;
-  }
-
-  .badge {
-    background: var(--color-warning-bg);
-    color: var(--color-warning-text);
-  }
-}
-
 .done {
   > .dot {
     background: var(--color-success-bg-solid);
@@ -442,16 +425,6 @@
   }
 }
 
-@keyframes pulse {
-  from {
-    box-shadow: 0 0 0 0 var(--color-warning);
-  }
-
-  to {
-    box-shadow: 0 0 0 10px transparent;
-  }
-}
-
 @keyframes shake {
   25%,
   75% {
@@ -469,12 +442,12 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+// 减少动画（由 motion.ts 决定，现在总是播放）
+:global(.simulation-still) {
   .step,
   .spark,
   .orb,
   .running > .dot .ring,
-  .checkpoint > .dot,
   .done > .dot,
   .changed > .main {
     animation: none;

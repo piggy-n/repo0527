@@ -9,7 +9,7 @@ import type { SimulationMap } from '../composables/useSimulationMap';
 import type { SimulationModel } from '../composables/useSimulationModel';
 import type { SimulationResult } from '../composables/useSimulationResult';
 import type { SimulationRun } from '../composables/useSimulationRun';
-import type { ApplyOutcome, MissingPopulation } from '../engine/engine';
+import type { ApplyOutcome } from '../engine/engine';
 import { STEP_GROUPS, type StepGroupId } from '../engine/steps';
 import { describeChanges, type NarrativeInput, type StepRecord, stepRecord } from '../run/narrative';
 import { currentGroup, doneCount, groupStatus, inProgress, stepGroup } from '../run/run-view';
@@ -26,7 +26,6 @@ import { StepsPanel } from './StepsPanel';
 const APPLIED_MESSAGES: Readonly<Record<ApplyOutcome, string | null>> = {
   unchanged: null,
   saved: '参数已保存，执行到对应步骤时生效',
-  resolved: '已按调整确认，接着推演',
   rerun: '已按调整重新推演'
 };
 
@@ -66,7 +65,6 @@ export const RunStage = defineComponent({
     const conditions = computed(() => state.value.conditions);
     const params = computed(() => state.value.params);
     const baseParams = computed(() => state.value.baseParams);
-    const decided = computed(() => state.value.decided);
     // 完成时这一轮的版本已经加进去了
     const version = computed(() => state.value.versions.length + (state.value.status === 'done' ? 0 : 1));
     const input = computed((): NarrativeInput | null => {
@@ -79,7 +77,6 @@ export const RunStage = defineComponent({
         conditions: conditions.value,
         params: params.value,
         baseParams: baseParams.value,
-        decided: decided.value,
         version: version.value
       };
     });
@@ -119,30 +116,6 @@ export const RunStage = defineComponent({
       const changes = describeChanges(adjustment.changes, adjustment.from, params.value, conditions.value);
       return `调整后重算：${changes.join('；')}`;
     });
-
-    // 人工干预里缺失处理的区县：按当前的人口口径插补
-    const missing = computed((): MissingPopulation[] => {
-      const calculator = run.calculator.value;
-      if (!calculator || !conditions.value) {
-        return [];
-      }
-      const year = Math.max(...conditions.value.years);
-      return calculator.missingDistricts(year, conditions.value.cityCodes).map(district => ({
-        district,
-        imputed: calculator.imputedPopulation(district, year, params.value.popCaliber)
-      }));
-    });
-
-    // 需要确认时右上自动展开，回到当前
-    watch(
-      () => state.value.checkpoint,
-      checkpoint => {
-        if (checkpoint) {
-          expandRight();
-          pinned.value = null;
-        }
-      }
-    );
 
     // 打开人工干预时暂停，关闭后继续
     let release: (() => void) | null = null;
@@ -277,8 +250,6 @@ export const RunStage = defineComponent({
         record={recordOf(group)}
         reviewing={reviewing.value || resultPhase.value}
         note={note.value}
-        onResolve={decision => run.resolveCheckpoint(decision)}
-        onAdjust={() => (intervening.value = true)}
         onBack={() => (pinned.value = null)}
         onCollapse={() => {
           if (resultPhase.value) {
@@ -289,13 +260,6 @@ export const RunStage = defineComponent({
         }}
       />
     );
-
-    const suggest = () => {
-      if (props.result.applySuggestion() === 'rerun') {
-        pinned.value = null;
-        ElMessage.success('已按建议情景重新推演');
-      }
-    };
 
     // 结果阶段：右侧是推演结果，回看某一步时详情在它左边
     const renderResult = () => {
@@ -308,7 +272,6 @@ export const RunStage = defineComponent({
             result={props.result}
             conditions={conditions.value}
             versions={state.value.versions}
-            onSuggest={suggest}
           />
         </div>,
         pinned.value !== null && (
@@ -331,16 +294,9 @@ export const RunStage = defineComponent({
       if (resultPhase.value) {
         return renderResult();
       }
-      const checkpoint = state.value.checkpoint !== null;
       if (!sides.right.value) {
         return (
-          <button
-            key="pill"
-            type="button"
-            class={[styles.pill, checkpoint && styles.attention]}
-            aria-label="展开当前步骤"
-            onClick={expandRight}
-          >
+          <button key="pill" type="button" class={styles.pill} aria-label="展开当前步骤" onClick={expandRight}>
             <span class={styles.pulse} />
             <span class={styles.pillText}>当前步骤 · {stepGroup(shown.value).name}</span>
           </button>
@@ -376,7 +332,6 @@ export const RunStage = defineComponent({
             <InterventionPanel
               run={run}
               model={props.model}
-              missing={missing.value}
               baseIndex={resultPhase.value ? props.result.selection.value?.viewIndex : undefined}
               onApplied={onApplied}
               onPreview={draft => {

@@ -1,4 +1,4 @@
-import { defineComponent, type PropType, type SlotsType, type VNode } from 'vue';
+import { defineComponent, type PropType } from 'vue';
 import { stepDefinition, type StepId } from '../engine/steps';
 import type { Metric, NarrativeLine, StepRecord } from '../run/narrative';
 import { RichText } from './RichText';
@@ -18,18 +18,14 @@ export const StepRecordView = defineComponent({
     record: { type: Object as PropType<StepRecord>, required: true },
     /** 步骤的进度 0～1 */
     progress: { type: Function as PropType<(step: StepId) => number>, required: true },
-    /** 步骤是否已经开始（进行、等确认、完成、复用） */
+    /** 步骤是否已经开始（进行、完成、复用） */
     started: { type: Function as PropType<(step: StepId) => boolean>, required: true },
     /** 减少动画：直接显示完整的文字和数字 */
     still: Boolean,
     /** 干预后重算的说明，写在分析过程的最前面 */
     note: { type: String as PropType<string | null>, default: null }
   },
-  slots: Object as SlotsType<{
-    /** 分析过程后面：等人确认的卡片 */
-    checkpoint?: () => VNode[];
-  }>,
-  setup(props, { slots }) {
+  setup(props) {
     // 进度过了 at 以后经过的毫秒数
     const elapsed = (step: StepId, at: number) => (props.progress(step) - at) * stepDefinition(step).duration;
 
@@ -86,7 +82,6 @@ export const StepRecordView = defineComponent({
                 </div>
               );
             })}
-            {slots.checkpoint?.()}
           </section>
           {metrics.length > 0 && (
             <section class={styles.block}>

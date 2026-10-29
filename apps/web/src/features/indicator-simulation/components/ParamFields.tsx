@@ -1,64 +1,51 @@
 import { MxTitle } from '@yzt/ui';
-import { ElCheckTag, ElInputNumber, ElRadioButton, ElRadioGroup, ElSlider } from 'element-plus';
+import { ElInputNumber, ElRadioButton, ElRadioGroup, ElSlider } from 'element-plus';
 import { defineComponent, type PropType, type VNodeChild } from 'vue';
-import type { MissingPopulation } from '../engine/engine';
-import { simulationIndicator, walkMinutes } from '../model/indicators';
+import { simulationIndicator } from '../model/indicators';
 import {
-  CALIBER_LABELS,
-  type FacilityScope,
-  inScenario,
-  MISSING_LABELS,
-  type MissingTreatment,
-  NEW_FACILITIES_RANGE,
+  isStandard,
+  paramApplies,
   PARAM_LABELS,
   type ParamKey,
-  type PopulationCaliber,
-  SCOPE_LABELS,
+  POP_CHANGE_RANGE,
+  RECOGNITION_LABELS,
+  type Recognition,
+  type Rule,
+  RULE_LABELS,
+  signedPercent,
   type SimulationConditions,
-  type SimulationParams,
-  WALK_SPEED_RANGE
+  type SimulationParams
 } from '../model/params';
 import styles from './ParamFields.module.scss';
 
-const CALIBERS: readonly PopulationCaliber[] = ['resident', 'registered'];
-const SCOPES: readonly FacilityScope[] = ['all', 'standard', 'large'];
-const MISSING_KINDS: readonly MissingTreatment['kind'][] = ['impute', 'exclude', 'manual'];
+const RULES: readonly Rule[] = ['new', 'old'];
+const RECOGNITIONS: readonly Recognition[] = ['half', 'intersect'];
+
+// 选项的说明：写清楚取自 Excel 的哪条规则
+const RULE_NOTES: Readonly<Record<Rule, string>> = {
+  new: '卫生服务站、文化活动站按步行 15 分钟（1000 米），2025 年起采用',
+  old: '站点按步行 5 分钟（300 米），服务中心仍为 15 分钟'
+};
+const RECOGNITION_NOTES: Readonly<Record<Recognition, string>> = {
+  half: '住宅图斑一半以上的面积在服务范围内才算覆盖',
+  intersect: '与服务范围相交的住宅图斑都算覆盖，同消防救援、派出所的认定'
+};
 
 // 单选组的值换回选项；不在选项里的忽略
 const pick = <T extends string>(options: readonly T[], value: unknown): T | undefined =>
   options.find(option => option === value);
 
-// 步行类覆盖率各自的服务半径
-function radiiText(conditions: SimulationConditions, walkSpeed: number): string {
-  const minutes = walkMinutes(conditions.indicatorIds);
-  if (minutes.length === 0) {
-    return '所选指标没有步行类覆盖率，不受影响';
-  }
-  return `服务半径：${minutes.map(value => `${value} 分钟 ${value * walkSpeed} 米`).join('，')}`;
-}
+const scenarioTag = (show: boolean) => show && <span class={styles.scenario}>模拟情景</span>;
 
-// 一项参数：区块标题（可带紧跟的灰色说明）、右侧的当前值，下面是编辑控件
-const field = (key: ParamKey, content: VNodeChild, value?: string, description?: string) => (
-  <div key={key} class={styles.field}>
-    <MxTitle description={description}>
-      {{
-        default: () => PARAM_LABELS[key],
-        extra: value === undefined ? undefined : () => <span class={styles.value}>{value}</span>
-      }}
-    </MxTitle>
-    <div>{content}</div>
-  </div>
-);
-
-/** 参数的编辑项：编排阶段的参数节点只编辑一项，人工干预编辑全部；改动交给拥有者，组件不保存 */
+/** 参数的编辑项：编排阶段的参数节点只编辑一项，人工干预编辑所选指标用得上的全部；改动交给拥有者，组件不保存 */
 export const ParamFields = defineComponent({
   name: 'ParamFields',
   props: {
     keys: { type: Array as PropType<readonly ParamKey[]>, required: true },
     conditions: { type: Object as PropType<SimulationConditions>, required: true },
     modelValue: { type: Object as PropType<SimulationParams>, required: true },
-    /** 最新年度缺失人口的区县：数据核查发现后才有，缺失数据处理按它编辑 */
-    missing: { type: Array as PropType<readonly MissingPopulation[]>, default: () => [] }
+    /** 浮层的标题已经写了参数名：不再显示区块标题，只留一行说明和右侧的取值或情景标记 */
+    bare: Boolean
   },
   emits: {
     'update:modelValue': (params: SimulationParams) => typeof params === 'object'
@@ -66,222 +53,148 @@ export const ParamFields = defineComponent({
   setup(props, { emit }) {
     const update = (patch: Partial<SimulationParams>) => emit('update:modelValue', { ...props.modelValue, ...patch });
 
-    const toggleScope = (id: string) => {
-      const { conditions, modelValue } = props;
-      const scope = new Set(modelValue.scenarioIds ?? conditions.indicatorIds);
-      if (scope.has(id)) {
-        scope.delete(id);
-      } else {
-        scope.add(id);
+    // 一项参数：区块标题（可带紧跟的灰色说明）、右侧的当前值或情景标记，下面是编辑控件
+    const field = (key: ParamKey, content: VNodeChild, extra?: () => VNodeChild, description?: string) => {
+      let head: VNodeChild;
+      if (!props.bare) {
+        head = <MxTitle description={description}>{{ default: () => PARAM_LABELS[key], extra }}</MxTitle>;
+      } else if (description !== undefined || extra) {
+        head = (
+          <div class={styles.head}>
+            <span class={styles.description}>{description}</span>
+            {extra?.()}
+          </div>
+        );
       }
-      const ids = conditions.indicatorIds.filter(item => scope.has(item));
-      update({ scenarioIds: ids.length === conditions.indicatorIds.length ? null : ids });
-    };
-
-    // 手动填写的人口：没填过的用插补值
-    const manualValues = (): Readonly<Record<string, number>> => {
-      const { missing, modelValue } = props;
-      const filled = modelValue.missing.kind === 'manual' ? modelValue.missing.values : {};
-      return Object.fromEntries(
-        missing.map(({ district, imputed }) => [district.code, filled[district.code] ?? imputed])
-      );
-    };
-
-    const renderMissing = (): VNodeChild => {
-      const { missing, modelValue: params } = props;
-      if (missing.length === 0) {
-        return field('missing', <p class={styles.note}>数据核查发现缺失后可调整</p>);
-      }
-      const values = manualValues();
-      return field(
-        'missing',
-        <>
-          <ElRadioGroup
-            size="small"
-            modelValue={params.missing.kind}
-            aria-label={PARAM_LABELS.missing}
-            onUpdate:modelValue={value => {
-              const kind = pick(MISSING_KINDS, value);
-              if (kind) {
-                update({ missing: kind === 'manual' ? { kind, values } : { kind } });
-              }
-            }}
-          >
-            {MISSING_KINDS.map(kind => (
-              <ElRadioButton key={kind} value={kind}>
-                {MISSING_LABELS[kind]}
-              </ElRadioButton>
-            ))}
-          </ElRadioGroup>
-          {params.missing.kind === 'manual' && (
-            <div class={styles.targets}>
-              {missing.map(({ district }) => [
-                <span key={`${district.code}-label`}>{district.name}（万人）</span>,
-                <ElInputNumber
-                  key={district.code}
-                  class={styles.number}
-                  size="small"
-                  controlsPosition="right"
-                  modelValue={values[district.code]}
-                  min={0.1}
-                  step={0.1}
-                  precision={1}
-                  aria-label={`${district.name}的人口（万人）`}
-                  onUpdate:modelValue={value => {
-                    if (typeof value === 'number' && Number.isFinite(value)) {
-                      update({ missing: { kind: 'manual', values: { ...values, [district.code]: value } } });
-                    }
-                  }}
-                />
-              ])}
-            </div>
-          )}
-          <p class={styles.note}>剔除的区县不参与汇总；手动填写核实后的人口</p>
-        </>
+      return (
+        <div key={key} class={styles.field}>
+          {head}
+          <div>{content}</div>
+        </div>
       );
     };
 
     const render = (key: ParamKey): VNodeChild => {
       const { conditions, modelValue: params } = props;
+      const scenario = () => scenarioTag(!isStandard(key, params));
+      // 这项参数作用于哪些已选指标
+      const scope = `作用于${conditions.indicatorIds
+        .filter(id => paramApplies(key, id))
+        .map(id => simulationIndicator(id).short)
+        .join('、')}`;
       switch (key) {
-        case 'popCaliber':
+        case 'rule':
           return field(
             key,
             <>
               <ElRadioGroup
                 size="small"
-                modelValue={params.popCaliber}
-                aria-label={PARAM_LABELS.popCaliber}
+                modelValue={params.rule}
+                aria-label={PARAM_LABELS.rule}
                 onUpdate:modelValue={value => {
-                  const popCaliber = pick(CALIBERS, value);
-                  if (popCaliber) {
-                    update({ popCaliber });
+                  const rule = pick(RULES, value);
+                  if (rule) {
+                    update({ rule });
                   }
                 }}
               >
-                {CALIBERS.map(caliber => (
-                  <ElRadioButton key={caliber} value={caliber}>
-                    {CALIBER_LABELS[caliber]}
+                {RULES.map(rule => (
+                  <ElRadioButton key={rule} value={rule}>
+                    {RULE_LABELS[rule]}
+                    {rule === 'new' && '（标准）'}
                   </ElRadioButton>
                 ))}
               </ElRadioGroup>
-              <p class={styles.note}>户籍人口在苏南城市明显少于常住人口，人均值会变高</p>
-            </>
-          );
-        case 'walkSpeed':
-          return field(
-            key,
-            <>
-              <ElSlider
-                class={styles.slider}
-                size="small"
-                modelValue={params.walkSpeed}
-                min={WALK_SPEED_RANGE.min}
-                max={WALK_SPEED_RANGE.max}
-                step={WALK_SPEED_RANGE.step}
-                showTooltip={false}
-                ariaLabel={PARAM_LABELS.walkSpeed}
-                onUpdate:modelValue={value => {
-                  if (typeof value === 'number') {
-                    update({ walkSpeed: value });
-                  }
-                }}
-              />
-              <p class={styles.note}>{radiiText(conditions, params.walkSpeed)}</p>
+              <p class={styles.note}>{RULE_NOTES[params.rule]}</p>
             </>,
-            `${params.walkSpeed} 米/分钟`
+            scenario,
+            scope
           );
-        case 'facilityScope':
-          return field(
-            key,
-            <ElRadioGroup
-              size="small"
-              modelValue={params.facilityScope}
-              aria-label={PARAM_LABELS.facilityScope}
-              onUpdate:modelValue={value => {
-                const facilityScope = pick(SCOPES, value);
-                if (facilityScope) {
-                  update({ facilityScope });
-                }
-              }}
-            >
-              {SCOPES.map(scope => (
-                <ElRadioButton key={scope} value={scope}>
-                  {SCOPE_LABELS[scope]}
-                </ElRadioButton>
-              ))}
-            </ElRadioGroup>
-          );
-        case 'newFacilities':
+        case 'recognition':
           return field(
             key,
             <>
-              <ElSlider
-                class={styles.slider}
+              <ElRadioGroup
                 size="small"
-                modelValue={params.newFacilities}
-                min={NEW_FACILITIES_RANGE.min}
-                max={NEW_FACILITIES_RANGE.max}
-                step={NEW_FACILITIES_RANGE.step}
-                showTooltip={false}
-                ariaLabel={PARAM_LABELS.newFacilities}
+                modelValue={params.recognition}
+                aria-label={PARAM_LABELS.recognition}
                 onUpdate:modelValue={value => {
-                  if (typeof value === 'number') {
-                    update({ newFacilities: value });
+                  const recognition = pick(RECOGNITIONS, value);
+                  if (recognition) {
+                    update({ recognition });
                   }
                 }}
-              />
-              <p class={styles.note}>情景假设：在现有设施附近按比例新增，地图上以紫色显示</p>
-              <div class={styles.subLabel}>
-                作用于<span class={styles.note}>点选切换，编排图上的连线同步</span>
-              </div>
-              <div class={styles.tags}>
-                {conditions.indicatorIds.map(id => (
-                  <ElCheckTag key={id} checked={inScenario(params, id)} onChange={() => toggleScope(id)}>
-                    {simulationIndicator(id).short}
-                  </ElCheckTag>
+              >
+                {RECOGNITIONS.map(recognition => (
+                  <ElRadioButton key={recognition} value={recognition}>
+                    {RECOGNITION_LABELS[recognition]}
+                    {recognition === 'half' && '（标准）'}
+                  </ElRadioButton>
                 ))}
-              </div>
+              </ElRadioGroup>
+              <p class={styles.note}>{RECOGNITION_NOTES[params.recognition]}</p>
             </>,
-            `${params.newFacilities}%`
+            scenario,
+            scope
+          );
+        case 'popChange':
+          return field(
+            key,
+            <>
+              <ElSlider
+                class={styles.slider}
+                size="small"
+                modelValue={params.popChange}
+                min={POP_CHANGE_RANGE.min}
+                max={POP_CHANGE_RANGE.max}
+                step={POP_CHANGE_RANGE.step}
+                showStops
+                showTooltip={false}
+                ariaLabel={PARAM_LABELS.popChange}
+                onUpdate:modelValue={value => {
+                  if (typeof value === 'number') {
+                    update({ popChange: value });
+                  }
+                }}
+              />
+              <p class={styles.note}>相对七普常住人口，只影响人均类指标</p>
+            </>,
+            () => [scenario(), <span class={styles.value}>{signedPercent(params.popChange)}</span>],
+            scope
           );
         case 'targets':
-          return field(
-            key,
-            <>
-              <div class={styles.targets}>
-                {conditions.indicatorIds.map(id => {
-                  const indicator = simulationIndicator(id);
-                  const label = `${indicator.short}（${indicator.unit}）`;
-                  return [
-                    <span key={`${id}-label`}>{label}</span>,
-                    <ElInputNumber
-                      key={id}
-                      class={styles.number}
-                      size="small"
-                      controlsPosition="right"
-                      modelValue={params.targets[id]}
-                      min={indicator.unit === '%' ? 1 : 0.1}
-                      max={indicator.unit === '%' ? 100 : undefined}
-                      step={indicator.unit === '%' ? 1 : 0.1}
-                      aria-label={`${label}的目标值`}
-                      onUpdate:modelValue={value => {
-                        if (typeof value === 'number' && Number.isFinite(value)) {
-                          update({ targets: { ...params.targets, [id]: value } });
-                        }
-                      }}
-                    />
-                  ];
-                })}
-              </div>
-            </>,
-            undefined,
-            '影响达标判断'
-          );
-        case 'missing':
           break;
       }
-      return renderMissing();
+      return field(
+        key,
+        <div class={styles.targets}>
+          {conditions.indicatorIds.map(id => {
+            const indicator = simulationIndicator(id);
+            const label = `${indicator.short}（${indicator.unit}）`;
+            return [
+              <span key={`${id}-label`}>{label}</span>,
+              <ElInputNumber
+                key={id}
+                class={styles.number}
+                size="small"
+                controlsPosition="right"
+                modelValue={params.targets[id]}
+                min={indicator.unit === '%' ? 1 : 0.1}
+                max={indicator.unit === '%' ? 100 : undefined}
+                step={indicator.unit === '%' ? 1 : 0.1}
+                aria-label={`${label}的目标值`}
+                onUpdate:modelValue={value => {
+                  if (typeof value === 'number' && Number.isFinite(value)) {
+                    update({ targets: { ...params.targets, [id]: value } });
+                  }
+                }}
+              />
+            ];
+          })}
+        </div>,
+        undefined,
+        '影响达标判断'
+      );
     };
 
     return () => <div class={styles.root}>{props.keys.map(render)}</div>;

@@ -1,18 +1,17 @@
-import { usePreferredReducedMotion } from '@vueuse/core';
 import { MxPanel } from '@yzt/ui';
 import { ElButton } from 'element-plus';
 import { computed, defineComponent, nextTick, type PropType, ref, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
-import type { CheckpointDecision, EngineState } from '../engine/engine';
+import type { EngineState } from '../engine/engine';
 import type { StepGroupId, StepId } from '../engine/steps';
+import { reducedMotion } from '../motion';
 import type { StepRecord } from '../run/narrative';
-import { groupOfStep, groupStatus, STATUS_LABELS, stepGroup } from '../run/run-view';
-import { CheckpointCard } from './CheckpointCard';
+import { groupStatus, STATUS_LABELS, stepGroup } from '../run/run-view';
 import styles from './DetailPanel.module.scss';
 import { StepRecordView } from './StepRecordView';
 import { GROUP_ICONS } from './StepsPanel';
 
-/** 右上的当前步骤：分析过程、数据、计算依据、参数；推演中跟随当前步骤，点左侧可以回看，等人确认时卡片在这里 */
+/** 右上的当前步骤：分析过程、数据、计算依据、参数；推演中跟随当前步骤，点左侧可以回看 */
 export const DetailPanel = defineComponent({
   name: 'DetailPanel',
   props: {
@@ -27,14 +26,11 @@ export const DetailPanel = defineComponent({
     note: { type: String as PropType<string | null>, default: null }
   },
   emits: {
-    resolve: (decision: CheckpointDecision) => typeof decision === 'object',
-    adjust: () => true,
     back: () => true,
     collapse: () => true
   },
   setup(props, { emit }) {
     const body = ref<HTMLElement>();
-    const motion = usePreferredReducedMotion();
     const started = (step: StepId) => {
       const { status } = props.state.steps[step];
       return status !== 'waiting' && status !== 'stale';
@@ -47,7 +43,7 @@ export const DetailPanel = defineComponent({
         0
       )
     );
-    watch([shownLines, () => props.state.checkpoint], async () => {
+    watch(shownLines, async () => {
       if (props.reviewing) {
         return;
       }
@@ -61,8 +57,6 @@ export const DetailPanel = defineComponent({
       const { state, group, record } = props;
       const status = groupStatus(group, state.steps);
       const label = state.paused && status === 'running' ? '已暂停' : STATUS_LABELS[status];
-      const pending = state.checkpoint;
-      const checkpoint = pending !== null && groupOfStep(pending.step).id === group ? pending : null;
       return (
         <MxPanel class={styles.panel} title={stepGroup(group).name} headerTone="muted" floating flush>
           {{
@@ -95,22 +89,9 @@ export const DetailPanel = defineComponent({
                     record={record}
                     progress={props.progress}
                     started={started}
-                    still={motion.value === 'reduce'}
+                    still={reducedMotion()}
                     note={props.note}
-                  >
-                    {{
-                      checkpoint: () =>
-                        checkpoint && (
-                          <CheckpointCard
-                            checkpoint={checkpoint}
-                            conditions={state.conditions ?? { years: [], cityCodes: [], indicatorIds: [] }}
-                            params={state.params}
-                            onResolve={decision => emit('resolve', decision)}
-                            onAdjust={() => emit('adjust')}
-                          />
-                        )
-                    }}
-                  </StepRecordView>
+                  />
                 ) : (
                   <p class={styles.empty}>等待开始</p>
                 )}

@@ -1,16 +1,8 @@
 import { abortReason, LatestController } from '@yzt/utils';
 import { createNanoEvents, type Unsubscribe } from 'nanoevents';
 import type { Calculator, YearResult } from '../model/calculator';
-import type { District } from '../model/districts';
 import { simulationIndicator } from '../model/indicators';
-import {
-  changedParams,
-  defaultParams,
-  type MissingTreatment,
-  type ParamKey,
-  type SimulationConditions,
-  type SimulationParams
-} from '../model/params';
+import { changedParams, defaultParams, type ParamKey, type SimulationConditions, type SimulationParams } from '../model/params';
 import { type Clock, PausableClock, systemClock } from './clock';
 import {
   downstream,
@@ -24,35 +16,17 @@ import {
   STEPS
 } from './steps';
 
-/** 整个推演：空闲、规划步骤、执行中、等人确认、完成、出错 */
-export type EngineStatus = 'idle' | 'planning' | 'running' | 'checkpoint' | 'done' | 'failed';
+/** 整个推演：空闲、规划步骤、执行中、完成、出错 */
+export type EngineStatus = 'idle' | 'planning' | 'running' | 'done' | 'failed';
 
-/** 步骤：等待、进行、等人确认、完成、沿用上一轮的结果、受干预影响待重算 */
-export type StepStatus = 'waiting' | 'running' | 'checkpoint' | 'done' | 'reused' | 'stale';
+/** 步骤：等待、进行、完成、沿用上一轮的结果、受干预影响待重算 */
+export type StepStatus = 'waiting' | 'running' | 'done' | 'reused' | 'stale';
 
 export interface StepState {
   readonly status: StepStatus;
-  /** 这一步用过人工确认或干预的参数 */
+  /** 这一步用过人工干预的参数 */
   readonly human: boolean;
 }
-
-/** 会停下来等人确认的步骤 */
-export type CheckpointStep = 'qc' | 'spatial';
-
-export interface MissingPopulation {
-  readonly district: District;
-  /** 按趋势插补的人口（万人） */
-  readonly imputed: number;
-}
-
-/** 等人确认的内容：数据核查问缺失人口怎么处理，空间分析确认参数（参数见状态的 params） */
-export type Checkpoint =
-  | { readonly step: 'qc'; readonly year: number; readonly missing: readonly MissingPopulation[] }
-  | { readonly step: 'spatial' };
-
-export type CheckpointDecision =
-  | { readonly step: 'qc'; readonly missing: MissingTreatment }
-  | { readonly step: 'spatial' };
 
 export interface SimulationVersion {
   readonly index: number;
@@ -74,7 +48,7 @@ export interface EngineState {
   /** 页面停用、打开人工干预时暂停，和 status 互不影响 */
   readonly paused: boolean;
   readonly conditions: SimulationConditions | null;
-  /** 这一轮的参数，推演中的确认和干预会改它 */
+  /** 这一轮的参数，推演中的干预会改它 */
   readonly params: SimulationParams;
   /** 这一轮的基准：开始时的参数，或结果阶段干预时基于的版本 */
   readonly baseParams: SimulationParams;
@@ -84,16 +58,13 @@ export interface EngineState {
   readonly restart: StepId | null;
   /** 引起这一轮重算的干预：改之前的参数和改了的参数项；第一轮为 null */
   readonly adjustment: { readonly from: SimulationParams; readonly changes: readonly ParamKey[] } | null;
-  readonly checkpoint: Checkpoint | null;
-  /** 确认点已经由人决定过（确认或干预过它的参数），之后不再停下来问 */
-  readonly decided: Readonly<Record<CheckpointStep, boolean>>;
   readonly versions: readonly SimulationVersion[];
   /** status 为 failed 时的错误 */
   readonly error: unknown;
 }
 
-/** 干预的结果：参数没变；保存到还没执行的步骤；作为当前确认点的决定；从某一步重算 */
-export type ApplyOutcome = 'unchanged' | 'saved' | 'resolved' | 'rerun';
+/** 干预的结果：参数没变；保存到还没执行的步骤；从某一步重算 */
+export type ApplyOutcome = 'unchanged' | 'saved' | 'rerun';
 
 /** 一次干预会怎样处理：结果、从哪一步起生效或重算、改了哪些参数项、结果阶段基于哪一版 */
 export interface ApplyPlan {
@@ -104,7 +75,7 @@ export interface ApplyPlan {
 }
 
 /** 引擎用到的计算 */
-export type EngineCalculator = Pick<Calculator, 'missingDistricts' | 'imputedPopulation' | 'compute'>;
+export type EngineCalculator = Pick<Calculator, 'compute'>;
 
 export interface EngineOptions {
   readonly calculator: EngineCalculator;
@@ -116,14 +87,7 @@ interface EngineEvents {
   change: (state: EngineState) => void;
 }
 
-interface Pending {
-  readonly step: CheckpointStep;
-  readonly resume: () => void;
-}
-
 type Patch = Partial<Omit<EngineState, 'revision'>>;
-
-const isCheckpointStep = (id: StepId): id is CheckpointStep => id === 'qc' || id === 'spatial';
 
 // 开始过的步骤在界面上已经出现，受影响时显示为待更新；没开始的仍是等待
 const started = (status: StepStatus): boolean => status !== 'waiting';
@@ -147,8 +111,6 @@ function initialState(paused: boolean): Omit<EngineState, 'revision'> {
     steps: mapSteps(() => ({ status: 'waiting', human: false })),
     restart: null,
     adjustment: null,
-    checkpoint: null,
-    decided: { qc: false, spatial: false },
     versions: [],
     error: null
   };
@@ -168,15 +130,14 @@ function assertConditions({ years, cityCodes, indicatorIds }: SimulationConditio
   }
 }
 
-/** 推演引擎：步骤的先后与并行、人工确认、干预后的失效与复用、版本；时间来自注入的时钟，动效只按状态演出 */
+/** 推演引擎：步骤的先后与并行、干预后的失效与复用、版本；时间来自注入的时钟，动效只按状态演出 */
 export class SimulationEngine implements Disposable {
   readonly #calculator: EngineCalculator;
   readonly #clock: PausableClock;
   readonly #emitter = createNanoEvents<EngineEvents>();
   readonly #runs = new LatestController();
-  // 进行中的步骤累计了多久、最近一次从什么时候开始计时（等人确认时不计时），用来算进度
-  readonly #timing = new Map<StepId, { elapsed: number; since: number | null }>();
-  #pending: Pending | null = null;
+  // 进行中的步骤从什么时候开始（时钟暂停时不走），用来算进度
+  readonly #started = new Map<StepId, number>();
   #state: EngineState = idleEngineState();
   #disposed = false;
 
@@ -199,8 +160,7 @@ export class SimulationEngine implements Disposable {
     this.#assertAlive();
     assertConditions(conditions);
     const signal = this.#runs.next();
-    this.#pending = null;
-    this.#timing.clear();
+    this.#started.clear();
     this.#set({
       ...initialState(this.#state.paused),
       status: 'planning',
@@ -215,8 +175,7 @@ export class SimulationEngine implements Disposable {
   stop(): void {
     this.#assertAlive();
     this.#runs.abort();
-    this.#pending = null;
-    this.#timing.clear();
+    this.#started.clear();
     this.#set(initialState(this.#state.paused));
   }
 
@@ -233,39 +192,19 @@ export class SimulationEngine implements Disposable {
     };
   }
 
-  /** 对当前的确认点做出决定；没有这一步的确认点时抛错 */
-  resolveCheckpoint(decision: CheckpointDecision): void {
-    this.#assertAlive();
-    const pending = this.#pending;
-    if (!pending || pending.step !== decision.step) {
-      throw new Error(`${decision.step} 没有在等待确认`);
-    }
-    const { params, steps, decided } = this.#state;
-    this.#continue(pending, {
-      params: decision.step === 'qc' ? { ...params, missing: decision.missing } : params,
-      steps,
-      decided
-    });
-  }
-
   /**
-   * 人工干预：推演中基于当前参数调整，只能改还没执行的步骤或当前确认点，否则从改动的步骤重算；
+   * 人工干预：推演中基于当前参数调整，还没执行的步骤直接保存，否则从改动的步骤重算；
    * 完成后基于某一版（默认最新一版）调整，重算出新的版本
    */
   apply(next: SimulationParams, options: { readonly baseIndex?: number } = {}): ApplyOutcome {
     const plan = this.planApply(next, options);
-    const marked = { params: next, ...this.#marked(plan.changes) };
+    const marked = { params: next, steps: this.#marked(plan.changes) };
     switch (plan.outcome) {
       case 'unchanged':
         return 'unchanged';
       case 'saved':
         this.#set(marked);
         return 'saved';
-      case 'resolved':
-        if (this.#pending) {
-          this.#continue(this.#pending, marked);
-        }
-        return 'resolved';
       case 'rerun':
         break;
     }
@@ -289,7 +228,7 @@ export class SimulationEngine implements Disposable {
       const restart = restartStep(changedParams(params, next));
       return { outcome: changes.length === 0 ? 'unchanged' : 'rerun', restart, changes, baseIndex };
     }
-    if (status !== 'planning' && status !== 'running' && status !== 'checkpoint') {
+    if (status !== 'planning' && status !== 'running') {
       throw new Error('推演没有在进行');
     }
     if (options.baseIndex !== undefined) {
@@ -302,10 +241,7 @@ export class SimulationEngine implements Disposable {
       return plan('unchanged');
     }
     const restartStatus = steps[restart].status;
-    if (restartStatus === 'waiting' || restartStatus === 'stale') {
-      return plan('saved');
-    }
-    return plan(this.#pending?.step === restart ? 'resolved' : 'rerun');
+    return plan(restartStatus === 'waiting' || restartStatus === 'stale' ? 'saved' : 'rerun');
   }
 
   /** 步骤的进度 0～1，按时钟实时计算：等待中、待更新为 0，完成、复用为 1 */
@@ -314,12 +250,11 @@ export class SimulationEngine implements Disposable {
     if (status === 'done' || status === 'reused') {
       return 1;
     }
-    const timing = this.#timing.get(id);
-    if (!timing || status === 'waiting' || status === 'stale') {
+    const startedAt = this.#started.get(id);
+    if (startedAt === undefined || status === 'waiting' || status === 'stale') {
       return 0;
     }
-    const elapsed = timing.elapsed + (timing.since === null ? 0 : this.#clock.now() - timing.since);
-    return Math.min(1, elapsed / stepDefinition(id).duration);
+    return Math.min(1, (this.#clock.now() - startedAt) / stepDefinition(id).duration);
   }
 
   [Symbol.dispose](): void {
@@ -327,29 +262,24 @@ export class SimulationEngine implements Disposable {
       return;
     }
     this.#disposed = true;
-    this.#pending = null;
     this.#runs[Symbol.dispose]();
     this.#emitter.events = {};
   }
 
-  // 改动的参数项所属的步骤标为人工；属于确认点的，确认点算作已决定
-  #marked(changes: readonly ParamKey[]): Pick<EngineState, 'steps' | 'decided'> {
+  // 改动的参数项所属的步骤标为人工
+  #marked(changes: readonly ParamKey[]): EngineState['steps'] {
     const ids = new Set(changes.map(key => PARAM_STEP[key]));
-    const { steps, decided } = this.#state;
-    return {
-      steps: mapSteps(id => (ids.has(id) ? { ...steps[id], human: true } : steps[id])),
-      decided: { qc: decided.qc || ids.has('qc'), spatial: decided.spatial || ids.has('spatial') }
-    };
+    const { steps } = this.#state;
+    return mapSteps(id => (ids.has(id) ? { ...steps[id], human: true } : steps[id]));
   }
 
   // 作废进行中的这一轮，从 restart 和它的下游、以及还没完成的步骤重算，其余沿用
-  #rerun(restart: StepId | null, patch: Pick<EngineState, 'params' | 'steps' | 'decided'>, base: Patch): void {
+  #rerun(restart: StepId | null, patch: Pick<EngineState, 'params' | 'steps'>, base: Patch): void {
     const conditions = this.#state.conditions;
     if (!conditions) {
       throw new Error('推演没有开始');
     }
     const signal = this.#runs.next();
-    this.#pending = null;
     const affected = restart === null ? new Set<StepId>() : downstream(restart);
     for (const { id } of STEPS) {
       const { status } = patch.steps[id];
@@ -358,7 +288,7 @@ export class SimulationEngine implements Disposable {
       }
     }
     for (const id of affected) {
-      this.#timing.delete(id);
+      this.#started.delete(id);
     }
     const from = this.#state.params;
     this.#set({
@@ -367,7 +297,6 @@ export class SimulationEngine implements Disposable {
       status: 'running',
       restart,
       adjustment: { from, changes: changedParams(from, patch.params) },
-      checkpoint: null,
       steps: mapSteps(id => {
         const step = patch.steps[id];
         if (!affected.has(id)) {
@@ -393,7 +322,7 @@ export class SimulationEngine implements Disposable {
     for (const level of LEVELS) {
       const group = STEPS.filter(step => step.level === level && steps.has(step.id));
       // oxlint-disable-next-line no-await-in-loop -- 层与层之间按顺序执行
-      await Promise.all(group.map(step => this.#execute(step, conditions, signal)));
+      await Promise.all(group.map(step => this.#execute(step, signal)));
       if (signal.aborted) {
         throw abortReason(signal);
       }
@@ -411,83 +340,12 @@ export class SimulationEngine implements Disposable {
     this.#set({ status: 'done', versions: [...versions, version] });
   }
 
-  async #execute(step: StepDefinition, conditions: SimulationConditions, signal: AbortSignal): Promise<void> {
-    this.#timing.set(step.id, { elapsed: 0, since: this.#clock.now() });
+  async #execute(step: StepDefinition, signal: AbortSignal): Promise<void> {
+    this.#started.set(step.id, this.#clock.now());
     this.#setStep(step.id, 'running');
-    let elapsed = 0;
-    if (step.checkpointAt !== undefined && isCheckpointStep(step.id)) {
-      await this.#sleep(step.checkpointAt, signal);
-      elapsed = step.checkpointAt;
-      const checkpoint = this.#checkpointOf(step.id, conditions);
-      if (checkpoint) {
-        await this.#confirm(step.id, checkpoint, elapsed, signal);
-      }
-    }
-    await this.#sleep(step.duration - elapsed, signal);
-    this.#timing.delete(step.id);
+    await this.#sleep(step.duration, signal);
+    this.#started.delete(step.id);
     this.#setStep(step.id, 'done');
-  }
-
-  #checkpointOf(id: CheckpointStep, conditions: SimulationConditions): Checkpoint | null {
-    if (this.#state.decided[id]) {
-      return null;
-    }
-    if (id === 'spatial') {
-      // 只有覆盖率类指标用到服务半径
-      const coverage = conditions.indicatorIds.some(item => simulationIndicator(item).model === 'coverage');
-      return coverage ? { step: 'spatial' } : null;
-    }
-    const year = Math.max(...conditions.years);
-    const districts = this.#calculator.missingDistricts(year, conditions.cityCodes);
-    if (districts.length === 0) {
-      return null;
-    }
-    const caliber = this.#state.params.popCaliber;
-    return {
-      step: 'qc',
-      year,
-      missing: districts.map(district => ({
-        district,
-        imputed: this.#calculator.imputedPopulation(district, year, caliber)
-      }))
-    };
-  }
-
-  // 停在确认点，等 resolveCheckpoint 或干预让它继续；停着的时候不计时
-  #confirm(step: CheckpointStep, checkpoint: Checkpoint, elapsed: number, signal: AbortSignal): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const onAbort = () => reject(abortReason(signal));
-      signal.addEventListener('abort', onAbort, { once: true });
-      this.#pending = {
-        step,
-        resume: () => {
-          signal.removeEventListener('abort', onAbort);
-          resolve();
-        }
-      };
-      this.#timing.set(step, { elapsed, since: null });
-      this.#set({
-        status: 'checkpoint',
-        checkpoint,
-        steps: { ...this.#state.steps, [step]: { ...this.#state.steps[step], status: 'checkpoint' } }
-      });
-    });
-  }
-
-  #continue(pending: Pending, patch: Pick<EngineState, 'params' | 'steps' | 'decided'>): void {
-    this.#pending = null;
-    const timing = this.#timing.get(pending.step);
-    if (timing) {
-      timing.since = this.#clock.now();
-    }
-    this.#set({
-      ...patch,
-      status: 'running',
-      checkpoint: null,
-      decided: { ...patch.decided, [pending.step]: true },
-      steps: { ...patch.steps, [pending.step]: { status: 'running', human: true } }
-    });
-    pending.resume();
   }
 
   // 等待返回后再确认一次没有作废：到期和中止可能发生在同一轮里
@@ -504,8 +362,7 @@ export class SimulationEngine implements Disposable {
         return;
       }
       this.#runs.abort();
-      this.#pending = null;
-      this.#set({ status: 'failed', checkpoint: null, error });
+      this.#set({ status: 'failed', error });
     });
   }
 

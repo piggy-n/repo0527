@@ -1,5 +1,5 @@
 import { computed, type ComputedRef, type Ref, shallowRef, watch } from 'vue';
-import type { ApplyOutcome, SimulationVersion } from '../engine/engine';
+import type { SimulationVersion } from '../engine/engine';
 import type { SimulationParams } from '../model/params';
 import {
   type Comparison,
@@ -23,14 +23,12 @@ export interface SimulationResult {
   readonly coloring: ComputedRef<MapColoring | null>;
   /** 预览中达标状态会变的区县 */
   readonly preview: Readonly<Ref<ReadonlySet<string>>>;
-  /** 改选择；不合法的值抛错，对比的一方不能是正在看的一版（改成默认参数） */
+  /** 改选择；不合法的值抛错，对比的一方不能是正在看的一版（改成标准口径） */
   readonly select: (patch: Partial<Omit<ResultSelection, 'viewIndex'>>) => void;
   /** 看另一版：对比改成它所基于的版本 */
   readonly viewVersion: (index: number) => void;
   /** 人工干预的草稿；null 是关掉预览 */
   readonly setPreview: (draft: SimulationParams | null) => void;
-  /** 按建议情景再推演：基于正在看的一版 */
-  readonly applySuggestion: () => ApplyOutcome;
 }
 
 const EMPTY: ReadonlySet<string> = new Set();
@@ -118,17 +116,6 @@ export function useSimulationResult(run: SimulationRun): SimulationResult {
         return;
       }
       preview.value = previewChanges(calculator, conditions.value, version.value.params, draft, current.indicatorId, current.year);
-    },
-    applySuggestion: () => {
-      const current = requireSelection();
-      const idea = summary.value?.idea;
-      if (!idea || !version.value) {
-        throw new Error('没有建议情景');
-      }
-      return run.apply(
-        { ...version.value.params, newFacilities: idea.add, scenarioIds: [...idea.scenarioIds] },
-        { baseIndex: current.viewIndex }
-      );
     }
   };
 }

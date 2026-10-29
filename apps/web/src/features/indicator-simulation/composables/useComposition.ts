@@ -2,17 +2,15 @@ import { type Ref, shallowRef } from 'vue';
 import type { SimulationParams } from '../model/params';
 import {
   type Composition,
-  defaultComposition,
   emptyComposition,
   withAllCities,
   withCity,
   withIndicator,
   withIndicatorMoved,
-  withParams,
   withYear
 } from '../compose/composition';
 
-/** 编排的拥有者：条件库和编排图只显示和调用 */
+/** 编排的拥有者：条件库、编排图和 AI 推演指令只显示和调用 */
 export interface CompositionOwner {
   readonly state: Readonly<Ref<Composition>>;
   toggleYear(year: number): void;
@@ -31,11 +29,14 @@ export interface CompositionOwner {
   /** 把第 from 项指标移到第 to 项 */
   moveIndicator(from: number, to: number): void;
   setParams(params: SimulationParams): void;
-  /** 清空条件，参数回到默认 */
-  clear(): void;
+  /** 整体换成另一个编排：AI 推演指令一列一列填入时用 */
+  replace(next: Composition): void;
+  /** 重置条件：清空条件，参数回到标准口径 */
+  reset(): void;
 }
 
-export function useComposition(initial: Composition = defaultComposition()): CompositionOwner {
+/** 编排的拥有者；打开页面时是空的，由 AI 推演指令或手动点选编排 */
+export function useComposition(initial: Composition = emptyComposition()): CompositionOwner {
   const state = shallowRef(initial);
   const set = (next: Composition) => {
     if (next !== state.value) {
@@ -77,7 +78,8 @@ export function useComposition(initial: Composition = defaultComposition()): Com
         set(withIndicatorMoved(state.value, from, to));
       }
     },
-    setParams: params => set(withParams(state.value, params)),
-    clear: () => set(emptyComposition())
+    setParams: params => set({ ...state.value, params }),
+    replace: set,
+    reset: () => set(emptyComposition())
   };
 }

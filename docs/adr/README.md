@@ -110,7 +110,8 @@
 | [0099](0099-3d-overlay-settle-live-shapes.md) | 三维覆盖物只换坐标：坐标没变的不动，停下后改回静态 | 已接受（修改 0082 第 1 节） |
 | [0100](0100-space-monitoring-statistics.md) | 城市国土空间监测基本统计：拥有者分工、轮询与提交跟踪、宽屏收起侧栏 | 已接受（MxSplitLayout 新增宽屏收起，补充 0016） |
 | [0101](0101-split-layout-custom-handles.md) | 分栏布局由页面给出收起把手和窄条：基本统计页的把手设计图 | 已接受（补充 0100 第 6 节） |
-| [0102](0102-indicator-simulation.md) | 指标智能推演：三阶段页面、确定性模拟与推演引擎 | 已接受 |
+| [0105](0105-indicator-simulation.md) | 指标智能推演：三阶段页面、确定性模拟与推演引擎 | 已接受（参数、模拟公式、确认点与减少动画已被 0106 取代） |
+| [0106](0106-indicator-simulation-excel-params.md) | 指标智能推演：按 Excel 计算规则的参数与 AI 推演指令 | 已接受 |
 
 ## 模板
 

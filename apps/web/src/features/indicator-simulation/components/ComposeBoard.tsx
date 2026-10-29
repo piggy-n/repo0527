@@ -1,5 +1,5 @@
 import { VideoPlay } from '@element-plus/icons-vue';
-import { usePreferredReducedMotion, useResizeObserver } from '@vueuse/core';
+import { useResizeObserver } from '@vueuse/core';
 import { MxPanel } from '@yzt/ui';
 import { ElButton, ElPopover } from 'element-plus';
 import {
@@ -32,14 +32,25 @@ import {
   relatedNodes,
   yearNode
 } from '../compose/board';
-import { COMPOSE_PARAM_KEYS, CONDITION_LABELS, missingConditions, paramValueText } from '../compose/composition';
+import { CONDITION_LABELS, missingConditions } from '../compose/composition';
 import type { CompositionOwner } from '../composables/useComposition';
 import type { ConditionDrag, DragItem } from '../composables/useConditionDrag';
+import type { BuildState } from '../composables/usePromptComposer';
 import type { SimulationModel } from '../composables/useSimulationModel';
+import { reducedMotion } from '../motion';
 import { STEP_GROUPS } from '../engine/steps';
 import { reachText, simulationIndicator } from '../model/indicators';
-import { PARAM_LABELS, type ParamKey, type SimulationParams } from '../model/params';
+import {
+  describeParam,
+  isScenario,
+  isStandard,
+  PARAM_LABELS,
+  type ParamKey,
+  paramsOf,
+  type SimulationParams
+} from '../model/params';
 import styles from './ComposeBoard.module.scss';
+import { EstimateBar } from './EstimateBar';
 import { ParamPopover } from './ParamPopover';
 import { StageStepper } from './StageStepper';
 
@@ -53,6 +64,8 @@ const LANES: readonly { readonly id: BoardLane; readonly label: string; readonly
 
 // 节点移动、出现的动画时长（与样式一致），期间每帧重量位置，连线跟着节点走
 const FOLLOW_MS = 400;
+// 新连线从起点画到终点的时长（与样式一致）
+const DRAW_MS = 600;
 const ARROW_STEPS: Readonly<Record<string, number>> = { ArrowUp: -1, ArrowDown: 1 };
 
 function sameBoxes(a: ReadonlyMap<string, Box>, b: ReadonlyMap<string, Box>): boolean {
@@ -82,13 +95,19 @@ const empty = (lane: 'years' | 'region' | 'indicators', show: boolean) =>
     </div>
   );
 
-/** 编排图：年份 → 监测范围 → 监测指标 → 计算参数 → AI 推演五列，连线由节点位置算出；接收条件库的拖入，指标按手柄排序 */
+/**
+ * 编排图：年份 → 监测范围 → 监测指标 → 计算参数 → AI 推演五列，连线由节点位置算出；接收条件库的拖入，指标按手柄排序。
+ * 计算参数只列所选指标用得上的几项；下方是指标预估，参数浮层打开时按草稿预览。
+ * AI 按指令编排时只显示已经出现的节点，最新的一个闪一下并滚到看得见，新连线画出来，标题栏写 AI 在做的事
+ */
 export const ComposeBoard = defineComponent({
   name: 'ComposeBoard',
   props: {
     composition: { type: Object as PropType<CompositionOwner>, required: true },
     drag: { type: Object as PropType<ConditionDrag>, required: true },
-    model: { type: Object as PropType<SimulationModel>, required: true }
+    model: { type: Object as PropType<SimulationModel>, required: true },
+    /** AI 按指令编排的进度；没在编排时为 null */
+    building: { type: Object as PropType<BuildState | null>, default: null }
   },
   emits: {
     start: () => true,
@@ -101,17 +120,40 @@ export const ComposeBoard = defineComponent({
     const boxes = shallowRef<ReadonlyMap<string, Box>>(new Map());
     const hovered = ref<string | null>(null);
     const editing = ref<ParamKey | null>(null);
+    // 参数浮层里的草稿：节点、情景标记和下方的预估按它预览；浮层关闭时为 null
+    const preview = shallowRef<SimulationParams | null>(null);
     const over = ref(false);
     // 拖入已有的条件时闪一下；次数的奇偶换动画名，同一个节点连续闪也会重新播放
     const flash = ref({ key: '', count: 0 });
-    const motion = usePreferredReducedMotion();
     const pageActive = usePageActive();
 
     const conditions = computed(() => props.composition.state.value.conditions);
     const params = computed(() => props.composition.state.value.params);
-    const links = computed(() => boardLinks(boxes.value, conditions.value, params.value));
-    const related = computed(() => relatedNodes(hovered.value, conditions.value, params.value));
+    const shown = computed(() => preview.value ?? params.value);
+    const links = computed(() => boardLinks(boxes.value, conditions.value, shown.value));
+    const related = computed(() => relatedNodes(hovered.value, conditions.value));
     const missing = computed(() => missingConditions(conditions.value));
+    // 节点是否显示：AI 编排时只显示已经出现的
+    const visible = (key: string) => props.building === null || props.building.revealed.has(key);
+
+    // 新出现的连线：画的期间按 pathLength = 1 从 0 画到 1，画完换回普通的线
+    const drawing = shallowRef<ReadonlySet<string>>(new Set());
+    let known = new Set<string>();
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    watch(links, current => {
+      const ids = current.map(link => link.id);
+      const added = ids.filter(id => !known.has(id));
+      known = new Set(ids);
+      if (added.length === 0 || reducedMotion()) {
+        return;
+      }
+      drawing.value = new Set([...drawing.value, ...added]);
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        drawing.value = new Set([...drawing.value].filter(id => !added.includes(id)));
+      }, DRAW_MS);
+      timers.add(timer);
+    });
 
     // 量出节点相对连线层的位置；包含动画中的变换，连线跟着动画走。页面被缓存期间量到的都是 0，保留原来的位置
     const measure = () => {
@@ -141,7 +183,7 @@ export const ComposeBoard = defineComponent({
     };
     const relayout = () => {
       measure();
-      if (motion.value === 'reduce') {
+      if (reducedMotion()) {
         return;
       }
       followUntil = performance.now() + FOLLOW_MS;
@@ -150,9 +192,15 @@ export const ComposeBoard = defineComponent({
       }
     };
     watch(() => props.composition.state.value, relayout, { flush: 'post' });
+    watch(() => props.building, relayout, { flush: 'post' });
     // 条件变了，浮层里的参数可能已经不对，关掉
     watch(conditions, () => {
       editing.value = null;
+    });
+    watch(editing, key => {
+      if (key === null) {
+        preview.value = null;
+      }
     });
 
     // 画布和每个节点的尺寸变化（字体加载、换行、窗口缩放）都重新量
@@ -172,7 +220,10 @@ export const ComposeBoard = defineComponent({
       measure();
     });
     onUpdated(syncObserved);
-    onBeforeUnmount(() => cancelAnimationFrame(frame));
+    onBeforeUnmount(() => {
+      cancelAnimationFrame(frame);
+      timers.forEach(timer => clearTimeout(timer));
+    });
 
     useSortableList(indicatorLane, {
       handle: '[data-indicator-handle]',
@@ -198,6 +249,39 @@ export const ComposeBoard = defineComponent({
     const flashNode = (key: string) => {
       flash.value = { key, count: flash.value.count + 1 };
     };
+
+    // 画布里放不下时，把节点滚到看得见（只滚画布，不用 scrollIntoView：它会连带滚动外层的容器）
+    const reveal = (key: string) => {
+      const box = canvas.value;
+      const element = box?.querySelector<HTMLElement>(`[data-node="${key}"]`);
+      if (!box || !element) {
+        return;
+      }
+      const view = box.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      const margin = 16;
+      const dy = rect.bottom + margin > view.bottom ? rect.bottom + margin - view.bottom : Math.min(0, rect.top - margin - view.top);
+      const dx = rect.right + margin > view.right ? rect.right + margin - view.right : Math.min(0, rect.left - margin - view.left);
+      if (dx !== 0 || dy !== 0) {
+        box.scrollBy({ left: dx, top: dy, behavior: reducedMotion() ? 'auto' : 'smooth' });
+      }
+    };
+
+    // AI 编排出一个新节点：闪一下，滚到看得见
+    watch(
+      () => props.building?.latest ?? null,
+      async key => {
+        if (key === null) {
+          return;
+        }
+        // AI 推演节点有自己的启动效果，不闪
+        if (key !== OUTPUT_NODE) {
+          flashNode(key);
+        }
+        await nextTick();
+        reveal(key);
+      }
+    );
 
     // 放下：加上这一项；已经有了就闪一下对应的节点
     const addItem = (item: DragItem) => {
@@ -274,7 +358,7 @@ export const ComposeBoard = defineComponent({
       const { years } = conditions.value;
       return [
         <TransitionGroup key="nodes" {...transition}>
-          {years.map(year => {
+          {years.filter(year => visible(yearNode(year))).map(year => {
             const key = yearNode(year);
             return (
               <div key={key} class={nodeClass(key, 'year')} data-node={key}>
@@ -285,7 +369,7 @@ export const ComposeBoard = defineComponent({
             );
           })}
         </TransitionGroup>,
-        empty('years', years.length === 0)
+        empty('years', years.length === 0 && props.building === null)
       ];
     };
 
@@ -295,7 +379,7 @@ export const ComposeBoard = defineComponent({
       const districts = cityCodes.reduce((sum, code) => sum + districtsOf(code).length, 0);
       return [
         <TransitionGroup key="nodes" {...transition}>
-          {cityCodes.length > 0 && (
+          {cityCodes.length > 0 && visible(REGION_NODE) && (
             <div key={REGION_NODE} class={nodeClass(REGION_NODE, 'region')} data-node={REGION_NODE}>
               <div class={styles.regionHead}>
                 <SvgIcon class={styles.icon} name="simulation-region" />
@@ -303,11 +387,11 @@ export const ComposeBoard = defineComponent({
                 <span class={styles.meta}>{districts} 个区县</span>
                 {removeButton('监测范围', () => props.composition.setAllCities(false))}
               </div>
-              <div class={styles.cityTags}>
-                {cityCodes.map(code => {
+              <div class={[styles.cityTags, props.building !== null && styles.tagsIn]}>
+                {cityCodes.map((code, index) => {
                   const name = shortRegionName(JIANGSU_CITIES.find(city => city.code === code)?.name ?? code);
                   return (
-                    <span key={code} class={styles.cityTag}>
+                    <span key={code} class={styles.cityTag} style={{ '--tag-index': index }}>
                       {name}
                       <button type="button" aria-label={`移除${name}`} onClick={() => props.composition.removeCity(code)}>
                         <SvgIcon name="close" />
@@ -319,7 +403,7 @@ export const ComposeBoard = defineComponent({
             </div>
           )}
         </TransitionGroup>,
-        empty('region', cityCodes.length === 0)
+        empty('region', cityCodes.length === 0 && props.building === null)
       ];
     };
 
@@ -327,7 +411,7 @@ export const ComposeBoard = defineComponent({
       const { indicatorIds } = conditions.value;
       return [
         <TransitionGroup key="nodes" {...transition}>
-          {indicatorIds.map(id => {
+          {indicatorIds.filter(id => visible(indicatorNode(id))).map(id => {
             const key = indicatorNode(id);
             const indicator = simulationIndicator(id);
             return (
@@ -352,14 +436,17 @@ export const ComposeBoard = defineComponent({
                   <b class={styles.indicatorName} title={`${indicator.name}（${reachText(indicator)}）`}>
                     <span>{indicator.name}</span>（{indicator.unit}）
                   </b>
-                  <span class={styles.meta}>{indicator.id}</span>
+                  <span class={styles.indicatorMeta}>
+                    <span class={styles.meta}>{indicator.id}</span>
+                    {isScenario(shown.value, id) && <span class={styles.scenarioTag}>模拟情景</span>}
+                  </span>
                 </div>
                 {removeButton(indicator.name, () => props.composition.removeIndicator(id))}
               </div>
             );
           })}
         </TransitionGroup>,
-        empty('indicators', indicatorIds.length === 0)
+        empty('indicators', indicatorIds.length === 0 && props.building === null)
       ];
     };
 
@@ -367,8 +454,10 @@ export const ComposeBoard = defineComponent({
       if (conditions.value.indicatorIds.length === 0) {
         return null;
       }
-      return COMPOSE_PARAM_KEYS.map(key => {
+      const keys = paramsOf(conditions.value.indicatorIds).filter(key => visible(paramNode(key)));
+      return keys.map(key => {
         const node = paramNode(key);
+        const scenario = !isStandard(key, shown.value);
         return (
           <ElPopover
             key={node}
@@ -378,8 +467,8 @@ export const ComposeBoard = defineComponent({
             persistent={false}
             popperStyle={{ padding: 0 }}
             visible={editing.value === key}
-            onUpdate:visible={visible => {
-              if (visible) {
+            onUpdate:visible={open => {
+              if (open) {
                 editing.value = key;
               } else if (editing.value === key) {
                 editing.value = null;
@@ -392,7 +481,7 @@ export const ComposeBoard = defineComponent({
                 <span class={styles.paramSlot}>
                   <button
                     type="button"
-                    class={nodeClass(node, 'param')}
+                    class={[nodeClass(node, 'param'), scenario && styles.scenarioParam]}
                     data-node={node}
                     aria-haspopup="dialog"
                     aria-expanded={editing.value === key}
@@ -407,7 +496,7 @@ export const ComposeBoard = defineComponent({
                   >
                     <span class={styles.text}>
                       <span class={styles.meta}>{PARAM_LABELS[key]}</span>
-                      <b>{paramValueText(key, conditions.value, params.value)}</b>
+                      <b>{describeParam(key, shown.value, conditions.value)}</b>
                     </span>
                   <SvgIcon class={styles.edit} name="simulation-tune" />
                 </button>
@@ -416,9 +505,9 @@ export const ComposeBoard = defineComponent({
               default: () => (
                 <ParamPopover
                   paramKey={key}
-                  model={props.model}
                   conditions={conditions.value}
                   params={params.value}
+                  onPreview={next => (preview.value = next)}
                   onApply={next => applyParams(key, next)}
                   onCancel={() => (editing.value = null)}
                 />
@@ -430,9 +519,13 @@ export const ComposeBoard = defineComponent({
     };
 
     const renderOutput = () => {
+      if (!visible(OUTPUT_NODE)) {
+        return null;
+      }
       const { years, cityCodes, indicatorIds } = conditions.value;
       const { model } = props;
       const ready = missing.value.length === 0;
+      const launching = props.building?.launching ?? false;
       let status: VNodeChild = null;
       if (model.status === 'loading') {
         status = <span class={styles.meta}>区县数据加载中…</span>;
@@ -447,7 +540,7 @@ export const ComposeBoard = defineComponent({
         );
       }
       return (
-        <div class={[nodeClass(OUTPUT_NODE, 'output'), ready && styles.armed]} data-node={OUTPUT_NODE}>
+        <div class={[nodeClass(OUTPUT_NODE, 'output'), ready && styles.armed, launching && styles.launching]} data-node={OUTPUT_NODE}>
           <div class={styles.orbWrap}>
             <span class={styles.orb} />
             <SvgIcon name="simulation-ai" size={20} />
@@ -468,10 +561,11 @@ export const ComposeBoard = defineComponent({
             class={styles.start}
             type="primary"
             icon={VideoPlay}
-            disabled={!ready || model.status !== 'ready'}
+            loading={launching}
+            disabled={!ready || model.status !== 'ready' || (props.building !== null && !launching)}
             onClick={() => emit('start')}
           >
-            开始推演
+            {launching ? '推演启动中' : '开始推演'}
           </ElButton>
         </div>
       );
@@ -490,9 +584,18 @@ export const ComposeBoard = defineComponent({
       return (
         <MxPanel class={styles.panel} headerTone="muted" flush>
           {{
-            header: () => <StageStepper phase="compose" />,
-            default: () => (
+            header: () => [
+              <StageStepper key="stepper" phase="compose" />,
+              props.building && (
+                <div key="status" class={styles.aiStatus} role="status">
+                  <span class={styles.statusOrb} />
+                  {props.building.message}
+                </div>
+              )
+            ],
+            default: () => [
               <div
+                key="canvas"
                 ref={canvas}
                 class={[styles.canvas, ready && styles.ready, over.value && styles.over]}
                 data-drop={props.drag.item.value?.kind}
@@ -508,9 +611,11 @@ export const ComposeBoard = defineComponent({
                         class={[
                           styles.link,
                           styles[link.kind],
-                          isLit(link, hovered.value, related.value) && styles.lit
+                          isLit(link, hovered.value, related.value) && styles.lit,
+                          drawing.value.has(link.id) && styles.drawing
                         ]}
                         d={link.d}
+                        pathLength={drawing.value.has(link.id) ? 1 : undefined}
                       />
                     ))}
                   </svg>
@@ -531,8 +636,15 @@ export const ComposeBoard = defineComponent({
                     </div>
                   ))}
                 </div>
-              </div>
-            )
+              </div>,
+              <EstimateBar
+                key="estimate"
+                model={props.model}
+                conditions={conditions.value}
+                params={shown.value}
+                previewing={preview.value !== null}
+              />
+            ]
           }}
         </MxPanel>
       );

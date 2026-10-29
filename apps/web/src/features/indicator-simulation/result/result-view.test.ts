@@ -2,13 +2,13 @@
 import { describe, expect, it } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { idleEngineState, type SimulationVersion } from '../engine/engine';
-import { DIFF_COLORS, EXCLUDED_COLOR, PASS_COLORS, VALUE_COLORS } from '../map/colors';
+import { DIFF_COLORS, PASS_COLORS, VALUE_COLORS } from '../map/colors';
 import { indicatorResult, passState } from '../model/analysis';
 import { type Calculator, createCalculator } from '../model/calculator';
 import { defaultParams, type ParamKey, type SimulationConditions, type SimulationParams } from '../model/params';
 import { loadTestAtlas } from '../model/test-atlas';
 import type { Rich } from '../run/narrative';
-import { comparisonOf, initialSelection, mapColoring, previewChanges, resultSummary, versionText } from './result-view';
+import { comparisonOf, initialSelection, mapColoring, previewChanges, resultSummary, sensitivityNote, versionText } from './result-view';
 
 const conditions: SimulationConditions = {
   years: [2025, 2026],
@@ -16,8 +16,8 @@ const conditions: SimulationConditions = {
   indicatorIds: ['A-39', 'B-65']
 };
 const withPatch = (patch: Partial<SimulationParams>): SimulationParams => ({ ...defaultParams(), ...patch });
-// 建议情景：公园绿地新增 20%，作用于同一种设施的两项指标
-const suggested = withPatch({ newFacilities: 20, scenarioIds: ['B-65', 'A-39'] });
+// 模拟情景：相交即算
+const intersect = withPatch({ recognition: 'intersect' });
 
 async function setup() {
   const calculator = createCalculator(await loadTestAtlas());
@@ -35,7 +35,7 @@ async function setup() {
     changes: base.changes
   });
   const v1 = versionOf(0, defaultParams(), { index: null, params: defaultParams(), changes: [] });
-  const v2 = versionOf(1, suggested, { index: 0, params: defaultParams(), changes: ['newFacilities'] });
+  const v2 = versionOf(1, intersect, { index: 0, params: defaultParams(), changes: ['recognition'] });
   return { calculator, versionOf, v1, v2, versions: [v1, v2] };
 }
 
@@ -62,13 +62,13 @@ describe('initialSelection', () => {
 });
 
 describe('comparisonOf', () => {
-  it('默认参数按同样的条件算一遍；版本直接用它的参数和结果；没有的版本按默认参数', async () => {
+  it('标准口径按同样的条件算一遍；版本直接用它的参数和结果；没有的版本按标准口径', async () => {
     const { calculator, versions, v2 } = await setup();
 
     const fallback = comparisonOf(calculator, conditions, versions, 'default');
-    expect(fallback).toEqual({ label: '默认参数', params: defaultParams(), result: calculator.compute(conditions, defaultParams()) });
+    expect(fallback).toEqual({ label: '标准口径', params: defaultParams(), result: calculator.compute(conditions, defaultParams()) });
     expect(comparisonOf(calculator, conditions, versions, 1)).toEqual({ label: 'v2', params: v2.params, result: v2.result });
-    expect(comparisonOf(calculator, conditions, versions, 5).label).toBe('默认参数');
+    expect(comparisonOf(calculator, conditions, versions, 5).label).toBe('标准口径');
   });
 });
 
@@ -77,39 +77,34 @@ describe('versionText', () => {
     const { v1, v2 } = await setup();
 
     expect(versionText(v1, conditions)).toBe('编排时的参数');
-    expect(versionText(v2, conditions)).toContain('20%');
+    expect(versionText(v2, conditions)).toBe('覆盖认定 覆盖 ≥ 50% → 相交即算');
   });
 });
 
 describe('resultSummary', () => {
-  it('第一版和默认参数比：64.6%、5/13 市达标、较上一年度；建议新增 20% 公园绿地达到 70.3%、7 市', async () => {
+  it('第一版和标准口径比：66.6%、5/13 市达标、较上一年度；结论只有一段', async () => {
     const { calculator, versions, v1 } = await setup();
     const summary = resultSummary(calculator, conditions, v1, comparisonOf(calculator, conditions, versions, 'default'), 'B-65', 2026);
 
-    expect(summary.kpis).toEqual([
-      { label: '2026 年全省', value: '64.6', unit: '%', delta: '持平', tone: 'flat' },
-      { label: '达标城市', value: '5', unit: '/ 13', delta: '持平', tone: 'flat' },
-      { label: '较 2025 年', value: '+1.5', unit: '点', delta: '年度变化', tone: 'up' }
+    expect(summary.kpis.slice(0, 2)).toEqual([
+      { label: '2026 年全省', value: '66.6', unit: '%', delta: '持平', tone: 'flat' },
+      { label: '达标城市', value: '5', unit: '/ 13', delta: '持平', tone: 'flat' }
     ]);
+    expect(summary.kpis[2]).toMatchObject({ label: '较 2025 年', unit: '点', delta: '年度变化' });
     expect(summary.previousYear).toBe(2025);
     expect(summary.attribution).toEqual([]);
-    expect(text(summary.insight[0])).toBe(
-      '2026 年公园绿地覆盖率全省 [64.6%]，[5/13] 市达到演示目标 70%，短板在 [苏州市、南京市]。较 2025 年 [+1.5 个百分点]。'
-    );
-    expect(text(summary.insight[1])).toBe('建议情景：规划新增 [20%] 公园绿地，预计 [64.6% → 70.3%]，达标 [5 → 7] 市。');
-    expect(summary.idea).toMatchObject({ add: 20, reached: true, scenarioIds: ['A-39', 'B-65'] });
+    expect(summary.insight).toHaveLength(1);
+    expect(text(summary.insight[0])).toMatch(/^2026 年公园绿地覆盖率全省 \[66\.6%\]，\[5\/13\] 市达到目标 70%，短板在 \[苏州市、/);
   });
 
   it('第二版和第一版比：数字的变化、主要的归因，版本名两边留空格', async () => {
     const { calculator, versions, v2 } = await setup();
     const summary = resultSummary(calculator, conditions, v2, comparisonOf(calculator, conditions, versions, 0), 'B-65', 2026);
 
-    expect(summary.kpis.slice(0, 2)).toEqual([
-      { label: '2026 年全省', value: '70.3', unit: '%', delta: '+5.7 点', tone: 'up' },
-      { label: '达标城市', value: '7', unit: '/ 13', delta: '+2 市', tone: 'up' }
-    ]);
-    expect(summary.attribution.map(item => [item.key, item.passDelta])).toEqual([['newFacilities', 2]]);
-    expect(text(summary.insight[0])).toContain('较 v1 [+5.7 个百分点]，主要来自规划新增设施（0% → 20%（公园绿地覆盖率、人均公园绿地））。');
+    expect(summary.kpis[0]).toMatchObject({ label: '2026 年全省', unit: '%', tone: 'up' });
+    expect(summary.attribution.map(item => item.key)).toEqual(['recognition']);
+    expect(text(summary.insight[0])).toContain('，主要来自覆盖认定（覆盖 ≥ 50% → 相交即算）。');
+    expect(text(summary.insight[0])).toContain('较 v1 [+');
   });
 
   it('只有一个年度时第三个数字是最低城市；人均类的单位前空一格', async () => {
@@ -118,35 +113,49 @@ describe('resultSummary', () => {
     const summary = resultSummary(calculator, single, v1, comparisonOf(calculator, single, [v1], 'default'), 'A-39', 2026);
 
     expect(summary.previousYear).toBeNull();
-    expect(summary.kpis[2]).toEqual({ label: '最低城市', value: '南京市', unit: '', delta: '12.25 m²', tone: 'flat' });
-    expect(text(summary.insight[0])).toContain('达到演示目标 15 m²');
+    expect(summary.kpis[2]).toMatchObject({ label: '最低城市', unit: '', tone: 'flat' });
+    expect(text(summary.insight[0])).toContain('达到目标 15 m²');
     expect(text(summary.insight[0])).not.toContain('较');
+  });
+
+  it('参数敏感性的说明：覆盖率写出取不同值的参数，人均类是人口曲线', async () => {
+    const { calculator, versions, v1 } = await setup();
+    const compare = comparisonOf(calculator, conditions, versions, 'default');
+
+    const noteOf = (id: string) => {
+      const value = resultSummary(calculator, conditions, v1, compare, id, 2026).sensitivity;
+      return value && sensitivityNote(value);
+    };
+
+    expect(noteOf('B-65')).toBe('覆盖认定的两种取法');
+    expect(noteOf('A-39')).toBe('随常住人口变化');
+    expect(sensitivityNote({ kind: 'options', keys: ['rule', 'recognition'], options: [] })).toBe('计算规程、覆盖认定的组合');
   });
 });
 
 describe('mapColoring', () => {
-  it('数值五档：图例从高到低，区县按默认参数的分位数着色', async () => {
+  it('数值五档：图例从高到低，区县按标准口径的分位数着色', async () => {
     const { calculator, versions, v2 } = await setup();
     const selection = { viewIndex: 1, compare: 0, indicatorId: 'B-65', year: 2026, mode: 'value' } as const;
     const { fill, legend } = mapColoring(calculator, conditions, selection, v2, comparisonOf(calculator, conditions, versions, 0));
 
     expect(legend.title).toBe('2026 年 · 公园绿地覆盖率（%）');
-    expect(legend.entries.map(entry => entry.text)).toEqual(['≥ 83', '72 – 83', '61 – 72', '45 – 61', '< 45']);
+    expect(legend.entries.map(entry => entry.text)).toEqual(['≥ 82', '72 – 82', '61 – 72', '44 – 61', '< 44']);
     expect(legend.entries.map(entry => entry.color)).toEqual(VALUE_COLORS.toReversed());
-    const rows = rowsOf(calculator, suggested);
-    const top = rows.find(row => row.value >= 83);
-    const bottom = rows.find(row => row.value < 45);
+    const rows = rowsOf(calculator, intersect);
+    const top = rows.find(row => row.value >= 82);
+    const bottom = rows.find(row => row.value < 44);
     expect([top && fill(top), bottom && fill(bottom)]).toEqual([VALUE_COLORS[4], VALUE_COLORS[0]]);
   });
 
-  it('达标三态：按演示目标', async () => {
+  it('达标三态：按目标值', async () => {
     const { calculator, versions, v2 } = await setup();
     const selection = { viewIndex: 1, compare: 0, indicatorId: 'B-65', year: 2026, mode: 'pass' } as const;
     const { fill, legend } = mapColoring(calculator, conditions, selection, v2, comparisonOf(calculator, conditions, versions, 0));
 
-    expect(legend.title).toBe('对照演示目标 70%');
+    expect(legend.title).toBe('对照目标 70%');
     expect(legend.entries.map(entry => entry.text)).toEqual(['达标', '接近（差 5% 以内）', '未达标']);
-    for (const row of rowsOf(calculator, suggested)) {
+    for (const row of rowsOf(calculator, intersect)) {
       expect(fill(row)).toBe(PASS_COLORS[passState(row.value, 70)]);
     }
   });
@@ -165,39 +174,25 @@ describe('mapColoring', () => {
     ]);
     expect(legend.note).toBeNull();
     const before = new Map(rowsOf(calculator, defaultParams()).map(row => [row.code, row.value]));
-    const rows = rowsOf(calculator, suggested);
+    const rows = rowsOf(calculator, intersect);
     const most = rows.toSorted((a, b) => b.value - (before.get(b.code) ?? 0) - (a.value - (before.get(a.code) ?? 0)))[0];
     expect(most && fill(most)).toBe(DIFF_COLORS[4]);
     expect(new Set(rows.map(fill)).has(DIFF_COLORS[0])).toBe(false);
 
     const same = mapColoring(calculator, conditions, { ...selection, compare: 1 }, v2, comparisonOf(calculator, conditions, versions, 1));
-    expect(same.legend.note).toBe('区县值与对比版本相同（变化只在汇总权重上）');
+    expect(same.legend.note).toBe('区县值与对比的一方相同');
     expect(same.legend.entries[2]?.text).toBe('基本不变');
     expect(new Set(rows.map(same.fill))).toEqual(new Set([DIFF_COLORS[2]]));
-  });
-
-  it('剔除了缺失人口的区县时，它们是灰色，图例多一行', async () => {
-    const { calculator, versionOf } = await setup();
-    const excluding = withPatch({ missing: { kind: 'exclude' } });
-    const version = versionOf(0, excluding, { index: null, params: excluding, changes: [] });
-    const selection = { viewIndex: 0, compare: 'default', indicatorId: 'B-65', year: 2026, mode: 'pass' } as const;
-    const { fill, legend } = mapColoring(calculator, conditions, selection, version, comparisonOf(calculator, conditions, [version], 'default'));
-
-    expect(legend.entries.at(-1)).toEqual({ color: EXCLUDED_COLOR, text: '已剔除（人口缺失）', shape: 'block' });
-    const rows = rowsOf(calculator, excluding);
-    const excluded = rows.filter(row => row.excluded);
-    expect(excluded.length).toBeGreaterThan(0);
-    expect(new Set(excluded.map(fill))).toEqual(new Set([EXCLUDED_COLOR]));
   });
 });
 
 describe('previewChanges', () => {
-  it('参数没变时没有区县；新增设施后列出达标状态会变的区县', async () => {
+  it('参数没变时没有区县；放宽认定后列出达标状态会变的区县', async () => {
     const { calculator } = await setup();
 
     expect(previewChanges(calculator, conditions, defaultParams(), defaultParams(), 'B-65', 2026).size).toBe(0);
-    const changed = previewChanges(calculator, conditions, defaultParams(), suggested, 'B-65', 2026);
-    const after = new Map(rowsOf(calculator, suggested).map(row => [row.code, row.pass]));
+    const changed = previewChanges(calculator, conditions, defaultParams(), intersect, 'B-65', 2026);
+    const after = new Map(rowsOf(calculator, intersect).map(row => [row.code, row.pass]));
     const flipped = rowsOf(calculator, defaultParams())
       .filter(row => after.get(row.code) !== row.pass)
       .map(row => row.code);

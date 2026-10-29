@@ -1,4 +1,4 @@
-// 指标与分类的类型随目录移到 shared/city-indicators（ADR 0102），驾驶舱各处仍从这里取
+// 指标与分类的类型随目录移到 shared/city-indicators（ADR 0105），驾驶舱各处仍从这里取
 export type { CategoryId, Indicator } from '@/shared/city-indicators/catalog';
 
 /** 图表类型与模拟记录保持独立，后续数据适配不依赖 ECharts */

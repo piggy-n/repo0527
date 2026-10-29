@@ -7,7 +7,7 @@ import type {
 } from 'echarts/components';
 import type { ComposeOption } from 'echarts/core';
 import { formatValue } from '../format';
-import type { Sensitivity } from '../model/analysis';
+import type { Sensitivity, SensitivityOption } from '../model/analysis';
 import type { CityResult } from '../model/calculator';
 import type { SimulationIndicator } from '../model/indicators';
 
@@ -132,14 +132,17 @@ export function citiesOption(
   };
 }
 
-/** 参数敏感性：全省值随步行速度或规划新增的变化，标出当前取值 */
+/** 参数敏感性：人均类是全省值随常住人口变化的曲线，覆盖率是各种规程、认定组合的柱子；都标出当前取值 */
 export function sensitivityOption(
   indicator: SimulationIndicator,
-  curve: Sensitivity,
+  sensitivity: Sensitivity,
   target: number,
   animation: boolean
 ): SimulationChartOption {
-  const unit = curve.key === 'walkSpeed' ? '米/分钟' : '%';
+  if (sensitivity.kind === 'options') {
+    return optionsChart(indicator, sensitivity.options, target, animation);
+  }
+  const curve = sensitivity;
   const found = curve.points.find(([x]) => x === curve.current);
   // 当前取值：只有一个点的线，显示圆点和"当前"
   const marker: LineSeriesOption = {
@@ -162,8 +165,8 @@ export function sensitivityOption(
       type: 'value',
       min: curve.points[0]?.[0],
       max: curve.points.at(-1)?.[0],
-      axisLabel: AXIS,
-      name: unit,
+      axisLabel: { ...AXIS, formatter: (value: number) => `${value > 0 ? '+' : ''}${value}` },
+      name: '人口 %',
       nameTextStyle: { fontSize: 12, color: '#8a94a6' },
       nameGap: 4,
       splitLine: { show: false }
@@ -180,6 +183,47 @@ export function sensitivityOption(
         markLine: targetLine('yAxis', target, false)
       },
       marker
+    ]
+  };
+}
+
+// 规程、认定的各种组合：当前的一根用主色并标"当前"，其余浅色；目标值画成横线
+/** 参数组合的横轴标签：组合拆成两行（"旧规程 + 相交即算"） */
+export const comboLabel = (label: string): string => label.replace(' + ', '\n');
+
+function optionsChart(
+  indicator: SimulationIndicator,
+  options: readonly SensitivityOption[],
+  target: number,
+  animation: boolean
+): SimulationChartOption {
+  return {
+    animation,
+    grid: { left: 44, right: 16, top: 20, bottom: 40 },
+    tooltip: { trigger: 'axis', valueFormatter: value => formatValue(Number(value), indicator) },
+    xAxis: {
+      type: 'category',
+      data: options.map(option => option.label),
+      // 四种组合时一格只有约 60 宽：每个标签都显示，组合拆成两行
+      axisLabel: { ...AXIS, interval: 0, lineHeight: 14, formatter: comboLabel },
+      axisTick: { show: false },
+      axisLine: { lineStyle: { color: '#e2e5ec' } }
+    },
+    // 柱子从 0 画起，和城市对比一样到 100%，目标线也在图里
+    yAxis: { type: 'value', axisLabel: AXIS, splitLine: SPLIT, max: indicator.unit === '%' ? 100 : undefined },
+    series: [
+      {
+        type: 'bar',
+        barWidth: 18,
+        data: options.map(option => ({
+          value: option.value,
+          itemStyle: { color: option.current ? PRIMARY : PRIMARY_LIGHT, borderRadius: [3, 3, 0, 0] },
+          label: option.current
+            ? { show: true, position: 'top', fontSize: 12, color: PRIMARY_DEEP, formatter: '当前' }
+            : { show: false }
+        })),
+        markLine: targetLine('yAxis', target, false)
+      }
     ]
   };
 }

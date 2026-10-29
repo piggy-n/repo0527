@@ -21,12 +21,6 @@ describe('STEPS', () => {
       }
     }
   });
-
-  it('确认点在步骤的时长之内', () => {
-    for (const step of STEPS) {
-      expect(step.checkpointAt ?? 0).toBeLessThan(step.duration);
-    }
-  });
 });
 
 describe('downstream', () => {
@@ -41,7 +35,8 @@ describe('downstream', () => {
 
 describe('restartStep', () => {
   it('取改动所属步骤里最靠前的；没有改动为 null', () => {
-    expect(restartStep(['targets', 'walkSpeed'])).toBe('spatial');
+    expect(restartStep(['targets', 'rule'])).toBe('spatial');
+    expect(restartStep(['recognition', 'popChange'])).toBe('pop');
     expect(restartStep(['targets'])).toBe('evaluate');
     expect(restartStep([])).toBeNull();
   });

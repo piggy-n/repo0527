@@ -5,7 +5,6 @@ import type { Clock } from '../engine/clock';
 import {
   type ApplyOutcome,
   type ApplyPlan,
-  type CheckpointDecision,
   type EngineState,
   idleEngineState,
   SimulationEngine
@@ -15,7 +14,7 @@ import type { Calculator } from '../model/calculator';
 import type { SimulationParams } from '../model/params';
 import { inProgress } from '../run/run-view';
 
-/** 推演的拥有者：引擎的状态快照、按帧刷新的进度，以及开始、停止、确认、干预、暂停 */
+/** 推演的拥有者：引擎的状态快照、按帧刷新的进度，以及开始、停止、干预、暂停 */
 export interface SimulationRun {
   readonly state: Readonly<Ref<EngineState>>;
   /** 开始推演时用的计算器；还没开始过时为 null */
@@ -24,7 +23,6 @@ export interface SimulationRun {
   readonly progress: (step: StepId) => number;
   readonly start: (composition: Composition, calculator: Calculator) => void;
   readonly stop: () => void;
-  readonly resolveCheckpoint: (decision: CheckpointDecision) => void;
   readonly planApply: (next: SimulationParams, options?: { readonly baseIndex?: number }) => ApplyPlan;
   readonly apply: (next: SimulationParams, options?: { readonly baseIndex?: number }) => ApplyOutcome;
   /** 暂停，返回解除函数；页面停用、打开人工干预各拿一个 */
@@ -83,7 +81,6 @@ export function useSimulationRun(clock?: Clock): SimulationRun {
     },
     start: (composition, next) => engineFor(next).start(composition.conditions, composition.params),
     stop: () => requireEngine().stop(),
-    resolveCheckpoint: decision => requireEngine().resolveCheckpoint(decision),
     planApply: (next, options) => requireEngine().planApply(next, options),
     apply: (next, options) => requireEngine().apply(next, options),
     // 还没开始过时没有要暂停的

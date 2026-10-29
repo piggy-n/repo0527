@@ -1,4 +1,4 @@
-import { Delete, Search } from '@element-plus/icons-vue';
+import { RefreshLeft, Search } from '@element-plus/icons-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
 import { ElButton, ElCheckbox, ElInput } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNodeChild } from 'vue';
@@ -10,7 +10,7 @@ import type { ConditionDrag, DragItem } from '../composables/useConditionDrag';
 import { INDICATOR_GROUPS, reachText, type SimulationIndicator } from '../model/indicators';
 import styles from './ConditionLibrary.module.scss';
 
-const indicatorTitle = (item: SimulationIndicator) => `${item.name}（${item.unit}，${reachText(item)}）`;
+const indicatorTitle = (item: SimulationIndicator) => `${item.name}（${item.unit}）${item.id} · ${reachText(item)}`;
 
 const chipKey = (item: DragItem): string => {
   switch (item.kind) {
@@ -32,7 +32,7 @@ const section = (title: string, extra: VNodeChild, content: VNodeChild, fill = f
   </section>
 );
 
-/** 条件库：年度、城市、指标都可以点选，也可以拖到编排图上；年度和范围固定在上面，只有指标列表滚动 */
+/** 指标智能推演条件：年度、城市、指标都可以点选，也可以拖到编排图上；年度和范围固定在上面，只有指标列表滚动 */
 export const ConditionLibrary = defineComponent({
   name: 'ConditionLibrary',
   props: {
@@ -116,7 +116,7 @@ export const ConditionLibrary = defineComponent({
           key="search"
           class={styles.search}
           modelValue={keyword.value}
-          placeholder="搜索指标"
+          placeholder="搜索指标名称或编码"
           aria-label="搜索指标"
           prefixIcon={Search}
           clearable
@@ -167,11 +167,11 @@ export const ConditionLibrary = defineComponent({
       const { cityCodes, indicatorIds } = composition.state.value.conditions;
       const all = cityCodes.length === JIANGSU_CITIES.length;
       return (
-        <MxPanel class={styles.panel} title="条件库" headerTone="muted" flush>
+        <MxPanel class={styles.panel} title="指标智能推演条件" flush>
           {{
             actions: () => (
-              <ElButton link type="primary" icon={Delete} onClick={() => composition.clear()}>
-                清空
+              <ElButton link type="primary" icon={RefreshLeft} onClick={() => composition.reset()}>
+                重置条件
               </ElButton>
             ),
             default: () => (

@@ -20,7 +20,6 @@ describe('groupStatus', () => {
     expect(groupStatus('prep', stateWith({ pop: 'done', poi: 'reused', land: 'done' }).steps)).toBe('done');
     expect(groupStatus('prep', stateWith({ pop: 'reused', poi: 'reused', land: 'reused' }).steps)).toBe('reused');
     expect(groupStatus('prep', stateWith({ pop: 'stale', poi: 'reused', land: 'reused' }).steps)).toBe('stale');
-    expect(groupStatus('qc', stateWith({ qc: 'checkpoint' }).steps)).toBe('checkpoint');
   });
 });
 
@@ -47,7 +46,7 @@ describe('说明文字', () => {
     expect(stepText('qc', state, undefined)).toBe('核查数据完整性…');
     expect(stepText('qc', { ...state, paused: true }, undefined)).toBe('已暂停');
     expect(stepText('parse', state, '1 年 · 13 市 · 3 项')).toBe('1 年 · 13 市 · 3 项');
-    expect(stepText('qc', stateWith({ qc: 'checkpoint' }), undefined)).toBe('等待你确认缺失处理');
+    expect(stepText('evaluate', stateWith({ evaluate: 'running' }), undefined)).toBe('对照目标值…');
   });
 
   it('数据准备一行汇总三路', () => {

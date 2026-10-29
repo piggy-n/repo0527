@@ -5,9 +5,8 @@ import { indicatorResult, type PassState, passState, valueBreaks } from '../mode
 import type { Calculator, DistrictResult } from '../model/calculator';
 import type { District } from '../model/districts';
 import { facilityLayoutOf } from '../model/facilities';
-import { reachMeters, simulationIndicator } from '../model/indicators';
-import type { SimulationConditions, SimulationParams } from '../model/params';
-import { EXCLUDED_COLOR, valueColor } from './colors';
+import { serviceMeters, type SimulationConditions, type SimulationParams } from '../model/params';
+import { PENDING_COLOR, valueColor } from './colors';
 
 /** 区县要素的属性：动画只换图层里的阈值，比较的是这里的排序（0～1） */
 export interface DistrictProperties {
@@ -19,10 +18,9 @@ export interface DistrictProperties {
   readonly cityRank: number;
   /** 中心经度在推演范围里从西到东的位置：计算时扫描带按它经过 */
   readonly lngRank: number;
-  /** 主指标在最新年度的颜色（剔除的是灰色） */
+  /** 主指标在最新年度的颜色 */
   readonly fill: string;
-  readonly missing: boolean;
-  /** 没有达到演示目标（评价分级时闪烁） */
+  /** 没有达到目标值（评价分级时闪烁） */
   readonly fail: boolean;
   /** 人工干预预览：改了参数后达标状态会变（结果阶段描虚线） */
   readonly preview: boolean;
@@ -43,13 +41,11 @@ export interface MapData {
   /** 推演范围以外的区县，盖上遮罩 */
   readonly mask: FeatureCollection<Polygon | MultiPolygon>;
   /** 主指标的设施点：rank 是离第一个市中心由近到远的位置，落点按它出现 */
-  readonly facilities: FeatureCollection<Point, { readonly planned: boolean; readonly rank: number }>;
-  /** 主指标的服务半径（米）；人均类为 0 */
+  readonly facilities: FeatureCollection<Point, { readonly rank: number }>;
+  /** 主指标的服务范围（米，旧规程下是站点的 300 米）；人均类为 0 */
   readonly ringMeters: number;
   /** 推演范围的外包框 */
   readonly bounds: ViewBounds;
-  /** 最新年度缺失人口的区县 */
-  readonly missing: readonly District[];
   /** 城市标注：位置、名称、主指标的值与达标 */
   readonly cities: readonly MapCity[];
   /** 空间分析的样例区县 */
@@ -84,7 +80,7 @@ const feature = <G extends Feature['geometry'], P>(geometry: G, properties: P): 
 /** 结果阶段可以换年度、换着色、标出预览的区县；推演时是最新年度、按数值分级 */
 export interface MapDataOptions {
   readonly year?: number;
-  /** 区县的颜色；不传时按五档数值分级，剔除的是灰色 */
+  /** 区县的颜色；不传时按五档数值分级 */
   readonly fill?: (row: DistrictResult) => string;
   readonly preview?: ReadonlySet<string>;
 }
@@ -103,14 +99,13 @@ export function mapData(
   const result = indicatorResult(calculator.computeYear(conditions, params, year).indicators, primary);
   const rows = new Map(result.rows.map(row => [row.code, row]));
   const breaks = valueBreaks(calculator, conditions, primary);
-  const fill = options.fill ?? ((row: DistrictResult) => (row.excluded ? EXCLUDED_COLOR : valueColor(row.value, breaks)));
-  const density = (district: District) => calculator.districtPopulation(district, year, 'resident') / district.area;
+  const fill = options.fill ?? ((row: DistrictResult) => valueColor(row.value, breaks));
+  const density = (district: District) => calculator.districtPopulation(district) / district.area;
   const densities = new Map(scope.map(district => [district.code, density(district)]));
   const maxDensity = Math.max(...densities.values(), 1);
   const lngRanks = ranks(scope, district => district.center[0]);
   const lastCity = Math.max(1, conditions.cityCodes.length - 1);
   const cityRanks = new Map(conditions.cityCodes.map((code, index) => [code, index / lastCity]));
-  const missing = calculator.missingDistricts(year, conditions.cityCodes);
 
   const districts = scope.map(district => {
     const row = rows.get(district.code);
@@ -120,9 +115,8 @@ export function mapData(
       density: 0.12 + 0.4 * Math.sqrt((densities.get(district.code) ?? 0) / maxDensity),
       cityRank: cityRanks.get(district.cityCode) ?? 0,
       lngRank: lngRanks.get(district) ?? 0,
-      fill: row ? fill(row) : EXCLUDED_COLOR,
-      missing: missing.some(item => item.code === district.code),
-      fail: row !== undefined && !row.excluded && !row.pass,
+      fill: row ? fill(row) : PENDING_COLOR,
+      fail: row !== undefined && !row.pass,
       preview: options.preview?.has(district.code) ?? false
     });
   });
@@ -130,7 +124,7 @@ export function mapData(
   // 设施点：离第一个市的中心由近到远
   const [first] = scope;
   const anchor = first?.center ?? [0, 0];
-  const points = facilityLayoutOf(calculator).points(conditions, primary, params, year);
+  const points = facilityLayoutOf(calculator).points(conditions, primary, year);
   const distance = ([lng = 0, lat = 0]: readonly number[]) => (lng - anchor[0]) ** 2 + (lat - anchor[1]) ** 2;
   const pointRanks = ranks(points, point => distance(point.coordinates));
 
@@ -149,15 +143,11 @@ export function mapData(
     facilities: {
       type: 'FeatureCollection',
       features: points.map(point =>
-        feature(
-          { type: 'Point', coordinates: [...point.coordinates] },
-          { planned: point.planned, rank: pointRanks.get(point) ?? 0 }
-        )
+        feature({ type: 'Point', coordinates: [...point.coordinates] }, { rank: pointRanks.get(point) ?? 0 })
       )
     },
-    ringMeters: reachMeters(simulationIndicator(primary), params.walkSpeed) ?? 0,
+    ringMeters: serviceMeters(primary, params) ?? 0,
     bounds: districtBounds(scope),
-    missing,
     cities: result.cities.map(city => {
       const members = scope.filter(district => district.cityCode === city.code);
       const center: [number, number] = [

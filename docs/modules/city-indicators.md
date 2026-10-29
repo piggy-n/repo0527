@@ -1,6 +1,6 @@
 # 城市体检指标：目录与模拟值（shared/city-indicators）
 
-城市体检驾驶舱和指标智能推演共用的指标目录和固定模拟值。2026-10-28 从 `features/city-dashboard` 移来（ADR 0102 第 4 条）：features 之间不能互相导入，第二个使用方出现后上移到 shared。
+城市体检驾驶舱和指标智能推演共用的指标目录和固定模拟值。2026-10-28 从 `features/city-dashboard` 移来（ADR 0105 第 4 条）：features 之间不能互相导入，第二个使用方出现后上移到 shared。
 
 ```
 shared/city-indicators/

@@ -4,7 +4,8 @@ import { requireIndicator } from '@/shared/city-indicators/catalog';
 import { mockIndicatorValue } from '@/shared/city-indicators/mock-value';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { indicatorResult } from './analysis';
-import { createCalculator } from './calculator';
+import { coverageStrength, createCalculator, INTERSECT_FACTOR, RULE_FACTOR } from './calculator';
+import { simulationIndicator } from './indicators';
 import { defaultParams, type SimulationParams } from './params';
 import { loadTestAtlas } from './test-atlas';
 
@@ -12,95 +13,94 @@ const ALL = JIANGSU_CITIES.map(city => city.code);
 const conditions = { years: [2026, 2025], cityCodes: ALL, indicatorIds: ['B-65', 'A-31', 'A-39', 'A-15'] };
 const withPatch = (patch: Partial<SimulationParams>): SimulationParams => ({ ...defaultParams(), ...patch });
 const calculatorOf = async () => createCalculator(await loadTestAtlas());
-const province = async (params: SimulationParams, id: string, year = 2026) =>
-  indicatorResult((await calculatorOf()).computeYear(conditions, params, year).indicators, id).value;
+const resultOf = async (params: SimulationParams, id: string, year = 2026) =>
+  indicatorResult((await calculatorOf()).computeYear(conditions, params, year).indicators, id);
 
-describe('区县人口', () => {
-  it('一个市各区县的份额加起来是 1；户籍与常住之比等于该市的比值', async () => {
+describe('区县人口与住宅用地', () => {
+  it('一个市各区县的人口加起来是该市的七普常住人口，不随年份变化', async () => {
     const calculator = await calculatorOf();
     const suzhou = calculator.atlas.inCities(['320500']);
-    const sum = (caliber: 'resident' | 'registered') => suzhou.reduce((total, district) => total + calculator.districtPopulation(district, 2026, caliber), 0);
 
-    expect(sum('registered') / sum('resident')).toBeCloseTo(0.58, 6);
-    expect(sum('resident')).toBeGreaterThan(1250);
-    expect(sum('resident')).toBeLessThan(1350);
+    expect(suzhou.reduce((sum, district) => sum + calculator.districtPopulation(district), 0)).toBeCloseTo(1274.8, 6);
+  });
+
+  it('住宅用地都大于 0，市辖区占区县面积的比例高', async () => {
+    const calculator = await calculatorOf();
+    const share = (urban: boolean) => {
+      const list = calculator.atlas.all.filter(district => district.urban === urban);
+      return list.reduce((sum, district) => sum + calculator.residentialLand(district), 0) / list.reduce((sum, district) => sum + district.area, 0);
+    };
+
+    expect(calculator.atlas.all.every(district => calculator.residentialLand(district) > 0)).toBe(true);
+    expect(share(true)).toBeGreaterThan(share(false) * 2);
   });
 });
 
 describe('computeYear', () => {
-  it('默认参数下，没有缺失的年度里市值等于驾驶舱的模拟值（覆盖率和人均值都是）', async () => {
+  it('标准口径下各年度的市值等于驾驶舱的模拟值（覆盖率和人均值都是）', async () => {
     const calculator = await calculatorOf();
-    const result = calculator.computeYear(conditions, defaultParams(), 2025);
-    for (const id of ['B-65', 'A-39']) {
-      for (const city of indicatorResult(result.indicators, id).cities) {
-        expect(city.value).toBeCloseTo(mockIndicatorValue(city.code, requireIndicator(id), 2025), 1);
+    for (const year of [2025, 2026]) {
+      const result = calculator.computeYear(conditions, defaultParams(), year);
+      for (const id of ['B-65', 'A-39', 'A-15']) {
+        for (const city of indicatorResult(result.indicators, id).cities) {
+          expect(city.value).toBeCloseTo(mockIndicatorValue(city.code, requireIndicator(id), year), 1);
+        }
       }
     }
   });
 
-  it('缺失人口只出现在最新年度：2 个区县、来自不同的市', async () => {
+  it('汇总权重：住宅用地覆盖率按住宅用地，城区面积覆盖率按区县面积，人均值按人口', async () => {
     const calculator = await calculatorOf();
-    const missing = calculator.missingDistricts(2026, ALL);
-    const rows = (year: number) => indicatorResult(calculator.computeYear(conditions, defaultParams(), year).indicators, 'B-65').rows;
+    const weights = (id: string) =>
+      indicatorResult(calculator.computeYear(conditions, defaultParams(), 2026).indicators, id).rows.map(row => row.weight);
+    const districts = calculator.atlas.inCities(ALL);
 
-    expect(missing.map(district => district.name)).toEqual(['溧水区', '广陵区']);
-    expect(new Set(missing.map(district => district.cityCode)).size).toBe(2);
-    expect(rows(2026).filter(row => row.missing).map(row => row.name)).toEqual(['溧水区', '广陵区']);
-    expect(rows(2025).some(row => row.missing)).toBe(false);
+    expect(weights('B-65')).toEqual(districts.map(district => calculator.residentialLand(district)));
+    expect(weights('A-15')).toEqual(districts.map(district => district.area));
+    expect(weights('A-39')).toEqual(districts.map(district => calculator.districtPopulation(district)));
   });
 
-  it('剔除缺失的区县：标为剔除、不参与汇总；手动填写的人口改变人均值', async () => {
+  it('覆盖强度：旧规程打折扣、相交即算放大，只对用得上的指标', () => {
+    const both = withPatch({ rule: 'old', recognition: 'intersect' });
+
+    expect(coverageStrength(simulationIndicator('A-31'), both)).toBeCloseTo(RULE_FACTOR * INTERSECT_FACTOR, 9);
+    expect(coverageStrength(simulationIndicator('B-65'), both)).toBe(INTERSECT_FACTOR);
+    expect(coverageStrength(simulationIndicator('A-15'), both)).toBe(1);
+    expect(coverageStrength(simulationIndicator('A-39'), both)).toBe(1);
+    expect(coverageStrength(simulationIndicator('A-31'), defaultParams())).toBe(1);
+  });
+
+  it('旧规程让社区卫生覆盖率下降，不影响公园绿地覆盖率', async () => {
+    const old = withPatch({ rule: 'old' });
+
+    expect((await resultOf(old, 'A-31')).value).toBeLessThan((await resultOf(defaultParams(), 'A-31')).value);
+    expect((await resultOf(old, 'B-65')).value).toBe((await resultOf(defaultParams(), 'B-65')).value);
+  });
+
+  it('相交即算让住宅用地覆盖率上升，城区面积覆盖率和人均值不变', async () => {
+    const intersect = withPatch({ recognition: 'intersect' });
+
+    expect((await resultOf(intersect, 'B-65')).value).toBeGreaterThan((await resultOf(defaultParams(), 'B-65')).value);
+    expect((await resultOf(intersect, 'A-15')).value).toBe((await resultOf(defaultParams(), 'A-15')).value);
+    expect((await resultOf(intersect, 'A-39')).value).toBe((await resultOf(defaultParams(), 'A-39')).value);
+  });
+
+  it('常住人口增加 10%：每个区县的人均值除以 1.1，覆盖率不变，总人口跟着变', async () => {
     const calculator = await calculatorOf();
-    const [lishui] = calculator.missingDistricts(2026, ALL);
-    if (!lishui) {
-      throw new Error('应有缺失的区县');
-    }
-    const rowOf = (params: SimulationParams) => {
-      const row = indicatorResult(calculator.computeYear(conditions, params, 2026).indicators, 'A-39').rows.find(item => item.code === lishui.code);
-      if (!row) {
-        throw new Error('缺少溧水区的结果');
-      }
-      return row;
-    };
-    const excluded = rowOf(withPatch({ missing: { kind: 'exclude' } }));
-    const imputed = rowOf(defaultParams());
-    const manual = rowOf(withPatch({ missing: { kind: 'manual', values: { [lishui.code]: imputed.weight * 2 } } }));
+    const more = withPatch({ popChange: 10 });
+    const before = calculator.computeYear(conditions, defaultParams(), 2026);
+    const after = calculator.computeYear(conditions, more, 2026);
+    const rows = (result: typeof before) => indicatorResult(result.indicators, 'A-39').rows.map(row => row.value);
 
-    expect(excluded.excluded).toBe(true);
-    expect(imputed.excluded).toBe(false);
-    expect(imputed.weight).toBe(calculator.imputedPopulation(lishui, 2026, 'resident'));
-    expect(manual.value).toBeCloseTo(imputed.value / 2, 1);
+    rows(after).forEach((value, index) => expect(value).toBeCloseTo((rows(before)[index] ?? 0) / 1.1, 1));
+    expect(indicatorResult(after.indicators, 'B-65').value).toBe(indicatorResult(before.indicators, 'B-65').value);
+    expect(after.population).toBeCloseTo(before.population * 1.1, 6);
   });
 
-  it('步行类覆盖率随步行速度上升，固定距离类不变；纳入口径越宽越高', async () => {
-    const faster = withPatch({ walkSpeed: 80 });
+  it('达标对照目标值，接近是差距在 5% 以内；最低城市', async () => {
+    const result = await resultOf(defaultParams(), 'B-65');
 
-    expect(await province(faster, 'B-65')).toBeGreaterThan(await province(defaultParams(), 'B-65'));
-    expect(await province(faster, 'A-15')).toBe(await province(defaultParams(), 'A-15'));
-    const byScope = await Promise.all((['all', 'standard', 'large'] as const).map(scope => province(withPatch({ facilityScope: scope }), 'B-65')));
-    expect(byScope.toSorted((a, b) => b - a)).toEqual(byScope);
-  });
-
-  it('规划新增只作用于选中的指标', async () => {
-    const scoped = withPatch({ newFacilities: 20, scenarioIds: ['B-65'] });
-
-    expect(await province(scoped, 'B-65')).toBeGreaterThan(await province(defaultParams(), 'B-65'));
-    expect(await province(scoped, 'A-31')).toBe(await province(defaultParams(), 'A-31'));
-  });
-
-  it('户籍口径让户籍人口少的苏州人均值变高', async () => {
-    const calculator = await calculatorOf();
-    const suzhou = (params: SimulationParams) =>
-      indicatorResult(calculator.computeYear(conditions, params, 2025).indicators, 'A-39').cities.find(city => city.code === '320500')?.value ?? 0;
-
-    expect(suzhou(withPatch({ popCaliber: 'registered' }))).toBeGreaterThan(suzhou(defaultParams()) * 1.5);
-  });
-
-  it('达标对照演示目标值，接近是差距在 5% 以内；最低城市', async () => {
-    const calculator = await calculatorOf();
-    const result = indicatorResult(calculator.computeYear(conditions, defaultParams(), 2026).indicators, 'B-65');
-
-    expect([result.passCount, result.total, result.target, result.value]).toEqual([5, 13, 70, 64.62]);
+    expect([result.passCount, result.total, result.target, result.value]).toEqual([5, 13, 70, 66.56]);
     expect(result.lowest.name).toBe('苏州市');
     for (const city of result.cities) {
       expect(city.pass).toBe(city.value >= 70);
@@ -110,7 +110,7 @@ describe('computeYear', () => {
 
   it('覆盖率不超过 100，同样的条件和参数两次计算结果相同', async () => {
     const calculator = await calculatorOf();
-    const params = withPatch({ walkSpeed: 100, newFacilities: 50, facilityScope: 'all' });
+    const params = withPatch({ rule: 'old', recognition: 'intersect', popChange: 20 });
     const first = calculator.compute(conditions, params);
 
     expect(Object.keys(first)).toEqual(['2025', '2026']);

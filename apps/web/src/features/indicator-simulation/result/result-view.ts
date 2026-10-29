@@ -7,14 +7,12 @@ import {
   passState,
   type Sensitivity,
   sensitivity,
-  type Suggestion,
-  suggestion,
   valueBreaks
 } from '../model/analysis';
 import type { Calculator, DistrictResult, IndicatorResult, YearResult } from '../model/calculator';
 import { simulationIndicator } from '../model/indicators';
 import { defaultParams, PARAM_LABELS, type SimulationConditions, type SimulationParams } from '../model/params';
-import { DIFF_COLORS, diffColor, diffEdges, EXCLUDED_COLOR, PASS_COLORS, VALUE_COLORS, valueColor } from '../map/colors';
+import { DIFF_COLORS, diffColor, diffEdges, PASS_COLORS, VALUE_COLORS, valueColor } from '../map/colors';
 import { describeChanges, em, primaryIndicator, type Rich, rich } from '../run/narrative';
 
 /** 结果地图的着色：数值五档、达标三态、和对比版本的差值 */
@@ -23,7 +21,7 @@ export type MapMode = 'value' | 'pass' | 'diff';
 /** 结果阶段在看什么：哪一版、和谁比、哪项指标、哪一年、地图怎么着色 */
 export interface ResultSelection {
   readonly viewIndex: number;
-  /** 对比的版本序号；default 是默认参数 */
+  /** 对比的版本序号；default 是标准口径（默认参数） */
   readonly compare: number | 'default';
   readonly indicatorId: string;
   readonly year: number;
@@ -37,14 +35,14 @@ export interface Comparison {
   readonly result: Readonly<Record<number, YearResult>>;
 }
 
-const DEFAULT_LABEL = '默认参数';
+const DEFAULT_LABEL = '标准口径';
 
 // 版本名 v1、v2 和汉字之间留空格
 const spaced = (label: string) => (/^v\d/.test(label) ? ` ${label} ` : label);
 // 数值后的单位：百分号紧跟，其他单位前空一格
 const unitText = (unit: string) => (unit === '%' ? '%' : ` ${unit}`);
 
-/** 新的一版生成后看它：和它所基于的版本比（第一版和默认参数比），主指标、最新年度、数值着色 */
+/** 新的一版生成后看它：和它所基于的版本比（第一版和标准口径比），主指标、最新年度、数值着色 */
 export function initialSelection(state: EngineState): ResultSelection | null {
   const version = state.versions.at(-1);
   if (!version || !state.conditions) {
@@ -59,7 +57,7 @@ export function initialSelection(state: EngineState): ResultSelection | null {
   };
 }
 
-/** 对比的一方：默认参数按同样的条件算一遍，版本直接用它的结果 */
+/** 对比的一方：标准口径按同样的条件算一遍，版本直接用它的结果 */
 export function comparisonOf(
   calculator: Calculator,
   conditions: SimulationConditions,
@@ -80,6 +78,15 @@ export function versionText(version: SimulationVersion, conditions: SimulationCo
   return changes.length === 0 ? '编排时的参数' : changes.join('；');
 }
 
+/** 参数敏感性的说明：人口曲线，或写出取不同值的参数 */
+export function sensitivityNote(value: Sensitivity): string {
+  if (value.kind === 'curve') {
+    return '随常住人口变化';
+  }
+  const names = value.keys.map(key => PARAM_LABELS[key]).join('、');
+  return value.keys.length > 1 ? `${names}的组合` : `${names}的两种取法`;
+}
+
 export type Tone = 'up' | 'down' | 'flat';
 const toneOf = (delta: number): Tone => (Math.abs(delta) < 0.005 ? 'flat' : delta > 0 ? 'up' : 'down');
 
@@ -96,11 +103,11 @@ export interface ResultSummary {
   readonly current: IndicatorResult;
   readonly base: IndicatorResult;
   readonly kpis: readonly Kpi[];
-  /** AI 结论：结论一段，有建议时再一段 */
+  /** AI 结论 */
   readonly insight: readonly Rich[];
-  readonly idea: Suggestion | null;
   readonly attribution: readonly Contribution[];
-  readonly sensitivity: Sensitivity;
+  /** 没有可调参数的指标为 null */
+  readonly sensitivity: Sensitivity | null;
   readonly previousYear: number | null;
 }
 
@@ -170,29 +177,21 @@ export function resultSummary(
     .toSorted((a, b) => a.value - b.value)
     .slice(0, 2);
   const target = version.params.targets[indicatorId] ?? current.target;
-  const idea = suggestion(calculator, conditions, version.params, indicatorId, year);
 
   const insight: Rich[] = [
     [
-      ...rich`${year} 年${indicator.short}全省 ${em(formatValue(current.value, indicator))}，${em(`${current.passCount}/${current.total}`)} 市达到演示目标 ${target}${unitText(indicator.unit)}`,
+      ...rich`${year} 年${indicator.short}全省 ${em(formatValue(current.value, indicator))}，${em(`${current.passCount}/${current.total}`)} 市达到目标 ${target}${unitText(indicator.unit)}`,
       ...(weak.length > 0 ? rich`，短板在 ${em(weak.map(city => city.name).join('、'))}` : []),
       '。',
       ...(top ? rich`较${spaced(comparison.label).trimEnd()} ${em(formatDelta(delta, indicator))}，主要来自${PARAM_LABELS[top.key]}（${top.from} → ${top.to}）。` : []),
       ...(trend !== null && previousYear !== null ? rich`较 ${previousYear} 年 ${em(formatDelta(trend, indicator))}。` : [])
     ]
   ];
-  if (idea) {
-    insight.push(
-      rich`${idea.reached ? '建议情景' : '仅靠新增设施难以达标，上限情景'}：规划新增 ${em(`${idea.add}%`)} ${indicator.facility}，预计 ${em(`${formatValue(idea.before.value, indicator)} → ${formatValue(idea.after.value, indicator)}`)}，达标 ${em(`${idea.before.passCount} → ${idea.after.passCount}`)} 市。`
-    );
-  }
-
   return {
     current,
     base,
     kpis,
     insight,
-    idea,
     attribution,
     sensitivity: sensitivity(calculator, conditions, version.params, indicatorId, year),
     previousYear
@@ -211,11 +210,7 @@ export interface MapColoring {
   readonly legend: { readonly title: string; readonly entries: readonly LegendEntry[]; readonly note: string | null };
 }
 
-// 剔除的区县总是灰色
-const withExcluded = (color: (row: DistrictResult) => string) => (row: DistrictResult) =>
-  row.excluded ? EXCLUDED_COLOR : color(row);
-
-/** 结果地图的着色和图例：数值五档按默认参数的分位数（年度、版本之间可比），达标按演示目标，差值和对比的一方比 */
+/** 结果地图的着色和图例：数值五档按标准口径的分位数（年度、版本之间可比），达标按目标值，差值和对比的一方比 */
 export function mapColoring(
   calculator: Calculator,
   conditions: SimulationConditions,
@@ -226,20 +221,17 @@ export function mapColoring(
   const { indicatorId, year, mode } = selection;
   const indicator = simulationIndicator(indicatorId);
   const current = indicatorOf(version.result, year, indicatorId);
-  const excluded = current.rows.some(row => row.excluded);
-  const tail: LegendEntry[] = excluded ? [{ color: EXCLUDED_COLOR, text: '已剔除（人口缺失）', shape: 'block' }] : [];
 
   if (mode === 'pass') {
     const target = current.target;
     return {
-      fill: withExcluded(row => PASS_COLORS[passState(row.value, target)]),
+      fill: row => PASS_COLORS[passState(row.value, target)],
       legend: {
-        title: `对照演示目标 ${target}${unitText(indicator.unit)}`,
+        title: `对照目标 ${target}${unitText(indicator.unit)}`,
         entries: [
           { color: PASS_COLORS.pass, text: '达标', shape: 'block' },
           { color: PASS_COLORS.near, text: '接近（差 5% 以内）', shape: 'block' },
-          { color: PASS_COLORS.fail, text: '未达标', shape: 'block' },
-          ...tail
+          { color: PASS_COLORS.fail, text: '未达标', shape: 'block' }
         ],
         note: null
       }
@@ -254,27 +246,21 @@ export function mapColoring(
     const same = maxAbs < 0.005;
     const labels = ['明显上升', '上升', same ? '基本不变' : `基本不变（±${(edges[2] ?? 0).toFixed(digits)}）`, '下降', '明显下降'];
     return {
-      fill: withExcluded(row => diffColor(deltaOf(row), edges)),
+      fill: row => diffColor(deltaOf(row), edges),
       legend: {
         title: `较${spaced(comparison.label)}变化（${indicator.unit === '%' ? '百分点' : indicator.unit}）`,
-        entries: [
-          ...DIFF_COLORS.toReversed().map((color, index): LegendEntry => ({ color, text: labels[index] ?? '', shape: 'block' })),
-          ...tail
-        ],
-        note: same ? '区县值与对比版本相同（变化只在汇总权重上）' : null
+        entries: DIFF_COLORS.toReversed().map((color, index): LegendEntry => ({ color, text: labels[index] ?? '', shape: 'block' })),
+        note: same ? '区县值与对比的一方相同' : null
       }
     };
   }
   const breaks = valueBreaks(calculator, conditions, indicatorId);
   const ranges = [`< ${breaks[0]}`, `${breaks[0]} – ${breaks[1]}`, `${breaks[1]} – ${breaks[2]}`, `${breaks[2]} – ${breaks[3]}`, `≥ ${breaks[3]}`];
   return {
-    fill: withExcluded(row => valueColor(row.value, breaks)),
+    fill: row => valueColor(row.value, breaks),
     legend: {
       title: `${year} 年 · ${indicator.short}（${indicator.unit}）`,
-      entries: [
-        ...VALUE_COLORS.map((color, index): LegendEntry => ({ color, text: ranges[index] ?? '', shape: 'block' })).toReversed(),
-        ...tail
-      ],
+      entries: VALUE_COLORS.map((color, index): LegendEntry => ({ color, text: ranges[index] ?? '', shape: 'block' })).toReversed(),
       note: null
     }
   };

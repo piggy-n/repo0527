@@ -15,8 +15,6 @@ export interface StepDefinition {
   readonly deps: readonly StepId[];
   /** 演示时长（毫秒），界面的动效按它编排 */
   readonly duration: number;
-  /** 需要人确认时，在步骤开始后多久停下来（毫秒） */
-  readonly checkpointAt?: number;
 }
 
 export const STEPS: readonly StepDefinition[] = [
@@ -24,10 +22,8 @@ export const STEPS: readonly StepDefinition[] = [
   { id: 'pop', name: '人口数据', group: 'prep', level: 1, deps: ['parse'], duration: 2600 },
   { id: 'poi', name: '设施数据', group: 'prep', level: 1, deps: ['parse'], duration: 3000 },
   { id: 'land', name: '用地数据', group: 'prep', level: 1, deps: ['parse'], duration: 2200 },
-  // 先核查一会儿，发现缺失人口后停下来问
-  { id: 'qc', name: '数据核查', group: 'qc', level: 2, deps: ['pop', 'poi', 'land'], duration: 2400, checkpointAt: 1200 },
-  // 一开始就确认参数
-  { id: 'spatial', name: '空间分析', group: 'spatial', level: 3, deps: ['qc'], duration: 5200, checkpointAt: 0 },
+  { id: 'qc', name: '数据核查', group: 'qc', level: 2, deps: ['pop', 'poi', 'land'], duration: 2400 },
+  { id: 'spatial', name: '空间分析', group: 'spatial', level: 3, deps: ['qc'], duration: 5200 },
   { id: 'compute', name: '指标计算', group: 'compute', level: 4, deps: ['spatial'], duration: 3400 },
   { id: 'evaluate', name: '评价分级', group: 'evaluate', level: 5, deps: ['compute'], duration: 2400 },
   { id: 'report', name: '结论生成', group: 'report', level: 6, deps: ['evaluate'], duration: 2600 }
@@ -57,11 +53,9 @@ export const RERUN_DELAY = 800;
 
 /** 参数项属于哪一步：改了参数，从这一步起重算 */
 export const PARAM_STEP: Readonly<Record<ParamKey, StepId>> = {
-  popCaliber: 'pop',
-  missing: 'qc',
-  walkSpeed: 'spatial',
-  facilityScope: 'spatial',
-  newFacilities: 'spatial',
+  popChange: 'pop',
+  rule: 'spatial',
+  recognition: 'spatial',
   targets: 'evaluate'
 };
 

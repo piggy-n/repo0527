@@ -69,6 +69,8 @@
   border-radius: var(--radius-sm);
   background: var(--color-bg-container);
   color: var(--color-text-regular);
+  // 按钮不继承字体，不写会用浏览器默认的 Arial，中文显得又淡又细
+  font-family: inherit;
   font-size: var(--font-size-xs);
   white-space: nowrap;
   cursor: grab;
@@ -94,9 +96,18 @@
     font-weight: var(--font-weight-semibold);
   }
 
+  // 指标：名称黑色 14 号、高 32、左对齐，悬停和选中仍用主色（2026-10-29 用户确认的原型）
   .indicators & {
     justify-content: flex-start;
+    height: 32px;
     padding: 0 var(--space-sm);
+    color: var(--color-text-title);
+    font-size: var(--font-size-base);
+
+    &:hover,
+    &[aria-pressed='true'] {
+      color: var(--color-primary);
+    }
   }
 }
 
@@ -140,6 +151,7 @@
   border: 0;
   background: none;
   color: var(--color-text-title);
+  font-family: inherit;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;

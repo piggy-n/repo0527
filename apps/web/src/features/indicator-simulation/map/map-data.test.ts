@@ -4,13 +4,13 @@ import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { createCalculator } from '../model/calculator';
 import { defaultParams } from '../model/params';
 import { loadTestAtlas } from '../model/test-atlas';
-import { EXCLUDED_COLOR, VALUE_COLORS } from './colors';
+import { VALUE_COLORS } from './colors';
 import { mapData } from './map-data';
 
 const ALL = JIANGSU_CITIES.map(city => city.code);
 
 describe('mapData', () => {
-  it('推演范围的区县带数值颜色、排序和缺失；范围外的进遮罩', async () => {
+  it('推演范围的区县带数值颜色和排序；范围外的进遮罩', async () => {
     const calculator = createCalculator(await loadTestAtlas());
     const conditions = { years: [2026], cityCodes: ['320100', '321000'], indicatorIds: ['B-65', 'A-39'] };
     const data = mapData(calculator, conditions, defaultParams(), 'B-65');
@@ -19,9 +19,6 @@ describe('mapData', () => {
 
     expect(properties.map(item => item.code)).toEqual(scope.map(district => district.code));
     expect(data.mask.features).toHaveLength(calculator.atlas.all.length - scope.length);
-    expect(properties.filter(item => item.missing).map(item => item.code)).toEqual(
-      calculator.missingDistricts(2026, conditions.cityCodes).map(district => district.code)
-    );
     // 经度排序从西到东
     const byLng = properties.toSorted((a, b) => a.lngRank - b.lngRank).map(item => item.code);
     expect(byLng).toEqual(scope.toSorted((a, b) => a.center[0] - b.center[0]).map(district => district.code));
@@ -33,14 +30,18 @@ describe('mapData', () => {
     expect(data.sample?.cityCode).toBe('320100');
   });
 
-  it('剔除的区县是灰色；人均类没有服务圈', async () => {
+  it('人均类没有服务圈；全省时没有遮罩', async () => {
     const calculator = createCalculator(await loadTestAtlas());
     const conditions = { years: [2026], cityCodes: ALL, indicatorIds: ['A-39'] };
-    const data = mapData(calculator, conditions, { ...defaultParams(), missing: { kind: 'exclude' } }, 'A-39');
-    const missing = data.districts.features.filter(feature => feature.properties.missing);
-    expect(missing.length).toBeGreaterThan(0);
-    expect(missing.every(feature => feature.properties.fill === EXCLUDED_COLOR)).toBe(true);
+    const data = mapData(calculator, conditions, defaultParams(), 'A-39');
     expect(data.ringMeters).toBe(0);
     expect(data.mask.features).toHaveLength(0);
+  });
+
+  it('服务圈按当前的规程：旧规程下社区卫生站点是 300 米', async () => {
+    const calculator = createCalculator(await loadTestAtlas());
+    const conditions = { years: [2026], cityCodes: ['320100'], indicatorIds: ['A-31'] };
+    expect(mapData(calculator, conditions, defaultParams(), 'A-31').ringMeters).toBe(1000);
+    expect(mapData(calculator, conditions, { ...defaultParams(), rule: 'old' }, 'A-31').ringMeters).toBe(300);
   });
 });

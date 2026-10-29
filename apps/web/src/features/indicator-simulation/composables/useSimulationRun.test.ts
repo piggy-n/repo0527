@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { effectScope } from 'vue';
 import { required } from '@/shared/testing/required';
-import { defaultComposition } from '../compose/composition';
+import { sampleComposition } from '../compose/composition';
 import { ManualClock } from '../engine/test-clock';
 import { createCalculator } from '../model/calculator';
 import { loadTestAtlas } from '../model/test-atlas';
@@ -18,7 +18,7 @@ describe('useSimulationRun', () => {
     expect(() => run.pause()()).not.toThrow();
     expect(() => run.stop()).toThrow('推演还没有开始');
 
-    run.start(defaultComposition(), calculator);
+    run.start(sampleComposition(), calculator);
     expect(run.state.value.status).toBe('planning');
     expect(run.calculator.value).toBe(calculator);
     await clock.advance(1300 + 900);

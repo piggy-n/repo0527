@@ -1,4 +1,4 @@
-import { demoTarget, SIMULATION_INDICATORS, simulationIndicator } from './indicators';
+import { demoTarget, reachMeters, SIMULATION_INDICATORS, simulationIndicator, walkMeters } from './indicators';
 
 /** 推演条件：年度、监测范围（市）、监测指标（编排图上的顺序） */
 export interface SimulationConditions {
@@ -7,133 +7,126 @@ export interface SimulationConditions {
   readonly indicatorIds: readonly string[];
 }
 
-export type PopulationCaliber = 'resident' | 'registered';
-export type FacilityScope = 'all' | 'standard' | 'large';
+/** 计算规程：新规程站点步行 15 分钟，旧规程站点步行 5 分钟（服务中心都是 15 分钟） */
+export type Rule = 'new' | 'old';
+/** 覆盖认定：覆盖面积 ≥ 50% 的住宅图斑算覆盖，或者相交即算 */
+export type Recognition = 'half' | 'intersect';
 
-/** 最新年度人口缺失的处理：按趋势插补、剔除这些区县、手动填写（万人，按区县代码） */
-export type MissingTreatment =
-  | { readonly kind: 'impute' }
-  | { readonly kind: 'exclude' }
-  | { readonly kind: 'manual'; readonly values: Readonly<Record<string, number>> };
-
-/** 可调整的参数：数据核查、空间分析、评价分级各自用到其中几项 */
+/** 可调整的参数：取值都来自 Excel 的计算方法，偏离标准值的是模拟情景（docs/modules/indicator-simulation.md） */
 export interface SimulationParams {
-  readonly popCaliber: PopulationCaliber;
-  readonly missing: MissingTreatment;
-  /** 步行速度（米/分钟），步行类覆盖率的服务半径 = 速度 × 分钟数 */
-  readonly walkSpeed: number;
-  readonly facilityScope: FacilityScope;
-  /** 规划新增设施（%）：情景假设，在现有设施附近按比例补点 */
-  readonly newFacilities: number;
-  /** 规划新增作用于哪些指标；null 是全部 */
-  readonly scenarioIds: readonly string[] | null;
-  /** 演示目标值，按指标编码 */
+  readonly rule: Rule;
+  readonly recognition: Recognition;
+  /** 常住人口相对七普的变化（%）：人均类的分母按它变化 */
+  readonly popChange: number;
+  /** 目标值，按指标编码；只影响达标判断 */
   readonly targets: Readonly<Record<string, number>>;
 }
 
-/** 参数的取值范围，界面的滑块按它设置 */
-export const WALK_SPEED_RANGE = { min: 40, max: 100, step: 5 } as const;
-export const NEW_FACILITIES_RANGE = { min: 0, max: 50, step: 5 } as const;
+/** 常住人口变化的范围，界面的滑块按它设置 */
+export const POP_CHANGE_RANGE = { min: -20, max: 20, step: 5 } as const;
 
 let defaults: SimulationParams | undefined;
 
-/** 默认参数：常住人口、插补、60 米/分钟、规模以上设施、不新增；第一次用到时才算目标值，之后一直是同一个对象 */
+/** 标准口径：新规程、覆盖面积 ≥ 50%、七普常住人口；第一次用到时才算目标值，之后一直是同一个对象 */
 export function defaultParams(): SimulationParams {
   defaults ??= {
-    popCaliber: 'resident',
-    missing: { kind: 'impute' },
-    walkSpeed: 60,
-    facilityScope: 'standard',
-    newFacilities: 0,
-    scenarioIds: null,
+    rule: 'new',
+    recognition: 'half',
+    popChange: 0,
     targets: Object.fromEntries(SIMULATION_INDICATORS.map(({ id }) => [id, demoTarget(id)]))
   };
   return defaults;
 }
 
-/** 一项指标在不在规划新增的作用范围里 */
-export const inScenario = (params: SimulationParams, id: string): boolean => params.scenarioIds === null || params.scenarioIds.includes(id);
-
-/** 用户能调整的参数项；规划新增和它的作用范围算一项，缺失处理和手动填写的数字算一项 */
-export type ParamKey = 'popCaliber' | 'missing' | 'walkSpeed' | 'facilityScope' | 'newFacilities' | 'targets';
+/** 用户能调整的参数项 */
+export type ParamKey = 'rule' | 'recognition' | 'popChange' | 'targets';
 
 /** 参数项在推演中的先后：归因按这个顺序逐项替换 */
-export const PARAM_KEYS: readonly ParamKey[] = ['popCaliber', 'missing', 'walkSpeed', 'facilityScope', 'newFacilities', 'targets'];
+export const PARAM_KEYS: readonly ParamKey[] = ['popChange', 'rule', 'recognition', 'targets'];
 
 export const PARAM_LABELS: Readonly<Record<ParamKey, string>> = {
-  popCaliber: '人口口径',
-  missing: '缺失数据处理',
-  walkSpeed: '步行速度',
-  facilityScope: '设施纳入口径',
-  newFacilities: '规划新增设施',
+  rule: '计算规程',
+  recognition: '覆盖认定',
+  popChange: '常住人口变化',
   targets: '目标值'
 };
 
-export const CALIBER_LABELS: Readonly<Record<PopulationCaliber, string>> = { resident: '常住人口', registered: '户籍人口' };
-export const SCOPE_LABELS: Readonly<Record<FacilityScope, string>> = { all: '全部设施', standard: '规模以上设施', large: '仅中大型设施' };
-export const MISSING_LABELS: Readonly<Record<MissingTreatment['kind'], string>> = { impute: '按趋势插补', exclude: '剔除缺失区县', manual: '手动填写' };
+export const RULE_LABELS: Readonly<Record<Rule, string>> = { new: '新规程', old: '旧规程' };
+export const RECOGNITION_LABELS: Readonly<Record<Recognition, string>> = { half: '覆盖 ≥ 50%', intersect: '相交即算' };
 
-// 按键比较两组数字（目标值、手动填写的人口），键的先后不算
+/** 参数项对这项指标起不起作用：规程只对 Excel 写了规程变化的两项，认定只对住宅用地覆盖率，人口只对人均类 */
+export function paramApplies(key: ParamKey, indicatorId: string): boolean {
+  const indicator = simulationIndicator(indicatorId);
+  switch (key) {
+    case 'rule':
+      return indicator.model === 'coverage' && indicator.ruleChange;
+    case 'recognition':
+      return indicator.model === 'coverage' && indicator.base === 'residential';
+    case 'popChange':
+      return indicator.model === 'perCapita';
+    case 'targets':
+      break;
+  }
+  return true;
+}
+
+/** 这些指标用得上的参数项，按推演中的先后 */
+export function paramsOf(indicatorIds: readonly string[]): ParamKey[] {
+  return PARAM_KEYS.filter(key => indicatorIds.some(id => paramApplies(key, id)));
+}
+
+/** 参数项取的是不是标准值；目标值不属于计算口径，总算标准 */
+export function isStandard(key: ParamKey, params: SimulationParams): boolean {
+  const standard = defaultParams();
+  return key === 'targets' || params[key] === standard[key];
+}
+
+/** 这项指标在这组参数下偏离标准口径的参数项 */
+export function scenarioKeys(params: SimulationParams, indicatorId: string): ParamKey[] {
+  return PARAM_KEYS.filter(key => paramApplies(key, indicatorId) && !isStandard(key, params));
+}
+
+/** 这项指标是不是模拟情景：有起作用的参数不是标准值 */
+export const isScenario = (params: SimulationParams, indicatorId: string): boolean =>
+  scenarioKeys(params, indicatorId).length > 0;
+
+/** 服务范围（米）：旧规程下站点按步行 5 分钟；人均类没有 */
+export function serviceMeters(indicatorId: string, params: SimulationParams): number | null {
+  const indicator = simulationIndicator(indicatorId);
+  if (indicator.model === 'coverage' && indicator.ruleChange && params.rule === 'old') {
+    return walkMeters(5);
+  }
+  return reachMeters(indicator);
+}
+
+// 按键比较目标值，键的先后不算
 function sameNumbers(a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>): boolean {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
   return [...keys].every(key => a[key] === b[key]);
 }
 
-// 作用范围按集合比较：null（全部）只等于 null
-function sameScope(a: readonly string[] | null, b: readonly string[] | null): boolean {
-  if (a === null || b === null) {
-    return a === b;
-  }
-  return a.length === b.length && a.every(id => b.includes(id));
-}
-
-function sameMissing(a: MissingTreatment, b: MissingTreatment): boolean {
-  if (a.kind === 'manual' && b.kind === 'manual') {
-    return sameNumbers(a.values, b.values);
-  }
-  return a.kind === b.kind;
-}
-
 /** 两组参数里不同的参数项，按 PARAM_KEYS 的顺序 */
 export function changedParams(from: SimulationParams, to: SimulationParams): ParamKey[] {
-  const same: Readonly<Record<ParamKey, () => boolean>> = {
-    popCaliber: () => from.popCaliber === to.popCaliber,
-    missing: () => sameMissing(from.missing, to.missing),
-    walkSpeed: () => from.walkSpeed === to.walkSpeed,
-    facilityScope: () => from.facilityScope === to.facilityScope,
-    newFacilities: () => from.newFacilities === to.newFacilities && sameScope(from.scenarioIds, to.scenarioIds),
-    targets: () => sameNumbers(from.targets, to.targets)
-  };
-  return PARAM_KEYS.filter(key => !same[key]());
+  return PARAM_KEYS.filter(key => (key === 'targets' ? !sameNumbers(from.targets, to.targets) : from[key] !== to[key]));
 }
 
-/** 规划新增作用的指标：全部，或一两项的简称，多了写"某某等 n 项" */
-export function scenarioText(params: SimulationParams, conditions: SimulationConditions): string {
-  if (params.scenarioIds === null) {
-    return '全部指标';
-  }
-  const names = params.scenarioIds.filter(id => conditions.indicatorIds.includes(id)).map(id => simulationIndicator(id).short);
-  if (names.length === 0) {
-    return '无指标';
-  }
-  return names.length <= 2 ? names.join('、') : `${names[0]}等 ${names.length} 项`;
+/** 把一项参数换成 source 的取值 */
+export function withParam(params: SimulationParams, key: ParamKey, source: SimulationParams): SimulationParams {
+  return { ...params, [key]: source[key] };
 }
 
-/** 参数项的取值说明，如"60 米/分钟""20%（公园绿地覆盖率）"；目标值写成"n 项已调整" */
+/** 带正负号的百分比，如"+10%""−5%""0%" */
+export const signedPercent = (value: number): string => `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value)}%`;
+
+/** 参数项的取值说明，如"旧规程""相交即算""+10%"；目标值写成"n 项已调整" */
 export function describeParam(key: ParamKey, params: SimulationParams, conditions: SimulationConditions): string {
   switch (key) {
-    case 'popCaliber':
-      return CALIBER_LABELS[params.popCaliber];
-    case 'missing':
-      return params.missing.kind === 'manual'
-        ? `手动填写（${Object.values(params.missing.values).map(value => `${value} 万人`).join('、')}）`
-        : MISSING_LABELS[params.missing.kind];
-    case 'walkSpeed':
-      return `${params.walkSpeed} 米/分钟`;
-    case 'facilityScope':
-      return SCOPE_LABELS[params.facilityScope];
-    case 'newFacilities':
-      return params.newFacilities === 0 ? '0%' : `${params.newFacilities}%（${scenarioText(params, conditions)}）`;
+    case 'rule':
+      return RULE_LABELS[params.rule];
+    case 'recognition':
+      return RECOGNITION_LABELS[params.recognition];
+    case 'popChange':
+      return signedPercent(params.popChange);
     case 'targets':
       break;
   }

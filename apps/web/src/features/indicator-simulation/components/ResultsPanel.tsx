@@ -1,15 +1,16 @@
-import { usePreferredReducedMotion } from '@vueuse/core';
 import { MxPanel, MxSection } from '@yzt/ui';
-import { ElButton, ElOption, ElSelect } from 'element-plus';
+import { ElOption, ElSelect } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { SimulationResult } from '../composables/useSimulationResult';
 import type { SimulationVersion } from '../engine/engine';
 import { formatDelta } from '../format';
 import { indicatorResult } from '../model/analysis';
+import { reducedMotion } from '../motion';
 import { simulationIndicator } from '../model/indicators';
 import { PARAM_LABELS, type SimulationConditions } from '../model/params';
 import { citiesOption, sensitivityOption, yearsOption } from '../result/chart-options';
+import { sensitivityNote } from '../result/result-view';
 import { RichText } from './RichText';
 import styles from './ResultsPanel.module.scss';
 import { SimulationChart } from './SimulationChart';
@@ -30,7 +31,7 @@ function revealSelected(list: HTMLElement): void {
   }
 }
 
-/** 推演结果：指标页签、关键数字、AI 结论与建议情景、多年度对比、城市对比、敏感性、变化归因 */
+/** 推演结果：指标页签、关键数字、AI 结论、多年度对比、城市对比、参数敏感性、变化归因 */
 export const ResultsPanel = defineComponent({
   name: 'ResultsPanel',
   props: {
@@ -38,12 +39,8 @@ export const ResultsPanel = defineComponent({
     conditions: { type: Object as PropType<SimulationConditions>, required: true },
     versions: { type: Array as PropType<readonly SimulationVersion[]>, required: true }
   },
-  emits: {
-    suggest: () => true
-  },
-  setup(props, { emit }) {
-    const motion = usePreferredReducedMotion();
-    const animation = computed(() => motion.value !== 'reduce');
+  setup(props) {
+    const animation = computed(() => !reducedMotion());
     const tablist = ref<HTMLElement>();
     watch(
       () => props.result.selection.value?.indicatorId,
@@ -90,7 +87,7 @@ export const ResultsPanel = defineComponent({
           target,
           animation.value
         ),
-        sensitivity: sensitivityOption(indicator, summary.sensitivity, target, animation.value)
+        sensitivity: summary.sensitivity === null ? null : sensitivityOption(indicator, summary.sensitivity, target, animation.value)
       };
     });
 
@@ -120,7 +117,7 @@ export const ResultsPanel = defineComponent({
                   aria-label="对比的版本"
                   onUpdate:modelValue={(value: number | 'default') => result.select({ compare: value })}
                 >
-                  <ElOption value="default" label="默认参数" />
+                  <ElOption value="default" label="标准口径" />
                   {versions
                     .filter(item => item.index !== selection.viewIndex)
                     .map(item => (
@@ -170,11 +167,6 @@ export const ResultsPanel = defineComponent({
                       <RichText text={paragraph} />
                     </p>
                   ))}
-                  {summary.idea && (
-                    <ElButton size="small" onClick={() => emit('suggest')}>
-                      按此情景再推演
-                    </ElButton>
-                  )}
                 </div>
                 {yearsChart && (
                   <MxSection title="多年度对比">
@@ -204,14 +196,19 @@ export const ResultsPanel = defineComponent({
                     )
                   }}
                 </MxSection>
-                <MxSection title="参数敏感性">
-                  {{
-                    extra: () => (
-                      <span class={styles.extra}>{summary.sensitivity.key === 'walkSpeed' ? '随步行速度变化' : '随规划新增变化'}</span>
-                    ),
-                    default: () => <SimulationChart option={options.sensitivity} height={150} label="参数敏感性" />
-                  }}
-                </MxSection>
+                {options.sensitivity && summary.sensitivity && (
+                  <MxSection title="参数敏感性">
+                    {{
+                      extra: () => (
+                        <span class={styles.extra}>
+                          {summary.sensitivity && sensitivityNote(summary.sensitivity)}
+                        </span>
+                      ),
+                      default: () =>
+                        options.sensitivity && <SimulationChart option={options.sensitivity} height={150} label="参数敏感性" />
+                    }}
+                  </MxSection>
+                )}
                 <MxSection title="变化归因">
                   {{
                     extra: () => (

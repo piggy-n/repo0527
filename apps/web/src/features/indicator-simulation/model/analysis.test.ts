@@ -1,30 +1,35 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
-import { contributions, indicatorResult, passState, sameFacility, sensitivity, suggestion, valueBreaks } from './analysis';
+import { contributions, indicatorResult, passState, sensitivity, valueBreaks } from './analysis';
 import { createCalculator } from './calculator';
 import { defaultParams, type SimulationParams } from './params';
 import { loadTestAtlas } from './test-atlas';
 
-const conditions = { years: [2026, 2025], cityCodes: JIANGSU_CITIES.map(city => city.code), indicatorIds: ['B-65', 'A-31', 'A-39'] };
+const conditions = {
+  years: [2026, 2025],
+  cityCodes: JIANGSU_CITIES.map(city => city.code),
+  indicatorIds: ['B-65', 'A-31', 'A-39', 'A-15']
+};
 const withPatch = (patch: Partial<SimulationParams>): SimulationParams => ({ ...defaultParams(), ...patch });
 const calculatorOf = async () => createCalculator(await loadTestAtlas());
 
 describe('contributions', () => {
-  it('逐项替换参数，各项贡献加起来等于总的变化；目标值只算达标城市', async () => {
+  it('逐项替换参数，各项贡献加起来等于总的变化；对这项指标不起作用的参数不列；目标值只算达标城市', async () => {
     const calculator = await calculatorOf();
-    const to = withPatch({ popCaliber: 'registered', walkSpeed: 75, newFacilities: 20, targets: { ...defaultParams().targets, 'B-65': 65 } });
-    const steps = contributions(calculator, conditions, defaultParams(), to, 'B-65', 2026);
-    const value = (params: SimulationParams) => indicatorResult(calculator.computeYear(conditions, params, 2026).indicators, 'B-65');
+    const to = withPatch({ popChange: 10, rule: 'old', recognition: 'intersect', targets: { ...defaultParams().targets, 'A-31': 75 } });
+    const steps = contributions(calculator, conditions, defaultParams(), to, 'A-31', 2026);
+    const value = (params: SimulationParams) => indicatorResult(calculator.computeYear(conditions, params, 2026).indicators, 'A-31');
 
     expect(steps.map(step => [step.key, step.from, step.to])).toEqual([
-      ['popCaliber', '常住人口', '户籍人口'],
-      ['walkSpeed', '60 米/分钟', '75 米/分钟'],
-      ['newFacilities', '0%', '20%（全部指标）'],
-      ['targets', '70', '65']
+      ['rule', '新规程', '旧规程'],
+      ['recognition', '覆盖 ≥ 50%', '相交即算'],
+      ['targets', '80', '75']
     ]);
     expect(steps.reduce((sum, step) => sum + step.delta, 0)).toBeCloseTo(value(to).value - value(defaultParams()).value, 6);
     expect(steps.reduce((sum, step) => sum + step.passDelta, 0)).toBe(value(to).passCount - value(defaultParams()).passCount);
+    expect(steps[0]?.delta).toBeLessThan(0);
+    expect(steps[1]?.delta).toBeGreaterThan(0);
     expect(steps.at(-1)?.delta).toBe(0);
   });
 
@@ -37,58 +42,53 @@ describe('contributions', () => {
 });
 
 describe('sensitivity', () => {
-  it('步行类覆盖率看步行速度：40～100 共 13 个点，单调上升，当前是 60', async () => {
-    const curve = sensitivity(await calculatorOf(), conditions, defaultParams(), 'B-65', 2026);
+  it('人均类：常住人口 −20%～+20% 共 9 个点，人口越多人均值越低，当前取值是参数里的', async () => {
+    const curve = sensitivity(await calculatorOf(), conditions, withPatch({ popChange: 10 }), 'A-39', 2026);
+    if (curve?.kind !== 'curve') {
+      throw new Error('人均类应是曲线');
+    }
+    const values = curve.points.map(([, value]) => value);
 
-    expect(curve.key).toBe('walkSpeed');
-    expect(curve.points.map(([x]) => x)).toEqual([40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]);
-    expect(curve.points.map(([, value]) => value).toSorted((a, b) => a - b)).toEqual(curve.points.map(([, value]) => value));
-    expect(curve.current).toBe(60);
+    expect(curve.points.map(([x]) => x)).toEqual([-20, -15, -10, -5, 0, 5, 10, 15, 20]);
+    expect(values.toSorted((a, b) => b - a)).toEqual(values);
+    expect(curve.current).toBe(10);
   });
 
-  it('人均类看规划新增；不在作用范围里时当前是 0，曲线按算进范围画', async () => {
-    const curve = sensitivity(await calculatorOf(), conditions, withPatch({ newFacilities: 20, scenarioIds: ['B-65'] }), 'A-39', 2026);
+  it('社区卫生覆盖率：规程和认定的四种组合，旧规程最低、相交即算最高，标出当前', async () => {
+    const result = sensitivity(await calculatorOf(), conditions, withPatch({ rule: 'old' }), 'A-31', 2026);
+    if (result?.kind !== 'options') {
+      throw new Error('覆盖率应是组合');
+    }
+    const value = (label: string) => result.options.find(option => option.label === label)?.value ?? Number.NaN;
 
-    expect(curve.key).toBe('newFacilities');
-    expect(curve.points).toHaveLength(11);
-    expect(curve.current).toBe(0);
-    expect(curve.points.at(-1)?.[1]).toBeGreaterThan(curve.points[0]?.[1] ?? Infinity);
+    expect(result.keys).toEqual(['rule', 'recognition']);
+    expect(result.options.map(option => [option.label, option.current, option.standard])).toEqual([
+      ['标准口径', false, true],
+      ['相交即算', false, false],
+      ['旧规程', true, false],
+      ['旧规程 + 相交即算', false, false]
+    ]);
+    expect(value('旧规程')).toBeLessThan(value('标准口径'));
+    expect(value('相交即算')).toBeGreaterThan(value('标准口径'));
   });
-});
 
-describe('suggestion', () => {
-  it('找最小的新增比例：公园绿地新增 20% 时全省达到 70%，作用于同一种设施的两项指标', async () => {
+  it('公园绿地覆盖率只有认定一项：两种组合；消防救援没有可调参数：没有敏感性', async () => {
     const calculator = await calculatorOf();
-    const idea = suggestion(calculator, conditions, defaultParams(), 'B-65', 2026);
+    const result = sensitivity(calculator, conditions, defaultParams(), 'B-65', 2026);
 
-    expect(idea).toMatchObject({ add: 20, reached: true, scenarioIds: ['B-65', 'A-39'] });
-    expect(idea?.after.value).toBeGreaterThanOrEqual(70);
-    // 少 5 个百分点就不够
-    const less = indicatorResult(calculator.computeYear(conditions, withPatch({ newFacilities: 15, scenarioIds: ['B-65', 'A-39'] }), 2026).indicators, 'B-65');
-    expect(less.value).toBeLessThan(70);
-    expect(less.passCount - (idea?.before.passCount ?? 0)).toBeLessThan(3);
-  });
-
-  it('全部达标时没有建议；新增到上限也达不到时给出上限情景', async () => {
-    const calculator = await calculatorOf();
-    const allPass = withPatch({ targets: { ...defaultParams().targets, 'B-65': 0 } });
-    const unreachable = withPatch({ targets: { ...defaultParams().targets, 'B-65': 99.9 } });
-
-    expect(suggestion(calculator, conditions, allPass, 'B-65', 2026)).toBeNull();
-    expect(suggestion(calculator, conditions, unreachable, 'B-65', 2026)).toMatchObject({ add: 50, reached: false });
-  });
-
-  it('同一种设施的已选指标', () => {
-    expect(sameFacility(conditions, 'A-39')).toEqual(['B-65', 'A-39']);
-    expect(sameFacility(conditions, 'A-31')).toEqual(['A-31']);
+    expect(result?.kind === 'options' && [result.keys, result.options.map(option => option.label)]).toEqual([
+      ['recognition'],
+      ['标准口径', '相交即算']
+    ]);
+    expect(sensitivity(calculator, conditions, defaultParams(), 'A-15', 2026)).toBeNull();
   });
 });
 
 describe('分级与达标', () => {
-  it('分级断点：所选年度默认参数下区县值的五档分位数，递增', async () => {
+  it('分级断点：所选年度标准口径下区县值的五档分位数，递增', async () => {
     const breaks = valueBreaks(await calculatorOf(), conditions, 'B-65');
 
-    expect(breaks).toEqual([45, 61, 72, 83]);
+    expect(breaks).toEqual([44, 61, 72, 82]);
   });
 
   it('达标、接近（差距在 5% 以内）、未达标', () => {

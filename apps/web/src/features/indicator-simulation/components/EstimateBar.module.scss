@@ -1,0 +1,138 @@
+// 编排图下方的底部栏：标题一行，下面是指标卡片横排；每张卡片至少 300，放得下最长的指标名称和编码
+.root {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg-container);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.previewing {
+  padding: 0 var(--space-sm);
+  border-radius: 999px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-xs);
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.toggle {
+  flex: none;
+}
+
+.rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-sm);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-bg-light);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-title);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.value,
+.target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-sm);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.value b {
+  color: var(--color-text-strong);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-base);
+}
+
+// 数值上升红色、下降绿色（2026-10-29 用户确认的展示规则）
+.up {
+  color: var(--color-danger);
+}
+
+.down {
+  color: var(--color-success-text);
+}
+
+.flat {
+  color: var(--color-text-secondary);
+}
+
+.scenario {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-scenario-bg);
+  color: var(--color-scenario);
+  line-height: var(--line-height-tag);
+  white-space: nowrap;
+}
+
+// 一个市时的达标状态
+.badge {
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  line-height: var(--line-height-compact);
+}
+
+.pass {
+  background: var(--color-success-bg-solid);
+  color: var(--color-success-text);
+}
+
+.near {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.fail {
+  background: var(--color-danger-bg-solid);
+  color: var(--color-danger);
+}
+
+.status {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}

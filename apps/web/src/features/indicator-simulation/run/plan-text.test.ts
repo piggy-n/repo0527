@@ -7,7 +7,6 @@ describe('planText', () => {
     const plan = { changes: [], baseIndex: null } as const;
     expect(planText({ ...plan, outcome: 'unchanged', restart: null })).toBe('参数未变化');
     expect(planText({ ...plan, outcome: 'saved', restart: 'spatial' })).toBe('「空间分析」尚未执行，保存后执行到这一步时生效');
-    expect(planText({ ...plan, outcome: 'resolved', restart: 'qc' })).toBe('作为「数据核查」的确认，接着推演');
     expect(planText({ ...plan, outcome: 'rerun', restart: 'spatial' })).toBe('将从「空间分析」重算，前面 3 个环节复用已有结果');
     expect(planText({ ...plan, outcome: 'rerun', restart: null })).toBe('参数与上一轮相同，直接生成新版本');
   });

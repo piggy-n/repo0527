@@ -7,9 +7,43 @@
 .map {
   position: absolute;
   inset: 0;
+  transition: opacity 0.45s ease;
 }
 
-// 条件编排时地图不显示，保留尺寸，回到推演时不用重新排版
+// 条件编排时地图不显示，保留尺寸，回到推演时不用重新排版；淡出后再隐藏
 .hidden {
+  opacity: 0;
   visibility: hidden;
+  transition:
+    opacity 0.45s ease,
+    visibility 0s linear 0.45s;
+}
+
+// 条件编排和推演之间淡入淡出：AI 编排完成自动开始推演时，编排图淡出，地图和推演面板淡入
+.stageEnterActive,
+.stageLeaveActive {
+  transition: opacity 0.45s ease;
+}
+
+.stageEnterFrom,
+.stageLeaveTo {
+  opacity: 0;
+}
+
+// 离开的一方叠在上面淡出，不占位置、不接收点击
+.stageLeaveActive {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+// 减少动画（由 motion.ts 决定，现在总是播放）
+:global(.simulation-still) {
+  .map,
+  .hidden,
+  .stageEnterActive,
+  .stageLeaveActive {
+    transition: none;
+  }
 }

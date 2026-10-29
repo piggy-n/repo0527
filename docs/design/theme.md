@@ -55,7 +55,7 @@ Element    --el-color-*、--el-text-color-* ……                  element-them
 | 深色背景上的文字与状态 | `--color-text-inverse`、`--color-inverse-hover`、`--color-inverse-active` | 第 2 节，2026-09-30 补充 |
 | 间距 4 / 8 / 12 / 16 / 24 | `--space-xs`、`-sm`、`-md`、`-lg`、`-xl` | 第 6.1 节，2026-09-30 补充，见 [page-layout.md](page-layout.md) |
 | 圆角 4 / 8 / 12 / 16 | `--radius-sm`、`-md`、`-lg`、`-xl` | 第 6.1 节，2026-09-30 补充；lg、xl 用于登录卡片 |
-| 指标智能推演的 AI 渐变与情景色 | `--color-ai-violet`、`-ai-cyan`、`-ai-glow`、`--color-scenario`、`-scenario-light` | 第 6.3 节，2026-10-28 补充（ADR 0102），只用于指标智能推演 |
+| 指标智能推演的 AI 渐变与情景色 | `--color-ai-violet`、`-ai-cyan`、`-ai-glow`、`--color-scenario`、`-scenario-light`、`-scenario-bg` | 第 6.3 节，2026-10-28 补充（ADR 0105），`-scenario-bg` 2026-10-29 补充，只用于指标智能推演 |
 
 间距、圆角按大小命名（`sm`、`md`、`lg`），与 `--font-size-*`、`--shadow-*` 一致。没有用数值命名（`--space-16`），名字等于值时改值就得改名；也没有按用途命名（`--panel-padding`），用途已经封装在 `libs/ui` 的布局组件里，页面不直接接触这些间距。
 

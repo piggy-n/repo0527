@@ -1,29 +1,28 @@
-import { usePreferredReducedMotion } from '@vueuse/core';
 import type { LngLat, StyleGroup } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
 import { computed, type ComputedRef, type Ref, ref, watch } from 'vue';
 import { formatValue } from '../format';
 import type { PassState } from '../model/analysis';
-import { districtBounds, type MapData, mapData } from '../map/map-data';
+import { type MapData, mapData } from '../map/map-data';
 import { alertsGroup, districtsGroup, facilitiesGroup, type MapFrame, mapFrame, maskGroup } from '../map/map-frame';
 import { simulationIndicator } from '../model/indicators';
+import { reducedMotion } from '../motion';
 import { primaryIndicator } from '../run/narrative';
 import { inProgress } from '../run/run-view';
 import type { SimulationResult } from './useSimulationResult';
 import type { SimulationRun } from './useSimulationRun';
 
-/** 地图上的文字标注：缺失人口的区县、评价后的城市值 */
+/** 地图上的文字标注：评价后的城市值 */
 export interface MapLabel {
   readonly key: string;
   readonly lngLat: LngLat;
   readonly text: string;
-  readonly kind: 'missing' | 'city';
   /** 城市值的达标状态 */
-  readonly state?: PassState;
+  readonly state: PassState;
 }
 
-/** 镜头跟随推演的几个位置：推演范围、缺失的区县、空间分析的样例 */
-type CameraCue = 'scope' | 'missing' | 'sample';
+/** 镜头跟随推演的几个位置：推演范围、空间分析的样例 */
+type CameraCue = 'scope' | 'sample';
 
 export interface SimulationMap {
   readonly data: Readonly<Ref<MapData | null>>;
@@ -60,7 +59,6 @@ export function useSimulationMap(
   result: SimulationResult | null = null
 ): SimulationMap {
   const state = run.state;
-  const motion = usePreferredReducedMotion();
   const conditions = computed(() => state.value.conditions);
   const params = computed(() => state.value.params);
   const active = computed(() => state.value.status !== 'idle');
@@ -94,7 +92,7 @@ export function useSimulationMap(
   // 每帧都会重新计算，值没变时保留原来的对象，样式不重新推导
   let last: MapFrame | null = null;
   const frame = computed((): MapFrame | null => {
-    let next = active.value ? mapFrame(state.value, run.progress, motion.value === 'reduce') : null;
+    let next = active.value ? mapFrame(state.value, run.progress, reducedMotion()) : null;
     // 结果阶段：数值全部显示，设施和服务圈都在，干预预览描虚线
     if (viewing.value) {
       const previewing = (preview.value?.size ?? 0) > 0;
@@ -112,14 +110,6 @@ export function useSimulationMap(
     if (!current || !now || !conditions.value) {
       return [];
     }
-    if (now.alert?.kind === 'missing') {
-      return current.missing.map(district => ({
-        key: district.code,
-        lngLat: district.center,
-        text: `${district.name} · 人口缺失`,
-        kind: 'missing'
-      }));
-    }
     const evaluated = ['done', 'reused'].includes(state.value.steps.evaluate.status);
     if (!evaluated) {
       return [];
@@ -129,7 +119,6 @@ export function useSimulationMap(
       key: city.code,
       lngLat: city.center,
       text: `${city.name.replace(/市$/, '')} ${formatValue(city.value, indicator)}`,
-      kind: 'city',
       state: city.state
     }));
   });
@@ -151,9 +140,6 @@ export function useSimulationMap(
     if (!inProgress(now.status)) {
       return null;
     }
-    if (now.checkpoint?.step === 'qc') {
-      return 'missing';
-    }
     return now.steps.spatial.status === 'running' ? 'sample' : 'scope';
   });
 
@@ -162,16 +148,11 @@ export function useSimulationMap(
     if (!current) {
       return;
     }
-    const duration = motion.value === 'reduce' ? 0 : 900;
-    if (target === 'missing' && current.missing.length > 0) {
-      const bounds = districtBounds(current.missing);
-      map.runCameraOperation(camera => camera.fitBounds(bounds, { maxZoom: 9, duration }));
-      return;
-    }
+    const duration = reducedMotion() ? 0 : 900;
     if (target === 'sample' && current.sample) {
       const zoom = current.ringMeters > 1500 ? 10.6 : 12.2;
       const center = current.sample.center;
-      const flight = motion.value === 'reduce' ? 0 : 1600;
+      const flight = reducedMotion() ? 0 : 1600;
       map.runCameraOperation(camera => camera.flyTo({ center, zoom }, { duration: flight }));
       return;
     }

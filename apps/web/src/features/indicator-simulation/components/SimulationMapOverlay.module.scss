@@ -34,15 +34,6 @@
   animation: label-in 0.3s ease-out;
 }
 
-.missing {
-  padding: 2px var(--space-sm);
-  border: 1px solid var(--color-warning);
-  background: var(--color-bg-container);
-  box-shadow: var(--shadow-sm);
-  color: var(--color-warning-text);
-  transform: translate(-50%, calc(-100% - 6px));
-}
-
 .city {
   padding: 0 6px;
   background: var(--color-bg-mask);
@@ -95,7 +86,8 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
+// 减少动画（由 motion.ts 决定，现在总是播放）
+:global(.simulation-still) {
   .label {
     animation: none;
   }

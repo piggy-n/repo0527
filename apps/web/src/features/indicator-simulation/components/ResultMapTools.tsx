@@ -1,9 +1,9 @@
 import { ElRadioButton, ElRadioGroup } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import type { SimulationResult } from '../composables/useSimulationResult';
-import { inScenario, type SimulationConditions } from '../model/params';
-import { reachMeters, simulationIndicator } from '../model/indicators';
-import { FACILITY_COLOR, PLANNED_COLOR } from '../map/colors';
+import { serviceMeters, type SimulationConditions } from '../model/params';
+import { simulationIndicator } from '../model/indicators';
+import { FACILITY_COLOR } from '../map/colors';
 import type { MapMode } from '../result/result-view';
 import styles from './ResultMapTools.module.scss';
 
@@ -33,8 +33,7 @@ export const ResultMapTools = defineComponent({
       }
       const years = conditions.years.toSorted((a, b) => a - b);
       const indicator = simulationIndicator(selection.indicatorId);
-      const meters = reachMeters(indicator, version.params.walkSpeed);
-      const planned = version.params.newFacilities > 0 && inScenario(version.params, selection.indicatorId);
+      const meters = serviceMeters(selection.indicatorId, version.params);
       const { legend } = coloring;
       return (
         <div class={styles.root}>
@@ -87,17 +86,11 @@ export const ResultMapTools = defineComponent({
               <span class={styles.dot} style={{ background: FACILITY_COLOR }} />
               {indicator.facility}
             </div>
-            {planned && (
-              <div class={styles.row}>
-                <span class={styles.dot} style={{ background: PLANNED_COLOR }} />
-                规划新增 {version.params.newFacilities}%
-              </div>
-            )}
             {meters !== null && (
               <>
                 <div class={styles.row}>
                   <span class={styles.ring} />
-                  服务圈 {meters} 米
+                  服务范围 {meters} 米
                 </div>
                 <div class={styles.note}>放大到区县查看设施与服务圈</div>
               </>

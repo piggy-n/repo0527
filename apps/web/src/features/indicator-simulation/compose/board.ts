@@ -1,5 +1,5 @@
-import type { ParamKey, SimulationConditions, SimulationParams } from '../model/params';
-import { affectedIndicators, COMPOSE_PARAM_KEYS } from './composition';
+import { isStandard, type ParamKey, paramsOf, type SimulationConditions, type SimulationParams } from '../model/params';
+import { affectedIndicators } from './composition';
 
 /** 编排图的五列 */
 export type BoardLane = 'years' | 'region' | 'indicators' | 'params' | 'output';
@@ -22,7 +22,7 @@ export interface Box {
   readonly h: number;
 }
 
-/** 连线：flow 是条件之间的流向，bus、tick 是参数总线，scenario 是规划新增作用的指标 */
+/** 连线：flow 是条件之间的流向，bus、tick 是参数总线；连到偏离标准口径的参数时是 scenario */
 export interface BoardLink {
   readonly id: string;
   readonly d: string;
@@ -44,10 +44,8 @@ function curve([ax, ay]: Point, [bx, by]: Point): string {
 
 // 总线离参数节点左边的距离
 const BUS_GAP = 14;
-// 情景虚线向下绕出的深度
-const SCENARIO_DIP = 60;
 
-/** 按节点位置连线：年份 → 范围 → 每项指标 → 参数总线 → 各参数 → AI 推演；规划新增大于 0 时连到它作用的指标。没有位置的节点不连 */
+/** 按节点位置连线：年份 → 范围 → 每项指标 → 参数总线 → 各参数 → AI 推演；参数是所选指标用得上的几项。没有位置的节点不连 */
 export function boardLinks(
   boxes: ReadonlyMap<string, Box>,
   conditions: SimulationConditions,
@@ -65,7 +63,7 @@ export function boardLinks(
       }
     }
   }
-  const paramBoxes = COMPOSE_PARAM_KEYS.flatMap(key => {
+  const paramBoxes = paramsOf(conditions.indicatorIds).flatMap(key => {
     const box = boxes.get(paramNode(key));
     return box ? [{ key, box }] : [];
   });
@@ -92,55 +90,35 @@ export function boardLinks(
   links.push({ id: BUS, d: `M${busX},${top} L${busX},${bottom}`, from: BUS, to: BUS, kind: 'bus' });
   for (const { key, box } of paramBoxes) {
     const y = box.y + box.h / 2;
-    links.push({ id: `b-${key}`, d: `M${busX},${y} L${box.x},${y}`, from: BUS, to: paramNode(key), kind: 'tick' });
+    const kind = isStandard(key, params) ? 'tick' : 'scenario';
+    links.push({ id: `b-${key}`, d: `M${busX},${y} L${box.x},${y}`, from: BUS, to: paramNode(key), kind });
     if (output) {
       const d = curve(right(box), left(output));
       links.push({ id: `o-${key}`, d, from: paramNode(key), to: OUTPUT_NODE, kind: 'flow' });
-    }
-  }
-  const scenario = boxes.get(paramNode('newFacilities'));
-  if (scenario && params.newFacilities > 0) {
-    for (const id of affectedIndicators('newFacilities', conditions, params)) {
-      const box = boxes.get(indicatorNode(id));
-      if (!box) {
-        continue;
-      }
-      const [ax, ay] = [scenario.x + 12, scenario.y + scenario.h];
-      const [bx, by] = [box.x + box.w - 12, box.y + box.h];
-      links.push({
-        id: `s-${id}`,
-        d: `M${ax},${ay} C${ax},${ay + SCENARIO_DIP} ${bx},${by + SCENARIO_DIP} ${bx},${by}`,
-        from: paramNode('newFacilities'),
-        to: indicatorNode(id),
-        kind: 'scenario'
-      });
     }
   }
   return links;
 }
 
 /** 悬停的节点和与它相关的节点：参数关联它影响的指标；指标关联上游的年份、范围和影响它的参数、下游的 AI 推演 */
-export function relatedNodes(
-  hovered: string | null,
-  conditions: SimulationConditions,
-  params: SimulationParams
-): Set<string> {
+export function relatedNodes(hovered: string | null, conditions: SimulationConditions): Set<string> {
   const related = new Set<string>();
   if (hovered === null) {
     return related;
   }
   related.add(hovered);
-  const param = COMPOSE_PARAM_KEYS.find(key => paramNode(key) === hovered);
+  const keys = paramsOf(conditions.indicatorIds);
+  const param = keys.find(key => paramNode(key) === hovered);
   if (param !== undefined) {
-    affectedIndicators(param, conditions, params).forEach(id => related.add(indicatorNode(id)));
+    affectedIndicators(param, conditions).forEach(id => related.add(indicatorNode(id)));
   }
   const indicator = conditions.indicatorIds.find(id => indicatorNode(id) === hovered);
   if (indicator !== undefined) {
     related.add(REGION_NODE);
     related.add(OUTPUT_NODE);
     conditions.years.forEach(year => related.add(yearNode(year)));
-    for (const key of COMPOSE_PARAM_KEYS) {
-      if (affectedIndicators(key, conditions, params).includes(indicator)) {
+    for (const key of keys) {
+      if (affectedIndicators(key, conditions).includes(indicator)) {
         related.add(paramNode(key));
       }
     }

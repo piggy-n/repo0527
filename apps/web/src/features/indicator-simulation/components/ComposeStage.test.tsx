@@ -1,31 +1,56 @@
 import { flushPromises, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { defineComponent, type PropType } from 'vue';
 import { required } from '@/shared/testing/required';
-import { type Composition, defaultComposition, emptyComposition } from '../compose/composition';
-import { useComposition } from '../composables/useComposition';
+import { type Composition, emptyComposition, sampleComposition } from '../compose/composition';
+import { PROMPT_EXAMPLES } from '../compose/prompt';
+import { type CompositionOwner, useComposition } from '../composables/useComposition';
+import { usePromptComposer } from '../composables/usePromptComposer';
 import type { SimulationModel } from '../composables/useSimulationModel';
-import type { Calculator } from '../model/calculator';
+import { type Calculator, createCalculator } from '../model/calculator';
+import { loadTestAtlas } from '../model/test-atlas';
 import { ComposeStage } from './ComposeStage';
 
-// 这些用例不做预估，用不到计算
-const ready: SimulationModel = { status: 'ready', calculator: {} as Calculator };
+let calculator: Calculator;
+beforeAll(async () => {
+  calculator = createCalculator(await loadTestAtlas());
+});
+const ready = (): SimulationModel => ({ status: 'ready', calculator });
 
-function mountStage(initial: Composition = defaultComposition(), model: SimulationModel = ready) {
-  const composition = useComposition(initial);
-  const wrapper = mount(ComposeStage, { props: { composition, model }, attachTo: document.body });
-  return { composition, wrapper };
+// 页面一样：编排完成后开始推演
+function mountStage(initial: Composition = sampleComposition(), model: SimulationModel = ready()) {
+  let owner: CompositionOwner | undefined;
+  const Host = defineComponent({
+    props: { model: { type: Object as PropType<SimulationModel>, required: true } },
+    emits: { start: () => true },
+    setup(props, { emit }) {
+      const composition = useComposition(initial);
+      owner = composition;
+      const composer = usePromptComposer(composition, { onComposed: () => emit('start') });
+      return () => <ComposeStage composition={composition} composer={composer} model={props.model} onStart={() => emit('start')} />;
+    }
+  });
+  const wrapper = mount(Host, { props: { model }, attachTo: document.body });
+  return { composition: required(owner, '编排的拥有者'), wrapper };
 }
 
-const chip = (wrapper: ReturnType<typeof mountStage>['wrapper'], text: string) =>
+type Wrapper = ReturnType<typeof mountStage>['wrapper'];
+
+const chip = (wrapper: Wrapper, text: string) =>
   required(
     wrapper.findAll('button[aria-pressed]').find(button => button.text() === text),
     `条件库里的"${text}"`
   );
-
-const nodes = (wrapper: ReturnType<typeof mountStage>['wrapper'], prefix: string) =>
-  wrapper.findAll(`[data-node^="${prefix}"]`).map(node => node.attributes('data-node'));
+const buttonOf = (wrapper: Wrapper, text: string) =>
+  required(
+    wrapper.findAll('button').find(button => button.text() === text),
+    `"${text}"按钮`
+  );
+const nodes = (wrapper: Wrapper, prefix?: string) =>
+  wrapper.findAll(prefix ? `[data-node^="${prefix}"]` : '[data-node]').map(node => node.attributes('data-node'));
 
 afterEach(() => {
+  vi.useRealTimers();
   document.body.innerHTML = '';
 });
 
@@ -97,53 +122,106 @@ describe('ComposeStage', () => {
 
   it('条件不全或区县数据没加载好时不能开始；齐全后开始', async () => {
     const empty = mountStage(emptyComposition());
-    const start = (wrapper: typeof empty.wrapper) =>
-      required(
-        wrapper.findAll('button').find(button => button.text() === '开始推演'),
-        '开始推演按钮'
-      );
-    expect(start(empty.wrapper).attributes('disabled')).toBeDefined();
+    expect(buttonOf(empty.wrapper, '开始推演').attributes('disabled')).toBeDefined();
     expect(empty.wrapper.get('[data-node="output"]').text()).toContain('还缺：年份、监测范围、监测指标');
 
-    const loading = mountStage(defaultComposition(), { status: 'loading' });
-    expect(start(loading.wrapper).attributes('disabled')).toBeDefined();
+    const loading = mountStage(sampleComposition(), { status: 'loading' });
+    expect(buttonOf(loading.wrapper, '开始推演').attributes('disabled')).toBeDefined();
     expect(loading.wrapper.get('[data-node="output"]').text()).toContain('区县数据加载中');
 
     const { wrapper } = mountStage();
-    await start(wrapper).trigger('click');
+    await buttonOf(wrapper, '开始推演').trigger('click');
     expect(wrapper.emitted('start')).toHaveLength(1);
   });
 
-  it('参数节点显示当前取值，点开编辑浮层', async () => {
-    // 浮层里的预估要计算，区县数据加载中时只显示提示
-    const { wrapper } = mountStage(defaultComposition(), { status: 'loading' });
-    const node = wrapper.get('[data-node="params:walkSpeed"]');
-    expect(node.text()).toContain('60 米/分钟');
+  it('参数节点只有所选指标用得上的几项，显示当前取值；点开编辑浮层，草稿在下方的预估里预览', async () => {
+    const { wrapper } = mountStage();
+    expect(nodes(wrapper, 'params:')).toEqual(['params:popChange', 'params:rule', 'params:recognition', 'params:targets']);
+    const node = wrapper.get('[data-node="params:rule"]');
+    expect(node.text()).toContain('新规程');
     expect(node.attributes('aria-expanded')).toBe('false');
 
     await node.trigger('click');
     await flushPromises();
     expect(node.attributes('aria-expanded')).toBe('true');
-    const dialog = required(document.body.querySelector('[role="dialog"][aria-label="步行速度"]'), '步行速度的浮层');
-    expect(dialog.textContent).toContain('区县数据加载中');
+    const dialog = required(document.body.querySelector('[role="dialog"][aria-label="计算规程"]'), '计算规程的浮层');
+    const old = required(dialog.querySelector<HTMLInputElement>('input[value="old"]'), '旧规程的选项');
+    old.checked = true;
+    old.dispatchEvent(new Event('change'));
+    await flushPromises();
+    expect(wrapper.get('[aria-label="指标预估结果"]').text()).toContain('参数预览中');
   });
 
-  it('清空在条件库的标题栏：点了只剩 AI 推演', async () => {
+  it('重置条件在条件库的标题栏：点了只剩 AI 推演', async () => {
     const { wrapper } = mountStage();
-    const clear = required(
-      wrapper.findAll('button').find(button => button.text() === '清空'),
-      '清空按钮'
-    );
-    expect(clear.element.closest('section')?.querySelector('h2')?.textContent).toBe('条件库');
-    await clear.trigger('click');
-    expect(wrapper.findAll('[data-node]').map(node => node.attributes('data-node'))).toEqual(['output']);
+    const reset = buttonOf(wrapper, '重置条件');
+    expect(reset.element.closest('section')?.querySelector('h2')?.textContent).toBe('指标智能推演条件');
+    await reset.trigger('click');
+    expect(nodes(wrapper)).toEqual(['output']);
   });
 
-  it('指标节点：名称后面括号写单位，下面只有灰色的编号', () => {
-    const { wrapper } = mountStage();
-    const node = wrapper.get('[data-node="indicators:A-39"]');
+  it('指标节点只写名称和单位，下面是灰色的编号；模拟情景的指标多一个标记', async () => {
+    const { wrapper, composition } = mountStage();
+    const node = () => wrapper.get('[data-node="indicators:A-31"]');
 
-    expect(node.get('b').text()).toBe('人均公园绿地面积（m²）');
-    expect(node.get('[class*="_meta_"]').text()).toBe('A-39');
+    expect(node().get('b').text()).toBe('社区卫生服务设施步行15分钟覆盖率（%）');
+    expect(node().get('[class*="_indicatorMeta_"]').text()).toBe('A-31');
+    composition.setParams({ ...composition.state.value.params, rule: 'old' });
+    await flushPromises();
+    expect(node().get('[class*="_indicatorMeta_"]').text()).toBe('A-31模拟情景');
+  });
+
+  it('选了几个年度时预估可以换年度，几个市时写达标的市数', async () => {
+    const { wrapper } = mountStage({ ...sampleComposition(), conditions: { ...sampleComposition().conditions, years: [2025, 2026] } });
+    const bar = () => wrapper.get('[aria-label="指标预估结果"]');
+    expect(bar().get('[aria-label="预估的年度"] input[value="2026"]').element).toHaveProperty('checked', true);
+    expect(bar().text()).toContain('预估达标');
+    expect(bar().text()).toMatch(/\d+\/13 市/);
+
+    await bar().get('[aria-label="预估的年度"] input[value="2025"]').setValue(true);
+    expect(bar().get('[aria-label="预估的年度"] input[value="2025"]').element).toHaveProperty('checked', true);
+  });
+});
+
+describe('ComposeStage 按 AI 推演指令编排', () => {
+  // jsdom 没有 scrollBy：编排时会把最新出现的节点滚到看得见
+  beforeAll(() => {
+    Element.prototype.scrollBy = () => undefined;
+  });
+  afterAll(() => {
+    Reflect.deleteProperty(Element.prototype, 'scrollBy');
+  });
+
+  it('发送后编排图从空白开始，一个节点一个节点地出现；期间条件库和编排图不接收操作；完成后开始推演', async () => {
+    vi.useFakeTimers();
+    const { wrapper } = mountStage(emptyComposition());
+    expect(wrapper.get<HTMLTextAreaElement>('[aria-label="推演指令"]').element.value).toBe(PROMPT_EXAMPLES[0]);
+
+    await buttonOf(wrapper, '发送').trigger('click');
+    expect(buttonOf(wrapper, '编排中').exists()).toBe(true);
+    expect(wrapper.get('[role="status"]').text()).toBe('AI 正在理解指令…');
+    expect(nodes(wrapper)).toEqual([]);
+    // 编排期间不显示"拖入或点选"的占位
+    expect(wrapper.text()).not.toContain('拖入或点选');
+    const locked = wrapper.findAll('[class*="_locked_"]');
+    expect(locked).toHaveLength(2);
+
+    await vi.advanceTimersByTimeAsync(900);
+    expect(nodes(wrapper)).toEqual(['years:2025']);
+    expect(wrapper.get('[role="status"]').text()).toBe('识别年份：2025 年');
+    await vi.advanceTimersByTimeAsync(450 * 2);
+    expect(nodes(wrapper)).toEqual(['years:2025', 'region', 'indicators:A-31']);
+
+    // 参数 3 项（人均类的人口变化用不上），再到 AI 推演
+    await vi.advanceTimersByTimeAsync(450 * 4);
+    expect(nodes(wrapper, 'params:')).toEqual(['params:rule', 'params:recognition', 'params:targets']);
+    expect(wrapper.get('[role="status"]').text()).toBe('编排完成，即将开始推演');
+    expect(buttonOf(wrapper, '推演启动中').exists()).toBe(true);
+    expect(wrapper.emitted('start')).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(wrapper.emitted('start')).toHaveLength(1);
+    expect(wrapper.find('[role="status"]').exists()).toBe(false);
+    expect(wrapper.findAll('[class*="_locked_"]')).toHaveLength(0);
   });
 });

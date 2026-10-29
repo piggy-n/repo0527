@@ -1,13 +1,15 @@
 import { MapCanvas, provideMap } from '@yzt/map-vue';
-import { defineComponent } from 'vue';
+import { defineComponent, Transition } from 'vue';
 import { ComposeStage } from '@/features/indicator-simulation/components/ComposeStage';
 import { RunStage } from '@/features/indicator-simulation/components/RunStage';
 import { useComposition } from '@/features/indicator-simulation/composables/useComposition';
 import { usePauseWhileInactive } from '@/features/indicator-simulation/composables/usePauseWhileInactive';
+import { usePromptComposer } from '@/features/indicator-simulation/composables/usePromptComposer';
 import { useSimulationMap } from '@/features/indicator-simulation/composables/useSimulationMap';
 import { useSimulationModel } from '@/features/indicator-simulation/composables/useSimulationModel';
 import { useSimulationResult } from '@/features/indicator-simulation/composables/useSimulationResult';
 import { useSimulationRun } from '@/features/indicator-simulation/composables/useSimulationRun';
+import { reducedMotion, STILL_CLASS } from '@/features/indicator-simulation/motion';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { usePageActive } from '@/shared/composables/usePageActive';
@@ -17,7 +19,9 @@ import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
 import styles from './IndicatorSimulationPage.module.scss';
 
 /**
- * 指标智能推演（ADR 0102）：条件编排 → AI 推演 → 结果展示，全部是确定性的模拟数据，不请求后端。
+ * 指标智能推演（ADR 0105）：条件编排 → AI 推演 → 结果展示，全部是确定性的模拟数据，不请求后端。
+ * 打开时编排是空的，由 AI 推演指令或手动点选编排；AI 按指令逐个节点编排完成后自动开始推演，两个阶段之间淡入淡出。
+ * 参数取自 Excel 的计算方法，偏离标准口径的是模拟情景。
  * 地图一直在下层，条件编排时隐藏；推演阶段的面板浮在地图上。地图不读写偏好，显示省界和市界。
  * 完成后右侧是推演结果，可以换版本、对比、换年度和着色；切到别的页面时缓存，推演暂停（docs/modules/indicator-simulation.md）
  */
@@ -63,11 +67,13 @@ export const IndicatorSimulationPage = defineComponent({
         run.start(composition.state.value, current.calculator);
       }
     };
+    // 指令的文字在推演后回到编排时还在；AI 编排完成后直接开始推演（区县数据还没好时停在编排图，由用户点开始）
+    const composer = usePromptComposer(composition, { still: reducedMotion, onComposed: start });
 
     return () => {
       const composing = run.state.value.status === 'idle';
       return (
-        <div class={styles.root}>
+        <div class={[styles.root, reducedMotion() && STILL_CLASS]}>
           {/* 用户自己拖动、缩放地图后，镜头不再跟随推演 */}
           <div
             class={[styles.map, composing && styles.hidden]}
@@ -77,11 +83,25 @@ export const IndicatorSimulationPage = defineComponent({
             <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
             <MapStatusNotice />
           </div>
-          {composing ? (
-            <ComposeStage key="compose" composition={composition} model={model.value} onStart={start} onRetry={retry} />
-          ) : (
-            <RunStage key="run" run={run} model={model.value} simulationMap={simulationMap} result={result} />
-          )}
+          <Transition
+            enterFromClass={styles.stageEnterFrom}
+            enterActiveClass={styles.stageEnterActive}
+            leaveActiveClass={styles.stageLeaveActive}
+            leaveToClass={styles.stageLeaveTo}
+          >
+            {composing ? (
+              <ComposeStage
+                key="compose"
+                composition={composition}
+                composer={composer}
+                model={model.value}
+                onStart={start}
+                onRetry={retry}
+              />
+            ) : (
+              <RunStage key="run" run={run} model={model.value} simulationMap={simulationMap} result={result} />
+            )}
+          </Transition>
         </div>
       );
     };
