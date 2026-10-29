@@ -69,8 +69,14 @@ function mountLayout(asideType?: 'menu' | 'panel') {
   );
 }
 
-// 页面持有收起状态：像页面一样按布局发出的事件改
-function mountCollapsible(initial: boolean) {
+// 页面给出的把手：只放一个标记，像设计图一样没有文字
+const handleSlots = {
+  rail: () => <span data-test="rail-art" />,
+  collapse: () => <span data-test="collapse-art" />
+};
+
+// 页面持有收起状态：像页面一样按布局发出的事件改；handles 时用页面给出的把手
+function mountCollapsible(initial: boolean, handles = false) {
   const collapsed = ref(initial);
   const wrapper = mount(
     () => (
@@ -81,6 +87,7 @@ function mountCollapsible(initial: boolean) {
         onUpdate:collapsed={value => (collapsed.value = value)}
       >
         {{
+          ...(handles ? handleSlots : {}),
           aside: () => (
             <MxPanel title="文件目录">
               <Counter />
@@ -171,6 +178,52 @@ describe('MxSplitLayout', () => {
 
     expect(collapsed.value).toBe(true);
     expect(counterPlace(wrapper)).toBe('drawer');
+    expect(collapseButtons(wrapper)).toHaveLength(0);
+    expect(closeButtons(wrapper)).toHaveLength(1);
+  });
+
+  it('页面给出把手：收起把手在侧栏上、面板里没有收起按钮；收起后窄条是页面的内容，名称由 aria-label 给出，点击在原位展开', async () => {
+    stubViewport(false);
+    const { wrapper, collapsed } = mountCollapsible(false, true);
+    await flushPromises();
+    await wrapper.find('[data-test="increase"]').trigger('click');
+
+    const [handle] = collapseButtons(wrapper);
+    expect(collapseButtons(wrapper)).toHaveLength(1);
+    expect(handle?.find('[data-test="collapse-art"]').exists()).toBe(true);
+    expect(handle?.element.parentElement?.tagName).toBe('ASIDE');
+    await handle?.trigger('click');
+    await flushPromises();
+
+    const rail = wrapper.find('button[aria-expanded]');
+    expect(collapsed.value).toBe(true);
+    expect(collapseButtons(wrapper)).toHaveLength(0);
+    expect(rail.attributes('aria-label')).toBe('文件目录');
+    expect(rail.attributes('aria-expanded')).toBe('false');
+    expect(rail.find('[data-test="rail-art"]').exists()).toBe(true);
+    expect(rail.text()).toBe('');
+    await rail.trigger('click');
+    await flushPromises();
+
+    expect(collapsed.value).toBe(false);
+    expect(counterPlace(wrapper)).toBe('aside');
+    expect(wrapper.find('[data-test="increase"]').text()).toBe('1');
+  });
+
+  it('页面给出把手时窄屏不用它们：默认的窄条打开抽屉，抽屉里只有关闭按钮', async () => {
+    stubViewport(true);
+    // 页面的状态是展开，窄屏时不起作用
+    const { wrapper } = mountCollapsible(false, true);
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="rail-art"]').exists()).toBe(false);
+    expect(toggleButtons(wrapper)).toHaveLength(1);
+    expect(toggleButtons(wrapper)[0]?.attributes('aria-label')).toBeUndefined();
+    await toggleButtons(wrapper)[0]?.trigger('click');
+    await flushPromises();
+
+    expect(counterPlace(wrapper)).toBe('drawer');
+    expect(wrapper.find('[data-test="collapse-art"]').exists()).toBe(false);
     expect(collapseButtons(wrapper)).toHaveLength(0);
     expect(closeButtons(wrapper)).toHaveLength(1);
   });

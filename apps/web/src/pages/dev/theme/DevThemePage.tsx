@@ -604,6 +604,11 @@ export const DevThemePage = defineComponent({
           <h2 class={styles.sectionTitle}>宽屏可收起的侧栏（MxSplitLayout 的 collapsible，侧栏面板的收起按钮、原位展开的窄条）</h2>
           <SplitLayoutPreview collapsible />
         </section>
+
+        <section class={styles.section}>
+          <h2 class={styles.sectionTitle}>自定义收起把手和窄条（collapse、rail 插槽，基本统计页的设计图；窄屏仍用默认窄条）</h2>
+          <SplitLayoutPreview collapsible handles />
+        </section>
       </div>
     );
   }

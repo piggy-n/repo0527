@@ -21,9 +21,9 @@ features/monitoring-statistics/
    ├─ ReportProgressPanel        当前报表进度
    ├─ StatisticsOverviewPanel    年报表统计计算总览
    └─ ReportMonitorPanel         当前报表监控（状态筛选、去下载、统计表）
-pages/space-monitoring-statistics/  页面：分栏布局、拥有者、左栏的收起、初次进入的落点、去下载
+pages/space-monitoring-statistics/  页面：分栏布局、拥有者、左栏的收起与把手图（images/）、初次进入的落点、去下载
 pages/dev/monitoring-statistics/    组件样例：正式页面换上固定数据的接口（demo-api.ts）
-libs/ui/split-layout/               MxSplitLayout 的宽屏收起（collapsible），见 modules/ui.md
+libs/ui/split-layout/               MxSplitLayout 的宽屏收起（collapsible）与 rail、collapse 插槽，见 modules/ui.md
 ```
 
 ## 数据从哪里来
@@ -61,6 +61,17 @@ libs/ui/split-layout/               MxSplitLayout 的宽屏收起（collapsible�
 
 跟踪的阶段（`tracking.ts`）：提交中 → 已提交等待（新统计最多 90 秒，重新统计 15 秒）→ 处理中 → 查到本次的结果就结束；新统计查到结果就算，重新统计要先见过处理中；等到截止还没有就超时，提示后可以重新查询。
 
+## 左栏的把手
+
+宽屏收起、展开时的把手是旧页面的设计图（ADR 0101），由页面通过 `MxSplitLayout` 的 `rail`、`collapse` 插槽给出；窄屏仍是默认的窄条和抽屉。
+
+| 文件 | 来源 | 显示 |
+|---|---|---|
+| `images/panel-handle-collapsed.webp` | 用户 2026-10-28 给的 `1.svg`（同旧 `public/images/TongJi/panel-handle-collapsed.png`），2 倍尺寸 160 × 554，18 KB | 收起时的竖条 80 × 277，竖直居中；"统计报表计算"竖排压在上部浅色区域（16、半粗、主色） |
+| `images/panel-handle-expanded.webp` | 用户给的 `2.svg`（同旧 `panel-handle-expanded.png`），2 倍尺寸 262 × 98，6.4 KB | 展开时的横条 131 × 49，贴在左栏右上角，比面板上边高 8 |
+
+转换方法：Playwright 的 Chromium 按 2 倍尺寸栅格化 SVG，`canvas.toDataURL('image/webp', 0.9)` 编码，保留透明通道。原 SVG 每个约 420 KB（1200 像素宽的 PNG 加一个箭头），不入库。
+
 ## 组件样例
 
 `/dev/monitoring-statistics` 渲染正式页面，传入 `createDemoApi()`、独立的查询缓存、总是有效的会话核对和可以切换的角色。2025 年同实测（省、市、县统计完且有失败，区级在处理，汇总统计市级没有任务），2026 年只有可选项，其他年份没有；提交后 3 秒开始、25 秒统计完。顶栏可以切换接口延迟、开始统计的结果（成功、被拒绝、无响应）、总览失败、状态查询失败、管理员和普通用户。
@@ -69,5 +80,5 @@ libs/ui/split-layout/               MxSplitLayout 的宽屏收起（collapsible�
 
 - 纯函数和接口解析按实测的返回写（`api.test.ts` 用 MSW）
 - 三个拥有者用假的 `StatisticsApi`；报表和总览的轮询用假定时器推进，包括连续失败停下、跟踪超时
-- 组件用假的拥有者（`components/test-owners.ts`）；页面用真实的拥有者和最小的路由，检查初次进入的落点、提交后收起左栏、去下载
-- `MxSplitLayout` 的宽屏收起在 `libs/ui` 的测试里
+- 组件用假的拥有者（`components/test-owners.ts`）；页面用真实的拥有者和最小的路由，检查初次进入的落点、把手是设计图、提交后收起左栏、去下载
+- `MxSplitLayout` 的宽屏收起和 `rail`、`collapse` 插槽在 `libs/ui` 的测试里

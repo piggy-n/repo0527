@@ -9,8 +9,8 @@ export interface SplitLayoutContext {
   asideLabel: ComputedRef<string>;
   openAside: () => void;
   closeAside: () => void;
-  /** 宽屏时侧栏可以收成窄条（页面开启 collapsible）；窄屏时总是 false，用抽屉 */
-  collapsible: ComputedRef<boolean>;
+  /** 侧栏面板放收起按钮：宽屏、页面开启 collapsible、没有用 collapse 插槽给出把手；窄屏时总是 false，用抽屉 */
+  collapseInPanel: ComputedRef<boolean>;
   /** 宽屏时把侧栏收成窄条，由页面决定是否采纳（collapsed 受控） */
   collapseAside: () => void;
 }

@@ -33,7 +33,7 @@ const AsideRegion = defineComponent({
 
 /**
  * 分栏布局：侧栏加主区，四周统一间距；窄屏时侧栏收成左侧的窄条，点击后在抽屉中打开，内容移动而不重建。
- * 开启 collapsible 后，宽屏时也能把侧栏收成同样的窄条，点击在原位展开（docs/modules/ui.md）
+ * 开启 collapsible 后，宽屏时也能把侧栏收成同样的窄条，点击在原位展开；收起把手和窄条的外观可以由页面给出（docs/modules/ui.md）
  */
 export const MxSplitLayout = defineComponent({
   name: 'MxSplitLayout',
@@ -51,6 +51,10 @@ export const MxSplitLayout = defineComponent({
   slots: Object as SlotsType<{
     default?: () => VNode[];
     aside?: () => VNode[];
+    /** 宽屏收起时窄条里的内容，代替图标和竖排名称；窄屏时仍用默认的窄条 */
+    rail?: () => VNode[];
+    /** 宽屏展开时的收起把手，贴在侧栏右上角，代替侧栏面板里的收起按钮 */
+    collapse?: () => VNode[];
   }>,
   setup(props, { slots, emit }) {
     const compact = useMediaQuery(COMPACT_MEDIA_QUERY);
@@ -61,6 +65,8 @@ export const MxSplitLayout = defineComponent({
     const inDrawer = computed(() => compact.value && drawerTarget.value !== undefined);
     // 宽屏收起只看页面给的状态；窄屏时侧栏总在抽屉里，不受它影响
     const collapsedWide = computed(() => props.collapsible && props.collapsed && !compact.value);
+    const expandedWide = computed(() => props.collapsible && !props.collapsed && !compact.value);
+    const collapseAside = () => emit('update:collapsed', true);
 
     const openAside = () => {
       asideOpen.value = true;
@@ -74,8 +80,8 @@ export const MxSplitLayout = defineComponent({
       asideLabel: computed(() => props.asideLabel),
       openAside,
       closeAside,
-      collapsible: computed(() => props.collapsible && !compact.value),
-      collapseAside: () => emit('update:collapsed', true)
+      collapseInPanel: computed(() => props.collapsible && !compact.value && !slots.collapse),
+      collapseAside
     });
 
     watch(compact, value => {
@@ -111,6 +117,8 @@ export const MxSplitLayout = defineComponent({
       const width = ASIDE_WIDTHS[props.asideType];
       // 窄屏点窄条打开抽屉；宽屏收起时点窄条在原位展开
       const expand = compact.value ? openAside : () => emit('update:collapsed', false);
+      // 页面给的窄条内容只在宽屏收起时用；内容可能只是图片，名称由 aria-label 给出
+      const customRail = collapsedWide.value && slots.rail !== undefined;
       return (
         <div class={styles.root}>
           <aside
@@ -122,18 +130,35 @@ export const MxSplitLayout = defineComponent({
                 <AsideRegion>{slots.aside?.()}</AsideRegion>
               </div>
             </Teleport>
+            {expandedWide.value && slots.collapse && (
+              <button
+                type="button"
+                class={styles.collapseHandle}
+                aria-label={`收起${props.asideLabel}`}
+                onClick={collapseAside}
+              >
+                {slots.collapse()}
+              </button>
+            )}
           </aside>
           {(compact.value || collapsedWide.value) && (
             <button
               type="button"
-              class={styles.rail}
+              class={[styles.rail, customRail && styles.customRail]}
               aria-expanded={compact.value ? asideOpen.value : false}
+              aria-label={customRail ? props.asideLabel : undefined}
               onClick={expand}
             >
-              <ElIcon>
-                <Expand />
-              </ElIcon>
-              <span class={styles.railLabel}>{props.asideLabel}</span>
+              {customRail ? (
+                slots.rail?.()
+              ) : (
+                <>
+                  <ElIcon>
+                    <Expand />
+                  </ElIcon>
+                  <span class={styles.railLabel}>{props.asideLabel}</span>
+                </>
+              )}
             </button>
           )}
           <div class={styles.main}>{slots.default?.()}</div>

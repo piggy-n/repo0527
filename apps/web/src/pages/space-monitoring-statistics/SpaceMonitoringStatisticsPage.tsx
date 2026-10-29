@@ -16,10 +16,14 @@ import type { SessionGuard } from '@/shared/auth/session-guard';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { navigate } from '@/shared/router/navigate';
 import { RouteName } from '@/shared/router/route-names';
+import collapsedHandle from './images/panel-handle-collapsed.webp';
+import expandedHandle from './images/panel-handle-expanded.webp';
 import styles from './SpaceMonitoringStatisticsPage.module.scss';
 
 /** 普通用户的"数据下载"（资源申请）还没有迁移 */
 const DOWNLOAD_UNAVAILABLE = '数据下载页面迁移后可用';
+
+const ASIDE_LABEL = '统计报表计算';
 
 /**
  * 城市国土空间监测基本统计：左栏提交统计任务（默认收起），主区看一份报表的进度、全年的总览和统计表（ADR 0100）。
@@ -95,13 +99,21 @@ export const SpaceMonitoringStatisticsPage = defineComponent({
 
     return () => (
       <MxSplitLayout
-        asideLabel="统计报表计算"
+        asideLabel={ASIDE_LABEL}
         collapsible
         collapsed={collapsed.value}
         onUpdate:collapsed={changeCollapsed}
       >
         {{
           aside: () => <StatisticsCalculationPanel calculation={calculation} />,
+          // 宽屏收起、展开时的把手沿用旧页面的设计图，素材不含文字，名称压在竖条的浅色区域上
+          rail: () => (
+            <span class={styles.railHandle}>
+              <img class={styles.railImage} src={collapsedHandle} alt="" />
+              <span class={styles.railLabel}>{ASIDE_LABEL}</span>
+            </span>
+          ),
+          collapse: () => <img class={styles.collapseHandle} src={expandedHandle} alt="" />,
           default: () => (
             <div class={styles.content} data-statistics-page>
               <div class={styles.top}>
