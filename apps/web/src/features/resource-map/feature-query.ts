@@ -10,11 +10,11 @@ import type {
   ViewBounds,
   ViewKind
 } from '@yzt/map-core';
+import { lngLatAt, pixelSizeAt, queryGeometry, screenBoxPolygon } from '@/shared/map/query-geometry';
 import { clipToScope, intersectsScope, type RegionScope, scopeContains } from '@/shared/map/region/region-scope';
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';
 import { LANDUSE_FIELD_LABELS } from './landuse';
-import { queryGeometry } from './query-geometry';
 import { isResourceBodyLayer, type ResourceLayersState, resourceSourceId } from './resource-layers';
 import { resourceStyle, tilesetOf } from './style-registry';
 
@@ -183,22 +183,6 @@ function renderedArea(point: ScreenPoint, tolerance: number): ScreenPoint | Scre
   return tolerance === 0 ? point : toleranceBox(point, tolerance);
 }
 
-// 两个经纬度当作平面坐标的距离
-function planarDistance([x1 = 0, y1 = 0]: Position, [x2 = 0, y2 = 0]: Position): number {
-  return Math.hypot(x2 - x1, y2 - y1);
-}
-
-/** 一个屏幕像素在这个点附近对应的经纬度距离，横竖两个方向取较小的；拾取不到时为 null（ADR 0051 第 4 节） */
-export function pixelSizeAt(point: ScreenPoint, pick: (point: ScreenPoint) => PickResult): number | null {
-  const center = lngLatAt(pick, point);
-  const right = lngLatAt(pick, { x: point.x + 1, y: point.y });
-  const below = lngLatAt(pick, { x: point.x, y: point.y + 1 });
-  if (!center || !right || !below) {
-    return null;
-  }
-  return Math.min(planarDistance(center, right), planarDistance(center, below));
-}
-
 // 只留几何和范围相交的渲染要素；没有范围时原样（ADR 0051 第 3 节）。在转换成候选、按 guid 去重之前过滤，
 // 同一个 guid 被瓦片切成的几段里有一段相交就留下
 function withinScope(features: readonly RenderedFeature[], area: RegionScope | null): readonly RenderedFeature[] {
@@ -317,30 +301,6 @@ export function planIdentify(
     }
   }
   return tasks;
-}
-
-// 拾取到的经纬度；拾取不到时为 null
-function lngLatAt(pick: (point: ScreenPoint) => PickResult, point: ScreenPoint): Position | null {
-  const result = pick(point);
-  return result.kind === 'hit' ? [...result.lngLat] : null;
-}
-
-/** 屏幕矩形四角（左上起顺时针）拾取到的闭合多边形，起点和终点可以在任意方向；有一角拾取不到时为 null */
-export function screenBoxPolygon(box: ScreenBox, pick: (point: ScreenPoint) => PickResult): Polygon | null {
-  const [left, right] = [Math.min(box.from.x, box.to.x), Math.max(box.from.x, box.to.x)];
-  const [top, bottom] = [Math.min(box.from.y, box.to.y), Math.max(box.from.y, box.to.y)];
-  const corners = [
-    { x: left, y: top },
-    { x: right, y: top },
-    { x: right, y: bottom },
-    { x: left, y: bottom }
-  ].map(corner => lngLatAt(pick, corner));
-  const ring = corners.filter(corner => corner !== null);
-  const [first] = ring;
-  if (ring.length !== corners.length || !first) {
-    return null;
-  }
-  return { type: 'Polygon', coordinates: [[...ring, first]] };
 }
 
 /** 后端识别用的范围：面用点击位置（只返回包含它的面），线、点用容差框四角拾取到的多边形；拾取不到时为 null */

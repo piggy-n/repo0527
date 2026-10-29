@@ -1,6 +1,7 @@
 import type { Geometry, MultiPolygon, Point, Polygon } from 'geojson';
 import { z } from 'zod';
 import { http } from '@/shared/http/client';
+import { geometryTextSchema } from '@/shared/map/geometry-schema';
 
 // 结构按 2026-10-09、10-11 实测的返回确定（docs/migration.md）；resource（所属分类名）与分类路径重复，不声明
 const resourceLayerSchema = z.object({
@@ -48,31 +49,7 @@ const featurePageSchema = z.object({ total: z.number(), list: z.array(featureRec
 
 export type FeaturePage = z.infer<typeof featurePageSchema>;
 
-const position = z.array(z.number()).min(2);
-
-/** GeoJSON 几何：后端返回的几何要拿来算范围、高亮，逐层校验坐标 */
-export const geometrySchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('Point'), coordinates: position }),
-  z.object({ type: z.literal('MultiPoint'), coordinates: z.array(position) }),
-  z.object({ type: z.literal('LineString'), coordinates: z.array(position) }),
-  z.object({ type: z.literal('MultiLineString'), coordinates: z.array(z.array(position)) }),
-  z.object({ type: z.literal('Polygon'), coordinates: z.array(z.array(position)) }),
-  z.object({ type: z.literal('MultiPolygon'), coordinates: z.array(z.array(z.array(position))) })
-]);
-
 // 几何接口的 geom 是 GeoJSON 字符串
-const geometryTextSchema = z
-  .string()
-  .transform((text, context) => {
-    try {
-      return JSON.parse(text) as unknown;
-    } catch {
-      context.addIssue({ code: 'custom', message: '几何不是合法的 JSON' });
-      return z.NEVER;
-    }
-  })
-  .pipe(geometrySchema);
-
 const featureGeometriesSchema = z.array(z.object({ guid: z.string(), geom: geometryTextSchema }));
 
 // 取完整几何：范围查询返回的几何会被裁到查询范围内，用"全世界"加条件

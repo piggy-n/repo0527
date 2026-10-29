@@ -43,7 +43,8 @@ describe('路由表', () => {
       RouteName.devSystemManagement,
       RouteName.devMessageCenter,
       RouteName.devMonitoringIndicators,
-      RouteName.devMonitoringStatistics
+      RouteName.devMonitoringStatistics,
+      RouteName.devDataQuery
     ].toSorted());
   });
 

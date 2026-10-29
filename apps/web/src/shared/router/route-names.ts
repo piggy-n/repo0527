@@ -15,6 +15,7 @@ export const RouteName = {
   devMessageCenter: 'dev-message-center',
   devMonitoringIndicators: 'dev-monitoring-indicators',
   devMonitoringStatistics: 'dev-monitoring-statistics',
+  devDataQuery: 'dev-data-query',
   currentMap: 'current-map',
   cityDashboard: 'city-dashboard',
   landChangeQuery: 'land-change-query',

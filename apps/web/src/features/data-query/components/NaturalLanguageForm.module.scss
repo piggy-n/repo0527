@@ -1,0 +1,51 @@
+// "换一组"放在输入框右下角，输入框底部留出它的位置
+.input {
+  position: relative;
+
+  :global(.el-textarea__inner) {
+    padding-bottom: 32px;
+  }
+}
+
+.examples {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+}
+
+// 解析中：三个依次闪烁的点（同旧页面）
+.thinking {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+
+  i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+    animation: blink 1.2s infinite;
+
+    &:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    &:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+  }
+}
+
+@keyframes blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+
+  40% {
+    opacity: 1;
+  }
+}

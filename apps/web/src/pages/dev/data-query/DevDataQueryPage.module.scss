@@ -1,0 +1,36 @@
+// 只布局实测页的开关栏和地图区域，页面本身的外观由真实组件提供
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--color-bg-page);
+}
+
+.bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-lg);
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid var(--color-divider);
+  background-color: var(--color-bg-container);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+
+  strong {
+    color: var(--color-text-title);
+    font-size: var(--font-size-base);
+  }
+}
+
+.link {
+  margin-left: auto;
+  color: var(--color-primary);
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
