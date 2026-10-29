@@ -1,0 +1,57 @@
+// 结果面板在地图中间一列的底部：展开时高 320（矮屏 260），最大化占满整列，收起只留 48 高的标题栏；
+// 表头固定、表体滚动，分页在面板的固定底栏
+.root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.expanded {
+  height: 320px;
+  max-height: 100%;
+
+  @media (height < 820px) {
+    height: 260px;
+  }
+}
+
+.maximized {
+  height: 100%;
+}
+
+.collapsed {
+  flex: none;
+}
+
+.panel {
+  flex: 1;
+  min-height: 0;
+}
+
+// 标题后面紧跟条数；MxTitle 默认占满剩下的宽度，这里按内容
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+
+  > :first-child {
+    flex: 0 1 auto;
+  }
+}
+
+.count {
+  flex: none;
+  height: 20px;
+  padding: 0 var(--space-sm);
+  border-radius: 999px;
+  background-color: var(--color-neutral-bg);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  line-height: 20px;
+}
+
+.table {
+  flex: 1;
+  min-height: 0;
+}

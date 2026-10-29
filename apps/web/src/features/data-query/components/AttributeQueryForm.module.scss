@@ -1,0 +1,66 @@
+// 条件卡片：浅灰底，字段名在上（名称可能很长，换行显示），控件在下；条件之间是 AND / OR 的连接
+.conditions {
+  display: flex;
+  flex-direction: column;
+}
+
+.condition {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-neutral-bg-light);
+}
+
+.conditionHead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+
+  :global(.el-button) {
+    flex: none;
+    height: 18px;
+    color: var(--color-text-secondary);
+  }
+}
+
+.conditionLabel {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.controls {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.operator {
+  flex: none;
+  width: 88px;
+}
+
+// ElDatePicker 的输入框默认有固定宽度
+.date:global(.el-date-editor) {
+  width: auto;
+}
+
+.connector {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-xs) 0;
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-neutral-bg-light);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
