@@ -1,12 +1,13 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
-import { ElMessageBox, type MessageBoxData } from 'element-plus';
+import { ElDatePicker, ElMessageBox, type MessageBoxData } from 'element-plus';
 import { createPinia } from 'pinia';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import type { StatisticsApi } from '@/features/monitoring-statistics/api';
 import type { ReportStatus } from '@/features/monitoring-statistics/report';
+import { defaultYear } from '@/features/monitoring-statistics/statistics';
 import { Role } from '@/shared/auth/roles';
 import type { SessionGuard } from '@/shared/auth/session-guard';
 import { RouteName } from '@/shared/router/route-names';
@@ -16,7 +17,8 @@ import { SpaceMonitoringStatisticsPage } from './SpaceMonitoringStatisticsPage';
 const OPTIONS = {
   tables: [
     { value: 'baseTable', label: '基本统计报表' },
-    { value: 'summaryTable', label: '汇总统计报表' }
+    { value: 'summaryTable', label: '汇总统计报表' },
+    { value: 'baseChangeTable', label: '基本变化统计报表' }
   ],
   levels: [
     { value: 'province', label: '省级' },
@@ -119,6 +121,32 @@ describe('SpaceMonitoringStatisticsPage', () => {
     await flushPromises();
 
     expect(asideHidden(wrapper)).toBe(true);
+  });
+
+  it('左栏第一次展开时，监测年度和两个本底年度跟着正在查看的', async () => {
+    const { wrapper } = await mountPage(Role.admin);
+    const changeRow = required(
+      wrapper.findAll('tbody tr').find(row => row.find('th').text() === '基本变化统计报表'),
+      '基本变化统计报表这一行'
+    );
+    await changeRow.get('button').trigger('click');
+    await flushPromises();
+    const picker = required(
+      wrapper.findAllComponents(ElDatePicker).find(item => item.find('input[aria-label="本底年份"]').exists()),
+      '本底年份'
+    );
+    picker.vm.$emit('update:modelValue', '2022');
+    await flushPromises();
+    const year = defaultYear();
+
+    await button(wrapper, '统计报表计算').trigger('click');
+    const aside = wrapper.get('aside');
+    expect(aside.findAll<HTMLInputElement>('.el-date-editor input').map(input => input.element.value)).toEqual([
+      `${year}年`,
+      '2022年',
+      `${Number(year) - 1}年`
+    ]);
+    expect(aside.text()).toContain('变更本底 2022年');
   });
 
   it('管理员去系统管理的统计报表下载；普通用户的按钮置灰', async () => {

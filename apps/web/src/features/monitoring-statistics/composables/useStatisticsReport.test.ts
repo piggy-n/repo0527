@@ -5,7 +5,7 @@ import { defineComponent } from 'vue';
 import { required } from '@/shared/testing/required';
 import type { StatisticsApi } from '../api';
 import type { ReportCriteria, ReportRow, ReportStatus } from '../report';
-import { overviewMatrix } from '../statistics';
+import { overviewMatrix, TABLES } from '../statistics';
 import { NEW_TASK_WAIT } from '../tracking';
 import { REPORT_POLL_INTERVAL, type StatisticsReport, useStatisticsReport } from './useStatisticsReport';
 
@@ -31,6 +31,8 @@ const OPTIONS = {
     { value: 'county', label: '县级' }
   ]
 } as const satisfies Pick<ReportStatus, 'tables' | 'levels'>;
+
+const BASE_YEARS = { change: '2024', water: '2024' };
 
 const settled = (change: Partial<ReportStatus> = {}): ReportStatus => ({
   rows: [row('江苏省城基1-1表', 'completed', '处理成功'), row('江苏省城基1-2表', 'failed', '处理失败')],
@@ -99,7 +101,7 @@ describe('useStatisticsReport', () => {
 
     report.setYear('2026');
     await vi.advanceTimersByTimeAsync(0);
-    expect(report.criteria.value).toEqual({ year: '2026', table: 'baseTable', level: 'county' });
+    expect(report.criteria.value).toEqual({ year: '2026', table: 'baseTable', level: 'county', baseYear: null });
     // 同一轮里先换报表再换年份，中间的 2025 年汇总统计不会请求
     expect(criteriaOf(fetch.mock.calls)).toEqual([
       '2025/baseTable/province',
@@ -155,14 +157,14 @@ describe('useStatisticsReport', () => {
     });
     await vi.advanceTimersByTimeAsync(0);
 
-    const tracking = report.trackSubmission('2025', [
+    const tracking = report.trackSubmission('2025', BASE_YEARS, [
       { target: { table: 'baseTable', level: 'city' }, recompute: false },
       { target: { table: 'summaryTable', level: 'city' }, recompute: false }
     ]);
-    expect(report.criteria.value).toEqual({ year: '2025', table: 'baseTable', level: 'city' });
+    expect(report.criteria.value).toEqual({ year: '2025', table: 'baseTable', level: 'city', baseYear: null });
     expect(report.run.value).toBe(1);
     expect(report.activity.value).toBe('submitting');
-    expect(report.isTracking({ year: '2025', table: 'summaryTable', level: 'city' })).toBe(true);
+    expect(report.isTracking({ year: '2025', table: 'summaryTable', level: 'city', baseYear: null })).toBe(true);
 
     stage = 'empty';
     tracking.accept();
@@ -179,14 +181,16 @@ describe('useStatisticsReport', () => {
 
     stage = 'done';
     await vi.advanceTimersByTimeAsync(REPORT_POLL_INTERVAL);
-    expect(report.isTracking({ year: '2025', table: 'baseTable', level: 'city' })).toBe(false);
+    expect(report.isTracking({ year: '2025', table: 'baseTable', level: 'city', baseYear: null })).toBe(false);
     expect(report.polling.value).toBe(false);
   });
 
   it('新统计等到截止还没查到任务就超时，提示后可以重新查询', async () => {
     const { report } = host(({ level }) => Promise.resolve(level === 'county' ? empty() : settled()));
     await vi.advanceTimersByTimeAsync(0);
-    report.trackSubmission('2025', [{ target: { table: 'baseTable', level: 'county' }, recompute: false }]).accept();
+    report
+      .trackSubmission('2025', BASE_YEARS, [{ target: { table: 'baseTable', level: 'county' }, recompute: false }])
+      .accept();
     await vi.advanceTimersByTimeAsync(NEW_TASK_WAIT + REPORT_POLL_INTERVAL);
 
     expect(report.notice.value).toMatchObject({ type: 'warning', retry: true });
@@ -199,15 +203,70 @@ describe('useStatisticsReport', () => {
     const { report } = host(() => Promise.resolve(empty()));
     await vi.advanceTimersByTimeAsync(0);
     report
-      .trackSubmission('2025', [{ target: { table: 'baseTable', level: 'province' }, recompute: false }])
+      .trackSubmission('2025', BASE_YEARS, [{ target: { table: 'baseTable', level: 'province' }, recompute: false }])
       .reject('已有统计任务在执行', false);
     expect(report.notice.value).toEqual({ type: 'error', text: '已有统计任务在执行', retry: true });
 
     report
-      .trackSubmission('2025', [{ target: { table: 'baseTable', level: 'province' }, recompute: false }])
+      .trackSubmission('2025', BASE_YEARS, [{ target: { table: 'baseTable', level: 'province' }, recompute: false }])
       .reject('网络异常', true);
     expect(report.notice.value?.type).toBe('warning');
     expect(report.activity.value).toBe('confirming');
+  });
+
+  it('变化类报表按自己的本底年份查：换报表时跟着报表取，换监测年份时回到上一年；本底年份要早于监测年份', async () => {
+    const tables = TABLES.map(table => ({ value: table.type, label: table.name }));
+    const { report, fetch } = host(() => Promise.resolve(settled({ tables })));
+    await vi.advanceTimersByTimeAsync(0);
+
+    report.setTable('baseChangeTable');
+    expect(report.criteria.value).toEqual({
+      year: '2025',
+      table: 'baseChangeTable',
+      level: 'province',
+      baseYear: '2024'
+    });
+    report.setBaseYear('2022');
+    report.setTable('entityChangeTable');
+    expect(report.criteria.value.baseYear).toBe('2022');
+    report.setTable('changeWaterTable');
+    expect(report.criteria.value.baseYear).toBe('2024');
+    report.setTable('baseTable');
+    expect(report.criteria.value.baseYear).toBeNull();
+    expect(() => report.setBaseYear('2023')).toThrow('基本统计报表没有本底年份');
+
+    report.setTable('baseChangeTable');
+    expect(() => report.setBaseYear('2025')).toThrow(RangeError);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch.mock.calls.at(-1)?.[0]).toEqual({
+      year: '2025',
+      table: 'baseChangeTable',
+      level: 'province',
+      baseYear: '2022'
+    });
+
+    report.setYear('2027');
+    expect(report.baseYears.value).toEqual({ change: '2026', water: '2026' });
+    expect(report.criteria.value.baseYear).toBe('2026');
+  });
+
+  it('提交后查看的本底年份换成提交的，各项按自己的本底年份跟踪', async () => {
+    const { report } = host(() => Promise.resolve(empty()));
+    await vi.advanceTimersByTimeAsync(0);
+
+    report.trackSubmission('2025', { change: '2022', water: '2023' }, [
+      { target: { table: 'changeWaterTable', level: 'district' }, recompute: false },
+      { target: { table: 'baseChangeTable', level: 'city' }, recompute: false }
+    ]);
+    expect(report.baseYears.value).toEqual({ change: '2022', water: '2023' });
+    expect(report.criteria.value).toEqual({
+      year: '2025',
+      table: 'changeWaterTable',
+      level: 'district',
+      baseYear: '2023'
+    });
+    expect(report.isTracking({ year: '2025', table: 'baseChangeTable', level: 'city', baseYear: '2022' })).toBe(true);
+    expect(report.isTracking({ year: '2025', table: 'baseChangeTable', level: 'city', baseYear: '2024' })).toBe(false);
   });
 
   it('状态筛选可以多选，换条件后回到全部', async () => {

@@ -23,6 +23,11 @@
   min-width: 0;
 }
 
+// 查看条件按内容的高度（窄时本底年份换行也不在面板里滚动），进度区占剩下的
+.conditions {
+  flex: none;
+}
+
 // 两张把手图按 2 倍尺寸导出，这里是显示尺寸（同旧页面）
 .railHandle {
   position: relative;

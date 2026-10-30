@@ -1,12 +1,32 @@
-import { type AreaLevel, type TableLevel, TABLES, type TableType, type TaskStatus, taskStatusOf } from './statistics';
+import {
+  type AreaLevel,
+  baseYearFor,
+  type BaseYears,
+  levelLabel,
+  type TableLevel,
+  tableOf,
+  type TableType,
+  type TaskStatus,
+  taskStatusOf
+} from './statistics';
 
-/** 查看哪一份报表：年份加报表类型、行政区划等级 */
+/** 查看哪一份报表：年份加报表类型、行政区划等级；变化类报表另有本底年份 */
 export interface ReportCriteria extends TableLevel {
   readonly year: string;
+  /** 变化类报表的本底年份，其余报表为 null */
+  readonly baseYear: string | null;
 }
 
+/** 按这组本底年份给出一个组合的查看条件 */
+export const criteriaOf = (year: string, target: TableLevel, baseYears: BaseYears): ReportCriteria => ({
+  year,
+  table: target.table,
+  level: target.level,
+  baseYear: baseYearFor(target.table, baseYears)
+});
+
 export const sameCriteria = (a: ReportCriteria, b: ReportCriteria) =>
-  a.year === b.year && a.table === b.table && a.level === b.level;
+  a.year === b.year && a.table === b.table && a.level === b.level && a.baseYear === b.baseYear;
 
 export interface ReportOption<T> {
   readonly value: T;
@@ -69,17 +89,22 @@ export function settledRatio({ total, completed, failed }: ReportCounts): number
   return Math.min(1, Math.max(0, (completed + failed) / total));
 }
 
-/** 某个报表能选的等级：后端给的等级里，这个报表支持的那些（汇总统计只有省、市） */
+/**
+ * 某个报表能选的等级：后端给的等级里这个报表支持的那些（汇总统计只有省、市，水路网没有县级），
+ * 名称按前端的叫法（水路网的区级叫"区县级"）
+ */
 export function levelOptionsFor(
   table: TableType,
   levels: readonly ReportOption<AreaLevel>[]
 ): readonly ReportOption<AreaLevel>[] {
-  const supported = TABLES.find(item => item.type === table)?.levels ?? [];
-  return levels.filter(option => supported.includes(option.value));
+  const supported = tableOf(table).levels;
+  return levels
+    .filter(option => supported.includes(option.value))
+    .map(option => ({ value: option.value, label: levelLabel(option.value, table) }));
 }
 
-/** 当前条件不在后端给的选项里时，换成第一个可选的报表和等级；这一年什么都没有时保持不变 */
-export function resolveCriteria(criteria: ReportCriteria, status: ReportStatus): ReportCriteria {
+/** 当前条件不在后端给的选项里时，换成第一个可选的报表和等级（本底年份跟着报表）；这一年什么都没有时保持不变 */
+export function resolveCriteria(criteria: ReportCriteria, status: ReportStatus, baseYears: BaseYears): ReportCriteria {
   const table = status.tables.some(option => option.value === criteria.table)
     ? criteria.table
     : status.tables[0]?.value;
@@ -90,5 +115,8 @@ export function resolveCriteria(criteria: ReportCriteria, status: ReportStatus):
   const level = levels.some(option => option.value === criteria.level)
     ? criteria.level
     : (levels[0]?.value ?? criteria.level);
-  return table === criteria.table && level === criteria.level ? criteria : { ...criteria, table, level };
+  if (table === criteria.table) {
+    return level === criteria.level ? criteria : { ...criteria, level };
+  }
+  return criteriaOf(criteria.year, { table, level }, baseYears);
 }

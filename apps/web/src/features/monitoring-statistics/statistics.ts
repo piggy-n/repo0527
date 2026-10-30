@@ -9,45 +9,86 @@ export const AREA_LEVELS: readonly { readonly id: AreaLevel; readonly label: str
   { id: 'county', label: '县级' }
 ];
 
-/** 报表类型，值是接口的 tableType */
+/** 报表类型，值是接口的 tableType；名称、请求参数和状态字段按用户 2026-10-29 给出的对照 */
 export const TABLE_TYPES = [
   'baseTable',
   'summaryTable',
-  'changeTable',
-  'waterBaseTable',
-  'waterChangeTable',
+  'baseChangeTable',
+  'baseWaterTable',
+  'changeWaterTable',
   'entityChangeTable'
 ] as const;
 export type TableType = (typeof TABLE_TYPES)[number];
 
+/** 变化类报表用哪个本底年份：基本变化、实体变化用变更本底，水路网变化用水路本底 */
+export const BASE_YEAR_KINDS = ['change', 'water'] as const;
+export type BaseYearKind = (typeof BASE_YEAR_KINDS)[number];
+
+/** 两个本底年份 */
+export type BaseYears = Readonly<Record<BaseYearKind, string>>;
+
+export const BASE_YEAR_LABELS: Readonly<Record<BaseYearKind, string>> = { change: '变更本底', water: '水路本底' };
+
 export interface TableDefinition {
   readonly type: TableType;
   readonly name: string;
-  /** 暂未开放的不能计算，总览里显示"暂未开放" */
-  readonly enabled: boolean;
   /** 能统计的行政区划等级 */
   readonly levels: readonly AreaLevel[];
+  /** 区、县合成一级"区县级"，状态和请求都按 district（水路网报表） */
+  readonly mergedDistrict: boolean;
+  /** 变化类报表除了监测年份还要本底年份；其余为 null */
+  readonly baseYear: BaseYearKind | null;
 }
 
 const ALL_LEVELS = AREA_LEVELS.map(level => level.id);
+const WATER_LEVELS: readonly AreaLevel[] = ['province', 'city', 'district'];
 
-// 报表清单沿用旧页面：基本统计四级，汇总统计只有省、市两级，其余暂未开放
+// 基本统计、基本变化、实体变化四级；汇总统计只有省、市两级；两种水路网报表是省、市、区县三级
 export const TABLES: readonly TableDefinition[] = [
-  { type: 'baseTable', name: '基本统计报表', enabled: true, levels: ALL_LEVELS },
-  { type: 'summaryTable', name: '汇总统计报表', enabled: true, levels: ['province', 'city'] },
-  { type: 'changeTable', name: '变化统计报表', enabled: false, levels: ALL_LEVELS },
-  { type: 'waterBaseTable', name: '水路网基本统计报表', enabled: false, levels: ALL_LEVELS },
-  { type: 'waterChangeTable', name: '水路网变化统计报表', enabled: false, levels: ALL_LEVELS },
-  { type: 'entityChangeTable', name: '实体变化统计报表', enabled: false, levels: ALL_LEVELS }
+  { type: 'baseTable', name: '基本统计报表', levels: ALL_LEVELS, mergedDistrict: false, baseYear: null },
+  { type: 'summaryTable', name: '汇总统计报表', levels: ['province', 'city'], mergedDistrict: false, baseYear: null },
+  { type: 'baseChangeTable', name: '基本变化统计报表', levels: ALL_LEVELS, mergedDistrict: false, baseYear: 'change' },
+  { type: 'baseWaterTable', name: '水路网基本统计报表', levels: WATER_LEVELS, mergedDistrict: true, baseYear: null },
+  { type: 'changeWaterTable', name: '水路网变化统计报表', levels: WATER_LEVELS, mergedDistrict: true, baseYear: 'water' },
+  { type: 'entityChangeTable', name: '实体变化统计报表', levels: ALL_LEVELS, mergedDistrict: false, baseYear: 'change' }
 ];
 
-export const levelLabel = (level: AreaLevel): string => AREA_LEVELS.find(item => item.id === level)?.label ?? level;
+export function tableOf(type: TableType): TableDefinition {
+  const table = TABLES.find(item => item.type === type);
+  if (!table) {
+    throw new Error(`没有报表类型 ${type}`);
+  }
+  return table;
+}
 
-export const tableName = (type: TableType): string => TABLES.find(item => item.type === type)?.name ?? type;
+export const tableName = (type: TableType): string => tableOf(type).name;
+
+/** 等级的名称；水路网报表的区级叫"区县级" */
+export function levelLabel(level: AreaLevel, table?: TableType): string {
+  if (level === 'district' && table !== undefined && tableOf(table).mergedDistrict) {
+    return '区县级';
+  }
+  return AREA_LEVELS.find(item => item.id === level)?.label ?? level;
+}
 
 /** 页面各处年份的默认值：上一年（同旧页面） */
 export function defaultYear(now = new Date()): string {
   return String(now.getFullYear() - 1);
+}
+
+/** 本底年份的默认值：监测年份的上一年；换监测年份时两个本底年份都回到它 */
+export function defaultBaseYears(year: string): BaseYears {
+  const previous = String(Number(year) - 1);
+  return { change: previous, water: previous };
+}
+
+/** 本底年份要早于监测年份 */
+export const isBaseYearValid = (year: string, baseYear: string) => Number(baseYear) < Number(year);
+
+/** 报表在这组本底年份下用哪一年；不是变化类报表时为 null */
+export function baseYearFor(table: TableType, baseYears: BaseYears): string | null {
+  const kind = tableOf(table).baseYear;
+  return kind === null ? null : baseYears[kind];
 }
 
 /** 一个统计任务的状态 */
@@ -73,27 +114,45 @@ export interface TableLevel {
   readonly level: AreaLevel;
 }
 
-/** 组合的键，勾选和跟踪都按它 */
+/** 组合的键，勾选和总览的状态都按它 */
 export const tableLevelKey = ({ table, level }: TableLevel): string => `${table}:${level}`;
 
 /** 可以计算的全部组合，按报表、等级的顺序 */
-export const CALCULABLE: readonly TableLevel[] = TABLES.filter(table => table.enabled).flatMap(table =>
+export const CALCULABLE: readonly TableLevel[] = TABLES.flatMap(table =>
   table.levels.map(level => ({ table: table.type, level }))
 );
 
 /** 总览接口给出的各组合状态文字；没有任务时为 null */
 export type OverviewStatuses = ReadonlyMap<string, string | null>;
 
-/** 总览矩阵的一格：不支持的等级、暂未开放的报表不能点 */
+/**
+ * 总览按本底年份分别查到的状态合成一份：变化类报表取自己本底年份的那一份，其余报表各份都一样，取第一份。
+ * 两个本底年份相同时只查一次
+ */
+export function mergeOverview(
+  byBaseYear: ReadonlyMap<string, OverviewStatuses>,
+  baseYears: BaseYears
+): OverviewStatuses {
+  const first = byBaseYear.values().next().value;
+  const merged = new Map<string, string | null>();
+  for (const table of TABLES) {
+    const statuses = table.baseYear === null ? first : byBaseYear.get(baseYears[table.baseYear]);
+    for (const level of table.levels) {
+      const key = tableLevelKey({ table: table.type, level });
+      merged.set(key, statuses?.get(key) ?? null);
+    }
+  }
+  return merged;
+}
+
+/** 总览矩阵的一格：不支持的等级不能点；水路网的区县级占区级、县级两列（merged） */
 export type OverviewCell =
   | { readonly kind: 'unsupported'; readonly level: AreaLevel }
-  | { readonly kind: 'disabled'; readonly level: AreaLevel }
-  | { readonly kind: TaskStatus; readonly level: AreaLevel; readonly text: string };
+  | { readonly kind: TaskStatus; readonly level: AreaLevel; readonly text: string; readonly merged: boolean };
 
 export interface OverviewRow {
   readonly table: TableType;
   readonly name: string;
-  readonly disabled: boolean;
   readonly cells: readonly OverviewCell[];
 }
 
@@ -102,16 +161,17 @@ export function overviewMatrix(statuses: OverviewStatuses | null): OverviewRow[]
   return TABLES.map(table => ({
     table: table.type,
     name: table.name,
-    disabled: !table.enabled,
-    cells: AREA_LEVELS.map(({ id: level }): OverviewCell => {
-      if (!table.enabled) {
-        return { kind: 'disabled', level };
+    cells: AREA_LEVELS.flatMap(({ id: level }): OverviewCell[] => {
+      // 区县级那一格已经占了县级这一列
+      if (table.mergedDistrict && level === 'county') {
+        return [];
       }
       if (!table.levels.includes(level)) {
-        return { kind: 'unsupported', level };
+        return [{ kind: 'unsupported', level }];
       }
       const text = statuses?.get(tableLevelKey({ table: table.type, level })) ?? null;
-      return { kind: taskStatusOf(text), level, text: text ?? '未处理' };
+      const merged = table.mergedDistrict && level === 'district';
+      return [{ kind: taskStatusOf(text), level, text: text ?? '未处理', merged }];
     })
   }));
 }
@@ -132,25 +192,32 @@ export function firstWithResult(rows: readonly OverviewRow[]): TableLevel | null
   return null;
 }
 
-/** 一个报表要统计哪些等级 */
-export interface LevelFlags {
+/** 一个报表的统计参数：哪些等级，变化类报表另带本底年份 */
+export interface TableParam {
   readonly year: string;
+  readonly bdYear?: string;
   readonly isProvince: boolean;
   readonly isCity: boolean;
   readonly isDistrict: boolean;
   readonly isCounty: boolean;
 }
 
-/** 创建任务的请求体：每个勾选了等级的报表一项（如 baseTableParam），字段名和结构沿用旧接口 */
-export type CreateTaskPayload = { year: string } & Partial<Record<`${TableType}Param`, LevelFlags>>;
+/** 创建任务的请求体：每个勾选了等级的报表一项，键是 tableType 加 Param（如 baseChangeTableParam） */
+export type CreateTaskPayload = { year: string } & Partial<Record<`${TableType}Param`, TableParam>>;
 
-export function createTaskPayload(year: string, selected: readonly TableLevel[]): CreateTaskPayload {
+/** 水路网的区县级按 district 传：isDistrict 为 true、isCounty 为 false */
+export function createTaskPayload(
+  year: string,
+  baseYears: BaseYears,
+  selected: readonly TableLevel[]
+): CreateTaskPayload {
   const payload: CreateTaskPayload = { year };
   for (const table of TABLES) {
     const levels = new Set(selected.filter(item => item.table === table.type).map(item => item.level));
     if (levels.size > 0) {
       payload[`${table.type}Param`] = {
         year,
+        ...(table.baseYear === null ? {} : { bdYear: baseYears[table.baseYear] }),
         isProvince: levels.has('province'),
         isCity: levels.has('city'),
         isDistrict: levels.has('district'),

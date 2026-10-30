@@ -47,7 +47,7 @@ const LEVELS = [
 ];
 
 describe('总览', () => {
-  it('按年份查询，八个组合的状态文字原样给出，没有任务的是 null', async () => {
+  it('按年份和本底年份查询；各报表、各等级的状态文字原样给出，没有任务的是 null', async () => {
     const bodies: unknown[] = [];
     server.use(
       mock.post('/backend/statistics/select-left-task', async ({ request }) => {
@@ -56,15 +56,29 @@ describe('总览', () => {
           dto({
             baseProvinceStatus: '处理失败',
             baseCityStatus: '未处理',
-            summaryCityStatus: '处理失败'
+            summaryCityStatus: '处理失败',
+            baseChangeProvinceStatus: '处理成功',
+            baseChangeCityStatus: null,
+            baseChangeDistrictStatus: null,
+            baseChangeCountyStatus: '正在处理',
+            baseWaterProvinceStatus: null,
+            baseWaterCityStatus: null,
+            baseWaterDistrictStatus: '处理失败',
+            changeWaterProvinceStatus: null,
+            changeWaterCityStatus: null,
+            changeWaterDistrictStatus: '处理成功',
+            entityChangeProvinceStatus: null,
+            entityChangeCityStatus: '未处理',
+            entityChangeDistrictStatus: null,
+            entityChangeCountyStatus: null
           })
         );
       })
     );
 
-    const statuses = await statisticsApi.fetchOverview('2025');
+    const statuses = await statisticsApi.fetchOverview('2025', '2024');
 
-    expect(bodies).toEqual([{ year: '2025' }]);
+    expect(bodies).toEqual([{ year: '2025', bdYear: '2024' }]);
     expect(Object.fromEntries(statuses)).toEqual({
       'baseTable:province': '处理失败',
       'baseTable:city': '未处理',
@@ -72,9 +86,31 @@ describe('总览', () => {
       'baseTable:county': null,
       'summaryTable:province': null,
       'summaryTable:city': '处理失败',
-      'summaryTable:district': null,
-      'summaryTable:county': null
+      'baseChangeTable:province': '处理成功',
+      'baseChangeTable:city': null,
+      'baseChangeTable:district': null,
+      'baseChangeTable:county': '正在处理',
+      'baseWaterTable:province': null,
+      'baseWaterTable:city': null,
+      'baseWaterTable:district': '处理失败',
+      'changeWaterTable:province': null,
+      'changeWaterTable:city': null,
+      'changeWaterTable:district': '处理成功',
+      'entityChangeTable:province': null,
+      'entityChangeTable:city': '未处理',
+      'entityChangeTable:district': null,
+      'entityChangeTable:county': null
     });
+  });
+
+  it('四种新报表的字段后端还没有返回时按没有任务（2026-10-29 实测）', async () => {
+    server.use(mock.post('/backend/statistics/select-left-task', () => ok(dto({ baseProvinceStatus: '处理失败' }))));
+
+    const statuses = await statisticsApi.fetchOverview('2025', '2024');
+
+    expect(statuses.get('baseTable:province')).toBe('处理失败');
+    expect(statuses.get('baseChangeTable:province')).toBeNull();
+    expect(statuses.get('changeWaterTable:district')).toBeNull();
   });
 });
 
@@ -119,7 +155,12 @@ describe('报表状态', () => {
       })
     );
 
-    const report = await statisticsApi.fetchReport({ year: '2025', table: 'baseTable', level: 'province' });
+    const report = await statisticsApi.fetchReport({
+      year: '2025',
+      table: 'baseTable',
+      level: 'province',
+      baseYear: null
+    });
 
     expect(bodies).toEqual([{ year: '2025', tableType: 'baseTable', level: 'province' }]);
     expect(report.rows).toEqual([
@@ -172,10 +213,45 @@ describe('报表状态', () => {
       )
     );
 
-    const report = await statisticsApi.fetchReport({ year: '2026', table: 'baseTable', level: 'province' });
+    const report = await statisticsApi.fetchReport({
+      year: '2026',
+      table: 'baseTable',
+      level: 'province',
+      baseYear: null
+    });
 
     expect(report).toMatchObject({ rows: [], progress: null, counts: { total: 0 } });
     expect(report.levels.map(level => level.value)).toEqual(['province', 'county']);
+  });
+
+  it('变化类报表另传本底年份；报表名称统一按前端的叫法', async () => {
+    const bodies: unknown[] = [];
+    server.use(
+      mock.post('/backend/statistics/select-task-status', async ({ request }) => {
+        bodies.push(await request.json());
+        return ok(
+          dto({
+            tableInfoList: [],
+            totalNum: 0,
+            processedNum: 0,
+            processingNum: 0,
+            unProcessNum: 0,
+            tableTypeList: [...TABLE_TYPES, { label: '变化统计报表', value: 'baseChangeTable' }],
+            levelList: LEVELS
+          })
+        );
+      })
+    );
+
+    const report = await statisticsApi.fetchReport({
+      year: '2025',
+      table: 'baseChangeTable',
+      level: 'county',
+      baseYear: '2023'
+    });
+
+    expect(bodies).toEqual([{ year: '2025', bdYear: '2023', tableType: 'baseChangeTable', level: 'county' }]);
+    expect(report.tables.map(table => table.label)).toEqual(['基本统计报表', '汇总统计报表', '基本变化统计报表']);
   });
 
   it('没见过的报表类型按返回格式错误处理', async () => {
@@ -195,13 +271,13 @@ describe('报表状态', () => {
       )
     );
     await expect(
-      statisticsApi.fetchReport({ year: '2025', table: 'baseTable', level: 'province' })
+      statisticsApi.fetchReport({ year: '2025', table: 'baseTable', level: 'province', baseYear: null })
     ).rejects.toMatchObject({ kind: 'invalid-response' });
   });
 });
 
 describe('开始统计', () => {
-  it('请求体按旧接口的结构提交；业务码失败时抛出 ApiError', async () => {
+  it('请求体原样提交；业务码失败时抛出 ApiError', async () => {
     const bodies: unknown[] = [];
     server.use(
       mock.post('/backend/statistics/create-table', async ({ request }) => {

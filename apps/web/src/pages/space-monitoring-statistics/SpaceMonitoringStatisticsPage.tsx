@@ -11,6 +11,7 @@ import { useStatisticsCalculation } from '@/features/monitoring-statistics/compo
 import { useStatisticsOverview } from '@/features/monitoring-statistics/composables/useStatisticsOverview';
 import { useStatisticsReport } from '@/features/monitoring-statistics/composables/useStatisticsReport';
 import { isReportSettled } from '@/features/monitoring-statistics/report';
+import { BASE_YEAR_KINDS } from '@/features/monitoring-statistics/statistics';
 import { Role } from '@/shared/auth/roles';
 import type { SessionGuard } from '@/shared/auth/session-guard';
 import { useSessionStore } from '@/shared/auth/session-store';
@@ -46,12 +47,12 @@ export const SpaceMonitoringStatisticsPage = defineComponent({
     const report = useStatisticsReport({ api });
     const overview = useStatisticsOverview({
       api,
-      year: () => report.criteria.value.year,
+      criteria: () => ({ year: report.criteria.value.year, baseYears: report.baseYears.value }),
       following: () => report.hasActiveTracking(report.criteria.value.year)
     });
     const calculation = useStatisticsCalculation({ api, report, overview, sessionGuard: props.sessionGuard });
 
-    // 左栏默认收起（同旧页面）；第一次展开时年度跟着正在查看的年份
+    // 左栏默认收起（同旧页面）；第一次展开时监测年度和两个本底年度跟着正在查看的
     const collapsed = ref(true);
     let calculationYearSynced = false;
     const changeCollapsed = (value: boolean) => {
@@ -59,6 +60,9 @@ export const SpaceMonitoringStatisticsPage = defineComponent({
       if (!value && !calculationYearSynced) {
         calculationYearSynced = true;
         calculation.setYear(report.criteria.value.year);
+        for (const kind of BASE_YEAR_KINDS) {
+          calculation.setBaseYear(kind, report.baseYears.value[kind]);
+        }
       }
     };
     // 提交后收起左栏，把地方让给结果
@@ -118,12 +122,13 @@ export const SpaceMonitoringStatisticsPage = defineComponent({
             <div class={styles.content} data-statistics-page>
               <div class={styles.top}>
                 <div class={styles.column}>
-                  <ReportConditionsPanel report={report} />
+                  <ReportConditionsPanel class={styles.conditions} report={report} />
                   <ReportProgressPanel report={report} onRefresh={refresh} />
                 </div>
                 <StatisticsOverviewPanel
                   overview={overview}
                   criteria={report.criteria.value}
+                  baseYears={report.baseYears.value}
                   onSelect={report.select}
                 />
               </div>

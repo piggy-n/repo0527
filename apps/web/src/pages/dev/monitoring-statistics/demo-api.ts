@@ -5,9 +5,9 @@ import {
   AREA_LEVELS,
   type AreaLevel,
   type CreateTaskPayload,
-  TABLES,
-  type TableLevel,
   tableLevelKey,
+  tableOf,
+  TABLES,
   type TableType,
   taskStatusOf
 } from '@/features/monitoring-statistics/statistics';
@@ -46,10 +46,18 @@ const REGIONS: Readonly<Record<AreaLevel, readonly string[]>> = {
   county: DISTRICTS.filter(region => !region.name.endsWith('区')).map(region => region.name)
 };
 
+// 水路网报表的区县级包括区和县（市）
+const regionsOf = (table: TableType, level: AreaLevel) =>
+  tableOf(table).mergedDistrict && level === 'district' ? [...REGIONS.district, ...REGIONS.county] : REGIONS[level];
+
 // 每个地区的统计表张数和名称里的简称
-const TABLE_SHAPES: Partial<Record<TableType, { readonly count: number; readonly short: string }>> = {
+const TABLE_SHAPES: Readonly<Record<TableType, { readonly count: number; readonly short: string }>> = {
   baseTable: { count: 49, short: '城基' },
-  summaryTable: { count: 44, short: '城汇' }
+  summaryTable: { count: 44, short: '城汇' },
+  baseChangeTable: { count: 36, short: '城变' },
+  baseWaterTable: { count: 12, short: '水基' },
+  changeWaterTable: { count: 12, short: '水变' },
+  entityChangeTable: { count: 18, short: '实变' }
 };
 
 const pad = (value: number) => String(value).padStart(2, '0');
@@ -62,11 +70,11 @@ const formatTime = (time: number) => {
 // 每 37 张里固定有一张失败，备注写原因
 const failsAt = (index: number) => index % 37 === 5;
 
-// 2025 年两种报表、四个等级都可选；2026 年同实测只有基本统计的省、县级；其他年份什么都没有
+// 2025 年六种报表、四个等级都可选；2026 年同实测只有基本统计的省、县级；其他年份什么都没有
 function optionsOfYear(year: string): Pick<ReportStatus, 'tables' | 'levels'> {
   if (year === '2025') {
     return {
-      tables: TABLES.filter(table => table.enabled).map(table => ({ value: table.type, label: table.name })),
+      tables: TABLES.map(table => ({ value: table.type, label: table.name })),
       levels: AREA_LEVELS.map(level => ({ value: level.id, label: level.label }))
     };
   }
@@ -82,19 +90,36 @@ function optionsOfYear(year: string): Pick<ReportStatus, 'tables' | 'levels'> {
   return { tables: [], levels: [] };
 }
 
+// 一轮统计按年份、本底年份（变化类报表）和组合区分
+const runKey = ({ year, table, level, baseYear }: ReportCriteria) =>
+  `${year}|${baseYear ?? '-'}|${tableLevelKey({ table, level })}`;
+
+// 2025 年已统计完的组合：基本统计同实测是省、市、县级（区级还在处理），汇总统计的市级没有任务；
+// 本底 2024 年的基本变化省、市级，水路网基本的省级、区县级，水路网变化的区县级
+const FINISHED_2025: readonly ReportCriteria[] = [
+  { year: '2025', table: 'baseTable', level: 'province', baseYear: null },
+  { year: '2025', table: 'baseTable', level: 'city', baseYear: null },
+  { year: '2025', table: 'baseTable', level: 'county', baseYear: null },
+  { year: '2025', table: 'summaryTable', level: 'province', baseYear: null },
+  { year: '2025', table: 'baseChangeTable', level: 'province', baseYear: '2024' },
+  { year: '2025', table: 'baseChangeTable', level: 'city', baseYear: '2024' },
+  { year: '2025', table: 'baseWaterTable', level: 'province', baseYear: null },
+  { year: '2025', table: 'baseWaterTable', level: 'district', baseYear: null },
+  { year: '2025', table: 'changeWaterTable', level: 'district', baseYear: '2024' }
+];
+
 /** 固定数据的接口，不请求后端；switches 由页面切换 */
 export function createDemoApi(): { readonly api: StatisticsApi; readonly switches: DemoSwitches } {
   const switches = reactive<DemoSwitches>({ ...INITIAL_SWITCHES });
   const created = Date.now();
-  // 2025 年同实测：省、市、县已统计完，区还在处理，汇总统计的市级没有任务；2026 年只有可选项、没有任务
+  // 2026 年只有可选项、没有任务
   const runs = new Map<string, DemoRun>([
-    [`2025|${tableLevelKey({ table: 'baseTable', level: 'province' })}`, { startedAt: created - 3_600_000, duration: 60_000 }],
-    [`2025|${tableLevelKey({ table: 'baseTable', level: 'city' })}`, { startedAt: created - 3_600_000, duration: 60_000 }],
-    [`2025|${tableLevelKey({ table: 'baseTable', level: 'district' })}`, { startedAt: created - 5000, duration: 45_000 }],
-    [`2025|${tableLevelKey({ table: 'baseTable', level: 'county' })}`, { startedAt: created - 3_600_000, duration: 60_000 }],
-    [`2025|${tableLevelKey({ table: 'summaryTable', level: 'province' })}`, { startedAt: created - 3_600_000, duration: 60_000 }]
+    ...FINISHED_2025.map(criteria => [runKey(criteria), { startedAt: created - 3_600_000, duration: 60_000 }] as const),
+    [
+      runKey({ year: '2025', table: 'baseTable', level: 'district', baseYear: null }),
+      { startedAt: created - 5000, duration: 45_000 }
+    ]
   ]);
-  const runOf = (year: string, target: TableLevel) => runs.get(`${year}|${tableLevelKey(target)}`);
 
   const respond = <T>(produce: () => T, signal?: AbortSignal): Promise<T> =>
     new Promise((resolve, reject) => {
@@ -111,13 +136,14 @@ export function createDemoApi(): { readonly api: StatisticsApi; readonly switche
       });
     });
 
-  const rowsOf = (year: string, target: TableLevel, now: number): ReportRow[] => {
-    const run = runOf(year, target);
-    const shape = TABLE_SHAPES[target.table];
-    if (run === undefined || shape === undefined) {
+  const rowsOf = (criteria: ReportCriteria, now: number): ReportRow[] => {
+    const { year, table, level } = criteria;
+    const run = runs.get(runKey(criteria));
+    if (run === undefined) {
       return [];
     }
-    const names = REGIONS[target.level].flatMap(region =>
+    const shape = TABLE_SHAPES[table];
+    const names = regionsOf(table, level).flatMap(region =>
       Array.from({ length: shape.count }, (_, index) => ({ region, name: `${region}${shape.short}1-${index + 1}表` }))
     );
     const step = run.duration / names.length;
@@ -142,8 +168,8 @@ export function createDemoApi(): { readonly api: StatisticsApi; readonly switche
   };
 
   // 总览里一个组合的状态：没有任务为 null，处理完有失败的是"处理失败"
-  const overviewText = (year: string, target: TableLevel, now: number): string | null => {
-    const rows = rowsOf(year, target, now);
+  const overviewText = (criteria: ReportCriteria, now: number): string | null => {
+    const rows = rowsOf(criteria, now);
     if (rows.length === 0) {
       return null;
     }
@@ -153,8 +179,8 @@ export function createDemoApi(): { readonly api: StatisticsApi; readonly switche
     return rows.some(row => row.status === 'failed') ? '处理失败' : '处理成功';
   };
 
-  const reportOf = ({ year, table, level }: ReportCriteria): ReportStatus => {
-    const rows = rowsOf(year, { table, level }, Date.now());
+  const reportOf = (criteria: ReportCriteria): ReportStatus => {
+    const rows = rowsOf(criteria, Date.now());
     const count = (status: ReportRow['status']) => rows.filter(row => row.status === status).length;
     const completed = count('completed');
     const failed = count('failed');
@@ -169,7 +195,7 @@ export function createDemoApi(): { readonly api: StatisticsApi; readonly switche
       },
       progress: rows.length === 0 ? null : ((completed + failed) / rows.length) * 100,
       statusText: null,
-      ...optionsOfYear(year)
+      ...optionsOfYear(criteria.year)
     };
   };
 
@@ -195,7 +221,7 @@ export function createDemoApi(): { readonly api: StatisticsApi; readonly switche
         levels.push('county');
       }
       for (const level of levels) {
-        runs.set(`${payload.year}|${tableLevelKey({ table: table.type, level })}`, {
+        runs.set(runKey({ year: payload.year, table: table.type, level, baseYear: flags.bdYear ?? null }), {
           startedAt: now + 3000,
           duration: 25_000
         });
@@ -204,7 +230,7 @@ export function createDemoApi(): { readonly api: StatisticsApi; readonly switche
   };
 
   const api: StatisticsApi = {
-    fetchOverview: (year, signal) =>
+    fetchOverview: (year, baseYear, signal) =>
       respond(() => {
         if (switches.overviewFails) {
           throw new Error('报表计算总览获取失败（样例）');
@@ -212,9 +238,9 @@ export function createDemoApi(): { readonly api: StatisticsApi; readonly switche
         const now = Date.now();
         return new Map(
           TABLES.flatMap(table =>
-            AREA_LEVELS.map(level => {
-              const target = { table: table.type, level: level.id };
-              return [tableLevelKey(target), overviewText(year, target, now)] as const;
+            table.levels.map(level => {
+              const criteria = { year, table: table.type, level, baseYear: table.baseYear === null ? null : baseYear };
+              return [tableLevelKey(criteria), overviewText(criteria, now)] as const;
             })
           )
         );

@@ -2,14 +2,17 @@ import { computed, type ComputedRef, getCurrentScope, onScopeDispose, type Ref, 
 import { type SessionGuard, useSessionGuard } from '@/shared/auth/session-guard';
 import { ApiError } from '@/shared/http/errors';
 import type { StatisticsApi } from '../api';
-import { hasReportResult, isReportSettled } from '../report';
+import { criteriaOf, hasReportResult, isReportSettled } from '../report';
 import {
+  type BaseYearKind,
+  type BaseYears,
   CALCULABLE,
   createTaskPayload,
+  defaultBaseYears,
   defaultYear,
+  isBaseYearValid,
   type TableLevel,
   tableLevelKey,
-  TABLES,
   type TableType,
   type TaskStatus
 } from '../statistics';
@@ -18,6 +21,8 @@ import type { StatisticsReport } from './useStatisticsReport';
 
 /** 确认框里的一项：提交前查到的状态；unknown 是没能确认的，可能覆盖已有结果或重复统计 */
 export interface CalculationEntry extends TableLevel {
+  /** 变化类报表这次用的本底年份，其余为 null */
+  readonly baseYear: string | null;
   readonly status: TaskStatus | 'unknown';
   readonly statusText: string;
 }
@@ -40,8 +45,8 @@ export interface CheckState {
 export interface StatisticsCalculation {
   /** 监测数据年度 */
   readonly year: Readonly<Ref<string>>;
-  /** 变更本底、水路本底年度：监测年度的上一年 */
-  readonly baseYear: ComputedRef<string>;
+  /** 变更本底、水路本底年度：默认监测年度的上一年，换监测年度时回到上一年 */
+  readonly baseYears: Readonly<Ref<BaseYears>>;
   readonly selected: Readonly<Ref<ReadonlySet<string>>>;
   readonly allState: ComputedRef<CheckState>;
   readonly tableState: (table: TableType) => CheckState;
@@ -49,6 +54,8 @@ export interface StatisticsCalculation {
   /** 从提交前检查到创建请求返回：期间不能再提交 */
   readonly submitting: Readonly<Ref<boolean>>;
   readonly setYear: (year: string) => void;
+  /** 不早于监测年度时抛错 */
+  readonly setBaseYear: (kind: BaseYearKind, year: string) => void;
   readonly toggle: (target: TableLevel, checked: boolean) => void;
   readonly toggleTable: (table: TableType, checked: boolean) => void;
   readonly toggleAll: (checked: boolean) => void;
@@ -89,6 +96,7 @@ export function useStatisticsCalculation(options: StatisticsCalculationOptions):
   const { api, report, overview } = options;
   const sessionGuard = options.sessionGuard ?? useSessionGuard();
   const year = shallowRef(defaultYear());
+  const baseYears = shallowRef<BaseYears>(defaultBaseYears(year.value));
   const selected = shallowRef<ReadonlySet<string>>(new Set());
   const submitting = shallowRef(false);
   // 只取消提交前的查询，不取消已发出的创建请求
@@ -116,27 +124,34 @@ export function useStatisticsCalculation(options: StatisticsCalculationOptions):
     return { checked: keys.length > 0 && count === keys.length, indeterminate: count > 0 && count < keys.length };
   };
 
-  // 提交前查一个组合现在的状态：有表或没处理完就是已有任务；查不到的按未确认提示
-  const inspect = async (target: TableLevel, signal: AbortSignal): Promise<CalculationEntry> => {
-    if (report.isTracking({ year: year.value, ...target })) {
-      return { ...target, status: 'unknown', statusText: '已有提交尚未结束，继续可能重复统计' };
+  // 提交前查一个组合现在的状态（变化类报表按这次的本底年份）：有表或没处理完就是已有任务；查不到的按未确认提示
+  const inspect = async (
+    target: TableLevel,
+    submitYear: string,
+    submitBaseYears: BaseYears,
+    signal: AbortSignal
+  ): Promise<CalculationEntry> => {
+    const criteria = criteriaOf(submitYear, target, submitBaseYears);
+    const entry = { table: target.table, level: target.level, baseYear: criteria.baseYear };
+    if (report.isTracking(criteria)) {
+      return { ...entry, status: 'unknown', statusText: '已有提交尚未结束，继续可能重复统计' };
     }
     try {
-      const status = await api.fetchReport({ year: year.value, ...target }, signal);
+      const status = await api.fetchReport(criteria, signal);
       const settled = isReportSettled(status);
       if (settled && !hasReportResult(status)) {
-        return { ...target, status: 'notStarted', statusText: '未处理' };
+        return { ...entry, status: 'notStarted', statusText: '未处理' };
       }
       let kind: TaskStatus = 'processing';
       if (settled) {
         kind = status.counts.failed > 0 ? 'failed' : 'completed';
       }
-      return { ...target, status: kind, statusText: status.statusText ?? '已有统计任务' };
+      return { ...entry, status: kind, statusText: status.statusText ?? '已有统计任务' };
     } catch (error) {
       if (signal.aborted) {
         throw error;
       }
-      return { ...target, status: 'unknown', statusText: '状态未确认' };
+      return { ...entry, status: 'unknown', statusText: '状态未确认' };
     }
   };
 
@@ -146,12 +161,14 @@ export function useStatisticsCalculation(options: StatisticsCalculationOptions):
       return { kind: 'canceled' };
     }
     const token = sessionGuard.capture();
+    // 确认、创建和之后的跟踪都用提交时的年份
     const submitYear = year.value;
+    const submitBaseYears = baseYears.value;
     submitting.value = true;
     try {
       let entries: CalculationEntry[];
       try {
-        entries = await Promise.all(targets.map(target => inspect(target, checks.signal)));
+        entries = await Promise.all(targets.map(target => inspect(target, submitYear, submitBaseYears, checks.signal)));
       } catch {
         // 提交前的查询只会因为页面卸载被取消，其余失败已按未确认处理
         return { kind: 'canceled' };
@@ -161,11 +178,12 @@ export function useStatisticsCalculation(options: StatisticsCalculationOptions):
       }
       const tracking = report.trackSubmission(
         submitYear,
+        submitBaseYears,
         entries.map(entry => ({ target: entry, recompute: entry.status !== 'notStarted' }))
       );
       try {
         sessionGuard.assertCurrent(token);
-        await api.createTasks(createTaskPayload(submitYear, targets));
+        await api.createTasks(createTaskPayload(submitYear, submitBaseYears, targets));
       } catch (error) {
         const message = error instanceof Error && error.message ? error.message : '统计分析请求提交失败，请稍后重试';
         const rejected = isRejection(error);
@@ -185,15 +203,24 @@ export function useStatisticsCalculation(options: StatisticsCalculationOptions):
 
   return {
     year: shallowReadonly(year),
-    baseYear: computed(() => `${Number(year.value) - 1}年`),
+    baseYears: shallowReadonly(baseYears),
     selected: shallowReadonly(selected),
     allState: computed(() => stateOf(calculableKeys)),
     tableState: table => stateOf(keysOf(table)),
     canStart: computed(() => selected.value.size > 0),
     submitting: shallowReadonly(submitting),
-    setYear: value => (year.value = value),
+    setYear: value => {
+      year.value = value;
+      baseYears.value = defaultBaseYears(value);
+    },
+    setBaseYear: (kind, value) => {
+      if (!isBaseYearValid(year.value, value)) {
+        throw new RangeError(`本底年度应早于监测数据年度 ${year.value}，收到 ${value}`);
+      }
+      baseYears.value = { ...baseYears.value, [kind]: value };
+    },
     toggle: (target, checked) => {
-      if (TABLES.some(table => table.type === target.table && table.enabled && table.levels.includes(target.level))) {
+      if (calculableKeys.includes(tableLevelKey(target))) {
         replace([tableLevelKey(target)], checked);
       }
     },
