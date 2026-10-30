@@ -141,11 +141,6 @@ export function batchYearOptions(catalog: ResourceCatalog | null): number[] {
   return [...years].toSorted((a, b) => b - a);
 }
 
-/** 目录里是否有资源有这一年的数据 */
-export function hasYearData(catalog: ResourceCatalog | null, year: number): boolean {
-  return [...(catalog?.resources.values() ?? [])].some(resource => resource.years.includes(year));
-}
-
 /**
  * 批量设置年份后的显示状态（ADR 0052 第 2 节）：有这一年的资源不论是否勾选都切过去，其他不变；
  * 没有资源要改时（包括没有任何资源有这一年，ADR 0094）返回原来的状态对象；年份不是整数时抛错

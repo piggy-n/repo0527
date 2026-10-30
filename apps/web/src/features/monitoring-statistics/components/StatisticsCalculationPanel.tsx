@@ -1,12 +1,24 @@
 import { MxPanel, MxTitle } from '@yzt/ui';
-import { ElButton, ElCheckbox, ElDatePicker, ElInput, ElMessage, ElMessageBox } from 'element-plus';
+import { ElButton, ElCheckbox, ElDatePicker, ElMessage, ElMessageBox } from 'element-plus';
 import { defineComponent, h, onBeforeUnmount, type PropType } from 'vue';
 import type { CalculationEntry, StatisticsCalculation } from '../composables/useStatisticsCalculation';
-import { AREA_LEVELS, levelLabel, tableLevelKey, TABLES, tableName } from '../statistics';
+import {
+  BASE_YEAR_KINDS,
+  BASE_YEAR_LABELS,
+  type BaseYearKind,
+  isBaseYearValid,
+  levelLabel,
+  tableLevelKey,
+  TABLES,
+  tableName
+} from '../statistics';
 import styles from './StatisticsCalculationPanel.module.scss';
 
 // 确认框里最多列出几项已有任务的组合（同旧页面）
 const CONFIRM_LIST_LIMIT = 8;
+
+const describeEntry = ({ table, level, baseYear }: CalculationEntry) =>
+  [tableName(table), levelLabel(level, table), ...(baseYear === null ? [] : [`本底${baseYear}年`])].join(' / ');
 
 // 确认框的内容：没有已有任务时一句话；有时逐条列出，说明会覆盖原有结果，有处理中的另外提醒
 function confirmMessage(entries: readonly CalculationEntry[]) {
@@ -29,7 +41,7 @@ function confirmMessage(entries: readonly CalculationEntry[]) {
       { class: styles.confirmList },
       existing.slice(0, CONFIRM_LIST_LIMIT).map(entry =>
         h('li', { key: tableLevelKey(entry) }, [
-          h('span', `${tableName(entry.table)} / ${levelLabel(entry.level)}`),
+          h('span', describeEntry(entry)),
           h('span', { class: [styles.confirmStatus, styles[entry.status]] }, entry.statusText)
         ])
       )
@@ -42,7 +54,8 @@ function confirmMessage(entries: readonly CalculationEntry[]) {
 }
 
 /**
- * 统计报表计算（左栏）：监测年度、两个本底年度（上一年，只读）、按报表和等级勾选，提交前确认已有任务的组合。
+ * 统计报表计算（左栏）：监测年度、两个本底年度（默认上一年，只能选更早的年份）、按报表和等级勾选，提交前确认已有任务的组合。
+ * 变化类报表在名称右边写用哪个本底年度。
  * 收起由布局负责（MxSplitLayout 的 collapsible）
  */
 export const StatisticsCalculationPanel = defineComponent({
@@ -84,6 +97,26 @@ export const StatisticsCalculationPanel = defineComponent({
       }
     };
 
+    const renderBaseYear = (kind: BaseYearKind) => {
+      const { calculation } = props;
+      return (
+        <div key={kind} class={styles.field}>
+          <span class={styles.label}>{BASE_YEAR_LABELS[kind]}年度</span>
+          <ElDatePicker
+            class={styles.control}
+            type="year"
+            modelValue={calculation.baseYears.value[kind]}
+            valueFormat="YYYY"
+            format="YYYY年"
+            clearable={false}
+            disabled={calculation.submitting.value}
+            disabledDate={(date: Date) => !isBaseYearValid(calculation.year.value, String(date.getFullYear()))}
+            onUpdate:modelValue={(value: string) => calculation.setBaseYear(kind, value)}
+          />
+        </div>
+      );
+    };
+
     return () => {
       const { calculation } = props;
       const submitting = calculation.submitting.value;
@@ -108,14 +141,7 @@ export const StatisticsCalculationPanel = defineComponent({
                       onUpdate:modelValue={(value: string) => calculation.setYear(value)}
                     />
                   </div>
-                  <div class={styles.field}>
-                    <span class={styles.label}>变更本底年度</span>
-                    <ElInput class={styles.control} modelValue={calculation.baseYear.value} disabled />
-                  </div>
-                  <div class={styles.field}>
-                    <span class={styles.label}>水路本底年度</span>
-                    <ElInput class={styles.control} modelValue={calculation.baseYear.value} disabled />
-                  </div>
+                  {BASE_YEAR_KINDS.map(renderBaseYear)}
                 </section>
                 <section class={styles.section}>
                   <MxTitle>
@@ -141,31 +167,29 @@ export const StatisticsCalculationPanel = defineComponent({
                           <ElCheckbox
                             modelValue={state.checked}
                             indeterminate={state.indeterminate}
-                            disabled={!table.enabled || submitting}
+                            disabled={submitting}
                             onChange={value => calculation.toggleTable(table.type, value === true)}
                           >
                             {table.name}
                           </ElCheckbox>
-                          {!table.enabled && <span class={styles.off}>暂未开放</span>}
+                          {table.baseYear !== null && (
+                            <span class={styles.baseYear}>
+                              {BASE_YEAR_LABELS[table.baseYear]} {calculation.baseYears.value[table.baseYear]}年
+                            </span>
+                          )}
                         </div>
-                        {table.enabled && (
-                          <div class={styles.levels}>
-                            {AREA_LEVELS.filter(level => table.levels.includes(level.id)).map(level => (
-                              <ElCheckbox
-                                key={level.id}
-                                modelValue={calculation.selected.value.has(
-                                  tableLevelKey({ table: table.type, level: level.id })
-                                )}
-                                disabled={submitting}
-                                onChange={value =>
-                                  calculation.toggle({ table: table.type, level: level.id }, value === true)
-                                }
-                              >
-                                {level.label}
-                              </ElCheckbox>
-                            ))}
-                          </div>
-                        )}
+                        <div class={styles.levels}>
+                          {table.levels.map(level => (
+                            <ElCheckbox
+                              key={level}
+                              modelValue={calculation.selected.value.has(tableLevelKey({ table: table.type, level }))}
+                              disabled={submitting}
+                              onChange={value => calculation.toggle({ table: table.type, level }, value === true)}
+                            >
+                              {levelLabel(level, table.type)}
+                            </ElCheckbox>
+                          ))}
+                        </div>
                       </article>
                     );
                   })}

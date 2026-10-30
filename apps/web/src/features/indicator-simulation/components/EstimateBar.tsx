@@ -4,14 +4,12 @@ import { ElButton, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, type PropType, ref } from 'vue';
 import { estimate, type EstimatePass } from '../compose/estimate';
 import type { SimulationModel } from '../composables/useSimulationModel';
-import { formatDelta, formatValue } from '../format';
+import { formatEstimate, formatEstimateDelta, roundEstimate } from '../format';
 import type { SimulationConditions, SimulationParams } from '../model/params';
 import styles from './EstimateBar.module.scss';
 
 // 最多列出几项指标
 const ROWS = 4;
-// 变化小于这个值算不变
-const FLAT = 0.005;
 
 const PASS_LABELS = { pass: '达标', near: '接近达标', fail: '未达标' } as const;
 
@@ -65,8 +63,10 @@ export const EstimateBar = defineComponent({
         <div class={styles.rows}>
           {current.rows.slice(0, ROWS).map(row => {
             const { indicator, value, standard, target } = row;
-            const delta = standard === null ? 0 : value - standard;
-            const tone = Math.abs(delta) < FLAT ? 'flat' : delta > 0 ? 'up' : 'down';
+            // 预估值按显示的精度取整后再比较，变化量和显示的数对得上
+            const shown = roundEstimate(value, indicator);
+            const delta = standard === null ? 0 : roundEstimate(shown - roundEstimate(standard, indicator), indicator);
+            const tone = delta === 0 ? 'flat' : delta > 0 ? 'up' : 'down';
             return (
               <div key={indicator.id} class={styles.card}>
                 <div class={styles.head}>
@@ -76,19 +76,21 @@ export const EstimateBar = defineComponent({
                   <span class={styles.code}>{indicator.id}</span>
                 </div>
                 <div class={styles.value}>
-                  <b>{formatValue(value, indicator)}</b>
+                  <b>{formatEstimate(value, indicator)}</b>
                   {standard === null ? (
                     <span>标准口径</span>
                   ) : (
                     <>
-                      <span class={styles[tone]}>较标准口径 {tone === 'flat' ? '不变' : formatDelta(delta, indicator)}</span>
+                      <span class={styles[tone]}>
+                        较标准口径 {tone === 'flat' ? '不变' : formatEstimateDelta(delta, indicator)}
+                      </span>
                       <span class={styles.scenario}>自定义口径</span>
                     </>
                   )}
                 </div>
                 <div class={styles.target}>
-                  <span>目标 ≥ {formatValue(target, indicator)}</span>
-                  <span>较目标 {formatDelta(value - target, indicator)}</span>
+                  <span>目标 ≥ {formatEstimate(target, indicator, false)}</span>
+                  <span>较目标 {formatEstimateDelta(shown - target, indicator)}</span>
                   {renderPass(row.pass)}
                 </div>
               </div>

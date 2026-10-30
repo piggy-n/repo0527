@@ -10,9 +10,10 @@ export function fakeReport(initial: ReportStatus | null) {
   const status = shallowRef(initial);
   const notice = shallowRef<ReportNotice | null>(null);
   const filter = shallowRef<ReadonlySet<TaskStatus>>(new Set());
-  const criteria = shallowRef<ReportCriteria>({ year: '2025', table: 'baseTable', level: 'province' });
+  const criteria = shallowRef<ReportCriteria>({ year: '2025', table: 'baseTable', level: 'province', baseYear: null });
   const report: StatisticsReport = {
     criteria,
+    baseYears: shallowRef({ change: '2024', water: '2024' }),
     tableOptions: computed(() => status.value?.tables ?? []),
     levelOptions: computed(() => status.value?.levels ?? []),
     status: computed(() => status.value),
@@ -26,6 +27,7 @@ export function fakeReport(initial: ReportStatus | null) {
     run: shallowRef(0),
     setYear: vi.fn<StatisticsReport['setYear']>(),
     setTable: vi.fn<StatisticsReport['setTable']>(),
+    setBaseYear: vi.fn<StatisticsReport['setBaseYear']>(),
     setLevel: vi.fn<StatisticsReport['setLevel']>(),
     select: vi.fn<StatisticsReport['select']>(),
     toggleStatus: vi.fn<StatisticsReport['toggleStatus']>(),
@@ -35,7 +37,7 @@ export function fakeReport(initial: ReportStatus | null) {
     hasActiveTracking: () => false,
     focusFirstResult: vi.fn<StatisticsReport['focusFirstResult']>()
   };
-  return { report, status, notice, filter };
+  return { report, status, notice, filter, criteria };
 }
 
 export const reportRow = (name: string, status: TaskStatus, statusText: string, cause: string | null = null): ReportRow => ({

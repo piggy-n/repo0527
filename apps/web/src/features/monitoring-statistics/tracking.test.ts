@@ -13,7 +13,7 @@ import {
   trackSubmitted
 } from './tracking';
 
-const TARGET: ReportCriteria = { year: '2025', table: 'baseTable', level: 'province' };
+const TARGET: ReportCriteria = { year: '2025', table: 'baseTable', level: 'province', baseYear: null };
 
 const report = (change: Partial<ReportStatus['counts']>, progress: number | null = null): ReportStatus => ({
   rows: [],
@@ -108,5 +108,21 @@ describe('提交后的跟踪', () => {
     });
     expect(reportNotice(trackObserved(waiting, RUNNING, 0), null)).toBeNull();
     expect(reportNotice(null, null)).toBeNull();
+  });
+
+  it('提示里写明变化类报表的本底年份和水路网的区县级', () => {
+    const [change, water] = trackSubmitted(
+      [
+        { target: { year: '2025', table: 'baseChangeTable', level: 'city', baseYear: '2023' }, recompute: false },
+        { target: { year: '2025', table: 'changeWaterTable', level: 'district', baseYear: '2024' }, recompute: false }
+      ],
+      1
+    );
+    expect(reportNotice(required(change, '基本变化的跟踪'), null)?.text).toBe(
+      '统计请求提交中（基本变化统计报表 / 市级 / 2025年 / 本底2023年），请稍候...'
+    );
+    expect(reportNotice(required(water, '水路网变化的跟踪'), null)?.text).toBe(
+      '统计请求提交中（水路网变化统计报表 / 区县级 / 2025年 / 本底2024年），请稍候...'
+    );
   });
 });

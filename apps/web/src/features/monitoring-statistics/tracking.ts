@@ -103,7 +103,10 @@ export interface ReportNotice {
   readonly retry: boolean;
 }
 
-const describe = ({ table, level, year }: ReportCriteria) => `${tableName(table)} / ${levelLabel(level)} / ${year}年`;
+const describe = ({ table, level, year, baseYear }: ReportCriteria) => {
+  const parts = [tableName(table), levelLabel(level, table), `${year}年`];
+  return (baseYear === null ? parts : [...parts, `本底${baseYear}年`]).join(' / ');
+};
 
 export function reportNotice(tracking: Tracking | null, error: string | null): ReportNotice | null {
   if (error !== null) {

@@ -1,6 +1,19 @@
 # 城市国土空间监测基本统计
 
-按年度提交基本统计、汇总统计的计算任务，查看一份报表（年份 + 报表类型 + 行政区划等级）的处理进度、全年的总览和每张统计表的状态。决策见 [ADR 0100](../adr/0100-space-monitoring-statistics.md)；旧代码与真实接口的核对见 [migration.md](../migration.md)"城市国土空间监测基本统计：接口实测"，和旧页面的差异见同一文档的"与旧页面的差异"。
+按年度提交六种报表（基本统计、汇总统计、基本变化、水路网基本、水路网变化、实体变化）的计算任务，查看一份报表（年份 + 报表类型 + 行政区划等级，变化类报表另有本底年份）的处理进度、全年的总览和每张统计表的状态。决策见 [ADR 0100](../adr/0100-space-monitoring-statistics.md)，其余四种报表和本底年份见 [ADR 0117](../adr/0117-statistics-remaining-reports.md)；旧代码与真实接口的核对见 [migration.md](../migration.md)"城市国土空间监测基本统计：接口实测"，和旧页面的差异见同一文档的"与旧页面的差异"。
+
+## 报表
+
+| 报表（tableType） | 等级 | 本底年份 | 请求参数 | 总览的状态字段 |
+|---|---|---|---|---|
+| 基本统计 `baseTable` | 省、市、区、县 | — | `baseTableParam` | `base*Status` |
+| 汇总统计 `summaryTable` | 省、市 | — | `summaryTableParam` | `summary*Status` |
+| 基本变化 `baseChangeTable` | 省、市、区、县 | 变更本底 | `baseChangeTableParam` | `baseChange*Status` |
+| 水路网基本 `baseWaterTable` | 省、市、区县 | — | `baseWaterTableParam` | `baseWater*Status`（区县级是 `District`） |
+| 水路网变化 `changeWaterTable` | 省、市、区县 | 水路本底 | `changeWaterTableParam` | `changeWater*Status`（区县级是 `District`） |
+| 实体变化 `entityChangeTable` | 省、市、区、县 | 变更本底 | `entityChangeTableParam` | `entityChange*Status` |
+
+配置在 `statistics.ts` 的 `TABLES`（`levels`、`mergedDistrict`、`baseYear`），状态字段在 `api.ts` 的 `STATUS_FIELDS`。水路网的区县级按 `district` 请求和取状态，创建时传 `isDistrict: true`、`isCounty: false`，名称叫"区县级"（`levelLabel`）。
 
 ## 分层
 
@@ -30,16 +43,24 @@ libs/ui/split-layout/               MxSplitLayout 的宽屏收起（collapsible�
 
 | 内容 | 接口 | 持有者 |
 |---|---|---|
-| 总览 | `POST /statistics/select-left-task`，`{ year }` | 查询缓存，`useStatisticsOverview` 推导矩阵 |
-| 报表状态、可选项 | `POST /statistics/select-task-status`，`{ year, tableType, level }` | 查询缓存，`useStatisticsReport` 记下最近的选项 |
+| 总览 | `POST /statistics/select-left-task`，`{ year, bdYear }` | 查询缓存，`useStatisticsOverview` 推导矩阵；两个本底年份不同时各查一次，按报表合成（`mergeOverview`） |
+| 报表状态、可选项 | `POST /statistics/select-task-status`，`{ year, bdYear?, tableType, level }`（变化类报表才有 `bdYear`） | 查询缓存，`useStatisticsReport` 记下最近的选项 |
 | 开始统计 | `POST /statistics/create-table` | 写操作，按 `useSessionGuard` 核对会话 |
 
-创建任务的请求体沿用旧接口：`{ year, baseTableParam?: { year, isProvince, isCity, isDistrict, isCounty }, summaryTableParam?: ... }`，只放勾选了等级的报表（`createTaskPayload`）。
+创建任务的请求体：`{ year, baseTableParam?: { year, isProvince, isCity, isDistrict, isCounty }, baseChangeTableParam?: { year, bdYear, ... }, ... }`，只放勾选了等级的报表，变化类报表带各自的本底年份（`createTaskPayload`）。报表类型的名称统一按前端的叫法，不用后端 `tableTypeList` 里的 `label`。
+
+## 本底年份
+
+- 两种本底：变更本底（基本变化、实体变化）、水路本底（水路网变化）；默认监测年份的上一年，只能选更早的年份（年份选择器置灰，拥有者收到不合法的年份时抛错），换监测年份时回到上一年
+- 查看：`useStatisticsReport` 持有两个本底年份，`criteria.baseYear` 是当前报表用的那一个（不是变化类报表时为 `null`）；换报表时跟着报表的种类取，提交后换成提交时的
+- 左栏：`useStatisticsCalculation` 另有两个本底年度，第一次展开时跟着正在查看的；提交时锁定，确认期间再改不影响这次提交
+- 总览标题下写变化类报表按哪个本底年份
 
 ## 查看条件
 
 - 默认上一年、基本统计、省级；返回的选项里没有当前的报表或等级时换成第一个可选的（刚提交还在跟踪的组合不换）
-- 汇总统计只有省、市级；"暂未开放"的四种报表在总览里整行置灰，不能计算
+- 第一行"监测年份"，变化类报表在同一行后面多一个"本底年份"（放不下时换行）；"报表类型"是下拉（六个名称较长）；"行政区划"是单选按钮。汇总统计只有省、市级，水路网报表是省、市、区县级
+- 查看条件按内容的高度，进度区占左列剩下的；换报表时面板高度不变
 - 初次进入时，总览和当前报表都到了以后，如果当前组合没有结果（成功、失败、处理中都算有），落到总览里第一个有结果的组合；用户先动过条件就不再落
 - 换条件、新的一轮提交都把状态筛选恢复成全部，统计表回到顶部
 
@@ -74,7 +95,7 @@ libs/ui/split-layout/               MxSplitLayout 的宽屏收起（collapsible�
 
 ## 组件样例
 
-`/dev/monitoring-statistics` 渲染正式页面，传入 `createDemoApi()`、独立的查询缓存、总是有效的会话核对和可以切换的角色。2025 年同实测（省、市、县统计完且有失败，区级在处理，汇总统计市级没有任务），2026 年只有可选项，其他年份没有；提交后 3 秒开始、25 秒统计完。顶栏可以切换接口延迟、开始统计的结果（成功、被拒绝、无响应）、总览失败、状态查询失败、管理员和普通用户。
+`/dev/monitoring-statistics` 渲染正式页面，传入 `createDemoApi()`、独立的查询缓存、总是有效的会话核对和可以切换的角色。2025 年六种报表都可选：基本统计同实测（省、市、县统计完且有失败，区级在处理，汇总统计市级没有任务），本底 2024 年的基本变化省、市级，水路网基本的省级、区县级，水路网变化的区县级已统计完（换别的本底年份就没有任务）；2026 年只有可选项，其他年份没有；提交后 3 秒开始、25 秒统计完。顶栏可以切换接口延迟、开始统计的结果（成功、被拒绝、无响应）、总览失败、状态查询失败、管理员和普通用户。
 
 ## 测试
 

@@ -249,6 +249,20 @@ describe('useResourceLayers', () => {
     stop();
   });
 
+  it('记下最后一次批量设置的年份给面板回显：单独改资源的年份不影响，没有数据的年份也记；不在可选年份里时为 null（ADR 0116）', async () => {
+    using ctx = await loaded();
+    expect(ctx.owner.batchYears.value).toStrictEqual([2025, 2024, 2023, 2021, 2020]);
+    expect(ctx.owner.batchYear.value).toBeNull();
+
+    ctx.owner.setYearForAll(2023);
+    ctx.owner.setYear('csxhjctb_hydl', 2024);
+    expect(ctx.owner.batchYear.value).toBe(2023);
+    ctx.owner.setYearForAll(2020);
+    expect(ctx.owner.batchYear.value).toBe(2020);
+    ctx.owner.setYearForAll(2030);
+    expect(ctx.owner.batchYear.value).toBeNull();
+  });
+
   it('重复操作：批量设成 2023，单独把一个改回 2025，再批量设成 2023，它又回到 2023', async () => {
     using ctx = await loaded();
 

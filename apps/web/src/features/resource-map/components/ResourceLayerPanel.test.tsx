@@ -1,6 +1,6 @@
 import type { CameraState } from '@yzt/map-core';
 import { provideMap } from '@yzt/map-vue';
-import { mount, type VueWrapper } from '@vue/test-utils';
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { ElOption, ElSelect, ElSlider } from 'element-plus';
 import SortableJS from 'sortablejs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -426,15 +426,16 @@ function batchSelect(wrapper: VueWrapper) {
   return select;
 }
 
-// 点下拉里的一项；下拉放在 body 下
+// 点下拉里一项的文字（事件再冒泡到选项上）；下拉放在 body 下
 async function pickOption(label: string) {
   const option = [...document.body.querySelectorAll('.el-select-dropdown__item')].find(
     item => item.textContent?.trim() === label
   );
-  if (!(option instanceof HTMLElement)) {
+  const text = option?.firstElementChild ?? option;
+  if (!(text instanceof HTMLElement)) {
     throw new Error(`下拉里没有 ${label}`);
   }
-  option.click();
+  text.click();
   await nextTick();
 }
 
@@ -463,32 +464,46 @@ describe('ResourceLayerPanel：年份（ADR 0052）', () => {
     expect(parcel.text()).toContain('2024');
   });
 
-  it('批量设置年份：选完就执行、选择框回到空，连续两次选同一年都执行；下拉里只有年份', async () => {
+  it('批量设置年份：选完就执行，选择框回显这一年，已选择图层的年份跟着变；下拉里只有年份（ADR 0116）', async () => {
     const { wrapper, owner } = await mountPanel();
+    owner.setChecked('csxhjctb_hydl', true);
+    await nextTick();
     expect(batchSelect(wrapper).findAllComponents(ElOption).map(option => option.props('value'))).toStrictEqual([
       2025, 2024, 2023, 2021, 2020
     ]);
+    expect(batchSelect(wrapper).props('modelValue')).toBeUndefined();
     expect(document.querySelector('.el-select-dropdown__footer')).toBeNull();
 
     await pickOption('2023 年');
     // 没勾选的村级调查区也切过去；地类图斑没有 2023 年，不变
     expect(yearsOf(owner)).toStrictEqual({ bgdc_dltb: 2024, bgdc_cjdcq: 2023, csxhjctb_hydl: 2023, szy_kt: 2024 });
-    expect(batchSelect(wrapper).props('modelValue')).toBeUndefined();
+    expect(batchSelect(wrapper).props('modelValue')).toBe(2023);
+    expect(batchSelect(wrapper).text()).toContain('2023 年');
+    expect(wrapper.get('[data-layer="csxhjctb_hydl"]').findComponent(ElSelect).props('modelValue')).toBe(2023);
+  });
+
+  it('单独改一个资源的年份不影响回显；再选同一年把它切回来', async () => {
+    const { wrapper, owner } = await mountPanel();
+    await pickOption('2023 年');
 
     owner.setYear('csxhjctb_hydl', 2025);
     await nextTick();
+    expect(batchSelect(wrapper).props('modelValue')).toBe(2023);
     await pickOption('2023 年');
     expect(owner.state.value.displays.get('csxhjctb_hydl')?.year).toBe(2023);
   });
 
-  it('选了没有资源有数据的年份：提示，图层不变（ADR 0094）', async () => {
-    const { owner } = await mountPanel();
+  it('选了没有资源有数据的年份：不提示，图层不变，选择框回显这一年', async () => {
+    const { wrapper, owner } = await mountPanel();
     const before = yearsOf(owner);
 
     await pickOption('2020 年');
+    await flushPromises();
 
     expect(yearsOf(owner)).toStrictEqual(before);
-    expect(document.body.textContent).toContain('没有资源有 2020 年的数据，图层保持不变');
+    expect(batchSelect(wrapper).props('modelValue')).toBe(2020);
+    expect(document.body.querySelector('.el-message')).toBeNull();
+    expect(document.body.textContent).not.toContain('图层保持不变');
   });
 
   it('没有多年份的资源时只有固定的 2021、2020（ADR 0094）', async () => {

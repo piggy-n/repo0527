@@ -34,7 +34,7 @@
   min-width: 0;
 }
 
-// 一个报表一块：浅灰底的一行是报表名称（分组的勾选），下面一行是等级；暂未开放的只有灰底一行
+// 一个报表一块：浅灰底的一行是报表名称（分组的勾选），变化类报表右边写用哪个本底年度；下面一行是等级
 .group {
   overflow: hidden;
   border: 1px solid var(--color-border-light);
@@ -53,7 +53,8 @@
   }
 }
 
-.off {
+.baseYear {
+  flex: none;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }

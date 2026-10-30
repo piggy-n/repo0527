@@ -8,13 +8,15 @@ const displaySchema = z.object({
 });
 
 /**
- * 存下的资源图层偏好（ADR 0042）：每个资源的勾选、透明度、年份和面板顺序。
+ * 存下的资源图层偏好（ADR 0042）：每个资源的勾选、透明度、年份和面板顺序，以及最后一次批量设置的年份（ADR 0116）。
  * 除了类型和范围，还要自洽：顺序不能有重复，并且和各资源的设置一一对应，否则会推导出重复的图层 ID
  */
 export const storedResourceLayersSchema = z
   .object({
     displays: z.record(z.string(), displaySchema),
-    order: z.array(z.string())
+    order: z.array(z.string()),
+    // 2026-10-29 之前存下的没有这一项，按没有批量设置过；格式只是多了一项，版本不变
+    batchYear: z.number().int().nullable().optional()
   })
   .refine(
     ({ displays, order }) =>
@@ -27,8 +29,11 @@ export const storedResourceLayersSchema = z
 export type StoredResourceLayers = z.infer<typeof storedResourceLayersSchema>;
 
 /** 当前状态的存储格式：普通的对象和数组，不存目录 */
-export function toStoredResourceLayers({ displays, order }: ResourceLayersState): StoredResourceLayers {
-  return { displays: Object.fromEntries(displays), order: [...order] };
+export function toStoredResourceLayers(
+  { displays, order }: ResourceLayersState,
+  batchYear: number | null
+): StoredResourceLayers {
+  return { displays: Object.fromEntries(displays), order: [...order], batchYear };
 }
 
 /** 存下的偏好还原成不带目录的显示状态；目录到了以后按 ADR 0041 第 3 节合并，不直接使用 */

@@ -4,7 +4,14 @@
   gap: var(--space-md);
 }
 
+// 一行里有几项时（监测年份和本底年份），放不下就换行
 .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md) var(--space-lg);
+}
+
+.field {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -16,8 +23,14 @@
   color: var(--color-text-regular);
 }
 
-.year {
-  width: 180px;
+// ElDatePicker 的输入框默认固定 220 宽
+.year:global(.el-date-editor) {
+  width: 140px;
+}
+
+// 报表名称最长 9 个字
+.control {
+  width: 200px;
 }
 
 .skeleton {

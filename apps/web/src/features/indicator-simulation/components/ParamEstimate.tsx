@@ -1,7 +1,7 @@
 import { MxTitle } from '@yzt/ui';
 import { computed, defineComponent, type PropType } from 'vue';
 import type { SimulationModel } from '../composables/useSimulationModel';
-import { formatDelta, formatValue } from '../format';
+import { formatEstimate, formatEstimateDelta, roundEstimate } from '../format';
 import { indicatorResult } from '../model/analysis';
 import { simulationIndicator } from '../model/indicators';
 import type { SimulationConditions, SimulationParams } from '../model/params';
@@ -9,8 +9,6 @@ import styles from './ParamEstimate.module.scss';
 
 // 最多列出几项指标
 const ROWS = 4;
-// 变化小于这个值算不变
-const FLAT = 0.005;
 
 /** 改参数时的即时预估：最新年度全省的值和达标的市，改前 → 改后；上升红色、下降绿色 */
 export const ParamEstimate = defineComponent({
@@ -42,9 +40,12 @@ export const ParamEstimate = defineComponent({
       const before = model.calculator.computeYear(conditions, base, year.value).indicators;
       const after = model.calculator.computeYear(conditions, draft, year.value).indicators;
       return conditions.indicatorIds.slice(0, ROWS).map(id => {
+        const indicator = simulationIndicator(id);
         const a = indicatorResult(before, id);
         const b = indicatorResult(after, id);
-        return { indicator: simulationIndicator(id), a, b, delta: b.value - a.value };
+        // 按显示的精度取整后相减，变化量和改前改后的数对得上
+        const delta = roundEstimate(roundEstimate(b.value, indicator) - roundEstimate(a.value, indicator), indicator);
+        return { indicator, a, b, delta };
       });
     });
 
@@ -63,7 +64,7 @@ export const ParamEstimate = defineComponent({
       return (
         <>
           {rows.value.map(({ indicator, a, b, delta }) => {
-            const tone = Math.abs(delta) < FLAT ? 'flat' : delta > 0 ? 'up' : 'down';
+            const tone = delta === 0 ? 'flat' : delta > 0 ? 'up' : 'down';
             return (
               <div key={indicator.id} class={styles.row}>
                 <span class={styles.name} title={indicator.name}>
@@ -73,10 +74,10 @@ export const ParamEstimate = defineComponent({
                   达标 {a.passCount} → {b.passCount} 市
                 </span>
                 <span class={styles.values}>
-                  <span>{formatValue(a.value, indicator)}</span>
+                  <span>{formatEstimate(a.value, indicator)}</span>
                   <span>→</span>
-                  <b>{formatValue(b.value, indicator)}</b>
-                  <span class={styles[tone]}>{tone === 'flat' ? '不变' : formatDelta(delta, indicator)}</span>
+                  <b>{formatEstimate(b.value, indicator)}</b>
+                  <span class={styles[tone]}>{tone === 'flat' ? '不变' : formatEstimateDelta(delta, indicator)}</span>
                 </span>
               </div>
             );

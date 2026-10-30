@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, Search } from '@element-plus/icons-vue';
 import { useResizeObserver } from '@vueuse/core';
 import { useMapOverlay } from '@yzt/map-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
-import { ElButton, ElIcon, ElInput, ElMessage, ElOption, ElSelect } from 'element-plus';
+import { ElButton, ElIcon, ElInput, ElOption, ElSelect } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
 import { usePageActive } from '@/shared/composables/usePageActive';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
@@ -14,7 +14,6 @@ import type { ResourcePanelLayout } from '../composables/useResourcePanelLayout'
 import { arrowStep } from '../keyboard';
 import { checkedLayers, expandedByDefault, panelTree } from '../layer-panel';
 import { ratioForCheckedHeight, splitLists } from '../panel-split';
-import { batchYearOptions, hasYearData } from '../resource-layers';
 import { CheckedLayerList } from './CheckedLayerList';
 import { ResourceTreeList } from './ResourceTreeList';
 import styles from './ResourceLayerPanel.module.scss';
@@ -69,14 +68,6 @@ export const ResourceLayerPanel = defineComponent({
     // 没有勾选资源时隐藏整个区域，不占用目录高度；保留用户的展开状态
     const hasChecked = computed(() => checkedCount.value > 0);
     const checkedExpanded = computed(() => hasChecked.value && !checkedCollapsed.value);
-    const batchYears = computed(() => batchYearOptions(props.layers.state.value.catalog));
-    // 固定列出的年份可能还没有数据：选了提示，图层不变（ADR 0094）
-    const setYearForAll = (year: number) => {
-      props.layers.setYearForAll(year);
-      if (!hasYearData(props.layers.state.value.catalog, year)) {
-        ElMessage.info(`没有资源有 ${year} 年的数据，图层保持不变`);
-      }
-    };
 
     // 目录第一次到达时展开含有勾选资源的分类；之后目录刷新不改用户的展开
     watch(
@@ -238,17 +229,30 @@ export const ResourceLayerPanel = defineComponent({
               placeholder="搜索资源"
               onUpdate:modelValue={(value: string) => (keyword.value = value)}
             />
-            {batchYears.value.length > 0 && (
-              // 批量设置是一次操作（ADR 0052 第 2 节）：选完就执行、不保留选中值，所以连续两次选同一年也会执行
+            {props.layers.batchYears.value.length > 0 && (
+              // 选完就执行（ADR 0052 第 2 节），选择框回显最后一次批量设置的年份（ADR 0116）。还没有数据的 2020、2021
+              // 选了图层不变，不提示
               <ElSelect
                 class={styles.batch}
-                modelValue={undefined}
+                modelValue={props.layers.batchYear.value ?? undefined}
                 placeholder="批量设置年份"
                 aria-label="批量设置年份"
-                onUpdate:modelValue={setYearForAll}
+                onUpdate:modelValue={(year: number) => props.layers.setYearForAll(year)}
               >
-                {batchYears.value.map(year => (
-                  <ElOption key={year} label={`${year} 年`} value={year} />
+                {props.layers.batchYears.value.map(year => (
+                  <ElOption key={year} label={`${year} 年`} value={year}>
+                    {/* 再点回显着的那一年也执行，把单独改过的资源切回来：ElSelect 选中的值没变时不发 update:modelValue */}
+                    <span
+                      class={styles.batchOption}
+                      onClick={() => {
+                        if (year === props.layers.batchYear.value) {
+                          props.layers.setYearForAll(year);
+                        }
+                      }}
+                    >
+                      {year} 年
+                    </span>
+                  </ElOption>
                 ))}
               </ElSelect>
             )}

@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { provideMap } from '@yzt/map-vue';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { JIANGSU_CAMERA } from '@/shared/map/jiangsu';
@@ -68,7 +68,7 @@ async function mountRun(composition: Composition = sampleComposition()) {
   required(log, '时间线').begin('计算全省三项指标');
   started.start(composition, calculator);
   await flushPromises();
-  return { wrapper, run: started, result: required(owner, '结果的拥有者'), view, clock };
+  return { wrapper, run: started, log: required(log, '时间线'), result: required(owner, '结果的拥有者'), view, clock };
 }
 
 type Mounted = Awaited<ReturnType<typeof mountRun>>;
@@ -97,6 +97,7 @@ const item = ({ wrapper }: Mounted, name: string) =>
   );
 
 afterEach(() => {
+  vi.useRealTimers();
   document.body.innerHTML = '';
 });
 
@@ -241,6 +242,24 @@ describe('RunStage', () => {
 
     await button(mounted, '调整条件').trigger('click');
     expect(run.state.value.status).toBe('idle');
+  });
+
+  it('看结果时说"回看计算流程"：回到 AI计算，回复先想一下再逐字打完，不停在"正在思考"', async () => {
+    // 回复按动画帧逐字打出：假的动画帧和时间
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] });
+    const mounted = await mountRun();
+    const { log, view } = mounted;
+    await advance(mounted, ENOUGH);
+    await button(mounted, '查看结果').trigger('click');
+
+    // 同对话栏（useRunConversation）：回复先记在时间线上，再切回流程图，AI计算这时才挂上
+    log.ai('回到计算流程。');
+    view.value = 'flow';
+    await flushPromises();
+    expect(entries(mounted).at(-1)).toBe('正在思考…');
+    vi.advanceTimersByTime(2000);
+    await flushPromises();
+    expect(entries(mounted).at(-1)).toBe('回到计算流程。');
   });
 
   it('完成后点流程图的评价节点：看这项指标的结果', async () => {

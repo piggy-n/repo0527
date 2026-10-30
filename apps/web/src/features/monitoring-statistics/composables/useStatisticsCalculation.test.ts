@@ -75,7 +75,7 @@ afterEach(() => {
 const selectBaseLevels = (calculation: StatisticsCalculation) => calculation.toggleTable('baseTable', true);
 
 describe('useStatisticsCalculation', () => {
-  it('勾选：按报表全选、全部全选，半选时显示不确定；暂未开放和不支持的等级勾不上', () => {
+  it('勾选：按报表全选、全部全选，半选时显示不确定；不支持的等级勾不上', () => {
     const { calculation } = setup();
     expect(calculation.canStart.value).toBe(false);
 
@@ -83,8 +83,11 @@ describe('useStatisticsCalculation', () => {
     expect(calculation.tableState('summaryTable')).toEqual({ checked: false, indeterminate: true });
     expect(calculation.allState.value).toEqual({ checked: false, indeterminate: true });
     calculation.toggle({ table: 'summaryTable', level: 'county' }, true);
-    calculation.toggle({ table: 'changeTable', level: 'province' }, true);
+    calculation.toggle({ table: 'baseWaterTable', level: 'county' }, true);
     expect([...calculation.selected.value]).toEqual(['summaryTable:province']);
+    calculation.toggleTable('changeWaterTable', true);
+    expect(calculation.tableState('changeWaterTable')).toEqual({ checked: true, indeterminate: false });
+    expect(calculation.selected.value.has('changeWaterTable:district')).toBe(true);
 
     calculation.toggleAll(true);
     expect(calculation.allState.value).toEqual({ checked: true, indeterminate: false });
@@ -93,10 +96,41 @@ describe('useStatisticsCalculation', () => {
     expect(calculation.canStart.value).toBe(true);
   });
 
-  it('本底年度是监测年度的上一年', () => {
+  it('两个本底年度默认是监测年度的上一年，可以各自改成更早的年份；换监测年度时回到上一年', () => {
     const { calculation } = setup();
     calculation.setYear('2025');
-    expect(calculation.baseYear.value).toBe('2024年');
+    expect(calculation.baseYears.value).toEqual({ change: '2024', water: '2024' });
+    calculation.setBaseYear('water', '2022');
+    expect(calculation.baseYears.value).toEqual({ change: '2024', water: '2022' });
+    expect(() => calculation.setBaseYear('change', '2025')).toThrow(RangeError);
+    calculation.setYear('2026');
+    expect(calculation.baseYears.value).toEqual({ change: '2025', water: '2025' });
+  });
+
+  it('变化类报表按各自的本底年度检查和提交，提交后按提交时的本底年度跟踪', async () => {
+    const { calculation, create, trackSubmission } = setup();
+    calculation.setYear('2025');
+    calculation.setBaseYear('change', '2023');
+    calculation.toggle({ table: 'entityChangeTable', level: 'district' }, true);
+    calculation.toggle({ table: 'changeWaterTable', level: 'district' }, true);
+    let entries: readonly CalculationEntry[] = [];
+
+    await calculation.submit(received => {
+      entries = received;
+      // 确认期间改了本底年度：这次提交仍用提交时的
+      calculation.setBaseYear('water', '2020');
+      return Promise.resolve(true);
+    });
+
+    expect(entries.map(({ table, baseYear }) => [table, baseYear])).toEqual([
+      ['changeWaterTable', '2024'],
+      ['entityChangeTable', '2023']
+    ]);
+    expect(trackSubmission.mock.calls[0]?.[1]).toEqual({ change: '2023', water: '2024' });
+    expect(create.mock.calls[0]?.[0]).toMatchObject({
+      changeWaterTableParam: { bdYear: '2024', isDistrict: true, isCounty: false },
+      entityChangeTableParam: { bdYear: '2023', isDistrict: true, isCounty: false }
+    });
   });
 
   it('提交前查各组合的状态交给确认：有结果、在处理的算已有任务，查不到的、正在跟踪的按未确认', async () => {
@@ -120,7 +154,7 @@ describe('useStatisticsCalculation', () => {
       ['baseTable', 'county', 'unknown', '状态未确认'],
       ['summaryTable', 'city', 'unknown', '已有提交尚未结束，继续可能重复统计']
     ]);
-    expect(trackSubmission).toHaveBeenCalledWith('2025', [
+    expect(trackSubmission).toHaveBeenCalledWith('2025', { change: '2024', water: '2024' }, [
       expect.objectContaining({ recompute: true }),
       expect.objectContaining({ recompute: true }),
       expect.objectContaining({ recompute: false }),

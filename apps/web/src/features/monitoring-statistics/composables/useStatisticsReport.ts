@@ -3,6 +3,7 @@ import { computed, type ComputedRef, getCurrentScope, type Ref, shallowReadonly,
 import type { StatisticsApi } from '../api';
 import { useReportQuery } from '../queries';
 import {
+  criteriaOf,
   isReportSettled,
   levelOptionsFor,
   type ReportCriteria,
@@ -14,11 +15,14 @@ import {
 } from '../report';
 import {
   type AreaLevel,
+  type BaseYears,
+  defaultBaseYears,
   defaultYear,
   firstWithResult,
+  isBaseYearValid,
   type OverviewRow,
   type TableLevel,
-  TABLES,
+  tableOf,
   type TableType,
   type TaskStatus
 } from '../statistics';
@@ -51,6 +55,8 @@ export type ReportActivity = 'submitting' | 'waiting' | 'confirming' | 'processi
 
 export interface StatisticsReport {
   readonly criteria: Readonly<Ref<ReportCriteria>>;
+  /** 查看变化类报表用的两个本底年份：换报表时跟着报表取，换监测年份时回到上一年 */
+  readonly baseYears: Readonly<Ref<BaseYears>>;
   /** 这一年可选的报表类型；还没查到时为空 */
   readonly tableOptions: ComputedRef<readonly ReportOption<TableType>[]>;
   /** 当前报表能选的等级 */
@@ -73,15 +79,18 @@ export interface StatisticsReport {
   readonly run: Readonly<Ref<number>>;
   readonly setYear: (year: string) => void;
   readonly setTable: (table: TableType) => void;
+  /** 当前报表的本底年份；不是变化类报表、或不早于监测年份时抛错 */
+  readonly setBaseYear: (baseYear: string) => void;
   readonly setLevel: (level: AreaLevel) => void;
   /** 一次切到报表和等级（点总览矩阵）；就是当前的时重新查询 */
   readonly select: (target: TableLevel) => void;
   readonly toggleStatus: (status: TaskStatus | null) => void;
   /** 重新查询：查询停下、提交失败或等待超时后由用户发起 */
   readonly retry: () => void;
-  /** 提交了这些组合：切到第一项开始跟踪 */
+  /** 提交了这些组合：切到第一项开始跟踪，查看的本底年份换成提交的 */
   readonly trackSubmission: (
     year: string,
+    baseYears: BaseYears,
     targets: readonly { readonly target: TableLevel; readonly recompute: boolean }[]
   ) => SubmissionTracking;
   /** 当前正在跟踪、还没结束的组合，提交前提示可能重复统计 */
@@ -111,7 +120,14 @@ export function useStatisticsReport({ api, now = Date.now }: StatisticsReportOpt
   if (!getCurrentScope()) {
     throw new Error('useStatisticsReport 只能在组件的 setup 或 effectScope 中调用');
   }
-  const criteria = shallowRef<ReportCriteria>({ year: defaultYear(), table: 'baseTable', level: 'province' });
+  const initialYear = defaultYear();
+  const criteria = shallowRef<ReportCriteria>({
+    year: initialYear,
+    table: 'baseTable',
+    level: 'province',
+    baseYear: null
+  });
+  const baseYears = shallowRef<BaseYears>(defaultBaseYears(initialYear));
   const trackings = shallowRef<readonly Tracking[]>([]);
   // 最近一次查到的选项，按年份；换报表、等级时还用这一年的
   const options = shallowRef<Pick<ReportStatus, 'tables' | 'levels'> & { readonly year: string }>({
@@ -203,7 +219,7 @@ export function useStatisticsReport({ api, now = Date.now }: StatisticsReportOpt
       replaceTracking(data.criteria, item => trackObserved(item, data.status, now()));
     }
     if (!isTrackingActive(tracking)) {
-      setCriteria(resolveCriteria(data.criteria, data.status));
+      setCriteria(resolveCriteria(data.criteria, data.status, baseYears.value));
     }
   });
   // 用户改条件、点总览、提交
@@ -259,6 +275,7 @@ export function useStatisticsReport({ api, now = Date.now }: StatisticsReportOpt
 
   return {
     criteria: shallowReadonly(criteria),
+    baseYears: shallowReadonly(baseYears),
     tableOptions,
     levelOptions,
     status: computed(() => current.value?.status ?? null),
@@ -270,15 +287,30 @@ export function useStatisticsReport({ api, now = Date.now }: StatisticsReportOpt
     statusFilter: shallowReadonly(statusFilter),
     rows,
     run: shallowReadonly(run),
-    setYear: year => userCriteria({ ...criteria.value, year }),
+    setYear: year => {
+      baseYears.value = defaultBaseYears(year);
+      userCriteria(criteriaOf(year, criteria.value, baseYears.value));
+    },
     setTable: table => {
-      const supported = TABLES.find(item => item.type === table)?.levels ?? [];
+      const supported = tableOf(table).levels;
       const level = supported.includes(criteria.value.level) ? criteria.value.level : (supported[0] ?? criteria.value.level);
-      userCriteria({ ...criteria.value, table, level });
+      userCriteria(criteriaOf(criteria.value.year, { table, level }, baseYears.value));
+    },
+    setBaseYear: baseYear => {
+      const { year, table } = criteria.value;
+      const kind = tableOf(table).baseYear;
+      if (kind === null) {
+        throw new Error(`${tableOf(table).name}没有本底年份`);
+      }
+      if (!isBaseYearValid(year, baseYear)) {
+        throw new RangeError(`本底年份应早于监测年份 ${year}，收到 ${baseYear}`);
+      }
+      baseYears.value = { ...baseYears.value, [kind]: baseYear };
+      userCriteria({ ...criteria.value, baseYear });
     },
     setLevel: level => userCriteria({ ...criteria.value, level }),
     select: target => {
-      const next = { ...criteria.value, ...target };
+      const next = criteriaOf(criteria.value.year, target, baseYears.value);
       if (sameCriteria(next, criteria.value)) {
         focusSettled = true;
         retry();
@@ -298,12 +330,13 @@ export function useStatisticsReport({ api, now = Date.now }: StatisticsReportOpt
       statusFilter.value = next;
     },
     retry,
-    trackSubmission: (year, targets) => {
+    trackSubmission: (year, submittedBaseYears, targets) => {
       const submission = run.value + 1;
       const submitted = trackSubmitted(
-        targets.map(({ target, recompute }) => ({ target: { year, ...target }, recompute })),
+        targets.map(({ target, recompute }) => ({ target: criteriaOf(year, target, submittedBaseYears), recompute })),
         submission
       );
+      baseYears.value = submittedBaseYears;
       const keep = trackings.value.filter(item => !submitted.some(next => sameCriteria(next.target, item.target)));
       trackings.value = [...keep, ...submitted];
       run.value = submission;
@@ -337,7 +370,7 @@ export function useStatisticsReport({ api, now = Date.now }: StatisticsReportOpt
       }
       const target = firstWithResult(matrix);
       if (target !== null) {
-        setCriteria({ ...criteria.value, ...target });
+        setCriteria(criteriaOf(criteria.value.year, target, baseYears.value));
       }
     }
   };

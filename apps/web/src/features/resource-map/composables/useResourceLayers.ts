@@ -16,6 +16,7 @@ import type { PreferenceScope } from '@/shared/storage/preference-scope';
 import { usePreference } from '@/shared/storage/use-preference';
 import type { Resource, ResourceCatalog } from '../catalog';
 import {
+  batchYearOptions,
   EMPTY_RESOURCE_LAYERS,
   mergeDisplayState,
   resourceCodeOfSource,
@@ -52,9 +53,16 @@ export interface ResourceLayers {
   readonly setOpacity: (code: string, opacity: number) => void;
   /** 不是这个资源的年份时抛错 */
   readonly setYear: (code: string, year: number) => void;
+  /** 批量设置可选的年份：多年份资源的年份并集加上固定的 2020、2021，新的在前（ADR 0094）；目录还没加载时没有 */
+  readonly batchYears: ComputedRef<readonly number[]>;
   /**
-   * 批量设置年份（ADR 0052 第 2 节）：有这一年的资源不论是否勾选都切过去，其他不变，只替换一次状态；
-   * 没有任何资源有这一年时什么也不改（ADR 0094），年份不是整数时抛错
+   * 最后一次批量设置的年份，面板的选择框回显它（ADR 0116）：单独改某个资源的年份不影响它，随偏好存下；
+   * 没有批量设置过、或已不在可选的年份里时为 null
+   */
+  readonly batchYear: ComputedRef<number | null>;
+  /**
+   * 批量设置年份（ADR 0052 第 2 节）：有这一年的资源不论是否勾选都切过去，其他不变，只替换一次状态，并记下这一年；
+   * 没有任何资源有这一年时图层不变（ADR 0094），年份不是整数时抛错
    */
   readonly setYearForAll: (year: number) => void;
   /** 移到面板上的第 index 位（0 在最上面，画在最上层）；位置越界时抛错 */
@@ -91,6 +99,8 @@ export function useResourceLayers(
   const validate = options.validate ?? validateCatalog;
   // 状态带着它所基于的目录：推导只读这一份，侦听器什么时候执行都不会读到中间态
   const state = shallowRef<ResourceLayersState>(EMPTY_RESOURCE_LAYERS);
+  // 最后一次批量设置的年份：只给面板回显，不参与推导（ADR 0116）
+  const lastBatchYear = shallowRef<number | null>(null);
 
   // 有偏好的范围时，目录要等恢复结束才合并：不先按默认值显示、再换成上次的选择（ADR 0042 第 5 节）
   const { preferences } = options;
@@ -100,10 +110,11 @@ export function useResourceLayers(
       name: 'resource-layers',
       version: 1,
       schema: storedResourceLayersSchema,
-      snapshot: () => toStoredResourceLayers(state.value),
+      snapshot: () => toStoredResourceLayers(state.value, lastBatchYear.value),
       restore: stored => {
         if (stored) {
           state.value = fromStoredResourceLayers(stored);
+          lastBatchYear.value = stored.batchYear ?? null;
         }
         restored.value = true;
       }
@@ -194,7 +205,10 @@ export function useResourceLayers(
 
   const setYearForAll = (year: number) => {
     state.value = withYearForAll(state.value, year);
+    lastBatchYear.value = year;
   };
+
+  const batchYears = computed(() => batchYearOptions(catalog.value));
 
   const move = (code: string, index: number) => {
     const current = state.value;
@@ -219,6 +233,10 @@ export function useResourceLayers(
     setCheckedMany,
     setOpacity,
     setYear,
+    batchYears,
+    batchYear: computed(() =>
+      lastBatchYear.value !== null && batchYears.value.includes(lastBatchYear.value) ? lastBatchYear.value : null
+    ),
     setYearForAll,
     move,
     deriveGroup: () =>

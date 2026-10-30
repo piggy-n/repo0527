@@ -20,13 +20,14 @@ function fakeCalculation(entries: readonly CalculationEntry[], outcome: SubmitOu
   const confirmed = shallowRef<boolean | null>(null);
   const calculation: StatisticsCalculation = {
     year: shallowRef('2025'),
-    baseYear: computed(() => '2024年'),
+    baseYears: shallowRef({ change: '2023', water: '2024' }),
     selected: shallowRef(new Set(['baseTable:province'])),
     allState: computed(() => ({ checked: false, indeterminate: true })),
     tableState: () => ({ checked: false, indeterminate: false }),
     canStart: computed(() => true),
     submitting: shallowRef(false),
     setYear: vi.fn<StatisticsCalculation['setYear']>(),
+    setBaseYear: vi.fn<StatisticsCalculation['setBaseYear']>(),
     toggle: vi.fn<StatisticsCalculation['toggle']>(),
     toggleTable: vi.fn<StatisticsCalculation['toggleTable']>(),
     toggleAll: vi.fn<StatisticsCalculation['toggleAll']>(),
@@ -39,7 +40,7 @@ function fakeCalculation(entries: readonly CalculationEntry[], outcome: SubmitOu
 }
 
 const entry = (level: CalculationEntry['level'], status: CalculationEntry['status'], statusText: string) =>
-  ({ table: 'baseTable', level, status, statusText }) satisfies CalculationEntry;
+  ({ table: 'baseTable', level, baseYear: null, status, statusText }) satisfies CalculationEntry;
 
 // 确认框的内容是 VNode：渲染出来取文字
 function messageText(message: unknown) {
@@ -60,18 +61,42 @@ async function clickStart(wrapper: ReturnType<typeof mount>) {
 }
 
 describe('StatisticsCalculationPanel', () => {
-  it('本底年度只读；暂未开放的报表不能勾，没有等级', () => {
+  it('两个本底年度可以选；变化类报表写用哪个本底年度，水路网报表是省、市、区县三级', () => {
     const { calculation } = fakeCalculation([], { kind: 'accepted' });
     const wrapper = mount(StatisticsCalculationPanel, { props: { calculation } });
+    const article = (name: string) =>
+      required(
+        wrapper.findAll('article').find(item => item.find('.el-checkbox').text() === name),
+        name
+      );
 
-    expect(wrapper.findAll('input[disabled]').map(input => (input.element as HTMLInputElement).value)).toContain('2024年');
-    const changeTable = required(
-      wrapper.findAll('article').find(article => article.text().includes('变化统计报表')),
-      '变化统计报表'
+    const years = wrapper.findAll<HTMLInputElement>('.el-date-editor input');
+    expect(years.map(input => [input.element.value, input.element.disabled])).toEqual([
+      ['2025年', false],
+      ['2023年', false],
+      ['2024年', false]
+    ]);
+    expect(article('基本变化统计报表').text()).toContain('变更本底 2023年');
+    expect(article('实体变化统计报表').text()).toContain('变更本底 2023年');
+    expect(article('水路网变化统计报表').text()).toContain('水路本底 2024年');
+    expect(article('水路网基本统计报表').text()).not.toContain('本底');
+    expect(article('水路网基本统计报表').findAll('.el-checkbox').map(box => box.text())).toEqual([
+      '水路网基本统计报表',
+      '省级',
+      '市级',
+      '区县级'
+    ]);
+    expect(wrapper.findAll('.el-checkbox.is-disabled')).toHaveLength(0);
+  });
+
+  it('确认框里变化类报表写本底年份', async () => {
+    const confirm = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as MessageBoxData);
+    const { calculation } = fakeCalculation(
+      [{ table: 'changeWaterTable', level: 'district', baseYear: '2024', status: 'failed', statusText: '已有统计任务' }],
+      { kind: 'accepted' }
     );
-    expect(changeTable.text()).toContain('暂未开放');
-    expect(changeTable.findAll('.el-checkbox')).toHaveLength(1);
-    expect(changeTable.find('.el-checkbox').classes()).toContain('is-disabled');
+    await clickStart(mount(StatisticsCalculationPanel, { props: { calculation } }));
+    expect(messageText(confirm.mock.calls[0]?.[0])).toContain('水路网变化统计报表 / 区县级 / 本底2024年已有统计任务');
   });
 
   it('没有已有任务时确认一句话；有时逐条列出并提醒正在处理的会被打断', async () => {
