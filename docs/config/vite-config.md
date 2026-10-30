@@ -61,7 +61,8 @@ const cesiumAssets = viteStaticCopy({
 `tools/build-output/vite-plugin.ts` 的 `buildOutputPlugin` 只在 `build` 生效，每次公网、内网构建都会执行，不需要另跑命令：
 
 - Vite 复制 `public/` 后，在 `writeBundle` 清理当前输出目录内的 `design.local/`，源设计稿仍放在 `public/design.local/`。删除前确认输出目录与源码、`public` 不重叠，支持自定义 `outDir`
-- 检查全部分块的模块清单，禁止包含 `src/pages/dev/`；再检查磁盘文件，禁止残留 `Dev*Page` 文件和 `design.local`
+- 同时删除输出目录 `3dt/` 下除 `manifest.json` 以外的内容：模型数据本机开发时放在 `public/3dt/`，服务器上单独部署（[deployment.md](../deployment.md)"3DT 模型数据单独部署"），清单随产物发布。Vite 仍会先复制再删除，本机放着全部模型（约 1.5 GB）时构建多花约 30 秒（2026-10-29 实测）；CI 没有模型数据，不受影响
+- 检查全部分块的模块清单，禁止包含 `src/pages/dev/`；再检查磁盘文件，禁止残留 `Dev*Page` 文件、`design.local` 和 `3dt/` 下清单以外的内容
 - 从入口分块沿静态 `imports` 检查依赖，禁止包含 MapLibre（`maplibre-gl`）和 Cesium（`cesium`、`@cesium/*`）；不遍历动态导入，地图运行时仍可按需加载、预加载。map-vue 的上下文会连带 maplibre-gl，所以给地图页注入三维运行时的那一层也放在地图页的分块里（ADR 0079 第 2 节）
 - 关闭天地图时，有效的 `VITE_TIANDITU_KEY` 必须为空；扫描文本产物，禁止残留按 `production` 模式读取的公网 key，错误只报告文件名。未调用的天地图地址模板允许保留，不以域名字符串代替运行时开关
 
