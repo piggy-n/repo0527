@@ -20,6 +20,7 @@ import { useSceneModels } from '@/features/scene-models/composables/useSceneMode
 import { useSceneModelsQuery } from '@/features/scene-models/queries';
 import { usePageActive } from '@/shared/composables/usePageActive';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
+import { appConfig } from '@/shared/config/app-config';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
@@ -99,9 +100,10 @@ export const CurrentMapPage = defineComponent({
     const root = ref<HTMLElement>();
     const { width, height } = useShownElementSize(root);
     const layout = computed(() => mapPageLayout(width.value, height.value));
-    // 记住上次的底图、边界和资源图层（ADR 0042）；没有登录时为 null，不读不写
+    // 记住上次的底图、边界和资源图层（ADR 0042）；没有登录时为 null，不读不写。
+    // 离开页面后重置时底图不读不写偏好，每次进入都是矢量底图，其余偏好照常恢复（ADR 0114）
     const preferences = usePreferenceScope();
-    const basemap = useBasemap({ preferences });
+    const basemap = useBasemap({ preferences: appConfig.pageStateReset ? null : preferences });
     // 目录由查询加载和缓存，拥有者只管显示状态；还没有目录时重试，查询会回到 pending，不再是失败
     const catalogQuery = useResourceCatalogQuery();
     const symbols = useResourceSymbols({ catalog: catalogQuery.data, preferences });

@@ -122,6 +122,7 @@
 | [0111](0111-map-controls-without-3d-and-basemap-card.md) | 不支持三维的地图不显示 2D/3D；底图入口抽成 BasemapCard，AI 对话、指标 AI 计算补上 | 已接受（修改 0053 第 3 节） |
 | [0112](0112-data-query-legacy-buttons-and-wide-results.md) | 数据查询的按钮参考旧页面，结果从左侧开始 | 已接受（修改 0104 第 2、3 节） |
 | [0113](0113-statistics-tasks-shown-as-approved.md) | 资源审核里的统计任务按审核通过显示，名称后标"统计任务"；准备状态 error 换成处理失败 | 已接受（修改 0092 第 3、6 节） |
+| [0114](0114-configurable-page-state-reset.md) | 离开页面后是否重置：环境变量 VITE_PAGE_STATE_RESET，默认保留 | 已接受（修改 0063、0042 的部分做法） |
 
 ## 模板
 

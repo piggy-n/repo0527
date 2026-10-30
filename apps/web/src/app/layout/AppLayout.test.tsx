@@ -17,15 +17,18 @@ function trackedPage(name: string, counts: Record<string, { created: number; unm
   });
 }
 
-async function setup() {
+// pageStateReset 不传时取环境变量（.env 里是 false）
+async function setup(pageStateReset?: boolean) {
   const counts: Record<string, { created: number; unmounted: number }> = {};
+  const layout =
+    pageStateReset === undefined ? AppLayout : defineComponent(() => () => <AppLayout pageStateReset={pageStateReset} />);
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/login', component: trackedPage('Login', counts) },
       {
         path: '/',
-        component: AppLayout,
+        component: layout,
         children: [
           { path: 'map', component: trackedPage('Map', counts), meta: { keepAlive: true } },
           { path: 'files', component: trackedPage('Files', counts) }
@@ -55,6 +58,15 @@ describe('AppLayout 的页面缓存', () => {
     expect(wrapper.find('[data-page="Files"]').exists()).toBe(true);
     // 缓存的页面不在文档里
     expect(wrapper.find('[data-page="Map"]').exists()).toBe(false);
+  });
+
+  it('打开"离开页面后重置"时不缓存：写了 keepAlive 的页面每次进入也重新创建（ADR 0114）', async () => {
+    const { router, counts } = await setup(true);
+
+    await router.push('/files');
+    await router.push('/map');
+
+    expect(counts.Map).toStrictEqual({ created: 2, unmounted: 1 });
   });
 
   it('离开布局时缓存跟着清空：再回来是新的页面', async () => {

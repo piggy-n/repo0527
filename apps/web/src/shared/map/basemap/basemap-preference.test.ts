@@ -55,6 +55,24 @@ describe('底图的偏好', () => {
     });
   });
 
+  it('切换到三维时自动换成影像不写进偏好，透明度照常写；用户自己选的底图照常写（ADR 0114）', async () => {
+    using ctx = setup();
+    await vi.advanceTimersByTimeAsync(0);
+
+    ctx.basemap.selectForDimension('3d');
+    ctx.basemap.setOpacity(0.5);
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+    expect(ctx.basemap.selected.value).toBe('imagery');
+    expect(ctx.store.entries.get(KEY)).toStrictEqual({
+      version: 1,
+      value: { selected: 'vector', opacity: { vector: 1, imagery: 0.5 } }
+    });
+
+    ctx.basemap.select('imagery');
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+    expect(ctx.store.entries.get(KEY)).toMatchObject({ value: { selected: 'imagery' } });
+  });
+
   it('存下的底图当前不可用（没有配置天地图）：保留"无底图"', async () => {
     const stored = { version: 1, value: { selected: 'vector', opacity: { vector: 0.5, imagery: 1 } } };
     using ctx = setup(createMemoryStore({ [KEY]: stored }), null);

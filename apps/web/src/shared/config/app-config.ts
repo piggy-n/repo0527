@@ -59,5 +59,7 @@ export const appConfig = {
   /** 天地图；为 null 时不能向天地图发任何请求 */
   tianditu: tianditu(import.meta.env.VITE_TIANDITU_ENABLED, import.meta.env.VITE_TIANDITU_KEY),
   /** AI 对话后端的基础地址，与 apiBaseUrl 是两个服务 */
-  aiApiBaseUrl: required('VITE_AI_API_BASE_URL', import.meta.env.VITE_AI_API_BASE_URL)
+  aiApiBaseUrl: required('VITE_AI_API_BASE_URL', import.meta.env.VITE_AI_API_BASE_URL),
+  /** 离开页面后重置：为 true 时不缓存页面，每次进入都是初始状态（ADR 0114） */
+  pageStateReset: flag('VITE_PAGE_STATE_RESET', import.meta.env.VITE_PAGE_STATE_RESET)
 } as const;

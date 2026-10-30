@@ -123,7 +123,7 @@ basemap.setOpacity(0.6);
 basemap.selectForDimension('3d'); // 切换二三维后选默认的底图
 ```
 
-- `selectForDimension(kind)`（ADR 0078 第 2 节）：三维选影像、二维选矢量；没有这种底图（关闭天地图）时不变。页面切换 `map.setDimension` 后调用
+- `selectForDimension(kind)`（ADR 0078 第 2 节）：三维选影像、二维选矢量；没有这种底图（关闭天地图）时不变。页面切换 `map.setDimension` 后调用。它只换显示的底图，偏好只存用户自己用 `select` 选的（ADR 0114）
 
 - `useBasemap()` 默认读取 `appConfig.tianditu`，测试时传入 `{ tianditu }`；不传偏好的范围时不依赖组件的生命周期，没有要清理的东西。推导用的是 `createBasemapStyles(tianditu)` 的两个纯函数
 - 不用 Pinia：状态只在一个页面里共享，不带到其他地图页，同一页面上的两张地图互不影响（ADR 0031）
