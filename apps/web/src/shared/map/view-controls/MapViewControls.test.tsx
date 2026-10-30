@@ -62,13 +62,13 @@ describe('MapViewControls', () => {
     expect(goToDefaultView).toHaveBeenCalledOnce();
   });
 
-  it('二维是当前的；三维暂未开放，点了没有效果', async () => {
+  it('页面不给当前视图（不支持三维）时没有 2D/3D，默认视角是最后一段、后面没有分隔线（ADR 0111）', () => {
     const { wrapper } = mountControls(10);
 
-    expect(button(wrapper, '二维').attributes('aria-pressed')).toBe('true');
-    expect(button(wrapper, '三维').attributes('aria-disabled')).toBe('true');
-    await button(wrapper, '三维').trigger('click');
-    expect(button(wrapper, '二维').attributes('aria-pressed')).toBe('true');
+    const labels = wrapper.findAll('button').map(item => item.attributes('aria-label'));
+    expect(labels).toStrictEqual(['放大', '缩小', '指北针：恢复正北、垂直俯视', '默认视角']);
+    expect(wrapper.findAll('[role="separator"]')).toHaveLength(2);
+    expect(wrapper.get('[role="toolbar"]').element.lastElementChild?.getAttribute('aria-label')).toBe('默认视角');
   });
 
   it('页面给出当前视图时两个按钮都可用：点另一个通知切换，点当前的不通知', async () => {

@@ -1,6 +1,6 @@
 import { COMPACT_MEDIA_QUERY } from '@yzt/ui';
 import { useMediaQuery } from '@vueuse/core';
-import { ElButton, ElTable, ElTableColumn, vLoading } from 'element-plus';
+import { ElButton, ElTable, ElTableColumn, ElTag, vLoading } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { PrepareStatusText } from '@/shared/data-request/PrepareStatusText';
@@ -18,9 +18,24 @@ interface Row {
   $index: number;
 }
 
+// 统计任务的名称后面跟小号标签"统计任务"（ADR 0113）；它们常常没有名称，只有标签。没有名称的申请什么都不渲染，由全局样式显示"-"
+function renderName(application: Application) {
+  if (application.status !== 'table') {
+    return application.name;
+  }
+  return (
+    <span class={styles.name}>
+      {application.name && <span class={styles.nameText}>{application.name}</span>}
+      <ElTag class="tag-mini" type="info">
+        统计任务
+      </ElTag>
+    </span>
+  );
+}
+
 /**
  * 申请表格（管理员审核用）：占满父元素的剩余高度；没有值的单元格由表格的全局样式显示"-"。
- * 待审核的"审核"，其余"查看"；统计任务没有申请的字段，不能查看。有数据准备这一步的才有下载，准备完成才能点（ADR 0092）
+ * 待审核的"审核"，其余"查看"；统计任务没有申请的字段，不能查看，按审核通过显示（ADR 0113）。有数据准备这一步的才有下载，准备完成才能点（ADR 0092）
  */
 export const ApplicationTable = defineComponent({
   name: 'ApplicationTable',
@@ -93,7 +108,9 @@ export const ApplicationTable = defineComponent({
             <ElTableColumn label="序号" width="64" align="center">
               {{ default: ({ $index }: Row) => props.firstSerial + $index }}
             </ElTableColumn>,
-            <ElTableColumn prop="name" label="数据名称" minWidth="200" showOverflowTooltip />,
+            <ElTableColumn label="数据名称" minWidth="200" showOverflowTooltip>
+              {{ default: ({ row }: Row) => renderName(row) }}
+            </ElTableColumn>,
             <ElTableColumn prop="applicant" label="申请人" width="100" showOverflowTooltip />,
             <ElTableColumn prop="region" label="行政区划" minWidth="140" showOverflowTooltip />,
             <ElTableColumn prop="appliedAt" label="申请时间" width="170" />,

@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { provideMap } from '@yzt/map-vue';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { JIANGSU_CAMERA } from '@/shared/map/jiangsu';
 import { required } from '@/shared/testing/required';
 import { type Composition, sampleComposition } from '../compose/composition';
@@ -44,6 +45,7 @@ async function mountRun(composition: Composition = sampleComposition()) {
       const result = useSimulationResult(owned);
       owner = result;
       const simulationMap = useSimulationMap(owned, map, result);
+      const basemap = useBasemap({ tianditu: null });
       return () => (
         <RunStage
           run={owned}
@@ -53,6 +55,8 @@ async function mountRun(composition: Composition = sampleComposition()) {
           userPause={userPause}
           result={result}
           simulationMap={simulationMap}
+          basemap={basemap}
+          goToDefaultView={() => undefined}
           view={view.value}
           onUpdate:view={next => (view.value = next)}
         />
@@ -174,7 +178,7 @@ describe('RunStage', () => {
     await parse.get('button').trigger('click');
     expect(parse.text()).toContain('理解指令：计算 2026 年全省的 3 项指标。');
 
-    expect(wrapper.find('[role="status"]').exists()).toBe(false);
+    expect(wrapper.find('[class*="_state_"][role="status"]').exists()).toBe(false);
     expect(['暂停', '人工干预', '停止'].map(text => wrapper.findAll('button').some(found => found.text() === text))).toEqual([false, false, false]);
     expect(wrapper.get('[aria-label="主区视图"]').text()).toBe('计算流程计算结果');
     expect(wrapper.find('map-canvas-stub').exists()).toBe(true);
@@ -200,6 +204,11 @@ describe('RunStage', () => {
     expect(item(mounted, '公园绿地覆盖率').attributes('aria-expanded')).toBe('true');
     expect(wrapper.findAll('[aria-label^="放大到"]').filter(row => row.element.tagName === 'BUTTON')).not.toHaveLength(0);
     expect(wrapper.get('[aria-label="图例"]').text()).toContain('公园绿地覆盖率2026 年 · 单位 %');
+    // 右下角是地图控制栏（不支持三维，没有 2D/3D）和底图卡片（ADR 0111）
+    const controls = wrapper.get('[aria-label="地图视角"]');
+    expect(controls.find('button[aria-label="默认视角"]').exists()).toBe(true);
+    expect(controls.find('button[aria-label="三维"]').exists()).toBe(false);
+    expect(wrapper.find('button[aria-label^="底图："]').exists()).toBe(true);
 
     await wrapper.get('[aria-label="主区视图"] input[value="flow"]').setValue(true);
     expect(view.value).toBe('flow');

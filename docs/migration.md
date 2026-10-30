@@ -43,7 +43,7 @@ git diff <基线>..master-demo -- <旧路径>
 
 ## 数据查询：与旧页面的差异
 
-- 高级查询由单独的按钮和第二个面板并入页签，排在空间查询之后（用户要求）
+- 高级查询由单独的按钮和第二个面板并入页签，排在空间查询之后（用户要求）；2026-10-29 起查询方式按旧页面排成一组按钮，"添加查询条件""显示 SQL 语句"和查询、重置的按钮也按旧页面，结果从页面左侧开始（ADR 0112）
 - 结果面板去掉统计图、统计表（写死的假数据），只留属性表格；去掉 `addPointLayer` 的 10 个假点
 - LIKE、NOT 改为包含、不包含（`%值%`），下拉显示中文；输入框默认选第一个运算符（旧页面要先选，否则这个条件被跳过）
 - 字段名按接口修正：医疗机构的两个"是否"字段 `IFTC` → `IFCH`、`IFIDH`（旧配置两个字段同名，点一次会加上两个）；城镇村的"备注" `FEATID` → `BZ`；地类名称的选项由地类编码表推出（旧的有两处错位：选"采矿用地"拼出 `DLMC = '工业用地'`）；结果表学校的 `ifch` → `iftc`、地类图斑的 `Tbxhmc` → `tbxhmc`
@@ -131,7 +131,7 @@ git diff <基线>..master-demo -- <旧路径>
 | 消息字段 | 全部记录同一组键；`isRead` 只见字符串；`category` 为 `table` 497、`resource` 7、`approval` 1；`taskStatus` 只有 `pending`、`approved`、`rejected`、`null`；`priority` 全为 0；`createTime` 是本地时间字符串 |
 | 消息与申请 | 没有 `applyId`，`taskId` 就是申请的 `apply_id`（三条用详情接口对上了）。"申请已过期"通知的 `taskStatus` 是 `rejected`，对应的申请却是审核通过、准备超时 |
 | `POST /api/apply/list` | 标准分页，共 35 条；没有值的字段整个键都不出现（不是 `null`）。`status`、`taskStatus`、`applyName`（模糊）都生效。页码越界时改成最后一页并返回那一页（请求 99 页，返回 `pageNum` 2）；没有数据时原样返回请求的页码，`pages` 是 0 |
-| 申请的状态 | `approved` 21、`pending` 1、`table` 13，没有 `rejected`；`storage_status` 只见 `timeout` 或没有，没有 `success`，下载无法用真实数据验证 |
+| 申请的状态 | `approved` 21、`pending` 1、`table` 13，没有 `rejected`；`storage_status` 只见 `timeout` 或没有，没有 `success`，下载无法用真实数据验证；2026-10-30 起出现 `error`，按旧页面换成"处理失败"（ADR 0113） |
 | `status: 'table'` | 13 条是基本统计的任务，没有图层、区划和用途；其中一条的 `apply_id` 等于用户 ID，没有名称和时间 |
 | 时间 | 申请的 `create_time`、`start_date`、`end_date` 是带 `+00:00` 的 ISO 串；消息的 `createTime` 是北京时间的字符串（同一条申请 03:29Z 对应消息里的 11:29），申请的时间也按北京时间显示 |
 | `GET /api/apply/{id}` | 结构同列表行；ID 不存在时 `code 200`、`data: null` |

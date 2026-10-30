@@ -20,14 +20,23 @@ export const CompactNav = defineComponent({
     const route = useRoute();
 
     // 一级项传入图标和是否选中（同页的其他路由也算）；子页面不带图标，靠缩进表示层级
-    const link = ({ label, route: target }: NavLinkTarget, icon?: IconName, active = target === route.name) => (
+    // 新标签页打开的页面（驾驶舱）用 window.open，当前页面不变
+    const open = ({ route: target, newTab }: NavLinkTarget) => {
+      if (newTab) {
+        window.open(router.resolve({ name: target }).href, '_blank', 'noopener');
+        return;
+      }
+      void navigate(router, { name: target });
+    };
+
+    const link = (target: NavLinkTarget, icon?: IconName, active = target.route === route.name) => (
       <ElDropdownItem
-        key={target}
+        key={target.route}
         class={[!icon && styles.compactNested, active && styles.compactActive]}
-        onClick={() => void navigate(router, { name: target })}
+        onClick={() => open(target)}
       >
         {icon && <SvgIcon class={styles.compactIcon} name={icon} size={16} />}
-        {label}
+        {target.label}
       </ElDropdownItem>
     );
 

@@ -33,6 +33,16 @@ describe('appConfig', () => {
     await expect(loadAppConfig()).rejects.toThrow('VITE_LOGIN_PUBLIC_KEY 不是有效的 SM2 公钥');
   });
 
+  it('离开页面后重置默认关闭；开关只能是 true 或 false（ADR 0114）', async () => {
+    expect((await loadAppConfig()).pageStateReset).toBe(false);
+
+    vi.stubEnv('VITE_PAGE_STATE_RESET', 'true');
+    expect((await loadAppConfig()).pageStateReset).toBe(true);
+
+    vi.stubEnv('VITE_PAGE_STATE_RESET', 'yes');
+    await expect(loadAppConfig()).rejects.toThrow('VITE_PAGE_STATE_RESET 只能是 true 或 false');
+  });
+
   describe('天地图（ADR 0031）', () => {
     it('.env 中开启，带着 key', async () => {
       const appConfig = await loadAppConfig();

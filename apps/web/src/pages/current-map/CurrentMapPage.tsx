@@ -20,14 +20,12 @@ import { useSceneModels } from '@/features/scene-models/composables/useSceneMode
 import { useSceneModelsQuery } from '@/features/scene-models/queries';
 import { usePageActive } from '@/shared/composables/usePageActive';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
-import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
-import { basemapOption } from '@/shared/map/basemap/basemap-style';
-import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
+import { appConfig } from '@/shared/config/app-config';
+import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
-import { MapCard } from '@/shared/map/card/MapCard';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { CoordinateLocatePanel } from '@/shared/map/location/CoordinateLocatePanel';
 import { LocationOverlay } from '@/shared/map/location/LocationOverlay';
@@ -40,7 +38,6 @@ import { panelStackHeight } from '@/shared/map/panel-group/panel-stack';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { usePanelStack } from '@/shared/map/panel-group/usePanelStack';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
-import { MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
 import { MapStatusBar } from '@/shared/map/status-bar/MapStatusBar';
 import { useMapReadout } from '@/shared/map/status-bar/useMapReadout';
 import { RegionLocatePanel } from '@/shared/map/region/RegionLocatePanel';
@@ -103,9 +100,10 @@ export const CurrentMapPage = defineComponent({
     const root = ref<HTMLElement>();
     const { width, height } = useShownElementSize(root);
     const layout = computed(() => mapPageLayout(width.value, height.value));
-    // 记住上次的底图、边界和资源图层（ADR 0042）；没有登录时为 null，不读不写
+    // 记住上次的底图、边界和资源图层（ADR 0042）；没有登录时为 null，不读不写。
+    // 离开页面后重置时底图不读不写偏好，每次进入都是矢量底图，其余偏好照常恢复（ADR 0114）
     const preferences = usePreferenceScope();
-    const basemap = useBasemap({ preferences });
+    const basemap = useBasemap({ preferences: appConfig.pageStateReset ? null : preferences });
     // 目录由查询加载和缓存，拥有者只管显示状态；还没有目录时重试，查询会回到 pending，不再是失败
     const catalogQuery = useResourceCatalogQuery();
     const symbols = useResourceSymbols({ catalog: catalogQuery.data, preferences });
@@ -290,38 +288,17 @@ export const CurrentMapPage = defineComponent({
     });
 
     // 当前底图的缩略图入口固定在地图控制栏下方
-    const renderBasemapCard = () => {
-      const current = basemapOption(basemap.selected.value);
-      return (
-        <div class={styles.cards} data-map-cards>
-          <MapOptionsPopover
-            name="basemap"
-            label="底图"
-            opacity={basemap.opacity.value}
-            open={basemapOpen.value}
-            visible={sides.right.value}
-            onTopChange={changeBasemapTop}
-            onOpacityChange={basemap.setOpacity}
-            onUpdate:open={changeBasemapOpen}
-          >
-            {{
-              reference: () => [
-                <MapCard
-                  label={current.shortLabel}
-                  name={`${PANEL_LABELS.basemap}：${current.label}`}
-                  pressed={sides.right.value && basemapOpen.value}
-                >
-                  {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[current.id]} />] }}
-                </MapCard>
-              ],
-              default: () => [
-                <BasemapPanel basemap={basemap} showOpacity={false} />
-              ]
-            }}
-          </MapOptionsPopover>
-        </div>
-      );
-    };
+    const renderBasemapCard = () => (
+      <div class={styles.cards} data-map-cards>
+        <BasemapCard
+          basemap={basemap}
+          open={basemapOpen.value}
+          visible={sides.right.value}
+          onTopChange={changeBasemapTop}
+          onUpdate:open={changeBasemapOpen}
+        />
+      </div>
+    );
 
     // 左侧一个面板：三维漫游时是漫游面板，其余二三维各一个。模型面板、资源面板切走时缓存起来，回来时搜索、展开这些
     // 界面状态还在（停用期间按 ADR 0063 处理）；漫游面板不缓存，每次漫游重新开始

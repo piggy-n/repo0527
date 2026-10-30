@@ -6,17 +6,13 @@ import { QueryResultPanel, type ResultView } from '@/features/data-query/compone
 import { useDataQuery } from '@/features/data-query/composables/useDataQuery';
 import { PREVIEW_GROUP, RESULT_GROUP } from '@/features/data-query/result-layers';
 import { QUERY_TOPICS, type QueryTopic, type TopicId } from '@/features/data-query/topics';
-import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
-import { basemapOption } from '@/shared/map/basemap/basemap-style';
-import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
+import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
-import { MapCard } from '@/shared/map/card/MapCard';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
-import { MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
@@ -85,54 +81,44 @@ const DataQueryView = defineComponent({
       }
     };
 
-    const renderBasemapCard = () => {
-      const current = basemapOption(basemap.selected.value);
-      return (
-        <div key="cards" class={styles.cards}>
-          <MapOptionsPopover
-            name="basemap"
-            label="底图"
-            opacity={basemap.opacity.value}
-            open={basemapOpen.value}
-            visible={sides.right.value}
-            onOpacityChange={basemap.setOpacity}
-            onUpdate:open={changeBasemapOpen}
-          >
-            {{
-              reference: () => [
-                <MapCard
-                  label={current.shortLabel}
-                  name={`底图：${current.label}`}
-                  pressed={sides.right.value && basemapOpen.value}
-                >
-                  {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[current.id]} />] }}
-                </MapCard>
-              ],
-              default: () => [<BasemapPanel basemap={basemap} showOpacity={false} />]
-            }}
-          </MapOptionsPopover>
-        </div>
-      );
-    };
+    const hasResult = () => query.result.request.value !== null;
+
+    const renderBasemapCard = () => (
+      <div key="cards" class={styles.cards}>
+        <BasemapCard
+          basemap={basemap}
+          open={basemapOpen.value}
+          visible={sides.right.value}
+          onUpdate:open={changeBasemapOpen}
+        />
+      </div>
+    );
 
     return () => (
       <div class={styles.root} data-data-query-page={props.topic.id}>
         <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
         <BoxSelectOverlay pick={query.spatial.draw} />
         <div class={styles.overlay}>
-          <div key="left" class={styles.left}>
-            <QueryPanel query={query} collapsed={!sides.left.value} onUpdate:collapsed={changeCollapsed} />
-          </div>
-          {query.result.request.value !== null && (
-            <div key="results" class={styles.results} v-show={sides.right.value}>
-              <QueryResultPanel
-                result={query.result}
-                exporter={query.exporter}
-                view={resultView.value}
-                onUpdate:view={(view: ResultView) => (resultView.value = view)}
-              />
+          {/* 查询面板和结果在同一列：结果从左边开始，面板让出它的高度；结果最大化时面板不显示（2026-10-29） */}
+          <div key="main" class={styles.main}>
+            <div key="left" class={styles.left} v-show={resultView.value !== 'maximized' || !hasResult()}>
+              <QueryPanel query={query} collapsed={!sides.left.value} onUpdate:collapsed={changeCollapsed} />
             </div>
-          )}
+            {hasResult() && (
+              <div
+                key="results"
+                class={[styles.results, resultView.value === 'maximized' && styles.maximized]}
+                v-show={sides.right.value}
+              >
+                <QueryResultPanel
+                  result={query.result}
+                  exporter={query.exporter}
+                  view={resultView.value}
+                  onUpdate:view={(view: ResultView) => (resultView.value = view)}
+                />
+              </div>
+            )}
+          </div>
           <div key="controls" class={styles.controls}>
             <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
           </div>

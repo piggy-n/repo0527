@@ -15,8 +15,11 @@ export type ApplicationStatus = z.infer<typeof applicationStatusSchema>;
 /** 审核的结果，筛选条件也用它 */
 export type AuditStatus = Exclude<ApplicationStatus, 'table'>;
 
-// 数据准备的状态（storage_status，shared/data-request 的 prepare-status）；没有这个字段时还没开始准备
-const prepareStatusSchema = z.enum(PREPARE_STATUSES);
+// 数据准备的状态（storage_status，shared/data-request 的 prepare-status）；没有这个字段时还没开始准备。
+// 2026-10-30 实测出现 error（准备失败），旧页面换成"处理失败"，这里同样换成 failed；其他没见过的值仍按返回格式错误
+const prepareStatusSchema = z
+  .enum([...PREPARE_STATUSES, 'error'])
+  .transform((status): PrepareStatus => (status === 'error' ? 'failed' : status));
 
 // 带时区的时间，如 2026-10-28T03:29:36.527+00:00，显示为北京时间（和消息里的时间一致）
 const dateTimeSchema = z.iso.datetime({ offset: true }).transform(value => formatBeijingDateTime(new Date(value)));

@@ -66,6 +66,26 @@ describe('HeaderNav', () => {
     expect(panel?.closest('.el-popper')?.querySelector('[class*="_groups_"]')).toBeNull();
   });
 
+  it('专项统计里的驾驶舱是新标签页打开的链接', async () => {
+    const wrapper = await mountNav(Role.user, '/current-map');
+
+    const query = wrapper.findAll('button').find(button => button.text() === '查询统计');
+    await query?.trigger('click');
+    await vi.waitFor(() => expect(document.querySelector('[class*="_groups_"]')).not.toBeNull());
+    const special = [...document.querySelectorAll<HTMLElement>('[class*="_groups_"] button')].find(
+      button => button.textContent?.trim() === '专项统计'
+    );
+    special?.dispatchEvent(new MouseEvent('mouseenter'));
+    await vi.waitFor(() => expect(document.querySelector('a[href="/city-dashboard"]')).not.toBeNull());
+
+    const dashboard = document.querySelector('a[href="/city-dashboard"]');
+    expect([dashboard?.textContent, dashboard?.getAttribute('target'), dashboard?.getAttribute('rel')]).toEqual([
+      '驾驶舱',
+      '_blank',
+      'noopener'
+    ]);
+  });
+
   it('链接项渲染为指向对应页面的链接', async () => {
     const wrapper = await mountNav(Role.user, '/current-map');
 

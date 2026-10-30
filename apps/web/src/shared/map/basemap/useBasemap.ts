@@ -50,16 +50,19 @@ export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBa
   const styles = createBasemapStyles(tianditu);
   // 状态不可变，变化时整体替换；推导只依赖它
   const state = shallowRef<BasemapState>(initialBasemapState(tianditu));
+  // 用户自己选的底图：偏好只存它，切换二三维时自动换的底图不写进去（ADR 0114），否则重新进入页面时二维也是影像
+  const chosen = shallowRef<BasemapId>(state.value.selected);
 
   if (preferences) {
     usePreference(preferences, {
       name: 'basemap',
       version: 1,
       schema: storedBasemapSchema,
-      snapshot: () => state.value,
+      snapshot: () => ({ ...state.value, selected: chosen.value }),
       restore: stored => {
         if (stored) {
           state.value = restoredBasemapState(stored, state.value, options);
+          chosen.value = state.value.selected;
         }
       }
     });
@@ -76,15 +79,17 @@ export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBa
     if (!options.some(option => option.id === id)) {
       throw new Error(`底图 ${id} 不可用`);
     }
+    chosen.value = id;
     if (id !== state.value.selected) {
       state.value = { ...state.value, selected: id };
     }
   };
 
+  // 只换显示的底图，不算用户的选择
   const selectForDimension = (kind: ViewKind) => {
     const id: BasemapId = kind === '3d' ? 'imagery' : 'vector';
-    if (options.some(option => option.id === id)) {
-      select(id);
+    if (options.some(option => option.id === id) && id !== state.value.selected) {
+      state.value = { ...state.value, selected: id };
     }
   };
 

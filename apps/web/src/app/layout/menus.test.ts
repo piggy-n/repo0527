@@ -54,7 +54,11 @@ describe('visibleNavItems', () => {
   });
 
   it('下拉面板中没有权限的页面被去掉，整组都没有权限时去掉整组', () => {
-    const onlyAdmin = new Set<RouteName>([RouteName.spaceMonitoringBasicStatistics, RouteName.spaceMonitoringIndicators]);
+    const onlyAdmin = new Set<RouteName>([
+      RouteName.spaceMonitoringBasicStatistics,
+      RouteName.spaceMonitoringIndicators,
+      RouteName.cityDashboard
+    ]);
     const items = visibleNavItems(navItems, Role.user, route => (onlyAdmin.has(route) ? [Role.admin] : undefined));
     const query = items.find(item => item.kind === 'dropdown');
 

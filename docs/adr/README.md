@@ -118,6 +118,11 @@
 | [0107](0107-indicator-simulation-flow-and-dialogue.md) | 指标智能推演：以流程图为核心的 AI 推演阶段与推演中的对话 | 已接受（结果展示的排布已被 0108 取代；完成卡片的位置已被 0109 取代） |
 | [0108](0108-indicator-simulation-results-in-run-layout.md) | 指标智能推演：结果展示并入推演阶段的布局 | 已接受（"重新编排"的叫法与回复前的小圆球已被 0109 修改） |
 | [0109](0109-indicator-simulation-rename-and-ai-avatar.md) | 指标智能推演改名为城市国土空间监测指标AI计算：文案、AI 输入框、机器人头像与按钮主次 | 已接受（修改 0106 第 6 条、0107 的完成卡片、0108 第 2、7 条） |
+| [0110](0110-city-dashboard-menu-entry.md) | 驾驶舱的菜单入口：查询统计 → 专项统计，新标签页打开 | 已接受（修改 0077） |
+| [0111](0111-map-controls-without-3d-and-basemap-card.md) | 不支持三维的地图不显示 2D/3D；底图入口抽成 BasemapCard，AI 对话、指标 AI 计算补上 | 已接受（修改 0053 第 3 节） |
+| [0112](0112-data-query-legacy-buttons-and-wide-results.md) | 数据查询的按钮参考旧页面，结果从左侧开始 | 已接受（修改 0104 第 2、3 节） |
+| [0113](0113-statistics-tasks-shown-as-approved.md) | 资源审核里的统计任务按审核通过显示，名称后标"统计任务"；准备状态 error 换成处理失败 | 已接受（修改 0092 第 3、6 节） |
+| [0114](0114-configurable-page-state-reset.md) | 离开页面后是否重置：环境变量 VITE_PAGE_STATE_RESET，默认保留 | 已接受（修改 0063、0042 的部分做法） |
 
 ## 模板
 

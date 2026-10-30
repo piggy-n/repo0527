@@ -17,7 +17,7 @@
 
 实际入口是 `src/router/index.js` 中的顶级懒加载路由 `/city-dashboard`，旧地址为 `/#/city-dashboard`，不经过业务 Layout。它不在免登录白名单内；`src/services/auth/auth-service.js` 的 `isRoleRouteAllowed` 对驾驶舱允许所有登录角色。README 与菜单源码均未发现驾驶舱菜单入口。
 
-正式迁移保持独立布局、需要登录、所有登录角色可访问、不加菜单。新项目使用已确定的 history 模式，地址变为 `/city-dashboard`；这是地址形式的变化，不是权限变更。路由放在 AppLayout 之外，使用独立动态 import；不接 `withMapRuntime`，不进入登录页的现状底图预加载。
+正式迁移保持独立布局、需要登录、所有登录角色可访问、不加菜单（2026-10-29 起顶部导航"查询统计 → 专项统计"下有"驾驶舱"，新标签页打开，ADR 0110）。新项目使用已确定的 history 模式，地址变为 `/city-dashboard`；这是地址形式的变化，不是权限变更。路由放在 AppLayout 之外，使用独立动态 import；不接 `withMapRuntime`，不进入登录页的现状底图预加载。
 
 素材实际来自 `dashboardConfig.dashboardAsset` 的 `BASE_URL + images/jsc/`，即旧 `public/images/jsc/`，不是 `src/public`。边界来自旧 `public/static/geojson/江苏省市界.json`。`asset-manifest.json` 保存原名、用途、重命名和配色；D0 保存原字节作对照，D1 已停用旧背景 PNG，等待用户提供 WebP。
 

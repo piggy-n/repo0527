@@ -12,7 +12,12 @@
   gap: var(--space-sm);
 }
 
-// 区块标题右边的操作（添加条件、提示）
+// 占满一行的按钮（添加查询条件、显示 SQL 语句）和包着按钮的下拉
+.wide {
+  width: 100%;
+}
+
+// 区块标题右边的提示
 .sectionHead {
   display: flex;
   align-items: center;

@@ -9,7 +9,7 @@ const AUDIT_TAG_TYPES: Record<AuditStatus, 'warning' | 'success' | 'danger'> = {
   rejected: 'danger'
 };
 
-/** 审核状态的标签；混在申请表里的统计任务显示为"统计任务"（ADR 0092） */
+/** 审核状态的标签；混在申请表里的统计任务按审核通过显示（同旧页面，ADR 0113），"统计任务"标在数据名称后面 */
 export const AuditStatusTag = defineComponent({
   name: 'AuditStatusTag',
   props: {
@@ -17,10 +17,8 @@ export const AuditStatusTag = defineComponent({
   },
   setup(props) {
     return () => {
-      if (props.status === 'table') {
-        return <ElTag type="info">统计任务</ElTag>;
-      }
-      return <ElTag type={AUDIT_TAG_TYPES[props.status]}>{AUDIT_STATUS_LABELS[props.status]}</ElTag>;
+      const status = props.status === 'table' ? 'approved' : props.status;
+      return <ElTag type={AUDIT_TAG_TYPES[status]}>{AUDIT_STATUS_LABELS[status]}</ElTag>;
     };
   }
 });

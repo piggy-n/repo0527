@@ -53,7 +53,7 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 | `create_time`、`start_date`、`end_date` | `appliedAt`、`startTime`、`endTime` | 带时区的 ISO 时间，按北京时间写成 `YYYY-MM-DD HH:mm:ss`（见下文"时间"） |
 | `data_formats` | `formats` | 小写逗号串拆成数组；统计任务是 `.zip` |
 | `apply_purpose` | `purpose` | |
-| `status` | `status` | `pending`、`approved`、`rejected`、`table`（混在申请表里的统计任务） |
+| `status` | `status` | `pending`、`approved`、`rejected`、`table`（混在申请表里的统计任务，按审核通过显示） |
 | `remark` | `reason` | 不通过的原因；通过的是空字符串 |
 | `storage_status` | `prepare` | `processing`、`success`、`timeout`、`failed`；没有时还没开始准备 |
 
@@ -82,7 +82,7 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 
 - **`useApplicationList`**：`shared/table` 的 `usePagedList`（见 [table.md](table.md)）加上申请的条件。筛选表单点"查询"才生效，名称去掉首尾空格，回到第 1 页；条件没变时点查询也重新请求；改每页条数回到第 1 页；后端（PageHelper）把越界的页码改成最后一页时页码跟过去，没有数据时回到第 1 页
 - **`ApplicationFilterBar`**：数据名称、审核状态、数据准备状态，`QueryForm`（标签 6 个字宽）
-- **`ApplicationTable`**：序号、数据名称、申请人、行政区划、申请时间、审核状态、数据准备状态；数据准备状态只有审核通过的申请和统计任务才有，其余单元格留空，由表格的全局样式显示"-"。操作列固定两格：待审核的"审核"、其余"查看"（统计任务没有）；有数据准备这一步的有"下载"，准备完成才能点
+- **`ApplicationTable`**：序号、数据名称、申请人、行政区划、申请时间、审核状态、数据准备状态；统计任务的审核状态显示"审核通过"、名称后面跟小号标签"统计任务"（同旧页面的状态，ADR 0113）；数据准备状态只有审核通过的申请和统计任务才有，其余单元格留空，由表格的全局样式显示"-"。操作列固定两格：待审核的"审核"、其余"查看"（统计任务没有）；有数据准备这一步的有"下载"，准备完成才能点
 - **`AuditSection`**（页面里）：组合上面三个和分页（`pagination-wrap`）；只在资源审核栏目显示时存在，统计报表栏目不请求申请列表
 
 申请和统计报表的列表共用 `usePagedList`；文件管理（Spring 分页）、资源管理（按目录）仍是各自的写法，这次没有改。

@@ -267,7 +267,8 @@ $tree-node: '.el-tree > .el-tree-node';
   }
 }
 
-// 占满宽度、各项等宽的单选按钮组（地图页坐标定位的写法切换）；用法 <ElRadioGroup class="radio-group-block">
+// 占满宽度、各项等宽的单选按钮组（地图页坐标定位的写法切换、数据查询的查询方式）；用法 <ElRadioGroup class="radio-group-block">。
+// 文字在各项里居中，左右内边距只决定最长的一项至少多宽：收到 6，"自然语言查询"等四项放得进 320 的面板
 .el-radio-group.radio-group-block {
   display: flex;
 
@@ -277,6 +278,8 @@ $tree-node: '.el-tree > .el-tree-node';
 
   .el-radio-button__inner {
     width: 100%;
+    padding-right: 6px;
+    padding-left: 6px;
   }
 }
 
