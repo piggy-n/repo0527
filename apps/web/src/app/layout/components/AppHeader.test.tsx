@@ -32,7 +32,7 @@ describe('AppHeader', () => {
     const wrapper = mount(AppHeader, { global: { plugins: [pinia, router, [VueQueryPlugin, { queryClient }]] } });
 
     const user = wrapper.get('[class*="_user_"]');
-    expect([...user.element.children].map(child => child.textContent?.trim())).toEqual(['', 'admin']);
+    expect([...user.element.children].map(child => child.textContent?.trim())).toEqual(['', '管理员']);
     expect(user.element.firstElementChild?.getAttribute('aria-label')).toMatch(/^消息/);
     // 顶栏的元素挂载以后才有，再渲染一次才交给消息按钮
     await vi.waitFor(() => expect(wrapper.findComponent(HeaderMessages).props('header')).toBe(wrapper.element));

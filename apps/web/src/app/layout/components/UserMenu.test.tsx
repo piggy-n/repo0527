@@ -12,10 +12,10 @@ import { UserMenu } from './UserMenu';
 const Empty = { render: () => null };
 let router: Router;
 
-async function mountMenu() {
+async function mountMenu(role: Role = Role.user) {
   const pinia = createPinia();
   setActivePinia(pinia);
-  useSessionStore().start({ token: 't', user: { loginName: 'zhangsan', realName: '张三', role: Role.user } });
+  useSessionStore().start({ token: 't', user: { loginName: 'zhangsan', realName: '张三', role } });
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -64,11 +64,18 @@ afterEach(() => {
 });
 
 describe('UserMenu', () => {
-  it('显示名字、登录名与角色', async () => {
-    await mountMenu();
+  it('按角色显示管理员或普通用户，不显示姓名；下拉菜单里另有登录名', async () => {
+    const wrapper = await mountMenu();
 
-    expect(document.body.textContent).toContain('张三');
-    expect(document.body.textContent).toContain('zhangsan · 普通用户');
+    expect(wrapper.get('button').text()).toBe('普通用户');
+    expect(document.querySelector('.el-dropdown-menu strong')?.textContent).toBe('普通用户');
+    expect(document.body.textContent).toContain('zhangsan');
+    expect(document.body.textContent).not.toContain('张三');
+    wrapper.unmount();
+    document.body.innerHTML = '';
+
+    const admin = await mountMenu(Role.admin);
+    expect(admin.get('button').text()).toBe('管理员');
   });
 
   it('确认退出后清空会话和查询缓存、回到登录页并提示', async () => {
