@@ -38,7 +38,7 @@
 - HTTP 用 axios + zod 4，测试中用 MSW 2.x 模拟接口（ADR 0011）
 - 接口数据用 TanStack Vue Query 5 管理，全局关闭失败重试和切回窗口时的自动刷新（ADR 0017）
 - 登录密码用 sm-crypto-v2 做 SM2 加密，公钥放在 `.env`；token 过期判断用 jwt-decode；会话存 localStorage（ADR 0015）
-- CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 安装浏览器 → 测试 → 公网、内网构建 → 生产产物冒烟（ADR 0005、0040、0065）；构建自动清理设计稿副本并检查开发页、入口静态依赖和天地图 key，见 docs/config/vite-config.md
+- CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 安装浏览器 → 测试 → 公网、内网构建 → 生产产物冒烟（ADR 0005、0040、0065）；构建自动清理设计稿副本和 3DT 模型数据并检查开发页、入口静态依赖和天地图 key，见 docs/config/vite-config.md
 
 - 偏好（资源图层、底图、边界的选择等）用 IndexedDB 持久化，经 `shared/storage` 的键值接口读写，实现用 idb-keyval；会话仍存 localStorage（ADR 0042）
 
@@ -237,7 +237,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 只有 MapLibre 适配器能写二维地图（lint 只允许 `libs/map-core/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；Cesium 镜像会话状态，不实现二维的引擎接口；二三维共用的是生命周期、相机、输入、拾取、投影、渲染要素查询这几个视图接口（ADR 0024、0047；三维的渲染要素查询返回空数组）
 - Cesium 同样只在 `libs/map-cesium` 和 `app` 导入（lint 检查，包括 `cesium/Build/...` 和 `@cesium/*`）；`CesiumView` 只依赖窄接口 `SceneLike`，唯一调用 Cesium 的是 `CesiumScene`，测试注入假场景（ADR 0079）
 - 三维的 GeoJSON 覆盖物由 map-cesium 按样式自动镜像（line、fill、circle，按整级求值、简化到半个像素，ADR 0080），拥有者不为三维另写分组；`symbol`、`fill-pattern` 等清单外的写法三维不画。三维期间点/框选不识别；三维独有的读数（视点高度、朝向）用就绪视图的 `eyeHeight()`、`heading()`
-- 三维独有的内容（3D Tiles 瓦片集、钻地、漫游）由会话的 `scene` 持有，页面用 `map.bindScene(() => SceneContent)` 绑定拥有者的推导函数（一个上下文只绑定一个）；瓦片集的状态从上下文的 `sceneStatus` 读，就绪时带建议的相机，定位用它做相机操作；漫游的进度从 `roamStatus` 读，漫游开始时开始一次相机操作，被别的定位作废就退出。模型清单 `public/3dt/manifest.json` 入库、模型数据不入库（ADR 0081、0083）
+- 三维独有的内容（3D Tiles 瓦片集、钻地、漫游）由会话的 `scene` 持有，页面用 `map.bindScene(() => SceneContent)` 绑定拥有者的推导函数（一个上下文只绑定一个）；瓦片集的状态从上下文的 `sceneStatus` 读，就绪时带建议的相机，定位用它做相机操作；漫游的进度从 `roamStatus` 读，漫游开始时开始一次相机操作，被别的定位作废就退出。模型清单 `public/3dt/manifest.json` 入库、模型数据不入库（ADR 0081、0083），也不进构建产物，服务器上放在发布目录之外、由 nginx 提供（`docs/deployment.md`）
 - 漫游时页面只留漫游面板和小地图，隐藏业务工具栏、功能面板、底图、区划条、视图控件和状态栏：只隐藏，不改各拥有者的状态，退出后原样显示；进入时切回移动，漫游只在换成移动以外的工具时退出（ADR 0084、0095、0097）。漫游时左侧的漫游面板替换三维模型面板，步行和路线在面板里切换，速度共用米/秒。没有单独的钻地：漫游地下的模型时由拥有者推导出地下空间（地表固定半透明、不显示地面上的模型），退出漫游就回到地面
 - 导航网格在 `map-core/scene/nav`，不依赖 Cesium、DOM：`buildNavigation` 在主线程下载叶节点瓦片、在 Worker 里构建；行走碰撞、寻路、平面图用同一份区域（`labels`）；平面图正北朝上（按根节点局部系的方位角旋转）、按区域着色（`planRegions`、`renderFloorMap`，ADR 0085）
 - 步行是会话三维内容的 `roam`（`kind: 'walk'`）：拥有者建好导航网格（按模型缓存）后交给会话，视图选出生点、接管键鼠逐帧行走；行走、点击、脱困、出生点的规则在 map-core 的 `Walker` 和纯函数里，Cesium 一侧（`scene-walk.ts`）只做输入、深度拾取和相机；回到出生点、脱困这类一次性命令写成计数；漫游期间每帧关掉 Cesium 的相机控制（flyTo 结束后它会被打开）（ADR 0086）；已经在模型里时挪相机不用 flyTo（在地下飞总会先升到地面以上），近处直接设、远处用 `Blackout` 闪切，漫游时覆盖物不按级别重建（ADR 0103）

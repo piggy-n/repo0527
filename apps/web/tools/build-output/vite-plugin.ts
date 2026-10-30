@@ -46,6 +46,9 @@ function checkFiles(directory: string, keys: readonly string[], prefix = ''): vo
     if (entry.name === 'design.local' || /^Dev.*Page(?:-|\.)/.test(entry.name)) {
       throw new Error(`[build-output] 产物包含开发专用文件：${name}`);
     }
+    if (prefix === '3dt/' && entry.name !== 'manifest.json') {
+      throw new Error(`[build-output] 产物包含 3DT 模型数据：${name}`);
+    }
     if (entry.isDirectory()) {
       checkFiles(path, keys, `${name}/`);
     } else if (keys.length > 0 && /\.(?:[cm]?js|css|html|json|map|svg|txt)$/i.test(entry.name)) {
@@ -58,7 +61,7 @@ function checkFiles(directory: string, keys: readonly string[], prefix = ''): vo
   }
 }
 
-/** 构建完成时清理本地设计稿，并检查开发页、入口依赖和关闭天地图时的 key */
+/** 构建完成时清理本地设计稿和 3DT 模型数据，并检查开发页、入口依赖和关闭天地图时的 key */
 export function buildOutputPlugin(): Plugin {
   let config: ResolvedConfig;
   let forbiddenKeys: string[] = [];
@@ -84,18 +87,28 @@ export function buildOutputPlugin(): Plugin {
         const outputDir = realpathSync(resolve(config.root, options.dir ?? config.build.outDir));
         const root = realpathSync(config.root);
         const publicDir = config.publicDir && existsSync(config.publicDir) ? realpathSync(config.publicDir) : null;
-        // 删除前确认输出目录与源码、public 分开，目标只能是该输出目录内的设计稿副本
+        // 删除前确认输出目录与源码、public 分开，目标只能是该输出目录内的副本
         if (
           contains(outputDir, root) ||
           (publicDir && (contains(publicDir, outputDir) || contains(outputDir, publicDir)))
         ) {
-          throw new Error('[build-output] 输出目录与源码或 public 重叠，不能清理设计稿');
+          throw new Error('[build-output] 输出目录与源码或 public 重叠，不能清理设计稿和模型数据');
         }
         const designs = resolve(outputDir, 'design.local');
         if (relative(outputDir, designs) !== 'design.local') {
           throw new Error('[build-output] 设计稿清理路径不在输出目录内');
         }
         rmSync(designs, { recursive: true, force: true });
+
+        // 3DT 模型数据在服务器上单独部署，产物只留随代码发布的清单（docs/deployment.md）
+        const models = resolve(outputDir, '3dt');
+        if (existsSync(models)) {
+          for (const name of readdirSync(models)) {
+            if (name !== 'manifest.json') {
+              rmSync(resolve(models, name), { recursive: true, force: true });
+            }
+          }
+        }
 
         const devPages = `${normalizePath(resolve(config.root, 'src/pages/dev'))}/`;
         for (const item of Object.values(bundle)) {
