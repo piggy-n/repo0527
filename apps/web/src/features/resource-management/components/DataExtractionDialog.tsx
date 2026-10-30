@@ -10,17 +10,17 @@ import {
   ElFormItem,
   ElInput,
   ElMessage,
-  ElOption,
-  ElSelect,
   ElStep,
   ElSteps,
-  ElTag
+  ElTag,
+  type FormInstance,
+  type FormRules
 } from 'element-plus';
-import { defineComponent, type PropType } from 'vue';
+import { defineComponent, type PropType, ref, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { DataExtractionOwner, ExtractionStep } from '../composables/useDataExtraction';
-import { DATA_FORMATS, DATA_LAYERS } from '@/shared/data-request/catalog';
-import { DATA_NAMES, HOT_KEYWORDS, PURPOSE_MAX_LENGTH } from '../extraction/extraction-form';
+import { DATA_FORMATS } from '@/shared/data-request/catalog';
+import { HOT_KEYWORDS, PURPOSE_MAX_LENGTH } from '../extraction/extraction-form';
 import styles from './DataExtractionDialog.module.scss';
 import { KnowledgeGraphChart } from './KnowledgeGraphChart';
 import { RegionCascader } from './RegionCascader';
@@ -29,6 +29,12 @@ import { RelationNodeDetail } from './RelationNodeDetail';
 
 // 完成页时三步都已完成
 const STEP_INDEX: Record<ExtractionStep, number> = { search: 0, graph: 1, done: 3 };
+
+// 数据名称和数据需求选了节点自动填写，可以改，不能空着
+const RULES: FormRules = {
+  dataName: [{ required: true, whitespace: true, message: '请选择节点或填写数据名称', trigger: 'blur' }],
+  requirement: [{ required: true, whitespace: true, message: '请选择节点或填写数据需求', trigger: 'blur' }]
+};
 
 /**
  * 自助取数：搜索关键词 → 在关系图里选节点、填条件 → 完成。第二步是左图右表单，窄屏改为上图下表单；
@@ -41,6 +47,12 @@ export const DataExtractionDialog = defineComponent({
   },
   setup(props) {
     const owner = props.owner;
+    const formRef = ref<FormInstance>();
+
+    // 换了节点时两项重新填写，之前没填的校验提示不再适用
+    watch([() => owner.form.dataName, () => owner.form.requirement], () =>
+      formRef.value?.clearValidate(['dataName', 'requirement'])
+    );
 
     function search(value?: string) {
       const message = owner.search(value);
@@ -49,7 +61,11 @@ export const DataExtractionDialog = defineComponent({
       }
     }
 
-    function submit() {
+    async function submit() {
+      const valid = await formRef.value?.validate().catch(() => false);
+      if (!valid) {
+        return;
+      }
       const message = owner.submit();
       if (message) {
         ElMessage.warning(message);
@@ -140,16 +156,20 @@ export const DataExtractionDialog = defineComponent({
     function renderForm() {
       const form = owner.form;
       return (
-        <ElForm class={styles.form} model={form} labelPosition="top">
-          <ElFormItem label="数据名称">
-            <ElSelect modelValue={form.dataName} onUpdate:modelValue={(value: string) => (form.dataName = value)}>
-              {DATA_NAMES.map(name => <ElOption key={name} value={name} label={name} />)}
-            </ElSelect>
+        <ElForm ref={formRef} class={styles.form} model={form} rules={RULES} labelPosition="top">
+          <ElFormItem label="数据名称" prop="dataName">
+            <ElInput
+              modelValue={form.dataName}
+              onUpdate:modelValue={(value: string) => (form.dataName = value)}
+              placeholder="选择节点后自动填写"
+            />
           </ElFormItem>
-          <ElFormItem label="数据需求（主题图层）">
-            <ElSelect modelValue={form.layerCode} onUpdate:modelValue={(value: string) => (form.layerCode = value)}>
-              {DATA_LAYERS.map(layer => <ElOption key={layer.value} value={layer.value} label={layer.label} />)}
-            </ElSelect>
+          <ElFormItem label="数据需求" prop="requirement">
+            <ElInput
+              modelValue={form.requirement}
+              onUpdate:modelValue={(value: string) => (form.requirement = value)}
+              placeholder="选择节点后自动生成，如：河流线图层"
+            />
           </ElFormItem>
           <ElFormItem label="行政区划">
             <RegionCascader modelValue={form.regionPath} onUpdate:modelValue={value => (form.regionPath = value)} />
@@ -257,7 +277,7 @@ export const DataExtractionDialog = defineComponent({
           <ElButton onClick={owner.back}>上一步</ElButton>
           <span>
             <ElButton onClick={owner.close}>取消</ElButton>
-            <ElButton type="primary" onClick={submit}>
+            <ElButton type="primary" onClick={() => void submit()}>
               开始取数
             </ElButton>
           </span>

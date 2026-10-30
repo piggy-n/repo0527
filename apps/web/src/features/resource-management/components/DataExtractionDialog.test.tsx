@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
@@ -60,16 +60,23 @@ describe('useDataExtraction', () => {
     expect(owner.graph.value.nodes.map(node => node.id)).toEqual(expect.arrayContaining(['S01-0103', 'P01-0103']));
   });
 
-  it('选节点不改条件；上一步保留条件、清掉节点；格式全空时不能提交', () => {
+  it('选节点时数据名称取节点名称、数据需求按名称生成，其余条件不变；上一步清掉节点和这两项；格式全空时不能提交', () => {
     const { owner } = host();
     owner.start();
+    expect([owner.form.dataName, owner.form.requirement]).toEqual(['', '']);
     owner.search('耕地');
     owner.form.purpose = '  年度台账  ';
     owner.select(required(owner.graph.value.nodes.find(node => node.id === 'S01-0101'), '水田'));
 
-    expect(owner.form.dataName).toBe('地类图斑');
+    expect([owner.form.dataName, owner.form.requirement]).toEqual(['水田', '水田图层']);
+    expect(owner.form.purpose).toBe('  年度台账  ');
+    owner.form.dataName = '改过的名称';
+    owner.select(required(owner.graph.value.nodes.find(node => node.id === 'S01-0102'), '水浇地'));
+    expect([owner.form.dataName, owner.form.requirement]).toEqual(['水浇地', '水浇地图层']);
+
     owner.back();
     expect(owner.selected.value).toBeNull();
+    expect([owner.form.dataName, owner.form.requirement]).toEqual(['', '']);
     expect(owner.form.purpose).toBe('  年度台账  ');
 
     owner.search('耕地');
@@ -85,6 +92,7 @@ describe('useDataExtraction', () => {
     const node = required(owner.graph.value.nodes.find(item => item.id === 'S01-0101'), '水田');
     owner.select(node);
     Object.assign(owner.form, {
+      requirement: ' 水田面图层 ',
       regionPath: ['320000', '320100', '320102'],
       purpose: ' 台账 ',
       formats: ['Excel', 'SHP']
@@ -95,8 +103,8 @@ describe('useDataExtraction', () => {
     expect(owner.request.value).toMatchObject({
       nodeId: 'S01-0101',
       nodeName: node.name,
-      dataName: '地类图斑',
-      layerCode: 'csxhjctb_xxp_2022',
+      dataName: '水田',
+      requirement: '水田面图层',
       xzqdm: '320102',
       formats: ['Excel', 'SHP'],
       purpose: '台账'
@@ -124,18 +132,29 @@ describe('useDataExtraction', () => {
     expect(owner.relation.view.value.lanes).toHaveLength(4);
   });
 
-  it('关系图里选中的节点随条件提交；上一步清掉选中', () => {
+  it('关系图里选中的节点随条件提交，数据需求带上数据表的几何类型；上一步清掉选中', () => {
     const { owner } = host();
     owner.start();
     owner.search('湖泊');
     owner.relation.select('land-survey/1102');
+    expect([owner.form.dataName, owner.form.requirement]).toEqual(['湖泊水面', '湖泊水面图层']);
     owner.back();
     expect(owner.relation.selectedId.value).toBeNull();
+    expect([owner.form.dataName, owner.form.requirement]).toEqual(['', '']);
 
-    owner.search('湖泊');
-    owner.relation.select('land-survey/1102');
+    owner.browseWater();
+    owner.relation.select('urban-monitoring/HYDL');
+    // 名称已经以几何类型结尾时不重复
+    expect([owner.form.dataName, owner.form.requirement]).toEqual(['水域线', '水域线图层']);
+    owner.relation.locate('land-survey/DLTB');
+    expect([owner.form.dataName, owner.form.requirement]).toEqual(['地类图斑', '地类图斑面图层']);
     expect(owner.submit()).toBeNull();
-    expect(owner.request.value).toMatchObject({ nodeId: 'land-survey/1102', nodeName: '湖泊水面' });
+    expect(owner.request.value).toMatchObject({
+      nodeId: 'land-survey/DLTB',
+      nodeName: '地类图斑',
+      dataName: '地类图斑',
+      requirement: '地类图斑面图层'
+    });
   });
 
   it('重新打开回到第一步和默认条件；换会话时关闭', () => {
@@ -167,6 +186,18 @@ describe('DataExtractionDialog', () => {
     await click('湿地');
     expect(owner.step.value).toBe('graph');
     expect(dialog().textContent).toContain('请选择关系图节点');
+    // 没选节点时数据名称、数据需求是空的，必填校验不通过
+    await click('开始取数');
+    await vi.waitFor(() => expect(dialog().textContent).toContain('请选择节点或填写数据名称'));
+    expect(dialog().textContent).toContain('请选择节点或填写数据需求');
+    expect(owner.step.value).toBe('graph');
+
+    owner.select(required(owner.graph.value.nodes.at(-1), '湿地的节点'));
+    await flushPromises();
+    const inputs = [...dialog().querySelectorAll<HTMLInputElement>('.el-form-item input')].slice(0, 2);
+    expect(inputs.map(input => input.value)).toEqual([owner.form.dataName, owner.form.requirement]);
+    expect(owner.form.requirement).toBe(`${owner.form.dataName}图层`);
+    expect(dialog().textContent).not.toContain('请选择节点或填写数据名称');
     await click('全选');
     expect(owner.form.formats).toEqual(['Excel', 'Word', 'Echarts', 'SHP', 'GDB']);
     await click('清空');
