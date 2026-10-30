@@ -4,6 +4,7 @@ import { computed, defineComponent, nextTick, type PropType, ref, type VNode } f
 import { useSortableList } from '@/shared/composables/useSortableList';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
+import type { TreeMove } from '../catalog-order';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import { arrowStep } from '../keyboard';
 import { type CheckedLayer, checkedDropTarget, checkedLayers, moveTarget } from '../layer-panel';
@@ -58,7 +59,8 @@ function renderStatus(statuses: readonly ResourceStatus[]) {
 
 /**
  * "已选择图层"（ADR 0053 第 6 节）：按叠放顺序从上到下，拖动手柄和上移、下移（ADR 0096）调整叠放顺序（上层优先显示），
- * 交给拥有者的 move；每一行是年份、名称、状态图标、透明度、上移下移、取消勾选。状态只显示最严重的图标，悬停时列出全部（ADR 0059）
+ * 换成目录树里的调整交给拥有者的 move，树跟着变（ADR 0118）；每一行是年份、名称、状态图标、透明度、上移下移、取消勾选。
+ * 状态只显示最严重的图标，悬停时列出全部（ADR 0059）
  */
 export const CheckedLayerList = defineComponent({
   name: 'CheckedLayerList',
@@ -72,9 +74,9 @@ export const CheckedLayerList = defineComponent({
     const list = ref<HTMLElement>();
     const items = computed(() => checkedLayers(props.layers.state.value));
 
-    const moveTo = (code: string, target: number | null) => {
+    const moveTo = (target: TreeMove | null) => {
       if (target !== null) {
-        props.layers.move(code, target);
+        props.layers.move(target);
       }
     };
 
@@ -84,7 +86,7 @@ export const CheckedLayerList = defineComponent({
       onMove: (from, to) => {
         const code = items.value[from]?.code;
         if (code !== undefined) {
-          moveTo(code, checkedDropTarget(props.layers.state.value, code, to));
+          moveTo(checkedDropTarget(props.layers.state.value, code, to));
         }
       }
     });
@@ -96,7 +98,7 @@ export const CheckedLayerList = defineComponent({
         return;
       }
       event.preventDefault();
-      moveTo(code, moveTarget(props.layers.state.value, code, step < 0 ? 'up' : 'down'));
+      moveTo(moveTarget(props.layers.state.value, code, step < 0 ? 'up' : 'down'));
       await nextTick();
       const handles = list.value?.querySelectorAll<HTMLElement>(HANDLE) ?? [];
       [...handles].find(handle => handle.dataset.code === code)?.focus();
@@ -104,7 +106,7 @@ export const CheckedLayerList = defineComponent({
 
     // 上移、下移一位；移动后焦点回到这一行的按钮上
     const onMoveButton = async (code: string, direction: MoveDirection) => {
-      moveTo(code, moveTarget(props.layers.state.value, code, direction));
+      moveTo(moveTarget(props.layers.state.value, code, direction));
       await nextTick();
       focusMoveButton(list.value?.querySelector(`[data-layer="${code}"]`), direction);
     };

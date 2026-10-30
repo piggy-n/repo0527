@@ -80,7 +80,6 @@ describe('useReasoningLog', () => {
       'qc',
       'spatial',
       'compute',
-      'evaluate',
       'report'
     ]);
   });
@@ -100,14 +99,14 @@ describe('useRunConversation', () => {
     expect(run.state.value.paused).toBe(false);
     conversation.send('继续');
     expect(outline(log.entries.value).filter(line => line.startsWith('AI'))).toEqual([
-      'AI：已暂停。说"继续"接着计算，也可以先改参数或范围。',
+      'AI：已暂停。输入"继续"恢复计算，也可先调整参数或范围。',
       'AI：继续计算。',
-      'AI：计算没有暂停。'
+      'AI：计算未暂停。'
     ]);
 
     await clock.advance(ENOUGH);
     conversation.send('暂停');
-    expect(lastReply(log.entries.value)).toContain('计算已经完成了');
+    expect(lastReply(log.entries.value)).toContain('计算已完成');
   });
 
   it('计算中改参数：还没执行的步骤保存，已执行的从受影响的一步重算；先解除暂停，编排同步成新的', async () => {
@@ -119,17 +118,23 @@ describe('useRunConversation', () => {
     conversation.send('按旧规程计算');
     expect([userPause.paused.value, run.state.value.paused]).toEqual([false, false]);
     expect(run.state.value.params.rule).toBe('old');
-    expect(lastReply(log.entries.value)).toContain('「空间分析」还没执行');
+    expect(lastReply(log.entries.value)).toContain('「空间分析」尚未执行');
     expect(owner.state.value.params.rule).toBe('old');
 
     await clock.advance(ENOUGH);
     conversation.send('常住人口增加 10%');
     expect(run.state.value.restart).toBe('pop');
-    expect(lastReply(log.entries.value)).toContain('从「数据准备」重算，前 1 步复用');
+    expect(lastReply(log.entries.value)).toContain('将从「数据准备」重新计算，前 1 步沿用已有结果');
     // 要重算的步骤冻结成"已调整"，重算开始时另加一条
     await clock.advance(1000);
     const lines = outline(log.entries.value);
-    expect(lines.filter(line => line.includes('·outdated'))).toEqual(['prep·outdated', 'qc·outdated', 'spatial·outdated', 'compute·outdated', 'evaluate·outdated', 'report·outdated']);
+    expect(lines.filter(line => line.includes('·outdated'))).toEqual([
+      'prep·outdated',
+      'qc·outdated',
+      'spatial·outdated',
+      'compute·outdated',
+      'report·outdated'
+    ]);
     expect(lines.at(-1)).toBe('prep（重算）');
   });
 
@@ -149,7 +154,7 @@ describe('useRunConversation', () => {
       'parse·outdated',
       'prep·stopped',
       '用户：加上苏州市',
-      'AI：好的，范围改为南京市、苏州市。从「条件解析」重算。'
+      'AI：已调整：范围改为南京市、苏州市。将从「条件解析」重新计算。'
     ]);
   });
 
@@ -160,7 +165,7 @@ describe('useRunConversation', () => {
     await clock.advance(3000);
     expect(conversation.send('  ')).toBe('empty');
     conversation.send('今天天气怎么样');
-    expect(lastReply(log.entries.value)).toContain('没听懂这句话');
+    expect(lastReply(log.entries.value)).toContain('未能识别该指令');
     expect(conversation.send('停止')).toBe('stopped');
     expect(run.state.value.status).toBe('idle');
   });
@@ -191,19 +196,18 @@ describe('useRunConversation', () => {
     conversation.send('看苏州市');
     expect([result.selection.value?.cityCode, view.value]).toEqual(['320500', 'result']);
     expect(conversation.reply.value).toBe('放大到苏州市，设施和服务范围放大后显示。');
-    expect(conversation.suggestions.value.slice(0, 4)).toEqual(['看南京市', '按达标着色', '看人均公园绿地', '回看计算流程']);
+    expect(conversation.suggestions.value.slice(0, 3)).toEqual(['看南京市', '看人均公园绿地', '回看计算流程']);
     expect(conversation.example.value).toBe('看南京市');
-    conversation.send('按达标着色');
     conversation.send('看 2024 年');
     conversation.send('看人均公园绿地');
     conversation.send('回到计算范围');
-    expect(result.selection.value).toEqual({ indicatorId: 'A-39', year: 2024, mode: 'pass', cityCode: null });
+    expect(result.selection.value).toEqual({ indicatorId: 'A-39', year: 2024, cityCode: null });
     expect(conversation.reply.value).toBe('回到整个计算范围。');
 
     conversation.send('回看计算流程');
     expect(view.value).toBe('flow');
     expect(conversation.reply.value).toBeNull();
-    expect(lastReply(log.entries.value)).toBe('回到计算流程。点标题栏的"计算结果"再回来。');
+    expect(lastReply(log.entries.value)).toBe('已切换到计算流程，可点击标题栏"计算结果"返回。');
     expect(run.state.value.versions).toBe(versions);
   });
 
@@ -214,13 +218,13 @@ describe('useRunConversation', () => {
     await clock.advance(ENOUGH);
 
     conversation.send('看南京市');
-    expect(conversation.reply.value).toBe('计算范围就是南京市。');
+    expect(conversation.reply.value).toBe('当前计算范围仅含南京市。');
     conversation.send('今天天气怎么样');
-    expect(conversation.reply.value).toContain('看结果可以说');
+    expect(conversation.reply.value).toContain('查看结果可尝试');
     conversation.send('看无锡市');
     expect(run.state.value.conditions?.cityCodes).toEqual(['320100', '320200']);
     // 改了就重新计算：回复只记在时间线上（回到流程图由页面按计算状态切换）
-    expect(lastReply(log.entries.value)).toContain('从「条件解析」重算');
+    expect(lastReply(log.entries.value)).toContain('将从「条件解析」重新计算');
     expect(conversation.reply.value).toBeNull();
   });
 });

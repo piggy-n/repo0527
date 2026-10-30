@@ -2,8 +2,6 @@
 
 /** 数值五档：浅蓝到深蓝（主色系） */
 export const VALUE_COLORS = ['#dfe8ff', '#b4c8ff', '#7f9ff6', '#4f72e3', '#2c4bb5'] as const;
-/** 达标三态：达标主色、接近琥珀、未达标红（第五版原型）；面上用浅一档，不整片铺饱和色 */
-export const PASS_COLORS = { pass: '#a9bdfb', near: '#f8d08a', fail: '#f3a3a3' } as const;
 /** 计算中还没扫到的区县 */
 export const PENDING_COLOR = '#c8d2e2';
 /** 人口密度的底色（紫色系，取自原型） */

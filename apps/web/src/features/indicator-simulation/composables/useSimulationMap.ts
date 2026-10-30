@@ -2,12 +2,11 @@ import type { LngLat, StyleGroup } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
 import { computed, type ComputedRef, type Ref, watch } from 'vue';
 import { formatValue } from '../format';
-import { indicatorResult, type PassState, passState } from '../model/analysis';
+import { indicatorResult } from '../model/analysis';
 import { type MapData, mapData } from '../map/map-data';
 import { districtsGroup, facilitiesGroup, highlightGroup, type MapFrame, maskGroup } from '../map/map-frame';
 import { simulationIndicator } from '../model/indicators';
 import { reducedMotion } from '../motion';
-import { PASS_TEXT } from '../result/result-view';
 import type { SimulationResult } from './useSimulationResult';
 import type { SimulationRun } from './useSimulationRun';
 
@@ -18,11 +17,9 @@ export interface MapLabel {
   /** 去掉"市"的名称 */
   readonly name: string;
   readonly value: string;
-  /** 城市值的达标状态 */
-  readonly state: PassState;
 }
 
-/** 鼠标下的区县：名称、值和达标 */
+/** 鼠标下的区县：名称和值 */
 export interface DistrictHint {
   readonly name: string;
   readonly text: string;
@@ -44,7 +41,7 @@ export interface SimulationMap {
 const SHOWN: MapFrame = { density: null, scan: 1, rain: 1, ring: 1 };
 
 /**
- * 结果展示的地图：按结果的选择显示（指标、年度、着色），各市标出值和达标，悬停的市描边；
+ * 结果展示的地图：按结果的选择显示（指标、年度），各市标出值，悬停的市描边；
  * 放大到一个市时画设施和服务圈；有了结果时镜头移到推演范围，放大到一个市时移到这个市，回到整个范围时再移回来
  */
 export function useSimulationMap(
@@ -92,8 +89,7 @@ export function useSimulationMap(
       cityCode: city.code,
       lngLat: city.center,
       name: city.name.replace(/市$/, ''),
-      value: formatValue(city.value, indicator),
-      state: city.state
+      value: formatValue(city.value, indicator)
     }));
   });
 
@@ -109,15 +105,12 @@ export function useSimulationMap(
     return new Map(
       outcome.rows.map((row): [string, DistrictHint] => [
         row.code,
-        {
-          name: row.name,
-          text: `${formatValue(row.value, indicator)} · ${PASS_TEXT[passState(row.value, outcome.target)]}`
-        }
+        { name: row.name, text: formatValue(row.value, indicator) }
       ])
     );
   });
 
-  // 有了结果（第一次，或重新推演完成）、换放大的市时移镜头；换指标、年度、着色时不动
+  // 有了结果（第一次，或重新推演完成）、换放大的市时移镜头；换指标、年度时不动
   watch(
     [() => (viewing.value ? conditions.value : null), () => viewing.value?.selection.cityCode ?? null],
     ([next, cityCode]) => {

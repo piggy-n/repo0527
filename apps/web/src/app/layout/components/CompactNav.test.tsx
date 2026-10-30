@@ -50,21 +50,21 @@ describe('CompactNav', () => {
       '[分组] 专项统计',
       '  城市国土空间监测基本统计',
       '  城市国土空间监测指标',
-      '  驾驶舱',
+      '  城市国土空间监测城市体检驾驶舱',
       '——',
       '[图标] 文件管理',
       '[图标] 系统管理',
       '——',
-      '[标题+图标] 智能体',
+      '[标题+图标] AI+',
       '  AI对话',
-      '  城市国土空间监测指标AI计算'
+      '  智能体'
     ]);
   });
 
-  it('一层下拉（智能体）没有分组名，直接列出缩进的页面', async () => {
+  it('一层下拉（AI+）没有分组名，直接列出缩进的页面', async () => {
     const rows = await openMenu(Role.user, '/indicator-simulation', items => items.filter(item => item.kind === 'menu'));
 
-    expect(rows).toEqual(['[标题+图标] 智能体', '  AI对话', '  城市国土空间监测指标AI计算 (当前)']);
+    expect(rows).toEqual(['[标题+图标] AI+', '  AI对话', '  智能体 (当前)']);
   });
 
   it('一级项在同一页面的其他路由上也标出当前：系统管理的统计报表', async () => {
@@ -77,7 +77,7 @@ describe('CompactNav', () => {
     const rows = await openMenu(Role.user, '/current-map', items => items.filter(item => item.kind === 'dropdown'));
 
     expect(rows.at(0)).toBe('[标题+图标] 查询统计');
-    expect(rows.at(-1)).toBe('  驾驶舱');
+    expect(rows.at(-1)).toBe('  城市国土空间监测城市体检驾驶舱');
   });
 
   it('驾驶舱在新标签页打开，当前页面不跳转', async () => {
@@ -90,7 +90,7 @@ describe('CompactNav', () => {
     await vi.waitFor(() => expect(document.querySelector('.el-dropdown-menu')).not.toBeNull());
 
     const dashboard = [...document.querySelectorAll<HTMLElement>('.el-dropdown-menu__item')].find(
-      item => item.textContent?.trim() === '驾驶舱'
+      item => item.textContent?.trim() === '城市国土空间监测城市体检驾驶舱'
     );
     dashboard?.click();
     await flushPromises();

@@ -38,14 +38,10 @@ describe('interpretCommand', () => {
     expect(changeOf(interpretCommand('恢复标准口径', current)).composition.params).toEqual(defaultParams());
   });
 
-  it('改某项指标的目标值；指标不在条件里时说明', () => {
-    const target = changeOf(interpretCommand('人均公园绿地目标改成 13', current));
-    expect(target.composition.params.targets['A-39']).toBe(13);
-    expect(target.said).toEqual(['人均公园绿地目标改为 13']);
-    expect(interpretCommand('公园绿地覆盖率目标 75', current)).toEqual({
-      kind: 'none',
-      notes: ['没找到要改目标值的指标，指标要先在计算条件里']
-    });
+  it('不设置目标值：说到目标值时不改条件，说明原因（2026-10-30）', () => {
+    const none = { kind: 'none', notes: ['计算结果只给出各项指标的值，不设置目标值'] };
+    expect(interpretCommand('人均公园绿地目标改成 13', current)).toEqual(none);
+    expect(interpretCommand('公园绿地覆盖率目标 75', current)).toEqual(none);
   });
 
   it('加上、去掉、只看城市；全省', () => {
@@ -70,14 +66,14 @@ describe('interpretCommand', () => {
 
   it('用不上的参数、清空条件、听不懂的话不改；有改动时暂停不算', () => {
     const solo: Composition = { ...current, conditions: { ...current.conditions, indicatorIds: ['A-39'] } };
-    expect(interpretCommand('按旧规程计算', solo)).toEqual({ kind: 'none', notes: ['当前指标用不上计算规程'] });
-    expect(interpretCommand('去掉南京市和苏州市', current)).toEqual({ kind: 'none', notes: ['年份、范围和指标都至少要留一项'] });
+    expect(interpretCommand('按旧规程计算', solo)).toEqual({ kind: 'none', notes: ['所选指标不适用计算规程'] });
+    expect(interpretCommand('去掉南京市和苏州市', current)).toEqual({ kind: 'none', notes: ['年份、范围和指标均需至少保留一项'] });
     expect(interpretCommand('今天天气怎么样', current)).toEqual({ kind: 'none', notes: [] });
     expect(interpretCommand('暂停，改成旧规程', current).kind).toBe('change');
     // 一句里同时有用得上和用不上的：改用得上的，说明用不上的
     const mixed = changeOf(interpretCommand('按旧规程、人口增加 10% 计算', { ...current, conditions: { ...current.conditions, indicatorIds: ['A-31'] } }));
     expect(mixed.composition.params).toMatchObject({ rule: 'old', popChange: 0 });
-    expect(mixed.notes).toEqual(['当前指标用不上常住人口变化']);
+    expect(mixed.notes).toEqual(['所选指标不适用常住人口变化']);
   });
 });
 

@@ -45,7 +45,10 @@ function curve([ax, ay]: Point, [bx, by]: Point): string {
 // 总线离参数节点左边的距离
 const BUS_GAP = 14;
 
-/** 按节点位置连线：年份 → 范围 → 每项指标 → 参数总线 → 各参数 → AI 推演；参数是所选指标用得上的几项。没有位置的节点不连 */
+/**
+ * 按节点位置连线：年份 → 范围 → 每项指标 → 参数总线 → 各参数 → AI 推演；参数是所选指标用得上的几项。没有位置的节点不连；
+ * 所选指标都没有可调的参数（如城区面积覆盖率）时指标直接连到 AI 推演
+ */
 export function boardLinks(
   boxes: ReadonlyMap<string, Box>,
   conditions: SimulationConditions,
@@ -63,17 +66,19 @@ export function boardLinks(
       }
     }
   }
-  const paramBoxes = paramsOf(conditions.indicatorIds).flatMap(key => {
+  const keys = paramsOf(conditions.indicatorIds);
+  const paramBoxes = keys.flatMap(key => {
     const box = boxes.get(paramNode(key));
     return box ? [{ key, box }] : [];
   });
   const first = paramBoxes[0]?.box;
   const last = paramBoxes.at(-1)?.box;
-  if (!first || !last) {
+  // 有参数时等参数节点有了位置再连指标
+  if ((!first || !last) && keys.length > 0) {
     return links;
   }
-  const busX = first.x - BUS_GAP;
-  const busPoint: Point = [busX, (first.y + last.y + last.h) / 2];
+  const busX = (first?.x ?? 0) - BUS_GAP;
+  const busPoint: Point | null = first && last ? [busX, (first.y + last.y + last.h) / 2] : null;
   for (const id of conditions.indicatorIds) {
     const box = boxes.get(indicatorNode(id));
     if (!box) {
@@ -83,7 +88,15 @@ export function boardLinks(
       const d = curve(right(region), left(box));
       links.push({ id: `r-${id}`, d, from: REGION_NODE, to: indicatorNode(id), kind: 'flow' });
     }
-    links.push({ id: `p-${id}`, d: curve(right(box), busPoint), from: indicatorNode(id), to: BUS, kind: 'flow' });
+    if (busPoint) {
+      links.push({ id: `p-${id}`, d: curve(right(box), busPoint), from: indicatorNode(id), to: BUS, kind: 'flow' });
+    } else if (output) {
+      const d = curve(right(box), left(output));
+      links.push({ id: `o-${id}`, d, from: indicatorNode(id), to: OUTPUT_NODE, kind: 'flow' });
+    }
+  }
+  if (!first || !last) {
+    return links;
   }
   const top = first.y + first.h / 2;
   const bottom = last.y + last.h / 2;

@@ -14,8 +14,8 @@ const LEVEL_CLASS: Readonly<Record<LabelLevel, string | undefined>> = {
 };
 
 /**
- * 叠在结果地图上的 DOM：各市的值与达标（互相压住时省掉数值或只留圆点，点了放大到这个市），
- * 鼠标下区县的名称、值和达标；位置随相机重新投影
+ * 叠在结果地图上的 DOM：各市的值（互相压住时省掉数值或只留圆点，点了放大到这个市），
+ * 鼠标下区县的名称和值；位置随相机重新投影
  */
 export const SimulationMapOverlay = defineComponent({
   name: 'SimulationMapOverlay',
@@ -71,7 +71,7 @@ export const SimulationMapOverlay = defineComponent({
           title: `${label.name} ${label.value}`
         };
         const content = [
-          <i key="dot" class={styles[label.state]} />,
+          <i key="dot" />,
           <span key="name" class={styles.name}>
             {label.name}
           </span>,

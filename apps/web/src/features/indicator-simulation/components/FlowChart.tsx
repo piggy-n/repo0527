@@ -8,8 +8,10 @@ import styles from './FlowChart.module.scss';
 
 const { nodeWidth, nodeHeight, columnGap, padX } = FLOW_LAYOUT;
 const HIDDEN: NodeFrame = { status: 'hidden', progress: 0 };
-// 评价分级的节点：完成后点了看这项指标的结果
-const EVAL_PREFIX = 'eval:';
+// 指标计算的节点（不含标准口径的对照）：完成后点了看这项指标的结果
+const CALC_PREFIX = 'calc:';
+const pickedIndicator = (node: FlowNode) =>
+  node.step === 'compute' && node.kind === 'node' ? node.key.slice(CALC_PREFIX.length) : null;
 
 // 连线：从上一个节点的右边到下一个节点的左边，水平进出
 function curve(a: FlowNode, b: FlowNode): string {
@@ -23,7 +25,7 @@ function curve(a: FlowNode, b: FlowNode): string {
 
 /**
  * 推演流程图：节点从父节点处长出，连线先描出再有光点流向正在执行的节点；镜头跟随正在执行的一列，
- * 也可以看全览或拖动画布。节点状态由 flowFrame 按推演进度算出，组件只画；完成后评价节点可以点
+ * 也可以看全览或拖动画布。节点状态由 flowFrame 按推演进度算出，组件只画；完成后指标计算的节点可以点
  */
 export const FlowChart = defineComponent({
   name: 'FlowChart',
@@ -31,7 +33,7 @@ export const FlowChart = defineComponent({
     plan: { type: Object as PropType<FlowPlan>, required: true },
     frame: { type: Object as PropType<FlowFrame>, required: true },
     paused: Boolean,
-    /** 计算完成：看全览，评价节点可以点 */
+    /** 计算完成：看全览，指标计算的节点可以点 */
     done: Boolean,
     /** 时间线上悬停的一步：这一列的节点高亮 */
     highlight: { type: Number as PropType<number | null>, default: null },
@@ -39,7 +41,7 @@ export const FlowChart = defineComponent({
     reserveRight: { type: Number, default: 0 }
   },
   emits: {
-    /** 完成后点了评价节点：看这项指标的结果 */
+    /** 完成后点了指标计算的节点：看这项指标的结果 */
     pick: (indicatorId: string) => typeof indicatorId === 'string'
   },
   setup(props, { emit }) {
@@ -102,6 +104,7 @@ export const FlowChart = defineComponent({
         .map(([from]) => props.plan.nodes.find(item => item.key === from))
         .find(item => item && visible(item.key));
       const lit = props.highlight === null || props.highlight === node.column;
+      const picked = pickedIndicator(node);
       return (
         <div
           key={node.key}
@@ -136,16 +139,16 @@ export const FlowChart = defineComponent({
           <b class={styles.title} title={node.title}>
             {node.title}
           </b>
-          <span class={[styles.detail, node.fail && frame.status === 'done' && styles.fail]} title={node.detail}>
+          <span class={styles.detail} title={node.detail}>
             {node.detail}
           </span>
           <i class={styles.progress} />
-          {props.done && node.key.startsWith(EVAL_PREFIX) && (
+          {props.done && picked !== null && (
             <button
               type="button"
               class={styles.pick}
               aria-label={`看${node.label}的结果`}
-              onClick={() => emit('pick', node.key.slice(EVAL_PREFIX.length))}
+              onClick={() => emit('pick', picked)}
             />
           )}
         </div>

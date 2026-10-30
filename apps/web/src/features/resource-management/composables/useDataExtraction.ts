@@ -1,6 +1,12 @@
 import { computed, onScopeDispose, reactive, ref, shallowRef, watch } from 'vue';
 import { useSessionStore } from '@/shared/auth/session-store';
-import { createExtractionForm, extractionRequest, type ExtractionRequest } from '../extraction/extraction-form';
+import {
+  createExtractionForm,
+  type ExtractionNode,
+  extractionRequest,
+  type ExtractionRequest,
+  extractionTarget
+} from '../extraction/extraction-form';
 import { type KnowledgeNode, searchContext, searchKnowledgeNodes } from '../extraction/knowledge-graph';
 import { chooseExtractionGraph, type ExtractionGraph, waterGraph } from '../extraction/relation-graph';
 import { useRelationGraph } from './useRelationGraph';
@@ -27,6 +33,23 @@ export function useDataExtraction() {
   const relation = useRelationGraph(waterGraph);
   const form = reactive(createExtractionForm());
   const request = shallowRef<ExtractionRequest | null>(null);
+  // 当前图里选中的节点：关系图的节点带上数据表的几何类型
+  const target = computed<ExtractionNode | null>(() => {
+    if (mode.value === 'legacy') {
+      return selected.value;
+    }
+    const node = relation.selected.value;
+    return node && { id: node.id, name: node.name, geometry: node.table?.geometry };
+  });
+
+  // 数据名称和数据需求跟着选中的节点：选了节点就重新填写（之后可以改），没有选中时清空
+  watch(
+    target,
+    node => {
+      Object.assign(form, node ? extractionTarget(node) : { dataName: '', requirement: '' });
+    },
+    { flush: 'sync' }
+  );
 
   function start() {
     step.value = 'search';
@@ -77,21 +100,21 @@ export function useDataExtraction() {
     step.value = 'graph';
   }
 
-  /** 选中节点只显示它的信息，不改动已填的条件 */
+  /** 选中节点：显示它的信息，数据名称和数据需求换成这个节点的，其余条件不变 */
   function select(node: KnowledgeNode) {
     if (step.value === 'graph') {
       selected.value = node;
     }
   }
 
-  /** 回到第一步：保留已填的条件，清掉选中的节点 */
+  /** 回到第一步：清掉选中的节点和跟着它的数据名称、数据需求，其余条件保留 */
   function back() {
     selected.value = null;
     relation.clearSelection();
     step.value = 'search';
   }
 
-  /** 和旧页面一样只要求至少一种数据格式；返回给用户的提示 */
+  /** 数据格式至少一种；数据名称和数据需求的必填由弹窗的表单校验。返回给用户的提示 */
   function submit(): string | null {
     if (step.value !== 'graph') {
       return null;
@@ -99,7 +122,7 @@ export function useDataExtraction() {
     if (form.formats.length === 0) {
       return '请至少选择一种数据格式';
     }
-    request.value = extractionRequest(form, mode.value === 'relation' ? relation.selected.value : selected.value);
+    request.value = extractionRequest(form, target.value);
     step.value = 'done';
     return null;
   }

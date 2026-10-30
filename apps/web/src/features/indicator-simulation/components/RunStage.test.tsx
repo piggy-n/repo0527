@@ -124,7 +124,7 @@ describe('RunStage', () => {
     expect(entries(mounted)[1]).toBe('条件解析进行中正在拆分年份、范围和指标…');
     await advance(mounted, THINK_MS - 700 + 300);
     await redraw();
-    expect(entries(mounted)[1]).toMatch(/^条件解析进行中理解指令：/);
+    expect(entries(mounted)[1]).toMatch(/^条件解析进行中解析指令：/);
 
     // 条件解析结束、数据准备刚开始（还在想）：条件解析的节点完成，三路数据还没长出
     await advance(mounted, run.state.value.durations.parse - 1400 + 10);
@@ -177,7 +177,7 @@ describe('RunStage', () => {
     );
     expect(parse.text()).toBe('条件解析完成2026 年 · 全省 · 3 项');
     await parse.get('button').trigger('click');
-    expect(parse.text()).toContain('理解指令：计算 2026 年全省的 3 项指标。');
+    expect(parse.text()).toContain('解析指令：计算 2026 年全省的 3 项指标。');
 
     expect(wrapper.find('[class*="_state_"][role="status"]').exists()).toBe(false);
     expect(['暂停', '人工干预', '停止'].map(text => wrapper.findAll('button').some(found => found.text() === text))).toEqual([false, false, false]);
@@ -192,7 +192,7 @@ describe('RunStage', () => {
     expect(mounted.run.state.value.status).toBe('idle');
   });
 
-  it('查看结果：左侧换成计算结果、主区换成地图；每项指标写结果和达标，选中的展开各市；切回计算流程时是 AI计算', async () => {
+  it('查看结果：左侧换成计算结果、主区换成地图；每项指标写结果，选中的展开各市；切回计算流程时是 AI计算', async () => {
     const mounted = await mountRun();
     const { wrapper, view } = mounted;
     await advance(mounted, ENOUGH);
@@ -201,7 +201,7 @@ describe('RunStage', () => {
     expect(view.value).toBe('result');
     expect(titles(mounted)).toContain('计算结果');
     expect(titles(mounted)).not.toContain('AI计算');
-    expect(item(mounted, '公园绿地覆盖率').text()).toBe('公园绿地覆盖率66.6%目标 ≥ 70.0%达标 5/13 市');
+    expect(item(mounted, '公园绿地覆盖率').text()).toBe('公园绿地覆盖率66.6%');
     expect(item(mounted, '公园绿地覆盖率').attributes('aria-expanded')).toBe('true');
     expect(wrapper.findAll('[aria-label^="放大到"]').filter(row => row.element.tagName === 'BUTTON')).not.toHaveLength(0);
     expect(wrapper.get('[aria-label="图例"]').text()).toContain('公园绿地覆盖率2026 年 · 单位 %');
@@ -216,18 +216,18 @@ describe('RunStage', () => {
     expect(titles(mounted)).toContain('AI计算');
   });
 
-  it('看结果：换指标、着色、悬停一市（地图描边）、点一市放大、返回计算范围；调整条件回到条件配置', async () => {
+  it('看结果：换指标、年度，悬停一市（地图描边）、点一市放大、返回计算范围；调整条件回到条件配置', async () => {
     const mounted = await mountRun({ ...sampleComposition(), conditions: { ...sampleComposition().conditions, years: [2025, 2026] } });
     const { wrapper, result, run } = mounted;
     await advance(mounted, ENOUGH);
     await button(mounted, '查看结果').trigger('click');
 
     await item(mounted, '人均公园绿地').trigger('click');
-    await wrapper.get('[aria-label="地图着色"] input[value="pass"]').setValue(true);
+    expect(wrapper.find('[aria-label="地图着色"]').exists()).toBe(false);
     await wrapper.get('[aria-label="年度"] input[value="2025"]').setValue(true);
-    expect(result.selection.value).toEqual({ indicatorId: 'A-39', year: 2025, mode: 'pass', cityCode: null });
+    expect(result.selection.value).toEqual({ indicatorId: 'A-39', year: 2025, cityCode: null });
     expect(item(mounted, '人均公园绿地').attributes('aria-expanded')).toBe('true');
-    expect(wrapper.get('[aria-label="图例"]').text()).toContain('2025 年 · 目标 ≥ 15 m²');
+    expect(wrapper.get('[aria-label="图例"]').text()).toContain('2025 年 · 单位 m²');
 
     const suzhou = required(
       wrapper.findAll('button[aria-label="放大到苏州"]').at(0),
@@ -281,7 +281,8 @@ describe('RunStage', () => {
 
     expect(nodes(mounted)['sa:B-65:0']).toBe('stale');
     expect(nodes(mounted).qc).toBe('done');
-    expect(entries(mounted).filter(text => text.includes('已调整')).map(text => text.slice(0, 4))).toEqual(['空间分析', '指标计算', '评价分级', '结论生成']);
+    const adjusted = entries(mounted).filter(text => text.includes('已调整'));
+    expect(adjusted.map(text => text.slice(0, 4))).toEqual(['空间分析', '指标计算', '结论生成']);
     await advance(mounted, 2000);
     expect(entries(mounted).at(-2)).toMatch(/^空间分析重算进行中/);
   });

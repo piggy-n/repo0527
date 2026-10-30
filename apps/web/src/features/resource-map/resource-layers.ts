@@ -6,6 +6,7 @@ import {
 } from '@maplibre/maplibre-gl-style-spec';
 import type { StyleGroup, StyleImage, StyleImages } from '@yzt/map-core';
 import type { Resource, ResourceCatalog, ResourceGeometry } from './catalog';
+import { treeOrder } from './catalog-order';
 import { noSymbolOverride, type ResourceSymbolOverride, type SymbolOverrideOf } from './resource-symbols';
 import {
   DEFAULT_OPACITY,
@@ -63,7 +64,7 @@ export interface ResourceLayersState {
   /** 目录还没加载时为 null */
   readonly catalog: ResourceCatalog | null;
   readonly displays: ReadonlyMap<string, ResourceDisplay>;
-  /** 面板上的顺序，包括没勾选的；排在前面的画在上面 */
+  /** 叠放顺序，包括没勾选的，排在前面的画在上面；按目录树整理过，同一个分类的资源连在一起，也是树上的顺序（ADR 0118） */
   readonly order: readonly string[];
 }
 
@@ -107,7 +108,7 @@ function mergedOrder(previous: readonly string[], catalog: ResourceCatalog): str
 
 /**
  * 目录（重新）加载后按资源合并显示状态（ADR 0041 第 3 节）：仍有的资源保留勾选、透明度和顺序，年份不再有效时改用最新的一年；
- * 新出现的用登记表的默认值；目录里没有了的删掉。持久化恢复的状态同样经过这里，不直接使用存下的值
+ * 新出现的用登记表的默认值；目录里没有了的删掉。顺序再按目录树整理（ADR 0118）。持久化恢复的状态同样经过这里，不直接使用存下的值
  */
 export function mergeDisplayState(previous: ResourceLayersState, catalog: ResourceCatalog): ResourceLayersState {
   if (previous.catalog === catalog) {
@@ -118,7 +119,7 @@ export function mergeDisplayState(previous: ResourceLayersState, catalog: Resour
     const display = previous.displays.get(resource.code);
     displays.set(resource.code, display ? keptDisplay(display, resource) : defaultDisplay(resource));
   }
-  return { catalog, displays, order: mergedOrder(previous.order, catalog) };
+  return { catalog, displays, order: treeOrder(catalog.categories, mergedOrder(previous.order, catalog)) };
 }
 
 // 批量设置年份固定列出的年份（ADR 0094）：数据里还没有时也列出

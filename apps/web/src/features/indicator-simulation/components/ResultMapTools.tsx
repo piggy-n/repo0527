@@ -6,17 +6,11 @@ import type { SimulationResult } from '../composables/useSimulationResult';
 import { serviceMeters, type SimulationConditions } from '../model/params';
 import { simulationIndicator } from '../model/indicators';
 import { FACILITY_COLOR } from '../map/colors';
-import type { MapMode } from '../result/result-view';
 import styles from './ResultMapTools.module.scss';
-
-const MODES: readonly { readonly value: MapMode; readonly label: string }[] = [
-  { value: 'value', label: '数值' },
-  { value: 'pass', label: '达标' }
-];
 
 const pick = <T,>(options: readonly T[], value: unknown): T | undefined => options.find(option => option === value);
 
-/** 结果地图左下的一张卡片：着色、年度切换（多年度时）和图例；放大到一个市时左上是"返回计算范围" */
+/** 结果地图左下的一张卡片：年度切换（多年度时）和图例；放大到一个市时左上是"返回计算范围" */
 export const ResultMapTools = defineComponent({
   name: 'ResultMapTools',
   props: {
@@ -51,25 +45,8 @@ export const ResultMapTools = defineComponent({
             </div>
           )}
           <div ref={legend} class={styles.card}>
-            <div class={styles.tools}>
-              <ElRadioGroup
-                size="small"
-                modelValue={selection.mode}
-                aria-label="地图着色"
-                onUpdate:modelValue={value => {
-                  const mode = pick(MODES.map(item => item.value), value);
-                  if (mode) {
-                    result.select({ mode });
-                  }
-                }}
-              >
-                {MODES.map(mode => (
-                  <ElRadioButton key={mode.value} value={mode.value}>
-                    {mode.label}
-                  </ElRadioButton>
-                ))}
-              </ElRadioGroup>
-              {years.length > 1 && (
+            {years.length > 1 && (
+              <div key="tools" class={styles.tools}>
                 <ElRadioGroup
                   size="small"
                   modelValue={selection.year}
@@ -87,9 +64,9 @@ export const ResultMapTools = defineComponent({
                     </ElRadioButton>
                   ))}
                 </ElRadioGroup>
-              )}
-            </div>
-            <div class={styles.legend} aria-label="图例">
+              </div>
+            )}
+            <div key="legend" class={styles.legend} aria-label="图例">
               <div class={styles.title}>{coloring.legend.title}</div>
               <div class={styles.subtitle}>{coloring.legend.subtitle}</div>
               {coloring.legend.entries.map(entry => (

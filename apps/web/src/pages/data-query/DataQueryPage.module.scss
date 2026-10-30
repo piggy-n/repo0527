@@ -1,6 +1,5 @@
-@use 'ui';
-
-// 画布型页面：地图撑满内容区，浮层的网格同指标页（ADR 0053）：左边两列是查询面板和查询结果，右列是地图控制和底图卡
+// 画布型页面：地图撑满内容区。浮层两列：右上角是地图控制和底图卡（2026-10-30 从右下角移来），
+// 查询面板和查询结果占满整个浮层，结果贴底、横跨整页
 .root {
   position: relative;
   height: 100%;
@@ -10,42 +9,43 @@
   position: absolute;
   inset: var(--space-lg);
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto 56px;
-  grid-template-columns: minmax(0, auto) minmax(0, 1fr) 40px;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 40px;
   gap: var(--space-md);
   pointer-events: none;
 }
 
-// 查询面板和查询结果占左边两列、从上到下：面板在上、按内容定高，结果贴底、从左边开始（参考旧页面，2026-10-29）；
-// 有结果时面板让出结果的高度，表单在面板内部滚动
+// 查询面板和查询结果在同一列、从上到下：面板在上、按内容定高，结果贴底、从左边一直到右边（参考旧页面，2026-10-29）；
+// 有结果时面板让出结果的高度，表单在面板内部滚动。右上角的控制叠在这一列的右上方，展开的结果在它们下面
 .main {
-  grid-row: 1 / 4;
+  grid-row: 1 / 3;
   grid-column: 1 / 3;
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
   min-width: 0;
   min-height: 0;
-
-  // 窄屏时左边只剩竖条，结果停在底图卡上方
-  @media (width < #{ui.$compact}) {
-    grid-row: 1 / 3;
-  }
 }
 
+// 结果最大化时从控制下面开始，不盖住地图控制和底图卡
+.mainMaximized {
+  grid-row: 2;
+}
+
+// 右边留出右上角一行的宽度（底图卡 80、控制 40、两处间距 12）：页面窄到放不下 320 的面板时，面板不伸到它们下面
 .left {
   display: flex;
   flex: 0 1 auto;
   flex-direction: column;
   align-items: flex-start;
   min-height: 0;
+  margin-right: 144px;
 
   > * {
     pointer-events: auto;
   }
 }
 
-// 底图卡宽 80、比工具列宽 40，伸进中间一列，结果右边为它留出位置；窄屏时结果在底图卡上方，右边不再让位
 .results {
   display: flex;
   flex: none;
@@ -53,14 +53,9 @@
   min-width: 0;
   min-height: 0;
   margin-top: auto;
-  margin-right: 40px;
 
   > * {
     pointer-events: auto;
-  }
-
-  @media (width < #{ui.$compact}) {
-    margin-right: 0;
   }
 }
 
@@ -69,24 +64,22 @@
   flex: 1;
 }
 
-.controls {
-  grid-row: 2;
-  grid-column: 3;
+// 底图卡在左、地图控制在右，一行顶部对齐（2026-10-30 用户要求，不放在控制下面）；比控制一列宽，跨两列靠右放，伸进左边一列
+.tools {
+  grid-row: 1;
+  grid-column: 1 / 3;
   justify-self: end;
-  align-self: end;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
 
   > * {
+    flex: none;
     pointer-events: auto;
   }
 }
 
-.cards {
-  grid-row: 3;
-  grid-column: 2 / 4;
-  justify-self: end;
+// 底图卡的入口按所在的盒子占满宽度（width: 100%），包一层按卡片本身的宽度排
+.basemap {
   display: flex;
-
-  > * {
-    pointer-events: auto;
-  }
 }

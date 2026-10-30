@@ -42,13 +42,10 @@ export function buildSteps(target: Composition): BuildStep[] {
   }
   current = { ...current, params };
   for (const key of paramsOf(conditions.indicatorIds)) {
-    let note = '';
-    if (key !== 'targets') {
-      note = isStandard(key, params) ? '（标准口径）' : '（自定义口径）';
-    }
+    const note = isStandard(key, params) ? '（标准口径）' : '（自定义口径）';
     steps.push({
       node: paramNode(key),
-      message: `设置${PARAM_LABELS[key]}：${describeParam(key, params, conditions)}${note}`,
+      message: `设置${PARAM_LABELS[key]}：${describeParam(key, params)}${note}`,
       composition: current
     });
   }

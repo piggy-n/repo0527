@@ -29,10 +29,9 @@ export function roundEstimate(value: number, indicator: Unit): number {
   return Math.round(value * scale) / scale + 0;
 }
 
-/** 预估值：按预估的精度，前面加"≈"，如"≈85%""≈1.2 平方米/人"；目标这类定值传 approx 为 false，不加 */
-export function formatEstimate(value: number, indicator: Unit, approx = true): string {
-  const text = withUnitText(roundEstimate(value, indicator).toFixed(estimateDigitsOf(indicator)), indicator);
-  return approx ? `≈${text}` : text;
+/** 预估值：按预估的精度，前面加"≈"，如"≈85%""≈1.2 平方米/人" */
+export function formatEstimate(value: number, indicator: Unit): string {
+  return `≈${withUnitText(roundEstimate(value, indicator).toFixed(estimateDigitsOf(indicator)), indicator)}`;
 }
 
 /** 预估的变化量：传入取整后的差，带正负号（没有变化时写 0），百分比写成"个百分点" */

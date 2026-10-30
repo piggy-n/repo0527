@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils';
-import { ElInputNumber, ElSlider } from 'element-plus';
+import { ElSlider } from 'element-plus';
 import { describe, expect, it } from 'vitest';
 import { required } from '@/shared/testing/required';
 import { defaultParams, type ParamKey, type SimulationConditions } from '../model/params';
@@ -29,7 +29,7 @@ describe('ParamPopover', () => {
     const draft = { ...defaultParams(), recognition: 'intersect' };
     expect(wrapper.emitted('preview')).toEqual([[draft]]);
     expect(wrapper.text()).toContain('自定义口径');
-    expect(wrapper.text()).toContain('同消防救援、派出所的认定');
+    expect(wrapper.text()).toContain('与消防救援、派出所覆盖率的认定方式一致');
     expect(ok()?.attributes('disabled')).toBeUndefined();
 
     await ok()?.trigger('click');
@@ -47,18 +47,6 @@ describe('ParamPopover', () => {
     expect(wrapper.text()).toContain('−10%');
     expect(wrapper.text()).toContain('自定义口径');
     expect(wrapper.emitted('preview')).toEqual([[{ ...defaultParams(), popChange: -10 }]]);
-  });
-
-  it('目标值每项指标一个输入框；改了目标值不算自定义口径', async () => {
-    const wrapper = mountPopover('targets');
-    expect(wrapper.text()).toContain('影响达标判断');
-    const inputs = wrapper.findAllComponents(ElInputNumber);
-    expect(inputs).toHaveLength(3);
-
-    inputs[2]?.vm.$emit('update:modelValue', 20);
-    await wrapper.vm.$nextTick();
-    expect(wrapper.emitted('preview')).toEqual([[{ ...defaultParams(), targets: { ...defaultParams().targets, 'A-39': 20 } }]]);
-    expect(wrapper.text()).not.toContain('自定义口径');
   });
 
   it('按 Esc 或关闭按钮取消', async () => {

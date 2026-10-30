@@ -4,7 +4,6 @@ import { defineComponent, nextTick, type PropType, ref, type VNode } from 'vue';
 import { useSortableList } from '@/shared/composables/useSortableList';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import type { ResourceGeometry } from '../catalog';
-import type { CatalogOrderOwner } from '../composables/useCatalogOrder';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import { arrowStep } from '../keyboard';
 import { nodeKey, type PanelNode } from '../layer-panel';
@@ -20,8 +19,8 @@ const GEOMETRY_ICONS: Readonly<Record<ResourceGeometry, IconName>> = {
 
 /**
  * 目录树里一个父节点下的子节点（ADR 0053 第 6 节）：分类可以展开，资源名称前是几何类型的图标。
- * 拖动手柄（复选框前面）和行末的上移、下移只在同一个父节点下调整目录顺序，交给目录顺序的拥有者，不改叠放顺序（ADR 0096）；
- * 搜索期间不能调整。每一层一个拖动实例，手柄按层级区分，免得外层的实例接手里层的拖动
+ * 拖动手柄（复选框前面）和行末的上移、下移（ADR 0096）在同一个父节点下调整顺序，交给资源图层的拥有者：树的顺序就是地图的叠放顺序，
+ * "已选择图层"跟着变（ADR 0118）。搜索期间不能调整。每一层一个拖动实例，手柄按层级区分，免得外层的实例接手里层的拖动
  */
 export const ResourceTreeList = defineComponent({
   name: 'ResourceTreeList',
@@ -32,8 +31,7 @@ export const ResourceTreeList = defineComponent({
     depth: { type: Number, required: true },
     expanded: { type: Object as PropType<ReadonlySet<string>>, required: true },
     searching: { type: Boolean, default: false },
-    layers: { type: Object as PropType<ResourceLayers>, required: true },
-    catalogOrder: { type: Object as PropType<CatalogOrderOwner>, required: true }
+    layers: { type: Object as PropType<ResourceLayers>, required: true }
   },
   emits: {
     toggle: (id: string) => typeof id === 'string'
@@ -42,7 +40,7 @@ export const ResourceTreeList = defineComponent({
     const list = ref<HTMLElement>();
     const handleSelector = `[data-drag-handle="${props.depth}"]`;
     const move = (from: number, to: number) =>
-      props.catalogOrder.move(props.parentId, props.nodes.map(nodeKey), from, to);
+      props.layers.move({ parentId: props.parentId, keys: props.nodes.map(nodeKey), from, to });
 
     useSortableList(list, {
       handle: handleSelector,
@@ -101,8 +99,8 @@ export const ResourceTreeList = defineComponent({
           class={styles.handle}
           data-drag-handle={props.depth}
           data-key={nodeKey(node)}
-          aria-label={`调整目录顺序：${name}`}
-          title="调整目录顺序"
+          aria-label={`调整图层顺序：${name}`}
+          title="调整图层顺序（上层优先显示）"
           onKeydown={event => void onHandleKeydown(event, index)}
         >
           <SvgIcon name="drag-handle" size={16} />
@@ -177,7 +175,6 @@ export const ResourceTreeList = defineComponent({
               expanded={props.expanded}
               searching={props.searching}
               layers={props.layers}
-              catalogOrder={props.catalogOrder}
               onToggle={id => emit('toggle', id)}
             />
           )}

@@ -124,4 +124,14 @@ describe('RelationNodeDetail', () => {
     expect(wrapper.text()).toContain('下级分类3');
     expect(wrapper.text()).toContain('水资源基础调查 · 一级类');
   });
+
+  it('下级分类的卡片前都留出展开按钮的位置，二级类、三级类逐级缩进（2026-10-30）', () => {
+    const { wrapper } = mountGraph();
+    // 卡片前面的元素：展开按钮或同宽的占位
+    const before = (id: string) => wrapper.get(`[data-node-id="${id}"]`).element.previousElementSibling;
+
+    const nested = ['land-use/1701', 'land-survey/1101', 'urban-monitoring/130A01', 'water-survey/HL_FS'];
+    expect(nested.map(id => before(id)?.getAttribute('aria-hidden'))).toEqual(nested.map(() => 'true'));
+    expect(before('urban-monitoring/130A')?.getAttribute('aria-label')).toBe('收起 水域网络');
+  });
 });

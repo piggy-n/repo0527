@@ -76,7 +76,7 @@ function mentionedParams(text: string): Partial<SimulationParams> {
 }
 
 /**
- * 理解推演中说的一句话（按规则，不接大模型）：停止；改参数（规程、认定、人口、某项指标的目标值）；
+ * 理解推演中说的一句话（按规则，不接大模型）：停止；改参数（规程、认定、人口）；
  * 加上、去掉或只看某些城市、指标、年度；没有改动时才认暂停和继续。用不上的参数、清空的条件写进 notes，不改
  */
 export function interpretCommand(input: string, current: Composition): RunCommand {
@@ -84,22 +84,13 @@ export function interpretCommand(input: string, current: Composition): RunComman
   if (/停止|终止|结束推演|取消推演|结束计算|取消计算|不推了|不算了|重新编排|调整条件/.test(text)) {
     return { kind: 'stop' };
   }
+  // 不按目标值评价（2026-10-30）：说到目标值时不改条件，免得"……目标改成 13"被当成"只看"
+  if (text.includes('目标')) {
+    return { kind: 'none', notes: ['计算结果只给出各项指标的值，不设置目标值'] };
+  }
   const { conditions, params } = current;
   const notes: string[] = [];
-
-  // 目标值："公园绿地覆盖率目标 75"
-  let rest = text;
-  let targets = params.targets;
-  const target = /^(.*?)目标值?(?:改成|改为|设为|调到|调整为|定为|为|到)?(\d+(?:\.\d+)?)/.exec(text);
-  if (target) {
-    const id = findIndicators(target[1] ?? '').find(item => conditions.indicatorIds.includes(item));
-    if (id === undefined) {
-      notes.push('没找到要改目标值的指标，指标要先在计算条件里');
-    } else {
-      targets = { ...params.targets, [id]: Number(target[2]) };
-    }
-    rest = text.replace(target[0], '');
-  }
+  const rest = text;
 
   // 条件：城市、指标、年度
   const verb = ADD.test(rest) || REMOVE.test(rest) || ONLY.test(rest);
@@ -122,15 +113,15 @@ export function interpretCommand(input: string, current: Composition): RunComman
       : conditions.indicatorIds;
   const yearList = years.length > 0 ? merge(conditions.years, years, rest, SIMULATION_YEARS) : conditions.years;
   if (cityCodes.length === 0 || indicatorIds.length === 0 || yearList.length === 0) {
-    return { kind: 'none', notes: [...notes, '年份、范围和指标都至少要留一项'] };
+    return { kind: 'none', notes: [...notes, '年份、范围和指标均需至少保留一项'] };
   }
 
   // 参数：只改用得上的
   const patch = mentionedParams(rest);
-  const next: SimulationParams = { ...params, ...patch, targets };
+  const next: SimulationParams = { ...params, ...patch };
   for (const key of ['rule', 'recognition', 'popChange'] as const) {
     if (key in patch && next[key] !== params[key] && !indicatorIds.some(id => paramApplies(key, id))) {
-      notes.push(`当前指标用不上${PARAM_LABELS[key]}`);
+      notes.push(`所选指标不适用${PARAM_LABELS[key]}`);
       Object.assign(next, { [key]: params[key] });
     }
   }
@@ -156,15 +147,10 @@ export function interpretCommand(input: string, current: Composition): RunComman
   }
   const nextConditions = { years: yearList, cityCodes, indicatorIds };
   for (const key of changedParams(params, next)) {
-    if (key === 'targets') {
-      const changed = indicatorIds.filter(id => next.targets[id] !== params.targets[id]);
-      said.push(changed.map(id => `${shortOf(id)}目标改为 ${next.targets[id]}`).join('、'));
-      continue;
-    }
     const used = indicatorIds.filter(id => paramApplies(key, id));
     const kindText = isStandard(key, next) ? '（标准口径）' : '（自定义口径）';
     said.push(
-      `${PARAM_LABELS[key]}改为「${describeParam(key, next, nextConditions)}」${kindText}，影响${used.map(shortOf).join('、')}`
+      `${PARAM_LABELS[key]}改为「${describeParam(key, next)}」${kindText}，影响${used.map(shortOf).join('、')}`
     );
   }
 

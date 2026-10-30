@@ -4,7 +4,7 @@ import styles from './LayerMoveButtons.module.scss';
 
 export type MoveDirection = 'up' | 'down';
 
-/** 调的是哪一种顺序：目录里的展示顺序，或地图的叠放顺序 */
+/** 在哪一处移动：目录树里的同级之间，或"已选择图层"里相邻的图层之间；两处调的都是地图的叠放顺序（ADR 0118） */
 export type MoveOrder = 'catalog' | 'stacking';
 
 // 无障碍名称按顺序区分，两处的同一个资源不重名；悬停提示只写方向

@@ -462,7 +462,16 @@ export const ComposeBoard = defineComponent({
       if (conditions.value.indicatorIds.length === 0) {
         return null;
       }
-      const keys = paramsOf(conditions.value.indicatorIds).filter(key => visible(paramNode(key)));
+      const all = paramsOf(conditions.value.indicatorIds);
+      // 所选指标都没有可调的参数（如城区面积覆盖率）：都按标准口径计算
+      if (all.length === 0) {
+        return (
+          <div key="empty" class={styles.empty}>
+            所选指标没有可调整的计算参数
+          </div>
+        );
+      }
+      const keys = all.filter(key => visible(paramNode(key)));
       return keys.map(key => {
         const node = paramNode(key);
         const scenario = !isStandard(key, shown.value);
@@ -504,7 +513,7 @@ export const ComposeBoard = defineComponent({
                   >
                     <span class={styles.text}>
                       <span class={styles.meta}>{PARAM_LABELS[key]}</span>
-                      <b>{describeParam(key, shown.value, conditions.value)}</b>
+                      <b>{describeParam(key, shown.value)}</b>
                     </span>
                   <SvgIcon class={styles.edit} name="simulation-tune" />
                 </button>
@@ -557,7 +566,7 @@ export const ComposeBoard = defineComponent({
           <span class={styles.meta}>
             {ready
               ? `${years.length} 个年度 × ${cityCodes.length} 市 × ${indicatorIds.length} 项指标`
-              : `还缺：${missing.value.map(kind => CONDITION_LABELS[kind]).join('、')}`}
+              : `待补充：${missing.value.map(kind => CONDITION_LABELS[kind]).join('、')}`}
           </span>
           <span class={styles.meta}>
             {ready

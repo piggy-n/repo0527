@@ -25,7 +25,7 @@ describe('STEPS', () => {
 
 describe('downstream', () => {
   it('人口数据的下游不含并行的设施、用地数据', () => {
-    expect([...downstream('pop')]).toEqual(['pop', 'qc', 'spatial', 'compute', 'evaluate', 'report']);
+    expect([...downstream('pop')]).toEqual(['pop', 'qc', 'spatial', 'compute', 'report']);
   });
 
   it('最后一步只有自己', () => {
@@ -35,9 +35,8 @@ describe('downstream', () => {
 
 describe('restartStep', () => {
   it('取改动所属步骤里最靠前的；没有改动为 null', () => {
-    expect(restartStep(['targets', 'rule'])).toBe('spatial');
+    expect(restartStep(['rule'])).toBe('spatial');
     expect(restartStep(['recognition', 'popChange'])).toBe('pop');
-    expect(restartStep(['targets'])).toBe('evaluate');
     expect(restartStep([])).toBeNull();
   });
 

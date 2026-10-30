@@ -1,4 +1,4 @@
-import { demoTarget, reachMeters, SIMULATION_INDICATORS, simulationIndicator, walkMeters } from './indicators';
+import { reachMeters, simulationIndicator, walkMeters } from './indicators';
 
 /** 推演条件：年度、监测范围（市）、监测指标（编排图上的顺序） */
 export interface SimulationConditions {
@@ -18,37 +18,28 @@ export interface SimulationParams {
   readonly recognition: Recognition;
   /** 常住人口相对七普的变化（%）：人均类的分母按它变化 */
   readonly popChange: number;
-  /** 目标值，按指标编码；只影响达标判断 */
-  readonly targets: Readonly<Record<string, number>>;
 }
 
 /** 常住人口变化的范围，界面的滑块按它设置 */
 export const POP_CHANGE_RANGE = { min: -20, max: 20, step: 5 } as const;
 
-let defaults: SimulationParams | undefined;
+const DEFAULTS: SimulationParams = Object.freeze({ rule: 'new', recognition: 'half', popChange: 0 });
 
-/** 标准口径：新规程、覆盖面积 ≥ 50%、七普常住人口；第一次用到时才算目标值，之后一直是同一个对象 */
+/** 标准口径：新规程、覆盖面积 ≥ 50%、七普常住人口；一直是同一个对象 */
 export function defaultParams(): SimulationParams {
-  defaults ??= {
-    rule: 'new',
-    recognition: 'half',
-    popChange: 0,
-    targets: Object.fromEntries(SIMULATION_INDICATORS.map(({ id }) => [id, demoTarget(id)]))
-  };
-  return defaults;
+  return DEFAULTS;
 }
 
 /** 用户能调整的参数项 */
-export type ParamKey = 'rule' | 'recognition' | 'popChange' | 'targets';
+export type ParamKey = 'rule' | 'recognition' | 'popChange';
 
 /** 参数项在推演中的先后：归因按这个顺序逐项替换 */
-export const PARAM_KEYS: readonly ParamKey[] = ['popChange', 'rule', 'recognition', 'targets'];
+export const PARAM_KEYS: readonly ParamKey[] = ['popChange', 'rule', 'recognition'];
 
 export const PARAM_LABELS: Readonly<Record<ParamKey, string>> = {
   rule: '计算规程',
   recognition: '覆盖认定',
-  popChange: '常住人口变化',
-  targets: '目标值'
+  popChange: '常住人口变化'
 };
 
 export const RULE_LABELS: Readonly<Record<Rule, string>> = { new: '新规程', old: '旧规程' };
@@ -57,17 +48,12 @@ export const RECOGNITION_LABELS: Readonly<Record<Recognition, string>> = { half:
 /** 参数项对这项指标起不起作用：规程只对 Excel 写了规程变化的两项，认定只对住宅用地覆盖率，人口只对人均类 */
 export function paramApplies(key: ParamKey, indicatorId: string): boolean {
   const indicator = simulationIndicator(indicatorId);
-  switch (key) {
-    case 'rule':
-      return indicator.model === 'coverage' && indicator.ruleChange;
-    case 'recognition':
-      return indicator.model === 'coverage' && indicator.base === 'residential';
-    case 'popChange':
-      return indicator.model === 'perCapita';
-    case 'targets':
-      break;
-  }
-  return true;
+  const applies: Readonly<Record<ParamKey, boolean>> = {
+    rule: indicator.model === 'coverage' && indicator.ruleChange,
+    recognition: indicator.model === 'coverage' && indicator.base === 'residential',
+    popChange: indicator.model === 'perCapita'
+  };
+  return applies[key];
 }
 
 /** 这些指标用得上的参数项，按推演中的先后 */
@@ -75,10 +61,9 @@ export function paramsOf(indicatorIds: readonly string[]): ParamKey[] {
   return PARAM_KEYS.filter(key => indicatorIds.some(id => paramApplies(key, id)));
 }
 
-/** 参数项取的是不是标准值；目标值不属于计算口径，总算标准 */
+/** 参数项取的是不是标准值 */
 export function isStandard(key: ParamKey, params: SimulationParams): boolean {
-  const standard = defaultParams();
-  return key === 'targets' || params[key] === standard[key];
+  return params[key] === defaultParams()[key];
 }
 
 /** 这项指标在这组参数下偏离标准口径的参数项 */
@@ -99,33 +84,20 @@ export function serviceMeters(indicatorId: string, params: SimulationParams): nu
   return reachMeters(indicator);
 }
 
-// 按键比较目标值，键的先后不算
-function sameNumbers(a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>): boolean {
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-  return [...keys].every(key => a[key] === b[key]);
-}
-
 /** 两组参数里不同的参数项，按 PARAM_KEYS 的顺序 */
 export function changedParams(from: SimulationParams, to: SimulationParams): ParamKey[] {
-  return PARAM_KEYS.filter(key => (key === 'targets' ? !sameNumbers(from.targets, to.targets) : from[key] !== to[key]));
+  return PARAM_KEYS.filter(key => from[key] !== to[key]);
 }
 
 /** 带正负号的百分比，如"+10%""−5%""0%" */
 export const signedPercent = (value: number): string => `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value)}%`;
 
-/** 参数项的取值说明，如"旧规程""相交即算""+10%"；目标值写成"n 项已调整" */
-export function describeParam(key: ParamKey, params: SimulationParams, conditions: SimulationConditions): string {
-  switch (key) {
-    case 'rule':
-      return RULE_LABELS[params.rule];
-    case 'recognition':
-      return RECOGNITION_LABELS[params.recognition];
-    case 'popChange':
-      return signedPercent(params.popChange);
-    case 'targets':
-      break;
-  }
-  const initial = defaultParams().targets;
-  const changed = conditions.indicatorIds.filter(id => params.targets[id] !== initial[id]).length;
-  return changed === 0 ? `${conditions.indicatorIds.length} 项默认` : `${changed} 项已调整`;
+/** 参数项的取值说明，如"旧规程""相交即算""+10%" */
+export function describeParam(key: ParamKey, params: SimulationParams): string {
+  const texts: Readonly<Record<ParamKey, string>> = {
+    rule: RULE_LABELS[params.rule],
+    recognition: RECOGNITION_LABELS[params.recognition],
+    popChange: signedPercent(params.popChange)
+  };
+  return texts[key];
 }

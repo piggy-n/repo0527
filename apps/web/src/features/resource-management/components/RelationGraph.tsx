@@ -288,7 +288,8 @@ export const RelationGraph = defineComponent({
       );
     }
 
-    // toggles：同级里有能展开的节点时，没有下级的节点也留出按钮的位置，名称对齐
+    // toggles：没有下级的节点也留出按钮的位置。一级类只在同级里有能展开的节点时留，名称对齐；
+    // 下级一直留，卡片比上级的卡片缩进一个按钮加间距，二级类、三级类逐级往右（2026-10-30）
     function renderItem(item: RelationTreeItem, toggles: boolean) {
       const children = item.children;
       return (
@@ -313,7 +314,7 @@ export const RelationGraph = defineComponent({
           </div>
           {children.length > 0 && (
             <div class={styles.children}>
-              {children.map(child => renderItem(child, children.some(other => other.childCount > 0)))}
+              {children.map(child => renderItem(child, true))}
             </div>
           )}
         </div>

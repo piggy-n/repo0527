@@ -1,5 +1,5 @@
 import { MxTitle } from '@yzt/ui';
-import { ElInputNumber, ElRadioButton, ElRadioGroup, ElSlider } from 'element-plus';
+import { ElRadioButton, ElRadioGroup, ElSlider } from 'element-plus';
 import { defineComponent, type PropType, type VNodeChild } from 'vue';
 import { simulationIndicator } from '../model/indicators';
 import {
@@ -27,8 +27,8 @@ const RULE_NOTES: Readonly<Record<Rule, string>> = {
   old: '站点按步行 5 分钟（300 米），服务中心仍为 15 分钟'
 };
 const RECOGNITION_NOTES: Readonly<Record<Recognition, string>> = {
-  half: '住宅图斑一半以上的面积在服务范围内才算覆盖',
-  intersect: '与服务范围相交的住宅图斑都算覆盖，同消防救援、派出所的认定'
+  half: '住宅图斑 50% 以上面积位于服务范围内时认定为覆盖',
+  intersect: '与服务范围相交的住宅图斑即认定为覆盖，与消防救援、派出所覆盖率的认定方式一致'
 };
 
 // 单选组的值换回选项；不在选项里的忽略
@@ -157,44 +157,12 @@ export const ParamFields = defineComponent({
                   }
                 }}
               />
-              <p class={styles.note}>相对七普常住人口，只影响人均类指标</p>
+              <p class={styles.note}>以七普常住人口为基准，仅影响人均类指标</p>
             </>,
             () => [scenario(), <span class={styles.value}>{signedPercent(params.popChange)}</span>],
             scope
           );
-        case 'targets':
-          break;
       }
-      return field(
-        key,
-        <div class={styles.targets}>
-          {conditions.indicatorIds.map(id => {
-            const indicator = simulationIndicator(id);
-            const label = `${indicator.short}（${indicator.unit}）`;
-            return [
-              <span key={`${id}-label`}>{label}</span>,
-              <ElInputNumber
-                key={id}
-                class={styles.number}
-                size="small"
-                controlsPosition="right"
-                modelValue={params.targets[id]}
-                min={indicator.unit === '%' ? 1 : 0.1}
-                max={indicator.unit === '%' ? 100 : undefined}
-                step={indicator.unit === '%' ? 1 : 0.1}
-                aria-label={`${label}的目标值`}
-                onUpdate:modelValue={value => {
-                  if (typeof value === 'number' && Number.isFinite(value)) {
-                    update({ targets: { ...params.targets, [id]: value } });
-                  }
-                }}
-              />
-            ];
-          })}
-        </div>,
-        undefined,
-        '影响达标判断'
-      );
     };
 
     return () => <div class={styles.root}>{props.keys.map(render)}</div>;

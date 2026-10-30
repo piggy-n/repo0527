@@ -62,12 +62,11 @@ describe('条件', () => {
 });
 
 describe('参数与指标的关系', () => {
-  it('计算规程只影响社区卫生，覆盖认定只影响住宅用地覆盖率，人口只影响人均类，目标值影响全部', () => {
+  it('计算规程只影响社区卫生，覆盖认定只影响住宅用地覆盖率，人口只影响人均类', () => {
     const { conditions } = composition(['B-65', 'A-31', 'A-15', 'A-39']);
     expect(affectedIndicators('rule', conditions)).toEqual(['A-31']);
     expect(affectedIndicators('recognition', conditions)).toEqual(['B-65', 'A-31']);
     expect(affectedIndicators('popChange', conditions)).toEqual(['A-39']);
-    expect(affectedIndicators('targets', conditions)).toEqual(['B-65', 'A-31', 'A-15', 'A-39']);
   });
 
   it('搜索按名称、简称或编码（编码不分大小写）', () => {

@@ -58,16 +58,3 @@
   font-size: var(--font-size-xs);
   line-height: var(--line-height-compact);
 }
-
-.targets {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 104px;
-  align-items: center;
-  gap: 6px var(--space-sm);
-  color: var(--color-text-regular);
-  font-size: var(--font-size-xs);
-}
-
-.number {
-  width: 100%;
-}

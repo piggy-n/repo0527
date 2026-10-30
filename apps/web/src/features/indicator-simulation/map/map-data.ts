@@ -1,7 +1,7 @@
 import type { ViewBounds } from '@yzt/map-core';
 import type { Feature, FeatureCollection, Point, Polygon, MultiPolygon } from 'geojson';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
-import { indicatorResult, type PassState, passState, valueBreaks } from '../model/analysis';
+import { indicatorResult, valueBreaks } from '../model/analysis';
 import type { Calculator, DistrictResult } from '../model/calculator';
 import type { District } from '../model/districts';
 import { facilityLayoutOf } from '../model/facilities';
@@ -22,14 +22,13 @@ export interface DistrictProperties {
   readonly fill: string;
 }
 
-/** 城市标注：位置、名称、所选指标的值与达标，以及放大到这个市时的范围 */
+/** 城市标注：位置、名称、所选指标的值，以及放大到这个市时的范围 */
 export interface MapCity {
   readonly code: string;
   readonly name: string;
   readonly center: readonly [number, number];
   readonly bounds: ViewBounds;
   readonly value: number;
-  readonly state: PassState;
 }
 
 /** 一轮推演在地图上要用的数据：条件和参数不变时不变 */
@@ -43,7 +42,7 @@ export interface MapData {
   readonly ringMeters: number;
   /** 推演范围的外包框 */
   readonly bounds: ViewBounds;
-  /** 城市标注：位置、名称、主指标的值与达标 */
+  /** 城市标注：位置、名称、主指标的值 */
   readonly cities: readonly MapCity[];
   /** 空间分析的样例区县 */
   readonly sample: District | null;
@@ -154,8 +153,7 @@ export function mapData(
         name,
         center,
         bounds: districtBounds(members),
-        value: city.value,
-        state: passState(city.value, result.target)
+        value: city.value
       };
     }),
     sample: urban[0] ?? firstCity[0] ?? null

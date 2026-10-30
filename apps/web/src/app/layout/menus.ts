@@ -32,7 +32,7 @@ export interface NavDropdown {
   groups: NavGroup[];
 }
 
-/** 点击后展开一层下拉的导航项：页面少、不分组（如"智能体"） */
+/** 点击后展开一层下拉的导航项：页面少、不分组（如"AI+"） */
 export interface NavMenu {
   kind: 'menu';
   label: string;
@@ -66,7 +66,7 @@ export const navItems: readonly NavItem[] = [
         links: [
           { label: '城市国土空间监测基本统计', route: RouteName.spaceMonitoringBasicStatistics },
           { label: '城市国土空间监测指标', route: RouteName.spaceMonitoringIndicators },
-          { label: '驾驶舱', route: RouteName.cityDashboard, newTab: true }
+          { label: '城市国土空间监测城市体检驾驶舱', route: RouteName.cityDashboard, newTab: true }
         ]
       }
     ]
@@ -82,11 +82,11 @@ export const navItems: readonly NavItem[] = [
   },
   {
     kind: 'menu',
-    label: '智能体',
+    label: 'AI+',
     icon: 'nav-ai',
     links: [
       { label: 'AI对话', route: RouteName.aiChat },
-      { label: '城市国土空间监测指标AI计算', route: RouteName.indicatorSimulation }
+      { label: '智能体', route: RouteName.indicatorSimulation }
     ]
   }
 ];

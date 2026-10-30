@@ -2,16 +2,6 @@ import type { Calculator, IndicatorResult } from './calculator';
 import { simulationIndicator } from './indicators';
 import { defaultParams, type SimulationConditions } from './params';
 
-/** 达标、接近（差距在目标值的 5% 以内）、未达标 */
-export type PassState = 'pass' | 'near' | 'fail';
-
-export function passState(value: number, target: number): PassState {
-  if (value >= target) {
-    return 'pass';
-  }
-  return value >= target * 0.95 ? 'near' : 'fail';
-}
-
 /** 地图分级的断点：所选年度在标准口径下的区县值取五档分位数，年度、版本之间的颜色可比 */
 export function valueBreaks(
   calculator: Calculator,

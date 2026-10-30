@@ -40,7 +40,7 @@ async function setup() {
 }
 
 describe('useSimulationResult', () => {
-  it('完成前没有结果；完成后看主指标、最新年度、数值着色、整个范围，列出每项指标和各市', async () => {
+  it('完成前没有结果；完成后看主指标、最新年度、整个范围，列出每项指标和各市', async () => {
     using ctx = await setup();
     const { run, result, calculator, clock, runToDone } = ctx;
     run.start(composition, calculator);
@@ -48,25 +48,25 @@ describe('useSimulationResult', () => {
     await settle();
     expect(result.selection.value).toBeNull();
     expect([result.items.value, result.rank.value, result.coloring.value]).toEqual([[], null, null]);
-    expect(() => result.select({ mode: 'pass' })).toThrow('还没有计算结果');
+    expect(() => result.select({ year: 2026 })).toThrow('还没有计算结果');
     run.stop();
 
     await runToDone();
-    expect(result.selection.value).toEqual({ indicatorId: 'B-65', year: 2026, mode: 'value', cityCode: null });
+    expect(result.selection.value).toEqual({ indicatorId: 'B-65', year: 2026, cityCode: null });
     expect(result.items.value.map(item => item.id)).toEqual(composition.conditions.indicatorIds);
-    expect(result.items.value.find(item => item.id === 'B-65')).toMatchObject({ verdict: '达标 5/13 市' });
+    expect(result.items.value.find(item => item.id === 'B-65')).toMatchObject({ value: 66.56 });
     expect(result.rank.value?.rows).toHaveLength(13);
     expect(result.coloring.value?.legend.subtitle).toBe('2026 年 · 单位 %');
   });
 
-  it('改指标、年度、着色、放大的市；不在条件里的抛错', async () => {
+  it('改指标、年度、放大的市；不在条件里的抛错', async () => {
     using ctx = await setup();
     const { result, runToDone } = ctx;
     await runToDone();
 
-    result.select({ indicatorId: 'A-39', year: 2025, mode: 'pass', cityCode: '320500' });
-    expect(result.selection.value).toEqual({ indicatorId: 'A-39', year: 2025, mode: 'pass', cityCode: '320500' });
-    expect(result.coloring.value?.legend.subtitle).toBe('2025 年 · 目标 ≥ 15 m²');
+    result.select({ indicatorId: 'A-39', year: 2025, cityCode: '320500' });
+    expect(result.selection.value).toEqual({ indicatorId: 'A-39', year: 2025, cityCode: '320500' });
+    expect(result.coloring.value?.legend.subtitle).toBe('2025 年 · 单位 m²');
 
     expect(() => result.select({ indicatorId: 'B-99' })).toThrow('计算条件里没有指标 B-99');
     expect(() => result.select({ year: 2020 })).toThrow('2020 年');
@@ -78,13 +78,13 @@ describe('useSimulationResult', () => {
     using ctx = await setup();
     const { run, result, calculator, finish, runToDone } = ctx;
     await runToDone();
-    result.select({ indicatorId: 'A-39', mode: 'pass' });
+    result.select({ indicatorId: 'A-39', year: 2025 });
     const before = result.items.value.find(item => item.id === 'B-65')?.value ?? 0;
 
     expect(run.apply({ ...defaultParams(), recognition: 'intersect' })).toBe('rerun');
     await finish();
     expect(result.version.value?.label).toBe('v2');
-    expect(result.selection.value).toMatchObject({ indicatorId: 'A-39', mode: 'pass' });
+    expect(result.selection.value).toMatchObject({ indicatorId: 'A-39', year: 2025 });
     expect(result.items.value.find(item => item.id === 'B-65')?.value).toBeGreaterThan(before);
 
     result.setHoverCity('320100');
@@ -93,6 +93,6 @@ describe('useSimulationResult', () => {
     expect(result.hoverCity.value).toBeNull();
     run.start(composition, calculator);
     await finish();
-    expect(result.selection.value).toMatchObject({ indicatorId: 'B-65', mode: 'value' });
+    expect(result.selection.value).toMatchObject({ indicatorId: 'B-65', year: 2026 });
   });
 });

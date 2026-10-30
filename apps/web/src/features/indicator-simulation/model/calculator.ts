@@ -14,16 +14,12 @@ export interface DistrictResult {
   readonly cityCode: string;
   readonly value: number;
   readonly weight: number;
-  readonly pass: boolean;
 }
 
 export interface CityResult {
   readonly code: string;
   readonly name: string;
   readonly value: number;
-  readonly pass: boolean;
-  /** 没有达标，但差距在目标值的 5% 以内 */
-  readonly near: boolean;
 }
 
 /** 一项指标在一个年度的结果：区县、市（加权）、全省（全部区县加权） */
@@ -31,10 +27,6 @@ export interface IndicatorResult {
   readonly rows: readonly DistrictResult[];
   readonly cities: readonly CityResult[];
   readonly value: number;
-  readonly passCount: number;
-  readonly total: number;
-  readonly lowest: CityResult;
-  readonly target: number;
 }
 
 export interface YearResult {
@@ -82,8 +74,6 @@ export const INTERSECT_FACTOR = 1.25;
 const round = (value: number, digits: number) => Number(value.toFixed(digits));
 const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
 const logit = (p: number) => Math.log(p / (1 - p));
-// 达标判断用的"接近"：差距在目标值的 5% 以内
-const NEAR = 0.95;
 
 function cityPopulation(cityCode: string): number {
   const value = CITY_POPULATION[cityCode];
@@ -173,7 +163,6 @@ export function createCalculator(atlas: DistrictAtlas): Calculator {
     const indicators: Record<string, IndicatorResult> = {};
     for (const id of indicatorIds) {
       const indicator = simulationIndicator(id);
-      const target = params.targets[id] ?? 0;
       const strength = coverageStrength(indicator, params);
       const rows = list.map((district): DistrictResult => {
         const base = baseValue(year, id, district);
@@ -185,37 +174,24 @@ export function createCalculator(atlas: DistrictAtlas): Calculator {
           name: district.name,
           cityCode: district.cityCode,
           value,
-          weight: weightOf(indicator, district),
-          pass: value >= target
+          weight: weightOf(indicator, district)
         };
       });
       const aggregate = (items: readonly DistrictResult[]) => {
         const total = items.reduce((sum, row) => sum + row.weight, 0);
         return round(items.reduce((sum, row) => sum + row.value * row.weight, 0) / total, indicator.precision);
       };
-      const cities = cityCodes.map((code): CityResult => {
-        const value = aggregate(rows.filter(row => row.cityCode === code));
-        return {
-          code,
-          name: findRegion(code)?.name ?? code,
-          value,
-          pass: value >= target,
-          near: value < target && value >= target * NEAR
-        };
-      });
-      const [first] = cities;
-      if (!first) {
+      if (cityCodes.length === 0) {
         throw new Error('计算条件里没有城市');
       }
-      indicators[id] = {
-        rows,
-        cities,
-        value: aggregate(rows),
-        passCount: cities.filter(city => city.pass).length,
-        total: cities.length,
-        lowest: cities.reduce((low, city) => (city.value < low.value ? city : low), first),
-        target
-      };
+      const cities = cityCodes.map(
+        (code): CityResult => ({
+          code,
+          name: findRegion(code)?.name ?? code,
+          value: aggregate(rows.filter(row => row.cityCode === code))
+        })
+      );
+      indicators[id] = { rows, cities, value: aggregate(rows) };
     }
     return {
       year,

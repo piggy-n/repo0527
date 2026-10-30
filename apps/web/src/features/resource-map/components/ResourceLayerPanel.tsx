@@ -8,7 +8,6 @@ import { usePageActive } from '@/shared/composables/usePageActive';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { CATALOG_ROOT } from '../catalog-order';
-import type { CatalogOrderOwner } from '../composables/useCatalogOrder';
 import type { ResourceLayers } from '../composables/useResourceLayers';
 import type { ResourcePanelLayout } from '../composables/useResourcePanelLayout';
 import { arrowStep } from '../keyboard';
@@ -32,7 +31,7 @@ const SPLITTER_HEIGHT = 24;
 const RATIO_STEP = 0.05;
 
 /**
- * 资源图层面板（ADR 0053 第 6 节、ADR 0060，设计稿 5D.2）：目录树负责浏览、勾选和目录顺序，"已选择图层"按叠放顺序调整顺序、年份和透明度，
+ * 资源图层面板（ADR 0053 第 6 节、ADR 0060，设计稿 5D.2）：目录树负责浏览、勾选和调整顺序，"已选择图层"按叠放顺序调整顺序、年份和透明度，
  * 两区之间的分割线可以拖动。只显示拥有者的状态并调用它们的操作；收起和分割线的位置由面板布局的拥有者记住，
  * 窄屏时让给右边由页面决定，所以收起与否由页面通过 collapsed 给出。会挡住定位，登记为贴左边的悬浮元素
  */
@@ -40,7 +39,6 @@ export const ResourceLayerPanel = defineComponent({
   name: 'ResourceLayerPanel',
   props: {
     layers: { type: Object as PropType<ResourceLayers>, required: true },
-    catalogOrder: { type: Object as PropType<CatalogOrderOwner>, required: true },
     layout: { type: Object as PropType<ResourcePanelLayout>, required: true },
     /** 目录加载失败；已经有目录时照常显示它 */
     failed: { type: Boolean, default: false },
@@ -63,7 +61,7 @@ export const ResourceLayerPanel = defineComponent({
     const checkedCollapsed = ref(true);
 
     const searching = computed(() => keyword.value.trim() !== '');
-    const tree = computed(() => panelTree(props.layers.state.value, keyword.value, props.catalogOrder.order.value));
+    const tree = computed(() => panelTree(props.layers.state.value, keyword.value));
     const checkedCount = computed(() => checkedLayers(props.layers.state.value).length);
     // 没有勾选资源时隐藏整个区域，不占用目录高度；保留用户的展开状态
     const hasChecked = computed(() => checkedCount.value > 0);
@@ -268,7 +266,6 @@ export const ResourceLayerPanel = defineComponent({
                     expanded={expanded.value}
                     searching={searching.value}
                     layers={props.layers}
-                    catalogOrder={props.catalogOrder}
                     onToggle={toggleExpanded}
                   />
                 ) : (

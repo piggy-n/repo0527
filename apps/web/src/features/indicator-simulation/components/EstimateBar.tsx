@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp } from '@element-plus/icons-vue';
 import { MxTitle } from '@yzt/ui';
 import { ElButton, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, type PropType, ref } from 'vue';
-import { estimate, type EstimatePass } from '../compose/estimate';
+import { estimate } from '../compose/estimate';
 import type { SimulationModel } from '../composables/useSimulationModel';
 import { formatEstimate, formatEstimateDelta, roundEstimate } from '../format';
 import type { SimulationConditions, SimulationParams } from '../model/params';
@@ -11,19 +11,8 @@ import styles from './EstimateBar.module.scss';
 // 最多列出几项指标
 const ROWS = 4;
 
-const PASS_LABELS = { pass: '达标', near: '接近达标', fail: '未达标' } as const;
-
-const renderPass = (pass: EstimatePass) =>
-  pass.kind === 'single' ? (
-    <span class={[styles.badge, styles[pass.state]]}>{PASS_LABELS[pass.state]}</span>
-  ) : (
-    <span>
-      预估达标 {pass.count}/{pass.total} 市
-    </span>
-  );
-
 /**
- * 编排图下方的指标预估：这组参数（参数弹窗打开时是草稿）下的值、相对标准口径的变化、目标与达标；上升红色、下降绿色。
+ * 编排图下方的指标预估：这组参数（参数弹窗打开时是草稿）下的值和相对标准口径的变化；上升红色、下降绿色。
  * 选了几个年度时可以切换，默认最新一年
  */
 export const EstimateBar = defineComponent({
@@ -56,13 +45,13 @@ export const EstimateBar = defineComponent({
       }
       const current = result.value;
       if (!current) {
-        return <p class={styles.status}>选好年份、范围和指标后显示预估</p>;
+        return <p class={styles.status}>选择年份、范围和指标后显示预估</p>;
       }
       const more = conditions.indicatorIds.length - ROWS;
       return (
         <div class={styles.rows}>
           {current.rows.slice(0, ROWS).map(row => {
-            const { indicator, value, standard, target } = row;
+            const { indicator, value, standard } = row;
             // 预估值按显示的精度取整后再比较，变化量和显示的数对得上
             const shown = roundEstimate(value, indicator);
             const delta = standard === null ? 0 : roundEstimate(shown - roundEstimate(standard, indicator), indicator);
@@ -87,11 +76,6 @@ export const EstimateBar = defineComponent({
                       <span class={styles.scenario}>自定义口径</span>
                     </>
                   )}
-                </div>
-                <div class={styles.target}>
-                  <span>目标 ≥ {formatEstimate(target, indicator, false)}</span>
-                  <span>较目标 {formatEstimateDelta(shown - target, indicator)}</span>
-                  {renderPass(row.pass)}
                 </div>
               </div>
             );

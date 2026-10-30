@@ -1,13 +1,8 @@
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
-import { indicatorResult, type PassState, passState } from '../model/analysis';
+import { indicatorResult } from '../model/analysis';
 import type { Calculator } from '../model/calculator';
 import { type SimulationIndicator, simulationIndicator } from '../model/indicators';
 import { defaultParams, isScenario, type SimulationConditions, type SimulationParams } from '../model/params';
-
-/** 一个市时是它的达标状态，几个市时是达标的市数 */
-export type EstimatePass =
-  | { readonly kind: 'single'; readonly state: PassState }
-  | { readonly kind: 'cities'; readonly count: number; readonly total: number };
 
 /** 预估的一项指标：这组参数下的值；模拟情景时还有标准口径的值 */
 export interface EstimateRow {
@@ -15,8 +10,6 @@ export interface EstimateRow {
   readonly value: number;
   /** 标准口径的值；不是模拟情景时为 null */
   readonly standard: number | null;
-  readonly target: number;
-  readonly pass: EstimatePass;
 }
 
 export interface Estimate {
@@ -51,29 +44,18 @@ export function estimate(
   }
   const year = wanted !== undefined && years.includes(wanted) ? wanted : Math.max(...years);
   const current = calculator.computeYear(conditions, params, year).indicators;
-  // 模拟情景的指标再按标准口径算一遍，目标值不变
+  // 模拟情景的指标再按标准口径算一遍
   const scenarioIds = indicatorIds.filter(id => isScenario(params, id));
   const standard =
     scenarioIds.length === 0
       ? {}
-      : calculator.computeYear(
-          { ...conditions, indicatorIds: scenarioIds },
-          { ...defaultParams(), targets: params.targets },
-          year
-        ).indicators;
-  const rows = indicatorIds.map((id): EstimateRow => {
-    const data = indicatorResult(current, id);
-    const pass: EstimatePass =
-      data.total === 1
-        ? { kind: 'single', state: passState(data.value, data.target) }
-        : { kind: 'cities', count: data.passCount, total: data.total };
-    return {
+      : calculator.computeYear({ ...conditions, indicatorIds: scenarioIds }, defaultParams(), year).indicators;
+  const rows = indicatorIds.map(
+    (id): EstimateRow => ({
       indicator: simulationIndicator(id),
-      value: data.value,
-      standard: scenarioIds.includes(id) ? indicatorResult(standard, id).value : null,
-      target: data.target,
-      pass
-    };
-  });
+      value: indicatorResult(current, id).value,
+      standard: scenarioIds.includes(id) ? indicatorResult(standard, id).value : null
+    })
+  );
   return { scope: scopeName(cityCodes), year, rows };
 }

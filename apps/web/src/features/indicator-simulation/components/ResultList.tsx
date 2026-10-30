@@ -11,8 +11,8 @@ import type { Rank, RankRow, ResultItem } from '../result/result-view';
 import styles from './ResultList.module.scss';
 
 /**
- * 结果展示的左侧（第五版原型）：每项指标一条，写结果、目标和达标；选中的一条展开各市（一个市时是各区县），
- * 悬停一行时地图描出这个市，点一行放大到它；条上的竖线是目标。底部是整行的"调整条件"
+ * 结果展示的左侧（第五版原型）：每项指标一条，写结果；选中的一条展开各市（一个市时是各区县），
+ * 悬停一行时地图描出这个市，点一行放大到它。底部是整行的"调整条件"
  */
 export const ResultList = defineComponent({
   name: 'ResultList',
@@ -31,7 +31,7 @@ export const ResultList = defineComponent({
           {row.name}
         </span>,
         <span key="bar" class={styles.bar}>
-          <i class={styles[row.state]} style={{ width: `${((row.value / rank.max) * 100).toFixed(1)}%` }} />
+          <i style={{ width: `${((row.value / rank.max) * 100).toFixed(1)}%` }} />
         </span>,
         <b key="value" class={styles.rankValue}>
           {formatValue(row.value, { unit })}
@@ -63,11 +63,7 @@ export const ResultList = defineComponent({
     const renderRank = (rank: Rank, unit: string) => (
       <div class={styles.detail}>
         <div class={styles.rankHead}>{rank.level === 'city' ? '各市' : '各区县'}</div>
-        <ol
-          class={styles.rank}
-          style={{ '--target': `${((rank.target / rank.max) * 100).toFixed(1)}%` }}
-          onMouseleave={() => props.result.setHoverCity(null)}
-        >
+        <ol class={styles.rank} onMouseleave={() => props.result.setHoverCity(null)}>
           {rank.rows.map(row => renderRow(row, rank, unit))}
         </ol>
       </div>
@@ -91,13 +87,6 @@ export const ResultList = defineComponent({
               {item.scenario && <span class={styles.scenario}>自定义口径</span>}
             </span>
             <b class={styles.value}>{formatValue(item.value, indicator)}</b>
-            <span class={styles.meta}>
-              <span>目标 ≥ {formatValue(item.target, indicator)}</span>
-              <span class={[styles.verdict, styles[item.state]]}>
-                <i />
-                {item.verdict}
-              </span>
-            </span>
           </button>
           {rank && renderRank(rank, indicator.unit)}
         </li>

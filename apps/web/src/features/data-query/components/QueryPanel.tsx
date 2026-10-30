@@ -3,7 +3,7 @@ import { MxPanel, MxTitle } from '@yzt/ui';
 import { ElButton, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { defineComponent, type PropType, ref, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
-import { type DataQuery, QUERY_TABS } from '../composables/useDataQuery';
+import { type DataQuery, SHOWN_QUERY_TABS } from '../composables/useDataQuery';
 import { AdvancedQueryForm } from './AdvancedQueryForm';
 import { AttributeQueryForm } from './AttributeQueryForm';
 import { NaturalLanguageForm } from './NaturalLanguageForm';
@@ -12,7 +12,7 @@ import styles from './QueryPanel.module.scss';
 import { SpatialQueryForm } from './SpatialQueryForm';
 
 /**
- * 查询面板（左侧）：标题是专题名，下面是四种查询方式的按钮组，底部是查询和重置（各占一半）；按钮的结构和排列参考旧页面
+ * 查询面板（左侧）：标题是专题名，下面是查询方式的按钮组（高级查询暂时隐藏），底部是查询和重置（各占一半）；按钮的结构和排列参考旧页面
  * （2026-10-29）。建设中的专题只有说明。收起时是左上角的竖条，窄屏时让给结果由页面决定
  */
 export const QueryPanel = defineComponent({
@@ -64,7 +64,7 @@ export const QueryPanel = defineComponent({
       );
     };
 
-    // 四种查询方式排成一组按钮，等宽占满一行（旧页面的分段按钮）
+    // 查询方式排成一组按钮，等宽占满一行（旧页面的分段按钮）
     const renderModes = () => (
       <div class={styles.modes}>
         <ElRadioGroup
@@ -73,13 +73,13 @@ export const QueryPanel = defineComponent({
           aria-label="查询方式"
           modelValue={props.query.tab.value}
           onUpdate:modelValue={value => {
-            const mode = QUERY_TABS.find(item => item.id === value);
+            const mode = SHOWN_QUERY_TABS.find(item => item.id === value);
             if (mode) {
               props.query.changeTab(mode.id);
             }
           }}
         >
-          {QUERY_TABS.map(item => (
+          {SHOWN_QUERY_TABS.map(item => (
             <ElRadioButton key={item.id} value={item.id}>
               {item.label}
             </ElRadioButton>

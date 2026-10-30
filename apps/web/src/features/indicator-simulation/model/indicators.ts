@@ -2,12 +2,8 @@ import {
   type CategoryId,
   INDICATOR_CATEGORIES,
   type IndicatorCategory,
-  INDICATORS,
-  requireIndicator
+  INDICATORS
 } from '@/shared/city-indicators/catalog';
-import { mockIndicatorValue } from '@/shared/city-indicators/mock-value';
-import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
-import { cached } from './cache';
 
 /** 覆盖率的服务范围：步行若干分钟、车行若干分钟（Excel 写明了距离），或者缓冲区的固定距离 */
 export type Reach =
@@ -156,15 +152,3 @@ export function reachText(indicator: SimulationIndicator): string {
   }
   return `${distanceText(reach.meters)}缓冲区`;
 }
-
-/**
- * 目标值：2026 年 13 市模拟值的中位数取整（覆盖率到 5，人均值 10 以上到 1、以下到 0.1），大约一半城市达标；
- * 不代表规范标准。第一次用到时才算（地图页分块不在顶层计算，ADR 0061）
- */
-export const demoTarget = cached((id: string): number => {
-  const indicator = requireIndicator(id);
-  const values = JIANGSU_CITIES.map(city => mockIndicatorValue(city.code, indicator, 2026)).toSorted((a, b) => a - b);
-  const median = values[Math.floor(values.length / 2)] ?? 0;
-  const step = indicator.unit === '%' ? 5 : median >= 10 ? 1 : 0.1;
-  return Number((Math.round(median / step) * step).toFixed(1));
-}, id => id);
