@@ -153,7 +153,7 @@ const button = (root: ParentNode | null | undefined, text: string) =>
   [...(root?.querySelectorAll('button') ?? [])].find(item => item.textContent?.trim() === text);
 
 describe('SystemManagementPage', () => {
-  it('资源审核：标题、筛选栏和表格；没有值的单元格留空，由全局样式显示"-"；统计任务不能查看', async () => {
+  it('资源审核：标题、筛选栏和表格；没有值的单元格留空，由全局样式显示"-"；统计任务按审核通过显示、名称后标"统计任务"、不能查看', async () => {
     mockBackend();
     const { wrapper } = await mountAt(RouteName.systemManagement);
     await vi.waitFor(() => expect(rows()).toHaveLength(4));
@@ -168,7 +168,7 @@ describe('SystemManagementPage', () => {
       ['1', '拆除未尽区', '', '江苏省南京市', '2026-10-28 11:29:36', '待审核', '', '审核'],
       ['2', '城镇村等用地', '王立', '江苏省', '2026-09-10 16:47:07', '审核通过', '正在处理', '查看下载'],
       ['3', '医疗机构面层', '王立', '江苏省', '2026-09-10 16:47:07', '审核通过', '处理完成', '查看下载'],
-      ['4', '', '王立', '', '', '统计任务', '未开始处理', '下载']
+      ['4', '统计任务', '王立', '', '', '审核通过', '未开始处理', '下载']
     ]);
   });
 

@@ -159,7 +159,7 @@ UI 在 2026-09-30 提供（此前用旧项目的 PNG 转 webp 占位）：
 
 ## 页面缓存（ADR 0063）
 
-`AppLayout` 的 `RouterView` 里常驻一个 `KeepAlive`：路由 meta 写了 `keepAlive: true` 的页面放进去，切到别的页面时缓存，回来时是同一个实例；其余页面照常渲染在它外面，每次重新创建。
+`AppLayout` 的 `RouterView` 里常驻一个 `KeepAlive`：路由 meta 写了 `keepAlive: true` 的页面放进去，切到别的页面时缓存，回来时是同一个实例；其余页面照常渲染在它外面，每次重新创建。环境变量 `VITE_PAGE_STATE_RESET=true` 时（`AppLayout` 的 `pageStateReset` 默认取它）不缓存，写了 `keepAlive` 的页面也每次重新创建（ADR 0114，页面清单和保留的状态见 ADR）。
 
 - 现在只有现状底图缓存：回到地图约 10 ms 画面就稳定，相机、勾选、点选结果、测量、打开的面板、区划选择都保留；重建要约 550 ms，这些状态也都丢了（5E.4 实测）
 - 不另设缓存的上限：`KeepAlive` 里只会出现标了 `keepAlive` 的页面。按组件类型缓存，两个标了 `keepAlive` 的路由不能共用同一个页面组件

@@ -93,10 +93,19 @@ describe('申请列表', () => {
     expect(task?.appliedAt).toBeUndefined();
   });
 
-  it('没见过的状态不猜成别的状态，整页按返回格式错误处理', async () => {
+  it('准备状态 error 换成处理失败（同旧页面，2026-10-30 实测）', async () => {
     server.use(
       mock.post('/backend/api/apply/list', () =>
         HttpResponse.json(applicationPageResponse([approvedRecord({ storage_status: 'error' })])))
+    );
+    const [application] = (await fetchApplicationPage({ ...emptyFilters, pageNum: 1, pageSize: 20 })).list;
+    expect(application?.prepare).toBe('failed');
+  });
+
+  it('没见过的状态不猜成别的状态，整页按返回格式错误处理', async () => {
+    server.use(
+      mock.post('/backend/api/apply/list', () =>
+        HttpResponse.json(applicationPageResponse([approvedRecord({ storage_status: 'archived' })])))
     );
     await expect(fetchApplicationPage({ ...emptyFilters, pageNum: 1, pageSize: 20 })).rejects.toMatchObject({
       kind: 'invalid-response'
