@@ -81,6 +81,8 @@ const DataQueryView = defineComponent({
       }
     };
 
+    const hasResult = () => query.result.request.value !== null;
+
     const renderBasemapCard = () => (
       <div key="cards" class={styles.cards}>
         <BasemapCard
@@ -97,19 +99,26 @@ const DataQueryView = defineComponent({
         <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
         <BoxSelectOverlay pick={query.spatial.draw} />
         <div class={styles.overlay}>
-          <div key="left" class={styles.left}>
-            <QueryPanel query={query} collapsed={!sides.left.value} onUpdate:collapsed={changeCollapsed} />
-          </div>
-          {query.result.request.value !== null && (
-            <div key="results" class={styles.results} v-show={sides.right.value}>
-              <QueryResultPanel
-                result={query.result}
-                exporter={query.exporter}
-                view={resultView.value}
-                onUpdate:view={(view: ResultView) => (resultView.value = view)}
-              />
+          {/* 查询面板和结果在同一列：结果从左边开始，面板让出它的高度；结果最大化时面板不显示（2026-10-29） */}
+          <div key="main" class={styles.main}>
+            <div key="left" class={styles.left} v-show={resultView.value !== 'maximized' || !hasResult()}>
+              <QueryPanel query={query} collapsed={!sides.left.value} onUpdate:collapsed={changeCollapsed} />
             </div>
-          )}
+            {hasResult() && (
+              <div
+                key="results"
+                class={[styles.results, resultView.value === 'maximized' && styles.maximized]}
+                v-show={sides.right.value}
+              >
+                <QueryResultPanel
+                  result={query.result}
+                  exporter={query.exporter}
+                  view={resultView.value}
+                  onUpdate:view={(view: ResultView) => (resultView.value = view)}
+                />
+              </div>
+            )}
+          </div>
           <div key="controls" class={styles.controls}>
             <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
           </div>

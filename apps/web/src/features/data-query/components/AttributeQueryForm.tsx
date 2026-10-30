@@ -49,7 +49,7 @@ const OPERATOR_LABELS: Readonly<Record<InputOperator, string>> = {
   '<=': '<='
 };
 
-/** 显示或隐藏 SQL 语句，属性查询和自然语言查询共用 */
+/** 显示或隐藏 SQL 语句，属性查询和自然语言查询共用；整行的描边按钮（参考旧页面） */
 export const SqlPreview = defineComponent({
   name: 'SqlPreview',
   props: {
@@ -60,8 +60,9 @@ export const SqlPreview = defineComponent({
     return () => (
       <div class={formStyles.sql}>
         <ElButton
-          link
           type="primary"
+          plain
+          class={formStyles.wide}
           icon={visible.value ? ArrowUp : ArrowDown}
           onClick={() => (visible.value = !visible.value)}
         >
@@ -156,21 +157,23 @@ export const AttributeQueryForm = defineComponent({
       );
     };
 
+    // 条件列表下面整行的"添加查询条件"（参考旧页面），点开是还没加的字段
     const renderAdd = () => {
       const fields = props.form.remainingFields.value;
       const disabled = props.form.layer.value === null || fields.length === 0;
       return (
         <ElDropdown
+          class={formStyles.wide}
           trigger="click"
-          placement="bottom-end"
+          placement="bottom"
           disabled={disabled}
           maxHeight={280}
           onCommand={(field: string) => props.form.addCondition(field)}
         >
           {{
             default: () => (
-              <ElButton link type="primary" icon={Plus} disabled={disabled}>
-                添加条件
+              <ElButton type="primary" plain class={formStyles.wide} icon={Plus} disabled={disabled}>
+                添加查询条件
               </ElButton>
             ),
             dropdown: () => (
@@ -254,11 +257,9 @@ export const AttributeQueryForm = defineComponent({
             </div>
           </section>
           <section class={formStyles.section}>
-            <div class={formStyles.sectionHead}>
-              <MxTitle>筛选条件</MxTitle>
-              {renderAdd()}
-            </div>
+            <MxTitle>筛选条件</MxTitle>
             <div class={styles.conditions}>{renderConditions()}</div>
+            {renderAdd()}
             {layer && <SqlPreview sql={form.sql.value} />}
           </section>
         </div>

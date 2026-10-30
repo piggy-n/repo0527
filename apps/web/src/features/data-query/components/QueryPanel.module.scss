@@ -8,65 +8,32 @@
   min-height: 0;
 }
 
+// 结果出现时页面让出它的高度，面板在内容区滚动
 .panel {
   box-sizing: border-box;
   width: 320px;
   max-width: 100%;
   max-height: 100%;
+  min-height: 0;
 }
 
-// 四个页签在标题下面单独一行（标题和四个页签放不进一行），等分宽度，当前的主色加粗、下面一条短线
-.tabs {
-  display: flex;
-  border-bottom: 1px solid var(--color-border-light);
+// 查询方式在标题下面单独一行，和下面的表单隔开 8（标题栏左右的内边距由面板给出）
+.modes {
+  padding-bottom: var(--space-sm);
 }
 
-.tab {
-  position: relative;
-  flex: 1 1 auto;
-  height: 40px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--color-text-regular);
-  font-size: var(--font-size-base);
-  white-space: nowrap;
-  cursor: pointer;
-
-  &:hover {
-    color: var(--color-primary);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--color-primary-border-hover);
-    outline-offset: -2px;
-  }
-}
-
-.currentTab {
-  color: var(--color-primary);
-  font-weight: var(--font-weight-semibold);
-
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 50%;
-    width: 28px;
-    height: 2px;
-    border-radius: 999px;
-    background-color: var(--color-primary);
-    transform: translateX(-50%);
-  }
-}
-
+// 查询、重置各占一半；间距由 gap 负责，去掉 Element 相邻按钮的左外边距
 .footer {
   display: flex;
-  justify-content: flex-end;
   gap: var(--space-sm);
   width: 100%;
   padding-top: var(--space-md);
   border-top: 1px solid var(--color-divider);
+
+  > :global(.el-button) {
+    flex: 1;
+    margin-left: 0;
+  }
 }
 
 .collapse {

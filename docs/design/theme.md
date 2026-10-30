@@ -231,7 +231,7 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 | `tag-mini` | `<ElTag class="tag-mini">` | 18px 高、左右 4、12px 字；颜色沿用 `type` | 消息卡片标题后的类型（2026-10-28 用户要求缩小，ADR 0102） |
 | `badge-mini` | `<ElBadge class="badge-mini">` | 16px 高、左右 4、10px 字（改的是 Element 的 `--el-badge-*` 变量） | 顶栏消息按钮的未读数，少挡住铃铛（2026-10-28 用户要求，ADR 0102） |
 | `select-no-arrow` | `<ElSelect class="select-no-arrow">` | 不显示右侧的下拉箭头，点击照常弹出选项 | 地图页"已选择图层"的年份（2026-10-16 用户要求） |
-| `radio-group-block` | `<ElRadioGroup class="radio-group-block">` | 占满宽度，各项等宽 | 地图页坐标定位的写法切换 |
+| `radio-group-block` | `<ElRadioGroup class="radio-group-block">` | 占满宽度，各项等宽；左右内边距 6，只决定最长一项的最小宽度 | 地图页坐标定位的写法切换、数据查询的查询方式（ADR 0112） |
 | `dialog-panel-header` | `<ElDialog class="dialog-panel-header">`，`header` 插槽用 `<MxTitle level="panel">` | 浅灰标题栏横向铺满，最小高 48、左侧 16、右侧预留 48 关闭区；内容内边距 16，底部 `0 16 16`；不加独立阴影或渐变 | 资源管理新增 / 重命名目录、文件上传 / 预览；真实样例在 `/dev/theme` 的「灰底标题弹窗」 |
 | `form-query` | 由 `shared/query-form` 的 `QueryForm` 加在 `ElForm` 上，页面不直接写 | 条件区（`form-query__fields`）从左到右排列、换行；控件宽 180，日期选择器去掉默认的 220 固定宽度；表单项不留底部外边距；按钮行（`form-query__actions`）默认在条件区下方，`form-query__extra` 靠右。条件换行时加 `form-query--aligned`：标签改为块级并两端对齐（`text-align-last: justify`），宽度由 `QueryForm` 设置；条件和按钮都放得下一行时加 `form-query--inline`：条件区和按钮行排成一行，按钮行占满剩下的宽度，extra 在最右端 | 列表页的筛选栏，规则见 [page-layout.md](page-layout.md) 的"筛选栏" |
 | `pagination-wrap` | `<ElPagination class="pagination-wrap">` | 靠右，放不下时换行，不裁掉页码、条数或跳页入口；窄于 760 时排成三行：总数和每页条数、上一页 · 页码 · 下一页、跳页 | 资源管理、系统管理的列表分页（ADR 0092，原来写在资源管理页里）；样例在 `/dev/theme` 的「表格与分页」 |

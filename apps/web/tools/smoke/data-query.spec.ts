@@ -125,7 +125,7 @@ test('属性查询：选图层先请求全省的预览瓦片；查询后结果�
 test('空间查询：已选图层时框选画完直接查询，报命中数，发给后端的是闭合的矩形', async ({ page, backend }) => {
   await openQuery(page, '/space-monitoring-query');
   const panel = page.locator('[data-query-panel]');
-  await panel.getByRole('tab', { name: '空间查询' }).click();
+  await panel.locator('.el-radio-button', { hasText: '空间查询' }).click();
   await chooseLayer(page, '学校点层');
   await panel.getByRole('button', { name: '框选' }).click();
   await expect(panel.getByRole('button', { name: '框选' })).toHaveAttribute('aria-pressed', 'true');
@@ -180,6 +180,6 @@ test('从顶栏切到别的专题时整页重建，条件、结果和地图都�
   await expect(page).toHaveURL(/\/forest-grass-wetland-desert-query$/);
   await expect(panel).toContainText('森林草原湿地荒漠调查监测');
   await expect(panel).toContainText('建设中');
-  await expect(panel.getByRole('tab')).toHaveCount(0);
+  await expect(panel.getByRole('radiogroup')).toHaveCount(0);
   await expect(panel.getByRole('button', { name: '查询', exact: true })).toHaveCount(0);
 });

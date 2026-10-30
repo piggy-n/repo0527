@@ -120,6 +120,7 @@
 | [0109](0109-indicator-simulation-rename-and-ai-avatar.md) | 指标智能推演改名为城市国土空间监测指标AI计算：文案、AI 输入框、机器人头像与按钮主次 | 已接受（修改 0106 第 6 条、0107 的完成卡片、0108 第 2、7 条） |
 | [0110](0110-city-dashboard-menu-entry.md) | 驾驶舱的菜单入口：查询统计 → 专项统计，新标签页打开 | 已接受（修改 0077） |
 | [0111](0111-map-controls-without-3d-and-basemap-card.md) | 不支持三维的地图不显示 2D/3D；底图入口抽成 BasemapCard，AI 对话、指标 AI 计算补上 | 已接受（修改 0053 第 3 节） |
+| [0112](0112-data-query-legacy-buttons-and-wide-results.md) | 数据查询的按钮参考旧页面，结果从左侧开始 | 已接受（修改 0104 第 2、3 节） |
 
 ## 模板
 

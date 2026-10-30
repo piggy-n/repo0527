@@ -1,6 +1,6 @@
 @use 'ui';
 
-// 画布型页面：地图撑满内容区，浮层的网格同指标页（ADR 0053）：左列是查询面板，中间一列底部是查询结果，右列是地图控制和底图卡
+// 画布型页面：地图撑满内容区，浮层的网格同指标页（ADR 0053）：左边两列是查询面板和查询结果，右列是地图控制和底图卡
 .root {
   position: relative;
   height: 100%;
@@ -16,12 +16,28 @@
   pointer-events: none;
 }
 
-// 查询面板从上到下，按内容定高，表单在面板内部滚动
-.left {
+// 查询面板和查询结果占左边两列、从上到下：面板在上、按内容定高，结果贴底、从左边开始（参考旧页面，2026-10-29）；
+// 有结果时面板让出结果的高度，表单在面板内部滚动
+.main {
   grid-row: 1 / 4;
-  grid-column: 1;
+  grid-column: 1 / 3;
   display: flex;
   flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+  min-height: 0;
+
+  // 窄屏时左边只剩竖条，结果停在底图卡上方
+  @media (width < #{ui.$compact}) {
+    grid-row: 1 / 3;
+  }
+}
+
+.left {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
   min-height: 0;
 
   > * {
@@ -29,26 +45,28 @@
   }
 }
 
-// 查询结果在中间一列底部；底图卡宽 80、比工具列宽 40，伸进中间一列，右边为它留出位置
+// 底图卡宽 80、比工具列宽 40，伸进中间一列，结果右边为它留出位置；窄屏时结果在底图卡上方，右边不再让位
 .results {
-  grid-row: 1 / 4;
-  grid-column: 2;
   display: flex;
+  flex: none;
   flex-direction: column;
-  justify-content: flex-end;
   min-width: 0;
   min-height: 0;
+  margin-top: auto;
   margin-right: 40px;
 
   > * {
     pointer-events: auto;
   }
 
-  // 窄屏时左边只剩竖条，结果停在底图卡上方，右边不再让位，宽度留给表格
   @media (width < #{ui.$compact}) {
-    grid-row: 1 / 3;
     margin-right: 0;
   }
+}
+
+// 最大化时占满整列，查询面板不显示
+.maximized {
+  flex: 1;
 }
 
 .controls {
