@@ -130,9 +130,8 @@ describe('RelationNodeDetail', () => {
     // 卡片前面的元素：展开按钮或同宽的占位
     const before = (id: string) => wrapper.get(`[data-node-id="${id}"]`).element.previousElementSibling;
 
-    for (const id of ['land-use/1701', 'land-survey/1101', 'urban-monitoring/130A01', 'water-survey/HL_FS']) {
-      expect(before(id)?.getAttribute('aria-hidden'), id).toBe('true');
-    }
+    const nested = ['land-use/1701', 'land-survey/1101', 'urban-monitoring/130A01', 'water-survey/HL_FS'];
+    expect(nested.map(id => before(id)?.getAttribute('aria-hidden'))).toEqual(nested.map(() => 'true'));
     expect(before('urban-monitoring/130A')?.getAttribute('aria-label')).toBe('收起 水域网络');
   });
 });
