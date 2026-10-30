@@ -39,14 +39,14 @@
 .railLabel {
   position: absolute;
   top: 16px;
-  right: 5px;
+  right: -2px;
   left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   height: 146px;
   color: var(--color-primary);
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-xxl);
   font-weight: var(--font-weight-semibold);
   letter-spacing: 2px;
   line-height: 1;

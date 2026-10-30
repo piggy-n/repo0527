@@ -275,6 +275,7 @@ AI 计算的外发光和"自定义口径"（S14 前叫"模拟情景"）的颜色
   --font-family-base: 'Alibaba PuHuiTi', 'Microsoft YaHei', sans-serif;
   --font-size-display: 30px;
   --font-size-title: 28px;
+  --font-size-xxl: 20px;  
   --font-size-xl: 18px;
   --font-size-lg: 16px;
   --font-size-base: 14px;
