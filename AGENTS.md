@@ -29,7 +29,7 @@
 - tsconfig 不开启 `incremental`：TS 7.0.2 的增量检查在 `declare global` 文件变化后会给出过期结果（ADR 0009）
 - 二维地图用 MapLibre GL JS 6，只用具名导入；`setWorkerUrl`、CSS 这类全局设置由 app 懒加载完成（登录页空闲时预加载，或首次进入地图时）；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002、0019、0023、0061）
 - 三维地图用 Cesium，精确锁定版本（1.146.0，ADR 0002、0079）；Worker、资源等运行时文件由 `vite-plugin-static-copy` 复制到产物的 `cesium/`，基础地址由 app 的三维运行时设置
-- 资源管理"自助取数"的关系图用 ECharts 的 graph 系列，坐标用 d3-force 按旧页面的力导布局计算，不引入 G6（ADR 0089）
+- 资源管理"自助取数"：水资源的检索用按数据成果分泳道的关系图（Vue 卡片 + SVG 连线，数据在 `extraction/water-relations.json`，ADR 0115）；其他资源的关系图用 ECharts 的 graph 系列，坐标用 d3-force 按旧页面的力导布局计算，不引入 G6（ADR 0089）
 - AI 对话回答的 Markdown 用 marked 转换、DOMPurify 净化后显示，只在 `features/ai-chat/markdown.ts` 中使用
 - 距离和面积用 geographiclib-geodesic 按椭球面计算，不另写公式（ADR 0035）；其他几何计算按需安装 turf v7 的单个包，不用 `@turf/turf` 全家桶（ADR 0037）
 - 地图内核的事件用 nanoevents；资源释放用标准的 `Disposable` / `DisposableStack`，运行时由 `app/main.ts` 全局引入的 core-js 补齐（ADR 0023）
