@@ -93,14 +93,20 @@ export const ReasoningPanel = defineComponent({
       () => props.log.entries.value,
       () => {
         now.value = performance.now();
-        ticker.resume();
       }
     );
-    watch(typingReply, typing => {
-      if (!typing) {
-        ticker.pause();
-      }
-    });
+    // 挂载时就可能有没打完的回复：看结果时说"回看计算流程"，回复先记上，面板随后才挂上
+    watch(
+      typingReply,
+      typing => {
+        if (typing) {
+          ticker.resume();
+        } else {
+          ticker.pause();
+        }
+      },
+      { immediate: true }
+    );
 
     const state = props.run.state;
     const timings = computed(() => (props.plan ? lineTimings(props.plan) : []));

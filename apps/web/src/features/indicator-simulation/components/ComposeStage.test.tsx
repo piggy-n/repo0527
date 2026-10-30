@@ -183,6 +183,13 @@ describe('ComposeStage', () => {
     expect(bar().get('[aria-label="预估的年度"] input[value="2026"]').element).toHaveProperty('checked', true);
     expect(bar().text()).toContain('预估达标');
     expect(bar().text()).toMatch(/\d+\/13 市/);
+    // 预估值前面加"≈"：覆盖率取整，人均公园绿地保留一位；目标不加
+    expect(bar().findAll('[class*="_value_"] b').map(value => value.text())).toEqual([
+      expect.stringMatching(/^≈\d+%$/),
+      expect.stringMatching(/^≈\d+%$/),
+      expect.stringMatching(/^≈\d+\.\d \S+$/)
+    ]);
+    expect(bar().text()).toMatch(/目标 ≥ \d+%/);
 
     await bar().get('[aria-label="预估的年度"] input[value="2025"]').setValue(true);
     expect(bar().get('[aria-label="预估的年度"] input[value="2025"]').element).toHaveProperty('checked', true);
