@@ -96,6 +96,7 @@ docs/
    - [城市国土空间监测基本统计的迁移](stages/space-monitoring-statistics-migration.md)：轮询交给查询库、跟踪写成纯函数的状态机、宽屏收起侧栏放进组件库
    - [数据查询的迁移](stages/data-query-migration.md)：四个路由一个组件按专题加 key、四个拥有者加一个编排者、通用的绘制工具、查询缓存的 key 里有 File
    - [城市国土空间监测指标AI计算（原名指标智能推演）](stages/indicator-simulation.md)：引擎只管状态和时间、动效从进度来，先预告再执行的同一份规则，页面缓存与可叠加的暂停，减少动画就是直接到终态
+   - [阶段性迁移验收（第三次全面审查，2026-10-30）](stages/main-acceptance-review.md)：全部检查与逐页验收的结果、写法整改，以及作为后续基线的待办与已知问题清单（tag `acceptance-2026-10-30`）
 5. [commands.md](commands.md)：日常要用的命令
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明，并按 [UI 工作流程](design/ui-workflow.md) 完成交互原型和实际页面验证。
