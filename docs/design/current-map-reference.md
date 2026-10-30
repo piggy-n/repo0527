@@ -25,7 +25,7 @@
 | 工具栏 | `MapToolbar` | 图标入口，当前显示与已打开状态由页面传入，不在工具栏重复保存 |
 | 资源树 | `ResourceLayerPanel` | 数量胶囊标识；"已选择图层"默认收起，零勾选时整区隐藏；拖动手柄在复选框前面、悬浮时出现，行末透明度右边是上移、下移（实心三角，只调目录顺序，ADR 0096、0102）；进入页面时没有勾选的资源就展开全部分类（ADR 0094） |
 | 透明度 | `LayerOpacity`、`OpacityToggle`、`OpacitySlider` | 入口随行悬浮或键盘焦点显示；弹层不影响勾选，滚动立即关闭；选中状态随弹层状态 |
-| 底图 | `MapCard`、`MapOptionsPopover`、`BasemapPanel` | 80 × 56 缩略图入口；左侧带箭头浮层，紧凑操作栏；外部点击不关闭，再次点击入口或 × 关闭 |
+| 底图 | `BasemapCard`（`MapCard`、`MapOptionsPopover`、`BasemapPanel`，ADR 0111） | 80 × 56 缩略图入口；左侧带箭头浮层，紧凑操作栏；外部点击不关闭，再次点击入口或 × 关闭 |
 | 图例 | `ResourceLegend`、`SymbolEditor` | 浏览与编辑分开；普通图例整行编辑；复杂子图例缩进 24、色块 22 × 16、名称完整换行；父级摘要 28 × 20 |
 | 恢复操作 | `ResourceLegendReset` | 有修改的浏览视图才显示固定底栏，顶部留 12；编辑中区分当前图例与本图层恢复，全局恢复提示明确包含未勾选图层 |
 

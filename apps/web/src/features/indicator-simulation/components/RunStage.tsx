@@ -3,8 +3,11 @@ import { MapCanvas } from '@yzt/map-vue';
 import { MxPanel, MxSplitLayout } from '@yzt/ui';
 import { ElButton, ElMessage, ElPopconfirm, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, onBeforeUnmount, type PropType, ref, watch } from 'vue';
+import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
+import type { Basemap } from '@/shared/map/basemap/useBasemap';
 import { JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
+import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
 import type { ReasoningLog } from '../composables/useReasoningLog';
 import type { RunFlow } from '../composables/useRunFlow';
@@ -52,6 +55,9 @@ export const RunStage = defineComponent({
     userPause: { type: Object as PropType<UserPause>, required: true },
     result: { type: Object as PropType<SimulationResult>, required: true },
     simulationMap: { type: Object as PropType<SimulationMap>, required: true },
+    /** 页面的底图拥有者和默认视角（ADR 0033）：结果地图右下角的控制栏和底图卡片（ADR 0111） */
+    basemap: { type: Object as PropType<Basemap>, required: true },
+    goToDefaultView: { type: Function as PropType<() => void>, required: true },
     /** 完成后主区看什么；推演中总是流程图 */
     view: { type: String as PropType<RunView>, default: 'flow' }
   },
@@ -63,6 +69,7 @@ export const RunStage = defineComponent({
     const state = run.state;
     const intervening = ref(false);
     const highlight = ref<number | null>(null);
+    const basemapOpen = ref(false);
     const done = computed(() => state.value.status === 'done');
     const showingResult = computed(() => done.value && props.view === 'result');
     const current = computed(() => {
@@ -222,6 +229,15 @@ export const RunStage = defineComponent({
             onFocusCity={cityCode => result.select({ cityCode })}
           />
           {conditions && <ResultMapTools result={result} conditions={conditions} />}
+          <div class={styles.mapCorner}>
+            <MapViewControls goToDefaultView={props.goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
+            <BasemapCard
+              basemap={props.basemap}
+              open={basemapOpen.value}
+              visible={showingResult.value}
+              onUpdate:open={open => (basemapOpen.value = open)}
+            />
+          </div>
         </div>
       );
     };

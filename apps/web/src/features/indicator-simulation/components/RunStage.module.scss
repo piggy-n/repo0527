@@ -24,6 +24,17 @@
   transition: opacity 0.3s ease;
 }
 
+// 结果地图右下角：地图控制栏，下面是底图卡片（同查询统计的地图页，ADR 0111）
+.mapCorner {
+  position: absolute;
+  right: var(--space-lg);
+  bottom: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-md);
+}
+
 // 淡出后再隐藏
 .concealed {
   opacity: 0;

@@ -10,16 +10,12 @@ import { useIndicatorConditions } from '@/features/monitoring-indicators/composa
 import { useIndicatorResult } from '@/features/monitoring-indicators/composables/useIndicatorResult';
 import { useIndicatorTree } from '@/features/monitoring-indicators/composables/useIndicatorTree';
 import { RESULT_GROUP } from '@/features/monitoring-indicators/result-layers';
-import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
-import { basemapOption } from '@/shared/map/basemap/basemap-style';
-import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
+import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
-import { MapCard } from '@/shared/map/card/MapCard';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
-import { MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
@@ -119,35 +115,16 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
       }
     );
 
-    const renderBasemapCard = () => {
-      const current = basemapOption(basemap.selected.value);
-      return (
-        <div key="cards" class={styles.cards}>
-          <MapOptionsPopover
-            name="basemap"
-            label="底图"
-            opacity={basemap.opacity.value}
-            open={basemapOpen.value}
-            visible={sides.right.value}
-            onOpacityChange={basemap.setOpacity}
-            onUpdate:open={changeBasemapOpen}
-          >
-            {{
-              reference: () => [
-                <MapCard
-                  label={current.shortLabel}
-                  name={`底图：${current.label}`}
-                  pressed={sides.right.value && basemapOpen.value}
-                >
-                  {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[current.id]} />] }}
-                </MapCard>
-              ],
-              default: () => [<BasemapPanel basemap={basemap} showOpacity={false} />]
-            }}
-          </MapOptionsPopover>
-        </div>
-      );
-    };
+    const renderBasemapCard = () => (
+      <div key="cards" class={styles.cards}>
+        <BasemapCard
+          basemap={basemap}
+          open={basemapOpen.value}
+          visible={sides.right.value}
+          onUpdate:open={changeBasemapOpen}
+        />
+      </div>
+    );
 
     return () => (
       <div class={styles.root} data-indicators-page>

@@ -17,6 +17,7 @@ import { useUserPause } from '@/features/indicator-simulation/composables/useUse
 import { reducedMotion, STILL_CLASS } from '@/features/indicator-simulation/motion';
 import type { RunView } from '@/features/indicator-simulation/result/result-view';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
+import { useDefaultView } from '@/shared/map/useDefaultView';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { usePageActive } from '@/shared/composables/usePageActive';
 import { JIANGSU_CAMERA } from '@/shared/map/jiangsu';
@@ -53,6 +54,7 @@ export const IndicatorSimulationPage = defineComponent({
       ],
       camera: JIANGSU_CAMERA
     });
+    const { goToDefaultView } = useDefaultView(map);
     const basemap = useBasemap();
     const boundaries = useBoundaries();
     boundaries.setVisible('city', true);
@@ -119,6 +121,8 @@ export const IndicatorSimulationPage = defineComponent({
           userPause={userPause}
           result={result}
           simulationMap={simulationMap}
+          basemap={basemap}
+          goToDefaultView={goToDefaultView}
           view={runView.value}
           onUpdate:view={view => (runView.value = view)}
         />

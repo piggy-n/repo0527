@@ -28,8 +28,8 @@ function iconButton(label: string, icon: IconName, onClick: () => void, disabled
 }
 
 /**
- * 地图的基础组（ADR 0053 第 3 节、ADR 0058）：层级、放大、缩小、指北针、默认视角、2D/3D，只有图标，悬停在左边提示名称。
- * 角落里的小控件，不登记为悬浮元素（第 9 节）；放在 provideMap 所在组件的子孙里
+ * 地图的基础组（ADR 0053 第 3 节、ADR 0058）：层级、放大、缩小、指北针、默认视角、2D/3D，只有图标，悬停在左边提示名称；
+ * 不支持三维的页面没有 2D/3D（ADR 0111）。角落里的小控件，不登记为悬浮元素（第 9 节）；放在 provideMap 所在组件的子孙里
  */
 export const MapViewControls = defineComponent({
   name: 'MapViewControls',
@@ -38,7 +38,7 @@ export const MapViewControls = defineComponent({
     goToDefaultView: { type: Function as PropType<() => void>, required: true },
     /** 和画布的缩放范围相同 */
     zoomRange: { type: Object as PropType<ZoomRange>, required: true },
-    /** 当前是二维还是三维；不传时三维按钮不可用（三维阶段之前，ADR 0053 第 3 节） */
+    /** 当前是二维还是三维；不传时不显示 2D/3D（页面不支持三维，ADR 0111） */
     dimension: { type: String as PropType<ViewKind>, default: undefined },
     /** 显示默认视角；地下空间时页面传 false：飞到全省会离开模型 */
     defaultView: { type: Boolean, default: true }
@@ -70,23 +70,7 @@ export const MapViewControls = defineComponent({
       );
     };
 
-    const renderDimension = () => {
-      if (props.dimension !== undefined) {
-        return [dimensionButton('2d', '二维', '2D'), dimensionButton('3d', '三维', '3D')];
-      }
-      return [
-        <button type="button" class={[styles.button, styles.current]} aria-label="二维" aria-pressed="true">
-          2D
-        </button>,
-        // 三维阶段之前点了没有效果（用户决定显示，ADR 0053 第 3 节）
-        withTip(
-          '三维暂未开放',
-          <button type="button" class={styles.button} aria-label="三维" aria-pressed="false" aria-disabled="true">
-            3D
-          </button>
-        )
-      ];
-    };
+    const dimensionShown = () => props.dimension !== undefined;
 
     return () => (
       <div class={styles.controls} role="toolbar" aria-label="地图视角" aria-orientation="vertical">
@@ -105,10 +89,16 @@ export const MapViewControls = defineComponent({
             <SvgIcon name="map-compass-color" size={20} rotate={compass.rotation.value} />
           </button>
         )}
-        <div class={styles.separator} role="separator" />
+        {/* 默认视角（地下空间时没有）和 2D/3D（不支持三维时没有）各自一段，段之间加分隔线 */}
+        {(props.defaultView || dimensionShown()) && <div class={styles.separator} role="separator" />}
         {props.defaultView && iconButton('默认视角', 'map-default-view', props.goToDefaultView)}
-        {props.defaultView && <div class={styles.separator} role="separator" />}
-        <div class={styles.dimension}>{renderDimension()}</div>
+        {props.defaultView && dimensionShown() && <div class={styles.separator} role="separator" />}
+        {dimensionShown() && (
+          <div class={styles.dimension}>
+            {dimensionButton('2d', '二维', '2D')}
+            {dimensionButton('3d', '三维', '3D')}
+          </div>
+        )}
       </div>
     );
   }
