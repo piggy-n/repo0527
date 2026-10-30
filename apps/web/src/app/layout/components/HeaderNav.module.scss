@@ -21,7 +21,8 @@
   align-items: center;
   gap: 8px;
   height: 44px;
-  padding: 0 18px;
+  // "AI对话"换成带箭头的"智能体"后多出约 10px，管理员在 1680 宽时 18 放不下，改成 17（docs/modules/layout.md）
+  padding: 0 17px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -76,6 +77,13 @@
 .links {
   min-width: 196px;
   padding-left: 8px;
+}
+
+// 一层下拉：没有分组列，只有一列页面
+.single {
+  min-width: 160px;
+  padding-left: 0;
+  font-size: var(--font-size-base);
 }
 
 .option {
@@ -145,10 +153,10 @@
   list-style: none;
 }
 
-// 加上消息按钮后，管理员的顶栏在 1440 宽时要 1450，内边距从 14 改成 12 才放得下（docs/modules/layout.md）
+// 管理员的顶栏在 1440 宽时放得下的内边距：加消息按钮后从 14 改成 12，加"智能体"下拉后改成 11（docs/modules/layout.md）
 @media (width < #{breakpoints.$nav-icons}) {
   .item {
-    padding: 0 12px;
+    padding: 0 11px;
   }
 
   .icon {

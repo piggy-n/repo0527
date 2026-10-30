@@ -1,0 +1,96 @@
+// 叠在结果地图上的城市标注（第五版原型）：胶囊里是达标的圆点、名称和值，点了放大到这个市
+.root {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+// 尺寸和 map/label-layout.ts 的估算一致：高 22，左右内边距 8，圆点 7、间隔 4
+.label {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-bg-mask);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text-title);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: pointer;
+  animation: label-in 0.3s ease-out;
+
+  i {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  &:hover,
+  &.lit {
+    z-index: 3;
+    background: var(--color-text-strong);
+    color: var(--color-text-inverse);
+  }
+}
+
+// 只有一个市：不能点，悬停不变色
+.still {
+  cursor: default;
+
+  &:hover {
+    z-index: 1;
+    background: var(--color-bg-mask);
+    color: var(--color-text-title);
+  }
+}
+
+// 完整的压在省略的上面；只有名称的是 short
+.full {
+  z-index: 2;
+}
+
+.short .value,
+.dot .name,
+.dot .value {
+  display: none;
+}
+
+.dot {
+  padding: 0 5px;
+}
+
+.pass {
+  background: var(--color-primary);
+}
+
+.near {
+  background: var(--color-warning);
+}
+
+.fail {
+  background: var(--color-danger);
+}
+
+@keyframes label-in {
+  from {
+    opacity: 0;
+  }
+}
+
+// 减少动画（由 motion.ts 决定，现在总是播放）
+:global(.simulation-still) {
+  .label {
+    animation: none;
+  }
+}

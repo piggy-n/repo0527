@@ -1,0 +1,182 @@
+// 条件库：年度、范围固定在上面，只有指标列表滚动；选项的尺寸同"现状底图 → 区划定位"（current-map-reference.md）
+.panel {
+  min-height: 0;
+}
+
+// 面板去掉内边距，由这里排：标题栏下 12、模块之间 16、标题与内容 8
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-height: 0;
+  // 矮屏时指标列表到了最小高度，整体再滚动，不把内容裁掉
+  overflow-y: auto;
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
+}
+
+.section {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+
+  // 标题本身会横向撑开（flex: 1），在纵向排列里不能跟着变高
+  > :first-child {
+    flex: none;
+  }
+}
+
+.fill {
+  flex: 1 0 200px;
+  min-height: 0;
+}
+
+.extra {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+}
+
+.grid {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+// 年份 6 个排一行；城市每格至少 52，容纳 3 字名称，320 宽的侧栏里是 5 列
+.years {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.cities {
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+}
+
+.indicators {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+// 悬停主色，选中浅主色底，同区划定位的选项
+.chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-container);
+  color: var(--color-text-regular);
+  // 按钮不继承字体，不写会用浏览器默认的 Arial，中文显得又淡又细
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  cursor: grab;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s,
+    color 0.15s;
+
+  &:hover {
+    border-color: var(--color-primary-border-hover);
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+
+  &[aria-pressed='true'] {
+    border-color: var(--color-primary-border);
+    background: var(--color-primary-bg);
+    color: var(--color-primary);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  // 指标：名称黑色 14 号、高 32、左对齐，悬停和选中仍用主色（2026-10-29 用户确认的原型）
+  .indicators & {
+    justify-content: flex-start;
+    height: 32px;
+    padding: 0 var(--space-sm);
+    color: var(--color-text-title);
+    font-size: var(--font-size-base);
+
+    &:hover,
+    &[aria-pressed='true'] {
+      color: var(--color-primary);
+    }
+  }
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search {
+  flex: none;
+}
+
+// 只有这里滚动：滚动条（全局 6 宽）放进面板右侧的内边距，选项和上面的按钮右边对齐、离滚动条 4
+.list {
+  flex: 1;
+  min-height: 0;
+  margin-right: -10px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
+.empty {
+  margin: var(--space-md) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+.group + .group {
+  margin-top: var(--space-xs);
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--color-text-title);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+// 向下的三角，收起时转向右
+.caret {
+  width: 0;
+  height: 0;
+  border: 4px solid transparent;
+  border-top-color: var(--color-text-secondary);
+  transform: translateY(2px);
+  transition: transform 0.2s;
+
+  [aria-expanded='false'] > & {
+    transform: rotate(-90deg) translateX(-2px);
+  }
+}
+
+.count {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-regular);
+}

@@ -4,12 +4,12 @@ import { defineComponent, type PropType } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import { navigate } from '@/shared/router/navigate';
-import { isNavItemActive, type NavDropdown, type NavItem, type NavLinkTarget } from '../menus';
+import { isNavItemActive, type NavDropdown, type NavItem, type NavLinkTarget, type NavMenu } from '../menus';
 import styles from './HeaderNav.module.scss';
 
 const divider = (key: string) => <li key={key} role="separator" class={styles.compactDivider} />;
 
-/** 窄屏导航：全部页面收进一个下拉菜单；一级项带图标，下拉项（如"查询统计"）自成一块，前后加分隔线，子页面缩进 */
+/** 窄屏导航：全部页面收进一个下拉菜单；一级项带图标，下拉项（如"查询统计""智能体"）自成一块，前后加分隔线，子页面缩进 */
 export const CompactNav = defineComponent({
   name: 'CompactNav',
   props: {
@@ -31,18 +31,21 @@ export const CompactNav = defineComponent({
       </ElDropdownItem>
     );
 
-    const section = (item: NavDropdown, index: number) => [
+    // 两级下拉的分组名作灰色小字，一层下拉直接列出页面
+    const section = (item: NavDropdown | NavMenu, index: number) => [
       ...(index > 0 ? [divider(`${item.label}-before`)] : []),
       <li key={item.label} role="presentation" class={styles.compactHeader}>
         <SvgIcon class={styles.compactIcon} name={item.icon} size={16} />
         {item.label}
       </li>,
-      ...item.groups.flatMap(group => [
-        <li key={group.label} role="presentation" class={styles.compactGroup}>
-          {group.label}
-        </li>,
-        ...group.links.map(target => link(target))
-      ]),
+      ...(item.kind === 'menu'
+        ? item.links.map(target => link(target))
+        : item.groups.flatMap(group => [
+          <li key={group.label} role="presentation" class={styles.compactGroup}>
+            {group.label}
+          </li>,
+          ...group.links.map(target => link(target))
+        ])),
       ...(index < props.items.length - 1 ? [divider(`${item.label}-after`)] : [])
     ];
 

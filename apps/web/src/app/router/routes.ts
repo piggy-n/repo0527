@@ -94,6 +94,17 @@ const businessRoutes: RouteRecordRaw[] = [
     component: withMapRuntime(() => import('@/pages/ai-chat/AiChatPage').then(({ AiChatPage }) => AiChatPage)),
     meta: { title: 'AI对话' }
   },
+  // 切到别的页面再回来，推演和结果都还在；停用期间推演暂停（ADR 0105 第 9 条）
+  {
+    path: 'indicator-simulation',
+    name: RouteName.indicatorSimulation,
+    component: withMapRuntime(() =>
+      import('@/pages/indicator-simulation/IndicatorSimulationPage').then(
+        ({ IndicatorSimulationPage }) => IndicatorSimulationPage
+      )
+    ),
+    meta: { title: '城市国土空间监测指标AI计算', keepAlive: true }
+  },
   {
     path: 'resource-management',
     name: RouteName.resourceManagement,
@@ -159,6 +170,16 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
         ({ DevMonitoringStatisticsPage }) => DevMonitoringStatisticsPage
       ),
     meta: { title: '基本统计组件样例', public: true }
+  },
+  {
+    path: '/dev/indicator-simulation',
+    name: RouteName.devIndicatorSimulation,
+    component: withMapRuntime(() =>
+      import('@/pages/dev/indicator-simulation/DevIndicatorSimulationPage').then(
+        ({ DevIndicatorSimulationPage }) => DevIndicatorSimulationPage
+      )
+    ),
+    meta: { title: '城市国土空间监测指标AI计算组件样例', public: true }
   },
   {
     path: '/dev/monitoring-indicators',

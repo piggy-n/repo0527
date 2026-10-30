@@ -1,9 +1,9 @@
 import { DataAnalysis, MapLocation } from '@element-plus/icons-vue';
 import { ElIcon } from 'element-plus';
 import { computed, defineComponent, type PropType, ref } from 'vue';
+import { ChatAvatar } from '@/shared/chat-avatar/ChatAvatar';
 import { statsText } from '../chat-result';
 import type { ChatMessage } from '../composables/useAiChat';
-import assistantImage from '../images/assistant.webp';
 import { renderMarkdown } from '../markdown';
 import { stepsRunning } from '../tool-steps';
 import styles from './ChatMessageItem.module.scss';
@@ -84,9 +84,7 @@ export const ChatMessageItem = defineComponent({
       const user = props.message.role === 'user';
       return (
         <article class={[styles.root, user && styles.user]} data-role={props.message.role}>
-          <span class={styles.avatar} aria-hidden="true">
-            {user ? '我' : <img class={styles.avatarImage} src={assistantImage} alt="" />}
-          </span>
+          <ChatAvatar speaker={props.message.role} />
           <div class={styles.body}>
             {user ? <div class={[styles.bubble, styles.question]}>{props.message.content}</div> : renderAnswer()}
             {renderMeta()}

@@ -1,0 +1,104 @@
+// AI计算与结果展示（原型 v4、v5）：和条件配置一样的分栏布局；计算时左侧 AI计算、主区流程图，看结果时左侧计算结果、主区地图
+.root {
+  position: relative;
+  height: 100%;
+}
+
+.panel {
+  flex: 1;
+  min-height: 0;
+}
+
+// 流程图和地图叠在面板的内容区里，不在看的一层隐藏但保留尺寸
+.stack {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  transition: opacity 0.3s ease;
+}
+
+// 淡出后再隐藏
+.concealed {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.3s ease,
+    visibility 0s linear 0.3s;
+}
+
+// 完成后标题栏右边是"计算流程 / 计算结果"
+.views {
+  margin-left: auto;
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.stateDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.runningDot {
+  background: var(--color-primary);
+  animation: beat 1.2s ease-in-out infinite;
+}
+
+.pausedDot {
+  background: var(--color-warning);
+}
+
+@keyframes beat {
+  50% {
+    box-shadow: 0 0 0 4px var(--color-primary-alpha-10);
+  }
+}
+
+// 间距由 gap 负责，去掉 Element 相邻按钮的左外边距
+.actions {
+  display: flex;
+  gap: var(--space-sm);
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+// 人工干预：流程图右上角，标题栏下面，不挡住正在生长的树
+.intervene {
+  position: absolute;
+  top: calc(var(--space-lg) + 48px + var(--space-md));
+  right: calc(var(--space-lg) + var(--space-md));
+  z-index: 8;
+  width: min(400px, calc(100% - 2 * var(--space-lg)));
+  max-height: calc(100% - 2 * var(--space-lg) - 48px - var(--space-md));
+  display: flex;
+  flex-direction: column;
+}
+
+:global(.simulation-still) {
+  .layer,
+  .concealed {
+    transition: none;
+  }
+
+  .runningDot {
+    animation: none;
+  }
+}

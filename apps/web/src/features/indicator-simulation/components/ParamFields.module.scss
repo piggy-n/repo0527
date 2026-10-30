@@ -1,0 +1,73 @@
+// 参数编辑项：名称用区块标题（MxTitle），参数之间 16、标题与控件之间 8
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+// 滑块两端留出圆点的位置，不贴着容器边（同图层透明度的滑块）；Element 的滑块宽 100%，内边距要算在宽度里
+.slider {
+  box-sizing: border-box;
+  padding: 0 var(--space-sm);
+}
+
+.value {
+  color: var(--color-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+// 浮层里没有区块标题时的一行：左边说明，右边取值或情景标记
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 22px;
+}
+
+.description {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+// 偏离标准口径：情景色的小标签（--color-scenario 系，同编排图）
+.scenario {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-scenario-bg);
+  color: var(--color-scenario);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-tag);
+  white-space: nowrap;
+}
+
+.note {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.targets {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  align-items: center;
+  gap: 6px var(--space-sm);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+}
+
+.number {
+  width: 100%;
+}

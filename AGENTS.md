@@ -49,7 +49,7 @@ apps/web/src/
 ├─ app/        应用装配：入口、路由、Pinia、全局插件、布局
 ├─ pages/      路由页面，只负责组合 features
 ├─ features/   按业务域划分：api.ts、queries.ts、store.ts、components/、composables/
-├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、加载耗时的标记（perf）、项目级的公共地图能力（map）、只供测试的辅助（testing）
+├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、加载耗时的标记（perf）、项目级的公共地图能力（map）、城市体检指标的目录与模拟值（city-indicators）、对话头像（chat-avatar）、只供测试的辅助（testing）
 └─ libs/       将来可拆到 packages/* 的模块，统一用 @yzt/<name> 导入
    ├─ utils/       @yzt/utils       纯 TS 工具，不依赖框架（目前是 Worker 通信层）
    ├─ ui/          @yzt/ui          Mx* 通用组件（布局、面板、区块、标题，ADR 0016）
@@ -133,7 +133,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 路由表在 `app/router/routes.ts`；路由名常量在 `shared/router/route-names.ts`，跳转写 `{ name: RouteName.xxx }`，不写路径字符串；页面级参数用路由的 `props` 传入，不放在 `meta` 里
 - 程序式跳转用 `shared/router/navigate`，返回 true 后才执行成功提示等后续动作；导航异常由 app 统一提示与恢复，调用方不重复提示（ADR 0064）
 - 页面权限写在路由 meta 上：不登录也能访问的页面加 `public: true`，限定角色写 `roles`；不另外维护路径清单。`routes.test.ts` 列出了全部公开页面和限定角色的页面，修改时同步更新（ADR 0015）
-- 切走时要保留状态的页面在路由 meta 写 `keepAlive: true`，由 `AppLayout` 里常驻的 `KeepAlive` 缓存，布局卸载（回到登录页）时清空；`routes.test.ts` 列出缓存的页面（ADR 0063）。被缓存的页面里量尺寸用 `shared/composables` 的 `useShownElementSize`，不直接用 `useElementSize`（停用期间量到 0，恢复的第一帧会按 0 排版）；停用时要结束的临时交互用 `usePageActive`
+- 切走时要保留状态的页面在路由 meta 写 `keepAlive: true`，由 `AppLayout` 里常驻的 `KeepAlive` 缓存，布局卸载（回到登录页）时清空；`routes.test.ts` 列出缓存的页面（ADR 0063）。被缓存的页面里量尺寸用 `shared/composables` 的 `useShownElementSize`，不直接用 `useElementSize`（停用期间量到 0，恢复的第一帧会按 0 排版）；停用时要结束的临时交互用 `usePageActive`。画布型页面的根元素用 `height: 100%`：内容区不是弹性容器，`flex: 1` 不生效，浮层全是绝对定位时整页高度为 0（见 `docs/design/page-layout.md`）
 - TSX 里同一个父元素下有几个按条件出现、可能同时变化的兄弟元素时，每个都给 `key`：TSX 没有模板编译器加的标记，Vue 把没有 key 的同类元素按顺序配对，里面的 `KeepAlive` 和有状态的组件会被重建（写法见 `pages/current-map/CurrentMapPage.tsx` 的浮层）
 - 顶部导航配置在 `app/layout/menus.ts`，导航项的权限从路由 meta 读取，不在菜单里另写角色；新增业务页时先加路由再加导航项
 - 登录会话只通过 `shared/auth` 的 `useSessionStore` 读写，不直接读写 localStorage 中的 token
@@ -258,6 +258,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 
 - 字体文件按授权不能提交到仓库（ADR 0012）；正文字体普惠体 3.0 只有 400、600 两个字重，改 `font-weight` 即可
 - 业务图标用 `shared/icons/SvgIcon`（`name` 有类型检查），不直接写 `<img>` 或内联 SVG（按数据画的图形不是图标，如图例的符号预览，可以直接用 SVG）；新图标放进 `apps/web/src/assets/icons/`，由 `@yzt/icons` 自动规范化（改名、颜色改为 currentColor），多色图标文件名以 `-color` 结尾，见 `docs/modules/icons.md`；Element 组件的图标属性仍用 `@element-plus/icons-vue`
+- AI 助手与用户的头像（机器人位图、"我"）用 `shared/chat-avatar` 的 `ChatAvatar`，不在页面里另放图片或画渐变圆球（ADR 0109，见 `docs/modules/chat-avatar.md`）
 - 系统名称用 `shared/system-title` 的 `SystemTitle` 组件（SVG 轮廓，大小和颜色跟随 `font-size`、`color`），不要把优设标题黑作为网页字体加载；修改名称见 `docs/modules/system-title.md`
 
 - 设计参考 `docs/design/color-and-typography.md`，落地方式见 `docs/design/theme.md`；规范和 Element Plus 的交互风格冲突时，优先和 Element 保持一致
@@ -274,6 +275,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 ## 迁移规则
 
 - 城市体检驾驶舱纳入阶段六，含自身的 Three.js 立体行政区地图；三维阶段（ADR 0078）只指现状底图的 Cesium 模块。先确认交互预览再分步实施，固定模拟指标与真实业务数据验收分开；入场按局部可见时长编排，不修改 GSAP 全局 ticker；图片保存复用 `shared/file-transfer`，缺少部署字体时沿用后备字体并保留卸载取消。范围、性能条件与基线见 `docs/modules/city-dashboard.md`
+- 城市国土空间监测指标AI计算（原名指标智能推演，ADR 0105～0109）是新页面，不是迁移，全部用确定性的模拟数据：界面上统一叫"计算""条件配置""自定义口径""调整条件"，不提 Excel，代码标识符沿用 simulation；参数按 Excel 的计算规则、按指标类型生效，除目标值外偏离标准口径就是"自定义口径"，不改指标的定义；AI 计算指令和计算中的对话按规则解析、不接大模型，输入框的占位是完整示例、空着时 Tab 填入；引擎（`features/indicator-simulation/engine`）只管步骤状态与时间，时钟注入、测试用假时钟；推演流程图的节点状态、打字由 `flow/frame.ts` 从步骤进度计算，各步的时长按推理的话多少给，不另开计时器；结果展示是推演阶段的另一个视图（左侧推演结果、主区地图），地图画布第一次推演完成时创建；这一页不跟随系统的减少动画，开关只在 `motion.ts`；叙述、结果摘要、地图着色由纯函数从计算结果生成；结果展示只存用户选过的部分、总是看最新一版，其余推导；页面缓存期间推演暂停。见 `docs/modules/indicator-simulation.md`
 - 只迁移旧项目中实际在用的模块。不迁移：资源中心（含独立的知识图谱页；但代码放在 `views/resource-center/` 下的文件管理、资源管理"自助取数"用到的图谱数据和布局要迁移）、资源共享、统计分析、旧版 resource-management、`views/sys` 与动态菜单路由、`/home` 测试页、mockjs、backend-switcher
 - 先读懂旧模块的行为，再按新架构重写，不逐行照搬；类结构和算法有价值的，保留设计并补上类型
 - 按真实接口返回（先实际请求一次看结构）和 TypeScript 类型写逻辑，不照搬旧代码为各种假设情况写的兜底判断：zod schema 已经保证的字段不再判空，不写 `|| ''`、`Array.isArray(...) ? ... : []` 这类兜底；确实可能缺失的字段在 schema 里写 `.optional()`，由类型提示调用方处理

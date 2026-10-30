@@ -1,0 +1,40 @@
+// 上面是阶段，下面是横跨全宽的 AI 对话栏；内容区不是弹性容器，用 height: 100% 占满（阶段是绝对定位，没有内容撑开）
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+// 两个阶段叠在这里；结果的地图在推演阶段的主区里
+.stages {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+// 条件编排和推演之间淡入淡出：AI 编排完成自动开始推演时，编排图淡出，推演阶段淡入
+.stageEnterActive,
+.stageLeaveActive {
+  transition: opacity 0.45s ease;
+}
+
+.stageEnterFrom,
+.stageLeaveTo {
+  opacity: 0;
+}
+
+// 离开的一方叠在上面淡出，不占位置、不接收点击
+.stageLeaveActive {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+// 减少动画（由 motion.ts 决定，现在总是播放）
+:global(.simulation-still) {
+  .stageEnterActive,
+  .stageLeaveActive {
+    transition: none;
+  }
+}

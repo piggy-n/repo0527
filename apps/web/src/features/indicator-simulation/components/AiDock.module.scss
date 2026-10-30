@@ -1,0 +1,127 @@
+// 页面底部横跨全宽的对话栏：输入框居中，最宽 760（原型 v4）
+.root {
+  flex: none;
+  padding: 10px var(--space-lg) var(--space-md);
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg-container);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+// 边框包住文字和按钮；文字区聚焦时主色描边和外发光（同 Element 输入框）
+.input {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  padding: 6px 6px 6px var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+
+  &:hover {
+    border-color: var(--color-primary-border-hover);
+  }
+
+  &:has(.textarea:focus) {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-alpha-10);
+  }
+
+  // Element 相邻按钮的左外边距由 gap 负责
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+// 一行起，随内容长到三行，空着时按占位的示例长高（浏览器量高度时不算占位）：
+// 看不见的副本写着同样的文字，和文字区叠在同一格里撑开高度
+.grow {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  margin: 5px 0;
+
+  &::after {
+    content: attr(data-value) ' ';
+    visibility: hidden;
+    overflow: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
+  &::after,
+  .textarea {
+    grid-area: 1 / 1;
+    max-height: calc(var(--line-height-base) * 3);
+    padding: 0;
+    font: inherit;
+    line-height: var(--line-height-base);
+  }
+}
+
+// 不能拖动改大小
+.textarea {
+  min-width: 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: none;
+  color: var(--color-text-title);
+
+  &::placeholder {
+    color: var(--color-text-placeholder);
+  }
+}
+
+.refresh {
+  margin-bottom: 7px;
+}
+
+// 看结果时 AI 的回复：机器人头像加上回复的话
+.reply {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  margin: 0;
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+// 快捷说法：点了直接发送
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-sm);
+
+  &:empty {
+    display: none;
+  }
+}
+
+.suggestion {
+  height: 26px;
+  padding: 0 var(--space-md);
+  border: 1px solid var(--color-primary-border);
+  border-radius: 999px;
+  background: var(--color-primary-bg-light);
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-bg);
+  }
+}

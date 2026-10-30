@@ -1,0 +1,4 @@
+// AI 按指令编排期间：推演条件和编排图只看不点，编排完成后恢复
+.locked {
+  pointer-events: none;
+}

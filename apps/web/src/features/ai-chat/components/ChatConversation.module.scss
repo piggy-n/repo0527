@@ -16,22 +16,10 @@
   text-align: center;
 }
 
-// 助手头像是位图（images/assistant.webp），放在主色圆底上（ADR 0103）
+// 欢迎语的助手头像（56 圆底，shared/chat-avatar）
 .robot {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
   margin-bottom: 12px;
-  border-radius: 50%;
-  background-color: var(--color-primary);
   box-shadow: var(--shadow-sm);
-}
-
-.robotImage {
-  display: block;
-  width: 40px;
-  height: auto;
 }
 
 .greeting {

@@ -38,6 +38,7 @@ docs/
 │  ├─ query-form.md           shared/query-form：列表页的查询表单（按是否换行切换标签宽度与按钮位置）
 │  ├─ layout.md               布局：顶部导航、用户菜单、宽度适配
 │  ├─ system-title.md         系统名称的 SVG 轮廓：用法、自动生成、常见问题
+│  ├─ chat-avatar.md          shared/chat-avatar：对话的头像（机器人、"我"），AI 对话与指标AI计算共用
 │  ├─ ui.md                   libs/ui：两个入口、窄屏断点、分栏布局、面板、区块、标题
 │  ├─ map-overview.md         地图架构总览：分层、贯穿全局的原则、按主题的现行 ADR 与修正关系、阅读顺序
 │  ├─ map-core.md             地图内核：用法、会话与 MapLibre 适配器的实现、实测行为、加载策略；附录为旧代码分析
@@ -94,6 +95,7 @@ docs/
    - [城市国土空间监测指标的迁移](stages/space-monitoring-indicators-migration.md)：实测推翻旧代码的兜底假设、计算轮询按 ADR 0039 归类、查询结果标上 ID
    - [城市国土空间监测基本统计的迁移](stages/space-monitoring-statistics-migration.md)：轮询交给查询库、跟踪写成纯函数的状态机、宽屏收起侧栏放进组件库
    - [数据查询的迁移](stages/data-query-migration.md)：四个路由一个组件按专题加 key、四个拥有者加一个编排者、通用的绘制工具、查询缓存的 key 里有 File
+   - [城市国土空间监测指标AI计算（原名指标智能推演）](stages/indicator-simulation.md)：引擎只管状态和时间、动效从进度来，先预告再执行的同一份规则，页面缓存与可叠加的暂停，减少动画就是直接到终态
 5. [commands.md](commands.md)：日常要用的命令
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明，并按 [UI 工作流程](design/ui-workflow.md) 完成交互原型和实际页面验证。

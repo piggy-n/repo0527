@@ -46,13 +46,21 @@ $colors: (
   'success-bg-hover': #dcfce7,
   'warning': #f0a020,
   'warning-bg': #fff7e8,
+  // 规范补充：浅底上的警示文字（2026-10-28，指标智能推演的确认点、待更新）
+  'warning-text': #b46b00,
   'danger': #e64b4b,
   'danger-text': #f04444,
   'danger-bg': rgba(245, 108, 108, 0.16),
   'danger-bg-solid': #ffecec,
   'neutral': #8a94a6,
   'neutral-bg': #eef1f5,
-  'neutral-bg-light': #f1f4f8
+  'neutral-bg-light': #f1f4f8,
+
+  // 规范补充：指标AI计算的主色外发光和自定义口径（ADR 0105；浅底 2026-10-29；渐变的两色 ADR 0109 删除）
+  'ai-glow': rgba(89, 126, 247, 0.22),
+  'scenario': #7a5cff,
+  'scenario-light': #a593ff,
+  'scenario-bg': rgba(122, 92, 255, 0.1)
 );
 
 // 主色透明度梯度，键是百分比

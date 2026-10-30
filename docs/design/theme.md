@@ -47,6 +47,7 @@ Element    --el-color-*、--el-text-color-* ……                  element-them
 | Info 不透明浅底 | `--color-info-bg-solid` | 第 3 节 |
 | Success 深色文本 / 实心 / 不透明浅底 / 悬停底 | `--color-success-text`、`-solid`、`-bg-solid`、`-bg-hover` | 第 3 节 |
 | Danger 深色文本 / 不透明浅底 | `--color-danger-text`、`--color-danger-bg-solid` | 第 3 节 |
+| Warning 深色文本 | `--color-warning-text`（`#B46B00`） | 2026-10-28 补充：`--color-warning` 在 `--color-warning-bg` 上对比度不够，浅底上的警示文字用它（指标智能推演的确认点、待更新） |
 | 极小文字 10px | `--font-size-xxs` | 第 5.2 节 |
 | 行高 22 / 18 / 16px | `--line-height-base`、`-compact`、`-tag` | 第 5.2 节 |
 | 登录卡片的蓝色投影 | `--shadow-primary-lg` | 第 6 节，2026-09-30 补充 |
@@ -55,6 +56,7 @@ Element    --el-color-*、--el-text-color-* ……                  element-them
 | 竖排入口 18px | `--font-size-xl` | 第 5.2 节，2026-10-28 补充（基本统计左栏的竖排名称） |
 | 间距 4 / 8 / 12 / 16 / 24 | `--space-xs`、`-sm`、`-md`、`-lg`、`-xl` | 第 6.1 节，2026-09-30 补充，见 [page-layout.md](page-layout.md) |
 | 圆角 4 / 8 / 12 / 16 | `--radius-sm`、`-md`、`-lg`、`-xl` | 第 6.1 节，2026-09-30 补充；lg、xl 用于登录卡片 |
+| 指标AI计算的外发光与自定义口径的颜色 | `--color-ai-glow`、`--color-scenario`、`-scenario-light`、`-scenario-bg` | 第 6.3 节，2026-10-28 补充（ADR 0105），`-scenario-bg` 2026-10-29 补充，`-ai-violet`、`-ai-cyan` 随渐变圆球删除（ADR 0109），只用于城市国土空间监测指标AI计算 |
 
 间距、圆角按大小命名（`sm`、`md`、`lg`），与 `--font-size-*`、`--shadow-*` 一致。没有用数值命名（`--space-16`），名字等于值时改值就得改名；也没有按用途命名（`--panel-padding`），用途已经封装在 `libs/ui` 的布局组件里，页面不直接接触这些间距。
 

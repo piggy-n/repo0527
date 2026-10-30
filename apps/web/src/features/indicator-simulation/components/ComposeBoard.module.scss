@@ -1,0 +1,610 @@
+// 编排图：版式取自确认的第二版原型；颜色见 color-and-typography.md 第 6.3 节
+.panel {
+  min-width: 0;
+}
+
+// 下方接着指标预估的底部栏，画布自己不要圆角
+.canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background-color: var(--color-primary-bg-lighter);
+  background-image: radial-gradient(circle, var(--color-border-dashed) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+// 块级容器里按画布宽度排；放在纵向 flex 里会按内容的最小宽度撑宽
+.lanes {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  min-height: 100%;
+  // 宽屏下按比例分，窄到 1200 断点（主区 832）时各列取最小宽度，刚好放下不出横向滚动；
+  // 监测范围的城市每行 5 个，这一列最少 240，其余几列按各自节点的内容收紧
+  // 1200 宽时列间距 20：最小宽度合计 720 + 间距 80 + 左右内边距 32 = 832
+  grid-template-columns:
+    minmax(88px, 11fr) minmax(240px, 26fr) minmax(156px, 23fr)
+    minmax(128px, 18fr) minmax(108px, 16fr);
+  grid-template-rows: auto 1fr;
+  column-gap: clamp(20px, 1.6vw, 40px);
+  min-width: 832px;
+  padding: 14px var(--space-lg) var(--space-lg);
+}
+
+.links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.link {
+  fill: none;
+  stroke: var(--color-primary-border);
+  stroke-width: 1.5;
+  transition:
+    stroke 0.2s,
+    opacity 0.2s;
+
+  .ready &:not(.scenario) {
+    stroke: var(--color-primary-border-hover);
+    stroke-dasharray: 6 6;
+    animation: flow 1.2s linear infinite;
+  }
+
+  // 悬停时其余连线变淡，相关的点亮
+  .hovering &:not(.lit) {
+    opacity: 0.25;
+  }
+
+  .lanes &.lit {
+    stroke: var(--color-primary);
+    stroke-width: 2;
+  }
+}
+
+.scenario {
+  stroke: var(--color-scenario-light);
+  stroke-dasharray: 4 4;
+}
+
+// 列标题：比节点里的说明高一级，和区块标题同字号、同色
+.laneHead {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: var(--space-sm);
+  color: var(--color-text-title);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+
+  svg {
+    color: var(--color-primary);
+  }
+}
+
+.lane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0 -6px;
+  padding: var(--space-sm) 6px;
+  border: 1px dashed transparent;
+  border-radius: var(--radius-lg);
+  transition:
+    background-color 0.2s,
+    border-color 0.2s;
+
+  // 拖动条件时，能放下它的那一列高亮
+  .canvas[data-drop='years'] &[data-lane='years'],
+  .canvas[data-drop='region'] &[data-lane='region'],
+  .canvas[data-drop='indicators'] &[data-lane='indicators'] {
+    border-color: var(--color-primary-border-hover);
+    background: var(--color-primary-alpha-5);
+  }
+
+  .canvas.over[data-drop='years'] &[data-lane='years'],
+  .canvas.over[data-drop='region'] &[data-lane='region'],
+  .canvas.over[data-drop='indicators'] &[data-lane='indicators'] {
+    background: var(--color-primary-alpha-10);
+  }
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  min-height: 60px;
+  padding: 0 var(--space-sm);
+  border: 1px dashed var(--color-border-dashed);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-mask);
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+.node {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-container);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  text-align: left;
+  transition:
+    opacity 0.2s,
+    border-color 0.2s;
+
+  b {
+    overflow: hidden;
+    color: var(--color-text-strong);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover .remove,
+  &:focus-within .remove {
+    opacity: 1;
+  }
+}
+
+.dimmed {
+  opacity: 0.45;
+}
+
+.related {
+  border-color: var(--color-primary-border-hover);
+}
+
+.icon {
+  flex: none;
+  color: var(--color-primary);
+  font-size: var(--font-size-lg);
+}
+
+.meta {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.remove {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-xs);
+  opacity: 0;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--color-danger-bg-solid);
+    color: var(--color-danger);
+  }
+
+  &:focus-visible {
+    opacity: 1;
+  }
+}
+
+// 年份、指标节点的移除按钮浮在右侧，不占名称的位置
+.year {
+  height: 40px;
+}
+
+.year,
+.indicator {
+  .remove {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+
+    &:not(:hover) {
+      background: var(--color-bg-container);
+    }
+  }
+}
+
+.region {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: var(--space-sm) 10px;
+}
+
+// 放不下时先省略区县数，范围名称保持完整
+.regionHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  b {
+    flex: none;
+  }
+}
+
+// 城市每行 5 个，等宽；移除的叉平时不显示，悬停或键盘聚焦时浮在右上角，不占名称的位置（同节点上的叉）
+.cityTags {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-xs);
+}
+
+.cityTag {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 22px;
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+
+  button {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    background: var(--color-bg-container);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xxs);
+    opacity: 0;
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--color-danger);
+      background: var(--color-danger-bg-solid);
+      color: var(--color-danger);
+    }
+  }
+
+  &:hover button,
+  button:focus-visible {
+    opacity: 1;
+  }
+}
+
+.indicator {
+  height: 54px;
+  padding-left: 4px;
+}
+
+// 名称放不下时只省略名称，括号里的单位一直完整
+.node .indicatorName {
+  display: flex;
+  min-width: 0;
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+// 编码和模拟情景标记一行
+.indicatorMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+// 偏离标准口径的指标：情景色的小标签（color-and-typography.md 第 6.3 节）
+.scenarioTag {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-scenario-bg);
+  color: var(--color-scenario);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tag);
+  white-space: nowrap;
+}
+
+.handle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-base);
+  cursor: grab;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+}
+
+.paramSlot {
+  display: block;
+}
+
+// 参数节点是按钮，字体要显式继承
+.param {
+  width: 100%;
+  height: 52px;
+  font-family: inherit;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 2px;
+  }
+}
+
+// 参数取了模拟情景的值：边框和取值用情景色，连到它的线是情景虚线
+.scenarioParam {
+  border-color: var(--color-scenario-light);
+
+  b {
+    color: var(--color-scenario);
+  }
+}
+
+.edit {
+  flex: none;
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-lg);
+
+  .param:hover &,
+  .param:focus-visible & {
+    color: var(--color-primary);
+  }
+}
+
+.output {
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: var(--space-md);
+  text-align: center;
+
+  .meta {
+    white-space: normal;
+  }
+}
+
+.armed {
+  border-color: transparent;
+  box-shadow:
+    0 0 0 1px var(--color-primary-border),
+    0 0 0 5px var(--color-ai-glow),
+    var(--shadow-lg);
+}
+
+// AI计算的机器人头像（shared/chat-avatar）：条件不全时淡一些，齐全时实色并有一圈呼吸的光晕
+.robot {
+  margin-bottom: 2px;
+  opacity: 0.45;
+  transition: opacity 0.2s;
+
+  .armed & {
+    opacity: 1;
+    animation: halo 1.6s ease-in-out infinite;
+  }
+}
+
+.start {
+  width: 100%;
+  margin-top: 6px;
+}
+
+// AI 按指令编排时，标题栏右侧写它在做的事
+.aiStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--color-primary);
+  font-size: var(--font-size-base);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  animation: status-in 0.3s ease-out;
+}
+
+.statusRobot {
+  animation: halo 1.2s ease-in-out infinite;
+}
+
+// 参数和 AI计算节点不在 TransitionGroup 里：出现时同样弹出
+.paramSlot {
+  animation: node-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.output {
+  animation: node-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+// 配置完成、即将开始计算：AI计算节点弹出后外发光一张一弛，头像的光晕更快
+.launching {
+  animation:
+    node-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    launch 1s ease-in-out 0.35s infinite;
+
+  .robot {
+    animation-duration: 0.6s;
+  }
+}
+
+// AI 编排出的城市一个一个出现
+.tagsIn .cityTag {
+  animation: tag-in 0.3s ease-out both;
+  animation-delay: calc(var(--tag-index) * 40ms);
+}
+
+// 新连线：从起点画到终点（pathLength = 1）；写在流动的虚线、情景虚线后面才能盖过它们
+.links .link.drawing,
+.ready .link.drawing {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw 0.6s ease-out forwards;
+}
+
+// 节点出现时弹出，换位置时平移（TransitionGroup）
+.enterFrom {
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+.enterActive {
+  transition:
+    opacity 0.3s,
+    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.move {
+  transition: transform 0.35s ease-out;
+}
+
+.flashEven {
+  animation: flash-even 0.8s ease-out;
+}
+
+.flashOdd {
+  animation: flash-odd 0.8s ease-out;
+}
+
+@keyframes flash-even {
+  from {
+    box-shadow: 0 0 0 6px var(--color-ai-glow);
+  }
+}
+
+@keyframes flash-odd {
+  from {
+    box-shadow: 0 0 0 6px var(--color-ai-glow);
+  }
+}
+
+@keyframes flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes node-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes tag-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes status-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes launch {
+  50% {
+    box-shadow:
+      0 0 0 1px var(--color-primary),
+      0 0 0 10px var(--color-ai-glow),
+      var(--shadow-lg);
+  }
+}
+
+@keyframes halo {
+  50% {
+    box-shadow: 0 0 0 5px var(--color-primary-alpha-10);
+  }
+}
+
+// 减少动画（由 motion.ts 决定，现在总是播放）
+:global(.simulation-still) {
+  .ready .link,
+  .armed .robot,
+  .flashEven,
+  .flashOdd,
+  .statusRobot,
+  .aiStatus,
+  .paramSlot,
+  .output,
+  .launching,
+  .tagsIn .cityTag {
+    animation: none;
+  }
+
+  // 新连线直接画全，不停在起点
+  .links .link.drawing,
+  .ready .link.drawing {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .enterActive,
+  .move {
+    transition: none;
+  }
+}

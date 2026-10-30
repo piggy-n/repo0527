@@ -1,0 +1,90 @@
+// 结果地图的工具与图例（第五版原型）：左下一张卡片，上面是着色和年度，下面是图例；放大到一个市时左上是返回
+.root {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.back {
+  position: absolute;
+  top: var(--space-md);
+  left: var(--space-md);
+  pointer-events: auto;
+
+  :global(.el-button) {
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+.card {
+  position: absolute;
+  bottom: var(--space-md);
+  left: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  box-sizing: border-box;
+  max-width: 224px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-mask);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  pointer-events: auto;
+}
+
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.title {
+  color: var(--color-text-strong);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-compact);
+}
+
+.subtitle {
+  margin-bottom: 4px;
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-compact);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 20px;
+}
+
+.gap {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--color-border-dashed);
+}
+
+.block {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  margin: 0 3px;
+  border: 1px solid var(--color-bg-container);
+  border-radius: 50%;
+}
+
+// 服务圈：绿色描边的浅圈（与地图上的颜色一致）
+.ring {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--color-success);
+  border-radius: 50%;
+  background: var(--color-success-bg);
+}
