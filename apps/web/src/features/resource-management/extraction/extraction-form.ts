@@ -4,8 +4,8 @@ import { PROVINCE_PATH } from '../data-request';
 
 // 自助取数第二步右侧的条件，选项和默认值沿用旧页面 QushuNodeForm
 
-/** 热门词都能搜到节点：前两个进水资源关系图，其余是旧页面的热门词 */
-export const HOT_KEYWORDS = ['河流', '湖泊', '耕地', '林地', '草地', '湿地', '居住用地', '旱地'];
+/** 热门词都能搜到节点：前两个进水资源关系图，其余是旧页面的热门词；宽屏下排成一行，去掉了旧页面的"旱地" */
+export const HOT_KEYWORDS = ['河流', '湖泊', '耕地', '林地', '草地', '湿地', '居住用地'];
 
 /** 提交时记下的节点：旧版知识图谱和水资源关系图的节点都有编号和名称 */
 export interface ExtractionNode {
