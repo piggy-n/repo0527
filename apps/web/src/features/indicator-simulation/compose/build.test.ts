@@ -22,7 +22,6 @@ describe('buildSteps', () => {
       paramNode('popChange'),
       paramNode('rule'),
       paramNode('recognition'),
-      paramNode('targets'),
       OUTPUT_NODE
     ]);
   });
@@ -37,7 +36,6 @@ describe('buildSteps', () => {
       '设置常住人口变化：0%（标准口径）',
       '设置计算规程：旧规程（自定义口径）',
       '设置覆盖认定：覆盖 ≥ 50%（标准口径）',
-      '设置目标值：2 项默认',
       '配置完成，即将开始计算'
     ]);
   });

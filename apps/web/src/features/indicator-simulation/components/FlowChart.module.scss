@@ -228,10 +228,6 @@
   white-space: nowrap;
 }
 
-.fail {
-  color: var(--color-danger);
-}
-
 // 进行中的节点底部的进度条：自己的话打到哪里
 .progress {
   position: absolute;
@@ -373,7 +369,7 @@
   }
 }
 
-// 完成后评价节点上盖一层透明按钮：点了看这项指标的结果（按钮不触发拖动画布）
+// 完成后指标计算的节点上盖一层透明按钮：点了看这项指标的结果（按钮不触发拖动画布）
 .pick {
   position: absolute;
   inset: 0;

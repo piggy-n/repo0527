@@ -19,7 +19,7 @@ describe('estimate', () => {
     expect(estimate(calculator, { ...nanjing, indicatorIds: [] }, defaultParams())).toBeNull();
   });
 
-  it('一个市：值和计算一致；自定义口径的指标带标准口径的值，标准口径的没有；达标按这个市', async () => {
+  it('一个市：值和计算一致；自定义口径的指标带标准口径的值，标准口径的没有', async () => {
     const calculator = await calculatorOf();
     const params = withPatch({ rule: 'old' });
     const result = estimate(calculator, nanjing, params);
@@ -29,30 +29,21 @@ describe('estimate', () => {
 
     expect(result?.scope).toBe('南京市');
     expect(result?.year).toBe(2025);
-    expect(rule).toMatchObject({ value: valueOf(params, 'A-31'), standard: valueOf(defaultParams(), 'A-31'), target: 80 });
+    expect(rule).toStrictEqual({
+      indicator: rule?.indicator,
+      value: valueOf(params, 'A-31'),
+      standard: valueOf(defaultParams(), 'A-31')
+    });
     expect(rule?.value).toBeLessThan(rule?.standard ?? 0);
-    expect(rule?.pass.kind).toBe('single');
     expect(park?.standard).toBeNull();
   });
 
-  it('改目标值：数值不变，达标跟着变', async () => {
-    const calculator = await calculatorOf();
-    const before = estimate(calculator, nanjing, defaultParams())?.rows[0];
-    const after = estimate(calculator, nanjing, withPatch({ targets: { ...defaultParams().targets, 'A-31': 120 } }))?.rows[0];
-
-    expect(after?.value).toBe(before?.value);
-    expect(after?.target).toBe(120);
-    expect(before?.pass).toEqual({ kind: 'single', state: 'pass' });
-    expect(after?.pass).toEqual({ kind: 'single', state: 'fail' });
-  });
-
-  it('几个市：写达标的市数；全省时范围写全省', async () => {
+  it('几个市：全省时范围写全省', async () => {
     const calculator = await calculatorOf();
     const all = { ...nanjing, cityCodes: JIANGSU_CITIES.map(city => city.code), indicatorIds: ['B-65'] };
     const result = estimate(calculator, all, defaultParams());
 
     expect(result?.scope).toBe('全省');
-    expect(result?.rows[0]?.pass).toEqual({ kind: 'cities', count: 5, total: 13 });
     expect(estimate(calculator, { ...nanjing, cityCodes: ['320100', '320500'] }, defaultParams())?.scope).toBe('2 个市');
   });
 

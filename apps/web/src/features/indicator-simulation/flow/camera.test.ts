@@ -13,7 +13,6 @@ const node = (key: string, column: number, y: number): FlowNode => ({
   detail: '',
   kind: 'node',
   scenario: false,
-  fail: false,
   x: FLOW_LAYOUT.padX + column * (FLOW_LAYOUT.nodeWidth + FLOW_LAYOUT.columnGap),
   y
 });
@@ -21,7 +20,7 @@ const plan = (width: number, height: number, nodes: FlowNode[] = []): FlowPlan =
   nodes,
   edges: [],
   lines: [],
-  summaries: { parse: '', prep: '', qc: '', spatial: '', compute: '', evaluate: '', report: '' },
+  summaries: { parse: '', prep: '', qc: '', spatial: '', compute: '', report: '' },
   width,
   height
 });

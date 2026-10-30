@@ -1,4 +1,4 @@
-// 叠在结果地图上的城市标注（第五版原型）：胶囊里是达标的圆点、名称和值，点了放大到这个市
+// 叠在结果地图上的城市标注（第五版原型）：胶囊里是主色的圆点、名称和值，点了放大到这个市
 .root {
   position: absolute;
   inset: 0;
@@ -34,6 +34,7 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
+    background: var(--color-primary);
   }
 
   &:hover,
@@ -68,18 +69,6 @@
 
 .dot {
   padding: 0 5px;
-}
-
-.pass {
-  background: var(--color-primary);
-}
-
-.near {
-  background: var(--color-warning);
-}
-
-.fail {
-  background: var(--color-danger);
 }
 
 @keyframes label-in {

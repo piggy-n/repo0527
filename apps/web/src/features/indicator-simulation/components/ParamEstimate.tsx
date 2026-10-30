@@ -10,7 +10,7 @@ import styles from './ParamEstimate.module.scss';
 // 最多列出几项指标
 const ROWS = 4;
 
-/** 改参数时的即时预估：最新年度全省的值和达标的市，改前 → 改后；上升红色、下降绿色 */
+/** 改参数时的即时预估：最新年度全省的值，改前 → 改后；上升红色、下降绿色 */
 export const ParamEstimate = defineComponent({
   name: 'ParamEstimate',
   props: {
@@ -69,9 +69,6 @@ export const ParamEstimate = defineComponent({
               <div key={indicator.id} class={styles.row}>
                 <span class={styles.name} title={indicator.name}>
                   {indicator.name}
-                </span>
-                <span class={styles.pass}>
-                  达标 {a.passCount} → {b.passCount} 市
                 </span>
                 <span class={styles.values}>
                   <span>{formatEstimate(a.value, indicator)}</span>

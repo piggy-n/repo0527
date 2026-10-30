@@ -1,5 +1,5 @@
 import { MxTitle } from '@yzt/ui';
-import { ElInputNumber, ElRadioButton, ElRadioGroup, ElSlider } from 'element-plus';
+import { ElRadioButton, ElRadioGroup, ElSlider } from 'element-plus';
 import { defineComponent, type PropType, type VNodeChild } from 'vue';
 import { simulationIndicator } from '../model/indicators';
 import {
@@ -162,39 +162,7 @@ export const ParamFields = defineComponent({
             () => [scenario(), <span class={styles.value}>{signedPercent(params.popChange)}</span>],
             scope
           );
-        case 'targets':
-          break;
       }
-      return field(
-        key,
-        <div class={styles.targets}>
-          {conditions.indicatorIds.map(id => {
-            const indicator = simulationIndicator(id);
-            const label = `${indicator.short}（${indicator.unit}）`;
-            return [
-              <span key={`${id}-label`}>{label}</span>,
-              <ElInputNumber
-                key={id}
-                class={styles.number}
-                size="small"
-                controlsPosition="right"
-                modelValue={params.targets[id]}
-                min={indicator.unit === '%' ? 1 : 0.1}
-                max={indicator.unit === '%' ? 100 : undefined}
-                step={indicator.unit === '%' ? 1 : 0.1}
-                aria-label={`${label}的目标值`}
-                onUpdate:modelValue={value => {
-                  if (typeof value === 'number' && Number.isFinite(value)) {
-                    update({ targets: { ...params.targets, [id]: value } });
-                  }
-                }}
-              />
-            ];
-          })}
-        </div>,
-        undefined,
-        '影响达标判断'
-      );
     };
 
     return () => <div class={styles.root}>{props.keys.map(render)}</div>;

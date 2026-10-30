@@ -11,8 +11,8 @@ import { useComposition } from './useComposition';
 const THINK = 900;
 const STEP = 450;
 const LAUNCH = 1000;
-// 第一条示例：年份、范围、指标、计算规程、覆盖认定、目标值、AI计算
-const FIRST_STEPS = 7;
+// 第一条示例：年份、范围、指标、计算规程、覆盖认定、AI计算
+const FIRST_STEPS = 6;
 const FIRST_DONE = THINK + STEP * (FIRST_STEPS - 1) + LAUNCH;
 
 const [first = '', second = ''] = PROMPT_EXAMPLES;

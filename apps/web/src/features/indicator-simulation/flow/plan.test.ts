@@ -27,22 +27,18 @@ describe('flowPlan', () => {
       'sa:A-31:1',
       'calc:A-31',
       'calc:A-31:std',
-      'eval:A-31',
       'sa:B-65:0',
       'sa:B-65:1',
       'calc:B-65',
       'calc:B-65:std',
-      'eval:B-65',
       'sa:A-39:land',
       'calc:A-39',
-      'eval:A-39',
       'report'
     ]);
     const parents = (key: string) => plan.edges.filter(([, to]) => to === key).map(([from]) => from);
     expect(parents('qc')).toEqual(['pop', 'poi', 'land']);
     expect(parents('calc:A-31:std')).toEqual(['sa:A-31:0', 'sa:A-31:1']);
-    expect(parents('eval:B-65')).toEqual(['calc:B-65', 'calc:B-65:std']);
-    expect(parents('report')).toEqual(['eval:A-31', 'eval:B-65', 'eval:A-39']);
+    expect(parents('report')).toEqual(['calc:A-31', 'calc:A-31:std', 'calc:B-65', 'calc:B-65:std', 'calc:A-39']);
     expect(plan.nodes.find(node => node.key === 'calc:A-31:std')).toMatchObject({ kind: 'standard', label: '对照 · 标准口径' });
   });
 
@@ -65,7 +61,7 @@ describe('flowPlan', () => {
     expect(plan.nodes.find(node => node.key === 'sa:A-15:0')?.detail).toBe('车行 5 分钟 · 3 公里');
   });
 
-  it('节点上的数字和计算一致；评价写达标的市数，未达标过半标红', async () => {
+  it('节点上的数字和计算一致；不按目标值评价，没有达标、目标的说法（2026-10-30）', async () => {
     const calculator = createCalculator(await loadTestAtlas());
     const params = withPatch({ recognition: 'intersect' });
     const plan = flowPlan({ calculator, conditions, params });
@@ -73,11 +69,17 @@ describe('flowPlan', () => {
     for (const id of conditions.indicatorIds) {
       const data = indicatorResult(result, id);
       expect(plan.nodes.find(node => node.key === `calc:${id}`)?.title).toBe(formatValue(data.value, simulationIndicator(id)));
-      expect(plan.nodes.find(node => node.key === `eval:${id}`)).toMatchObject({
-        title: `达标 ${data.passCount}/${data.total} 市`,
-        fail: data.passCount * 2 < data.total
-      });
     }
+    const texts = [
+      ...plan.nodes.flatMap(node => [node.title, node.detail]),
+      ...plan.lines.map(line => plainText(line.text)),
+      ...Object.values(plan.summaries)
+    ].join('');
+    expect(texts).not.toMatch(/达标|目标/);
+    expect(plan.nodes.find(node => node.key === 'report')).toMatchObject({
+      title: '3 项指标',
+      detail: '南京市、苏州市 · 2025 年'
+    });
   });
 
   it('每个节点都有点亮它的一句话；推理文字写出自定义口径；同样的输入得到同样的图', async () => {
@@ -99,6 +101,6 @@ describe('flowPlan', () => {
     }
     const spots = plan.nodes.map(node => `${node.x},${node.y}`);
     expect(new Set(spots).size).toBe(spots.length);
-    expect(plan.nodes.find(node => node.key === 'report')?.column).toBe(6);
+    expect(plan.nodes.find(node => node.key === 'report')?.column).toBe(5);
   });
 });

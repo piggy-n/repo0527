@@ -22,7 +22,7 @@ import { em, type Rich, rich } from '../run/narrative';
 export interface FlowNode {
   readonly key: string;
   readonly step: StepId;
-  /** 第几列：条件解析 0，数据准备 1 … 结论生成 6 */
+  /** 第几列：条件解析 0，数据准备 1 … 结论生成 5 */
   readonly column: number;
   readonly label: string;
   readonly title: string;
@@ -31,8 +31,6 @@ export interface FlowNode {
   readonly kind: 'root' | 'node' | 'standard';
   /** 这个节点按模拟情景计算 */
   readonly scenario: boolean;
-  /** 评价未达标：说明用红色 */
-  readonly fail: boolean;
   readonly x: number;
   readonly y: number;
 }
@@ -182,12 +180,11 @@ interface Draft {
   readonly detail: string;
   readonly kind?: FlowNode['kind'];
   readonly scenario?: boolean;
-  readonly fail?: boolean;
 }
 
 /**
- * 一轮推演的流程图：条件解析 → 人口、设施、用地三路数据 → 数据核查 → 按指标分支（服务范围 → 指标计算〔模拟情景另有标准口径对照〕
- * → 评价分级）→ 结论生成。节点、推理文字里的数字都来自同一份计算，同样的输入得到同样的图
+ * 一轮推演的流程图：条件解析 → 人口、设施、用地三路数据 → 数据核查 → 按指标分支（服务范围 → 指标计算〔模拟情景另有标准口径对照〕）
+ * → 结论生成。节点、推理文字里的数字都来自同一份计算，同样的输入得到同样的图；不按目标值评价（2026-10-30）
  */
 export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPlan {
   const { years, cityCodes, indicatorIds } = conditions;
@@ -202,11 +199,10 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
   const census = districts.reduce((sum, district) => sum + calculator.districtPopulation(district), 0);
   const residential = districts.reduce((sum, district) => sum + calculator.residentialLand(district), 0);
   const current = calculator.computeYear(conditions, params, year).indicators;
-  const standardParams = { ...defaultParams(), targets: params.targets };
   const standard =
     scenarioIds.length === 0
       ? current
-      : calculator.computeYear({ ...conditions, indicatorIds: scenarioIds }, standardParams, year).indicators;
+      : calculator.computeYear({ ...conditions, indicatorIds: scenarioIds }, defaultParams(), year).indicators;
   // 标准口径的值：模拟情景的指标另算了一遍，其余就是这次的值
   const standardOf = (id: string) => indicatorResult(scenarioIds.includes(id) ? standard : current, id);
   const layout = facilityLayoutOf(calculator);
@@ -239,12 +235,12 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     area > 0 ? `城区面积覆盖率 ${area} 项` : '',
     perCapita.length > 0 ? `人均 ${perCapita.length} 项` : ''
   ].filter(Boolean);
-  say('parse', rich`按计算方法分类：${kinds.join('、')}，各自只配用得上的参数。`, 'parse');
+  say('parse', rich`按计算方法分类：${kinds.join('、')}；计算参数按指标类型分别适用。`, 'parse');
   const changed = (['rule', 'recognition', 'popChange'] as const).filter(
     key => !isStandard(key, params) && indicatorIds.some(id => paramApplies(key, id))
   );
   if (changed.length > 0) {
-    const values = changed.map(key => `${PARAM_LABELS[key]}按「${describeParam(key, params, conditions)}」`).join('，');
+    const values = changed.map(key => `${PARAM_LABELS[key]}按「${describeParam(key, params)}」`).join('，');
     const scenarioNames = scenarioIds.map(id => simulationIndicator(id).short).join('、');
     say('parse', rich`${values}，当前使用${em('自定义口径')}计算；${scenarioNames}另算一支标准口径作对照。`, 'parse');
   } else {
@@ -311,8 +307,7 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
   say('qc', rich`核对 ${em(`${districts.length} 个区县`)}的人口、设施和用地：字段齐全，设施坐标都落在区县范围内。`, 'qc');
   say('qc', rich`${year} 年没有缺失数据，可以开始空间分析。`, 'qc');
 
-  // 按指标分支：服务范围（人均类是用地汇总）→ 指标计算（模拟情景另有标准口径对照）→ 评价分级
-  const single = cityCodes.length === 1;
+  // 按指标分支：服务范围（人均类是用地汇总）→ 指标计算（模拟情景另有标准口径对照）
   const blocks: { id: string; saKeys: string[]; calcKeys: string[] }[] = [];
   for (const indicator of indicators) {
     const { id, short } = indicator;
@@ -401,55 +396,21 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
         link(sa, calc);
       }
     }
-
-    const evalKey = `eval:${id}`;
-    const near = data.value >= data.target * 0.95;
-    const singleVerdict = data.value >= data.target ? '达标' : near ? '接近达标' : '未达标';
-    const verdict = single ? singleVerdict : `达标 ${data.passCount}/${data.total} 市`;
-    const target = `目标 ≥ ${formatValue(data.target, indicator)}`;
-    node({
-      key: evalKey,
-      step: 'evaluate',
-      label: short,
-      title: verdict,
-      detail: scenario
-        ? `${target} · 较标准 ${formatDelta(data.value - base.value, indicator).replace(' 个百分点', ' 点')}`
-        : target,
-      fail: single ? data.value < data.target : data.passCount * 2 < data.total
-    });
-    const gapText = em(formatDelta(data.target - data.value, indicator).replace(/^\+/, ''));
-    const lowestText = `${data.lowest.name}（${formatValue(data.lowest.value, indicator)}）`;
-    say(
-      'evaluate',
-      single
-        ? data.value >= data.target
-          ? rich`${short}：${target}，${em('达标')}。`
-          : rich`${short}：${target}，差 ${gapText}，${near ? '接近达标' : '未达标'}。`
-        : rich`${short}：${target}，达标 ${em(`${data.passCount}/${data.total}`)} 市，最低是${lowestText}。`,
-      evalKey
-    );
     for (const calc of calcKeys) {
-      link(calc, evalKey);
+      link(calc, 'report');
     }
-    link(evalKey, 'report');
     blocks.push({ id, saKeys, calcKeys });
   }
 
-  // 结论生成：按离目标的远近排
-  const ratio = (id: string) => {
-    const data = indicatorResult(current, id);
-    return data.value / data.target;
-  };
-  const ranked = indicatorIds.toSorted((a, b) => ratio(b) - ratio(a));
-  const reached = indicatorIds.filter(id => ratio(id) >= 1).length;
+  // 结论生成：按条件里的顺序汇总各项指标的值
   node({
     key: 'report',
     step: 'report',
     label: '结论生成',
     title: `${indicatorIds.length} 项指标`,
-    detail: `${reached} 项达到目标`
+    detail: `${scope} · ${year} 年`
   });
-  const values = ranked
+  const values = indicatorIds
     .slice(0, 4)
     .map(id => {
       const indicator = simulationIndicator(id);
@@ -457,17 +418,6 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     })
     .join('，');
   say('report', rich`汇总 ${em(`${indicatorIds.length} 支`)}：${values}${indicatorIds.length > 4 ? ' 等' : ''}。`, 'report');
-  const best = ranked[0] ?? '';
-  const worst = ranked.at(-1) ?? '';
-  if (indicatorIds.length > 1) {
-    const lowest = indicatorResult(current, worst).lowest;
-    const lowestNote = single ? '' : `，${lowest.name}最需要补齐`;
-    say(
-      'report',
-      rich`相对目标最好的是${simulationIndicator(best).short}，差距最大的是${em(simulationIndicator(worst).short)}${lowestNote}。`,
-      'report'
-    );
-  }
   if (scenarioIds.length > 0) {
     const effects = scenarioIds.map(id => {
       const indicator = simulationIndicator(id);
@@ -486,7 +436,6 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     const center = row + (rows - 1) / 2;
     block.saKeys.forEach((key, index) => slots.set(key, center - (block.saKeys.length - 1) / 2 + index));
     block.calcKeys.forEach((key, index) => slots.set(key, center - (block.calcKeys.length - 1) / 2 + index));
-    slots.set(`eval:${block.id}`, center);
     row += rows + branchGap;
   }
   const totalRows = Math.max(3, row - branchGap);
@@ -507,7 +456,6 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
       detail: draft.detail,
       kind: draft.kind ?? 'node',
       scenario: draft.scenario ?? false,
-      fail: draft.fail ?? false,
       column,
       x: padX + column * (nodeWidth + columnGap),
       y: padY + (slots.get(draft.key) ?? middle) * rowHeight
@@ -521,9 +469,6 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     qc: `${districts.length} 个区县 · 数据完整`,
     spatial: `${saCount} 个分析分支`,
     compute: `${indicatorIds.length} 项指标已计算${scenarioIds.length > 0 ? `，${scenarioIds.length} 项有对照` : ''}`,
-    evaluate: indicators
-      .map(indicator => `${indicator.short} ${nodes.find(item => item.key === `eval:${indicator.id}`)?.title ?? ''}`)
-      .join(' · '),
     report: '结论已生成'
   };
 

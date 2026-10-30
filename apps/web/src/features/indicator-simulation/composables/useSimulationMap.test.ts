@@ -6,7 +6,7 @@ import { effectScope } from 'vue';
 import { required } from '@/shared/testing/required';
 import { sampleComposition } from '../compose/composition';
 import { ManualClock } from '../engine/test-clock';
-import { PASS_COLORS, VALUE_COLORS } from '../map/colors';
+import { VALUE_COLORS } from '../map/colors';
 import { createCalculator } from '../model/calculator';
 import { loadTestAtlas } from '../model/test-atlas';
 import { useSimulationMap } from './useSimulationMap';
@@ -44,7 +44,7 @@ const settle = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 const empty = { sources: {}, layers: [] };
 
 describe('useSimulationMap', () => {
-  it('计算中没有地图数据和分组，镜头不动；有了结果时镜头移到计算范围，各市标出值和达标', async () => {
+  it('计算中没有地图数据和分组，镜头不动；有了结果时镜头移到计算范围，各市标出值', async () => {
     using ctx = await setup();
     const { run, map, calculator, clock, moves } = ctx;
     run.start(sampleComposition(), calculator);
@@ -60,11 +60,11 @@ describe('useSimulationMap', () => {
     expect(moves).toEqual([{ kind: 'fit', bounds, maxZoom: 10 }]);
     const cities = map.labels.value;
     expect(cities).toHaveLength(13);
-    expect(cities[0]).toMatchObject({ cityCode: '320100', name: '南京', value: '47.7%' });
+    expect(cities[0]).toStrictEqual({ cityCode: '320100', lngLat: cities[0]?.lngLat, name: '南京', value: '47.7%' });
     expect(map.deriveDistricts().layers.length).toBeGreaterThan(0);
   });
 
-  it('按选择着色：数值、达标，换指标时标注跟着换；悬停的市描边；鼠标下的区县有提示', async () => {
+  it('按数值着色，换指标时标注跟着换；悬停的市描边；鼠标下的区县提示值、不写达标', async () => {
     using ctx = await setup();
     const { run, map, result, calculator, clock } = ctx;
     run.start(sampleComposition(), calculator);
@@ -73,9 +73,8 @@ describe('useSimulationMap', () => {
     const fills = () => new Set(map.data.value?.districts.features.map(feature => feature.properties.fill));
 
     expect([...fills()].every(color => (VALUE_COLORS as readonly string[]).includes(color))).toBe(true);
-    result.select({ mode: 'pass' });
-    expect([...fills()].every(color => Object.values<string>(PASS_COLORS).includes(color))).toBe(true);
     result.select({ indicatorId: 'A-39' });
+    expect([...fills()].every(color => (VALUE_COLORS as readonly string[]).includes(color))).toBe(true);
     expect(map.labels.value[0]?.value).toBe('12.26 m²');
 
     expect(map.deriveHighlight().layers[0]).toMatchObject({ filter: ['==', ['get', 'cityCode'], ''] });
@@ -83,11 +82,11 @@ describe('useSimulationMap', () => {
     expect(map.deriveHighlight().layers[0]).toMatchObject({ filter: ['==', ['get', 'cityCode'], '320500'] });
 
     const district = required(map.data.value?.districts.features[0], '第一个区县').properties.code;
-    expect(map.describeDistrict(district)?.text).toMatch(/^\d+\.\d{2} m² · (达标|接近达标|未达标)$/);
+    expect(map.describeDistrict(district)?.text).toMatch(/^\d+\.\d{2} m²$/);
     expect(map.describeDistrict('000000')).toBeNull();
   });
 
-  it('放大到一个市时镜头移到这个市、画出设施和服务圈，回到整个范围时移回来；换着色不动镜头', async () => {
+  it('放大到一个市时镜头移到这个市、画出设施和服务圈，回到整个范围时移回来；换指标不动镜头', async () => {
     using ctx = await setup();
     const { run, map, result, calculator, clock, moves } = ctx;
     run.start(sampleComposition(), calculator);
@@ -103,7 +102,7 @@ describe('useSimulationMap', () => {
     result.select({ cityCode: '320500' });
     await settle();
     expect(map.deriveFacilities().layers.map(layer => layer.id)).toEqual(['simulation-facilities-ring', 'simulation-facilities-point']);
-    result.select({ mode: 'pass' });
+    result.select({ indicatorId: 'A-39' });
     await settle();
     result.select({ cityCode: null });
     await settle();

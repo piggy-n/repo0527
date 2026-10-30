@@ -70,8 +70,7 @@
   color: var(--color-text-secondary);
 }
 
-.value,
-.target {
+.value {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -107,28 +106,6 @@
   color: var(--color-scenario);
   line-height: var(--line-height-tag);
   white-space: nowrap;
-}
-
-// 一个市时的达标状态
-.badge {
-  padding: 0 6px;
-  border-radius: var(--radius-sm);
-  line-height: var(--line-height-compact);
-}
-
-.pass {
-  background: var(--color-success-bg-solid);
-  color: var(--color-success-text);
-}
-
-.near {
-  background: var(--color-warning-bg);
-  color: var(--color-warning-text);
-}
-
-.fail {
-  background: var(--color-danger-bg-solid);
-  color: var(--color-danger);
 }
 
 .status {

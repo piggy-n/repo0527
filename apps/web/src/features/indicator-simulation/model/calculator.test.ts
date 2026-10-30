@@ -97,15 +97,13 @@ describe('computeYear', () => {
     expect(after.population).toBeCloseTo(before.population * 1.1, 6);
   });
 
-  it('达标对照目标值，接近是差距在 5% 以内；最低城市', async () => {
+  it('结果只有区县、市和全省的值，不按目标值评价（2026-10-30）', async () => {
     const result = await resultOf(defaultParams(), 'B-65');
 
-    expect([result.passCount, result.total, result.target, result.value]).toEqual([5, 13, 70, 66.56]);
-    expect(result.lowest.name).toBe('苏州市');
-    for (const city of result.cities) {
-      expect(city.pass).toBe(city.value >= 70);
-      expect(city.near).toBe(city.value < 70 && city.value >= 66.5);
-    }
+    expect(Object.keys(result).toSorted()).toEqual(['cities', 'rows', 'value']);
+    expect(result.value).toBe(66.56);
+    expect(result.cities).toHaveLength(13);
+    expect(Object.keys(result.cities[0] ?? {}).toSorted()).toEqual(['code', 'name', 'value']);
   });
 
   it('覆盖率不超过 100，同样的条件和参数两次计算结果相同', async () => {

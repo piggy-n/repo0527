@@ -142,7 +142,7 @@ describe('ComposeStage', () => {
 
   it('参数节点只有所选指标用得上的几项，显示当前取值；点开编辑浮层，草稿在下方的预估里预览', async () => {
     const { wrapper } = mountStage();
-    expect(nodes(wrapper, 'params:')).toEqual(['params:popChange', 'params:rule', 'params:recognition', 'params:targets']);
+    expect(nodes(wrapper, 'params:')).toEqual(['params:popChange', 'params:rule', 'params:recognition']);
     const node = wrapper.get('[data-node="params:rule"]');
     expect(node.text()).toContain('新规程');
     expect(node.attributes('aria-expanded')).toBe('false');
@@ -177,19 +177,17 @@ describe('ComposeStage', () => {
     expect(node().get('[class*="_indicatorMeta_"]').text()).toBe('A-31自定义口径');
   });
 
-  it('选了几个年度时预估可以换年度，几个市时写达标的市数', async () => {
+  it('选了几个年度时预估可以换年度；只写预估值和口径，不写目标和达标（2026-10-30）', async () => {
     const { wrapper } = mountStage({ ...sampleComposition(), conditions: { ...sampleComposition().conditions, years: [2025, 2026] } });
     const bar = () => wrapper.get('[aria-label="指标预估结果"]');
     expect(bar().get('[aria-label="预估的年度"] input[value="2026"]').element).toHaveProperty('checked', true);
-    expect(bar().text()).toContain('预估达标');
-    expect(bar().text()).toMatch(/\d+\/13 市/);
-    // 预估值前面加"≈"：覆盖率取整，人均公园绿地保留一位；目标不加
+    // 预估值前面加"≈"：覆盖率取整，人均公园绿地保留一位
     expect(bar().findAll('[class*="_value_"] b').map(value => value.text())).toEqual([
       expect.stringMatching(/^≈\d+%$/),
       expect.stringMatching(/^≈\d+%$/),
       expect.stringMatching(/^≈\d+\.\d \S+$/)
     ]);
-    expect(bar().text()).toMatch(/目标 ≥ \d+%/);
+    expect(bar().text()).not.toMatch(/达标|目标/);
 
     await bar().get('[aria-label="预估的年度"] input[value="2025"]').setValue(true);
     expect(bar().get('[aria-label="预估的年度"] input[value="2025"]').element).toHaveProperty('checked', true);
@@ -245,7 +243,7 @@ describe('ComposeStage 按 AI计算指令编排', () => {
 
     // 参数 3 项（人均类的人口变化用不上），再到 AI计算
     await vi.advanceTimersByTimeAsync(450 * 4);
-    expect(nodes(wrapper, 'params:')).toEqual(['params:rule', 'params:recognition', 'params:targets']);
+    expect(nodes(wrapper, 'params:')).toEqual(['params:rule', 'params:recognition']);
     expect(wrapper.get('[role="status"]').text()).toBe('配置完成，即将开始计算');
     expect(buttonOf(wrapper, '计算启动中').exists()).toBe(true);
     expect(wrapper.emitted('start')).toBeUndefined();

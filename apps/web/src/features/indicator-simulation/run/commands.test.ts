@@ -38,14 +38,10 @@ describe('interpretCommand', () => {
     expect(changeOf(interpretCommand('恢复标准口径', current)).composition.params).toEqual(defaultParams());
   });
 
-  it('改某项指标的目标值；指标不在条件里时说明', () => {
-    const target = changeOf(interpretCommand('人均公园绿地目标改成 13', current));
-    expect(target.composition.params.targets['A-39']).toBe(13);
-    expect(target.said).toEqual(['人均公园绿地目标改为 13']);
-    expect(interpretCommand('公园绿地覆盖率目标 75', current)).toEqual({
-      kind: 'none',
-      notes: ['没找到要改目标值的指标，指标要先在计算条件里']
-    });
+  it('不设置目标值：说到目标值时不改条件，说明原因（2026-10-30）', () => {
+    const none = { kind: 'none', notes: ['计算结果只给出各项指标的值，不设置目标值'] };
+    expect(interpretCommand('人均公园绿地目标改成 13', current)).toEqual(none);
+    expect(interpretCommand('公园绿地覆盖率目标 75', current)).toEqual(none);
   });
 
   it('加上、去掉、只看城市；全省', () => {

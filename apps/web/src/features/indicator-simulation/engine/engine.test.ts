@@ -14,11 +14,11 @@ const conditions: SimulationConditions = { years: [2025, 2026], cityCodes: ALL, 
 const withPatch = (patch: Partial<SimulationParams>): SimulationParams => ({ ...defaultParams(), ...patch });
 
 // 默认时长下的时间点（毫秒）：条件解析 1300 开始，三路数据准备 3100 开始、6100 全部完成，
-// 数据核查到 8500，空间分析到 13700，22100 完成
+// 数据核查到 8500，空间分析到 13700，指标计算到 17100，19700 完成
 const PREP_AT = 3100;
 const QC_AT = 6100;
 const SPATIAL_AT = 8500;
-const DONE_AT = 22_100;
+const DONE_AT = 19_700;
 // 从空间分析开始到完成
 const FROM_SPATIAL = DONE_AT - SPATIAL_AT;
 
@@ -173,7 +173,6 @@ describe('计算中的人工干预', () => {
       qc: 'stale',
       spatial: 'waiting',
       compute: 'waiting',
-      evaluate: 'waiting',
       report: 'waiting'
     });
     expect(engine.state.steps.pop.human).toBe(true);
@@ -233,10 +232,10 @@ describe('planApply', () => {
     using ctx = await setup();
     const { engine } = ctx;
     await runToDone(ctx);
-    expect(engine.planApply(withPatch({ targets: { ...defaultParams().targets, 'A-31': 75 } }))).toEqual({
+    expect(engine.planApply(withPatch({ recognition: 'intersect' }))).toEqual({
       outcome: 'rerun',
-      restart: 'evaluate',
-      changes: ['targets'],
+      restart: 'spatial',
+      changes: ['recognition'],
       baseIndex: 0
     });
   });
@@ -271,14 +270,14 @@ describe('结果阶段的人工干预', () => {
     await clock.advance(RERUN_DELAY + FROM_SPATIAL);
 
     const v1 = engine.state.versions[0]?.params ?? defaultParams();
-    const params = { ...v1, targets: { ...v1.targets, 'A-31': 75 } };
+    const params = { ...v1, recognition: 'intersect' as const };
     expect(engine.apply(params, { baseIndex: 0 })).toBe('rerun');
     // 相对 v2 计算规程也变回了新规程，从空间分析重算
     expect(engine.state.restart).toBe('spatial');
     expect(engine.state.baseIndex).toBe(0);
 
     await clock.advance(RERUN_DELAY + FROM_SPATIAL);
-    expect(engine.state.versions[2]).toMatchObject({ label: 'v3', baseIndex: 0, changes: ['targets'], params });
+    expect(engine.state.versions[2]).toMatchObject({ label: 'v3', baseIndex: 0, changes: ['recognition'], params });
   });
 
   it('与所基于的版本相同：不生成新版本；没有这个版本时抛错', async () => {

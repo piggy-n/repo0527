@@ -80,7 +80,6 @@ describe('useReasoningLog', () => {
       'qc',
       'spatial',
       'compute',
-      'evaluate',
       'report'
     ]);
   });
@@ -129,7 +128,13 @@ describe('useRunConversation', () => {
     // 要重算的步骤冻结成"已调整"，重算开始时另加一条
     await clock.advance(1000);
     const lines = outline(log.entries.value);
-    expect(lines.filter(line => line.includes('·outdated'))).toEqual(['prep·outdated', 'qc·outdated', 'spatial·outdated', 'compute·outdated', 'evaluate·outdated', 'report·outdated']);
+    expect(lines.filter(line => line.includes('·outdated'))).toEqual([
+      'prep·outdated',
+      'qc·outdated',
+      'spatial·outdated',
+      'compute·outdated',
+      'report·outdated'
+    ]);
     expect(lines.at(-1)).toBe('prep（重算）');
   });
 
@@ -191,13 +196,12 @@ describe('useRunConversation', () => {
     conversation.send('看苏州市');
     expect([result.selection.value?.cityCode, view.value]).toEqual(['320500', 'result']);
     expect(conversation.reply.value).toBe('放大到苏州市，设施和服务范围放大后显示。');
-    expect(conversation.suggestions.value.slice(0, 4)).toEqual(['看南京市', '按达标着色', '看人均公园绿地', '回看计算流程']);
+    expect(conversation.suggestions.value.slice(0, 3)).toEqual(['看南京市', '看人均公园绿地', '回看计算流程']);
     expect(conversation.example.value).toBe('看南京市');
-    conversation.send('按达标着色');
     conversation.send('看 2024 年');
     conversation.send('看人均公园绿地');
     conversation.send('回到计算范围');
-    expect(result.selection.value).toEqual({ indicatorId: 'A-39', year: 2024, mode: 'pass', cityCode: null });
+    expect(result.selection.value).toEqual({ indicatorId: 'A-39', year: 2024, cityCode: null });
     expect(conversation.reply.value).toBe('回到整个计算范围。');
 
     conversation.send('回看计算流程');

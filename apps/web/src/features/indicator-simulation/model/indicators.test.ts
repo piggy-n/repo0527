@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
-  demoTarget,
   INDICATOR_GROUPS,
   reachMeters,
   reachText,
@@ -57,9 +56,5 @@ describe('计算支持的指标', () => {
       '2 公里缓冲区',
       '面积 ÷ 人口'
     ]);
-  });
-
-  it('目标值是 2026 年城市值的中位数取整', () => {
-    expect(['B-65', 'A-31', 'A-39', 'B-61', 'A-14'].map(demoTarget)).toEqual([70, 80, 15, 2.1, 2.1]);
   });
 });

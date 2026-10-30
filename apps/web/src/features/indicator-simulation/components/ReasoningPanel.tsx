@@ -26,8 +26,7 @@ const THINKING: Readonly<Record<StepGroupId, readonly string[]>> = {
   qc: ['正在核对区县字段', '正在检查设施坐标'],
   spatial: ['正在生成服务范围', '正在叠加住宅用地'],
   compute: ['正在逐区县计算', '正在汇总到市和全省'],
-  evaluate: ['正在对照目标值', '正在统计达标城市'],
-  report: ['正在比较各项指标', '正在归纳结论']
+  report: ['正在汇总各项指标', '正在归纳结论']
 };
 // 离底部不到这么多像素算在底部：新内容出现时跟着滚
 const STICKY = 24;

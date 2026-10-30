@@ -6,11 +6,9 @@ const percent = { unit: '%' };
 const perCapita = { unit: '平方米/人' };
 
 describe('预估的格式', () => {
-  it('百分比取整、人均值保留一位，前面加"≈"；目标这类定值不加', () => {
+  it('百分比取整、人均值保留一位，前面加"≈"', () => {
     expect(formatEstimate(84.6, percent)).toBe('≈85%');
     expect(formatEstimate(1.349, perCapita)).toBe('≈1.3 平方米/人');
-    expect(formatEstimate(70, percent, false)).toBe('70%');
-    expect(formatEstimate(15, perCapita, false)).toBe('15.0 平方米/人');
   });
 
   it('按显示的精度取整，没有 -0', () => {

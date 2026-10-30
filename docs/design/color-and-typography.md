@@ -223,7 +223,7 @@ AI 计算的外发光和"自定义口径"（S14 前叫"模拟情景"）的颜色
 - AI 的图标统一是 `shared/chat-avatar` 的机器人头像（主色圆底，ADR 0109）；原来的"主色 → ai-violet → ai-cyan"锥形渐变圆球和这两个令牌已删除
 - 待更新这类警示用 `--color-warning-bg` 浅底配 `--color-warning-text`（`#B46B00`）文字，边框、圆点用 `--color-warning`
 - 编排图的连线用 `--color-primary-border`，条件齐全后用 `--color-primary-border-hover` 并流动；画布底色 `--color-primary-bg-lighter`、网点 `--color-border-dashed`，都是已有令牌
-- 结果展示的达标三态（2026-10-29 补充，ADR 0108）：达标 `--color-primary`、接近 `--color-warning`（文字 `--color-warning-text`）、未达标 `--color-danger`；地图上的区县填充浅一档，是 `map/colors.ts` 的常量（MapLibre 读不到 CSS 变量）。条件配置的预估栏、人工干预的预估仍用绿、红表示达标与否
+- 结果展示的达标三态（2026-10-29 补充，ADR 0108；2026-10-30 随达标评价一起去掉，ADR 0120，以下是当时的记录）：达标 `--color-primary`、接近 `--color-warning`（文字 `--color-warning-text`）、未达标 `--color-danger`；地图上的区县填充浅一档，是 `map/colors.ts` 的常量（MapLibre 读不到 CSS 变量）。条件配置的预估栏、人工干预的预估仍用绿、红表示达标与否
 
 ## 7. CSS 变量落地
 

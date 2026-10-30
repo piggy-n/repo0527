@@ -12,7 +12,7 @@ import {
 } from '../result/result-view';
 import type { SimulationRun } from './useSimulationRun';
 
-/** 结果展示的拥有者：看哪项指标、哪一年、怎么着色、放大到哪个市，以及悬停的市；结果总是最新的一版 */
+/** 结果展示的拥有者：看哪项指标、哪一年、放大到哪个市，以及悬停的市；结果总是最新的一版 */
 export interface SimulationResult {
   /** 还没有结果时为 null */
   readonly selection: ComputedRef<ResultSelection | null>;
@@ -62,9 +62,7 @@ export function useSimulationResult(run: SimulationRun): SimulationResult {
     const calculator = run.calculator.value;
     const { conditions } = state.value;
     const current = selection.value;
-    return calculator && version.value && conditions && current
-      ? mapColoring(calculator, conditions, current, version.value)
-      : null;
+    return calculator && version.value && conditions && current ? mapColoring(calculator, conditions, current) : null;
   });
 
   return {

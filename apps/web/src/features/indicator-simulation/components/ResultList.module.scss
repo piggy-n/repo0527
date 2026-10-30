@@ -52,9 +52,7 @@
 // 收起时名称和结果一行；选中时结果单独一行、用结果数值的字号
 .head {
   display: grid;
-  grid-template-areas:
-    'name value'
-    'meta meta';
+  grid-template-areas: 'name value';
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 2px var(--space-sm);
   width: 100%;
@@ -69,8 +67,7 @@
   .selected & {
     grid-template-areas:
       'name name'
-      'value value'
-      'meta meta';
+      'value value';
     cursor: default;
   }
 }
@@ -120,45 +117,7 @@
   }
 }
 
-.meta {
-  display: flex;
-  grid-area: meta;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-compact);
-  white-space: nowrap;
-}
-
-// 达标三态：达标主色、接近琥珀、未达标红
-.verdict {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: var(--font-weight-semibold);
-
-  i {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: currentColor;
-  }
-
-  &.pass {
-    color: var(--color-primary);
-  }
-
-  &.near {
-    color: var(--color-warning-text);
-  }
-
-  &.fail {
-    color: var(--color-danger);
-  }
-}
-
-// 各市：条长是数值，竖线是目标
+// 各市：条长是数值
 .detail {
   padding: 0 4px 8px;
 }
@@ -226,31 +185,8 @@ button.row {
     position: absolute;
     inset: 0 auto 0 0;
     border-radius: inherit;
-    transition: width 0.3s;
-  }
-
-  .pass {
     background: var(--color-primary);
-  }
-
-  .near {
-    background: var(--color-warning);
-  }
-
-  .fail {
-    background: var(--color-danger);
-  }
-
-  // 目标的竖线
-  &::after {
-    content: '';
-    position: absolute;
-    top: -4px;
-    bottom: -4px;
-    left: var(--target);
-    width: 2px;
-    border-radius: 1px;
-    background: var(--color-text-strong);
+    transition: width 0.3s;
   }
 }
 
