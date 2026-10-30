@@ -9,6 +9,8 @@ import {
   prepareMapRuntime,
   withMapRuntime
 } from './map-framework';
+// 第一次导入整个 Cesium 放在收集阶段：全量测试的负载下要 30～40 秒，收集不计入用例的超时（docs/config/vite-config.md 的"测试耗时"）
+import { setupSceneRuntime } from './map-runtime-3d';
 
 // 由测试决定何时结束的加载
 function pending<T>() {
@@ -105,12 +107,11 @@ describe('框架', () => {
     expect(runtime).toStrictEqual({ setup: setupMapRuntime, prewarm: prewarmMapRuntime });
   });
 
-  // 第一次导入整个 Cesium：单独跑约 3 秒，全量测试的负载下会超过默认的 5 秒
+  // map-runtime-3d 已在文件开头导入，这里的动态导入直接取模块表里的同一个模块
   it('三维的运行时是 map-runtime-3d 的设置，没有要预热的', async () => {
     const runtime = await loadMapRuntime('3d');
-    const { setupSceneRuntime } = await import('./map-runtime-3d');
 
     expect(runtime).toMatchObject({ setup: setupSceneRuntime });
     expect(runtime.prewarm()).toBeUndefined();
-  }, 20000);
+  });
 });
