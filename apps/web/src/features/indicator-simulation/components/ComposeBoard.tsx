@@ -566,7 +566,7 @@ export const ComposeBoard = defineComponent({
           <span class={styles.meta}>
             {ready
               ? `${years.length} 个年度 × ${cityCodes.length} 市 × ${indicatorIds.length} 项指标`
-              : `还缺：${missing.value.map(kind => CONDITION_LABELS[kind]).join('、')}`}
+              : `待补充：${missing.value.map(kind => CONDITION_LABELS[kind]).join('、')}`}
           </span>
           <span class={styles.meta}>
             {ready

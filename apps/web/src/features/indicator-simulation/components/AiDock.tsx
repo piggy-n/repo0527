@@ -7,8 +7,8 @@ import type { RunConversation } from '../composables/useRunConversation';
 import styles from './AiDock.module.scss';
 
 const WARNINGS: Readonly<Record<Exclude<SendOutcome, 'sent'>, string>> = {
-  empty: '请输入计算指令，按 Tab 可以填入示例',
-  unrecognized: '没有识别出监测指标，可以点"换一批"换个示例'
+  empty: '请输入计算指令，按 Tab 键填入示例',
+  unrecognized: '未识别到监测指标，可点击"换一批"更换示例'
 };
 
 /**
@@ -42,7 +42,7 @@ export const AiDock = defineComponent({
       }
       const outcome = conversation.send(words);
       if (outcome === 'empty') {
-        ElMessage.warning('请输入要说的话，按 Tab 可以填入示例');
+        ElMessage.warning('请输入指令，按 Tab 键填入示例');
       } else if (outcome === 'stopped') {
         ElMessage.success('已停止计算，配置的条件已保留');
       }

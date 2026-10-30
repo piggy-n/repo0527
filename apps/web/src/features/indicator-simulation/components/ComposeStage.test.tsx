@@ -129,7 +129,7 @@ describe('ComposeStage', () => {
   it('条件不全或区县数据没加载好时不能开始；齐全后开始', async () => {
     const empty = mountStage(emptyComposition());
     expect(buttonOf(empty.wrapper, '开始计算').attributes('disabled')).toBeDefined();
-    expect(empty.wrapper.get('[data-node="output"]').text()).toContain('还缺：年份、监测范围、监测指标');
+    expect(empty.wrapper.get('[data-node="output"]').text()).toContain('待补充：年份、监测范围、监测指标');
 
     const loading = mountStage(sampleComposition(), { status: 'loading' });
     expect(buttonOf(loading.wrapper, '开始计算').attributes('disabled')).toBeDefined();

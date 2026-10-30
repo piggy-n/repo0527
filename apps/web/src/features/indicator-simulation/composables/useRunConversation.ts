@@ -36,9 +36,10 @@ export interface RunConversation {
   send(text?: string): ConversationOutcome;
 }
 
-const HINT = '没听懂这句话。可以说：暂停、继续、停止；改成旧规程、相交即算、人口增加 10%；加上苏州市、去掉人均公园绿地。';
+const HINT = '未能识别该指令，可尝试：暂停、继续、停止；改成旧规程、相交即算、人口增加 10%；加上苏州市、去掉人均公园绿地。';
 // 推演完成后还能看结果
-const DONE_HINT = '没听懂这句话。看结果可以说：看南京市、看 2025 年、回看计算流程；要改条件可以说：改成旧规程、相交即算、加上苏州市、去掉人均公园绿地。';
+const DONE_HINT =
+  '未能识别该指令。查看结果可尝试：看南京市、看 2025 年、回看计算流程；调整条件可尝试：改成旧规程、相交即算、加上苏州市、去掉人均公园绿地。';
 
 // 控制计算的快捷说法：太短，不拿来做占位的示例
 const CONTROLS: ReadonlySet<string> = new Set(['暂停', '继续', '停止计算', '调整条件', '回看计算流程']);
@@ -102,17 +103,17 @@ export function useRunConversation(
         return 'stopped';
       case 'pause':
         if (phase.value === 'done') {
-          say('计算已经完成了。直接说要改什么，我会在这一版的基础上重新计算。');
+          say('计算已完成。请说明需要调整的内容，将在当前版本基础上重新计算。');
         } else {
-          say(userPause.pause() ? '已暂停。说"继续"接着计算，也可以先改参数或范围。' : '计算已经暂停了。');
+          say(userPause.pause() ? '已暂停。输入"继续"恢复计算，也可先调整参数或范围。' : '计算已处于暂停状态。');
         }
         return 'replied';
       case 'resume':
-        say(userPause.resume() ? '继续计算。' : '计算没有暂停。');
+        say(userPause.resume() ? '继续计算。' : '计算未暂停。');
         return 'replied';
       case 'none':
         if (command.notes.length > 0) {
-          say(`${command.notes.join('；')}，计算没有变化。`);
+          say(`${command.notes.join('；')}，计算条件未变化。`);
         } else {
           say(phase.value === 'done' ? DONE_HINT : HINT);
         }
@@ -123,11 +124,11 @@ export function useRunConversation(
     // 改了就重新推演、回到流程图，回复只记在时间线上
     userPause.resume();
     composition.replace(command.composition);
-    const head = `好的，${command.said.join('；')}。`;
+    const head = `已调整：${command.said.join('；')}。`;
     const notes = command.notes.length > 0 ? `（${command.notes.join('；')}）` : '';
     if (command.conditionsChanged) {
       run.restart(command.composition);
-      log.ai(`${head}从「条件解析」重算。${notes}`);
+      log.ai(`${head}将从「条件解析」重新计算。${notes}`);
       return 'replied';
     }
     // 从哪一步起生效：保存时引擎不记重算的起点，先问一遍
@@ -136,8 +137,8 @@ export function useRunConversation(
     const reused = STEP_GROUPS.findIndex(group => group.name === groupName(restart));
     const tail =
       outcome === 'saved'
-        ? `「${groupName(restart)}」还没执行，执行到时按新的设置。`
-        : `从「${groupName(restart)}」重算${reused > 0 ? `，前 ${reused} 步复用` : ''}。`;
+        ? `「${groupName(restart)}」尚未执行，执行时将采用新设置。`
+        : `将从「${groupName(restart)}」重新计算${reused > 0 ? `，前 ${reused} 步沿用已有结果` : ''}。`;
     log.ai(`${head}${tail}${notes}`);
     return 'replied';
   };

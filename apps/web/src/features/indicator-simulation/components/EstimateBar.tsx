@@ -45,7 +45,7 @@ export const EstimateBar = defineComponent({
       }
       const current = result.value;
       if (!current) {
-        return <p class={styles.status}>选好年份、范围和指标后显示预估</p>;
+        return <p class={styles.status}>选择年份、范围和指标后显示预估</p>;
       }
       const more = conditions.indicatorIds.length - ROWS;
       return (

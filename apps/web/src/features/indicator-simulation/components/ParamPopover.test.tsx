@@ -29,7 +29,7 @@ describe('ParamPopover', () => {
     const draft = { ...defaultParams(), recognition: 'intersect' };
     expect(wrapper.emitted('preview')).toEqual([[draft]]);
     expect(wrapper.text()).toContain('自定义口径');
-    expect(wrapper.text()).toContain('同消防救援、派出所的认定');
+    expect(wrapper.text()).toContain('与消防救援、派出所覆盖率的认定方式一致');
     expect(ok()?.attributes('disabled')).toBeUndefined();
 
     await ok()?.trigger('click');

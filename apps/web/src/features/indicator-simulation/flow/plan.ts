@@ -228,7 +228,7 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     detail: `${indicatorIds.length} 项指标 · ${scenarioIds.length > 0 ? '含自定义口径' : '标准口径'}`,
     kind: 'root'
   });
-  say('parse', rich`理解指令：计算 ${em(`${yearsText} 年`)}${scope}的 ${em(`${indicatorIds.length} 项`)}指标。`, 'parse');
+  say('parse', rich`解析指令：计算 ${em(`${yearsText} 年`)}${scope}的 ${em(`${indicatorIds.length} 项`)}指标。`, 'parse');
   const area = coverage.filter(indicator => indicator.base === 'area').length;
   const kinds = [
     coverage.length - area > 0 ? `住宅用地覆盖率 ${coverage.length - area} 项` : '',
@@ -242,11 +242,11 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
   if (changed.length > 0) {
     const values = changed.map(key => `${PARAM_LABELS[key]}按「${describeParam(key, params)}」`).join('，');
     const scenarioNames = scenarioIds.map(id => simulationIndicator(id).short).join('、');
-    say('parse', rich`${values}，当前使用${em('自定义口径')}计算；${scenarioNames}另算一支标准口径作对照。`, 'parse');
+    say('parse', rich`${values}，当前按${em('自定义口径')}计算；${scenarioNames}同时按标准口径计算作为对照。`, 'parse');
   } else {
     say('parse', rich`参数都按${em('标准口径')}计算。`, 'parse');
   }
-  say('parse', rich`规划路线：数据分三路并行准备，核查后按指标分成 ${em(`${indicatorIds.length} 支`)}，最后汇总成结论。`, 'parse');
+  say('parse', rich`计算流程：人口、设施、用地数据并行准备，核查后按指标分 ${em(`${indicatorIds.length} 个分支`)}计算，最后汇总结论。`, 'parse');
 
   // 数据准备：三路并行
   const shownCities = cityCodes.slice(0, 3).map(code => {
@@ -277,15 +277,15 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     key: 'poi',
     step: 'poi',
     label: '设施数据',
-    title: coverage.length > 0 ? `${facilityTypes.length} 类设施点` : '不需要设施点',
-    detail: coverage.length > 0 ? `${formatNumber(facilityTotal)} 处` : '人均类只用用地'
+    title: coverage.length > 0 ? `${facilityTypes.length} 类设施点` : '无需设施点',
+    detail: coverage.length > 0 ? `${formatNumber(facilityTotal)} 处` : '人均类仅需用地数据'
   });
   const moreFacilities = facilityTypes.length > 4 ? ` 等 ${facilityTypes.length} 类` : '';
   say(
     'poi',
     coverage.length > 0
       ? rich`载入设施点：${facilityTypes.slice(0, 4).join('、')}${moreFacilities}，共 ${em(`${formatNumber(facilityTotal)} 处`)}。`
-      : rich`所选指标不需要设施点，这一路跳过。`,
+      : rich`所选指标不涉及设施点，跳过设施数据准备。`,
     'poi'
   );
   node({
@@ -304,8 +304,8 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
 
   // 数据核查
   node({ key: 'qc', step: 'qc', label: '数据核查', title: `${districts.length} 个区县`, detail: '数据完整' });
-  say('qc', rich`核对 ${em(`${districts.length} 个区县`)}的人口、设施和用地：字段齐全，设施坐标都落在区县范围内。`, 'qc');
-  say('qc', rich`${year} 年没有缺失数据，可以开始空间分析。`, 'qc');
+  say('qc', rich`核对 ${em(`${districts.length} 个区县`)}的人口、设施和用地：字段完整，设施坐标均位于区县范围内。`, 'qc');
+  say('qc', rich`${year} 年数据无缺失，进入空间分析。`, 'qc');
 
   // 按指标分支：服务范围（人均类是用地汇总）→ 指标计算（模拟情景另有标准口径对照）
   const blocks: { id: string; saKeys: string[]; calcKeys: string[] }[] = [];
@@ -329,7 +329,7 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
         say(
           'spatial',
           item.union
-            ? rich`再叠加${item.reach}的路网服务区，和缓冲区${em('取并集')}。`
+            ? rich`叠加${item.reach}路网服务区，与缓冲区${em('取并集')}。`
             : rich`${short}：${item.facility}按${item.reach}生成服务范围，半径 ${em(meters(item.meters))}。`,
           key
         );
@@ -367,7 +367,7 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
         ? rich`${short}：${indicator.facility}面积除以七普人口${popNote}，${where}为 ${em(value)}。`
         : indicator.base === 'area'
           ? rich`${short}：服务范围叠加城区面积，相交即算，${where} ${em(value)}。`
-          : rich`${short}：服务范围叠加住宅用地，${recognitionText(params)}的图斑算覆盖，${where} ${em(value)}。`,
+          : rich`${short}：服务范围叠加住宅用地，按「${recognitionText(params)}」认定覆盖图斑，${where} ${em(value)}。`,
       calcKey
     );
     const base = standardOf(id);
@@ -379,14 +379,14 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
         step: 'compute',
         label: '对照 · 标准口径',
         title: formatValue(base.value, indicator),
-        detail: `${short} · 标准规则`,
+        detail: `${short} · 标准口径`,
         kind: 'standard'
       });
       const delta = data.value - base.value;
       const deltaText = em(formatDelta(Math.abs(delta), indicator).replace(/^\+/, ''));
       say(
         'compute',
-        rich`对照标准口径为 ${em(formatValue(base.value, indicator))}，自定义口径${delta >= 0 ? '高' : '低'}出 ${deltaText}。`,
+        rich`标准口径为 ${em(formatValue(base.value, indicator))}，自定义口径较其${delta >= 0 ? '高' : '低'} ${deltaText}。`,
         stdKey
       );
     }
@@ -417,15 +417,19 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
       return `${indicator.short} ${formatValue(indicatorResult(current, id).value, indicator)}`;
     })
     .join('，');
-  say('report', rich`汇总 ${em(`${indicatorIds.length} 支`)}：${values}${indicatorIds.length > 4 ? ' 等' : ''}。`, 'report');
+  say('report', rich`汇总 ${em(`${indicatorIds.length} 项指标`)}：${values}${indicatorIds.length > 4 ? ' 等' : ''}。`, 'report');
   if (scenarioIds.length > 0) {
     const effects = scenarioIds.map(id => {
       const indicator = simulationIndicator(id);
-      return `${indicator.short}${formatDelta(indicatorResult(current, id).value - standardOf(id).value, indicator)}`;
+      return `${indicator.short}变化 ${formatDelta(indicatorResult(current, id).value - standardOf(id).value, indicator)}`;
     });
-    say('report', rich`自定义口径让${effects.join('、')}，结论按自定义口径给出，标准口径的值一并保留。`, 'report');
+    say(
+      'report',
+      rich`采用自定义口径后，${effects.join('、')}；结论按自定义口径给出，并保留标准口径的值作为对照。`,
+      'report'
+    );
   }
-  say('report', rich`计算完成，点下方的"查看结果"在地图上查看各区县。`, 'report');
+  say('report', rich`计算完成，可点击下方"查看结果"查看各区县结果。`, 'report');
 
   // 位置：分支按块从上往下排，块内居中；不分支的列在整棵树的中间
   const { nodeWidth, columnGap, rowHeight, padX, padY, branchGap } = FLOW_LAYOUT;
@@ -465,7 +469,7 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
   const saCount = nodes.filter(item => item.step === 'spatial').length;
   const summaries: Record<StepGroupId, string> = {
     parse: `${yearsText} 年 · ${scope} · ${indicatorIds.length} 项${scenarioIds.length > 0 ? ' · 自定义口径' : ''}`,
-    prep: '人口、设施、用地 3 路数据已就绪',
+    prep: '人口、设施、用地数据已就绪',
     qc: `${districts.length} 个区县 · 数据完整`,
     spatial: `${saCount} 个分析分支`,
     compute: `${indicatorIds.length} 项指标已计算${scenarioIds.length > 0 ? `，${scenarioIds.length} 项有对照` : ''}`,

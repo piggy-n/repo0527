@@ -124,7 +124,7 @@ describe('RunStage', () => {
     expect(entries(mounted)[1]).toBe('条件解析进行中正在拆分年份、范围和指标…');
     await advance(mounted, THINK_MS - 700 + 300);
     await redraw();
-    expect(entries(mounted)[1]).toMatch(/^条件解析进行中理解指令：/);
+    expect(entries(mounted)[1]).toMatch(/^条件解析进行中解析指令：/);
 
     // 条件解析结束、数据准备刚开始（还在想）：条件解析的节点完成，三路数据还没长出
     await advance(mounted, run.state.value.durations.parse - 1400 + 10);
@@ -177,7 +177,7 @@ describe('RunStage', () => {
     );
     expect(parse.text()).toBe('条件解析完成2026 年 · 全省 · 3 项');
     await parse.get('button').trigger('click');
-    expect(parse.text()).toContain('理解指令：计算 2026 年全省的 3 项指标。');
+    expect(parse.text()).toContain('解析指令：计算 2026 年全省的 3 项指标。');
 
     expect(wrapper.find('[class*="_state_"][role="status"]').exists()).toBe(false);
     expect(['暂停', '人工干预', '停止'].map(text => wrapper.findAll('button').some(found => found.text() === text))).toEqual([false, false, false]);

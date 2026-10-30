@@ -113,7 +113,7 @@ export function interpretCommand(input: string, current: Composition): RunComman
       : conditions.indicatorIds;
   const yearList = years.length > 0 ? merge(conditions.years, years, rest, SIMULATION_YEARS) : conditions.years;
   if (cityCodes.length === 0 || indicatorIds.length === 0 || yearList.length === 0) {
-    return { kind: 'none', notes: [...notes, '年份、范围和指标都至少要留一项'] };
+    return { kind: 'none', notes: [...notes, '年份、范围和指标均需至少保留一项'] };
   }
 
   // 参数：只改用得上的
@@ -121,7 +121,7 @@ export function interpretCommand(input: string, current: Composition): RunComman
   const next: SimulationParams = { ...params, ...patch };
   for (const key of ['rule', 'recognition', 'popChange'] as const) {
     if (key in patch && next[key] !== params[key] && !indicatorIds.some(id => paramApplies(key, id))) {
-      notes.push(`当前指标用不上${PARAM_LABELS[key]}`);
+      notes.push(`所选指标不适用${PARAM_LABELS[key]}`);
       Object.assign(next, { [key]: params[key] });
     }
   }

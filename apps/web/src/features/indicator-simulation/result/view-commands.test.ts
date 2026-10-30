@@ -44,7 +44,7 @@ describe('interpretView', () => {
   it('只有一个市时说范围就是它，不放大', () => {
     const command = interpretView('看南京市', { ...conditions, cityCodes: ['320100'] });
 
-    expect(command).toEqual({ patch: {}, show: 'result', reply: '计算范围就是南京市。' });
+    expect(command).toEqual({ patch: {}, show: 'result', reply: '当前计算范围仅含南京市。' });
   });
 });
 
