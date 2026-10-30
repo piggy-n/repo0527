@@ -18,14 +18,14 @@ describe('visibleNavItems', () => {
       '查询统计',
       '文件管理',
       '系统管理',
-      '智能体'
+      'AI+'
     ]);
     expect(labels(visibleNavItems(navItems, Role.user, rolesOf))).toEqual([
       '现状底图',
       '查询统计',
       '数据下载',
       '文件管理',
-      '智能体'
+      'AI+'
     ]);
   });
 
@@ -35,22 +35,22 @@ describe('visibleNavItems', () => {
     expect(targets.filter(route => !router.hasRoute(route))).toEqual([]);
   });
 
-  it('智能体是一层下拉：AI对话、城市国土空间监测指标AI计算', () => {
-    const agent = navItems.find(item => item.label === '智能体');
+  it('AI+ 是一层下拉：AI对话、智能体', () => {
+    const agent = navItems.find(item => item.label === 'AI+');
 
-    expect(agent?.kind === 'menu' && agent.links.map(({ label }) => label)).toEqual(['AI对话', '城市国土空间监测指标AI计算']);
+    expect(agent?.kind === 'menu' && agent.links.map(({ label }) => label)).toEqual(['AI对话', '智能体']);
   });
 
   it('一层下拉中没有权限的页面被去掉，都没有权限时去掉整项', () => {
     const onlyAdmin = new Set<RouteName>([RouteName.indicatorSimulation]);
     const partly = visibleNavItems(navItems, Role.user, route => (onlyAdmin.has(route) ? [Role.admin] : undefined));
-    const agent = partly.find(item => item.label === '智能体');
+    const agent = partly.find(item => item.label === 'AI+');
 
     expect(agent?.kind === 'menu' && agent.links.map(({ route }) => route)).toEqual([RouteName.aiChat]);
 
     onlyAdmin.add(RouteName.aiChat);
     const none = visibleNavItems(navItems, Role.user, route => (onlyAdmin.has(route) ? [Role.admin] : undefined));
-    expect(labels(none)).not.toContain('智能体');
+    expect(labels(none)).not.toContain('AI+');
   });
 
   it('下拉面板中没有权限的页面被去掉，整组都没有权限时去掉整组', () => {
@@ -95,7 +95,7 @@ describe('isNavItemActive', () => {
   });
 
   it('一层下拉在其中任一页面时选中', () => {
-    const agent = navItems.find(item => item.label === '智能体');
+    const agent = navItems.find(item => item.label === 'AI+');
 
     expect(agent && isNavItemActive(agent, RouteName.aiChat)).toBe(true);
     expect(agent && isNavItemActive(agent, RouteName.indicatorSimulation)).toBe(true);
