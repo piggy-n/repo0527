@@ -27,7 +27,10 @@ export const AiChatPage = defineComponent({
   name: 'AiChatPage',
   setup() {
     // 回答的结果在底图之上、注记之下，边界在最上面
-    const map = provideMap({ groups: ['basemap', 'ai-result', 'basemap-labels', 'boundaries'], camera: JIANGSU_CAMERA });
+    const map = provideMap({
+      groups: ['basemap', 'ai-result', 'basemap-labels', 'boundaries'],
+      camera: JIANGSU_CAMERA
+    });
     const { goToDefaultView } = useDefaultView(map);
     const basemap = useBasemap();
     const boundaries = useBoundaries();

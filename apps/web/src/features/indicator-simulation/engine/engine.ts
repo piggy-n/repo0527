@@ -2,7 +2,13 @@ import { abortReason, LatestController } from '@yzt/utils';
 import { createNanoEvents, type Unsubscribe } from 'nanoevents';
 import type { Calculator, YearResult } from '../model/calculator';
 import { simulationIndicator } from '../model/indicators';
-import { changedParams, defaultParams, type ParamKey, type SimulationConditions, type SimulationParams } from '../model/params';
+import {
+  changedParams,
+  defaultParams,
+  type ParamKey,
+  type SimulationConditions,
+  type SimulationParams
+} from '../model/params';
 import { type Clock, PausableClock, systemClock } from './clock';
 import {
   BASE_DURATIONS,
@@ -367,7 +373,10 @@ export class SimulationEngine implements Disposable {
         if (!affected.has(id)) {
           return { ...step, status: 'reused', redo: false };
         }
-        return started(step.status) ? { ...step, status: 'stale', redo: true } : { ...step, status: 'waiting', redo: false };
+        if (started(step.status)) {
+          return { ...step, status: 'stale', redo: true };
+        }
+        return { ...step, status: 'waiting', redo: false };
       })
     });
     this.#launch(this.#run(conditions, affected, RERUN_DELAY, signal), signal);

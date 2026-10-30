@@ -84,7 +84,11 @@ export const FlowChart = defineComponent({
         return;
       }
       view.value = 'free';
-      free.value = { ...current.from, x: current.from.x + event.clientX - current.x, y: current.from.y + event.clientY - current.y };
+      free.value = {
+        ...current.from,
+        x: current.from.x + event.clientX - current.x,
+        y: current.from.y + event.clientY - current.y
+      };
     };
     const endDrag = () => {
       drag.value = null;
@@ -158,7 +162,8 @@ export const FlowChart = defineComponent({
           return [];
         }
         const target = nodeFrame(to).status;
-        const state = target === 'running' ? 'active' : target === 'stale' || nodeFrame(from).status === 'stale' ? 'stale' : 'done';
+        const stale = target === 'stale' || nodeFrame(from).status === 'stale';
+        const state = target === 'running' ? 'active' : stale ? 'stale' : 'done';
         return [{ key: `${from}>${to}`, d: curve(a, b), state, standard: b.kind === 'standard' }];
       });
     });
@@ -199,7 +204,11 @@ export const FlowChart = defineComponent({
         >
           <div
             class={[styles.world, !drag.value && styles.animate]}
-            style={{ width: `${plan.width}px`, height: `${plan.height}px`, transform: `translate(${x}px, ${y}px) scale(${scale})` }}
+            style={{
+              width: `${plan.width}px`,
+              height: `${plan.height}px`,
+              transform: `translate(${x}px, ${y}px) scale(${scale})`
+            }}
           >
             {FLOW_COLUMNS.map((title, column) => (
               <span

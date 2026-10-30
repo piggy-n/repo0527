@@ -9,7 +9,12 @@ import { ReportTable } from '@/features/statistics-report/components/ReportTable
 import { RouteName } from '@/shared/router/route-names';
 import { SideNav, type SideNavItem } from '@/shared/side-nav/SideNav';
 import styles from './preview.module.scss';
-import { type ListScene, type SubmitScene, type SystemSection, useSystemManagementDemo } from './useSystemManagementDemo';
+import {
+  type ListScene,
+  type SubmitScene,
+  type SystemSection,
+  useSystemManagementDemo
+} from './useSystemManagementDemo';
 
 const SECTIONS: [SystemSection, string][] = [
   ['audit', '资源审核'],

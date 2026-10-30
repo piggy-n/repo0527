@@ -17,7 +17,9 @@ export function useRunFlow(run: SimulationRun): RunFlow {
   const params = computed(() => state.value.params);
   const plan = computed(() => {
     const calculator = run.calculator.value;
-    return calculator && conditions.value ? flowPlan({ calculator, conditions: conditions.value, params: params.value }) : null;
+    return calculator && conditions.value
+      ? flowPlan({ calculator, conditions: conditions.value, params: params.value })
+      : null;
   });
   // 上一轮出现过的节点：重算时它们在轮到之前显示为待更新
   const previous = computed(() => {
@@ -26,7 +28,8 @@ export function useRunFlow(run: SimulationRun): RunFlow {
     if (!calculator || !previousConditions || !adjustment) {
       return null;
     }
-    return new Set(flowPlan({ calculator, conditions: previousConditions, params: adjustment.from }).nodes.map(node => node.key));
+    const previousPlan = flowPlan({ calculator, conditions: previousConditions, params: adjustment.from });
+    return new Set(previousPlan.nodes.map(node => node.key));
   });
   const frame = computed(() => (plan.value ? flowFrame(plan.value, state.value, run.progress, previous.value) : null));
   return { plan, frame };

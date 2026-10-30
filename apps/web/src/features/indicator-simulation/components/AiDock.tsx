@@ -108,7 +108,13 @@ export const AiDock = defineComponent({
                 />
               </div>
               {!conversation && (
-                <ElButton class={styles.refresh} link icon={RefreshRight} disabled={sending} onClick={() => composer.refresh()}>
+                <ElButton
+                  class={styles.refresh}
+                  link
+                  icon={RefreshRight}
+                  disabled={sending}
+                  onClick={() => composer.refresh()}
+                >
                   换一批
                 </ElButton>
               )}

@@ -54,13 +54,17 @@ export function useSimulationResult(run: SimulationRun): SimulationResult {
   const rank = computed(() => {
     const { conditions } = state.value;
     const current = selection.value;
-    return version.value && conditions && current ? rankOf(version.value, conditions, current.indicatorId, current.year) : null;
+    return version.value && conditions && current
+      ? rankOf(version.value, conditions, current.indicatorId, current.year)
+      : null;
   });
   const coloring = computed(() => {
     const calculator = run.calculator.value;
     const { conditions } = state.value;
     const current = selection.value;
-    return calculator && version.value && conditions && current ? mapColoring(calculator, conditions, current, version.value) : null;
+    return calculator && version.value && conditions && current
+      ? mapColoring(calculator, conditions, current, version.value)
+      : null;
   });
 
   return {

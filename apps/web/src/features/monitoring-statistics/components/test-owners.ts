@@ -40,7 +40,12 @@ export function fakeReport(initial: ReportStatus | null) {
   return { report, status, notice, filter, criteria };
 }
 
-export const reportRow = (name: string, status: TaskStatus, statusText: string, cause: string | null = null): ReportRow => ({
+export const reportRow = (
+  name: string,
+  status: TaskStatus,
+  statusText: string,
+  cause: string | null = null
+): ReportRow => ({
   year: '2025',
   regionName: '江苏省',
   name,

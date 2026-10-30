@@ -141,7 +141,21 @@ const GEOMETRY_FILTERS: Readonly<Record<ResultGeometry, ExpressionSpecification>
 };
 
 // 线宽、点的大小随级别变化，取值沿用旧页面
-const LINE_WIDTH: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 6, 0.3, 10, 0.7, 13, 1.4, 16, 2.6, 18, 3.5];
+const LINE_WIDTH: ExpressionSpecification = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  6,
+  0.3,
+  10,
+  0.7,
+  13,
+  1.4,
+  16,
+  2.6,
+  18,
+  3.5
+];
 const CIRCLE_RADIUS: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 6, 2, 10, 4, 14, 6, 18, 9];
 const CIRCLE_STROKE_WIDTH: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 6, 0.4, 10, 1, 14, 1.5];
 const FLAG_SIZE: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 6, 0.28, 10, 0.42, 14, 1.2, 18, 1.7];
@@ -191,12 +205,26 @@ function layersOf(
   }
   const lineLayout = { visibility, 'line-cap': 'round', 'line-join': 'round' } as const;
   if (layer.geometry === 'line') {
-    return [{ id, type: 'line', ...common, layout: lineLayout, paint: { 'line-color': color, 'line-width': LINE_WIDTH } }];
+    return [
+      { id, type: 'line', ...common, layout: lineLayout, paint: { 'line-color': color, 'line-width': LINE_WIDTH } }
+    ];
   }
   // 面加一圈同色的边线，相邻的面能分清
   return [
-    { id, type: 'fill', ...common, layout: { visibility }, paint: { 'fill-color': color, 'fill-outline-color': color } },
-    { id: `${id}-outline`, type: 'line', ...common, layout: lineLayout, paint: { 'line-color': color, 'line-width': 1 } }
+    {
+      id,
+      type: 'fill',
+      ...common,
+      layout: { visibility },
+      paint: { 'fill-color': color, 'fill-outline-color': color }
+    },
+    {
+      id: `${id}-outline`,
+      type: 'line',
+      ...common,
+      layout: lineLayout,
+      paint: { 'line-color': color, 'line-width': 1 }
+    }
   ];
 }
 

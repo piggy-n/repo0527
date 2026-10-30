@@ -1,4 +1,10 @@
-import { type CategoryId, INDICATOR_CATEGORIES, type IndicatorCategory, INDICATORS, requireIndicator } from '@/shared/city-indicators/catalog';
+import {
+  type CategoryId,
+  INDICATOR_CATEGORIES,
+  type IndicatorCategory,
+  INDICATORS,
+  requireIndicator
+} from '@/shared/city-indicators/catalog';
 import { mockIndicatorValue } from '@/shared/city-indicators/mock-value';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { cached } from './cache';
@@ -77,7 +83,8 @@ const SPECS: Readonly<Record<string, ModelSpec & { readonly short: string }>> = 
 const isCategory = (id: string): id is CategoryId => INDICATOR_CATEGORIES.some(category => category.id === id);
 
 /** 推演支持的指标，按共用目录的顺序；名称、单位、精度取自目录 */
-export const SIMULATION_INDICATORS: readonly SimulationIndicator[] = INDICATORS.flatMap(({ id, name, unit, precision, categoryId }) => {
+export const SIMULATION_INDICATORS: readonly SimulationIndicator[] = INDICATORS.flatMap(indicator => {
+  const { id, name, unit, precision, categoryId } = indicator;
   const spec = SPECS[id];
   if (!spec) {
     return [];
@@ -89,7 +96,9 @@ export const SIMULATION_INDICATORS: readonly SimulationIndicator[] = INDICATORS.
 });
 
 /** 清单里写了、目录里却没有的编码（应为空，测试检查） */
-export const UNKNOWN_SPEC_IDS: readonly string[] = Object.keys(SPECS).filter(id => !SIMULATION_INDICATORS.some(item => item.id === id));
+export const UNKNOWN_SPEC_IDS: readonly string[] = Object.keys(SPECS).filter(
+  id => !SIMULATION_INDICATORS.some(item => item.id === id)
+);
 
 const BY_ID = new Map(SIMULATION_INDICATORS.map(indicator => [indicator.id, indicator]));
 
@@ -103,7 +112,9 @@ export function simulationIndicator(id: string): SimulationIndicator {
 }
 
 /** 条件库的分组：四类指标各自支持的几项，没有支持项的分类不出现 */
-export const INDICATOR_GROUPS: readonly (IndicatorCategory & { readonly indicators: readonly SimulationIndicator[] })[] =
+type IndicatorGroup = IndicatorCategory & { readonly indicators: readonly SimulationIndicator[] };
+
+export const INDICATOR_GROUPS: readonly IndicatorGroup[] =
   INDICATOR_CATEGORIES.map(({ id, name }) => ({
     id,
     name,

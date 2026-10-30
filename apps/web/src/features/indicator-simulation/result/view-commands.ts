@@ -59,7 +59,8 @@ export function interpretView(input: string, conditions: SimulationConditions): 
 
 /** 看结果时的快捷说法：看另一个市（多个市时）、换着色、看另一项指标、回看推演流程 */
 export function viewSuggestions(conditions: SimulationConditions, selection: ResultSelection): string[] {
-  const city = conditions.cityCodes.length > 1 ? conditions.cityCodes.find(code => code !== selection.cityCode) : undefined;
+  const city =
+    conditions.cityCodes.length > 1 ? conditions.cityCodes.find(code => code !== selection.cityCode) : undefined;
   const other = conditions.indicatorIds.find(id => id !== selection.indicatorId);
   return [
     ...(city === undefined ? [] : [`看${cityName(city)}`]),

@@ -53,7 +53,9 @@ const overlaps = (a: Box, b: Box) =>
 export function labelLevels(specs: readonly LabelSpec[]): LabelLevel[] {
   const levels: LabelLevel[] = specs.map(() => 'dot');
   const placed: Box[] = [];
-  const order = specs.map((spec, index) => ({ spec, index })).toSorted((a, b) => Number(b.spec.first) - Number(a.spec.first));
+  const order = specs
+    .map((spec, index) => ({ spec, index }))
+    .toSorted((a, b) => Number(b.spec.first) - Number(a.spec.first));
   for (const { spec, index } of order) {
     const level = (['full', 'name', 'dot'] as const).find(
       candidate => !placed.some(other => overlaps(boxOf(spec.point, labelWidth(spec, candidate)), other))

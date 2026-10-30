@@ -1,4 +1,12 @@
-import { computed, type ComputedRef, getCurrentScope, onScopeDispose, type Ref, shallowReadonly, shallowRef } from 'vue';
+import {
+  computed,
+  type ComputedRef,
+  getCurrentScope,
+  onScopeDispose,
+  type Ref,
+  shallowReadonly,
+  shallowRef
+} from 'vue';
 import { type SessionGuard, useSessionGuard } from '@/shared/auth/session-guard';
 import { ApiError } from '@/shared/http/errors';
 import type { StatisticsApi } from '../api';
@@ -155,7 +163,9 @@ export function useStatisticsCalculation(options: StatisticsCalculationOptions):
     }
   };
 
-  const submit = async (confirm: (entries: readonly CalculationEntry[]) => Promise<boolean>): Promise<SubmitOutcome> => {
+  const submit = async (
+    confirm: (entries: readonly CalculationEntry[]) => Promise<boolean>
+  ): Promise<SubmitOutcome> => {
     const targets = CALCULABLE.filter(item => selected.value.has(tableLevelKey(item)));
     if (disposed || submitting.value || targets.length === 0) {
       return { kind: 'canceled' };

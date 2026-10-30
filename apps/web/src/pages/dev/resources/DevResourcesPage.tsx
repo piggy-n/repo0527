@@ -398,7 +398,8 @@ export const DevResourcesPage = defineComponent({
       const known = new Set(LANDUSE_GROUPS.flatMap(group => group.classes.map(item => item.code)));
       const unknown = [...codes].filter(code => !known.has(code));
       landuseStats.value = [
-        `z${target.getZoom().toFixed(1)}：queryRenderedFeatures ${rendered.length} 个要素、${codes.size} 种编码、${renderedMs} ms；` +
+        `z${target.getZoom().toFixed(1)}：queryRenderedFeatures ${rendered.length} 个要素、` +
+          `${codes.size} 种编码、${renderedMs} ms；` +
           `querySourceFeatures ${fromSource.length} 个、${sourceMs} ms；表外编码：${unknown.join('、') || '无'}`,
         ...landuseStats.value
       ];

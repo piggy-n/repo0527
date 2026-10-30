@@ -43,7 +43,8 @@ const DONE_HINT = '没听懂这句话。看结果可以说：看南京市、按�
 // 控制计算的快捷说法：太短，不拿来做占位的示例
 const CONTROLS: ReadonlySet<string> = new Set(['暂停', '继续', '停止计算', '调整条件', '回看计算流程']);
 
-const groupName =(step: string | null) => STEP_GROUPS.find(group => group.steps.some(item => item === step))?.name ?? '条件解析';
+const groupName = (step: string | null) =>
+  STEP_GROUPS.find(group => group.steps.some(item => item === step))?.name ?? '条件解析';
 
 /**
  * 推演中的对话（按规则理解，run/commands.ts）：暂停、继续、停止；改参数时按引擎的规则保存或从受影响的步骤重算，
@@ -60,7 +61,9 @@ export function useRunConversation(
   const text = ref('');
   const lastReply = shallowRef<string | null>(null);
   const state = run.state;
-  const phase = computed(() => (state.value.status === 'done' ? 'done' : userPause.paused.value ? 'paused' : 'running'));
+  const phase = computed(() =>
+    state.value.status === 'done' ? 'done' : userPause.paused.value ? 'paused' : 'running'
+  );
   const current = () => {
     const { conditions, params } = state.value;
     if (!conditions) {
@@ -108,7 +111,11 @@ export function useRunConversation(
         say(userPause.resume() ? '继续计算。' : '计算没有暂停。');
         return 'replied';
       case 'none':
-        say(command.notes.length > 0 ? `${command.notes.join('；')}，计算没有变化。` : phase.value === 'done' ? DONE_HINT : HINT);
+        if (command.notes.length > 0) {
+          say(`${command.notes.join('；')}，计算没有变化。`);
+        } else {
+          say(phase.value === 'done' ? DONE_HINT : HINT);
+        }
         return 'replied';
       case 'change':
         break;

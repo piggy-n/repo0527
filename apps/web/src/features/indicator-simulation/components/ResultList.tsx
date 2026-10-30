@@ -80,7 +80,12 @@ export const ResultList = defineComponent({
       const rank = selected ? result.rank.value : null;
       return (
         <li key={item.id} class={[styles.item, selected && styles.selected]}>
-          <button type="button" class={styles.head} aria-expanded={selected} onClick={() => result.select({ indicatorId: item.id })}>
+          <button
+            type="button"
+            class={styles.head}
+            aria-expanded={selected}
+            onClick={() => result.select({ indicatorId: item.id })}
+          >
             <span class={styles.name}>
               <span title={item.name}>{item.short}</span>
               {item.scenario && <span class={styles.scenario}>自定义口径</span>}
@@ -111,7 +116,12 @@ export const ResultList = defineComponent({
             ),
             default: () => <ol class={styles.list}>{props.result.items.value.map(renderItem)}</ol>,
             footer: () => (
-              <ElButton class={['button-xl', styles.recompose]} type="primary" icon={Back} onClick={() => emit('recompose')}>
+              <ElButton
+                class={['button-xl', styles.recompose]}
+                type="primary"
+                icon={Back}
+                onClick={() => emit('recompose')}
+              >
                 调整条件
               </ElButton>
             )

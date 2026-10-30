@@ -56,8 +56,11 @@ export function estimate(
   const standard =
     scenarioIds.length === 0
       ? {}
-      : calculator.computeYear({ ...conditions, indicatorIds: scenarioIds }, { ...defaultParams(), targets: params.targets }, year)
-          .indicators;
+      : calculator.computeYear(
+          { ...conditions, indicatorIds: scenarioIds },
+          { ...defaultParams(), targets: params.targets },
+          year
+        ).indicators;
   const rows = indicatorIds.map((id): EstimateRow => {
     const data = indicatorResult(current, id);
     const pass: EstimatePass =

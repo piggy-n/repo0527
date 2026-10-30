@@ -53,8 +53,20 @@ export const ReportMonitorPanel = defineComponent({
     const columns = computed((): Column<ReportRow>[] => {
       const tableLabel = tableName(props.report.criteria.value.table);
       return [
-        { key: 'year', title: '年份', width: 96, align: 'center', cellRenderer: ({ rowData }: Cell) => text(`${rowData.year}年`) },
-        { key: 'region', title: '行政区划', width: 140, align: 'center', cellRenderer: ({ rowData }: Cell) => text(rowData.regionName) },
+        {
+          key: 'year',
+          title: '年份',
+          width: 96,
+          align: 'center',
+          cellRenderer: ({ rowData }: Cell) => text(`${rowData.year}年`)
+        },
+        {
+          key: 'region',
+          title: '行政区划',
+          width: 140,
+          align: 'center',
+          cellRenderer: ({ rowData }: Cell) => text(rowData.regionName)
+        },
         { key: 'table', title: '报表类型', width: 140, align: 'center', cellRenderer: () => text(tableLabel) },
         {
           key: 'name',
@@ -94,7 +106,8 @@ export const ReportMonitorPanel = defineComponent({
           width: 200,
           flexGrow: 1,
           align: 'center',
-          cellRenderer: ({ rowData }: Cell) => text(rowData.cause, rowData.status === 'failed' ? styles.cause : undefined)
+          cellRenderer: ({ rowData }: Cell) =>
+            text(rowData.cause, rowData.status === 'failed' ? styles.cause : undefined)
         }
       ];
     });
@@ -159,7 +172,12 @@ export const ReportMonitorPanel = defineComponent({
       const { report } = props;
       const current = tags.value;
       const download = (
-        <ElButton type="primary" icon={Download} disabled={props.downloadBlocked !== null} onClick={() => emit('download')}>
+        <ElButton
+          type="primary"
+          icon={Download}
+          disabled={props.downloadBlocked !== null}
+          onClick={() => emit('download')}
+        >
           去下载
         </ElButton>
       );

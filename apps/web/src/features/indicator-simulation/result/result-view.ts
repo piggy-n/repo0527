@@ -33,8 +33,9 @@ export function resolveSelection(state: EngineState, chosen: Partial<ResultSelec
     return null;
   }
   const { indicatorId, year, cityCode } = chosen;
+  const chosenValid = indicatorId !== undefined && conditions.indicatorIds.includes(indicatorId);
   return {
-    indicatorId: indicatorId !== undefined && conditions.indicatorIds.includes(indicatorId) ? indicatorId : primaryIndicator(conditions),
+    indicatorId: chosenValid ? indicatorId : primaryIndicator(conditions),
     year: year !== undefined && conditions.years.includes(year) ? year : Math.max(...conditions.years),
     mode: chosen.mode ?? 'value',
     cityCode: cityCode && conditions.cityCodes.length > 1 && conditions.cityCodes.includes(cityCode) ? cityCode : null
@@ -102,12 +103,23 @@ export interface Rank {
 }
 
 /** 选中指标的各市结果；只有一个市时是它的各区县 */
-export function rankOf(version: SimulationVersion, conditions: SimulationConditions, indicatorId: string, year: number): Rank {
+export function rankOf(
+  version: SimulationVersion,
+  conditions: SimulationConditions,
+  indicatorId: string,
+  year: number
+): Rank {
   const result = indicatorOf(version, year, indicatorId);
   const level = conditions.cityCodes.length === 1 ? 'district' : 'city';
   const rows: RankRow[] =
     level === 'district'
-      ? result.rows.map(row => ({ key: row.code, name: row.name, value: row.value, state: passState(row.value, result.target), cityCode: null }))
+      ? result.rows.map(row => ({
+          key: row.code,
+          name: row.name,
+          value: row.value,
+          state: passState(row.value, result.target),
+          cityCode: null
+        }))
       : result.cities.map(city => ({
           key: city.code,
           name: city.name.replace(/市$/, ''),
@@ -163,7 +175,13 @@ export function mapColoring(
     };
   }
   const breaks = valueBreaks(calculator, conditions, indicatorId);
-  const ranges = [`< ${breaks[0]}`, `${breaks[0]} – ${breaks[1]}`, `${breaks[1]} – ${breaks[2]}`, `${breaks[2]} – ${breaks[3]}`, `≥ ${breaks[3]}`];
+  const ranges = [
+    `< ${breaks[0]}`,
+    `${breaks[0]} – ${breaks[1]}`,
+    `${breaks[1]} – ${breaks[2]}`,
+    `${breaks[2]} – ${breaks[3]}`,
+    `≥ ${breaks[3]}`
+  ];
   return {
     fill: row => valueColor(row.value, breaks),
     legend: {

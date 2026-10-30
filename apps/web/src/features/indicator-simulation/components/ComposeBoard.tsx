@@ -262,8 +262,14 @@ export const ComposeBoard = defineComponent({
       const view = box.getBoundingClientRect();
       const rect = element.getBoundingClientRect();
       const margin = 16;
-      const dy = rect.bottom + margin > view.bottom ? rect.bottom + margin - view.bottom : Math.min(0, rect.top - margin - view.top);
-      const dx = rect.right + margin > view.right ? rect.right + margin - view.right : Math.min(0, rect.left - margin - view.left);
+      const dy =
+        rect.bottom + margin > view.bottom
+          ? rect.bottom + margin - view.bottom
+          : Math.min(0, rect.top - margin - view.top);
+      const dx =
+        rect.right + margin > view.right
+          ? rect.right + margin - view.right
+          : Math.min(0, rect.left - margin - view.left);
       if (dx !== 0 || dy !== 0) {
         box.scrollBy({ left: dx, top: dy, behavior: reducedMotion() ? 'auto' : 'smooth' });
       }
@@ -542,7 +548,10 @@ export const ComposeBoard = defineComponent({
         );
       }
       return (
-        <div class={[nodeClass(OUTPUT_NODE, 'output'), ready && styles.armed, launching && styles.launching]} data-node={OUTPUT_NODE}>
+        <div
+          class={[nodeClass(OUTPUT_NODE, 'output'), ready && styles.armed, launching && styles.launching]}
+          data-node={OUTPUT_NODE}
+        >
           <ChatAvatar class={styles.robot} speaker="assistant" size={44} />
           <b>AI计算</b>
           <span class={styles.meta}>

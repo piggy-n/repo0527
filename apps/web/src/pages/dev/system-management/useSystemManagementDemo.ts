@@ -87,7 +87,8 @@ export function useSystemManagementDemo() {
   const downloads = useDemoDownloads();
 
   // 列表：样例按演示的列表状态显示，筛选点"查询"才生效
-  const rowsFor = <T>(rows: readonly T[]) => (listScene.value === 'normal' || listScene.value === 'refreshing' ? rows : []);
+  const rowsFor = <T>(rows: readonly T[]) =>
+    listScene.value === 'normal' || listScene.value === 'refreshing' ? rows : [];
   const auditForm = reactive(emptyApplicationFilters());
   const auditApplied = ref(emptyApplicationFilters());
   const auditPager = usePager();

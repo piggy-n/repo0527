@@ -111,7 +111,9 @@ export const ReasoningPanel = defineComponent({
     const state = props.run.state;
     const timings = computed(() => (props.plan ? lineTimings(props.plan) : []));
     const groupDone = (group: StepGroupId) =>
-      (STEP_GROUPS[groupIndex(group)]?.steps ?? []).every(step => ['done', 'reused'].includes(state.value.steps[step].status));
+      (STEP_GROUPS[groupIndex(group)]?.steps ?? []).every(step =>
+        ['done', 'reused'].includes(state.value.steps[step].status)
+      );
     const doneCount = computed(() => STEP_GROUPS.filter(group => groupDone(group.id)).length);
 
     const scrollToEnd = () => {
@@ -142,7 +144,11 @@ export const ReasoningPanel = defineComponent({
 
     // 这一步开始后经过的毫秒：数据准备三路并行，取走得最远的
     const elapsedOf = (group: StepGroupId) =>
-      Math.max(...(STEP_GROUPS[groupIndex(group)]?.steps ?? []).map(step => props.run.progress(step) * state.value.durations[step]));
+      Math.max(
+        ...(STEP_GROUPS[groupIndex(group)]?.steps ?? []).map(
+          step => props.run.progress(step) * state.value.durations[step]
+        )
+      );
 
     // 一步正在打的话：所属步骤的进度换算成经过的毫秒
     const liveLines = (group: StepGroupId) => {
@@ -185,7 +191,9 @@ export const ReasoningPanel = defineComponent({
       const collapsible = frozen?.state === 'outdated' || done;
       let content = null;
       if (frozen?.state === 'outdated') {
-        content = open ? renderLines(frozen.lines.map(text => ({ text, typed: Number.POSITIVE_INFINITY, typing: false }))) : null;
+        content = open
+          ? renderLines(frozen.lines.map(text => ({ text, typed: Number.POSITIVE_INFINITY, typing: false })))
+          : null;
       } else if (done) {
         content = open ? renderLines(liveLines(entry.group)) : null;
       } else if (frozen === null) {

@@ -54,7 +54,8 @@ function findParams(text: string, indicatorIds: readonly string[]): SimulationPa
   const pop = /人口(增加|增长|上升|提高|减少|下降|降低)(\d+)%/.exec(text);
   let popChange = 0;
   if (pop && uses('popChange')) {
-    const size = Math.min(POP_CHANGE_RANGE.max, Math.round(Number(pop[2]) / POP_CHANGE_RANGE.step) * POP_CHANGE_RANGE.step);
+    const stepped = Math.round(Number(pop[2]) / POP_CHANGE_RANGE.step) * POP_CHANGE_RANGE.step;
+    const size = Math.min(POP_CHANGE_RANGE.max, stepped);
     popChange = /减少|下降|降低/.test(pop[1] ?? '') ? -size : size;
   }
   return {

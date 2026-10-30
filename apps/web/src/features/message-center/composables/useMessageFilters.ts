@@ -16,7 +16,8 @@ export function useMessageFilters(messages: MaybeRefOrGetter<readonly Message[]>
   const filtered = computed(() =>
     toValue(messages).filter(
       message =>
-        (readFilter.value === 'all' || !message.read) && (category.value === 'all' || message.category === category.value)
+        (readFilter.value === 'all' || !message.read) &&
+        (category.value === 'all' || message.category === category.value)
     )
   );
 

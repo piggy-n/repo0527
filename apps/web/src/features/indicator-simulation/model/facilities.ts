@@ -34,7 +34,9 @@ const KM_PER_LAT = 110.57;
 export function createFacilityLayout(calculator: Calculator): FacilityLayout {
   // 同一种设施按它的覆盖率指标估算数量（公园绿地按 B-65），标准口径
   const coverageOf = new Map(
-    SIMULATION_INDICATORS.flatMap(indicator => (indicator.model === 'coverage' ? [[indicator.facility, indicator.id] as const] : []))
+    SIMULATION_INDICATORS.flatMap(indicator =>
+      indicator.model === 'coverage' ? [[indicator.facility, indicator.id] as const] : []
+    )
   );
   const effectiveArea = (district: District) =>
     Math.min(district.area * (district.urban ? 0.6 : 0.12), calculator.districtPopulation(district) * 0.9);
@@ -72,9 +74,15 @@ export function createFacilityLayout(calculator: Calculator): FacilityLayout {
             const u = Math.max(1e-6, stableRandom(`${key}:${attempt}:u`));
             const v = stableRandom(`${key}:${attempt}:v`);
             const r = Math.sqrt(-2 * Math.log(u)) * sigma;
-            point = [district.center[0] + (r * Math.cos(2 * Math.PI * v)) / KM_PER_LNG, district.center[1] + (r * Math.sin(2 * Math.PI * v)) / KM_PER_LAT];
+            point = [
+              district.center[0] + (r * Math.cos(2 * Math.PI * v)) / KM_PER_LNG,
+              district.center[1] + (r * Math.sin(2 * Math.PI * v)) / KM_PER_LAT
+            ];
           } else {
-            point = [west + stableRandom(`${key}:${attempt}:x`) * (east - west), south + stableRandom(`${key}:${attempt}:y`) * (north - south)];
+            point = [
+              west + stableRandom(`${key}:${attempt}:x`) * (east - west),
+              south + stableRandom(`${key}:${attempt}:y`) * (north - south)
+            ];
           }
           if (booleanPointInPolygon([...point], feature)) {
             points.push({ id: key, coordinates: point, districtCode: district.code });
@@ -90,7 +98,9 @@ export function createFacilityLayout(calculator: Calculator): FacilityLayout {
   return {
     total(conditions, indicatorId, year) {
       const { facility } = simulationIndicator(indicatorId);
-      return calculator.atlas.inCities(conditions.cityCodes).reduce((total, district) => total + count(facility, year, district), 0);
+      return calculator.atlas
+        .inCities(conditions.cityCodes)
+        .reduce((total, district) => total + count(facility, year, district), 0);
     },
     points(conditions, indicatorId, year) {
       const { facility } = simulationIndicator(indicatorId);

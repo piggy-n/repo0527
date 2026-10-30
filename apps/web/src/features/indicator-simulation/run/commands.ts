@@ -66,7 +66,8 @@ function mentionedParams(text: string): Partial<SimulationParams> {
   }
   const pop = /人口(增加|增长|上升|提高|减少|下降|降低)(\d+)%/.exec(text);
   if (pop) {
-    const size = Math.min(POP_CHANGE_RANGE.max, Math.round(Number(pop[2]) / POP_CHANGE_RANGE.step) * POP_CHANGE_RANGE.step);
+    const stepped = Math.round(Number(pop[2]) / POP_CHANGE_RANGE.step) * POP_CHANGE_RANGE.step;
+    const size = Math.min(POP_CHANGE_RANGE.max, stepped);
     patch.popChange = /减少|下降|降低/.test(pop[1] ?? '') ? -size : size;
   } else if (/人口(不变|恢复)/.test(text)) {
     patch.popChange = 0;
@@ -108,7 +109,9 @@ export function interpretCommand(input: string, current: Composition): RunComman
     SIMULATION_YEARS.includes(year)
   );
   const cityCodes =
-    cities.length > 0 ? merge(conditions.cityCodes, cities, rest, JIANGSU_CITIES.map(city => city.code)) : conditions.cityCodes;
+    cities.length > 0
+      ? merge(conditions.cityCodes, cities, rest, JIANGSU_CITIES.map(city => city.code))
+      : conditions.cityCodes;
   const indicatorIds =
     indicators.length > 0 && verb
       ? REMOVE.test(rest)
@@ -159,13 +162,20 @@ export function interpretCommand(input: string, current: Composition): RunComman
       continue;
     }
     const used = indicatorIds.filter(id => paramApplies(key, id));
+    const kindText = isStandard(key, next) ? '（标准口径）' : '（自定义口径）';
     said.push(
-      `${PARAM_LABELS[key]}改为「${describeParam(key, next, nextConditions)}」${isStandard(key, next) ? '（标准口径）' : '（自定义口径）'}，影响${used.map(shortOf).join('、')}`
+      `${PARAM_LABELS[key]}改为「${describeParam(key, next, nextConditions)}」${kindText}，影响${used.map(shortOf).join('、')}`
     );
   }
 
   if (said.length > 0) {
-    return { kind: 'change', composition: { conditions: nextConditions, params: next }, conditionsChanged, said, notes };
+    return {
+      kind: 'change',
+      composition: { conditions: nextConditions, params: next },
+      conditionsChanged,
+      said,
+      notes
+    };
   }
   if (notes.length === 0 && /暂停|停一下|等一下|先停/.test(text)) {
     return { kind: 'pause' };
@@ -177,7 +187,10 @@ export function interpretCommand(input: string, current: Composition): RunComman
 }
 
 /** 对话栏上方的快捷说法：按当前的条件、参数和推演状态给几条 */
-export function commandSuggestions({ conditions, params }: Composition, phase: 'running' | 'paused' | 'done'): string[] {
+export function commandSuggestions(
+  { conditions, params }: Composition,
+  phase: 'running' | 'paused' | 'done'
+): string[] {
   const { indicatorIds, cityCodes } = conditions;
   const uses = (key: ParamKey) => indicatorIds.some(id => paramApplies(key, id));
   const list: string[] = [];

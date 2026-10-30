@@ -184,7 +184,9 @@ export function hasProcessing(rows: readonly OverviewRow[]): boolean {
 /** 已有结果的组合（成功、失败、处理中）；初次进入时当前组合没有结果，就落到第一个有结果的 */
 export function firstWithResult(rows: readonly OverviewRow[]): TableLevel | null {
   for (const row of rows) {
-    const cell = row.cells.find(item => item.kind === 'completed' || item.kind === 'processing' || item.kind === 'failed');
+    const cell = row.cells.find(
+      item => item.kind === 'completed' || item.kind === 'processing' || item.kind === 'failed'
+    );
     if (cell !== undefined) {
       return { table: row.table, level: cell.level };
     }

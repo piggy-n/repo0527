@@ -120,7 +120,13 @@ function serviceAreas(indicator: SimulationIndicator, params: SimulationParams):
     const old = indicator.ruleChange && params.rule === 'old';
     const [center, station] = stations;
     return [
-      { facility: center, reach: `步行 ${reach.minutes} 分钟`, meters: walkMeters(reach.minutes), scenario: false, union: false },
+      {
+        facility: center,
+        reach: `步行 ${reach.minutes} 分钟`,
+        meters: walkMeters(reach.minutes),
+        scenario: false,
+        union: false
+      },
       {
         facility: station,
         reach: old ? '步行 5 分钟（旧规程）' : `步行 ${reach.minutes} 分钟`,
@@ -139,17 +145,34 @@ function serviceAreas(indicator: SimulationIndicator, params: SimulationParams):
           { facility: '路网服务区', reach: `步行 ${reach.minutes} 分钟`, meters: distance, scenario: false, union: true }
         ];
       }
-      return [{ facility: indicator.facility, reach: `步行 ${reach.minutes} 分钟`, meters: distance, scenario: false, union: false }];
+      return [
+        {
+          facility: indicator.facility,
+          reach: `步行 ${reach.minutes} 分钟`,
+          meters: distance,
+          scenario: false,
+          union: false
+        }
+      ];
     }
     case 'drive':
-      return [{ facility: indicator.facility, reach: `车行 ${reach.minutes} 分钟`, meters: reach.meters, scenario: false, union: false }];
+      return [
+        {
+          facility: indicator.facility,
+          reach: `车行 ${reach.minutes} 分钟`,
+          meters: reach.meters,
+          scenario: false,
+          union: false
+        }
+      ];
     case 'radius':
       break;
   }
   return [{ facility: indicator.facility, reach: '缓冲区', meters: reach.meters, scenario: false, union: false }];
 }
 
-const recognitionText = (params: SimulationParams): string => (params.recognition === 'intersect' ? '相交即算' : '覆盖 ≥ 50%');
+const recognitionText = (params: SimulationParams): string =>
+  params.recognition === 'intersect' ? '相交即算' : '覆盖 ≥ 50%';
 
 interface Draft {
   readonly key: string;
@@ -222,11 +245,8 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
   );
   if (changed.length > 0) {
     const values = changed.map(key => `${PARAM_LABELS[key]}按「${describeParam(key, params, conditions)}」`).join('，');
-    say(
-      'parse',
-      rich`${values}，当前使用${em('自定义口径')}计算；${scenarioIds.map(id => simulationIndicator(id).short).join('、')}另算一支标准口径作对照。`,
-      'parse'
-    );
+    const scenarioNames = scenarioIds.map(id => simulationIndicator(id).short).join('、');
+    say('parse', rich`${values}，当前使用${em('自定义口径')}计算；${scenarioNames}另算一支标准口径作对照。`, 'parse');
   } else {
     say('parse', rich`参数都按${em('标准口径')}计算。`, 'parse');
   }
@@ -241,12 +261,22 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
   });
   const popChanged = params.popChange !== 0 && perCapita.length > 0;
   node({ key: 'pop', step: 'pop', label: '人口数据', title: '七普常住人口', detail: `${formatNumber(census, 1)} 万人` });
+  const moreCities = cityCodes.length > 3 ? ` 等 ${cityCodes.length} 市` : '';
+  const popAdjusted = popChanged ? `，人均类按 ${signedPercent(params.popChange)} 调整` : '';
   say(
     'pop',
-    rich`读取七普常住人口：${shownCities.join('、')}${cityCodes.length > 3 ? ` 等 ${cityCodes.length} 市` : ''}，合计 ${em(`${formatNumber(census, 1)} 万人`)}${popChanged ? `，人均类按 ${signedPercent(params.popChange)} 调整` : ''}。`,
+    rich`读取七普常住人口：${shownCities.join('、')}${moreCities}，合计 ${em(`${formatNumber(census, 1)} 万人`)}${popAdjusted}。`,
     'pop'
   );
-  const facilityTypes = [...new Set(coverage.flatMap(indicator => serviceAreas(indicator, params).filter(item => !item.union).map(item => item.facility)))];
+  const facilityTypes = [
+    ...new Set(
+      coverage.flatMap(indicator =>
+        serviceAreas(indicator, params)
+          .filter(item => !item.union)
+          .map(item => item.facility)
+      )
+    )
+  ];
   node({
     key: 'poi',
     step: 'poi',
@@ -254,19 +284,23 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     title: coverage.length > 0 ? `${facilityTypes.length} 类设施点` : '不需要设施点',
     detail: coverage.length > 0 ? `${formatNumber(facilityTotal)} 处` : '人均类只用用地'
   });
+  const moreFacilities = facilityTypes.length > 4 ? ` 等 ${facilityTypes.length} 类` : '';
   say(
     'poi',
     coverage.length > 0
-      ? rich`载入设施点：${facilityTypes.slice(0, 4).join('、')}${facilityTypes.length > 4 ? ` 等 ${facilityTypes.length} 类` : ''}，共 ${em(`${formatNumber(facilityTotal)} 处`)}。`
+      ? rich`载入设施点：${facilityTypes.slice(0, 4).join('、')}${moreFacilities}，共 ${em(`${formatNumber(facilityTotal)} 处`)}。`
       : rich`所选指标不需要设施点，这一路跳过。`,
     'poi'
   );
-  node({ key: 'land', step: 'land', label: '用地数据', title: '住宅用地与专项用地', detail: `${formatNumber(residential)} 平方千米` });
-  say(
-    'land',
-    rich`载入用地：住宅用地 ${em(`${formatNumber(residential)} 平方千米`)}${perCapita.length > 0 ? `，以及${perCapita.map(indicator => indicator.facility).join('、')}` : ''}。`,
-    'land'
-  );
+  node({
+    key: 'land',
+    step: 'land',
+    label: '用地数据',
+    title: '住宅用地与专项用地',
+    detail: `${formatNumber(residential)} 平方千米`
+  });
+  const extraLand = perCapita.length > 0 ? `，以及${perCapita.map(indicator => indicator.facility).join('、')}` : '';
+  say('land', rich`载入用地：住宅用地 ${em(`${formatNumber(residential)} 平方千米`)}${extraLand}。`, 'land');
   for (const key of ['pop', 'poi', 'land']) {
     link('parse', key);
     link(key, 'qc');
@@ -310,7 +344,13 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
       saKeys.push(key);
       // 用地面积不随人口变化：标准口径的人均值 × 七普人口（万人）= 公顷
       const land = standardOf(id).value * census;
-      node({ key, step: 'spatial', label: short, title: `${indicator.facility}汇总`, detail: `${formatNumber(land)} 公顷` });
+      node({
+        key,
+        step: 'spatial',
+        label: short,
+        title: `${indicator.facility}汇总`,
+        detail: `${formatNumber(land)} 公顷`
+      });
       say('spatial', rich`${short}：${indicator.facility}汇总到区县，共 ${em(`${formatNumber(land)} 公顷`)}。`, key);
     }
 
@@ -325,10 +365,11 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
           : `叠加住宅用地 · ${recognitionText(params)}`;
     node({ key: calcKey, step: 'compute', label: short, title: value, detail: how, scenario });
     const where = `${years.length > 1 ? `${year} 年` : ''}${scope}`;
+    const popNote = params.popChange !== 0 ? `（${signedPercent(params.popChange)}）` : '';
     say(
       'compute',
       indicator.model === 'perCapita'
-        ? rich`${short}：${indicator.facility}面积除以七普人口${params.popChange !== 0 ? `（${signedPercent(params.popChange)}）` : ''}，${where}为 ${em(value)}。`
+        ? rich`${short}：${indicator.facility}面积除以七普人口${popNote}，${where}为 ${em(value)}。`
         : indicator.base === 'area'
           ? rich`${short}：服务范围叠加城区面积，相交即算，${where} ${em(value)}。`
           : rich`${short}：服务范围叠加住宅用地，${recognitionText(params)}的图斑算覆盖，${where} ${em(value)}。`,
@@ -347,9 +388,10 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
         kind: 'standard'
       });
       const delta = data.value - base.value;
+      const deltaText = em(formatDelta(Math.abs(delta), indicator).replace(/^\+/, ''));
       say(
         'compute',
-        rich`对照标准口径为 ${em(formatValue(base.value, indicator))}，自定义口径${delta >= 0 ? '高' : '低'}出 ${em(formatDelta(Math.abs(delta), indicator).replace(/^\+/, ''))}。`,
+        rich`对照标准口径为 ${em(formatValue(base.value, indicator))}，自定义口径${delta >= 0 ? '高' : '低'}出 ${deltaText}。`,
         stdKey
       );
     }
@@ -362,23 +404,28 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
 
     const evalKey = `eval:${id}`;
     const near = data.value >= data.target * 0.95;
-    const verdict = single ? (data.value >= data.target ? '达标' : near ? '接近达标' : '未达标') : `达标 ${data.passCount}/${data.total} 市`;
+    const singleVerdict = data.value >= data.target ? '达标' : near ? '接近达标' : '未达标';
+    const verdict = single ? singleVerdict : `达标 ${data.passCount}/${data.total} 市`;
     const target = `目标 ≥ ${formatValue(data.target, indicator)}`;
     node({
       key: evalKey,
       step: 'evaluate',
       label: short,
       title: verdict,
-      detail: scenario ? `${target} · 较标准 ${formatDelta(data.value - base.value, indicator).replace(' 个百分点', ' 点')}` : target,
+      detail: scenario
+        ? `${target} · 较标准 ${formatDelta(data.value - base.value, indicator).replace(' 个百分点', ' 点')}`
+        : target,
       fail: single ? data.value < data.target : data.passCount * 2 < data.total
     });
+    const gapText = em(formatDelta(data.target - data.value, indicator).replace(/^\+/, ''));
+    const lowestText = `${data.lowest.name}（${formatValue(data.lowest.value, indicator)}）`;
     say(
       'evaluate',
       single
         ? data.value >= data.target
           ? rich`${short}：${target}，${em('达标')}。`
-          : rich`${short}：${target}，差 ${em(formatDelta(data.target - data.value, indicator).replace(/^\+/, ''))}，${near ? '接近达标' : '未达标'}。`
-        : rich`${short}：${target}，达标 ${em(`${data.passCount}/${data.total}`)} 市，最低是${data.lowest.name}（${formatValue(data.lowest.value, indicator)}）。`,
+          : rich`${short}：${target}，差 ${gapText}，${near ? '接近达标' : '未达标'}。`
+        : rich`${short}：${target}，达标 ${em(`${data.passCount}/${data.total}`)} 市，最低是${lowestText}。`,
       evalKey
     );
     for (const calc of calcKeys) {
@@ -395,19 +442,29 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
   };
   const ranked = indicatorIds.toSorted((a, b) => ratio(b) - ratio(a));
   const reached = indicatorIds.filter(id => ratio(id) >= 1).length;
-  node({ key: 'report', step: 'report', label: '结论生成', title: `${indicatorIds.length} 项指标`, detail: `${reached} 项达到目标` });
+  node({
+    key: 'report',
+    step: 'report',
+    label: '结论生成',
+    title: `${indicatorIds.length} 项指标`,
+    detail: `${reached} 项达到目标`
+  });
   const values = ranked
     .slice(0, 4)
-    .map(id => `${simulationIndicator(id).short} ${formatValue(indicatorResult(current, id).value, simulationIndicator(id))}`)
+    .map(id => {
+      const indicator = simulationIndicator(id);
+      return `${indicator.short} ${formatValue(indicatorResult(current, id).value, indicator)}`;
+    })
     .join('，');
   say('report', rich`汇总 ${em(`${indicatorIds.length} 支`)}：${values}${indicatorIds.length > 4 ? ' 等' : ''}。`, 'report');
   const best = ranked[0] ?? '';
   const worst = ranked.at(-1) ?? '';
   if (indicatorIds.length > 1) {
     const lowest = indicatorResult(current, worst).lowest;
+    const lowestNote = single ? '' : `，${lowest.name}最需要补齐`;
     say(
       'report',
-      rich`相对目标最好的是${simulationIndicator(best).short}，差距最大的是${em(simulationIndicator(worst).short)}${single ? '' : `，${lowest.name}最需要补齐`}。`,
+      rich`相对目标最好的是${simulationIndicator(best).short}，差距最大的是${em(simulationIndicator(worst).short)}${lowestNote}。`,
       'report'
     );
   }

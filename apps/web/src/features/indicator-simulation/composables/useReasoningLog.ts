@@ -38,8 +38,11 @@ export interface ReasoningLog {
 
 const groupOf = (id: StepGroupId) => STEP_GROUPS.find(group => group.id === id) ?? STEP_GROUPS[0];
 const started = (state: EngineState, group: StepGroupId) =>
-  (groupOf(group)?.steps ?? []).some(step => state.steps[step].status === 'running' || state.steps[step].status === 'done');
-const redo = (state: EngineState, group: StepGroupId) => (groupOf(group)?.steps ?? []).some(step => state.steps[step].redo);
+  (groupOf(group)?.steps ?? []).some(
+    step => state.steps[step].status === 'running' || state.steps[step].status === 'done'
+  );
+const redo = (state: EngineState, group: StepGroupId) =>
+  (groupOf(group)?.steps ?? []).some(step => state.steps[step].redo);
 const running = (state: EngineState, group: StepGroupId) =>
   (groupOf(group)?.steps ?? []).some(step => state.steps[step].status === 'running');
 
@@ -58,7 +61,9 @@ export function useReasoningLog(run: SimulationRun, now: () => number = () => pe
   const freeze = (before: EngineState, after: EngineState) => {
     const calculator = run.calculator.value;
     const old =
-      calculator && before.conditions ? flowPlan({ calculator, conditions: before.conditions, params: before.params }) : null;
+      calculator && before.conditions
+        ? flowPlan({ calculator, conditions: before.conditions, params: before.params })
+        : null;
     entries.value = entries.value.map(entry => {
       if (entry.kind !== 'step' || entry.frozen !== null || !redo(after, entry.group)) {
         return entry;
@@ -68,7 +73,11 @@ export function useReasoningLog(run: SimulationRun, now: () => number = () => pe
       const stopped = running(before, entry.group);
       return {
         ...entry,
-        frozen: { state: stopped ? 'stopped' : 'outdated', lines: stopped ? [] : lines, summary: stopped ? null : (old?.summaries[entry.group] ?? null) }
+        frozen: {
+          state: stopped ? 'stopped' : 'outdated',
+          lines: stopped ? [] : lines,
+          summary: stopped ? null : (old?.summaries[entry.group] ?? null)
+        }
       };
     });
   };
@@ -79,7 +88,9 @@ export function useReasoningLog(run: SimulationRun, now: () => number = () => pe
       if (before && state.adjustment !== null && state.adjustment !== before.adjustment) {
         freeze(before, state);
       }
-      const live = new Set(entries.value.flatMap(entry => (entry.kind === 'step' && entry.frozen === null ? [entry.group] : [])));
+      const live = new Set(
+        entries.value.flatMap(entry => (entry.kind === 'step' && entry.frozen === null ? [entry.group] : []))
+      );
       for (const group of STEP_GROUPS) {
         if (!live.has(group.id) && started(state, group.id)) {
           push({ kind: 'step', id: nextId++, group: group.id, rerun: redo(state, group.id), frozen: null });

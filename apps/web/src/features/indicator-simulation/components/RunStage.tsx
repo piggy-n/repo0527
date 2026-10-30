@@ -73,7 +73,9 @@ export const RunStage = defineComponent({
     const done = computed(() => state.value.status === 'done');
     const showingResult = computed(() => done.value && props.view === 'result');
     const current = computed(() => {
-      const running = STEP_GROUPS.filter(group => group.steps.some(step => state.value.steps[step].status === 'running'));
+      const running = STEP_GROUPS.filter(group =>
+        group.steps.some(step => state.value.steps[step].status === 'running')
+      );
       return running.at(-1)?.name ?? null;
     });
 
@@ -175,7 +177,13 @@ export const RunStage = defineComponent({
             人工干预
           </ElButton>
           {running ? (
-            <ElPopconfirm key="stop" title="停止计算？配置的条件会保留" confirmButtonText="停止" cancelButtonText="继续" onConfirm={stop}>
+            <ElPopconfirm
+              key="stop"
+              title="停止计算？配置的条件会保留"
+              confirmButtonText="停止"
+              cancelButtonText="继续"
+              onConfirm={stop}
+            >
               {{
                 reference: () => (
                   <ElButton type="danger" plain icon={CircleClose}>
@@ -279,7 +287,12 @@ export const RunStage = defineComponent({
           </MxSplitLayout>
           {intervening.value && (
             <div class={styles.intervene}>
-              <InterventionPanel run={run} model={props.model} onApplied={onApplied} onClose={() => (intervening.value = false)} />
+              <InterventionPanel
+                run={run}
+                model={props.model}
+                onApplied={onApplied}
+                onClose={() => (intervening.value = false)}
+              />
             </div>
           )}
         </div>

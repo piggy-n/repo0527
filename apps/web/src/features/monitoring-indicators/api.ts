@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { http } from '@/shared/http/client';
 import { calculationResultValue, calculationRowStatus, type CalculationProgress } from './calculation';
-import { dedupeIndicators, type IndicatorCategory, type IndicatorStatus, type IndicatorTreeNode } from './indicator-tree';
+import {
+  dedupeIndicators,
+  type IndicatorCategory,
+  type IndicatorStatus,
+  type IndicatorTreeNode
+} from './indicator-tree';
 import { type IndicatorResult, type ResultGeometry, resultLayersOf } from './result-layers';
 
 // 返回结构按 2026-10-28 的实测写，见 docs/migration.md 的"城市国土空间监测指标：接口实测"
@@ -24,7 +29,11 @@ export interface CalculationParams {
 
 /** 指标页用到的接口；拥有者通过它请求，组件样例换成固定数据的实现 */
 export interface IndicatorApi {
-  fetchTree(source: IndicatorTreeSource, params: IndicatorTreeParams, signal?: AbortSignal): Promise<IndicatorTreeNode[]>;
+  fetchTree(
+    source: IndicatorTreeSource,
+    params: IndicatorTreeParams,
+    signal?: AbortSignal
+  ): Promise<IndicatorTreeNode[]>;
   /** 这些指标是否已有计算结果（重新计算前要确认） */
   verifyCalculation(params: CalculationParams): Promise<boolean>;
   startCalculation(params: CalculationParams): Promise<void>;
@@ -117,7 +126,11 @@ const TREE_PATHS: Readonly<Record<IndicatorTreeSource, string>> = {
 };
 
 /** 指标树；失败时由全局提示给出原因（同旧页面），还没有可显示的树时树里另有重新加载 */
-function fetchTree(source: IndicatorTreeSource, { category, regionCode, year }: IndicatorTreeParams, signal?: AbortSignal) {
+function fetchTree(
+  source: IndicatorTreeSource,
+  { category, regionCode, year }: IndicatorTreeParams,
+  signal?: AbortSignal
+) {
   return http.get(TREE_PATHS[source], { query: { type: category, regionCode, year }, schema: treeSchema, signal });
 }
 
@@ -173,7 +186,9 @@ const resultSchema = z
   .object({
     id: z.string(),
     result: z.string(),
-    layers: z.array(z.object({ gdbName: z.string(), chineseName: z.string(), type: z.enum(['POINT', 'LINE', 'POLYGON']) }))
+    layers: z.array(
+      z.object({ gdbName: z.string(), chineseName: z.string(), type: z.enum(['POINT', 'LINE', 'POLYGON']) })
+    )
   })
   .transform(
     (data): IndicatorResult => ({

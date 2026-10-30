@@ -13,7 +13,10 @@ export interface AuditForm {
 export type ReviewState = 'closed' | 'loading' | 'error' | 'missing' | 'ready';
 
 /** 一次审核的结果；null 表示没有发出，或页面已销毁、换了会话，界面不提示 */
-export type AuditResult = { kind: 'success'; id: string; approved: boolean } | { kind: 'error'; message: string } | null;
+export type AuditResult =
+  | { kind: 'success'; id: string; approved: boolean }
+  | { kind: 'error'; message: string }
+  | null;
 
 const emptyForm = (): AuditForm => ({ approved: true, reason: '' });
 

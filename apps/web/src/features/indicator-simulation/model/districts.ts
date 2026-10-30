@@ -38,7 +38,8 @@ const toLngLat = ([lng = 0, lat = 0]: Position): LngLat => [lng, lat];
 const ringArea = (ring: readonly Position[]) => geodesicArea(ring.map(toLngLat)) / 1e6;
 
 function summarize({ region, boundary }: DistrictShape): District {
-  const polygons = boundary.geometry.type === 'Polygon' ? [boundary.geometry.coordinates] : boundary.geometry.coordinates;
+  const polygons =
+    boundary.geometry.type === 'Polygon' ? [boundary.geometry.coordinates] : boundary.geometry.coordinates;
   let area = 0;
   let largest: { area: number; ring: readonly Position[] } = { area: -1, ring: [] };
   for (const [outer = [], ...holes] of polygons) {

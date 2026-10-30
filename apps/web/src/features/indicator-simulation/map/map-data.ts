@@ -149,7 +149,14 @@ export function mapData(
         members.reduce((sum, district) => sum + district.center[1], 0) / Math.max(1, members.length)
       ];
       const name = JIANGSU_CITIES.find(item => item.code === city.code)?.name ?? city.name;
-      return { code: city.code, name, center, bounds: districtBounds(members), value: city.value, state: passState(city.value, result.target) };
+      return {
+        code: city.code,
+        name,
+        center,
+        bounds: districtBounds(members),
+        value: city.value,
+        state: passState(city.value, result.target)
+      };
     }),
     sample: urban[0] ?? firstCity[0] ?? null
   };

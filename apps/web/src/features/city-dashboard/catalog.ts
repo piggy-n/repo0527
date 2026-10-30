@@ -1,4 +1,9 @@
-import { type Indicator, INDICATOR_CATEGORIES, type IndicatorCategory, INDICATORS } from '@/shared/city-indicators/catalog';
+import {
+  type Indicator,
+  INDICATOR_CATEGORIES,
+  type IndicatorCategory,
+  INDICATORS
+} from '@/shared/city-indicators/catalog';
 import type { City } from './model';
 
 /** 页面开放年份保持旧配置，独立于模拟记录的十年范围 */

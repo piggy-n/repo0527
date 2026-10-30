@@ -7,7 +7,11 @@ import { type LabelLevel, labelLevels } from '../map/label-layout';
 import { DISTRICTS_GROUP } from '../map/map-frame';
 import styles from './SimulationMapOverlay.module.scss';
 
-const LEVEL_CLASS: Readonly<Record<LabelLevel, string | undefined>> = { full: styles.full, name: styles.short, dot: styles.dot };
+const LEVEL_CLASS: Readonly<Record<LabelLevel, string | undefined>> = {
+  full: styles.full,
+  name: styles.short,
+  dot: styles.dot
+};
 
 /**
  * 叠在结果地图上的 DOM：各市的值与达标（互相压住时省掉数值或只留圆点，点了放大到这个市），
@@ -47,14 +51,22 @@ export const SimulationMapOverlay = defineComponent({
       }
       const placed = props.simulationMap.labels.value.flatMap(label => {
         const point = view.project(label.lngLat);
-        return point ? [{ label, point, first: label.cityCode === props.hoverCity || label.cityCode === props.focusCity }] : [];
+        const first = label.cityCode === props.hoverCity || label.cityCode === props.focusCity;
+        return point ? [{ label, point, first }] : [];
       });
-      const levels = labelLevels(placed.map(({ label, point, first }) => ({ point, name: label.name, value: label.value, first })));
+      const levels = labelLevels(
+        placed.map(({ label, point, first }) => ({ point, name: label.name, value: label.value, first }))
+      );
       // 只有一个市时范围就是它，标注不能点
       const zoomable = props.simulationMap.labels.value.length > 1;
       return placed.map(({ label, point }, index) => {
         const attrs = {
-          class: [styles.label, LEVEL_CLASS[levels[index] ?? 'dot'], !zoomable && styles.still, label.cityCode === props.hoverCity && styles.lit],
+          class: [
+            styles.label,
+            LEVEL_CLASS[levels[index] ?? 'dot'],
+            !zoomable && styles.still,
+            label.cityCode === props.hoverCity && styles.lit
+          ],
           style: { left: `${point.x}px`, top: `${point.y}px` },
           title: `${label.name} ${label.value}`
         };

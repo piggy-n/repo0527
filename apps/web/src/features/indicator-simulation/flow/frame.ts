@@ -108,7 +108,10 @@ export function flowFrame(
       return;
     }
     const span = spans.get(line.node);
-    spans.set(line.node, span ? { start: Math.min(span.start, timing.start), end: Math.max(span.end, timing.end) } : timing);
+    spans.set(
+      line.node,
+      span ? { start: Math.min(span.start, timing.start), end: Math.max(span.end, timing.end) } : timing
+    );
   });
   const perStep = new Map<StepId, number>();
   for (const node of plan.nodes) {
@@ -151,7 +154,9 @@ export function flowFrame(
     nodes.set(node.key, frame);
   }
 
-  const running = STEPS.filter(({ id }) => state.steps[id].status === 'running').map(({ id }) => COLUMN_OF_STEP.get(id) ?? 0);
+  const running = STEPS.filter(({ id }) => state.steps[id].status === 'running').map(
+    ({ id }) => COLUMN_OF_STEP.get(id) ?? 0
+  );
   const column = state.status === 'planning' ? 0 : running.length > 0 ? Math.max(...running) : null;
   return { nodes, column };
 }

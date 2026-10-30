@@ -17,5 +17,8 @@ export function mockIndicatorValue(cityCode: string, indicator: Indicator, year:
     return parts.reduce((sum, id) => sum + createProfileValue(cityCode, requireIndicator(id), year), 0);
   }
   const value = createProfileValue(cityCode, indicator, year);
-  return indicator.id === 'A09-2' ? Math.max(value, createProfileValue(cityCode, requireIndicator('A-30'), year)) : value;
+  if (indicator.id === 'A09-2') {
+    return Math.max(value, createProfileValue(cityCode, requireIndicator('A-30'), year));
+  }
+  return value;
 }

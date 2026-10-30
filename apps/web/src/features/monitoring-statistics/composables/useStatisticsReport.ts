@@ -211,7 +211,9 @@ export function useStatisticsReport({ api, now = Date.now }: StatisticsReportOpt
       return;
     }
     const { tables, levels } = data.status;
-    if (options.value.year !== data.criteria.year || options.value.tables !== tables || options.value.levels !== levels) {
+    const changed =
+      options.value.year !== data.criteria.year || options.value.tables !== tables || options.value.levels !== levels;
+    if (changed) {
       options.value = { year: data.criteria.year, tables, levels };
     }
     const tracking = trackingOf(trackings.value, data.criteria);
@@ -293,7 +295,8 @@ export function useStatisticsReport({ api, now = Date.now }: StatisticsReportOpt
     },
     setTable: table => {
       const supported = tableOf(table).levels;
-      const level = supported.includes(criteria.value.level) ? criteria.value.level : (supported[0] ?? criteria.value.level);
+      const supportedLevel = supported.includes(criteria.value.level);
+      const level = supportedLevel ? criteria.value.level : (supported[0] ?? criteria.value.level);
       userCriteria(criteriaOf(criteria.value.year, { table, level }, baseYears.value));
     },
     setBaseYear: baseYear => {

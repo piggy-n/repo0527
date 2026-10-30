@@ -113,7 +113,8 @@ export function createCalculator(atlas: DistrictAtlas): Calculator {
     (cityCode: string) => {
       const list = atlas.inCities([cityCode]);
       const weights = list.map(
-        district => district.area ** 0.35 * (district.urban ? 2.2 : 1) * (0.7 + 0.6 * stableRandom(`${district.code}:pop`))
+        district =>
+          district.area ** 0.35 * (district.urban ? 2.2 : 1) * (0.7 + 0.6 * stableRandom(`${district.code}:pop`))
       );
       const total = weights.reduce((sum, weight) => sum + weight, 0);
       return new Map(list.map((district, index) => [district.code, (weights[index] ?? 0) / total]));
@@ -194,7 +195,13 @@ export function createCalculator(atlas: DistrictAtlas): Calculator {
       };
       const cities = cityCodes.map((code): CityResult => {
         const value = aggregate(rows.filter(row => row.cityCode === code));
-        return { code, name: findRegion(code)?.name ?? code, value, pass: value >= target, near: value < target && value >= target * NEAR };
+        return {
+          code,
+          name: findRegion(code)?.name ?? code,
+          value,
+          pass: value >= target,
+          near: value < target && value >= target * NEAR
+        };
       });
       const [first] = cities;
       if (!first) {
@@ -210,7 +217,11 @@ export function createCalculator(atlas: DistrictAtlas): Calculator {
         target
       };
     }
-    return { year, indicators, population: list.reduce((sum, district) => sum + districtPopulation(district), 0) * people };
+    return {
+      year,
+      indicators,
+      population: list.reduce((sum, district) => sum + districtPopulation(district), 0) * people
+    };
   };
 
   return {
@@ -219,6 +230,7 @@ export function createCalculator(atlas: DistrictAtlas): Calculator {
     residentialLand,
     baseValue,
     computeYear,
-    compute: (conditions, params) => Object.fromEntries(conditions.years.map(year => [year, computeYear(conditions, params, year)]))
+    compute: (conditions, params) =>
+      Object.fromEntries(conditions.years.map(year => [year, computeYear(conditions, params, year)]))
   };
 }

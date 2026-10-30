@@ -75,7 +75,10 @@ export function dedupeIndicators(nodes: readonly IndicatorTreeNode[]): Indicator
 }
 
 /** 按名称搜索：保留名称包含关键字的指标和它们的分类；关键字为空时原样返回 */
-export function filterIndicatorTree(nodes: readonly IndicatorTreeNode[], keyword: string): readonly IndicatorTreeNode[] {
+export function filterIndicatorTree(
+  nodes: readonly IndicatorTreeNode[],
+  keyword: string
+): readonly IndicatorTreeNode[] {
   const text = keyword.trim();
   if (text === '') {
     return nodes;

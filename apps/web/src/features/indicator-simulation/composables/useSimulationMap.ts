@@ -70,7 +70,10 @@ export function useSimulationMap(
       return null;
     }
     const { selection, version, coloring } = current;
-    return mapData(calculator, conditions.value, version.params, selection.indicatorId, { year: selection.year, fill: coloring.fill });
+    return mapData(calculator, conditions.value, version.params, selection.indicatorId, {
+      year: selection.year,
+      fill: coloring.fill
+    });
   });
   const frame = computed(() => (data.value === null ? null : SHOWN));
   // 设施和服务圈只在放大到一个市（或范围只有一个市）时画：按级别分不开，两个市的范围和一个市只差半级
@@ -106,7 +109,10 @@ export function useSimulationMap(
     return new Map(
       outcome.rows.map((row): [string, DistrictHint] => [
         row.code,
-        { name: row.name, text: `${formatValue(row.value, indicator)} · ${PASS_TEXT[passState(row.value, outcome.target)]}` }
+        {
+          name: row.name,
+          text: `${formatValue(row.value, indicator)} · ${PASS_TEXT[passState(row.value, outcome.target)]}`
+        }
       ])
     );
   });

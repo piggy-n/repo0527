@@ -1,6 +1,12 @@
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { SIMULATION_INDICATORS, simulationIndicator } from '../model/indicators';
-import { defaultParams, paramApplies, type ParamKey, type SimulationConditions, type SimulationParams } from '../model/params';
+import {
+  defaultParams,
+  paramApplies,
+  type ParamKey,
+  type SimulationConditions,
+  type SimulationParams
+} from '../model/params';
 
 /** 可选的年度，新的在前；与驾驶舱的开放年份一致 */
 export const SIMULATION_YEARS: readonly number[] = [2026, 2025, 2024, 2023, 2022, 2021];
@@ -115,5 +121,7 @@ export function searchIndicators(keyword: string): typeof SIMULATION_INDICATORS 
     return SIMULATION_INDICATORS;
   }
   const upper = text.toUpperCase();
-  return SIMULATION_INDICATORS.filter(item => item.name.includes(text) || item.short.includes(text) || item.id.includes(upper));
+  return SIMULATION_INDICATORS.filter(
+    item => item.name.includes(text) || item.short.includes(text) || item.id.includes(upper)
+  );
 }

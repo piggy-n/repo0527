@@ -1,5 +1,13 @@
 import { LatestController } from '@yzt/utils';
-import { computed, type ComputedRef, getCurrentScope, onScopeDispose, type Ref, shallowReadonly, shallowRef } from 'vue';
+import {
+  computed,
+  type ComputedRef,
+  getCurrentScope,
+  onScopeDispose,
+  type Ref,
+  shallowReadonly,
+  shallowRef
+} from 'vue';
 import { type SessionGuard, useSessionGuard } from '@/shared/auth/session-guard';
 import type { CalculationParams, IndicatorApi } from '../api';
 import { type CalculationRequest, type CalculationTask, isCalculationBusy } from '../calculation';

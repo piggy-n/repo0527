@@ -90,7 +90,8 @@ export function trackObserved(tracking: Tracking, status: ReportStatus, now: num
 
 /** 还在等这个组合的任务：继续按间隔查 */
 export const isTrackingActive = (tracking: Tracking | null) =>
-  tracking !== null && (tracking.phase === 'submitting' || tracking.phase === 'waiting' || tracking.phase === 'processing');
+  tracking !== null &&
+  (tracking.phase === 'submitting' || tracking.phase === 'waiting' || tracking.phase === 'processing');
 
 export const trackingOf = (trackings: readonly Tracking[], criteria: ReportCriteria) =>
   trackings.find(item => sameCriteria(item.target, criteria)) ?? null;
