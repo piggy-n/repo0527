@@ -44,7 +44,8 @@ describe('路由表', () => {
       RouteName.devMessageCenter,
       RouteName.devMonitoringIndicators,
       RouteName.devMonitoringStatistics,
-      RouteName.devIndicatorSimulation
+      RouteName.devIndicatorSimulation,
+      RouteName.devDataQuery
     ].toSorted());
   });
 

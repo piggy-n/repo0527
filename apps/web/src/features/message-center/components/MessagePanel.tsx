@@ -57,38 +57,45 @@ export const MessagePanel = defineComponent({
       }
     });
 
+    // 业务按钮在时间下方、右对齐；暂时去不了时按钮禁用，原因写在按钮下方
     function renderLink(message: Message) {
       const link = messageLink(message);
       if (!link) {
         return null;
       }
       const reason = props.unavailableReason(link.target);
-      return (
-        <div class={styles.actions}>
-          <ElButton
-            link
-            type="primary"
-            disabled={reason !== null}
-            onClick={() => {
-              // 点击还会冒泡到整行，同一条只提交一次
-              void center.markRead(message);
-              emit('open', link.target);
-            }}
-          >
-            {link.label}
-          </ElButton>
-          {reason !== null && <span class={styles.unavailable}>{reason}</span>}
-        </div>
-      );
+      return [
+        <ElButton
+          key="link"
+          class={styles.action}
+          link
+          type="primary"
+          size="small"
+          disabled={reason !== null}
+          onClick={() => {
+            // 点击还会冒泡到整行，同一条只提交一次
+            void center.markRead(message);
+            emit('open', link.target);
+          }}
+        >
+          {link.label}
+        </ElButton>,
+        reason !== null && (
+          <span key="reason" class={styles.unavailable}>
+            {reason}
+          </span>
+        )
+      ];
     }
 
-    // 一条消息：未读点、类型、标题、时间（悬停看完整时间）、完整正文、业务按钮；点一行标为已读
+    // 一条消息一张卡片：未读点、标题（放不下时省略）、类型、时间（悬停看完整时间），下面是完整正文和业务按钮；
+    // 未读白底浅蓝描边，已读浅灰底、文字变淡（同旧项目）。点一下标为已读
     function renderMessage(message: Message, now: Date) {
       const markRead = () => void center.markRead(message);
       return (
         <article
           key={message.id}
-          class={[styles.message, !message.read && styles.unread]}
+          class={[styles.message, message.read ? styles.read : styles.unread]}
           tabindex={0}
           aria-label={`${message.read ? '' : '未读，'}${message.title}`}
           aria-busy={center.isReading(message.id)}
@@ -100,19 +107,19 @@ export const MessagePanel = defineComponent({
           }}
         >
           <span class={styles.dot} />
-          <div class={styles.main}>
-            <div class={styles.head}>
-              <ElTag size="small" type={CATEGORY_TAGS[message.category]}>
-                {CATEGORY_LABELS[message.category]}
-              </ElTag>
-              <strong class={styles.title}>{message.title}</strong>
-              <time class={styles.time} datetime={message.createdAt} title={message.createdAt}>
-                {messageTime(message.createdAt, now)}
-              </time>
-            </div>
-            <p class={styles.content}>{message.content}</p>
-            {renderLink(message)}
+          <div class={styles.head}>
+            <strong class={styles.title} title={message.title}>
+              {message.title}
+            </strong>
+            <ElTag class="tag-mini" type={CATEGORY_TAGS[message.category]}>
+              {CATEGORY_LABELS[message.category]}
+            </ElTag>
           </div>
+          <time class={styles.time} datetime={message.createdAt} title={message.createdAt}>
+            {messageTime(message.createdAt, now)}
+          </time>
+          <p class={styles.content}>{message.content}</p>
+          {renderLink(message)}
         </article>
       );
     }

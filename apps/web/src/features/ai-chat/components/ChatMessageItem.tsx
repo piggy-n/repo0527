@@ -1,9 +1,9 @@
 import { DataAnalysis, MapLocation } from '@element-plus/icons-vue';
 import { ElIcon } from 'element-plus';
 import { computed, defineComponent, type PropType, ref } from 'vue';
-import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { statsText } from '../chat-result';
 import type { ChatMessage } from '../composables/useAiChat';
+import assistantImage from '../images/assistant.webp';
 import { renderMarkdown } from '../markdown';
 import { stepsRunning } from '../tool-steps';
 import styles from './ChatMessageItem.module.scss';
@@ -85,7 +85,7 @@ export const ChatMessageItem = defineComponent({
       return (
         <article class={[styles.root, user && styles.user]} data-role={props.message.role}>
           <span class={styles.avatar} aria-hidden="true">
-            {user ? '我' : <SvgIcon name="nav-ai" size={18} />}
+            {user ? '我' : <img class={styles.avatarImage} src={assistantImage} alt="" />}
           </span>
           <div class={styles.body}>
             {user ? <div class={[styles.bubble, styles.question]}>{props.message.content}</div> : renderAnswer()}

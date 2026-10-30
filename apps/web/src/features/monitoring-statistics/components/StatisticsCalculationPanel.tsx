@@ -136,7 +136,7 @@ export const StatisticsCalculationPanel = defineComponent({
                   {TABLES.map(table => {
                     const state = calculation.tableState(table.type);
                     return (
-                      <article key={table.type} class={[styles.group, !table.enabled && styles.disabled]}>
+                      <article key={table.type} class={styles.group}>
                         <div class={styles.groupHeader}>
                           <ElCheckbox
                             modelValue={state.checked}

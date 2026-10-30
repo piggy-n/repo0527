@@ -163,12 +163,7 @@ export const ChatPanel = defineComponent({
     };
 
     return () => (
-      <MxPanel
-        headerTone="muted"
-        flush
-        title={historyOpen.value ? undefined : '空间查询助手'}
-        description="自然资源 GIS 智能查询"
-      >
+      <MxPanel headerTone="muted" flush title={historyOpen.value ? undefined : '空间查询助手'}>
         {{
           header: historyOpen.value ? renderHistoryHeader : undefined,
           actions: renderActions,

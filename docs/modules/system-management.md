@@ -166,9 +166,9 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 ### 弹框里的组件（`MessagePanel`）
 
 - 外层是 `MxPanel headerTone="muted" flush`（ADR 0076）：标题"消息"，说明"N 条未读"，操作区"全部已读"；筛选放在 `subheader`，只有列表滚动。最高取 CSS 变量 `--message-panel-max-height`，由 app 的弹框按顶栏位置算出
-- 一条消息：未读红点；类型标签（审批提醒 `warning`、资源消息 `primary`、统计报表 `info`）；标题（过长省略）；时间（`messageTime`：今天写"今天 时:分"，今年写"月-日 时:分"，更早写日期；"今天"按北京时间判断，悬停看完整时间）；完整正文（连续的字母数字也能换行）；业务按钮
+- 一条消息是一张卡片（2026-10-28 按旧项目的消息卡片调整，ADR 0102）：未读白底、`--color-primary-border` 描边、主色圆点、标题半粗；已读 `--color-neutral-bg-light` 浅灰底，标题和正文换成次要色。第一行是标题（按内容宽度，放不下时先省略）和紧跟其后的小号类型标签（`tag-mini`，审批提醒 `warning`、资源消息 `primary`、统计报表 `info`，始终完整），右列是时间（`messageTime`：今天写"今天 时:分"，今年写"月-日 时:分"，更早写日期；"今天"按北京时间判断，悬停看完整时间）；正文在标题下面（连续的字母数字也能换行）；业务按钮是小号文字按钮，在时间下方、右对齐，正文让出这一列
 - 点一行或在行上按回车标为已读。业务按钮标为已读并发出 `open(target)`，由 app 关弹框、跳转；点击会冒泡到整行，同一条按 ID 只提交一次，所以不阻止冒泡
-- 业务按钮的文案和目标由 `display.ts` 的 `messageLink` 给出（ADR 0093 第 6 条）；`unavailableReason(target)` 返回原因时按钮禁用、旁边显示原因，由 app 按角色给出
+- 业务按钮的文案和目标由 `display.ts` 的 `messageLink` 给出（ADR 0093 第 6 条）；`unavailableReason(target)` 返回原因时按钮禁用、原因写在按钮下方、右对齐，由 app 按角色给出
 - 滚到距底部 120 以内接着显示（`useInfiniteScroll`）；换筛选回到列表顶部
 - 第一次请求的骨架屏延迟显示（`useDelayedFlag`）；失败时"加载失败 / 重试"；空的分"暂无消息"和"没有未读消息"；末尾是"继续滚动显示更多"或"共 N 条"
 

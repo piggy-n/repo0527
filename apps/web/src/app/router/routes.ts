@@ -1,4 +1,5 @@
 import type { RouteLocationNormalized, RouteRecordRaw } from 'vue-router';
+import type { TopicId } from '@/features/data-query/topics';
 import { Role } from '@/shared/auth/roles';
 import { RouteName } from '@/shared/router/route-names';
 import { AppLayout } from '../layout/AppLayout';
@@ -31,6 +32,19 @@ const placeholder = (path: string, name: RouteName, title: string, roles?: reado
   meta: { title, roles }
 });
 
+// 数据查询的四个页面共用一个组件，专题由 props 传入；换专题时页面按专题重建（DataQueryPage）
+const loadDataQueryPage = withMapRuntime(() =>
+  import('@/pages/data-query/DataQueryPage').then(({ DataQueryPage }) => DataQueryPage)
+);
+
+const dataQueryRoute = (path: string, name: RouteName, topic: TopicId, title: string): RouteRecordRaw => ({
+  path,
+  name,
+  component: loadDataQueryPage,
+  props: { topic },
+  meta: { title }
+});
+
 // 地址和各角色能访问的页面沿用旧项目
 const businessRoutes: RouteRecordRaw[] = [
   {
@@ -39,10 +53,15 @@ const businessRoutes: RouteRecordRaw[] = [
     component: loadCurrentMapPage,
     meta: { title: '现状底图', keepAlive: true }
   },
-  placeholder('land-change-query', RouteName.landChangeQuery, '国土变更调查查询'),
-  placeholder('space-monitoring-query', RouteName.spaceMonitoringQuery, '城市国土空间监测查询'),
-  placeholder('forest-grass-wetland-desert-query', RouteName.forestGrassWetlandDesertQuery, '森林草原湿地荒漠调查监测'),
-  placeholder('water-resource-basic-query', RouteName.waterResourceBasicQuery, '水资源基础调查'),
+  dataQueryRoute('land-change-query', RouteName.landChangeQuery, 'land-change', '国土变更调查查询'),
+  dataQueryRoute('space-monitoring-query', RouteName.spaceMonitoringQuery, 'space-monitoring', '城市国土空间监测查询'),
+  dataQueryRoute(
+    'forest-grass-wetland-desert-query',
+    RouteName.forestGrassWetlandDesertQuery,
+    'forest-grass-wetland-desert',
+    '森林草原湿地荒漠调查监测'
+  ),
+  dataQueryRoute('water-resource-basic-query', RouteName.waterResourceBasicQuery, 'water-resource', '水资源基础调查'),
   {
     path: 'space-monitoring-basic-statistics',
     name: RouteName.spaceMonitoringBasicStatistics,
@@ -171,6 +190,14 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
       )
     ),
     meta: { title: '监测指标组件样例', public: true }
+  },
+  {
+    path: '/dev/data-query',
+    name: RouteName.devDataQuery,
+    component: withMapRuntime(() =>
+      import('@/pages/dev/data-query/DevDataQueryPage').then(({ DevDataQueryPage }) => DevDataQueryPage)
+    ),
+    meta: { title: '数据查询实测', public: true }
   },
   {
     path: '/dev/theme',

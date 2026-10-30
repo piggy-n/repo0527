@@ -34,6 +34,7 @@
 | `composables/useAiChat.ts` | 对话的拥有者：消息、会话 ID、最近一次的结果；发送、打开历史、新对话在同一个 `LatestController` 通道里后发覆盖先发，作用域销毁时取消 |
 | `composables/useAiSessionRemoval.ts` | 删除的流程：按对话防重复，确认框由界面提供（写法同 `useFileRemoval`） |
 | `components/` | `ChatPanel`（对话 / 历史两个视图、输入框）、`ChatConversation`、`ChatMessageItem`、`ToolSteps`、`ChatHistory`、`AiResultPanel`、`ResultChart` |
+| `images/assistant.webp` | 助手头像：用户给的机器人位图按 2 倍尺寸转成 96 × 90 的 WebP（ADR 0102），欢迎语里 40 宽、消息头像 24 宽，都放在 `--color-primary` 的圆底上（ADR 0103，原来是 `--color-primary-border`）；它不是单色图标，不进 `assets/icons/` |
 
 页面按分栏型排布：左侧 320 是对话面板（窄屏收进抽屉），右侧上方是地图面板（`MxPanel flush`），下方是结果面板；结果最大化时地图只留 120 高的一条，并隐藏地图控制栏。地图页的运行时由路由的 `withMapRuntime` 加载，页面不缓存（`keepAlive` 未开）。
 

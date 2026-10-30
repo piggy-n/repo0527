@@ -72,7 +72,7 @@ saveFile(file);
 
 `getBlob` 返回 `Promise<BinaryResponse>`；`fetchFile` 返回 `Promise<DownloadedFile>`，同时透传 `timeout`、`silent`；`saveFile` 不发请求、不弹提示。公共基础第一版只提供这三个场景需要的 GET 文件流。
 
-2026-10-27 系统管理迁移时加上 POST（ADR 0092）：数据申请的下载接口是 `POST /api/apply/download/{id}`、没有正文。`http.postBlob(url, body?, options)` 和 `getBlob` 走同一个请求通道、同样识别错误信封；`fetchFile` 加 `method: 'post'`（默认 `get`），不支持正文，以后遇到带正文的 POST 导出再扩展。
+2026-10-27 系统管理迁移时加上 POST（ADR 0092）：数据申请的下载接口是 `POST /api/apply/download/{id}`、没有正文。`http.postBlob(url, body?, options)` 和 `getBlob` 走同一个请求通道、同样识别错误信封；`fetchFile` 加 `method: 'post'`（默认 `get`），不支持正文，以后遇到带正文的 POST 导出再扩展。2026-10-28 数据查询迁移时加上 `body`（ADR 0104）：导出是带正文的 POST，对象按 JSON 发送，带 shp 文件的 FormData 原样发送；GET 时不用。
 
 ### 4. 列表行内的下载（`useRowDownloads`、`DownloadButton`）
 

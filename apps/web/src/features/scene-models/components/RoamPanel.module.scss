@@ -86,11 +86,60 @@
   color: var(--color-text-secondary);
 }
 
+// 速度：两个 20 × 20 的加减按钮夹着数值，数值 14 加粗、单位 12 次要色
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-container);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-primary-border-hover);
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    background-color: var(--color-neutral-bg-light);
+    color: var(--color-text-disabled);
+    cursor: not-allowed;
+  }
+}
+
 .speed {
-  min-width: 52px;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+  min-width: 48px;
+  color: var(--color-text-title);
+  font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
   font-variant-numeric: tabular-nums;
-  text-align: center;
+}
+
+.unit {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
 }
 
 .muted {

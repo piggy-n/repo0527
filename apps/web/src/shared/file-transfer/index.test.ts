@@ -45,6 +45,22 @@ describe('文件读取', () => {
     expect(methods).toEqual(['POST', 'GET']);
   });
 
+  it('POST 时带上正文：对象按 JSON 发送，FormData 原样发送', async () => {
+    const bodies: unknown[] = [];
+    server.use(
+      mock.post('/backend/file', async ({ request }) => {
+        const type = request.headers.get('content-type') ?? '';
+        bodies.push(type.includes('json') ? await request.json() : (await request.formData()).get('name'));
+        return new HttpResponse('文件', { headers: { 'Content-Type': 'application/zip' } });
+      })
+    );
+    const form = new FormData();
+    form.append('name', '范围.zip');
+    await fetchFile('/file', { fallbackName: '数据.zip', method: 'post', body: { format: 'excel' } });
+    await fetchFile('/file', { fallbackName: '数据.zip', method: 'post', body: form });
+    expect(bodies).toEqual([{ format: 'excel' }, '范围.zip']);
+  });
+
   it('不会通过 MIME 补齐掩盖错误信封', async () => {
     server.use(mock.get('/backend/file', () => HttpResponse.json({ code: 40000, msg: '文件不存在' })));
     await expect(fetchFile('/file', { fallbackName: '资料.pdf', fallbackType: 'application/pdf' }))

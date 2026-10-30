@@ -1095,6 +1095,26 @@ describe('CesiumView 的路线漫游（ADR 0083）', () => {
     ]);
   });
 
+  it('漫游时覆盖物不随级别重新推导：地下的相机算出的级别随视线跳动；结束后按当时的级别推导（ADR 0103）', async () => {
+    const { session, scene, view, roam } = roamSetup();
+    await view.whenReady();
+    const width = ['interpolate', ['linear'], ['zoom'], 6, 1, 10, 5];
+    session.style.setGroup('boundaries', cityLine(collection(LINE), { 'line-width': width }));
+    await flush();
+    roam(routeRoam());
+    await settle();
+    const updates = scene.overlayUpdates;
+
+    scene.drag({ ...START, zoom: 9.2 });
+    scene.drag({ ...START, zoom: 3.4 });
+    expect(scene.overlayUpdates).toBe(updates);
+
+    roam(undefined);
+    await settle();
+    scene.drag({ ...START, zoom: 9.2 });
+    expect(lineWidth(scene)).toBe(4);
+  });
+
   it('撤掉漫游：场景结束路线并飞回开始前的位置，进度变成 null', async () => {
     const { scene, view, statuses, roam } = roamSetup();
     await view.whenReady();

@@ -31,6 +31,7 @@ import {
   Matrix4,
   SceneTransforms
 } from 'cesium';
+import { Blackout } from './scene-blackout';
 import { keepInputsOff, releaseCamera, type RoamSaved, takeOverCamera } from './scene-roam-camera';
 import type { SceneWalkStart } from './scene-like';
 import { WalkAvatar } from './scene-walk-avatar';
@@ -55,9 +56,6 @@ const QUICK_CLICK = 300;
 const QUICK_CLICK_TOLERANCE = 30;
 // 悬停光标要做深度拾取（读 GPU），指针或视角变了才重新判断，最多这么久一次（毫秒）
 const HOVER_INTERVAL = 80;
-// 闪切：先黑下来，挪过去，再亮起来，看不到穿墙的过程（毫秒）
-const BLINK_OUT = 160;
-const BLINK_IN = 260;
 // 滚轮按行、按页滚动时换成像素
 const WHEEL_LINE = 33;
 const WHEEL_PAGE = 600;
@@ -109,7 +107,6 @@ interface Hover {
 
 interface Blink {
   action: () => void;
-  readonly timer: ReturnType<typeof setTimeout>;
   // 已经挪过去：之后到新画面画出来之前（不到一帧，画面全黑）不接受点击，那时深度拾取读到的还是旧画面
   placed: boolean;
 }
@@ -162,13 +159,13 @@ export class SceneWalk implements Disposable {
   readonly #widget: CesiumWidget;
   readonly #events: SceneWalkEvents;
   readonly #stack = new DisposableStack();
+  readonly #blackout: Blackout;
   #saved: RoamSaved | null = null;
   #walking: Walking | null = null;
-  // 行走期间的监听、光环和黑幕，结束时一起撤掉
+  // 行走期间的监听、光环和人物，结束时和黑幕一起撤掉
   #input: DisposableStack | null = null;
   #marker: WalkMarker | null = null;
   #avatar: WalkAvatar | null = null;
-  #overlay: HTMLDivElement | null = null;
   #speed = 1;
   readonly #keys = new Set<string>();
   #fovy = WALK_FOVY;
@@ -192,6 +189,7 @@ export class SceneWalk implements Disposable {
   constructor(widget: CesiumWidget, events: SceneWalkEvents) {
     this.#widget = widget;
     this.#events = events;
+    this.#blackout = this.#stack.use(new Blackout(widget.container));
     this.#stack.defer(widget.scene.preRender.addEventListener(() => this.#tick()));
     this.#stack.defer(() => this.#teardown());
   }
@@ -202,10 +200,12 @@ export class SceneWalk implements Disposable {
   }
 
   /**
-   * 开始步行：接管相机（inherited 是路线换手过来时它记下的），选出生点，飞到出生点的视点高度；
+   * 开始步行：接管相机（inherited 是路线换手过来时它记下的），选出生点，飞到出生点的视点高度；已经在模型里
+   * （从路线换过来、换了一次步行）时不飞，出生点就在眼前（在原地开始）直接落下，远了闪切过去（ADR 0103）。
    * 之前的步行一并结束。找不到出生点时报告 failed，相机停在原处，等结束时还原
    */
   start({ navigation, spawn, speed, view, avatar }: SceneWalkStart, inherited: RoamSaved | null = null): void {
+    const inside = this.#saved !== null || inherited !== null;
     this.#teardown();
     this.#saved = takeOverCamera(this.#widget, this.#saved ?? inherited);
     this.#speed = speed;
@@ -236,7 +236,20 @@ export class SceneWalk implements Disposable {
       }
     };
     const { position, direction, up } = this.#pose(walking);
-    this.#widget.camera.flyTo({
+    const { camera } = this.#widget;
+    if (inside) {
+      // 在地下 flyTo 总会先升到地面以上再落下来，不飞；取消上一段飞行时 Cesium 会打开相机控制，再关上
+      camera.cancelFlight();
+      keepInputsOff(this.#widget);
+      this.#blackout.cut(Cartesian3.distance(position, camera.positionWC), () => {
+        land();
+        if (this.#walking === walking) {
+          this.#applyCamera(walking);
+        }
+      });
+      return;
+    }
+    camera.flyTo({
       destination: position,
       orientation: { direction, up },
       duration: ENTER_FLIGHT,
@@ -768,12 +781,10 @@ export class SceneWalk implements Disposable {
       }
       return;
     }
-    const overlay = this.#ensureOverlay();
     this.#walking?.walker.cancelRoute();
-    overlay.style.transition = `opacity ${BLINK_OUT}ms ease-in`;
-    overlay.style.opacity = '1';
-    const blink: Blink = { action, placed: false, timer: setTimeout(() => this.#placeBlink(blink), BLINK_OUT) };
+    const blink: Blink = { action, placed: false };
     this.#blink = blink;
+    this.#blackout.darken(() => this.#placeBlink(blink));
   }
 
   // 挪过去以后新画面画出一帧就恢复响应，不用等画面完全亮起来
@@ -786,9 +797,7 @@ export class SceneWalk implements Disposable {
     blink.action();
     this.#applied = null;
     this.#applyCamera(walking);
-    const overlay = this.#ensureOverlay();
-    overlay.style.transition = `opacity ${BLINK_IN}ms ease-out`;
-    overlay.style.opacity = '0';
+    this.#blackout.lighten();
     const { scene } = this.#widget;
     const remove = scene.postRender.addEventListener(() => {
       remove();
@@ -804,35 +813,18 @@ export class SceneWalk implements Disposable {
     if (!blink || blink.placed) {
       return;
     }
-    clearTimeout(blink.timer);
     this.#blink = null;
-    const overlay = this.#ensureOverlay();
-    overlay.style.transition = `opacity ${BLINK_IN}ms ease-out`;
-    overlay.style.opacity = '0';
-  }
-
-  #ensureOverlay(): HTMLDivElement {
-    if (!this.#overlay) {
-      const overlay = document.createElement('div');
-      overlay.style.cssText = 'position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:1';
-      this.#widget.container.append(overlay);
-      this.#overlay = overlay;
-    }
-    return this.#overlay;
+    this.#blackout.lighten();
   }
 
   // 撤掉这次步行的监听、光环、黑幕和按键，相机不动
   #teardown(): void {
     this.#input?.dispose();
     this.#input = null;
-    if (this.#blink) {
-      clearTimeout(this.#blink.timer);
-      this.#blink = null;
-    }
+    this.#blink = null;
+    this.#blackout.clear();
     clearTimeout(this.#hoverTimer);
     this.#hoverTimer = undefined;
-    this.#overlay?.remove();
-    this.#overlay = null;
     this.#marker?.[Symbol.dispose]();
     this.#marker = null;
     this.#avatar?.[Symbol.dispose]();

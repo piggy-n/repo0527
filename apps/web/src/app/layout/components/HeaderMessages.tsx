@@ -109,8 +109,8 @@ export const HeaderMessages = defineComponent({
               aria-label={label.value}
             >
               {/* 超过 99 显示 99+ 是 ElBadge 的默认 */}
-              <ElBadge value={center.unreadCount.value} hidden={center.unreadCount.value === 0}>
-                <SvgIcon name="header-bell" size={20} />
+              <ElBadge class="badge-mini" value={center.unreadCount.value} hidden={center.unreadCount.value === 0}>
+                <SvgIcon name="header-bell" size={22} />
               </ElBadge>
             </button>
           ),

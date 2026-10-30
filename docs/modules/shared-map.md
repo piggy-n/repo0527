@@ -43,6 +43,10 @@
 | `box-select/box-gesture.ts` | 拖动框选的手势：阈值、屏蔽派生的单击、取消（纯函数，ADR 0049） |
 | `box-select/BoxSelectOverlay.tsx` | 点/框选的浮层：拖动框选时的矩形（设计稿 5D.7 保留原来的外观）和鼠标旁的提示（ADR 0056） |
 | `pan-key.ts` | 临时拖动地图的键：Mac 用 ⌘、其他平台用 Ctrl，交给工具声明的修饰键和提示里的写法（ADR 0056） |
+| `draw/shape-draw.ts` | 绘制范围的类型、提示文案和 `draw` 分组的推导（纯函数，ADR 0104） |
+| `draw/useShapeDraw.ts` | 绘制的拥有者：框选、多边形两个工具，只保留一个画完的范围；框选的矩形和提示交给 `BoxSelectOverlay`（见"绘制范围"） |
+| `query-geometry.ts` | 发给后端的几何：整理（简化、舍入、有效性，ADR 0051）、屏幕框四角拾取成多边形、一个像素对应的经纬度距离；2026-10-28 从 `features/resource-map` 移来 |
+| `geometry-schema.ts` | 查询接口返回的 GeoJSON 几何（及其字符串）的 zod schema；2026-10-28 从 `features/resource-map/api.ts` 移来 |
 | `measure/measure-style.ts` | `measure` 分组的推导（纯函数，ADR 0035） |
 | `measure/measure-labels.ts` | 测量的标签、单位格式、标签放在哪一边与鼠标旁的提示（纯函数，ADR 0055） |
 | `measure/useMeasure.ts` | 测量的拥有者：桥接 map-core 的 `MeasureStore`，提供两个工具和推导函数 |
@@ -338,6 +342,24 @@ const tool: MapTool = { ..., panModifier: panKey.modifier };   // 按住这个�
 - 提示的内容和显示条件由点选的拥有者给出（`features/resource-map` 的 `useFeaturePick`，ADR 0056 第 4 节），浮层只显示：`hint` 为 `null` 时不渲染，否则用 `PointerHint` 放在指针旁，靠边时翻到另一侧
 - 浮层只要求 `BoxSelectOverlayState` 的两个只读 ref（`boxDraft`、`hint`），不导入业务类型。页面传稳定的拥有者，由浮层在自己的渲染里读 `.value`，鼠标每帧变化不带动页面根组件重渲染
 - 框带 `data-box`，提示带 `data-pointer-hint`，测试据此区分
+
+## 绘制范围（ADR 0104）
+
+```tsx
+// 页面 setup：创建拥有者（数据查询由 useSpatialForm 创建），登记两个工具，绑定 draw 分组
+const draw = useShapeDraw(map, { onStart: () => result.clear(), onComplete: shape => submit(shape) });
+map.registerTools(draw.tools);
+map.bindStyle({ draw: draw.deriveGroup });
+
+<BoxSelectOverlay pick={draw} />                       // 框选时的矩形和鼠标旁的提示
+<button onClick={() => draw.toggle('rectangle')}>框选</button>   // 再点一次退出
+```
+
+- 两个工具都是临时任务，画完或 Esc 退回移动；`toggle` 再点一次退出，`stop` 退出，退出时丢掉没画完的、保留画完的；`clear` 清掉画完的
+- 框选用点/框选的手势：离开起点 3 像素才算开始（这时调用 `onStart`、清掉上一个范围），关掉拖动平移和 Shift 框选放大，按住 `currentPanKey()` 临时拖动；地图移动、窗口失焦、视图不再就绪时取消这次手势
+- 多边形同测面：左键单击加节点（双击里的第二次单击不加），双击完成，不足三个节点时双击只取消这一次；可以拖动地图，只关双击放大；画的过程中是虚线和节点
+- 画完的范围（`DrawnShape`）带完成时一个像素对应的经纬度距离，交给 `queryGeometry` 当简化的容差；自相交等整理不出来的由使用方提示
+- 只在二维处理输入；提示在工具在用、视图就绪、指针在画布上时有值，文案沿用旧数据查询页
 
 ## 测量（ADR 0035）
 

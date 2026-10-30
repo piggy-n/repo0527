@@ -23,7 +23,6 @@
   height: 32px;
   border-radius: 50%;
   background-color: var(--color-primary);
-  color: var(--color-text-inverse);
   font-size: var(--font-size-xs);
 
   .user & {
@@ -31,6 +30,13 @@
     color: var(--color-primary);
     font-weight: var(--font-weight-semibold);
   }
+}
+
+// 助手头像是位图（images/assistant.webp），在 32 的主色圆底（同欢迎语）里显示 24 宽
+.avatarImage {
+  display: block;
+  width: 24px;
+  height: auto;
 }
 
 // 回答占满头像右侧的宽度，里面可能有表格

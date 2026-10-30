@@ -25,6 +25,35 @@ git diff <基线>..master-demo -- <旧路径>
 | 城市国土空间监测指标 | `b4f39874293b4d01f77b66966a382e6e77a4bcbf`（yzt 基线 `0cfef2c`） | `src/views/space-monitoring-indicators/`（`index.vue`、`components/IndicatorTree.vue`、`LayerManagerPanel.vue`、`IndicatorLegend.vue`，`utils/indicatorLayerStyle.js`、`indicatorMvtManager.js`，`mockIndicatorLayers.js` 只用到区划中心）、`src/api/analysis/analysis-api.js`、`src/assets/images/layer/flag_icon.png` | `features/monitoring-indicators`、`pages/space-monitoring-indicators`；组件预览 `/dev/monitoring-indicators` | 2026-10-28 开始，分支 `migrate-space-monitoring-indicators`。`mock-data.js` 没有被引用，不迁移。预览当天经用户确认；接口核对见下文"城市国土空间监测指标：接口实测"，与旧页面的差异见"城市国土空间监测指标：与旧页面的差异"。合进 main `74b2fc0` 后全部检查通过，在真实后端上看过正式页面（[阶段笔记](stages/space-monitoring-indicators-migration.md)）；当天用户验收通过，快进合入本地 main。成果瓦片和开始计算待联调 |
 | 城市国土空间监测基本统计 | `b4f39874293b4d01f77b66966a382e6e77a4bcbf`（yzt 基线 `b96499c`） | `src/views/space-monitoring-statistics/`（路由用的 `index.vue`、`composables/useStatisticsStatusPolling.js`、`useStatisticsTaskStatus.js`、`statistics-adapter.js`、`statistics-config.js`）、`src/api/statistics/statistics-api.js` 的前三个接口、`public/images/TongJi/` 的设计素材 | `features/monitoring-statistics`、`pages/space-monitoring-statistics`；组件预览 `/dev/monitoring-statistics`；宽屏收起侧栏是 `libs/ui` 的 `MxSplitLayout` 的新能力 | 2026-10-28 开始，分支 `migrate-space-monitoring-statistics`。不迁移：没挂路由的旧版 `SpaceMonitoringStatisticsPage.vue` 和只被它引用的 `components/` 下 6 个组件。预览当天经用户确认（ADR 0100）；同日在真实后端上只读看过正式页面，用户验收通过，快进合入本地 main（[阶段笔记](stages/space-monitoring-statistics-migration.md)）；开始统计的写操作待联调。之后用户给出两张把手的设计图，转成 2 倍尺寸的 WebP 接入（ADR 0101），验收通过后合入本地 main。接口核对见下文"城市国土空间监测基本统计：接口实测"，与旧页面的差异见"城市国土空间监测基本统计：与旧页面的差异" |
 | 系统管理、消息中心 | `b4f3987`（yzt 基线 `6e2d606`） | `src/views/system-management/`、`src/views/resource-application/components/ApplicationListSection.vue`（管理员审核的部分）、`src/components/resource-application/`（`ResourceDetailDialog`、`StatusTag`、`MessageCenterPanel`、`MessageCard`、`NotificationBell`）、`src/services/resource-application/`（`applyApiService`、`messageService`、`resourceApplyService` 的状态文案）、`src/api/apply/`、`src/api/statistics/`（`statisticsPage`）、`src/api/message/`、`src/views/message-center/` | 原型 `pages/dev/system-management`、`pages/dev/message-center` | 2026-10-27 重新开始（上一版已由 `6dda705` 撤回，不沿用）；原型已确认（ADR 0092、0093）。已完成：资源审核、申请详情与审核、下载、统计报表（`features/data-application`、`features/statistics-report`、`pages/system-management`），消息的接口、查询、已读与弹框内容（`features/message-center`），顶栏的消息按钮与弹框（`app/layout` 的 `HeaderMessages`，顶栏断点重新测量过），开发页改为正式组件的样例，生产冒烟；ADR 改号为 0092、0093。2026-10-28 用户验收通过，由 `ddc2d6c` 合入本地 main（[阶段笔记](stages/system-message-migration.md)）；真实后端的写操作、下载和统计报表数据待联调。接口核对见下文"系统管理与消息中心：接口实测" |
+| 数据查询（国土变更调查、城市国土空间监测、森林草原湿地荒漠调查监测、水资源基础调查） | `b4f39874293b4d01f77b66966a382e6e77a4bcbf`（yzt 基线 `ebec3c6`） | `src/views/space-monitoring-query/`（`index.vue`、`config.js`、`land-change-config.js`；`region.js`、`utils/` 不迁移，见下文）、`src/views/data-query-map/index.vue`、`src/api/query/query-api.js`、`src/components/map/map-configs.js` 的 `QUERY_MAP_CONFIG` | `features/data-query`、`pages/data-query`；绘制工具 `shared/map/draw`；实测页 `/dev/data-query`；分支 `migrate-data-query` | 2026-10-28 开始，设计稿（`public/design.local/data-query/`，不入库）当天确认（ADR 0104）。四个页签、空间绘制、结果面板、导出都已实现，查询在真实后端上实测；导出接口未登录时报错，待登录后验收。2026-10-29 验收：修好分支上类型检查和 lint 的报错后 CI 的步骤全部通过，在实测页用真实接口操作四个页签，以合并提交合入 main 并推送（[阶段笔记](stages/data-query-migration.md)）。接口核对见下文"数据查询：接口实测"，与旧页面的差异见"数据查询：与旧页面的差异" |
+
+## 数据查询：接口实测（2026-10-28）
+
+不登录、经本机开发服务的 `/backend` 代理或直接请求后端，只读。
+
+| 接口 | 实测 |
+|---|---|
+| `GET /api/query/attr/page`：`layerCode`、`xzqdm`、`conditions`、`pageNum`、`pageSize` | 不校验登录；成功时没有信封，是 PageHelper 的分页（`total`、`list`、`pageNum`、`pages` 等）；失败时 HTTP 200、返回 `{ success: false, code: 500, msg: '系统异常' }`。字段是小写；大量字段是 `-9999` |
+| `GET /api/query/scope/geojson`、`/page`：`layerCode`、`geometry` | 前者返回 `[{ guid, geom }]`，`geom` 是 GeoJSON 字符串；后者同属性分页 |
+| `GET /api/query/mvt`：`layerCode`、`xzqdm`、`conditions`、`z/x/y` | protobuf，不校验登录；瓦片里的图层名是表名，城镇村等用地是 `czcdyd` |
+| `POST /api/export/region`、`/geojson`、`/shp` | 未登录时三种都返回"系统异常"（JSON），没能实测成功的文件流和响应头，导出按旧页面的参数实现 |
+| 条件的写法 | `NAME LIKE '小学'` 是精确匹配（0 条），`LIKE '%小学%'` 才是包含；`NAME NOT '小学'` 报 500，`NOT LIKE` 可以；数值比较带引号也可以（`CZCMJ > '100'`） |
+| 字段名 | 医疗机构：`IFCH`、`IFIDH` 可以，`IFTC` 报 500；城镇村等用地：`BZ` 可以，`FEATID` 报 500。学校的 `QUOTA`、`IFCON` 报 500（表里没有这两个字段），`GXSJ` 不报错但查不到；学校、医院不返回 `gxsj`、`quota`、`bz` |
+| 数值 | 地类图斑的 `tbmj` 像平方米（如 1383114），旧页面的列名写"亩"、保留一位小数，单位待后端确认 |
+
+## 数据查询：与旧页面的差异
+
+- 高级查询由单独的按钮和第二个面板并入页签，排在空间查询之后（用户要求）
+- 结果面板去掉统计图、统计表（写死的假数据），只留属性表格；去掉 `addPointLayer` 的 10 个假点
+- LIKE、NOT 改为包含、不包含（`%值%`），下拉显示中文；输入框默认选第一个运算符（旧页面要先选，否则这个条件被跳过）
+- 字段名按接口修正：医疗机构的两个"是否"字段 `IFTC` → `IFCH`、`IFIDH`（旧配置两个字段同名，点一次会加上两个）；城镇村的"备注" `FEATID` → `BZ`；地类名称的选项由地类编码表推出（旧的有两处错位：选"采矿用地"拼出 `DLMC = '工业用地'`）；结果表学校的 `ifch` → `iftc`、地类图斑的 `Tbxhmc` → `tbxhmc`
+- 行政区划用本地区划目录（省、市、区县），不用 `region.js`（8 个区县代码错误）；区县也能定位（旧页面只认市界）
+- 不迁移 `TiandituBoundaryLayer`（省界用本地边界）、`MapTippyHint`（用 `PointerHint`）、`SpaceQueryDrawingManager`（用 `shared/map/draw`）、`buildSpatialQueryGeoJSON`（发给后端的几何经 `queryGeometry` 整理）
+- 定位避开查询面板和结果面板（`useMapOverlay`），不再自己算留白；画的范围仍按外包框放大一倍定位，shp 按结果的范围
+- MVT 走同源 `/backend`，条件做 URL 编码（旧代码写死 `http://192.168.1.180:18010`、条件没编码）；结果颜色用现状底图点选的高亮色
+- 国土变更调查的自然语言输入提示换成能识别的示例（旧提示"查询江苏省南京市耕地分布"的规则已注释掉）
+- 画的多边形自相交、整理不出几何时提示重新绘制（旧页面原样发给后端）
+- 森林草原湿地荒漠、水资源：面板里显示"建设中"，不再用地图角标
 
 ## 城市国土空间监测基本统计：接口实测（2026-10-28）
 

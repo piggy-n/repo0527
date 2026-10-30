@@ -52,7 +52,8 @@ Element    --el-color-*、--el-text-color-* ……                  element-them
 | 行高 22 / 18 / 16px | `--line-height-base`、`-compact`、`-tag` | 第 5.2 节 |
 | 登录卡片的蓝色投影 | `--shadow-primary-lg` | 第 6 节，2026-09-30 补充 |
 | 内容区顶部渐变的起始色 | `--color-bg-page-top` | 第 2 节，2026-09-30 补充；色相 214° 取自顶部栏背景（212°），不属于主题色系（222～227°），对比后保留，见 [modules/layout.md](../modules/layout.md) |
-| 深色背景上的文字与状态 | `--color-text-inverse`、`--color-inverse-hover`、`--color-inverse-active` | 第 2 节，2026-09-30 补充 |
+| 深色背景上的文字与状态 | `--color-text-inverse`、`--color-inverse-hover`、`--color-inverse-active`、`--color-inverse-strong` | 第 2 节，2026-09-30 补充；`inverse-strong` 2026-10-28 补充（消息按钮有圆底后的悬停、打开） |
+| 竖排入口 18px | `--font-size-xl` | 第 5.2 节，2026-10-28 补充（基本统计左栏的竖排名称） |
 | 间距 4 / 8 / 12 / 16 / 24 | `--space-xs`、`-sm`、`-md`、`-lg`、`-xl` | 第 6.1 节，2026-09-30 补充，见 [page-layout.md](page-layout.md) |
 | 圆角 4 / 8 / 12 / 16 | `--radius-sm`、`-md`、`-lg`、`-xl` | 第 6.1 节，2026-09-30 补充；lg、xl 用于登录卡片 |
 | 指标智能推演的 AI 渐变与情景色 | `--color-ai-violet`、`-ai-cyan`、`-ai-glow`、`--color-scenario`、`-scenario-light`、`-scenario-bg` | 第 6.3 节，2026-10-28 补充（ADR 0105），`-scenario-bg` 2026-10-29 补充，只用于指标智能推演 |
@@ -143,6 +144,7 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 | `ElTable` | `--el-table-header-text-color` | `text-title`（`#1F2937`） | Element 默认用 secondary 灰色；旧项目资源管理列表的表头是 `#1F2937`（2026-09-29 确认） |
 | `ElTable` | `--el-table-header-bg-color` | `neutral-bg`（`#EEF1F5`） | Element 默认白色；旧项目的三套表格样式都给表头加了底色，取与资源管理列表的 `#EEF1F8` 最接近的现有令牌（2026-10-08 确认） |
 | `ElTable` | `--el-table-row-hover-bg-color` | `primary-bg-light`（`#F3F6FF`） | Element 默认 `#F5F7FA`；与旧项目资源管理列表的 `#F2F6FF` 最接近（2026-10-08 确认） |
+| `ElCheckbox` | `--el-checkbox-checked-text-color` | 同未选中的 `--el-checkbox-text-color` | Element 默认选中后文字变主色；选中只由方框表示，文字保持常规色，指标成果、行政区、资源树等勾选列表一致（2026-10-28 用户确认全局统一，ADR 0102）。`ElCheckboxButton` 不受影响 |
 
 ### 表格的全局样式
 
@@ -226,6 +228,8 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 | `input-filled` | `<ElInput class="input-filled">` | `primary-border` 浅蓝底、无边框；悬停 `primary-border-hover`、聚焦 `primary` 描边；48px 高、16px 字、`--radius-md` 圆角；占位符和图标用 `primary` | 登录页 |
 | `button-xl` | `<ElButton class="button-xl">` | 48px 高、16px 半粗、`--radius-md` 圆角；颜色沿用按钮的 `type` | 登录页 |
 | `button-inline` | `<ElButton class="button-inline" link size="small">` | 使用项目字体，与同一行状态文字按基线对齐；其他外观由 `type` 和 `size` 决定 | 文件管理下载状态行，由文件管理分支维护 |
+| `tag-mini` | `<ElTag class="tag-mini">` | 18px 高、左右 4、12px 字；颜色沿用 `type` | 消息卡片标题后的类型（2026-10-28 用户要求缩小，ADR 0102） |
+| `badge-mini` | `<ElBadge class="badge-mini">` | 16px 高、左右 4、10px 字（改的是 Element 的 `--el-badge-*` 变量） | 顶栏消息按钮的未读数，少挡住铃铛（2026-10-28 用户要求，ADR 0102） |
 | `select-no-arrow` | `<ElSelect class="select-no-arrow">` | 不显示右侧的下拉箭头，点击照常弹出选项 | 地图页"已选择图层"的年份（2026-10-16 用户要求） |
 | `radio-group-block` | `<ElRadioGroup class="radio-group-block">` | 占满宽度，各项等宽 | 地图页坐标定位的写法切换 |
 | `dialog-panel-header` | `<ElDialog class="dialog-panel-header">`，`header` 插槽用 `<MxTitle level="panel">` | 浅灰标题栏横向铺满，最小高 48、左侧 16、右侧预留 48 关闭区；内容内边距 16，底部 `0 16 16`；不加独立阴影或渐变 | 资源管理新增 / 重命名目录、文件上传 / 预览；真实样例在 `/dev/theme` 的「灰底标题弹窗」 |

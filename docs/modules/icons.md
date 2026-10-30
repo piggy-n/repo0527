@@ -168,7 +168,7 @@ packages/icons/
 | `map-compass-color` | 自制（ADR 0058） | 基础组的指北针：北半 `#E64B4B`、南半 `#9AA5B8`（`--color-danger`、`--color-text-placeholder` 的色值），多色图标不随令牌变化 |
 | `geometry-polygon` / `geometry-line` / `geometry-point` | `polygon` / `line` / `circle-dot` | 资源的几何类型：面、线、点 |
 | `drag-handle` | `grip-vertical` | 拖动排序的手柄 |
-| `move-up` / `move-down` | `arrow-up` / `arrow-down` | 资源图层面板的上移、下移（ADR 0096） |
+| `move-up` / `move-down` | 自制（2026-10-28 由 `arrow-up` / `arrow-down` 换成实心三角，ADR 0102） | 资源图层面板的上移、下移（ADR 0096）：24 × 24 里宽 14、高 8 的三角，描边 1.5 圆角 |
 | `splitter-handle` | `menu-2` | 可拖动的分割线中间的手柄 |
 | `panel-collapse` / `panel-expand` | `layout-sidebar-left-collapse` / `layout-sidebar-left-expand` | 收起、展开左侧的面板 |
 | `close` | `x` | 取消勾选、关闭 |
@@ -185,6 +185,7 @@ packages/icons/
 | `location-pin` | `map-pin`（实心，`icons/filled/`） | 坐标定位点的图钉；实心图标的根元素是 `fill="currentColor"`，没有描边 |
 | `header-bell` | `bell` | 顶栏右侧的消息按钮（2026-10-27 加入，消息弹框原型在用） |
 | `menu-audit` / `menu-report` | `clipboard-check` / `report-analytics` | 系统管理页面内导航的资源审核、统计报表 |
+| `draw-rectangle` / `file-upload` | `marquee-2` / `file-upload` | 数据查询空间查询的框选、shp 文件导入（2026-10-28 加入；多边形沿用 `geometry-polygon`） |
 
 以后再加 Tabler 的图标照同样的做法，并补进这张表。
 

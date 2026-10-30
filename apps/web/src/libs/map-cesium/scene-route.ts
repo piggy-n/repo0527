@@ -1,5 +1,6 @@
 import { type RoutePath, type RoutePose, smoothAngle } from '@yzt/map-core';
 import { Cartesian3, Math as CesiumMath, type CesiumWidget } from 'cesium';
+import { Blackout } from './scene-blackout';
 import type { RoutePlayback } from './scene-like';
 import { keepInputsOff, releaseCamera, type RoamSaved, takeOverCamera } from './scene-roam-camera';
 
@@ -24,13 +25,15 @@ export interface SceneRouteEvents {
 }
 
 /**
- * 路线漫游的相机（ADR 0083 第 3 节）：开始时飞到起点停住；播放时每帧按真实流逝的时间推进，朝向看前方并平滑；
- * 暂停时左键拖动原地转头，继续后转回路线的朝向；结束时还原视场角、相机控制，可以飞回开始前的位置
+ * 路线漫游的相机（ADR 0083 第 3 节）：开始时飞到起点停住，已经在模型里时闪切过去（ADR 0103）；播放时每帧按真实流逝的
+ * 时间推进，朝向看前方并平滑；暂停时左键拖动原地转头，继续后转回路线的朝向；结束时还原视场角、相机控制，
+ * 可以飞回开始前的位置
  */
 export class SceneRoute implements Disposable {
   readonly #widget: CesiumWidget;
   readonly #events: SceneRouteEvents;
   readonly #stack = new DisposableStack();
+  readonly #blackout: Blackout;
   #path: RoutePath | null = null;
   #saved: RoamSaved | null = null;
   #distance = 0;
@@ -49,6 +52,7 @@ export class SceneRoute implements Disposable {
   constructor(widget: CesiumWidget, events: SceneRouteEvents) {
     this.#widget = widget;
     this.#events = events;
+    this.#blackout = this.#stack.use(new Blackout(widget.container));
     const { scene, canvas } = widget;
     this.#stack.defer(scene.preRender.addEventListener(() => this.#tick()));
     const down = (event: PointerEvent) => this.#onPointerDown(event);
@@ -73,21 +77,41 @@ export class SceneRoute implements Disposable {
   /** 开始一条路线：之前的路线一并结束；inherited 是步行换手过来时它记下的相机 */
   start(path: RoutePath, inherited: RoamSaved | null = null): void {
     const { camera } = this.#widget;
+    // 从步行换过来、换了一条路线：已经在模型里，闪切到起点（ADR 0103）
+    const inside = this.#saved !== null || inherited !== null;
+    // 先停下上一段飞行：它的回调只认自己的路线，不会把这次当成已经落地
+    camera.cancelFlight();
     this.#saved = takeOverCamera(this.#widget, this.#saved ?? inherited);
     this.#events.setFovy(ROAM_FOVY);
     this.#path = path;
     this.#distance = 0;
     this.#playing = false;
     this.#last = null;
-    this.#resetLook(path.pose(0));
     const pose = path.pose(0);
+    this.#resetLook(pose);
     this.#flying = true;
+    const land = () => {
+      if (this.#path === path) {
+        this.#landed();
+      }
+    };
+    const destination = Cartesian3.fromDegrees(pose.lng, pose.lat, pose.height);
+    if (inside) {
+      // 在地下 flyTo 总会先升到地面以上再落下来，不飞
+      this.#blackout.cut(Cartesian3.distance(destination, camera.positionWC), () => {
+        if (this.#path === path) {
+          this.#apply(pose);
+          land();
+        }
+      });
+      return;
+    }
     camera.flyTo({
-      destination: Cartesian3.fromDegrees(pose.lng, pose.lat, pose.height),
+      destination,
       orientation: { heading: CesiumMath.toRadians(pose.heading), pitch: CesiumMath.toRadians(pose.pitch), roll: 0 },
       duration: START_FLIGHT,
-      complete: () => this.#landed(),
-      cancel: () => this.#landed()
+      complete: land,
+      cancel: land
     });
   }
 
@@ -126,6 +150,7 @@ export class SceneRoute implements Disposable {
   /** 交给步行：停下路线，不还原相机，给出开始路线前记下的相机；没有在漫游时为 null */
   handOff(): RoamSaved | null {
     const saved = this.#saved;
+    this.#blackout.lighten();
     this.#path = null;
     this.#saved = null;
     this.#playing = false;

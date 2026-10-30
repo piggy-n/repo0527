@@ -11,6 +11,7 @@ import type {
   ViewKind
 } from '@yzt/map-core';
 import { describe, expect, it } from 'vitest';
+import { isValidPolygonal, QUERY_VERTEX_LIMIT, screenBoxPolygon, vertexCount } from '@/shared/map/query-geometry';
 import type { RegionScope } from '@/shared/map/region/region-scope';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
@@ -24,19 +25,16 @@ import {
   identifyStep,
   isEmptyValue,
   pickResources,
-  pixelSizeAt,
   planBox,
   planIdentify,
   type PickCandidate,
   type PickResource,
   queryCapabilityOf,
   renderedCandidates,
-  screenBoxPolygon,
   screenDistance,
   serverCandidates,
   weightedEstimate
 } from './feature-query';
-import { isValidPolygonal, QUERY_VERTEX_LIMIT, vertexCount } from './query-geometry';
 import type { ResourceDisplay, ResourceLayersState } from './resource-layers';
 
 function layer(code: string, geoType: ResourceTreeLayer['geoType'], ...yearList: [number, ...number[]]) {
@@ -425,32 +423,6 @@ describe('planIdentify', () => {
   });
 });
 
-describe('screenBoxPolygon', () => {
-  it('四角从左上起顺时针拾取成闭合多边形，起点和终点在哪个方向都一样', () => {
-    const polygon = screenBoxPolygon({ from: { x: 0, y: 0 }, to: { x: 200, y: 100 } }, picker().pick);
-
-    expect(polygon).toStrictEqual({
-      type: 'Polygon',
-      coordinates: [
-        [
-          [0, 0],
-          [2, 0],
-          [2, 1],
-          [0, 1],
-          [0, 0]
-        ]
-      ]
-    });
-    expect(screenBoxPolygon({ from: { x: 200, y: 100 }, to: { x: 0, y: 0 } }, picker().pick)).toStrictEqual(polygon);
-  });
-
-  it('有一角拾取不到时为 null', () => {
-    const missRightBottom = picker(({ x, y }) => x === 200 && y === 100);
-
-    expect(screenBoxPolygon({ from: { x: 0, y: 0 }, to: { x: 200, y: 100 } }, missRightBottom.pick)).toBeNull();
-  });
-});
-
 // n 个不同的 guid 的渲染要素
 const many = (target: PickResource, n: number) =>
   Array.from({ length: n }, (_, index) => rendered(target.sourceId, { guid: index.toString(16).padStart(32, '0') }, 0));
@@ -783,12 +755,6 @@ const HOLED: RegionScope = {
 };
 
 describe('区划范围（ADR 0051 第 3、4 节）', () => {
-  it('一个像素对应的经纬度距离：横竖取较小的；拾取不到时为 null', () => {
-    const { view } = scopedView([]);
-    expect(pixelSizeAt({ x: 50, y: 50 }, view.pick)).toBeCloseTo(0.01, 10);
-    expect(pixelSizeAt({ x: 50, y: 50 }, picker(({ y }) => y === 51).pick)).toBeNull();
-  });
-
   it('单击在区划外（遮罩上）时为 null，不查询；区划里的面也取几何，和区划不相交的去掉', () => {
     const outside = scopedView([shaped(DLTB, 'a', rect(1.2, 0.2, 1.4, 0.4))]);
     expect(planIdentify([DLTB], { x: 150, y: 50 }, 15, outside.view, SCOPE)).toBeNull();

@@ -1,17 +1,59 @@
 // @vitest-environment node
 import { simplify } from '@turf/simplify';
 import type { MultiPolygon, Polygon, Position } from 'geojson';
+import type { PickResult, ScreenPoint } from '@yzt/map-core';
 import { describe, expect, it } from 'vitest';
-import cityFile from '@/shared/map/boundary/data/jiangsu-city.json?raw';
-import { clipToScope } from '@/shared/map/region/region-scope';
+import cityFile from './boundary/data/jiangsu-city.json?raw';
 import {
   isValidPolygonal,
+  pixelSizeAt,
   QUERY_VERTEX_LIMIT,
   queryGeometry,
   roundPolygonal,
+  screenBoxPolygon,
   SIMPLIFY_PIXELS,
   vertexCount
 } from './query-geometry';
+import { clipToScope } from './region/region-scope';
+
+// 一个像素是 0.01 度的拾取；miss 为 true 的位置拾取不到
+function picker(miss: (point: ScreenPoint) => boolean = () => false) {
+  return (point: ScreenPoint): PickResult =>
+    miss(point) ? { kind: 'miss' } : { kind: 'hit', surface: 'map', lngLat: [point.x / 100, point.y / 100] };
+}
+
+describe('screenBoxPolygon', () => {
+  it('四角从左上起顺时针拾取成闭合多边形，起点和终点在哪个方向都一样', () => {
+    const polygon = screenBoxPolygon({ from: { x: 0, y: 0 }, to: { x: 200, y: 100 } }, picker());
+
+    expect(polygon).toStrictEqual({
+      type: 'Polygon',
+      coordinates: [
+        [
+          [0, 0],
+          [2, 0],
+          [2, 1],
+          [0, 1],
+          [0, 0]
+        ]
+      ]
+    });
+    expect(screenBoxPolygon({ from: { x: 200, y: 100 }, to: { x: 0, y: 0 } }, picker())).toStrictEqual(polygon);
+  });
+
+  it('有一角拾取不到时为 null', () => {
+    const missRightBottom = picker(({ x, y }) => x === 200 && y === 100);
+
+    expect(screenBoxPolygon({ from: { x: 0, y: 0 }, to: { x: 200, y: 100 } }, missRightBottom)).toBeNull();
+  });
+});
+
+describe('pixelSizeAt', () => {
+  it('一个像素对应的经纬度距离：横竖取较小的；拾取不到时为 null', () => {
+    expect(pixelSizeAt({ x: 50, y: 50 }, picker())).toBeCloseTo(0.01, 10);
+    expect(pixelSizeAt({ x: 50, y: 50 }, picker(({ y }) => y === 51))).toBeNull();
+  });
+});
 
 function square(x: number, y: number, size: number): Position[] {
   return [

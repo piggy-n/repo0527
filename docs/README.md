@@ -29,6 +29,7 @@ docs/
 │  ├─ file-transfer.md        公共上传进度、二进制下载、文件名与取消语义
 │  ├─ file-management.md      文件管理迁移边界、上传交互原型与验证记录
 │  ├─ system-management.md    系统管理与消息：分层、申请与消息的数据层、待联调
+│  ├─ data-query.md           数据查询：四个页面共用的组件、四个页签的拥有者与规则、测试
 │  ├─ city-dashboard.md       城市体检驾驶舱：旧版口径、依赖评估、分步迁移与交互预览
 │  ├─ auth.md                 鉴权：会话、角色、页面权限、路由守卫、登录接口与表单
 │  ├─ storage.md              shared/storage：偏好的持久化（键值存储、偏好的范围、恢复与写入）
@@ -92,6 +93,7 @@ docs/
    - [现状底图的调整（2026-10-28）](stages/current-map-adjustments.md)：默认值记例外、两份顺序、意图里用用户看到的单位、没有 key 的兄弟节点怎样被重建、能推导的状态不另存
    - [城市国土空间监测指标的迁移](stages/space-monitoring-indicators-migration.md)：实测推翻旧代码的兜底假设、计算轮询按 ADR 0039 归类、查询结果标上 ID
    - [城市国土空间监测基本统计的迁移](stages/space-monitoring-statistics-migration.md)：轮询交给查询库、跟踪写成纯函数的状态机、宽屏收起侧栏放进组件库
+   - [数据查询的迁移](stages/data-query-migration.md)：四个路由一个组件按专题加 key、四个拥有者加一个编排者、通用的绘制工具、查询缓存的 key 里有 File
    - [指标智能推演](stages/indicator-simulation.md)：引擎只管状态和时间、动效从进度来，先预告再执行的同一份规则，页面缓存与可叠加的暂停，减少动画就是直接到终态
 5. [commands.md](commands.md)：日常要用的命令
 

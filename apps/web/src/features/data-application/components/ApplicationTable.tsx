@@ -6,6 +6,7 @@ import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
 import { PrepareStatusText } from '@/shared/data-request/PrepareStatusText';
 import { DownloadButton } from '@/shared/file-transfer/DownloadButton';
 import type { RowDownloadState } from '@/shared/file-transfer/useRowDownloads';
+import { TableLoadError } from '@/shared/table/TableLoadError';
 import { TableSkeleton } from '@/shared/table/TableSkeleton';
 import type { Application } from '../api';
 import { canDownload, hasPrepareStep } from '../status';
@@ -80,14 +81,7 @@ export const ApplicationTable = defineComponent({
         return '';
       }
       if (props.error) {
-        return (
-          <div class={styles.error}>
-            加载失败
-            <ElButton link type="primary" onClick={() => emit('retry')}>
-              重试
-            </ElButton>
-          </div>
-        );
+        return <TableLoadError onRetry={() => emit('retry')} />;
       }
       return '暂无数据';
     }

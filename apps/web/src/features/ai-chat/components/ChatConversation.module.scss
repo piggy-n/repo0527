@@ -16,6 +16,7 @@
   text-align: center;
 }
 
+// 助手头像是位图（images/assistant.webp），放在主色圆底上（ADR 0103）
 .robot {
   display: grid;
   place-items: center;
@@ -24,8 +25,13 @@
   margin-bottom: 12px;
   border-radius: 50%;
   background-color: var(--color-primary);
-  color: var(--color-text-inverse);
   box-shadow: var(--shadow-sm);
+}
+
+.robotImage {
+  display: block;
+  width: 40px;
+  height: auto;
 }
 
 .greeting {

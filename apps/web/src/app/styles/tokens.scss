@@ -23,6 +23,7 @@ $colors: (
   'text-inverse': #ffffff,
   'inverse-hover': rgba(255, 255, 255, 0.1),
   'inverse-active': rgba(255, 255, 255, 0.3),
+  'inverse-strong': rgba(255, 255, 255, 0.4),
 
   'border': #e6ebf3,
   'border-light': #edf1f7,
@@ -81,6 +82,7 @@ $primary-alphas: (5, 10, 12, 14, 28, 32);
 
   --font-size-display: 30px;
   --font-size-title: 28px;
+  --font-size-xl: 18px;
   --font-size-lg: 16px;
   --font-size-base: 14px;
   --font-size-xs: 12px;
