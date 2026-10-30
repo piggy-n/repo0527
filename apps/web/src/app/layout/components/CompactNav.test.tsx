@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { Role } from '@/shared/auth/roles';
@@ -50,6 +50,7 @@ describe('CompactNav', () => {
       '[分组] 专项统计',
       '  城市国土空间监测基本统计',
       '  城市国土空间监测指标',
+      '  驾驶舱',
       '——',
       '[图标] 文件管理',
       '[图标] 系统管理',
@@ -76,6 +77,26 @@ describe('CompactNav', () => {
     const rows = await openMenu(Role.user, '/current-map', items => items.filter(item => item.kind === 'dropdown'));
 
     expect(rows.at(0)).toBe('[标题+图标] 查询统计');
-    expect(rows.at(-1)).toBe('  城市国土空间监测指标');
+    expect(rows.at(-1)).toBe('  驾驶舱');
+  });
+
+  it('驾驶舱在新标签页打开，当前页面不跳转', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const router = createRouter({ history: createMemoryHistory(), routes: routesWithoutPages() });
+    await router.push('/current-map');
+    const items = visibleNavItems(navItems, Role.user, name => router.resolve({ name }).meta.roles);
+    const wrapper = mount(CompactNav, { props: { items }, global: { plugins: [router] }, attachTo: document.body });
+    await wrapper.find('button').trigger('click');
+    await vi.waitFor(() => expect(document.querySelector('.el-dropdown-menu')).not.toBeNull());
+
+    const dashboard = [...document.querySelectorAll<HTMLElement>('.el-dropdown-menu__item')].find(
+      item => item.textContent?.trim() === '驾驶舱'
+    );
+    dashboard?.click();
+    await flushPromises();
+
+    expect(open).toHaveBeenCalledWith('/city-dashboard', '_blank', 'noopener');
+    expect(router.currentRoute.value.path).toBe('/current-map');
+    open.mockRestore();
   });
 });

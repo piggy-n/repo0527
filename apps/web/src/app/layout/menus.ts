@@ -6,6 +6,8 @@ import { RouteName } from '@/shared/router/route-names';
 export interface NavLinkTarget {
   label: string;
   route: RouteName;
+  // 在新标签页打开：独立的大屏页（驾驶舱）不在应用布局里，没有回到应用的入口
+  newTab?: boolean;
 }
 
 /** 点击后直接跳转的导航项 */
@@ -63,7 +65,8 @@ export const navItems: readonly NavItem[] = [
         label: '专项统计',
         links: [
           { label: '城市国土空间监测基本统计', route: RouteName.spaceMonitoringBasicStatistics },
-          { label: '城市国土空间监测指标', route: RouteName.spaceMonitoringIndicators }
+          { label: '城市国土空间监测指标', route: RouteName.spaceMonitoringIndicators },
+          { label: '驾驶舱', route: RouteName.cityDashboard, newTab: true }
         ]
       }
     ]
