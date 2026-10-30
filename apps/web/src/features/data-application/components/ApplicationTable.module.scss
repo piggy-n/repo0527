@@ -10,3 +10,23 @@
   gap: var(--space-xs);
   align-items: center;
 }
+
+// 统计任务的名称和标签：名称放不下时先省略，标签始终完整
+.name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  max-width: 100%;
+  vertical-align: middle;
+
+  :global(.el-tag) {
+    flex: none;
+  }
+}
+
+.nameText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

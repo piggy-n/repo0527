@@ -121,6 +121,7 @@
 | [0110](0110-city-dashboard-menu-entry.md) | 驾驶舱的菜单入口：查询统计 → 专项统计，新标签页打开 | 已接受（修改 0077） |
 | [0111](0111-map-controls-without-3d-and-basemap-card.md) | 不支持三维的地图不显示 2D/3D；底图入口抽成 BasemapCard，AI 对话、指标 AI 计算补上 | 已接受（修改 0053 第 3 节） |
 | [0112](0112-data-query-legacy-buttons-and-wide-results.md) | 数据查询的按钮参考旧页面，结果从左侧开始 | 已接受（修改 0104 第 2、3 节） |
+| [0113](0113-statistics-tasks-shown-as-approved.md) | 资源审核里的统计任务按审核通过显示，名称后标"统计任务"；准备状态 error 换成处理失败 | 已接受（修改 0092 第 3、6 节） |
 
 ## 模板
 
