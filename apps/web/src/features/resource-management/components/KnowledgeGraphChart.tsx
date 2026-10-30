@@ -165,7 +165,7 @@ export const KnowledgeGraphChart = defineComponent({
           {toolButton('放大', 'map-zoom-in', () => zoomBy(ZOOM_STEP))}
           {toolButton('缩小', 'map-zoom-out', () => zoomBy(1 / ZOOM_STEP))}
           <div class={styles.separator} role="separator" />
-          {toolButton('适配全图', 'map-default-view', reset)}
+          {toolButton('适配全图', 'dashboard-expand', reset)}
         </div>
       </div>
     );
