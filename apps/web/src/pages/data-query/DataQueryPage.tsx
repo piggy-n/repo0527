@@ -85,16 +85,18 @@ const DataQueryView = defineComponent({
 
     const maximized = () => resultView.value === 'maximized' && hasResult();
 
-    // 地图控制在上、底图卡在下，都在右上角
+    // 都在右上角：底图卡在地图控制的左边，顶部对齐
     const renderTools = () => (
       <div key="tools" class={styles.tools}>
+        <div class={styles.basemap}>
+          <BasemapCard
+            basemap={basemap}
+            open={basemapOpen.value}
+            visible={sides.right.value}
+            onUpdate:open={changeBasemapOpen}
+          />
+        </div>
         <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
-        <BasemapCard
-          basemap={basemap}
-          open={basemapOpen.value}
-          visible={sides.right.value}
-          onUpdate:open={changeBasemapOpen}
-        />
       </div>
     );
 
