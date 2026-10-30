@@ -9,7 +9,7 @@ import styles from './HeaderNav.module.scss';
 
 const divider = (key: string) => <li key={key} role="separator" class={styles.compactDivider} />;
 
-/** 窄屏导航：全部页面收进一个下拉菜单；一级项带图标，下拉项（如"查询统计""智能体"）自成一块，前后加分隔线，子页面缩进 */
+/** 窄屏导航：全部页面收进一个下拉菜单；一级项带图标，下拉项（如"查询统计""AI+"）自成一块，前后加分隔线，子页面缩进 */
 export const CompactNav = defineComponent({
   name: 'CompactNav',
   props: {
