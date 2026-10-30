@@ -1,0 +1,200 @@
+{
+  "name": "水资源",
+  "products": [
+    {
+      "id": "land-use",
+      "name": "用地用海分类",
+      "kind": "分类标准",
+      "classes": [
+        {
+          "code": "17",
+          "name": "陆地水域",
+          "children": [
+            { "code": "1701", "name": "河流水面" },
+            { "code": "1702", "name": "湖泊水面" },
+            { "code": "1703", "name": "水库水面" },
+            { "code": "1704", "name": "坑塘水面" },
+            { "code": "1705", "name": "沟渠" },
+            { "code": "1706", "name": "冰川及常年积雪" }
+          ]
+        },
+        { "code": "24", "name": "其他海域" }
+      ],
+      "datasets": []
+    },
+    {
+      "id": "land-survey",
+      "name": "国土调查",
+      "kind": "调查成果",
+      "classes": [
+        {
+          "code": "11",
+          "name": "水域及水利设施用地",
+          "children": [
+            { "code": "1101", "name": "河流水面" },
+            { "code": "1102", "name": "湖泊水面" },
+            { "code": "1103", "name": "水库水面" },
+            { "code": "1104", "name": "坑塘水面" },
+            { "code": "1107", "name": "沟渠" },
+            { "code": "1110", "name": "冰川及永久积雪" }
+          ]
+        }
+      ],
+      "datasets": [
+        {
+          "code": "DLTB",
+          "name": "地类图斑",
+          "table": {
+            "title": "XX年XX县国土变更调查土地利用现状",
+            "geometry": "面",
+            "period": "年度",
+            "fields": [
+              { "code": "BSM", "name": "标识码", "type": "文本", "note": "内容唯一，可用于计数" },
+              { "code": "DLBM", "name": "地类编码", "type": "文本" },
+              { "code": "DLMC", "name": "地类名称", "type": "文本" },
+              { "code": "ZLDWDM", "name": "坐落单位代码", "type": "文本" },
+              { "code": "ZLDWMC", "name": "坐落单位名称", "type": "文本" },
+              { "code": "TBMJ", "name": "图斑面积", "type": "数值（2 位小数）", "note": "平方米" },
+              { "code": "CZCSXM", "name": "城镇村属性码", "type": "文本" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "urban-monitoring",
+      "name": "城市国土空间监测",
+      "kind": "监测成果",
+      "classes": [
+        {
+          "code": "13",
+          "name": "其他",
+          "children": [
+            {
+              "code": "130A",
+              "name": "水域网络",
+              "children": [
+                { "code": "130A01", "name": "河流" },
+                { "code": "130A02", "name": "水渠" },
+                { "code": "130A03", "name": "湖泊" },
+                { "code": "130A04", "name": "水库" },
+                { "code": "130A05", "name": "坑塘" },
+                { "code": "130A06", "name": "海面" }
+              ]
+            }
+          ]
+        }
+      ],
+      "datasets": [
+        {
+          "code": "HYDA",
+          "name": "水域面",
+          "table": {
+            "title": "XX年XX县城市国土空间监测补充数据集（BCDataset）水域面层",
+            "geometry": "面",
+            "period": "年度",
+            "fields": [
+              { "code": "CCN", "name": "水域类别名称", "type": "文本" },
+              { "code": "BAS", "name": "所属流域的代码", "type": "文本", "note": "河流、水渠必填" },
+              { "code": "ECRM", "name": "实体编码依据说明", "type": "数值（取整）" },
+              { "code": "NAME", "name": "名称", "type": "文本", "note": "河流、湖泊、水库必填；水渠、坑塘、海岸可填" },
+              { "code": "PERIOD", "name": "时令月份", "type": "文本", "note": "湖泊必填，河流可填" },
+              { "code": "TYPE", "name": "河流类型", "type": "文本", "note": "河流必填" },
+              { "code": "AHEIGHT", "name": "平均水深", "type": "数值（1 位小数）", "note": "米；湖泊可填" },
+              { "code": "PAREA", "name": "水面面积", "type": "数值（2 位小数）", "note": "平方千米；湖泊可填" },
+              { "code": "EC", "name": "实体编码", "type": "文本", "note": "河流、水渠、湖泊、水库可填" },
+              { "code": "GRADE", "name": "等级", "type": "文本", "note": "河流、水渠可填" },
+              { "code": "LENGTH", "name": "长度", "type": "数值（3 位小数）", "note": "千米；水渠可填" },
+              { "code": "MHEIGHT", "name": "最大水深", "type": "数值（1 位小数）", "note": "米；湖泊可填" },
+              { "code": "PASS", "name": "通航性质", "type": "文本", "note": "河流、水渠可填" },
+              { "code": "SDTF", "name": "单双向", "type": "文本", "note": "水渠可填" },
+              { "code": "SHRC", "name": "共享河段编码", "type": "文本", "note": "河流、水渠可填" },
+              { "code": "USE", "name": "用途类型", "type": "文本", "note": "水库、坑塘可填" },
+              { "code": "VOL", "name": "容积", "type": "数值（1 位小数）", "note": "万立方米；湖泊、水库可填" },
+              { "code": "WRID", "name": "水利行业编码", "type": "文本", "note": "河流、水渠、湖泊、水库可填" },
+              { "code": "WRGR", "name": "水利行业河流级别", "type": "数值（取整）", "note": "河流可填" },
+              { "code": "WSUCODE", "name": "所在集水区代码", "type": "文本", "note": "湖泊、库塘可填" },
+              { "code": "LKRCODE", "name": "所在主要河流代码", "type": "文本", "note": "湖泊、库塘可填" },
+              { "code": "NGRADE", "name": "新定湖泊等级", "type": "文本", "note": "湖泊、库塘可填" },
+              { "code": "GCODE", "name": "湖泊水库代码", "type": "文本", "note": "湖泊、库塘可填" },
+              { "code": "GNAME", "name": "湖泊水库实体的名称", "type": "文本", "note": "湖泊、库塘可填" },
+              { "code": "ANAME", "name": "湖泊水库的其它名称", "type": "文本", "note": "湖泊、库塘可填" },
+              { "code": "ChangeType", "name": "标识变化类型", "type": "文本", "note": "图形或属性发生变化时填写" },
+              { "code": "FEATID", "name": "要素唯一标识码", "type": "文本" },
+              { "code": "GXSJ", "name": "更新时间", "type": "文本" }
+            ]
+          }
+        },
+        {
+          "code": "HYDL",
+          "name": "水域线",
+          "table": {
+            "title": "XX年XX县城市国土空间监测补充数据集（BCDataset）水域线层",
+            "geometry": "线",
+            "period": "年度"
+          }
+        }
+      ]
+    },
+    {
+      "id": "water-survey",
+      "name": "水资源基础调查",
+      "kind": "调查成果",
+      "classes": [
+        {
+          "code": "FSQ",
+          "name": "丰水期",
+          "children": [
+            {
+              "code": "HL_FS",
+              "name": "丰水期河流",
+              "table": {
+                "title": "XX年XX县地表水域空间数据（丰水期地表河流）",
+                "period": "丰水期",
+                "fields": [
+                  { "code": "UID", "name": "实体唯一标识码", "type": "文本" },
+                  { "code": "HLMC", "name": "河流名称", "type": "文本" },
+                  { "code": "HLDM", "name": "河流代码", "type": "文本" },
+                  { "code": "HLBM", "name": "河流（段）编码", "type": "文本" },
+                  { "code": "XJXZQDM", "name": "县级行政区代码", "type": "文本" },
+                  { "code": "XJXZQMC", "name": "县级行政区名称", "type": "文本" },
+                  { "code": "SMMJ", "name": "水面面积", "type": "数值（2 位小数）", "note": "平方米" },
+                  { "code": "HLDJ", "name": "河流等级", "type": "文本" },
+                  { "code": "LYMC", "name": "流域名称", "type": "文本" },
+                  { "code": "LYBM", "name": "流域编码", "type": "文本" },
+                  { "code": "SJNF", "name": "数据年份", "type": "文本" },
+                  { "code": "BZ", "name": "备注", "type": "文本" },
+                  { "code": "CKZL", "name": "参考资料", "type": "文本" }
+                ]
+              }
+            },
+            { "code": "HP_FS", "name": "丰水期湖泊", "table": { "period": "丰水期" } },
+            { "code": "SK_FS", "name": "丰水期水库", "table": { "period": "丰水期" } }
+          ]
+        },
+        {
+          "code": "KSQ",
+          "name": "枯水期",
+          "children": [
+            { "code": "HL_KS", "name": "枯水期河流", "table": { "period": "枯水期" } },
+            { "code": "HP_KS", "name": "枯水期湖泊", "table": { "period": "枯水期" } },
+            { "code": "SK_KS", "name": "枯水期水库", "table": { "period": "枯水期" } }
+          ]
+        },
+        { "code": "KT", "name": "坑塘" }
+      ],
+      "datasets": []
+    }
+  ],
+  "relations": [
+    { "kind": "class-mapping", "source": "land-survey/1101", "target": "land-use/1701" },
+    { "kind": "class-mapping", "source": "land-survey/1102", "target": "land-use/1702" },
+    { "kind": "class-mapping", "source": "land-survey/1103", "target": "land-use/1703" },
+    { "kind": "class-mapping", "source": "land-survey/1104", "target": "land-use/1704" },
+    { "kind": "class-mapping", "source": "land-survey/1107", "target": "land-use/1705" },
+    { "kind": "class-mapping", "source": "land-survey/1110", "target": "land-use/1706" },
+    { "kind": "temporal", "source": "water-survey/HL_FS", "target": "water-survey/HL_KS" },
+    { "kind": "temporal", "source": "water-survey/HP_FS", "target": "water-survey/HP_KS" },
+    { "kind": "temporal", "source": "water-survey/SK_FS", "target": "water-survey/SK_KS" }
+  ]
+}

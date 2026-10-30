@@ -24,11 +24,16 @@ import { DATA_NAMES, HOT_KEYWORDS, PURPOSE_MAX_LENGTH } from '../extraction/extr
 import styles from './DataExtractionDialog.module.scss';
 import { KnowledgeGraphChart } from './KnowledgeGraphChart';
 import { RegionCascader } from './RegionCascader';
+import { RelationGraph } from './RelationGraph';
+import { RelationNodeDetail } from './RelationNodeDetail';
 
 // 完成页时三步都已完成
 const STEP_INDEX: Record<ExtractionStep, number> = { search: 0, graph: 1, done: 3 };
 
-/** 自助取数：搜索关键词 → 在关系图里选节点、填条件 → 完成。第二步是左图右表单，窄屏改为上图下表单 */
+/**
+ * 自助取数：搜索关键词 → 在关系图里选节点、填条件 → 完成。第二步是左图右表单，窄屏改为上图下表单；
+ * 水资源用泳道关系图（弹窗加宽到 1440），其他资源沿用旧版知识图谱
+ */
 export const DataExtractionDialog = defineComponent({
   name: 'DataExtractionDialog',
   props: {
@@ -64,7 +69,7 @@ export const DataExtractionDialog = defineComponent({
                   search();
                 }
               }}
-              placeholder="请输入地类名称搜索（如：耕地、水田、居住用地）"
+              placeholder="请输入地类名称搜索（如：河流、耕地、居住用地）"
               aria-label="搜索关键词"
               prefixIcon={Search}
               clearable
@@ -80,6 +85,13 @@ export const DataExtractionDialog = defineComponent({
                 {word}
               </ElButton>
             ))}
+          </div>
+          <div class={styles.hot}>
+            <span>按资源类别：</span>
+            <ElButton size="small" onClick={owner.browseWater}>
+              <SvgIcon class={styles.buttonIcon} name="resource-water" size={14} />
+              水资源
+            </ElButton>
           </div>
         </div>
       );
@@ -207,8 +219,21 @@ export const DataExtractionDialog = defineComponent({
           </p>
         );
       }
+      if (owner.mode.value === 'relation') {
+        return (
+          <div key="relation" class={styles.workspace}>
+            <div class={styles.graph}>
+              <RelationGraph owner={owner.relation} />
+            </div>
+            <div class={styles.conditions}>
+              <RelationNodeDetail owner={owner.relation} />
+              {renderForm()}
+            </div>
+          </div>
+        );
+      }
       return (
-        <div class={styles.workspace}>
+        <div key="legacy" class={styles.workspace}>
           <div class={styles.graph}>
             <KnowledgeGraphChart
               graph={owner.graph.value}
@@ -242,7 +267,11 @@ export const DataExtractionDialog = defineComponent({
 
     return () => (
       <ElDialog
-        class={['dialog-panel-header', styles.dialog, owner.step.value === 'graph' && styles.wide]}
+        class={[
+          'dialog-panel-header',
+          styles.dialog,
+          owner.step.value === 'graph' && (owner.mode.value === 'relation' ? styles.wideRelation : styles.wide)
+        ]}
         modelValue={owner.open.value}
         onUpdate:modelValue={(open: boolean) => (owner.open.value = open)}
         title="知识库-自助取数"

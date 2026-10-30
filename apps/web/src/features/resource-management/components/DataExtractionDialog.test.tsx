@@ -103,6 +103,41 @@ describe('useDataExtraction', () => {
     });
   });
 
+  it('水资源的检索词进新的关系图，其他资源沿用旧版；按资源类别可以直接打开水资源', () => {
+    const { owner } = host();
+    owner.start();
+
+    expect(owner.search(' 河流 ')).toBeNull();
+    expect(owner.mode.value).toBe('relation');
+    expect(owner.relation.keyword.value).toBe('河流');
+
+    owner.back();
+    expect(owner.search('耕地')).toBeNull();
+    expect(owner.mode.value).toBe('legacy');
+    expect(owner.relation.keyword.value).toBe('');
+    expect(owner.graph.value.nodes.length).toBeGreaterThan(0);
+
+    owner.back();
+    owner.browseWater();
+    expect(owner.step.value).toBe('graph');
+    expect(owner.mode.value).toBe('relation');
+    expect(owner.relation.view.value.lanes).toHaveLength(4);
+  });
+
+  it('关系图里选中的节点随条件提交；上一步清掉选中', () => {
+    const { owner } = host();
+    owner.start();
+    owner.search('湖泊');
+    owner.relation.select('land-survey/1102');
+    owner.back();
+    expect(owner.relation.selectedId.value).toBeNull();
+
+    owner.search('湖泊');
+    owner.relation.select('land-survey/1102');
+    expect(owner.submit()).toBeNull();
+    expect(owner.request.value).toMatchObject({ nodeId: 'land-survey/1102', nodeName: '湖泊水面' });
+  });
+
   it('重新打开回到第一步和默认条件；换会话时关闭', () => {
     const { owner, session } = host();
     owner.start();
@@ -144,6 +179,24 @@ describe('DataExtractionDialog', () => {
     expect(owner.step.value).toBe('done');
     expect(dialog().querySelector('[role="status"]')?.textContent).toBe('已转到后台处理数据');
     expect(dialog().querySelector('.el-dialog__footer')).toBeNull();
+  });
+
+  it('按资源类别打开水资源关系图：弹窗加宽，右侧是节点详情；选中节点后详情列出关系', async () => {
+    const { owner } = host();
+    owner.start();
+    await flushPromises();
+
+    await click('水资源');
+    const graph = required(dialog().querySelector('[aria-label="水资源关系图"]'), '水资源关系图');
+    expect(graph.querySelectorAll('[data-node-id]')).toHaveLength(35);
+    expect(dialog().textContent).toContain('请选择关系图节点');
+    expect(required(document.querySelector('.el-dialog'), '弹窗').className).toContain('wideRelation');
+
+    required(graph.querySelector<HTMLElement>('[data-node-id="water-survey/HL_FS"]'), 'HL_FS').click();
+    await flushPromises();
+    expect(owner.relation.selectedId.value).toBe('water-survey/HL_FS');
+    expect(dialog().textContent).toContain('时序关联');
+    expect(dialog().textContent).toContain('13 个字段');
   });
 
   it('输入法选字时的回车不搜索，普通回车搜索', async () => {

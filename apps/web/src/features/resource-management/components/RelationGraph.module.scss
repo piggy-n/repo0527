@@ -1,0 +1,425 @@
+// 水资源关系图：上面是数据成果的筛选，中间是可平移缩放的泳道，下面是关系类型和视角按钮
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 320px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-container);
+}
+
+.toolbar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-lg);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.products {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.label {
+  color: var(--color-text-regular);
+}
+
+.productTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: var(--font-weight-regular);
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.keyword {
+  margin-left: auto;
+}
+
+.canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.viewport {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  cursor: grab;
+}
+
+.panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
+// 舞台按缩放比例变换，外面这层按缩放后的尺寸占位，滚动范围才对
+.sizer {
+  position: relative;
+  overflow: hidden;
+}
+
+.stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--lane-gap);
+  box-sizing: border-box;
+  padding: var(--space-lg) 32px var(--space-lg) var(--space-lg);
+  transform-origin: 0 0;
+}
+
+// 线在泳道底色之上、卡片之下
+.edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.lane {
+  flex: 1 1 0;
+  min-width: var(--lane-min-width);
+  max-width: 300px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-neutral-bg-light);
+}
+
+.laneHead {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  padding: 10px var(--space-md) var(--space-sm);
+  border-top: 3px solid var(--product-color);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+
+  strong {
+    color: var(--color-text-strong);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-base);
+  }
+
+  span {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-compact);
+  }
+}
+
+.laneBody {
+  padding: var(--space-xs) var(--space-sm) var(--space-md);
+}
+
+.item + .item,
+.children > .item:first-child {
+  margin-top: 6px;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+
+// 展开按钮宽 16，下级缩进 20，竖线对着按钮的中线
+.toggle,
+.toggleSpace {
+  flex: none;
+  width: 16px;
+  height: 32px;
+}
+
+.toggle {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+
+  :global(.el-icon) {
+    transition: transform 0.15s;
+  }
+
+  &[aria-expanded='true'] :global(.el-icon) {
+    transform: rotate(90deg);
+  }
+
+  &:hover {
+    background-color: var(--color-primary-bg);
+    color: var(--color-primary);
+  }
+}
+
+.children {
+  margin-left: 7px;
+  padding-left: 12px;
+  border-left: 1px solid var(--color-border-dashed);
+}
+
+.card {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 4px var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-container);
+  color: var(--color-text-strong);
+  font: inherit;
+  line-height: var(--line-height-base);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--color-primary-border-hover);
+  }
+
+  mark {
+    border-bottom: 2px solid var(--color-warning);
+    background-color: var(--color-warning-bg);
+    color: inherit;
+  }
+}
+
+.toggle:focus-visible,
+.card:focus-visible,
+.tool:focus-visible,
+.kind:focus-visible {
+  outline: 2px solid var(--color-primary-border-hover);
+  outline-offset: 1px;
+}
+
+.levelOne .name {
+  font-weight: var(--font-weight-semibold);
+}
+
+.dataset {
+  background-color: var(--color-neutral-bg);
+}
+
+// 和焦点相连：描出关系的颜色；文字不变淡，保证对比度
+.related {
+  border-color: var(--relation-color);
+  box-shadow: inset 0 0 0 1px var(--relation-color);
+}
+
+.selected {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-bg-light);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.tableMark {
+  flex: none;
+  align-self: center;
+  margin-right: -2px;
+  color: var(--color-text-secondary);
+}
+
+.code {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.badge,
+.count {
+  flex: none;
+  align-self: center;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tag);
+}
+
+.badge {
+  background-color: var(--color-bg-container);
+  color: var(--color-text-regular);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.pending {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  box-shadow: none;
+}
+
+.count {
+  background-color: var(--color-neutral-bg);
+  color: var(--color-text-regular);
+}
+
+.datasets {
+  margin-top: var(--space-md);
+}
+
+.subhead {
+  margin: 0 0 6px 20px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.edgeLabel {
+  position: absolute;
+  z-index: 3;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background-color: var(--color-bg-container);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tag);
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+}
+
+.legend {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-md);
+  padding: 6px var(--space-md);
+  border-top: 1px solid var(--color-border-light);
+  font-size: var(--font-size-xs);
+}
+
+.kinds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-sm);
+}
+
+.kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-regular);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+  }
+
+  &[aria-disabled='true'] {
+    cursor: default;
+
+    &:hover {
+      background: none;
+    }
+  }
+}
+
+.kindOff {
+  color: var(--color-text-placeholder);
+
+  svg {
+    opacity: 0.4;
+  }
+}
+
+.kindCount {
+  color: var(--color-text-secondary);
+}
+
+// 视角按钮放在图例栏右端：浮在画布上会压住最后一列
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-regular);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+}
+
+.zoomValue {
+  min-width: 44px;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+// 窄屏：数据成果一行横向滚动
+@media (max-width: 600px) {
+  .products {
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}

@@ -23,6 +23,15 @@
   width: min(1180px, calc(100vw - 32px));
 }
 
+// 水资源关系图的四条泳道至少要 968 宽
+.wideRelation {
+  width: min(1440px, calc(100vw - 32px));
+}
+
+.buttonIcon {
+  margin-right: var(--space-xs);
+}
+
 .steps {
   flex: none;
   align-self: center;
@@ -184,6 +193,11 @@
   .graph {
     flex: none;
     height: 360px;
+  }
+
+  // 泳道图有筛选栏和图例栏，留出更高的画布
+  .wideRelation .graph {
+    height: 560px;
   }
 
   .conditions {
