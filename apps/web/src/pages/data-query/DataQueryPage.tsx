@@ -18,7 +18,7 @@ import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
 import styles from './DataQueryPage.module.scss';
 
-// 一个专题的查询页：左边查询面板，中间底部查询结果，右边地图控制和底图卡（同指标页的网格，ADR 0053）
+// 一个专题的查询页：左上查询面板，底部横跨整页的查询结果，右上地图控制和底图卡（2026-10-30）
 const DataQueryView = defineComponent({
   name: 'DataQueryView',
   props: {
@@ -83,8 +83,12 @@ const DataQueryView = defineComponent({
 
     const hasResult = () => query.result.request.value !== null;
 
-    const renderBasemapCard = () => (
-      <div key="cards" class={styles.cards}>
+    const maximized = () => resultView.value === 'maximized' && hasResult();
+
+    // 地图控制在上、底图卡在下，都在右上角
+    const renderTools = () => (
+      <div key="tools" class={styles.tools}>
+        <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
         <BasemapCard
           basemap={basemap}
           open={basemapOpen.value}
@@ -99,9 +103,9 @@ const DataQueryView = defineComponent({
         <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
         <BoxSelectOverlay pick={query.spatial.draw} />
         <div class={styles.overlay}>
-          {/* 查询面板和结果在同一列：结果从左边开始，面板让出它的高度；结果最大化时面板不显示（2026-10-29） */}
-          <div key="main" class={styles.main}>
-            <div key="left" class={styles.left} v-show={resultView.value !== 'maximized' || !hasResult()}>
+          {/* 查询面板和结果在同一列：结果横跨整页，面板让出它的高度；结果最大化时面板不显示（2026-10-29） */}
+          <div key="main" class={[styles.main, maximized() && styles.mainMaximized]}>
+            <div key="left" class={styles.left} v-show={!maximized()}>
               <QueryPanel query={query} collapsed={!sides.left.value} onUpdate:collapsed={changeCollapsed} />
             </div>
             {hasResult() && (
@@ -119,10 +123,7 @@ const DataQueryView = defineComponent({
               </div>
             )}
           </div>
-          <div key="controls" class={styles.controls}>
-            <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
-          </div>
-          {renderBasemapCard()}
+          {renderTools()}
         </div>
         <MapStatusNotice />
       </div>

@@ -39,7 +39,7 @@ const button = (wrapper: VueWrapper, text: string) =>
   );
 
 describe('QueryPanel', () => {
-  it('标题是专题名；四种查询方式是一组按钮，高级查询在自然语言查询之前，点一项切换内容', async () => {
+  it('标题是专题名；查询方式是一组按钮，高级查询暂时隐藏，点一项切换内容', async () => {
     const wrapper = setup();
     expect(wrapper.find('h2').text()).toBe('城市国土空间监测查询');
     const group = wrapper.get('[role="radiogroup"]');
@@ -47,18 +47,16 @@ describe('QueryPanel', () => {
     expect(group.findAll('.el-radio-button').map(item => item.text())).toStrictEqual([
       '属性查询',
       '空间查询',
-      '高级查询',
       '自然语言查询'
     ]);
     expect(wrapper.text()).toContain('查询范围');
 
-    await mode(wrapper, '高级查询').get('input').setValue(true);
-    expect(wrapper.get('.el-radio-button.is-active').text()).toBe('高级查询');
-    expect(wrapper.text()).toContain('构造条件');
-    expect(wrapper.text()).toContain('请先选择图层');
-
     await mode(wrapper, '空间查询').get('input').setValue(true);
+    expect(wrapper.get('.el-radio-button.is-active').text()).toBe('空间查询');
     expect(wrapper.text()).toContain('选择方式');
+
+    await mode(wrapper, '自然语言查询').get('input').setValue(true);
+    expect(wrapper.get('.el-radio-button.is-active').text()).toBe('自然语言查询');
   });
 
   it('参考旧页面的按钮：条件下面是"添加查询条件"（选图层前不可用），底部查询在前、重置在后', () => {

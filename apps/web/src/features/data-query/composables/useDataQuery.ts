@@ -22,6 +22,9 @@ export const QUERY_TABS: readonly { readonly id: QueryTab; readonly label: strin
   { id: 'natural', label: '自然语言查询' }
 ];
 
+/** 面板上显示的页签：高级查询暂时隐藏（2026-10-30），表单、提交和导出的逻辑都保留，去掉过滤即恢复 */
+export const SHOWN_QUERY_TABS = QUERY_TABS.filter(item => item.id !== 'advanced');
+
 /** 点"查询"（或画完范围自动查询）的结果，页面据此提示 */
 export type SubmitResult =
   | { readonly kind: 'submitted' }
