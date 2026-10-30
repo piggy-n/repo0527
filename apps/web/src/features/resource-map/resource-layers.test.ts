@@ -6,7 +6,6 @@ import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import {
   batchYearOptions,
-  hasYearData,
   EMPTY_RESOURCE_LAYERS,
   mergeDisplayState,
   isResourceBodyLayer,
@@ -358,11 +357,6 @@ describe('批量设置年份（ADR 0052 第 2 节）', () => {
     expect(batchYearOptions(CATALOG)).toStrictEqual([2025, 2024, 2023, 2021, 2020]);
     expect(batchYearOptions(catalogOf(DLTB, GYSSP))).toStrictEqual([2021, 2020]);
     expect(batchYearOptions(null)).toStrictEqual([]);
-  });
-
-  it('目录里是否有资源有这一年的数据：单年份的也算', () => {
-    expect([2022, 2025, 2021].map(year => hasYearData(CATALOG, year))).toStrictEqual([true, true, false]);
-    expect(hasYearData(null, 2024)).toBe(false);
   });
 
   it('有这一年的资源不论是否勾选都切过去，没有的不变；勾选、透明度、顺序不变', () => {

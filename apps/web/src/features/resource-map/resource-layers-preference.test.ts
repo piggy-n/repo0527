@@ -63,22 +63,26 @@ afterEach(() => {
 describe('资源图层偏好的校验', () => {
   const display = { checked: true, opacity: 0.5, year: 2024 };
 
-  it('顺序和各资源的设置一一对应：通过', () => {
+  it('顺序和各资源的设置一一对应：通过；批量设置的年份可以没有', () => {
     const value = { displays: { a: display, b: display }, order: ['b', 'a'] };
 
     expect(storedResourceLayersSchema.safeParse(value).success).toBe(true);
+    expect(storedResourceLayersSchema.safeParse({ ...value, batchYear: 2023 }).success).toBe(true);
+    expect(storedResourceLayersSchema.safeParse({ ...value, batchYear: null }).success).toBe(true);
   });
 
-  it('顺序有重复、顺序里的资源没有设置、多出没有排序的设置、透明度越界：不通过', () => {
+  it('顺序有重复、顺序里的资源没有设置、多出没有排序的设置、透明度越界、批量年份不是整数：不通过', () => {
     // 前两组数量相等，只有"不重复""每一项都有设置"这两条检查能分别拦下
     const invalid = [
       { displays: { a: display, b: display }, order: ['a', 'a'] },
       { displays: { a: display, b: display }, order: ['a', 'c'] },
       { displays: { a: display, b: display }, order: ['a'] },
-      { displays: { a: { ...display, opacity: 1.5 } }, order: ['a'] }
+      { displays: { a: { ...display, opacity: 1.5 } }, order: ['a'] },
+      { displays: { a: display }, order: ['a'], batchYear: 2023.5 }
     ];
 
     expect(invalid.map(value => storedResourceLayersSchema.safeParse(value).success)).toStrictEqual([
+      false,
       false,
       false,
       false,
@@ -166,7 +170,7 @@ describe('资源图层的偏好', () => {
     expect(ctx.owner.state.value.displays.get('bgdc_dltb')?.checked).toBe(false);
   });
 
-  it('批量设置的年份写入，没勾选的资源也写；重新打开时还原', async () => {
+  it('批量设置的年份写入，没勾选的资源也写，并记下批量设置的年份；重新打开时还原（ADR 0116）', async () => {
     const store = createMemoryStore();
     {
       using ctx = setup(store);
@@ -175,7 +179,10 @@ describe('资源图层的偏好', () => {
       await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
     }
     expect(store.entries.get(KEY)).toMatchObject({
-      value: { displays: { bgdc_cjdcq: { checked: false, year: 2023 }, csxhjctb_hydl: { year: 2023 } } }
+      value: {
+        displays: { bgdc_cjdcq: { checked: false, year: 2023 }, csxhjctb_hydl: { year: 2023 } },
+        batchYear: 2023
+      }
     });
 
     using reopened = setup(store);
@@ -183,6 +190,16 @@ describe('资源图层的偏好', () => {
 
     expect(reopened.owner.state.value.displays.get('bgdc_cjdcq')?.year).toBe(2023);
     expect(reopened.owner.state.value.displays.get('csxhjctb_hydl')?.year).toBe(2023);
+    expect(reopened.owner.batchYear.value).toBe(2023);
+  });
+
+  it('以前存下的没有批量设置的年份：照常还原，按没有批量设置过', async () => {
+    const store = createMemoryStore(stored({ bgdc_dltb: HIDDEN }, ['bgdc_dltb']));
+    using ctx = setup(store);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(ctx.owner.state.value.displays.get('bgdc_dltb')?.opacity).toBe(0.9);
+    expect(ctx.owner.batchYear.value).toBeNull();
   });
 
   it('修改后防抖写入：每个资源的设置和面板顺序', async () => {
@@ -203,7 +220,8 @@ describe('资源图层的偏好', () => {
           bgdc_cjdcq: { checked: false, opacity: 1, year: 2024 },
           csxhjctb_hydl: { checked: true, opacity: 0.4, year: 2025 }
         },
-        order: ['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq']
+        order: ['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq'],
+        batchYear: null
       }
     });
   });

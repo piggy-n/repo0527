@@ -108,6 +108,13 @@
   width: 132px;
 }
 
+// 批量年份下拉的一项：铺满整行（抵消 Element 选项左 20、右 32 的内边距），点哪里都能再执行一次回显着的那一年
+.batchOption {
+  display: block;
+  margin: 0 -32px 0 -20px;
+  padding: 0 32px 0 20px;
+}
+
 // 目录、分割线、"已选择图层"：两区的高度由组件按内容和分割线算好（panel-split.ts），面板跟着内容变矮
 .lists {
   display: flex;

@@ -224,7 +224,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - line 图层的 `line-dasharray` 不在常量和按要素取值之间切换（MapLibre 6.12 的缺陷会报错）：线型不同的要素按线型拆成多个图层，每层的线型是常量，实线不设（ADR 0046）
 - 只随级别变化（常量或按 `zoom` 的 `step`）的 `fill-pattern` 设 `'fill-pattern-transition': { duration: 0 }`：过渡期间 MapLibre 按旧图片取图集位置，换花纹后会画错约 300 毫秒（见 `docs/migration.md` 的"切换填充方式的闪烁"）
 - 区划目录和区划边界只用本地数据（`shared/map/region`），目录与市界、县界数据由测试保证逐条一致（ADR 0036）；经纬度的识别、显示和复制只用 `shared/map/location/coordinate-format.ts` 的纯函数（ADR 0037）
-- 资源的年份是按 `code` 的显示状态：单个资源用拥有者的 `setYear`，批量用 `setYearForAll`（有这一年的资源不论是否勾选都切过去），不另存"当前年份"；界面条目的身份、名称和符号按 `code`，年份作为单独的字段显示（ADR 0052）
+- 资源的年份是按 `code` 的显示状态：单个资源用拥有者的 `setYear`，批量用 `setYearForAll`（有这一年的资源不论是否勾选都切过去），不另存"当前年份"；拥有者记下的最后一次批量设置的年份（`batchYear`）只给选择框回显，不参与推导，也不代替各资源的年份（ADR 0116）；界面条目的身份、名称和符号按 `code`，年份作为单独的字段显示（ADR 0052）
 - 区划裁剪按区划边界的几何，不按要素属性里的区划代码过滤（业务数据的代码和区划目录对不上）：区划外用 `region-clip` 分组的遮罩盖住；显示和查询的范围都取 `readyBoundary`；点选、框选的渲染要素先按范围过滤再去重、计数，发给后端的几何只用 `query-geometry.ts` 的 `queryGeometry` 整理（误差不超过 2 像素、有效、最多 120 个坐标），整理不出来时提示范围太复杂（ADR 0051）
 - 地图页的区域按 ADR 0070：行政区、图例、区划定位、坐标定位共用 `usePanelGroup` + `MapPanelGroup`，查询详情由独立 `FeatureDetailWindow` 展示，底图保留按钮左侧的 `MapOptionsPopover`；外壳负责标题、关闭和悬浮元素登记，内容不重复处理。功能入口打开时标签前移，直接点标签只切换；统一关闭只影响功能组。功能与详情同列上下排列，布局由 `panelStackLayout`、`usePanelStack` 管理，空间不足只收起非当前内容。有临时交互的内容接收 `active`，隐藏或收起时结束交互，关闭时卸载；窄屏仍由 `useSideExclusion` 决定最后操作的一边
 - 地图页的界面按 5D 的设计稿（ADR 0053～0055）及后续已确认调整：当前工具、面板开关、视图状态、失败原因等仍是组合式函数、store 或纯函数里的数据，组件只显示和调用，测试放在逻辑上；随尺寸变化的排法写成纯函数（如 `mapPageLayout`、`fitStatusLayout`），组件只交给它量到的尺寸。新的界面块先出可操作的 HTML 原型（`public/design.local/`，不入库）或真实组件预览，用户确认后再实现，按 `docs/design/ui-workflow.md` 验证
