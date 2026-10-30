@@ -26,6 +26,10 @@ export interface RunConversation {
   /** 推演进行中、已暂停、已完成：对话栏的提示和快捷说法按它变 */
   readonly phase: ComputedRef<'running' | 'paused' | 'done'>;
   readonly suggestions: ComputedRef<readonly string[]>;
+  /** 输入框空着时占位显示的一句完整说法：快捷说法里第一条不是暂停、停止这类控制的 */
+  readonly example: ComputedRef<string>;
+  /** 把示例填进输入框（Tab） */
+  fillExample(): void;
   /** 看结果时左侧没有时间线：上一句看结果的回复，对话栏写在输入框下面；看流程图时为 null */
   readonly reply: ComputedRef<string | null>;
   /** 发送输入框里的话；传了 text 时发送这句（快捷说法） */
@@ -34,9 +38,12 @@ export interface RunConversation {
 
 const HINT = '没听懂这句话。可以说：暂停、继续、停止；改成旧规程、相交即算、人口增加 10%、公园绿地覆盖率目标 75；加上苏州市、去掉人均公园绿地。';
 // 推演完成后还能看结果
-const DONE_HINT = '没听懂这句话。看结果可以说：看南京市、按达标着色、看 2025 年、回看推演流程；改推演可以说：改成旧规程、相交即算、加上苏州市、去掉人均公园绿地。';
+const DONE_HINT = '没听懂这句话。看结果可以说：看南京市、按达标着色、看 2025 年、回看计算流程；要改条件可以说：改成旧规程、相交即算、加上苏州市、去掉人均公园绿地。';
 
-const groupName = (step: string | null) => STEP_GROUPS.find(group => group.steps.some(item => item === step))?.name ?? '条件解析';
+// 控制计算的快捷说法：太短，不拿来做占位的示例
+const CONTROLS: ReadonlySet<string> = new Set(['暂停', '继续', '停止计算', '调整条件', '回看计算流程']);
+
+const groupName =(step: string | null) => STEP_GROUPS.find(group => group.steps.some(item => item === step))?.name ?? '条件解析';
 
 /**
  * 推演中的对话（按规则理解，run/commands.ts）：暂停、继续、停止；改参数时按引擎的规则保存或从受影响的步骤重算，
@@ -57,7 +64,7 @@ export function useRunConversation(
   const current = () => {
     const { conditions, params } = state.value;
     if (!conditions) {
-      throw new Error('推演没有开始');
+      throw new Error('计算没有开始');
     }
     return { conditions, params };
   };
@@ -92,16 +99,16 @@ export function useRunConversation(
         return 'stopped';
       case 'pause':
         if (phase.value === 'done') {
-          say('推演已经完成了。直接说要改什么，我会在这一版的基础上重新推演。');
+          say('计算已经完成了。直接说要改什么，我会在这一版的基础上重新计算。');
         } else {
-          say(userPause.pause() ? '已暂停。说"继续"接着推演，也可以先改参数或范围。' : '推演已经暂停了。');
+          say(userPause.pause() ? '已暂停。说"继续"接着计算，也可以先改参数或范围。' : '计算已经暂停了。');
         }
         return 'replied';
       case 'resume':
-        say(userPause.resume() ? '继续推演。' : '推演没有暂停。');
+        say(userPause.resume() ? '继续计算。' : '计算没有暂停。');
         return 'replied';
       case 'none':
-        say(command.notes.length > 0 ? `${command.notes.join('；')}，推演没有变化。` : phase.value === 'done' ? DONE_HINT : HINT);
+        say(command.notes.length > 0 ? `${command.notes.join('；')}，计算没有变化。` : phase.value === 'done' ? DONE_HINT : HINT);
         return 'replied';
       case 'change':
         break;
@@ -128,24 +135,31 @@ export function useRunConversation(
     return 'replied';
   };
 
+  // 看结果时先给看结果的说法，再给两条改参数的
+  const suggestions = computed(() => {
+    const { conditions } = state.value;
+    if (!conditions) {
+      return [];
+    }
+    const list = commandSuggestions(current(), phase.value);
+    const selection = viewer.selection.value;
+    return phase.value === 'done' && viewer.view.value === 'result' && selection
+      ? [...viewSuggestions(conditions, selection), ...list.slice(0, 2)]
+      : list;
+  });
+  const example = computed(() => suggestions.value.find(words => !CONTROLS.has(words)) ?? suggestions.value[0] ?? '');
+
   return {
     text,
     setText: value => {
       text.value = value;
     },
     phase,
-    // 看结果时先给看结果的说法，再给两条改参数的
-    suggestions: computed(() => {
-      const { conditions } = state.value;
-      if (!conditions) {
-        return [];
-      }
-      const list = commandSuggestions(current(), phase.value);
-      const selection = viewer.selection.value;
-      return phase.value === 'done' && viewer.view.value === 'result' && selection
-        ? [...viewSuggestions(conditions, selection), ...list.slice(0, 2)]
-        : list;
-    }),
+    suggestions,
+    example,
+    fillExample: () => {
+      text.value = example.value;
+    },
     reply: computed(() => (viewer.view.value === 'result' ? lastReply.value : null)),
     send
   };

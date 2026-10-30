@@ -33,32 +33,32 @@ describe('parsePrompt', () => {
   });
 
   it('几个年度新的在前，几个市按区划目录，几项指标按句子里的先后', () => {
-    const result = parsed('推演 2024、2026 年苏州市、无锡市社区小学覆盖率和人均公园绿地面积');
+    const result = parsed('计算 2024、2026 年苏州市、无锡市社区小学覆盖率和人均公园绿地面积');
 
     expect(result.conditions).toEqual({ years: [2026, 2024], cityCodes: ['320200', '320500'], indicatorIds: ['A-32', 'A-39'] });
   });
 
   it('没写年份按 2025，没写城市或写了全省按全省；不在可选范围的年份不算', () => {
-    expect(parsed('推演公园绿地覆盖率').conditions).toMatchObject({ years: [2025], cityCodes: ALL });
-    expect(parsed('推演 2019 年全省公园绿地覆盖率').conditions).toMatchObject({ years: [2025], cityCodes: ALL });
+    expect(parsed('计算公园绿地覆盖率').conditions).toMatchObject({ years: [2025], cityCodes: ALL });
+    expect(parsed('计算 2019 年全省公园绿地覆盖率').conditions).toMatchObject({ years: [2025], cityCodes: ALL });
   });
 
   it('长的关键词先匹配：人均公共停车场不会再算成公共停车场', () => {
-    expect(parsed('推演人均公共停车场、停车楼用地面积').conditions.indicatorIds).toEqual(['B08-2']);
+    expect(parsed('计算人均公共停车场、停车楼用地面积').conditions.indicatorIds).toEqual(['B08-2']);
   });
 
   it('参数只在所选指标用得上时才改', () => {
-    expect(parsed('按旧规程推演南京市公园绿地覆盖率').params.rule).toBe('new');
-    expect(parsed('按人口增加 10% 推演公园绿地覆盖率').params.popChange).toBe(0);
+    expect(parsed('按旧规程计算南京市公园绿地覆盖率').params.rule).toBe('new');
+    expect(parsed('按人口增加 10% 计算公园绿地覆盖率').params.popChange).toBe(0);
   });
 
   it('人口变化按 5% 取整，超出范围的按 20%；减少写成负数', () => {
-    expect(parsed('按常住人口减少 12% 推演人均公园绿地面积').params.popChange).toBe(-10);
-    expect(parsed('按常住人口增加 30% 推演人均公园绿地面积').params.popChange).toBe(20);
+    expect(parsed('按常住人口减少 12% 计算人均公园绿地面积').params.popChange).toBe(-10);
+    expect(parsed('按常住人口增加 30% 计算人均公园绿地面积').params.popChange).toBe(20);
   });
 
   it('认不出指标时为 null', () => {
-    expect(parsePrompt('今天适合推演什么')).toBeNull();
+    expect(parsePrompt('今天适合计算什么')).toBeNull();
   });
 });
 
@@ -74,13 +74,13 @@ describe('describeComposition', () => {
       expect(parsed(text)).toEqual(composition);
     }
     expect(describeComposition(parsed(PROMPT_EXAMPLES[0] ?? ''))).toBe(
-      '按卫生服务站步行 5 分钟的旧规程，推演 2025 年南京市社区卫生服务设施步行15分钟覆盖率'
+      '按卫生服务站步行 5 分钟的旧规程，计算 2025 年南京市社区卫生服务设施步行15分钟覆盖率'
     );
   });
 
   it('多个市、多项指标时写"等"', () => {
-    const composition = parsed('推演 2025 年南京市、苏州市、无锡市社区卫生服务设施覆盖率和人均公园绿地面积');
-    expect(describeComposition(composition)).toBe('推演 2025 年南京市等 3 个市社区卫生服务设施步行15分钟覆盖率等 2 项指标');
+    const composition = parsed('计算 2025 年南京市、苏州市、无锡市社区卫生服务设施覆盖率和人均公园绿地面积');
+    expect(describeComposition(composition)).toBe('计算 2025 年南京市等 3 个市社区卫生服务设施步行15分钟覆盖率等 2 项指标');
     expect(describeComposition({ ...composition, conditions: { ...composition.conditions, cityCodes: ALL } })).toContain('年全省');
   });
 });

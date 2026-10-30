@@ -167,7 +167,7 @@ export const ConditionLibrary = defineComponent({
       const { cityCodes, indicatorIds } = composition.state.value.conditions;
       const all = cityCodes.length === JIANGSU_CITIES.length;
       return (
-        <MxPanel class={styles.panel} title="指标智能推演条件" flush>
+        <MxPanel class={styles.panel} title="指标计算条件" headerTone="muted" flush>
           {{
             actions: () => (
               <ElButton link type="primary" icon={RefreshLeft} onClick={() => composition.reset()}>

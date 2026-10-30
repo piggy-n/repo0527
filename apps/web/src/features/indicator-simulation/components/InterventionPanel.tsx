@@ -92,7 +92,7 @@ export const InterventionPanel = defineComponent({
             ),
             footer: () => [
               <span key="hint" class={styles.hint}>
-                推演已暂停，关闭后继续
+                计算已暂停，关闭后继续
               </span>,
               <ElButton key="cancel" onClick={() => emit('close')}>
                 取消

@@ -44,7 +44,7 @@ export function buildSteps(target: Composition): BuildStep[] {
   for (const key of paramsOf(conditions.indicatorIds)) {
     let note = '';
     if (key !== 'targets') {
-      note = isStandard(key, params) ? '（标准口径）' : '（模拟情景）';
+      note = isStandard(key, params) ? '（标准口径）' : '（自定义口径）';
     }
     steps.push({
       node: paramNode(key),
@@ -52,6 +52,6 @@ export function buildSteps(target: Composition): BuildStep[] {
       composition: current
     });
   }
-  steps.push({ node: OUTPUT_NODE, message: '编排完成，即将开始推演', composition: current });
+  steps.push({ node: OUTPUT_NODE, message: '配置完成，即将开始计算', composition: current });
   return steps;
 }

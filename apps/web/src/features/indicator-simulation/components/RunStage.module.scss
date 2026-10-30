@@ -1,4 +1,4 @@
-// AI 推演与结果展示（原型 v4、v5）：和条件编排一样的分栏布局；推演时左侧 AI 推理、主区流程图，看结果时左侧推演结果、主区地图
+// AI计算与结果展示（原型 v4、v5）：和条件配置一样的分栏布局；计算时左侧 AI计算、主区流程图，看结果时左侧计算结果、主区地图
 .root {
   position: relative;
   height: 100%;
@@ -34,7 +34,7 @@
     visibility 0s linear 0.3s;
 }
 
-// 完成后标题栏右边是"推演流程 / 推演结果"
+// 完成后标题栏右边是"计算流程 / 计算结果"
 .views {
   margin-left: auto;
 }
@@ -80,69 +80,6 @@
   }
 }
 
-// 推演完成：流程图底部居中的卡片
-.doneCard {
-  position: absolute;
-  bottom: var(--space-lg);
-  left: 50%;
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  // 两侧各让出右下角视图切换的宽度，窄时不压住它
-  max-width: calc(100% - 256px);
-  padding: 10px 14px;
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-container);
-  box-shadow: var(--shadow-md);
-  transform: translateX(-50%);
-  cursor: default;
-  animation: rise 0.35s ease-out both;
-
-  :global(.el-button + .el-button) {
-    margin-left: 0;
-  }
-}
-
-@keyframes rise {
-  from {
-    opacity: 0;
-    translate: 0 6px;
-  }
-}
-
-.orb {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 200deg,
-    var(--color-primary),
-    var(--color-ai-violet),
-    var(--color-ai-cyan),
-    var(--color-primary)
-  );
-  box-shadow: 0 0 0 3px var(--color-ai-glow);
-}
-
-.doneText {
-  min-width: 0;
-
-  b {
-    color: var(--color-text-title);
-  }
-
-  p {
-    margin: 0;
-    overflow: hidden;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
-    line-height: var(--line-height-compact);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
 // 人工干预：流程图右上角，标题栏下面，不挡住正在生长的树
 .intervene {
   position: absolute;
@@ -161,8 +98,7 @@
     transition: none;
   }
 
-  .runningDot,
-  .doneCard {
+  .runningDot {
     animation: none;
   }
 }

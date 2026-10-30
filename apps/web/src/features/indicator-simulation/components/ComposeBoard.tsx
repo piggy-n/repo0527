@@ -16,6 +16,7 @@ import {
   type VNodeChild,
   watch
 } from 'vue';
+import { ChatAvatar } from '@/shared/chat-avatar/ChatAvatar';
 import { usePageActive } from '@/shared/composables/usePageActive';
 import { useSortableList } from '@/shared/composables/useSortableList';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
@@ -54,12 +55,13 @@ import { EstimateBar } from './EstimateBar';
 import { ParamPopover } from './ParamPopover';
 import { StageStepper } from './StageStepper';
 
-const LANES: readonly { readonly id: BoardLane; readonly label: string; readonly icon: IconName }[] = [
+// 列标题的图标；AI计算是机器人头像（null）
+const LANES: readonly { readonly id: BoardLane; readonly label: string; readonly icon: IconName | null }[] = [
   { id: 'years', label: '年份', icon: 'simulation-calendar' },
   { id: 'region', label: '监测范围', icon: 'simulation-region' },
   { id: 'indicators', label: '监测指标', icon: 'simulation-indicator' },
   { id: 'params', label: '计算参数', icon: 'simulation-tune' },
-  { id: 'output', label: 'AI 推演', icon: 'simulation-ai' }
+  { id: 'output', label: 'AI计算', icon: null }
 ];
 
 // 节点移动、出现的动画时长（与样式一致），期间每帧重量位置，连线跟着节点走
@@ -438,7 +440,7 @@ export const ComposeBoard = defineComponent({
                   </b>
                   <span class={styles.indicatorMeta}>
                     <span class={styles.meta}>{indicator.id}</span>
-                    {isScenario(shown.value, id) && <span class={styles.scenarioTag}>模拟情景</span>}
+                    {isScenario(shown.value, id) && <span class={styles.scenarioTag}>自定义口径</span>}
                   </span>
                 </div>
                 {removeButton(indicator.name, () => props.composition.removeIndicator(id))}
@@ -541,11 +543,8 @@ export const ComposeBoard = defineComponent({
       }
       return (
         <div class={[nodeClass(OUTPUT_NODE, 'output'), ready && styles.armed, launching && styles.launching]} data-node={OUTPUT_NODE}>
-          <div class={styles.orbWrap}>
-            <span class={styles.orb} />
-            <SvgIcon name="simulation-ai" size={20} />
-          </div>
-          <b>AI 推演</b>
+          <ChatAvatar class={styles.robot} speaker="assistant" size={44} />
+          <b>AI计算</b>
           <span class={styles.meta}>
             {ready
               ? `${years.length} 个年度 × ${cityCodes.length} 市 × ${indicatorIds.length} 项指标`
@@ -565,7 +564,7 @@ export const ComposeBoard = defineComponent({
             disabled={!ready || model.status !== 'ready' || (props.building !== null && !launching)}
             onClick={() => emit('start')}
           >
-            {launching ? '推演启动中' : '开始推演'}
+            {launching ? '计算启动中' : '开始计算'}
           </ElButton>
         </div>
       );
@@ -588,7 +587,7 @@ export const ComposeBoard = defineComponent({
               <StageStepper key="stepper" phase="compose" />,
               props.building && (
                 <div key="status" class={styles.aiStatus} role="status">
-                  <span class={styles.statusOrb} />
+                  <ChatAvatar class={styles.statusRobot} speaker="assistant" size={20} />
                   {props.building.message}
                 </div>
               )
@@ -621,7 +620,7 @@ export const ComposeBoard = defineComponent({
                   </svg>
                   {LANES.map(lane => (
                     <div key={`head-${lane.id}`} class={styles.laneHead}>
-                      <SvgIcon name={lane.icon} />
+                      {lane.icon === null ? <ChatAvatar speaker="assistant" size={20} /> : <SvgIcon name={lane.icon} />}
                       {lane.label}
                     </div>
                   ))}

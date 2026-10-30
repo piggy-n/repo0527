@@ -5,9 +5,9 @@ import { type Composition, SIMULATION_YEARS } from './composition';
 
 /** 三条示例指令：每条是"推演条件 + 至多一个参数"，分别用到计算规程、覆盖认定、常住人口变化 */
 export const PROMPT_EXAMPLES: readonly string[] = [
-  '按卫生服务站步行 5 分钟的旧规程，推演 2025 年南京市社区卫生服务设施覆盖率',
-  '按“相交即算”的覆盖认定，推演 2025 年南京市公园绿地、广场步行 5 分钟覆盖率',
-  '按常住人口增加 10%，推演 2025 年南京市人均公园绿地面积'
+  '按卫生服务站步行 5 分钟的旧规程，计算 2025 年南京市社区卫生服务设施覆盖率',
+  '按“相交即算”的覆盖认定，计算 2025 年南京市公园绿地、广场步行 5 分钟覆盖率',
+  '按常住人口增加 10%，计算 2025 年南京市人均公园绿地面积'
 ];
 
 /** 没写年份时按 2025 年：计算方法合集的监测年度 */
@@ -118,7 +118,7 @@ export function describeComposition({ conditions, params }: Composition): string
       : [])
   ];
   const yearsText = years.toSorted((a, b) => a - b).join('、');
-  return `${ways.length > 0 ? `按${ways.join('、')}，` : ''}推演 ${yearsText} 年${scope}${subject}`;
+  return `${ways.length > 0 ? `按${ways.join('、')}，` : ''}计算 ${yearsText} 年${scope}${subject}`;
 }
 
 /** 随机指令里一定有的指标：社区卫生服务设施覆盖率，计算规程、覆盖认定都能演示 */
@@ -163,7 +163,7 @@ export function randomPrompt(random: () => number, avoid: readonly string[] = []
             ? `按常住人口${random() < 0.5 ? '增加' : '减少'} ${percent}%，`
             : '';
     const scope = cities === null ? '全省' : cities.map(city => city.name).join('、');
-    text = `${phrase}推演 ${years.join('、')} 年${scope}${joinNames(indicators.map(item => item.name))}`;
+    text = `${phrase}计算 ${years.join('、')} 年${scope}${joinNames(indicators.map(item => item.name))}`;
   }
   return text;
 }

@@ -97,7 +97,7 @@ const BY_ID = new Map(SIMULATION_INDICATORS.map(indicator => [indicator.id, indi
 export function simulationIndicator(id: string): SimulationIndicator {
   const indicator = BY_ID.get(id);
   if (!indicator) {
-    throw new Error(`推演不支持指标 ${id}`);
+    throw new Error(`计算不支持指标 ${id}`);
   }
   return indicator;
 }

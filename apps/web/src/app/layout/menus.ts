@@ -83,7 +83,7 @@ export const navItems: readonly NavItem[] = [
     icon: 'nav-ai',
     links: [
       { label: 'AI对话', route: RouteName.aiChat },
-      { label: '指标智能推演', route: RouteName.indicatorSimulation }
+      { label: '城市国土空间监测指标AI计算', route: RouteName.indicatorSimulation }
     ]
   }
 ];

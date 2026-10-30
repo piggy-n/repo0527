@@ -11,7 +11,7 @@ export const DevIndicatorSimulationPage = defineComponent({
     return () => (
       <div class={styles.root}>
         <div class={styles.bar}>
-          <strong>指标智能推演样例</strong>
+          <strong>城市国土空间监测指标AI计算样例</strong>
           <span>真实页面，模拟数据，不请求后端</span>
           <RouterLink class={styles.link} to={{ name: RouteName.devTheme }}>
             主题预览

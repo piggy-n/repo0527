@@ -13,10 +13,10 @@ describe('useSimulationRun', () => {
     const calculator = createCalculator(await loadTestAtlas());
     const clock = new ManualClock();
     const scope = effectScope();
-    const run = required(scope.run(() => useSimulationRun(clock)), '推演的拥有者');
+    const run = required(scope.run(() => useSimulationRun(clock)), '计算的拥有者');
     expect(run.state.value.status).toBe('idle');
     expect(() => run.pause()()).not.toThrow();
-    expect(() => run.stop()).toThrow('推演还没有开始');
+    expect(() => run.stop()).toThrow('计算还没有开始');
 
     run.start(sampleComposition(), calculator);
     expect(run.state.value.status).toBe('planning');

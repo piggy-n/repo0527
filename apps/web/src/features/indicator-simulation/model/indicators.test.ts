@@ -11,7 +11,7 @@ import {
   walkMeters
 } from './indicators';
 
-describe('推演支持的指标', () => {
+describe('计算支持的指标', () => {
   it('22 项都在共用目录里，四类都有', () => {
     expect(UNKNOWN_SPEC_IDS).toEqual([]);
     expect(SIMULATION_INDICATORS).toHaveLength(22);
@@ -35,7 +35,7 @@ describe('推演支持的指标', () => {
       ruleChange: false
     });
     expect(simulationIndicator('A-39')).toMatchObject({ unit: 'm²', model: 'perCapita', facility: '公园绿地' });
-    expect(() => simulationIndicator('B-12')).toThrow('推演不支持指标 B-12');
+    expect(() => simulationIndicator('B-12')).toThrow('计算不支持指标 B-12');
   });
 
   it('覆盖对象和规程变化按计算方法：消防、派出所覆盖城区面积，社区卫生、文化设施有新旧规程', () => {

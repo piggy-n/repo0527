@@ -206,10 +206,10 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     step: 'parse',
     label: '条件解析',
     title: `${scope} · ${yearsText} 年`,
-    detail: `${indicatorIds.length} 项指标 · ${scenarioIds.length > 0 ? '含模拟情景' : '标准口径'}`,
+    detail: `${indicatorIds.length} 项指标 · ${scenarioIds.length > 0 ? '含自定义口径' : '标准口径'}`,
     kind: 'root'
   });
-  say('parse', rich`理解指令：推演 ${em(`${yearsText} 年`)}${scope}的 ${em(`${indicatorIds.length} 项`)}指标。`, 'parse');
+  say('parse', rich`理解指令：计算 ${em(`${yearsText} 年`)}${scope}的 ${em(`${indicatorIds.length} 项`)}指标。`, 'parse');
   const area = coverage.filter(indicator => indicator.base === 'area').length;
   const kinds = [
     coverage.length - area > 0 ? `住宅用地覆盖率 ${coverage.length - area} 项` : '',
@@ -224,11 +224,11 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     const values = changed.map(key => `${PARAM_LABELS[key]}按「${describeParam(key, params, conditions)}」`).join('，');
     say(
       'parse',
-      rich`${values}，和 Excel 的标准口径不同，按${em('模拟情景')}推演；${scenarioIds.map(id => simulationIndicator(id).short).join('、')}另算一支标准口径作对照。`,
+      rich`${values}，当前使用${em('自定义口径')}计算；${scenarioIds.map(id => simulationIndicator(id).short).join('、')}另算一支标准口径作对照。`,
       'parse'
     );
   } else {
-    say('parse', rich`参数都是${em('标准口径')}，即 Excel 里的计算规则。`, 'parse');
+    say('parse', rich`参数都按${em('标准口径')}计算。`, 'parse');
   }
   say('parse', rich`规划路线：数据分三路并行准备，核查后按指标分成 ${em(`${indicatorIds.length} 支`)}，最后汇总成结论。`, 'parse');
 
@@ -343,13 +343,13 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
         step: 'compute',
         label: '对照 · 标准口径',
         title: formatValue(base.value, indicator),
-        detail: `${short} · Excel 规则`,
+        detail: `${short} · 标准规则`,
         kind: 'standard'
       });
       const delta = data.value - base.value;
       say(
         'compute',
-        rich`对照标准口径为 ${em(formatValue(base.value, indicator))}，模拟情景${delta >= 0 ? '高' : '低'}出 ${em(formatDelta(Math.abs(delta), indicator).replace(/^\+/, ''))}。`,
+        rich`对照标准口径为 ${em(formatValue(base.value, indicator))}，自定义口径${delta >= 0 ? '高' : '低'}出 ${em(formatDelta(Math.abs(delta), indicator).replace(/^\+/, ''))}。`,
         stdKey
       );
     }
@@ -416,9 +416,9 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
       const indicator = simulationIndicator(id);
       return `${indicator.short}${formatDelta(indicatorResult(current, id).value - standardOf(id).value, indicator)}`;
     });
-    say('report', rich`模拟情景让${effects.join('、')}，结论按模拟情景给出，标准口径的值一并保留。`, 'report');
+    say('report', rich`自定义口径让${effects.join('、')}，结论按自定义口径给出，标准口径的值一并保留。`, 'report');
   }
-  say('report', rich`推演完成，可以进入结果展示，在地图上查看各区县。`, 'report');
+  say('report', rich`计算完成，点下方的"查看结果"在地图上查看各区县。`, 'report');
 
   // 位置：分支按块从上往下排，块内居中；不分支的列在整棵树的中间
   const { nodeWidth, columnGap, rowHeight, padX, padY, branchGap } = FLOW_LAYOUT;
@@ -459,7 +459,7 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
 
   const saCount = nodes.filter(item => item.step === 'spatial').length;
   const summaries: Record<StepGroupId, string> = {
-    parse: `${yearsText} 年 · ${scope} · ${indicatorIds.length} 项${scenarioIds.length > 0 ? ' · 模拟情景' : ''}`,
+    parse: `${yearsText} 年 · ${scope} · ${indicatorIds.length} 项${scenarioIds.length > 0 ? ' · 自定义口径' : ''}`,
     prep: '人口、设施、用地 3 路数据已就绪',
     qc: `${districts.length} 个区县 · 数据完整`,
     spatial: `${saCount} 个分析分支`,

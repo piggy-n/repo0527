@@ -16,7 +16,7 @@ const MODES: readonly { readonly value: MapMode; readonly label: string }[] = [
 
 const pick = <T,>(options: readonly T[], value: unknown): T | undefined => options.find(option => option === value);
 
-/** 结果地图左下的一张卡片：着色、年度切换（多年度时）和图例；放大到一个市时左上是"返回推演范围" */
+/** 结果地图左下的一张卡片：着色、年度切换（多年度时）和图例；放大到一个市时左上是"返回计算范围" */
 export const ResultMapTools = defineComponent({
   name: 'ResultMapTools',
   props: {
@@ -46,7 +46,7 @@ export const ResultMapTools = defineComponent({
           {selection.cityCode !== null && (
             <div key="back" ref={back} class={styles.back}>
               <ElButton icon={Back} onClick={() => result.select({ cityCode: null })}>
-                返回推演范围
+                返回计算范围
               </ElButton>
             </div>
           )}
@@ -108,7 +108,6 @@ export const ResultMapTools = defineComponent({
                   服务范围 {meters} 米
                 </div>
               )}
-              <div class={styles.note}>点城市标注放大，设施和服务范围放大后显示</div>
             </div>
           </div>
         </div>

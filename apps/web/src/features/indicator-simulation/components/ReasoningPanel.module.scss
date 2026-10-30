@@ -291,10 +291,12 @@
   }
 }
 
-// 对话：用户的话靠右，AI 的回复用三色小圆球
+// 对话：用户的话靠右、右侧是"我"的头像；AI 的回复把时间线上的圆点换成机器人头像（shared/chat-avatar）
 .user {
   display: flex;
+  align-items: flex-start;
   justify-content: flex-end;
+  gap: var(--space-sm);
 }
 
 .bubble {
@@ -308,25 +310,24 @@
   overflow-wrap: anywhere;
 }
 
-.ai {
-  .dot {
-    border: 0;
-    background: conic-gradient(
-      from 200deg,
-      var(--color-primary),
-      var(--color-ai-violet),
-      var(--color-ai-cyan),
-      var(--color-primary)
-    );
-  }
+// 24 的头像圆心对准时间线（x 6.5）和第一行文字的中线
+.avatar {
+  position: absolute;
+  top: -1px;
+  left: -6px;
+}
 
-  .head {
-    cursor: default;
-  }
+.ai .thinking {
+  margin-top: 1px;
+}
 
-  .line {
-    margin-top: 2px;
-  }
+// 底部的两个按钮平分一行
+.action {
+  flex: 1;
+}
+
+.panel :global(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .latest {

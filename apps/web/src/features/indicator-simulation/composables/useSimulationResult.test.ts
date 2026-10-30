@@ -10,7 +10,7 @@ import { loadTestAtlas } from '../model/test-atlas';
 import { useSimulationResult } from './useSimulationResult';
 import { useSimulationRun } from './useSimulationRun';
 
-// 各步的时长按推理的话多少给：推进这么久一定推演完；6100 时还在推演中
+// 各步的时长按推理的话多少给：推进这么久一定计算完；6100 时还在计算中
 const DONE_AT = 120_000;
 const QC_AT = 6100;
 
@@ -26,7 +26,7 @@ async function setup() {
       const run = useSimulationRun(clock);
       return { run, result: useSimulationResult(run) };
     }),
-    '推演和结果'
+    '计算和结果'
   );
   const finish = async () => {
     await clock.advance(DONE_AT);
@@ -48,7 +48,7 @@ describe('useSimulationResult', () => {
     await settle();
     expect(result.selection.value).toBeNull();
     expect([result.items.value, result.rank.value, result.coloring.value]).toEqual([[], null, null]);
-    expect(() => result.select({ mode: 'pass' })).toThrow('还没有推演结果');
+    expect(() => result.select({ mode: 'pass' })).toThrow('还没有计算结果');
     run.stop();
 
     await runToDone();
@@ -68,13 +68,13 @@ describe('useSimulationResult', () => {
     expect(result.selection.value).toEqual({ indicatorId: 'A-39', year: 2025, mode: 'pass', cityCode: '320500' });
     expect(result.coloring.value?.legend.subtitle).toBe('2025 年 · 目标 ≥ 15 m²');
 
-    expect(() => result.select({ indicatorId: 'B-99' })).toThrow('推演条件里没有指标 B-99');
+    expect(() => result.select({ indicatorId: 'B-99' })).toThrow('计算条件里没有指标 B-99');
     expect(() => result.select({ year: 2020 })).toThrow('2020 年');
     expect(() => result.select({ cityCode: '999999' })).toThrow('市 999999');
     expect(result.selection.value?.indicatorId).toBe('A-39');
   });
 
-  it('改参数重新推演后看最新一版，选过的仍沿用；回到条件编排时清空', async () => {
+  it('改参数重新计算后看最新一版，选过的仍沿用；回到条件配置时清空', async () => {
     using ctx = await setup();
     const { run, result, calculator, finish, runToDone } = ctx;
     await runToDone();

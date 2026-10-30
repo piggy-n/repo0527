@@ -79,7 +79,7 @@ export function createDistrictAtlas(shapes: readonly DistrictShape[]): DistrictA
     get(code) {
       const district = byCode.get(code);
       if (!district) {
-        throw new Error(`推演范围里没有区县 ${code}`);
+        throw new Error(`计算范围里没有区县 ${code}`);
       }
       return district;
     },

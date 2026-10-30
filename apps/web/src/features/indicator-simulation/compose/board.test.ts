@@ -38,9 +38,9 @@ const kinds = (params: SimulationParams, boxes = allBoxes) =>
   }, {});
 
 describe('boardLinks', () => {
-  it('年份 → 范围 → 每项指标 → 总线 → 各参数 → AI 推演；参数只有所选指标用得上的几项', () => {
+  it('年份 → 范围 → 每项指标 → 总线 → 各参数 → AI计算；参数只有所选指标用得上的几项', () => {
     expect(paramsOf(conditions.indicatorIds)).toEqual(['popChange', 'recognition', 'targets']);
-    // 年份 2 + 范围到指标 2 + 指标到总线 2 + 参数到 AI 推演 3
+    // 年份 2 + 范围到指标 2 + 指标到总线 2 + 参数到 AI计算 3
     expect(kinds(defaultParams())).toEqual({ flow: 9, bus: 1, tick: 3 });
     const [first] = boardLinks(allBoxes, conditions, defaultParams());
     expect(first).toMatchObject({ from: 'years:2026', to: REGION_NODE, d: 'M120,20 C160,20 160,20 200,20' });
@@ -66,7 +66,7 @@ describe('悬停', () => {
     expect([...related]).toEqual([paramNode('recognition'), indicatorNode('B-65')]);
   });
 
-  it('悬停指标：关联年份、范围、影响它的参数和 AI 推演', () => {
+  it('悬停指标：关联年份、范围、影响它的参数和 AI计算', () => {
     const related = relatedNodes(indicatorNode('A-39'), conditions);
     expect(related.has(paramNode('recognition'))).toBe(false);
     expect(related.has(paramNode('popChange'))).toBe(true);

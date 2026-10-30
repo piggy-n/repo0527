@@ -198,7 +198,7 @@ export function createCalculator(atlas: DistrictAtlas): Calculator {
       });
       const [first] = cities;
       if (!first) {
-        throw new Error('推演条件里没有城市');
+        throw new Error('计算条件里没有城市');
       }
       indicators[id] = {
         rows,

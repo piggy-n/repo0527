@@ -14,7 +14,7 @@
   margin: 0 auto;
 }
 
-// 边框包住小圆球、文字和按钮；文字区聚焦时主色描边和外发光（同 Element 输入框）
+// 边框包住文字和按钮；文字区聚焦时主色描边和外发光（同 Element 输入框）
 .input {
   display: flex;
   align-items: flex-end;
@@ -41,36 +41,40 @@
   }
 }
 
-.orb {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  margin-bottom: 8px;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 200deg,
-    var(--color-primary),
-    var(--color-ai-violet),
-    var(--color-ai-cyan),
-    var(--color-primary)
-  );
-  box-shadow: 0 0 0 2px var(--color-ai-glow);
-}
-
-// 一行起，随内容长到三行，不能拖动改大小
-.textarea {
+// 一行起，随内容长到三行，空着时按占位的示例长高（浏览器量高度时不算占位）：
+// 看不见的副本写着同样的文字，和文字区叠在同一格里撑开高度
+.grow {
+  display: grid;
   flex: 1;
   min-width: 0;
-  max-height: calc(var(--line-height-base) * 3);
   margin: 5px 0;
-  padding: 0;
+
+  &::after {
+    content: attr(data-value) ' ';
+    visibility: hidden;
+    overflow: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
+  &::after,
+  .textarea {
+    grid-area: 1 / 1;
+    max-height: calc(var(--line-height-base) * 3);
+    padding: 0;
+    font: inherit;
+    line-height: var(--line-height-base);
+  }
+}
+
+// 不能拖动改大小
+.textarea {
+  min-width: 0;
   border: 0;
   outline: none;
   resize: none;
   background: none;
   color: var(--color-text-title);
-  font: inherit;
-  line-height: var(--line-height-base);
 
   &::placeholder {
     color: var(--color-text-placeholder);
@@ -81,36 +85,16 @@
   margin-bottom: 7px;
 }
 
-.hint {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-compact);
-  text-align: center;
-}
-
-// 看结果时 AI 的回复：小圆球加上回复的话，颜色比提示深一档
+// 看结果时 AI 的回复：机器人头像加上回复的话
 .reply {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-sm);
+  margin: 0;
   color: var(--color-text-regular);
-}
-
-.replyOrb {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: conic-gradient(
-    from 200deg,
-    var(--color-primary),
-    var(--color-ai-violet),
-    var(--color-ai-cyan),
-    var(--color-primary)
-  );
-  box-shadow: 0 0 0 2px var(--color-ai-glow);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
 }
 
 // 快捷说法：点了直接发送

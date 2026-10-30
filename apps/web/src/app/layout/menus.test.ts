@@ -35,10 +35,10 @@ describe('visibleNavItems', () => {
     expect(targets.filter(route => !router.hasRoute(route))).toEqual([]);
   });
 
-  it('智能体是一层下拉：AI对话、指标智能推演', () => {
+  it('智能体是一层下拉：AI对话、城市国土空间监测指标AI计算', () => {
     const agent = navItems.find(item => item.label === '智能体');
 
-    expect(agent?.kind === 'menu' && agent.links.map(({ label }) => label)).toEqual(['AI对话', '指标智能推演']);
+    expect(agent?.kind === 'menu' && agent.links.map(({ label }) => label)).toEqual(['AI对话', '城市国土空间监测指标AI计算']);
   });
 
   it('一层下拉中没有权限的页面被去掉，都没有权限时去掉整项', () => {

@@ -13,7 +13,7 @@ import { useSimulationMap } from './useSimulationMap';
 import { useSimulationResult } from './useSimulationResult';
 import { useSimulationRun } from './useSimulationRun';
 
-// 各步的时长按推理的话多少给：推进这么久一定推演完
+// 各步的时长按推理的话多少给：推进这么久一定计算完
 const ENOUGH = 120_000;
 
 type Move = { readonly kind: 'fit'; readonly bounds: ViewBounds; readonly maxZoom?: number } | { readonly kind: 'fly' };
@@ -35,7 +35,7 @@ async function setup() {
       const result = useSimulationResult(run);
       return { run, result, map: useSimulationMap(run, { runCameraOperation: action => action(camera) }, result) };
     }),
-    '推演和地图'
+    '计算和地图'
   );
   return { ...owned, calculator, clock, moves, [Symbol.dispose]: () => scope.stop() };
 }
@@ -44,7 +44,7 @@ const settle = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 const empty = { sources: {}, layers: [] };
 
 describe('useSimulationMap', () => {
-  it('推演中没有地图数据和分组，镜头不动；有了结果时镜头移到推演范围，各市标出值和达标', async () => {
+  it('计算中没有地图数据和分组，镜头不动；有了结果时镜头移到计算范围，各市标出值和达标', async () => {
     using ctx = await setup();
     const { run, map, calculator, clock, moves } = ctx;
     run.start(sampleComposition(), calculator);
@@ -113,7 +113,7 @@ describe('useSimulationMap', () => {
     ]);
   });
 
-  it('换条件重新推演：完成后镜头再移到新的范围；范围只有一个市时直接画设施', async () => {
+  it('换条件重新计算：完成后镜头再移到新的范围；范围只有一个市时直接画设施', async () => {
     using ctx = await setup();
     const { run, map, calculator, clock, moves } = ctx;
     run.start(sampleComposition(), calculator);

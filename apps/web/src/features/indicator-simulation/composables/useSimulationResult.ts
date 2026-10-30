@@ -74,7 +74,7 @@ export function useSimulationResult(run: SimulationRun): SimulationResult {
       const current = selection.value;
       const { conditions } = state.value;
       if (!current || !conditions) {
-        throw new Error('还没有推演结果');
+        throw new Error('还没有计算结果');
       }
       const next = { ...current, ...patch };
       if (
@@ -82,7 +82,7 @@ export function useSimulationResult(run: SimulationRun): SimulationResult {
         !conditions.years.includes(next.year) ||
         (next.cityCode !== null && !conditions.cityCodes.includes(next.cityCode))
       ) {
-        throw new Error(`推演条件里没有指标 ${next.indicatorId}、${next.year} 年或市 ${next.cityCode}`);
+        throw new Error(`计算条件里没有指标 ${next.indicatorId}、${next.year} 年或市 ${next.cityCode}`);
       }
       chosen.value = next;
     },

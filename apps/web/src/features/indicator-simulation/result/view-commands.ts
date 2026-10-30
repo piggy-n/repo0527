@@ -12,7 +12,7 @@ export interface ViewCommand {
 }
 
 // 有这些说法时是改条件、改参数或控制推演，交给 interpretCommand
-const CHANGE = /加上|增加|添加|再加|加入|也看|去掉|删除|删掉|移除|不看|不要|只看|只推演|换成|改成|改为|改回|旧规程|新规程|相交|人口|目标|标准口径|停止|暂停|继续|重新/;
+const CHANGE = /加上|增加|添加|再加|加入|也看|去掉|删除|删掉|移除|不看|不要|只看|只推演|只计算|换成|改成|改为|改回|旧规程|新规程|相交|人口|目标|标准口径|停止|暂停|继续|重新/;
 
 const cityName = (code: string) => JIANGSU_CITIES.find(city => city.code === code)?.name ?? code;
 
@@ -26,7 +26,7 @@ export function interpretView(input: string, conditions: SimulationConditions): 
     return null;
   }
   if (text.includes('流程')) {
-    return { patch: {}, show: 'flow', reply: '回到推演流程。点标题栏的"推演结果"再回来。' };
+    return { patch: {}, show: 'flow', reply: '回到计算流程。点标题栏的"计算结果"再回来。' };
   }
   if (text.includes('达标') && /着色|颜色|看/.test(text)) {
     return { patch: { mode: 'pass' }, show: 'result', reply: '地图按达标着色：主色达标，琥珀色接近，红色未达标。' };
@@ -34,8 +34,8 @@ export function interpretView(input: string, conditions: SimulationConditions): 
   if (text.includes('数值')) {
     return { patch: { mode: 'value' }, show: 'result', reply: '地图按数值着色。' };
   }
-  if (/全省|全部|整体|推演范围/.test(text) && /看|回/.test(text)) {
-    return { patch: { cityCode: null }, show: 'result', reply: '回到整个推演范围。' };
+  if (/全省|全部|整体|推演范围|计算范围/.test(text) && /看|回/.test(text)) {
+    return { patch: { cityCode: null }, show: 'result', reply: '回到整个计算范围。' };
   }
   const year = conditions.years.find(item => text.includes(String(item)));
   if (year !== undefined) {
@@ -45,14 +45,14 @@ export function interpretView(input: string, conditions: SimulationConditions): 
   if (city !== undefined) {
     return conditions.cityCodes.length > 1
       ? { patch: { cityCode: city }, show: 'result', reply: `放大到${cityName(city)}，设施和服务范围放大后显示。` }
-      : { patch: {}, show: 'result', reply: `推演范围就是${cityName(city)}。` };
+      : { patch: {}, show: 'result', reply: `计算范围就是${cityName(city)}。` };
   }
   const indicator = findIndicators(text).find(id => conditions.indicatorIds.includes(id));
   if (indicator !== undefined && text.includes('看')) {
     return { patch: { indicatorId: indicator }, show: 'result', reply: `看${simulationIndicator(indicator).short}。` };
   }
   if (text.includes('结果')) {
-    return { patch: {}, show: 'result', reply: '这是推演结果。' };
+    return { patch: {}, show: 'result', reply: '这是计算结果。' };
   }
   return null;
 }
@@ -65,6 +65,6 @@ export function viewSuggestions(conditions: SimulationConditions, selection: Res
     ...(city === undefined ? [] : [`看${cityName(city)}`]),
     selection.mode === 'pass' ? '按数值着色' : '按达标着色',
     ...(other === undefined ? [] : [`看${simulationIndicator(other).short}`]),
-    '回看推演流程'
+    '回看计算流程'
   ];
 }

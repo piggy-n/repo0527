@@ -103,7 +103,7 @@ const businessRoutes: RouteRecordRaw[] = [
         ({ IndicatorSimulationPage }) => IndicatorSimulationPage
       )
     ),
-    meta: { title: '指标智能推演', keepAlive: true }
+    meta: { title: '城市国土空间监测指标AI计算', keepAlive: true }
   },
   {
     path: 'resource-management',
@@ -179,7 +179,7 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
         ({ DevIndicatorSimulationPage }) => DevIndicatorSimulationPage
       )
     ),
-    meta: { title: '指标智能推演组件样例', public: true }
+    meta: { title: '城市国土空间监测指标AI计算组件样例', public: true }
   },
   {
     path: '/dev/monitoring-indicators',

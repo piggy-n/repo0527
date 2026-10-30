@@ -1,38 +1,34 @@
 import { Promotion, RefreshRight } from '@element-plus/icons-vue';
-import { useTextareaAutosize } from '@vueuse/core';
 import { ElButton, ElMessage } from 'element-plus';
-import { computed, defineComponent, type PropType, ref } from 'vue';
+import { computed, defineComponent, type PropType } from 'vue';
+import { ChatAvatar } from '@/shared/chat-avatar/ChatAvatar';
 import type { PromptComposer, SendOutcome } from '../composables/usePromptComposer';
 import type { RunConversation } from '../composables/useRunConversation';
 import styles from './AiDock.module.scss';
 
 const WARNINGS: Readonly<Record<Exclude<SendOutcome, 'sent'>, string>> = {
-  empty: '请输入推演指令',
-  unrecognized: '没有识别出监测指标，可以点"刷新"换一条示例'
-};
-
-const RUN_HINTS: Readonly<Record<RunConversation['phase']['value'], string>> = {
-  running: '推演中 · 随时可以打断：暂停、改参数、调整范围或指标',
-  paused: '已暂停 · 说"继续"接着推演，也可以先改参数或范围',
-  done: '推演完成 · 看哪个市、怎么着色只换视图；改参数、范围或指标会重新推演'
+  empty: '请输入计算指令，按 Tab 可以填入示例',
+  unrecognized: '没有识别出监测指标，可以点"换一批"换个示例'
 };
 
 /**
- * 页面底部的 AI 对话栏：条件编排时写推演指令（刷新换示例、发送后 AI 逐个节点编排）；推演和结果阶段对推演说话，
+ * 页面底部的 AI 对话栏：条件配置时写计算指令（换一批换示例、发送后 AI 逐个节点配置）；计算和结果阶段对计算说话，
  * 上方是按当前条件给的快捷说法；看结果时左侧没有时间线，AI 的回复写在输入框下面。
- * 回车发送（输入法选字时不算），Shift + 回车换行，输入框随内容长到三行
+ * 输入框空着时占位显示一句完整的示例，按 Tab 填进来；回车发送（输入法选字时不算），Shift + 回车换行，
+ * 输入框随内容（空着时随示例）长到三行
  */
 export const AiDock = defineComponent({
   name: 'AiDock',
   props: {
     composer: { type: Object as PropType<PromptComposer>, required: true },
-    /** 推演和结果阶段的对话；条件编排时为 null */
+    /** 计算和结果阶段的对话；条件配置时为 null */
     conversation: { type: Object as PropType<RunConversation | null>, default: null }
   },
   setup(props) {
-    const textarea = ref<HTMLTextAreaElement>();
     const text = computed(() => (props.conversation ? props.conversation.text.value : props.composer.text.value));
-    useTextareaAutosize({ element: textarea, input: text, styleProp: 'minHeight' });
+    const example = computed(() =>
+      props.conversation ? props.conversation.example.value : props.composer.example.value
+    );
     const busy = computed(() => props.conversation === null && props.composer.sending.value);
 
     const say = (words?: string) => {
@@ -46,9 +42,9 @@ export const AiDock = defineComponent({
       }
       const outcome = conversation.send(words);
       if (outcome === 'empty') {
-        ElMessage.warning('先输入要对推演说的话');
+        ElMessage.warning('请输入要说的话，按 Tab 可以填入示例');
       } else if (outcome === 'stopped') {
-        ElMessage.success('已停止推演，编排的条件已保留');
+        ElMessage.success('已停止计算，配置的条件已保留');
       }
     };
 
@@ -57,6 +53,16 @@ export const AiDock = defineComponent({
         event.preventDefault();
         if (!busy.value) {
           say();
+        }
+        return;
+      }
+      // 空着时 Tab 填入占位的示例；有字时照常移动焦点
+      if (event.key === 'Tab' && !event.shiftKey && !event.isComposing && text.value === '' && !busy.value) {
+        event.preventDefault();
+        if (props.conversation) {
+          props.conversation.fillExample();
+        } else {
+          props.composer.fillExample();
         }
       }
     };
@@ -75,14 +81,7 @@ export const AiDock = defineComponent({
     return () => {
       const { conversation, composer } = props;
       const sending = busy.value;
-      const phase = conversation?.phase.value;
       const reply = conversation?.reply.value ?? null;
-      let hint: string;
-      if (phase) {
-        hint = RUN_HINTS[phase];
-      } else {
-        hint = sending ? 'AI 正在按指令编排条件，完成后自动开始推演' : '回车发送，Shift + 回车换行；也可以在上方手动编排后点"开始推演"';
-      }
       return (
         <footer class={styles.root} aria-label="AI 对话">
           <div class={styles.inner}>
@@ -96,41 +95,31 @@ export const AiDock = defineComponent({
               </div>
             )}
             <div class={styles.input}>
-              <span class={styles.orb} aria-hidden="true" />
-              <textarea
-                ref={textarea}
-                class={styles.textarea}
-                rows={1}
-                value={text.value}
-                readonly={sending}
-                placeholder={
-                  conversation
-                    ? phase === 'done'
-                      ? '还想看什么？例如：看苏州市、按达标着色、改成旧规程'
-                      : '对推演说话：暂停、改成相交即算、加上苏州市…'
-                    : '输入推演指令，例如：推演 2025 年南京市社区卫生服务设施步行15分钟覆盖率'
-                }
-                aria-label={conversation ? '对推演说的话' : '推演指令'}
-                onInput={onInput}
-                onKeydown={onKeydown}
-              />
+              <div class={styles.grow} data-value={text.value || example.value}>
+                <textarea
+                  class={styles.textarea}
+                  rows={1}
+                  value={text.value}
+                  readonly={sending}
+                  placeholder={example.value}
+                  aria-label={conversation ? '对计算说的话' : '计算指令'}
+                  onInput={onInput}
+                  onKeydown={onKeydown}
+                />
+              </div>
               {!conversation && (
                 <ElButton class={styles.refresh} link icon={RefreshRight} disabled={sending} onClick={() => composer.refresh()}>
-                  刷新
+                  换一批
                 </ElButton>
               )}
               <ElButton type="primary" icon={Promotion} loading={sending} onClick={() => say()}>
-                {sending ? '编排中' : '发送'}
+                {sending ? '配置中' : '发送'}
               </ElButton>
             </div>
-            {reply ? (
-              <p key="reply" class={[styles.hint, styles.reply]} role="status">
-                <span class={styles.replyOrb} aria-hidden="true" />
+            {reply && (
+              <p class={styles.reply} role="status">
+                <ChatAvatar speaker="assistant" size={20} />
                 {reply}
-              </p>
-            ) : (
-              <p key="hint" class={styles.hint}>
-                {hint}
               </p>
             )}
           </div>

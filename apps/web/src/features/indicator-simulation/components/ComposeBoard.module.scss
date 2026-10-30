@@ -1,10 +1,4 @@
 // 编排图：版式取自确认的第二版原型；颜色见 color-and-typography.md 第 6.3 节
-@property --orb-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-
 .panel {
   min-width: 0;
 }
@@ -434,35 +428,15 @@
     var(--shadow-lg);
 }
 
-.orbWrap {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
+// AI计算的机器人头像（shared/chat-avatar）：条件不全时淡一些，齐全时实色并有一圈呼吸的光晕
+.robot {
   margin-bottom: 2px;
-  color: var(--color-primary);
-}
-
-// 主色 → 紫 → 青的锥形渐变环，条件齐全时转起来
-.orb {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(
-    from var(--orb-angle),
-    var(--color-primary),
-    var(--color-ai-violet),
-    var(--color-ai-cyan),
-    var(--color-primary)
-  );
-  opacity: 0.35;
-  // 遮罩只看透明度，挖空中间留一圈环
-  mask: radial-gradient(circle, transparent 17px, var(--color-primary) 18px);
+  opacity: 0.45;
+  transition: opacity 0.2s;
 
   .armed & {
     opacity: 1;
-    animation: spin 1.2s linear infinite;
+    animation: halo 1.6s ease-in-out infinite;
   }
 }
 
@@ -486,22 +460,11 @@
   animation: status-in 0.3s ease-out;
 }
 
-.statusOrb {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: conic-gradient(
-    from var(--orb-angle),
-    var(--color-primary),
-    var(--color-ai-violet),
-    var(--color-ai-cyan),
-    var(--color-primary)
-  );
-  animation: spin 0.9s linear infinite;
+.statusRobot {
+  animation: halo 1.2s ease-in-out infinite;
 }
 
-// 参数和 AI 推演节点不在 TransitionGroup 里：出现时同样弹出
+// 参数和 AI计算节点不在 TransitionGroup 里：出现时同样弹出
 .paramSlot {
   animation: node-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
@@ -510,14 +473,14 @@
   animation: node-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-// 编排完成、即将开始推演：AI 推演节点弹出后外发光一张一弛，光环转得更快
+// 配置完成、即将开始计算：AI计算节点弹出后外发光一张一弛，头像的光晕更快
 .launching {
   animation:
     node-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both,
     launch 1s ease-in-out 0.35s infinite;
 
-  .orb {
-    animation-duration: 0.5s;
+  .robot {
+    animation-duration: 0.6s;
   }
 }
 
@@ -612,19 +575,19 @@
   }
 }
 
-@keyframes spin {
-  to {
-    --orb-angle: 360deg;
+@keyframes halo {
+  50% {
+    box-shadow: 0 0 0 5px var(--color-primary-alpha-10);
   }
 }
 
 // 减少动画（由 motion.ts 决定，现在总是播放）
 :global(.simulation-still) {
   .ready .link,
-  .armed .orb,
+  .armed .robot,
   .flashEven,
   .flashOdd,
-  .statusOrb,
+  .statusRobot,
   .aiStatus,
   .paramSlot,
   .output,

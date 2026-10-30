@@ -56,9 +56,7 @@ $colors: (
   'neutral-bg': #eef1f5,
   'neutral-bg-light': #f1f4f8,
 
-  // 规范补充：指标智能推演的 AI 渐变（与主色组成三色）和模拟情景（ADR 0105；浅底 2026-10-29）
-  'ai-violet': #8b7bff,
-  'ai-cyan': #3ec5f2,
+  // 规范补充：指标AI计算的主色外发光和自定义口径（ADR 0105；浅底 2026-10-29；渐变的两色 ADR 0109 删除）
   'ai-glow': rgba(89, 126, 247, 0.22),
   'scenario': #7a5cff,
   'scenario-light': #a593ff,

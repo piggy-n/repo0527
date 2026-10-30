@@ -23,13 +23,13 @@ async function setup() {
       usePauseWhileInactive(owned, active);
       return owned;
     }),
-    '推演的拥有者'
+    '计算的拥有者'
   );
   return { run, calculator, clock, active, [Symbol.dispose]: () => scope.stop() };
 }
 
 describe('usePauseWhileInactive', () => {
-  it('停用期间推演暂停、进度不走，回来后从停下的地方继续', async () => {
+  it('停用期间计算暂停、进度不走，回来后从停下的地方继续', async () => {
     using ctx = await setup();
     const { run, calculator, clock, active } = ctx;
     run.start(sampleComposition(), calculator);

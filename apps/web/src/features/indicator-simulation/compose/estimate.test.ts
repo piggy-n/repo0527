@@ -19,7 +19,7 @@ describe('estimate', () => {
     expect(estimate(calculator, { ...nanjing, indicatorIds: [] }, defaultParams())).toBeNull();
   });
 
-  it('一个市：值和计算一致；模拟情景的指标带标准口径的值，标准口径的没有；达标按这个市', async () => {
+  it('一个市：值和计算一致；自定义口径的指标带标准口径的值，标准口径的没有；达标按这个市', async () => {
     const calculator = await calculatorOf();
     const params = withPatch({ rule: 'old' });
     const result = estimate(calculator, nanjing, params);

@@ -15,7 +15,7 @@ const planOf = async (params = withPatch({ recognition: 'intersect' }), next = c
   flowPlan({ calculator: createCalculator(await loadTestAtlas()), conditions: next, params });
 
 describe('flowPlan', () => {
-  it('条件解析 → 三路数据 → 核查 → 按指标分支 → 结论；模拟情景的指标多一支标准口径对照', async () => {
+  it('条件解析 → 三路数据 → 核查 → 按指标分支 → 结论；自定义口径的指标多一支标准口径对照', async () => {
     const plan = await planOf();
     expect(plan.nodes.map(node => node.key)).toEqual([
       'parse',
@@ -54,7 +54,7 @@ describe('flowPlan', () => {
     expect(byKey('sa:B-65:1')).toMatchObject({ title: '路网服务区 · 取并集', detail: '步行 5 分钟 · 300 米' });
     expect(byKey('sa:A-39:land')?.title).toBe('公园绿地汇总');
     expect(byKey('calc:B-65')?.detail).toBe('叠加住宅用地 · 覆盖 ≥ 50%');
-    // 公园绿地覆盖率用不上计算规程，不是模拟情景
+    // 公园绿地覆盖率用不上计算规程，不是自定义口径
     expect(plan.nodes.some(node => node.key === 'calc:B-65:std')).toBe(false);
   });
 
@@ -80,12 +80,12 @@ describe('flowPlan', () => {
     }
   });
 
-  it('每个节点都有点亮它的一句话；推理文字写出模拟情景；同样的输入得到同样的图', async () => {
+  it('每个节点都有点亮它的一句话；推理文字写出自定义口径；同样的输入得到同样的图', async () => {
     const plan = await planOf();
     const lit = new Set(plan.lines.map(line => line.node));
     expect(plan.nodes.filter(node => !lit.has(node.key))).toEqual([]);
     expect(plan.lines.map(line => plainText(line.text)).join('')).toContain('覆盖认定按「相交即算」');
-    expect(plan.summaries.parse).toBe('2025 年 · 南京市、苏州市 · 3 项 · 模拟情景');
+    expect(plan.summaries.parse).toBe('2025 年 · 南京市、苏州市 · 3 项 · 自定义口径');
     expect(await planOf()).toEqual(plan);
   });
 

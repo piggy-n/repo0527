@@ -1,9 +1,9 @@
 import { RefreshRight } from '@element-plus/icons-vue';
 import { ElButton, ElTooltip } from 'element-plus';
 import { defineComponent, onMounted, type PropType, ref, shallowRef, watch } from 'vue';
+import { ChatAvatar } from '@/shared/chat-avatar/ChatAvatar';
 import type { AiChat, ChatMessage } from '../composables/useAiChat';
 import { INITIAL_EXAMPLE_COUNT, nextExampleCount, pickExamples } from '../examples';
-import assistantImage from '../images/assistant.webp';
 import styles from './ChatConversation.module.scss';
 import { ChatMessageItem } from './ChatMessageItem';
 
@@ -18,9 +18,7 @@ function replacedOrAppended(next: readonly ChatMessage[], previous: readonly Cha
 function renderWelcome() {
   return (
     <div class={styles.welcome}>
-      <span class={styles.robot} aria-hidden="true">
-        <img class={styles.robotImage} src={assistantImage} alt="" />
-      </span>
+      <ChatAvatar class={styles.robot} speaker="assistant" size={56} />
       <h3 class={styles.greeting}>您好，我是空间查询助手</h3>
       <p class={styles.intro}>支持自然资源空间数据、图层、统计、分析等多维度查询与知识问答</p>
     </div>

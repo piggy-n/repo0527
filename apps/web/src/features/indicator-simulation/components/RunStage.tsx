@@ -1,4 +1,4 @@
-import { CircleClose, Operation, VideoPause, VideoPlay } from '@element-plus/icons-vue';
+import { Back, CircleClose, Operation, VideoPause, VideoPlay } from '@element-plus/icons-vue';
 import { MapCanvas } from '@yzt/map-vue';
 import { MxPanel, MxSplitLayout } from '@yzt/ui';
 import { ElButton, ElMessage, ElPopconfirm, ElRadioButton, ElRadioGroup } from 'element-plus';
@@ -32,15 +32,15 @@ const INTERVENE_ROOM = 400 + 24;
 const APPLIED_MESSAGES: Readonly<Record<ApplyOutcome, string | null>> = {
   unchanged: null,
   saved: '参数已保存，执行到对应步骤时生效',
-  rerun: '已按调整重新推演'
+  rerun: '已按调整重新计算'
 };
 
 const isView = (value: unknown): value is RunView => value === 'flow' || value === 'result';
 
 /**
- * AI 推演与结果展示（原型 v4、v5）：推演时左侧 AI 推理，主区是推演流程图，标题栏是阶段、推演状态、暂停、人工干预和停止；
- * 完成后标题栏只留阶段和"推演流程 / 推演结果"的切换，看结果时左侧是推演结果、主区是地图。
- * 地图画布在第一次推演完成时才创建，之后切换视图、重新推演都保留
+ * AI计算与结果展示（原型 v4、v5）：计算时左侧 AI计算的时间线，主区是计算流程图，标题栏是阶段、计算状态、暂停、人工干预和停止；
+ * 完成后标题栏只留阶段和"计算流程 / 计算结果"的切换，"查看结果""调整条件"在左侧时间线的底部；
+ * 看结果时左侧是计算结果、主区是地图。地图画布在第一次计算完成时才创建，之后切换视图、重新计算都保留
  */
 export const RunStage = defineComponent({
   name: 'RunStage',
@@ -94,7 +94,7 @@ export const RunStage = defineComponent({
     const stop = () => {
       intervening.value = false;
       run.stop();
-      ElMessage.success('已停止推演，编排的条件已保留');
+      ElMessage.success('已停止计算，配置的条件已保留');
     };
 
     const onApplied = (outcome: ApplyOutcome) => {
@@ -116,7 +116,7 @@ export const RunStage = defineComponent({
       if (state.value.paused) {
         return `已暂停${current.value ? ` · ${current.value}` : ''}`;
       }
-      return `推演中 · ${current.value ?? '规划步骤'}`;
+      return `计算中 · ${current.value ?? '规划步骤'}`;
     };
 
     const renderHeader = () => {
@@ -134,8 +134,8 @@ export const RunStage = defineComponent({
               }
             }}
           >
-            <ElRadioButton value="flow">推演流程</ElRadioButton>
-            <ElRadioButton value="result">推演结果</ElRadioButton>
+            <ElRadioButton value="flow">计算流程</ElRadioButton>
+            <ElRadioButton value="result">计算结果</ElRadioButton>
           </ElRadioGroup>
         ];
       }
@@ -147,8 +147,10 @@ export const RunStage = defineComponent({
           <i class={[styles.stateDot, state.value.paused ? styles.pausedDot : styles.runningDot]} />
           {renderState()}
         </span>,
+        // 主次：暂停 / 继续是主按钮，人工干预是默认按钮（打开时浅色主色），停止是红色朴素按钮
         <div key="actions" class={styles.actions}>
           <ElButton
+            type="primary"
             icon={paused ? VideoPlay : VideoPause}
             disabled={!running}
             onClick={() => (paused ? props.userPause.resume() : props.userPause.pause())}
@@ -158,6 +160,7 @@ export const RunStage = defineComponent({
           <ElButton
             icon={Operation}
             type={intervening.value ? 'primary' : 'default'}
+            plain={intervening.value}
             disabled={!running}
             aria-pressed={intervening.value}
             onClick={() => (intervening.value = !intervening.value)}
@@ -165,33 +168,22 @@ export const RunStage = defineComponent({
             人工干预
           </ElButton>
           {running ? (
-            <ElPopconfirm key="stop" title="停止推演？编排的条件会保留" confirmButtonText="停止" cancelButtonText="继续" onConfirm={stop}>
-              {{ reference: () => <ElButton icon={CircleClose}>停止</ElButton> }}
+            <ElPopconfirm key="stop" title="停止计算？配置的条件会保留" confirmButtonText="停止" cancelButtonText="继续" onConfirm={stop}>
+              {{
+                reference: () => (
+                  <ElButton type="danger" plain icon={CircleClose}>
+                    停止
+                  </ElButton>
+                )
+              }}
             </ElPopconfirm>
           ) : (
-            <ElButton key="recompose" onClick={() => run.stop()}>
-              重新编排
+            <ElButton key="recompose" icon={Back} onClick={() => run.stop()}>
+              调整条件
             </ElButton>
           )}
         </div>
       ];
-    };
-
-    const renderDone = () => {
-      const plan = props.flow.plan.value;
-      return (
-        <div class={styles.doneCard}>
-          <span class={styles.orb} aria-hidden="true" />
-          <div class={styles.doneText}>
-            <b>推演完成</b>
-            <p title={plan?.summaries.evaluate}>{plan?.summaries.evaluate}</p>
-          </div>
-          <ElButton type="primary" onClick={() => showResult()}>
-            查看结果
-          </ElButton>
-          <ElButton onClick={() => run.stop()}>重新编排</ElButton>
-        </div>
-      );
     };
 
     const renderFlow = () => {
@@ -209,9 +201,7 @@ export const RunStage = defineComponent({
               highlight={highlight.value}
               reserveRight={intervening.value ? INTERVENE_ROOM : 0}
               onPick={showResult}
-            >
-              {{ default: () => (done.value ? renderDone() : null) }}
-            </FlowChart>
+            />
           </div>
         )
       );
@@ -240,7 +230,7 @@ export const RunStage = defineComponent({
       const conditions = state.value.conditions;
       return (
         <div class={styles.root}>
-          <MxSplitLayout asideLabel={showingResult.value ? '推演结果' : 'AI 推理'}>
+          <MxSplitLayout asideLabel={showingResult.value ? '计算结果' : 'AI计算'}>
             {{
               aside: () =>
                 showingResult.value && conditions ? (
@@ -252,6 +242,8 @@ export const RunStage = defineComponent({
                     log={props.log}
                     plan={props.flow.plan.value}
                     onHover={column => (highlight.value = column)}
+                    onResult={() => showResult()}
+                    onRecompose={() => run.stop()}
                   />
                 ),
               default: () => (

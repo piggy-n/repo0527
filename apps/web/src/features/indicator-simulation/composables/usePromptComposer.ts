@@ -20,17 +20,19 @@ export interface BuildState {
   readonly launching: boolean;
 }
 
-/** AI 推演指令的拥有者：输入框的文字、换示例、发送后逐个节点编排；面板和编排图只显示和调用 */
+/** AI 计算指令的拥有者：输入框的文字、占位的示例、发送后逐个节点配置；面板和编排图只显示和调用 */
 export interface PromptComposer {
   readonly text: Readonly<Ref<string>>;
-  /** 正在逐字打出换上的示例 */
-  readonly typing: Readonly<Ref<boolean>>;
-  /** 按指令编排的进度；没在编排时为 null */
+  /** 输入框空着时占位显示的一句完整示例 */
+  readonly example: Readonly<Ref<string>>;
+  /** 按指令配置的进度；没在配置时为 null */
   readonly building: Readonly<Ref<BuildState | null>>;
   readonly sending: ComputedRef<boolean>;
   /** 用户输入 */
   setText(text: string): void;
-  /** 换成随机组合的一句指令（一定有社区卫生服务设施覆盖率，不和当前的重复），只换文字，发送后才编排 */
+  /** 把示例填进输入框（Tab） */
+  fillExample(): void;
+  /** 换一批：换成随机组合的一句示例（一定有社区卫生服务设施覆盖率，不和当前的重复），清空输入框让它显示出来 */
   refresh(): void;
   send(): SendOutcome;
 }
@@ -38,14 +40,11 @@ export interface PromptComposer {
 export interface PromptComposerOptions {
   /** 换示例用的随机数，测试固定它 */
   readonly random?: () => number;
-  /** 减少动画：换上的示例直接出现，不逐字打出；编排仍然一个节点一个节点地出现，只是节点本身不做动效 */
-  readonly still?: () => boolean;
-  /** 编排完成：页面接着开始推演 */
+  /** 配置完成：页面接着开始计算 */
   readonly onComposed?: () => void;
 }
 
-// 打字每个字、理解指令、出现每个节点、编排完成到开始推演的间隔（毫秒）
-const TYPE_MS = 20;
+// 理解指令、出现每个节点、配置完成到开始计算的间隔（毫秒）
 const THINK_MS = 900;
 const STEP_MS = 450;
 const LAUNCH_MS = 1000;
@@ -72,28 +71,22 @@ async function pause(ms: number, signal: AbortSignal): Promise<boolean> {
 }
 
 /**
- * AI 推演指令：不接大模型，按规则解析（compose/prompt.ts）。打开页面时输入框里是第一条示例、编排是空的；
- * 发送后编排图先清空，"理解指令"一会儿，再按 buildSteps 逐个出现节点，完成后交给页面开始推演。
- * 手动改编排会停下正在进行的编排（也不再自动推演）；输入框里还是上次发送或自动生成的描述时，
+ * AI 计算指令：不接大模型，按规则解析（compose/prompt.ts）。打开页面时输入框是空的、占位显示第一条示例，编排也是空的；
+ * 发送后编排图先清空，"理解指令"一会儿，再按 buildSteps 逐个出现节点，完成后交给页面开始计算。
+ * 手动改编排会停下正在进行的配置（也不再自动计算）；输入框里还是上次发送或自动生成的描述时，
  * 改写成当前编排的描述，用户自己改过文字后不再改写
  */
 export function usePromptComposer(composition: CompositionOwner, options: PromptComposerOptions = {}): PromptComposer {
-  const { random = Math.random, still = () => false, onComposed } = options;
-  const text = ref(PROMPT_EXAMPLES[0] ?? '');
-  const typing = ref(false);
+  const { random = Math.random, onComposed } = options;
+  const text = ref('');
+  const example = ref(PROMPT_EXAMPLES[0] ?? '');
   const building = shallowRef<BuildState | null>(null);
-  // 正在逐字打出的那句：打到一半发送时按整句发送
-  let typingTarget = '';
   // 输入框里是不是当前编排的描述
   let synced = false;
   // 这里自己在改编排：侦听里据此区分手动修改
   let writing = false;
-  const typeRun = new LatestController();
   const buildRun = new LatestController();
-  onScopeDispose(() => {
-    typeRun[Symbol.dispose]();
-    buildRun[Symbol.dispose]();
-  });
+  onScopeDispose(() => buildRun[Symbol.dispose]());
 
   const write = (next: Composition) => {
     writing = true;
@@ -104,10 +97,6 @@ export function usePromptComposer(composition: CompositionOwner, options: Prompt
     }
   };
 
-  const stopTyping = () => {
-    typeRun.abort();
-    typing.value = false;
-  };
   const stopBuilding = () => {
     buildRun.abort();
     building.value = null;
@@ -130,31 +119,10 @@ export function usePromptComposer(composition: CompositionOwner, options: Prompt
         synced = false;
         return;
       }
-      stopTyping();
       text.value = description;
     },
     { flush: 'sync' }
   );
-
-  const typeOut = async (target: string) => {
-    typingTarget = target;
-    const signal = typeRun.next();
-    if (still()) {
-      typing.value = false;
-      text.value = target;
-      return;
-    }
-    typing.value = true;
-    for (let length = 1; length <= target.length; length++) {
-      text.value = target.slice(0, length);
-      // oxlint-disable-next-line no-await-in-loop -- 逐字打出，每个字之间要等
-      await wait(TYPE_MS, signal);
-      if (signal.aborted) {
-        return;
-      }
-    }
-    typing.value = false;
-  };
 
   const build = async (target: Composition) => {
     const signal = buildRun.next();
@@ -180,26 +148,23 @@ export function usePromptComposer(composition: CompositionOwner, options: Prompt
     building.value = null;
   };
 
+  const setText = (value: string) => {
+    synced = false;
+    text.value = value;
+  };
+
   return {
     text,
-    typing,
+    example,
     building,
     sending: computed(() => building.value !== null),
-    setText: value => {
-      stopTyping();
-      synced = false;
-      text.value = value;
-    },
+    setText,
+    fillExample: () => setText(example.value),
     refresh: () => {
-      synced = false;
-      void typeOut(randomPrompt(random, [text.value, typingTarget]));
+      example.value = randomPrompt(random, [example.value]);
+      setText('');
     },
     send: () => {
-      // 示例还没打完就发送：按整句发送
-      if (typing.value) {
-        stopTyping();
-        text.value = typingTarget;
-      }
       if (text.value.trim() === '') {
         return 'empty';
       }
@@ -207,7 +172,6 @@ export function usePromptComposer(composition: CompositionOwner, options: Prompt
       if (!parsed) {
         return 'unrecognized';
       }
-      stopTyping();
       void build(parsed);
       return 'sent';
     }

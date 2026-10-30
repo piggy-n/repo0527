@@ -38,6 +38,6 @@ describe('createDistrictAtlas', () => {
 
     expect(atlas.inCities(['321100']).map(district => district.name)).toEqual(['京口区', '润州区', '丹徒区', '丹阳市', '扬中市', '句容市']);
     expect(atlas.inCities(['321100'])).toBe(atlas.inCities(['321100']));
-    expect(() => atlas.get('999999')).toThrow('推演范围里没有区县 999999');
+    expect(() => atlas.get('999999')).toThrow('计算范围里没有区县 999999');
   });
 });

@@ -60,7 +60,7 @@ describe('HeaderNav', () => {
     const panel = document.querySelector('[class*="_single_"]');
     expect([...(panel?.querySelectorAll('a') ?? [])].map(link => [link.textContent, link.getAttribute('href')])).toEqual([
       ['AI对话', '/ai-chat'],
-      ['指标智能推演', '/indicator-simulation']
+      ['城市国土空间监测指标AI计算', '/indicator-simulation']
     ]);
     // 查询统计的面板也渲染在 body 下，只看智能体所在的弹层
     expect(panel?.closest('.el-popper')?.querySelector('[class*="_groups_"]')).toBeNull();

@@ -209,23 +209,21 @@ body {
 
 步行时的小地图、完整地图（ADR 0087）画在这张图上面：人是主色（`--color-primary`）的箭头加同色渐隐的视野扇形，描边是容器底色（`--color-bg-container`），都从令牌读；点击移动的落点是 `#3cd2ff`，和三维里的落点光环同色；看别的楼层时人的平面位置是主色的淡色圈。完整地图没画到的地方是 `--color-bg-page`。
 
-## 6.3 指标智能推演（2026-10-28 补充，ADR 0105）
+## 6.3 城市国土空间监测指标AI计算（2026-10-28 补充，ADR 0105；原名指标智能推演）
 
-AI 推演的过程色和"模拟情景"的情景色，只用于指标智能推演页面：
+AI 计算的外发光和"自定义口径"（S14 前叫"模拟情景"）的颜色，只用于这一页：
 
 | 令牌 | 值 | 用途 |
 |---|---|---|
-| `--color-ai-violet` | `#8B7BFF` | AI 渐变的第二色：推演入口的光环、进行中的步骤 |
-| `--color-ai-cyan` | `#3EC5F2` | AI 渐变的第三色 |
-| `--color-ai-glow` | `rgba(89, 126, 247, 0.22)` | 主色的外发光：条件齐全时的推演入口、插入位置 |
-| `--color-scenario` | `#7A5CFF` | 模拟情景（参数偏离 Excel 的标准口径）：情景标签和改过的参数值的文字 |
-| `--color-scenario-light` | `#A593FF` | 模拟情景：编排图上连到改过的参数的虚线 |
-| `--color-scenario-bg` | `rgba(122, 92, 255, 0.1)` | 模拟情景：情景标签的浅底（2026-10-29 补充） |
+| `--color-ai-glow` | `rgba(89, 126, 247, 0.22)` | 主色的外发光：条件齐全时的 AI计算节点、插入位置、进行中的流程节点 |
+| `--color-scenario` | `#7A5CFF` | 自定义口径（参数偏离标准口径）：标签和改过的参数值的文字 |
+| `--color-scenario-light` | `#A593FF` | 自定义口径：编排图上连到改过的参数的虚线 |
+| `--color-scenario-bg` | `rgba(122, 92, 255, 0.1)` | 自定义口径：标签的浅底（2026-10-29 补充） |
 
-- AI 渐变按"主色 → ai-violet → ai-cyan → 主色"的锥形渐变旋转；减少动画时不转
+- AI 的图标统一是 `shared/chat-avatar` 的机器人头像（主色圆底，ADR 0109）；原来的"主色 → ai-violet → ai-cyan"锥形渐变圆球和这两个令牌已删除
 - 待更新这类警示用 `--color-warning-bg` 浅底配 `--color-warning-text`（`#B46B00`）文字，边框、圆点用 `--color-warning`
 - 编排图的连线用 `--color-primary-border`，条件齐全后用 `--color-primary-border-hover` 并流动；画布底色 `--color-primary-bg-lighter`、网点 `--color-border-dashed`，都是已有令牌
-- 结果展示的达标三态（2026-10-29 补充，ADR 0108）：达标 `--color-primary`、接近 `--color-warning`（文字 `--color-warning-text`）、未达标 `--color-danger`；地图上的区县填充浅一档，是 `map/colors.ts` 的常量（MapLibre 读不到 CSS 变量）。条件编排的预估栏、人工干预的预估仍用绿、红表示达标与否
+- 结果展示的达标三态（2026-10-29 补充，ADR 0108）：达标 `--color-primary`、接近 `--color-warning`（文字 `--color-warning-text`）、未达标 `--color-danger`；地图上的区县填充浅一档，是 `map/colors.ts` 的常量（MapLibre 读不到 CSS 变量）。条件配置的预估栏、人工干预的预估仍用绿、红表示达标与否
 
 ## 7. CSS 变量落地
 

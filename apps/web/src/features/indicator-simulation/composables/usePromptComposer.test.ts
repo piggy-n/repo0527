@@ -7,11 +7,11 @@ import { describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from 
 import { type PromptComposerOptions, usePromptComposer } from './usePromptComposer';
 import { useComposition } from './useComposition';
 
-// 理解指令 900 毫秒，之后每个节点 450，最后一个节点到开始推演 1000
+// 理解指令 900 毫秒，之后每个节点 450，最后一个节点到开始计算 1000
 const THINK = 900;
 const STEP = 450;
 const LAUNCH = 1000;
-// 第一条示例：年份、范围、指标、计算规程、覆盖认定、目标值、AI 推演
+// 第一条示例：年份、范围、指标、计算规程、覆盖认定、目标值、AI计算
 const FIRST_STEPS = 7;
 const FIRST_DONE = THINK + STEP * (FIRST_STEPS - 1) + LAUNCH;
 
@@ -38,24 +38,28 @@ afterEach(() => {
 });
 
 describe('usePromptComposer 发送', () => {
-  it('打开时输入框里是第一条示例；空的或认不出指标时不编排', () => {
+  it('打开时输入框是空的，占位是第一条示例；空的或认不出指标时不编排', () => {
     using ctx = setup();
     const { composer, composition } = ctx;
     const before = composition.state.value;
-    expect(composer.text.value).toBe(first);
+    expect(composer.text.value).toBe('');
+    expect(composer.example.value).toBe(first);
+    expect(composer.send()).toBe('empty');
 
     composer.setText('  ');
     expect(composer.send()).toBe('empty');
-    composer.setText('今天适合推演什么');
+    composer.setText('今天适合计算什么');
     expect(composer.send()).toBe('unrecognized');
     expect(composer.building.value).toBeNull();
     expect(composition.state.value).toBe(before);
   });
 
-  it('发送后先清空编排、理解指令，再一个节点一个节点地编排，完成后交给页面开始推演', async () => {
+  it('Tab 填入示例后发送：先清空编排、理解指令，再一个节点一个节点地编排，完成后交给页面开始计算', async () => {
     using ctx = setup();
     const { composer, composition, composed } = ctx;
 
+    composer.fillExample();
+    expect(composer.text.value).toBe(first);
     expect(composer.send()).toBe('sent');
     expect(composer.sending.value).toBe(true);
     expect(composition.state.value).toEqual(emptyComposition());
@@ -76,9 +80,10 @@ describe('usePromptComposer 发送', () => {
     expect(composition.state.value).toEqual(parsePrompt(first));
   });
 
-  it('编排中手动改编排：停下，不再开始推演；再次发送作废上一次', async () => {
+  it('编排中手动改编排：停下，不再开始计算；再次发送作废上一次', async () => {
     using ctx = setup();
     const { composer, composition, composed } = ctx;
+    composer.fillExample();
     composer.send();
     await vi.advanceTimersByTimeAsync(THINK + STEP);
     composition.addYear(2024);
@@ -98,6 +103,7 @@ describe('usePromptComposer 发送', () => {
 
   it('作用域销毁时停下正在进行的编排', async () => {
     const { composer, composed, scope } = setup();
+    composer.fillExample();
     composer.send();
     scope.stop();
     await vi.advanceTimersByTimeAsync(FIRST_DONE);
@@ -109,6 +115,7 @@ describe('usePromptComposer 输入框的文字', () => {
   it('发送后手动改编排：文字改写成当前编排的描述；用户自己改过文字后不再改写', async () => {
     using ctx = setup();
     const { composer, composition } = ctx;
+    composer.fillExample();
     composer.send();
     await vi.advanceTimersByTimeAsync(FIRST_DONE);
 
@@ -124,6 +131,7 @@ describe('usePromptComposer 输入框的文字', () => {
   it('重置条件后留着原来的话，之后不再改写', async () => {
     using ctx = setup();
     const { composer, composition } = ctx;
+    composer.fillExample();
     composer.send();
     await vi.advanceTimersByTimeAsync(FIRST_DONE);
     const text = composer.text.value;
@@ -134,36 +142,21 @@ describe('usePromptComposer 输入框的文字', () => {
     expect(composer.text.value).toBe(text);
   });
 
-  it('刷新换成随机组合的一句（一定有社区卫生覆盖率，不和当前的重复），逐字打出；打到一半发送按整句发送', async () => {
+  it('换一批换成随机组合的一句（一定有社区卫生覆盖率，不和当前的重复），清空输入框让它显示出来；Tab 填入后发送', async () => {
     using ctx = setup({ random: () => 0.99 });
     const { composer, composition } = ctx;
-    const target = randomPrompt(() => 0.99, [first, '']);
+    const target = randomPrompt(() => 0.99, [first]);
     expect(target).not.toBe(first);
 
+    composer.setText('写了一半');
     composer.refresh();
-    expect(composer.typing.value).toBe(true);
-    expect(composer.text.value).toBe(target.slice(0, 1));
-    await vi.advanceTimersByTimeAsync(20 * 3);
-    expect(composer.text.value).toBe(target.slice(0, 4));
+    expect(composer.example.value).toBe(target);
+    expect(composer.text.value).toBe('');
 
+    composer.fillExample();
     expect(composer.send()).toBe('sent');
-    expect(composer.typing.value).toBe(false);
-    expect(composer.text.value).toBe(target);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(composition.state.value).toEqual(parsePrompt(target));
     expect(composition.state.value.conditions.indicatorIds[0]).toBe('A-31');
-  });
-
-  it('减少动画时换上的话直接出现；编排照样一个节点一个节点地出现', async () => {
-    using ctx = setup({ random: () => 0, still: () => true });
-    const { composer } = ctx;
-
-    composer.refresh();
-    expect(composer.typing.value).toBe(false);
-    expect(composer.text.value).toBe(randomPrompt(() => 0, [first, '']));
-
-    composer.send();
-    await vi.advanceTimersByTimeAsync(THINK);
-    expect(composer.building.value?.revealed.size).toBe(1);
   });
 });

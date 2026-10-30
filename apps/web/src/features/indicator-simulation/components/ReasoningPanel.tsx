@@ -1,8 +1,9 @@
-import { ArrowDown, ArrowRight } from '@element-plus/icons-vue';
+import { ArrowDown, ArrowRight, Back, View } from '@element-plus/icons-vue';
 import { useRafFn, useResizeObserver } from '@vueuse/core';
 import { MxPanel } from '@yzt/ui';
 import { ElButton, ElIcon } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, shallowRef, watch } from 'vue';
+import { ChatAvatar } from '@/shared/chat-avatar/ChatAvatar';
 import type { LogEntry, ReasoningLog } from '../composables/useReasoningLog';
 import type { SimulationRun } from '../composables/useSimulationRun';
 import { STEP_GROUPS, type StepGroupId } from '../engine/steps';
@@ -20,7 +21,7 @@ const HINT_MS = 550;
 
 // 每一步开始思考时的动态提示，按经过的时间轮换
 const THINKING: Readonly<Record<StepGroupId, readonly string[]>> = {
-  parse: ['正在理解指令', '正在拆分年份、范围和指标', '正在规划推演路线'],
+  parse: ['正在理解指令', '正在拆分年份、范围和指标', '正在规划计算路线'],
   prep: ['正在连接人口库', '正在载入设施图层', '正在读取国土变更调查'],
   qc: ['正在核对区县字段', '正在检查设施坐标'],
   spatial: ['正在生成服务范围', '正在叠加住宅用地'],
@@ -55,8 +56,9 @@ const renderThinking = (hint: string) => (
 );
 
 /**
- * AI 推理：思维链、打字和对话在一条时间线上。进行中的一步按进度逐字打出，完成后收成一行摘要（点开看全文）；
- * 用户的话靠右，AI 的回复逐字出现；新内容出现时跟着滚到底，用户往上翻时不跟，可以点"回到最新"
+ * AI计算：思维链、打字和对话在一条时间线上。进行中的一步按进度逐字打出，完成后收成一行摘要（点开看全文）；
+ * 用户的话靠右、右侧是"我"的头像，AI 的回复以机器人头像开头、逐字出现；新内容出现时跟着滚到底，
+ * 用户往上翻时不跟，可以点"回到最新"。计算完成后底部固定"查看结果"和"调整条件"
  */
 export const ReasoningPanel = defineComponent({
   name: 'ReasoningPanel',
@@ -67,7 +69,11 @@ export const ReasoningPanel = defineComponent({
   },
   emits: {
     /** 悬停在一步上：流程图里这一列高亮；离开时为 null */
-    hover: (column: number | null) => column === null || typeof column === 'number'
+    hover: (column: number | null) => column === null || typeof column === 'number',
+    /** 计算完成后点"查看结果" */
+    result: () => true,
+    /** 计算完成后点"调整条件"：回到条件配置 */
+    recompose: () => true
   },
   setup(props, { emit }) {
     const body = ref<HTMLElement>();
@@ -218,6 +224,7 @@ export const ReasoningPanel = defineComponent({
           return (
             <li key={entry.id} class={[styles.entry, styles.user]}>
               <div class={styles.bubble}>{entry.text}</div>
+              <ChatAvatar speaker="user" size={24} />
             </li>
           );
         case 'ai': {
@@ -225,10 +232,7 @@ export const ReasoningPanel = defineComponent({
           const typed = Math.min(entry.text.length, Math.floor(since / REPLY_MS));
           return (
             <li key={entry.id} class={[styles.entry, styles.ai]}>
-              <span class={styles.dot} />
-              <div class={styles.head}>
-                <span class={styles.title}>AI</span>
-              </div>
+              <ChatAvatar class={styles.avatar} speaker="assistant" size={24} />
               {since < 0 ? (
                 renderThinking('正在思考')
               ) : (
@@ -256,7 +260,7 @@ export const ReasoningPanel = defineComponent({
       const planning = idle && (
         <li key="planning" class={[styles.entry, styles.running]}>
           <span class={styles.dot} />
-          {renderThinking(status === 'planning' ? '正在规划推演步骤' : '正在根据调整重新安排步骤')}
+          {renderThinking(status === 'planning' ? '正在规划计算步骤' : '正在根据调整重新安排步骤')}
         </li>
       );
       const next = STEP_GROUPS.find(group =>
@@ -275,15 +279,33 @@ export const ReasoningPanel = defineComponent({
       ];
     };
 
+    // 计算完成后底部固定"查看结果"和"调整条件"
+    const renderFooter = () => [
+      <ElButton
+        key="result"
+        class={['button-xl', styles.action]}
+        type="primary"
+        icon={View}
+        onClick={() => emit('result')}
+      >
+        查看结果
+      </ElButton>,
+      <ElButton key="recompose" class={['button-xl', styles.action]} icon={Back} onClick={() => emit('recompose')}>
+        调整条件
+      </ElButton>
+    ];
+
     return () => {
+      const done = state.value.status === 'done';
       return (
-        <MxPanel class={styles.panel} title="AI 推理" flush>
+        <MxPanel class={styles.panel} title="AI计算" headerTone="muted" flush>
           {{
             actions: () => (
               <span class={styles.meta}>
                 完成 {doneCount.value}/{STEP_GROUPS.length} 步
               </span>
             ),
+            footer: done ? renderFooter : undefined,
             default: () => (
               <div class={styles.wrap}>
                 <div ref={body} class={styles.body} onScroll={onScroll}>

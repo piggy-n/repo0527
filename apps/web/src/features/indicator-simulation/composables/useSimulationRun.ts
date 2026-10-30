@@ -62,7 +62,7 @@ export function useSimulationRun(clock?: Clock): SimulationRun {
 
   const requireEngine = (): SimulationEngine => {
     if (!engine) {
-      throw new Error('推演还没有开始');
+      throw new Error('计算还没有开始');
     }
     return engine;
   };

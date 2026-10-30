@@ -1,0 +1,20 @@
+// 助手头像是位图（assistant.webp），放在主色圆底上（ADR 0103）
+.root {
+  display: grid;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  font-size: var(--font-size-xs);
+}
+
+.user {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.image {
+  display: block;
+  height: auto;
+}

@@ -57,7 +57,7 @@ describe('条件', () => {
     expect(withIndicator(next, 'A-31', false).conditions.indicatorIds).toEqual(['B-65', 'A-39']);
     expect(withIndicatorMoved(next, 2, 0).conditions.indicatorIds).toEqual(['A-39', 'B-65', 'A-31']);
     expect(() => withIndicatorMoved(next, 0, 3)).toThrow('超出范围');
-    expect(() => withIndicator(next, 'G01-6', true)).toThrow('推演不支持指标 G01-6');
+    expect(() => withIndicator(next, 'G01-6', true)).toThrow('计算不支持指标 G01-6');
   });
 });
 

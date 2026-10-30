@@ -32,7 +32,7 @@ export type RunCommand =
 
 const ADD = /加上|增加|添加|再加|加入|也看|还要|补充/;
 const REMOVE = /去掉|删除|删掉|移除|不看|不要|排除|拿掉/;
-const ONLY = /只看|只推演|只要|换成|改成|改为/;
+const ONLY = /只看|只推演|只计算|只要|换成|改成|改为/;
 
 const shortOf = (id: string) => simulationIndicator(id).short;
 const sameList = (a: readonly (string | number)[], b: readonly (string | number)[]) => a.join() === b.join();
@@ -80,7 +80,7 @@ function mentionedParams(text: string): Partial<SimulationParams> {
  */
 export function interpretCommand(input: string, current: Composition): RunCommand {
   const text = input.replace(/\s+/g, '');
-  if (/停止|终止|结束推演|取消推演|不推了|重新编排/.test(text)) {
+  if (/停止|终止|结束推演|取消推演|结束计算|取消计算|不推了|不算了|重新编排|调整条件/.test(text)) {
     return { kind: 'stop' };
   }
   const { conditions, params } = current;
@@ -93,7 +93,7 @@ export function interpretCommand(input: string, current: Composition): RunComman
   if (target) {
     const id = findIndicators(target[1] ?? '').find(item => conditions.indicatorIds.includes(item));
     if (id === undefined) {
-      notes.push('没找到要改目标值的指标，指标要先在推演条件里');
+      notes.push('没找到要改目标值的指标，指标要先在计算条件里');
     } else {
       targets = { ...params.targets, [id]: Number(target[2]) };
     }
@@ -160,7 +160,7 @@ export function interpretCommand(input: string, current: Composition): RunComman
     }
     const used = indicatorIds.filter(id => paramApplies(key, id));
     said.push(
-      `${PARAM_LABELS[key]}改为「${describeParam(key, next, nextConditions)}」${isStandard(key, next) ? '（标准口径）' : '（模拟情景）'}，影响${used.map(shortOf).join('、')}`
+      `${PARAM_LABELS[key]}改为「${describeParam(key, next, nextConditions)}」${isStandard(key, next) ? '（标准口径）' : '（自定义口径）'}，影响${used.map(shortOf).join('、')}`
     );
   }
 
@@ -170,7 +170,7 @@ export function interpretCommand(input: string, current: Composition): RunComman
   if (notes.length === 0 && /暂停|停一下|等一下|先停/.test(text)) {
     return { kind: 'pause' };
   }
-  if (notes.length === 0 && /继续|恢复推演|接着/.test(text)) {
+  if (notes.length === 0 && /继续|恢复推演|恢复计算|接着/.test(text)) {
     return { kind: 'resume' };
   }
   return { kind: 'none', notes };
@@ -188,7 +188,7 @@ export function commandSuggestions({ conditions, params }: Composition, phase: '
     list.push(params.recognition === 'intersect' ? '覆盖认定改回 50%' : '改成相交即算');
   }
   if (uses('rule')) {
-    list.push(params.rule === 'old' ? '改回新规程' : '按旧规程推演');
+    list.push(params.rule === 'old' ? '改回新规程' : '按旧规程计算');
   }
   if (uses('popChange')) {
     list.push(params.popChange === 0 ? '常住人口增加 10%' : '人口不变');
@@ -203,6 +203,6 @@ export function commandSuggestions({ conditions, params }: Composition, phase: '
   } else if (!indicatorIds.includes('A-39')) {
     list.push('加上人均公园绿地');
   }
-  list.push(phase === 'done' ? '重新编排' : '停止推演');
+  list.push(phase === 'done' ? '调整条件' : '停止计算');
   return list;
 }

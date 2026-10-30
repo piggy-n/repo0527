@@ -56,14 +56,14 @@ describe('CompactNav', () => {
       '——',
       '[标题+图标] 智能体',
       '  AI对话',
-      '  指标智能推演'
+      '  城市国土空间监测指标AI计算'
     ]);
   });
 
   it('一层下拉（智能体）没有分组名，直接列出缩进的页面', async () => {
     const rows = await openMenu(Role.user, '/indicator-simulation', items => items.filter(item => item.kind === 'menu'));
 
-    expect(rows).toEqual(['[标题+图标] 智能体', '  AI对话', '  指标智能推演 (当前)']);
+    expect(rows).toEqual(['[标题+图标] 智能体', '  AI对话', '  城市国土空间监测指标AI计算 (当前)']);
   });
 
   it('一级项在同一页面的其他路由上也标出当前：系统管理的统计报表', async () => {

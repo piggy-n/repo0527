@@ -1,4 +1,4 @@
-import { RefreshLeft } from '@element-plus/icons-vue';
+import { Back } from '@element-plus/icons-vue';
 import { MxPanel } from '@yzt/ui';
 import { ElButton } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
@@ -12,7 +12,7 @@ import styles from './ResultList.module.scss';
 
 /**
  * 结果展示的左侧（第五版原型）：每项指标一条，写结果、目标和达标；选中的一条展开各市（一个市时是各区县），
- * 悬停一行时地图描出这个市，点一行放大到它。底部是整行的"重新编排"
+ * 悬停一行时地图描出这个市，点一行放大到它；条上的竖线是目标。底部是整行的"调整条件"
  */
 export const ResultList = defineComponent({
   name: 'ResultList',
@@ -62,10 +62,7 @@ export const ResultList = defineComponent({
 
     const renderRank = (rank: Rank, unit: string) => (
       <div class={styles.detail}>
-        <div class={styles.rankHead}>
-          <span>{rank.level === 'city' ? '各市' : '各区县'}</span>
-          <span>竖线是目标</span>
-        </div>
+        <div class={styles.rankHead}>{rank.level === 'city' ? '各市' : '各区县'}</div>
         <ol
           class={styles.rank}
           style={{ '--target': `${((rank.target / rank.max) * 100).toFixed(1)}%` }}
@@ -86,7 +83,7 @@ export const ResultList = defineComponent({
           <button type="button" class={styles.head} aria-expanded={selected} onClick={() => result.select({ indicatorId: item.id })}>
             <span class={styles.name}>
               <span title={item.name}>{item.short}</span>
-              {item.scenario && <span class={styles.scenario}>模拟情景</span>}
+              {item.scenario && <span class={styles.scenario}>自定义口径</span>}
             </span>
             <b class={styles.value}>{formatValue(item.value, indicator)}</b>
             <span class={styles.meta}>
@@ -105,7 +102,7 @@ export const ResultList = defineComponent({
     return () => {
       const year = props.result.selection.value?.year;
       return (
-        <MxPanel class={styles.panel} title="推演结果" flush>
+        <MxPanel class={styles.panel} title="计算结果" headerTone="muted" flush>
           {{
             actions: () => (
               <span class={styles.scope}>
@@ -114,8 +111,8 @@ export const ResultList = defineComponent({
             ),
             default: () => <ol class={styles.list}>{props.result.items.value.map(renderItem)}</ol>,
             footer: () => (
-              <ElButton class={['button-xl', styles.recompose]} type="primary" icon={RefreshLeft} onClick={() => emit('recompose')}>
-                重新编排
+              <ElButton class={['button-xl', styles.recompose]} type="primary" icon={Back} onClick={() => emit('recompose')}>
+                调整条件
               </ElButton>
             )
           }}

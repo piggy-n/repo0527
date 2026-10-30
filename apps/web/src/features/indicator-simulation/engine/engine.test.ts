@@ -37,7 +37,7 @@ const statuses = (engine: SimulationEngine): Record<string, StepStatus> =>
 
 const statusesOf = (ids: readonly StepId[], engine: SimulationEngine) => ids.map(id => engine.state.steps[id].status);
 
-// 推演到完成
+// 计算到完成
 async function runToDone({ engine, advanceTo }: Context, params = defaultParams()) {
   engine.start(conditions, params);
   await advanceTo(DONE_AT);
@@ -95,12 +95,12 @@ describe('推进', () => {
     expect(clock.pending).toBe(0);
   });
 
-  it('不合法的调用抛错：条件不完整、未知指标、没在推演时干预、推演中指定版本', async () => {
+  it('不合法的调用抛错：条件不完整、未知指标、没在计算时干预、计算中指定版本', async () => {
     using ctx = await setup();
     const { engine } = ctx;
-    expect(() => engine.start({ ...conditions, indicatorIds: [] }, defaultParams())).toThrow('推演条件不完整');
-    expect(() => engine.start({ ...conditions, indicatorIds: ['G01-6'] }, defaultParams())).toThrow('推演不支持指标 G01-6');
-    expect(() => engine.apply(withPatch({ rule: 'old' }))).toThrow('推演没有在进行');
+    expect(() => engine.start({ ...conditions, indicatorIds: [] }, defaultParams())).toThrow('计算条件不完整');
+    expect(() => engine.start({ ...conditions, indicatorIds: ['G01-6'] }, defaultParams())).toThrow('计算不支持指标 G01-6');
+    expect(() => engine.apply(withPatch({ rule: 'old' }))).toThrow('计算没有在进行');
 
     engine.start(conditions, defaultParams());
     expect(() => engine.apply(withPatch({ rule: 'old' }), { baseIndex: 0 })).toThrow('只能基于当前参数');
@@ -125,7 +125,7 @@ describe('推进', () => {
   });
 });
 
-describe('推演中的人工干预', () => {
+describe('计算中的人工干预', () => {
   it('参数没变：什么也不做', async () => {
     using ctx = await setup();
     const { engine, clock } = ctx;
@@ -351,7 +351,7 @@ describe('暂停、停止、释放', () => {
     expect(engine.state.revision).toBe(revision);
   });
 
-  it('重新开始：上一次推演作废，按新的条件从头开始', async () => {
+  it('重新开始：上一次计算作废，按新的条件从头开始', async () => {
     using ctx = await setup();
     const { engine, advanceTo } = ctx;
     engine.start(conditions, defaultParams());
@@ -367,7 +367,7 @@ describe('暂停、停止、释放', () => {
     expect(engine.state.conditions?.cityCodes).toEqual(['320100']);
   });
 
-  it('释放后：进行中的推演作废，不再通知，方法抛错', async () => {
+  it('释放后：进行中的计算作废，不再通知，方法抛错', async () => {
     const ctx = await setup();
     const { engine, clock } = ctx;
     const listener = vi.fn<(state: EngineState) => void>();
@@ -462,14 +462,14 @@ describe('换条件重算', () => {
     expect(engine.state.versions.map(version => version.label)).toEqual(['v1']);
   });
 
-  it('推演中换条件：没开始过的步骤仍是等待；还没开始推演时不能换', async () => {
+  it('计算中换条件：没开始过的步骤仍是等待；还没开始计算时不能换', async () => {
     using ctx = await setup();
     const { engine, advanceTo } = ctx;
-    expect(() => engine.restart(moreCities, defaultParams())).toThrow('推演没有开始');
+    expect(() => engine.restart(moreCities, defaultParams())).toThrow('计算没有开始');
     engine.start(conditions, defaultParams());
     await advanceTo(QC_AT + 100);
     engine.restart(moreCities, defaultParams());
     expect(statusesOf(['parse', 'qc', 'spatial'], engine)).toEqual(['stale', 'stale', 'waiting']);
-    expect(() => engine.restart({ ...moreCities, indicatorIds: [] }, defaultParams())).toThrow('推演条件不完整');
+    expect(() => engine.restart({ ...moreCities, indicatorIds: [] }, defaultParams())).toThrow('计算条件不完整');
   });
 });

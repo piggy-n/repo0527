@@ -24,7 +24,7 @@ describe('changedParams', () => {
     expect(defaultParams()).toBe(base);
   });
 
-  it('按推演中的先后列出改动的参数项', () => {
+  it('按计算中的先后列出改动的参数项', () => {
     const next = withPatch({ recognition: 'intersect', popChange: 10, rule: 'old', targets: { ...base.targets, 'B-65': 65 } });
 
     expect(changedParams(base, next)).toEqual(['popChange', 'rule', 'recognition', 'targets']);
@@ -46,7 +46,7 @@ describe('参数作用于哪些指标', () => {
     expect(['A-15', 'A-39'].map(id => paramApplies('targets', id))).toEqual([true, true]);
   });
 
-  it('所选指标用得上的参数项，按推演中的先后', () => {
+  it('所选指标用得上的参数项，按计算中的先后', () => {
     expect(paramsOf(['B-65', 'A-39', 'A-31'])).toEqual(['popChange', 'rule', 'recognition', 'targets']);
     expect(paramsOf(['B-65'])).toEqual(['recognition', 'targets']);
     expect(paramsOf(['A-15'])).toEqual(['targets']);
@@ -54,8 +54,8 @@ describe('参数作用于哪些指标', () => {
   });
 });
 
-describe('模拟情景', () => {
-  it('参数偏离标准口径、而且对这项指标起作用才是模拟情景；目标值不算', () => {
+describe('自定义口径', () => {
+  it('参数偏离标准口径、而且对这项指标起作用才是自定义口径；目标值不算', () => {
     const old = withPatch({ rule: 'old' });
 
     expect(isStandard('rule', old)).toBe(false);

@@ -82,7 +82,7 @@ export const EstimateBar = defineComponent({
                   ) : (
                     <>
                       <span class={styles[tone]}>较标准口径 {tone === 'flat' ? '不变' : formatDelta(delta, indicator)}</span>
-                      <span class={styles.scenario}>模拟情景</span>
+                      <span class={styles.scenario}>自定义口径</span>
                     </>
                   )}
                 </div>
@@ -94,7 +94,7 @@ export const EstimateBar = defineComponent({
               </div>
             );
           })}
-          {more > 0 && <p class={styles.status}>另有 {more} 项指标，开始推演后查看</p>}
+          {more > 0 && <p class={styles.status}>另有 {more} 项指标，开始计算后查看</p>}
         </div>
       );
     };

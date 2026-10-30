@@ -18,7 +18,7 @@ beforeAll(async () => {
 });
 const ready = (): SimulationModel => ({ status: 'ready', calculator });
 
-// 和页面一样：底部是对话栏，编排完成后开始推演
+// 和页面一样：底部是对话栏，编排完成后开始计算
 function mountStage(initial: Composition = sampleComposition(), model: SimulationModel = ready()) {
   let owner: CompositionOwner | undefined;
   const Host = defineComponent({
@@ -128,15 +128,15 @@ describe('ComposeStage', () => {
 
   it('条件不全或区县数据没加载好时不能开始；齐全后开始', async () => {
     const empty = mountStage(emptyComposition());
-    expect(buttonOf(empty.wrapper, '开始推演').attributes('disabled')).toBeDefined();
+    expect(buttonOf(empty.wrapper, '开始计算').attributes('disabled')).toBeDefined();
     expect(empty.wrapper.get('[data-node="output"]').text()).toContain('还缺：年份、监测范围、监测指标');
 
     const loading = mountStage(sampleComposition(), { status: 'loading' });
-    expect(buttonOf(loading.wrapper, '开始推演').attributes('disabled')).toBeDefined();
+    expect(buttonOf(loading.wrapper, '开始计算').attributes('disabled')).toBeDefined();
     expect(loading.wrapper.get('[data-node="output"]').text()).toContain('区县数据加载中');
 
     const { wrapper } = mountStage();
-    await buttonOf(wrapper, '开始推演').trigger('click');
+    await buttonOf(wrapper, '开始计算').trigger('click');
     expect(wrapper.emitted('start')).toHaveLength(1);
   });
 
@@ -158,15 +158,15 @@ describe('ComposeStage', () => {
     expect(wrapper.get('[aria-label="指标预估结果"]').text()).toContain('参数预览中');
   });
 
-  it('重置条件在条件库的标题栏：点了只剩 AI 推演', async () => {
+  it('重置条件在条件库的标题栏：点了只剩 AI计算', async () => {
     const { wrapper } = mountStage();
     const reset = buttonOf(wrapper, '重置条件');
-    expect(reset.element.closest('section')?.querySelector('h2')?.textContent).toBe('指标智能推演条件');
+    expect(reset.element.closest('section')?.querySelector('h2')?.textContent).toBe('指标计算条件');
     await reset.trigger('click');
     expect(nodes(wrapper)).toEqual(['output']);
   });
 
-  it('指标节点只写名称和单位，下面是灰色的编号；模拟情景的指标多一个标记', async () => {
+  it('指标节点只写名称和单位，下面是灰色的编号；自定义口径的指标多一个标记', async () => {
     const { wrapper, composition } = mountStage();
     const node = () => wrapper.get('[data-node="indicators:A-31"]');
 
@@ -174,7 +174,7 @@ describe('ComposeStage', () => {
     expect(node().get('[class*="_indicatorMeta_"]').text()).toBe('A-31');
     composition.setParams({ ...composition.state.value.params, rule: 'old' });
     await flushPromises();
-    expect(node().get('[class*="_indicatorMeta_"]').text()).toBe('A-31模拟情景');
+    expect(node().get('[class*="_indicatorMeta_"]').text()).toBe('A-31自定义口径');
   });
 
   it('选了几个年度时预估可以换年度，几个市时写达标的市数', async () => {
@@ -189,7 +189,7 @@ describe('ComposeStage', () => {
   });
 });
 
-describe('ComposeStage 按 AI 推演指令编排', () => {
+describe('ComposeStage 按 AI计算指令编排', () => {
   // jsdom 没有 scrollBy：编排时会把最新出现的节点滚到看得见
   beforeAll(() => {
     Element.prototype.scrollBy = () => undefined;
@@ -198,13 +198,31 @@ describe('ComposeStage 按 AI 推演指令编排', () => {
     Reflect.deleteProperty(Element.prototype, 'scrollBy');
   });
 
-  it('发送后编排图从空白开始，一个节点一个节点地出现；期间条件库和编排图不接收操作；完成后开始推演', async () => {
+  it('输入框空着时占位是示例，Tab 填进来；有字时 Tab 照常移动焦点', async () => {
+    const { wrapper } = mountStage(emptyComposition());
+    const input = wrapper.get<HTMLTextAreaElement>('[aria-label="计算指令"]');
+    expect(input.element.value).toBe('');
+    expect(input.attributes('placeholder')).toBe(PROMPT_EXAMPLES[0]);
+
+    await input.trigger('keydown', { key: 'Tab' });
+    expect(input.element.value).toBe(PROMPT_EXAMPLES[0]);
+
+    await input.setValue('自己写的');
+    await input.trigger('keydown', { key: 'Tab' });
+    expect(input.element.value).toBe('自己写的');
+
+    await buttonOf(wrapper, '换一批').trigger('click');
+    expect(input.element.value).toBe('');
+    expect(input.attributes('placeholder')).not.toBe(PROMPT_EXAMPLES[0]);
+  });
+
+  it('发送后编排图从空白开始，一个节点一个节点地出现；期间条件库和编排图不接收操作；完成后开始计算', async () => {
     vi.useFakeTimers();
     const { wrapper } = mountStage(emptyComposition());
-    expect(wrapper.get<HTMLTextAreaElement>('[aria-label="推演指令"]').element.value).toBe(PROMPT_EXAMPLES[0]);
+    await wrapper.get('[aria-label="计算指令"]').trigger('keydown', { key: 'Tab' });
 
     await buttonOf(wrapper, '发送').trigger('click');
-    expect(buttonOf(wrapper, '编排中').exists()).toBe(true);
+    expect(buttonOf(wrapper, '配置中').exists()).toBe(true);
     expect(wrapper.get('[role="status"]').text()).toBe('AI 正在理解指令…');
     expect(nodes(wrapper)).toEqual([]);
     // 编排期间不显示"拖入或点选"的占位
@@ -218,11 +236,11 @@ describe('ComposeStage 按 AI 推演指令编排', () => {
     await vi.advanceTimersByTimeAsync(450 * 2);
     expect(nodes(wrapper)).toEqual(['years:2025', 'region', 'indicators:A-31']);
 
-    // 参数 3 项（人均类的人口变化用不上），再到 AI 推演
+    // 参数 3 项（人均类的人口变化用不上），再到 AI计算
     await vi.advanceTimersByTimeAsync(450 * 4);
     expect(nodes(wrapper, 'params:')).toEqual(['params:rule', 'params:recognition', 'params:targets']);
-    expect(wrapper.get('[role="status"]').text()).toBe('编排完成，即将开始推演');
-    expect(buttonOf(wrapper, '推演启动中').exists()).toBe(true);
+    expect(wrapper.get('[role="status"]').text()).toBe('配置完成，即将开始计算');
+    expect(buttonOf(wrapper, '计算启动中').exists()).toBe(true);
     expect(wrapper.emitted('start')).toBeUndefined();
 
     await vi.advanceTimersByTimeAsync(1000);

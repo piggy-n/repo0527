@@ -14,7 +14,7 @@ const conditions: SimulationConditions = {
   cityCodes: JIANGSU_CITIES.map(city => city.code),
   indicatorIds: ['A-39', 'B-65']
 };
-// 模拟情景：相交即算
+// 自定义口径：相交即算
 const intersect: SimulationParams = { ...defaultParams(), recognition: 'intersect' };
 
 async function setup(scope: SimulationConditions = conditions, params = defaultParams()) {
@@ -57,7 +57,7 @@ describe('resolveSelection', () => {
 });
 
 describe('resultItems', () => {
-  it('每项指标一条，顺序同条件：多个市时写达标几市，全部、部分、都没有对应三态；模拟情景标出来', async () => {
+  it('每项指标一条，顺序同条件：多个市时写达标几市，全部、部分、都没有对应三态；自定义口径标出来', async () => {
     const { version } = await setup(conditions, intersect);
     const items = resultItems(version, conditions, 2026);
     const b65 = indicatorResult(version.result[2026]?.indicators ?? {}, 'B-65');

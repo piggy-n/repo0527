@@ -10,7 +10,7 @@ import { mapData } from './map-data';
 const ALL = JIANGSU_CITIES.map(city => city.code);
 
 describe('mapData', () => {
-  it('推演范围的区县带数值颜色和排序；范围外的进遮罩', async () => {
+  it('计算范围的区县带数值颜色和排序；范围外的进遮罩', async () => {
     const calculator = createCalculator(await loadTestAtlas());
     const conditions = { years: [2026], cityCodes: ['320100', '321000'], indicatorIds: ['B-65', 'A-39'] };
     const data = mapData(calculator, conditions, defaultParams(), 'B-65');

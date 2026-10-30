@@ -133,7 +133,7 @@ export function idleEngineState(): EngineState {
 
 function assertConditions({ years, cityCodes, indicatorIds }: SimulationConditions): void {
   if (years.length === 0 || cityCodes.length === 0 || indicatorIds.length === 0) {
-    throw new Error('推演条件不完整：年度、监测范围、监测指标都至少要有一项');
+    throw new Error('计算条件不完整：年度、监测范围、监测指标都至少要有一项');
   }
   for (const id of indicatorIds) {
     simulationIndicator(id);
@@ -193,7 +193,7 @@ export class SimulationEngine implements Disposable {
     assertConditions(conditions);
     const { status, conditions: before, steps, params: from } = this.#state;
     if (status === 'idle' || !before) {
-      throw new Error('推演没有开始');
+      throw new Error('计算没有开始');
     }
     const signal = this.#runs.next();
     this.#started.clear();
@@ -276,10 +276,10 @@ export class SimulationEngine implements Disposable {
       return { outcome: changes.length === 0 ? 'unchanged' : 'rerun', restart, changes, baseIndex };
     }
     if (status !== 'planning' && status !== 'running') {
-      throw new Error('推演没有在进行');
+      throw new Error('计算没有在进行');
     }
     if (options.baseIndex !== undefined) {
-      throw new Error('推演进行中只能基于当前参数调整');
+      throw new Error('计算进行中只能基于当前参数调整');
     }
     const changes = changedParams(params, next);
     const restart = restartStep(changes);
@@ -340,7 +340,7 @@ export class SimulationEngine implements Disposable {
   #rerun(restart: StepId | null, patch: Pick<EngineState, 'params' | 'steps'>, base: Patch): void {
     const conditions = this.#state.conditions;
     if (!conditions) {
-      throw new Error('推演没有开始');
+      throw new Error('计算没有开始');
     }
     const signal = this.#runs.next();
     const affected = restart === null ? new Set<StepId>() : downstream(restart);
@@ -451,7 +451,7 @@ export class SimulationEngine implements Disposable {
 
   #assertAlive(): void {
     if (this.#disposed) {
-      throw new Error('推演引擎已释放');
+      throw new Error('计算引擎已释放');
     }
   }
 }

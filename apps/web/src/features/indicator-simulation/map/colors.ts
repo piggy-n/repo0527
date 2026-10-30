@@ -6,7 +6,7 @@ export const VALUE_COLORS = ['#dfe8ff', '#b4c8ff', '#7f9ff6', '#4f72e3', '#2c4bb
 export const PASS_COLORS = { pass: '#a9bdfb', near: '#f8d08a', fail: '#f3a3a3' } as const;
 /** 计算中还没扫到的区县 */
 export const PENDING_COLOR = '#c8d2e2';
-/** 人口密度的底色（--color-ai-violet 系） */
+/** 人口密度的底色（紫色系，取自原型） */
 export const DENSITY_COLOR = '#9d8cff';
 /** 设施与它的服务圈 */
 export const FACILITY_COLOR = '#1f7a58';

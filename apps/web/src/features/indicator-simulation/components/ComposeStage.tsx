@@ -29,7 +29,7 @@ export const ComposeStage = defineComponent({
       const building = props.composer.building.value;
       const locked = building !== null && styles.locked;
       return (
-        <MxSplitLayout asideLabel="推演条件">
+        <MxSplitLayout asideLabel="计算条件">
           {{
             aside: () => <ConditionLibrary class={locked} composition={props.composition} drag={drag} />,
             default: () => (

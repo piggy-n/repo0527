@@ -1,4 +1,4 @@
-import { computed, defineComponent, type PropType, ref, type SlotsType, type VNode, watch } from 'vue';
+import { computed, defineComponent, type PropType, ref, watch } from 'vue';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { flowCamera, type FlowView } from '../flow/camera';
@@ -31,7 +31,7 @@ export const FlowChart = defineComponent({
     plan: { type: Object as PropType<FlowPlan>, required: true },
     frame: { type: Object as PropType<FlowFrame>, required: true },
     paused: Boolean,
-    /** 推演完成：看全览，底部给完成的卡片留位置 */
+    /** 计算完成：看全览，评价节点可以点 */
     done: Boolean,
     /** 时间线上悬停的一步：这一列的节点高亮 */
     highlight: { type: Number as PropType<number | null>, default: null },
@@ -42,8 +42,7 @@ export const FlowChart = defineComponent({
     /** 完成后点了评价节点：看这项指标的结果 */
     pick: (indicatorId: string) => typeof indicatorId === 'string'
   },
-  slots: Object as SlotsType<{ default?: () => VNode | VNode[] | null }>,
-  setup(props, { emit, slots }) {
+  setup(props, { emit }) {
     const canvas = ref<HTMLElement>();
     const size = useShownElementSize(canvas);
     const view = ref<FlowView | 'free'>('follow');
@@ -64,7 +63,7 @@ export const FlowChart = defineComponent({
       const viewport = {
         width: Math.max(0, size.width.value - props.reserveRight),
         height: size.height.value,
-        bottom: props.done ? 84 : 0
+        bottom: 0
       };
       return flowCamera(props.plan, props.frame, viewport, view.value);
     });
@@ -123,7 +122,7 @@ export const FlowChart = defineComponent({
         >
           <div class={styles.head}>
             <span class={styles.label}>{node.label}</span>
-            {node.scenario && <span class={styles.scenario}>模拟情景</span>}
+            {node.scenario && <span class={styles.scenario}>自定义口径</span>}
             <span class={styles.state}>
               {frame.status === 'running' && <span class={styles.spinner} />}
               {frame.status === 'done' && <SvgIcon class={styles.check} name="check" />}
@@ -228,7 +227,6 @@ export const FlowChart = defineComponent({
               </button>
             ))}
           </div>
-          {slots.default?.()}
         </div>
       );
     };

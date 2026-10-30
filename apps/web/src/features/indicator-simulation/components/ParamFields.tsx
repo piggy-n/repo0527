@@ -35,7 +35,7 @@ const RECOGNITION_NOTES: Readonly<Record<Recognition, string>> = {
 const pick = <T extends string>(options: readonly T[], value: unknown): T | undefined =>
   options.find(option => option === value);
 
-const scenarioTag = (show: boolean) => show && <span class={styles.scenario}>模拟情景</span>;
+const scenarioTag = (show: boolean) => show && <span class={styles.scenario}>自定义口径</span>;
 
 /** 参数的编辑项：编排阶段的参数节点只编辑一项，人工干预编辑所选指标用得上的全部；改动交给拥有者，组件不保存 */
 export const ParamFields = defineComponent({

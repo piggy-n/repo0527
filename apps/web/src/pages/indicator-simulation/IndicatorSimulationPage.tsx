@@ -88,7 +88,7 @@ export const IndicatorSimulationPage = defineComponent({
       }
     };
     // 指令的文字在推演后回到编排时还在；AI 编排完成后直接开始推演（区县数据还没好时停在编排图，由用户点开始）
-    const composer = usePromptComposer(composition, { still: reducedMotion, onComposed: () => startWith(composer.text.value) });
+    const composer = usePromptComposer(composition, { onComposed: () => startWith(composer.text.value) });
     // 推演和结果阶段的对话：暂停、继续、停止，改参数或条件；完成后还能看结果
     const conversation = useRunConversation(run, composition, userPause, log, {
       selection: result.selection,

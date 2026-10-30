@@ -21,7 +21,7 @@ import { FlowChart } from './FlowChart';
 import { ReasoningPanel } from './ReasoningPanel';
 import { RunStage } from './RunStage';
 
-// 规划步骤 1300 毫秒，每步先想 1100 毫秒；各步的时长按推理的话多少给，推进这么久一定推演完
+// 规划步骤 1300 毫秒，每步先想 1100 毫秒；各步的时长按推理的话多少给，推进这么久一定计算完
 const PLANNING = 1300;
 const ENOUGH = 120_000;
 
@@ -60,8 +60,8 @@ async function mountRun(composition: Composition = sampleComposition()) {
     }
   });
   const wrapper = mount(Host, { attachTo: document.body, global: { stubs: { MapCanvas: true } } });
-  const started = required(run, '推演的拥有者');
-  required(log, '时间线').begin('推演全省三项指标');
+  const started = required(run, '计算的拥有者');
+  required(log, '时间线').begin('计算全省三项指标');
   started.start(composition, calculator);
   await flushPromises();
   return { wrapper, run: started, result: required(owner, '结果的拥有者'), view, clock };
@@ -85,7 +85,7 @@ const advance = async ({ clock }: Mounted, ms: number) => {
   await flushPromises();
 };
 const titles = ({ wrapper }: Mounted) => wrapper.findAll('h2').map(title => title.text());
-// 左侧推演结果的一条指标
+// 左侧计算结果的一条指标
 const item = ({ wrapper }: Mounted, name: string) =>
   required(
     wrapper.findAll('[aria-expanded]').find(head => head.text().startsWith(name)),
@@ -105,13 +105,14 @@ describe('RunStage', () => {
       wrapper.findComponent(ReasoningPanel).vm.$forceUpdate();
       await flushPromises();
     };
-    expect(entries(mounted)).toEqual(['推演全省三项指标', '正在规划推演步骤…', '下一步 · 条件解析']);
+    // 用户的话右侧是"我"的头像
+    expect(entries(mounted)).toEqual(['计算全省三项指标我', '正在规划计算步骤…', '下一步 · 条件解析']);
     expect(nodes(mounted)).toEqual({});
 
     await advance(mounted, PLANNING + 300);
     await redraw();
     expect(entries(mounted).slice(1)).toEqual(['条件解析进行中正在理解指令…', '下一步 · 数据准备']);
-    expect(wrapper.get('[role="status"]').text()).toBe('推演中 · 条件解析');
+    expect(wrapper.get('[role="status"]').text()).toBe('计算中 · 条件解析');
     // 想了半秒多，提示换成下一句；想完开始打字
     await advance(mounted, 400);
     await redraw();
@@ -126,12 +127,17 @@ describe('RunStage', () => {
     expect(entries(mounted).at(-2)).toBe('数据准备进行中正在连接人口库…');
   });
 
-  it('暂停按钮：推演停住、写已暂停，再点继续；和打开人工干预的暂停互不影响', async () => {
+  it('暂停按钮：计算停住、写已暂停，再点继续；和打开人工干预的暂停互不影响', async () => {
     const mounted = await mountRun();
     const { run, wrapper } = mounted;
     await advance(mounted, PLANNING + 300);
+    // 主次：暂停是主按钮，人工干预是默认按钮，停止是红色朴素按钮
+    expect(button(mounted, '暂停').classes()).toContain('el-button--primary');
+    expect(button(mounted, '人工干预').classes()).not.toContain('el-button--primary');
+    expect(button(mounted, '停止').classes()).toEqual(expect.arrayContaining(['el-button--danger', 'is-plain']));
     await button(mounted, '暂停').trigger('click');
     expect(run.state.value.paused).toBe(true);
+    expect(button(mounted, '继续').classes()).toContain('el-button--primary');
     expect(wrapper.get('[role="status"]').text()).toBe('已暂停 · 条件解析');
     expect(wrapper.find('[class*="_paused_"]').exists()).toBe(true);
 
@@ -139,6 +145,8 @@ describe('RunStage', () => {
     expect(wrapper.getComponent(FlowChart).props('reserveRight')).toBe(0);
     await button(mounted, '人工干预').trigger('click');
     expect(wrapper.getComponent(FlowChart).props('reserveRight')).toBe(424);
+    // 打开时是浅色的主色
+    expect(button(mounted, '人工干预').classes()).toEqual(expect.arrayContaining(['el-button--primary', 'is-plain']));
     await wrapper.get('[aria-label="关闭人工干预"]').trigger('click');
     expect(wrapper.getComponent(FlowChart).props('reserveRight')).toBe(0);
     expect(run.state.value.paused).toBe(true);
@@ -150,32 +158,44 @@ describe('RunStage', () => {
     const mounted = await mountRun();
     const { wrapper } = mounted;
     expect(wrapper.find('map-canvas-stub').exists()).toBe(false);
+    expect(wrapper.getComponent(ReasoningPanel).find('footer').exists()).toBe(false);
     await advance(mounted, ENOUGH);
 
     expect(new Set(Object.values(nodes(mounted)))).toEqual(new Set(['done']));
+    // "查看结果""调整条件"固定在左侧 AI计算的底部，流程图里没有
+    const footer = wrapper.getComponent(ReasoningPanel).get('footer');
+    expect(footer.findAll('button').map(found => found.text())).toEqual(['查看结果', '调整条件']);
+    expect(wrapper.getComponent(FlowChart).text()).not.toContain('查看结果');
     const parse = required(
       wrapper.findAll('[class*="_timeline_"] > li').find(entry => entry.text().startsWith('条件解析')),
       '条件解析这一条'
     );
     expect(parse.text()).toBe('条件解析完成2026 年 · 全省 · 3 项');
     await parse.get('button').trigger('click');
-    expect(parse.text()).toContain('理解指令：推演 2026 年全省的 3 项指标。');
+    expect(parse.text()).toContain('理解指令：计算 2026 年全省的 3 项指标。');
 
     expect(wrapper.find('[role="status"]').exists()).toBe(false);
     expect(['暂停', '人工干预', '停止'].map(text => wrapper.findAll('button').some(found => found.text() === text))).toEqual([false, false, false]);
-    expect(wrapper.get('[aria-label="主区视图"]').text()).toBe('推演流程推演结果');
+    expect(wrapper.get('[aria-label="主区视图"]').text()).toBe('计算流程计算结果');
     expect(wrapper.find('map-canvas-stub').exists()).toBe(true);
+
+    // 底部的"调整条件"回到条件配置
+    await required(
+      footer.findAll('button').find(found => found.text() === '调整条件'),
+      '底部的"调整条件"'
+    ).trigger('click');
+    expect(mounted.run.state.value.status).toBe('idle');
   });
 
-  it('查看结果：左侧换成推演结果、主区换成地图；每项指标写结果和达标，选中的展开各市；切回推演流程时是 AI 推理', async () => {
+  it('查看结果：左侧换成计算结果、主区换成地图；每项指标写结果和达标，选中的展开各市；切回计算流程时是 AI计算', async () => {
     const mounted = await mountRun();
     const { wrapper, view } = mounted;
     await advance(mounted, ENOUGH);
 
     await button(mounted, '查看结果').trigger('click');
     expect(view.value).toBe('result');
-    expect(titles(mounted)).toContain('推演结果');
-    expect(titles(mounted)).not.toContain('AI 推理');
+    expect(titles(mounted)).toContain('计算结果');
+    expect(titles(mounted)).not.toContain('AI计算');
     expect(item(mounted, '公园绿地覆盖率').text()).toBe('公园绿地覆盖率66.6%目标 ≥ 70.0%达标 5/13 市');
     expect(item(mounted, '公园绿地覆盖率').attributes('aria-expanded')).toBe('true');
     expect(wrapper.findAll('[aria-label^="放大到"]').filter(row => row.element.tagName === 'BUTTON')).not.toHaveLength(0);
@@ -183,10 +203,10 @@ describe('RunStage', () => {
 
     await wrapper.get('[aria-label="主区视图"] input[value="flow"]').setValue(true);
     expect(view.value).toBe('flow');
-    expect(titles(mounted)).toContain('AI 推理');
+    expect(titles(mounted)).toContain('AI计算');
   });
 
-  it('看结果：换指标、着色、悬停一市（地图描边）、点一市放大、返回推演范围；重新编排回到条件编排', async () => {
+  it('看结果：换指标、着色、悬停一市（地图描边）、点一市放大、返回计算范围；调整条件回到条件配置', async () => {
     const mounted = await mountRun({ ...sampleComposition(), conditions: { ...sampleComposition().conditions, years: [2025, 2026] } });
     const { wrapper, result, run } = mounted;
     await advance(mounted, ENOUGH);
@@ -207,10 +227,10 @@ describe('RunStage', () => {
     expect(result.hoverCity.value).toBe('320500');
     await suzhou.trigger('click');
     expect(result.selection.value?.cityCode).toBe('320500');
-    await button(mounted, '返回推演范围').trigger('click');
+    await button(mounted, '返回计算范围').trigger('click');
     expect(result.selection.value?.cityCode).toBeNull();
 
-    await button(mounted, '重新编排').trigger('click');
+    await button(mounted, '调整条件').trigger('click');
     expect(run.state.value.status).toBe('idle');
   });
 
