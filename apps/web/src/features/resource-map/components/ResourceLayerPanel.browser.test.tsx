@@ -7,7 +7,6 @@ import { userEvent } from 'vitest/browser';
 import { defineComponent, KeepAlive, nextTick, type Ref, ref, shallowRef } from 'vue';
 import type { ResourceTreeCategory } from '../api';
 import { buildCatalog } from '../catalog';
-import { useCatalogOrder } from '../composables/useCatalogOrder';
 import { type ResourceLayers, useResourceLayers } from '../composables/useResourceLayers';
 import { useResourcePanelLayout } from '../composables/useResourcePanelLayout';
 import { ResourceLayerPanel } from './ResourceLayerPanel';
@@ -74,13 +73,12 @@ function setup(height: number, shown?: Ref<boolean>, expandChecked = true) {
       const map = provideMap({ groups: ['resources'], camera: CAMERA });
       const layers = useResourceLayers(map, { catalog: shallowRef(CATALOG), tileBase: 'http://localhost/tiles/' });
       owner = layers;
-      const order = useCatalogOrder();
       return () => (
         <div
           data-column
           style={{ display: 'flex', flexDirection: 'column', width: '320px', height: `${height}px`, ...TOKENS }}
         >
-          <ResourceLayerPanel layers={layers} catalogOrder={order} layout={layout} />
+          <ResourceLayerPanel layers={layers} layout={layout} />
         </div>
       );
     }

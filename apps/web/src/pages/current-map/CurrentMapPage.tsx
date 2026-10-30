@@ -6,7 +6,6 @@ import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureD
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
 import { ResourceLegendReset } from '@/features/resource-map/components/ResourceLegendReset';
-import { useCatalogOrder } from '@/features/resource-map/composables/useCatalogOrder';
 import { useFeaturePick } from '@/features/resource-map/composables/useFeaturePick';
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
@@ -142,9 +141,8 @@ export const CurrentMapPage = defineComponent({
       laneTop.value = lane.value?.getBoundingClientRect().top ?? 0;
       basemapTop.value = top;
     };
-    // 资源面板的收起、分割线的位置和目录顺序按账号记住；窄屏时左右只显示一边，只推导显示，不改收起状态（ADR 0053 第 6、8 节）
+    // 资源面板的收起、分割线的位置按账号记住，顺序随资源图层记住；窄屏时左右只显示一边，只推导显示，不改收起状态（ADR 0053 第 6、8 节）
     const panelLayout = useResourcePanelLayout({ preferences });
-    const catalogOrder = useCatalogOrder({ preferences });
     // 三维时左侧是三维模型面板，两个面板的收起各自保留（ADR 0081 第 7 节）；模型面板的不持久化
     const modelsCollapsed = ref(false);
     const leftCollapsed = computed(() =>
@@ -322,7 +320,6 @@ export const CurrentMapPage = defineComponent({
       return (
         <ResourceLayerPanel
           layers={resources}
-          catalogOrder={catalogOrder}
           layout={panelLayout}
           failed={catalogQuery.isError.value}
           collapsed={!sides.left.value}

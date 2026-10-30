@@ -3,17 +3,14 @@ import { effectScope } from 'vue';
 import { createMemoryStore } from '@/shared/storage/key-value-store';
 import { createTestPreferenceScope } from '@/shared/storage/testing';
 import { PREFERENCE_WRITE_DEBOUNCE } from '@/shared/storage/use-preference';
-import { useCatalogOrder } from './useCatalogOrder';
 import { useResourcePanelLayout } from './useResourcePanelLayout';
 
-const ORDER_KEY = 'zhangsan/resource-catalog-order';
 const LAYOUT_KEY = 'zhangsan/resource-panel';
 
 function setup(store = createMemoryStore()) {
   const effect = effectScope();
   const { scope } = createTestPreferenceScope(store);
   const owners = effect.run(() => ({
-    order: useCatalogOrder({ preferences: scope }),
     layout: useResourcePanelLayout({ preferences: scope })
   }));
   if (!owners) {
@@ -30,17 +27,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('目录顺序和面板布局的偏好', () => {
-  it('恢复上次的目录顺序、收起状态和分割线的位置', async () => {
+// 目录树的顺序就是叠放顺序，随资源图层的偏好记住（ADR 0118），见 resource-layers-preference.test.ts
+describe('面板布局的偏好', () => {
+  it('恢复上次的收起状态和分割线的位置', async () => {
     using ctx = setup(
       createMemoryStore({
-        [ORDER_KEY]: { version: 1, value: { p: ['b', 'a'] } },
         [LAYOUT_KEY]: { version: 1, value: { collapsed: true, checkedRatio: 0.6 } }
       })
     );
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(ctx.order.order.value).toStrictEqual({ p: ['b', 'a'] });
     expect(ctx.layout.collapsed.value).toBe(true);
     expect(ctx.layout.checkedRatio.value).toBe(0.6);
   });
@@ -49,28 +45,24 @@ describe('目录顺序和面板布局的偏好', () => {
     using ctx = setup();
     await vi.advanceTimersByTimeAsync(0);
 
-    ctx.order.move('p', ['a', 'b', 'c'], 0, 2);
     ctx.layout.setCollapsed(true);
     ctx.layout.setCheckedRatio(0.3);
     await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
 
-    expect(ctx.store.entries.get(ORDER_KEY)).toStrictEqual({ version: 1, value: { p: ['b', 'c', 'a'] } });
     expect(ctx.store.entries.get(LAYOUT_KEY)).toStrictEqual({
       version: 1,
       value: { collapsed: true, checkedRatio: 0.3 }
     });
   });
 
-  it('格式不对时当作没有存过：重复的键、越界的比例', async () => {
+  it('格式不对时当作没有存过：越界的比例', async () => {
     using ctx = setup(
       createMemoryStore({
-        [ORDER_KEY]: { version: 1, value: { p: ['a', 'a'] } },
         [LAYOUT_KEY]: { version: 1, value: { collapsed: true, checkedRatio: 1.5 } }
       })
     );
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(ctx.order.order.value).toStrictEqual({});
     expect(ctx.layout.collapsed.value).toBe(false);
     expect(ctx.layout.checkedRatio.value).toBe(0.4);
   });

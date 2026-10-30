@@ -202,14 +202,14 @@ describe('资源图层的偏好', () => {
     expect(ctx.owner.batchYear.value).toBeNull();
   });
 
-  it('修改后防抖写入：每个资源的设置和面板顺序', async () => {
+  it('修改后防抖写入：每个资源的设置和叠放顺序（也是目录树的顺序）', async () => {
     const store = createMemoryStore();
     using ctx = setup(store);
     await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
 
     ctx.owner.setChecked('csxhjctb_hydl', true);
     ctx.owner.setOpacity('csxhjctb_hydl', 0.4);
-    ctx.owner.move('csxhjctb_hydl', 0);
+    ctx.owner.move({ parentId: '测试', keys: ctx.owner.state.value.order, from: 2, to: 0 });
     await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
 
     expect(store.entries.get(KEY)).toStrictEqual({

@@ -15,6 +15,7 @@ import { appConfig } from '@/shared/config/app-config';
 import type { PreferenceScope } from '@/shared/storage/preference-scope';
 import { usePreference } from '@/shared/storage/use-preference';
 import type { Resource, ResourceCatalog } from '../catalog';
+import { type TreeMove, treeOrder } from '../catalog-order';
 import {
   batchYearOptions,
   EMPTY_RESOURCE_LAYERS,
@@ -65,8 +66,11 @@ export interface ResourceLayers {
    * 没有任何资源有这一年时图层不变（ADR 0094），年份不是整数时抛错
    */
   readonly setYearForAll: (year: number) => void;
-  /** 移到面板上的第 index 位（0 在最上面，画在最上层）；位置越界时抛错 */
-  readonly move: (code: string, index: number) => void;
+  /**
+   * 目录树里同级调整顺序，地图的叠放顺序、"已选择图层"和图例跟着变（ADR 0118）；"已选择图层"里的移动先由
+   * moveTarget、checkedDropTarget 换成目录树里的调整。位置越界、键重复时抛错
+   */
+  readonly move: (target: TreeMove) => void;
   readonly deriveGroup: () => StyleGroup;
 }
 
@@ -210,17 +214,11 @@ export function useResourceLayers(
 
   const batchYears = computed(() => batchYearOptions(catalog.value));
 
-  const move = (code: string, index: number) => {
+  const move = (target: TreeMove) => {
     const current = state.value;
-    const from = current.order.indexOf(code);
-    if (from === -1) {
-      throw new Error(`目录里没有资源 ${code}`);
-    }
-    if (!(Number.isInteger(index) && index >= 0 && index < current.order.length)) {
-      throw new RangeError(`位置应在 0～${current.order.length - 1} 之间，收到 ${index}`);
-    }
-    if (from !== index) {
-      state.value = { ...current, order: current.order.toSpliced(from, 1).toSpliced(index, 0, code) };
+    const order = treeOrder(current.catalog?.categories ?? [], current.order, target);
+    if (order.some((code, index) => code !== current.order[index])) {
+      state.value = { ...current, order };
     }
   };
 

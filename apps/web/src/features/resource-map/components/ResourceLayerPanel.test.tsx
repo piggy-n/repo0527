@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, ref, shallowRef } from 'vue';
 import type { ResourceTreeCategory } from '../api';
 import { buildCatalog, type ResourceCatalog } from '../catalog';
-import { type CatalogOrderOwner, useCatalogOrder } from '../composables/useCatalogOrder';
 import { type ResourceLayers, useResourceLayers } from '../composables/useResourceLayers';
 import { type ResourcePanelLayout, useResourcePanelLayout } from '../composables/useResourcePanelLayout';
 import { ResourceLayerPanel } from './ResourceLayerPanel';
@@ -62,18 +61,16 @@ async function mountPanel(
   const onRetry = vi.fn<() => void>();
   // 收起由页面决定：这里像页面一样按面板发出的事件改
   const collapsed = ref(false);
-  let owners: { layers: ResourceLayers; order: CatalogOrderOwner; layout: ResourcePanelLayout } | undefined;
+  let owners: { layers: ResourceLayers; layout: ResourcePanelLayout } | undefined;
   const Page = defineComponent(() => {
     const map = provideMap({ groups: ['resources'], camera: CAMERA });
     const layers = useResourceLayers(map, { catalog: source, tileBase: 'http://localhost/tiles/', validate });
-    const order = useCatalogOrder();
     const layout = useResourcePanelLayout();
     map.bindStyle({ resources: layers.deriveGroup });
-    owners = { layers, order, layout };
+    owners = { layers, layout };
     return () => (
       <ResourceLayerPanel
         layers={layers}
-        catalogOrder={order}
         layout={layout}
         failed={failed.value}
         collapsed={collapsed.value}
@@ -91,7 +88,7 @@ async function mountPanel(
   if (!owners) {
     throw new Error('页面没有创建拥有者');
   }
-  return { wrapper, owner: owners.layers, order: owners.order, source, failed, onRetry, collapsed };
+  return { wrapper, owner: owners.layers, source, failed, onRetry, collapsed };
 }
 
 function button(wrapper: VueWrapper, label: string) {
@@ -107,6 +104,12 @@ const visibleResources = (wrapper: VueWrapper) =>
   wrapper.findAll('[data-resource]').map(row => row.attributes('data-resource'));
 
 const checkedOrder = (wrapper: VueWrapper) => wrapper.findAll('[data-layer]').map(row => row.attributes('data-layer'));
+
+const categoryOrder = (wrapper: VueWrapper) =>
+  wrapper.findAll('[data-category]').map(row => row.attributes('data-category'));
+
+// 地图上的资源图层，从上到下
+const mapOrder = (owner: ResourceLayers) => owner.deriveGroup().layers.map(({ id }) => id).toReversed();
 
 // 模拟 SortableJS 放下：它已经把元素移到了新位置，再调用 onEnd
 function drop(list: Element, from: number, to: number) {
@@ -213,7 +216,7 @@ describe('ResourceLayerPanel', () => {
     const { wrapper } = await mountPanel();
     const input = wrapper.get('input[placeholder="搜索资源"]');
     const treeMoves = () => wrapper.findAll('[data-resource] [data-move], [data-category] [data-move]');
-    expect(wrapper.findAll('button[title="调整目录顺序"]').length).toBeGreaterThan(0);
+    expect(wrapper.findAll('button[title="调整图层顺序（上层优先显示）"]').length).toBeGreaterThan(0);
     expect(treeMoves().length).toBeGreaterThan(0);
 
     const rootList = wrapper.get('[data-resource-layer-panel] ul').element;
@@ -221,7 +224,7 @@ describe('ResourceLayerPanel', () => {
 
     await input.setValue('坑塘');
     expect(visibleResources(wrapper)).toStrictEqual(['szy_kt']);
-    expect(wrapper.findAll('button[title="调整目录顺序"]')).toHaveLength(0);
+    expect(wrapper.findAll('button[title="调整图层顺序（上层优先显示）"]')).toHaveLength(0);
     expect(treeMoves()).toHaveLength(0);
     expect(rootList instanceof HTMLElement && SortableJS.get(rootList)?.option('disabled')).toBe(true);
 
@@ -229,58 +232,55 @@ describe('ResourceLayerPanel', () => {
     expect(wrapper.text()).toContain('没有找到资源');
   });
 
-  it('目录顺序：拖动或在手柄上按方向键只调整同一个分类下的展示顺序，不改叠放顺序（ADR 0053 第 6 节）', async () => {
-    const { wrapper, owner, order } = await mountPanel(CATALOG, true);
+  it('目录树：拖动或在手柄上按方向键在同一个分类下调整顺序，地图的叠放顺序和"已选择图层"跟着变（ADR 0118）', async () => {
+    const { wrapper, owner } = await mountPanel(CATALOG, true);
     owner.setChecked('csxhjctb_hydl', true);
     await nextTick();
-    const stacking = checkedOrder(wrapper);
+    expect(mapOrder(owner)).toStrictEqual(['resources-bgdc_dltb', 'resources-csxhjctb_hydl']);
 
-    await button(wrapper, '调整目录顺序：地类图斑').trigger('keydown', { key: 'ArrowDown' });
+    await button(wrapper, '调整图层顺序：地类图斑').trigger('keydown', { key: 'ArrowDown' });
     expect(visibleResources(wrapper)).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl']);
-    expect(order.order.value).toStrictEqual({ [LAND]: ['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl'] });
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('调整目录顺序：地类图斑');
+    expect(owner.state.value.order).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl', 'szy_kt']);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('调整图层顺序：地类图斑');
 
     drop(wrapper.get(`[data-category="${LAND}"] > ul`).element, 2, 0);
     await nextTick();
     expect(visibleResources(wrapper)).toStrictEqual(['csxhjctb_hydl', 'bgdc_cjdcq', 'bgdc_dltb']);
-
-    expect(checkedOrder(wrapper)).toStrictEqual(stacking);
-    expect(owner.state.value.order.slice(0, 3)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
+    expect(checkedOrder(wrapper)).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb']);
+    expect(mapOrder(owner)).toStrictEqual(['resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
   });
 
-  it('目录顺序：拖动手柄在复选框前面，行末的上移、下移在同一个分类下换位，不改叠放顺序；到头时不可用，焦点留在这一行（ADR 0096）', async () => {
-    const { wrapper, owner, order } = await mountPanel(CATALOG, true);
+  it('目录树：拖动手柄在复选框前面，行末的上移、下移在同一个分类下换位，叠放顺序跟着变；到头时不可用，焦点留在这一行（ADR 0096、0118）', async () => {
+    const { wrapper, owner } = await mountPanel(CATALOG, true);
     owner.setChecked('csxhjctb_hydl', true);
     await nextTick();
-    const stacking = checkedOrder(wrapper);
     const row = wrapper.get('[data-resource="bgdc_dltb"] > div').element;
     const parts = [...row.children].map(child =>
       child.querySelector('input[type="checkbox"]') ? 'checkbox' : (child.getAttribute('aria-label') ?? '')
     );
-    expect(parts.indexOf('调整目录顺序：地类图斑')).toBe(parts.indexOf('checkbox') - 1);
+    expect(parts.indexOf('调整图层顺序：地类图斑')).toBe(parts.indexOf('checkbox') - 1);
     expect(button(wrapper, '目录里上移：地类图斑').attributes('disabled')).toBeDefined();
     expect(button(wrapper, '目录里下移：水域线层').attributes('disabled')).toBeDefined();
 
     await button(wrapper, '目录里下移：地类图斑').trigger('click');
     expect(visibleResources(wrapper)).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl']);
-    expect(order.order.value).toStrictEqual({ [LAND]: ['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl'] });
+    expect(owner.state.value.order).toStrictEqual(['bgdc_cjdcq', 'bgdc_dltb', 'csxhjctb_hydl', 'szy_kt']);
     expect(document.activeElement?.getAttribute('aria-label')).toBe('目录里下移：地类图斑');
 
     // 到了最后一位：下移不可用，焦点换到上移
     await button(wrapper, '目录里下移：地类图斑').trigger('click');
     expect(visibleResources(wrapper)).toStrictEqual(['bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb']);
+    expect(checkedOrder(wrapper)).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb']);
     expect(document.activeElement?.getAttribute('aria-label')).toBe('目录里上移：地类图斑');
 
-    // 分类同样只在同一个父节点下换位
+    // 分类同样只在同一个父节点下换位，带着它的资源一起挪
     await button(wrapper, '目录里下移：土地资源').trigger('click');
-    expect(order.order.value['基础库']).toStrictEqual(['基础库 / 水资源', LAND]);
-
-    expect(checkedOrder(wrapper)).toStrictEqual(stacking);
-    expect(owner.state.value.order.slice(0, 3)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
+    expect(categoryOrder(wrapper)).toStrictEqual(['基础库', '基础库 / 水资源', LAND]);
+    expect(owner.state.value.order).toStrictEqual(['szy_kt', 'bgdc_cjdcq', 'csxhjctb_hydl', 'bgdc_dltb']);
   });
 
-  it('"已选择图层"：行末的上移、下移调整叠放顺序，越过没勾选的资源，不改目录顺序；到头时不可用（ADR 0096）', async () => {
-    const { wrapper, owner, order } = await mountPanel(CATALOG, true);
+  it('"已选择图层"：行末的上移、下移调整叠放顺序，越过没勾选的资源，目录树跟着变；到头时不可用（ADR 0096、0118）', async () => {
+    const { wrapper, owner } = await mountPanel(CATALOG, true);
     // 叠放顺序是地类图斑、村级调查区（没勾选）、水域线层、坑塘
     owner.setChecked('csxhjctb_hydl', true);
     owner.setChecked('szy_kt', true);
@@ -294,17 +294,18 @@ describe('ResourceLayerPanel', () => {
     // 到了最上面：上移不可用，焦点换到下移
     expect(document.activeElement?.getAttribute('aria-label')).toBe('下移一层：水域线层');
 
-    await button(wrapper, '下移一层：地类图斑').trigger('click');
-    expect(checkedOrder(wrapper)).toStrictEqual(['csxhjctb_hydl', 'szy_kt', 'bgdc_dltb']);
-    expect(owner.state.value.order).toStrictEqual(['csxhjctb_hydl', 'bgdc_cjdcq', 'szy_kt', 'bgdc_dltb']);
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('上移一层：地类图斑');
+    expect(visibleResources(wrapper)).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq']);
 
-    expect(visibleResources(wrapper)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
-    expect(order.order.value).toStrictEqual({});
+    // 坑塘在另一个分类：土地资源整个挪到水资源下面，同一个分类的资源连在一起
+    await button(wrapper, '下移一层：地类图斑').trigger('click');
+    expect(checkedOrder(wrapper)).toStrictEqual(['szy_kt', 'csxhjctb_hydl', 'bgdc_dltb']);
+    expect(owner.state.value.order).toStrictEqual(['szy_kt', 'csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq']);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('上移一层：地类图斑');
+    expect(categoryOrder(wrapper)).toStrictEqual(['基础库', '基础库 / 水资源', LAND]);
   });
 
-  it('"已选择图层"：拖动或在手柄上按方向键调整叠放顺序，不改目录顺序', async () => {
-    const { wrapper, owner, order } = await mountPanel(CATALOG, true);
+  it('"已选择图层"：拖动或在手柄上按方向键调整叠放顺序，目录树跟着变', async () => {
+    const { wrapper, owner } = await mountPanel(CATALOG, true);
     // 叠放顺序是地类图斑、村级调查区（没勾选）、水域线层、坑塘："已选择图层"里的位置和叠放顺序里的位置不同
     owner.setChecked('csxhjctb_hydl', true);
     owner.setChecked('szy_kt', true);
@@ -315,13 +316,15 @@ describe('ResourceLayerPanel', () => {
     expect(checkedOrder(wrapper)).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'szy_kt']);
     expect(document.activeElement?.getAttribute('aria-label')).toBe('调整叠放顺序：水域线层');
 
+    expect(visibleResources(wrapper)).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq']);
+
+    // 水域线层拖到坑塘的位置：坑塘在另一个分类，土地资源整个挪到水资源下面
     drop(wrapper.get('[data-layer="bgdc_dltb"]').element.parentElement ?? document.body, 0, 2);
     await nextTick();
-    expect(checkedOrder(wrapper)).toStrictEqual(['bgdc_dltb', 'szy_kt', 'csxhjctb_hydl']);
+    expect(checkedOrder(wrapper)).toStrictEqual(['szy_kt', 'csxhjctb_hydl', 'bgdc_dltb']);
     expect(wrapper.findAll('[data-drag-handle="checked"]').map(handle => handle.text())).toStrictEqual(['1', '2', '3']);
-
-    expect(visibleResources(wrapper)).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
-    expect(order.order.value).toStrictEqual({});
+    expect(categoryOrder(wrapper)).toStrictEqual(['基础库', '基础库 / 水资源', LAND]);
+    expect(mapOrder(owner)).toStrictEqual(['resources-szy_kt', 'resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
   });
 
   it('× 取消勾选；年份和透明度按资源保留，重新勾选时照旧', async () => {

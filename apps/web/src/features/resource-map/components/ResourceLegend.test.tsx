@@ -187,7 +187,7 @@ describe('ResourceLegend', () => {
     await button(wrapper, '收起地类图斑').trigger('click');
     expect(landuseShown(wrapper)).toBe(false);
     owner.setOpacity('bgdc_dltb', 0.5);
-    owner.move('bgdc_dltb', 2);
+    owner.move({ parentId: '测试', keys: owner.state.value.order, from: 0, to: 2 });
     await nextTick();
     expect(landuseShown(wrapper)).toBe(false);
 

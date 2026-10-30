@@ -6,7 +6,6 @@ import { RouterLink } from 'vue-router';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
 import { ResourceLegend } from '@/features/resource-map/components/ResourceLegend';
 import { ResourceLegendReset } from '@/features/resource-map/components/ResourceLegendReset';
-import { useCatalogOrder } from '@/features/resource-map/composables/useCatalogOrder';
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
@@ -40,7 +39,6 @@ const MapUiSamples = defineComponent({
     const catalog = shallowRef(SAMPLE_CATALOG);
     const symbols = useResourceSymbols({ catalog });
     const layers = useResourceLayers(map, { catalog, symbols });
-    const order = useCatalogOrder();
     const layout = useResourcePanelLayout();
     const boundaries = useBoundaries();
     const basemap = { ...useBasemap(), thumbnails: SAMPLE_THUMBNAILS };
@@ -83,7 +81,6 @@ const MapUiSamples = defineComponent({
               <div class={styles.resourceColumn}>
                 <ResourceLayerPanel
                   layers={layers}
-                  catalogOrder={order}
                   layout={layout}
                   collapsed={layout.collapsed.value}
                   onUpdate:collapsed={layout.setCollapsed}

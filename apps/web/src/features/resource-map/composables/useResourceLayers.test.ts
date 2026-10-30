@@ -55,6 +55,12 @@ function layerIds(owner: ReturnType<typeof useResourceLayers>): string[] {
   return owner.deriveGroup().layers.map(({ id }) => id);
 }
 
+// 测试目录只有"测试"一个分类：在它下面把 code 移到第 index 位
+function moveTo(owner: ReturnType<typeof useResourceLayers>, code: string, index: number) {
+  const keys = owner.state.value.order;
+  owner.move({ parentId: '测试', keys, from: keys.indexOf(code), to: index });
+}
+
 // 村级调查区的统一符号改成红色
 const redVillageSurvey = (code: string) => (code === 'bgdc_cjdcq' ? { uniform: { fillColor: 'red' } } : undefined);
 
@@ -96,7 +102,7 @@ describe('useResourceLayers', () => {
     ctx.owner.setChecked('bgdc_dltb', true);
     ctx.owner.setOpacity('bgdc_dltb', 1);
     ctx.owner.setYear('csxhjctb_hydl', 2025);
-    ctx.owner.move('bgdc_dltb', 0);
+    moveTo(ctx.owner, 'bgdc_dltb', 0);
     expect(ctx.owner.state.value).toBe(initial);
 
     ctx.owner.setChecked('csxhjctb_hydl', true);
@@ -128,30 +134,33 @@ describe('useResourceLayers', () => {
     expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb']);
   });
 
-  it('移到面板上的第 index 位：排在最上面的画在最上层', async () => {
+  it('目录树里同级调整就是调整叠放顺序：排在最上面的画在最上层', async () => {
     using ctx = await loaded();
     ctx.owner.setChecked('csxhjctb_hydl', true);
 
-    ctx.owner.move('csxhjctb_hydl', 0);
+    moveTo(ctx.owner, 'csxhjctb_hydl', 0);
     expect(ctx.owner.state.value.order).toStrictEqual(['csxhjctb_hydl', 'bgdc_dltb', 'bgdc_cjdcq']);
     expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb', 'resources-csxhjctb_hydl']);
 
-    ctx.owner.move('csxhjctb_hydl', 2);
+    moveTo(ctx.owner, 'csxhjctb_hydl', 2);
     expect(ctx.owner.state.value.order).toStrictEqual(['bgdc_dltb', 'bgdc_cjdcq', 'csxhjctb_hydl']);
   });
 
-  it('参数不合法时抛错，状态不变：目录里没有的资源、透明度越界、不是资源的年份、位置越界', async () => {
+  it('参数不合法时抛错，状态不变：目录里没有的资源、透明度越界、不是资源的年份、位置越界、键重复', async () => {
     using ctx = await loaded();
     const before = ctx.owner.state.value;
+    const keys = before.order;
 
     expect(() => ctx.owner.setChecked('szy_kt', true)).toThrow('目录里没有资源 szy_kt');
     expect(() => ctx.owner.setOpacity('bgdc_dltb', 1.5)).toThrow(RangeError);
     expect(() => ctx.owner.setOpacity('bgdc_dltb', Number.NaN)).toThrow(RangeError);
     expect(() => ctx.owner.setYear('csxhjctb_hydl', 2030)).toThrow('没有 2030 年的数据');
-    expect(() => ctx.owner.move('bgdc_dltb', 3)).toThrow(RangeError);
-    expect(() => ctx.owner.move('bgdc_dltb', -1)).toThrow(RangeError);
-    expect(() => ctx.owner.move('bgdc_dltb', 0.5)).toThrow(RangeError);
-    expect(() => ctx.owner.move('szy_kt', 0)).toThrow('目录里没有资源 szy_kt');
+    expect(() => ctx.owner.move({ parentId: '测试', keys, from: 0, to: 3 })).toThrow(RangeError);
+    expect(() => ctx.owner.move({ parentId: '测试', keys, from: -1, to: 0 })).toThrow(RangeError);
+    expect(() => ctx.owner.move({ parentId: '测试', keys, from: 0, to: 0.5 })).toThrow(RangeError);
+    expect(() => ctx.owner.move({ parentId: '测试', keys: ['bgdc_dltb', 'bgdc_dltb'], from: 0, to: 1 })).toThrow(
+      '重复的键'
+    );
     expect(ctx.owner.state.value).toBe(before);
   });
 
@@ -169,7 +178,7 @@ describe('useResourceLayers', () => {
 
     ctx.owner.setChecked('csxhjctb_hydl', true);
     ctx.owner.setOpacity('csxhjctb_hydl', 0.5);
-    ctx.owner.move('csxhjctb_hydl', 0);
+    moveTo(ctx.owner, 'csxhjctb_hydl', 0);
     ctx.owner.deriveGroup();
     await nextTick();
 
@@ -278,7 +287,7 @@ describe('useResourceLayers', () => {
     using ctx = await loaded({ symbols: { overrideOf: redVillageSurvey } });
     ctx.owner.setChecked('bgdc_cjdcq', true);
     ctx.owner.setOpacity('bgdc_cjdcq', 0.5);
-    ctx.owner.move('bgdc_cjdcq', 0);
+    moveTo(ctx.owner, 'bgdc_cjdcq', 0);
     const fillOf = () => ctx.owner.deriveGroup().layers.find(({ id }) => id === 'resources-bgdc_cjdcq');
 
     ctx.owner.setYearForAll(2023);

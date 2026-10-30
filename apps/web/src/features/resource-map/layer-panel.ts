@@ -1,5 +1,5 @@
 import type { CatalogCategory, ResourceGeometry } from './catalog';
-import { CATALOG_ROOT, type CatalogOrder, EMPTY_CATALOG_ORDER, orderedChildren } from './catalog-order';
+import { CATALOG_ROOT, type TreeMove } from './catalog-order';
 import type { ResourceLayersState } from './resource-layers';
 
 // 图层面板显示的数据，都由显示状态推导；面板只显示和调用拥有者的操作（5C.2）
@@ -42,20 +42,23 @@ function checkStateOf(codes: readonly string[], state: ResourceLayersState): Che
 }
 
 /**
- * 面板上的目录树，按目录顺序，有用户调整过的目录顺序时按它排（ADR 0053 第 6 节）：没有资源的分类不显示。
+ * 面板上的目录树，按叠放顺序（ADR 0118）：同一个父节点下的子节点按它们最靠前的资源在 state.order 里的位置排；没有资源的分类不显示。
  * 有关键字时（不区分大小写）只留名称命中的资源，分类名称命中时留下它的全部资源；分类的勾选和数量只算显示出来的资源
  */
-export function panelTree(
-  state: ResourceLayersState,
-  keyword = '',
-  order: CatalogOrder = EMPTY_CATALOG_ORDER
-): PanelCategory[] {
-  const { catalog } = state;
+export function panelTree(state: ResourceLayersState, keyword = ''): PanelCategory[] {
+  const { catalog, order } = state;
   if (!catalog) {
     return [];
   }
   const needle = keyword.trim().toLowerCase();
   const matches = (name: string) => name.toLowerCase().includes(needle);
+  const position = new Map(order.map((code, index) => [code, index]));
+  // 子节点按它最靠前的资源排，不在顺序里的排在最后；顺序整理过，同一个分类的资源连在一起
+  const rankOf = (node: PanelNode) => {
+    const codes = node.kind === 'resource' ? [node.code] : node.codes;
+    return Math.min(order.length, ...codes.map(code => position.get(code) ?? order.length));
+  };
+  const sortedNodes = <T extends PanelNode>(nodes: readonly T[]) => nodes.toSorted((a, b) => rankOf(a) - rankOf(b));
 
   // keepAll：没有关键字，或者祖先分类的名称已经命中
   const categoryNode = (category: CatalogCategory, keepAll: boolean): PanelCategory | null => {
@@ -72,7 +75,7 @@ export function panelTree(
       const checked = state.displays.get(child.code)?.checked ?? false;
       return [{ kind: 'resource', code: child.code, name: resource.name, geometry: resource.geometry, checked }];
     });
-    const sorted = orderedChildren(children, nodeKey, order[category.id]);
+    const sorted = sortedNodes(children);
     const codes = sorted.flatMap(child => (child.kind === 'resource' ? [child.code] : child.codes));
     if (codes.length === 0) {
       return null;
@@ -85,7 +88,7 @@ export function panelTree(
     const node = categoryNode(category, needle === '');
     return node ? [node] : [];
   });
-  return orderedChildren(roots, nodeKey, order[CATALOG_ROOT]);
+  return sortedNodes(roots);
 }
 
 // 子树里要展开的分类：all 为 true 时全部，否则只要含有勾选资源的
@@ -130,27 +133,66 @@ export function checkedLayers(state: ResourceLayersState): CheckedLayer[] {
   });
 }
 
+// 目录树里从顶层到资源的每一层：父节点、这一层的子节点，以及其中通往资源的那个
+interface TreeStep {
+  readonly parentId: string;
+  readonly keys: readonly string[];
+  readonly key: string;
+}
+
+function pathTo(nodes: readonly PanelNode[], code: string, parentId: string): TreeStep[] | null {
+  const keys = nodes.map(nodeKey);
+  for (const node of nodes) {
+    if (node.kind === 'resource' && node.code === code) {
+      return [{ parentId, keys, key: code }];
+    }
+    if (node.kind === 'category' && node.codes.includes(code)) {
+      const rest = pathTo(node.children, code, node.id);
+      return rest && [{ parentId, keys, key: node.id }, ...rest];
+    }
+  }
+  return null;
+}
+
 /**
- * 在"已选择图层"里拖到第 to 位（放下后在已勾选的列表里的位置）时交给拥有者 move 的位置：移到那个位置上原来的已勾选资源所在的位置，
- * 中间没勾选的资源不算。位置不变、不在"已选择图层"里时为 null；位置越界时抛错
+ * 把 code 挪到 neighbor 原来的位置（neighbor 在上面时挪到它上面，在下面时挪到它下面）对应的目录树调整：两者在同一个分类下时直接换位，
+ * 否则在两者分开的那一层，code 所在的分类整体挪到 neighbor 所在的分类旁边，同一个分类的资源总是连在一起（ADR 0118）
  */
-export function checkedDropTarget(state: ResourceLayersState, code: string, to: number): number | null {
+function moveBeside(state: ResourceLayersState, code: string, neighbor: string): TreeMove | null {
+  const tree = panelTree(state);
+  const own = pathTo(tree, code, CATALOG_ROOT) ?? [];
+  const other = pathTo(tree, neighbor, CATALOG_ROOT) ?? [];
+  const level = own.findIndex((step, index) => step.key !== other[index]?.key);
+  const step = own[level];
+  const beside = other[level];
+  if (!step || !beside) {
+    return null;
+  }
+  const { parentId, keys } = step;
+  return { parentId, keys, from: keys.indexOf(step.key), to: keys.indexOf(beside.key) };
+}
+
+/**
+ * 在"已选择图层"里拖到第 to 位（放下后在已勾选的列表里的位置）时交给拥有者 move 的调整：挪到那个位置上原来的已勾选资源旁边，
+ * 中间没勾选的资源不算，跨分类时整个分类一起挪。位置不变、不在"已选择图层"里时为 null；位置越界时抛错
+ */
+export function checkedDropTarget(state: ResourceLayersState, code: string, to: number): TreeMove | null {
   const codes = checkedLayers(state).map(layer => layer.code);
   const from = codes.indexOf(code);
   if (!(Number.isInteger(to) && to >= 0 && to < codes.length)) {
     throw new RangeError(`位置应在 0～${codes.length - 1} 之间，收到 ${to}`);
   }
   const neighbor = codes[to];
-  return from === -1 || from === to || neighbor === undefined ? null : state.order.indexOf(neighbor);
+  return from === -1 || from === to || neighbor === undefined ? null : moveBeside(state, code, neighbor);
 }
 
 /**
- * 在已勾选的资源之间上移、下移一位时交给拥有者 move 的位置：移到相邻的已勾选资源所在的位置，中间没勾选的资源不算。
- * 已经在最上面、最下面，或者没有勾选时为 null
+ * 在已勾选的资源之间上移、下移一位时交给拥有者 move 的调整：和相邻的已勾选资源换位，中间没勾选的资源不算，
+ * 跨分类时整个分类一起挪。已经在最上面、最下面，或者没有勾选时为 null
  */
-export function moveTarget(state: ResourceLayersState, code: string, direction: 'up' | 'down'): number | null {
+export function moveTarget(state: ResourceLayersState, code: string, direction: 'up' | 'down'): TreeMove | null {
   const codes = checkedLayers(state).map(layer => layer.code);
   const index = codes.indexOf(code);
   const neighbor = index === -1 ? undefined : codes[direction === 'up' ? index - 1 : index + 1];
-  return neighbor === undefined ? null : state.order.indexOf(neighbor);
+  return neighbor === undefined ? null : moveBeside(state, code, neighbor);
 }
