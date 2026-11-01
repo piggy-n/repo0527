@@ -1,14 +1,17 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { defineComponent, type PropType } from 'vue';
+import { computed, defineComponent, type PropType } from 'vue';
 import { required } from '@/shared/testing/required';
 import { type Composition, emptyComposition, sampleComposition } from '../compose/composition';
 import { PROMPT_EXAMPLES } from '../compose/prompt';
 import { type CompositionOwner, useComposition } from '../composables/useComposition';
 import { usePromptComposer } from '../composables/usePromptComposer';
 import type { SimulationModel } from '../composables/useSimulationModel';
+import { createTestEditor } from '../composables/test-scope-editor';
+import type { ScopeEditor } from '../composables/useScopeEditor';
 import { type Calculator, createCalculator } from '../model/calculator';
 import { scopeCityCodes } from '../model/scope';
+import { NINGZHEN_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
 import { AiDock } from './AiDock';
 import { ComposeStage } from './ComposeStage';
@@ -22,6 +25,7 @@ const ready = (): SimulationModel => ({ status: 'ready', calculator });
 // 和页面一样：底部是对话栏，编排完成后开始计算
 function mountStage(initial: Composition = sampleComposition(), model: SimulationModel = ready()) {
   let owner: CompositionOwner | undefined;
+  let scopeEditor: ScopeEditor | undefined;
   const Host = defineComponent({
     props: { model: { type: Object as PropType<SimulationModel>, required: true } },
     emits: { start: () => true },
@@ -29,16 +33,28 @@ function mountStage(initial: Composition = sampleComposition(), model: Simulatio
       const composition = useComposition(initial);
       owner = composition;
       const composer = usePromptComposer(composition, { onComposed: () => emit('start') });
+      const { editor } = createTestEditor(computed(() => props.model));
+      scopeEditor = editor;
       return () => (
         <div>
-          <ComposeStage composition={composition} composer={composer} model={props.model} onStart={() => emit('start')} />
-          <AiDock composer={composer} />
+          <ComposeStage
+            composition={composition}
+            composer={composer}
+            model={props.model}
+            editor={editor}
+            onStart={() => emit('start')}
+          />
+          <AiDock composer={composer} scope={{ composition, editor }} />
         </div>
       );
     }
   });
   const wrapper = mount(Host, { props: { model }, attachTo: document.body });
-  return { composition: required(owner, '编排的拥有者'), wrapper };
+  return {
+    composition: required(owner, '编排的拥有者'),
+    editor: required(scopeEditor, '范围弹窗的拥有者'),
+    wrapper
+  };
 }
 
 type Wrapper = ReturnType<typeof mountStage>['wrapper'];
@@ -253,5 +269,56 @@ describe('ComposeStage 按 AI计算指令编排', () => {
     expect(wrapper.emitted('start')).toHaveLength(1);
     expect(wrapper.find('[role="status"]').exists()).toBe(false);
     expect(wrapper.findAll('[class*="_locked_"]')).toHaveLength(0);
+  });
+});
+
+describe('ComposeStage 的自定义范围（ADR 0121）', () => {
+  it('监测范围切到自定义范围：条件库是上传、绘制两个入口，编排图的空位打开范围弹窗', async () => {
+    const { wrapper, editor, composition } = mountStage();
+    const kind = required(
+      wrapper.findAll('label').find(label => label.text() === '自定义范围'),
+      '"自定义范围"切换'
+    );
+    await kind.get('input').setValue(true);
+    expect(composition.state.value.conditions.scope).toEqual({ kind: 'area', area: null });
+    expect(wrapper.text()).toContain('支持 GeoJSON、Shapefile（.zip）');
+    expect(nodes(wrapper, 'region')).toEqual([]);
+
+    await buttonOf(wrapper, '上传文件或在地图上绘制范围').trigger('click');
+    expect(editor.open.value).toBe(true);
+    editor.cancel();
+    await buttonOf(wrapper, '地图绘制').trigger('click');
+    expect(editor.open.value).toBe(true);
+    expect(editor.draw.active.value).toBe('polygon');
+  });
+
+  it('有自定义范围时条件库是范围卡片，编排图和对话栏同步显示；从对话栏移除后都回到入口，切回行政区划再切回来仍保留', async () => {
+    const area = await testArea(calculator.atlas, NINGZHEN_RINGS, '宁镇交界');
+    const { wrapper, editor, composition } = mountStage();
+    composition.setScopeKind('area');
+    composition.setArea(area);
+    await flushPromises();
+
+    const card = wrapper.get('[class*="_areaCard_"]');
+    expect(card.text()).toContain('宁镇交界绘制');
+    expect(card.text()).toMatch(/南京、镇江 · \d+ 个区县/);
+    expect(nodes(wrapper, 'region')).toEqual(['region']);
+    expect(wrapper.get('[data-node="region"]').text()).toContain('自定义范围');
+    const dock = wrapper.get('footer[aria-label="AI 对话"]');
+    expect(dock.text()).toContain('宁镇交界');
+
+    await buttonOf(wrapper, '编辑范围').trigger('click');
+    expect(editor.open.value).toBe(true);
+    expect(editor.name.value).toBe('宁镇交界');
+    editor.cancel();
+
+    composition.setScopeKind('cities');
+    composition.setScopeKind('area');
+    expect(composition.state.value.conditions.scope).toEqual({ kind: 'area', area });
+
+    await dock.get('[aria-label="移除自定义范围"]').trigger('click');
+    expect(composition.state.value.conditions.scope).toEqual({ kind: 'area', area: null });
+    expect(wrapper.find('[class*="_areaCard_"]').exists()).toBe(false);
+    expect(buttonOf(wrapper, '地图绘制').exists()).toBe(true);
   });
 });

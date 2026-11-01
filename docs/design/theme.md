@@ -233,6 +233,7 @@ Element 把组件自己的变量定义在组件选择器上（例如 `.el-table 
 | `select-no-arrow` | `<ElSelect class="select-no-arrow">` | 不显示右侧的下拉箭头，点击照常弹出选项 | 地图页"已选择图层"的年份（2026-10-16 用户要求） |
 | `radio-group-block` | `<ElRadioGroup class="radio-group-block">` | 占满宽度，各项等宽；左右内边距 6，只决定最长一项的最小宽度 | 地图页坐标定位的写法切换、数据查询的查询方式（ADR 0112） |
 | `dialog-panel-header` | `<ElDialog class="dialog-panel-header">`，`header` 插槽用 `<MxTitle level="panel">` | 浅灰标题栏横向铺满，最小高 48、左侧 16、右侧预留 48 关闭区；内容内边距 16，底部 `0 16 16`；不加独立阴影或渐变 | 资源管理新增 / 重命名目录、文件上传 / 预览；真实样例在 `/dev/theme` 的「灰底标题弹窗」 |
+| `dialog-flush-body` | 和 `dialog-panel-header` 一起用：`<ElDialog class="dialog-panel-header dialog-flush-body">` | 正文不留内边距，内容（地图、分栏）铺满；底栏内边距 `12 16`，上面一条 `--color-border-light` 分隔线 | 指标 AI 计算的自定义范围弹窗（ADR 0121） |
 | `form-query` | 由 `shared/query-form` 的 `QueryForm` 加在 `ElForm` 上，页面不直接写 | 条件区（`form-query__fields`）从左到右排列、换行；控件宽 180，日期选择器去掉默认的 220 固定宽度；表单项不留底部外边距；按钮行（`form-query__actions`）默认在条件区下方，`form-query__extra` 靠右。条件换行时加 `form-query--aligned`：标签改为块级并两端对齐（`text-align-last: justify`），宽度由 `QueryForm` 设置；条件和按钮都放得下一行时加 `form-query--inline`：条件区和按钮行排成一行，按钮行占满剩下的宽度，extra 在最右端 | 列表页的筛选栏，规则见 [page-layout.md](page-layout.md) 的"筛选栏" |
 | `pagination-wrap` | `<ElPagination class="pagination-wrap">` | 靠右，放不下时换行，不裁掉页码、条数或跳页入口；窄于 760 时排成三行：总数和每页条数、上一页 · 页码 · 下一页、跳页 | 资源管理、系统管理的列表分页（ADR 0092，原来写在资源管理页里）；样例在 `/dev/theme` 的「表格与分页」 |
 

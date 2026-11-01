@@ -8,7 +8,11 @@ import { formatValue } from '../format';
 import { simulationIndicator } from '../model/indicators';
 import type { SimulationConditions } from '../model/params';
 import type { Rank, RankRow, ResultItem } from '../result/result-view';
+import { formatRatio } from '../scope/area-tree';
 import styles from './ResultList.module.scss';
+
+const partialTitle = (row: RankRow) =>
+  row.share === null ? `${row.name}只有部分区域在范围内` : `${row.name}有 ${formatRatio(row.share)} 的面积在范围内`;
 
 /**
  * 结果展示的左侧（第五版原型）：每项指标一条，写结果；选中的一条展开各市（一个市时是各区县），
@@ -24,12 +28,22 @@ export const ResultList = defineComponent({
     recompose: () => true
   },
   setup(props, { emit }) {
-    const renderRow = (row: RankRow, rank: Rank, unit: string) => {
+    const renderRow = (row: RankRow, rank: Rank, unit: string, covering: boolean) => {
       const { result } = props;
       const content = [
         <span key="name" class={styles.rankName}>
           {row.name}
         </span>,
+        // 自定义范围里有部分覆盖的行时多一列，标出只算了一部分的市、区县
+        covering && (
+          <span key="cover">
+            {row.partial && (
+              <span class={styles.partial} title={partialTitle(row)}>
+                部分
+              </span>
+            )}
+          </span>
+        ),
         <span key="bar" class={styles.bar}>
           <i style={{ width: `${((row.value / rank.max) * 100).toFixed(1)}%` }} />
         </span>,
@@ -40,7 +54,7 @@ export const ResultList = defineComponent({
       const { cityCode } = row;
       if (cityCode === null) {
         return (
-          <li key={row.key} class={styles.row}>
+          <li key={row.key} class={[styles.row, covering && styles.covering]}>
             {content}
           </li>
         );
@@ -49,7 +63,7 @@ export const ResultList = defineComponent({
         <li key={row.key}>
           <button
             type="button"
-            class={[styles.row, result.hoverCity.value === cityCode && styles.lit]}
+            class={[styles.row, covering && styles.covering, result.hoverCity.value === cityCode && styles.lit]}
             aria-label={`放大到${row.name}`}
             onMouseenter={() => result.setHoverCity(cityCode)}
             onClick={() => result.select({ cityCode })}
@@ -60,14 +74,20 @@ export const ResultList = defineComponent({
       );
     };
 
-    const renderRank = (rank: Rank, unit: string) => (
-      <div class={styles.detail}>
-        <div class={styles.rankHead}>{rank.level === 'city' ? '各市' : '各区县'}</div>
-        <ol class={styles.rank} onMouseleave={() => props.result.setHoverCity(null)}>
-          {rank.rows.map(row => renderRow(row, rank, unit))}
-        </ol>
-      </div>
-    );
+    const renderRank = (rank: Rank, unit: string) => {
+      const covering = rank.rows.some(row => row.partial);
+      return (
+        <div class={styles.detail}>
+          <div class={styles.rankHead}>
+            {rank.level === 'city' ? '各市' : '各区县'}
+            {covering && <span class={styles.rankNote}>部分覆盖的只算范围内的部分</span>}
+          </div>
+          <ol class={styles.rank} onMouseleave={() => props.result.setHoverCity(null)}>
+            {rank.rows.map(row => renderRow(row, rank, unit, covering))}
+          </ol>
+        </div>
+      );
+    };
 
     const renderItem = (item: ResultItem) => {
       const { result } = props;

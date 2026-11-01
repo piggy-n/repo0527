@@ -123,12 +123,21 @@
 }
 
 .rankHead {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
   margin: 0 8px;
   padding: var(--space-sm) 0 2px;
   border-top: 1px dashed var(--color-border-dashed);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-compact);
+}
+
+.rankNote {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rank {
@@ -154,6 +163,22 @@
   font: inherit;
   font-size: var(--font-size-xs);
   text-align: left;
+}
+
+// 自定义范围有部分覆盖时，名称后面多一列"部分"
+.covering {
+  grid-template-columns: 64px 32px 1fr 72px;
+}
+
+.partial {
+  display: inline-block;
+  padding: 0 4px;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  line-height: var(--line-height-tag);
+  cursor: help;
 }
 
 button.row {

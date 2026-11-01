@@ -13,6 +13,22 @@ export const box = (west: number, south: number, east: number, north: number): P
   [west, south]
 ];
 
+/** 每个环一个面的 GeoJSON 文件，交给上传 */
+export const geojsonFile = (name: string, rings: readonly Position[][]): File =>
+  new File(
+    [
+      JSON.stringify({
+        type: 'FeatureCollection',
+        features: rings.map(ring => ({
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'Polygon', coordinates: [ring] }
+        }))
+      })
+    ],
+    name
+  );
+
 /** 一个或几个矩形组成的自定义范围，覆盖按 95 个区县分析 */
 export async function testArea(atlas: DistrictAtlas, rings: readonly Position[][], name = '测试范围'): Promise<ScopeArea> {
   const geometry: MultiPolygon = { type: 'MultiPolygon', coordinates: rings.map(ring => [ring]) };

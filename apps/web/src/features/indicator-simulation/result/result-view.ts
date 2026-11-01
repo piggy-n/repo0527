@@ -1,3 +1,4 @@
+import { districtsOf } from '@/shared/map/region/region-catalog';
 import type { EngineState, SimulationVersion } from '../engine/engine';
 import { indicatorResult, valueBreaks } from '../model/analysis';
 import type { Calculator, DistrictResult, IndicatorResult } from '../model/calculator';
@@ -68,7 +69,9 @@ export interface RankRow {
   readonly name: string;
   readonly value: number;
   readonly cityCode: string | null;
-  /** 自定义范围里部分覆盖的区县：范围内面积占比；其余为 null */
+  /** 自定义范围部分覆盖的市、区县：只按范围内的部分计算 */
+  readonly partial: boolean;
+  /** 部分覆盖的区县在范围内的面积占比；市和其余的区县为 null */
   readonly share: number | null;
 }
 
@@ -92,9 +95,13 @@ export function rankOf(
   cityCode: string | null = null
 ): Rank {
   const result = indicatorOf(version, year, indicatorId);
-  const area = conditions.scope.kind === 'area';
-  const cityCodes = scopeCityCodes(conditions.scope);
+  const { scope } = conditions;
+  const area = scope.kind === 'area';
+  const cityCodes = scopeCityCodes(scope);
   const only = cityCodes.length === 1 ? cityCodes[0] : area ? cityCode : null;
+  // 自定义范围里全部覆盖的区县；市的区县都在里面才算全部覆盖
+  const covers = scope.kind === 'area' ? (scope.area?.coverage.covers ?? []) : [];
+  const whole = new Set(covers.filter(cover => cover.relation === 'full').map(cover => cover.code));
   const rows: RankRow[] = only
     ? result.rows
         .filter(row => row.cityCode === only)
@@ -103,6 +110,7 @@ export function rankOf(
           name: row.name,
           value: row.value,
           cityCode: null,
+          partial: area && row.share < 1,
           share: area && row.share < 1 ? row.share : null
         }))
     : result.cities.map(city => ({
@@ -110,6 +118,7 @@ export function rankOf(
         name: city.name.replace(/市$/, ''),
         value: city.value,
         cityCode: city.code,
+        partial: area && districtsOf(city.code).some(district => !whole.has(district.code)),
         share: null
       }));
   const level = only ? 'district' : 'city';

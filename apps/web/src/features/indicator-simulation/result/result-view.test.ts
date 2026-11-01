@@ -117,20 +117,26 @@ describe('mapColoring', () => {
 });
 
 describe('自定义范围的排行（ADR 0121）', () => {
-  it('一个市的范围列区县，部分覆盖的带面积占比；跨市的列各市，放大到一个市时列它在范围里的区县', async () => {
+  it('一个市的范围列区县，部分覆盖的标出并带面积占比；跨市的列各市，放大到一个市时列它在范围里的区县', async () => {
     const atlas = await loadTestAtlas();
     const nanjing = { ...conditions, scope: areaScope(await testArea(atlas, NANJING_RINGS)) };
     const single = await setup(nanjing);
     const rank = rankOf(single.version, nanjing, 'B-65', 2026);
     expect(rank.level).toBe('district');
     expect(rank.rows).toHaveLength(7);
-    expect(rank.rows.find(row => row.name === '秦淮区')?.share).toBeNull();
+    expect(rank.rows.find(row => row.name === '秦淮区')).toMatchObject({ partial: false, share: null });
+    expect(rank.rows.find(row => row.name === '江宁区')?.partial).toBe(true);
     expect(rank.rows.find(row => row.name === '江宁区')?.share).toBeLessThan(0.2);
 
     const ningzhen = { ...conditions, scope: areaScope(await testArea(atlas, NINGZHEN_RINGS)) };
     const cross = await setup(ningzhen);
     const cities = rankOf(cross.version, ningzhen, 'B-65', 2026);
     expect(cities.rows.map(row => row.key).toSorted()).toEqual(['320100', '321100']);
+    // 两个市都只有一部分在范围里：市的一行标出部分覆盖，不带占比
+    expect(cities.rows.map(row => [row.partial, row.share])).toEqual([
+      [true, null],
+      [true, null]
+    ]);
     const zoomed = rankOf(cross.version, ningzhen, 'B-65', 2026, '321100');
     expect(zoomed.level).toBe('district');
     expect(zoomed.rows.map(row => row.name).toSorted()).toEqual(['丹徒区', '句容市'].toSorted());
@@ -139,6 +145,8 @@ describe('自定义范围的排行（ADR 0121）', () => {
 
   it('行政区划放大到一个市时仍列各市（不变）', async () => {
     const { version } = await setup();
-    expect(rankOf(version, conditions, 'B-65', 2026, '320100').level).toBe('city');
+    const rank = rankOf(version, conditions, 'B-65', 2026, '320100');
+    expect(rank.level).toBe('city');
+    expect(rank.rows.every(row => !row.partial && row.share === null)).toBe(true);
   });
 });

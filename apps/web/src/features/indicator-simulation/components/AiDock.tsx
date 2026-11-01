@@ -2,8 +2,14 @@ import { Promotion, RefreshRight } from '@element-plus/icons-vue';
 import { ElButton, ElMessage } from 'element-plus';
 import { computed, defineComponent, type PropType } from 'vue';
 import { ChatAvatar } from '@/shared/chat-avatar/ChatAvatar';
+import { SvgIcon } from '@/shared/icons/SvgIcon';
+import type { CompositionOwner } from '../composables/useComposition';
 import type { PromptComposer, SendOutcome } from '../composables/usePromptComposer';
 import type { RunConversation } from '../composables/useRunConversation';
+import type { ScopeEditor } from '../composables/useScopeEditor';
+import { areaBrief } from '../scope/area-tree';
+import { AreaFilePicker } from './AreaFilePicker';
+import { AreaThumbnail } from './AreaThumbnail';
 import styles from './AiDock.module.scss';
 
 const WARNINGS: Readonly<Record<Exclude<SendOutcome, 'sent'>, string>> = {
@@ -23,7 +29,12 @@ export const AiDock = defineComponent({
   props: {
     composer: { type: Object as PropType<PromptComposer>, required: true },
     /** 计算和结果阶段的对话；条件配置时为 null */
-    conversation: { type: Object as PropType<RunConversation | null>, default: null }
+    conversation: { type: Object as PropType<RunConversation | null>, default: null },
+    /** 条件配置时可以上传自定义范围，用着的范围显示在输入框上方（ADR 0121）；计算和结果阶段为 null */
+    scope: {
+      type: Object as PropType<{ readonly composition: CompositionOwner; readonly editor: ScopeEditor } | null>,
+      default: null
+    }
   },
   setup(props) {
     const text = computed(() => (props.conversation ? props.conversation.text.value : props.composer.text.value));
@@ -79,8 +90,46 @@ export const AiDock = defineComponent({
       }
     };
 
+    // 用着的自定义范围：像对话里的附件，点开编辑，叉是移除
+    const renderAttachment = () => {
+      const scope = props.scope;
+      const current = scope?.composition.state.value.conditions.scope;
+      if (!scope || current?.kind !== 'area' || !current.area) {
+        return null;
+      }
+      const { area } = current;
+      const brief = areaBrief(area);
+      return (
+        <div class={styles.attachment}>
+          <button
+            type="button"
+            class={styles.attachmentOpen}
+            title="编辑自定义范围"
+            onClick={() => scope.editor.start('edit', { area })}
+          >
+            <AreaThumbnail outline={area.outline} size={32} />
+            <span class={styles.attachmentText}>
+              <b>{area.name}</b>
+              <span>
+                {brief.size} · {brief.where}
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            class={styles.attachmentRemove}
+            aria-label="移除自定义范围"
+            title="移除"
+            onClick={() => scope.composition.setArea(null)}
+          >
+            <SvgIcon name="close" />
+          </button>
+        </div>
+      );
+    };
+
     return () => {
-      const { conversation, composer } = props;
+      const { conversation, composer, scope } = props;
       const sending = busy.value;
       const reply = conversation?.reply.value ?? null;
       return (
@@ -95,6 +144,7 @@ export const AiDock = defineComponent({
                 ))}
               </div>
             )}
+            {renderAttachment()}
             <div class={styles.input}>
               <div class={styles.grow} data-value={text.value || example.value}>
                 <textarea
@@ -108,6 +158,18 @@ export const AiDock = defineComponent({
                   onKeydown={onKeydown}
                 />
               </div>
+              {scope && (
+                <AreaFilePicker onPick={files => scope.editor.start('upload', { files })}>
+                  {{
+                    default: ({ open }: { readonly open: () => void }) => (
+                      <ElButton class={styles.refresh} link disabled={sending} onClick={open}>
+                        <SvgIcon class={styles.uploadIcon} name="file-upload" />
+                        上传范围
+                      </ElButton>
+                    )
+                  }}
+                </AreaFilePicker>
+              )}
               {!conversation && (
                 <ElButton
                   class={styles.refresh}

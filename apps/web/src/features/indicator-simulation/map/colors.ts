@@ -21,3 +21,11 @@ export function valueColor(value: number, breaks: readonly number[]): string {
   const index = breaks.findIndex(edge => value < edge);
   return VALUE_COLORS[index === -1 ? VALUE_COLORS.length - 1 : index] ?? VALUE_COLORS[0];
 }
+
+/** 范围弹窗：全部覆盖、部分覆盖的区县在范围内的部分（主色系、琥珀色系的浅色），区县的分界线，范围本身 */
+export const COVER_FULL_COLOR = '#b4c8ff';
+export const COVER_PARTIAL_COLOR = '#ffd98a';
+export const DISTRICT_EDGE_COLOR = '#9aa5b8';
+export const AREA_COLOR = '#597ef7';
+/** 范围边线下的白色衬底 */
+export const AREA_CASING_COLOR = '#ffffff';
