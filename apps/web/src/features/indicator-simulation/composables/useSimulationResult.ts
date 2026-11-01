@@ -1,5 +1,6 @@
 import { computed, type ComputedRef, type Ref, shallowRef, watch } from 'vue';
 import type { SimulationVersion } from '../engine/engine';
+import { scopeCityCodes } from '../model/scope';
 import {
   type MapColoring,
   mapColoring,
@@ -55,7 +56,7 @@ export function useSimulationResult(run: SimulationRun): SimulationResult {
     const { conditions } = state.value;
     const current = selection.value;
     return version.value && conditions && current
-      ? rankOf(version.value, conditions, current.indicatorId, current.year)
+      ? rankOf(version.value, conditions, current.indicatorId, current.year, current.cityCode)
       : null;
   });
   const coloring = computed(() => {
@@ -82,7 +83,7 @@ export function useSimulationResult(run: SimulationRun): SimulationResult {
       if (
         !conditions.indicatorIds.includes(next.indicatorId) ||
         !conditions.years.includes(next.year) ||
-        (next.cityCode !== null && !conditions.cityCodes.includes(next.cityCode))
+        (next.cityCode !== null && !scopeCityCodes(conditions.scope).includes(next.cityCode))
       ) {
         throw new Error(`计算条件里没有指标 ${next.indicatorId}、${next.year} 年或市 ${next.cityCode}`);
       }

@@ -100,7 +100,7 @@ export const ResultList = defineComponent({
           {{
             actions: () => (
               <span class={styles.scope}>
-                {year} 年 · {scopeText(props.conditions.cityCodes)}
+                {year} 年 · {scopeText(props.conditions.scope)}
               </span>
             ),
             default: () => <ol class={styles.list}>{props.result.items.value.map(renderItem)}</ol>,

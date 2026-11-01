@@ -3,11 +3,12 @@ import { ElSlider } from 'element-plus';
 import { describe, expect, it } from 'vitest';
 import { required } from '@/shared/testing/required';
 import { defaultParams, type ParamKey, type SimulationConditions } from '../model/params';
+import { citiesScope } from '../model/scope';
 import { ParamPopover } from './ParamPopover';
 
 const conditions: SimulationConditions = {
   years: [2026],
-  cityCodes: ['320100', '320200', '320500'],
+  scope: citiesScope(['320100', '320200', '320500']),
   indicatorIds: ['B-65', 'A-31', 'A-39']
 };
 

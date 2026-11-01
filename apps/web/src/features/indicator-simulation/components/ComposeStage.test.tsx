@@ -8,6 +8,7 @@ import { type CompositionOwner, useComposition } from '../composables/useComposi
 import { usePromptComposer } from '../composables/usePromptComposer';
 import type { SimulationModel } from '../composables/useSimulationModel';
 import { type Calculator, createCalculator } from '../model/calculator';
+import { scopeCityCodes } from '../model/scope';
 import { loadTestAtlas } from '../model/test-atlas';
 import { AiDock } from './AiDock';
 import { ComposeStage } from './ComposeStage';
@@ -122,7 +123,7 @@ describe('ComposeStage', () => {
     expect(wrapper.get('[data-node="region"]').text()).toContain('12 个市');
 
     await wrapper.get('.el-checkbox input').setValue(true);
-    expect(composition.state.value.conditions.cityCodes).toHaveLength(13);
+    expect(scopeCityCodes(composition.state.value.conditions.scope)).toHaveLength(13);
     expect(wrapper.get('[data-node="region"]').text()).toContain('全省');
   });
 

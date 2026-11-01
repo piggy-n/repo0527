@@ -8,7 +8,8 @@ import styles from './AiDock.module.scss';
 
 const WARNINGS: Readonly<Record<Exclude<SendOutcome, 'sent'>, string>> = {
   empty: '请输入计算指令，按 Tab 键填入示例',
-  unrecognized: '未识别到监测指标，可点击"换一批"更换示例'
+  unrecognized: '未识别到监测指标，可点击"换一批"更换示例',
+  'no-area': '还没有自定义范围，请先上传范围文件或在地图上绘制'
 };
 
 /**

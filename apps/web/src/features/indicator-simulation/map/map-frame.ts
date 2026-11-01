@@ -99,22 +99,36 @@ export function districtsGroup(data: MapData | null, frame: MapFrame | null): St
   return { sources: { [source]: { type: 'geojson', data: data.districts } }, layers };
 }
 
-/** 推演范围以外的区县盖上遮罩 */
+/** 推演范围以外盖上遮罩；自定义范围再描出边界（虚线） */
 export function maskGroup(data: MapData | null): StyleGroup {
   if (!data || data.mask.features.length === 0) {
     return EMPTY;
   }
+  const layers: LayerSpecification[] = [
+    {
+      id: `${MASK_GROUP}-fill`,
+      type: 'fill',
+      source: MASK_GROUP,
+      filter: POLYGONS,
+      paint: { 'fill-color': MASK_COLOR, 'fill-opacity': 0.68 }
+    }
+  ];
+  const outline = `${MASK_GROUP}-area`;
+  if (data.area) {
+    layers.push({
+      id: `${outline}-line`,
+      type: 'line',
+      source: outline,
+      layout: { 'line-join': 'round' },
+      paint: { 'line-color': HIGHLIGHT_COLOR, 'line-width': 1.6, 'line-dasharray': [3, 2] }
+    });
+  }
   return {
-    sources: { [MASK_GROUP]: { type: 'geojson', data: data.mask } },
-    layers: [
-      {
-        id: `${MASK_GROUP}-fill`,
-        type: 'fill',
-        source: MASK_GROUP,
-        filter: POLYGONS,
-        paint: { 'fill-color': MASK_COLOR, 'fill-opacity': 0.68 }
-      }
-    ]
+    sources: {
+      [MASK_GROUP]: { type: 'geojson', data: data.mask },
+      ...(data.area && { [outline]: { type: 'geojson', data: data.area } })
+    },
+    layers
   };
 }
 

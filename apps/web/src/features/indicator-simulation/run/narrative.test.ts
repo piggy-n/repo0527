@@ -2,11 +2,12 @@
 import { describe, expect, it } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import type { SimulationConditions } from '../model/params';
+import { citiesScope } from '../model/scope';
 import { em, plainText, primaryIndicator, rich } from './narrative';
 
 const conditions: SimulationConditions = {
   years: [2026, 2025],
-  cityCodes: JIANGSU_CITIES.map(city => city.code),
+  scope: citiesScope(JIANGSU_CITIES.map(city => city.code)),
   indicatorIds: ['A-39', 'B-65', 'A-31']
 };
 

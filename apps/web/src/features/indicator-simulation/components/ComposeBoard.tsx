@@ -41,6 +41,7 @@ import type { SimulationModel } from '../composables/useSimulationModel';
 import { reducedMotion } from '../motion';
 import { STEP_GROUPS } from '../engine/steps';
 import { reachText, simulationIndicator } from '../model/indicators';
+import { scopeCityCodes } from '../model/scope';
 import {
   describeParam,
   isScenario,
@@ -382,7 +383,8 @@ export const ComposeBoard = defineComponent({
     };
 
     const renderRegion = () => {
-      const { cityCodes } = conditions.value;
+      const { scope } = conditions.value;
+      const cityCodes = scope.kind === 'cities' ? scope.cityCodes : [];
       const all = cityCodes.length === JIANGSU_CITIES.length;
       const districts = cityCodes.reduce((sum, code) => sum + districtsOf(code).length, 0);
       return [
@@ -539,7 +541,8 @@ export const ComposeBoard = defineComponent({
       if (!visible(OUTPUT_NODE)) {
         return null;
       }
-      const { years, cityCodes, indicatorIds } = conditions.value;
+      const { years, scope, indicatorIds } = conditions.value;
+      const cityCodes = scopeCityCodes(scope);
       const { model } = props;
       const ready = missing.value.length === 0;
       const launching = props.building?.launching ?? false;

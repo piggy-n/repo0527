@@ -3,6 +3,7 @@ import { indicatorResult, valueBreaks } from '../model/analysis';
 import type { Calculator, DistrictResult, IndicatorResult } from '../model/calculator';
 import { simulationIndicator } from '../model/indicators';
 import { isScenario, type SimulationConditions } from '../model/params';
+import { scopeCityCodes } from '../model/scope';
 import { VALUE_COLORS, valueColor } from '../map/colors';
 import { primaryIndicator } from '../run/narrative';
 
@@ -27,10 +28,11 @@ export function resolveSelection(state: EngineState, chosen: Partial<ResultSelec
   }
   const { indicatorId, year, cityCode } = chosen;
   const chosenValid = indicatorId !== undefined && conditions.indicatorIds.includes(indicatorId);
+  const cityCodes = scopeCityCodes(conditions.scope);
   return {
     indicatorId: chosenValid ? indicatorId : primaryIndicator(conditions),
     year: year !== undefined && conditions.years.includes(year) ? year : Math.max(...conditions.years),
-    cityCode: cityCode && conditions.cityCodes.length > 1 && conditions.cityCodes.includes(cityCode) ? cityCode : null
+    cityCode: cityCode && cityCodes.length > 1 && cityCodes.includes(cityCode) ? cityCode : null
   };
 }
 
@@ -66,6 +68,8 @@ export interface RankRow {
   readonly name: string;
   readonly value: number;
   readonly cityCode: string | null;
+  /** 自定义范围里部分覆盖的区县：范围内面积占比；其余为 null */
+  readonly share: number | null;
 }
 
 export interface Rank {
@@ -76,24 +80,39 @@ export interface Rank {
   readonly max: number;
 }
 
-/** 选中指标的各市结果；只有一个市时是它的各区县 */
+/**
+ * 选中指标的各市结果；只有一个市时是它的各区县。自定义范围放大到一个市时列这个市的区县，
+ * 跨市的范围不把所有区县平铺出来（ADR 0121）
+ */
 export function rankOf(
   version: SimulationVersion,
   conditions: SimulationConditions,
   indicatorId: string,
-  year: number
+  year: number,
+  cityCode: string | null = null
 ): Rank {
   const result = indicatorOf(version, year, indicatorId);
-  const level = conditions.cityCodes.length === 1 ? 'district' : 'city';
-  const rows: RankRow[] =
-    level === 'district'
-      ? result.rows.map(row => ({ key: row.code, name: row.name, value: row.value, cityCode: null }))
-      : result.cities.map(city => ({
-          key: city.code,
-          name: city.name.replace(/市$/, ''),
-          value: city.value,
-          cityCode: city.code
-        }));
+  const area = conditions.scope.kind === 'area';
+  const cityCodes = scopeCityCodes(conditions.scope);
+  const only = cityCodes.length === 1 ? cityCodes[0] : area ? cityCode : null;
+  const rows: RankRow[] = only
+    ? result.rows
+        .filter(row => row.cityCode === only)
+        .map(row => ({
+          key: row.code,
+          name: row.name,
+          value: row.value,
+          cityCode: null,
+          share: area && row.share < 1 ? row.share : null
+        }))
+    : result.cities.map(city => ({
+        key: city.code,
+        name: city.name.replace(/市$/, ''),
+        value: city.value,
+        cityCode: city.code,
+        share: null
+      }));
+  const level = only ? 'district' : 'city';
   return {
     level,
     rows: rows.toSorted((a, b) => b.value - a.value),

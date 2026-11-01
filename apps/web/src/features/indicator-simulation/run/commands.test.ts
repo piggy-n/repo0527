@@ -1,12 +1,15 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
-import type { Composition } from '../compose/composition';
+import { type Composition, rememberedScopes, withArea } from '../compose/composition';
 import { defaultParams } from '../model/params';
+import { areaScope, citiesScope, scopeCityCodes } from '../model/scope';
+import { NINGZHEN_RINGS, testArea } from '../model/test-area';
+import { loadTestAtlas } from '../model/test-atlas';
 import { commandSuggestions, interpretCommand, type RunCommand } from './commands';
 
 const current: Composition = {
-  conditions: { years: [2025], cityCodes: ['320100', '320500'], indicatorIds: ['A-31', 'A-39'] },
+  conditions: { years: [2025], scope: citiesScope(['320100', '320500']), indicatorIds: ['A-31', 'A-39'] },
   params: { ...defaultParams(), recognition: 'intersect' }
 };
 
@@ -27,7 +30,7 @@ describe('interpretCommand', () => {
 
   it('改参数：只改参数时不算改条件，写出改成什么、影响哪些指标', () => {
     const rule = changeOf(interpretCommand('按旧规程计算', current));
-    expect(rule.composition).toEqual({ ...current, params: { ...current.params, rule: 'old' } });
+    expect(rule.composition).toMatchObject({ ...current, params: { ...current.params, rule: 'old' } });
     expect(rule.conditionsChanged).toBe(false);
     expect(rule.said).toEqual(['计算规程改为「旧规程」（自定义口径），影响社区卫生覆盖率']);
 
@@ -46,12 +49,13 @@ describe('interpretCommand', () => {
 
   it('加上、去掉、只看城市；全省', () => {
     const added = changeOf(interpretCommand('加上无锡市', current));
-    expect(added.composition.conditions.cityCodes).toEqual(['320100', '320200', '320500']);
+    expect(added.composition.conditions.scope).toEqual(citiesScope(['320100', '320200', '320500']));
     expect(added.conditionsChanged).toBe(true);
     expect(added.said).toEqual(['范围改为南京市等 3 个市']);
-    expect(changeOf(interpretCommand('去掉苏州', current)).composition.conditions.cityCodes).toEqual(['320100']);
-    expect(changeOf(interpretCommand('只看苏州市', current)).composition.conditions.cityCodes).toEqual(['320500']);
-    expect(changeOf(interpretCommand('加上全省', current)).composition.conditions.cityCodes).toHaveLength(JIANGSU_CITIES.length);
+    expect(changeOf(interpretCommand('去掉苏州', current)).composition.conditions.scope).toEqual(citiesScope(['320100']));
+    expect(changeOf(interpretCommand('只看苏州市', current)).composition.conditions.scope).toEqual(citiesScope(['320500']));
+    const all = changeOf(interpretCommand('加上全省', current)).composition.conditions.scope;
+    expect(scopeCityCodes(all)).toHaveLength(JIANGSU_CITIES.length);
   });
 
   it('加上、去掉指标；改年度', () => {
@@ -91,5 +95,38 @@ describe('commandSuggestions', () => {
     expect(commandSuggestions(current, 'paused')[0]).toBe('继续');
     const done = commandSuggestions({ ...current, conditions: { ...current.conditions, indicatorIds: ['B-65'] } }, 'done');
     expect(done).toEqual(['覆盖认定改回 50%', '加上无锡市', '加上人均公园绿地', '调整条件']);
+  });
+});
+
+describe('自定义范围的说法（ADR 0121）', () => {
+  it('自定义范围下说城市：改为行政区划，"加上"以范围涉及的市为基础，并说明范围还在', async () => {
+    const area = await testArea(await loadTestAtlas(), NINGZHEN_RINGS, '宁镇交界');
+    const custom = withArea(current, area);
+    const only = changeOf(interpretCommand('只看苏州市', custom));
+    expect(only.composition.conditions.scope).toEqual(citiesScope(['320500']));
+    expect(only.conditionsChanged).toBe(true);
+    expect(only.said[0]).toBe('范围改为苏州市（自定义范围「宁镇交界」仍保留，说"改回自定义范围"可以切回）');
+    expect(rememberedScopes(only.composition).area).toBe(area);
+    const added = changeOf(interpretCommand('加上无锡市', custom));
+    expect(added.composition.conditions.scope).toEqual(citiesScope(['320100', '320200', '321100']));
+  });
+
+  it('说"改回自定义范围"切回记下的范围；还没有范围时说明，不改', async () => {
+    const area = await testArea(await loadTestAtlas(), NINGZHEN_RINGS, '宁镇交界');
+    const back = changeOf(interpretCommand('改回自定义范围', { ...current, scopes: { cityCodes: [], area } }));
+    expect(back.composition.conditions.scope).toEqual(areaScope(area));
+    expect(back.said).toEqual(['范围改为自定义范围「宁镇交界」']);
+    expect(interpretCommand('按上传的范围计算', current)).toEqual({
+      kind: 'none',
+      notes: ['还没有自定义范围，可在条件配置中上传范围文件或在地图上绘制']
+    });
+  });
+
+  it('快捷说法：自定义范围下不建议加城市；行政区划下记着自定义范围时建议切回', async () => {
+    const area = await testArea(await loadTestAtlas(), NINGZHEN_RINGS);
+    expect(commandSuggestions(withArea(current, area), 'running')).not.toContain('加上无锡市');
+    const kept = commandSuggestions({ ...current, scopes: { cityCodes: [], area } }, 'running');
+    expect(kept).toContain('改回自定义范围');
+    expect(kept).not.toContain('加上无锡市');
   });
 });

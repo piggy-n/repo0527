@@ -1,9 +1,10 @@
 import { reachMeters, simulationIndicator, walkMeters } from './indicators';
+import type { SimulationScope } from './scope';
 
-/** 推演条件：年度、监测范围（市）、监测指标（编排图上的顺序） */
+/** 推演条件：年度、监测范围（所选的市或自定义范围，ADR 0121）、监测指标（编排图上的顺序） */
 export interface SimulationConditions {
   readonly years: readonly number[];
-  readonly cityCodes: readonly string[];
+  readonly scope: SimulationScope;
   readonly indicatorIds: readonly string[];
 }
 

@@ -3,10 +3,12 @@ import { booleanPointInPolygon } from '@turf/boolean-point-in-polygon';
 import { describe, expect, it } from 'vitest';
 import { createCalculator } from './calculator';
 import { createFacilityLayout } from './facilities';
+import { areaScope, citiesScope } from './scope';
+import { NANJING_RINGS, testArea } from './test-area';
 import { loadTestAtlas } from './test-atlas';
 
 // 镇江 6 个区县：点数适中，测试快
-const conditions = { years: [2026], cityCodes: ['321100'], indicatorIds: ['B-65', 'A-39', 'B-61'] };
+const conditions = { years: [2026], scope: citiesScope(['321100']), indicatorIds: ['B-65', 'A-39', 'B-61'] };
 const layoutOf = async () => {
   const calculator = createCalculator(await loadTestAtlas());
   return { calculator, layout: createFacilityLayout(calculator) };
@@ -44,5 +46,21 @@ describe('createFacilityLayout', () => {
     const { layout } = await layoutOf();
 
     expect(layout.total(conditions, 'B-61', 2026)).toBeGreaterThan(0);
+  });
+});
+
+describe('自定义范围的设施点（ADR 0121）', () => {
+  it('只留范围内的点；数量就是地图上的点数', async () => {
+    const { calculator, layout } = await layoutOf();
+    const area = await testArea(calculator.atlas, NANJING_RINGS);
+    const custom = { years: [2026], scope: areaScope(area), indicatorIds: ['B-65'] };
+    const points = layout.points(custom, 'B-65', 2026);
+    const inside = { type: 'Feature' as const, properties: {}, geometry: area.geometry };
+    const whole = layout.points({ ...custom, scope: citiesScope(['320100']) }, 'B-65', 2026);
+
+    expect(points.length).toBeGreaterThan(0);
+    expect(points.length).toBeLessThan(whole.length);
+    expect(points.every(point => booleanPointInPolygon([...point.coordinates], inside))).toBe(true);
+    expect(layout.total(custom, 'B-65', 2026)).toBe(points.length);
   });
 });

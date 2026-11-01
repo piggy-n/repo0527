@@ -1,12 +1,12 @@
 import { LatestController } from '@yzt/utils';
 import { computed, type ComputedRef, onScopeDispose, type Ref, ref, shallowRef, watch } from 'vue';
-import { buildSteps } from '../compose/build';
-import { type Composition, emptyComposition } from '../compose/composition';
-import { describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from '../compose/prompt';
+import { blankOf, buildSteps } from '../compose/build';
+import type { Composition } from '../compose/composition';
+import { AREA_EXAMPLE, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from '../compose/prompt';
 import type { CompositionOwner } from './useComposition';
 
-/** 发送的结果：输入框是空的、认不出指标、开始编排 */
-export type SendOutcome = 'empty' | 'unrecognized' | 'sent';
+/** 发送的结果：输入框是空的、认不出指标、说了自定义范围但还没有上传或绘制、开始编排 */
+export type SendOutcome = 'empty' | 'unrecognized' | 'no-area' | 'sent';
 
 /** AI 按指令编排的进度：编排图只显示已经出现的节点 */
 export interface BuildState {
@@ -23,7 +23,7 @@ export interface BuildState {
 /** AI 计算指令的拥有者：输入框的文字、占位的示例、发送后逐个节点配置；面板和编排图只显示和调用 */
 export interface PromptComposer {
   readonly text: Readonly<Ref<string>>;
-  /** 输入框空着时占位显示的一句完整示例 */
+  /** 输入框空着时占位显示的一句完整示例；正在用自定义范围时说"自定义范围" */
   readonly example: Readonly<Ref<string>>;
   /** 按指令配置的进度；没在配置时为 null */
   readonly building: Readonly<Ref<BuildState | null>>;
@@ -79,7 +79,13 @@ async function pause(ms: number, signal: AbortSignal): Promise<boolean> {
 export function usePromptComposer(composition: CompositionOwner, options: PromptComposerOptions = {}): PromptComposer {
   const { random = Math.random, onComposed } = options;
   const text = ref('');
-  const example = ref(PROMPT_EXAMPLES[0] ?? '');
+  const cityExample = ref(PROMPT_EXAMPLES[0] ?? '');
+  const areaExample = ref(AREA_EXAMPLE);
+  const areaActive = computed(() => {
+    const { scope } = composition.state.value.conditions;
+    return scope.kind === 'area' && scope.area !== null;
+  });
+  const example = computed(() => (areaActive.value ? areaExample.value : cityExample.value));
   const building = shallowRef<BuildState | null>(null);
   // 输入框里是不是当前编排的描述
   let synced = false;
@@ -126,7 +132,7 @@ export function usePromptComposer(composition: CompositionOwner, options: Prompt
 
   const build = async (target: Composition) => {
     const signal = buildRun.next();
-    write(emptyComposition());
+    write(blankOf(target));
     building.value = { revealed: new Set(), latest: null, message: 'AI 正在理解指令…', launching: false };
     if (!(await pause(THINK_MS, signal))) {
       return;
@@ -161,18 +167,22 @@ export function usePromptComposer(composition: CompositionOwner, options: Prompt
     setText,
     fillExample: () => setText(example.value),
     refresh: () => {
-      example.value = randomPrompt(random, [example.value]);
+      if (areaActive.value) {
+        areaExample.value = randomPrompt(random, [areaExample.value], true);
+      } else {
+        cityExample.value = randomPrompt(random, [cityExample.value]);
+      }
       setText('');
     },
     send: () => {
       if (text.value.trim() === '') {
         return 'empty';
       }
-      const parsed = parsePrompt(text.value);
-      if (!parsed) {
-        return 'unrecognized';
+      const parsed = parsePrompt(text.value, composition.state.value);
+      if (!parsed.ok) {
+        return parsed.reason === 'area' ? 'no-area' : 'unrecognized';
       }
-      void build(parsed);
+      void build(parsed.composition);
       return 'sent';
     }
   };

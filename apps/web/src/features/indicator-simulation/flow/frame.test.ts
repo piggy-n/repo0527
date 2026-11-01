@@ -4,12 +4,17 @@ import { type EngineState, idleEngineState, type StepState } from '../engine/eng
 import { BASE_DURATIONS, type StepId, STEPS } from '../engine/steps';
 import { createCalculator } from '../model/calculator';
 import { defaultParams, type SimulationConditions } from '../model/params';
+import { citiesScope } from '../model/scope';
 import { loadTestAtlas } from '../model/test-atlas';
 import { plainText } from '../run/narrative';
 import { flowDurations, flowFrame, lineTimings, THINK_MS, TYPE_MS, typedChars } from './frame';
 import { flowPlan } from './plan';
 
-const conditions: SimulationConditions = { years: [2025], cityCodes: ['320100'], indicatorIds: ['A-31', 'A-39'] };
+const conditions: SimulationConditions = {
+  years: [2025],
+  scope: citiesScope(['320100']),
+  indicatorIds: ['A-31', 'A-39']
+};
 const planOf = async () =>
   flowPlan({ calculator: createCalculator(await loadTestAtlas()), conditions, params: { ...defaultParams(), rule: 'old' } });
 

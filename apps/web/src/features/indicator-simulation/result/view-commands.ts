@@ -2,6 +2,7 @@ import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { findCities, findIndicators } from '../compose/prompt';
 import { simulationIndicator } from '../model/indicators';
 import type { SimulationConditions } from '../model/params';
+import { scopeCityCodes } from '../model/scope';
 import type { ResultSelection, RunView } from './result-view';
 
 /** 看结果的一句话：只换结果的选择和主区的视图，不重新推演 */
@@ -35,9 +36,10 @@ export function interpretView(input: string, conditions: SimulationConditions): 
   if (year !== undefined) {
     return { patch: { year }, show: 'result', reply: `已切换到 ${year} 年。` };
   }
-  const city = findCities(text).find(code => conditions.cityCodes.includes(code));
+  const cityCodes = scopeCityCodes(conditions.scope);
+  const city = findCities(text).find(code => cityCodes.includes(code));
   if (city !== undefined) {
-    return conditions.cityCodes.length > 1
+    return cityCodes.length > 1
       ? { patch: { cityCode: city }, show: 'result', reply: `放大到${cityName(city)}，设施和服务范围放大后显示。` }
       : { patch: {}, show: 'result', reply: `当前计算范围仅含${cityName(city)}。` };
   }
@@ -53,8 +55,8 @@ export function interpretView(input: string, conditions: SimulationConditions): 
 
 /** 看结果时的快捷说法：看另一个市（多个市时）、看另一项指标、回看推演流程 */
 export function viewSuggestions(conditions: SimulationConditions, selection: ResultSelection): string[] {
-  const city =
-    conditions.cityCodes.length > 1 ? conditions.cityCodes.find(code => code !== selection.cityCode) : undefined;
+  const cityCodes = scopeCityCodes(conditions.scope);
+  const city = cityCodes.length > 1 ? cityCodes.find(code => code !== selection.cityCode) : undefined;
   const other = conditions.indicatorIds.find(id => id !== selection.indicatorId);
   return [
     ...(city === undefined ? [] : [`看${cityName(city)}`]),

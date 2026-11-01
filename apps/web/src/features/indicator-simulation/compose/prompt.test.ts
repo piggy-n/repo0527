@@ -2,32 +2,35 @@
 import { describe, expect, it } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { defaultParams } from '../model/params';
-import { emptyComposition } from './composition';
-import { describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from './prompt';
+import { areaScope, citiesScope, scopeCityCodes } from '../model/scope';
+import { NANJING_RINGS, testArea } from '../model/test-area';
+import { loadTestAtlas } from '../model/test-atlas';
+import { emptyComposition, rememberedScopes, withArea, withScopeKind } from './composition';
+import { AREA_EXAMPLE, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from './prompt';
 
 const ALL = JIANGSU_CITIES.map(city => city.code);
 const parsed = (text: string) => {
   const result = parsePrompt(text);
-  if (!result) {
+  if (!result.ok) {
     throw new Error(`应能解析：${text}`);
   }
-  return result;
+  return result.composition;
 };
 
 describe('parsePrompt', () => {
   it('三条示例：各填一项参数，其余是标准口径', () => {
     const [rule = '', recognition = '', population = ''] = PROMPT_EXAMPLES;
 
-    expect(parsed(rule)).toEqual({
-      conditions: { years: [2025], cityCodes: ['320100'], indicatorIds: ['A-31'] },
+    expect(parsed(rule)).toMatchObject({
+      conditions: { years: [2025], scope: citiesScope(['320100']), indicatorIds: ['A-31'] },
       params: { ...defaultParams(), rule: 'old' }
     });
-    expect(parsed(recognition)).toEqual({
-      conditions: { years: [2025], cityCodes: ['320100'], indicatorIds: ['B-65'] },
+    expect(parsed(recognition)).toMatchObject({
+      conditions: { years: [2025], scope: citiesScope(['320100']), indicatorIds: ['B-65'] },
       params: { ...defaultParams(), recognition: 'intersect' }
     });
-    expect(parsed(population)).toEqual({
-      conditions: { years: [2025], cityCodes: ['320100'], indicatorIds: ['A-39'] },
+    expect(parsed(population)).toMatchObject({
+      conditions: { years: [2025], scope: citiesScope(['320100']), indicatorIds: ['A-39'] },
       params: { ...defaultParams(), popChange: 10 }
     });
   });
@@ -35,12 +38,16 @@ describe('parsePrompt', () => {
   it('几个年度新的在前，几个市按区划目录，几项指标按句子里的先后', () => {
     const result = parsed('计算 2024、2026 年苏州市、无锡市社区小学覆盖率和人均公园绿地面积');
 
-    expect(result.conditions).toEqual({ years: [2026, 2024], cityCodes: ['320200', '320500'], indicatorIds: ['A-32', 'A-39'] });
+    expect(result.conditions).toEqual({
+      years: [2026, 2024],
+      scope: citiesScope(['320200', '320500']),
+      indicatorIds: ['A-32', 'A-39']
+    });
   });
 
   it('没写年份按 2025，没写城市或写了全省按全省；不在可选范围的年份不算', () => {
-    expect(parsed('计算公园绿地覆盖率').conditions).toMatchObject({ years: [2025], cityCodes: ALL });
-    expect(parsed('计算 2019 年全省公园绿地覆盖率').conditions).toMatchObject({ years: [2025], cityCodes: ALL });
+    expect(parsed('计算公园绿地覆盖率').conditions).toMatchObject({ years: [2025], scope: citiesScope(ALL) });
+    expect(parsed('计算 2019 年全省公园绿地覆盖率').conditions).toMatchObject({ years: [2025], scope: citiesScope(ALL) });
   });
 
   it('长的关键词先匹配：人均公共停车场不会再算成公共停车场', () => {
@@ -57,8 +64,8 @@ describe('parsePrompt', () => {
     expect(parsed('按常住人口增加 30% 计算人均公园绿地面积').params.popChange).toBe(20);
   });
 
-  it('认不出指标时为 null', () => {
-    expect(parsePrompt('今天适合计算什么')).toBeNull();
+  it('认不出指标时说明', () => {
+    expect(parsePrompt('今天适合计算什么')).toEqual({ ok: false, reason: 'indicator' });
   });
 });
 
@@ -81,7 +88,8 @@ describe('describeComposition', () => {
   it('多个市、多项指标时写"等"', () => {
     const composition = parsed('计算 2025 年南京市、苏州市、无锡市社区卫生服务设施覆盖率和人均公园绿地面积');
     expect(describeComposition(composition)).toBe('计算 2025 年南京市等 3 个市社区卫生服务设施步行15分钟覆盖率等 2 项指标');
-    expect(describeComposition({ ...composition, conditions: { ...composition.conditions, cityCodes: ALL } })).toContain('年全省');
+    const all = { ...composition, conditions: { ...composition.conditions, scope: citiesScope(ALL) } };
+    expect(describeComposition(all)).toContain('年全省');
   });
 });
 
@@ -100,7 +108,7 @@ describe('randomPrompt', () => {
     const results = texts.map(text => parsed(text));
     expect(results.every(item => item.conditions.indicatorIds[0] === 'A-31')).toBe(true);
     expect(new Set(texts).size).toBeGreaterThan(30);
-    expect(new Set(results.map(item => item.conditions.cityCodes.join())).size).toBeGreaterThan(10);
+    expect(new Set(results.map(item => scopeCityCodes(item.conditions.scope).join())).size).toBeGreaterThan(10);
     expect(new Set(results.map(item => item.conditions.years.join())).size).toBeGreaterThan(5);
     expect(new Set(results.map(item => item.conditions.indicatorIds.length))).toEqual(new Set([1, 2, 3]));
     const scenarios = new Set(results.map(({ params }) => `${params.rule}/${params.recognition}/${params.popChange}`));
@@ -110,5 +118,47 @@ describe('randomPrompt', () => {
   it('和要避开的话重复时重新组合', () => {
     const once = randomPrompt(seeded(7));
     expect(randomPrompt(seeded(7), [once])).not.toBe(once);
+  });
+});
+
+describe('自定义范围的指令（ADR 0121）', () => {
+  it('说了自定义范围时用记下的范围；还没有范围时说明原因', async () => {
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS, '江宁片区');
+    const current = withArea(emptyComposition(), area);
+    const result = parsePrompt('按上传的范围计算 2024 年社区卫生服务设施覆盖率', current);
+    expect(result.ok && result.composition.conditions).toEqual({
+      years: [2024],
+      scope: areaScope(area),
+      indicatorIds: ['A-31']
+    });
+    expect(parsePrompt(AREA_EXAMPLE, emptyComposition())).toEqual({ ok: false, reason: 'area' });
+  });
+
+  it('没说范围时：正在用自定义范围就接着用；说了城市时改为行政区划，范围仍记着', async () => {
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS);
+    const current = withArea(emptyComposition(), area);
+    const kept = parsePrompt('计算人均公园绿地面积', current);
+    expect(kept.ok && kept.composition.conditions.scope).toEqual(areaScope(area));
+    const cities = parsePrompt('计算苏州市人均公园绿地面积', current);
+    expect(cities.ok && cities.composition.conditions.scope).toEqual(citiesScope(['320500']));
+    expect(cities.ok && rememberedScopes(cities.composition).area).toBe(area);
+    const other = parsePrompt('计算人均公园绿地面积', withScopeKind(current, 'cities'));
+    expect(other.ok && other.composition.conditions.scope).toEqual(citiesScope(ALL));
+  });
+
+  it('写成一句话、解析回去得到同样的范围；随机的示例写"自定义范围"', async () => {
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS, '江宁片区');
+    const current = withArea(emptyComposition(), area);
+    const result = parsePrompt('计算自定义范围 2025 年社区卫生服务设施覆盖率', current);
+    if (!result.ok) {
+      throw new Error('应能解析');
+    }
+    const text = describeComposition(result.composition);
+    expect(text).toBe('计算自定义范围「江宁片区」 2025 年社区卫生服务设施步行15分钟覆盖率');
+    expect(parsePrompt(text, current)).toEqual(result);
+    const random = randomPrompt(seeded(3), [], true);
+    expect(random).toContain('计算自定义范围 ');
+    const parsedRandom = parsePrompt(random, current);
+    expect(parsedRandom.ok && parsedRandom.composition.conditions.scope).toEqual(areaScope(area));
   });
 });

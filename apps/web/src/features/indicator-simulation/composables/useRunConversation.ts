@@ -1,4 +1,5 @@
 import { computed, type ComputedRef, type Ref, ref, shallowRef } from 'vue';
+import { rememberedScopes } from '../compose/composition';
 import { STEP_GROUPS } from '../engine/steps';
 import type { ResultSelection, RunView } from '../result/result-view';
 import { interpretView, viewSuggestions } from '../result/view-commands';
@@ -65,12 +66,13 @@ export function useRunConversation(
   const phase = computed(() =>
     state.value.status === 'done' ? 'done' : userPause.paused.value ? 'paused' : 'running'
   );
+  // 条件和参数以计算为准；记下的另一种范围（如上传的自定义范围）在条件配置的拥有者里
   const current = () => {
     const { conditions, params } = state.value;
     if (!conditions) {
       throw new Error('计算没有开始');
     }
-    return { conditions, params };
+    return { conditions, params, scopes: rememberedScopes(composition.state.value) };
   };
 
   // AI 的回复记在时间线上，也留一份给看结果时的对话栏

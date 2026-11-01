@@ -6,14 +6,20 @@ import { cached } from './cache';
 import type { District, DistrictAtlas } from './districts';
 import { type SimulationIndicator, simulationIndicator } from './indicators';
 import type { SimulationConditions, SimulationParams } from './params';
+import { scopeCityCodes, scopeDistricts } from './scope';
 
-/** 一个区县的计算结果；weight 是汇总时的权重：覆盖率是住宅用地或区县面积，人均值是人口 */
+/**
+ * 一个区县的计算结果；weight 是汇总时的权重：覆盖率是住宅用地或区县面积，人均值是人口，
+ * 自定义范围部分覆盖的区县乘以范围内的面积占比（share）
+ */
 export interface DistrictResult {
   readonly code: string;
   readonly name: string;
   readonly cityCode: string;
   readonly value: number;
   readonly weight: number;
+  /** 范围内面积占区县面积的比例：行政区划、全部覆盖时为 1 */
+  readonly share: number;
 }
 
 export interface CityResult {
@@ -157,14 +163,16 @@ export function createCalculator(atlas: DistrictAtlas): Calculator {
     cityBaseValues(year, indicatorId, district.cityCode).get(district.code) ?? 0;
 
   const computeYear = (conditions: SimulationConditions, params: SimulationParams, year: number): YearResult => {
-    const { cityCodes, indicatorIds } = conditions;
-    const list = atlas.inCities(cityCodes);
+    const { scope, indicatorIds } = conditions;
+    // 自定义范围部分覆盖的区县：值按整个区县算，汇总的权重和人口按范围内的面积占比折算（ADR 0121）
+    const list = scopeDistricts(atlas, scope);
+    const cityCodes = scopeCityCodes(scope);
     const people = 1 + params.popChange / 100;
     const indicators: Record<string, IndicatorResult> = {};
     for (const id of indicatorIds) {
       const indicator = simulationIndicator(id);
       const strength = coverageStrength(indicator, params);
-      const rows = list.map((district): DistrictResult => {
+      const rows = list.map(({ district, share }): DistrictResult => {
         const base = baseValue(year, id, district);
         // 覆盖率按强度换算；人均值的分母是变化后的常住人口
         const raw = indicator.model === 'coverage' ? 100 * (1 - (1 - base / 100) ** strength) : base / people;
@@ -174,16 +182,14 @@ export function createCalculator(atlas: DistrictAtlas): Calculator {
           name: district.name,
           cityCode: district.cityCode,
           value,
-          weight: weightOf(indicator, district)
+          weight: weightOf(indicator, district) * share,
+          share
         };
       });
       const aggregate = (items: readonly DistrictResult[]) => {
         const total = items.reduce((sum, row) => sum + row.weight, 0);
         return round(items.reduce((sum, row) => sum + row.value * row.weight, 0) / total, indicator.precision);
       };
-      if (cityCodes.length === 0) {
-        throw new Error('计算条件里没有城市');
-      }
       const cities = cityCodes.map(
         (code): CityResult => ({
           code,
@@ -196,7 +202,7 @@ export function createCalculator(atlas: DistrictAtlas): Calculator {
     return {
       year,
       indicators,
-      population: list.reduce((sum, district) => sum + districtPopulation(district), 0) * people
+      population: list.reduce((sum, { district, share }) => sum + districtPopulation(district) * share, 0) * people
     };
   };
 

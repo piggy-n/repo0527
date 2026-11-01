@@ -8,6 +8,7 @@ import { sampleComposition } from '../compose/composition';
 import { ManualClock } from '../engine/test-clock';
 import { VALUE_COLORS } from '../map/colors';
 import { createCalculator } from '../model/calculator';
+import { citiesScope } from '../model/scope';
 import { loadTestAtlas } from '../model/test-atlas';
 import { useSimulationMap } from './useSimulationMap';
 import { useSimulationResult } from './useSimulationResult';
@@ -118,7 +119,8 @@ describe('useSimulationMap', () => {
     run.start(sampleComposition(), calculator);
     await clock.advance(ENOUGH);
     await settle();
-    run.restart({ ...sampleComposition(), conditions: { ...sampleComposition().conditions, cityCodes: ['320100'] } });
+    const sample = sampleComposition();
+    run.restart({ ...sample, conditions: { ...sample.conditions, scope: citiesScope(['320100']) } });
     await clock.advance(ENOUGH);
     await settle();
     expect(moves).toHaveLength(2);

@@ -1,9 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { SimulationConditions } from '../model/params';
+import { citiesScope } from '../model/scope';
 import { interpretView, viewSuggestions } from './view-commands';
 
-const conditions: SimulationConditions = { years: [2024, 2025], cityCodes: ['320100', '320500'], indicatorIds: ['B-65', 'A-39'] };
+const conditions: SimulationConditions = {
+  years: [2024, 2025],
+  scope: citiesScope(['320100', '320500']),
+  indicatorIds: ['B-65', 'A-39']
+};
 
 describe('interpretView', () => {
   it('回看流程、回到整个范围、年度、范围里的市、条件里的指标、看结果', () => {
@@ -42,7 +47,7 @@ describe('interpretView', () => {
   });
 
   it('只有一个市时说范围就是它，不放大', () => {
-    const command = interpretView('看南京市', { ...conditions, cityCodes: ['320100'] });
+    const command = interpretView('看南京市', { ...conditions, scope: citiesScope(['320100']) });
 
     expect(command).toEqual({ patch: {}, show: 'result', reply: '当前计算范围仅含南京市。' });
   });
@@ -53,7 +58,8 @@ describe('viewSuggestions', () => {
     const selection = { indicatorId: 'B-65', year: 2025, cityCode: '320100' } as const;
 
     expect(viewSuggestions(conditions, selection)).toEqual(['看苏州市', '看人均公园绿地', '回看计算流程']);
-    expect(viewSuggestions({ ...conditions, cityCodes: ['320100'], indicatorIds: ['B-65'] }, selection)).toEqual([
+    const single = { ...conditions, scope: citiesScope(['320100']), indicatorIds: ['B-65'] };
+    expect(viewSuggestions(single, selection)).toEqual([
       '回看计算流程'
     ]);
   });

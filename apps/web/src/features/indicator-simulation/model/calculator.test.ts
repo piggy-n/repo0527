@@ -7,10 +7,12 @@ import { indicatorResult } from './analysis';
 import { coverageStrength, createCalculator, INTERSECT_FACTOR, RULE_FACTOR } from './calculator';
 import { simulationIndicator } from './indicators';
 import { defaultParams, type SimulationParams } from './params';
+import { areaScope, citiesScope, scopeDistricts } from './scope';
+import { NANJING_RINGS, NINGZHEN_RINGS, testArea } from './test-area';
 import { loadTestAtlas } from './test-atlas';
 
 const ALL = JIANGSU_CITIES.map(city => city.code);
-const conditions = { years: [2026, 2025], cityCodes: ALL, indicatorIds: ['B-65', 'A-31', 'A-39', 'A-15'] };
+const conditions = { years: [2026, 2025], scope: citiesScope(ALL), indicatorIds: ['B-65', 'A-31', 'A-39', 'A-15'] };
 const withPatch = (patch: Partial<SimulationParams>): SimulationParams => ({ ...defaultParams(), ...patch });
 const calculatorOf = async () => createCalculator(await loadTestAtlas());
 const resultOf = async (params: SimulationParams, id: string, year = 2026) =>
@@ -114,5 +116,48 @@ describe('computeYear', () => {
     expect(Object.keys(first)).toEqual(['2025', '2026']);
     expect(first[2026]?.indicators['B-65']?.rows.every(row => row.value <= 100)).toBe(true);
     expect(createCalculator(calculator.atlas).compute(conditions, params)).toEqual(first);
+  });
+});
+
+describe('自定义范围（ADR 0121）', () => {
+  it('区县的值同行政区划；部分覆盖的区县汇总时权重和人口乘以范围内的面积占比', async () => {
+    const calculator = await calculatorOf();
+    const area = await testArea(calculator.atlas, NANJING_RINGS);
+    const custom = { years: [2026], scope: areaScope(area), indicatorIds: ['B-65', 'A-39'] };
+    const whole = { years: [2026], scope: citiesScope(['320100']), indicatorIds: ['B-65', 'A-39'] };
+    const result = calculator.computeYear(custom, defaultParams(), 2026);
+    const reference = calculator.computeYear(whole, defaultParams(), 2026);
+
+    for (const id of ['B-65', 'A-39']) {
+      const rows = indicatorResult(result.indicators, id).rows;
+      const byCode = new Map(indicatorResult(reference.indicators, id).rows.map(row => [row.code, row]));
+      expect(rows.map(row => row.code)).toEqual(area.coverage.covers.map(cover => cover.code));
+      for (const row of rows) {
+        const cover = area.coverage.covers.find(item => item.code === row.code);
+        const share = cover?.relation === 'full' ? 1 : (cover?.ratio ?? 0);
+        expect(row.value).toBe(byCode.get(row.code)?.value);
+        expect(row.share).toBe(share);
+        expect(row.weight).toBeCloseTo((byCode.get(row.code)?.weight ?? 0) * share, 9);
+      }
+      const total = rows.reduce((sum, row) => sum + row.weight, 0);
+      const mean = rows.reduce((sum, row) => sum + row.value * row.weight, 0) / total;
+      const value = indicatorResult(result.indicators, id).value;
+      expect(value).toBeCloseTo(mean, simulationIndicator(id).precision);
+      expect(indicatorResult(result.indicators, id).cities).toEqual([{ code: '320100', name: '南京市', value }]);
+    }
+    const people = scopeDistricts(calculator.atlas, custom.scope).reduce(
+      (sum, { district, share }) => sum + calculator.districtPopulation(district) * share,
+      0
+    );
+    expect(result.population).toBeCloseTo(people, 9);
+    expect(result.population).toBeLessThan(reference.population);
+  });
+
+  it('跨市的范围按涉及的市汇总', async () => {
+    const calculator = await calculatorOf();
+    const area = await testArea(calculator.atlas, NINGZHEN_RINGS);
+    const custom = { years: [2026], scope: areaScope(area), indicatorIds: ['A-31'] };
+    const result = calculator.computeYear(custom, defaultParams(), 2026);
+    expect(indicatorResult(result.indicators, 'A-31').cities.map(city => city.code)).toEqual(['320100', '321100']);
   });
 });

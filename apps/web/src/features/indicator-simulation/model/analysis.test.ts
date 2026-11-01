@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { valueBreaks } from './analysis';
 import { createCalculator } from './calculator';
+import { citiesScope } from './scope';
 import { loadTestAtlas } from './test-atlas';
 
 const conditions = {
   years: [2026, 2025],
-  cityCodes: JIANGSU_CITIES.map(city => city.code),
+  scope: citiesScope(JIANGSU_CITIES.map(city => city.code)),
   indicatorIds: ['B-65', 'A-31', 'A-39', 'A-15']
 };
 const calculatorOf = async () => createCalculator(await loadTestAtlas());

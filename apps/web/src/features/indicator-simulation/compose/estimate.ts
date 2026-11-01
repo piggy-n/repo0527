@@ -3,6 +3,7 @@ import { indicatorResult } from '../model/analysis';
 import type { Calculator } from '../model/calculator';
 import { type SimulationIndicator, simulationIndicator } from '../model/indicators';
 import { defaultParams, isScenario, type SimulationConditions, type SimulationParams } from '../model/params';
+import { areaLabel, scopeCityCodes, type SimulationScope } from '../model/scope';
 
 /** 预估的一项指标：这组参数下的值；模拟情景时还有标准口径的值 */
 export interface EstimateRow {
@@ -13,14 +14,18 @@ export interface EstimateRow {
 }
 
 export interface Estimate {
-  /** 监测范围的说明，如"南京市""全省""3 个市" */
+  /** 监测范围的说明，如"南京市""全省""3 个市""自定义范围「江宁片区」" */
   readonly scope: string;
   /** 预估的年度 */
   readonly year: number;
   readonly rows: readonly EstimateRow[];
 }
 
-function scopeName(cityCodes: readonly string[]): string {
+function scopeName(scope: SimulationScope): string {
+  if (scope.kind === 'area') {
+    return scope.area ? areaLabel(scope.area) : '自定义范围';
+  }
+  const { cityCodes } = scope;
   if (cityCodes.length === JIANGSU_CITIES.length) {
     return '全省';
   }
@@ -38,8 +43,8 @@ export function estimate(
   params: SimulationParams,
   wanted?: number
 ): Estimate | null {
-  const { years, cityCodes, indicatorIds } = conditions;
-  if (years.length === 0 || cityCodes.length === 0 || indicatorIds.length === 0) {
+  const { years, scope, indicatorIds } = conditions;
+  if (years.length === 0 || scopeCityCodes(scope).length === 0 || indicatorIds.length === 0) {
     return null;
   }
   const year = wanted !== undefined && years.includes(wanted) ? wanted : Math.max(...years);
@@ -57,5 +62,5 @@ export function estimate(
       standard: scenarioIds.includes(id) ? indicatorResult(standard, id).value : null
     })
   );
-  return { scope: scopeName(cityCodes), year, rows };
+  return { scope: scopeName(scope), year, rows };
 }

@@ -6,12 +6,14 @@ import { VALUE_COLORS } from '../map/colors';
 import { indicatorResult } from '../model/analysis';
 import { createCalculator } from '../model/calculator';
 import { defaultParams, type SimulationConditions, type SimulationParams } from '../model/params';
+import { areaScope, citiesScope } from '../model/scope';
+import { NANJING_RINGS, NINGZHEN_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
 import { mapColoring, rankOf, resolveSelection, resultItems } from './result-view';
 
 const conditions: SimulationConditions = {
   years: [2025, 2026],
-  cityCodes: JIANGSU_CITIES.map(city => city.code),
+  scope: citiesScope(JIANGSU_CITIES.map(city => city.code)),
   indicatorIds: ['A-39', 'B-65']
 };
 // 自定义口径：相交即算
@@ -50,7 +52,7 @@ describe('resolveSelection', () => {
       cityCode: '320500'
     });
     expect(resolveSelection(done, { indicatorId: 'A-31', year: 2021 })).toMatchObject({ indicatorId: 'B-65', year: 2026 });
-    const single = { ...done, conditions: { ...conditions, cityCodes: ['320500'] } };
+    const single = { ...done, conditions: { ...conditions, scope: citiesScope(['320500']) } };
     expect(resolveSelection(single, { cityCode: '320500' })?.cityCode).toBeNull();
   });
 });
@@ -88,7 +90,7 @@ describe('rankOf', () => {
   });
 
   it('只有一个市时列它的区县，不能点', async () => {
-    const single = { ...conditions, cityCodes: ['320500'] };
+    const single = { ...conditions, scope: citiesScope(['320500']) };
     const { calculator, version } = await setup(single);
     const rank = rankOf(version, single, 'B-65', 2026);
 
@@ -111,5 +113,32 @@ describe('mapColoring', () => {
     const top = rows.find(row => row.value >= 82);
     const bottom = rows.find(row => row.value < 44);
     expect([top && fill(top), bottom && fill(bottom)]).toEqual([VALUE_COLORS[4], VALUE_COLORS[0]]);
+  });
+});
+
+describe('自定义范围的排行（ADR 0121）', () => {
+  it('一个市的范围列区县，部分覆盖的带面积占比；跨市的列各市，放大到一个市时列它在范围里的区县', async () => {
+    const atlas = await loadTestAtlas();
+    const nanjing = { ...conditions, scope: areaScope(await testArea(atlas, NANJING_RINGS)) };
+    const single = await setup(nanjing);
+    const rank = rankOf(single.version, nanjing, 'B-65', 2026);
+    expect(rank.level).toBe('district');
+    expect(rank.rows).toHaveLength(7);
+    expect(rank.rows.find(row => row.name === '秦淮区')?.share).toBeNull();
+    expect(rank.rows.find(row => row.name === '江宁区')?.share).toBeLessThan(0.2);
+
+    const ningzhen = { ...conditions, scope: areaScope(await testArea(atlas, NINGZHEN_RINGS)) };
+    const cross = await setup(ningzhen);
+    const cities = rankOf(cross.version, ningzhen, 'B-65', 2026);
+    expect(cities.rows.map(row => row.key).toSorted()).toEqual(['320100', '321100']);
+    const zoomed = rankOf(cross.version, ningzhen, 'B-65', 2026, '321100');
+    expect(zoomed.level).toBe('district');
+    expect(zoomed.rows.map(row => row.name).toSorted()).toEqual(['丹徒区', '句容市'].toSorted());
+    expect(zoomed.rows.every(row => row.share !== null && row.share < 1)).toBe(true);
+  });
+
+  it('行政区划放大到一个市时仍列各市（不变）', async () => {
+    const { version } = await setup();
+    expect(rankOf(version, conditions, 'B-65', 2026, '320100').level).toBe('city');
   });
 });

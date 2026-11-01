@@ -4,7 +4,7 @@ import { ElButton, ElCheckbox, ElInput } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNodeChild } from 'vue';
 import type { CategoryId } from '@/shared/city-indicators/catalog';
 import { JIANGSU_CITIES, shortRegionName } from '@/shared/map/region/region-catalog';
-import { searchIndicators, SIMULATION_YEARS } from '../compose/composition';
+import { rememberedScopes, searchIndicators, SIMULATION_YEARS } from '../compose/composition';
 import type { CompositionOwner } from '../composables/useComposition';
 import type { ConditionDrag, DragItem } from '../composables/useConditionDrag';
 import { INDICATOR_GROUPS, reachText, type SimulationIndicator } from '../model/indicators';
@@ -91,7 +91,7 @@ export const ConditionLibrary = defineComponent({
 
     const renderCities = () => {
       const { composition } = props;
-      const { cityCodes } = composition.state.value.conditions;
+      const { cityCodes } = rememberedScopes(composition.state.value);
       return (
         <div class={[styles.grid, styles.cities]}>
           {JIANGSU_CITIES.map(city =>
@@ -164,7 +164,8 @@ export const ConditionLibrary = defineComponent({
 
     return () => {
       const { composition } = props;
-      const { cityCodes, indicatorIds } = composition.state.value.conditions;
+      const { indicatorIds } = composition.state.value.conditions;
+      const { cityCodes } = rememberedScopes(composition.state.value);
       const all = cityCodes.length === JIANGSU_CITIES.length;
       return (
         <MxPanel class={styles.panel} title="指标计算条件" headerTone="muted" flush>
