@@ -113,6 +113,18 @@ describe('ToolModel', () => {
     expect(changes).toHaveLength(2);
   });
 
+  it('按下时问当前工具是否接管拖动：带上点和视图，没有声明的工具不接管', () => {
+    const { model } = setup();
+    const capturesPress = vi.fn<NonNullable<MapTool['capturesPress']>>(point => point.x > 5);
+    model.register('edit', { persistent: false, capturesPress });
+
+    expect(model.capturesPress({ x: 10, y: 20 }, VIEW)).toBe(false);
+    model.activate('edit');
+    expect(model.capturesPress({ x: 10, y: 20 }, VIEW)).toBe(true);
+    expect(model.capturesPress({ x: 1, y: 20 }, VIEW)).toBe(false);
+    expect(capturesPress).toHaveBeenCalledWith({ x: 10, y: 20 }, VIEW);
+  });
+
   it('输入只交给当前工具，并带上视图', () => {
     const { model, log } = setup();
     model.activate('pick');

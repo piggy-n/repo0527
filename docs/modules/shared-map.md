@@ -46,6 +46,14 @@
 | `pan-key.ts` | 临时拖动地图的键：Mac 用 ⌘、其他平台用 Ctrl，交给工具声明的修饰键和提示里的写法（ADR 0056） |
 | `draw/shape-draw.ts` | 绘制范围的类型、提示文案和 `draw` 分组的推导（纯函数，ADR 0104） |
 | `draw/useShapeDraw.ts` | 绘制的拥有者：框选、多边形两个工具，只保留一个画完的范围；框选的矩形和提示交给 `BoxSelectOverlay`（见"绘制范围"） |
+| `draw/shape-edit.ts` | 逐点编辑的纯函数：手柄（节点、边的中点）、按到哪一个、移动、插入、删除节点，`shape-edit` 分组的推导（ADR 0122） |
+| `draw/useShapeEdit.ts` | 逐点编辑的拥有者：一个工具，按在手柄上时接管拖动，拖完才交出新的范围；选中、删除、提示（见"逐点编辑"） |
+| `area/area-geometry.ts` | 自定义范围的几何：限值 `AREA_LIMITS`、坐标检查、整理成有效的面、节点多时简化、面积与周长（见"自定义范围"，ADR 0121） |
+| `area/area-file.ts` | 读范围文件：GeoJSON、Shapefile 的压缩包或同一组文件；读不了时返回原因 |
+| `area/area-coverage.ts` | 范围与行政区求交：全部覆盖、部分覆盖、只在边界相交，以及在外面的面积；判定的容差 `COVER_RULES` |
+| `area/area.worker.ts`、`area-worker-handlers.ts`、`area-worker-protocol.ts` | 范围分析的 Worker：读文件、整理画的范围、求交 |
+| `area/area-analyzer.ts` | 主线程一侧：`createAreaAnalyzer()` 托管 Worker，读文件前先按大小拦下过大的文件 |
+| `area/shpjs.d.ts` | shpjs 用到的 `parseShp` 的类型声明（`tsconfig.worker.json` 包含这个文件） |
 | `query-geometry.ts` | 发给后端的几何：整理（简化、舍入、有效性，ADR 0051）、屏幕框四角拾取成多边形、一个像素对应的经纬度距离；2026-10-28 从 `features/resource-map` 移来 |
 | `geometry-schema.ts` | 查询接口返回的 GeoJSON 几何（及其字符串）的 zod schema；2026-10-28 从 `features/resource-map/api.ts` 移来 |
 | `measure/measure-style.ts` | `measure` 分组的推导（纯函数，ADR 0035） |
@@ -361,6 +369,70 @@ map.bindStyle({ draw: draw.deriveGroup });
 - 多边形同测面：左键单击加节点（双击里的第二次单击不加），双击完成，不足三个节点时双击只取消这一次；可以拖动地图，只关双击放大；画的过程中是虚线和节点
 - 画完的范围（`DrawnShape`）带完成时一个像素对应的经纬度距离，交给 `queryGeometry` 当简化的容差；自相交等整理不出来的由使用方提示
 - 只在二维处理输入；提示在工具在用、视图就绪、指针在画布上时有值，文案沿用旧数据查询页
+
+## 逐点编辑（ADR 0122）
+
+```tsx
+// 页面 setup：范围由拥有者持有，编辑工具只读它、拖完交出新的
+const edit = useShapeEdit(map, { geometry: () => draft.value, onChange: next => replaceDraft(next) });
+map.registerTools(edit.tools);
+map.bindStyle({ 'shape-edit': edit.deriveGroup });
+
+<PointerHint point={edit.hint.value.point} lines={edit.hint.value.lines} canvas={size} />  // 有提示时
+<button onClick={edit.toggle}>编辑节点</button>
+```
+
+- 临时任务，Esc 依次取消拖动、取消选中、退出；不改光标，不关拖动平移（只关双击放大）
+- 按在节点或边的中点上（8 像素以内，范围内有节点时只选节点）时由工具接管这次拖动（`capturesPress`），别处照常平移；移动不到 3 像素算单击，只选中节点
+- 拖动中只预览（虚线），松开后把新的范围交给 `onChange`，并选中这个节点；拖动边的中点在这条边上插入节点
+- 单击选中节点后按 Delete（或 Backspace）删除，也可以由面板调用 `removeSelected()`；环只剩 3 个节点时不删（返回 `'minimum'`）
+- 不检查自相交：交出去的范围由拥有者整理（自定义范围交给 `shared/map/area` 的 `prepareArea`）
+
+## 自定义范围（ADR 0121）
+
+上传的文件和画的范围都在 Worker 里整理、分析（`createAreaAnalyzer`），结果对象说明读不了、不能用的原因，不抛错。这些模块只用相对导入和 npm 包，按 `tsconfig.worker.json` 检查。
+
+```ts
+using analyzer = createAreaAnalyzer();
+const read = await analyzer.read(files, signal);                 // 一个 GeoJSON、一个压缩包，或同一组 Shapefile
+const prepared = await analyzer.prepare(polygons, signal);       // 画的范围
+const covered = await analyzer.cover(area, regions, '江苏省', signal);
+```
+
+**文件**：
+
+| 检查 | 不通过时 |
+|---|---|
+| 类型：`.geojson`、`.json`、`.zip`，或 Shapefile 的各个文件；一次只能一个范围 | 说明支持的格式；GeoJSON 和压缩包混选、选了多个 .shp 时说明 |
+| 大小：合计 50 MB；压缩包先读目录，解压后超过 200 MB 不解压；主线程先按大小拦下，不读进内存 | 说明大小和上限 |
+| 结构：JSON 格式（说明大约第几行）、GeoJSON 的 type 和要素结构、坐标的数组形状；.shp 的文件码、文件长度（被截断）、要素类型 | 说明哪个文件、哪里不对 |
+| 几何类型：只用面；点、线、空几何忽略并提示；全是点、线时不能用；压缩包里有几个图层时合并面图层 | 说明是点图层、线图层 |
+| 坐标系：GeoJSON 要经纬度，旧版 `crs` 成员写了投影坐标系时说明要转换；Shapefile 按 .prj 转换，没有 .prj 时按经纬度读并提示；坐标不在经纬度范围里时分"可能是投影坐标""经纬度颠倒"说明 | 说明坐标系的问题 |
+
+**整理**（`prepareArea`）：去掉相邻的重复点、闭合环、去掉不足 3 个节点的环；节点超过 50 万个不整理；多于 5000 个时按约 1 米起、最多约 100 米的容差逐步简化（县界本身只有约 8400 个节点）；自己和自己求交得到有效的面，合并重叠、拆开交叉的边；面积不足 1 公顷、超过 15 万平方千米时不能用。简化、修正了交叉的边、去掉了环都写进提示。缩略图另有不超过 400 个节点的轮廓。
+
+**覆盖**（`coverRegions`，规则在 `COVER_RULES`）：
+
+| 情况 | 判定 |
+|---|---|
+| 交集小于 1 公顷，或平均宽度（2 × 面积 ÷ 周长）小于 25 米的细条 | 边界相交，算未覆盖（范围本身平均宽度不到 300 米时不按宽度判断） |
+| 行政区在范围外的部分不超过"面积的 0.5%"与"周长 × 25 米"中大的一个 | 全部覆盖（县界简化过，精确的边界和它有出入） |
+| 其余有交集的 | 部分覆盖，带范围内的面积和占比 |
+| 不在任何行政区里的面积超过 0.1 平方千米且超过范围的 0.5% | 在外面（省外）的面积，不参与计算 |
+| 一个行政区也没覆盖 | 不能用：说明不在范围内，或只沿边界略有重叠 |
+
+节点多于 500 个时先把范围裁到行政区的外包框再求交；每个行政区之后让出一次，可以取消。
+
+**实测**（2026-10-31，Node 24，真实县界，带起伏的环）：
+
+| 节点 | 整理 | 求交 | 覆盖的区县 |
+|---|---|---|---|
+| 2000 | 185 ms | 455 ms | 16 |
+| 5 万 | 391 ms | 1.1 s | 38 |
+| 20 万 | 1.1 s | 424 ms | 72 |
+| 50 万 | 2.3 s | 490 ms | 78 |
+
+简化前 20 万个节点要 16 秒、50 万个要 54 秒（求交的耗时和范围的节点数成正比，单次约 15 微秒 / 节点）；简化后面积变化不到 0.01%，覆盖的区县不变。
 
 ## 测量（ADR 0035）
 

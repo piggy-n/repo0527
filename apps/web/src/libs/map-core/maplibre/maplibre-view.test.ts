@@ -37,6 +37,20 @@ interface FakeEvent {
   readonly originalEvent?: unknown;
   readonly cause?: unknown;
   readonly point?: { readonly x: number; readonly y: number };
+  readonly preventDefault?: () => void;
+}
+
+/** 地图的鼠标事件：MapLibre 的 preventDefault 记在 prevented 上 */
+class FakeMouseEvent {
+  prevented = false;
+  constructor(
+    readonly point: { readonly x: number; readonly y: number },
+    readonly originalEvent: MouseEvent
+  ) {}
+
+  preventDefault(): void {
+    this.prevented = true;
+  }
 }
 
 // 手势的开关，记下 enable、disable 的调用
@@ -116,7 +130,7 @@ class FakeMap implements MapLike {
     this.canvasContainer.append(this.canvas);
     // 像 MapLibre 一样在画布容器的冒泡阶段收到按下，再发出地图事件；画布在 (0, 0)
     this.canvasContainer.addEventListener('mousedown', event =>
-      this.fire('mousedown', { point: { x: event.clientX, y: event.clientY }, originalEvent: event })
+      this.fire('mousedown', new FakeMouseEvent({ x: event.clientX, y: event.clientY }, event))
     );
   }
 
@@ -291,8 +305,10 @@ class FakeMap implements MapLike {
   }
 
   /** 模拟鼠标事件：MapLibre 的事件带画布上的点和原始的 DOM 事件 */
-  mouse(type: MapMouseEventType, x: number, y: number, init: MouseEventInit = {}): void {
-    this.fire(type, { point: { x, y }, originalEvent: new MouseEvent(type, init) });
+  mouse(type: MapMouseEventType, x: number, y: number, init: MouseEventInit = {}): FakeMouseEvent {
+    const event = new FakeMouseEvent({ x, y }, new MouseEvent(type, init));
+    this.fire(type, event);
+    return event;
   }
 
   /** 在画布上按下鼠标（DOM 事件）：先经过适配器在捕获阶段的监听，没被截下才发出地图事件 */
@@ -1766,6 +1782,32 @@ describe('MapLibreView', () => {
           modifiers: { ...NO_MODIFIERS, ctrl: true, alt: true }
         }))
       ]);
+    });
+
+    it('lets the active tool take a left press away from drag pan when it captures the point', () => {
+      using ctx = setup();
+      const presses: { x: number; y: number }[] = [];
+      const { tool, inputs } = recordingTool({
+        capturesPress: point => {
+          presses.push({ ...point });
+          return point.x < 50;
+        }
+      });
+      ctx.session.tool.register('edit', tool);
+      ctx.session.tool.activate('edit');
+      expect(ctx.map.mouse('mousedown', 10, 10).prevented).toBe(false);
+      ctx.map.fire('style.load');
+
+      expect(ctx.map.mouse('mousedown', 10, 10).prevented).toBe(true);
+      expect(ctx.map.mouse('mousedown', 80, 10).prevented).toBe(false);
+      expect(ctx.map.mouse('mousedown', 10, 10, { button: 2 }).prevented).toBe(false);
+      expect(ctx.map.mouse('mousemove', 10, 10).prevented).toBe(false);
+      expect(presses).toStrictEqual([
+        { x: 10, y: 10 },
+        { x: 80, y: 10 }
+      ]);
+      // 接管的按下照样交给工具
+      expect(inputs.filter(input => input.type === 'down')).toHaveLength(3);
     });
 
     it('gives tools only the kind, pick, project and rendered query of the view', async () => {

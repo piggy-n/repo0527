@@ -40,6 +40,11 @@ export interface MapTool {
   deactivate?(): void;
   /** 返回 true 表示已处理；Esc 没有被处理时，临时任务退出 */
   handleInput?(event: MapInputEvent, view: ToolView): boolean | void;
+  /**
+   * 左键按在这一点时，这次拖动是否交给工具、不平移地图（如拖动编辑的节点，ADR 0122）；
+   * 在按下的输入之前问，只在二维生效。不写时一律平移
+   */
+  capturesPress?(point: ScreenPoint, view: ToolView): boolean;
 }
 
 /** 内置的移动工具：默认的常驻模式，不改光标、不关手势 */
@@ -127,6 +132,12 @@ export class ToolModel implements Disposable {
         this.release(this.#active);
       }
     }
+  }
+
+  /** 当前工具是否接管按在这一点的拖动（ADR 0122）；工具没有声明时为 false */
+  capturesPress(point: ScreenPoint, view: ToolView): boolean {
+    this.#events.assertAlive();
+    return this.activeTool.capturesPress?.(point, view) === true;
   }
 
   on<E extends keyof ToolModelEvents>(event: E, callback: ToolModelEvents[E]): Unsubscribe {
