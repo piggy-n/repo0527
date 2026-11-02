@@ -149,10 +149,42 @@ git diff <基线>..master-demo -- <旧路径>
 | `status: 'table'` | 13 条是基本统计的任务，没有图层、区划和用途；其中一条的 `apply_id` 等于用户 ID，没有名称和时间 |
 | 时间 | 申请的 `create_time`、`start_date`、`end_date` 是带 `+00:00` 的 ISO 串；消息的 `createTime` 是北京时间的字符串（同一条申请 03:29Z 对应消息里的 11:29），申请的时间也按北京时间显示 |
 | `GET /api/apply/{id}` | 结构同列表行；ID 不存在时 `code 200`、`data: null` |
-| `POST /statistics/page` | 0 条（但有 497 条报表通知），报表列表和下载契约没有真实样本；字段按旧页面读的写（`id`、`name`、`year`、`startTime`、`finishTime`、`status`），待联调核对 |
+| `POST /statistics/page` | 0 条（但有 497 条报表通知），报表列表和下载契约没有真实样本；字段按旧页面读的写（`id`、`name`、`year`、`startTime`、`finishTime`、`status`）。2026-11 有了真实样本，见下面的"统计报表：联调样本" |
 | `GET /statistics/download?id=不存在` | HTTP 200 加 JSON 信封 `code 40000 "任务不存在"` |
 
 后端的问题（不为它们调整方案）：审批提醒正文是"nullnull于…"，申请人为空；待审核的申请没有 `user_name`，审核列表的申请人列显示"-"；消息列表不分页、没有未读数接口，未读角标只能取 `isRead: 'false'` 的整个列表；全部已读的接口没有参数，后端改当前账号的全部消息，做不到 ADR 0093 的"之后到达的新消息保持未读"；统计任务混在申请表里。
+
+## 统计报表：联调样本（2026-11）
+
+换到内网的新后端后，用户提供了一份 `POST /statistics/page` 的返回（16 条，第 1 页）。Claude 访问不到这个后端，下面的结论来自这份样本和旧代码，没有实际请求过。
+
+| 项目 | 样本 |
+|---|---|
+| 分页 | PageHelper 结构，`total`、`list`、`pageNum`、`pageSize`、`pages` 等都有 |
+| 每行的字段 | `id`（19 位数字串，超过安全整数，只能按字符串用）、`year`（字符串）、`type`（`baseTable`、`baseChangeTable`、`baseWaterTable`、`changeWaterTable`、`summaryTable`）、`status`、`level`（`province`、`city`、`county`、`district`）、`name`、`startTime`、`finishTime`、`createdTime`，以及都是 `null` 的 `pageNum`、`pageSize`；没有文件地址一类的字段 |
+| 没有值的字段 | 键还在，值是 `null`（`pageNum`、`pageSize` 就是），和申请列表"整个键都不出现"不一样 |
+| 状态 | 16 条全是"处理成功" |
+
+**原来的问题**：迁移时没有样本，按 `prepare-status.ts` 的注释把报表的 `status` 当成和申请的 `storage_status` 同一套英文值。其实旧页面是先用 `normalizeTaskStatus` 把中英文都换算好，再判断和显示的（`applyApiService.js`、`ApplicationListSection.vue` 的 `resolveTaskStatus`），迁移时丢了换算。结果是"处理成功"不认得，只显示纯文本，`status !== 'success'` 恒为真，下载一直禁用。
+
+**状态的取值和显示**：文字总是显示后端给的（同旧页面、基本统计页），图标和颜色按换算的结果（`features/statistics-report/api.ts` 的 `prepareStatusOf`，显示用 `PrepareStatusText`）。
+
+| 文字 | 依据 | 换算 | 能否下载 |
+|---|---|---|---|
+| 处理成功 | 这份样本 | `success`（绿色、对勾） | 能 |
+| 正在处理 | 旧页面的换算、基本统计的 `taskStatusOf` | `processing`（蓝色、转圈） | 不能 |
+| 处理失败 | `/statistics/select-task-status` 实测 | `failed`（红色图标） | 不能 |
+| 未处理 | 同上 | 无（灰字） | 不能 |
+| 其他 | 没见过 | 无（灰字，原样显示） | 不能 |
+
+用户确认只判断这四种文字加其他，文字要完全相同。只有"处理成功"是这个接口实测的，其余来自同一批统计任务的其他接口和旧代码。
+
+**和旧页面的差异**：旧页面的 `normalizeTaskStatus` 还认英文值（`success`、`running` 等）和"处理完成""处理中""完成""成功""失败""过期""已过期""待处理"这些同义词，那张表是为不稳定的命名写的，和申请共用。真实返回是中文，这里只认上表的文字，其余按"其他"处理：灰字原样显示，不能下载。基本统计页的 `taskStatusOf` 是另一处判断，仍然认"处理完成"和包含"正在处理"的文字。
+
+**按推断处理、待核对**：
+- 没开始、没完成的任务，`startTime`、`finishTime` 按 `null` 解析（从样本里 `pageNum` 是 `null` 推断的）；如果后端是不写这个键，整页会报"加载失败"
+- 后端实际是否还有上表以外的状态文字（如"处理完成""正在处理中""处理中""已过期"），等有非"处理成功"的记录时核对；处理完了却不是"处理成功"的记录，这里不能下载
+- 真实的下载（文件名、类型、大小）只有用户能在内网确认
 
 ## 资源管理：附属服务、自助取数、下载申请（2026-10-27）
 

@@ -119,8 +119,8 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 ## 下载与统计报表
 
 - **下载**：`shared/file-transfer` 的 `useRowDownloads` 和 `DownloadButton`（见 [file-transfer.md](file-transfer.md)）。申请用 `fetchApplicationFile`（`POST /api/apply/download/{id}`，`http.postBlob`），报表用 `fetchReportFile`（`GET /statistics/download?id=`）；没有响应头的文件名时用名称加 `.zip`（旧页面的写法）。列表和弹窗共用同一份下载状态，在哪里点都显示进度；结果由页面提示（"已交给浏览器下载"或失败原因）
-- **数据准备的状态**放在 `shared/data-request`（`prepare-status.ts`、`PrepareStatusText`）：申请的 `storage_status` 和报表的 `status` 是同一套取值，旧页面用同一个函数换算
-- **统计报表**（`features/statistics-report`）：`POST /statistics/page`（正文 `name`、`pageNum`、`pageSize`）、`useReportList`（`usePagedList`，名称去掉首尾空格）、`ReportFilterBar`（报表名称）、`ReportTable`（序号、年份、报表名称、开始时间、完成时间、状态、下载）。**没有真实样本**：2026-10-27 只读核对时一条记录都没有，字段按旧页面读的写（`id`、`name`、`year`、`startTime`、`finishTime`、`status`），年份统一成字符串、时间原样显示；状态是字符串，认得数据准备的四个值，其他的原样显示；`status` 是 `success` 才能下载
+- **数据准备的状态**放在 `shared/data-request`（`prepare-status.ts`、`PrepareStatusText`）：取值是申请的 `storage_status`（英文）。报表的 `status` 是中文文字，不是同一套，由报表的接口换算成这些值，`PrepareStatusText` 的 `label` 显示原文
+- **统计报表**（`features/statistics-report`）：`POST /statistics/page`（正文 `name`、`pageNum`、`pageSize`）、`useReportList`（`usePagedList`，名称去掉首尾空格）、`ReportFilterBar`（报表名称）、`ReportTable`（序号、年份、报表名称、开始时间、完成时间、状态、下载）。字段按 2026-11 的联调样本（[migration.md](../migration.md)"统计报表：联调样本"）：`status` 是换算的结果（`success`、`processing`、`failed`，未处理和认不出的是 `undefined`），`statusText` 是后端的文字；`status` 是 `success` 才能下载；时间可能是 `null`，由表格的全局样式显示"-"
 - **`ReportsSection`**（页面里）：只在统计报表栏目显示时存在
 
 ### 验证（2026-10-27）
@@ -129,6 +129,13 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 - 浏览器测试 `ApplicationTable.browser.test.tsx`：操作列两格里"查看"和"下载 100%"都放得下；把操作列改窄到 100 时断言失败
 - 改坏验证 12 处：postBlob 用 GET、忽略 method、不防重复、换会话不中止、销毁不中止、中止后仍保存、总量未知也显示百分比、没准备好也能下载、报表没完成也能下载、弹窗里的下载不响应、年份不转字符串、申请下载用 GET，都是断言失败。"postBlob 用 GET"第一次是没有模拟的请求报错、"不防重复"第一次是超时，改成接住所有方法、和下一轮的等待赛跑后才是断言失败
 - 没有验证：真实的下载（没有准备完成的申请，统计报表没有记录），下载响应的文件名和类型
+
+### 验证（2026-11，报表的状态与下载）
+
+- 单元测试：报表的接口（字段按联调样本、状态换算、时间是 `null`、长数字 ID 原样放进下载请求）、页面（四种状态的文字和样式，只有处理成功的能下载，点了发出 `GET /statistics/download?id=`）
+- 改坏验证 15 处：按文字和 `success` 比较（原来的 bug）、不判断状态、退回纯文本、不传文字、各个文字不换算或换算错、又认"处理完成"、用包含判断"正在处理"、时间不接受 `null`、丢掉原文、组件忽略 `label`，都是断言失败
+- 组件样例 `/dev/system-management`（真实的 `ReportTable`、固定数据）：1600 × 900 下处理成功是绿色对勾、按钮可点（点了显示进度，结束后提示"已交给浏览器下载"）；正在处理是蓝色转圈，处理失败是红色图标，未处理是灰字，这三种按钮置灰；没有时间的单元格显示"-"；状态列没有溢出。375 × 812 下表格在内部横向滚动，页面没有横向滚动，操作列不固定。资源审核的"数据准备状态"文案没有变化；控制台没有错误
+- 没有验证：内网后端的真实页面和真实下载（文件名、类型、大小），除"处理成功"以外的真实状态文字
 
 ## 消息（`features/message-center`）
 
@@ -204,7 +211,7 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 ## 待联调
 
 - 审核的成功返回、准备完成后的下载（文件名、类型、大小）、驳回原因：没有真实样本，不对真实后端做写操作
-- 统计报表的字段、类型和状态取值：分页接口目前没有记录
+- 统计报表：除"处理成功"以外的状态文字、没开始和没完成的任务的时间、真实的下载（文件名、类型、大小），见 [migration.md](../migration.md)"统计报表：联调样本"
 - 统计任务请后端在审核列表里排除；待审核的申请没有申请人
 - 消息已读、全部已读的成功返回；全部已读请后端接收提交时看到的消息 ID，之后到达的新消息保持未读（ADR 0093）
 - 消息列表请后端加分页和未读数接口：现在每 60 秒传一次未读的整个列表，打开弹框传一次全部（当时约 225 KB）

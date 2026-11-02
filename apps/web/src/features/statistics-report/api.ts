@@ -1,27 +1,32 @@
 import { z } from 'zod';
+import type { PrepareStatus } from '@/shared/data-request/prepare-status';
 import { fetchFile } from '@/shared/file-transfer';
 import { http, type TransferProgress } from '@/shared/http/client';
 
-// 2026-10-27 只读核对时 /statistics/page 一条记录都没有（docs/migration.md）。字段按旧页面读的写
-// （applyApiService 的 normalizeStatisticsReportRecord），类型待联调核对：年份和时间照接口给的原样显示；
-// 状态是字符串，认得数据准备的四个值（shared/data-request 的 prepare-status），其他的原样显示
+// 状态是后端的中文文字，和申请的 storage_status（英文）不是一套，取值见 docs/migration.md。
+// 只认处理成功、正在处理、处理失败、未处理；未处理和其他文字返回 undefined，界面原样显示、不能下载
+function prepareStatusOf(text: string): PrepareStatus | undefined {
+  if (text === '处理成功') {
+    return 'success';
+  }
+  if (text === '正在处理') {
+    return 'processing';
+  }
+  return text === '处理失败' ? 'failed' : undefined;
+}
+
+// 字段按联调拿到的返回（docs/migration.md），用不到的（type、level、createdTime 等）解析时丢弃。
+// 没有值的键写成 null：这个返回里每行的 pageNum、pageSize 就是，没开始、没完成的任务的时间同样按 null
 const reportSchema = z
   .object({
     id: z.string().min(1),
     name: z.string(),
-    year: z.union([z.number().int(), z.string()]).optional(),
-    startTime: z.string().optional(),
-    finishTime: z.string().optional(),
+    year: z.string(),
+    startTime: z.string().nullable(),
+    finishTime: z.string().nullable(),
     status: z.string()
   })
-  .transform(row => ({
-    id: row.id,
-    name: row.name,
-    year: row.year === undefined ? undefined : String(row.year),
-    startTime: row.startTime,
-    finishTime: row.finishTime,
-    status: row.status
-  }));
+  .transform(row => ({ ...row, status: prepareStatusOf(row.status), statusText: row.status }));
 
 export type Report = z.infer<typeof reportSchema>;
 

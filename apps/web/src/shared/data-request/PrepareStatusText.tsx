@@ -27,18 +27,20 @@ function renderIcon(status: PrepareStatus) {
 export const PrepareStatusText = defineComponent({
   name: 'PrepareStatusText',
   props: {
-    status: { type: String as PropType<PrepareStatus> }
+    status: { type: String as PropType<PrepareStatus> },
+    // 文字，默认按状态；统计报表显示后端给的文字
+    label: String
   },
   setup(props) {
     return () => {
       const status = props.status;
       if (!status) {
-        return <span class={[styles.root, styles.waiting]}>{PREPARE_WAITING_LABEL}</span>;
+        return <span class={[styles.root, styles.waiting]}>{props.label ?? PREPARE_WAITING_LABEL}</span>;
       }
       return (
         <span class={[styles.root, styles[status]]}>
           {renderIcon(status)}
-          {PREPARE_STATUS_LABELS[status]}
+          {props.label ?? PREPARE_STATUS_LABELS[status]}
         </span>
       );
     };
