@@ -45,8 +45,8 @@
   margin-left: 0;
 }
 
-// 触屏没有悬浮，操作一直显示
-@media (hover: none), (any-pointer: coarse) {
+// 触屏没有悬浮，操作一直显示；不用 any-pointer：接着触屏或虚拟触控设备、主要用鼠标时也成立，所有行都会显示
+@media (hover: none) {
   .treeActions {
     opacity: 1;
     pointer-events: auto;
