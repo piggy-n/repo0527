@@ -1,10 +1,11 @@
 import { Connection } from '@element-plus/icons-vue';
-import { MxPanel } from '@yzt/ui';
+import { MxPanel, MxSplitLayout } from '@yzt/ui';
 import { ElButton, ElMessage, ElOption, ElSelect } from 'element-plus';
 import { defineComponent, ref } from 'vue';
-import type { ResourceRecord } from '@/features/resource-management/api';
+import type { ResourceDirectory, ResourceRecord } from '@/features/resource-management/api';
 import { DataApplicationDialog } from '@/features/resource-management/components/DataApplicationDialog';
 import { DataExtractionDialog } from '@/features/resource-management/components/DataExtractionDialog';
+import { ResourceDirectoryPanel } from '@/features/resource-management/components/ResourceDirectoryPanel';
 import { ResourceServiceDialogs } from '@/features/resource-management/components/ResourceServiceDialogs';
 import { ResourceTable } from '@/features/resource-management/components/ResourceTable';
 import { useDataApplication } from '@/features/resource-management/composables/useDataApplication';
@@ -44,9 +45,27 @@ const ROWS: ResourceRecord[] = [
   row('demo-yearless', '城镇村等用地', null, 'bgdc', 'czcdyd')
 ];
 
+const directories = (names: string[]): ResourceDirectory[] => names.map(name => ({ id: name, name }));
+
+// 固定的目录，覆盖全部目录图标；前两项带别的目录的旧图标文件名，看按名称指定的图标是否生效
+const DIRECTORIES: ResourceDirectory[] = [
+  {
+    id: '基础库',
+    name: '基础库',
+    children: [
+      { id: '城市国土空间监测', name: '城市国土空间监测', icon: '土地资源@1x.png' },
+      { id: '国土变更', name: '国土变更', icon: '土地资源@1x.png' },
+      ...directories(['土地资源', '地质/矿产资源', '海洋资源', '水资源', '森林资源', '草原资源', '湿地资源', '荒漠', '国家公园'])
+    ]
+  },
+  { id: '公共库', name: '公共库', children: directories(['气象', '水利', '生态']) },
+  { id: '主题库', name: '主题库', children: directories(['生态保护区', '耕地保护区', '联合审批']) },
+  { id: '三区三线', name: '三区三线', children: null }
+];
+
 const wait = (milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds));
 
-/** 资源管理的组件样例：正式的资源表格、附属服务弹窗、自助取数和下载申请；不请求接口，申请的结果用演示选项决定 */
+/** 资源管理的组件样例：正式的目录树、资源表格、附属服务弹窗、自助取数和下载申请；不请求接口，申请的结果用演示选项决定 */
 export const DevResourceManagementPage = defineComponent({
   name: 'DevResourceManagementPage',
   setup() {
@@ -54,6 +73,7 @@ export const DevResourceManagementPage = defineComponent({
     const store = useLayerServiceStore();
     const extraction = useDataExtraction();
     const applyScene = ref<ApplyScene>('success');
+    const selectedDirectory = ref('城市国土空间监测');
     const application = useDataApplication(async () => {
       await wait(applyScene.value === 'slow' ? 3000 : 600);
       if (applyScene.value === 'error') {
@@ -84,7 +104,7 @@ export const DevResourceManagementPage = defineComponent({
         <header class={styles.header}>
           <h1>资源管理 · 组件样例</h1>
           <p class={styles.hint}>
-            正式的资源表格、地图服务与数据接口弹窗、自助取数和下载申请。服务记录本来就只在内存里；自助取数没有接口；下载申请不发请求，结果按下面的选项演示。
+            正式的目录树、资源表格、地图服务与数据接口弹窗、自助取数和下载申请。目录是固定数据、不能维护；服务记录本来就只在内存里；自助取数没有接口；下载申请不发请求，结果按下面的选项演示。
           </p>
           <div class={styles.controls}>
             <ElButton size="small" onClick={fillServices}>
@@ -111,29 +131,45 @@ export const DevResourceManagementPage = defineComponent({
       <main class={styles.page}>
         {renderHeader()}
         <div class={styles.workspace}>
-          <MxPanel headerTone="muted" title="资源列表" description="组件样例">
+          <MxSplitLayout asideLabel="资源目录">
             {{
-              actions: () => (
-                <ElButton type="primary" icon={Connection} onClick={extraction.start}>
-                  自助取数
-                </ElButton>
+              aside: () => (
+                <MxPanel headerTone="muted" title="资源目录">
+                  <ResourceDirectoryPanel
+                    nodes={DIRECTORIES}
+                    selected={selectedDirectory.value}
+                    maintenanceDisabled
+                    onSelect={(id: string) => (selectedDirectory.value = id)}
+                  />
+                </MxPanel>
               ),
               default: () => (
-                <ResourceTable
-                  rows={ROWS}
-                  selected
-                  statusPending={() => false}
-                  serviceCount={services.count}
-                  onToggle={() => ElMessage.info('样例不启停图层')}
-                  onView={() => ElMessage.info('样例不打开详情')}
-                  onRetry={() => undefined}
-                  onApply={application.start}
-                  onListServices={services.openList}
-                  onAddService={services.openForm}
-                />
+                <MxPanel headerTone="muted" title="资源列表" description="组件样例">
+                  {{
+                    actions: () => (
+                      <ElButton type="primary" icon={Connection} onClick={extraction.start}>
+                        自助取数
+                      </ElButton>
+                    ),
+                    default: () => (
+                      <ResourceTable
+                        rows={ROWS}
+                        selected
+                        statusPending={() => false}
+                        serviceCount={services.count}
+                        onToggle={() => ElMessage.info('样例不启停图层')}
+                        onView={() => ElMessage.info('样例不打开详情')}
+                        onRetry={() => undefined}
+                        onApply={application.start}
+                        onListServices={services.openList}
+                        onAddService={services.openForm}
+                      />
+                    )
+                  }}
+                </MxPanel>
               )
             }}
-          </MxPanel>
+          </MxSplitLayout>
         </div>
         <ResourceServiceDialogs owner={services} />
         <DataExtractionDialog owner={extraction} />

@@ -22,4 +22,23 @@ describe('资源目录图标', () => {
     expect(resourceDirectoryIcon({ id: 'park', name: '国家公园', code: 'gjgyzy', icon })).toBe('resource-park');
     expect(resourceDirectoryIcon({ id: 'park', name: '重命名的国家公园', code: 'gjgyzy', icon })).toBe('resource-park');
   });
+
+  it('城市国土空间监测、国土变更、三区三线各用自己的图标', () => {
+    expect(resourceDirectoryIcon({ id: 'a', name: '城市国土空间监测' })).toBe('resource-urban-monitoring');
+    expect(resourceDirectoryIcon({ id: 'b', name: '国土变更' })).toBe('resource-land-change');
+    expect(resourceDirectoryIcon({ id: 'c', name: '三区三线' })).toBe('resource-three-zones');
+    expect(resourceDirectoryIcon({ id: 'c', name: '三区三线1' })).toBe('resource-three-zones');
+  });
+
+  it('这三个目录带着别的目录的旧图标文件名时，仍用按名称指定的图标', () => {
+    const legacy = { icon: '土地资源@1x.png', iconSelected: '土地资源1@1x.png' };
+    expect(resourceDirectoryIcon({ id: 'a', name: '城市国土空间监测', ...legacy })).toBe('resource-urban-monitoring');
+    expect(resourceDirectoryIcon({ id: 'b', name: '国土变更', ...legacy })).toBe('resource-land-change');
+    expect(resourceDirectoryIcon({ id: 'c', name: '三区三线', ...legacy })).toBe('resource-three-zones');
+    expect(resourceDirectoryIcon({ id: 'c', name: '三区三线1', ...legacy })).toBe('resource-three-zones');
+  });
+
+  it('三区三线改名后仍按旧图标文件名对应', () => {
+    expect(resourceDirectoryIcon({ id: 'c', name: '新名称', icon: '三区三线@1x.png' })).toBe('resource-three-zones');
+  });
 });
