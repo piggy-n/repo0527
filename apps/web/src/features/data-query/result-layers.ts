@@ -42,7 +42,7 @@ export function previewGroup(layer: QueryLayer | null, tileBase: string): StyleG
     return EMPTY_GROUP;
   }
   const source = PREVIEW_GROUP;
-  const common = { source, 'source-layer': layer.sourceLayer } as const;
+  const common = { source, 'source-layer': layer.table } as const;
   const layers: LayerSpecification[] =
     layer.geometry === 'point'
       ? [
@@ -136,7 +136,7 @@ export function resultGroup(
     const tiles = mvtTiles(tileBase, request.layerCode, request.xzqdm, request.conditions);
     return {
       sources: { [RESULT_GROUP]: { type: 'vector', tiles, ...TILE_ZOOMS } },
-      layers: resultLayers(layer.sourceLayer, layer.geometry)
+      layers: resultLayers(layer.table, layer.geometry)
     };
   }
   if (features === null || features.features.length === 0) {

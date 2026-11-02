@@ -13,12 +13,10 @@ export interface ResultColumn {
 /** 可查询的一个图层 */
 export interface QueryLayer {
   readonly label: string;
-  /** 接口的 layerCode */
+  /** 接口的 layerCode，也是 MVT 瓦片里的图层名 */
   readonly table: string;
   /** 点层画圆点，面层画边线；预览和结果都按它出图层 */
   readonly geometry: 'point' | 'polygon';
-  /** MVT 瓦片里的图层名：城镇村等用地是表名中段，其余是完整表名（旧页面实测） */
-  readonly sourceLayer: string;
   readonly fields: readonly ConditionField[];
   readonly columns: readonly ResultColumn[];
 }
@@ -97,7 +95,6 @@ const school = (label: string, table: string, geometry: QueryLayer['geometry']):
   label,
   table,
   geometry,
-  sourceLayer: table,
   fields: SCHOOL_FIELDS,
   columns: SCHOOL_COLUMNS
 });
@@ -106,7 +103,6 @@ const hospital = (label: string, table: string, geometry: QueryLayer['geometry']
   label,
   table,
   geometry,
-  sourceLayer: table,
   fields: HOSPITAL_FIELDS,
   columns: HOSPITAL_COLUMNS
 });
@@ -202,7 +198,6 @@ export const QUERY_TOPICS: Readonly<Record<TopicId, QueryTopic>> = {
         label: '城镇村等用地',
         table: 'bgdc_czcdyd_2022',
         geometry: 'polygon',
-        sourceLayer: 'czcdyd',
         fields: TOWN_FIELDS,
         columns: TOWN_COLUMNS
       },
@@ -210,7 +205,6 @@ export const QUERY_TOPICS: Readonly<Record<TopicId, QueryTopic>> = {
         label: '地类图斑',
         table: 'bgdc_dltb_2022',
         geometry: 'polygon',
-        sourceLayer: 'bgdc_dltb_2022',
         fields: PARCEL_FIELDS,
         columns: PARCEL_COLUMNS
       }
