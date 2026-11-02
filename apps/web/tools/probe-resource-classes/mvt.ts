@@ -1,6 +1,6 @@
 import { gunzipSync } from 'node:zlib';
 
-// 瓦片的解码：只读图层名、几何类型和属性，不解码坐标（Vector Tile 2.1 的 protobuf 结构）。
+// 瓦片的解码：读图层名、几何类型和属性，坐标要用时才由 partsOf 解码（Vector Tile 2.1 的 protobuf 结构）。
 // 不依赖第三方库，这个目录可以单独拷到能连后端的机器上运行
 
 export type TileValue = string | number | boolean;
@@ -8,6 +8,8 @@ export type TileValue = string | number | boolean;
 export interface TileFeature {
   readonly geometry: 'point' | 'line' | 'polygon' | 'unknown';
   readonly properties: Readonly<Record<string, TileValue>>;
+  /** 几何的命令序列，还没有解码 */
+  readonly commands: Uint8Array;
 }
 
 export interface TileLayer {
@@ -162,7 +164,12 @@ function decodeFeature(
   const reader = new Reader(bytes);
   const properties: Record<string, TileValue> = {};
   let geometry: TileFeature['geometry'] = 'unknown';
+  let commands: Uint8Array = new Uint8Array();
   reader.fields(tag => {
+    if (tag === 4) {
+      commands = reader.bytes();
+      return true;
+    }
     if (tag === 2) {
       const tags = new Reader(reader.bytes());
       while (!tags.done) {
@@ -180,7 +187,57 @@ function decodeFeature(
     }
     return false;
   });
-  return { geometry, properties };
+  return { geometry, properties, commands };
+}
+
+const COMMAND = { moveTo: 1, lineTo: 2, closePath: 7 } as const;
+
+/** 解码几何：面的每个环、线的每条折线、每个点各是一个部件；坐标是瓦片内的整数，x、y 交替 */
+export function partsOf(commands: Uint8Array): number[][] {
+  let position = 0;
+  const next = (): number => {
+    let value = 0;
+    let scale = 1;
+    for (;;) {
+      const byte = commands[position];
+      if (byte === undefined) {
+        throw new RangeError('几何在命令中途结束');
+      }
+      position += 1;
+      value += (byte & 0x7f) * scale;
+      if (byte < 0x80) {
+        return value;
+      }
+      scale *= 128;
+    }
+  };
+  const delta = (): number => {
+    const value = next();
+    return value % 2 === 0 ? value / 2 : -(value + 1) / 2;
+  };
+  const parts: number[][] = [];
+  let part: number[] = [];
+  let x = 0;
+  let y = 0;
+  while (position < commands.length) {
+    const command = next();
+    const id = command % 8;
+    if (id !== COMMAND.moveTo && id !== COMMAND.lineTo && id !== COMMAND.closePath) {
+      throw new RangeError(`不认识的几何命令 ${id}`);
+    }
+    // 闭合命令没有参数，计算面积时首尾自然相连
+    const count = id === COMMAND.closePath ? 0 : Math.floor(command / 8);
+    for (let index = 0; index < count; index += 1) {
+      x += delta();
+      y += delta();
+      if (id === COMMAND.moveTo) {
+        part = [];
+        parts.push(part);
+      }
+      part.push(x, y);
+    }
+  }
+  return parts;
 }
 
 function decodeLayer(bytes: Uint8Array): TileLayer {
