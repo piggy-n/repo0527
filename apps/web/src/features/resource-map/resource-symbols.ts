@@ -25,8 +25,8 @@ export interface SymbolTarget {
 /** 一个资源的覆盖 */
 export interface ResourceSymbolOverride {
   readonly uniform?: SymbolOverride;
-  /** 按属性配色的资源选了统一样式；分类样式是默认，不记 */
-  readonly mode?: 'uniform';
+  /** 用户选的样式方式（ADR 0123 第 3 节）；分类样式只在同时有统一样式的覆盖时才记，其他时候它就是默认 */
+  readonly mode?: SymbolMode;
   /** 分类样式各取值的覆盖，按取值的键 */
   readonly items?: Readonly<Record<string, SymbolOverride>>;
 }
@@ -51,9 +51,11 @@ const isEmpty = (override: SymbolOverride | undefined) => !override || Object.ke
 /** 去掉空的统一样式和取值；什么都不剩时为 undefined */
 export function pruneOverride(override: ResourceSymbolOverride): ResourceSymbolOverride | undefined {
   const items = Object.entries(override.items ?? {}).filter(([, item]) => !isEmpty(item));
+  const hasUniform = !isEmpty(override.uniform);
+  const keepsMode = override.mode === 'uniform' || (override.mode === 'classified' && hasUniform);
   const pruned: ResourceSymbolOverride = {
-    ...(isEmpty(override.uniform) ? {} : { uniform: override.uniform }),
-    ...(override.mode === 'uniform' ? { mode: 'uniform' } : {}),
+    ...(hasUniform ? { uniform: override.uniform } : {}),
+    ...(keepsMode ? { mode: override.mode } : {}),
     ...(items.length > 0 ? { items: Object.fromEntries(items) } : {})
   };
   return Object.keys(pruned).length > 0 ? pruned : undefined;
@@ -126,7 +128,7 @@ export const storedSymbolsSchema = z.record(
   z.string(),
   z.object({
     uniform: overrideSchema.optional(),
-    mode: z.literal('uniform').optional(),
+    mode: z.enum(['uniform', 'classified']).optional(),
     items: z.record(z.string(), overrideSchema).optional()
   })
 );

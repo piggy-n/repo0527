@@ -2,20 +2,28 @@
 import { describe, expect, it } from 'vitest';
 import { classExpression, classItems, type ColorRule, OTHER_ITEM, symbolClasses } from './classification';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
-import { RESOURCE_PALETTE } from './palette';
 import { colorOf, normalizeColor as color } from './test-expression';
 
 const HYDL: ColorRule = {
   kind: 'values',
   property: 'ccn',
-  colors: [
-    ['河流', '#1E88E5'],
-    ['水渠', '#4FC3F7']
+  entries: [
+    { value: '河流', label: '河流', color: '#1E88E5' },
+    { value: '水渠', label: '水渠', color: '#4FC3F7' }
   ],
   fallback: '#2F80ED'
 };
 
-const ORDERED: ColorRule = { kind: 'ordered', property: 'czclx', values: ['201', '202'], fallback: '#999999' };
+// 取值是编码，名称另写
+const CODES: ColorRule = {
+  kind: 'values',
+  property: 'cc',
+  entries: [
+    { value: '08H211', label: '高等院校', color: '#111111' },
+    { value: '08H213', label: '中小学', color: '#222222' }
+  ],
+  fallback: '#999999'
+};
 
 const blackForCanal = (item: { key: string }) => (item.key === '水渠' ? '#000000' : '#FFFFFF');
 
@@ -30,16 +38,16 @@ function routeOf(rule: ColorRule) {
 }
 
 describe('classItems', () => {
-  it('按取值配色：各取值和"其他"，键是取值本身；按顺序取色的用配色板', () => {
+  it('按取值配色：各取值和"其他"，键是取值本身，名称用于显示', () => {
     expect(classItems(HYDL)).toStrictEqual([
       { key: '河流', label: '河流', color: '#1E88E5' },
       { key: '水渠', label: '水渠', color: '#4FC3F7' },
       { key: OTHER_ITEM, label: '其他', color: '#2F80ED' }
     ]);
-    expect(classItems(ORDERED).map(item => item.color)).toStrictEqual([
-      RESOURCE_PALETTE[0],
-      RESOURCE_PALETTE[1],
-      '#999999'
+    expect(classItems(CODES)).toStrictEqual([
+      { key: '08H211', label: '高等院校', color: '#111111' },
+      { key: '08H213', label: '中小学', color: '#222222' },
+      { key: OTHER_ITEM, label: '其他', color: '#999999' }
     ]);
   });
 
@@ -56,6 +64,13 @@ describe('classItems', () => {
 });
 
 describe('classExpression', () => {
+  it('按编码配色时按取值匹配，不按名称匹配', () => {
+    const route = routeOf(CODES);
+
+    expect(route({ cc: '08H213' })).toBe('08H213');
+    expect(route({ cc: '中小学' })).toBe(OTHER_ITEM);
+  });
+
   it('按取值配色：按属性匹配，其他值和缺少属性用兜底', () => {
     const route = routeOf(HYDL);
     const features: Record<string, string>[] = [{ ccn: '河流' }, { ccn: '水渠' }, { ccn: '湖泊' }, {}];

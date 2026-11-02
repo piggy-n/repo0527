@@ -6,38 +6,27 @@ import {
   URBAN_VILLAGE_CODE_NAMES
 } from './landuse';
 import { matchExpression, type MatchOutput } from './match-expression';
-import { paletteColor } from './palette';
 
-// 按属性配色的规则（ADR 0041 第 2 节）与分类样式的取值（ADR 0044 第 2～4 节）：每条规则有一组取值，各自有键、名称和默认主色；
+// 按属性配色的规则（ADR 0041 第 2 节、ADR 0123）与分类样式的取值（ADR 0044 第 2～4 节）：每条规则有一组取值，各自有键、名称和默认主色；
 // 地图上按规则的匹配结构把各取值的输出组合成一个表达式。地图样式里的颜色是数据，不走 CSS 令牌
 
-/** 按取值对照颜色 */
+/** 字典的一项（class-dictionaries.ts）：取值就是符号覆盖的键（ADR 0044 第 3 节），名称只用于显示 */
+export interface ClassEntry {
+  readonly value: string;
+  readonly label: string;
+  readonly color: string;
+}
+
+/** 按属性的取值配色 */
 export interface ValueColorRule {
   readonly kind: 'values';
   readonly property: string;
-  readonly colors: readonly (readonly [value: string, color: string])[];
-  readonly fallback: string;
-}
-
-/** 按取值的顺序从配色板取色：每次一样，图例能列出实际颜色 */
-export interface OrderedColorRule {
-  readonly kind: 'ordered';
-  readonly property: string;
-  readonly values: readonly string[];
+  readonly entries: readonly ClassEntry[];
   readonly fallback: string;
 }
 
 /** 按属性配色；地类的两种按 landuse.ts 的编码表和历史名称表 */
-export type ColorRule =
-  | ValueColorRule
-  | OrderedColorRule
-  | { readonly kind: 'landuse-code' }
-  | { readonly kind: 'landuse-name' };
-
-/** 按取值配色的对照 */
-export function valueColors(rule: ValueColorRule | OrderedColorRule): readonly (readonly [string, string])[] {
-  return rule.kind === 'values' ? rule.colors : rule.values.map((value, index) => [value, paletteColor(index)]);
-}
+export type ColorRule = ValueColorRule | { readonly kind: 'landuse-code' } | { readonly kind: 'landuse-name' };
 
 /** 兜底的键：按取值配色的"其他"、地类的"未匹配的地类" */
 export const OTHER_ITEM = '$other';
@@ -79,12 +68,12 @@ const NAME_FROM_CODE = matchExpression(
   ''
 );
 
-function otherItem(rule: ValueColorRule | OrderedColorRule): ClassItem {
+function otherItem(rule: ValueColorRule): ClassItem {
   return { key: OTHER_ITEM, label: '其他', color: rule.fallback };
 }
 
-function valueItems(rule: ValueColorRule | OrderedColorRule): ClassItem[] {
-  return valueColors(rule).map(([value, color]) => ({ key: value, label: value, color }));
+function valueItems(rule: ValueColorRule): ClassItem[] {
+  return rule.entries.map(({ value, label, color }) => ({ key: value, label, color }));
 }
 
 /** 规则的全部取值，最后一项是兜底；地类是 69 个地类、6 个历史地类和"未匹配的地类" */

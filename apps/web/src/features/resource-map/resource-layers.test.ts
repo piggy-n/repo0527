@@ -68,10 +68,10 @@ function styleWithDuplicateValues(code: string) {
     color: {
       kind: 'values' as const,
       property: 'ccn',
-      colors: [
-        ['河流', '#1E88E5'],
-        ['河流', '#4FC3F7']
-      ] as const,
+      entries: [
+        { value: '河流', label: '河流', color: '#1E88E5' },
+        { value: '河流', label: '河流', color: '#4FC3F7' }
+      ],
       fallback: '#2F80ED'
     }
   };
@@ -193,14 +193,14 @@ describe('resourcesGroup', () => {
     expect(layerOf(group, 'csxhjctb_hydl').minzoom).toBeUndefined();
   });
 
-  it('地类图斑带 promoteId；瓦片图层名的例外按年份生效', () => {
+  it('地类图斑带 promoteId；瓦片图层名默认等于瓦片集名（2026-11-01 探查，城镇村等用地不再是例外）', () => {
     const state = checkAll(mergeDisplayState(EMPTY_RESOURCE_LAYERS, catalogOf(DLTB, CZCDYD)));
 
     const group = derive(state);
 
     expect(group.sources['resources-bgdc_dltb']).toMatchObject({ promoteId: 'bsm' });
     expect(group.sources['resources-bgdc_czcdyd']).not.toHaveProperty('promoteId');
-    expect(layerOf(group, 'bgdc_czcdyd')['source-layer' as keyof LayerSpecification]).toBe('czcdyd');
+    expect(layerOf(group, 'bgdc_czcdyd')['source-layer' as keyof LayerSpecification]).toBe('bgdc_czcdyd_2022');
   });
 
   it('透明度乘在各几何类型的不透明度上：面、线，点连同白描边', () => {

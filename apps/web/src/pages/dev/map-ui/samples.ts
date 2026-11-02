@@ -28,7 +28,7 @@ export const SAMPLE_CATALOG = buildCatalog([{
       code: 'facilities',
       name: '公共设施',
       children: [
-        { code: 'sample_point', name: '公共设施点层', geoType: 'Point', yearList: [2024, 2025] },
+        { code: 'csxhjctb_xxp', name: '学校点层', geoType: 'Point', yearList: [2024, 2025] },
         { code: 'sample_long', name: '用于检查完整名称与换行的公共服务设施面层', geoType: 'Polygon', yearList: [2025] }
       ]
     }

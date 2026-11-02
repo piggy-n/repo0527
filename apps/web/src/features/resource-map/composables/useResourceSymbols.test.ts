@@ -284,6 +284,23 @@ describe('useResourceSymbols', () => {
     expect(symbols.overrides.value.has('csxhjctb_hydl')).toBe(false);
   });
 
+  it('有统一样式的覆盖时，选了分类样式要记下来：否则按"调过统一样式就是统一样式"变回去（ADR 0123 第 3 节）', () => {
+    using ctx = setup();
+    const { symbols } = ctx;
+    symbols.setMode('csxhjctb_hydl', 'uniform');
+    symbols.setSymbol({ code: 'csxhjctb_hydl' }, { color: '#000' });
+
+    symbols.setMode('csxhjctb_hydl', 'classified');
+    expect(symbols.modeOf('csxhjctb_hydl')).toBe('classified');
+    expect(symbols.overrides.value.get('csxhjctb_hydl')).toStrictEqual({
+      uniform: { color: 'rgba(0, 0, 0, 1)' },
+      mode: 'classified'
+    });
+
+    symbols.setMode('csxhjctb_hydl', 'uniform');
+    expect(symbols.modeOf('csxhjctb_hydl')).toBe('uniform');
+  });
+
   it('恢复一个资源：样式方式、统一样式、各取值和它的预览一起去掉，别的资源不动', () => {
     using ctx = setup();
     const { symbols } = ctx;

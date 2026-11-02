@@ -2,10 +2,16 @@
 import { type StyleSpecification, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
 import type { Resource, ResourceGeometry } from './catalog';
-import { valueColors } from './classification';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import { paletteColor, RESOURCE_PALETTE } from './palette';
-import { classDefaultSymbol, defaultSymbol, resourceStyle, resourceStyleLayers, sourceLayerOf } from './style-registry';
+import {
+  classDefaultSymbol,
+  defaultSymbol,
+  resourceStyle,
+  resourceStyleLayers,
+  sourceLayerOf,
+  symbolModeOf
+} from './style-registry';
 import { type ResourceSymbol, sizeCurve, sizePixels, symbolLayers } from './symbols';
 import {
   colorOf,
@@ -22,6 +28,46 @@ function resource(code: string, geometry: ResourceGeometry, index = 0): Resource
 // 主图层：没有拆层时就是唯一的图层
 const mainLayer = (...args: Parameters<typeof resourceStyleLayers>) => resourceStyleLayers(...args).parts[0];
 const mainOf = (symbol: ResourceSymbol) => symbolLayers(symbol).parts[0];
+
+// 登记表里按属性配色的全部资源（ADR 0123）：加了规则要加到这里
+const RULE_CODES = [
+  'bgdc_dltb',
+  'bgdc_dltb_czc',
+  'bgdc_czcdyd',
+  'lcsh_cdtb',
+  'lcsh_sdtb',
+  'csxhjctb_xxa',
+  'csxhjctb_xxp',
+  'csxhjctb_yljga',
+  'csxhjctb_yljgp',
+  'csxhjctb_fljga',
+  'csxhjctb_fljgp',
+  'csxhjctb_gyssa',
+  'csxhjctb_gyssp',
+  'csxhjctb_gyylda',
+  'csxhjctb_jtfwcza',
+  'csxhjctb_jtysyda',
+  'csxhjctb_jtysydp',
+  'csxhjctb_syfwya',
+  'csxhjctb_syfwyp',
+  'csxhjctb_czzza',
+  'csxhjctb_xzcsgxgzyda',
+  'csxhjctb_yjbna',
+  'csxhjctb_hydl',
+  'csxhjctb_hyda',
+  'csxhjctb_lvll',
+  'csxhjctb_lrdl',
+  'csxhjctb_lctl',
+  'csxhjctb_llkl',
+  'csxhjctb_llkp',
+  'csxhjctb_lrrl',
+  'gtkjgh_czkfbj',
+  'gtkjgh_stbhhx'
+];
+
+function repeated(list: readonly string[]) {
+  return new Set(list).size !== list.length;
+}
 
 function colorRuleOf(code: string) {
   const rule = resourceStyle(code).color;
@@ -54,14 +100,23 @@ describe('按属性配色', () => {
     expect(colorOf(expression, {})).toBe(color('#2F80ED'));
   });
 
-  it('按取值的顺序取色（城镇村等用地的 czclx）：每次一样，8 个取值颜色互不相同，包括旧项目漏掉的 201A、202A', () => {
+  it('城镇村等用地按 czclx：8 个取值的颜色和换成字典之前相同，图例写名称，还没有名称的写编码', () => {
     const rule = colorRuleOf('bgdc_czcdyd');
-    if (rule.kind !== 'ordered') {
-      throw new Error('城镇村等用地应按取值的顺序取色');
+    if (rule.kind !== 'values') {
+      throw new Error('城镇村等用地应按取值配色');
     }
 
-    expect(valueColors(rule)).toStrictEqual(rule.values.map((value, index) => [value, RESOURCE_PALETTE[index]]));
-    expect(new Set(valueColors(rule).map(([, value]) => value)).size).toBe(8);
+    expect(rule.entries.map(({ color: value }) => value)).toStrictEqual(RESOURCE_PALETTE.slice(0, 8));
+    expect(rule.entries.map(({ value, label }) => [value, label])).toStrictEqual([
+      ['201', '201 城市用地'],
+      ['201A', '201A'],
+      ['202', '202 建制镇用地'],
+      ['202A', '202A'],
+      ['203', '203 村庄用地'],
+      ['203A', '203A 村庄用地'],
+      ['204', '204 采矿及盐田用地'],
+      ['205', '205 风景名胜及特殊用地']
+    ]);
     const expression = colorExpression(rule);
     expect(colorOf(expression, { czclx: '201A' })).toBe(color(paletteColor(1)));
     expect(colorOf(expression, { czclx: '205' })).toBe(color(paletteColor(7)));
@@ -69,9 +124,55 @@ describe('按属性配色', () => {
   });
 
   it('登记的规则都能被 MapLibre 解析', () => {
-    const codes = ['bgdc_dltb', 'bgdc_dltb_czc', 'bgdc_czcdyd', 'csxhjctb_hydl', 'csxhjctb_lvll'];
+    expect(RULE_CODES.filter(code => !parsesAsColor(colorExpression(colorRuleOf(code))))).toStrictEqual([]);
+  });
 
-    expect(codes.filter(code => !parsesAsColor(colorExpression(colorRuleOf(code))))).toStrictEqual([]);
+  it('每条规则里的取值、名称、颜色都不重复：取值是符号覆盖的键，颜色相同分不清类别', () => {
+    const problems = RULE_CODES.flatMap(code => {
+      const rule = colorRuleOf(code);
+      if (rule.kind !== 'values') {
+        return [];
+      }
+      return repeated(rule.entries.map(item => item.value)) ||
+        repeated(rule.entries.map(item => item.label)) ||
+        repeated(rule.entries.map(item => item.color))
+        ? [code]
+        : [];
+    });
+
+    expect(problems).toStrictEqual([]);
+  });
+
+  it('按字段和字典分类：编码按 cc、学校的点层比面层少的取值只列实际有的，同一取值在点层、面层同色', () => {
+    const entriesOf = (code: string) => {
+      const rule = colorRuleOf(code);
+      return rule.kind === 'values' ? rule.entries : [];
+    };
+    const schoolAreas = colorRuleOf('csxhjctb_xxa');
+    const schoolPoints = entriesOf('csxhjctb_xxp');
+
+    expect(schoolAreas).toMatchObject({ property: 'cc', fallback: LANDUSE_FALLBACK_COLOR });
+    expect(schoolPoints.map(item => item.value)).toStrictEqual(['08H212', '08H213', '08H214', '08H215']);
+    expect(schoolPoints.every(item => entriesOf('csxhjctb_xxa').includes(item))).toBe(true);
+    const expression = colorExpression(colorRuleOf('csxhjctb_yljgp'));
+    expect(colorOf(expression, { cc: '08H222' })).toBe(color(RESOURCE_PALETTE[2]));
+    expect(colorOf(expression, { cc: '-9999' })).toBe(color(LANDUSE_FALLBACK_COLOR));
+    // 早期年份缺字段的（福利机构 2022）全部归入"其他"，不按年份调整规则（ADR 0123）
+    expect(colorOf(colorExpression(colorRuleOf('csxhjctb_fljga')), {})).toBe(color(LANDUSE_FALLBACK_COLOR));
+  });
+
+  it('cc 只有一个取值的资源不分类，保持统一样式', () => {
+    const uniform = ['csxhjctb_tyhda', 'csxhjctb_tyhdp', 'csxhjctb_whhda', 'csxhjctb_jgtta', 'csxhjctb_sdza'];
+
+    expect(uniform.filter(code => resourceStyle(code).color)).toStrictEqual([]);
+  });
+
+  it('草地、湿地复用地类的规则；水域面层多出湖泊、水库、坑塘、海面', () => {
+    expect(colorRuleOf('lcsh_cdtb')).toStrictEqual({ kind: 'landuse-code' });
+    expect(colorRuleOf('lcsh_sdtb')).toStrictEqual({ kind: 'landuse-code' });
+    const expression = colorExpression(colorRuleOf('csxhjctb_hyda'));
+    expect(colorOf(expression, { ccn: '河流' })).toBe(color('#1E88E5'));
+    expect(colorOf(expression, { ccn: '坑塘' })).toBe(color('#80CBC4'));
   });
 });
 
@@ -92,11 +193,11 @@ describe('登记表', () => {
     expect(resourceStyle('constructor')).toStrictEqual({});
   });
 
-  it('瓦片里的图层名默认是"code_年份"，两个例外只对那一年生效', () => {
+  it('瓦片里的图层名默认是"code_年份"，例外只对那一年生效', () => {
     expect(sourceLayerOf('bgdc_dltb', 2022)).toBe('bgdc_dltb_2022');
-    expect(sourceLayerOf('bgdc_czcdyd', 2022)).toBe('czcdyd');
+    expect(sourceLayerOf('bgdc_czcdyd', 2022)).toBe('bgdc_czcdyd_2022');
     expect(sourceLayerOf('bgdc_dltb_czc', 2021)).toBe('dltb_czc_2021');
-    expect(sourceLayerOf('bgdc_czcdyd', 2023)).toBe('bgdc_czcdyd_2023');
+    expect(sourceLayerOf('bgdc_dltb_czc', 2022)).toBe('bgdc_dltb_czc_2022');
   });
 });
 
@@ -123,7 +224,7 @@ describe('默认样式', () => {
     expect(mainLayer(resource('csxhjctb_hydl', 'line', 2))).toMatchObject({
       paint: { 'line-color': colorExpression(colorRuleOf('csxhjctb_hydl')) }
     });
-    expect(mainLayer(resource('csxhjctb_gyssp', 'circle', 3))).toMatchObject({
+    expect(mainLayer(resource('csxhjctb_tyhdp', 'circle', 3))).toMatchObject({
       type: 'circle',
       paint: { 'circle-color': RESOURCE_PALETTE[3], 'circle-stroke-color': '#FFFFFF', 'circle-stroke-width': 1 }
     });
@@ -165,9 +266,10 @@ describe('默认样式', () => {
   it('按属性配色的资源：分类样式用各取值的覆盖、不受统一样式的覆盖影响；选了统一样式时用统一样式', () => {
     const hydl = resource('csxhjctb_hydl', 'line', 2);
     const items = { 水渠: { width: 'XL' } } as const;
-    const override = { uniform: { color: 'rgba(0, 0, 0, 1)' }, items };
+    const uniform = { color: 'rgba(0, 0, 0, 1)' };
+    const override = { uniform, items };
 
-    const classified = mainLayer(hydl, undefined, override);
+    const classified = mainLayer(hydl, undefined, { ...override, mode: 'classified' });
     expect(classified).toStrictEqual(mainLayer(hydl, undefined, { items }));
     const width = classified.type === 'line' ? classified.paint['line-width'] : undefined;
     expect(paintValueOf('line', 'line-width', width, { ccn: '水渠' }, 14)).toBe(sizePixels('line', 'XL'));
@@ -176,6 +278,19 @@ describe('默认样式', () => {
     expect(mainLayer(hydl, undefined, { ...override, mode: 'uniform' })).toStrictEqual(
       mainOf({ geometry: 'line', color: 'rgba(0, 0, 0, 1)', width: 'M', dash: 'solid' })
     );
+  });
+
+  it('没选过方式时：调过统一样式的资源按统一样式，否则按分类样式（ADR 0123 第 3 节）', () => {
+    const style = resourceStyle('csxhjctb_xxa');
+    const uniform = { fillColor: 'rgba(0, 0, 0, 1)' };
+
+    expect(symbolModeOf(style)).toBe('classified');
+    expect(symbolModeOf(style, { items: { '08H211': uniform } })).toBe('classified');
+    expect(symbolModeOf(style, { uniform })).toBe('uniform');
+    expect(symbolModeOf(style, { uniform, mode: 'classified' })).toBe('classified');
+    expect(symbolModeOf(style, { mode: 'uniform' })).toBe('uniform');
+    // 不按属性配色的资源只有统一样式
+    expect(symbolModeOf(resourceStyle('csxhjctb_tyhda'), { mode: 'classified' })).toBe('uniform');
   });
 
   it('各种组合放进样式都能通过 MapLibre 的校验', () => {
@@ -187,7 +302,7 @@ describe('默认样式', () => {
       resource('bgdc_cjdcqjx', 'line'),
       resource('csxhjctb_hydl', 'line'),
       resource('csxhjctb_lvll', 'line'),
-      resource('csxhjctb_gyssp', 'circle')
+      resource('csxhjctb_tyhdp', 'circle')
     ];
     const style: StyleSpecification = {
       version: 8,

@@ -31,7 +31,6 @@ const PALETTE = [
   '#2FA663'
 ];
 const SOURCE_LAYER_EXCEPTIONS: Readonly<Record<string, string>> = {
-  bgdc_czcdyd_2022: 'czcdyd',
   bgdc_dltb_czc_2021: 'dltb_czc_2021'
 };
 const MISSING_RESOURCE = 'dev_missing';

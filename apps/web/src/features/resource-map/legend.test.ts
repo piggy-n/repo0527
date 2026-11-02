@@ -45,7 +45,7 @@ const CATALOG = buildCatalog([
       layer('bgdc_czcdyd', '城镇村等用地', 'Polygon'),
       layer('szy_kt', '坑塘', 'Polygon'),
       layer('bgdc_cjdcqjx', '村级调查区界线', 'Line'),
-      layer('csxhjctb_gyssp', '公用设施点层', 'Point')
+      layer('csxhjctb_tyhdp', '公用设施点层', 'Point')
     ]
   }
 ]);
@@ -96,7 +96,7 @@ describe('legendEntries', () => {
       'bgdc_dltb',
       'bgdc_dltb_czc',
       'bgdc_czcdyd',
-      'csxhjctb_gyssp'
+      'csxhjctb_tyhdp'
     ]);
     expect(legendEntries(EMPTY_RESOURCE_LAYERS, new Map())).toStrictEqual([]);
   });
@@ -128,12 +128,17 @@ describe('legendEntries', () => {
       ]
     });
     const czcdyd = entryOf(entries, 'bgdc_czcdyd');
-    expect(czcdyd.kind === 'values' ? czcdyd.values.map(({ label, swatch }) => [label, swatch]) : null).toStrictEqual([
-      ...['201', '201A', '202', '202A', '203', '203A', '204', '205'].map((label, index) => [
-        label,
+    // 键是取值，已保存的符号覆盖按它；名称只用于显示
+    expect(czcdyd.kind === 'values' ? czcdyd.values.map(({ key, swatch }) => [key, swatch]) : null).toStrictEqual([
+      ...['201', '201A', '202', '202A', '203', '203A', '204', '205'].map((key, index) => [
+        key,
         fillSwatch(RESOURCE_PALETTE[index], RESOURCE_PALETTE[index])
       ]),
-      ['其他', fillSwatch(LANDUSE_FALLBACK_COLOR, LANDUSE_FALLBACK_COLOR)]
+      ['$other', fillSwatch(LANDUSE_FALLBACK_COLOR, LANDUSE_FALLBACK_COLOR)]
+    ]);
+    expect(czcdyd.kind === 'values' ? czcdyd.values.map(({ label }) => label).slice(0, 2) : null).toStrictEqual([
+      '201 城市用地',
+      '201A'
     ]);
   });
 
@@ -147,7 +152,7 @@ describe('legendEntries', () => {
     expect(entryOf(entries, 'bgdc_cjdcqjx')).toMatchObject({
       swatch: { geometry: 'line', color: RESOURCE_PALETTE[5] }
     });
-    expect(entryOf(entries, 'csxhjctb_gyssp')).toMatchObject({
+    expect(entryOf(entries, 'csxhjctb_tyhdp')).toMatchObject({
       swatch: { geometry: 'circle', fill: RESOURCE_PALETTE[6], stroke: '#FFFFFF' }
     });
   });
@@ -203,15 +208,15 @@ describe('legendEntries', () => {
     const fill = 'rgba(176,58,107,0.35)';
     expect(paintOf('szy_kt')).toMatchObject({ 'fill-color': fill, 'fill-outline-color': RESOURCE_PALETTE[4] });
     expect(entryOf(entries, 'szy_kt')).toMatchObject({ swatch: { fill } });
-    expect(paintOf('csxhjctb_gyssp')).toMatchObject({ 'circle-color': RESOURCE_PALETTE[6] });
+    expect(paintOf('csxhjctb_tyhdp')).toMatchObject({ 'circle-color': RESOURCE_PALETTE[6] });
   });
 
   it('符号覆盖：图层和图例都从叠加后的符号推导；分类样式不用统一样式的覆盖', () => {
     const overrides = new Map<string, ResourceSymbolOverride>([
       ['szy_kt', { uniform: { fillColor: 'rgba(0, 0, 255, 0.5)' } }],
       ['bgdc_cjdcqjx', { uniform: { color: 'rgba(0, 128, 0, 1)', width: 'L', dash: 'dashed' } }],
-      ['csxhjctb_gyssp', { uniform: { strokeColor: 'rgba(0, 0, 0, 1)', size: 6, strokeWidth: 3 } }],
-      ['csxhjctb_hydl', { uniform: { color: 'rgba(0, 0, 0, 1)' } }]
+      ['csxhjctb_tyhdp', { uniform: { strokeColor: 'rgba(0, 0, 0, 1)', size: 6, strokeWidth: 3 } }],
+      ['csxhjctb_hydl', { uniform: { color: 'rgba(0, 0, 0, 1)' }, mode: 'classified' }]
     ]);
     const overrideOf = (code: string) => overrides.get(code);
     const tileBase = 'http://localhost/tiles/';
@@ -231,13 +236,13 @@ describe('legendEntries', () => {
       'line-dasharray': [3, 2]
     });
     expect(entryOf(entries, 'bgdc_cjdcqjx')).toMatchObject({ swatch: { color: 'rgba(0, 128, 0, 1)' } });
-    expect(paintOf('csxhjctb_gyssp')).toMatchObject({
+    expect(paintOf('csxhjctb_tyhdp')).toMatchObject({
       'circle-color': RESOURCE_PALETTE[6],
       'circle-radius': sizeCurve('circle', 6),
       'circle-stroke-color': 'rgba(0, 0, 0, 1)',
       'circle-stroke-width': 3
     });
-    expect(entryOf(entries, 'csxhjctb_gyssp')).toMatchObject({ swatch: { stroke: 'rgba(0, 0, 0, 1)' } });
+    expect(entryOf(entries, 'csxhjctb_tyhdp')).toMatchObject({ swatch: { stroke: 'rgba(0, 0, 0, 1)' } });
 
     const plain = resourcesGroup({ state: ALL, invalid: new Map(), tileBase });
     expect(paintOf('csxhjctb_hydl')).toStrictEqual(plain.layers.find(item => item.id === 'resources-csxhjctb_hydl')?.paint);
@@ -250,7 +255,10 @@ describe('legendEntries', () => {
 
   it('分类样式的覆盖：取值的预览和图层一起变；选了统一样式时图例带上方式和统一样式的预览', () => {
     const overrides = new Map<string, ResourceSymbolOverride>([
-      ['csxhjctb_hydl', { uniform: { color: 'rgba(0, 0, 0, 1)' }, items: { 水渠: { color: 'rgba(255, 0, 0, 1)' } } }],
+      [
+        'csxhjctb_hydl',
+        { uniform: { color: 'rgba(0, 0, 0, 1)' }, mode: 'classified', items: { 水渠: { color: 'rgba(255, 0, 0, 1)' } } }
+      ],
       ['bgdc_dltb', { mode: 'uniform', items: { '0101': { fillColor: 'rgba(0, 0, 255, 1)' } } }],
       ['bgdc_dltb_czc', { items: { 'legacy:城市用地': { fillColor: 'rgba(0, 255, 0, 1)' } } }]
     ]);

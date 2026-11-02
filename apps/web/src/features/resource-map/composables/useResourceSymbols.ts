@@ -233,7 +233,7 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
       throw new Error(`资源 ${code} 不在目录里，或者不按属性配色`);
     }
     clearPreviewIf(previewing => previewing.code === code);
-    replace(code, pruneOverride({ ...overrides.value.get(code), mode: mode === 'uniform' ? 'uniform' : undefined }));
+    replace(code, pruneOverride({ ...overrides.value.get(code), mode }));
   };
 
   return {

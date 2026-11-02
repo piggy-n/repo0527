@@ -180,9 +180,9 @@ describe('symbolLayers', () => {
 const RULE: ColorRule = {
   kind: 'values',
   property: 'ccn',
-  colors: [
-    ['河流', '#1E88E5'],
-    ['水渠', '#4FC3F7']
+  entries: [
+    { value: '河流', label: '河流', color: '#1E88E5' },
+    { value: '水渠', label: '水渠', color: '#4FC3F7' }
   ],
   fallback: '#2F80ED'
 };
