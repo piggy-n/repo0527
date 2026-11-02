@@ -1,6 +1,6 @@
 import { Search } from '@element-plus/icons-vue';
 import { MxTitle } from '@yzt/ui';
-import { ElButton, ElInput, ElRadioButton, ElRadioGroup, ElTag } from 'element-plus';
+import { ElButton, ElInput, ElRadioButton, ElRadioGroup, ElTag, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNodeChild, watch } from 'vue';
 import { ChatAvatar } from '@/shared/chat-avatar/ChatAvatar';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
@@ -11,22 +11,29 @@ import type { AnalysisStep, ScopeAnalysis, ScopeEditor } from '../composables/us
 import {
   type CityCover,
   type CoverFilter,
+  type CoverMeasure,
   type CoverageTree,
+  coverCounts,
+  coverDetail,
   type DistrictCover,
   expandAllByDefault,
   filterTree,
-  formatKm2,
-  formatRatio
+  formatKm2
 } from '../scope/area-tree';
 import styles from './AreaAnalysisPanel.module.scss';
 
 const RELATION_TEXT: Readonly<Record<CoverRelation, string>> = { full: '全部覆盖', partial: '部分覆盖' };
 
-const relationTag = (relation: CoverRelation, short = false) => (
-  <ElTag class="tag-mini" type={relation === 'full' ? 'primary' : 'warning'} disableTransitions>
-    {short ? RELATION_TEXT[relation].slice(0, 2) : RELATION_TEXT[relation]}
-  </ElTag>
+// 一行的标签：有部分覆盖时是橙色；行里只写面积，占比在悬浮提示里
+const coverTag = (text: string, partial: boolean, measure: CoverMeasure) => (
+  <ElTooltip content={coverDetail(measure)} placement="top">
+    <ElTag class={['tag-mini', styles.tag]} type={partial ? 'warning' : 'primary'} disableTransitions>
+      {text}
+    </ElTag>
+  </ElTooltip>
 );
+
+const renderArea = (area: number) => <span class={styles.measure}>{formatKm2(area)} km²</span>;
 
 // 区县多于这个数时出现搜索框
 const SEARCH_FROM = 8;
@@ -131,20 +138,21 @@ export const AreaAnalysisPanel = defineComponent({
     const renderDistrict = (district: DistrictCover) => {
       const { editor } = props;
       return (
-        <li key={district.code}>
+        <li key={district.code} class={styles.treeItem}>
           <button
             type="button"
             class={[styles.row, styles.districtRow, editor.hovered.value === district.code && styles.lit]}
-            title={`移到${district.name}`}
+            aria-label={`${district.name}，${RELATION_TEXT[district.relation]}，${coverDetail(district)}，移到这里`}
             onMouseenter={() => editor.hover(district.code)}
             onFocus={() => editor.hover(district.code)}
             onClick={() => editor.focusDistrict(district.code)}
           >
-            <span class={styles.name}>{district.name}</span>
-            {relationTag(district.relation, true)}
-            <span class={styles.measure}>
-              {formatKm2(district.area)} km² · {formatRatio(district.ratio)}
+            {/* 提示写在名称上：写在整行上会和标签的悬浮提示同时出现 */}
+            <span class={styles.name} title={`移到${district.name}`}>
+              {district.name}
             </span>
+            {coverTag(RELATION_TEXT[district.relation].slice(0, 2), district.relation === 'partial', district)}
+            {renderArea(district.area)}
           </button>
         </li>
       );
@@ -153,25 +161,21 @@ export const AreaAnalysisPanel = defineComponent({
     const renderCity = (city: CityCover) => {
       const open = searching.value || expanded.value.has(city.code);
       return (
-        <li key={city.code} class={styles.city}>
+        <li key={city.code} class={styles.treeItem}>
           <button
             type="button"
             class={[styles.row, styles.cityRow]}
             aria-expanded={open}
+            aria-label={`${city.name}，${RELATION_TEXT[city.relation]}，涉及区县${coverCounts(city)}，${coverDetail(city)}`}
             disabled={searching.value}
             onClick={() => toggleCity(city.code)}
           >
-            <span class={[styles.caret, open && styles.caretOpen]} aria-hidden="true" />
-            <span class={styles.name}>{city.name}</span>
-            {relationTag(city.relation, true)}
-            <span class={styles.measure}>
-              {formatKm2(city.area)} km² · {formatRatio(city.ratio)}
+            <span class={styles.cityName}>
+              <span class={[styles.caret, open && styles.caretOpen]} aria-hidden="true" />
+              <span class={styles.name}>{city.name}</span>
             </span>
-            <span class={styles.counts}>
-              {city.full > 0 && `全部 ${city.full}`}
-              {city.full > 0 && city.partial > 0 && ' · '}
-              {city.partial > 0 && `部分 ${city.partial}`}
-            </span>
+            {coverTag(coverCounts(city), city.partial > 0, city)}
+            {renderArea(city.area)}
           </button>
           {open && <ul class={styles.districts}>{city.districts.map(renderDistrict)}</ul>}
         </li>
@@ -186,7 +190,7 @@ export const AreaAnalysisPanel = defineComponent({
           {/* 标题、筛选和搜索在列表滚动时停在顶上 */}
           <div class={styles.treeTools}>
             <MxTitle>
-              {{ default: () => '涉及的行政区', extra: () => <span class={styles.hint}>面积 · 占该行政区</span> }}
+              {{ default: () => '涉及的行政区', extra: () => <span class={styles.hint}>范围内面积</span> }}
             </MxTitle>
             <ElRadioGroup
               class="radio-group-block"
@@ -220,18 +224,18 @@ export const AreaAnalysisPanel = defineComponent({
               />
             )}
           </div>
-          <div class={[styles.row, styles.provinceRow]}>
-            <span class={styles.name}>江苏省</span>
-            {relationTag(current.province.relation, true)}
-            <span class={styles.measure}>
-              {formatKm2(current.province.area)} km² · {formatRatio(current.province.ratio)}
-            </span>
+          <div class={styles.rows}>
+            <div class={[styles.row, styles.provinceRow]}>
+              <span class={styles.name}>江苏省</span>
+              {coverTag(coverCounts(current), current.partial > 0, current.province)}
+              {renderArea(current.province.area)}
+            </div>
+            {list.length > 0 ? (
+              <ul class={styles.cities}>{list.map(renderCity)}</ul>
+            ) : (
+              <p class={styles.none}>没有符合条件的区县</p>
+            )}
           </div>
-          {list.length > 0 ? (
-            <ul class={styles.cities}>{list.map(renderCity)}</ul>
-          ) : (
-            <p class={styles.none}>没有符合条件的区县</p>
-          )}
           {current.touches.length > 0 && (
             <div class={styles.touches}>
               <ElButton

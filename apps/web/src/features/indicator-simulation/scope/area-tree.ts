@@ -12,6 +12,8 @@ export interface DistrictCover {
   readonly relation: CoverRelation;
   /** 范围内的面积（平方千米） */
   readonly area: number;
+  /** 区县的面积（平方千米） */
+  readonly total: number;
   /** 占区县面积的比例：全部覆盖的是 1（计算时按整个区县） */
   readonly ratio: number;
 }
@@ -22,6 +24,8 @@ export interface CityCover {
   readonly name: string;
   readonly relation: CoverRelation;
   readonly area: number;
+  /** 全市的面积 */
+  readonly total: number;
   /** 占全市面积的比例 */
   readonly ratio: number;
   readonly full: number;
@@ -38,7 +42,12 @@ export interface TouchedDistrict {
 
 export interface CoverageTree {
   /** 江苏省：所有区县都全部覆盖时是全部覆盖 */
-  readonly province: { readonly relation: CoverRelation; readonly area: number; readonly ratio: number };
+  readonly province: {
+    readonly relation: CoverRelation;
+    readonly area: number;
+    readonly total: number;
+    readonly ratio: number;
+  };
   readonly cities: readonly CityCover[];
   readonly touches: readonly TouchedDistrict[];
   readonly full: number;
@@ -60,6 +69,7 @@ export function coverageTree(coverage: AreaCoverage, atlas: DistrictAtlas): Cove
                 name: district.name,
                 relation: cover.relation,
                 area: cover.area,
+                total: district.area,
                 ratio: cover.relation === 'full' ? 1 : cover.ratio
               }
             ]
@@ -80,6 +90,7 @@ export function coverageTree(coverage: AreaCoverage, atlas: DistrictAtlas): Cove
         name: city.name,
         relation: whole ? 'full' : 'partial',
         area,
+        total,
         ratio: whole ? 1 : Math.min(1, area / total),
         full,
         partial: districts.length - full,
@@ -95,6 +106,7 @@ export function coverageTree(coverage: AreaCoverage, atlas: DistrictAtlas): Cove
     province: {
       relation: whole ? 'full' : 'partial',
       area: coverage.coveredArea,
+      total: provinceArea,
       ratio: whole ? 1 : Math.min(1, coverage.coveredArea / provinceArea)
     },
     cities,
@@ -102,6 +114,13 @@ export function coverageTree(coverage: AreaCoverage, atlas: DistrictAtlas): Cove
     full,
     partial
   };
+}
+
+/** 省、市、区县一行的面积和占比 */
+export interface CoverMeasure {
+  readonly area: number;
+  readonly total: number;
+  readonly ratio: number;
 }
 
 /** 列表的筛选：全部、全部覆盖、部分覆盖 */
@@ -145,6 +164,14 @@ export function formatRatio(ratio: number): string {
   const percent = ratio * 100;
   return `${percent >= 10 ? Math.min(99, Math.round(percent)) : percent.toFixed(1)}%`;
 }
+
+/** 上级一行的标签：下面的区县按覆盖方式计数，如"部分 5""全部 1 · 部分 2" */
+export const coverCounts = ({ full, partial }: { readonly full: number; readonly partial: number }): string =>
+  [full > 0 && `全部 ${full}`, partial > 0 && `部分 ${partial}`].filter(Boolean).join(' · ');
+
+/** 标签的悬浮提示：范围内的面积 / 行政区的面积（占比），如"50 km² / 100 km²（50%）" */
+export const coverDetail = ({ area, total, ratio }: CoverMeasure): string =>
+  `${formatKm2(area)} km² / ${formatKm2(total)} km²（${formatRatio(ratio)}）`;
 
 const cityName = (code: string) => JIANGSU_CITIES.find(city => city.code === code)?.name ?? code;
 

@@ -252,7 +252,9 @@
   background: var(--color-bg-container);
 }
 
+// 和下面面积一列的右边对齐
 .hint {
+  margin-right: var(--space-sm);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }
@@ -261,24 +263,51 @@
   width: 100%;
 }
 
-.cities,
-.districts {
+// 省、市、区县的行共用一套列：名称占满剩下的宽度，标签和面积的列宽按最宽的内容，各级的标签和面积都对齐
+@mixin tree-columns {
   display: grid;
-  gap: 2px;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  column-gap: var(--space-sm);
+  row-gap: 2px;
+}
+
+.cities,
+.districts,
+.treeItem {
+  @include tree-columns;
+
+  row-gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+// 层级引导线：同 ElTree（theme.md 的"树的全局样式"），对齐市的展开箭头中心
 .districts {
-  margin-top: 2px;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 14px;
+    width: 1px;
+    background-color: var(--color-border);
+    pointer-events: none;
+  }
 }
 
 .row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  @include tree-columns;
+
   align-items: center;
-  gap: var(--space-sm);
   width: 100%;
   min-height: 32px;
   padding: 0 var(--space-sm);
@@ -317,37 +346,45 @@ button.row {
   text-overflow: ellipsis;
 }
 
-.provinceRow .name {
+// 名称每级缩进 18，同 ElTree；省、市是分组，区县是叶子
+.provinceRow .name,
+.cityRow .name {
   font-weight: var(--font-weight-semibold);
 }
 
 .cityRow {
-  grid-template-columns: 12px minmax(0, 1fr) auto auto;
-
-  .name {
-    font-weight: var(--font-weight-semibold);
-  }
+  padding-left: 12px;
 }
 
-.counts {
-  grid-column: 2 / -1;
-  margin-top: -6px;
-  padding-bottom: 4px;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+.cityName {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
 }
 
 .districtRow {
-  padding-left: 28px;
+  padding-left: 44px;
+
+  .name {
+    color: var(--color-text-regular);
+  }
+}
+
+// 标签按文字的宽度，左边对齐
+.tag {
+  justify-self: start;
 }
 
 .measure {
+  justify-self: end;
   color: var(--color-text-secondary);
-  text-align: right;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .caret {
+  flex: none;
   width: 0;
   height: 0;
   border-top: 4px solid transparent;
@@ -361,6 +398,7 @@ button.row {
 }
 
 .none {
+  grid-column: 1 / -1;
   margin: 0;
   padding: var(--space-sm) 0;
   font-size: var(--font-size-xs);

@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import type { Position } from 'geojson';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { defineComponent, shallowRef } from 'vue';
 import { required } from '@/shared/testing/required';
 import { createTestEditor } from '../composables/test-scope-editor';
@@ -14,6 +14,11 @@ import { AreaAnalysisPanel } from './AreaAnalysisPanel';
 let calculator: Calculator;
 beforeAll(async () => {
   calculator = createCalculator(await loadTestAtlas());
+});
+
+// 标签的悬浮提示放在 body 下
+afterEach(() => {
+  document.body.innerHTML = '';
 });
 
 // before 在面板挂载前操作拥有者，如打开已有的范围
@@ -42,7 +47,7 @@ async function analyzed(editor: ScopeEditor, rings: readonly Position[][]) {
 
 type Wrapper = ReturnType<typeof mountPanel>['wrapper'];
 const districtNames = (wrapper: Wrapper) =>
-  wrapper.findAll('button[title^="移到"]').map(button => button.get('[class*="_name_"]').text());
+  wrapper.findAll('button[aria-label$="移到这里"]').map(button => button.get('[class*="_name_"]').text());
 const cityButton = (wrapper: Wrapper, name: string) =>
   required(
     wrapper.findAll('button[aria-expanded]').find(button => button.text().startsWith(name)),
@@ -91,7 +96,7 @@ describe('AreaAnalysisPanel', () => {
       '"部分覆盖"筛选'
     );
     await partial.get('input').setValue(true);
-    const rows = wrapper.findAll('button[title^="移到"]');
+    const rows = wrapper.findAll('button[aria-label$="移到这里"]');
     expect(rows.length).toBeGreaterThan(10);
     expect(rows.every(row => row.text().includes('部分'))).toBe(true);
 
@@ -102,10 +107,44 @@ describe('AreaAnalysisPanel', () => {
     expect(wrapper.text()).toContain('没有符合条件的区县');
   });
 
+  it('行里只有名称、标签和面积：市的标签合计区县，占比在标签的悬浮提示里，读屏也能读到', async () => {
+    const { wrapper, editor } = mountPanel();
+    await analyzed(editor, NINGZHEN_RINGS);
+    const nanjing = cityButton(wrapper, '南京市');
+    expect(nanjing.get('.el-tag').text()).toBe('部分 2');
+    expect(nanjing.text()).toMatch(/^南京市部分 2[\d,.]+ km²$/);
+    const detail = /[\d,.]+ km² \/ [\d,.]+ km²（[\d.]+%）$/;
+    expect(nanjing.attributes('aria-label')).toMatch(/^南京市，部分覆盖，涉及区县部分 2，/);
+    expect(nanjing.attributes('aria-label')).toMatch(detail);
+
+    const district = wrapper.get('button[aria-label$="移到这里"]');
+    expect(district.get('.el-tag').text()).toBe('部分');
+    expect(district.text()).toMatch(/^.+区部分[\d,.]+ km²$/);
+
+    expect(document.body.textContent).not.toMatch(detail);
+    await nanjing.get('.el-tag').trigger('mouseenter');
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toMatch(detail);
+    });
+  });
+
+  it('省的标签合计全部区县；全部、部分都有时写在一个标签里，有部分覆盖时是橙色', async () => {
+    const { wrapper, editor } = mountPanel();
+    await analyzed(editor, [box(118.7, 31.95, 118.95, 32.15)]);
+    const tags = wrapper.findAll('.el-tag');
+    expect(tags[0]?.text()).toMatch(/^全部 \d+ · 部分 \d+$/);
+    expect(tags[0]?.classes()).toContain('el-tag--warning');
+    const full = required(
+      wrapper.findAll('button[aria-label$="移到这里"]').find(row => row.get('.el-tag').text() === '全部'),
+      '全部覆盖的区县'
+    );
+    expect(full.get('.el-tag').classes()).toContain('el-tag--primary');
+  });
+
   it('悬停区县时地图描出它，移出列表时取消', async () => {
     const { wrapper, editor } = mountPanel();
     await analyzed(editor, NINGZHEN_RINGS);
-    const first = wrapper.get('button[title^="移到"]');
+    const first = wrapper.get('button[aria-label$="移到这里"]');
     await first.trigger('mouseenter');
     expect(editor.hovered.value).not.toBeNull();
     await wrapper.get('section').trigger('mouseleave');
