@@ -111,7 +111,7 @@ export const URBAN_RENEWAL_TYPES = named(
 
 export const SHELTER_TYPES = named('户外', '室内');
 
-// 城镇村属性（czclx）：名称来自旧项目的对照；201A、202A 对照里没有，按 203A 的先例用基础编码的名称（待业务确认）
+// 城镇村属性（czclx）：名称来自旧项目的对照；201A、202A 对照里没有，按 203A 的先例用基础编码的名称
 export const URBAN_VILLAGE_TYPES = fromPalette(
   ...['201', '201A', '202', '202A', '203', '203A', '204', '205'].map(code => {
     const name = URBAN_VILLAGE_CODE_NAMES[code] ?? URBAN_VILLAGE_CODE_NAMES[code.replace('A', '')];
@@ -191,9 +191,9 @@ export const WETLAND_LANDUSE: readonly string[] = [
 // 耕地补划目标、永久基本农田（三区三线）只有耕地的三个地类
 export const CULTIVATED_LANDUSE: readonly string[] = ['0101', '0102', '0103'];
 
-// 其余资源。下面标"推断"的名称没有现成的对照，按命名规律写的，待业务确认（docs/migration.md）
+// 其余资源。有的名称没有现成的对照，按命名规律写的，用户已确认（docs/migration.md）
 
-// 界线类型（jxlx）：推断，按国土调查数据库标准的界线类型
+// 界线类型（jxlx）：按国土调查数据库标准的界线类型
 export const BOUNDARY_TYPES = fromPalette(
   ['630200', '省级界线'],
   ['640200', '市级界线'],
@@ -216,7 +216,7 @@ export const RIVER_LEVELS: readonly ClassEntry[] = [
   '#90CAF9'
 ].map((color, index) => ({ value: String(index + 1), label: `${index + 1} 级`, color }));
 
-// 水库等别（skdb）：推断，D、Z、X 是大、中、小型；N/A 约占 37%，归入"其他"
+// 水库等别（skdb）：D、Z、X 是大、中、小型；N/A 约占 37%，归入"其他"
 export const RESERVOIR_GRADES: readonly ClassEntry[] = [
   { value: 'D02', label: '大（2）型', color: '#004D40' },
   { value: 'Z01', label: '中型', color: '#00897B' },
@@ -230,7 +230,7 @@ export const BASIN_TYPES: readonly ClassEntry[] = [
   { value: '长江流域', label: '长江流域', color: '#00897B' }
 ];
 
-// 批准未建设土地的业务类型（ywlx）：推断，按拼音缩写
+// 批准未建设土地的业务类型（ywlx）：按拼音缩写
 export const UNBUILT_LAND_TYPES = fromPalette(
   ['GWYFPC', '国务院分批次'],
   ['GWYDDXZ', '国务院单独选址'],
@@ -239,7 +239,7 @@ export const UNBUILT_LAND_TYPES = fromPalette(
   ['ZJGGJX', '增减挂钩建新']
 );
 
-// 耕地等别（lyd）：字段按名称推测是利用等，等别数字小的质量高，颜色由深到浅
+// 耕地等别（lyd，利用等）：等别数字小的质量高，颜色由深到浅
 export const FARMLAND_GRADES: readonly ClassEntry[] = [
   { value: '3', label: '3 等', color: '#1B5E20' },
   { value: '4', label: '4 等', color: '#43A047' },
