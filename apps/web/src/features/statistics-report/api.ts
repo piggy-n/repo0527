@@ -3,13 +3,13 @@ import type { PrepareStatus } from '@/shared/data-request/prepare-status';
 import { fetchFile } from '@/shared/file-transfer';
 import { http, type TransferProgress } from '@/shared/http/client';
 
-// 状态是后端的中文文字，和申请的 storage_status（英文）不是一套；见过的取值见 docs/migration.md。
-// 未处理和认不出的返回 undefined，界面原样显示文字、不能下载
+// 状态是后端的中文文字，和申请的 storage_status（英文）不是一套，取值见 docs/migration.md。
+// 只认处理成功、正在处理、处理失败、未处理；未处理和其他文字返回 undefined，界面原样显示、不能下载
 function prepareStatusOf(text: string): PrepareStatus | undefined {
-  if (text === '处理成功' || text === '处理完成') {
+  if (text === '处理成功') {
     return 'success';
   }
-  if (text.includes('正在处理')) {
+  if (text === '正在处理') {
     return 'processing';
   }
   return text === '处理失败' ? 'failed' : undefined;

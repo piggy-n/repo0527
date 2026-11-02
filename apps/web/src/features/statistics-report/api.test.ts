@@ -34,8 +34,8 @@ describe('统计报表', () => {
     ]);
   });
 
-  it('状态文字换算成数据准备的状态：未处理和认不出的都算还没开始', async () => {
-    const texts = ['处理成功', '处理完成', '正在处理', '正在处理中', '处理失败', '未处理', '其他状态'];
+  it('状态只认处理成功、正在处理、处理失败、未处理，文字要完全相同；未处理和其他文字都没有对应的状态', async () => {
+    const texts = ['处理成功', '正在处理', '处理失败', '未处理', '处理完成', '正在处理中', '其他状态'];
     server.use(
       mock.post('/backend/statistics/page', () =>
         HttpResponse.json(
@@ -47,11 +47,11 @@ describe('统计报表', () => {
 
     expect(page.list.map(report => [report.statusText, report.status])).toEqual([
       ['处理成功', 'success'],
-      ['处理完成', 'success'],
       ['正在处理', 'processing'],
-      ['正在处理中', 'processing'],
       ['处理失败', 'failed'],
       ['未处理', undefined],
+      ['处理完成', undefined],
+      ['正在处理中', undefined],
       ['其他状态', undefined]
     ]);
   });
