@@ -3,7 +3,6 @@ import { useMediaQuery } from '@vueuse/core';
 import { ElTable, ElTableColumn, vLoading } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';
-import { isPrepareStatus } from '@/shared/data-request/prepare-status';
 import { PrepareStatusText } from '@/shared/data-request/PrepareStatusText';
 import { DownloadButton } from '@/shared/file-transfer/DownloadButton';
 import type { RowDownloadState } from '@/shared/file-transfer/useRowDownloads';
@@ -17,12 +16,7 @@ interface Row {
   $index: number;
 }
 
-// 认得的状态显示图标和文案，其他的原样显示（没有真实样本，见 api.ts）
-function renderStatus(report: Report) {
-  return isPrepareStatus(report.status) ? <PrepareStatusText status={report.status} /> : report.status;
-}
-
-/** 统计报表的表格：占满父元素的剩余高度；状态认得的显示图标和文案，其他的原样显示；处理完成的才能下载 */
+/** 统计报表的表格：占满父元素的剩余高度；状态显示后端的文字，图标和颜色按换算的状态；处理成功的才能下载 */
 export const ReportTable = defineComponent({
   name: 'ReportTable',
   directives: { loading: vLoading },
@@ -73,7 +67,7 @@ export const ReportTable = defineComponent({
             <ElTableColumn prop="startTime" label="开始时间" width="170" />,
             <ElTableColumn prop="finishTime" label="完成时间" width="170" />,
             <ElTableColumn label="状态" width="130">
-              {{ default: ({ row }: Row) => renderStatus(row) }}
+              {{ default: ({ row }: Row) => <PrepareStatusText status={row.status} label={row.statusText} /> }}
             </ElTableColumn>,
             <ElTableColumn label="操作" width="110" align="center" fixed={compact.value ? false : 'right'}>
               {{

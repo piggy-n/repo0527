@@ -1,6 +1,5 @@
 import type { Application } from '@/features/data-application/api';
 import type { Report } from '@/features/statistics-report/api';
-import type { PrepareStatus } from '@/shared/data-request/prepare-status';
 
 // 系统管理组件样例的固定数据：字段和取值按 2026-10-27 只读核对的真实接口整理（docs/migration.md），名称和人名是虚构的；
 // 时间是接口转换以后的北京时间，格式是小写
@@ -170,32 +169,48 @@ export const APPLICATION_SAMPLES: Application[] = [
   ...tableTasks
 ];
 
+// 报表的名称和结构按联调拿到的 /statistics/page 返回（docs/migration.md）；那份返回全是处理成功，其余状态的时间是推断的
 const reportNames = [
   '基本统计报表_省级',
   '基本统计报表_市级',
   '基本统计报表_县级',
   '基本统计报表_区级',
   '汇总统计报表_省级',
-  '汇总统计报表_市级',
   '基本变化统计报表_省级',
   '基本变化统计报表_市级',
   '基本变化统计报表_县级',
-  '基本变化统计报表_区级'
+  '水路网基本统计报表_省级',
+  '水路网基本统计报表_市级',
+  '水路网基本统计报表_区县级',
+  '水路网变化统计报表_省级',
+  '水路网变化统计报表_市级'
 ];
 
-const reportStatuses: PrepareStatus[] = ['success', 'success', 'processing', 'success', 'failed', 'success', 'timeout'];
+const SUCCEEDED = { status: 'success', statusText: '处理成功' } as const;
+
+const reportStates: Pick<Report, 'status' | 'statusText'>[] = [
+  SUCCEEDED,
+  SUCCEEDED,
+  { status: 'processing', statusText: '正在处理' },
+  SUCCEEDED,
+  { status: 'failed', statusText: '处理失败' },
+  SUCCEEDED,
+  { status: undefined, statusText: '未处理' }
+];
 
 export const REPORT_SAMPLES: Report[] = reportNames.flatMap((name, index) =>
-  ['2024', '2023'].map((year, yearIndex): Report => {
-    const status = reportStatuses[(index + yearIndex) % reportStatuses.length] ?? 'success';
-    const day = String(14 - index).padStart(2, '0');
+  ['2026', '2025'].map((year, yearIndex): Report => {
+    const state = reportStates[(index + yearIndex) % reportStates.length] ?? SUCCEEDED;
+    const day = String(28 - index).padStart(2, '0');
+    const finished = state.status === 'success' || state.status === 'failed';
     return {
-      id: `report-${year}-${index + 1}`,
+      id: `21170971907${year}${String(index + 1).padStart(4, '0')}`,
       name,
       year,
-      startTime: `2026-10-${day} 14:2${yearIndex}:00`,
-      finishTime: status === 'processing' ? undefined : `2026-10-${day} 14:2${yearIndex + 3}:45`,
-      status
+      startTime: state.status === undefined ? null : `2026-10-${day} 14:2${yearIndex}:00`,
+      finishTime: finished ? `2026-10-${day} 14:2${yearIndex + 3}:45` : null,
+      status: state.status,
+      statusText: state.statusText
     };
   })
 );

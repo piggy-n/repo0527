@@ -1,15 +1,21 @@
-// 测试用的虚构记录。2026-10-27 实测 /statistics/page 没有记录，字段按旧页面读的写（见 api.ts），待联调核对
+// 测试用的记录，结构按联调拿到的 /statistics/page 返回（docs/migration.md）：没有值的键写成 null，每行都带 null 的
+// pageNum、pageSize；ID 是超过安全整数的长数字串，状态是中文文字
 
 type RawRecord = Record<string, unknown>;
 
 export function reportRecord(overrides: RawRecord = {}): RawRecord {
   return {
-    id: 'report-1',
+    id: '2117097190761029634',
+    year: '2026',
+    type: 'baseTable',
+    status: '处理成功',
+    level: 'province',
     name: '基本统计报表_省级',
-    year: 2024,
-    startTime: '2026-10-14 14:20:00',
-    finishTime: '2026-10-14 14:23:45',
-    status: 'success',
+    startTime: '2026-11-02 11:31:28',
+    finishTime: '2026-11-02 11:39:28',
+    createdTime: '2026-11-02 11:31:18',
+    pageNum: null,
+    pageSize: null,
     ...overrides
   };
 }

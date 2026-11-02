@@ -18,6 +18,7 @@ import { reportPageResponse, reportRecord } from '@/features/statistics-report/t
 import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { createTestJwtExpiringAt } from '@/shared/auth/testing';
+import statusStyles from '@/shared/data-request/PrepareStatusText.module.scss';
 import { RouteName } from '@/shared/router/route-names';
 import { SystemManagementPage } from './SystemManagementPage';
 
@@ -38,7 +39,7 @@ afterAll(() => server.close());
 
 type RawRecord = Record<string, unknown>;
 
-// 申请：待审核、准备中、准备完成、统计任务各一条，审核会改掉待审核那条的状态；报表：处理完成、处理中各一条。
+// 申请：待审核、准备中、准备完成、统计任务各一条，审核会改掉待审核那条的状态；报表：处理成功、正在处理、处理失败、未处理各一条。
 // 记下列表、详情、报表的请求次数，审核的参数和下载的请求
 function mockBackend() {
   const records: RawRecord[] = [
@@ -47,7 +48,12 @@ function mockBackend() {
     approvedRecord({ apply_id: 'apply-ready', apply_name: '医疗机构面层', storage_status: 'success' }),
     tableRecord()
   ];
-  const reports = [reportRecord(), reportRecord({ id: 'report-2', name: '汇总统计报表_市级', status: 'processing' })];
+  const reports = [
+    reportRecord(),
+    reportRecord({ id: 'report-2', name: '汇总统计报表_市级', status: '正在处理', finishTime: null }),
+    reportRecord({ id: 'report-3', name: '基本变化统计报表_市级', status: '处理失败' }),
+    reportRecord({ id: 'report-4', name: '水路网基本统计报表_省级', status: '未处理', startTime: null, finishTime: null })
+  ];
   const state = { list: 0, detail: 0, reports: 0, audits: [] as Record<string, string>[], downloads: [] as string[] };
   server.use(
     mock.post('/backend/api/apply/list', () => {
@@ -143,8 +149,11 @@ function rows() {
     [...row.querySelectorAll('td .cell')].map(cell => cell.textContent?.trim() ?? ''));
 }
 
+// 表体里用这种状态样式显示的文字
+const statusOf = (status: string) => document.querySelector(`.el-table__body .${statusStyles[status]}`)?.textContent;
+
 // 弹窗渲染在 body 下
-const dialog = () => document.querySelector<HTMLElement>('.el-dialog');
+const dialog =() => document.querySelector<HTMLElement>('.el-dialog');
 const dialogOpen = () => {
   const overlay = dialog()?.closest<HTMLElement>('.el-overlay');
   return overlay !== null && overlay !== undefined && overlay.style.display !== 'none';
@@ -200,23 +209,29 @@ describe('SystemManagementPage', () => {
     expect(backend.downloads).toEqual(['POST apply-ready']);
   });
 
-  it('统计报表：不请求申请列表；表格和下载，处理完成的才能下载；切回资源审核时再请求申请列表', async () => {
+  it('统计报表：不请求申请列表；状态显示后端的文字、样式按换算的状态；处理成功的才能下载；切回资源审核时再请求申请列表', async () => {
     const backend = mockBackend();
     const saved = stubSave();
     const { router, wrapper } = await mountAt(RouteName.systemManagementReports);
-    await vi.waitFor(() => expect(rows()).toHaveLength(2));
+    await vi.waitFor(() => expect(rows()).toHaveLength(4));
     expect(backend.list).toBe(0);
     expect(wrapper.findAll('h2').map(title => title.text())).toStrictEqual(['系统管理', '统计报表']);
     expect(rows()).toEqual([
-      ['1', '2024', '基本统计报表_省级', '2026-10-14 14:20:00', '2026-10-14 14:23:45', '处理完成', '下载'],
-      ['2', '2024', '汇总统计报表_市级', '2026-10-14 14:20:00', '2026-10-14 14:23:45', '正在处理', '下载']
+      ['1', '2026', '基本统计报表_省级', '2026-11-02 11:31:28', '2026-11-02 11:39:28', '处理成功', '下载'],
+      ['2', '2026', '汇总统计报表_市级', '2026-11-02 11:31:28', '', '正在处理', '下载'],
+      ['3', '2026', '基本变化统计报表_市级', '2026-11-02 11:31:28', '2026-11-02 11:39:28', '处理失败', '下载'],
+      ['4', '2026', '水路网基本统计报表_省级', '', '', '未处理', '下载']
     ]);
+    expect(statusOf('success')).toBe('处理成功');
+    expect(statusOf('processing')).toBe('正在处理');
+    expect(statusOf('failed')).toBe('处理失败');
+    expect(statusOf('waiting')).toBe('未处理');
     const downloadButtons = [...document.querySelectorAll<HTMLButtonElement>('.el-table__body button')];
-    expect(downloadButtons.map(item => item.disabled)).toEqual([false, true]);
+    expect(downloadButtons.map(item => item.disabled)).toEqual([false, true, true, true]);
 
     downloadButtons[0]?.click();
     await vi.waitFor(() => expect(saved).toEqual(['基本统计报表_省级.zip']));
-    expect(backend.downloads).toEqual(['GET report-1']);
+    expect(backend.downloads).toEqual(['GET 2117097190761029634']);
 
     await router.push({ name: RouteName.systemManagement });
     await vi.waitFor(() => expect(backend.list).toBe(1));
