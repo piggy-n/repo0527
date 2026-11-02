@@ -133,7 +133,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 路由表在 `app/router/routes.ts`；路由名常量在 `shared/router/route-names.ts`，跳转写 `{ name: RouteName.xxx }`，不写路径字符串；页面级参数用路由的 `props` 传入，不放在 `meta` 里
 - 程序式跳转用 `shared/router/navigate`，返回 true 后才执行成功提示等后续动作；导航异常由 app 统一提示与恢复，调用方不重复提示（ADR 0064）
 - 页面权限写在路由 meta 上：不登录也能访问的页面加 `public: true`，限定角色写 `roles`；不另外维护路径清单。`routes.test.ts` 列出了全部公开页面和限定角色的页面，修改时同步更新（ADR 0015）
-- 切走时要保留状态的页面在路由 meta 写 `keepAlive: true`，由 `AppLayout` 里常驻的 `KeepAlive` 缓存，布局卸载（回到登录页）时清空；环境变量 `VITE_PAGE_STATE_RESET=true` 时不缓存、每次进入都是初始状态（默认 false，ADR 0114）；`routes.test.ts` 列出缓存的页面（ADR 0063）。被缓存的页面里量尺寸用 `shared/composables` 的 `useShownElementSize`，不直接用 `useElementSize`（停用期间量到 0，恢复的第一帧会按 0 排版）；停用时要结束的临时交互用 `usePageActive`。画布型页面的根元素用 `height: 100%`：内容区不是弹性容器，`flex: 1` 不生效，浮层全是绝对定位时整页高度为 0（见 `docs/design/page-layout.md`）
+- 切走时要保留状态的页面在路由 meta 写 `keepAlive: true`，由 `AppLayout` 里常驻的 `KeepAlive` 缓存，布局卸载（回到登录页）时清空；环境变量 `VITE_PAGE_STATE_RESET=true` 时不缓存、每次进入都是初始状态（`.env` 里目前是 true，ADR 0114）；`routes.test.ts` 列出缓存的页面（ADR 0063）。被缓存的页面里量尺寸用 `shared/composables` 的 `useShownElementSize`，不直接用 `useElementSize`（停用期间量到 0，恢复的第一帧会按 0 排版）；停用时要结束的临时交互用 `usePageActive`。画布型页面的根元素用 `height: 100%`：内容区不是弹性容器，`flex: 1` 不生效，浮层全是绝对定位时整页高度为 0（见 `docs/design/page-layout.md`）
 - TSX 里同一个父元素下有几个按条件出现、可能同时变化的兄弟元素时，每个都给 `key`：TSX 没有模板编译器加的标记，Vue 把没有 key 的同类元素按顺序配对，里面的 `KeepAlive` 和有状态的组件会被重建（写法见 `pages/current-map/CurrentMapPage.tsx` 的浮层）
 - 顶部导航配置在 `app/layout/menus.ts`，导航项的权限从路由 meta 读取，不在菜单里另写角色；新增业务页时先加路由再加导航项
 - 登录会话只通过 `shared/auth` 的 `useSessionStore` 读写，不直接读写 localStorage 中的 token
@@ -165,7 +165,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 不用 DOM 的测试文件（纯逻辑、libs 的会话与 Worker 通信层、`tools/` 脚本）第一行写 `// @vitest-environment node`：默认的 jsdom 每个文件要多花约 1 秒创建（见 `docs/config/vite-config.md` 的"测试耗时"）
 - 工具函数、鉴权、HTTP 错误处理这类纯逻辑要写测试；页面和组件测试关键交互
 - pages、features 的测试用 `createMemoryHistory()` 建只含所需路由的最小路由，不导入 `app` 的路由表（测试文件同样受依赖方向约束）；`app` 自己的测试可以用真实路由表，例如检查导航与路由权限是否一致
-- 模拟环境变量用 `vi.stubEnv`，用例结束后会自动撤销（`unstubEnvs`）
+- 模拟环境变量用 `vi.stubEnv`，用例结束后会自动撤销（`unstubEnvs`）；部署时决定的开关，用例不依赖 `.env` 的取值：单元测试自己固定（模块加载时就读取的，放进 `vi.hoisted`），生产冒烟用 `loadEnv` 读构建用的取值，验证对应的行为
 - 模拟接口用 MSW 的 `setupServer()`，并设置 `onUnhandledRequest: 'error'`；不用 `vi.mock('axios')`；依赖第三方类的代码（如 MapLibre 适配器）依赖自己定义的窄接口，测试注入实现它的假对象，并用 `expectTypeOf` 检查真实的类满足它，不用 `vi.mock` 整个库
 - 测试写完后，故意改坏被测代码，确认测试会失败，并确认失败原因是断言而不是代码报错或超时（可能一直挂起的等待要和必然更晚结束的等待赛跑：只经过微任务的用 `setTimeout(0)`，经过消息往返的按轮数推进事件循环，不用固定时长，见 `docs/modules/utils.md` 的测试）；修 bug 时先写能复现问题的测试
 - `vite.config.ts` 的 `test.server.deps.inline: ['element-plus']` 不能删：不加的话 Element 表单的校验在测试中永远通过（见 `docs/config/vite-config.md`）
