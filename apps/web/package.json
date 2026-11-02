@@ -18,6 +18,7 @@
     "title:generate": "node tools/system-title/cli.ts",
     "boundaries:generate": "node tools/boundaries/cli.ts",
     "measure:map-load": "vite build && node tools/measure-map-load/cli.ts",
+    "probe:resource-classes": "node tools/probe-resource-classes/cli.ts",
     "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
   },
   "dependencies": {
