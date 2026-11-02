@@ -20,6 +20,7 @@ import { useSceneModelsQuery } from '@/features/scene-models/queries';
 import { usePageActive } from '@/shared/composables/usePageActive';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { appConfig } from '@/shared/config/app-config';
+import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
@@ -347,7 +348,7 @@ export const CurrentMapPage = defineComponent({
           style={{ '--map-tools-width': toolbarColumns ? '72px' : '40px' }}
           data-map-page={phone ? 'phone' : 'wide'}
         >
-          <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
+          <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS}scrollZoomRates={SCROLL_ZOOM_RATES} />
           <CesiumCanvas onUnsupported={reportUnsupported} />
           <MeasureOverlay measure={measure} />
           <LocationOverlay location={location} />

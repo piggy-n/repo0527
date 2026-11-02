@@ -10,6 +10,8 @@ interface QueryGeometry {
 interface Backend {
   // 查询瓦片的地址参数，按请求顺序
   tiles: URLSearchParams[];
+  // 查询瓦片请求带的 token，按请求顺序
+  tileTokens: (string | undefined)[];
   // 结果表分页的接口和参数
   pages: { readonly endpoint: string; readonly params: URLSearchParams }[];
   // 空间查询命中要素时收到的几何
@@ -36,7 +38,7 @@ const FEATURES = [
 // 产物测试只使用本地接口样本，不导入源码；没有列出的接口交给公共夹具
 const test = base.extend<{ backend: Backend }>({
   backend: [async ({ context }, use) => {
-    const backend: Backend = { tiles: [], pages: [], geometries: [], exports: [] };
+    const backend: Backend = { tiles: [], tileTokens: [], pages: [], geometries: [], exports: [] };
     await context.route('**/backend/api/**', async route => {
       const request = route.request();
       const url = new URL(request.url());
@@ -44,6 +46,7 @@ const test = base.extend<{ backend: Backend }>({
       if (endpoint === '/api/query/mvt' && request.method() === 'GET') {
         // 空瓦片：只确认地址，地图上没有要素
         backend.tiles.push(url.searchParams);
+        backend.tileTokens.push(request.headers().token);
         await route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) });
       } else if (endpoint === '/api/query/attr/page' || endpoint === '/api/query/scope/geojson/page') {
         backend.pages.push({ endpoint, params: url.searchParams });
@@ -87,6 +90,19 @@ async function openTopic(page: Page, label: string) {
   await page.getByRole('button', { name: '查询统计' }).click();
   await page.getByRole('link', { name: label, exact: true }).click();
 }
+
+test('MapLibre 在 Worker 里发出的瓦片请求带登录 token', async ({ page, backend }) => {
+  await openQuery(page, '/space-monitoring-query');
+  await chooseLayer(page, '学校点层');
+  await expect.poll(() => backend.tileTokens.length).toBeGreaterThan(0);
+
+  const token = await page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem('yzt.session') ?? '{}') as { token?: string };
+    return session.token;
+  });
+  expect(token).toBeTruthy();
+  expect(new Set(backend.tileTokens)).toEqual(new Set([token]));
+});
 
 test('属性查询：选图层先请求全省的预览瓦片；查询后结果表、条数和带条件的结果瓦片；导出 Excel 以图层名下载', async ({ page, backend }) => {
   await openQuery(page, '/space-monitoring-query');

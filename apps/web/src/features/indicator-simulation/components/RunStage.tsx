@@ -3,6 +3,7 @@ import { MapCanvas } from '@yzt/map-vue';
 import { MxPanel, MxSplitLayout } from '@yzt/ui';
 import { ElButton, ElMessage, ElPopconfirm, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, onBeforeUnmount, type PropType, ref, watch } from 'vue';
+import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
 import type { Basemap } from '@/shared/map/basemap/useBasemap';
 import { JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
@@ -228,7 +229,7 @@ export const RunStage = defineComponent({
       const selection = result.selection.value;
       return (
         <div key="map" class={[styles.layer, !showingResult.value && styles.concealed]}>
-          <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
+          <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS}scrollZoomRates={SCROLL_ZOOM_RATES} />
           <MapStatusNotice />
           <SimulationMapOverlay
             simulationMap={props.simulationMap}

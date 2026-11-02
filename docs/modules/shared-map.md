@@ -15,6 +15,7 @@
 | `pointer-hint/pointer-hint.ts` | 鼠标旁的提示在哪一侧：右边、下边放不下时翻到另一侧（纯函数，ADR 0055）；提示的内容 `PointerHintContent`（位置和各行） |
 | `pointer-hint/PointerHint.tsx` | 鼠标旁的提示：加粗的数值和操作说明，测量和拾取共用 |
 | `jiangsu.ts` | 江苏省的范围 `JIANGSU_BOUNDS`、创建地图时的相机 `JIANGSU_CAMERA`、缩放范围 `JIANGSU_ZOOM_RANGE` |
+| `backend-request.ts` | 业务地图画布的选项 `JIANGSU_MAP_OPTIONS`：缩放范围，以及只给发往后端的瓦片请求带 token 的 `transformRequest` |
 | `useDefaultView.ts` | 默认视角：第一次就绪时按江苏的范围定位，`goToDefaultView()` 回到默认视角（ADR 0033） |
 | `useMapLoadMarks.ts` | 登录后第一次进入地图时，记下地图页开始创建、视图就绪、第一次画面稳定（见 [perf.md](perf.md)） |
 | `basemap/basemap-style.ts` | 底图目录与推导：可选的底图、初始状态、`createBasemapStyles` 给出两个分组的推导函数（纯函数，ADR 0031） |
@@ -90,10 +91,11 @@
 // 页面 setup：只在 provideMap 所在的组件里调用一次，传入页面句柄
 const { goToDefaultView } = useDefaultView(map);
 
-// 画布带上缩放范围
-<MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} />
+// 画布带上缩放范围和瓦片请求的 token
+<MapCanvas mapOptions={JIANGSU_MAP_OPTIONS} />
 ```
 
+- `JIANGSU_MAP_OPTIONS` 的 `transformRequest` 每次请求时读取当前 token，只发给 `appConfig.apiBaseUrl` 下的地址，天地图和站内静态文件不带；MapLibre 在主线程转换请求，再连同请求头交给 Worker，所以 Worker 里发出的瓦片请求也带 token。token 放请求头、不拼进地址，避免进入日志和缓存的键。三维不显示矢量瓦片，不经过它
 - `JIANGSU_BOUNDS` 是省界数据的实际范围向外取整（`[116.35, 30.75, 121.98, 35.15]`），由测试检查它包含省界的全部范围、四边多出的不超过 0.05°。5A 时的 `[116.3, 30.7, 121.9, 35.2]` 东边界切掉了启东一角
 - `JIANGSU_ZOOM_RANGE` 是 5～18 级，与旧项目一致：5 级能看到江苏和周边，天地图只有 18 级以内的数据
 - 创建地图时用 `JIANGSU_CAMERA`（沿用旧项目的默认视角 119.5, 33.0, z6.8）
@@ -275,7 +277,7 @@ boundaries.setOpacity(0.6);
 ```tsx
 // 页面：放在工具栏一列的下面；默认视角的回调来自页面的 useDefaultView，缩放范围和画布的相同
 <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
-<MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
+<MapCanvas mapOptions={JIANGSU_MAP_OPTIONS} scrollZoomRates={SCROLL_ZOOM_RATES} />
 ```
 
 - 宽 40，只有图标，悬停在左边提示名称：层级（32 × 28）、放大、缩小、指北针（32 × 32）、默认视角、2D/3D（上下两格，各 32 × 24）；整组 241 高（加指北针以前是 209）。角落里的小控件，不登记为悬浮元素
@@ -799,6 +801,7 @@ sides.activate('right');
 |---|---|---|
 | `useDefaultView.test.ts` | 初始适配在进入页面时的操作下 `run`、不开始新的操作，和它的参数；回到默认视角是一次相机操作和它的参数；画布已经创建视图或不在作用域里时抛错。第一次就绪、失败重试后补做、让给用户的操作、页面卸载时放弃由 `run` 负责，见 map-vue 的 `context.test.ts` 和现状底图页的测试 | Node |
 | `jiangsu.test.ts` | 江苏的范围包含省界数据，四边多出的不超过 0.05° | Node |
+| `backend-request.test.ts` | 三种瓦片地址带 token；天地图、其他域名、站内静态文件、前缀相近的路径不带；每次请求读取当前 token；Worker 里的请求真正带上请求头见冒烟 `data-query.spec.ts` | jsdom |
 | `pages/current-map/CurrentMapPage.test.tsx` | 页面绑定的分组与叠放（底图、注记、省界，区划高亮在边界之上，测量叠在最上面）；区划定位：工具栏开关面板、选中后高亮并定位、用关闭按钮或工具栏关面板都不清选择、再点回到全省和默认视角（市界用替换的 fetch 提供）；坐标定位：区划定位和坐标定位是功能面板的两个 Tab（切走时隐藏、取消拾取、输入保留，再点正在显示的入口关闭）、窄屏时右边让出去以后再点坐标定位、图例是重新显示（输入保留，让出去时入口不显示为按下）、资源详情切走时保留、再单击时切回、关闭时清除选择（ADR 0053）、输入后定位与位置信息（两种格式、所在区划）、拾取与提示、长按拖动与 Esc（假定时器）、关闭面板取消拾取、图钉随相机移动、单击开关位置信息（右键不算）、画布重建时先隐藏、拖动时视口坐标换成画布坐标、测量时图钉不响应、"清除"；状态栏：比例尺、"中心"、鼠标的位置在下一帧写入、写法跟着坐标定位面板、没有版权控件；把缩放范围交给画布；第一次就绪时定位、画布重建后不再定位；"默认视角"按钮；失败重试后补做；测量的完整交互：提示跟随鼠标和状态、画的过程中含鼠标所在点的长度、末点的总长、标签随相机移动、× 和"清除"、换成测面，结果标签的摆放（总长在旁边、总面积居中），画布重建时标签先隐藏、就绪后重新显示；当前区划：没选时不显示，选中后写出区划，"回到全省"清除；区划定位与其他相机操作的先后（ADR 0038）：加载期间点"默认视角"（相机没变）、上一次定位的动画中选中区县、地图加载期间选中区划、加载期间拖动或坐标定位（这几个用例重新导入页面，区划边界从没有缓存开始，边界文件的请求由用例放行）（用假地图，鼠标事件经过真实的适配器） | jsdom |
 | `map-status.test.ts` | 各状态的显示内容、两种引擎失败、样式失败、没有原因、不是 Error 的原因 | Node |
 | `MapStatusNotice.test.tsx` | 引擎失败时显示原因和"重试"，点击后重新创建地图，重试过程不抛错 | jsdom |

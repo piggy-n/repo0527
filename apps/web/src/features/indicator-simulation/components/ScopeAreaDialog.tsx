@@ -3,6 +3,7 @@ import { MapCanvas, useMapOverlay } from '@yzt/map-vue';
 import { ElButton, ElDialog, ElInput, ElMessage, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNodeChild } from 'vue';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
+import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
 import { JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
@@ -249,7 +250,7 @@ export const ScopeAreaDialog = defineComponent({
                   onDragleave={onDragLeave}
                   onDrop={onDrop}
                 >
-                  <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
+                  <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS}scrollZoomRates={SCROLL_ZOOM_RATES} />
                   <MapStatusNotice />
                   <MapChrome editor={editor} />
                   <BoxSelectOverlay pick={editor.draw} />

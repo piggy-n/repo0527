@@ -31,7 +31,7 @@ export interface MapLibreViewOptions<G extends string> {
   readonly container: HTMLElement;
   /** 创建后是否显示，默认 true；为 false 时加载完成后进入 paused */
   readonly active?: boolean;
-  /** minZoom、maxZoom、transformRequest 等，由 app 提供 */
+  /** minZoom、maxZoom、transformRequest 等，由页面提供 */
   readonly mapOptions?: Omit<MapLibreMapOptions, 'container' | 'style' | 'center' | 'zoom' | 'bearing' | 'pitch'>;
   /** 测试时换成假地图 */
   readonly createMap?: (options: MapLibreMapOptions) => MapLike;

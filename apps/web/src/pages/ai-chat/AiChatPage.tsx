@@ -6,6 +6,7 @@ import { hasPanelContent } from '@/features/ai-chat/chat-result';
 import { AiResultPanel } from '@/features/ai-chat/components/AiResultPanel';
 import { ChatPanel } from '@/features/ai-chat/components/ChatPanel';
 import { useAiChat } from '@/features/ai-chat/composables/useAiChat';
+import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
@@ -71,7 +72,7 @@ export const AiChatPage = defineComponent({
             <div class={[styles.mapSlot, resultMaximized.value && styles.mapShrunk]}>
               <MxPanel flush>
                 <div class={styles.map}>
-                  <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
+                  <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS}scrollZoomRates={SCROLL_ZOOM_RATES} />
                   {/* 结果最大化时地图只剩一条，放不下控制栏和底图卡片 */}
                   {!resultMaximized.value && (
                     <div class={styles.corner}>
