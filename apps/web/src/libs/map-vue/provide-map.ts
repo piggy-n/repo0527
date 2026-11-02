@@ -1,13 +1,14 @@
 import { BROWSE_TOOL, MapSession, type MapSessionOptions, type MapTool } from '@yzt/map-core';
 import { safeReporter } from '@yzt/utils';
-import { getCurrentInstance, onBeforeMount, onBeforeUnmount, onUnmounted, provide } from 'vue';
+import { getCurrentInstance, inject, onBeforeMount, onBeforeUnmount, onUnmounted, provide } from 'vue';
 import { INTERNAL_MAP_CONTEXT, type MapContext, MapContextState } from './context';
 import { type OverlayOptions, resolveOverlayOptions } from './overlay';
+import { MAP_ERROR_REPORTER } from './runtime';
 import { SceneBinder, type SceneDerivation } from './scene-binder';
 import { StyleBinder, type StyleDerivation } from './style-binder';
 
 export interface ProvideMapOptions<G extends string> extends MapSessionOptions<G> {
-  /** 样式提交失败、视图运行中的错误；默认打印到控制台 */
+  /** 样式提交失败、视图运行中的错误；默认用 app 提供的 MAP_ERROR_REPORTER，没有时打印到控制台 */
   readonly onError?: (error: unknown) => void;
   /** 定位避开悬浮元素时的边距、间隔和可视区域的下限（ADR 0029） */
   readonly overlay?: OverlayOptions;
@@ -36,7 +37,7 @@ export function provideMap<const G extends string>(options: ProvideMapOptions<G>
     throw new Error('provideMap 只能在组件的 setup 中调用');
   }
   // 统一的上报入口：外部的报告器抛错时不能打断提交、状态转换和卸载，map-vue 内部都经由它上报
-  const onError = safeReporter(options.onError ?? reportToConsole, 'map-vue');
+  const onError = safeReporter(options.onError ?? inject(MAP_ERROR_REPORTER, reportToConsole), 'map-vue');
   const overlayOptions = resolveOverlayOptions(options.overlay);
   const session = new MapSession(options);
   const binder = new StyleBinder(session.style, onError);

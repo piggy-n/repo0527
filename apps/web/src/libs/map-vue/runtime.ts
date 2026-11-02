@@ -12,3 +12,6 @@ export type MapRuntimePreloader = (framework: ViewKind) => void;
 
 /** app 用它 provide 预加载运行时的函数；没有 provide 时画布不预加载 */
 export const MAP_RUNTIME_PRELOAD: InjectionKey<MapRuntimePreloader> = Symbol('map-runtime-preload');
+
+/** app 用它 provide 地图错误的报告器，处理鉴权这类 map-vue 不认识的事；页面传了 onError 时以页面的为准，都没有时打印到控制台 */
+export const MAP_ERROR_REPORTER: InjectionKey<(error: unknown) => void> = Symbol('map-error-reporter');

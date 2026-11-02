@@ -210,7 +210,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 样式按分组推导：每个拥有者用纯函数从自己的状态推导出分组并整体替换；跨分组的修改用一次 `setGroups` 提交，批次不跨 `await`；交给会话的 GeoJSON 数据和样式图片不能原地修改，要换新对象（ADR 0022、0045）
 - 地图能力按 ADR 0027 分层：与框架无关的逻辑在 map-core，Vue 衔接在 map-vue，项目级的公共能力（底图、行政区、工具栏界面）在 `shared/map`，业务数据驱动的图层在 feature，页面挑选组合；用组合，不做带开关的全能地图组件。一项能力放哪一层看它是否属于某个业务域，不看有几个使用方
 - 页面用 `provideMap()` 创建会话，用 `map.bindStyle()` 把拥有者的推导函数（`() => StyleGroup`）绑定到分组，只能在同一个组件的 setup 里绑定；拥有者不提交样式，"不显示"用推导结果返回空分组表达（ADR 0028）
-- 业务地图的画布用 `shared/map/backend-request.ts` 的 `JIANGSU_MAP_OPTIONS`（后端校验瓦片的 token，见 `docs/migration.md`）：只给发往 `appConfig.apiBaseUrl` 的请求带 token，天地图等第三方不带；token 放请求头，不拼进地址
+- 业务地图的画布用 `shared/map/backend-request.ts` 的 `JIANGSU_MAP_OPTIONS`（后端校验瓦片的 token，见 `docs/migration.md`）：只给发往 `appConfig.apiBaseUrl` 的请求带 token，天地图等第三方不带；token 放请求头，不拼进地址。瓦片的 401 由 app 通过 `MAP_ERROR_REPORTER` 注入的 `reportMapError` 接收，和接口的 401 走同一个 `onUnauthorized`，页面不另外处理
 - 引用别的分组数据源的推导，要依赖被引用方的状态，保证两者在同一轮变化、一起提交；拥有者的数据源、图层和样式图片的 ID 以分组名为前缀（ADR 0027、0028、0045）
 - `shared/map` 和 feature 的地图能力按"拥有者"写（ADR 0031）：组合式函数持有状态（`shallowRef`，整体替换，值没变时不替换）并提供操作（参数不合法时抛错），推导分组的是纯函数；面板等界面通过 props 拿到拥有者，只显示和调用
 - 默认视角 `useDefaultView(map)` 只在 `provideMap` 所在组件的 setup 里调用一次，其他组件通过 props 拿到 `goToDefaultView`（ADR 0033）

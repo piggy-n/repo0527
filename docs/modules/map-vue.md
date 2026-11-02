@@ -16,7 +16,7 @@
 | `MapCanvas.tsx` | `<MapCanvas>`：二维地图画布，挂载后创建视图、卸载时释放 |
 | `CesiumCanvas.tsx` | `<CesiumCanvas>`：三维画布，第一次切到三维时加载运行时和 map-cesium 再创建视图 |
 | `failed-view.ts` | `FailedView`：框架加载失败时挂上的视图，一直处于引擎失败 |
-| `runtime.ts` | `MAP_RUNTIME`：app 提供"加载某个框架的运行时"的函数用的注入键；`MAP_RUNTIME_PRELOAD`：app 提供"预加载某个框架的运行时"的函数（ADR 0091） |
+| `runtime.ts` | `MAP_RUNTIME`：app 提供"加载某个框架的运行时"的函数用的注入键；`MAP_RUNTIME_PRELOAD`：app 提供"预加载某个框架的运行时"的函数（ADR 0091）；`MAP_ERROR_REPORTER`：app 提供地图错误的默认报告器 |
 | `use-map.ts` | `useMap()`：子孙组件取只读上下文；`useMapOverlay()`：悬浮元素登记自己贴着的边 |
 
 ## 用法
@@ -26,7 +26,7 @@
 const map = provideMap({
   groups: ['basemap', 'resources', 'highlight'], // 从下到上的叠放顺序
   camera: JIANGSU_CAMERA,
-  onError: reportMapError // 可选：样式提交失败、视图运行中的错误；默认打印到控制台
+  onError: reportError // 可选：样式提交失败、视图运行中的错误；默认用 app 提供的 MAP_ERROR_REPORTER，没有时打印到控制台
 });
 
 const basemap = useBasemap();
@@ -243,7 +243,7 @@ const padding = useMap().overlayPadding();
 
 ## 错误上报
 
-- `provideMap` 在入口把 `onError`（没传时是打印到控制台）用 `@yzt/utils` 的 `safeReporter` 包一层，map-vue 内部（提交器、卸载时的释放、画布、交给视图的报告器）都经由它上报
+- `provideMap` 在入口把 `onError`（没传时用注入的 `MAP_ERROR_REPORTER`，也没有时打印到控制台）用 `@yzt/utils` 的 `safeReporter` 包一层，map-vue 内部（提交器、卸载时的释放、画布、交给视图的报告器）都经由它上报
 - 外部的报告器自己抛错时，改为打印到控制台（连同原始错误），不打断提交、视图的状态转换和卸载。之前的问题：报告器在卸载路径上抛错会让后续的卸载钩子都不执行；在挂载时的提交里抛错会让挂载失败
 - 视图（`MapLibreView`）自己也包了一层：map-core 可以脱离 map-vue 单独使用
 

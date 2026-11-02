@@ -268,7 +268,7 @@ R5 按用户最新确认直接打开文件选择器，不增加导入弹窗或�
 
 - 经 `/backend` 同源代理可以正常请求。MapLibre 在 Worker 里请求瓦片，地址要用绝对地址（旧代码注释同样记录了这一点）
 - **不校验 token**：不带 token、带无效 token 都返回 200，内容完全相同。至少目前瓦片与用户、权限无关（ADR 0025 的待定问题），以后会不会按权限过滤仍要向后端确认
-- **2026-11-02 换到后端 `192.168.153.194:18010` 后校验 token**：不带 token 返回 401（响应体 52 字节），旧项目带 `token` 请求头返回 200。所以业务地图的画布都用 `shared/map/backend-request.ts` 的 `JIANGSU_MAP_OPTIONS`，发往 `/backend/` 的瓦片请求带 token（`/api/tiles`、`/api/query/mvt`、`/api/analysis/mvt` 都经过它）。瓦片是否按用户、权限过滤仍待后端确认；响应头仍是 `Cache-Control: max-age=300, public`
+- **2026-11-02 换到后端 `192.168.153.194:18010` 后校验 token**：不带 token 返回 401（响应体 52 字节），旧项目带 `token` 请求头返回 200。所以业务地图的画布都用 `shared/map/backend-request.ts` 的 `JIANGSU_MAP_OPTIONS`，发往 `/backend/` 的瓦片请求带 token（`/api/tiles`、`/api/query/mvt`、`/api/analysis/mvt` 都经过它），瓦片的 401 和接口的 401 一样结束会话并回到登录页。瓦片是否按用户、权限过滤仍待后端确认；响应头仍是 `Cache-Control: max-age=300, public`
 - 响应头：`Content-Type: application/x-protobuf`，`Cache-Control: max-age=300, public`；没有 `ETag`、`Last-Modified`，5 分钟后只能整张重新下载；**没有压缩**
 - 瓦片内的图层名默认等于瓦片集名（如 `bgdc_dltb_2022`）；旧代码例外表里的两个仍然成立：`bgdc_czcdyd_2022` 是 `czcdyd`，`bgdc_dltb_czc_2021` 是 `dltb_czc_2021`
 - 地类图斑 2022 的属性字段：`bsm`、`dlmc`、`dlbm`，另有 `clustered`、`point_count`、`sqrt_point_count`
