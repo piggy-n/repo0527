@@ -180,7 +180,7 @@ pnpm add -Dw -E some-tool
 
 **执行了什么**：Node 直接运行 `tools/probe-resource-classes/cli.ts`，请求资源树、`/api/query/attr/page`（每个表最多抽 4 页，超过 200 万行只读第一页）和 `/api/tiles`（南京、苏州、徐州、扬州，默认 7、9、11、14 级）。结果写进 `probe-resource-classes.local/`（不入库）：`candidates.csv`（业务确认）、`slicing-requirements.csv`（交给切片）、`summary.md`、`report.json`，`raw/` 是按瓦片集的缓存，中断后重新运行会跳过已完成的。
 
-**注意事项**：要能连上后端，并在自己的终端设置环境变量 `YZT_PROBE_TOKEN`（取法见 `--help`），token 不写进任何输出；用 `--base-url` 给出后端地址（不带 `/backend`）。后端共用，默认 2 个并发，全部 183 个瓦片集要跑一段时间，可以先用 `--codes` 试几个资源；`--exact` 按取值逐个 COUNT，只在选定的资源上用。要确认图例列全了时用 `--enumerate=资源:字段,...`：只枚举这些字段的全部取值，结果写到 `distinct-values.json`，请求数约等于抽样漏掉的取值数。分布来自抽样，字段和取值是候选，业务含义要人确认。这个目录不依赖第三方库，可以单独拷到能连后端的机器上，用 Node 24 运行。
+**注意事项**：要能连上后端，并在自己的终端设置环境变量 `YZT_PROBE_TOKEN`（取法见 `--help`），token 不写进任何输出；用 `--base-url` 给出后端地址（不带 `/backend`）。后端共用，默认 2 个并发，全部 183 个瓦片集要跑一段时间，可以先用 `--codes` 试几个资源；`--exact` 按取值逐个 COUNT，只在选定的资源上用。要确认图例列全了时用 `--enumerate=资源:字段,...`：只枚举这些字段的全部取值，结果写到 `distinct-values.json`，请求数约等于抽样漏掉的取值数；千万行的表一次查询可能要几分钟，用 `--timeout=<秒>` 调大上限（默认 120，超时不重试）。分布来自抽样，字段和取值是候选，业务含义要人确认。这个目录不依赖第三方库，可以单独拷到能连后端的机器上，用 Node 24 运行。
 
 ### `pnpm --filter @yzt/web icons`
 

@@ -70,6 +70,8 @@ export interface ProbeOptions {
   /** 总数超过它的表不查准确分布：62 万个要素统计一次要 8 s（docs/roadmap.md 5C.6） */
   readonly exactLimit: number;
   readonly refresh: boolean;
+  /** 单个请求的上限（秒）：千万行的表一次 COUNT 可能要几分钟，枚举时调大 */
+  readonly timeoutSeconds: number;
 }
 
 export interface ProbeIO {
@@ -125,7 +127,6 @@ const MAX_PAIR_RECORDS = 3000;
 const MAX_EXACT_FIELDS = 2;
 const MAX_EXACT_VALUES = 40;
 const RETRY_DELAYS: readonly number[] = [2000, 5000];
-const REQUEST_TIMEOUT = 120_000;
 const PROVINCE_CODE = '320000';
 
 function messageOf(error: unknown): string {
@@ -207,7 +208,7 @@ async function request(url: string, options: ProbeOptions, io: ProbeIO): Promise
     try {
       const response = await io.fetch(url, {
         headers: { token: options.token },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT)
+        signal: AbortSignal.timeout(options.timeoutSeconds * 1000)
       });
       if (response.status === 401 || response.status === 403) {
         throw new ProbeAuthError(`后端返回 ${response.status}：token 失效或没有权限，请更新 YZT_PROBE_TOKEN`);
@@ -217,7 +218,8 @@ async function request(url: string, options: ProbeOptions, io: ProbeIO): Promise
       }
       lastError = new Error(`HTTP ${response.status}`);
     } catch (error) {
-      if (error instanceof ProbeAuthError) {
+      // 超时重试只会给后端多压几次重查询，要调大 --timeout
+      if (error instanceof ProbeAuthError || (error instanceof DOMException && error.name === 'TimeoutError')) {
         throw error;
       }
       lastError = error;

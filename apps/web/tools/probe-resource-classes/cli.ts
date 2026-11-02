@@ -39,6 +39,7 @@ token 在浏览器登录系统后取：开发者工具的控制台运行 JSON.pa
   --enumerate=<a:f,b:g> 枚举资源 a 的字段 f、资源 b 的字段 g 的全部取值，确认图例列全了；只做这一件事，
                         结果写到 distinct-values.json；可以和 --years 一起用
   --out=<目录>          输出目录，默认 probe-resource-classes.local（不入库）
+  --timeout=<120>       单个请求的上限（秒），超时不重试；枚举千万行的表时调大
   --refresh             不用缓存，重新请求
   --help`;
 
@@ -54,6 +55,7 @@ const { values } = parseArgs({
     enumerate: { type: 'string' },
     out: { type: 'string', default: 'probe-resource-classes.local' },
     refresh: { type: 'boolean', default: false },
+    timeout: { type: 'string', default: '120' },
     help: { type: 'boolean', default: false }
   }
 });
@@ -87,7 +89,8 @@ const options: ProbeOptions = {
   concurrency: Number(values.concurrency),
   exact: values.exact,
   exactLimit: Number(values['exact-limit']),
-  refresh: values.refresh
+  refresh: values.refresh,
+  timeoutSeconds: Number(values.timeout)
 };
 
 const io: ProbeIO = {

@@ -59,12 +59,12 @@ const repeat = <T>(value: T, times: number): T[] => Array.from({ length: times }
 
 describe('瓦片解码', () => {
   it('读出图层名、几何类型和各种类型的属性，负的 int64 不丢符号', () => {
-    const tile = encodeTile('csxhjctb_xxa_2022', [
+    const tile = encodeTile('csxhjctb_tyhda_2022', [
       { geometry: 3, properties: { cc: '08H213', quota: -9999, ratio: 0.5, flag: true } },
       { geometry: 1, properties: { cc: '08H211' } }
     ]);
     const [layer] = decodeTile(tile);
-    expect(layer?.name).toBe('csxhjctb_xxa_2022');
+    expect(layer?.name).toBe('csxhjctb_tyhda_2022');
     expect(layer?.features[0]).toEqual({
       geometry: 'polygon',
       properties: { cc: '08H213', quota: -9999, ratio: 0.5, flag: true }
@@ -251,8 +251,8 @@ describe('分类字段的识别', () => {
     const sample = sampleOf(records);
     const labels = findLabelFields(records, sample);
     const dlbmOf = (code: string) => assessFields(sample, labels, code).find(item => item.field === 'dlbm');
-    expect(dlbmOf('csxhjctb_xxa')?.verdict).toBe('possible');
-    expect(dlbmOf('csxhjctb_xxa')?.reasons.join()).toContain('变化（或细化）前');
+    expect(dlbmOf('csxhjctb_tyhda')?.verdict).toBe('possible');
+    expect(dlbmOf('csxhjctb_tyhda')?.reasons.join()).toContain('变化（或细化）前');
     expect(dlbmOf('bgdc_dltb')?.verdict).toBe('recommended');
   });
 
@@ -355,7 +355,7 @@ const TREE = {
       code: null,
       name: '主题库',
       children: [
-        { code: 'csxhjctb_xxa', name: '学校面层', geoType: 'Polygon', yearList: [2022, 2023] },
+        { code: 'csxhjctb_tyhda', name: '学校面层', geoType: 'Polygon', yearList: [2022, 2023] },
         { code: 'szy_kt', name: '坑塘', geoType: 'Polygon', yearList: [2024] }
       ]
     }
@@ -443,7 +443,8 @@ const OPTIONS: ProbeOptions = {
   concurrency: 2,
   exact: false,
   exactLimit: 500000,
-  refresh: false
+  refresh: false,
+  timeoutSeconds: 120
 };
 
 describe('探查', () => {
@@ -451,7 +452,7 @@ describe('探查', () => {
     const backend = fakeBackend();
     const result = await runProbe(OPTIONS, backend.io, exactFieldsOf);
     expect(backend.headers.every(token => token === 'secret-token')).toBe(true);
-    expect(result.probes.map(probe => probe.tileset).toSorted()).toEqual(['csxhjctb_xxa_2023', 'szy_kt_2024']);
+    expect(result.probes.map(probe => probe.tileset).toSorted()).toEqual(['csxhjctb_tyhda_2023', 'szy_kt_2024']);
     const [school, water] = result.resources.map(resource => summarizeResource(resource, result.probes));
     expect(school).toMatchObject({ status: 'candidate' });
     expect(water).toMatchObject({ status: 'no-tiles', primary: null });
@@ -465,7 +466,7 @@ describe('探查', () => {
 
   it('取够要素就不再请求别的城市', async () => {
     const backend = fakeBackend();
-    await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_xxa']), zooms: [14] }, backend.io, exactFieldsOf);
+    await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_tyhda']), zooms: [14] }, backend.io, exactFieldsOf);
     // 每张 800 个要素，取够 1500 要两张
     expect(backend.requests.filter(request => request.startsWith('/api/tiles/'))).toHaveLength(2);
   });
@@ -480,9 +481,9 @@ describe('探查', () => {
 
   it('所有年份都探查；有缓存的瓦片集不再请求', async () => {
     const backend = fakeBackend();
-    const options = { ...OPTIONS, codes: new Set(['csxhjctb_xxa']), years: 'all' } as const;
+    const options = { ...OPTIONS, codes: new Set(['csxhjctb_tyhda']), years: 'all' } as const;
     await runProbe(options, backend.io, exactFieldsOf);
-    expect([...backend.saved.keys()].toSorted()).toEqual(['csxhjctb_xxa_2022', 'csxhjctb_xxa_2023']);
+    expect([...backend.saved.keys()].toSorted()).toEqual(['csxhjctb_tyhda_2022', 'csxhjctb_tyhda_2023']);
     const again = fakeBackend(undefined, backend.saved);
     await runProbe(options, again.io, exactFieldsOf);
     expect(again.requests).toEqual(['/resource-map/base/tree']);
@@ -490,20 +491,20 @@ describe('探查', () => {
 
   it('旧版本脚本留下的缓存不用：识别规则改过，旧结果里的名称字段可能是错的', async () => {
     const backend = fakeBackend();
-    const options = { ...OPTIONS, codes: new Set(['csxhjctb_xxa']) };
+    const options = { ...OPTIONS, codes: new Set(['csxhjctb_tyhda']) };
     await runProbe(options, backend.io, exactFieldsOf);
     const stale = new Map([...backend.saved].map(([key, probe]) => [key, { ...probe, version: 1 }]));
     const again = fakeBackend(undefined, stale);
     await runProbe(options, again.io, exactFieldsOf);
     expect(again.requests.length).toBeGreaterThan(1);
-    expect(again.saved.get('csxhjctb_xxa_2023')?.version).toBeGreaterThan(1);
+    expect(again.saved.get('csxhjctb_tyhda_2023')?.version).toBeGreaterThan(1);
   });
 
   it('超大的表只读第一页：深分页要 OFFSET，后端共用', async () => {
     const backend = fakeBackend(url =>
       url.pathname === '/api/query/attr/page' ? Response.json({ total: 3_000_000, list: schoolRecords(200) }) : undefined
     );
-    await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_xxa']) }, backend.io, exactFieldsOf);
+    await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_tyhda']) }, backend.io, exactFieldsOf);
     expect(backend.requests.filter(request => request.startsWith('/api/query/attr/page'))).toHaveLength(1);
   });
 
@@ -514,14 +515,14 @@ describe('探查', () => {
       }
       return url.pathname === '/api/query/attr/page' ? Response.json({ total: 2000, list: schoolRecords(200) }) : undefined;
     });
-    const result = await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_xxa']) }, backend.io, exactFieldsOf);
+    const result = await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_tyhda']) }, backend.io, exactFieldsOf);
     expect(result.failures).toEqual([]);
     expect(result.probes[0]?.attributes).toMatchObject({ total: 2000, sampled: 200, error: '系统异常' });
   });
 
   it('--refresh 不用缓存', async () => {
     const backend = fakeBackend();
-    const options = { ...OPTIONS, codes: new Set(['csxhjctb_xxa']) };
+    const options = { ...OPTIONS, codes: new Set(['csxhjctb_tyhda']) };
     await runProbe(options, backend.io, exactFieldsOf);
     const again = fakeBackend(undefined, backend.saved);
     await runProbe({ ...options, refresh: true }, again.io, exactFieldsOf);
@@ -541,9 +542,28 @@ describe('探查', () => {
         return failing.io.fetch(input, init);
       }
     };
-    const result = await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_xxa']), zooms: [14] }, flaky, exactFieldsOf);
+    const result = await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_tyhda']), zooms: [14] }, flaky, exactFieldsOf);
     expect(result.failures).toEqual([]);
     expect(result.probes).toHaveLength(1);
+  });
+
+  it('超时不重试：重试只会给后端多压几次重查询，错误写明', async () => {
+    let attempts = 0;
+    const base = fakeBackend();
+    const slow: ProbeIO = {
+      ...base.io,
+      fetch: (input, init) => {
+        if (urlOf(input).includes('/api/query/attr/page')) {
+          attempts += 1;
+          return Promise.reject(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+        }
+        return base.io.fetch(input, init);
+      }
+    };
+    const [result] = await runEnumerate([{ code: 'szy_kt', field: 'f' }], OPTIONS, slow);
+
+    expect(attempts).toBe(1);
+    expect(result).toMatchObject({ remaining: null, error: 'The operation was aborted due to timeout' });
   });
 
   it('重试后仍失败的瓦片集记下来、不写缓存，其他继续', async () => {
@@ -551,13 +571,13 @@ describe('探查', () => {
     const flaky: ProbeIO = {
       ...failing.io,
       fetch: (input, init) =>
-        urlOf(input).includes('/api/tiles/csxhjctb_xxa')
+        urlOf(input).includes('/api/tiles/csxhjctb_tyhda')
           ? Promise.reject(new TypeError('fetch failed'))
           : failing.io.fetch(input, init)
     };
     const result = await runProbe(OPTIONS, flaky, exactFieldsOf);
-    expect(result.failures).toEqual([{ tileset: 'csxhjctb_xxa_2023', message: 'fetch failed' }]);
-    expect(failing.saved.has('csxhjctb_xxa_2023')).toBe(false);
+    expect(result.failures).toEqual([{ tileset: 'csxhjctb_tyhda_2023', message: 'fetch failed' }]);
+    expect(failing.saved.has('csxhjctb_tyhda_2023')).toBe(false);
     expect(failing.saved.has('szy_kt_2024')).toBe(true);
   });
 
@@ -568,7 +588,7 @@ describe('探查', () => {
 
   it('--exact 查候选字段的准确分布，算出样本外的数量', async () => {
     const backend = fakeBackend();
-    const options = { ...OPTIONS, codes: new Set(['csxhjctb_xxa']), exact: true };
+    const options = { ...OPTIONS, codes: new Set(['csxhjctb_tyhda']), exact: true };
     const { probes } = await runProbe(options, backend.io, exactFieldsOf);
     const conditions = backend.requests
       .filter(request => request.includes('pageSize=1&') || request.endsWith('pageSize=1'))
@@ -581,7 +601,7 @@ describe('探查', () => {
 
   it('不加 --exact 时不查准确分布；加了也只查最新一年', async () => {
     const backend = fakeBackend();
-    const options = { ...OPTIONS, codes: new Set(['csxhjctb_xxa']), years: 'all' } as const;
+    const options = { ...OPTIONS, codes: new Set(['csxhjctb_tyhda']), years: 'all' } as const;
     const { probes } = await runProbe(options, backend.io, exactFieldsOf);
     expect(probes.every(probe => probe.exact === undefined)).toBe(true);
     const again = fakeBackend();
@@ -592,7 +612,7 @@ describe('探查', () => {
 
   it('超过上限的表不查准确分布', async () => {
     const backend = fakeBackend();
-    const options = { ...OPTIONS, codes: new Set(['csxhjctb_xxa']), exact: true, exactLimit: 100 };
+    const options = { ...OPTIONS, codes: new Set(['csxhjctb_tyhda']), exact: true, exactLimit: 100 };
     const { probes } = await runProbe(options, backend.io, exactFieldsOf);
     expect(probes[0]?.exact).toEqual({});
     expect(backend.requests.some(request => request.includes('pageSize=1&'))).toBe(false);
@@ -642,7 +662,7 @@ describe('枚举字段的全部取值', () => {
 
   it('从抽样见过的取值开始，写明哪些是这次才发现的', async () => {
     const backend = enumerating();
-    const cached = await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_xxa']) }, fakeBackend().io, exactFieldsOf);
+    const cached = await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_tyhda']) }, fakeBackend().io, exactFieldsOf);
     const probe = cached.probes[0];
     if (!probe) {
       throw new Error('没有探查结果');
@@ -692,14 +712,14 @@ describe('报告', () => {
     const { summaries } = await probed();
     expect(summaries[0]?.primary?.field).toBe('ccn');
     const [, ...rows] = candidateRows(summaries);
-    const row = rows.find(cells => cells[2] === 'csxhjctb_xxa' && cells[6] === 'ccn');
+    const row = rows.find(cells => cells[2] === 'csxhjctb_tyhda' && cells[6] === 'ccn');
     expect(row?.[7]).toBe('建议');
     expect(row?.[15]).toContain('瓦片里比 cc 保留得全');
   });
 
   it('属性能查、瓦片报错的瓦片集也写进概览', async () => {
     const backend = fakeBackend(url =>
-      url.pathname.startsWith('/api/tiles/csxhjctb_xxa')
+      url.pathname.startsWith('/api/tiles/csxhjctb_tyhda')
         ? Response.json({ success: false, code: 500, msg: 'renderFields 非法: 面积' })
         : undefined
     );
@@ -707,7 +727,7 @@ describe('报告', () => {
     const summaries = result.resources.map(resource => summarizeResource(resource, result.probes));
     expect(summaries[0]?.status).toBe('candidate');
     const text = formatSummary(result, summaries);
-    expect(text).toContain('- csxhjctb_xxa_2023 瓦片：renderFields 非法: 面积');
+    expect(text).toContain('- csxhjctb_tyhda_2023 瓦片：renderFields 非法: 面积');
     expect(text).toContain('- szy_kt_2024 属性：系统异常');
   });
 
@@ -724,7 +744,7 @@ describe('报告', () => {
       }
       return undefined;
     });
-    const options = { ...OPTIONS, codes: new Set(['csxhjctb_xxa']), exact: true };
+    const options = { ...OPTIONS, codes: new Set(['csxhjctb_tyhda']), exact: true };
     const result = await runProbe(options, backend.io, exactFieldsOf);
     const conditions = backend.requests.map(request => new URL(request, 'http://x').searchParams.get('conditions'));
     expect(conditions).toContain(`"type" = '完全中学'`);
@@ -740,7 +760,7 @@ describe('报告', () => {
   it('只探查了部分年份时写明其他年份没有探查，不让"没有差异"误导人', async () => {
     const { summaries } = await probed();
     const [, ...rows] = candidateRows(summaries);
-    expect(rows.find(cells => cells[2] === 'csxhjctb_xxa')?.[16]).toBe('2022 年未探查');
+    expect(rows.find(cells => cells[2] === 'csxhjctb_tyhda')?.[16]).toBe('2022 年未探查');
   });
 
   it('切片要求列出要保留的字段；聚合要素写明要按分类聚合', async () => {
@@ -748,7 +768,7 @@ describe('报告', () => {
     const [header, ...rows] = slicingRows(summaries);
     expect(header?.[0]).toBe('瓦片集');
     const row = rows.find(cells => cells[3] === 'ccn');
-    expect(row?.[0]).toBe('csxhjctb_xxa_2023');
+    expect(row?.[0]).toBe('csxhjctb_tyhda_2023');
     expect(row?.[5]).toBe('z7:100% z14:100%');
     expect(row?.[7]).toBe('是');
     expect(row?.[8]).toContain('z7 有 100% 是聚合要素');
@@ -764,7 +784,7 @@ describe('报告', () => {
       }
       return url.pathname.startsWith('/api/tiles/') ? new Response(new Uint8Array()) : undefined;
     });
-    const result = await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_xxa']) }, backend.io, exactFieldsOf);
+    const result = await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_tyhda']) }, backend.io, exactFieldsOf);
     const summaries = result.resources.map(resource => summarizeResource(resource, result.probes));
     expect(summaries[0]).toMatchObject({ status: 'possible', primary: { field: 'foo' } });
     expect(slicingRows(summaries).slice(1)).toEqual([]);
@@ -775,20 +795,20 @@ describe('报告', () => {
     const [, ...rows] = candidateRows(summaries);
     const water = rows.find(cells => cells[2] === 'szy_kt');
     expect(water?.[5]).toBe('瓦片报错，暂时判断不了');
-    const school = rows.find(cells => cells[2] === 'csxhjctb_xxa' && cells[6] === 'cc');
+    const school = rows.find(cells => cells[2] === 'csxhjctb_tyhda' && cells[6] === 'cc');
     expect(school?.[9]).toBe('ccn');
     expect(school?.[14]).toContain('08H213 中小学（');
   });
 
   it('其他年份没有这个字段、多出取值时写在差异里', async () => {
     const backend = fakeBackend(url => {
-      if (url.pathname === '/api/query/attr/page' && url.searchParams.get('layerCode') === 'csxhjctb_xxa_2022') {
+      if (url.pathname === '/api/query/attr/page' && url.searchParams.get('layerCode') === 'csxhjctb_tyhda_2022') {
         const list = schoolRecords(60).map(({ guid, TYPE, NAME }) => ({ guid, TYPE: `${TYPE}（旧）`, NAME }));
         return Response.json({ total: 60, list });
       }
       return undefined;
     });
-    const options = { ...OPTIONS, codes: new Set(['csxhjctb_xxa']), years: 'all' } as const;
+    const options = { ...OPTIONS, codes: new Set(['csxhjctb_tyhda']), years: 'all' } as const;
     const result = await runProbe(options, backend.io, exactFieldsOf);
     const [summary] = result.resources.map(resource => summarizeResource(resource, result.probes));
     const rows = candidateRows(summary ? [summary] : []).slice(1);
