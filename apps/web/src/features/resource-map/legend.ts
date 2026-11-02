@@ -231,15 +231,20 @@ const LANDUSE_SECTIONS: readonly LanduseLegendSection[] = [
 
 /**
  * 地类图例的条目（ADR 0043 第 2 节、ADR 0074）：表 A.2 的地类、历史地类、未匹配的地类依次平铺
- * 有关键字时（不区分大小写，去掉首尾空格）留下编码或名称命中的地类；分组名命中时留下整组
+ * 有关键字时（不区分大小写，去掉首尾空格）留下编码或名称命中的地类；分组名命中时留下整组。
+ * available 是资源实际有的取值（按键，ADR 0124），只列这些；不给时是全表
  */
-export function landuseLegendItems(keyword = ''): LanduseLegendItem[] {
+export function landuseLegendItems(
+  keyword = '',
+  available?: ReadonlyMap<string, unknown>
+): LanduseLegendItem[] {
   const needle = keyword.trim().toLowerCase();
   const matches = (text: string | null) => text !== null && text.toLowerCase().includes(needle);
-  return LANDUSE_SECTIONS.flatMap(section => {
+  const items = LANDUSE_SECTIONS.flatMap(section => {
     if (needle === '' || matches(section.name)) {
       return section.items;
     }
     return section.items.filter(item => matches(item.code) || matches(item.name));
   });
+  return available ? items.filter(item => available.has(item.key)) : items;
 }

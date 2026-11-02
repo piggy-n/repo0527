@@ -216,7 +216,8 @@ describe('useResourceLayers', () => {
       symbols: {
         overrideOf: code => {
           const uniform = overrides.value.get(code);
-          return uniform && { uniform };
+          // 选了分类样式：地类图斑不用统一样式的覆盖
+          return uniform && { uniform, mode: 'classified' as const };
         }
       }
     });

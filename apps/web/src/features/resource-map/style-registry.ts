@@ -1,5 +1,44 @@
 import type { Resource, ResourceGeometry } from './catalog';
-import { type ClassItem, type ColorRule, symbolClasses } from './classification';
+import {
+  BASIN_TYPES,
+  BOUNDARY_TYPES,
+  CITY_ROAD_TYPES,
+  COMMERCE_TYPES,
+  CULTIVATED_LANDUSE,
+  CULTURE_VENUE_TYPES,
+  DEVELOPMENT_ZONE_TYPES,
+  FARMLAND_GRADES,
+  FOREST_TYPES,
+  FUNERAL_TYPES,
+  GRASSLAND_LANDUSE,
+  HIGHWAY_EXIT_TYPES,
+  HIGHWAY_TYPES,
+  HOUSING_TYPES,
+  MEDICAL_TYPES,
+  PARK_TYPES,
+  PERMANENT_FARMLAND_TYPES,
+  pickEntries,
+  RAIL_STATION_TYPES,
+  RAILWAY_TYPES,
+  RAMP_TYPES,
+  RED_LINE_TYPES,
+  RESERVOIR_GRADES,
+  RIVER_LEVELS,
+  RURAL_ROAD_TYPES,
+  SCHOOL_TYPES,
+  SHELTER_TYPES,
+  SOIL_TYPES,
+  TRANSPORT_LAND_TYPES,
+  TRANSPORT_STATION_TYPES,
+  UNBUILT_LAND_TYPES,
+  URBAN_RENEWAL_TYPES,
+  URBAN_VILLAGE_TYPES,
+  UTILITY_TYPES,
+  WATER_TYPES,
+  WELFARE_TYPES,
+  WETLAND_LANDUSE
+} from './class-dictionaries';
+import { type ClassEntry, type ClassItem, type ColorRule, symbolClasses } from './classification';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import { paletteColor } from './palette';
 import type { ResourceSymbolOverride, SymbolMode } from './resource-symbols';
@@ -25,57 +64,76 @@ export interface ResourceStyle {
   readonly checked?: boolean;
 }
 
-// 最小显示级别：取南京、苏州两处单张瓦片小于约 2 MB、首次生成少于约 2 s 的最低级别（5C.1b、5C.1d 实测，docs/migration.md）
+// 按取值配色的规则：字段加字典（ADR 0123）
+function valueRule(property: string, entries: readonly ClassEntry[], fallback = LANDUSE_FALLBACK_COLOR): ColorRule {
+  return { kind: 'values', property, entries, fallback };
+}
+
+// 水域的兜底色和类别同是蓝色系
+const WATER_FALLBACK = '#2F80ED';
+
+// 最小显示级别：取南京、苏州两处单张瓦片小于约 2 MB、首次生成少于约 2 s 的最低级别（5C.1b、5C.1d 实测，docs/migration.md）；
+// 按属性配色：字段和取值来自探查（ADR 0123），点层比面层少的取值只列实际有的
 const RESOURCE_STYLES = new Map<string, ResourceStyle>([
   ['bgdc_dltb', { color: { kind: 'landuse-code' }, promoteId: 'bsm', checked: true }],
   ['bgdc_dltb_czc', { color: { kind: 'landuse-name' } }],
-  [
-    'bgdc_czcdyd',
-    {
-      color: {
-        kind: 'ordered',
-        property: 'czclx',
-        values: ['201', '201A', '202', '202A', '203', '203A', '204', '205'],
-        fallback: LANDUSE_FALLBACK_COLOR
-      }
-    }
-  ],
-  [
-    'csxhjctb_hydl',
-    {
-      color: {
-        kind: 'values',
-        property: 'ccn',
-        colors: [
-          ['河流', '#1E88E5'],
-          ['水渠', '#4FC3F7']
-        ],
-        fallback: '#2F80ED'
-      }
-    }
-  ],
-  [
-    'csxhjctb_lvll',
-    {
-      color: {
-        kind: 'values',
-        property: 'type',
-        colors: [
-          ['农村硬化道路', '#E67E22'],
-          ['机耕路', '#C49A6C'],
-          ['乡村路', '#8D6E63']
-        ],
-        fallback: '#A1887F'
-      }
-    }
-  ],
-  ['csxhjctb_hyda', { minzoom: 10 }],
-  ['csxhjctb_lrdl', { minzoom: 9 }],
-  ['csxhjctb_lctl', { minzoom: 9 }],
-  ['bgdc_yjjbnttb', { minzoom: 9 }],
+  ['bgdc_czcdyd', { color: valueRule('czclx', URBAN_VILLAGE_TYPES) }],
+  ['lcsh_sltb', { color: valueRule('lin_zhong', FOREST_TYPES) }],
+  ['lcsh_cdtb', { color: { kind: 'landuse-code', only: GRASSLAND_LANDUSE } }],
+  ['lcsh_sdtb', { color: { kind: 'landuse-code', only: WETLAND_LANDUSE } }],
+  ['lcsh_hmtb', { color: valueRule('tu_rang_lx', SOIL_TYPES) }],
+  ['csxhjctb_xxa', { color: valueRule('cc', SCHOOL_TYPES) }],
+  ['csxhjctb_xxp', { color: valueRule('cc', pickEntries(SCHOOL_TYPES, '08H212', '08H213', '08H214', '08H215')) }],
+  ['csxhjctb_yljga', { color: valueRule('cc', MEDICAL_TYPES) }],
+  ['csxhjctb_yljgp', { color: valueRule('cc', MEDICAL_TYPES) }],
+  ['csxhjctb_fljga', { color: valueRule('cc', WELFARE_TYPES) }],
+  ['csxhjctb_fljgp', { color: valueRule('cc', WELFARE_TYPES) }],
+  ['csxhjctb_gyssa', { color: valueRule('cc', UTILITY_TYPES) }],
+  ['csxhjctb_gyssp', { color: valueRule('cc', pickEntries(UTILITY_TYPES, '080901', '080905')) }],
+  ['csxhjctb_gyylda', { color: valueRule('cc', PARK_TYPES) }],
+  ['csxhjctb_jtfwcza', { color: valueRule('cc', TRANSPORT_STATION_TYPES) }],
+  ['csxhjctb_jtysyda', { color: valueRule('cc', TRANSPORT_LAND_TYPES) }],
+  ['csxhjctb_jtysydp', { color: valueRule('type', RAIL_STATION_TYPES) }],
+  ['csxhjctb_syfwya', { color: valueRule('cc', COMMERCE_TYPES) }],
+  ['csxhjctb_syfwyp', { color: valueRule('cc', COMMERCE_TYPES) }],
+  ['csxhjctb_czzza', { color: valueRule('cc', HOUSING_TYPES) }],
+  ['csxhjctb_xzcsgxgzyda', { color: valueRule('type', URBAN_RENEWAL_TYPES) }],
+  ['csxhjctb_yjbna', { color: valueRule('type', SHELTER_TYPES) }],
+  ['csxhjctb_hydl', { color: valueRule('ccn', pickEntries(WATER_TYPES, '河流', '水渠'), WATER_FALLBACK) }],
+  ['csxhjctb_hyda', { minzoom: 10, color: valueRule('ccn', WATER_TYPES, WATER_FALLBACK) }],
+  ['csxhjctb_lvll', { color: valueRule('type', RURAL_ROAD_TYPES, '#A1887F') }],
+  ['csxhjctb_lrdl', { minzoom: 9, color: valueRule('type', HIGHWAY_TYPES) }],
+  ['csxhjctb_lctl', { minzoom: 9, color: valueRule('type', CITY_ROAD_TYPES) }],
+  ['csxhjctb_llkl', { color: valueRule('type', RAMP_TYPES) }],
+  ['csxhjctb_llkp', { color: valueRule('type', HIGHWAY_EXIT_TYPES) }],
+  ['csxhjctb_lrrl', { color: valueRule('type', RAILWAY_TYPES) }],
+  ['gtkjgh_czkfbj', { color: valueRule('ghfqdm', DEVELOPMENT_ZONE_TYPES) }],
+  ['gtkjgh_stbhhx', { color: valueRule('hxlx', RED_LINE_TYPES) }],
+  ['gtkjgh_gdbhmb', { color: { kind: 'landuse-code', only: CULTIVATED_LANDUSE } }],
+  ['gtkjgh_yjjbntbhtb', { color: { kind: 'landuse-code', only: CULTIVATED_LANDUSE } }],
+  ['csxhjctb_wycga', { color: valueRule('type', CULTURE_VENUE_TYPES) }],
+  ['csxhjctb_wycgp', { color: valueRule('type', CULTURE_VENUE_TYPES) }],
+  ['csxhjctb_bzssa', { color: valueRule('type', FUNERAL_TYPES) }],
+  ['szy_hl_fs', { color: valueRule('hldj', RIVER_LEVELS) }],
+  ['szy_hl_ks', { color: valueRule('hldj', RIVER_LEVELS) }],
+  ['szy_sk_fs', { color: valueRule('skdb', RESERVOIR_GRADES) }],
+  ['szy_sk_ks', { color: valueRule('skdb', RESERVOIR_GRADES) }],
+  ['szy_hp_fs', { color: valueRule('lymc', BASIN_TYPES) }],
+  ['szy_hp_ks', { color: valueRule('lymc', BASIN_TYPES) }],
+  ['szy_kt', { color: valueRule('lymc', BASIN_TYPES) }],
+  ['bgdc_gddb', { color: valueRule('lyd', FARMLAND_GRADES) }],
+  ['bgdc_pzwjstd', { color: valueRule('ywlx', UNBUILT_LAND_TYPES) }],
+  ['bgdc_xzqjx', { color: valueRule('jxlx', BOUNDARY_TYPES) }],
+  ['bgdc_yjjbnttb', { minzoom: 9, color: valueRule('dlmc', PERMANENT_FARMLAND_TYPES) }],
   ['bgdc_lmfw', { minzoom: 9 }],
   ['bgdc_cjdcq', { minzoom: 9 }],
-  ['bgdc_cjdcqjx', { minzoom: 8 }],
+  [
+    'bgdc_cjdcqjx',
+    {
+      minzoom: 8,
+      color: valueRule('jxlx', pickEntries(BOUNDARY_TYPES, '630200', '640200', '650200', '660200', '670500'))
+    }
+  ],
   ['bgdc_ttq', { minzoom: 8 }],
   ['bgdc_xzq', { minzoom: 8 }]
 ]);
@@ -97,11 +155,8 @@ export function tilesetOf(code: string, year: number): string {
   return `${code}_${year}`;
 }
 
-// 瓦片里的图层名默认等于瓦片集名，这两个例外（5C.1b 实测）
-const SOURCE_LAYER_EXCEPTIONS = new Map([
-  ['bgdc_czcdyd_2022', 'czcdyd'],
-  ['bgdc_dltb_czc_2021', 'dltb_czc_2021']
-]);
+// 瓦片里的图层名默认等于瓦片集名，只有这一个例外（2026-11-01 探查全部资源）
+const SOURCE_LAYER_EXCEPTIONS = new Map([['bgdc_dltb_czc_2021', 'dltb_czc_2021']]);
 
 export function sourceLayerOf(code: string, year: number): string {
   const tileset = tilesetOf(code, year);
@@ -161,9 +216,12 @@ export function classSymbol(resource: Resource, item: ClassItem, override?: Reso
   return resolveSymbol(classDefaultSymbol(resource, item), override?.items?.[item.key]);
 }
 
-/** 样式方式：不按属性配色的资源只有统一样式 */
+/** 样式方式：不按属性配色的资源只有统一样式；没选过方式时，调过统一样式的按统一样式，其余按分类样式（ADR 0123 第 3 节） */
 export function symbolModeOf(style: ResourceStyle, override?: ResourceSymbolOverride): SymbolMode {
-  return style.color && override?.mode !== 'uniform' ? 'classified' : 'uniform';
+  if (!style.color) {
+    return 'uniform';
+  }
+  return override?.mode ?? (override?.uniform ? 'uniform' : 'classified');
 }
 
 /**

@@ -131,6 +131,8 @@
 | [0120](0120-indicator-simulation-without-targets.md) | 城市国土空间监测指标AI计算：去掉目标值与达标评价 | 已接受（修改 0106 的目标值、0107 的评价分级、0108 的达标三态） |
 | [0121](0121-indicator-simulation-custom-scope.md) | 城市国土空间监测指标AI计算：自定义监测范围（上传、绘制、覆盖分析） | 已接受（修改 0105 的计算条件、0108 的结果排行） |
 | [0122](0122-tool-captures-press.md) | 工具接管按下的拖动：逐点编辑范围 | 已接受（修改 0034 第 3 条） |
+| [0123](0123-resource-class-dictionaries.md) | 资源分类：字典加规则，探查后人工确认 | 已接受（修改 0044 第 3 节） |
+| [0124](0124-landuse-rule-only-actual-classes.md) | 林草湿荒的分类：图例和地图只用资源实际有的类别 | 已接受（补充 0123） |
 
 ## 模板
 

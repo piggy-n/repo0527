@@ -20,6 +20,7 @@
 | 内网部署的构建 | `pnpm build:intranet` |
 | 预览构建产物 | `pnpm --filter @yzt/web preview` |
 | 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter @yzt/web measure:map-load` |
+| 探查资源的分类字段（只读，要能连后端） | `pnpm --filter @yzt/web probe:resource-classes` |
 | 每月检查依赖 | `pnpm deps:check` |
 | 范围内升级 | `pnpm deps:update:within-range` |
 | 大版本升级 | `pnpm deps:update:allow-major` |
@@ -170,6 +171,16 @@ pnpm add -Dw -E some-tool
 **执行了什么**：先 `vite build`，再由 Node 运行 `tools/measure-map-load/cli.ts`：用 `vite preview` 提供产物，Playwright 驱动本机的 Edge，每次用新的浏览器上下文打开登录页、停留几秒、登录、等到画面稳定；网络和 CPU 用 CDP 限速。原始数据写进 `tools/measure-map-load/results.local/`（不入库）。
 
 **注意事项**：要先在自己的终端设置环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD`（加 `--mock-backend` 时不连后端、不用账号，配内网构建比较几种做法）；默认三档网络各 5 次，Slow 4G 每次约 20 秒，全部跑完约 5 分钟，期间会弹出浏览器窗口。对比几份构建时不用这个脚本（它会先构建 `dist`），直接运行 `cli.ts` 并给出 `--builds`。参数（次数、网络、停留时长、CPU 降速、多份构建等）和实测的前提见 [modules/perf.md](modules/perf.md)。
+
+### `pnpm --filter @yzt/web probe:resource-classes`
+
+**作用**：只读探查现状底图的资源：每个瓦片集有哪些字段、取值和分布，各瓦片级别保留了哪些字段；给出候选的分类字段和要交给切片的字段清单。
+
+**什么时候用**：评估哪些资源能按属性分类、新增或重新切片之后核对字段时。
+
+**执行了什么**：Node 直接运行 `tools/probe-resource-classes/cli.ts`，请求资源树、`/api/query/attr/page`（每个表最多抽 4 页，超过 200 万行只读第一页）和 `/api/tiles`（南京、苏州、徐州、扬州，默认 7、9、11、14 级）。结果写进 `probe-resource-classes.local/`（不入库）：`candidates.csv`（业务确认）、`slicing-requirements.csv`（交给切片）、`summary.md`、`report.json`，`raw/` 是按瓦片集的缓存，中断后重新运行会跳过已完成的。
+
+**注意事项**：要能连上后端，并在自己的终端设置环境变量 `YZT_PROBE_TOKEN`（取法见 `--help`），token 不写进任何输出；用 `--base-url` 给出后端地址（不带 `/backend`）。后端共用，默认 2 个并发，全部 183 个瓦片集要跑一段时间，可以先用 `--codes` 试几个资源；`--exact` 按取值逐个 COUNT，只在选定的资源上用。要确认图例列全了时用 `--enumerate=资源:字段,...`：只枚举这些字段的全部取值，结果写到 `distinct-values.json`，请求数约等于抽样漏掉的取值数；千万行的表一次查询可能要几分钟，用 `--timeout=<秒>` 调大上限（默认 120，超时不重试）。分布来自抽样，字段和取值是候选，业务含义要人确认。这个目录不依赖第三方库，可以单独拷到能连后端的机器上，用 Node 24 运行。
 
 ### `pnpm --filter @yzt/web icons`
 

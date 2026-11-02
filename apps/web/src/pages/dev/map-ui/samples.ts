@@ -21,14 +21,14 @@ export const SAMPLE_CATALOG = buildCatalog([{
       name: '水资源',
       children: [
         { code: 'csxhjctb_hydl', name: '水域线层', geoType: 'Line', yearList: [2023, 2024, 2025] },
-        { code: 'szy_kt', name: '坑塘水面', geoType: 'Polygon', yearList: [2024] }
+        { code: 'lcsh_sdtb', name: '湿地分布图斑', geoType: 'Polygon', yearList: [2024] }
       ]
     },
     {
       code: 'facilities',
       name: '公共设施',
       children: [
-        { code: 'sample_point', name: '公共设施点层', geoType: 'Point', yearList: [2024, 2025] },
+        { code: 'csxhjctb_xxp', name: '学校点层', geoType: 'Point', yearList: [2024, 2025] },
         { code: 'sample_long', name: '用于检查完整名称与换行的公共服务设施面层', geoType: 'Polygon', yearList: [2025] }
       ]
     }

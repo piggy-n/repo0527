@@ -115,11 +115,23 @@ describe('存储格式', () => {
     expect(invalid.filter(uniform => storedSymbolsSchema.safeParse({ a: { uniform } }).success)).toStrictEqual([]);
   });
 
-  it('样式方式只存"统一样式"；各取值的覆盖按同样的规则校验', () => {
+  it('样式方式是统一样式或分类样式；各取值的覆盖按同样的规则校验', () => {
     const items = { 河流: { width: 'XL', color: BLUE } };
     expect(storedSymbolsSchema.safeParse({ a: { mode: 'uniform', items } }).success).toBe(true);
-    expect(storedSymbolsSchema.safeParse({ a: { mode: 'classified' } }).success).toBe(false);
+    expect(storedSymbolsSchema.safeParse({ a: { mode: 'classified' } }).success).toBe(true);
+    expect(storedSymbolsSchema.safeParse({ a: { mode: 'other' } }).success).toBe(false);
     expect(storedSymbolsSchema.safeParse({ a: { items: { 河流: { width: 20 } } } }).success).toBe(false);
+  });
+
+  it('分类样式只在有统一样式的覆盖时才留下：其他时候它就是默认（ADR 0123 第 3 节）', () => {
+    const uniform = { fillColor: BLACK };
+
+    expect(pruneOverride({ mode: 'classified', uniform })).toStrictEqual({ uniform, mode: 'classified' });
+    expect(pruneOverride({ mode: 'classified', items: { 河流: { color: BLUE } } })).toStrictEqual({
+      items: { 河流: { color: BLUE } }
+    });
+    expect(pruneOverride({ mode: 'classified' })).toBeUndefined();
+    expect(pruneOverride({ mode: 'uniform' })).toStrictEqual({ mode: 'uniform' });
   });
 
   it('来回转换不变；还原时去掉空的部分，什么都不剩的资源不留', () => {
@@ -152,6 +164,18 @@ describe('符号的偏好', () => {
 
     expect(ctx.symbols.overrides.value).toStrictEqual(new Map(Object.entries(value)));
     expect(ctx.symbols.symbolOf({ code: 'szy_kt' })).toMatchObject({ fillColor: 'rgba(0, 0, 0, 1)' });
+  });
+
+  it('之前调过统一样式、现在有了分类规则的资源，打开后还是统一样式；没调过的按分类样式（ADR 0123 第 3 节）', async () => {
+    const value = { csxhjctb_gyssp: { uniform: { size: 'L' } } };
+    using ctx = setup(createMemoryStore({ [KEY]: { version: 1, value } }));
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(ctx.symbols.modeOf('csxhjctb_gyssp')).toBe('uniform');
+    using untouched = setup();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(untouched.symbols.modeOf('csxhjctb_gyssp')).toBe('classified');
   });
 
   it('确认的改动防抖写入；预览不写入', async () => {

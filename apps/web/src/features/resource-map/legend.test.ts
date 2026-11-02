@@ -43,9 +43,9 @@ const CATALOG = buildCatalog([
       layer('bgdc_dltb_czc', '地类图斑（城镇村）', 'Polygon'),
       layer('csxhjctb_hydl', '水域线层', 'Line', [2023, 2024, 2025]),
       layer('bgdc_czcdyd', '城镇村等用地', 'Polygon'),
-      layer('szy_kt', '坑塘', 'Polygon'),
-      layer('bgdc_cjdcqjx', '村级调查区界线', 'Line'),
-      layer('csxhjctb_gyssp', '公用设施点层', 'Point')
+      layer('bgdc_ccwjq', '坑塘', 'Polygon'),
+      layer('csxhjctb_csnljsl', '村级调查区界线', 'Line'),
+      layer('csxhjctb_tyhdp', '公用设施点层', 'Point')
     ]
   }
 ]);
@@ -82,21 +82,21 @@ const fillSwatch = (fill: string, stroke: string) => ({
 
 describe('legendEntries', () => {
   it('勾选且配置合法的资源，按叠放顺序从上到下；没勾选的、配置错误的不进图例', () => {
-    const state = { ...ALL, order: ['szy_kt', ...ALL.order.filter(code => code !== 'szy_kt')] };
+    const state = { ...ALL, order: ['bgdc_ccwjq', ...ALL.order.filter(code => code !== 'bgdc_ccwjq')] };
     const displays = new Map(state.displays);
     const hydl = displays.get('csxhjctb_hydl');
     if (hydl) {
       displays.set('csxhjctb_hydl', { ...hydl, checked: false });
     }
 
-    const entries = legendEntries({ ...state, displays }, new Map([['bgdc_cjdcqjx', ['配置错误']]]));
+    const entries = legendEntries({ ...state, displays }, new Map([['csxhjctb_csnljsl', ['配置错误']]]));
 
     expect(entries.map(entry => entry.code)).toStrictEqual([
-      'szy_kt',
+      'bgdc_ccwjq',
       'bgdc_dltb',
       'bgdc_dltb_czc',
       'bgdc_czcdyd',
-      'csxhjctb_gyssp'
+      'csxhjctb_tyhdp'
     ]);
     expect(legendEntries(EMPTY_RESOURCE_LAYERS, new Map())).toStrictEqual([]);
   });
@@ -128,26 +128,31 @@ describe('legendEntries', () => {
       ]
     });
     const czcdyd = entryOf(entries, 'bgdc_czcdyd');
-    expect(czcdyd.kind === 'values' ? czcdyd.values.map(({ label, swatch }) => [label, swatch]) : null).toStrictEqual([
-      ...['201', '201A', '202', '202A', '203', '203A', '204', '205'].map((label, index) => [
-        label,
+    // 键是取值，已保存的符号覆盖按它；名称只用于显示
+    expect(czcdyd.kind === 'values' ? czcdyd.values.map(({ key, swatch }) => [key, swatch]) : null).toStrictEqual([
+      ...['201', '201A', '202', '202A', '203', '203A', '204', '205'].map((key, index) => [
+        key,
         fillSwatch(RESOURCE_PALETTE[index], RESOURCE_PALETTE[index])
       ]),
-      ['其他', fillSwatch(LANDUSE_FALLBACK_COLOR, LANDUSE_FALLBACK_COLOR)]
+      ['$other', fillSwatch(LANDUSE_FALLBACK_COLOR, LANDUSE_FALLBACK_COLOR)]
+    ]);
+    expect(czcdyd.kind === 'values' ? czcdyd.values.map(({ label }) => label).slice(0, 2) : null).toStrictEqual([
+      '201 城市用地',
+      '201A 城市用地'
     ]);
   });
 
   it('统一符号：面是半透明填充加同色描边，线是实线，点带白边', () => {
     const entries = legendEntries(ALL, new Map());
 
-    expect(entryOf(entries, 'szy_kt')).toMatchObject({
+    expect(entryOf(entries, 'bgdc_ccwjq')).toMatchObject({
       kind: 'symbol',
       swatch: { geometry: 'fill', fill: 'rgba(176,58,107,0.35)', outline: RESOURCE_PALETTE[4] }
     });
-    expect(entryOf(entries, 'bgdc_cjdcqjx')).toMatchObject({
+    expect(entryOf(entries, 'csxhjctb_csnljsl')).toMatchObject({
       swatch: { geometry: 'line', color: RESOURCE_PALETTE[5] }
     });
-    expect(entryOf(entries, 'csxhjctb_gyssp')).toMatchObject({
+    expect(entryOf(entries, 'csxhjctb_tyhdp')).toMatchObject({
       swatch: { geometry: 'circle', fill: RESOURCE_PALETTE[6], stroke: '#FFFFFF' }
     });
   });
@@ -201,17 +206,17 @@ describe('legendEntries', () => {
     const entries = legendEntries(ALL, new Map());
 
     const fill = 'rgba(176,58,107,0.35)';
-    expect(paintOf('szy_kt')).toMatchObject({ 'fill-color': fill, 'fill-outline-color': RESOURCE_PALETTE[4] });
-    expect(entryOf(entries, 'szy_kt')).toMatchObject({ swatch: { fill } });
-    expect(paintOf('csxhjctb_gyssp')).toMatchObject({ 'circle-color': RESOURCE_PALETTE[6] });
+    expect(paintOf('bgdc_ccwjq')).toMatchObject({ 'fill-color': fill, 'fill-outline-color': RESOURCE_PALETTE[4] });
+    expect(entryOf(entries, 'bgdc_ccwjq')).toMatchObject({ swatch: { fill } });
+    expect(paintOf('csxhjctb_tyhdp')).toMatchObject({ 'circle-color': RESOURCE_PALETTE[6] });
   });
 
   it('符号覆盖：图层和图例都从叠加后的符号推导；分类样式不用统一样式的覆盖', () => {
     const overrides = new Map<string, ResourceSymbolOverride>([
-      ['szy_kt', { uniform: { fillColor: 'rgba(0, 0, 255, 0.5)' } }],
-      ['bgdc_cjdcqjx', { uniform: { color: 'rgba(0, 128, 0, 1)', width: 'L', dash: 'dashed' } }],
-      ['csxhjctb_gyssp', { uniform: { strokeColor: 'rgba(0, 0, 0, 1)', size: 6, strokeWidth: 3 } }],
-      ['csxhjctb_hydl', { uniform: { color: 'rgba(0, 0, 0, 1)' } }]
+      ['bgdc_ccwjq', { uniform: { fillColor: 'rgba(0, 0, 255, 0.5)' } }],
+      ['csxhjctb_csnljsl', { uniform: { color: 'rgba(0, 128, 0, 1)', width: 'L', dash: 'dashed' } }],
+      ['csxhjctb_tyhdp', { uniform: { strokeColor: 'rgba(0, 0, 0, 1)', size: 6, strokeWidth: 3 } }],
+      ['csxhjctb_hydl', { uniform: { color: 'rgba(0, 0, 0, 1)' }, mode: 'classified' }]
     ]);
     const overrideOf = (code: string) => overrides.get(code);
     const tileBase = 'http://localhost/tiles/';
@@ -220,24 +225,24 @@ describe('legendEntries', () => {
     const entries = legendEntries(ALL, new Map(), overrideOf);
 
     // 填充换了颜色、描边没换：描边随缩放从主色（10 级）过渡到描边色（14 级，ADR 0045）
-    expect(paintOf('szy_kt')).toMatchObject({
+    expect(paintOf('bgdc_ccwjq')).toMatchObject({
       'fill-color': 'rgba(0, 0, 255, 0.5)',
       'fill-outline-color': ['interpolate', ['linear'], ['zoom'], 10, 'rgba(0,0,255,1)', 14, RESOURCE_PALETTE[4]]
     });
-    expect(entryOf(entries, 'szy_kt')).toMatchObject({ swatch: { fill: 'rgba(0, 0, 255, 0.5)', outline: RESOURCE_PALETTE[4] } });
-    expect(paintOf('bgdc_cjdcqjx')).toMatchObject({
+    expect(entryOf(entries, 'bgdc_ccwjq')).toMatchObject({ swatch: { fill: 'rgba(0, 0, 255, 0.5)', outline: RESOURCE_PALETTE[4] } });
+    expect(paintOf('csxhjctb_csnljsl')).toMatchObject({
       'line-color': 'rgba(0, 128, 0, 1)',
       'line-width': sizeCurve('line', 'L'),
       'line-dasharray': [3, 2]
     });
-    expect(entryOf(entries, 'bgdc_cjdcqjx')).toMatchObject({ swatch: { color: 'rgba(0, 128, 0, 1)' } });
-    expect(paintOf('csxhjctb_gyssp')).toMatchObject({
+    expect(entryOf(entries, 'csxhjctb_csnljsl')).toMatchObject({ swatch: { color: 'rgba(0, 128, 0, 1)' } });
+    expect(paintOf('csxhjctb_tyhdp')).toMatchObject({
       'circle-color': RESOURCE_PALETTE[6],
       'circle-radius': sizeCurve('circle', 6),
       'circle-stroke-color': 'rgba(0, 0, 0, 1)',
       'circle-stroke-width': 3
     });
-    expect(entryOf(entries, 'csxhjctb_gyssp')).toMatchObject({ swatch: { stroke: 'rgba(0, 0, 0, 1)' } });
+    expect(entryOf(entries, 'csxhjctb_tyhdp')).toMatchObject({ swatch: { stroke: 'rgba(0, 0, 0, 1)' } });
 
     const plain = resourcesGroup({ state: ALL, invalid: new Map(), tileBase });
     expect(paintOf('csxhjctb_hydl')).toStrictEqual(plain.layers.find(item => item.id === 'resources-csxhjctb_hydl')?.paint);
@@ -250,7 +255,10 @@ describe('legendEntries', () => {
 
   it('分类样式的覆盖：取值的预览和图层一起变；选了统一样式时图例带上方式和统一样式的预览', () => {
     const overrides = new Map<string, ResourceSymbolOverride>([
-      ['csxhjctb_hydl', { uniform: { color: 'rgba(0, 0, 0, 1)' }, items: { 水渠: { color: 'rgba(255, 0, 0, 1)' } } }],
+      [
+        'csxhjctb_hydl',
+        { uniform: { color: 'rgba(0, 0, 0, 1)' }, mode: 'classified', items: { 水渠: { color: 'rgba(255, 0, 0, 1)' } } }
+      ],
       ['bgdc_dltb', { mode: 'uniform', items: { '0101': { fillColor: 'rgba(0, 0, 255, 1)' } } }],
       ['bgdc_dltb_czc', { items: { 'legacy:城市用地': { fillColor: 'rgba(0, 255, 0, 1)' } } }]
     ]);
@@ -275,22 +283,22 @@ describe('legendEntries', () => {
   });
 
   it('无填充的面：预览的填充透明，描边照常', () => {
-    const overrides = new Map<string, ResourceSymbolOverride>([['szy_kt', { uniform: { fillStyle: 'none' } }]]);
+    const overrides = new Map<string, ResourceSymbolOverride>([['bgdc_ccwjq', { uniform: { fillStyle: 'none' } }]]);
     const entries = legendEntries(ALL, new Map(), code => overrides.get(code));
 
-    expect(entryOf(entries, 'szy_kt')).toMatchObject({
+    expect(entryOf(entries, 'bgdc_ccwjq')).toMatchObject({
       swatch: { geometry: 'fill', fill: 'rgba(0, 0, 0, 0)', outline: RESOURCE_PALETTE[4] }
     });
   });
 
   it('有花纹的面：预览带上花纹和纹理颜色；分类样式的取值也一样，纹理颜色默认是取值颜色加深', () => {
     const overrides = new Map<string, ResourceSymbolOverride>([
-      ['szy_kt', { uniform: { fillStyle: 'xCross', patternColor: 'rgba(0, 0, 0, 1)' } }],
+      ['bgdc_ccwjq', { uniform: { fillStyle: 'xCross', patternColor: 'rgba(0, 0, 0, 1)' } }],
       ['bgdc_dltb', { items: { '0101': { fillStyle: 'dot' } } }]
     ]);
     const entries = legendEntries(ALL, new Map(), code => overrides.get(code));
 
-    expect(entryOf(entries, 'szy_kt')).toMatchObject({
+    expect(entryOf(entries, 'bgdc_ccwjq')).toMatchObject({
       swatch: { pattern: { name: 'xCross', color: 'rgba(0, 0, 0, 1)' } }
     });
     const dltb = entryOf(entries, 'bgdc_dltb');
@@ -319,13 +327,31 @@ describe('图例条目的年份（ADR 0052 第 3 节）', () => {
 
     expect(entryOf(before, 'csxhjctb_hydl').year).toBe(2025);
     expect(entryOf(after, 'csxhjctb_hydl')).toStrictEqual({ ...entryOf(before, 'csxhjctb_hydl'), year: 2023 });
-    expect(entryOf(before, 'szy_kt').year).toBe(2022);
+    expect(entryOf(before, 'bgdc_ccwjq').year).toBe(2022);
     expect(after.map(entry => entry.code)).toStrictEqual(before.map(entry => entry.code));
   });
 });
 
 // 地类图例的名称列表，按显示顺序
 const names = (keyword?: string) => landuseLegendItems(keyword).map(item => item.name);
+
+describe('地类图例只列资源实际有的类别（ADR 0124）', () => {
+  const available = new Map([
+    ['1106', null],
+    ['1105', null],
+    ['$other', null]
+  ]);
+
+  it('只留下资源有的，顺序不变；没给范围时仍是全表', () => {
+    expect(landuseLegendItems('', available).map(item => item.key)).toStrictEqual(['1105', '1106', '$other']);
+    expect(landuseLegendItems()).toHaveLength(76);
+  });
+
+  it('搜索只在资源有的类别里找', () => {
+    expect(landuseLegendItems('滩涂', available).map(item => item.name)).toStrictEqual(['沿海滩涂', '内陆滩涂']);
+    expect(landuseLegendItems('水田', available)).toStrictEqual([]);
+  });
+});
 
 describe('landuseLegendItems', () => {
   it('平铺表 A.2 的 69 个地类，最后是 6 个历史地类和未匹配的地类（ADR 0074）', () => {
