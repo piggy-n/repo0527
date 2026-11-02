@@ -1,5 +1,5 @@
 import { type ClassEntry, legacyItem } from './classification';
-import { URBAN_VILLAGE_CODE_NAMES } from './landuse';
+import { LANDUSE_CLASSES, LANDUSE_LEGACY_NAME_COLORS, URBAN_VILLAGE_CODE_NAMES } from './landuse';
 import { paletteColor } from './palette';
 
 // 分类字典（ADR 0123）：取值、名称和颜色，同一取值在点层、面层同色，改颜色只改这里；哪个资源用哪个字典在 style-registry.ts。
@@ -111,10 +111,10 @@ export const URBAN_RENEWAL_TYPES = named(
 
 export const SHELTER_TYPES = named('户外', '室内');
 
-// 城镇村属性（czclx）：名称来自旧项目的对照，201A、202A 还没有名称（待业务确认，docs/migration.md），先显示编码
+// 城镇村属性（czclx）：名称来自旧项目的对照；201A、202A 对照里没有，按 203A 的先例用基础编码的名称（待业务确认）
 export const URBAN_VILLAGE_TYPES = fromPalette(
   ...['201', '201A', '202', '202A', '203', '203A', '204', '205'].map(code => {
-    const name = URBAN_VILLAGE_CODE_NAMES[code];
+    const name = URBAN_VILLAGE_CODE_NAMES[code] ?? URBAN_VILLAGE_CODE_NAMES[code.replace('A', '')];
     return [code, name ? `${code} ${name}` : code] as const;
   })
 );
@@ -169,18 +169,117 @@ export const SOIL_TYPES: readonly ClassEntry[] = [
   { value: '211', label: '水稻土', color: '#7E57C2' }
 ];
 
-// 草地分布图斑实际有的地类（dlbm）：编码 1208 不在表 A.2，按名称匹配历史地类"后备耕地"
+// 草地分布图斑的全部地类（dlbm，2026-11-02 枚举）：编码 1208 不在表 A.2，按名称匹配历史地类"后备耕地"
 export const GRASSLAND_LANDUSE: readonly string[] = [
-  '0101', '0102', '0103', '0201', '0201K', '0202', '0204', '0204K', '0301', '0301K', '0302', '0305', '0307', '0307K',
-  '0402', '0404', '0508', '05H1', '0601', '0602', '0603', '0701', '0702', '0809', '0810', '0810A', '08H1', '08H2',
-  '08H2A', '09', '1001', '1002', '1003', '1004', '1005', '1006', '1007', '1008', '1009', '1101', '1102', '1103',
-  '1104', '1104A', '1104K', '1105', '1106', '1107', '1109', '1201', '1202', '1204', '1207',
+  '0101', '0102', '0103', '0201', '0201K', '0202', '0202K', '0204', '0204K', '0301', '0301K', '0302', '0304', '0305',
+  '0307', '0307K', '0402', '0404', '0508', '05H1', '0601', '0602', '0603', '0701', '0702', '0809', '0810', '0810A',
+  '08H1', '08H2', '08H2A', '09', '1001', '1002', '1003', '1004', '1005', '1006', '1007', '1008', '1009', '1101',
+  '1102', '1103', '1104', '1104A', '1104K', '1105', '1106', '1107', '1107A', '1109', '1201', '1202', '1203', '1204',
+  '1206', '1207',
   legacyItem('后备耕地')
 ];
 
-// 湿地分布图斑实际有的地类（dlbm）
+// 湿地分布图斑的全部地类（dlbm，2026-11-02 枚举）
 export const WETLAND_LANDUSE: readonly string[] = [
-  '0101', '0102', '0103', '0204', '0301', '0302', '0304', '0306', '0307', '0402', '0404', '0601', '0603', '0702',
-  '0809', '0810', '09', '1003', '1006', '1008', '1101', '1102', '1103', '1104', '1104A', '1105', '1106', '1107',
-  '1108', '1109', '1202', '1207'
+  '0101', '0102', '0103', '0201', '0202', '0202K', '0204', '0204K', '0301', '0302', '0304', '0305', '0306', '0307',
+  '0402', '0404', '0508', '05H1', '0601', '0602', '0603', '0701', '0702', '0809', '0810', '08H1', '08H2', '09', '1001',
+  '1003', '1005', '1006', '1008', '1101', '1102', '1103', '1104', '1104A', '1104K', '1105', '1106', '1107', '1108',
+  '1109', '1202', '1204', '1207',
+  legacyItem('后备耕地')
+];
+
+// 耕地补划目标、永久基本农田（三区三线）只有耕地的三个地类
+export const CULTIVATED_LANDUSE: readonly string[] = ['0101', '0102', '0103'];
+
+// 其余资源。下面标"推断"的名称没有现成的对照，按命名规律写的，待业务确认（docs/migration.md）
+
+// 界线类型（jxlx）：推断，按国土调查数据库标准的界线类型
+export const BOUNDARY_TYPES = fromPalette(
+  ['630200', '省级界线'],
+  ['640200', '市级界线'],
+  ['650200', '县级界线'],
+  ['660200', '乡级界线'],
+  ['670500', '村级界线'],
+  ['250202', '岛屿岸线']
+);
+
+// 河流等级（hldj）：1 级最大，颜色由深到浅，大多数河流是 8、9 级，不能太浅
+export const RIVER_LEVELS: readonly ClassEntry[] = [
+  '#0B2A6B',
+  '#0D3C8C',
+  '#0D47A1',
+  '#1565C0',
+  '#1976D2',
+  '#1E88E5',
+  '#42A5F5',
+  '#64B5F6',
+  '#90CAF9'
+].map((color, index) => ({ value: String(index + 1), label: `${index + 1} 级`, color }));
+
+// 水库等别（skdb）：推断，D、Z、X 是大、中、小型；N/A 约占 37%，归入"其他"
+export const RESERVOIR_GRADES: readonly ClassEntry[] = [
+  { value: 'D02', label: '大（2）型', color: '#004D40' },
+  { value: 'Z01', label: '中型', color: '#00897B' },
+  { value: 'X01', label: '小（1）型', color: '#4DB6AC' },
+  { value: 'X02', label: '小（2）型', color: '#B2DFDB' }
+];
+
+// 流域（lymc）：湖泊、坑塘
+export const BASIN_TYPES: readonly ClassEntry[] = [
+  { value: '淮河流域', label: '淮河流域', color: '#1E88E5' },
+  { value: '长江流域', label: '长江流域', color: '#00897B' }
+];
+
+// 批准未建设土地的业务类型（ywlx）：推断，按拼音缩写
+export const UNBUILT_LAND_TYPES = fromPalette(
+  ['GWYFPC', '国务院分批次'],
+  ['GWYDDXZ', '国务院单独选址'],
+  ['SZFFPC', '省政府分批次'],
+  ['SZFDDXZ', '省政府单独选址'],
+  ['ZJGGJX', '增减挂钩建新']
+);
+
+// 耕地等别（lyd）：字段按名称推测是利用等，等别数字小的质量高，颜色由深到浅
+export const FARMLAND_GRADES: readonly ClassEntry[] = [
+  { value: '3', label: '3 等', color: '#1B5E20' },
+  { value: '4', label: '4 等', color: '#43A047' },
+  { value: '5', label: '5 等', color: '#9CCC65' },
+  { value: '6', label: '6 等', color: '#DCE775' }
+];
+
+// 文艺场馆、殡葬设施（type）：复合值（如"博物馆/展览馆"，约 2%）和"其他"都归入"其他"，不单独成类
+export const CULTURE_VENUE_TYPES = named(
+  '公共图书馆',
+  '博物馆',
+  '展览馆',
+  '公共美术馆',
+  '纪念馆',
+  '档案馆',
+  '科技馆',
+  '非物质文化遗产馆',
+  '综合'
+);
+
+export const FUNERAL_TYPES = named('公墓', '陵园', '骨灰堂（骨灰存放处）', '殡仪馆（殡仪服务站）');
+
+// 永久基本农田图斑（dlmc）：编码混着二调和三调，只能按名称；颜色取地类表，村庄、有林地是表外的旧名称，取对应的地类
+export function landuseColor(name: string): string {
+  const color = LANDUSE_CLASSES.find(item => item.name === name)?.color ?? LANDUSE_LEGACY_NAME_COLORS[name];
+  if (!color) {
+    throw new Error(`地类表里没有 ${name}`);
+  }
+  return color;
+}
+
+export const PERMANENT_FARMLAND_TYPES: readonly ClassEntry[] = [
+  { value: '水田', label: '水田', color: landuseColor('水田') },
+  { value: '水浇地', label: '水浇地', color: landuseColor('水浇地') },
+  { value: '旱地', label: '旱地', color: landuseColor('旱地') },
+  { value: '果园', label: '果园', color: landuseColor('果园') },
+  { value: '茶园', label: '茶园', color: landuseColor('茶园') },
+  { value: '其他园地', label: '其他园地', color: landuseColor('其他园地') },
+  { value: '有林地', label: '有林地', color: landuseColor('乔木林地') },
+  { value: '坑塘水面', label: '坑塘水面', color: landuseColor('坑塘水面') },
+  { value: '采矿用地', label: '采矿用地', color: landuseColor('采矿用地') },
+  { value: '村庄', label: '村庄', color: landuseColor('村庄用地') }
 ];

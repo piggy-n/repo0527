@@ -65,7 +65,24 @@ const RULE_CODES = [
   'csxhjctb_llkp',
   'csxhjctb_lrrl',
   'gtkjgh_czkfbj',
-  'gtkjgh_stbhhx'
+  'gtkjgh_stbhhx',
+  'gtkjgh_gdbhmb',
+  'gtkjgh_yjjbntbhtb',
+  'csxhjctb_wycga',
+  'csxhjctb_wycgp',
+  'csxhjctb_bzssa',
+  'szy_hl_fs',
+  'szy_hl_ks',
+  'szy_sk_fs',
+  'szy_sk_ks',
+  'szy_hp_fs',
+  'szy_hp_ks',
+  'szy_kt',
+  'bgdc_gddb',
+  'bgdc_pzwjstd',
+  'bgdc_xzqjx',
+  'bgdc_cjdcqjx',
+  'bgdc_yjjbnttb'
 ];
 
 function repeated(list: readonly string[]) {
@@ -103,7 +120,7 @@ describe('按属性配色', () => {
     expect(colorOf(expression, {})).toBe(color('#2F80ED'));
   });
 
-  it('城镇村等用地按 czclx：8 个取值的颜色和换成字典之前相同，图例写名称，还没有名称的写编码', () => {
+  it('城镇村等用地按 czclx：8 个取值的颜色和换成字典之前相同，图例写名称', () => {
     const rule = colorRuleOf('bgdc_czcdyd');
     if (rule.kind !== 'values') {
       throw new Error('城镇村等用地应按取值配色');
@@ -112,9 +129,9 @@ describe('按属性配色', () => {
     expect(rule.entries.map(({ color: value }) => value)).toStrictEqual(RESOURCE_PALETTE.slice(0, 8));
     expect(rule.entries.map(({ value, label }) => [value, label])).toStrictEqual([
       ['201', '201 城市用地'],
-      ['201A', '201A'],
+      ['201A', '201A 城市用地'],
       ['202', '202 建制镇用地'],
-      ['202A', '202A'],
+      ['202A', '202A 建制镇用地'],
       ['203', '203 村庄用地'],
       ['203A', '203A 村庄用地'],
       ['204', '204 采矿及盐田用地'],
@@ -166,6 +183,7 @@ describe('按属性配色', () => {
 
   it('cc 只有一个取值的资源不分类，保持统一样式', () => {
     const uniform = ['csxhjctb_tyhda', 'csxhjctb_tyhdp', 'csxhjctb_whhda', 'csxhjctb_jgtta', 'csxhjctb_sdza'];
+    uniform.push('csxhjctb_dltbbha', 'csxhjctb_dltbbhp', 'bgdc_xzq', 'bgdc_cjdcq', 'bgdc_ccwjq');
 
     expect(uniform.filter(code => resourceStyle(code).color)).toStrictEqual([]);
   });
@@ -212,14 +230,15 @@ describe('林、草、湿、荒的分类（ADR 0124）', () => {
   it('每个资源只列实际有的类别，不是地类的全表', () => {
     expect(keysOf(FOREST)).toHaveLength(19);
     expect(keysOf(DESERT)).toHaveLength(14);
-    expect(keysOf(GRASS)).toHaveLength(55);
-    expect(keysOf(WETLAND)).toHaveLength(33);
-    // 湿地里没有果园、铁路用地；草地里有后备耕地（编码 1208 不在表 A.2，按名称匹配）
-    expect(keysOf(WETLAND)).toEqual(expect.arrayContaining(['1106', '1105', OTHER_ITEM]));
-    expect(keysOf(WETLAND)).not.toContain('0201');
-    expect(keysOf(WETLAND)).not.toContain('1001');
-    expect(keysOf(GRASS)).toContain('legacy:后备耕地');
-    expect(keysOf(WETLAND)).not.toContain('legacy:后备耕地');
+    // 枚举的结果：草地 59 个、湿地 48 个地类，都有后备耕地（编码 1208 不在表 A.2，按名称匹配）
+    expect(keysOf(GRASS)).toHaveLength(60);
+    expect(keysOf(WETLAND)).toHaveLength(49);
+    expect(keysOf(GRASS)).toEqual(expect.arrayContaining(['0404', '1107A', '1206', 'legacy:后备耕地', OTHER_ITEM]));
+    expect(keysOf(WETLAND)).toEqual(expect.arrayContaining(['1106', '1105', '1001', 'legacy:后备耕地', OTHER_ITEM]));
+    // 湿地里没有这些
+    expect(keysOf(WETLAND)).not.toContain('1107A');
+    expect(keysOf(WETLAND)).not.toContain('0103K');
+    expect(keysOf(WETLAND)).not.toContain('1002');
   });
 
   it('名称按代码表；代码表里没有的 120、122 先显示编码', () => {
@@ -250,7 +269,73 @@ describe('林、草、湿、荒的分类（ADR 0124）', () => {
     // 林种有约四分之一是空字符串
     expect(colorOf(colorExpression(colorRuleOf(FOREST)), { lin_zhong: '' })).toBe(fallback);
     expect(colorOf(colorExpression(colorRuleOf(DESERT)), { tu_rang_lx: '999' })).toBe(fallback);
-    expect(colorOf(colorExpression(colorRuleOf(WETLAND)), { dlbm: '0201', dlmc: '果园' })).toBe(fallback);
+    expect(colorOf(colorExpression(colorRuleOf(WETLAND)), { dlbm: '1002', dlmc: '轨道交通用地' })).toBe(fallback);
+  });
+});
+
+// 规则的字段（地类规则写种类）和不含兜底的取值数
+function fieldOf(code: string) {
+  const rule = colorRuleOf(code);
+  return rule.kind === 'values' ? [rule.property, rule.entries.length] : [rule.kind, classItems(rule).length - 1];
+}
+
+function colorAt(code: string, properties: Record<string, string>) {
+  return colorOf(colorExpression(colorRuleOf(code)), properties);
+}
+
+describe('其余资源的分类', () => {
+  it('字段和取值数', () => {
+    const expected = {
+      bgdc_xzqjx: ['jxlx', 6],
+      bgdc_cjdcqjx: ['jxlx', 5],
+      bgdc_pzwjstd: ['ywlx', 5],
+      bgdc_gddb: ['lyd', 4],
+      bgdc_yjjbnttb: ['dlmc', 10],
+      szy_hl_fs: ['hldj', 9],
+      szy_hl_ks: ['hldj', 9],
+      szy_sk_fs: ['skdb', 4],
+      szy_sk_ks: ['skdb', 4],
+      szy_hp_fs: ['lymc', 2],
+      szy_hp_ks: ['lymc', 2],
+      szy_kt: ['lymc', 2],
+      csxhjctb_wycga: ['type', 9],
+      csxhjctb_wycgp: ['type', 9],
+      csxhjctb_bzssa: ['type', 4],
+      gtkjgh_gdbhmb: ['landuse-code', 3],
+      gtkjgh_yjjbntbhtb: ['landuse-code', 3]
+    };
+
+    expect(Object.fromEntries(Object.keys(expected).map(code => [code, fieldOf(code)]))).toStrictEqual(expected);
+  });
+
+  it('复合值和"其他"归入"其他"，不单独成类；水库的 N/A 同样', () => {
+    const fallback = color(LANDUSE_FALLBACK_COLOR);
+    const venue = colorExpression(colorRuleOf('csxhjctb_wycga'));
+
+    expect(colorOf(venue, { type: '博物馆' })).not.toBe(fallback);
+    expect(colorOf(venue, { type: '博物馆/展览馆' })).toBe(fallback);
+    expect(colorOf(venue, { type: '其他' })).toBe(fallback);
+    expect(colorOf(colorExpression(colorRuleOf('szy_sk_fs')), { skdb: 'N/A' })).toBe(fallback);
+  });
+
+  it('同一个字典在几个资源上同色：行政区界线和村级调查区界线的县级界线、丰水期和枯水期的河流', () => {
+    expect(colorAt('bgdc_cjdcqjx', { jxlx: '650200' })).toBe(colorAt('bgdc_xzqjx', { jxlx: '650200' }));
+    expect(colorAt('szy_hl_ks', { hldj: '8' })).toBe(colorAt('szy_hl_fs', { hldj: '8' }));
+    // 村级调查区界线没有岛屿岸线
+    expect(colorAt('bgdc_cjdcqjx', { jxlx: '250202' })).toBe(color(LANDUSE_FALLBACK_COLOR));
+  });
+
+  it('永久基本农田图斑按名称，颜色取地类表：表外的旧名称也有颜色', () => {
+    const expression = colorExpression(colorRuleOf('bgdc_yjjbnttb'));
+
+    expect(colorOf(expression, { dlmc: '水田', dlbm: '011' })).toBe(color('rgb(248, 208, 114)'));
+    expect(colorOf(expression, { dlmc: '有林地' })).toBe(color('rgb(49, 173, 105)'));
+    expect(colorOf(expression, { dlmc: '村庄' })).toBe(color('rgb(236, 137, 138)'));
+  });
+
+  it('加了分类的重资源仍有最小显示级别', () => {
+    expect(resourceStyle('bgdc_yjjbnttb').minzoom).toBe(9);
+    expect(resourceStyle('bgdc_cjdcqjx').minzoom).toBe(8);
   });
 });
 
@@ -267,7 +352,7 @@ describe('登记表', () => {
   });
 
   it('没登记的资源（包括和原型上的属性同名的）没有特别的样式', () => {
-    expect(resourceStyle('szy_kt')).toStrictEqual({});
+    expect(resourceStyle('bgdc_ccwjq')).toStrictEqual({});
     expect(resourceStyle('constructor')).toStrictEqual({});
   });
 
@@ -281,7 +366,7 @@ describe('登记表', () => {
 
 describe('默认样式', () => {
   it('单一配色的面：半透明填充加同色描边，颜色按目录顺序取', () => {
-    expect(mainLayer(resource('szy_kt', 'fill', 1))).toStrictEqual({
+    expect(mainLayer(resource('bgdc_ccwjq', 'fill', 1))).toStrictEqual({
       type: 'fill',
       paint: { 'fill-color': 'rgba(22,179,179,0.35)', 'fill-outline-color': RESOURCE_PALETTE[1] }
     });
@@ -295,7 +380,7 @@ describe('默认样式', () => {
   });
 
   it('线是实色；点是实色加白描边；按属性配色时颜色换成表达式', () => {
-    expect(mainLayer(resource('bgdc_cjdcqjx', 'line', 2))).toMatchObject({
+    expect(mainLayer(resource('csxhjctb_csnljsl', 'line', 2))).toMatchObject({
       type: 'line',
       paint: { 'line-color': RESOURCE_PALETTE[2] }
     });

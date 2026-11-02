@@ -30,7 +30,7 @@ const CATALOG = buildCatalog([
     children: [
       layer('bgdc_dltb', '地类图斑', 'Polygon'),
       layer('csxhjctb_hydl', '水域线层', 'Line', [2023, 2024, 2025]),
-      layer('szy_kt', '坑塘', 'Polygon'),
+      layer('bgdc_ccwjq', '坑塘', 'Polygon'),
       layer('lcsh_sdtb', '湿地分布图斑', 'Polygon')
     ]
   }
@@ -127,12 +127,12 @@ describe('ResourceLegend', () => {
     owner.setChecked('lcsh_sdtb', true);
     await nextTick();
 
-    expect(wrapper.findAll('[data-landuse]')).toHaveLength(33);
+    expect(wrapper.findAll('[data-landuse]')).toHaveLength(49);
     expect(wrapper.find('[data-landuse="1106"]').exists()).toBe(true);
-    expect(wrapper.find('[data-landuse="0201"]').exists()).toBe(false);
+    expect(wrapper.find('[data-landuse="1002"]').exists()).toBe(false);
 
     const search = wrapper.get('input[aria-label="搜索地类编码或名称"]');
-    await search.setValue('果园');
+    await search.setValue('轨道交通');
     expect(wrapper.findAll('[data-landuse]')).toHaveLength(0);
     await search.setValue('滩涂');
     expect(wrapper.findAll('[data-landuse]').map(item => item.attributes('data-landuse'))).toStrictEqual(['1105', '1106']);
@@ -140,10 +140,10 @@ describe('ResourceLegend', () => {
 
   it('隐藏时不渲染条目，编辑器卸载、丢弃取色预览；再显示时展开状态保留（ADR 0053 第 4 节）', async () => {
     const { wrapper, owner, symbols, active } = mountLegend();
-    owner.setChecked('szy_kt', true);
+    owner.setChecked('bgdc_ccwjq', true);
     await nextTick();
     await button(wrapper, '编辑坑塘图例').trigger('click');
-    symbols.previewColor({ code: 'szy_kt' }, 'fillColor', 'rgba(0, 128, 0, 0.8)');
+    symbols.previewColor({ code: 'bgdc_ccwjq' }, 'fillColor', 'rgba(0, 128, 0, 0.8)');
     expect(symbols.preview.value).not.toBeNull();
 
     active.value = false;
@@ -153,15 +153,15 @@ describe('ResourceLegend', () => {
 
     active.value = true;
     await nextTick();
-    expect(wrapper.find('[data-legend-settings="szy_kt"] [data-symbol-editor]').exists()).toBe(true);
+    expect(wrapper.find('[data-legend-settings="bgdc_ccwjq"] [data-symbol-editor]').exists()).toBe(true);
   });
 
   it('三维时只显示说明、丢弃取色预览；切回二维后编辑目标照旧（ADR 0080 第 5 节）', async () => {
     const { wrapper, owner, symbols, scene } = mountLegend();
-    owner.setChecked('szy_kt', true);
+    owner.setChecked('bgdc_ccwjq', true);
     await nextTick();
     await button(wrapper, '编辑坑塘图例').trigger('click');
-    symbols.previewColor({ code: 'szy_kt' }, 'fillColor', 'rgba(0, 128, 0, 0.8)');
+    symbols.previewColor({ code: 'bgdc_ccwjq' }, 'fillColor', 'rgba(0, 128, 0, 0.8)');
 
     scene.value = true;
     await nextTick();
@@ -172,7 +172,7 @@ describe('ResourceLegend', () => {
     scene.value = false;
     await nextTick();
     expect(wrapper.find('[data-legend-scene-note]').exists()).toBe(false);
-    expect(wrapper.find('[data-legend-settings="szy_kt"] [data-symbol-editor]').exists()).toBe(true);
+    expect(wrapper.find('[data-legend-settings="bgdc_ccwjq"] [data-symbol-editor]').exists()).toBe(true);
   });
 
   it('切走再切回保留当前编辑目标，返回后保留搜索词和各图层展开状态', async () => {
@@ -226,23 +226,23 @@ describe('ResourceLegend', () => {
   it('单一符号直接显示预览，编辑器由独立入口打开', async () => {
     const { wrapper, owner } = mountLegend();
     await nextTick();
-    owner.setChecked('szy_kt', true);
+    owner.setChecked('bgdc_ccwjq', true);
     await nextTick();
     owner.setChecked('bgdc_dltb', false);
     await nextTick();
 
-    expect(entries(wrapper)).toStrictEqual(['szy_kt']);
+    expect(entries(wrapper)).toStrictEqual(['bgdc_ccwjq']);
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
   });
 
   it('仅有符号覆盖时显示全部恢复默认，确认后恢复并隐藏入口', async () => {
     const { wrapper, owner, symbols } = mountLegend();
-    owner.setChecked('szy_kt', true);
+    owner.setChecked('bgdc_ccwjq', true);
     await nextTick();
     const resetAll = () => wrapper.findAll('button').find(item => item.text() === '全部恢复默认');
     expect(resetAll()).toBeUndefined();
 
-    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: '#000' });
+    symbols.setSymbol({ code: 'bgdc_ccwjq' }, { fillColor: '#000' });
     await nextTick();
     expect(resetAll()?.attributes('disabled')).toBeUndefined();
     expect(resetAll()).toBeDefined();
@@ -262,15 +262,15 @@ describe('ResourceLegend', () => {
 
   it('普通图例只有整行编辑入口；按取值配色展开后列出取值和"其他"', async () => {
     const { wrapper, owner } = mountLegend();
-    owner.setCheckedMany(['csxhjctb_hydl', 'szy_kt'], true);
+    owner.setCheckedMany(['csxhjctb_hydl', 'bgdc_ccwjq'], true);
     await nextTick();
 
-    expect(wrapper.get('[data-legend="szy_kt"]').text()).toBe('坑塘2022');
-    expect(swatchColors(wrapper.get('[data-legend="szy_kt"] [data-swatch]'))).toContain('rgba(199,79,155,0.35)');
+    expect(wrapper.get('[data-legend="bgdc_ccwjq"]').text()).toBe('坑塘2022');
+    expect(swatchColors(wrapper.get('[data-legend="bgdc_ccwjq"] [data-swatch]'))).toContain('rgba(199,79,155,0.35)');
     expect(wrapper.find('[data-symbol-editor]').exists()).toBe(false);
-    expect(wrapper.get('[data-legend="szy_kt"]').findAll('button')).toHaveLength(1);
+    expect(wrapper.get('[data-legend="bgdc_ccwjq"]').findAll('button')).toHaveLength(1);
     await button(wrapper, '编辑坑塘图例').trigger('click');
-    expect(wrapper.find('[data-symbol-editor="szy_kt"]').exists()).toBe(true);
+    expect(wrapper.find('[data-symbol-editor="bgdc_ccwjq"]').exists()).toBe(true);
     await back(wrapper);
     expect(wrapper.get('[data-legend="csxhjctb_hydl"]').findAll('li').map(item => item.text())).toStrictEqual([
       '河流',
@@ -281,8 +281,8 @@ describe('ResourceLegend', () => {
 
   it('所有编辑视图都隐藏全部恢复默认，返回浏览后重新显示', async () => {
     const { wrapper, owner, symbols } = mountLegend();
-    owner.setChecked('szy_kt', true);
-    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: '#000' });
+    owner.setChecked('bgdc_ccwjq', true);
+    symbols.setSymbol({ code: 'bgdc_ccwjq' }, { fillColor: '#000' });
     await nextTick();
     const resetAll = () => wrapper.findAll('button').some(item => item.text() === '全部恢复默认');
     expect(resetAll()).toBe(true);
@@ -304,7 +304,7 @@ describe('ResourceLegend', () => {
 
   it('按属性配色的条目名称前是前三个取值的颜色；改过符号的条目、取值名称后有小圆点（设计稿 5D.5）', async () => {
     const { wrapper, owner, symbols } = mountLegend();
-    owner.setCheckedMany(['csxhjctb_hydl', 'szy_kt'], true);
+    owner.setCheckedMany(['csxhjctb_hydl', 'bgdc_ccwjq'], true);
     await nextTick();
     const row = (code: string) => wrapper.get(`[data-legend="${code}"] > div`);
     const edited = (code: string) => row(code).find('[data-edited]').exists();
@@ -315,13 +315,13 @@ describe('ResourceLegend', () => {
       'background-color: rgb(79, 195, 247);',
       'background-color: rgb(47, 128, 237);'
     ]);
-    expect(row('szy_kt').find('[data-colors]').exists()).toBe(false);
-    expect([edited('szy_kt'), edited('csxhjctb_hydl')]).toStrictEqual([false, false]);
+    expect(row('bgdc_ccwjq').find('[data-colors]').exists()).toBe(false);
+    expect([edited('bgdc_ccwjq'), edited('csxhjctb_hydl')]).toStrictEqual([false, false]);
 
-    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });
+    symbols.setSymbol({ code: 'bgdc_ccwjq' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });
     symbols.setSymbol({ code: 'csxhjctb_hydl', item: '水渠' }, { color: 'rgba(255, 0, 0, 1)' });
     await nextTick();
-    expect([edited('szy_kt'), edited('csxhjctb_hydl')]).toStrictEqual([true, true]);
+    expect([edited('bgdc_ccwjq'), edited('csxhjctb_hydl')]).toStrictEqual([true, true]);
 
     const valueEdited = (key: string) => wrapper.get(`[data-value="${key}"]`).find('[data-edited]').exists();
     expect([valueEdited('河流'), valueEdited('水渠')]).toStrictEqual([false, true]);
@@ -329,19 +329,19 @@ describe('ResourceLegend', () => {
 
   it('预览和确认的符号都反映在图例上，丢弃预览后回到确认的颜色', async () => {
     const { wrapper, owner, symbols } = mountLegend();
-    owner.setChecked('szy_kt', true);
+    owner.setChecked('bgdc_ccwjq', true);
     await nextTick();
-    const colors = () => swatchColors(wrapper.get('[data-legend="szy_kt"] [data-swatch]'));
+    const colors = () => swatchColors(wrapper.get('[data-legend="bgdc_ccwjq"] [data-swatch]'));
 
-    symbols.setSymbol({ code: 'szy_kt' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });
+    symbols.setSymbol({ code: 'bgdc_ccwjq' }, { fillColor: 'rgba(0, 0, 255, 0.5)' });
     await nextTick();
     expect(colors()).toContain('rgba(0, 0, 255, 0.5)');
 
-    symbols.previewColor({ code: 'szy_kt' }, 'fillColor', 'rgba(0, 128, 0, 0.8)');
+    symbols.previewColor({ code: 'bgdc_ccwjq' }, 'fillColor', 'rgba(0, 128, 0, 0.8)');
     await nextTick();
     expect(colors()).toContain('rgba(0, 128, 0, 0.8)');
 
-    symbols.clearPreview({ code: 'szy_kt' });
+    symbols.clearPreview({ code: 'bgdc_ccwjq' });
     await nextTick();
     expect(colors()).toContain('rgba(0, 0, 255, 0.5)');
     expect(colors()).not.toContain('rgba(0, 128, 0, 0.8)');
