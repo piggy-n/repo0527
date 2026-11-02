@@ -21,7 +21,7 @@ export const SAMPLE_CATALOG = buildCatalog([{
       name: '水资源',
       children: [
         { code: 'csxhjctb_hydl', name: '水域线层', geoType: 'Line', yearList: [2023, 2024, 2025] },
-        { code: 'szy_kt', name: '坑塘水面', geoType: 'Polygon', yearList: [2024] }
+        { code: 'lcsh_sdtb', name: '湿地分布图斑', geoType: 'Polygon', yearList: [2024] }
       ]
     },
     {

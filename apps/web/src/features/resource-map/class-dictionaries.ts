@@ -1,4 +1,4 @@
-import type { ClassEntry } from './classification';
+import { type ClassEntry, legacyItem } from './classification';
 import { URBAN_VILLAGE_CODE_NAMES } from './landuse';
 import { paletteColor } from './palette';
 
@@ -128,3 +128,59 @@ export const DEVELOPMENT_ZONE_TYPES = fromPalette(
 );
 
 export const RED_LINE_TYPES = named('水源涵养', '生物多样性维护', '水土保持', '其他生态系统服务功能重要性');
+// 林草湿荒（ADR 0124）：只列探查到的取值，名称来自后端提供的代码表（全表在 docs/migration.md）
+
+// 林种（lin_zhong）：色相按大类，防护林绿、特种用途林青蓝、用材林橙、经济林紫；约四分之一的图斑没有林种，归入"其他"
+export const FOREST_TYPES: readonly ClassEntry[] = [
+  { value: '111', label: '水源涵养林', color: '#1B5E20' },
+  { value: '112', label: '水土保持林', color: '#2E7D32' },
+  { value: '113', label: '防风固沙林', color: '#558B2F' },
+  { value: '114', label: '农田牧场防护林', color: '#7CB342' },
+  { value: '115', label: '护岸林', color: '#43A047' },
+  { value: '116', label: '护路林', color: '#81C784' },
+  { value: '117', label: '其他防护林', color: '#AED581' },
+  { value: '122', label: '实验林', color: '#00695C' },
+  { value: '123', label: '母树林', color: '#00897B' },
+  { value: '124', label: '环境保护林', color: '#26A69A' },
+  { value: '125', label: '风景林', color: '#00ACC1' },
+  { value: '126', label: '名胜古迹和革命纪念林', color: '#0277BD' },
+  { value: '127', label: '自然保护林', color: '#4FC3F7' },
+  { value: '231', label: '短轮伐期用材林', color: '#EF6C00' },
+  { value: '232', label: '速生丰产用材林', color: '#FFA726' },
+  { value: '233', label: '一般用材林', color: '#FFD54F' },
+  { value: '251', label: '果树林', color: '#8E24AA' },
+  { value: '255', label: '其他经济林', color: '#CE93D8' }
+];
+
+// 土壤类型（tu_rang_lx）：色相按土纲；120、122 不在代码表里（待业务确认，docs/migration.md），先显示编码
+export const SOIL_TYPES: readonly ClassEntry[] = [
+  { value: '104', label: '黄壤', color: '#FDD835' },
+  { value: '111', label: '黄棕壤', color: '#C49A6C' },
+  { value: '112', label: '黄褐土', color: '#8D6E63' },
+  { value: '113', label: '棕壤', color: '#6D4C41' },
+  { value: '120', label: '120', color: '#FFB74D' },
+  { value: '122', label: '122', color: '#FB8C00' },
+  { value: '123', label: '灰褐土', color: '#E65100' },
+  { value: '152', label: '灰棕漠土', color: '#9E9D24' },
+  { value: '163', label: '新积土', color: '#66BB6A' },
+  { value: '171', label: '石质土', color: '#546E7A' },
+  { value: '182', label: '潮土', color: '#4FC3F7' },
+  { value: '184', label: '林灌草甸土', color: '#0288D1' },
+  { value: '211', label: '水稻土', color: '#7E57C2' }
+];
+
+// 草地分布图斑实际有的地类（dlbm）：编码 1208 不在表 A.2，按名称匹配历史地类"后备耕地"
+export const GRASSLAND_LANDUSE: readonly string[] = [
+  '0101', '0102', '0103', '0201', '0201K', '0202', '0204', '0204K', '0301', '0301K', '0302', '0305', '0307', '0307K',
+  '0402', '0404', '0508', '05H1', '0601', '0602', '0603', '0701', '0702', '0809', '0810', '0810A', '08H1', '08H2',
+  '08H2A', '09', '1001', '1002', '1003', '1004', '1005', '1006', '1007', '1008', '1009', '1101', '1102', '1103',
+  '1104', '1104A', '1104K', '1105', '1106', '1107', '1109', '1201', '1202', '1204', '1207',
+  legacyItem('后备耕地')
+];
+
+// 湿地分布图斑实际有的地类（dlbm）
+export const WETLAND_LANDUSE: readonly string[] = [
+  '0101', '0102', '0103', '0204', '0301', '0302', '0304', '0306', '0307', '0402', '0404', '0601', '0603', '0702',
+  '0809', '0810', '09', '1003', '1006', '1008', '1101', '1102', '1103', '1104', '1104A', '1105', '1106', '1107',
+  '1108', '1109', '1202', '1207'
+];

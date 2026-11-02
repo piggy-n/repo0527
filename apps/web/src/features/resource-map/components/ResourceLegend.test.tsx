@@ -22,7 +22,7 @@ function layer(
   return { code, name, geoType, yearList };
 }
 
-// 地类、按取值配色、统一符号各一个；只有地类图斑默认勾选
+// 地类、按取值配色、统一符号、只列实际类别的地类各一个；只有地类图斑默认勾选
 const CATALOG = buildCatalog([
   {
     code: null,
@@ -30,7 +30,8 @@ const CATALOG = buildCatalog([
     children: [
       layer('bgdc_dltb', '地类图斑', 'Polygon'),
       layer('csxhjctb_hydl', '水域线层', 'Line', [2023, 2024, 2025]),
-      layer('szy_kt', '坑塘', 'Polygon')
+      layer('szy_kt', '坑塘', 'Polygon'),
+      layer('lcsh_sdtb', '湿地分布图斑', 'Polygon')
     ]
   }
 ]);
@@ -115,6 +116,26 @@ describe('ResourceLegend', () => {
     await nextTick();
 
     expect(entries(wrapper)).toStrictEqual(['bgdc_dltb', 'csxhjctb_hydl']);
+  });
+
+  it('湿地只列它实际有的地类，搜索也只在这些里找；地类图斑仍是全表（ADR 0124）', async () => {
+    const { wrapper, owner } = mountLegend();
+    await nextTick();
+    expect(wrapper.findAll('[data-landuse]')).toHaveLength(76);
+
+    owner.setChecked('bgdc_dltb', false);
+    owner.setChecked('lcsh_sdtb', true);
+    await nextTick();
+
+    expect(wrapper.findAll('[data-landuse]')).toHaveLength(33);
+    expect(wrapper.find('[data-landuse="1106"]').exists()).toBe(true);
+    expect(wrapper.find('[data-landuse="0201"]').exists()).toBe(false);
+
+    const search = wrapper.get('input[aria-label="搜索地类编码或名称"]');
+    await search.setValue('果园');
+    expect(wrapper.findAll('[data-landuse]')).toHaveLength(0);
+    await search.setValue('滩涂');
+    expect(wrapper.findAll('[data-landuse]').map(item => item.attributes('data-landuse'))).toStrictEqual(['1105', '1106']);
   });
 
   it('隐藏时不渲染条目，编辑器卸载、丢弃取色预览；再显示时展开状态保留（ADR 0053 第 4 节）', async () => {

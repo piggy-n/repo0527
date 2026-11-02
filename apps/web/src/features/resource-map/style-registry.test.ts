@@ -2,6 +2,7 @@
 import { type StyleSpecification, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
 import type { Resource, ResourceGeometry } from './catalog';
+import { classItems, OTHER_ITEM } from './classification';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import { paletteColor, RESOURCE_PALETTE } from './palette';
 import {
@@ -34,8 +35,10 @@ const RULE_CODES = [
   'bgdc_dltb',
   'bgdc_dltb_czc',
   'bgdc_czcdyd',
+  'lcsh_sltb',
   'lcsh_cdtb',
   'lcsh_sdtb',
+  'lcsh_hmtb',
   'csxhjctb_xxa',
   'csxhjctb_xxp',
   'csxhjctb_yljga',
@@ -167,12 +170,87 @@ describe('按属性配色', () => {
     expect(uniform.filter(code => resourceStyle(code).color)).toStrictEqual([]);
   });
 
-  it('草地、湿地复用地类的规则；水域面层多出湖泊、水库、坑塘、海面', () => {
-    expect(colorRuleOf('lcsh_cdtb')).toStrictEqual({ kind: 'landuse-code' });
-    expect(colorRuleOf('lcsh_sdtb')).toStrictEqual({ kind: 'landuse-code' });
+  it('水域面层多出湖泊、水库、坑塘、海面', () => {
     const expression = colorExpression(colorRuleOf('csxhjctb_hyda'));
     expect(colorOf(expression, { ccn: '河流' })).toBe(color('#1E88E5'));
     expect(colorOf(expression, { ccn: '坑塘' })).toBe(color('#80CBC4'));
+  });
+});
+
+const FOREST = 'lcsh_sltb';
+const GRASS = 'lcsh_cdtb';
+const WETLAND = 'lcsh_sdtb';
+const DESERT = 'lcsh_hmtb';
+
+function keysOf(code: string) {
+  return classItems(colorRuleOf(code)).map(item => item.key);
+}
+
+function labelOf(code: string, key: string) {
+  return classItems(colorRuleOf(code)).find(item => item.key === key)?.label;
+}
+
+// 地图上这个取值的要素的属性
+function propertiesOf(code: string, key: string, label: string): Record<string, string> {
+  if (code === FOREST) {
+    return { lin_zhong: key };
+  }
+  if (code === DESERT) {
+    return { tu_rang_lx: key };
+  }
+  return key.startsWith('legacy:') ? { dlbm: '1208', dlmc: label } : { dlbm: key };
+}
+
+describe('林、草、湿、荒的分类（ADR 0124）', () => {
+  it('字段按后端提供的：林按 lin_zhong，荒按 tu_rang_lx，草、湿按地类编码', () => {
+    expect(colorRuleOf(FOREST)).toMatchObject({ kind: 'values', property: 'lin_zhong' });
+    expect(colorRuleOf(DESERT)).toMatchObject({ kind: 'values', property: 'tu_rang_lx' });
+    expect(colorRuleOf(GRASS).kind).toBe('landuse-code');
+    expect(colorRuleOf(WETLAND).kind).toBe('landuse-code');
+  });
+
+  it('每个资源只列实际有的类别，不是地类的全表', () => {
+    expect(keysOf(FOREST)).toHaveLength(19);
+    expect(keysOf(DESERT)).toHaveLength(14);
+    expect(keysOf(GRASS)).toHaveLength(55);
+    expect(keysOf(WETLAND)).toHaveLength(33);
+    // 湿地里没有果园、铁路用地；草地里有后备耕地（编码 1208 不在表 A.2，按名称匹配）
+    expect(keysOf(WETLAND)).toEqual(expect.arrayContaining(['1106', '1105', OTHER_ITEM]));
+    expect(keysOf(WETLAND)).not.toContain('0201');
+    expect(keysOf(WETLAND)).not.toContain('1001');
+    expect(keysOf(GRASS)).toContain('legacy:后备耕地');
+    expect(keysOf(WETLAND)).not.toContain('legacy:后备耕地');
+  });
+
+  it('名称按代码表；代码表里没有的 120、122 先显示编码', () => {
+    expect(labelOf(FOREST, '233')).toBe('一般用材林');
+    expect(labelOf(FOREST, '126')).toBe('名胜古迹和革命纪念林');
+    expect(labelOf(DESERT, '111')).toBe('黄棕壤');
+    expect(labelOf(DESERT, '211')).toBe('水稻土');
+    expect(labelOf(DESERT, '120')).toBe('120');
+    expect(labelOf(DESERT, '122')).toBe('122');
+  });
+
+  it('图例和地图一致：图例上每一项的颜色，就是地图上这个取值画出的颜色', () => {
+    for (const code of [FOREST, GRASS, WETLAND, DESERT]) {
+      const rule = colorRuleOf(code);
+      const expression = colorExpression(rule);
+      const drawn = classItems(rule).filter(item => item.key !== OTHER_ITEM);
+      const expected = drawn.map(item => [item.key, color(item.color)]);
+
+      expect(drawn.map(item => [item.key, colorOf(expression, propertiesOf(code, item.key, item.label))])).toStrictEqual(
+        expected
+      );
+    }
+  });
+
+  it('图例没有的取值在地图上归入"其他"：不会出现图例里找不到的颜色', () => {
+    const fallback = color(LANDUSE_FALLBACK_COLOR);
+
+    // 林种有约四分之一是空字符串
+    expect(colorOf(colorExpression(colorRuleOf(FOREST)), { lin_zhong: '' })).toBe(fallback);
+    expect(colorOf(colorExpression(colorRuleOf(DESERT)), { tu_rang_lx: '999' })).toBe(fallback);
+    expect(colorOf(colorExpression(colorRuleOf(WETLAND)), { dlbm: '0201', dlmc: '果园' })).toBe(fallback);
   });
 });
 

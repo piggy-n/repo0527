@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { classExpression, classItems, type ColorRule, OTHER_ITEM, symbolClasses } from './classification';
+import { classExpression, classItems, type ColorRule, legacyItem, OTHER_ITEM, symbolClasses } from './classification';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import { colorOf, normalizeColor as color } from './test-expression';
 
@@ -36,6 +36,34 @@ function routeOf(rule: ColorRule) {
     return keys[index];
   };
 }
+
+describe('地类规则只列实际有的类别（ADR 0124）', () => {
+  const SOME: ColorRule = { kind: 'landuse-code', only: ['0404', '0101', legacyItem('后备耕地')] };
+
+  it('取值只有列出的和"未匹配的地类"，按编码表的顺序，不按列出的顺序', () => {
+    expect(classItems(SOME).map(item => item.key)).toStrictEqual(['0101', '0404', 'legacy:后备耕地', OTHER_ITEM]);
+  });
+
+  it('地图和图例一致：列出的按编码、历史地类按名称匹配，没列出的都归入"未匹配的地类"', () => {
+    const route = routeOf(SOME);
+
+    expect(route({ dlbm: '0404', dlmc: '其他草地' })).toBe('0404');
+    expect(route({ dlbm: '1208', dlmc: '后备耕地' })).toBe('legacy:后备耕地');
+    expect(route({ dlbm: '0301', dlmc: '乔木林地' })).toBe(OTHER_ITEM);
+    expect(route({ dlbm: '999', dlmc: '城市用地' })).toBe(OTHER_ITEM);
+  });
+
+  it('只列编码、没有历史地类时，表达式仍能解析', () => {
+    const rule: ColorRule = { kind: 'landuse-code', only: ['0404'] };
+
+    expect(routeOf(rule)({ dlbm: '0404' })).toBe('0404');
+    expect(routeOf(rule)({ dlbm: '1208', dlmc: '后备耕地' })).toBe(OTHER_ITEM);
+  });
+
+  it('不写 only 时仍是全表：地类图斑不受影响', () => {
+    expect(classItems({ kind: 'landuse-code' })).toHaveLength(76);
+  });
+});
 
 describe('classItems', () => {
   it('按取值配色：各取值和"其他"，键是取值本身，名称用于显示', () => {

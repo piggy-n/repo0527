@@ -3,6 +3,8 @@ import {
   CITY_ROAD_TYPES,
   COMMERCE_TYPES,
   DEVELOPMENT_ZONE_TYPES,
+  FOREST_TYPES,
+  GRASSLAND_LANDUSE,
   HIGHWAY_EXIT_TYPES,
   HIGHWAY_TYPES,
   HOUSING_TYPES,
@@ -16,13 +18,15 @@ import {
   RURAL_ROAD_TYPES,
   SCHOOL_TYPES,
   SHELTER_TYPES,
+  SOIL_TYPES,
   TRANSPORT_LAND_TYPES,
   TRANSPORT_STATION_TYPES,
   URBAN_RENEWAL_TYPES,
   URBAN_VILLAGE_TYPES,
   UTILITY_TYPES,
   WATER_TYPES,
-  WELFARE_TYPES
+  WELFARE_TYPES,
+  WETLAND_LANDUSE
 } from './class-dictionaries';
 import { type ClassEntry, type ClassItem, type ColorRule, symbolClasses } from './classification';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
@@ -64,8 +68,10 @@ const RESOURCE_STYLES = new Map<string, ResourceStyle>([
   ['bgdc_dltb', { color: { kind: 'landuse-code' }, promoteId: 'bsm', checked: true }],
   ['bgdc_dltb_czc', { color: { kind: 'landuse-name' } }],
   ['bgdc_czcdyd', { color: valueRule('czclx', URBAN_VILLAGE_TYPES) }],
-  ['lcsh_cdtb', { color: { kind: 'landuse-code' } }],
-  ['lcsh_sdtb', { color: { kind: 'landuse-code' } }],
+  ['lcsh_sltb', { color: valueRule('lin_zhong', FOREST_TYPES) }],
+  ['lcsh_cdtb', { color: { kind: 'landuse-code', only: GRASSLAND_LANDUSE } }],
+  ['lcsh_sdtb', { color: { kind: 'landuse-code', only: WETLAND_LANDUSE } }],
+  ['lcsh_hmtb', { color: valueRule('tu_rang_lx', SOIL_TYPES) }],
   ['csxhjctb_xxa', { color: valueRule('cc', SCHOOL_TYPES) }],
   ['csxhjctb_xxp', { color: valueRule('cc', pickEntries(SCHOOL_TYPES, '08H212', '08H213', '08H214', '08H215')) }],
   ['csxhjctb_yljga', { color: valueRule('cc', MEDICAL_TYPES) }],

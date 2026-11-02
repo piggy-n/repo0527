@@ -335,6 +335,24 @@ describe('图例条目的年份（ADR 0052 第 3 节）', () => {
 // 地类图例的名称列表，按显示顺序
 const names = (keyword?: string) => landuseLegendItems(keyword).map(item => item.name);
 
+describe('地类图例只列资源实际有的类别（ADR 0124）', () => {
+  const available = new Map([
+    ['1106', null],
+    ['1105', null],
+    ['$other', null]
+  ]);
+
+  it('只留下资源有的，顺序不变；没给范围时仍是全表', () => {
+    expect(landuseLegendItems('', available).map(item => item.key)).toStrictEqual(['1105', '1106', '$other']);
+    expect(landuseLegendItems()).toHaveLength(76);
+  });
+
+  it('搜索只在资源有的类别里找', () => {
+    expect(landuseLegendItems('滩涂', available).map(item => item.name)).toStrictEqual(['沿海滩涂', '内陆滩涂']);
+    expect(landuseLegendItems('水田', available)).toStrictEqual([]);
+  });
+});
+
 describe('landuseLegendItems', () => {
   it('平铺表 A.2 的 69 个地类，最后是 6 个历史地类和未匹配的地类（ADR 0074）', () => {
     const items = landuseLegendItems();

@@ -56,7 +56,7 @@ export const LanduseLegend = defineComponent({
         </li>
       );
     };
-    const items = computed(() => landuseLegendItems(keyword.value));
+    const items = computed(() => landuseLegendItems(keyword.value, props.swatches));
 
     return () => (
       <div class={styles.legend}>

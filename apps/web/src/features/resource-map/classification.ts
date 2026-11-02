@@ -25,8 +25,14 @@ export interface ValueColorRule {
   readonly fallback: string;
 }
 
+/** 按地类编码配色；only 是资源实际有的取值（键，见 ClassItem），不写时是全表（ADR 0124） */
+export interface LanduseCodeRule {
+  readonly kind: 'landuse-code';
+  readonly only?: readonly string[];
+}
+
 /** 按属性配色；地类的两种按 landuse.ts 的编码表和历史名称表 */
-export type ColorRule = ValueColorRule | { readonly kind: 'landuse-code' } | { readonly kind: 'landuse-name' };
+export type ColorRule = ValueColorRule | LanduseCodeRule | { readonly kind: 'landuse-name' };
 
 /** 兜底的键：按取值配色的"其他"、地类的"未匹配的地类" */
 export const OTHER_ITEM = '$other';
@@ -76,8 +82,17 @@ function valueItems(rule: ValueColorRule): ClassItem[] {
   return rule.entries.map(({ value, label, color }) => ({ key: value, label, color }));
 }
 
-/** 规则的全部取值，最后一项是兜底；地类是 69 个地类、6 个历史地类和"未匹配的地类" */
+// 资源实际有的地类：地图和图例都只用这些，没列的归入"未匹配的地类"，两边一致（ADR 0124）
+function keptItems(rule: LanduseCodeRule, items: readonly ClassItem[]): readonly ClassItem[] {
+  const { only } = rule;
+  return only ? items.filter(item => only.includes(item.key)) : items;
+}
+
+/** 规则的全部取值，最后一项是兜底；地类默认是 69 个地类、6 个历史地类和"未匹配的地类"，写了 only 时只有列出的 */
 export function classItems(rule: ColorRule): readonly ClassItem[] {
+  if (rule.kind === 'landuse-code' && rule.only) {
+    return [...keptItems(rule, LANDUSE_CODE_ITEMS), ...keptItems(rule, LANDUSE_LEGACY_ITEMS), LANDUSE_OTHER];
+  }
   if (rule.kind === 'landuse-code' || rule.kind === 'landuse-name') {
     return LANDUSE_ITEMS;
   }
@@ -102,10 +117,11 @@ export function classExpression<T extends MatchOutput>(
 ): T | ExpressionSpecification {
   const byLabel = (item: ClassItem) => [item.label, output(item)] as const;
   if (rule.kind === 'landuse-code') {
-    const byLegacyName = matchExpression(['get', 'dlmc'], LANDUSE_LEGACY_ITEMS.map(byLabel), output(LANDUSE_OTHER));
+    const legacy = keptItems(rule, LANDUSE_LEGACY_ITEMS);
+    const byLegacyName = matchExpression(['get', 'dlmc'], legacy.map(byLabel), output(LANDUSE_OTHER));
     return matchExpression(
       ['get', 'dlbm'],
-      LANDUSE_CODE_ITEMS.map(item => [item.key, output(item)] as const),
+      keptItems(rule, LANDUSE_CODE_ITEMS).map(item => [item.key, output(item)] as const),
       byLegacyName
     );
   }
