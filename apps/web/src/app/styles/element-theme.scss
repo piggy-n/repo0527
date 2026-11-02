@@ -356,6 +356,19 @@ $tree-node: '.el-tree > .el-tree-node';
   }
 }
 
+// 内容铺满的面板标题弹窗（地图加侧栏，如指标 AI 计算的自定义范围，ADR 0121）：和 dialog-panel-header 一起用，
+// 正文不留内边距，底栏上面一条分隔线；用法 <ElDialog class="dialog-panel-header dialog-flush-body">
+.el-dialog.dialog-panel-header.dialog-flush-body {
+  .el-dialog__body {
+    padding: 0;
+  }
+
+  .el-dialog__footer {
+    padding: var(--space-md) var(--space-lg);
+    border-top: 1px solid var(--color-border-light);
+  }
+}
+
 // 列表页的分页（ADR 0092，原来写在资源管理页里）：标准分页控件，窄屏只换行，不裁掉页码、条数或跳页入口；
 // 用法 <ElPagination class="pagination-wrap">
 .el-pagination.pagination-wrap {

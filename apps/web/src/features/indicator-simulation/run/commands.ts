@@ -1,8 +1,9 @@
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
-import { type Composition, SIMULATION_YEARS } from '../compose/composition';
-import { findCities, findIndicators } from '../compose/prompt';
+import { type Composition, rememberedScopes, SIMULATION_YEARS, withScope } from '../compose/composition';
+import { AREA_WORDS, findCities, findIndicators } from '../compose/prompt';
 import { scopeText } from '../flow/plan';
 import { simulationIndicator } from '../model/indicators';
+import { areaLabel, areaScope, citiesScope, scopeCityCodes, type SimulationScope } from '../model/scope';
 import {
   changedParams,
   describeParam,
@@ -36,6 +37,31 @@ const ONLY = /只看|只推演|只计算|只要|换成|改成|改为/;
 
 const shortOf = (id: string) => simulationIndicator(id).short;
 const sameList = (a: readonly (string | number)[], b: readonly (string | number)[]) => a.join() === b.join();
+
+function sameScope(a: SimulationScope, b: SimulationScope): boolean {
+  if (a.kind === 'cities' && b.kind === 'cities') {
+    return sameList(a.cityCodes, b.cityCodes);
+  }
+  return a.kind === 'area' && b.kind === 'area' && a.area === b.area;
+}
+
+// 说到的范围：自定义范围、城市（在自定义范围下说城市，改为行政区划，"加上""去掉"以范围涉及的市为基础）
+function nextScope(text: string, current: Composition, notes: string[]): SimulationScope {
+  const { scope } = current.conditions;
+  const { area } = rememberedScopes(current);
+  if (AREA_WORDS.test(text)) {
+    if (area) {
+      return areaScope(area);
+    }
+    notes.push('还没有自定义范围，可在条件配置中上传范围文件或在地图上绘制');
+    return scope;
+  }
+  const cities = /人口/.test(text) ? [] : findCities(text);
+  if (cities.length === 0) {
+    return scope;
+  }
+  return citiesScope(merge(scopeCityCodes(scope), cities, text, JIANGSU_CITIES.map(city => city.code)));
+}
 
 // 按动词合并：去掉、只看、加上（默认）
 function merge<T>(current: readonly T[], mentioned: readonly T[], text: string, order: readonly T[]): T[] {
@@ -92,17 +118,13 @@ export function interpretCommand(input: string, current: Composition): RunComman
   const notes: string[] = [];
   const rest = text;
 
-  // 条件：城市、指标、年度
+  // 条件：范围、指标、年度
   const verb = ADD.test(rest) || REMOVE.test(rest) || ONLY.test(rest);
-  const cities = /人口/.test(rest) ? [] : findCities(rest);
+  const scope = nextScope(rest, current, notes);
   const indicators = findIndicators(rest);
   const years = [...new Set([...rest.matchAll(/20\d{2}/g)].map(match => Number(match[0])))].filter(year =>
     SIMULATION_YEARS.includes(year)
   );
-  const cityCodes =
-    cities.length > 0
-      ? merge(conditions.cityCodes, cities, rest, JIANGSU_CITIES.map(city => city.code))
-      : conditions.cityCodes;
   const indicatorIds =
     indicators.length > 0 && verb
       ? REMOVE.test(rest)
@@ -112,7 +134,7 @@ export function interpretCommand(input: string, current: Composition): RunComman
           : [...conditions.indicatorIds, ...indicators.filter(id => !conditions.indicatorIds.includes(id))]
       : conditions.indicatorIds;
   const yearList = years.length > 0 ? merge(conditions.years, years, rest, SIMULATION_YEARS) : conditions.years;
-  if (cityCodes.length === 0 || indicatorIds.length === 0 || yearList.length === 0) {
+  if (scopeCityCodes(scope).length === 0 || indicatorIds.length === 0 || yearList.length === 0) {
     return { kind: 'none', notes: [...notes, '年份、范围和指标均需至少保留一项'] };
   }
 
@@ -127,8 +149,12 @@ export function interpretCommand(input: string, current: Composition): RunComman
   }
 
   const said: string[] = [];
-  if (!sameList(cityCodes, conditions.cityCodes)) {
-    said.push(`范围改为${scopeText(cityCodes)}`);
+  const scopeChanged = !sameScope(scope, conditions.scope);
+  if (scopeChanged) {
+    const { area } = rememberedScopes(current);
+    // 从自定义范围改为行政区划时说明范围还在
+    const kept = scope.kind === 'cities' && area ? `（${areaLabel(area)}仍保留，说"改回自定义范围"可以切回）` : '';
+    said.push(`范围改为${scopeText(scope)}${kept}`);
   }
   const added = indicatorIds.filter(id => !conditions.indicatorIds.includes(id));
   const removed = conditions.indicatorIds.filter(id => !indicatorIds.includes(id));
@@ -139,13 +165,11 @@ export function interpretCommand(input: string, current: Composition): RunComman
     said.push(`去掉${removed.map(shortOf).join('、')}`);
   }
   const conditionsChanged =
-    !sameList(cityCodes, conditions.cityCodes) ||
-    !sameList(indicatorIds, conditions.indicatorIds) ||
-    !sameList(yearList, conditions.years);
+    scopeChanged || !sameList(indicatorIds, conditions.indicatorIds) || !sameList(yearList, conditions.years);
   if (!sameList(yearList, conditions.years)) {
     said.push(`年度改为 ${yearList.toSorted((a, b) => a - b).join('、')} 年`);
   }
-  const nextConditions = { years: yearList, cityCodes, indicatorIds };
+  const nextConditions = { years: yearList, scope: conditions.scope, indicatorIds };
   for (const key of changedParams(params, next)) {
     const used = indicatorIds.filter(id => paramApplies(key, id));
     const kindText = isStandard(key, next) ? '（标准口径）' : '（自定义口径）';
@@ -157,7 +181,7 @@ export function interpretCommand(input: string, current: Composition): RunComman
   if (said.length > 0) {
     return {
       kind: 'change',
-      composition: { conditions: nextConditions, params: next },
+      composition: withScope({ ...current, conditions: nextConditions, params: next }, scope),
       conditionsChanged,
       said,
       notes
@@ -173,11 +197,9 @@ export function interpretCommand(input: string, current: Composition): RunComman
 }
 
 /** 对话栏上方的快捷说法：按当前的条件、参数和推演状态给几条 */
-export function commandSuggestions(
-  { conditions, params }: Composition,
-  phase: 'running' | 'paused' | 'done'
-): string[] {
-  const { indicatorIds, cityCodes } = conditions;
+export function commandSuggestions(composition: Composition, phase: 'running' | 'paused' | 'done'): string[] {
+  const { conditions, params } = composition;
+  const { indicatorIds, scope } = conditions;
   const uses = (key: ParamKey) => indicatorIds.some(id => paramApplies(key, id));
   const list: string[] = [];
   if (phase !== 'done') {
@@ -192,9 +214,14 @@ export function commandSuggestions(
   if (uses('popChange')) {
     list.push(params.popChange === 0 ? '常住人口增加 10%' : '人口不变');
   }
-  const other = JIANGSU_CITIES.find(city => !cityCodes.includes(city.code));
-  if (other && cityCodes.length < 4) {
-    list.push(`加上${other.name}`);
+  // 自定义范围下不建议加城市（会改为行政区划）；行政区划下有记下的自定义范围时建议切回
+  if (scope.kind === 'cities') {
+    const other = JIANGSU_CITIES.find(city => !scope.cityCodes.includes(city.code));
+    if (rememberedScopes(composition).area) {
+      list.push('改回自定义范围');
+    } else if (other && scope.cityCodes.length < 4) {
+      list.push(`加上${other.name}`);
+    }
   }
   const last = indicatorIds.at(-1);
   if (indicatorIds.length > 1 && last !== undefined) {

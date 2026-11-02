@@ -15,6 +15,7 @@
 | `pointer-hint/pointer-hint.ts` | 鼠标旁的提示在哪一侧：右边、下边放不下时翻到另一侧（纯函数，ADR 0055）；提示的内容 `PointerHintContent`（位置和各行） |
 | `pointer-hint/PointerHint.tsx` | 鼠标旁的提示：加粗的数值和操作说明，测量和拾取共用 |
 | `jiangsu.ts` | 江苏省的范围 `JIANGSU_BOUNDS`、创建地图时的相机 `JIANGSU_CAMERA`、缩放范围 `JIANGSU_ZOOM_RANGE` |
+| `backend-request.ts` | 业务地图画布的选项 `JIANGSU_MAP_OPTIONS`：缩放范围，以及只给发往后端的瓦片请求带 token 的 `transformRequest`；地图错误的报告器 `reportMapError`：瓦片的 401 按登录过期处理 |
 | `useDefaultView.ts` | 默认视角：第一次就绪时按江苏的范围定位，`goToDefaultView()` 回到默认视角（ADR 0033） |
 | `useMapLoadMarks.ts` | 登录后第一次进入地图时，记下地图页开始创建、视图就绪、第一次画面稳定（见 [perf.md](perf.md)） |
 | `basemap/basemap-style.ts` | 底图目录与推导：可选的底图、初始状态、`createBasemapStyles` 给出两个分组的推导函数（纯函数，ADR 0031） |
@@ -46,6 +47,14 @@
 | `pan-key.ts` | 临时拖动地图的键：Mac 用 ⌘、其他平台用 Ctrl，交给工具声明的修饰键和提示里的写法（ADR 0056） |
 | `draw/shape-draw.ts` | 绘制范围的类型、提示文案和 `draw` 分组的推导（纯函数，ADR 0104） |
 | `draw/useShapeDraw.ts` | 绘制的拥有者：框选、多边形两个工具，只保留一个画完的范围；框选的矩形和提示交给 `BoxSelectOverlay`（见"绘制范围"） |
+| `draw/shape-edit.ts` | 逐点编辑的纯函数：手柄（节点、边的中点）、按到哪一个、移动、插入、删除节点，`shape-edit` 分组的推导（ADR 0122） |
+| `draw/useShapeEdit.ts` | 逐点编辑的拥有者：一个工具，按在手柄上时接管拖动，拖完才交出新的范围；选中、删除、提示（见"逐点编辑"） |
+| `area/area-geometry.ts` | 自定义范围的几何：限值 `AREA_LIMITS`、坐标检查、整理成有效的面、节点多时简化、面积与周长（见"自定义范围"，ADR 0121） |
+| `area/area-file.ts` | 读范围文件：GeoJSON、Shapefile 的压缩包或同一组文件；读不了时返回原因 |
+| `area/area-coverage.ts` | 范围与行政区求交：全部覆盖、部分覆盖、只在边界相交，以及在外面的面积；判定的容差 `COVER_RULES` |
+| `area/area.worker.ts`、`area-worker-handlers.ts`、`area-worker-protocol.ts` | 范围分析的 Worker：读文件、整理画的范围、求交 |
+| `area/area-analyzer.ts` | 主线程一侧：`createAreaAnalyzer()` 托管 Worker，读文件前先按大小拦下过大的文件 |
+| `area/shpjs.d.ts` | shpjs 用到的 `parseShp` 的类型声明（`tsconfig.worker.json` 包含这个文件） |
 | `query-geometry.ts` | 发给后端的几何：整理（简化、舍入、有效性，ADR 0051）、屏幕框四角拾取成多边形、一个像素对应的经纬度距离；2026-10-28 从 `features/resource-map` 移来 |
 | `geometry-schema.ts` | 查询接口返回的 GeoJSON 几何（及其字符串）的 zod schema；2026-10-28 从 `features/resource-map/api.ts` 移来 |
 | `measure/measure-style.ts` | `measure` 分组的推导（纯函数，ADR 0035） |
@@ -82,10 +91,12 @@
 // 页面 setup：只在 provideMap 所在的组件里调用一次，传入页面句柄
 const { goToDefaultView } = useDefaultView(map);
 
-// 画布带上缩放范围
-<MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} />
+// 画布带上缩放范围和瓦片请求的 token
+<MapCanvas mapOptions={JIANGSU_MAP_OPTIONS} />
 ```
 
+- `JIANGSU_MAP_OPTIONS` 的 `transformRequest` 每次请求时读取当前 token，只发给 `appConfig.apiBaseUrl` 下的地址，天地图和站内静态文件不带；MapLibre 在主线程转换请求，再连同请求头交给 Worker，所以 Worker 里发出的瓦片请求也带 token。token 放请求头、不拼进地址，避免进入日志和缓存的键。三维不显示矢量瓦片，不经过它
+- `reportMapError` 由 app 的 `withRuntimeLoader` 通过 `MAP_ERROR_REPORTER` 提供给所有地图页，页面不用传 `onError`。带 token 发往后端的瓦片返回 401 时，它调用 `onUnauthorized`，和接口的 401 同样结束会话、提示并回到登录页；第三方地址的 401、没带 token 发出的瓦片（如未登录时的 `/dev/resources`）和其他错误只打印到控制台。瓦片的错误只带状态码和地址，带不回请求头，所以交给 `onUnauthorized` 的是最后发给后端的 token。回到登录页后地图已卸载，不会再收到这批瓦片的错误；只有其他标签页同一账号重新登录、这个标签页又立刻发出了新瓦片时，旧瓦片晚到的 401 才分辨不出来（见 [auth.md](auth.md) 的"旧会话的 401"）
 - `JIANGSU_BOUNDS` 是省界数据的实际范围向外取整（`[116.35, 30.75, 121.98, 35.15]`），由测试检查它包含省界的全部范围、四边多出的不超过 0.05°。5A 时的 `[116.3, 30.7, 121.9, 35.2]` 东边界切掉了启东一角
 - `JIANGSU_ZOOM_RANGE` 是 5～18 级，与旧项目一致：5 级能看到江苏和周边，天地图只有 18 级以内的数据
 - 创建地图时用 `JIANGSU_CAMERA`（沿用旧项目的默认视角 119.5, 33.0, z6.8）
@@ -267,7 +278,7 @@ boundaries.setOpacity(0.6);
 ```tsx
 // 页面：放在工具栏一列的下面；默认视角的回调来自页面的 useDefaultView，缩放范围和画布的相同
 <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
-<MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
+<MapCanvas mapOptions={JIANGSU_MAP_OPTIONS} scrollZoomRates={SCROLL_ZOOM_RATES} />
 ```
 
 - 宽 40，只有图标，悬停在左边提示名称：层级（32 × 28）、放大、缩小、指北针（32 × 32）、默认视角、2D/3D（上下两格，各 32 × 24）；整组 241 高（加指北针以前是 209）。角落里的小控件，不登记为悬浮元素
@@ -361,6 +372,70 @@ map.bindStyle({ draw: draw.deriveGroup });
 - 多边形同测面：左键单击加节点（双击里的第二次单击不加），双击完成，不足三个节点时双击只取消这一次；可以拖动地图，只关双击放大；画的过程中是虚线和节点
 - 画完的范围（`DrawnShape`）带完成时一个像素对应的经纬度距离，交给 `queryGeometry` 当简化的容差；自相交等整理不出来的由使用方提示
 - 只在二维处理输入；提示在工具在用、视图就绪、指针在画布上时有值，文案沿用旧数据查询页
+
+## 逐点编辑（ADR 0122）
+
+```tsx
+// 页面 setup：范围由拥有者持有，编辑工具只读它、拖完交出新的
+const edit = useShapeEdit(map, { geometry: () => draft.value, onChange: next => replaceDraft(next) });
+map.registerTools(edit.tools);
+map.bindStyle({ 'shape-edit': edit.deriveGroup });
+
+<PointerHint point={edit.hint.value.point} lines={edit.hint.value.lines} canvas={size} />  // 有提示时
+<button onClick={edit.toggle}>编辑节点</button>
+```
+
+- 临时任务，Esc 依次取消拖动、取消选中、退出；不改光标，不关拖动平移（只关双击放大）
+- 按在节点或边的中点上（8 像素以内，范围内有节点时只选节点）时由工具接管这次拖动（`capturesPress`），别处照常平移；移动不到 3 像素算单击，只选中节点
+- 拖动中只预览（虚线），松开后把新的范围交给 `onChange`，并选中这个节点；拖动边的中点在这条边上插入节点
+- 单击选中节点后按 Delete（或 Backspace）删除，也可以由面板调用 `removeSelected()`；环只剩 3 个节点时不删（返回 `'minimum'`）
+- 不检查自相交：交出去的范围由拥有者整理（自定义范围交给 `shared/map/area` 的 `prepareArea`）
+
+## 自定义范围（ADR 0121）
+
+上传的文件和画的范围都在 Worker 里整理、分析（`createAreaAnalyzer`），结果对象说明读不了、不能用的原因，不抛错。这些模块只用相对导入和 npm 包，按 `tsconfig.worker.json` 检查。
+
+```ts
+using analyzer = createAreaAnalyzer();
+const read = await analyzer.read(files, signal);                 // 一个 GeoJSON、一个压缩包，或同一组 Shapefile
+const prepared = await analyzer.prepare(polygons, signal);       // 画的范围
+const covered = await analyzer.cover(area, regions, '江苏省', signal);
+```
+
+**文件**：
+
+| 检查 | 不通过时 |
+|---|---|
+| 类型：`.geojson`、`.json`、`.zip`，或 Shapefile 的各个文件；一次只能一个范围 | 说明支持的格式；GeoJSON 和压缩包混选、选了多个 .shp 时说明 |
+| 大小：合计 50 MB；压缩包先读目录，解压后超过 200 MB 不解压；主线程先按大小拦下，不读进内存 | 说明大小和上限 |
+| 结构：JSON 格式（说明大约第几行）、GeoJSON 的 type 和要素结构、坐标的数组形状；.shp 的文件码、文件长度（被截断）、要素类型 | 说明哪个文件、哪里不对 |
+| 几何类型：只用面；点、线、空几何忽略并提示；全是点、线时不能用；压缩包里有几个图层时合并面图层 | 说明是点图层、线图层 |
+| 坐标系：GeoJSON 要经纬度，旧版 `crs` 成员写了投影坐标系时说明要转换；Shapefile 按 .prj 转换，没有 .prj 时按经纬度读并提示；坐标不在经纬度范围里时分"可能是投影坐标""经纬度颠倒"说明 | 说明坐标系的问题 |
+
+**整理**（`prepareArea`）：去掉相邻的重复点、闭合环、去掉不足 3 个节点的环；节点超过 50 万个不整理；多于 5000 个时按约 1 米起、最多约 100 米的容差逐步简化（县界本身只有约 8400 个节点）；自己和自己求交得到有效的面，合并重叠、拆开交叉的边；面积不足 1 公顷、超过 15 万平方千米时不能用。简化、修正了交叉的边、去掉了环都写进提示。缩略图另有不超过 400 个节点的轮廓。
+
+**覆盖**（`coverRegions`，规则在 `COVER_RULES`）：
+
+| 情况 | 判定 |
+|---|---|
+| 交集小于 1 公顷，或平均宽度（2 × 面积 ÷ 周长）小于 25 米的细条 | 边界相交，算未覆盖（范围本身平均宽度不到 300 米时不按宽度判断） |
+| 行政区在范围外的部分不超过"面积的 0.5%"与"周长 × 25 米"中大的一个 | 全部覆盖（县界简化过，精确的边界和它有出入） |
+| 其余有交集的 | 部分覆盖，带范围内的面积和占比 |
+| 不在任何行政区里的面积超过 0.1 平方千米且超过范围的 0.5% | 在外面（省外）的面积，不参与计算 |
+| 一个行政区也没覆盖 | 不能用：说明不在范围内，或只沿边界略有重叠 |
+
+节点多于 500 个时先把范围裁到行政区的外包框再求交；每个行政区之后让出一次，可以取消。
+
+**实测**（2026-10-31，Node 24，真实县界，带起伏的环）：
+
+| 节点 | 整理 | 求交 | 覆盖的区县 |
+|---|---|---|---|
+| 2000 | 185 ms | 455 ms | 16 |
+| 5 万 | 391 ms | 1.1 s | 38 |
+| 20 万 | 1.1 s | 424 ms | 72 |
+| 50 万 | 2.3 s | 490 ms | 78 |
+
+简化前 20 万个节点要 16 秒、50 万个要 54 秒（求交的耗时和范围的节点数成正比，单次约 15 微秒 / 节点）；简化后面积变化不到 0.01%，覆盖的区县不变。
 
 ## 测量（ADR 0035）
 
@@ -727,6 +802,7 @@ sides.activate('right');
 |---|---|---|
 | `useDefaultView.test.ts` | 初始适配在进入页面时的操作下 `run`、不开始新的操作，和它的参数；回到默认视角是一次相机操作和它的参数；画布已经创建视图或不在作用域里时抛错。第一次就绪、失败重试后补做、让给用户的操作、页面卸载时放弃由 `run` 负责，见 map-vue 的 `context.test.ts` 和现状底图页的测试 | Node |
 | `jiangsu.test.ts` | 江苏的范围包含省界数据，四边多出的不超过 0.05° | Node |
+| `backend-request.test.ts` | 三种瓦片地址带 token；天地图、其他域名、站内静态文件、前缀相近的路径不带；每次请求读取当前 token；后端瓦片的 401 交给 `onUnauthorized` 并带上发出时的 token；没带 token 的瓦片、第三方地址、其他状态码只打印。Worker 里的请求真正带上请求头、401 回到登录页见冒烟 `data-query.spec.ts` | jsdom |
 | `pages/current-map/CurrentMapPage.test.tsx` | 页面绑定的分组与叠放（底图、注记、省界，区划高亮在边界之上，测量叠在最上面）；区划定位：工具栏开关面板、选中后高亮并定位、用关闭按钮或工具栏关面板都不清选择、再点回到全省和默认视角（市界用替换的 fetch 提供）；坐标定位：区划定位和坐标定位是功能面板的两个 Tab（切走时隐藏、取消拾取、输入保留，再点正在显示的入口关闭）、窄屏时右边让出去以后再点坐标定位、图例是重新显示（输入保留，让出去时入口不显示为按下）、资源详情切走时保留、再单击时切回、关闭时清除选择（ADR 0053）、输入后定位与位置信息（两种格式、所在区划）、拾取与提示、长按拖动与 Esc（假定时器）、关闭面板取消拾取、图钉随相机移动、单击开关位置信息（右键不算）、画布重建时先隐藏、拖动时视口坐标换成画布坐标、测量时图钉不响应、"清除"；状态栏：比例尺、"中心"、鼠标的位置在下一帧写入、写法跟着坐标定位面板、没有版权控件；把缩放范围交给画布；第一次就绪时定位、画布重建后不再定位；"默认视角"按钮；失败重试后补做；测量的完整交互：提示跟随鼠标和状态、画的过程中含鼠标所在点的长度、末点的总长、标签随相机移动、× 和"清除"、换成测面，结果标签的摆放（总长在旁边、总面积居中），画布重建时标签先隐藏、就绪后重新显示；当前区划：没选时不显示，选中后写出区划，"回到全省"清除；区划定位与其他相机操作的先后（ADR 0038）：加载期间点"默认视角"（相机没变）、上一次定位的动画中选中区县、地图加载期间选中区划、加载期间拖动或坐标定位（这几个用例重新导入页面，区划边界从没有缓存开始，边界文件的请求由用例放行）（用假地图，鼠标事件经过真实的适配器） | jsdom |
 | `map-status.test.ts` | 各状态的显示内容、两种引擎失败、样式失败、没有原因、不是 Error 的原因 | Node |
 | `MapStatusNotice.test.tsx` | 引擎失败时显示原因和"重试"，点击后重新创建地图，重试过程不抛错 | jsdom |

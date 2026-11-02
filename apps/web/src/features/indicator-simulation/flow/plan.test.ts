@@ -5,11 +5,17 @@ import { indicatorResult } from '../model/analysis';
 import { createCalculator } from '../model/calculator';
 import { simulationIndicator } from '../model/indicators';
 import { defaultParams, type SimulationConditions, type SimulationParams } from '../model/params';
+import { areaScope, citiesScope, scopeDistricts } from '../model/scope';
+import { NANJING_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
 import { plainText } from '../run/narrative';
 import { FLOW_LAYOUT, flowPlan } from './plan';
 
-const conditions: SimulationConditions = { years: [2025], cityCodes: ['320100', '320500'], indicatorIds: ['A-31', 'B-65', 'A-39'] };
+const conditions: SimulationConditions = {
+  years: [2025],
+  scope: citiesScope(['320100', '320500']),
+  indicatorIds: ['A-31', 'B-65', 'A-39']
+};
 const withPatch = (patch: Partial<SimulationParams>): SimulationParams => ({ ...defaultParams(), ...patch });
 const planOf = async (params = withPatch({ recognition: 'intersect' }), next = conditions) =>
   flowPlan({ calculator: createCalculator(await loadTestAtlas()), conditions: next, params });
@@ -102,5 +108,26 @@ describe('flowPlan', () => {
     const spots = plan.nodes.map(node => `${node.x},${node.y}`);
     expect(new Set(spots).size).toBe(spots.length);
     expect(plan.nodes.find(node => node.key === 'report')?.column).toBe(5);
+  });
+});
+
+describe('自定义范围的流程图（ADR 0121）', () => {
+  it('条件解析写出范围、覆盖的区县；人口、用地、核查只算范围内的部分', async () => {
+    const calculator = createCalculator(await loadTestAtlas());
+    const area = await testArea(calculator.atlas, NANJING_RINGS, '江宁片区');
+    const custom = { ...conditions, scope: areaScope(area) };
+    const plan = flowPlan({ calculator, conditions: custom, params: defaultParams() });
+    const parse = plan.lines.filter(line => line.step === 'parse').map(line => plainText(line.text));
+    expect(parse[1]).toBe(
+      '监测范围是自定义范围「江宁片区」（地图绘制，279 平方千米），涉及南京市 7 个区县：1 个全部覆盖、6 个部分覆盖；部分覆盖的区县按范围内的面积占比折算人口和用地。'
+    );
+    expect(plan.nodes.find(node => node.key === 'parse')?.title).toBe('自定义范围「江宁片区」 · 2025 年');
+    expect(plan.nodes.find(node => node.key === 'qc')?.title).toBe('7 个区县');
+    const people = scopeDistricts(calculator.atlas, custom.scope).reduce(
+      (sum, { district, share }) => sum + calculator.districtPopulation(district) * share,
+      0
+    );
+    const digits = { maximumFractionDigits: 1, minimumFractionDigits: 1 };
+    expect(plan.nodes.find(node => node.key === 'pop')?.detail).toBe(`${people.toLocaleString('zh-CN', digits)} 万人`);
   });
 });

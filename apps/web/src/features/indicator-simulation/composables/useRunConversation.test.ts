@@ -6,6 +6,7 @@ import { type Composition, sampleComposition } from '../compose/composition';
 import { ManualClock } from '../engine/test-clock';
 import { createCalculator } from '../model/calculator';
 import { defaultParams } from '../model/params';
+import { citiesScope } from '../model/scope';
 import { loadTestAtlas } from '../model/test-atlas';
 import type { RunView } from '../result/result-view';
 import { useComposition } from './useComposition';
@@ -18,7 +19,7 @@ import { useUserPause } from './useUserPause';
 // 各步的时长按推理的话多少给：推进这么久一定计算完
 const ENOUGH = 120_000;
 const composition: Composition = {
-  conditions: { years: [2025], cityCodes: ['320100'], indicatorIds: ['A-31', 'A-39'] },
+  conditions: { years: [2025], scope: citiesScope(['320100']), indicatorIds: ['A-31', 'A-39'] },
   params: { ...defaultParams(), recognition: 'intersect' }
 };
 
@@ -147,9 +148,9 @@ describe('useRunConversation', () => {
     conversation.setText('加上苏州市');
     expect(conversation.send()).toBe('replied');
     expect(conversation.text.value).toBe('');
-    expect(run.state.value.conditions?.cityCodes).toEqual(['320100', '320500']);
-    expect(run.state.value.previousConditions?.cityCodes).toEqual(['320100']);
-    expect(owner.state.value.conditions.cityCodes).toEqual(['320100', '320500']);
+    expect(run.state.value.conditions?.scope).toEqual(citiesScope(['320100', '320500']));
+    expect(run.state.value.previousConditions?.scope).toEqual(citiesScope(['320100']));
+    expect(owner.state.value.conditions.scope).toEqual(citiesScope(['320100', '320500']));
     expect(outline(log.entries.value).slice(1)).toEqual([
       'parse·outdated',
       'prep·stopped',
@@ -187,7 +188,10 @@ describe('useRunConversation', () => {
     using ctx = await setup();
     const { conversation, run, result, view, calculator, clock, log } = ctx;
     run.start(
-      { ...composition, conditions: { years: [2024, 2025], cityCodes: ['320100', '320500'], indicatorIds: ['A-31', 'A-39'] } },
+      {
+        ...composition,
+        conditions: { years: [2024, 2025], scope: citiesScope(['320100', '320500']), indicatorIds: ['A-31', 'A-39'] }
+      },
       calculator
     );
     await clock.advance(ENOUGH);
@@ -222,7 +226,7 @@ describe('useRunConversation', () => {
     conversation.send('今天天气怎么样');
     expect(conversation.reply.value).toContain('查看结果可尝试');
     conversation.send('看无锡市');
-    expect(run.state.value.conditions?.cityCodes).toEqual(['320100', '320200']);
+    expect(run.state.value.conditions?.scope).toEqual(citiesScope(['320100', '320200']));
     // 改了就重新计算：回复只记在时间线上（回到流程图由页面按计算状态切换）
     expect(lastReply(log.entries.value)).toContain('将从「条件解析」重新计算');
     expect(conversation.reply.value).toBeNull();

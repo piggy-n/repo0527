@@ -4,6 +4,6 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
     "lib": ["es2023", "esnext.disposable", "webworker"]
   },
-  "include": ["src/**/*.worker.ts"],
+  "include": ["src/**/*.worker.ts", "src/shared/map/area/shpjs.d.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

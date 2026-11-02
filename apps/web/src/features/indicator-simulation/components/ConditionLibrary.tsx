@@ -1,13 +1,19 @@
 import { RefreshLeft, Search } from '@element-plus/icons-vue';
 import { MxPanel, MxTitle } from '@yzt/ui';
-import { ElButton, ElCheckbox, ElInput } from 'element-plus';
+import { ElButton, ElCheckbox, ElInput, ElRadioButton, ElRadioGroup, ElTag } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNodeChild } from 'vue';
 import type { CategoryId } from '@/shared/city-indicators/catalog';
+import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { JIANGSU_CITIES, shortRegionName } from '@/shared/map/region/region-catalog';
-import { searchIndicators, SIMULATION_YEARS } from '../compose/composition';
+import { rememberedScopes, searchIndicators, SIMULATION_YEARS } from '../compose/composition';
 import type { CompositionOwner } from '../composables/useComposition';
 import type { ConditionDrag, DragItem } from '../composables/useConditionDrag';
+import type { ScopeEditor } from '../composables/useScopeEditor';
 import { INDICATOR_GROUPS, reachText, type SimulationIndicator } from '../model/indicators';
+import type { ScopeArea } from '../model/scope';
+import { areaBrief } from '../scope/area-tree';
+import { AreaFilePicker } from './AreaFilePicker';
+import { AreaThumbnail } from './AreaThumbnail';
 import styles from './ConditionLibrary.module.scss';
 
 const indicatorTitle = (item: SimulationIndicator) => `${item.name}（${item.unit}）${item.id} · ${reachText(item)}`;
@@ -32,12 +38,16 @@ const section = (title: string, extra: VNodeChild, content: VNodeChild, fill = f
   </section>
 );
 
-/** 指标智能推演条件：年度、城市、指标都可以点选，也可以拖到编排图上；年度和范围固定在上面，只有指标列表滚动 */
+/**
+ * 指标计算条件：年度、城市、指标都可以点选，也可以拖到编排图上；年度和范围固定在上面，只有指标列表滚动。
+ * 监测范围分行政区划和自定义范围（ADR 0121）：自定义范围在这里上传、绘制，有了以后是范围卡片
+ */
 export const ConditionLibrary = defineComponent({
   name: 'ConditionLibrary',
   props: {
     composition: { type: Object as PropType<CompositionOwner>, required: true },
-    drag: { type: Object as PropType<ConditionDrag>, required: true }
+    drag: { type: Object as PropType<ConditionDrag>, required: true },
+    editor: { type: Object as PropType<ScopeEditor>, required: true }
   },
   setup(props) {
     const keyword = ref('');
@@ -91,9 +101,9 @@ export const ConditionLibrary = defineComponent({
 
     const renderCities = () => {
       const { composition } = props;
-      const { cityCodes } = composition.state.value.conditions;
+      const { cityCodes } = rememberedScopes(composition.state.value);
       return (
-        <div class={[styles.grid, styles.cities]}>
+        <div key="cities" class={[styles.grid, styles.cities]}>
           {JIANGSU_CITIES.map(city =>
             chip(
               { kind: 'region', code: city.code },
@@ -105,6 +115,89 @@ export const ConditionLibrary = defineComponent({
           )}
         </div>
       );
+    };
+
+    // 自定义范围：还没有时是上传、绘制两个入口，有了是范围卡片；高度和三行城市接近，切换时下面的指标不跳
+    const renderArea = (area: ScopeArea | null) => {
+      const { composition, editor } = props;
+      const upload = (files: File[]) => editor.start('upload', { files });
+      if (!area) {
+        return (
+          <div key="entries" class={styles.entries}>
+            <AreaFilePicker onPick={upload}>
+              {{
+                default: ({ open }: { readonly open: () => void }) => (
+                  <button type="button" class={styles.entry} onClick={open}>
+                    <SvgIcon name="file-upload" />
+                    上传文件
+                  </button>
+                )
+              }}
+            </AreaFilePicker>
+            <button type="button" class={styles.entry} onClick={() => editor.start('draw')}>
+              <SvgIcon name="geometry-polygon" />
+              地图绘制
+            </button>
+            <p class={styles.entryNote}>支持 GeoJSON、Shapefile（.zip），坐标系为 CGCS2000 或 WGS84</p>
+          </div>
+        );
+      }
+      const brief = areaBrief(area);
+      return (
+        <div key="card" class={styles.areaCard}>
+          <AreaThumbnail outline={area.outline} size={64} />
+          <div class={styles.areaInfo}>
+            <div class={styles.areaName}>
+              <span title={area.name}>{area.name}</span>
+              <ElTag class="tag-mini" disableTransitions>
+                {area.source === 'upload' ? '上传' : '绘制'}
+              </ElTag>
+            </div>
+            <span class={styles.areaMeta}>{brief.where}</span>
+            <span class={styles.areaMeta}>{brief.size}</span>
+            <div class={styles.areaActions}>
+              <ElButton link type="primary" onClick={() => editor.start('edit', { area })}>
+                编辑范围
+              </ElButton>
+              <AreaFilePicker onPick={upload}>
+                {{
+                  default: ({ open }: { readonly open: () => void }) => (
+                    <ElButton link type="primary" onClick={open}>
+                      重新上传
+                    </ElButton>
+                  )
+                }}
+              </AreaFilePicker>
+              <ElButton link type="danger" onClick={() => composition.setArea(null)}>
+                移除
+              </ElButton>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const renderScope = () => {
+      const { composition } = props;
+      const { scope } = composition.state.value.conditions;
+      return [
+        <ElRadioGroup
+          key="kind"
+          class="radio-group-block"
+          size="small"
+          modelValue={scope.kind}
+          aria-label="监测范围的种类"
+          onUpdate:modelValue={value => {
+            if (value === 'cities' || value === 'area') {
+              composition.setScopeKind(value);
+            }
+          }}
+        >
+          <ElRadioButton value="cities">行政区划</ElRadioButton>
+          <ElRadioButton value="area">自定义范围</ElRadioButton>
+        </ElRadioGroup>,
+        scope.kind === 'cities' ? renderCities() : renderArea(scope.area)
+      ];
     };
 
     const renderIndicators = () => {
@@ -164,7 +257,8 @@ export const ConditionLibrary = defineComponent({
 
     return () => {
       const { composition } = props;
-      const { cityCodes, indicatorIds } = composition.state.value.conditions;
+      const { indicatorIds, scope } = composition.state.value.conditions;
+      const { cityCodes } = rememberedScopes(composition.state.value);
       const all = cityCodes.length === JIANGSU_CITIES.length;
       return (
         <MxPanel class={styles.panel} title="指标计算条件" headerTone="muted" flush>
@@ -179,14 +273,16 @@ export const ConditionLibrary = defineComponent({
                 {section('监测年份', <span class={styles.extra}>可多选</span>, renderYears())}
                 {section(
                   '监测范围',
-                  <ElCheckbox
-                    modelValue={all}
-                    indeterminate={cityCodes.length > 0 && !all}
-                    onChange={value => composition.setAllCities(value === true)}
-                  >
-                    全省
-                  </ElCheckbox>,
-                  renderCities()
+                  scope.kind === 'cities' && (
+                    <ElCheckbox
+                      modelValue={all}
+                      indeterminate={cityCodes.length > 0 && !all}
+                      onChange={value => composition.setAllCities(value === true)}
+                    >
+                      全省
+                    </ElCheckbox>
+                  ),
+                  renderScope()
                 )}
                 {section('监测指标', <span class={styles.extra}>已选 {indicatorIds.length}</span>, renderIndicators(), true)}
               </div>

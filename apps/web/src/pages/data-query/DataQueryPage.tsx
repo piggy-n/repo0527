@@ -6,6 +6,7 @@ import { QueryResultPanel, type ResultView } from '@/features/data-query/compone
 import { useDataQuery } from '@/features/data-query/composables/useDataQuery';
 import { PREVIEW_GROUP, RESULT_GROUP } from '@/features/data-query/result-layers';
 import { QUERY_TOPICS, type QueryTopic, type TopicId } from '@/features/data-query/topics';
+import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
@@ -102,7 +103,7 @@ const DataQueryView = defineComponent({
 
     return () => (
       <div class={styles.root} data-data-query-page={props.topic.id}>
-        <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
+        <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS}scrollZoomRates={SCROLL_ZOOM_RATES} />
         <BoxSelectOverlay pick={query.spatial.draw} />
         <div class={styles.overlay}>
           {/* 查询面板和结果在同一列：结果横跨整页，面板让出它的高度；结果最大化时面板不显示（2026-10-29） */}

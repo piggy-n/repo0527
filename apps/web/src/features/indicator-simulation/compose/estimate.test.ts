@@ -4,10 +4,12 @@ import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { indicatorResult } from '../model/analysis';
 import { createCalculator } from '../model/calculator';
 import { defaultParams, type SimulationParams } from '../model/params';
+import { areaScope, citiesScope } from '../model/scope';
+import { NANJING_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
 import { estimate } from './estimate';
 
-const nanjing = { years: [2025], cityCodes: ['320100'], indicatorIds: ['A-31', 'B-65'] };
+const nanjing = { years: [2025], scope: citiesScope(['320100']), indicatorIds: ['A-31', 'B-65'] };
 const withPatch = (patch: Partial<SimulationParams>): SimulationParams => ({ ...defaultParams(), ...patch });
 const calculatorOf = async () => createCalculator(await loadTestAtlas());
 
@@ -15,7 +17,7 @@ describe('estimate', () => {
   it('年度、范围、指标有一项没选时没有预估', async () => {
     const calculator = await calculatorOf();
     expect(estimate(calculator, { ...nanjing, years: [] }, defaultParams())).toBeNull();
-    expect(estimate(calculator, { ...nanjing, cityCodes: [] }, defaultParams())).toBeNull();
+    expect(estimate(calculator, { ...nanjing, scope: citiesScope([]) }, defaultParams())).toBeNull();
     expect(estimate(calculator, { ...nanjing, indicatorIds: [] }, defaultParams())).toBeNull();
   });
 
@@ -40,11 +42,12 @@ describe('estimate', () => {
 
   it('几个市：全省时范围写全省', async () => {
     const calculator = await calculatorOf();
-    const all = { ...nanjing, cityCodes: JIANGSU_CITIES.map(city => city.code), indicatorIds: ['B-65'] };
+    const all = { ...nanjing, scope: citiesScope(JIANGSU_CITIES.map(city => city.code)), indicatorIds: ['B-65'] };
     const result = estimate(calculator, all, defaultParams());
 
     expect(result?.scope).toBe('全省');
-    expect(estimate(calculator, { ...nanjing, cityCodes: ['320100', '320500'] }, defaultParams())?.scope).toBe('2 个市');
+    const two = { ...nanjing, scope: citiesScope(['320100', '320500']) };
+    expect(estimate(calculator, two, defaultParams())?.scope).toBe('2 个市');
   });
 
   it('几个年度：默认最新一年，可以指定其中一年，指定的不在条件里时按最新一年', async () => {
@@ -57,5 +60,14 @@ describe('estimate', () => {
     expect(estimate(calculator, years, defaultParams(), 2024)?.rows[0]?.value).toBe(
       indicatorResult(calculator.computeYear(years, defaultParams(), 2024).indicators, 'A-31').value
     );
+  });
+});
+
+describe('自定义范围的预估（ADR 0121）', () => {
+  it('范围写"自定义范围「名称」"；还没有范围时没有预估', async () => {
+    const calculator = await calculatorOf();
+    const area = await testArea(calculator.atlas, NANJING_RINGS, '江宁片区');
+    expect(estimate(calculator, { ...nanjing, scope: areaScope(area) }, defaultParams())?.scope).toBe('自定义范围「江宁片区」');
+    expect(estimate(calculator, { ...nanjing, scope: areaScope(null) }, defaultParams())).toBeNull();
   });
 });

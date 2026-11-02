@@ -130,6 +130,8 @@ placeholder('system-management', RouteName.systemManagement, '系统管理', [Ro
 
 现在 `shared/http` 把请求发出时 `getHeaders` 返回的请求头交给 `onUnauthorized(error, { headers })`，`app/http.ts` 比较其中的 token 与当前会话的 token，不同就忽略。`shared/http` 仍然不认识 token，只报告"这个请求带了哪些请求头"。附带的效果：同一批请求的多个 401 只有第一个会清空会话并提示，之后的 token 已对不上。
 
+地图瓦片不经过 `shared/http`，由 `shared/map/backend-request.ts` 的 `reportMapError` 调用同一个 `onUnauthorized`。瓦片的错误带不回请求头，它交出的是最后发给后端的 token：同一批瓦片的多个 401 同样只处理第一个；其他标签页同一账号重新登录后，这个标签页发出新瓦片之前，旧瓦片晚到的 401 也会被忽略。
+
 没有采用的做法：
 
 - 会话版本号：原理相同，但请求还要带上版本号，比直接比较 token 多一个概念

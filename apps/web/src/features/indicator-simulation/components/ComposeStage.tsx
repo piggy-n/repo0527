@@ -3,6 +3,7 @@ import { defineComponent, type PropType } from 'vue';
 import type { CompositionOwner } from '../composables/useComposition';
 import { useConditionDrag } from '../composables/useConditionDrag';
 import type { PromptComposer } from '../composables/usePromptComposer';
+import type { ScopeEditor } from '../composables/useScopeEditor';
 import type { SimulationModel } from '../composables/useSimulationModel';
 import { ComposeBoard } from './ComposeBoard';
 import { ConditionLibrary } from './ConditionLibrary';
@@ -17,7 +18,9 @@ export const ComposeStage = defineComponent({
   props: {
     composition: { type: Object as PropType<CompositionOwner>, required: true },
     composer: { type: Object as PropType<PromptComposer>, required: true },
-    model: { type: Object as PropType<SimulationModel>, required: true }
+    model: { type: Object as PropType<SimulationModel>, required: true },
+    /** 自定义范围的弹窗 */
+    editor: { type: Object as PropType<ScopeEditor>, required: true }
   },
   emits: {
     start: () => true,
@@ -31,13 +34,16 @@ export const ComposeStage = defineComponent({
       return (
         <MxSplitLayout asideLabel="计算条件">
           {{
-            aside: () => <ConditionLibrary class={locked} composition={props.composition} drag={drag} />,
+            aside: () => (
+              <ConditionLibrary class={locked} composition={props.composition} drag={drag} editor={props.editor} />
+            ),
             default: () => (
               <ComposeBoard
                 class={locked}
                 composition={props.composition}
                 drag={drag}
                 model={props.model}
+                editor={props.editor}
                 building={building}
                 onStart={() => emit('start')}
                 onRetry={() => emit('retry')}

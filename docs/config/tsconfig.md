@@ -231,14 +231,15 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
     "lib": ["es2023", "esnext.disposable", "webworker"]
   },
-  "include": ["src/**/*.worker.ts"],
+  "include": ["src/**/*.worker.ts", "src/shared/map/area/shpjs.d.ts"],
   "exclude": ["src/**/*.test.ts"]
 }
 ```
 
 - 自己写的 Worker 要按 `webworker` 环境检查（ADR 0018 的待定事项，ADR 0085 解决）：入口里的 `self` 是 `DedicatedWorkerGlobalScope`，满足 `@yzt/utils` 的 `WorkerEndpoint`；DOM 环境里 `self` 是 `Window`，`postMessage` 的参数对不上
 - 入口文件和它导入的模块都在这里按 `webworker` 检查：Worker 里用到 DOM 的 API（`document`、`window`）会报错。`tsconfig.app.json`、`tsconfig.libs.json` 排除 `*.worker.ts`；入口导入的普通模块同时被两边检查，所以只能用两种环境都有的 API
-- 继承 `tsconfig.libs.json`：同样不加载 `vite/client`、没有 `@/*`，Worker 入口只放在 libs 里
+- 继承 `tsconfig.libs.json`：同样不加载 `vite/client`、没有 `@/*`。Worker 入口放在 libs 里，或放在只用相对导入和 npm 包的 shared 模块里（`shared/map/area`，ADR 0121）
+- `include` 里的 `shpjs.d.ts`：Worker 用到的库没有类型声明时，自己写的声明文件不会随入口导入进来，要列在这里（app 的配置包含整个 `src`，不用另写）
 - `exclude` 要写：不写就继承 libs 的，里面有 `*.worker.ts`，会一个文件也不检查
 
 ## 修改时的检查清单

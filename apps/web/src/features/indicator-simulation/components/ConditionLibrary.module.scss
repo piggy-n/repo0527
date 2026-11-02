@@ -180,3 +180,112 @@
   color: var(--color-text-secondary);
   font-weight: var(--font-weight-regular);
 }
+
+// 自定义范围的两个入口：虚线框，图标在上（ADR 0121）
+.entries {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  height: 56px;
+  border: 1px dashed var(--color-primary-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-bg-lighter);
+  color: var(--color-text-regular);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s,
+    color 0.15s;
+
+  svg {
+    color: var(--color-primary);
+    font-size: 20px;
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--color-primary);
+    background: var(--color-primary-bg-light);
+    color: var(--color-primary);
+  }
+}
+
+.entryNote {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+// 范围卡片：缩略图、名称和来源、涉及的市县、面积，下面一行操作
+.areaCard {
+  display: flex;
+  gap: var(--space-md);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-bg-lighter);
+}
+
+.areaInfo {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.areaName {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  color: var(--color-text-title);
+  font-weight: var(--font-weight-semibold);
+
+  span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  :global(.el-tag) {
+    flex: none;
+    font-weight: var(--font-weight-regular);
+  }
+}
+
+.areaMeta {
+  overflow: hidden;
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.areaActions {
+  display: flex;
+  gap: var(--space-md);
+  margin-top: 2px;
+
+  :global(.el-button) {
+    height: auto;
+    font-size: var(--font-size-xs);
+  }
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}

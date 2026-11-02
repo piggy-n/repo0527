@@ -1,8 +1,10 @@
+import { districtsOf } from '@/shared/map/region/region-catalog';
 import type { EngineState, SimulationVersion } from '../engine/engine';
 import { indicatorResult, valueBreaks } from '../model/analysis';
 import type { Calculator, DistrictResult, IndicatorResult } from '../model/calculator';
 import { simulationIndicator } from '../model/indicators';
 import { isScenario, type SimulationConditions } from '../model/params';
+import { scopeCityCodes } from '../model/scope';
 import { VALUE_COLORS, valueColor } from '../map/colors';
 import { primaryIndicator } from '../run/narrative';
 
@@ -27,10 +29,11 @@ export function resolveSelection(state: EngineState, chosen: Partial<ResultSelec
   }
   const { indicatorId, year, cityCode } = chosen;
   const chosenValid = indicatorId !== undefined && conditions.indicatorIds.includes(indicatorId);
+  const cityCodes = scopeCityCodes(conditions.scope);
   return {
     indicatorId: chosenValid ? indicatorId : primaryIndicator(conditions),
     year: year !== undefined && conditions.years.includes(year) ? year : Math.max(...conditions.years),
-    cityCode: cityCode && conditions.cityCodes.length > 1 && conditions.cityCodes.includes(cityCode) ? cityCode : null
+    cityCode: cityCode && cityCodes.length > 1 && cityCodes.includes(cityCode) ? cityCode : null
   };
 }
 
@@ -66,6 +69,10 @@ export interface RankRow {
   readonly name: string;
   readonly value: number;
   readonly cityCode: string | null;
+  /** 自定义范围部分覆盖的市、区县：只按范围内的部分计算 */
+  readonly partial: boolean;
+  /** 部分覆盖的区县在范围内的面积占比；市和其余的区县为 null */
+  readonly share: number | null;
 }
 
 export interface Rank {
@@ -76,24 +83,45 @@ export interface Rank {
   readonly max: number;
 }
 
-/** 选中指标的各市结果；只有一个市时是它的各区县 */
+/**
+ * 选中指标的各市结果；只有一个市时是它的各区县。自定义范围放大到一个市时列这个市的区县，
+ * 跨市的范围不把所有区县平铺出来（ADR 0121）
+ */
 export function rankOf(
   version: SimulationVersion,
   conditions: SimulationConditions,
   indicatorId: string,
-  year: number
+  year: number,
+  cityCode: string | null = null
 ): Rank {
   const result = indicatorOf(version, year, indicatorId);
-  const level = conditions.cityCodes.length === 1 ? 'district' : 'city';
-  const rows: RankRow[] =
-    level === 'district'
-      ? result.rows.map(row => ({ key: row.code, name: row.name, value: row.value, cityCode: null }))
-      : result.cities.map(city => ({
-          key: city.code,
-          name: city.name.replace(/市$/, ''),
-          value: city.value,
-          cityCode: city.code
-        }));
+  const { scope } = conditions;
+  const area = scope.kind === 'area';
+  const cityCodes = scopeCityCodes(scope);
+  const only = cityCodes.length === 1 ? cityCodes[0] : area ? cityCode : null;
+  // 自定义范围里全部覆盖的区县；市的区县都在里面才算全部覆盖
+  const covers = scope.kind === 'area' ? (scope.area?.coverage.covers ?? []) : [];
+  const whole = new Set(covers.filter(cover => cover.relation === 'full').map(cover => cover.code));
+  const rows: RankRow[] = only
+    ? result.rows
+        .filter(row => row.cityCode === only)
+        .map(row => ({
+          key: row.code,
+          name: row.name,
+          value: row.value,
+          cityCode: null,
+          partial: area && row.share < 1,
+          share: area && row.share < 1 ? row.share : null
+        }))
+    : result.cities.map(city => ({
+        key: city.code,
+        name: city.name.replace(/市$/, ''),
+        value: city.value,
+        cityCode: city.code,
+        partial: area && districtsOf(city.code).some(district => !whole.has(district.code)),
+        share: null
+      }));
+  const level = only ? 'district' : 'city';
   return {
     level,
     rows: rows.toSorted((a, b) => b.value - a.value),

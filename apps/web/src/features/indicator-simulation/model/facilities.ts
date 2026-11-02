@@ -6,6 +6,7 @@ import type { Calculator } from './calculator';
 import type { District } from './districts';
 import { reachMeters, SIMULATION_INDICATORS, simulationIndicator } from './indicators';
 import type { SimulationConditions } from './params';
+import { scopeDistricts } from './scope';
 
 /** 地图上的一个设施点 */
 export interface FacilityPoint {
@@ -95,17 +96,32 @@ export function createFacilityLayout(calculator: Calculator): FacilityLayout {
     (facility, year, district) => `${facility}:${year}:${district.code}`
   );
 
+  // 范围里的设施点：部分覆盖的区县只留范围内的点
+  const pointsIn = (conditions: SimulationConditions, indicatorId: string, year: number): FacilityPoint[] => {
+    const { facility } = simulationIndicator(indicatorId);
+    return scopeDistricts(calculator.atlas, conditions.scope).flatMap(({ district, relation, geometry }) => {
+      const points = place(facility, year, district);
+      if (relation === 'full') {
+        return points;
+      }
+      const inside = { type: 'Feature' as const, properties: {}, geometry };
+      return points.filter(point => booleanPointInPolygon([...point.coordinates], inside));
+    });
+  };
+
   return {
     total(conditions, indicatorId, year) {
+      // 自定义范围的数量和地图上的点一致：数范围内的点
+      if (conditions.scope.kind === 'area') {
+        return pointsIn(conditions, indicatorId, year).length;
+      }
       const { facility } = simulationIndicator(indicatorId);
-      return calculator.atlas
-        .inCities(conditions.cityCodes)
-        .reduce((total, district) => total + count(facility, year, district), 0);
+      return scopeDistricts(calculator.atlas, conditions.scope).reduce(
+        (total, { district }) => total + count(facility, year, district),
+        0
+      );
     },
-    points(conditions, indicatorId, year) {
-      const { facility } = simulationIndicator(indicatorId);
-      return calculator.atlas.inCities(conditions.cityCodes).flatMap(district => place(facility, year, district));
-    }
+    points: pointsIn
   };
 }
 

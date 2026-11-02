@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, inject, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { INTERNAL_MAP_CONTEXT } from './context';
 import { type MapHandle, provideMap } from './provide-map';
+import { MAP_ERROR_REPORTER } from './runtime';
 import { StyleBinder } from './style-binder';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
@@ -23,6 +24,19 @@ function backgroundColor(session: MapSession<string>): unknown {
 // 自己会抛错的错误报告器
 function throwingReporter(): never {
   throw new Error('报告器出错');
+}
+
+// 底图推导总是失败的页面
+function failingPage(onError?: (error: unknown) => void) {
+  return defineComponent(() => {
+    const map = provideMap({ groups: ['basemap'], camera: CAMERA, onError });
+    map.bindStyle({
+      basemap: () => {
+        throw new Error('推导失败');
+      }
+    });
+    return () => null;
+  });
 }
 
 function injectSession(): MapSession<string> {
@@ -198,6 +212,20 @@ describe('provideMap', () => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+
+  it('没有传 onError 时用 app 提供的报告器，页面传了以页面的为准', () => {
+    const provided = vi.fn<(error: unknown) => void>();
+    const own = vi.fn<(error: unknown) => void>();
+    const global ={ provide: { [MAP_ERROR_REPORTER as symbol]: provided } };
+
+    mount(failingPage(), { global });
+    expect(provided).toHaveBeenCalledWith(expect.any(Error));
+
+    provided.mockClear();
+    mount(failingPage(own), { global });
+    expect(own).toHaveBeenCalledWith(expect.any(Error));
+    expect(provided).not.toHaveBeenCalled();
   });
 
   describe('onError 自身抛错', () => {

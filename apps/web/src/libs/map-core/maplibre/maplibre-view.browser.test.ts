@@ -487,6 +487,39 @@ describe('MapLibreView（真实的 MapLibre）', () => {
     });
   });
 
+  it('工具接管按下（ADR 0122）：按在接管的位置拖动不平移、输入照样交给工具；别处拖动照常平移', async () => {
+    using ctx = setup();
+    await withTimeout(ctx.view.whenReady(), '首次加载完成');
+    const inputs: string[] = [];
+    // 只接管画布中心附近的按下，像编辑时按在节点上
+    ctx.session.tool.register('edit', {
+      persistent: false,
+      capturesPress: point => Math.abs(point.x - 400) < 10 && Math.abs(point.y - 300) < 10,
+      handleInput: event => void inputs.push(event.type)
+    });
+    ctx.session.tool.activate('edit');
+
+    await dragRight(ctx.map, 0);
+
+    expect(ctx.session.camera.current.center).toStrictEqual(CAMERA.center);
+    expect(inputs).toContain('down');
+    expect(inputs.filter(type => type === 'move').length).toBeGreaterThan(0);
+    expect(inputs).toContain('up');
+
+    // 对照：同一个工具按在别处拖动是平移
+    const canvas = ctx.map.getCanvas();
+    const { left, top } = canvas.getBoundingClientRect();
+    const at = (x: number) => ({ bubbles: true, button: 0, buttons: 1, clientX: left + x, clientY: top + 100 });
+    canvas.dispatchEvent(new MouseEvent('mousedown', at(400)));
+    for (const x of [420, 440, 460]) {
+      canvas.dispatchEvent(new MouseEvent('mousemove', at(x)));
+    }
+    await twoFrames();
+    canvas.dispatchEvent(new MouseEvent('mouseup', { ...at(460), buttons: 0 }));
+    await twoFrames();
+    expect(ctx.session.camera.current.center).not.toStrictEqual(CAMERA.center);
+  });
+
   it('画布尺寸变化：发出 resize，相机不变，同一个经纬度投影到新的位置', async () => {
     using ctx = setup();
     await withTimeout(ctx.view.whenReady(), '首次加载完成');

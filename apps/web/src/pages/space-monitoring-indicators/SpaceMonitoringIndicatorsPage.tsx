@@ -10,6 +10,7 @@ import { useIndicatorConditions } from '@/features/monitoring-indicators/composa
 import { useIndicatorResult } from '@/features/monitoring-indicators/composables/useIndicatorResult';
 import { useIndicatorTree } from '@/features/monitoring-indicators/composables/useIndicatorTree';
 import { RESULT_GROUP } from '@/features/monitoring-indicators/result-layers';
+import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
@@ -128,7 +129,7 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
 
     return () => (
       <div class={styles.root} data-indicators-page>
-        <MapCanvas mapOptions={JIANGSU_ZOOM_RANGE} scrollZoomRates={SCROLL_ZOOM_RATES} />
+        <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS}scrollZoomRates={SCROLL_ZOOM_RATES} />
         <div class={styles.overlay}>
           <div key="left" class={styles.left}>
             <IndicatorPanel

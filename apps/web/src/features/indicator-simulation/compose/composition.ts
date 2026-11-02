@@ -7,14 +7,30 @@ import {
   type SimulationConditions,
   type SimulationParams
 } from '../model/params';
+import {
+  areaScope,
+  citiesScope,
+  type ScopeArea,
+  type ScopeKind,
+  scopeCityCodes,
+  type SimulationScope
+} from '../model/scope';
 
 /** 可选的年度，新的在前；与驾驶舱的开放年份一致 */
 export const SIMULATION_YEARS: readonly number[] = [2026, 2025, 2024, 2023, 2022, 2021];
+
+/** 两种监测范围各自最近的选择：切换范围的种类、按指令重新配置时恢复，不丢掉上传或绘制的范围 */
+export interface ScopeMemory {
+  readonly cityCodes: readonly string[];
+  readonly area: ScopeArea | null;
+}
 
 /** 编排的条件和参数 */
 export interface Composition {
   readonly conditions: SimulationConditions;
   readonly params: SimulationParams;
+  /** 没有生效的那种范围；生效的以条件里的为准。没有时两种都是空的 */
+  readonly scopes?: ScopeMemory;
 }
 
 /** 编排图的三列条件 */
@@ -31,14 +47,50 @@ const CITY_CODES = JIANGSU_CITIES.map(city => city.code);
 /** 演示用的完整编排：最新年度、全省、公园绿地覆盖率、社区卫生覆盖率、人均公园绿地，标准口径 */
 export function sampleComposition(): Composition {
   return {
-    conditions: { years: [2026], cityCodes: CITY_CODES, indicatorIds: ['B-65', 'A-31', 'A-39'] },
+    conditions: { years: [2026], scope: citiesScope(CITY_CODES), indicatorIds: ['B-65', 'A-31', 'A-39'] },
     params: defaultParams()
   };
 }
 
 /** 空的编排：打开页面和重置条件后，没有条件，参数是标准口径 */
 export function emptyComposition(): Composition {
-  return { conditions: { years: [], cityCodes: [], indicatorIds: [] }, params: defaultParams() };
+  return { conditions: { years: [], scope: citiesScope([]), indicatorIds: [] }, params: defaultParams() };
+}
+
+/** 两种范围各自最近的选择：生效的取条件里的，另一种取记下的 */
+export function rememberedScopes({ conditions, scopes }: Composition): ScopeMemory {
+  const { scope } = conditions;
+  return {
+    cityCodes: scope.kind === 'cities' ? scope.cityCodes : (scopes?.cityCodes ?? []),
+    area: scope.kind === 'area' ? scope.area : (scopes?.area ?? null)
+  };
+}
+
+/** 换监测范围：记下两种范围各自的选择 */
+export function withScope(composition: Composition, scope: SimulationScope): Composition {
+  const memory = rememberedScopes(composition);
+  return {
+    ...composition,
+    conditions: { ...composition.conditions, scope },
+    scopes: {
+      cityCodes: scope.kind === 'cities' ? scope.cityCodes : memory.cityCodes,
+      area: scope.kind === 'area' ? scope.area : memory.area
+    }
+  };
+}
+
+/** 切换范围的种类，恢复这种范围上一次的选择 */
+export function withScopeKind(composition: Composition, kind: ScopeKind): Composition {
+  if (composition.conditions.scope.kind === kind) {
+    return composition;
+  }
+  const memory = rememberedScopes(composition);
+  return withScope(composition, kind === 'cities' ? citiesScope(memory.cityCodes) : areaScope(memory.area));
+}
+
+/** 换上（或移除，传 null）自定义范围，并切到自定义范围 */
+export function withArea(composition: Composition, area: ScopeArea | null): Composition {
+  return withScope(composition, areaScope(area));
 }
 
 function assertYear(year: number): void {
@@ -53,6 +105,15 @@ function assertCity(code: string): void {
   }
 }
 
+// 按市增减只在行政区划下：自定义范围的市由范围决定
+function selectedCities({ conditions }: Composition): readonly string[] {
+  const { scope } = conditions;
+  if (scope.kind !== 'cities') {
+    throw new Error('自定义范围不能按市增减，请先切换到行政区划');
+  }
+  return scope.cityCodes;
+}
+
 /** 加上或去掉一个年度；年度按新的在前排列 */
 export function withYear(composition: Composition, year: number, on: boolean): Composition {
   assertYear(year);
@@ -61,17 +122,17 @@ export function withYear(composition: Composition, year: number, on: boolean): C
   return { ...composition, conditions: { ...conditions, years: years.toSorted((a, b) => b - a) } };
 }
 
-/** 加上或去掉一个市；市按区划目录的顺序排列 */
+/** 加上或去掉一个市；市按区划目录的顺序排列。只在行政区划下 */
 export function withCity(composition: Composition, code: string, on: boolean): Composition {
   assertCity(code);
-  const { conditions } = composition;
-  const cityCodes = CITY_CODES.filter(item => (item === code ? on : conditions.cityCodes.includes(item)));
-  return { ...composition, conditions: { ...conditions, cityCodes } };
+  const current = selectedCities(composition);
+  return withScope(composition, citiesScope(CITY_CODES.filter(item => (item === code ? on : current.includes(item)))));
 }
 
-/** 全选或清空监测范围 */
+/** 全选或清空所选的市；只在行政区划下 */
 export function withAllCities(composition: Composition, on: boolean): Composition {
-  return { ...composition, conditions: { ...composition.conditions, cityCodes: on ? CITY_CODES : [] } };
+  selectedCities(composition);
+  return withScope(composition, citiesScope(on ? CITY_CODES : []));
 }
 
 /** 加上（排在最后）或去掉一项指标 */
@@ -99,11 +160,11 @@ export function withIndicatorMoved(composition: Composition, from: number, to: n
   return { ...composition, conditions: { ...composition.conditions, indicatorIds: ids } };
 }
 
-/** 还缺哪几列条件，按编排图的顺序 */
-export function missingConditions({ years, cityCodes, indicatorIds }: SimulationConditions): ConditionKind[] {
+/** 还缺哪几列条件，按编排图的顺序；自定义范围还没有上传、绘制时算缺监测范围 */
+export function missingConditions({ years, scope, indicatorIds }: SimulationConditions): ConditionKind[] {
   const counts: Readonly<Record<ConditionKind, number>> = {
     years: years.length,
-    region: cityCodes.length,
+    region: scopeCityCodes(scope).length,
     indicators: indicatorIds.length
   };
   return (['years', 'region', 'indicators'] as const).filter(kind => counts[kind] === 0);

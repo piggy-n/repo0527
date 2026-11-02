@@ -1,19 +1,23 @@
 import { provideMap } from '@yzt/map-vue';
+import { ElMessage } from 'element-plus';
 import { computed, defineComponent, ref, Transition, watch } from 'vue';
 import { AiDock } from '@/features/indicator-simulation/components/AiDock';
 import { ComposeStage } from '@/features/indicator-simulation/components/ComposeStage';
 import { RunStage } from '@/features/indicator-simulation/components/RunStage';
+import { ScopeAreaDialog } from '@/features/indicator-simulation/components/ScopeAreaDialog';
 import { useComposition } from '@/features/indicator-simulation/composables/useComposition';
 import { usePauseWhileInactive } from '@/features/indicator-simulation/composables/usePauseWhileInactive';
 import { usePromptComposer } from '@/features/indicator-simulation/composables/usePromptComposer';
 import { useReasoningLog } from '@/features/indicator-simulation/composables/useReasoningLog';
 import { useRunConversation } from '@/features/indicator-simulation/composables/useRunConversation';
 import { useRunFlow } from '@/features/indicator-simulation/composables/useRunFlow';
+import { useScopeEditor } from '@/features/indicator-simulation/composables/useScopeEditor';
 import { useSimulationMap } from '@/features/indicator-simulation/composables/useSimulationMap';
 import { useSimulationModel } from '@/features/indicator-simulation/composables/useSimulationModel';
 import { useSimulationResult } from '@/features/indicator-simulation/composables/useSimulationResult';
 import { useSimulationRun } from '@/features/indicator-simulation/composables/useSimulationRun';
 import { useUserPause } from '@/features/indicator-simulation/composables/useUserPause';
+import { areaLabel } from '@/features/indicator-simulation/model/scope';
 import { reducedMotion, STILL_CLASS } from '@/features/indicator-simulation/motion';
 import type { RunView } from '@/features/indicator-simulation/result/result-view';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
@@ -41,16 +45,21 @@ export const IndicatorSimulationPage = defineComponent({
     const userPause = useUserPause(run);
     usePauseWhileInactive(run, usePageActive());
 
-    // 区县的填充在底图之上、注记之下；遮罩盖住范围外，边界在上面，悬停的市描边最上
+    // 区县的填充在底图之上、注记之下；遮罩盖住范围外，边界在上面，悬停的市描边最上。
+    // 自定义范围的弹窗（ADR 0121）：覆盖的部分在注记之下，范围、绘制、编辑的手柄在最上
     const map = provideMap({
       groups: [
         'basemap',
         'simulation-districts',
         'simulation-mask',
         'simulation-facilities',
+        'scope-cover',
         'basemap-labels',
         'boundaries',
-        'simulation-highlight'
+        'simulation-highlight',
+        'scope-area',
+        'draw',
+        'shape-edit'
       ],
       camera: JIANGSU_CAMERA
     });
@@ -59,6 +68,15 @@ export const IndicatorSimulationPage = defineComponent({
     const boundaries = useBoundaries();
     boundaries.setVisible('city', true);
     const simulationMap = useSimulationMap(run, map, result);
+    const scopeEditor = useScopeEditor(map, {
+      model,
+      goToDefaultView,
+      onConfirm: area => {
+        composition.setArea(area);
+        ElMessage.success(`已使用${areaLabel(area)}`);
+      }
+    });
+    map.registerTools(scopeEditor.tools);
     map.bindStyle({
       basemap: basemap.deriveGroup,
       'basemap-labels': basemap.deriveLabelsGroup,
@@ -66,7 +84,11 @@ export const IndicatorSimulationPage = defineComponent({
       'simulation-districts': simulationMap.deriveDistricts,
       'simulation-mask': simulationMap.deriveMask,
       'simulation-facilities': simulationMap.deriveFacilities,
-      'simulation-highlight': simulationMap.deriveHighlight
+      'simulation-highlight': simulationMap.deriveHighlight,
+      'scope-cover': scopeEditor.deriveCover,
+      'scope-area': scopeEditor.deriveArea,
+      draw: scopeEditor.draw.deriveGroup,
+      'shape-edit': scopeEditor.edit.deriveGroup
     });
 
     // 推演完成后主区看流程还是结果；重新推演时回到流程图
@@ -108,6 +130,7 @@ export const IndicatorSimulationPage = defineComponent({
           composition={composition}
           composer={composer}
           model={model.value}
+          editor={scopeEditor}
           onStart={() => startWith(null)}
           onRetry={retry}
         />
@@ -140,7 +163,13 @@ export const IndicatorSimulationPage = defineComponent({
             {renderStage()}
           </Transition>
         </div>
-        <AiDock composer={composer} conversation={composing.value ? null : conversation} />
+        <AiDock
+          composer={composer}
+          conversation={composing.value ? null : conversation}
+          scope={composing.value ? { composition, editor: scopeEditor } : null}
+        />
+        {/* 只在条件配置时挂上：弹窗里的地图画布和结果的画布不能同时存在 */}
+        {composing.value && <ScopeAreaDialog editor={scopeEditor} />}
       </div>
     );
   }

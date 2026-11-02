@@ -268,6 +268,7 @@ R5 按用户最新确认直接打开文件选择器，不增加导入弹窗或�
 
 - 经 `/backend` 同源代理可以正常请求。MapLibre 在 Worker 里请求瓦片，地址要用绝对地址（旧代码注释同样记录了这一点）
 - **不校验 token**：不带 token、带无效 token 都返回 200，内容完全相同。至少目前瓦片与用户、权限无关（ADR 0025 的待定问题），以后会不会按权限过滤仍要向后端确认
+- **2026-11-02 换到后端 `192.168.153.194:18010` 后校验 token**：不带 token 返回 401（响应体 52 字节），旧项目带 `token` 请求头返回 200。所以业务地图的画布都用 `shared/map/backend-request.ts` 的 `JIANGSU_MAP_OPTIONS`，发往 `/backend/` 的瓦片请求带 token（`/api/tiles`、`/api/query/mvt`、`/api/analysis/mvt` 都经过它），瓦片的 401 和接口的 401 一样结束会话并回到登录页。瓦片是否按用户、权限过滤仍待后端确认；响应头仍是 `Cache-Control: max-age=300, public`
 - 响应头：`Content-Type: application/x-protobuf`，`Cache-Control: max-age=300, public`；没有 `ETag`、`Last-Modified`，5 分钟后只能整张重新下载；**没有压缩**
 - 瓦片内的图层名默认等于瓦片集名（如 `bgdc_dltb_2022`）；旧代码例外表里的两个仍然成立：`bgdc_czcdyd_2022` 是 `czcdyd`，`bgdc_dltb_czc_2021` 是 `dltb_czc_2021`
 - 地类图斑 2022 的属性字段：`bsm`、`dlmc`、`dlbm`，另有 `clustered`、`point_count`、`sqrt_point_count`
@@ -660,4 +661,4 @@ ADR 0055 改了这些和旧项目不同的地方：
 - 返回头有 `Access-Control-Allow-Origin: *`、`Cache-Control: max-age=432000`（5 天）；key 不对时返回 418；不带 Referer 也能取到瓦片，这个 key 可能没有设域名白名单（待确认，见 roadmap）
 - 旧项目的内网影像 `http://192.168.1.180:8080/tiles/{z}/{x}/{y}.jpg` 只有 1～9 级（10 级以上全部 404），9 级覆盖约 90.7～135.7°E、20～52.9°N；用户决定改用天地图影像，不迁移
 - 旧项目提交 `d768c66` 的天地图开关：关闭时底图样式里不放天地图数据源，区划边界只用本地 GeoJSON、天地图行政区接口直接抛错；同一提交把现状底图的默认选择从"无底图"改回"矢量底图"。新项目用 `appConfig.tianditu`（关闭时为 `null`）和内网构建模式实现同样的语义，5B.2 的边界、5B.5 的区划定位沿用
-- 旧项目的 `auth-service` 把 `t0`～`t7.tianditu.gov.cn` 排除在加 token 的范围之外：以后给瓦片请求加 token 时只给同源请求加，不能把登录 token 发给天地图
+- 旧项目的 `auth-service` 把 `t0`～`t7.tianditu.gov.cn` 排除在加 token 的范围之外：新项目的瓦片请求只给 `/backend/` 加 token（`shared/map/backend-request.ts`），不把登录 token 发给天地图

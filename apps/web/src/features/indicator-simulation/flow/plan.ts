@@ -16,6 +16,7 @@ import {
   type SimulationConditions,
   type SimulationParams
 } from '../model/params';
+import { areaLabel, citiesScope, scopeCityCodes, scopeDistricts, type SimulationScope } from '../model/scope';
 import { em, type Rich, rich } from '../run/narrative';
 
 /** 流程图的节点：属于引擎的某一步，由那一步的进度点亮 */
@@ -90,13 +91,37 @@ const meters = (value: number): string => (value >= 1000 ? `${value / 1000} 公�
 const formatNumber = (value: number, digits = 0): string =>
   value.toLocaleString('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
-/** 范围的说明：一两个市写全名，全省写"全省"，更多时写"南京市等 3 个市" */
-export function scopeText(cityCodes: readonly string[]): string {
+/** 范围的说明：一两个市写全名，全省写"全省"，更多时写"南京市等 3 个市"；自定义范围写"自定义范围「名称」" */
+export function scopeText(scope: SimulationScope): string {
+  if (scope.kind === 'area') {
+    return scope.area ? areaLabel(scope.area) : '自定义范围';
+  }
+  const { cityCodes } = scope;
   if (cityCodes.length === JIANGSU_CITIES.length) {
     return '全省';
   }
   const [first = ''] = cityCodes;
   return cityCodes.length <= 2 ? cityCodes.map(cityName).join('、') : `${cityName(first)}等 ${cityCodes.length} 个市`;
+}
+
+/** 只按市说范围时用：如对话里"范围改为……" */
+export const citiesText = (cityCodes: readonly string[]): string => scopeText(citiesScope(cityCodes));
+
+const formatArea = (km2: number): string => km2.toLocaleString('zh-CN', { maximumFractionDigits: km2 >= 100 ? 0 : 1 });
+
+// 自定义范围的说明：多大、涉及几个区县、哪些全部覆盖、哪些部分覆盖（多时只写个数）
+function areaSentence(scope: SimulationScope): Rich | null {
+  if (scope.kind !== 'area' || !scope.area) {
+    return null;
+  }
+  const { coverage, cityCodes, source, file } = scope.area;
+  const full = coverage.covers.filter(cover => cover.relation === 'full').length;
+  const partial = coverage.covers.length - full;
+  const from = source === 'upload' && file ? `上传的 ${file.format === 'geojson' ? 'GeoJSON' : 'Shapefile'}` : '地图绘制';
+  const size = `${formatArea(coverage.area)} 平方千米`;
+  const districts = em(`${coverage.covers.length} 个区县`);
+  const where = rich`监测范围是${em(areaLabel(scope.area))}（${from}，${size}），涉及${citiesText(cityCodes)} ${districts}：`;
+  return [...where, ...rich`${full} 个全部覆盖、${partial} 个部分覆盖；部分覆盖的区县按范围内的面积占比折算人口和用地。`];
 }
 
 /** 一项覆盖率指标要生成的服务范围：设施、范围的说明、距离；模拟情景的站点标出来 */
@@ -187,17 +212,26 @@ interface Draft {
  * → 结论生成。节点、推理文字里的数字都来自同一份计算，同样的输入得到同样的图；不按目标值评价（2026-10-30）
  */
 export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPlan {
-  const { years, cityCodes, indicatorIds } = conditions;
+  const { years, indicatorIds } = conditions;
+  const cityCodes = scopeCityCodes(conditions.scope);
   const year = Math.max(...years);
   const yearsText = years.toSorted((a, b) => a - b).join('、');
-  const scope = scopeText(cityCodes);
+  const scope = scopeText(conditions.scope);
   const indicators = indicatorIds.map(simulationIndicator);
   const scenarioIds = indicatorIds.filter(id => isScenario(params, id));
   const coverage = indicators.filter(indicator => indicator.model === 'coverage');
   const perCapita = indicators.filter(indicator => indicator.model === 'perCapita');
-  const districts = calculator.atlas.inCities(cityCodes);
-  const census = districts.reduce((sum, district) => sum + calculator.districtPopulation(district), 0);
-  const residential = districts.reduce((sum, district) => sum + calculator.residentialLand(district), 0);
+  // 自定义范围部分覆盖的区县按范围内的面积占比折算人口和用地
+  const districts = scopeDistricts(calculator.atlas, conditions.scope);
+  const peopleOf = (codes: readonly string[]) =>
+    districts
+      .filter(({ district }) => codes.includes(district.cityCode))
+      .reduce((sum, { district, share }) => sum + calculator.districtPopulation(district) * share, 0);
+  const census = peopleOf(cityCodes);
+  const residential = districts.reduce(
+    (sum, { district, share }) => sum + calculator.residentialLand(district) * share,
+    0
+  );
   const current = calculator.computeYear(conditions, params, year).indicators;
   const standard =
     scenarioIds.length === 0
@@ -229,6 +263,10 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     kind: 'root'
   });
   say('parse', rich`解析指令：计算 ${em(`${yearsText} 年`)}${scope}的 ${em(`${indicatorIds.length} 项`)}指标。`, 'parse');
+  const covered = areaSentence(conditions.scope);
+  if (covered) {
+    say('parse', covered, 'parse');
+  }
   const area = coverage.filter(indicator => indicator.base === 'area').length;
   const kinds = [
     coverage.length - area > 0 ? `住宅用地覆盖率 ${coverage.length - area} 项` : '',
@@ -249,12 +287,7 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
   say('parse', rich`计算流程：人口、设施、用地数据并行准备，核查后按指标分 ${em(`${indicatorIds.length} 个分支`)}计算，最后汇总结论。`, 'parse');
 
   // 数据准备：三路并行
-  const shownCities = cityCodes.slice(0, 3).map(code => {
-    const total = calculator.atlas
-      .inCities([code])
-      .reduce((sum, district) => sum + calculator.districtPopulation(district), 0);
-    return `${cityName(code)} ${total.toFixed(1)} 万人`;
-  });
+  const shownCities = cityCodes.slice(0, 3).map(code => `${cityName(code)} ${peopleOf([code]).toFixed(1)} 万人`);
   const popChanged = params.popChange !== 0 && perCapita.length > 0;
   node({ key: 'pop', step: 'pop', label: '人口数据', title: '七普常住人口', detail: `${formatNumber(census, 1)} 万人` });
   const moreCities = cityCodes.length > 3 ? ` 等 ${cityCodes.length} 市` : '';

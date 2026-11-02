@@ -6,6 +6,7 @@ import { indicatorResult } from '../model/analysis';
 import { type MapData, mapData } from '../map/map-data';
 import { districtsGroup, facilitiesGroup, highlightGroup, type MapFrame, maskGroup } from '../map/map-frame';
 import { simulationIndicator } from '../model/indicators';
+import { scopeCityCodes } from '../model/scope';
 import { reducedMotion } from '../motion';
 import type { SimulationResult } from './useSimulationResult';
 import type { SimulationRun } from './useSimulationRun';
@@ -73,10 +74,16 @@ export function useSimulationMap(
     });
   });
   const frame = computed(() => (data.value === null ? null : SHOWN));
-  // 设施和服务圈只在放大到一个市（或范围只有一个市）时画：按级别分不开，两个市的范围和一个市只差半级
+  // 设施和服务圈只在放大到一个市（或范围只有一个市、自定义范围）时画：按级别分不开，两个市的范围和一个市只差半级；
+  // 自定义范围一般不大，设施点只取范围内的
   const focused = computed(() => {
     const current = viewing.value;
-    return current !== null && (current.selection.cityCode !== null || conditions.value?.cityCodes.length === 1);
+    const scope = conditions.value?.scope;
+    return (
+      current !== null &&
+      scope !== undefined &&
+      (current.selection.cityCode !== null || scope.kind === 'area' || scopeCityCodes(scope).length === 1)
+    );
   });
 
   const labels = computed((): MapLabel[] => {

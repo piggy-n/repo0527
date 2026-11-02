@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { type Calculator, createCalculator } from '../model/calculator';
 import { defaultParams, type SimulationConditions, type SimulationParams } from '../model/params';
+import { areaScope, citiesScope } from '../model/scope';
 import { loadTestAtlas } from '../model/test-atlas';
 import { type EngineCalculator, type EngineState, SimulationEngine, type StepStatus } from './engine';
 import { PLANNING_DURATION, RERUN_DELAY, type StepId, STEPS } from './steps';
@@ -10,7 +11,11 @@ import { ManualClock } from './test-clock';
 
 const ALL = JIANGSU_CITIES.map(city => city.code);
 // 覆盖率类和人均类各一项
-const conditions: SimulationConditions = { years: [2025, 2026], cityCodes: ALL, indicatorIds: ['A-31', 'A-39'] };
+const conditions: SimulationConditions = {
+  years: [2025, 2026],
+  scope: citiesScope(ALL),
+  indicatorIds: ['A-31', 'A-39']
+};
 const withPatch = (patch: Partial<SimulationParams>): SimulationParams => ({ ...defaultParams(), ...patch });
 
 // 默认时长下的时间点（毫秒）：条件解析 1300 开始，三路数据准备 3100 开始、6100 全部完成，
@@ -99,6 +104,7 @@ describe('推进', () => {
     using ctx = await setup();
     const { engine } = ctx;
     expect(() => engine.start({ ...conditions, indicatorIds: [] }, defaultParams())).toThrow('计算条件不完整');
+    expect(() => engine.start({ ...conditions, scope: areaScope(null) }, defaultParams())).toThrow('计算条件不完整');
     expect(() => engine.start({ ...conditions, indicatorIds: ['G01-6'] }, defaultParams())).toThrow('计算不支持指标 G01-6');
     expect(() => engine.apply(withPatch({ rule: 'old' }))).toThrow('计算没有在进行');
 
@@ -356,14 +362,14 @@ describe('暂停、停止、释放', () => {
     engine.start(conditions, defaultParams());
     await advanceTo(2000);
 
-    engine.start({ ...conditions, cityCodes: ['320100'] }, defaultParams());
+    engine.start({ ...conditions, scope: citiesScope(['320100']) }, defaultParams());
     expect(engine.state.status).toBe('planning');
     // 第一次的条件解析会在 3100 完成
     await advanceTo(2000 + PREP_AT - 1);
     expect(engine.state.steps.parse.status).toBe('running');
     await advanceTo(2000 + PREP_AT);
     expect(engine.state.steps.parse.status).toBe('done');
-    expect(engine.state.conditions?.cityCodes).toEqual(['320100']);
+    expect(engine.state.conditions?.scope).toEqual(citiesScope(['320100']));
   });
 
   it('释放后：进行中的计算作废，不再通知，方法抛错', async () => {
@@ -432,7 +438,11 @@ describe('重算的标记', () => {
 });
 
 describe('换条件重算', () => {
-  const moreCities: SimulationConditions = { ...conditions, cityCodes: ['320100', '320500'], indicatorIds: ['A-31'] };
+  const moreCities: SimulationConditions = {
+    ...conditions,
+    scope: citiesScope(['320100', '320500']),
+    indicatorIds: ['A-31']
+  };
 
   it('开始过的步骤标为待更新，从条件解析重算；记下换之前的条件，版本作废', async () => {
     using ctx = await setup();

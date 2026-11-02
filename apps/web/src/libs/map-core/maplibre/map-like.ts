@@ -25,6 +25,8 @@ export interface MapMouseEventLike {
   // 画布左上角为原点的 CSS 像素
   readonly point: { readonly x: number; readonly y: number };
   readonly originalEvent: MouseEvent;
+  /** mousedown 时调用：这次按下不交给拖动平移等手势（ADR 0122） */
+  preventDefault(): void;
 }
 
 /** 地图的一种手势（拖动平移、双击放大、Shift 框选放大）的开关 */

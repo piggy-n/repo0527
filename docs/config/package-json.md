@@ -154,6 +154,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "dompurify": "^3.4.17",
     "echarts": "^6.1.0",
     "element-plus": "^2.14.6",
+    "fflate": "^0.8.3",
     "geographiclib-geodesic": "^2.2.0",
     "gsap": "3.13.0",
     "idb-keyval": "^6.3.0",
@@ -162,6 +163,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "marked": "^18.1.1",
     "nanoevents": "^10.0.0",
     "pinia": "^4.0.3",
+    "shpjs": "^6.2.0",
     "sm-crypto-v2": "^1.15.1",
     "sortablejs": "^1.15.7",
     "three": "0.183.2",
@@ -237,13 +239,15 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `cesium` | 三维地图（ADR 0002、0079），只在 `libs/map-cesium` 和 app 的装配中导入（lint 检查）。不遵守语义化版本，精确锁定（ADR 0005）；`cesium` 是聚合包，代码在它依赖的 `@cesium/engine`、`@cesium/widgets` 里（1.146.0 对应 26.4.0、16.3.0）。本项目只用 engine 的 `CesiumWidget`，导入写 `cesium`。Worker、资源和第三方文件不经过打包，由 `vite-plugin-static-copy` 复制到产物的 `cesium/`；地图页第一次切到三维时才加载 | MapLibre 的地球投影（没有 3D Tiles、第一人称相机）、deck.gl |
 | `@maplibre/maplibre-gl-style-spec` | MapLibre 样式规范的工具：map-core 用它的 `diff` 对比样式快照（ADR 0022），以后在三维和 Worker 里求值表达式和过滤条件（ADR 0021、0024）。它本来就是 maplibre-gl 的依赖，pnpm 不允许使用没有声明的包，所以自己声明；版本范围与 maplibre-gl 声明的相同（`^26.4.4`），两者解析到同一个版本，只打包一份 | 手写求值器（旧项目的做法，ADR 0020） |
 | `@types/geojson` | GeoJSON 的类型，并提供全局命名空间 `GeoJSON`：style-spec 和 maplibre-gl 的声明文件依赖它，要在 tsconfig 的 `types` 中加载，否则相关类型会悄悄变成错误类型（见 [tsconfig.md](tsconfig.md)）。版本范围与 maplibre-gl 依赖的相同 | — |
-| `geographiclib-geodesic` | 椭球面上的距离和面积（ADR 0024 第 4 条、ADR 0035），只在 map-core 的测量中使用。Karney 算法的作者维护，MIT 许可，自带类型；只有 CommonJS 格式的压缩包（32 KB），由 Vite 预构建处理。参数是先纬度后经度，map-core 的封装负责转换 | geodesy（Vincenty，没有椭球面积）、turf（球面） |
+| `geographiclib-geodesic` | 椭球面上的距离和面积（ADR 0024 第 4 条、ADR 0035），在 map-core 的测量和 `shared/map/area`（自定义范围的面积、周长，在 Worker 里运行，不能导入 map-core 的入口）中使用。Karney 算法的作者维护，MIT 许可，自带类型；只有 CommonJS 格式的压缩包（32 KB），由 Vite 预构建处理。参数是先纬度后经度，map-core 的封装负责转换 | geodesy（Vincenty，没有椭球面积）、turf（球面） |
 | `@turf/bbox` | 选中要素的外包范围，定位时 `fitBounds` 用（ADR 0047），只在 `features/resource-map/feature-query.ts` 中使用。turf v7 的单个包，自带类型；依赖 `@turf/helpers`、`@turf/meta` | 自己遍历坐标 |
 | `@turf/boolean-point-in-polygon` | 判断点在哪个区县的多边形里（ADR 0037），只在 `shared/map/region` 中使用。turf v7 的单个包（按需安装，不用 `@turf/turf` 全家桶），自带类型，处理洞和多面；依赖 `@turf/helpers`、`@turf/invariant` 和 `point-in-polygon-hao` | 自己写射线法 |
-| `@turf/intersect` | 识别范围和区划求交（ADR 0051），只在 `shared/map/region/region-scope.ts` 中使用。turf v7 的单个包，自带类型；底层是 `polyclip-ts`（0.x，用 `bignumber.js` 做精确计算） | 差集、手写多边形裁剪 |
+| `@turf/intersect` | 识别范围和区划求交（ADR 0051，`shared/map/region/region-scope.ts`）；自定义范围与区县求交、自己和自己求交整理成有效的面（ADR 0121，`shared/map/area`）。turf v7 的单个包，自带类型；底层是 `polyclip-ts`（0.x，用 `bignumber.js` 做精确计算） | 差集、手写多边形裁剪 |
 | `@turf/boolean-intersects` | 要素的几何和区划范围是否相交（ADR 0051），只在 `shared/map/region/region-scope.ts` 中使用。turf v7 的单个包，处理点、线、面和多部分的几何 | 只判断要素的一个顶点 |
-| `@turf/bbox-clip` | 求交前先按识别范围的外包矩形裁掉区划远处的边（Sutherland–Hodgman），只在 `shared/map/region/region-scope.ts` 中使用；南京市界的求交从约 140 ms 降到 1～20 ms（见 modules/shared-map.md"区划裁剪"） | 直接求交、自己写矩形裁剪 |
-| `@turf/simplify` | Douglas-Peucker 算法简化：发给后端的几何放不进地址时（ADR 0051 第 4 节，`shared/map/query-geometry.ts`，简化不保证结果有效，由同一个文件里的有效性检查把关）；三维的覆盖物按这一级的半个像素简化（ADR 0080 第 2 节，`libs/map-cesium/overlay-plan.ts`） | 自己写简化 |
+| `@turf/bbox-clip` | 求交前先按识别范围的外包矩形裁掉区划远处的边（Sutherland–Hodgman），在 `shared/map/region/region-scope.ts` 和 `shared/map/area/area-coverage.ts`（节点多的自定义范围先裁到区县的外包框）中使用；南京市界的求交从约 140 ms 降到 1～20 ms（见 modules/shared-map.md"区划裁剪"） | 直接求交、自己写矩形裁剪 |
+| `@turf/simplify` | Douglas-Peucker 算法简化：发给后端的几何放不进地址时（ADR 0051 第 4 节，`shared/map/query-geometry.ts`，简化不保证结果有效，由同一个文件里的有效性检查把关）；三维的覆盖物按这一级的半个像素简化（ADR 0080 第 2 节，`libs/map-cesium/overlay-plan.ts`）；节点多的自定义范围在分析前简化、缩略图的轮廓（ADR 0121，`shared/map/area/area-geometry.ts`） | 自己写简化 |
+| `shpjs` | 读 Shapefile 的 .shp，按 .prj 用 proj4 转为经纬度（ADR 0121），只在 `shared/map/area/area-file.ts` 中使用，在 Worker 里按需动态导入。MIT 许可；6.x 是纯 ESM，依赖 `proj4`、`but-unzip`、`parsedbf`；不带类型声明，只在 `shared/map/area/shpjs.d.ts` 声明用到的 `parseShp`（`tsconfig.worker.json` 要包含这个文件） | 自己写 .shp 解析和投影换算、`shapefile`（不读 .prj，2019 年后没有发布） |
+| `fflate` | 解压上传的 Shapefile 压缩包（ADR 0121），只在 `shared/map/area/area-file.ts` 中使用：先只读目录、按解压后的大小拦下过大的压缩包，再解压用得上的文件。MIT 许可，无依赖，自带类型；0.x 的小版本按大版本对待。依赖树里原有同一版本 | shpjs 自带的解压（读不到目录，说不清缺了哪个文件）、JSZip |
 | `d3-force` | 资源管理"自助取数"关系图的力导布局，坐标和旧页面一致（ADR 0089），只在 `features/resource-management/extraction/graph-layout.ts` 中使用，随关系图的运行时懒加载。精确锁定旧项目 D3 7.9 的子包版本，和 `d3-geo`、`d3-polygon` 一样；依赖 `d3-dispatch`、`d3-quadtree`、`d3-timer`。类型来自 `@types/d3-force` | ECharts 自带的力导（坐标和旧页面不同）、G6 4（ADR 0089） |
 | `sortablejs` | 资源图层面板的拖动排序（ADR 0054）：目录树和"已选择图层"（同一份叠放顺序，ADR 0118），只在 `shared/composables/useSortableList.ts` 中使用（测试可以导入它来模拟放下）。只认手柄、每个列表一个实例，放下后先把 DOM 还原，再把位置交给拥有者，由 Vue 重新渲染；MIT 许可，无依赖。没有用 `@vueuse/integrations` 的 `useSortable`：它默认直接改数组，我们的顺序在拥有者里，自己包一层更直接，也少一个依赖 | ElTree 自带的拖放、自己写指针事件（ADR 0054） |
 | `@types/sortablejs` | SortableJS 的类型（它不自带），只在开发时使用 | — |

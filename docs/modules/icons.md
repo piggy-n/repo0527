@@ -186,6 +186,7 @@ packages/icons/
 | `header-bell` | `bell` | 顶栏右侧的消息按钮（2026-10-27 加入，消息弹框原型在用） |
 | `menu-audit` / `menu-report` | `clipboard-check` / `report-analytics` | 系统管理页面内导航的资源审核、统计报表 |
 | `draw-rectangle` / `file-upload` | `marquee-2` / `file-upload` | 数据查询空间查询的框选、shp 文件导入（2026-10-28 加入；多边形沿用 `geometry-polygon`） |
+| `vertex-edit` / `undo` / `trash` | `edit` / `arrow-back-up` / `trash` | 自定义范围弹窗的编辑节点、撤销、删除节点（2026-10-31 加入，ADR 0121） |
 
 以后再加 Tabler 的图标照同样的做法，并补进这张表。
 

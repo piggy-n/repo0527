@@ -36,11 +36,15 @@ import {
 import { CONDITION_LABELS, missingConditions } from '../compose/composition';
 import type { CompositionOwner } from '../composables/useComposition';
 import type { ConditionDrag, DragItem } from '../composables/useConditionDrag';
+import type { ScopeEditor } from '../composables/useScopeEditor';
 import type { BuildState } from '../composables/usePromptComposer';
 import type { SimulationModel } from '../composables/useSimulationModel';
 import { reducedMotion } from '../motion';
 import { STEP_GROUPS } from '../engine/steps';
 import { reachText, simulationIndicator } from '../model/indicators';
+import { type ScopeArea, scopeCityCodes } from '../model/scope';
+import { areaBrief } from '../scope/area-tree';
+import { AreaThumbnail } from './AreaThumbnail';
 import {
   describeParam,
   isScenario,
@@ -89,6 +93,10 @@ const removeButton = (label: string, onClick: () => void) => (
   </button>
 );
 
+// AI计算卡片的产出：自定义范围每个年度、每项指标一个结果，行政区划每个市一个
+const outputText = (count: number, area: boolean) =>
+  `共 ${count} 个${area ? '范围' : '市级'}结果 · ${STEP_GROUPS.length} 个步骤`;
+
 // 一列条件为空时的占位
 const empty = (lane: 'years' | 'region' | 'indicators', show: boolean) =>
   show && (
@@ -108,6 +116,8 @@ export const ComposeBoard = defineComponent({
     composition: { type: Object as PropType<CompositionOwner>, required: true },
     drag: { type: Object as PropType<ConditionDrag>, required: true },
     model: { type: Object as PropType<SimulationModel>, required: true },
+    /** 自定义范围的弹窗：点范围节点编辑，空着时点占位打开 */
+    editor: { type: Object as PropType<ScopeEditor>, required: true },
     /** AI 按指令编排的进度；没在编排时为 null */
     building: { type: Object as PropType<BuildState | null>, default: null }
   },
@@ -381,8 +391,53 @@ export const ComposeBoard = defineComponent({
       ];
     };
 
+    // 自定义范围的节点：缩略图、名称、涉及的市县，点击编辑（ADR 0121）
+    const renderArea = (area: ScopeArea | null) => {
+      const brief = area ? areaBrief(area) : null;
+      return [
+        <TransitionGroup key="nodes" {...transition}>
+          {area && brief && visible(REGION_NODE) && (
+            <div key={REGION_NODE} class={nodeClass(REGION_NODE, 'region')} data-node={REGION_NODE}>
+              <button
+                type="button"
+                class={styles.areaNode}
+                title="编辑自定义范围"
+                onClick={() => props.editor.start('edit', { area })}
+              >
+                <AreaThumbnail outline={area.outline} size={44} />
+                <span class={styles.areaText}>
+                  <span class={styles.regionHead}>
+                    <SvgIcon class={styles.icon} name="simulation-region" />
+                    <b>自定义范围</b>
+                    <span class={styles.meta}>{brief.size}</span>
+                  </span>
+                  <span class={styles.areaName}>{area.name}</span>
+                  <span class={styles.meta}>{brief.where}</span>
+                </span>
+              </button>
+              {removeButton('自定义范围', () => props.composition.setArea(null))}
+            </div>
+          )}
+        </TransitionGroup>,
+        !area && props.building === null && (
+          <button
+            key="empty"
+            type="button"
+            class={[styles.empty, styles.emptyAction]}
+            onClick={() => props.editor.start('choose')}
+          >
+            上传文件或在地图上绘制范围
+          </button>
+        )
+      ];
+    };
+
     const renderRegion = () => {
-      const { cityCodes } = conditions.value;
+      const { scope } = conditions.value;
+      if (scope.kind === 'area') {
+        return renderArea(scope.area);
+      }
+      const { cityCodes } = scope;
       const all = cityCodes.length === JIANGSU_CITIES.length;
       const districts = cityCodes.reduce((sum, code) => sum + districtsOf(code).length, 0);
       return [
@@ -539,7 +594,9 @@ export const ComposeBoard = defineComponent({
       if (!visible(OUTPUT_NODE)) {
         return null;
       }
-      const { years, cityCodes, indicatorIds } = conditions.value;
+      const { years, scope, indicatorIds } = conditions.value;
+      const cityCodes = scopeCityCodes(scope);
+      const area = scope.kind === 'area';
       const { model } = props;
       const ready = missing.value.length === 0;
       const launching = props.building?.launching ?? false;
@@ -565,13 +622,11 @@ export const ComposeBoard = defineComponent({
           <b>AI计算</b>
           <span class={styles.meta}>
             {ready
-              ? `${years.length} 个年度 × ${cityCodes.length} 市 × ${indicatorIds.length} 项指标`
+              ? `${years.length} 个年度 × ${area ? '自定义范围' : `${cityCodes.length} 市`} × ${indicatorIds.length} 项指标`
               : `待补充：${missing.value.map(kind => CONDITION_LABELS[kind]).join('、')}`}
           </span>
           <span class={styles.meta}>
-            {ready
-              ? `共 ${years.length * cityCodes.length * indicatorIds.length} 个市级结果 · ${STEP_GROUPS.length} 个步骤`
-              : '从左侧点选或拖入'}
+            {ready ? outputText(years.length * (area ? 1 : cityCodes.length) * indicatorIds.length, area) : '从左侧点选或拖入'}
           </span>
           {status}
           <ElButton

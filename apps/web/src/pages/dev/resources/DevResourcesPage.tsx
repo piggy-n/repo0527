@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { appConfig } from '@/shared/config/app-config';
 import { http } from '@/shared/http/client';
 import { LANDUSE_GROUPS } from '@/features/resource-map/landuse';
+import { backendTransformRequest } from '@/shared/map/backend-request';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import styles from './DevResourcesPage.module.scss';
 
@@ -281,7 +282,7 @@ export const DevResourcesPage = defineComponent({
         if (resourceType === 'Glyphs') {
           glyphRanges.value = [...glyphRanges.value, decodeURIComponent(url.slice(url.indexOf('/glyphs/') + 8))];
         }
-        return { url };
+        return backendTransformRequest(url);
       }
     };
 

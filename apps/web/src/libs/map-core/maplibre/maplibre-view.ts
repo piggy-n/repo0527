@@ -31,7 +31,7 @@ export interface MapLibreViewOptions<G extends string> {
   readonly container: HTMLElement;
   /** 创建后是否显示，默认 true；为 false 时加载完成后进入 paused */
   readonly active?: boolean;
-  /** minZoom、maxZoom、transformRequest 等，由 app 提供 */
+  /** minZoom、maxZoom、transformRequest 等，由页面提供 */
   readonly mapOptions?: Omit<MapLibreMapOptions, 'container' | 'style' | 'center' | 'zoom' | 'bearing' | 'pitch'>;
   /** 测试时换成假地图 */
   readonly createMap?: (options: MapLibreMapOptions) => MapLike;
@@ -240,7 +240,16 @@ export class MapLibreView<const G extends string> implements MapView {
       stack.defer(() => subscription.unsubscribe());
     }
     for (const type of Object.keys(POINTER_TYPES) as MapMouseEventType[]) {
-      const subscription = map.on(type, event => this.#guard(() => this.#onInput(toPointerEvent(type, event))));
+      const subscription = map.on(type, event =>
+        this.#guard(() => {
+          const input = toPointerEvent(type, event);
+          // 当前工具接管这次按下（如拖动编辑的节点）时不平移地图（ADR 0122）
+          if (input.type === 'down' && input.button === 0 && this.#capturesPress(input.point)) {
+            event.preventDefault();
+          }
+          this.#onInput(input);
+        })
+      );
       stack.defer(() => subscription.unsubscribe());
     }
     // 按键只在地图获得焦点时收到，不影响页面上其他输入框
@@ -605,6 +614,10 @@ export class MapLibreView<const G extends string> implements MapView {
     if (this.#state === 'ready' && (event.type === 'key' || this.#pan?.swallows(event.type) !== true)) {
       this.#session.tool.dispatch(event, this.#toolView);
     }
+  }
+
+  #capturesPress(point: ScreenPoint): boolean {
+    return this.#state === 'ready' && this.#session.tool.capturesPress(point, this.#toolView);
   }
 
   // 没有就绪时不应用，进入 ready（首次激活、恢复显示）时再按当前工具应用；切换工具时结束临时拖动

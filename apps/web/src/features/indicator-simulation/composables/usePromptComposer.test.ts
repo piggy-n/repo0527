@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope } from 'vue';
 import { required } from '@/shared/testing/required';
 import { emptyComposition, sampleComposition } from '../compose/composition';
-import { describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from '../compose/prompt';
+import { AREA_EXAMPLE, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from '../compose/prompt';
+import { areaScope, citiesScope } from '../model/scope';
+import { NANJING_RINGS, testArea } from '../model/test-area';
+import { loadTestAtlas } from '../model/test-atlas';
 import { type PromptComposerOptions, usePromptComposer } from './usePromptComposer';
 import { useComposition } from './useComposition';
 
@@ -16,6 +19,15 @@ const FIRST_STEPS = 6;
 const FIRST_DONE = THINK + STEP * (FIRST_STEPS - 1) + LAUNCH;
 
 const [first = '', second = ''] = PROMPT_EXAMPLES;
+
+// 解析得到的编排；解析不了时抛错
+function parsedOf(text: string) {
+  const result = parsePrompt(text);
+  if (!result.ok) {
+    throw new Error(`应能解析：${text}`);
+  }
+  return result.composition;
+}
 
 function setup(options: PromptComposerOptions = {}) {
   const composed = vi.fn<() => void>();
@@ -62,12 +74,12 @@ describe('usePromptComposer 发送', () => {
     expect(composer.text.value).toBe(first);
     expect(composer.send()).toBe('sent');
     expect(composer.sending.value).toBe(true);
-    expect(composition.state.value).toEqual(emptyComposition());
+    expect(composition.state.value.conditions).toEqual(emptyComposition().conditions);
     expect(composer.building.value).toEqual({ revealed: new Set(), latest: null, message: 'AI 正在理解指令…', launching: false });
 
     await vi.advanceTimersByTimeAsync(THINK);
     expect(composer.building.value).toMatchObject({ latest: 'years:2025', message: '识别年份：2025 年', launching: false });
-    expect(composition.state.value.conditions).toEqual({ years: [2025], cityCodes: [], indicatorIds: [] });
+    expect(composition.state.value.conditions).toEqual({ years: [2025], scope: citiesScope([]), indicatorIds: [] });
 
     await vi.advanceTimersByTimeAsync(STEP * (FIRST_STEPS - 1));
     expect(composer.building.value).toMatchObject({ latest: 'output', launching: true });
@@ -77,7 +89,7 @@ describe('usePromptComposer 发送', () => {
     await vi.advanceTimersByTimeAsync(LAUNCH);
     expect(composed).toHaveBeenCalledTimes(1);
     expect(composer.building.value).toBeNull();
-    expect(composition.state.value).toEqual(parsePrompt(first));
+    expect(composition.state.value).toEqual(parsedOf(first));
   });
 
   it('编排中手动改编排：停下，不再开始计算；再次发送作废上一次', async () => {
@@ -98,7 +110,7 @@ describe('usePromptComposer 发送', () => {
     composer.send();
     await vi.advanceTimersByTimeAsync(FIRST_DONE);
     expect(composed).toHaveBeenCalledTimes(1);
-    expect(composition.state.value).toEqual(parsePrompt(second));
+    expect(composition.state.value).toEqual(parsedOf(second));
   });
 
   it('作用域销毁时停下正在进行的编排', async () => {
@@ -156,7 +168,34 @@ describe('usePromptComposer 输入框的文字', () => {
     composer.fillExample();
     expect(composer.send()).toBe('sent');
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(composition.state.value).toEqual(parsePrompt(target));
+    expect(composition.state.value).toEqual(parsedOf(target));
     expect(composition.state.value.conditions.indicatorIds[0]).toBe('A-31');
+  });
+});
+
+describe('usePromptComposer 的自定义范围（ADR 0121）', () => {
+  it('正在用自定义范围时占位说"自定义范围"，换一批也是；说了自定义范围、还没有范围时不配置', async () => {
+    using ctx = setup({ random: () => 0.5 });
+    const { composer, composition } = ctx;
+    composer.setText(AREA_EXAMPLE);
+    expect(composer.send()).toBe('no-area');
+
+    vi.useRealTimers();
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS);
+    vi.useFakeTimers();
+    composition.setArea(area);
+    expect(composer.example.value).toBe(AREA_EXAMPLE);
+    composer.refresh();
+    expect(composer.example.value).toContain('计算自定义范围 ');
+    composition.setScopeKind('cities');
+    expect(composer.example.value).toBe(first);
+
+    composition.setScopeKind('area');
+    composer.fillExample();
+    expect(composer.send()).toBe('sent');
+    // 配置开始时的空白记着自定义范围
+    expect(composition.state.value.conditions.scope).toEqual(areaScope(null));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(composition.state.value.conditions.scope).toEqual(areaScope(area));
   });
 });

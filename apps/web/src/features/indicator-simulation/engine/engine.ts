@@ -2,6 +2,7 @@ import { abortReason, LatestController } from '@yzt/utils';
 import { createNanoEvents, type Unsubscribe } from 'nanoevents';
 import type { Calculator, YearResult } from '../model/calculator';
 import { simulationIndicator } from '../model/indicators';
+import { scopeCityCodes } from '../model/scope';
 import {
   changedParams,
   defaultParams,
@@ -137,8 +138,8 @@ export function idleEngineState(): EngineState {
   return { ...initialState(false), revision: 0 };
 }
 
-function assertConditions({ years, cityCodes, indicatorIds }: SimulationConditions): void {
-  if (years.length === 0 || cityCodes.length === 0 || indicatorIds.length === 0) {
+function assertConditions({ years, scope, indicatorIds }: SimulationConditions): void {
+  if (years.length === 0 || scopeCityCodes(scope).length === 0 || indicatorIds.length === 0) {
     throw new Error('计算条件不完整：年度、监测范围、监测指标都至少要有一项');
   }
   for (const id of indicatorIds) {

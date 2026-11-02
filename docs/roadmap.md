@@ -105,7 +105,7 @@
 | 5E | 区划裁剪的求交库（2026-10-16 实测后决定，ADR 0061 第 4 节）：不按需加载。实际是 42 KB（gzip 15 KB），去掉它 Fast 4G 只快 2 ms、Slow 4G 快 138 ms，登录页又会预加载地图页分块 | ADR 0051、modules/shared-map.md"区划裁剪" |
 | 5E | 地图资源的加载策略（2026-10-16 实测后决定，ADR 0061）：`defaultMapFramework()` 现在固定回答二维；进入地图时两个分块同时加载、都到了再预热 Worker 池；登录页空闲时预加载，只在省流量模式时跳过；运行时注入 map-vue 留到三维阶段。字体不推迟（ADR 0062） | [modules/map-core.md](modules/map-core.md)"地图资源的加载策略"、[modules/perf.md](modules/perf.md) |
 | 7 | 评估 utils、map-core、map-cesium 一起拆到 `packages/`（三维阶段没有做，移到阶段七）；自己写的 Worker 的类型检查配置在 3D.4b 已做（`tsconfig.worker.json`，ADR 0085） | ADR 0018、0021 |
-| 第一个 Worker 真实使用方出现时 | Worker 池的调度、缓存淘汰、内存预算用真实瓦片验证；真实 Worker 在 Vite 下的打包与加载在 `/dev` 开发页验证；瓦片目前不校验 token、与用户无关（2026-10-09 实测，见 [migration.md](migration.md)），此前仍向后端确认以后是否会按权限过滤 | ADR 0025 |
+| 第一个 Worker 真实使用方出现时 | Worker 池的调度、缓存淘汰、内存预算用真实瓦片验证；真实 Worker 在 Vite 下的打包与加载在 `/dev` 开发页验证；瓦片是否校验 token 因后端而异（2026-10-09 实测的旧后端不校验，2026-11-02 换的后端校验，见 [migration.md](migration.md)），此前仍向后端确认是否会按权限过滤 | ADR 0025 |
 | 三维 | 3D.1 已做：Cesium 运行时作为第二个框架加载函数接入；实现镜像前写出三维样式的支持清单与降级规则（ADR 0079 第 7 节）；拾取按模型、椭球报告命中表面（本阶段没有地形）；相机同步只用公开 API。3D.5a 已定（ADR 0091）：不做悬停时加载，二维稳定后空闲时预加载运行时；不预取 Cesium 的静态资源；三维期间二维保留。三维接入 MVT 时再做：MVT 解码的 `@mapbox/vector-tile`、`pbf` 对齐 maplibre-gl 依赖的版本；三维点选改用瓦片数据服务，不再先对齐二维；瓦片数据服务与 MapLibre 之间避免重复下载的做法 | ADR 0019、0020、0021、0024、0091 |
 | 三维 | 3D.1 已做：工具模型的 `dragPan` 在三维映射成 Cesium 的旋转、平移开关；还原精确视角的条件由三维视图订阅相机事件、看 `cause` 判断。还没做（三维阶段没有做，移到阶段七）：`MapView` 的约定写成可复用的契约测试，二三维视图都跑 | ADR 0039、本文 |
 | 6 | AI 对话：AI 后端登录不再在前端写死账号密码。2026-10-28 最小迁移时只迁了登录接口和 token 的存放，前端不写账号，账号来源等后端方案；联调核对接口、恢复临时静默的提示、MVT 结果、重构时统一进 `shared/http` 等待办见 [modules/ai-chat.md](modules/ai-chat.md)"待办" | ADR 0015、[modules/ai-chat.md](modules/ai-chat.md) |
@@ -845,7 +845,22 @@ UI 工作流程补充（2026-10-20）：用户确认将设计与验证流程固�
 
 - 自助取数的几何类型只有三张数据表有，分类节点生成的是"XX图层"（[migration.md](migration.md)"自助取数的几何类型"）
 - 现状底图的树拖动在真实页面（需登录）上的地图叠放待用户验收；组件样例 `/dev/map-ui` 上验证过树和"已选择图层"的同步
-- `AppLayout.test.tsx` 的页面缓存用例和 `app-config.test.ts` 的默认值用例在 `.env` 打开 `VITE_PAGE_STATE_RESET`（`e754bb0`）后失败，与本轮无关，待决定测试是否固定这个变量
+- `AppLayout.test.tsx` 的页面缓存用例和 `app-config.test.ts` 的默认值用例在 `.env` 打开 `VITE_PAGE_STATE_RESET`（`e754bb0`）后失败，与本轮无关，待决定测试是否固定这个变量；生产冒烟的"切页期间改变尺寸，返回后复用画布"同样因页面不再缓存而失败（2026-11-01 自定义范围分支上确认）
+
+## 指标 AI 计算：自定义监测范围（2026-10-31）
+
+用户 2026-10-31 要求"智能体"（城市国土空间监测指标AI计算）的监测范围增加自定义范围，原型 v6 确认后按推荐方案开发。分支 `feat/simulation-custom-scope`，从本地 main `9ab5248` 开始。
+
+| 步骤 | 内容 | 状态 |
+|---|---|---|
+| 1 | `shared/map/area`：Shapefile、GeoJSON 的读取与校验，整理范围、节点多时简化，与区县求交判定全部 / 部分 / 边界相交（Worker，[ADR 0121](adr/0121-indicator-simulation-custom-scope.md)） | 已提交，待验收 |
+| 2 | 工具接管按在节点上的拖动，绘制的范围可以逐点编辑（[ADR 0122](adr/0122-tool-captures-press.md)） | 已提交，待验收 |
+| 3 | 计算条件的范围改成行政区划或自定义范围，自定义范围参与计算（部分覆盖按面积折算） | 已提交，待验收 |
+| 4 | 范围弹窗（地图 + AI 范围分析）、条件库 / 编排图 / 对话栏三处入口、结果排行的"部分"标记（[模块文档](modules/indicator-simulation.md)"S16"） | 已提交，待验收 |
+
+待办：
+
+- 用户实际的 Shapefile 和有天地图底图时的观感待验收；触屏上的绘制和拖动节点没有验证
 
 ## 业务模块
 

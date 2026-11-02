@@ -2,6 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { defaultParams } from '../model/params';
+import { areaScope, citiesScope, scopeCityCodes } from '../model/scope';
+import { NANJING_RINGS, testArea } from '../model/test-area';
+import { loadTestAtlas } from '../model/test-atlas';
 import {
   affectedIndicators,
   type Composition,
@@ -9,15 +12,18 @@ import {
   missingConditions,
   sampleComposition,
   searchIndicators,
+  rememberedScopes,
   withAllCities,
+  withArea,
   withCity,
   withIndicator,
   withIndicatorMoved,
+  withScopeKind,
   withYear
 } from './composition';
 
 const composition = (indicatorIds: readonly string[]): Composition => ({
-  conditions: { years: [2026], cityCodes: ['320100'], indicatorIds },
+  conditions: { years: [2026], scope: citiesScope(['320100']), indicatorIds },
   params: defaultParams()
 });
 
@@ -27,7 +33,7 @@ describe('条件', () => {
     expect(emptyComposition().params).toBe(defaultParams());
     expect(sampleComposition().conditions).toEqual({
       years: [2026],
-      cityCodes: JIANGSU_CITIES.map(city => city.code),
+      scope: citiesScope(JIANGSU_CITIES.map(city => city.code)),
       indicatorIds: ['B-65', 'A-31', 'A-39']
     });
   });
@@ -44,9 +50,9 @@ describe('条件', () => {
   it('市按区划目录的顺序；全省全选或清空', () => {
     let next = withCity(emptyComposition(), '321300', true);
     next = withCity(next, '320100', true);
-    expect(next.conditions.cityCodes).toEqual(['320100', '321300']);
-    expect(withAllCities(next, true).conditions.cityCodes).toHaveLength(13);
-    expect(withAllCities(next, false).conditions.cityCodes).toEqual([]);
+    expect(next.conditions.scope).toEqual(citiesScope(['320100', '321300']));
+    expect(scopeCityCodes(withAllCities(next, true).conditions.scope)).toHaveLength(13);
+    expect(withAllCities(next, false).conditions.scope).toEqual(citiesScope([]));
     expect(() => withCity(next, '110000', true)).toThrow('没有城市');
   });
 
@@ -74,5 +80,37 @@ describe('参数与指标的关系', () => {
     expect(searchIndicators('小学覆盖').map(item => item.id)).toEqual(['A-32']);
     expect(searchIndicators('a-31').map(item => item.id)).toEqual(['A-31']);
     expect(searchIndicators('  ')).toHaveLength(22);
+  });
+});
+
+describe('两种监测范围（ADR 0121）', () => {
+  it('切换范围的种类时恢复这种范围上一次的选择，另一种记着', async () => {
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS);
+    const cities = withCity(composition(['A-31']), '320500', true);
+    const custom = withArea(cities, area);
+    expect(custom.conditions.scope).toEqual(areaScope(area));
+    expect(rememberedScopes(custom)).toEqual({ cityCodes: ['320100', '320500'], area });
+
+    const back = withScopeKind(custom, 'cities');
+    expect(back.conditions.scope).toEqual(citiesScope(['320100', '320500']));
+    expect(withScopeKind(back, 'area').conditions.scope).toEqual(areaScope(area));
+    expect(withScopeKind(back, 'cities')).toBe(back);
+  });
+
+  it('还没有自定义范围时算缺监测范围；移除范围后仍是自定义范围、等着重新上传或绘制', async () => {
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS);
+    const empty = withScopeKind(composition(['A-31']), 'area');
+    expect(empty.conditions.scope).toEqual(areaScope(null));
+    expect(missingConditions(empty.conditions)).toEqual(['region']);
+    const removed = withArea(withArea(empty, area), null);
+    expect(removed.conditions.scope).toEqual(areaScope(null));
+    expect(rememberedScopes(removed).area).toBeNull();
+  });
+
+  it('自定义范围下不能按市增减', async () => {
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS);
+    const custom = withArea(composition(['A-31']), area);
+    expect(() => withCity(custom, '320500', true)).toThrow('自定义范围不能按市增减');
+    expect(() => withAllCities(custom, true)).toThrow('自定义范围不能按市增减');
   });
 });

@@ -12,9 +12,14 @@ import {
   relatedNodes,
   yearNode
 } from './board';
+import { citiesScope } from '../model/scope';
 
 // 公园绿地覆盖率用得上覆盖认定，人均公园绿地用得上常住人口变化
-const conditions: SimulationConditions = { years: [2026, 2025], cityCodes: ['320100'], indicatorIds: ['B-65', 'A-39'] };
+const conditions: SimulationConditions = {
+  years: [2026, 2025],
+  scope: citiesScope(['320100']),
+  indicatorIds: ['B-65', 'A-39']
+};
 
 // 每个节点一个固定的框：列按顺序向右，列内向下
 function boxesOf(keys: readonly string[][]): Map<string, Box> {
