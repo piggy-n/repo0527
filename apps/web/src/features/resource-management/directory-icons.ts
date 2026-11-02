@@ -1,12 +1,21 @@
 import type { IconName } from '@/shared/icons/SvgIcon';
 import type { ResourceDirectory } from './api';
 
+// 后端拆分、改名目录后可能留着别的目录的旧图标文件名（如土地资源），这几个目录的图标按名称指定，优先于文件名
+const namedIcons: Record<string, IconName> = {
+  城市国土空间监测: 'resource-urban-monitoring',
+  国土变更: 'resource-land-change',
+  三区三线: 'resource-three-zones',
+  // 2026-11 实测后端的顶层分组叫"三区三线1"，待后端确认
+  三区三线1: 'resource-three-zones'
+};
+
 // 旧目录图标的文件名不受目录重命名影响，优先按它映射；缺失时再按名称选择
 const directoryIcons: Record<string, IconName> = {
+  ...namedIcons,
   基础库: 'resource-base',
   公共库: 'resource-public',
   主题库: 'resource-topic',
-  三区三线: 'map-boundaries',
   土地资源: 'resource-land',
   '地质/矿产资源': 'resource-geology',
   地质_矿产资源: 'resource-geology',
@@ -32,9 +41,9 @@ const categoryIcons: Record<string, IconName> = { sdzy: 'resource-wetland', gjgy
 
 /** 目录的图标：不加载后端给的图标地址，已知的旧图标对应到本地图标，其他目录用默认图标 */
 export function resourceDirectoryIcon(node: ResourceDirectory): IconName {
-  const categoryIcon = node.code && categoryIcons[node.code];
-  if (categoryIcon) {
-    return categoryIcon;
+  const assignedIcon = (node.code && categoryIcons[node.code]) || namedIcons[node.name];
+  if (assignedIcon) {
+    return assignedIcon;
   }
   for (const filename of [node.icon, node.iconSelected]) {
     const key = filename?.replace(/(?:1)?@1x\.png$/, '');
