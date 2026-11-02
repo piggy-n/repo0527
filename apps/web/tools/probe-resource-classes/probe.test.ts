@@ -16,9 +16,11 @@ import { decodeTile, readTileBody } from './mvt.ts';
 import {
   equalsCondition,
   flattenTree,
+  notInCondition,
   ProbeAuthError,
   type ProbeIO,
   type ProbeOptions,
+  runEnumerate,
   runProbe,
   samplePages,
   tileAt,
@@ -601,6 +603,89 @@ async function probed() {
   const result = await runProbe(OPTIONS, fakeBackend().io, exactFieldsOf);
   return { result, summaries: result.resources.map(resource => summarizeResource(resource, result.probes)) };
 }
+
+describe('枚举字段的全部取值', () => {
+  // 少见的取值在第一页之后，空字符串和 NULL 混在里面
+  const ROWS = [
+    ...repeat({ LIN_ZHONG: '233' }, 300),
+    ...repeat({ LIN_ZHONG: '111' }, 5),
+    { LIN_ZHONG: '' },
+    { LIN_ZHONG: "12'7" },
+    { LIN_ZHONG: null }
+  ];
+
+  function enumerating() {
+    return fakeBackend(url => {
+      if (url.pathname !== '/api/query/attr/page') {
+        return undefined;
+      }
+      const condition = url.searchParams.get('conditions') ?? '';
+      const list = condition.includes('NOT IN') ? condition.slice(condition.indexOf('(')) : '';
+      const excluded = new Set([...list.matchAll(/'((?:[^']|'')*)'/g)].map(match => (match[1] ?? '').replaceAll("''", "'")));
+      const rows = ROWS.filter(({ LIN_ZHONG }) => LIN_ZHONG !== null && !excluded.has(LIN_ZHONG));
+      return Response.json({ total: rows.length, list: rows.slice(0, 200) });
+    });
+  }
+  const target = [{ code: 'szy_kt', field: 'lin_zhong' }];
+
+  it('条件：没有已知取值时查非空，单引号双写', () => {
+    expect(notInCondition('f', [])).toBe('"f" IS NOT NULL');
+    expect(notInCondition('f', ['a', "b'c"])).toBe(`"f" NOT IN ('a','b''c')`);
+  });
+
+  it('一轮轮排除已知取值，直到没有记录：第一页之后的少见取值也能找到，NULL 不算', async () => {
+    const [result] = await runEnumerate(target, OPTIONS, enumerating().io);
+
+    expect(result).toMatchObject({ tileset: 'szy_kt_2024', remaining: 0, error: null });
+    expect(result?.values).toStrictEqual(['', '111', "12'7", '233']);
+  });
+
+  it('从抽样见过的取值开始，写明哪些是这次才发现的', async () => {
+    const backend = enumerating();
+    const cached = await runProbe({ ...OPTIONS, codes: new Set(['csxhjctb_xxa']) }, fakeBackend().io, exactFieldsOf);
+    const probe = cached.probes[0];
+    if (!probe) {
+      throw new Error('没有探查结果');
+    }
+    const stats = sampleOf(repeat({ lin_zhong: '233' }, 3));
+    const saved = { ...probe, tileset: 'szy_kt_2024', attributes: { ...probe.attributes, stats }, tiles: [] };
+    const io: ProbeIO = { ...backend.io, load: tileset => (tileset === 'szy_kt_2024' ? saved : null) };
+
+    const [result] = await runEnumerate(target, OPTIONS, io);
+
+    expect(new URL(backend.requests[1] ?? '', 'http://x').searchParams.get('conditions')).toBe(`"lin_zhong" NOT IN ('233')`);
+    expect(result?.discovered).toStrictEqual(['', '111', "12'7"]);
+  });
+
+  it('接口报错、取不到新取值时写明没列全，不当作列全了', async () => {
+    const failing = fakeBackend(url =>
+      url.pathname === '/api/query/attr/page' ? Response.json({ success: false, code: 500, msg: '系统异常' }) : undefined
+    );
+    const [failed] = await runEnumerate(target, OPTIONS, failing.io);
+    expect(failed).toMatchObject({ remaining: null, error: '系统异常' });
+
+    const stuck = fakeBackend(url =>
+      url.pathname === '/api/query/attr/page' ? Response.json({ total: 5, list: [] }) : undefined
+    );
+    const [unfinished] = await runEnumerate(target, OPTIONS, stuck.io);
+    expect(unfinished).toMatchObject({ remaining: 5, error: '还有 5 行，但取不到新的取值' });
+
+    // 记录里这个字段是 null 或者没有时不算取值，不能写成文字的 "null"
+    const empty = fakeBackend(url =>
+      url.pathname === '/api/query/attr/page'
+        ? Response.json({ total: 2, list: [{ lin_zhong: null }, { other: '1' }] })
+        : undefined
+    );
+    const [blank] = await runEnumerate(target, OPTIONS, empty.io);
+    expect(blank).toMatchObject({ values: [], remaining: 2 });
+  });
+
+  it('token 失效时停下来；资源树里没有的资源直接报错', async () => {
+    const expired = fakeBackend(url => (url.pathname.startsWith('/api/') ? new Response('', { status: 401 }) : undefined));
+    await expect(runEnumerate(target, OPTIONS, expired.io)).rejects.toBeInstanceOf(ProbeAuthError);
+    await expect(runEnumerate([{ code: 'nope', field: 'f' }], OPTIONS, enumerating().io)).rejects.toThrow('nope');
+  });
+});
 
 describe('报告', () => {
   it('编码在低级别的瓦片里缺失、名称都有时建议用名称，不用重新切片', async () => {

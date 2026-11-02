@@ -46,8 +46,8 @@ const COMMON_FIELDS: ReadonlySet<string> = new Set([
 ]);
 const CLASS_NAME_PATTERN = /(lx|lb|fl|dj|jb|xz|type|class|level|kind)$/;
 
-// 接口和瓦片的值转成文字；嵌套的值（查询接口偶尔有）转成 JSON
-function textOf(value: unknown): string {
+/** 接口和瓦片的值转成文字；嵌套的值（查询接口偶尔有）转成 JSON */
+export function textOf(value: unknown): string {
   if (value === null || value === undefined) {
     return 'null';
   }

@@ -1,5 +1,13 @@
 // oxlint-disable no-await-in-loop -- 后端共用：同一个瓦片集的请求一个接一个地发，并发只由 eachLimit 控制
-import { addRecord, emptySample, findLabelFields, type LabelField, mergeSamples, type SampleStats } from './analyze.ts';
+import {
+  addRecord,
+  emptySample,
+  findLabelFields,
+  type LabelField,
+  mergeSamples,
+  type SampleStats,
+  textOf
+} from './analyze.ts';
 import { readTileBody } from './mvt.ts';
 
 // 请求后端做只读探查：资源树、属性分页、瓦片，接口的行为见 docs/migration.md；后端共用，默认只开 2 个并发
@@ -178,9 +186,16 @@ export function samplePages(total: number, pageSize: number, pages: number): num
   return [...new Set(picked)];
 }
 
+const quoted = (value: string) => `'${value.replaceAll("'", "''")}'`;
+
 /** 条件的写法：字段名加双引号、小写，值里的单引号要双写（docs/migration.md 的接口实测） */
 export function equalsCondition(field: string, value: string): string {
-  return `"${field}" = '${value.replaceAll("'", "''")}'`;
+  return `"${field}" = ${quoted(value)}`;
+}
+
+/** 排除已知取值的条件；NOT IN 不会选中 NULL，所以空值不算没枚举完 */
+export function notInCondition(field: string, values: readonly string[]): string {
+  return values.length === 0 ? `"${field}" IS NOT NULL` : `"${field}" NOT IN (${values.map(quoted).join(',')})`;
 }
 
 async function request(url: string, options: ProbeOptions, io: ProbeIO): Promise<Response> {
@@ -404,6 +419,87 @@ async function exactCounts(
     }
   }
   return result;
+}
+
+export interface EnumerateTarget {
+  readonly code: string;
+  readonly field: string;
+}
+
+export interface EnumeratedField {
+  readonly tileset: string;
+  readonly field: string;
+  /** 全部取值，升序；空字符串、-9999 这类占位也算取值，由人判断 */
+  readonly values: readonly string[];
+  /** 抽样里没见过、这次才发现的取值 */
+  readonly discovered: readonly string[];
+  /** 排除这些取值后还剩多少行：0 才说明列全了；第一次请求就失败时为 null */
+  readonly remaining: number | null;
+  readonly error: string | null;
+}
+
+const MAX_ENUMERATE_ROUNDS = 30;
+
+// 枚举一个字段的全部取值：排除已知的值再查，还有记录就从这一页取新值，直到没有。
+// 比逐个取值 COUNT 省请求，也不用深分页，超大的表也能查全
+async function enumerateField(tileset: string, field: string, seed: readonly string[], options: ProbeOptions, io: ProbeIO) {
+  const known = new Set(seed);
+  let remaining: number | null = null;
+  let error: string | null = null;
+  for (let round = 0; round < MAX_ENUMERATE_ROUNDS && remaining !== 0; round += 1) {
+    try {
+      const page = await fetchPage(tileset, notInCondition(field, [...known]), 1, PAGE_SIZE, options, io);
+      remaining = page.total;
+      const before = known.size;
+      for (const record of page.list) {
+        const value = lowerKeys(record)[field];
+        if (value !== null && value !== undefined) {
+          known.add(textOf(value));
+        }
+      }
+      if (remaining > 0 && known.size === before) {
+        error = `还有 ${remaining} 行，但取不到新的取值`;
+        break;
+      }
+    } catch (cause) {
+      if (cause instanceof ProbeAuthError) {
+        throw cause;
+      }
+      error = messageOf(cause);
+      break;
+    }
+  }
+  const values = [...known].toSorted();
+  const discovered = values.filter(value => !seed.includes(value));
+  return { tileset, field, values, discovered, remaining, error } satisfies EnumeratedField;
+}
+
+/** 枚举字段的全部取值：抽样只能发现常见的，要确认图例列全了时用；已有探查缓存的从抽样见过的取值开始 */
+export async function runEnumerate(
+  targets: readonly EnumerateTarget[],
+  options: ProbeOptions,
+  io: ProbeIO
+): Promise<EnumeratedField[]> {
+  const resources = await fetchTree(options, io);
+  const jobs = targets.flatMap(({ code, field }) => {
+    const resource = resources.find(item => item.code === code);
+    if (!resource) {
+      throw new Error(`资源树里没有 ${code}`);
+    }
+    const years = options.years === 'latest' ? resource.years.slice(-1) : resource.years;
+    return years.map(year => ({ tileset: `${code}_${year}`, field }));
+  });
+  const results: EnumeratedField[] = [];
+  await eachLimit(jobs, options.concurrency, async ({ tileset, field }) => {
+    const cached = io.load(tileset);
+    const samples = cached ? [cached.attributes.stats, ...cached.tiles.map(tile => tile.stats)] : [];
+    const seed = Object.keys(mergeSamples(samples).fields[field]?.values ?? {});
+    const result = await enumerateField(tileset, field, seed, options, io);
+    results.push(result);
+    const state = result.remaining === 0 ? '列全了' : `没列全：${result.error ?? `还剩 ${result.remaining} 行`}`;
+    io.log(`${tileset}.${field} 共 ${result.values.length} 个取值，${state}；新发现：${result.discovered.join('、') || '无'}`);
+  });
+  return results;
 }
 
 async function eachLimit<T>(items: readonly T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {

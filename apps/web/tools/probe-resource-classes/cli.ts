@@ -2,7 +2,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { ProbeAuthError, type ProbeIO, type ProbeOptions, runProbe, type TilesetProbe } from './probe.ts';
+import {
+  type EnumerateTarget,
+  ProbeAuthError,
+  type ProbeIO,
+  type ProbeOptions,
+  runEnumerate,
+  runProbe,
+  type TilesetProbe
+} from './probe.ts';
 import {
   candidateRows,
   exactFieldsOf,
@@ -28,6 +36,8 @@ token 在浏览器登录系统后取：开发者工具的控制台运行 JSON.pa
   --concurrency=<2>     同时探查几个瓦片集，默认 2；后端共用，不要开太大
   --exact               查候选字段的准确分布（每个取值一次 COUNT），只在最新一年、不超过 --exact-limit 的表上查
   --exact-limit=<500000>
+  --enumerate=<a:f,b:g> 枚举资源 a 的字段 f、资源 b 的字段 g 的全部取值，确认图例列全了；只做这一件事，
+                        结果写到 distinct-values.json；可以和 --years 一起用
   --out=<目录>          输出目录，默认 probe-resource-classes.local（不入库）
   --refresh             不用缓存，重新请求
   --help`;
@@ -41,6 +51,7 @@ const { values } = parseArgs({
     concurrency: { type: 'string', default: '2' },
     exact: { type: 'boolean', default: false },
     'exact-limit': { type: 'string', default: '500000' },
+    enumerate: { type: 'string' },
     out: { type: 'string', default: 'probe-resource-classes.local' },
     refresh: { type: 'boolean', default: false },
     help: { type: 'boolean', default: false }
@@ -104,7 +115,23 @@ function compactSummary({ resource, status, currentField, primary, assessed, lat
   };
 }
 
+function enumerateTargets(text: string): EnumerateTarget[] {
+  return text.split(',').map(item => {
+    const [code, field] = item.trim().split(':');
+    if (!code || !field) {
+      throw new Error(`--enumerate 的写法是 资源:字段，收到 ${item}`);
+    }
+    return { code, field: field.toLowerCase() };
+  });
+}
+
 try {
+  if (values.enumerate) {
+    const results = await runEnumerate(enumerateTargets(values.enumerate), options, io);
+    writeFileSync(join(out, 'distinct-values.json'), JSON.stringify(results, null, 2));
+    console.log(`[probe] 完成，结果在 ${join(out, 'distinct-values.json')}`);
+    process.exit(0);
+  }
   const result = await runProbe(options, io, exactFieldsOf);
   const summaries = result.resources.map(resource => summarizeResource(resource, result.probes));
   writeFileSync(join(out, 'candidates.csv'), toCsv(candidateRows(summaries)));
