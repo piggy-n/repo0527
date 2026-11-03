@@ -31,7 +31,6 @@ describe('简报数据', () => {
   it('2026、2025 就是简报的数，包括简报里的 0', () => {
     expect([valueOf('320100', 2026, 'B-65'), valueOf('320100', 2025, 'B-65')]).toEqual([49.6, 49.27]);
     expect([valueOf('320500', 2026, 'B-21'), valueOf('320500', 2025, 'B-21')]).toEqual([61.42, 73.64]);
-    expect([valueOf('321300', 2026, 'A-15'), valueOf('321300', 2025, 'A-15')]).toEqual([51.95, 90.92]);
     expect([valueOf('320100', 2026, 'A-16'), valueOf('320100', 2025, 'A-16')]).toEqual([406, 448]);
     expect([valueOf('320600', 2026, 'B-12'), valueOf('320600', 2025, 'B-12')]).toEqual([0, 89]);
   });
@@ -39,7 +38,7 @@ describe('简报数据', () => {
 
 describe('简报年份之外', () => {
   it('2024 及以前从简报的 2025 出发，按原 mock 和 2025 的比例折算', () => {
-    for (const id of ['B-65', 'A-39', 'A-15', 'B-19']) {
+    for (const id of ['B-65', 'A-39', 'B-19']) {
       const { precision } = requireIndicator(id);
       for (const year of [2017, 2021, 2024]) {
         const ratio = mockOf('320100', year, id) / mockOf('320100', 2025, id);
@@ -72,6 +71,27 @@ describe('简报年份之外', () => {
     expect(outOfRange).toEqual([]);
     expect(mockOf('320900', 2027, 'B-47')).toBeGreaterThan(mockOf('320900', 2026, 'B-47'));
     expect(valueOf('320900', 2027, 'B-47')).toBe(100);
+  });
+});
+
+describe('简报两年口径不同的 A-15', () => {
+  it('2026 是简报的数，2025 及以前都从 2026 折算，不用 2025 的旧口径', () => {
+    expect(valueOf('321300', 2026, 'A-15')).toBe(51.95);
+    expect(report['2025']['A-15']['321300']).toBe(90.92);
+    for (const city of JIANGSU_CITIES) {
+      for (const year of [2025, 2024, 2021, 2017]) {
+        const ratio = mockOf(city.code, year, 'A-15') / mockOf(city.code, 2026, 'A-15');
+
+        expect(valueOf(city.code, year, 'A-15')).toBe(Number((valueOf(city.code, 2026, 'A-15') * ratio).toFixed(2)));
+      }
+    }
+  });
+
+  it('13 个市 2025 到 2026 都没有口径造成的断崖', () => {
+    const ratios = JIANGSU_CITIES.map(city => valueOf(city.code, 2025, 'A-15') / valueOf(city.code, 2026, 'A-15'));
+
+    expect(Math.min(...ratios)).toBeGreaterThan(0.9);
+    expect(Math.max(...ratios)).toBeLessThan(1.1);
   });
 });
 
@@ -123,5 +143,14 @@ describe('indicatorValueSource', () => {
     expect(indicatorValueSource('B-65', 2027)).toBe('scaled');
     expect(PARTS.map(id => indicatorValueSource(id, 2026))).toEqual(['scaled', 'scaled']);
     expect(['A08-2', 'A09-2'].map(id => indicatorValueSource(id, 2026))).toEqual(['mock', 'mock']);
+  });
+
+  it('A-15 只有 2026 是 report，2025 也是折算的', () => {
+    expect([2026, 2025, 2024, 2027].map(year => indicatorValueSource('A-15', year))).toEqual([
+      'report',
+      'scaled',
+      'scaled',
+      'scaled'
+    ]);
   });
 });

@@ -54,7 +54,7 @@ describe('computeYear', () => {
     const nanjing = (year: number, id: string) =>
       indicatorResult(calculator.computeYear(conditions, defaultParams(), year).indicators, id).cities[0]?.value;
     expect([nanjing(2026, 'B-65'), nanjing(2026, 'A-39'), nanjing(2026, 'A-15')]).toEqual([49.6, 4.64, 49.78]);
-    expect([nanjing(2025, 'B-65'), nanjing(2025, 'A-39'), nanjing(2025, 'A-15')]).toEqual([49.27, 4.63, 92.2]);
+    expect([nanjing(2025, 'B-65'), nanjing(2025, 'A-39'), nanjing(2025, 'A-15')]).toEqual([49.27, 4.63, 49.63]);
   });
 
   it('汇总权重：住宅用地覆盖率按住宅用地，城区面积覆盖率按区县面积，人均值按人口', async () => {

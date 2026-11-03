@@ -56,6 +56,7 @@ describe('驾驶舱固定数据', () => {
     const sourceOf = (year: number, code: string) =>
       data.records.find(record => record.year === year && record.indicatorCode === code)?.dataSource;
     expect([sourceOf(2026, 'B-65'), sourceOf(2024, 'B-65'), sourceOf(2026, 'A08-2')]).toEqual(['report', 'scaled', 'mock']);
+    expect([sourceOf(2026, 'A-15'), sourceOf(2025, 'A-15')]).toEqual(['report', 'scaled']);
     expect(data.value(2026, '320100', 'B-65')).toBe(49.6);
     expect(data.value(2000, '320100', 'A-15')).toBeNull();
     expect(data.value(2026, 'unknown', 'A-15')).toBeNull();
