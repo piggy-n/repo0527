@@ -1,7 +1,8 @@
 import { Back } from '@element-plus/icons-vue';
 import { MxPanel } from '@yzt/ui';
-import { ElButton } from 'element-plus';
+import { ElButton, ElTooltip } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
+import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import type { SimulationResult } from '../composables/useSimulationResult';
 import { scopeText } from '../flow/plan';
 import { formatValue } from '../format';
@@ -11,8 +12,17 @@ import type { Rank, RankRow, ResultItem } from '../result/result-view';
 import { formatRatio } from '../scope/area-tree';
 import styles from './ResultList.module.scss';
 
-const partialTitle = (row: RankRow) =>
-  row.share === null ? `${row.name}只有部分区域在范围内` : `${row.name}有 ${formatRatio(row.share)} 的面积在范围内`;
+// "部分"的提示：写出占比或各覆盖几个区县，不重复标签已经说的话
+function partialTitle({ name, share, cover }: RankRow): string {
+  if (share !== null) {
+    return `${name}有 ${formatRatio(share)} 的面积在范围内`;
+  }
+  if (!cover) {
+    return '';
+  }
+  const parts = [cover.full > 0 && `全部覆盖 ${cover.full} 个`, cover.partial > 0 && `部分覆盖 ${cover.partial} 个`];
+  return `${name} ${cover.total} 个区县里，${parts.filter(Boolean).join('、')}`;
+}
 
 /**
  * 结果展示的左侧（第五版原型）：每项指标一条，写结果；选中的一条展开各市（一个市时是各区县），
@@ -38,9 +48,9 @@ export const ResultList = defineComponent({
         covering && (
           <span key="cover">
             {row.partial && (
-              <span class={styles.partial} title={partialTitle(row)}>
-                部分
-              </span>
+              <ElTooltip {...MAP_TOOLTIP_PROPS} content={partialTitle(row)} placement="top">
+                <span class={styles.partial}>部分</span>
+              </ElTooltip>
             )}
           </span>
         ),
@@ -119,7 +129,7 @@ export const ResultList = defineComponent({
         <MxPanel class={styles.panel} title="计算结果" headerTone="muted" flush>
           {{
             actions: () => (
-              <span class={styles.scope}>
+              <span class={styles.scope} title={scopeText(props.conditions.scope)}>
                 {year} 年 · {scopeText(props.conditions.scope)}
               </span>
             ),

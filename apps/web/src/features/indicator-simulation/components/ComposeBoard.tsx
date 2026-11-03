@@ -41,17 +41,19 @@ import type { BuildState } from '../composables/usePromptComposer';
 import type { SimulationModel } from '../composables/useSimulationModel';
 import { reducedMotion } from '../motion';
 import { STEP_GROUPS } from '../engine/steps';
-import { reachText, simulationIndicator } from '../model/indicators';
+import { simulationIndicator } from '../model/indicators';
 import { type ScopeArea, scopeCityCodes } from '../model/scope';
 import { areaBrief } from '../scope/area-tree';
 import { AreaThumbnail } from './AreaThumbnail';
 import {
   describeParam,
+  indicatorName,
   isScenario,
   isStandard,
   PARAM_LABELS,
   type ParamKey,
   paramsOf,
+  reachTextOf,
   type SimulationParams
 } from '../model/params';
 import styles from './ComposeBoard.module.scss';
@@ -477,6 +479,7 @@ export const ComposeBoard = defineComponent({
           {indicatorIds.filter(id => visible(indicatorNode(id))).map(id => {
             const key = indicatorNode(id);
             const indicator = simulationIndicator(id);
+            const name = indicatorName(id, shown.value);
             return (
               <div
                 key={key}
@@ -489,22 +492,22 @@ export const ComposeBoard = defineComponent({
                   type="button"
                   class={styles.handle}
                   data-indicator-handle={id}
-                  aria-label={`调整顺序：${indicator.name}`}
+                  aria-label={`调整顺序：${name}`}
                   title="拖动或按上下方向键调整顺序"
                   onKeydown={event => void onHandleKeydown(event, id)}
                 >
                   <SvgIcon name="drag-handle" />
                 </button>
                 <div class={styles.text}>
-                  <b class={styles.indicatorName} title={`${indicator.name}（${reachText(indicator)}）`}>
-                    <span>{indicator.name}</span>（{indicator.unit}）
+                  <b class={styles.indicatorName} title={`${name}（${reachTextOf(id, shown.value)}）`}>
+                    <span>{name}</span>（{indicator.unit}）
                   </b>
                   <span class={styles.indicatorMeta}>
                     <span class={styles.meta}>{indicator.id}</span>
                     {isScenario(shown.value, id) && <span class={styles.scenarioTag}>自定义口径</span>}
                   </span>
                 </div>
-                {removeButton(indicator.name, () => props.composition.removeIndicator(id))}
+                {removeButton(name, () => props.composition.removeIndicator(id))}
               </div>
             );
           })}
@@ -568,7 +571,7 @@ export const ComposeBoard = defineComponent({
                   >
                     <span class={styles.text}>
                       <span class={styles.meta}>{PARAM_LABELS[key]}</span>
-                      <b>{describeParam(key, shown.value)}</b>
+                      <b title={describeParam(key, shown.value)}>{describeParam(key, shown.value)}</b>
                     </span>
                   <SvgIcon class={styles.edit} name="simulation-tune" />
                 </button>

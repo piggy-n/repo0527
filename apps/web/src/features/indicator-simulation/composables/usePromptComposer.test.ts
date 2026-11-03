@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope } from 'vue';
 import { required } from '@/shared/testing/required';
 import { emptyComposition, sampleComposition } from '../compose/composition';
-import { AREA_EXAMPLE, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from '../compose/prompt';
+import { areaPrompt, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from '../compose/prompt';
 import { areaScope, citiesScope } from '../model/scope';
 import { NANJING_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
@@ -14,8 +14,8 @@ import { useComposition } from './useComposition';
 const THINK = 900;
 const STEP = 450;
 const LAUNCH = 1000;
-// 第一条示例：年份、范围、指标、计算规程、覆盖认定、AI计算
-const FIRST_STEPS = 6;
+// 第一条示例：年份、范围、指标、步行时长、计算规程、覆盖认定、AI计算
+const FIRST_STEPS = 7;
 const FIRST_DONE = THINK + STEP * (FIRST_STEPS - 1) + LAUNCH;
 
 const [first = '', second = ''] = PROMPT_EXAMPLES;
@@ -174,19 +174,62 @@ describe('usePromptComposer 输入框的文字', () => {
 });
 
 describe('usePromptComposer 的自定义范围（ADR 0121）', () => {
-  it('正在用自定义范围时占位说"自定义范围"，换一批也是；说了自定义范围、还没有范围时不配置', async () => {
+  it('换了范围回到新范围的默认示例；填进来没改过的话跟着换，改过的不动', async () => {
     using ctx = setup({ random: () => 0.5 });
     const { composer, composition } = ctx;
-    composer.setText(AREA_EXAMPLE);
+    vi.useRealTimers();
+    const atlas = await loadTestAtlas();
+    const one = await testArea(atlas, NANJING_RINGS, '甲片区');
+    const two = await testArea(atlas, NANJING_RINGS, '乙片区');
+    vi.useFakeTimers();
+
+    composition.setArea(one);
+    composer.refresh();
+    composition.setArea(two);
+    expect(composer.example.value).toBe(areaPrompt(two));
+
+    // 回到换过示例的范围：还是换上的那句，填进来的话跟着换
+    composer.fillExample();
+    composition.setArea(one);
+    expect(composer.example.value).toContain('甲片区');
+    expect(composer.text.value).toBe(composer.example.value);
+
+    composer.setText('自己写的');
+    composition.setArea(two);
+    expect(composer.text.value).toBe('自己写的');
+  });
+
+  it('发送填进来的示例后，配置的中途和完成后输入框里还是这句话', async () => {
+    using ctx = setup();
+    const { composer, composition } = ctx;
+    vi.useRealTimers();
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS, '江宁片区');
+    vi.useFakeTimers();
+    composition.setArea(area);
+    composer.fillExample();
+    expect(composer.send()).toBe('sent');
+    expect(composer.text.value).toBe(areaPrompt(area));
+    await vi.advanceTimersByTimeAsync(THINK);
+    expect(composer.text.value).toBe(areaPrompt(area));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(composer.text.value).toBe(areaPrompt(area));
+  });
+
+  it('正在用自定义范围时占位写出它的名称，换一批也是；说了自定义范围、还没有范围时不配置', async () => {
+    using ctx = setup({ random: () => 0.5 });
+    const { composer, composition } = ctx;
+    composer.setText('计算自定义范围 2025 年社区卫生服务设施覆盖率');
     expect(composer.send()).toBe('no-area');
 
     vi.useRealTimers();
-    const area = await testArea(await loadTestAtlas(), NANJING_RINGS);
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS, '江宁片区');
     vi.useFakeTimers();
     composition.setArea(area);
-    expect(composer.example.value).toBe(AREA_EXAMPLE);
+    expect(composer.example.value).toBe(areaPrompt(area));
+    expect(composer.example.value).toContain('自定义范围「江宁片区」');
     composer.refresh();
-    expect(composer.example.value).toContain('计算自定义范围 ');
+    expect(composer.example.value).not.toBe(areaPrompt(area));
+    expect(composer.example.value).toContain('计算自定义范围「江宁片区」 ');
     composition.setScopeKind('cities');
     expect(composer.example.value).toBe(first);
 

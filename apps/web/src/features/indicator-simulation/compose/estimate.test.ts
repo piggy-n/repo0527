@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { indicatorResult } from '../model/analysis';
 import { createCalculator } from '../model/calculator';
-import { defaultParams, type SimulationParams } from '../model/params';
+import { simulationIndicator } from '../model/indicators';
+import { defaultParams, type SimulationParams, withWalkMinutes } from '../model/params';
 import { areaScope, citiesScope } from '../model/scope';
 import { NANJING_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
@@ -33,11 +34,17 @@ describe('estimate', () => {
     expect(result?.year).toBe(2025);
     expect(rule).toStrictEqual({
       indicator: rule?.indicator,
+      name: simulationIndicator('A-31').name,
       value: valueOf(params, 'A-31'),
       standard: valueOf(defaultParams(), 'A-31')
     });
     expect(rule?.value).toBeLessThan(rule?.standard ?? 0);
     expect(park?.standard).toBeNull();
+
+    // 改了步行时长：名称写改后的时长，值低于标准口径的（ADR 0125）
+    const [walked] = estimate(calculator, nanjing, withWalkMinutes(defaultParams(), 'A-31', 10))?.rows ?? [];
+    expect(walked?.name).toBe('社区卫生服务设施步行10分钟覆盖率');
+    expect(walked?.value).toBeLessThan(walked?.standard ?? 0);
   });
 
   it('几个市：全省时范围写全省', async () => {

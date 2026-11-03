@@ -156,7 +156,7 @@ export function mapData(
   const scoped = scopeDistricts(atlas, scope);
   const result = indicatorResult(calculator.computeYear(conditions, params, year).indicators, primary);
   const rows = new Map(result.rows.map(row => [row.code, row]));
-  const breaks = valueBreaks(calculator, conditions, primary);
+  const breaks = valueBreaks(calculator, conditions, primary, params);
   const fill = options.fill ?? ((row: DistrictResult) => valueColor(row.value, breaks));
   const density = (district: District) => calculator.districtPopulation(district) / district.area;
   const densities = new Map(scoped.map(({ district }) => [district.code, density(district)]));

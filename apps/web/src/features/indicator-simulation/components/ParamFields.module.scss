@@ -52,6 +52,38 @@
   white-space: nowrap;
 }
 
+// 步行时长：每项指标一行，名称和距离在上，可选的几档在下
+.walkList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.walkRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.walkHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.walkName {
+  min-width: 0;
+  color: var(--color-text-title);
+  font-size: var(--font-size-xs);
+
+  small {
+    margin-left: var(--space-xs);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+  }
+}
+
 .note {
   margin: 4px 0 0;
   color: var(--color-text-secondary);

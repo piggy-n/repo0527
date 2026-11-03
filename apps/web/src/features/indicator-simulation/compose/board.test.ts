@@ -1,6 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { defaultParams, paramsOf, type SimulationConditions, type SimulationParams } from '../model/params';
+import {
+  defaultParams,
+  paramsOf,
+  type SimulationConditions,
+  type SimulationParams,
+  withWalkMinutes
+} from '../model/params';
 import {
   boardLinks,
   type Box,
@@ -44,21 +50,23 @@ const kinds = (params: SimulationParams, boxes = allBoxes) =>
 
 describe('boardLinks', () => {
   it('年份 → 范围 → 每项指标 → 总线 → 各参数 → AI计算；参数只有所选指标用得上的几项', () => {
-    expect(paramsOf(conditions.indicatorIds)).toEqual(['popChange', 'recognition']);
-    // 年份 2 + 范围到指标 2 + 指标到总线 2 + 参数到 AI计算 2
-    expect(kinds(defaultParams())).toEqual({ flow: 8, bus: 1, tick: 2 });
+    expect(paramsOf(conditions.indicatorIds)).toEqual(['popChange', 'walk', 'recognition']);
+    // 年份 2 + 范围到指标 2 + 指标到总线 2 + 参数到 AI计算 3
+    expect(kinds(defaultParams())).toEqual({ flow: 9, bus: 1, tick: 3 });
     const [first] = boardLinks(allBoxes, conditions, defaultParams());
     expect(first).toMatchObject({ from: 'years:2026', to: REGION_NODE, d: 'M120,20 C160,20 160,20 200,20' });
   });
 
   it('连到偏离标准口径的参数时是情景虚线', () => {
-    expect(kinds({ ...defaultParams(), recognition: 'intersect' })).toEqual({ flow: 8, bus: 1, tick: 1, scenario: 1 });
+    expect(kinds({ ...defaultParams(), recognition: 'intersect' })).toEqual({ flow: 9, bus: 1, tick: 2, scenario: 1 });
+    // 改了一项指标的步行时长：步行时长这个参数也是情景虚线
+    expect(kinds(withWalkMinutes(defaultParams(), 'B-65', 10))).toEqual({ flow: 9, bus: 1, tick: 2, scenario: 1 });
   });
 
   it('还没有位置的节点不连；没有参数节点时只有年份到范围', () => {
     const boxes = new Map(allBoxes);
     boxes.delete(indicatorNode('A-39'));
-    expect(kinds(defaultParams(), boxes)).toEqual({ flow: 6, bus: 1, tick: 2 });
+    expect(kinds(defaultParams(), boxes)).toEqual({ flow: 7, bus: 1, tick: 3 });
     const noParams = new Map([...allBoxes].filter(([key]) => !key.startsWith('params:')));
     expect(kinds(defaultParams(), noParams)).toEqual({ flow: 2 });
   });

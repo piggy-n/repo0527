@@ -7,6 +7,7 @@ import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
 import { JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
+import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
 import { EDIT_VERTEX_LIMIT, type ScopeEditor } from '../composables/useScopeEditor';
@@ -44,7 +45,7 @@ function renderButton(button: ToolButton) {
     </button>
   );
   return button.reason ? (
-    <ElTooltip key={button.key} content={button.reason} placement="bottom">
+    <ElTooltip {...MAP_TOOLTIP_PROPS} key={button.key} content={button.reason} placement="bottom">
       {/* 禁用的按钮收不到鼠标事件，提示挂在外层 */}
       <span class={styles.toolWrap}>{content}</span>
     </ElTooltip>

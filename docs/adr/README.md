@@ -133,6 +133,7 @@
 | [0122](0122-tool-captures-press.md) | 工具接管按下的拖动：逐点编辑范围 | 已接受（修改 0034 第 3 条） |
 | [0123](0123-resource-class-dictionaries.md) | 资源分类：字典加规则，探查后人工确认 | 已接受（修改 0044 第 3 节） |
 | [0124](0124-landuse-rule-only-actual-classes.md) | 林草湿荒的分类：图例和地图只用资源实际有的类别 | 已接受（补充 0123） |
+| [0125](0125-indicator-simulation-walk-minutes.md) | 监测指标的步行时长可调：距离查表、上限按标准时长、结果按服务面积变化 | 已接受（修改 0106） |
 
 ## 模板
 

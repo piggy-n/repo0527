@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils';
 import { ElSlider } from 'element-plus';
 import { describe, expect, it } from 'vitest';
 import { required } from '@/shared/testing/required';
-import { defaultParams, type ParamKey, type SimulationConditions } from '../model/params';
+import { defaultParams, type ParamKey, type SimulationConditions, withWalkMinutes } from '../model/params';
 import { citiesScope } from '../model/scope';
 import { ParamPopover } from './ParamPopover';
 
@@ -14,6 +14,33 @@ const conditions: SimulationConditions = {
 
 const mountPopover = (paramKey: ParamKey) =>
   mount(ParamPopover, { props: { paramKey, conditions, params: defaultParams() } });
+
+describe('ParamPopover 的步行时长（ADR 0125）', () => {
+  const walking = { ...conditions, indicatorIds: ['A-31', 'A08-2', 'A-39'] };
+
+  it('每项步行类指标一行：标准时长、距离和可选的几档；选了之后草稿里是这项指标的时长', async () => {
+    const wrapper = mount(ParamPopover, { props: { paramKey: 'walk', conditions: walking, params: defaultParams() } });
+    const groups = wrapper.findAll('[role="radiogroup"]');
+    expect(groups.map(group => group.attributes('aria-label'))).toEqual([
+      '社区卫生覆盖率的步行时长（分钟）',
+      '公交站覆盖率的步行时长（分钟）'
+    ]);
+    expect(groups[0]?.findAll('input').map(input => input.element.getAttribute('value'))).toEqual(
+      ['5', '10', '15', '20', '25', '30']
+    );
+    expect(groups[1]?.findAll('input').map(input => input.element.getAttribute('value'))).toEqual(['5', '10', '15']);
+    expect(wrapper.text()).toContain('标准 15 分钟');
+    expect(wrapper.text()).toContain('1000 米');
+
+    const ten = required(
+      groups[0]?.findAll('input').find(input => input.element.getAttribute('value') === '10'),
+      '10 分钟的选项'
+    );
+    await ten.setValue(true);
+    expect(wrapper.emitted('preview')).toEqual([[withWalkMinutes(defaultParams(), 'A-31', 10)]]);
+    expect(wrapper.text()).toContain('500 米');
+  });
+});
 
 describe('ParamPopover', () => {
   it('参数没变时不能确定；改动后交给编排图预览、标出自定义口径，确定交出草稿', async () => {

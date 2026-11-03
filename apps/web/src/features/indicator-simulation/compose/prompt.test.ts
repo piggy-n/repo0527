@@ -6,7 +6,7 @@ import { areaScope, citiesScope, scopeCityCodes } from '../model/scope';
 import { NANJING_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
 import { emptyComposition, rememberedScopes, withArea, withScopeKind } from './composition';
-import { AREA_EXAMPLE, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from './prompt';
+import { areaPrompt, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from './prompt';
 
 const ALL = JIANGSU_CITIES.map(city => city.code);
 const parsed = (text: string) => {
@@ -102,6 +102,58 @@ const seeded = (seed: number) => {
   };
 };
 
+const minutesOf = (text: string) => parsed(text).params.walkMinutes;
+
+describe('指令里的步行时长（ADR 0125）', () => {
+  it('紧跟在指标后面的只改这一项；名称里写标准时长的不算改', () => {
+    expect(minutesOf('计算社区卫生服务设施步行10分钟覆盖率')).toEqual({ 'A-31': 10 });
+    expect(minutesOf('计算社区小学步行20分钟覆盖率和社区中学覆盖率')).toEqual({ 'A-32': 20 });
+    expect(minutesOf('计算社区卫生服务设施步行15分钟覆盖率')).toEqual({});
+    expect(minutesOf('计算 2025 年南京市公园绿地、广场步行 5 分钟覆盖率')).toEqual({});
+    expect(minutesOf('计算社区卫生步行 20 分钟覆盖率')).toEqual({ 'A-31': 20 });
+  });
+
+  it('没说指标的改所选的全部步行类指标，单独说了的优先，标准时长不记', () => {
+    expect(minutesOf('按步行 10 分钟，计算社区卫生服务设施覆盖率和公交车站覆盖率')).toEqual({ 'A-31': 10, 'A08-2': 10 });
+    expect(minutesOf('按步行 10 分钟，计算社区卫生服务设施覆盖率和社区小学覆盖率')).toEqual({ 'A-31': 10 });
+    expect(minutesOf('按步行 20 分钟，计算社区卫生服务设施覆盖率和社区小学步行 25 分钟覆盖率')).toEqual({
+      'A-31': 20,
+      'A-32': 25
+    });
+  });
+
+  it('不在档位上的取最近一档，超过上限的取上限；不是步行类的不改', () => {
+    expect(minutesOf('按步行 12 分钟计算社区卫生服务设施覆盖率')).toEqual({ 'A-31': 10 });
+    expect(minutesOf('按步行 40 分钟计算社区卫生服务设施覆盖率')).toEqual({ 'A-31': 30 });
+    expect(minutesOf('按步行 40 分钟计算公交车站覆盖率')).toEqual({ 'A08-2': 15 });
+    expect(minutesOf('按步行 10 分钟计算人均公园绿地面积')).toEqual({});
+    expect(minutesOf('按步行 10 分钟计算消防救援覆盖率')).toEqual({});
+  });
+
+  it('旧规程那句话里的"步行 5 分钟"不是要改时长', () => {
+    const composition = parsed('按卫生服务站步行 5 分钟的旧规程，计算 2025 年南京市社区卫生服务设施覆盖率');
+    expect(composition.params.rule).toBe('old');
+    expect(composition.params.walkMinutes).toEqual({});
+  });
+
+  it('写成一句话带着改后的时长，解析回去相同', () => {
+    const composition = parsed('按步行 10 分钟，计算 2025 年南京市社区卫生服务设施覆盖率');
+    const text = describeComposition(composition);
+    expect(text).toContain('社区卫生服务设施步行10分钟覆盖率');
+    expect(parsed(text)).toMatchObject({ params: composition.params, conditions: composition.conditions });
+  });
+
+  it('随机的指令里有的改了时长，解析得到名称里写的时长', () => {
+    const texts = Array.from({ length: 60 }, (_, index) => randomPrompt(seeded(index + 1)));
+    const walked = texts.filter(text => Object.keys(minutesOf(text)).length > 0);
+    expect(walked.length).toBeGreaterThan(5);
+    for (const text of walked) {
+      const minutes = parsed(text).params.walkMinutes['A-31'];
+      expect(text).toContain(`社区卫生服务设施步行${minutes}分钟覆盖率`);
+    }
+  });
+});
+
 describe('randomPrompt', () => {
   it('一定有社区卫生覆盖率，排在第一；城市、年度、指标、参数的组合各不相同', () => {
     const texts = Array.from({ length: 40 }, (_, index) => randomPrompt(seeded(index + 1)));
@@ -131,7 +183,7 @@ describe('自定义范围的指令（ADR 0121）', () => {
       scope: areaScope(area),
       indicatorIds: ['A-31']
     });
-    expect(parsePrompt(AREA_EXAMPLE, emptyComposition())).toEqual({ ok: false, reason: 'area' });
+    expect(parsePrompt(areaPrompt(area), emptyComposition())).toEqual({ ok: false, reason: 'area' });
   });
 
   it('没说范围时：正在用自定义范围就接着用；说了城市时改为行政区划，范围仍记着', async () => {
@@ -146,7 +198,17 @@ describe('自定义范围的指令（ADR 0121）', () => {
     expect(other.ok && other.composition.conditions.scope).toEqual(citiesScope(ALL));
   });
 
-  it('写成一句话、解析回去得到同样的范围；随机的示例写"自定义范围"', async () => {
+  it('「」里是范围的名称：名称里的年份、城市、指标不算条件', async () => {
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS, '2023南京公园绿地片区');
+    const result = parsePrompt(areaPrompt(area), withArea(emptyComposition(), area));
+    expect(result.ok && result.composition.conditions).toEqual({
+      years: [2025],
+      scope: areaScope(area),
+      indicatorIds: ['A-31', 'A-39']
+    });
+  });
+
+  it('写成一句话、解析回去得到同样的范围；随机的示例写出范围的名称', async () => {
     const area = await testArea(await loadTestAtlas(), NANJING_RINGS, '江宁片区');
     const current = withArea(emptyComposition(), area);
     const result = parsePrompt('计算自定义范围 2025 年社区卫生服务设施覆盖率', current);
@@ -156,8 +218,8 @@ describe('自定义范围的指令（ADR 0121）', () => {
     const text = describeComposition(result.composition);
     expect(text).toBe('计算自定义范围「江宁片区」 2025 年社区卫生服务设施步行15分钟覆盖率');
     expect(parsePrompt(text, current)).toEqual(result);
-    const random = randomPrompt(seeded(3), [], true);
-    expect(random).toContain('计算自定义范围 ');
+    const random = randomPrompt(seeded(3), [], area);
+    expect(random).toContain('计算自定义范围「江宁片区」 ');
     const parsedRandom = parsePrompt(random, current);
     expect(parsedRandom.ok && parsedRandom.composition.conditions.scope).toEqual(areaScope(area));
   });

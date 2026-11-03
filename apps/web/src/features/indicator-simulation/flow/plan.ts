@@ -8,6 +8,7 @@ import { type SimulationIndicator, simulationIndicator, walkMeters } from '../mo
 import {
   defaultParams,
   describeParam,
+  indicatorShort,
   isScenario,
   isStandard,
   paramApplies,
@@ -138,44 +139,37 @@ function serviceAreas(indicator: SimulationIndicator, params: SimulationParams):
     return [];
   }
   const { reach } = indicator;
+  // 改过的步行时长（ADR 0125）；旧规程的站点仍是 5 分钟
+  const custom = params.walkMinutes[indicator.id];
+  const scenario = custom !== undefined;
   const stations = STATIONS[indicator.id];
   if (stations && reach.kind === 'walk') {
+    const minutes = custom ?? reach.minutes;
     const old = indicator.ruleChange && params.rule === 'old';
     const [center, station] = stations;
     return [
-      {
-        facility: center,
-        reach: `步行 ${reach.minutes} 分钟`,
-        meters: walkMeters(reach.minutes),
-        scenario: false,
-        union: false
-      },
+      { facility: center, reach: `步行 ${minutes} 分钟`, meters: walkMeters(minutes), scenario, union: false },
       {
         facility: station,
-        reach: old ? '步行 5 分钟（旧规程）' : `步行 ${reach.minutes} 分钟`,
-        meters: old ? walkMeters(5) : walkMeters(reach.minutes),
-        scenario: old,
+        reach: old ? '步行 5 分钟（旧规程）' : `步行 ${minutes} 分钟`,
+        meters: old ? walkMeters(5) : walkMeters(minutes),
+        scenario: old || scenario,
         union: false
       }
     ];
   }
   switch (reach.kind) {
     case 'walk': {
-      const distance = walkMeters(reach.minutes);
+      const minutes = custom ?? reach.minutes;
+      const distance = walkMeters(minutes);
       if (UNION_IDS.has(indicator.id)) {
         return [
-          { facility: indicator.facility, reach: '缓冲区', meters: distance, scenario: false, union: false },
-          { facility: '路网服务区', reach: `步行 ${reach.minutes} 分钟`, meters: distance, scenario: false, union: true }
+          { facility: indicator.facility, reach: '缓冲区', meters: distance, scenario, union: false },
+          { facility: '路网服务区', reach: `步行 ${minutes} 分钟`, meters: distance, scenario, union: true }
         ];
       }
       return [
-        {
-          facility: indicator.facility,
-          reach: `步行 ${reach.minutes} 分钟`,
-          meters: distance,
-          scenario: false,
-          union: false
-        }
+        { facility: indicator.facility, reach: `步行 ${minutes} 分钟`, meters: distance, scenario, union: false }
       ];
     }
     case 'drive':
@@ -274,7 +268,7 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     perCapita.length > 0 ? `人均 ${perCapita.length} 项` : ''
   ].filter(Boolean);
   say('parse', rich`按计算方法分类：${kinds.join('、')}；计算参数按指标类型分别适用。`, 'parse');
-  const changed = (['rule', 'recognition', 'popChange'] as const).filter(
+  const changed = (['walk', 'rule', 'recognition', 'popChange'] as const).filter(
     key => !isStandard(key, params) && indicatorIds.some(id => paramApplies(key, id))
   );
   if (changed.length > 0) {
@@ -283,6 +277,16 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     say('parse', rich`${values}，当前按${em('自定义口径')}计算；${scenarioNames}同时按标准口径计算作为对照。`, 'parse');
   } else {
     say('parse', rich`参数都按${em('标准口径')}计算。`, 'parse');
+  }
+  // 改过步行时长的指标：写明时长和距离都变了，名称和结果跟着变
+  for (const [id, minutes] of Object.entries(params.walkMinutes)) {
+    const indicator = simulationIndicator(id);
+    const from = indicator.model === 'coverage' && indicator.reach.kind === 'walk' ? indicator.reach.minutes : minutes;
+    say(
+      'parse',
+      rich`${indicator.short}的步行时长由 ${from} 分钟（${walkMeters(from)} 米）改为 ${em(`${minutes} 分钟（${walkMeters(minutes)} 米）`)}，指标按${em(indicatorShort(id, params))}计算。`,
+      'parse'
+    );
   }
   say('parse', rich`计算流程：人口、设施、用地数据并行准备，核查后按指标分 ${em(`${indicatorIds.length} 个分支`)}计算，最后汇总结论。`, 'parse');
 
@@ -343,7 +347,8 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
   // 按指标分支：服务范围（人均类是用地汇总）→ 指标计算（模拟情景另有标准口径对照）
   const blocks: { id: string; saKeys: string[]; calcKeys: string[] }[] = [];
   for (const indicator of indicators) {
-    const { id, short } = indicator;
+    const { id } = indicator;
+    const short = indicatorShort(id, params);
     const data = indicatorResult(current, id);
     const scenario = scenarioIds.includes(id);
     const saKeys: string[] = [];
@@ -412,7 +417,7 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
         step: 'compute',
         label: '对照 · 标准口径',
         title: formatValue(base.value, indicator),
-        detail: `${short} · 标准口径`,
+        detail: `${indicator.short} · 标准口径`,
         kind: 'standard'
       });
       const delta = data.value - base.value;
@@ -447,14 +452,14 @@ export function flowPlan({ calculator, conditions, params }: FlowInput): FlowPla
     .slice(0, 4)
     .map(id => {
       const indicator = simulationIndicator(id);
-      return `${indicator.short} ${formatValue(indicatorResult(current, id).value, indicator)}`;
+      return `${indicatorShort(id, params)} ${formatValue(indicatorResult(current, id).value, indicator)}`;
     })
     .join('，');
   say('report', rich`汇总 ${em(`${indicatorIds.length} 项指标`)}：${values}${indicatorIds.length > 4 ? ' 等' : ''}。`, 'report');
   if (scenarioIds.length > 0) {
     const effects = scenarioIds.map(id => {
       const indicator = simulationIndicator(id);
-      return `${indicator.short}变化 ${formatDelta(indicatorResult(current, id).value - standardOf(id).value, indicator)}`;
+      return `${indicatorShort(id, params)}变化 ${formatDelta(indicatorResult(current, id).value - standardOf(id).value, indicator)}`;
     });
     say(
       'report',

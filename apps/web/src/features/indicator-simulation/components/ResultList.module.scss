@@ -4,10 +4,15 @@
   min-height: 0;
 }
 
+// 自定义范围的名称可能很长：放不下时省略，不挤掉标题
 .scope {
+  display: block;
+  overflow: hidden;
+  max-width: 180px;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .list {

@@ -7,6 +7,7 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { CoverRelation } from '@/shared/map/area/area-coverage';
 import { AREA_LIMITS } from '@/shared/map/area/area-geometry';
 import { shortRegionName } from '@/shared/map/region/region-catalog';
+import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import type { AnalysisStep, ScopeAnalysis, ScopeEditor } from '../composables/useScopeEditor';
 import {
   type CityCover,
@@ -24,9 +25,9 @@ import styles from './AreaAnalysisPanel.module.scss';
 
 const RELATION_TEXT: Readonly<Record<CoverRelation, string>> = { full: '全部覆盖', partial: '部分覆盖' };
 
-// 一行的标签：有部分覆盖时是橙色；行里只写面积，占比在悬浮提示里
+// 一行的标签：有部分覆盖时是橙色；行里只写面积，占比在悬浮提示里。整个行政区都在范围内时提示没有新内容，不显示
 const coverTag = (text: string, partial: boolean, measure: CoverMeasure) => (
-  <ElTooltip content={coverDetail(measure)} placement="top">
+  <ElTooltip {...MAP_TOOLTIP_PROPS} content={coverDetail(measure)} placement="top" disabled={measure.ratio >= 1}>
     <ElTag class={['tag-mini', styles.tag]} type={partial ? 'warning' : 'primary'} disableTransitions>
       {text}
     </ElTag>
