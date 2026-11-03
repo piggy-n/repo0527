@@ -83,6 +83,21 @@ describe('统计报表', () => {
     expect(file.fileName).toBe('基本统计报表_省级.zip');
   });
 
+  it('响应头的普通 filename 是百分号编码时，保存的是解码后的中文名称', async () => {
+    server.use(
+      mock.get('/backend/statistics/download', () => new HttpResponse('内容', {
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition':
+            'attachment; filename=%E5%9F%BA%E6%9C%AC%E5%8F%98%E5%8C%96%E7%BB%9F%E8%AE%A1%E6%8A%A5%E8%A1%A8_%E5%B8%82%E7%BA%A7.zip'
+        }
+      }))
+    );
+    const file = await fetchReportFile({ id: '1', name: '后备名称' }, new AbortController().signal, () => undefined);
+
+    expect(file.fileName).toBe('基本变化统计报表_市级.zip');
+  });
+
   it('下载失败时是返回的错误信封（实测"任务不存在"是 HTTP 200 加 code 40000）', async () => {
     server.use(
       mock.get('/backend/statistics/download', () => HttpResponse.json({ success: false, code: 40000, msg: '任务不存在' }))

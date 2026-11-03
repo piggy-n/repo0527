@@ -7,6 +7,15 @@ function cleanFileName(value: string): string {
   return /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name) ? `_${name}` : name;
 }
 
+/** 解码百分号编码，不完整时返回 null */
+function decodePercent(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
 /** 优先使用 UTF-8 filename*，其次 filename，最后使用业务提供的名称 */
 export function downloadFileName(disposition: string | null, fallbackName: string): string {
   let extended = '';
@@ -17,15 +26,14 @@ export function downloadFileName(disposition: string | null, fallbackName: strin
     const value = raw.trim().replace(/^"|"$/g, '').replace(/\\(["\\])/g, '$1');
     if (key.toLowerCase() === 'filename*') {
       const match = /^utf-8'[^']*'(.*)$/i.exec(value);
-      if (match) {
-        try {
-          extended = cleanFileName(decodeURIComponent(match[1]));
-        } catch {
-          // 不完整的百分号编码回退到普通名称，不猜测服务器编码
-        }
+      // 不完整的百分号编码回退到普通名称，不猜测服务器编码
+      const decoded = match && decodePercent(match[1]);
+      if (decoded) {
+        extended = cleanFileName(decoded);
       }
     } else {
-      regular = cleanFileName(value);
+      // 后端可能把编码过的名称放在普通 filename 里；解不开说明名称里本来就有 %，保留原样
+      regular = cleanFileName(decodePercent(value) ?? value);
     }
   }
   return extended || regular || cleanFileName(fallbackName) || '文件';
