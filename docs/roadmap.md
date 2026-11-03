@@ -969,7 +969,7 @@ UI 工作流程补充（2026-10-20）：用户确认将设计与验证流程固�
 | 消息中心 | `message-center` | 全部 | `views/message-center` |
 | 资源管理 | `resource-management` | 管理员 | `views/resource-management-new` |
 | 系统管理 | `system-management` | 管理员 | `views/system-management` |
-| 数据下载（资源申请；2026-11-02 迁移，真实接口待联调，ADR 0127） | `resource-application`、`resource-application/statistical-report` | 普通用户 | `views/resource-application` |
+| 数据下载（资源申请；2026-11-02 迁移，当天验收通过合入 main，真实接口待联调，ADR 0127） | `resource-application`、`resource-application/statistical-report` | 普通用户 | `views/resource-application` |
 
 "空间监测三件套"指数据查询、基本统计、指标这三个页面组件。旧目录按旧项目的路由表对应（2026-09-30 核对），开始迁移某个模块时再读代码确认实际用到的文件，并在 [migration.md](migration.md) 记下基线。
 
