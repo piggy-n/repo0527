@@ -96,7 +96,7 @@ const MapUiSamples = defineComponent({
                 <div class={styles.panelColumn}>
                   <MapPanelGroup
                     group={panels}
-                    labels={{ legend: '图例', boundaries: '行政区' }}
+                    labels={{ legend: '图例', boundaries: '行政区边界' }}
                     collapsed={collapsed.value}
                     collapsible
                     onUpdate:collapsed={value => (collapsed.value = value)}

@@ -145,6 +145,7 @@ export const IndicatorSimulationPage = defineComponent({
           result={result}
           simulationMap={simulationMap}
           basemap={basemap}
+          boundaries={boundaries}
           goToDefaultView={goToDefaultView}
           view={runView.value}
           onUpdate:view={view => (runView.value = view)}
@@ -169,7 +170,7 @@ export const IndicatorSimulationPage = defineComponent({
           scope={composing.value ? { composition, editor: scopeEditor } : null}
         />
         {/* 只在条件配置时挂上：弹窗里的地图画布和结果的画布不能同时存在 */}
-        {composing.value && <ScopeAreaDialog editor={scopeEditor} />}
+        {composing.value && <ScopeAreaDialog editor={scopeEditor} boundaries={boundaries} />}
       </div>
     );
   }

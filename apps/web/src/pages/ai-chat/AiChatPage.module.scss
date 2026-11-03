@@ -26,11 +26,12 @@
   flex: 1;
 }
 
-// 地图区域，提示和控制栏以它为定位参照
+// 地图区域，提示和控制栏以它为定位参照；按它的高度决定右下角的排法
 .map {
   position: relative;
   flex: 1;
   min-height: 0;
+  container-type: size;
 }
 
 // 右下角：地图控制栏，下面是底图卡片（同查询统计的地图页，ADR 0111）
@@ -42,4 +43,21 @@
   flex-direction: column;
   align-items: flex-end;
   gap: var(--space-md);
+
+  > * {
+    flex: none;
+  }
+}
+
+// 底图卡的入口按所在的盒子占满宽度（width: 100%），包一层按卡片本身的宽度排
+.basemap {
+  display: flex;
+}
+
+// 结果展开后地图变矮，一列放不下控制栏（223）和底图卡片（56）：底图卡片移到控制栏左边、顶部对齐（同数据查询的一行排法，ADR 0128）
+@container (height < 340px) {
+  .corner {
+    flex-direction: row-reverse;
+    align-items: flex-start;
+  }
 }

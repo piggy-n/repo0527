@@ -1,5 +1,5 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { ElMessageBox, type MessageBoxData } from 'element-plus';
 import { createPinia } from 'pinia';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -92,6 +92,23 @@ async function startCalculation(wrapper: VueWrapper) {
   await flushPromises();
 }
 
+const ENTRY = '[aria-label="地图视角"] button[aria-label="行政区边界"]';
+// 行政区边界的浮层挂在 body 下
+const boundariesPopover = () => {
+  const element = document.querySelector('[data-map-options="boundaries"]');
+  return element instanceof HTMLElement ? new DOMWrapper(element) : null;
+};
+const popoverShown = () => boundariesPopover()?.isVisible() === true;
+const levelChecked = (label: string) =>
+  boundariesPopover()?.get<HTMLInputElement>(`label[aria-label="${label}"] input`).element.checked;
+const pressed = (wrapper: VueWrapper) => wrapper.get(ENTRY).attributes('aria-pressed');
+
+const tabNamed = (wrapper: VueWrapper, name: string) =>
+  required(
+    wrapper.findAll('[role="tab"]').find(item => item.text() === name),
+    `${name}页签`
+  );
+
 describe('SpaceMonitoringIndicatorsPage', () => {
   it('宽屏时指标面板和进度一起显示', async () => {
     const wrapper = await mountPage();
@@ -136,5 +153,54 @@ describe('SpaceMonitoringIndicatorsPage', () => {
     expect(wrapper.find('[data-indicator-result]').exists()).toBe(false);
     await tab('指标展示').trigger('click');
     expect(wrapper.find('[data-indicator-result]').exists()).toBe(false);
+  });
+
+  describe('行政区边界（ADR 0128）', () => {
+    it('入口在控制栏，默认省、市、县界都显示；两个页签都能用，切页签时浮层还开着', async () => {
+      const wrapper = await mountPage();
+      expect(popoverShown()).toBe(false);
+
+      await wrapper.get(ENTRY).trigger('click');
+      expect(pressed(wrapper)).toBe('true');
+      await vi.waitFor(() => expect(popoverShown()).toBe(true));
+      expect(levelChecked('省界')).toBe(true);
+      expect(levelChecked('市界')).toBe(true);
+      expect(levelChecked('县界')).toBe(true);
+
+      await tabNamed(wrapper, '指标展示').trigger('click');
+      expect(popoverShown()).toBe(true);
+      expect(pressed(wrapper)).toBe('true');
+    });
+
+    it('成果面板里没有重复的入口，也没有单独的工具栏', async () => {
+      const wrapper = await mountPage();
+      await tabNamed(wrapper, '指标展示').trigger('click');
+      await check(wrapper, '社区小学步行10分钟覆盖率（%）');
+      await flushPromises();
+
+      const result = wrapper.get('[data-indicator-result]');
+      expect(result.text()).not.toContain('行政区');
+      expect(result.find('label[aria-label="省界"]').exists()).toBe(false);
+      expect(wrapper.findAll('[role="toolbar"]')).toHaveLength(1);
+    });
+
+    it('窄屏时点入口让出左边；展开指标面板时浮层隐藏，打开的状态保留', async () => {
+      stubNarrow();
+      const wrapper = await mountPage();
+      await wrapper.get('button[aria-label="收起监测指标"]').trigger('click');
+      await wrapper.get('button[aria-label="展开监测指标"]').trigger('click');
+
+      await wrapper.get(ENTRY).trigger('click');
+      await vi.waitFor(() => expect(popoverShown()).toBe(true));
+      expect(wrapper.find('button[aria-label="展开监测指标"]').exists()).toBe(true);
+
+      await wrapper.get('button[aria-label="展开监测指标"]').trigger('click');
+      expect(pressed(wrapper)).toBe('false');
+      await vi.waitFor(() => expect(popoverShown()).toBe(false));
+
+      await wrapper.get(ENTRY).trigger('click');
+      expect(pressed(wrapper)).toBe('true');
+      await vi.waitFor(() => expect(popoverShown()).toBe(true));
+    });
   });
 });

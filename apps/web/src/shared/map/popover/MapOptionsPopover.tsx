@@ -10,7 +10,7 @@ import styles from './MapOptionsPopover.module.scss';
 // 自己处理入口切换，忽略 Element 的外部点击、失焦和 Esc 关闭请求
 const ignoreVisibility = () => undefined;
 
-/** 底图的左侧箭头浮层；选择状态仍由原有拥有者持有 */
+/** 底图、行政区边界的左侧箭头浮层；选择状态仍由原有拥有者持有 */
 export const MapOptionsPopover = defineComponent({
   name: 'MapOptionsPopover',
   props: {
@@ -19,7 +19,9 @@ export const MapOptionsPopover = defineComponent({
     /** 当前透明度，null 表示没有可调整的底图 */
     opacity: { type: Number as PropType<number | null>, default: null },
     open: { type: Boolean, default: false },
-    visible: { type: Boolean, default: true }
+    visible: { type: Boolean, default: true },
+    /** 默认和入口垂直居中；left-end 底边和入口对齐、向上展开，给下方的底图浮层让位 */
+    placement: { type: String as PropType<'left' | 'left-end'>, default: 'left' }
   },
   emits: {
     'update:open': (open: boolean) => typeof open === 'boolean',
@@ -81,7 +83,7 @@ export const MapOptionsPopover = defineComponent({
       <ElPopover
         trigger="click"
         triggerKeys={[]}
-        placement="left"
+        placement={props.placement}
         fallbackPlacements={['left-start', 'left-end']}
         strategy="fixed"
         width={320}

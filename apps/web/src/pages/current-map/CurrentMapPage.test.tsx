@@ -679,10 +679,10 @@ describe('CurrentMapPage', () => {
     expect(basemapCard().text()).toBe('影像');
   });
 
-  it('行政区并入功能标签；两处透明度分别控制，关闭重开保留数值且默认收起', async () => {
+  it('行政区边界并入功能标签；两处透明度分别控制，关闭重开保留数值且默认收起', async () => {
     const { wrapper } = await readyPage();
     const labels = wrapper.get('[role="toolbar"]').findAll('button').map(item => item.attributes('aria-label'));
-    expect(labels.slice(-3)).toStrictEqual(['行政区', '图例', '清除测量与定位标记']);
+    expect(labels.slice(-3)).toStrictEqual(['行政区边界', '图例', '清除测量与定位标记']);
     await button(wrapper, '底图：矢量底图').trigger('click');
     await vi.waitFor(() => expect(optionsPopover('basemap').exists()).toBe(true));
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
@@ -698,29 +698,29 @@ describe('CurrentMapPage', () => {
     await button(wrapper, '底图：矢量底图').trigger('click');
     await vi.waitFor(() => expect(optionsPopoverVisible('basemap')).toBe(false));
 
-    await button(wrapper, '行政区').trigger('click');
+    await button(wrapper, '行政区边界').trigger('click');
     expect(shownPanels(wrapper)).toStrictEqual(['boundaries']);
     const boundaryPanel = () => wrapper.get('[data-panel="boundaries"]');
     expect(boundaryPanel().find('[aria-label="底图"]').exists()).toBe(false);
-    expect(button(wrapper, '行政区').attributes('aria-pressed')).toBe('true');
+    expect(button(wrapper, '行政区边界').attributes('aria-pressed')).toBe('true');
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
-    await boundaryPanel().get('[aria-label="调整行政区透明度"]').trigger('click');
-    expect(boundaryPanel().get('[aria-label="调整行政区透明度"]').attributes('aria-pressed')).toBe('true');
+    await boundaryPanel().get('[aria-label="调整行政区边界透明度"]').trigger('click');
+    expect(boundaryPanel().get('[aria-label="调整行政区边界透明度"]').attributes('aria-pressed')).toBe('true');
     wrapper.getComponent(ElSlider).vm.$emit('update:modelValue', 70);
     await nextTick();
-    await boundaryPanel().get('[aria-label="调整行政区透明度"]').trigger('click');
+    await boundaryPanel().get('[aria-label="调整行政区边界透明度"]').trigger('click');
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
-    expect(boundaryPanel().get('[aria-label="调整行政区透明度"]').attributes('aria-pressed')).toBe('false');
-    await boundaryPanel().get('[aria-label="调整行政区透明度"]').trigger('click');
+    expect(boundaryPanel().get('[aria-label="调整行政区边界透明度"]').attributes('aria-pressed')).toBe('false');
+    await boundaryPanel().get('[aria-label="调整行政区边界透明度"]').trigger('click');
     expect(wrapper.getComponent(ElSlider).props('modelValue')).toBe(70);
     await button(wrapper, '图例').trigger('click');
-    expect(button(wrapper, '行政区').attributes('aria-pressed')).toBe('false');
-    expect(wrapper.get('[aria-label="已打开的地图工具"] [aria-selected="false"]').text()).toBe('行政区');
-    await button(wrapper, '行政区').trigger('click');
+    expect(button(wrapper, '行政区边界').attributes('aria-pressed')).toBe('false');
+    expect(wrapper.get('[aria-label="已打开的地图工具"] [aria-selected="false"]').text()).toBe('行政区边界');
+    await button(wrapper, '行政区边界').trigger('click');
     expect(shownPanels(wrapper)).toStrictEqual(['boundaries']);
     // 正在显示时再次点入口关闭，其他标签保留
-    await button(wrapper, '行政区').trigger('click');
-    expect(button(wrapper, '行政区').attributes('aria-pressed')).toBe('false');
+    await button(wrapper, '行政区边界').trigger('click');
+    expect(button(wrapper, '行政区边界').attributes('aria-pressed')).toBe('false');
     expect(wrapper.find('[data-panel="boundaries"]').exists()).toBe(false);
     expect(shownPanels(wrapper)).toStrictEqual(['legend']);
 

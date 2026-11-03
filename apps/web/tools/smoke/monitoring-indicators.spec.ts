@@ -118,6 +118,12 @@ test('勾选指标开始计算，进度查到全部完成；展示页签选中�
   const result = page.locator('[data-indicator-result]');
   await expect(result).toContainText('40.04%');
   await expect(result.getByRole('img', { name: '旗子' })).toBeVisible();
-  await expect(result.locator('.el-checkbox')).toHaveText(['省', '市', '县', '社区小学', '路网', '城区范围面']);
+  await expect(result.locator('.el-checkbox')).toHaveText(['社区小学', '路网', '城区范围面']);
   await expect.poll(() => backend.tiles.some(tile => tile.startsWith(`/api/analysis/mvt/${ANALYSIS_ID}/`))).toBe(true);
+
+  // 行政区边界的入口在控制栏，不在成果面板里（ADR 0128）；默认省、市、县界都显示
+  await page.getByRole('toolbar', { name: '地图视角' }).getByRole('button', { name: '行政区边界' }).click();
+  const boundaries = page.locator('[data-map-options="boundaries"]');
+  await expect(boundaries.locator('.el-checkbox')).toHaveText(['省', '市', '县']);
+  await expect(boundaries.locator('.el-checkbox.is-checked')).toHaveCount(3);
 });

@@ -1,9 +1,10 @@
 import { MxTitle } from '@yzt/ui';
 import { MapCanvas, useMapOverlay } from '@yzt/map-vue';
 import { ElButton, ElDialog, ElInput, ElMessage, ElTooltip } from 'element-plus';
-import { computed, defineComponent, type PropType, ref, type VNodeChild } from 'vue';
+import { computed, defineComponent, type PropType, ref, type VNodeChild, watch } from 'vue';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
+import type { Boundaries } from '@/shared/map/boundary/useBoundaries';
 import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
 import { JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
@@ -168,10 +169,19 @@ const MapChrome = defineComponent({
 export const ScopeAreaDialog = defineComponent({
   name: 'ScopeAreaDialog',
   props: {
-    editor: { type: Object as PropType<ScopeEditor>, required: true }
+    editor: { type: Object as PropType<ScopeEditor>, required: true },
+    /** 页面的行政区边界拥有者（ADR 0128）：和结果地图共用，勾选的级别不随弹窗关闭改变 */
+    boundaries: { type: Object as PropType<Boundaries>, required: true }
   },
   setup(props) {
     const dragging = ref(false);
+    // 弹窗关上时地图随内容卸载，下次打开时浮层是关着的
+    const boundariesOpen = ref(false);
+    watch(props.editor.open, open => {
+      if (!open) {
+        boundariesOpen.value = false;
+      }
+    });
     // 逐点编辑没有框选的矩形，只借用浮层显示鼠标旁的提示
     const editHint = { boxDraft: computed(() => null), hint: props.editor.edit.hint };
 
@@ -257,7 +267,13 @@ export const ScopeAreaDialog = defineComponent({
                   <BoxSelectOverlay pick={editor.draw} />
                   <BoxSelectOverlay pick={editHint} />
                   <div class={styles.corner}>
-                    <MapViewControls goToDefaultView={editor.overview} zoomRange={JIANGSU_ZOOM_RANGE} />
+                    <MapViewControls
+                      goToDefaultView={editor.overview}
+                      zoomRange={JIANGSU_ZOOM_RANGE}
+                      boundaries={props.boundaries}
+                      boundariesOpen={boundariesOpen.value}
+                      onUpdate:boundariesOpen={open => (boundariesOpen.value = open)}
+                    />
                   </div>
                   {dragging.value && <div class={styles.drop}>松开鼠标上传范围文件</div>}
                 </div>
