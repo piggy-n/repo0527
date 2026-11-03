@@ -1,5 +1,5 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, type MaybeRefOrGetter, toValue } from 'vue';
+import { computed, type MaybeRefOrGetter, toValue, watch } from 'vue';
 import { useSessionGuard } from '@/shared/auth/session-guard';
 import { fetchMessages, markAllMessagesRead, markMessageRead, type Message } from './api';
 
@@ -30,13 +30,28 @@ export function useMessagesQuery(enabled: MaybeRefOrGetter<boolean>) {
   });
 }
 
-/** 未读的条数：接口没有计数，取未读列表的长度；标签页可见时定时刷新，隐藏时不取（refetchIntervalInBackground 默认关） */
+// 接口没有计数，取未读列表的长度
+const unreadCountOptions = {
+  queryKey: messageKeys.unread(),
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchMessages(true, signal),
+  select: (messages: Message[]) => messages.length
+};
+
+/** 未读的条数：标签页可见时定时刷新，隐藏时不取（refetchIntervalInBackground 默认关） */
 export function useUnreadCountQuery() {
-  return useQuery({
-    queryKey: messageKeys.unread(),
-    queryFn: ({ signal }) => fetchMessages(true, signal),
-    select: (messages: Message[]) => messages.length,
-    refetchInterval: UNREAD_REFRESH_INTERVAL
+  return useQuery({ ...unreadCountOptions, refetchInterval: UNREAD_REFRESH_INTERVAL });
+}
+
+/**
+ * 未读数变多（有新消息）时调用 onNew。只读顶栏那个未读查询的结果，自己不请求也不定时：多一个定时的观察者，轮询就翻倍。
+ * 看的是条数：同一轮里一条变已读、一条新到时看不出来，等下一次变化
+ */
+export function useOnNewMessage(onNew: () => void) {
+  const unread = useQuery({ ...unreadCountOptions, enabled: false });
+  watch(unread.data, (count, previous) => {
+    if (count !== undefined && previous !== undefined && count > previous) {
+      onNew();
+    }
   });
 }
 

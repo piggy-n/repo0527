@@ -969,7 +969,7 @@ UI 工作流程补充（2026-10-20）：用户确认将设计与验证流程固�
 | 消息中心 | `message-center` | 全部 | `views/message-center` |
 | 资源管理 | `resource-management` | 管理员 | `views/resource-management-new` |
 | 系统管理 | `system-management` | 管理员 | `views/system-management` |
-| 数据下载（资源申请） | `resource-application` | 普通用户 | `views/resource-application` |
+| 数据下载（资源申请；2026-11-02 迁移，当天验收通过合入 main，真实接口待联调，ADR 0127） | `resource-application`、`resource-application/statistical-report` | 普通用户 | `views/resource-application` |
 
 "空间监测三件套"指数据查询、基本统计、指标这三个页面组件。旧目录按旧项目的路由表对应（2026-09-30 核对），开始迁移某个模块时再读代码确认实际用到的文件，并在 [migration.md](migration.md) 记下基线。
 
@@ -981,7 +981,7 @@ AI 对话和消息中心暂不迁移（用户 2026-10-23 确认；消息中心�
 
 | 顺序 | 分组 | 旧代码 | 依赖与注意 |
 |---|---|---|---|
-| 1 | 数据下载（资源申请）与系统管理 | `views/resource-application/`、`views/system-management/`（两页共用 817 行的 `ApplicationListSection`，按角色区分申请与审核，另有"统计报表"）；`components/resource-application/` 的申请、审核、详情、下载进度对话框；`services/resource-application/` 的接口与状态 | 最接近文件管理、资源管理的列表页写法，先做。下载复用 `shared/file-transfer`；资源管理列表里旧的"下载申请"入口（`ResourceApplyDialog`）随这一组恢复。旧代码里和消息中心耦合的部分（`messageService`、`NotificationBell`）不迁移，申请状态的提醒方式在原型阶段和用户确认。左侧菜单用 `ElMenu` 变体还是 `MxSideMenu` 在这里定（见上文"后续阶段要带上的事项"） |
+| 1 | 数据下载（资源申请）与系统管理 | `views/resource-application/`、`views/system-management/`（两页共用 817 行的 `ApplicationListSection`，按角色区分申请与审核，另有"统计报表"）；`components/resource-application/` 的申请、审核、详情、下载进度对话框；`services/resource-application/` 的接口与状态 | 最接近文件管理、资源管理的列表页写法，先做。下载复用 `shared/file-transfer`；资源管理列表里旧的"下载申请"入口（`ResourceApplyDialog`）随这一组恢复。旧代码里和消息中心耦合的部分（`messageService`、`NotificationBell`）不迁移，申请状态的提醒方式在原型阶段和用户确认。左侧菜单用 `ElMenu` 变体还是 `MxSideMenu` 在这里定（见上文"后续阶段要带上的事项"）。系统管理 2026-10-28 完成（ADR 0092、0093），数据下载 2026-11-02 完成（ADR 0127）；修改密码、修改头像仍未做 |
 | 2 | 城市国土空间监测基本统计 | `views/space-monitoring-statistics/`（主文件 2056 行，任务状态轮询 1058 行，条件、进度、矩阵、表格组件） | 统计任务的轮询先按 ADR 0039 归类（同一任务的先后查询多半是可替换操作，用 `LatestController`），不手写递增计数；不依赖地图，可以和第 1 组并行 |
 | 3 | 数据查询（四个页面共用） | `views/space-monitoring-query/`（主文件 4780 行、配置 1550 行，按 `queryModule` 区分国土变更、城市国土空间监测、森林草原湿地荒漠、水资源） | 地图页：复用阶段五的公共地图能力（底图、边界、区划定位、工具栏）。空间查询的绘制是新的交互工具（ADR 0034），先在 map-core 做通用的绘制再接业务；旧的 `TiandituBoundaryLayer` 不迁移（区划边界只用本地数据，ADR 0036）。导出复用 `shared/file-transfer`。四个页面一个路由组件、页面参数用路由 `props` 传入。2026-10-28 完成（ADR 0104）：绘制放在 `shared/map/draw`（手势的纯函数已在 shared/map，没有放进 map-core）；统计图、统计表和高级查询的导出记为待办 |
 | 4 | 城市国土空间监测指标 | `views/space-monitoring-indicators/`（主文件 2116 行，指标树 1087 行，MVT 图层管理与图例） | 地图页：指标图层按"拥有者 + 纯函数推导分组"接入（ADR 0028），图例复用现状底图的图例组件能复用的部分；旧代码里的 `mock-data.js`、`mockIndicatorLayers.js` 先核对是否在真实页面用到 |

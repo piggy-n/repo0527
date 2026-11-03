@@ -61,9 +61,9 @@ afterEach(async () => {
   await page.viewport(1280, 800);
 });
 
-async function open() {
+async function open(props: { showApplicant?: boolean } = {}) {
   const downloads = { isDownloading: () => false, percentOf: () => null };
-  mounted.push(mount(ApplicationDialog, { props: { owner: owner(), downloads }, attachTo: document.body }));
+  mounted.push(mount(ApplicationDialog, { props: { owner: owner(), downloads, ...props }, attachTo: document.body }));
   await nextTick();
   await expect.poll(() => document.querySelector('.el-dialog .el-descriptions')).not.toBeNull();
   const dialog = document.querySelector<HTMLElement>('.el-dialog');
@@ -107,6 +107,16 @@ describe('ApplicationDialog 的布局', () => {
     expect(name?.contentHeight).toBeGreaterThan(name?.labelHeight ?? 0);
     expect(name?.contentLeft).toBe(left[0]);
     expect(dialog.querySelectorAll('.el-dialog__footer button')).toHaveLength(2);
+  });
+
+  it('不显示申请人：申请处室独占一行，开始和结束时间仍在同一行，申请用途回到左列', async () => {
+    const dialog = await open({ showApplicant: false });
+    const byLabel = Object.fromEntries(items(dialog).map(cell => [cell.label, cell]));
+
+    expect(byLabel['申请人']).toBeUndefined();
+    expect(byLabel['主题图层']?.contentTop).toBeGreaterThan(byLabel['申请处室']?.contentTop ?? 0);
+    expect(byLabel['开始时间']?.contentTop).toBe(byLabel['结束时间']?.contentTop);
+    expect(byLabel['申请用途']?.contentLeft).toBe(byLabel['数据名称']?.contentLeft);
   });
 
   it('窄屏：宽度是视口减 32，每行一项，值仍然对齐', async () => {

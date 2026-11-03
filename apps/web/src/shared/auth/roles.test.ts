@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { RouteName } from '../router/route-names';
-import { canAccess, Role, roleHome, roleLabel, toRole } from './roles';
+import { canAccess, Role, roleApplicationRoute, roleHome, roleLabel, roleReportRoute, toRole } from './roles';
 
 describe('toRole', () => {
   it('识别 admin 和 user', () => {
@@ -40,5 +40,14 @@ describe('roleHome', () => {
   it('两种角色都进入现状底图', () => {
     expect(roleHome(Role.admin)).toBe(RouteName.currentMap);
     expect(roleHome(Role.user)).toBe(RouteName.currentMap);
+  });
+});
+
+describe('角色看申请和统计报表的页面', () => {
+  it('管理员在系统管理，普通用户在数据下载', () => {
+    expect(roleApplicationRoute(Role.admin)).toBe(RouteName.systemManagement);
+    expect(roleReportRoute(Role.admin)).toBe(RouteName.systemManagementReports);
+    expect(roleApplicationRoute(Role.user)).toBe(RouteName.resourceApplication);
+    expect(roleReportRoute(Role.user)).toBe(RouteName.resourceApplicationReports);
   });
 });

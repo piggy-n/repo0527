@@ -25,6 +25,7 @@ git diff <基线>..master-demo -- <旧路径>
 | 城市国土空间监测指标 | `b4f39874293b4d01f77b66966a382e6e77a4bcbf`（yzt 基线 `0cfef2c`） | `src/views/space-monitoring-indicators/`（`index.vue`、`components/IndicatorTree.vue`、`LayerManagerPanel.vue`、`IndicatorLegend.vue`，`utils/indicatorLayerStyle.js`、`indicatorMvtManager.js`，`mockIndicatorLayers.js` 只用到区划中心）、`src/api/analysis/analysis-api.js`、`src/assets/images/layer/flag_icon.png` | `features/monitoring-indicators`、`pages/space-monitoring-indicators`；组件预览 `/dev/monitoring-indicators` | 2026-10-28 开始，分支 `migrate-space-monitoring-indicators`。`mock-data.js` 没有被引用，不迁移。预览当天经用户确认；接口核对见下文"城市国土空间监测指标：接口实测"，与旧页面的差异见"城市国土空间监测指标：与旧页面的差异"。合进 main `74b2fc0` 后全部检查通过，在真实后端上看过正式页面（[阶段笔记](stages/space-monitoring-indicators-migration.md)）；当天用户验收通过，快进合入本地 main。成果瓦片和开始计算待联调 |
 | 城市国土空间监测基本统计 | `b4f39874293b4d01f77b66966a382e6e77a4bcbf`（yzt 基线 `b96499c`） | `src/views/space-monitoring-statistics/`（路由用的 `index.vue`、`composables/useStatisticsStatusPolling.js`、`useStatisticsTaskStatus.js`、`statistics-adapter.js`、`statistics-config.js`）、`src/api/statistics/statistics-api.js` 的前三个接口、`public/images/TongJi/` 的设计素材 | `features/monitoring-statistics`、`pages/space-monitoring-statistics`；组件预览 `/dev/monitoring-statistics`；宽屏收起侧栏是 `libs/ui` 的 `MxSplitLayout` 的新能力 | 2026-10-28 开始，分支 `migrate-space-monitoring-statistics`。不迁移：没挂路由的旧版 `SpaceMonitoringStatisticsPage.vue` 和只被它引用的 `components/` 下 6 个组件。预览当天经用户确认（ADR 0100）；同日在真实后端上只读看过正式页面，用户验收通过，快进合入本地 main（[阶段笔记](stages/space-monitoring-statistics-migration.md)）；开始统计的写操作待联调。之后用户给出两张把手的设计图，转成 2 倍尺寸的 WebP 接入（ADR 0101），验收通过后合入本地 main。接口核对见下文"城市国土空间监测基本统计：接口实测"，与旧页面的差异见"城市国土空间监测基本统计：与旧页面的差异"。2026-10-29 同步旧仓库 `master-next` 的 `c79e7e6`（对接其余四种报表，ADR 0117），见"其余四种报表" |
 | 系统管理、消息中心 | `b4f3987`（yzt 基线 `6e2d606`） | `src/views/system-management/`、`src/views/resource-application/components/ApplicationListSection.vue`（管理员审核的部分）、`src/components/resource-application/`（`ResourceDetailDialog`、`StatusTag`、`MessageCenterPanel`、`MessageCard`、`NotificationBell`）、`src/services/resource-application/`（`applyApiService`、`messageService`、`resourceApplyService` 的状态文案）、`src/api/apply/`、`src/api/statistics/`（`statisticsPage`）、`src/api/message/`、`src/views/message-center/` | 原型 `pages/dev/system-management`、`pages/dev/message-center` | 2026-10-27 重新开始（上一版已由 `6dda705` 撤回，不沿用）；原型已确认（ADR 0092、0093）。已完成：资源审核、申请详情与审核、下载、统计报表（`features/data-application`、`features/statistics-report`、`pages/system-management`），消息的接口、查询、已读与弹框内容（`features/message-center`），顶栏的消息按钮与弹框（`app/layout` 的 `HeaderMessages`，顶栏断点重新测量过），开发页改为正式组件的样例，生产冒烟；ADR 改号为 0092、0093。2026-10-28 用户验收通过，由 `ddc2d6c` 合入本地 main（[阶段笔记](stages/system-message-migration.md)）；真实后端的写操作、下载和统计报表数据待联调。接口核对见下文"系统管理与消息中心：接口实测" |
+| 数据下载（普通用户） | `b4f3987`（yzt 基线 `27340d3`） | `src/views/resource-application/`（`index.vue`、`components/ApplicationListSection.vue` 的普通用户分支）、`src/components/resource-application/ResourceDetailDialog.vue`（只查看）、`MessageCenterPanel.vue` 和 `messageService.js` 里普通用户的跳转与按钮文案 | `pages/resource-application`；共用 `features/data-application`、`features/statistics-report`；组件样例 `/dev/system-management` 的普通用户视角 | 2026-11-02 迁移（ADR 0127）：预览经用户确认后实现，真实页面用固定接口验证，当天用户验收通过，合入 main；Claude 没有用普通用户账号请求过真实后端，待联调的事项见下文。与旧页面的差异见下文"数据下载：与旧页面的差异" |
 | 数据查询（国土变更调查、城市国土空间监测、森林草原湿地荒漠调查监测、水资源基础调查） | `b4f39874293b4d01f77b66966a382e6e77a4bcbf`（yzt 基线 `ebec3c6`） | `src/views/space-monitoring-query/`（`index.vue`、`config.js`、`land-change-config.js`；`region.js`、`utils/` 不迁移，见下文）、`src/views/data-query-map/index.vue`、`src/api/query/query-api.js`、`src/components/map/map-configs.js` 的 `QUERY_MAP_CONFIG` | `features/data-query`、`pages/data-query`；绘制工具 `shared/map/draw`；实测页 `/dev/data-query`；分支 `migrate-data-query` | 2026-10-28 开始，设计稿（`public/design.local/data-query/`，不入库）当天确认（ADR 0104）。四个页签、空间绘制、结果面板、导出都已实现，查询在真实后端上实测；导出接口未登录时报错，待登录后验收。2026-10-29 验收：修好分支上类型检查和 lint 的报错后 CI 的步骤全部通过，在实测页用真实接口操作四个页签，以合并提交合入 main 并推送（[阶段笔记](stages/data-query-migration.md)）。接口核对见下文"数据查询：接口实测"，与旧页面的差异见"数据查询：与旧页面的差异" |
 
 ## 数据查询：接口实测（2026-10-28）
@@ -98,7 +99,7 @@ git diff <基线>..master-demo -- <旧路径>
 - 轮询改由查询库按间隔进行，规则同旧页面（5 秒；总览 30 秒；失败退避、连续 3 次停下；标签页隐藏时暂停）
 - 提交后的跟踪去掉结果签名比较和"已查到结果但不能确认是本次的"提示；重新统计时如果没看到处理中，15 秒后提示"暂未查询到本次提交的统计任务"
 - 提交前只逐个组合查状态，不再先查一次总览；确认框的列表用组件渲染，不拼 HTML 字符串
-- 普通用户的"去下载"置灰，说明"数据下载页面迁移后可用"（旧页面跳到还没迁移的页面）
+- 普通用户的"去下载"同旧页面，进数据下载的统计报表（迁移期间曾经置灰，2026-11-02 恢复，ADR 0127）
 - 其余四种报表（2026-10-29，ADR 0117）：查看时的本底年份按两种本底（变更、水路）各记一个，不按"年度 + 报表类型"；换监测年份时本底年份回到上一年，只能选更早的年份；两个本底年份不同时总览各查一次再合成；报表类型改用下拉，本底年份和监测年份在同一行
 
 ## 城市国土空间监测指标：接口实测（2026-10-28）
@@ -186,6 +187,23 @@ git diff <基线>..master-demo -- <旧路径>
 - 没开始、没完成的任务，`startTime`、`finishTime` 按 `null` 解析（从样本里 `pageNum` 是 `null` 推断的）；如果后端是不写这个键，整页会报"加载失败"
 - 后端实际是否还有上表以外的状态文字（如"处理完成""正在处理中""处理中""已过期"），等有非"处理成功"的记录时核对；处理完了却不是"处理成功"的记录，这里不能下载
 - 真实的下载（文件名、类型、大小）只有用户能在内网确认
+
+## 数据下载：与旧页面的差异（2026-11-02）
+
+列名、筛选、地址和下载接口都同旧页面，下面是不同的地方：
+
+- 详情用系统管理的弹窗（宽 640、描述列表），不是旧的 390 宽只读表单；不显示申请人时"申请处室"独占一行。待审核的申请写"审核进度"，旧页面只有两个状态字段
+- 数据准备状态只有审核通过的申请和统计任务才有，其余显示"-"（ADR 0092 第 5 条）；旧页面都写"未开始处理"
+- 统计任务的名称后标"统计任务"，没有"查看"（ADR 0113）；旧页面的"查看"置灰
+- 消息的业务按钮文案统一为"查看申请""查看报表"（旧页面都是"查看详情"）。打开申请用查询参数 `apply`，不用一次性参数，也没有"返回消息中心"（消息是弹框，ADR 0093）
+- 新消息时刷新：旧页面每 5 秒取全量消息，ID 有变化就刷新；现在未读数变多时才刷新，最多晚 60 秒（ADR 0127 第 4 条）
+- 不迁移：`downloadTaskService` 的模拟任务（`attachRelatedTask` 对真实申请什么也不做）、`syncCurrentRole`（角色来自会话）
+
+**待联调**（Claude 访问不到内网后端，也不持有普通用户账号）：
+
+- 用普通用户账号实际请求 `/api/apply/list`、`/api/apply/{id}`、`/statistics/page`。旧页面对两种角色发同样的请求，所以"只看到本人的申请"靠后端保证；字段按管理员会话实测和联调样本写，普通用户的返回没有核对过
+- 普通用户的列表里是否也混有 `status: 'table'` 的统计任务；统计报表是否按用户过滤
+- 真实的下载（文件名、类型、大小），同系统管理
 
 ## 资源管理：附属服务、自助取数、下载申请（2026-10-27）
 

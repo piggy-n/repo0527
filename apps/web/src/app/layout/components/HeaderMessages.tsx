@@ -5,11 +5,11 @@ import { useRouter } from 'vue-router';
 import { MessagePanel } from '@/features/message-center/components/MessagePanel';
 import { useMessageCenter } from '@/features/message-center/composables/useMessageCenter';
 import type { MessageTarget } from '@/features/message-center/display';
-import { canAccess } from '@/shared/auth/roles';
+import { Role } from '@/shared/auth/roles';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { navigate } from '@/shared/router/navigate';
-import { MESSAGE_UNAVAILABLE, messageLocation } from '../message-routes';
+import { messageLocation } from '../message-routes';
 import styles from './HeaderMessages.module.scss';
 
 // 弹框顶边离顶栏下沿 8，左右、底边离窗口至少 16，最高 640（ADR 0093）
@@ -66,17 +66,13 @@ export const HeaderMessages = defineComponent({
       }
     });
 
-    // 权限从路由的 meta.roles 读取，和顶部导航一致
-    function unavailableReason(target: MessageTarget): string | null {
-      const role = session.user?.role;
-      const allowed = role !== undefined && canAccess(role, router.resolve(messageLocation(target)).meta.roles);
-      return allowed ? null : MESSAGE_UNAVAILABLE;
-    }
-
     // 跳转失败由 app 统一提示，这里不再处理
     async function openTarget(target: MessageTarget) {
       close();
-      await navigate(router, messageLocation(target));
+      const role = session.user?.role;
+      if (role !== undefined) {
+        await navigate(router, messageLocation(target, role));
+      }
     }
 
     return () => (
@@ -117,7 +113,7 @@ export const HeaderMessages = defineComponent({
           default: () => (
             <MessagePanel
               center={center}
-              unavailableReason={unavailableReason}
+              canAudit={session.user?.role === Role.admin}
               onOpen={(target: MessageTarget) => void openTarget(target)}
             />
           )

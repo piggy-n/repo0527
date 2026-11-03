@@ -44,6 +44,20 @@ describe('useSystemManagementDemo', () => {
     expect(demo.review.mode.value).toBe('view');
   });
 
+  it('普通用户只查看：待审核的也不进入审核，提交不生效；换角色时关上打开的申请', async () => {
+    const demo = useSystemManagementDemo();
+    await demo.open('apply-001');
+    expect(demo.review.mode.value).toBe('audit');
+
+    demo.switchViewer('user');
+    expect(demo.review.state.value).toBe('closed');
+
+    await demo.open('apply-001');
+    expect(demo.review.mode.value).toBe('view');
+    expect(await demo.review.submit()).toBeNull();
+    expect(demo.review.application.value?.status).toBe('pending');
+  });
+
   it('下载：进度每次涨 20%，同一行不重复开始', async () => {
     vi.useFakeTimers();
     const { downloads } = useSystemManagementDemo();

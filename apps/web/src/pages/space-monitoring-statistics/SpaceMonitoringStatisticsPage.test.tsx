@@ -72,7 +72,8 @@ async function mountPage(role: Role) {
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: RouteName.spaceMonitoringBasicStatistics, component: Empty },
-      { path: '/reports', name: RouteName.systemManagementReports, component: Empty }
+      { path: '/reports', name: RouteName.systemManagementReports, component: Empty },
+      { path: '/user-reports', name: RouteName.resourceApplicationReports, component: Empty }
     ]
   });
   await router.push('/');
@@ -149,13 +150,15 @@ describe('SpaceMonitoringStatisticsPage', () => {
     expect(aside.text()).toContain('变更本底 2022年');
   });
 
-  it('管理员去系统管理的统计报表下载；普通用户的按钮置灰', async () => {
+  it('管理员去系统管理的统计报表下载；普通用户去数据下载的统计报表', async () => {
     const admin = await mountPage(Role.admin);
     await button(admin.wrapper, '去下载').trigger('click');
     await flushPromises();
     expect(admin.router.currentRoute.value.name).toBe(RouteName.systemManagementReports);
 
     const user = await mountPage(Role.user);
-    expect(button(user.wrapper, '去下载').attributes('disabled')).toBeDefined();
+    await button(user.wrapper, '去下载').trigger('click');
+    await flushPromises();
+    expect(user.router.currentRoute.value.name).toBe(RouteName.resourceApplicationReports);
   });
 });

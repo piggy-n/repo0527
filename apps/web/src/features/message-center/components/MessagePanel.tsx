@@ -32,11 +32,8 @@ export const MessagePanel = defineComponent({
   name: 'MessagePanel',
   props: {
     center: { type: Object as PropType<MessageCenter>, required: true },
-    // 目标暂时去不了时返回原因：按钮禁用，旁边显示原因；由 app 按角色决定
-    unavailableReason: {
-      type: Function as PropType<(target: MessageTarget) => string | null>,
-      default: () => null
-    }
+    // 由 app 按角色决定：不能审核时审批提醒的按钮写"查看申请"
+    canAudit: { type: Boolean, default: true }
   },
   emits: {
     // 点了业务按钮：消息已提交已读，由 app 关闭弹框并跳转
@@ -57,21 +54,18 @@ export const MessagePanel = defineComponent({
       }
     });
 
-    // 业务按钮在时间下方、右对齐；暂时去不了时按钮禁用，原因写在按钮下方
+    // 业务按钮在时间下方、右对齐
     function renderLink(message: Message) {
-      const link = messageLink(message);
+      const link = messageLink(message, props.canAudit);
       if (!link) {
         return null;
       }
-      const reason = props.unavailableReason(link.target);
-      return [
+      return (
         <ElButton
-          key="link"
           class={styles.action}
           link
           type="primary"
           size="small"
-          disabled={reason !== null}
           onClick={() => {
             // 点击还会冒泡到整行，同一条只提交一次
             void center.markRead(message);
@@ -79,13 +73,8 @@ export const MessagePanel = defineComponent({
           }}
         >
           {link.label}
-        </ElButton>,
-        reason !== null && (
-          <span key="reason" class={styles.unavailable}>
-            {reason}
-          </span>
-        )
-      ];
+        </ElButton>
+      );
     }
 
     // 一条消息一张卡片：未读点、标题（放不下时省略）、类型、时间（悬停看完整时间），下面是完整正文和业务按钮；

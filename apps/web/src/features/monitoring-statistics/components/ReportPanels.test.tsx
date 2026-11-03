@@ -141,21 +141,13 @@ describe('ReportMonitorPanel', () => {
     expect(report.toggleStatus).toHaveBeenLastCalledWith(null);
   });
 
-  it('能下载时点"去下载"交给页面；不能时按钮置灰并说明原因', async () => {
+  it('点"去下载"交给页面', async () => {
     const { report } = fakeReport(reportStatus(ROWS));
-    const allowed = mount(ReportMonitorPanel, { props: { report } });
+    const wrapper = mount(ReportMonitorPanel, { props: { report } });
     await required(
-      allowed.findAll('button').find(button => button.text() === '去下载'),
+      wrapper.findAll('button').find(button => button.text() === '去下载'),
       '去下载'
     ).trigger('click');
-    expect(allowed.emitted('download')).toHaveLength(1);
-
-    const blocked = mount(ReportMonitorPanel, { props: { report, downloadBlocked: '数据下载页面迁移后可用' } });
-    await flushPromises();
-    const button = required(
-      blocked.findAll('button').find(item => item.text() === '去下载'),
-      '去下载'
-    );
-    expect(button.attributes('disabled')).toBeDefined();
+    expect(wrapper.emitted('download')).toHaveLength(1);
   });
 });

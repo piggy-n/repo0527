@@ -5,32 +5,36 @@ import { RouteName } from '@/shared/router/route-names';
 import { AppLayout } from '../layout/AppLayout';
 import { withMapRuntime } from '../map-framework';
 
-const loadPlaceholder = () =>
-  import('@/pages/placeholder/PlaceholderPage').then(({ PlaceholderPage }) => PlaceholderPage);
-
 // 系统管理的两个栏目是两个路由、同一个页面，栏目由 props 传入；打开的申请是资源审核的查询参数 apply（ADR 0092）
 const loadSystemManagementPage = () =>
   import('@/pages/system-management/SystemManagementPage').then(({ SystemManagementPage }) => SystemManagementPage);
 
+// 数据下载的结构和系统管理相同（ADR 0127）
+const loadResourceApplicationPage = () =>
+  import('@/pages/resource-application/ResourceApplicationPage').then(
+    ({ ResourceApplicationPage }) => ResourceApplicationPage
+  );
+
+// 打开的申请：空字符串和同名参数写了几次（数组）都不认
+const applyIdOf = (route: Pick<RouteLocationNormalized, 'query'>) =>
+  typeof route.query.apply === 'string' && route.query.apply !== '' ? route.query.apply : null;
+
 /** 资源审核路由的 props：栏目和打开的申请 */
 export const auditRouteProps = (route: Pick<RouteLocationNormalized, 'query'>) => ({
   section: 'audit',
-  // 空字符串和同名参数写了几次（数组）都不认
-  applyId: typeof route.query.apply === 'string' && route.query.apply !== '' ? route.query.apply : null
+  applyId: applyIdOf(route)
+});
+
+/** 数据列表路由的 props：栏目和打开的申请 */
+export const applicationsRouteProps = (route: Pick<RouteLocationNormalized, 'query'>) => ({
+  section: 'applications',
+  applyId: applyIdOf(route)
 });
 
 /** 现状底图的加载函数：路由和登录页的预加载共用（ADR 0061 第 3 节） */
 export const loadCurrentMapPage = withMapRuntime(() =>
   import('@/pages/current-map/CurrentMapPage').then(({ CurrentMapPage }) => CurrentMapPage)
 );
-
-// 尚未迁移的业务页，迁移后换成指向真实页面的完整路由记录；roles 不写时所有已登录用户都能访问
-const placeholder = (path: string, name: RouteName, title: string, roles?: readonly Role[]): RouteRecordRaw => ({
-  path,
-  name,
-  component: loadPlaceholder,
-  meta: { title, roles }
-});
 
 // 数据查询的四个页面共用一个组件，专题由 props 传入；换专题时页面按专题重建（DataQueryPage）
 const loadDataQueryPage = withMapRuntime(() =>
@@ -114,7 +118,20 @@ const businessRoutes: RouteRecordRaw[] = [
       ),
     meta: { title: '资源管理', roles: [Role.admin] }
   },
-  placeholder('resource-application', RouteName.resourceApplication, '资源申请', [Role.user]),
+  {
+    path: 'resource-application',
+    name: RouteName.resourceApplication,
+    component: loadResourceApplicationPage,
+    props: applicationsRouteProps,
+    meta: { title: '数据下载', roles: [Role.user] }
+  },
+  {
+    path: 'resource-application/statistical-report',
+    name: RouteName.resourceApplicationReports,
+    component: loadResourceApplicationPage,
+    props: { section: 'reports' },
+    meta: { title: '统计报表', roles: [Role.user] }
+  },
   {
     path: 'system-management',
     name: RouteName.systemManagement,
@@ -153,7 +170,7 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
     name: RouteName.devSystemManagement,
     component: () => import('@/pages/dev/system-management/DevSystemManagementPage')
       .then(({ DevSystemManagementPage }) => DevSystemManagementPage),
-    meta: { title: '系统管理组件样例', public: true }
+    meta: { title: '系统管理与数据下载组件样例', public: true }
   },
   {
     path: '/dev/message-center',

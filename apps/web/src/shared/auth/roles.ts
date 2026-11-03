@@ -42,3 +42,23 @@ const roleHomes: Record<Role, RouteName> = {
 export function roleHome(role: Role): RouteName {
   return roleHomes[role];
 }
+
+const roleApplicationRoutes: Record<Role, RouteName> = {
+  admin: RouteName.systemManagement,
+  user: RouteName.resourceApplication
+};
+
+/** 角色看申请的页面：管理员在系统管理里审核，普通用户在数据下载里查看自己的（ADR 0092、0127） */
+export function roleApplicationRoute(role: Role): RouteName {
+  return roleApplicationRoutes[role];
+}
+
+const roleReportRoutes: Record<Role, RouteName> = {
+  admin: RouteName.systemManagementReports,
+  user: RouteName.resourceApplicationReports
+};
+
+/** 角色看统计报表的页面 */
+export function roleReportRoute(role: Role): RouteName {
+  return roleReportRoutes[role];
+}

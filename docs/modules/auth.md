@@ -72,6 +72,7 @@ const { user, displayName } = storeToRefs(session);
 - `toRole(roleCode)`：缺失或无法识别时按 `user` 处理，与旧项目一致
 - `roleHome(role)`：角色登录后进入的页面（目前两种角色都是现状底图），也是访问无权限页面时的去处
 - `canAccess(role, allowed)`：`allowed` 为 `undefined` 表示不限角色；路由守卫用它检查页面权限，布局的导航菜单也用它过滤
+- `roleApplicationRoute(role)`、`roleReportRoute(role)`：角色看申请、统计报表的页面（管理员在系统管理，普通用户在数据下载），消息跳转和基本统计的"去下载"共用（ADR 0127）
 
 ## 页面权限（路由 meta）
 
@@ -79,13 +80,13 @@ const { user, displayName } = storeToRefs(session);
 
 ```ts
 { path: '/login', name: RouteName.login, component: ..., meta: { title: '登录', public: true } }
-placeholder('system-management', RouteName.systemManagement, '系统管理', [Role.admin])   // meta.roles
+{ path: 'system-management', name: RouteName.systemManagement, component: ..., meta: { title: '系统管理', roles: [Role.admin] } }
 ```
 
 | meta | 含义 | 当前使用的页面 |
 |---|---|---|
 | `public: true` | 不登录也能访问 | 登录页、404、开发用的主题预览 |
-| `roles: [...]` | 只允许这些角色访问 | 资源管理、系统管理（`admin`）；资源申请（`user`） |
+| `roles: [...]` | 只允许这些角色访问 | 资源管理、系统管理（`admin`）；数据下载（`user`） |
 | 都不写 | 所有已登录用户都能访问 | 其余业务页 |
 
 `routes.test.ts` 明确列出了公开页面和限定角色的页面。给业务页误加 `public`，或者改了角色限制，这个测试都会失败；确实要改时，同步修改测试。

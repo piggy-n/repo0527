@@ -22,9 +22,12 @@ const LINK_LABELS: Record<MessageCategory, string> = {
   table: '查看报表'
 };
 
-/** 报表通知指向统计报表，审批提醒、资源消息指向申请；业务消息没有申请 ID 时没有按钮 */
-export function messageLink(message: Message): MessageLink | null {
-  const label = LINK_LABELS[message.category];
+/**
+ * 报表通知指向统计报表，审批提醒、资源消息指向申请；业务消息没有申请 ID 时没有按钮。
+ * 不能审核的角色只能查看，审批提醒的按钮也写"查看申请"（同旧页面，ADR 0127）
+ */
+export function messageLink(message: Message, canAudit: boolean): MessageLink | null {
+  const label = message.category === 'approval' && !canAudit ? LINK_LABELS.resource : LINK_LABELS[message.category];
   if (message.category === 'table') {
     return { label, target: { kind: 'reports' } };
   }

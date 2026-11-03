@@ -40,7 +40,9 @@ export const ApplicationDialog = defineComponent({
   props: {
     owner: { type: Object as PropType<ApplicationReviewOwner>, required: true },
     // 和列表共用下载的状态：在哪里点下载，两边都显示进度
-    downloads: { type: Object as PropType<RowDownloadState>, required: true }
+    downloads: { type: Object as PropType<RowDownloadState>, required: true },
+    // 申请人看到的都是自己的申请，不显示申请人
+    showApplicant: { type: Boolean, default: true }
   },
   emits: {
     close: () => true,
@@ -133,8 +135,11 @@ export const ApplicationDialog = defineComponent({
             <ElDescriptionsItem label="数据名称" span={wide}>
               {shown(application.name)}
             </ElDescriptionsItem>
-            <ElDescriptionsItem label="申请人">{shown(application.applicant)}</ElDescriptionsItem>
-            <ElDescriptionsItem label="申请处室">{application.department}</ElDescriptionsItem>
+            {props.showApplicant && <ElDescriptionsItem label="申请人">{shown(application.applicant)}</ElDescriptionsItem>}
+            {/* 没有申请人时独占一行，后面的开始、结束时间仍然成对 */}
+            <ElDescriptionsItem label="申请处室" span={props.showApplicant ? 1 : wide}>
+              {application.department}
+            </ElDescriptionsItem>
             <ElDescriptionsItem label="主题图层">
               {application.layerCode === undefined ? EMPTY_VALUE : dataLayerLabel(application.layerCode)}
             </ElDescriptionsItem>
@@ -161,7 +166,8 @@ export const ApplicationDialog = defineComponent({
 
     function renderResult(application: Application) {
       return (
-        <MxSection title="审核结果">
+        // 申请人查看待审核的申请时还没有结果
+        <MxSection title={application.status === 'pending' ? '审核进度' : '审核结果'}>
           <ElDescriptions class={styles.descriptions} column={columns.value}>
             <ElDescriptionsItem label="审核状态">
               <AuditStatusTag status={application.status} />

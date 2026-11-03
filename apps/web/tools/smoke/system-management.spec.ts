@@ -123,7 +123,7 @@ test('管理员：角标是未读数，点"去审核"标为已读、关上弹框
   await expect(page.locator('.el-table__empty-text')).toContainText('暂无数据');
 });
 
-test('普通用户：业务按钮禁用并说明原因；窄屏时弹框左右离窗口 16', async ({ page, backend }) => {
+test('普通用户：不能审核，审批提醒也写"查看申请"；窄屏时弹框左右离窗口 16，按 Esc 关闭不标已读', async ({ page, backend }) => {
   backend.role = 'user';
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
@@ -132,12 +132,42 @@ test('普通用户：业务按钮禁用并说明原因；窄屏时弹框左右�
   const box = await boxOf(popover);
   expect(box.x).toBeCloseTo(16, 0);
   expect(box.x + box.width).toBeCloseTo(390 - 16, 0);
-  await Promise.all(
-    ['去审核', '查看报表'].map(name => expect(popover.getByRole('button', { name, exact: true })).toBeDisabled())
-  );
-  await expect(popover.getByText('数据下载页面迁移后可用').first()).toBeVisible();
+  await expect(popover.getByRole('button', { name: '去审核', exact: true })).toHaveCount(0);
+  await expect(popover.getByRole('button', { name: '查看申请', exact: true })).toHaveCount(2);
 
   await page.keyboard.press('Escape');
   await expect(popover).toBeHidden();
   expect(backend.reads).toEqual([]);
+});
+
+test('普通用户：从消息打开数据下载里的申请，只查看；再从消息去统计报表，用菜单回到数据列表', async ({ page, backend }) => {
+  backend.role = 'user';
+  await login(page);
+
+  const { popover } = await openMessages(page, '消息，2 条未读');
+  await popover.getByRole('button', { name: '查看申请', exact: true }).first().click();
+  await expect(page).toHaveURL(/\/resource-application\?apply=apply-001$/);
+  await expect(popover).toBeHidden();
+  await expect.poll(() => backend.reads).toEqual(['/api/message/read/msg-approval']);
+
+  const dialog = page.locator('.el-dialog').filter({ hasText: '申请详情' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('审核进度');
+  await expect(dialog.getByRole('button', { name: '提交审核', exact: true })).toHaveCount(0);
+
+  // 关闭申请回到列表，顶栏选中"数据下载"，列表没有申请人
+  await dialog.locator('.el-dialog__headerbtn').click();
+  await expect(page).toHaveURL(/\/resource-application$/);
+  await expect(page.locator('.el-table__header')).toContainText('资源名称');
+  await expect(page.locator('.el-table__header')).not.toContainText('申请人');
+  await expect(page.locator('.el-table__body')).toContainText('拆除未尽区');
+
+  const again = await openMessages(page, '消息，1 条未读');
+  await again.popover.getByRole('button', { name: '查看报表', exact: true }).click();
+  await expect(page).toHaveURL(/\/resource-application\/statistical-report$/);
+  await expect(page.locator('.el-table__empty-text')).toContainText('暂无数据');
+
+  await page.getByRole('link', { name: '数据列表', exact: true }).click();
+  await expect(page).toHaveURL(/\/resource-application$/);
+  await expect(page.locator('.el-table__body')).toContainText('拆除未尽区');
 });

@@ -19,6 +19,11 @@ export const PREPARE_STATUS_OPTIONS = PREPARE_STATUSES.map(value => ({
   label: PREPARE_STATUS_LABELS[value]
 }));
 
+/** 审核时打开申请的按钮：待审核的是"审核"，其余"查看"；只查看时不用它，用表格默认的"查看" */
+export function auditOpenLabel(application: Pick<Application, 'status'>): string {
+  return application.status === 'pending' ? '审核' : '查看';
+}
+
 /** 只有审核通过的申请和统计任务才准备数据 */
 export function hasPrepareStep(application: Pick<Application, 'status'>): boolean {
   return application.status === 'approved' || application.status === 'table';

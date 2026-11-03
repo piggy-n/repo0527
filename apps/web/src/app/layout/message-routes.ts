@@ -1,13 +1,10 @@
 import type { MessageTarget } from '@/features/message-center/display';
-import { RouteName } from '@/shared/router/route-names';
+import { type Role, roleApplicationRoute, roleReportRoute } from '@/shared/auth/roles';
 
-/** 消息指向的页面：申请在系统管理里用 ?apply= 打开，报表是统计报表栏目（ADR 0092、0093） */
-export function messageLocation(target: MessageTarget) {
+/** 消息指向的页面，按角色换成路由：申请用 ?apply= 打开，报表是统计报表栏目（ADR 0092、0093、0127） */
+export function messageLocation(target: MessageTarget, role: Role) {
   if (target.kind === 'reports') {
-    return { name: RouteName.systemManagementReports };
+    return { name: roleReportRoute(role) };
   }
-  return { name: RouteName.systemManagement, query: { apply: target.applyId } };
+  return { name: roleApplicationRoute(role), query: { apply: target.applyId } };
 }
-
-/** 角色去不了消息指向的页面时的说明：普通用户看申请的"数据下载"还没有迁移 */
-export const MESSAGE_UNAVAILABLE = '数据下载页面迁移后可用';
