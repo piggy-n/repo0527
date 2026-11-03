@@ -167,21 +167,21 @@ const LAND_CHANGE_NATURAL: NaturalLanguageConfig = {
     {
       examples: ['查询江苏省城镇村等用地类型为201、201A、202的数据'],
       keywords: ['城镇村等用地', '201', '201A', '202'],
-      table: 'bgdc_czcdyd_2022',
+      table: 'bgdc_czcdyd_2025',
       region: '320000',
       condition: { field: 'CZCLX', value: ['201', '201A', '202'] }
     },
     {
       examples: ['江苏省南京市城镇村等用地类型为201、201A的城镇村等用地', '南京市城镇村等用地类型为201、201A的数据'],
       keywords: ['城镇村等用地', '201', '201A'],
-      table: 'bgdc_czcdyd_2022',
+      table: 'bgdc_czcdyd_2025',
       region: '320100',
       condition: { field: 'CZCLX', value: ['201', '201A'] }
     },
     {
       examples: ['查询江苏省城镇村等用地类型为202、202A的数据'],
       keywords: ['城镇村等用地', '202', '202A'],
-      table: 'bgdc_czcdyd_2022',
+      table: 'bgdc_czcdyd_2025',
       region: '320000',
       condition: { field: 'CZCLX', value: ['202', '202A'] }
     }
@@ -196,7 +196,7 @@ export const QUERY_TOPICS: Readonly<Record<TopicId, QueryTopic>> = {
     layers: [
       {
         label: '城镇村等用地',
-        table: 'bgdc_czcdyd_2022',
+        table: 'bgdc_czcdyd_2025',
         geometry: 'polygon',
         fields: TOWN_FIELDS,
         columns: TOWN_COLUMNS

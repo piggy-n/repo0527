@@ -250,7 +250,7 @@ describe('高级查询', () => {
     query.attribute.setRegion('320100');
     query.changeTab('advanced');
     query.advanced.setLayer('bgdc_dltb_2022');
-    query.advanced.sql.value = "SELECT * FROM bgdc_czcdyd_2022 WHERE CZCLX = '201'";
+    query.advanced.sql.value = "SELECT * FROM bgdc_czcdyd_2025 WHERE CZCLX = '201'";
 
     expect(await query.submit()).toStrictEqual({ kind: 'submitted' });
     await flushPromises();
@@ -281,7 +281,7 @@ describe('自然语言查询', () => {
     expect(query.busy.value).toBe(true);
     await vi.advanceTimersByTimeAsync(PARSE_DELAY);
     expect(await submitted).toStrictEqual({ kind: 'submitted' });
-    expect(query.attribute.layer.value?.table).toBe('bgdc_czcdyd_2022');
+    expect(query.attribute.layer.value?.table).toBe('bgdc_czcdyd_2025');
     expect(query.attribute.region.value).toBe('320100');
     expect(query.result.request.value).toMatchObject({ origin: 'natural', conditions: "CZCLX IN ('201','201A')" });
     expect(natural.parsed.value).toBe(true);
