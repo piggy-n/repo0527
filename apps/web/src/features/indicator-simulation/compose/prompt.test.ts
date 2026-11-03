@@ -1,14 +1,24 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { indicatorValueSource } from '@/shared/city-indicators/indicator-value';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { defaultParams } from '../model/params';
 import { areaScope, citiesScope, scopeCityCodes } from '../model/scope';
 import { NANJING_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
-import { emptyComposition, rememberedScopes, withArea, withScopeKind } from './composition';
+import { type Composition, emptyComposition, rememberedScopes, withArea, withScopeKind } from './composition';
 import { conflictsAfterReply, areaPrompt, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt, randomScopeReply, saidScope } from './prompt';
 
 const ALL = JIANGSU_CITIES.map(city => city.code);
+// AI 计算页里简报有的 12 项（docs/modules/city-indicators.md）
+const REPORTED = ['A-14', 'A-15', 'A-31', 'A-32', 'A-33', 'A-34', 'A-35', 'A-36', 'A-39', 'B-14', 'B-61', 'B-65'];
+// 编排里不是简报原数的"指标 年度"
+const unreported = (compositions: readonly Composition[]) =>
+  compositions.flatMap(({ conditions }) =>
+    conditions.years.flatMap(year =>
+      conditions.indicatorIds.filter(id => indicatorValueSource(id, year) !== 'report').map(id => `${id} ${year}`)
+    )
+  );
 const parsed = (text: string) => {
   const result = parsePrompt(text);
   if (!result.ok) {
@@ -18,12 +28,12 @@ const parsed = (text: string) => {
 };
 
 describe('parsePrompt', () => {
-  it('三条示例：各填一项参数，其余是标准口径', () => {
-    const [rule = '', recognition = '', population = ''] = PROMPT_EXAMPLES;
+  it('三条示例：第一条（打开页面时的占位）是标准口径，后两条各填一项参数', () => {
+    const [standard = '', recognition = '', population = ''] = PROMPT_EXAMPLES;
 
-    expect(parsed(rule)).toMatchObject({
+    expect(parsed(standard)).toMatchObject({
       conditions: { years: [2025], scope: citiesScope(['320100']), indicatorIds: ['A-31'] },
-      params: { ...defaultParams(), rule: 'old' }
+      params: defaultParams()
     });
     expect(parsed(recognition)).toMatchObject({
       conditions: { years: [2025], scope: citiesScope(['320100']), indicatorIds: ['B-65'] },
@@ -75,14 +85,16 @@ describe('describeComposition', () => {
   });
 
   it('写出年份、范围、指标和偏离标准口径的参数；解析回去得到同样的编排', () => {
-    for (const example of PROMPT_EXAMPLES) {
+    const oldRule = '按卫生服务站步行 5 分钟的旧规程，计算 2025 年南京市社区卫生服务设施覆盖率';
+    for (const example of [...PROMPT_EXAMPLES, oldRule]) {
       const composition = parsed(example);
       const text = describeComposition(composition);
       expect(parsed(text)).toEqual(composition);
     }
-    expect(describeComposition(parsed(PROMPT_EXAMPLES[0] ?? ''))).toBe(
+    expect(describeComposition(parsed(oldRule))).toBe(
       '按卫生服务站步行 5 分钟的旧规程，计算 2025 年南京市社区卫生服务设施步行15分钟覆盖率'
     );
+    expect(describeComposition(parsed(PROMPT_EXAMPLES[0] ?? ''))).toBe('计算 2025 年南京市社区卫生服务设施步行15分钟覆盖率');
   });
 
   it('多个市、多项指标时写"等"', () => {
@@ -93,9 +105,9 @@ describe('describeComposition', () => {
   });
 });
 
-// 可重复的随机数（线性同余），每个种子一串
+// 可重复的随机数（线性同余），每个种子一串；种子小时第一个数都约是 0.24，所以先走一步，否则走不到"两个年度"
 const seeded = (seed: number) => {
-  let state = seed;
+  let state = (seed * 1_664_525 + 1_013_904_223) % 4_294_967_296;
   return () => {
     state = (state * 1_664_525 + 1_013_904_223) % 4_294_967_296;
     return state / 4_294_967_296;
@@ -161,7 +173,7 @@ describe('randomPrompt', () => {
     expect(results.every(item => item.conditions.indicatorIds[0] === 'A-31')).toBe(true);
     expect(new Set(texts).size).toBeGreaterThan(30);
     expect(new Set(results.map(item => scopeCityCodes(item.conditions.scope).join())).size).toBeGreaterThan(10);
-    expect(new Set(results.map(item => item.conditions.years.join())).size).toBeGreaterThan(5);
+    expect(new Set(results.map(item => item.conditions.years.join()))).toEqual(new Set(['2026', '2025', '2026,2025']));
     expect(new Set(results.map(item => item.conditions.indicatorIds.length))).toEqual(new Set([1, 2, 3]));
     const scenarios = new Set(results.map(({ params }) => `${params.rule}/${params.recognition}/${params.popChange}`));
     expect(scenarios.size).toBeGreaterThan(3);
@@ -170,6 +182,35 @@ describe('randomPrompt', () => {
   it('和要避开的话重复时重新组合', () => {
     const once = randomPrompt(seeded(7));
     expect(randomPrompt(seeded(7), [once])).not.toBe(once);
+  });
+
+  it('只说有简报原数的年度和指标；简报有的 12 项都会出现，消防救援只在单选 2026 年时出现', async () => {
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS, '江宁片区');
+    const current = withArea(emptyComposition(), area);
+    const results = Array.from({ length: 300 }, (_, index) => parsed(randomPrompt(seeded(index + 1))));
+    const inArea = Array.from({ length: 100 }, (_, index) => {
+      const result = parsePrompt(randomPrompt(seeded(index + 1), [], area), current);
+      if (!result.ok) {
+        throw new Error('应能解析自定义范围的语句');
+      }
+      return result.composition;
+    });
+
+    expect(unreported([...results, ...inArea])).toEqual([]);
+    expect(new Set(results.flatMap(item => item.conditions.indicatorIds))).toEqual(new Set(REPORTED));
+    const withFire = results.filter(item => item.conditions.indicatorIds.includes('A-15'));
+    expect(withFire.length).toBeGreaterThan(0);
+    expect(new Set(withFire.map(item => item.conditions.years.join()))).toEqual(new Set(['2026']));
+  });
+
+  it('默认示例和自定义范围的示例也只说有简报原数的年度和指标', async () => {
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS, '江宁片区');
+    const fromArea = parsePrompt(areaPrompt(area), withArea(emptyComposition(), area));
+    if (!fromArea.ok) {
+      throw new Error('应能解析自定义范围的示例');
+    }
+
+    expect(unreported([...PROMPT_EXAMPLES.map(parsed), fromArea.composition])).toEqual([]);
   });
 });
 
