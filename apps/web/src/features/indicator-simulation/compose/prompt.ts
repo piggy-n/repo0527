@@ -1,7 +1,7 @@
 import { JIANGSU_CITIES, shortRegionName } from '@/shared/map/region/region-catalog';
 import { SIMULATION_INDICATORS, simulationIndicator } from '../model/indicators';
 import { defaultParams, paramApplies, POP_CHANGE_RANGE, type SimulationParams } from '../model/params';
-import { areaLabel, areaScope, citiesScope, type SimulationScope } from '../model/scope';
+import { areaLabel, areaScope, citiesScope, type ScopeArea, type SimulationScope } from '../model/scope';
 import { type Composition, emptyComposition, rememberedScopes, SIMULATION_YEARS, withScope } from './composition';
 
 /** 三条示例指令：每条是"推演条件 + 至多一个参数"，分别用到计算规程、覆盖认定、常住人口变化 */
@@ -77,8 +77,9 @@ export function findCities(text: string): string[] {
 /** 指令里说到自定义范围：用上传或绘制的范围（ADR 0121） */
 export const AREA_WORDS = /自定义范围|上传的范围|绘制的范围|画的范围|这个范围|该范围/;
 
-/** 有自定义范围时占位的示例：说"自定义范围"，解析得到这个范围 */
-export const AREA_EXAMPLE = '计算自定义范围 2025 年社区卫生服务设施覆盖率和人均公园绿地面积';
+/** 正在用自定义范围时占位的示例：写出范围的名称，解析得到这个范围 */
+export const areaPrompt = (area: ScopeArea): string =>
+  `计算${areaLabel(area)} 2025 年社区卫生服务设施覆盖率和人均公园绿地面积`;
 
 /** 解析的结果：认不出指标，或者说了自定义范围、但还没有上传或绘制 */
 export type PromptParse =
@@ -90,7 +91,8 @@ export type PromptParse =
  * 说了城市时用这些市；都没说时，正在用自定义范围就接着用，否则按全省。记下的两种范围带进结果
  */
 export function parsePrompt(input: string, current: Composition = emptyComposition()): PromptParse {
-  const text = input.replace(/\s+/g, '');
+  // 「」里是自定义范围的名称：里面的数字、城市、指标不算条件
+  const text = input.replace(/「[^」]*」/g, '').replace(/\s+/g, '');
   const indicatorIds = findIndicators(text);
   if (indicatorIds.length === 0) {
     return { ok: false, reason: 'indicator' };
@@ -175,9 +177,13 @@ const joinNames = (names: readonly string[]): string =>
 /**
  * 刷新时换上的一句指令：一定有社区卫生服务设施覆盖率，再随机配一两个年度、一到三个市或全省、另外 0～2 项指标，
  * 以及所选指标用得上的一项参数（也可能是标准口径）；和 avoid 里的话重复时重新组合。解析这句话得到同样的编排。
- * area 为 true（正在用自定义范围）时范围写"自定义范围"
+ * 传了 area（正在用的自定义范围）时范围写它的名称
  */
-export function randomPrompt(random: () => number, avoid: readonly string[] = [], area = false): string {
+export function randomPrompt(
+  random: () => number,
+  avoid: readonly string[] = [],
+  area: ScopeArea | null = null
+): string {
   let text = '';
   for (let attempt = 0; attempt < 10 && (text === '' || avoid.includes(text)); attempt++) {
     const years = sampleOf(SIMULATION_YEARS, random() < 0.7 ? 1 : 2, random).toSorted((a, b) => a - b);
@@ -197,7 +203,7 @@ export function randomPrompt(random: () => number, avoid: readonly string[] = []
             : '';
     const names = joinNames(indicators.map(item => item.name));
     if (area) {
-      text = `${phrase}计算自定义范围 ${years.join('、')} 年${names}`;
+      text = `${phrase}计算${areaLabel(area)} ${years.join('、')} 年${names}`;
     } else {
       const scope = cities === null ? '全省' : cities.map(city => city.name).join('、');
       text = `${phrase}计算 ${years.join('、')} 年${scope}${names}`;

@@ -2,7 +2,8 @@ import { LatestController } from '@yzt/utils';
 import { computed, type ComputedRef, onScopeDispose, type Ref, ref, shallowRef, watch } from 'vue';
 import { blankOf, buildSteps } from '../compose/build';
 import type { Composition } from '../compose/composition';
-import { AREA_EXAMPLE, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from '../compose/prompt';
+import { areaPrompt, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from '../compose/prompt';
+import type { ScopeArea } from '../model/scope';
 import type { CompositionOwner } from './useComposition';
 
 /** 发送的结果：输入框是空的、认不出指标、说了自定义范围但还没有上传或绘制、开始编排 */
@@ -23,7 +24,7 @@ export interface BuildState {
 /** AI 计算指令的拥有者：输入框的文字、占位的示例、发送后逐个节点配置；面板和编排图只显示和调用 */
 export interface PromptComposer {
   readonly text: Readonly<Ref<string>>;
-  /** 输入框空着时占位显示的一句完整示例；正在用自定义范围时说"自定义范围" */
+  /** 输入框空着时占位显示的一句完整示例；正在用自定义范围时写出它的名称 */
   readonly example: Readonly<Ref<string>>;
   /** 按指令配置的进度；没在配置时为 null */
   readonly building: Readonly<Ref<BuildState | null>>;
@@ -80,12 +81,19 @@ export function usePromptComposer(composition: CompositionOwner, options: Prompt
   const { random = Math.random, onComposed } = options;
   const text = ref('');
   const cityExample = ref(PROMPT_EXAMPLES[0] ?? '');
-  const areaExample = ref(AREA_EXAMPLE);
-  const areaActive = computed(() => {
+  const area = computed(() => {
     const { scope } = composition.state.value.conditions;
-    return scope.kind === 'area' && scope.area !== null;
+    return scope.kind === 'area' ? scope.area : null;
   });
-  const example = computed(() => (areaActive.value ? areaExample.value : cityExample.value));
+  // 换一批换上的话记下是哪个范围的：换了范围就回到新范围的默认示例
+  const areaPick = shallowRef<{ readonly area: ScopeArea; readonly text: string } | null>(null);
+  const example = computed(() => {
+    const current = area.value;
+    if (!current) {
+      return cityExample.value;
+    }
+    return areaPick.value?.area === current ? areaPick.value.text : areaPrompt(current);
+  });
   const building = shallowRef<BuildState | null>(null);
   // 输入框里是不是当前编排的描述
   let synced = false;
@@ -130,6 +138,17 @@ export function usePromptComposer(composition: CompositionOwner, options: Prompt
     { flush: 'sync' }
   );
 
+  // 输入框里还是填进来的示例时跟着换，不留着上一个范围的话；用户改过的不动，按指令配置的中途不算
+  watch(
+    example,
+    (next, previous) => {
+      if (!writing && text.value === previous) {
+        text.value = next;
+      }
+    },
+    { flush: 'sync' }
+  );
+
   const build = async (target: Composition) => {
     const signal = buildRun.next();
     write(blankOf(target));
@@ -167,8 +186,9 @@ export function usePromptComposer(composition: CompositionOwner, options: Prompt
     setText,
     fillExample: () => setText(example.value),
     refresh: () => {
-      if (areaActive.value) {
-        areaExample.value = randomPrompt(random, [areaExample.value], true);
+      const current = area.value;
+      if (current) {
+        areaPick.value = { area: current, text: randomPrompt(random, [example.value], current) };
       } else {
         cityExample.value = randomPrompt(random, [cityExample.value]);
       }

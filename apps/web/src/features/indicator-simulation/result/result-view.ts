@@ -1,3 +1,4 @@
+import type { RegionCover } from '@/shared/map/area/area-coverage';
 import { districtsOf } from '@/shared/map/region/region-catalog';
 import type { EngineState, SimulationVersion } from '../engine/engine';
 import { indicatorResult, valueBreaks } from '../model/analysis';
@@ -73,6 +74,15 @@ export interface RankRow {
   readonly partial: boolean;
   /** 部分覆盖的区县在范围内的面积占比；市和其余的区县为 null */
   readonly share: number | null;
+  /** 自定义范围里市的区县覆盖情况；区县的行和行政区划时为 null */
+  readonly cover: RankCover | null;
+}
+
+/** 一个市的区县有几个，全部覆盖、部分覆盖的各几个 */
+export interface RankCover {
+  readonly total: number;
+  readonly full: number;
+  readonly partial: number;
 }
 
 export interface Rank {
@@ -81,6 +91,14 @@ export interface Rank {
   readonly rows: readonly RankRow[];
   /** 条长的满格：最大值再留一点 */
   readonly max: number;
+}
+
+// 一个市的区县有几个、全部覆盖和部分覆盖的各几个
+function cityCover(cityCode: string, covers: readonly RegionCover[]): RankCover {
+  const districts = new Set(districtsOf(cityCode).map(district => district.code));
+  const mine = covers.filter(cover => districts.has(cover.code));
+  const full = mine.filter(cover => cover.relation === 'full').length;
+  return { total: districts.size, full, partial: mine.length - full };
 }
 
 /**
@@ -111,7 +129,8 @@ export function rankOf(
           value: row.value,
           cityCode: null,
           partial: area && row.share < 1,
-          share: area && row.share < 1 ? row.share : null
+          share: area && row.share < 1 ? row.share : null,
+          cover: null
         }))
     : result.cities.map(city => ({
         key: city.code,
@@ -119,7 +138,8 @@ export function rankOf(
         value: city.value,
         cityCode: city.code,
         partial: area && districtsOf(city.code).some(district => !whole.has(district.code)),
-        share: null
+        share: null,
+        cover: area ? cityCover(city.code, covers) : null
       }));
   const level = only ? 'district' : 'city';
   return {

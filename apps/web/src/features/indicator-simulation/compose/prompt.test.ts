@@ -6,7 +6,7 @@ import { areaScope, citiesScope, scopeCityCodes } from '../model/scope';
 import { NANJING_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
 import { emptyComposition, rememberedScopes, withArea, withScopeKind } from './composition';
-import { AREA_EXAMPLE, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from './prompt';
+import { areaPrompt, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from './prompt';
 
 const ALL = JIANGSU_CITIES.map(city => city.code);
 const parsed = (text: string) => {
@@ -131,7 +131,7 @@ describe('自定义范围的指令（ADR 0121）', () => {
       scope: areaScope(area),
       indicatorIds: ['A-31']
     });
-    expect(parsePrompt(AREA_EXAMPLE, emptyComposition())).toEqual({ ok: false, reason: 'area' });
+    expect(parsePrompt(areaPrompt(area), emptyComposition())).toEqual({ ok: false, reason: 'area' });
   });
 
   it('没说范围时：正在用自定义范围就接着用；说了城市时改为行政区划，范围仍记着', async () => {
@@ -146,7 +146,17 @@ describe('自定义范围的指令（ADR 0121）', () => {
     expect(other.ok && other.composition.conditions.scope).toEqual(citiesScope(ALL));
   });
 
-  it('写成一句话、解析回去得到同样的范围；随机的示例写"自定义范围"', async () => {
+  it('「」里是范围的名称：名称里的年份、城市、指标不算条件', async () => {
+    const area = await testArea(await loadTestAtlas(), NANJING_RINGS, '2023南京公园绿地片区');
+    const result = parsePrompt(areaPrompt(area), withArea(emptyComposition(), area));
+    expect(result.ok && result.composition.conditions).toEqual({
+      years: [2025],
+      scope: areaScope(area),
+      indicatorIds: ['A-31', 'A-39']
+    });
+  });
+
+  it('写成一句话、解析回去得到同样的范围；随机的示例写出范围的名称', async () => {
     const area = await testArea(await loadTestAtlas(), NANJING_RINGS, '江宁片区');
     const current = withArea(emptyComposition(), area);
     const result = parsePrompt('计算自定义范围 2025 年社区卫生服务设施覆盖率', current);
@@ -156,8 +166,8 @@ describe('自定义范围的指令（ADR 0121）', () => {
     const text = describeComposition(result.composition);
     expect(text).toBe('计算自定义范围「江宁片区」 2025 年社区卫生服务设施步行15分钟覆盖率');
     expect(parsePrompt(text, current)).toEqual(result);
-    const random = randomPrompt(seeded(3), [], true);
-    expect(random).toContain('计算自定义范围 ');
+    const random = randomPrompt(seeded(3), [], area);
+    expect(random).toContain('计算自定义范围「江宁片区」 ');
     const parsedRandom = parsePrompt(random, current);
     expect(parsedRandom.ok && parsedRandom.composition.conditions.scope).toEqual(areaScope(area));
   });

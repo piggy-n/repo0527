@@ -14,6 +14,19 @@
   margin: 0 auto;
 }
 
+// 输入框外的一行：左边是用着的范围，右边是换一批，和要发送的内容分开
+.tools {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.refresh {
+  flex: none;
+  margin-left: auto;
+}
+
 // 边框包住文字和按钮；文字区聚焦时主色描边和外发光（同 Element 输入框）
 .input {
   display: flex;
@@ -39,6 +52,31 @@
   :global(.el-button + .el-button) {
     margin-left: 0;
   }
+}
+
+// 条件配置时分两行：文字占满整行，下面左边上传范围、右边发送
+.stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px 8px 8px var(--space-md);
+  cursor: text;
+
+  .grow {
+    flex: none;
+    margin: 2px 0;
+  }
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.send {
+  margin-left: auto;
 }
 
 // 一行起，随内容长到三行，空着时按占位的示例长高（浏览器量高度时不算占位）：
@@ -79,10 +117,6 @@
   &::placeholder {
     color: var(--color-text-placeholder);
   }
-}
-
-.refresh {
-  margin-bottom: 7px;
 }
 
 // 看结果时 AI 的回复：机器人头像加上回复的话
@@ -134,8 +168,8 @@
 // 用着的自定义范围：输入框上方的附件卡片（ADR 0121）
 .attachment {
   display: flex;
-  align-self: flex-start;
   align-items: center;
+  min-width: 0;
   gap: var(--space-xs);
   max-width: 100%;
   padding: var(--space-xs);

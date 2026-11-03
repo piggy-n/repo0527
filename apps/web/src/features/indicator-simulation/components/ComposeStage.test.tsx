@@ -238,6 +238,16 @@ describe('ComposeStage 按 AI计算指令编排', () => {
     expect(input.attributes('placeholder')).not.toBe(PROMPT_EXAMPLES[0]);
   });
 
+  it('输入框里只有文字、上传范围和发送，换一批在框外', () => {
+    const { wrapper } = mountStage();
+    const input = wrapper.get('[aria-label="计算指令"]').element;
+    const box = required(input.closest('[class*="_input_"]'), '输入框的边框');
+    expect(box.textContent).toContain('上传范围');
+    expect(box.textContent).toContain('发送');
+    expect(box.textContent).not.toContain('换一批');
+    expect(buttonOf(wrapper, '换一批').exists()).toBe(true);
+  });
+
   it('发送后编排图从空白开始，一个节点一个节点地出现；期间条件库和编排图不接收操作；完成后开始计算', async () => {
     vi.useFakeTimers();
     const { wrapper } = mountStage(emptyComposition());

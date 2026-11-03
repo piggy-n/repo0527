@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import { ElTooltip } from 'element-plus';
 import type { Position } from 'geojson';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { defineComponent, shallowRef } from 'vue';
@@ -126,6 +127,29 @@ describe('AreaAnalysisPanel', () => {
     await vi.waitFor(() => {
       expect(document.body.textContent).toMatch(detail);
     });
+  });
+
+  it('整个行政区都在范围内时没有悬浮提示；提示移开后立即关闭、不留节点（同地图工具栏）', async () => {
+    const { wrapper, editor } = mountPanel();
+    await analyzed(editor, [box(118.7, 31.95, 118.95, 32.15)]);
+    const rows = wrapper.findAll('button[aria-label$="移到这里"]');
+    const withTag = (text: string) =>
+      required(
+        rows.find(row => row.get('.el-tag').text() === text),
+        `标签是${text}的区县`
+      ).get('.el-tag');
+    // 先悬停全部覆盖的，再悬停部分覆盖的：后者的提示出现时，前者该出现也出现了
+    await withTag('全部').trigger('mouseenter');
+    const partial = withTag('部分');
+    await partial.trigger('mouseenter');
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain('km² / ');
+    });
+    expect(document.body.textContent).not.toContain('（100%）');
+
+    const tips = wrapper.findAllComponents(ElTooltip);
+    expect(tips.length).toBeGreaterThan(0);
+    expect(tips.every(tip => tip.props('hideAfter') === 0 && tip.props('persistent') === false)).toBe(true);
   });
 
   it('省的标签合计全部区县；全部、部分都有时写在一个标签里，有部分覆盖时是橙色', async () => {

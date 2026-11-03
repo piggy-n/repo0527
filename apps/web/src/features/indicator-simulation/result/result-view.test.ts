@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
+import { districtsOf, JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { idleEngineState, type SimulationVersion } from '../engine/engine';
 import { VALUE_COLORS } from '../map/colors';
 import { indicatorResult } from '../model/analysis';
@@ -132,11 +132,13 @@ describe('自定义范围的排行（ADR 0121）', () => {
     const cross = await setup(ningzhen);
     const cities = rankOf(cross.version, ningzhen, 'B-65', 2026);
     expect(cities.rows.map(row => row.key).toSorted()).toEqual(['320100', '321100']);
-    // 两个市都只有一部分在范围里：市的一行标出部分覆盖，不带占比
+    // 两个市都只有一部分在范围里：市的一行标出部分覆盖，不带占比，带各覆盖几个区县
     expect(cities.rows.map(row => [row.partial, row.share])).toEqual([
       [true, null],
       [true, null]
     ]);
+    const zhenjiang = cities.rows.find(row => row.key === '321100')?.cover;
+    expect(zhenjiang).toEqual({ total: districtsOf('321100').length, full: 0, partial: 2 });
     const zoomed = rankOf(cross.version, ningzhen, 'B-65', 2026, '321100');
     expect(zoomed.level).toBe('district');
     expect(zoomed.rows.map(row => row.name).toSorted()).toEqual(['丹徒区', '句容市'].toSorted());
