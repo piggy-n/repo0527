@@ -1,7 +1,7 @@
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { describeParam, indicatorName, isStandard, PARAM_LABELS, paramsOf, withWalkMinutes } from '../model/params';
-import { areaLabel, areaScope, citiesScope, type SimulationScope } from '../model/scope';
-import { indicatorNode, OUTPUT_NODE, paramNode, REGION_NODE, yearNode } from './board';
+import { areaLabel, areaScope, citiesScope, scopeCityCodes, type SimulationScope } from '../model/scope';
+import { indicatorNode, OUTPUT_NODE, paramNode, REGION_NODE, YEAR_PENDING_NODE, yearNode } from './board';
 import {
   type Composition,
   emptyComposition,
@@ -10,6 +10,8 @@ import {
   withScope,
   withYear
 } from './composition';
+import type { ConditionConflict } from './conflicts';
+import { canRun } from './guide';
 
 /** AI 按指令编排的一步：出现一个节点，编排随之更新 */
 export interface BuildStep {
@@ -21,7 +23,8 @@ export interface BuildStep {
   readonly composition: Composition;
 }
 
-function scopeText(scope: SimulationScope): string {
+/** 配置和补充范围时写的范围，如"自定义范围「江宁片区」，涉及 5 个区县" */
+export function scopeSummary(scope: SimulationScope): string {
   if (scope.kind === 'area') {
     const { area } = scope;
     return area ? `${areaLabel(area)}，涉及 ${area.coverage.covers.length} 个区县` : '自定义范围';
@@ -32,6 +35,16 @@ function scopeText(scope: SimulationScope): string {
   }
   const names = cityCodes.map(code => JIANGSU_CITIES.find(city => city.code === code)?.name ?? code);
   return names.length <= 3 ? names.join('、') : `${names[0]}等 ${names.length} 个市`;
+}
+
+function regionMessage(scope: SimulationScope, conflict: boolean, kept: boolean): string {
+  if (conflict) {
+    return '范围有冲突，标记为待确认';
+  }
+  if (scopeCityCodes(scope).length === 0) {
+    return '未指定监测范围，标记为待补充';
+  }
+  return `${kept ? '沿用范围' : '识别范围'}：${scopeSummary(scope)}`;
 }
 
 /**
@@ -46,18 +59,25 @@ export function blankOf(target: Composition): Composition {
 
 /**
  * 从空白开始编排到目标的每一步：年份逐个、监测范围、指标逐个、参数逐个（所选指标用得上的几项），最后是 AI 推演；
- * 参数在第一个参数节点出现时一起设好
+ * 参数在第一个参数节点出现时一起设好。没有范围的标为待补充，有冲突的标为待确认（ADR 0129）
  */
-export function buildSteps(target: Composition): BuildStep[] {
+export function buildSteps(
+  target: Composition,
+  { conflicts = [], keptScope = false }: { readonly conflicts?: readonly ConditionConflict[]; readonly keptScope?: boolean } = {}
+): BuildStep[] {
   const { conditions, params } = target;
+  const conflictOn = (key: string) => conflicts.some(conflict => conflict.key === key);
   const steps: BuildStep[] = [];
   let current = blankOf(target);
   for (const year of conditions.years) {
     current = withYear(current, year, true);
     steps.push({ node: yearNode(year), message: `识别年份：${year} 年`, composition: current });
   }
+  if (conflictOn('years')) {
+    steps.push({ node: YEAR_PENDING_NODE, message: '年份不可用，标记为待确认', composition: current });
+  }
   current = withScope(current, conditions.scope);
-  steps.push({ node: REGION_NODE, message: `识别范围：${scopeText(conditions.scope)}`, composition: current });
+  steps.push({ node: REGION_NODE, message: regionMessage(conditions.scope, conflictOn('scope'), keptScope), composition: current });
   for (const id of conditions.indicatorIds) {
     current = withIndicator(current, id, true);
     // 改过步行时长的指标一出现就是改后的名称
@@ -70,12 +90,10 @@ export function buildSteps(target: Composition): BuildStep[] {
   current = { ...current, params };
   for (const key of paramsOf(conditions.indicatorIds)) {
     const note = isStandard(key, params) ? '（标准口径）' : '（自定义口径）';
-    steps.push({
-      node: paramNode(key),
-      message: `设置${PARAM_LABELS[key]}：${describeParam(key, params)}${note}`,
-      composition: current
-    });
+    const value = conflictOn(key) ? '待确认' : `${describeParam(key, params)}${note}`;
+    steps.push({ node: paramNode(key), message: `设置${PARAM_LABELS[key]}：${value}`, composition: current });
   }
-  steps.push({ node: OUTPUT_NODE, message: '配置完成，即将开始计算', composition: current });
+  const message = canRun(conditions, conflicts) ? '配置完成，即将开始计算' : '已配置已知条件';
+  steps.push({ node: OUTPUT_NODE, message, composition: current });
   return steps;
 }

@@ -289,3 +289,23 @@
     margin-left: 0;
   }
 }
+
+// 对话发起的配置还缺范围（ADR 0129）：标题后写"待补充"，选项外闪两下
+.pendingTag {
+  margin-left: var(--space-sm);
+}
+
+.glow {
+  border-radius: var(--radius-sm);
+  animation: pending-glow 1.4s ease-out 2;
+}
+
+@keyframes pending-glow {
+  0% {
+    box-shadow: 0 0 0 0 var(--color-warning);
+  }
+
+  100% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}

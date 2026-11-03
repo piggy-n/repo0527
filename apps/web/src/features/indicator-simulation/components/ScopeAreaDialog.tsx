@@ -168,7 +168,9 @@ const MapChrome = defineComponent({
 export const ScopeAreaDialog = defineComponent({
   name: 'ScopeAreaDialog',
   props: {
-    editor: { type: Object as PropType<ScopeEditor>, required: true }
+    editor: { type: Object as PropType<ScopeEditor>, required: true },
+    /** 现在能不能放地图画布：计算和结果阶段打开时，要等结果地图卸下（ADR 0129） */
+    canvasReady: { type: Boolean, default: true }
   },
   setup(props) {
     const dragging = ref(false);
@@ -251,7 +253,7 @@ export const ScopeAreaDialog = defineComponent({
                   onDragleave={onDragLeave}
                   onDrop={onDrop}
                 >
-                  <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS}scrollZoomRates={SCROLL_ZOOM_RATES} />
+                  {props.canvasReady && <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS}scrollZoomRates={SCROLL_ZOOM_RATES} />}
                   <MapStatusNotice />
                   <MapChrome editor={editor} />
                   <BoxSelectOverlay pick={editor.draw} />

@@ -1,4 +1,5 @@
 import { type Ref, shallowRef, watch } from 'vue';
+import type { DialogueLine } from '../compose/guide';
 import type { EngineState } from '../engine/engine';
 import { STEP_GROUPS, type StepGroupId } from '../engine/steps';
 import { flowPlan } from '../flow/plan';
@@ -29,8 +30,8 @@ export type LogEntry =
 /** AI 推理的时间线：思维链、打字和对话按发生的先后排在一起 */
 export interface ReasoningLog {
   readonly entries: Readonly<Ref<readonly LogEntry[]>>;
-  /** 开始新的推演：清空，有指令时先记下这句话 */
-  begin(instruction: string | null): void;
+  /** 开始新的推演：清空，先记下计算之前的对话（指令、AI 的追问、补充的话） */
+  begin(dialogue: readonly DialogueLine[]): void;
   user(text: string): void;
   /** AI 的回复：从现在起逐字打出 */
   ai(text: string): void;
@@ -102,8 +103,13 @@ export function useReasoningLog(run: SimulationRun, now: () => number = () => pe
 
   return {
     entries,
-    begin: instruction => {
-      entries.value = instruction ? [{ kind: 'user', id: nextId++, text: instruction }] : [];
+    begin: dialogue => {
+      // 这些话已经说完了：AI 的不再逐字打出
+      entries.value = dialogue.map(line =>
+        line.speaker === 'user'
+          ? { kind: 'user', id: nextId++, text: line.text }
+          : { kind: 'ai', id: nextId++, text: line.text, at: Number.NEGATIVE_INFINITY }
+      );
     },
     user: text => push({ kind: 'user', id: nextId++, text }),
     ai: text => push({ kind: 'ai', id: nextId++, text, at: now() })

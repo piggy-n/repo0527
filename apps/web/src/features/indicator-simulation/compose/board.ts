@@ -7,6 +7,8 @@ export type BoardLane = 'years' | 'region' | 'indicators' | 'params' | 'output';
 /** 节点的标识：年份、监测范围（一个节点列出各市）、指标、参数、AI 推演 */
 export const REGION_NODE = 'region';
 export const OUTPUT_NODE = 'output';
+/** 说的年份都不可选时，年份列的"待确认"节点（ADR 0129） */
+export const YEAR_PENDING_NODE = 'years:pending';
 // 参数总线：指标的连线汇到这条竖线上，再分到各个参数
 const BUS = 'bus';
 
@@ -22,13 +24,13 @@ export interface Box {
   readonly h: number;
 }
 
-/** 连线：flow 是条件之间的流向，bus、tick 是参数总线；连到偏离标准口径的参数时是 scenario */
+/** 连线：flow 是条件之间的流向，bus、tick 是参数总线；连到偏离标准口径的参数时是 scenario，连着待补充、待确认的节点时是 pending */
 export interface BoardLink {
   readonly id: string;
   readonly d: string;
   readonly from: string;
   readonly to: string;
-  readonly kind: 'flow' | 'bus' | 'tick' | 'scenario';
+  readonly kind: 'flow' | 'bus' | 'tick' | 'scenario' | 'pending';
 }
 
 type Point = readonly [number, number];
@@ -47,14 +49,16 @@ const BUS_GAP = 14;
 
 /**
  * 按节点位置连线：年份 → 范围 → 每项指标 → 参数总线 → 各参数 → AI 推演；参数是所选指标用得上的几项。没有位置的节点不连；
- * 所选指标都没有可调的参数（如城区面积覆盖率）时指标直接连到 AI 推演
+ * 所选指标都没有可调的参数（如城区面积覆盖率）时指标直接连到 AI 推演。pending 是待补充、待确认的节点
  */
 export function boardLinks(
   boxes: ReadonlyMap<string, Box>,
   conditions: SimulationConditions,
-  params: SimulationParams
+  params: SimulationParams,
+  pending: ReadonlySet<string> = new Set()
 ): BoardLink[] {
   const links: BoardLink[] = [];
+  const flow = (from: string, to: string): BoardLink['kind'] => (pending.has(from) || pending.has(to) ? 'pending' : 'flow');
   const region = boxes.get(REGION_NODE);
   const output = boxes.get(OUTPUT_NODE);
   if (region) {
@@ -62,8 +66,13 @@ export function boardLinks(
       const box = boxes.get(yearNode(year));
       if (box) {
         const d = curve(right(box), left(region));
-        links.push({ id: `y-${year}`, d, from: yearNode(year), to: REGION_NODE, kind: 'flow' });
+        links.push({ id: `y-${year}`, d, from: yearNode(year), to: REGION_NODE, kind: flow(yearNode(year), REGION_NODE) });
       }
+    }
+    const unsure = boxes.get(YEAR_PENDING_NODE);
+    if (unsure) {
+      const d = curve(right(unsure), left(region));
+      links.push({ id: 'y-pending', d, from: YEAR_PENDING_NODE, to: REGION_NODE, kind: 'pending' });
     }
   }
   const keys = paramsOf(conditions.indicatorIds);
@@ -86,7 +95,7 @@ export function boardLinks(
     }
     if (region) {
       const d = curve(right(region), left(box));
-      links.push({ id: `r-${id}`, d, from: REGION_NODE, to: indicatorNode(id), kind: 'flow' });
+      links.push({ id: `r-${id}`, d, from: REGION_NODE, to: indicatorNode(id), kind: flow(REGION_NODE, indicatorNode(id)) });
     }
     if (busPoint) {
       links.push({ id: `p-${id}`, d: curve(right(box), busPoint), from: indicatorNode(id), to: BUS, kind: 'flow' });
@@ -103,11 +112,12 @@ export function boardLinks(
   links.push({ id: BUS, d: `M${busX},${top} L${busX},${bottom}`, from: BUS, to: BUS, kind: 'bus' });
   for (const { key, box } of paramBoxes) {
     const y = box.y + box.h / 2;
-    const kind = isStandard(key, params) ? 'tick' : 'scenario';
+    const standardKind = isStandard(key, params) ? 'tick' : 'scenario';
+    const kind = pending.has(paramNode(key)) ? 'pending' : standardKind;
     links.push({ id: `b-${key}`, d: `M${busX},${y} L${box.x},${y}`, from: BUS, to: paramNode(key), kind });
     if (output) {
       const d = curve(right(box), left(output));
-      links.push({ id: `o-${key}`, d, from: paramNode(key), to: OUTPUT_NODE, kind: 'flow' });
+      links.push({ id: `o-${key}`, d, from: paramNode(key), to: OUTPUT_NODE, kind: flow(paramNode(key), OUTPUT_NODE) });
     }
   }
   return links;

@@ -660,3 +660,57 @@
     color: var(--color-primary);
   }
 }
+
+// 待补充、待确认的节点和连线（ADR 0129）：琥珀色虚线，和已经确定的节点区分开
+.pendingNode {
+  border: 1px dashed var(--color-warning);
+  background: var(--color-warning-bg);
+  box-shadow: none;
+
+  b {
+    color: var(--color-warning-text);
+  }
+
+  .icon {
+    color: var(--color-warning-text);
+  }
+}
+
+.pendingNote {
+  margin: 0;
+  color: var(--color-text-regular);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+}
+
+.pendingActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--space-md);
+
+  button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-primary);
+    font-family: inherit;
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-compact);
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--color-primary-hover);
+      text-decoration: underline;
+    }
+  }
+}
+
+.pending {
+  stroke: var(--color-warning);
+  stroke-dasharray: 4 4;
+}
+
+.aiWaiting {
+  color: var(--color-warning-text);
+}

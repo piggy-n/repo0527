@@ -5,9 +5,10 @@ import { defaultParams, withWalkMinutes } from '../model/params';
 import { areaScope, citiesScope } from '../model/scope';
 import { NANJING_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
-import { indicatorNode, OUTPUT_NODE, paramNode, REGION_NODE, yearNode } from './board';
+import { indicatorNode, OUTPUT_NODE, paramNode, REGION_NODE, YEAR_PENDING_NODE, yearNode } from './board';
 import { blankOf, buildSteps } from './build';
 import { type Composition, rememberedScopes, withScope } from './composition';
+import { paramConflicts, yearsConflict } from './conflicts';
 
 const target: Composition = {
   conditions: { years: [2026, 2025], scope: citiesScope(['320100', '320500']), indicatorIds: ['A-31', 'A-39'] },
@@ -96,5 +97,29 @@ describe('buildSteps 的步行时长（ADR 0125）', () => {
     expect(steps.find(step => step.node === paramNode('walk'))?.message).toBe(
       '设置步行时长：社区卫生 10 分钟（自定义口径）'
     );
+  });
+});
+
+describe('buildSteps 待补充、待确认（ADR 0129）', () => {
+  const pending: Composition = { ...target, conditions: { ...target.conditions, scope: citiesScope([]) } };
+
+  it('没有范围：范围节点照样出现，写明待补充；最后一步不说即将开始计算', () => {
+    const steps = buildSteps(pending);
+    expect(steps.find(step => step.node === REGION_NODE)?.message).toBe('未指定监测范围，标记为待补充');
+    expect(steps.at(-1)).toMatchObject({ node: OUTPUT_NODE, message: '已配置已知条件' });
+    expect(steps.at(-1)?.composition.conditions.indicatorIds).toEqual(['A-31', 'A-39']);
+  });
+
+  it('沿用页面上已有的范围时写明沿用', () => {
+    expect(buildSteps(target, { keptScope: true }).find(step => step.node === REGION_NODE)?.message).toBe('沿用范围：南京市、苏州市');
+  });
+
+  it('有冲突：年份多一个待确认的节点，参数写待确认，不说即将开始计算', () => {
+    const noYear: Composition = { ...target, conditions: { ...target.conditions, years: [] } };
+    const years = buildSteps(noYear, { conflicts: [yearsConflict([2019], [2026, 2025])] });
+    expect(years[0]).toMatchObject({ node: YEAR_PENDING_NODE, message: '年份不可用，标记为待确认' });
+    const rule = buildSteps(target, { conflicts: paramConflicts('旧规程和新规程') });
+    expect(rule.find(step => step.node === paramNode('rule'))?.message).toBe('设置计算规程：待确认');
+    expect(rule.at(-1)?.message).toBe('已配置已知条件');
   });
 });

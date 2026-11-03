@@ -6,6 +6,7 @@ import { ComposeStage } from '@/features/indicator-simulation/components/Compose
 import { RunStage } from '@/features/indicator-simulation/components/RunStage';
 import { ScopeAreaDialog } from '@/features/indicator-simulation/components/ScopeAreaDialog';
 import { useComposition } from '@/features/indicator-simulation/composables/useComposition';
+import { useCanvasHolder } from '@/features/indicator-simulation/composables/useCanvasHolder';
 import { usePauseWhileInactive } from '@/features/indicator-simulation/composables/usePauseWhileInactive';
 import { usePromptComposer } from '@/features/indicator-simulation/composables/usePromptComposer';
 import { useReasoningLog } from '@/features/indicator-simulation/composables/useReasoningLog';
@@ -17,7 +18,8 @@ import { useSimulationModel } from '@/features/indicator-simulation/composables/
 import { useSimulationResult } from '@/features/indicator-simulation/composables/useSimulationResult';
 import { useSimulationRun } from '@/features/indicator-simulation/composables/useSimulationRun';
 import { useUserPause } from '@/features/indicator-simulation/composables/useUserPause';
-import { areaLabel } from '@/features/indicator-simulation/model/scope';
+import type { DialogueLine } from '@/features/indicator-simulation/compose/guide';
+import { areaLabel, areaScope } from '@/features/indicator-simulation/model/scope';
 import { reducedMotion, STILL_CLASS } from '@/features/indicator-simulation/motion';
 import type { RunView } from '@/features/indicator-simulation/result/result-view';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
@@ -29,7 +31,8 @@ import styles from './IndicatorSimulationPage.module.scss';
 
 /**
  * 指标智能推演（ADR 0105～0108）：条件编排 → AI 推演 → 结果展示，全部是确定性的模拟数据，不请求后端。
- * 打开时编排是空的，由底部对话栏的推演指令或手动点选编排；AI 按指令逐个节点编排完成后自动开始推演。
+ * 打开时编排是空的，由底部对话栏的推演指令或手动点选编排；AI 按指令逐个节点编排完成后自动开始推演，
+ * 缺范围或有冲突时停在条件配置问用户，补齐后继续（ADR 0129）。
  * AI 推演阶段左侧是 AI 推理，主区是推演流程图；完成后"查看结果"在同一布局里换成左侧推演结果、主区地图，不读写偏好。
  * 编排和推演之间淡入淡出；切到别的页面时缓存，推演暂停（docs/modules/indicator-simulation.md）
  */
@@ -67,15 +70,26 @@ export const IndicatorSimulationPage = defineComponent({
     const basemap = useBasemap();
     const boundaries = useBoundaries();
     boundaries.setVisible('city', true);
-    const simulationMap = useSimulationMap(run, map, result);
+    const composing = computed(() => run.state.value.status === 'idle');
     const scopeEditor = useScopeEditor(map, {
       model,
       goToDefaultView,
+      // 计算和结果阶段：从条件解析重算；等范围时：补上并继续；纯手动配置：换上范围
       onConfirm: area => {
-        composition.setArea(area);
-        ElMessage.success(`已使用${areaLabel(area)}`);
+        if (!composing.value) {
+          conversation.applyArea(area);
+        } else if (composer.asking.value) {
+          composer.supplyScope(areaScope(area), `${area.source === 'upload' ? '上传' : '绘制'}范围「${area.name}」`);
+        } else {
+          composition.setArea(area);
+          ElMessage.success(`已使用${areaLabel(area)}`);
+        }
       }
     });
+    // 弹窗开着时结果地图让开、计算暂停，关上后恢复（ADR 0129）
+    const canvasHolder = useCanvasHolder(scopeEditor.open);
+    usePauseWhileInactive(run, computed(() => !scopeEditor.open.value));
+    const simulationMap = useSimulationMap(run, map, result, () => scopeEditor.open.value);
     map.registerTools(scopeEditor.tools);
     map.bindStyle({
       basemap: basemap.deriveGroup,
@@ -101,27 +115,34 @@ export const IndicatorSimulationPage = defineComponent({
         }
       }
     );
-    const composing = computed(() => run.state.value.status === 'idle');
 
-    // 开始推演：按指令编排完成的，时间线先写上这句指令
-    const startWith = (instruction: string | null) => {
+    // 开始推演：按指令编排完成的，时间线先写上计算之前的对话
+    const startWith = (dialogue: readonly DialogueLine[]) => {
       const current = model.value;
       if (current.status === 'ready') {
-        log.begin(instruction);
+        log.begin(dialogue);
         run.start(composition.state.value, current.calculator);
       }
     };
-    // 指令的文字在推演后回到编排时还在；AI 编排完成后直接开始推演（区县数据还没好时停在编排图，由用户点开始）
-    const composer = usePromptComposer(composition, { onComposed: () => startWith(composer.text.value) });
+    // 指令的文字在推演后回到编排时还在；AI 编排完成后直接开始推演（区县数据还没好时停在编排图，由用户点开始）；
+    // 开始按钮、自动开始都经 composer 做执行校验
+    const composer = usePromptComposer(composition, { onComposed: () => startWith(composer.dialogue.value) });
     // 推演和结果阶段的对话：暂停、继续、停止，改参数或条件；完成后还能看结果
-    const conversation = useRunConversation(run, composition, userPause, log, {
-      selection: result.selection,
-      view: runView,
-      select: result.select,
-      show: view => {
-        runView.value = view;
-      }
-    });
+    const conversation = useRunConversation(
+      run,
+      composition,
+      userPause,
+      log,
+      {
+        selection: result.selection,
+        view: runView,
+        select: result.select,
+        show: view => {
+          runView.value = view;
+        }
+      },
+      { onScopeRemoved: said => composer.awaitScope(said) }
+    );
 
     const renderStage = () =>
       composing.value ? (
@@ -131,7 +152,7 @@ export const IndicatorSimulationPage = defineComponent({
           composer={composer}
           model={model.value}
           editor={scopeEditor}
-          onStart={() => startWith(null)}
+          onStart={() => composer.start()}
           onRetry={retry}
         />
       ) : (
@@ -146,6 +167,8 @@ export const IndicatorSimulationPage = defineComponent({
           simulationMap={simulationMap}
           basemap={basemap}
           goToDefaultView={goToDefaultView}
+          mapAvailable={canvasHolder.value === 'result'}
+          scopeEditing={scopeEditor.open.value}
           view={runView.value}
           onUpdate:view={view => (runView.value = view)}
         />
@@ -166,10 +189,10 @@ export const IndicatorSimulationPage = defineComponent({
         <AiDock
           composer={composer}
           conversation={composing.value ? null : conversation}
-          scope={composing.value ? { composition, editor: scopeEditor } : null}
+          scope={{ composition, editor: scopeEditor }}
         />
-        {/* 只在条件配置时挂上：弹窗里的地图画布和结果的画布不能同时存在 */}
-        {composing.value && <ScopeAreaDialog editor={scopeEditor} />}
+        {/* 弹窗里的地图画布和结果的画布不能同时存在，由 canvasHolder 换手 */}
+        <ScopeAreaDialog editor={scopeEditor} canvasReady={canvasHolder.value === 'scope'} />
       </div>
     );
   }

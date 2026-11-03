@@ -33,6 +33,8 @@ async function mountRun(composition: Composition = sampleComposition()) {
   let log: ReasoningLog | undefined;
   let owner: SimulationResult | undefined;
   const view = ref<RunView>('flow');
+  const mapAvailable = ref(true);
+  const scopeEditing = ref(false);
   const Host = defineComponent({
     setup() {
       const owned = useSimulationRun(clock);
@@ -57,6 +59,8 @@ async function mountRun(composition: Composition = sampleComposition()) {
           simulationMap={simulationMap}
           basemap={basemap}
           goToDefaultView={() => undefined}
+          mapAvailable={mapAvailable.value}
+          scopeEditing={scopeEditing.value}
           view={view.value}
           onUpdate:view={next => (view.value = next)}
         />
@@ -65,10 +69,10 @@ async function mountRun(composition: Composition = sampleComposition()) {
   });
   const wrapper = mount(Host, { attachTo: document.body, global: { stubs: { MapCanvas: true } } });
   const started = required(run, '计算的拥有者');
-  required(log, '时间线').begin('计算全省三项指标');
+  required(log, '时间线').begin([{ speaker: 'user', text: '计算全省三项指标' }]);
   started.start(composition, calculator);
   await flushPromises();
-  return { wrapper, run: started, log: required(log, '时间线'), result: required(owner, '结果的拥有者'), view, clock };
+  return { wrapper, run: started, log: required(log, '时间线'), result: required(owner, '结果的拥有者'), view, clock, mapAvailable, scopeEditing };
 }
 
 type Mounted = Awaited<ReturnType<typeof mountRun>>;
@@ -300,5 +304,25 @@ describe('RunStage', () => {
     expect([dim('pop'), dim('parse'), dim('report')]).toEqual([false, true, true]);
     await prep.trigger('mouseleave');
     expect(dim('parse')).toBe(false);
+  });
+});
+
+describe('RunStage 范围弹窗开着时（ADR 0129）', () => {
+  it('标题栏写正在选择范围；结果地图让开，关上后回来', async () => {
+    const mounted = await mountRun();
+    const { wrapper, mapAvailable, scopeEditing } = mounted;
+    scopeEditing.value = true;
+    await flushPromises();
+    expect(wrapper.get('[role="status"]').text()).toBe('已暂停 · 正在选择范围');
+    scopeEditing.value = false;
+    await advance(mounted, ENOUGH);
+    expect(wrapper.find('map-canvas-stub').exists()).toBe(true);
+
+    mapAvailable.value = false;
+    await flushPromises();
+    expect(wrapper.find('map-canvas-stub').exists()).toBe(false);
+    mapAvailable.value = true;
+    await flushPromises();
+    expect(wrapper.find('map-canvas-stub').exists()).toBe(true);
   });
 });

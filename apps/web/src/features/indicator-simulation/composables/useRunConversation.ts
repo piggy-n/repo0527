@@ -1,16 +1,20 @@
 import { computed, type ComputedRef, type Ref, ref, shallowRef } from 'vue';
-import { rememberedScopes } from '../compose/composition';
+import { missingConditions, rememberedScopes, withArea } from '../compose/composition';
 import { STEP_GROUPS } from '../engine/steps';
 import type { ResultSelection, RunView } from '../result/result-view';
+import { areaLabel, type ScopeArea } from '../model/scope';
 import { interpretView, viewSuggestions } from '../result/view-commands';
-import { commandSuggestions, interpretCommand } from '../run/commands';
+import { commandSuggestions, interpretCommand, scopeAction } from '../run/commands';
 import type { CompositionOwner } from './useComposition';
 import type { ReasoningLog } from './useReasoningLog';
 import type { SimulationRun } from './useSimulationRun';
 import type { UserPause } from './useUserPause';
 
-/** 发送的结果：输入框是空的、停止了推演（界面回到条件编排）、其余都已回复在时间线上 */
-export type ConversationOutcome = 'empty' | 'stopped' | 'replied';
+/**
+ * 发送的结果：输入框是空的、停止了推演（界面回到条件编排）、移除了范围（回到条件配置等补充）、其余都已回复在时间线上；
+ * upload、draw 由对话栏打开文件选择和弹窗
+ */
+export type ConversationOutcome = 'empty' | 'stopped' | 'scope-removed' | 'replied' | 'upload' | 'draw';
 
 /** 看结果用的：结果的选择、主区在看流程还是结果 */
 export interface ResultViewer {
@@ -35,15 +39,22 @@ export interface RunConversation {
   readonly reply: ComputedRef<string | null>;
   /** 发送输入框里的话；传了 text 时发送这句（快捷说法） */
   send(text?: string): ConversationOutcome;
+  /** 弹窗里确定了新的自定义范围：从条件解析重算（ADR 0129） */
+  applyArea(area: ScopeArea): void;
 }
 
-const HINT = '未能识别该指令，可尝试：暂停、继续、停止；改成旧规程、相交即算、人口增加 10%；加上苏州市、去掉人均公园绿地。';
+export interface RunConversationHooks {
+  /** 范围被移除：计算没法继续，页面回到条件配置等补充；说明这句话改了什么 */
+  readonly onScopeRemoved?: (said: readonly string[]) => void;
+}
+
+const HINT = '未能识别该指令，可尝试：暂停、继续、停止；改成旧规程、相交即算、人口增加 10%；加上苏州市、移除范围、去掉人均公园绿地。';
 // 推演完成后还能看结果
 const DONE_HINT =
-  '未能识别该指令。查看结果可尝试：看南京市、看 2025 年、回看计算流程；调整条件可尝试：改成旧规程、相交即算、加上苏州市、去掉人均公园绿地。';
+  '未能识别该指令。查看结果可尝试：看南京市、看 2025 年、回看计算流程；调整条件可尝试：改成旧规程、相交即算、加上苏州市、移除范围、去掉人均公园绿地。';
 
 // 控制计算的快捷说法：太短，不拿来做占位的示例
-const CONTROLS: ReadonlySet<string> = new Set(['暂停', '继续', '停止计算', '调整条件', '回看计算流程']);
+const CONTROLS: ReadonlySet<string> = new Set(['暂停', '继续', '停止计算', '调整条件', '回看计算流程', '绘制范围', '移除范围']);
 
 const groupName = (step: string | null) =>
   STEP_GROUPS.find(group => group.steps.some(item => item === step))?.name ?? '条件解析';
@@ -51,6 +62,7 @@ const groupName = (step: string | null) =>
 /**
  * 推演中的对话（按规则理解，run/commands.ts）：暂停、继续、停止；改参数时按引擎的规则保存或从受影响的步骤重算，
  * 改年度、范围、指标时从条件解析重算；有改动时先解除用户的暂停。条件编排同步成新的条件，停止后回到编排时就是它。
+ * 范围被移除时停止计算，回到条件配置等补充；要上传或绘制新范围时打开弹窗（ADR 0129）。
  * 推演完成后先看是不是看结果的说法（result/view-commands.ts）：只换结果的选择和主区的视图，不重新推演
  */
 export function useRunConversation(
@@ -58,7 +70,8 @@ export function useRunConversation(
   composition: CompositionOwner,
   userPause: UserPause,
   log: ReasoningLog,
-  viewer: ResultViewer
+  viewer: ResultViewer,
+  hooks: RunConversationHooks = {}
 ): RunConversation {
   const text = ref('');
   const lastReply = shallowRef<string | null>(null);
@@ -91,6 +104,14 @@ export function useRunConversation(
     }
     log.user(input);
     lastReply.value = null;
+    const action = scopeAction(input);
+    if (action === 'draw') {
+      // 只记在时间线上：取消后不该留在结果页的输入框下面
+      log.ai(phase.value === 'done' ? '已打开地图绘制；确定后将从「条件解析」重新计算。' : '已打开地图绘制，计算暂停；确定后将从「条件解析」重新计算，取消后继续。');
+    }
+    if (action) {
+      return action;
+    }
     const view = phase.value === 'done' && viewer.selection.value ? interpretView(input, current().conditions) : null;
     if (view) {
       viewer.select(view.patch);
@@ -113,6 +134,9 @@ export function useRunConversation(
       case 'resume':
         say(userPause.resume() ? '继续计算。' : '计算未暂停。');
         return 'replied';
+      case 'conflict':
+        say(`${command.conflicts[0]?.question ?? ''}计算条件未变化。`);
+        return 'replied';
       case 'none':
         if (command.notes.length > 0) {
           say(`${command.notes.join('；')}，计算条件未变化。`);
@@ -126,6 +150,13 @@ export function useRunConversation(
     // 改了就重新推演、回到流程图，回复只记在时间线上
     userPause.resume();
     composition.replace(command.composition);
+    // 执行校验：范围没了就不能重算，回到条件配置，其余条件保留
+    if (missingConditions(command.composition.conditions).length > 0) {
+      const stopping = phase.value !== 'done';
+      run.stop();
+      hooks.onScopeRemoved?.([...command.said, stopping ? '计算已停止，其他条件已保留' : '其他条件已保留']);
+      return 'scope-removed';
+    }
     const head = `已调整：${command.said.join('；')}。`;
     const notes = command.notes.length > 0 ? `（${command.notes.join('；')}）` : '';
     if (command.conditionsChanged) {
@@ -154,7 +185,7 @@ export function useRunConversation(
     const list = commandSuggestions(current(), phase.value);
     const selection = viewer.selection.value;
     return phase.value === 'done' && viewer.view.value === 'result' && selection
-      ? [...viewSuggestions(conditions, selection), ...list.slice(0, 2)]
+      ? [...viewSuggestions(conditions, selection), ...list.slice(0, 2), '绘制范围', '移除范围']
       : list;
   });
   const example = computed(() => suggestions.value.find(words => !CONTROLS.has(words)) ?? suggestions.value[0] ?? '');
@@ -171,6 +202,15 @@ export function useRunConversation(
       text.value = example.value;
     },
     reply: computed(() => (viewer.view.value === 'result' ? lastReply.value : null)),
-    send
+    send,
+    applyArea: area => {
+      const next = withArea(current(), area);
+      lastReply.value = null;
+      log.user(`${area.source === 'upload' ? '上传' : '绘制'}范围「${area.name}」`);
+      userPause.resume();
+      composition.replace(next);
+      run.restart(next);
+      log.ai(`已调整：范围改为${areaLabel(area)}，涉及 ${area.coverage.covers.length} 个区县。将从「条件解析」重新计算。`);
+    }
   };
 }

@@ -4,12 +4,24 @@ import {
   defaultParams,
   indicatorName,
   paramApplies,
+  PARAM_LABELS,
+  type ParamKey,
   POP_CHANGE_RANGE,
   type SimulationParams,
   withWalkMinutes
 } from '../model/params';
-import { areaLabel, areaScope, citiesScope, type ScopeArea, type SimulationScope } from '../model/scope';
+import { areaLabel, areaScope, citiesScope, type ScopeArea, scopeCityCodes } from '../model/scope';
 import { type Composition, emptyComposition, rememberedScopes, SIMULATION_YEARS, withScope } from './composition';
+import {
+  type ConditionConflict,
+  type ConflictKey,
+  paramConflicts,
+  saidPopChanges,
+  saidRecognition,
+  saidRule,
+  scopeConflict,
+  yearsConflict
+} from './conflicts';
 import { applyWalk, coreName, findWalk, walkStem } from './walk-prompt';
 
 /** 三条示例指令：每条是"推演条件 + 至多一个参数"，分别用到计算规程、覆盖认定、常住人口变化 */
@@ -54,25 +66,41 @@ export function findIndicators(text: string): string[] {
   return found.toSorted((a, b) => a.at - b.at).map(item => item.id);
 }
 
-// 参数只认这几种写法，而且只在所选指标用得上时才改，其余保持标准口径
-function findParams(text: string, indicatorIds: readonly string[]): SimulationParams {
+// 参数只认这几种写法，而且只在所选指标用得上时才改，其余保持标准口径；用不上的说明原因
+function findParams(text: string, indicatorIds: readonly string[], notes: string[]): SimulationParams {
   const uses = (key: 'rule' | 'recognition' | 'popChange') => indicatorIds.some(id => paramApplies(key, id));
   const standard = defaultParams();
-  const pop = /人口(增加|增长|上升|提高|减少|下降|降低)(\d+)%/.exec(text);
-  let popChange = 0;
-  if (pop && uses('popChange')) {
-    const stepped = Math.round(Number(pop[2]) / POP_CHANGE_RANGE.step) * POP_CHANGE_RANGE.step;
-    const size = Math.min(POP_CHANGE_RANGE.max, stepped);
-    popChange = /减少|下降|降低/.test(pop[1] ?? '') ? -size : size;
+  const notUsed = (key: ParamKey) => notes.push(`所选指标不适用${PARAM_LABELS[key]}，已按标准口径`);
+  const pops = saidPopChanges(text);
+  const [pop = 0] = pops;
+  if (pop !== 0 && !uses('popChange')) {
+    notUsed('popChange');
+  }
+  const rule = saidRule(text);
+  if (rule === 'old' && !uses('rule')) {
+    notUsed('rule');
+  }
+  const recognition = saidRecognition(text);
+  if (recognition === 'intersect' && !uses('recognition')) {
+    notUsed('recognition');
   }
   const found: SimulationParams = {
     ...standard,
-    rule: text.includes('旧规程') && uses('rule') ? 'old' : standard.rule,
-    recognition: text.includes('相交') && uses('recognition') ? 'intersect' : standard.recognition,
-    popChange
+    rule: rule === 'old' && uses('rule') ? 'old' : standard.rule,
+    recognition: recognition === 'intersect' && uses('recognition') ? 'intersect' : standard.recognition,
+    popChange: pops.length === 1 && uses('popChange') ? pop : 0
   };
   const walk = findWalk(text);
-  return walk ? applyWalk(found, walk, indicatorIds).params : found;
+  if (!walk) {
+    return found;
+  }
+  const { params, applied, snapped } = applyWalk(found, walk, indicatorIds);
+  if (applied === 0) {
+    notUsed('walk');
+  } else if (snapped) {
+    notes.push(`${PARAM_LABELS.walk}按 5 分钟一档，已取最接近的一档`);
+  }
+  return params;
 }
 
 /** 句子里提到的城市（按区划目录排序）；写了"全省""江苏"时是全部 13 个市 */
@@ -85,47 +113,124 @@ export function findCities(text: string): string[] {
 /** 指令里说到自定义范围：用上传或绘制的范围（ADR 0121） */
 export const AREA_WORDS = /自定义范围|上传的范围|绘制的范围|画的范围|这个范围|该范围/;
 
+/** 一句话里说的范围：都没说、自定义范围、城市，或者同时说了两种（要问） */
+export type SaidScope =
+  | { readonly kind: 'none' | 'area' }
+  | { readonly kind: 'cities' | 'both'; readonly cityCodes: readonly string[] };
+
+const SCOPE_TARGET = /(?:改成|改为|换成|改回)(.*)$/;
+
+/** 句子里说的范围；"把自定义范围换成南京市"说的是南京市。城市由调用方找好：对话里说人口时不认城市 */
+export function saidScope(text: string, cityCodes: readonly string[] = findCities(text)): SaidScope {
+  const wantsArea = AREA_WORDS.test(text);
+  if (wantsArea && cityCodes.length > 0) {
+    const target = SCOPE_TARGET.exec(text)?.[1] ?? '';
+    if (AREA_WORDS.test(target)) {
+      return { kind: 'area' };
+    }
+    const named = findCities(target);
+    return named.length > 0 ? { kind: 'cities', cityCodes: named } : { kind: 'both', cityCodes };
+  }
+  if (wantsArea) {
+    return { kind: 'area' };
+  }
+  return cityCodes.length > 0 ? { kind: 'cities', cityCodes } : { kind: 'none' };
+}
+
+const mentionedYears = (text: string): number[] => [...new Set([...text.matchAll(/20\d{2}/g)].map(match => Number(match[0])))];
+
+// 「」里是自定义范围的名称：里面的数字、城市、指标不算条件
+const plainPrompt = (input: string): string => input.replace(/「[^」]*」/g, '').replace(/\s+/g, '');
+
 /** 正在用自定义范围时占位的示例：写出范围的名称，解析得到这个范围 */
 export const areaPrompt = (area: ScopeArea): string =>
   `计算${areaLabel(area)} 2025 年社区卫生服务设施覆盖率和人均公园绿地面积`;
 
-/** 解析的结果：认不出指标，或者说了自定义范围、但还没有上传或绘制 */
-export type PromptParse =
-  | { readonly ok: true; readonly composition: Composition }
-  | { readonly ok: false; readonly reason: 'indicator' | 'area' };
+/** 解析好的一句指令：条件可能还不全（范围待补充）；conflicts 要用户确认，notes 只是说明 */
+export interface ParsedPrompt {
+  readonly ok: true;
+  readonly composition: Composition;
+  readonly conflicts: readonly ConditionConflict[];
+  readonly notes: readonly string[];
+  /** 句子没说范围，接着用页面上已有的范围 */
+  readonly keptScope: boolean;
+}
+
+/** 解析的结果：认不出指标时不配置 */
+export type PromptParse = ParsedPrompt | { readonly ok: false; readonly reason: 'indicator' };
 
 /**
- * 解析一句计算指令：年份（没写按 2025）、范围、指标、参数。范围：说了自定义范围时用记下的自定义范围；
- * 说了城市时用这些市；都没说时，正在用自定义范围就接着用，否则按全省。记下的两种范围带进结果
+ * 解析一句计算指令（ADR 0129）：年份（没写按 2025，写了但都不可选时留空并追问）、范围、指标、参数。
+ * 范围：说了自定义范围、城市就用；都没说时，页面上已有范围就接着用，否则留空，由调用方标为待补充。记下的两种范围带进结果
  */
 export function parsePrompt(input: string, current: Composition = emptyComposition()): PromptParse {
-  // 「」里是自定义范围的名称：里面的数字、城市、指标不算条件
-  const text = input.replace(/「[^」]*」/g, '').replace(/\s+/g, '');
+  const text = plainPrompt(input);
   const indicatorIds = findIndicators(text);
   if (indicatorIds.length === 0) {
     return { ok: false, reason: 'indicator' };
   }
+  const notes: string[] = [];
+  const conflicts: ConditionConflict[] = [];
+  const said = mentionedYears(text);
+  const years = said.filter(year => SIMULATION_YEARS.includes(year)).toSorted((a, b) => b - a);
+  const unavailable = said.filter(year => !SIMULATION_YEARS.includes(year));
+  if (unavailable.length > 0 && years.length === 0) {
+    conflicts.push(yearsConflict(unavailable, SIMULATION_YEARS));
+  } else if (unavailable.length > 0) {
+    notes.push(`没有 ${unavailable.join('、')} 年的数据，已按 ${years.join('、')} 年计算`);
+  }
+
   const { area } = rememberedScopes(current);
-  const wantsArea = AREA_WORDS.test(text);
-  if (wantsArea && !area) {
-    return { ok: false, reason: 'area' };
-  }
-  const years = [...new Set([...text.matchAll(/20\d{2}/g)].map(match => Number(match[0])))]
-    .filter(year => SIMULATION_YEARS.includes(year))
-    .toSorted((a, b) => b - a);
-  const cityCodes = findCities(text);
-  let scope: SimulationScope;
-  if (wantsArea || (cityCodes.length === 0 && current.conditions.scope.kind === 'area' && area)) {
+  const named = saidScope(text);
+  const { scope: currentScope } = current.conditions;
+  let scope = currentScope;
+  if (named.kind === 'area') {
     scope = areaScope(area);
-  } else {
-    scope = citiesScope(cityCodes.length > 0 ? cityCodes : ALL_CITIES);
+  } else if (named.kind === 'cities') {
+    scope = citiesScope(named.cityCodes);
+  } else if (named.kind === 'both') {
+    conflicts.push(scopeConflict(named.cityCodes, area !== null));
+    scope = citiesScope([]);
   }
+
+  const params = findParams(text, indicatorIds, notes);
+  conflicts.push(...paramConflicts(text).filter(conflict => indicatorIds.some(id => paramApplies(conflict.key, id))));
   const parsed: Composition = {
     ...current,
-    conditions: { years: years.length > 0 ? years : [DEFAULT_YEAR], scope: current.conditions.scope, indicatorIds },
-    params: findParams(text, indicatorIds)
+    conditions: { years: said.length > 0 ? years : [DEFAULT_YEAR], scope: currentScope, indicatorIds },
+    params
   };
-  return { ok: true, composition: withScope(parsed, scope) };
+  return {
+    ok: true,
+    composition: withScope(parsed, scope),
+    conflicts,
+    notes,
+    keptScope: named.kind === 'none' && scopeCityCodes(currentScope).length > 0
+  };
+}
+
+const ANSWERS: Readonly<Record<ConflictKey, (text: string) => boolean>> = {
+  years: text => mentionedYears(text).some(year => SIMULATION_YEARS.includes(year)),
+  scope: text => {
+    const { kind } = saidScope(text);
+    return kind === 'area' || kind === 'cities';
+  },
+  rule: text => {
+    const said = saidRule(text);
+    return said === 'old' || said === 'new';
+  },
+  recognition: text => {
+    const said = saidRecognition(text);
+    return said === 'intersect' || said === 'half';
+  },
+  popChange: text => saidPopChanges(text).length === 1 || /人口(不变|恢复)/.test(text)
+};
+
+/** 这句话回答之后还没解决的冲突；恢复标准口径时几项参数都算回答了 */
+export function conflictsAfterReply(conflicts: readonly ConditionConflict[], input: string): ConditionConflict[] {
+  const text = plainPrompt(input);
+  const standard = /(恢复|改回|回到|按)标准口径/.test(text);
+  return conflicts.filter(({ key }) => !ANSWERS[key](text) && !(standard && key !== 'years' && key !== 'scope'));
 }
 
 /** 把编排写成一句指令；条件不全时是空字符串。全省、一两个市或自定义范围时，解析这句话能得到同样的年份、范围、第一项指标和参数 */
@@ -161,6 +266,14 @@ export function describeComposition({ conditions, params }: Composition): string
   return range.kind === 'area'
     ? `${lead}计算${scope} ${yearsText} 年${subject}`
     : `${lead}计算 ${yearsText} 年${scope}${subject}`;
+}
+
+const SCOPE_REPLIES: readonly string[] = ['南京市、苏州市', '全省', '无锡市', '徐州市、连云港市', '常州市、镇江市'];
+
+/** 等用户补充范围时占位的回复示例：换一批换一句，不和 avoid 相同 */
+export function randomScopeReply(random: () => number, avoid: string): string {
+  const pool = SCOPE_REPLIES.filter(item => item !== avoid);
+  return pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))] ?? avoid;
 }
 
 /** 随机指令里一定有的指标：社区卫生服务设施覆盖率，计算规程、覆盖认定、步行时长都能演示 */

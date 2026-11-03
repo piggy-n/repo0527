@@ -2,7 +2,7 @@
 import type { ViewBounds } from '@yzt/map-core';
 import type { CameraControl } from '@yzt/map-vue';
 import { describe, expect, it } from 'vitest';
-import { effectScope } from 'vue';
+import { effectScope, ref } from 'vue';
 import { required } from '@/shared/testing/required';
 import { sampleComposition } from '../compose/composition';
 import { ManualClock } from '../engine/test-clock';
@@ -34,7 +34,9 @@ async function setup() {
     scope.run(() => {
       const run = useSimulationRun(clock);
       const result = useSimulationResult(run);
-      return { run, result, map: useSimulationMap(run, { runCameraOperation: action => action(camera) }, result) };
+      const suspended = ref(false);
+      const map = useSimulationMap(run, { runCameraOperation: action => action(camera) }, result, () => suspended.value);
+      return { run, result, suspended, map };
     }),
     '计算和地图'
   );
@@ -125,5 +127,30 @@ describe('useSimulationMap', () => {
     await settle();
     expect(moves).toHaveLength(2);
     expect(map.deriveFacilities().layers.length).toBeGreaterThan(0);
+  });
+});
+
+describe('useSimulationMap 范围弹窗借用地图（ADR 0129）', () => {
+  it('弹窗开着时不显示结果；关上后恢复，镜头移回计算范围', async () => {
+    using ctx = await setup();
+    const { run, map, suspended, calculator, clock, moves } = ctx;
+    run.start(sampleComposition(), calculator);
+    await clock.advance(ENOUGH);
+    await settle();
+    expect(map.data.value).not.toBeNull();
+    const before = moves.length;
+
+    suspended.value = true;
+    await settle();
+    expect(map.data.value).toBeNull();
+    expect(map.labels.value).toEqual([]);
+    expect(map.deriveDistricts()).toEqual(empty);
+    expect(moves).toHaveLength(before);
+
+    suspended.value = false;
+    await settle();
+    expect(map.data.value).not.toBeNull();
+    expect(moves).toHaveLength(before + 1);
+    expect(moves.at(-1)?.kind).toBe('fit');
   });
 });

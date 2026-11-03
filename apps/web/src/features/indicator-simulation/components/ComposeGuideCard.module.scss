@@ -1,0 +1,97 @@
+// 输入框上方的引导卡：在等用户时是琥珀色，和编排图的待补充节点一致；都齐了是主色
+.root {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 6px var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-bg-lighter);
+  animation: guide-in 0.24s ease-out;
+}
+
+.asking {
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg);
+}
+
+@keyframes guide-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.text {
+  margin: 1px 0 0;
+  color: var(--color-text-title);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+
+  em {
+    color: var(--color-warning-text);
+    font-style: normal;
+    font-weight: var(--font-weight-semibold);
+  }
+}
+
+.known {
+  color: var(--color-text-regular);
+}
+
+.more {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 2;
+  align-items: center;
+  gap: 6px var(--space-sm);
+
+  // Element 相邻按钮的左外边距由 gap 负责
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+// 同计算阶段的快捷说法，底色换成白色，在琥珀色的卡片上看得清
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 var(--space-md);
+  border: 1px solid var(--color-primary-border);
+  border-radius: 999px;
+  background: var(--color-bg-container);
+  color: var(--color-primary);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible,
+  &[aria-expanded='true'] {
+    border-color: var(--color-primary);
+    background: var(--color-primary-bg);
+  }
+
+  svg {
+    font-size: 14px;
+  }
+}
+
+.gap {
+  width: 1px;
+  height: 14px;
+  background: var(--color-divider);
+}

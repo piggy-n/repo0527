@@ -16,6 +16,7 @@ import {
   paramNode,
   REGION_NODE,
   relatedNodes,
+  YEAR_PENDING_NODE,
   yearNode
 } from './board';
 import { citiesScope } from '../model/scope';
@@ -108,5 +109,28 @@ describe('悬停', () => {
       .map(link => link.id);
     expect(lit).toEqual(['p-B-65', 'bus', 'b-recognition', 'o-recognition']);
     expect(relatedNodes(null, conditions).size).toBe(0);
+  });
+});
+
+describe('boardLinks 待补充、待确认（ADR 0129）', () => {
+  it('连着待补充节点的线是 pending，其余不变；不传时没有 pending', () => {
+    const links = boardLinks(allBoxes, conditions, defaultParams(), new Set([REGION_NODE]));
+    const touching = links.filter(link => link.from === REGION_NODE || link.to === REGION_NODE);
+    expect(touching.length).toBeGreaterThan(0);
+    expect(touching.every(link => link.kind === 'pending')).toBe(true);
+    expect(links.filter(link => link.kind === 'pending')).toHaveLength(touching.length);
+    expect(boardLinks(allBoxes, conditions, defaultParams()).some(link => link.kind === 'pending')).toBe(false);
+  });
+
+  it('待确认的参数：进出的线都是 pending', () => {
+    const key = paramNode('recognition');
+    const links = boardLinks(allBoxes, conditions, defaultParams(), new Set([key]));
+    expect(links.filter(link => link.to === key || link.from === key).map(link => link.kind)).toEqual(['pending', 'pending']);
+  });
+
+  it('待确认的年份节点连到范围', () => {
+    const boxes = boxesOf([[YEAR_PENDING_NODE], [REGION_NODE]]);
+    const links = boardLinks(boxes, { ...conditions, years: [], indicatorIds: [] }, defaultParams(), new Set([YEAR_PENDING_NODE]));
+    expect(links).toEqual([expect.objectContaining({ from: YEAR_PENDING_NODE, to: REGION_NODE, kind: 'pending' })]);
   });
 });

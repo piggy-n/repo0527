@@ -1,12 +1,13 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { effectScope, ref } from 'vue';
 import { required } from '@/shared/testing/required';
 import { type Composition, sampleComposition } from '../compose/composition';
 import { ManualClock } from '../engine/test-clock';
 import { createCalculator } from '../model/calculator';
 import { defaultParams } from '../model/params';
-import { citiesScope } from '../model/scope';
+import { areaScope, citiesScope } from '../model/scope';
+import { NINGZHEN_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
 import type { RunView } from '../result/result-view';
 import { useComposition } from './useComposition';
@@ -36,12 +37,14 @@ async function setup() {
       const result = useSimulationResult(run);
       const view = ref<RunView>('flow');
       const viewer = { selection: result.selection, view, select: result.select, show: (next: RunView) => (view.value = next) };
-      return { run, owner, log, userPause, result, view, conversation: useRunConversation(run, owner, userPause, log, viewer) };
+      const removed = vi.fn<(said: readonly string[]) => void>();
+      const conversation = useRunConversation(run, owner, userPause, log, viewer, { onScopeRemoved: removed });
+      return { run, owner, log, userPause, result, view, removed, conversation };
     }),
     '计算和对话'
   );
   const start = () => {
-    owned.log.begin('计算南京市的两项指标');
+    owned.log.begin([{ speaker: 'user', text: '计算南京市的两项指标' }]);
     owned.run.start(composition, calculator);
   };
   return { ...owned, calculator, clock, start, [Symbol.dispose]: () => scope.stop() };
@@ -230,5 +233,91 @@ describe('useRunConversation', () => {
     // 改了就重新计算：回复只记在时间线上（回到流程图由页面按计算状态切换）
     expect(lastReply(log.entries.value)).toContain('将从「条件解析」重新计算');
     expect(conversation.reply.value).toBeNull();
+  });
+});
+
+describe('计算阶段新增、替换、移除范围（ADR 0129）', () => {
+  it('开始时接上计算之前的对话：AI 的话已经说完，不再逐字打出', async () => {
+    using ctx = await setup();
+    const { log } = ctx;
+    log.begin([
+      { speaker: 'user', text: '计算社区卫生' },
+      { speaker: 'ai', text: '还缺监测范围。' },
+      { speaker: 'user', text: '南京市' }
+    ]);
+    expect(outline(log.entries.value)).toEqual(['用户：计算社区卫生', 'AI：还缺监测范围。', '用户：南京市']);
+    const [, ai] = log.entries.value;
+    expect(ai?.kind === 'ai' && ai.at).toBe(Number.NEGATIVE_INFINITY);
+  });
+
+  it('计算中移除范围：停止计算，交回条件配置，其余条件保留', async () => {
+    using ctx = await setup();
+    const { run, owner, conversation, removed, clock, start } = ctx;
+    start();
+    await clock.advance(3000);
+    expect(conversation.send('移除范围')).toBe('scope-removed');
+    expect(run.state.value.status).toBe('idle');
+    expect(owner.state.value.conditions).toEqual({ ...composition.conditions, scope: citiesScope([]) });
+    expect(removed).toHaveBeenCalledWith(['已移除南京市', '计算已停止，其他条件已保留']);
+  });
+
+  it('完成后去掉最后一个市也一样；说明里不说计算已停止', async () => {
+    using ctx = await setup();
+    const { run, conversation, removed, clock, start } = ctx;
+    start();
+    await clock.advance(ENOUGH);
+    expect(conversation.send('去掉南京市')).toBe('scope-removed');
+    expect(run.state.value.status).toBe('idle');
+    expect(removed).toHaveBeenCalledWith(['已移除南京市', '其他条件已保留']);
+  });
+
+  it('换范围：从条件解析重算，不交回条件配置', async () => {
+    using ctx = await setup();
+    const { run, conversation, removed, clock, log, start } = ctx;
+    start();
+    await clock.advance(3000);
+    expect(conversation.send('换成苏州市')).toBe('replied');
+    expect(removed).not.toHaveBeenCalled();
+    expect(run.state.value.conditions?.scope).toEqual(citiesScope(['320500']));
+    expect(lastReply(log.entries.value)).toBe('已调整：范围改为苏州市。将从「条件解析」重新计算。');
+  });
+
+  it('要上传、绘制范围时交给对话栏打开；绘制有说明', async () => {
+    using ctx = await setup();
+    const { conversation, log, start } = ctx;
+    start();
+    expect(conversation.send('上传范围')).toBe('upload');
+    expect(conversation.send('绘制范围')).toBe('draw');
+    expect(lastReply(log.entries.value)).toContain('已打开地图绘制，计算暂停');
+    expect(conversation.suggestions.value).toEqual(expect.arrayContaining(['绘制范围', '移除范围']));
+    expect(conversation.example.value).not.toMatch(/绘制范围|移除范围/);
+  });
+
+  it('弹窗确定了新范围：解除暂停，从条件解析重算，条件配置同步', async () => {
+    using ctx = await setup();
+    const { run, owner, conversation, userPause, calculator, log, clock, start } = ctx;
+    const area = await testArea(calculator.atlas, NINGZHEN_RINGS, '宁镇交界');
+    start();
+    await clock.advance(3000);
+    userPause.pause();
+    conversation.applyArea(area);
+    expect(userPause.paused.value).toBe(false);
+    expect(owner.state.value.conditions.scope).toEqual(areaScope(area));
+    expect(run.state.value.conditions?.scope).toEqual(areaScope(area));
+    expect(outline(log.entries.value)).toContain('用户：绘制范围「宁镇交界」');
+    expect(lastReply(log.entries.value)).toContain('已调整：范围改为自定义范围「宁镇交界」');
+    await clock.advance(ENOUGH);
+    expect(run.state.value.status).toBe('done');
+  });
+
+  it('一句话里互相矛盾：问用哪一个，不重算', async () => {
+    using ctx = await setup();
+    const { run, conversation, log, clock, start } = ctx;
+    start();
+    await clock.advance(3000);
+    const before = run.state.value.conditions;
+    expect(conversation.send('按旧规程和新规程计算')).toBe('replied');
+    expect(lastReply(log.entries.value)).toBe('同时提到了旧规程和新规程，要按哪一个计算？计算条件未变化。');
+    expect(run.state.value.conditions).toBe(before);
   });
 });

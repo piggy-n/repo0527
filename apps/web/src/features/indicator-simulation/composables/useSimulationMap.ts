@@ -43,12 +43,14 @@ const SHOWN: MapFrame = { density: null, scan: 1, rain: 1, ring: 1 };
 
 /**
  * 结果展示的地图：按结果的选择显示（指标、年度），各市标出值，悬停的市描边；
- * 放大到一个市时画设施和服务圈；有了结果时镜头移到推演范围，放大到一个市时移到这个市，回到整个范围时再移回来
+ * 放大到一个市时画设施和服务圈；有了结果时镜头移到推演范围，放大到一个市时移到这个市，回到整个范围时再移回来。
+ * suspended：范围弹窗借用同一个地图上下文时不显示结果，关上后镜头移回来（ADR 0129）
  */
 export function useSimulationMap(
   run: SimulationRun,
   map: Pick<MapContext, 'runCameraOperation'>,
-  result: SimulationResult
+  result: SimulationResult,
+  suspended: () => boolean = () => false
 ): SimulationMap {
   const state = run.state;
   const conditions = computed(() => state.value.conditions);
@@ -58,7 +60,9 @@ export function useSimulationMap(
     const selection = result.selection.value;
     const version = result.version.value;
     const coloring = result.coloring.value;
-    return state.value.status === 'done' && selection && version && coloring ? { selection, version, coloring } : null;
+    return !suspended() && state.value.status === 'done' && selection && version && coloring
+      ? { selection, version, coloring }
+      : null;
   });
 
   const data = computed((): MapData | null => {
