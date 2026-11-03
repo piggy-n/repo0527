@@ -17,6 +17,8 @@ import { ManualClock } from '../engine/test-clock';
 import { THINK_MS } from '../flow/frame';
 import { createCalculator } from '../model/calculator';
 import { defaultParams } from '../model/params';
+import { areaScope } from '../model/scope';
+import { NINGZHEN_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
 import type { RunView } from '../result/result-view';
 import { FlowChart } from './FlowChart';
@@ -229,6 +231,9 @@ describe('RunStage', () => {
     expect(item(mounted, '公园绿地覆盖率').text()).toBe('公园绿地覆盖率57.1%');
     expect(item(mounted, '公园绿地覆盖率').attributes('aria-expanded')).toBe('true');
     expect(wrapper.findAll('[aria-label^="放大到"]').filter(row => row.element.tagName === 'BUTTON')).not.toHaveLength(0);
+    // 行政区划没有覆盖占比这一列
+    expect(wrapper.get('[class*="_rankHead_"]').text()).toBe('各市');
+    expect(wrapper.find('[class*="_ratio_"]').exists()).toBe(false);
     expect(wrapper.get('[aria-label="图例"]').text()).toContain('公园绿地覆盖率2026 年 · 单位 %');
     // 右下角是地图控制栏（不支持三维，没有 2D/3D）和底图卡片（ADR 0111）
     const controls = wrapper.get('[aria-label="地图视角"]');
@@ -239,6 +244,26 @@ describe('RunStage', () => {
     await wrapper.get('[aria-label="主区视图"] input[value="flow"]').setValue(true);
     expect(view.value).toBe('flow');
     expect(titles(mounted)).toContain('AI计算');
+  });
+
+  it('自定义范围的排行多一列覆盖占比（ADR 0131）：列头写明，部分覆盖是橙色，提示说结果只算这部分、各覆盖几个区县', async () => {
+    const area = await testArea(await loadTestAtlas(), NINGZHEN_RINGS);
+    const composition = sampleComposition();
+    const mounted = await mountRun({ ...composition, conditions: { ...composition.conditions, scope: areaScope(area) } });
+    const { wrapper } = mounted;
+    await advance(mounted, ENOUGH);
+    await button(mounted, '查看结果').trigger('click');
+
+    expect(wrapper.get('[class*="_rankHead_"]').text()).toBe('各市覆盖占比');
+    expect(wrapper.find('[class*="_rankNote_"]').exists()).toBe(false);
+    const ratios = wrapper.findAll('[class*="_ratio_"]');
+    expect(ratios).toHaveLength(area.cityCodes.length);
+    const first = required(ratios[0], '第一行的覆盖占比');
+    expect(first.text()).toMatch(/^[\d.]+%$/);
+    expect(first.classes().join(' ')).toContain('ratioPartial');
+    await first.trigger('mouseenter');
+    await vi.waitFor(() => expect(document.body.textContent).toContain('的面积在范围内，结果只算这部分；'));
+    expect(document.body.textContent).toMatch(/个区县里，(完整覆盖 \d+ 个、)?部分覆盖 \d+ 个/);
   });
 
   it('行政区边界在结果地图的控制栏（ADR 0128）：勾选改页面的拥有者；切到计算流程时浮层隐藏，切回来还在', async () => {

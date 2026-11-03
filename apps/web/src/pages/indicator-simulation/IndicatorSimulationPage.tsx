@@ -88,6 +88,12 @@ export const IndicatorSimulationPage = defineComponent({
     });
     // 弹窗开着时结果地图让开、计算暂停，关上后恢复（ADR 0129）
     const canvasHolder = useCanvasHolder(scopeEditor.open);
+    // 轮到弹窗放画布时才定位：换手之前的定位会落在要卸下的结果地图上（ADR 0131）
+    watch(canvasHolder, holder => {
+      if (holder === 'scope') {
+        scopeEditor.frame();
+      }
+    });
     usePauseWhileInactive(run, computed(() => !scopeEditor.open.value));
     const simulationMap = useSimulationMap(run, map, result, () => scopeEditor.open.value);
     map.registerTools(scopeEditor.tools);

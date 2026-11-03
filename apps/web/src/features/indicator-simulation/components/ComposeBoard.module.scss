@@ -243,6 +243,17 @@
   align-items: stretch;
   gap: 6px;
   padding: var(--space-sm) 10px;
+
+  // 自定义范围的移除按钮浮在右上角，不占一行（行政区划的在标题行里）
+  > .remove {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+
+    &:not(:hover) {
+      background: var(--color-bg-container);
+    }
+  }
 }
 
 // 放不下时先省略区县数，范围名称保持完整

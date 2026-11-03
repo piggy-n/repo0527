@@ -29,6 +29,19 @@
   color: var(--color-text-secondary);
 }
 
+// 处理说明的入口：不抢标题的注意力，悬停、聚焦时才看内容
+.notes {
+  display: inline-flex;
+  font-size: var(--font-size-base);
+  color: var(--color-text-placeholder);
+  cursor: help;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--color-text-secondary);
+  }
+}
+
 .body {
   display: flex;
   flex: 1;
@@ -74,20 +87,11 @@
   font-size: var(--font-size-xs);
   line-height: var(--line-height-compact);
   color: var(--color-text-secondary);
-
-  small {
-    display: block;
-    color: var(--color-text-secondary);
-  }
 }
 
 .running,
 .done {
   color: var(--color-text-regular);
-}
-
-.failed {
-  color: var(--color-danger-text);
 }
 
 .dot {
@@ -109,11 +113,6 @@
     color: var(--color-text-inverse);
     background: var(--color-primary);
     border-color: var(--color-primary);
-  }
-
-  .failed & {
-    background: var(--color-danger);
-    border-color: var(--color-danger);
   }
 }
 
@@ -162,14 +161,8 @@
 }
 
 .summary {
-  display: grid;
-  grid-template-columns: 24px 1fr;
-  gap: var(--space-sm);
+  margin: 0;
   color: var(--color-text-regular);
-
-  p {
-    margin: 0;
-  }
 }
 
 .stats {
@@ -252,18 +245,11 @@
   background: var(--color-bg-container);
 }
 
-// 和下面面积一列的右边对齐
-.hint {
-  margin-right: var(--space-sm);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
 .search {
   width: 100%;
 }
 
-// 省、市、区县的行共用一套列：名称占满剩下的宽度，标签和面积的列宽按最宽的内容，各级的标签和面积都对齐
+// 省、市、区县的行共用一套列：名称占满剩下的宽度，占比和面积的列宽按最宽的内容，各级的占比和面积都对齐
 @mixin tree-columns {
   display: grid;
   grid-column: 1 / -1;
@@ -371,9 +357,26 @@ button.row {
   }
 }
 
-// 标签按文字的宽度，左边对齐
-.tag {
-  justify-self: start;
+// 列头和数字一样靠右：看得出下面的数是什么
+.columnHead {
+  min-height: 20px;
+  color: var(--color-text-secondary);
+
+  span:not(:first-child) {
+    justify-self: end;
+    white-space: nowrap;
+  }
+}
+
+.ratio {
+  justify-self: end;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ratioPartial {
+  color: var(--color-warning-text);
 }
 
 .measure {

@@ -1,4 +1,5 @@
 import type { AreaCoverage, CoverRelation } from '@/shared/map/area/area-coverage';
+import type { AreaProblemCode } from '@/shared/map/area/area-geometry';
 import { JIANGSU_CITIES, shortRegionName } from '@/shared/map/region/region-catalog';
 import type { DistrictAtlas } from '../model/districts';
 import type { ScopeArea } from '../model/scope';
@@ -165,9 +166,9 @@ export function formatRatio(ratio: number): string {
   return `${percent >= 10 ? Math.min(99, Math.round(percent)) : percent.toFixed(1)}%`;
 }
 
-/** 上级一行的标签：下面的区县按覆盖方式计数，如"部分 5""全部 1 · 部分 2" */
+/** 上级一行的提示：下面的区县按覆盖方式计数，如"部分 5""完整 1 · 部分 2" */
 export const coverCounts = ({ full, partial }: { readonly full: number; readonly partial: number }): string =>
-  [full > 0 && `全部 ${full}`, partial > 0 && `部分 ${partial}`].filter(Boolean).join(' · ');
+  [full > 0 && `完整 ${full}`, partial > 0 && `部分 ${partial}`].filter(Boolean).join(' · ');
 
 /** 标签的悬浮提示：范围内的面积 / 行政区的面积（占比），如"50 km² / 100 km²（50%）" */
 export const coverDetail = ({ area, total, ratio }: CoverMeasure): string =>
@@ -177,56 +178,59 @@ const cityName = (code: string) => JIANGSU_CITIES.find(city => city.code === cod
 
 const namesOf = (list: readonly { readonly name: string }[]) => list.map(item => item.name).join('、');
 
-/** AI 的一段摘要：范围在哪、多大，涉及几个区县，哪些全部覆盖、哪些部分覆盖（区县多时只写个数） */
-export function areaSummary(tree: CoverageTree, coverage: AreaCoverage): string {
+/** AI 的一句话摘要：范围在哪，区县少时写出各自怎么覆盖，多时只写个数；各覆盖几个在下面的筛选里，面积在卡片里 */
+export function areaSummary(tree: CoverageTree): string {
   const { cities } = tree;
   const where =
     cities.length === 1
       ? `位于${cities[0]?.name ?? ''}`
-      : `跨${cities.length <= 3 ? namesOf(cities) : `${cities[0]?.name ?? ''}等`} ${cities.length} 个市`;
+      : `跨${cities.length <= 3 ? namesOf(cities) : `${cities[0]?.name ?? ''}等 ${cities.length} 个市`}`;
   const districts = cities.flatMap(city => city.districts);
+  if (districts.length > 4) {
+    return `范围${where}，涉及 ${districts.length} 个区县。`;
+  }
   const full = districts.filter(item => item.relation === 'full');
   const partial = districts.filter(item => item.relation === 'partial');
-  let detail: string;
-  if (districts.length <= 4) {
-    detail = [full.length > 0 && `${namesOf(full)}全部覆盖`, partial.length > 0 && `${namesOf(partial)}部分覆盖`]
-      .filter(Boolean)
-      .join('，');
-  } else if (full.length === 0) {
-    detail = '均为部分覆盖';
-  } else if (partial.length === 0) {
-    detail = '均为全部覆盖';
-  } else {
-    detail = `${full.length <= 3 ? namesOf(full) : `${full.length} 个区县`}全部覆盖，其余 ${partial.length} 个部分覆盖`;
-  }
-  const tail = partial.length > 0 ? '计算时，部分覆盖的区县按范围内的面积占比折算人口和用地。' : '';
-  const inside = coverage.outsideArea > 0 ? `（省内 ${formatKm2(coverage.coveredArea)}）` : '';
-  return `范围${where}，面积 ${formatKm2(coverage.area)} 平方千米${inside}，涉及 ${districts.length} 个区县：${detail}。${tail}`;
+  const detail = [full.length > 0 && `${namesOf(full)}完整覆盖`, partial.length > 0 && `${namesOf(partial)}部分覆盖`]
+    .filter(Boolean)
+    .join('，');
+  return `范围${where}，${detail}。`;
 }
 
-/** 覆盖分析的提示：省外的面积、大部分在省外、只沿边界相交的区县 */
-export function coverageNotices(tree: CoverageTree, coverage: AreaCoverage): string[] {
-  const notices: string[] = [];
-  if (coverage.outsideArea > 0) {
-    const most = coverage.outsideArea > coverage.area / 2 ? '，范围的大部分在省外' : '';
-    notices.push(`范围有 ${formatKm2(coverage.outsideArea)} 平方千米在江苏省外，不参与计算${most}`);
+/** 影响计算结果、要让用户看到的提示：省外的面积不参与计算 */
+export function coverageNotices(coverage: AreaCoverage): string[] {
+  if (coverage.outsideArea <= 0) {
+    return [];
   }
-  if (tree.touches.length > 0) {
-    const { touches } = tree;
-    const names = touches.length <= 3 ? namesOf(touches) : `${touches[0]?.name ?? ''}等 ${touches.length} 个区县`;
-    notices.push(`${names}只与范围的边界相交（细条或不足 1 公顷），不算覆盖`);
-  }
-  return notices;
+  const most = coverage.outsideArea > coverage.area / 2 ? '，范围的大部分在省外' : '';
+  return [`范围有 ${formatKm2(coverage.outsideArea)} 平方千米在江苏省外，不参与计算${most}`];
 }
 
-/** 范围卡片上的两行说明：涉及的市和区县（部分覆盖的个数），面积 */
+const PROBLEM_TEXT: Readonly<Record<AreaProblemCode, string>> = {
+  'file-type': '不支持这种文件，请上传 GeoJSON 或 Shapefile',
+  'file-size': '文件太大，请精简后重新上传',
+  'file-empty': '文件里没有可用的范围，请检查后重新上传',
+  'file-corrupt': '文件无法读取，请检查后重新上传',
+  'file-parts': 'Shapefile 的文件不完整，建议打包成 .zip 后上传',
+  crs: '文件的坐标系不支持，请转换为经纬度坐标后上传',
+  'geometry-type': '文件里没有面，不能作为范围',
+  'geometry-invalid': '范围不是有效的面，请重新绘制或上传',
+  'too-complex': '范围太复杂，请精简后重新上传',
+  'too-small': '范围太小，请重新绘制或上传',
+  'too-large': '范围太大，请缩小后重新绘制或上传',
+  outside: '范围不在江苏省内，请检查后重新绘制或上传'
+};
+
+/** 不能用的原因写给用户看的话：说清楚怎么办；具体的技术原因收在"查看原因"里（ADR 0131） */
+export const problemText = (code: AreaProblemCode): string => PROBLEM_TEXT[code];
+
+/** 范围卡片上的两行说明：涉及的市和区县，面积 */
 export function areaBrief(area: ScopeArea): { readonly where: string; readonly size: string } {
   const { covers } = area.coverage;
-  const partial = covers.filter(cover => cover.relation === 'partial').length;
   const names = area.cityCodes.map(code => shortRegionName(cityName(code)));
   const cities = names.length <= 3 ? names.join('、') : `${names.slice(0, 2).join('、')}等 ${names.length} 个市`;
   return {
-    where: `${cities} · ${covers.length} 个区县${partial > 0 ? `（部分 ${partial}）` : ''}`,
+    where: `${cities} · ${covers.length} 个区县`,
     size: `${formatKm2(area.coverage.area)} km²`
   };
 }

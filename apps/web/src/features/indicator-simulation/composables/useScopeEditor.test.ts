@@ -1,7 +1,12 @@
 // @vitest-environment node
+import type { StyleGroup } from '@yzt/map-core';
 import type { Position } from 'geojson';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { effectScope, type EffectScope, shallowRef } from 'vue';
+import { polygonsOf } from '@/shared/map/area/area-geometry';
+import { JIANGSU_BOUNDS } from '@/shared/map/jiangsu';
+import { polygonBounds } from '@/shared/map/region/region-geometry';
+import { required } from '@/shared/testing/required';
 import { type Calculator, createCalculator } from '../model/calculator';
 import { box, geojsonFile, NANJING_RINGS, NINGZHEN_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
@@ -30,6 +35,12 @@ function setup(initial: SimulationModel = { status: 'ready', calculator }) {
   return { ...created, model };
 }
 
+// 分组里一个数据源的数据
+const dataOf = (group: StyleGroup, id: string) => {
+  const source = group.sources[id];
+  return source?.type === 'geojson' ? source.data : undefined;
+};
+
 // 分析经过 Worker 的消息往返，等到不在进行中
 async function settled(editor: ScopeEditor): Promise<ScopeAnalysis> {
   await vi.waitFor(() => {
@@ -43,7 +54,7 @@ describe('范围弹窗的拥有者', () => {
     const { editor, map, defaultViews } = setup();
     editor.start('upload', { files: [geojsonFile('宁镇交界.geojson', NINGZHEN_RINGS)] });
     expect(editor.open.value).toBe(true);
-    expect(defaultViews.value).toBe(1);
+    expect(defaultViews.value).toBe(0);
     expect(editor.busy.value).toBe(true);
     const running = editor.analysis.value;
     expect(running.status === 'running' && running.steps.map(step => step.state)).toEqual([
@@ -58,10 +69,9 @@ describe('范围弹窗的拥有者', () => {
       throw new Error(`分析没有完成：${done.status}`);
     }
     expect(done.steps.map(step => step.state)).toEqual(['done', 'done', 'done', 'done']);
-    expect(done.steps[0]?.label).toBe('读取文件：宁镇交界.geojson');
-    expect(done.steps[0]?.detail).toBe('GeoJSON，1 个面');
+    expect(done.steps.map(step => step.label)).toEqual(['读取文件：宁镇交界.geojson', '整理范围', '叠加行政区边界', '统计覆盖情况']);
     expect(done.tree.cities.map(city => city.name)).toEqual(['南京市', '镇江市']);
-    expect(done.summary).toMatch(/^范围跨南京市、镇江市 2 个市/);
+    expect(done.summary).toMatch(/^范围跨南京市、镇江市，/);
     expect(done.population).toBeGreaterThan(0);
     expect(editor.draft.value).toMatchObject({ source: 'upload', file: { name: '宁镇交界.geojson', format: 'geojson' } });
     expect(editor.name.value).toBe('宁镇交界');
@@ -87,14 +97,13 @@ describe('范围弹窗的拥有者', () => {
     expect(editor.analysis.value.status).toBe('empty');
   });
 
-  it('文件不能用：原因写进分析，不能重试；之前有范围时可以撤销回去', async () => {
+  it('文件不能用：写给用户的话按类型给，具体原因单独留着，不能重试；之前有范围时可以撤销回去', async () => {
     const { editor } = setup();
     editor.start('choose');
     editor.upload([new File(['{"type":'], 'broken.geojson')]);
     const failed = await settled(editor);
-    expect(failed).toMatchObject({ status: 'failed', retryable: false });
-    expect(failed.status === 'failed' && failed.message).toMatch(/^broken\.geojson 不是有效的 JSON/);
-    expect(failed.status === 'failed' && failed.steps[0]?.state).toBe('failed');
+    expect(failed).toMatchObject({ status: 'failed', retryable: false, message: '文件无法读取，请检查后重新上传' });
+    expect(failed.status === 'failed' && failed.detail?.startsWith('broken.geojson 不是有效的 JSON')).toBe(true);
     expect(editor.canUndo.value).toBe(false);
 
     editor.upload([geojsonFile('南京.geojson', NANJING_RINGS)]);
@@ -123,7 +132,12 @@ describe('范围弹窗的拥有者', () => {
     const { editor, model } = setup({ status: 'loading' });
     editor.start('upload', { files: [geojsonFile('南京.geojson', NANJING_RINGS)] });
     const failed = await settled(editor);
-    expect(failed).toMatchObject({ status: 'failed', retryable: true, message: '区县数据还没有加载好，请稍后重试' });
+    expect(failed).toMatchObject({
+      status: 'failed',
+      retryable: true,
+      message: '区县数据还没有加载好，请稍后重试',
+      detail: null
+    });
 
     model.value = { status: 'ready', calculator };
     editor.retry();
@@ -150,16 +164,61 @@ describe('范围弹窗的拥有者', () => {
     expect(editor.analysis.value).toMatchObject({ status: 'done', steps: [], coverage: area.coverage });
     expect(editor.name.value).toBe('主城');
     expect(defaultViews.value).toBe(0);
-    expect(map.cameraRuns.value).toBe(1);
     editor.overview();
-    expect(map.cameraRuns.value).toBe(2);
+    expect(map.cameraRuns.value).toBe(1);
     editor.focusDistrict('320104');
-    expect(map.cameraRuns.value).toBe(3);
+    expect(map.cameraRuns.value).toBe(2);
+    // 没有覆盖的区县不移动
+    editor.focusDistrict('321322');
+    expect(map.cameraRuns.value).toBe(2);
 
     // 改过名称后，换了文件也不再自动改
     editor.upload([geojsonFile('新文件.geojson', NINGZHEN_RINGS)]);
     await settled(editor);
     expect(editor.name.value).toBe('主城');
+  });
+
+  it('点部分覆盖的区县：移到它在范围内的部分，不是整个区县', async () => {
+    const { editor, map } = setup();
+    editor.start('upload', { files: [geojsonFile('宁镇.geojson', NINGZHEN_RINGS)] });
+    const done = await settled(editor);
+    if (done.status !== 'done') {
+      throw new Error(`分析没有完成：${done.status}`);
+    }
+    const partial = required(done.coverage.covers.find(cover => cover.relation === 'partial'), '部分覆盖的区县');
+    editor.focusDistrict(partial.code);
+    expect(map.fitTargets.value.at(-1)).toEqual(polygonBounds(polygonsOf(partial.geometry)));
+    expect(map.fitTargets.value.at(-1)).not.toEqual(calculator.atlas.get(partial.code).bounds);
+  });
+
+  it('打开时不定位，等画布放好再 frame：都不带动画，有范围时看范围，没有时看全省', async () => {
+    const atlas = await loadTestAtlas();
+    const area = await testArea(atlas, NANJING_RINGS, '主城');
+    const { editor, map, defaultViews } = setup();
+    // 结果阶段的画布还没卸下时不能定位：定位会落在要卸下的画布上
+    editor.start('edit', { area });
+    expect(map.cameraRuns.value).toBe(0);
+    editor.frame();
+    expect(map.fitDurations.value).toEqual([0]);
+    editor.cancel();
+
+    editor.start('choose');
+    expect(map.cameraRuns.value).toBe(1);
+    editor.frame();
+    expect(map.fitDurations.value).toEqual([0, 0]);
+    expect(map.fitTargets.value.at(-1)).toEqual(JIANGSU_BOUNDS);
+    expect(defaultViews.value).toBe(0);
+  });
+
+  it('上传：还没有范围时直接定位，换范围时平滑移过去', async () => {
+    const { editor, map } = setup();
+    editor.start('upload', { files: [geojsonFile('南京.geojson', NANJING_RINGS)] });
+    await settled(editor);
+    expect(map.fitDurations.value).toEqual([0]);
+
+    editor.upload([geojsonFile('宁镇.geojson', NINGZHEN_RINGS)]);
+    await settled(editor);
+    expect(map.fitDurations.value).toEqual([0, 600]);
   });
 
   it('清除后可以撤销；取消丢掉草稿并关上弹窗；没有范围时默认视角回到全省', async () => {
@@ -170,7 +229,7 @@ describe('范围弹窗的拥有者', () => {
     expect(editor.draft.value).toBeNull();
     expect(editor.analysis.value.status).toBe('empty');
     editor.overview();
-    expect(defaultViews.value).toBe(2);
+    expect(defaultViews.value).toBe(1);
     editor.undo();
     expect(editor.analysis.value.status).toBe('done');
 
@@ -197,16 +256,41 @@ describe('范围弹窗的拥有者', () => {
     expect(editor.canEdit.value).toBe(false);
   });
 
-  it('样式：弹窗关着时都为空；打开后有区县分界线，完成后有覆盖的部分和范围，悬停的区县描出来', async () => {
+  it('样式：弹窗关着时都为空；打开后有区县分界线，完成后有覆盖的部分和范围', async () => {
     const { editor } = setup();
     expect(editor.deriveCover().layers).toEqual([]);
     editor.start('upload', { files: [geojsonFile('南京.geojson', NANJING_RINGS)] });
     expect(editor.deriveCover().layers.map(layer => layer.id)).toEqual(['scope-cover-edge']);
     await settled(editor);
     expect(editor.deriveCover().layers.map(layer => layer.id)).toEqual(['scope-cover-fill', 'scope-cover-edge']);
-    editor.hover('320104');
-    expect(editor.deriveArea().layers.map(layer => layer.id)).toContain('scope-area-hover');
+    expect(editor.deriveArea().layers.map(layer => layer.id)).toContain('scope-area-mask');
     editor.cancel();
     expect(editor.deriveArea().layers).toEqual([]);
+  });
+
+  it('悬停：只高亮区县在范围内的部分（不是整个区县）；没有覆盖的区县不高亮；遮罩不随悬停重算', async () => {
+    const { editor } = setup();
+    editor.start('upload', { files: [geojsonFile('宁镇.geojson', NINGZHEN_RINGS)] });
+    const done = await settled(editor);
+    if (done.status !== 'done') {
+      throw new Error(`分析没有完成：${done.status}`);
+    }
+    const partial = required(done.coverage.covers.find(cover => cover.relation === 'partial'), '部分覆盖的区县');
+    const whole = calculator.atlas.get(partial.code).geometry;
+    const before = dataOf(editor.deriveArea(), 'scope-area-mask');
+    expect(before).toBeDefined();
+
+    editor.hover(partial.code);
+    const group = editor.deriveArea();
+    expect(dataOf(group, 'scope-area-hover')).toBe(partial.geometry);
+    expect(dataOf(group, 'scope-area-hover')).not.toBe(whole);
+    // 同一个对象：会话不重新加载数据源
+    expect(dataOf(group, 'scope-area-mask')).toBe(before);
+    expect(group.layers.at(-1)?.id).toBe('scope-area-hover-line');
+
+    editor.hover('321322');
+    expect(Object.keys(editor.deriveArea().sources)).not.toContain('scope-area-hover');
+    editor.hover(null);
+    expect(Object.keys(editor.deriveArea().sources)).not.toContain('scope-area-hover');
   });
 });

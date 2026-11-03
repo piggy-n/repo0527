@@ -22,10 +22,14 @@ export function valueColor(value: number, breaks: readonly number[]): string {
   return VALUE_COLORS[index === -1 ? VALUE_COLORS.length - 1 : index] ?? VALUE_COLORS[0];
 }
 
-/** 范围弹窗：全部覆盖、部分覆盖的区县在范围内的部分（主色系、琥珀色系的浅色），区县的分界线，范围本身 */
+/** 范围弹窗：全部覆盖、部分覆盖的区县在范围内的部分（主色系、琥珀色系的浅色） */
 export const COVER_FULL_COLOR = '#b4c8ff';
 export const COVER_PARTIAL_COLOR = '#ffd98a';
-export const DISTRICT_EDGE_COLOR = '#9aa5b8';
-export const AREA_COLOR = '#597ef7';
+/** 区县的分界线：同行政区边界的主题色 */
+export const DISTRICT_EDGE_COLOR = '#597ef7';
+/** 范围的边线、悬停的区县在范围内的部分：主题色的深色，同省界 */
+export const AREA_COLOR = '#2f54eb';
 /** 范围边线下的白色衬底 */
 export const AREA_CASING_COLOR = '#ffffff';
+/** 范围以外压暗一层（--color-text-strong）：换了底图也看得出范围 */
+export const AREA_MASK_COLOR = '#2f3a4f';

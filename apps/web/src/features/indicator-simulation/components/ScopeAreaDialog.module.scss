@@ -18,6 +18,17 @@
   background: var(--color-neutral-bg-light);
 }
 
+.canvas {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.canvasShown {
+  opacity: 1;
+}
+
 .analysis {
   width: 340px;
   flex: none;
@@ -114,7 +125,7 @@
 }
 
 .outline {
-  border: 2px solid var(--color-primary);
+  border: 2px solid;
 }
 
 // 视角控件在右下角，和结果地图一样；角落里的小控件不登记为悬浮元素

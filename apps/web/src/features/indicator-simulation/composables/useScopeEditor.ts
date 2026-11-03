@@ -1,20 +1,21 @@
 import type { MapTool, StyleGroup, ViewBounds } from '@yzt/map-core';
 import type { MapContext } from '@yzt/map-vue';
 import { LatestController } from '@yzt/utils';
-import type { MultiPolygon } from 'geojson';
+import type { MultiPolygon, Polygon } from 'geojson';
 import { computed, type ComputedRef, onScopeDispose, type Ref, ref, type ShallowRef, shallowRef } from 'vue';
 import { type AreaAnalyzer, createAreaAnalyzer } from '@/shared/map/area/area-analyzer';
 import type { AreaCoverage, RegionShape } from '@/shared/map/area/area-coverage';
 import type { AreaFileResult, AreaFormat } from '@/shared/map/area/area-file';
-import { type AreaCheck, polygonsOf, vertexCount } from '@/shared/map/area/area-geometry';
+import { type AreaCheck, type AreaProblem, polygonsOf, vertexCount } from '@/shared/map/area/area-geometry';
 import type { DrawnShape } from '@/shared/map/draw/shape-draw';
 import { type ShapeDraw, useShapeDraw } from '@/shared/map/draw/useShapeDraw';
 import { type ShapeEdit, useShapeEdit } from '@/shared/map/draw/useShapeEdit';
+import { JIANGSU_BOUNDS } from '@/shared/map/jiangsu';
 import { polygonBounds } from '@/shared/map/region/region-geometry';
 import type { DistrictAtlas } from '../model/districts';
 import { createScopeArea, type ScopeArea } from '../model/scope';
-import { areaSummary, type CoverageTree, coverageNotices, coverageTree } from '../scope/area-tree';
-import { areaGroup, coverGroup, coverPieces, districtEdges } from '../scope/scope-style';
+import { areaSummary, type CoverageTree, coverageNotices, coverageTree, problemText } from '../scope/area-tree';
+import { areaGroup, areaShape, coverGroup, coverPieces, districtEdges } from '../scope/scope-style';
 import type { SimulationModel } from './useSimulationModel';
 
 /** 怎样打开范围弹窗：只是看看、上传了文件、要绘制、编辑已有的范围 */
@@ -27,20 +28,19 @@ export interface ScopeDraft {
   readonly source: 'upload' | 'draw';
   readonly file: { readonly name: string; readonly format: AreaFormat } | null;
   readonly vertices: number;
-  /** 读文件、整理时的提示（如简化、修正了交叉的边） */
+  /** 读文件、整理时做过的处理（如简化、修正了交叉的边）：不影响使用，收在说明的提示里 */
   readonly notices: readonly string[];
 }
 
-export type StepState = 'waiting' | 'running' | 'done' | 'failed';
+export type StepState = 'waiting' | 'running' | 'done';
 
-/** 分析的一步：标签、状态，完成后的说明 */
+/** 分析的一步 */
 export interface AnalysisStep {
   readonly label: string;
   readonly state: StepState;
-  readonly detail: string | null;
 }
 
-/** AI 范围分析：分步的进度，完成后的覆盖、摘要和提示；不能用时的原因（读不了、在省外等），出错时可以重试 */
+/** AI 范围分析：分步的进度，完成后的覆盖、摘要和提示；不能用时写给用户的话和具体原因，出错时可以重试 */
 export type ScopeAnalysis =
   | { readonly status: 'empty' }
   | { readonly status: 'running'; readonly steps: readonly AnalysisStep[] }
@@ -56,8 +56,9 @@ export type ScopeAnalysis =
     }
   | {
       readonly status: 'failed';
-      readonly steps: readonly AnalysisStep[];
       readonly message: string;
+      /** 具体的技术原因：不直接显示，用户想看时再看 */
+      readonly detail: string | null;
       /** 分析出错（不是文件或范围本身的问题）时可以重试 */
       readonly retryable: boolean;
     };
@@ -68,11 +69,14 @@ export const EDIT_VERTEX_LIMIT = 1000;
 /** 每一步至少显示这么久（毫秒）：分析很快时也看得清在做什么 */
 const STEP_MS = 360;
 
+/** 换范围、画完时平滑移过去（毫秒）；打开弹窗时不带动画（ADR 0131） */
+const FIT_MS = 600;
+
 export interface ScopeEditorOptions {
   readonly model: Readonly<Ref<SimulationModel>>;
   /** 换上自定义范围（确定时） */
   readonly onConfirm: (area: ScopeArea) => void;
-  /** 打开弹窗、没有范围时回到全省 */
+  /** 弹窗的默认视角按钮：没有范围时回到全省 */
   readonly goToDefaultView: () => void;
   /** 测试注入 */
   readonly analyzer?: AreaAnalyzer;
@@ -106,6 +110,8 @@ export interface ScopeEditor {
   readonly tools: Readonly<Record<string, MapTool>>;
   /** 打开弹窗；编辑时带上现有的范围，上传时带上文件 */
   readonly start: (intent: ScopeIntent, input?: ScopeStartInput) => void;
+  /** 弹窗的画布放好后定位：有范围时看整个范围，没有时看全省；不带动画，不从上一次的位置飞过去（ADR 0131） */
+  readonly frame: () => void;
   readonly upload: (files: readonly File[]) => void;
   readonly setName: (name: string) => void;
   readonly undo: () => void;
@@ -140,7 +146,7 @@ type Input =
       readonly base: ScopeDraft | null;
     };
 
-const geometryBounds = (geometry: MultiPolygon): ViewBounds => polygonBounds(polygonsOf(geometry));
+const geometryBounds = (geometry: Polygon | MultiPolygon): ViewBounds => polygonBounds(polygonsOf(geometry));
 
 const wait = (ms: number, signal: AbortSignal) =>
   new Promise<void>(resolve => {
@@ -158,12 +164,8 @@ const wait = (ms: number, signal: AbortSignal) =>
 const isAbort = (error: unknown) =>
   (error instanceof DOMException || error instanceof Error) && error.name === 'AbortError';
 
-const FORMAT_NAMES: Readonly<Record<AreaFormat, string>> = { geojson: 'GeoJSON', shapefile: 'Shapefile' };
-
-const vertexText = (count: number) => `${count.toLocaleString('zh-CN')} 个节点`;
-
 /**
- * 范围弹窗（ADR 0121）：上传、绘制、逐点编辑都在 Worker 里整理、与 95 个区县求交；新的一次作废还没完成的分析。
+ * 范围弹窗（ADR 0121、0131）：上传、绘制、逐点编辑都在 Worker 里整理、与 95 个区县求交；新的一次作废还没完成的分析。
  * 分析按步骤显示进度，读不了、在省外等原因写进分析，不弹提示；确定后才交给条件
  */
 export function useScopeEditor(
@@ -225,8 +227,12 @@ export function useScopeEditor(
     }
   };
 
-  const fitTo = (geometry: MultiPolygon) => {
-    map.runCameraOperation(camera => camera.fitBounds(geometryBounds(geometry), { maxZoom: 13, duration: 600 }));
+  const fitTo = (geometry: MultiPolygon, duration = FIT_MS) => {
+    map.runCameraOperation(camera => camera.fitBounds(geometryBounds(geometry), { maxZoom: 13, duration }));
+  };
+  const coverOf = (code: string) => {
+    const current = analysis.value;
+    return current.status === 'done' ? current.coverage.covers.find(cover => cover.code === code) : undefined;
   };
 
   const draw = useShapeDraw(map, { onComplete: shape => onDrawn(shape) });
@@ -239,44 +245,50 @@ export function useScopeEditor(
 
   // 一步一步地推进：每一步至少显示 stepMs
   const stepper = (labels: readonly string[], signal: AbortSignal) => {
-    let steps: AnalysisStep[] = labels.map((label, index) => ({
-      label,
-      state: index === 0 ? 'running' : 'waiting',
-      detail: null
-    }));
     let index = 0;
+    const stateAt = (at: number): StepState => {
+      if (at < index) {
+        return 'done';
+      }
+      return at === index ? 'running' : 'waiting';
+    };
+    const stepsNow = (): readonly AnalysisStep[] => labels.map((label, at) => ({ label, state: stateAt(at) }));
     const show = () => {
       if (!signal.aborted) {
-        analysis.value = { status: 'running', steps };
+        analysis.value = { status: 'running', steps: stepsNow() };
       }
     };
     show();
     return {
       get steps(): readonly AnalysisStep[] {
-        return steps;
+        return stepsNow();
       },
       /** 完成当前这一步，开始下一步；返回 false 表示已被作废 */
-      async next(detail: string | null = null): Promise<boolean> {
+      async next(): Promise<boolean> {
         await wait(stepMs, signal);
         if (signal.aborted) {
           return false;
         }
-        steps = steps.map((step, at) => {
-          if (at === index) {
-            return { ...step, state: 'done', detail };
-          }
-          return at === index + 1 ? { ...step, state: 'running' } : step;
-        });
         index += 1;
         show();
         return true;
       },
-      fail(message: string, retryable = false) {
-        if (signal.aborted) {
-          return;
+      /** 文件或范围本身的问题：写给用户的话按类型给，原话留作具体原因 */
+      reject(problem: AreaProblem) {
+        if (!signal.aborted) {
+          analysis.value = {
+            status: 'failed',
+            message: problemText(problem.code),
+            detail: problem.message,
+            retryable: false
+          };
         }
-        steps = steps.map((step, at) => (at === index ? { ...step, state: 'failed' } : step));
-        analysis.value = { status: 'failed', steps, message, retryable };
+      },
+      /** 分析本身没做成：可以重试 */
+      fail(message: string) {
+        if (!signal.aborted) {
+          analysis.value = { status: 'failed', message, detail: null, retryable: true };
+        }
       }
     };
   };
@@ -289,7 +301,7 @@ export function useScopeEditor(
         return null;
       }
       if (!read.ok) {
-        progress.fail(read.problem.message);
+        progress.reject(read.problem);
         return null;
       }
       const file = input.files.find(item => /\.(zip|shp|geojson|json)$/i.test(item.name)) ?? input.files[0];
@@ -302,11 +314,10 @@ export function useScopeEditor(
         vertices: read.area.vertices,
         notices: read.area.notices
       };
-      const features = `${read.features} 个面`;
-      if (!(await progress.next(`${FORMAT_NAMES[read.format]}，${features}`))) {
+      if (!(await progress.next())) {
         return null;
       }
-      if (!(await progress.next(read.crs))) {
+      if (!(await progress.next())) {
         return null;
       }
       return next;
@@ -316,7 +327,7 @@ export function useScopeEditor(
       return null;
     }
     if (!checked.ok) {
-      progress.fail(checked.problem.message);
+      progress.reject(checked.problem);
       return null;
     }
     const next: ScopeDraft = {
@@ -327,18 +338,18 @@ export function useScopeEditor(
       vertices: checked.area.vertices,
       notices: checked.area.notices
     };
-    if (!(await progress.next(vertexText(next.vertices)))) {
+    if (!(await progress.next())) {
       return null;
     }
     return next;
   }
 
   const labelsOf = (input: Input): string[] => {
-    const cover = ['叠加江苏省 95 个区县的边界', '判断覆盖方式，统计面积'];
+    const cover = ['叠加行政区边界', '统计覆盖情况'];
     if (input.kind === 'files') {
       const first = input.files[0]?.name ?? '';
       const more = input.files.length > 1 ? ` 等 ${input.files.length} 个文件` : '';
-      return [`读取文件：${first}${more}`, '识别坐标系、整理范围', ...cover];
+      return [`读取文件：${first}${more}`, '整理范围', ...cover];
     }
     return [input.source === 'edit' ? '整理修改后的范围' : '整理绘制的范围', ...cover];
   };
@@ -364,11 +375,12 @@ export function useScopeEditor(
         name.value = next.file ? next.file.name.replace(/\.[^.]+$/, '') : '绘制范围';
       }
       if (input.kind === 'files' || input.source === 'draw') {
-        fitTo(next.geometry);
+        // 还没有范围时从全省飞过去没有信息量，直接定位；换范围、画完时平滑移过去，看得出前后的关系
+        fitTo(next.geometry, input.kind === 'files' && !before.draft ? 0 : FIT_MS);
       }
       const atlas = atlasOf();
       if (!atlas) {
-        progress.fail('区县数据还没有加载好，请稍后重试', true);
+        progress.fail('区县数据还没有加载好，请稍后重试');
         return;
       }
       const covered = await analyzer.cover(next.geometry, regionsOf(atlas), '江苏省', signal);
@@ -376,11 +388,11 @@ export function useScopeEditor(
         return;
       }
       if (!covered.ok) {
-        progress.fail(covered.problem.message);
+        progress.reject(covered.problem);
         return;
       }
       const tree = coverageTree(covered.coverage, atlas);
-      if (!(await progress.next(`${tree.cities.length} 个市、${tree.full + tree.partial} 个区县`))) {
+      if (!(await progress.next())) {
         return;
       }
       await wait(stepMs, signal);
@@ -393,13 +405,13 @@ export function useScopeEditor(
         steps,
         coverage: covered.coverage,
         tree,
-        summary: areaSummary(tree, covered.coverage),
-        notices: [...next.notices, ...coverageNotices(tree, covered.coverage)],
+        summary: areaSummary(tree),
+        notices: coverageNotices(covered.coverage),
         population: populationOf(covered.coverage)
       };
     } catch (error) {
       if (!signal.aborted && !isAbort(error)) {
-        progress.fail('分析出错，可以重试；多次失败时请换一个文件或重新绘制', true);
+        progress.fail('分析没有完成，请重试；多次失败时换一个文件或重新绘制');
       }
     }
   }
@@ -444,8 +456,8 @@ export function useScopeEditor(
       steps: [],
       coverage: area.coverage,
       tree,
-      summary: areaSummary(tree, area.coverage),
-      notices: coverageNotices(tree, area.coverage),
+      summary: areaSummary(tree),
+      notices: coverageNotices(area.coverage),
       population: populationOf(area.coverage)
     };
     name.value = area.name;
@@ -460,6 +472,8 @@ export function useScopeEditor(
     const current = analysis.value;
     return current.status === 'done' ? coverPieces(current.coverage.covers) : null;
   });
+  // 遮罩随范围缓存：悬停时不重算，数据源也不重新加载
+  const shapeData = computed(() => (open.value && draft.value ? areaShape(draft.value.geometry) : null));
 
   return {
     open,
@@ -480,15 +494,22 @@ export function useScopeEditor(
       const { area = null, files } = input;
       if (area) {
         restore(area);
-        fitTo(area.geometry);
-      } else {
-        options.goToDefaultView();
       }
       if (files && files.length > 0) {
         void analyze({ kind: 'files', files });
       } else if (intent === 'draw') {
         draw.toggle('polygon');
       }
+    },
+    frame: () => {
+      const shape = draft.value;
+      map.runCameraOperation(camera => {
+        if (shape) {
+          camera.fitBounds(geometryBounds(shape.geometry), { maxZoom: 13, duration: 0 });
+        } else {
+          camera.fitBounds(JIANGSU_BOUNDS, { duration: 0, pitch: 0 });
+        }
+      });
     },
     upload: files => {
       if (files.length > 0) {
@@ -536,10 +557,10 @@ export function useScopeEditor(
       hovered.value = code;
     },
     focusDistrict: code => {
-      const atlas = atlasOf();
-      if (atlas) {
-        const { bounds } = atlas.get(code);
-        map.runCameraOperation(camera => camera.fitBounds(bounds, { maxZoom: 12, duration: 600 }));
+      const cover = coverOf(code);
+      if (cover) {
+        const bounds = geometryBounds(cover.geometry);
+        map.runCameraOperation(camera => camera.fitBounds(bounds, { maxZoom: 12, duration: FIT_MS }));
       }
     },
     overview: () => {
@@ -575,12 +596,9 @@ export function useScopeEditor(
     },
     deriveCover: () => coverGroup(edgesData.value, piecesData.value),
     deriveArea: () => {
-      const atlas = atlasOf();
       const code = hovered.value;
-      return areaGroup(
-        open.value ? (draft.value?.geometry ?? null) : null,
-        open.value && atlas && code ? atlas.get(code).geometry : null
-      );
+      // 只高亮区县在范围内的部分：Worker 求交时已经算好（ADR 0131）
+      return areaGroup(shapeData.value, open.value && code ? (coverOf(code)?.geometry ?? null) : null);
     }
   };
 }
