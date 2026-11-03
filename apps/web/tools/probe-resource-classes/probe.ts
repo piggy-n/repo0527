@@ -93,11 +93,11 @@ export interface ProbeResult {
 export class ProbeAuthError extends Error {}
 
 /** 抽样的城市：南北、沿海都有，稀疏的资源也能取到要素（docs/migration.md 的实测用的也是这几处） */
-const SAMPLE_POINTS: readonly (readonly [lng: number, lat: number])[] = [
-  [118.8, 32.05],
-  [120.62, 31.3],
-  [117.18, 34.26],
-  [119.42, 32.39]
+export const SAMPLE_POINTS: readonly (readonly [lng: number, lat: number, name: string])[] = [
+  [118.8, 32.05, '南京'],
+  [120.62, 31.3, '苏州'],
+  [117.18, 34.26, '徐州'],
+  [119.42, 32.39, '扬州']
 ];
 
 // 这些资源的低级别瓦片很重（水域面层 z7 有 42 MB、20 s）：同样式登记表的最小显示级别，更低的级别不请求
@@ -199,7 +199,7 @@ export function notInCondition(field: string, values: readonly string[]): string
   return values.length === 0 ? `"${field}" IS NOT NULL` : `"${field}" NOT IN (${values.map(quoted).join(',')})`;
 }
 
-async function request(url: string, options: ProbeOptions, io: ProbeIO): Promise<Response> {
+export async function request(url: string, options: ProbeOptions, io: Pick<ProbeIO, 'fetch' | 'sleep'>): Promise<Response> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt += 1) {
     if (attempt > 0) {
@@ -228,7 +228,7 @@ async function request(url: string, options: ProbeOptions, io: ProbeIO): Promise
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-async function fetchTree(options: ProbeOptions, io: ProbeIO): Promise<ResourceInfo[]> {
+export async function fetchTree(options: ProbeOptions, io: Pick<ProbeIO, 'fetch' | 'sleep'>): Promise<ResourceInfo[]> {
   const response = await request(`${options.baseUrl}/resource-map/base/tree`, options, io);
   const body: unknown = await response.json();
   if (!isRecord(body) || !Array.isArray(body.data)) {
@@ -504,7 +504,7 @@ export async function runEnumerate(
   return results;
 }
 
-async function eachLimit<T>(items: readonly T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
+export async function eachLimit<T>(items: readonly T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
   let next = 0;
   const worker = async () => {
     while (next < items.length) {

@@ -1,10 +1,12 @@
-// 只供测试：按 Vector Tile 2.1 的结构编码一张瓦片（属性和几何类型；几何只放占位）
+// 只供测试：按 Vector Tile 2.1 的结构编码一张瓦片（属性和几何类型；不给 parts 时几何只放占位）
 
 type Value = string | number | boolean;
 
 interface FeatureInput {
   readonly geometry?: 1 | 2 | 3;
   readonly properties: Readonly<Record<string, Value>>;
+  /** 部件的坐标，x、y 交替：面的每个环（不重复首点）、线的每条折线、每个点 */
+  readonly parts?: readonly (readonly number[])[];
 }
 
 function varint(value: bigint): number[] {
@@ -47,15 +49,42 @@ function indexOf<T>(list: T[], item: T): number {
   return found >= 0 ? found : list.push(item) - 1;
 }
 
+const command = (id: number, count: number) => varint(BigInt(count * 8 + id));
+const zigzag = (value: number) => varint(BigInt(value >= 0 ? value * 2 : -value * 2 - 1));
+
+function encodeParts(parts: readonly (readonly number[])[], closed: boolean): number[] {
+  let x = 0;
+  let y = 0;
+  const delta = (nextX: number, nextY: number) => {
+    const bytes = [...zigzag(nextX - x), ...zigzag(nextY - y)];
+    x = nextX;
+    y = nextY;
+    return bytes;
+  };
+  return parts.flatMap(part => {
+    const [startX = 0, startY = 0] = part;
+    const bytes = [...command(1, 1), ...delta(startX, startY)];
+    const rest = part.length / 2 - 1;
+    if (rest > 0) {
+      bytes.push(...command(2, rest));
+      for (let index = 2; index < part.length; index += 2) {
+        bytes.push(...delta(part[index] ?? 0, part[index + 1] ?? 0));
+      }
+    }
+    return closed ? [...bytes, ...command(7, 1)] : bytes;
+  });
+}
+
 export function encodeTile(name: string, features: readonly FeatureInput[]): Uint8Array {
   const keys: string[] = [];
   const values: Value[] = [];
-  const encoded = features.map(({ geometry = 3, properties }) => {
+  const encoded = features.map(({ geometry = 3, properties, parts }) => {
     const tags = Object.entries(properties).flatMap(([key, value]) =>
       varint(BigInt(indexOf(keys, key))).concat(varint(BigInt(indexOf(values, value))))
     );
-    // 几何是一个 MoveTo，让 @mapbox/vector-tile 也能读
-    return bytesField(2, bytesField(2, tags).concat(field(3, 0), geometry, bytesField(4, [9, 2, 2])));
+    // 占位的几何是一个 MoveTo，让 @mapbox/vector-tile 也能读
+    const commands = parts ? encodeParts(parts, geometry === 3) : [9, 2, 2];
+    return bytesField(2, bytesField(2, tags).concat(field(3, 0), geometry, bytesField(4, commands)));
   });
   const layer = [
     ...field(15, 0),

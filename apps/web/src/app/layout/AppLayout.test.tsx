@@ -1,8 +1,13 @@
 import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, onUnmounted } from 'vue';
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router';
 import { AppLayout } from './AppLayout';
+
+// appConfig 在模块加载时读取开关，要在导入 AppLayout 之前固定，用例不受 .env 的取值影响
+vi.hoisted(() => {
+  vi.stubEnv('VITE_PAGE_STATE_RESET', 'false');
+});
 
 // 记下每个页面创建、卸载了几次
 function trackedPage(name: string, counts: Record<string, { created: number; unmounted: number }>) {
@@ -17,7 +22,7 @@ function trackedPage(name: string, counts: Record<string, { created: number; unm
   });
 }
 
-// pageStateReset 不传时取环境变量（.env 里是 false）
+// pageStateReset 不传时取 appConfig（上面固定成了 false）
 async function setup(pageStateReset?: boolean) {
   const counts: Record<string, { created: number; unmounted: number }> = {};
   const layout =

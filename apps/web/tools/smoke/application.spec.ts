@@ -1,6 +1,12 @@
 import { readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { Page } from 'playwright/test';
+import { loadEnv } from 'vite';
 import { expect, test } from './fixtures.ts';
+
+// 开关在构建时写进产物，这里和内网构建读同一份配置，验证产物实际的行为（ADR 0114）
+const appRoot = fileURLToPath(new URL('../..', import.meta.url));
+const pageStateReset = loadEnv('intranet', appRoot, 'VITE_').VITE_PAGE_STATE_RESET === 'true';
 
 /** 通过真实登录表单提交，只替换接口响应 */
 async function login(page: Page): Promise<void> {
@@ -27,7 +33,8 @@ function chunkFile(prefix: string): string {
   return matches[0];
 }
 
-test('登录到地图，切页期间改变尺寸，返回后复用画布并保留状态', async ({ page }) => {
+/** 登录到地图，打开区划定位并放大一级，返回切页后要比较的内容 */
+async function openMapAndChangeState(page: Page) {
   await page.goto('/login');
   await login(page);
   await readyMap(page);
@@ -39,22 +46,49 @@ test('登录到地图，切页期间改变尺寸，返回后复用画布并保�
   await expect(page.locator('[data-region-locate-panel]')).toContainText('南京市');
 
   const level = page.getByRole('status', { name: /^当前层级/ });
-  const before = await level.getAttribute('aria-label');
-  const precise = Number(before?.match(/（([\d.]+)）/)?.[1]);
+  const initialLevel = await level.getAttribute('aria-label');
+  const precise = Number(initialLevel?.match(/（([\d.]+)）/)?.[1]);
   expect(Number.isFinite(precise)).toBe(true);
   await page.getByRole('button', { name: '放大', exact: true }).click();
   await expect(level).toHaveAttribute('aria-label', new RegExp(`（${(precise + 1).toFixed(1).replace('.', '\\.')}）$`));
   const savedLevel = await level.getAttribute('aria-label');
-  if (savedLevel === null) {
+  if (initialLevel === null || savedLevel === null) {
     throw new Error('当前层级没有无障碍名称');
   }
   const canvas = page.locator('.maplibregl-canvas');
   const original = await canvas.elementHandle();
   expect(original).not.toBeNull();
+  return { search, level, initialLevel, savedLevel, canvas, original };
+}
+
+/** 切到文件管理页，等页面出现 */
+async function leaveForFileManagement(page: Page): Promise<void> {
+  await page.getByRole('link', { name: '文件管理', exact: true }).click();
+  await expect(page).toHaveURL(/\/file-management$/);
+  await expect(page.getByRole('button', { name: '上传文件', exact: true })).toBeVisible();
+}
+
+test('登录到地图，切页后返回是新的画布，回到初始状态（ADR 0114）', async ({ page }) => {
+  test.skip(!pageStateReset, '这次构建关闭了离开页面后重置');
+  const { search, level, initialLevel, original } = await openMapAndChangeState(page);
   try {
-    await page.getByRole('link', { name: '文件管理', exact: true }).click();
-    await expect(page).toHaveURL(/\/file-management$/);
-    await expect(page.getByRole('button', { name: '上传文件', exact: true })).toBeVisible();
+    await leaveForFileManagement(page);
+    await page.getByRole('link', { name: '现状底图', exact: true }).click();
+    await readyMap(page);
+    // 旧画布不再回到文档；面板没有打开，层级回到进入时的默认视角
+    expect(await original.evaluate((element: { isConnected: boolean }) => element.isConnected)).toBe(false);
+    await expect(search).toHaveCount(0);
+    await expect(level).toHaveAttribute('aria-label', initialLevel);
+  } finally {
+    await original?.dispose();
+  }
+});
+
+test('登录到地图，切页期间改变尺寸，返回后复用画布并保留状态', async ({ page }) => {
+  test.skip(pageStateReset, '这次构建打开了离开页面后重置，页面不缓存');
+  const { search, level, savedLevel, canvas, original } = await openMapAndChangeState(page);
+  try {
+    await leaveForFileManagement(page);
     // KeepAlive 将旧画布移出文档；只检查新画布存在不足以发现意外重建
     expect(await original.evaluate((element: { isConnected: boolean }) => element.isConnected)).toBe(false);
     await page.setViewportSize({ width: 1440, height: 860 });
