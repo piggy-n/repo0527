@@ -39,13 +39,21 @@ const productSchema = z.object({
   id: z.string(),
   name: z.string(),
   kind: z.string(),
+  // 总节点到这个数据成果的关系名称，只用于展示（ADR 0126）
+  relation: z.string(),
   classes: z.array(classSchema),
   datasets: z.array(datasetSchema)
 });
 
 const relationSchema = z.object({ kind: z.enum(RELATION_KINDS), source: z.string(), target: z.string() });
 
-const dataSchema = z.object({ name: z.string(), products: z.array(productSchema), relations: z.array(relationSchema) });
+const dataSchema = z.object({
+  name: z.string(),
+  // 总节点的名称
+  title: z.string(),
+  products: z.array(productSchema),
+  relations: z.array(relationSchema)
+});
 
 type RawClass = z.infer<typeof classSchema>;
 
@@ -60,6 +68,7 @@ export interface RelationProduct {
   id: string;
   name: string;
   kind: string;
+  relation: string;
 }
 
 export interface RelationNode {
@@ -75,6 +84,7 @@ export interface RelationNode {
 
 export interface RelationGraph {
   name: string;
+  title: string;
   products: readonly RelationProduct[];
   /** 按数据顺序：每个数据成果先列分类（深度优先），再列数据表 */
   nodes: ReadonlyMap<string, RelationNode>;
@@ -120,7 +130,8 @@ export function createRelationGraph(data: unknown): RelationGraph {
   }
   return {
     name: parsed.name,
-    products: parsed.products.map(({ id, name, kind }) => ({ id, name, kind })),
+    title: parsed.title,
+    products: parsed.products.map(({ id, name, kind, relation }) => ({ id, name, kind, relation })),
     nodes,
     children,
     relations: parsed.relations.map(({ kind, source, target }) => ({

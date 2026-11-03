@@ -18,14 +18,9 @@
   }
 }
 
-// 第二步：左图右表单，条件栏宽度沿用旧页面的 384
+// 第二步：左图右表单，条件栏宽度沿用旧页面的 384；名称写在节点里，图要够大（ADR 0126）
 .wide {
-  width: min(1180px, calc(100vw - 32px));
-}
-
-// 水资源关系图的四条泳道至少要 968 宽
-.wideRelation {
-  width: min(1440px, calc(100vw - 32px));
+  width: min(1600px, calc(100vw - 32px));
 }
 
 .buttonIcon {
@@ -61,7 +56,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 384px;
   gap: var(--space-lg);
-  height: min(640px, 65dvh);
+  height: min(720px, calc(100dvh - 232px));
   min-height: 0;
 }
 
@@ -75,38 +70,6 @@
   min-width: 0;
   overflow-y: auto;
   padding-right: var(--space-xs);
-}
-
-.node {
-  margin-bottom: var(--space-md);
-  padding: var(--space-md);
-  border: 1px solid var(--color-primary-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-primary-bg-light);
-  overflow-wrap: anywhere;
-
-  strong {
-    color: var(--color-text-strong);
-    font-weight: var(--font-weight-semibold);
-  }
-
-  p {
-    margin: var(--space-xs) 0 0;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
-    line-height: var(--line-height-compact);
-  }
-}
-
-.nodeTitle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-
-  :global(.el-tag) {
-    flex: none;
-  }
 }
 
 // 这个表单没有校验提示，表单项之间不用留 Element 默认 18 的提示位置；1080P 下条件栏不用滚动
@@ -190,13 +153,9 @@
     height: auto;
   }
 
+  // 图有筛选栏和图例栏，留出足够高的画布
   .graph {
     flex: none;
-    height: 360px;
-  }
-
-  // 泳道图有筛选栏和图例栏，留出更高的画布
-  .wideRelation .graph {
     height: 560px;
   }
 

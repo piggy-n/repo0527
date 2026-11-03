@@ -20,10 +20,12 @@ describe('水资源关系图数据', () => {
 
     expect(waterGraph.products.map(product => product.name)).toEqual([
       '用地用海分类',
-      '国土调查',
-      '城市国土空间监测',
-      '水资源基础调查'
+      '国土调查分类',
+      '城市国土空间监测分类',
+      '水资源基础调查分类'
     ]);
+    expect(waterGraph.title).toBe('水资源知识图谱');
+    expect(waterGraph.products.map(product => product.relation)).toEqual(['规划用途', '现状调查', '城市监测', '专项调查']);
     expect(total).toBe(4);
     expect(nodes).toHaveLength(35);
     expect(nodes.every(node => node.id === `${node.productId}/${node.code}`)).toBe(true);
@@ -56,7 +58,7 @@ describe('水资源关系图数据', () => {
   });
 
   it('数据不合 schema 时报错', () => {
-    expect(() => createRelationGraph({ name: '测试', products: [], relations: [{ kind: '包含' }] })).toThrow(ZodError);
+    expect(() => createRelationGraph({ name: '测试', title: '测试', products: [], relations: [{ kind: '包含' }] })).toThrow(ZodError);
   });
 });
 

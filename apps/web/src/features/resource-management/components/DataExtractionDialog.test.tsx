@@ -56,8 +56,8 @@ describe('useDataExtraction', () => {
 
     expect(owner.search(' 旱地 ')).toBeNull();
     expect(owner.step.value).toBe('graph');
-    expect(owner.searched.value).toBe('旱地');
-    expect(owner.graph.value.nodes.map(node => node.id)).toEqual(expect.arrayContaining(['S01-0103', 'P01-0103']));
+    expect(owner.legacy.keyword.value).toBe('旱地');
+    expect(owner.legacy.view.value.nodes.map(node => node.id)).toEqual(expect.arrayContaining(['S01-0103', 'P01-0103']));
   });
 
   it('选节点时数据名称取节点名称、数据需求按名称生成，其余条件不变；上一步清掉节点和这两项；格式全空时不能提交', () => {
@@ -66,16 +66,16 @@ describe('useDataExtraction', () => {
     expect([owner.form.dataName, owner.form.requirement]).toEqual(['', '']);
     owner.search('耕地');
     owner.form.purpose = '  年度台账  ';
-    owner.select(required(owner.graph.value.nodes.find(node => node.id === 'S01-0101'), '水田'));
+    owner.legacy.select('S01-0101');
 
     expect([owner.form.dataName, owner.form.requirement]).toEqual(['水田', '水田图层']);
     expect(owner.form.purpose).toBe('  年度台账  ');
     owner.form.dataName = '改过的名称';
-    owner.select(required(owner.graph.value.nodes.find(node => node.id === 'S01-0102'), '水浇地'));
+    owner.legacy.select('S01-0102');
     expect([owner.form.dataName, owner.form.requirement]).toEqual(['水浇地', '水浇地图层']);
 
     owner.back();
-    expect(owner.selected.value).toBeNull();
+    expect(owner.legacy.selected.value).toBeNull();
     expect([owner.form.dataName, owner.form.requirement]).toEqual(['', '']);
     expect(owner.form.purpose).toBe('  年度台账  ');
 
@@ -89,8 +89,8 @@ describe('useDataExtraction', () => {
     const { owner } = host();
     owner.start();
     owner.search('耕地');
-    const node = required(owner.graph.value.nodes.find(item => item.id === 'S01-0101'), '水田');
-    owner.select(node);
+    owner.legacy.select('S01-0101');
+    const node = required(owner.legacy.selected.value, '水田');
     Object.assign(owner.form, {
       requirement: ' 水田面图层 ',
       regionPath: ['320000', '320100', '320102'],
@@ -123,13 +123,14 @@ describe('useDataExtraction', () => {
     expect(owner.search('耕地')).toBeNull();
     expect(owner.mode.value).toBe('legacy');
     expect(owner.relation.keyword.value).toBe('');
-    expect(owner.graph.value.nodes.length).toBeGreaterThan(0);
+    expect(owner.legacy.view.value.nodes.length).toBeGreaterThan(0);
 
     owner.back();
     owner.browseWater();
     expect(owner.step.value).toBe('graph');
     expect(owner.mode.value).toBe('relation');
-    expect(owner.relation.view.value.lanes).toHaveLength(4);
+    expect(owner.relation.view.value.nodes).toHaveLength(40);
+    expect(owner.legacy.view.value.nodes).toEqual([]);
   });
 
   it('关系图里选中的节点随条件提交，数据需求带上数据表的几何类型；上一步清掉选中', () => {
@@ -155,6 +156,44 @@ describe('useDataExtraction', () => {
       dataName: '地类图斑',
       requirement: '地类图斑面图层'
     });
+  });
+
+  it('水资源的总节点和大类只是组织节点：点开看详情，不填写数据名称，不进快照', () => {
+    const { owner } = host();
+    owner.start();
+    owner.browseWater();
+
+    owner.relation.select('root');
+    expect(owner.relation.detail.value?.isTarget).toBe(false);
+    expect([owner.form.dataName, owner.form.requirement]).toEqual(['', '']);
+
+    owner.relation.select('land-survey');
+    expect(owner.relation.selected.value).toBeNull();
+    expect([owner.form.dataName, owner.form.requirement]).toEqual(['', '']);
+    owner.form.dataName = '手填';
+    owner.form.requirement = '手填图层';
+    expect(owner.submit()).toBeNull();
+    expect(owner.request.value).toMatchObject({ nodeId: '', nodeName: '', dataName: '手填' });
+  });
+
+  it('节点太多的检索先收起到一级类，定位时展开上级', () => {
+    const { owner } = host();
+    owner.start();
+    expect(owner.search('用地')).toBeNull();
+
+    expect(owner.mode.value).toBe('legacy');
+    expect(owner.legacy.view.value.nodes.length).toBeLessThan(61);
+    expect(owner.legacy.view.value.nodes.some(node => node.level === 2)).toBe(false);
+
+    const [parent] = owner.legacy.collapsed.value;
+    owner.legacy.select(parent);
+    const child = required(owner.legacy.detail.value?.children[0], '收起的下级');
+    expect(owner.legacy.view.value.nodes.some(node => node.id === child.id)).toBe(false);
+
+    owner.legacy.locate(child.id);
+    expect(owner.legacy.selectedId.value).toBe(child.id);
+    expect(owner.legacy.view.value.nodes.some(node => node.id === child.id)).toBe(true);
+    expect(owner.form.dataName).toBe(child.name);
   });
 
   it('重新打开回到第一步和默认条件；换会话时关闭', () => {
@@ -185,14 +224,14 @@ describe('DataExtractionDialog', () => {
 
     await click('湿地');
     expect(owner.step.value).toBe('graph');
-    expect(dialog().textContent).toContain('请选择关系图节点');
+    expect(dialog().textContent).toContain('请选择知识图谱节点');
     // 没选节点时数据名称、数据需求是空的，必填校验不通过
     await click('开始取数');
     await vi.waitFor(() => expect(dialog().textContent).toContain('请选择节点或填写数据名称'));
     expect(dialog().textContent).toContain('请选择节点或填写数据需求');
     expect(owner.step.value).toBe('graph');
 
-    owner.select(required(owner.graph.value.nodes.at(-1), '湿地的节点'));
+    owner.legacy.select(required(owner.legacy.view.value.nodes.at(-1), '湿地的节点').id);
     await flushPromises();
     const inputs = [...dialog().querySelectorAll<HTMLInputElement>('.el-form-item input')].slice(0, 2);
     expect(inputs.map(input => input.value)).toEqual([owner.form.dataName, owner.form.requirement]);
@@ -212,22 +251,37 @@ describe('DataExtractionDialog', () => {
     expect(dialog().querySelector('.el-dialog__footer')).toBeNull();
   });
 
-  it('按资源类别打开水资源关系图：弹窗加宽，右侧是节点详情；选中节点后详情列出关系', async () => {
+  it('按资源类别打开水资源图谱：弹窗加宽，有数据成果筛选，右侧是节点详情；选中节点后详情列出关系', async () => {
     const { owner } = host();
     owner.start();
     await flushPromises();
 
     await click('水资源');
-    const graph = required(dialog().querySelector('[aria-label="水资源关系图"]'), '水资源关系图');
-    expect(graph.querySelectorAll('[data-node-id]')).toHaveLength(35);
-    expect(dialog().textContent).toContain('请选择关系图节点');
-    expect(required(document.querySelector('.el-dialog'), '弹窗').className).toContain('wideRelation');
+    expect(dialog().querySelector('[role="group"][aria-label="数据成果"]')).not.toBeNull();
+    expect(dialog().textContent).toContain('请选择知识图谱节点');
+    expect(required(document.querySelector('.el-dialog'), '弹窗').className).toContain('wide');
 
-    required(graph.querySelector<HTMLElement>('[data-node-id="water-survey/HL_FS"]'), 'HL_FS').click();
+    owner.relation.select('water-survey/HL_FS');
     await flushPromises();
-    expect(owner.relation.selectedId.value).toBe('water-survey/HL_FS');
     expect(dialog().textContent).toContain('时序关联');
     expect(dialog().textContent).toContain('13 个字段');
+  });
+
+  it('其他资源没有数据成果筛选，详情同样列出关系和下级，点了定位过去', async () => {
+    const { owner } = host();
+    owner.start();
+    await flushPromises();
+
+    await click('耕地');
+    expect(dialog().querySelector('[role="group"][aria-label="数据成果"]')).toBeNull();
+    owner.legacy.select('S01');
+    await flushPromises();
+    expect(dialog().textContent).toContain('国土调查工作分类 · 一级类');
+    expect(dialog().textContent).toContain('下级3');
+
+    await click('0101水田');
+    expect(owner.legacy.selectedId.value).toBe('S01-0101');
+    expect(dialog().textContent).toContain('分类对应');
   });
 
   it('输入法选字时的回车不搜索，普通回车搜索', async () => {

@@ -1,17 +1,17 @@
+// 旧项目的网格底，线色更淡（ADR 0126）
 .root {
-  position: relative;
-  height: 100%;
-  min-height: 320px;
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg-container);
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(var(--color-primary-alpha-5) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-primary-alpha-5) 1px, transparent 1px),
+    var(--color-primary-bg-lighter);
+  background-size: 32px 32px;
 }
 
 .canvas {
   width: 100%;
   height: 100%;
-  min-height: 320px;
 }
 
 .state {

@@ -84,7 +84,7 @@ export function searchKnowledgeNodes(keyword: string): KnowledgeNode[] {
 
 /**
  * 搜索结果周围的子图：每个命中节点到根的路径、直接子级（规划一级类再带上三级类），
- * 以及和它有对应关系的节点的同样内容。节点和关系的顺序与旧页面一致，力导布局的结果依赖这个顺序
+ * 以及和它有对应关系的节点的同样内容。节点和关系的顺序与旧页面一致，由 legacy-subgraph.fixture.json 核对
  */
 export function searchContext(matches: readonly KnowledgeNode[]): KnowledgeGraph {
   const ids = new Set<string>();
@@ -136,8 +136,8 @@ function mappedNodes(node: KnowledgeNode): KnowledgeNode[] {
   });
 }
 
-// 关系两端和父节点都在数据里，由测试保证
-function requiredNode(id: string): KnowledgeNode {
+/** 按编号取节点；关系两端和父节点都在数据里，由测试保证 */
+export function requiredNode(id: string): KnowledgeNode {
   const node = nodesById.get(id);
   if (!node) {
     throw new Error(`知识图谱里没有节点 ${id}`);

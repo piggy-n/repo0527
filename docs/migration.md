@@ -196,9 +196,11 @@ git diff <基线>..master-demo -- <旧路径>
 | 自助取数 | `src/views/resource-center/components/qushu/`、`src/views/knowledge-graph-enterprise/`（`QushuGraphPanel.vue`、`data/data.json`、`utils/graphData.js`、`utils/graphExpandManager.js`、`utils/useEnterpriseGraph.js` 的布局部分）、`src/services/resource-center/qushuService.js` | `features/resource-management/extraction`、`useDataExtraction`、`DataExtractionDialog`、`KnowledgeGraphChart` |
 | 下载申请 | `src/components/resource-application/ResourceApplyDialog.vue`、`src/services/resource-application/applyApiService.js` 的 `createApplication`、`src/api/apply/apply-api.js` | `application-form.ts`、`useDataApplication`、`DataApplicationDialog` |
 
-与旧页面的差异：关系图改用 ECharts，名称在节点外、字号固定（ADR 0089）；两段搜索合成一次（结果相同）；"开始取数"同样没有接口。下载申请的图层对不上时留空、默认结束时间加一个月（用户 2026-10-27 确认），不再悄悄选学校点层。不迁移：独立知识图谱页的管理、展开、多选、导出、图例筛选；申请列表、审批与文件下载（属于申请列表和系统管理）。
+与旧页面的差异：关系图改用 ECharts（ADR 0089，名称的位置 2026-11-02 改回节点内，见下）；两段搜索合成一次（结果相同）；"开始取数"同样没有接口。下载申请的图层对不上时留空、默认结束时间加一个月（用户 2026-10-27 确认），不再悄悄选学校点层。不迁移：独立知识图谱页的管理、展开、多选、导出、图例筛选；申请列表、审批与文件下载（属于申请列表和系统管理）。
 
 2026-10-29：水资源的检索改用按数据成果分泳道的关系图（新功能，旧页面没有对应），其他资源不变，见 ADR 0115 和[资源管理模块](modules/resource-management.md)的"水资源关系图"。
+
+2026-11-02：客户要求回到旧项目的表现形式：水资源图不再用泳道，改成总节点连四个大类的放射布局；两种图的名称都写回节点里，配色恢复旧项目的色相（降低饱和度），每条线写关系名称。和旧页面的差异：字号按屏幕上的直径自适应，不随缩放小到看不清，名称按词折行、不截断；坐标不再逐点复现旧页面；超过 60 个节点时先收起到一级类；见 ADR 0126。
 
 2026-10-30：数据名称、数据需求不再沿用旧页面写死的下拉（"地类图斑"等四个名称、六个主题图层），改为跟着选中的节点自动填写的必填项，见[资源管理模块](modules/resource-management.md)的"自助取数"。
 

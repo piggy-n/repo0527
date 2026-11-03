@@ -1,59 +1,117 @@
-import { useResizeObserver } from '@vueuse/core';
+import { useResizeObserver, useTimeoutFn } from '@vueuse/core';
 import type { ECElementEvent, ECharts } from 'echarts/core';
 import { ElButton, ElTooltip } from 'element-plus';
 import { defineComponent, nextTick, onMounted, onScopeDispose, type PropType, ref, watch } from 'vue';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
-import type { ChartTheme } from '../extraction/graph-chart';
+import type { ChartTheme, GraphDisplay } from '../extraction/graph-chart';
+import type { GraphLayoutInput, GraphPoint, GraphView, GraphViewport } from '../extraction/graph-model';
 import type * as GraphRuntime from '../extraction/graph-runtime';
-import type { KnowledgeGraph, KnowledgeNode } from '../extraction/knowledge-graph';
 import styles from './KnowledgeGraphChart.module.scss';
 
 type LoadState = 'loading' | 'ready' | 'failed';
 
 // 按钮每次缩放的倍数
 const ZOOM_STEP = 1.25;
+// 画布尺寸稳定后才重新布局，拖动窗口时不反复计算
+const RELAYOUT_DELAY = 120;
 
 function readTheme(element: HTMLElement): ChartTheme {
   const style = getComputedStyle(element);
   const token = (name: string) => style.getPropertyValue(name).trim();
   return {
     fontFamily: style.fontFamily,
-    text: token('--color-text-strong'),
-    textSecondary: token('--color-text-secondary'),
     background: token('--color-bg-container'),
     primary: token('--color-primary'),
-    warning: token('--color-warning')
+    tooltipBackground: token('--color-text-title'),
+    tooltipText: token('--color-text-inverse')
   };
 }
 
-/** 自助取数的关系图：ECharts 运行时在第一次显示时才加载；可拖动节点、拖动画布、滚轮和按钮缩放，点击节点选中 */
+// 当前缩放比例：数据单位到像素的比例除以缩放为 1 时的比例；取三位小数，0.9999 这样的误差不能把字号算小一档
+function currentZoom(chart: ECharts, baseScale: number): number {
+  const origin = chart.convertToPixel({ seriesIndex: 0 }, [0, 0]);
+  const unit = chart.convertToPixel({ seriesIndex: 0 }, [1, 0]);
+  return Math.round(((unit[0] - origin[0]) / baseScale) * 1000) / 1000;
+}
+
+/**
+ * 知识图谱的画布：ECharts 运行时在第一次显示时才加载；可拖动节点、拖动画布、滚轮和按钮缩放，点击选中，双击收起展开。
+ * 名称写在节点里，字号跟节点在屏幕上的直径走（ADR 0126）：字号只取双数，缩放时跨档才更新标签
+ */
 export const KnowledgeGraphChart = defineComponent({
   name: 'KnowledgeGraphChart',
   props: {
-    graph: { type: Object as PropType<KnowledgeGraph>, required: true },
-    keyword: { type: String, required: true },
-    selectedId: String
+    view: { type: Object as PropType<GraphView>, required: true },
+    layoutInput: { type: Object as PropType<GraphLayoutInput>, required: true },
+    selectedId: { type: String as PropType<string | null>, default: null },
+    title: { type: String, default: '知识图谱' }
   },
   emits: {
-    select: (_node: KnowledgeNode) => true
+    select: (_id: string) => true,
+    toggle: (_id: string) => true
   },
   setup(props, { emit }) {
     const host = ref<HTMLElement>();
     const state = ref<LoadState>('loading');
     let chart: ECharts | undefined;
     let runtime: typeof GraphRuntime | undefined;
+    let display: GraphDisplay | undefined;
+    let labelKey = '';
+    let renderedSize = '';
     let disposed = false;
+    // 布局结果按输入和画布大小缓存；拖动过的节点位置 ECharts 不写回配置，更新标签时要带上，否则节点会跳回去
+    const layouts = new Map<string, ReadonlyMap<string, GraphPoint>>();
+    let positions: ReadonlyMap<string, GraphPoint> | undefined;
+    const dragged = new Map<string, GraphPoint>();
+    let grab: { id: string; dx: number; dy: number; startX: number; startY: number } | null = null;
+
+    function layoutFor(viewport: GraphViewport, loaded: typeof GraphRuntime) {
+      const key = `${props.layoutInput.key}@${viewport.width}x${viewport.height}`;
+      const cached = layouts.get(key);
+      if (cached) {
+        return cached;
+      }
+      const result = loaded.layoutGraph(props.layoutInput, viewport);
+      layouts.set(key, result);
+      return result;
+    }
 
     function render() {
       const element = host.value;
-      if (!chart || !runtime || !element) {
+      if (!chart || !runtime || !element || element.clientWidth === 0 || element.clientHeight === 0) {
         return;
       }
+      chart.resize();
       const viewport = { width: element.clientWidth, height: element.clientHeight };
-      const option = runtime.knowledgeChartOption(props.graph, props.keyword, readTheme(element), viewport);
-      chart.setOption(option, { notMerge: true });
+      renderedSize = `${viewport.width}x${viewport.height}`;
+      const layout = layoutFor(viewport, runtime);
+      if (layout !== positions) {
+        dragged.clear();
+        positions = layout;
+      }
+      display = runtime.createGraphDisplay(props.view, layout, readTheme(element), viewport, dragged);
+      chart.setOption(display.option, { notMerge: true });
+      labelKey = display.labelKey(1);
       syncSelection();
+    }
+
+    // 字号或关系名称的位置变了才更新标签；只换 data、links，缩放和平移留在系列里
+    function refreshLabels() {
+      if (!chart || !display || !runtime) {
+        return;
+      }
+      const zoom = currentZoom(chart, display.baseScale);
+      const key = display.labelKey(zoom);
+      if (key === labelKey) {
+        return;
+      }
+      labelKey = key;
+      chart.setOption(
+        { series: [{ id: runtime.GRAPH_SERIES_ID, data: display.nodeItems(zoom), links: display.linkItems(zoom) }] },
+        { lazyUpdate: true }
+      );
+      void nextTick(syncSelection);
     }
 
     // 选中状态以 selectedId 为准；ECharts 点击时自己会切换选中，之后再按 props 改回来
@@ -61,8 +119,8 @@ export const KnowledgeGraphChart = defineComponent({
       if (!chart) {
         return;
       }
-      chart.dispatchAction({ type: 'unselect', seriesIndex: 0, dataIndex: props.graph.nodes.map((_, index) => index) });
-      const index = props.graph.nodes.findIndex(node => node.id === props.selectedId);
+      chart.dispatchAction({ type: 'unselect', seriesIndex: 0, dataIndex: props.view.nodes.map((_, index) => index) });
+      const index = props.view.nodes.findIndex(node => node.id === props.selectedId);
       if (index >= 0) {
         chart.dispatchAction({ type: 'select', seriesIndex: 0, dataIndex: index });
       }
@@ -70,16 +128,45 @@ export const KnowledgeGraphChart = defineComponent({
 
     function onClick(event: ECElementEvent) {
       if (event.dataType === 'node') {
-        emit('select', props.graph.nodes[event.dataIndex]);
+        emit('select', props.view.nodes[event.dataIndex].id);
         void nextTick(syncSelection);
       }
+    }
+
+    function onDoubleClick(event: ECElementEvent) {
+      if (event.dataType === 'node' && props.view.nodes[event.dataIndex].childCount > 0) {
+        emit('toggle', props.view.nodes[event.dataIndex].id);
+      }
+    }
+
+    // 按下时记住指针和节点中心的差，松开时换算回数据坐标，就是拖到的位置
+    function onMouseDown(event: ECElementEvent) {
+      const at = event.dataType === 'node' ? props.view.nodes[event.dataIndex].id : null;
+      const point = at === null ? undefined : (dragged.get(at) ?? positions?.get(at));
+      if (!chart || at === null || !point || !event.event) {
+        return;
+      }
+      const { offsetX, offsetY } = event.event;
+      const [x, y] = chart.convertFromPixel({ seriesIndex: 0 }, [offsetX, offsetY]);
+      grab = { id: at, dx: x - point.x, dy: y - point.y, startX: offsetX, startY: offsetY };
+    }
+
+    function onMouseUp({ offsetX, offsetY }: { offsetX: number; offsetY: number }) {
+      const released = grab;
+      grab = null;
+      if (!chart || !released || Math.hypot(offsetX - released.startX, offsetY - released.startY) <= 2) {
+        return;
+      }
+      const [x, y] = chart.convertFromPixel({ seriesIndex: 0 }, [offsetX, offsetY]);
+      dragged.set(released.id, { x: x - released.dx, y: y - released.dy });
+      void nextTick(refreshLabels);
     }
 
     async function load() {
       state.value = 'loading';
       try {
         const loaded = await import('../extraction/graph-runtime');
-        // ECharts 只在排版时量一次文字宽度：先加载要用的两个字重，否则按后备字体量宽，换行、隐藏和图例翻页都会算错。
+        // ECharts 只在排版时量一次文字宽度：先加载要用的两个字重，否则按后备字体量宽。
         // 页面上还没用到的字体不会自动加载，document.fonts.ready 等不到它；没有部署字体时这里直接完成
         const family = host.value ? getComputedStyle(host.value).fontFamily : '';
         await Promise.all([document.fonts.load(`400 12px ${family}`), document.fonts.load(`600 14px ${family}`)]);
@@ -89,6 +176,10 @@ export const KnowledgeGraphChart = defineComponent({
         runtime = loaded;
         chart = loaded.createChart(host.value);
         chart.on('click', onClick);
+        chart.on('dblclick', onDoubleClick);
+        chart.on('mousedown', onMouseDown);
+        chart.on('graphroam', refreshLabels);
+        chart.getZr().on('mouseup', onMouseUp);
         render();
         state.value = 'ready';
       } catch {
@@ -111,12 +202,29 @@ export const KnowledgeGraphChart = defineComponent({
 
     // 回到适配全图的视角，拖动过的节点位置保留
     function reset() {
-      chart?.setOption({ series: [{ zoom: 1, center: null }] });
+      if (chart && runtime) {
+        chart.setOption({ series: [{ id: runtime.GRAPH_SERIES_ID, zoom: 1, center: null }] });
+        refreshLabels();
+      }
     }
 
+    // 尺寸真的变了才重新布局：重画会回到适配全图，观察器第一次回调时尺寸没变，不能把用户刚做的缩放冲掉
+    function renderIfResized() {
+      const element = host.value;
+      if (element && `${element.clientWidth}x${element.clientHeight}` !== renderedSize) {
+        render();
+      }
+    }
+
+    // 再次开始时重新计时；作用域销毁时自动停止
+    const { start: scheduleRender } = useTimeoutFn(renderIfResized, RELAYOUT_DELAY, { immediate: false });
+
     onMounted(() => void load());
-    useResizeObserver(host, () => chart?.resize());
-    watch(() => [props.graph, props.keyword], render);
+    useResizeObserver(host, () => {
+      chart?.resize();
+      scheduleRender();
+    });
+    watch(() => [props.view, props.layoutInput], render);
     watch(() => props.selectedId, syncSelection);
     onScopeDispose(() => {
       disposed = true;
@@ -130,7 +238,7 @@ export const KnowledgeGraphChart = defineComponent({
       }
       return (
         <div class={styles.state} role="status">
-          {state.value === 'failed' ? '关系图加载失败' : '正在加载关系图…'}
+          {state.value === 'failed' ? '知识图谱加载失败' : '正在加载知识图谱…'}
           {state.value === 'failed' && (
             <ElButton link type="primary" onClick={() => void load()}>
               重试
@@ -159,9 +267,9 @@ export const KnowledgeGraphChart = defineComponent({
 
     return () => (
       <div class={styles.root}>
-        <div ref={host} class={styles.canvas} role="img" aria-label="取数关系图" />
+        <div ref={host} class={styles.canvas} role="img" aria-label={props.title} />
         {renderState()}
-        <div class={styles.tools} role="toolbar" aria-label="关系图视角" aria-orientation="vertical">
+        <div class={styles.tools} role="toolbar" aria-label="视角" aria-orientation="vertical">
           {toolButton('放大', 'map-zoom-in', () => zoomBy(ZOOM_STEP))}
           {toolButton('缩小', 'map-zoom-out', () => zoomBy(1 / ZOOM_STEP))}
           <div class={styles.separator} role="separator" />
