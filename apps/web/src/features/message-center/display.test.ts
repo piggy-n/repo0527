@@ -16,22 +16,30 @@ const message = (overrides: Partial<Message>): Message => ({
 
 describe('messageLink', () => {
   it('审批提醒去审核，资源消息查看申请，都带上申请 ID', () => {
-    expect(messageLink(message({}))).toEqual({
+    expect(messageLink(message({}), true)).toEqual({
       label: '去审核',
       target: { kind: 'application', applyId: 'apply-1' }
     });
-    expect(messageLink(message({ category: 'resource', applyId: 'apply-2' }))).toEqual({
+    expect(messageLink(message({ category: 'resource', applyId: 'apply-2' }), true)).toEqual({
       label: '查看申请',
       target: { kind: 'application', applyId: 'apply-2' }
     });
   });
 
+  it('不能审核时审批提醒也是查看申请，其余不变', () => {
+    expect(messageLink(message({}), false)).toEqual({
+      label: '查看申请',
+      target: { kind: 'application', applyId: 'apply-1' }
+    });
+    expect(messageLink(message({ category: 'table', applyId: null }), false)?.label).toBe('查看报表');
+  });
+
   it('报表通知指向统计报表；没有申请 ID 的业务消息没有按钮', () => {
-    expect(messageLink(message({ category: 'table', applyId: null }))).toEqual({
+    expect(messageLink(message({ category: 'table', applyId: null }), true)).toEqual({
       label: '查看报表',
       target: { kind: 'reports' }
     });
-    expect(messageLink(message({ category: 'resource', applyId: null }))).toBeNull();
+    expect(messageLink(message({ category: 'resource', applyId: null }), true)).toBeNull();
   });
 });
 

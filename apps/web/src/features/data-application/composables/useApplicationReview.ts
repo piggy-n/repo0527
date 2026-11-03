@@ -12,6 +12,9 @@ export interface AuditForm {
 /** 打开的申请处在哪一步：没有打开、读取中、读取失败、不存在、可以显示 */
 export type ReviewState = 'closed' | 'loading' | 'error' | 'missing' | 'ready';
 
+/** 弹窗的模式：填审核意见，或只查看 */
+export type ReviewMode = 'audit' | 'view';
+
 /** 一次审核的结果；null 表示没有发出，或页面已销毁、换了会话，界面不提示 */
 export type AuditResult =
   | { kind: 'success'; id: string; approved: boolean }
@@ -20,31 +23,9 @@ export type AuditResult =
 
 const emptyForm = (): AuditForm => ({ approved: true, reason: '' });
 
-/**
- * 打开的申请（ID 来自路由的查询参数，ADR 0092）与审核：待审核的填审核意见，其余只查看，模式由申请当前的状态决定。
- * 提交期间不能重复提交；失败时保留填写的内容。不渲染、不跳转、不提示；send 默认是真实的审核接口，组件样例传入演示的提交
- */
-export function useApplicationReview(
-  applyId: MaybeRefOrGetter<string | null>,
-  send: (submission: AuditSubmission) => Promise<unknown> = useAuditApplicationMutation().mutateAsync
-) {
-  const sessionGuard = useSessionGuard();
+// 打开的申请（ID 来自路由的查询参数，ADR 0092）：读取和它处在哪一步
+function useOpenedApplication(applyId: MaybeRefOrGetter<string | null>) {
   const query = useApplicationQuery(applyId);
-  const form = reactive<AuditForm>(emptyForm());
-  const pending = ref(false);
-  let disposed = false;
-  onScopeDispose(() => {
-    disposed = true;
-  });
-
-  // 换了一条申请，审核意见从头填
-  watch(
-    () => toValue(applyId),
-    () => {
-      Object.assign(form, emptyForm());
-    },
-    { flush: 'sync' }
-  );
 
   // 查询换 key 后 data 要到下一轮才更新，只认标着当前 ID 的结果
   const entry = computed(() => {
@@ -64,7 +45,37 @@ export function useApplicationReview(
     return query.isError.value ? 'error' : 'loading';
   });
 
-  const mode = computed(() => (application.value?.status === 'pending' ? 'audit' : 'view'));
+  return { application, state, retry: () => void query.refetch() };
+}
+
+/**
+ * 打开的申请与审核：待审核的填审核意见，其余只查看，模式由申请当前的状态决定。
+ * 提交期间不能重复提交；失败时保留填写的内容。不渲染、不跳转、不提示；send 默认是真实的审核接口，组件样例传入演示的提交
+ */
+export function useApplicationReview(
+  applyId: MaybeRefOrGetter<string | null>,
+  send: (submission: AuditSubmission) => Promise<unknown> = useAuditApplicationMutation().mutateAsync
+) {
+  const sessionGuard = useSessionGuard();
+  const opened = useOpenedApplication(applyId);
+  const { application } = opened;
+  const form = reactive<AuditForm>(emptyForm());
+  const pending = ref(false);
+  let disposed = false;
+  onScopeDispose(() => {
+    disposed = true;
+  });
+
+  // 换了一条申请，审核意见从头填
+  watch(
+    () => toValue(applyId),
+    () => {
+      Object.assign(form, emptyForm());
+    },
+    { flush: 'sync' }
+  );
+
+  const mode = computed<ReviewMode>(() => (application.value?.status === 'pending' ? 'audit' : 'view'));
 
   async function submit(): Promise<AuditResult> {
     const current = application.value;
@@ -90,7 +101,18 @@ export function useApplicationReview(
     }
   }
 
-  return { application, state, mode, form, pending, submit, retry: () => void query.refetch() };
+  return { ...opened, mode, form, pending, submit };
 }
 
 export type ApplicationReviewOwner = ReturnType<typeof useApplicationReview>;
+
+/** 申请人查看自己的申请（ADR 0127）：和审核共用一个弹窗，所以形状相同；总是只查看，待审核的也不能提交，也不创建审核的请求 */
+export function useApplicationView(applyId: MaybeRefOrGetter<string | null>): ApplicationReviewOwner {
+  return {
+    ...useOpenedApplication(applyId),
+    mode: computed<ReviewMode>(() => 'view'),
+    form: reactive(emptyForm()),
+    pending: ref(false),
+    submit: () => Promise.resolve(null)
+  };
+}

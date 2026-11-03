@@ -11,7 +11,7 @@ import { createTestJwtExpiringAt } from '@/shared/auth/testing';
 import { ApiError } from '@/shared/http/errors';
 import type { AuditSubmission } from '../queries';
 import { approvedRecord, envelope, pendingRecord } from '../test-data';
-import { useApplicationReview } from './useApplicationReview';
+import { useApplicationReview, useApplicationView } from './useApplicationReview';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
@@ -200,5 +200,30 @@ describe('useApplicationReview', () => {
     });
     sends[1]?.();
     expect(await switched).toBeNull();
+  });
+});
+
+describe('useApplicationView', () => {
+  it('跟着路由打开和关闭；待审核的申请也只查看，提交什么都不做', async () => {
+    mockDetails();
+    let view: ReturnType<typeof useApplicationView> | undefined;
+    const id = ref<string | null>(null);
+    const Host = defineComponent(() => {
+      view = useApplicationView(id);
+      return () => null;
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    mount(Host, { global: { plugins: [[VueQueryPlugin, { queryClient }]] } });
+    expect(view?.state.value).toBe('closed');
+
+    id.value = 'apply-pending';
+    await vi.waitFor(() => expect(view?.state.value).toBe('ready'));
+    expect(view?.application.value?.status).toBe('pending');
+    expect(view?.mode.value).toBe('view');
+    expect(await view?.submit()).toBeNull();
+    expect(view?.pending.value).toBe(false);
+
+    id.value = 'missing';
+    await vi.waitFor(() => expect(view?.state.value).toBe('missing'));
   });
 });

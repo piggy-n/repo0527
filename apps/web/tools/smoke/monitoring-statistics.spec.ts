@@ -4,6 +4,7 @@ import { expect, test as base } from './fixtures.ts';
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
 
 interface Backend {
+  role: 'admin' | 'user';
   // 开始统计收到的请求体，按顺序
   creates: unknown[];
 }
@@ -35,14 +36,14 @@ const report = (tableType: string, level: string) =>
 // 产物测试只使用本地接口样本，不导入源码；没有列出的接口交给公共夹具
 const test = base.extend<{ backend: Backend }>({
   backend: [async ({ context }, use) => {
-    const backend: Backend = { creates: [] };
+    const backend: Backend = { role: 'admin', creates: [] };
     await context.route('**/backend/**', async route => {
       const request = route.request();
       const endpoint = new URL(request.url()).pathname.slice('/backend'.length);
       let data: unknown;
       if (endpoint === '/user/login') {
         const token = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: 'smoke', exp: Math.floor(Date.now() / 1000) + 3600 })}.signature`;
-        data = { token, loginName: 'smoke', realName: '冒烟测试', roleCode: 'admin' };
+        data = { token, loginName: 'smoke', realName: '冒烟测试', roleCode: backend.role };
       } else if (endpoint === '/statistics/select-left-task' && request.method() === 'POST') {
         data = dto({ summaryProvinceStatus: '处理失败' });
       } else if (endpoint === '/statistics/select-task-status' && request.method() === 'POST') {
@@ -100,4 +101,12 @@ test('管理员点"去下载"进入系统管理的统计报表', async ({ page }
   await openStatistics(page);
   await page.getByRole('button', { name: '去下载' }).click();
   await expect(page).toHaveURL(/\/system-management\/statistical-report$/);
+});
+
+test('普通用户点"去下载"进入数据下载的统计报表', async ({ page, backend }) => {
+  backend.role = 'user';
+  await openStatistics(page);
+  await page.getByRole('button', { name: '去下载' }).click();
+  await expect(page).toHaveURL(/\/resource-application\/statistical-report$/);
+  await expect(page.locator('.el-table__empty-text')).toContainText('暂无数据');
 });

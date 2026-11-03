@@ -12,6 +12,7 @@ import {
   useMarkAllReadMutation,
   useMarkReadMutation,
   useMessagesQuery,
+  useOnNewMessage,
   useUnreadCountQuery
 } from './queries';
 import { createMessageBackend, type MessageBackendOptions } from './test-data';
@@ -108,6 +109,47 @@ describe('全部消息与未读数', () => {
     vi.advanceTimersByTime(UNREAD_REFRESH_INTERVAL * 2);
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(requests).toEqual(['unread', 'unread']);
+  });
+});
+
+function mountWatcher(onNew: () => void) {
+  const Watcher = defineComponent(() => {
+    useOnNewMessage(onNew);
+    return () => null;
+  });
+  mount(Watcher, { global: { plugins: [[VueQueryPlugin, { queryClient }]] } });
+}
+
+describe('useOnNewMessage', () => {
+  it('未读数变多时回调；第一次读到、未读数变少时不回调', async () => {
+    const { arrive } = mockServer();
+    const onNew = vi.fn<() => void>();
+    mountHost();
+    mountWatcher(onNew);
+    await vi.waitFor(() => expect(unread.data.value).toBe(2));
+    expect(onNew).not.toHaveBeenCalled();
+
+    await markRead.mutateAsync({ id: 'msg-approval', token: useSessionStore().token });
+    await vi.waitFor(() => expect(unread.data.value).toBe(1));
+    expect(onNew).not.toHaveBeenCalled();
+
+    arrive();
+    await unread.refetch();
+    await vi.waitFor(() => expect(onNew).toHaveBeenCalledOnce());
+  });
+
+  it('自己不请求也不定时：只读顶栏那个查询的结果，轮询不翻倍', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const { requests } = mockServer();
+    mountHost();
+    await vi.waitFor(() => expect(unread.data.value).toBe(2));
+
+    const timers = vi.getTimerCount();
+    mountWatcher(() => undefined);
+    expect(vi.getTimerCount()).toBe(timers);
+    // 请求在挂载时同步开始，不用等消息往返
+    expect(queryClient.isFetching()).toBe(0);
+    expect(requests).toEqual(['unread']);
   });
 });
 

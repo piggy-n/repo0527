@@ -5,12 +5,6 @@ import type { MessageTarget } from '@/features/message-center/display';
 import styles from './preview.module.scss';
 import { type ListScene, type ReadScene, useMessageDemo } from './useMessageDemo';
 
-type DemoRole = 'admin' | 'user';
-
-const ROLES: [DemoRole, string][] = [
-  ['admin', '管理员'],
-  ['user', '普通用户']
-];
 const LIST_SCENES: [ListScene, string][] = [
   ['normal', '正常'],
   ['loading', '首次加载'],
@@ -23,11 +17,9 @@ const READ_SCENES: [ReadScene, string][] = [
   ['slow', '2 秒后成功']
 ];
 
-// 和 app/layout/message-routes 的说明相同；页面不能导入 app
-const UNAVAILABLE = '数据下载页面迁移后可用';
-
+// 正式页面里由 app 按角色换成路由：管理员在系统管理里，普通用户在数据下载里
 function describeTarget(target: MessageTarget): string {
-  return target.kind === 'reports' ? '系统管理 · 统计报表' : `系统管理 · 资源审核，打开申请 ${target.applyId}`;
+  return target.kind === 'reports' ? '统计报表' : `打开申请 ${target.applyId}`;
 }
 
 // 演示选项：一个标签加一个小号下拉
@@ -49,11 +41,7 @@ export const DevMessageCenterPage = defineComponent({
   name: 'DevMessageCenterPage',
   setup() {
     const demo = useMessageDemo({ onReadError: reason => ElMessage.error(reason) });
-    const role = ref<DemoRole>('admin');
     const lastTarget = ref<MessageTarget | null>(null);
-
-    // 正式页面里能不能去由路由的 meta.roles 决定：两种目标现在都只有管理员能去
-    const unavailableReason = () => (role.value === 'admin' ? null : UNAVAILABLE);
 
     return () => (
       <main class={styles.page}>
@@ -65,9 +53,6 @@ export const DevMessageCenterPage = defineComponent({
             <code>{lastTarget.value ? describeTarget(lastTarget.value) : '无'}</code>
           </p>
           <div class={styles.controls}>
-            {renderOption('角色', role.value, ROLES, value => {
-              role.value = value;
-            })}
             {renderOption('列表状态', demo.listScene.value, LIST_SCENES, value => {
               demo.listScene.value = value;
             })}
@@ -83,7 +68,6 @@ export const DevMessageCenterPage = defineComponent({
           <div class={styles.frame}>
             <MessagePanel
               center={demo.center}
-              unavailableReason={unavailableReason}
               onOpen={(target: MessageTarget) => {
                 lastTarget.value = target;
               }}

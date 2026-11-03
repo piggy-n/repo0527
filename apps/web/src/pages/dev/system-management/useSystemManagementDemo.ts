@@ -11,6 +11,8 @@ import type { RowDownloadState } from '@/shared/file-transfer/useRowDownloads';
 import { APPLICATION_SAMPLES, REPORT_SAMPLES } from './samples';
 
 export type SystemSection = 'audit' | 'reports';
+// 管理员看系统管理，普通用户看数据下载：同样的组件，普通用户只查看不审核
+export type Viewer = 'admin' | 'user';
 export type ListScene = 'normal' | 'loading' | 'refreshing' | 'error' | 'empty';
 export type SubmitScene = 'success' | 'error' | 'slow';
 
@@ -76,10 +78,11 @@ function useDemoDownloads() {
 }
 
 /**
- * 系统管理组件样例的数据与拥有者：申请、统计报表的列表和筛选，打开的申请与审核，下载进度；都是固定数据，
- * 审核和下载只在内存里改，列表状态、审核结果由演示选项决定，不请求接口
+ * 系统管理和数据下载组件样例的数据与拥有者：申请、统计报表的列表和筛选，打开的申请与审核，下载进度；都是固定数据，
+ * 审核和下载只在内存里改，看的角色、列表状态、审核结果由演示选项决定，不请求接口
  */
 export function useSystemManagementDemo() {
+  const viewer = ref<Viewer>('admin');
   const section = ref<SystemSection>('audit');
   const listScene = ref<ListScene>('normal');
   const submitScene = ref<SubmitScene>('success');
@@ -141,6 +144,7 @@ export function useSystemManagementDemo() {
   const form = reactive<AuditForm>({ approved: true, reason: '' });
   const pending = ref(false);
   const opened = computed(() => applications.value.find(application => application.id === openId.value) ?? null);
+  const mode = computed(() => (viewer.value === 'admin' && opened.value?.status === 'pending' ? 'audit' : 'view'));
 
   const state = computed<ReviewState>(() => {
     if (openId.value === null) {
@@ -166,6 +170,12 @@ export function useSystemManagementDemo() {
     openId.value = null;
   }
 
+  // 换角色相当于换了一个页面，打开的申请不带过去
+  function switchViewer(next: Viewer) {
+    viewer.value = next;
+    close();
+  }
+
   function settle(id: string, approved: boolean, reason: string) {
     applications.value = applications.value.map(application =>
       application.id === id ? settled(application, approved, reason) : application
@@ -174,7 +184,7 @@ export function useSystemManagementDemo() {
 
   async function submit(): Promise<AuditResult> {
     const current = opened.value;
-    if (!current || current.status !== 'pending' || pending.value) {
+    if (!current || mode.value !== 'audit' || pending.value) {
       return null;
     }
     pending.value = true;
@@ -193,14 +203,14 @@ export function useSystemManagementDemo() {
   const review: ApplicationReviewOwner = {
     application: opened,
     state,
-    mode: computed(() => (opened.value?.status === 'pending' ? 'audit' : 'view')),
+    mode,
     form,
     pending,
     submit,
     retry: () => undefined
   };
 
-  return { section, listScene, submitScene, audit, reports, review, open, close, downloads };
+  return { viewer, switchViewer, section, listScene, submitScene, audit, reports, review, open, close, downloads };
 }
 
 // 审核以后的申请：通过的开始准备数据，不通过的记下原因

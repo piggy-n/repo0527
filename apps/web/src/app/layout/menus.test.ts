@@ -88,6 +88,14 @@ describe('isNavItemActive', () => {
     expect(system && isNavItemActive(system, RouteName.resourceManagement)).toBe(false);
   });
 
+  it('链接项在同一页面的其他路由上也选中：数据下载的统计报表', () => {
+    const download = navItems.find(item => item.label === '数据下载');
+
+    expect(download && isNavItemActive(download, RouteName.resourceApplicationReports)).toBe(true);
+    expect(download && isNavItemActive(download, RouteName.resourceApplication)).toBe(true);
+    expect(download && isNavItemActive(download, RouteName.systemManagementReports)).toBe(false);
+  });
+
   it('下拉项在其中任一页面时选中', () => {
     expect(query && isNavItemActive(query, RouteName.spaceMonitoringIndicators)).toBe(true);
     expect(query && isNavItemActive(query, RouteName.currentMap)).toBe(false);

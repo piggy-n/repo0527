@@ -16,7 +16,6 @@ import { useSessionStore } from '@/shared/auth/session-store';
 import { createTestJwtExpiringAt } from '@/shared/auth/testing';
 import { required } from '@/shared/testing/required';
 import { routesWithoutPages } from '../../router/test-routes';
-import { MESSAGE_UNAVAILABLE } from '../message-routes';
 import { HeaderMessages } from './HeaderMessages';
 
 const server = setupServer();
@@ -113,13 +112,20 @@ describe('HeaderMessages', () => {
     await vi.waitFor(() => expect(mounted.router.currentRoute.value.fullPath).toBe('/system-management/statistical-report'));
   });
 
-  it('普通用户：业务按钮禁用，说明数据下载还没有迁移', async () => {
+  it('普通用户：审批提醒也写"查看申请"；业务按钮标为已读、关闭弹框，打开数据下载里的申请或统计报表', async () => {
     const mounted = await mountMessages(Role.user, { messages: [approvalMessage(), tableMessage()] });
     await openPanel(mounted);
+    expect(document.querySelector('[aria-label="消息列表"]')?.textContent).not.toContain('去审核');
 
-    for (const text of ['去审核', '查看报表']) {
-      expect(panelButton(text).disabled).toBe(true);
-    }
-    expect(document.querySelector('[aria-label="消息列表"]')?.textContent).toContain(MESSAGE_UNAVAILABLE);
+    panelButton('查看申请').click();
+    await vi.waitFor(() =>
+      expect(mounted.router.currentRoute.value.fullPath).toBe('/resource-application?apply=apply-pending'));
+    await vi.waitFor(() => expect(bell(mounted).attributes('aria-expanded')).toBe('false'));
+    await vi.waitFor(() => expect(mounted.backend.requests).toContain('read msg-approval'));
+
+    await openPanel(mounted);
+    panelButton('查看报表').click();
+    await vi.waitFor(() =>
+      expect(mounted.router.currentRoute.value.fullPath).toBe('/resource-application/statistical-report'));
   });
 });

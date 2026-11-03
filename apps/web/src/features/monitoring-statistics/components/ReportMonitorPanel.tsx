@@ -8,7 +8,6 @@ import {
   ElIcon,
   ElSkeleton,
   ElTableV2,
-  ElTooltip,
   type TableV2Instance
 } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, watch } from 'vue';
@@ -34,14 +33,12 @@ const text = (value: string | null, extra?: string) => (
 
 /**
  * 当前报表监控：数量标签兼作状态筛选（可多选，"共几个"回到全部），统计表多到几千张，用虚拟表格。
- * 去下载由页面决定能不能去、去哪里
+ * 去下载由页面决定去哪里
  */
 export const ReportMonitorPanel = defineComponent({
   name: 'ReportMonitorPanel',
   props: {
-    report: { type: Object as PropType<StatisticsReport>, required: true },
-    /** 不能下载时的原因；能下载时为 null */
-    downloadBlocked: { type: String as PropType<string | null>, default: null }
+    report: { type: Object as PropType<StatisticsReport>, required: true }
   },
   emits: {
     download: () => true
@@ -171,16 +168,6 @@ export const ReportMonitorPanel = defineComponent({
     return () => {
       const { report } = props;
       const current = tags.value;
-      const download = (
-        <ElButton
-          type="primary"
-          icon={Download}
-          disabled={props.downloadBlocked !== null}
-          onClick={() => emit('download')}
-        >
-          去下载
-        </ElButton>
-      );
       return (
         <MxPanel title="当前报表监控" flush class={styles.panel}>
           {{
@@ -202,15 +189,11 @@ export const ReportMonitorPanel = defineComponent({
                 ))}
               </div>
             ),
-            actions: () => [
-              props.downloadBlocked === null ? (
-                download
-              ) : (
-                <ElTooltip content={props.downloadBlocked} placement="top">
-                  <span>{download}</span>
-                </ElTooltip>
-              )
-            ],
+            actions: () => (
+              <ElButton type="primary" icon={Download} onClick={() => emit('download')}>
+                去下载
+              </ElButton>
+            ),
             default: () =>
               report.loading.value ? (
                 showSkeleton.value && <ElSkeleton class={styles.skeleton} rows={5} animated />

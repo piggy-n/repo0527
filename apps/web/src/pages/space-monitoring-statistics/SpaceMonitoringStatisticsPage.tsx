@@ -12,17 +12,13 @@ import { useStatisticsOverview } from '@/features/monitoring-statistics/composab
 import { useStatisticsReport } from '@/features/monitoring-statistics/composables/useStatisticsReport';
 import { isReportSettled } from '@/features/monitoring-statistics/report';
 import { BASE_YEAR_KINDS } from '@/features/monitoring-statistics/statistics';
-import { Role } from '@/shared/auth/roles';
+import { type Role, roleReportRoute } from '@/shared/auth/roles';
 import type { SessionGuard } from '@/shared/auth/session-guard';
 import { useSessionStore } from '@/shared/auth/session-store';
 import { navigate } from '@/shared/router/navigate';
-import { RouteName } from '@/shared/router/route-names';
 import collapsedHandle from './images/panel-handle-collapsed.webp';
 import expandedHandle from './images/panel-handle-expanded.webp';
 import styles from './SpaceMonitoringStatisticsPage.module.scss';
-
-/** 普通用户的"数据下载"（资源申请）还没有迁移 */
-const DOWNLOAD_UNAVAILABLE = '数据下载页面迁移后可用';
 
 const ASIDE_LABEL = '统计报表计算';
 
@@ -94,10 +90,11 @@ export const SpaceMonitoringStatisticsPage = defineComponent({
       overview.refresh();
     };
 
+    // 下载在角色自己的统计报表栏目里：管理员在系统管理，普通用户在数据下载
     const role = computed(() => props.role ?? session.user?.role);
     const download = () => {
-      if (role.value === Role.admin) {
-        void navigate(router, { name: RouteName.systemManagementReports });
+      if (role.value !== undefined) {
+        void navigate(router, { name: roleReportRoute(role.value) });
       }
     };
 
@@ -132,12 +129,7 @@ export const SpaceMonitoringStatisticsPage = defineComponent({
                   onSelect={report.select}
                 />
               </div>
-              <ReportMonitorPanel
-                class={styles.monitor}
-                report={report}
-                downloadBlocked={role.value === Role.admin ? null : DOWNLOAD_UNAVAILABLE}
-                onDownload={download}
-              />
+              <ReportMonitorPanel class={styles.monitor} report={report} onDownload={download} />
             </div>
           )
         }}

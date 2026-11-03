@@ -30,6 +30,7 @@ export const RouteName = {
   indicatorSimulation: 'indicator-simulation',
   resourceManagement: 'resource-management',
   resourceApplication: 'resource-application',
+  resourceApplicationReports: 'resource-application-reports',
   systemManagement: 'system-management',
   systemManagementReports: 'system-management-reports'
 } as const;

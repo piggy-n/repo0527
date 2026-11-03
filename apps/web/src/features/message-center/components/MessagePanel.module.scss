@@ -49,8 +49,7 @@
   grid-template-columns: 8px minmax(0, 1fr) auto;
   grid-template-areas:
     'dot head time'
-    '. content action'
-    '. reason reason';
+    '. content action';
   gap: var(--space-xs) var(--space-sm);
   padding: var(--space-md);
   border: 1px solid transparent;
@@ -155,11 +154,4 @@
   align-self: start;
   justify-self: end;
   height: var(--line-height-compact);
-}
-
-.unavailable {
-  grid-area: reason;
-  justify-self: end;
-  color: var(--color-text-placeholder);
-  font-size: var(--font-size-xs);
 }

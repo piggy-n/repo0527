@@ -28,3 +28,9 @@ export function useReportPageQuery(params: MaybeRefOrGetter<ReportPageParams>) {
 
   return { ...query, rememberPage };
 }
+
+/** 让统计报表的列表重新读取：正在显示的马上请求，其余下次用到时再读 */
+export function useInvalidateReports() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: reportKeys.all });
+}

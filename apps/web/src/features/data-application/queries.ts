@@ -76,6 +76,12 @@ export function useSeedApplication() {
   };
 }
 
+/** 让申请的列表和详情重新读取：正在显示的马上请求，其余下次用到时再读 */
+export function useInvalidateApplications() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: applicationKeys.all });
+}
+
 /** 写操作的参数都带上提交时的会话（useSessionGuard 的 capture） */
 export interface AuditSubmission {
   audit: ApplicationAudit;

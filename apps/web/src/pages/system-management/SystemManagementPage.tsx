@@ -1,9 +1,9 @@
 import { MxPanel, MxSplitLayout } from '@yzt/ui';
 import { defineComponent, type PropType } from 'vue';
+import { ReportListPanel } from '@/features/statistics-report/components/ReportListPanel';
 import { RouteName } from '@/shared/router/route-names';
 import { SideNav, type SideNavItem } from '@/shared/side-nav/SideNav';
 import { AuditSection } from './AuditSection';
-import { ReportsSection } from './ReportsSection';
 
 /** 系统管理的栏目，由路由的 props 传入（ADR 0092） */
 export type SystemSection = 'audit' | 'reports';
@@ -30,7 +30,7 @@ export const SystemManagementPage = defineComponent({
               <SideNav label="系统管理" items={NAV_ITEMS} />
             </MxPanel>
           ),
-          default: () => (props.section === 'audit' ? <AuditSection applyId={props.applyId} /> : <ReportsSection />)
+          default: () => (props.section === 'audit' ? <AuditSection applyId={props.applyId} /> : <ReportListPanel />)
         }}
       </MxSplitLayout>
     );

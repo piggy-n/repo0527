@@ -1,18 +1,18 @@
 import { MxPanel } from '@yzt/ui';
 import { ElMessage, ElPagination } from 'element-plus';
 import { defineComponent } from 'vue';
-import type { Report } from '@/features/statistics-report/api';
-import { ReportFilterBar } from '@/features/statistics-report/components/ReportFilterBar';
-import { ReportTable } from '@/features/statistics-report/components/ReportTable';
-import { useReportDownloads } from '@/features/statistics-report/composables/useReportDownloads';
-import { useReportList } from '@/features/statistics-report/composables/useReportList';
-import styles from './SystemManagementPage.module.scss';
+import type { Report } from '../api';
+import { useReportDownloads } from '../composables/useReportDownloads';
+import { useReportList } from '../composables/useReportList';
+import { ReportFilterBar } from './ReportFilterBar';
+import styles from './ReportListPanel.module.scss';
+import { ReportTable } from './ReportTable';
 
 const PAGE_SIZES = [10, 20, 50, 100];
 
-/** 统计报表栏目：按名称筛选、表格、分页与下载；只在这个栏目显示时存在 */
-export const ReportsSection = defineComponent({
-  name: 'ReportsSection',
+/** 统计报表的列表面板：按名称筛选、表格、分页与下载；系统管理和数据下载共用，只在这个栏目显示时存在 */
+export const ReportListPanel = defineComponent({
+  name: 'ReportListPanel',
   setup() {
     const list = useReportList();
     const downloads = useReportDownloads();

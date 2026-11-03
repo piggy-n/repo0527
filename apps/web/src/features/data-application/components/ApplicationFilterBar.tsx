@@ -11,7 +11,9 @@ export const ApplicationFilterBar = defineComponent({
   name: 'ApplicationFilterBar',
   props: {
     // 和 ElForm 的 model 一样，直接修改传入的响应式对象的字段
-    model: { type: Object as PropType<ApplicationFilters>, required: true }
+    model: { type: Object as PropType<ApplicationFilters>, required: true },
+    // 名称这一项的叫法由使用方决定：审核叫数据名称，申请人的列表叫资源名称（同旧页面）
+    nameLabel: { type: String, default: '数据名称' }
   },
   emits: {
     search: () => true,
@@ -22,13 +24,13 @@ export const ApplicationFilterBar = defineComponent({
       <QueryForm labelChars={6}>
         {{
           default: () => [
-            <ElFormItem label="数据名称">
+            <ElFormItem label={props.nameLabel}>
               <ElInput
                 modelValue={props.model.name}
                 onUpdate:modelValue={(value: string) => {
                   props.model.name = value;
                 }}
-                placeholder="请输入数据名称"
+                placeholder={`请输入${props.nameLabel}`}
                 clearable
                 onKeydown={(event: Event | KeyboardEvent) => {
                   // 输入法选字时按的回车只是确认候选词，不查询

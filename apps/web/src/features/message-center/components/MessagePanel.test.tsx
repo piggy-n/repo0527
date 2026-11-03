@@ -24,18 +24,11 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-let unavailableReason: (target: MessageTarget) => string | null = () => null;
 const opened: MessageTarget[] = [];
 
 const Host = defineComponent(() => {
   const center = useMessageCenter(true);
-  return () => (
-    <MessagePanel
-      center={center}
-      unavailableReason={unavailableReason}
-      onOpen={(target: MessageTarget) => opened.push(target)}
-    />
-  );
+  return () => <MessagePanel center={center} onOpen={(target: MessageTarget) => opened.push(target)} />;
 });
 
 function mountPanel(options: MessageBackendOptions = {}) {
@@ -53,7 +46,6 @@ function mountPanel(options: MessageBackendOptions = {}) {
 }
 
 afterEach(() => {
-  unavailableReason = () => null;
   opened.length = 0;
 });
 
@@ -104,8 +96,7 @@ describe('MessagePanel', () => {
     expect(backend.requests.filter(request => request.startsWith('read'))).toEqual(['read msg-table', 'read msg-approval']);
   });
 
-  it('业务按钮：标为已读并交出目标；去不了时禁用并说明原因', async () => {
-    unavailableReason = target => (target.kind === 'reports' ? '数据下载页面迁移后可用' : null);
+  it('业务按钮：标为已读并交出目标', async () => {
     const { wrapper, backend } = mountPanel();
     await loaded(wrapper);
 
@@ -115,10 +106,8 @@ describe('MessagePanel', () => {
     // 点击也冒泡到整行，同一条只提交一次
     expect(backend.requests.filter(request => request.startsWith('read'))).toEqual(['read msg-approval']);
 
-    const report = button(wrapper, '查看报表');
-    expect(report.attributes('disabled')).toBeDefined();
-    expect(row(wrapper, '报表分析通知').text()).toContain('数据下载页面迁移后可用');
-    expect(button(wrapper, '查看申请').attributes('disabled')).toBeUndefined();
+    await button(wrapper, '查看报表').trigger('click');
+    expect(opened).toEqual([{ kind: 'application', applyId: 'apply-pending' }, { kind: 'reports' }]);
   });
 
   it('全部已读：没有未读时禁用', async () => {

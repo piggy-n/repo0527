@@ -1,6 +1,6 @@
-# 系统管理与消息
+# 系统管理、数据下载与消息
 
-管理员的资源审核、申请详情、统计报表与下载，以及所有角色的消息弹框。决策见 [ADR 0092](../adr/0092-system-management.md)（系统管理）和 [ADR 0093](../adr/0093-header-message-popover.md)（消息）；旧代码与真实接口的核对见 [migration.md](../migration.md)"系统管理与消息中心：接口实测"。
+管理员的资源审核、申请详情、统计报表与下载，普通用户的数据下载，以及所有角色的消息弹框。决策见 [ADR 0092](../adr/0092-system-management.md)（系统管理）、[ADR 0093](../adr/0093-header-message-popover.md)（消息）和 [ADR 0127](../adr/0127-resource-application-for-users.md)（数据下载）；旧代码与真实接口的核对见 [migration.md](../migration.md)"系统管理与消息中心：接口实测"。
 
 ## 分层
 
@@ -13,15 +13,16 @@ shared/data-request/          数据申请的共用清单：资源管理提交�
 shared/table/usePagedList.ts  后端是 PageHelper 的列表（申请、统计报表共用）
 shared/file-transfer/         useRowDownloads（行内下载）、DownloadButton；shared/http 加了 postBlob
 shared/side-nav/              菜单型左栏的页面内导航 SideNav
-features/data-application/    申请：接口、状态与文案、查询与审核、列表的组合式函数、筛选栏、表格、状态显示
-                              （以后用户侧"数据下载"也在这里扩展）
-features/statistics-report/   统计报表：接口、查询、列表与下载的组合式函数、筛选栏、表格
+features/data-application/    申请：接口、状态与文案、查询与审核、列表的组合式函数、筛选栏、表格、状态显示、
+                              两种角色共用的列表面板 ApplicationListPanel
+features/statistics-report/   统计报表：接口、查询、列表与下载的组合式函数、筛选栏、表格、列表面板 ReportListPanel
 features/message-center/      消息：接口、查询与已读、弹框的组合式函数 useMessageCenter（筛选与分批是 useMessageFilters）、
                               弹框里的 MessagePanel
 pages/system-management/      SystemManagementPage（分栏布局、SideNav）与资源审核栏目 AuditSection
-pages/dev/system-management/  组件样例：正式组件加演示拥有者，数据固定（见下文"组件样例"）
+pages/resource-application/   ResourceApplicationPage（普通用户的数据下载，结构同上）与数据列表栏目 ApplicationsSection
+pages/dev/system-management/  组件样例：正式组件加演示拥有者，数据固定，可以切换角色（见下文"组件样例"）
 pages/dev/message-center/     组件样例：正式的 MessagePanel 加演示拥有者
-app/router、app/layout        两个路由；顶栏在统计报表上也选中"系统管理"；消息按钮与弹框 HeaderMessages
+app/router、app/layout        四个路由；顶栏在统计报表上也选中"系统管理"或"数据下载"；消息按钮与弹框 HeaderMessages
 ```
 
 区划选项（`REGION_OPTIONS`、`PROVINCE_PATH`）只有资源管理的申请表单用，留在 `features/resource-management/data-request.ts`。
@@ -59,7 +60,7 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 
 状态是枚举：出现没见过的值时整页按返回格式错误处理，不像旧代码那样把一组同义词猜成同一个状态。真实接口出现新值时，先核对含义再加进枚举。
 
-`status.ts` 放文案和两个判断：`hasPrepareStep`（审核通过的申请和统计任务才准备数据）、`canDownload`（准备完成）。
+`status.ts` 放文案和三个判断：`hasPrepareStep`（审核通过的申请和统计任务才准备数据）、`canDownload`（准备完成）、`auditOpenLabel`（审核时打开申请的按钮文字）。
 
 ### 查询
 
@@ -81,9 +82,10 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 ## 资源审核列表
 
 - **`useApplicationList`**：`shared/table` 的 `usePagedList`（见 [table.md](table.md)）加上申请的条件。筛选表单点"查询"才生效，名称去掉首尾空格，回到第 1 页；条件没变时点查询也重新请求；改每页条数回到第 1 页；后端（PageHelper）把越界的页码改成最后一页时页码跟过去，没有数据时回到第 1 页
-- **`ApplicationFilterBar`**：数据名称、审核状态、数据准备状态，`QueryForm`（标签 6 个字宽）
-- **`ApplicationTable`**：序号、数据名称、申请人、行政区划、申请时间、审核状态、数据准备状态；统计任务的审核状态显示"审核通过"、名称后面跟小号标签"统计任务"（同旧页面的状态，ADR 0113）；数据准备状态只有审核通过的申请和统计任务才有，其余单元格留空，由表格的全局样式显示"-"。操作列固定两格：待审核的"审核"、其余"查看"（统计任务没有）；有数据准备这一步的有"下载"，准备完成才能点
-- **`AuditSection`**（页面里）：组合上面三个和分页（`pagination-wrap`）；只在资源审核栏目显示时存在，统计报表栏目不请求申请列表
+- **`ApplicationFilterBar`**：名称（叫法由 `nameLabel` 传入，默认数据名称）、审核状态、数据准备状态，`QueryForm`（标签 6 个字宽）
+- **`ApplicationTable`**：序号、名称（`nameLabel`）、申请人（`showApplicant`）、行政区划、申请时间、审核状态、数据准备状态；统计任务的审核状态显示"审核通过"、名称后面跟小号标签"统计任务"（同旧页面的状态，ADR 0113）；数据准备状态只有审核通过的申请和统计任务才有，其余单元格留空，由表格的全局样式显示"-"。操作列固定两格：打开申请（文字由 `openLabel` 传入，默认"查看"，审核用 `auditOpenLabel`；统计任务没有）；有数据准备这一步的有"下载"，准备完成才能点
+- **`ApplicationListPanel`**：组合上面两个、详情弹窗、分页（`pagination-wrap`）和下载，两种角色共用；组件不判断角色，差别由属性传入，打开和关闭只发出事件，由页面换成路由
+- **`AuditSection`**（页面里）：给面板传审核的拥有者和 `auditOpenLabel`；只在资源审核栏目显示时存在，统计报表栏目不请求申请列表
 
 申请和统计报表的列表共用 `usePagedList`；文件管理（Spring 分页）、资源管理（按目录）仍是各自的写法，这次没有改。
 
@@ -104,8 +106,9 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 
 - **路由状态**：资源审核路由的 `props` 是 app 里的 `auditRouteProps`，把查询参数 `apply` 交给页面（空字符串、写了几次的不认）。点"审核 / 查看"时 push（浏览器的后退能关掉弹窗），关闭时 replace 去掉它；消息跳转、刷新页面、再次打开同一条都是同一件事
 - **`useApplicationReview(applyId, send?)`**：打开的申请和审核。`state` 是 `closed`、`loading`、`error`、`missing`、`ready`；查询换 key 后 `data` 要到下一轮才更新，只认标着当前 ID 的结果，换申请时不会先显示上一条。`mode` 由申请当前的状态决定（待审核的是 `audit`，其余 `view`）。换申请时审核意见从头填。`submit()` 只提交待审核的申请，原因去掉首尾空格，提交期间不重复提交；结果是 `success`（带申请 ID）、`error`（带原因）或 `null`（没发出，或页面已销毁、换了会话）。不渲染、不跳转、不提示
+- **`useApplicationView(applyId)`**：普通用户只查看（ADR 0127）。和 `useApplicationReview` 共用读取申请的部分，形状相同，模式总是 `view`，`submit()` 总是 `null`，不创建审核的请求
 - **`useSeedApplication`**：从列表打开时先把这一行记成它的详情（字段相同），弹窗立刻有内容，详情接口照常读取最新的状态；从消息打开时没有这一步，读取超过 300 毫秒才出骨架屏
-- **`ApplicationDialog`**：`dialog-panel-header` 加 `MxTitle`，宽 640（窄屏视口减 32）。"申请信息"是 `ElDescriptions`（窄于 640 时一列），标签至少 4 个字宽，值在自己的位置换行，没有值时显示"-"；图层名称、格式名称由 `shared/data-request` 的 `dataLayerLabel`、`dataFormatLabel` 换算。下面是"审核意见"（通过 / 不通过，不通过必须填原因，最多 200 字）或"审核结果"（审核状态、数据准备、不通过原因）。成功后提示"已审核通过"或"已退回申请"；提交期间换成了别的申请时不关那一条
+- **`ApplicationDialog`**：`dialog-panel-header` 加 `MxTitle`，宽 640（窄屏视口减 32）。"申请信息"是 `ElDescriptions`（窄于 640 时一列），标签至少 4 个字宽，值在自己的位置换行，没有值时显示"-"；图层名称、格式名称由 `shared/data-request` 的 `dataLayerLabel`、`dataFormatLabel` 换算；`showApplicant` 为 false 时不显示申请人，"申请处室"独占一行。下面是"审核意见"（通过 / 不通过，不通过必须填原因，最多 200 字）或"审核结果"（审核状态、数据准备、不通过原因；只读打开待审核的申请时标题是"审核进度"）。成功后提示"已审核通过"或"已退回申请"；提交期间换成了别的申请时不关那一条
 - **关闭**：Element 的弹窗要等淡出结束才发出 `update:modelValue`，所以点关闭、按 Esc 时在 `beforeClose` 里立即通知页面去掉 `apply`；弹窗的开关只跟着路由。提交期间不关
 - **显示的内容是快照**（2026-10-28 在组件样例里发现）：去掉 `apply` 以后 `state` 马上是 `closed`，但弹窗还要淡出约 300 毫秒，这时按"没有申请"渲染会闪成"申请不存在或已被删除"；提交成功时详情先刷新成审核通过，关上前会闪一下"审核结果"。弹窗显示一份内容的快照，从点"提交审核"到弹窗关上、以及关上后的淡出期间不更新（`holding`），关上以后再打开照常更新。`ApplicationDialog.test.tsx` 用真实的过渡测这两种情况（默认的过渡替身会跳过淡出，测不出来）
 
@@ -121,7 +124,7 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 - **下载**：`shared/file-transfer` 的 `useRowDownloads` 和 `DownloadButton`（见 [file-transfer.md](file-transfer.md)）。申请用 `fetchApplicationFile`（`POST /api/apply/download/{id}`，`http.postBlob`），报表用 `fetchReportFile`（`GET /statistics/download?id=`）；没有响应头的文件名时用名称加 `.zip`（旧页面的写法）。列表和弹窗共用同一份下载状态，在哪里点都显示进度；结果由页面提示（"已交给浏览器下载"或失败原因）
 - **数据准备的状态**放在 `shared/data-request`（`prepare-status.ts`、`PrepareStatusText`）：取值是申请的 `storage_status`（英文）。报表的 `status` 是中文文字，不是同一套，由报表的接口换算成这些值，`PrepareStatusText` 的 `label` 显示原文
 - **统计报表**（`features/statistics-report`）：`POST /statistics/page`（正文 `name`、`pageNum`、`pageSize`）、`useReportList`（`usePagedList`，名称去掉首尾空格）、`ReportFilterBar`（报表名称）、`ReportTable`（序号、年份、报表名称、开始时间、完成时间、状态、下载）。字段按 2026-11 的联调样本（[migration.md](../migration.md)"统计报表：联调样本"）：`status` 是换算的结果（`success`、`processing`、`failed`，未处理和认不出的是 `undefined`），`statusText` 是后端的文字；`status` 是 `success` 才能下载；时间可能是 `null`，由表格的全局样式显示"-"
-- **`ReportsSection`**（页面里）：只在统计报表栏目显示时存在
+- **`ReportListPanel`**（feature 里，系统管理和数据下载共用）：筛选、表格、分页与下载；只在统计报表栏目显示时存在
 
 ### 验证（2026-10-27）
 
@@ -136,6 +139,22 @@ app/router、app/layout        两个路由；顶栏在统计报表上也选中"
 - 改坏验证 15 处：按文字和 `success` 比较（原来的 bug）、不判断状态、退回纯文本、不传文字、各个文字不换算或换算错、又认"处理完成"、用包含判断"正在处理"、时间不接受 `null`、丢掉原文、组件忽略 `label`，都是断言失败
 - 组件样例 `/dev/system-management`（真实的 `ReportTable`、固定数据）：1600 × 900 下处理成功是绿色对勾、按钮可点（点了显示进度，结束后提示"已交给浏览器下载"）；正在处理是蓝色转圈，处理失败是红色图标，未处理是灰字，这三种按钮置灰；没有时间的单元格显示"-"；状态列没有溢出。375 × 812 下表格在内部横向滚动，页面没有横向滚动，操作列不固定。资源审核的"数据准备状态"文案没有变化；控制台没有错误
 - 没有验证：内网后端的真实页面和真实下载（文件名、类型、大小），除"处理成功"以外的真实状态文字
+
+## 数据下载（普通用户，ADR 0127）
+
+- **路由**：`/resource-application`（`RouteName.resourceApplication`，`props` 是 app 里的 `applicationsRouteProps`，带上查询参数 `apply`）和 `/resource-application/statistical-report`（`RouteName.resourceApplicationReports`）都指向 `ResourceApplicationPage`，只有普通用户能访问；管理员进来回到首页，普通用户进系统管理同样回到首页
+- **`ApplicationsSection`**：面板的标题是"数据列表"，`nameLabel="资源名称"`、`showApplicant={false}`，拥有者是 `useApplicationView`，打开和关闭的写法同资源审核
+- **新消息时刷新**：`useOnNewMessage`（`features/message-center/queries.ts`）在未读数变多时回调，页面用 `useInvalidateApplications`、`useInvalidateReports` 让查询失效，正在显示的列表和打开的详情马上重新读取，其余下次用到时再读。它是 `enabled: false` 的观察者，只读顶栏那个未读查询的结果；第一次读到、未读数变少时不回调。看的是条数，同一轮里一条变已读、一条新到时看不出来，等下一次变化
+- 刷新不算主动刷新，表格不显示遮罩（见 [table.md](table.md) 的加载状态）
+
+### 验证（2026-11-02）
+
+- 单元测试：`ResourceApplicationPage`（列和文案、只读的详情、不通过的原因、列表和弹窗里下载、统计报表、未读数变多时刷新）、`useApplicationView`、`useOnNewMessage`（回调的时机；不请求、不多一个定时器）、`messageLocation`（两种角色，去的页面都能访问）、`messageLink` 的 `canAudit`、`HeaderMessages`（普通用户的文案和跳转）、统计页的"去下载"、`roleApplicationRoute`、`roleReportRoute`、`applicationsRouteProps`、顶栏的选中
+- 浏览器测试 `ApplicationDialog.browser.test.tsx`：不显示申请人时"申请处室"独占一行，开始、结束时间同一行，申请用途回到左列
+- 改坏验证 25 处，都是断言失败。"观察者自己定时"第一次没测出来：两次轮询落在同一次时钟推进里，后一次和前一次合并了；改成比较假时钟里的定时器个数后才能区分
+- 生产冒烟：普通用户的消息文案和弹框位置；从消息打开数据下载里的申请（只读）、关闭、去统计报表、用菜单回到数据列表；基本统计的"去下载"
+- 真实页面（固定接口，开发服务）：1440 × 900 操作顶栏进入、查看后用浏览器后退关闭、带 `apply` 刷新后打开、Esc 关闭并去掉 `apply`、列表里下载（文件名"医疗机构面层.zip"）、从消息打开、切到统计报表、普通用户访问 `/system-management` 回到首页、未读数变多后列表重新请求；1200、1920、768、390 宽都没有横向滚动，控制台没有除拦下的天地图以外的错误
+- 没有验证：真实后端（内网，Claude 访问不到）；用普通用户账号请求的返回和真实下载
 
 ## 消息（`features/message-center`）
 
@@ -175,7 +194,7 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 - 外层是 `MxPanel headerTone="muted" flush`（ADR 0076）：标题"消息"，说明"N 条未读"，操作区"全部已读"；筛选放在 `subheader`，只有列表滚动。最高取 CSS 变量 `--message-panel-max-height`，由 app 的弹框按顶栏位置算出
 - 一条消息是一张卡片（2026-10-28 按旧项目的消息卡片调整，ADR 0102）：未读白底、`--color-primary-border` 描边、主色圆点、标题半粗；已读 `--color-neutral-bg-light` 浅灰底，标题和正文换成次要色。第一行是标题（按内容宽度，放不下时先省略）和紧跟其后的小号类型标签（`tag-mini`，审批提醒 `warning`、资源消息 `primary`、统计报表 `info`，始终完整），右列是时间（`messageTime`：今天写"今天 时:分"，今年写"月-日 时:分"，更早写日期；"今天"按北京时间判断，悬停看完整时间）；正文在标题下面（连续的字母数字也能换行）；业务按钮是小号文字按钮，在时间下方、右对齐，正文让出这一列
 - 点一行或在行上按回车标为已读。业务按钮标为已读并发出 `open(target)`，由 app 关弹框、跳转；点击会冒泡到整行，同一条按 ID 只提交一次，所以不阻止冒泡
-- 业务按钮的文案和目标由 `display.ts` 的 `messageLink` 给出（ADR 0093 第 6 条）；`unavailableReason(target)` 返回原因时按钮禁用、原因写在按钮下方、右对齐，由 app 按角色给出
+- 业务按钮的文案和目标由 `display.ts` 的 `messageLink(message, canAudit)` 给出（ADR 0093 第 6 条）；`canAudit` 由 app 按角色给出，不能审核时审批提醒也写"查看申请"（同旧页面，ADR 0127）
 - 滚到距底部 120 以内接着显示（`useInfiniteScroll`）；换筛选回到列表顶部
 - 第一次请求的骨架屏延迟显示（`useDelayedFlag`）；失败时"加载失败 / 重试"；空的分"暂无消息"和"没有未读消息"；末尾是"继续滚动显示更多"或"共 N 条"
 
@@ -194,8 +213,8 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 
 原型阶段的预览组件已删掉，两个开发页改为正式组件加页面里的演示拥有者（写法同 `/dev/file-management`）：数据固定，写操作只在内存里改，不请求接口，生产构建不包含。
 
-- **`/dev/system-management`**：和正式页面相同的分栏布局、`SideNav`、筛选栏、表格、详情与审核弹窗、分页。`useSystemManagementDemo` 给出申请和统计报表的列表与筛选、`ApplicationReviewOwner` 形状的审核拥有者、表格和弹窗共用的下载进度。演示选项：栏目、列表状态（正常、首次加载、刷新中、加载失败、没有数据）、审核提交（成功、失败、3 秒后成功）、"从消息打开"待审核或已退回的申请（先读取 1 秒）。左侧菜单链接到真实页面（要登录），所以用"栏目"切换，菜单不显示当前项
-- **`/dev/message-center`**：正式的 `MessagePanel` 放在和弹框一样的外框里（宽 `min(400px, 100vw - 32px)`、最高 640、浮层圆角和阴影）。`useMessageDemo` 和 `useMessageCenter` 同形，筛选和分批用同一个 `useMessageFilters`。演示选项：角色（普通用户的业务按钮禁用并说明原因）、列表状态、标记已读（成功、失败、2 秒后成功）、收到一条新消息；点业务按钮显示正式页面会去的地方。顶栏的按钮、弹框外壳和跳转在 `app/layout`，页面不能导入，要在登录后的顶栏里看
+- **`/dev/system-management`**：和正式页面相同的分栏布局、`SideNav`、筛选栏、表格、详情与审核弹窗、分页。`useSystemManagementDemo` 给出申请和统计报表的列表与筛选、`ApplicationReviewOwner` 形状的审核拥有者、表格和弹窗共用的下载进度。演示选项：角色（管理员看系统管理，普通用户看数据下载，差别都写在页面的 `PAGES` 里）、栏目、列表状态（正常、首次加载、刷新中、加载失败、没有数据）、审核提交（成功、失败、3 秒后成功，只有管理员有）、"从消息打开"待审核或已退回的申请（先读取 1 秒）。左侧菜单链接到真实页面（要登录），所以用"栏目"切换，菜单不显示当前项
+- **`/dev/message-center`**：正式的 `MessagePanel` 放在和弹框一样的外框里（宽 `min(400px, 100vw - 32px)`、最高 640、浮层圆角和阴影）。`useMessageDemo` 和 `useMessageCenter` 同形，筛选和分批用同一个 `useMessageFilters`。演示选项：列表状态、标记已读（成功、失败、2 秒后成功）、收到一条新消息；点业务按钮显示最近一次的目标。顶栏的按钮、弹框外壳和跳转在 `app/layout`，页面不能导入，要在登录后的顶栏里看
 - 测试：`useSystemManagementDemo.test.ts`、`useMessageDemo.test.ts`（筛选、审核与下载的演示行为，列表状态与已读失败）
 
 2026-10-28 在浏览器里实测：消息样例的标签、业务按钮、普通用户的禁用说明；系统管理样例的列表、从消息打开的读取、审核提交后弹窗关闭和行内状态。浏览器窗口 800 宽，看的是窄屏布局（侧栏收成窄条）。
@@ -205,11 +224,12 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 只用本地接口样本，内网构建后运行：
 
 - 管理员：角标是未读数（"消息，2 条未读"），弹框顶边离顶栏下沿 8、右边和按钮对齐、宽 400；点"去审核"后已读接口收到这一条、弹框关上、打开 `/system-management?apply=apply-001` 和"审核申请"弹窗，角标变成 1；取消后去掉 `apply`，切到统计报表栏目显示"暂无数据"
-- 普通用户：390 宽时弹框左右离窗口 16；"去审核""查看报表"禁用并说明原因；Esc 关闭，没有已读请求
+- 普通用户：390 宽时弹框左右离窗口 16；没有"去审核"，审批提醒也写"查看申请"；Esc 关闭，没有已读请求。宽屏时点"查看申请"打开 `/resource-application?apply=apply-001`（"申请详情"、"审核进度"，没有"提交审核"），已读接口收到这一条；关闭后列表有"资源名称"、没有"申请人"；点"查看报表"到统计报表，用菜单回到数据列表
 - 公共夹具 `fixtures.ts` 加了消息列表（空）：顶栏进入应用就取未读数，其他用例没有消息、不显示角标
 
 ## 待联调
 
+- 用普通用户账号请求申请和统计报表（"只看到本人的申请"靠后端保证，见 [migration.md](../migration.md)"数据下载：与旧页面的差异"）
 - 审核的成功返回、准备完成后的下载（文件名、类型、大小）、驳回原因：没有真实样本，不对真实后端做写操作
 - 统计报表：除"处理成功"以外的状态文字、没开始和没完成的任务的时间、真实的下载（文件名、类型、大小），见 [migration.md](../migration.md)"统计报表：联调样本"
 - 统计任务请后端在审核列表里排除；待审核的申请没有申请人

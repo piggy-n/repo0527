@@ -71,7 +71,13 @@ export const navItems: readonly NavItem[] = [
       }
     ]
   },
-  { kind: 'link', label: '数据下载', icon: 'nav-download', route: RouteName.resourceApplication },
+  {
+    kind: 'link',
+    label: '数据下载',
+    icon: 'nav-download',
+    route: RouteName.resourceApplication,
+    alsoActiveOn: [RouteName.resourceApplicationReports]
+  },
   { kind: 'link', label: '文件管理', icon: 'nav-files', route: RouteName.fileManagement },
   {
     kind: 'link',

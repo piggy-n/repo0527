@@ -185,7 +185,8 @@ packages/icons/
 | `copy` | `copy` | 复制 |
 | `location-pin` | `map-pin`（实心，`icons/filled/`） | 坐标定位点的图钉；实心图标的根元素是 `fill="currentColor"`，没有描边 |
 | `header-bell` | `bell` | 顶栏右侧的消息按钮（2026-10-27 加入，消息弹框原型在用） |
-| `menu-audit` / `menu-report` | `clipboard-check` / `report-analytics` | 系统管理页面内导航的资源审核、统计报表 |
+| `menu-audit` / `menu-report` | `clipboard-check` / `report-analytics` | 系统管理页面内导航的资源审核、统计报表（数据下载的统计报表也用 `menu-report`） |
+| `menu-list` | `list-details` | 数据下载页面内导航的数据列表（2026-11-02 加入，ADR 0127） |
 | `draw-rectangle` / `file-upload` | `marquee-2` / `file-upload` | 数据查询空间查询的框选、shp 文件导入（2026-10-28 加入；多边形沿用 `geometry-polygon`） |
 | `vertex-edit` / `undo` / `trash` | `edit` / `arrow-back-up` / `trash` | 自定义范围弹窗的编辑节点、撤销、删除节点（2026-10-31 加入，ADR 0121） |
 
