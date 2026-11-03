@@ -25,9 +25,9 @@ function vectorTiles(group: ReturnType<typeof previewGroup>, id: string): string
 describe('MVT 地址', () => {
   it('同源的 /backend 换成绝对地址；条件做 URL 编码，瓦片坐标的占位符原样保留', () => {
     expect(BASE).toBe('http://localhost:5173/backend/api/query/mvt');
-    const [tiles] = mvtTiles(BASE, 'bgdc_czcdyd_2022', '320100', "CZCLX IN ('201','201A')");
+    const [tiles] = mvtTiles(BASE, 'bgdc_czcdyd_2025', '320100', "CZCLX IN ('201','201A')");
     expect(tiles).toBe(
-      'http://localhost:5173/backend/api/query/mvt?layerCode=bgdc_czcdyd_2022&xzqdm=320100' +
+      'http://localhost:5173/backend/api/query/mvt?layerCode=bgdc_czcdyd_2025&xzqdm=320100' +
         '&conditions=CZCLX+IN+%28%27201%27%2C%27201A%27%29&z={z}&x={x}&y={y}'
     );
     expect(new URL(tiles ?? '').searchParams.get('conditions')).toBe("CZCLX IN ('201','201A')");
@@ -45,7 +45,7 @@ describe('previewGroup', () => {
     ]);
     const town = previewGroup(TOWN ?? null, BASE);
     expect(town.layers.map(({ id }) => id)).toStrictEqual([`${PREVIEW_GROUP}-fill`, `${PREVIEW_GROUP}-line`]);
-    expect(town.layers.every(layer => 'source-layer' in layer && layer['source-layer'] === 'bgdc_czcdyd_2022')).toBe(true);
+    expect(town.layers.every(layer => 'source-layer' in layer && layer['source-layer'] === 'bgdc_czcdyd_2025')).toBe(true);
     const query = new URL(vectorTiles(town, PREVIEW_GROUP)).searchParams;
     expect([query.get('xzqdm'), query.get('conditions')]).toStrictEqual(['320000', '']);
   });

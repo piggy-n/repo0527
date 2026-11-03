@@ -95,8 +95,8 @@ describe('高级查询的 SQL', () => {
 
   it('拆出表名、行政区划和条件；区划在中间时去掉它和多余的连接', () => {
     expect(
-      parseAdvancedSql("SELECT * FROM bgdc_czcdyd_2022 WHERE CZCLX = '201' AND xzqdm = '320100' AND CZCMJ > '10';", null, '320000')
-    ).toStrictEqual({ layerCode: 'bgdc_czcdyd_2022', xzqdm: '320100', conditions: "CZCLX = '201' AND CZCMJ > '10'" });
+      parseAdvancedSql("SELECT * FROM bgdc_czcdyd_2025 WHERE CZCLX = '201' AND xzqdm = '320100' AND CZCMJ > '10';", null, '320000')
+    ).toStrictEqual({ layerCode: 'bgdc_czcdyd_2025', xzqdm: '320100', conditions: "CZCLX = '201' AND CZCMJ > '10'" });
     expect(parseAdvancedSql("SELECT * FROM t WHERE xzqdm = '320102'", null, '320000')).toStrictEqual({
       layerCode: 't',
       xzqdm: '320102',
