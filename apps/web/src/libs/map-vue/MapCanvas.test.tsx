@@ -672,11 +672,12 @@ describe('MapCanvas', () => {
       expect(handle.view.value).toBeNull();
       handle.runCameraOperation(camera => camera.flyTo({ center: [118.8, 32.05], zoom: 10 }));
       expect(maps[0]?.flyToCalls).toStrictEqual([]);
+      const resizesBefore = maps[0]?.resizes ?? 0;
 
       shown.value = true;
       await nextTick();
       expect(maps).toHaveLength(1);
-      expect(maps[0]?.resizes).toBe(1);
+      expect(maps[0]?.resizes).toBe(resizesBefore + 1);
       expect(handle.viewState.value).toBe('ready');
       expect(maps[0]?.flyToCalls).toMatchObject([{ center: [118.8, 32.05], zoom: 10 }]);
     });

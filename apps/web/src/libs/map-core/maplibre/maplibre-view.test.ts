@@ -1634,6 +1634,20 @@ describe('MapLibreView', () => {
       expect(ctx.session.camera.current.center).toStrictEqual([119.5, 32.5]);
     });
 
+    it('resizes the canvas to its container on first load, before syncing the camera and entering ready', () => {
+      using ctx = setup();
+      const states: ViewState[] = [];
+      ctx.view.on('statechange', state => states.push(state));
+      expect(ctx.map.resizedAt).toStrictEqual([]);
+
+      ctx.map.fire('style.load');
+
+      // 容器创建时可能还没有尺寸（弹窗里的地图）：就绪时排队的定位要按实际尺寸算
+      expect(ctx.map.resizedAt).toHaveLength(1);
+      expect(ctx.map.resizedAt[0]).toBeLessThanOrEqual(names(ctx.map.calls).indexOf('jumpTo'));
+      expect(states).toStrictEqual(['ready']);
+    });
+
     it('resizes the canvas to its container on resume, before syncing the camera (ADR 0063)', () => {
       using ctx = setup();
       ctx.map.fire('style.load');
@@ -1645,8 +1659,8 @@ describe('MapLibreView', () => {
 
       ctx.view.resume();
 
-      // 恢复时只调整一次尺寸，在同步相机的 jumpTo 之前，进入 ready 之前
-      expect(ctx.map.resizedAt).toStrictEqual([before]);
+      // 恢复时只调整一次尺寸（前面的是首次加载那一次），在同步相机的 jumpTo 之前，进入 ready 之前
+      expect(ctx.map.resizedAt.slice(1)).toStrictEqual([before]);
       expect(names(ctx.map.calls.slice(before))).toContain('jumpTo');
       expect(states).toStrictEqual(['ready']);
     });
