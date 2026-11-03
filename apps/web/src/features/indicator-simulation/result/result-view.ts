@@ -4,7 +4,13 @@ import type { EngineState, SimulationVersion } from '../engine/engine';
 import { indicatorResult, valueBreaks } from '../model/analysis';
 import type { Calculator, DistrictResult, IndicatorResult } from '../model/calculator';
 import { simulationIndicator } from '../model/indicators';
-import { isScenario, type SimulationConditions } from '../model/params';
+import {
+  indicatorName,
+  indicatorShort,
+  isScenario,
+  type SimulationConditions,
+  type SimulationParams
+} from '../model/params';
 import { scopeCityCodes } from '../model/scope';
 import { VALUE_COLORS, valueColor } from '../map/colors';
 import { primaryIndicator } from '../run/narrative';
@@ -52,16 +58,13 @@ export interface ResultItem {
 
 /** 每项指标在这一年的结果，顺序同条件 */
 export function resultItems(version: SimulationVersion, conditions: SimulationConditions, year: number): ResultItem[] {
-  return conditions.indicatorIds.map(id => {
-    const indicator = simulationIndicator(id);
-    return {
-      id,
-      short: indicator.short,
-      name: indicator.name,
-      value: indicatorOf(version, year, id).value,
-      scenario: isScenario(version.params, id)
-    };
-  });
+  return conditions.indicatorIds.map(id => ({
+    id,
+    short: indicatorShort(id, version.params),
+    name: indicatorName(id, version.params),
+    value: indicatorOf(version, year, id).value,
+    scenario: isScenario(version.params, id)
+  }));
 }
 
 /** 排行的一行：市的行可以点了放大，区县的行没有 cityCode */
@@ -164,11 +167,12 @@ export interface MapColoring {
 export function mapColoring(
   calculator: Calculator,
   conditions: SimulationConditions,
-  selection: ResultSelection
+  selection: ResultSelection,
+  params: SimulationParams
 ): MapColoring {
   const { indicatorId, year } = selection;
   const indicator = simulationIndicator(indicatorId);
-  const breaks = valueBreaks(calculator, conditions, indicatorId);
+  const breaks = valueBreaks(calculator, conditions, indicatorId, params);
   const ranges = [
     `< ${breaks[0]}`,
     `${breaks[0]} – ${breaks[1]}`,
@@ -179,9 +183,12 @@ export function mapColoring(
   return {
     fill: row => valueColor(row.value, breaks),
     legend: {
-      title: indicator.short,
+      title: indicatorShort(indicatorId, params),
       subtitle: `${year} 年 · 单位 ${indicator.unit}`,
-      entries: VALUE_COLORS.map((color, index): LegendEntry => ({ color, text: ranges[index] ?? '' })).toReversed()
+      // 上下两端相同的一档是空的（值全都一样时），不列
+      entries: VALUE_COLORS.map((color, index): LegendEntry => ({ color, text: ranges[index] ?? '' }))
+        .filter((_, index) => index === 0 || index === breaks.length || breaks[index - 1] !== breaks[index])
+        .toReversed()
     }
   };
 }

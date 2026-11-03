@@ -1,16 +1,30 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
+  SIMULATION_INDICATORS,
+  simulationIndicator,
+  standardWalkMinutes,
+  WALK_METERS,
+  walkOptions
+} from './indicators';
+import {
   changedParams,
   defaultParams,
   describeParam,
+  indicatorName,
+  indicatorShort,
   isScenario,
   isStandard,
+  keepWalkMinutes,
   paramApplies,
   paramsOf,
+  reachTextOf,
   scenarioKeys,
   serviceMeters,
   signedPercent,
+  snapWalkMinutes,
+  walkMinutesOf,
+  withWalkMinutes,
   type SimulationParams
 } from './params';
 
@@ -38,8 +52,8 @@ describe('参数作用于哪些指标', () => {
   });
 
   it('所选指标用得上的参数项，按计算中的先后；城区面积覆盖率没有可调的参数', () => {
-    expect(paramsOf(['B-65', 'A-39', 'A-31'])).toEqual(['popChange', 'rule', 'recognition']);
-    expect(paramsOf(['B-65'])).toEqual(['recognition']);
+    expect(paramsOf(['B-65', 'A-39', 'A-31'])).toEqual(['popChange', 'walk', 'rule', 'recognition']);
+    expect(paramsOf(['B-65'])).toEqual(['walk', 'recognition']);
     expect(paramsOf(['A-15'])).toEqual([]);
     expect(paramsOf([])).toEqual([]);
   });
@@ -79,5 +93,102 @@ describe('参数的说明', () => {
 
   it('带正负号的百分比', () => {
     expect([10, -5, 0].map(signedPercent)).toEqual(['+10%', '−5%', '0%']);
+  });
+});
+
+describe('步行时长（ADR 0125）', () => {
+  const custom = withWalkMinutes(defaultParams(), 'A-31', 10);
+
+  it('距离查表：5、10、15 分钟是 Excel 的三档，更长的按 1000 米 ÷ 15 分钟外推，取整到 10 米', () => {
+    expect(WALK_METERS).toEqual({ 5: 300, 10: 500, 15: 1000, 20: 1330, 25: 1670, 30: 2000 });
+  });
+
+  it('可选的时长：5 分钟一档，不超过标准时长的 3 倍和 30 分钟；不是步行类的没有', () => {
+    expect(walkOptions(simulationIndicator('A08-2'))).toEqual([5, 10, 15]);
+    expect(walkOptions(simulationIndicator('A-32'))).toEqual([5, 10, 15, 20, 25, 30]);
+    expect(walkOptions(simulationIndicator('A-31'))).toEqual([5, 10, 15, 20, 25, 30]);
+    expect(walkOptions(simulationIndicator('A-15'))).toEqual([]);
+    expect(walkOptions(simulationIndicator('A-39'))).toEqual([]);
+  });
+
+  it('步行类 10 项：名称里都写着标准时长，改了之后名称和简称都写改后的', () => {
+    const walking = SIMULATION_INDICATORS.filter(item => standardWalkMinutes(item) !== null);
+    expect(walking).toHaveLength(10);
+    for (const { id, name, short } of walking) {
+      const standard = standardWalkMinutes(simulationIndicator(id));
+      expect(name).toContain(`步行${standard}分钟`);
+      expect(short.endsWith('覆盖率')).toBe(true);
+      const params = withWalkMinutes(defaultParams(), id, standard === 10 ? 15 : 10);
+      expect(indicatorName(id, params)).not.toBe(name);
+      expect(indicatorShort(id, params)).not.toBe(short);
+    }
+  });
+
+  it('改一项：名称、简称、服务范围的说明、距离都跟着变，编码和别的指标不变', () => {
+    expect(indicatorName('A-31', custom)).toBe('社区卫生服务设施步行10分钟覆盖率');
+    expect(indicatorShort('A-31', custom)).toBe('社区卫生10分钟覆盖率');
+    expect(reachTextOf('A-31', custom)).toBe('步行 10 分钟（500 米）');
+    expect(serviceMeters('A-31', custom)).toBe(500);
+    expect(walkMinutesOf(custom, 'A-31')).toBe(10);
+    expect(indicatorName('A-33', custom)).toBe(simulationIndicator('A-33').name);
+    expect(serviceMeters('A-33', custom)).toBe(1000);
+    expect(walkMinutesOf(custom, 'A-33')).toBe(15);
+    expect(walkMinutesOf(custom, 'A-15')).toBeNull();
+    expect(indicatorName('A-31', defaultParams())).toBe(simulationIndicator('A-31').name);
+    expect(reachTextOf('A-31', defaultParams())).toBe('步行 15 分钟（1000 米）');
+  });
+
+  it('旧规程的服务距离是站点的 5 分钟，不跟随设定的时长', () => {
+    expect(serviceMeters('A-31', { ...custom, rule: 'old' })).toBe(300);
+    expect(indicatorName('A-31', { ...custom, rule: 'old' })).toBe('社区卫生服务设施步行10分钟覆盖率');
+  });
+
+  it('标准时长不记；值没变时返回原来的对象；改回标准后是标准口径；不是可选的时长抛错', () => {
+    expect(withWalkMinutes(defaultParams(), 'A-31', 15)).toBe(defaultParams());
+    expect(withWalkMinutes(custom, 'A-31', 10)).toBe(custom);
+    const back = withWalkMinutes(custom, 'A-31', 15);
+    expect(back.walkMinutes).toEqual({});
+    expect(isStandard('walk', back)).toBe(true);
+    expect(withWalkMinutes(custom, 'A-31', null).walkMinutes).toEqual({});
+    expect(() => withWalkMinutes(defaultParams(), 'A-31', 12)).toThrow('没有步行 12 分钟');
+    expect(() => withWalkMinutes(defaultParams(), 'A08-2', 20)).toThrow('没有步行 20 分钟');
+    expect(() => withWalkMinutes(defaultParams(), 'A-15', 10)).toThrow('没有步行 10 分钟');
+  });
+
+  it('一项指标是不是自定义口径只看它自己的时长', () => {
+    expect(isStandard('walk', custom)).toBe(false);
+    expect(scenarioKeys(custom, 'A-31')).toEqual(['walk']);
+    expect(isScenario(custom, 'A-31')).toBe(true);
+    expect(isScenario(custom, 'A-33')).toBe(false);
+    expect(paramApplies('walk', 'A-31')).toBe(true);
+    expect(paramApplies('walk', 'A-15')).toBe(false);
+    expect(paramApplies('walk', 'A-39')).toBe(false);
+  });
+
+  it('比较和说明：内容相同就没有变化；写出指标和时长，多项写个数', () => {
+    const both = withWalkMinutes(custom, 'A-33', 20);
+    const reordered = withWalkMinutes(withWalkMinutes(defaultParams(), 'A-33', 20), 'A-31', 10);
+    expect(changedParams(both, reordered)).toEqual([]);
+    expect(changedParams(defaultParams(), custom)).toEqual(['walk']);
+    expect(describeParam('walk', defaultParams())).toBe('标准');
+    expect(describeParam('walk', custom)).toBe('社区卫生 10 分钟');
+    expect(describeParam('walk', both)).toBe('2 项已调整');
+  });
+
+  it('说到的时长取最近的一档：一样近时取短的，超过上限时是上限', () => {
+    expect(snapWalkMinutes('A-31', 12)).toBe(10);
+    expect(snapWalkMinutes('A-31', 13)).toBe(15);
+    expect(snapWalkMinutes('A-31', 7.5)).toBe(5);
+    expect(snapWalkMinutes('A-31', 1)).toBe(5);
+    expect(snapWalkMinutes('A-31', 40)).toBe(30);
+    expect(snapWalkMinutes('A08-2', 40)).toBe(15);
+    expect(() => snapWalkMinutes('A-39', 10)).toThrow('不是步行类');
+  });
+
+  it('只留下所选指标的时长', () => {
+    const both = withWalkMinutes(custom, 'A-33', 20);
+    expect(keepWalkMinutes(both, ['A-33']).walkMinutes).toEqual({ 'A-33': 20 });
+    expect(keepWalkMinutes(both, ['A-31', 'A-33'])).toBe(both);
+    expect(keepWalkMinutes(both, []).walkMinutes).toEqual({});
   });
 });

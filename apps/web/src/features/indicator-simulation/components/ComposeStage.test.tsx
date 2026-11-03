@@ -159,7 +159,7 @@ describe('ComposeStage', () => {
 
   it('参数节点只有所选指标用得上的几项，显示当前取值；点开编辑浮层，草稿在下方的预估里预览', async () => {
     const { wrapper } = mountStage();
-    expect(nodes(wrapper, 'params:')).toEqual(['params:popChange', 'params:rule', 'params:recognition']);
+    expect(nodes(wrapper, 'params:')).toEqual(['params:popChange', 'params:walk', 'params:rule', 'params:recognition']);
     const node = wrapper.get('[data-node="params:rule"]');
     expect(node.text()).toContain('新规程');
     expect(node.attributes('aria-expanded')).toBe('false');
@@ -270,7 +270,7 @@ describe('ComposeStage 按 AI计算指令编排', () => {
 
     // 参数 3 项（人均类的人口变化用不上），再到 AI计算
     await vi.advanceTimersByTimeAsync(450 * 4);
-    expect(nodes(wrapper, 'params:')).toEqual(['params:rule', 'params:recognition']);
+    expect(nodes(wrapper, 'params:')).toEqual(['params:walk', 'params:rule', 'params:recognition']);
     expect(wrapper.get('[role="status"]').text()).toBe('配置完成，即将开始计算');
     expect(buttonOf(wrapper, '计算启动中').exists()).toBe(true);
     expect(wrapper.emitted('start')).toBeUndefined();

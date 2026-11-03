@@ -51,7 +51,7 @@ export const EstimateBar = defineComponent({
       return (
         <div class={styles.rows}>
           {current.rows.slice(0, ROWS).map(row => {
-            const { indicator, value, standard } = row;
+            const { indicator, name, value, standard } = row;
             // 预估值按显示的精度取整后再比较，变化量和显示的数对得上
             const shown = roundEstimate(value, indicator);
             const delta = standard === null ? 0 : roundEstimate(shown - roundEstimate(standard, indicator), indicator);
@@ -59,8 +59,8 @@ export const EstimateBar = defineComponent({
             return (
               <div key={indicator.id} class={styles.card}>
                 <div class={styles.head}>
-                  <span class={styles.name} title={indicator.name}>
-                    {indicator.name}
+                  <span class={styles.name} title={name}>
+                    {name}
                   </span>
                   <span class={styles.code}>{indicator.id}</span>
                 </div>

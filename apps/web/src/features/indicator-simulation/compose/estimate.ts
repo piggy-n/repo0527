@@ -2,12 +2,20 @@ import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { indicatorResult } from '../model/analysis';
 import type { Calculator } from '../model/calculator';
 import { type SimulationIndicator, simulationIndicator } from '../model/indicators';
-import { defaultParams, isScenario, type SimulationConditions, type SimulationParams } from '../model/params';
+import {
+  defaultParams,
+  indicatorName,
+  isScenario,
+  type SimulationConditions,
+  type SimulationParams
+} from '../model/params';
 import { areaLabel, scopeCityCodes, type SimulationScope } from '../model/scope';
 
 /** 预估的一项指标：这组参数下的值；模拟情景时还有标准口径的值 */
 export interface EstimateRow {
   readonly indicator: SimulationIndicator;
+  /** 按这组参数的名称：改过步行时长时写改后的时长 */
+  readonly name: string;
   readonly value: number;
   /** 标准口径的值；不是模拟情景时为 null */
   readonly standard: number | null;
@@ -58,6 +66,7 @@ export function estimate(
   const rows = indicatorIds.map(
     (id): EstimateRow => ({
       indicator: simulationIndicator(id),
+      name: indicatorName(id, params),
       value: indicatorResult(current, id).value,
       standard: scenarioIds.includes(id) ? indicatorResult(standard, id).value : null
     })

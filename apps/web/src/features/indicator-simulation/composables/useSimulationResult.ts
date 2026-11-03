@@ -63,7 +63,9 @@ export function useSimulationResult(run: SimulationRun): SimulationResult {
     const calculator = run.calculator.value;
     const { conditions } = state.value;
     const current = selection.value;
-    return calculator && version.value && conditions && current ? mapColoring(calculator, conditions, current) : null;
+    return calculator && version.value && conditions && current
+      ? mapColoring(calculator, conditions, current, version.value.params)
+      : null;
   });
 
   return {

@@ -1,8 +1,9 @@
 import { MxTitle } from '@yzt/ui';
 import { ElRadioButton, ElRadioGroup, ElSlider } from 'element-plus';
 import { defineComponent, type PropType, type VNodeChild } from 'vue';
-import { simulationIndicator } from '../model/indicators';
+import { simulationIndicator, standardWalkMinutes, walkMeters, walkOptions } from '../model/indicators';
 import {
+  indicatorName,
   isStandard,
   paramApplies,
   PARAM_LABELS,
@@ -14,7 +15,9 @@ import {
   RULE_LABELS,
   signedPercent,
   type SimulationConditions,
-  type SimulationParams
+  type SimulationParams,
+  walkMinutesOf,
+  withWalkMinutes
 } from '../model/params';
 import styles from './ParamFields.module.scss';
 
@@ -70,6 +73,46 @@ export const ParamFields = defineComponent({
         <div key={key} class={styles.field}>
           {head}
           <div>{content}</div>
+        </div>
+      );
+    };
+
+    // 一项指标的步行时长：名称和标准时长、改后的距离，下面是可选的几档
+    const renderWalkRow = (id: string) => {
+      const { modelValue: params } = props;
+      const indicator = simulationIndicator(id);
+      const minutes = walkMinutesOf(params, id);
+      if (minutes === null) {
+        return null;
+      }
+      const options = walkOptions(indicator);
+      return (
+        <div key={id} class={styles.walkRow}>
+          <div class={styles.walkHead}>
+            <span class={styles.walkName} title={indicatorName(id, params)}>
+              {indicator.short}
+              <small>标准 {standardWalkMinutes(indicator)} 分钟</small>
+            </span>
+            <span class={styles.value}>{walkMeters(minutes)} 米</span>
+          </div>
+          <ElRadioGroup
+            class="radio-group-block"
+            size="small"
+            modelValue={minutes}
+            aria-label={`${indicator.short}的步行时长（分钟）`}
+            onUpdate:modelValue={value => {
+              const chosen = options.find(option => option === value);
+              if (chosen !== undefined) {
+                emit('update:modelValue', withWalkMinutes(params, id, chosen));
+              }
+            }}
+          >
+            {options.map(option => (
+              <ElRadioButton key={option} value={option}>
+                {option}
+              </ElRadioButton>
+            ))}
+          </ElRadioGroup>
         </div>
       );
     };
@@ -161,6 +204,20 @@ export const ParamFields = defineComponent({
             </>,
             () => [scenario(), <span class={styles.value}>{signedPercent(params.popChange)}</span>],
             scope
+          );
+        case 'walk':
+          return field(
+            key,
+            <>
+              <div class={styles.walkList}>
+                {conditions.indicatorIds.filter(id => paramApplies(key, id)).map(renderWalkRow)}
+              </div>
+              <p class={styles.note}>
+                单位：分钟。5、10、15 分钟按计算方法为 300、500、1000 米，更长的按每分钟约 67 米换算；最长为标准时长的 3 倍，且不超过 30 分钟
+              </p>
+            </>,
+            scenario,
+            '每项指标单独设置，名称和结果同步变化'
           );
       }
     };

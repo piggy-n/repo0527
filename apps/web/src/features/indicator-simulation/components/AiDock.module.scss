@@ -131,12 +131,13 @@
   line-height: var(--line-height-compact);
 }
 
-// 快捷说法：点了直接发送
+// 快捷说法：点了直接发送；在输入框的容器外面，条数多时用满整行
 .suggestions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
 
   &:empty {
     display: none;

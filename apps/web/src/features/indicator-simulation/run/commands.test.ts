@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { type Composition, rememberedScopes, withArea } from '../compose/composition';
-import { defaultParams } from '../model/params';
+import { defaultParams, isStandard } from '../model/params';
 import { areaScope, citiesScope, scopeCityCodes } from '../model/scope';
 import { NINGZHEN_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
@@ -88,13 +88,71 @@ describe('commandSuggestions', () => {
       '覆盖认定改回 50%',
       '按旧规程计算',
       '常住人口增加 10%',
+      '社区卫生改为步行 10 分钟',
       '加上无锡市',
       '去掉人均公园绿地',
       '停止计算'
     ]);
     expect(commandSuggestions(current, 'paused')[0]).toBe('继续');
     const done = commandSuggestions({ ...current, conditions: { ...current.conditions, indicatorIds: ['B-65'] } }, 'done');
-    expect(done).toEqual(['覆盖认定改回 50%', '加上无锡市', '加上人均公园绿地', '调整条件']);
+    expect(done).toEqual(['覆盖认定改回 50%', '公园绿地改为步行 10 分钟', '加上无锡市', '加上人均公园绿地', '调整条件']);
+  });
+});
+
+describe('步行时长的说法（ADR 0125）', () => {
+  const walking: Composition = {
+    ...current,
+    conditions: { ...current.conditions, indicatorIds: ['A-31', 'A-33', 'A-39'] }
+  };
+
+  it('"改成"不是"只看"：只改时长，所选的指标不变，不算改了条件', () => {
+    for (const words of ['社区卫生改成步行 10 分钟', '社区卫生步行时长改为 10 分钟', '社区卫生改为步行 10 分钟']) {
+      const change = changeOf(interpretCommand(words, walking));
+      expect(change.composition.conditions.indicatorIds).toEqual(['A-31', 'A-33', 'A-39']);
+      expect(change.composition.params.walkMinutes).toEqual({ 'A-31': 10 });
+      expect(change.conditionsChanged).toBe(false);
+      expect(change.said).toEqual(['步行时长改为「社区卫生 10 分钟」（自定义口径），影响社区卫生覆盖率']);
+    }
+  });
+
+  it('没说指标时改所选的全部步行类指标；改回标准；恢复标准口径时也恢复', () => {
+    const change = changeOf(interpretCommand('步行时长改成 10 分钟', walking));
+    expect(change.composition.params.walkMinutes).toEqual({ 'A-31': 10, 'A-33': 10 });
+    expect(change.composition.conditions.indicatorIds).toEqual(['A-31', 'A-33', 'A-39']);
+    for (const words of ['步行时长改回标准', '恢复标准口径']) {
+      const back = changeOf(interpretCommand(words, change.composition));
+      expect(back.composition.params.walkMinutes).toEqual({});
+      expect(isStandard('walk', back.composition.params)).toBe(true);
+    }
+  });
+
+  it('不在档位上的取最接近的一档并说明；所选指标都不是步行类时不改并说明', () => {
+    const change = changeOf(interpretCommand('社区卫生改成步行 12 分钟', walking));
+    expect(change.composition.params.walkMinutes).toEqual({ 'A-31': 10 });
+    expect(change.notes.join()).toContain('已取最接近的一档');
+    const none = interpretCommand('步行时长改成 10 分钟', {
+      ...current,
+      conditions: { ...current.conditions, indicatorIds: ['A-39'] }
+    });
+    expect(none).toEqual({ kind: 'none', notes: ['所选指标不适用步行时长'] });
+  });
+
+  it('"加上"时指标也加上；去掉指标时清掉它的时长', () => {
+    const added = changeOf(interpretCommand('加上社区小学步行 20 分钟', walking));
+    expect(added.composition.conditions.indicatorIds).toEqual(['A-31', 'A-33', 'A-39', 'A-32']);
+    expect(added.composition.params.walkMinutes).toEqual({ 'A-32': 20 });
+    const custom = changeOf(interpretCommand('社区卫生改成步行 10 分钟', walking)).composition;
+    const removed = changeOf(interpretCommand('去掉社区卫生', custom));
+    expect(removed.composition.conditions.indicatorIds).toEqual(['A-33', 'A-39']);
+    expect(removed.composition.params.walkMinutes).toEqual({});
+  });
+
+  it('快捷说法：都是标准时长时建议改第一项，改过时建议改回；说这句话能生效', () => {
+    const suggestion = commandSuggestions(walking, 'done').find(words => words.includes('步行'));
+    expect(suggestion).toBe('社区卫生改为步行 10 分钟');
+    const change = changeOf(interpretCommand(suggestion ?? '', walking));
+    expect(change.composition.params.walkMinutes).toEqual({ 'A-31': 10 });
+    expect(commandSuggestions(change.composition, 'done')).toContain('步行时长改回标准');
   });
 });
 

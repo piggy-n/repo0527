@@ -143,16 +143,16 @@ export const AiDock = defineComponent({
       const reply = conversation?.reply.value ?? null;
       return (
         <footer class={styles.root} aria-label="AI 对话">
-          <div class={styles.inner}>
-            {conversation && (
-              <div key="suggestions" class={styles.suggestions} role="group" aria-label="快捷说法">
-                {conversation.suggestions.value.map(words => (
-                  <button key={words} type="button" class={styles.suggestion} onClick={() => say(words)}>
-                    {words}
-                  </button>
-                ))}
-              </div>
-            )}
+          {conversation && (
+            <div key="suggestions" class={styles.suggestions} role="group" aria-label="快捷说法">
+              {conversation.suggestions.value.map(words => (
+                <button key={words} type="button" class={styles.suggestion} onClick={() => say(words)}>
+                  {words}
+                </button>
+              ))}
+            </div>
+          )}
+          <div key="inner" class={styles.inner}>
             {!conversation && (
               <div key="tools" class={styles.tools}>
                 {renderAttachment()}

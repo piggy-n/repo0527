@@ -2,6 +2,7 @@ import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { SIMULATION_INDICATORS, simulationIndicator } from '../model/indicators';
 import {
   defaultParams,
+  keepWalkMinutes,
   paramApplies,
   type ParamKey,
   type SimulationConditions,
@@ -143,7 +144,11 @@ export function withIndicator(composition: Composition, id: string, on: boolean)
     return composition;
   }
   const indicatorIds = on ? [...conditions.indicatorIds, id] : conditions.indicatorIds.filter(item => item !== id);
-  return { ...composition, conditions: { ...conditions, indicatorIds } };
+  return {
+    ...composition,
+    conditions: { ...conditions, indicatorIds },
+    params: keepWalkMinutes(composition.params, indicatorIds)
+  };
 }
 
 /** 把第 from 项指标移到第 to 项 */

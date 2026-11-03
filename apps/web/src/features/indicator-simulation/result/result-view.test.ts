@@ -5,7 +5,7 @@ import { idleEngineState, type SimulationVersion } from '../engine/engine';
 import { VALUE_COLORS } from '../map/colors';
 import { indicatorResult } from '../model/analysis';
 import { createCalculator } from '../model/calculator';
-import { defaultParams, type SimulationConditions, type SimulationParams } from '../model/params';
+import { defaultParams, type SimulationConditions, type SimulationParams, withWalkMinutes } from '../model/params';
 import { areaScope, citiesScope } from '../model/scope';
 import { NANJING_RINGS, NINGZHEN_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
@@ -100,11 +100,50 @@ describe('rankOf', () => {
   });
 });
 
+describe('改过步行时长的结果（ADR 0125）', () => {
+  it('列表和图例写改后的时长，仍标自定义口径；着色按这个时长分档，不会全落在最低一档', async () => {
+    const params = withWalkMinutes(defaultParams(), 'A-31', 5);
+    const custom = { ...conditions, indicatorIds: ['A-31', 'B-65'] };
+    const { calculator, version } = await setup(custom, params);
+    const items = resultItems(version, custom, 2026);
+    expect(items[0]).toMatchObject({
+      short: '社区卫生5分钟覆盖率',
+      name: '社区卫生服务设施步行5分钟覆盖率',
+      scenario: true
+    });
+    expect(items[1]).toMatchObject({ short: '公园绿地覆盖率', scenario: false });
+
+    const selection = { indicatorId: 'A-31', year: 2026, cityCode: null } as const;
+    const { fill, legend } = mapColoring(calculator, custom, selection, params);
+    expect(legend.title).toBe('社区卫生5分钟覆盖率');
+    const rows = indicatorResult(version.result[2026]?.indicators ?? {}, 'A-31').rows;
+    expect(new Set(rows.map(fill)).size).toBeGreaterThan(2);
+  });
+
+  it('时长长、都接近 100% 时：分档留小数分得开；值全都一样时不列空的一档，图例没有重复', async () => {
+    // 南京的社区卫生标准口径已经很高，长时长下都接近 100%
+    const custom = { ...conditions, indicatorIds: ['A-31'], scope: citiesScope(['320100']) };
+    const legendAt = async (minutes: number) => {
+      const params = withWalkMinutes(defaultParams(), 'A-31', minutes);
+      const { calculator } = await setup(custom, params);
+      const selection = { indicatorId: 'A-31', year: 2026, cityCode: null } as const;
+      return mapColoring(calculator, custom, selection, params).legend.entries.map(entry => entry.text);
+    };
+    const near = await legendAt(20);
+    expect(near).toHaveLength(5);
+    expect(new Set(near).size).toBe(5);
+    expect(near.join()).toContain('.');
+
+    const flat = await legendAt(30);
+    expect(new Set(flat).size).toBe(flat.length);
+  });
+});
+
 describe('mapColoring', () => {
   it('数值五档：图例从高到低，区县按标准口径的分位数着色', async () => {
     const { calculator, version } = await setup(conditions, intersect);
     const selection = { indicatorId: 'B-65', year: 2026, cityCode: null } as const;
-    const { fill, legend } = mapColoring(calculator, conditions, selection);
+    const { fill, legend } = mapColoring(calculator, conditions, selection, intersect);
 
     expect([legend.title, legend.subtitle]).toEqual(['公园绿地覆盖率', '2026 年 · 单位 %']);
     expect(legend.entries.map(entry => entry.text)).toEqual(['≥ 82', '72 – 82', '61 – 72', '44 – 61', '< 44']);

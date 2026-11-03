@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { requireIndicator } from '@/shared/city-indicators/catalog';
 import { mockIndicatorValue } from '@/shared/city-indicators/mock-value';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
+import { required } from '@/shared/testing/required';
 import { indicatorResult } from './analysis';
 import { coverageStrength, createCalculator, INTERSECT_FACTOR, RULE_FACTOR } from './calculator';
 import { simulationIndicator } from './indicators';
-import { defaultParams, type SimulationParams } from './params';
+import { defaultParams, type SimulationParams, withWalkMinutes } from './params';
 import { areaScope, citiesScope, scopeDistricts } from './scope';
 import { NANJING_RINGS, NINGZHEN_RINGS, testArea } from './test-area';
 import { loadTestAtlas } from './test-atlas';
@@ -70,6 +71,7 @@ describe('computeYear', () => {
     expect(coverageStrength(simulationIndicator('A-15'), both)).toBe(1);
     expect(coverageStrength(simulationIndicator('A-39'), both)).toBe(1);
     expect(coverageStrength(simulationIndicator('A-31'), defaultParams())).toBe(1);
+    expect(coverageStrength(simulationIndicator('A-31'), { ...defaultParams(), rule: 'old' })).toBeCloseTo(RULE_FACTOR, 9);
   });
 
   it('旧规程让社区卫生覆盖率下降，不影响公园绿地覆盖率', async () => {
@@ -159,5 +161,59 @@ describe('自定义范围（ADR 0121）', () => {
     const custom = { years: [2026], scope: areaScope(area), indicatorIds: ['A-31'] };
     const result = calculator.computeYear(custom, defaultParams(), 2026);
     expect(indicatorResult(result.indicators, 'A-31').cities.map(city => city.code)).toEqual(['320100', '321100']);
+  });
+});
+
+const walk = (id: string, minutes: number, base = defaultParams()) => withWalkMinutes(base, id, minutes);
+const strengthOf = (id: string, params: SimulationParams) => coverageStrength(simulationIndicator(id), params);
+
+describe('步行时长的计算（ADR 0125）', () => {
+  it('强度是距离比的平方：服务面积随距离的平方变化', () => {
+    expect(strengthOf('A-31', walk('A-31', 10))).toBeCloseTo((500 / 1000) ** 2, 9);
+    expect(strengthOf('A-31', walk('A-31', 5))).toBeCloseTo((300 / 1000) ** 2, 9);
+    expect(strengthOf('A-31', walk('A-31', 30))).toBeCloseTo(4, 9);
+    expect(strengthOf('B-65', walk('B-65', 10))).toBeCloseTo((500 / 300) ** 2, 9);
+    expect(strengthOf('A-32', walk('A-32', 5))).toBeCloseTo((300 / 500) ** 2, 9);
+  });
+
+  it('和相交即算相乘；别的指标不受影响', () => {
+    const params = { ...walk('A-31', 10), recognition: 'intersect' as const };
+    expect(strengthOf('A-31', params)).toBeCloseTo(0.25 * INTERSECT_FACTOR, 9);
+    expect(strengthOf('A-33', walk('A-31', 10))).toBe(1);
+  });
+
+  it('旧规程：站点固定 5 分钟，标准时长下是 RULE_FACTOR，选 5 分钟时和新规程相同，时长越长强度越大', () => {
+    const old = (minutes: number) => strengthOf('A-31', { ...walk('A-31', minutes), rule: 'old' });
+    expect(old(15)).toBeCloseTo(RULE_FACTOR, 9);
+    expect(old(5)).toBeCloseTo(strengthOf('A-31', walk('A-31', 5)), 9);
+    expect(old(10)).toBeGreaterThan(old(5));
+    expect(old(10)).toBeLessThan(old(15));
+    expect(old(20)).toBeGreaterThan(old(15));
+    // 服务中心仍随时长变化，所以比新规程低
+    expect(old(10)).toBeLessThan(strengthOf('A-31', walk('A-31', 10)));
+  });
+
+  it('结果随时长单调变化，按公式从标准值算出，不超过 100；人均类、其他指标不变', async () => {
+    const calculator = createCalculator(await loadTestAtlas());
+    const nanjing = { years: [2025], scope: citiesScope(['320100']), indicatorIds: ['A-31', 'A-33', 'A-39'] };
+    const at = (params: SimulationParams, id: string) => {
+      const { indicators } = calculator.computeYear(nanjing, params, 2025);
+      return required(indicators[id], `指标 ${id} 的结果`);
+    };
+    const standard = at(defaultParams(), 'A-31');
+    const values = [5, 10, 15, 20, 30].map(minutes => at(walk('A-31', minutes), 'A-31').value);
+    expect(values.toSorted((a, b) => a - b)).toEqual(values);
+    expect(values[2]).toBe(standard.value);
+    expect(values[0]).toBeLessThan(standard.value);
+    expect(values[3]).toBeGreaterThan(standard.value);
+    expect(values.every(value => value <= 100)).toBe(true);
+
+    const shorter = at(walk('A-31', 10), 'A-31');
+    shorter.rows.forEach((row, index) => {
+      const base = standard.rows[index]?.value ?? 0;
+      expect(row.value).toBeCloseTo(100 * (1 - (1 - base / 100) ** 0.25), 0);
+    });
+    expect(at(walk('A-31', 10), 'A-33').value).toBe(at(defaultParams(), 'A-33').value);
+    expect(at(walk('A-31', 10), 'A-39').value).toBe(at(defaultParams(), 'A-39').value);
   });
 });

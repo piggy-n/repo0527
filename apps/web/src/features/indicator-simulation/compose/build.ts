@@ -1,6 +1,5 @@
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
-import { simulationIndicator } from '../model/indicators';
-import { describeParam, isStandard, PARAM_LABELS, paramsOf } from '../model/params';
+import { describeParam, indicatorName, isStandard, PARAM_LABELS, paramsOf, withWalkMinutes } from '../model/params';
 import { areaLabel, areaScope, citiesScope, type SimulationScope } from '../model/scope';
 import { indicatorNode, OUTPUT_NODE, paramNode, REGION_NODE, yearNode } from './board';
 import {
@@ -61,7 +60,12 @@ export function buildSteps(target: Composition): BuildStep[] {
   steps.push({ node: REGION_NODE, message: `识别范围：${scopeText(conditions.scope)}`, composition: current });
   for (const id of conditions.indicatorIds) {
     current = withIndicator(current, id, true);
-    steps.push({ node: indicatorNode(id), message: `识别指标：${simulationIndicator(id).name}`, composition: current });
+    // 改过步行时长的指标一出现就是改后的名称
+    const minutes = params.walkMinutes[id];
+    if (minutes !== undefined) {
+      current = { ...current, params: withWalkMinutes(current.params, id, minutes) };
+    }
+    steps.push({ node: indicatorNode(id), message: `识别指标：${indicatorName(id, params)}`, composition: current });
   }
   current = { ...current, params };
   for (const key of paramsOf(conditions.indicatorIds)) {

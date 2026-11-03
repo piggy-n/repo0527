@@ -11,8 +11,14 @@ export type Reach =
   | { readonly kind: 'drive'; readonly minutes: number; readonly meters: number }
   | { readonly kind: 'radius'; readonly meters: number };
 
-/** 步行分钟数对应的距离（米）：Excel 的 5、10、15 分钟三档，不是"速度 × 分钟" */
-export const WALK_METERS: Readonly<Record<number, number>> = { 5: 300, 10: 500, 15: 1000 };
+/**
+ * 步行分钟数对应的距离（米）：5、10、15 分钟是 Excel 的三档，不是"速度 × 分钟"；
+ * 更长的按 1000 米 ÷ 15 分钟外推，取整到 10 米（ADR 0125）
+ */
+export const WALK_METERS: Readonly<Record<number, number>> = { 5: 300, 10: 500, 15: 1000, 20: 1330, 25: 1670, 30: 2000 };
+
+/** 可选时长的上限是标准时长的几倍；最长的一档是 WALK_METERS 里的最后一档 */
+const WALK_MAX_RATIO = 3;
 
 /** 覆盖的对象：住宅用地（覆盖面积 ≥ 50% 的图斑算覆盖），或城区面积（相交即算） */
 export type CoverageBase = 'residential' | 'area';
@@ -117,13 +123,28 @@ export const INDICATOR_GROUPS: readonly IndicatorGroup[] =
     indicators: SIMULATION_INDICATORS.filter(indicator => indicator.categoryId === id)
   })).filter(group => group.indicators.length > 0);
 
-/** 步行分钟数的距离（米）；Excel 只有 5、10、15 分钟三档 */
+/** 步行分钟数的距离（米）；只有 WALK_METERS 里的几档 */
 export function walkMeters(minutes: number): number {
   const meters = WALK_METERS[minutes];
   if (meters === undefined) {
     throw new Error(`没有步行 ${minutes} 分钟的距离档`);
   }
   return meters;
+}
+
+/** 目录里的步行时长（分钟）；不是步行类的指标为 null */
+export const standardWalkMinutes = (indicator: SimulationIndicator): number | null =>
+  indicator.model === 'coverage' && indicator.reach.kind === 'walk' ? indicator.reach.minutes : null;
+
+/** 这项指标可选的步行时长（分钟）：5 分钟一档，不超过标准时长的 3 倍；不是步行类的指标没有 */
+export function walkOptions(indicator: SimulationIndicator): readonly number[] {
+  const standard = standardWalkMinutes(indicator);
+  if (standard === null) {
+    return [];
+  }
+  return Object.keys(WALK_METERS)
+    .map(Number)
+    .filter(minutes => minutes <= standard * WALK_MAX_RATIO);
 }
 
 /** 标准口径的服务距离（米）；人均类没有 */
@@ -136,15 +157,15 @@ export function reachMeters(indicator: SimulationIndicator): number | null {
 
 const distanceText = (meters: number) => (meters >= 1000 ? `${meters / 1000} 公里` : `${meters} 米`);
 
-/** 服务范围的说明：如"步行 15 分钟（1000 米）""车行 5 分钟（3 公里）""2 公里缓冲区"；步行写米，同 Excel */
-export function reachText(indicator: SimulationIndicator): string {
+/** 服务范围的说明：如"步行 15 分钟（1000 米）""车行 5 分钟（3 公里）""2 公里缓冲区"；步行写米，同 Excel。minutes 是改过的步行时长 */
+export function reachText(indicator: SimulationIndicator, minutes?: number): string {
   if (indicator.model !== 'coverage') {
     return '面积 ÷ 人口';
   }
   const { reach } = indicator;
   switch (reach.kind) {
     case 'walk':
-      return `步行 ${reach.minutes} 分钟（${walkMeters(reach.minutes)} 米）`;
+      return `步行 ${minutes ?? reach.minutes} 分钟（${walkMeters(minutes ?? reach.minutes)} 米）`;
     case 'drive':
       return `车行 ${reach.minutes} 分钟（${distanceText(reach.meters)}）`;
     case 'radius':

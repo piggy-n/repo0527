@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
-import { defaultParams } from '../model/params';
+import { defaultParams, withWalkMinutes } from '../model/params';
 import { areaScope, citiesScope } from '../model/scope';
 import { NANJING_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
@@ -26,6 +26,7 @@ describe('buildSteps', () => {
       indicatorNode('A-31'),
       indicatorNode('A-39'),
       paramNode('popChange'),
+      paramNode('walk'),
       paramNode('rule'),
       paramNode('recognition'),
       OUTPUT_NODE
@@ -40,6 +41,7 @@ describe('buildSteps', () => {
       '识别指标：社区卫生服务设施步行15分钟覆盖率',
       '识别指标：人均公园绿地面积',
       '设置常住人口变化：0%（标准口径）',
+      '设置步行时长：标准（标准口径）',
       '设置计算规程：旧规程（自定义口径）',
       '设置覆盖认定：覆盖 ≥ 50%（标准口径）',
       '配置完成，即将开始计算'
@@ -81,5 +83,18 @@ describe('自定义范围的配置步骤（ADR 0121）', () => {
     // 配置成行政区划时，记着的自定义范围不丢
     const cities = withScope(custom, citiesScope(['320100']));
     expect(rememberedScopes(buildSteps(cities).at(-1)?.composition ?? cities).area).toBe(area);
+  });
+});
+
+describe('buildSteps 的步行时长（ADR 0125）', () => {
+  it('改过时长的指标一出现就是改后的名称，参数节点写明改了什么', () => {
+    const custom = { ...target, params: withWalkMinutes(defaultParams(), 'A-31', 10) };
+    const steps = buildSteps(custom);
+    const appear = steps.find(step => step.node === indicatorNode('A-31'));
+    expect(appear?.message).toBe('识别指标：社区卫生服务设施步行10分钟覆盖率');
+    expect(appear?.composition.params.walkMinutes).toEqual({ 'A-31': 10 });
+    expect(steps.find(step => step.node === paramNode('walk'))?.message).toBe(
+      '设置步行时长：社区卫生 10 分钟（自定义口径）'
+    );
   });
 });

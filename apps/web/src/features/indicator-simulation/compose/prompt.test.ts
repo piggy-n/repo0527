@@ -102,6 +102,58 @@ const seeded = (seed: number) => {
   };
 };
 
+const minutesOf = (text: string) => parsed(text).params.walkMinutes;
+
+describe('指令里的步行时长（ADR 0125）', () => {
+  it('紧跟在指标后面的只改这一项；名称里写标准时长的不算改', () => {
+    expect(minutesOf('计算社区卫生服务设施步行10分钟覆盖率')).toEqual({ 'A-31': 10 });
+    expect(minutesOf('计算社区小学步行20分钟覆盖率和社区中学覆盖率')).toEqual({ 'A-32': 20 });
+    expect(minutesOf('计算社区卫生服务设施步行15分钟覆盖率')).toEqual({});
+    expect(minutesOf('计算 2025 年南京市公园绿地、广场步行 5 分钟覆盖率')).toEqual({});
+    expect(minutesOf('计算社区卫生步行 20 分钟覆盖率')).toEqual({ 'A-31': 20 });
+  });
+
+  it('没说指标的改所选的全部步行类指标，单独说了的优先，标准时长不记', () => {
+    expect(minutesOf('按步行 10 分钟，计算社区卫生服务设施覆盖率和公交车站覆盖率')).toEqual({ 'A-31': 10, 'A08-2': 10 });
+    expect(minutesOf('按步行 10 分钟，计算社区卫生服务设施覆盖率和社区小学覆盖率')).toEqual({ 'A-31': 10 });
+    expect(minutesOf('按步行 20 分钟，计算社区卫生服务设施覆盖率和社区小学步行 25 分钟覆盖率')).toEqual({
+      'A-31': 20,
+      'A-32': 25
+    });
+  });
+
+  it('不在档位上的取最近一档，超过上限的取上限；不是步行类的不改', () => {
+    expect(minutesOf('按步行 12 分钟计算社区卫生服务设施覆盖率')).toEqual({ 'A-31': 10 });
+    expect(minutesOf('按步行 40 分钟计算社区卫生服务设施覆盖率')).toEqual({ 'A-31': 30 });
+    expect(minutesOf('按步行 40 分钟计算公交车站覆盖率')).toEqual({ 'A08-2': 15 });
+    expect(minutesOf('按步行 10 分钟计算人均公园绿地面积')).toEqual({});
+    expect(minutesOf('按步行 10 分钟计算消防救援覆盖率')).toEqual({});
+  });
+
+  it('旧规程那句话里的"步行 5 分钟"不是要改时长', () => {
+    const composition = parsed('按卫生服务站步行 5 分钟的旧规程，计算 2025 年南京市社区卫生服务设施覆盖率');
+    expect(composition.params.rule).toBe('old');
+    expect(composition.params.walkMinutes).toEqual({});
+  });
+
+  it('写成一句话带着改后的时长，解析回去相同', () => {
+    const composition = parsed('按步行 10 分钟，计算 2025 年南京市社区卫生服务设施覆盖率');
+    const text = describeComposition(composition);
+    expect(text).toContain('社区卫生服务设施步行10分钟覆盖率');
+    expect(parsed(text)).toMatchObject({ params: composition.params, conditions: composition.conditions });
+  });
+
+  it('随机的指令里有的改了时长，解析得到名称里写的时长', () => {
+    const texts = Array.from({ length: 60 }, (_, index) => randomPrompt(seeded(index + 1)));
+    const walked = texts.filter(text => Object.keys(minutesOf(text)).length > 0);
+    expect(walked.length).toBeGreaterThan(5);
+    for (const text of walked) {
+      const minutes = parsed(text).params.walkMinutes['A-31'];
+      expect(text).toContain(`社区卫生服务设施步行${minutes}分钟覆盖率`);
+    }
+  });
+});
+
 describe('randomPrompt', () => {
   it('一定有社区卫生覆盖率，排在第一；城市、年度、指标、参数的组合各不相同', () => {
     const texts = Array.from({ length: 40 }, (_, index) => randomPrompt(seeded(index + 1)));

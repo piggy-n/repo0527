@@ -4,8 +4,8 @@ import { stableRandom } from '@/shared/city-indicators/stable-random';
 import { findRegion } from '@/shared/map/region/region-catalog';
 import { cached } from './cache';
 import type { District, DistrictAtlas } from './districts';
-import { type SimulationIndicator, simulationIndicator } from './indicators';
-import type { SimulationConditions, SimulationParams } from './params';
+import { type SimulationIndicator, simulationIndicator, standardWalkMinutes, walkMeters } from './indicators';
+import { type SimulationConditions, type SimulationParams, walkMinutesOf } from './params';
 import { scopeCityCodes, scopeDistricts } from './scope';
 
 /**
@@ -72,7 +72,7 @@ const CITY_POPULATION: Readonly<Record<string, number>> = {
   321300: 498.6
 };
 
-/** 旧规程：站点按步行 5 分钟，覆盖强度打的折扣 */
+/** 旧规程：站点按步行 5 分钟，标准时长下覆盖强度打的折扣 */
 export const RULE_FACTOR = 0.6;
 /** 相交即算：与服务范围相交的图斑都算覆盖，覆盖强度放大的倍数 */
 export const INTERSECT_FACTOR = 1.25;
@@ -89,14 +89,31 @@ function cityPopulation(cityCode: string): number {
   return value;
 }
 
-/** 覆盖强度：标准口径为 1，旧规程打折扣、相交即算放大；覆盖率 = 1 − (1 − 标准值)^强度 */
+// 服务范围带来的强度：服务面积随距离的平方变化（ADR 0125）。旧规程的站点固定 5 分钟，
+// 服务中心跟随设定的时长，两者的份额由"标准时长下强度等于 RULE_FACTOR"定出
+function reachStrength(indicator: SimulationIndicator, params: SimulationParams): number {
+  const standard = standardWalkMinutes(indicator);
+  const minutes = walkMinutesOf(params, indicator.id);
+  if (standard === null || minutes === null) {
+    return 1;
+  }
+  const areaOf = (meters: number) => (meters / walkMeters(standard)) ** 2;
+  const center = areaOf(walkMeters(minutes));
+  if (indicator.model !== 'coverage' || !indicator.ruleChange || params.rule !== 'old') {
+    return center;
+  }
+  const station = areaOf(walkMeters(5));
+  const centerShare = (RULE_FACTOR - station) / (1 - station);
+  return centerShare * center + (1 - centerShare) * station;
+}
+
+/** 覆盖强度：标准口径为 1，随服务范围变化，相交即算放大；覆盖率 = 1 − (1 − 标准值)^强度 */
 export function coverageStrength(indicator: SimulationIndicator, params: SimulationParams): number {
   if (indicator.model !== 'coverage') {
     return 1;
   }
-  const rule = indicator.ruleChange && params.rule === 'old' ? RULE_FACTOR : 1;
   const recognition = indicator.base === 'residential' && params.recognition === 'intersect' ? INTERSECT_FACTOR : 1;
-  return rule * recognition;
+  return reachStrength(indicator, params) * recognition;
 }
 
 // 住宅用地：城镇住宅加农村宅基地，市辖区占的比例高

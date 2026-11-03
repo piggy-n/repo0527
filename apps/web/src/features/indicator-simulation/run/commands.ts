@@ -1,13 +1,16 @@
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { type Composition, rememberedScopes, SIMULATION_YEARS, withScope } from '../compose/composition';
 import { AREA_WORDS, findCities, findIndicators } from '../compose/prompt';
+import { applyWalk, findWalk } from '../compose/walk-prompt';
 import { scopeText } from '../flow/plan';
-import { simulationIndicator } from '../model/indicators';
+import { simulationIndicator, standardWalkMinutes, walkOptions } from '../model/indicators';
 import { areaLabel, areaScope, citiesScope, scopeCityCodes, type SimulationScope } from '../model/scope';
 import {
   changedParams,
+  defaultParams,
   describeParam,
   isStandard,
+  keepWalkMinutes,
   paramApplies,
   type ParamKey,
   PARAM_LABELS,
@@ -34,6 +37,9 @@ export type RunCommand =
 const ADD = /加上|增加|添加|再加|加入|也看|还要|补充/;
 const REMOVE = /去掉|删除|删掉|移除|不看|不要|排除|拿掉/;
 const ONLY = /只看|只推演|只计算|只要|换成|改成|改为/;
+// 说到这些动词时指标本身也要变：步行时长的说法不从句子里去掉，"加上社区小学步行 20 分钟"仍然加上社区小学
+const KEEP_INDICATOR = /只看|只推演|只计算|只要|换成/;
+const WALK_RESET = /步行(时长|时间)?(改回|恢复|回到)/;
 
 const shortOf = (id: string) => simulationIndicator(id).short;
 const sameList = (a: readonly (string | number)[], b: readonly (string | number)[]) => a.join() === b.join();
@@ -78,7 +84,7 @@ function merge<T>(current: readonly T[], mentioned: readonly T[], text: string, 
 function mentionedParams(text: string): Partial<SimulationParams> {
   const patch: { -readonly [K in keyof SimulationParams]?: SimulationParams[K] } = {};
   if (/(恢复|改回|回到|按)标准口径/.test(text)) {
-    Object.assign(patch, { rule: 'new', recognition: 'half', popChange: 0 });
+    Object.assign(patch, { rule: 'new', recognition: 'half', popChange: 0, walkMinutes: defaultParams().walkMinutes });
   }
   if (text.includes('旧规程')) {
     patch.rule = 'old';
@@ -102,7 +108,7 @@ function mentionedParams(text: string): Partial<SimulationParams> {
 }
 
 /**
- * 理解推演中说的一句话（按规则，不接大模型）：停止；改参数（规程、认定、人口）；
+ * 理解推演中说的一句话（按规则，不接大模型）：停止；改参数（规程、认定、人口、步行时长）；
  * 加上、去掉或只看某些城市、指标、年度；没有改动时才认暂停和继续。用不上的参数、清空的条件写进 notes，不改
  */
 export function interpretCommand(input: string, current: Composition): RunCommand {
@@ -116,7 +122,10 @@ export function interpretCommand(input: string, current: Composition): RunComman
   }
   const { conditions, params } = current;
   const notes: string[] = [];
-  const rest = text;
+  // 单纯改步行时长时，句子里的指标和"改成"不是在改所选的指标
+  const walk = findWalk(text);
+  const keepsIndicator = ADD.test(text) || REMOVE.test(text) || KEEP_INDICATOR.test(text);
+  const rest = walk && !keepsIndicator ? walk.rest : text;
 
   // 条件：范围、指标、年度
   const verb = ADD.test(rest) || REMOVE.test(rest) || ONLY.test(rest);
@@ -140,13 +149,25 @@ export function interpretCommand(input: string, current: Composition): RunComman
 
   // 参数：只改用得上的
   const patch = mentionedParams(rest);
-  const next: SimulationParams = { ...params, ...patch };
+  let next: SimulationParams = { ...params, ...patch };
   for (const key of ['rule', 'recognition', 'popChange'] as const) {
     if (key in patch && next[key] !== params[key] && !indicatorIds.some(id => paramApplies(key, id))) {
       notes.push(`所选指标不适用${PARAM_LABELS[key]}`);
       Object.assign(next, { [key]: params[key] });
     }
   }
+  if (WALK_RESET.test(rest)) {
+    next = { ...next, walkMinutes: defaultParams().walkMinutes };
+  } else if (walk) {
+    const { params: walked, applied, snapped } = applyWalk(next, walk, indicatorIds);
+    next = walked;
+    if (applied === 0) {
+      notes.push(`所选指标不适用${PARAM_LABELS.walk}`);
+    } else if (snapped) {
+      notes.push(`${PARAM_LABELS.walk}按 5 分钟一档，最长为标准时长的 3 倍且不超过 30 分钟，已取最接近的一档`);
+    }
+  }
+  next = keepWalkMinutes(next, indicatorIds);
 
   const said: string[] = [];
   const scopeChanged = !sameScope(scope, conditions.scope);
@@ -171,7 +192,10 @@ export function interpretCommand(input: string, current: Composition): RunComman
   }
   const nextConditions = { years: yearList, scope: conditions.scope, indicatorIds };
   for (const key of changedParams(params, next)) {
-    const used = indicatorIds.filter(id => paramApplies(key, id));
+    // 步行时长只写改了的指标；其余参数写所有用得上的
+    const used = indicatorIds.filter(id =>
+      key === 'walk' ? params.walkMinutes[id] !== next.walkMinutes[id] : paramApplies(key, id)
+    );
     const kindText = isStandard(key, next) ? '（标准口径）' : '（自定义口径）';
     said.push(
       `${PARAM_LABELS[key]}改为「${describeParam(key, next)}」${kindText}，影响${used.map(shortOf).join('、')}`
@@ -196,6 +220,18 @@ export function interpretCommand(input: string, current: Composition): RunComman
   return { kind: 'none', notes };
 }
 
+// 步行时长的快捷说法：都是标准时长时建议改第一项，改过时建议改回
+function walkSuggestion({ conditions, params }: Composition): string {
+  if (!isStandard('walk', params)) {
+    return '步行时长改回标准';
+  }
+  const indicator = conditions.indicatorIds.map(simulationIndicator).find(item => standardWalkMinutes(item) !== null);
+  const minutes = indicator && walkOptions(indicator).find(item => item >= 10 && item !== standardWalkMinutes(indicator));
+  return indicator && minutes !== undefined
+    ? `${indicator.short.replace('覆盖率', '')}改为步行 ${minutes} 分钟`
+    : '步行时长改回标准';
+}
+
 /** 对话栏上方的快捷说法：按当前的条件、参数和推演状态给几条 */
 export function commandSuggestions(composition: Composition, phase: 'running' | 'paused' | 'done'): string[] {
   const { conditions, params } = composition;
@@ -213,6 +249,9 @@ export function commandSuggestions(composition: Composition, phase: 'running' | 
   }
   if (uses('popChange')) {
     list.push(params.popChange === 0 ? '常住人口增加 10%' : '人口不变');
+  }
+  if (uses('walk')) {
+    list.push(walkSuggestion(composition));
   }
   // 自定义范围下不建议加城市（会改为行政区划）；行政区划下有记下的自定义范围时建议切回
   if (scope.kind === 'cities') {

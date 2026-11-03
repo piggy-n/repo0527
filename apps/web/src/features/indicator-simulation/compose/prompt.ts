@@ -1,8 +1,16 @@
 import { JIANGSU_CITIES, shortRegionName } from '@/shared/map/region/region-catalog';
 import { SIMULATION_INDICATORS, simulationIndicator } from '../model/indicators';
-import { defaultParams, paramApplies, POP_CHANGE_RANGE, type SimulationParams } from '../model/params';
+import {
+  defaultParams,
+  indicatorName,
+  paramApplies,
+  POP_CHANGE_RANGE,
+  type SimulationParams,
+  withWalkMinutes
+} from '../model/params';
 import { areaLabel, areaScope, citiesScope, type ScopeArea, type SimulationScope } from '../model/scope';
 import { type Composition, emptyComposition, rememberedScopes, SIMULATION_YEARS, withScope } from './composition';
+import { applyWalk, coreName, findWalk, walkStem } from './walk-prompt';
 
 /** 三条示例指令：每条是"推演条件 + 至多一个参数"，分别用到计算规程、覆盖认定、常住人口变化 */
 export const PROMPT_EXAMPLES: readonly string[] = [
@@ -16,15 +24,13 @@ const DEFAULT_YEAR = 2025;
 
 const ALL_CITIES = JIANGSU_CITIES.map(city => city.code);
 
-// 指标的关键词：全称、简称，以及去掉服务范围和"覆盖率""面积"的核心名称（如"社区卫生服务设施"）
+// 指标的关键词：全称、简称、去掉服务范围和"覆盖率""面积"的核心名称（如"社区卫生服务设施"），
+// 步行类还有简称的词干（如"社区卫生"，"社区卫生改为步行 10 分钟"）
 function indicatorKeywords(): { readonly id: string; readonly word: string }[] {
   return SIMULATION_INDICATORS.flatMap(item => {
-    const core = item.name
-      .replace(/步行\d+分钟/, '')
-      .replace(/\d+分钟(可达|出警)?/, '')
-      .replace(/\d+(公里|千米)(服务)?/, '')
-      .replace(/(覆盖率|面积)$/, '');
-    return [...new Set([item.name, item.short, core])].map(word => ({ id: item.id, word }));
+    const stem = walkStem(item);
+    const words = [item.name, item.short, coreName(item), ...(stem === null ? [] : [stem])];
+    return [...new Set(words)].map(word => ({ id: item.id, word }));
   }).toSorted((a, b) => b.word.length - a.word.length);
 }
 
@@ -48,7 +54,7 @@ export function findIndicators(text: string): string[] {
   return found.toSorted((a, b) => a.at - b.at).map(item => item.id);
 }
 
-// 参数只认三种写法，而且只在所选指标用得上时才改，其余保持标准口径
+// 参数只认这几种写法，而且只在所选指标用得上时才改，其余保持标准口径
 function findParams(text: string, indicatorIds: readonly string[]): SimulationParams {
   const uses = (key: 'rule' | 'recognition' | 'popChange') => indicatorIds.some(id => paramApplies(key, id));
   const standard = defaultParams();
@@ -59,12 +65,14 @@ function findParams(text: string, indicatorIds: readonly string[]): SimulationPa
     const size = Math.min(POP_CHANGE_RANGE.max, stepped);
     popChange = /减少|下降|降低/.test(pop[1] ?? '') ? -size : size;
   }
-  return {
+  const found: SimulationParams = {
     ...standard,
     rule: text.includes('旧规程') && uses('rule') ? 'old' : standard.rule,
     recognition: text.includes('相交') && uses('recognition') ? 'intersect' : standard.recognition,
     popChange
   };
+  const walk = findWalk(text);
+  return walk ? applyWalk(found, walk, indicatorIds).params : found;
 }
 
 /** 句子里提到的城市（按区划目录排序）；写了"全省""江苏"时是全部 13 个市 */
@@ -137,7 +145,7 @@ export function describeComposition({ conditions, params }: Composition): string
   } else {
     scope = names.length <= 2 ? names.join('、') : `${names[0]}等 ${names.length} 个市`;
   }
-  const name = simulationIndicator(first).name;
+  const name = indicatorName(first, params);
   const subject = indicatorIds.length === 1 ? name : `${name}等 ${indicatorIds.length} 项指标`;
   const uses = (key: 'rule' | 'recognition' | 'popChange') => indicatorIds.some(id => paramApplies(key, id));
   const ways = [
@@ -155,8 +163,11 @@ export function describeComposition({ conditions, params }: Composition): string
     : `${lead}计算 ${yearsText} 年${scope}${subject}`;
 }
 
-/** 随机指令里一定有的指标：社区卫生服务设施覆盖率，计算规程、覆盖认定都能演示 */
+/** 随机指令里一定有的指标：社区卫生服务设施覆盖率，计算规程、覆盖认定、步行时长都能演示 */
 export const ANCHOR_INDICATOR = 'A-31';
+
+// 随机指令里演示的步行时长：社区卫生的标准是 15 分钟
+const RANDOM_WALK_MINUTES: readonly number[] = [5, 10, 20, 30];
 
 // 从列表里不重复地取 count 个，保持原来的先后
 function sampleOf<T>(items: readonly T[], count: number, random: () => number): T[] {
@@ -190,7 +201,13 @@ export function randomPrompt(
     const cities = random() < 0.15 ? null : sampleOf(JIANGSU_CITIES, 1 + Math.floor(random() * 3), random);
     const others = SIMULATION_INDICATORS.filter(item => item.id !== ANCHOR_INDICATOR);
     const indicators = [simulationIndicator(ANCHOR_INDICATOR), ...sampleOf(others, Math.floor(random() * 3), random)];
-    const ways = ['旧规程', '相交', ...(indicators.some(item => item.model === 'perCapita') ? ['人口'] : []), '标准'];
+    const ways = [
+      '旧规程',
+      '相交',
+      '时长',
+      ...(indicators.some(item => item.model === 'perCapita') ? ['人口'] : []),
+      '标准'
+    ];
     const way = ways[Math.min(ways.length - 1, Math.floor(random() * ways.length))];
     const percent = (1 + Math.floor(random() * 4)) * POP_CHANGE_RANGE.step;
     const phrase =
@@ -201,7 +218,10 @@ export function randomPrompt(
           : way === '人口'
             ? `按常住人口${random() < 0.5 ? '增加' : '减少'} ${percent}%，`
             : '';
-    const names = joinNames(indicators.map(item => item.name));
+    // 演示步行时长：第一项指标换成另一档，名称里就写着时长
+    const minutes = RANDOM_WALK_MINUTES[Math.floor(random() * RANDOM_WALK_MINUTES.length)] ?? 10;
+    const walked = way === '时长' ? withWalkMinutes(defaultParams(), ANCHOR_INDICATOR, minutes) : defaultParams();
+    const names = joinNames(indicators.map(item => indicatorName(item.id, walked)));
     if (area) {
       text = `${phrase}计算${areaLabel(area)} ${years.join('、')} 年${names}`;
     } else {

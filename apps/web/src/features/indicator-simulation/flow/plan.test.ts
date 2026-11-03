@@ -4,7 +4,7 @@ import { formatValue } from '../format';
 import { indicatorResult } from '../model/analysis';
 import { createCalculator } from '../model/calculator';
 import { simulationIndicator } from '../model/indicators';
-import { defaultParams, type SimulationConditions, type SimulationParams } from '../model/params';
+import { defaultParams, type SimulationConditions, type SimulationParams, withWalkMinutes } from '../model/params';
 import { areaScope, citiesScope, scopeDistricts } from '../model/scope';
 import { NANJING_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
@@ -129,5 +129,38 @@ describe('自定义范围的流程图（ADR 0121）', () => {
     );
     const digits = { maximumFractionDigits: 1, minimumFractionDigits: 1 };
     expect(plan.nodes.find(node => node.key === 'pop')?.detail).toBe(`${people.toLocaleString('zh-CN', digits)} 万人`);
+  });
+});
+
+const walking = (indicatorIds = ['A-31']) => ({ ...conditions, indicatorIds });
+
+describe('改过步行时长的流程（ADR 0125）', () => {
+  it('服务范围写改后的时长和距离并标为情景；条件解析写明改了什么；计算节点用改后的简称，对照写标准口径', async () => {
+    const plan = await planOf(withWalkMinutes(defaultParams(), 'A-31', 10), walking());
+    const areas = plan.nodes.filter(node => node.key.startsWith('sa:A-31'));
+    expect(areas.map(node => node.detail)).toEqual(['步行 10 分钟 · 500 米', '步行 10 分钟 · 500 米']);
+    expect(areas.every(node => node.scenario)).toBe(true);
+    const parse = plan.lines.filter(line => line.step === 'parse').map(line => plainText(line.text));
+    expect(parse.join()).toContain('步行时长由 15 分钟（1000 米）改为 10 分钟（500 米）');
+    expect(parse.join()).toContain('社区卫生10分钟覆盖率');
+    expect(plan.nodes.find(node => node.key === 'calc:A-31')?.label).toBe('社区卫生10分钟覆盖率');
+    expect(plan.nodes.find(node => node.key === 'calc:A-31:std')?.detail).toBe('社区卫生覆盖率 · 标准口径');
+  });
+
+  it('旧规程：服务中心跟随设定的时长，站点仍是 5 分钟', async () => {
+    const plan = await planOf({ ...withWalkMinutes(defaultParams(), 'A-31', 20), rule: 'old' }, walking());
+    const areas = plan.nodes.filter(node => node.key.startsWith('sa:A-31'));
+    expect(areas.map(node => node.detail)).toEqual(['步行 20 分钟 · 1.33 公里', '步行 5 分钟（旧规程） · 300 米']);
+  });
+
+  it('没改时不写时长的变化，服务范围不是情景；只改了别的指标时这项不受影响', async () => {
+    const plain = await planOf(defaultParams(), walking());
+    expect(plain.lines.map(line => plainText(line.text)).join()).not.toContain('步行时长由');
+    const other = await planOf(withWalkMinutes(defaultParams(), 'A-33', 20), walking(['A-31', 'A-33']));
+    expect(other.nodes.find(node => node.key === 'sa:A-31:0')?.scenario).toBe(false);
+    expect(other.nodes.find(node => node.key === 'sa:A-33:0')).toMatchObject({
+      detail: '步行 20 分钟 · 1.33 公里',
+      scenario: true
+    });
   });
 });

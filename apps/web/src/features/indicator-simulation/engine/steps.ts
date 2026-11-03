@@ -57,6 +57,7 @@ export const RERUN_DELAY = 800;
 /** 参数项属于哪一步：改了参数，从这一步起重算 */
 export const PARAM_STEP: Readonly<Record<ParamKey, StepId>> = {
   popChange: 'pop',
+  walk: 'spatial',
   rule: 'spatial',
   recognition: 'spatial'
 };

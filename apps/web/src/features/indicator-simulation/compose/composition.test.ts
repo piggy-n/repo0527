@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
-import { defaultParams } from '../model/params';
+import { defaultParams, withWalkMinutes } from '../model/params';
 import { areaScope, citiesScope, scopeCityCodes } from '../model/scope';
 import { NANJING_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
@@ -25,6 +25,18 @@ import {
 const composition = (indicatorIds: readonly string[]): Composition => ({
   conditions: { years: [2026], scope: citiesScope(['320100']), indicatorIds },
   params: defaultParams()
+});
+
+describe('去掉指标时的步行时长（ADR 0125）', () => {
+  it('去掉指标后清掉它的时长：加回来是目录里的名称和标准时长，也不留看不见的设定', () => {
+    const base = { ...withIndicator(emptyComposition(), 'A-31', true) };
+    const custom = { ...base, params: withWalkMinutes(base.params, 'A-31', 10) };
+    const removed = withIndicator(custom, 'A-31', false);
+    expect(removed.params.walkMinutes).toEqual({});
+    expect(withIndicator(removed, 'A-31', true).params.walkMinutes).toEqual({});
+    const other = withIndicator(custom, 'A-33', true);
+    expect(other.params.walkMinutes).toEqual({ 'A-31': 10 });
+  });
 });
 
 describe('条件', () => {

@@ -4,7 +4,7 @@ import type { SimulationModel } from '../composables/useSimulationModel';
 import { formatEstimate, formatEstimateDelta, roundEstimate } from '../format';
 import { indicatorResult } from '../model/analysis';
 import { simulationIndicator } from '../model/indicators';
-import type { SimulationConditions, SimulationParams } from '../model/params';
+import { indicatorName, type SimulationConditions, type SimulationParams } from '../model/params';
 import styles from './ParamEstimate.module.scss';
 
 // 最多列出几项指标
@@ -45,7 +45,7 @@ export const ParamEstimate = defineComponent({
         const b = indicatorResult(after, id);
         // 按显示的精度取整后相减，变化量和改前改后的数对得上
         const delta = roundEstimate(roundEstimate(b.value, indicator) - roundEstimate(a.value, indicator), indicator);
-        return { indicator, a, b, delta };
+        return { indicator, name: indicatorName(id, draft), a, b, delta };
       });
     });
 
@@ -63,12 +63,12 @@ export const ParamEstimate = defineComponent({
       const more = conditions.indicatorIds.length - ROWS;
       return (
         <>
-          {rows.value.map(({ indicator, a, b, delta }) => {
+          {rows.value.map(({ indicator, name, a, b, delta }) => {
             const tone = delta === 0 ? 'flat' : delta > 0 ? 'up' : 'down';
             return (
               <div key={indicator.id} class={styles.row}>
-                <span class={styles.name} title={indicator.name}>
-                  {indicator.name}
+                <span class={styles.name} title={name}>
+                  {name}
                 </span>
                 <span class={styles.values}>
                   <span>{formatEstimate(a.value, indicator)}</span>

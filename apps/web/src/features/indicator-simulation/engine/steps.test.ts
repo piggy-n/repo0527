@@ -46,3 +46,11 @@ describe('restartStep', () => {
     }
   });
 });
+
+describe('步行时长属于空间分析（ADR 0125）', () => {
+  it('改步行时长从空间分析起重算，和规程、认定一样；同时改人口时从更靠前的人口数据起', () => {
+    expect(PARAM_STEP.walk).toBe('spatial');
+    expect(restartStep(['walk'])).toBe('spatial');
+    expect(restartStep(['walk', 'popChange'])).toBe('pop');
+  });
+});
