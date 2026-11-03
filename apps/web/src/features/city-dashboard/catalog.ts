@@ -4,6 +4,7 @@ import {
   type IndicatorCategory,
   INDICATORS
 } from '@/shared/city-indicators/catalog';
+import { indicatorValueSource } from '@/shared/city-indicators/indicator-value';
 import type { City } from './model';
 
 /** 页面开放年份保持旧配置，独立于模拟记录的十年范围 */
@@ -33,9 +34,17 @@ export interface DashboardCategory extends IndicatorCategory {
   readonly indicators: readonly Indicator[];
 }
 
-/** 四类指标只持有目录引用，不复制或生成展示值 */
+// 最新开放年份有简报原数才算有真实数据：超高层的两个分项是折算，不算
+const hasReportData = ({ id }: Indicator) => indicatorValueSource(id, DASHBOARD_YEARS[0]) === 'report';
+
+// 有真实数据的指标排在前面，两部分内部保持目录顺序
+function reportedFirst(indicators: readonly Indicator[]): readonly Indicator[] {
+  return [...indicators.filter(hasReportData), ...indicators.filter(indicator => !hasReportData(indicator))];
+}
+
+/** 四类指标只持有目录引用，不复制或生成展示值；顺序只属于驾驶舱，目录和 AI 计算页不受影响 */
 export const CATEGORIES: readonly DashboardCategory[] = INDICATOR_CATEGORIES.map(({ id, name }) => ({
   id,
   name,
-  indicators: INDICATORS.filter(indicator => indicator.categoryId === id)
+  indicators: reportedFirst(INDICATORS.filter(indicator => indicator.categoryId === id))
 }));
