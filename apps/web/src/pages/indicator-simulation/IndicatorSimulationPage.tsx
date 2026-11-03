@@ -166,6 +166,7 @@ export const IndicatorSimulationPage = defineComponent({
           result={result}
           simulationMap={simulationMap}
           basemap={basemap}
+          boundaries={boundaries}
           goToDefaultView={goToDefaultView}
           mapAvailable={canvasHolder.value === 'result'}
           scopeEditing={scopeEditor.open.value}
@@ -192,7 +193,7 @@ export const IndicatorSimulationPage = defineComponent({
           scope={{ composition, editor: scopeEditor }}
         />
         {/* 弹窗里的地图画布和结果的画布不能同时存在，由 canvasHolder 换手 */}
-        <ScopeAreaDialog editor={scopeEditor} canvasReady={canvasHolder.value === 'scope'} />
+        <ScopeAreaDialog editor={scopeEditor} boundaries={boundaries} canvasReady={canvasHolder.value === 'scope'} />
       </div>
     );
   }

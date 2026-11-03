@@ -12,7 +12,7 @@ import { type PanelGroup, usePanelGroup } from './usePanelGroup';
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 const ORDER = ['region', 'coordinate', 'boundaries', 'legend'] as const;
 type Id = (typeof ORDER)[number];
-const LABELS = { region: '区划定位', coordinate: '坐标定位', boundaries: '行政区', legend: '图例' };
+const LABELS = { region: '区划定位', coordinate: '坐标定位', boundaries: '行政区边界', legend: '图例' };
 
 // 用到的令牌由 app 的样式给出，这里直接写出
 const TOKENS = {
@@ -192,7 +192,7 @@ describe('MapPanelGroup（真实的布局）', () => {
     scroller.scrollTop = scroller.scrollHeight;
     expect(list.getBoundingClientRect().top).toBe(before);
 
-    await ctx.wrapper.get('[aria-label="关闭行政区"]').trigger('click');
+    await ctx.wrapper.get('[aria-label="关闭行政区边界"]').trigger('click');
     expect(ctx.group.isOpen('boundaries')).toBe(false);
     expect(ctx.group.state.value.open).toHaveLength(3);
     for (const label of ['图例', '坐标定位', '区划定位']) {

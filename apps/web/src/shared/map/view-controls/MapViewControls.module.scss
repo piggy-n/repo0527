@@ -71,7 +71,12 @@
   }
 }
 
-// 当前的视图（二维或三维）
+// 窄屏时让给了另一边的浮层，入口只标主色（同业务组）
+.opened {
+  color: var(--color-primary);
+}
+
+// 当前的视图（二维或三维）、正在显示浮层的入口
 .current,
 .current:hover {
   background-color: var(--color-primary-bg);

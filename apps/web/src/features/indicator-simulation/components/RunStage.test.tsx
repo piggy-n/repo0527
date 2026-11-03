@@ -1,8 +1,9 @@
-import { flushPromises, mount } from '@vue/test-utils';
+import { DOMWrapper, flushPromises, mount } from '@vue/test-utils';
 import { provideMap } from '@yzt/map-vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
+import { type Boundaries, useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { JIANGSU_CAMERA } from '@/shared/map/jiangsu';
 import { required } from '@/shared/testing/required';
 import { type Composition, sampleComposition } from '../compose/composition';
@@ -32,6 +33,7 @@ async function mountRun(composition: Composition = sampleComposition()) {
   let run: SimulationRun | undefined;
   let log: ReasoningLog | undefined;
   let owner: SimulationResult | undefined;
+  let boundaries: Boundaries | undefined;
   const view = ref<RunView>('flow');
   const mapAvailable = ref(true);
   const scopeEditing = ref(false);
@@ -48,6 +50,8 @@ async function mountRun(composition: Composition = sampleComposition()) {
       owner = result;
       const simulationMap = useSimulationMap(owned, map, result);
       const basemap = useBasemap({ tianditu: null });
+      const ownedBoundaries = useBoundaries();
+      boundaries = ownedBoundaries;
       return () => (
         <RunStage
           run={owned}
@@ -58,6 +62,7 @@ async function mountRun(composition: Composition = sampleComposition()) {
           result={result}
           simulationMap={simulationMap}
           basemap={basemap}
+          boundaries={ownedBoundaries}
           goToDefaultView={() => undefined}
           mapAvailable={mapAvailable.value}
           scopeEditing={scopeEditing.value}
@@ -72,7 +77,17 @@ async function mountRun(composition: Composition = sampleComposition()) {
   required(log, '时间线').begin([{ speaker: 'user', text: '计算全省三项指标' }]);
   started.start(composition, calculator);
   await flushPromises();
-  return { wrapper, run: started, log: required(log, '时间线'), result: required(owner, '结果的拥有者'), view, clock, mapAvailable, scopeEditing };
+  return {
+    wrapper,
+    run: started,
+    log: required(log, '时间线'),
+    result: required(owner, '结果的拥有者'),
+    boundaries: required(boundaries, '行政区边界的拥有者'),
+    view,
+    clock,
+    mapAvailable,
+    scopeEditing
+  };
 }
 
 type Mounted = Awaited<ReturnType<typeof mountRun>>;
@@ -99,6 +114,12 @@ const item = ({ wrapper }: Mounted, name: string) =>
     wrapper.findAll('[aria-expanded]').find(head => head.text().startsWith(name)),
     `"${name}"这一条`
   );
+
+// 行政区边界的浮层挂在 body 下
+const boundariesPopover = () => {
+  const element = document.querySelector('[data-map-options="boundaries"]');
+  return element instanceof HTMLElement ? new DOMWrapper(element) : null;
+};
 
 afterEach(() => {
   vi.useRealTimers();
@@ -218,6 +239,30 @@ describe('RunStage', () => {
     await wrapper.get('[aria-label="主区视图"] input[value="flow"]').setValue(true);
     expect(view.value).toBe('flow');
     expect(titles(mounted)).toContain('AI计算');
+  });
+
+  it('行政区边界在结果地图的控制栏（ADR 0128）：勾选改页面的拥有者；切到计算流程时浮层隐藏，切回来还在', async () => {
+    const mounted = await mountRun();
+    const { wrapper, view, boundaries } = mounted;
+    await advance(mounted, ENOUGH);
+    await button(mounted, '查看结果').trigger('click');
+    const entry = () => wrapper.get('[aria-label="地图视角"] button[aria-label="行政区边界"]');
+
+    await entry().trigger('click');
+    expect(entry().attributes('aria-pressed')).toBe('true');
+    await vi.waitFor(() => expect(boundariesPopover()?.isVisible()).toBe(true));
+    await boundariesPopover()?.get('label[aria-label="县界"] input').setValue(true);
+    expect(boundaries.visible.value.county).toBe(true);
+
+    view.value = 'flow';
+    await flushPromises();
+    expect(entry().attributes('aria-pressed')).toBe('false');
+    await vi.waitFor(() => expect(boundariesPopover()?.isVisible() ?? false).toBe(false));
+
+    view.value = 'result';
+    await flushPromises();
+    expect(entry().attributes('aria-pressed')).toBe('true');
+    await vi.waitFor(() => expect(boundariesPopover()?.isVisible()).toBe(true));
   });
 
   it('看结果：换指标、年度，悬停一市（地图描边）、点一市放大、返回计算范围；调整条件回到条件配置', async () => {

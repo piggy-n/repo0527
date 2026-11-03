@@ -23,9 +23,9 @@
 | `basemap/BasemapPanel.tsx` | 底图的切换：三张缩略图只写类型、当前底图的透明度（设计稿 5D.4） |
 | `basemap/BasemapCard.tsx` | 底图入口：当前底图的缩略图卡片，点开是左侧的底图浮层；开关由页面持有，现状底图、数据查询、指标、AI 对话、指标 AI 计算共用（ADR 0111） |
 | `popover/MapOptionsPopover.tsx` | 底图左侧箭头 Popover：入口切换、透明度、关闭与定位避让，定位后报告顶部，开关由页面持有（ADR 0070） |
-| `OpacityToggle.tsx` | 底图与行政区共用的透明度展开图标，选中状态独立于 Tooltip |
+| `OpacityToggle.tsx` | 底图与行政区边界共用的透明度展开图标，选中状态独立于 Tooltip |
 | `tooltip.ts` | 地图 Tooltip 的统一显隐参数，避免快速扫过图标时延迟关闭与淡出重叠 |
-| `boundary/BoundarySettingsPanel.tsx` | 行政区标签内容，复用原边界面板与透明度入口 |
+| `boundary/BoundarySettingsPanel.tsx` | 现状底图的行政区边界标签内容，复用原边界面板与透明度入口 |
 | `panel-group/panel-stack.ts`、`usePanelStack.ts` | 同列功能与详情的高度分配、手动收起和小高度下的自动收起 |
 | `basemap/BasemapThumbnail.tsx` | 底图的缩略图：注记叠在底图上、对准南京；无底图是浅色方格与居中禁用图标（面板和底图卡共用） |
 | `boundary/data/` | 省、市、县界的 GeoJSON，由转换脚本生成（见"行政区边界的数据"） |
@@ -38,7 +38,7 @@
 | `view-controls/useZoomButtons.ts` | 基础组的层级与放大、缩小：每次 ±1，连续点击累计，被别的相机操作作废后重新开始 |
 | `view-controls/compass.ts` | 指北针的提示（转过时写出角度）和图标要转的角度（纯函数，ADR 0058） |
 | `view-controls/useCompassButton.ts` | 指北针：旋转和俯仰回到 0，中心和级别不变 |
-| `view-controls/MapViewControls.tsx` | 基础组：层级、放大、缩小、指北针、默认视角、2D/3D（不支持三维的页面没有）（ADR 0053 第 3 节、ADR 0058、ADR 0111） |
+| `view-controls/MapViewControls.tsx` | 基础组：层级、放大、缩小、指北针、行政区边界（页面给出拥有者才有）、默认视角、2D/3D（不支持三维的页面没有）（ADR 0053 第 3 节、ADR 0058、ADR 0111、ADR 0128） |
 | `status-bar/status-bar.ts` | 状态栏的纯函数：比例尺的整齐长度、视点高度的写法、显示的角度、放不下时的取舍（ADR 0053 第 5 节、ADR 0080 第 6 节） |
 | `status-bar/useMapReadout.ts` | 状态栏的读数：比例尺（三维是视点高度）、鼠标所在或画布中心的经纬度、角度，步行时的朝向，从地图上下文推导 |
 | `status-bar/MapStatusBar.tsx` | 左下角的状态栏：只显示，按量出的宽度取舍 |
@@ -218,7 +218,7 @@ boundaries.setOpacity(0.6);
 - `useBoundaries()` 的写法与 `useBasemap()` 相同：状态是一个 `shallowRef`，值没变时不替换；透明度不是 0～1 之间的有限数时抛错。三级都关闭时仍可以改透明度
 - 进入页面时只显示省界；指标页（阶段六）要四项全开时再加初始值的参数
 - 记住选择（5C.3，ADR 0042）：`useBoundaries({ preferences })` 读到存下的三个级别和透明度后整体替换一次（`boundary-preference.ts` 的 schema 校验通过才用），之后的修改防抖写入
-- 面板 `BoundaryPanel`（设计稿 5D.4）：常规宽度三级横排，窄屏自动换行，勾选框后面是这一级的线型示意（ADR 0057：24 宽的 SVG，从下到上叠同样的几条线，高度放得下最宽的一条；色带的虚化只有 1 像素，不画；虚线的线段和间隔按线宽换算，圆头画在线段外面，和 MapLibre 的圆头虚线一样）；文字只显示省 / 市 / 县，`aria-label` 保留省界 / 市界 / 县界。同一行的 `actions` 插槽用细线分隔透明度操作；透明度用共用的 `OpacitySlider`，没有打开任何级别时没有这一行。复选框组给出勾选的全部值，按级别逐一 `setVisible`，值没变的级别不替换状态。现状底图用 `BoundarySettingsPanel` 放进功能标签，不重复标题，透明度默认收起，切走或收起功能面板后恢复收起；关闭标签不清空边界选择（ADR 0070）
+- 面板 `BoundaryPanel`（设计稿 5D.4）：常规宽度三级横排，窄屏自动换行，勾选框后面是这一级的线型示意（ADR 0057：24 宽的 SVG，从下到上叠同样的几条线，高度放得下最宽的一条；色带的虚化只有 1 像素，不画；虚线的线段和间隔按线宽换算，圆头画在线段外面，和 MapLibre 的圆头虚线一样）；文字只显示省 / 市 / 县，`aria-label` 保留省界 / 市界 / 县界。同一行的 `actions` 插槽用细线分隔透明度操作；透明度用共用的 `OpacitySlider`，没有打开任何级别时没有这一行。复选框组给出勾选的全部值，按级别逐一 `setVisible`，值没变的级别不替换状态。现状底图用 `BoundarySettingsPanel` 放进功能标签，不重复标题，透明度默认收起，切走或收起功能面板后恢复收起；关闭标签不清空边界选择（ADR 0070）；其他地图页放在基础组入口的浮层里（ADR 0128，见"基础组"）
 
 ### 浏览器验证（2026-10-10）
 
@@ -288,6 +288,7 @@ boundaries.setOpacity(0.6);
 - 页面不传 `dimension` 时（不支持三维）不显示 2D/3D 和它前面的分隔线，默认视角是最后一段（ADR 0111；原来 3D 照常显示、`aria-disabled`，提示"三维暂未开放"）
 - 页面传了 `dimension`（`ViewKind`）时两格都可用：当前的一格高亮，点另一格发出 `update:dimension`，点当前的不发；切换本身和切换时换底图都由页面决定（三维原型 `/dev/map-3d` 已使用，业务页在三维阶段接入）
 - `defaultView`（默认 true）为 false 时不显示默认视角和它下面的分隔线：现状底图在地下空间时传 false，飞到全省会离开模型（ADR 0084）
+- 行政区边界（ADR 0128）：页面传 `boundaries` 才有这个入口，排在指北针一段和默认视角之间，整组 223 高（没有 2D/3D 时）。开关由页面持有，写法同底图卡：`boundariesOpen`、`update:boundariesOpen`，窄屏让给另一边时 `boundariesVisible` 为 false，页面把 `boundariesOpen` 计入 `useSideExclusion` 的 `rightOpen`。点开是 `MapOptionsPopover`（`placement="left-end"`）+ `BoundaryPanel`（`showOpacity={false}`）；现状底图的入口在业务组，不传。名称和图标取 `TOOLBAR_ACTIONS.boundaries`，和业务组是同一条
 - 滚轮和触控板的缩放速率 `SCROLL_ZOOM_RATES`：滚轮 1/600、触控板 1/150（MapLibre 默认 1/450、1/100），首轮先调低灵敏度，用普通鼠标和触控板实际试过后再定。画布的 `scrollZoomRates` 只在创建地图时生效，由适配器设到 MapLibre 的 `scrollZoom` 上
 
 ## 状态栏（ADR 0053 第 5 节）

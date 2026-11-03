@@ -3,7 +3,6 @@ import { provideMap } from '@yzt/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, shallowRef } from 'vue';
 import { JIANGSU_CAMERA } from '@/shared/map/jiangsu';
-import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { required } from '@/shared/testing/required';
 import type { IndicatorResultOwner, IndicatorResultState, ResultLayerView } from '../composables/useIndicatorResult';
 import type { IndicatorLeaf } from '../indicator-tree';
@@ -65,8 +64,7 @@ function mountPanel(initial: IndicatorResultState) {
   const fake = fakeOwner(initial);
   const Page = defineComponent(() => {
     provideMap({ groups: ['boundaries'], camera: JIANGSU_CAMERA });
-    const boundaries = useBoundaries();
-    return () => <IndicatorResultPanel result={fake.owner} boundaries={boundaries} />;
+    return () => <IndicatorResultPanel result={fake.owner} />;
   });
   return { wrapper: mount(Page), ...fake };
 }
@@ -84,7 +82,7 @@ describe('IndicatorResultPanel', () => {
     expect(wrapper.text()).toContain('40.04%');
     const rows = wrapper.findAll('li');
     const names = rows.map(row => row.get('.el-checkbox').text());
-    expect(names.slice(-3)).toEqual(['社区小学', '路网', '城区范围面']);
+    expect(names).toEqual(['社区小学', '路网', '城区范围面']);
     const school = required(rows.at(-3), '社区小学');
     expect(school.find('svg[aria-label="旗子"]').exists()).toBe(true);
     expect(school.find('.el-color-picker').exists()).toBe(false);
@@ -92,6 +90,13 @@ describe('IndicatorResultPanel', () => {
 
     await required(rows.at(-2), '路网').get('.el-checkbox input').setValue(false);
     expect(owner.setVisible).toHaveBeenCalledWith('roads', false);
+  });
+
+  it('不再有行政区边界的控制，统一在地图工具栏（ADR 0128）', () => {
+    const { wrapper } = mountPanel(READY);
+
+    expect(wrapper.text()).not.toContain('行政区');
+    expect(wrapper.find('[aria-label="行政区边界"]').exists()).toBe(false);
   });
 
   it('改过颜色的子图层才能恢复默认', async () => {

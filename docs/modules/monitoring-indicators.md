@@ -20,12 +20,12 @@ features/monitoring-indicators/
    ├─ IndicatorPanel          左侧面板：页签、计算设置、两棵树、重置与开始计算
    ├─ IndicatorTree           分类页签、搜索、全选、指标的状态或结果
    ├─ CalculationProgressPanel 数据处理进度（地图底部）
-   └─ IndicatorResultPanel    指标成果（地图右上）：计算结果、行政区、子图层与取色
+   └─ IndicatorResultPanel    指标成果（地图右上）：计算结果、子图层与取色
 pages/space-monitoring-indicators/  页面：地图、拥有者、样式绑定、面板的位置和窄屏取舍
 pages/dev/monitoring-indicators/    组件样例：正式页面换上固定数据的接口（demo-api.ts）
 ```
 
-页面之外不依赖这个 feature；底图、行政区、视图控件、底图卡片都用 `shared/map` 的现有能力，没有改动它们。
+页面之外不依赖这个 feature；底图、行政区边界、视图控件、底图卡片都用 `shared/map` 的现有能力。行政区边界由页面持有（默认省、市、县界都显示），入口在右下的控制栏，两个页签都能用，不在 feature 里（ADR 0128，原来在指标成果面板里）。
 
 ## 数据从哪里来
 

@@ -1,8 +1,10 @@
 import type { CameraState } from '@yzt/map-core';
 import { provideMap } from '@yzt/map-vue';
-import { mount, type VueWrapper } from '@vue/test-utils';
-import { describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
+import { DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
+import { ElSlider } from 'element-plus';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { defineComponent, nextTick, ref } from 'vue';
+import { useBoundaries } from '../boundary/useBoundaries';
 import { MapViewControls } from './MapViewControls';
 
 const RANGE = { minZoom: 5, maxZoom: 18 };
@@ -19,6 +21,34 @@ function mountControls(zoom: number, bearing = 0) {
 }
 
 const button = (wrapper: VueWrapper, label: string) => wrapper.get(`button[aria-label="${label}"]`);
+
+function mountWithBoundaries() {
+  const boundaries = useBoundaries();
+  const open = ref(false);
+  const visible = ref(true);
+  const camera: CameraState = { center: [119.4, 32.9], zoom: 10, bearing: 0, pitch: 0 };
+  const Page = defineComponent(() => {
+    provideMap({ groups: ['basemap'], camera });
+    return () => (
+      <MapViewControls
+        goToDefaultView={() => undefined}
+        zoomRange={RANGE}
+        boundaries={boundaries}
+        boundariesOpen={open.value}
+        boundariesVisible={visible.value}
+        onUpdate:boundariesOpen={value => (open.value = value)}
+      />
+    );
+  });
+  return { wrapper: mount(Page, { attachTo: document.body }), boundaries, open, visible };
+}
+
+const entry = (wrapper: VueWrapper) => button(wrapper, '行政区边界');
+const popover = () => {
+  const element = document.querySelector('[data-map-options="boundaries"]');
+  return element instanceof HTMLElement ? new DOMWrapper(element) : null;
+};
+const popoverShown = () => popover()?.isVisible() === true;
 
 describe('MapViewControls', () => {
   it('显示向下取整的层级，完整的级别在提示和无障碍名称里', () => {
@@ -108,5 +138,72 @@ describe('MapViewControls', () => {
     const labels = wrapper.findAll('button').map(item => item.attributes('aria-label'));
     expect(labels).toStrictEqual(['放大', '缩小', '指北针：恢复正北、垂直俯视', '二维', '三维']);
     expect(wrapper.findAll('[role="separator"]')).toHaveLength(2);
+  });
+
+  describe('行政区边界（ADR 0128）', () => {
+    afterEach(() => {
+      // 浮层挂在 body 下，不随组件卸载
+      document.body.innerHTML = '';
+    });
+
+    it('不给拥有者时没有入口（现状底图的入口在业务组）', () => {
+      expect(mountControls(10).wrapper.find('button[aria-label="行政区边界"]').exists()).toBe(false);
+    });
+
+    it('入口在指北针和默认视角之间，各自隔一条分隔线', () => {
+      const { wrapper } = mountWithBoundaries();
+
+      const labels = wrapper.findAll('button').map(item => item.attributes('aria-label'));
+      expect(labels).toStrictEqual(['放大', '缩小', '指北针：恢复正北、垂直俯视', '行政区边界', '默认视角']);
+      expect(wrapper.findAll('[role="separator"]')).toHaveLength(3);
+      expect(entry(wrapper).attributes('aria-pressed')).toBe('false');
+    });
+
+    it('点入口打开浮层，显示省、市、县，勾选改拥有者；再点关闭，勾选还在', async () => {
+      const { wrapper, boundaries, open } = mountWithBoundaries();
+
+      await entry(wrapper).trigger('click');
+      expect(open.value).toBe(true);
+      expect(entry(wrapper).attributes('aria-pressed')).toBe('true');
+      await vi.waitFor(() => expect(popoverShown()).toBe(true));
+      const content = popover();
+      expect(content?.findAll('label').map(label => label.text())).toStrictEqual(['省', '市', '县']);
+      await content?.get('label[aria-label="县界"] input').setValue(true);
+      expect(boundaries.visible.value).toStrictEqual({ province: true, city: false, county: true });
+
+      await entry(wrapper).trigger('click');
+      expect(open.value).toBe(false);
+      expect(entry(wrapper).attributes('aria-pressed')).toBe('false');
+      expect(boundaries.visible.value.county).toBe(true);
+    });
+
+    it('透明度在浮层的操作栏：默认收起，点开后拖动改拥有者；× 关闭浮层', async () => {
+      const { wrapper, boundaries, open } = mountWithBoundaries();
+      await entry(wrapper).trigger('click');
+      await vi.waitFor(() => expect(popoverShown()).toBe(true));
+      expect(popover()?.find('.el-slider').exists()).toBe(false);
+
+      await popover()?.get('button[aria-label="调整行政区边界透明度"]').trigger('click');
+      wrapper.getComponent(ElSlider).vm.$emit('update:modelValue', 40);
+      await nextTick();
+      expect(boundaries.opacity.value).toBe(0.4);
+      expect(popover()?.text()).toContain('40%');
+
+      await popover()?.get('button[aria-label="关闭行政区边界"]').trigger('click');
+      expect(open.value).toBe(false);
+    });
+
+    it('让给另一边时不显示为按下、只标主色；这时点入口是重新显示，不是关闭', async () => {
+      const { wrapper, open, visible } = mountWithBoundaries();
+      await entry(wrapper).trigger('click');
+
+      visible.value = false;
+      await nextTick();
+      expect(entry(wrapper).attributes('aria-pressed')).toBe('false');
+      expect(entry(wrapper).classes().join(' ')).toContain('_opened_');
+
+      await entry(wrapper).trigger('click');
+      expect(open.value).toBe(true);
+    });
   });
 });

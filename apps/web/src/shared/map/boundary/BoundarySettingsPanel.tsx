@@ -3,7 +3,7 @@ import { OpacityToggle } from '../OpacityToggle';
 import { BoundaryPanel } from './BoundaryPanel';
 import type { Boundaries } from './useBoundaries';
 
-/** 行政区标签中的设置，切走或收起时结束透明度展开 */
+/** 行政区边界标签中的设置，切走或收起时结束透明度展开 */
 export const BoundarySettingsPanel = defineComponent({
   name: 'BoundarySettingsPanel',
   props: {
@@ -25,7 +25,11 @@ export const BoundarySettingsPanel = defineComponent({
       <BoundaryPanel boundaries={props.boundaries} showOpacity={opacityOpen.value}>
         {{
           actions: () => [
-            <OpacityToggle label="行政区" open={opacityOpen.value} onUpdate:open={open => (opacityOpen.value = open)} />
+            <OpacityToggle
+              label="行政区边界"
+              open={opacityOpen.value}
+              onUpdate:open={open => (opacityOpen.value = open)}
+            />
           ]
         }}
       </BoundaryPanel>

@@ -41,7 +41,7 @@ const FUNCTION_PANELS = ['boundaries', 'legend', 'region-locate', 'coordinate-lo
 const PANEL_LABELS = {
   'region-locate': '区划定位',
   'coordinate-locate': '坐标定位',
-  boundaries: '行政区',
+  boundaries: '行政区边界',
   legend: '图例'
 };
 

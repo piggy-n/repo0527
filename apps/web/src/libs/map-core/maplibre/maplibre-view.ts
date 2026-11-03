@@ -298,9 +298,6 @@ export class MapLibreView<const G extends string> implements MapView {
   resume(): void {
     this.#assertAlive();
     this.#active = true;
-    // 容器离开文档、宽高为 0 时 MapLibre 使用默认尺寸；恢复时先按实际尺寸调整，避免排队的定位使用旧尺寸
-    // 尺寸监听要到下一帧才重新量，原因与实测更正见 map-core.md 的 pause/resume 说明（ADR 0063）
-    this.#map?.resize();
     if (this.#state === 'paused' && this.#map !== undefined) {
       this.#activate(this.#map);
     }
@@ -450,6 +447,9 @@ export class MapLibreView<const G extends string> implements MapView {
 
   // 首次进入 ready 和恢复显示共用：先追上样式，相机先跟随会话、再把地图的实际值写回，最后才进入 ready
   #activate(map: MapLike): void {
+    // 容器离开文档、还没显示（宽高为 0）时 MapLibre 使用默认的 400×300，尺寸监听要到下一帧才重新量；
+    // 先按实际尺寸调整，否则就绪时排队的定位按旧尺寸算，动画途中才变大，目标会停在旧尺寸的中心（见 map-core.md 的激活说明）
+    map.resize();
     this.#catchUp(map);
     if (this.#mapStyle.status !== 'loaded') {
       // 追赶时触发了整体重建：中止激活，等 style.load 后再激活，重建失败则进入 failed

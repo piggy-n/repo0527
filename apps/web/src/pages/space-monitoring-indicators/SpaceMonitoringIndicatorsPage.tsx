@@ -41,7 +41,7 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
       camera: JIANGSU_CAMERA
     });
     const { goToDefaultView } = useDefaultView(map);
-    // 底图和行政区不记偏好，不影响现状底图记住的选择；行政区默认省、市、县界都显示（同旧页面）
+    // 底图和行政区边界不记偏好，不影响现状底图记住的选择；默认省、市、县界都显示（同旧页面）
     const basemap = useBasemap();
     const boundaries = useBoundaries();
     boundaries.setVisible('city', true);
@@ -69,11 +69,13 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
 
     const collapsed = ref(false);
     const basemapOpen = ref(false);
-    // 窄屏时指标面板和其余的面板（底图、成果、进度）只显示最后操作的一边
+    const boundariesOpen = ref(false);
+    // 窄屏时指标面板和其余的面板（底图、行政区边界、成果、进度）只显示最后操作的一边
     const sides = useSideExclusion({
       leftExpanded: () => !collapsed.value,
       rightOpen: () =>
         basemapOpen.value ||
+        boundariesOpen.value ||
         (tab.value === 'result' && result.state.value.kind !== 'none') ||
         (tab.value === 'calculation' && calculation.task.value !== null)
     });
@@ -94,6 +96,12 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
     };
     const changeBasemapOpen = (open: boolean) => {
       basemapOpen.value = open;
+      if (open) {
+        sides.activate('right');
+      }
+    };
+    const changeBoundariesOpen = (open: boolean) => {
+      boundariesOpen.value = open;
       if (open) {
         sides.activate('right');
       }
@@ -145,7 +153,7 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
           </div>
           {tab.value === 'result' && (
             <div key="lane" class={styles.lane}>
-              <IndicatorResultPanel result={result} boundaries={boundaries} visible={sides.right.value} />
+              <IndicatorResultPanel result={result} visible={sides.right.value} />
             </div>
           )}
           {tab.value === 'calculation' && (
@@ -154,7 +162,14 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
             </div>
           )}
           <div key="controls" class={styles.controls}>
-            <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
+            <MapViewControls
+              goToDefaultView={goToDefaultView}
+              zoomRange={JIANGSU_ZOOM_RANGE}
+              boundaries={boundaries}
+              boundariesOpen={boundariesOpen.value}
+              boundariesVisible={sides.right.value}
+              onUpdate:boundariesOpen={changeBoundariesOpen}
+            />
           </div>
           {renderBasemapCard()}
         </div>

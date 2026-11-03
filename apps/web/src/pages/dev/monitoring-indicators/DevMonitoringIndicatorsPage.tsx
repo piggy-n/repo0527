@@ -29,7 +29,7 @@ const DEMO_GUARD: SessionGuard = {
 };
 
 /**
- * 监测指标的组件样例：真实页面换上固定数据的接口，地图、底图和行政区是真的，不请求后端；
+ * 监测指标的组件样例：真实页面换上固定数据的接口，地图、底图和行政区边界是真的，不请求后端；
  * 成果的矢量瓦片没有数据，地图上只有区划定位，子图层的显隐、改色在面板和图例上看
  */
 export const DevMonitoringIndicatorsPage = defineComponent({
