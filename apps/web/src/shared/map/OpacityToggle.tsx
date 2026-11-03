@@ -4,7 +4,7 @@ import { SvgIcon } from '../icons/SvgIcon';
 import { MAP_TOOLTIP_PROPS } from './tooltip';
 import styles from './OpacityToggle.module.scss';
 
-/** 底图与行政区共用的透明度展开按钮，选中样式不受 Tooltip 状态影响 */
+/** 底图与行政区边界共用的透明度展开按钮，选中样式不受 Tooltip 状态影响 */
 export const OpacityToggle = defineComponent({
   name: 'OpacityToggle',
   props: {

@@ -22,7 +22,7 @@ const RESULT_MAX_ZOOM = 14;
 
 /**
  * AI 对话：左侧对话面板，右侧上方是地图、下方是查询结果；最小迁移的范围与待办见 docs/modules/ai-chat.md。
- * 地图有底图（可以切换，不读写偏好）、省界和回答里的 GeoJSON
+ * 地图有底图（可以切换，不读写偏好）、行政区边界（默认省界，入口在控制栏，ADR 0128）和回答里的 GeoJSON
  */
 export const AiChatPage = defineComponent({
   name: 'AiChatPage',
@@ -47,11 +47,13 @@ export const AiChatPage = defineComponent({
     const resultExpanded = ref(false);
     const resultMaximized = ref(false);
     const basemapOpen = ref(false);
-    // 结果最大化时地图只剩一条，控制栏和底图都不显示，底图浮层一并关上
+    const boundariesOpen = ref(false);
+    // 结果最大化时地图只剩一条，控制栏和底图都不显示，两个浮层一并关上
     const changeMaximized = (value: boolean) => {
       resultMaximized.value = value;
       if (value) {
         basemapOpen.value = false;
+        boundariesOpen.value = false;
       }
     };
     watch(chat.latest, latest => {
@@ -76,12 +78,20 @@ export const AiChatPage = defineComponent({
                   {/* 结果最大化时地图只剩一条，放不下控制栏和底图卡片 */}
                   {!resultMaximized.value && (
                     <div class={styles.corner}>
-                      <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
-                      <BasemapCard
-                        basemap={basemap}
-                        open={basemapOpen.value}
-                        onUpdate:open={open => (basemapOpen.value = open)}
+                      <MapViewControls
+                        goToDefaultView={goToDefaultView}
+                        zoomRange={JIANGSU_ZOOM_RANGE}
+                        boundaries={boundaries}
+                        boundariesOpen={boundariesOpen.value}
+                        onUpdate:boundariesOpen={open => (boundariesOpen.value = open)}
                       />
+                      <div class={styles.basemap}>
+                        <BasemapCard
+                          basemap={basemap}
+                          open={basemapOpen.value}
+                          onUpdate:open={open => (basemapOpen.value = open)}
+                        />
+                      </div>
                     </div>
                   )}
                   <MapStatusNotice />

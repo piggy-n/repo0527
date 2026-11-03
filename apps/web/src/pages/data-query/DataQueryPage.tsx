@@ -32,7 +32,7 @@ const DataQueryView = defineComponent({
       camera: JIANGSU_CAMERA
     });
     const { goToDefaultView } = useDefaultView(map);
-    // 底图和行政区不记偏好，不影响现状底图记住的选择；行政区默认只显示省界（同旧页面）
+    // 底图和行政区边界不记偏好，不影响现状底图记住的选择；默认只显示省界（同旧页面）
     const basemap = useBasemap();
     const boundaries = useBoundaries();
     const query = useDataQuery({ topic: props.topic, map, onDrawSubmit: notifySubmit });
@@ -49,11 +49,12 @@ const DataQueryView = defineComponent({
 
     const collapsed = ref(false);
     const basemapOpen = ref(false);
+    const boundariesOpen = ref(false);
     const resultView = ref<ResultView>('expanded');
-    // 窄屏时查询面板和其余的（结果、底图）只显示最后操作的一边
+    // 窄屏时查询面板和其余的（结果、底图、行政区边界）只显示最后操作的一边
     const sides = useSideExclusion({
       leftExpanded: () => !collapsed.value,
-      rightOpen: () => basemapOpen.value || query.result.request.value !== null
+      rightOpen: () => basemapOpen.value || boundariesOpen.value || query.result.request.value !== null
     });
 
     // 每次查询都展开结果（同旧页面），窄屏时显示结果
@@ -81,6 +82,12 @@ const DataQueryView = defineComponent({
         sides.activate('right');
       }
     };
+    const changeBoundariesOpen = (open: boolean) => {
+      boundariesOpen.value = open;
+      if (open) {
+        sides.activate('right');
+      }
+    };
 
     const hasResult = () => query.result.request.value !== null;
 
@@ -97,7 +104,14 @@ const DataQueryView = defineComponent({
             onUpdate:open={changeBasemapOpen}
           />
         </div>
-        <MapViewControls goToDefaultView={goToDefaultView} zoomRange={JIANGSU_ZOOM_RANGE} />
+        <MapViewControls
+          goToDefaultView={goToDefaultView}
+          zoomRange={JIANGSU_ZOOM_RANGE}
+          boundaries={boundaries}
+          boundariesOpen={boundariesOpen.value}
+          boundariesVisible={sides.right.value}
+          onUpdate:boundariesOpen={changeBoundariesOpen}
+        />
       </div>
     );
 

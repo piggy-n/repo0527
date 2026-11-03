@@ -1,6 +1,6 @@
 import type { Feature, FeatureCollection, Polygon } from 'geojson';
 import { LngLat as MapLibreLngLat, Map as MapLibreMap } from 'maplibre-gl';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
 import { MapSession } from '../session/map-session';
 import type { StyleImage } from '../style/style-image';
@@ -73,10 +73,13 @@ async function dragRight(map: MapLibreMap, button: 0 | 2, init: MouseEventInit =
 }
 
 // 每个用例自己的容器（尺寸写死）、会话和视图，结束时一起释放并移除容器：同一个文件的用例共用一个页面
-function setup(camera: CameraState = CAMERA, initial?: StyleGroup) {
+function setup(camera: CameraState = CAMERA, initial?: StyleGroup, { hidden = false }: { hidden?: boolean } = {}) {
   const container = document.body.appendChild(document.createElement('div'));
   container.style.width = '800px';
   container.style.height = '600px';
+  if (hidden) {
+    container.style.display = 'none';
+  }
   const session = new MapSession({ groups: ['data'], camera });
   // 创建视图之前就有的样式：地图按这份快照创建
   if (initial) {
@@ -552,6 +555,34 @@ describe('MapLibreView（真实的 MapLibre）', () => {
     // 不等下一帧
     expect(ctx.view.state).toBe('ready');
     expect(ctx.view.project([118.9, 32.1])).toStrictEqual(before);
+  });
+
+  it('创建时容器还没显示（弹窗里的地图）：就绪时已按实际尺寸调整，排队的定位不按默认的 400×300 算', async () => {
+    // 固定时机：显示之后、就绪之前 MapLibre 的尺寸监听还没来得及触发（真实页面上它和就绪在同一帧，先后不定）
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+    using ctx = setup(CAMERA, undefined, { hidden: true });
+    ctx.container.style.display = 'block';
+    expect(ctx.map.getCanvas().clientWidth).toBe(400);
+
+    await withTimeout(ctx.view.whenReady(), '首次加载完成');
+
+    expect(ctx.map.getCanvas().clientWidth).toBe(800);
+    expect(ctx.map.getCanvas().clientHeight).toBe(600);
+    const [west, south, east, north] = [120.0, 31.2, 120.6, 31.8];
+    ctx.view.fitBounds([west, south, east, north], { padding: 20, duration: 0 });
+    const middle = ctx.view.project([(west + east) / 2, (south + north) / 2]);
+    expect(Math.abs(middle.x - 400)).toBeLessThan(2);
+    expect(Math.abs(middle.y - 300)).toBeLessThan(2);
   });
 
   it('定位动画进行中暂停：直接到终点并写回会话，恢复后停在终点，不回到动画的中途（ADR 0063）', async () => {

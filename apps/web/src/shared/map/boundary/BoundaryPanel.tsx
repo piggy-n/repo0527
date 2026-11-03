@@ -43,7 +43,7 @@ function renderSwatch(lines: readonly BoundarySwatchLine[]) {
 
 /**
  * 行政区边界（ADR 0033，设计稿 5D.4）：三级横排，勾选框后面是这一级在地图上的线型；勾选了才有透明度。
- * 只显示 useBoundaries 的状态并调用它的操作；现状底图中放在行政区标签，外观和登记由外壳负责
+ * 只显示 useBoundaries 的状态并调用它的操作；放在行政区边界的功能面板里，外观和登记由外壳负责
  */
 export const BoundaryPanel = defineComponent({
   name: 'BoundaryPanel',
