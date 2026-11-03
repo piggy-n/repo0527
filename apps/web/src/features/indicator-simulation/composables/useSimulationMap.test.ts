@@ -61,7 +61,7 @@ describe('useSimulationMap', () => {
     expect(moves).toEqual([{ kind: 'fit', bounds, maxZoom: 10 }]);
     const cities = map.labels.value;
     expect(cities).toHaveLength(13);
-    expect(cities[0]).toStrictEqual({ cityCode: '320100', lngLat: cities[0]?.lngLat, name: '南京', value: '47.7%' });
+    expect(cities[0]).toStrictEqual({ cityCode: '320100', lngLat: cities[0]?.lngLat, name: '南京', value: '49.6%' });
     expect(map.deriveDistricts().layers.length).toBeGreaterThan(0);
   });
 
@@ -76,7 +76,7 @@ describe('useSimulationMap', () => {
     expect([...fills()].every(color => (VALUE_COLORS as readonly string[]).includes(color))).toBe(true);
     result.select({ indicatorId: 'A-39' });
     expect([...fills()].every(color => (VALUE_COLORS as readonly string[]).includes(color))).toBe(true);
-    expect(map.labels.value[0]?.value).toBe('12.26 m²');
+    expect(map.labels.value[0]?.value).toBe('4.64 m²');
 
     expect(map.deriveHighlight().layers[0]).toMatchObject({ filter: ['==', ['get', 'cityCode'], ''] });
     result.setHoverCity('320500');

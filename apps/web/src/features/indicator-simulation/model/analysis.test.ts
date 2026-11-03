@@ -18,13 +18,13 @@ describe('分级', () => {
   it('分级断点：所选年度标准口径下区县值的五档分位数，递增', async () => {
     const breaks = valueBreaks(await calculatorOf(), conditions, 'B-65', { ...defaultParams(), recognition: 'intersect' });
 
-    expect(breaks).toEqual([44, 61, 72, 82]);
+    expect(breaks).toEqual([39, 48, 60, 72]);
   });
 
   it('改过步行时长时按这个时长分档：时长不同的结果不在一个量级', async () => {
     const calculator = await calculatorOf();
     const longer = valueBreaks(calculator, conditions, 'B-65', withWalkMinutes(defaultParams(), 'B-65', 10));
-    expect(longer[0]).toBeGreaterThan(44);
+    expect(longer[0]).toBeGreaterThan(39);
     const shorter = valueBreaks(calculator, conditions, 'A-31', withWalkMinutes(defaultParams(), 'A-31', 5));
     const standard = valueBreaks(calculator, conditions, 'A-31', defaultParams());
     expect(shorter[3]).toBeLessThan(standard[0] ?? 0);

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { requireIndicator } from '@/shared/city-indicators/catalog';
-import { mockIndicatorValue } from '@/shared/city-indicators/mock-value';
+import { indicatorValue } from '@/shared/city-indicators/indicator-value';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { required } from '@/shared/testing/required';
 import { indicatorResult } from './analysis';
@@ -40,16 +40,21 @@ describe('区县人口与住宅用地', () => {
 });
 
 describe('computeYear', () => {
-  it('标准口径下各年度的市值等于驾驶舱的模拟值（覆盖率和人均值都是）', async () => {
+  it('标准口径下各年度的市值等于驾驶舱的值（覆盖率和人均值都是，简报年份一分不差）', async () => {
     const calculator = await calculatorOf();
-    for (const year of [2025, 2026]) {
+    for (const year of [2024, 2025, 2026]) {
       const result = calculator.computeYear(conditions, defaultParams(), year);
       for (const id of ['B-65', 'A-39', 'A-15']) {
         for (const city of indicatorResult(result.indicators, id).cities) {
-          expect(city.value).toBeCloseTo(mockIndicatorValue(city.code, requireIndicator(id), year), 1);
+          const expected = indicatorValue(city.code, requireIndicator(id), year);
+          expect(city.value).toBe(expected);
         }
       }
     }
+    const nanjing = (year: number, id: string) =>
+      indicatorResult(calculator.computeYear(conditions, defaultParams(), year).indicators, id).cities[0]?.value;
+    expect([nanjing(2026, 'B-65'), nanjing(2026, 'A-39'), nanjing(2026, 'A-15')]).toEqual([49.6, 4.64, 49.78]);
+    expect([nanjing(2025, 'B-65'), nanjing(2025, 'A-39'), nanjing(2025, 'A-15')]).toEqual([49.27, 4.63, 92.2]);
   });
 
   it('汇总权重：住宅用地覆盖率按住宅用地，城区面积覆盖率按区县面积，人均值按人口', async () => {
@@ -105,7 +110,7 @@ describe('computeYear', () => {
     const result = await resultOf(defaultParams(), 'B-65');
 
     expect(Object.keys(result).toSorted()).toEqual(['cities', 'rows', 'value']);
-    expect(result.value).toBe(66.56);
+    expect(result.value).toBe(57.12);
     expect(result.cities).toHaveLength(13);
     expect(Object.keys(result.cities[0] ?? {}).toSorted()).toEqual(['code', 'name', 'value']);
   });

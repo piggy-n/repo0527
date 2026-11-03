@@ -201,7 +201,7 @@ describe('RunStage', () => {
     expect(view.value).toBe('result');
     expect(titles(mounted)).toContain('计算结果');
     expect(titles(mounted)).not.toContain('AI计算');
-    expect(item(mounted, '公园绿地覆盖率').text()).toBe('公园绿地覆盖率66.6%');
+    expect(item(mounted, '公园绿地覆盖率').text()).toBe('公园绿地覆盖率57.1%');
     expect(item(mounted, '公园绿地覆盖率').attributes('aria-expanded')).toBe('true');
     expect(wrapper.findAll('[aria-label^="放大到"]').filter(row => row.element.tagName === 'BUTTON')).not.toHaveLength(0);
     expect(wrapper.get('[aria-label="图例"]').text()).toContain('公园绿地覆盖率2026 年 · 单位 %');

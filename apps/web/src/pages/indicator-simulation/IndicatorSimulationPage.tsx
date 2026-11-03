@@ -28,7 +28,7 @@ import { JIANGSU_CAMERA } from '@/shared/map/jiangsu';
 import styles from './IndicatorSimulationPage.module.scss';
 
 /**
- * 指标智能推演（ADR 0105～0108）：条件编排 → AI 推演 → 结果展示，全部是确定性的模拟数据，不请求后端。
+ * 指标智能推演（ADR 0105～0108）：条件编排 → AI 推演 → 结果展示，全部是确定性的本地数据，不请求后端。
  * 打开时编排是空的，由底部对话栏的推演指令或手动点选编排；AI 按指令逐个节点编排完成后自动开始推演。
  * AI 推演阶段左侧是 AI 推理，主区是推演流程图；完成后"查看结果"在同一布局里换成左侧推演结果、主区地图，不读写偏好。
  * 编排和推演之间淡入淡出；切到别的页面时缓存，推演暂停（docs/modules/indicator-simulation.md）
