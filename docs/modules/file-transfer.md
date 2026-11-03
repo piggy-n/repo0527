@@ -122,6 +122,7 @@ return http.post('/resource-management/layer/create-attribute-by-excel', body, {
 ### 3. 文件与错误规则
 
 - 文件名优先解析 Content-Disposition 的 `filename*`，其次 `filename`，再用业务提供的后备名称；保留中文，移除路径和控制字符，处理无效编码；列表 name 已含扩展名，不重复追加
+- 普通 `filename` 也按百分号编码解码一次，解不开（如 `完成率100%.txt`）时保留原样：RFC 6266 不要求解码，但 2026-11 用户反馈统计报表下载出现 `%E5%9F%BA…zip`，由此推断后端把编码过的中文名放在这里（真实响应头待实测），旧项目同样解码。先解码再清理，编码过的路径分隔符和控制字符同样会被移除
 - 先判断失败响应，再补 MIME；仅在类型缺失或为 `application/octet-stream` 时使用业务提供的已知 MIME，不覆盖明确的服务端类型
 - HTTP 错误中的 Blob、HTTP 200 中的 JSON 失败信封都进入现有 ApiError；401 仍携带发出时的凭据上下文，`silent` 不吞鉴权失败，取消不弹全局错误
 - 错误体最多解码 64 KiB；HTTP 错误超过此大小时退回状态码提示。JSON、HTML、缺失类型、octet-stream 和 TXT 会检查小型信封；明确的二进制类型直接保留字节
