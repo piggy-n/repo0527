@@ -155,7 +155,7 @@ export function tilesetOf(code: string, year: number): string {
   return `${code}_${year}`;
 }
 
-// 瓦片里的图层名默认等于瓦片集名，只有这一个例外（2026-11-01 探查全部资源）
+// 瓦片里的图层名默认等于瓦片集名；地类图斑（城镇村）的规范名称不带 bgdc_ 前缀（后端确认，2026-11-01 探查全部资源）
 const SOURCE_LAYER_EXCEPTIONS = new Map([['bgdc_dltb_czc_2021', 'dltb_czc_2021']]);
 
 export function sourceLayerOf(code: string, year: number): string {

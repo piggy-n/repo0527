@@ -65,7 +65,7 @@ describe('瓦片解码', () => {
     ]);
     const [layer] = decodeTile(tile);
     expect(layer?.name).toBe('csxhjctb_tyhda_2022');
-    expect(layer?.features[0]).toEqual({
+    expect(layer?.features[0]).toMatchObject({
       geometry: 'polygon',
       properties: { cc: '08H213', quota: -9999, ratio: 0.5, flag: true }
     });

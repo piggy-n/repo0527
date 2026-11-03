@@ -39,13 +39,13 @@ describe('previewGroup', () => {
     expect(previewGroup(null, BASE)).toStrictEqual({ sources: {}, layers: [] });
   });
 
-  it('点层只画灰点，面层画填充和边线；都是全省、不带条件，按图层自己的瓦片图层名', () => {
+  it('点层只画灰点，面层画填充和边线；都是全省、不带条件，瓦片里的图层名就是表名', () => {
     expect(previewGroup(SCHOOL_POINTS ?? null, BASE).layers.map(({ id, type }) => [id, type])).toStrictEqual([
       [`${PREVIEW_GROUP}-point`, 'circle']
     ]);
     const town = previewGroup(TOWN ?? null, BASE);
     expect(town.layers.map(({ id }) => id)).toStrictEqual([`${PREVIEW_GROUP}-fill`, `${PREVIEW_GROUP}-line`]);
-    expect(town.layers.every(layer => 'source-layer' in layer && layer['source-layer'] === 'czcdyd')).toBe(true);
+    expect(town.layers.every(layer => 'source-layer' in layer && layer['source-layer'] === 'bgdc_czcdyd_2022')).toBe(true);
     const query = new URL(vectorTiles(town, PREVIEW_GROUP)).searchParams;
     expect([query.get('xzqdm'), query.get('conditions')]).toStrictEqual(['320000', '']);
   });

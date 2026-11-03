@@ -321,7 +321,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - `pnpm test`：所有包的测试（`vitest run`，`apps/web` 里有 `unit`、`browser` 两个项目）；`pnpm --filter @yzt/web test:watch` 监听模式；`test:unit`、`test:browser` 只跑其中一个；第一次跑浏览器测试前运行 `pnpm --filter @yzt/web test:browser:install`
 - CI（`.github/workflows/ci.yml`）依次运行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm lint`、安装 Chromium 无界面版、`pnpm test`、`pnpm build`、`pnpm build:intranet`、`pnpm --filter @yzt/web test:smoke`
 - `pnpm --filter @yzt/web measure:map-load`：实测"点击登录 → 地图第一次加载完成"（先构建；账号密码从环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD` 读，由用户在自己的终端运行）
-- `pnpm --filter @yzt/web probe:resource-classes`：只读探查资源的字段和分类候选（要能连后端；token 从环境变量 `YZT_PROBE_TOKEN` 读，由用户在自己的终端运行）
+- `pnpm --filter @yzt/web probe:resource-classes`：只读探查资源的字段和分类候选，`--tile-check` 查瓦片是否把要素合并（要能连后端；token 从环境变量 `YZT_PROBE_TOKEN` 读，由用户在自己的终端运行）
 - `pnpm deps:check`：检查过期的依赖和 GitHub Actions
 - `pnpm deps:update:within-range`：在版本范围内更新依赖和 Actions
 - `pnpm deps:update:allow-major`：交互式选择要升级大版本的依赖和 Actions
