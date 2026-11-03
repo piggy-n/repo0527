@@ -34,8 +34,9 @@ describe('驾驶舱固定数据', () => {
     expect(await digest(values)).toBe(baseline.valuesSha256);
   });
 
+  // 摘要按目录顺序计算，驾驶舱各分类里的显示顺序不参与比对
   it('原 mock 全部指标的六年地图分档与旧版一致', async () => {
-    const classifications = CATEGORIES.flatMap(category => category.indicators).map(indicator => [
+    const classifications = INDICATORS.map(indicator => [
       indicator.id,
       createMapClassification(DASHBOARD_YEARS.flatMap(year => CITIES.map(city => mockIndicatorValue(
         city.code,

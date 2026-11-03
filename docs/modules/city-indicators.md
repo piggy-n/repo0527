@@ -64,7 +64,7 @@ indicatorValue('320100', requireIndicator('B-65'), 2026); // 49.6，简报的南
 
 ## 各页面自己保留的
 
-- 驾驶舱：开放年份、城市名单与标签锚点（`features/city-dashboard/catalog.ts`），带分组指标列表的 `CATEGORIES`，十年记录的构建与查询（`data/mock-data.ts`，记录的 `dataSource` 标明来源）。驾驶舱的 `model.ts` 从这里转出 `Indicator`、`CategoryId`，各处仍从 `model.ts` 取
+- 驾驶舱：开放年份、城市名单与标签锚点（`features/city-dashboard/catalog.ts`），带分组指标列表的 `CATEGORIES`（各类把简报有的指标排在前面，顺序只属于驾驶舱，这里的目录和 AI 计算页不受影响，见 [city-dashboard.md](city-dashboard.md)"数据口径"），十年记录的构建与查询（`data/mock-data.ts`，记录的 `dataSource` 标明来源）。驾驶舱的 `model.ts` 从这里转出 `Indicator`、`CategoryId`，各处仍从 `model.ts` 取
 - 指标智能推演：区县分解、推演模型与参数（S3，见 [indicator-simulation.md](indicator-simulation.md)）。区县值由市的值反推，简报没有区县数据
 
 ## 测试
@@ -72,7 +72,8 @@ indicatorValue('320100', requireIndicator('B-65'), 2026); // 49.6，简报的南
 - `catalog.test.ts`：96 项、编码不重复、四类各自的项数、来源字段；缺项抛错
 - `indicator-value.test.ts`：简报数据的形状与精度；2026、2025 等于简报；其余年份的折算、基准年为 0、取值范围；A-15 的例外；其余 62 项和原 mock 全等；合计与分项、并集与交集的约束；来源。逐个改坏折算的基准年、上限、0 的保护、分项的分配、A-15 的例外后都有断言失败
 - `mock-value.test.ts`：原 mock 同样的输入同一个值；约束；取值范围
-- 驾驶舱的 `data/mock-data.test.ts`：原 mock 的全部 12480 个值和六年分档仍和旧 master-demo 的摘要比对；记录都来自 `indicatorValue` 并标明来源
+- 驾驶舱的 `data/mock-data.test.ts`：原 mock 的全部 12480 个值和六年分档仍和旧 master-demo 的摘要比对（按目录顺序算，和驾驶舱的显示顺序无关）；记录都来自 `indicatorValue` 并标明来源
+- 驾驶舱的 `catalog.test.ts`：各类有简报数据的排在前面、两部分内部保持目录顺序；四类的首项；超高层的两个分项不算；列表里的是目录的对象，全部记录的值等于 `indicatorValue`
 - 推演模型的 `calculator.test.ts`：标准口径下市值和 `indicatorValue` 完全相等
 
 把简报抄进 `report-values.json` 时，用 2026 − 2025 对照简报的"变化量"、13 市重算的平均、最大、最小、中位数对照简报的全省统计，都一致。
