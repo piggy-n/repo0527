@@ -14,19 +14,6 @@
   margin: 0 auto;
 }
 
-// 输入框外的一行：左边是用着的范围，右边是换一批，和要发送的内容分开
-.tools {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-sm);
-  min-width: 0;
-}
-
-.refresh {
-  flex: none;
-  margin-left: auto;
-}
-
 // 边框包住文字和按钮；文字区聚焦时主色描边和外发光（同 Element 输入框）
 .input {
   display: flex;
@@ -54,29 +41,38 @@
   }
 }
 
-// 条件配置时分两行：文字占满整行，下面左边上传范围、右边发送
+// 条件配置时两行两列：左边是文字和上传范围，右边上下是换一批和发送
 .stacked {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
+  display: grid;
+  grid-template:
+    'text refresh' auto
+    'upload send' auto / minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px var(--space-sm);
   padding: 6px 8px 8px var(--space-md);
   cursor: text;
 
   .grow {
-    flex: none;
+    grid-area: text;
     margin: 2px 0;
   }
-}
 
-.actions {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--space-sm);
-}
+  // 文字多行时也紧贴在发送上面；只有一行时和文字对齐
+  .refresh {
+    grid-area: refresh;
+    align-self: end;
+    justify-self: center;
+    margin-bottom: 3px;
+  }
 
-.send {
-  margin-left: auto;
+  .upload {
+    grid-area: upload;
+    justify-self: start;
+  }
+
+  .send {
+    grid-area: send;
+  }
 }
 
 // 一行起，随内容长到三行，空着时按占位的示例长高（浏览器量高度时不算占位）：
@@ -169,6 +165,7 @@
 // 用着的自定义范围：输入框上方的附件卡片（ADR 0121）
 .attachment {
   display: flex;
+  align-self: flex-start;
   align-items: center;
   min-width: 0;
   gap: var(--space-xs);
