@@ -27,8 +27,8 @@ const focusText = (event: MouseEvent) => {
 };
 
 /**
- * 页面底部的 AI 对话栏：条件配置时写计算指令（发送后 AI 逐个节点配置），输入框上方一行是用着的范围和"换一批"，
- * 框内文字下面一行左边上传范围、右边发送；计算和结果阶段对计算说话，上方是按当前条件给的快捷说法，框内只有文字和发送；
+ * 页面底部的 AI 对话栏：条件配置时写计算指令（发送后 AI 逐个节点配置），用着的范围在输入框上方，
+ * 框内左边是文字和上传范围，右边上下是"换一批"和发送；计算和结果阶段对计算说话，上方是按当前条件给的快捷说法，框内只有文字和发送；
  * 看结果时左侧没有时间线，AI 的回复写在输入框下面。
  * 输入框空着时占位显示一句完整的示例，按 Tab 填进来；回车发送（输入法选字时不算），Shift + 回车换行，
  * 输入框随内容（空着时随示例）长到三行
@@ -109,7 +109,7 @@ export const AiDock = defineComponent({
       const { area } = current;
       const brief = areaBrief(area);
       return (
-        <div class={styles.attachment}>
+        <div key="attachment" class={styles.attachment}>
           <button
             type="button"
             class={styles.attachmentOpen}
@@ -153,20 +153,7 @@ export const AiDock = defineComponent({
             </div>
           )}
           <div key="inner" class={styles.inner}>
-            {!conversation && (
-              <div key="tools" class={styles.tools}>
-                {renderAttachment()}
-                <ElButton
-                  class={styles.refresh}
-                  link
-                  icon={RefreshRight}
-                  disabled={sending}
-                  onClick={() => composer.refresh()}
-                >
-                  换一批
-                </ElButton>
-              </div>
-            )}
+            {renderAttachment()}
             <div key="input" class={[styles.input, scope && styles.stacked]} onClick={focusText}>
               <div class={styles.grow} data-value={text.value || example.value}>
                 <textarea
@@ -180,23 +167,40 @@ export const AiDock = defineComponent({
                   onKeydown={onKeydown}
                 />
               </div>
-              <div class={styles.actions}>
-                {scope && (
-                  <AreaFilePicker onPick={files => scope.editor.start('upload', { files })}>
-                    {{
-                      default: ({ open }: { readonly open: () => void }) => (
-                        <ElButton link disabled={sending} onClick={open}>
-                          <SvgIcon class={styles.uploadIcon} name="file-upload" />
-                          上传范围
-                        </ElButton>
-                      )
-                    }}
-                  </AreaFilePicker>
-                )}
-                <ElButton class={styles.send} type="primary" icon={Promotion} loading={sending} onClick={() => say()}>
-                  {sending ? '配置中' : '发送'}
+              {!conversation && (
+                <ElButton
+                  key="refresh"
+                  class={styles.refresh}
+                  link
+                  icon={RefreshRight}
+                  disabled={sending}
+                  onClick={() => composer.refresh()}
+                >
+                  换一批
                 </ElButton>
-              </div>
+              )}
+              {scope && (
+                <AreaFilePicker key="upload" onPick={files => scope.editor.start('upload', { files })}>
+                  {{
+                    default: ({ open }: { readonly open: () => void }) => (
+                      <ElButton class={styles.upload} link disabled={sending} onClick={open}>
+                        <SvgIcon class={styles.uploadIcon} name="file-upload" />
+                        上传范围
+                      </ElButton>
+                    )
+                  }}
+                </AreaFilePicker>
+              )}
+              <ElButton
+                key="send"
+                class={styles.send}
+                type="primary"
+                icon={Promotion}
+                loading={sending}
+                onClick={() => say()}
+              >
+                {sending ? '配置中' : '发送'}
+              </ElButton>
             </div>
             {reply && (
               <p class={styles.reply} role="status">
