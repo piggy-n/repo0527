@@ -128,8 +128,7 @@
 }
 
 .rankHead {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
   gap: var(--space-sm);
   margin: 0 8px;
   padding: var(--space-sm) 0 2px;
@@ -139,9 +138,8 @@
   line-height: var(--line-height-compact);
 }
 
-.rankNote {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.rankColumn {
+  text-align: right;
   white-space: nowrap;
 }
 
@@ -170,20 +168,20 @@
   text-align: left;
 }
 
-// 自定义范围有部分覆盖时，名称后面多一列"部分"
+// 自定义范围有部分覆盖时，名称后面多一列覆盖占比：列头"覆盖占比"四个字的宽度
 .covering {
-  grid-template-columns: 64px 32px 1fr 72px;
+  grid-template-columns: 64px 48px 1fr 72px;
 }
 
-.partial {
-  display: inline-block;
-  padding: 0 4px;
+.ratio {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
   white-space: nowrap;
-  border-radius: var(--radius-sm);
-  background: var(--color-warning-bg);
+}
+
+.ratioPartial {
   color: var(--color-warning-text);
-  line-height: var(--line-height-tag);
-  cursor: help;
 }
 
 button.row {

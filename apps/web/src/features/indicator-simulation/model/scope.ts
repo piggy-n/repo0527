@@ -16,6 +16,8 @@ export interface ScopeArea {
   readonly coverage: AreaCoverage;
   /** 涉及的市，按区划目录的顺序 */
   readonly cityCodes: readonly string[];
+  /** 范围内面积占各涉及市面积的比例：结果排行显示，不参与计算；市的区县都完整覆盖时是 1 */
+  readonly cityRatios: Readonly<Record<string, number>>;
 }
 
 /** 监测范围：所选的市，或自定义范围（还没有上传、绘制时为 null） */
@@ -39,10 +41,24 @@ export function scopeCityCodes(scope: SimulationScope): readonly string[] {
 /** 用在说明里的名称，如"自定义范围「江宁片区」" */
 export const areaLabel = (area: ScopeArea): string => `自定义范围「${area.name}」`;
 
+// 范围内面积占这个市面积的比例：面积按求交量出来，都完整覆盖时也可能差一点点不到 1，直接写 1
+function cityRatio(atlas: DistrictAtlas, cityCode: string, coverage: AreaCoverage): number {
+  const members = atlas.inCities([cityCode]);
+  const covers = new Map(coverage.covers.map(cover => [cover.code, cover]));
+  if (members.every(district => covers.get(district.code)?.relation === 'full')) {
+    return 1;
+  }
+  const area = members.reduce((sum, district) => sum + (covers.get(district.code)?.area ?? 0), 0);
+  const total = members.reduce((sum, district) => sum + district.area, 0);
+  return Math.min(1, area / total);
+}
+
 /** 由覆盖分析建自定义范围：涉及的市按区划目录排序 */
-export function createScopeArea(atlas: DistrictAtlas, input: Omit<ScopeArea, 'cityCodes'>): ScopeArea {
+export function createScopeArea(atlas: DistrictAtlas, input: Omit<ScopeArea, 'cityCodes' | 'cityRatios'>): ScopeArea {
   const touched = new Set(input.coverage.covers.map(cover => atlas.get(cover.code).cityCode));
-  return { ...input, cityCodes: JIANGSU_CITIES.map(city => city.code).filter(code => touched.has(code)) };
+  const cityCodes = JIANGSU_CITIES.map(city => city.code).filter(code => touched.has(code));
+  const cityRatios = Object.fromEntries(cityCodes.map(code => [code, cityRatio(atlas, code, input.coverage)]));
+  return { ...input, cityCodes, cityRatios };
 }
 
 /** 范围里的一个区县：整个区县，或自定义范围里的一部分 */

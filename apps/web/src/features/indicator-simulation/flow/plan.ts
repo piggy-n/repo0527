@@ -110,7 +110,7 @@ export const citiesText = (cityCodes: readonly string[]): string => scopeText(ci
 
 const formatArea = (km2: number): string => km2.toLocaleString('zh-CN', { maximumFractionDigits: km2 >= 100 ? 0 : 1 });
 
-// 自定义范围的说明：多大、涉及几个区县、哪些全部覆盖、哪些部分覆盖（多时只写个数）
+// 自定义范围的说明：多大、涉及几个区县、各覆盖几个
 function areaSentence(scope: SimulationScope): Rich | null {
   if (scope.kind !== 'area' || !scope.area) {
     return null;
@@ -122,7 +122,7 @@ function areaSentence(scope: SimulationScope): Rich | null {
   const size = `${formatArea(coverage.area)} 平方千米`;
   const districts = em(`${coverage.covers.length} 个区县`);
   const where = rich`监测范围是${em(areaLabel(scope.area))}（${from}，${size}），涉及${citiesText(cityCodes)} ${districts}：`;
-  return [...where, ...rich`${full} 个全部覆盖、${partial} 个部分覆盖；部分覆盖的区县按范围内的面积占比折算人口和用地。`];
+  return [...where, ...rich`${full} 个完整覆盖、${partial} 个部分覆盖；部分覆盖的区县按范围内的面积占比折算人口和用地。`];
 }
 
 /** 一项覆盖率指标要生成的服务范围：设施、范围的说明、距离；模拟情景的站点标出来 */

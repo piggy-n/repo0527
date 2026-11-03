@@ -75,7 +75,7 @@ export interface RankRow {
   readonly cityCode: string | null;
   /** 自定义范围部分覆盖的市、区县：只按范围内的部分计算 */
   readonly partial: boolean;
-  /** 部分覆盖的区县在范围内的面积占比；市和其余的区县为 null */
+  /** 自定义范围里，范围内面积占这个市、区县的比例；行政区划时为 null */
   readonly share: number | null;
   /** 自定义范围里市的区县覆盖情况；区县的行和行政区划时为 null */
   readonly cover: RankCover | null;
@@ -122,6 +122,7 @@ export function rankOf(
   const only = cityCodes.length === 1 ? cityCodes[0] : area ? cityCode : null;
   // 自定义范围里全部覆盖的区县；市的区县都在里面才算全部覆盖
   const covers = scope.kind === 'area' ? (scope.area?.coverage.covers ?? []) : [];
+  const cityRatios = scope.kind === 'area' ? (scope.area?.cityRatios ?? {}) : {};
   const whole = new Set(covers.filter(cover => cover.relation === 'full').map(cover => cover.code));
   const rows: RankRow[] = only
     ? result.rows
@@ -132,7 +133,7 @@ export function rankOf(
           value: row.value,
           cityCode: null,
           partial: area && row.share < 1,
-          share: area && row.share < 1 ? row.share : null,
+          share: area ? row.share : null,
           cover: null
         }))
     : result.cities.map(city => ({
@@ -141,7 +142,7 @@ export function rankOf(
         value: city.value,
         cityCode: city.code,
         partial: area && districtsOf(city.code).some(district => !whole.has(district.code)),
-        share: null,
+        share: cityRatios[city.code] ?? null,
         cover: area ? cityCover(city.code, covers) : null
       }));
   const level = only ? 'district' : 'city';

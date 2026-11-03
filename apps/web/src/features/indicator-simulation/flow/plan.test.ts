@@ -119,7 +119,7 @@ describe('自定义范围的流程图（ADR 0121）', () => {
     const plan = flowPlan({ calculator, conditions: custom, params: defaultParams() });
     const parse = plan.lines.filter(line => line.step === 'parse').map(line => plainText(line.text));
     expect(parse[1]).toBe(
-      '监测范围是自定义范围「江宁片区」（地图绘制，279 平方千米），涉及南京市 7 个区县：1 个全部覆盖、6 个部分覆盖；部分覆盖的区县按范围内的面积占比折算人口和用地。'
+      '监测范围是自定义范围「江宁片区」（地图绘制，279 平方千米），涉及南京市 7 个区县：1 个完整覆盖、6 个部分覆盖；部分覆盖的区县按范围内的面积占比折算人口和用地。'
     );
     expect(plan.nodes.find(node => node.key === 'parse')?.title).toBe('自定义范围「江宁片区」 · 2025 年');
     expect(plan.nodes.find(node => node.key === 'qc')?.title).toBe('7 个区县');

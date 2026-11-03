@@ -12,16 +12,14 @@ import type { Rank, RankRow, ResultItem } from '../result/result-view';
 import { formatRatio } from '../scope/area-tree';
 import styles from './ResultList.module.scss';
 
-// "部分"的提示：写出占比或各覆盖几个区县，不重复标签已经说的话
-function partialTitle({ name, share, cover }: RankRow): string {
-  if (share !== null) {
-    return `${name}有 ${formatRatio(share)} 的面积在范围内`;
-  }
+// 覆盖占比的提示：结果只算范围内的部分；市的行再写各覆盖几个区县
+function coverTitle({ name, share, cover }: RankRow): string {
+  const base = `${name}有 ${formatRatio(share ?? 1)} 的面积在范围内，结果只算这部分`;
   if (!cover) {
-    return '';
+    return base;
   }
-  const parts = [cover.full > 0 && `全部覆盖 ${cover.full} 个`, cover.partial > 0 && `部分覆盖 ${cover.partial} 个`];
-  return `${name} ${cover.total} 个区县里，${parts.filter(Boolean).join('、')}`;
+  const parts = [cover.full > 0 && `完整覆盖 ${cover.full} 个`, cover.partial > 0 && `部分覆盖 ${cover.partial} 个`];
+  return `${base}；${cover.total} 个区县里，${parts.filter(Boolean).join('、')}`;
 }
 
 /**
@@ -44,15 +42,13 @@ export const ResultList = defineComponent({
         <span key="name" class={styles.rankName}>
           {row.name}
         </span>,
-        // 自定义范围里有部分覆盖的行时多一列，标出只算了一部分的市、区县
+        // 自定义范围里有部分覆盖的行时多一列覆盖占比（ADR 0131）：部分覆盖是橙色，占满是灰色、没有提示
         covering && (
-          <span key="cover">
-            {row.partial && (
-              <ElTooltip {...MAP_TOOLTIP_PROPS} content={partialTitle(row)} placement="top">
-                <span class={styles.partial}>部分</span>
-              </ElTooltip>
-            )}
-          </span>
+          <ElTooltip {...MAP_TOOLTIP_PROPS} key="cover" content={coverTitle(row)} placement="top" disabled={!row.partial}>
+            <span class={[styles.ratio, row.partial && styles.ratioPartial]}>
+              {row.share !== null && formatRatio(row.share)}
+            </span>
+          </ElTooltip>
         ),
         <span key="bar" class={styles.bar}>
           <i style={{ width: `${((row.value / rank.max) * 100).toFixed(1)}%` }} />
@@ -88,9 +84,10 @@ export const ResultList = defineComponent({
       const covering = rank.rows.some(row => row.partial);
       return (
         <div class={styles.detail}>
-          <div class={styles.rankHead}>
-            {rank.level === 'city' ? '各市' : '各区县'}
-            {covering && <span class={styles.rankNote}>部分覆盖的只算范围内的部分</span>}
+          {/* 有覆盖占比时和下面的行共用一套列：结果也可能是百分数，要看得出这一列是什么 */}
+          <div class={[styles.rankHead, covering && styles.covering]}>
+            <span>{rank.level === 'city' ? '各市' : '各区县'}</span>
+            {covering && <span class={styles.rankColumn}>覆盖占比</span>}
           </div>
           <ol class={styles.rank} onMouseleave={() => props.result.setHoverCity(null)}>
             {rank.rows.map(row => renderRow(row, rank, unit, covering))}

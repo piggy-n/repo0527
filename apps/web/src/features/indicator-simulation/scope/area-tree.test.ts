@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { AreaCoverage } from '@/shared/map/area/area-coverage';
+import type { AreaProblemCode } from '@/shared/map/area/area-geometry';
 import { required } from '@/shared/testing/required';
 import { loadTestAtlas } from '../model/test-atlas';
 import { box, NANJING_RINGS, NINGZHEN_RINGS, testArea } from '../model/test-area';
@@ -14,7 +15,8 @@ import {
   expandAllByDefault,
   filterTree,
   formatKm2,
-  formatRatio
+  formatRatio,
+  problemText
 } from './area-tree';
 
 // 苏中一大片：跨 11 个市、56 个区县，西边有一部分在安徽
@@ -105,8 +107,8 @@ describe('面积和比例的写法', () => {
 describe('一行的标签', () => {
   it('上级按覆盖方式计数，只写有的一种，都有时合在一起', () => {
     expect(coverCounts({ full: 0, partial: 5 })).toBe('部分 5');
-    expect(coverCounts({ full: 3, partial: 0 })).toBe('全部 3');
-    expect(coverCounts({ full: 1, partial: 2 })).toBe('全部 1 · 部分 2');
+    expect(coverCounts({ full: 3, partial: 0 })).toBe('完整 3');
+    expect(coverCounts({ full: 1, partial: 2 })).toBe('完整 1 · 部分 2');
   });
 
   it('悬浮提示写范围内的面积、行政区的面积和占比', () => {
@@ -116,53 +118,68 @@ describe('一行的标签', () => {
 });
 
 describe('摘要、提示和卡片说明', () => {
-  it('区县少时写出名称；有部分覆盖时说明计算按面积折算', async () => {
+  it('摘要只有一句：区县少时写出名称，不重复面积，也不讲计算方式', async () => {
     const { tree, coverage } = await treeOf(NINGZHEN_RINGS);
-    const summary = areaSummary(tree, coverage);
-    expect(summary).toMatch(/^范围跨南京市、镇江市 2 个市，面积 [\d,.]+ 平方千米，涉及 \d 个区县：/);
+    const summary = areaSummary(tree);
+    expect(summary).toMatch(/^范围跨南京市、镇江市，/);
     for (const district of tree.cities.flatMap(city => city.districts)) {
       expect(summary).toContain(district.name);
     }
-    expect(summary).toContain('部分覆盖的区县按范围内的面积占比折算人口和用地');
-    expect(coverageNotices(tree, coverage)).toEqual([]);
+    expect(summary).not.toMatch(/平方千米|折算/);
+    expect(summary.match(/。/g)).toHaveLength(1);
+    expect(coverageNotices(coverage)).toEqual([]);
   });
 
-  it('区县多时只写个数；范围有一部分在省外时摘要写出省内的面积，提示写出省外的面积', async () => {
+  it('区县多时只写个数；提示只留影响结果的：省外的面积不参与计算', async () => {
     const { tree, coverage } = await treeOf(WIDE_RINGS);
-    const summary = areaSummary(tree, coverage);
-    expect(summary).toContain(`跨南京市等 ${tree.cities.length} 个市`);
-    expect(summary).toContain(`（省内 ${formatKm2(coverage.coveredArea)}）`);
-    expect(summary).toContain(`其余 ${tree.partial} 个部分覆盖`);
+    expect(areaSummary(tree)).toBe(`范围跨南京市等 ${tree.cities.length} 个市，涉及 ${tree.full + tree.partial} 个区县。`);
     expect(coverage.outsideArea).toBeGreaterThan(0);
-    expect(coverageNotices(tree, coverage)).toEqual([
+    expect(coverageNotices(coverage)).toEqual([
       `范围有 ${formatKm2(coverage.outsideArea)} 平方千米在江苏省外，不参与计算`
     ]);
   });
 
-  it('大部分在省外、只沿边界相交的区县都写进提示', async () => {
-    const { atlas, tree, coverage } = await treeOf(NANJING_RINGS);
-    const touched = tree.cities[0]?.districts[0];
-    if (!touched) {
-      throw new Error('南京的范围至少涉及一个区县');
-    }
+  it('大部分在省外时写进提示；只沿边界相交的区县不算影响结果，不写提示', async () => {
+    const { coverage } = await treeOf(NANJING_RINGS);
     const outside: AreaCoverage = {
       ...coverage,
       outsideArea: coverage.area * 2,
-      touches: [{ code: touched.code, area: 0.001 }]
+      touches: [{ code: required(coverage.covers[0], '南京的区县').code, area: 0.001 }]
     };
-    const notices = coverageNotices(coverageTree(outside, atlas), outside);
+    const notices = coverageNotices(outside);
+    expect(notices).toHaveLength(1);
     expect(notices[0]).toMatch(/，范围的大部分在省外$/);
-    expect(notices[1]).toBe(`${touched.name}只与范围的边界相交（细条或不足 1 公顷），不算覆盖`);
   });
 
-  it('卡片：市名用简称，多于 3 个市只写前两个和个数；有部分覆盖时写出个数', async () => {
+  it('不能用的原因按类型写给用户：说怎么办，不带节点数、坐标系名称这类技术细节', () => {
+    expect(problemText('crs')).toBe('文件的坐标系不支持，请转换为经纬度坐标后上传');
+    expect(problemText('outside')).toBe('范围不在江苏省内，请检查后重新绘制或上传');
+    const codes: readonly AreaProblemCode[] = [
+      'file-type',
+      'file-size',
+      'file-empty',
+      'file-corrupt',
+      'file-parts',
+      'crs',
+      'geometry-type',
+      'geometry-invalid',
+      'too-complex',
+      'too-small',
+      'too-large',
+      'outside'
+    ];
+    for (const code of codes) {
+      expect(problemText(code)).not.toMatch(/\d|(?<!Geo)JSON|EPSG|CGCS|WGS|节点/);
+    }
+  });
+
+  it('卡片：市名用简称，多于 3 个市只写前两个和个数；不写部分覆盖的个数', async () => {
     const { area } = await treeOf(NINGZHEN_RINGS);
-    const partial = area.coverage.covers.filter(cover => cover.relation === 'partial').length;
     expect(areaBrief(area)).toEqual({
-      where: `南京、镇江 · ${area.coverage.covers.length} 个区县（部分 ${partial}）`,
+      where: `南京、镇江 · ${area.coverage.covers.length} 个区县`,
       size: `${formatKm2(area.coverage.area)} km²`
     });
     const wide = await treeOf(WIDE_RINGS);
-    expect(areaBrief(wide.area).where).toMatch(/^南京、无锡等 11 个市 · 56 个区县（部分 \d+）$/);
+    expect(areaBrief(wide.area).where).toBe('南京、无锡等 11 个市 · 56 个区县');
   });
 });

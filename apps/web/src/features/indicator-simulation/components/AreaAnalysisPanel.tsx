@@ -1,12 +1,10 @@
 import { Search } from '@element-plus/icons-vue';
 import { MxTitle } from '@yzt/ui';
-import { ElButton, ElInput, ElRadioButton, ElRadioGroup, ElTag, ElTooltip } from 'element-plus';
+import { ElButton, ElInput, ElRadioButton, ElRadioGroup, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNodeChild, watch } from 'vue';
 import { ChatAvatar } from '@/shared/chat-avatar/ChatAvatar';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import type { CoverRelation } from '@/shared/map/area/area-coverage';
-import { AREA_LIMITS } from '@/shared/map/area/area-geometry';
-import { shortRegionName } from '@/shared/map/region/region-catalog';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import type { AnalysisStep, ScopeAnalysis, ScopeEditor } from '../composables/useScopeEditor';
 import {
@@ -19,18 +17,22 @@ import {
   type DistrictCover,
   expandAllByDefault,
   filterTree,
-  formatKm2
+  formatKm2,
+  formatRatio
 } from '../scope/area-tree';
 import styles from './AreaAnalysisPanel.module.scss';
 
-const RELATION_TEXT: Readonly<Record<CoverRelation, string>> = { full: '全部覆盖', partial: '部分覆盖' };
+const RELATION_TEXT: Readonly<Record<CoverRelation, string>> = { full: '完整覆盖', partial: '部分覆盖' };
 
-// 一行的标签：有部分覆盖时是橙色；行里只写面积，占比在悬浮提示里。整个行政区都在范围内时提示没有新内容，不显示
-const coverTag = (text: string, partial: boolean, measure: CoverMeasure) => (
-  <ElTooltip {...MAP_TOOLTIP_PROPS} content={coverDetail(measure)} placement="top" disabled={measure.ratio >= 1}>
-    <ElTag class={['tag-mini', styles.tag]} type={partial ? 'warning' : 'primary'} disableTransitions>
-      {text}
-    </ElTag>
+// 覆盖占比（ADR 0131）：部分覆盖是橙色，占满是灰色；悬浮看面积，市和省还有各覆盖几个区县。占满时提示没有新内容，不显示
+const renderRatio = (measure: CoverMeasure, counts?: string) => (
+  <ElTooltip
+    {...MAP_TOOLTIP_PROPS}
+    content={counts ? `${counts}；${coverDetail(measure)}` : coverDetail(measure)}
+    placement="top"
+    disabled={measure.ratio >= 1}
+  >
+    <span class={[styles.ratio, measure.ratio < 1 && styles.ratioPartial]}>{formatRatio(measure.ratio)}</span>
   </ElTooltip>
 );
 
@@ -50,10 +52,7 @@ const renderStep = (step: AnalysisStep, index: number) => (
     <span class={styles.dot} aria-hidden="true">
       {step.state === 'done' && <SvgIcon name="check" />}
     </span>
-    <span class={styles.stepText}>
-      {step.label}
-      {step.detail && <small>{step.detail}</small>}
-    </span>
+    <span class={styles.stepText}>{step.label}</span>
   </li>
 );
 
@@ -61,17 +60,13 @@ const renderEmpty = () => (
   <div class={styles.empty}>
     <ChatAvatar speaker="assistant" size={56} />
     <p>上传范围文件，或用地图左上角的工具绘制范围</p>
-    <small>
-      AI 会分析范围涉及的省、市、县，判断全部覆盖还是部分覆盖，并统计面积。
-      支持 GeoJSON（.geojson、.json）和 Shapefile（.zip 压缩包，或同时选择 .shp、.dbf、.prj），
-      坐标系为 CGCS2000 或 WGS84；文件不超过 {AREA_LIMITS.fileBytes / 1024 / 1024} MB，也可以把文件拖到地图上。
-    </small>
+    <small>支持 GeoJSON、Shapefile，也可以把文件拖到地图上</small>
   </div>
 );
 
 /**
- * AI 范围分析（ADR 0121）：分步的进度；完成后是摘要、四个数、提示和按省、市、县分级的列表——
- * 区县多时先只列各市，点开再看区县；可以按覆盖方式筛选、按名称搜索。悬停区县时地图描出它，点击移过去
+ * AI 范围分析（ADR 0121、0131）：分步的进度；完成后是一句摘要、四个数、影响结果的提示和按省、市、县分级的列表——
+ * 区县多时先只列各市，点开再看区县；可以按覆盖方式筛选、按名称搜索。悬停区县时地图高亮它在范围内的部分，点击移过去
  */
 export const AreaAnalysisPanel = defineComponent({
   name: 'AreaAnalysisPanel',
@@ -112,7 +107,7 @@ export const AreaAnalysisPanel = defineComponent({
       expanded.value = next;
     };
 
-    const renderFailed = (message: string, retryable: boolean) => {
+    const renderFailed = ({ message, detail, retryable }: Extract<ScopeAnalysis, { status: 'failed' }>) => {
       const { editor } = props;
       return (
         <div class={styles.failure} role="alert">
@@ -130,9 +125,36 @@ export const AreaAnalysisPanel = defineComponent({
                   撤销，回到上一个范围
                 </ElButton>
               )}
+              {detail && (
+                <ElTooltip {...MAP_TOOLTIP_PROPS} content={detail} placement="bottom">
+                  <ElButton link type="info">
+                    查看原因
+                  </ElButton>
+                </ElTooltip>
+              )}
             </div>
           </div>
         </div>
+      );
+    };
+
+    // 读文件、整理时做过的处理：不影响使用，收在标题旁的提示里
+    const renderNotes = () => {
+      const notes = props.editor.draft.value?.notices ?? [];
+      return (
+        props.editor.analysis.value.status === 'done' &&
+        notes.length > 0 && (
+          <ElTooltip {...MAP_TOOLTIP_PROPS} placement="bottom">
+            {{
+              content: () => notes.map(note => <div key={note}>{note}</div>),
+              default: () => (
+                <span class={styles.notes} role="note" tabindex={0} aria-label={`处理说明：${notes.join('；')}`}>
+                  <SvgIcon name="info" />
+                </span>
+              )
+            }}
+          </ElTooltip>
+        )
       );
     };
 
@@ -145,14 +167,16 @@ export const AreaAnalysisPanel = defineComponent({
             class={[styles.row, styles.districtRow, editor.hovered.value === district.code && styles.lit]}
             aria-label={`${district.name}，${RELATION_TEXT[district.relation]}，${coverDetail(district)}，移到这里`}
             onMouseenter={() => editor.hover(district.code)}
+            onMouseleave={() => editor.hover(null)}
             onFocus={() => editor.hover(district.code)}
+            onBlur={() => editor.hover(null)}
             onClick={() => editor.focusDistrict(district.code)}
           >
             {/* 提示写在名称上：写在整行上会和标签的悬浮提示同时出现 */}
             <span class={styles.name} title={`移到${district.name}`}>
               {district.name}
             </span>
-            {coverTag(RELATION_TEXT[district.relation].slice(0, 2), district.relation === 'partial', district)}
+            {renderRatio(district)}
             {renderArea(district.area)}
           </button>
         </li>
@@ -175,7 +199,7 @@ export const AreaAnalysisPanel = defineComponent({
               <span class={[styles.caret, open && styles.caretOpen]} aria-hidden="true" />
               <span class={styles.name}>{city.name}</span>
             </span>
-            {coverTag(coverCounts(city), city.partial > 0, city)}
+            {renderRatio(city, coverCounts(city))}
             {renderArea(city.area)}
           </button>
           {open && <ul class={styles.districts}>{city.districts.map(renderDistrict)}</ul>}
@@ -187,12 +211,10 @@ export const AreaAnalysisPanel = defineComponent({
       const total = current.full + current.partial;
       const list = cities.value;
       return (
-        <section class={styles.tree} onMouseleave={() => props.editor.hover(null)}>
+        <section class={styles.tree}>
           {/* 标题、筛选和搜索在列表滚动时停在顶上 */}
           <div class={styles.treeTools}>
-            <MxTitle>
-              {{ default: () => '涉及的行政区', extra: () => <span class={styles.hint}>范围内面积</span> }}
-            </MxTitle>
+            <MxTitle>涉及的行政区</MxTitle>
             <ElRadioGroup
               class="radio-group-block"
               size="small"
@@ -206,10 +228,10 @@ export const AreaAnalysisPanel = defineComponent({
             >
               <ElRadioButton value="all">全部 {total}</ElRadioButton>
               <ElRadioButton value="full" disabled={current.full === 0}>
-                全部覆盖 {current.full}
+                完整 {current.full}
               </ElRadioButton>
               <ElRadioButton value="partial" disabled={current.partial === 0}>
-                部分覆盖 {current.partial}
+                部分 {current.partial}
               </ElRadioButton>
             </ElRadioGroup>
             {total > SEARCH_FROM && (
@@ -226,9 +248,14 @@ export const AreaAnalysisPanel = defineComponent({
             )}
           </div>
           <div class={styles.rows}>
+            <div class={[styles.row, styles.columnHead]} aria-hidden="true">
+              <span />
+              <span>覆盖占比</span>
+              <span>范围内面积</span>
+            </div>
             <div class={[styles.row, styles.provinceRow]}>
               <span class={styles.name}>江苏省</span>
-              {coverTag(coverCounts(current), current.partial > 0, current.province)}
+              {renderRatio(current.province, coverCounts(current))}
               {renderArea(current.province.area)}
             </div>
             {list.length > 0 ? (
@@ -258,35 +285,21 @@ export const AreaAnalysisPanel = defineComponent({
       const { summary, notices, tree: current, coverage, population } = done;
       const total = current.full + current.partial;
       const people = population.toLocaleString('zh-CN', { maximumFractionDigits: population >= 10 ? 0 : 1 });
-      const cityNames = current.cities.map(city => shortRegionName(city.name));
-      // 每个数下面一行小字补充说明，卡片等高、不折行
+      // 范围跨出省界时，面积下面写省内的部分：只有这部分参与计算
       const stats: readonly Stat[] = [
         {
           label: '范围面积',
           value: [<b key="v">{formatKm2(coverage.area)}</b>, ' km²'],
           note: coverage.outsideArea > 0 ? `省内 ${formatKm2(coverage.coveredArea)} km²` : undefined
         },
-        {
-          label: '涉及区县',
-          value: [<b key="v">{total}</b>, ' 个'],
-          note: `全部 ${current.full} · 部分 ${current.partial}`
-        },
-        {
-          label: '涉及市',
-          value: [<b key="v">{current.cities.length}</b>, ' 个'],
-          note: cityNames.length <= 3 ? cityNames.join('、') : undefined
-        },
-        {
-          label: '估算常住人口',
-          value: ['≈', <b key="v">{people}</b>, ' 万人'],
-          note: current.partial > 0 ? '部分覆盖按面积折算' : undefined
-        }
+        { label: '涉及区县', value: [<b key="v">{total}</b>, ' 个'], note: undefined },
+        { label: '涉及市', value: [<b key="v">{current.cities.length}</b>, ' 个'], note: undefined },
+        { label: '估算常住人口', value: ['≈', <b key="v">{people}</b>, ' 万人'], note: undefined }
       ];
       return [
-        <div key="summary" class={styles.summary}>
-          <ChatAvatar speaker="assistant" size={24} />
-          <p>{summary}</p>
-        </div>,
+        <p key="summary" class={styles.summary}>
+          {summary}
+        </p>,
         <dl key="stats" class={styles.stats}>
           {stats.map(({ label, value, note }) => (
             <div key={label} class={styles.stat}>
@@ -312,7 +325,6 @@ export const AreaAnalysisPanel = defineComponent({
 
     return () => {
       const analysis = props.editor.analysis.value;
-      const state = { empty: '', running: '分析中…', done: '分析完成', failed: '不能使用' }[analysis.status];
       let body: VNodeChild;
       switch (analysis.status) {
         case 'empty':
@@ -322,14 +334,7 @@ export const AreaAnalysisPanel = defineComponent({
           body = <ol class={styles.steps}>{analysis.steps.map(renderStep)}</ol>;
           break;
         case 'failed':
-          body = [
-            analysis.steps.length > 0 && (
-              <ol key="steps" class={styles.steps}>
-                {analysis.steps.map(renderStep)}
-              </ol>
-            ),
-            <div key="failure">{renderFailed(analysis.message, analysis.retryable)}</div>
-          ];
+          body = renderFailed(analysis);
           break;
         case 'done':
           body = renderDone(analysis);
@@ -340,8 +345,9 @@ export const AreaAnalysisPanel = defineComponent({
           <header class={styles.head}>
             <ChatAvatar speaker="assistant" size={24} />
             <h3>AI 范围分析</h3>
+            {renderNotes()}
             <span class={styles.state} aria-live="polite">
-              {state}
+              {analysis.status === 'running' && '分析中…'}
             </span>
           </header>
           <div class={styles.body}>{body}</div>

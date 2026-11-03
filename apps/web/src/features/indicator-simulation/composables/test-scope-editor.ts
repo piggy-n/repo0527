@@ -1,6 +1,6 @@
 // 只供测试：假的地图上下文和同一线程里的分析 Worker，建范围弹窗的拥有者
-import type { CameraState, ScreenPoint } from '@yzt/map-core';
-import type { MapViewport } from '@yzt/map-vue';
+import type { CameraState, ScreenPoint, ViewBounds } from '@yzt/map-core';
+import type { CameraControl, MapViewport } from '@yzt/map-vue';
 import { serveWorker } from '@yzt/utils';
 import { type Ref, ref, shallowRef } from 'vue';
 import { createAreaAnalyzer } from '@/shared/map/area/area-analyzer';
@@ -10,10 +10,20 @@ import type { ScopeArea } from '../model/scope';
 import { type ScopeEditor, useScopeEditor } from './useScopeEditor';
 import type { SimulationModel } from './useSimulationModel';
 
-/** 假的地图上下文：工具切换、指针、视图都可以由测试改；定位只记下次数 */
+/** 假的地图上下文：工具切换、指针、视图都可以由测试改；定位只记下次数和每次的时长 */
 export function fakeMap() {
   const activeTool = ref('browse');
   const cameraRuns = ref(0);
+  const fitDurations = ref<(number | undefined)[]>([]);
+  const fitTargets = shallowRef<readonly ViewBounds[]>([]);
+  const camera: CameraControl = {
+    flyTo: () => undefined,
+    fitBounds: (bounds, options) => {
+      fitDurations.value.push(options?.duration);
+      fitTargets.value = [...fitTargets.value, bounds];
+    },
+    reveal: () => undefined
+  };
   return {
     useCamera: () => shallowRef<CameraState>({ center: [119, 33], zoom: 8, bearing: 0, pitch: 0 }),
     view: shallowRef<MapViewport | null>(null),
@@ -27,10 +37,13 @@ export function fakeMap() {
         activeTool.value = 'browse';
       }
     },
-    runCameraOperation: () => {
+    runCameraOperation: (action: (control: CameraControl) => void) => {
       cameraRuns.value += 1;
+      action(camera);
     },
-    cameraRuns
+    cameraRuns,
+    fitDurations,
+    fitTargets
   };
 }
 

@@ -139,6 +139,7 @@
 | [0128](0128-map-toolbar-boundaries.md) | 地图控制栏里的行政区边界入口 | 已接受（修改 0098 里边界控制的位置；补充 0053、0111） |
 | [0129](0129-indicator-simulation-deferred-scope.md) | 城市国土空间监测指标AI计算：先对话、后补充监测范围 | 已接受（修改 0106 第 6 条、0121 第 1 条） |
 | [0130](0130-city-indicators-monitoring-report.md) | 城市指标用 2026 年监测成果简报的数据 | 已接受（市级基准值的来源部分取代 0105 第 2 条） |
+| [0131](0131-scope-dialog-camera-copy-and-highlight.md) | 城市国土空间监测指标AI计算：范围弹窗的定位、信息量和高亮 | 已接受（修改 0121 的弹窗定位、分析内容和样式） |
 
 ## 模板
 

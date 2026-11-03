@@ -1,5 +1,5 @@
 import { MxTitle } from '@yzt/ui';
-import { MapCanvas, useMapOverlay } from '@yzt/map-vue';
+import { MapCanvas, useMap, useMapOverlay } from '@yzt/map-vue';
 import { ElButton, ElDialog, ElInput, ElMessage, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNodeChild, watch } from 'vue';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
@@ -11,8 +11,8 @@ import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
-import { EDIT_VERTEX_LIMIT, type ScopeEditor } from '../composables/useScopeEditor';
-import { COVER_FULL_COLOR, COVER_PARTIAL_COLOR } from '../map/colors';
+import type { ScopeEditor } from '../composables/useScopeEditor';
+import { AREA_COLOR, COVER_FULL_COLOR, COVER_PARTIAL_COLOR } from '../map/colors';
 import { AreaAnalysisPanel } from './AreaAnalysisPanel';
 import { AreaFilePicker } from './AreaFilePicker';
 import styles from './ScopeAreaDialog.module.scss';
@@ -76,7 +76,7 @@ const MapChrome = defineComponent({
       const editReason = !draft
         ? '先上传或绘制范围'
         : !editor.canEdit.value
-          ? `范围有 ${draft.vertices.toLocaleString('zh-CN')} 个节点，超过 ${EDIT_VERTEX_LIMIT} 个不能逐点编辑，可以重新绘制或上传`
+          ? '范围太复杂，不能逐点编辑，可以重新绘制或上传'
           : undefined;
       const buttons: ToolButton[] = [
         {
@@ -146,14 +146,14 @@ const MapChrome = defineComponent({
         <div key="legend" ref={legend} class={styles.legend}>
           <span>
             <i class={styles.swatch} style={{ background: COVER_FULL_COLOR }} />
-            全部覆盖
+            完整覆盖
           </span>
           <span>
             <i class={styles.swatch} style={{ background: COVER_PARTIAL_COLOR }} />
             部分覆盖
           </span>
           <span>
-            <i class={[styles.swatch, styles.outline]} />
+            <i class={[styles.swatch, styles.outline]} style={{ borderColor: AREA_COLOR }} />
             自定义范围
           </span>
         </div>
@@ -176,6 +176,7 @@ export const ScopeAreaDialog = defineComponent({
     canvasReady: { type: Boolean, default: true }
   },
   setup(props) {
+    const { view } = useMap();
     const dragging = ref(false);
     // 弹窗关上时地图随内容卸载，下次打开时浮层是关着的
     const boundariesOpen = ref(false);
@@ -263,7 +264,10 @@ export const ScopeAreaDialog = defineComponent({
                   onDragleave={onDragLeave}
                   onDrop={onDrop}
                 >
-                  {props.canvasReady && <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS} scrollZoomRates={SCROLL_ZOOM_RATES} />}
+                  {/* 视图就绪、定位好了才淡入：看不到上一次的位置（ADR 0131） */}
+                  <div class={[styles.canvas, view.value && styles.canvasShown]}>
+                    {props.canvasReady && <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS} scrollZoomRates={SCROLL_ZOOM_RATES} />}
+                  </div>
                   <MapStatusNotice />
                   <MapChrome editor={editor} />
                   <BoxSelectOverlay pick={editor.draw} />

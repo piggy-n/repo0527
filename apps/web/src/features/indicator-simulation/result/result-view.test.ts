@@ -165,7 +165,7 @@ describe('自定义范围的排行（ADR 0121）', () => {
     const rank = rankOf(single.version, nanjing, 'B-65', 2026);
     expect(rank.level).toBe('district');
     expect(rank.rows).toHaveLength(7);
-    expect(rank.rows.find(row => row.name === '秦淮区')).toMatchObject({ partial: false, share: null });
+    expect(rank.rows.find(row => row.name === '秦淮区')).toMatchObject({ partial: false, share: 1 });
     expect(rank.rows.find(row => row.name === '江宁区')?.partial).toBe(true);
     expect(rank.rows.find(row => row.name === '江宁区')?.share).toBeLessThan(0.2);
 
@@ -173,11 +173,14 @@ describe('自定义范围的排行（ADR 0121）', () => {
     const cross = await setup(ningzhen);
     const cities = rankOf(cross.version, ningzhen, 'B-65', 2026);
     expect(cities.rows.map(row => row.key).toSorted()).toEqual(['320100', '321100']);
-    // 两个市都只有一部分在范围里：市的一行标出部分覆盖，不带占比，带各覆盖几个区县
-    expect(cities.rows.map(row => [row.partial, row.share])).toEqual([
-      [true, null],
-      [true, null]
-    ]);
+    // 两个市都只有一部分在范围里：市的一行也带占比（占全市的），还带各覆盖几个区县
+    const area = ningzhen.scope.kind === 'area' ? ningzhen.scope.area : null;
+    for (const row of cities.rows) {
+      expect(row.partial).toBe(true);
+      expect(row.share).toBe(area?.cityRatios[row.key]);
+      expect(row.share).toBeGreaterThan(0);
+      expect(row.share).toBeLessThan(1);
+    }
     const zhenjiang = cities.rows.find(row => row.key === '321100')?.cover;
     expect(zhenjiang).toEqual({ total: districtsOf('321100').length, full: 0, partial: 2 });
     const zoomed = rankOf(cross.version, ningzhen, 'B-65', 2026, '321100');
