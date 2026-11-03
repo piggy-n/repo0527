@@ -54,7 +54,7 @@ describe('useSimulationResult', () => {
     await runToDone();
     expect(result.selection.value).toEqual({ indicatorId: 'B-65', year: 2026, cityCode: null });
     expect(result.items.value.map(item => item.id)).toEqual(composition.conditions.indicatorIds);
-    expect(result.items.value.find(item => item.id === 'B-65')).toMatchObject({ value: 66.56 });
+    expect(result.items.value.find(item => item.id === 'B-65')).toMatchObject({ value: 57.12 });
     expect(result.rank.value?.rows).toHaveLength(13);
     expect(result.coloring.value?.legend.subtitle).toBe('2026 年 · 单位 %');
   });

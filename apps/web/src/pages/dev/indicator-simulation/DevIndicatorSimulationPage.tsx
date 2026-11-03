@@ -4,7 +4,7 @@ import { RouteName } from '@/shared/router/route-names';
 import { IndicatorSimulationPage } from '../../indicator-simulation/IndicatorSimulationPage';
 import styles from './DevIndicatorSimulationPage.module.scss';
 
-/** 指标智能推演的组件样例：真实页面，不登录；数据本来就是本地的模拟值 */
+/** 指标智能推演的组件样例：真实页面，不登录；数据本来就是本地的固定值 */
 export const DevIndicatorSimulationPage = defineComponent({
   name: 'DevIndicatorSimulationPage',
   setup() {
@@ -12,7 +12,7 @@ export const DevIndicatorSimulationPage = defineComponent({
       <div class={styles.root}>
         <div class={styles.bar}>
           <strong>城市国土空间监测指标AI计算样例</strong>
-          <span>真实页面，模拟数据，不请求后端</span>
+          <span>真实页面，本地固定数据，不请求后端</span>
           <RouterLink class={styles.link} to={{ name: RouteName.devTheme }}>
             主题预览
           </RouterLink>

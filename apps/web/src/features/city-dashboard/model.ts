@@ -1,7 +1,9 @@
+import type { IndicatorValueSource } from '@/shared/city-indicators/indicator-value';
+
 // 指标与分类的类型随目录移到 shared/city-indicators（ADR 0105），驾驶舱各处仍从这里取
 export type { CategoryId, Indicator } from '@/shared/city-indicators/catalog';
 
-/** 图表类型与模拟记录保持独立，后续数据适配不依赖 ECharts */
+/** 图表类型与数据记录保持独立，后续数据适配不依赖 ECharts */
 export type ChartType = 'bar' | 'line';
 
 export interface City {
@@ -16,11 +18,11 @@ export type DashboardRecord = {
   readonly cityCode: string;
   readonly indicatorCode: string;
   readonly unit: string;
-  readonly dataSource: 'mock';
+  readonly dataSource: IndicatorValueSource;
 } & ({ readonly status: 'available'; readonly value: number }
   | { readonly status: 'missing'; readonly value: null });
 
-/** 页面注入数据读接口；目前唯一实现是固定模拟数据，不声明虚构接口 */
+/** 页面注入数据读接口；目前唯一实现是固定的本地记录（createMockData），不声明虚构接口 */
 export interface DashboardData {
   readonly years: readonly number[];
 

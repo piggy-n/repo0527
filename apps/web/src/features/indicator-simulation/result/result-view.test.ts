@@ -100,6 +100,14 @@ describe('rankOf', () => {
   });
 });
 
+const nanjingLegendAt = async (indicatorId: string, minutes: number) => {
+  const custom = { ...conditions, indicatorIds: [indicatorId], scope: citiesScope(['320100']) };
+  const params = withWalkMinutes(defaultParams(), indicatorId, minutes);
+  const { calculator } = await setup(custom, params);
+  const selection = { indicatorId, year: 2026, cityCode: null } as const;
+  return mapColoring(calculator, custom, selection, params).legend.entries.map(entry => entry.text);
+};
+
 describe('改过步行时长的结果（ADR 0125）', () => {
   it('列表和图例写改后的时长，仍标自定义口径；着色按这个时长分档，不会全落在最低一档', async () => {
     const params = withWalkMinutes(defaultParams(), 'A-31', 5);
@@ -121,20 +129,14 @@ describe('改过步行时长的结果（ADR 0125）', () => {
   });
 
   it('时长长、都接近 100% 时：分档留小数分得开；值全都一样时不列空的一档，图例没有重复', async () => {
-    // 南京的社区卫生标准口径已经很高，长时长下都接近 100%
-    const custom = { ...conditions, indicatorIds: ['A-31'], scope: citiesScope(['320100']) };
-    const legendAt = async (minutes: number) => {
-      const params = withWalkMinutes(defaultParams(), 'A-31', minutes);
-      const { calculator } = await setup(custom, params);
-      const selection = { indicatorId: 'A-31', year: 2026, cityCode: null } as const;
-      return mapColoring(calculator, custom, selection, params).legend.entries.map(entry => entry.text);
-    };
-    const near = await legendAt(20);
+    // 南京的社区体育、停车场标准口径已经很高，长时长下都接近 100%
+    const near = await nanjingLegendAt('A-36', 20);
     expect(near).toHaveLength(5);
     expect(new Set(near).size).toBe(5);
     expect(near.join()).toContain('.');
 
-    const flat = await legendAt(30);
+    const flat = await nanjingLegendAt('A08-1', 30);
+    expect(flat.length).toBeLessThan(5);
     expect(new Set(flat).size).toBe(flat.length);
   });
 });
@@ -146,11 +148,11 @@ describe('mapColoring', () => {
     const { fill, legend } = mapColoring(calculator, conditions, selection, intersect);
 
     expect([legend.title, legend.subtitle]).toEqual(['公园绿地覆盖率', '2026 年 · 单位 %']);
-    expect(legend.entries.map(entry => entry.text)).toEqual(['≥ 82', '72 – 82', '61 – 72', '44 – 61', '< 44']);
+    expect(legend.entries.map(entry => entry.text)).toEqual(['≥ 72', '60 – 72', '48 – 60', '39 – 48', '< 39']);
     expect(legend.entries.map(entry => entry.color)).toEqual(VALUE_COLORS.toReversed());
     const rows = indicatorResult(version.result[2026]?.indicators ?? {}, 'B-65').rows;
-    const top = rows.find(row => row.value >= 82);
-    const bottom = rows.find(row => row.value < 44);
+    const top = rows.find(row => row.value >= 72);
+    const bottom = rows.find(row => row.value < 39);
     expect([top && fill(top), bottom && fill(bottom)]).toEqual([VALUE_COLORS[4], VALUE_COLORS[0]]);
   });
 });
