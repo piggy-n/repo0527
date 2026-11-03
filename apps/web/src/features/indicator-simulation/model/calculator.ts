@@ -1,5 +1,5 @@
 import { requireIndicator } from '@/shared/city-indicators/catalog';
-import { mockIndicatorValue } from '@/shared/city-indicators/mock-value';
+import { indicatorValue } from '@/shared/city-indicators/indicator-value';
 import { stableRandom } from '@/shared/city-indicators/stable-random';
 import { findRegion } from '@/shared/map/region/region-catalog';
 import { cached } from './cache';
@@ -48,7 +48,7 @@ export interface Calculator {
   districtPopulation(district: District): number;
   /** 区县的住宅用地面积（平方千米，演示量级）：住宅用地覆盖率按它汇总 */
   residentialLand(district: District): number;
-  /** 区县基准值：标准口径下的值，按汇总权重的均值等于该市的模拟值 */
+  /** 区县基准值：标准口径下的值，按汇总权重的均值等于该市的值 */
   baseValue(year: number, indicatorId: string, district: District): number;
   computeYear(conditions: SimulationConditions, params: SimulationParams, year: number): YearResult;
   /** 全部年度 */
@@ -146,11 +146,11 @@ export function createCalculator(atlas: DistrictAtlas): Calculator {
     return indicator.base === 'residential' ? residentialLand(district) : district.area;
   };
 
-  // 一个市的区县基准值：覆盖率在 logit 空间加区县差异再整体平移，人均值按比例加差异再缩放；两者的加权均值都等于市的模拟值
+  // 一个市的区县基准值：覆盖率在 logit 空间加区县差异再整体平移，人均值按比例加差异再缩放；两者的加权均值都等于市的值
   const cityBaseValues = cached(
     (year: number, indicatorId: string, cityCode: string) => {
       const indicator = simulationIndicator(indicatorId);
-      const target = mockIndicatorValue(cityCode, requireIndicator(indicatorId), year);
+      const target = indicatorValue(cityCode, requireIndicator(indicatorId), year);
       const list = atlas.inCities([cityCode]);
       const weights = list.map(district => weightOf(indicator, district));
       const total = weights.reduce((sum, weight) => sum + weight, 0);

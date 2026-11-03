@@ -1,7 +1,7 @@
 import { VideoPlay } from '@element-plus/icons-vue';
 import { useResizeObserver } from '@vueuse/core';
 import { MxPanel } from '@yzt/ui';
-import { ElButton, ElPopover } from 'element-plus';
+import { ElButton, ElPopover, ElTag } from 'element-plus';
 import {
   computed,
   defineComponent,
@@ -31,9 +31,12 @@ import {
   paramNode,
   REGION_NODE,
   relatedNodes,
+  YEAR_PENDING_NODE,
   yearNode
 } from '../compose/board';
 import { CONDITION_LABELS, missingConditions } from '../compose/composition';
+import type { ConditionConflict } from '../compose/conflicts';
+import { blockerText, canRun } from '../compose/guide';
 import type { CompositionOwner } from '../composables/useComposition';
 import type { ConditionDrag, DragItem } from '../composables/useConditionDrag';
 import type { ScopeEditor } from '../composables/useScopeEditor';
@@ -44,7 +47,9 @@ import { STEP_GROUPS } from '../engine/steps';
 import { simulationIndicator } from '../model/indicators';
 import { type ScopeArea, scopeCityCodes } from '../model/scope';
 import { areaBrief } from '../scope/area-tree';
+import { AreaFilePicker } from './AreaFilePicker';
 import { AreaThumbnail } from './AreaThumbnail';
+import { CityPicker } from './CityPicker';
 import {
   describeParam,
   indicatorName,
@@ -110,7 +115,8 @@ const empty = (lane: 'years' | 'region' | 'indicators', show: boolean) =>
 /**
  * 编排图：年份 → 监测范围 → 监测指标 → 计算参数 → AI 推演五列，连线由节点位置算出；接收条件库的拖入，指标按手柄排序。
  * 计算参数只列所选指标用得上的几项；下方是指标预估，参数浮层打开时按草稿预览。
- * AI 按指令编排时只显示已经出现的节点，最新的一个闪一下并滚到看得见，新连线画出来，标题栏写 AI 在做的事
+ * AI 按指令编排时只显示已经出现的节点，最新的一个闪一下并滚到看得见，新连线画出来，标题栏写 AI 在做的事。
+ * 对话发起的配置缺范围或有冲突时，对应的节点标为待补充、待确认（琥珀色虚线），不能开始（ADR 0129）
  */
 export const ComposeBoard = defineComponent({
   name: 'ComposeBoard',
@@ -121,11 +127,17 @@ export const ComposeBoard = defineComponent({
     /** 自定义范围的弹窗：点范围节点编辑，空着时点占位打开 */
     editor: { type: Object as PropType<ScopeEditor>, required: true },
     /** AI 按指令编排的进度；没在编排时为 null */
-    building: { type: Object as PropType<BuildState | null>, default: null }
+    building: { type: Object as PropType<BuildState | null>, default: null },
+    /** 对话发起的配置：没有范围时标"待补充" */
+    asking: { type: Boolean, default: false },
+    /** 还要用户确认的冲突 */
+    conflicts: { type: Array as PropType<readonly ConditionConflict[]>, default: () => [] }
   },
   emits: {
     start: () => true,
-    retry: () => true
+    retry: () => true,
+    /** 待补充节点上点选了城市 */
+    cities: (cityCodes: readonly string[]) => cityCodes.length > 0
   },
   setup(props, { emit }) {
     const canvas = ref<HTMLElement>();
@@ -144,9 +156,28 @@ export const ComposeBoard = defineComponent({
     const conditions = computed(() => props.composition.state.value.conditions);
     const params = computed(() => props.composition.state.value.params);
     const shown = computed(() => preview.value ?? params.value);
-    const links = computed(() => boardLinks(boxes.value, conditions.value, shown.value));
-    const related = computed(() => relatedNodes(hovered.value, conditions.value));
+    const conflictOn = (key: ConditionConflict['key']) => props.conflicts.some(conflict => conflict.key === key);
     const missing = computed(() => missingConditions(conditions.value));
+    const ready = computed(() => canRun(conditions.value, props.conflicts));
+    // 要标出来的范围节点：对话发起时缺范围，或者说的范围有冲突
+    const regionPending = computed(() => conflictOn('scope') || (props.asking && missing.value.includes('region')));
+    const pendingNodes = computed(() => {
+      const nodes = new Set<string>();
+      if (regionPending.value) {
+        nodes.add(REGION_NODE);
+      }
+      if (conflictOn('years')) {
+        nodes.add(YEAR_PENDING_NODE);
+      }
+      for (const { key } of props.conflicts) {
+        if (key !== 'years' && key !== 'scope') {
+          nodes.add(paramNode(key));
+        }
+      }
+      return nodes;
+    });
+    const links = computed(() => boardLinks(boxes.value, conditions.value, shown.value, pendingNodes.value));
+    const related = computed(() => relatedNodes(hovered.value, conditions.value));
     // 节点是否显示：AI 编排时只显示已经出现的
     const visible = (key: string) => props.building === null || props.building.revealed.has(key);
 
@@ -388,9 +419,67 @@ export const ComposeBoard = defineComponent({
               </div>
             );
           })}
+          {conflictOn('years') && visible(YEAR_PENDING_NODE) && (
+            <div
+              key={YEAR_PENDING_NODE}
+              class={[nodeClass(YEAR_PENDING_NODE, 'year'), styles.pendingNode]}
+              data-node={YEAR_PENDING_NODE}
+            >
+              <ElTag class="tag-mini" type="warning" disableTransitions>
+                待确认
+              </ElTag>
+            </div>
+          )}
         </TransitionGroup>,
-        empty('years', years.length === 0 && props.building === null)
+        empty('years', years.length === 0 && !conflictOn('years') && props.building === null)
       ];
+    };
+
+    // 待补充、待确认的范围节点（ADR 0129）：可以直接在这里选；有冲突时要先回答引导卡的问题
+    const uploadArea = (files: File[]) => props.editor.start('upload', { files });
+    const renderPendingRegion = () => {
+      const conflict = conflictOn('scope');
+      return (
+        <TransitionGroup key="nodes" {...transition}>
+          {visible(REGION_NODE) && (
+            <div key={REGION_NODE} class={[nodeClass(REGION_NODE, 'region'), styles.pendingNode]} data-node={REGION_NODE}>
+              <div class={styles.regionHead}>
+                <SvgIcon class={styles.icon} name="simulation-region" />
+                <b>监测范围</b>
+                <ElTag class="tag-mini" type="warning" disableTransitions>
+                  {conflict ? '待确认' : '待补充'}
+                </ElTag>
+              </div>
+              <p class={styles.pendingNote}>{conflict ? '指令里的范围有冲突，确认后继续' : '计算前需要指定；可以直接回复，或选择'}</p>
+              {!conflict && (
+                <div class={styles.pendingActions}>
+                  <CityPicker placement="bottom" onPick={cityCodes => emit('cities', cityCodes)}>
+                    {{
+                      reference: () => (
+                        <button type="button" aria-haspopup="dialog">
+                          选择城市
+                        </button>
+                      )
+                    }}
+                  </CityPicker>
+                  <AreaFilePicker onPick={uploadArea}>
+                    {{
+                      default: ({ open }: { readonly open: () => void }) => (
+                        <button type="button" onClick={open}>
+                          上传文件
+                        </button>
+                      )
+                    }}
+                  </AreaFilePicker>
+                  <button type="button" onClick={() => props.editor.start('draw')}>
+                    地图绘制
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </TransitionGroup>
+      );
     };
 
     // 自定义范围的节点：缩略图、名称、涉及的市县，点击编辑（ADR 0121）
@@ -436,6 +525,9 @@ export const ComposeBoard = defineComponent({
 
     const renderRegion = () => {
       const { scope } = conditions.value;
+      if (regionPending.value) {
+        return renderPendingRegion();
+      }
       if (scope.kind === 'area') {
         return renderArea(scope.area);
       }
@@ -532,7 +624,8 @@ export const ComposeBoard = defineComponent({
       const keys = all.filter(key => visible(paramNode(key)));
       return keys.map(key => {
         const node = paramNode(key);
-        const scenario = !isStandard(key, shown.value);
+        const unsure = key !== 'walk' && conflictOn(key);
+        const scenario = !unsure && !isStandard(key, shown.value);
         return (
           <ElPopover
             key={node}
@@ -556,7 +649,7 @@ export const ComposeBoard = defineComponent({
                 <span class={styles.paramSlot}>
                   <button
                     type="button"
-                    class={[nodeClass(node, 'param'), scenario && styles.scenarioParam]}
+                    class={[nodeClass(node, 'param'), scenario && styles.scenarioParam, unsure && styles.pendingNode]}
                     data-node={node}
                     aria-haspopup="dialog"
                     aria-expanded={editing.value === key}
@@ -571,7 +664,7 @@ export const ComposeBoard = defineComponent({
                   >
                     <span class={styles.text}>
                       <span class={styles.meta}>{PARAM_LABELS[key]}</span>
-                      <b title={describeParam(key, shown.value)}>{describeParam(key, shown.value)}</b>
+                      <b title={describeParam(key, shown.value)}>{unsure ? '待确认' : describeParam(key, shown.value)}</b>
                     </span>
                   <SvgIcon class={styles.edit} name="simulation-tune" />
                 </button>
@@ -593,6 +686,13 @@ export const ComposeBoard = defineComponent({
       });
     };
 
+    const outputHint = () => {
+      if (props.conflicts.length > 0) {
+        return '在下方回复或点选项确认';
+      }
+      return props.asking ? '可以直接回复，或从左侧选择' : '从左侧点选或拖入';
+    };
+
     const renderOutput = () => {
       if (!visible(OUTPUT_NODE)) {
         return null;
@@ -601,7 +701,6 @@ export const ComposeBoard = defineComponent({
       const cityCodes = scopeCityCodes(scope);
       const area = scope.kind === 'area';
       const { model } = props;
-      const ready = missing.value.length === 0;
       const launching = props.building?.launching ?? false;
       let status: VNodeChild = null;
       if (model.status === 'loading') {
@@ -618,18 +717,18 @@ export const ComposeBoard = defineComponent({
       }
       return (
         <div
-          class={[nodeClass(OUTPUT_NODE, 'output'), ready && styles.armed, launching && styles.launching]}
+          class={[nodeClass(OUTPUT_NODE, 'output'), ready.value && styles.armed, launching && styles.launching]}
           data-node={OUTPUT_NODE}
         >
           <ChatAvatar class={styles.robot} speaker="assistant" size={44} />
           <b>AI计算</b>
           <span class={styles.meta}>
-            {ready
+            {ready.value
               ? `${years.length} 个年度 × ${area ? '自定义范围' : `${cityCodes.length} 市`} × ${indicatorIds.length} 项指标`
-              : `待补充：${missing.value.map(kind => CONDITION_LABELS[kind]).join('、')}`}
+              : blockerText(conditions.value, props.conflicts)}
           </span>
           <span class={styles.meta}>
-            {ready ? outputText(years.length * (area ? 1 : cityCodes.length) * indicatorIds.length, area) : '从左侧点选或拖入'}
+            {ready.value ? outputText(years.length * (area ? 1 : cityCodes.length) * indicatorIds.length, area) : outputHint()}
           </span>
           {status}
           <ElButton
@@ -637,7 +736,7 @@ export const ComposeBoard = defineComponent({
             type="primary"
             icon={VideoPlay}
             loading={launching}
-            disabled={!ready || model.status !== 'ready' || (props.building !== null && !launching)}
+            disabled={!ready.value || model.status !== 'ready' || (props.building !== null && !launching)}
             onClick={() => emit('start')}
           >
             {launching ? '计算启动中' : '开始计算'}
@@ -654,25 +753,32 @@ export const ComposeBoard = defineComponent({
       output: renderOutput
     };
 
-    return () => {
-      const ready = missing.value.length === 0;
+    // 标题栏：AI 在做的事；停下来等用户时写等什么
+    const renderStatus = () => {
+      const waiting = props.asking && !ready.value && props.building === null;
+      const message = waiting ? blockerText(conditions.value, props.conflicts).replaceAll('待', '等待') : props.building?.message;
       return (
+        message && (
+          <div key="status" class={[styles.aiStatus, waiting && styles.aiWaiting]} role={waiting ? undefined : 'status'}>
+            <ChatAvatar class={waiting ? undefined : styles.statusRobot} speaker="assistant" size={20} />
+            {message}
+          </div>
+        )
+      );
+    };
+
+    return () => (
         <MxPanel class={styles.panel} headerTone="muted" flush>
           {{
             header: () => [
               <StageStepper key="stepper" phase="compose" />,
-              props.building && (
-                <div key="status" class={styles.aiStatus} role="status">
-                  <ChatAvatar class={styles.statusRobot} speaker="assistant" size={20} />
-                  {props.building.message}
-                </div>
-              )
+              renderStatus()
             ],
             default: () => [
               <div
                 key="canvas"
                 ref={canvas}
-                class={[styles.canvas, ready && styles.ready, over.value && styles.over]}
+                class={[styles.canvas, ready.value && styles.ready, over.value && styles.over]}
                 data-drop={props.drag.item.value?.kind}
                 onDragover={onDragover}
                 onDragleave={onDragleave}
@@ -718,11 +824,11 @@ export const ComposeBoard = defineComponent({
                 conditions={conditions.value}
                 params={shown.value}
                 previewing={preview.value !== null}
+                pendingScope={regionPending.value}
               />
             ]
           }}
         </MxPanel>
-      );
-    };
+    );
   }
 });

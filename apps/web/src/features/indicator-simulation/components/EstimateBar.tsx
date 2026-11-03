@@ -22,7 +22,9 @@ export const EstimateBar = defineComponent({
     conditions: { type: Object as PropType<SimulationConditions>, required: true },
     params: { type: Object as PropType<SimulationParams>, required: true },
     /** 参数弹窗的草稿：标出"参数预览中" */
-    previewing: Boolean
+    previewing: Boolean,
+    /** 对话发起的配置还缺范围（ADR 0129） */
+    pendingScope: Boolean
   },
   setup(props) {
     const collapsed = ref(false);
@@ -45,7 +47,7 @@ export const EstimateBar = defineComponent({
       }
       const current = result.value;
       if (!current) {
-        return <p class={styles.status}>选择年份、范围和指标后显示预估</p>;
+        return <p class={styles.status}>{props.pendingScope ? '补充监测范围后显示预估' : '选择年份、范围和指标后显示预估'}</p>;
       }
       const more = conditions.indicatorIds.length - ROWS;
       return (

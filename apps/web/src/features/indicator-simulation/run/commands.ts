@@ -1,6 +1,7 @@
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { type Composition, rememberedScopes, SIMULATION_YEARS, withScope } from '../compose/composition';
-import { AREA_WORDS, findCities, findIndicators } from '../compose/prompt';
+import { type ConditionConflict, paramConflicts, saidPopChanges, saidRecognition, saidRule, scopeConflict, withoutPop } from '../compose/conflicts';
+import { AREA_WORDS, findCities, findIndicators, saidScope } from '../compose/prompt';
 import { applyWalk, findWalk } from '../compose/walk-prompt';
 import { scopeText } from '../flow/plan';
 import { simulationIndicator, standardWalkMinutes, walkOptions } from '../model/indicators';
@@ -14,7 +15,6 @@ import {
   paramApplies,
   type ParamKey,
   PARAM_LABELS,
-  POP_CHANGE_RANGE,
   type SimulationParams
 } from '../model/params';
 
@@ -32,6 +32,8 @@ export type RunCommand =
       readonly said: readonly string[];
       readonly notes: readonly string[];
     }
+  /** 一句话里互相矛盾：不改，问用哪一个（ADR 0129） */
+  | { readonly kind: 'conflict'; readonly conflicts: readonly ConditionConflict[] }
   | { readonly kind: 'none'; readonly notes: readonly string[] };
 
 const ADD = /加上|增加|添加|再加|加入|也看|还要|补充/;
@@ -40,6 +42,7 @@ const ONLY = /只看|只推演|只计算|只要|换成|改成|改为/;
 // 说到这些动词时指标本身也要变：步行时长的说法不从句子里去掉，"加上社区小学步行 20 分钟"仍然加上社区小学
 const KEEP_INDICATOR = /只看|只推演|只计算|只要|换成/;
 const WALK_RESET = /步行(时长|时间)?(改回|恢复|回到)/;
+const REMOVE_SCOPE = /(去掉|删除|删掉|移除|不要|清空|取消)(监测|计算|自定义|这个|该|当前)*范围/;
 
 const shortOf = (id: string) => simulationIndicator(id).short;
 const sameList = (a: readonly (string | number)[], b: readonly (string | number)[]) => a.join() === b.join();
@@ -51,23 +54,40 @@ function sameScope(a: SimulationScope, b: SimulationScope): boolean {
   return a.kind === 'area' && b.kind === 'area' && a.area === b.area;
 }
 
-// 说到的范围：自定义范围、城市（在自定义范围下说城市，改为行政区划，"加上""去掉"以范围涉及的市为基础）
+// 说到的范围：移除、自定义范围、城市（在自定义范围下说城市，改为行政区划，"加上""去掉"以范围涉及的市为基础）
 function nextScope(text: string, current: Composition, notes: string[]): SimulationScope {
   const { scope } = current.conditions;
   const { area } = rememberedScopes(current);
-  if (AREA_WORDS.test(text)) {
+  if (REMOVE_SCOPE.test(text)) {
+    if (scope.kind === 'cities' && text.includes('自定义')) {
+      notes.push('当前用的是行政区划，没有自定义范围可移除');
+      return scope;
+    }
+    return scope.kind === 'area' ? areaScope(null) : citiesScope([]);
+  }
+  const said = saidScope(text, citiesIn(text));
+  if (said.kind === 'area') {
     if (area) {
       return areaScope(area);
     }
-    notes.push('还没有自定义范围，可在条件配置中上传范围文件或在地图上绘制');
+    // 正等着补充范围：切到自定义范围，条件库给出上传和绘制；已有范围时不丢掉它
+    if (scopeCityCodes(scope).length === 0) {
+      return areaScope(null);
+    }
+    notes.push('还没有自定义范围，可以点"上传范围"或说"绘制范围"');
     return scope;
   }
-  const cities = /人口/.test(text) ? [] : findCities(text);
-  if (cities.length === 0) {
+  if (said.kind !== 'cities') {
     return scope;
   }
-  return citiesScope(merge(scopeCityCodes(scope), cities, text, JIANGSU_CITIES.map(city => city.code)));
+  return citiesScope(merge(scopeCityCodes(scope), said.cityCodes, text, JIANGSU_CITIES.map(city => city.code)));
 }
+
+// 对话里说人口时不认城市
+const citiesIn = (text: string) => (/人口/.test(text) ? [] : findCities(text));
+
+// 一项条件原来有、这句话之后没了
+const emptied = (before: readonly unknown[], after: readonly unknown[]) => before.length > 0 && after.length === 0;
 
 // 按动词合并：去掉、只看、加上（默认）
 function merge<T>(current: readonly T[], mentioned: readonly T[], text: string, order: readonly T[]): T[] {
@@ -86,21 +106,17 @@ function mentionedParams(text: string): Partial<SimulationParams> {
   if (/(恢复|改回|回到|按)标准口径/.test(text)) {
     Object.assign(patch, { rule: 'new', recognition: 'half', popChange: 0, walkMinutes: defaultParams().walkMinutes });
   }
-  if (text.includes('旧规程')) {
-    patch.rule = 'old';
-  } else if (text.includes('新规程')) {
-    patch.rule = 'new';
+  const rule = saidRule(text);
+  if (rule === 'old' || rule === 'new') {
+    patch.rule = rule;
   }
-  if (text.includes('相交')) {
-    patch.recognition = 'intersect';
-  } else if (/(覆盖|认定).*(50%|一半)/.test(text)) {
-    patch.recognition = 'half';
+  const recognition = saidRecognition(text);
+  if (recognition === 'intersect' || recognition === 'half') {
+    patch.recognition = recognition;
   }
-  const pop = /人口(增加|增长|上升|提高|减少|下降|降低)(\d+)%/.exec(text);
-  if (pop) {
-    const stepped = Math.round(Number(pop[2]) / POP_CHANGE_RANGE.step) * POP_CHANGE_RANGE.step;
-    const size = Math.min(POP_CHANGE_RANGE.max, stepped);
-    patch.popChange = /减少|下降|降低/.test(pop[1] ?? '') ? -size : size;
+  const [pop] = saidPopChanges(text);
+  if (pop !== undefined) {
+    patch.popChange = pop;
   } else if (/人口(不变|恢复)/.test(text)) {
     patch.popChange = 0;
   }
@@ -109,7 +125,8 @@ function mentionedParams(text: string): Partial<SimulationParams> {
 
 /**
  * 理解推演中说的一句话（按规则，不接大模型）：停止；改参数（规程、认定、人口、步行时长）；
- * 加上、去掉或只看某些城市、指标、年度；没有改动时才认暂停和继续。用不上的参数、清空的条件写进 notes，不改
+ * 加上、去掉或只看某些城市、指标、年度；新增、替换或移除监测范围；没有改动时才认暂停和继续。
+ * 用不上的参数、清空的年份和指标写进 notes，不改；一句话里互相矛盾时问用哪一个。范围可以移除，结果里条件就不全了（ADR 0129）
  */
 export function interpretCommand(input: string, current: Composition): RunCommand {
   const text = input.replace(/\s+/g, '');
@@ -122,6 +139,10 @@ export function interpretCommand(input: string, current: Composition): RunComman
   }
   const { conditions, params } = current;
   const notes: string[] = [];
+  const named = saidScope(text, citiesIn(text));
+  if (named.kind === 'both') {
+    return { kind: 'conflict', conflicts: [scopeConflict(named.cityCodes, rememberedScopes(current).area !== null)] };
+  }
   // 单纯改步行时长时，句子里的指标和"改成"不是在改所选的指标
   const walk = findWalk(text);
   const keepsIndicator = ADD.test(text) || REMOVE.test(text) || KEEP_INDICATOR.test(text);
@@ -131,9 +152,12 @@ export function interpretCommand(input: string, current: Composition): RunComman
   const verb = ADD.test(rest) || REMOVE.test(rest) || ONLY.test(rest);
   const scope = nextScope(rest, current, notes);
   const indicators = findIndicators(rest);
-  const years = [...new Set([...rest.matchAll(/20\d{2}/g)].map(match => Number(match[0])))].filter(year =>
-    SIMULATION_YEARS.includes(year)
-  );
+  const saidYears = [...new Set([...rest.matchAll(/20\d{2}/g)].map(match => Number(match[0])))];
+  const years = saidYears.filter(year => SIMULATION_YEARS.includes(year));
+  const unavailable = saidYears.filter(year => !SIMULATION_YEARS.includes(year));
+  if (unavailable.length > 0) {
+    notes.push(`没有 ${unavailable.join('、')} 年的数据，可选 ${SIMULATION_YEARS.at(-1)}～${SIMULATION_YEARS[0]} 年`);
+  }
   const indicatorIds =
     indicators.length > 0 && verb
       ? REMOVE.test(rest)
@@ -143,8 +167,12 @@ export function interpretCommand(input: string, current: Composition): RunComman
           : [...conditions.indicatorIds, ...indicators.filter(id => !conditions.indicatorIds.includes(id))]
       : conditions.indicatorIds;
   const yearList = years.length > 0 ? merge(conditions.years, years, rest, SIMULATION_YEARS) : conditions.years;
-  if (scopeCityCodes(scope).length === 0 || indicatorIds.length === 0 || yearList.length === 0) {
-    return { kind: 'none', notes: [...notes, '年份、范围和指标均需至少保留一项'] };
+  if (emptied(conditions.indicatorIds, indicatorIds) || emptied(conditions.years, yearList)) {
+    return { kind: 'none', notes: [...notes, '年份和指标均需至少保留一项'] };
+  }
+  const contradictions = paramConflicts(rest).filter(conflict => indicatorIds.some(id => paramApplies(conflict.key, id)));
+  if (contradictions.length > 0) {
+    return { kind: 'conflict', conflicts: contradictions };
   }
 
   // 参数：只改用得上的
@@ -173,9 +201,15 @@ export function interpretCommand(input: string, current: Composition): RunComman
   const scopeChanged = !sameScope(scope, conditions.scope);
   if (scopeChanged) {
     const { area } = rememberedScopes(current);
-    // 从自定义范围改为行政区划时说明范围还在
-    const kept = scope.kind === 'cities' && area ? `（${areaLabel(area)}仍保留，说"改回自定义范围"可以切回）` : '';
-    said.push(`范围改为${scopeText(scope)}${kept}`);
+    if (scopeCityCodes(scope).length > 0) {
+      // 从自定义范围改为行政区划时说明范围还在
+      const kept = scope.kind === 'cities' && area ? `（${areaLabel(area)}仍保留，说"改回自定义范围"可以切回）` : '';
+      said.push(`范围改为${scopeText(scope)}${kept}`);
+    } else if (scope.kind === 'area' && conditions.scope.kind === 'cities') {
+      said.push('监测范围改用自定义范围');
+    } else {
+      said.push(`已移除${scopeText(conditions.scope)}`);
+    }
   }
   const added = indicatorIds.filter(id => !conditions.indicatorIds.includes(id));
   const removed = conditions.indicatorIds.filter(id => !indicatorIds.includes(id));
@@ -268,6 +302,27 @@ export function commandSuggestions(composition: Composition, phase: 'running' | 
   } else if (!indicatorIds.includes('A-39')) {
     list.push('加上人均公园绿地');
   }
-  list.push(phase === 'done' ? '调整条件' : '停止计算');
+  list.push('绘制范围', '移除范围', phase === 'done' ? '调整条件' : '停止计算');
   return list;
+}
+
+/** 这句话是一条新的完整指令：说了指标，又说了年份、范围或"计算"，没有"加上、去掉、只看"这类动词 */
+export function isFullInstruction(input: string): boolean {
+  const text = withoutPop(input.replace(/「[^」]*」/g, '').replace(/\s+/g, ''));
+  if (findIndicators(text).length === 0 || ADD.test(text) || REMOVE.test(text) || ONLY.test(text)) {
+    return false;
+  }
+  return /计算|推演/.test(text) || /20\d{2}/.test(text) || findCities(text).length > 0 || AREA_WORDS.test(text);
+}
+
+/** 开始计算的说法 */
+export const isStartWord = (input: string): boolean => /^(开始计算|开始|计算|开始吧|计算吧|算吧)$/.test(input.replace(/\s+/g, ''));
+
+/** 要上传或绘制范围的说法：打开弹窗，不是改条件 */
+export function scopeAction(input: string): 'upload' | 'draw' | null {
+  const match = /^(?:请|重新)*(上传|绘制|画)(?:一个|新的|自定义|监测)*范围$/.exec(input.replace(/\s+/g, ''));
+  if (!match) {
+    return null;
+  }
+  return match[1] === '上传' ? 'upload' : 'draw';
 }

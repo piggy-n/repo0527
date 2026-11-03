@@ -6,7 +6,7 @@ import { defaultParams, isStandard } from '../model/params';
 import { areaScope, citiesScope, scopeCityCodes } from '../model/scope';
 import { NINGZHEN_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
-import { commandSuggestions, interpretCommand, type RunCommand } from './commands';
+import { commandSuggestions, interpretCommand, isFullInstruction, isStartWord, type RunCommand, scopeAction } from './commands';
 
 const current: Composition = {
   conditions: { years: [2025], scope: citiesScope(['320100', '320500']), indicatorIds: ['A-31', 'A-39'] },
@@ -71,7 +71,8 @@ describe('interpretCommand', () => {
   it('用不上的参数、清空条件、听不懂的话不改；有改动时暂停不算', () => {
     const solo: Composition = { ...current, conditions: { ...current.conditions, indicatorIds: ['A-39'] } };
     expect(interpretCommand('按旧规程计算', solo)).toEqual({ kind: 'none', notes: ['所选指标不适用计算规程'] });
-    expect(interpretCommand('去掉南京市和苏州市', current)).toEqual({ kind: 'none', notes: ['年份、范围和指标均需至少保留一项'] });
+    expect(interpretCommand('去掉社区卫生和人均公园绿地', current)).toEqual({ kind: 'none', notes: ['年份和指标均需至少保留一项'] });
+    expect(interpretCommand('去掉 2025 年', current)).toEqual({ kind: 'none', notes: ['年份和指标均需至少保留一项'] });
     expect(interpretCommand('今天天气怎么样', current)).toEqual({ kind: 'none', notes: [] });
     expect(interpretCommand('暂停，改成旧规程', current).kind).toBe('change');
     // 一句里同时有用得上和用不上的：改用得上的，说明用不上的
@@ -91,11 +92,13 @@ describe('commandSuggestions', () => {
       '社区卫生改为步行 10 分钟',
       '加上无锡市',
       '去掉人均公园绿地',
+      '绘制范围',
+      '移除范围',
       '停止计算'
     ]);
     expect(commandSuggestions(current, 'paused')[0]).toBe('继续');
     const done = commandSuggestions({ ...current, conditions: { ...current.conditions, indicatorIds: ['B-65'] } }, 'done');
-    expect(done).toEqual(['覆盖认定改回 50%', '公园绿地改为步行 10 分钟', '加上无锡市', '加上人均公园绿地', '调整条件']);
+    expect(done).toEqual(['覆盖认定改回 50%', '公园绿地改为步行 10 分钟', '加上无锡市', '加上人均公园绿地', '绘制范围', '移除范围', '调整条件']);
   });
 });
 
@@ -176,7 +179,7 @@ describe('自定义范围的说法（ADR 0121）', () => {
     expect(back.said).toEqual(['范围改为自定义范围「宁镇交界」']);
     expect(interpretCommand('按上传的范围计算', current)).toEqual({
       kind: 'none',
-      notes: ['还没有自定义范围，可在条件配置中上传范围文件或在地图上绘制']
+      notes: ['还没有自定义范围，可以点"上传范围"或说"绘制范围"']
     });
   });
 
@@ -186,5 +189,93 @@ describe('自定义范围的说法（ADR 0121）', () => {
     const kept = commandSuggestions({ ...current, scopes: { cityCodes: [], area } }, 'running');
     expect(kept).toContain('改回自定义范围');
     expect(kept).not.toContain('加上无锡市');
+  });
+});
+
+describe('新增、替换、移除监测范围（ADR 0129）', () => {
+  const pending: Composition = { ...current, conditions: { ...current.conditions, scope: citiesScope([]) } };
+
+  it('移除范围：说"移除范围"或去掉最后的市，结果里范围是空的；其余条件不变', () => {
+    for (const words of ['移除范围', '去掉监测范围', '不要范围了', '清空范围']) {
+      const removed = changeOf(interpretCommand(words, current));
+      expect(removed.composition.conditions.scope).toEqual(citiesScope([]));
+      expect(removed.composition.conditions.indicatorIds).toEqual(current.conditions.indicatorIds);
+      expect(removed.said).toEqual(['已移除南京市、苏州市']);
+    }
+    expect(changeOf(interpretCommand('去掉南京市和苏州市', current)).composition.conditions.scope).toEqual(citiesScope([]));
+  });
+
+  it('移除自定义范围：范围不再记着；用着行政区划时说明没有可移除的', async () => {
+    const area = await testArea(await loadTestAtlas(), NINGZHEN_RINGS, '宁镇交界');
+    const removed = changeOf(interpretCommand('移除自定义范围', withArea(current, area)));
+    expect(removed.composition.conditions.scope).toEqual(areaScope(null));
+    expect(rememberedScopes(removed.composition).area).toBeNull();
+    expect(removed.said).toEqual(['已移除自定义范围「宁镇交界」']);
+    expect(interpretCommand('移除自定义范围', current)).toEqual({ kind: 'none', notes: ['当前用的是行政区划，没有自定义范围可移除'] });
+  });
+
+  it('等范围时：回复城市就是补上，其余条件不变；可以接着改年份、指标、参数', () => {
+    const filled = changeOf(interpretCommand('南京市、苏州市', pending));
+    expect(filled.composition.conditions.scope).toEqual(citiesScope(['320100', '320500']));
+    expect(filled.composition.conditions.indicatorIds).toEqual(current.conditions.indicatorIds);
+    expect(changeOf(interpretCommand('全省', pending)).composition.conditions.scope).toEqual(citiesScope(JIANGSU_CITIES.map(city => city.code)));
+    const years = changeOf(interpretCommand('改成 2024 年', pending));
+    expect(years.composition.conditions).toMatchObject({ years: [2024], scope: citiesScope([]) });
+    const added = changeOf(interpretCommand('再加上公交车站', pending));
+    expect(added.composition.conditions.indicatorIds).toEqual(['A-31', 'A-39', 'A08-2']);
+    expect(changeOf(interpretCommand('按旧规程计算', pending)).composition.params.rule).toBe('old');
+  });
+
+  it('等范围时说自定义范围但还没有：切到自定义范围等上传；已有范围时不丢', async () => {
+    const asked = changeOf(interpretCommand('用自定义范围', pending));
+    expect(asked.composition.conditions.scope).toEqual(areaScope(null));
+    expect(asked.said).toEqual(['监测范围改用自定义范围']);
+    expect(interpretCommand('用自定义范围', current).kind).toBe('none');
+    const area = await testArea(await loadTestAtlas(), NINGZHEN_RINGS);
+    expect(changeOf(interpretCommand('用自定义范围', { ...pending, scopes: { cityCodes: [], area } })).composition.conditions.scope).toEqual(areaScope(area));
+  });
+
+  it('年份全空（待确认）时回复可选的年份；说不可选的年份时说明，不改', () => {
+    const noYear: Composition = { ...current, conditions: { ...current.conditions, years: [] } };
+    expect(changeOf(interpretCommand('改成 2025 年', noYear)).composition.conditions.years).toEqual([2025]);
+    expect(interpretCommand('改成 2019 年', current)).toEqual({ kind: 'none', notes: ['没有 2019 年的数据，可选 2021～2026 年'] });
+  });
+
+  it('一句话里互相矛盾：不改，问用哪一个；用不上的参数不问', () => {
+    const asked = interpretCommand('按旧规程和新规程计算', current);
+    expect(asked.kind).toBe('conflict');
+    expect(asked.kind === 'conflict' && asked.conflicts.map(item => item.key)).toEqual(['rule']);
+    expect(interpretCommand('用自定义范围和南京市', current).kind).toBe('conflict');
+    const solo: Composition = { ...current, conditions: { ...current.conditions, indicatorIds: ['A-39'] } };
+    expect(interpretCommand('按旧规程和新规程计算', solo).kind).toBe('none');
+    // 说换成哪一个不是矛盾
+    expect(changeOf(interpretCommand('把旧规程改成新规程', { ...current, params: { ...current.params, rule: 'old' } })).composition.params.rule).toBe('new');
+    expect(changeOf(interpretCommand('把自定义范围换成无锡市', current)).composition.conditions.scope).toEqual(citiesScope(['320200']));
+  });
+});
+
+describe('说法的分类', () => {
+  it('完整指令：说了指标，又说了年份、范围或"计算"，没有动词', () => {
+    expect(isFullInstruction('计算 2025 年社区卫生服务设施覆盖率')).toBe(true);
+    expect(isFullInstruction('计算社区卫生服务设施覆盖率')).toBe(true);
+    expect(isFullInstruction('2025 年南京市社区卫生覆盖率')).toBe(true);
+    expect(isFullInstruction('按常住人口增加 10%，计算 2025 年人均公园绿地面积')).toBe(true);
+    expect(isFullInstruction('计算自定义范围「只看南京」 2025 年社区卫生服务设施覆盖率')).toBe(true);
+    expect(isFullInstruction('再加上人均公园绿地')).toBe(false);
+    expect(isFullInstruction('去掉人均公园绿地')).toBe(false);
+    expect(isFullInstruction('社区小学步行 20 分钟')).toBe(false);
+    expect(isFullInstruction('南京市')).toBe(false);
+    expect(isFullInstruction('人均公园绿地面积')).toBe(false);
+  });
+
+  it('开始计算、上传和绘制范围的说法', () => {
+    expect(['开始计算', '开始', '计算吧'].every(isStartWord)).toBe(true);
+    expect(isStartWord('开始计算社区卫生')).toBe(false);
+    expect(scopeAction('上传范围')).toBe('upload');
+    expect(scopeAction('重新上传范围')).toBe('upload');
+    expect(scopeAction('绘制范围')).toBe('draw');
+    expect(scopeAction('画一个范围')).toBe('draw');
+    expect(scopeAction('上传的范围')).toBeNull();
+    expect(scopeAction('移除范围')).toBeNull();
   });
 });

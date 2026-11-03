@@ -171,7 +171,9 @@ export const ScopeAreaDialog = defineComponent({
   props: {
     editor: { type: Object as PropType<ScopeEditor>, required: true },
     /** 页面的行政区边界拥有者（ADR 0128）：和结果地图共用，勾选的级别不随弹窗关闭改变 */
-    boundaries: { type: Object as PropType<Boundaries>, required: true }
+    boundaries: { type: Object as PropType<Boundaries>, required: true },
+    /** 现在能不能放地图画布：计算和结果阶段打开时，要等结果地图卸下（ADR 0129） */
+    canvasReady: { type: Boolean, default: true }
   },
   setup(props) {
     const dragging = ref(false);
@@ -261,7 +263,7 @@ export const ScopeAreaDialog = defineComponent({
                   onDragleave={onDragLeave}
                   onDrop={onDrop}
                 >
-                  <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS}scrollZoomRates={SCROLL_ZOOM_RATES} />
+                  {props.canvasReady && <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS} scrollZoomRates={SCROLL_ZOOM_RATES} />}
                   <MapStatusNotice />
                   <MapChrome editor={editor} />
                   <BoxSelectOverlay pick={editor.draw} />

@@ -1,5 +1,8 @@
 import { MxSplitLayout } from '@yzt/ui';
-import { defineComponent, type PropType } from 'vue';
+import { computed, defineComponent, type PropType } from 'vue';
+import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
+import { missingConditions } from '../compose/composition';
+import { citiesScope } from '../model/scope';
 import type { CompositionOwner } from '../composables/useComposition';
 import { useConditionDrag } from '../composables/useConditionDrag';
 import type { PromptComposer } from '../composables/usePromptComposer';
@@ -28,6 +31,16 @@ export const ComposeStage = defineComponent({
   },
   setup(props, { emit }) {
     const drag = useConditionDrag();
+    const pendingScope = computed(
+      () =>
+        props.composer.asking.value &&
+        props.composer.building.value === null &&
+        missingConditions(props.composition.state.value.conditions).includes('region')
+    );
+    const pickCities = (cityCodes: readonly string[]) => {
+      const names = cityCodes.map(code => JIANGSU_CITIES.find(city => city.code === code)?.name ?? code);
+      props.composer.supplyScope(citiesScope(cityCodes), names.join('、'));
+    };
     return () => {
       const building = props.composer.building.value;
       const locked = building !== null && styles.locked;
@@ -35,7 +48,13 @@ export const ComposeStage = defineComponent({
         <MxSplitLayout asideLabel="计算条件">
           {{
             aside: () => (
-              <ConditionLibrary class={locked} composition={props.composition} drag={drag} editor={props.editor} />
+              <ConditionLibrary
+                class={locked}
+                composition={props.composition}
+                drag={drag}
+                editor={props.editor}
+                pendingScope={pendingScope.value}
+              />
             ),
             default: () => (
               <ComposeBoard
@@ -45,6 +64,9 @@ export const ComposeStage = defineComponent({
                 model={props.model}
                 editor={props.editor}
                 building={building}
+                asking={props.composer.asking.value}
+                conflicts={props.composer.conflicts.value}
+                onCities={pickCities}
                 onStart={() => emit('start')}
                 onRetry={() => emit('retry')}
               />

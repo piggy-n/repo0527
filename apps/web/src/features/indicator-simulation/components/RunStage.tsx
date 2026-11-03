@@ -61,6 +61,10 @@ export const RunStage = defineComponent({
     basemap: { type: Object as PropType<Basemap>, required: true },
     boundaries: { type: Object as PropType<Boundaries>, required: true },
     goToDefaultView: { type: Function as PropType<() => void>, required: true },
+    /** 现在能不能放结果地图：范围弹窗借用地图上下文时不能（ADR 0129） */
+    mapAvailable: { type: Boolean, default: true },
+    /** 范围弹窗开着：计算暂停 */
+    scopeEditing: { type: Boolean, default: false },
     /** 完成后主区看什么；推演中总是流程图 */
     view: { type: String as PropType<RunView>, default: 'flow' }
   },
@@ -126,6 +130,9 @@ export const RunStage = defineComponent({
     };
 
     const renderState = () => {
+      if (props.scopeEditing) {
+        return '已暂停 · 正在选择范围';
+      }
       if (state.value.paused) {
         return `已暂停${current.value ? ` · ${current.value}` : ''}`;
       }
@@ -288,7 +295,7 @@ export const RunStage = defineComponent({
                     default: () => (
                       <div class={styles.stack}>
                         {renderFlow()}
-                        {mapMounted.value && renderMap()}
+                        {mapMounted.value && props.mapAvailable && renderMap()}
                       </div>
                     )
                   }}

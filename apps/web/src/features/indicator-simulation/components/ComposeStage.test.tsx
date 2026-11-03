@@ -332,3 +332,125 @@ describe('ComposeStage 的自定义范围（ADR 0121）', () => {
     expect(buttonOf(wrapper, '地图绘制').exists()).toBe(true);
   });
 });
+
+const guideOf = (wrapper: Wrapper) => wrapper.get('[data-guide]');
+const guideButton = (wrapper: Wrapper, text: string) =>
+  required(
+    guideOf(wrapper).findAll('button').find(button => button.text() === text),
+    `引导卡上的"${text}"`
+  );
+
+describe('ComposeStage 先对话、后补充范围（ADR 0129）', () => {
+  beforeAll(() => {
+    Element.prototype.scrollBy = () => undefined;
+  });
+  afterAll(() => {
+    Reflect.deleteProperty(Element.prototype, 'scrollBy');
+  });
+
+  const NO_SCOPE = '计算 2025 年社区卫生服务设施覆盖率';
+
+  async function sendPending(wrapper: Wrapper, sentence = NO_SCOPE) {
+    await wrapper.get('[aria-label="计算指令"]').setValue(sentence);
+    await buttonOf(wrapper, '发送').trigger('click');
+    await vi.advanceTimersByTimeAsync(60_000);
+    await flushPromises();
+  }
+
+  it('没写范围：范围节点标待补充，不能开始；引导卡问范围，条件库标出来', async () => {
+    vi.useFakeTimers();
+    const { wrapper, composition } = mountStage(emptyComposition());
+    await sendPending(wrapper);
+
+    expect(wrapper.emitted('start')).toBeUndefined();
+    const region = wrapper.get('[data-node="region"]');
+    expect(region.text()).toContain('待补充');
+    expect(region.classes().join(' ')).toMatch(/_pendingNode_/);
+    expect(buttonOf(wrapper, '开始计算').attributes('disabled')).toBeDefined();
+    expect(wrapper.get('[data-node="output"]').text()).toContain('待补充：监测范围');
+    expect(wrapper.get('[aria-label="指标预估结果"]').text()).toContain('补充监测范围后显示预估');
+    expect(guideOf(wrapper).text()).toContain('已识别：2025 年 · 社区卫生服务设施步行15分钟覆盖率。还缺监测范围');
+    expect(wrapper.text()).toContain('等待补充：监测范围');
+    expect(wrapper.find('[class*="_pendingTag_"]').text()).toBe('待补充');
+    expect(wrapper.get<HTMLTextAreaElement>('[aria-label="计算指令"]').element.value).toBe('');
+    expect(composition.state.value.conditions.indicatorIds).toEqual(['A-31']);
+  });
+
+  it('引导卡的"全省"一键补上，自动开始计算；节点换成范围', async () => {
+    vi.useFakeTimers();
+    const { wrapper, composition } = mountStage(emptyComposition());
+    await sendPending(wrapper);
+    await guideButton(wrapper, '全省').trigger('click');
+    expect(wrapper.find('[data-guide]').exists()).toBe(false);
+    expect(wrapper.get('[data-node="region"]').text()).toContain('全省');
+    expect(wrapper.get('[role="status"]').text()).toContain('已补充范围：全省 13 个市');
+    expect(buttonOf(wrapper, '计算启动中').exists()).toBe(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(wrapper.emitted('start')).toHaveLength(1);
+    expect(scopeCityCodes(composition.state.value.conditions.scope)).toHaveLength(13);
+  });
+
+  it('在条件库里点选：范围节点换回来，引导卡说齐了；点引导卡的开始才计算', async () => {
+    vi.useFakeTimers();
+    const { wrapper } = mountStage(emptyComposition());
+    await sendPending(wrapper);
+    await chip(wrapper, '南京').trigger('click');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(wrapper.emitted('start')).toBeUndefined();
+    expect(wrapper.get('[data-node="region"]').classes().join(' ')).not.toMatch(/_pendingNode_/);
+    expect(wrapper.find('[class*="_pendingTag_"]').exists()).toBe(false);
+    expect(guideOf(wrapper).text()).toContain('条件已齐全');
+    await guideButton(wrapper, '开始计算').trigger('click');
+    expect(wrapper.emitted('start')).toHaveLength(1);
+  });
+
+  it('待补充节点和引导卡都能打开绘制；说自定义范围但没有时先给上传和绘制', async () => {
+    vi.useFakeTimers();
+    const { wrapper, editor } = mountStage(emptyComposition());
+    await sendPending(wrapper);
+    await guideButton(wrapper, '地图绘制').trigger('click');
+    expect(editor.open.value).toBe(true);
+    editor.cancel();
+    const region = wrapper.get('[data-node="region"]');
+    await required(region.findAll('button').find(button => button.text() === '地图绘制'), '节点上的绘制').trigger('click');
+    expect(editor.open.value).toBe(true);
+    editor.cancel();
+
+    await guideButton(wrapper, '全省').trigger('click');
+    await vi.advanceTimersByTimeAsync(1000);
+    await buttonOf(wrapper, '重置条件').trigger('click');
+    await sendPending(wrapper, '计算自定义范围 2025 年社区卫生服务设施覆盖率');
+    const labels = guideOf(wrapper).findAll('button').map(button => button.text());
+    expect(labels).toEqual(['上传文件', '地图绘制', '全省', '选择城市']);
+  });
+
+  it('冲突：节点标待确认，引导卡给选项；选了以后继续', async () => {
+    vi.useFakeTimers();
+    const { wrapper } = mountStage(emptyComposition());
+    await sendPending(wrapper, '按旧规程和新规程计算 2025 年南京市社区卫生服务设施覆盖率');
+    expect(wrapper.get('[data-node="params:rule"]').text()).toContain('待确认');
+    expect(wrapper.get('[data-node="output"]').text()).toContain('待确认：计算规程');
+    expect(buttonOf(wrapper, '开始计算').attributes('disabled')).toBeDefined();
+    expect(guideOf(wrapper).text()).toContain('同时提到了旧规程和新规程');
+    await guideButton(wrapper, '旧规程').trigger('click');
+    expect(wrapper.get('[data-node="params:rule"]').text()).toContain('旧规程');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(wrapper.emitted('start')).toHaveLength(1);
+  });
+
+  it('年份不可用：年份列是待确认的节点', async () => {
+    vi.useFakeTimers();
+    const { wrapper } = mountStage(emptyComposition());
+    await sendPending(wrapper, '计算 2019 年南京市社区卫生服务设施覆盖率');
+    expect(nodes(wrapper, 'years:')).toEqual(['years:pending']);
+    expect(wrapper.get('[data-node="years:pending"]').text()).toBe('待确认');
+    expect(guideOf(wrapper).text()).toContain('没有 2019 年的数据');
+  });
+
+  it('纯手动配置：还是原来的占位，没有引导卡', () => {
+    const { wrapper } = mountStage(emptyComposition());
+    expect(wrapper.text()).toContain('拖入或点选监测范围');
+    expect(wrapper.find('[data-guide]').exists()).toBe(false);
+    expect(wrapper.find('[class*="_pendingTag_"]').exists()).toBe(false);
+  });
+});

@@ -6,7 +6,7 @@ import { areaScope, citiesScope, scopeCityCodes } from '../model/scope';
 import { NANJING_RINGS, testArea } from '../model/test-area';
 import { loadTestAtlas } from '../model/test-atlas';
 import { emptyComposition, rememberedScopes, withArea, withScopeKind } from './composition';
-import { areaPrompt, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt } from './prompt';
+import { conflictsAfterReply, areaPrompt, describeComposition, parsePrompt, PROMPT_EXAMPLES, randomPrompt, randomScopeReply, saidScope } from './prompt';
 
 const ALL = JIANGSU_CITIES.map(city => city.code);
 const parsed = (text: string) => {
@@ -45,9 +45,9 @@ describe('parsePrompt', () => {
     });
   });
 
-  it('没写年份按 2025，没写城市或写了全省按全省；不在可选范围的年份不算', () => {
-    expect(parsed('计算公园绿地覆盖率').conditions).toMatchObject({ years: [2025], scope: citiesScope(ALL) });
-    expect(parsed('计算 2019 年全省公园绿地覆盖率').conditions).toMatchObject({ years: [2025], scope: citiesScope(ALL) });
+  it('没写年份按 2025；写了全省是全省；没写范围时留空，由调用方标为待补充', () => {
+    expect(parsed('计算公园绿地覆盖率').conditions).toMatchObject({ years: [2025], scope: citiesScope([]) });
+    expect(parsed('计算全省公园绿地覆盖率').conditions).toMatchObject({ years: [2025], scope: citiesScope(ALL) });
   });
 
   it('长的关键词先匹配：人均公共停车场不会再算成公共停车场', () => {
@@ -174,7 +174,7 @@ describe('randomPrompt', () => {
 });
 
 describe('自定义范围的指令（ADR 0121）', () => {
-  it('说了自定义范围时用记下的范围；还没有范围时说明原因', async () => {
+  it('说了自定义范围时用记下的范围；还没有范围时是待补充的自定义范围', async () => {
     const area = await testArea(await loadTestAtlas(), NANJING_RINGS, '江宁片区');
     const current = withArea(emptyComposition(), area);
     const result = parsePrompt('按上传的范围计算 2024 年社区卫生服务设施覆盖率', current);
@@ -183,7 +183,9 @@ describe('自定义范围的指令（ADR 0121）', () => {
       scope: areaScope(area),
       indicatorIds: ['A-31']
     });
-    expect(parsePrompt(areaPrompt(area), emptyComposition())).toEqual({ ok: false, reason: 'area' });
+    const none = parsePrompt(areaPrompt(area), emptyComposition());
+    expect(none.ok && none.composition.conditions.scope).toEqual(areaScope(null));
+    expect(none.ok && none.conflicts).toEqual([]);
   });
 
   it('没说范围时：正在用自定义范围就接着用；说了城市时改为行政区划，范围仍记着', async () => {
@@ -194,8 +196,10 @@ describe('自定义范围的指令（ADR 0121）', () => {
     const cities = parsePrompt('计算苏州市人均公园绿地面积', current);
     expect(cities.ok && cities.composition.conditions.scope).toEqual(citiesScope(['320500']));
     expect(cities.ok && rememberedScopes(cities.composition).area).toBe(area);
+    // 切到了行政区划、一个市也没选：待补充，自定义范围仍记着
     const other = parsePrompt('计算人均公园绿地面积', withScopeKind(current, 'cities'));
-    expect(other.ok && other.composition.conditions.scope).toEqual(citiesScope(ALL));
+    expect(other.ok && other.composition.conditions.scope).toEqual(citiesScope([]));
+    expect(other.ok && rememberedScopes(other.composition).area).toBe(area);
   });
 
   it('「」里是范围的名称：名称里的年份、城市、指标不算条件', async () => {
@@ -222,5 +226,120 @@ describe('自定义范围的指令（ADR 0121）', () => {
     expect(random).toContain('计算自定义范围「江宁片区」 ');
     const parsedRandom = parsePrompt(random, current);
     expect(parsedRandom.ok && parsedRandom.composition.conditions.scope).toEqual(areaScope(area));
+  });
+});
+
+const parsedFull = (text: string, current = emptyComposition()) => {
+  const result = parsePrompt(text, current);
+  if (!result.ok) {
+    throw new Error(`应能解析：${text}`);
+  }
+  return result;
+};
+const conflictKeys = (text: string, current = emptyComposition()) => parsedFull(text, current).conflicts.map(item => item.key);
+
+describe('范围待补充（ADR 0129）', () => {
+  it('没写范围时其余条件照常解析，范围留空，不算冲突', () => {
+    const result = parsedFull('按卫生服务站步行 5 分钟的旧规程，计算 2024、2025 年社区卫生服务设施覆盖率和人均公园绿地面积');
+    expect(result.composition.conditions).toEqual({ years: [2025, 2024], scope: citiesScope([]), indicatorIds: ['A-31', 'A-39'] });
+    expect(result.composition.params.rule).toBe('old');
+    expect(result.conflicts).toEqual([]);
+    expect(result.keptScope).toBe(false);
+  });
+
+  it('页面上已有范围时接着用，记为沿用', () => {
+    const current = parsed('计算 2025 年苏州市公园绿地覆盖率');
+    const result = parsedFull('计算 2024 年人均公园绿地面积', current);
+    expect(result.composition.conditions.scope).toEqual(citiesScope(['320500']));
+    expect(result.keptScope).toBe(true);
+  });
+
+  it('"换一批"的语句去掉范围后都进入待补充，其余条件和原来相同', () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      const text = randomPrompt(seeded(seed));
+      const scoped = parsed(text);
+      // 语句里的范围是"全省"或顿号隔开的市名，紧跟在年后面
+      const stripped = text.replace(/年(?:全省|[\u4e00-\u9fa5]{2,3}市(?:、[\u4e00-\u9fa5]{2,3}市)*)/, '年');
+      const result = parsedFull(stripped);
+      expect(stripped).not.toBe(text);
+      expect(result.composition.conditions.scope).toEqual(citiesScope([]));
+      expect(result.composition.conditions.years).toEqual(scoped.conditions.years);
+      expect(result.composition.conditions.indicatorIds).toEqual(scoped.conditions.indicatorIds);
+      expect(result.composition.params).toEqual(scoped.params);
+      expect(result.conflicts).toEqual([]);
+    }
+  });
+
+  it('等范围时的回复示例换一句，不和当前的重复', () => {
+    expect(randomScopeReply(() => 0, '南京市、苏州市')).toBe('全省');
+    expect(randomScopeReply(() => 0.99, '常州市、镇江市')).toBe('徐州市、连云港市');
+    for (let index = 0; index < 20; index++) {
+      expect(randomScopeReply(seeded(index + 1), '全省')).not.toBe('全省');
+    }
+  });
+});
+
+describe('条件冲突（ADR 0129）', () => {
+  it('写的年份都不可选：留空并追问，不替用户换成 2025 年', () => {
+    const result = parsedFull('计算 2019 年南京市社区卫生服务设施覆盖率');
+    expect(result.composition.conditions.years).toEqual([]);
+    expect(result.conflicts[0]).toMatchObject({ key: 'years', label: '年份' });
+    expect(result.conflicts[0]?.question).toContain('2019');
+    expect(result.conflicts[0]?.options.map(option => option.say)).toEqual(['改成 2026 年', '改成 2025 年']);
+  });
+
+  it('部分年份不可选：按可选的算，说明丢了哪一年', () => {
+    const result = parsedFull('计算 2019、2025 年南京市社区卫生服务设施覆盖率');
+    expect(result.composition.conditions.years).toEqual([2025]);
+    expect(result.conflicts).toEqual([]);
+    expect(result.notes).toEqual(['没有 2019 年的数据，已按 2025 年计算']);
+  });
+
+  it('同一项参数说了两种：不替用户选，用标准口径等确认；所选指标用不上时不问', () => {
+    const rule = parsedFull('按旧规程和新规程计算 2025 年南京市社区卫生服务设施覆盖率');
+    expect(rule.conflicts.map(item => item.key)).toEqual(['rule']);
+    expect(rule.composition.params.rule).toBe('new');
+    expect(conflictKeys('按旧规程和新规程计算 2025 年南京市人均公园绿地面积')).toEqual([]);
+    expect(conflictKeys('按相交即算和覆盖 50% 计算 2025 年南京市公园绿地覆盖率')).toEqual(['recognition']);
+    const pop = parsedFull('按常住人口增加 10%、人口减少 5%，计算 2025 年南京市人均公园绿地面积');
+    expect(pop.conflicts.map(item => item.key)).toEqual(['popChange']);
+    expect(pop.composition.params.popChange).toBe(0);
+  });
+
+  it('同时说自定义范围和城市：范围留空等确认；"换成"说的是后面那个', async () => {
+    const result = parsedFull('计算自定义范围和南京市 2025 年社区卫生服务设施覆盖率');
+    expect(result.conflicts.map(item => item.key)).toEqual(['scope']);
+    expect(result.composition.conditions.scope).toEqual(citiesScope([]));
+    expect(result.conflicts[0]?.options.map(option => option.say)).toEqual(['用自定义范围', '南京市']);
+
+    expect(saidScope('把自定义范围换成南京市')).toEqual({ kind: 'cities', cityCodes: ['320100'] });
+    expect(saidScope('南京市改回自定义范围')).toEqual({ kind: 'area' });
+    expect(saidScope('计算覆盖率')).toEqual({ kind: 'none' });
+  });
+
+  it('参数用不上时不阻断，写进说明', () => {
+    const result = parsedFull('按旧规程计算 2025 年南京市人均公园绿地面积');
+    expect(result.conflicts).toEqual([]);
+    expect(result.composition.params.rule).toBe('new');
+    expect(result.notes).toEqual(['所选指标不适用计算规程，已按标准口径']);
+    expect(parsedFull('按相交即算计算 2025 年南京市人均公园绿地面积').notes).toEqual(['所选指标不适用覆盖认定，已按标准口径']);
+    expect(parsedFull('按人口增加 10% 计算 2025 年南京市公园绿地覆盖率').notes).toEqual(['所选指标不适用常住人口变化，已按标准口径']);
+    expect(parsedFull('按步行 10 分钟计算 2025 年南京市人均公园绿地面积').notes).toEqual(['所选指标不适用步行时长，已按标准口径']);
+  });
+
+  it('说了回答才算解决：按句子里实际说的判断', () => {
+    const conflicts = [
+      ...parsedFull('计算 2019 年南京市社区卫生服务设施覆盖率').conflicts,
+      ...parsedFull('按旧规程和新规程计算 2025 年南京市社区卫生服务设施覆盖率').conflicts,
+      ...parsedFull('计算自定义范围和南京市 2025 年社区卫生服务设施覆盖率').conflicts
+    ];
+    const keys = (text: string) => conflictsAfterReply(conflicts, text).map(item => item.key);
+    expect(keys('再加上人均公园绿地')).toEqual(['years', 'rule', 'scope']);
+    expect(keys('改成 2025 年')).toEqual(['rule', 'scope']);
+    expect(keys('改成 2019 年')).toEqual(['years', 'rule', 'scope']);
+    expect(keys('按新规程计算')).toEqual(['years', 'scope']);
+    expect(keys('南京市')).toEqual(['years', 'rule']);
+    expect(keys('用自定义范围')).toEqual(['years', 'rule']);
+    expect(keys('恢复标准口径')).toEqual(['years', 'scope']);
   });
 });

@@ -239,3 +239,8 @@
     color: var(--color-danger-text);
   }
 }
+
+// 计算和结果阶段框内一行：上传范围和文字居中对齐
+.input:not(.stacked) .upload {
+  align-self: center;
+}

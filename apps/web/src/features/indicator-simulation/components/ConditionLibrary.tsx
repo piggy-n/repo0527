@@ -31,7 +31,7 @@ const chipKey = (item: DragItem): string => {
 };
 
 // 一个模块：区块标题、右侧的补充，下面是内容；间距比 MxSection 紧凑，指标模块撑满剩余高度
-const section = (title: string, extra: VNodeChild, content: VNodeChild, fill = false) => (
+const section = (title: VNodeChild, extra: VNodeChild, content: VNodeChild, fill = false) => (
   <section class={[styles.section, fill && styles.fill]}>
     <MxTitle>{{ default: () => title, extra: () => extra }}</MxTitle>
     {content}
@@ -47,7 +47,9 @@ export const ConditionLibrary = defineComponent({
   props: {
     composition: { type: Object as PropType<CompositionOwner>, required: true },
     drag: { type: Object as PropType<ConditionDrag>, required: true },
-    editor: { type: Object as PropType<ScopeEditor>, required: true }
+    editor: { type: Object as PropType<ScopeEditor>, required: true },
+    /** 对话发起的配置还缺范围：标出"待补充"，提示可以在这里选（ADR 0129） */
+    pendingScope: { type: Boolean, default: false }
   },
   setup(props) {
     const keyword = ref('');
@@ -103,7 +105,7 @@ export const ConditionLibrary = defineComponent({
       const { composition } = props;
       const { cityCodes } = rememberedScopes(composition.state.value);
       return (
-        <div key="cities" class={[styles.grid, styles.cities]}>
+        <div key="cities" class={[styles.grid, styles.cities, props.pendingScope && styles.glow]}>
           {JIANGSU_CITIES.map(city =>
             chip(
               { kind: 'region', code: city.code },
@@ -123,7 +125,7 @@ export const ConditionLibrary = defineComponent({
       const upload = (files: File[]) => editor.start('upload', { files });
       if (!area) {
         return (
-          <div key="entries" class={styles.entries}>
+          <div key="entries" class={[styles.entries, props.pendingScope && styles.glow]}>
             <AreaFilePicker onPick={upload}>
               {{
                 default: ({ open }: { readonly open: () => void }) => (
@@ -272,7 +274,14 @@ export const ConditionLibrary = defineComponent({
               <div class={styles.body}>
                 {section('监测年份', <span class={styles.extra}>可多选</span>, renderYears())}
                 {section(
-                  '监测范围',
+                  props.pendingScope
+                    ? [
+                        '监测范围',
+                        <ElTag key="pending" class={['tag-mini', styles.pendingTag]} type="warning" disableTransitions>
+                          待补充
+                        </ElTag>
+                      ]
+                    : '监测范围',
                   scope.kind === 'cities' && (
                     <ElCheckbox
                       modelValue={all}

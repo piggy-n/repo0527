@@ -35,6 +35,8 @@ async function mountRun(composition: Composition = sampleComposition()) {
   let owner: SimulationResult | undefined;
   let boundaries: Boundaries | undefined;
   const view = ref<RunView>('flow');
+  const mapAvailable = ref(true);
+  const scopeEditing = ref(false);
   const Host = defineComponent({
     setup() {
       const owned = useSimulationRun(clock);
@@ -62,6 +64,8 @@ async function mountRun(composition: Composition = sampleComposition()) {
           basemap={basemap}
           boundaries={ownedBoundaries}
           goToDefaultView={() => undefined}
+          mapAvailable={mapAvailable.value}
+          scopeEditing={scopeEditing.value}
           view={view.value}
           onUpdate:view={next => (view.value = next)}
         />
@@ -70,7 +74,7 @@ async function mountRun(composition: Composition = sampleComposition()) {
   });
   const wrapper = mount(Host, { attachTo: document.body, global: { stubs: { MapCanvas: true } } });
   const started = required(run, '计算的拥有者');
-  required(log, '时间线').begin('计算全省三项指标');
+  required(log, '时间线').begin([{ speaker: 'user', text: '计算全省三项指标' }]);
   started.start(composition, calculator);
   await flushPromises();
   return {
@@ -80,7 +84,9 @@ async function mountRun(composition: Composition = sampleComposition()) {
     result: required(owner, '结果的拥有者'),
     boundaries: required(boundaries, '行政区边界的拥有者'),
     view,
-    clock
+    clock,
+    mapAvailable,
+    scopeEditing
   };
 }
 
@@ -220,7 +226,7 @@ describe('RunStage', () => {
     expect(view.value).toBe('result');
     expect(titles(mounted)).toContain('计算结果');
     expect(titles(mounted)).not.toContain('AI计算');
-    expect(item(mounted, '公园绿地覆盖率').text()).toBe('公园绿地覆盖率66.6%');
+    expect(item(mounted, '公园绿地覆盖率').text()).toBe('公园绿地覆盖率57.1%');
     expect(item(mounted, '公园绿地覆盖率').attributes('aria-expanded')).toBe('true');
     expect(wrapper.findAll('[aria-label^="放大到"]').filter(row => row.element.tagName === 'BUTTON')).not.toHaveLength(0);
     expect(wrapper.get('[aria-label="图例"]').text()).toContain('公园绿地覆盖率2026 年 · 单位 %');
@@ -343,5 +349,25 @@ describe('RunStage', () => {
     expect([dim('pop'), dim('parse'), dim('report')]).toEqual([false, true, true]);
     await prep.trigger('mouseleave');
     expect(dim('parse')).toBe(false);
+  });
+});
+
+describe('RunStage 范围弹窗开着时（ADR 0129）', () => {
+  it('标题栏写正在选择范围；结果地图让开，关上后回来', async () => {
+    const mounted = await mountRun();
+    const { wrapper, mapAvailable, scopeEditing } = mounted;
+    scopeEditing.value = true;
+    await flushPromises();
+    expect(wrapper.get('[role="status"]').text()).toBe('已暂停 · 正在选择范围');
+    scopeEditing.value = false;
+    await advance(mounted, ENOUGH);
+    expect(wrapper.find('map-canvas-stub').exists()).toBe(true);
+
+    mapAvailable.value = false;
+    await flushPromises();
+    expect(wrapper.find('map-canvas-stub').exists()).toBe(false);
+    mapAvailable.value = true;
+    await flushPromises();
+    expect(wrapper.find('map-canvas-stub').exists()).toBe(true);
   });
 });
