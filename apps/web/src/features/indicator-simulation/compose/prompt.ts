@@ -1,3 +1,4 @@
+import { indicatorValueSource } from '@/shared/city-indicators/indicator-value';
 import { JIANGSU_CITIES, shortRegionName } from '@/shared/map/region/region-catalog';
 import { SIMULATION_INDICATORS, simulationIndicator } from '../model/indicators';
 import {
@@ -24,9 +25,9 @@ import {
 } from './conflicts';
 import { applyWalk, coreName, findWalk, walkStem } from './walk-prompt';
 
-/** 三条示例指令：每条是"推演条件 + 至多一个参数"，分别用到计算规程、覆盖认定、常住人口变化 */
+/** 三条示例指令：第一条是打开页面时的占位，标准口径，算出的市级值就是简报的数；后两条分别用到覆盖认定、常住人口变化 */
 export const PROMPT_EXAMPLES: readonly string[] = [
-  '按卫生服务站步行 5 分钟的旧规程，计算 2025 年南京市社区卫生服务设施覆盖率',
+  '计算 2025 年南京市社区卫生服务设施覆盖率',
   '按“相交即算”的覆盖认定，计算 2025 年南京市公园绿地、广场步行 5 分钟覆盖率',
   '按常住人口增加 10%，计算 2025 年南京市人均公园绿地面积'
 ];
@@ -279,6 +280,12 @@ export function randomScopeReply(random: () => number, avoid: string): string {
 /** 随机指令里一定有的指标：社区卫生服务设施覆盖率，计算规程、覆盖认定、步行时长都能演示 */
 export const ANCHOR_INDICATOR = 'A-31';
 
+// 这项指标这一年有简报的原数（ADR 0130）：其余年份是折算的，其余指标是模拟值
+const isReported = (id: string, year: number) => indicatorValueSource(id, year) === 'report';
+
+// 随机指令的年度：只取有简报原数的
+const RANDOM_YEARS = SIMULATION_YEARS.filter(year => isReported(ANCHOR_INDICATOR, year));
+
 // 随机指令里演示的步行时长：社区卫生的标准是 15 分钟
 const RANDOM_WALK_MINUTES: readonly number[] = [5, 10, 20, 30];
 
@@ -300,8 +307,8 @@ const joinNames = (names: readonly string[]): string =>
 
 /**
  * 刷新时换上的一句指令：一定有社区卫生服务设施覆盖率，再随机配一两个年度、一到三个市或全省、另外 0～2 项指标，
- * 以及所选指标用得上的一项参数（也可能是标准口径）；和 avoid 里的话重复时重新组合。解析这句话得到同样的编排。
- * 传了 area（正在用的自定义范围）时范围写它的名称
+ * 以及所选指标用得上的一项参数（也可能是标准口径）；年度和指标只用有简报原数的；和 avoid 里的话重复时重新组合。
+ * 解析这句话得到同样的编排。传了 area（正在用的自定义范围）时范围写它的名称
  */
 export function randomPrompt(
   random: () => number,
@@ -310,9 +317,11 @@ export function randomPrompt(
 ): string {
   let text = '';
   for (let attempt = 0; attempt < 10 && (text === '' || avoid.includes(text)); attempt++) {
-    const years = sampleOf(SIMULATION_YEARS, random() < 0.7 ? 1 : 2, random).toSorted((a, b) => a - b);
+    const years = sampleOf(RANDOM_YEARS, random() < 0.7 ? 1 : 2, random).toSorted((a, b) => a - b);
     const cities = random() < 0.15 ? null : sampleOf(JIANGSU_CITIES, 1 + Math.floor(random() * 3), random);
-    const others = SIMULATION_INDICATORS.filter(item => item.id !== ANCHOR_INDICATOR);
+    const others = SIMULATION_INDICATORS.filter(
+      item => item.id !== ANCHOR_INDICATOR && years.every(year => isReported(item.id, year))
+    );
     const indicators = [simulationIndicator(ANCHOR_INDICATOR), ...sampleOf(others, Math.floor(random() * 3), random)];
     const ways = [
       '旧规程',
