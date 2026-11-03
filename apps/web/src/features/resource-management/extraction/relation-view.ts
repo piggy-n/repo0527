@@ -1,10 +1,10 @@
+import type { DetailChildRelation, DetailNode, GraphEdge, GraphEdgeKind, GraphNode, GraphNodeDetail, GraphView } from './graph-model';
+import { classCategory, EDGE_STYLES, NODE_STYLES, searchTitle } from './graph-style';
 import {
   ancestorsOf,
   childrenOf,
-  type GraphRelation,
   otherEnd,
   type RelationGraph,
-  type RelationKind,
   relationNode,
   type RelationNode,
   type RelationProduct,
@@ -12,61 +12,58 @@ import {
   searchRelationNodes
 } from './relation-graph';
 
+/** 图上的总节点；大类的节点编号就是数据成果的编号。它们只是组织节点，不在 graph.nodes 里（ADR 0126） */
+export const RELATION_ROOT_ID = 'root';
+
+const LEVEL_NAMES = ['一级类', '二级类', '三级类'];
+
 export interface RelationViewState {
   keyword: string;
   hiddenProducts: ReadonlySet<string>;
-  kinds: ReadonlySet<RelationKind>;
-  /** 展开、收起过的节点；没有记录的默认展开 */
-  expanded: ReadonlyMap<string, boolean>;
+  kinds: ReadonlySet<GraphEdgeKind>;
+  /** 收起的节点 */
+  collapsed: ReadonlySet<string>;
 }
 
-export interface RelationTreeItem {
-  node: RelationNode;
-  open: boolean;
-  /** 当前范围里的下级个数，收起时也算 */
-  childCount: number;
-  children: RelationTreeItem[];
-}
-
-export interface RelationLane {
-  product: RelationProduct;
-  /** 数据成果在整份数据里的序号，决定泳道颜色 */
-  productIndex: number;
-  tree: RelationTreeItem[];
-  datasets: RelationNode[];
-  classCount: number;
-}
-
-/** 图上的一条线：两端都是可见节点，同一对节点、同一种关系合成一条 */
-export interface RelationEdge {
-  key: string;
-  kind: RelationKind;
-  from: string;
-  to: string;
-  relations: GraphRelation[];
-}
-
-export interface RelationView {
-  lanes: RelationLane[];
-  edges: RelationEdge[];
-  /** 检索命中的节点 */
-  matches: ReadonlySet<string>;
+export interface RelationView extends GraphView {
   /** 当前范围：有命中时是命中节点周围，否则是全部节点 */
   scope: ReadonlySet<string>;
-  /** 可见节点所在的泳道 */
-  laneOf: ReadonlyMap<string, number>;
-  /** 范围里的节点在图上由谁代表：自己可见就是自己，被收起时是最近的可见上级 */
-  representatives: ReadonlyMap<string, string>;
-  /** 每种关系在可见泳道之间的条数，不论是否显示 */
-  counts: Readonly<Record<RelationKind, number>>;
 }
 
-/** 检索结果周围的范围：命中节点、它的上级和直接下级，以及和它有关系的节点和它们的上级 */
+function productOf(graph: RelationGraph, id: string): RelationProduct | undefined {
+  return graph.products.find(product => product.id === id);
+}
+
+/** 图上的下级：总节点 → 大类 → 一级类和数据表 → 下级分类 */
+export function relationChildren(graph: RelationGraph, id: string): readonly string[] {
+  if (id === RELATION_ROOT_ID) {
+    return graph.products.map(product => product.id);
+  }
+  if (productOf(graph, id)) {
+    return [...graph.nodes.values()]
+      .filter(node => node.productId === id && node.parentId === null)
+      .map(node => node.id);
+  }
+  return childrenOf(graph, id);
+}
+
+/** 图上的上级，从总节点到直接上级 */
+export function relationAncestors(graph: RelationGraph, id: string): string[] {
+  if (id === RELATION_ROOT_ID) {
+    return [];
+  }
+  if (productOf(graph, id)) {
+    return [RELATION_ROOT_ID];
+  }
+  return [RELATION_ROOT_ID, relationNode(graph, id).productId, ...ancestorsOf(graph, id)];
+}
+
+/** 检索结果周围的范围：命中节点、它的上级和直接下级，以及和它有关系的节点和它们的上级；总节点和大类跟着上级带上 */
 function searchScope(graph: RelationGraph, matches: readonly RelationNode[]): Set<string> {
   const ids = new Set<string>();
   const addWithAncestors = (id: string) => {
     ids.add(id);
-    ancestorsOf(graph, id).forEach(ancestor => ids.add(ancestor));
+    relationAncestors(graph, id).forEach(ancestor => ids.add(ancestor));
   };
   for (const node of matches) {
     addWithAncestors(node.id);
@@ -76,141 +73,215 @@ function searchScope(graph: RelationGraph, matches: readonly RelationNode[]): Se
   return ids;
 }
 
+function allIds(graph: RelationGraph): Set<string> {
+  return new Set([RELATION_ROOT_ID, ...graph.products.map(product => product.id), ...graph.nodes.keys()]);
+}
+
 /**
- * 当前状态下的图：每个数据成果一条泳道，分类按层级排成树，数据表在泳道底部；
- * 关系的一端被收起时挂到最近的可见上级上，两端落在同一节点的关系不画
+ * 当前状态下的图：总节点连四个大类，下面是分类树和数据表；
+ * 关系的一端被收起时挂到最近的可见分类上，两端落在同一节点的不画，同一对节点合成一条；一端不在检索范围里的不画
  */
 export function buildRelationView(graph: RelationGraph, state: RelationViewState): RelationView {
   const matchNodes = searchRelationNodes(graph, state.keyword);
-  const scope = matchNodes.length > 0 ? searchScope(graph, matchNodes) : new Set(graph.nodes.keys());
-  const isOpen = (id: string) => state.expanded.get(id) ?? true;
+  const scope = matchNodes.length > 0 ? searchScope(graph, matchNodes) : allIds(graph);
+  const matches = new Set(matchNodes.map(node => node.id));
 
-  const lanes: RelationLane[] = [];
-  const laneOf = new Map<string, number>();
-  graph.products.forEach((product, productIndex) => {
-    if (state.hiddenProducts.has(product.id)) {
+  const visible = new Set<string>();
+  const walk = (id: string) => {
+    if (!scope.has(id) || state.hiddenProducts.has(id)) {
       return;
     }
-    const lane = lanes.length;
-    const toItem = (node: RelationNode): RelationTreeItem => {
-      laneOf.set(node.id, lane);
-      const kids = childrenOf(graph, node.id).filter(id => scope.has(id));
-      const open = kids.length > 0 && isOpen(node.id);
-      return {
-        node,
-        open,
-        childCount: kids.length,
-        children: open ? kids.map(id => toItem(relationNode(graph, id))) : []
-      };
-    };
-    const nodes = [...graph.nodes.values()].filter(node => node.productId === product.id && scope.has(node.id));
-    const tree = nodes.filter(node => node.level === 1).map(toItem);
-    const datasets = nodes.filter(node => node.level === null);
-    datasets.forEach(node => laneOf.set(node.id, lane));
-    if (tree.length > 0 || datasets.length > 0) {
-      lanes.push({ product, productIndex, tree, datasets, classCount: nodes.length - datasets.length });
+    visible.add(id);
+    if (!state.collapsed.has(id)) {
+      relationChildren(graph, id).forEach(walk);
     }
-  });
+  };
+  walk(RELATION_ROOT_ID);
 
-  // 可见的节点都在 laneOf 里（收起的下级没有展开过）；代表是自己和上级里最深的可见节点
-  const representatives = new Map<string, string>();
-  for (const id of scope) {
-    const nearest = [...ancestorsOf(graph, id), id].findLast(candidate => laneOf.has(candidate));
-    if (nearest) {
-      representatives.set(id, nearest);
-    }
+  const rootName = matchNodes.length > 0 ? searchTitle(state.keyword.trim()) : graph.title;
+  const nodes: GraphNode[] = [];
+  for (const id of visible) {
+    const childCount = relationChildren(graph, id).filter(child => scope.has(child)).length;
+    nodes.push({
+      id,
+      match: matches.has(id),
+      childCount,
+      hiddenChildren: state.collapsed.has(id) ? childCount : 0,
+      ...nodeShape(graph, id, rootName)
+    });
   }
 
-  const order = new Map([...graph.nodes.keys()].map((id, index) => [id, index]));
-  const position = (id: string) => [laneOf.get(id) ?? 0, order.get(id) ?? 0];
-  const counts: Record<RelationKind, number> = { 'class-mapping': 0, temporal: 0, 'field-mapping': 0, spatial: 0 };
-  const edges = new Map<string, RelationEdge>();
+  const edges: GraphEdge[] = [];
+  for (const id of visible) {
+    for (const child of relationChildren(graph, id)) {
+      if (visible.has(child)) {
+        edges.push(treeEdge(graph, id, child));
+      }
+    }
+  }
+  const counts: Partial<Record<GraphEdgeKind, number>> = { 'class-mapping': 0, temporal: 0, 'field-mapping': 0, spatial: 0 };
+  const merged = new Map<string, GraphEdge>();
+  const nearestVisible = (id: string) => [...ancestorsOf(graph, id), id].findLast(candidate => visible.has(candidate));
   for (const relation of graph.relations) {
-    const a = representatives.get(relation.source);
-    const b = representatives.get(relation.target);
-    if (!a || !b) {
+    const a = nearestVisible(relation.source);
+    const b = nearestVisible(relation.target);
+    if (!scope.has(relation.source) || !scope.has(relation.target) || !a || !b) {
       continue;
     }
-    counts[relation.kind] += 1;
+    counts[relation.kind] = (counts[relation.kind] ?? 0) + 1;
     if (a === b || !state.kinds.has(relation.kind)) {
       continue;
     }
-    const [from, to] = [a, b].toSorted((x, y) => {
-      const [laneX, orderX] = position(x);
-      const [laneY, orderY] = position(y);
-      return laneX - laneY || orderX - orderY;
-    });
-    const key = `${relation.kind}|${from}|${to}`;
-    const edge = edges.get(key) ?? { key, kind: relation.kind, from, to, relations: [] };
-    edge.relations.push(relation);
-    edges.set(key, edge);
+    const id = `${relation.kind}|${a}|${b}`;
+    const count = (merged.get(id)?.count ?? 0) + 1;
+    const name = EDGE_STYLES[relation.kind].label;
+    const label = count > 1 ? `${name} ×${count}` : name;
+    merged.set(id, { id, source: a, target: b, kind: relation.kind, label, depth: 0, count });
   }
-
-  return {
-    lanes,
-    edges: [...edges.values()],
-    matches: new Set(matchNodes.map(node => node.id)),
-    scope,
-    laneOf,
-    representatives,
-    counts
-  };
+  edges.push(...merged.values());
+  counts.organize = edges.filter(edge => edge.kind === 'organize').length;
+  counts.contains = edges.filter(edge => edge.kind === 'contains').length;
+  return { nodes, edges, matches, counts, scope };
 }
 
-export interface RelationLink {
-  relation: GraphRelation;
-  other: RelationNode;
-}
-
-export interface ChildRelationLink extends RelationLink {
-  /** 关系在这个节点子树里的一端 */
-  inner: RelationNode;
-}
-
-export interface RelationNodeDetail {
-  node: RelationNode;
-  product: RelationProduct;
-  /** 从一级类到直接上级 */
-  path: RelationNode[];
-  children: RelationNode[];
-  relations: RelationLink[];
-  /** 下级分类和子树以外节点的关系，收起时在详情里也能看到 */
-  childRelations: ChildRelationLink[];
-  /** 分类所属数据成果的数据表 */
-  productDatasets: RelationNode[];
-}
-
-function isInside(graph: RelationGraph, id: string, rootId: string): boolean {
-  return id === rootId || ancestorsOf(graph, id).includes(rootId);
-}
-
-/** 选中节点的详情 */
-export function relationNodeDetail(graph: RelationGraph, id: string): RelationNodeDetail {
+// 节点里和状态无关的部分
+function nodeShape(graph: RelationGraph, id: string, rootName: string): Pick<GraphNode, 'name' | 'code' | 'kind' | 'level' | 'category'> {
+  if (id === RELATION_ROOT_ID) {
+    return { name: rootName, code: '', kind: 'root', level: null, category: 'root' };
+  }
+  const product = productOf(graph, id);
+  if (product) {
+    return { name: product.name, code: '', kind: 'system', level: null, category: 'system' };
+  }
   const node = relationNode(graph, id);
-  const product = graph.products.find(item => item.id === node.productId);
-  if (!product) {
-    throw new Error(`关系图里没有数据成果 ${node.productId}`);
+  return node.level === null
+    ? { name: node.name, code: node.code, kind: 'dataset', level: null, category: 'dataset' }
+    : { name: node.name, code: node.code, kind: 'class', level: node.level, category: classCategory(node.productId, node.level) };
+}
+
+function treeEdge(graph: RelationGraph, parent: string, child: string): GraphEdge {
+  const id = `tree:${child}`;
+  if (parent === RELATION_ROOT_ID) {
+    const label = productOf(graph, child)?.relation ?? '';
+    return { id, source: parent, target: child, kind: 'organize', label, depth: 0, count: 1 };
   }
-  const childRelations = graph.relations.flatMap(relation => {
-    const ends = [relation.source, relation.target];
-    const inner = ends.filter(end => end !== id && isInside(graph, end, id));
-    if (inner.length !== 1 || isInside(graph, otherEnd(relation, inner[0]), id)) {
+  const node = relationNode(graph, child);
+  const label = node.level === null ? '数据表' : EDGE_STYLES.contains.label;
+  const depth = ancestorsOf(graph, child).length + 1;
+  return { id, source: parent, target: child, kind: 'contains', label, depth, count: 1 };
+}
+
+function detailNode(node: RelationNode): DetailNode {
+  return { id: node.id, code: node.code, name: node.name };
+}
+
+function organizeNode(graph: RelationGraph, id: string): DetailNode {
+  const name = id === RELATION_ROOT_ID ? graph.title : (productOf(graph, id)?.name ?? id);
+  return { id, code: '', name };
+}
+
+function anyDetailNode(graph: RelationGraph, id: string): DetailNode {
+  const node = graph.nodes.get(id);
+  return node ? detailNode(node) : organizeNode(graph, id);
+}
+
+// 下级和子树以外节点的关系
+function childRelationsOf(graph: RelationGraph, id: string): DetailChildRelation[] {
+  const inside = (candidate: string) => candidate !== id && relationAncestors(graph, candidate).includes(id);
+  return graph.relations.flatMap(relation => {
+    const sourceInside = inside(relation.source);
+    if (sourceInside === inside(relation.target)) {
       return [];
     }
-    const innerNode = relationNode(graph, inner[0]);
-    return [{ relation, inner: innerNode, other: relationNode(graph, otherEnd(relation, innerNode.id)) }];
+    const [innerId, otherId] = sourceInside ? [relation.source, relation.target] : [relation.target, relation.source];
+    return [
+      {
+        id: relation.id,
+        kind: relation.kind,
+        label: EDGE_STYLES[relation.kind].label,
+        inner: detailNode(relationNode(graph, innerId)),
+        other: detailNode(relationNode(graph, otherId))
+      }
+    ];
   });
-  const datasets = [...graph.nodes.values()].filter(item => item.productId === node.productId && item.level === null);
+}
+
+const NO_DETAIL = { path: [], relations: [], childRelations: [], table: null, datasets: [], datasetsTitle: '', note: '' };
+
+/** 选中节点的详情；总节点和大类可以看，但不是取数节点 */
+export function relationNodeDetail(graph: RelationGraph, id: string): GraphNodeDetail {
+  const children = relationChildren(graph, id).map(child => anyDetailNode(graph, child));
+  if (id === RELATION_ROOT_ID) {
+    return {
+      ...NO_DETAIL,
+      id,
+      code: '',
+      name: graph.title,
+      meta: NODE_STYLES.root.label,
+      color: NODE_STYLES.root.fill,
+      isTarget: false,
+      children,
+      relations: graph.products.map(product => ({
+        id: `organize:${product.id}`,
+        kind: 'organize',
+        label: product.relation,
+        other: organizeNode(graph, product.id)
+      })),
+      note: '总节点和它的关系只用于组织展示，不改变四个大类原有的数据关系'
+    };
+  }
+  const product = productOf(graph, id);
+  if (product) {
+    return {
+      ...NO_DETAIL,
+      id,
+      code: '',
+      name: product.name,
+      meta: `${NODE_STYLES.system.label} · ${product.kind}`,
+      color: NODE_STYLES.system.fill,
+      isTarget: false,
+      children,
+      relations: [
+        {
+          id: `organize:${id}`,
+          kind: 'organize',
+          label: product.relation,
+          other: organizeNode(graph, RELATION_ROOT_ID)
+        }
+      ],
+      childRelations: childRelationsOf(graph, id)
+    };
+  }
+  const node = relationNode(graph, id);
+  const owner = productOf(graph, node.productId);
+  const levelName = node.level === null ? NODE_STYLES.dataset.label : (LEVEL_NAMES[node.level - 1] ?? `${node.level} 级类`);
+  const category = node.level === null ? 'dataset' : classCategory(node.productId, node.level);
+  const datasets = node.level === null
+    ? []
+    : [...graph.nodes.values()].filter(item => item.productId === node.productId && item.level === null).map(detailNode);
   return {
-    node,
-    product,
-    path: ancestorsOf(graph, id).map(ancestor => relationNode(graph, ancestor)),
-    children: childrenOf(graph, id).map(child => relationNode(graph, child)),
-    relations: relationsOf(graph, id).map(relation => ({
-      relation,
-      other: relationNode(graph, otherEnd(relation, id))
-    })),
-    childRelations,
-    productDatasets: node.level === null ? [] : datasets
+    id,
+    code: node.code,
+    name: node.name,
+    meta: [owner?.name, levelName].filter(Boolean).join(' · '),
+    color: NODE_STYLES[category].fill,
+    isTarget: true,
+    path: ancestorsOf(graph, id).map(ancestor => detailNode(relationNode(graph, ancestor))),
+    relations: relationsOf(graph, id).map(relation => {
+      const other = relationNode(graph, otherEnd(relation, id));
+      return {
+        id: relation.id,
+        kind: relation.kind,
+        label: EDGE_STYLES[relation.kind].label,
+        other: detailNode(other),
+        product: productOf(graph, other.productId)?.name
+      };
+    }),
+    childRelations: childRelationsOf(graph, id),
+    children,
+    table: node.table,
+    datasets,
+    datasetsTitle: `${owner?.name ?? ''}的数据表`,
+    note: ''
   };
 }

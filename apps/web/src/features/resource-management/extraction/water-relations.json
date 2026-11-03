@@ -1,10 +1,12 @@
 {
   "name": "水资源",
+  "title": "水资源知识图谱",
   "products": [
     {
       "id": "land-use",
       "name": "用地用海分类",
       "kind": "分类标准",
+      "relation": "规划用途",
       "classes": [
         {
           "code": "17",
@@ -24,8 +26,9 @@
     },
     {
       "id": "land-survey",
-      "name": "国土调查",
+      "name": "国土调查分类",
       "kind": "调查成果",
+      "relation": "现状调查",
       "classes": [
         {
           "code": "11",
@@ -63,8 +66,9 @@
     },
     {
       "id": "urban-monitoring",
-      "name": "城市国土空间监测",
+      "name": "城市国土空间监测分类",
       "kind": "监测成果",
+      "relation": "城市监测",
       "classes": [
         {
           "code": "13",
@@ -138,8 +142,9 @@
     },
     {
       "id": "water-survey",
-      "name": "水资源基础调查",
+      "name": "水资源基础调查分类",
       "kind": "调查成果",
+      "relation": "专项调查",
       "classes": [
         {
           "code": "FSQ",

@@ -1,18 +1,16 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { required } from '@/shared/testing/required';
-import { layoutGraph } from './graph-layout';
 import { knowledgeEdges, knowledgeNodes, searchContext, searchKnowledgeNodes } from './knowledge-graph';
-import legacy from './legacy-layout.fixture.json';
+import legacy from './legacy-subgraph.fixture.json';
 
-interface LegacyLayout {
+interface LegacySubgraph {
   keyword: string;
   ids: string[];
   edges: string[];
-  positions: Record<string, number[] | undefined>;
 }
 
-const fixtures: LegacyLayout[] = legacy;
+const fixtures: LegacySubgraph[] = legacy;
 const node = (id: string) => required(knowledgeNodes.find(item => item.id === id), `节点 ${id}`);
 
 describe('知识图谱数据', () => {
@@ -62,20 +60,11 @@ describe('searchContext', () => {
     expect(graph.nodes.some(item => item.parentId !== null && item.level === 3)).toBe(true);
   });
 
-  // 基准由旧项目 master-demo 的 graphData、GraphExpandManager、buildForceLayout 生成，不是用本实现算出来的
-  it.each(fixtures)('「$keyword」的节点、关系顺序和力导坐标与旧页面一致', fixture => {
+  // 基准由旧项目 master-demo 的 graphData、GraphExpandManager 生成，不是用本实现算出来的
+  it.each(fixtures)('「$keyword」的节点、关系顺序与旧页面一致', fixture => {
     const graph = searchContext(searchKnowledgeNodes(fixture.keyword));
-    const snapshot = JSON.stringify(graph);
-    const positions = layoutGraph(graph.nodes, graph.edges);
 
     expect(graph.nodes.map(item => item.id)).toEqual(fixture.ids);
     expect(graph.edges.map(edge => edge.id)).toEqual(fixture.edges);
-    for (const [id, point] of Object.entries(fixture.positions)) {
-      const [x, y] = required(point, `${id} 的旧坐标`);
-      const actual = required(positions.get(id), `${id} 的新坐标`);
-      expect(actual.x).toBeCloseTo(x, 5);
-      expect(actual.y).toBeCloseTo(y, 5);
-    }
-    expect(JSON.stringify(graph)).toBe(snapshot);
   });
 });

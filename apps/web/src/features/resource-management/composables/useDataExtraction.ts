@@ -7,36 +7,32 @@ import {
   type ExtractionRequest,
   extractionTarget
 } from '../extraction/extraction-form';
-import { type KnowledgeNode, searchContext, searchKnowledgeNodes } from '../extraction/knowledge-graph';
 import { chooseExtractionGraph, type ExtractionGraph, waterGraph } from '../extraction/relation-graph';
+import { useLegacyGraph } from './useLegacyGraph';
 import { useRelationGraph } from './useRelationGraph';
 
-/** 三步：搜索关键词、在关系图里选节点并填条件、完成 */
+/** 三步：搜索关键词、在知识图谱里选节点并填条件、完成 */
 export type ExtractionStep = 'search' | 'graph' | 'done';
 
 /**
  * 自助取数的弹窗：每次打开都从第一步和默认条件开始。旧页面的"开始取数"只是在前端切到完成页，
  * 没有接口、任务和结果文件（docs/modules/resource-management.md），这里同样只保存提交时的条件快照。
- * 第二步按检索词选图：水资源用泳道关系图（relation），其他资源沿用旧版知识图谱（legacy）
+ * 第二步按检索词选图：水资源（relation）和其他资源（legacy）用同一种知识图谱，数据不同
  */
 export function useDataExtraction() {
   const session = useSessionStore();
   const open = ref(false);
   const step = ref<ExtractionStep>('search');
   const keyword = ref('');
-  // 关系图对应的关键词：进入第二步时确定，之后改输入框不影响图
-  const searched = ref('');
   const mode = ref<ExtractionGraph>('legacy');
-  const matches = shallowRef<readonly KnowledgeNode[]>([]);
-  const graph = computed(() => searchContext(matches.value));
-  const selected = shallowRef<KnowledgeNode | null>(null);
+  const legacy = useLegacyGraph();
   const relation = useRelationGraph(waterGraph);
   const form = reactive(createExtractionForm());
   const request = shallowRef<ExtractionRequest | null>(null);
-  // 当前图里选中的节点：关系图的节点带上数据表的几何类型
+  // 当前图里选中的节点：水资源的节点带上数据表的几何类型
   const target = computed<ExtractionNode | null>(() => {
     if (mode.value === 'legacy') {
-      return selected.value;
+      return legacy.selected.value;
     }
     const node = relation.selected.value;
     return node && { id: node.id, name: node.name, geometry: node.table?.geometry };
@@ -54,10 +50,8 @@ export function useDataExtraction() {
   function start() {
     step.value = 'search';
     keyword.value = '';
-    searched.value = '';
     mode.value = 'legacy';
-    matches.value = [];
-    selected.value = null;
+    legacy.enter('');
     relation.reset();
     request.value = null;
     Object.assign(form, createExtractionForm());
@@ -86,30 +80,21 @@ export function useDataExtraction() {
     return null;
   }
 
-  /** 按资源类别进入：直接打开水资源关系图的全部节点 */
+  /** 按资源类别进入：直接打开水资源图谱的全部节点 */
   function browseWater() {
     enterGraph('relation', '');
   }
 
   function enterGraph(choice: ExtractionGraph, text: string) {
-    searched.value = text;
     mode.value = choice;
-    matches.value = choice === 'legacy' ? searchKnowledgeNodes(text) : [];
-    selected.value = null;
+    legacy.enter(choice === 'legacy' ? text : '');
     relation.reset(choice === 'relation' ? text : '');
     step.value = 'graph';
   }
 
-  /** 选中节点：显示它的信息，数据名称和数据需求换成这个节点的，其余条件不变 */
-  function select(node: KnowledgeNode) {
-    if (step.value === 'graph') {
-      selected.value = node;
-    }
-  }
-
   /** 回到第一步：清掉选中的节点和跟着它的数据名称、数据需求，其余条件保留 */
   function back() {
-    selected.value = null;
+    legacy.clearSelection();
     relation.clearSelection();
     step.value = 'search';
   }
@@ -131,10 +116,8 @@ export function useDataExtraction() {
     open,
     step,
     keyword,
-    searched,
     mode,
-    graph,
-    selected,
+    legacy,
     relation,
     form,
     request,
@@ -142,7 +125,6 @@ export function useDataExtraction() {
     close,
     search,
     browseWater,
-    select,
     back,
     submit
   };

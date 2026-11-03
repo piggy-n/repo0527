@@ -12,7 +12,6 @@ import {
   ElMessage,
   ElStep,
   ElSteps,
-  ElTag,
   type FormInstance,
   type FormRules
 } from 'element-plus';
@@ -22,10 +21,10 @@ import type { DataExtractionOwner, ExtractionStep } from '../composables/useData
 import { DATA_FORMATS } from '@/shared/data-request/catalog';
 import { HOT_KEYWORDS, PURPOSE_MAX_LENGTH } from '../extraction/extraction-form';
 import styles from './DataExtractionDialog.module.scss';
-import { KnowledgeGraphChart } from './KnowledgeGraphChart';
+import { GraphNodeDetail } from './GraphNodeDetail';
+import { KnowledgeGraphPanel } from './KnowledgeGraphPanel';
 import { RegionCascader } from './RegionCascader';
-import { RelationGraph } from './RelationGraph';
-import { RelationNodeDetail } from './RelationNodeDetail';
+import { RelationToolbar } from './RelationToolbar';
 
 // 完成页时三步都已完成
 const STEP_INDEX: Record<ExtractionStep, number> = { search: 0, graph: 1, done: 3 };
@@ -37,8 +36,8 @@ const RULES: FormRules = {
 };
 
 /**
- * 自助取数：搜索关键词 → 在关系图里选节点、填条件 → 完成。第二步是左图右表单，窄屏改为上图下表单；
- * 水资源用泳道关系图（弹窗加宽到 1440），其他资源沿用旧版知识图谱
+ * 自助取数：搜索关键词 → 在知识图谱里选节点、填条件 → 完成。第二步是左图右表单，窄屏改为上图下表单；
+ * 水资源和其他资源用同一种知识图谱，水资源多一个数据成果的筛选栏（ADR 0126）
  */
 export const DataExtractionDialog = defineComponent({
   name: 'DataExtractionDialog',
@@ -110,30 +109,6 @@ export const DataExtractionDialog = defineComponent({
             </ElButton>
           </div>
         </div>
-      );
-    }
-
-    function renderNode() {
-      const node = owner.selected.value;
-      if (!node) {
-        return (
-          <section class={styles.node} aria-live="polite">
-            <strong>请选择关系图节点</strong>
-            <p>在关系图中点击节点，查看它的分类信息</p>
-          </section>
-        );
-      }
-      return (
-        <section class={styles.node} aria-live="polite">
-          <div class={styles.nodeTitle}>
-            <strong>{node.name}</strong>
-            <ElTag size="small" type="success">
-              已选中
-            </ElTag>
-          </div>
-          <p>{[node.systemName, node.levelName].filter(Boolean).join(' · ')}</p>
-          <p>{node.label}</p>
-        </section>
       );
     }
 
@@ -239,31 +214,17 @@ export const DataExtractionDialog = defineComponent({
           </p>
         );
       }
-      if (owner.mode.value === 'relation') {
-        return (
-          <div key="relation" class={styles.workspace}>
-            <div class={styles.graph}>
-              <RelationGraph owner={owner.relation} />
-            </div>
-            <div class={styles.conditions}>
-              <RelationNodeDetail owner={owner.relation} />
-              {renderForm()}
-            </div>
-          </div>
-        );
-      }
+      const mode = owner.mode.value;
+      const graph = mode === 'relation' ? owner.relation : owner.legacy;
       return (
-        <div key="legacy" class={styles.workspace}>
+        <div key={mode} class={styles.workspace}>
           <div class={styles.graph}>
-            <KnowledgeGraphChart
-              graph={owner.graph.value}
-              keyword={owner.searched.value}
-              selectedId={owner.selected.value?.id}
-              onSelect={owner.select}
-            />
+            <KnowledgeGraphPanel owner={graph}>
+              {{ toolbar: mode === 'relation' ? () => <RelationToolbar owner={owner.relation} /> : undefined }}
+            </KnowledgeGraphPanel>
           </div>
           <div class={styles.conditions}>
-            {renderNode()}
+            <GraphNodeDetail detail={graph.detail.value} onLocate={graph.locate} />
             {renderForm()}
           </div>
         </div>
@@ -290,7 +251,7 @@ export const DataExtractionDialog = defineComponent({
         class={[
           'dialog-panel-header',
           styles.dialog,
-          owner.step.value === 'graph' && (owner.mode.value === 'relation' ? styles.wideRelation : styles.wide)
+          owner.step.value === 'graph' && styles.wide
         ]}
         modelValue={owner.open.value}
         onUpdate:modelValue={(open: boolean) => (owner.open.value = open)}
