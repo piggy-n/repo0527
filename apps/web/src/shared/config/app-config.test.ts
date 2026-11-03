@@ -33,7 +33,8 @@ describe('appConfig', () => {
     await expect(loadAppConfig()).rejects.toThrow('VITE_LOGIN_PUBLIC_KEY 不是有效的 SM2 公钥');
   });
 
-  it('离开页面后重置默认关闭；开关只能是 true 或 false（ADR 0114）', async () => {
+  it('离开页面后重置跟随开关；开关只能是 true 或 false（ADR 0114）', async () => {
+    vi.stubEnv('VITE_PAGE_STATE_RESET', 'false');
     expect((await loadAppConfig()).pageStateReset).toBe(false);
 
     vi.stubEnv('VITE_PAGE_STATE_RESET', 'true');
