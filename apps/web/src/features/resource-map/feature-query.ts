@@ -74,7 +74,7 @@ export function pickResources(
   return state.order.flatMap(code => {
     const resource = state.catalog?.resources.get(code);
     const display = state.displays.get(code);
-    if (!resource || !display?.checked || invalid.has(code) || zoom < (resourceStyle(code).minzoom ?? 0)) {
+    if (!resource || !display?.checked || invalid.has(code) || zoom < (resource.minzoom ?? 0)) {
       return [];
     }
     const layerCode = tilesetOf(code, display.year);

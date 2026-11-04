@@ -1,4 +1,5 @@
 import type { ResourceTreeCategory, ResourceTreeLayer, ResourceTreeNode } from './api';
+import { builtInMinZooms, type ResourceMinZooms } from './min-zooms';
 
 /** 资源的几何类型，对应 MapLibre 的图层类型 */
 export type ResourceGeometry = 'fill' | 'line' | 'circle';
@@ -13,6 +14,8 @@ export interface Resource {
   readonly categoryId: string;
   /** 在目录里的顺序，默认配色按它从配色板取 */
   readonly index: number;
+  /** 最小显示级别：数据源和图层共用，更低的级别不请求瓦片（ADR 0041 第 3 节、ADR 0137）；没有时不限制 */
+  readonly minzoom?: number;
 }
 
 export interface CatalogCategory {
@@ -53,7 +56,10 @@ const GEOMETRY: Readonly<Record<ResourceTreeLayer['geoType'], ResourceGeometry>>
 const isCategory = (node: ResourceTreeNode): node is ResourceTreeCategory => 'children' in node;
 
 /** 由接口树得出目录：按 code 去重并合并年份；不抛错，异常数据记进 problems（目录在 computed 里得出，ADR 0028） */
-export function buildCatalog(tree: readonly ResourceTreeCategory[]): ResourceCatalog {
+export function buildCatalog(
+  tree: readonly ResourceTreeCategory[],
+  minZooms: ResourceMinZooms = builtInMinZooms()
+): ResourceCatalog {
   const resources = new Map<string, Resource>();
   const problems: CatalogProblem[] = [];
   const categoryIds = new Set<string>();
@@ -62,13 +68,15 @@ export function buildCatalog(tree: readonly ResourceTreeCategory[]): ResourceCat
     const geometry = GEOMETRY[layer.geoType];
     const existing = resources.get(layer.code);
     if (!existing) {
+      const minzoom = minZooms[layer.code];
       resources.set(layer.code, {
         code: layer.code,
         name: layer.name,
         geometry,
         years: [...new Set(layer.yearList)].toSorted((a, b) => a - b),
         categoryId,
-        index: resources.size
+        index: resources.size,
+        ...(minzoom === undefined ? {} : { minzoom })
       });
       return { kind: 'resource', code: layer.code };
     }

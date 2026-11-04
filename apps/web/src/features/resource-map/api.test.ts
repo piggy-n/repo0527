@@ -4,7 +4,8 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { configureHttp } from '@/shared/http/configure';
 import { ApiError } from '@/shared/http/errors';
-import { fetchFeatureDetail, fetchResourceTree, guidCondition, queryFeaturesAt } from './api';
+import { fetchFeatureDetail, fetchResourceMinZooms, fetchResourceTree, guidCondition, queryFeaturesAt } from './api';
+import { builtInMinZooms } from './min-zooms';
 import { resourceTreeData, resourceTreeResponse } from './test-data';
 
 const server = setupServer();
@@ -25,6 +26,67 @@ afterAll(() => {
 function mockTree(body: JsonBodyType = resourceTreeResponse()) {
   server.use(mock.get('/backend/resource-map/base/tree', () => HttpResponse.json(body)));
 }
+
+describe('fetchResourceMinZooms', () => {
+  const MIN_ZOOMS_URL = '*/resource-min-zooms.json';
+
+  it('读部署的配置，不经过 /backend；空表就是都不限制（ADR 0137）', async () => {
+    const urls: string[] = [];
+    let body: JsonBodyType = { csxhjctb_lrdl: 12 };
+    server.use(
+      mock.get(MIN_ZOOMS_URL, ({ request }) => {
+        urls.push(new URL(request.url).pathname);
+        return HttpResponse.json(body);
+      })
+    );
+
+    await expect(fetchResourceMinZooms()).resolves.toStrictEqual({ csxhjctb_lrdl: 12 });
+    expect(urls).toStrictEqual(['/resource-min-zooms.json']);
+
+    body = {};
+    await expect(fetchResourceMinZooms()).resolves.toStrictEqual({});
+  });
+
+  it.each([
+    ['文件缺失', () => new HttpResponse(null, { status: 404 })],
+    ['nginx 回退成 index.html', () => HttpResponse.html('<!doctype html><title>现状图</title>')],
+    ['级别超过数据源的最大级别', () => HttpResponse.json({ csxhjctb_lrdl: 16 })],
+    ['不是对象', () => HttpResponse.json([8])],
+    ['网络失败', () => HttpResponse.error()]
+  ])('%s：用构建时带上的层级，不抛错，不退回到不限制', async (_, respond) => {
+    server.use(mock.get(MIN_ZOOMS_URL, respond));
+    using warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await expect(fetchResourceMinZooms()).resolves.toStrictEqual(builtInMinZooms());
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it('请求被取消时照样抛出，不当成读取失败', async () => {
+    server.use(mock.get(MIN_ZOOMS_URL, () => HttpResponse.json({})));
+    using warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(fetchResourceMinZooms(controller.signal)).rejects.toBeInstanceOf(ApiError);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('关闭开关时不请求，都不限制（ADR 0132）', async () => {
+    let requests = 0;
+    server.use(
+      mock.get(MIN_ZOOMS_URL, () => {
+        requests += 1;
+        return HttpResponse.json({ csxhjctb_lrdl: 12 });
+      })
+    );
+    vi.resetModules();
+    vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', 'false');
+    const disabled = await import('./api');
+
+    await expect(disabled.fetchResourceMinZooms()).resolves.toStrictEqual({});
+    expect(requests).toBe(0);
+  });
+});
 
 describe('fetchResourceTree', () => {
   it('按实测结构解析：分类带 children（可能为空），图层没有；丢弃未声明的 resource 字段', async () => {

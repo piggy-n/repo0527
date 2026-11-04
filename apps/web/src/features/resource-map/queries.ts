@@ -1,7 +1,8 @@
 import { skipToken, useQuery } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
-import { type FeatureDetail, fetchFeatureDetail, fetchResourceTree } from './api';
+import { type FeatureDetail, fetchFeatureDetail, fetchResourceMinZooms, fetchResourceTree } from './api';
 import { buildCatalog } from './catalog';
+import type { ResourceMinZooms } from './min-zooms';
 
 /** 资源图层的 query key 只在这里拼 */
 export const resourceMapKeys = {
@@ -10,15 +11,25 @@ export const resourceMapKeys = {
   featureDetail: (layerCode: string, guid: string) => [...resourceMapKeys.all, 'feature', layerCode, guid] as const
 };
 
+interface CatalogSources {
+  readonly tree: Awaited<ReturnType<typeof fetchResourceTree>>;
+  readonly minZooms: ResourceMinZooms;
+}
+
+const catalogOf = ({ tree, minZooms }: CatalogSources) => buildCatalog(tree, minZooms);
+
 /**
- * 资源目录：查询缓存保存接口树，`select` 由它得出目录。树的引用不变时不重新得出，
- * 后台刷新的内容没变时，结构共享会保留原来的树，面板、图例、拥有者拿到的还是同一个目录
+ * 资源目录：查询缓存保存接口树和部署的最小显示级别（ADR 0137），`select` 由它们得出目录。引用不变时不重新得出，
+ * 后台刷新的内容没变时，结构共享会保留原来的数据，面板、图例、拥有者拿到的还是同一个目录
  */
 export function useResourceCatalogQuery() {
   return useQuery({
     queryKey: resourceMapKeys.tree(),
-    queryFn: ({ signal }) => fetchResourceTree(signal),
-    select: buildCatalog
+    queryFn: async ({ signal }): Promise<CatalogSources> => {
+      const [tree, minZooms] = await Promise.all([fetchResourceTree(signal), fetchResourceMinZooms(signal)]);
+      return { tree, minZooms };
+    },
+    select: catalogOf
   });
 }
 

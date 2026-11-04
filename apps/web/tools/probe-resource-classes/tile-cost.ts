@@ -86,6 +86,9 @@ export interface TileCostIO extends Pick<ProbeIO, 'fetch' | 'sleep' | 'log'> {
 // 地类图斑默认勾选，全省视图必须有，按 ADR 0041 不限制
 const EXEMPT: ReadonlySet<string> = new Set(['bgdc_dltb']);
 
+// 大小没超，但第一次请求 5～7 级要等十几秒；瓦片生成过后实测看不出来，不按实测放开（ADR 0136）
+const SLOW_FIRST_REQUEST: ReadonlySet<string> = new Set(['bgdc_cjdcq', 'bgdc_cjdcqjx', 'bgdc_lmfw']);
+
 // 重试的等待会算进耗时，失败就记下来
 const NO_RETRY: readonly number[] = [];
 
@@ -305,8 +308,10 @@ export function minZoomConfig(results: readonly TileCostResult[]): Record<string
     if (!exempt) {
       const unknownValue = measured.has(code) ? null : current;
       const value = suggested === 'unknown' ? unknownValue : suggested === 'none' ? null : suggested;
-      if (value !== null) {
-        config.set(code, Math.max(value, config.get(code) ?? value));
+      const kept = SLOW_FIRST_REQUEST.has(code) ? current : null;
+      const levels = [value, kept, config.get(code) ?? null].filter(level => level !== null);
+      if (levels.length > 0) {
+        config.set(code, Math.max(...levels));
       }
     }
   }
@@ -332,7 +337,7 @@ function suggestionText(suggested: MinZoomSuggestion): string {
   return suggested === 'unknown' ? '判断不了' : `${suggested} 级`;
 }
 
-function changeText({ current, suggested, exempt }: TileCostResult): string {
+function changeText({ code, current, suggested, exempt }: TileCostResult): string {
   if (exempt) {
     return '例外，按 ADR 0041 不限制';
   }
@@ -342,6 +347,9 @@ function changeText({ current, suggested, exempt }: TileCostResult): string {
   const next = suggested === 'none' ? null : suggested;
   if (next === current) {
     return '不变';
+  }
+  if (SLOW_FIRST_REQUEST.has(code) && current !== null && (next === null || next < current)) {
+    return '例外，第一次请求很慢，保留（ADR 0136）';
   }
   if (current === null) {
     return '新增限制';
@@ -436,7 +444,7 @@ export function formatTileCost(results: readonly TileCostResult[], limits: TileC
     '',
     `判断标准：单张解压后不超过 ${sizeText(limits.maxBytes)}，整张收完不超过 ${timeText(limits.maxMs)}。每个瓦片集从高级别往低查，一超标就停，更低的级别不再请求；建议的最小显示级别是超标级别的上一级。`,
     '',
-    '大小是稳定的；耗时受后端当时的负载和缓存影响，超过上限时再测一次，两次都超才算。建议值写在 resource-min-zooms.json。',
+    '大小是稳定的；耗时受后端当时的负载和缓存影响，超过上限时再测一次，两次都超才算。建议值写在 resource-min-zooms.json，格式和发布目录里的同名文件一样（ADR 0137）。',
     '',
     `## 要确认的（${changed.length} 个）`,
     '',

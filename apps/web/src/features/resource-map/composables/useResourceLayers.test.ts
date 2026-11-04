@@ -300,10 +300,15 @@ describe('useResourceLayers', () => {
     expect(fill?.type === 'fill' && fill.paint?.['fill-color']).toBe('red');
   });
 
-  it('最小显示级别来自登记表', () => {
+  it('最小显示级别来自目录：目录没到或没有这个资源时没有级别', async () => {
     using ctx = setup();
+    expect(ctx.owner.minzoomOf('bgdc_cjdcq')).toBeUndefined();
 
-    expect(ctx.owner.minzoomOf('csxhjctb_lrdl')).toBe(9);
+    ctx.catalog.value = CATALOG;
+    await nextTick();
+
+    expect(ctx.owner.minzoomOf('bgdc_cjdcq')).toBe(8);
     expect(ctx.owner.minzoomOf('bgdc_dltb')).toBeUndefined();
+    expect(ctx.owner.minzoomOf('nope')).toBeUndefined();
   });
 });

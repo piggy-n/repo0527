@@ -57,7 +57,7 @@ import { pickHintLines, scenePickHintLines } from '../pick-hint';
 import { type FeatureKey, useFeatureDetailQuery } from '../queries';
 import type { ResourceLayersState } from '../resource-layers';
 import { type BatchHighlight, selectionGroup } from '../selection-style';
-import { resourceStyle, sourceLayerOf } from '../style-registry';
+import { sourceLayerOf } from '../style-registry';
 import type { ResourceLayers } from './useResourceLayers';
 
 /** 后端识别的分页，用来加载更多 */
@@ -705,7 +705,7 @@ export function useFeaturePick(
     return {
       sourceId: target.sourceId,
       sourceLayer: sourceLayerOf(code, target.year),
-      minzoom: resourceStyle(code).minzoom,
+      minzoom: target.resource.minzoom,
       guids: candidates.map(({ guid }) => guid)
     };
   };

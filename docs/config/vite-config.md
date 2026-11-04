@@ -13,7 +13,7 @@
 
 | 配置 | 值 | 说明 |
 |---|---|---|
-| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`cesiumAssets`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`cesiumAssets` 提供 Cesium 的运行时文件，`buildOutputPlugin` 只在构建时清理、检查产物，都见下文 |
+| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`staticFiles`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`staticFiles` 提供 Cesium 的运行时文件和资源的最小显示级别，`buildOutputPlugin` 只在构建时清理、检查产物，都见下文 |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `css.preprocessorOptions.scss.loadPaths` | `[src/libs]` | libs 模块的 Sass 入口按模块名引用，见下文 |
 | `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
@@ -37,20 +37,26 @@ const generators =
 - `systemTitlePlugin` 从 `./tools/system-title/vite-plugin.ts` 导入，带 `.ts` 扩展名，因为同一份代码也由 Node 直接运行；`iconsPlugin` 从 workspace 包的 `@yzt/icons/tools` 入口导入
 - 同时开着多个开发服务器时，它们都会处理图标目录；`iconsPlugin` 对此做了容错，见 [modules/icons.md](../modules/icons.md)
 
-### Cesium 的运行时文件
+### 不经过打包的文件
 
 ```ts
-const cesiumAssets = viteStaticCopy({
+const staticFiles = viteStaticCopy({
   targets: [
     {
       src: 'node_modules/cesium/Build/Cesium/{Workers,Assets,ThirdParty}/**/*',
       dest: 'cesium',
       rename: { stripBase: 4 }
+    },
+    {
+      src: 'src/features/resource-map/resource-min-zooms.json',
+      dest: '.',
+      rename: { stripBase: 3 }
     }
   ]
 });
 ```
 
+- `resource-min-zooms.json` 是资源的最小显示级别（ADR 0137）：源码导入它作为内置的层级，同时复制到产物根目录，部署时换这个文件就能改；不放进 `public/`，因为 Vite 不让源码导入 `public/` 的文件。`stripBase: 3` 去掉 `src/features/resource-map`，文件直接在 `dist/` 下。生产冒烟检查它确实进了产物
 - Cesium 运行时按基础地址请求 Worker、资源（地球的贴图、着色器用到的数据）和第三方文件（Draco 解码等），这些文件不经过打包（ADR 0079 第 1 节）。`vite-plugin-static-copy` 构建时把它们复制到产物的 `cesium/`（2026-10-26 实测约 6.9 MB），开发服务器和测试时从 `node_modules` 直接提供，不复制、不入库
 - `stripBase: 4` 去掉 `node_modules/cesium/Build/Cesium` 四层目录，保留 `Workers`、`Assets`、`ThirdParty`；升级 Cesium 后核对这几个目录还在原来的位置
 - 所有模式都启用：浏览器测试用真实的 Cesium，同样从 `/cesium/` 加载

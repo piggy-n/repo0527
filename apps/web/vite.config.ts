@@ -27,20 +27,25 @@ export default defineConfig(({ mode }) => {
         ];
 
   // Cesium 按基础地址请求的 Worker、资源和第三方文件，复制到产物的 cesium/，开发服务器同样提供（ADR 0079 第 1 节）；
-  // 测试也要：浏览器测试用真实的 Cesium
-  const cesiumAssets = viteStaticCopy({
+  // 测试也要：浏览器测试用真实的 Cesium。资源的最小显示级别复制到产物根目录，部署时换这个文件就能改（ADR 0137）
+  const staticFiles = viteStaticCopy({
     targets: [
       {
         src: 'node_modules/cesium/Build/Cesium/{Workers,Assets,ThirdParty}/**/*',
         dest: 'cesium',
         // 去掉 node_modules/cesium/Build/Cesium 四层，保留 Workers 等目录
         rename: { stripBase: 4 }
+      },
+      {
+        src: 'src/features/resource-map/resource-min-zooms.json',
+        dest: '.',
+        rename: { stripBase: 3 }
       }
     ]
   });
 
   return {
-    plugins: [vueJsx(), ...generators, cesiumAssets, buildOutputPlugin()],
+    plugins: [vueJsx(), ...generators, staticFiles, buildOutputPlugin()],
     resolve: {
       // 直接读取 tsconfig 的 paths，不再单独维护一份别名
       tsconfigPaths: true

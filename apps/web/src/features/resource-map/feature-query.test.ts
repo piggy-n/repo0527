@@ -10,7 +10,7 @@ import type {
   ScreenPoint,
   ViewKind
 } from '@yzt/map-core';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { isValidPolygonal, QUERY_VERTEX_LIMIT, screenBoxPolygon, vertexCount } from '@/shared/map/query-geometry';
 import type { RegionScope } from '@/shared/map/region/region-scope';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
@@ -91,6 +91,9 @@ const HYDL = targetOf('csxhjctb_hydl', 2024);
 
 const guid = (digit: string) => digit.repeat(32);
 
+const pickedCodes = (state: ResourceLayersState, zoom: number) =>
+  pickResources(state, new Map(), zoom).map(target => target.resource.code);
+
 describe('queryCapabilityOf', () => {
   it('后端范围识别逐个数据集登记，查详情按前缀，两者各自判断', () => {
     for (const code of ['bgdc_dltb', 'bgdc_dltb_czc', 'bgdc_czcdyd', 'csxhjctb_hydl', 'csxhjctb_lvll']) {
@@ -119,18 +122,16 @@ describe('pickResources', () => {
     ]);
   });
 
-  it('当前级别低于最小显示级别的资源不取；关闭开关后都取（ADR 0132）', async () => {
+  it('当前级别低于资源的最小显示级别时不取；级别跟着目录走，配置里没写的都取（ADR 0137）', () => {
     const displays = new Map([...STATE.displays, ['csxhjctb_lrdl', display(2025)]]);
     const state = { ...STATE, displays, order: ['csxhjctb_lrdl', ...STATE.order] };
-    const codes = (pick: typeof pickResources, zoom: number) => pick(state, new Map(), zoom).map(target => target.resource.code);
 
-    expect(codes(pickResources, 9)).toContain('csxhjctb_lrdl');
-    expect(codes(pickResources, 8.9)).not.toContain('csxhjctb_lrdl');
+    expect(pickedCodes(state, 9)).toContain('csxhjctb_lrdl');
+    expect(pickedCodes(state, 8.9)).not.toContain('csxhjctb_lrdl');
 
-    vi.resetModules();
-    vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', 'false');
-    const disabled = await import('./feature-query');
-    expect(codes(disabled.pickResources, 8.9)).toContain('csxhjctb_lrdl');
+    const stricter = { ...state, catalog: buildCatalog(tree, { csxhjctb_lrdl: 12 }) };
+    expect(pickedCodes(stricter, 11.9)).not.toContain('csxhjctb_lrdl');
+    expect(pickedCodes({ ...state, catalog: buildCatalog(tree, {}) }, 5)).toContain('csxhjctb_lrdl');
   });
 
   it('目录还没加载、顺序里的资源不在目录或没有显示状态时跳过', () => {

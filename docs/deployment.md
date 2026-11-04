@@ -43,6 +43,20 @@
 - 新增模型：先把目录上传到模型目录，再改清单、发布前端。清单里有、服务器上没有的模型，在三维模型面板里显示加载失败，其他模型不受影响
 - 模型的文件多（`XZ_GC_3DT` 有 1000 多个），打成压缩包上传后在服务器上解压
 
+### 调整资源的最小显示级别
+
+`dist/resource-min-zooms.json` 决定每个资源放大到几级才显示、才请求瓦片（ADR 0132、0137）。换后端环境或重新切片后，用 `probe:resource-classes --tile-cost` 重测（[commands.md](commands.md)），它输出的同名文件格式相同，人工确认后可以直接替换；不用重新构建，用户刷新页面就生效。
+
+```json
+{ "csxhjctb_lrdl": 9, "bgdc_lmfw": 8 }
+```
+
+- 键是资源的 `code`，值是 0～15 的整数；没写的资源不限制，`{}` 表示都不限制
+- 文件读不到或者格式不对（包括 nginx 回退成 `index.html`）时，用构建时带上的层级，浏览器控制台有一条警告；整份不用，不会只用对的那几项
+- `dist` 每次发布整体替换，确定下来的值要同步回仓库的 `apps/web/src/features/resource-map/resource-min-zooms.json`，否则下次发布就还原了
+- 构建时 `VITE_RESOURCE_MIN_ZOOM_ENABLED=false` 的产物不读这个文件，都不限制；改这个开关要重新构建
+- 村级调查区、界线、路面范围的层级不只看实测大小（ADR 0136），放开前先确认后端的瓦片缓存
+
 ## nginx 需要的配置
 
 ```nginx

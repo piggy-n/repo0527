@@ -4,6 +4,7 @@ import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { defineComponent, shallowRef } from 'vue';
+import { builtInMinZooms } from './min-zooms';
 import { type FeatureKey, resourceMapKeys, useFeatureDetailQuery, useResourceCatalogQuery } from './queries';
 import { resourceTreeData, resourceTreeResponse } from './test-data';
 
@@ -28,7 +29,8 @@ function mockTree(data: () => unknown = resourceTreeData) {
     mock.get('/backend/resource-map/base/tree', () => {
       requests++;
       return HttpResponse.json(resourceTreeResponse(data()));
-    })
+    }),
+    mock.get('*/resource-min-zooms.json', () => HttpResponse.json(builtInMinZooms()))
   );
   return () => requests;
 }
@@ -81,6 +83,37 @@ describe('useResourceCatalogQuery', () => {
     await catalog.refetch();
     expect(catalog.data.value).not.toBe(first);
     expect(catalog.data.value?.resources.has('gtkjgh_czkfbj')).toBe(false);
+  });
+
+  it('资源的最小显示级别来自部署的配置；配置变了，刷新后是新的目录（ADR 0137）', async () => {
+    mockTree();
+    let minZooms: Record<string, number> = { csxhjctb_lrdl: 12 };
+    server.use(mock.get('*/resource-min-zooms.json', () => HttpResponse.json(minZooms)));
+    mountHost();
+
+    await vi.waitFor(() => expect(catalog.data.value).toBeDefined());
+    const first = catalog.data.value;
+    expect(first?.resources.get('csxhjctb_lrdl')?.minzoom).toBe(12);
+    // 配置里没写的不限制，不按构建时带上的
+    expect(first?.resources.get('bgdc_cjdcq')).not.toHaveProperty('minzoom');
+
+    await catalog.refetch();
+    expect(catalog.data.value).toBe(first);
+
+    minZooms = { csxhjctb_lrdl: 10 };
+    await catalog.refetch();
+    expect(catalog.data.value?.resources.get('csxhjctb_lrdl')?.minzoom).toBe(10);
+  });
+
+  it('配置读不到时目录照常，用构建时带上的层级', async () => {
+    mockTree();
+    server.use(mock.get('*/resource-min-zooms.json', () => new HttpResponse(null, { status: 404 })));
+    using warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mountHost();
+
+    await vi.waitFor(() => expect(catalog.data.value).toBeDefined());
+    expect(catalog.data.value?.resources.get('csxhjctb_lrdl')?.minzoom).toBe(9);
+    expect(warn).toHaveBeenCalledOnce();
   });
 });
 

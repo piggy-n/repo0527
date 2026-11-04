@@ -1,7 +1,9 @@
 import type { Geometry, MultiPolygon, Point, Polygon } from 'geojson';
 import { z } from 'zod';
+import { appConfig } from '@/shared/config/app-config';
 import { http } from '@/shared/http/client';
 import { geometryTextSchema } from '@/shared/map/geometry-schema';
+import { builtInMinZooms, type ResourceMinZooms, resourceMinZoomsSchema } from './min-zooms';
 
 // 结构按 2026-10-09、10-11 实测的返回确定（docs/migration.md）；resource（所属分类名）与分类路径重复，不声明
 const resourceLayerSchema = z.object({
@@ -35,6 +37,27 @@ const resourceCategorySchema: z.ZodType<ResourceTreeCategory> = z.object({
 /** 现状底图的资源树（ADR 0041）：顶层是基础库、公共库、主题库、三区三线四个分组；失败由资源列表显示并重试，不弹全局提示 */
 export function fetchResourceTree(signal?: AbortSignal) {
   return http.get('/resource-map/base/tree', { schema: z.array(resourceCategorySchema), signal, silent: true });
+}
+
+/**
+ * 部署的最小显示级别（ADR 0137）：文件读不到或不合法时用构建带上的层级，不让一个配置文件拦住地图；
+ * 带上时间戳绕过缓存，换了文件刷新就生效，不用改 nginx
+ */
+export async function fetchResourceMinZooms(signal?: AbortSignal): Promise<ResourceMinZooms> {
+  if (!appConfig.resourceMinZoomEnabled) {
+    return {};
+  }
+  const url = new URL(`${import.meta.env.BASE_URL}resource-min-zooms.json`, window.location.href);
+  url.searchParams.set('t', String(Date.now()));
+  try {
+    return await http.get(url.href, { schema: resourceMinZoomsSchema, envelope: false, signal, silent: true });
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    console.warn('[resource-map] 读不到部署的最小显示级别，用构建带上的层级', error);
+    return builtInMinZooms();
+  }
 }
 
 // 要素查询接口（ADR 0047 第 8 节）：成功时没有信封，失败时返回信封；结构按 2026-10-14 实测确定（docs/migration.md）

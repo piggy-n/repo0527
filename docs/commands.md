@@ -190,7 +190,7 @@ pnpm add -Dw -E some-tool
 
 **执行了什么**：Node 直接运行 `tools/probe-resource-classes/cli.ts`，请求资源树、`/api/query/attr/page`（每个表最多抽 4 页，超过 200 万行只读第一页）和 `/api/tiles`（南京、苏州、徐州、扬州，默认 7、9、11、14 级）。结果写进 `probe-resource-classes.local/`（不入库）：`candidates.csv`（业务确认）、`slicing-requirements.csv`（交给切片）、`summary.md`、`report.json`，`raw/` 是按瓦片集的缓存，中断后重新运行会跳过已完成的。
 
-**注意事项**：要能连上后端，并在自己的终端设置环境变量 `YZT_PROBE_TOKEN`（取法见 `--help`），token 不写进任何输出；用 `--base-url` 给出后端地址（不带 `/backend`）。后端共用，默认 2 个并发，全部 183 个瓦片集要跑一段时间，可以先用 `--codes` 试几个资源；`--exact` 按取值逐个 COUNT，只在选定的资源上用。要确认图例列全了时用 `--enumerate=资源:字段,...`：只枚举这些字段的全部取值，结果写到 `distinct-values.json`，请求数约等于抽样漏掉的取值数；千万行的表一次查询可能要几分钟，用 `--timeout=<秒>` 调大上限（默认 120，超时不重试）。同一级别的瓦片颜色不一致时用 `--tile-check=资源,...`：只解码这些资源最新一年 6～12 级瓦片的几何（覆盖全省的网格，一个级别最多 `--tiles-per-zoom` 张，默认 25），判断是不是把要素合并成了一个，结果写到 `tile-check.md`（结论、逐级别的数字、能和页面对照的瓦片网格、同一地点跨级别的取值）和 `tile-check.json`；`资源:字段` 可以指定字段，`rules` 是全部有分类规则的资源，请求多，先查几个。换后端环境或重新切片后用 `--tile-cost` 实测瓦片的大小和耗时，给出最小显示级别的建议：默认最新一年的 12～5 级，一个级别最多 6 张（`--tiles-per-zoom`），标准是单张解压后 6 MB（`--max-tile-mb`，ADR 0132）、收完 2 秒（`--max-tile-seconds`）；从高级别往低查，一超标就停，更低的级别不再请求，默认只开 1 个并发，失败不重试，耗时才准；耗时超过上限时再测一次，两次都超才算；结果写到 `tile-cost.md`（要确认的资源、响应头、逐级别的数字）、`tile-cost.json`（同时是进度，中断后重新运行跳过已测完的瓦片集，`--refresh` 时重测）和 `resource-min-zooms.json`（建议的配置）。分布来自抽样，字段和取值是候选，业务含义要人确认。这个目录不依赖第三方库，可以单独拷到能连后端的机器上，用 Node 24 运行。
+**注意事项**：要能连上后端，并在自己的终端设置环境变量 `YZT_PROBE_TOKEN`（取法见 `--help`），token 不写进任何输出；用 `--base-url` 给出后端地址（不带 `/backend`）。后端共用，默认 2 个并发，全部 183 个瓦片集要跑一段时间，可以先用 `--codes` 试几个资源；`--exact` 按取值逐个 COUNT，只在选定的资源上用。要确认图例列全了时用 `--enumerate=资源:字段,...`：只枚举这些字段的全部取值，结果写到 `distinct-values.json`，请求数约等于抽样漏掉的取值数；千万行的表一次查询可能要几分钟，用 `--timeout=<秒>` 调大上限（默认 120，超时不重试）。同一级别的瓦片颜色不一致时用 `--tile-check=资源,...`：只解码这些资源最新一年 6～12 级瓦片的几何（覆盖全省的网格，一个级别最多 `--tiles-per-zoom` 张，默认 25），判断是不是把要素合并成了一个，结果写到 `tile-check.md`（结论、逐级别的数字、能和页面对照的瓦片网格、同一地点跨级别的取值）和 `tile-check.json`；`资源:字段` 可以指定字段，`rules` 是全部有分类规则的资源，请求多，先查几个。换后端环境或重新切片后用 `--tile-cost` 实测瓦片的大小和耗时，给出最小显示级别的建议：默认最新一年的 12～5 级，一个级别最多 6 张（`--tiles-per-zoom`），标准是单张解压后 6 MB（`--max-tile-mb`，ADR 0132）、收完 2 秒（`--max-tile-seconds`）；从高级别往低查，一超标就停，更低的级别不再请求，默认只开 1 个并发，失败不重试，耗时才准；耗时超过上限时再测一次，两次都超才算；结果写到 `tile-cost.md`（要确认的资源、响应头、逐级别的数字）、`tile-cost.json`（同时是进度，中断后重新运行跳过已测完的瓦片集，`--refresh` 时重测）和 `resource-min-zooms.json`（建议的配置，人工确认后可以直接替换发布目录里的同名文件，见 [deployment.md](deployment.md)；第一次请求很慢的 3 个资源不按实测放开，ADR 0136、0137）。分布来自抽样，字段和取值是候选，业务含义要人确认。这个目录不依赖第三方库，可以单独拷到能连后端的机器上，用 Node 24 运行。
 
 ### `pnpm --filter @yzt/web icons`
 
@@ -318,6 +318,8 @@ pnpm --filter @yzt/web test:smoke
 **执行了什么**：已有 Playwright Test 从 `tools/smoke/playwright.config.ts` 读取配置，自动启动并关闭 4173 端口上的产物预览；接口在浏览器中替换为固定响应，地图使用本地省界和真实引擎，未知接口与公网请求使测试失败。
 
 **注意事项**：需要已安装 Chromium；4173 端口须空闲，不复用已有服务。三维的模型数据不入库，冒烟拦下清单和瓦片，换成自己生成的一间 12 米见方的屋子（`tools/smoke/scene-model.ts`）；软件渲染下这个用例约 30 秒，用例的时限放到 3 分钟。不会自动构建，不能在公网产物上运行；输出写入已忽略的 `apps/web/smoke-results.local/`，不依赖账号、私有字体或真实后端，不设毫秒性能门槛。`pnpm test` 不包含这组 `*.spec.ts` 用例。
+
+构建时决定的开关，冒烟和构建读同一份配置，只验证这次构建的取值（如 `resource-min-zooms.spec.ts`：`.env` 的 `VITE_RESOURCE_MIN_ZOOM_ENABLED` 现在是 `false`，打开时的用例被跳过）。要验证另一个取值，不改 `.env`，在同一个终端设环境变量后构建和冒烟（`loadEnv` 优先取环境变量），PowerShell 里写 `$env:VITE_RESOURCE_MIN_ZOOM_ENABLED = 'true'`，结束后 `Remove-Item Env:VITE_RESOURCE_MIN_ZOOM_ENABLED`，再按原来的配置构建一次。
 
 ### `pnpm --filter @yzt/web test:watch`
 
