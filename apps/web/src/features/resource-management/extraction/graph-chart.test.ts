@@ -156,9 +156,9 @@ describe('createGraphDisplay：名称', () => {
   it('根节点的名称：水资源是图谱名称，检索时带上关键词；总节点、大类都写在节点里', () => {
     const names = (keyword: string) => nodesOf(display(water(keyword).view, water(keyword).positions).nodeItems(1));
 
-    expect(names('').map(node => node.name)).toContain('水资源知识图谱');
+    expect(names('').map(node => node.name)).toContain('水资源调查监测成果知识图谱');
     expect(names('河流').map(node => node.name)).toContain('“河流”关联知识图谱');
-    expect(names('').find(node => node.id === 'root')?.label.formatter).toBe('水资源\n知识图谱');
+    expect(names('').find(node => node.id === 'root')?.label.formatter).toBe('水资源\n调查监测成果\n知识图谱');
     const land = legacy('耕地');
     expect(nodesOf(display(land.view, land.positions).nodeItems(1)).map(node => node.name)).toEqual(
       expect.arrayContaining(['“耕地”关联知识图谱', '国土空间用地用海分类'])

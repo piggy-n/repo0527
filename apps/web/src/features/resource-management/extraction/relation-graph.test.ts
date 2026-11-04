@@ -24,7 +24,7 @@ describe('水资源关系图数据', () => {
       '城市国土空间监测分类',
       '水资源基础调查分类'
     ]);
-    expect(waterGraph.title).toBe('水资源知识图谱');
+    expect(waterGraph.title).toBe('水资源调查监测成果知识图谱');
     expect(waterGraph.products.map(product => product.relation)).toEqual(['规划用途', '现状调查', '城市监测', '专项调查']);
     expect(total).toBe(4);
     expect(nodes).toHaveLength(35);
