@@ -20,6 +20,7 @@
 | `useMapLoadMarks.ts` | 登录后第一次进入地图时，记下地图页开始创建、视图就绪、第一次画面稳定（见 [perf.md](perf.md)） |
 | `basemap/basemap-style.ts` | 底图目录与推导：可选的底图、初始状态、`createBasemapStyles` 给出两个分组的推导函数（纯函数，ADR 0031） |
 | `basemap/static-basemap.ts` | 内网静态底图的两个分组和页面要传的 `BASEMAP_STYLE_ROOT`（ADR 0133） |
+| `basemap/static-options.ts` | 静态底图的开关（地名、各市分色）：只在这里改，不进 `.env`，默认都关（ADR 0134） |
 | `basemap/static-palette.ts` | 静态底图的配色，地图样式和缩略图共用 |
 | `basemap/data/jiangsu-labels.json`、`basemap/images/static-thumbnail.svg` | 静态底图的地名点和缩略图，由 `pnpm basemap:generate` 生成，不手改 |
 | `basemap/useBasemap.ts` | 底图的拥有者：持有选择和透明度，提供操作和两个推导函数 |
@@ -120,7 +121,7 @@ const { goToDefaultView } = useDefaultView(map);
 |---|---|---|---|
 | 矢量底图 | 公网（默认） | 背景 + 天地图 `vec` | 天地图 `cva` |
 | 影像底图 | 公网 | 背景 + 天地图 `img` | 天地图 `cia` |
-| 静态底图 | 内网（默认） | 省外底色 + 市界上的面和线 | 市、区县地名 |
+| 静态底图 | 内网（默认） | 省外底色 + 市界上的面和线 | 默认空；打开开关时是市、区县地名 |
 | 无底图 | 都有 | 背景 | 空 |
 
 ```ts
@@ -153,15 +154,17 @@ basemap.selectForDimension('3d'); // 切换二三维后选默认的底图
 - 关闭天地图（`appConfig.tianditu` 为 `null`，内网部署）时能选"静态底图"和"无底图"，进入时是静态底图；工厂不建天地图的数据源，无论状态是什么，推导结果里都没有天地图
 - 瓦片地址里的 `{z}`、`{x}`、`{y}` 由 MapLibre 替换，地址用模板字符串拼，不经过 `URLSearchParams`（会把花括号转义）
 
-### 静态底图（ADR 0133）
+### 静态底图（ADR 0133、0134）
 
-- 不用图片：和行政区边界同一份市界（`jiangsu-city.json`）直接画面和线，任何级别都清晰，和边界严格重合。评估过单张图片、瓦片金字塔，实测对比见 ADR
-- 各市按 `code` 取色（`static-palette.ts`），相邻的市不同色，由测试按共用顶点判断。苏州和泰州隔着长江相邻，看地图容易漏掉
-- 地名点由 `pnpm basemap:generate` 生成，取面内离边界最远的点；市名一直显示，区县从 8.5 级起显示，市名避让时优先
-- 地名只有汉字，用 `JIANGSU_MAP_OPTIONS` 的 `localIdeographFontFamily` 在本地画，不请求字形。样式校验要求有 `glyphs`，所以绑定注记分组的页面都要在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`，地址不会被请求；漏传时整个视图进入 `failed`，`pages/map-pages.test.ts` 检查
-- 三维：面和线由 map-cesium 镜像，用 `ClassificationType.TERRAIN`，不会染到模型上；地名不画（三维不支持 `symbol`）。切换二三维时保持静态底图
+- 不用图片：和行政区边界同一份市界（`jiangsu-city.json`）直接画面和线，任何级别都清晰，和边界严格重合。评估过单张图片、瓦片金字塔，实测对比见 ADR 0133
+- 开关在 `static-options.ts` 的 `STATIC_BASEMAP_OPTIONS`，只在代码里改，不进 `.env`：`labels`（地名，默认关）、`cityColors`（各市分色，默认关，全省用 `STATIC_LAND_COLOR`，即 CREAM）。改了 `cityColors` 要运行 `basemap:generate` 更新缩略图；改默认值后"默认都关闭"那条用例要同步
+- 陆地的四种颜色是不透明的 HEX：原色按 75% 叠在省外底色 `#E6EAF0` 上换算（CREAM `#F7F3E6 → #F3F1E9`，其余见 ADR 0134），原色写在 `static-palette.ts` 的注释里。没有透明度常量，`fill-opacity` 只有底图的透明度滑块
+- 打开分色时各市按 `code` 取色（`static-palette.ts`），相邻的市不同色，由测试按共用顶点判断。苏州和泰州隔着长江相邻，看地图容易漏掉
+- 地名点由 `pnpm basemap:generate` 生成，取面内离边界最远的点；打开地名时市名一直显示，区县从 8.5 级起显示，市名避让时优先
+- 地名只有汉字，用 `JIANGSU_MAP_OPTIONS` 的 `localIdeographFontFamily` 在本地画，不请求字形。样式校验要求有 `glyphs`，所以绑定注记分组的页面都要在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`（地名关闭时也传，打开开关不用改页面），地址不会被请求；打开地名后漏传时整个视图进入 `failed`，`pages/map-pages.test.ts` 检查
+- 三维：面和线由 map-cesium 镜像，用 `ClassificationType.TERRAIN`，不会染到模型上；到 11 级不再加细、不再重建（`overlayDetailMetadata`，ADR 0135）；地名不画（三维不支持 `symbol`）。切换二三维时保持静态底图
 - 面的过滤条件要写 `['Polygon', 'MultiPolygon']`：三维按要素原来的类型求值，只写 `Polygon` 时南京（MultiPolygon）会被滤掉
-- 改了配色或边界数据后运行 `basemap:generate`；缩略图和配色是否一致由测试检查
+- 改了配色、分色开关或边界数据后运行 `basemap:generate`；缩略图和当前配置是否一致由测试检查
 
 ### 面板与底图卡（设计稿 5D.4）
 
@@ -843,7 +846,7 @@ sides.activate('right');
 | `measure/useMeasure.test.ts` | 两个工具的 ID 与类型；由工具 ID 得到测量类型；状态跟随输入、推导、删除和清除；鼠标位置单独跟随，没在画时移动鼠标不重新推导；作用域销毁时释放；不在作用域里时抛错 | Node |
 | `boundary/BoundaryPanel.test.tsx` | 勾选、取消某一级后改变状态，都不勾选时没有滑块；线型示意（省界的线宽、县界的虚线）；滑块按百分比显示、拖动时交给拥有者 0～1 的值 | jsdom |
 | `basemap/basemap-preference.test.ts` | 恢复上次的底图和透明度（包括内网的静态底图）；修改后防抖写入；存下的底图不可用时保留当前的选择；版本 1 的"无底图"不盖住默认的静态底图；透明度越界时当作没有存过；合并函数（假定时器、内存存储） | jsdom |
-| `basemap/static-basemap.test.ts` | 每个市都有颜色、相邻的市不同色、缩略图和配色一致；面保留 MultiPolygon；地名和区划目录逐条对应、只有汉字、落在自己的行政区里；区县地名的最小级别 | Node |
+| `basemap/static-basemap.test.ts` | 开关的默认值和两种取值下的分组；陆地色的换算关系、滑块的透明度；每个市都有颜色、相邻的市不同色、缩略图和当前配置一致；面保留 MultiPolygon；地名和区划目录逐条对应、只有汉字、落在自己的行政区里；区县地名的最小级别 | Node |
 | `boundary/boundary-preference.test.ts` | 恢复上次的级别和透明度、推导随之变化；修改后防抖写入；缺少级别时当作没有存过；不传范围时和原来一样 | jsdom |
 | `boundary/useBoundaries.test.ts` | 初始状态；开关某一级、透明度；值没变时不重新推导；不合法的透明度抛错；每次调用各有一份状态 | Node |
 | `region/region-catalog.test.ts` | 目录与市界、县界数据逐条对应；市、区县的数量与所在的市；旧项目写错代码的区县；查找、路径、简称；当前位置的各级、区县所在的市；搜索的规则、顺序与条数 | Node |

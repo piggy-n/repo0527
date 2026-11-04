@@ -7,14 +7,20 @@ import type {
   LineLayerSpecification,
   SymbolLayerSpecification
 } from '@maplibre/maplibre-gl-style-spec';
-import type { StyleGroup, StyleRoot } from '@yzt/map-core';
+import { overlayDetailMetadata, type StyleGroup, type StyleRoot } from '@yzt/map-core';
 import cityUrl from '../boundary/data/jiangsu-city.json?url';
 import labelsUrl from './data/jiangsu-labels.json?url';
-import { STATIC_CITY_COLORS, STATIC_CITY_LINE_COLOR, STATIC_OUTSIDE_COLOR } from './static-palette';
+import { STATIC_BASEMAP_OPTIONS } from './static-options';
+import {
+  STATIC_CITY_COLORS,
+  STATIC_CITY_LINE_COLOR,
+  STATIC_LAND_COLOR,
+  STATIC_OUTSIDE_COLOR
+} from './static-palette';
 
 /**
  * 静态底图的地名只有汉字，由 MapLibre 用本地字体画，这个地址不会被请求；样式校验要求有 text-field 时必须有 glyphs。
- * 使用 useBasemap 的页面都要在 provideMap 时传入（ADR 0133）
+ * 使用 useBasemap 的页面都要在 provideMap 时传入，地名的开关关闭时也传，打开开关不用再改页面（ADR 0133、0134）
  */
 export const BASEMAP_STYLE_ROOT: StyleRoot = { glyphs: '/fonts/glyphs/{fontstack}/{range}.pbf' };
 
@@ -38,13 +44,17 @@ const CITY_COLOR: ExpressionSpecification = [
 // 三维按要素原来的类型求值：不写 MultiPolygon 的话南京会被滤掉
 const POLYGONS: FilterSpecification = ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false];
 
-function landLayer(opacity: number): FillLayerSpecification {
+// 三维的面和线到 11 级不再加细：约 1.6 万个顶点、误差约 19 米；不设上限时靠近模型要重建约 6 万个（ADR 0135）
+const OVERLAY_DETAIL = overlayDetailMetadata(11);
+
+function landLayer(opacity: number, cityColors: boolean): FillLayerSpecification {
   return {
     id: 'basemap-static-land',
     type: 'fill',
     source: CITY_SOURCE_ID,
     filter: POLYGONS,
-    paint: { 'fill-color': CITY_COLOR, 'fill-opacity': opacity }
+    metadata: OVERLAY_DETAIL,
+    paint: { 'fill-color': cityColors ? CITY_COLOR : STATIC_LAND_COLOR, 'fill-opacity': opacity }
   };
 }
 
@@ -53,6 +63,7 @@ function cityLineLayer(opacity: number): LineLayerSpecification {
     id: 'basemap-static-line',
     type: 'line',
     source: CITY_SOURCE_ID,
+    metadata: OVERLAY_DETAIL,
     layout: { 'line-join': 'round' },
     paint: {
       'line-color': STATIC_CITY_LINE_COLOR,
@@ -62,11 +73,11 @@ function cityLineLayer(opacity: number): LineLayerSpecification {
   };
 }
 
-/** 静态底图的 basemap 分组：省外的底色、各市的面和市之间的细线（ADR 0133） */
-export function staticBasemapGroup(opacity: number): StyleGroup {
+/** 静态底图的 basemap 分组：省外的底色、陆地的面和市之间的细线（ADR 0133、0134） */
+export function staticBasemapGroup(opacity: number, options = STATIC_BASEMAP_OPTIONS): StyleGroup {
   return {
     sources: { [CITY_SOURCE_ID]: CITY_SOURCE },
-    layers: [BACKGROUND, landLayer(opacity), cityLineLayer(opacity)]
+    layers: [BACKGROUND, landLayer(opacity, options.cityColors), cityLineLayer(opacity)]
   };
 }
 
@@ -98,8 +109,13 @@ function labelLayer(
   };
 }
 
+const NO_LABELS: StyleGroup = { sources: {}, layers: [] };
+
 /** 静态底图的 basemap-labels 分组：市、区县的地名，只有二维画（三维不支持 symbol，ADR 0080）；市名在上，避让时优先 */
-export function staticLabelsGroup(opacity: number): StyleGroup {
+export function staticLabelsGroup(opacity: number, options = STATIC_BASEMAP_OPTIONS): StyleGroup {
+  if (!options.labels) {
+    return NO_LABELS;
+  }
   return {
     sources: { [LABELS_SOURCE_ID]: LABELS_SOURCE },
     layers: [

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { overlayDetailMetadata } from '@yzt/map-core';
 import type { Feature, FeatureCollection, GeoJSON, Geometry, GeoJsonProperties, LineString, Position } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import {
@@ -174,6 +175,45 @@ describe('planOverlays', () => {
       ['transparent', 0, 0],
       ['shown', 4, 1]
     ]);
+  });
+
+  it('写了细节上限的图层：到上限为止按当前级别，超过后还是同一个结果，场景不重建（ADR 0135）', () => {
+    const layer = lineLayer('capped', {
+      metadata: overlayDetailMetadata(8),
+      paint: { 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1, 10, 5] }
+    });
+    const data = collection(feature(lineString(...ZIGZAG)));
+    const plan = (zoom: number) => planOverlays([spec(layer, data)], inline, zoom);
+
+    const [at6] = plan(6);
+    const [at8] = plan(8);
+
+    expect(at8).not.toBe(at6);
+    expect(plan(12)[0]).toBe(at8);
+    expect(plan(21)[0]).toBe(at8);
+    const [line] = only<LineShape>(at8?.shapes ?? [], 'line');
+    // 线宽和简化都按 8 级：容差约 0.0014°，起伏 0.001° 的锯齿被简化掉
+    expect(line?.width).toBe(3);
+    expect(line?.path.length).toBeLessThan(ZIGZAG.length);
+  });
+
+  it('没写细节上限的图层每一级都重新推导，放大后不再简化', () => {
+    const data = collection(feature(lineString(...ZIGZAG)));
+    const layer = lineLayer('plain', {});
+    const plan = (zoom: number) => planOverlays([spec(layer, data)], inline, zoom);
+
+    const [at8] = plan(8);
+    const [at12] = plan(12);
+
+    expect(at12).not.toBe(at8);
+    expect(only<LineShape>(at12?.shapes ?? [], 'line')[0]?.path).toHaveLength(ZIGZAG.length);
+  });
+
+  it('细节上限不影响图层的级别范围：超过 maxzoom 照样不画', () => {
+    const data = collection(feature(lineString([118, 32], [119, 33])));
+    const layer = lineLayer('ranged', { metadata: overlayDetailMetadata(8), maxzoom: 10 });
+
+    expect(planOverlays([spec(layer, data)], inline, 12)).toStrictEqual([]);
   });
 
   it('线宽、颜色写错时取默认值，不影响别的属性', () => {

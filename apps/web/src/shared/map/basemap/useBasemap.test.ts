@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { computed } from 'vue';
 import { appConfig } from '../../config/app-config';
 import { basemapOptions } from './basemap-style';
+import { staticLabelsGroup } from './static-basemap';
 import { useBasemap } from './useBasemap';
 
 const TIANDITU = { key: '0123456789abcdef0123456789abcdef' };
@@ -37,7 +38,7 @@ describe('useBasemap', () => {
     expect(basemap.selected.value).toBe('static');
     expect(basemap.opacity.value).toBe(1);
     expect(Object.keys(basemap.deriveGroup().sources)).toStrictEqual(['basemap-static']);
-    expect(Object.keys(basemap.deriveLabelsGroup().sources)).toStrictEqual(['basemap-labels-static']);
+    expect(basemap.deriveLabelsGroup()).toStrictEqual(staticLabelsGroup(1));
     expect(JSON.stringify([basemap.deriveGroup(), basemap.deriveLabelsGroup()])).not.toContain('tianditu');
   });
 

@@ -11,6 +11,7 @@ import {
   createBasemapStyles,
   initialBasemapState
 } from './basemap-style';
+import { staticBasemapGroup, staticLabelsGroup } from './static-basemap';
 
 const KEY = '0123456789abcdef0123456789abcdef';
 const TIANDITU = { key: KEY };
@@ -172,40 +173,11 @@ describe('createBasemapStyles：关闭天地图（内网部署）', () => {
     expect(JSON.stringify(compose(styles, state(selected)))).not.toContain('tianditu');
   });
 
-  it('静态底图：省外的底色、市界数据上的面和线，地名在注记分组，都只引用本地文件', () => {
-    const basemap = state('static');
-    const base = styles.basemapGroup(basemap);
-    const labels = styles.labelsGroup(basemap);
+  it('静态底图：两个分组来自 static-basemap，用它自己的透明度', () => {
+    const basemap = state('static', { vector: 0.3, imagery: 0.2, static: 0.5 });
 
-    expect(base.layers.map(({ id, type }) => [id, type])).toStrictEqual([
-      ['basemap-background', 'background'],
-      ['basemap-static-land', 'fill'],
-      ['basemap-static-line', 'line']
-    ]);
-    expect(labels.layers.map(({ id, type }) => [id, type])).toStrictEqual([
-      ['basemap-labels-static-county', 'symbol'],
-      ['basemap-labels-static-city', 'symbol']
-    ]);
-    const urls = [...Object.values(base.sources), ...Object.values(labels.sources)].map(source =>
-      source.type === 'geojson' && typeof source.data === 'string' ? source.data : ''
-    );
-    expect(urls).toHaveLength(2);
-    for (const url of urls) {
-      expect(url).toMatch(/jiangsu-(city|labels)[^/]*\.json/);
-      expect(url).not.toMatch(/^https?:/);
-    }
-  });
-
-  it('静态底图的透明度作用于面、线和地名，底色不变，线本来的不透明度乘在上面', () => {
-    const basemap = state('static', { static: 0.5 });
-    const painted = [...styles.basemapGroup(basemap).layers, ...styles.labelsGroup(basemap).layers];
-    const paint = (id: string) => painted.find(layer => layer.id === id)?.paint;
-
-    expect(paint('basemap-background')).toStrictEqual({ 'background-color': '#E6EAF0' });
-    expect(paint('basemap-static-land')).toMatchObject({ 'fill-opacity': 0.5 });
-    expect(paint('basemap-static-line')).toMatchObject({ 'line-opacity': 0.45 });
-    expect(paint('basemap-labels-static-city')).toMatchObject({ 'text-opacity': 0.5 });
-    expect(paint('basemap-labels-static-county')).toMatchObject({ 'text-opacity': 0.5 });
+    expect(styles.basemapGroup(basemap)).toStrictEqual(staticBasemapGroup(0.5));
+    expect(styles.labelsGroup(basemap)).toStrictEqual(staticLabelsGroup(0.5));
   });
 
   it('改静态底图的透明度只产生 setPaintProperty，不重新下载数据', () => {
@@ -214,7 +186,7 @@ describe('createBasemapStyles：关闭天地图（内网部署）', () => {
     expect(new Set(commands.map(({ command }) => command))).toStrictEqual(new Set(['setPaintProperty']));
   });
 
-  it('静态底图和无底图之间切换：换掉面、线和地名，底色跟着变', () => {
+  it('静态底图和无底图之间切换：换掉面和线，底色跟着变', () => {
     const commands = diffStyle(compose(styles, state('static')), compose(styles, state('none')));
     const touched = commands.map(({ command, args }) => [command, args[0]]);
 
@@ -222,10 +194,7 @@ describe('createBasemapStyles：关闭天地图（内网部署）', () => {
       expect.arrayContaining([
         ['removeLayer', 'basemap-static-land'],
         ['removeLayer', 'basemap-static-line'],
-        ['removeLayer', 'basemap-labels-static-city'],
-        ['removeLayer', 'basemap-labels-static-county'],
         ['removeSource', 'basemap-static'],
-        ['removeSource', 'basemap-labels-static'],
         ['setPaintProperty', 'basemap-background']
       ])
     );

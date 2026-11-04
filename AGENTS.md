@@ -224,7 +224,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 工具栏的按钮由页面挑选（`items`），动作的回调由页面给出（`actions`）；开关面板的动作，由页面通过 `pressed` 告诉工具栏显示为按下，工具栏不保存开关（ADR 0034、0036）
 - 行政区边界的入口：现状底图在业务组，打开功能标签；其他地图页给 `MapViewControls` 传 `boundaries` 和 `boundariesOpen`，点开是底图同款的浮层，不另放工具栏，开关由页面持有（窄屏时计入 `useSideExclusion`）；默认级别由页面设置（ADR 0128）
 - fill 图层要用 `['geometry-type']` 限定为面：MapLibre 会把线也当成环填充；要写 `['Polygon', 'MultiPolygon']`，三维按要素原来的类型求值
-- 内网的静态底图用本地市界直接绘制面、线和地名，不用图片，也不用天地图的截图或瓦片；绑定 `basemap-labels` 分组的页面在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`，漏传时整个视图进入 `failed`；改了配色或边界数据运行 `basemap:generate`（ADR 0133）
+- 内网的静态底图用本地市界直接绘制面、线和地名，不用图片，也不用天地图的截图或瓦片；地名、各市分色是 `static-options.ts` 里的开关，不进 `.env`，默认都关（全省 CREAM）；陆地色是换算好的不透明 HEX，不用透明度变量；绑定 `basemap-labels` 分组的页面在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`，打开地名后漏传时整个视图进入 `failed`；改了配色、分色开关或边界数据运行 `basemap:generate`（ADR 0133、0134）
 - line 图层的 `line-dasharray` 不在常量和按要素取值之间切换（MapLibre 6.12 的缺陷会报错）：线型不同的要素按线型拆成多个图层，每层的线型是常量，实线不设（ADR 0046）
 - 只随级别变化（常量或按 `zoom` 的 `step`）的 `fill-pattern` 设 `'fill-pattern-transition': { duration: 0 }`：过渡期间 MapLibre 按旧图片取图集位置，换花纹后会画错约 300 毫秒（见 `docs/migration.md` 的"切换填充方式的闪烁"）
 - 区划目录和区划边界只用本地数据（`shared/map/region`），目录与市界、县界数据由测试保证逐条一致（ADR 0036）；经纬度的识别、显示和复制只用 `shared/map/location/coordinate-format.ts` 的纯函数（ADR 0037）
@@ -242,7 +242,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 会话的选择状态只存要素身份（数据源 + 业务主键），属性、几何、候选列表和详情留在 feature 的查询缓存里，高亮分组从选择和查询结果推导（ADR 0022、0047）
 - 只有 MapLibre 适配器能写二维地图（lint 只允许 `libs/map-core/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；Cesium 镜像会话状态，不实现二维的引擎接口；二三维共用的是生命周期、相机、输入、拾取、投影、渲染要素查询这几个视图接口（ADR 0024、0047；三维的渲染要素查询返回空数组）
 - Cesium 同样只在 `libs/map-cesium` 和 `app` 导入（lint 检查，包括 `cesium/Build/...` 和 `@cesium/*`）；`CesiumView` 只依赖窄接口 `SceneLike`，唯一调用 Cesium 的是 `CesiumScene`，测试注入假场景（ADR 0079）
-- 三维的 GeoJSON 覆盖物由 map-cesium 按样式自动镜像（line、fill、circle，按整级求值、简化到半个像素，ADR 0080），拥有者不为三维另写分组；`symbol`、`fill-pattern` 等清单外的写法三维不画。三维期间点/框选不识别；三维独有的读数（视点高度、朝向）用就绪视图的 `eyeHeight()`、`heading()`
+- 三维的 GeoJSON 覆盖物由 map-cesium 按样式自动镜像（line、fill、circle，按整级求值、简化到半个像素，ADR 0080），拥有者不为三维另写分组；铺满大范围、只做背景的图层用 `overlayDetailMetadata` 写细节上限，超过后不再加细、不再重建（ADR 0135）；`symbol`、`fill-pattern` 等清单外的写法三维不画。三维期间点/框选不识别；三维独有的读数（视点高度、朝向）用就绪视图的 `eyeHeight()`、`heading()`
 - 三维独有的内容（3D Tiles 瓦片集、钻地、漫游）由会话的 `scene` 持有，页面用 `map.bindScene(() => SceneContent)` 绑定拥有者的推导函数（一个上下文只绑定一个）；瓦片集的状态从上下文的 `sceneStatus` 读，就绪时带建议的相机，定位用它做相机操作；漫游的进度从 `roamStatus` 读，漫游开始时开始一次相机操作，被别的定位作废就退出。模型清单 `public/3dt/manifest.json` 入库、模型数据不入库（ADR 0081、0083），也不进构建产物，服务器上放在发布目录之外、由 nginx 提供（`docs/deployment.md`）
 - 漫游时页面只留漫游面板和小地图，隐藏业务工具栏、功能面板、底图、区划条、视图控件和状态栏：只隐藏，不改各拥有者的状态，退出后原样显示；进入时切回移动，漫游只在换成移动以外的工具时退出（ADR 0084、0095、0097）。漫游时左侧的漫游面板替换三维模型面板，步行和路线在面板里切换，速度共用米/秒。没有单独的钻地：漫游地下的模型时由拥有者推导出地下空间（地表固定半透明、不显示地面上的模型），退出漫游就回到地面
 - 导航网格在 `map-core/scene/nav`，不依赖 Cesium、DOM：`buildNavigation` 在主线程下载叶节点瓦片、在 Worker 里构建；行走碰撞、寻路、平面图用同一份区域（`labels`）；平面图正北朝上（按根节点局部系的方位角旋转）、按区域着色（`planRegions`、`renderFloorMap`，ADR 0085）

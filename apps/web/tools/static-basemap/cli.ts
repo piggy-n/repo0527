@@ -1,13 +1,14 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { STATIC_BASEMAP_OPTIONS } from '../../src/shared/map/basemap/static-options.ts';
 import {
-  STATIC_CITY_COLORS,
   STATIC_CITY_LINE_COLOR,
-  STATIC_OUTSIDE_COLOR
+  STATIC_OUTSIDE_COLOR,
+  staticCityColors
 } from '../../src/shared/map/basemap/static-palette.ts';
 import { labelCollection, type RegionCollection, thumbnailSvg } from './generate.ts';
 
-// 由边界数据生成静态底图的地名点和缩略图：在 apps/web 下运行 pnpm basemap:generate（ADR 0133）
+// 由边界数据生成静态底图的地名点和缩略图：在 apps/web 下运行 pnpm basemap:generate（ADR 0133、0134）
 const dataDir = resolve(process.cwd(), 'src/shared/map/boundary/data');
 const outputDir = resolve(process.cwd(), 'src/shared/map/basemap');
 const read = (name: string) => JSON.parse(readFileSync(resolve(dataDir, name), 'utf8')) as RegionCollection;
@@ -18,7 +19,7 @@ const counties = read('jiangsu-county.json');
 const outputs = {
   'data/jiangsu-labels.json': JSON.stringify(labelCollection(cities, counties)),
   'images/static-thumbnail.svg': thumbnailSvg(cities, {
-    cityColors: STATIC_CITY_COLORS,
+    cityColors: staticCityColors(STATIC_BASEMAP_OPTIONS.cityColors),
     outsideColor: STATIC_OUTSIDE_COLOR,
     lineColor: STATIC_CITY_LINE_COLOR
   })

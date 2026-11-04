@@ -13,6 +13,7 @@ import {
   type StylePropertySpecification
 } from '@maplibre/maplibre-gl-style-spec';
 import { simplify } from '@turf/simplify';
+import { overlayDetailLimit } from '@yzt/map-core';
 import type { GeoJSON, Geometry, GeoJsonProperties, Position } from 'geojson';
 
 /** 三维画的覆盖物图层：对应二维 geojson 数据源上的 line、fill、circle 图层（ADR 0080 第 1 节） */
@@ -441,7 +442,9 @@ interface Planned {
 
 const plannedLayers = new WeakMap<OverlayLayerSpecification, Planned>();
 
-function planLayer(spec: OverlaySpec, data: GeoJSON, level: number): OverlayLayer {
+function planLayer(spec: OverlaySpec, data: GeoJSON, zoomLevel: number): OverlayLayer {
+  // 写了上限的图层到这一级为止：再放大时还是同一个结果，场景不重建（ADR 0135）
+  const level = Math.min(zoomLevel, overlayDetailLimit(spec.layer.metadata) ?? zoomLevel);
   const previous = plannedLayers.get(spec.layer);
   if (previous && previous.data === data && previous.level === level && previous.order === spec.order) {
     return previous.result;

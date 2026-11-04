@@ -78,8 +78,9 @@ test('三维：二维稳定后预加载运行时，切到三维、加载模型�
     await page.keyboard.press('Escape');
     await expect(bar).toHaveCount(0);
 
-    // 退出漫游同时回到地面，回到二维：复用原来的画布
-    await page.getByRole('button', { name: '二维', exact: true }).click();
+    // 退出漫游同时回到地面，回到二维：复用原来的画布。软件渲染下退出后的帧要等贴地面画完，
+    // 主线程卡在 readPixels 上，静态底图实测 20～30 秒，默认的等待不够（ADR 0135）
+    await page.getByRole('button', { name: '二维', exact: true }).click({ timeout: 60_000 });
     await expect(flatCanvas).toBeVisible();
     expect(await original.evaluate((element: { isConnected: boolean }) => element.isConnected)).toBe(true);
     expect(wasRequested(/^\/cesium\/Workers\//), 'Cesium 的 Worker 脚本').toBe(true);
