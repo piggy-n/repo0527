@@ -146,6 +146,7 @@
 | [0135](0135-overlay-detail-limit.md) | 三维覆盖物的细节上限 | 已接受（补充 0080 第 2 节） |
 | [0136](0136-slow-first-request-min-zoom.md) | 第一次请求很慢的资源也限制最小显示级别 | 已接受（修改 0132 中三个资源的层级） |
 | [0137](0137-resource-min-zoom-deploy-file.md) | 资源的最小显示级别放进部署文件 | 已接受（修改 0132 的层级写进代码） |
+| [0138](0138-page-state-reset-on-by-default.md) | 离开页面后重置：`.env` 提交的取值改为 true | 已接受（修改 0114 的默认取值） |
 
 ## 模板
 

@@ -36,6 +36,7 @@ import countyFile from '@/shared/map/boundary/data/jiangsu-county.json?raw';
 import { JIANGSU_BOUNDS } from '@/shared/map/jiangsu';
 import { formatCoordinate, formatLngLat } from '@/shared/map/location/coordinate-format';
 import { formatDistance } from '@/shared/map/measure/measure-labels';
+import { createMemoryStore } from '@/shared/storage/key-value-store';
 import { required } from '@/shared/testing/required';
 import { CurrentMapPage } from './CurrentMapPage';
 
@@ -636,6 +637,16 @@ async function switchTo(wrapper: ReturnType<typeof mountPage>['wrapper'], label:
 }
 
 const sceneOf = (page: ReturnType<typeof mountPage>) => required(page.scenes[0], '没有创建三维视图');
+
+const basemapCardOf = (wrapper: PageWrapper) => wrapper.get('[data-map-cards] button:last-child');
+
+// 换成无底图；页面隐藏时偏好不等防抖，立即写入
+async function chooseNoBasemap(wrapper: PageWrapper) {
+  await basemapCardOf(wrapper).trigger('click');
+  await vi.waitFor(() => expect(optionsPopover('basemap').exists()).toBe(true));
+  await optionsPopover('basemap').get('button[aria-label="无底图"]').trigger('click');
+  window.dispatchEvent(new Event('pagehide'));
+}
 
 describe('CurrentMapPage', () => {
   it('绑定底图、注记和边界，从下到上是底图、注记、省界', () => {
@@ -1990,6 +2001,49 @@ describe('CurrentMapPage', () => {
 
     expect(total()).toMatchObject({ x: 140, y: 25 });
     expect(pinAt(wrapper)).toStrictEqual([90, 55]);
+  });
+
+  describe('离开页面后重置时的底图（ADR 0114）', () => {
+    const STORED = { version: 2, value: { selected: 'imagery', opacity: { vector: 1, imagery: 1, static: 1 } } };
+
+    // 已登录、存着影像底图；jsdom 没有 IndexedDB，偏好换成内存存储。appConfig 在模块加载时读取环境变量，要重新导入页面
+    async function pageWithStoredImagery(pageStateReset: 'true' | 'false') {
+      vi.stubEnv('VITE_PAGE_STATE_RESET', pageStateReset);
+      localStorage.setItem(
+        'yzt.session',
+        JSON.stringify({ token: 'token', user: { loginName: 'zhangsan', role: 'user' } })
+      );
+      const store = createMemoryStore({ 'zhangsan/basemap': STORED });
+      const get = vi.spyOn(store, 'get');
+      vi.doMock('@/shared/storage/idb-store', () => ({ preferenceStore: store }));
+      const { wrapper } = await readyPage(await freshModules());
+      return { wrapper, store, get };
+    }
+
+    afterEach(() => {
+      vi.doUnmock('@/shared/storage/idb-store');
+      localStorage.removeItem('yzt.session');
+    });
+
+    it('打开时底图不读不写偏好：存着影像也是矢量，换了也不存；其余偏好照常读取', async () => {
+      const { wrapper, store, get } = await pageWithStoredImagery('true');
+      await settle();
+
+      expect(basemapCardOf(wrapper).text()).toBe('矢量');
+      expect(get).not.toHaveBeenCalledWith('zhangsan/basemap');
+      expect(get).toHaveBeenCalledWith('zhangsan/boundaries');
+
+      await chooseNoBasemap(wrapper);
+      expect(store.entries.get('zhangsan/basemap')).toStrictEqual(STORED);
+    });
+
+    it('关闭时恢复存下的底图，换了也存下', async () => {
+      const { wrapper, store } = await pageWithStoredImagery('false');
+      await vi.waitFor(() => expect(basemapCardOf(wrapper).text()).toBe('影像'));
+
+      await chooseNoBasemap(wrapper);
+      expect(store.entries.get('zhangsan/basemap')).toMatchObject({ value: { selected: 'none' } });
+    });
   });
 
   describe('区划定位与其他相机操作的先后（每个用例重新导入页面，边界没有缓存）', () => {
