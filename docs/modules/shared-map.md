@@ -19,15 +19,18 @@
 | `useDefaultView.ts` | 默认视角：第一次就绪时按江苏的范围定位，`goToDefaultView()` 回到默认视角（ADR 0033） |
 | `useMapLoadMarks.ts` | 登录后第一次进入地图时，记下地图页开始创建、视图就绪、第一次画面稳定（见 [perf.md](perf.md)） |
 | `basemap/basemap-style.ts` | 底图目录与推导：可选的底图、初始状态、`createBasemapStyles` 给出两个分组的推导函数（纯函数，ADR 0031） |
+| `basemap/static-basemap.ts` | 内网静态底图的两个分组和页面要传的 `BASEMAP_STYLE_ROOT`（ADR 0133） |
+| `basemap/static-palette.ts` | 静态底图的配色，地图样式和缩略图共用 |
+| `basemap/data/jiangsu-labels.json`、`basemap/images/static-thumbnail.svg` | 静态底图的地名点和缩略图，由 `pnpm basemap:generate` 生成，不手改 |
 | `basemap/useBasemap.ts` | 底图的拥有者：持有选择和透明度，提供操作和两个推导函数 |
-| `basemap/BasemapPanel.tsx` | 底图的切换：三张缩略图只写类型、当前底图的透明度（设计稿 5D.4） |
+| `basemap/BasemapPanel.tsx` | 底图的切换：缩略图只写类型（公网三张、内网两张）、当前底图的透明度（设计稿 5D.4） |
 | `basemap/BasemapCard.tsx` | 底图入口：当前底图的缩略图卡片，点开是左侧的底图浮层；开关由页面持有，现状底图、数据查询、指标、AI 对话、指标 AI 计算共用（ADR 0111） |
 | `popover/MapOptionsPopover.tsx` | 底图左侧箭头 Popover：入口切换、透明度、关闭与定位避让，定位后报告顶部，开关由页面持有（ADR 0070） |
 | `OpacityToggle.tsx` | 底图与行政区边界共用的透明度展开图标，选中状态独立于 Tooltip |
 | `tooltip.ts` | 地图 Tooltip 的统一显隐参数，避免快速扫过图标时延迟关闭与淡出重叠 |
 | `boundary/BoundarySettingsPanel.tsx` | 现状底图的行政区边界标签内容，复用原边界面板与透明度入口 |
 | `panel-group/panel-stack.ts`、`usePanelStack.ts` | 同列功能与详情的高度分配、手动收起和小高度下的自动收起 |
-| `basemap/BasemapThumbnail.tsx` | 底图的缩略图：注记叠在底图上、对准南京；无底图是浅色方格与居中禁用图标（面板和底图卡共用） |
+| `basemap/BasemapThumbnail.tsx` | 底图的缩略图：注记叠在底图上，按 `focus` 对准；静态底图只有一张图；无底图是浅色方格与居中禁用图标（面板和底图卡共用） |
 | `boundary/data/` | 省、市、县界的 GeoJSON，由转换脚本生成（见"行政区边界的数据"） |
 | `boundary/boundary-style.ts` | 边界的级别、初始状态、`boundaryGroup` 推导（纯函数，ADR 0033） |
 | `boundary/useBoundaries.ts` | 边界的拥有者：持有每一级是否显示和共用的透明度 |
@@ -111,17 +114,18 @@ const { goToDefaultView } = useDefaultView(map);
 
 ## 底图（ADR 0031）
 
-全部用天地图，按 `appConfig.tianditu` 决定能选哪些：
+公网用天地图，内网用本地数据画的静态底图（ADR 0133），按 `appConfig.tianditu` 决定能选哪些：
 
-| 底图 | `basemap` 分组 | `basemap-labels` 分组 |
-|---|---|---|
-| 矢量底图 | 背景 + 天地图 `vec` | 天地图 `cva` |
-| 影像底图 | 背景 + 天地图 `img` | 天地图 `cia` |
-| 无底图 | 背景 | 空 |
+| 底图 | 环境 | `basemap` 分组 | `basemap-labels` 分组 |
+|---|---|---|---|
+| 矢量底图 | 公网（默认） | 背景 + 天地图 `vec` | 天地图 `cva` |
+| 影像底图 | 公网 | 背景 + 天地图 `img` | 天地图 `cia` |
+| 静态底图 | 内网（默认） | 省外底色 + 市界上的面和线 | 市、区县地名 |
+| 无底图 | 都有 | 背景 | 空 |
 
 ```ts
-// 页面 setup：拥有者的状态随页面，进入页面时重新开始
-const map = provideMap({ groups: ['basemap', 'basemap-labels'], camera: JIANGSU_CAMERA });
+// 页面 setup：拥有者的状态随页面，进入页面时重新开始；root 给静态底图的地名用（ADR 0133）
+const map = provideMap({ groups: ['basemap', 'basemap-labels'], camera: JIANGSU_CAMERA, root: BASEMAP_STYLE_ROOT });
 const basemap = useBasemap();
 map.bindStyle({ basemap: basemap.deriveGroup, 'basemap-labels': basemap.deriveLabelsGroup });
 
@@ -140,14 +144,24 @@ basemap.selectForDimension('3d'); // 切换二三维后选默认的底图
 - 不用 Pinia：状态只在一个页面里共享，不带到其他地图页，同一页面上的两张地图互不影响（ADR 0031）
 - 状态是一个 `shallowRef`，变化时整体替换；选择或透明度没变时不替换，推导函数包在 `computed` 里（提交器就是这样做的）时不会重新推导。滑块拖动时会重复给出相同的值
 - 不合法的调用直接抛错，状态不变：选择不可用的底图（如关闭天地图时选矢量）、透明度不是 0～1 之间的有限数、无底图时修改透明度。界面只提供可用的操作，这些都是编程错误；错误在操作里抛出，不进入推导和 `computed`
-- 记住选择（5C.3，ADR 0042）：页面传入偏好的范围 `useBasemap({ preferences })` 时，先用默认值，读到存下的偏好后替换一次（`basemap-preference.ts`）：选中的底图当前可用就恢复它，不可用（没有配置天地图）时保留当前的选择；两种底图的透明度经校验（0～1）后照样恢复。之后选择、改透明度防抖写入。用法与规则见 [storage.md](storage.md)
+- 记住选择（5C.3，ADR 0042）：页面传入偏好的范围 `useBasemap({ preferences })` 时，先用默认值，读到存下的偏好后替换一次（`basemap-preference.ts`）：选中的底图当前可用就恢复它，不可用（换了部署环境）时保留当前的选择；每种底图的透明度经校验（0～1）后照样恢复。之后选择、改透明度防抖写入。格式是版本 2（版本 1 里内网只能存"无底图"，不算用户的选择，ADR 0133）。用法与规则见 [storage.md](storage.md)
 
 - 状态（`BasemapState`）只有选中的底图和每种底图的透明度（0～1），可以直接序列化；透明度同时作用于底图和注记，不影响背景
-- 背景是 `basemap-background`（`#F3F5F8`），无论选哪种底图都在最底下：无底图时显示它，瓦片加载中和调低透明度时与它混合
+- 背景是 `basemap-background`（`#F3F5F8`，静态底图时是省外底色 `#E6EAF0`），无论选哪种底图都在最底下：无底图时显示它，瓦片加载中和调低透明度时与它混合
 - 天地图的数据源设 `minzoom: 1`、`maxzoom: 18`：2026-10-10 实测 `vec`、`cva`、`img`、`cia` 只有 1～18 级有数据，0 级和 19 级也返回 200，内容是占位图；超过 18 级时放大使用 18 级的瓦片
 - 没选中的底图，数据源不在样式里；改透明度只产生 `setPaintProperty`。这一点由 style-spec 的 `diff` 对数据源做深比较保证，与数据源是不是同一个对象无关（改坏验证时发现，见"测试"）
-- 关闭天地图（`appConfig.tianditu` 为 `null`，内网部署）时只能选"无底图"，进入时就是它；工厂不建任何数据源，无论状态是什么，推导结果里都没有天地图
+- 关闭天地图（`appConfig.tianditu` 为 `null`，内网部署）时能选"静态底图"和"无底图"，进入时是静态底图；工厂不建天地图的数据源，无论状态是什么，推导结果里都没有天地图
 - 瓦片地址里的 `{z}`、`{x}`、`{y}` 由 MapLibre 替换，地址用模板字符串拼，不经过 `URLSearchParams`（会把花括号转义）
+
+### 静态底图（ADR 0133）
+
+- 不用图片：和行政区边界同一份市界（`jiangsu-city.json`）直接画面和线，任何级别都清晰，和边界严格重合。评估过单张图片、瓦片金字塔，实测对比见 ADR
+- 各市按 `code` 取色（`static-palette.ts`），相邻的市不同色，由测试按共用顶点判断。苏州和泰州隔着长江相邻，看地图容易漏掉
+- 地名点由 `pnpm basemap:generate` 生成，取面内离边界最远的点；市名一直显示，区县从 8.5 级起显示，市名避让时优先
+- 地名只有汉字，用 `JIANGSU_MAP_OPTIONS` 的 `localIdeographFontFamily` 在本地画，不请求字形。样式校验要求有 `glyphs`，所以绑定注记分组的页面都要在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`，地址不会被请求；漏传时整个视图进入 `failed`，`pages/map-pages.test.ts` 检查
+- 三维：面和线由 map-cesium 镜像，用 `ClassificationType.TERRAIN`，不会染到模型上；地名不画（三维不支持 `symbol`）。切换二三维时保持静态底图
+- 面的过滤条件要写 `['Polygon', 'MultiPolygon']`：三维按要素原来的类型求值，只写 `Polygon` 时南京（MultiPolygon）会被滤掉
+- 改了配色或边界数据后运行 `basemap:generate`；缩略图和配色是否一致由测试检查
 
 ### 面板与底图卡（设计稿 5D.4）
 
@@ -163,13 +177,13 @@ const current = basemapOption(basemap.selected.value);   // { id, label: '矢量
 </MapCard>
 ```
 
-- 三张缩略图只写类型（选项的 `shortLabel`：矢量、影像、无底图），名称叠在缩略图右下角，沿用底图卡的半透明底色，选中时为主色底、反白文字；无障碍名称是全称，当前的用 `aria-pressed`、主色描边和右上角的勾（`SvgIcon` 的 `check`）
-- 缩略图由拥有者给出（`basemap.thumbnails`，`basemapThumbnails(tianditu)` 纯函数）：天地图南京所在的那张 10 级瓦片（849, 415），底图和配套的注记各一张，放大到 160% 后按 `focus`（86% 67%，南京在瓦片里的位置）对准。和底图的数据源用同一个地址模板（`tileUrl`）；无底图、关闭天地图时为 `null`，不请求天地图，显示和地图背景同色的方格。组件不读 `appConfig`
+- 缩略图只写类型（选项的 `shortLabel`：矢量、影像、静态、无底图），名称叠在缩略图右下角，沿用底图卡的半透明底色，选中时为主色底、反白文字；无障碍名称是全称，当前的用 `aria-pressed`、主色描边和右上角的勾（`SvgIcon` 的 `check`）
+- 缩略图由拥有者给出（`basemap.thumbnails`，`basemapThumbnails(tianditu)` 纯函数）：天地图南京所在的那张 10 级瓦片（849, 415），底图和配套的注记各一张，放大到 160% 后按 `focus`（86% 67%，南京在瓦片里的位置）对准。和底图的数据源用同一个地址模板（`tileUrl`）；静态底图是打包的 SVG，没有注记（`labels` 为 `null`），`focus` 居中，放大到 160% 后全省正好露出来；无底图为 `null`，显示和地图背景同色的方格；关闭天地图时矢量、影像为 `null`，不请求天地图。组件不读 `appConfig`
 - 透明度用共用的 `OpacitySlider`：滑块按百分比显示、不带刻度、右边写出百分比，拖动过程中实时交出 0～1。底图 Popover 的顶部操作栏与行政区标签的选项行各自用 `OpacityToggle` 控制下方滑块，默认隐藏，关闭重开恢复隐藏、数值保留。页面把 `basemap.opacity` 与 `setOpacity` 交给 `MapOptionsPopover`，内部的 `BasemapPanel` 用 `showOpacity={false}` 避免重复；行政区仍由 `BoundaryPanel` 的 `showOpacity` 控制。选择无底图时隐藏透明度入口并收起滑块，切回后按需展开。Element 的滑块宽 100%，两端各留 `--space-md`（12）并计入宽度（`box-sizing: border-box`）；端点圆点悬浮放大到 24 时，与名称及百分比仍保留至少 8 间距
 - 现状底图页的底图使用 `MapOptionsPopover`，行政区已并入功能标签。按 ADR 0070 及后续界面反馈，底图再次点击入口或右上关闭按钮关闭；外部点击、失焦和 Esc 不关闭，页面停用仍关闭。`visible` 与更新监听保持受控，入口单独切换，忽略 Element 的自动显隐请求；禁用组件的触发按键拦截，键盘通过原生按钮点击执行同一开关
 - 底图 Popover 在入口左侧间隔 12、带箭头，宽 320，固定定位并限制在视口内；窄屏限制宽度，内容自然撑高，无内部滚动区。`afterWrite` 定位修饰器报告真实顶部，右侧面板列在它上方留 12；透明度展开与视口变化都会重新定位。`OpacityToggle` 的独立选中类和 `aria-pressed` 跟随展开状态，不依赖 Tooltip 的 `aria-expanded`
 - 底图不显示标题，顶部留 8、左右及底部留 12；顶部操作栏高 24，透明度与关闭按钮靠右排列、间隔 8，不加背景或分隔线，与缩略图间隔 4。缩略图等宽、高 60，独占整行；滑块在缩略图下方另起一行，行距 8，不增加内部滚动区
-- 底图卡（ADR 0066）：基础控制栏下方的 80 × 56 缩略图，四周留 2，右下角写简称（矢量、影像、无底图），无障碍名称写全称"底图：矢量底图"（`MapCard` 的 `name`）；名称和简称用 `basemapOption(id)` 按 ID 取
+- 底图卡（ADR 0066）：基础控制栏下方的 80 × 56 缩略图，四周留 2，右下角写简称（矢量、影像、静态、无底图），无障碍名称写全称"底图：矢量底图"（`MapCard` 的 `name`）；名称和简称用 `basemapOption(id)` 按 ID 取
 - `MapCard` 有封面时使用缩略图变体，无封面仍保留 56 × 56 的图标卡。面板打开时沿用主色外边框和独立焦点框，缩略图名称使用主色底；现状底图的图例入口已移至右上工具栏
 - `Basemap` 接口里的函数都写成函数类型的属性（`readonly deriveGroup: () => StyleGroup`），不写方法签名：它们是闭包，页面直接取出来交给 `bindStyle`，写成方法签名时 lint 的 `unbound-method` 会报错
 
@@ -185,7 +199,7 @@ const current = basemapOption(basemap.selected.value);   // { id, label: '矢量
 | 切到矢量再切回影像 | 矢量是 100%，影像仍是 40%，各自记住 |
 | 无底图 | 样式里只有 `basemap-background`，没有数据源，滑块隐藏 |
 | 放大到 z19.6 | 只请求 18 级瓦片，显示的是放大的 18 级瓦片，不是占位图 |
-| 内网配置（`dev:intranet`）进入页面 | 面板只有"无底图"；地图画出背景色（在渲染的那一帧读像素是 243、245、248）；整个页面没有任何外部域名的请求 |
+| 内网配置（`dev:intranet`）进入页面 | 当时面板只有"无底图"，2026-11-03 起默认静态底图（ADR 0133）；地图画出背景色（在渲染的那一帧读像素是 243、245、248）；整个页面没有任何外部域名的请求 |
 | 375 宽 | 面板宽 220，在屏幕内，没有横向滚动 |
 
 - 缩小时地图最小只到 z0.71（画布尺寸的限制），瓦片按 2 级请求；栅格瓦片按 256 像素换算，瓦片级别总比地图缩放级大 1，所以不会请求 0 级，`minzoom: 1` 只是写明天地图的范围
@@ -807,7 +821,7 @@ sides.activate('right');
 | `pages/current-map/CurrentMapPage.test.tsx` | 页面绑定的分组与叠放（底图、注记、省界，区划高亮在边界之上，测量叠在最上面）；区划定位：工具栏开关面板、选中后高亮并定位、用关闭按钮或工具栏关面板都不清选择、再点回到全省和默认视角（市界用替换的 fetch 提供）；坐标定位：区划定位和坐标定位是功能面板的两个 Tab（切走时隐藏、取消拾取、输入保留，再点正在显示的入口关闭）、窄屏时右边让出去以后再点坐标定位、图例是重新显示（输入保留，让出去时入口不显示为按下）、资源详情切走时保留、再单击时切回、关闭时清除选择（ADR 0053）、输入后定位与位置信息（两种格式、所在区划）、拾取与提示、长按拖动与 Esc（假定时器）、关闭面板取消拾取、图钉随相机移动、单击开关位置信息（右键不算）、画布重建时先隐藏、拖动时视口坐标换成画布坐标、测量时图钉不响应、"清除"；状态栏：比例尺、"中心"、鼠标的位置在下一帧写入、写法跟着坐标定位面板、没有版权控件；把缩放范围交给画布；第一次就绪时定位、画布重建后不再定位；"默认视角"按钮；失败重试后补做；测量的完整交互：提示跟随鼠标和状态、画的过程中含鼠标所在点的长度、末点的总长、标签随相机移动、× 和"清除"、换成测面，结果标签的摆放（总长在旁边、总面积居中），画布重建时标签先隐藏、就绪后重新显示；当前区划：没选时不显示，选中后写出区划，"回到全省"清除；区划定位与其他相机操作的先后（ADR 0038）：加载期间点"默认视角"（相机没变）、上一次定位的动画中选中区县、地图加载期间选中区划、加载期间拖动或坐标定位（这几个用例重新导入页面，区划边界从没有缓存开始，边界文件的请求由用例放行）（用假地图，鼠标事件经过真实的适配器） | jsdom |
 | `map-status.test.ts` | 各状态的显示内容、两种引擎失败、样式失败、没有原因、不是 Error 的原因 | Node |
 | `MapStatusNotice.test.tsx` | 引擎失败时显示原因和"重试"，点击后重新创建地图，重试过程不抛错 | jsdom |
-| `basemap/BasemapPanel.test.tsx` | 三张缩略图只写类型、当前的按下，点一张选中、无底图时没有透明度；缩略图叠着注记和底图、无底图没有图片；滑块按百分比显示、右边写出百分比、拖动时交给拥有者 0～1 的值；关闭天地图时只有"无底图" | jsdom |
+| `basemap/BasemapPanel.test.tsx` | 三张缩略图只写类型、当前的按下，点一张选中、无底图时没有透明度；缩略图叠着注记和底图、无底图没有图片；滑块按百分比显示、右边写出百分比、拖动时交给拥有者 0～1 的值；关闭天地图时是"静态"和"无底图"，能来回切换；静态底图的缩略图只有一张图 | jsdom |
 | `card/MapCard.test.tsx` | 图在上、字在下（图标和铺满的图都一样）、点击通知、按下、只写简称时的无障碍名称 | jsdom |
 | `basemap/useBasemap.test.ts` | 默认读取配置；两种配置下的初始状态；切换后推导出所选底图和注记；透明度作用于当前底图、每种底图各自记住；相同的值不触发重新推导；不合法的调用抛错且状态不变 | Node |
 | `boundary/boundary-style.test.ts` | 级别与初始状态；数据源是三份文件的地址；三级的叠放、线宽、虚线；透明度乘在基础值上；关闭的级别不在样式里；ID 前缀与校验；改透明度只产生 `setPaintProperty`；开关一级只增删这一级；面板的线型示意（同色、同不透明度和虚线，线宽取中间一档） | Node |
@@ -828,7 +842,8 @@ sides.activate('right');
 | `pointer-hint/pointer-hint.test.ts` | 默认在右下方；右边、下边放不下的边界；还不知道画布尺寸时不翻 | Node |
 | `measure/useMeasure.test.ts` | 两个工具的 ID 与类型；由工具 ID 得到测量类型；状态跟随输入、推导、删除和清除；鼠标位置单独跟随，没在画时移动鼠标不重新推导；作用域销毁时释放；不在作用域里时抛错 | Node |
 | `boundary/BoundaryPanel.test.tsx` | 勾选、取消某一级后改变状态，都不勾选时没有滑块；线型示意（省界的线宽、县界的虚线）；滑块按百分比显示、拖动时交给拥有者 0～1 的值 | jsdom |
-| `basemap/basemap-preference.test.ts` | 恢复上次的底图和透明度；修改后防抖写入；存下的底图不可用时保留"无底图"；透明度越界时当作没有存过；合并函数（假定时器、内存存储） | jsdom |
+| `basemap/basemap-preference.test.ts` | 恢复上次的底图和透明度（包括内网的静态底图）；修改后防抖写入；存下的底图不可用时保留当前的选择；版本 1 的"无底图"不盖住默认的静态底图；透明度越界时当作没有存过；合并函数（假定时器、内存存储） | jsdom |
+| `basemap/static-basemap.test.ts` | 每个市都有颜色、相邻的市不同色、缩略图和配色一致；面保留 MultiPolygon；地名和区划目录逐条对应、只有汉字、落在自己的行政区里；区县地名的最小级别 | Node |
 | `boundary/boundary-preference.test.ts` | 恢复上次的级别和透明度、推导随之变化；修改后防抖写入；缺少级别时当作没有存过；不传范围时和原来一样 | jsdom |
 | `boundary/useBoundaries.test.ts` | 初始状态；开关某一级、透明度；值没变时不重新推导；不合法的透明度抛错；每次调用各有一份状态 | Node |
 | `region/region-catalog.test.ts` | 目录与市界、县界数据逐条对应；市、区县的数量与所在的市；旧项目写错代码的区县；查找、路径、简称；当前位置的各级、区县所在的市；搜索的规则、顺序与条数 | Node |
@@ -841,7 +856,7 @@ sides.activate('right');
 | `location/location-info.test.ts` | 位置信息放在上方、超出可视区域上边时翻到下方（包括上边登记了元素）、左右限制在可视区域里（避开右侧面板）、小三角的位置和限制、可视区域比卡片窄；所在区划的各种文字 | Node |
 | `location/CoordinateLocatePanel.test.tsx` | 空白时不提示；打开时显示已有的点；识别结果、规范写法、认不出来；切换格式；粘贴一对坐标；填反；"定位"按原值、空白时提示；回车与输入法；拾取开关、"拾取中"、关闭；卸载时取消拾取 | jsdom |
 | `apps/web/tools/boundaries/boundaries.test.ts` | 边界数据的转换：文件对应关系、坐标取整与去掉高程、只留名称和代码、去掉 `crs`、原始结构不符合或没有要素时报错 | Node |
-| `basemap/basemap-style.test.ts` | 可选的底图与初始状态；每种底图的组成、瓦片地址、缩放范围与透明度；ID 的分组前缀与组合后的校验；改透明度只产生 `setPaintProperty`；切换底图时背景不动；关闭天地图时任何选择都没有天地图；缩略图（南京附近的 10 级瓦片，底图加注记；无底图、关闭天地图时没有） | Node |
+| `basemap/basemap-style.test.ts` | 可选的底图与初始状态；每种底图的组成、瓦片地址、缩放范围与透明度；ID 的分组前缀与组合后的校验；改透明度只产生 `setPaintProperty`；切换底图时背景不动；关闭天地图时任何选择都没有天地图；静态底图的组成、只引用本地文件、透明度、切到无底图；缩略图（南京附近的 10 级瓦片，底图加注记；静态底图是打包的小图；无底图、关闭天地图时矢量和影像没有） | Node |
 
 - 底图的推导逐一改坏 22 处（关闭时仍给出全部选项或仍建数据源、注记图层用错、少一个子域名、缺少缩放范围、占位符被转义、行列写反、不带 key、背景缺失或在底图上面、注记不跟透明度、影像用矢量的透明度、ID 不带前缀或重复等），全部由断言发现
 - 默认视角逐一改坏 10 处、江苏的范围 2 处、页面 2 处，只有"调用时先立即定位一次"测不出来：调用时视图一定还不存在（否则抛错），立即定位什么也不做，行为没有变化。这一处起初暴露了一个隐患——在地图就绪之后调用会在下一次就绪时重置用户的视角——所以加了"视图已存在时抛错"，把只能在页面里调用一次写进代码

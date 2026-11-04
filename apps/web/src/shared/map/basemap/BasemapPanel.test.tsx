@@ -68,10 +68,30 @@ describe('BasemapPanel', () => {
     expect(wrapper.text()).toContain('35%');
   });
 
-  it('关闭天地图时只有"无底图"', () => {
-    const { wrapper } = mountPanel(null);
+  it('关闭天地图时是"静态"和"无底图"，默认选中静态；点一下切到无底图，透明度随之隐藏', async () => {
+    const { wrapper, basemap } = mountPanel(null);
 
-    expect(options(wrapper).map(button => button.text())).toStrictEqual(['无底图']);
+    expect(options(wrapper).map(button => button.text())).toStrictEqual(['静态', '无底图']);
+    expect(option(wrapper, '静态底图').attributes('aria-pressed')).toBe('true');
+    expect(wrapper.find('.el-slider').exists()).toBe(true);
+
+    await option(wrapper, '无底图').trigger('click');
+    expect(basemap.selected.value).toBe('none');
+    expect(option(wrapper, '静态底图').attributes('aria-pressed')).toBe('false');
     expect(wrapper.find('.el-slider').exists()).toBe(false);
+
+    await option(wrapper, '静态底图').trigger('click');
+    expect(basemap.selected.value).toBe('static');
+    expect(wrapper.find('.el-slider').exists()).toBe(true);
+  });
+
+  it('静态底图的缩略图只有一张打包的图，没有注记，也不请求天地图', () => {
+    const { wrapper, basemap } = mountPanel(null);
+    const style = option(wrapper, '静态底图').find('[aria-hidden="true"]').attributes('style') ?? '';
+
+    expect(style).toContain(`url("${basemap.thumbnails.static?.base}")`);
+    expect(style.match(/url\(/g)).toHaveLength(1);
+    expect(style).not.toContain('null');
+    expect(style).not.toContain('tianditu');
   });
 });

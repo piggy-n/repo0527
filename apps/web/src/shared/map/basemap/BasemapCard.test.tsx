@@ -9,13 +9,13 @@ import { useBasemap } from './useBasemap';
 const TIANDITU = { key: '0123456789abcdef0123456789abcdef' };
 
 // 页面持有开关和"能不能显示"；浮层定位要地图上下文（没有画布）
-function mountCard(visible = true) {
+function mountCard(visible = true, tianditu: typeof TIANDITU | null = TIANDITU) {
   const open = ref(false);
   const shown = ref(visible);
   let basemap: ReturnType<typeof useBasemap> | undefined;
   const Page = defineComponent(() => {
     provideMap({ groups: [], camera: JIANGSU_CAMERA });
-    const owner = useBasemap({ tianditu: TIANDITU });
+    const owner = useBasemap({ tianditu });
     basemap = owner;
     return () => (
       <BasemapCard basemap={owner} open={open.value} visible={shown.value} onUpdate:open={value => (open.value = value)} />
@@ -46,6 +46,17 @@ describe('BasemapCard', () => {
     basemap?.select('imagery');
     await wrapper.vm.$nextTick();
     expect(card(wrapper).attributes('aria-label')).toBe('底图：影像底图');
+  });
+
+  it('关闭天地图时卡片写"静态"，切到无底图后写"无底图"', async () => {
+    const { wrapper, basemap } = mountCard(true, null);
+
+    expect(card(wrapper).text()).toBe('静态');
+    expect(card(wrapper).attributes('aria-label')).toBe('底图：静态底图');
+
+    basemap?.select('none');
+    await wrapper.vm.$nextTick();
+    expect(card(wrapper).text()).toBe('无底图');
   });
 
   it('不能显示时（窄屏让给另一边、地图不在看）打开着也不显示为按下', async () => {

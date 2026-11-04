@@ -12,6 +12,7 @@ import { useIndicatorTree } from '@/features/monitoring-indicators/composables/u
 import { RESULT_GROUP } from '@/features/monitoring-indicators/result-layers';
 import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
+import { BASEMAP_STYLE_ROOT } from '@/shared/map/basemap/static-basemap';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
@@ -38,7 +39,8 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
     // 注记、边界压在成果上面：成果里的区划范围是不透明的面，地名和边界不被盖住（同现状底图的叠放，ADR 0033）
     const map = provideMap({
       groups: ['basemap', RESULT_GROUP, 'basemap-labels', 'boundaries'],
-      camera: JIANGSU_CAMERA
+      camera: JIANGSU_CAMERA,
+      root: BASEMAP_STYLE_ROOT
     });
     const { goToDefaultView } = useDefaultView(map);
     // 底图和行政区边界不记偏好，不影响现状底图记住的选择；默认省、市、县界都显示（同旧页面）

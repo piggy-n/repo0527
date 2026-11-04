@@ -43,8 +43,9 @@ export function reportMapError(error: unknown): void {
   console.error('[map]', error);
 }
 
-/** 业务地图画布的选项：缩放范围，发往后端的瓦片请求带 token */
+/** 业务地图画布的选项：缩放范围，发往后端的瓦片请求带 token，静态底图的地名用页面的字体在本地画（ADR 0133） */
 export const JIANGSU_MAP_OPTIONS: MapCanvasMapOptions = {
   ...JIANGSU_ZOOM_RANGE,
-  transformRequest: backendTransformRequest
+  transformRequest: backendTransformRequest,
+  localIdeographFontFamily: '"Alibaba PuHuiTi", "Microsoft YaHei", sans-serif'
 };

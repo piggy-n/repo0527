@@ -8,6 +8,7 @@ import { ChatPanel } from '@/features/ai-chat/components/ChatPanel';
 import { useAiChat } from '@/features/ai-chat/composables/useAiChat';
 import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
+import { BASEMAP_STYLE_ROOT } from '@/shared/map/basemap/static-basemap';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
@@ -30,7 +31,8 @@ export const AiChatPage = defineComponent({
     // 回答的结果在底图之上、注记之下，边界在最上面
     const map = provideMap({
       groups: ['basemap', 'ai-result', 'basemap-labels', 'boundaries'],
-      camera: JIANGSU_CAMERA
+      camera: JIANGSU_CAMERA,
+      root: BASEMAP_STYLE_ROOT
     });
     const { goToDefaultView } = useDefaultView(map);
     const basemap = useBasemap();

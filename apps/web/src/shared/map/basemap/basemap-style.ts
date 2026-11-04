@@ -5,18 +5,20 @@ import type {
 } from '@maplibre/maplibre-gl-style-spec';
 import type { StyleGroup } from '@yzt/map-core';
 import type { TiandituConfig } from '../../config/app-config';
+import staticThumbnailUrl from './images/static-thumbnail.svg?url';
+import { staticBasemapGroup, staticLabelsGroup } from './static-basemap';
 
-/** 底图的种类 */
-export type BasemapId = 'vector' | 'imagery' | 'none';
+/** 底图的种类：矢量、影像来自天地图，静态只用本地数据（ADR 0133） */
+export type BasemapId = 'vector' | 'imagery' | 'static' | 'none';
 
-/** 有瓦片的底图，各有自己的透明度 */
-export type TiledBasemapId = Exclude<BasemapId, 'none'>;
+/** 有画面的底图，各有自己的透明度 */
+export type DrawnBasemapId = Exclude<BasemapId, 'none'>;
 
 /** 底图拥有者的状态：只有 ID 和数字，可以直接序列化 */
 export interface BasemapState {
   readonly selected: BasemapId;
   /** 每种底图各记一个，0～1，同时作用于底图和注记 */
-  readonly opacity: Readonly<Record<TiledBasemapId, number>>;
+  readonly opacity: Readonly<Record<DrawnBasemapId, number>>;
 }
 
 export interface BasemapOption {
@@ -26,10 +28,10 @@ export interface BasemapOption {
   readonly shortLabel: string;
 }
 
-/** 缩略图：天地图的底图和注记各一张瓦片，focus 是要对准的位置（CSS 的 background-position） */
+/** 缩略图：底图和注记各一张图，focus 是要对准的位置（CSS 的 background-position）；静态底图的图里已经全有，没有注记 */
 export interface BasemapThumbnail {
   readonly base: string;
-  readonly labels: string;
+  readonly labels: string | null;
   readonly focus: string;
 }
 
@@ -44,16 +46,20 @@ export interface BasemapStyles {
 const OPTION_BY_ID: Readonly<Record<BasemapId, BasemapOption>> = {
   vector: { id: 'vector', label: '矢量底图', shortLabel: '矢量' },
   imagery: { id: 'imagery', label: '影像底图', shortLabel: '影像' },
+  static: { id: 'static', label: '静态底图', shortLabel: '静态' },
   none: { id: 'none', label: '无底图', shortLabel: '无底图' }
 };
-const OPTIONS: readonly BasemapOption[] = [OPTION_BY_ID.vector, OPTION_BY_ID.imagery, OPTION_BY_ID.none];
-const NONE_ONLY = [OPTION_BY_ID.none];
+const TIANDITU_OPTIONS: readonly BasemapOption[] = [OPTION_BY_ID.vector, OPTION_BY_ID.imagery, OPTION_BY_ID.none];
+const INTRANET_OPTIONS: readonly BasemapOption[] = [OPTION_BY_ID.static, OPTION_BY_ID.none];
+
+/** 天地图的底图 */
+type TiandituBasemapId = 'vector' | 'imagery';
 
 // 天地图 WMTS 的图层：底图和配套的注记
 const TIANDITU_LAYERS = {
   vector: { base: 'vec', labels: 'cva' },
   imagery: { base: 'img', labels: 'cia' }
-} as const satisfies Record<TiledBasemapId, { base: string; labels: string }>;
+} as const satisfies Record<TiandituBasemapId, { base: string; labels: string }>;
 
 const SUBDOMAINS = ['0', '1', '2', '3', '4', '5', '6', '7'];
 
@@ -74,27 +80,32 @@ export function basemapOption(id: BasemapId): BasemapOption {
   return OPTION_BY_ID[id];
 }
 
-/** 可选的底图；关闭天地图（内网部署）时只有"无底图" */
+/** 可选的底图；关闭天地图（内网部署）时是"静态底图"和"无底图" */
 export function basemapOptions(tianditu: TiandituConfig | null): readonly BasemapOption[] {
-  return tianditu ? OPTIONS : NONE_ONLY;
+  return tianditu ? TIANDITU_OPTIONS : INTRANET_OPTIONS;
 }
 
-/** 各种底图的缩略图；无底图、关闭天地图时为 null，不请求天地图 */
+/** 各种底图的缩略图；静态底图是打包的小图，无底图没有图片，关闭天地图时不请求天地图 */
 export function basemapThumbnails(
   tianditu: TiandituConfig | null
 ): Readonly<Record<BasemapId, BasemapThumbnail | null>> {
-  const thumbnail = (id: TiledBasemapId): BasemapThumbnail | null =>
+  const thumbnail = (id: TiandituBasemapId): BasemapThumbnail | null =>
     tianditu && {
       base: tileUrl(TIANDITU_LAYERS[id].base, tianditu.key, '0', THUMBNAIL_TILE),
       labels: tileUrl(TIANDITU_LAYERS[id].labels, tianditu.key, '0', THUMBNAIL_TILE),
       focus: THUMBNAIL_TILE.focus
     };
-  return { vector: thumbnail('vector'), imagery: thumbnail('imagery'), none: null };
+  return {
+    vector: thumbnail('vector'),
+    imagery: thumbnail('imagery'),
+    static: { base: staticThumbnailUrl, labels: null, focus: '50% 50%' },
+    none: null
+  };
 }
 
-/** 进入页面时的状态：开启天地图时是矢量底图，否则是无底图；透明度都是 1 */
+/** 进入页面时的状态：开启天地图时是矢量底图，否则是静态底图；透明度都是 1 */
 export function initialBasemapState(tianditu: TiandituConfig | null): BasemapState {
-  return { selected: tianditu ? 'vector' : 'none', opacity: { vector: 1, imagery: 1 } };
+  return { selected: tianditu ? 'vector' : 'static', opacity: { vector: 1, imagery: 1, static: 1 } };
 }
 
 // 一张瓦片的地址；z、x、y 也可以是 MapLibre 替换的占位符，所以不经过 URLSearchParams 转义
@@ -121,7 +132,7 @@ function rasterLayer(id: string, opacity: number): RasterLayerSpecification {
 }
 
 // 一种底图在两个分组里的数据源；数据源和图层用同一个 ID，以分组名为前缀
-function tiledSources(id: TiledBasemapId, key: string) {
+function tiledSources(id: TiandituBasemapId, key: string) {
   const baseId = `basemap-${id}`;
   const labelsId = `basemap-labels-${id}`;
   return {
@@ -143,6 +154,9 @@ export function createBasemapStyles(tianditu: TiandituConfig | null): BasemapSty
 
   return {
     basemapGroup({ selected, opacity }) {
+      if (selected === 'static') {
+        return staticBasemapGroup(opacity.static);
+      }
       if (selected === 'none' || !sources) {
         return BACKGROUND_ONLY;
       }
@@ -150,6 +164,9 @@ export function createBasemapStyles(tianditu: TiandituConfig | null): BasemapSty
       return { sources: base, layers: [BACKGROUND_LAYER, rasterLayer(baseId, opacity[selected])] };
     },
     labelsGroup({ selected, opacity }) {
+      if (selected === 'static') {
+        return staticLabelsGroup(opacity.static);
+      }
       if (selected === 'none' || !sources) {
         return EMPTY;
       }

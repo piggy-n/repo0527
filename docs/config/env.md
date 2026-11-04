@@ -27,7 +27,7 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_APP_TITLE` | `江苏省统一调查监测现状图` | `index.html`（`%VITE_APP_TITLE%`）、`appConfig.title` | 系统名称，只定义一次 |
 | `VITE_API_BASE_URL` | `/backend` | `vite.config.ts`（代理前缀）、`appConfig.apiBaseUrl` | 接口基础地址 |
 | `VITE_LOGIN_PUBLIC_KEY` | `04d2bf…fa83`（130 位） | `appConfig.loginPublicKey` | 登录密码加密用的 SM2 公钥，由后端提供（ADR 0015）。公钥本身是公开的，可以写进产物 |
-| `VITE_TIANDITU_ENABLED` | `true` | `appConfig.tianditu` | 天地图开关（ADR 0031）。不能访问公网的内网部署设为 `false`，地图不再向天地图发任何请求 |
+| `VITE_TIANDITU_ENABLED` | `true` | `appConfig.tianditu` | 天地图开关（ADR 0031）。不能访问公网的内网部署设为 `false`，地图不再向天地图发任何请求，底图是本地数据画的静态底图和无底图（ADR 0133） |
 | `VITE_TIANDITU_KEY` | `13745b…8974`（32 位） | `appConfig.tianditu.key` | 天地图的浏览器端 key，开启时必填，关闭时不读。它本来就写在每个瓦片地址里，防盗用靠天地图控制台的域名白名单和配额 |
 | `PROXY_TARGET` | `http://192.168.1.180:18010` | 只在 `vite.config.ts` | 开发服务器与 `vite preview` 的代理目标 |
 | `VITE_AI_API_BASE_URL` | `/ai-backend` | `vite.config.ts`（代理前缀）、`appConfig.aiApiBaseUrl` | AI 对话后端的基础地址。AI 后端是另一个服务（Bearer 鉴权、没有信封），同样走同源代理，见 [modules/ai-chat.md](../modules/ai-chat.md) |

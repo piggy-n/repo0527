@@ -67,7 +67,7 @@ describe('backendTransformRequest', () => {
   });
 
   it('画布选项包含缩放范围和这个转换函数', () => {
-    expect(JIANGSU_MAP_OPTIONS).toEqual({ ...JIANGSU_ZOOM_RANGE, transformRequest: backendTransformRequest });
+    expect(JIANGSU_MAP_OPTIONS).toMatchObject({ ...JIANGSU_ZOOM_RANGE, transformRequest: backendTransformRequest });
   });
 });
 

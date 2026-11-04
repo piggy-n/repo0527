@@ -14,7 +14,7 @@ import {
 
 const KEY = '0123456789abcdef0123456789abcdef';
 const TIANDITU = { key: KEY };
-const SELECTIONS: readonly BasemapId[] = ['vector', 'imagery', 'none'];
+const SELECTIONS: readonly BasemapId[] = ['vector', 'imagery', 'static', 'none'];
 
 const BACKGROUND = { id: 'basemap-background', type: 'background', paint: { 'background-color': '#F3F5F8' } };
 
@@ -38,7 +38,7 @@ function rasterLayer(id: string, opacity: number) {
 }
 
 function state(selected: BasemapId, opacity: Partial<BasemapState['opacity']> = {}): BasemapState {
-  return { selected, opacity: { vector: 1, imagery: 1, ...opacity } };
+  return { selected, opacity: { vector: 1, imagery: 1, static: 1, ...opacity } };
 }
 
 // 两个分组组合成完整的样式；StyleModel 提交时会校验 ID 重复和引用不存在的数据源
@@ -55,18 +55,28 @@ describe('可选的底图与初始状态', () => {
       { id: 'imagery', label: '影像底图', shortLabel: '影像' },
       { id: 'none', label: '无底图', shortLabel: '无底图' }
     ]);
-    expect(initialBasemapState(TIANDITU)).toStrictEqual({ selected: 'vector', opacity: { vector: 1, imagery: 1 } });
+    expect(initialBasemapState(TIANDITU)).toStrictEqual({
+      selected: 'vector',
+      opacity: { vector: 1, imagery: 1, static: 1 }
+    });
   });
 
-  it('关闭天地图：只有无底图，进入时就是它', () => {
-    expect(basemapOptions(null)).toStrictEqual([{ id: 'none', label: '无底图', shortLabel: '无底图' }]);
-    expect(initialBasemapState(null)).toStrictEqual({ selected: 'none', opacity: { vector: 1, imagery: 1 } });
+  it('关闭天地图：静态底图和无底图，进入时是静态底图（ADR 0133）', () => {
+    expect(basemapOptions(null)).toStrictEqual([
+      { id: 'static', label: '静态底图', shortLabel: '静态' },
+      { id: 'none', label: '无底图', shortLabel: '无底图' }
+    ]);
+    expect(initialBasemapState(null)).toStrictEqual({
+      selected: 'static',
+      opacity: { vector: 1, imagery: 1, static: 1 }
+    });
   });
 
   it('按 ID 取一种底图的名称和简称：底图卡写简称，无障碍名称写全称（ADR 0057）', () => {
     expect(basemapOption('vector')).toBe(basemapOptions(TIANDITU)[0]);
     expect(basemapOption('imagery')).toStrictEqual({ id: 'imagery', label: '影像底图', shortLabel: '影像' });
-    expect(basemapOption('none')).toBe(basemapOptions(null)[0]);
+    expect(basemapOption('static')).toBe(basemapOptions(null)[0]);
+    expect(basemapOption('none')).toBe(basemapOptions(null)[1]);
   });
 });
 
@@ -151,12 +161,74 @@ describe('createBasemapStyles：开启天地图', () => {
 describe('createBasemapStyles：关闭天地图（内网部署）', () => {
   const styles = createBasemapStyles(null);
 
-  it.each(SELECTIONS)('选择 %s 时也只有背景，推导结果里没有天地图', selected => {
+  it.each(['vector', 'imagery', 'none'] as const)('选择 %s 时也只有背景', selected => {
     const basemap = state(selected);
 
     expect(styles.basemapGroup(basemap)).toStrictEqual({ sources: {}, layers: [BACKGROUND] });
     expect(styles.labelsGroup(basemap)).toStrictEqual({ sources: {}, layers: [] });
-    expect(JSON.stringify(compose(styles, basemap))).not.toContain('tianditu');
+  });
+
+  it.each(SELECTIONS)('选择 %s 时推导结果里没有天地图', selected => {
+    expect(JSON.stringify(compose(styles, state(selected)))).not.toContain('tianditu');
+  });
+
+  it('静态底图：省外的底色、市界数据上的面和线，地名在注记分组，都只引用本地文件', () => {
+    const basemap = state('static');
+    const base = styles.basemapGroup(basemap);
+    const labels = styles.labelsGroup(basemap);
+
+    expect(base.layers.map(({ id, type }) => [id, type])).toStrictEqual([
+      ['basemap-background', 'background'],
+      ['basemap-static-land', 'fill'],
+      ['basemap-static-line', 'line']
+    ]);
+    expect(labels.layers.map(({ id, type }) => [id, type])).toStrictEqual([
+      ['basemap-labels-static-county', 'symbol'],
+      ['basemap-labels-static-city', 'symbol']
+    ]);
+    const urls = [...Object.values(base.sources), ...Object.values(labels.sources)].map(source =>
+      source.type === 'geojson' && typeof source.data === 'string' ? source.data : ''
+    );
+    expect(urls).toHaveLength(2);
+    for (const url of urls) {
+      expect(url).toMatch(/jiangsu-(city|labels)[^/]*\.json/);
+      expect(url).not.toMatch(/^https?:/);
+    }
+  });
+
+  it('静态底图的透明度作用于面、线和地名，底色不变，线本来的不透明度乘在上面', () => {
+    const basemap = state('static', { static: 0.5 });
+    const painted = [...styles.basemapGroup(basemap).layers, ...styles.labelsGroup(basemap).layers];
+    const paint = (id: string) => painted.find(layer => layer.id === id)?.paint;
+
+    expect(paint('basemap-background')).toStrictEqual({ 'background-color': '#E6EAF0' });
+    expect(paint('basemap-static-land')).toMatchObject({ 'fill-opacity': 0.5 });
+    expect(paint('basemap-static-line')).toMatchObject({ 'line-opacity': 0.45 });
+    expect(paint('basemap-labels-static-city')).toMatchObject({ 'text-opacity': 0.5 });
+    expect(paint('basemap-labels-static-county')).toMatchObject({ 'text-opacity': 0.5 });
+  });
+
+  it('改静态底图的透明度只产生 setPaintProperty，不重新下载数据', () => {
+    const commands = diffStyle(compose(styles, state('static')), compose(styles, state('static', { static: 0.5 })));
+
+    expect(new Set(commands.map(({ command }) => command))).toStrictEqual(new Set(['setPaintProperty']));
+  });
+
+  it('静态底图和无底图之间切换：换掉面、线和地名，底色跟着变', () => {
+    const commands = diffStyle(compose(styles, state('static')), compose(styles, state('none')));
+    const touched = commands.map(({ command, args }) => [command, args[0]]);
+
+    expect(touched).toEqual(
+      expect.arrayContaining([
+        ['removeLayer', 'basemap-static-land'],
+        ['removeLayer', 'basemap-static-line'],
+        ['removeLayer', 'basemap-labels-static-city'],
+        ['removeLayer', 'basemap-labels-static-county'],
+        ['removeSource', 'basemap-static'],
+        ['removeSource', 'basemap-labels-static'],
+        ['setPaintProperty', 'basemap-background']
+      ])
+    );
   });
 });
 
@@ -167,14 +239,18 @@ const thumbnailTile = (layer: string) =>
 
 describe('缩略图', () => {
   it('矢量、影像各用南京附近的一张 10 级瓦片，叠上配套的注记；无底图没有图片', () => {
-    expect(basemapThumbnails(TIANDITU)).toStrictEqual({
+    expect(basemapThumbnails(TIANDITU)).toMatchObject({
       vector: { base: thumbnailTile('vec'), labels: thumbnailTile('cva'), focus: '86% 67%' },
       imagery: { base: thumbnailTile('img'), labels: thumbnailTile('cia'), focus: '86% 67%' },
       none: null
     });
   });
 
-  it('关闭天地图时都没有图片，不请求天地图', () => {
-    expect(basemapThumbnails(null)).toStrictEqual({ vector: null, imagery: null, none: null });
+  it('关闭天地图时矢量、影像没有图片，静态底图是打包的小图，不请求天地图', () => {
+    const { vector, imagery, static: staticThumbnail, none } = basemapThumbnails(null);
+
+    expect([vector, imagery, none]).toStrictEqual([null, null, null]);
+    expect(staticThumbnail?.base).toMatch(/static-thumbnail/);
+    expect(staticThumbnail?.labels).toBeNull();
   });
 });

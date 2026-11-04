@@ -1,5 +1,5 @@
 import { buildCatalog } from '@/features/resource-map/catalog';
-import type { BasemapThumbnail } from '@/shared/map/basemap/basemap-style';
+import { type BasemapId, type BasemapThumbnail, basemapThumbnails } from '@/shared/map/basemap/basemap-style';
 import imagery from './sample-imagery.svg?url';
 import vector from './sample-vector.svg?url';
 
@@ -35,9 +35,10 @@ export const SAMPLE_CATALOG = buildCatalog([{
   ]
 }]);
 
-/** 本地示意图替代天地图缩略图，预览页不发外部地图请求 */
-export const SAMPLE_THUMBNAILS: Readonly<Record<'vector' | 'imagery' | 'none', BasemapThumbnail | null>> = {
+/** 本地示意图替代天地图缩略图，预览页不发外部地图请求；静态底图的缩略图本来就是本地的 */
+export const SAMPLE_THUMBNAILS: Readonly<Record<BasemapId, BasemapThumbnail | null>> = {
   vector: { base: vector, labels: vector, focus: 'center' },
   imagery: { base: imagery, labels: imagery, focus: 'center' },
+  static: basemapThumbnails(null).static,
   none: null
 };

@@ -6,7 +6,7 @@
   gap: var(--space-md);
 }
 
-// 内网只有一张时也按三列的宽度，不拉伸
+// 内网只有两张时也按三列的宽度，不拉伸
 .options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

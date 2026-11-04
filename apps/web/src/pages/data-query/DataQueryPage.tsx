@@ -8,6 +8,7 @@ import { PREVIEW_GROUP, RESULT_GROUP } from '@/features/data-query/result-layers
 import { QUERY_TOPICS, type QueryTopic, type TopicId } from '@/features/data-query/topics';
 import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
+import { BASEMAP_STYLE_ROOT } from '@/shared/map/basemap/static-basemap';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
@@ -29,7 +30,8 @@ const DataQueryView = defineComponent({
     // 预览压在注记下面，结果和画的范围在边界上面（同旧页面）
     const map = provideMap({
       groups: ['basemap', PREVIEW_GROUP, 'basemap-labels', 'boundaries', RESULT_GROUP, 'draw'],
-      camera: JIANGSU_CAMERA
+      camera: JIANGSU_CAMERA,
+      root: BASEMAP_STYLE_ROOT
     });
     const { goToDefaultView } = useDefaultView(map);
     // 底图和行政区边界不记偏好，不影响现状底图记住的选择；默认只显示省界（同旧页面）

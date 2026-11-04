@@ -30,13 +30,36 @@ describe('useBasemap', () => {
     expect(JSON.stringify([basemap.deriveGroup(), basemap.deriveLabelsGroup()])).toContain(`tk=${TIANDITU.key}`);
   });
 
-  it('关闭天地图：只有无底图，没有透明度，推导结果里没有天地图', () => {
+  it('关闭天地图：静态底图和无底图可选，进入时是静态底图，推导结果里没有天地图', () => {
     const basemap = useBasemap({ tianditu: null });
 
-    expect(basemap.options.map(option => option.id)).toStrictEqual(['none']);
-    expect(basemap.selected.value).toBe('none');
-    expect(basemap.opacity.value).toBeNull();
+    expect(basemap.options.map(option => option.id)).toStrictEqual(['static', 'none']);
+    expect(basemap.selected.value).toBe('static');
+    expect(basemap.opacity.value).toBe(1);
+    expect(Object.keys(basemap.deriveGroup().sources)).toStrictEqual(['basemap-static']);
+    expect(Object.keys(basemap.deriveLabelsGroup().sources)).toStrictEqual(['basemap-labels-static']);
     expect(JSON.stringify([basemap.deriveGroup(), basemap.deriveLabelsGroup()])).not.toContain('tianditu');
+  });
+
+  it('关闭天地图：一键切到无底图没有透明度，切回静态底图还是原来的透明度', () => {
+    const basemap = useBasemap({ tianditu: null });
+    basemap.setOpacity(0.4);
+
+    basemap.select('none');
+    expect(basemap.opacity.value).toBeNull();
+    expect(basemap.deriveGroup().sources).toStrictEqual({});
+    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
+
+    basemap.select('static');
+    expect(basemap.opacity.value).toBe(0.4);
+    expect(Object.keys(basemap.deriveGroup().sources)).toStrictEqual(['basemap-static']);
+  });
+
+  it('开启天地图时不能选静态底图', () => {
+    const basemap = useBasemap({ tianditu: TIANDITU });
+
+    expect(() => basemap.select('static')).toThrow('底图 static 不可用');
+    expect(basemap.selected.value).toBe('vector');
   });
 
   it('切换底图后，推导出所选底图和配套的注记', () => {
@@ -55,7 +78,7 @@ describe('useBasemap', () => {
     expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
   });
 
-  it('切换二三维：三维选影像、二维选矢量；关闭天地图时保持无底图', () => {
+  it('切换二三维：三维选影像、二维选矢量；关闭天地图时保持原来的底图', () => {
     const basemap = useBasemap({ tianditu: TIANDITU });
 
     basemap.selectForDimension('3d');
@@ -64,6 +87,9 @@ describe('useBasemap', () => {
     expect(basemap.selected.value).toBe('vector');
 
     const intranet = useBasemap({ tianditu: null });
+    intranet.selectForDimension('3d');
+    expect(intranet.selected.value).toBe('static');
+    intranet.select('none');
     intranet.selectForDimension('3d');
     expect(intranet.selected.value).toBe('none');
   });
@@ -112,7 +138,7 @@ describe('useBasemap', () => {
     const basemap = useBasemap({ tianditu: null });
 
     expect(() => basemap.select('vector')).toThrow('底图 vector 不可用');
-    expect(basemap.selected.value).toBe('none');
+    expect(basemap.selected.value).toBe('static');
   });
 
   it.each([-0.1, 1.1, Number.NaN, Number.POSITIVE_INFINITY])('透明度为 %s 时抛错，状态不变', value => {

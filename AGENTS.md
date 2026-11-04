@@ -188,7 +188,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 自定义环境变量只在 `shared/config/app-config.ts` 中读取和校验，其他代码使用 `appConfig`；Vite 内置的 `DEV`、`PROD`、`MODE`、`BASE_URL` 可以直接读取。新增变量要在 `shared/config/import-meta-env.ts` 中声明类型
 - `VITE_` 开头的变量会写进构建产物，不能放密钥；只给 `vite.config.ts` 用的变量不加 `VITE_` 前缀
 - 接口请求走同源的 `appConfig.apiBaseUrl`（`/backend`），由 Vite 或 nginx 转发到后端（ADR 0008）
-- 天地图只通过 `appConfig.tianditu`（`{ key } | null`）使用；为 `null` 时不发任何公网请求，界面上也不出现依赖天地图的选项（ADR 0031）
+- 天地图只通过 `appConfig.tianditu`（`{ key } | null`）使用；为 `null` 时不发任何公网请求，界面上也不出现依赖天地图的选项（ADR 0031）；这时底图是"静态底图"（默认）和"无底图"（ADR 0133）
 - 内网与公网的差异只写在 `.env.intranet`（`pnpm build:intranet`、`dev:intranet`），代码只读 `appConfig`，不判断模式名；区分生产与开发用 `PROD` / `DEV`，不用 `MODE`（ADR 0032）
 
 ### 接口请求（ADR 0011，用法见 `docs/modules/http.md`）
@@ -223,7 +223,8 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 关掉拖动平移的工具要临时拖动地图时声明 `panModifier`，值取 `shared/map` 的 `currentPanKey()`（Mac 用 ⌘，其他用 Ctrl），平移和手型光标由适配器负责，工具不自己监听修饰键（ADR 0056）
 - 工具栏的按钮由页面挑选（`items`），动作的回调由页面给出（`actions`）；开关面板的动作，由页面通过 `pressed` 告诉工具栏显示为按下，工具栏不保存开关（ADR 0034、0036）
 - 行政区边界的入口：现状底图在业务组，打开功能标签；其他地图页给 `MapViewControls` 传 `boundaries` 和 `boundariesOpen`，点开是底图同款的浮层，不另放工具栏，开关由页面持有（窄屏时计入 `useSideExclusion`）；默认级别由页面设置（ADR 0128）
-- fill 图层要用 `['geometry-type']` 限定为面：MapLibre 会把线也当成环填充
+- fill 图层要用 `['geometry-type']` 限定为面：MapLibre 会把线也当成环填充；要写 `['Polygon', 'MultiPolygon']`，三维按要素原来的类型求值
+- 内网的静态底图用本地市界直接绘制面、线和地名，不用图片，也不用天地图的截图或瓦片；绑定 `basemap-labels` 分组的页面在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`，漏传时整个视图进入 `failed`；改了配色或边界数据运行 `basemap:generate`（ADR 0133）
 - line 图层的 `line-dasharray` 不在常量和按要素取值之间切换（MapLibre 6.12 的缺陷会报错）：线型不同的要素按线型拆成多个图层，每层的线型是常量，实线不设（ADR 0046）
 - 只随级别变化（常量或按 `zoom` 的 `step`）的 `fill-pattern` 设 `'fill-pattern-transition': { duration: 0 }`：过渡期间 MapLibre 按旧图片取图集位置，换花纹后会画错约 300 毫秒（见 `docs/migration.md` 的"切换填充方式的闪烁"）
 - 区划目录和区划边界只用本地数据（`shared/map/region`），目录与市界、县界数据由测试保证逐条一致（ADR 0036）；经纬度的识别、显示和复制只用 `shared/map/location/coordinate-format.ts` 的纯函数（ADR 0037）

@@ -56,7 +56,8 @@ export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBa
   if (preferences) {
     usePreference(preferences, {
       name: 'basemap',
-      version: 1,
+      // 版本 1 里内网只能存"无底图"，不算用户的选择，不能盖住默认的静态底图（ADR 0133）
+      version: 2,
       schema: storedBasemapSchema,
       snapshot: () => ({ ...state.value, selected: chosen.value }),
       restore: stored => {

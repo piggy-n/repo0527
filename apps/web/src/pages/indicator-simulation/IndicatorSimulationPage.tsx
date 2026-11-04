@@ -22,6 +22,7 @@ import type { DialogueLine } from '@/features/indicator-simulation/compose/guide
 import { areaLabel, areaScope } from '@/features/indicator-simulation/model/scope';
 import { reducedMotion, STILL_CLASS } from '@/features/indicator-simulation/motion';
 import type { RunView } from '@/features/indicator-simulation/result/result-view';
+import { BASEMAP_STYLE_ROOT } from '@/shared/map/basemap/static-basemap';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
@@ -64,7 +65,8 @@ export const IndicatorSimulationPage = defineComponent({
         'draw',
         'shape-edit'
       ],
-      camera: JIANGSU_CAMERA
+      camera: JIANGSU_CAMERA,
+      root: BASEMAP_STYLE_ROOT
     });
     const { goToDefaultView } = useDefaultView(map);
     const basemap = useBasemap();

@@ -22,6 +22,7 @@ import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { appConfig } from '@/shared/config/app-config';
 import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
+import { BASEMAP_STYLE_ROOT } from '@/shared/map/basemap/static-basemap';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
@@ -89,7 +90,8 @@ export const CurrentMapPage = defineComponent({
     // （ADR 0051）；边界压在注记上面，区划高亮在边界之上，测量在最上面
     const map = provideMap({
       groups: ['basemap', 'resources', 'selection', 'region-clip', 'basemap-labels', 'boundaries', 'region', 'measure'],
-      camera: JIANGSU_CAMERA
+      camera: JIANGSU_CAMERA,
+      root: BASEMAP_STYLE_ROOT
     });
     // 登录后第一次进入时记下加载的耗时（docs/modules/perf.md）
     useMapLoadMarks(map);

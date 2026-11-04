@@ -126,7 +126,7 @@ pnpm add -Dw -E some-tool
 
 **作用**：用内网部署的配置启动开发服务器，地图不向天地图发任何请求。
 
-**什么时候用**：开发或检查内网环境下的行为，例如底图只能选"无底图"。
+**什么时候用**：开发或检查内网环境下的行为，例如底图默认是"静态底图"、没有矢量和影像（ADR 0133）。
 
 **执行了什么**：运行 `vite --mode intranet`，在 `.env` 之上加载 `.env.intranet`（ADR 0032）。
 
@@ -161,6 +161,16 @@ pnpm add -Dw -E some-tool
 **执行了什么**：Node 直接运行 `tools/boundaries/cli.ts`，读取目录下的 `江苏省界.json`、`江苏省市界.json`、`江苏省县界.json`，坐标保留 6 位小数、属性只留名称和代码，写入 `src/shared/map/boundary/data/`。
 
 **注意事项**：目录是旧项目（yzt）的 `public/static/geojson`。旧仓库可能停在其他分支上，最好先用 `git show master-demo:public/static/geojson/<文件名>` 导出到一个临时目录再转换；原始文件的结构不符合时报错退出。详见 [modules/shared-map.md](modules/shared-map.md)"行政区边界的数据"。
+
+### `pnpm --filter @yzt/web basemap:generate`
+
+**作用**：由市界、县界生成内网静态底图的地名点和缩略图（ADR 0133）。
+
+**什么时候用**：边界数据或 `static-palette.ts` 的配色变化时。平时不用运行，生成结果已经提交；缩略图和配色对不上时 `static-basemap.test.ts` 会失败。
+
+**执行了什么**：Node 直接运行 `tools/static-basemap/cli.ts`，读取 `src/shared/map/boundary/data/` 的市界、县界，写入 `src/shared/map/basemap/data/jiangsu-labels.json` 和 `src/shared/map/basemap/images/static-thumbnail.svg`，打印各自的大小。
+
+**注意事项**：不访问网络，约 1 秒完成。
 
 ### `pnpm --filter @yzt/web measure:map-load`
 
