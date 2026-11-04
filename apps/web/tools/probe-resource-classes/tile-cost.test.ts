@@ -375,6 +375,14 @@ describe('配置和报告', () => {
     expect(Object.keys(config)).toStrictEqual(['a_unknown', 'z_two_years']);
   });
 
+  it('第一次请求很慢的资源，实测建议放开也保留现在的级别；建议更严时用更严的（ADR 0136）', () => {
+    expect(minZoomConfig([resultOf({ code: 'bgdc_lmfw', suggested: 'none', current: 8 })])).toStrictEqual({ bgdc_lmfw: 8 });
+    expect(minZoomConfig([resultOf({ code: 'bgdc_cjdcq', suggested: 6, current: 8 })])).toStrictEqual({ bgdc_cjdcq: 8 });
+    expect(minZoomConfig([resultOf({ code: 'bgdc_cjdcqjx', suggested: 10, current: 8 })])).toStrictEqual({ bgdc_cjdcqjx: 10 });
+    const report = formatTileCost([resultOf({ code: 'bgdc_lmfw', suggested: 'none', current: 8 })], LIMITS);
+    expect(report).toContain('| bgdc_lmfw | bgdc_lmfw_2025 | 8 级 | 不限制 | 例外，第一次请求很慢，保留（ADR 0136） |');
+  });
+
   it('判断不了的年份：别的年份测到了就以测到的为准，不保留现在的值；顺序不影响结果', () => {
     const emptyLatest = resultOf({ code: 'empty_latest', suggested: 'unknown', current: 10, year: 2026 });
     const measured = resultOf({ code: 'empty_latest', suggested: 'none', current: 10, year: 2025 });

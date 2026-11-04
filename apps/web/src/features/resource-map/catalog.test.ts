@@ -7,6 +7,32 @@ function layer(code: string, geoType: 'Polygon' | 'Line' | 'Point', yearList: [n
   return { code, name, geoType, yearList };
 }
 
+describe('资源的最小显示级别', () => {
+  const tree: ResourceTreeCategory[] = [
+    {
+      code: null,
+      name: '测试',
+      children: [
+        layer('csxhjctb_lrdl', 'Line', [2025]),
+        layer('csxhjctb_hydl', 'Line', [2023]),
+        // 同一个 code 重复出现，合并年份时级别不能丢
+        layer('csxhjctb_lrdl', 'Line', [2026])
+      ]
+    }
+  ];
+
+  it('按传入的配置；没写的资源不带这个属性', () => {
+    const { resources } = buildCatalog(tree, { csxhjctb_lrdl: 12 });
+
+    expect(resources.get('csxhjctb_lrdl')).toMatchObject({ minzoom: 12, years: [2025, 2026] });
+    expect(resources.get('csxhjctb_hydl')).not.toHaveProperty('minzoom');
+  });
+
+  it('不传时用构建时带上的层级', () => {
+    expect(buildCatalog(tree).resources.get('csxhjctb_lrdl')?.minzoom).toBe(9);
+  });
+});
+
 const TREE: ResourceTreeCategory[] = [
   {
     code: null,

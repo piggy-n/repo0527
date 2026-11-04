@@ -211,7 +211,8 @@ function resourceEntry(
   override: ResourceSymbolOverride | undefined
 ): ResourceEntry {
   const id = resourceSourceId(resource.code);
-  const { minzoom, promoteId } = style;
+  const { minzoom } = resource;
+  const { promoteId } = style;
   const zoomRange = minzoom === undefined ? {} : { minzoom };
   const source: VectorSourceSpecification = {
     type: 'vector',

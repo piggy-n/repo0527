@@ -29,6 +29,7 @@ import { setupServer } from 'msw/node';
 import { createPinia } from 'pinia';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { type ComponentPublicInstance, defineComponent, KeepAlive, nextTick, ref } from 'vue';
+import { builtInMinZooms } from '@/features/resource-map/min-zooms';
 import { resourceTreeResponse } from '@/features/resource-map/test-data';
 import cityFile from '@/shared/map/boundary/data/jiangsu-city.json?raw';
 import countyFile from '@/shared/map/boundary/data/jiangsu-county.json?raw';
@@ -359,7 +360,10 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
 
 // 资源树默认返回测试数据（结构同实测）；用例可以换成失败的响应
 const TREE_URL = '/backend/resource-map/base/tree';
-const server = setupServer(mock.get(TREE_URL, () => HttpResponse.json(resourceTreeResponse())));
+const server = setupServer(
+  mock.get(TREE_URL, () => HttpResponse.json(resourceTreeResponse())),
+  mock.get('*/resource-min-zooms.json', () => HttpResponse.json(builtInMinZooms()))
+);
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });

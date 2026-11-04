@@ -33,7 +33,7 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_AI_API_BASE_URL` | `/ai-backend` | `vite.config.ts`（代理前缀）、`appConfig.aiApiBaseUrl` | AI 对话后端的基础地址。AI 后端是另一个服务（Bearer 鉴权、没有信封），同样走同源代理，见 [modules/ai-chat.md](../modules/ai-chat.md) |
 | `AI_PROXY_TARGET` | `http://localhost:8090` | 只在 `vite.config.ts` | AI 后端的代理目标，沿用旧项目的本机开发地址，尚未联调 |
 | `VITE_PAGE_STATE_RESET` | `true` | `appConfig.pageStateReset`、`AppLayout` | 离开页面后是否重置（ADR 0114）。`false` 时现状底图、指标 AI 计算切走再回来保留上次的状态；`true` 时不缓存页面，每次进入都是初始状态，现状底图的底图不读不写偏好（总是矢量），其余偏好照常恢复 |
-| `VITE_RESOURCE_MIN_ZOOM_ENABLED` | `true` | `appConfig.resourceMinZoomEnabled`、`resourceStyle` | 资源的最小显示级别（ADR 0132）。`true` 时按 `style-registry.ts` 的层级表限制，没到层级不请求瓦片、提示放大到几级；`false` 时不限制，低级别的瓦片可能有十几 MB，只用于排查和应急 |
+| `VITE_RESOURCE_MIN_ZOOM_ENABLED` | `true` | `appConfig.resourceMinZoomEnabled`、`fetchResourceMinZooms`、`builtInMinZooms` | 资源的最小显示级别（ADR 0132、0137）。`true` 时按发布目录的 `resource-min-zooms.json` 限制（读不到时用构建带上的那份），没到层级不请求瓦片、提示放大到几级；`false` 时不读文件、不限制，低级别的瓦片可能有十几 MB，只用于排查和应急 |
 
 ## 两类变量
 

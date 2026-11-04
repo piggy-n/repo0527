@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import {
@@ -288,10 +289,9 @@ async function loadRegistry(): Promise<RegistryModule> {
 }
 
 describe('和样式登记表一致', () => {
-  it('跳过的低级别等于资源的最小显示级别', async () => {
-    const { resourceStyle } = await loadRegistry();
-    const floors = Object.keys(ZOOM_FLOORS).map(code => [code, resourceStyle(code).minzoom]);
-    expect(Object.fromEntries(floors)).toEqual(ZOOM_FLOORS);
+  it('跳过的低级别等于资源的最小显示级别：两边多一个、少一个都不行', () => {
+    const file = new URL('../../src/features/resource-map/resource-min-zooms.json', import.meta.url);
+    expect(ZOOM_FLOORS).toStrictEqual(JSON.parse(readFileSync(file, 'utf8')));
   });
 
   it('现有规则的字段和登记表一致', async () => {

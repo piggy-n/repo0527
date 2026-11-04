@@ -107,6 +107,8 @@ export const ZOOM_FLOORS: Readonly<Record<string, number>> = {
   csxhjctb_lvll: 8,
   bgdc_yjjbnttb: 8,
   bgdc_lmfw: 8,
+  bgdc_cjdcq: 8,
+  bgdc_cjdcqjx: 8,
   szy_hl_fs: 8,
   szy_hl_ks: 8
 };

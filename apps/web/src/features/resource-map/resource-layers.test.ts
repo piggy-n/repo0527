@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { featureFilter, type LayerSpecification, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import type { StyleGroup } from '@yzt/map-core';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import {
@@ -201,17 +201,17 @@ describe('resourcesGroup', () => {
     expect(layerOf(group, 'csxhjctb_lrdl').minzoom).toBe(9);
   });
 
-  it('关闭最小显示级别的开关时，数据源和图层都不设（ADR 0132）', async () => {
-    vi.resetModules();
-    vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', 'false');
-    const disabled = await import('./resource-layers');
-    const state = checkAll(disabled.mergeDisplayState(disabled.EMPTY_RESOURCE_LAYERS, catalogOf(LRDL)));
+  it('级别跟着目录走：部署的配置改了就用新的，配置里没写的数据源和图层都不设（ADR 0137）', () => {
+    const tree: ResourceTreeCategory[] = [{ code: null, name: '测试', children: [LRDL, YJJBNTTB] }];
+    const catalog = buildCatalog(tree, { csxhjctb_lrdl: 12 });
 
-    const group = disabled.resourcesGroup({ state, invalid: new Map(), tileBase: TILE_BASE });
+    const group = derive(checkAll(mergeDisplayState(EMPTY_RESOURCE_LAYERS, catalog)));
 
-    expect(group.sources['resources-csxhjctb_lrdl']).toMatchObject({ maxzoom: 15 });
-    expect(group.sources['resources-csxhjctb_lrdl']).not.toHaveProperty('minzoom');
-    expect(layerOf(group, 'csxhjctb_lrdl')).not.toHaveProperty('minzoom');
+    expect(group.sources['resources-csxhjctb_lrdl']).toMatchObject({ minzoom: 12 });
+    expect(layerOf(group, 'csxhjctb_lrdl').minzoom).toBe(12);
+    expect(group.sources['resources-bgdc_yjjbnttb']).toMatchObject({ maxzoom: 15 });
+    expect(group.sources['resources-bgdc_yjjbnttb']).not.toHaveProperty('minzoom');
+    expect(layerOf(group, 'bgdc_yjjbnttb')).not.toHaveProperty('minzoom');
   });
 
   it('地类图斑带 promoteId；瓦片图层名默认等于瓦片集名（2026-11-01 探查，城镇村等用地不再是例外）', () => {
@@ -259,7 +259,7 @@ describe('resourcesGroup', () => {
       expect(part).toMatchObject({
         source: `resources-${code}`,
         filter: 'filter' in main ? main.filter : undefined,
-        minzoom: resourceStyle(code).minzoom
+        minzoom: 8
       });
       expect('source-layer' in part && part['source-layer']).toBe('source-layer' in main && main['source-layer']);
     }

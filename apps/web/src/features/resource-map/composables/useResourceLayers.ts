@@ -33,7 +33,6 @@ import {
   storedResourceLayersSchema,
   toStoredResourceLayers
 } from '../resource-layers-preference';
-import { resourceStyle } from '../style-registry';
 import type { ResourceSymbols } from './useResourceSymbols';
 
 /** 资源图层的拥有者（ADR 0041 第 3 节）：页面把 deriveGroup 绑定到 resources 分组，面板通过 props 拿到它 */
@@ -226,7 +225,7 @@ export function useResourceLayers(
     state: shallowReadonly(state),
     configErrors,
     tileErrors,
-    minzoomOf: code => resourceStyle(code).minzoom,
+    minzoomOf: code => catalog.value?.resources.get(code)?.minzoom,
     setChecked: (code, checked) => setCheckedMany([code], checked),
     setCheckedMany,
     setOpacity,

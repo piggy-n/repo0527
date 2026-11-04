@@ -1048,6 +1048,15 @@ describe('useFeaturePick：框选', () => {
     expect(layerIds(owner)).toStrictEqual([]);
   });
 
+  it('批量高亮和资源用同一个最小显示级别，级别跟着目录走（ADR 0137）', () => {
+    mockDetail();
+    const { owner, send } = setup(15, { ...STATE, catalog: buildCatalog(tree, { bgdc_dltb: 11 }) });
+
+    dragBox(send, [rendered(DLTB, 1), rendered(DLTB, 2)]);
+
+    expect(owner.deriveGroup().layers[0]).toMatchObject({ minzoom: 11 });
+  });
+
   it('提示要素过多时，这个资源取消勾选就清除', async () => {
     const { owner, send, resources } = setup(15);
     dragBox(send, manyOf(DLTB, 5001));
