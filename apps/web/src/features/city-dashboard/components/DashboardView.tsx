@@ -92,7 +92,7 @@ export const DashboardView = defineComponent({
       >
         <DashboardAtmosphere entering={entrance.phase.value !== 'ready'} reduced={entrance.reduced.value} />
         <header class={styles.heading} data-enter="title">
-          <h1 data-enter="title-text">江苏省城市国土空间监测城市体检驾驶舱</h1>
+          <h1 data-enter="title-text">江苏省城市国土空间监测驾驶舱</h1>
         </header>
         <div class={styles.content}>
           <DashboardFilters

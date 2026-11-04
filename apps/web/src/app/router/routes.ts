@@ -262,7 +262,7 @@ export const routes: RouteRecordRaw[] = [
     name: RouteName.cityDashboard,
     component: () =>
       import('@/pages/city-dashboard/CityDashboardPage').then(({ CityDashboardPage }) => CityDashboardPage),
-    meta: { title: '城市体检驾驶舱' }
+    meta: { title: '城市国土空间监测驾驶舱' }
   },
   {
     path: '/login',

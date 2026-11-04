@@ -80,7 +80,7 @@ describe('HeaderNav', () => {
 
     const dashboard = document.querySelector('a[href="/city-dashboard"]');
     expect([dashboard?.textContent, dashboard?.getAttribute('target'), dashboard?.getAttribute('rel')]).toEqual([
-      '城市国土空间监测城市体检驾驶舱',
+      '城市国土空间监测驾驶舱',
       '_blank',
       'noopener'
     ]);

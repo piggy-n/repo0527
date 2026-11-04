@@ -21,7 +21,7 @@ test('驾驶舱需登录、独立懒加载，缺字体时地图详情及三类�
   expect(scripts.some(url => url.includes('CityDashboardPage-'))).toBe(false);
   await page.goto('/city-dashboard');
   await expect(page.locator('[data-state]')).toHaveAttribute('data-state', 'ready');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('江苏省城市国土空间监测城市体检驾驶舱');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('江苏省城市国土空间监测驾驶舱');
   await expect(page.getByRole('link', { name: '现状底图', exact: true })).toHaveCount(0);
   expect(scripts.some(url => url.includes('CityDashboardPage-'))).toBe(true);
 
