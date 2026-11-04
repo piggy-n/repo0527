@@ -237,7 +237,7 @@ export function tilesToCheck(zoom: number, limit: number): { x: number; y: numbe
     return grid;
   }
   const picked = new Map<string, { x: number; y: number }>();
-  for (const [lng, lat] of SAMPLE_POINTS) {
+  for (const [lng, lat] of SAMPLE_POINTS.slice(0, limit)) {
     const tile = tileAt(lng, lat, zoom);
     picked.set(`${tile.x}/${tile.y}`, tile);
   }

@@ -1,3 +1,4 @@
+import { appConfig } from '@/shared/config/app-config';
 import type { Resource, ResourceGeometry } from './catalog';
 import {
   BASIN_TYPES,
@@ -56,7 +57,7 @@ import {
 // 只登记和默认值不同的部分。地图样式里的颜色是数据，不走 CSS 令牌
 
 export interface ResourceStyle {
-  /** 最小显示级别：数据源和图层共用，更低的级别不请求瓦片（ADR 0041 第 3 节） */
+  /** 最小显示级别：数据源和图层共用，更低的级别不请求瓦片（ADR 0041 第 3 节、ADR 0132） */
   readonly minzoom?: number;
   readonly color?: ColorRule;
   /** 用这个属性作要素 ID，跨瓦片稳定，点选高亮用 */
@@ -72,7 +73,7 @@ function valueRule(property: string, entries: readonly ClassEntry[], fallback = 
 // 水域的兜底色和类别同是蓝色系
 const WATER_FALLBACK = '#2F80ED';
 
-// 最小显示级别：取南京、苏州两处单张瓦片小于约 2 MB、首次生成少于约 2 s 的最低级别（5C.1b、5C.1d 实测，docs/migration.md）；
+// 最小显示级别：单张瓦片不超过 6 MB 的最低级别，多个年份取最严的（--tile-cost 实测，ADR 0132，docs/migration.md）；
 // 按属性配色：字段和取值来自探查（ADR 0123），点层比面层少的取值只列实际有的
 const RESOURCE_STYLES = new Map<string, ResourceStyle>([
   ['bgdc_dltb', { color: { kind: 'landuse-code' }, promoteId: 'bsm', checked: true }],
@@ -100,8 +101,8 @@ const RESOURCE_STYLES = new Map<string, ResourceStyle>([
   ['csxhjctb_xzcsgxgzyda', { color: valueRule('type', URBAN_RENEWAL_TYPES) }],
   ['csxhjctb_yjbna', { color: valueRule('type', SHELTER_TYPES) }],
   ['csxhjctb_hydl', { color: valueRule('ccn', pickEntries(WATER_TYPES, '河流', '水渠'), WATER_FALLBACK) }],
-  ['csxhjctb_hyda', { minzoom: 10, color: valueRule('ccn', WATER_TYPES, WATER_FALLBACK) }],
-  ['csxhjctb_lvll', { color: valueRule('type', RURAL_ROAD_TYPES, '#A1887F') }],
+  ['csxhjctb_hyda', { color: valueRule('ccn', WATER_TYPES, WATER_FALLBACK) }],
+  ['csxhjctb_lvll', { minzoom: 8, color: valueRule('type', RURAL_ROAD_TYPES, '#A1887F') }],
   ['csxhjctb_lrdl', { minzoom: 9, color: valueRule('type', HIGHWAY_TYPES) }],
   ['csxhjctb_lctl', { minzoom: 9, color: valueRule('type', CITY_ROAD_TYPES) }],
   ['csxhjctb_llkl', { color: valueRule('type', RAMP_TYPES) }],
@@ -114,8 +115,8 @@ const RESOURCE_STYLES = new Map<string, ResourceStyle>([
   ['csxhjctb_wycga', { color: valueRule('type', CULTURE_VENUE_TYPES) }],
   ['csxhjctb_wycgp', { color: valueRule('type', CULTURE_VENUE_TYPES) }],
   ['csxhjctb_bzssa', { color: valueRule('type', FUNERAL_TYPES) }],
-  ['szy_hl_fs', { color: valueRule('hldj', RIVER_LEVELS) }],
-  ['szy_hl_ks', { color: valueRule('hldj', RIVER_LEVELS) }],
+  ['szy_hl_fs', { minzoom: 8, color: valueRule('hldj', RIVER_LEVELS) }],
+  ['szy_hl_ks', { minzoom: 8, color: valueRule('hldj', RIVER_LEVELS) }],
   ['szy_sk_fs', { color: valueRule('skdb', RESERVOIR_GRADES) }],
   ['szy_sk_ks', { color: valueRule('skdb', RESERVOIR_GRADES) }],
   ['szy_hp_fs', { color: valueRule('lymc', BASIN_TYPES) }],
@@ -124,24 +125,26 @@ const RESOURCE_STYLES = new Map<string, ResourceStyle>([
   ['bgdc_gddb', { color: valueRule('lyd', FARMLAND_GRADES) }],
   ['bgdc_pzwjstd', { color: valueRule('ywlx', UNBUILT_LAND_TYPES) }],
   ['bgdc_xzqjx', { color: valueRule('jxlx', BOUNDARY_TYPES) }],
-  ['bgdc_yjjbnttb', { minzoom: 9, color: valueRule('dlmc', PERMANENT_FARMLAND_TYPES) }],
-  ['bgdc_lmfw', { minzoom: 9 }],
-  ['bgdc_cjdcq', { minzoom: 9 }],
+  ['bgdc_yjjbnttb', { minzoom: 8, color: valueRule('dlmc', PERMANENT_FARMLAND_TYPES) }],
+  ['bgdc_lmfw', { minzoom: 8 }],
   [
     'bgdc_cjdcqjx',
     {
-      minzoom: 8,
       color: valueRule('jxlx', pickEntries(BOUNDARY_TYPES, '630200', '640200', '650200', '660200', '670500'))
     }
-  ],
-  ['bgdc_ttq', { minzoom: 8 }],
-  ['bgdc_xzq', { minzoom: 8 }]
+  ]
 ]);
 
 const NO_STYLE: ResourceStyle = {};
 
 export function resourceStyle(code: string): ResourceStyle {
-  return RESOURCE_STYLES.get(code) ?? NO_STYLE;
+  const style = RESOURCE_STYLES.get(code) ?? NO_STYLE;
+  if (appConfig.resourceMinZoomEnabled) {
+    return style;
+  }
+  // 提示、瓦片请求和点选都从这里取最小显示级别，关闭开关时一起不限制（ADR 0132）
+  const { minzoom: _unused, ...unlimited } = style;
+  return unlimited;
 }
 
 /** 新出现的资源的透明度：100%（ADR 0053 第 6 节；旧项目是 0.9）。已经存下的透明度保留原值 */

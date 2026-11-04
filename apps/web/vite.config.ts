@@ -74,6 +74,8 @@ export default defineConfig(({ mode }) => {
       fsModuleCache: true,
       // 每个用例结束后撤销 vi.stubEnv，避免影响其他用例
       unstubEnvs: true,
+      // 部署时决定的开关，很多用例依赖它的默认行为：固定下来，改 .env 不影响测试（ADR 0132）
+      env: { VITE_RESOURCE_MIN_ZOOM_ENABLED: 'true' },
       // 两个项目继承上面的插件、别名和 Sass 配置（ADR 0040）
       projects: [
         {

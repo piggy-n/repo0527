@@ -44,6 +44,20 @@ describe('appConfig', () => {
     await expect(loadAppConfig()).rejects.toThrow('VITE_PAGE_STATE_RESET 只能是 true 或 false');
   });
 
+  it('资源的最小显示级别跟随开关；开关只能是 true 或 false（ADR 0132）', async () => {
+    vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', 'true');
+    expect((await loadAppConfig()).resourceMinZoomEnabled).toBe(true);
+
+    vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', 'false');
+    expect((await loadAppConfig()).resourceMinZoomEnabled).toBe(false);
+
+    vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', 'off');
+    await expect(loadAppConfig()).rejects.toThrow('VITE_RESOURCE_MIN_ZOOM_ENABLED 只能是 true 或 false');
+
+    vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', '');
+    await expect(loadAppConfig()).rejects.toThrow('缺少环境变量 VITE_RESOURCE_MIN_ZOOM_ENABLED');
+  });
+
   describe('天地图（ADR 0031）', () => {
     it('.env 中开启，带着 key', async () => {
       const appConfig = await loadAppConfig();

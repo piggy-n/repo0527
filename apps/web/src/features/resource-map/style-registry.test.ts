@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { type StyleSpecification, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Resource, ResourceGeometry } from './catalog';
 import { classItems, OTHER_ITEM } from './classification';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
@@ -334,8 +334,8 @@ describe('其余资源的分类', () => {
   });
 
   it('加了分类的重资源仍有最小显示级别', () => {
-    expect(resourceStyle('bgdc_yjjbnttb').minzoom).toBe(9);
-    expect(resourceStyle('bgdc_cjdcqjx').minzoom).toBe(8);
+    expect(resourceStyle('bgdc_yjjbnttb').minzoom).toBe(8);
+    expect(resourceStyle('csxhjctb_lrdl').minzoom).toBe(9);
   });
 });
 
@@ -346,9 +346,35 @@ describe('登记表', () => {
     expect(resourceStyle('bgdc_cjdcq').checked).toBeUndefined();
   });
 
-  it('重的资源有最小显示级别', () => {
-    const minzooms = ['csxhjctb_hyda', 'bgdc_cjdcq', 'bgdc_xzq'].map(code => resourceStyle(code).minzoom);
-    expect(minzooms).toStrictEqual([10, 9, 8]);
+  it('最小显示级别是单张瓦片 6 MB 的实测结果（ADR 0132）', () => {
+    const limited = {
+      csxhjctb_lrdl: 9,
+      csxhjctb_lctl: 9,
+      csxhjctb_lvll: 8,
+      bgdc_yjjbnttb: 8,
+      bgdc_lmfw: 8,
+      szy_hl_fs: 8,
+      szy_hl_ks: 8
+    };
+    const levels = Object.keys(limited).map(code => [code, resourceStyle(code).minzoom]);
+    expect(Object.fromEntries(levels)).toStrictEqual(limited);
+    // 旧环境上要限制，新环境实测不用了
+    const freed = ['csxhjctb_hyda', 'bgdc_cjdcq', 'bgdc_cjdcqjx', 'bgdc_ttq', 'bgdc_xzq'];
+    expect(freed.filter(code => resourceStyle(code).minzoom !== undefined)).toStrictEqual([]);
+  });
+
+  it('开关打开时按登记表；关闭时都没有最小显示级别，别的样式不变（ADR 0132）', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', 'true');
+    const enabled = await import('./style-registry');
+    expect(enabled.resourceStyle('csxhjctb_lrdl').minzoom).toBe(9);
+
+    vi.resetModules();
+    vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', 'false');
+    const disabled = await import('./style-registry');
+    expect(disabled.resourceStyle('csxhjctb_lrdl')).not.toHaveProperty('minzoom');
+    expect(disabled.resourceStyle('csxhjctb_lrdl').color).toStrictEqual(enabled.resourceStyle('csxhjctb_lrdl').color);
+    expect(disabled.resourceStyle('bgdc_lmfw')).toStrictEqual({});
   });
 
   it('没登记的资源（包括和原型上的属性同名的）没有特别的样式', () => {

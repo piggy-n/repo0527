@@ -303,7 +303,7 @@ describe('useResourceLayers', () => {
   it('最小显示级别来自登记表', () => {
     using ctx = setup();
 
-    expect(ctx.owner.minzoomOf('bgdc_cjdcq')).toBe(9);
+    expect(ctx.owner.minzoomOf('csxhjctb_lrdl')).toBe(9);
     expect(ctx.owner.minzoomOf('bgdc_dltb')).toBeUndefined();
   });
 });

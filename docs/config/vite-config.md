@@ -76,6 +76,7 @@ const cesiumAssets = viteStaticCopy({
 |---|---|---|
 | `fsModuleCache` | `true` | 把转换结果缓存到根目录的 `node_modules/.vitest-cache`，之后的运行跳过转换，见下文"测试耗时" |
 | `unstubEnvs` | `true` | 每个用例结束后撤销 `vi.stubEnv`。已用对照实验验证：关掉后，一个用例修改的环境变量会泄漏到下一个用例 |
+| `env` | `VITE_RESOURCE_MIN_ZOOM_ENABLED: 'true'` | 固定部署时决定的开关：很多用例依赖"有最小显示级别"的行为，改 `.env` 不影响测试（ADR 0132）。测试开关本身的用例用 `vi.stubEnv` 覆盖 |
 
 `unit` 项目：
 

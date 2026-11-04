@@ -472,11 +472,11 @@ describe('探查', () => {
   });
 
   it('重的资源不请求低于最小显示级别的瓦片', async () => {
-    const tree = { code: 200, data: [{ code: 'csxhjctb_hyda', name: '水域面层', geoType: 'Polygon', yearList: [2025] }] };
+    const tree = { code: 200, data: [{ code: 'csxhjctb_lrdl', name: '公路线层', geoType: 'Line', yearList: [2025] }] };
     const backend = fakeBackend(url => (url.pathname === '/resource-map/base/tree' ? Response.json(tree) : undefined));
-    await runProbe({ ...OPTIONS, zooms: [7, 9, 11] }, backend.io, exactFieldsOf);
+    await runProbe({ ...OPTIONS, zooms: [7, 8, 9, 11] }, backend.io, exactFieldsOf);
     const zooms = backend.requests.flatMap(request => /^\/api\/tiles\/[^/]+\/(\d+)\//.exec(request)?.[1] ?? []);
-    expect(new Set(zooms)).toEqual(new Set(['11']));
+    expect(new Set(zooms)).toEqual(new Set(['9', '11']));
   });
 
   it('所有年份都探查；有缓存的瓦片集不再请求', async () => {

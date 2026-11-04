@@ -365,18 +365,21 @@ describe('ResourceLayerPanel', () => {
   });
 
   it('级别不够时名称后有说明图标，提示放大到几级；级别够了就没有，位置仍然留着（ADR 0059）', async () => {
-    const { wrapper, owner } = await mountPanel();
-    const minzoom = owner.minzoomOf('bgdc_cjdcq');
+    const catalog = buildCatalog([
+      { code: null, name: '基础库', children: [layer('bgdc_dltb', '地类图斑'), layer('csxhjctb_lrdl', '公路线层', 'Line')] }
+    ]);
+    const { wrapper, owner } = await mountPanel(catalog);
+    const minzoom = owner.minzoomOf('csxhjctb_lrdl');
     if (minzoom === undefined || minzoom <= CAMERA.zoom) {
-      throw new Error('村级调查区应当有高于当前级别的最小显示级别');
+      throw new Error('公路线层应当有高于当前级别的最小显示级别');
     }
-    owner.setChecked('bgdc_cjdcq', true);
+    owner.setChecked('csxhjctb_lrdl', true);
     await nextTick();
 
-    const status = wrapper.get('[data-layer="bgdc_cjdcq"] [role="img"]');
+    const status = wrapper.get('[data-layer="csxhjctb_lrdl"] [role="img"]');
     expect(status.attributes('data-status')).toBe('minzoom');
     expect(status.attributes('aria-label')).toBe(`放大至第 ${minzoom} 级显示`);
-    expect(wrapper.get('[data-layer="bgdc_cjdcq"]').text()).not.toContain('放大');
+    expect(wrapper.get('[data-layer="csxhjctb_lrdl"]').text()).not.toContain('放大');
     // 地类图斑没有状态：没有图标，名称后面的位置照样在
     const dltb = wrapper.get('[data-layer="bgdc_dltb"]');
     expect(dltb.find('[role="img"]').exists()).toBe(false);

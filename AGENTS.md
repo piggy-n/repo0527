@@ -165,7 +165,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 不用 DOM 的测试文件（纯逻辑、libs 的会话与 Worker 通信层、`tools/` 脚本）第一行写 `// @vitest-environment node`：默认的 jsdom 每个文件要多花约 1 秒创建（见 `docs/config/vite-config.md` 的"测试耗时"）
 - 工具函数、鉴权、HTTP 错误处理这类纯逻辑要写测试；页面和组件测试关键交互
 - pages、features 的测试用 `createMemoryHistory()` 建只含所需路由的最小路由，不导入 `app` 的路由表（测试文件同样受依赖方向约束）；`app` 自己的测试可以用真实路由表，例如检查导航与路由权限是否一致
-- 模拟环境变量用 `vi.stubEnv`，用例结束后会自动撤销（`unstubEnvs`）；部署时决定的开关，用例不依赖 `.env` 的取值：单元测试自己固定（模块加载时就读取的，放进 `vi.hoisted`），生产冒烟用 `loadEnv` 读构建用的取值，验证对应的行为
+- 模拟环境变量用 `vi.stubEnv`，用例结束后会自动撤销（`unstubEnvs`）；部署时决定的开关，用例不依赖 `.env` 的取值：单元测试自己固定（模块加载时就读取的，放进 `vi.hoisted`；很多用例依赖默认行为的，固定在 `vite.config.ts` 的 `test.env`），生产冒烟用 `loadEnv` 读构建用的取值，验证对应的行为
 - 模拟接口用 MSW 的 `setupServer()`，并设置 `onUnhandledRequest: 'error'`；不用 `vi.mock('axios')`；依赖第三方类的代码（如 MapLibre 适配器）依赖自己定义的窄接口，测试注入实现它的假对象，并用 `expectTypeOf` 检查真实的类满足它，不用 `vi.mock` 整个库
 - 测试写完后，故意改坏被测代码，确认测试会失败，并确认失败原因是断言而不是代码报错或超时（可能一直挂起的等待要和必然更晚结束的等待赛跑：只经过微任务的用 `setTimeout(0)`，经过消息往返的按轮数推进事件循环，不用固定时长，见 `docs/modules/utils.md` 的测试）；修 bug 时先写能复现问题的测试
 - `vite.config.ts` 的 `test.server.deps.inline: ['element-plus']` 不能删：不加的话 Element 表单的校验在测试中永远通过（见 `docs/config/vite-config.md`）
@@ -229,6 +229,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 区划目录和区划边界只用本地数据（`shared/map/region`），目录与市界、县界数据由测试保证逐条一致（ADR 0036）；经纬度的识别、显示和复制只用 `shared/map/location/coordinate-format.ts` 的纯函数（ADR 0037）
 - 资源的年份是按 `code` 的显示状态：单个资源用拥有者的 `setYear`，批量用 `setYearForAll`（有这一年的资源不论是否勾选都切过去），不另存"当前年份"；拥有者记下的最后一次批量设置的年份（`batchYear`）只给选择框回显，不参与推导，也不代替各资源的年份（ADR 0116）；界面条目的身份、名称和符号按 `code`，年份作为单独的字段显示（ADR 0052）
 - 资源按属性分类按 ADR 0123：取值、名称、颜色写在 `features/resource-map/class-dictionaries.ts`，`style-registry.ts` 按 `code` 登记字段和字典，一个资源一行；取值是符号覆盖的键，改名称不影响已保存的覆盖。图例和地图都只用资源实际有的类别，地类规则用 `only` 列出（ADR 0124），不只在图例里过滤。新的分类先用 `probe:resource-classes` 探查、人工确认，前端不统计瓦片（ADR 0043）
+- 资源的最小显示级别按 ADR 0132：层级写在 `style-registry.ts`，是单张瓦片 6 MB 的实测结果（`probe:resource-classes --tile-cost`，换后端环境或重新切片后重测），脚本的 `ZOOM_FLOORS` 和它一致；数据源和图层用同一个级别，只给图层设时瓦片失败会一路请求更低的级别。`VITE_RESOURCE_MIN_ZOOM_ENABLED=false` 时不限制，只用于排查和应急；提示、瓦片请求和点选都从 `resourceStyle` 取值，不单独读开关
 - 区划裁剪按区划边界的几何，不按要素属性里的区划代码过滤（业务数据的代码和区划目录对不上）：区划外用 `region-clip` 分组的遮罩盖住；显示和查询的范围都取 `readyBoundary`；点选、框选的渲染要素先按范围过滤再去重、计数，发给后端的几何只用 `query-geometry.ts` 的 `queryGeometry` 整理（误差不超过 2 像素、有效、最多 120 个坐标），整理不出来时提示范围太复杂（ADR 0051）
 - 地图页的区域按 ADR 0070：行政区、图例、区划定位、坐标定位共用 `usePanelGroup` + `MapPanelGroup`，查询详情由独立 `FeatureDetailWindow` 展示，底图保留按钮左侧的 `MapOptionsPopover`；外壳负责标题、关闭和悬浮元素登记，内容不重复处理。功能入口打开时标签前移，直接点标签只切换；统一关闭只影响功能组。功能与详情同列上下排列，布局由 `panelStackLayout`、`usePanelStack` 管理，空间不足只收起非当前内容。有临时交互的内容接收 `active`，隐藏或收起时结束交互，关闭时卸载；窄屏仍由 `useSideExclusion` 决定最后操作的一边
 - 地图页的界面按 5D 的设计稿（ADR 0053～0055）及后续已确认调整：当前工具、面板开关、视图状态、失败原因等仍是组合式函数、store 或纯函数里的数据，组件只显示和调用，测试放在逻辑上；随尺寸变化的排法写成纯函数（如 `mapPageLayout`、`fitStatusLayout`），组件只交给它量到的尺寸。新的界面块先出可操作的 HTML 原型（`public/design.local/`，不入库）或真实组件预览，用户确认后再实现，按 `docs/design/ui-workflow.md` 验证
@@ -322,7 +323,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - `pnpm test`：所有包的测试（`vitest run`，`apps/web` 里有 `unit`、`browser` 两个项目）；`pnpm --filter @yzt/web test:watch` 监听模式；`test:unit`、`test:browser` 只跑其中一个；第一次跑浏览器测试前运行 `pnpm --filter @yzt/web test:browser:install`
 - CI（`.github/workflows/ci.yml`）依次运行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm lint`、安装 Chromium 无界面版、`pnpm test`、`pnpm build`、`pnpm build:intranet`、`pnpm --filter @yzt/web test:smoke`
 - `pnpm --filter @yzt/web measure:map-load`：实测"点击登录 → 地图第一次加载完成"（先构建；账号密码从环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD` 读，由用户在自己的终端运行）
-- `pnpm --filter @yzt/web probe:resource-classes`：只读探查资源的字段和分类候选，`--tile-check` 查瓦片是否把要素合并（要能连后端；token 从环境变量 `YZT_PROBE_TOKEN` 读，由用户在自己的终端运行）
+- `pnpm --filter @yzt/web probe:resource-classes`：只读探查资源的字段和分类候选，`--tile-check` 查瓦片是否把要素合并，`--tile-cost` 实测瓦片的大小和耗时、给出最小显示级别的建议（要能连后端；token 从环境变量 `YZT_PROBE_TOKEN` 读，由用户在自己的终端运行）
 - `pnpm deps:check`：检查过期的依赖和 GitHub Actions
 - `pnpm deps:update:within-range`：在版本范围内更新依赖和 Actions
 - `pnpm deps:update:allow-major`：交互式选择要升级大版本的依赖和 Actions

@@ -21,6 +21,7 @@ import {
   toCsv
 } from './report.ts';
 import { formatTileCheck, parseTileCheckTargets, runTileCheck, type TileCheckResult } from './tile-check.ts';
+import { formatTileCost, minZoomConfig, runTileCost, type TileCostLimits, type TileCostResult } from './tile-cost.ts';
 
 // 探查资源的分类字段（docs/commands.md）：只读请求后端，结果写到 --out；token 从环境变量读，不写进任何输出
 
@@ -32,9 +33,10 @@ token 在浏览器登录系统后取：开发者工具的控制台运行 JSON.pa
 选项：
   --base-url=<地址>     后端地址，不带 /backend（也可以用环境变量 YZT_PROBE_BASE_URL）
   --codes=<a,b>         只探查这些资源，默认全部
-  --years=all|latest    探查哪些年份，默认 all（--tile-check 默认 latest）
-  --zooms=<7,9,11,14>   抽样的瓦片级别，默认 7,9,11,14（--tile-check 默认 6～12）；重的资源自动跳过低级别
-  --concurrency=<2>     同时探查几个瓦片集，默认 2；后端共用，不要开太大
+  --years=all|latest    探查哪些年份，默认 all（--tile-check、--tile-cost 默认 latest）
+  --zooms=<7,9,11,14>   抽样的瓦片级别，默认 7,9,11,14（--tile-check 默认 6～12，--tile-cost 默认 5～12）；
+                        除了 --tile-cost，重的资源自动跳过低级别
+  --concurrency=<2>     同时探查几个瓦片集，默认 2（--tile-cost 默认 1，耗时才准）；后端共用，不要开太大
   --exact               查候选字段的准确分布（每个取值一次 COUNT），只在最新一年、不超过 --exact-limit 的表上查
   --exact-limit=<500000>
   --enumerate=<a:f,b:g> 枚举资源 a 的字段 f、资源 b 的字段 g 的全部取值，确认图例列全了；只做这一件事，
@@ -42,7 +44,12 @@ token 在浏览器登录系统后取：开发者工具的控制台运行 JSON.pa
   --tile-check=<a,b:f>  解码这些资源各级别瓦片的几何，判断是不是把要素合并成了一个，查同一级别颜色不一致；
                         只做这一件事，结果写到 tile-check.md、tile-check.json。a 按分类规则的字段，b 按字段 f，
                         rules 是全部有分类规则的资源（请求多，先查几个）
-  --tiles-per-zoom=<25> --tile-check 一个级别最多查多少张瓦片，放得下时查覆盖全省的整个网格
+  --tile-cost           实测瓦片的大小和耗时，给出最小显示级别的建议；可以和 --codes、--years 一起用。从高级别往低查，
+                        一超标就停，更低的级别不再请求；只做这一件事，结果写到 tile-cost.md、tile-cost.json、
+                        resource-min-zooms.json。中断后重新运行跳过已测完的瓦片集，--refresh 时重测
+  --max-tile-mb=<6>     --tile-cost 单张解压后的上限（MB）
+  --max-tile-seconds=<2> --tile-cost 单张收完的上限（秒）
+  --tiles-per-zoom=<25> 一个级别最多查多少张瓦片，默认 25（--tile-cost 默认 6），放得下时查覆盖全省的整个网格
   --out=<目录>          输出目录，默认 probe-resource-classes.local（不入库）
   --timeout=<120>       单个请求的上限（秒），超时不重试；枚举千万行的表时调大
   --refresh             不用缓存，重新请求
@@ -54,12 +61,15 @@ const { values } = parseArgs({
     codes: { type: 'string' },
     years: { type: 'string' },
     zooms: { type: 'string' },
-    concurrency: { type: 'string', default: '2' },
+    concurrency: { type: 'string' },
     exact: { type: 'boolean', default: false },
     'exact-limit': { type: 'string', default: '500000' },
     enumerate: { type: 'string' },
     'tile-check': { type: 'string' },
-    'tiles-per-zoom': { type: 'string', default: '25' },
+    'tile-cost': { type: 'boolean', default: false },
+    'max-tile-mb': { type: 'string', default: '6' },
+    'max-tile-seconds': { type: 'string', default: '2' },
+    'tiles-per-zoom': { type: 'string' },
     out: { type: 'string', default: 'probe-resource-classes.local' },
     refresh: { type: 'boolean', default: false },
     timeout: { type: 'string', default: '120' },
@@ -79,12 +89,18 @@ if (!baseUrl || !token) {
   process.exit(1);
 }
 const tileCheck = values['tile-check'];
-const years = values.years ?? (tileCheck ? 'latest' : 'all');
+const tileCost = values['tile-cost'];
+const years = values.years ?? (tileCheck || tileCost ? 'latest' : 'all');
 if (years !== 'all' && years !== 'latest') {
   console.error('[probe] --years 只能是 all 或 latest');
   process.exit(1);
 }
-const zooms = values.zooms ?? (tileCheck ? '6,7,8,9,10,11,12' : '7,9,11,14');
+const defaultZooms = tileCheck ? '6,7,8,9,10,11,12' : '7,9,11,14';
+const zooms = values.zooms ?? (tileCost ? '12,11,10,9,8,7,6,5' : defaultZooms);
+const limits: TileCostLimits = {
+  maxBytes: Number(values['max-tile-mb']) * 1024 * 1024,
+  maxMs: Number(values['max-tile-seconds']) * 1000
+};
 
 const out = resolve(values.out);
 const rawDir = join(out, 'raw');
@@ -96,7 +112,7 @@ const options: ProbeOptions = {
   codes: values.codes ? new Set(values.codes.split(',').map(code => code.trim())) : null,
   years,
   zooms: zooms.split(',').map(Number),
-  concurrency: Number(values.concurrency),
+  concurrency: Number(values.concurrency ?? (tileCost ? 1 : 2)),
   exact: values.exact,
   exactLimit: Number(values['exact-limit']),
   refresh: values.refresh,
@@ -144,9 +160,32 @@ function saveTileCheck(results: readonly TileCheckResult[], tilesPerZoom: number
   writeFileSync(join(out, 'tile-check.md'), formatTileCheck(results, tilesPerZoom));
 }
 
+const tileCostFile = join(out, 'tile-cost.json');
+
+// 同样每测完一个瓦片集写一次；tile-cost.json 同时是下次继续用的进度
+function saveTileCost(results: readonly TileCostResult[]): void {
+  writeFileSync(tileCostFile, JSON.stringify(results, null, 2));
+  writeFileSync(join(out, 'tile-cost.md'), formatTileCost(results, limits));
+  writeFileSync(join(out, 'resource-min-zooms.json'), `${JSON.stringify(minZoomConfig(results), null, 2)}\n`);
+}
+
 try {
+  if (tileCost) {
+    await runTileCost(
+      { ...options, tilesPerZoom: Number(values['tiles-per-zoom'] ?? 6), limits },
+      {
+        ...io,
+        now: () => performance.now(),
+        load: () =>
+          existsSync(tileCostFile) ? (JSON.parse(readFileSync(tileCostFile, 'utf8')) as TileCostResult[]) : [],
+        save: saveTileCost
+      }
+    );
+    console.log(`[probe] 完成，结果在 ${join(out, 'tile-cost.md')}`);
+    process.exit(0);
+  }
   if (tileCheck) {
-    const tilesPerZoom = Number(values['tiles-per-zoom']);
+    const tilesPerZoom = Number(values['tiles-per-zoom'] ?? 25);
     await runTileCheck(
       parseTileCheckTargets(tileCheck),
       { ...options, tilesPerZoom },

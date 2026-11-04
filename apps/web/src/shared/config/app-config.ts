@@ -61,5 +61,7 @@ export const appConfig = {
   /** AI 对话后端的基础地址，与 apiBaseUrl 是两个服务 */
   aiApiBaseUrl: required('VITE_AI_API_BASE_URL', import.meta.env.VITE_AI_API_BASE_URL),
   /** 离开页面后重置：为 true 时不缓存页面，每次进入都是初始状态（ADR 0114） */
-  pageStateReset: flag('VITE_PAGE_STATE_RESET', import.meta.env.VITE_PAGE_STATE_RESET)
+  pageStateReset: flag('VITE_PAGE_STATE_RESET', import.meta.env.VITE_PAGE_STATE_RESET),
+  /** 资源的最小显示级别：为 false 时不限制，各级都请求瓦片（ADR 0132） */
+  resourceMinZoomEnabled: flag('VITE_RESOURCE_MIN_ZOOM_ENABLED', import.meta.env.VITE_RESOURCE_MIN_ZOOM_ENABLED)
 } as const;
