@@ -254,7 +254,6 @@ export const DashboardCharts = defineComponent({
                 cities={model.cities.value}
                 city={hoveredCity.value}
                 activeYear={model.state.value.activeYear}
-                chartType={model.preference(selected).type}
                 legend={detailLegend.value}
               />
             </div>

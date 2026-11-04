@@ -1,5 +1,5 @@
 import { defineComponent, type PropType } from 'vue';
-import type { ChartType, City, Comparison, Indicator } from '../model';
+import type { City, Comparison, Indicator } from '../model';
 import { yearColor } from '../charts/colors';
 import { formatValue } from '../calculations';
 import styles from './DashboardCharts.module.scss';
@@ -13,7 +13,6 @@ export const TooltipTable = defineComponent({
     cities: { type: Array as PropType<readonly City[]>, required: true },
     city: { type: Object as PropType<City>, required: true },
     activeYear: { type: Number as PropType<number | null>, default: null },
-    chartType: { type: String as PropType<ChartType>, default: 'bar' },
     legend: { type: Object as PropType<Readonly<Record<string, boolean>>>, required: true }
   },
   setup(props) {
@@ -58,7 +57,7 @@ export const TooltipTable = defineComponent({
                   {rows.map(item => (
                     <tr key={item.year} aria-current={item.year === props.activeYear ? 'true' : undefined}>
                       <th scope="row">
-                        <i aria-hidden="true" style={{ background: yearColor(item.year, props.chartType) }} />
+                        <i aria-hidden="true" style={{ background: yearColor(item.year, props.indicator.id) }} />
                         {item.year}
                         {item.year === props.activeYear && <small class={styles.currentYear}>当前</small>}
                       </th>

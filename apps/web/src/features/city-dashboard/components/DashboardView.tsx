@@ -72,7 +72,6 @@ export const DashboardView = defineComponent({
             cities={model.cities.value}
             comparison={model.comparisons.value.get(indicator.value.id) ?? []}
             activeYear={model.state.value.activeYear}
-            chartType={preference.type}
             legend={preference.legend}
           />
         </div>
