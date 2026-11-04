@@ -256,7 +256,7 @@ describe('DataExtractionDialog', () => {
     owner.start();
     await flushPromises();
 
-    await click('水资源');
+    await click('水资源调查监测成果');
     expect(dialog().querySelector('[role="group"][aria-label="数据成果"]')).not.toBeNull();
     expect(dialog().textContent).toContain('请选择知识图谱节点');
     expect(required(document.querySelector('.el-dialog'), '弹窗').className).toContain('wide');

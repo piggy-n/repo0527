@@ -105,7 +105,7 @@ export const DataExtractionDialog = defineComponent({
             <span>按资源类别：</span>
             <ElButton size="small" onClick={owner.browseWater}>
               <SvgIcon class={styles.buttonIcon} name="resource-water" size={14} />
-              水资源
+              水资源调查监测成果
             </ElButton>
           </div>
         </div>

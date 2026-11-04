@@ -17,7 +17,7 @@ const EDGE_HIDDEN_BELOW = 0.72;
 
 const segmenter = new Intl.Segmenter('zh-CN', { granularity: 'word' });
 // 分词器不认识的专业词，不从中间折行
-const KEEP_TOGETHER = ['用地用海', '国土空间', '丰水期', '枯水期', '商业服务业', '畜禽'];
+const KEEP_TOGETHER = ['用地用海', '国土空间', '调查监测', '知识图谱', '丰水期', '枯水期', '商业服务业', '畜禽'];
 // 标点跟着旁边的字，不单独成行
 const OPENING = /[“（《]/;
 const CLOSING = /[”）》、，]/;
