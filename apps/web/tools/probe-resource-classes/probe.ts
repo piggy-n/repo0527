@@ -199,11 +199,16 @@ export function notInCondition(field: string, values: readonly string[]): string
   return values.length === 0 ? `"${field}" IS NOT NULL` : `"${field}" NOT IN (${values.map(quoted).join(',')})`;
 }
 
-export async function request(url: string, options: ProbeOptions, io: Pick<ProbeIO, 'fetch' | 'sleep'>): Promise<Response> {
+export async function request(
+  url: string,
+  options: ProbeOptions,
+  io: Pick<ProbeIO, 'fetch' | 'sleep'>,
+  retryDelays: readonly number[] = RETRY_DELAYS
+): Promise<Response> {
   let lastError: unknown;
-  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt += 1) {
+  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     if (attempt > 0) {
-      await io.sleep(RETRY_DELAYS[attempt - 1] ?? 0);
+      await io.sleep(retryDelays[attempt - 1] ?? 0);
     }
     try {
       const response = await io.fetch(url, {

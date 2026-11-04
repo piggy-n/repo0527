@@ -167,6 +167,12 @@ describe('要查的瓦片', () => {
   });
 });
 
+describe('要查的瓦片的上限', () => {
+  it('上限比抽样的城市少时也不超过上限', () => {
+    expect(tilesToCheck(10, 2)).toHaveLength(2);
+  });
+});
+
 describe('--tile-check 的写法', () => {
   it('不写字段时按分类规则的字段', () => {
     expect(parseTileCheckTargets('lcsh_sltb, bgdc_dltb')).toStrictEqual([
@@ -201,7 +207,7 @@ const TREE = {
       name: '林草湿荒',
       children: [
         { code: 'lcsh_sltb', name: '森林分布图斑', geoType: 'Polygon', yearList: [2023, 2024] },
-        { code: 'csxhjctb_hyda', name: '水域面层', geoType: 'Polygon', yearList: [2025] },
+        { code: 'csxhjctb_lrdl', name: '公路线层', geoType: 'Line', yearList: [2025] },
         { code: 'csxhjctb_hydl', name: '水域线层', geoType: 'LineString', yearList: [2025] }
       ]
     }
@@ -308,9 +314,9 @@ describe('探查瓦片', () => {
 
   it('跳过重资源的最小显示级别以下', async () => {
     const { io, requests } = forestBackend();
-    await runTileCheck([{ code: 'csxhjctb_hyda', field: 'ccn' }], OPTIONS, io);
-    expect(requests.some(path => path.includes('/csxhjctb_hyda_2025/7/'))).toBe(false);
-    expect(requests.some(path => path.includes('/csxhjctb_hyda_2025/11/'))).toBe(true);
+    await runTileCheck([{ code: 'csxhjctb_lrdl', field: 'type' }], OPTIONS, io);
+    expect(requests.some(path => path.includes('/csxhjctb_lrdl_2025/7/'))).toBe(false);
+    expect(requests.some(path => path.includes('/csxhjctb_lrdl_2025/11/'))).toBe(true);
   });
 
   it('空瓦片、后端报错和网络失败都不中断；报错记下来，有要素的瓦片照常判断', async () => {

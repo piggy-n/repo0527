@@ -290,9 +290,14 @@ function errorMessage(text: string): string {
   return text.slice(0, 200);
 }
 
+/** 瓦片接口的内容：gzip 压缩的先解压 */
+export function unzippedTile(raw: Uint8Array): Uint8Array {
+  return raw[0] === 0x1f && raw[1] === 0x8b ? new Uint8Array(gunzipSync(raw)) : raw;
+}
+
 /** 按内容判断瓦片接口的返回 */
 export function readTileBody(raw: Uint8Array): TileBody {
-  const bytes = raw[0] === 0x1f && raw[1] === 0x8b ? new Uint8Array(gunzipSync(raw)) : raw;
+  const bytes = unzippedTile(raw);
   if (bytes.length === 0) {
     return { kind: 'empty' };
   }
