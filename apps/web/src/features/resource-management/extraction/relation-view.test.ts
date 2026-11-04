@@ -55,7 +55,7 @@ describe('buildRelationView', () => {
     const result = view();
 
     expect(result.nodes).toHaveLength(40);
-    expect(result.nodes[0]).toMatchObject({ id: 'root', kind: 'root', name: '水资源调查监测成果知识图谱', category: 'root' });
+    expect(result.nodes[0]).toMatchObject({ id: 'root', kind: 'root', name: '水资源调查监测成果', category: 'root' });
     expect(result.nodes.filter(node => node.kind === 'system').map(node => node.name)).toEqual([
       '用地用海分类',
       '国土调查分类',
@@ -171,7 +171,7 @@ describe('buildRelationView', () => {
 
     expect(view({ keyword: '水域网络' }).nodes.filter(node => node.level === 3)).toHaveLength(6);
     expect(view({ keyword: '查无此项' }).scope.size).toBe(40);
-    expect(view({ keyword: '查无此项' }).nodes[0].name).toBe('水资源调查监测成果知识图谱');
+    expect(view({ keyword: '查无此项' }).nodes[0].name).toBe('水资源调查监测成果');
   });
 });
 
@@ -179,7 +179,7 @@ describe('relationNodeDetail', () => {
   it('总节点：四条组织关系和说明，不是取数节点', () => {
     const detail = relationNodeDetail(waterGraph, RELATION_ROOT_ID);
 
-    expect(detail).toMatchObject({ name: '水资源调查监测成果知识图谱', meta: '中心主题', isTarget: false });
+    expect(detail).toMatchObject({ name: '水资源调查监测成果', meta: '中心主题', isTarget: false });
     expect(detail.relations.map(relation => [relation.label, relation.other.name])).toEqual([
       ['规划用途', '用地用海分类'],
       ['现状调查', '国土调查分类'],

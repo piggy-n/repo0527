@@ -127,7 +127,7 @@ export function useRelationGraph(graph: RelationGraph) {
   }
 
   return {
-    title: '水资源调查监测成果知识图谱',
+    title: '水资源调查监测成果',
     legendNodes: WATER_LEGEND,
     graph,
     keyword,

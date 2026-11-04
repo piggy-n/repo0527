@@ -52,7 +52,7 @@ const allNames = [
 
 describe('fitNameInCircle', () => {
   it('在词之间折行，不把词拆开', () => {
-    expect(lines('水资源调查监测成果知识图谱')).toEqual(['水资源', '调查监测成果', '知识图谱']);
+    expect(lines('水资源调查监测成果')).toEqual(['水资源', '调查监测', '成果']);
     expect(lines('城市国土空间监测分类')).toEqual(['城市', '国土空间', '监测分类']);
     expect(lines('水资源基础调查分类')).toEqual(['水资源', '基础调查', '分类']);
     expect(lines('水域及水利设施用地')).toEqual(['水域及', '水利设施', '用地']);
@@ -143,7 +143,7 @@ describe('measureNodes', () => {
 
 describe('adaptiveFont', () => {
   const item = measured({ name: '冰川及永久积雪' });
-  const root = measured({ kind: 'root', level: null, name: '水资源调查监测成果知识图谱' });
+  const root = measured({ kind: 'root', level: null, name: '水资源调查监测成果' });
 
   it('字号随缩放变大，始终是不小于 12 的双数', () => {
     const fonts = [1, 1.25, 1.6, 2, 3, 4, 6].map(zoom => adaptiveFont(item, 1, zoom));
