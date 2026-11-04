@@ -40,7 +40,9 @@ export function resourceTreeData(): RawCategory[] {
             hydl,
             hydl,
             hydl,
-            layer('csxhjctb_gyssp', '公用设施点层', 'Point', [2025], '土地资源')
+            layer('csxhjctb_gyssp', '公用设施点层', 'Point', [2025], '土地资源'),
+            // 9 级起显示
+            layer('csxhjctb_lrdl', '公路线层', 'Line', [2026], '土地资源')
           ]
         },
         { code: null, name: '海洋资源', children: [] },

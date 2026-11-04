@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { featureFilter, type LayerSpecification, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import type { StyleGroup } from '@yzt/map-core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';
 import {
@@ -39,6 +39,9 @@ const CJDCQJX = layer('bgdc_cjdcqjx', 'Line', 2022);
 const HYDL = layer('csxhjctb_hydl', 'Line', 2023, 2024, 2025);
 const GYSSP = layer('csxhjctb_gyssp', 'Point', 2025);
 const CZCDYD = layer('bgdc_czcdyd', 'Polygon', 2022);
+// 有最小显示级别的资源：面 8 级，线 9 级
+const YJJBNTTB = layer('bgdc_yjjbnttb', 'Polygon', 2025);
+const LRDL = layer('csxhjctb_lrdl', 'Line', 2026);
 
 const CATALOG = catalogOf(DLTB, CJDCQ, CJDCQJX, HYDL, GYSSP);
 
@@ -188,9 +191,27 @@ describe('resourcesGroup', () => {
       maxzoom: 15
     });
     expect(layerOf(group, 'csxhjctb_hydl')).toMatchObject({ 'source-layer': 'csxhjctb_hydl_2023' });
-    expect(group.sources['resources-bgdc_cjdcq']).toMatchObject({ minzoom: 9, maxzoom: 15 });
-    expect(layerOf(group, 'bgdc_cjdcq').minzoom).toBe(9);
     expect(layerOf(group, 'csxhjctb_hydl').minzoom).toBeUndefined();
+  });
+
+  it('有最小显示级别的资源，数据源和图层用同一个级别', () => {
+    const group = derive(checkAll(mergeDisplayState(EMPTY_RESOURCE_LAYERS, catalogOf(LRDL))));
+
+    expect(group.sources['resources-csxhjctb_lrdl']).toMatchObject({ minzoom: 9, maxzoom: 15 });
+    expect(layerOf(group, 'csxhjctb_lrdl').minzoom).toBe(9);
+  });
+
+  it('关闭最小显示级别的开关时，数据源和图层都不设（ADR 0132）', async () => {
+    vi.resetModules();
+    vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', 'false');
+    const disabled = await import('./resource-layers');
+    const state = checkAll(disabled.mergeDisplayState(disabled.EMPTY_RESOURCE_LAYERS, catalogOf(LRDL)));
+
+    const group = disabled.resourcesGroup({ state, invalid: new Map(), tileBase: TILE_BASE });
+
+    expect(group.sources['resources-csxhjctb_lrdl']).toMatchObject({ maxzoom: 15 });
+    expect(group.sources['resources-csxhjctb_lrdl']).not.toHaveProperty('minzoom');
+    expect(layerOf(group, 'csxhjctb_lrdl')).not.toHaveProperty('minzoom');
   });
 
   it('地类图斑带 promoteId；瓦片图层名默认等于瓦片集名（2026-11-01 探查，城镇村等用地不再是例外）', () => {
@@ -220,24 +241,25 @@ describe('resourcesGroup', () => {
   });
 
   it('面按需拆层（ADR 0045）：纹理图层、描边图层的 ID 加后缀，共用数据源、过滤和最小级别，透明度乘在每个图层上', () => {
-    const state = withDisplay(checkAll(initial), 'bgdc_cjdcq', { opacity: 0.4 });
+    const code = 'bgdc_yjjbnttb';
+    const state = withDisplay(checkAll(mergeDisplayState(EMPTY_RESOURCE_LAYERS, catalogOf(YJJBNTTB))), code, { opacity: 0.4 });
     const overrides: Record<string, ResourceSymbolOverride> = {
-      bgdc_cjdcq: { uniform: { fillStyle: 'cross', outlineWidth: 'L' } }
+      [code]: { mode: 'uniform', uniform: { fillStyle: 'cross', outlineWidth: 'L' } }
     };
-    const group = resourcesGroup({ state, invalid: new Map(), tileBase: TILE_BASE, overrideOf: code => overrides[code] });
-    const parts = group.layers.filter(({ id }) => id === 'resources-bgdc_cjdcq' || id.startsWith('resources-bgdc_cjdcq-'));
+    const group = resourcesGroup({ state, invalid: new Map(), tileBase: TILE_BASE, overrideOf: item => overrides[item] });
+    const parts = group.layers.filter(({ id }) => id === `resources-${code}` || id.startsWith(`resources-${code}-`));
 
     expect(parts.map(({ id }) => id)).toStrictEqual([
-      'resources-bgdc_cjdcq',
-      'resources-bgdc_cjdcq-pattern',
-      'resources-bgdc_cjdcq-outline'
+      `resources-${code}`,
+      `resources-${code}-pattern`,
+      `resources-${code}-outline`
     ]);
-    const main = layerOf(group, 'bgdc_cjdcq');
+    const main = layerOf(group, code);
     for (const part of parts) {
       expect(part).toMatchObject({
-        source: 'resources-bgdc_cjdcq',
+        source: `resources-${code}`,
         filter: 'filter' in main ? main.filter : undefined,
-        minzoom: resourceStyle('bgdc_cjdcq').minzoom
+        minzoom: resourceStyle(code).minzoom
       });
       expect('source-layer' in part && part['source-layer']).toBe('source-layer' in main && main['source-layer']);
     }

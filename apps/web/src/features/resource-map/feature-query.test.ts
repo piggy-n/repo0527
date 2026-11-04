@@ -10,7 +10,7 @@ import type {
   ScreenPoint,
   ViewKind
 } from '@yzt/map-core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { isValidPolygonal, QUERY_VERTEX_LIMIT, screenBoxPolygon, vertexCount } from '@/shared/map/query-geometry';
 import type { RegionScope } from '@/shared/map/region/region-scope';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
@@ -49,6 +49,7 @@ const tree: ResourceTreeCategory[] = [
       layer('bgdc_dltb', 'Polygon', 2022),
       layer('bgdc_dltb_czc', 'Polygon', 2022),
       // 9 级起显示
+      layer('csxhjctb_lrdl', 'Line', 2025),
       layer('bgdc_cjdcq', 'Polygon', 2023, 2024),
       layer('csxhjctb_hydl', 'Line', 2023, 2024, 2025),
       layer('csxhjctb_gyssp', 'Point', 2025),
@@ -110,15 +111,26 @@ describe('pickResources', () => {
     const invalid = new Map([['csxhjctb_gyssp', '图层不合法']]);
 
     expect(pickResources(STATE, invalid, 9)).toStrictEqual([HYDL, targetOf('bgdc_cjdcq', 2023), DLTB]);
-    expect(pickResources(STATE, invalid, 8.9).map(target => target.resource.code)).toStrictEqual([
-      'csxhjctb_hydl',
-      'bgdc_dltb'
-    ]);
     expect(pickResources(STATE, new Map(), 8).map(target => target.layerCode)).toStrictEqual([
       'csxhjctb_hydl_2024',
+      'bgdc_cjdcq_2023',
       'bgdc_dltb_2022',
       'csxhjctb_gyssp_2025'
     ]);
+  });
+
+  it('当前级别低于最小显示级别的资源不取；关闭开关后都取（ADR 0132）', async () => {
+    const displays = new Map([...STATE.displays, ['csxhjctb_lrdl', display(2025)]]);
+    const state = { ...STATE, displays, order: ['csxhjctb_lrdl', ...STATE.order] };
+    const codes = (pick: typeof pickResources, zoom: number) => pick(state, new Map(), zoom).map(target => target.resource.code);
+
+    expect(codes(pickResources, 9)).toContain('csxhjctb_lrdl');
+    expect(codes(pickResources, 8.9)).not.toContain('csxhjctb_lrdl');
+
+    vi.resetModules();
+    vi.stubEnv('VITE_RESOURCE_MIN_ZOOM_ENABLED', 'false');
+    const disabled = await import('./feature-query');
+    expect(codes(disabled.pickResources, 8.9)).toContain('csxhjctb_lrdl');
   });
 
   it('目录还没加载、顺序里的资源不在目录或没有显示状态时跳过', () => {
@@ -126,6 +138,7 @@ describe('pickResources', () => {
     const order = ['bgdc_xzq', 'bgdc_dltb_czc', ...STATE.order];
     expect(pickResources({ ...STATE, order }, new Map(), 8).map(target => target.resource.code)).toStrictEqual([
       'csxhjctb_hydl',
+      'bgdc_cjdcq',
       'bgdc_dltb',
       'csxhjctb_gyssp'
     ]);

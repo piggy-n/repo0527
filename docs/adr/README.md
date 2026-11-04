@@ -140,6 +140,7 @@
 | [0129](0129-indicator-simulation-deferred-scope.md) | 城市国土空间监测指标AI计算：先对话、后补充监测范围 | 已接受（修改 0106 第 6 条、0121 第 1 条） |
 | [0130](0130-city-indicators-monitoring-report.md) | 城市指标用 2026 年监测成果简报的数据 | 已接受（市级基准值的来源部分取代 0105 第 2 条） |
 | [0131](0131-scope-dialog-camera-copy-and-highlight.md) | 城市国土空间监测指标AI计算：范围弹窗的定位、信息量和高亮 | 已接受（修改 0121 的弹窗定位、分析内容和样式） |
+| [0132](0132-resource-min-zoom-standard.md) | 资源的最小显示级别：按单张瓦片 6 MB 实测，.env 开关控制是否限制 | 已接受（修改 0041 的标准和取值） |
 
 ## 模板
 

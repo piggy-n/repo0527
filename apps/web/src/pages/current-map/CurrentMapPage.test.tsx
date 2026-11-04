@@ -1369,9 +1369,9 @@ describe('CurrentMapPage', () => {
 
   it('平移和同一级内缩放不更新"已选择图层"列表，跨过最小级别才更新提示', async () => {
     const { wrapper, map, updates } = await readyPage();
-    await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
+    await vi.waitFor(() => resourceRow(wrapper, 'csxhjctb_lrdl'));
     await button(wrapper, '展开已选择图层').trigger('click');
-    await resourceRow(wrapper, 'bgdc_cjdcq').get('input').setValue(true);
+    await resourceRow(wrapper, 'csxhjctb_lrdl').get('input').setValue(true);
     map.moveTo([119, 32], 8, {});
     await settle();
     updates.clear();
@@ -1384,23 +1384,23 @@ describe('CurrentMapPage', () => {
     expect(updates.get('CheckedLayerList') ?? 0).toBe(0);
     map.moveTo([119, 32], 9 - 1e-7, {});
     await nextTick();
-    expect(layerRow(wrapper, 'bgdc_cjdcq').find('[data-status="minzoom"]').exists()).toBe(true);
+    expect(layerRow(wrapper, 'csxhjctb_lrdl').find('[data-status="minzoom"]').exists()).toBe(true);
     expect(updates.get('CheckedLayerList') ?? 0).toBe(0);
 
     map.moveTo([119, 32], 9, {});
     await nextTick();
-    expect(layerRow(wrapper, 'bgdc_cjdcq').find('[data-status="minzoom"]').exists()).toBe(false);
+    expect(layerRow(wrapper, 'csxhjctb_lrdl').find('[data-status="minzoom"]').exists()).toBe(false);
     expect(updates.get('CheckedLayerList')).toBe(1);
   });
 
   it('勾选了但级别不够的资源在状态图标里提示放大到几级；瓦片加载失败标在对应资源的图标上（ADR 0059）', async () => {
     const { wrapper, map } = await readyPage();
-    await vi.waitFor(() => resourceRow(wrapper, 'bgdc_cjdcq'));
+    await vi.waitFor(() => resourceRow(wrapper, 'csxhjctb_lrdl'));
     await button(wrapper, '展开已选择图层').trigger('click');
-    expect(wrapper.find('[data-layer="bgdc_cjdcq"]').exists()).toBe(false);
+    expect(wrapper.find('[data-layer="csxhjctb_lrdl"]').exists()).toBe(false);
 
-    await resourceRow(wrapper, 'bgdc_cjdcq').get('input').setValue(true);
-    expect(layerRow(wrapper, 'bgdc_cjdcq').get('[role="img"]').attributes('aria-label')).toBe('放大至第 9 级显示');
+    await resourceRow(wrapper, 'csxhjctb_lrdl').get('input').setValue(true);
+    expect(layerRow(wrapper, 'csxhjctb_lrdl').get('[role="img"]').attributes('aria-label')).toBe('放大至第 9 级显示');
     // 数据源的错误照样上报（默认打印到控制台）
     using consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const tileError = new Error('Unable to parse the tile');
@@ -1414,15 +1414,15 @@ describe('CurrentMapPage', () => {
     expect(consoleError).toHaveBeenCalledWith('[map-vue]', tileError);
 
     // 级别不够的资源又有瓦片加载失败：图标换成更严重的，提示里两条都在
-    map.fire('error', { error: tileError, sourceId: 'resources-bgdc_cjdcq' });
+    map.fire('error', { error: tileError, sourceId: 'resources-csxhjctb_lrdl' });
     await nextTick();
-    const cjdcq = layerRow(wrapper, 'bgdc_cjdcq').get('[role="img"]');
-    expect(cjdcq.attributes('data-status')).toBe('tile-error');
-    expect(cjdcq.attributes('aria-label')).toBe('有瓦片加载失败；放大至第 9 级显示');
+    const lrdl = layerRow(wrapper, 'csxhjctb_lrdl').get('[role="img"]');
+    expect(lrdl.attributes('data-status')).toBe('tile-error');
+    expect(lrdl.attributes('aria-label')).toBe('有瓦片加载失败；放大至第 9 级显示');
 
     map.moveTo([118.8, 32.05], 9, { originalEvent: new MouseEvent('wheel') });
     await nextTick();
-    expect(layerRow(wrapper, 'bgdc_cjdcq').get('[role="img"]').attributes('aria-label')).toBe('有瓦片加载失败');
+    expect(layerRow(wrapper, 'csxhjctb_lrdl').get('[role="img"]').attributes('aria-label')).toBe('有瓦片加载失败');
   });
 
   it('点选：14 级起点中地类图斑直接出详情，高亮插在注记下面；离开点选工具时清除', async () => {

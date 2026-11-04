@@ -59,6 +59,7 @@ describe('useResourceCatalogQuery', () => {
       'bgdc_dltb',
       'csxhjctb_hydl',
       'csxhjctb_gyssp',
+      'csxhjctb_lrdl',
       'szy_kt',
       'gtkjgh_czkfbj'
     ]);

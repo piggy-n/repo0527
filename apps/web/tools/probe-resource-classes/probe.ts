@@ -100,17 +100,15 @@ export const SAMPLE_POINTS: readonly (readonly [lng: number, lat: number, name: 
   [119.42, 32.39, '扬州']
 ];
 
-// 这些资源的低级别瓦片很重（水域面层 z7 有 42 MB、20 s）：同样式登记表的最小显示级别，更低的级别不请求
+// 这些资源的低级别瓦片很重（乡村道路线层 7 级最大 17.7 MB）：同样式登记表的最小显示级别，更低的级别不请求
 export const ZOOM_FLOORS: Readonly<Record<string, number>> = {
-  csxhjctb_hyda: 10,
   csxhjctb_lrdl: 9,
   csxhjctb_lctl: 9,
-  bgdc_yjjbnttb: 9,
-  bgdc_lmfw: 9,
-  bgdc_cjdcq: 9,
-  bgdc_cjdcqjx: 8,
-  bgdc_ttq: 8,
-  bgdc_xzq: 8
+  csxhjctb_lvll: 8,
+  bgdc_yjjbnttb: 8,
+  bgdc_lmfw: 8,
+  szy_hl_fs: 8,
+  szy_hl_ks: 8
 };
 
 /** 缓存的版本：探查或配对的规则变化时加一，旧版本的缓存不再使用 */

@@ -14,5 +14,6 @@ declare global {
     readonly VITE_TIANDITU_KEY?: string;
     readonly VITE_AI_API_BASE_URL?: string;
     readonly VITE_PAGE_STATE_RESET?: string;
+    readonly VITE_RESOURCE_MIN_ZOOM_ENABLED?: string;
   }
 }
