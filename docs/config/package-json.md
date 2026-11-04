@@ -267,6 +267,21 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 
 `@types/node` 要跟随 Node 运行时的大版本（当前是 24），不要随 latest 升到 26。`pnpm deps:check` 会一直把它列为可升级，这是预期行为。
 
+## 暂不修复的安全告警
+
+下面两个中危告警（2026-11-04 用 `pnpm audit` 和官方公告核对）只来自开发依赖，受影响的代码在这个项目里不会执行，所以不强制覆盖版本，等上游换大版本：
+
+| 告警 | 安装的版本 → 修复版本 | 谁依赖它 | 为什么不受影响 |
+|---|---|---|---|
+| [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)，`minimatch` 处理构造的模式时占用大量 CPU 和内存 | 10.2.6 → 11.0.1 | `eslint`、`@eslint/config-array`（`eslint-plugin-boundaries` 的 peer）；`editorconfig`、`glob`（`js-beautify` 的命令行） | 项目不运行 ESLint（ADR 0006），boundaries 和它用到的解析器都不加载 `eslint`、`minimatch`；`js-beautify` 只有 `js/src/cli.js` 加载 `glob`、`editorconfig`，项目不用它的命令行。触发还要攻击者能传入 glob 模式 |
+| [GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4)，`glob` 取消后仍在后台遍历目录 | 13.0.6 → 14.0.2 | `js-beautify`（`@vue/test-utils` 的依赖） | 同上，只有命令行加载。触发还要给 `glob` 传 `AbortSignal` 并依赖它限制开销 |
+
+项目代码也没有直接导入这两个包。
+
+**为什么不用 `pnpm.overrides`**：上游的最新版（`eslint` 10.14.0、`@eslint/config-array` 0.23.5、`editorconfig` 3.0.2、`js-beautify` 2.0.3）都还声明旧的大版本，没有能升的直接依赖。强制覆盖要同时跨两个大版本：`minimatch` 11 删了 `makeRe()`、`regexp`、`AST` 等接口，模式的内部结构也变了，`glob` 13 不能直接配它，`glob` 14 也改了接口。这些代码不执行，所以既消除不了实际风险，测试也验证不了覆盖后是否还能用。
+
+**什么时候再看**：每月 `pnpm deps:check` 时跑一次 `pnpm audit`，上游换到 `minimatch` 11、`glob` 14 后正常升级，并删掉这一节。以下情况要提前处理：项目开始运行 ESLint 或 `js-beautify` 的命令行、直接使用这两个包，或者出现新的告警。
+
 ## 修改时的检查清单
 
 - 新增依赖前，先确认现有依赖里没有同类库（AGENTS.md）；再查 `pnpm-lock.yaml` 里是否已经有其他包间接依赖它，有的话优先选同一版本，避免打包两份
