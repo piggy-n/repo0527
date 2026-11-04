@@ -92,7 +92,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
     return { opacity: focused ? 1 : 0.38, borderColor: focused ? '#C88E00' : undefined, borderWidth: focused ? 2 : 0 };
   };
   const series = comparison.map((item, seriesIndex): BarSeriesOption | LineSeriesOption => {
-    const color = yearColor(item.year, preference.type);
+    const color = yearColor(item.year, indicator.id);
     const showLabelYear = plan[item.year]?.compact || preference.type === 'line';
     const labelPrefix = showLabelYear ? `${item.year}年${stacked ? '\n' : ' '}` : '';
     const data = item.values.map((value, index) => ({
