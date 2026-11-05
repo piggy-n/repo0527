@@ -128,6 +128,62 @@ describe('底图的偏好', () => {
   });
 });
 
+describe('标注的偏好（ADR 0146）', () => {
+  const LABELS_KEY = 'zhangsan/basemap-labels';
+
+  it('恢复存下的显隐，覆盖进入时的默认值', async () => {
+    using online = setup(createMemoryStore({ [LABELS_KEY]: { version: 1, value: false } }));
+    using intranet = setup(createMemoryStore({ [LABELS_KEY]: { version: 1, value: true } }), null);
+    expect([online.basemap.labelsVisible.value, intranet.basemap.labelsVisible.value]).toStrictEqual([true, false]);
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect([online.basemap.labelsVisible.value, intranet.basemap.labelsVisible.value]).toStrictEqual([false, true]);
+    expect(intranet.basemap.deriveLabelsGroup().layers).not.toHaveLength(0);
+  });
+
+  it('切换后防抖写入自己的键，不写进底图的偏好', async () => {
+    using ctx = setup();
+    await vi.advanceTimersByTimeAsync(0);
+
+    ctx.basemap.setLabelsVisible(false);
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+
+    expect(ctx.store.entries.get(LABELS_KEY)).toStrictEqual({ version: 1, value: false });
+    expect(ctx.store.entries.has(KEY)).toBe(false);
+  });
+
+  it('两项一起恢复时都生效：底图的恢复不算用户操作过标注，反过来也一样', async () => {
+    const basemapValue = { selected: 'imagery', opacity: { vector: 1, imagery: 0.6, static: 1 } };
+    using ctx = setup(
+      createMemoryStore({ [KEY]: { version: VERSION, value: basemapValue }, [LABELS_KEY]: { version: 1, value: false } })
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(ctx.basemap.selected.value).toBe('imagery');
+    expect(ctx.basemap.labelsVisible.value).toBe(false);
+  });
+
+  it('改透明度不写标注的键', async () => {
+    using ctx = setup();
+    await vi.advanceTimersByTimeAsync(0);
+
+    ctx.basemap.setOpacity(0.5);
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+
+    expect(ctx.store.entries.has(LABELS_KEY)).toBe(false);
+  });
+
+  it('存的不是布尔值：当作没有存过', async () => {
+    using ctx = setup(createMemoryStore({ [LABELS_KEY]: { version: 1, value: 'off' } }));
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(ctx.basemap.labelsVisible.value).toBe(true);
+  });
+});
+
 describe('restoredBasemapState', () => {
   it('选中的底图可用就恢复它；不可用时保留当前的选择，透明度照样恢复', () => {
     const stored = { selected: 'imagery' as const, opacity: { vector: 0.3, imagery: 0.7, static: 0.2 } };

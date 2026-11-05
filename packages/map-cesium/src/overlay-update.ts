@@ -32,6 +32,15 @@ function sameStyle(a: OverlayShape, b: OverlayShape): boolean {
       sameColor(a.strokeColor, b.strokeColor)
     );
   }
+  if (a.kind === 'label' && b.kind === 'label') {
+    return (
+      a.text === b.text &&
+      a.size === b.size &&
+      a.haloWidth === b.haloWidth &&
+      sameColor(a.color, b.color) &&
+      sameColor(a.haloColor, b.haloColor)
+    );
+  }
   return false;
 }
 
@@ -51,13 +60,13 @@ export function sameCoordinates(a: OverlayShape, b: OverlayShape): boolean {
   if (a.kind === 'polygon' && b.kind === 'polygon') {
     return a.rings.length === b.rings.length && a.rings.every((ring, index) => samePath(ring, b.rings[index]));
   }
-  if (a.kind === 'point' && b.kind === 'point') {
+  if ((a.kind === 'point' && b.kind === 'point') || (a.kind === 'label' && b.kind === 'label')) {
     return samePosition(a.position, b.position);
   }
   return false;
 }
 
-// 每帧读取时要重建几何的点数；点的位置本来就每帧更新，不算
+// 每帧读取时要重建几何的点数；点和文字的位置本来就每帧更新，不算
 function livePoints(shapes: readonly OverlayShape[]): number {
   let count = 0;
   for (const shape of shapes) {

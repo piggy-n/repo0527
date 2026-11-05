@@ -103,6 +103,7 @@ export default defineConfig(({ mode }) => {
         VITE_RESOURCE_MIN_ZOOM_ENABLED: 'true',
         VITE_PREFERENCES_ENABLED: 'true',
         VITE_PREFERENCE_BASEMAP: 'true',
+        VITE_PREFERENCE_BASEMAP_LABELS: 'true',
         VITE_PREFERENCE_BOUNDARIES: 'true',
         VITE_PREFERENCE_RESOURCE_LAYERS: 'true',
         VITE_PREFERENCE_RESOURCE_SYMBOLS: 'true',

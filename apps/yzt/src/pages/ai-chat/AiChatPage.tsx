@@ -16,6 +16,7 @@ import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
+import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './AiChatPage.module.scss';
 
 // 结果定位不再放大到比这一级更近（沿用旧项目）
@@ -35,7 +36,7 @@ export const AiChatPage = defineComponent({
       root: BASEMAP_STYLE_ROOT
     });
     const { goToDefaultView } = useDefaultView(map);
-    const basemap = useBasemap();
+    const basemap = useBasemap({ preferences: usePreferenceScope() });
     const boundaries = useBoundaries();
     const chat = useAiChat();
     map.bindStyle({

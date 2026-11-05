@@ -27,6 +27,7 @@ import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { JIANGSU_CAMERA } from '@/shared/map/jiangsu';
+import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './IndicatorSimulationPage.module.scss';
 
 /**
@@ -68,7 +69,7 @@ export const IndicatorSimulationPage = defineComponent({
       root: BASEMAP_STYLE_ROOT
     });
     const { goToDefaultView } = useDefaultView(map);
-    const basemap = useBasemap();
+    const basemap = useBasemap({ preferences: usePreferenceScope() });
     const boundaries = useBoundaries();
     boundaries.setVisible('city', true);
     const composing = computed(() => run.state.value.status === 'idle');

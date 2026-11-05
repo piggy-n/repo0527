@@ -7,6 +7,7 @@ import {
   cleanPath,
   dashPattern,
   isGeoJson,
+  type LabelShape,
   type LineShape,
   type OverlayLayerSpecification,
   type OverlayShape,
@@ -60,6 +61,84 @@ function shapesOf(specs: readonly OverlaySpec[], zoom = 9): readonly OverlayShap
 function only<S extends OverlayShape>(shapes: readonly OverlayShape[], kind: S['kind']): S[] {
   return shapes.filter((shape): shape is S => shape.kind === kind);
 }
+
+const symbol = (extra: object = {}): OverlayLayerSpecification => ({
+  id: 'basemap-labels-static-city',
+  type: 'symbol',
+  source: 'names',
+  layout: { 'text-field': ['get', 'name'], 'text-size': 14 },
+  paint: { 'text-color': '#ff0000', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
+  ...extra
+});
+
+describe('planOverlays：文字（ADR 0146）', () => {
+  const names = collection(
+    feature({ type: 'Point', coordinates: [118.74, 31.98] }, { name: '南京市', level: 'city' }),
+    feature({ type: 'Point', coordinates: [118.8, 32.05] }, { name: '玄武区', level: 'county' })
+  );
+
+  it('按要素取文字，大小、颜色、描边来自样式', () => {
+    const shapes = only<LabelShape>(shapesOf([spec(symbol(), names)]), 'label');
+
+    expect(shapes).toStrictEqual([
+      {
+        kind: 'label',
+        position: [118.74, 31.98],
+        text: '南京市',
+        size: 14,
+        color: [1, 0, 0, 1],
+        haloColor: [1, 1, 1, 1],
+        haloWidth: 1.5
+      },
+      {
+        kind: 'label',
+        position: [118.8, 32.05],
+        text: '玄武区',
+        size: 14,
+        color: [1, 0, 0, 1],
+        haloColor: [1, 1, 1, 1],
+        haloWidth: 1.5
+      }
+    ]);
+  });
+
+  it('透明度同时乘进文字和描边；完全透明时不画', () => {
+    const paint = { 'text-color': '#ff0000', 'text-halo-color': '#ffffff', 'text-opacity': 0.5 };
+    const [half] = only<LabelShape>(shapesOf([spec(symbol({ paint }), names)]), 'label');
+
+    expect(half?.color).toStrictEqual([1, 0, 0, 0.5]);
+    expect(half?.haloColor).toStrictEqual([1, 1, 1, 0.5]);
+    expect(shapesOf([spec(symbol({ paint: { 'text-opacity': 0 } }), names)])).toStrictEqual([]);
+  });
+
+  it('按过滤条件取一级；没到最小级别时不画，四舍五入后到了就画（和二维的 8.5 级对齐）', () => {
+    const county = symbol({ minzoom: 8.5, filter: ['==', ['get', 'level'], 'county'] });
+
+    expect(shapesOf([spec(county, names)], 8.4)).toStrictEqual([]);
+    expect(only<LabelShape>(shapesOf([spec(county, names)], 8.5), 'label').map(({ text }) => text)).toStrictEqual([
+      '玄武区'
+    ]);
+  });
+
+  it('text-field 写成常量也能画', () => {
+    const fixed = symbol({ layout: { 'text-field': '固定文字' } });
+
+    expect(only<LabelShape>(shapesOf([spec(fixed, names)]), 'label').map(({ text }) => text)).toStrictEqual([
+      '固定文字',
+      '固定文字'
+    ]);
+  });
+
+  it('隐藏的图层不画；取不到文字的要素不画，线和面要素也不画', () => {
+    const hidden = symbol({ layout: { 'text-field': ['get', 'name'], visibility: 'none' } });
+    const noName = collection(feature({ type: 'Point', coordinates: [118, 32] }, {}));
+    const lineFeature = collection(feature(lineString([118, 32], [119, 32]), { name: '长江' }));
+
+    expect(shapesOf([spec(hidden, names)])).toStrictEqual([]);
+    expect(shapesOf([spec(symbol(), noName)])).toStrictEqual([]);
+    expect(shapesOf([spec(symbol(), lineFeature)])).toStrictEqual([]);
+  });
+});
 
 describe('planOverlays', () => {
   it('线图层按取整后的级别求值线宽，颜色带上不透明度；面要素画出每个环', () => {

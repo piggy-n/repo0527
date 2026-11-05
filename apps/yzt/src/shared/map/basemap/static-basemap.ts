@@ -20,7 +20,7 @@ import {
 
 /**
  * 静态底图的地名只有汉字，由 MapLibre 用本地字体画，这个地址不会被请求；样式校验要求有 text-field 时必须有 glyphs。
- * 使用 useBasemap 的页面都要在 provideMap 时传入，地名的开关关闭时也传，打开开关不用再改页面（ADR 0133、0134）
+ * 使用 useBasemap 的页面都要在 provideMap 时传入，标注可以在页面上随时打开（ADR 0133、0146）
  */
 export const BASEMAP_STYLE_ROOT: StyleRoot = { glyphs: '/fonts/glyphs/{fontstack}/{range}.pbf' };
 
@@ -109,13 +109,8 @@ function labelLayer(
   };
 }
 
-const NO_LABELS: StyleGroup = { sources: {}, layers: [] };
-
-/** 静态底图的 basemap-labels 分组：市、区县的地名，只有二维画（三维不支持 symbol，ADR 0080）；市名在上，避让时优先 */
-export function staticLabelsGroup(opacity: number, options = STATIC_BASEMAP_OPTIONS): StyleGroup {
-  if (!options.labels) {
-    return NO_LABELS;
-  }
+/** 静态底图的 basemap-labels 分组：市、区县的地名，二三维都画（ADR 0146）；市名在上，避让时优先 */
+export function staticLabelsGroup(opacity: number): StyleGroup {
   return {
     sources: { [LABELS_SOURCE_ID]: LABELS_SOURCE },
     layers: [

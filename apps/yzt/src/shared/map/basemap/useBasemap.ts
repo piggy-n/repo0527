@@ -3,7 +3,7 @@ import { computed, type ComputedRef, shallowRef } from 'vue';
 import { appConfig, type TiandituConfig } from '../../config/app-config';
 import type { PreferenceScope } from '../../storage/preference-scope';
 import { usePreference } from '../../storage/use-preference';
-import { restoredBasemapState, storedBasemapSchema } from './basemap-preference';
+import { restoredBasemapState, storedBasemapLabelsSchema, storedBasemapSchema } from './basemap-preference';
 import {
   type BasemapId,
   type BasemapOption,
@@ -12,13 +12,14 @@ import {
   type BasemapThumbnail,
   basemapThumbnails,
   createBasemapStyles,
-  initialBasemapState
+  initialBasemapState,
+  initialLabelsVisible
 } from './basemap-style';
 
 export interface UseBasemapOptions {
   /** 默认读取 appConfig.tianditu；测试时传入 */
   readonly tianditu?: TiandituConfig | null;
-  /** 页面提供时记住上次的底图和透明度（ADR 0042）；不提供时不读不写 */
+  /** 页面提供时记住上次的底图、透明度和标注（ADR 0042、0146），各有开关；不提供时不读不写 */
   readonly preferences?: PreferenceScope | null;
 }
 
@@ -37,6 +38,9 @@ export interface Basemap {
   readonly selectForDimension: (kind: ViewKind) => void;
   /** 修改当前底图的透明度；不在 0～1 之间、或者无底图时直接抛错 */
   readonly setOpacity: (value: number) => void;
+  /** 标注是否显示：所有底图共用一个，切换底图、二三维时沿用（ADR 0146）；无底图时没有标注可画，值保留 */
+  readonly labelsVisible: ComputedRef<boolean>;
+  readonly setLabelsVisible: (visible: boolean) => void;
   /** 绑定到 basemap 分组 */
   readonly deriveGroup: () => StyleGroup;
   /** 绑定到 basemap-labels 分组 */
@@ -52,6 +56,8 @@ export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBa
   const state = shallowRef<BasemapState>(initialBasemapState(tianditu));
   // 用户自己选的底图：偏好只存它，切换二三维时自动换的底图不写进去（ADR 0114），否则重新进入页面时二维也是影像
   const chosen = shallowRef<BasemapId>(state.value.selected);
+  // 和底图的状态分开：两项偏好各读各的，一项恢复时不能让另一项以为用户已经操作过
+  const labels = shallowRef(initialLabelsVisible(tianditu));
 
   if (preferences) {
     usePreference(preferences, {
@@ -64,6 +70,17 @@ export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBa
         if (stored) {
           state.value = restoredBasemapState(stored, state.value, options);
           chosen.value = state.value.selected;
+        }
+      }
+    });
+    usePreference(preferences, {
+      name: 'basemap-labels',
+      version: 1,
+      schema: storedBasemapLabelsSchema,
+      snapshot: () => labels.value,
+      restore: stored => {
+        if (stored !== null) {
+          labels.value = stored;
         }
       }
     });
@@ -116,7 +133,11 @@ export function useBasemap({ tianditu = appConfig.tianditu, preferences }: UseBa
     select,
     selectForDimension,
     setOpacity,
+    labelsVisible: computed(() => labels.value),
+    setLabelsVisible: visible => {
+      labels.value = visible;
+    },
     deriveGroup: () => styles.basemapGroup(state.value),
-    deriveLabelsGroup: () => styles.labelsGroup(state.value)
+    deriveLabelsGroup: () => styles.labelsGroup(state.value, labels.value)
   };
 }

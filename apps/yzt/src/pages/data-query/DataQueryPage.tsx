@@ -18,6 +18,7 @@ import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
+import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './DataQueryPage.module.scss';
 
 // 一个专题的查询页：左上查询面板，底部横跨整页的查询结果，右上地图控制和底图卡（2026-10-30）
@@ -35,7 +36,7 @@ const DataQueryView = defineComponent({
     });
     const { goToDefaultView } = useDefaultView(map);
     // 底图和行政区边界不记偏好，不影响现状底图记住的选择；默认只显示省界（同旧页面）
-    const basemap = useBasemap();
+    const basemap = useBasemap({ preferences: usePreferenceScope() });
     const boundaries = useBoundaries();
     const query = useDataQuery({ topic: props.topic, map, onDrawSubmit: notifySubmit });
 

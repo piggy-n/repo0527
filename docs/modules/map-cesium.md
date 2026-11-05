@@ -11,7 +11,7 @@
 | `url-template.ts` | 数据源的多个瓦片地址合成带 `{s}` 的模板 | 否 | node |
 | `scene-style.ts` | `planSceneStyle`：样式 → 影像图层、地球底色、覆盖物图层、不支持的图层 | 否 | node |
 | `overlay-update.ts` | `movableInPlace`：图层再次推导时能不能只换坐标（样式、个数不变，线和面不超过 500 个点，ADR 0082）；`sameCoordinates`：形状的坐标没变（ADR 0099） | 否 | node |
-| `overlay-plan.ts` | `planOverlays`：覆盖物图层和数据 → 形状（按整级求值样式、简化到半个像素、遮罩外环收成方框、去掉重复点） | 否 | node |
+| `overlay-plan.ts` | `planOverlays`：覆盖物图层和数据 → 形状（按整级求值样式、简化到半个像素、遮罩外环收成方框、去掉重复点；`symbol` 图层的文字，ADR 0146） | 否 | node |
 | `scene-like.ts` | 窄接口 `SceneLike`、`ScenePose`、`TilesetOptions`、`WebGLUnavailableError` | 否 | — |
 | `cesium-view.ts` | `CesiumView`：生命周期、相机同步与精确还原、样式镜像、覆盖物数据的下载、工具输入与临时拖动、数据源错误、视点高度、三维内容 | 否（只依赖 `SceneLike`） | jsdom，注入假场景 |
 | `cesium-scene.ts` | `CesiumScene`：唯一调用 Cesium 的门面 | 是 | 浏览器，真实 Cesium |
@@ -107,6 +107,7 @@
 - 只换坐标时坐标没变的形状不动；换了坐标的线和面停下 0.5 秒后改回静态的实体（旧的留到新的画好）。每帧读取的实体 Cesium 每帧重建、要求再画一帧，不改回的话场景一直重画，`requestRenderMode` 停不下来（ADR 0099）
 - 要重建的图层，旧的实体留到新加的全部画好再移除，不会空白：看 `clock.canAnimate`（`CesiumWidget` 每帧写入这一帧 `dataSourceDisplay.update` 的结果）。不能看 `dataSourceDisplay.ready`：它第一次就绪后一直为 `true`（ADR 0082）
 - 数据源的 `data` 是地址时由 `CesiumView` 下载，按地址缓存；下载或内容不是 GeoJSON 时按数据源 ID 记错误，地址不再被引用时忘掉，再次引用时重新下载；视图释放时取消下载。下载函数由构造参数 `loadJson` 换掉（瓦片集的索引也用它），测试不发网络请求
+- 文字（ADR 0146）：`symbol` 图层有 `text-field` 时推导出 `LabelShape`，只有图标的仍然报告为不支持。`CesiumScene` 画成 Entity 的 `label`：字体取画布容器继承的 `font-family`（包不知道应用的字体令牌），描边宽度是 `text-halo-width` 的两倍，垂直居中；深度测试用默认值，相机倾斜时不被地球切掉（浏览器测试检查），漫游时会被模型挡住。不做避让。跨级再推导时文字和样式没变就不重建，透明度变了走重建
 - 画面稳定（`settle`）要等影像瓦片和覆盖物都画好
 
 ## 拾取与投影

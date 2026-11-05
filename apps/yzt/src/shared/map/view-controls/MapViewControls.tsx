@@ -3,9 +3,9 @@ import { useMap } from '@mx/map-vue';
 import { ElTooltip } from 'element-plus';
 import { defineComponent, type PropType, type VNode } from 'vue';
 import { type IconName, SvgIcon } from '../../icons/SvgIcon';
-import { BoundaryPanel } from '../boundary/BoundaryPanel';
+import { BoundarySettingsPanel } from '../boundary/BoundarySettingsPanel';
 import type { Boundaries } from '../boundary/useBoundaries';
-import { MapOptionsPopover } from '../popover/MapOptionsPopover';
+import { type MapOptionsContext, MapOptionsPopover } from '../popover/MapOptionsPopover';
 import { TOOLBAR_ACTIONS } from '../toolbar/toolbar-items';
 import { MAP_TOOLTIP_PROPS } from '../tooltip';
 import { useCompassButton } from './useCompassButton';
@@ -84,7 +84,7 @@ export const MapViewControls = defineComponent({
 
     const dimensionShown = () => props.dimension !== undefined;
 
-    // 点开是和底图卡同样的左侧浮层：再点入口或 × 关闭，透明度在浮层的操作栏，勾选和透明度都在拥有者里
+    // 点开是和底图卡同样的左侧浮层，默认只有三级勾选，透明度入口在同一行；勾选和透明度都在拥有者里（ADR 0146）
     const renderBoundaries = (boundaries: Boundaries) => {
       const { label, icon } = TOOLBAR_ACTIONS.boundaries;
       const pressed = props.boundariesOpen && props.boundariesVisible;
@@ -92,12 +92,9 @@ export const MapViewControls = defineComponent({
         <MapOptionsPopover
           key="boundaries"
           name="boundaries"
-          label={label}
           placement="left-end"
-          opacity={boundaries.opacity.value}
           open={props.boundariesOpen}
           visible={props.boundariesVisible}
-          onOpacityChange={boundaries.setOpacity}
           onUpdate:open={open => emit('update:boundariesOpen', open)}
         >
           {{
@@ -115,7 +112,9 @@ export const MapViewControls = defineComponent({
                 pressed
               )
             ],
-            default: () => [<BoundaryPanel boundaries={boundaries} showOpacity={false} />]
+            default: ({ active }: MapOptionsContext) => [
+              <BoundarySettingsPanel boundaries={boundaries} active={active} />
+            ]
           }}
         </MapOptionsPopover>
       );

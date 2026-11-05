@@ -156,7 +156,7 @@ describe('SpaceMonitoringIndicatorsPage', () => {
   });
 
   describe('行政区边界（ADR 0128）', () => {
-    it('入口在控制栏，默认省、市、县界都显示；两个页签都能用，切页签时浮层还开着', async () => {
+    it('入口在控制栏，默认省、市、县界都显示；两个页签都能用，切页签算点外部，浮层关闭（ADR 0146）', async () => {
       const wrapper = await mountPage();
       expect(popoverShown()).toBe(false);
 
@@ -168,8 +168,12 @@ describe('SpaceMonitoringIndicatorsPage', () => {
       expect(levelChecked('县界')).toBe(true);
 
       await tabNamed(wrapper, '指标展示').trigger('click');
-      expect(popoverShown()).toBe(true);
+      expect(pressed(wrapper)).toBe('false');
+      await vi.waitFor(() => expect(popoverShown()).toBe(false));
+
+      await wrapper.get(ENTRY).trigger('click');
       expect(pressed(wrapper)).toBe('true');
+      await vi.waitFor(() => expect(popoverShown()).toBe(true));
     });
 
     it('成果面板里没有重复的入口，也没有单独的工具栏', async () => {

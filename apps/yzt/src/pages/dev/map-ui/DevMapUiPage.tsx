@@ -18,7 +18,7 @@ import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { MapCard } from '@/shared/map/card/MapCard';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
-import { MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
+import { type MapOptionsContext, MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
 import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { RouteName } from '@/shared/router/route-names';
 import styles from './DevMapUiPage.module.scss';
@@ -141,15 +141,12 @@ const MapUiSamples = defineComponent({
                 </MxPanel>
               </div>
               <div class={styles.basemapArea}>
-                <span class={styles.note}>点击缩略图打开；再次点击或 × 关闭</span>
+                <span class={styles.note}>点击缩略图打开；选底图、再次点击、点外部或 Esc 关闭</span>
                 <div class={styles.basemapTrigger}>
                   <MapOptionsPopover
                     name="sample-basemap"
-                    label="底图"
-                    opacity={basemap.opacity.value}
                     open={basemapOpen.value}
                     onUpdate:open={value => (basemapOpen.value = value)}
-                    onOpacityChange={basemap.setOpacity}
                   >
                     {{
                       reference: () => [
@@ -163,7 +160,9 @@ const MapUiSamples = defineComponent({
                           }}
                         </MapCard>
                       ],
-                      default: () => [<BasemapPanel basemap={basemap} showOpacity={false} />]
+                      default: ({ active, close }: MapOptionsContext) => [
+                <BasemapPanel basemap={basemap} active={active} onPicked={close} />
+              ]
                     }}
                   </MapOptionsPopover>
                 </div>

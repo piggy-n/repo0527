@@ -39,8 +39,8 @@ export interface BasemapThumbnail {
 export interface BasemapStyles {
   /** 背景和所选底图 */
   basemapGroup(state: BasemapState): StyleGroup;
-  /** 所选底图配套的注记 */
-  labelsGroup(state: BasemapState): StyleGroup;
+  /** 所选底图配套的标注；visible 为 false 时是空的 */
+  labelsGroup(state: BasemapState, visible: boolean): StyleGroup;
 }
 
 const OPTION_BY_ID: Readonly<Record<BasemapId, BasemapOption>> = {
@@ -108,6 +108,11 @@ export function initialBasemapState(tianditu: TiandituConfig | null): BasemapSta
   return { selected: tianditu ? 'vector' : 'static', opacity: { vector: 1, imagery: 1, static: 1 } };
 }
 
+/** 进入页面时标注是否显示：天地图的注记显示，静态底图的地名不显示（ADR 0134） */
+export function initialLabelsVisible(tianditu: TiandituConfig | null): boolean {
+  return tianditu !== null;
+}
+
 // 一张瓦片的地址；z、x、y 也可以是 MapLibre 替换的占位符，所以不经过 URLSearchParams 转义
 function tileUrl(layer: string, key: string, subdomain: string, { z, x, y }: Record<'z' | 'x' | 'y', string>): string {
   return (
@@ -163,7 +168,10 @@ export function createBasemapStyles(tianditu: TiandituConfig | null): BasemapSty
       const { baseId, base } = sources[selected];
       return { sources: base, layers: [BACKGROUND_LAYER, rasterLayer(baseId, opacity[selected])] };
     },
-    labelsGroup({ selected, opacity }) {
+    labelsGroup({ selected, opacity }, visible) {
+      if (!visible) {
+        return EMPTY;
+      }
       if (selected === 'static') {
         return staticLabelsGroup(opacity.static);
       }

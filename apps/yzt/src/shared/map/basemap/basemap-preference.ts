@@ -9,6 +9,9 @@ export const storedBasemapSchema = z.object({
   opacity: z.object({ vector: opacity, imagery: opacity, static: opacity })
 });
 
+/** 存下的标注显隐（ADR 0146）：单独一项，底图偏好关着时也记住 */
+export const storedBasemapLabelsSchema = z.boolean();
+
 /** 存下的偏好合并进当前状态：选中的底图当前不可用（换了部署环境，ADR 0031、0032、0133）时保留当前的选择 */
 export function restoredBasemapState(
   stored: z.infer<typeof storedBasemapSchema>,

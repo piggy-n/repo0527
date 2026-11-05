@@ -396,6 +396,12 @@ function button(wrapper: ReturnType<typeof mountPage>['wrapper'], text: string) 
   return found;
 }
 
+// 在页面空白处按下，到 toX 松开：不动就是单击，移动了就是拖动
+function pressAndRelease(toX: number): void {
+  document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 100, clientY: 100 }));
+  document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1, clientX: toX, clientY: 100 }));
+}
+
 // Popover 挂在 body 下，按功能名称找到其内容
 function optionsPopover(name: string) {
   const element = document.querySelector(`[data-map-options="${name}"]`);
@@ -678,13 +684,12 @@ describe('CurrentMapPage', () => {
     expect(basemapCard().attributes('aria-pressed')).toBe('true');
     expect(optionsPopover('basemap').find('[aria-label="行政区边界"]').exists()).toBe(false);
     expect(optionsPopover('basemap').find('h2, h3').exists()).toBe(false);
-    expect(optionsPopover('basemap').find('[aria-label="关闭底图"]').exists()).toBe(true);
+    expect(optionsPopover('basemap').find('[aria-label="关闭底图"]').exists()).toBe(false);
 
+    // 选了底图就关闭
     await optionsPopover('basemap').get('button[aria-label="影像底图"]').trigger('click');
     expect(cover()).toContain('/img_w/');
     expect([basemapCard().text(), basemapCard().attributes('aria-label')]).toStrictEqual(['影像', '底图：影像底图']);
-
-    await optionsPopover('basemap').get('[aria-label="关闭底图"]').trigger('click');
     expect(basemapCard().attributes('aria-pressed')).toBe('false');
     await button(wrapper, '图例').trigger('click');
     expect(button(wrapper, '图例').attributes('aria-pressed')).toBe('true');
@@ -694,7 +699,7 @@ describe('CurrentMapPage', () => {
     expect(basemapCard().text()).toBe('影像');
   });
 
-  it('行政区边界并入功能标签；两处透明度分别控制，关闭重开保留数值且默认收起', async () => {
+  it('行政区边界并入功能标签；底图的标注和透明度、行政区的透明度分别控制，关闭重开保留数值且默认收起', async () => {
     const { wrapper } = await readyPage();
     const labels = wrapper.get('[role="toolbar"]').findAll('button').map(item => item.attributes('aria-label'));
     expect(labels.slice(-3)).toStrictEqual(['行政区边界', '图例', '清除测量与定位标记']);
@@ -702,14 +707,14 @@ describe('CurrentMapPage', () => {
     await vi.waitFor(() => expect(optionsPopover('basemap').exists()).toBe(true));
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
 
-    await optionsPopover('basemap').get('[aria-label="调整底图透明度"]').trigger('click');
-    expect(optionsPopover('basemap').get('[aria-label="调整底图透明度"]').attributes('aria-pressed')).toBe('true');
+    await optionsPopover('basemap').get('[aria-label="调整标注和透明度"]').trigger('click');
+    expect(optionsPopover('basemap').get('[aria-label="调整标注和透明度"]').attributes('aria-pressed')).toBe('true');
     wrapper.getComponent(ElSlider).vm.$emit('update:modelValue', 40);
     await nextTick();
     expect(optionsPopover('basemap').text()).toContain('40%');
-    await optionsPopover('basemap').get('[aria-label="调整底图透明度"]').trigger('click');
+    await optionsPopover('basemap').get('[aria-label="调整标注和透明度"]').trigger('click');
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
-    expect(optionsPopover('basemap').get('[aria-label="调整底图透明度"]').attributes('aria-pressed')).toBe('false');
+    expect(optionsPopover('basemap').get('[aria-label="调整标注和透明度"]').attributes('aria-pressed')).toBe('false');
     await button(wrapper, '底图：矢量底图').trigger('click');
     await vi.waitFor(() => expect(optionsPopoverVisible('basemap')).toBe(false));
 
@@ -742,39 +747,53 @@ describe('CurrentMapPage', () => {
     await button(wrapper, '底图：矢量底图').trigger('click');
     await vi.waitFor(() => expect(optionsPopover('basemap').exists()).toBe(true));
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
-    expect(optionsPopover('basemap').get('[aria-label="调整底图透明度"]').attributes('aria-pressed')).toBe('false');
-    await optionsPopover('basemap').get('[aria-label="调整底图透明度"]').trigger('click');
+    expect(optionsPopover('basemap').get('[aria-label="调整标注和透明度"]').attributes('aria-pressed')).toBe('false');
+    await optionsPopover('basemap').get('[aria-label="调整标注和透明度"]').trigger('click');
     expect(wrapper.getComponent(ElSlider).props('modelValue')).toBe(40);
 
+    // 无底图没有可调的：选了就关闭，再打开时没有入口
     await optionsPopover('basemap').get('[aria-label="无底图"]').trigger('click');
+    await button(wrapper, '底图：无底图').trigger('click');
+    await vi.waitFor(() => expect(optionsPopoverVisible('basemap')).toBe(true));
     expect(wrapper.findAllComponents(ElSlider)).toHaveLength(0);
-    expect(optionsPopover('basemap').find('[aria-label="调整底图透明度"]').exists()).toBe(false);
+    expect(optionsPopover('basemap').find('[aria-label="调整标注和透明度"]').exists()).toBe(false);
     await optionsPopover('basemap').get('[aria-label="矢量底图"]').trigger('click');
-    expect(optionsPopover('basemap').get('[aria-label="调整底图透明度"]').attributes('aria-pressed')).toBe('false');
-    await optionsPopover('basemap').get('[aria-label="调整底图透明度"]').trigger('click');
+    await button(wrapper, '底图：矢量底图').trigger('click');
+    await vi.waitFor(() => expect(optionsPopoverVisible('basemap')).toBe(true));
+    expect(optionsPopover('basemap').get('[aria-label="调整标注和透明度"]').attributes('aria-pressed')).toBe('false');
+    await optionsPopover('basemap').get('[aria-label="调整标注和透明度"]').trigger('click');
     expect(wrapper.getComponent(ElSlider).props('modelValue')).toBe(40);
   });
 
-  it('底图入口再次点击可关闭，外部点击和 Esc 保持打开', async () => {
+  it('底图浮层：再点入口、单击外部、按 Esc 都关闭；拖动地图不关闭', async () => {
     const name = 'basemap';
     const { wrapper } = await readyPage();
     const trigger = button(wrapper, '底图：矢量底图');
-    await trigger.trigger('click');
-    await vi.waitFor(() => expect(optionsPopover(name).exists()).toBe(true));
-    vi.useFakeTimers();
+    const reopen = async () => {
+      await trigger.trigger('click');
+      await vi.waitFor(() => expect(optionsPopoverVisible(name)).toBe(true));
+    };
+    const expectClosed = async () => {
+      expect(trigger.attributes('aria-pressed')).toBe('false');
+      await vi.waitFor(() => expect(optionsPopoverVisible(name)).toBe(false));
+    };
 
-    document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
-    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
-    await optionsPopover(name).trigger('keydown', { key: 'Escape', code: 'Escape' });
-    // 推进 Element 的隐藏延迟，避免在关闭请求尚未处理时就断言
-    await vi.advanceTimersByTimeAsync(1000);
+    await reopen();
+    await trigger.trigger('click');
+    await expectClosed();
+
+    await reopen();
+    pressAndRelease(200);
+    await nextTick();
     expect(trigger.attributes('aria-pressed')).toBe('true');
-    expect(optionsPopover(name).isVisible()).toBe(true);
 
-    await trigger.trigger('click');
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(trigger.attributes('aria-pressed')).toBe('false');
-    expect(optionsPopoverVisible(name)).toBe(false);
+    pressAndRelease(100);
+    await nextTick();
+    await expectClosed();
+
+    await reopen();
+    await optionsPopover(name).trigger('keydown', { key: 'Escape', code: 'Escape' });
+    await expectClosed();
   });
 
   it('第一次就绪时按江苏范围定位一次；画布重建后再次就绪时不再定位，保留用户调整过的视角', async () => {

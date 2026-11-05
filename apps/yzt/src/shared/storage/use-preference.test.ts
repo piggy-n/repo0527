@@ -306,6 +306,7 @@ async function exercise(ctx: ReturnType<typeof setup>) {
 describe('usePreference：开关（ADR 0140）', () => {
   const ITEMS = [
     ['basemap', 'VITE_PREFERENCE_BASEMAP'],
+    ['basemap-labels', 'VITE_PREFERENCE_BASEMAP_LABELS'],
     ['boundaries', 'VITE_PREFERENCE_BOUNDARIES'],
     ['resource-layers', 'VITE_PREFERENCE_RESOURCE_LAYERS'],
     ['resource-symbols', 'VITE_PREFERENCE_RESOURCE_SYMBOLS'],

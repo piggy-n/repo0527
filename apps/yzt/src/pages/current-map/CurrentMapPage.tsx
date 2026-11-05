@@ -201,7 +201,7 @@ export const CurrentMapPage = defineComponent({
       functions.toggle(id, shown);
       stack.activate('functions', true);
     };
-    // 底图入口切换开关，外部点击不关闭
+    // 底图的开关：入口、选了底图、点外部、Esc 都经过这里（ADR 0146）
     const changeBasemapOpen = (open: boolean) => {
       basemapOpen.value = open;
       if (open) {

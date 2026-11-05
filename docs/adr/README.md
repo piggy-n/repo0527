@@ -80,7 +80,7 @@
 | [0066](0066-current-map-ui-refinement.md) | 现状底图的资源操作、紧凑图例与独立底图浮窗 | 已接受（修正 0053、0057、0060，补充 0043、0044） |
 | [0067](0067-map-popup-spacing-and-alignment.md) | 地图浮窗间距、透明度入口与图例对齐 | 已接受（修正 0066） |
 | [0068](0068-basemap-and-boundary-popovers.md) | 底图与行政区独立 Popover | 已接受（修正 0066、0067） |
-| [0069](0069-map-options-popover-interaction.md) | 底图与行政区 Popover 的显示和关闭规则 | 已接受（修正 0068） |
+| [0069](0069-map-options-popover-interaction.md) | 底图与行政区 Popover 的显示和关闭规则 | 已接受（修正 0068；第 3 节的关闭规则由 0146 修改） |
 | [0070](0070-map-functional-tabs-and-detail-stack.md) | 行政区功能标签、独立详情与右侧面板排布 | 已接受（修正 0053、0066、0068、0069） |
 | [0071](0071-map-panel-title-and-wrapped-tabs.md) | 地图工具的标准标题与两列标签 | 已接受（修正 0053、0066、0070） |
 | [0072](0072-map-tab-size-and-selection.md) | 地图功能标签的字号与选中状态 | 已接受（修正 0071） |
@@ -91,7 +91,7 @@
 | [0077](0077-city-dashboard-isolated-rendering.md) | 城市体检驾驶舱独立渲染与资源所有权 | 已接受 |
 | [0078](0078-3d-scope-and-interaction.md) | 三维阶段的范围与交互 | 已接受 |
 | [0079](0079-cesium-view-and-dimension-switch.md) | Cesium 运行时、三维视图与二三维切换 | 已接受（修正 0002 的 Cesium 版本） |
-| [0080](0080-3d-overlays-measure-and-status.md) | 三维的覆盖物、测量、临时拖动与状态栏 | 已接受（三维期间暂停 0048、0049 中三维的识别；第 1 节的只改坐标、等画好由 0082 修正） |
+| [0080](0080-3d-overlays-measure-and-status.md) | 三维的覆盖物、测量、临时拖动与状态栏 | 已接受（三维期间暂停 0048、0049 中三维的识别；第 1 节的只改坐标、等画好由 0082 修正；symbol 的文字由 0146 补上） |
 | [0081](0081-3d-models-scene-content-and-underground.md) | 三维模型：3DT 清单、会话的三维内容与钻地 | 已接受（第 6 节钻地时隐藏白膜由 0084 改为隐藏地面上的模型） |
 | [0082](0082-3d-overlay-live-limit-and-rebuild-wait.md) | 三维覆盖物：只换坐标的点数上限、重建时等新实体画好 | 已接受（修正 0080 第 1 节） |
 | [0083](0083-3d-route-roam.md) | 三维路线漫游：清单里的路线、会话的漫游意图 | 已接受（选工具退出漫游由 0084 改为移动以外的工具；漫游状态按种类区分、路线和步行换手由 0086 补充） |
@@ -143,8 +143,8 @@
 | [0130](0130-city-indicators-monitoring-report.md) | 城市指标用 2026 年监测成果简报的数据 | 已接受（市级基准值的来源部分取代 0105 第 2 条） |
 | [0131](0131-scope-dialog-camera-copy-and-highlight.md) | 城市国土空间监测指标AI计算：范围弹窗的定位、信息量和高亮 | 已接受（修改 0121 的弹窗定位、分析内容和样式） |
 | [0132](0132-resource-min-zoom-standard.md) | 资源的最小显示级别：按单张瓦片 6 MB 实测，.env 开关控制是否限制 | 已接受（修改 0041 的标准和取值；三个资源的层级被 0136 修改，层级写进代码被 0137 修改） |
-| [0133](0133-static-basemap.md) | 内网的静态底图：用本地边界绘制，不用图片 | 已接受（补充 0031、0032 的内网底图目录；默认的地名和配色由 0134 修改） |
-| [0134](0134-static-basemap-switches.md) | 静态底图的默认外观：地名、分色改为代码开关，陆地色换算成不透明 HEX | 已接受（修改 0133 的默认外观） |
+| [0133](0133-static-basemap.md) | 内网的静态底图：用本地边界绘制，不用图片 | 已接受（补充 0031、0032 的内网底图目录；默认的地名和配色由 0134 修改；地名只在二维画由 0146 修改） |
+| [0134](0134-static-basemap-switches.md) | 静态底图的默认外观：地名、分色改为代码开关，陆地色换算成不透明 HEX | 已接受（修改 0133 的默认外观；地名的开关由 0146 改成页面操作） |
 | [0135](0135-overlay-detail-limit.md) | 三维覆盖物的细节上限 | 已接受（补充 0080 第 2 节） |
 | [0136](0136-slow-first-request-min-zoom.md) | 第一次请求很慢的资源也限制最小显示级别 | 已接受（修改 0132 中三个资源的层级） |
 | [0137](0137-resource-min-zoom-deploy-file.md) | 资源的最小显示级别放进部署文件 | 已接受（修改 0132 的层级写进代码） |
@@ -156,6 +156,7 @@
 | [0143](0143-package-split.md) | libs 搬到 packages，抽出 @yzt/theme | 已接受 |
 | [0144](0144-rename-app-and-scope.md) | 应用改名 yzt，公共包前缀改为 @mx | 已接受 |
 | [0145](0145-map-tools-package.md) | 地图的通用交互拆成 @mx/map-tools | 已接受 |
+| [0146](0146-basemap-panel-and-labels.md) | 底图面板默认只有切换按钮，标注改成页面操作，浮层可以点外部和 Esc 关闭，三维画文字 | 已接受（修改 0069 第 3 节、0134 第 1 节、0080 和 0133 里三维不画 symbol，补充 0140） |
 
 ## 模板
 
