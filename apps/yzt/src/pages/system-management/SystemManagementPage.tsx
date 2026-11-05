@@ -1,4 +1,4 @@
-import { MxPanel, MxSplitLayout } from '@yzt/ui';
+import { MxPanel, MxSplitLayout } from '@mx/ui';
 import { defineComponent, type PropType } from 'vue';
 import { ReportListPanel } from '@/features/statistics-report/components/ReportListPanel';
 import { RouteName } from '@/shared/router/route-names';

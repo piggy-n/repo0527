@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { ElButton, ElIcon, ElOption, ElRadioButton, ElRadioGroup, ElSelect } from 'element-plus';
 import { computed, defineComponent, onUnmounted, type PropType, ref, type VNode, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';

@@ -1,4 +1,4 @@
-import { LatestController } from '@yzt/utils';
+import { LatestController } from '@mx/utils';
 import { onScopeDispose, ref, shallowRef, watch } from 'vue';
 import { useSessionStore } from '@/shared/auth/session-store';
 import type { TransferProgress } from '@/shared/file-transfer';

@@ -1,4 +1,4 @@
-import { LatestController } from '@yzt/utils';
+import { LatestController } from '@mx/utils';
 import { computed, type ComputedRef, onScopeDispose, type Ref, ref, shallowRef, watch } from 'vue';
 import { REGION_NODE } from '../compose/board';
 import { blankOf, buildSteps, scopeSummary } from '../compose/build';

@@ -1,6 +1,6 @@
 import { Loading } from '@element-plus/icons-vue';
 import { useVirtualList } from '@vueuse/core';
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { ElIcon } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNode, watch } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';

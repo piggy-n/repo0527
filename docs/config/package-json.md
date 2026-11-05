@@ -12,7 +12,7 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 |---|---|---|
 | 根 `package.json` | workspace 根 | 整个仓库共用的工具（lint、TS）、跨包脚本、pnpm 与 Node 的版本声明 |
 | `apps/yzt/package.json` | 应用包 `yzt` | 应用自己的运行时依赖和构建工具 |
-| `packages/*/package.json` | 内部包 `@yzt/<name>` | 见 [internal-packages.md](internal-packages.md) |
+| `packages/*/package.json` | 内部包 `@mx/<name>` | 见 [internal-packages.md](internal-packages.md) |
 
 判断一个依赖放哪里：只有一个包用到的放那个包；两个及以上的包用到的版本写进 `pnpm-workspace.yaml` 的 `catalog`，各包写 `catalog:`；对整个仓库生效的（oxlint 扫描所有文件）放根目录。往根目录安装依赖要加 `-w`，例如 `pnpm add -Dw oxlint`。
 
@@ -99,7 +99,7 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 | `oxlint` | 精确 | lint 主程序；依赖的 `jsPlugins` 处于 alpha 阶段，不承诺语义化版本 |
 | `oxlint-tsgolint` | 精确 | 类型感知规则，内置 Go 版 TS，要和 TS 一样精确锁定 |
 | `eslint-plugin-boundaries` | `^` | 依赖方向检查，通过 oxlint 的 `jsPlugins` 运行；它对 `handlebars`、`@boundaries/elements` 是精确依赖，这两个包的安全修复要随插件升级 |
-| `eslint-import-resolver-typescript` | `^` | 让 boundaries 按 tsconfig 的 `paths` 解析 `@/`，按符号链接解析 `@yzt/` |
+| `eslint-import-resolver-typescript` | `^` | 让 boundaries 按 tsconfig 的 `paths` 解析 `@/`，按符号链接解析 `@mx/` |
 | `typescript` | catalog，精确 | TS 不遵守语义化版本，小版本也可能带来新的类型错误 |
 | `vitest`、`@vitest/browser-playwright` | catalog | 根目录的 `vitest.shared.ts`（应用和各个包共用的浏览器测试设置）要导入它们 |
 
@@ -149,7 +149,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "@turf/simplify": "^7.4.0",
     "@vue/devtools-api": "^8.2.1",
     "@vueuse/core": "^15.0.0",
-    "@yzt/icons": "workspace:*",
+    "@mx/icons": "workspace:*",
     "axios": "^1.20.0",
     "cesium": "1.146.0",
     "core-js": "^3.50.0",
@@ -208,7 +208,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 
 ### name
 
-`yzt` 和内部包 `@yzt/<name>` 使用同一个作用域，一眼能看出属于同一个项目。脚本里用 `pnpm --filter yzt <脚本>` 指定在哪个包里执行。
+`yzt` 和内部包 `@mx/<name>` 使用同一个作用域，一眼能看出属于同一个项目。脚本里用 `pnpm --filter yzt <脚本>` 指定在哪个包里执行。
 
 ### type: module
 
@@ -241,7 +241,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `vite-plugin-static-copy` | 把 Cesium 的 `Workers`、`Assets`、`ThirdParty` 复制到产物的 `cesium/`，开发服务器和测试时直接从 `node_modules` 提供（ADR 0079 第 1 节），见 [vite-config.md](vite-config.md)"Cesium 的运行时文件"。Cesium 官方的 Vite 示例用的也是它 | 在 `public/` 放一份副本（要入库或在安装后复制）、`vite-plugin-cesium`（第三方插件，通过全局的 `CESIUM_BASE_URL` 设置基础地址） |
 | `sirv` | 开发服务器把 `/3dt/*`、`/design.local/*` 映射到未入库的 `local/`（ADR 0141），见 [local-files.md](local-files.md)。Vite 提供 `public/` 用的也是它 | 手写中间件 |
 | `sass-embedded` | 编译 `*.module.scss`；通过嵌入协议调用原生 Dart Sass，比纯 JS 版 `sass` 快 | `sass`、Less、原生 CSS |
-| `@yzt/icons` | workspace 内部包（ADR 0014）。`workspace:*` 表示始终使用本仓库 `packages/icons` 的当前代码，pnpm 用符号链接连接，见 [internal-packages.md](internal-packages.md) | — |
+| `@mx/icons` | workspace 内部包（ADR 0014）。`workspace:*` 表示始终使用本仓库 `packages/icons` 的当前代码，pnpm 用符号链接连接，见 [internal-packages.md](internal-packages.md) | — |
 | `axios` | HTTP 请求，只在 `shared/http/client.ts` 中使用（ADR 0011） | ky、原生 fetch |
 | `zod` | 接口返回值的校验与类型推断（ADR 0011） | valibot、手写类型守卫 |
 | `idb-keyval` | 偏好存在 IndexedDB，只用 `createStore`、`get`、`set`、`del`，只在 `shared/storage/idb-store.ts` 中使用；一个数据库只放一个仓库（ADR 0042） | localStorage（同步、阻塞主线程、容量小）、idb（完整的封装，用不到事务和索引） |

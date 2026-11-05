@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { featureFilter } from '@maplibre/maplibre-gl-style-spec';
 import type { Geometry } from 'geojson';
-import { type StyleGroup, StyleModel } from '@yzt/map-core';
+import { type StyleGroup, StyleModel } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import { type BatchHighlight, selectionGroup } from './selection-style';
 

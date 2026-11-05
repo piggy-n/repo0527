@@ -1,4 +1,4 @@
-import { LatestController } from '@yzt/utils';
+import { LatestController } from '@mx/utils';
 import { onScopeDispose, reactive, ref, shallowRef } from 'vue';
 import type { FileDownloadTask, useFileDownloads } from '@/features/file-management/composables/useFileDownloads';
 import type {

@@ -1,4 +1,4 @@
-import { transfer, type WorkerHandlers } from '@yzt/utils';
+import { transfer, type WorkerHandlers } from '@mx/utils';
 import { parseB3dmTriangles } from './b3dm';
 import { buildNavGrid } from './heightfield';
 import type { NavWorkerProtocol } from './nav-worker-protocol';

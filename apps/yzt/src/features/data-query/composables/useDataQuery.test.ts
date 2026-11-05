@@ -1,7 +1,7 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { flushPromises, mount } from '@vue/test-utils';
-import type { CameraState, MapInputEvent, MapPointerEvent, ToolView, ViewBounds } from '@yzt/map-core';
-import type { CameraControl, CameraOperation, MapViewport } from '@yzt/map-vue';
+import type { CameraState, MapInputEvent, MapPointerEvent, ToolView, ViewBounds } from '@mx/map-core';
+import type { CameraControl, CameraOperation, MapViewport } from '@mx/map-vue';
 import { HttpResponse, http as mock } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';

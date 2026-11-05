@@ -122,7 +122,7 @@ session[Symbol.dispose]();
 - 不做范围收敛：俯角上限等由各视图应用时处理，再按 `sync` 写回
 - 数值都没变时不通知；同步通知，不合并到微任务：相机本来每帧变一次，事件的 `cause` 要对得上触发它的那次调用
 - 不记录变化的次数：三维能否还原离开时的精确视角（ADR 0020 第 5 条），由三维视图在隐藏期间订阅相机事件、看 `cause` 判断（ADR 0039 第 5 条，原来的 `intentRevision` 已删除）
-- 相机操作（ADR 0038）：`beginOperation()` 开始一次新的操作，中止上一次的信号并返回这一次的；`operation` 读当前的信号；释放时中止。内部用 `@yzt/utils` 的 `LatestController`（ADR 0039 第 2 条）；释放时只中止当前的信号、不释放它，释放后 `beginOperation()` 已经由模型自己的检查抛错。用户开始拖动或缩放、用户发起的定位各是一次操作，由适配器和发起定位的拥有者调用；相机的变化本身不开始、也不中止操作。等待中的定位（如区划定位等边界）拿着开始时的信号，中止了就不再定位。5B 之后曾用相机的变化次数判断，相机没变的操作（目标就是当前视角）和动画的每一帧都会判断错
+- 相机操作（ADR 0038）：`beginOperation()` 开始一次新的操作，中止上一次的信号并返回这一次的；`operation` 读当前的信号；释放时中止。内部用 `@mx/utils` 的 `LatestController`（ADR 0039 第 2 条）；释放时只中止当前的信号、不释放它，释放后 `beginOperation()` 已经由模型自己的检查抛错。用户开始拖动或缩放、用户发起的定位各是一次操作，由适配器和发起定位的拥有者调用；相机的变化本身不开始、也不中止操作。等待中的定位（如区划定位等边界）拿着开始时的信号，中止了就不再定位。5B 之后曾用相机的变化次数判断，相机没变的操作（目标就是当前视角）和动画的每一帧都会判断错
 
 ### SceneContentModel（ADR 0081 第 2 节）
 
@@ -268,7 +268,7 @@ store.clear();
 - 5C.0e 之后发现的回归（5C.0e 引入）：样式失败后，同一轮里收到新的提交（通知还在微任务里）和 `style.load`，激活时追赶触发重建，`setStyle` 抛错。重建时没有离开 `failed`，`failed(style) → failed(engine)` 被转换表拒绝，引擎失败随之丢失（原来的 `#fatal` 不受转换影响），之后的 `style.load` 又把视图带回 `ready`。修复是上面两条，先写了复现的用例
 - 不在表里的转换不执行，报给 `onError`（`MapLibreView 不能从 … 转换到 …`），状态保持不变。调用方都在 MapLibre 的事件处理里，抛错也只会被 `#guard` 接住，所以选择报告。它是第二道防线：上游的判断（如"引擎失败后不再处理 `style.load`"）写错时，状态仍然合法，错误被报告出来
 - 表在代码里只有一份（`TRANSITIONS`，3D.1 起放在 `view/view-lifecycle.ts`，和 `deferred` 一起由入口导出，三维视图共用，ADR 0079），测试另写一份作为判断标准，两份一致才说明实现照表执行
-- 构造时用 `@yzt/utils` 的 `safeReporter` 包装 `onError`：外部的报告器自己抛错时改为打印到控制台，不打断状态转换（之前报告器在 `error` 事件里抛错，加载失败就判定不了，视图一直停在 `initializing`，异常还会冒进 MapLibre 的事件分发）
+- 构造时用 `@mx/utils` 的 `safeReporter` 包装 `onError`：外部的报告器自己抛错时改为打印到控制台，不打断状态转换（之前报告器在 `error` 事件里抛错，加载失败就判定不了，视图一直停在 `initializing`，异常还会冒进 MapLibre 的事件分发）
 - `whenReady()` 的 Promise 内部先挂一个空的 `catch`：没人等待时被拒绝不会报"未处理的拒绝"，等待的人照样收到错误
 - 释放时取消订阅、`map.remove()`，等待中的 `whenReady` 以 `AbortError` 结束
 - 传给 MapLibre 的选项先用 `withoutUndefined` 去掉值为 `undefined` 的键（原因见下文）
@@ -436,7 +436,7 @@ store.clear();
 | 业务图层、底图、边界等拥有者（Manager），从自己的状态推导分组 | 阶段五、六，迁移现状底图和业务图层时 |
 | 框选的批量高亮：按 `guid` 过滤的图层还是 feature-state（选中的单个要素用完整几何的 GeoJSON 分组，ADR 0047） | 5C.6b |
 | Cesium 镜像与相机同步、三维样式的支持清单 | 做三维时（`packages/map-cesium`） |
-| 瓦片数据服务（基于 `@yzt/utils` 的 Worker 通信层；第一个真实使用方是导航网格，ADR 0085） | 接入 MVT 时 |
+| 瓦片数据服务（基于 `@mx/utils` 的 Worker 通信层；第一个真实使用方是导航网格，ADR 0085） | 接入 MVT 时 |
 
 ## 待定问题
 
@@ -461,7 +461,7 @@ store.clear();
 | `createMapEngine` 的注册表 | 工厂 | 不再需要：Cesium 是会话状态的读者，不实现二维的引擎接口（ADR 0020）。map-vue 仍然只用动态 `import()` 加载 map-cesium |
 | `MapService` 聚合十几个 Manager | 外观 | 保留 |
 | `selection/` 拆成 QueryService、Manager、Highlight、Presenter、InteractionController | 职责分离 | 旧代码里拆得最好的部分，作为其他模块的样板 |
-| `MvtTileWorkerPool` + `mvtTileWorker` + `tileRenderer` | 对象池 + 调度 | 算法移到引擎无关的瓦片数据服务（map-core），通信改用 `@yzt/utils` 的有类型通信层，池归实例所有（ADR 0021），见下文"Worker 与缓存" |
+| `MvtTileWorkerPool` + `mvtTileWorker` + `tileRenderer` | 对象池 + 调度 | 算法移到引擎无关的瓦片数据服务（map-core），通信改用 `@mx/utils` 的有类型通信层，池归实例所有（ADR 0021），见下文"Worker 与缓存" |
 | Worker 的鉴权头由主线程每次请求时算好传入 | — | Worker 里没有 localStorage；每次现算也避免了 token 刷新后 Worker 拿着旧 token。新代码里由使用方传入取鉴权头的函数 |
 
 ## 要改进的地方
@@ -528,7 +528,7 @@ store.clear();
 | 坐标转换 | proj4 | CGCS2000 经纬度（EPSG:4490）在 Web 地图上可以近似当作 WGS84 使用；后端给 3 度带高斯投影坐标时用它转换 |
 | 样式类型 | maplibre-gl 自带 | `LayerSpecification`、`SourceSpecification` 等由 maplibre-gl 导出，不自己定义 |
 | 绘制编辑 | terra-draw | 旧项目自己写了 925 行的 `GeometryDrawManager`；terra-draw 通过适配器支持多种地图引擎，先评估能否替代 |
-| Worker 通信 | 手写，放在 `@yzt/utils` | 已实现（ADR 0021、0025，[utils.md](utils.md)）：路线图的学习点是"有类型的 Worker 消息"，不引入 comlink |
+| Worker 通信 | 手写，放在 `@mx/utils` | 已实现（ADR 0021、0025，[utils.md](utils.md)）：路线图的学习点是"有类型的 Worker 消息"，不引入 comlink |
 | 空间索引 | rbush 或 flatbush | 前端要对大量要素做框选、命中检测时再用；MapLibre 的 `queryRenderedFeatures` 够用就不引入 |
 | 分级设色 | simple-statistics + d3-scale-chromatic（或 chroma-js） | 自然断点等统计分级；d3 只安装用到的子包 |
 | WKT 转换 | `@terraformer/wkt` | 后端返回 WKT 时再引入 |
@@ -538,7 +538,7 @@ store.clear();
 
 ## Worker 与缓存
 
-二维由 MapLibre 自己在 Worker 里解析瓦片，并在内存里缓存（`maxTileCacheSize`），不自建渲染 Worker（ADR 0021）。下面说的是三维：旧项目在 Worker 里把 MVT 解码、绘制成图片，作为影像交给 Cesium。Worker 通信层已经在 `@yzt/utils` 实现（[utils.md](utils.md)），瓦片数据服务将基于它。这些缓存算法将移到引擎无关的瓦片数据服务，供三维栅格化和标注、二维图例统计（实测后决定）、以后的三维点选共同使用（ADR 0021）。缓存键、字段并集、共用下载的计数和数据所有权见 ADR 0025；下面的算法是起点，等第一个真实使用方出现后用真实瓦片验证再定。
+二维由 MapLibre 自己在 Worker 里解析瓦片，并在内存里缓存（`maxTileCacheSize`），不自建渲染 Worker（ADR 0021）。下面说的是三维：旧项目在 Worker 里把 MVT 解码、绘制成图片，作为影像交给 Cesium。Worker 通信层已经在 `@mx/utils` 实现（[utils.md](utils.md)），瓦片数据服务将基于它。这些缓存算法将移到引擎无关的瓦片数据服务，供三维栅格化和标注、二维图例统计（实测后决定）、以后的三维点选共同使用（ADR 0021）。缓存键、字段并集、共用下载的计数和数据所有权见 ADR 0025；下面的算法是起点，等第一个真实使用方出现后用真实瓦片验证再定。
 
 ### 旧代码已有的缓存
 

@@ -1,4 +1,4 @@
-import { MapCanvas, provideMap } from '@yzt/map-vue';
+import { MapCanvas, provideMap } from '@mx/map-vue';
 import { defineComponent, type PropType, ref, watch } from 'vue';
 import { type IndicatorApi, indicatorApi } from '@/features/monitoring-indicators/api';
 import type { SessionGuard } from '@/shared/auth/session-guard';

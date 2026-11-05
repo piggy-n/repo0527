@@ -1,5 +1,5 @@
-import type { StyleGroup } from '@yzt/map-core';
-import type { MapContext } from '@yzt/map-vue';
+import type { StyleGroup } from '@mx/map-core';
+import type { MapContext } from '@mx/map-vue';
 import { computed, type ComputedRef, readonly, type Ref, ref } from 'vue';
 import { appConfig } from '@/shared/config/app-config';
 import type { RegionBoundaryLoader } from '@/shared/map/region/region-geometry';

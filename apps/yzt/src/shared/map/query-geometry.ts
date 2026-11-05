@@ -1,7 +1,7 @@
 import { booleanPointInPolygon } from '@turf/boolean-point-in-polygon';
 import { simplify } from '@turf/simplify';
 import type { MultiPolygon, Polygon, Position } from 'geojson';
-import type { PickResult, ScreenBox, ScreenPoint } from '@yzt/map-core';
+import type { PickResult, ScreenBox, ScreenPoint } from '@mx/map-core';
 
 // 发给后端范围查询的几何（ADR 0051 第 4 节）：几何放在 GET 地址里（约 8 KB 封顶），而且必须是有效的多边形
 

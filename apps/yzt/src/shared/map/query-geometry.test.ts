@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { simplify } from '@turf/simplify';
 import type { MultiPolygon, Polygon, Position } from 'geojson';
-import type { PickResult, ScreenPoint } from '@yzt/map-core';
+import type { PickResult, ScreenPoint } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import cityFile from './boundary/data/jiangsu-city.json?raw';
 import {

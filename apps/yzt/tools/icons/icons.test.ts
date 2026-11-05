@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describeReport, isUpToDate, syncIcons } from '@yzt/icons/tools';
+import { describeReport, isUpToDate, syncIcons } from '@mx/icons/tools';
 import { describe, expect, it } from 'vitest';
 import { iconsPaths } from './paths.ts';
 

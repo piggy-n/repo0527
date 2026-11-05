@@ -1,4 +1,4 @@
-import { buildNavigation, type NavBuildProgress, type Navigation, prepareTileset } from '@yzt/map-core';
+import { buildNavigation, type NavBuildProgress, type Navigation, prepareTileset } from '@mx/map-core';
 import { fetchTilesetJson } from './api';
 
 /** 建导航网格（ADR 0085、0086）：读索引、下载最精细一级的瓦片，在 Worker 里构建；测试时换掉 */

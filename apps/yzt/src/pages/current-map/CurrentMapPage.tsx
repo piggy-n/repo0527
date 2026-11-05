@@ -1,6 +1,6 @@
 import { useEventListener } from '@vueuse/core';
-import { BROWSE_TOOL, type ViewKind } from '@yzt/map-core';
-import { CesiumCanvas, MapCanvas, provideMap, type UnsupportedLayer } from '@yzt/map-vue';
+import { BROWSE_TOOL, type ViewKind } from '@mx/map-core';
+import { CesiumCanvas, MapCanvas, provideMap, type UnsupportedLayer } from '@mx/map-vue';
 import { computed, defineComponent, KeepAlive, ref, watch } from 'vue';
 import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureDetailWindow';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';

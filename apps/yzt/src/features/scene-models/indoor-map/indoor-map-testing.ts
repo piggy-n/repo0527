@@ -1,5 +1,5 @@
 // 只供测试使用：手工拼的两层小车站和它的局部系
-import { type Navigation, NavGrid, navigationFrame } from '@yzt/map-core';
+import { type Navigation, NavGrid, navigationFrame } from '@mx/map-core';
 
 const CHUNK = 32;
 const LEVELS = 4;

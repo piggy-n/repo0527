@@ -1,4 +1,4 @@
-import { LatestController } from '@yzt/utils';
+import { LatestController } from '@mx/utils';
 import type { Unsubscribe } from '../events';
 import { ModelEvents } from '../model-events';
 

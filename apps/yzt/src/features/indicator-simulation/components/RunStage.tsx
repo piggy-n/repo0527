@@ -1,6 +1,6 @@
 import { Back, CircleClose, Operation, VideoPause, VideoPlay } from '@element-plus/icons-vue';
-import { MapCanvas } from '@yzt/map-vue';
-import { MxPanel, MxSplitLayout } from '@yzt/ui';
+import { MapCanvas } from '@mx/map-vue';
+import { MxPanel, MxSplitLayout } from '@mx/ui';
 import { ElButton, ElMessage, ElPopconfirm, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, onBeforeUnmount, type PropType, ref, watch } from 'vue';
 import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';

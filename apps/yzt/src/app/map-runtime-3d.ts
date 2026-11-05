@@ -1,5 +1,5 @@
 import 'cesium/Build/Cesium/Widgets/CesiumWidget/CesiumWidget.css';
-import { setCesiumBaseUrl } from '@yzt/map-cesium';
+import { setCesiumBaseUrl } from '@mx/map-cesium';
 
 let configured = false;
 

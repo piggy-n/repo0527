@@ -1,4 +1,4 @@
-import type { ScreenPoint } from '@yzt/map-core';
+import type { ScreenPoint } from '@mx/map-core';
 
 /** 城市标注的三种写法：名称和值、只有名称、只有圆点（悬停看名称和值） */
 export type LabelLevel = 'full' | 'name' | 'dot';

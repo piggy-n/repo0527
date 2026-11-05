@@ -1,4 +1,4 @@
-import { abortReason } from '@yzt/utils';
+import { abortReason } from '@mx/utils';
 
 /** 推演用的时钟：读时间、等待；测试注入手动推进的时钟 */
 export interface Clock {

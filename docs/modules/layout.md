@@ -10,7 +10,7 @@ app/layout/
 ├─ AppLayout.tsx          顶部栏 + 内容区（RouterView）；内容区占满剩余高度，页面在其中滚动
 ├─ menus.ts               导航配置、按角色过滤、选中判断（纯函数）
 ├─ message-routes.ts      消息指向的页面（纯函数）
-├─ _breakpoints.scss      顶部栏专用的两档断点（窄屏断点在 @yzt/ui）
+├─ _breakpoints.scss      顶部栏专用的两档断点（窄屏断点在 @mx/ui）
 ├─ images/                顶部栏背景与 Logo（UI 提供的 2x webp）
 └─ components/
    ├─ AppHeader.tsx       顶部栏
@@ -87,7 +87,7 @@ app/layout/
 | < 1200 | 导航收进"☰ 菜单"下拉（结构见下文） | — |
 
 - 1680、1440 两档只和顶部栏的内容有关，在 `_breakpoints.scss`，由 `HeaderNav` 和 `AppHeader` 的样式共用
-- 1200 是全应用共用的窄屏断点，分栏布局的侧栏也在这里收进抽屉，定义在 `@yzt/ui`，样式中用 `@use '@yzt/ui'` 引用（见 [ui.md](ui.md)）
+- 1200 是全应用共用的窄屏断点，分栏布局的侧栏也在这里收进抽屉，定义在 `@mx/ui`，样式中用 `@use '@mx/ui'` 引用（见 [ui.md](ui.md)）
 - 媒体查询用区间写法 `(width < 1680px)`，原因见 [ui.md](ui.md) 的"窄屏断点"
 - 更窄（设计范围以外）时，Logo 区域允许收缩并裁掉右侧，保证菜单和用户区可见。窄屏时导航区是 `flex: 1 0 auto`：只写 `flex: 1` 时基准是 0，375 宽时"菜单"溢出到 Logo 上、白字落在 Logo 的白底上看不见（5D.8 验收时发现，换 Logo 素材以后才出现）
 - 断点最初按旧 Logo（344px 宽）量出，换成 UI 的新素材后重新测量，三档仍然成立，断点不变；以后更换 Logo、增减导航项或顶栏右侧的按钮时要重新测量
@@ -147,7 +147,7 @@ UI 在 2026-09-30 提供（此前用旧项目的 PNG 转 webp 占位）：
 |---|---|---|
 | 背景 | `images/header-background.webp` | 3840×192（2x），28 KB |
 | Logo | `images/header-logo.webp` | 810×190（2x，带透明），14 KB；显示为 320×75 |
-| 导航图标 | `src/assets/icons/nav-*.svg` | 20×20，由 `@yzt/icons` 规范化为单色（跟随文字颜色） |
+| 导航图标 | `src/assets/icons/nav-*.svg` | 20×20，由 `@mx/icons` 规范化为单色（跟随文字颜色） |
 | 下拉箭头 | `src/assets/icons/nav-arrow-color.svg` | 16×10，带渐变，文件名以 `-color` 结尾，保留原色 |
 
 两个图标做了手工处理（在 UI 原稿上修改后交给图标工具规范化）：

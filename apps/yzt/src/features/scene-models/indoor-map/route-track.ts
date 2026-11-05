@@ -8,7 +8,7 @@ import {
   type RoutePath,
   type RoutePoint,
   type WalkPlayer
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import { type IndoorMap, type MapPlayer, toPlane } from './indoor-map';
 
 // 路线漫游时室内地图上的路线和人（ADR 0097 第 6 节）：路线换到导航网格的局部系，人按走过的米数从路线上取

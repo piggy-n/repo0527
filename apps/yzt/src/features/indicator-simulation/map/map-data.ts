@@ -1,4 +1,4 @@
-import type { ViewBounds } from '@yzt/map-core';
+import type { ViewBounds } from '@mx/map-core';
 import type { Feature, FeatureCollection, MultiPolygon, Point, Polygon, Position } from 'geojson';
 import { polygonsOf } from '@/shared/map/area/area-geometry';
 import { JIANGSU_BOUNDS } from '@/shared/map/jiangsu';

@@ -1,5 +1,5 @@
 import { Back } from '@element-plus/icons-vue';
-import { useMapOverlay } from '@yzt/map-vue';
+import { useMapOverlay } from '@mx/map-vue';
 import { ElButton, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { defineComponent, type PropType, ref } from 'vue';
 import type { SimulationResult } from '../composables/useSimulationResult';

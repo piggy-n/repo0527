@@ -1,5 +1,5 @@
-import type { ScreenPoint } from '@yzt/map-core';
-import type { OverlayPadding } from '@yzt/map-vue';
+import type { ScreenPoint } from '@mx/map-core';
+import type { OverlayPadding } from '@mx/map-vue';
 import { regionPath } from '../region/region-catalog';
 import type { LocationRegion } from './useLocationPoint';
 

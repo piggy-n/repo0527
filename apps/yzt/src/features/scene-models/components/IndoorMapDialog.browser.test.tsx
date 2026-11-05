@@ -1,5 +1,5 @@
 import 'element-plus/dist/index.css';
-import type { NavPoint } from '@yzt/map-core';
+import type { NavPoint } from '@mx/map-core';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { userEvent } from 'vitest/browser';

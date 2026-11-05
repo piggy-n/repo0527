@@ -1,4 +1,4 @@
-import type { PanModifier } from '@yzt/map-core';
+import type { PanModifier } from '@mx/map-core';
 
 /** 临时拖动地图的键（ADR 0056）：交给工具声明的修饰键，和它在提示里的写法 */
 export interface PanKey {

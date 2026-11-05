@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue';
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { ElButton, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, type PropType, ref } from 'vue';
 import { estimate } from '../compose/estimate';

@@ -1,6 +1,6 @@
 // @vitest-environment node
-import type { CameraState, LngLat, MapInputEvent, PickResult, ToolView } from '@yzt/map-core';
-import type { CameraControl, CameraOperation, MapContext, MapViewState } from '@yzt/map-vue';
+import type { CameraState, LngLat, MapInputEvent, PickResult, ToolView } from '@mx/map-core';
+import type { CameraControl, CameraOperation, MapContext, MapViewState } from '@mx/map-vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, shallowRef } from 'vue';
 import countyFile from '../boundary/data/jiangsu-county.json?raw';

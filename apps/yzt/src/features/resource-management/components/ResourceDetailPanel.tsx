@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowLeft, ArrowUp, EditPen } from '@element-plus/icons-vue';
 import { useMediaQuery } from '@vueuse/core';
-import { MxPanel, MxSection, MxTitle } from '@yzt/ui';
+import { MxPanel, MxSection, MxTitle } from '@mx/ui';
 import {
   ElAlert,
   ElButton,

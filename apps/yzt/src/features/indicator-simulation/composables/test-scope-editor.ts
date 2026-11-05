@@ -1,7 +1,7 @@
 // 只供测试：假的地图上下文和同一线程里的分析 Worker，建范围弹窗的拥有者
-import type { CameraState, ScreenPoint, ViewBounds } from '@yzt/map-core';
-import type { CameraControl, MapViewport } from '@yzt/map-vue';
-import { serveWorker } from '@yzt/utils';
+import type { CameraState, ScreenPoint, ViewBounds } from '@mx/map-core';
+import type { CameraControl, MapViewport } from '@mx/map-vue';
+import { serveWorker } from '@mx/utils';
 import { type Ref, ref, shallowRef } from 'vue';
 import { createAreaAnalyzer } from '@/shared/map/area/area-analyzer';
 import { areaWorkerHandlers } from '@/shared/map/area/area-worker-handlers';

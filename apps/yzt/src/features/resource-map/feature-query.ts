@@ -9,7 +9,7 @@ import type {
   ToolView,
   ViewBounds,
   ViewKind
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import { lngLatAt, pixelSizeAt, queryGeometry, screenBoxPolygon } from '@/shared/map/query-geometry';
 import { clipToScope, intersectsScope, type RegionScope, scopeContains } from '@/shared/map/region/region-scope';
 import { type FeatureRecord, isFeatureGuid } from './api';

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { cumulativeDistances, geodesicArea, type LngLat, lineLength } from '@yzt/map-core';
+import { cumulativeDistances, geodesicArea, type LngLat, lineLength } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import {
   centroid,

@@ -1,6 +1,6 @@
 import { Download, Loading, Minus, Plus, Warning } from '@element-plus/icons-vue';
 import { useElementSize } from '@vueuse/core';
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { ElButton, ElDialog, ElIcon, ElTag } from 'element-plus';
 import { defineComponent, type PropType, ref, watch } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';

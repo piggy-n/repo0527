@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { StyleImage } from '@yzt/map-core';
+import type { StyleImage } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import {
   BLANK_PATTERN_IMAGE_ID,

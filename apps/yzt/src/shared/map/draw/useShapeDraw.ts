@@ -1,6 +1,6 @@
 import { useEventListener } from '@vueuse/core';
-import type { LngLat, MapInputEvent, MapTool, ScreenBox, ScreenPoint, StyleGroup, ToolView } from '@yzt/map-core';
-import type { MapContext } from '@yzt/map-vue';
+import type { LngLat, MapInputEvent, MapTool, ScreenBox, ScreenPoint, StyleGroup, ToolView } from '@mx/map-core';
+import type { MapContext } from '@mx/map-vue';
 import { computed, type ComputedRef, getCurrentScope, type ShallowRef, shallowReadonly, shallowRef, watch } from 'vue';
 import {
   type BoxGesture,

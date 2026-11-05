@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils';
-import { provideMap } from '@yzt/map-vue';
+import { provideMap } from '@mx/map-vue';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { JIANGSU_CAMERA } from '../jiangsu';

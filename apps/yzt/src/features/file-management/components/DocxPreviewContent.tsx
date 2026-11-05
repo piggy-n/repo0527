@@ -1,4 +1,4 @@
-import { LatestController } from '@yzt/utils';
+import { LatestController } from '@mx/utils';
 import { defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
 import type { FilePreviewContent } from '../composables/useFilePreview';
 import { documentTokenStyles, renderDocx } from '../docx-preview';

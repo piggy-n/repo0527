@@ -121,7 +121,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 ## 三维画布 `<CesiumCanvas>`
 
 - 和 `<MapCanvas>` 并列放在页面里，外层绝对定位叠在同一块区域上（页面的根元素要相对定位）；当前显示的是二维时 `visibility: hidden`
-- 第一次切到三维时才加载：同时动态导入 `@yzt/map-cesium` 和调用注入的运行时加载函数（`MAP_RUNTIME`），都到了再创建 `CesiumView`；之后一直保留（ADR 0020 第 4 条）
+- 第一次切到三维时才加载：同时动态导入 `@mx/map-cesium` 和调用注入的运行时加载函数（`MAP_RUNTIME`），都到了再创建 `CesiumView`；之后一直保留（ADR 0020 第 4 条）
 - 预加载（ADR 0091）：挂载时显示的是二维，就等上下文的 `whenSettled`（二维第一次画面稳定），那时三维视图还没有、也没在加载就调用注入的 `MAP_RUNTIME_PRELOAD`（`'3d'`），不等结果；等待期间切到三维、卸载时作废。什么时候真的加载（浏览器空闲、省流量模式跳过）由 app 决定，没有 provide 时不预加载
 - 视图总是以暂停状态创建，挂上后由 `shouldRun('3d')` 决定是否恢复：加载期间用户可能已经切回二维、页面也可能被停用
 - 加载失败（分块下载失败、没有注入运行时）时报告错误并挂上 `FailedView`：上下文照常显示引擎失败，`retry()` 重新加载；加载期间卸载时，加载到的视图直接释放、不挂上
@@ -143,7 +143,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 | `sceneStatus` | 当前视图报告的三维内容状态（按瓦片集 ID 的 `loading`、`ready` 带建议的相机、`failed` 带错误，ADR 0081）：只在当前视图是三维时有内容，二维、没有视图时是空表；切换、替换视图后取新视图的报告 |
 | `roamStatus` | 当前视图报告的漫游状态，按 `kind` 区分：路线的进度（ADR 0083）、步行的阶段、人称、提示和人的位置（ADR 0086、0087、0090）；没有在漫游、二维、没有视图时为 null |
 | `retry()` | 引擎失败后重新创建视图；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
-| `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@yzt/utils` 的 `abortReason`）。等待结束、返回之前 `signal` 中止或视图被卸下，同样以中止结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪。定位不用它，用相机操作 |
+| `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@mx/utils` 的 `abortReason`）。等待结束、返回之前 `signal` 中止或视图被卸下，同样以中止结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪。定位不用它，用相机操作 |
 | `whenSettled(signal?)` | 等到视图下一次画面稳定（视图的 `settle` 事件：没有动画，视野里的瓦片都已画出），用于加载耗时的标记（5E.1，见 [perf.md](perf.md)）。没有视图时等视图挂上；和 `whenReady` 一样绑定具体的视图实例，它被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束，`signal` 中止时以它的原因结束；结束时取消订阅。在 Promise 外面订阅，订阅本身出错（视图已释放）时以这个错误结束 |
 | `useCamera()` | 在调用方的作用域里订阅相机，作用域销毁时取消；不在组件 setup 或 `effectScope` 里调用时抛错 |
 | `runCameraOperation(action)` | 用户发起的定位（默认视角、坐标定位等）都从这里执行，等于 `beginCameraOperation().run(action)` |
@@ -243,7 +243,7 @@ const padding = useMap().overlayPadding();
 
 ## 错误上报
 
-- `provideMap` 在入口把 `onError`（没传时用注入的 `MAP_ERROR_REPORTER`，也没有时打印到控制台）用 `@yzt/utils` 的 `safeReporter` 包一层，map-vue 内部（提交器、卸载时的释放、画布、交给视图的报告器）都经由它上报
+- `provideMap` 在入口把 `onError`（没传时用注入的 `MAP_ERROR_REPORTER`，也没有时打印到控制台）用 `@mx/utils` 的 `safeReporter` 包一层，map-vue 内部（提交器、卸载时的释放、画布、交给视图的报告器）都经由它上报
 - 外部的报告器自己抛错时，改为打印到控制台（连同原始错误），不打断提交、视图的状态转换和卸载。之前的问题：报告器在卸载路径上抛错会让后续的卸载钩子都不执行；在挂载时的提交里抛错会让挂载失败
 - 视图（`MapLibreView`）自己也包了一层：map-core 可以脱离 map-vue 单独使用
 
@@ -291,7 +291,7 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 | `overlay.browser.test.tsx` | 真实的布局和 MapLibre（ADR 0040）：登记的面板按实际尺寸算进留白（左 352），不传 `padding` 的 `fitBounds` 把范围放在面板右边的区域里、并贴满可视区域的一边。jsdom 里元素的尺寸都是 0，5A.3 起这一点只在开发页手动验证过 | Chromium 无界面版 |
 
 - 推导失败的用例用 `await expect(nextTick()).resolves.toBeUndefined()` 等待：异常冒出侦听器时，失败落在断言上，而不是测试本身报错
-- `MapCanvas.test.tsx` 注入实现 `MapLike` 的假地图（`MapLike` 等类型从 `@yzt/map-core` 导出），走真实的 `MapLibreView`；`context.test.ts` 用一个实现 `MapView` 的假视图，测 `MapLibreView` 本身覆盖不到的情况
+- `MapCanvas.test.tsx` 注入实现 `MapLike` 的假地图（`MapLike` 等类型从 `@mx/map-core` 导出），走真实的 `MapLibreView`；`context.test.ts` 用一个实现 `MapView` 的假视图，测 `MapLibreView` 本身覆盖不到的情况
 - 画布与上下文逐一改坏 20 处，19 处由断言发现。"卸载时先卸下再释放"改成先释放后卸下测不出来：两步都是同步的，等待者的回调在微任务里才执行，侦听器也在之后才运行，看到的都是最终结果，这个顺序不影响行为。"卸下时不取消订阅"起初也没有被发现：`MapLibreView` 释放时会清空自己的监听，碰巧不出问题；`MapView` 接口并不保证这一点，补了 `context.test.ts` 后由断言发现
 - 5A 之后的三处修复（`whenReady` 绑定视图实例、初始定位改为第一次就绪时、错误上报的包装）逐一改坏 9 处，起初 2 处没被发现："返回前不确认仍是当前视图"当时以为测不到（5B 之后找到了稳定的测法，见上）；"初始定位不停止侦听"是页面测试的场景不对（就绪后收到 `error` 只上报、状态不变，侦听器根本没被触发），改成画布重建后再次就绪才测出来
 - 失败原因与重试（连同 map-core 的 `failure` 和 `shared/map` 的提示）逐一改坏 14 处，全部发现；"重试时不释放旧视图"起初是挂上新视图时抛错、不是断言失败，等待重试的那一步改成 `resolves` 断言后由断言发现

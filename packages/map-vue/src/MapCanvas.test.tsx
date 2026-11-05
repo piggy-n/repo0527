@@ -13,8 +13,8 @@ import type {
   MapSubscription,
   RenderedFeatureLike,
   StyleGroup
-} from '@yzt/map-core';
-import { MapLibreView } from '@yzt/map-core';
+} from '@mx/map-core';
+import { MapLibreView } from '@mx/map-core';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, inject, KeepAlive, nextTick, ref, type ShallowRef } from 'vue';

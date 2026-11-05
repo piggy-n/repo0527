@@ -1,5 +1,5 @@
-import { MapCanvas, provideMap } from '@yzt/map-vue';
-import { MxPanel, MxSplitLayout } from '@yzt/ui';
+import { MapCanvas, provideMap } from '@mx/map-vue';
+import { MxPanel, MxSplitLayout } from '@mx/ui';
 import { defineComponent, ref, watch } from 'vue';
 import { aiResultGroup, resultBounds } from '@/features/ai-chat/ai-result-layer';
 import { hasPanelContent } from '@/features/ai-chat/chat-result';

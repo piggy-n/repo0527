@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { EMPTY_SCENE_CONTENT, type SceneContent, SceneContentModel, type TilesetLayer } from '@yzt/map-core';
+import { EMPTY_SCENE_CONTENT, type SceneContent, SceneContentModel, type TilesetLayer } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import { nextTick, ref } from 'vue';
 import { SceneBinder } from './scene-binder';

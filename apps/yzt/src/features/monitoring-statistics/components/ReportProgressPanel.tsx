@@ -1,5 +1,5 @@
 import { CircleCheck, CircleClose, Clock, Loading, Refresh, RefreshRight } from '@element-plus/icons-vue';
-import { MxPanel } from '@yzt/ui';
+import { MxPanel } from '@mx/ui';
 import { ElButton, ElIcon, ElProgress } from 'element-plus';
 import { computed, defineComponent, type PropType } from 'vue';
 import type { ReportActivity, StatisticsReport } from '../composables/useStatisticsReport';

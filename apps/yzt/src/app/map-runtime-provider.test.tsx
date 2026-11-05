@@ -5,7 +5,7 @@ import {
   MAP_RUNTIME_PRELOAD,
   type MapRuntimeLoader,
   type MapRuntimePreloader
-} from '@yzt/map-vue';
+} from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, inject } from 'vue';
 import { reportMapError } from '@/shared/map/backend-request';

@@ -1,5 +1,5 @@
-import { geodesicDistance, type LngLat, type WalkView } from '@yzt/map-core';
-import type { MapContext } from '@yzt/map-vue';
+import { geodesicDistance, type LngLat, type WalkView } from '@mx/map-core';
+import type { MapContext } from '@mx/map-vue';
 import { computed, type ComputedRef } from 'vue';
 import {
   belowSurface,

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { ViewKind } from '@yzt/map-core';
+import type { ViewKind } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import { effectScope, shallowRef } from 'vue';
 import { LoadTrace, type Timeline } from '../perf/load-trace';

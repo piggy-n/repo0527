@@ -1,5 +1,5 @@
-import type { ViewKind } from '@yzt/map-core';
-import { useMap } from '@yzt/map-vue';
+import type { ViewKind } from '@mx/map-core';
+import { useMap } from '@mx/map-vue';
 import { ElTooltip } from 'element-plus';
 import { defineComponent, type PropType, type VNode } from 'vue';
 import { type IconName, SvgIcon } from '../../icons/SvgIcon';

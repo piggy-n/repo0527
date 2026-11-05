@@ -1,5 +1,5 @@
 {
-  "name": "@yzt/map-core",
+  "name": "@mx/map-core",
   "private": true,
   "type": "module",
   "exports": {
@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@maplibre/maplibre-gl-style-spec": "catalog:",
-    "@yzt/utils": "workspace:*",
+    "@mx/utils": "workspace:*",
     "geographiclib-geodesic": "catalog:",
     "nanoevents": "catalog:"
   },

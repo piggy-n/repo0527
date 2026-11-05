@@ -1,6 +1,6 @@
 import { booleanPointInPolygon } from '@turf/boolean-point-in-polygon';
 import type { MultiPolygon, Polygon, Position } from 'geojson';
-import type { LngLat, ViewBounds } from '@yzt/map-core';
+import type { LngLat, ViewBounds } from '@mx/map-core';
 import { z } from 'zod';
 import cityUrl from '../boundary/data/jiangsu-city.json?url';
 import countyUrl from '../boundary/data/jiangsu-county.json?url';

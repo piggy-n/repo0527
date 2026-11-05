@@ -11,7 +11,7 @@
 | 组件写法 | Vue 3 + TSX，不用 `.vue` 单文件组件 | 0001 | [code-style](../code-style.md) |
 | TypeScript 与 lint | 只用 TS 7，不引入依赖 TS JS API 的工具；oxlint + oxlint-tsgolint；规则只分 `error`、`off`；不开 `incremental` | 0003、0006、0009 | [oxlintrc](../config/oxlintrc.md)、[tsconfig](../config/tsconfig.md) |
 | 模块边界 | `pages → features → shared → packages`，lint 检查；包单入口，不读 env、store、router | 0004、0006、0143 | [oxlintrc](../config/oxlintrc.md) |
-| 内部包 | `packages/*` 的 `exports` 直接指向源码，不单独构建、不发布；每个包自己跑测试，`pnpm test` 逐个包串行；共用依赖的版本放 catalog，要和应用共用一份的写 peer；`shared/map` 暂不拆 | 0014、0143 | [internal-packages](../config/internal-packages.md) |
+| 内部包 | `packages/*` 的 `exports` 直接指向源码，不单独构建、不发布；前缀 `@mx/`，应用叫 `yzt`（旧文档里的 `@yzt/`、`apps/web` 是同一个东西）；每个包自己跑测试，`pnpm test` 逐个包串行；共用依赖的版本放 catalog，要和应用共用一份的写 peer；`shared/map` 暂不拆 | 0014、0143、0144 | [internal-packages](../config/internal-packages.md) |
 | 依赖维护 | 一般用 `^`，不遵守语义化版本的精确锁定；发布满 3 天才能安装；大版本一次升一个 | 0005 | [package-json](../config/package-json.md)、[pnpm-workspace](../config/pnpm-workspace.md) |
 | CI 与冒烟 | GitHub Actions 全量跑，push 到 main 触发；生产构建上用本地固定接口做冒烟 | 0005、0040、0065 | [ci-workflow](../config/ci-workflow.md) |
 | 本地验证 | 按影响范围和风险分四级，只跑相关测试；改坏验证只用于修 bug 和关键逻辑 | 0139 | `AGENTS.md`"验证分级" |
@@ -39,7 +39,7 @@
 | 主题 | 现在的结论 | ADR | 文档 |
 |---|---|---|---|
 | 字体与系统名称 | 普惠体 3.0 自托管、不入库，只放 `public/fonts/`；系统名称用 SVG 轮廓 | 0012、0013、0062 | [fonts](../design/fonts.md)、[system-title](../modules/system-title.md) |
-| 布局组件 | `@yzt/ui` 的 `Mx*`；浅灰底标题栏复用 `MxPanel headerTone="muted"`；分栏布局可以宽屏收起，把手由页面给出 | 0016、0076、0100、0101 | [ui](../modules/ui.md)、[page-layout](../design/page-layout.md) |
+| 布局组件 | `@mx/ui` 的 `Mx*`；浅灰底标题栏复用 `MxPanel headerTone="muted"`；分栏布局可以宽屏收起，把手由页面给出 | 0016、0076、0100、0101 | [ui](../modules/ui.md)、[page-layout](../design/page-layout.md) |
 | 拖动排序 | `useSortableList` 包 SortableJS，顺序交给拥有者，只能按住手柄拖 | 0054 | [composables](../modules/composables.md) |
 | 文件传输 | `shared/file-transfer` 负责上传进度、二进制下载、文件名和取消；预览按格式加载 | 0075 | [file-transfer](../modules/file-transfer.md)、[file-management](../modules/file-management.md) |
 | 对话头像 | `shared/chat-avatar` 的 `ChatAvatar`，AI 对话和指标 AI 计算共用 | 0109 | [chat-avatar](../modules/chat-avatar.md) |

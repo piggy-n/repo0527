@@ -1,4 +1,4 @@
-import { LatestController } from '@yzt/utils';
+import { LatestController } from '@mx/utils';
 import { onScopeDispose, type Ref, shallowRef } from 'vue';
 import { sharedRegionBoundaryLoader } from '@/shared/map/region/region-geometry';
 import { type Calculator, createCalculator } from '../model/calculator';

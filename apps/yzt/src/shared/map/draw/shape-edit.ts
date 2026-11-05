@@ -1,6 +1,6 @@
 import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Feature, MultiPolygon, Position } from 'geojson';
-import type { LngLat, ScreenPoint, StyleGroup } from '@yzt/map-core';
+import type { LngLat, ScreenPoint, StyleGroup } from '@mx/map-core';
 
 // 逐点编辑的纯函数（ADR 0122）：找按到的节点、移动、插入、删除，以及编辑用的样式分组
 

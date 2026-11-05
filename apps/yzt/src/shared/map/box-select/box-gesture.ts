@@ -1,4 +1,4 @@
-import type { ScreenBox, ScreenPoint } from '@yzt/map-core';
+import type { ScreenBox, ScreenPoint } from '@mx/map-core';
 
 // 拖动框选的手势（ADR 0049 第 1 节）：纯函数，工具的拥有者持有状态、按指针事件推进
 

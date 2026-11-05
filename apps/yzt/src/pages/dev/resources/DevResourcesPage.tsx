@@ -1,6 +1,6 @@
 import type { FilterSpecification, LayerSpecification, SourceSpecification } from '@maplibre/maplibre-gl-style-spec';
-import type { CameraState, MapLibreMapOptions, StyleGroup, ViewBounds } from '@yzt/map-core';
-import { MapCanvas, provideMap } from '@yzt/map-vue';
+import type { CameraState, MapLibreMapOptions, StyleGroup, ViewBounds } from '@mx/map-core';
+import { MapCanvas, provideMap } from '@mx/map-vue';
 import { ElButton, ElCheckbox, ElInputNumber, ElSwitch } from 'element-plus';
 // oxlint-disable-next-line no-restricted-imports -- 开发页实测要用原生地图的 idle、error 事件和 setWorkerCount，开发页不进生产构建
 import { type ErrorEvent, Map as MapLibreMap, setWorkerCount } from 'maplibre-gl';

@@ -1,5 +1,5 @@
 import { DOMWrapper, flushPromises, mount } from '@vue/test-utils';
-import { provideMap } from '@yzt/map-vue';
+import { provideMap } from '@mx/map-vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';

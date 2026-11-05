@@ -1,5 +1,5 @@
 import { useMediaQuery } from '@vueuse/core';
-import { COMPACT_MEDIA_QUERY } from '@yzt/ui';
+import { COMPACT_MEDIA_QUERY } from '@mx/ui';
 import { computed, type ComputedRef, ref } from 'vue';
 import { type MapSide, visibleSides } from './panel-group';
 

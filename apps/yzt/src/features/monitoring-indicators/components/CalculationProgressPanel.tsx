@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, FullScreen, Loading, Refresh, ScaleToOriginal } from '@element-plus/icons-vue';
-import { MxPanel } from '@yzt/ui';
+import { MxPanel } from '@mx/ui';
 import { ElButton, ElIcon, ElMessage, ElProgress, ElTable, ElTableColumn, ElTag } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, watch } from 'vue';
 import {

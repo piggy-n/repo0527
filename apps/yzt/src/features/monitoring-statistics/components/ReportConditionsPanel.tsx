@@ -1,4 +1,4 @@
-import { MxPanel } from '@yzt/ui';
+import { MxPanel } from '@mx/ui';
 import { ElDatePicker, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSkeleton } from 'element-plus';
 import { defineComponent, type PropType, type VNode } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';

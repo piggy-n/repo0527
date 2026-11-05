@@ -1,5 +1,5 @@
 import { ArrowLeft, Clock, Delete, Plus, Promotion } from '@element-plus/icons-vue';
-import { MxPanel, MxTitle } from '@yzt/ui';
+import { MxPanel, MxTitle } from '@mx/ui';
 import { ElButton, ElInput, ElMessage, ElMessageBox } from 'element-plus';
 import { defineComponent, onBeforeUnmount, type PropType, ref } from 'vue';
 import { statsText } from '../chat-result';

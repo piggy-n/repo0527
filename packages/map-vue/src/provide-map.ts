@@ -1,5 +1,5 @@
-import { BROWSE_TOOL, MapSession, type MapSessionOptions, type MapTool } from '@yzt/map-core';
-import { safeReporter } from '@yzt/utils';
+import { BROWSE_TOOL, MapSession, type MapSessionOptions, type MapTool } from '@mx/map-core';
+import { safeReporter } from '@mx/utils';
 import { getCurrentInstance, inject, onBeforeMount, onBeforeUnmount, onUnmounted, provide } from 'vue';
 import { INTERNAL_MAP_CONTEXT, type MapContext, MapContextState } from './context';
 import { type OverlayOptions, resolveOverlayOptions } from './overlay';

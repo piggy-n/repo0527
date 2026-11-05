@@ -1,5 +1,5 @@
 import { RefreshLeft, Search } from '@element-plus/icons-vue';
-import { MxPanel, MxTitle } from '@yzt/ui';
+import { MxPanel, MxTitle } from '@mx/ui';
 import { ElButton, ElCheckbox, ElInput, ElRadioButton, ElRadioGroup, ElTag } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNodeChild } from 'vue';
 import type { CategoryId } from '@/shared/city-indicators/catalog';

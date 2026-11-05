@@ -1,7 +1,7 @@
 import { Close, Minus, Plus, Rank, RefreshLeft, VideoPause, VideoPlay } from '@element-plus/icons-vue';
-import { type WalkNotice, type WalkView, WALK_VIEWS } from '@yzt/map-core';
-import { useMapOverlay } from '@yzt/map-vue';
-import { MxPanel } from '@yzt/ui';
+import { type WalkNotice, type WalkView, WALK_VIEWS } from '@mx/map-core';
+import { useMapOverlay } from '@mx/map-vue';
+import { MxPanel } from '@mx/ui';
 import { ElButton, ElIcon, ElProgress, ElRadioButton, ElRadioGroup, ElTooltip } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';

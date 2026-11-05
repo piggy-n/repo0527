@@ -1,4 +1,4 @@
-import { MxPanel, MxTitle } from '@yzt/ui';
+import { MxPanel, MxTitle } from '@mx/ui';
 import { ElButton, ElCheckbox, ElDatePicker, ElMessage, ElMessageBox } from 'element-plus';
 import { defineComponent, h, onBeforeUnmount, type PropType } from 'vue';
 import type { CalculationEntry, StatisticsCalculation } from '../composables/useStatisticsCalculation';

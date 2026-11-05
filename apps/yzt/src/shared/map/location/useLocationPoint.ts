@@ -1,6 +1,6 @@
-import type { LngLat, MapInputEvent, MapTool, ScreenPoint, ToolView } from '@yzt/map-core';
-import type { MapContext } from '@yzt/map-vue';
-import { LatestController } from '@yzt/utils';
+import type { LngLat, MapInputEvent, MapTool, ScreenPoint, ToolView } from '@mx/map-core';
+import type { MapContext } from '@mx/map-vue';
+import { LatestController } from '@mx/utils';
 import { getCurrentScope, onScopeDispose, type ShallowRef, shallowReadonly, shallowRef, watch } from 'vue';
 import { findRegion, type Region } from '../region/region-catalog';
 import { type RegionBoundaryLoader, sharedRegionBoundaryLoader } from '../region/region-geometry';

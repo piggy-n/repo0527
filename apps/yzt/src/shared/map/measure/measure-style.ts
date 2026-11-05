@@ -1,6 +1,6 @@
 import type { FilterSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Feature, FeatureCollection, Geometry, Position } from 'geojson';
-import type { LngLat, MeasureState, StyleGroup } from '@yzt/map-core';
+import type { LngLat, MeasureState, StyleGroup } from '@mx/map-core';
 
 const SOURCE = 'measure';
 

@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, Download, FullScreen, ScaleToOriginal } from '@element-plus/icons-vue';
-import { MxPanel, MxTitle } from '@yzt/ui';
+import { MxPanel, MxTitle } from '@mx/ui';
 import { ElButton, ElIcon, ElTable, ElTableColumn } from 'element-plus';
 import { computed, defineComponent, type PropType } from 'vue';
 import { excelDownloadUrl } from '../api';

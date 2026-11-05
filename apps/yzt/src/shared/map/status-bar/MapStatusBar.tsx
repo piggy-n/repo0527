@@ -1,4 +1,4 @@
-import { EYE_HEIGHT, type WalkView } from '@yzt/map-core';
+import { EYE_HEIGHT, type WalkView } from '@mx/map-core';
 import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
 import { useShownElementSize } from '../../composables/useShownElementSize';
 import { type CoordinateFormat, formatLngLat } from '../location/coordinate-format';

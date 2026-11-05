@@ -1,4 +1,4 @@
-import { MxPanel } from '@yzt/ui';
+import { MxPanel } from '@mx/ui';
 import { ElMessage, ElPagination } from 'element-plus';
 import { defineComponent } from 'vue';
 import type { Report } from '../api';

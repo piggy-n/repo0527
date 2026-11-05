@@ -8,8 +8,8 @@ import {
   type RoamStatus,
   type SceneStatus,
   type WalkView
-} from '@yzt/map-core';
-import type { CameraControl } from '@yzt/map-vue';
+} from '@mx/map-core';
+import type { CameraControl } from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, shallowRef } from 'vue';
 import { required } from '@/shared/testing/required';

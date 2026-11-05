@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { CameraState, LngLat } from '@yzt/map-core';
+import type { CameraState, LngLat } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import { effectScope, nextTick, shallowRef } from 'vue';
 import { useCoordinateInput } from './useCoordinateInput';

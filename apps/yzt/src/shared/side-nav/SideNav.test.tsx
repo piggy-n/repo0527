@@ -1,4 +1,4 @@
-import { MxSplitLayout } from '@yzt/ui';
+import { MxSplitLayout } from '@mx/ui';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h } from 'vue';

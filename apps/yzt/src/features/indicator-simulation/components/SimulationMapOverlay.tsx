@@ -1,4 +1,4 @@
-import { useMap } from '@yzt/map-vue';
+import { useMap } from '@mx/map-vue';
 import { computed, defineComponent, type PropType, ref } from 'vue';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { PointerHint } from '@/shared/map/pointer-hint/PointerHint';

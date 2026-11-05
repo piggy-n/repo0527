@@ -1,6 +1,6 @@
 // @vitest-environment node
-import { CameraModel, type ViewBounds } from '@yzt/map-core';
-import type { CameraControl, CameraOperation } from '@yzt/map-vue';
+import { CameraModel, type ViewBounds } from '@mx/map-core';
+import type { CameraControl, CameraOperation } from '@mx/map-vue';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { effectScope } from 'vue';
 import countyFile from '../boundary/data/jiangsu-county.json?raw';

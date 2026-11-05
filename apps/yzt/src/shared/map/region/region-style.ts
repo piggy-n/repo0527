@@ -1,6 +1,6 @@
 import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { FeatureCollection } from 'geojson';
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import type { RegionBoundary } from './region-geometry';
 
 const SOURCE = 'region';

@@ -1,6 +1,6 @@
 import { Aim, Position } from '@element-plus/icons-vue';
 import { ElButton, ElInput, ElRadioButton, ElRadioGroup } from 'element-plus';
-import { useMap } from '@yzt/map-vue';
+import { useMap } from '@mx/map-vue';
 import { computed, defineComponent, onBeforeUnmount, type PropType, watch } from 'vue';
 import type { Axis, CoordinateFormat } from './coordinate-format';
 import { useCoordinateInput } from './useCoordinateInput';

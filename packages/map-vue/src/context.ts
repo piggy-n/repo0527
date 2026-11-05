@@ -21,8 +21,8 @@ import {
   type ViewBounds,
   type ViewKind,
   type ViewState
-} from '@yzt/map-core';
-import { abortReason } from '@yzt/utils';
+} from '@mx/map-core';
+import { abortReason } from '@mx/utils';
 import {
   getCurrentScope,
   type InjectionKey,

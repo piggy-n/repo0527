@@ -1,5 +1,5 @@
-import type { LngLat, StyleGroup } from '@yzt/map-core';
-import type { MapContext } from '@yzt/map-vue';
+import type { LngLat, StyleGroup } from '@mx/map-core';
+import type { MapContext } from '@mx/map-vue';
 import { computed, type ComputedRef, type Ref, watch } from 'vue';
 import { formatValue } from '../format';
 import { indicatorResult } from '../model/analysis';

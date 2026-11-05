@@ -1,4 +1,4 @@
-import { MxSection, MxTitle } from '@yzt/ui';
+import { MxSection, MxTitle } from '@mx/ui';
 import { useMediaQuery } from '@vueuse/core';
 import {
   ElButton,

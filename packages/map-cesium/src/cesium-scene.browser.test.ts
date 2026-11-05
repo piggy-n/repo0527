@@ -9,7 +9,7 @@ import {
   type WalkNotice,
   type WalkPhase,
   type WalkPlayer
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import type { GeoJSON, Position } from 'geojson';
 import { Cartesian3, Math as CesiumMath, Matrix4, Transforms } from 'cesium';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';

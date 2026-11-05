@@ -1,5 +1,5 @@
 import { Document, UploadFilled } from '@element-plus/icons-vue';
-import { MxSection, MxTitle } from '@yzt/ui';
+import { MxSection, MxTitle } from '@mx/ui';
 import {
   type CascaderOption,
   ElAlert,

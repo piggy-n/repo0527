@@ -1,4 +1,4 @@
-import { MxSplitLayout } from '@yzt/ui';
+import { MxSplitLayout } from '@mx/ui';
 import { computed, defineComponent, type PropType, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { type StatisticsApi, statisticsApi } from '@/features/monitoring-statistics/api';

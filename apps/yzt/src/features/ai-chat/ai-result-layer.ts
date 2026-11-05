@@ -1,7 +1,7 @@
 import type { ExpressionSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { bbox } from '@turf/bbox';
 import type { FeatureCollection } from 'geojson';
-import type { StyleGroup, ViewBounds } from '@yzt/map-core';
+import type { StyleGroup, ViewBounds } from '@mx/map-core';
 
 /** 分组名：AI 回答里的 GeoJSON，放在底图之上、注记之下 */
 export const AI_RESULT_GROUP = 'ai-result';

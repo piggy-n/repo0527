@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import { computed } from 'vue';
 import { appConfig } from '../../config/app-config';

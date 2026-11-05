@@ -1,4 +1,4 @@
-import { abortReason } from '@yzt/utils';
+import { abortReason } from '@mx/utils';
 import type { Clock } from './clock';
 
 interface Sleeper {

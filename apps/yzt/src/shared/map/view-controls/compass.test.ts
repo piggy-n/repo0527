@@ -1,6 +1,6 @@
 // @vitest-environment node
-import type { CameraState } from '@yzt/map-core';
-import type { CameraControl, MapContext } from '@yzt/map-vue';
+import type { CameraState } from '@mx/map-core';
+import type { CameraControl, MapContext } from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { shallowRef } from 'vue';
 import { compassRotation, compassTitle } from './compass';

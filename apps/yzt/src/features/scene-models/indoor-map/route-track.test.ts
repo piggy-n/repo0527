@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { type RoutePoint, RoutePath } from '@yzt/map-core';
+import { type RoutePoint, RoutePath } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import { required } from '@/shared/testing/required';
 import { indoorMapOf, type MapPlayer, toPlane } from './indoor-map';

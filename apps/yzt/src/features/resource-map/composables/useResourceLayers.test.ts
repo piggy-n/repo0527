@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { NO_SOURCE_ERRORS, type SourceErrors } from '@yzt/map-core';
+import { NO_SOURCE_ERRORS, type SourceErrors } from '@mx/map-core';
 import { describe, expect, it, vi } from 'vitest';
 import { computed, effectScope, nextTick, shallowRef, watch } from 'vue';
 import type { ResourceTreeCategory, ResourceTreeLayer } from '../api';

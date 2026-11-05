@@ -6,7 +6,7 @@ import type {
   TilesetLayer,
   TilesetStatus,
   WalkView
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import type { SceneModel } from './catalog';
 
 /** 漫游地下的模型时地表的不透明度（ADR 0097 第 5 节：没有单独的钻地，不能调） */

@@ -1,7 +1,7 @@
 import type { FilterSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Feature, FeatureCollection, Polygon } from 'geojson';
 import { ElButton } from 'element-plus';
-import type { CameraState, LngLat, MapTool, ScreenPoint, StyleGroup, ViewBounds } from '@yzt/map-core';
+import type { CameraState, LngLat, MapTool, ScreenPoint, StyleGroup, ViewBounds } from '@mx/map-core';
 import {
   CesiumCanvas,
   MapCanvas,
@@ -10,7 +10,7 @@ import {
   type UnsupportedLayer,
   useMap,
   useMapOverlay
-} from '@yzt/map-vue';
+} from '@mx/map-vue';
 import { computed, defineComponent, type PropType, ref, shallowRef } from 'vue';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';

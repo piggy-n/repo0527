@@ -1,4 +1,4 @@
-import { abortReason, LatestController } from '@yzt/utils';
+import { abortReason, LatestController } from '@mx/utils';
 import { createNanoEvents, type Unsubscribe } from 'nanoevents';
 import type { Calculator, YearResult } from '../model/calculator';
 import { simulationIndicator } from '../model/indicators';

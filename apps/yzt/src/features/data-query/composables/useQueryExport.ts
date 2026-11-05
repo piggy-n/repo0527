@@ -1,4 +1,4 @@
-import { LatestController } from '@yzt/utils';
+import { LatestController } from '@mx/utils';
 import { computed, type ComputedRef, getCurrentScope, onScopeDispose, readonly, type Ref, ref } from 'vue';
 import { saveFile } from '@/shared/file-transfer';
 import { type ExportFormat, exportResult } from '../api';

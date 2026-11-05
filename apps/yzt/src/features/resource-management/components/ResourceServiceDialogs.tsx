@@ -1,6 +1,6 @@
 import { CopyDocument, Delete, EditPen, Plus } from '@element-plus/icons-vue';
 import { useClipboard } from '@vueuse/core';
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import {
   ElButton,
   ElDialog,

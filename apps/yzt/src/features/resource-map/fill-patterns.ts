@@ -1,4 +1,4 @@
-import type { StyleImage, StyleImages } from '@yzt/map-core';
+import type { StyleImage, StyleImages } from '@mx/map-core';
 
 // 面的花纹（ADR 0045 第 3 节）：形状是一份数据，按距离场生成 SDF 图片，颜色由图层的 fill-color 给出；
 // 图片只和形状有关，同一个 ID 始终是同一个对象（会话按引用比较图片）

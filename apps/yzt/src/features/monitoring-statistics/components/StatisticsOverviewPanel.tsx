@@ -1,5 +1,5 @@
 import { RefreshRight, WarningFilled } from '@element-plus/icons-vue';
-import { MxPanel } from '@yzt/ui';
+import { MxPanel } from '@mx/ui';
 import { ElButton, ElIcon } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import type { StatisticsOverview } from '../composables/useStatisticsOverview';

@@ -1,6 +1,6 @@
 import { VideoPlay } from '@element-plus/icons-vue';
 import { useResizeObserver } from '@vueuse/core';
-import { MxPanel } from '@yzt/ui';
+import { MxPanel } from '@mx/ui';
 import { ElButton, ElPopover, ElTag } from 'element-plus';
 import {
   computed,

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { featureFilter, type LayerSpecification, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';

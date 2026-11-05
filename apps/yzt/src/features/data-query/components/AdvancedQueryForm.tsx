@@ -1,4 +1,4 @@
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { ElInput } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import type { AdvancedForm } from '../composables/useAdvancedForm';

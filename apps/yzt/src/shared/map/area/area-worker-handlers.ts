@@ -1,4 +1,4 @@
-import type { WorkerHandlers } from '@yzt/utils';
+import type { WorkerHandlers } from '@mx/utils';
 import { coverRegions } from './area-coverage';
 import { readAreaFiles } from './area-file';
 import { prepareArea } from './area-geometry';

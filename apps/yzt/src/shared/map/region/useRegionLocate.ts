@@ -1,6 +1,6 @@
-import type { FitBoundsOptions, StyleGroup } from '@yzt/map-core';
-import type { MapContext } from '@yzt/map-vue';
-import { LatestController } from '@yzt/utils';
+import type { FitBoundsOptions, StyleGroup } from '@mx/map-core';
+import type { MapContext } from '@mx/map-vue';
+import { LatestController } from '@mx/utils';
 import { getCurrentScope, onScopeDispose, type ShallowRef, shallowReadonly, shallowRef } from 'vue';
 import { findRegion, type Region } from './region-catalog';
 import { type RegionBoundary, type RegionBoundaryLoader, sharedRegionBoundaryLoader } from './region-geometry';

@@ -1,6 +1,6 @@
-import type { MapTool, StyleGroup, ViewBounds } from '@yzt/map-core';
-import type { MapContext } from '@yzt/map-vue';
-import { LatestController } from '@yzt/utils';
+import type { MapTool, StyleGroup, ViewBounds } from '@mx/map-core';
+import type { MapContext } from '@mx/map-vue';
+import { LatestController } from '@mx/utils';
 import type { MultiPolygon, Polygon } from 'geojson';
 import { computed, type ComputedRef, onScopeDispose, type Ref, ref, type ShallowRef, shallowRef } from 'vue';
 import { type AreaAnalyzer, createAreaAnalyzer } from '@/shared/map/area/area-analyzer';

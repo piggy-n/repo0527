@@ -4,7 +4,7 @@ import {
   validateStyleMin,
   type VectorSourceSpecification
 } from '@maplibre/maplibre-gl-style-spec';
-import type { StyleGroup, StyleImage, StyleImages } from '@yzt/map-core';
+import type { StyleGroup, StyleImage, StyleImages } from '@mx/map-core';
 import type { Resource, ResourceCatalog, ResourceGeometry } from './catalog';
 import { treeOrder } from './catalog-order';
 import { noSymbolOverride, type ResourceSymbolOverride, type SymbolOverrideOf } from './resource-symbols';

@@ -1,7 +1,7 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { flushPromises, mount } from '@vue/test-utils';
-import type { ViewBounds } from '@yzt/map-core';
-import type { CameraControl, CameraOperation } from '@yzt/map-vue';
+import type { ViewBounds } from '@mx/map-core';
+import type { CameraControl, CameraOperation } from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, shallowRef } from 'vue';
 import { findRegion, type Region } from '@/shared/map/region/region-catalog';

@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowRight, Back, View } from '@element-plus/icons-vue';
 import { useRafFn, useResizeObserver } from '@vueuse/core';
-import { MxPanel } from '@yzt/ui';
+import { MxPanel } from '@mx/ui';
 import { ElButton, ElIcon } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, shallowRef, watch } from 'vue';
 import { ChatAvatar } from '@/shared/chat-avatar/ChatAvatar';

@@ -581,22 +581,22 @@ export const DevThemePage = defineComponent({
         </section>
 
         <section class={styles.section}>
-          <h2 class={styles.sectionTitle}>标题（@yzt/ui 的 MxTitle）</h2>
+          <h2 class={styles.sectionTitle}>标题（@mx/ui 的 MxTitle）</h2>
           <TitlePreview />
         </section>
 
         <section class={styles.section}>
-          <h2 class={styles.sectionTitle}>区块（@yzt/ui 的 MxSection）</h2>
+          <h2 class={styles.sectionTitle}>区块（@mx/ui 的 MxSection）</h2>
           <SectionPreview />
         </section>
 
         <section class={styles.section}>
-          <h2 class={styles.sectionTitle}>面板（@yzt/ui 的 MxPanel）</h2>
+          <h2 class={styles.sectionTitle}>面板（@mx/ui 的 MxPanel）</h2>
           <PanelPreview />
         </section>
 
         <section class={styles.section}>
-          <h2 class={styles.sectionTitle}>分栏布局（@yzt/ui 的 MxSplitLayout，视口窄于 1200 时侧栏收进抽屉）</h2>
+          <h2 class={styles.sectionTitle}>分栏布局（@mx/ui 的 MxSplitLayout，视口窄于 1200 时侧栏收进抽屉）</h2>
           <SplitLayoutPreview />
         </section>
 

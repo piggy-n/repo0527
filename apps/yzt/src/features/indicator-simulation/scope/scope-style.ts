@@ -3,7 +3,7 @@ import type {
   LayerSpecification,
   SourceSpecification
 } from '@maplibre/maplibre-gl-style-spec';
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import type { Feature, FeatureCollection, MultiPolygon, Polygon } from 'geojson';
 import type { RegionCover } from '@/shared/map/area/area-coverage';
 import { clipMask } from '@/shared/map/region/region-clip';

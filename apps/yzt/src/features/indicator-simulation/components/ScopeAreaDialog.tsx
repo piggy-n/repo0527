@@ -1,5 +1,5 @@
-import { MxTitle } from '@yzt/ui';
-import { MapCanvas, useMap, useMapOverlay } from '@yzt/map-vue';
+import { MxTitle } from '@mx/ui';
+import { MapCanvas, useMap, useMapOverlay } from '@mx/map-vue';
 import { ElButton, ElDialog, ElInput, ElMessage, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNodeChild, watch } from 'vue';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';

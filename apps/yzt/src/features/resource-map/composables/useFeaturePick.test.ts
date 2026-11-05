@@ -12,8 +12,8 @@ import type {
   ScreenPoint,
   ToolView,
   ViewKind
-} from '@yzt/map-core';
-import type { CameraControl, CameraOperation, MapContext, MapViewport } from '@yzt/map-vue';
+} from '@mx/map-core';
+import type { CameraControl, CameraOperation, MapContext, MapViewport } from '@mx/map-vue';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, shallowRef } from 'vue';
 import type { RegionScope } from '@/shared/map/region/region-scope';

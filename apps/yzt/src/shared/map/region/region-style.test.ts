@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { type StyleGroup, StyleModel } from '@yzt/map-core';
+import { type StyleGroup, StyleModel } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import type { RegionBoundary } from './region-geometry';
 import { regionGroup } from './region-style';

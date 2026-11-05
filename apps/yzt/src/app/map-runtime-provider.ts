@@ -4,7 +4,7 @@ import {
   MAP_RUNTIME_PRELOAD,
   type MapRuntimeLoader,
   type MapRuntimePreloader
-} from '@yzt/map-vue';
+} from '@mx/map-vue';
 import { type Component, defineComponent, h, provide } from 'vue';
 import { reportMapError } from '@/shared/map/backend-request';
 

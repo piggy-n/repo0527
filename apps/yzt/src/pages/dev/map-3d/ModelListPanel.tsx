@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowRight, ArrowUp, Loading, Search } from '@element-plus/icons-vue';
-import { MxPanel, MxTitle } from '@yzt/ui';
+import { MxPanel, MxTitle } from '@mx/ui';
 import { ElButton, ElCheckbox, ElIcon, ElInput, ElOption, ElSelect, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref } from 'vue';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';

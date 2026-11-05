@@ -4,7 +4,7 @@ import {
   type LayerSpecification,
   type SourceSpecification
 } from '@maplibre/maplibre-gl-style-spec';
-import type { StyleGroup, StyleImage } from '@yzt/map-core';
+import type { StyleGroup, StyleImage } from '@mx/map-core';
 
 /** 成果子图层的几何类型 */
 export type ResultGeometry = 'point' | 'line' | 'fill';

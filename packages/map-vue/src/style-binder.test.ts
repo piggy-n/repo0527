@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { type StyleGroup, StyleModel } from '@yzt/map-core';
+import { type StyleGroup, StyleModel } from '@mx/map-core';
 import { describe, expect, it, vi } from 'vitest';
 import { nextTick, ref } from 'vue';
 import { StyleBinder } from './style-binder';

@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@yzt/ui';
+import { useSplitLayout } from '@mx/ui';
 import { ElTree, type TreeInstance } from 'element-plus';
 import { defineComponent, ref } from 'vue';
 import { fileCategories, findCategoryPath } from '../categories';

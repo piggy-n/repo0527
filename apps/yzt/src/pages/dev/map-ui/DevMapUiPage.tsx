@@ -1,5 +1,5 @@
-import { provideMap } from '@yzt/map-vue';
-import { MxPanel, MxTitle } from '@yzt/ui';
+import { provideMap } from '@mx/map-vue';
+import { MxPanel, MxTitle } from '@mx/ui';
 import { ElButton, ElRadioButton, ElRadioGroup } from 'element-plus';
 import { computed, defineComponent, ref, shallowRef } from 'vue';
 import { RouterLink } from 'vue-router';

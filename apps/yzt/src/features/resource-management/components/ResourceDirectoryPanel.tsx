@@ -1,5 +1,5 @@
 import { Delete, EditPen, Plus } from '@element-plus/icons-vue';
-import { MxTitle, useSplitLayout } from '@yzt/ui';
+import { MxTitle, useSplitLayout } from '@mx/ui';
 import {
   ElAlert,
   ElButton,

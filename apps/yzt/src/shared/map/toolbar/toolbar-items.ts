@@ -1,4 +1,4 @@
-import { BROWSE_TOOL } from '@yzt/map-core';
+import { BROWSE_TOOL } from '@mx/map-core';
 import type { IconName } from '../../icons/SvgIcon';
 import { MEASURE_TOOL_IDS, type MeasureToolId } from '../measure/useMeasure';
 

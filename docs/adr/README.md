@@ -24,7 +24,7 @@
 | [0010](0010-testing-with-vitest.md) | 测试使用 Vitest 与 jsdom | 已接受（真实浏览器测试由 0040 补充） |
 | [0011](0011-http-client-axios-zod-msw.md) | HTTP 客户端：axios + zod，测试用 MSW 模拟接口 | 已接受（没有信封的接口由 0047 补充） |
 | [0012](0012-fonts-self-hosted-and-svg-title.md) | 字体：普惠体 3.0 自托管且不入库，系统名称用 SVG 轮廓 | 已接受（存放位置已被 0013 取代；加载时机由 0062 补充） |
-| [0013](0013-fonts-in-public-dir.md) | 字体文件统一放在 apps/yzt/public/fonts/ | 已接受 |
+| [0013](0013-fonts-in-public-dir.md) | 字体文件统一放在 apps/web/public/fonts/ | 已接受 |
 | [0014](0014-icons-as-internal-package.md) | 图标做成第一个 workspace 包 @yzt/icons（内部包） | 已接受 |
 | [0015](0015-login-session-and-permissions.md) | 登录与会话：会话存 localStorage，SM2 用 sm-crypto-v2，权限声明在路由上 | 已接受 |
 | [0016](0016-ui-components-in-libs-ui.md) | 通用 UI 组件放在 libs/ui | 已接受（位置由 0143 改为 packages/ui） |
@@ -154,6 +154,7 @@
 | [0141](0141-local-files-dir.md) | 未入库的本地文件集中到 local/ | 已接受 |
 | [0142](0142-docs-slimming.md) | 文档分层：规则按目录加载，过程记录归档 | 已接受 |
 | [0143](0143-package-split.md) | libs 搬到 packages，抽出 @yzt/theme | 已接受 |
+| [0144](0144-rename-app-and-scope.md) | 应用改名 yzt，公共包前缀改为 @mx | 已接受 |
 
 ## 模板
 

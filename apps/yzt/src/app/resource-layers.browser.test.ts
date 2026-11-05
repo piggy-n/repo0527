@@ -1,5 +1,5 @@
 import type { GeoJSONSourceSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { type CameraState, MapLibreView, MapSession, type StyleGroup } from '@yzt/map-core';
+import { type CameraState, MapLibreView, MapSession, type StyleGroup } from '@mx/map-core';
 import type { Feature, FeatureCollection } from 'geojson';
 import { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it } from 'vitest';

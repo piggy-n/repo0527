@@ -1,6 +1,6 @@
 import { Loading } from '@element-plus/icons-vue';
 import { ElButton, ElIcon } from 'element-plus';
-import { useMap } from '@yzt/map-vue';
+import { useMap } from '@mx/map-vue';
 import { computed, defineComponent } from 'vue';
 import { useDelayedFlag } from '../composables/useDelayedFlag';
 import { SvgIcon } from '../icons/SvgIcon';

@@ -1,5 +1,5 @@
 {
-  "name": "@yzt/map-vue",
+  "name": "@mx/map-vue",
   "private": true,
   "type": "module",
   "exports": {
@@ -12,9 +12,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@yzt/map-cesium": "workspace:*",
-    "@yzt/map-core": "workspace:*",
-    "@yzt/utils": "workspace:*"
+    "@mx/map-cesium": "workspace:*",
+    "@mx/map-core": "workspace:*",
+    "@mx/utils": "workspace:*"
   },
   "peerDependencies": {
     "vue": "catalog:"

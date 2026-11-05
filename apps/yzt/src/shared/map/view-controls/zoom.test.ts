@@ -1,6 +1,6 @@
 // @vitest-environment node
-import type { CameraState } from '@yzt/map-core';
-import type { CameraControl, CameraOperation } from '@yzt/map-vue';
+import type { CameraState } from '@mx/map-core';
+import type { CameraControl, CameraOperation } from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { shallowRef } from 'vue';
 import { useZoomButtons } from './useZoomButtons';

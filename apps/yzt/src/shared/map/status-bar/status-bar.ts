@@ -1,4 +1,4 @@
-import type { CameraState } from '@yzt/map-core';
+import type { CameraState } from '@mx/map-core';
 
 /** 比例尺的取样：画布中间的水平线上相距 100 像素的两点（ADR 0053 第 5 节） */
 export const SCALE_SAMPLE_WIDTH = 100;

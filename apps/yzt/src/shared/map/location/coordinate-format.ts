@@ -1,4 +1,4 @@
-import type { LngLat } from '@yzt/map-core';
+import type { LngLat } from '@mx/map-core';
 
 export type Axis = 'lng' | 'lat';
 

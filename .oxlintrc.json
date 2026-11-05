@@ -151,21 +151,21 @@
                 "from": { "element": { "type": "package", "captured": { "name": "{ui,map-core,map-cesium,map-vue}" } } },
                 "allow": {
                   "to": { "element": { "type": "package", "captured": { "name": "utils" } } },
-                  "dependency": { "source": "@yzt/*" }
+                  "dependency": { "source": "@mx/*" }
                 }
               },
               {
                 "from": { "element": { "type": "package", "captured": { "name": "{map-cesium,map-vue}" } } },
                 "allow": {
                   "to": { "element": { "type": "package", "captured": { "name": "map-core" } } },
-                  "dependency": { "source": "@yzt/*" }
+                  "dependency": { "source": "@mx/*" }
                 }
               },
               {
                 "from": { "element": { "type": "package", "captured": { "name": "map-vue" } } },
                 "allow": {
                   "to": { "element": { "type": "package", "captured": { "name": "map-cesium" } } },
-                  "dependency": { "source": "@yzt/*", "nodeKind": "dynamic-import" }
+                  "dependency": { "source": "@mx/*", "nodeKind": "dynamic-import" }
                 }
               },
               {
@@ -216,7 +216,7 @@
               },
               {
                 "from": { "element": { "types": { "anyOf": ["app", "pages", "feature", "shared"] } } },
-                "allow": { "to": { "element": { "type": "package" } }, "dependency": { "source": "@yzt/*" } }
+                "allow": { "to": { "element": { "type": "package" } }, "dependency": { "source": "@mx/*" } }
               },
               { "disallow": { "to": { "module": { "source": "mapbox-gl" } } } }
             ]

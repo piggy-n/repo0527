@@ -1,4 +1,4 @@
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import { computed, type ComputedRef, shallowRef } from 'vue';
 import type { PreferenceScope } from '../../storage/preference-scope';
 import { usePreference } from '../../storage/use-preference';

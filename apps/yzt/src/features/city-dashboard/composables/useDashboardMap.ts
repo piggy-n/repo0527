@@ -2,7 +2,7 @@ import { computed, onMounted, onScopeDispose, ref, shallowRef, watch, type Ref }
 import { useDocumentVisibility, usePreferredReducedMotion, useResizeObserver } from '@vueuse/core';
 import { gsap } from 'gsap';
 import { Color } from 'three';
-import { LatestController } from '@yzt/utils';
+import { LatestController } from '@mx/utils';
 import { CITIES } from '../catalog';
 import { loadDashboardRegions } from '../map/region-geometry';
 import { layoutMapLabels } from '../map/label-layout';

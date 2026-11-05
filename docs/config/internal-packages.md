@@ -8,7 +8,7 @@
 内部包（internal package）是只在本仓库内使用、不发布到 npm 的 workspace 包。它不单独构建，`package.json` 的 `exports` 直接指向 TS 源码，由使用方（`apps/yzt` 的 Vite）编译：
 
 ```
-apps/yzt  ──依赖 "@yzt/map-core": "workspace:*"──▶  node_modules/@yzt/map-core（符号链接）──▶ packages/map-core
+apps/yzt  ──依赖 "@mx/map-core": "workspace:*"──▶  node_modules/@mx/map-core（符号链接）──▶ packages/map-core
                                                     exports "." → ./src/index.ts
 ```
 
@@ -44,13 +44,13 @@ packages/map-core/
    └─ test-setup.browser.ts  浏览器测试要 MapLibre 时才有
 ```
 
-`@yzt/theme` 只有 Sass，没有 TS，也就没有 tsconfig、测试配置和 `typecheck`、`test` 脚本；`pnpm -r` 会跳过它。`@yzt/icons` 比这些约定早，还有 `tools/` 这个 Node 入口，tsconfig 没有用公共配置，测试写在 `tsconfig.lib.json` 里。
+`@mx/theme` 只有 Sass，没有 TS，也就没有 tsconfig、测试配置和 `typecheck`、`test` 脚本；`pnpm -r` 会跳过它。`@mx/icons` 比这些约定早，还有 `tools/` 这个 Node 入口，tsconfig 没有用公共配置，测试写在 `tsconfig.lib.json` 里。
 
 ## package.json
 
 ```json
 {
-  "name": "@yzt/map-core",
+  "name": "@mx/map-core",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
@@ -60,7 +60,7 @@ packages/map-core/
     "test:changed": "vitest run --changed main --passWithNoTests",
     "test:watch": "vitest"
   },
-  "dependencies": { "@yzt/utils": "workspace:*", "nanoevents": "catalog:" },
+  "dependencies": { "@mx/utils": "workspace:*", "nanoevents": "catalog:" },
   "peerDependencies": { "maplibre-gl": "catalog:" },
   "devDependencies": { "maplibre-gl": "catalog:", "vitest": "catalog:", "...": "catalog:" }
 }
@@ -68,23 +68,23 @@ packages/map-core/
 
 | 字段 | 说明 |
 |---|---|
-| `name` | `@yzt/<名字>` |
-| `exports` | 只暴露入口。深层导入（如 `@yzt/map-core/src/xxx`）在解析时就会失败（已验证：TS2307） |
+| `name` | `@mx/<名字>` |
+| `exports` | 只暴露入口。深层导入（如 `@mx/map-core/src/xxx`）在解析时就会失败（已验证：TS2307） |
 | `exports` 的 `sass` 条件 | 给样式用的入口，见下文"Sass 入口" |
-| `exports` 的 `./tools` | 可选的第二个入口，放 Node 端代码（例如 `@yzt/icons/tools` 的规范化工具与 Vite 插件），和浏览器入口分开，保证 SVGO 这类依赖不会进入浏览器产物 |
+| `exports` 的 `./tools` | 可选的第二个入口，放 Node 端代码（例如 `@mx/icons/tools` 的规范化工具与 Vite 插件），和浏览器入口分开，保证 SVGO 这类依赖不会进入浏览器产物 |
 | `bin` | 可选的命令行，指向 `.ts` 文件，由 Node 直接运行（类型剥离）；使用方安装后在 `node_modules/.bin` 中出现，例如 `yzt-icons` |
 | `private: true` | 防止被误发布 |
 | 没有 `build` 脚本 | 内部包不构建；根目录的 `pnpm -r build` 会跳过它 |
 | `typecheck`、`test`、`test:changed` | 被根目录的 `pnpm typecheck`、`pnpm test`、`pnpm test:changed` 覆盖，CI 不用改 |
 
-使用方在自己的 `package.json` 中写 `"@yzt/map-core": "workspace:*"`，pnpm 会建立符号链接。
+使用方在自己的 `package.json` 中写 `"@mx/map-core": "workspace:*"`，pnpm 会建立符号链接。
 
 ## 依赖怎么声明
 
 | 写法 | 什么时候用 | 例子 |
 |---|---|---|
 | `peerDependencies` + `devDependencies` | 要和应用共用同一份：有全局状态，或者两份会互不相通 | `vue`、`element-plus`、`maplibre-gl`（`setWorkerUrl`）、`cesium`（`buildModuleUrl.setBaseUrl`） |
-| `dependencies` | 其他运行时依赖，包括别的内部包 | `nanoevents`、`@turf/simplify`、`@vueuse/core`、`@yzt/utils` |
+| `dependencies` | 其他运行时依赖，包括别的内部包 | `nanoevents`、`@turf/simplify`、`@vueuse/core`、`@mx/utils` |
 | `devDependencies` | 只有测试和类型检查用 | `vitest`、`@vue/test-utils`、`@types/geojson` |
 
 两个及以上的包用到的依赖在 `pnpm-workspace.yaml` 的 `catalog` 写版本，这里写 `catalog:`（见 [pnpm-workspace.md](pnpm-workspace.md)）。
@@ -107,7 +107,7 @@ ls node_modules/.pnpm | grep -E '^(vue|maplibre-gl|cesium|element-plus)@'
 
 ## 应用侧的解析
 
-`@yzt/*` 不在 tsconfig 的 `paths` 里，TS、Vite、lint 都按 `node_modules` 的符号链接和包的 `exports` 解析。解析出的是 `packages/` 下的真实路径，不在 `node_modules` 里，所以：
+`@mx/*` 不在 tsconfig 的 `paths` 里，TS、Vite、lint 都按 `node_modules` 的符号链接和包的 `exports` 解析。解析出的是 `packages/` 下的真实路径，不在 `node_modules` 里，所以：
 
 - Vite 不预构建它，当作自己的源码编译，改了能热更新（已验证：改包里的样式和组件，页面不刷新就生效）
 - 应用的 `tsc -b` 把用到的包源码按应用的配置再检查一遍，和原来 libs 的做法相同，多花的时间可以忽略
@@ -133,18 +133,18 @@ ls node_modules/.pnpm | grep -E '^(vue|maplibre-gl|cesium|element-plus)@'
 }
 ```
 
-样式里写 `@use '@yzt/ui'`，命名空间是最后一段（`ui.$compact`）。Vite 解析 Sass 的 `@use` 时带 `sass` 条件，解析 TS 的 `import` 时不带，所以同一个包名在两边各自找到自己的入口；TS 不认识 `sass` 条件，走 `default`。
+样式里写 `@use '@mx/ui'`，命名空间是最后一段（`ui.$compact`）。Vite 解析 Sass 的 `@use` 时带 `sass` 条件，解析 TS 的 `import` 时不带，所以同一个包名在两边各自找到自己的入口；TS 不认识 `sass` 条件，走 `default`。
 
 | 包 | 入口的内容 |
 |---|---|
-| `@yzt/ui` | 只放变量（断点），不输出 CSS，否则每个 `@use` 它的样式文件都会重复输出一份（ADR 0016） |
-| `@yzt/theme` | 输出令牌、Element 主题和全局基础样式，整个应用只由 `app/styles/index.scss` 引用一次（见 [design/theme.md](../design/theme.md)） |
+| `@mx/ui` | 只放变量（断点），不输出 CSS，否则每个 `@use` 它的样式文件都会重复输出一份（ADR 0016） |
+| `@mx/theme` | 输出令牌、Element 主题和全局基础样式，整个应用只由 `app/styles/index.scss` 引用一次（见 [design/theme.md](../design/theme.md)） |
 
 ## lint
 
 - `boundaries/elements` 中有 `package` 元素（`packages/*`，按目录名捕获 `name`）
-- 应用只能通过 `@yzt/*` 引用包
-- 包之间按上面的方向放行，也只能写 `@yzt/*`；其余的只能依赖外部模块和包内部的相对路径（`packages` override）
+- 应用只能通过 `@mx/*` 引用包
+- 包之间按上面的方向放行，也只能写 `@mx/*`；其余的只能依赖外部模块和包内部的相对路径（`packages` override）
 
 详见 [oxlintrc.md](oxlintrc.md)。
 
@@ -156,7 +156,7 @@ ls node_modules/.pnpm | grep -E '^(vue|maplibre-gl|cesium|element-plus)@'
 
 **给已安装的包新增 `bin` 后，命令不会出现。** lockfile 没有变化时，`pnpm install` 直接跳过链接。处理办法：
 
-- 推荐：在使用方删掉再加回这个依赖，`pnpm --filter yzt remove @yzt/icons`，然后 `pnpm --filter yzt add "@yzt/icons@workspace:*"`
+- 推荐：在使用方删掉再加回这个依赖，`pnpm --filter yzt remove @mx/icons`，然后 `pnpm --filter yzt add "@mx/icons@workspace:*"`
 - 或者 `pnpm install --force`，但**必须先停掉所有开发服务器、测试等正在运行的 Node 进程**。阶段二实测：开发服务器运行时，sass 的 `dart.exe` 占用着文件，强制重装中途失败，把 sass-embedded 平台包里的二进制文件删掉了，之后所有 SCSS 编译都会失败（报 `sass --embedded is unavailable in pure JS mode`）。停掉进程后再执行一次 `pnpm install --force` 可以恢复
 
 全新 clone 后的首次安装会正常链接（已在干净目录中验证）。

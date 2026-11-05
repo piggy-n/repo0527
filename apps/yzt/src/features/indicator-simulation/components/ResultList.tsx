@@ -1,5 +1,5 @@
 import { Back } from '@element-plus/icons-vue';
-import { MxPanel } from '@yzt/ui';
+import { MxPanel } from '@mx/ui';
 import { ElButton, ElTooltip } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';

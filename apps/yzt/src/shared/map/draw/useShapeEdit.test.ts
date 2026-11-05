@@ -1,5 +1,5 @@
-import type { MapInputEvent, MapPointerEvent, ScreenPoint, ToolView, ViewKind } from '@yzt/map-core';
-import type { MapViewport } from '@yzt/map-vue';
+import type { MapInputEvent, MapPointerEvent, ScreenPoint, ToolView, ViewKind } from '@mx/map-core';
+import type { MapViewport } from '@mx/map-vue';
 import type { MultiPolygon } from 'geojson';
 import { describe, expect, it, vi } from 'vitest';
 import { effectScope, ref, shallowRef } from 'vue';

@@ -19,9 +19,9 @@ import {
   type Unsubscribe,
   type ViewBounds,
   type ViewState
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
-import { CesiumCanvas, MapCanvas, type SceneViewOptions } from '@yzt/map-vue';
+import { CesiumCanvas, MapCanvas, type SceneViewOptions } from '@mx/map-vue';
 import { DOMWrapper, mount } from '@vue/test-utils';
 import { ElSlider } from 'element-plus';
 import { HttpResponse, http as mock } from 'msw';
@@ -289,7 +289,7 @@ async function freshModules(): Promise<PageModules> {
   vi.resetModules();
   const [{ CurrentMapPage: page }, { MapCanvas: canvas, CesiumCanvas: sceneCanvas }] = await Promise.all([
     import('./CurrentMapPage'),
-    import('@yzt/map-vue')
+    import('@mx/map-vue')
   ]);
   return { page, canvas, sceneCanvas };
 }

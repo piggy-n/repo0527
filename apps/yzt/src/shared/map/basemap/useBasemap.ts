@@ -1,4 +1,4 @@
-import type { StyleGroup, ViewKind } from '@yzt/map-core';
+import type { StyleGroup, ViewKind } from '@mx/map-core';
 import { computed, type ComputedRef, shallowRef } from 'vue';
 import { appConfig, type TiandituConfig } from '../../config/app-config';
 import type { PreferenceScope } from '../../storage/preference-scope';

@@ -1,7 +1,7 @@
 import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { booleanPointInPolygon } from '@turf/boolean-point-in-polygon';
 import type { Feature, MultiPolygon, Polygon, Position } from 'geojson';
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import type { RegionBoundary } from './region-geometry';
 
 type Ring = Position[];

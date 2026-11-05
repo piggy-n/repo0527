@@ -1,4 +1,4 @@
-import { MapCanvas, provideMap } from '@yzt/map-vue';
+import { MapCanvas, provideMap } from '@mx/map-vue';
 import { defineComponent, type PropType, ref, watch } from 'vue';
 import { QueryPanel } from '@/features/data-query/components/QueryPanel';
 import { notifySubmit } from '@/features/data-query/components/query-messages';

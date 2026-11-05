@@ -1,4 +1,4 @@
-import { abortReason, WorkerHost, type WorkerEndpoint } from '@yzt/utils';
+import { abortReason, WorkerHost, type WorkerEndpoint } from '@mx/utils';
 import type { PreparedTileset } from '../prepare-tileset';
 import type { NavOptions } from './nav-data';
 import { type NavFrame, navigationFrame } from './nav-frame';

@@ -1,4 +1,4 @@
-import { geodesicArea, type LngLat, type ViewBounds } from '@yzt/map-core';
+import { geodesicArea, type LngLat, type ViewBounds } from '@mx/map-core';
 import type { MultiPolygon, Polygon, Position } from 'geojson';
 import { districtsOf, JIANGSU_CITIES, type Region } from '@/shared/map/region/region-catalog';
 import type { RegionBoundary, RegionBoundaryLoader } from '@/shared/map/region/region-geometry';

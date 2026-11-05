@@ -1,4 +1,4 @@
-import { useMap } from '@yzt/map-vue';
+import { useMap } from '@mx/map-vue';
 import { ElOption, ElSelect, ElTooltip } from 'element-plus';
 import { computed, defineComponent, nextTick, type PropType, ref, type VNode } from 'vue';
 import { useSortableList } from '@/shared/composables/useSortableList';

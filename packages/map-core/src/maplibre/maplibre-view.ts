@@ -1,5 +1,5 @@
 import { GPUInitializationError, Map as MapLibreMap } from 'maplibre-gl';
-import { safeReporter } from '@yzt/utils';
+import { safeReporter } from '@mx/utils';
 import { createNanoEvents } from 'nanoevents';
 import type { CameraCause, CameraState } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';

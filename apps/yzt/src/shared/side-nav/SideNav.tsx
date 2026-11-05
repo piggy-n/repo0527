@@ -1,4 +1,4 @@
-import { useSplitLayout } from '@yzt/ui';
+import { useSplitLayout } from '@mx/ui';
 import { defineComponent, type PropType } from 'vue';
 import { RouterLink } from 'vue-router';
 import { type IconName, SvgIcon } from '../icons/SvgIcon';

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import type { Position } from 'geojson';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { effectScope, type EffectScope, shallowRef } from 'vue';

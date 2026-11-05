@@ -1,6 +1,6 @@
-import type { StyleGroup } from '@yzt/map-core';
-import type { MapContext } from '@yzt/map-vue';
-import { safeReporter } from '@yzt/utils';
+import type { StyleGroup } from '@mx/map-core';
+import type { MapContext } from '@mx/map-vue';
+import { safeReporter } from '@mx/utils';
 import {
   computed,
   type ComputedRef,

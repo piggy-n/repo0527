@@ -1,4 +1,4 @@
-import { MxPanel } from '@yzt/ui';
+import { MxPanel } from '@mx/ui';
 import { useInfiniteScroll } from '@vueuse/core';
 import { ElButton, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSkeleton, ElTag } from 'element-plus';
 import { defineComponent, type PropType, ref, watch } from 'vue';

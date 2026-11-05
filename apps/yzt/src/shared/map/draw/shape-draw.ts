@@ -1,6 +1,6 @@
 import type { FilterSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Feature, Polygon, Position } from 'geojson';
-import type { LngLat, StyleGroup } from '@yzt/map-core';
+import type { LngLat, StyleGroup } from '@mx/map-core';
 import type { PanKey } from '../pan-key';
 
 /** 绘制范围的两种方式（数据查询的空间查询） */

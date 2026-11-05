@@ -35,7 +35,7 @@ allowBuilds:
 
 ## packages
 
-`apps/*` 下的每个目录（目前只有 `apps/yzt`）都是一个 workspace 包。`packages/*` 放可复用的 `@yzt/*` 包（ADR 0014、0143），配置约定见 [internal-packages.md](internal-packages.md)。
+`apps/*` 下的每个目录（目前只有 `apps/yzt`）都是一个 workspace 包。`packages/*` 放可复用的 `@mx/*` 包（ADR 0014、0143），配置约定见 [internal-packages.md](internal-packages.md)。
 
 workspace 带来的能力：
 

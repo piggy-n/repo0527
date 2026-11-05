@@ -1,4 +1,4 @@
-import type { ViewBounds } from '@yzt/map-core';
+import type { ViewBounds } from '@mx/map-core';
 import { z } from 'zod';
 import { fetchFile } from '@/shared/file-transfer';
 import { http } from '@/shared/http/client';

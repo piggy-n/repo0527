@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { type ExpressionSpecification, type Feature, featureFilter } from '@maplibre/maplibre-gl-style-spec';
-import { overlayDetailLimit, StyleModel } from '@yzt/map-core';
+import { overlayDetailLimit, StyleModel } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import cityFile from '../boundary/data/jiangsu-city.json?raw';
 import countyFile from '../boundary/data/jiangsu-county.json?raw';

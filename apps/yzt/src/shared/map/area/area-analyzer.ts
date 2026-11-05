@@ -1,4 +1,4 @@
-import { type WorkerEndpoint, WorkerHost } from '@yzt/utils';
+import { type WorkerEndpoint, WorkerHost } from '@mx/utils';
 import type { CoverOutcome, RegionShape } from './area-coverage';
 import type { AreaFileResult } from './area-file';
 import { type AreaCheck, type AreaGeometry, AREA_LIMITS, type PolygonCoordinates, problem } from './area-geometry';

@@ -1,5 +1,5 @@
 import { CircleCheck, CircleClose, Clock, Download, Refresh } from '@element-plus/icons-vue';
-import { MxPanel } from '@yzt/ui';
+import { MxPanel } from '@mx/ui';
 import {
   type Column,
   ElAutoResizer,

@@ -1,4 +1,4 @@
-import { COMPACT_MEDIA_QUERY } from '@yzt/ui';
+import { COMPACT_MEDIA_QUERY } from '@mx/ui';
 import { useMediaQuery } from '@vueuse/core';
 import { ElTable, ElTableColumn, vLoading } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';

@@ -1,5 +1,5 @@
-import type { CameraState, MapLike } from '@yzt/map-core';
-import { MapCanvas, provideMap } from '@yzt/map-vue';
+import type { CameraState, MapLike } from '@mx/map-core';
+import { MapCanvas, provideMap } from '@mx/map-vue';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';

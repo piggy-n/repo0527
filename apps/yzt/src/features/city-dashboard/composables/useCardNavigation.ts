@@ -1,6 +1,6 @@
 import { computed, nextTick, onScopeDispose, ref, watch, type Ref } from 'vue';
 import { useDocumentVisibility, useEventListener, useResizeObserver } from '@vueuse/core';
-import { LatestController } from '@yzt/utils';
+import { LatestController } from '@mx/utils';
 import { CardWheelGesture, cardStops, nearestStop } from '../charts/card-navigation';
 
 interface CardNavigationOptions {

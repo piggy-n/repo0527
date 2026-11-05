@@ -1,4 +1,4 @@
-import type { ScreenPoint, ViewKind } from '@yzt/map-core';
+import type { ScreenPoint, ViewKind } from '@mx/map-core';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, shallowRef } from 'vue';
 import { z } from 'zod';
 import { useShownElementSize } from '@/shared/composables/useShownElementSize';

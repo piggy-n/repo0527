@@ -1,6 +1,6 @@
 import { Aim, Close, Minus, Plus } from '@element-plus/icons-vue';
-import type { NavLevel, NavPoint } from '@yzt/map-core';
-import { MxPanel } from '@yzt/ui';
+import type { NavLevel, NavPoint } from '@mx/map-core';
+import { MxPanel } from '@mx/ui';
 import { ElButton, ElRadioButton, ElRadioGroup, ElTooltip } from 'element-plus';
 import {
   computed,

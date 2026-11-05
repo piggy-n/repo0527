@@ -1,4 +1,4 @@
-import type { CameraState, ViewBounds } from '@yzt/map-core';
+import type { CameraState, ViewBounds } from '@mx/map-core';
 
 /** 江苏省的范围（省界数据的实际范围向外取整，ADR 0033），进入地图页、回到默认视角时按它定位 */
 export const JIANGSU_BOUNDS: ViewBounds = [116.35, 30.75, 121.98, 35.15];

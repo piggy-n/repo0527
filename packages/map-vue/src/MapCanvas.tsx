@@ -4,7 +4,7 @@ import {
   type MapLibreViewOptions,
   type MapLike,
   type ScrollZoomRates
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import { defineComponent, onActivated, onDeactivated, onMounted, onUnmounted, type PropType, ref, watch } from 'vue';
 import styles from './MapCanvas.module.scss';
 import { injectMapState } from './use-map';

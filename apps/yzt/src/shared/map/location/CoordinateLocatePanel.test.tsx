@@ -1,5 +1,5 @@
-import type { CameraState, LngLat } from '@yzt/map-core';
-import { type MapHandle, provideMap } from '@yzt/map-vue';
+import type { CameraState, LngLat } from '@mx/map-core';
+import { type MapHandle, provideMap } from '@mx/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';

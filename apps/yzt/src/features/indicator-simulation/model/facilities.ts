@@ -1,5 +1,5 @@
 import { booleanPointInPolygon } from '@turf/boolean-point-in-polygon';
-import type { LngLat } from '@yzt/map-core';
+import type { LngLat } from '@mx/map-core';
 import { stableRandom } from '@/shared/city-indicators/stable-random';
 import { cached } from './cache';
 import type { Calculator } from './calculator';

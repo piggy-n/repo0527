@@ -10,7 +10,7 @@ import {
   planeToLocal,
   renderFloorMap,
   type Rgb
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import { useElementSize } from '@vueuse/core';
 import { ElButton, ElOption, ElRadioButton, ElRadioGroup, ElSelect, ElSwitch } from 'element-plus';
 import { computed, defineComponent, nextTick, ref, shallowRef, watch } from 'vue';

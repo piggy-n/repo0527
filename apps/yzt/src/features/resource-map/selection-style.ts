@@ -1,6 +1,6 @@
 import type { ExpressionSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Feature, Geometry } from 'geojson';
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 
 /** 分组名：选中要素的高亮，放在 resources 之上、basemap-labels 之下（ADR 0047 第 5 节） */
 export const SELECTION_GROUP = 'selection';

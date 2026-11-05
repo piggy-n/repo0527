@@ -1,5 +1,5 @@
-import type { ScreenPoint } from '@yzt/map-core';
-import { useMap } from '@yzt/map-vue';
+import type { ScreenPoint } from '@mx/map-core';
+import { useMap } from '@mx/map-vue';
 import { computed, defineComponent, type PropType, ref } from 'vue';
 import { useShownElementSize } from '../../composables/useShownElementSize';
 import { SvgIcon } from '../../icons/SvgIcon';

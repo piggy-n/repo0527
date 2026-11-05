@@ -3,7 +3,7 @@ import type {
   RasterLayerSpecification,
   RasterSourceSpecification
 } from '@maplibre/maplibre-gl-style-spec';
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import type { TiandituConfig } from '../../config/app-config';
 import staticThumbnailUrl from './images/static-thumbnail.svg?url';
 import { staticBasemapGroup, staticLabelsGroup } from './static-basemap';

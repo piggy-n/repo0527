@@ -1,6 +1,6 @@
 // @vitest-environment node
-import type { CameraState, LngLat, PickResult, RoamStatus, ScreenPoint } from '@yzt/map-core';
-import type { MapViewport } from '@yzt/map-vue';
+import type { CameraState, LngLat, PickResult, RoamStatus, ScreenPoint } from '@mx/map-core';
+import type { MapViewport } from '@mx/map-vue';
 import { describe, expect, it } from 'vitest';
 import { effectScope, ref, shallowRef } from 'vue';
 import { useMapReadout } from './useMapReadout';

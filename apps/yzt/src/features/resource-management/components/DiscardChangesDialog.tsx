@@ -1,4 +1,4 @@
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { ElButton, ElDialog } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import type { useResourceDetail } from '../composables/useResourceDetail';

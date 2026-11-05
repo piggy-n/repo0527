@@ -1,5 +1,5 @@
-import { BROWSE_TOOL, type MapTool, type ViewKind } from '@yzt/map-core';
-import { provideMap } from '@yzt/map-vue';
+import { BROWSE_TOOL, type MapTool, type ViewKind } from '@mx/map-core';
+import { provideMap } from '@mx/map-vue';
 import { useEventListener } from '@vueuse/core';
 import { ElRadioButton, ElRadioGroup, ElSwitch } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, shallowRef, watch } from 'vue';

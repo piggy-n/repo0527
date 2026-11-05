@@ -1,4 +1,4 @@
-import type { ViewBounds } from '@yzt/map-core';
+import type { ViewBounds } from '@mx/map-core';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent, ref } from 'vue';

@@ -4,7 +4,7 @@ import { booleanIntersects } from '@turf/boolean-intersects';
 import { booleanPointInPolygon } from '@turf/boolean-point-in-polygon';
 import { intersect } from '@turf/intersect';
 import type { Feature, Geometry, MultiPolygon, Polygon, Position } from 'geojson';
-import type { LngLat } from '@yzt/map-core';
+import type { LngLat } from '@mx/map-core';
 
 /** 区划裁剪的范围（ADR 0051 第 1 节）：已加载的区划边界；识别范围和它求交后也是这个类型 */
 export type RegionScope = Polygon | MultiPolygon;

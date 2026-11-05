@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { diffStyle, type StyleGroup, StyleModel } from '@yzt/map-core';
+import { diffStyle, type StyleGroup, StyleModel } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import {
   BOUNDARY_OPTIONS,

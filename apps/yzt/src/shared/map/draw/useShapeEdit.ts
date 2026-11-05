@@ -1,5 +1,5 @@
-import type { MapInputEvent, MapTool, ScreenPoint, StyleGroup, ToolView } from '@yzt/map-core';
-import type { MapContext } from '@yzt/map-vue';
+import type { MapInputEvent, MapTool, ScreenPoint, StyleGroup, ToolView } from '@mx/map-core';
+import type { MapContext } from '@mx/map-vue';
 import type { MultiPolygon } from 'geojson';
 import { computed, type ComputedRef, getCurrentScope, type ShallowRef, shallowReadonly, shallowRef } from 'vue';
 import type { PointerHintContent } from '../pointer-hint/pointer-hint';

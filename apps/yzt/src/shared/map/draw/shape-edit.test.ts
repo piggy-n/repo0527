@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { MultiPolygon } from 'geojson';
-import type { LngLat, ScreenPoint } from '@yzt/map-core';
+import type { LngLat, ScreenPoint } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import { editGroup, handleAt, handlesOf, insertVertex, moveVertex, removeVertex } from './shape-edit';
 

@@ -1,4 +1,4 @@
-import type { ScreenBox } from '@yzt/map-core';
+import type { ScreenBox } from '@mx/map-core';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { nextTick, shallowRef } from 'vue';

@@ -11,9 +11,9 @@ import type {
   SelectedFeature,
   StyleGroup,
   ToolView
-} from '@yzt/map-core';
-import type { CameraOperation, MapContext } from '@yzt/map-vue';
-import { LatestController } from '@yzt/utils';
+} from '@mx/map-core';
+import type { CameraOperation, MapContext } from '@mx/map-vue';
+import { LatestController } from '@mx/utils';
 import {
   computed,
   type ComputedRef,

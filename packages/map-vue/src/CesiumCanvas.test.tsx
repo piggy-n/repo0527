@@ -5,7 +5,7 @@ import {
   type SourceErrors,
   type Unsubscribe,
   type ViewState
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, onMounted, provide, ref } from 'vue';

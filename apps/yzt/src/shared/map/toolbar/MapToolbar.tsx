@@ -1,4 +1,4 @@
-import { useMap, useMapOverlay } from '@yzt/map-vue';
+import { useMap, useMapOverlay } from '@mx/map-vue';
 import { ElTooltip } from 'element-plus';
 import { defineComponent, type PropType, ref, type SlotsType, type VNode } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';

@@ -1,4 +1,4 @@
-import { useMapOverlay } from '@yzt/map-vue';
+import { useMapOverlay } from '@mx/map-vue';
 import { defineComponent, type PropType, ref } from 'vue';
 import { SvgIcon } from '../../icons/SvgIcon';
 import { RegionTrail } from './RegionTrail';

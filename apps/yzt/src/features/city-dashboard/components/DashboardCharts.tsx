@@ -1,6 +1,6 @@
 import { computed, defineComponent, ref, shallowRef, watch, type PropType } from 'vue';
 import { ElButton, ElDialog } from 'element-plus';
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { usePreferredReducedMotion, useResizeObserver } from '@vueuse/core';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { CITIES } from '../catalog';

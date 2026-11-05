@@ -1,4 +1,4 @@
-import { MxPanel, MxSplitLayout } from '@yzt/ui';
+import { MxPanel, MxSplitLayout } from '@mx/ui';
 import { ElButton, ElMessage, ElOption, ElPagination, ElSelect } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import type { Application } from '@/features/data-application/api';

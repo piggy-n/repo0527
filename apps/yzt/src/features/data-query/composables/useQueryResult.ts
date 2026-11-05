@@ -1,7 +1,7 @@
 import { bbox } from '@turf/bbox';
-import type { StyleGroup, ViewBounds } from '@yzt/map-core';
-import type { CameraOperation, MapContext } from '@yzt/map-vue';
-import { LatestController } from '@yzt/utils';
+import type { StyleGroup, ViewBounds } from '@mx/map-core';
+import type { CameraOperation, MapContext } from '@mx/map-vue';
+import { LatestController } from '@mx/utils';
 import type { FeatureCollection } from 'geojson';
 import {
   computed,

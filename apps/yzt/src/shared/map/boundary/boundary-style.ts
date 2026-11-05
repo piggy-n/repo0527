@@ -3,7 +3,7 @@ import type {
   GeoJSONSourceSpecification,
   LineLayerSpecification
 } from '@maplibre/maplibre-gl-style-spec';
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import cityUrl from './data/jiangsu-city.json?url';
 import countyUrl from './data/jiangsu-county.json?url';
 import provinceUrl from './data/jiangsu-province.json?url';

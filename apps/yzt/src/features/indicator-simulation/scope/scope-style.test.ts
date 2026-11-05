@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import type { MultiPolygon, Polygon } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import type { RegionCover } from '@/shared/map/area/area-coverage';

@@ -1,4 +1,4 @@
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import type {
   ExpressionSpecification,
   FilterSpecification,

@@ -1,4 +1,4 @@
-import { LatestController } from '@yzt/utils';
+import { LatestController } from '@mx/utils';
 import { computed, onScopeDispose, shallowRef } from 'vue';
 import { ApiError } from '@/shared/http/errors';
 import { type AiSessionMessage, type ChatStreamEvent, fetchAiSessionMessages, postChat, streamChat } from '../api';

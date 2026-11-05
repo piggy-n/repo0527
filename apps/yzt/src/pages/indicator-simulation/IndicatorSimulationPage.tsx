@@ -1,4 +1,4 @@
-import { provideMap } from '@yzt/map-vue';
+import { provideMap } from '@mx/map-vue';
 import { ElMessage } from 'element-plus';
 import { computed, defineComponent, ref, Transition, watch } from 'vue';
 import { AiDock } from '@/features/indicator-simulation/components/AiDock';

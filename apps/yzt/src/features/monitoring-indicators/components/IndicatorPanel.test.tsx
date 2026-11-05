@@ -1,6 +1,6 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
-import { provideMap } from '@yzt/map-vue';
+import { provideMap } from '@mx/map-vue';
 import { ElMessageBox, type MessageBoxData } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';

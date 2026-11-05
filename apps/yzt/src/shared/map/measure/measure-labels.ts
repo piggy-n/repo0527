@@ -6,7 +6,7 @@ import {
   type MeasureDraft,
   type MeasureKind,
   type MeasureState
-} from '@yzt/map-core';
+} from '@mx/map-core';
 
 /** 地图上的一个测量标签；结果标签带关闭按钮，measurementId 是要删除的那一条 */
 export interface MeasureLabel {

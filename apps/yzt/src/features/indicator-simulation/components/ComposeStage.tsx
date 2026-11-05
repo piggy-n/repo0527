@@ -1,4 +1,4 @@
-import { MxSplitLayout } from '@yzt/ui';
+import { MxSplitLayout } from '@mx/ui';
 import { computed, defineComponent, type PropType } from 'vue';
 import { JIANGSU_CITIES } from '@/shared/map/region/region-catalog';
 import { missingConditions } from '../compose/composition';

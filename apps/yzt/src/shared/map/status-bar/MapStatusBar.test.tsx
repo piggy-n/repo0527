@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils';
-import type { LngLat, WalkView } from '@yzt/map-core';
+import type { LngLat, WalkView } from '@mx/map-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, shallowRef } from 'vue';
 import type { CoordinateFormat } from '../location/coordinate-format';

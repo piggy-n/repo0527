@@ -1,5 +1,5 @@
 import { Connection } from '@element-plus/icons-vue';
-import { MxPanel, MxSplitLayout } from '@yzt/ui';
+import { MxPanel, MxSplitLayout } from '@mx/ui';
 import { ElButton, ElMessage, ElOption, ElSelect } from 'element-plus';
 import { defineComponent, ref } from 'vue';
 import type { ResourceDirectory, ResourceRecord } from '@/features/resource-management/api';

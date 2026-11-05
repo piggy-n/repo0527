@@ -7,8 +7,8 @@ import {
   planRegions,
   prepareTileset,
   type RegionPlan
-} from '@yzt/map-core';
-import { LatestController } from '@yzt/utils';
+} from '@mx/map-core';
+import { LatestController } from '@mx/utils';
 import { onScopeDispose, type Ref, shallowRef } from 'vue';
 
 /** 建好的导航网格，连同楼层和区域着色 */

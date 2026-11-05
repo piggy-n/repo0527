@@ -1,6 +1,6 @@
 import { Upload } from '@element-plus/icons-vue';
 import { useMediaQuery } from '@vueuse/core';
-import { COMPACT_MEDIA_QUERY, MxPanel, MxSplitLayout } from '@yzt/ui';
+import { COMPACT_MEDIA_QUERY, MxPanel, MxSplitLayout } from '@mx/ui';
 import { ElButton, ElMessage, ElOption, ElPagination, ElSelect, ElTable, ElTableColumn, ElTag } from 'element-plus';
 import { computed, defineComponent, reactive, type Ref, ref } from 'vue';
 import { DEFAULT_CATEGORY_ID, findCategoryPath } from '@/features/file-management/categories';

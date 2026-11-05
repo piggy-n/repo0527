@@ -9,7 +9,7 @@ import type {
   ScreenBox,
   ScreenPoint,
   ViewKind
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import { isValidPolygonal, QUERY_VERTEX_LIMIT, screenBoxPolygon, vertexCount } from '@/shared/map/query-geometry';
 import type { RegionScope } from '@/shared/map/region/region-scope';

@@ -1,4 +1,4 @@
-import type { ScreenPoint } from '@yzt/map-core';
+import type { ScreenPoint } from '@mx/map-core';
 import { computed, defineComponent, type PropType, ref } from 'vue';
 import { useShownElementSize } from '../../composables/useShownElementSize';
 import { pointerHintSides, type Size } from './pointer-hint';

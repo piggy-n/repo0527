@@ -1,4 +1,4 @@
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { ElButton } from 'element-plus';
 import { defineComponent, type PropType, ref } from 'vue';
 import type { ShapeKind } from '@/shared/map/draw/shape-draw';

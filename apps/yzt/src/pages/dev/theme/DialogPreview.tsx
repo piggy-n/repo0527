@@ -1,4 +1,4 @@
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { ElButton, ElDialog, ElForm, ElFormItem, ElInput } from 'element-plus';
 import { defineComponent, ref } from 'vue';
 

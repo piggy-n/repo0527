@@ -1,4 +1,4 @@
-import type { ScreenBox } from '@yzt/map-core';
+import type { ScreenBox } from '@mx/map-core';
 import { defineComponent, type PropType, type Ref, ref } from 'vue';
 import { useShownElementSize } from '../../composables/useShownElementSize';
 import type { PointerHintContent } from '../pointer-hint/pointer-hint';

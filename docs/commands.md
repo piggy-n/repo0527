@@ -209,7 +209,7 @@ pnpm add -Dw -E some-tool
 
 **什么时候用**：放入新图标而开发服务器没有开着时；开着的话会自动处理。
 
-**执行了什么**：运行 `@yzt/icons` 提供的 `yzt-icons src/assets/icons src/shared/icons/icons.json`。加 `--check` 只检查不改动，有待处理的内容时退出码为 1。
+**执行了什么**：运行 `@mx/icons` 提供的 `yzt-icons src/assets/icons src/shared/icons/icons.json`。加 `--check` 只检查不改动，有待处理的内容时退出码为 1。
 
 **注意事项**：中文文件名会报错，需要手动改名；处理后提交图标文件和 `icons.json`。详见 [modules/icons.md](modules/icons.md)。
 
@@ -236,7 +236,7 @@ pnpm --filter yzt test:smoke
 
 **什么时候用**：提交代码前；改了类型、接口、tsconfig 之后。
 
-**执行了什么**：根目录的 `pnpm -r typecheck` 在每个有这个脚本的包里执行 `tsc -b`（`@yzt/theme` 没有 TS，跳过）：
+**执行了什么**：根目录的 `pnpm -r typecheck` 在每个有这个脚本的包里执行 `tsc -b`（`@mx/theme` 没有 TS，跳过）：
 
 1. 读取 `tsconfig.json` 的 `references`
 2. 依次全量检查各份配置（应用的 `app`、`worker`、`node`，包的 `lib`、`test`、`node`，见 [config/tsconfig.md](config/tsconfig.md)）
@@ -296,7 +296,7 @@ pnpm --filter yzt test:smoke
 **注意事项**：
 
 - 测试文件和源文件放在一起，显式从 `vitest` 导入 `describe`、`it`、`expect`（不开 `globals`）
-- 只跑一个包：`pnpm --filter @yzt/map-core test`；只跑某个目录或文件：`pnpm --filter yzt test -- src/app/router`
+- 只跑一个包：`pnpm --filter @mx/map-core test`；只跑某个目录或文件：`pnpm --filter yzt test -- src/app/router`
 - 本地 `it.only` 会让其他用例被跳过，lint 会报错；CI 中 Vitest 会直接拒绝运行
 - Vitest 只转译不做类型检查，测试文件的类型由 `pnpm typecheck` 检查
 - 改了 Vite 插件的选项、或怀疑测试用的是旧的转换结果时，先清缓存：`pnpm --filter yzt exec vitest --clearCache`（缓存键不含插件选项，见 [config/vite-config.md](config/vite-config.md)"测试耗时"）

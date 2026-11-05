@@ -1,5 +1,5 @@
 import { Connection } from '@element-plus/icons-vue';
-import { MxPanel, MxSplitLayout } from '@yzt/ui';
+import { MxPanel, MxSplitLayout } from '@mx/ui';
 import { ElAlert, ElButton, ElMessage, ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';

@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowRight } from '@element-plus/icons-vue';
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { ElButton, ElProgress } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, useId } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';

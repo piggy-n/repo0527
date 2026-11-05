@@ -1,6 +1,6 @@
 # 主题落地：设计令牌与 Element Plus 映射
 
-对应文件：`packages/theme/src/`（`@yzt/theme`，令牌、Element 主题、全局基础样式，ADR 0143）；`apps/yzt/src/app/styles/`（字体声明和样式入口）
+对应文件：`packages/theme/src/`（`@mx/theme`，令牌、Element 主题、全局基础样式，ADR 0143）；`apps/yzt/src/app/styles/`（字体声明和样式入口）
 规范原文：[color-and-typography.md](color-and-typography.md)
 
 规范是**参考**而不是硬性要求（2026-09-29 确认）：色值、字号、阴影优先取自规范；规范和 Element 的交互风格冲突时（例如悬停方向），优先和 Element 保持一致。
@@ -21,19 +21,19 @@ Element    --el-color-*、--el-text-color-* ……                  element-them
 | `tokens.scss` | 规范中的全部令牌，输出到 `:root` |
 | `element-theme.scss` | 把令牌映射到 Element 的 CSS 变量 |
 | `base.scss` | `body`、滚动条等全局基础样式 |
-| `_index.scss` | 包的 Sass 入口（`@use '@yzt/theme'`），按上面的顺序加载 |
+| `_index.scss` | 包的 Sass 入口（`@use '@mx/theme'`），按上面的顺序加载 |
 | `apps/yzt/src/app/styles/fonts.scss` | 字体声明。留在应用：字体文件不入库，地址依赖应用的 `public`（ADR 0012、0013）；`--font-family-base` 只写字体名，没有字体文件时回退到后面的字体 |
-| `apps/yzt/src/app/styles/index.scss` | 应用的样式入口：先 `fonts`，再 `@yzt/theme` |
+| `apps/yzt/src/app/styles/index.scss` | 应用的样式入口：先 `fonts`，再 `@mx/theme` |
 
 `main.ts` 中必须先 import `element-plus/dist/index.css`，再 import `./styles/index.scss`。两边都在 `:root` 上定义变量，优先级相同，后加载的生效。
 
-`@yzt/theme` 的入口输出 CSS，整个应用只能由 `app/styles/index.scss` 引用一次，别的样式文件 `@use` 它会重复输出一份。它不导入 element-plus，`element-theme.scss` 只写 `--el-*` 变量和 `.el-*` 选择器；`peerDependencies` 里的 `element-plus` 声明这份样式针对哪个版本写的。
+`@mx/theme` 的入口输出 CSS，整个应用只能由 `app/styles/index.scss` 引用一次，别的样式文件 `@use` 它会重复输出一份。它不导入 element-plus，`element-theme.scss` 只写 `--el-*` 变量和 `.el-*` 选择器；`peerDependencies` 里的 `element-plus` 声明这份样式针对哪个版本写的。
 
 搬进包时（2026-11-05）比较过：内网构建的入口 CSS 和搬之前逐字节相同。
 
 ### 为什么用 CSS 变量作为约定
 
-- 页面、`@yzt/ui` 等组件只写 `var(--color-primary)`，不需要 import `@yzt/theme` 的 SCSS，不破坏依赖方向
+- 页面、`@mx/ui` 等组件只写 `var(--color-primary)`，不需要 import `@mx/theme` 的 SCSS，不破坏依赖方向
 - 主题值只在 `tokens.scss` 定义一次，Element 的变量也引用它，改一处全局生效
 
 色板用 Sass map 维护，是因为 Element 的部分色阶需要在编译时用 `color.mix` 计算，而 CSS 变量在编译时拿不到值。Sass map 在输出 `--color-*` 的同时供 `element-theme.scss` 读取，所以色值仍然只写一次。
@@ -323,4 +323,4 @@ CSS 目前没有 lint 检查，以上规则靠评审保证。需要强制检查�
 - 规范有变化：先更新 [color-and-typography.md](color-and-typography.md)，再改 `tokens.scss` 和本文
 - 新增令牌：沿用第 7 节的命名方式，并在本文"令牌清单"中登记
 - 升级 Element Plus：重新统计 `light-3`、`light-7`、`dark-2` 的用法，确认 CSS 变量名没有变化，并检查新增的写死奇数字号；确认表格不传 `size` 时仍然没有尺寸类、`el-table--small` 和 `el-table--large` 的类名没有变化（行高 48 的选择器依赖它们）；确认表格空状态的类名 `el-table__empty-text` 没有变化（骨架屏依赖它）；确认树的节点文字仍是 `.el-tree-node__label`、叶子的展开图标仍带 `is-leaf`、默认缩进仍是 18（树的颜色、分组字重和引导线依赖它们）
-- 修改后打开主题预览页（开发服务器的 `/dev/theme`，只在开发环境注册），逐项检查色板、间距与圆角、按钮、表单、查询表单、标签、树、表格，以及最后四节的 `@yzt/ui` 标题、区块、面板和分栏布局（分栏布局要把窗口拖到 1200 以下，检查抽屉）
+- 修改后打开主题预览页（开发服务器的 `/dev/theme`，只在开发环境注册），逐项检查色板、间距与圆角、按钮、表单、查询表单、标签、树、表格，以及最后四节的 `@mx/ui` 标题、区块、面板和分栏布局（分栏布局要把窗口拖到 1200 以下，检查抽屉）

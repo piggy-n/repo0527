@@ -15,7 +15,7 @@ import {
   renderFloorMap,
   type RgbaImage,
   type WalkPlayer
-} from '@yzt/map-core';
+} from '@mx/map-core';
 
 /** 室内地图（ADR 0087）：导航网格分好的楼层和按区域的着色；north 是局部 y 轴的方位角，画图时按它旋转、正北朝上 */
 export interface IndoorMap {

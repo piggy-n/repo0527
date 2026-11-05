@@ -11,8 +11,8 @@ import {
   type WalkRoamStatus,
   type WalkView,
   WALK_VIEWS
-} from '@yzt/map-core';
-import type { CameraOperation, MapContext } from '@yzt/map-vue';
+} from '@mx/map-core';
+import type { CameraOperation, MapContext } from '@mx/map-vue';
 import {
   computed,
   type ComputedRef,

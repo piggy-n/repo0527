@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, Close, Plus } from '@element-plus/icons-vue';
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import {
   ElButton,
   ElCascader,

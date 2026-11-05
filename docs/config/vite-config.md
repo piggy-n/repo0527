@@ -1,7 +1,7 @@
 # vite.config.ts 配置说明
 
 对应文件：`apps/yzt/vite.config.ts`
-相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（@yzt/ui 的 Sass 入口）、ADR 0143（libs 搬成包）、ADR 0079（Cesium 的运行时文件）、ADR 0141（未入库的本地文件）
+相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（@mx/ui 的 Sass 入口）、ADR 0143（libs 搬成包）、ADR 0079（Cesium 的运行时文件）、ADR 0141（未入库的本地文件）
 
 ## 整体结构
 
@@ -34,7 +34,7 @@ const generators =
 
 - 两者都在 `buildStart` 钩子中运行：开发服务器启动时、构建开始时各一次。修改 `.env` 或 `vite.config.ts` 引用的文件（例如文字轮廓的清单 `paths.ts`）后开发服务器会自动重启，所以改名称后轮廓会自动更新；`iconsPlugin` 还会监听图标目录，放入或删除 SVG 时立即处理
 - 测试模式（`mode === 'test'`，即 Vitest）下不加入：测试检查已提交的结果，不在运行时改动源文件
-- `systemTitlePlugin` 从 `./tools/system-title/vite-plugin.ts` 导入，带 `.ts` 扩展名，因为同一份代码也由 Node 直接运行；`iconsPlugin` 从 workspace 包的 `@yzt/icons/tools` 入口导入
+- `systemTitlePlugin` 从 `./tools/system-title/vite-plugin.ts` 导入，带 `.ts` 扩展名，因为同一份代码也由 Node 直接运行；`iconsPlugin` 从 workspace 包的 `@mx/icons/tools` 入口导入
 - 同时开着多个开发服务器时，它们都会处理图标目录；`iconsPlugin` 对此做了容错，见 [modules/icons.md](../modules/icons.md)
 
 ### 不经过打包的文件
@@ -163,7 +163,7 @@ Vitest 5 运行结束时会打印各部分所占的比例：导入 32～36%、�
 
 ### 包的 Sass 入口
 
-没有 Sass 相关的配置：样式写 `@use '@yzt/ui'`，Vite 解析 Sass 时带 `sass` 条件，找到包的 `exports` 里的 `_index.scss`（ADR 0143），见 [internal-packages.md](internal-packages.md) 的"Sass 入口"。原来用 `loadPaths` 指向 `src/libs` 的做法，每个应用都要绑定目录结构，已经去掉。
+没有 Sass 相关的配置：样式写 `@use '@mx/ui'`，Vite 解析 Sass 时带 `sass` 条件，找到包的 `exports` 里的 `_index.scss`（ADR 0143），见 [internal-packages.md](internal-packages.md) 的"Sass 入口"。原来用 `loadPaths` 指向 `src/libs` 的做法，每个应用都要绑定目录结构，已经去掉。
 
 已验证：开发服务器和生产构建中，顶部栏的 `@media (width < #{ui.$compact})` 都编译成了 `(width < 1200px)`。
 

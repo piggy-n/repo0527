@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { serveWorker } from '@yzt/utils';
+import { serveWorker } from '@mx/utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAreaAnalyzer } from './area-analyzer';
 import { AREA_LIMITS } from './area-geometry';

@@ -1,5 +1,5 @@
-import type { MapViewFailure } from '@yzt/map-core';
-import type { MapViewState } from '@yzt/map-vue';
+import type { MapViewFailure } from '@mx/map-core';
+import type { MapViewState } from '@mx/map-vue';
 
 /** 地图状态要显示的内容（ADR 0030）：界面只负责显示，文案和能否重试都在这里决定 */
 export type MapStatus =

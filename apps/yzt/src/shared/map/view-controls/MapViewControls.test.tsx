@@ -1,5 +1,5 @@
-import type { CameraState } from '@yzt/map-core';
-import { provideMap } from '@yzt/map-vue';
+import type { CameraState } from '@mx/map-core';
+import { provideMap } from '@mx/map-vue';
 import { DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
 import { ElSlider } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';

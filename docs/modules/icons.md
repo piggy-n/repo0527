@@ -1,4 +1,4 @@
-# 图标（@yzt/icons 与 SvgIcon）
+# 图标（@mx/icons 与 SvgIcon）
 
 相关决策：ADR 0014
 对应目录：`packages/icons/`（通用部分）、`apps/yzt/src/assets/icons/`（项目的图标文件）、`apps/yzt/src/shared/icons/`（项目的图标组件与注册表）
@@ -75,7 +75,7 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
 | 时机 | 做什么 |
 |---|---|
 | 开发服务器启动、图标目录有变化 | `iconsPlugin` 自动处理，出错只打印，不影响开发服务器 |
-| `pnpm icons` | 手动处理（`yzt-icons` 命令，由 `@yzt/icons` 提供） |
+| `pnpm icons` | 手动处理（`yzt-icons` 命令，由 `@mx/icons` 提供） |
 | `pnpm build` | 构建开始时处理一次；有无法处理的文件（如中文名）时构建失败 |
 | `pnpm test`（CI 也会运行） | `apps/yzt/tools/icons/icons.test.ts` 以检查模式运行，有未处理的文件或注册表过期时失败，并提示运行 `pnpm icons` |
 
@@ -97,11 +97,11 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
 
 ```
 packages/icons/
-├─ src/                          浏览器端，入口 @yzt/icons
+├─ src/                          浏览器端，入口 @mx/icons
 │  ├─ index.ts
 │  ├─ create-icon-component.tsx  图标组件工厂
 │  └─ icon.module.css            基础样式（1em、inline-block、基线对齐）
-└─ tools/                        Node 端，入口 @yzt/icons/tools，不会进入浏览器产物
+└─ tools/                        Node 端，入口 @mx/icons/tools，不会进入浏览器产物
    ├─ index.ts
    ├─ naming.ts                  文件名 → 短横线命名
    ├─ normalize.ts               SVGO 规范化
@@ -126,7 +126,7 @@ packages/icons/
 - **函数签名写法定义组件**：`defineComponent((props: IconProps<Name>) => ..., { props: [...] })`，props 的类型由参数决定，适合泛型组件，避免了 `PropType` 在泛型下的类型断言
 - **内联 `<svg>` 而不是雪碧图**：不需要把所有图标注入页面 DOM，也不依赖已不维护的 `vite-plugin-svg-icons`。所有注册的图标都会打进包里（2026-09-30 的 10 个图标，注册表约 14 KB，gzip 后约 5 KB），几十个图标可以接受；图标数量增长到上百个时，再考虑按需加载
 - **注册表是生成的 JSON**：TS 能从 JSON 推断出每个键，所以不需要生成 TS 代码，也避开了生成代码的格式和 lint 问题
-- **两个入口**：`@yzt/icons` 只含浏览器代码；SVGO 等 Node 代码在 `@yzt/icons/tools`，已验证生产产物中不含 SVGO
+- **两个入口**：`@mx/icons` 只含浏览器代码；SVGO 等 Node 代码在 `@mx/icons/tools`，已验证生产产物中不含 SVGO
 
 ## 当前的图标
 

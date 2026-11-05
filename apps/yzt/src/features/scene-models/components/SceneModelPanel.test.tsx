@@ -6,8 +6,8 @@ import {
   type RoamStatus,
   type SceneStatus,
   type WalkNotice
-} from '@yzt/map-core';
-import { type CameraControl, provideMap } from '@yzt/map-vue';
+} from '@mx/map-core';
+import { type CameraControl, provideMap } from '@mx/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { ElOption, ElSelect } from 'element-plus';
 import { afterEach, describe, expect, it, vi } from 'vitest';

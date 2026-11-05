@@ -1,4 +1,4 @@
-import type { CameraControl, MapContext } from '@yzt/map-vue';
+import type { CameraControl, MapContext } from '@mx/map-vue';
 import { getCurrentScope } from 'vue';
 import { JIANGSU_BOUNDS } from './jiangsu';
 

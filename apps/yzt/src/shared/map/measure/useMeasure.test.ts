@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { MapInputEvent, ToolView } from '@yzt/map-core';
+import type { MapInputEvent, ToolView } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import { computed, effectScope } from 'vue';
 import { MEASURE_TOOL_IDS, measureKindOf, useMeasure } from './useMeasure';

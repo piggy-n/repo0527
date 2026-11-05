@@ -1,5 +1,5 @@
 import { Close, RefreshLeft, VideoPause, VideoPlay } from '@element-plus/icons-vue';
-import { MxPanel } from '@yzt/ui';
+import { MxPanel } from '@mx/ui';
 import { ElButton, ElProgress, ElRadioButton, ElRadioGroup, ElTooltip } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';

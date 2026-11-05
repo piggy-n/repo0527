@@ -1,4 +1,4 @@
-import type { MapContext } from '@yzt/map-vue';
+import type { MapContext } from '@mx/map-vue';
 import { onScopeDispose } from 'vue';
 import type { LoadTrace } from '../perf/load-trace';
 import { type LoginToMapStep, loginToMap } from '../perf/login-to-map';

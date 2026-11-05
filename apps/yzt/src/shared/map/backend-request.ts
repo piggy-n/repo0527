@@ -1,4 +1,4 @@
-import type { MapCanvasMapOptions } from '@yzt/map-vue';
+import type { MapCanvasMapOptions } from '@mx/map-vue';
 import { z } from 'zod';
 import { useSessionStore } from '../auth/session-store';
 import { appConfig } from '../config/app-config';

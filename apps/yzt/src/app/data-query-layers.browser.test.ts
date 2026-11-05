@@ -1,4 +1,4 @@
-import { type CameraState, MapLibreView, MapSession } from '@yzt/map-core';
+import { type CameraState, MapLibreView, MapSession } from '@mx/map-core';
 import { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it } from 'vitest';
 import type { QueryRequest, ResultFeatures } from '@/features/data-query/api';

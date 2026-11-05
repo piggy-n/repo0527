@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { booleanPointInPolygon } from '@turf/boolean-point-in-polygon';
 import type { MultiPolygon, Polygon, Position } from 'geojson';
-import { type StyleGroup, StyleModel } from '@yzt/map-core';
+import { type StyleGroup, StyleModel } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import cityFile from '../boundary/data/jiangsu-city.json?raw';
 import cityUrl from '../boundary/data/jiangsu-city.json?url';

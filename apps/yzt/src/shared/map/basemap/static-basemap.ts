@@ -7,7 +7,7 @@ import type {
   LineLayerSpecification,
   SymbolLayerSpecification
 } from '@maplibre/maplibre-gl-style-spec';
-import { overlayDetailMetadata, type StyleGroup, type StyleRoot } from '@yzt/map-core';
+import { overlayDetailMetadata, type StyleGroup, type StyleRoot } from '@mx/map-core';
 import cityUrl from '../boundary/data/jiangsu-city.json?url';
 import labelsUrl from './data/jiangsu-labels.json?url';
 import { STATIC_BASEMAP_OPTIONS } from './static-options';

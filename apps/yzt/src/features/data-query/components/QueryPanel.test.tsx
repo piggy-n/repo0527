@@ -1,6 +1,6 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
-import { provideMap } from '@yzt/map-vue';
+import { provideMap } from '@mx/map-vue';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent } from 'vue';
 import { JIANGSU_CAMERA } from '@/shared/map/jiangsu';

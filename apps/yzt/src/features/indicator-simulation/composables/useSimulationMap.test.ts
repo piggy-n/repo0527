@@ -1,6 +1,6 @@
 // @vitest-environment node
-import type { ViewBounds } from '@yzt/map-core';
-import type { CameraControl } from '@yzt/map-vue';
+import type { ViewBounds } from '@mx/map-core';
+import type { CameraControl } from '@mx/map-vue';
 import { describe, expect, it } from 'vitest';
 import { effectScope, ref } from 'vue';
 import { required } from '@/shared/testing/required';

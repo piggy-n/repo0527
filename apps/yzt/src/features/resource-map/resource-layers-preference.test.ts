@@ -1,4 +1,4 @@
-import { NO_SOURCE_ERRORS } from '@yzt/map-core';
+import { NO_SOURCE_ERRORS } from '@mx/map-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, shallowRef } from 'vue';
 import { createMemoryStore, type KeyValueStore } from '@/shared/storage/key-value-store';

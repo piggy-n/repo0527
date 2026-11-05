@@ -1,6 +1,6 @@
 // @vitest-environment node
-import type { CameraControl, CameraOperation, MapContext, MapViewState } from '@yzt/map-vue';
-import { LatestController } from '@yzt/utils';
+import type { CameraControl, CameraOperation, MapContext, MapViewState } from '@mx/map-vue';
+import { LatestController } from '@mx/utils';
 import { describe, expect, it, vi } from 'vitest';
 import { effectScope, ref } from 'vue';
 import { JIANGSU_BOUNDS } from './jiangsu';

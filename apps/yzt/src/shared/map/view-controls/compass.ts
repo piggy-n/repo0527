@@ -1,4 +1,4 @@
-import type { CameraState } from '@yzt/map-core';
+import type { CameraState } from '@mx/map-core';
 import { visibleAngles } from '../status-bar/status-bar';
 
 /** 指北针的提示和无障碍名称（ADR 0058）：转过时写出当前的角度，写法和状态栏一样，小角度不写成 358° */

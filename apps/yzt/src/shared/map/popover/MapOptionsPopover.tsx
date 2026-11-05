@@ -1,5 +1,5 @@
 import { Close } from '@element-plus/icons-vue';
-import { useMapOverlay } from '@yzt/map-vue';
+import { useMapOverlay } from '@mx/map-vue';
 import { ElButton, ElPopover } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, type SlotsType, type VNode, watch } from 'vue';
 import { usePageActive } from '../../composables/usePageActive';

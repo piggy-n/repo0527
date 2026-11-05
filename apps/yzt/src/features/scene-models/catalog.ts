@@ -1,4 +1,4 @@
-import { RoutePath } from '@yzt/map-core';
+import { RoutePath } from '@mx/map-core';
 import { findRegion } from '@/shared/map/region/region-catalog';
 import type { ManifestModel, SceneManifest } from './api';
 

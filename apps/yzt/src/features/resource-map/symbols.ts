@@ -5,7 +5,7 @@ import {
   type FillLayerSpecification,
   type LineLayerSpecification
 } from '@maplibre/maplibre-gl-style-spec';
-import type { StyleImages } from '@yzt/map-core';
+import type { StyleImages } from '@mx/map-core';
 import type { ResourceGeometry } from './catalog';
 import type { ClassItem, SymbolClasses } from './classification';
 import {

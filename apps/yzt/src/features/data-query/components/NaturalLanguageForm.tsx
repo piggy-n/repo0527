@@ -1,5 +1,5 @@
 import { Refresh } from '@element-plus/icons-vue';
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { ElButton, ElInput } from 'element-plus';
 import { defineComponent, type PropType } from 'vue';
 import type { AttributeForm } from '../composables/useAttributeForm';

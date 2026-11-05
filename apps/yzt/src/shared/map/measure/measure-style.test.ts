@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { featureFilter } from '@maplibre/maplibre-gl-style-spec';
 import type { FeatureCollection } from 'geojson';
-import { diffStyle, type LngLat, type MeasureState, type StyleGroup, StyleModel } from '@yzt/map-core';
+import { diffStyle, type LngLat, type MeasureState, type StyleGroup, StyleModel } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import { measureGroup } from './measure-style';
 

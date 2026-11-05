@@ -1,4 +1,4 @@
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { ElRadioButton, ElRadioGroup, ElSlider } from 'element-plus';
 import { defineComponent, type PropType, type VNodeChild } from 'vue';
 import { simulationIndicator, standardWalkMinutes, walkMeters, walkOptions } from '../model/indicators';

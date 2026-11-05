@@ -1,6 +1,6 @@
 import type { ExpressionSpecification, LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { StyleGroup } from '@yzt/map-core';
+import type { StyleGroup } from '@mx/map-core';
 import type { QueryRequest, ResultFeatures } from './api';
 import type { QueryLayer } from './topics';
 

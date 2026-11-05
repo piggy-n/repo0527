@@ -1,4 +1,4 @@
-import { MxPanel, MxSplitLayout } from '@yzt/ui';
+import { MxPanel, MxSplitLayout } from '@mx/ui';
 import { defineComponent, type PropType } from 'vue';
 import { useInvalidateApplications } from '@/features/data-application/queries';
 import { useOnNewMessage } from '@/features/message-center/queries';

@@ -1,4 +1,4 @@
-import { MxPanel, MxSplitLayout } from '@yzt/ui';
+import { MxPanel, MxSplitLayout } from '@mx/ui';
 import { ElPagination } from 'element-plus';
 import { computed, defineComponent } from 'vue';
 import { findCategoryPath } from '@/features/file-management/categories';

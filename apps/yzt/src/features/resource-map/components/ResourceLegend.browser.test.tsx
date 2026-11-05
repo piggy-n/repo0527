@@ -1,7 +1,7 @@
 import 'element-plus/dist/index.css';
-import type { CameraState } from '@yzt/map-core';
-import { provideMap } from '@yzt/map-vue';
-import { MxPanel } from '@yzt/ui';
+import type { CameraState } from '@mx/map-core';
+import { provideMap } from '@mx/map-vue';
+import { MxPanel } from '@mx/ui';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { userEvent } from 'vitest/browser';

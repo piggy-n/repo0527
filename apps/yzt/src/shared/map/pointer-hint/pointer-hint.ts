@@ -1,4 +1,4 @@
-import type { ScreenPoint } from '@yzt/map-core';
+import type { ScreenPoint } from '@mx/map-core';
 
 export interface Size {
   readonly width: number;

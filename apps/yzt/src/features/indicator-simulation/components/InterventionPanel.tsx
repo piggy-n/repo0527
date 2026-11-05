@@ -1,4 +1,4 @@
-import { MxPanel } from '@yzt/ui';
+import { MxPanel } from '@mx/ui';
 import { ElButton } from 'element-plus';
 import { computed, defineComponent, type PropType, shallowRef } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';

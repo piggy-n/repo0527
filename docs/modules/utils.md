@@ -1,4 +1,4 @@
-# packages/utils（@yzt/utils）
+# packages/utils（@mx/utils）
 
 纯 TS 的通用工具，不依赖 Vue、Element、Pinia（`.claude/rules/packages.md`）。目前有两部分：Worker 通信层，以及只认最新一次的 `LatestController`。
 

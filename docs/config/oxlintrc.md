@@ -129,7 +129,7 @@ console.log(value);
 
 ### import/resolver
 
-boundaries 要知道 `@/features/map`、`@yzt/map-core` 实际指向哪个文件，才能判断它属于哪一层。这里指定用 `eslint-import-resolver-typescript`，按各 tsconfig 的 `paths` 解析别名。相对路径也会被解析成真实文件，所以 `../layer/store` 这种写法同样能被识别。
+boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件，才能判断它属于哪一层。这里指定用 `eslint-import-resolver-typescript`，按各 tsconfig 的 `paths` 解析别名。相对路径也会被解析成真实文件，所以 `../layer/store` 这种写法同样能被识别。
 
 `project` 是数组：应用和每个 workspace 包各有自己的 tsconfig（阶段二加入 `packages/icons` 后改为数组）。有多个项目时解析器会打印一条性能提示，`noWarnOnMultipleProjects` 用来关掉它。
 
@@ -141,7 +141,7 @@ boundaries 要知道 `@/features/map`、`@yzt/map-core` 实际指向哪个文件
 - `pattern`：匹配的目录。路径相对于仓库根目录，因为 lint 从根目录运行
 - `capture`：把 `*` 匹配到的部分记成变量。`features/*` 的 `name` 让每个 feature 成为独立元素，`features/map` 和 `features/layer` 因此被视为两个不同的单元
 
-`package` 元素对应 `packages/*` 下的 workspace 包（ADR 0014、0143），`name` 捕获包的目录名，包之间的方向按它放行。阶段二实测：没有这条定义时，`@yzt/icons` 经 `node_modules` 下的符号链接解析，被当作外部依赖放行，包内代码导入应用代码也不会报错；加上定义后，解析出的真实路径落在 `packages/icons` 中，被识别为 package 元素，双向的违规都能查出。
+`package` 元素对应 `packages/*` 下的 workspace 包（ADR 0014、0143），`name` 捕获包的目录名，包之间的方向按它放行。阶段二实测：没有这条定义时，`@mx/icons` 经 `node_modules` 下的符号链接解析，被当作外部依赖放行，包内代码导入应用代码也不会报错；加上定义后，解析出的真实路径落在 `packages/icons` 中，被识别为 package 元素，双向的违规都能查出。
 
 ## rules
 
@@ -285,7 +285,7 @@ boundaries 要知道 `@/features/map`、`@yzt/map-core` 实际指向哪个文件
 | 2 | app → pages、feature、shared，且写成 `@/` 别名 | 应用装配层可以组合下面所有层 |
 | 3 | pages → feature、shared，且写成 `@/` 别名 | 页面只负责组合 features |
 | 4 | feature → shared，且写成 `@/` 别名 | feature 之间不互相导入 |
-| 5 | app、pages、feature、shared → package，且写成 `@yzt/*` | 引用包只能用包名，不能用相对路径绕过包的入口（阶段二加入，已验证） |
+| 5 | app、pages、feature、shared → package，且写成 `@mx/*` | 引用包只能用包名，不能用相对路径绕过包的入口（阶段二加入，已验证） |
 | 6 | 全局禁止 `mapbox-gl` | 2.0 起为专有许可（ADR 0002） |
 
 ### 包的策略
@@ -297,8 +297,8 @@ boundaries 要知道 `@/features/map`、`@yzt/map-core` 实际指向哪个文件
 | 0 | 放行所有外部包 | 后面的禁止策略会再收紧 |
 | 1 | 放行 Node 内置模块 | 供 `tools/` 使用 |
 | 2 | 放行包内部的相对导入 | 同一个包内部必须写成相对路径 |
-| 3 | ui、map-core、map-cesium、map-vue → utils，且写成 `@yzt/*` | 包之间的依赖只能用包名 |
-| 4 | map-cesium、map-vue → map-core，且写成 `@yzt/*` | 地图内核被三维和 Vue 衔接层使用 |
+| 3 | ui、map-core、map-cesium、map-vue → utils，且写成 `@mx/*` | 包之间的依赖只能用包名 |
+| 4 | map-cesium、map-vue → map-core，且写成 `@mx/*` | 地图内核被三维和 Vue 衔接层使用 |
 | 5 | map-vue → map-cesium，且只能动态 `import()` | Cesium 体积大，只能懒加载 |
 | 6 | 禁止 utils、map-core、map-cesium 依赖 Vue 生态 | 这三个包要保持框架无关 |
 | 7 | 禁止 map-vue 依赖 vue-router、pinia、element-plus、`@element-plus/**` | map-vue 只负责地图与 Vue 的衔接，界面和项目配置放在 `shared/map`（ADR 0027 第 5 条） |
@@ -311,8 +311,8 @@ boundaries 要知道 `@/features/map`、`@yzt/map-core` 实际指向哪个文件
 - **`"@(./|+(../))**"`（策略 1）**：意思是"以 `./` 开头，或以一个或多个 `../` 开头"。
   - 不能写成 `./**`：底层的 micromatch 会把 `./` 规范化掉，导致 `./store` 匹配不上（阶段一实测）
   - 阶段一原来写的是 `".{,.}/**"`（展开为 `./**`、`../**`），阶段二发现它匹配不了 `../../router/routes`：micromatch 的 `**` 不匹配以点开头的路径段，第二个 `..` 过不去，所以单元内部往上跨两层的相对导入被误报。改成现在的写法后，用 micromatch 4.0.8 实测：`./a`、`../a`、`../../a`、`../../../a` 都匹配，`@/app/x`、`vue` 不匹配；用 lint 实测：两层相对导入通过，单元内部改用 `@/` 别名仍然报错
-- **`"@/**"`（策略 2–4）**：跨单元导入必须写成 `@/` 别名（AGENTS.md"跨单元只用别名"）。阶段二之前这三条策略没有限制写法，用 `../../../shared/...` 这样的相对路径跨单元导入也会放行；2026-09-30 补上，用探针验证 app → shared、pages → feature、feature → shared 改用相对路径后各报 1 处，现有代码没有违规。`@/**` 不会误匹配 `@yzt/icons`、`@element-plus/...` 这类以 `@` 开头的包名（已用 micromatch 验证）
-- **`"@yzt/*"`**：micromatch 的 `*` 不跨越 `/`，所以 `@yzt/map-core/internal` 不匹配。不过这种深层导入在解析那一关就已经失败了（包的 `exports` 只暴露入口）
+- **`"@/**"`（策略 2–4）**：跨单元导入必须写成 `@/` 别名（AGENTS.md"跨单元只用别名"）。阶段二之前这三条策略没有限制写法，用 `../../../shared/...` 这样的相对路径跨单元导入也会放行；2026-09-30 补上，用探针验证 app → shared、pages → feature、feature → shared 改用相对路径后各报 1 处，现有代码没有违规。`@/**` 不会误匹配 `@mx/icons`、`@element-plus/...` 这类以 `@` 开头的包名（已用 micromatch 验证）
+- **`"@mx/*"`**：micromatch 的 `*` 不跨越 `/`，所以 `@mx/map-core/internal` 不匹配。不过这种深层导入在解析那一关就已经失败了（包的 `exports` 只暴露入口）
 - **`"nodeKind": "dynamic-import"`（包的策略 5）**：boundaries 会区分静态 `import` 和动态 `import()`，前者的 `nodeKind` 是 `import`
 - **`captured.name`**：用 `{a,b}` 花括号语法匹配多个模块名
 
@@ -340,7 +340,7 @@ boundaries 要知道 `@/features/map`、`@yzt/map-core` 实际指向哪个文件
 
 有两类问题不归 lint 管，而是交给 TS：
 
-- 深层导入 `@yzt/x/internal`：包的 `exports` 只暴露入口，解析直接失败（TS2307）
+- 深层导入 `@mx/x/internal`：包的 `exports` 只暴露入口，解析直接失败（TS2307）
 - 包读取 `import.meta.env`、使用 `@/`：由包的 `tsconfig.lib.json` 拦截（`no-restricted-properties` 检查不到 `import.meta`），见 [tsconfig.md](tsconfig.md)。`@/shared/...` 在包里解析不出来，boundaries 把它当成外部模块放行，lint 不报（2026-11-05 验证），靠 TS2307
 
 ## 维护指南

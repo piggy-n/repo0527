@@ -1,5 +1,5 @@
-import type { CameraState } from '@yzt/map-core';
-import { provideMap } from '@yzt/map-vue';
+import type { CameraState } from '@mx/map-core';
+import { provideMap } from '@mx/map-vue';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { ElOption, ElSelect, ElSlider } from 'element-plus';
 import SortableJS from 'sortablejs';

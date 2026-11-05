@@ -1,4 +1,4 @@
-import type { ScreenPoint } from '@yzt/map-core';
+import type { ScreenPoint } from '@mx/map-core';
 
 /** 按住多久进入拖动、按住时移动多少像素算取消（ADR 0037 第 5 条） */
 export const LONG_PRESS_DELAY = 500;

@@ -13,7 +13,7 @@ import {
   ElTree
 } from 'element-plus';
 import { defineComponent, ref } from 'vue';
-import { MxPanel, MxSection, MxSplitLayout, MxTitle, useSplitLayout } from '@yzt/ui';
+import { MxPanel, MxSection, MxSplitLayout, MxTitle, useSplitLayout } from '@mx/ui';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import collapsedHandle from '../../space-monitoring-statistics/images/panel-handle-collapsed.webp';
 import expandedHandle from '../../space-monitoring-statistics/images/panel-handle-expanded.webp';
@@ -21,7 +21,7 @@ import styles from './UiComponentsPreview.module.scss';
 
 const descriptionWidths = [480, 320, 200, 140];
 
-/** @yzt/ui 的标题：两个层级、自定义图标、extra、说明、省略 */
+/** @mx/ui 的标题：两个层级、自定义图标、extra、说明、省略 */
 export const TitlePreview = defineComponent({
   name: 'TitlePreview',
   setup() {
@@ -120,7 +120,7 @@ export const TitlePreview = defineComponent({
 
 const reportTables = ['土地利用现状分类面积汇总表', '耕地种植属性统计表', '城镇村及工矿用地统计表'];
 
-/** @yzt/ui 的区块：面板里连续的区块，标题与内容之间 12，区块之间 16 */
+/** @mx/ui 的区块：面板里连续的区块，标题与内容之间 12，区块之间 16 */
 export const SectionPreview = defineComponent({
   name: 'SectionPreview',
   setup() {
@@ -190,7 +190,7 @@ const documentIcon = () => (
   </ElIcon>
 );
 
-/** @yzt/ui 的面板：默认与浅灰标题、操作与底部、表格占满、无头部、去掉内边距 */
+/** @mx/ui 的面板：默认与浅灰标题、操作与底部、表格占满、无头部、去掉内边距 */
 export const PanelPreview = defineComponent({
   name: 'PanelPreview',
   setup() {
@@ -355,7 +355,7 @@ const DirectoryTree = defineComponent({
 });
 
 /**
- * @yzt/ui 的分栏布局：侧栏 320，窄屏（视口 < 1200）时侧栏收进抽屉；collapsible 时宽屏也能收成窄条，
+ * @mx/ui 的分栏布局：侧栏 320，窄屏（视口 < 1200）时侧栏收进抽屉；collapsible 时宽屏也能收成窄条，
  * handles 时收起把手和窄条换成基本统计页的设计图
  */
 export const SplitLayoutPreview = defineComponent({

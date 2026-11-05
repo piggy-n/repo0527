@@ -1,4 +1,4 @@
-import type { MapContext } from '@yzt/map-vue';
+import type { MapContext } from '@mx/map-vue';
 import { computed, type ComputedRef } from 'vue';
 import { compassRotation, compassTitle } from './compass';
 import { VIEW_BUTTON_DURATION } from './zoom';

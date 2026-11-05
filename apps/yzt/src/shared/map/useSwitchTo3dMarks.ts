@@ -1,4 +1,4 @@
-import type { MapContext } from '@yzt/map-vue';
+import type { MapContext } from '@mx/map-vue';
 import { onScopeDispose, watch } from 'vue';
 import type { LoadTrace } from '../perf/load-trace';
 import { type SwitchTo3dStep, switchTo3d } from '../perf/switch-to-3d';

@@ -1,6 +1,6 @@
 import type { Point } from 'geojson';
-import type { CameraState } from '@yzt/map-core';
-import { provideMap } from '@yzt/map-vue';
+import type { CameraState } from '@mx/map-core';
+import { provideMap } from '@mx/map-vue';
 import { mount, type VueWrapper } from '@vue/test-utils';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, shallowRef } from 'vue';

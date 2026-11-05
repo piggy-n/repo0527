@@ -1,4 +1,4 @@
-import type { CameraState, MapSession, StyleGroup } from '@yzt/map-core';
+import type { CameraState, MapSession, StyleGroup } from '@mx/map-core';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, inject, nextTick, onMounted, onUnmounted, ref } from 'vue';

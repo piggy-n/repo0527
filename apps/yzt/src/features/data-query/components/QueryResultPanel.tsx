@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, FullScreen, ScaleToOriginal } from '@element-plus/icons-vue';
-import { useMapOverlay } from '@yzt/map-vue';
-import { MxPanel, MxTitle } from '@yzt/ui';
+import { useMapOverlay } from '@mx/map-vue';
+import { MxPanel, MxTitle } from '@mx/ui';
 import { ElButton, ElPagination, ElTable, ElTableColumn, vLoading } from 'element-plus';
 import { defineComponent, type PropType, ref } from 'vue';
 import { useDelayedFlag } from '@/shared/composables/useDelayedFlag';

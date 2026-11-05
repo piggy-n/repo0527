@@ -1,4 +1,4 @@
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { computed, defineComponent, type PropType } from 'vue';
 import type { SimulationModel } from '../composables/useSimulationModel';
 import { formatEstimate, formatEstimateDelta, roundEstimate } from '../format';

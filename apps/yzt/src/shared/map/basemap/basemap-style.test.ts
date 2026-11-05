@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { diffStyle, StyleModel } from '@yzt/map-core';
+import { diffStyle, StyleModel } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import {
   basemapOption,

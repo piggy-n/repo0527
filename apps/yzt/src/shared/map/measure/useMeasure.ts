@@ -5,7 +5,7 @@ import {
   MeasureStore,
   type ScreenPoint,
   type StyleGroup
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import { getCurrentScope, onScopeDispose, type ShallowRef, shallowReadonly, shallowRef } from 'vue';
 import { measureGroup } from './measure-style';
 

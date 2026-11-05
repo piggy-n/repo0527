@@ -1,4 +1,4 @@
-import { LatestController } from '@yzt/utils';
+import { LatestController } from '@mx/utils';
 import { getCurrentScope, onScopeDispose, readonly, type Ref, ref } from 'vue';
 import { matchNaturalRule } from '../conditions';
 import type { NaturalLanguageConfig, NaturalLanguageRule } from '../topics';

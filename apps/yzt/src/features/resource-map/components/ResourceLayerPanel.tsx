@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Search } from '@element-plus/icons-vue';
 import { useResizeObserver } from '@vueuse/core';
-import { useMapOverlay } from '@yzt/map-vue';
-import { MxPanel, MxTitle } from '@yzt/ui';
+import { useMapOverlay } from '@mx/map-vue';
+import { MxPanel, MxTitle } from '@mx/ui';
 import { ElButton, ElIcon, ElInput, ElOption, ElSelect } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
 import { usePageActive } from '@/shared/composables/usePageActive';

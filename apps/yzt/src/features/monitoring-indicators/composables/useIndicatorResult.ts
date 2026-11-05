@@ -1,6 +1,6 @@
-import type { FitBoundsOptions, StyleGroup } from '@yzt/map-core';
-import type { MapContext } from '@yzt/map-vue';
-import { LatestController } from '@yzt/utils';
+import type { FitBoundsOptions, StyleGroup } from '@mx/map-core';
+import type { MapContext } from '@mx/map-vue';
+import { LatestController } from '@mx/utils';
 import { computed, type ComputedRef, getCurrentScope, onScopeDispose, shallowRef, watch } from 'vue';
 import { appConfig } from '@/shared/config/app-config';
 import type { Region } from '@/shared/map/region/region-catalog';

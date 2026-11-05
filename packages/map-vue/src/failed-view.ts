@@ -9,7 +9,7 @@ import {
   type Unsubscribe,
   type ViewKind,
   type ViewState
-} from '@yzt/map-core';
+} from '@mx/map-core';
 
 /**
  * 框架加载失败时挂上的视图（ADR 0079 第 8 节）：一直处于引擎失败状态，页面照常显示失败和重试；

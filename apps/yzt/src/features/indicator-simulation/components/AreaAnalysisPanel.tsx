@@ -1,5 +1,5 @@
 import { Search } from '@element-plus/icons-vue';
-import { MxTitle } from '@yzt/ui';
+import { MxTitle } from '@mx/ui';
 import { ElButton, ElInput, ElRadioButton, ElRadioGroup, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNodeChild, watch } from 'vue';
 import { ChatAvatar } from '@/shared/chat-avatar/ChatAvatar';

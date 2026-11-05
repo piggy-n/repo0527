@@ -1,5 +1,5 @@
 import vueJsx from '@vitejs/plugin-vue-jsx';
-import { iconsPlugin } from '@yzt/icons/tools';
+import { iconsPlugin } from '@mx/icons/tools';
 import { loadEnv, normalizePath } from 'vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 // 与 vite 的 defineConfig 相同，只是类型里多了 test 字段

@@ -7,7 +7,7 @@ import {
   Walker,
   WALK_KEYS,
   yawToHeading
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import { ElButton } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, shallowRef } from 'vue';
 import type { SceneModel } from '@/features/scene-models/catalog';

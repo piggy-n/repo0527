@@ -1,4 +1,4 @@
-import { safeReporter } from '@yzt/utils';
+import { safeReporter } from '@mx/utils';
 import { getCurrentScope, onScopeDispose, watch } from 'vue';
 import { useSessionStore } from '../auth/session-store';
 import { preferenceStore } from './idb-store';

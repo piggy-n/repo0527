@@ -1,7 +1,7 @@
 import { useClipboard, useEventListener } from '@vueuse/core';
-import { BROWSE_TOOL, type ScreenPoint } from '@yzt/map-core';
-import { useMap } from '@yzt/map-vue';
-import { MxTitle } from '@yzt/ui';
+import { BROWSE_TOOL, type ScreenPoint } from '@mx/map-core';
+import { useMap } from '@mx/map-vue';
+import { MxTitle } from '@mx/ui';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
 import { usePageActive } from '../../composables/usePageActive';
 import { useShownElementSize } from '../../composables/useShownElementSize';

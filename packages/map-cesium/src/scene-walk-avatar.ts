@@ -1,4 +1,4 @@
-import { WalkCycle } from '@yzt/map-core';
+import { WalkCycle } from '@mx/map-core';
 import { Cartesian3, Color, Matrix3, Matrix4, Model, ModelAnimationLoop, type Scene, ShadowMode } from 'cesium';
 import { createHeadlightShader } from './scene-tilesets';
 
