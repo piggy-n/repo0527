@@ -1,0 +1,5 @@
+{
+  "station": { "id": "station", "url": "/3dt/SZ_3DT/tileset.json", "center": [120.6660669, 31.317559], "zoom": 18 },
+  "white": { "id": "white", "url": "/3dt/SZ_WhiteModel/plain/tileset.json", "center": [120.6660669, 31.317559], "zoom": 15.5 },
+  "oblique": { "id": "oblique", "url": "/3dt/XZ_GC_3DT/tileset.json", "center": [117.1807, 34.2657], "zoom": 17 }
+}

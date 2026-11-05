@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LCC2 standalone PoC</title>
+    <style>
+      html, body, #view { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      #hud {
+        position: absolute; left: 8px; top: 8px; max-width: 360px; padding: 6px 8px; background: rgba(16, 20, 24, 0.82);
+        color: #e8edf2; font: 11px/1.4 Consolas, monospace; white-space: pre-wrap; border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="view"></div>
+    <div id="hud"></div>
+    <script type="module" src="/src/standalone.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env.local
+results/
+screenshots/
+REPORT.md
+lcc2/results/
+# 只和这份样例的位置有关的分析脚本，不进分支
+lcc2/tools/placement.mjs
+lcc2/tools/register.js
+lcc2/tools/register2.js

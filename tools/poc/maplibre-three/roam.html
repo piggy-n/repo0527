@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Independent Three roam PoC</title>
+    <style>
+      html, body, #roam { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      #hud {
+        position: absolute; left: 8px; top: 8px; padding: 6px 8px; background: rgba(16, 20, 24, 0.8); color: #e8edf2;
+        font: 11px/1.4 Consolas, monospace; white-space: pre; border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="roam"></div>
+    <div id="hud"></div>
+    <script type="module" src="/src/roam-main.ts"></script>
+  </body>
+</html>

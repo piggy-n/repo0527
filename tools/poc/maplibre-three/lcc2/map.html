@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>LCC2 in MapLibre PoC</title>
+    <style>
+      html, body, #map { margin: 0; height: 100%; background: #101418; }
+      #panel {
+        position: absolute; left: 8px; top: 8px; z-index: 10; width: 280px; max-height: calc(100% - 16px); overflow: auto;
+        padding: 6px 8px; background: rgba(16, 20, 24, 0.84); color: #e8edf2; border-radius: 6px;
+        font: 11px/1.4 Consolas, monospace; white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="panel"></div>
+    <script type="module" src="/src/map-page.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MapLibre + Three PoC</title>
+    <style>
+      html, body, #map { margin: 0; height: 100%; background: #101418; }
+      #panel {
+        position: absolute; left: 8px; top: 8px; z-index: 10; width: 300px; max-height: calc(100% - 16px); overflow: auto;
+        padding: 8px; background: rgba(16, 20, 24, 0.86); color: #e8edf2; border-radius: 6px;
+        font: 12px/1.45 'Microsoft YaHei', sans-serif;
+      }
+      #panel pre { margin: 6px 0 0; white-space: pre-wrap; font: 11px/1.4 Consolas, monospace; }
+      #panel button { margin: 2px 2px 0 0; padding: 2px 6px; font: inherit; cursor: pointer; }
+      #roam { position: absolute; inset: 0; z-index: 5; display: none; background: #000; }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="roam"></div>
+    <div id="panel"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
