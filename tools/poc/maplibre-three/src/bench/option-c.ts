@@ -18,6 +18,7 @@ const params = new URLSearchParams(location.search);
 const modelIds = (params.get('models') ?? '').split(',').filter(Boolean) as ModelId[];
 const noBasemap = params.get('basemap') === 'none';
 const cacheMB = numberParam(params, 'lruMB', 0);
+const adaptive = params.get('adaptive') === '1';
 const eye = parseEye(params.get('eye'));
 const interactive = params.get('walk') === '1';
 const errors: string[] = [];
@@ -37,6 +38,22 @@ const internals = (tiles: unknown) => tiles as TilesInternals;
 function queuesEmpty(tiles: TilesInternals): boolean {
   const { stats } = tiles;
   return stats.downloading === 0 && stats.parsing === 0 && stats.queued === 0;
+}
+
+// 和 packages/map-cesium 的 SceneTilesets 相同：缓存 384 MB，当前视图需要时再多占 256 MB
+const ADAPTIVE_CACHE_BYTES = 384 * 1048576;
+const ADAPTIVE_OVERFLOW_BYTES = 256 * 1048576;
+const BASE_ERROR_TARGET = 16;
+// Cesium 收回时已有一批请求在路上，内存会冲到 600 MB 上下；这里没有这个惯性，收回线取预算的 80% 才能用满预算
+const ADAPTIVE_RECOVER_BYTES = (ADAPTIVE_CACHE_BYTES + ADAPTIVE_OVERFLOW_BYTES) * 0.8;
+
+/** 规则来自 Cesium 的 memoryAdjustedScreenSpaceError：到了上限还有瓦片要加载就每帧放宽 2%，低于收回线再每帧收回 2% */
+function adaptErrorTarget(tiles: TilesInternals): void {
+  if ((tiles.lruCache.cachedBytes ?? 0) < ADAPTIVE_RECOVER_BYTES) {
+    tiles.errorTarget = Math.max(tiles.errorTarget / 1.02, BASE_ERROR_TARGET);
+  } else if ((tiles.stats.refused ?? 0) > 0) {
+    tiles.errorTarget *= 1.02;
+  }
 }
 
 // ---------- 独立 Three 场景 ----------
@@ -202,6 +219,11 @@ async function startMap(): Promise<void> {
       internals(layer.tiles).lruCache.maxBytesSize = cacheMB * 1048576;
       internals(layer.tiles).lruCache.minBytesSize = cacheMB * 0.75 * 1048576;
     }
+    if (adaptive) {
+      internals(layer.tiles).lruCache.maxBytesSize = ADAPTIVE_CACHE_BYTES + ADAPTIVE_OVERFLOW_BYTES;
+      // LRU 淘汰到这个大小就停，要比收回线低：刚好相等时缓存停在线上方一点，屏幕误差永远收不回来
+      internals(layer.tiles).lruCache.minBytesSize = ADAPTIVE_CACHE_BYTES * 0.9;
+    }
     const events = layer.tiles as unknown as { addEventListener(type: string, listener: (event: { url?: unknown; error?: unknown }) => void): void };
     events.addEventListener('load-model', () => {
       models += 1;
@@ -212,11 +234,19 @@ async function startMap(): Promise<void> {
   }
 
   const trackedTiles = () => layers.map(layer => internals(layer.tiles));
+  if (adaptive) {
+    map.on('render', () => trackedTiles().forEach(adaptErrorTarget));
+  }
+  // 自适应时还有瓦片被拒绝、或者屏幕误差还在往回收，都说明没有收敛，不算稳定
+  const adapting = (tiles: TilesInternals) =>
+    (tiles.stats.refused ?? 0) > 0 ||
+    (tiles.errorTarget > BASE_ERROR_TARGET && (tiles.lruCache.cachedBytes ?? 0) < ADAPTIVE_RECOVER_BYTES);
+  const settled = (tiles: TilesInternals) => queuesEmpty(tiles) && (!adaptive || !adapting(tiles));
   publish({
     engine: 'maplibre+three（自写层）',
     config: {
       errorTarget: internals(layers[0]?.tiles).errorTarget,
-      cacheMB: cacheMB > 0 ? cacheMB : 'LRU 默认 400 MB',
+      cacheMB: adaptive ? '384 MB 加 256 MB 溢出，自适应' : cacheMB > 0 ? cacheMB : 'LRU 默认 400 MB',
       antialias: true,
       lift,
       fovy: map.getVerticalFieldOfView(),
@@ -225,7 +255,7 @@ async function startMap(): Promise<void> {
     gl: map.getCanvas().getContext('webgl2') as WebGL2RenderingContext,
     loadStartedAt,
     errors,
-    isStable: () => models > 0 && trackedTiles().every(queuesEmpty),
+    isStable: () => models > 0 && trackedTiles().every(settled),
     basemapIdle: () => noBasemap || map.areTilesLoaded(),
     tick: () => map.triggerRepaint(),
     setContinuous(on) {
@@ -246,6 +276,7 @@ async function startMap(): Promise<void> {
         tilesVisible: sum(tiles => tiles.visibleTiles.size),
         tilesRefused: sum(tiles => tiles.stats.refused ?? 0),
         tilesFailed: sum(tiles => tiles.stats.failed ?? 0),
+        errorTarget: all[0]?.errorTarget ?? null,
         // 缓存是共用的，不累加
         engineCacheMB: Math.round((all[0]?.lruCache.cachedBytes ?? 0) / 1048576),
         engineCalls: layers.reduce((total, layer) => total + (layer.renderer?.info.render.calls ?? 0), 0),

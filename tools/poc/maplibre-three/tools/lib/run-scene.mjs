@@ -198,6 +198,19 @@ export async function runScene(run, repeat, { options, baseUrl, screenshotsDir, 
     progress('飞行（第二遍）');
     result.flightWarm = await page.evaluate(([frames, ms]) => window.__probe.flight(frames, ms), [keyframes, times.flightMs]);
     result.engineEnd = await page.evaluate(() => window.bench.stats());
+    // 飞行刚结束时瓦片和屏幕误差都还没回来，再等一段才是用户停下来看到的画面
+    progress('等画面恢复');
+    const recoverStart = await page.evaluate(() => window.__probe.now());
+    const recovered = await page.evaluate(
+      ({ timeoutMs, streak }) => window.__probe.waitStable(timeoutMs, streak),
+      { timeoutMs: times.settleMs, streak: run.stableStreak ?? 5 }
+    );
+    result.recovery = {
+      stable: recovered.stable,
+      ms: recovered.waitedMs,
+      longTasks: await page.evaluate(([from, to]) => window.__probe.longTasks(from, to + 1), [recoverStart, recovered.at])
+    };
+    result.engineRecovered = await page.evaluate(() => window.bench.stats());
     await sampleMemory('end');
     writeFileSync(join(screenshotsDir, `${name}-end.jpg`), await screenshot({ type: 'jpeg', quality: 85 }));
 

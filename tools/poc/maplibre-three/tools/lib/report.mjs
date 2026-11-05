@@ -124,6 +124,15 @@ const ROWS = [
     const end = pick(runs, run => run.engineEnd?.tilesRefused);
     return start === null ? '—' : `静止 ${integer(start)}，飞行后 ${integer(end)}`;
   }],
+  ['屏幕误差：静止 / 飞行刚结束 / 恢复后（基准 16，变大说明缓存不够、画面放粗）', runs => {
+    const read = phase => pick(runs, run => run[phase]?.memoryAdjustedSse ?? run[phase]?.errorTarget);
+    return read('engineStatic') === null ? '—' : `${number(read('engineStatic'))} / ${number(read('engineEnd'))} / ${number(read('engineRecovered'))}`;
+  }],
+  ['第二遍飞行后恢复（秒），⚠ 表示到上限还没恢复', runs => {
+    const seconds = pick(runs, run => run.recovery?.ms);
+    return seconds === null ? '—' : number(seconds / 1000) + (runs.some(run => run.recovery && !run.recovery.stable) ? ' ⚠' : '');
+  }],
+  ['恢复后显示的瓦片数 / 三角形', runs => `${integer(pick(runs, run => run.engineRecovered?.tilesVisible))} / ${integer(pick(runs, run => run.engineRecovered?.engineTriangles))}`],
   ['每帧三角形（GL 层统计）', runs => integer(pick(runs, run => run.draws?.primitivesPerFrame))],
   ['每帧 draw call（GL 层统计）', runs => integer(pick(runs, run => run.draws?.callsPerFrame))],
   ['引擎自报的三角形 / draw call', runs => `${integer(pick(runs, run => run.engineStatic?.engineTriangles))} / ${integer(pick(runs, run => run.engineStatic?.engineCalls))}`],
@@ -231,7 +240,8 @@ const METHOD = `- **冷启动：** 每个场景单独启动一个浏览器进程
 - **显存：** Windows 的 \`GPU Process Memory\` 计数器，取 GPU 进程的 Dedicated Usage（经 WMI 读同一个计数器，中文系统也能用）。只在阶段之间和加载期每 5 秒取一次，"峰值"是这些采样的最大值，不是真正的瞬时峰值。
 - **空白判断：** 模型显示和隐藏各拍一张，比较差异。差异低于 0.2% 算模型没画出来，画面几乎只有一种颜色算空白，这两种都标为无效。
 - **到稳定：** 模型的下载、解析队列连续约 1 秒都是空的（LCC2 约 3 秒，且显示的高斯数不再变化），从第一次变空算起。方案 C 缓存满了以后队列也是空的，这时只是不再加载，并不是加载完了，报告会标出 refused；缓存预算不同时，要结合显示的瓦片数、三角形数和截图一起看。
-- **方案 C 的配置：** 自写 custom layer；\`errorTarget\` 16，和 Cesium 的 \`maximumScreenSpaceError\` 相同；所有瓦片集共用一个 LRU 缓存（默认 400 MB）。
+- **方案 C 的配置：** 自写 custom layer；\`errorTarget\` 16，和 Cesium 的 \`maximumScreenSpaceError\` 相同；所有瓦片集共用一个 LRU 缓存（默认 400 MB）。缓存满了就拒绝加载，不会放粗。
+- **方案 C 自适应缓存：** 缓存预算和 Cesium 相同（384 MB 加 256 MB 溢出），规则来自 Cesium 的 \`memoryAdjustedScreenSpaceError\`：到了上限还有瓦片要加载，\`errorTarget\` 每帧乘 1.02；低于收回线时每帧除以 1.02，下限 16。两处和 Cesium 不同：收回线是 512 MB（Cesium 是 384 MB，但它收回时有请求在路上，内存会冲到 600 MB 上下），LRU 的淘汰下限是 346 MB。这是和 Cesium 对比倾斜摄影时最公平的一列。"到稳定"还要求没有被拒绝的瓦片，屏幕误差也不再往回收。
 - **Cesium 的配置：** 直接用 \`packages/map-cesium\` 的 \`SceneTilesets\`（384 MB 加 256 MB 溢出）、\`SceneUnderground\` 和 \`camera-math\`；\`CesiumWidget\` 的创建参数抄自 \`CesiumScene\`，因为它把 widget 藏在私有字段里，读不到统计。没有覆盖物和工具，只有底图和模型。
 - **站内的方案 C：** "方案 C" 是地图里的自写层，模型抬高 20 米绕开 MapLibre 对相机的限制；"独立场景" 是单独的 Three 画布，没有底图，也没有 MapLibre。视场角都是 60°，和仓库的步行相同。`;
 

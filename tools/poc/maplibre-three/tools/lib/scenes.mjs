@@ -78,6 +78,7 @@ function aerialScene(id, title, models, center, zoom, variants) {
 
 const C = { id: 'c', label: '方案 C' };
 const cacheVariant = cacheMB => ({ id: `c-${cacheMB}mb`, label: `方案 C ${cacheMB} MB 缓存`, cacheMB });
+const C_ADAPTIVE = { id: 'c-adaptive', label: '方案 C 自适应缓存', adaptive: true };
 const CESIUM = { id: 'cesium', label: 'Cesium' };
 const C_ROAM = { id: 'c-roam', label: '方案 C 独立场景' };
 
@@ -101,7 +102,7 @@ export function buildScenes(options) {
   const oblique = MODELS.oblique.center;
   const stationModel = MANIFEST.models[0];
   const route = stationModel.routes.find(item => item.id === 'concourse') ?? stationModel.routes[0];
-  const obliqueVariants = [C, ...options.cacheMBs.map(cacheVariant), CESIUM];
+  const obliqueVariants = [C, ...options.cacheMBs.map(cacheVariant), C_ADAPTIVE, CESIUM];
   return [
     aerialScene('white-z15.5', '白模，z15.5', ['white'], MODELS.white.center, 15.5, [C, CESIUM]),
     aerialScene('white-station-z17', '白模加车站，z17', ['white', 'station'], station, 17, [C, CESIUM]),
@@ -193,7 +194,7 @@ function makeRun(scene, variant, options) {
     engine: 'c',
     loadTimeoutMs,
     flight,
-    path: `/bench-c.html?${query({ models, basemap, lruMB: variant.cacheMB, ...camera })}`
+    path: `/bench-c.html?${query({ models, basemap, lruMB: variant.cacheMB, adaptive: variant.adaptive ? 1 : undefined, ...camera })}`
   };
 }
 
