@@ -12,6 +12,20 @@ import { localFilesPlugin } from './tools/local-files/vite-plugin.ts';
 import { titleOutlineConfig } from './tools/system-title/paths.ts';
 import { systemTitlePlugin } from './tools/system-title/vite-plugin.ts';
 
+// 包的入口都是 src/index.ts，分块默认会叫 src；换成包名（如 map-cesium），产物里才认得出
+function chunkName({ moduleIds, name }: { moduleIds: string[]; name: string }): string {
+  if (name !== 'src') {
+    return name;
+  }
+  for (const id of moduleIds) {
+    const packageName = /\/packages\/([^/]+)\/src\/index\.ts$/.exec(normalizePath(id))?.[1];
+    if (packageName) {
+      return packageName;
+    }
+  }
+  return name;
+}
+
 export default defineConfig(({ mode }) => {
   // 前缀参数传空字符串，才能读到不带 VITE_ 前缀的 PROXY_TARGET；它只在这里使用，不会进入前端代码
   const env = loadEnv(mode, process.cwd(), '');
@@ -57,11 +71,7 @@ export default defineConfig(({ mode }) => {
     build: {
       rolldownOptions: {
         output: {
-          // 包的入口都是 src/index.ts，分块默认会叫 src；换成包名（如 map-cesium），产物里才认得出
-          chunkFileNames: ({ facadeModuleId, name }) => {
-            const packageName = /\/packages\/([^/]+)\/src\/index\.ts$/.exec(normalizePath(facadeModuleId ?? ''))?.[1];
-            return `assets/${packageName ?? name}-[hash].js`;
-          }
+          chunkFileNames: chunk => `assets/${chunkName(chunk)}-[hash].js`
         }
       }
     },
