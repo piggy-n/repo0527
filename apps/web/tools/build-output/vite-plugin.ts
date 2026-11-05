@@ -1,12 +1,6 @@
-import { existsSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { loadEnv, normalizePath, type Plugin, type ResolvedConfig, type Rolldown } from 'vite';
-
-/** 判断目标是否在目录内，包含目录自身 */
-function contains(directory: string, target: string): boolean {
-  const path = relative(directory, target);
-  return path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path);
-}
 
 // 地图引擎只能经由动态导入出现：二维的 MapLibre、三维的 Cesium（含拆出的 @cesium/* 包）
 const MAP_ENGINES = [
@@ -44,10 +38,10 @@ function checkFiles(directory: string, keys: readonly string[], prefix = ''): vo
     const name = `${prefix}${entry.name}`;
     const path = resolve(directory, entry.name);
     if (entry.name === 'design.local' || /^Dev.*Page(?:-|\.)/.test(entry.name)) {
-      throw new Error(`[build-output] 产物包含开发专用文件：${name}`);
+      throw new Error(`[build-output] 产物包含开发专用文件：${name}（原型放在 local/design，见 ADR 0141）`);
     }
     if (prefix === '3dt/' && entry.name !== 'manifest.json') {
-      throw new Error(`[build-output] 产物包含 3DT 模型数据：${name}`);
+      throw new Error(`[build-output] 产物包含 3DT 模型数据：${name}（模型放在 local/3dt，见 ADR 0141）`);
     }
     if (entry.isDirectory()) {
       checkFiles(path, keys, `${name}/`);
@@ -61,7 +55,7 @@ function checkFiles(directory: string, keys: readonly string[], prefix = ''): vo
   }
 }
 
-/** 构建完成时清理本地设计稿和 3DT 模型数据，并检查开发页、入口依赖和关闭天地图时的 key */
+/** 构建完成时检查产物：没有开发页、本地设计稿和 3DT 模型数据，入口依赖不含地图引擎，关闭天地图时没有 key */
 export function buildOutputPlugin(): Plugin {
   let config: ResolvedConfig;
   let forbiddenKeys: string[] = [];
@@ -84,32 +78,7 @@ export function buildOutputPlugin(): Plugin {
       order: 'post',
       sequential: true,
       handler(options, bundle) {
-        const outputDir = realpathSync(resolve(config.root, options.dir ?? config.build.outDir));
-        const root = realpathSync(config.root);
-        const publicDir = config.publicDir && existsSync(config.publicDir) ? realpathSync(config.publicDir) : null;
-        // 删除前确认输出目录与源码、public 分开，目标只能是该输出目录内的副本
-        if (
-          contains(outputDir, root) ||
-          (publicDir && (contains(publicDir, outputDir) || contains(outputDir, publicDir)))
-        ) {
-          throw new Error('[build-output] 输出目录与源码或 public 重叠，不能清理设计稿和模型数据');
-        }
-        const designs = resolve(outputDir, 'design.local');
-        if (relative(outputDir, designs) !== 'design.local') {
-          throw new Error('[build-output] 设计稿清理路径不在输出目录内');
-        }
-        rmSync(designs, { recursive: true, force: true });
-
-        // 3DT 模型数据在服务器上单独部署，产物只留随代码发布的清单（docs/deployment.md）
-        const models = resolve(outputDir, '3dt');
-        if (existsSync(models)) {
-          for (const name of readdirSync(models)) {
-            if (name !== 'manifest.json') {
-              rmSync(resolve(models, name), { recursive: true, force: true });
-            }
-          }
-        }
-
+        const outputDir = resolve(config.root, options.dir ?? config.build.outDir);
         const devPages = `${normalizePath(resolve(config.root, 'src/pages/dev'))}/`;
         for (const item of Object.values(bundle)) {
           if (item.type === 'chunk' && item.moduleIds.some(id => normalizePath(id).startsWith(devPages))) {

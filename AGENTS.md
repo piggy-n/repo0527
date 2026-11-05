@@ -62,6 +62,7 @@ apps/web/src/
 - `packages/*`：workspace 内部包，`exports` 直接指向 `src/index.ts`，不单独构建（ADR 0014）；目前有 `@yzt/icons`（图标组件与 SVG 规范化工具）。新建包按 `docs/config/internal-packages.md`
 - `apps/web/tools/`：Node 直接运行的 TS 工具脚本（如 `pnpm title:generate`、加载耗时的实测 `measure:map-load`），相对导入写 `.ts` 扩展名，只用可剥离的语法（`erasableSyntaxOnly`）
 - `apps/web/public/fonts/`：唯一的字体目录，不入库（ADR 0013），见 `docs/design/fonts.md`
+- `local/`（仓库根目录，不入库）：模型、原型、探查结果、实测数据和手动测试文件，环境变量 `YZT_LOCAL_DIR` 可以指到别处（worktree 指回主目录）；开发服务器把 `/3dt/*`、`/design.local/*` 映射到这里，地址不变；`public/` 只放要发布的文件，字体是构建输入、留在原处（ADR 0141，见 `docs/config/local-files.md`）
 
 ## 依赖方向
 
@@ -250,7 +251,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 资源的最小显示级别按 ADR 0132、0137：层级写在 `features/resource-map/resource-min-zooms.json`，是单张瓦片 6 MB 的实测结果（`probe:resource-classes --tile-cost`，换后端环境或重新切片后重测），脚本的 `ZOOM_FLOORS` 和它一致；这个文件构建时带上一份，同时复制到发布目录，部署时换它、刷新页面就生效，读不到或不合法时用带上的那份，确定的值要同步回仓库（`docs/deployment.md`）；村级调查区、界线、路面范围第一次请求很慢，定 8 级，不按实测放开（ADR 0136）；数据源和图层用同一个级别，只给图层设时瓦片失败会一路请求更低的级别。`VITE_RESOURCE_MIN_ZOOM_ENABLED=false` 时不限制、不读文件，只用于排查和应急；提示、瓦片请求和点选都从目录的 `resource.minzoom` 取值，不单独读开关
 - 区划裁剪按区划边界的几何，不按要素属性里的区划代码过滤（业务数据的代码和区划目录对不上）：区划外用 `region-clip` 分组的遮罩盖住；显示和查询的范围都取 `readyBoundary`；点选、框选的渲染要素先按范围过滤再去重、计数，发给后端的几何只用 `query-geometry.ts` 的 `queryGeometry` 整理（误差不超过 2 像素、有效、最多 120 个坐标），整理不出来时提示范围太复杂（ADR 0051）
 - 地图页的区域按 ADR 0070：行政区、图例、区划定位、坐标定位共用 `usePanelGroup` + `MapPanelGroup`，查询详情由独立 `FeatureDetailWindow` 展示，底图保留按钮左侧的 `MapOptionsPopover`；外壳负责标题、关闭和悬浮元素登记，内容不重复处理。功能入口打开时标签前移，直接点标签只切换；统一关闭只影响功能组。功能与详情同列上下排列，布局由 `panelStackLayout`、`usePanelStack` 管理，空间不足只收起非当前内容。有临时交互的内容接收 `active`，隐藏或收起时结束交互，关闭时卸载；窄屏仍由 `useSideExclusion` 决定最后操作的一边
-- 地图页的界面按 5D 的设计稿（ADR 0053～0055）及后续已确认调整：当前工具、面板开关、视图状态、失败原因等仍是组合式函数、store 或纯函数里的数据，组件只显示和调用，测试放在逻辑上；随尺寸变化的排法写成纯函数（如 `mapPageLayout`、`fitStatusLayout`），组件只交给它量到的尺寸。新的界面块先出可操作的 HTML 原型（`public/design.local/`，不入库）或真实组件预览，用户确认后再实现，按 `docs/design/ui-workflow.md` 验证
+- 地图页的界面按 5D 的设计稿（ADR 0053～0055）及后续已确认调整：当前工具、面板开关、视图状态、失败原因等仍是组合式函数、store 或纯函数里的数据，组件只显示和调用，测试放在逻辑上；随尺寸变化的排法写成纯函数（如 `mapPageLayout`、`fitStatusLayout`），组件只交给它量到的尺寸。新的界面块先出可操作的 HTML 原型（`local/design/`，不入库，用 `/design.local/<主题>/` 打开）或真实组件预览，用户确认后再实现，按 `docs/design/ui-workflow.md` 验证
 - 现状底图已确认的界面细节（已选择图层区域、透明度浮层、图例的浏览与编辑、功能容器与标签、底图 Popover、地图 Tooltip、区划定位、标题栏底色）记在 `docs/design/current-map-reference.md` 的"已确认的界面细节"，改这些界面前先读，用户确认新的调整后同步更新那里
 - 接收外部回调的模块（如 `onError`）在入口用 `@yzt/utils` 的 `safeReporter` 包装：回调自己抛错不能打断内部的状态转换和资源释放
 - 地图的加载与失败提示由 `shared/map` 的 `describeMapStatus` 推导，界面只负责显示；引擎失败用上下文的 `retry()` 重建，不在页面里换画布的 `key`（ADR 0030）
@@ -260,7 +261,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 只有 MapLibre 适配器能写二维地图（lint 只允许 `libs/map-core/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；Cesium 镜像会话状态，不实现二维的引擎接口；二三维共用的是生命周期、相机、输入、拾取、投影、渲染要素查询这几个视图接口（ADR 0024、0047；三维的渲染要素查询返回空数组）
 - Cesium 同样只在 `libs/map-cesium` 和 `app` 导入（lint 检查，包括 `cesium/Build/...` 和 `@cesium/*`）；`CesiumView` 只依赖窄接口 `SceneLike`，唯一调用 Cesium 的是 `CesiumScene`，测试注入假场景（ADR 0079）
 - 三维的 GeoJSON 覆盖物由 map-cesium 按样式自动镜像（line、fill、circle，按整级求值、简化到半个像素，ADR 0080），拥有者不为三维另写分组；铺满大范围、只做背景的图层用 `overlayDetailMetadata` 写细节上限，超过后不再加细、不再重建（ADR 0135）；`symbol`、`fill-pattern` 等清单外的写法三维不画。三维期间点/框选不识别；三维独有的读数（视点高度、朝向）用就绪视图的 `eyeHeight()`、`heading()`
-- 三维独有的内容（3D Tiles 瓦片集、钻地、漫游）由会话的 `scene` 持有，页面用 `map.bindScene(() => SceneContent)` 绑定拥有者的推导函数（一个上下文只绑定一个）；瓦片集的状态从上下文的 `sceneStatus` 读，就绪时带建议的相机，定位用它做相机操作；漫游的进度从 `roamStatus` 读，漫游开始时开始一次相机操作，被别的定位作废就退出。模型清单 `public/3dt/manifest.json` 入库、模型数据不入库（ADR 0081、0083），也不进构建产物，服务器上放在发布目录之外、由 nginx 提供（`docs/deployment.md`）
+- 三维独有的内容（3D Tiles 瓦片集、钻地、漫游）由会话的 `scene` 持有，页面用 `map.bindScene(() => SceneContent)` 绑定拥有者的推导函数（一个上下文只绑定一个）；瓦片集的状态从上下文的 `sceneStatus` 读，就绪时带建议的相机，定位用它做相机操作；漫游的进度从 `roamStatus` 读，漫游开始时开始一次相机操作，被别的定位作废就退出。模型清单 `public/3dt/manifest.json` 入库、模型数据不入库（ADR 0081、0083），也不进构建产物；本机放在 `local/3dt/`（ADR 0141），服务器上放在发布目录之外、由 nginx 提供（`docs/deployment.md`）
 - 漫游时页面只留漫游面板和小地图，隐藏业务工具栏、功能面板、底图、区划条、视图控件和状态栏：只隐藏，不改各拥有者的状态，退出后原样显示；进入时切回移动，漫游只在换成移动以外的工具时退出（ADR 0084、0095、0097）。漫游时左侧的漫游面板替换三维模型面板，步行和路线在面板里切换，速度共用米/秒。没有单独的钻地：漫游地下的模型时由拥有者推导出地下空间（地表固定半透明、不显示地面上的模型），退出漫游就回到地面
 - 导航网格在 `map-core/scene/nav`，不依赖 Cesium、DOM：`buildNavigation` 在主线程下载叶节点瓦片、在 Worker 里构建；行走碰撞、寻路、平面图用同一份区域（`labels`）；平面图正北朝上（按根节点局部系的方位角旋转）、按区域着色（`planRegions`、`renderFloorMap`，ADR 0085）
 - 步行是会话三维内容的 `roam`（`kind: 'walk'`）：拥有者建好导航网格（按模型缓存）后交给会话，视图选出生点、接管键鼠逐帧行走；行走、点击、脱困、出生点的规则在 map-core 的 `Walker` 和纯函数里，Cesium 一侧（`scene-walk.ts`）只做输入、深度拾取和相机；回到出生点、脱困这类一次性命令写成计数；漫游期间每帧关掉 Cesium 的相机控制（flyTo 结束后它会被打开）（ADR 0086）；已经在模型里时挪相机不用 flyTo（在地下飞总会先升到地面以上），近处直接设、远处用 `Blackout` 闪切，漫游时覆盖物不按级别重建（ADR 0103）

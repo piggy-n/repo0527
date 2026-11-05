@@ -1,10 +1,16 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { type CDPSession, chromium, type Page } from 'playwright';
+import { localPath } from '../local-files/paths.ts';
 
-// 驾驶舱的释放实测（docs/modules/city-dashboard.md）：node tools/measure-city-dashboard/lifecycle.ts [预览地址] [次数]
-// 只操作 D3 真实组件预览里的进入、退出按钮，在同一个文档里看释放的趋势；不用于生产业务入口
-const url = process.argv[2] ?? 'http://127.0.0.1:5188/design.local/city-dashboard/index.html';
+// 驾驶舱的释放实测（docs/modules/city-dashboard.md）：node tools/measure-city-dashboard/lifecycle.ts <预览地址> [次数]
+// 只操作预览里的"D3 预览工具"进入、退出按钮，在同一个文档里看释放的趋势；不用于生产业务入口。
+// 当时的预览已经不在了，复测前要先做一个带这些按钮的预览
+const url = process.argv[2];
+if (!url) {
+  console.error('[measure] 要给出预览地址：node tools/measure-city-dashboard/lifecycle.ts <预览地址> [次数]');
+  process.exit(1);
+}
 const cycles = Number(process.argv[3] ?? 30);
 
 // 浏览器里的计数：按 WebGL 上下文记录各类对象的创建和删除，上下文丢失时它的对象全部算作释放
@@ -112,7 +118,7 @@ try {
   if (errors.length > 0) {
     throw new Error(errors.join('\n'));
   }
-  const output = resolve(import.meta.dirname, 'results.local');
+  const output = localPath('measure/city-dashboard');
   await mkdir(output, { recursive: true });
   const report = { url, renderer: 'Chromium SwiftShader', samples, errors };
   await writeFile(resolve(output, 'd3-lifecycle.json'), JSON.stringify(report, null, 2), 'utf8');

@@ -72,6 +72,10 @@ Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者�
 
 例外：Vite 内置的 `DEV`、`PROD`、`MODE`、`BASE_URL` 直接读取 `import.meta.env`。例如路由表在定义整个开发路由数组时判断 `import.meta.env.DEV`，让生产构建同时删除开发路由和动态导入，产物检查保证不残留开发页。
 
+## 不放进 `.env` 的变量
+
+`YZT_LOCAL_DIR`（未入库的本地文件放在哪里）只从进程的环境变量读：工具脚本由 Node 直接运行，读不到 `.env`，写在 `.env.local` 里会只对开发服务器生效。见 [local-files.md](local-files.md)。
+
 ## 修改时的检查清单
 
 - 新增变量：先想清楚它会不会写进产物（`VITE_` 前缀）；在 `import-meta-env.ts` 中声明类型，在 `app-config.ts` 中读取和校验；更新本文的变量表

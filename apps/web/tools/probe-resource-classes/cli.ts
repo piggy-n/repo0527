@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { localPath } from '../local-files/paths.ts';
 import {
   type EnumerateTarget,
   ProbeAuthError,
@@ -50,7 +51,7 @@ token 在浏览器登录系统后取：开发者工具的控制台运行 JSON.pa
   --max-tile-mb=<6>     --tile-cost 单张解压后的上限（MB）
   --max-tile-seconds=<2> --tile-cost 单张收完的上限（秒）
   --tiles-per-zoom=<25> 一个级别最多查多少张瓦片，默认 25（--tile-cost 默认 6），放得下时查覆盖全省的整个网格
-  --out=<目录>          输出目录，默认 probe-resource-classes.local（不入库）
+  --out=<目录>          输出目录，默认 local/probe/resource-classes（不入库）
   --timeout=<120>       单个请求的上限（秒），超时不重试；枚举千万行的表时调大
   --refresh             不用缓存，重新请求
   --help`;
@@ -70,7 +71,7 @@ const { values } = parseArgs({
     'max-tile-mb': { type: 'string', default: '6' },
     'max-tile-seconds': { type: 'string', default: '2' },
     'tiles-per-zoom': { type: 'string' },
-    out: { type: 'string', default: 'probe-resource-classes.local' },
+    out: { type: 'string', default: localPath('probe/resource-classes') },
     refresh: { type: 'boolean', default: false },
     timeout: { type: 'string', default: '120' },
     help: { type: 'boolean', default: false }

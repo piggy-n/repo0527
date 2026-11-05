@@ -68,9 +68,9 @@ describe('parseOptions', () => {
   });
 
   it('--builds 按顺序给出要交替测量的构建', () => {
-    expect(parseOptions(['--builds', 'baseline=builds.local/baseline, preload = builds.local/preload']).builds).toStrictEqual([
-      { name: 'baseline', dir: 'builds.local/baseline' },
-      { name: 'preload', dir: 'builds.local/preload' }
+    expect(parseOptions(['--builds', 'baseline=builds/baseline, preload = builds/preload']).builds).toStrictEqual([
+      { name: 'baseline', dir: 'builds/baseline' },
+      { name: 'preload', dir: 'builds/preload' }
     ]);
   });
 

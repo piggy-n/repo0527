@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
 import { type BrowserContext, type CDPSession, chromium, type Page } from 'playwright';
+import { localPath } from '../local-files/paths.ts';
 
 // 驾驶舱的加载实测（docs/modules/city-dashboard.md）：node tools/measure-city-dashboard/cli.ts [产物目录] [结果名称] [CPU 倍率]
 // 用内网产物；只注入固定的前端会话，不导入应用源码、不访问后端，缓存策略由这里的本地服务器明确给出
@@ -223,7 +224,7 @@ try {
       await context.close();
     }
   }
-  const output = resolve(import.meta.dirname, 'results.local');
+  const output = localPath('measure/city-dashboard');
   await mkdir(output, { recursive: true });
   const report = {
     label,

@@ -344,6 +344,9 @@ importers:
       sass-embedded:
         specifier: ^1.105.0
         version: 1.105.0
+      sirv:
+        specifier: ^3.0.2
+        version: 3.0.2
       typescript:
         specifier: 7.0.2
         version: 7.0.2

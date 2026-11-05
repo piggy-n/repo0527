@@ -22,6 +22,7 @@
 | 预览构建产物 | `pnpm --filter @yzt/web preview` |
 | 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter @yzt/web measure:map-load` |
 | 探查资源的分类字段、瓦片是否合并（只读，要能连后端） | `pnpm --filter @yzt/web probe:resource-classes` |
+| 生成自定义监测范围的验收文件 | `pnpm --filter @yzt/web scope-files:generate` |
 | 每月检查依赖 | `pnpm deps:check` |
 | 范围内升级 | `pnpm deps:update:within-range` |
 | 大版本升级 | `pnpm deps:update:allow-major` |
@@ -122,6 +123,7 @@ pnpm add -Dw -E some-tool
 - **开发服务器不做类型检查**。Vite 只把 TS 转成 JS，类型错误不会阻止页面运行。类型问题要看编辑器提示，或者运行 `pnpm typecheck`
 - 默认端口是 5173，被占用时 Vite 会自动换下一个端口，以终端输出的地址为准；设了 `PORT` 环境变量时用它，被占用时直接失败（供 Claude 桌面端的预览分配端口，见 [config/vite-config.md](config/vite-config.md)"开发服务器的端口"）
 - `--filter @yzt/web` 指定在哪个包里运行；也可以 `cd apps/web` 后执行 `pnpm dev`
+- 模型（`/3dt/*`）和原型（`/design.local/*`）从未入库的 `local/` 提供；在 worktree 里运行时用 `YZT_LOCAL_DIR` 指回主目录，见 [config/local-files.md](config/local-files.md)
 
 ### `pnpm --filter @yzt/web dev:intranet`
 
@@ -179,7 +181,7 @@ pnpm add -Dw -E some-tool
 
 **什么时候用**：评估地图资源的加载策略（预加载、按需加载）前后各测一次；三维阶段、阶段七改了加载方式后复测。
 
-**执行了什么**：先 `vite build`，再由 Node 运行 `tools/measure-map-load/cli.ts`：用 `vite preview` 提供产物，Playwright 驱动本机的 Edge，每次用新的浏览器上下文打开登录页、停留几秒、登录、等到画面稳定；网络和 CPU 用 CDP 限速。原始数据写进 `tools/measure-map-load/results.local/`（不入库）。
+**执行了什么**：先 `vite build`，再由 Node 运行 `tools/measure-map-load/cli.ts`：用 `vite preview` 提供产物，Playwright 驱动本机的 Edge，每次用新的浏览器上下文打开登录页、停留几秒、登录、等到画面稳定；网络和 CPU 用 CDP 限速。原始数据写进 `local/measure/map-load/`（不入库）。
 
 **注意事项**：要先在自己的终端设置环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD`（加 `--mock-backend` 时不连后端、不用账号，配内网构建比较几种做法）；默认三档网络各 5 次，Slow 4G 每次约 20 秒，全部跑完约 5 分钟，期间会弹出浏览器窗口。对比几份构建时不用这个脚本（它会先构建 `dist`），直接运行 `cli.ts` 并给出 `--builds`。参数（次数、网络、停留时长、CPU 降速、多份构建等）和实测的前提见 [modules/perf.md](modules/perf.md)。
 
@@ -189,9 +191,17 @@ pnpm add -Dw -E some-tool
 
 **什么时候用**：评估哪些资源能按属性分类、新增或重新切片之后核对字段时。
 
-**执行了什么**：Node 直接运行 `tools/probe-resource-classes/cli.ts`，请求资源树、`/api/query/attr/page`（每个表最多抽 4 页，超过 200 万行只读第一页）和 `/api/tiles`（南京、苏州、徐州、扬州，默认 7、9、11、14 级）。结果写进 `probe-resource-classes.local/`（不入库）：`candidates.csv`（业务确认）、`slicing-requirements.csv`（交给切片）、`summary.md`、`report.json`，`raw/` 是按瓦片集的缓存，中断后重新运行会跳过已完成的。
+**执行了什么**：Node 直接运行 `tools/probe-resource-classes/cli.ts`，请求资源树、`/api/query/attr/page`（每个表最多抽 4 页，超过 200 万行只读第一页）和 `/api/tiles`（南京、苏州、徐州、扬州，默认 7、9、11、14 级）。结果写进 `local/probe/resource-classes/`（不入库，`--out` 可以改）：`candidates.csv`（业务确认）、`slicing-requirements.csv`（交给切片）、`summary.md`、`report.json`，`raw/` 是按瓦片集的缓存，中断后重新运行会跳过已完成的。
 
 **注意事项**：要能连上后端，并在自己的终端设置环境变量 `YZT_PROBE_TOKEN`（取法见 `--help`），token 不写进任何输出；用 `--base-url` 给出后端地址（不带 `/backend`）。后端共用，默认 2 个并发，全部 183 个瓦片集要跑一段时间，可以先用 `--codes` 试几个资源；`--exact` 按取值逐个 COUNT，只在选定的资源上用。要确认图例列全了时用 `--enumerate=资源:字段,...`：只枚举这些字段的全部取值，结果写到 `distinct-values.json`，请求数约等于抽样漏掉的取值数；千万行的表一次查询可能要几分钟，用 `--timeout=<秒>` 调大上限（默认 120，超时不重试）。同一级别的瓦片颜色不一致时用 `--tile-check=资源,...`：只解码这些资源最新一年 6～12 级瓦片的几何（覆盖全省的网格，一个级别最多 `--tiles-per-zoom` 张，默认 25），判断是不是把要素合并成了一个，结果写到 `tile-check.md`（结论、逐级别的数字、能和页面对照的瓦片网格、同一地点跨级别的取值）和 `tile-check.json`；`资源:字段` 可以指定字段，`rules` 是全部有分类规则的资源，请求多，先查几个。换后端环境或重新切片后用 `--tile-cost` 实测瓦片的大小和耗时，给出最小显示级别的建议：默认最新一年的 12～5 级，一个级别最多 6 张（`--tiles-per-zoom`），标准是单张解压后 6 MB（`--max-tile-mb`，ADR 0132）、收完 2 秒（`--max-tile-seconds`）；从高级别往低查，一超标就停，更低的级别不再请求，默认只开 1 个并发，失败不重试，耗时才准；耗时超过上限时再测一次，两次都超才算；结果写到 `tile-cost.md`（要确认的资源、响应头、逐级别的数字）、`tile-cost.json`（同时是进度，中断后重新运行跳过已测完的瓦片集，`--refresh` 时重测）和 `resource-min-zooms.json`（建议的配置，人工确认后可以直接替换发布目录里的同名文件，见 [deployment.md](deployment.md)；第一次请求很慢的 3 个资源不按实测放开，ADR 0136、0137）。分布来自抽样，字段和取值是候选，业务含义要人确认。这个目录不依赖第三方库，可以单独拷到能连后端的机器上，用 Node 24 运行。
+
+### `pnpm --filter @yzt/web scope-files:generate`
+
+**作用**：生成自定义监测范围的验收文件（正常的 GeoJSON、Shapefile、各种不能使用的文件），写到 `local/scope-test-files/`（不入库，约 64 MB）。每个文件的预期见 [`tools/scope-test-files/说明.md`](../apps/web/tools/scope-test-files/说明.md)。
+
+**什么时候用**：手动验收指标 AI 计算的上传范围，或者读取规则变了要更新文件时。
+
+**执行了什么**：Node 直接运行 `tools/scope-test-files/cli.ts`，只重建 A、B、C 三个目录。
 
 ### `pnpm --filter @yzt/web icons`
 
@@ -353,7 +363,7 @@ pnpm --filter @yzt/web test:smoke
 
 **执行了什么**：根目录的 `pnpm -r build` 在 `apps/web` 里执行 `vite build`：Rolldown 打包、压缩，输出到 `apps/web/dist`。文件名带内容哈希，CSS Modules 的类名也会哈希化。
 
-构建内置产物检查：清理输出目录里的 `design.local/` 副本，检查没有开发页面、MapLibre 没有进入入口的静态依赖；失败时构建也失败。源设计稿和字体保留，具体规则见 [config/vite-config.md](config/vite-config.md) 的“构建产物检查”。
+构建内置产物检查：检查没有开发页面、原型和模型数据，MapLibre 没有进入入口的静态依赖；失败时构建也失败，具体规则见 [config/vite-config.md](config/vite-config.md) 的“构建产物检查”。
 
 **注意事项**：
 

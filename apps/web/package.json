@@ -21,6 +21,7 @@
     "basemap:generate": "node tools/static-basemap/cli.ts",
     "measure:map-load": "vite build && node tools/measure-map-load/cli.ts",
     "probe:resource-classes": "node tools/probe-resource-classes/cli.ts",
+    "scope-files:generate": "node tools/scope-test-files/cli.ts",
     "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
   },
   "dependencies": {
@@ -79,6 +80,7 @@
     "opentype.js": "^2.0.0",
     "playwright": "^1.64.0",
     "sass-embedded": "^1.105.0",
+    "sirv": "^3.0.2",
     "typescript": "7.0.2",
     "vite": "^8.3.5",
     "vite-plugin-static-copy": "^4.1.1",

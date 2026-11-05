@@ -149,6 +149,7 @@
 | [0138](0138-page-state-reset-on-by-default.md) | 离开页面后重置：`.env` 提交的取值改为 true | 已接受（修改 0114 的默认取值） |
 | [0139](0139-verification-levels.md) | 迭代期的验证分级与协作方式 | 已接受 |
 | [0140](0140-preference-switches.md) | 偏好的开关：一个总开关加每项一个分项开关 | 已接受（修改 0114、0138 里底图偏好的做法） |
+| [0141](0141-local-files-dir.md) | 未入库的本地文件集中到 local/ | 已接受 |
 
 ## 模板
 
