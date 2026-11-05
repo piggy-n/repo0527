@@ -21,7 +21,7 @@
 |---|---|---|
 | `apps/web/public/fonts/` | 授权不能入库的字体（[design/fonts.md](../design/fonts.md)） | 构建输入，要复制进产物（ADR 0013） |
 | `apps/web/public/3dt/manifest.json` | 模型清单 | 入库，随产物发布，格式由代码里的 zod 校验 |
-| `apps/web/smoke-results.local/`、`apps/web/file-transfer-results.local/` | Playwright 的失败输出 | 每次运行先清空，放在各自的检出里，多个 worktree 才不会互相删掉 |
+| 每个检出自己的 `local/smoke-results/`、`local/file-transfer-results/` | Playwright 的输出和截图 | 每次运行先清空，所以不跟 `YZT_LOCAL_DIR`，多个 worktree 才不会互相删掉（2026-11-05 从 `apps/web/*-results.local/` 挪来） |
 | `apps/web/.env.local` | 个人临时覆盖的环境变量 | Vite 的约定（[env.md](env.md)） |
 
 ## 指到别处
