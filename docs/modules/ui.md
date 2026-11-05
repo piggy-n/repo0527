@@ -1,29 +1,29 @@
-# 通用 UI 组件（libs/ui）
+# 通用 UI 组件（packages/ui）
 
-对应目录：`apps/web/src/libs/ui/`，导入名 `@yzt/ui`
+对应目录：`packages/ui/`，导入名 `@yzt/ui`
 相关决策：[ADR 0016](../adr/0016-ui-components-in-libs-ui.md)；设计规范：[design/page-layout.md](../design/page-layout.md)
 
-第一个 libs 模块，按"已经是一个包"的规则编写（ADR 0004）：外部只从入口导入，内部只用相对路径，不读取 `import.meta.env`、store、router，不引用应用代码。这些规则由 lint 的 `boundaries` 和 `tsconfig.libs.json` 检查（见 [config/tsconfig.md](../config/tsconfig.md)）。
+内部包（ADR 0143）：外部只从入口导入，内部只用相对路径，不读取 `import.meta.env`、store、router，不引用应用代码。这些规则由 lint 的 `boundaries` 和包的 `tsconfig.lib.json` 检查（见 [config/internal-packages.md](../config/internal-packages.md)）。
 
 目前有分栏布局 `MxSplitLayout`、面板 `MxPanel`、区块 `MxSection`、标题 `MxTitle`。组件的展示在主题预览页（`/dev/theme`）的最后四节。
 
 ## 目录
 
 ```
-libs/
-├─ css-modules.d.ts         libs 专用的 CSS Modules 类型声明（见下文"类型检查"）
-└─ ui/
-   ├─ index.ts              TS 入口
-   ├─ _index.scss           Sass 入口：只放变量，不输出 CSS
-   ├─ breakpoints.ts        窄屏断点
-   ├─ breakpoints.test.ts   检查 TS 与 Sass 中的断点一致
-   ├─ title/MxTitle.tsx     标题
-   ├─ section/MxSection.tsx 区块：区块标题 + 内容
-   ├─ panel/MxPanel.tsx     面板
-   └─ split-layout/
-      ├─ MxSplitLayout.tsx     分栏布局
-      ├─ context.ts            provide / inject 的键与 useSplitLayout
-      └─ scroll-positions.ts   记录与写回滚动位置
+packages/ui/src/
+├─ index.ts              TS 入口
+├─ _index.scss           Sass 入口：只放变量，不输出 CSS
+├─ css-modules.d.ts      CSS Modules 的类型声明（见下文"类型检查"）
+├─ test-setup.ts         测试：每个用例结束后卸载组件
+├─ breakpoints.ts        窄屏断点
+├─ breakpoints.test.ts   检查 TS 与 Sass 中的断点一致
+├─ title/MxTitle.tsx     标题
+├─ section/MxSection.tsx 区块：区块标题 + 内容
+├─ panel/MxPanel.tsx     面板
+└─ split-layout/
+   ├─ MxSplitLayout.tsx     分栏布局
+   ├─ context.ts            provide / inject 的键与 useSplitLayout
+   └─ scroll-positions.ts   记录与写回滚动位置
 ```
 
 ## 两个入口
@@ -31,9 +31,9 @@ libs/
 | 入口 | 用法 | 内容 |
 |---|---|---|
 | `index.ts` | `import { MxPanel, useSplitLayout } from '@yzt/ui'` | 组件、组合式函数、常量、类型 |
-| `_index.scss` | `@use 'ui';` 之后写 `ui.$compact` | Sass 变量 |
+| `_index.scss` | `@use '@yzt/ui';` 之后写 `ui.$compact` | Sass 变量 |
 
-Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不了 CSS 变量，断点只能以 Sass 变量的形式提供给样式。应用中写 `@use 'ui'` 能找到它，是因为 `vite.config.ts` 把 `src/libs` 加进了 Sass 的 `loadPaths`（见 [config/vite-config.md](../config/vite-config.md)）。Sass 入口只放变量，不写会输出 CSS 的规则，否则每个 `@use` 它的样式文件都会重复输出一份。
+Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不了 CSS 变量，断点只能以 Sass 变量的形式提供给样式。应用中写 `@use '@yzt/ui'` 能找到它，是因为包的 `exports` 用 `sass` 条件指向它（见 [config/internal-packages.md](../config/internal-packages.md) 的"Sass 入口"）。Sass 入口只放变量，不写会输出 CSS 的规则，否则每个 `@use` 它的样式文件都会重复输出一份。
 
 ## 窄屏断点
 
@@ -272,7 +272,7 @@ jsdom 没有布局（`getClientRects()` 总是空的、没有 ResizeObserver）�
 
 ### 抽屉的内边距
 
-Element 抽屉的内容区默认有 20px 内边距，侧栏的面板要占满抽屉，所以布局在自己的抽屉上设置了 `--el-drawer-padding-primary: 0`（`MxSplitLayout.module.scss` 的 `.drawer`）。这是 `.claude/rules/ui.md`"Element 的外观只在 `element-theme.scss` 中调整"的例外：它只作用于布局内部使用的这一个抽屉，是布局结构的一部分，不改变 Element 在其他地方的外观；放在 app 的 `element-theme.scss` 里，`libs/ui` 就要依赖 app 定义的全局 class。
+Element 抽屉的内容区默认有 20px 内边距，侧栏的面板要占满抽屉，所以布局在自己的抽屉上设置了 `--el-drawer-padding-primary: 0`（`MxSplitLayout.module.scss` 的 `.drawer`）。这是 `.claude/rules/ui.md`"Element 的外观只在 `element-theme.scss` 中调整"的例外：它只作用于布局内部使用的这一个抽屉，是布局结构的一部分，不改变 Element 在其他地方的外观；放在 app 的 `element-theme.scss` 里，`packages/ui` 就要依赖 app 定义的全局 class。
 
 ## 插槽的写法
 
@@ -282,11 +282,11 @@ TSX 中给组件传多个插槽时，子元素写成对象：`{{ default: () => 
 
 ## 类型检查
 
-`tsconfig.libs.json` 不加载 `vite/client`，而 `*.module.scss` 的类型本来由它提供，所以 `libs/css-modules.d.ts` 单独声明（与 `@yzt/icons` 包的做法相同）。`tsconfig.app.json` 的 `include` 是整个 `src`，会同时看到 `vite/client` 和这份文件里的同名声明，所以 app 配置用 `exclude` 排除了这份文件，只让 libs 配置使用。不排除时也不会报错，但那是因为 `skipLibCheck` 跳过了所有 `.d.ts` 的检查，不应依赖它。
+包的 `tsconfig.lib.json` 不加载 `vite/client`，而 `*.module.scss` 的类型本来由它提供，所以 `src/css-modules.d.ts` 单独声明（与 `@yzt/icons` 的做法相同）。应用只沿导入进入包，`tsconfig.test.json` 的 `include` 也不含它，所以不会和 `vite/client` 的同名声明同时出现。
 
 ## 组件依赖的 CSS 变量
 
-组件的样式使用应用在 `app/styles/tokens.scss` 中定义的 CSS 变量，不 import 应用的 SCSS（ADR 0016）。换一个应用使用 `@yzt/ui`，要先提供这些变量：
+组件的样式使用 `@yzt/theme` 输出的 CSS 变量（定义在 `packages/theme/src/tokens.scss`），不 import 它的 SCSS（ADR 0016、0143）。换一个应用使用 `@yzt/ui`，要先引用 `@yzt/theme` 或自己提供这些变量：
 
 | 组件 | 变量 |
 |---|---|

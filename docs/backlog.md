@@ -86,7 +86,7 @@
 
 ## 以后再做
 
-- 拆包：utils、map-core、map-cesium 一起拆到 `packages/`，放到业务修改之后；`shared/map` 等第二个地图项目的需求清楚了再拆（ADR 0018）
+- 拆 `shared/map`：等第二个地图项目的需求清楚了再拆（ADR 0143）
 - 接入 Renovate；改用 Pull Request 后给 `main` 设分支保护（[ci-workflow](config/ci-workflow.md)）
 - `MapView` 的约定写成二三维共跑的契约测试；业务端到端测试、覆盖率门槛
 - Worker 池的调度、缓存淘汰、内存预算，见 [utils](modules/utils.md)"还没做的"；瓦片数据服务等接入 MVT 时（[map-core](modules/map-core.md)"还没做的"）

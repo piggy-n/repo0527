@@ -1,7 +1,7 @@
 # tsconfig 配置说明
 
-对应文件：`apps/web/tsconfig.json`、`apps/web/tsconfig.app.json`、`apps/web/tsconfig.libs.json`、`apps/web/tsconfig.worker.json`、`apps/web/tsconfig.node.json`
-相关决策：ADR 0003（TypeScript 7）、ADR 0004（模块边界）、ADR 0006（依赖方向检查）、ADR 0016（第一个 libs 模块）
+对应文件：`apps/web/tsconfig.json`、`apps/web/tsconfig.app.json`、`apps/web/tsconfig.worker.json`、`apps/web/tsconfig.node.json`，根目录的 `tsconfig.package.json`、`tsconfig.package.node.json`，以及各个包的 tsconfig
+相关决策：ADR 0003（TypeScript 7）、ADR 0004（模块边界）、ADR 0006（依赖方向检查）、ADR 0143（libs 搬成包）
 
 ## 为什么拆成多个文件
 
@@ -11,7 +11,6 @@
 |---|---|---|
 | `tsconfig.json` | 不检查任何文件，只列出引用 | — |
 | `tsconfig.app.json` | `src/` | DOM + `vite/client` + `geojson` |
-| `tsconfig.libs.json` | `src/libs/`（不含测试、Worker 入口） | DOM + `geojson`，不加载 `vite/client`，没有 `@/*` |
 | `tsconfig.worker.json` | `src/**/*.worker.ts` 及其依赖 | `webworker`，不含 DOM（ADR 0085） |
 | `tsconfig.node.json` | `vite.config.ts`、`tools/` | Node |
 
@@ -26,7 +25,6 @@
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.libs.json" },
     { "path": "./tsconfig.worker.json" },
     { "path": "./tsconfig.node.json" }
   ]
@@ -145,17 +143,16 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 | `noEmit` | `true` | 只检查不输出，编译交给 Vite |
 | `paths` | 见下 | 路径别名 |
 | `include` | `["src"]` | 检查范围 |
-| `exclude` | `["src/libs/css-modules.d.ts"]` | libs 专用的类型声明，见下文 tsconfig.libs.json 一节 |
+| `exclude` | `["src/**/*.worker.ts"]` | Worker 入口由 `tsconfig.worker.json` 按 `webworker` 环境检查 |
 
 ```json
 "paths": {
-  "@/*": ["./src/*"],
-  "@yzt/*": ["./src/libs/*/index.ts"]
+  "@/*": ["./src/*"]
 }
 ```
 
 - `@/*`：应用内跨单元导入用的别名
-- `@yzt/*`：libs 模块将来的包名，**只映射到各模块的 `index.ts`**。所以 `@yzt/map-core` 能解析，`@yzt/map-core/internal` 会被映射成 `src/libs/map-core/internal/index.ts`，这个文件不存在，TS 直接报"找不到模块"。"只能从入口导入"这条规则就这样由类型检查强制保证了
+- `@yzt/*` 不写在这里：内部包是 workspace 依赖，按 `node_modules` 的符号链接和包的 `exports` 解析。`exports` 只暴露入口，所以 `@yzt/map-core` 能解析，`@yzt/map-core/src/index` 报 TS2307（已验证），"只能从入口导入"由解析规则保证（ADR 0143）
 - TS 7 移除了 `baseUrl`，`paths` 里的相对路径以 tsconfig 文件所在目录为基准
 
 读取这份 `paths` 的工具有三个，改动时要保持一致：
@@ -189,58 +186,59 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 | `erasableSyntaxOnly` | 禁止 `enum`、`namespace`、构造函数参数属性 | 会限制 TS 的面向对象写法，项目还在学习阶段，暂不限制 |
 | `allowImportingTsExtensions` | 允许 `import './a.ts'` | 目前的导入都不写扩展名，用不到 |
 
-## tsconfig.libs.json
+## 包的 tsconfig
 
-阶段三创建第一个 libs 模块 `libs/ui` 时加入（ADR 0006、0016）。作用是在类型检查阶段拦住 libs 违反拆包规则（ADR 0004）的写法：
+`packages/*` 每个包按运行环境和用途拆成几份配置（ADR 0143）。共用的选项在根目录的 `tsconfig.package.json`（内容同上文的 app 配置，`types` 是空数组，没有 `paths`）和 `tsconfig.package.node.json`（内容同 `tsconfig.node.json`），各份配置用 `extends` 继承，只写差异：
 
 ```json
+// packages/map-core/tsconfig.lib.json
 {
-  "extends": "./tsconfig.app.json",
+  "extends": "../../tsconfig.package.json",
   "compilerOptions": {
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.libs.tsbuildinfo",
-    "types": ["geojson"],
-    "paths": {
-      "@yzt/*": ["./src/libs/*/index.ts"]
-    }
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.lib.tsbuildinfo",
+    "types": ["geojson"]
   },
-  "include": ["src/libs"],
-  "exclude": ["src/libs/**/*.test.ts", "src/libs/**/*.test.tsx"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.worker.ts", "src/test-setup.browser.ts"]
 }
 ```
 
-| 选项 | 值 | 说明 |
+| 文件 | 检查范围 | 环境类型 |
 |---|---|---|
-| `extends` | `./tsconfig.app.json` | 其余选项与 app 相同，只覆盖下面几项，两份配置不会逐渐不一致 |
-| `types` | `["geojson"]` | 不加载 `vite/client`，libs 里读取 `import.meta.env` 会报错；只加载 libs 需要的 `geojson`（见上文"语言与运行环境"） |
-| `paths` | 只有 `@yzt/*` | `paths` 整体覆盖而不是合并，没有 `@/*`，libs 里用 `@/` 导入会报错 |
-| `include` | `["src/libs"]` | 只检查 libs |
-| `exclude` | 测试文件 | 测试不打包进模块，可以用 Vite 的特性（如 `?raw` 导入），仍由 app 配置检查 |
+| `tsconfig.lib.json` | `src/`（不含测试、Worker 入口、测试的 setup） | DOM，不加载 `vite/client`，没有 `paths`；用到 GeoJSON 的包加 `geojson` |
+| `tsconfig.test.json` | 测试和测试的 setup | 加载 `vite/client`，可以用 `?raw`、`?worker&url`、导入 CSS（`utils` 不需要，没有加载） |
+| `tsconfig.worker.json` | `src/**/*.worker.ts`（只有 map-core 有） | `webworker`，不含 DOM |
+| `tsconfig.node.json` | `vitest.config.ts` | Node |
 
-已验证：在 `src/libs/ui` 下放一个同时读取 `import.meta.env.VITE_APP_TITLE`、导入 `@/shared/config/app-config` 的探针文件，`tsc -b` 报出 TS2339（`ImportMeta` 上没有 `env`）和 TS2307（找不到模块），且只由这份配置报出；删掉探针后通过。
+`tsconfig.lib.json` 的作用是在类型检查阶段拦住违反拆包规则（ADR 0004）的写法。已验证：在 `packages/ui/src` 下放一个读取 `import.meta.env.MODE` 的探针文件，`tsc -b` 报 TS2339；在 `packages/map-core/src` 下用 `@/shared/...` 导入，报 TS2307；删掉探针后通过。
 
-**libs 被检查两次**：`tsconfig.app.json` 的 `include` 是整个 `src`，所以 libs 的源码也会按 app 的规则检查一遍。这是有意保留的：如果把 libs 从 app 配置中排除，app 就要通过项目引用使用 libs 的类型，被引用的项目必须开启 `composite`（隐含输出声明文件），配置会复杂很多。多一次检查的耗时可以忽略。
+**配置要逐个包写 `tsBuildInfoFile`：** `extends` 里的相对路径相对写它的那份配置，放在公共配置里，所有包会用同一个位置。
 
-**CSS Modules 的类型**：`*.module.scss` 的模块声明来自 `vite/client`，这份配置不加载它，所以在 `src/libs/css-modules.d.ts` 中单独声明（阶段三 3.2b 加入，与 `@yzt/icons` 包的做法相同）。`tsconfig.app.json` 用 `"exclude": ["src/libs/css-modules.d.ts"]` 排除这份文件，否则 app 配置会同时看到它和 `vite/client` 中的同名声明；那样也不会报错，但只是因为 `skipLibCheck` 跳过了 `.d.ts` 的检查。libs 配置自己写了 `exclude`，会整体覆盖继承来的值，所以仍然包含这份文件（已用 `tsc --listFilesOnly` 确认两份配置各自包含的文件）。
+**包被检查多次：** 应用的 `tsc -b` 会沿导入把用到的包按 app 的规则再查一遍，依赖它的包也会（map-vue 的程序里有 map-core、map-cesium 的源码）。这是有意保留的：改用项目引用（`composite`）要输出声明文件，配置会复杂很多。全部包的 `pnpm typecheck` 约 9 秒（2026-11-05，并行）。
+
+**CSS Modules 的类型：** `*.module.scss` 的模块声明来自 `vite/client`，`tsconfig.lib.json` 不加载它，所以 `src/css-modules.d.ts` 单独声明（`ui`、`map-vue`、`icons` 各一份）。应用的程序只沿导入进入包，看不到这份文件；`tsconfig.test.json` 的 `include` 也不含它，不会和 `vite/client` 同时出现。
 
 ## tsconfig.worker.json
 
+应用（`shared/map/area/area.worker.ts`）和 `packages/map-core`（`nav-grid.worker.ts`）各有一份：
+
 ```json
+// apps/web/tsconfig.worker.json
 {
-  "extends": "./tsconfig.libs.json",
+  "extends": "../../tsconfig.package.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
-    "lib": ["es2023", "esnext.disposable", "webworker"]
+    "lib": ["es2023", "esnext.disposable", "webworker"],
+    "types": ["geojson"]
   },
-  "include": ["src/**/*.worker.ts", "src/shared/map/area/shpjs.d.ts"],
-  "exclude": ["src/**/*.test.ts"]
+  "include": ["src/**/*.worker.ts", "src/shared/map/area/shpjs.d.ts"]
 }
 ```
 
-- 自己写的 Worker 要按 `webworker` 环境检查（ADR 0018 的待定事项，ADR 0085 解决）：入口里的 `self` 是 `DedicatedWorkerGlobalScope`，满足 `@yzt/utils` 的 `WorkerEndpoint`；DOM 环境里 `self` 是 `Window`，`postMessage` 的参数对不上
-- 入口文件和它导入的模块都在这里按 `webworker` 检查：Worker 里用到 DOM 的 API（`document`、`window`）会报错。`tsconfig.app.json`、`tsconfig.libs.json` 排除 `*.worker.ts`；入口导入的普通模块同时被两边检查，所以只能用两种环境都有的 API
-- 继承 `tsconfig.libs.json`：同样不加载 `vite/client`、没有 `@/*`。Worker 入口放在 libs 里，或放在只用相对导入和 npm 包的 shared 模块里（`shared/map/area`，ADR 0121）
+- 自己写的 Worker 要按 `webworker` 环境检查（ADR 0085）：入口里的 `self` 是 `DedicatedWorkerGlobalScope`，满足 `@yzt/utils` 的 `WorkerEndpoint`；DOM 环境里 `self` 是 `Window`，`postMessage` 的参数对不上
+- 入口文件和它导入的模块都在这里按 `webworker` 检查：Worker 里用到 DOM 的 API（`document`、`window`）会报 TS2584（已验证两份配置都能报出）。入口导入的普通模块同时被两边检查，所以只能用两种环境都有的 API
+- 继承 `tsconfig.package.json`：不加载 `vite/client`、没有 `@/*`。Worker 入口放在包里，或放在只用相对导入和 npm 包的 shared 模块里（ADR 0121）
 - `include` 里的 `shpjs.d.ts`：Worker 用到的库没有类型声明时，自己写的声明文件不会随入口导入进来，要列在这里（app 的配置包含整个 `src`，不用另写）
-- `exclude` 要写：不写就继承 libs 的，里面有 `*.worker.ts`，会一个文件也不检查
 
 ## 修改时的检查清单
 
@@ -248,4 +246,4 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 - 改了 `lib` 或 `target`：确认和 Vite 的浏览器目标一致；加入目标浏览器不支持的 API 时，同时在 `app/main.ts` 补齐运行时
 - 新增 tsconfig：加进 `tsconfig.json` 的 `references`，设置独立的 `tsBuildInfoFile`；在 ADR 0009 被取代之前，不要开启 `incremental`
 - 升级 TS：按上文"增量检查"一节的步骤复测，决定是否恢复增量检查
-- 引入新库：如果它的声明文件引用全局命名空间（如 `GeoJSON`），在 `types` 中加载对应的 `@types` 包（app 和 libs 两份配置）；lint 报 `error typed value` 时先查这一点
+- 引入新库：如果它的声明文件引用全局命名空间（如 `GeoJSON`），在 `types` 中加载对应的 `@types` 包（app 和用到它的包）；lint 报 `error typed value` 时先查这一点

@@ -1,6 +1,6 @@
 # 表格的加载状态（shared/table）
 
-对应目录：`apps/web/src/shared/table/`；样式在 `apps/web/src/app/styles/element-theme.scss` 的表格部分。
+对应目录：`apps/web/src/shared/table/`；样式在 `packages/theme/src/element-theme.scss` 的表格部分。
 
 ## 三种情况
 

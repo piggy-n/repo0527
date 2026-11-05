@@ -23,8 +23,8 @@ Claude Code 读写匹配的文件时自动加载 `.claude/rules/` 里对应的�
 | `http.md` | `api.ts`、`queries.ts`、`shared/http/`、`session-guard` | 接口函数、查询、写操作的会话核对 |
 | `pages.md` | `app/`、`pages/`、`shared/router/`、`shared/auth/`、`shared/perf/` | 路由、权限、导航、开发页、页面缓存、加载耗时、结束会话 |
 | `state.md` | `features/*/store.ts`、`shared/storage/` | Pinia、偏好的持久化与开关 |
-| `libs.md` | `libs/`、`packages/` | 拆包规则、libs 内部的依赖方向、内部包 |
-| `map.md` | 地图的 libs、`shared/map/`、用到地图的 feature 和页面、`*.worker.ts` | 会话、样式分组、拥有者、相机操作、工具、地图页、Worker |
+| `packages.md` | `packages/`、`tsconfig.package*`、`vitest.shared.ts` | 拆包规则、包之间的依赖方向、依赖声明、包的测试 |
+| `map.md` | 地图的包、`shared/map/`、用到地图的 feature 和页面、`*.worker.ts` | 会话、样式分组、拥有者、相机操作、工具、地图页、Worker |
 | `map-3d.md` | `map-cesium`、`map-core/scene`、`scene-models`、现状底图页 | 三维、二三维切换、漫游、导航网格 |
 | `resource-map.md` | `resource-map`、现状底图页、`probe-resource-classes` | 年份、分类、最小显示级别、已确认的界面细节 |
 | `indicator-simulation.md` | 指标 AI 计算 | 叫法、引擎、流程图、自定义范围 |
@@ -48,28 +48,30 @@ Claude Code 读写匹配的文件时自动加载 `.claude/rules/` 里对应的�
 
 ```
 apps/web/src/
-├─ app/        应用装配：入口、路由、Pinia、全局插件、布局
+├─ app/        应用装配：入口、路由、Pinia、全局插件、布局、字体声明
 ├─ pages/      路由页面，只负责组合 features
 ├─ features/   按业务域划分：api.ts、queries.ts、store.ts、components/、composables/
-├─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、加载耗时的标记（perf）、项目级的公共地图能力（map）、城市体检指标的目录与取值（city-indicators）、对话头像（chat-avatar）、只供测试的辅助（testing）
-└─ libs/       将来可拆到 packages/* 的模块，统一用 @yzt/<name> 导入
-   ├─ utils/       @yzt/utils       纯 TS 工具，不依赖框架（目前是 Worker 通信层）
-   ├─ ui/          @yzt/ui          Mx* 通用组件（布局、面板、区块、标题，ADR 0016）
-   ├─ map-core/    @yzt/map-core    地图内核，不依赖 Vue
-   ├─ map-cesium/  @yzt/map-cesium  Cesium 三维
-   └─ map-vue/     @yzt/map-vue     地图与 Vue 的衔接
+└─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、加载耗时的标记（perf）、项目级的公共地图能力（map）、城市体检指标的目录与取值（city-indicators）、对话头像（chat-avatar）、只供测试的辅助（testing）
+
+packages/      workspace 内部包，导出 TS 源码，不构建；统一用 @yzt/<name> 导入（ADR 0143）
+├─ utils/       @yzt/utils       纯 TS 工具，不依赖框架（目前是 Worker 通信层）
+├─ ui/          @yzt/ui          Mx* 通用组件（布局、面板、区块、标题，ADR 0016）
+├─ theme/       @yzt/theme       设计令牌、Element 主题、全局基础样式，只有 Sass 入口
+├─ icons/       @yzt/icons       图标组件与 SVG 规范化工具（ADR 0014）
+├─ map-core/    @yzt/map-core    地图内核，不依赖 Vue
+├─ map-cesium/  @yzt/map-cesium  Cesium 三维
+└─ map-vue/     @yzt/map-vue     地图与 Vue 的衔接
 ```
 
 - `pages/dev/<名称>/`：开发页面，和业务页面分开放，只注册在 `devRoutes`，生产构建不包含，业务代码不导入
-- `packages/*`：workspace 内部包，目前有 `@yzt/icons`；应用通过 `@yzt/<name>` 使用
 - `apps/web/tools/`：Node 直接运行的 TS 工具脚本（如 `pnpm title:generate`、加载耗时的实测 `measure:map-load`），相对导入写 `.ts` 扩展名，只用可剥离的语法（`erasableSyntaxOnly`）
 - `apps/web/public/fonts/`：唯一的字体目录，不入库
 - `local/`（仓库根目录，不入库）：模型、原型、探查结果、实测数据和手动测试文件，环境变量 `YZT_LOCAL_DIR` 可以指到别处（worktree 指回主目录）；开发服务器把 `/3dt/*`、`/design.local/*` 映射到这里，地址不变；`public/` 只放要发布的文件，字体是构建输入、留在原处（ADR 0141，见 `docs/config/local-files.md`）
 
 ## 依赖方向
 
-- `pages → features → shared → libs`，`app` 可以依赖所有目录；features 之间不互相导入，需要复用的内容上移到 shared 或 libs
-- 同一单元（一个 feature、一个 lib 模块、shared、pages、app）内部只用相对路径；跨单元只用别名，引用 libs 只写 `@yzt/<name>`
+- `pages → features → shared → packages`，`app` 可以依赖所有目录；features 之间不互相导入，需要复用的内容上移到 shared 或 packages；包之间的方向见 `.claude/rules/packages.md`
+- 同一单元（一个 feature、一个包、shared、pages、app）内部只用相对路径；跨单元只用别名，引用包只写 `@yzt/<name>`
 - 由 lint 检查（`.oxlintrc.json` 的 `boundaries/dependencies`，说明见 `docs/config/oxlintrc.md`）；分层有变化时同步修改（ADR 0006）
 
 ## 编码约定
@@ -137,13 +139,13 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 | 级别 | 改动 | 运行 |
 |---|---|---|
 | 0 | 只改文档、注释 | 不运行 |
-| 1 | 局部改动：单个 feature、页面、组件，使用方很少的 shared 模块 | `pnpm typecheck`、`pnpm lint`、`pnpm --filter @yzt/web test:changed` |
-| 2 | 影响面大：libs、shared 的公共能力或接口（`test:changed` 选中几十个文件）、全局样式、路由、页面的加载或缓存 | 级别 1，加 `pnpm build:intranet` 和相关的冒烟用例（`pnpm --filter @yzt/web test:smoke <文件名>`） |
+| 1 | 局部改动：单个 feature、页面、组件，使用方很少的 shared 模块 | `pnpm typecheck`、`pnpm lint`、`pnpm test:changed` |
+| 2 | 影响面大：packages、shared 的公共能力或接口（`test:changed` 选中几十个文件）、全局样式、路由、页面的加载或缓存 | 级别 1，加 `pnpm build:intranet` 和相关的冒烟用例（`pnpm --filter @yzt/web test:smoke <文件名>`） |
 | 3 | 依赖、Vite、tsconfig、lint、CI、构建插件、`.env`，鉴权、会话、HTTP 的核心；发布前 | 和 CI 相同的全量（`docs/commands.md` 的"质量检查"） |
 
-- `test:changed` 只沿 import 关系选测试：`.module.scss` 和被 import 的 JSON 选得到；全局样式（`app/styles`）一个也选不到，`.env`、运行时才请求的文件同样查不到，不能因为它没选中测试就算通过
-- 改了 `package.json`、`vite.config.*` 时，Vitest 自动跑全部测试
-- 改 `packages/*` 时加上该包自己的测试（`pnpm --filter <包名> test`）
+- `test:changed` 只沿 import 关系选测试：`.module.scss` 和被 import 的 JSON 选得到；全局样式（`packages/theme`、`app/styles`）一个也选不到，`.env`、运行时才请求的文件同样查不到，不能因为它没选中测试就算通过
+- `pnpm test:changed` 逐个包执行：改包里的代码时，包自己的测试和依赖它的包、web 的测试都能选中
+- 改了任何一个 `package.json`、`vite.config.*`、`vitest.config.*` 时，Vitest 自动跑全部测试
 - UI 改动按 `docs/design/ui-workflow.md` 另外验证，这里的检查不能代替
 
 ## 文档
@@ -153,7 +155,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - `docs/README.md`：文档索引与维护约定
 - `docs/backlog.md`：唯一的待办清单，解决一项删一行
 - `docs/adr/overview.md`：按主题列现行结论，查决策从这里开始；`docs/adr/`：决策记录，编号递增，接受后不再修改，决策有变化时新写一份并注明取代了哪一份
-- `docs/modules/`：shared、libs、packages 以及 app 中布局等模块的用法与设计；用法或设计变化时更新
+- `docs/modules/`：shared、packages 以及 app 中布局等模块的用法与设计；用法或设计变化时更新
 - `docs/config/`：重要配置文件的逐项说明；修改配置文件时同步更新
 - `docs/design/`：设计规范、主题落地与页面布局；修改令牌、Element 映射或布局规则时同步更新
 - `docs/commands.md`：常用命令；新增或修改脚本时同步更新
@@ -163,7 +165,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 ## 常用命令
 
 - `pnpm --filter @yzt/web dev`：启动开发服务器；`dev:intranet` 用内网配置
-- `pnpm typecheck`、`pnpm lint`（`lint:fix` 自动修复）、`pnpm --filter @yzt/web test:changed`（只跑相关测试）
-- `pnpm test`：所有包的测试；`pnpm --filter @yzt/web test:unit`、`test:browser` 只跑一个项目；第一次跑浏览器测试前运行 `test:browser:install`
+- `pnpm typecheck`、`pnpm lint`（`lint:fix` 自动修复）、`pnpm test:changed`（只跑相关测试）
+- `pnpm test`：所有包的测试，逐个包串行；`pnpm --filter @yzt/<name> test` 只跑一个包；`pnpm --filter @yzt/web test:unit`、`test:browser` 只跑一个项目；第一次跑浏览器测试前运行 `test:browser:install`
 - `pnpm build`、`pnpm build:intranet`（内网，不请求天地图）；`pnpm --filter @yzt/web test:smoke <文件名>`：生产冒烟
 - 其余命令（实测、探查、依赖更新）见 `docs/commands.md`；要账号或 token 的脚本由用户在自己的终端运行

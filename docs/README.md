@@ -17,13 +17,13 @@ docs/
 │  └─ NNNN-*.md
 ├─ config/                    重要配置文件的逐项说明
 │  ├─ package-json.md         根目录与 apps/web 的 package.json
-│  ├─ tsconfig.md             apps/web 的 tsconfig（app、libs、node）
+│  ├─ tsconfig.md             应用和包的 tsconfig（app、worker、node，包的 lib、test）
 │  ├─ oxlintrc.md             .oxlintrc.json（lint 规则与依赖方向）
-│  ├─ pnpm-workspace.md       pnpm-workspace.yaml（workspace、冷却期、安装脚本）
+│  ├─ pnpm-workspace.md       pnpm-workspace.yaml（workspace、catalog、冷却期、安装脚本）
 │  ├─ ci-workflow.md          .github/workflows/ci.yml
 │  ├─ vite-config.md          apps/web/vite.config.ts（插件、别名、代理）
 │  ├─ local-files.md          未入库的本地文件（local/）：目录划分、YZT_LOCAL_DIR、开发服务器的映射
-│  ├─ internal-packages.md    packages/* 内部包的配置约定与新建清单
+│  ├─ internal-packages.md    packages/* 内部包的配置、依赖声明、测试与新建清单
 │  └─ env.md                  apps/web/.env（环境变量、类型与校验）
 ├─ modules/                   内部模块的用法与设计说明
 │  ├─ http.md                 shared/http：HTTP 客户端、ApiError、回调注入
@@ -37,14 +37,14 @@ docs/
 │  ├─ system-title.md         系统名称的 SVG 轮廓：用法、自动生成、常见问题
 │  ├─ chat-avatar.md          shared/chat-avatar：对话的头像，AI 对话与指标AI计算共用
 │  ├─ city-indicators.md      shared/city-indicators：城市指标的目录与取值
-│  ├─ ui.md                   libs/ui：两个入口、窄屏断点、分栏布局、面板、区块、标题
+│  ├─ ui.md                   packages/ui：两个入口、窄屏断点、分栏布局、面板、区块、标题
 │  ├─ perf.md                 shared/perf：加载耗时的标记与实测脚本
-│  ├─ utils.md                libs/utils：Worker 通信层、LatestController
+│  ├─ utils.md                packages/utils：Worker 通信层、LatestController
 │  ├─ icons.md                图标：SvgIcon 用法、添加图标、规范化规则
 │  ├─ map-overview.md         地图架构总览：分层、原则、按主题的现行 ADR、阅读顺序
 │  ├─ map-core.md             地图内核：会话与 MapLibre 适配器、实测行为、加载策略；附录为旧代码分析
-│  ├─ map-vue.md              libs/map-vue：provideMap、样式绑定、MapCanvas、相机操作、定位可视区域、二三维切换
-│  ├─ map-cesium.md           libs/map-cesium：CesiumView、相机换算、样式镜像的支持清单、拾取与投影
+│  ├─ map-vue.md              packages/map-vue：provideMap、样式绑定、MapCanvas、相机操作、定位可视区域、二三维切换
+│  ├─ map-cesium.md           packages/map-cesium：CesiumView、相机换算、样式镜像的支持清单、拾取与投影
 │  ├─ shared-map.md           shared/map：底图、边界、默认视角、工具栏、测量、区划定位、坐标定位、状态提示
 │  ├─ file-management.md      文件管理：迁移边界、上传交互与验证
 │  ├─ resource-management.md  资源管理：目录、详情、Excel、自助取数、下载申请

@@ -316,7 +316,7 @@ R1 不改变管理员业务路由，也不把演示原型切成真实写入页�
 | 图层启停 | POST query 发送 ID 与字符串状态；按 ID 防重复，不同图层可并发，成功后重读，失败保持原状态；旧会话结果和卸载后的提示有保护 |
 | 页面与布局 | `pages/resource-management` 装配 feature；复用 MxPanel、MxSection、QueryForm、TableSkeleton；浅灰主标题栏、文字「查看」、仅属性表滚动、窄 / 矮屏逐组展开元数据；头部返回 / 修改同高 32，编辑底栏按钮间距 8，无多余状态说明 |
 | 业务图标 | 新增 `assets/icons/resource-*.svg`，通过既有工具登记到 `shared/icons/icons.json`，统一由 SvgIcon 渲染；目录改名不丢已知图标，未知类型有缺省图标 |
-| 获准的共享外观 | `app/styles/element-theme.scss` 仅新增按需使用的 `dialog-panel-header`；资源目录新增 / 改名采用灰底 + MxTitle，去掉所属分组；`pages/dev/theme` 添加真实组件样例 |
+| 获准的共享外观 | `packages/theme/src/element-theme.scss` 仅新增按需使用的 `dialog-panel-header`；资源目录新增 / 改名采用灰底 + MxTitle，去掉所属分组；`pages/dev/theme` 添加真实组件样例 |
 | 测试 | 6 个资源管理单元测试文件；`tools/smoke/resource-management.spec.ts` 覆盖正式产物交互、管理员守卫与多尺寸布局 |
 | 文档 | 本文维护旧基线、真实接口、待确认项、公共传输需求及验证；同步 roadmap、migration、主题 / 布局与图标说明 |
 

@@ -8,6 +8,10 @@ paths:
   - "apps/web/.env*"
   - "apps/web/vite.config.ts"
   - "apps/web/tsconfig*.json"
+  - "packages/*/tsconfig*.json"
+  - "packages/*/vitest.config.ts"
+  - "tsconfig.package*.json"
+  - "vitest.shared.ts"
   - "apps/web/src/shared/config/**"
 ---
 
@@ -23,6 +27,7 @@ paths:
 - 小版本和补丁：CI 通过后合并
 - 大版本：先读 Breaking Changes 和迁移指南再决定；等出过几个补丁版本再升；一次只升一个包，单独提交，并在提交说明里写明迁移内容
 - 每月手动检查一次（`pnpm deps:check`），接入 Renovate 后改为每周自动处理；安全告警随时处理
+- 两个及以上的包用到的依赖在 `pnpm-workspace.yaml` 的 `catalog` 写版本，包里写 `catalog:`（ADR 0143）；只有一个包用到的写在那个包里
 - `pnpm-lock.yaml` 必须提交
 - 依赖的安装脚本默认不执行，是否放行在 `pnpm-workspace.yaml` 的 `allowBuilds` 中逐个决定
 

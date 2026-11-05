@@ -1,14 +1,15 @@
 # pnpm-workspace.yaml 配置说明
 
 对应文件：根目录 `pnpm-workspace.yaml`
-相关决策：ADR 0004（拆包预留）、ADR 0005（依赖维护）
+相关决策：ADR 0004（拆包预留）、ADR 0005（依赖维护）、ADR 0143（catalog）
 
 它不是 JSON 文件，但和 `package.json` 一样是工程的核心配置，所以一并说明。YAML 本身支持注释，文件里保留了简短的注释。
 
 ## 这个文件管什么
 
 1. 声明 workspace 包含哪些目录
-2. pnpm 的项目级设置。pnpm 较新的版本把项目设置集中到这个文件，`.npmrc` 主要用于 registry 地址和认证
+2. 依赖版本的统一入口（`catalog`）
+3. pnpm 的项目级设置。pnpm 较新的版本把项目设置集中到这个文件，`.npmrc` 主要用于 registry 地址和认证
 
 当前内容：
 
@@ -16,6 +17,11 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+catalog:
+  cesium: 1.146.0
+  vue: ^3.5.43
+  # 其余见文件
 
 minimumReleaseAge: 4320
 
@@ -29,7 +35,7 @@ allowBuilds:
 
 ## packages
 
-`apps/*` 下的每个目录（目前只有 `apps/web`）都是一个 workspace 包。`packages/*` 放可复用的 `@yzt/*` 包，第一个是阶段二的 `packages/icons`（ADR 0014），配置约定见 [internal-packages.md](internal-packages.md)。
+`apps/*` 下的每个目录（目前只有 `apps/web`）都是一个 workspace 包。`packages/*` 放可复用的 `@yzt/*` 包（ADR 0014、0143），配置约定见 [internal-packages.md](internal-packages.md)。
 
 workspace 带来的能力：
 
@@ -38,6 +44,27 @@ workspace 带来的能力：
 - 包之间可以用 `workspace:*` 互相引用，不用发布到 npm
 
 pnpm 的 `node_modules` 是严格的：每个包只能访问自己声明过的依赖，不会出现"没声明却能 import"的幽灵依赖。npm 和 yarn classic 把所有依赖平铺到根目录，没声明的包往往也能被 import 到。
+
+## catalog
+
+```yaml
+catalog:
+  cesium: 1.146.0
+  maplibre-gl: ^6.12.0
+  vue: ^3.5.43
+```
+
+两个及以上的包用到的依赖在这里写一次版本，各包的 `package.json` 写 `"vue": "catalog:"`（dependencies、devDependencies、peerDependencies 都可以写）；只有一个包用到的依赖仍写在那个包里（ADR 0143）。
+
+**为什么必须统一：** 包经符号链接解析时，`import 'cesium'` 找的是包自己的 `node_modules`，不是应用的。版本完全相同时，pnpm 把它们链接到 `.pnpm` 下的同一个目录，才是同一份；版本不同时不报错，悄悄出现两份，MapLibre 的 `setWorkerUrl`、Cesium 的 `setBaseUrl`、Vue 的响应式都会互不相通。
+
+**不遵守语义化版本的包**（Cesium、TypeScript）在这里写精确版本，peer 写 `catalog:` 同样是精确版本。
+
+已验证（pnpm 12.14，2026-11-05）：
+
+- 转成 catalog 后 lockfile 里只有 `specifier` 变成 `catalog:`，解析到的版本不变
+- `pnpm outdated -r`（`pnpm deps:check`）能列出 catalog 里的依赖
+- `pnpm update -r --latest` 只改 catalog 里的版本，`package.json` 保持 `catalog:`
 
 ## minimumReleaseAge
 
@@ -102,10 +129,10 @@ pnpm 从 10 开始默认**不执行**依赖包的安装脚本（`preinstall`、`
 |---|---|---|
 | `trustPolicy: no-downgrade` | 某个包的可信等级（例如是否带发布来源证明）比以前的版本低时拒绝安装 | 没开，可作为以后加强供应链安全的选项 |
 | `blockExoticSubdeps` | 禁止间接依赖来自 git 仓库或任意 URL | 默认已开启 |
-| `catalog` | 在一处定义依赖版本，各包用 `catalog:` 引用 | 没用。目前只有 `typescript` 在两个包里重复声明，以后包多了可以考虑 |
 
 ## 修改时的检查清单
 
 - 改了 `minimumReleaseAge`：运行 `pnpm install --frozen-lockfile`，确认现有 lockfile 仍然通过校验
 - 新增 `allowBuilds` 项：写明由哪个依赖引入、为什么这样选
 - 新增 `packages` 目录：确认 `pnpm -r typecheck`、`pnpm -r build` 能覆盖新包
+- 第二个包用到某个依赖时：把版本挪进 `catalog`，两个包都写 `catalog:`

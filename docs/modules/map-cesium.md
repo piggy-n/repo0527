@@ -1,6 +1,6 @@
 # map-cesium：三维视图
 
-`libs/map-cesium`（`@yzt/map-cesium`）是二维 MapLibre 适配器的三维对应：一个实现 `MapView` 的 `CesiumView`，镜像会话的样式（栅格底图和 GeoJSON 覆盖物）、同步相机、把画布上的输入交给工具（ADR 0020、0024、0079、0080）。三维阶段的范围与交互见 ADR 0078，分步计划见 [roadmap](../archive/roadmap.md)"三维阶段的范围与取舍"。
+`packages/map-cesium`（`@yzt/map-cesium`）是二维 MapLibre 适配器的三维对应：一个实现 `MapView` 的 `CesiumView`，镜像会话的样式（栅格底图和 GeoJSON 覆盖物）、同步相机、把画布上的输入交给工具（ADR 0020、0024、0079、0080）。三维阶段的范围与交互见 ADR 0078，分步计划见 [roadmap](../archive/roadmap.md)"三维阶段的范围与取舍"。
 
 ## 结构
 
@@ -27,7 +27,7 @@
 
 `CesiumView` 不导入 Cesium，靠构造参数 `createScene` 拿到场景：真实的是 `createCesiumScene`，测试换成假场景。`cesium-view.test.ts` 用 `expectTypeOf<CesiumScene>().toExtend<SceneLike>()` 检查真实的门面满足窄接口，和 MapLibre 适配器的 `MapLike` 一样（ADR 0079 第 3 节）。
 
-只有 `libs/map-cesium` 和 `app` 能导入 `cesium` 和 `@cesium/*`，由 lint 检查（[oxlintrc.md](../config/oxlintrc.md)）。map-vue 只能用动态 `import()` 引用本模块。
+只有 `packages/map-cesium` 和 `app` 能导入 `cesium` 和 `@cesium/*`，由 lint 检查（[oxlintrc.md](../config/oxlintrc.md)）。map-vue 只能用动态 `import()` 引用本模块。
 
 ## 运行时
 

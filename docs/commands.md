@@ -12,7 +12,7 @@
 | 第一次运行浏览器测试前（每台机器一次，升级 playwright 后再运行一次） | `pnpm --filter @yzt/web test:browser:install` |
 | 本地开发 | `pnpm --filter @yzt/web dev` |
 | 本地开发（内网配置，不请求天地图） | `pnpm --filter @yzt/web dev:intranet` |
-| 改完代码的常规检查（级别 1，见 ADR 0139） | `pnpm typecheck` → `pnpm lint` → `pnpm --filter @yzt/web test:changed` |
+| 改完代码的常规检查（级别 1，见 ADR 0139） | `pnpm typecheck` → `pnpm lint` → `pnpm test:changed` |
 | 全量检查（级别 3，和 CI 相同，需已安装浏览器） | `pnpm typecheck` → `pnpm lint` → `pnpm test` → `pnpm build` → `pnpm build:intranet` → `pnpm --filter @yzt/web test:smoke` |
 | 自动修复 lint 问题 | `pnpm lint:fix` |
 | 写代码时持续运行测试 | `pnpm --filter @yzt/web test:watch` |
@@ -236,16 +236,16 @@ pnpm --filter @yzt/web test:smoke
 
 **什么时候用**：提交代码前；改了类型、接口、tsconfig 之后。
 
-**执行了什么**：根目录的 `pnpm -r typecheck` 在每个包里执行 `typecheck` 脚本。目前只有 `apps/web`，执行的是 `tsc -b`：
+**执行了什么**：根目录的 `pnpm -r typecheck` 在每个有这个脚本的包里执行 `tsc -b`（`@yzt/theme` 没有 TS，跳过）：
 
 1. 读取 `tsconfig.json` 的 `references`
-2. 依次全量检查 `tsconfig.app.json`（`src/`）和 `tsconfig.node.json`（`vite.config.ts`）
+2. 依次全量检查各份配置（应用的 `app`、`worker`、`node`，包的 `lib`、`test`、`node`，见 [config/tsconfig.md](config/tsconfig.md)）
 3. 有错误时退出码非 0
 
 **注意事项**：
 
 - 只检查，不输出任何文件（`noEmit`）
-- 每次都是全量检查，目前约 8 秒。增量检查因 TS 7.0.2 的问题已关闭（ADR 0009）
+- 每次都是全量检查，目前约 9 秒（并行）。增量检查因 TS 7.0.2 的问题已关闭（ADR 0009）
 - 这里的 `tsc` 是 TS 7（Go 原生实现），速度很快；不要改用 vue-tsc（ADR 0003）
 
 ### `pnpm lint`
@@ -286,7 +286,7 @@ pnpm --filter @yzt/web test:smoke
 
 **什么时候用**：需要全量验证时（级别 3）；平时用 `test:changed`。
 
-**执行了什么**：根目录的 `pnpm -r test` 在 `apps/web` 里执行 `vitest run`：
+**执行了什么**：根目录的 `pnpm -r --workspace-concurrency=1 test` 逐个包执行 `vitest run`，依赖在前、web 最后，某个包失败就停（ADR 0143）。包用自己的 `vitest.config.ts`；`apps/web` 里：
 
 1. 读取 `vite.config.ts`（与开发、构建共用插件、别名和 `.env`，模式为 `test`）
 2. 运行两个项目（ADR 0040）：`unit` 跑 `src/**/*.test.{ts,tsx}` 和 `tools/**/*.test.ts`（不含 `*.browser.test.*`），默认环境是 jsdom，第一行写了 `// @vitest-environment node` 的文件用 Node 环境；`browser` 跑 `src/**/*.browser.test.{ts,tsx}`，在 Playwright 启动的 Chromium 无界面版里运行
@@ -296,11 +296,11 @@ pnpm --filter @yzt/web test:smoke
 **注意事项**：
 
 - 测试文件和源文件放在一起，显式从 `vitest` 导入 `describe`、`it`、`expect`（不开 `globals`）
-- 只跑某个目录或文件：`pnpm --filter @yzt/web test -- src/app/router`
+- 只跑一个包：`pnpm --filter @yzt/map-core test`；只跑某个目录或文件：`pnpm --filter @yzt/web test -- src/app/router`
 - 本地 `it.only` 会让其他用例被跳过，lint 会报错；CI 中 Vitest 会直接拒绝运行
 - Vitest 只转译不做类型检查，测试文件的类型由 `pnpm typecheck` 检查
 - 改了 Vite 插件的选项、或怀疑测试用的是旧的转换结果时，先清缓存：`pnpm --filter @yzt/web exec vitest --clearCache`（缓存键不含插件选项，见 [config/vite-config.md](config/vite-config.md)"测试耗时"）
-- CI 上约 5～6 分钟（2026-11-04）；本机内存紧张时加 `--maxWorkers=2`，单元测试约 10 分钟
+- CI 上约 5～6 分钟（2026-11-04）；本机内存紧张时写 `pnpm -r --workspace-concurrency=1 test --maxWorkers=2`，web 的单元测试约 10 分钟
 - 本机没有安装浏览器时，`browser` 项目会报找不到浏览器，先运行 `test:browser:install`
 
 ### `pnpm --filter @yzt/web test:unit`、`test:browser`
@@ -311,9 +311,9 @@ pnpm --filter @yzt/web test:smoke
 
 **注意事项**：浏览器测试里 `console` 的输出在本会话这类简洁报告器下不显示，要看时加 `--reporter=default`，例如 `pnpm --filter @yzt/web test:browser -- --reporter=default`
 
-### `pnpm --filter @yzt/web test:changed`
+### `pnpm test:changed`
 
-**作用**：只跑和改动相关的单元测试、浏览器测试（`vitest run --changed main --passWithNoTests`）。
+**作用**：逐个包只跑和改动相关的单元测试、浏览器测试（每个包执行 `vitest run --changed main --passWithNoTests`）。
 
 **什么时候用**：验证级别 1、2，见 `AGENTS.md` 的"验证分级"。
 
@@ -321,10 +321,10 @@ pnpm --filter @yzt/web test:smoke
 
 **注意事项**：
 
-- `.module.scss` 和被 import 的 JSON 选得到；全局样式（`app/styles`）选不到任何测试，`.env`、运行时才请求的文件也查不到，没选中测试不等于通过
-- 改了 `package.json`、`vite.config.*` 时，Vitest 自动跑全部测试（默认的 `forceRerunTriggers`）
-- 只看 `apps/web` 的测试；改 `packages/*` 时加上 `pnpm --filter <包名> test`
-- 内存紧张时加 `--maxWorkers=2`：`pnpm --filter @yzt/web test:changed --maxWorkers=2`
+- `.module.scss` 和被 import 的 JSON 选得到；全局样式（`packages/theme`、`app/styles`）选不到任何测试，`.env`、运行时才请求的文件也查不到，没选中测试不等于通过
+- 改了任何一个 `package.json`、`vite.config.*`、`vitest.config.*` 时，每个包都跑全部测试（默认的 `forceRerunTriggers`）
+- 改包里的代码时，包自己的测试和依赖它的包、web 的测试都能选中（沿 workspace 链接找，ADR 0143）；每个包启动一次 Vitest，没有相关测试时也要多花 1～3 秒
+- 内存紧张时加 `--maxWorkers=2`：`pnpm -r --workspace-concurrency=1 test:changed --maxWorkers=2`
 
 ### `pnpm --filter @yzt/web test:browser:install`
 

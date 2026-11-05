@@ -54,7 +54,7 @@ trace.mark('session');  // 记下 login-to-map:session，并量出从 start 到�
 
 - map-core 的视图加了 `settle` 事件：MapLibre 发出 `idle`、视图处于 `ready` 时触发；加载中、暂停时的 `idle` 不算（加载中样式还没生效，暂停时显示的是另一个视图）。不叫 `idle`，是因为 map-vue 里 `idle` 表示"还没有视图"
 - map-vue 的上下文加了 `whenSettled(signal?)`，和 `whenReady` 一样绑定具体的视图：等到它下一次画面稳定；没有视图时等视图挂上；视图被卸下或替换、上下文释放时以 `AbortError` 结束，`signal` 中止时以它的原因结束
-- libs 里不打标记（不读全局单例），`shared/map/useMapLoadMarks(map)` 在 `provideMap` 所在组件的 setup 里调用：不在一轮里时直接返回；否则记下 `page`，再依次等 `whenReady`、`whenSettled`，页面卸载时中止等待
+- 包里不打标记（不读全局单例），`shared/map/useMapLoadMarks(map)` 在 `provideMap` 所在组件的 setup 里调用：不在一轮里时直接返回；否则记下 `page`，再依次等 `whenReady`、`whenSettled`，页面卸载时中止等待
 
 真实的 MapLibre 上由浏览器测试确认：首次加载时 `settle` 在进入 `ready` 之后发出，那时初始样式的数据已经画出。
 

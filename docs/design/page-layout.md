@@ -1,8 +1,8 @@
 # 页面布局规范
 
-决策：[ADR 0016](../adr/0016-ui-components-in-libs-ui.md)（通用 UI 组件放在 `libs/ui`）
+决策：[ADR 0016](../adr/0016-ui-components-in-libs-ui.md)（通用 UI 组件放在 `packages/ui`）
 设计稿：2026-09-30 确认（阶段三 3.1，静态 HTML，未入库）
-组件：`libs/ui`（`@yzt/ui`）的分栏布局 `MxSplitLayout`、面板 `MxPanel`、区块 `MxSection`、标题 `MxTitle`（阶段三 3.2 实现），用法见 [modules/ui.md](../modules/ui.md)
+组件：`packages/ui`（`@yzt/ui`）的分栏布局 `MxSplitLayout`、面板 `MxPanel`、区块 `MxSection`、标题 `MxTitle`（阶段三 3.2 实现），用法见 [modules/ui.md](../modules/ui.md)
 
 本文规定业务页面内容区的排布：页面分几块、间距多大、面板和标题长什么样、窄屏怎么收。顶部栏和内容区背景属于 `app/layout`，见 [modules/layout.md](../modules/layout.md)。
 
@@ -118,7 +118,7 @@
 | 区块标题 | 14 / 600 | `--color-text-title` | `h3` | 4 × 14 | 16 |
 
 - 默认左侧是竖杠：宽 4、高等于字号、两端全圆、`--color-primary`，与文字间距 `--space-sm`
-- 竖杠可以换成自定义图标，主色，由页面通过插槽传入（`libs/ui` 不能引用 `SvgIcon`）
+- 竖杠可以换成自定义图标，主色，由页面通过插槽传入（`packages/ui` 不能引用 `SvgIcon`）
 - `extra` 插槽放在右侧，不参与省略；标题文字过长时省略
 - 标题后面可以跟灰色说明（`description`，12px、`--color-text-secondary`，如分类的上级路径）：空间不够时说明先省略到 0，标题保持完整；只有标题自己放不下时才省略标题，`extra` 始终完整。实现见 [modules/ui.md](../modules/ui.md) 的"标题和说明的收缩顺序"
 - 区块之间 `--space-lg`，区块标题与下方内容之间 `--space-md`；"区块标题 + 内容"用 `MxSection`，这两个间距由它负责，页面不再自己写（3.2b 加入）
@@ -198,7 +198,7 @@
 
 视口宽度 < 1200 时，左栏收进抽屉。
 
-- 断点与顶部导航收成"☰ 菜单"的断点相同，全应用只有一个"窄屏"定义，由 `libs/ui` 提供（ADR 0016）
+- 断点与顶部导航收成"☰ 菜单"的断点相同，全应用只有一个"窄屏"定义，由 `packages/ui` 提供（ADR 0016）
 - 为什么不直接隐藏：迁移范围内的左栏多是页面内导航（系统管理）或筛选条件（文件管理的目录树、资源管理的资源菜单），隐藏等于在窄屏上拿掉功能
 - 用 `ElDrawer` 从左侧滑出，宽度等于侧栏档位，按 `ElDrawer` 的默认行为盖住整个窗口
 - 左栏收成左侧 40 宽的窄条，点击打开抽屉：外观与面板相同，上面是图标（`Expand`）和竖排的左栏名称。只放图标更省地方，但看不出点开是什么，未采用

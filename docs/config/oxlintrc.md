@@ -1,7 +1,7 @@
 # .oxlintrc.json 配置说明
 
 对应文件：根目录 `.oxlintrc.json`
-相关决策：ADR 0003（为什么是 oxlint）、ADR 0004（分层与依赖方向）、ADR 0006（规则取舍）
+相关决策：ADR 0003（为什么是 oxlint）、ADR 0004（分层与依赖方向）、ADR 0006（规则取舍）、ADR 0143（libs 搬成包）
 
 ## 整体结构
 
@@ -122,7 +122,6 @@ console.log(value);
     { "type": "pages", "pattern": "apps/web/src/pages" },
     { "type": "feature", "pattern": "apps/web/src/features/*", "capture": ["name"] },
     { "type": "shared", "pattern": "apps/web/src/shared" },
-    { "type": "lib", "pattern": "apps/web/src/libs/*", "capture": ["name"] },
     { "type": "package", "pattern": "packages/*", "capture": ["name"] }
   ]
 }
@@ -130,7 +129,7 @@ console.log(value);
 
 ### import/resolver
 
-boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它属于哪一层。这里指定用 `eslint-import-resolver-typescript`，按各 tsconfig 的 `paths` 解析别名。相对路径也会被解析成真实文件，所以 `../layer/store` 这种写法同样能被识别。
+boundaries 要知道 `@/features/map`、`@yzt/map-core` 实际指向哪个文件，才能判断它属于哪一层。这里指定用 `eslint-import-resolver-typescript`，按各 tsconfig 的 `paths` 解析别名。相对路径也会被解析成真实文件，所以 `../layer/store` 这种写法同样能被识别。
 
 `project` 是数组：应用和每个 workspace 包各有自己的 tsconfig（阶段二加入 `packages/icons` 后改为数组）。有多个项目时解析器会打印一条性能提示，`noWarnOnMultipleProjects` 用来关掉它。
 
@@ -142,7 +141,7 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 - `pattern`：匹配的目录。路径相对于仓库根目录，因为 lint 从根目录运行
 - `capture`：把 `*` 匹配到的部分记成变量。`features/*` 的 `name` 让每个 feature 成为独立元素，`features/map` 和 `features/layer` 因此被视为两个不同的单元
 
-`package` 元素对应 `packages/*` 下的 workspace 包（ADR 0014）。阶段二实测：没有这条定义时，`@yzt/icons` 经 `node_modules` 下的符号链接解析，被当作外部依赖放行，包内代码导入应用代码也不会报错；加上定义后，解析出的真实路径落在 `packages/icons` 中，被识别为 package 元素，双向的违规都能查出。
+`package` 元素对应 `packages/*` 下的 workspace 包（ADR 0014、0143），`name` 捕获包的目录名，包之间的方向按它放行。阶段二实测：没有这条定义时，`@yzt/icons` 经 `node_modules` 下的符号链接解析，被当作外部依赖放行，包内代码导入应用代码也不会报错；加上定义后，解析出的真实路径落在 `packages/icons` 中，被识别为 package 元素，双向的违规都能查出。
 
 ## rules
 
@@ -171,8 +170,8 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 "no-restricted-imports": ["error", {
   "paths": [
     { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
-    { "name": "maplibre-gl", "message": "maplibre-gl 只能在 libs/map-core/maplibre 和 app 中导入（ADR 0024）" },
-    { "name": "cesium", "message": "cesium 只能在 libs/map-cesium 和 app 中导入（ADR 0079）" }
+    { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
+    { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
   ],
   "patterns": [
     { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
@@ -184,8 +183,8 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 
 - `paths` 的 lodash-es：禁止 `import _ from 'lodash-es'`（默认导入整个库，影响 tree-shaking）
 - `patterns` 的 lodash：禁止 `lodash` 和 `lodash/xxx`（CommonJS 版本）
-- maplibre-gl（阶段四加入）：只有 MapLibre 适配器能写二维地图（ADR 0020、0024），所以默认禁止导入，由下文的 override 只对 `libs/map-core/maplibre/` 和 `app/` 放开。`paths` 拦住包本身（类型导入也算），`patterns` 拦住 `maplibre-gl/dist/...` 下的 CSS 和 Worker 文件
-- cesium（3D.1 加入）：同样的写法，只对 `libs/map-cesium/` 和 `app/` 放开（ADR 0079）。`patterns` 拦住 `cesium/Build/...` 下的样式表和 `@cesium/engine` 等子包。map-cesium 里的代码约定从聚合包 `cesium` 导入，升级时只看一个版本；这一条 lint 不检查
+- maplibre-gl（阶段四加入）：只有 MapLibre 适配器能写二维地图（ADR 0020、0024），所以默认禁止导入，由下文的 override 只对 `packages/map-core/src/maplibre/`、`app/` 和包的 `test-setup.browser.ts` 放开。`paths` 拦住包本身（类型导入也算），`patterns` 拦住 `maplibre-gl/dist/...` 下的 CSS 和 Worker 文件
+- cesium（3D.1 加入）：同样的写法，只对 `packages/map-cesium/src/` 和 `app/` 放开（ADR 0079）。`patterns` 拦住 `cesium/Build/...` 下的样式表和 `@cesium/engine` 等子包。map-cesium 里的代码约定从聚合包 `cesium` 导入，升级时只看一个版本；这一条 lint 不检查
 
 ### 第三组：类型感知规则
 
@@ -223,18 +222,18 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 ### 地图适配器和 app 放开地图引擎
 
 ```json
-{ "files": ["apps/web/src/libs/map-core/maplibre/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、cesium 的两项 }] } }
-{ "files": ["apps/web/src/libs/map-cesium/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项 }] } }
+{ "files": ["packages/map-core/src/maplibre/**", "packages/*/src/test-setup.browser.ts"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、cesium 的两项 }] } }
+{ "files": ["packages/map-cesium/src/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项 }] } }
 { "files": ["apps/web/src/app/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项 }] } }
 ```
 
-默认严格、例外显式：基础规则对所有文件禁止 maplibre-gl 和 cesium，这里只对各自的适配器和 app 的装配（`setWorkerUrl`、`setCesiumBaseUrl`、CSS，ADR 0023、0079）放开：MapLibre 适配器仍不能导入 cesium，map-cesium 仍不能导入 maplibre-gl。override 会**整体替换**规则的选项，所以没有放开的几项要在每个 override 里再写一遍，否则这些目录就不再限制它们。oxlint 没有独立的 `typescript/no-restricted-imports` 可以分开配置，重复无法避免。
+默认严格、例外显式：基础规则对所有文件禁止 maplibre-gl 和 cesium，这里只对各自的适配器、app 的装配（`setWorkerUrl`、`setCesiumBaseUrl`、CSS，ADR 0023、0079）和包的测试 setup（包的浏览器测试不依赖应用，自己设置 Worker 地址，ADR 0143）放开：MapLibre 适配器仍不能导入 cesium，map-cesium 仍不能导入 maplibre-gl。override 会**整体替换**规则的选项，所以没有放开的几项要在每个 override 里再写一遍，否则这些目录就不再限制它们。oxlint 没有独立的 `typescript/no-restricted-imports` 可以分开配置，重复无法避免。
 
-没有用 boundaries 的策略实现：boundaries 的元素只能精确到"哪个 lib 模块"，放行 map-core 就等于整个 map-core 都能导入，`StyleModel` 这类不该接触 SDK 的文件也不受限制。
+没有用 boundaries 的策略实现：boundaries 的元素只能精确到"哪个包"，放行 map-core 就等于整个 map-core 都能导入，`StyleModel` 这类不该接触 SDK 的文件也不受限制。
 
-2026-10-09 用探针验证：`libs/map-core/style` 里的类型导入、`shared` 里导入 `maplibre-gl/dist/maplibre-gl.css`、`features` 里的导入都报错；`app` 和 `libs/map-core/maplibre` 里的导入通过；`app` 里导入 `lodash/debounce` 仍然报错。
+2026-10-09 用探针验证：`packages/map-core/style` 里的类型导入、`shared` 里导入 `maplibre-gl/dist/maplibre-gl.css`、`features` 里的导入都报错；`app` 和 `packages/map-core/src/maplibre` 里的导入通过；`app` 里导入 `lodash/debounce` 仍然报错。
 
-2026-10-26 加入 cesium 后再验证：`shared` 里导入 `cesium`（类型导入）、`cesium/Build/.../widgets.css`、`@cesium/engine` 都报错；`libs/map-core/maplibre` 里导入 `cesium`、`libs/map-cesium` 里导入 `maplibre-gl` 报错；`libs/map-cesium` 和 `app` 里导入 `cesium` 通过，`app` 里导入 `lodash/debounce` 仍然报错。
+2026-10-26 加入 cesium 后再验证：`shared` 里导入 `cesium`（类型导入）、`cesium/Build/.../widgets.css`、`@cesium/engine` 都报错；`packages/map-core/src/maplibre` 里导入 `cesium`、`packages/map-cesium` 里导入 `maplibre-gl` 报错；`packages/map-cesium` 和 `app` 里导入 `cesium` 通过，`app` 里导入 `lodash/debounce` 仍然报错。
 
 ### packages 的依赖方向
 
@@ -242,9 +241,9 @@ boundaries 要知道 `@/features/map` 实际指向哪个文件，才能判断它
 { "files": ["packages/*/src/**", "packages/*/tools/**"], "rules": { "boundaries/dependencies": [ ... ] } }
 ```
 
-workspace 包只允许依赖外部模块、Node 内置模块和本包内部的相对路径，不能导入应用或其他单元的代码，保证包可以脱离应用单独使用。阶段二用探针验证：`packages/icons` 导入 `apps/web/src/shared/...` 会报错。
+包只允许依赖外部模块、Node 内置模块、本包内部的相对路径和按方向放行的其他包，不能导入应用代码，保证包可以脱离应用单独使用。阶段二用探针验证：`packages/icons` 导入 `apps/web/src/shared/...` 会报错。
 
-策略比应用少：除了下文的 0（外部模块）、1（单元内部相对路径），还有一条放行 Node 内置模块（boundaries 把 `node:fs` 这类归为 `origin: "core"`），供 `tools/` 使用。浏览器端的 `src/` 不需要单独禁止内置模块：`tsconfig.lib.json` 没有加载 Node 类型，导入 `node:fs` 会直接类型报错。
+策略见下文"包的策略"。放行 Node 内置模块的一条（boundaries 把 `node:fs` 这类归为 `origin: "core"`）供 `tools/` 使用；浏览器端的 `src/` 不需要单独禁止内置模块：`tsconfig.lib.json` 没有加载 Node 类型，导入 `node:fs` 会直接类型报错。
 
 ### apps/web/src 的依赖方向
 
@@ -286,14 +285,26 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 | 2 | app → pages、feature、shared，且写成 `@/` 别名 | 应用装配层可以组合下面所有层 |
 | 3 | pages → feature、shared，且写成 `@/` 别名 | 页面只负责组合 features |
 | 4 | feature → shared，且写成 `@/` 别名 | feature 之间不互相导入 |
-| 5 | app、pages、feature、shared → lib，且写成 `@yzt/*` | 引用 libs 只能用包名，不能用 `@/libs/...` 或相对路径 |
-| 6 | app、pages、feature、shared → package，且写成 `@yzt/*` | 引用 workspace 包只能用包名，不能用相对路径绕过包的入口（阶段二加入，已验证） |
-| 7 | ui、map-core、map-cesium、map-vue → utils，且写成 `@yzt/*` | libs 之间的依赖也只能用包名 |
-| 8 | map-cesium、map-vue → map-core，且写成 `@yzt/*` | 地图内核被三维和 Vue 衔接层使用 |
-| 9 | map-vue → map-cesium，且只能动态 `import()` | Cesium 体积大，只能懒加载 |
-| 10 | 禁止 utils、map-core、map-cesium 依赖 Vue 生态 | 这三个模块要保持框架无关 |
-| 11 | 禁止 map-vue 依赖 vue-router、pinia、element-plus、`@element-plus/**` | map-vue 只负责地图与 Vue 的衔接，界面和项目配置放在 `shared/map`（ADR 0027 第 5 条，阶段五加入） |
-| 12 | 全局禁止 `mapbox-gl` | 2.0 起为专有许可（ADR 0002） |
+| 5 | app、pages、feature、shared → package，且写成 `@yzt/*` | 引用包只能用包名，不能用相对路径绕过包的入口（阶段二加入，已验证） |
+| 6 | 全局禁止 `mapbox-gl` | 2.0 起为专有许可（ADR 0002） |
+
+### 包的策略
+
+`packages` override 里的策略（ADR 0143，从原来 libs 的策略搬过来，元素从 `lib` 换成 `package`）：
+
+| 序号 | 策略 | 含义 |
+|---|---|---|
+| 0 | 放行所有外部包 | 后面的禁止策略会再收紧 |
+| 1 | 放行 Node 内置模块 | 供 `tools/` 使用 |
+| 2 | 放行包内部的相对导入 | 同一个包内部必须写成相对路径 |
+| 3 | ui、map-core、map-cesium、map-vue → utils，且写成 `@yzt/*` | 包之间的依赖只能用包名 |
+| 4 | map-cesium、map-vue → map-core，且写成 `@yzt/*` | 地图内核被三维和 Vue 衔接层使用 |
+| 5 | map-vue → map-cesium，且只能动态 `import()` | Cesium 体积大，只能懒加载 |
+| 6 | 禁止 utils、map-core、map-cesium 依赖 Vue 生态 | 这三个包要保持框架无关 |
+| 7 | 禁止 map-vue 依赖 vue-router、pinia、element-plus、`@element-plus/**` | map-vue 只负责地图与 Vue 的衔接，界面和项目配置放在 `shared/map`（ADR 0027 第 5 条） |
+| 8 | 全局禁止 `mapbox-gl` | 同上 |
+
+只靠 pnpm 的严格模式不够：它能拦住没声明的依赖，但拦不住 map-vue 静态导入 map-cesium，也拦不住有人把 vue 声明进 map-core。
 
 几个写法细节：
 
@@ -301,8 +312,8 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
   - 不能写成 `./**`：底层的 micromatch 会把 `./` 规范化掉，导致 `./store` 匹配不上（阶段一实测）
   - 阶段一原来写的是 `".{,.}/**"`（展开为 `./**`、`../**`），阶段二发现它匹配不了 `../../router/routes`：micromatch 的 `**` 不匹配以点开头的路径段，第二个 `..` 过不去，所以单元内部往上跨两层的相对导入被误报。改成现在的写法后，用 micromatch 4.0.8 实测：`./a`、`../a`、`../../a`、`../../../a` 都匹配，`@/app/x`、`vue` 不匹配；用 lint 实测：两层相对导入通过，单元内部改用 `@/` 别名仍然报错
 - **`"@/**"`（策略 2–4）**：跨单元导入必须写成 `@/` 别名（AGENTS.md"跨单元只用别名"）。阶段二之前这三条策略没有限制写法，用 `../../../shared/...` 这样的相对路径跨单元导入也会放行；2026-09-30 补上，用探针验证 app → shared、pages → feature、feature → shared 改用相对路径后各报 1 处，现有代码没有违规。`@/**` 不会误匹配 `@yzt/icons`、`@element-plus/...` 这类以 `@` 开头的包名（已用 micromatch 验证）
-- **`"@yzt/*"`（策略 5–9）**：micromatch 的 `*` 不跨越 `/`，所以 `@yzt/map-core/internal` 不匹配。不过这种深层导入在 tsconfig 那一关就已经解析失败了
-- **`"nodeKind": "dynamic-import"`（策略 9）**：boundaries 会区分静态 `import` 和动态 `import()`，前者的 `nodeKind` 是 `import`
+- **`"@yzt/*"`**：micromatch 的 `*` 不跨越 `/`，所以 `@yzt/map-core/internal` 不匹配。不过这种深层导入在解析那一关就已经失败了（包的 `exports` 只暴露入口）
+- **`"nodeKind": "dynamic-import"`（包的策略 5）**：boundaries 会区分静态 `import` 和动态 `import()`，前者的 `nodeKind` 是 `import`
 - **`captured.name`**：用 `{a,b}` 花括号语法匹配多个模块名
 
 ### 能查什么、不能查什么
@@ -314,13 +325,14 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 | 跨 feature 导入（别名或相对路径） | 策略 4 |
 | 跨单元用相对路径（如 app 用 `../../shared/...`） | 策略 2–4（阶段二补充） |
 | 单元内部使用别名 | 策略 1 |
-| 引用 libs 没写 `@yzt` | 策略 5 |
 | shared 依赖 feature、pages 依赖 app | 策略 2–4 |
-| utils 依赖 vue | 策略 10 |
-| map-vue 依赖 element-plus、pinia、vue-router | 策略 11（阶段五） |
-| 静态导入 map-cesium | 策略 9 |
-| 应用用相对路径导入 workspace 包的内部文件 | 策略 6（阶段二） |
-| workspace 包导入应用代码 | packages override（阶段二） |
+| utils、map-core 依赖 vue | 包的策略 6 |
+| map-vue 依赖 element-plus、pinia、vue-router | 包的策略 7（阶段五） |
+| 静态导入 map-cesium | 包的策略 5 |
+| 包之间反方向依赖（map-cesium → map-vue、map-core → ui、ui → map-core）、用相对路径跨包 | 包的默认禁止（2026-11-05 验证） |
+| 包的测试文件违反方向 | 同上：`packages/*/src/**` 包括测试（2026-11-05 验证） |
+| 应用用相对路径导入 workspace 包的内部文件 | 策略 5（阶段二） |
+| 包用相对路径导入应用代码 | packages override（阶段二） |
 | lodash 默认导入、整包 lodash | `no-restricted-imports` |
 | 在 MapLibre 适配器和 app 之外导入 maplibre-gl（包括类型导入和 `dist` 下的文件） | `no-restricted-imports` 加放开用的 override（阶段四） |
 | 在 map-cesium 和 app 之外导入 cesium（包括类型导入、`Build` 下的文件和 `@cesium/*` 子包） | 同上（3D.1） |
@@ -328,8 +340,8 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 
 有两类问题不归 lint 管，而是交给 TS：
 
-- 深层导入 `@yzt/x/internal`：tsconfig 的 `paths` 只映射到 `index.ts`，解析直接失败
-- libs 读取 `import.meta.env`、使用 `@/`：由 `tsconfig.libs.json` 拦截（`no-restricted-properties` 检查不到 `import.meta`），见 [tsconfig.md](tsconfig.md)
+- 深层导入 `@yzt/x/internal`：包的 `exports` 只暴露入口，解析直接失败（TS2307）
+- 包读取 `import.meta.env`、使用 `@/`：由包的 `tsconfig.lib.json` 拦截（`no-restricted-properties` 检查不到 `import.meta`），见 [tsconfig.md](tsconfig.md)。`@/shared/...` 在包里解析不出来，boundaries 把它当成外部模块放行，lint 不报（2026-11-05 验证），靠 TS2307
 
 ## 维护指南
 
@@ -339,10 +351,9 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 |---|---|
 | 修改 lodash 的导入限制 | 基础规则和"地图适配器和 app 放开地图引擎"的三个 override 一起改 |
 | 新增一个 feature | 不用改，`features/*` 自动匹配 |
-| 新增 ADR 0004 已列出的 lib 模块 | 不用改，策略里已经写好了名字 |
-| 新增一个新名字的 lib 模块 | 在策略 6–9 中补充它的依赖关系，并同步 `.claude/rules/libs.md` 与 ADR |
-| 调整分层 | 同时改 `boundaries/elements`、策略、tsconfig `paths`、`AGENTS.md` 和 `.claude/rules/libs.md`，并写新的 ADR |
-| 新增 app 或 package | 补充对应的元素和 `import/resolver` 配置 |
+| 新增一个包 | 不依赖其他包、也没有包依赖它时不用改；否则在包的策略 3–5 中补充它的依赖关系，并同步 `.claude/rules/packages.md` 与 ADR |
+| 调整分层 | 同时改 `boundaries/elements`、策略、`AGENTS.md` 和 `.claude/rules/packages.md`，并写新的 ADR |
+| 新增 app | 补充对应的元素和 `import/resolver` 配置 |
 
 ### 调试方法
 

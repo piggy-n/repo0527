@@ -1,7 +1,7 @@
 # vite.config.ts 配置说明
 
 对应文件：`apps/web/vite.config.ts`
-相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（libs 的 Sass 入口）、ADR 0079（Cesium 的运行时文件）、ADR 0141（未入库的本地文件）
+相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（@yzt/ui 的 Sass 入口）、ADR 0143（libs 搬成包）、ADR 0079（Cesium 的运行时文件）、ADR 0141（未入库的本地文件）
 
 ## 整体结构
 
@@ -15,7 +15,7 @@
 |---|---|---|
 | `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`staticFiles`、`localFiles`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`staticFiles` 提供 Cesium 的运行时文件和资源的最小显示级别，`localFiles` 只在开发服务器上提供未入库的模型和原型，`buildOutputPlugin` 只在构建时检查产物，都见下文 |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
-| `css.preprocessorOptions.scss.loadPaths` | `[src/libs]` | libs 模块的 Sass 入口按模块名引用，见下文 |
+| `build.rolldownOptions.output.chunkFileNames` | 函数 | 包入口所在的分块按包名命名，见下文"分块的名字" |
 | `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
 | `server.proxy` | `/backend/` → `PROXY_TARGET`；`/ai-backend/` → `AI_PROXY_TARGET` | 同源代理，见下文 |
 | `test` | 见下文 | Vitest 的配置（ADR 0010） |
@@ -99,7 +99,6 @@ const localFiles = localFilesPlugin({ '/3dt': localPath('3dt'), '/design.local':
 | `environment` | `'jsdom'` | 在 Node 里模拟 DOM，挂载组件用。不用 DOM 的测试文件在第一行写 `// @vitest-environment node` 改用 Node 环境，见下文"测试耗时" |
 | `setupFiles` | `['src/test-setup.ts']` | 每个测试文件运行前执行。里面调用 `@vue/test-utils` 的 `enableAutoUnmount(afterEach)`：每个用例结束后卸载用 `mount` 挂载的组件，查询、定时器、ResizeObserver 随之停止，进行中的查询被取消，不会有晚到的请求落到下一个用例（之前出现过 MSW 报"没有匹配的处理函数"）。用例里手动 `unmount()` 过的组件会再卸载一次，这一版 Vue 下是空操作，不报错也不警告。已用对照实验验证：去掉这一项后，前一个用例挂载的组件没有被卸载 |
 | `server.deps.inline` | `['element-plus']` | 让 Vitest 处理 element-plus，而不是交给 Node 直接加载。不加的话，Element 表单的校验在测试中永远通过，见下文 |
-| `css.include` | `[/\/src\/libs\/[^/]+\/_index\.scss/]` | 只让 libs 的 Sass 入口按原文加载，供断点一致性测试读取，见下文"Sass 的 loadPaths" |
 
 `browser` 项目（ADR 0040）：
 
@@ -107,6 +106,7 @@ const localFiles = localFilesPlugin({ '/3dt': localPath('3dt'), '/design.local':
 |---|---|---|
 | `include` | `['src/**/*.browser.test.{ts,tsx}']` | 只有依赖真实引擎或真实布局的用例 |
 | `setupFiles` | `['src/test-setup.ts', 'src/test-setup.browser.ts']` | 后者调用 app 的 `setupMapRuntime()`：Worker 地址、Worker 数量和 MapLibre 的 CSS 与生产用同一份装配 |
+| `browser` | `vitest.shared.ts` 的 `browserTestOptions` | 下面几项，应用和各个包共用一份（ADR 0143） |
 | `browser.enabled` | `true` | 默认是 `false`：不写的话这些用例仍在 Node / jsdom 里跑（读 Vitest 5.0.2 的源码确认：`resolved.browser.enabled ??= false`） |
 | `browser.provider` | `playwright({ launchOptions: { args: ['--use-angle=swiftshader'] } })` | Playwright 驱动 Chromium；显式选软件渲染，减少本机和 CI 之间渲染后端的差异 |
 | `browser.headless` | `true` | 不弹出浏览器窗口，CI 也能跑 |
@@ -157,29 +157,23 @@ Vitest 5 运行结束时会打印各部分所占的比例：导入 32～36%、�
 
 **缓存的失效**：缓存键由模块的路径和内容、Vite 配置（root、mode、resolve、插件名、配置文件本身的内容）、`NODE_ENV` 和 Vitest 版本组成（2026-10-09 读 Vitest 5.0.2 的源码确认），不包含插件的选项；用到 `import.meta.glob` 的模块不缓存。缓存放在 `node_modules` 里，重装依赖时自然清掉。改了插件的选项、或怀疑测试用的是旧的转换结果时，执行 `pnpm --filter @yzt/web exec vitest --clearCache`（同时清掉用于排序的运行记录）。
 
-**Node 环境**：在 Node 环境下也能通过的测试文件——纯逻辑、libs 的会话与 Worker 通信层、`tools/` 下的 Node 脚本——在第一行写 `// @vitest-environment node`。忘了写只是慢一点；写了但实际用到 DOM，会因为 `document` 未定义而直接失败，不会悄悄通过。Node 和 jsdom 有细小差别，例如 `DOMException` 在 Node 和浏览器里都是 `Error` 的实例，在 jsdom 里不是（Worker 通信层的错误处理两种都兼容）。
+**Node 环境**：在 Node 环境下也能通过的测试文件——纯逻辑、包里的会话与 Worker 通信层、`tools/` 下的 Node 脚本——在第一行写 `// @vitest-environment node`。忘了写只是慢一点；写了但实际用到 DOM，会因为 `document` 未定义而直接失败，不会悄悄通过。Node 和 jsdom 有细小差别，例如 `DOMException` 在 Node 和浏览器里都是 `Error` 的实例，在 jsdom 里不是（Worker 通信层的错误处理两种都兼容）。
 
 **大库在文件开头导入**：Vitest 不转换也不预构建 Cesium，交给 Node 直接加载，入口转到 `@cesium/engine`、`@cesium/widgets` 约 1400 个 ESM 文件。单独导入约 2～3 秒、内存多约 115 MB；2026-10-28/29 全量测试的负载下，`map-framework.test.ts` 在用例里第一次导入它用了 28～41 秒，超过用例的超时。Vitest 不给收集阶段（导入测试文件和它的静态依赖）计时，只限制 Worker 启动的时间（2026-10-29 读 Vitest 5.0.5 的源码确认），所以要导入整个大库的测试在文件开头静态导入，用例里的动态导入拿到的是模块表里已有的模块，不靠加大用例的超时。`map-runtime-3d.test.ts` 一开始就是静态导入，没有出现过超时。
 
-### Sass 的 loadPaths
+### 包的 Sass 入口
 
-```ts
-css: {
-  preprocessorOptions: {
-    scss: { loadPaths: [fileURLToPath(new URL('./src/libs', import.meta.url))] }
-  }
-}
-```
-
-libs 模块除了 TS 入口 `index.ts`，还可以有一个 Sass 入口 `_index.scss`，只放变量（目前只有 `libs/ui` 的窄屏断点，ADR 0016）。Sass 解析 `@use 'ui'` 时，先找当前文件旁边的 `ui.scss`、`_ui.scss`，找不到再到 `loadPaths` 里找，`src/libs/ui/_index.scss` 是目录 `ui` 的 index 文件，于是被选中。这和 TS 的 `@yzt/ui` 对应：外部只写模块名，不写模块内部的路径。
-
-- 没有用相对路径（`@use '../../../libs/ui/breakpoints'`）：那样会直接引用模块内部的文件，违背"只从入口导入"
-- 也没有用 `resolve.alias`：别名只在 tsconfig 的 `paths` 里维护，而 `@yzt/*` 只映射到 `index.ts`，不适用于 Sass 文件
-- 路径用 `import.meta.url` 计算，不依赖启动命令所在的目录
+没有 Sass 相关的配置：样式写 `@use '@yzt/ui'`，Vite 解析 Sass 时带 `sass` 条件，找到包的 `exports` 里的 `_index.scss`（ADR 0143），见 [internal-packages.md](internal-packages.md) 的"Sass 入口"。原来用 `loadPaths` 指向 `src/libs` 的做法，每个应用都要绑定目录结构，已经去掉。
 
 已验证：开发服务器和生产构建中，顶部栏的 `@media (width < #{ui.$compact})` 都编译成了 `(width < 1200px)`。
 
-**测试中读取 Sass 入口**：`libs/ui/breakpoints.test.ts` 用 `import sassEntry from './_index.scss?raw'` 读取原文，检查其中的 `$compact` 与 TS 常量一致。Vitest 默认把所有样式请求（包括带 `?raw` 的）替换成空字符串，实测拿到的是 `""`；`test.css.include` 列出的文件才交给 Vite 正常处理，所以这里只放行 libs 的 Sass 入口。
+**测试中读取 Sass 入口**：`packages/ui/src/breakpoints.test.ts` 用 `import sassEntry from './_index.scss?raw'` 读取原文，检查其中的 `$compact` 与 TS 常量一致。Vitest 默认把所有样式请求（包括带 `?raw` 的）替换成空字符串，实测拿到的是 `""`；`test.css.include` 列出的文件才交给 Vite 正常处理，所以 `packages/ui/vitest.config.ts` 只放行这个入口。
+
+### 分块的名字
+
+包的入口都是 `src/index.ts`，Rolldown 按目录给这样的分块命名，默认都会叫 `src-xxx.js`。`chunkName` 只对默认名是 `src` 的分块，从 `moduleIds` 里找 `packages/<名字>/src/index.ts`，换成包名（ADR 0143）。不能用 `facadeModuleId`：map-core 的分块不是某个入口的外观，它是 `null`（2026-11-05 实测）。
+
+只改文件名，不改分块的划分。冒烟按名字找的分块（`LoginPage`、`CurrentMapPage`、`map-runtime`）不受影响。
 
 ### 读取环境变量
 
@@ -234,5 +228,5 @@ AI 对话的后端是另一个服务，用同样的写法加了第二条：`/ai-
 - 新增插件：确认它不依赖 TS 的 JS API（ADR 0003），并在本文登记；插件对测试同样生效，改完运行 `pnpm test`
 - 修改插件的选项：测试的转换缓存不包含插件选项，先执行 `pnpm --filter @yzt/web exec vitest --clearCache` 再运行测试
 - 改动路径别名：只改 tsconfig 的 `paths`，不要在这里加 `resolve.alias`
-- 新增 libs 模块的 Sass 入口：放在模块根目录，命名 `_index.scss`，只放变量；`test.css.include` 的正则已经覆盖所有模块
+- 新增包的 Sass 入口：不用改这里，写在包的 `exports` 的 `sass` 条件里，见 [internal-packages.md](internal-packages.md) 的"Sass 入口"
 - 升级 Cesium：核对 `Build/Cesium` 下的三个目录和 `stripBase` 的层数，构建后产物的 `cesium/` 里能找到 `Workers/`、`Assets/`、`ThirdParty/`，再跑 map-cesium 的浏览器测试
