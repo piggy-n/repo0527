@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import vueJsx from '@vitejs/plugin-vue-jsx';
 import { iconsPlugin } from '@yzt/icons/tools';
 import { loadEnv } from 'vite';
@@ -55,12 +54,6 @@ export default defineConfig(({ mode }) => {
       // 直接读取 tsconfig 的 paths，不再单独维护一份别名
       tsconfigPaths: true
     },
-    css: {
-      preprocessorOptions: {
-        // libs 模块的 Sass 入口按模块名引用，如 @use 'ui' 对应 src/libs/ui/_index.scss
-        scss: { loadPaths: [fileURLToPath(new URL('./src/libs', import.meta.url))] }
-      }
-    },
     server: {
       // 预览工具用 PORT 分配端口（.claude/launch.json 的 autoPort），被占用时直接失败；没有 PORT 时沿用 Vite 的默认端口
       ...(env.PORT ? { port: Number(env.PORT), strictPort: true } : {}),
@@ -104,8 +97,6 @@ export default defineConfig(({ mode }) => {
             exclude: [...configDefaults.exclude, 'src/**/*.browser.test.{ts,tsx}'],
             environment: 'jsdom',
             setupFiles: ['src/test-setup.ts'],
-            // Vitest 默认把样式文件替换成空内容（带 ?raw 也一样）；libs 的 Sass 入口要按原文读取，供断点一致性测试使用
-            css: { include: [/\/src\/libs\/[^/]+\/_index\.scss/] },
             // 交给 Node 直接加载时，element-plus 会拿到 CommonJS 版的 async-validator，表单校验在测试中永远通过（见 docs/config/vite-config.md）
             server: { deps: { inline: ['element-plus'] } }
           }

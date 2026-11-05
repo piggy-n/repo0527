@@ -1,6 +1,7 @@
 {
   "name": "repo0527",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "pnpm -r build",
     "build:intranet": "pnpm -r build:intranet",

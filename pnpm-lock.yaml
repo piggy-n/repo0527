@@ -295,6 +295,9 @@ importers:
       '@yzt/icons':
         specifier: workspace:*
         version: link:../../packages/icons
+      '@yzt/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@yzt/utils':
         specifier: workspace:*
         version: link:../../packages/utils
@@ -462,6 +465,52 @@ importers:
       jsdom:
         specifier: 'catalog:'
         version: 30.1.1(@noble/hashes@1.8.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 'catalog:'
+        version: 8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0)
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.5(@types/node@24.19.0)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(jsdom@30.1.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@24.19.0)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0))
+      vue:
+        specifier: 'catalog:'
+        version: 3.5.43(typescript@7.0.2)
+
+  packages/ui:
+    dependencies:
+      '@element-plus/icons-vue':
+        specifier: 'catalog:'
+        version: 2.3.2(vue@3.5.43(typescript@7.0.2))
+      '@vueuse/core':
+        specifier: 'catalog:'
+        version: 15.0.0(vue@3.5.43(typescript@7.0.2))
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.0
+      '@vitejs/plugin-vue-jsx':
+        specifier: 'catalog:'
+        version: 5.1.6(supports-color@8.1.1)(vite@8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0))(vue@3.5.43(typescript@7.0.2))
+      '@vitest/browser-playwright':
+        specifier: 'catalog:'
+        version: 5.0.5(msw@2.15.0(@types/node@24.19.0)(typescript@7.0.2))(playwright@1.64.0)(vite@8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0))(vitest@5.0.5)
+      '@vue/test-utils':
+        specifier: 'catalog:'
+        version: 2.5.1(@vue/compiler-dom@3.5.43)(@vue/server-renderer@3.5.43)(vue@3.5.43(typescript@7.0.2))
+      element-plus:
+        specifier: 'catalog:'
+        version: 2.14.6(vue@3.5.43(typescript@7.0.2))
+      jsdom:
+        specifier: 'catalog:'
+        version: 30.1.1(@noble/hashes@1.8.0)
+      playwright:
+        specifier: 'catalog:'
+        version: 1.64.0
+      sass-embedded:
+        specifier: 'catalog:'
+        version: 1.105.0
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
