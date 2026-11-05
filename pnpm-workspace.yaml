@@ -2,6 +2,32 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# 两个及以上的包用到的依赖在这里写一次版本，包里写 catalog:。包经符号链接解析时找的是自己的 node_modules，
+# 版本一致才能和应用共用一份 Vue、MapLibre、Cesium（ADR 0143）
+catalog:
+  "@element-plus/icons-vue": ^2.3.2
+  "@maplibre/maplibre-gl-style-spec": ^26.4.4
+  "@turf/simplify": ^7.4.0
+  "@types/geojson": ^7946.0.16
+  "@types/node": ^24.19.0
+  "@vitejs/plugin-vue-jsx": ^5.1.6
+  "@vitest/browser-playwright": ^5.0.5
+  "@vue/test-utils": ^2.5.1
+  "@vueuse/core": ^15.0.0
+  cesium: 1.146.0
+  element-plus: ^2.14.6
+  geographiclib-geodesic: ^2.2.0
+  jsdom: ^30.1.1
+  maplibre-gl: ^6.12.0
+  nanoevents: ^10.0.0
+  playwright: ^1.64.0
+  sass-embedded: ^1.105.0
+  typescript: 7.0.2
+  vite: ^8.3.5
+  vite-plugin-static-copy: ^4.1.1
+  vitest: ^5.0.5
+  vue: ^3.5.43
+
 # 新版本发布满 3 天才允许安装，对应 npm 允许撤回版本的 72 小时窗口（ADR 0005）
 minimumReleaseAge: 4320
 

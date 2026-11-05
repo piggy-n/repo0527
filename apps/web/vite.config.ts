@@ -1,11 +1,11 @@
 import { fileURLToPath } from 'node:url';
 import vueJsx from '@vitejs/plugin-vue-jsx';
-import { playwright } from '@vitest/browser-playwright';
 import { iconsPlugin } from '@yzt/icons/tools';
 import { loadEnv } from 'vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 // 与 vite 的 defineConfig 相同，只是类型里多了 test 字段
 import { configDefaults, defineConfig } from 'vitest/config';
+import { browserTestOptions } from '../../vitest.shared.ts';
 import { buildOutputPlugin } from './tools/build-output/vite-plugin.ts';
 import { iconsPaths } from './tools/icons/paths.ts';
 import { localPath } from './tools/local-files/paths.ts';
@@ -131,17 +131,7 @@ export default defineConfig(({ mode }) => {
             fileParallelism: false,
             include: ['src/**/*.browser.test.{ts,tsx}'],
             setupFiles: ['src/test-setup.ts', 'src/test-setup.browser.ts'],
-            browser: {
-              // 默认是 false：不写的话这些用例仍在 Node / jsdom 里跑
-              enabled: true,
-              // 显式选软件渲染，减少本机和 CI 之间的差异
-              provider: playwright({ launchOptions: { args: ['--use-angle=swiftshader'] } }),
-              headless: true,
-              viewport: { width: 1280, height: 800 },
-              // 不做截图比对，CI 也不上传附件：失败时不往仓库目录写截图
-              screenshotFailures: false,
-              instances: [{ browser: 'chromium' }]
-            }
+            browser: browserTestOptions
           }
         }
       ]

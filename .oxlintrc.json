@@ -147,7 +147,45 @@
             "policies": [
               { "allow": { "to": { "module": { "origin": "external" } } } },
               { "allow": { "to": { "module": { "origin": "core" } } } },
-              { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": "@(./|+(../))**" } } }
+              { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": "@(./|+(../))**" } } },
+              {
+                "from": { "element": { "type": "package", "captured": { "name": "{ui,map-core,map-cesium,map-vue}" } } },
+                "allow": {
+                  "to": { "element": { "type": "package", "captured": { "name": "utils" } } },
+                  "dependency": { "source": "@yzt/*" }
+                }
+              },
+              {
+                "from": { "element": { "type": "package", "captured": { "name": "{map-cesium,map-vue}" } } },
+                "allow": {
+                  "to": { "element": { "type": "package", "captured": { "name": "map-core" } } },
+                  "dependency": { "source": "@yzt/*" }
+                }
+              },
+              {
+                "from": { "element": { "type": "package", "captured": { "name": "map-vue" } } },
+                "allow": {
+                  "to": { "element": { "type": "package", "captured": { "name": "map-cesium" } } },
+                  "dependency": { "source": "@yzt/*", "nodeKind": "dynamic-import" }
+                }
+              },
+              {
+                "from": { "element": { "type": "package", "captured": { "name": "{utils,map-core,map-cesium}" } } },
+                "disallow": {
+                  "to": {
+                    "module": {
+                      "source": ["vue", "vue-router", "pinia", "element-plus", "@vue/**", "@element-plus/**"]
+                    }
+                  }
+                }
+              },
+              {
+                "from": { "element": { "type": "package", "captured": { "name": "map-vue" } } },
+                "disallow": {
+                  "to": { "module": { "source": ["vue-router", "pinia", "element-plus", "@element-plus/**"] } }
+                }
+              },
+              { "disallow": { "to": { "module": { "source": "mapbox-gl" } } } }
             ]
           }
         ]
@@ -221,6 +259,10 @@
                 "disallow": {
                   "to": { "module": { "source": ["vue-router", "pinia", "element-plus", "@element-plus/**"] } }
                 }
+              },
+              {
+                "from": { "element": { "type": "lib" } },
+                "allow": { "to": { "element": { "type": "package" } }, "dependency": { "source": "@yzt/*" } }
               },
               { "disallow": { "to": { "module": { "source": "mapbox-gl" } } } }
             ]
