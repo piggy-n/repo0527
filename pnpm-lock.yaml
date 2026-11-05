@@ -295,6 +295,9 @@ importers:
       '@yzt/icons':
         specifier: workspace:*
         version: link:../../packages/icons
+      '@yzt/map-cesium':
+        specifier: workspace:*
+        version: link:../../packages/map-cesium
       '@yzt/map-core':
         specifier: workspace:*
         version: link:../../packages/map-core
@@ -481,6 +484,55 @@ importers:
         specifier: 'catalog:'
         version: 3.5.43(typescript@7.0.2)
 
+  packages/map-cesium:
+    dependencies:
+      '@maplibre/maplibre-gl-style-spec':
+        specifier: 'catalog:'
+        version: 26.4.4
+      '@turf/simplify':
+        specifier: 'catalog:'
+        version: 7.4.0
+      '@yzt/map-core':
+        specifier: workspace:*
+        version: link:../map-core
+      '@yzt/utils':
+        specifier: workspace:*
+        version: link:../utils
+      nanoevents:
+        specifier: 'catalog:'
+        version: 10.0.0
+    devDependencies:
+      '@types/geojson':
+        specifier: 'catalog:'
+        version: 7946.0.16
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.0
+      '@vitest/browser-playwright':
+        specifier: 'catalog:'
+        version: 5.0.5(msw@2.15.0(@types/node@24.19.0)(typescript@7.0.2))(playwright@1.64.0)(vite@8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0))(vitest@5.0.5)
+      cesium:
+        specifier: 'catalog:'
+        version: 1.146.0
+      jsdom:
+        specifier: 'catalog:'
+        version: 30.1.1(@noble/hashes@1.8.0)
+      playwright:
+        specifier: 'catalog:'
+        version: 1.64.0
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 'catalog:'
+        version: 8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0)
+      vite-plugin-static-copy:
+        specifier: 'catalog:'
+        version: 4.1.1(vite@8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0))
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.5(@types/node@24.19.0)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(jsdom@30.1.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@24.19.0)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0))
+
   packages/map-core:
     dependencies:
       '@maplibre/maplibre-gl-style-spec':
@@ -523,6 +575,58 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 5.0.5(@types/node@24.19.0)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(jsdom@30.1.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@24.19.0)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0))
+
+  packages/map-vue:
+    dependencies:
+      '@yzt/map-cesium':
+        specifier: workspace:*
+        version: link:../map-cesium
+      '@yzt/map-core':
+        specifier: workspace:*
+        version: link:../map-core
+      '@yzt/utils':
+        specifier: workspace:*
+        version: link:../utils
+    devDependencies:
+      '@types/geojson':
+        specifier: 'catalog:'
+        version: 7946.0.16
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.0
+      '@vitejs/plugin-vue-jsx':
+        specifier: 'catalog:'
+        version: 5.1.6(supports-color@8.1.1)(vite@8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0))(vue@3.5.43(typescript@7.0.2))
+      '@vitest/browser-playwright':
+        specifier: 'catalog:'
+        version: 5.0.5(msw@2.15.0(@types/node@24.19.0)(typescript@7.0.2))(playwright@1.64.0)(vite@8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0))(vitest@5.0.5)
+      '@vue/test-utils':
+        specifier: 'catalog:'
+        version: 2.5.1(@vue/compiler-dom@3.5.43)(@vue/server-renderer@3.5.43)(vue@3.5.43(typescript@7.0.2))
+      jsdom:
+        specifier: 'catalog:'
+        version: 30.1.1(@noble/hashes@1.8.0)
+      maplibre-gl:
+        specifier: 'catalog:'
+        version: 6.12.0
+      playwright:
+        specifier: 'catalog:'
+        version: 1.64.0
+      sass-embedded:
+        specifier: 'catalog:'
+        version: 1.105.0
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 'catalog:'
+        version: 8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0)
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.5(@types/node@24.19.0)(@vitest/browser-playwright@5.0.5)(@vitest/ui@5.0.5)(jsdom@30.1.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@24.19.0)(typescript@7.0.2))(vite@8.3.5(@types/node@24.19.0)(sass-embedded@1.105.0)(sass@1.105.0))
+      vue:
+        specifier: 'catalog:'
+        version: 3.5.43(typescript@7.0.2)
 
   packages/ui:
     dependencies:
