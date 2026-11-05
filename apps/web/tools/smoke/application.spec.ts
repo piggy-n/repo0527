@@ -1,12 +1,36 @@
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { Page } from 'playwright/test';
+import type { Locator, Page } from 'playwright/test';
 import { loadEnv } from 'vite';
 import { expect, test } from './fixtures.ts';
 
-// 开关在构建时写进产物，这里和内网构建读同一份配置，验证产物实际的行为（ADR 0114）
+// 开关在构建时写进产物，这里和内网构建读同一份配置，验证产物实际的行为（ADR 0114、0140）
 const appRoot = fileURLToPath(new URL('../..', import.meta.url));
-const pageStateReset = loadEnv('intranet', appRoot, 'VITE_').VITE_PAGE_STATE_RESET === 'true';
+const env = loadEnv('intranet', appRoot, 'VITE_');
+const pageStateReset = env.VITE_PAGE_STATE_RESET === 'true';
+const basemapPreference = env.VITE_PREFERENCES_ENABLED === 'true' && env.VITE_PREFERENCE_BASEMAP === 'true';
+
+// 存着无底图（内网默认是静态底图）、和默认不同的透明度：恢复过、写入过都看得出来
+const STORED_BASEMAP = { version: 2, value: { selected: 'none', opacity: { vector: 1, imagery: 1, static: 0.5 } } };
+
+// 偏好的库名和仓库名（src/shared/storage/idb-store.ts）；冒烟不导入应用源码，工具的类型环境没有 DOM，这段写成字符串交给浏览器执行
+const IN_PREFERENCE_STORE = `(mode, access) => new Promise((resolve, reject) => {
+  const opening = indexedDB.open('yzt-preferences');
+  opening.onupgradeneeded = () => opening.result.createObjectStore('preferences');
+  opening.onerror = () => reject(opening.error);
+  opening.onsuccess = () => {
+    const database = opening.result;
+    const request = access(database.transaction('preferences', mode).objectStore('preferences'));
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      database.close();
+      resolve(request.result);
+    };
+  };
+})`;
+
+const readStoredBasemap = (page: Page) =>
+  page.evaluate<unknown>(`(${IN_PREFERENCE_STORE})('readonly', store => store.get('smoke/basemap'))`);
 
 /** 通过真实登录表单提交，只替换接口响应 */
 async function login(page: Page): Promise<void> {
@@ -110,6 +134,52 @@ test('登录到地图，切页期间改变尺寸，返回后复用画布并保�
   } finally {
     await original?.dispose();
   }
+});
+
+/** 登录前存好底图偏好，登录到地图、等画面稳定（这时读取早已结束），返回底图卡片 */
+async function openMapWithStoredBasemap(page: Page) {
+  await page.goto('/login');
+  await page.evaluate(
+    `(${IN_PREFERENCE_STORE})('readwrite', store => store.put(${JSON.stringify(STORED_BASEMAP)}, 'smoke/basemap'))`
+  );
+  await login(page);
+  await readyMap(page);
+  await page.waitForFunction(() => performance.getEntriesByName('login-to-map:settled', 'measure').length > 0);
+  return page.locator('button[aria-label^="底图："]');
+}
+
+async function chooseBasemap(page: Page, card: Locator, name: string): Promise<void> {
+  await card.click();
+  await page.getByRole('button', { name, exact: true }).click();
+  await expect(card).toHaveAttribute('aria-label', `底图：${name}`);
+}
+
+test('底图偏好关闭：存下的不读，换了也不写，旧数据保留（ADR 0140）', async ({ page }) => {
+  test.skip(basemapPreference, '这次构建打开了底图偏好');
+  const card = await openMapWithStoredBasemap(page);
+  await expect(card).toHaveAttribute('aria-label', '底图：静态底图');
+
+  await chooseBasemap(page, card, '无底图');
+  // 离开时立即写入还没写的那一次；页面缓存时没有卸载，由刷新的 pagehide 提交
+  await leaveForFileManagement(page);
+  await page.goto('/current-map');
+  await readyMap(page);
+
+  await expect(card).toHaveAttribute('aria-label', '底图：静态底图');
+  expect(await readStoredBasemap(page)).toEqual(STORED_BASEMAP);
+});
+
+test('底图偏好打开：恢复存下的，换了写入（ADR 0140）', async ({ page }) => {
+  test.skip(!basemapPreference, '这次构建关闭了底图偏好');
+  const card = await openMapWithStoredBasemap(page);
+  await expect(card).toHaveAttribute('aria-label', '底图：无底图');
+
+  await chooseBasemap(page, card, '静态底图');
+
+  await expect.poll(() => readStoredBasemap(page)).toEqual({
+    version: 2,
+    value: { ...STORED_BASEMAP.value, selected: 'static' }
+  });
 });
 
 for (const prefix of ['LoginPage', 'CurrentMapPage', 'map-runtime']) {

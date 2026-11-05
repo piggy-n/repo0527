@@ -2003,12 +2003,17 @@ describe('CurrentMapPage', () => {
     expect(pinAt(wrapper)).toStrictEqual([90, 55]);
   });
 
-  describe('离开页面后重置时的底图（ADR 0114）', () => {
+  describe('偏好的开关（ADR 0140）', () => {
     const STORED = { version: 2, value: { selected: 'imagery', opacity: { vector: 1, imagery: 1, static: 1 } } };
+    const PREFERENCE_KEYS = ['basemap', 'boundaries', 'resource-layers', 'resource-symbols', 'resource-panel'].map(
+      name => `zhangsan/${name}`
+    );
 
     // 已登录、存着影像底图；jsdom 没有 IndexedDB，偏好换成内存存储。appConfig 在模块加载时读取环境变量，要重新导入页面
-    async function pageWithStoredImagery(pageStateReset: 'true' | 'false') {
-      vi.stubEnv('VITE_PAGE_STATE_RESET', pageStateReset);
+    async function pageWithStoredImagery(env: Readonly<Record<string, string>> = {}) {
+      Object.entries(env).forEach(([name, value]) => {
+        vi.stubEnv(name, value);
+      });
       localStorage.setItem(
         'yzt.session',
         JSON.stringify({ token: 'token', user: { loginName: 'zhangsan', role: 'user' } })
@@ -2025,8 +2030,8 @@ describe('CurrentMapPage', () => {
       localStorage.removeItem('yzt.session');
     });
 
-    it('打开时底图不读不写偏好：存着影像也是矢量，换了也不存；其余偏好照常读取', async () => {
-      const { wrapper, store, get } = await pageWithStoredImagery('true');
+    it('底图的开关关闭：不读不写，存着影像也是矢量，换了也不存；其余偏好照常读取', async () => {
+      const { wrapper, store, get } = await pageWithStoredImagery({ VITE_PREFERENCE_BASEMAP: 'false' });
       await settle();
 
       expect(basemapCardOf(wrapper).text()).toBe('矢量');
@@ -2037,12 +2042,54 @@ describe('CurrentMapPage', () => {
       expect(store.entries.get('zhangsan/basemap')).toStrictEqual(STORED);
     });
 
-    it('关闭时恢复存下的底图，换了也存下', async () => {
-      const { wrapper, store } = await pageWithStoredImagery('false');
+    it('底图的开关打开：恢复存下的底图，换了也存下', async () => {
+      const { wrapper, store } = await pageWithStoredImagery();
       await vi.waitFor(() => expect(basemapCardOf(wrapper).text()).toBe('影像'));
 
       await chooseNoBasemap(wrapper);
       expect(store.entries.get('zhangsan/basemap')).toMatchObject({ value: { selected: 'none' } });
+    });
+
+    it('离开页面后重置只管页面缓存：打开时开关开着的底图照样恢复', async () => {
+      const { wrapper } = await pageWithStoredImagery({ VITE_PAGE_STATE_RESET: 'true' });
+
+      await vi.waitFor(() => expect(basemapCardOf(wrapper).text()).toBe('影像'));
+    });
+
+    it('离开页面后重置只管页面缓存：关闭时开关关着的底图照样不读', async () => {
+      const { wrapper, get } = await pageWithStoredImagery({
+        VITE_PAGE_STATE_RESET: 'false',
+        VITE_PREFERENCE_BASEMAP: 'false'
+      });
+      await settle();
+
+      expect(basemapCardOf(wrapper).text()).toBe('矢量');
+      expect(get).not.toHaveBeenCalledWith('zhangsan/basemap');
+    });
+
+    it('所有开关打开：五项偏好都读取', async () => {
+      const { get } = await pageWithStoredImagery();
+
+      PREFERENCE_KEYS.forEach(key => expect(get).toHaveBeenCalledWith(key));
+    });
+
+    it('总开关关闭：五项偏好都不读，资源列表照常显示', async () => {
+      const { wrapper, store, get } = await pageWithStoredImagery({ VITE_PREFERENCES_ENABLED: 'false' });
+
+      await vi.waitFor(() => expect(wrapper.find('[data-resource="bgdc_dltb"]').exists()).toBe(true));
+      expect(basemapCardOf(wrapper).text()).toBe('矢量');
+      expect(get).not.toHaveBeenCalled();
+
+      await chooseNoBasemap(wrapper);
+      expect(store.entries.get('zhangsan/basemap')).toStrictEqual(STORED);
+    });
+
+    // 资源图层的拥有者等恢复结束才合并目录：开关关闭时不结束恢复，资源列表就一直是空的
+    it('资源图层的开关关闭：不读这一项，目录照常合并进资源列表', async () => {
+      const { wrapper, get } = await pageWithStoredImagery({ VITE_PREFERENCE_RESOURCE_LAYERS: 'false' });
+
+      await vi.waitFor(() => expect(wrapper.find('[data-resource="bgdc_dltb"]').exists()).toBe(true));
+      expect(get).not.toHaveBeenCalledWith('zhangsan/resource-layers');
     });
   });
 

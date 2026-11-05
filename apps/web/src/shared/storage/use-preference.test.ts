@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { effectScope, shallowRef } from 'vue';
 import { z } from 'zod';
+import type { PreferenceName } from '../config/app-config';
 import { createMemoryStore, type KeyValueStore } from './key-value-store';
 import type { PreferenceScope } from './preference-scope';
 import { PREFERENCE_READ_TIMEOUT, PREFERENCE_WRITE_DEBOUNCE, usePreference } from './use-preference';
@@ -8,7 +9,9 @@ import { PREFERENCE_READ_TIMEOUT, PREFERENCE_WRITE_DEBOUNCE, usePreference } fro
 const schema = z.object({ count: z.number().int().min(0) });
 type Counter = z.infer<typeof schema>;
 
-const KEY = 'zhangsan/counter';
+// 名称只影响键和开关；流程的用例随便用一项，开关的用例逐项走
+const NAME = 'boundaries';
+const KEY = `zhangsan/${NAME}`;
 
 // 读取由用例决定什么时候返回的存储；写入照常记在内存里
 function deferredStore() {
@@ -22,12 +25,12 @@ function deferredStore() {
 }
 
 // 拥有者：状态是一个计数，恢复时直接采用存下的值；范围的生命期由用例结束
-function setup(store: KeyValueStore) {
+function setup(store: KeyValueStore, name: PreferenceName = NAME, use: typeof usePreference = usePreference) {
   const lifetime = new AbortController();
   const errors: unknown[] = [];
   const scope: PreferenceScope = {
     store,
-    key: name => `zhangsan/${name}`,
+    key: item => `zhangsan/${item}`,
     signal: lifetime.signal,
     onError: error => errors.push(error)
   };
@@ -35,8 +38,8 @@ function setup(store: KeyValueStore) {
   const restored: (Counter | null)[] = [];
   const effect = effectScope();
   effect.run(() =>
-    usePreference(scope, {
-      name: 'counter',
+    use(scope, {
+      name,
       version: 1,
       schema,
       snapshot: () => state.value,
@@ -139,7 +142,7 @@ describe('usePreference：恢复', () => {
     const effect = effectScope();
     effect.run(() =>
       usePreference(scope, {
-        name: 'counter',
+        name: NAME,
         version: 1,
         schema,
         snapshot: () => ({ count: 0 }),
@@ -264,7 +267,7 @@ describe('usePreference：写入', () => {
     effect.run(() =>
       usePreference(
         { store, key: name => name, signal: lifetime.signal, onError: () => undefined },
-        { name: 'counter', version: 1, schema, snapshot: () => ({ count: 0 }), restore }
+        { name: NAME, version: 1, schema, snapshot: () => ({ count: 0 }), restore }
       )
     );
 
@@ -273,5 +276,143 @@ describe('usePreference：写入', () => {
     expect(get).not.toHaveBeenCalled();
     expect(restore).not.toHaveBeenCalled();
     effect.stop();
+  });
+});
+
+// appConfig 在模块加载时读取环境变量，改了开关要重新导入
+async function usePreferenceWith(variable: string, value: string) {
+  vi.stubEnv(variable, value);
+  vi.resetModules();
+  const module = await import('./use-preference');
+  return module.usePreference;
+}
+
+// 走遍会读写的时机：恢复的等待、状态变化后的防抖、页面隐藏、pagehide、生命期结束
+async function exercise(ctx: ReturnType<typeof setup>) {
+  await vi.advanceTimersByTimeAsync(PREFERENCE_READ_TIMEOUT);
+  ctx.state.value = { count: 5 };
+  await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+  ctx.state.value = { count: 6 };
+  using visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  document.dispatchEvent(new Event('visibilitychange'));
+  visibility.mockReturnValue('visible');
+  ctx.state.value = { count: 7 };
+  window.dispatchEvent(new Event('pagehide'));
+  ctx.state.value = { count: 8 };
+  ctx.lifetime.abort();
+  ctx.effect.stop();
+}
+
+describe('usePreference：开关（ADR 0140）', () => {
+  const ITEMS = [
+    ['basemap', 'VITE_PREFERENCE_BASEMAP'],
+    ['boundaries', 'VITE_PREFERENCE_BOUNDARIES'],
+    ['resource-layers', 'VITE_PREFERENCE_RESOURCE_LAYERS'],
+    ['resource-symbols', 'VITE_PREFERENCE_RESOURCE_SYMBOLS'],
+    ['resource-panel', 'VITE_PREFERENCE_RESOURCE_PANEL']
+  ] as const;
+  const STORED = { version: 1, value: { count: 3 } };
+
+  // 存着这一项的旧数据，记下对存储的每一次访问
+  function storeWithOldData(name: PreferenceName) {
+    const store = createMemoryStore({ [`zhangsan/${name}`]: STORED });
+    return { store, accesses: [vi.spyOn(store, 'get'), vi.spyOn(store, 'set'), vi.spyOn(store, 'delete')] };
+  }
+
+  describe.each(ITEMS)('%s', (name, variable) => {
+    it('分项开关打开：恢复存下的值，变化后写入', async () => {
+      const { store } = storeWithOldData(name);
+      const ctx = setup(store, name, await usePreferenceWith(variable, 'true'));
+
+      await flushReads();
+      expect(ctx.restored).toStrictEqual([{ count: 3 }]);
+
+      ctx.state.value = { count: 5 };
+      await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE);
+      expect(store.entries.get(`zhangsan/${name}`)).toStrictEqual({ version: 1, value: { count: 5 } });
+      ctx.effect.stop();
+    });
+
+    it('分项开关关闭：和没有存过一样恢复为 null，不读不写，旧数据保留', async () => {
+      const { store, accesses } = storeWithOldData(name);
+      const ctx = setup(store, name, await usePreferenceWith(variable, 'false'));
+
+      await exercise(ctx);
+
+      expect(ctx.restored).toStrictEqual([null]);
+      accesses.forEach(access => expect(access).not.toHaveBeenCalled());
+      expect(store.entries.get(`zhangsan/${name}`)).toStrictEqual(STORED);
+    });
+
+    it('总开关关闭：分项开关打开也不读不写', async () => {
+      const { store, accesses } = storeWithOldData(name);
+      const ctx = setup(store, name, await usePreferenceWith('VITE_PREFERENCES_ENABLED', 'false'));
+
+      await exercise(ctx);
+
+      expect(ctx.restored).toStrictEqual([null]);
+      accesses.forEach(access => expect(access).not.toHaveBeenCalled());
+      expect(store.entries.get(`zhangsan/${name}`)).toStrictEqual(STORED);
+    });
+
+    it('分项开关关闭只影响自己：其他几项照常恢复', async () => {
+      const use = await usePreferenceWith(variable, 'false');
+      const others = ITEMS.filter(([candidate]) => candidate !== name).map(([other]) =>
+        setup(storeWithOldData(other).store, other, use)
+      );
+
+      await flushReads();
+
+      others.forEach(ctx => {
+        expect(ctx.restored).toStrictEqual([{ count: 3 }]);
+        ctx.effect.stop();
+      });
+    });
+  });
+
+  it('关闭期间操作过，重新打开后恢复的还是旧数据', async () => {
+    const { store } = storeWithOldData(NAME);
+    await exercise(setup(store, NAME, await usePreferenceWith('VITE_PREFERENCE_BOUNDARIES', 'false')));
+
+    const reopened = setup(store, NAME, await usePreferenceWith('VITE_PREFERENCE_BOUNDARIES', 'true'));
+    await flushReads();
+
+    expect(reopened.restored).toStrictEqual([{ count: 3 }]);
+    expect(reopened.state.value).toStrictEqual({ count: 3 });
+    reopened.effect.stop();
+  });
+
+  it('开关关闭时拥有者的 restore 抛错：同样交给 onError，不打断拥有者的 setup', async () => {
+    const use = await usePreferenceWith('VITE_PREFERENCE_BOUNDARIES', 'false');
+    const failure = new Error('合并失败');
+    const errors: unknown[] = [];
+    const scope: PreferenceScope = {
+      store: createMemoryStore(),
+      key: name => name,
+      signal: new AbortController().signal,
+      onError: error => errors.push(error)
+    };
+    const effect = effectScope();
+    const create = () =>
+      effect.run(() =>
+        use(scope, {
+          name: NAME,
+          version: 1,
+          schema,
+          snapshot: () => ({ count: 0 }),
+          restore: () => {
+            throw failure;
+          }
+        })
+      );
+
+    expect(create).not.toThrow();
+    expect(errors).toStrictEqual([failure]);
+    effect.stop();
+  });
+
+  it('名称只能是登记了开关的几项', () => {
+    expectTypeOf<PreferenceName>().toEqualTypeOf<(typeof ITEMS)[number][0]>();
+    expectTypeOf<'counter'>().not.toExtend<PreferenceName>();
   });
 });

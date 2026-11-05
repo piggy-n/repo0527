@@ -58,6 +58,53 @@ describe('appConfig', () => {
     await expect(loadAppConfig()).rejects.toThrow('缺少环境变量 VITE_RESOURCE_MIN_ZOOM_ENABLED');
   });
 
+  describe('偏好的开关（ADR 0140）', () => {
+    const ITEMS = [
+      ['basemap', 'VITE_PREFERENCE_BASEMAP'],
+      ['boundaries', 'VITE_PREFERENCE_BOUNDARIES'],
+      ['resource-layers', 'VITE_PREFERENCE_RESOURCE_LAYERS'],
+      ['resource-symbols', 'VITE_PREFERENCE_RESOURCE_SYMBOLS'],
+      ['resource-panel', 'VITE_PREFERENCE_RESOURCE_PANEL']
+    ] as const;
+    const ALL_ON = Object.fromEntries(ITEMS.map(([name]) => [name, true]));
+    const ALL_OFF = Object.fromEntries(ITEMS.map(([name]) => [name, false]));
+
+    it('都打开时每一项都生效', async () => {
+      expect((await loadAppConfig()).preferences).toStrictEqual(ALL_ON);
+    });
+
+    it.each(ITEMS)('%s 的分项开关关闭时只有它不生效', async (name, variable) => {
+      vi.stubEnv(variable, 'false');
+
+      expect((await loadAppConfig()).preferences).toStrictEqual({ ...ALL_ON, [name]: false });
+    });
+
+    it('总开关关闭时每一项都不生效，分项开关打开也一样', async () => {
+      vi.stubEnv('VITE_PREFERENCES_ENABLED', 'false');
+
+      expect((await loadAppConfig()).preferences).toStrictEqual(ALL_OFF);
+    });
+
+    it('总开关只能是 true 或 false，不能为空', async () => {
+      vi.stubEnv('VITE_PREFERENCES_ENABLED', 'off');
+      await expect(loadAppConfig()).rejects.toThrow('VITE_PREFERENCES_ENABLED 只能是 true 或 false');
+
+      vi.stubEnv('VITE_PREFERENCES_ENABLED', '');
+      await expect(loadAppConfig()).rejects.toThrow('缺少环境变量 VITE_PREFERENCES_ENABLED');
+    });
+
+    it.each(ITEMS)('%s 的分项开关写错时加载即报错，总开关关闭时也一样', async (_, variable) => {
+      vi.stubEnv(variable, 'yes');
+      await expect(loadAppConfig()).rejects.toThrow(`${variable} 只能是 true 或 false`);
+
+      vi.stubEnv('VITE_PREFERENCES_ENABLED', 'false');
+      await expect(loadAppConfig()).rejects.toThrow(`${variable} 只能是 true 或 false`);
+
+      vi.stubEnv(variable, '');
+      await expect(loadAppConfig()).rejects.toThrow(`缺少环境变量 ${variable}`);
+    });
+  });
+
   describe('天地图（ADR 0031）', () => {
     it('.env 中开启，带着 key', async () => {
       const appConfig = await loadAppConfig();

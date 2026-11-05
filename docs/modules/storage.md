@@ -1,6 +1,6 @@
 # shared/storage：偏好的持久化
 
-> 状态：5C.3 完成键值存储、偏好的范围和共用的恢复与写入流程；使用方是底图（`shared/map/basemap`）、边界（`shared/map/boundary`）和资源图层（`features/resource-map`），现状底图页装配。决策见 [ADR 0042](../adr/0042-preference-persistence.md)。
+> 状态：5C.3 完成键值存储、偏好的范围和共用的恢复与写入流程；使用方是底图（`shared/map/basemap`）、边界（`shared/map/boundary`）和资源图层（`features/resource-map`），现状底图页装配。决策见 [ADR 0042](../adr/0042-preference-persistence.md)；开关见 [ADR 0140](../adr/0140-preference-switches.md)。
 
 需要跨刷新、跨次打开保留的偏好（勾选了哪些资源、选了哪种底图等）存在 IndexedDB。拥有者不直接调用 idb-keyval 或 localStorage，而是接收页面提供的偏好范围，用共用的流程恢复和写入；登录会话仍存 localStorage（ADR 0015）。
 
@@ -49,6 +49,18 @@ if (preferences) {
 | `useBoundaries` | `boundaries` | 三个级别是否显示、透明度 | 读到后整体替换 |
 | `useResourceLayers` | `resource-layers` | 每个资源的勾选、透明度、年份，面板顺序 | 等目录和存储都就绪，按 ADR 0041 第 3 节合并；顺序不能有重复、和设置一一对应，否则整条作废 |
 | `useResourceSymbols` | `resource-symbols` | 每个资源的统一样式、样式方式（只记"统一样式"）、分类样式各取值，都只记和默认不同的字段（颜色已规范化），不存临时预览 | 读到后整体替换，空的部分去掉，目录里没有了的资源也保留；有一个字段越界、颜色解析不了，整条作废（ADR 0044） |
+| `useResourcePanelLayout` | `resource-panel` | 资源图层面板是否收起、"已选择图层"区的高度比例 | 读到后整体替换 |
+
+## 开关（ADR 0140）
+
+每一项偏好由 `.env` 的总开关 `VITE_PREFERENCES_ENABLED` 和自己的分项开关控制，变量见 [config/env.md](../config/env.md)；`.env` 现在只关着底图。
+
+- **生效值**：`appConfig.preferences` 按名称给出，两个开关都为 `true` 才生效
+- **判断的位置**：只在 `usePreference` 按 `name` 判断，拥有者和页面不另外判断，照常把范围传下去
+- **关闭时**：调用一次 `restore(null)`，和"没有存过"一样结束恢复（`useResourceLayers` 等它才合并目录，不能直接返回）；不访问存储，不侦听状态，不登记页面事件。旧数据保留，重新打开后恢复的是关闭之前存的值
+- **改了要重新构建**：`VITE_` 变量在构建时写进产物
+
+新增一项偏好的步骤：在 `.env` 加变量，在 `shared/config/import-meta-env.ts` 声明类型，在 `app-config.ts` 的 `preferenceSwitches` 登记（名称的类型 `PreferenceName` 由它推导，没登记的名称通不过类型检查），在 `vite.config.ts` 的 `test.env` 固定，更新上面的使用方和 `env.md`。
 
 ## 规则
 
@@ -72,7 +84,9 @@ if (preferences) {
 |---|---|---|
 | `key-value-store.test.ts` | 内存实现存取复制品、没有的键、删除 | Node |
 | `preference-scope.test.ts` | 没有登录时为 null；键的编码；退出时立即结束、同一账号重新登录不结束、换了账号结束；作用域销毁时结束 | jsdom |
-| `use-preference.test.ts` | 恢复：合法的值、没有存过、版本或格式不对、读取失败、超时与晚到的结果、恢复前已操作；写入：只在恢复之后、防抖、恢复引起的变化不写回、写入失败、生命期结束与作用域销毁时立即写入、之后不再写入、晚到的读取不应用、页面隐藏与 `pagehide`、范围已结束时不读不写（假定时器） | jsdom |
+| `use-preference.test.ts` | 恢复：合法的值、没有存过、版本或格式不对、读取失败、超时与晚到的结果、恢复前已操作；写入：只在恢复之后、防抖、恢复引起的变化不写回、写入失败、生命期结束与作用域销毁时立即写入、之后不再写入、晚到的读取不应用、页面隐藏与 `pagehide`、范围已结束时不读不写；开关：逐项验证分项开关和总开关，关闭时恢复为 `null`、对存储没有任何访问、旧数据保留，其他几项不受影响，重新打开后恢复旧数据，`restore` 抛错交给 `onError`（假定时器） | jsdom |
 | `idb-store.browser.test.ts` | 真实的 IndexedDB：读写删、复制品、跨实例保留、数据库之间隔离、不能克隆的值以失败结束 | Chromium 无界面版 |
 
 - 改坏 20 处（共用流程 16 处、范围 4 处），19 处由断言发现。"结束时不停止侦听"起初没被发现：侦听的回调里还有一道"已结束就不写"的检查，两者重复；去掉回调里的检查、只靠停止侦听后由断言发现
+- 开关改坏 12 处（入口 6 处、合并与校验 5 处、页面改回按重置决定 1 处），都能发现。其中"开关关闭时不结束恢复"由 `CurrentMapPage.test.tsx` 的资源列表用例发现：拥有者等 `restore` 才合并目录
+- 生产冒烟（`application.spec.ts`）在产物上用真实的 IndexedDB 验证底图偏好：登录前写入一条记录，关闭时不恢复、换了也不写、记录原样保留，打开时恢复、换了写入；只验证这次构建的取值
