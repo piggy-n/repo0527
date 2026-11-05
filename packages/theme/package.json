@@ -1,0 +1,13 @@
+{
+  "name": "@yzt/theme",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "sass": "./src/_index.scss"
+    }
+  },
+  "peerDependencies": {
+    "element-plus": "catalog:"
+  }
+}

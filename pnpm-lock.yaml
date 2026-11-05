@@ -304,6 +304,9 @@ importers:
       '@yzt/map-vue':
         specifier: workspace:*
         version: link:../../packages/map-vue
+      '@yzt/theme':
+        specifier: workspace:*
+        version: link:../../packages/theme
       '@yzt/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -630,6 +633,12 @@ importers:
       vue:
         specifier: 'catalog:'
         version: 3.5.43(typescript@7.0.2)
+
+  packages/theme:
+    dependencies:
+      element-plus:
+        specifier: 'catalog:'
+        version: 2.14.6(vue@3.5.43(typescript@7.0.2))
 
   packages/ui:
     dependencies:

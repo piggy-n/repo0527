@@ -1,0 +1,4 @@
+// @yzt/theme 的 Sass 入口：输出令牌、Element 主题和全局基础样式，整个应用只由样式入口 @use 一次（ADR 0143）
+@use 'tokens';
+@use 'element-theme';
+@use 'base';
