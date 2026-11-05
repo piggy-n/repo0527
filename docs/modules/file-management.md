@@ -2,7 +2,7 @@
 
 ## 本轮联合复测（2026-10-21）
 
-资源 R5 合入前复查并修复文件删除的会话竞态、晚到提示和缓存刷新。用户已澄清：只移除图片缩放旁的「适合宽度」按钮，保留图片预览入口、显示及加减缩放；此前将图片改为仅下载属于理解偏差，现已纠正。文件名、类型与缩放按钮同行，阅读区间距为 8。用例、浏览器证据和最终回归见[联合验收报告](../stages/resource-file-management-acceptance.md)。
+资源 R5 合入前复查并修复文件删除的会话竞态、晚到提示和缓存刷新。用户已澄清：只移除图片缩放旁的「适合宽度」按钮，保留图片预览入口、显示及加减缩放；此前将图片改为仅下载属于理解偏差，现已纠正。文件名、类型与缩放按钮同行，阅读区间距为 8。用例、浏览器证据和最终回归见[联合验收报告](../archive/stages/resource-file-management-acceptance.md)。
 
 ## 独立复测与合入验收（2026-10-21）
 
@@ -14,7 +14,7 @@ CI 的 Chromium headless shell 不包含 PDF 阅读器；本轮另用完整 Edge
 
 验收范围为前端及固定接口集成。真实后端权限、上传部分成功和下载响应头仍待联调，不执行真实文件的试验性上传或删除；复杂业务 DOCX、跨浏览器排版仍不在本轮保证范围。公共传输可供资源管理后续 Excel 接入，Excel 业务不随本次合入实施。
 
-对应目录：`features/file-management`、`pages/file-management`。阶段六旧项目基线为 `6b4799b922efb2ed276cc28122fbe78527234b75`，完整调用核对见 [迁移记录](../migration.md)。
+对应目录：`features/file-management`、`pages/file-management`。阶段六旧项目基线为 `6b4799b922efb2ed276cc28122fbe78527234b75`，完整调用核对见 [迁移记录](../archive/migration.md)。
 
 ## 当前边界
 
@@ -181,7 +181,7 @@ pnpm test:smoke
 
 ## 代码审查后的调整（2026-10-23）
 
-按 `stage-5e` 之前的代码质量复查本模块，详见[审查报告](../stages/post-5e-code-review.md)。行为上的变化只有一处，其余是写法：
+按 `stage-5e` 之前的代码质量复查本模块，详见[审查报告](../archive/stages/post-5e-code-review.md)。行为上的变化只有一处，其余是写法：
 
 - 登录过期不再让下载、预览没有反应：组合式函数不再预先判断 `isActive()`，请求由 `shared/http` 发现过期后按 401 统一提示并回到登录页；已经发出的下载、上传照常完成（服务端已经接受）。会话核对统一用 `shared/auth/session-guard` 的 `useSessionGuard`（比较 token），见 [auth.md](auth.md)"写操作的会话核对"
 - 删除 `useFileContentRequest`（见上文"请求与状态归属"）；下载阶段的拼写和 `ApiError` 一致，取消是 `canceled`

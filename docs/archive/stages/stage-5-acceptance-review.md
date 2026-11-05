@@ -64,7 +64,7 @@
 - **现象**：`pnpm build` 和内网构建的 `dist/assets/` 里都有 `DevMapPage-*.js/css`、`DevResourcesPage-*.js/css`，没有任何分块引用它们；`DevThemePage` 没有进入
 - **原因**：`app/router/routes.ts` 第 53 行的 `devRoutes` 数组在模块顶层求值，第 88 行才按 `import.meta.env.DEV` 决定用不用。两个地图开发页的 `component` 是 `withMapRuntime(...)` 的调用结果，`DevThemePage` 只包在箭头函数里、没有进入产物。看起来是 Rolldown（Vite 8.3.1、rolldown 1.2.11）先把调用里的动态 `import()` 登记成了分块，摇树时删掉了调用，分块却留了下来（机制是推测，没有读 Rolldown 的源码；现象和下面的修法都实测过）
 - **影响**
-  - 和 AGENTS.md"只注册在 `devRoutes` 里，生产构建不包含"、`routes.ts` 第 52 行的注释、[modules/map-core.md](../modules/map-core.md)"app 的地图运行时与开发页"里"生产产物里没有 maplibre-gl 和开发页"的记录不符。开发页从阶段四（`745f435`）起就用 `withMapRuntime` 包装，那时的记录可能成立，是哪一次升级构建工具后开始出现的没有追查
+  - 和 AGENTS.md"只注册在 `devRoutes` 里，生产构建不包含"、`routes.ts` 第 52 行的注释、[modules/map-core.md](../../modules/map-core.md)"app 的地图运行时与开发页"里"生产产物里没有 maplibre-gl 和开发页"的记录不符。开发页从阶段四（`745f435`）起就用 `withMapRuntime` 包装，那时的记录可能成立，是哪一次升级构建工具后开始出现的没有追查
   - 分块图被开发页牵动：地图页和开发页共用的模块被拆成独立的共享分块（`MapStatusNotice`、`MeasureOverlay`、`landuse` 等）。地图页的静态依赖是 16 个文件，修正后是 10 个，总量少约 3 KB（gzip）；登录页的静态依赖从 11 个文件变成 9 个。5E 的实测是在现在的分块图上做的，结论不受影响，修正后复测时要知道分块变了
 - **修法**（本地改写后构建验证，已还原）：条件包住整个数组字面量，常量折叠后动态 `import()` 根本不会出现
 
@@ -81,7 +81,7 @@
 > 这里记录的是当时的状态。后来设计稿移出了 `public/`，构建不再清理、只检查（ADR 0141）。
 
 - **现象**：本机构建的 `dist/` 里有 `design.local/`（13 个设计稿 HTML，约 688 KB），内网构建同样有，其中 10 个设计稿里写着天地图的地址
-- **原因**：Vite 构建时把整个 `public/` 原样复制到 `dist/`；`*.local` 只在 `.gitignore` 里忽略，管不到构建。CI 从干净的检出构建，不会出现，但 [deployment.md](../deployment.md) 规定部署用的构建要先在本机放好字体再构建，所以部署包会带上设计稿
+- **原因**：Vite 构建时把整个 `public/` 原样复制到 `dist/`；`*.local` 只在 `.gitignore` 里忽略，管不到构建。CI 从干净的检出构建，不会出现，但 [deployment.md](../../deployment.md) 规定部署用的构建要先在本机放好字体再构建，所以部署包会带上设计稿
 - **影响**：设计稿随部署公开（`/design.local/*.html` 谁都能打开）；内网版本里出现公网地址，和 ADR 0031、0032"内网版本不出现依赖天地图的东西"的意图不符（不会自动请求，打开设计稿才会）
 - **修法**：设计稿移出 `public/`（例如 `apps/web/design.local/`，开发服务器用只在 `serve` 时生效的中间件提供，或者直接用文件方式打开）；不想挪目录时，在 `vite.config.ts` 加一个只在 `build` 时生效的小插件，`closeBundle` 时删除 `dist/design.local`。同步改 AGENTS.md 和 5D 总结里"放在 `public/design.local/`"的说法
 
@@ -110,15 +110,15 @@
 
 - `.env.intranet` 只设 `VITE_TIANDITU_ENABLED=false`，`VITE_TIANDITU_KEY` 继承 `.env`；`app-config.ts` 把两个值都交给 `tianditu()`，key 的字面量因此留在内网产物的入口相关分块里（本文不抄录）
 - key 是浏览器端 key，公网版本本来就公开（ADR 0031）；内网版本用不到它，也不应该带着公网服务的凭据
-- **修法**：`.env.intranet` 加一行 `VITE_TIANDITU_KEY=`（关闭时 `tianditu()` 不校验 key），[config/env.md](../config/env.md) 同步说明
+- **修法**：`.env.intranet` 加一行 `VITE_TIANDITU_KEY=`（关闭时 `tianditu()` 不校验 key），[config/env.md](../../config/env.md) 同步说明
 
 ### 6. 代码注释和文档索引没跟上（文档，已确认）
 
 2026-10-19 已处理：尺寸注释与模块说明一致，阅读顺序补齐 5E 与验收报告，维护约定改为 5A～5E；map-core 的产物说明已在前一轮修复时更新。下面保留验收时的发现，旧 ADR 和阶段总结中的实验背景不改写。
 
-- `maplibre-view.ts` 第 338 行的注释仍写"页面被缓存时 MapLibre 把画布缩成 0×0"。5E 已在 roadmap 和 [modules/map-core.md](../modules/map-core.md) 更正为"量到容器宽高为 0 时用默认的 400×300"（MapLibre 6.12 的 `_containerDimensions` 里是 `|| 400`、`|| 300`），注释要跟着改
-- [docs/README.md](../README.md)"建议的阅读顺序"列到 5D，缺 5E 和阶段五回顾；"维护约定"里还写着"阶段五拆成 5A～5D"
-- 第 1 条修好后，[modules/map-core.md](../modules/map-core.md)"生产产物里没有 maplibre-gl 和开发页"补上"由产物检查保证"
+- `maplibre-view.ts` 第 338 行的注释仍写"页面被缓存时 MapLibre 把画布缩成 0×0"。5E 已在 roadmap 和 [modules/map-core.md](../../modules/map-core.md) 更正为"量到容器宽高为 0 时用默认的 400×300"（MapLibre 6.12 的 `_containerDimensions` 里是 `|| 400`、`|| 300`），注释要跟着改
+- [docs/README.md](../../README.md)"建议的阅读顺序"列到 5D，缺 5E 和阶段五回顾；"维护约定"里还写着"阶段五拆成 5A～5D"
+- 第 1 条修好后，[modules/map-core.md](../../modules/map-core.md)"生产产物里没有 maplibre-gl 和开发页"补上"由产物检查保证"
 
 ---
 

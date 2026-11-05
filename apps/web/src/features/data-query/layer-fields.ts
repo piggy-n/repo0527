@@ -1,4 +1,4 @@
-// 各图层的查询条件字段，来自旧项目 space-monitoring-query/config.js；字段名按接口实际认的修正（见 docs/migration.md）
+// 各图层的查询条件字段，来自旧项目 space-monitoring-query/config.js；字段名按接口实际认的修正（见 docs/archive/migration.md）
 
 /** 下拉选项：code 拼进条件，name 显示 */
 export interface FieldOption {

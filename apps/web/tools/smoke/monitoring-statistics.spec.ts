@@ -9,7 +9,7 @@ interface Backend {
   creates: unknown[];
 }
 
-// 本地接口样本：结构按 2026-10-28 只读核对的真实接口（docs/migration.md），两个查询接口返回同一个结构
+// 本地接口样本：结构按 2026-10-28 只读核对的真实接口（docs/archive/migration.md），两个查询接口返回同一个结构
 const dto = (change: Record<string, unknown>) => ({
   dataVolume: null, status: null, tableInfoList: null, totalNum: null, unProcessNum: null, processingNum: null,
   processedNum: null, failNum: 0, baseProvinceStatus: null, baseCityStatus: null, baseDistrictStatus: null,

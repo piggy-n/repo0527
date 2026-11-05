@@ -428,7 +428,7 @@ store.clear();
 
 ## 还没做的
 
-有了使用方再做，各项的时机也登记在 [roadmap.md](../roadmap.md) 的"后续阶段要带上的事项"：
+有了使用方再做，还要做的登记在 [backlog](../backlog.md)，下表是当时的记录：
 
 | 内容 | 时机 |
 |---|---|
@@ -443,9 +443,9 @@ store.clear();
 - 图例统计的主线程耗时：已定（5C.4 实测后决定，ADR 0043），不做统计：旧项目统计只为发现表外编码，已由 ADR 0041 的静态规则代替；实测全省 18.9 万个要素 327～563 ms、z13 只要几毫秒，以后要"只看当前视野的地类"时按这组数字选做法
 - 高亮用 feature-state 还是按要素 ID 过滤的图层：做高亮时实测（ADR 0022）
 - 三维样式的支持清单：实现镜像之前写出（ADR 0024）
-- 瓦片是否因用户或权限而不同：2026-10-09 实测瓦片不校验 token，带不带 token 内容相同（[migration.md](../migration.md)"现状底图：接口实测"）；以后会不会按权限过滤仍要向后端确认，再决定缓存键是否包含权限范围（ADR 0025）
+- 瓦片是否因用户或权限而不同：2026-10-09 实测瓦片不校验 token，带不带 token 内容相同（[docs/archive/migration.md](../archive/migration.md)"现状底图：接口实测"）；以后会不会按权限过滤仍要向后端确认，再决定缓存键是否包含权限范围（ADR 0025）
 
-已确定：map-core 放在 `libs/map-core`（ADR 0018）；MapLibre 用 6.x（ADR 0019）；地图会话状态是唯一真相源（ADR 0020）；Worker 策略（ADR 0021）；样式模型与会话提交（ADR 0022）；资源释放、事件与运行时装配（ADR 0023）；视图接口（ADR 0024）；Worker 通信契约与瓦片数据服务（ADR 0025）；迁移基线 `836f03b` 已记入 [migration.md](../migration.md)。
+已确定：map-core 放在 `libs/map-core`（ADR 0018）；MapLibre 用 6.x（ADR 0019）；地图会话状态是唯一真相源（ADR 0020）；Worker 策略（ADR 0021）；样式模型与会话提交（ADR 0022）；资源释放、事件与运行时装配（ADR 0023）；视图接口（ADR 0024）；Worker 通信契约与瓦片数据服务（ADR 0025）；迁移基线 `836f03b` 已记入 [docs/archive/migration.md](../archive/migration.md)。
 
 ---
 

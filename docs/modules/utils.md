@@ -1,6 +1,6 @@
 # libs/utils（@yzt/utils）
 
-纯 TS 的通用工具，不依赖 Vue、Element、Pinia（AGENTS.md"依赖方向"）。目前有两部分：Worker 通信层，以及只认最新一次的 `LatestController`。
+纯 TS 的通用工具，不依赖 Vue、Element、Pinia（`.claude/rules/libs.md`）。目前有两部分：Worker 通信层，以及只认最新一次的 `LatestController`。
 
 相关决策：ADR 0021（Worker 策略）、ADR 0025（Worker 通信契约）。
 

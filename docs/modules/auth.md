@@ -191,7 +191,7 @@ export function endSession(): void {
 
 ### 写操作的会话核对（useSessionGuard）
 
-2026-10-23 代码审查时抽出（[审查报告](../stages/post-5e-code-review.md)）。服务端写操作（删除、上传、保存、启停、导入、目录维护）在提交和完成之间可能换了会话：其他标签页退出、换账号，或同一账号重新登录拿到新 token。`shared/auth/session-guard.ts` 的 `useSessionGuard()` 统一这件事：
+2026-10-23 代码审查时抽出（[审查报告](../archive/stages/post-5e-code-review.md)）。服务端写操作（删除、上传、保存、启停、导入、目录维护）在提交和完成之间可能换了会话：其他标签页退出、换账号，或同一账号重新登录拿到新 token。`shared/auth/session-guard.ts` 的 `useSessionGuard()` 统一这件事：
 
 ```ts
 const sessionGuard = useSessionGuard();

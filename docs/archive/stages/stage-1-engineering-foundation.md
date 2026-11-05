@@ -6,7 +6,7 @@
 
 阶段一的目标：在写任何业务代码之前，把"代码怎么组织、怎么检查、怎么保证质量"的基础搭好，并用实测确认每个工具真的按预期工作。
 
-本文分两部分：第一部分记录做了什么、每项改动的目的；第二部分按主题整理可以学到的知识，以及每个设计的替代方案。各配置文件的逐项说明在 [config/](../config/) 目录，命令用法在 [commands.md](../commands.md)。
+本文分两部分：第一部分记录做了什么、每项改动的目的；第二部分按主题整理可以学到的知识，以及每个设计的替代方案。各配置文件的逐项说明在 [config/](../../config/) 目录，命令用法在 [commands.md](../../commands.md)。
 
 ---
 
@@ -91,7 +91,7 @@ TS 7 用 Go 重写，不再提供传统的 JS API。阶段一要回答的问题�
 
 结论（ADR 0003 方案 1）：只用 TS 7；lint 用 oxlint；不引入依赖 TS JS API 的工具。
 
-同时确定了 tsconfig 的写法：solution 风格、显式写出 `types` 等选项、`incremental` 配合 `tsc -b`（阶段二因 TS 7 增量检查的问题关闭，见 ADR 0009）、Vite 用 `resolve.tsconfigPaths` 读取路径别名。详见 [config/tsconfig.md](../config/tsconfig.md)。
+同时确定了 tsconfig 的写法：solution 风格、显式写出 `types` 等选项、`incremental` 配合 `tsc -b`（阶段二因 TS 7 增量检查的问题关闭，见 ADR 0009）、Vite 用 `resolve.tsconfigPaths` 读取路径别名。详见 [config/tsconfig.md](../../config/tsconfig.md)。
 
 ### 3. 接入 lint，定稿 ADR 0006
 
@@ -104,7 +104,7 @@ TS 7 用 Go 重写，不再提供传统的 JS API。阶段一要回答的问题�
 | `@yzt/*` 只映射到 `index.ts` | 深层导入在类型检查阶段就失败 |
 | 规则只用 `error` / `off`，关闭规则必须写原因 | 避免警告堆积、豁免失控 |
 
-验证：在模拟分层的夹具里放了 18 处违规，各层工具合计全部拦截；又在真实仓库放了 13 类违规，全部报出、没有误报。详见 [config/oxlintrc.md](../config/oxlintrc.md)。
+验证：在模拟分层的夹具里放了 18 处违规，各层工具合计全部拦截；又在真实仓库放了 13 类违规，全部报出、没有误报。详见 [config/oxlintrc.md](../../config/oxlintrc.md)。
 
 ### 4. 最小 CI 与依赖维护（ADR 0005 阶段一事项）
 
@@ -119,7 +119,7 @@ TS 7 用 Go 重写，不再提供传统的 JS API。阶段一要回答的问题�
 | 新增根 `typecheck` 脚本 | CI 和本地使用同一条命令 |
 | 依赖脚本加 `--include-github-actions`，大版本升级改为交互式 | 每月检查时一并覆盖 Actions；大版本逐个确认 |
 
-验证：先把 git 会提交的文件复制到干净目录，从零执行 CI 的四个步骤，退出码全部为 0；推送后 GitHub 上的首次运行（提交 `fb6a85d`）全部步骤通过，耗时约 30 秒。详见 [config/ci-workflow.md](../config/ci-workflow.md)、[config/pnpm-workspace.md](../config/pnpm-workspace.md)、[config/package-json.md](../config/package-json.md)。
+验证：先把 git 会提交的文件复制到干净目录，从零执行 CI 的四个步骤，退出码全部为 0；推送后 GitHub 上的首次运行（提交 `fb6a85d`）全部步骤通过，耗时约 30 秒。详见 [config/ci-workflow.md](../../config/ci-workflow.md)、[config/pnpm-workspace.md](../../config/pnpm-workspace.md)、[config/package-json.md](../../config/package-json.md)。
 
 ### 5. 文档与约定
 
@@ -170,7 +170,7 @@ TS 7 用 Go 重写，不再提供传统的 JS API。阶段一要回答的问题�
 
 ### 2. tsconfig 的几组关键概念
 
-逐项说明见 [config/tsconfig.md](../config/tsconfig.md)，这里只列最值得理解的概念。
+逐项说明见 [config/tsconfig.md](../../config/tsconfig.md)，这里只列最值得理解的概念。
 
 | 概念 | 要点 |
 |---|---|

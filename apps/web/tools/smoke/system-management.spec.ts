@@ -9,7 +9,7 @@ interface Backend {
   reads: string[];
 }
 
-// 本地接口样本：字段按 2026-10-27 只读核对的真实接口（docs/migration.md），人名虚构
+// 本地接口样本：字段按 2026-10-27 只读核对的真实接口（docs/archive/migration.md），人名虚构
 const messages = [
   { msgId: 'msg-approval', category: 'approval', title: '数据申请待审核', isRead: 'false', taskId: 'apply-001',
     content: '王立于2026年10月28日11时29分提交的资源申请需要您审批，请及时查看并处理相关申请。',

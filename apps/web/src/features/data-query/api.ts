@@ -4,7 +4,7 @@ import { fetchFile } from '@/shared/file-transfer';
 import { http } from '@/shared/http/client';
 import { geometryTextSchema } from '@/shared/map/geometry-schema';
 
-// 查询接口成功时没有信封，失败时返回信封（ADR 0047 第 8 节）；结构按 2026-10-28 实测确定（docs/migration.md）
+// 查询接口成功时没有信封，失败时返回信封（ADR 0047 第 8 节）；结构按 2026-10-28 实测确定（docs/archive/migration.md）
 
 /** 结果表的一行：字段按图层不同，由列配置按需读取 */
 const recordSchema = z.record(z.string(), z.unknown());

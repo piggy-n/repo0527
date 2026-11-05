@@ -389,7 +389,7 @@ pnpm --filter @yzt/web test:smoke
 
 ## 四、依赖维护
 
-维护规则见 ADR 0005 和 AGENTS.md。当前的节奏是每月手动检查一次，以后接入 Renovate 后改为自动处理。
+维护规则见 ADR 0005 和 `.claude/rules/deps-config.md`。当前的节奏是每月手动检查一次，以后接入 Renovate 后改为自动处理。
 
 ### `pnpm deps:check`
 

@@ -148,7 +148,7 @@ const businessRoutes: RouteRecordRaw[] = [
   }
 ];
 
-// 开发页面：放在 pages/dev/<名称>/，路由名 dev<名称>，路径 /dev/<名称>（AGENTS.md）
+// 开发页面：放在 pages/dev/<名称>/，路由名 dev<名称>，路径 /dev/<名称>（.claude/rules/pages.md）
 // 生产构建中 import.meta.env.DEV 为 false，这些路由连同页面代码都不会进入产物
 const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
   {

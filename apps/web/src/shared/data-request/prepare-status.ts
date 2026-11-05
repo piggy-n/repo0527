@@ -1,4 +1,4 @@
-// 数据准备的状态：取值是申请的 storage_status，沿用旧页面的筛选项（docs/migration.md）；
+// 数据准备的状态：取值是申请的 storage_status，沿用旧页面的筛选项（docs/archive/migration.md）；
 // 统计报表的状态是中文文字，由它的接口换算成这几个值（features/statistics-report/api.ts）
 
 export const PREPARE_STATUSES = ['processing', 'success', 'timeout', 'failed'] as const;

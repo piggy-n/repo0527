@@ -48,7 +48,7 @@ export interface QueryTopic {
 }
 
 // 结果表的列沿用旧页面，字段名按接口实际返回修正（学校的 ifch → iftc，地类图斑的 Tbxhmc → tbxhmc）；
-// 接口不返回的列（学校、医院的 gxsj，医院的 quota、bz）保留，显示为空，记在 docs/migration.md
+// 接口不返回的列（学校、医院的 gxsj，医院的 quota、bz）保留，显示为空，记在 docs/archive/migration.md
 const SCHOOL_COLUMNS: readonly ResultColumn[] = [
   { prop: 'cc', label: '变化(或细化)后类型代码' },
   { prop: 'ccn', label: '变化(或细化)后类型名称' },

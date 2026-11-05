@@ -49,7 +49,7 @@ describe('路由表', () => {
     ].toSorted());
   });
 
-  // 开发页面的约定见 AGENTS.md：页面在 pages/dev/<名称>/，路径 /dev/<名称>，路由名的值 dev-<名称>
+  // 开发页面的约定见 .claude/rules/pages.md：页面在 pages/dev/<名称>/，路径 /dev/<名称>，路由名的值 dev-<名称>
   it('开发页面的路径和路由名相互对应', () => {
     const devRecords = records.filter(({ path, name }) => path.startsWith('/dev/') || String(name).startsWith('dev-'));
     const pairs = devRecords.map(({ path, name }) => [path, String(name)]);

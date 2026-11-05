@@ -55,12 +55,21 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 | 地图上的浮层 | 测量的单位和标签、鼠标旁的提示（`PointerHint`）、位置信息只放在可视区域里、当前区划条；点中的位置被面板挡住时用相机控制的 `reveal` 平移（5D.6） | 0055（修正 0035 第 4 节、0037 第 5 节） | [shared-map.md](shared-map.md)、[map-vue.md](map-vue.md) |
 | 测量 | 椭球面计算（geographiclib）；`MeasureStore` 持有结果和两个工具 | 0035 | [map-core.md](map-core.md)、[shared-map.md](shared-map.md) |
 | 区划定位、坐标定位 | 本地区划目录与边界；经纬度的识别与格式只用纯函数；位置点可拖动 | 0036、0037 | [shared-map.md](shared-map.md) |
-| 资源图层 | feature `resource-map`：接口树 → 目录（纯函数，查询的 `select` 得出）→ 样式登记表 → 拥有者 `useResourceLayers`（按 `code` 的显示状态）→ `resources` 分组（底图之上、注记之下）；图层面板的目录树负责浏览、勾选和调整顺序，"已勾选"区按叠放顺序列出；两处调的是同一份顺序（资源图层的 `order`，按目录树连续），地图跟着变（5C.2、5D.2，ADR 0053、0054、0118）；勾选、透明度、顺序、年份按用户记住（5C.3，ADR 0042）；图例从登记表推导，不做地类统计（5C.4，ADR 0043）；符号的覆盖和拖动取色时的预览由拥有者 `useResourceSymbols` 持有，分组和图例都从默认符号、覆盖和预览推导；按属性配色的资源可以换成统一样式，分类样式各取值的符号用 `match` 组合在一个图层里，在图例里编辑（5C.5，ADR 0044）；图例的预览按参考级别的实际像素画出线宽、线型、点的大小和面的描边（5D.5）；未勾选的不放进样式，每个资源一个数据源、默认一个图层，面用到花纹或复杂描边时按需拆出纹理图层、描边图层，花纹是随分组提交的 SDF 图片（5C.5c，ADR 0045）；线和面的描边用到多种线型时按线型拆层，每层的线型是常量，按要素的线型过滤（ADR 0046），重的资源有最小显示级别（部署的 `resource-min-zooms.json` 随目录查询一起读，进入目录的 `Resource.minzoom`，ADR 0132、0137）；目录变化时逐个资源校验；瓦片错误从视图的数据源错误推导 | 0041、0044、0045、0046、0047、0132、0137 | [migration.md](../migration.md)"现状底图：资源图层实测" |
-| 点选与框选 | 选择状态只存要素身份（数据源 + `guid`）；二维 14 级以上只用渲染要素，14 级以下和三维由登记的数据集查后端；框选离起点 3 像素起算并屏蔽派生的单击，松手时按渲染要素加权估数，超过 5000 提示缩小范围；批量高亮在瓦片上按 `guid` 过滤 | 0047（第 1、2 节由 0048 修正，框选由 0049 确定）、0048、0049（第 2 节的估数由 0050 修正）、0050 | [migration.md](../migration.md)"点选的实测""框选的实测" |
+| 资源图层 | feature `resource-map`：接口树 → 目录（纯函数，查询的 `select` 得出）→ 样式登记表 → 拥有者 `useResourceLayers`（按 `code` 的显示状态）→ `resources` 分组（底图之上、注记之下）；图层面板的目录树负责浏览、勾选和调整顺序，"已勾选"区按叠放顺序列出；两处调的是同一份顺序（资源图层的 `order`，按目录树连续），地图跟着变（5C.2、5D.2，ADR 0053、0054、0118）；勾选、透明度、顺序、年份按用户记住（5C.3，ADR 0042）；图例从登记表推导，不做地类统计（5C.4，ADR 0043）；符号的覆盖和拖动取色时的预览由拥有者 `useResourceSymbols` 持有，分组和图例都从默认符号、覆盖和预览推导；按属性配色的资源可以换成统一样式，分类样式各取值的符号用 `match` 组合在一个图层里，在图例里编辑（5C.5，ADR 0044）；图例的预览按参考级别的实际像素画出线宽、线型、点的大小和面的描边（5D.5）；未勾选的不放进样式，每个资源一个数据源、默认一个图层，面用到花纹或复杂描边时按需拆出纹理图层、描边图层，花纹是随分组提交的 SDF 图片（5C.5c，ADR 0045）；线和面的描边用到多种线型时按线型拆层，每层的线型是常量，按要素的线型过滤（ADR 0046），重的资源有最小显示级别（部署的 `resource-min-zooms.json` 随目录查询一起读，进入目录的 `Resource.minzoom`，ADR 0132、0137）；目录变化时逐个资源校验；瓦片错误从视图的数据源错误推导 | 0041、0044、0045、0046、0047、0132、0137 | [docs/archive/migration.md](../archive/migration.md)"现状底图：资源图层实测" |
+| 点选与框选 | 选择状态只存要素身份（数据源 + `guid`）；二维 14 级以上只用渲染要素，14 级以下和三维由登记的数据集查后端；框选离起点 3 像素起算并屏蔽派生的单击，松手时按渲染要素加权估数，超过 5000 提示缩小范围；批量高亮在瓦片上按 `guid` 过滤 | 0047（第 1、2 节由 0048 修正，框选由 0049 确定）、0048、0049（第 2 节的估数由 0050 修正）、0050 | [docs/archive/migration.md](../archive/migration.md)"点选的实测""框选的实测" |
 | 区划裁剪 | 按区划边界几何：区划外用遮罩盖住（按环的嵌套深度构造）；点选、框选按几何限定范围，发给后端的几何误差不超过 2 像素、有效、最多 120 个坐标 | 0051 | [shared-map.md](shared-map.md)"区划裁剪" |
-| 资源的年份 | 年份是按 `code` 的显示状态；单个资源各自选，另有批量设置（作用于所有有这一年的资源）；不存"当前年份" | 0052 | [migration.md](../migration.md)"年份的验收" |
+| 资源的年份 | 年份是按 `code` 的显示状态；单个资源各自选，另有批量设置（作用于所有有这一年的资源）；不存"当前年份" | 0052 | [docs/archive/migration.md](../archive/migration.md)"年份的验收" |
 | 真实引擎的测试 | 依赖真实 MapLibre 或真实布局的少量用例用 Vitest 浏览器模式，只用本地数据 | 0040 | [vite-config.md](../config/vite-config.md) |
 | 相机操作与异步 | 用户发起的定位是一次操作，用信号判断是否作废；操作对象的 `run` 负责等待与再确认；可替换操作只认最新（`LatestController`）；revision / operation / version 各有一个意思 | 0038（第 1、3 条由 0039 修正）、0039 | [map-vue.md](map-vue.md)"相机操作"、[utils.md](utils.md) |
+| 点/框选的交互 | 十字光标、跟随提示；关掉拖动平移的工具声明 `panModifier`，按住 Ctrl / ⌘ 临时拖动地图；工具要接管按在手柄上的拖动时声明 `capturesPress` | 0056、0122 | [shared-map.md](shared-map.md)、[map-core.md](map-core.md) |
+| 现状底图的界面 | 功能标签与独立详情同列排布、底图 Popover、紧凑图例与编辑视图、面板标题、指北针、状态栏在左下角、上移下移按钮、"已选择图层"；以设计文档"已确认的界面细节"为准 | 0057～0060、0066～0074、0094～0096、0102、0116 | [current-map-reference.md](../design/current-map-reference.md) |
+| 控制栏与边界入口 | 不支持三维的地图不显示 2D/3D；底图入口是 `BasemapCard`；除现状底图外的地图页在控制栏放行政区边界入口 | 0111、0128 | [shared-map.md](shared-map.md) |
+| 资源的分类与显示级别 | 取值、名称、颜色写在字典，`style-registry.ts` 按 `code` 登记；图例和地图只用实际有的类别；最小显示级别按单张瓦片 6 MB 实测，放进可替换的部署文件；第一次请求很慢的资源定 8 级 | 0123、0124、0132、0136、0137 | [archive/migration.md](../archive/migration.md)"现状底图：资源分类的探查" |
+| 内网静态底图 | 用本地市界直接绘制面、线和地名，不用图片；地名和各市分色是代码开关，默认都关 | 0133、0134 | [shared-map.md](shared-map.md) |
+| 加载与页面缓存 | 登录页空闲时预加载地图页并预热 Worker 池；字体不推迟；`KeepAlive` 加路由 meta，停用期间暂停视图；`.env` 的开关决定离开页面后是否重置 | 0061～0063、0114、0138 | [map-core.md](map-core.md)、[perf.md](perf.md)、[layout.md](layout.md) |
+| 三维的运行时与切换 | 范围与交互已定；Cesium 只在 `map-cesium` 和 app 导入，`CesiumView` 依赖窄接口；`setDimension` 切换，二维稳定后空闲时预加载三维运行时 | 0078、0079、0091 | [map-cesium.md](map-cesium.md) |
+| 三维覆盖物 | GeoJSON 按样式自动镜像，按整级求值、简化到半个像素；只换坐标时有点数上限，停下后改回静态，重建时等新实体画好；背景图层有细节上限 | 0080、0082、0099、0103、0135 | [map-cesium.md](map-cesium.md) |
+| 三维模型与漫游 | 静态清单描述 3D Tiles，会话的 `scene` 持有；路线和步行是 `roam`，合并成一个漫游入口，没有单独的钻地；导航网格是纯 TS，在 Worker 里构建；室内地图、第三人称（入口暂不开放） | 0081、0083～0087、0090、0097、0102、0103 | [map-cesium.md](map-cesium.md)、[map-core.md](map-core.md) |
 
 ## 阅读顺序
 
@@ -71,7 +80,7 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 3. ADR 0026 → 0030：失败的处理
 4. ADR 0034：交互工具
 5. ADR 0038 → 0039：相机操作与异步规则
-6. 其余按要做的事去读；阶段总结（[stage-4](../stages/stage-4-map-core.md)、[5A](../stages/stage-5a-map-skeleton.md)、[5B](../stages/stage-5b-public-map-capabilities.md)、[5C](../stages/stage-5c-current-map-business.md)）记录了每次决定前后踩过的坑
+6. 其余按要做的事去读；阶段总结（[stage-4](../archive/stages/stage-4-map-core.md)、[5A](../archive/stages/stage-5a-map-skeleton.md)、[5B](../archive/stages/stage-5b-public-map-capabilities.md)、[5C](../archive/stages/stage-5c-current-map-business.md)）记录了每次决定前后踩过的坑
 
 ## 维护
 

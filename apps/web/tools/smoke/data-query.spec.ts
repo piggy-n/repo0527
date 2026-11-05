@@ -22,7 +22,7 @@ interface Backend {
   exports: { readonly endpoint: string; readonly body: unknown }[];
 }
 
-// 本地接口样本：结构按 2026-10-28 只读核对的真实接口（docs/migration.md），成功时没有信封
+// 本地接口样本：结构按 2026-10-28 只读核对的真实接口（docs/archive/migration.md），成功时没有信封
 const SCHOOLS = [
   { guid: 'a', cc: '08H213', ccn: '中小学', name: '南京市琅琊路小学', type: '小学', iftc: '否' },
   { guid: 'b', cc: '08H213', ccn: '中小学', name: '南京市拉萨路小学', type: '小学', iftc: '-9999' }

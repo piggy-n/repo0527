@@ -5,7 +5,7 @@ import { http } from '@/shared/http/client';
 import { geometryTextSchema } from '@/shared/map/geometry-schema';
 import { builtInMinZooms, type ResourceMinZooms, resourceMinZoomsSchema } from './min-zooms';
 
-// 结构按 2026-10-09、10-11 实测的返回确定（docs/migration.md）；resource（所属分类名）与分类路径重复，不声明
+// 结构按 2026-10-09、10-11 实测的返回确定（docs/archive/migration.md）；resource（所属分类名）与分类路径重复，不声明
 const resourceLayerSchema = z.object({
   code: z.string(),
   name: z.string(),
@@ -60,7 +60,7 @@ export async function fetchResourceMinZooms(signal?: AbortSignal): Promise<Resou
   }
 }
 
-// 要素查询接口（ADR 0047 第 8 节）：成功时没有信封，失败时返回信封；结构按 2026-10-14 实测确定（docs/migration.md）
+// 要素查询接口（ADR 0047 第 8 节）：成功时没有信封，失败时返回信封；结构按 2026-10-14 实测确定（docs/archive/migration.md）
 
 /** 查询接口返回的一条记录：字段按资源不同，由调用方按需读取 */
 const featureRecordSchema = z.record(z.string(), z.unknown());

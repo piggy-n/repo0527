@@ -5,7 +5,7 @@
 
 5C 的目标是"除三维外与旧页面功能对齐"：把旧现状底图里的资源图层、图层面板、图例、符号编辑、点选与框选、区划裁剪、年份迁到 `features/resource-map`，现状底图页把它们和 5B 的公共能力组装起来。开始前先插入 5C.0，把 5A、5B 里各写一套的"结果还算不算数"统一成一套规则。每一步都先读旧代码、用真实后端实测，再写 ADR 和用户讨论，接受后实现，最后在真实数据上验收。
 
-本文分两部分：第一部分记录做了什么、每项改动的目的；第二部分按主题整理可以学到的知识、设计理由和替代方案。实测数据在 [migration.md](../migration.md) 的"现状底图"各节，公共能力的用法在 [modules/shared-map.md](../modules/shared-map.md)，存储在 [modules/storage.md](../modules/storage.md)，地图部分的 ADR 关系在 [modules/map-overview.md](../modules/map-overview.md)。
+本文分两部分：第一部分记录做了什么、每项改动的目的；第二部分按主题整理可以学到的知识、设计理由和替代方案。实测数据在 [migration.md](../migration.md) 的"现状底图"各节，公共能力的用法在 [modules/shared-map.md](../../modules/shared-map.md)，存储在 [modules/storage.md](../../modules/storage.md)，地图部分的 ADR 关系在 [modules/map-overview.md](../../modules/map-overview.md)。
 
 ---
 

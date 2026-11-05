@@ -160,7 +160,6 @@ uses: actions/checkout@v7
 
 ## 还没做的事
 
-- 在 GitHub 仓库设置中开启 Dependabot 安全告警（手动操作，只开告警，不开版本更新）
 - 以后改用 Pull Request 流程时，可以给 `main` 设置分支保护，要求 CI 通过才能合并
 
 ## 迁移到其他平台或停用 CI
@@ -173,7 +172,7 @@ uses: actions/checkout@v7
 |---|---|
 | `.github/workflows/ci.yml` | 唯一真正依赖平台的文件 |
 | 根 `package.json` 的 `deps:check`、`deps:update:within-range`、`deps:update:allow-major` | `--include-github-actions` 参数，顺带检查 Actions 的版本 |
-| AGENTS.md、ADR 0005、本文、`commands.md` | 文字描述，以及"Actions 用 SHA 固定"的约定 |
+| `.claude/rules/deps-config.md`、ADR 0005、本文、`commands.md` | 文字描述，以及"Actions 用 SHA 固定"的约定 |
 | GitHub 仓库设置 | Dependabot 安全告警 |
 
 保持迁移成本低的前提是继续遵守本文末尾的检查清单：新增检查步骤时，先在 `package.json` 里加脚本，CI 只负责调用。
@@ -182,7 +181,7 @@ uses: actions/checkout@v7
 
 1. 删除 `.github/workflows/ci.yml`，或者在 GitHub 仓库设置中禁用 Actions
 2. 去掉三个 `deps:*` 脚本中的 `--include-github-actions`
-3. 写一份新的 ADR 说明理由（取代 ADR 0005 中关于 CI 的部分），同步 AGENTS.md、本文和 `commands.md`
+3. 写一份新的 ADR 说明理由（取代 ADR 0005 中关于 CI 的部分），同步 `.claude/rules/deps-config.md`、本文和 `commands.md`
 
 停用后的代价：质量检查只能靠提交前手动运行那 5 条命令；也失去了"干净环境"这道保障，"依赖了没提交的文件""改了 `package.json` 没提交 lockfile"这类问题在本地发现不了。
 
@@ -195,7 +194,7 @@ uses: actions/checkout@v7
 3. 确认新平台会设置 `CI` 环境变量；如果不会，在流水线里显式设置 `CI=true`，保证 Vitest 仍然拒绝 `.only`
 4. 如果改用内网的 npm 源，按下文"内网 npm 源"一节实测冷却期
 5. 为安全告警找替代，例如在流水线中加 `pnpm audit`，或者使用平台自带的依赖扫描
-6. 写新的 ADR（取代 ADR 0005 中关于 CI 平台的部分），同步 AGENTS.md、本文和 `commands.md`
+6. 写新的 ADR（取代 ADR 0005 中关于 CI 平台的部分），同步 `.claude/rules/deps-config.md`、本文和 `commands.md`
 7. 推一个分支验证每一步；再故意留一个 `it.only` 或类型错误，确认流水线会失败
 
 各平台的差异对照：

@@ -4,7 +4,7 @@ import { PREPARE_STATUSES, type PrepareStatus } from '@/shared/data-request/prep
 import { fetchFile } from '@/shared/file-transfer';
 import { http, type TransferProgress } from '@/shared/http/client';
 
-// 字段按 2026-10-27 只读核对的真实返回（docs/migration.md）：没有值的字段整个键都不出现，所以写 optional 而不是 nullable；
+// 字段按 2026-10-27 只读核对的真实返回（docs/archive/migration.md）：没有值的字段整个键都不出现，所以写 optional 而不是 nullable；
 // 用不到的字段（user_id、receiver_dept_code、xzqdm、file_path、storage_progess 等）不声明，解析时丢弃
 
 /** 申请的状态；table 是后端混在申请表里的基本统计任务（ADR 0092） */
@@ -28,7 +28,7 @@ const applicationSchema = z
   .object({
     apply_id: z.string().min(1),
     apply_name: z.string().optional(),
-    // 实测待审核的申请没有申请人（后端问题，记在 migration.md）
+    // 实测待审核的申请没有申请人（后端问题，记在 docs/archive/migration.md）
     user_name: z.string().optional(),
     receiver_dept_name: z.string(),
     layer_code: z.string().optional(),

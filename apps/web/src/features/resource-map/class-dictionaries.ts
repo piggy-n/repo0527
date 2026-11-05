@@ -3,7 +3,7 @@ import { LANDUSE_CLASSES, LANDUSE_LEGACY_NAME_COLORS, URBAN_VILLAGE_CODE_NAMES }
 import { paletteColor } from './palette';
 
 // 分类字典（ADR 0123）：取值、名称和颜色，同一取值在点层、面层同色，改颜色只改这里；哪个资源用哪个字典在 style-registry.ts。
-// 取值来自 2026-11-02 的探查（docs/migration.md）。地图样式里的颜色是数据，不走 CSS 令牌
+// 取值来自 2026-11-02 的探查（docs/archive/migration.md）。地图样式里的颜色是数据，不走 CSS 令牌
 
 // 按顺序从配色板取色：一个字典不超过 10 项时颜色不重复
 function fromPalette(...pairs: readonly (readonly [value: string, label: string])[]): readonly ClassEntry[] {
@@ -128,7 +128,7 @@ export const DEVELOPMENT_ZONE_TYPES = fromPalette(
 );
 
 export const RED_LINE_TYPES = named('水源涵养', '生物多样性维护', '水土保持', '其他生态系统服务功能重要性');
-// 林草湿荒（ADR 0124）：只列探查到的取值，名称来自后端提供的代码表（全表在 docs/migration.md）
+// 林草湿荒（ADR 0124）：只列探查到的取值，名称来自后端提供的代码表（全表在 docs/archive/migration.md）
 
 // 林种（lin_zhong）：色相按大类，防护林绿、特种用途林青蓝、用材林橙、经济林紫；约四分之一的图斑没有林种，归入"其他"
 export const FOREST_TYPES: readonly ClassEntry[] = [
@@ -152,7 +152,7 @@ export const FOREST_TYPES: readonly ClassEntry[] = [
   { value: '255', label: '其他经济林', color: '#CE93D8' }
 ];
 
-// 土壤类型（tu_rang_lx）：色相按土纲；120、122 不在代码表里（待业务确认，docs/migration.md），先显示编码
+// 土壤类型（tu_rang_lx）：色相按土纲；120、122 不在代码表里（待业务确认，docs/archive/migration.md），先显示编码
 export const SOIL_TYPES: readonly ClassEntry[] = [
   { value: '104', label: '黄壤', color: '#FDD835' },
   { value: '111', label: '黄棕壤', color: '#C49A6C' },
@@ -191,7 +191,7 @@ export const WETLAND_LANDUSE: readonly string[] = [
 // 耕地补划目标、永久基本农田（三区三线）只有耕地的三个地类
 export const CULTIVATED_LANDUSE: readonly string[] = ['0101', '0102', '0103'];
 
-// 其余资源。有的名称没有现成的对照，按命名规律写的，用户已确认（docs/migration.md）
+// 其余资源。有的名称没有现成的对照，按命名规律写的，用户已确认（docs/archive/migration.md）
 
 // 界线类型（jxlx）：按国土调查数据库标准的界线类型
 export const BOUNDARY_TYPES = fromPalette(

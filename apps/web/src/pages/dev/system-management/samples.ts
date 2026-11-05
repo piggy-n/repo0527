@@ -1,7 +1,7 @@
 import type { Application } from '@/features/data-application/api';
 import type { Report } from '@/features/statistics-report/api';
 
-// 系统管理组件样例的固定数据：字段和取值按 2026-10-27 只读核对的真实接口整理（docs/migration.md），名称和人名是虚构的；
+// 系统管理组件样例的固定数据：字段和取值按 2026-10-27 只读核对的真实接口整理（docs/archive/migration.md），名称和人名是虚构的；
 // 时间是接口转换以后的北京时间，格式是小写
 
 const DEPARTMENT = '江苏省基础地理信息中心';
@@ -169,7 +169,7 @@ export const APPLICATION_SAMPLES: Application[] = [
   ...tableTasks
 ];
 
-// 报表的名称和结构按联调拿到的 /statistics/page 返回（docs/migration.md）；那份返回全是处理成功，其余状态的时间是推断的
+// 报表的名称和结构按联调拿到的 /statistics/page 返回（docs/archive/migration.md）；那份返回全是处理成功，其余状态的时间是推断的
 const reportNames = [
   '基本统计报表_省级',
   '基本统计报表_市级',

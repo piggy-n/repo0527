@@ -27,7 +27,7 @@ const EXCLUDED_FIELDS: readonly (readonly [pattern: RegExp, reason: string])[] =
 
 /** 有编码表的标准分类字段：三调地类、城镇村属性、城市国土空间监测的类型代码 */
 const STANDARD_FIELDS: ReadonlySet<string> = new Set(['dlbm', 'dlmc', 'czclx', 'czcsxm', 'cc', 'ccn']);
-// 三调和监测成果里常见的分类字段（docs/migration.md、water-relations.json 的字段表）
+// 三调和监测成果里常见的分类字段（docs/archive/migration.md、water-relations.json 的字段表）
 const COMMON_FIELDS: ReadonlySet<string> = new Set([
   'type',
   'grade',

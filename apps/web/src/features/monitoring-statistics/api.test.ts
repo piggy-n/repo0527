@@ -10,7 +10,7 @@ afterAll(() => server.close());
 
 const ok = (data: JsonBodyType) => HttpResponse.json({ success: true, code: 200, data, msg: '请求成功' });
 
-// 两个查询接口返回同一个结构，没用到的字段是 null（2026-10-28 实测，docs/migration.md）
+// 两个查询接口返回同一个结构，没用到的字段是 null（2026-10-28 实测，docs/archive/migration.md）
 const dto = (change: Record<string, JsonBodyType>) => ({
   dataVolume: null,
   status: null,

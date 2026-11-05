@@ -11,7 +11,7 @@ afterAll(() => server.close());
 
 const ok = (data: JsonBodyType) => HttpResponse.json({ success: true, code: 200, data, msg: '请求成功' });
 
-// 下面的节点按 2026-10-28 实测的返回写（docs/migration.md）
+// 下面的节点按 2026-10-28 实测的返回写（docs/archive/migration.md）
 const listLeaf = (dm: string, mc: string, change: Record<string, JsonBodyType> = {}) => ({
   result: '',
   reason: '',

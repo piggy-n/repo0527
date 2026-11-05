@@ -12,7 +12,7 @@
 3. 漫游：只保留第一视角，新增路线漫游，支持开始、暂停与退出
 4. 验收：二三维切换、三维显示与 3DT、工具栏和两种漫游都能用，二维不受影响，不涉及 MVT
 
-读旧代码（`master-demo` 的 `6b4799b`，`views/current-map-new/cesium/` 等约 9000 行，基线见 [migration.md](../migration.md)）得到的事实：
+读旧代码（`master-demo` 的 `6b4799b`，`views/current-map-new/cesium/` 等约 9000 行，基线见 [docs/archive/migration.md](../archive/migration.md)）得到的事实：
 
 - 旧项目只有两份本地模型：苏州一座地铁车站（`public/SZ_3DT`，约 90 MB）和苏州白膜（`public/SZ_WhiteModel`，三种效果各一套瓦片），都不入库；资源树接口只返回矢量图层，所有分支里都没有"全省 3DT 列表"
 - 旧的漫游是车站里的步行：导航网格判断碰撞和楼层，点击移动，第一人称和第三人称（人物模型）可以切换，有室内小地图，地下模型配有"钻地"和地表透明度；没有路线漫游

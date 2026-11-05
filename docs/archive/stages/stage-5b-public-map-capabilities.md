@@ -5,7 +5,7 @@
 
 5B 的目标是"任何地图页都能装上底图、边界和工具栏"：把旧项目在多个地图页里各写一份的底图、行政区边界、工具切换、测量、定位做成 `shared/map` 里独立的能力，现状底图页挑选组合。开始前先修了 5A 之后发现的三处问题；中途把坐标定位从 5B.5 拆成 5B.6，因为旧项目的坐标定位只是占位按钮，用户决定新做成"坐标定位与位置点"。
 
-本文分两部分：第一部分记录做了什么、每项改动的目的；第二部分按主题整理可以学到的知识、设计理由和替代方案。各能力的用法在 [modules/shared-map.md](../modules/shared-map.md)，内核和衔接层的变化在 [modules/map-core.md](../modules/map-core.md)、[modules/map-vue.md](../modules/map-vue.md)。
+本文分两部分：第一部分记录做了什么、每项改动的目的；第二部分按主题整理可以学到的知识、设计理由和替代方案。各能力的用法在 [modules/shared-map.md](../../modules/shared-map.md)，内核和衔接层的变化在 [modules/map-core.md](../../modules/map-core.md)、[modules/map-vue.md](../../modules/map-vue.md)。
 
 ---
 
