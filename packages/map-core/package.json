@@ -1,0 +1,34 @@
+{
+  "name": "@yzt/map-core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:changed": "vitest run --changed main --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@maplibre/maplibre-gl-style-spec": "catalog:",
+    "@yzt/utils": "workspace:*",
+    "geographiclib-geodesic": "catalog:",
+    "nanoevents": "catalog:"
+  },
+  "peerDependencies": {
+    "maplibre-gl": "catalog:"
+  },
+  "devDependencies": {
+    "@types/geojson": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "jsdom": "catalog:",
+    "maplibre-gl": "catalog:",
+    "playwright": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

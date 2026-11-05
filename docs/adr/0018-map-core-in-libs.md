@@ -1,6 +1,6 @@
 # 0018. map-core 放在 libs/map-core
 
-- 状态：已接受
+- 状态：已接受（位置由 0143 改为 packages/map-core）
 - 日期：2026-10-09
 
 ## 背景

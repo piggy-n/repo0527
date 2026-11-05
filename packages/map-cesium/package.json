@@ -1,0 +1,36 @@
+{
+  "name": "@yzt/map-cesium",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:changed": "vitest run --changed main --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@maplibre/maplibre-gl-style-spec": "catalog:",
+    "@turf/simplify": "catalog:",
+    "@yzt/map-core": "workspace:*",
+    "@yzt/utils": "workspace:*",
+    "nanoevents": "catalog:"
+  },
+  "peerDependencies": {
+    "cesium": "catalog:"
+  },
+  "devDependencies": {
+    "@types/geojson": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "cesium": "catalog:",
+    "jsdom": "catalog:",
+    "playwright": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-static-copy": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -11,14 +11,14 @@ features           业务数据驱动的图层（5C 起：资源图层 features/
   ↓
 shared/map         项目级的公共能力：底图、行政区边界、默认视角、工具栏、基础组、状态栏、测量、区划定位、坐标定位、地图状态提示
   ↓
-libs/map-vue       地图与 Vue 的衔接：会话的提供与注入、画布、样式绑定、相机操作、工具登记、定位可视区域
+packages/map-vue       地图与 Vue 的衔接：会话的提供与注入、画布、样式绑定、相机操作、工具登记、定位可视区域
   ↓
-libs/map-core      地图会话（样式、相机、当前工具）、视图接口、MapLibre 适配器、测量计算；不依赖 Vue
+packages/map-core      地图会话（样式、相机、当前工具）、视图接口、MapLibre 适配器、测量计算；不依赖 Vue
   ↓
-libs/utils         LatestController、safeReporter、Worker 通信层
+packages/utils         LatestController、safeReporter、Worker 通信层
 ```
 
-三维（`libs/map-cesium`，3D.1 起，见 [map-cesium.md](map-cesium.md)）放在 map-core 之上，只能由 map-vue 动态导入；只有它和 app 能导入 `cesium`。依赖方向由 lint 检查（ADR 0006、0079）。
+三维（`packages/map-cesium`，3D.1 起，见 [map-cesium.md](map-cesium.md)）放在 map-core 之上，只能由 map-vue 动态导入；只有它和 app 能导入 `cesium`。依赖方向由 lint 检查（ADR 0006、0079）。
 
 ## 贯穿全局的几条原则
 
@@ -37,7 +37,7 @@ libs/utils         LatestController、safeReporter、Worker 通信层
 
 | 主题 | 现在的结论 | ADR | 文档 |
 |---|---|---|---|
-| 位置与拆包 | map-core 在 `libs`，单入口；utils、map-core、map-cesium 以后一起拆到 `packages/` | 0004、0018 | [map-core.md](map-core.md) |
+| 位置与拆包 | map-core、map-cesium、map-vue、utils 是内部包（`packages/*`），单入口；`shared/map` 等第二个地图项目的需求清楚了再拆 | 0004、0143 | [internal-packages](../config/internal-packages.md) |
 | 引擎与版本 | MapLibre GL JS 6，具名导入；Cesium 精确锁定；不用 mapbox-gl | 0002（大版本由 0019 确定）、0019 | [map-core.md](map-core.md) |
 | 分层与组装 | 五层的职责；能力按拥有者写，页面挑选组合，不做带开关的全能地图组件 | 0027 | 本文、[shared-map.md](shared-map.md) |
 | 会话 | 样式、相机、当前工具、选择状态（只存要素身份）、三维内容（瓦片集、钻地，页面用 `bindScene` 绑定）；二三维共同的唯一真相源 | 0020（选择状态的范围由 0022 修正，方案比较由 0024 修正）、0047、0081 | [map-core.md](map-core.md) |

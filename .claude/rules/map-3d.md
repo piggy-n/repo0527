@@ -1,7 +1,7 @@
 ---
 paths:
-  - "apps/web/src/libs/map-cesium/**"
-  - "apps/web/src/libs/map-core/scene/**"
+  - "packages/map-cesium/**"
+  - "packages/map-core/src/scene/**"
   - "apps/web/src/features/scene-models/**"
   - "apps/web/src/pages/current-map/**"
   - "apps/web/src/pages/dev/{map-3d,nav-grid}/**"
@@ -11,7 +11,7 @@ paths:
 # 三维（ADR 0078、0079，设计见 `docs/modules/map-cesium.md`）
 
 - 三维地图用 Cesium，精确锁定版本（1.146.0，ADR 0002、0079）；Worker、资源等运行时文件由 `vite-plugin-static-copy` 复制到产物的 `cesium/`，基础地址由 app 的三维运行时设置
-- Cesium 同样只在 `libs/map-cesium` 和 `app` 导入（lint 检查，包括 `cesium/Build/...` 和 `@cesium/*`）；`CesiumView` 只依赖窄接口 `SceneLike`，唯一调用 Cesium 的是 `CesiumScene`，测试注入假场景（ADR 0079）
+- Cesium 同样只在 `packages/map-cesium` 和 `app` 导入（lint 检查，包括 `cesium/Build/...` 和 `@cesium/*`）；`CesiumView` 只依赖窄接口 `SceneLike`，唯一调用 Cesium 的是 `CesiumScene`，测试注入假场景（ADR 0079）
 - 二三维切换用上下文的 `map.setDimension(kind)`：页面同时放 `<MapCanvas>` 和 `<CesiumCanvas>`，每种视图一个画布，上下文的 `view` 等只反映当前种类；切换时要做的业务（如 `basemap.selectForDimension`：三维默认影像、二维默认矢量）由页面在同一处调用。三维画布第一次切到三维时才加载，运行时由 app 的 `withMapRuntime` 通过 `MAP_RUNTIME` 注入，不在 `main.ts` 里安装（会把 maplibre-gl 带进入口，ADR 0079 第 2、8 节）
 - 三维的 GeoJSON 覆盖物由 map-cesium 按样式自动镜像（line、fill、circle，按整级求值、简化到半个像素，ADR 0080），拥有者不为三维另写分组；铺满大范围、只做背景的图层用 `overlayDetailMetadata` 写细节上限，超过后不再加细、不再重建（ADR 0135）；`symbol`、`fill-pattern` 等清单外的写法三维不画。三维期间点/框选不识别；三维独有的读数（视点高度、朝向）用就绪视图的 `eyeHeight()`、`heading()`
 - 三维独有的内容（3D Tiles 瓦片集、钻地、漫游）由会话的 `scene` 持有，页面用 `map.bindScene(() => SceneContent)` 绑定拥有者的推导函数（一个上下文只绑定一个）；瓦片集的状态从上下文的 `sceneStatus` 读，就绪时带建议的相机，定位用它做相机操作；漫游的进度从 `roamStatus` 读，漫游开始时开始一次相机操作，被别的定位作废就退出。模型清单 `public/3dt/manifest.json` 入库、模型数据不入库（ADR 0081、0083），也不进构建产物；本机放在 `local/3dt/`（ADR 0141），服务器上放在发布目录之外、由 nginx 提供（`docs/deployment.md`）

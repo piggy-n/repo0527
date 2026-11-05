@@ -1,0 +1,39 @@
+{
+  "name": "@yzt/ui",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "sass": "./src/_index.scss",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:changed": "vitest run --changed main --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "catalog:",
+    "@vueuse/core": "catalog:"
+  },
+  "peerDependencies": {
+    "element-plus": "catalog:",
+    "vue": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@vitejs/plugin-vue-jsx": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "element-plus": "catalog:",
+    "jsdom": "catalog:",
+    "playwright": "catalog:",
+    "sass-embedded": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vue": "catalog:"
+  }
+}

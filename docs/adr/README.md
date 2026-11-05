@@ -15,7 +15,7 @@
 | [0001](0001-tsx-instead-of-sfc.md) | 组件使用 TSX，不使用 SFC | 已接受 |
 | [0002](0002-map-libraries.md) | 二维地图用 MapLibre，Cesium 精确锁版本 | 已接受（大版本由 0019 确定） |
 | [0003](0003-typescript-7-toolchain.md) | TypeScript 7 与工具链 | 已接受（`incremental` 一条已被 0009 取代） |
-| [0004](0004-module-boundaries.md) | 模块边界与拆包预留 | 已接受 |
+| [0004](0004-module-boundaries.md) | 模块边界与拆包预留 | 已接受（拆包由 0143 落地） |
 | [0005](0005-dependency-maintenance-and-ci.md) | 依赖维护与持续集成 | 已接受 |
 | [0006](0006-lint-rules-and-boundaries.md) | lint 规则与依赖方向检查 | 已接受 |
 | [0007](0007-vue-router-5-and-history-mode.md) | 路由使用 Vue Router 5 与 history 模式 | 已接受 |
@@ -27,9 +27,9 @@
 | [0013](0013-fonts-in-public-dir.md) | 字体文件统一放在 apps/web/public/fonts/ | 已接受 |
 | [0014](0014-icons-as-internal-package.md) | 图标做成第一个 workspace 包 @yzt/icons（内部包） | 已接受 |
 | [0015](0015-login-session-and-permissions.md) | 登录与会话：会话存 localStorage，SM2 用 sm-crypto-v2，权限声明在路由上 | 已接受 |
-| [0016](0016-ui-components-in-libs-ui.md) | 通用 UI 组件放在 libs/ui | 已接受 |
+| [0016](0016-ui-components-in-libs-ui.md) | 通用 UI 组件放在 libs/ui | 已接受（位置由 0143 改为 packages/ui） |
 | [0017](0017-server-state-with-tanstack-query.md) | 接口数据用 TanStack Vue Query 管理 | 已接受 |
-| [0018](0018-map-core-in-libs.md) | map-core 放在 libs/map-core | 已接受 |
+| [0018](0018-map-core-in-libs.md) | map-core 放在 libs/map-core | 已接受（位置由 0143 改为 packages/map-core） |
 | [0019](0019-maplibre-v6.md) | 二维地图用 MapLibre GL JS 6 | 已接受 |
 | [0020](0020-map-session-state-as-source-of-truth.md) | 二三维关系：地图会话状态是唯一的真相源 | 已接受（选择状态的范围由 0022 修正，方案 B 的比较由 0024 修正） |
 | [0021](0021-worker-strategy.md) | Worker 策略：二维不自建渲染 Worker，统一通信层与瓦片数据服务 | 已接受（第 5 条的表述由 0024 修正，第 3、4 条由 0025 补充，第 2 条的图例统计由 0043 定为不做） |
@@ -149,10 +149,11 @@
 | [0136](0136-slow-first-request-min-zoom.md) | 第一次请求很慢的资源也限制最小显示级别 | 已接受（修改 0132 中三个资源的层级） |
 | [0137](0137-resource-min-zoom-deploy-file.md) | 资源的最小显示级别放进部署文件 | 已接受（修改 0132 的层级写进代码） |
 | [0138](0138-page-state-reset-on-by-default.md) | 离开页面后重置：`.env` 提交的取值改为 true | 已接受（修改 0114 的默认取值） |
-| [0139](0139-verification-levels.md) | 迭代期的验证分级与协作方式 | 已接受 |
+| [0139](0139-verification-levels.md) | 迭代期的验证分级与协作方式 | 已接受（`test:changed` 的范围由 0143 修改） |
 | [0140](0140-preference-switches.md) | 偏好的开关：一个总开关加每项一个分项开关 | 已接受（修改 0114、0138 里底图偏好的做法） |
 | [0141](0141-local-files-dir.md) | 未入库的本地文件集中到 local/ | 已接受 |
 | [0142](0142-docs-slimming.md) | 文档分层：规则按目录加载，过程记录归档 | 已接受 |
+| [0143](0143-package-split.md) | libs 搬到 packages，抽出 @yzt/theme | 已接受 |
 
 ## 模板
 

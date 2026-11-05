@@ -1,7 +1,7 @@
 # 字体
 
 相关决策：ADR 0012、ADR 0013
-对应文件：`apps/web/src/app/styles/fonts.scss`、`apps/web/src/app/styles/tokens.scss`
+对应文件：`apps/web/src/app/styles/fonts.scss`、`packages/theme/src/tokens.scss`
 
 ## 总览
 

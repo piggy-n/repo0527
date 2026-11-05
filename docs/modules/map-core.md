@@ -6,7 +6,7 @@
 
 - 长期存在、持有资源的对象写成类：引擎、图层、交互工具、Worker 池。计算写成纯函数：几何计算、样式表达式生成、地类分类规则，便于单独测试
 - 组合优先于继承：最多一层抽象基类（例如统一管理资源释放），不做 `BaseManager → LayerManager → MvtLayerManager` 这样的多层继承。目前一层也没有用到
-- 依赖通过构造参数传入（libs 的拆包规则），所有对象在一个地方组装：页面调用 map-vue 的 `provideMap()` 创建会话、绑定样式（ADR 0028，见 [map-vue.md](map-vue.md)）。map-core 不依赖 Vue、Element，不读 store 和全局单例；提示、接口请求、鉴权头由使用方传入
+- 依赖通过构造参数传入（包的拆包规则），所有对象在一个地方组装：页面调用 map-vue 的 `provideMap()` 创建会话、绑定样式（ADR 0028，见 [map-vue.md](map-vue.md)）。map-core 不依赖 Vue、Element，不读 store 和全局单例；提示、接口请求、鉴权头由使用方传入
 - 核心能力是二三维之间接近无感的切换：用户在一个框架里的操作和状态，切到另一个框架时尽量保留；框架独有的功能保持独有（ADR 0020）
 - map-core 持有地图会话状态（样式模型、相机、当前工具、选择状态），它是二三维共同的唯一真相源。Manager 修改会话状态，不直接写引擎；只有 MapLibre 适配器写二维地图，Cesium 镜像会话状态（ADR 0020）。jsdom 里没有 WebGL，Manager 的测试断言会话状态即可
 
@@ -402,7 +402,7 @@ store.clear();
 原则：
 
 1. **不绑定默认模式**：客户可能要求默认进入三维，或者按配置动态决定。app 里用一个解析函数回答"进入地图时先用哪个框架"，依据可以是部署配置、后端或用户级配置、上次使用的框架；加载和预加载都以它为准。默认框架要登录后才知道时，登录页按"上次使用的框架"或部署默认值预测，猜错只多一次下载
-2. **运行时按框架组织**：二维的 `setupMapRuntime`、以后三维的 Cesium 运行时（含 `CESIUM_BASE_URL`）各是一个加载函数，由 app 注入给 map-vue（libs 不能导入 app）。进入地图时只阻塞加载默认框架，另一个按访问路径在后台加载。路由上写死 MapLibre 的 `withMapRuntime` 到阶段五可能被这种注入方式取代
+2. **运行时按框架组织**：二维的 `setupMapRuntime`、以后三维的 Cesium 运行时（含 `CESIUM_BASE_URL`）各是一个加载函数，由 app 注入给 map-vue（包不能导入 app）。进入地图时只阻塞加载默认框架，另一个按访问路径在后台加载。路由上写死 MapLibre 的 `withMapRuntime` 到阶段五可能被这种注入方式取代
 3. **默认三维时二维仍要加载但不阻塞**：ADR 0020 第 7 条，三维期间二维暂时仍充当查询后端，二维视图以 `active: false` 创建；三维点选改用瓦片数据服务后，二维可以推迟到第一次需要时再创建
 4. **预加载**：登录页空闲时预加载预测出的默认框架的运行时和地图页代码。`requestIdleCallback` 加超时，Safari 不支持它（MDN 数据：只在预览版里，需要开启开关），用 `setTimeout` 兜底；`navigator.connection` 的 `saveData` 为真或网络为 2G 时跳过（只有 Chromium 内核支持，其他浏览器按正常网络处理）。另一个框架按访问路径加载：鼠标悬停到切换按钮时开始加载，或地图页空闲后、用户用过这个框架时再加载
 5. **二维的 Worker 池**：MapLibre 6 的 `prewarm()` 可以提前启动 Worker 池（随之下载 Worker 脚本），但会一直保留到 `clearPrewarmedResources()`，实测收益后再决定
@@ -435,7 +435,7 @@ store.clear();
 | map-vue 的运行时注入（按框架组织的运行时由 app 注入；`provideMap`、`<MapCanvas>`、`useMap()` 已在 5A.2 完成，见 [map-vue.md](map-vue.md)） | 三维阶段，有了第二个框架时（5E 开始时决定） |
 | 业务图层、底图、边界等拥有者（Manager），从自己的状态推导分组 | 阶段五、六，迁移现状底图和业务图层时 |
 | 框选的批量高亮：按 `guid` 过滤的图层还是 feature-state（选中的单个要素用完整几何的 GeoJSON 分组，ADR 0047） | 5C.6b |
-| Cesium 镜像与相机同步、三维样式的支持清单 | 做三维时（`libs/map-cesium`） |
+| Cesium 镜像与相机同步、三维样式的支持清单 | 做三维时（`packages/map-cesium`） |
 | 瓦片数据服务（基于 `@yzt/utils` 的 Worker 通信层；第一个真实使用方是导航网格，ADR 0085） | 接入 MVT 时 |
 
 ## 待定问题
@@ -445,7 +445,7 @@ store.clear();
 - 三维样式的支持清单：实现镜像之前写出（ADR 0024）
 - 瓦片是否因用户或权限而不同：2026-10-09 实测瓦片不校验 token，带不带 token 内容相同（[docs/archive/migration.md](../archive/migration.md)"现状底图：接口实测"）；以后会不会按权限过滤仍要向后端确认，再决定缓存键是否包含权限范围（ADR 0025）
 
-已确定：map-core 放在 `libs/map-core`（ADR 0018）；MapLibre 用 6.x（ADR 0019）；地图会话状态是唯一真相源（ADR 0020）；Worker 策略（ADR 0021）；样式模型与会话提交（ADR 0022）；资源释放、事件与运行时装配（ADR 0023）；视图接口（ADR 0024）；Worker 通信契约与瓦片数据服务（ADR 0025）；迁移基线 `836f03b` 已记入 [docs/archive/migration.md](../archive/migration.md)。
+已确定：map-core 放在 `packages/map-core`（ADR 0018）；MapLibre 用 6.x（ADR 0019）；地图会话状态是唯一真相源（ADR 0020）；Worker 策略（ADR 0021）；样式模型与会话提交（ADR 0022）；资源释放、事件与运行时装配（ADR 0023）；视图接口（ADR 0024）；Worker 通信契约与瓦片数据服务（ADR 0025）；迁移基线 `836f03b` 已记入 [docs/archive/migration.md](../archive/migration.md)。
 
 ---
 
@@ -470,7 +470,7 @@ store.clear();
 2. **交互互相询问**：多处传入 `isInteractionBlocked: () => this.measure.shouldBlockInteractions()`。测距、测面、绘制、点选、框选抢同一套鼠标事件，靠互相询问来避让。改为状态模式：交互管理器保证同一时间只有一个激活的工具，切换时旧工具 `deactivate()`、新工具 `activate()`
 3. **逐个记着解绑**：`this.boundMapClick = e => ...` 等一串"稳定引用便于解绑"，每加一个监听都要记得在 `destroy` 里解绑。改为注册时就登记释放动作（`DisposableStack` 或 `AbortController`），销毁时一次释放
 4. **全局事件总线**：`src/libs/bus.js` 的 `mitt()` 实例，事件名是字符串，没有类型。改为每个对象自己的有类型事件，回调参数的类型由事件表推断
-5. **职责和分层**：`PopupManager` 1875 行，要拆；`MapService` 直接导入 `ElMessage`、接口和鉴权服务，违反 libs 规则，改由使用方传入
+5. **职责和分层**：`PopupManager` 1875 行，要拆；`MapService` 直接导入 `ElMessage`、接口和鉴权服务，违反包的规则，改由使用方传入
 6. **引擎抽象被绕过**：`IMapEngine` 照着 Mapbox 的 API 一比一转发（`addLayer(spec)`、`setFilter(expr)`）；`MapboxEngine` 比接口多出 16 个方法（`setPaintProperty`、`setFeatureState`、`addImage`、`project` 等），业务照样调用；引擎之外有 12 处 `getNativeMap()`，测距测面、绘制、区划边界、点选交互都直接拿原生地图；`window.map` 是全局变量
 7. **通信渠道太多**：构造时传入的回调、mitt 全局总线、`landuseStyleManager` / `layerSymbolStyleManager` 两个全局单例自带的 `on/off`、`window` 自定义事件 `LAYER_ORDER_CHANGE_EVENT`、`getProps()` 按需读取 Vue 的 props。另有 4 个开关（`enableManagedLayers`、`enableUnifiedFeatureSelection`、`enableAiResults`、`showToolbar`）分出新旧两套点选路径。页面调用地图能力要经过 `CommonMap → MapContainer → MapService` 三层 `defineExpose` 转发 20 多个方法
 8. **资源释放靠人记**：

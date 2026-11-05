@@ -1,8 +1,8 @@
 ---
 paths:
-  - "apps/web/src/libs/map-core/**"
-  - "apps/web/src/libs/map-vue/**"
-  - "apps/web/src/libs/map-cesium/**"
+  - "packages/map-core/**"
+  - "packages/map-vue/**"
+  - "packages/map-cesium/**"
   - "apps/web/src/shared/map/**"
   - "apps/web/src/features/{resource-map,scene-models,data-query,monitoring-indicators,indicator-simulation,ai-chat}/**"
   - "apps/web/src/pages/{current-map,data-query,space-monitoring-indicators,indicator-simulation,ai-chat}/**"
@@ -30,7 +30,7 @@ paths:
 - 引用别的分组数据源的推导，要依赖被引用方的状态，保证两者在同一轮变化、一起提交；拥有者的数据源、图层和样式图片的 ID 以分组名为前缀（ADR 0027、0028、0045）
 - `shared/map` 和 feature 的地图能力按"拥有者"写（ADR 0031）：组合式函数持有状态（`shallowRef`，整体替换，值没变时不替换）并提供操作（参数不合法时抛错），推导分组的是纯函数；面板等界面通过 props 拿到拥有者，只显示和调用
 - 会话的选择状态只存要素身份（数据源 + 业务主键），属性、几何、候选列表和详情留在 feature 的查询缓存里，高亮分组从选择和查询结果推导（ADR 0022、0047）
-- 只有 MapLibre 适配器能写二维地图（lint 只允许 `libs/map-core/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；Cesium 镜像会话状态，不实现二维的引擎接口；二三维共用的是生命周期、相机、输入、拾取、投影、渲染要素查询这几个视图接口（ADR 0024、0047；三维的渲染要素查询返回空数组）
+- 只有 MapLibre 适配器能写二维地图（lint 只允许 `packages/map-core/src/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；Cesium 镜像会话状态，不实现二维的引擎接口；二三维共用的是生命周期、相机、输入、拾取、投影、渲染要素查询这几个视图接口（ADR 0024、0047；三维的渲染要素查询返回空数组）
 - 视图上的差异（如三维期间不画二维标注）由适配器自己处理，不改会话状态；框架独有的功能按能力声明，独有状态由各自的模块保管，切换框架时保留
 - 样式表达式和过滤条件在三维、Worker 里一律用 `@maplibre/maplibre-gl-style-spec` 求值，不手写求值器；它保证求值语义一致，不保证渲染效果一致，三维的支持范围按清单降级（ADR 0024）
 

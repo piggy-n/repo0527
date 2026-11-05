@@ -1,9 +1,9 @@
 {
-  "extends": "./tsconfig.libs.json",
+  "extends": "../../tsconfig.package.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
-    "lib": ["es2023", "esnext.disposable", "webworker"]
+    "lib": ["es2023", "esnext.disposable", "webworker"],
+    "types": ["geojson"]
   },
-  "include": ["src/**/*.worker.ts", "src/shared/map/area/shpjs.d.ts"],
-  "exclude": ["src/**/*.test.ts"]
+  "include": ["src/**/*.worker.ts", "src/shared/map/area/shpjs.d.ts"]
 }

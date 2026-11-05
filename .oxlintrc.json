@@ -24,7 +24,6 @@
       { "type": "pages", "pattern": "apps/web/src/pages" },
       { "type": "feature", "pattern": "apps/web/src/features/*", "capture": ["name"] },
       { "type": "shared", "pattern": "apps/web/src/shared" },
-      { "type": "lib", "pattern": "apps/web/src/libs/*", "capture": ["name"] },
       { "type": "package", "pattern": "packages/*", "capture": ["name"] }
     ]
   },
@@ -44,13 +43,13 @@
       {
         "paths": [
           { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
-          { "name": "maplibre-gl", "message": "maplibre-gl 只能在 libs/map-core/maplibre 和 app 中导入（ADR 0024）" },
-          { "name": "cesium", "message": "cesium 只能在 libs/map-cesium 和 app 中导入（ADR 0079）" }
+          { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
+          { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
         ],
         "patterns": [
           { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
-          { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 libs/map-core/maplibre 和 app 中导入（ADR 0024）" },
-          { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 libs/map-cesium 和 app 中导入（ADR 0079）" }
+          { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
+          { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
         ]
       }
     ],
@@ -84,36 +83,36 @@
       }
     },
     {
-      "files": ["apps/web/src/libs/map-core/maplibre/**"],
+      "files": ["packages/map-core/src/maplibre/**", "packages/*/src/test-setup.browser.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",
           {
             "paths": [
               { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
-              { "name": "cesium", "message": "cesium 只能在 libs/map-cesium 和 app 中导入（ADR 0079）" }
+              { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
             ],
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
-              { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 libs/map-cesium 和 app 中导入（ADR 0079）" }
+              { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
             ]
           }
         ]
       }
     },
     {
-      "files": ["apps/web/src/libs/map-cesium/**"],
+      "files": ["packages/map-cesium/src/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
           {
             "paths": [
               { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
-              { "name": "maplibre-gl", "message": "maplibre-gl 只能在 libs/map-core/maplibre 和 app 中导入（ADR 0024）" }
+              { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" }
             ],
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
-              { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 libs/map-core/maplibre 和 app 中导入（ADR 0024）" }
+              { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" }
             ]
           }
         ]
@@ -147,7 +146,45 @@
             "policies": [
               { "allow": { "to": { "module": { "origin": "external" } } } },
               { "allow": { "to": { "module": { "origin": "core" } } } },
-              { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": "@(./|+(../))**" } } }
+              { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": "@(./|+(../))**" } } },
+              {
+                "from": { "element": { "type": "package", "captured": { "name": "{ui,map-core,map-cesium,map-vue}" } } },
+                "allow": {
+                  "to": { "element": { "type": "package", "captured": { "name": "utils" } } },
+                  "dependency": { "source": "@yzt/*" }
+                }
+              },
+              {
+                "from": { "element": { "type": "package", "captured": { "name": "{map-cesium,map-vue}" } } },
+                "allow": {
+                  "to": { "element": { "type": "package", "captured": { "name": "map-core" } } },
+                  "dependency": { "source": "@yzt/*" }
+                }
+              },
+              {
+                "from": { "element": { "type": "package", "captured": { "name": "map-vue" } } },
+                "allow": {
+                  "to": { "element": { "type": "package", "captured": { "name": "map-cesium" } } },
+                  "dependency": { "source": "@yzt/*", "nodeKind": "dynamic-import" }
+                }
+              },
+              {
+                "from": { "element": { "type": "package", "captured": { "name": "{utils,map-core,map-cesium}" } } },
+                "disallow": {
+                  "to": {
+                    "module": {
+                      "source": ["vue", "vue-router", "pinia", "element-plus", "@vue/**", "@element-plus/**"]
+                    }
+                  }
+                }
+              },
+              {
+                "from": { "element": { "type": "package", "captured": { "name": "map-vue" } } },
+                "disallow": {
+                  "to": { "module": { "source": ["vue-router", "pinia", "element-plus", "@element-plus/**"] } }
+                }
+              },
+              { "disallow": { "to": { "module": { "source": "mapbox-gl" } } } }
             ]
           }
         ]
@@ -179,48 +216,7 @@
               },
               {
                 "from": { "element": { "types": { "anyOf": ["app", "pages", "feature", "shared"] } } },
-                "allow": { "to": { "element": { "type": "lib" } }, "dependency": { "source": "@yzt/*" } }
-              },
-              {
-                "from": { "element": { "types": { "anyOf": ["app", "pages", "feature", "shared"] } } },
                 "allow": { "to": { "element": { "type": "package" } }, "dependency": { "source": "@yzt/*" } }
-              },
-              {
-                "from": { "element": { "type": "lib", "captured": { "name": "{ui,map-core,map-cesium,map-vue}" } } },
-                "allow": {
-                  "to": { "element": { "type": "lib", "captured": { "name": "utils" } } },
-                  "dependency": { "source": "@yzt/*" }
-                }
-              },
-              {
-                "from": { "element": { "type": "lib", "captured": { "name": "{map-cesium,map-vue}" } } },
-                "allow": {
-                  "to": { "element": { "type": "lib", "captured": { "name": "map-core" } } },
-                  "dependency": { "source": "@yzt/*" }
-                }
-              },
-              {
-                "from": { "element": { "type": "lib", "captured": { "name": "map-vue" } } },
-                "allow": {
-                  "to": { "element": { "type": "lib", "captured": { "name": "map-cesium" } } },
-                  "dependency": { "source": "@yzt/*", "nodeKind": "dynamic-import" }
-                }
-              },
-              {
-                "from": { "element": { "type": "lib", "captured": { "name": "{utils,map-core,map-cesium}" } } },
-                "disallow": {
-                  "to": {
-                    "module": {
-                      "source": ["vue", "vue-router", "pinia", "element-plus", "@vue/**", "@element-plus/**"]
-                    }
-                  }
-                }
-              },
-              {
-                "from": { "element": { "type": "lib", "captured": { "name": "map-vue" } } },
-                "disallow": {
-                  "to": { "module": { "source": ["vue-router", "pinia", "element-plus", "@element-plus/**"] } }
-                }
               },
               { "disallow": { "to": { "module": { "source": "mapbox-gl" } } } }
             ]

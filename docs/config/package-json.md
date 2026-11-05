@@ -1,7 +1,7 @@
 # package.json 配置说明
 
-对应文件：根目录 `package.json`、`apps/web/package.json`
-相关决策：ADR 0003（TypeScript 7）、ADR 0005（依赖维护）、ADR 0006（lint）
+对应文件：根目录 `package.json`、`apps/web/package.json`（`packages/*` 的见 [internal-packages.md](internal-packages.md)）
+相关决策：ADR 0003（TypeScript 7）、ADR 0005（依赖维护）、ADR 0006（lint）、ADR 0143（catalog、串行测试）
 脚本的详细用法见 [commands.md](../commands.md)
 
 ## 两个 package.json 的分工
@@ -12,8 +12,9 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 |---|---|---|
 | 根 `package.json` | workspace 根 | 整个仓库共用的工具（lint、TS）、跨包脚本、pnpm 与 Node 的版本声明 |
 | `apps/web/package.json` | 应用包 `@yzt/web` | 应用自己的运行时依赖和构建工具 |
+| `packages/*/package.json` | 内部包 `@yzt/<name>` | 见 [internal-packages.md](internal-packages.md) |
 
-判断一个依赖放哪里：只有应用用到的（Vue、Vite）放应用包；对整个仓库生效的（oxlint 扫描所有文件）放根目录。往根目录安装依赖要加 `-w`，例如 `pnpm add -Dw oxlint`。
+判断一个依赖放哪里：只有一个包用到的放那个包；两个及以上的包用到的版本写进 `pnpm-workspace.yaml` 的 `catalog`，各包写 `catalog:`；对整个仓库生效的（oxlint 扫描所有文件）放根目录。往根目录安装依赖要加 `-w`，例如 `pnpm add -Dw oxlint`。
 
 ## 根 package.json
 
@@ -35,7 +36,8 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 | `typecheck` | `pnpm -r typecheck` | 检查所有包的类型 |
 | `lint` | `oxlint` | 从根目录检查整个仓库 |
 | `lint:fix` | `oxlint --fix` | 自动修复可以安全修复的问题 |
-| `test` | `pnpm -r test` | 运行所有包的测试（ADR 0010） |
+| `test` | `pnpm -r --workspace-concurrency=1 test` | 逐个包运行测试（ADR 0010、0143）：这些浏览器测试用软件 WebGL，不能让两个包同时开浏览器 |
+| `test:changed` | `pnpm -r --workspace-concurrency=1 test:changed` | 逐个包只跑和改动相关的测试（ADR 0139、0143） |
 | `deps:check` | `pnpm outdated -r --include-github-actions` | 检查过期的依赖和 GitHub Actions |
 | `deps:update:within-range` | `pnpm -r update --include-github-actions` | 在版本范围内更新 |
 | `deps:update:allow-major` | `pnpm update -r -i --latest --include-github-actions` | 交互式选择大版本升级 |
@@ -84,9 +86,11 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 "devDependencies": {
   "eslint-import-resolver-typescript": "^4.4.5",
   "eslint-plugin-boundaries": "^7.2.1",
+  "@vitest/browser-playwright": "catalog:",
   "oxlint": "1.85.0",
   "oxlint-tsgolint": "7.0.2003",
-  "typescript": "7.0.2"
+  "typescript": "catalog:",
+  "vitest": "catalog:"
 }
 ```
 
@@ -95,8 +99,9 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 | `oxlint` | 精确 | lint 主程序；依赖的 `jsPlugins` 处于 alpha 阶段，不承诺语义化版本 |
 | `oxlint-tsgolint` | 精确 | 类型感知规则，内置 Go 版 TS，要和 TS 一样精确锁定 |
 | `eslint-plugin-boundaries` | `^` | 依赖方向检查，通过 oxlint 的 `jsPlugins` 运行；它对 `handlebars`、`@boundaries/elements` 是精确依赖，这两个包的安全修复要随插件升级 |
-| `eslint-import-resolver-typescript` | `^` | 让 boundaries 按 tsconfig 的 `paths` 解析 `@/`、`@yzt/` |
-| `typescript` | 精确 | TS 不遵守语义化版本，小版本也可能带来新的类型错误 |
+| `eslint-import-resolver-typescript` | `^` | 让 boundaries 按 tsconfig 的 `paths` 解析 `@/`，按符号链接解析 `@yzt/` |
+| `typescript` | catalog，精确 | TS 不遵守语义化版本，小版本也可能带来新的类型错误 |
+| `vitest`、`@vitest/browser-playwright` | catalog | 根目录的 `vitest.shared.ts`（应用和各个包共用的浏览器测试设置）要导入它们 |
 
 版本写法的规则（ADR 0005）：
 
@@ -199,17 +204,19 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 
 新增的 `test:smoke` 使用已有 `playwright` 包提供的 `playwright/test`，访问内网生产构建；与 Vitest 分开运行，不增加依赖。运行前先执行 `pnpm build:intranet`，用法见 [commands.md](../commands.md)，范围见 ADR 0065。
 
-`test:changed` 只跑和改动相关的测试，基准固定为 `main`，供验证分级的级别 1、2 使用（ADR 0139）；`--passWithNoTests` 让没有选中测试的改动不算失败。
+`test:changed` 只跑和改动相关的测试，基准固定为 `main`，供验证分级的级别 1、2 使用（ADR 0139）；`--passWithNoTests` 让没有选中测试的改动不算失败。平时用根目录的 `pnpm test:changed`，它在每个包里各执行一次，改包里的代码时包自己的测试和依赖它的包、web 的测试都能选中（ADR 0143）。
 
 ### name
 
-`@yzt/web` 和 libs 将来的包名 `@yzt/<name>` 使用同一个作用域，一眼能看出属于同一个项目。脚本里用 `pnpm --filter @yzt/web <脚本>` 指定在哪个包里执行。
+`@yzt/web` 和内部包 `@yzt/<name>` 使用同一个作用域，一眼能看出属于同一个项目。脚本里用 `pnpm --filter @yzt/web <脚本>` 指定在哪个包里执行。
 
 ### type: module
 
-让包里的 `.js` 文件按 ES 模块处理。Vite 的配置文件、以后可能出现的脚本都用 `import` / `export`，不用 CommonJS 的 `require`。
+让包里的 `.js` 文件按 ES 模块处理。根目录同样写了：没有它，Vite 加载配置时把根目录的 `vitest.shared.ts` 当成 CommonJS 并打印警告。Vite 的配置文件、以后可能出现的脚本都用 `import` / `export`，不用 CommonJS 的 `require`。
 
 ### dependencies 与 devDependencies
+
+写 `catalog:` 的依赖，版本在 `pnpm-workspace.yaml` 的 `catalog`（两个及以上的包用到，ADR 0143，见 [pnpm-workspace.md](pnpm-workspace.md)）。下文说到的版本号以那里为准。
 
 对于由 Vite 打包的应用，两者都会被安装，区别主要是语义：
 
@@ -228,7 +235,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `@vue/devtools-api` | Pinia 4 的必需 peer 依赖，提供开发者工具集成。pnpm 会自动补装 peer，这里显式声明是为了让依赖关系一目了然；生产构建中不会用到 | — |
 | `@element-plus/icons-vue` | Element 的图标组件。它本来就是 element-plus 的依赖，但 pnpm 不允许 import 没有声明的包，所以要自己声明 | — |
 | `@tanstack/vue-query` | 接口数据的查询与缓存（ADR 0017）：取消旧请求、按 key 缓存、变更后失效、会话结束时统一清理。依赖 `vue-demi`（安装脚本不执行，见 pnpm-workspace.md）和 6.x 的 `@vue/devtools-api`（只在开发环境使用，不进生产包）；生产入口包 gzip 后增加约 8.5 KB | 现有 `http` 加每页的组合式函数、VueUse 的 `useAsyncState` |
-| `@vueuse/core` | 组合式工具集，按需具名导入，未用到的函数会被 tree-shake。目前在 `libs/ui` 的分栏布局中用 `useMediaQuery`（窄屏断点）、`useResizeObserver`（侧栏内容显示后写回滚动位置），两者都会在作用域销毁时自动移除监听。element-plus 2.14.6 内部依赖 15.0.0，所以这里也用 15，打包时只有一份；15.0.0 还没出过补丁版本，但它已经随 Element 在项目中运行，选 14 反而会多打包一份 | 手写 matchMedia、ResizeObserver 的封装 |
+| `@vueuse/core` | 组合式工具集，按需具名导入，未用到的函数会被 tree-shake。目前在 `packages/ui` 的分栏布局中用 `useMediaQuery`（窄屏断点）、`useResizeObserver`（侧栏内容显示后写回滚动位置），两者都会在作用域销毁时自动移除监听。element-plus 2.14.6 内部依赖 15.0.0，所以这里也用 15，打包时只有一份；15.0.0 还没出过补丁版本，但它已经随 Element 在项目中运行，选 14 反而会多打包一份 | 手写 matchMedia、ResizeObserver 的封装 |
 | `vite` | 开发服务器与构建工具，8.x 内部使用 Rolldown 打包 | webpack、Rsbuild |
 | `@vitejs/plugin-vue-jsx` | 用 Babel 编译 Vue 的 TSX，支持 Vue 专有的 JSX 语义 | `@vitejs/plugin-vue`（SFC，ADR 0001 未采用） |
 | `vite-plugin-static-copy` | 把 Cesium 的 `Workers`、`Assets`、`ThirdParty` 复制到产物的 `cesium/`，开发服务器和测试时直接从 `node_modules` 提供（ADR 0079 第 1 节），见 [vite-config.md](vite-config.md)"Cesium 的运行时文件"。Cesium 官方的 Vite 示例用的也是它 | 在 `public/` 放一份副本（要入库或在安装后复制）、`vite-plugin-cesium`（第三方插件，通过全局的 `CESIUM_BASE_URL` 设置基础地址） |
@@ -241,7 +248,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `jwt-decode` | 读取登录 token 的过期时间，只在 `shared/auth/token.ts` 中使用；不校验签名（ADR 0015） | 手写 base64url 解码 |
 | `sm-crypto-v2` | 登录密码的 SM2 加密，只在 `features/auth/password.ts` 中使用；底层是 `@noble/curves`，已与旧项目的 sm-crypto 交叉验证兼容（ADR 0015） | sm-crypto |
 | `maplibre-gl` | 二维地图（ADR 0002、0019），只在 map-core 的适配器和 app 的装配中导入。6.x 只提供 ESM，Worker 由 app 用 `?worker&url` 导入后交给 `setWorkerUrl`；依赖里的 `@types/geojson`、`@maplibre/maplibre-gl-style-spec` 不会暴露给应用，要用时自己声明，版本与它保持一致。主模块约 1 MB、Worker 510 KB，地图页必须懒加载 | mapbox-gl（2.0 起为专有许可）、OpenLayers |
-| `cesium` | 三维地图（ADR 0002、0079），只在 `libs/map-cesium` 和 app 的装配中导入（lint 检查）。不遵守语义化版本，精确锁定（ADR 0005）；`cesium` 是聚合包，代码在它依赖的 `@cesium/engine`、`@cesium/widgets` 里（1.146.0 对应 26.4.0、16.3.0）。本项目只用 engine 的 `CesiumWidget`，导入写 `cesium`。Worker、资源和第三方文件不经过打包，由 `vite-plugin-static-copy` 复制到产物的 `cesium/`；地图页第一次切到三维时才加载 | MapLibre 的地球投影（没有 3D Tiles、第一人称相机）、deck.gl |
+| `cesium` | 三维地图（ADR 0002、0079），只在 `packages/map-cesium` 和 app 的装配中导入（lint 检查）。不遵守语义化版本，精确锁定（ADR 0005）；`cesium` 是聚合包，代码在它依赖的 `@cesium/engine`、`@cesium/widgets` 里（1.146.0 对应 26.4.0、16.3.0）。本项目只用 engine 的 `CesiumWidget`，导入写 `cesium`。Worker、资源和第三方文件不经过打包，由 `vite-plugin-static-copy` 复制到产物的 `cesium/`；地图页第一次切到三维时才加载 | MapLibre 的地球投影（没有 3D Tiles、第一人称相机）、deck.gl |
 | `@maplibre/maplibre-gl-style-spec` | MapLibre 样式规范的工具：map-core 用它的 `diff` 对比样式快照（ADR 0022），以后在三维和 Worker 里求值表达式和过滤条件（ADR 0021、0024）。它本来就是 maplibre-gl 的依赖，pnpm 不允许使用没有声明的包，所以自己声明；版本范围与 maplibre-gl 声明的相同（`^26.4.4`），两者解析到同一个版本，只打包一份 | 手写求值器（旧项目的做法，ADR 0020） |
 | `@types/geojson` | GeoJSON 的类型，并提供全局命名空间 `GeoJSON`：style-spec 和 maplibre-gl 的声明文件依赖它，要在 tsconfig 的 `types` 中加载，否则相关类型会悄悄变成错误类型（见 [tsconfig.md](tsconfig.md)）。版本范围与 maplibre-gl 依赖的相同 | — |
 | `geographiclib-geodesic` | 椭球面上的距离和面积（ADR 0024 第 4 条、ADR 0035），在 map-core 的测量和 `shared/map/area`（自定义范围的面积、周长，在 Worker 里运行，不能导入 map-core 的入口）中使用。Karney 算法的作者维护，MIT 许可，自带类型；只有 CommonJS 格式的压缩包（32 KB），由 Vite 预构建处理。参数是先纬度后经度，map-core 的封装负责转换 | geodesy（Vincenty，没有椭球面积）、turf（球面） |
@@ -250,7 +257,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `@turf/intersect` | 识别范围和区划求交（ADR 0051，`shared/map/region/region-scope.ts`）；自定义范围与区县求交、自己和自己求交整理成有效的面（ADR 0121，`shared/map/area`）。turf v7 的单个包，自带类型；底层是 `polyclip-ts`（0.x，用 `bignumber.js` 做精确计算） | 差集、手写多边形裁剪 |
 | `@turf/boolean-intersects` | 要素的几何和区划范围是否相交（ADR 0051），只在 `shared/map/region/region-scope.ts` 中使用。turf v7 的单个包，处理点、线、面和多部分的几何 | 只判断要素的一个顶点 |
 | `@turf/bbox-clip` | 求交前先按识别范围的外包矩形裁掉区划远处的边（Sutherland–Hodgman），在 `shared/map/region/region-scope.ts` 和 `shared/map/area/area-coverage.ts`（节点多的自定义范围先裁到区县的外包框）中使用；南京市界的求交从约 140 ms 降到 1～20 ms（见 modules/shared-map.md"区划裁剪"） | 直接求交、自己写矩形裁剪 |
-| `@turf/simplify` | Douglas-Peucker 算法简化：发给后端的几何放不进地址时（ADR 0051 第 4 节，`shared/map/query-geometry.ts`，简化不保证结果有效，由同一个文件里的有效性检查把关）；三维的覆盖物按这一级的半个像素简化（ADR 0080 第 2 节，`libs/map-cesium/overlay-plan.ts`）；节点多的自定义范围在分析前简化、缩略图的轮廓（ADR 0121，`shared/map/area/area-geometry.ts`） | 自己写简化 |
+| `@turf/simplify` | Douglas-Peucker 算法简化：发给后端的几何放不进地址时（ADR 0051 第 4 节，`shared/map/query-geometry.ts`，简化不保证结果有效，由同一个文件里的有效性检查把关）；三维的覆盖物按这一级的半个像素简化（ADR 0080 第 2 节，`packages/map-cesium/overlay-plan.ts`）；节点多的自定义范围在分析前简化、缩略图的轮廓（ADR 0121，`shared/map/area/area-geometry.ts`） | 自己写简化 |
 | `shpjs` | 读 Shapefile 的 .shp，按 .prj 用 proj4 转为经纬度（ADR 0121），只在 `shared/map/area/area-file.ts` 中使用，在 Worker 里按需动态导入。MIT 许可；6.x 是纯 ESM，依赖 `proj4`、`but-unzip`、`parsedbf`；不带类型声明，只在 `shared/map/area/shpjs.d.ts` 声明用到的 `parseShp`（`tsconfig.worker.json` 要包含这个文件） | 自己写 .shp 解析和投影换算、`shapefile`（不读 .prj，2019 年后没有发布） |
 | `fflate` | 解压上传的 Shapefile 压缩包（ADR 0121），只在 `shared/map/area/area-file.ts` 中使用：先只读目录、按解压后的大小拦下过大的压缩包，再解压用得上的文件。MIT 许可，无依赖，自带类型；0.x 的小版本按大版本对待。依赖树里原有同一版本 | shpjs 自带的解压（读不到目录，说不清缺了哪个文件）、JSZip |
 | `d3-force` | 资源管理"自助取数"知识图谱的力导布局（ADR 0089、0126），只在 `features/resource-management/extraction/graph-layout.ts` 中使用，随关系图的运行时懒加载。精确锁定旧项目 D3 7.9 的子包版本，和 `d3-geo`、`d3-polygon` 一样；依赖 `d3-dispatch`、`d3-quadtree`、`d3-timer`。类型来自 `@types/d3-force` | ECharts 自带的力导（坐标和旧页面不同）、G6 4（ADR 0089） |
@@ -294,5 +301,5 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 - 往根目录装依赖加 `-w`；精确锁定加 `-E`
 - 改了 `devEngines.runtime`：同步检查 CI 能否装到对应的 Node，`@types/node` 的大版本是否一致
 - 升级 `typescript`：根目录和 `apps/web` 两处同时改，保持同一版本；同时评估 `oxlint-tsgolint` 是否要跟着升
-- 升级 `cesium`：读 CHANGES.md 的 Breaking Changes，按大版本对待；核对 `buildModuleUrl.setBaseUrl` 仍然存在（`libs/map-cesium/runtime.ts` 的模块扩充）和静态文件的目录（[vite-config.md](vite-config.md)），再跑 map-cesium 的浏览器测试
+- 升级 `cesium`：读 CHANGES.md 的 Breaking Changes，按大版本对待；核对 `buildModuleUrl.setBaseUrl` 仍然存在（`packages/map-cesium/src/runtime.ts` 的模块扩充）和静态文件的目录（[vite-config.md](vite-config.md)），再跑 map-cesium 的浏览器测试
 - 安装时出现 `ERR_PNPM_IGNORED_BUILDS`：在 `pnpm-workspace.yaml` 的 `allowBuilds` 里逐个决定，见 [pnpm-workspace.md](pnpm-workspace.md)

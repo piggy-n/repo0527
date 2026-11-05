@@ -36,7 +36,7 @@ features/monitoring-statistics/
    └─ ReportMonitorPanel         当前报表监控（状态筛选、去下载、统计表）
 pages/space-monitoring-statistics/  页面：分栏布局、拥有者、左栏的收起与把手图（images/）、初次进入的落点、去下载
 pages/dev/monitoring-statistics/    组件样例：正式页面换上固定数据的接口（demo-api.ts）
-libs/ui/split-layout/               MxSplitLayout 的宽屏收起（collapsible）与 rail、collapse 插槽，见 modules/ui.md
+packages/ui/src/split-layout/               MxSplitLayout 的宽屏收起（collapsible）与 rail、collapse 插槽，见 modules/ui.md
 ```
 
 ## 数据从哪里来
@@ -102,4 +102,4 @@ libs/ui/split-layout/               MxSplitLayout 的宽屏收起（collapsible�
 - 纯函数和接口解析按实测的返回写（`api.test.ts` 用 MSW）
 - 三个拥有者用假的 `StatisticsApi`；报表和总览的轮询用假定时器推进，包括连续失败停下、跟踪超时
 - 组件用假的拥有者（`components/test-owners.ts`）；页面用真实的拥有者和最小的路由，检查初次进入的落点、把手是设计图、提交后收起左栏、去下载
-- `MxSplitLayout` 的宽屏收起和 `rail`、`collapse` 插槽在 `libs/ui` 的测试里
+- `MxSplitLayout` 的宽屏收起和 `rail`、`collapse` 插槽在 `packages/ui` 的测试里

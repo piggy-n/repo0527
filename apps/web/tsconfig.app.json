@@ -17,10 +17,9 @@
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "@yzt/*": ["./src/libs/*/index.ts"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"],
-  "exclude": ["src/libs/css-modules.d.ts", "src/**/*.worker.ts"]
+  "exclude": ["src/**/*.worker.ts"]
 }

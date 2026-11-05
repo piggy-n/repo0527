@@ -2,7 +2,7 @@
 
 > 状态：5A.2 完成了 `provideMap`、样式绑定、画布组件 `<MapCanvas>` 和只读上下文 `useMap()`；5A.3 加入定位可视区域（`useMapOverlay`）、失败原因与重试；5B.3 加入交互工具的登记与切换、视图入口的拾取和投影；5B 之后加入相机操作，5C.0d 改为相机操作对象、视图入口只在就绪时有值；3D.1 加入二三维切换（每种视图一个画布）、三维画布 `<CesiumCanvas>` 和运行时注入（ADR 0079 第 8 节）。设计依据是 ADR 0027（分层）、ADR 0028（上下文）、ADR 0029（定位可视区域）、ADR 0030（失败原因）、ADR 0034（交互工具）、ADR 0038 和 0039（相机操作）。
 
-`libs/map-vue` 把 map-core 的地图会话和视图接到 Vue 的组件树与响应式系统上。它只做衔接：不依赖 element-plus、pinia、vue-router（lint 强制），不读项目配置，除画布容器外不渲染界面。项目级的地图能力（底图、行政区、工具栏界面、失败提示）在 `shared/map`。
+`packages/map-vue` 把 map-core 的地图会话和视图接到 Vue 的组件树与响应式系统上。它只做衔接：不依赖 element-plus、pinia、vue-router（lint 强制），不读项目配置，除画布容器外不渲染界面。项目级的地图能力（底图、行政区、工具栏界面、失败提示）在 `shared/map`。
 
 ## 结构
 
