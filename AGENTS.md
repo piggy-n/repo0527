@@ -5,8 +5,8 @@
 
 ## 协作方式
 
-- 每一步先说明设计理由、替代方案和涉及的知识点，再动手
-- 一次推进一个小步骤，不擅自扩大范围；涉及选型的问题先讨论再决定
+- 小改动直接做；涉及选型、架构或不容易回退的决定，先说明设计理由和替代方案，讨论后再动手（ADR 0139）
+- 一次推进一个小步骤，不擅自扩大范围
 - 重要决策写成 ADR（`docs/adr/`）；阶段结束时把新结论同步到本文件，并更新 `docs/roadmap.md` 的状态与调整
 - 新页面、较大的布局变化或新的交互形式先按设计规范提供可在浏览器操作的 HTML 原型或真实组件预览，确认后再开发；截图只作状态记录，不能代替交互设计稿。主题与组件库层面的改动在 `/dev/theme` 实际操作并截图确认
 - UI 修改按 `docs/design/ui-workflow.md`：先对照规范、已验收组件与真实页面，修改后主动检查、修复，再交给用户验收；交付说明实际验证的尺寸、状态和未验证项，不能以构建通过代替 UI 验证
@@ -94,7 +94,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 
 ### lint（ADR 0006）
 
-- 规则只分 `error` 和 `off` 两级，不用 `warn`；提交前 `pnpm lint` 必须通过
+- 规则只分 `error` 和 `off` 两级，不用 `warn`；提交代码前 `pnpm lint` 必须通过
 - 在代码里关闭规则要写明原因：`// oxlint-disable-next-line <规则> -- 原因`；不再需要的关闭注释会报错
 - 类的私有成员用 TS 的 `private` 或 `#`，不用下划线前缀
 
@@ -167,10 +167,26 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - pages、features 的测试用 `createMemoryHistory()` 建只含所需路由的最小路由，不导入 `app` 的路由表（测试文件同样受依赖方向约束）；`app` 自己的测试可以用真实路由表，例如检查导航与路由权限是否一致
 - 模拟环境变量用 `vi.stubEnv`，用例结束后会自动撤销（`unstubEnvs`）；部署时决定的开关，用例不依赖 `.env` 的取值：单元测试自己固定（模块加载时就读取的，放进 `vi.hoisted`；很多用例依赖默认行为的，固定在 `vite.config.ts` 的 `test.env`），生产冒烟用 `loadEnv` 读构建用的取值，验证对应的行为
 - 模拟接口用 MSW 的 `setupServer()`，并设置 `onUnhandledRequest: 'error'`；不用 `vi.mock('axios')`；依赖第三方类的代码（如 MapLibre 适配器）依赖自己定义的窄接口，测试注入实现它的假对象，并用 `expectTypeOf` 检查真实的类满足它，不用 `vi.mock` 整个库
-- 测试写完后，故意改坏被测代码，确认测试会失败，并确认失败原因是断言而不是代码报错或超时（可能一直挂起的等待要和必然更晚结束的等待赛跑：只经过微任务的用 `setTimeout(0)`，经过消息往返的按轮数推进事件循环，不用固定时长，见 `docs/modules/utils.md` 的测试）；修 bug 时先写能复现问题的测试
+- 修 bug 和关键逻辑的测试写完后，故意改坏被测代码，确认测试会失败，并确认失败原因是断言而不是代码报错或超时（可能一直挂起的等待要和必然更晚结束的等待赛跑：只经过微任务的用 `setTimeout(0)`，经过消息往返的按轮数推进事件循环，不用固定时长，见 `docs/modules/utils.md` 的测试）；修 bug 时先写能复现问题的测试
 - `vite.config.ts` 的 `test.server.deps.inline: ['element-plus']` 不能删：不加的话 Element 表单的校验在测试中永远通过（见 `docs/config/vite-config.md`）
 - 不提交 `.only`：lint 的 `vitest/no-focused-tests` 会报错，CI 中 Vitest 也会拒绝运行
 - `mount` 挂载的组件在每个用例结束后由 `src/test-setup.ts` 自动卸载（`enableAutoUnmount`），不用逐个 `unmount()`；Element 放在 `body` 下的弹出层不归组件管，挂到 `body` 的测试仍要在 `afterEach` 里清空它
+
+### 验证分级（ADR 0139）
+
+改完按影响范围和风险选一级，拿不准就升一级。CI 每次 push 到 main 都跑全量，本地不重复。交付时说明跑了哪一级、哪些命令、哪些没验证
+
+| 级别 | 改动 | 运行 |
+|---|---|---|
+| 0 | 只改文档、注释 | 不运行 |
+| 1 | 局部改动：单个 feature、页面、组件，使用方很少的 shared 模块 | `pnpm typecheck`、`pnpm lint`、`pnpm --filter @yzt/web test:changed` |
+| 2 | 影响面大：libs、shared 的公共能力或接口（`test:changed` 选中几十个文件）、全局样式、路由、页面的加载或缓存 | 级别 1，加 `pnpm build:intranet` 和相关的冒烟用例（`pnpm --filter @yzt/web test:smoke <文件名>`） |
+| 3 | 依赖、Vite、tsconfig、lint、CI、构建插件、`.env`，鉴权、会话、HTTP 的核心；发布前 | 和 CI 相同的全量（`docs/commands.md` 的"质量检查"） |
+
+- `test:changed` 只沿 import 关系选测试：`.module.scss` 和被 import 的 JSON 选得到；全局样式（`app/styles`）一个也选不到，`.env`、运行时才请求的文件同样查不到，不能因为它没选中测试就算通过
+- 改了 `package.json`、`vite.config.*` 时，Vitest 自动跑全部测试
+- 改 `packages/*` 时加上该包自己的测试（`pnpm --filter <包名> test`）
+- UI 改动按 `docs/design/ui-workflow.md` 另外验证，这里的检查不能代替
 
 ### Pinia
 
@@ -321,7 +337,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - `pnpm lint`：lint 检查（含类型感知规则与依赖方向）；`pnpm lint:fix` 自动修复可安全修复的问题
 - `pnpm build`：所有包的生产构建；`pnpm build:intranet` 是内网部署的构建（不请求天地图）
 - `pnpm --filter @yzt/web dev:intranet`：用内网配置启动开发服务器
-- `pnpm test`：所有包的测试（`vitest run`，`apps/web` 里有 `unit`、`browser` 两个项目）；`pnpm --filter @yzt/web test:watch` 监听模式；`test:unit`、`test:browser` 只跑其中一个；第一次跑浏览器测试前运行 `pnpm --filter @yzt/web test:browser:install`
+- `pnpm test`：所有包的测试（`vitest run`，`apps/web` 里有 `unit`、`browser` 两个项目）；`pnpm --filter @yzt/web test:watch` 监听模式；`test:unit`、`test:browser` 只跑其中一个；`test:changed` 只跑和改动相关的测试（相对 main，含未提交的改动）；第一次跑浏览器测试前运行 `pnpm --filter @yzt/web test:browser:install`
 - CI（`.github/workflows/ci.yml`）依次运行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm lint`、安装 Chromium 无界面版、`pnpm test`、`pnpm build`、`pnpm build:intranet`、`pnpm --filter @yzt/web test:smoke`
 - `pnpm --filter @yzt/web measure:map-load`：实测"点击登录 → 地图第一次加载完成"（先构建；账号密码从环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD` 读，由用户在自己的终端运行）
 - `pnpm --filter @yzt/web probe:resource-classes`：只读探查资源的字段和分类候选，`--tile-check` 查瓦片是否把要素合并，`--tile-cost` 实测瓦片的大小和耗时、给出最小显示级别的建议（要能连后端；token 从环境变量 `YZT_PROBE_TOKEN` 读，由用户在自己的终端运行）

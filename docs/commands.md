@@ -12,11 +12,12 @@
 | 第一次运行浏览器测试前（每台机器一次，升级 playwright 后再运行一次） | `pnpm --filter @yzt/web test:browser:install` |
 | 本地开发 | `pnpm --filter @yzt/web dev` |
 | 本地开发（内网配置，不请求天地图） | `pnpm --filter @yzt/web dev:intranet` |
-| 提交前（和 CI 相同，需已安装浏览器） | `pnpm typecheck` → `pnpm lint` → `pnpm test` → `pnpm build` → `pnpm build:intranet` → `pnpm --filter @yzt/web test:smoke` |
+| 改完代码的常规检查（级别 1，见 ADR 0139） | `pnpm typecheck` → `pnpm lint` → `pnpm --filter @yzt/web test:changed` |
+| 全量检查（级别 3，和 CI 相同，需已安装浏览器） | `pnpm typecheck` → `pnpm lint` → `pnpm test` → `pnpm build` → `pnpm build:intranet` → `pnpm --filter @yzt/web test:smoke` |
 | 自动修复 lint 问题 | `pnpm lint:fix` |
 | 写代码时持续运行测试 | `pnpm --filter @yzt/web test:watch` |
 | 只跑单元测试 / 只跑浏览器测试 | `pnpm --filter @yzt/web test:unit` / `pnpm --filter @yzt/web test:browser` |
-| 生产产物的浏览器冒烟 | `pnpm build:intranet` → `pnpm --filter @yzt/web test:smoke` |
+| 生产产物的浏览器冒烟（只跑某个文件时后面加文件名） | `pnpm build:intranet` → `pnpm --filter @yzt/web test:smoke` |
 | 内网部署的构建 | `pnpm build:intranet` |
 | 预览构建产物 | `pnpm --filter @yzt/web preview` |
 | 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter @yzt/web measure:map-load` |
@@ -206,7 +207,9 @@ pnpm add -Dw -E some-tool
 
 ## 三、质量检查
 
-已安装浏览器后，提交前按顺序运行下面的检查；CI 还会先执行冻结安装：
+平时按改动的范围和风险选择验证的级别，规则见 `AGENTS.md` 的"验证分级"（ADR 0139）。CI 每次 push 到 main 都跑全量。
+
+需要全量时（级别 3），已安装浏览器后按顺序运行下面的检查；CI 还会先执行冻结安装：
 
 ```bash
 pnpm typecheck
@@ -221,7 +224,7 @@ pnpm --filter @yzt/web test:smoke
 
 **作用**：检查所有包的 TypeScript 类型。
 
-**什么时候用**：提交前；改了类型、接口、tsconfig 之后。
+**什么时候用**：提交代码前；改了类型、接口、tsconfig 之后。
 
 **执行了什么**：根目录的 `pnpm -r typecheck` 在每个包里执行 `typecheck` 脚本。目前只有 `apps/web`，执行的是 `tsc -b`：
 
@@ -232,14 +235,14 @@ pnpm --filter @yzt/web test:smoke
 **注意事项**：
 
 - 只检查，不输出任何文件（`noEmit`）
-- 每次都是全量检查，目前约 1 秒。增量检查因 TS 7.0.2 的问题已关闭（ADR 0009）
+- 每次都是全量检查，目前约 8 秒。增量检查因 TS 7.0.2 的问题已关闭（ADR 0009）
 - 这里的 `tsc` 是 TS 7（Go 原生实现），速度很快；不要改用 vue-tsc（ADR 0003）
 
 ### `pnpm lint`
 
 **作用**：检查代码质量、类型相关的问题和依赖方向。
 
-**什么时候用**：提交前；新增文件或调整目录结构之后。
+**什么时候用**：提交代码前；新增文件或调整目录结构之后。
 
 **执行了什么**：在根目录运行 `oxlint`：
 
@@ -248,7 +251,7 @@ pnpm --filter @yzt/web test:smoke
 3. 类型感知规则交给 `oxlint-tsgolint`，它读取 tsconfig 做类型分析
 4. `eslint-plugin-boundaries` 通过 `jsPlugins` 在 Node 里运行，检查依赖方向
 
-目前全仓库约 1 秒。
+目前全仓库约 13 秒。
 
 **注意事项**：
 
@@ -271,7 +274,7 @@ pnpm --filter @yzt/web test:smoke
 
 **作用**：运行所有包的测试一次。
 
-**什么时候用**：提交前；改了有测试覆盖的代码之后。
+**什么时候用**：需要全量验证时（级别 3）；平时用 `test:changed`。
 
 **执行了什么**：根目录的 `pnpm -r test` 在 `apps/web` 里执行 `vitest run`：
 
@@ -287,7 +290,7 @@ pnpm --filter @yzt/web test:smoke
 - 本地 `it.only` 会让其他用例被跳过，lint 会报错；CI 中 Vitest 会直接拒绝运行
 - Vitest 只转译不做类型检查，测试文件的类型由 `pnpm typecheck` 检查
 - 改了 Vite 插件的选项、或怀疑测试用的是旧的转换结果时，先清缓存：`pnpm --filter @yzt/web exec vitest --clearCache`（缓存键不含插件选项，见 [config/vite-config.md](config/vite-config.md)"测试耗时"）
-- 耗时约 30 秒（缓存已写好时），波动约 ±4 秒；加入浏览器项目后多了约 5 秒（启动浏览器、两个项目并行）
+- CI 上约 5～6 分钟（2026-11-04）；本机内存紧张时加 `--maxWorkers=2`，单元测试约 10 分钟
 - 本机没有安装浏览器时，`browser` 项目会报找不到浏览器，先运行 `test:browser:install`
 
 ### `pnpm --filter @yzt/web test:unit`、`test:browser`
@@ -297,6 +300,21 @@ pnpm --filter @yzt/web test:smoke
 **什么时候用**：只改了一边的代码时；排查浏览器测试的问题时。
 
 **注意事项**：浏览器测试里 `console` 的输出在本会话这类简洁报告器下不显示，要看时加 `--reporter=default`，例如 `pnpm --filter @yzt/web test:browser -- --reporter=default`
+
+### `pnpm --filter @yzt/web test:changed`
+
+**作用**：只跑和改动相关的单元测试、浏览器测试（`vitest run --changed main --passWithNoTests`）。
+
+**什么时候用**：验证级别 1、2，见 `AGENTS.md` 的"验证分级"。
+
+**执行了什么**：用 `git diff main...HEAD` 加暂存、未暂存、未跟踪的文件找出改动，再沿 import 关系选出依赖它们的测试文件。在 main 上就是未提交的改动，在分支上还包括分支自己的提交，不包括 main 之后的新提交。
+
+**注意事项**：
+
+- `.module.scss` 和被 import 的 JSON 选得到；全局样式（`app/styles`）选不到任何测试，`.env`、运行时才请求的文件也查不到，没选中测试不等于通过
+- 改了 `package.json`、`vite.config.*` 时，Vitest 自动跑全部测试（默认的 `forceRerunTriggers`）
+- 只看 `apps/web` 的测试；改 `packages/*` 时加上 `pnpm --filter <包名> test`
+- 内存紧张时加 `--maxWorkers=2`：`pnpm --filter @yzt/web test:changed --maxWorkers=2`
 
 ### `pnpm --filter @yzt/web test:browser:install`
 
@@ -313,7 +331,7 @@ pnpm --filter @yzt/web test:smoke
 
 **作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）；三维（`scene.spec.ts`，3D.5c）检查二维稳定后预加载了三维运行时、切到三维画面稳定、加载一个生成的测试模型并定位、点"漫游"步行进站（导航网格的 Worker 分块，左侧换成漫游面板）、漫游时没有状态栏和视图控件（ADR 0095、0097），Esc 退出漫游回到地面后回到二维复用画布。
 
-**什么时候用**：先运行 `pnpm build:intranet`；修改加载、路由或页面缓存后运行，CI 在内网构建后自动执行。
+**什么时候用**：先运行 `pnpm build:intranet`；修改加载、路由或页面缓存后运行，CI 在内网构建后自动执行。只跑某个文件时在命令后面加文件名，如 `pnpm --filter @yzt/web test:smoke system-management`。
 
 **执行了什么**：已有 Playwright Test 从 `tools/smoke/playwright.config.ts` 读取配置，自动启动并关闭 4173 端口上的产物预览；接口在浏览器中替换为固定响应，地图使用本地省界和真实引擎，未知接口与公网请求使测试失败。
 

@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:browser": "vitest run --project browser",
+    "test:changed": "vitest run --changed main --passWithNoTests",
     "test:browser:install": "playwright install --only-shell chromium",
     "test:smoke": "playwright test --config tools/smoke/playwright.config.ts",
     "test:watch": "vitest",
