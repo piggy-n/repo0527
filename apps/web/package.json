@@ -39,6 +39,7 @@
     "@yzt/icons": "workspace:*",
     "@yzt/map-cesium": "workspace:*",
     "@yzt/map-core": "workspace:*",
+    "@yzt/map-vue": "workspace:*",
     "@yzt/ui": "workspace:*",
     "@yzt/utils": "workspace:*",
     "axios": "^1.20.0",

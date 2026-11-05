@@ -24,7 +24,6 @@
       { "type": "pages", "pattern": "apps/web/src/pages" },
       { "type": "feature", "pattern": "apps/web/src/features/*", "capture": ["name"] },
       { "type": "shared", "pattern": "apps/web/src/shared" },
-      { "type": "lib", "pattern": "apps/web/src/libs/*", "capture": ["name"] },
       { "type": "package", "pattern": "packages/*", "capture": ["name"] }
     ]
   },
@@ -217,51 +216,6 @@
               },
               {
                 "from": { "element": { "types": { "anyOf": ["app", "pages", "feature", "shared"] } } },
-                "allow": { "to": { "element": { "type": "lib" } }, "dependency": { "source": "@yzt/*" } }
-              },
-              {
-                "from": { "element": { "types": { "anyOf": ["app", "pages", "feature", "shared"] } } },
-                "allow": { "to": { "element": { "type": "package" } }, "dependency": { "source": "@yzt/*" } }
-              },
-              {
-                "from": { "element": { "type": "lib", "captured": { "name": "{ui,map-core,map-cesium,map-vue}" } } },
-                "allow": {
-                  "to": { "element": { "type": "lib", "captured": { "name": "utils" } } },
-                  "dependency": { "source": "@yzt/*" }
-                }
-              },
-              {
-                "from": { "element": { "type": "lib", "captured": { "name": "{map-cesium,map-vue}" } } },
-                "allow": {
-                  "to": { "element": { "type": "lib", "captured": { "name": "map-core" } } },
-                  "dependency": { "source": "@yzt/*" }
-                }
-              },
-              {
-                "from": { "element": { "type": "lib", "captured": { "name": "map-vue" } } },
-                "allow": {
-                  "to": { "element": { "type": "lib", "captured": { "name": "map-cesium" } } },
-                  "dependency": { "source": "@yzt/*", "nodeKind": "dynamic-import" }
-                }
-              },
-              {
-                "from": { "element": { "type": "lib", "captured": { "name": "{utils,map-core,map-cesium}" } } },
-                "disallow": {
-                  "to": {
-                    "module": {
-                      "source": ["vue", "vue-router", "pinia", "element-plus", "@vue/**", "@element-plus/**"]
-                    }
-                  }
-                }
-              },
-              {
-                "from": { "element": { "type": "lib", "captured": { "name": "map-vue" } } },
-                "disallow": {
-                  "to": { "module": { "source": ["vue-router", "pinia", "element-plus", "@element-plus/**"] } }
-                }
-              },
-              {
-                "from": { "element": { "type": "lib" } },
                 "allow": { "to": { "element": { "type": "package" } }, "dependency": { "source": "@yzt/*" } }
               },
               { "disallow": { "to": { "module": { "source": "mapbox-gl" } } } }

@@ -301,6 +301,9 @@ importers:
       '@yzt/map-core':
         specifier: workspace:*
         version: link:../../packages/map-core
+      '@yzt/map-vue':
+        specifier: workspace:*
+        version: link:../../packages/map-vue
       '@yzt/ui':
         specifier: workspace:*
         version: link:../../packages/ui

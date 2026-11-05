@@ -1,0 +1,37 @@
+{
+  "name": "@yzt/map-vue",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:changed": "vitest run --changed main --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@yzt/map-cesium": "workspace:*",
+    "@yzt/map-core": "workspace:*",
+    "@yzt/utils": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "catalog:"
+  },
+  "devDependencies": {
+    "@types/geojson": "catalog:",
+    "@types/node": "catalog:",
+    "@vitejs/plugin-vue-jsx": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "jsdom": "catalog:",
+    "maplibre-gl": "catalog:",
+    "playwright": "catalog:",
+    "sass-embedded": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vue": "catalog:"
+  }
+}
