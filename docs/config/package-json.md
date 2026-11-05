@@ -123,6 +123,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:browser": "vitest run --project browser",
+    "test:changed": "vitest run --changed main --passWithNoTests",
     "test:browser:install": "playwright install --only-shell chromium",
     "test:smoke": "playwright test --config tools/smoke/playwright.config.ts",
     "test:watch": "vitest",
@@ -196,6 +197,8 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 ```
 
 新增的 `test:smoke` 使用已有 `playwright` 包提供的 `playwright/test`，访问内网生产构建；与 Vitest 分开运行，不增加依赖。运行前先执行 `pnpm build:intranet`，用法见 [commands.md](../commands.md)，范围见 ADR 0065。
+
+`test:changed` 只跑和改动相关的测试，基准固定为 `main`，供验证分级的级别 1、2 使用（ADR 0139）；`--passWithNoTests` 让没有选中测试的改动不算失败。
 
 ### name
 
