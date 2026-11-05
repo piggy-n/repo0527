@@ -6,14 +6,11 @@
 
 ## 交互原型
 
-原型是开发的依据，不入库：
+原型是开发的依据，不入库，放在 `local/design/`，开发服务器用 `/design.local/<目录>/` 打开（[config/local-files.md](../config/local-files.md)）：
 
-- 第二版（2026-10-28 确认）：`apps/web/public/design.local/indicator-simulation/`；第一版留在同级的 `indicator-simulation-v1/` 作对照
-- 第三版（2026-10-29 确认，条件编排页的参数与 AI 推演指令）：`apps/web/public/design.local/indicator-simulation-v3/`
-- 第四版（2026-10-29 确认，AI 推演阶段的流程图、推理时间线和底部对话栏）：`apps/web/public/design.local/indicator-simulation-v4/`
-- 第五版（2026-10-29 确认，结果展示：左侧推演结果、主区地图）：`apps/web/public/design.local/indicator-simulation-v5/`，区县的值和设施点是原型里的示意，不是模型的数字
-- 第七版（2026-11-03 确认，先对话、后补充范围）：`apps/web/public/design.local/indicator-simulation-v7/`，打开时写全 `index.html`（开发服务器把目录地址回退到单页应用）
-- 素材脚本：`apps/web/design.local/indicator-simulation/build.mjs` 生成指标值、区县摘要、边界副本和依赖副本；`serve.mjs` 起一个只读 `public`、到时自动退出的本地预览（`node apps/web/design.local/indicator-simulation/serve.mjs 5189`，用 localhost 打开，天地图按来源限制访问）
+- 第七版（2026-11-03 确认，先对话、后补充范围）：`indicator-simulation-v7/`，三个阶段都能操作；计算流程只画步骤，流程图以真实页面为准（ADR 0107），区县的值是原型里的示意
+- 第一到六版已删除（每个主题只留最新版），确认的结论在 ADR 0105～0108、0121
+- 自定义范围的验收文件：`pnpm --filter @yzt/web scope-files:generate` 生成到 `local/scope-test-files/`，每个文件的预期见 [`tools/scope-test-files/说明.md`](../../apps/web/tools/scope-test-files/说明.md)
 - 原型用 GSAP 的时间线兼作推演时钟、直接操作 MapLibre，正式实现按 ADR 0105 拆开，不照搬原型代码
 
 ## 分步实施

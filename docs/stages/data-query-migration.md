@@ -9,7 +9,7 @@
 | 步骤 | 内容 |
 |---|---|
 | 1 读旧代码、量接口 | `space-monitoring-query/index.vue` 4780 行、`config.js` 1550 行；只读请求属性分页、范围查询、MVT 和导出接口，找出 LIKE 不加通配符、NOT 拼出非法 SQL、几个字段名写错 |
-| 2 设计稿 | `public/design.local/data-query/`（不入库），用户确认四个页签的排法和四项取舍 |
+| 2 设计稿 | `local/design/data-query/`（不入库），用户确认四个页签的排法和四项取舍 |
 | 3 公共能力 | `query-geometry` 和几何的 schema 从 `features/resource-map` 移到 `shared/map`；新增 `shared/map/draw` 的框选、多边形；`fetchFile` 的 POST 可以带正文 |
 | 4 页面 | `features/data-query`（专题配置、条件、四个表单的拥有者、结果、导出）和 `pages/data-query`；实测页 `/dev/data-query` 挂真实页面、请求真实接口 |
 | 5 测试与文档 | 纯函数、接口、编排、面板、真实引擎上的图层；ADR 0104、模块文档、migration.md |

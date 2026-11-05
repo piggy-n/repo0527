@@ -66,10 +66,10 @@ pnpm --filter @yzt/web measure:map-load
 
 先 `vite build`，再用 `vite preview` 提供构建产物（接口按 `vite.config.ts` 的代理转发到后端），用 Playwright 打开登录页、登录、等到画面稳定，每档网络测几次取中位数。参数加在命令后面，例如 `pnpm --filter @yzt/web measure:map-load --runs 3 --profiles slow4g --label baseline`。
 
-对比几种做法时，先把每种做法各自构建到一个目录（`vite build --outDir tools/measure-map-load/builds.local/<名称>`，`*.local` 不入库），再不经过构建直接运行脚本：
+对比几种做法时，先把每种做法各自构建到一个目录（`vite build --outDir ../../local/measure/builds/<名称> --emptyOutDir`，不入库，用完删掉），再不经过构建直接运行脚本：
 
 ```bash
-pnpm --filter @yzt/web exec node tools/measure-map-load/cli.ts --runs 3 --label variants --builds "baseline=tools/measure-map-load/builds.local/baseline,preload=tools/measure-map-load/builds.local/preload"
+pnpm --filter @yzt/web exec node tools/measure-map-load/cli.ts --runs 3 --label variants --builds "baseline=../../local/measure/builds/baseline,preload=../../local/measure/builds/preload"
 ```
 
 账号密码从环境变量读取，在自己的终端里设置（PowerShell 是 `$env:YZT_MEASURE_LOGIN_NAME = '...'`、`$env:YZT_MEASURE_PASSWORD = '...'`）：
@@ -111,7 +111,7 @@ pnpm --filter @yzt/web exec node tools/measure-map-load/cli.ts --runs 3 --label 
 3. 填入账号密码、点"登录"；等到 `login-to-map:settled` 出现，或者出现登录失败的提示（立即停止整个实测）、超时
 4. 读出各步骤的 measure、全部完成的请求（Playwright 的 `requestfinished`：完成时刻、压缩后的大小）、长任务（页面最先执行的 `PerformanceObserver`）、画面稳定时还没下载完的请求
 
-输出三张表（步骤、资源的完成时刻、登录页停留期间的长任务）和还没下载完的请求，原始数据写进 `tools/measure-map-load/results.local/<label>-<时间>.json`（`*.local` 不入库）。表里只取画面稳定了的几次；资源的完成时刻从开始量起，负数表示点登录之前已经下载完。
+输出三张表（步骤、资源的完成时刻、登录页停留期间的长任务）和还没下载完的请求，原始数据写进 `local/measure/map-load/<label>-<时间>.json`（不入库）。表里只取画面稳定了的几次；资源的完成时刻从开始量起，负数表示点登录之前已经下载完。
 
 ### 实测的前提（2026-10-16 核实）
 
@@ -126,7 +126,7 @@ pnpm --filter @yzt/web exec node tools/measure-map-load/cli.ts --runs 3 --label 
 
 ## 基线（2026-10-16）
 
-现在的做法（不预加载）：真实后端、真实天地图，新用户（没有偏好，没有勾选资源），Edge 有界面运行，登录页停留 5 秒，每档 5 次全部完成。每档 5 次之间画面稳定的时刻相差不到 0.4 秒（不限速 1110～1325 ms，Fast 4G 3308～3343 ms，Slow 4G 17249～17581 ms），5 次够用。原始数据 `results.local/baseline-2026-10-16T07-13-00.879Z.json`。
+现在的做法（不预加载）：真实后端、真实天地图，新用户（没有偏好，没有勾选资源），Edge 有界面运行，登录页停留 5 秒，每档 5 次全部完成。每档 5 次之间画面稳定的时刻相差不到 0.4 秒（不限速 1110～1325 ms，Fast 4G 3308～3343 ms，Slow 4G 17249～17581 ms），5 次够用。原始数据没有保留。
 
 步骤（毫秒，从发出登录请求算起，中位数）：
 
@@ -168,7 +168,7 @@ pnpm --filter @yzt/web exec node tools/measure-map-load/cli.ts --runs 3 --label 
 
 ## 5E.2 的对比实验（2026-10-16）
 
-6 份构建在同一轮里交替测量（`--builds`，每档 3 次，其余条件同基线），原始数据 `results.local/variants-2026-10-16T07-57-43.314Z.json`。除了基线，每份都是一处本地改动，构建后还原，不提交：
+6 份构建在同一轮里交替测量（`--builds`，每档 3 次，其余条件同基线），原始数据没有保留。除了基线，每份都是一处本地改动，构建后还原，不提交：
 
 | 构建 | 改动 |
 |---|---|
@@ -222,7 +222,7 @@ pnpm --filter @yzt/web exec node tools/measure-map-load/cli.ts --runs 3 --label 
 
 ## ADR 0061 实现后的复测（2026-10-16）
 
-5 份构建交替测量，每档 3 次，原始数据 `results.local/final-2026-10-16T08-32-19.918Z.json`：基线、上一轮实验里的 prewarm（运行时加载完就预热）、按 ADR 0061 实现的 final（两个分块同时加载，都到了再预热），以及 final 上的两种字体时机（实验用的本地改动，构建后还原）：`final-defer-semibold` 去掉 600 的 `@font-face`，画面稳定后用 `FontFace` 加载；`final-defer-fonts` 两个字重都这样推迟。
+5 份构建交替测量，每档 3 次，原始数据没有保留：基线、上一轮实验里的 prewarm（运行时加载完就预热）、按 ADR 0061 实现的 final（两个分块同时加载，都到了再预热），以及 final 上的两种字体时机（实验用的本地改动，构建后还原）：`final-defer-semibold` 去掉 600 的 `@font-face`，画面稳定后用 `FontFace` 加载；`final-defer-fonts` 两个字重都这样推迟。
 
 画面稳定（毫秒，中位数，括号里是和 baseline 的差）：
 
@@ -260,7 +260,7 @@ Slow 4G 下的资源（毫秒，从发出登录请求算起）：
 
 ## 3D.5a 切到三维的实测（2026-10-27，ADR 0091）
 
-内网构建（不请求天地图，三维没有影像）、`--mock-backend`、无界面 Edge（`--headless`）、登录页停留 2 秒、二维稳定后停留 5 秒（`--stay 5000`），三份构建交替测量，每档 3 次取中位数，原始数据 `results.local/switch3d-2026-10-28T05-07-17.316Z.json`。除了 baseline，每份都是对地图页的一处本地改动，构建后还原，不提交：
+内网构建（不请求天地图，三维没有影像）、`--mock-backend`、无界面 Edge（`--headless`）、登录页停留 2 秒、二维稳定后停留 5 秒（`--stay 5000`），三份构建交替测量，每档 3 次取中位数，原始数据 `local/measure/map-load/switch3d-2026-10-28T05-07-17.316Z.json`。除了 baseline，每份都是对地图页的一处本地改动，构建后还原，不提交：
 
 | 构建 | 改动 |
 |---|---|
