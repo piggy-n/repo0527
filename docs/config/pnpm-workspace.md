@@ -8,7 +8,7 @@
 ## 这个文件管什么
 
 1. 声明 workspace 包含哪些目录
-2. 依赖版本的统一入口（`catalog`）
+2. 依赖版本的统一入口（`catalog`）和对间接依赖的强制版本（`overrides`）
 3. pnpm 的项目级设置。pnpm 较新的版本把项目设置集中到这个文件，`.npmrc` 主要用于 registry 地址和认证
 
 当前内容：
@@ -22,6 +22,11 @@ catalog:
   cesium: 1.146.0
   vue: ^3.5.43
   # 其余见文件
+
+overrides:
+  "@cesium/core": 0.1.0
+  "@cesium/engine": 26.4.0
+  "@cesium/widgets": 16.3.0
 
 minimumReleaseAge: 4320
 
@@ -65,6 +70,21 @@ catalog:
 - 转成 catalog 后 lockfile 里只有 `specifier` 变成 `catalog:`，解析到的版本不变
 - `pnpm outdated -r`（`pnpm deps:check`）能列出 catalog 里的依赖
 - `pnpm update -r --latest` 只改 catalog 里的版本，`package.json` 保持 `catalog:`
+
+## overrides
+
+```yaml
+overrides:
+  "@cesium/core": 0.1.0
+  "@cesium/engine": 26.4.0
+  "@cesium/widgets": 16.3.0
+```
+
+`cesium` 是聚合包，catalog 把它钉在 1.146.0，但它对子包写的是 `^26.4.0`、`^16.3.0`、`^0.1.0`。只靠 lockfile 才能停在配套的版本：一旦刷新 lockfile，子包就会升上去。2026-11-05 在 PoC 工程里实测，解析到 `@cesium/engine` 26.5.0 后构建失败（它移除了 `ForEach`）。
+
+三个子包一起钉，只钉 engine 时 widgets 仍然可能升到不配套的版本。
+
+**升级 `cesium` 时：** 查新版本 `package.json` 里三个子包的版本，和 catalog 一起改。只改 catalog 时，新的聚合包会配旧的子包，不一定会报错。
 
 ## minimumReleaseAge
 
@@ -136,3 +156,4 @@ pnpm 从 10 开始默认**不执行**依赖包的安装脚本（`preinstall`、`
 - 新增 `allowBuilds` 项：写明由哪个依赖引入、为什么这样选
 - 新增 `packages` 目录：确认 `pnpm -r typecheck`、`pnpm -r build` 能覆盖新包
 - 第二个包用到某个依赖时：把版本挪进 `catalog`，两个包都写 `catalog:`
+- 升级 `cesium`：`overrides` 里的三个子包一起改

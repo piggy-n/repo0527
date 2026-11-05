@@ -234,6 +234,11 @@ catalogs:
       specifier: ^3.5.43
       version: 3.5.43
 
+overrides:
+  '@cesium/core': 0.1.0
+  '@cesium/engine': 26.4.0
+  '@cesium/widgets': 16.3.0
+
 importers:
 
   .:

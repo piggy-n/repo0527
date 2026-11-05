@@ -29,6 +29,12 @@ catalog:
   vitest: ^5.0.5
   vue: ^3.5.43
 
+# cesium 是聚合包，对子包写的是 ^：不钉住时刷新 lockfile 会升到和它不配套的版本。升级 cesium 时一起改
+overrides:
+  "@cesium/core": 0.1.0
+  "@cesium/engine": 26.4.0
+  "@cesium/widgets": 16.3.0
+
 # 新版本发布满 3 天才允许安装，对应 npm 允许撤回版本的 72 小时窗口（ADR 0005）
 minimumReleaseAge: 4320
 

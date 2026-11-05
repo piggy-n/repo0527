@@ -19,7 +19,7 @@ paths:
 
 ## 依赖维护（ADR 0005）
 
-- 一般依赖用 `^`；不遵守语义化版本的包精确锁定：Cesium、TypeScript、oxlint（`jsPlugins` 处于 alpha 阶段）、oxlint-tsgolint（内置 TS）
+- 一般依赖用 `^`；不遵守语义化版本的包精确锁定：Cesium、TypeScript、oxlint（`jsPlugins` 处于 alpha 阶段）、oxlint-tsgolint（内置 TS）；Cesium 的子包在 `pnpm-workspace.yaml` 的 `overrides` 钉住，升级 `cesium` 时一起改
 - 0.x 版本的包，小版本升级按大版本对待
 - 新版本发布满 3 天（`minimumReleaseAge: 4320`）才能安装，防止装到刚发布的恶意版本；紧急安全补丁用 `minimumReleaseAgeExclude` 临时豁免该版本，冷却期过后删除豁免
 - Node 与 pnpm 的版本在根 `package.json` 的 `devEngines` 中声明，CI 从这里读取；`@types/node` 跟随 Node 的大版本，不随 latest 升级
