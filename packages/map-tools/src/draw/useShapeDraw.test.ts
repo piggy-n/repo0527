@@ -2,7 +2,7 @@ import type { CameraState, MapInputEvent, MapPointerEvent, ScreenPoint, ToolView
 import type { MapViewport } from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { effectScope, ref, shallowRef } from 'vue';
-import { required } from '../../testing/required';
+import { required } from '../testing/required';
 import type { DrawnShape } from './shape-draw';
 import { DRAW_TOOL_IDS, useShapeDraw } from './useShapeDraw';
 

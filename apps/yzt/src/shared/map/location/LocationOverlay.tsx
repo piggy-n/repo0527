@@ -1,12 +1,10 @@
 import { useClipboard, useEventListener } from '@vueuse/core';
 import { BROWSE_TOOL, type ScreenPoint } from '@mx/map-core';
-import { useMap } from '@mx/map-vue';
+import { useMap, usePageActive, useShownElementSize } from '@mx/map-vue';
 import { MxTitle } from '@mx/ui';
+import { PointerHint } from '@mx/map-tools';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
-import { usePageActive } from '../../composables/usePageActive';
-import { useShownElementSize } from '../../composables/useShownElementSize';
 import { SvgIcon } from '../../icons/SvgIcon';
-import { PointerHint } from '../pointer-hint/PointerHint';
 import { type CoordinateFormat, formatLngLat } from './coordinate-format';
 import { describeLocationRegion, placeLocationInfo } from './location-info';
 import { createPressGesture, type PressPhase } from './press-gesture';

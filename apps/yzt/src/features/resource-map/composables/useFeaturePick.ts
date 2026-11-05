@@ -15,6 +15,18 @@ import type {
 import type { CameraOperation, MapContext } from '@mx/map-vue';
 import { LatestController } from '@mx/utils';
 import {
+  acceptsClick,
+  type BoxGesture,
+  cancelBox,
+  currentPanKey,
+  drawingBox,
+  moveBox,
+  NO_BOX_GESTURE,
+  type PointerHintContent,
+  pressBox,
+  releaseBox
+} from '@mx/map-tools';
+import {
   computed,
   type ComputedRef,
   getCurrentScope,
@@ -25,18 +37,6 @@ import {
   shallowRef,
   watch
 } from 'vue';
-import {
-  acceptsClick,
-  type BoxGesture,
-  cancelBox,
-  drawingBox,
-  moveBox,
-  NO_BOX_GESTURE,
-  pressBox,
-  releaseBox
-} from '@/shared/map/box-select/box-gesture';
-import { currentPanKey } from '@/shared/map/pan-key';
-import type { PointerHintContent } from '@/shared/map/pointer-hint/pointer-hint';
 import type { RegionScope } from '@/shared/map/region/region-scope';
 import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
 import { type FeatureDetail, type FeaturePage, queryFeaturesAt } from '../api';

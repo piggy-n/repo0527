@@ -1,6 +1,5 @@
-// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { panKeyFor } from '@/shared/map/pan-key';
+import { panKeyFor } from '@mx/map-tools';
 import { pickHintLines, scenePickHintLines } from './pick-hint';
 
 describe('pickHintLines', () => {

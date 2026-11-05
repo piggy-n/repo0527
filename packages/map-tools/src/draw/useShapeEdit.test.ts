@@ -3,7 +3,7 @@ import type { MapViewport } from '@mx/map-vue';
 import type { MultiPolygon } from 'geojson';
 import { describe, expect, it, vi } from 'vitest';
 import { effectScope, ref, shallowRef } from 'vue';
-import { required } from '../../testing/required';
+import { required } from '../testing/required';
 import { EDIT_TOOL_ID, useShapeEdit } from './useShapeEdit';
 
 // 拾取：每像素 0.001 度，画布左上角是 (118, 33)

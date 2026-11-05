@@ -9,7 +9,9 @@ pages              挑选能力、组合成页面；provideMap 创建会话，�
   ↓
 features           业务数据驱动的图层（5C 起：资源图层 features/resource-map、点选、图例）
   ↓
-shared/map         项目级的公共能力：底图、行政区边界、默认视角、工具栏、基础组、状态栏、测量、区划定位、坐标定位、地图状态提示
+shared/map         项目级的公共能力：底图、行政区边界、默认视角、工具栏、基础组、状态栏、区划定位、坐标定位、地图状态提示
+  ↓
+packages/map-tools     通用交互：绘制、逐点编辑、测量、框选手势、鼠标旁的提示；和业务、江苏都无关（ADR 0145）
   ↓
 packages/map-vue       地图与 Vue 的衔接：会话的提供与注入、画布、样式绑定、相机操作、工具登记、定位可视区域
   ↓
@@ -37,7 +39,7 @@ packages/utils         LatestController、safeReporter、Worker 通信层
 
 | 主题 | 现在的结论 | ADR | 文档 |
 |---|---|---|---|
-| 位置与拆包 | map-core、map-cesium、map-vue、utils 是内部包（`packages/*`），单入口；`shared/map` 等第二个地图项目的需求清楚了再拆 | 0004、0143 | [internal-packages](../config/internal-packages.md) |
+| 位置与拆包 | map-core、map-cesium、map-vue、map-tools、utils 是内部包（`packages/*`），单入口；通用交互已拆成 map-tools，`shared/map` 留下的等第二个地图项目的需求清楚了再拆 | 0004、0143、0145 | [internal-packages](../config/internal-packages.md)、[map-tools](map-tools.md) |
 | 引擎与版本 | MapLibre GL JS 6，具名导入；Cesium 精确锁定；不用 mapbox-gl | 0002（大版本由 0019 确定）、0019 | [map-core.md](map-core.md) |
 | 分层与组装 | 五层的职责；能力按拥有者写，页面挑选组合，不做带开关的全能地图组件 | 0027 | 本文、[shared-map.md](shared-map.md) |
 | 会话 | 样式、相机、当前工具、选择状态（只存要素身份）、三维内容（瓦片集、钻地，页面用 `bindScene` 绑定）；二三维共同的唯一真相源 | 0020（选择状态的范围由 0022 修正，方案比较由 0024 修正）、0047、0081 | [map-core.md](map-core.md) |

@@ -2,7 +2,7 @@ import { useElementSize } from '@vueuse/core';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent, KeepAlive, nextTick, onActivated, ref } from 'vue';
-import { useShownElementSize } from './useShownElementSize';
+import { useShownElementSize } from './use-shown-element-size';
 
 // 并行地图测试会占用浏览器渲染线程，给真实 ResizeObserver 留出调度时间
 const resizeWait = { timeout: 3000 };

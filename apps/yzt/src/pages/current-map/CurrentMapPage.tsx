@@ -1,6 +1,14 @@
 import { useEventListener } from '@vueuse/core';
 import { BROWSE_TOOL, type ViewKind } from '@mx/map-core';
-import { CesiumCanvas, MapCanvas, provideMap, type UnsupportedLayer } from '@mx/map-vue';
+import {
+  CesiumCanvas,
+  MapCanvas,
+  provideMap,
+  type UnsupportedLayer,
+  usePageActive,
+  useShownElementSize
+} from '@mx/map-vue';
+import { BoxSelectOverlay, MeasureOverlay, useMeasure } from '@mx/map-tools';
 import { computed, defineComponent, KeepAlive, ref, watch } from 'vue';
 import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureDetailWindow';
 import { ResourceLayerPanel } from '@/features/resource-map/components/ResourceLayerPanel';
@@ -17,22 +25,18 @@ import { IndoorMinimap } from '@/features/scene-models/components/IndoorMinimap'
 import { RoamPanel } from '@/features/scene-models/components/RoamPanel';
 import { useSceneModels } from '@/features/scene-models/composables/useSceneModels';
 import { useSceneModelsQuery } from '@/features/scene-models/queries';
-import { usePageActive } from '@/shared/composables/usePageActive';
-import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
+import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
 import { BASEMAP_STYLE_ROOT } from '@/shared/map/basemap/static-basemap';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
-import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { CoordinateLocatePanel } from '@/shared/map/location/CoordinateLocatePanel';
 import { LocationOverlay } from '@/shared/map/location/LocationOverlay';
 import { useLocationPoint } from '@/shared/map/location/useLocationPoint';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
-import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
-import { useMeasure } from '@/shared/map/measure/useMeasure';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
 import { panelStackHeight } from '@/shared/map/panel-group/panel-stack';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
@@ -350,7 +354,7 @@ export const CurrentMapPage = defineComponent({
         >
           <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS}scrollZoomRates={SCROLL_ZOOM_RATES} />
           <CesiumCanvas onUnsupported={reportUnsupported} />
-          <MeasureOverlay measure={measure} />
+          <MeasureOverlay measure={measure}>{{ removeIcon: () => <SvgIcon name="close" size={12} /> }}</MeasureOverlay>
           <LocationOverlay location={location} />
           <BoxSelectOverlay pick={pick} />
           {/* 浮层里的区域都带 key：好几个按条件出现，同时变化时（开始漫游、进入地下空间、窄屏时换边）Vue 会把没有 key 的

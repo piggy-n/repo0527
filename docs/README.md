@@ -29,7 +29,7 @@ docs/
 │  ├─ http.md                 shared/http：HTTP 客户端、ApiError、回调注入
 │  ├─ auth.md                 鉴权：会话、角色、页面权限、路由守卫、登录接口与表单
 │  ├─ storage.md              shared/storage：偏好的持久化（键值存储、偏好的范围、恢复与写入）
-│  ├─ composables.md          通用组合式函数：useDelayedFlag、usePageActive、useShownElementSize
+│  ├─ composables.md          通用组合式函数：useDelayedFlag、useSortableList
 │  ├─ table.md                shared/table：列表的加载状态（骨架屏、遮罩、后台刷新）与 TableSkeleton
 │  ├─ query-form.md           shared/query-form：列表页的查询表单
 │  ├─ file-transfer.md        公共上传进度、二进制下载、文件名与取消语义
@@ -44,6 +44,7 @@ docs/
 │  ├─ map-overview.md         地图架构总览：分层、原则、按主题的现行 ADR、阅读顺序
 │  ├─ map-core.md             地图内核：会话与 MapLibre 适配器、实测行为、加载策略；附录为旧代码分析
 │  ├─ map-vue.md              packages/map-vue：provideMap、样式绑定、MapCanvas、相机操作、定位可视区域、二三维切换
+│  ├─ map-tools.md            packages/map-tools：绘制、逐点编辑、测量、框选手势、鼠标旁的提示、发给后端的几何
 │  ├─ map-cesium.md           packages/map-cesium：CesiumView、相机换算、样式镜像的支持清单、拾取与投影
 │  ├─ shared-map.md           shared/map：底图、边界、默认视角、工具栏、测量、区划定位、坐标定位、状态提示
 │  ├─ file-management.md      文件管理：迁移边界、上传交互与验证

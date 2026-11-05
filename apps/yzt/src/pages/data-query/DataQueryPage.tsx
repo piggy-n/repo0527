@@ -1,4 +1,5 @@
 import { MapCanvas, provideMap } from '@mx/map-vue';
+import { BoxSelectOverlay } from '@mx/map-tools';
 import { defineComponent, type PropType, ref, watch } from 'vue';
 import { QueryPanel } from '@/features/data-query/components/QueryPanel';
 import { notifySubmit } from '@/features/data-query/components/query-messages';
@@ -11,7 +12,6 @@ import { BasemapCard } from '@/shared/map/basemap/BasemapCard';
 import { BASEMAP_STYLE_ROOT } from '@/shared/map/basemap/static-basemap';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
-import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';

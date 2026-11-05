@@ -5,7 +5,7 @@ import {
   useElementSize
 } from '@vueuse/core';
 import { type Ref, readonly, shallowRef, watch } from 'vue';
-import { usePageActive } from './usePageActive';
+import { usePageActive } from './use-page-active';
 
 /**
  * 和 useElementSize 一样量元素的尺寸，但所在页面停用（被 KeepAlive 缓存）期间量到的不采用（ADR 0063）：停用时 DOM 移出文档、

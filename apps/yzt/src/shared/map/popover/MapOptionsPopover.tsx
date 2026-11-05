@@ -1,8 +1,7 @@
 import { Close } from '@element-plus/icons-vue';
-import { useMapOverlay } from '@mx/map-vue';
+import { useMapOverlay, usePageActive } from '@mx/map-vue';
 import { ElButton, ElPopover } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, type SlotsType, type VNode, watch } from 'vue';
-import { usePageActive } from '../../composables/usePageActive';
 import { OpacitySlider } from '../OpacitySlider';
 import { OpacityToggle } from '../OpacityToggle';
 import styles from './MapOptionsPopover.module.scss';

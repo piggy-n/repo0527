@@ -1,4 +1,4 @@
-import type { PanKey } from '@/shared/map/pan-key';
+import type { PanKey } from '@mx/map-tools';
 
 /** 点/框选在鼠标旁的提示（ADR 0056 第 4 节）：临时拖动的修饰键按平台写 */
 export function pickHintLines({ label }: PanKey): readonly string[] {

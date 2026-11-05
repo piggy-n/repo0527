@@ -1,7 +1,7 @@
 # workspace 内部包的配置约定
 
-对应目录：`packages/*`（utils、ui、theme、icons、map-core、map-cesium、map-vue）
-相关决策：ADR 0004（模块边界）、ADR 0014（第一个内部包）、ADR 0143（libs 全部搬成包）
+对应目录：`packages/*`（utils、ui、theme、icons、map-core、map-cesium、map-vue、map-tools）
+相关决策：ADR 0004（模块边界）、ADR 0014（第一个内部包）、ADR 0143（libs 全部搬成包）、ADR 0145（map-tools）
 
 ## 什么是内部包
 
@@ -20,6 +20,7 @@ apps/yzt  ──依赖 "@mx/map-core": "workspace:*"──▶  node_modules/@mx/
 utils ◀── ui
 utils ◀── map-core ◀── map-cesium
 utils、map-core ◀── map-vue ┄┄动态 import()┄┄▶ map-cesium
+map-core、map-vue ◀── map-tools
 icons、theme 不依赖其他包
 ```
 
@@ -74,6 +75,7 @@ packages/map-core/
 | `exports` 的 `./tools` | 可选的第二个入口，放 Node 端代码（例如 `@mx/icons/tools` 的规范化工具与 Vite 插件），和浏览器入口分开，保证 SVGO 这类依赖不会进入浏览器产物 |
 | `bin` | 可选的命令行，指向 `.ts` 文件，由 Node 直接运行（类型剥离）；使用方安装后在 `node_modules/.bin` 中出现，例如 `yzt-icons` |
 | `private: true` | 防止被误发布 |
+| `sideEffects: false` | 模块多、不同页面只用其中一部分的包才写（目前是 `@mx/map-tools`），见下文"分块" |
 | 没有 `build` 脚本 | 内部包不构建；根目录的 `pnpm -r build` 会跳过它 |
 | `typecheck`、`test`、`test:changed` | 被根目录的 `pnpm typecheck`、`pnpm test`、`pnpm test:changed` 覆盖，CI 不用改 |
 
@@ -148,9 +150,11 @@ ls node_modules/.pnpm | grep -E '^(vue|maplibre-gl|cesium|element-plus)@'
 
 详见 [oxlintrc.md](oxlintrc.md)。
 
-## 分块的名字
+## 分块
 
 包的入口都是 `src/index.ts`，Rolldown 按目录给分块命名，默认都会叫 `src-xxx.js`。`apps/yzt/vite.config.ts` 的 `chunkFileNames` 把它换成包名（`map-cesium-xxx.js`），产物里才认得出。
+
+**`sideEffects`：** 入口把包里的模块都连在一起。Rolldown 判断不出某个模块没有副作用时（顶层写 `new Map(...)` 就会这样），经入口导入一个名字，所有模块都算可达，同样的页面组合下它们进同一个分块。`@mx/map-tools` 实测：工具栏只取 `MEASURE_TOOL_IDS`，整个包连同 turf 都进了工具栏的分块，不用它们的 AI 对话页多加载约 26 KB（ADR 0145）。写 `"sideEffects": false` 后只有用到的模块进分块。代价是模块不能在导入时产生副作用；`*.module.scss` 取了类名，不算。
 
 ## 踩过的坑
 
@@ -172,5 +176,5 @@ ls node_modules/.pnpm | grep -E '^(vue|maplibre-gl|cesium|element-plus)@'
 3. `.oxlintrc.json` 的 `import/resolver` 的 `project` 数组已用 `packages/*/tsconfig.lib.json` 通配，不用改；新包要依赖或被依赖时，在 `packages` override 里补上方向
 4. 在使用方添加 `workspace:*` 依赖，运行 `pnpm install`，确认 `.pnpm` 里没有多出 Vue、MapLibre、Cesium 的第二份
 5. 运行 `pnpm typecheck`、`pnpm lint`、`pnpm --filter <包名> test`，确认新包被覆盖
-6. 构建后比较产物：入口大小不变，入口没有带上地图引擎
+6. 构建后比较产物：入口大小不变，入口没有带上地图引擎；再看各页面静态加载的分块（总量和页面用不到的模块），不只看总大小
 7. 在 `docs/modules/` 写模块说明，并在 AGENTS.md 的目录结构中登记

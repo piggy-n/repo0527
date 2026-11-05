@@ -1,8 +1,6 @@
 import { bbox } from '@turf/bbox';
 import { computed, type ComputedRef, type ShallowRef, shallowReadonly, shallowRef } from 'vue';
-import type { DrawnShape } from '@/shared/map/draw/shape-draw';
-import { type ShapeDraw, useShapeDraw } from '@/shared/map/draw/useShapeDraw';
-import { queryGeometry } from '@/shared/map/query-geometry';
+import { type DrawnShape, queryGeometry, type ShapeDraw, useShapeDraw } from '@mx/map-tools';
 import { layerOf, type QueryLayer, type QueryTopic } from '../topics';
 import type { FormCheck } from './useAttributeForm';
 

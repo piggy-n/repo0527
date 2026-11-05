@@ -1,10 +1,10 @@
 import { type CameraState, MapLibreView, MapSession } from '@mx/map-core';
+import { drawGroup, polygonOf } from '@mx/map-tools';
 import { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it } from 'vitest';
 import type { QueryRequest, ResultFeatures } from '@/features/data-query/api';
 import { featureCollection, RESULT_GROUP, resultGroup } from '@/features/data-query/result-layers';
 import { QUERY_TOPICS } from '@/features/data-query/topics';
-import { drawGroup, polygonOf } from '@/shared/map/draw/shape-draw';
 
 // 数据查询的空间结果和画的范围放在真实 MapLibre 上：分组推导出来的图层能画出要素、没有报错。
 // 放在 app 里：要用原生地图等渲染完成、查画出的要素，只有 app 和 MapLibre 适配器能导入 maplibre-gl

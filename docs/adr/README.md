@@ -38,7 +38,7 @@
 | [0024](0024-shared-view-interfaces.md) | 二三维共用的视图接口 | 已接受（渲染要素的只读查询由 0047 补充） |
 | [0025](0025-worker-contract-and-tile-data-service.md) | Worker 通信契约与瓦片数据服务的约束 | 已接受 |
 | [0026](0026-view-sync-failures.md) | 视图同步的失败处理：错误事件、加载失败与恢复 | 已接受（第 4 条的"不另加 API"由 0030 修正；第 1、2 条只适用于不带数据源的错误，由 0041 修正） |
-| [0027](0027-map-capability-layers.md) | 地图能力的分层与页面组装 | 已接受 |
+| [0027](0027-map-capability-layers.md) | 地图能力的分层与页面组装 | 已接受（通用交互的位置由 0145 改为 packages/map-tools） |
 | [0028](0028-map-vue-context.md) | map-vue：会话与视图分开的地图上下文 | 已接受（第 5 条中 `view` 的含义、`whenReady` 的用途由 0039 修正） |
 | [0029](0029-map-overlay-padding.md) | 定位可视区域：悬浮元素登记、定位时现量现算 | 已接受（地图页登记哪些元素由 0053 补充） |
 | [0030](0030-view-failure-as-data.md) | 视图失败的原因作为数据 | 已接受 |
@@ -46,7 +46,7 @@
 | [0032](0032-intranet-build-mode.md) | 公网与内网两套构建命令：Vite 构建模式 | 已接受 |
 | [0033](0033-boundaries-and-default-view.md) | 行政区边界与默认视角 | 已接受（第 3 节每一级的线和样式由 0057 修正） |
 | [0034](0034-interaction-tools.md) | 交互工具：视图输入、工具模型与工具栏 | 已接受（点选工具由 0047 补充；第 5 节工具栏的位置与登记由 0053 修正；第 2、3 节临时拖动的修饰键与光标由 0056 补充） |
-| [0035](0035-measurement.md) | 测量：椭球面计算、测量的状态与标签 | 已接受（第 4 节的单位格式和提示由 0055 修正） |
+| [0035](0035-measurement.md) | 测量：椭球面计算、测量的状态与标签 | 已接受（第 4 节的单位格式和提示由 0055 修正；第 3、4 节的位置由 0145 改为 packages/map-tools） |
 | [0036](0036-region-locate.md) | 区划定位：本地区划目录、边界的加载与定位 | 已接受（选中区划的显示由 0055 补充） |
 | [0037](0037-coordinate-locate-and-location-point.md) | 坐标定位与位置点 | 已接受（第 5 节位置信息的摆放由 0055 修正） |
 | [0038](0038-camera-operations.md) | 相机操作：用操作的信号判断等待中的定位是否作废 | 已接受（第 1 条的 `intentRevision`、第 3 条的上下文入口由 0039 修正） |
@@ -155,6 +155,7 @@
 | [0142](0142-docs-slimming.md) | 文档分层：规则按目录加载，过程记录归档 | 已接受 |
 | [0143](0143-package-split.md) | libs 搬到 packages，抽出 @yzt/theme | 已接受 |
 | [0144](0144-rename-app-and-scope.md) | 应用改名 yzt，公共包前缀改为 @mx | 已接受 |
+| [0145](0145-map-tools-package.md) | 地图的通用交互拆成 @mx/map-tools | 已接受 |
 
 ## 模板
 

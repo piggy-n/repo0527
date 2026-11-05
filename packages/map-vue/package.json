@@ -14,7 +14,8 @@
   "dependencies": {
     "@mx/map-cesium": "workspace:*",
     "@mx/map-core": "workspace:*",
-    "@mx/utils": "workspace:*"
+    "@mx/utils": "workspace:*",
+    "@vueuse/core": "catalog:"
   },
   "peerDependencies": {
     "vue": "catalog:"

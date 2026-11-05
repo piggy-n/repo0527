@@ -1,6 +1,6 @@
 import { ElPopover, ElSlider } from 'element-plus';
 import { computed, defineComponent } from 'vue';
-import { usePageActive } from '@/shared/composables/usePageActive';
+import { usePageActive } from '@mx/map-vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { useLayerOpacityPopup } from '../composables/useLayerOpacityPopup';
 import styles from './LayerOpacity.module.scss';

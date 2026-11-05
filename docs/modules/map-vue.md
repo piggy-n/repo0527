@@ -18,6 +18,8 @@
 | `failed-view.ts` | `FailedView`：框架加载失败时挂上的视图，一直处于引擎失败 |
 | `runtime.ts` | `MAP_RUNTIME`：app 提供"加载某个框架的运行时"的函数用的注入键；`MAP_RUNTIME_PRELOAD`：app 提供"预加载某个框架的运行时"的函数（ADR 0091）；`MAP_ERROR_REPORTER`：app 提供地图错误的默认报告器 |
 | `use-map.ts` | `useMap()`：子孙组件取只读上下文；`useMapOverlay()`：悬浮元素登记自己贴着的边 |
+| `use-page-active.ts` | `usePageActive()`：所在页面是否在显示（见"页面缓存"） |
+| `use-shown-element-size.ts` | `useShownElementSize()`：页面停用期间量到的尺寸不采用（见"页面缓存"） |
 
 ## 用法
 
@@ -279,6 +281,42 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 
 另外发现：浏览器面板只有 420px 宽时，`fitBounds` 的左右 padding（40 + 360）几乎占满画布，只剩 20px 可用，结果缩到 z1.33、中心偏到 163.9°；1280 宽时正常（中心 120.65°，比江苏的几何中心偏东，是右侧留白的预期效果）。"被占用的区域"换算成 padding 时要考虑画布尺寸，在 5A.3 处理。
 
+## 页面缓存（ADR 0063、0145）
+
+这两个组合式函数本身和地图无关，放在这里是因为 `@mx/map-tools` 的浮层要用，它们又不能依赖 Element，而现在的使用方都在地图页（`MapCanvas` 也按同样的 `KeepAlive` 钩子暂停视图）。非地图页要用时先比较产物，确认没有带上地图引擎。
+
+### usePageActive
+
+所在页面是否在显示（ADR 0063）：页面被布局里的 `KeepAlive` 缓存、切到别的页面期间为 `false`，激活后回到 `true`；不在 `KeepAlive` 里时一直为 `true`。只能在组件的 setup 里调用（用的是 `onDeactivated`、`onActivated`）。
+
+```ts
+import { usePageActive } from '@mx/map-vue';
+
+const pageActive = usePageActive();
+watch(pageActive, active => {
+  if (!active) {
+    gesture.cancel();   // 停用时结束临时的交互，例如拖动中的图钉
+  }
+});
+```
+
+用到它的地方：两组 Tab 面板把它算进内容的 `active`（页面停用也算隐藏），位置点的图钉在停用时取消拖动，资源面板手写的尺寸监听在停用期间不采用测量结果。
+
+### useShownElementSize
+
+和 `@vueuse/core` 的 `useElementSize` 用法相同（`target`、`initialSize`、`options`），但所在页面停用期间量到的尺寸不采用，保留上一次的值（ADR 0063）。
+
+```ts
+import { useShownElementSize } from '@mx/map-vue';
+
+const { width, height } = useShownElementSize(root);
+const layout = computed(() => mapPageLayout(width.value, height.value));
+```
+
+为什么需要它：页面被缓存时 DOM 移出文档，`ResizeObserver` 量到 0；恢复时它要到下一帧才重新量，这一帧按 0 排的界面会闪一下（手机宽度的排法退回常规、状态栏去掉经纬度、测量标签翻到另一边、资源面板两区重新分）。浏览器测试 `use-shown-element-size.browser.test.tsx` 在真实的 `ResizeObserver` 上对比：再次激活的那一刻，`useElementSize` 读到 0，它读到原来的尺寸。
+
+被缓存的页面（现在是现状底图）里量尺寸一律用它，不直接用 `useElementSize`；不在 `KeepAlive` 里时两者完全一样。
+
 ## 测试
 
 | 文件 | 内容 | 环境 |
@@ -289,6 +327,8 @@ Vue 3.5.43 卸载组件的顺序（读源码确认）：本组件的 `onBeforeUn
 | `context.test.ts` | 卸下视图后旧视图的事件不再改变状态、卸下的不是当前视图时不做任何事；悬浮元素的登记、注销与现量现算，相机控制 `fitBounds` 的默认 padding、`reveal` 的新中心以及不动的几种情况，`useMapOverlay` 不在作用域里时抛错；`activeTool` 跟随工具模型、上下文释放后不再跟随；`selection` 从会话已有的选择开始、跟随会话，`select`、`clearSelection` 写进会话，释放后不再跟随；`view` 的渲染要素查询原样转发；视图入口只在 `ready` 时有值；相机操作：开始时作废上一次、读当前的不开始新的且是同一个对象，就绪时同步执行、没就绪时等到就绪（暂停不算）、期间有新的操作时放弃、引擎失败后重试和样式失败后恢复都照样执行、挂上已就绪的视图时执行、只能 `run` 一次且不重放、已作废和上下文释放后不执行、地图刚就绪时旧操作先执行新操作后执行、回调里开始的新操作立即执行、相机控制过期后抛错和作废后不生效、回调出错交给 `onError`、等待的监听在执行和作废和释放时移除；`whenReady` 返回前 `signal` 中止、视图被卸下；鼠标位置：一帧只更新一次、取最后的位置，按下也算移动、按键不算，离开画布为 null，视图不在就绪时不跟踪，失败、卸下、上下文释放时清空并取消那一帧，不是当前视图的输入不算（用手动推进的下一帧） | Node |
 | `overlay.test.ts` | 占用与间隔、同一边取最大、不算的元素、画布的位置、横向和纵向的下限、选项；`revealOffset` 的挡住判断（含间隔、只看方框）、平移量和画布的位置 | Node |
 | `overlay.browser.test.tsx` | 真实的布局和 MapLibre（ADR 0040）：登记的面板按实际尺寸算进留白（左 352），不传 `padding` 的 `fitBounds` 把范围放在面板右边的区域里、并贴满可视区域的一边。jsdom 里元素的尺寸都是 0，5A.3 起这一点只在开发页手动验证过 | Chromium 无界面版 |
+| `use-page-active.test.tsx` | `KeepAlive` 停用时为 false、激活时回到 true；不在 `KeepAlive` 里时一直为 true | jsdom |
+| `use-shown-element-size.browser.test.tsx` | 真实的 `ResizeObserver`：再次激活的那一刻 `useElementSize` 读到 0，它读到原来的尺寸 | Chromium 无界面版 |
 
 - 推导失败的用例用 `await expect(nextTick()).resolves.toBeUndefined()` 等待：异常冒出侦听器时，失败落在断言上，而不是测试本身报错
 - `MapCanvas.test.tsx` 注入实现 `MapLike` 的假地图（`MapLike` 等类型从 `@mx/map-core` 导出），走真实的 `MapLibreView`；`context.test.ts` 用一个实现 `MapView` 的假视图，测 `MapLibreView` 本身覆盖不到的情况

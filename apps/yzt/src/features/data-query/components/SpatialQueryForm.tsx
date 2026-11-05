@@ -1,7 +1,7 @@
 import { MxTitle } from '@mx/ui';
+import type { ShapeKind } from '@mx/map-tools';
 import { ElButton } from 'element-plus';
 import { defineComponent, type PropType, ref } from 'vue';
-import type { ShapeKind } from '@/shared/map/draw/shape-draw';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import type { SpatialForm } from '../composables/useSpatialForm';
 import type { QueryTopic } from '../topics';
