@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { abortReason, serveWorker } from '@yzt/utils';
+import { abortReason, serveWorker } from '@mx/utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PreparedTileset } from '../prepare-tileset';
 import { buildNavigation, type NavBuildProgress } from './nav-build';

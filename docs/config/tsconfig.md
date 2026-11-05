@@ -1,6 +1,6 @@
 # tsconfig 配置说明
 
-对应文件：`apps/web/tsconfig.json`、`apps/web/tsconfig.app.json`、`apps/web/tsconfig.worker.json`、`apps/web/tsconfig.node.json`，根目录的 `tsconfig.package.json`、`tsconfig.package.node.json`，以及各个包的 tsconfig
+对应文件：`apps/yzt/tsconfig.json`、`apps/yzt/tsconfig.app.json`、`apps/yzt/tsconfig.worker.json`、`apps/yzt/tsconfig.node.json`，根目录的 `tsconfig.package.json`、`tsconfig.package.node.json`，以及各个包的 tsconfig
 相关决策：ADR 0003（TypeScript 7）、ADR 0004（模块边界）、ADR 0006（依赖方向检查）、ADR 0143（libs 搬成包）
 
 ## 为什么拆成多个文件
@@ -47,7 +47,7 @@
 
 阶段二发现 TS 7.0.2 的增量检查有问题：`declare global` 文件变化后，它不会重新检查依赖这些全局类型的文件，既会误报也会漏报。全量检查只慢约 0.3 秒，所以关闭了增量，正好利用上面这条规则让 `tsc -b` 每次都全量检查。
 
-`tsBuildInfoFile` 仍然保留：不开 `incremental` 时，build 模式照样会写一份记录，只包含根文件和 `package.json` 列表，用来判断项目是否需要重查。不指定位置的话，它会出现在 `apps/web/` 目录下（阶段二实际遇到过）。
+`tsBuildInfoFile` 仍然保留：不开 `incremental` 时，build 模式照样会写一份记录，只包含根文件和 `package.json` 列表，用来判断项目是否需要重查。不指定位置的话，它会出现在 `apps/yzt/` 目录下（阶段二实际遇到过）。
 
 升级 TS 后想重新开启时，用下面的步骤复测：
 
@@ -152,7 +152,7 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 ```
 
 - `@/*`：应用内跨单元导入用的别名
-- `@yzt/*` 不写在这里：内部包是 workspace 依赖，按 `node_modules` 的符号链接和包的 `exports` 解析。`exports` 只暴露入口，所以 `@yzt/map-core` 能解析，`@yzt/map-core/src/index` 报 TS2307（已验证），"只能从入口导入"由解析规则保证（ADR 0143）
+- `@mx/*` 不写在这里：内部包是 workspace 依赖，按 `node_modules` 的符号链接和包的 `exports` 解析。`exports` 只暴露入口，所以 `@mx/map-core` 能解析，`@mx/map-core/src/index` 报 TS2307（已验证），"只能从入口导入"由解析规则保证（ADR 0143）
 - TS 7 移除了 `baseUrl`，`paths` 里的相对路径以 tsconfig 文件所在目录为基准
 
 读取这份 `paths` 的工具有三个，改动时要保持一致：
@@ -223,7 +223,7 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 应用（`shared/map/area/area.worker.ts`）和 `packages/map-core`（`nav-grid.worker.ts`）各有一份：
 
 ```json
-// apps/web/tsconfig.worker.json
+// apps/yzt/tsconfig.worker.json
 {
   "extends": "../../tsconfig.package.json",
   "compilerOptions": {
@@ -235,7 +235,7 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 }
 ```
 
-- 自己写的 Worker 要按 `webworker` 环境检查（ADR 0085）：入口里的 `self` 是 `DedicatedWorkerGlobalScope`，满足 `@yzt/utils` 的 `WorkerEndpoint`；DOM 环境里 `self` 是 `Window`，`postMessage` 的参数对不上
+- 自己写的 Worker 要按 `webworker` 环境检查（ADR 0085）：入口里的 `self` 是 `DedicatedWorkerGlobalScope`，满足 `@mx/utils` 的 `WorkerEndpoint`；DOM 环境里 `self` 是 `Window`，`postMessage` 的参数对不上
 - 入口文件和它导入的模块都在这里按 `webworker` 检查：Worker 里用到 DOM 的 API（`document`、`window`）会报 TS2584（已验证两份配置都能报出）。入口导入的普通模块同时被两边检查，所以只能用两种环境都有的 API
 - 继承 `tsconfig.package.json`：不加载 `vite/client`、没有 `@/*`。Worker 入口放在包里，或放在只用相对导入和 npm 包的 shared 模块里（ADR 0121）
 - `include` 里的 `shpjs.d.ts`：Worker 用到的库没有类型声明时，自己写的声明文件不会随入口导入进来，要列在这里（app 的配置包含整个 `src`，不用另写）

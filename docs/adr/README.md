@@ -154,6 +154,7 @@
 | [0141](0141-local-files-dir.md) | 未入库的本地文件集中到 local/ | 已接受 |
 | [0142](0142-docs-slimming.md) | 文档分层：规则按目录加载，过程记录归档 | 已接受 |
 | [0143](0143-package-split.md) | libs 搬到 packages，抽出 @yzt/theme | 已接受 |
+| [0144](0144-rename-app-and-scope.md) | 应用改名 yzt，公共包前缀改为 @mx | 已接受 |
 
 ## 模板
 

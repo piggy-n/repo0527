@@ -1,4 +1,4 @@
-import type { SceneContent, SceneContentModel } from '@yzt/map-core';
+import type { SceneContent, SceneContentModel } from '@mx/map-core';
 import { computed, type ComputedRef, watch, type WatchHandle } from 'vue';
 
 /** 拥有者给出的推导函数：从自己的状态推导出整份三维内容（ADR 0081 第 2 节） */

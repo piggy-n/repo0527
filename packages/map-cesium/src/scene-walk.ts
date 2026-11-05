@@ -20,7 +20,7 @@ import {
   type WalkPose,
   WalkRig,
   type WalkView
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import {
   Cartesian2,
   Cartesian3,

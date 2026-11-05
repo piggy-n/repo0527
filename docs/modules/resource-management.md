@@ -130,7 +130,7 @@
 - 独立、目录、列表、详情面板的主标题栏均使用 `--color-neutral-bg-light`（`#F1F4F8`），横向铺满标题区域；内容区保留原底色，标题栏不加独立阴影或渐变
 - 复用 `MxTitle` 的 panel 层级：16px、600、`--color-text-strong`（`#2F3A4F`），不随选中或展开变蓝；蓝色竖条 4 × 16、间距 8；标题栏最小高度 48、左右内边距 16，标题、图标和操作垂直居中，内容区沿用同一左侧内边距
 - 内部区块仍用轻量的 `MxSection`，不重复铺灰底。灰底样式只由资源管理面板添加，不修改公共 MxPanel 默认外观、共享主题或文件管理页面
-- 目录原 PNG 图标来自上述旧提交的 `public/images/ziYuanZhongXin/`；本轮按原有造型重绘原型使用到的 SVG，缺省图标沿用旧 `default-resource.svg` 轮廓。使用 `@yzt/icons` 的规范化工具与组件生成器，不在页面渲染 PNG，也不重复实现图标组件；选中目录图标跟随主题色，主标题保持深色
+- 目录原 PNG 图标来自上述旧提交的 `public/images/ziYuanZhongXin/`；本轮按原有造型重绘原型使用到的 SVG，缺省图标沿用旧 `default-resource.svg` 轮廓。使用 `@mx/icons` 的规范化工具与组件生成器，不在页面渲染 PNG，也不重复实现图标组件；选中目录图标跟随主题色，主标题保持深色
 - 原型图标素材、局部注册表与脚本当时留在本地目录（未保留），未改公共图标注册表；正式迁移时仅把本模块使用的图标通过既有流程加入 `SvgIcon`
 - 「数据名称」改为「资源名称」；详情「修改」移到头部，进入编辑后仍由底栏提供取消 / 保存
 
@@ -161,7 +161,7 @@
 
 ## R1：目录、年份与分页读取
 
-对应目录：`apps/web/src/features/resource-management/`。沿用 ADR 0011、0017、0039，不引入依赖或公共传输实现。
+对应目录：`apps/yzt/src/features/resource-management/`。沿用 ADR 0011、0017、0039，不引入依赖或公共传输实现。
 
 | 文件 | 责任 |
 |---|---|
@@ -310,7 +310,7 @@ R1 不改变管理员业务路由，也不把演示原型切成真实写入页�
 
 | 范围 | 变更与合入后行为 |
 |---|---|
-| 管理员入口 | `apps/web/src/app/router/routes.ts` 将资源管理占位页改为正式页面懒加载；路由名、路径与 `Role.admin` 保留 |
+| 管理员入口 | `apps/yzt/src/app/router/routes.ts` 将资源管理占位页改为正式页面懒加载；路由名、路径与 `Role.admin` 保留 |
 | 目录 / 年份 / 列表 | `features/resource-management` 的 API、Query 和组合式函数接入目录树、年份与分页；目录新增 / 改名 / 删除后更新选择及列表，名称与年份查询、重置、分页、空 / 加载 / 错误状态齐备 |
 | 详情 / 属性 | 查询元数据与属性结构，分类和字段名称独立草稿；PUT 同时传 query 和完整属性数组，保留未编辑字段；失败不丢输入，未保存离开确认，成功刷新列表与详情 |
 | 图层启停 | POST query 发送 ID 与字符串状态；按 ID 防重复，不同图层可并发，成功后重读，失败保持原状态；旧会话结果和卸载后的提示有保护 |
@@ -354,11 +354,11 @@ R1 不改变管理员业务路由，也不把演示原型切成真实写入页�
 
 1. R1～R4 不依赖公共上传能力，可由用户协调单独合入；无需为了 Excel 延后整个模块。本会话保持当前 worktree / 分支，不切主目录分支，不读取另一 worktree 的未提交代码
 2. 本轮只读核对到的本地 `main` 与 `origin/main` 均为 `9023f3f`；没有为此执行 fetch，也不把该引用当成远端实时状态。实际合入前应由协调者对目标分支的最新提交重新比较
-3. 共享文件按双方新增内容合并：`routes.ts` 保留资源管理懒加载及管理员权限，同时保留文件管理路由改动；`element-theme.scss` 保留双方各自变体，资源管理仅拥有 `dialog-panel-header`；`DevThemePage.tsx` 合并样例入口；图标源文件都保留后在 `apps/web` 运行 `pnpm icons` 重新生成注册表，不用一方的 `icons.json` 整体覆盖另一方
+3. 共享文件按双方新增内容合并：`routes.ts` 保留资源管理懒加载及管理员权限，同时保留文件管理路由改动；`element-theme.scss` 保留双方各自变体，资源管理仅拥有 `dialog-panel-header`；`DevThemePage.tsx` 合并样例入口；图标源文件都保留后在 `apps/yzt` 运行 `pnpm icons` 重新生成注册表，不用一方的 `icons.json` 整体覆盖另一方
 4. `docs/archive/roadmap.md`、`docs/archive/migration.md` 只合并资源管理对应记录，保留文件管理自己的状态；主题、布局与图标文档合并新增小节，不回退并行会话的规范
 5. 合入后的集成代码按项目既有 CI 复跑类型、lint、测试、公网 / 内网构建和生产冒烟；若公共 HTTP 发生变化，重点回归 PUT query + body、POST 启停 query、会话隔离及错误处理。本分支的测试结果不替代组合后的验证
 
-相关回归命令：根目录运行 `pnpm typecheck`、`pnpm lint`、`pnpm build`、`pnpm build:intranet`；随后在 `apps/web` 运行：
+相关回归命令：根目录运行 `pnpm typecheck`、`pnpm lint`、`pnpm build`、`pnpm build:intranet`；随后在 `apps/yzt` 运行：
 
 ```sh
 pnpm exec vitest run --project unit src/features/resource-management src/app/router/routes.test.ts tools/icons/icons.test.ts src/shared/query-form/QueryForm.test.tsx src/pages/file-management/FileManagementPage.test.tsx

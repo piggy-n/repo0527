@@ -1,7 +1,7 @@
 ---
 paths:
-  - "apps/web/src/**/*.tsx"
-  - "apps/web/src/**/*.scss"
+  - "apps/yzt/src/**/*.tsx"
+  - "apps/yzt/src/**/*.scss"
   - "packages/*/src/**/*.tsx"
   - "packages/*/src/**/*.scss"
   - "docs/design/**"
@@ -42,8 +42,8 @@ paths:
 ## 样式与设计规范
 
 - 字体文件按授权不能提交到仓库（ADR 0012）；正文字体普惠体 3.0 只有 400、600 两个字重，改 `font-weight` 即可
-- `apps/web/public/fonts/`：唯一的字体目录，不入库（ADR 0013），见 `docs/design/fonts.md`
-- 业务图标用 `shared/icons/SvgIcon`（`name` 有类型检查），不直接写 `<img>` 或内联 SVG（按数据画的图形不是图标，如图例的符号预览，可以直接用 SVG）；新图标放进 `apps/web/src/assets/icons/`，由 `@yzt/icons` 自动规范化（改名、颜色改为 currentColor），多色图标文件名以 `-color` 结尾，见 `docs/modules/icons.md`；Element 组件的图标属性仍用 `@element-plus/icons-vue`
+- `apps/yzt/public/fonts/`：唯一的字体目录，不入库（ADR 0013），见 `docs/design/fonts.md`
+- 业务图标用 `shared/icons/SvgIcon`（`name` 有类型检查），不直接写 `<img>` 或内联 SVG（按数据画的图形不是图标，如图例的符号预览，可以直接用 SVG）；新图标放进 `apps/yzt/src/assets/icons/`，由 `@mx/icons` 自动规范化（改名、颜色改为 currentColor），多色图标文件名以 `-color` 结尾，见 `docs/modules/icons.md`；Element 组件的图标属性仍用 `@element-plus/icons-vue`
 - AI 助手与用户的头像（机器人位图、"我"）用 `shared/chat-avatar` 的 `ChatAvatar`，不在页面里另放图片或画渐变圆球（ADR 0109，见 `docs/modules/chat-avatar.md`）
 - 系统名称用 `shared/system-title` 的 `SystemTitle` 组件（SVG 轮廓，大小和颜色跟随 `font-size`、`color`），不要把优设标题黑作为网页字体加载；修改名称见 `docs/modules/system-title.md`
 - 设计参考 `docs/design/color-and-typography.md`，落地方式见 `docs/design/theme.md`；规范和 Element Plus 的交互风格冲突时，优先和 Element 保持一致
@@ -54,5 +54,5 @@ paths:
 - 列表页的筛选栏用 `shared/query-form` 的 `QueryForm`（控件等宽；条件不换行时标签按文字宽度，换行时标签统一宽度并两端对齐；按钮放不下就另起一行），不用 `<label>` 包住控件；工具栏和筛选栏的按钮按 `page-layout.md` "操作按钮"的对照表配图标，表格行内的文字按钮不加图标
 - 不给 `ElTree` 设置 `indent`：树的层级引导线按 Element 默认缩进 18 定位（见 `theme.md` 的"树的全局样式"）
 - 表格的空值由全局样式显示 `-`（见 `theme.md` 的"表格的全局样式"），列上不再用 `formatter` 或插槽处理空值
-- `packages/ui` 的组件只通过 CSS 变量使用令牌，不 import `@yzt/theme` 的 SCSS；不能引用 `SvgIcon`，自定义图标由使用方通过插槽传入
+- `packages/ui` 的组件只通过 CSS 变量使用令牌，不 import `@mx/theme` 的 SCSS；不能引用 `SvgIcon`，自定义图标由使用方通过插槽传入
 - Element Plus 的外观只在 `packages/theme/src/element-theme.scss` 统一调整，页面和组件不单独覆盖 `--el-*` 变量；需要另一种外观时在其中定义变体 class（如 `input-filled`、`button-xl`），页面只引用 class，见 `docs/design/theme.md`；唯一的例外是 `packages/ui` 分栏布局内部抽屉的内边距（见 `docs/modules/ui.md`）

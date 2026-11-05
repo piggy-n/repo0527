@@ -13,7 +13,7 @@ import {
   type StylePropertySpecification
 } from '@maplibre/maplibre-gl-style-spec';
 import { simplify } from '@turf/simplify';
-import { overlayDetailLimit } from '@yzt/map-core';
+import { overlayDetailLimit } from '@mx/map-core';
 import type { GeoJSON, Geometry, GeoJsonProperties, Position } from 'geojson';
 
 /** 三维画的覆盖物图层：对应二维 geojson 数据源上的 line、fill、circle 图层（ADR 0080 第 1 节） */

@@ -1,0 +1,183 @@
+// @vitest-environment node
+import type { CameraState, LngLat, PickResult, RoamStatus, ScreenPoint } from '@mx/map-core';
+import type { MapViewport } from '@mx/map-vue';
+import { describe, expect, it } from 'vitest';
+import { effectScope, ref, shallowRef } from 'vue';
+import { useMapReadout } from './useMapReadout';
+
+// 假视图：(500, 300) 是相机的中心，每像素 degreesPerPixel 度；换算不受 Vue 跟踪，改了以后要加投影修订号
+function fakeViewport(camera: { readonly value: CameraState }) {
+  const projection = { degreesPerPixel: 0.01, miss: false };
+  const picks: ScreenPoint[] = [];
+  const viewport: MapViewport = {
+    kind: '2d',
+    pick: (point: ScreenPoint): PickResult => {
+      picks.push(point);
+      if (projection.miss) {
+        return { kind: 'miss' };
+      }
+      const [lng, lat] = camera.value.center;
+      const { degreesPerPixel } = projection;
+      return {
+        kind: 'hit',
+        surface: 'map',
+        lngLat: [lng + (point.x - 500) * degreesPerPixel, lat - (point.y - 300) * degreesPerPixel]
+      };
+    },
+    project: () => ({ x: 500, y: 300 }),
+    queryRendered: () => [],
+    eyeHeight: () => null,
+    heading: () => null
+  };
+  // 三维视图：同样的拾取，另外有视点高度（ADR 0080 第 6 节）和朝向
+  const eye = { height: 420_000, heading: 359.6 };
+  const sceneViewport: MapViewport = {
+    ...viewport,
+    kind: '3d',
+    eyeHeight: () => eye.height,
+    heading: () => eye.heading
+  };
+  return { viewport, sceneViewport, eye, projection, picks };
+}
+
+function setup() {
+  const camera = shallowRef<CameraState>({ center: [118.8, 32], zoom: 9, bearing: 0, pitch: 0 });
+  const view = shallowRef<MapViewport | null>(null);
+  const pointer = shallowRef<ScreenPoint | null>(null);
+  const projectionRevision = ref(0);
+  const roamStatus = shallowRef<RoamStatus | null>(null);
+  const fake = fakeViewport(camera);
+  const scope = effectScope();
+  const readout = scope.run(() =>
+    useMapReadout({ view, pointer, projectionRevision, roamStatus, useCamera: () => camera })
+  );
+  if (!readout) {
+    throw new Error('作用域没有运行');
+  }
+  return {
+    readout,
+    camera,
+    view,
+    pointer,
+    projectionRevision,
+    roamStatus,
+    ...fake,
+    [Symbol.dispose]: () => scope.stop()
+  };
+}
+
+const lngLatOf = (position: { readonly lngLat: LngLat } | null) => position?.lngLat.map(value => value.toFixed(2));
+
+describe('useMapReadout', () => {
+  it('视图不在就绪时比例尺和经纬度都为 null，角度照常', () => {
+    using ctx = setup();
+    ctx.camera.value = { ...ctx.camera.value, bearing: 345, pitch: 30.4 };
+
+    expect(ctx.readout.scale.value).toBeNull();
+    expect(ctx.readout.position.value).toBeNull();
+    expect(ctx.readout.angles.value).toStrictEqual({ bearing: -15, pitch: 30 });
+  });
+
+  it('三维没有比例尺，显示视点高度：相机变化时重新读取；二维、视图不在就绪时为 null', () => {
+    using ctx = setup();
+    expect(ctx.readout.eye.value).toBeNull();
+    ctx.view.value = ctx.viewport;
+    expect(ctx.readout.eye.value).toBeNull();
+
+    ctx.view.value = ctx.sceneViewport;
+    expect(ctx.readout.scale.value).toBeNull();
+    expect(ctx.readout.eye.value).toBe(420_000);
+    ctx.eye.height = 2400;
+    ctx.camera.value = { ...ctx.camera.value, zoom: 14 };
+    expect(ctx.readout.eye.value).toBe(2400);
+    expect(lngLatOf(ctx.readout.position.value)).toStrictEqual(['118.80', '32.00']);
+  });
+
+  it('三维视点在地表以下时不显示画布中心（相机的中心在视线穿出地面的远处）；鼠标在画布上时照常拾取', () => {
+    using ctx = setup();
+    ctx.view.value = ctx.sceneViewport;
+    ctx.eye.height = -3.6;
+    ctx.camera.value = { ...ctx.camera.value, pitch: 114 };
+    expect(ctx.readout.position.value).toBeNull();
+
+    ctx.pointer.value = { x: 600, y: 200 };
+    expect(lngLatOf(ctx.readout.position.value)).toStrictEqual(['119.80', '33.00']);
+
+    ctx.pointer.value = null;
+    ctx.eye.height = -0.4;
+    ctx.camera.value = { ...ctx.camera.value, pitch: 80 };
+    expect(ctx.readout.position.value).toStrictEqual({ lngLat: [118.8, 32], center: true });
+  });
+
+  it('比例尺：在相机中心投影到的水平线上取相距 100 像素的两点，按椭球面算距离', () => {
+    using ctx = setup();
+    ctx.view.value = ctx.viewport;
+
+    // 100 像素是 1 个经度，北纬 32° 约 94.6 千米，80 像素约 75.7 千米，取 50 千米
+    expect(ctx.readout.scale.value?.label).toBe('50 km');
+    expect(ctx.picks).toStrictEqual([
+      { x: 450, y: 300 },
+      { x: 550, y: 300 }
+    ]);
+  });
+
+  it('经纬度：鼠标在画布上时拾取它下面的点；不在画布上时是画布中心，标为中心', () => {
+    using ctx = setup();
+    ctx.view.value = ctx.viewport;
+
+    expect(ctx.readout.position.value).toStrictEqual({ lngLat: [118.8, 32], center: true });
+
+    ctx.pointer.value = { x: 600, y: 200 };
+    expect(lngLatOf(ctx.readout.position.value)).toStrictEqual(['119.80', '33.00']);
+    expect(ctx.readout.position.value?.center).toBe(false);
+  });
+
+  it('鼠标不动、地图缩放或画布尺寸变化时，随投影修订号重新拾取', () => {
+    using ctx = setup();
+    ctx.view.value = ctx.viewport;
+    ctx.pointer.value = { x: 600, y: 300 };
+    expect(lngLatOf(ctx.readout.position.value)).toStrictEqual(['119.80', '32.00']);
+    expect(ctx.readout.scale.value?.label).toBe('50 km');
+
+    ctx.projection.degreesPerPixel = 0.001;
+    ctx.projectionRevision.value++;
+
+    expect(lngLatOf(ctx.readout.position.value)).toStrictEqual(['118.90', '32.00']);
+    expect(ctx.readout.scale.value?.label).toBe('5 km');
+  });
+
+  it('拾取不到时比例尺和经纬度为 null', () => {
+    using ctx = setup();
+    ctx.projection.miss = true;
+    ctx.view.value = ctx.viewport;
+    ctx.pointer.value = { x: 600, y: 200 };
+
+    expect(ctx.readout.scale.value).toBeNull();
+    expect(ctx.readout.position.value).toBeNull();
+  });
+});
+
+describe('useMapReadout 的步行（ADR 0086 第 5 节、ADR 0090）', () => {
+  it('步行中才有：人称取步行状态，朝向取视图的相机、取整到 0～359；进场、失败、路线漫游时没有', () => {
+    using ctx = setup();
+    ctx.view.value = ctx.sceneViewport;
+    expect(ctx.readout.walking.value).toBeNull();
+    const walk = { kind: 'walk', id: 'walk-1', view: 'first', notice: null, notices: 0, player: null } as const;
+
+    ctx.roamStatus.value = { ...walk, phase: 'entering' };
+    expect(ctx.readout.walking.value).toBeNull();
+    ctx.roamStatus.value = { ...walk, phase: 'walking' };
+    expect(ctx.readout.walking.value).toStrictEqual({ view: 'first', heading: 0 });
+
+    ctx.eye.heading = 75.6;
+    ctx.camera.value = { ...ctx.camera.value, bearing: 76 };
+    expect(ctx.readout.walking.value).toStrictEqual({ view: 'first', heading: 76 });
+    ctx.roamStatus.value = { ...walk, phase: 'walking', view: 'third' };
+    expect(ctx.readout.walking.value).toStrictEqual({ view: 'third', heading: 76 });
+
+    ctx.roamStatus.value = { ...walk, phase: 'failed' };
+    expect(ctx.readout.walking.value).toBeNull();
+    ctx.roamStatus.value = { kind: 'route', id: 'enter', run: 0, distance: 0, total: 10, finished: false };
+    expect(ctx.readout.walking.value).toBeNull();
+  });
+});

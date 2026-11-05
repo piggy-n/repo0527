@@ -1,7 +1,7 @@
 # vite.config.ts 配置说明
 
-对应文件：`apps/web/vite.config.ts`
-相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（@yzt/ui 的 Sass 入口）、ADR 0143（libs 搬成包）、ADR 0079（Cesium 的运行时文件）、ADR 0141（未入库的本地文件）
+对应文件：`apps/yzt/vite.config.ts`
+相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（@mx/ui 的 Sass 入口）、ADR 0143（libs 搬成包）、ADR 0079（Cesium 的运行时文件）、ADR 0141（未入库的本地文件）
 
 ## 整体结构
 
@@ -34,7 +34,7 @@ const generators =
 
 - 两者都在 `buildStart` 钩子中运行：开发服务器启动时、构建开始时各一次。修改 `.env` 或 `vite.config.ts` 引用的文件（例如文字轮廓的清单 `paths.ts`）后开发服务器会自动重启，所以改名称后轮廓会自动更新；`iconsPlugin` 还会监听图标目录，放入或删除 SVG 时立即处理
 - 测试模式（`mode === 'test'`，即 Vitest）下不加入：测试检查已提交的结果，不在运行时改动源文件
-- `systemTitlePlugin` 从 `./tools/system-title/vite-plugin.ts` 导入，带 `.ts` 扩展名，因为同一份代码也由 Node 直接运行；`iconsPlugin` 从 workspace 包的 `@yzt/icons/tools` 入口导入
+- `systemTitlePlugin` 从 `./tools/system-title/vite-plugin.ts` 导入，带 `.ts` 扩展名，因为同一份代码也由 Node 直接运行；`iconsPlugin` 从 workspace 包的 `@mx/icons/tools` 入口导入
 - 同时开着多个开发服务器时，它们都会处理图标目录；`iconsPlugin` 对此做了容错，见 [modules/icons.md](../modules/icons.md)
 
 ### 不经过打包的文件
@@ -119,7 +119,7 @@ const localFiles = localFilesPlugin({ '/3dt': localPath('3dt'), '/design.local':
 #### 浏览器测试（5C.1a 实测）
 
 - Playwright 1.64 自带的 Chromium 156 无界面版默认就用 SwiftShader 软件渲染 WebGL2，Windows 上有显卡、不加参数也是如此（渲染器是 `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)`）。环境用例 `src/browser-environment.browser.test.ts` 检查 WebGL2 能否创建并输出渲染器和浏览器版本
-- 浏览器只装无界面版（`pnpm --filter @yzt/web test:browser:install`），Windows 上解压后约 280 MB，放在用户目录的 Playwright 缓存里
+- 浏览器只装无界面版（`pnpm --filter yzt test:browser:install`），Windows 上解压后约 280 MB，放在用户目录的 Playwright 缓存里
 - CI（ubuntu-latest）第一次运行就通过，Linux 上的软件渲染没有问题：安装浏览器和系统依赖 14 s，`pnpm test` 54 s
 - 同一个测试文件的用例共用一个页面：每个用例自己创建容器，结束时移除；`using` 释放视图和会话
 - 在本会话的终端里，Vitest 自动换成了不打印通过用例日志的简洁报告器，环境用例输出的渲染器信息要加 `--reporter=default` 才看得到；CI 用默认报告器，日志照常显示
@@ -155,7 +155,7 @@ Vitest 5 运行结束时会打印各部分所占的比例：导入 32～36%、�
 | `isolate: false`（各文件共享环境和模块） | 20 多个文件失败：模块里的状态（Pinia、查询缓存、会话）在文件之间共享 | 不用 |
 | `pool: 'threads'`、减少并行数 | 只差 1～2 秒，在波动范围内 | 不改 |
 
-**缓存的失效**：缓存键由模块的路径和内容、Vite 配置（root、mode、resolve、插件名、配置文件本身的内容）、`NODE_ENV` 和 Vitest 版本组成（2026-10-09 读 Vitest 5.0.2 的源码确认），不包含插件的选项；用到 `import.meta.glob` 的模块不缓存。缓存放在 `node_modules` 里，重装依赖时自然清掉。改了插件的选项、或怀疑测试用的是旧的转换结果时，执行 `pnpm --filter @yzt/web exec vitest --clearCache`（同时清掉用于排序的运行记录）。
+**缓存的失效**：缓存键由模块的路径和内容、Vite 配置（root、mode、resolve、插件名、配置文件本身的内容）、`NODE_ENV` 和 Vitest 版本组成（2026-10-09 读 Vitest 5.0.2 的源码确认），不包含插件的选项；用到 `import.meta.glob` 的模块不缓存。缓存放在 `node_modules` 里，重装依赖时自然清掉。改了插件的选项、或怀疑测试用的是旧的转换结果时，执行 `pnpm --filter yzt exec vitest --clearCache`（同时清掉用于排序的运行记录）。
 
 **Node 环境**：在 Node 环境下也能通过的测试文件——纯逻辑、包里的会话与 Worker 通信层、`tools/` 下的 Node 脚本——在第一行写 `// @vitest-environment node`。忘了写只是慢一点；写了但实际用到 DOM，会因为 `document` 未定义而直接失败，不会悄悄通过。Node 和 jsdom 有细小差别，例如 `DOMException` 在 Node 和浏览器里都是 `Error` 的实例，在 jsdom 里不是（Worker 通信层的错误处理两种都兼容）。
 
@@ -163,7 +163,7 @@ Vitest 5 运行结束时会打印各部分所占的比例：导入 32～36%、�
 
 ### 包的 Sass 入口
 
-没有 Sass 相关的配置：样式写 `@use '@yzt/ui'`，Vite 解析 Sass 时带 `sass` 条件，找到包的 `exports` 里的 `_index.scss`（ADR 0143），见 [internal-packages.md](internal-packages.md) 的"Sass 入口"。原来用 `loadPaths` 指向 `src/libs` 的做法，每个应用都要绑定目录结构，已经去掉。
+没有 Sass 相关的配置：样式写 `@use '@mx/ui'`，Vite 解析 Sass 时带 `sass` 条件，找到包的 `exports` 里的 `_index.scss`（ADR 0143），见 [internal-packages.md](internal-packages.md) 的"Sass 入口"。原来用 `loadPaths` 指向 `src/libs` 的做法，每个应用都要绑定目录结构，已经去掉。
 
 已验证：开发服务器和生产构建中，顶部栏的 `@media (width < #{ui.$compact})` 都编译成了 `(width < 1200px)`。
 
@@ -183,7 +183,7 @@ const env = loadEnv(mode, process.cwd(), '');
 
 - 配置文件运行在 Node 里，此时 `import.meta.env` 还没有加载 `.env`，所以要用 `loadEnv` 手动读取
 - 第三个参数是变量前缀，传空字符串表示读取全部变量，这样才能读到不带 `VITE_` 前缀的 `PROXY_TARGET`
-- `process.cwd()` 在 `pnpm --filter @yzt/web dev` 下就是 `apps/web`，和 Vite 默认的 `envDir` 一致
+- `process.cwd()` 在 `pnpm --filter yzt dev` 下就是 `apps/yzt`，和 Vite 默认的 `envDir` 一致
 
 ### 代理
 
@@ -218,7 +218,7 @@ AI 对话的后端是另一个服务，用同样的写法加了第二条：`/ai-
 
 - Vite 本身不读 `PORT` 环境变量。Claude 桌面端预览开发服务器时（`.claude/launch.json` 设了 `autoPort: true`），由工具挑一个空闲端口并通过 `PORT` 传入，多个会话可以各开各的服务器
 - 有 `PORT` 时开启 `strictPort`：端口被占用就直接失败，不自动换到下一个端口，否则工具等的端口上没有服务器
-- 没有 `PORT` 时（平时在终端运行 `pnpm --filter @yzt/web dev`）不受影响，仍是默认的 5173，被占用时自动换端口
+- 没有 `PORT` 时（平时在终端运行 `pnpm --filter yzt dev`）不受影响，仍是默认的 5173，被占用时自动换端口
 - 换了端口就是另一个源，localStorage 里的登录会话不共享，要重新登录
 
 ## 修改时的检查清单
@@ -226,7 +226,7 @@ AI 对话的后端是另一个服务，用同样的写法加了第二条：`/ai-
 - 新增代理规则：同步更新 `docs/deployment.md` 中的 nginx 示例，保持开发和生产一致
 - 新增映射到 `local/` 的地址：同时写进 [local-files.md](local-files.md) 和 `docs/deployment.md`（线上怎么提供）
 - 新增插件：确认它不依赖 TS 的 JS API（ADR 0003），并在本文登记；插件对测试同样生效，改完运行 `pnpm test`
-- 修改插件的选项：测试的转换缓存不包含插件选项，先执行 `pnpm --filter @yzt/web exec vitest --clearCache` 再运行测试
+- 修改插件的选项：测试的转换缓存不包含插件选项，先执行 `pnpm --filter yzt exec vitest --clearCache` 再运行测试
 - 改动路径别名：只改 tsconfig 的 `paths`，不要在这里加 `resolve.alias`
 - 新增包的 Sass 入口：不用改这里，写在包的 `exports` 的 `sass` 条件里，见 [internal-packages.md](internal-packages.md) 的"Sass 入口"
 - 升级 Cesium：核对 `Build/Cesium` 下的三个目录和 `stripBase` 的层数，构建后产物的 `cesium/` 里能找到 `Workers/`、`Assets/`、`ThirdParty/`，再跑 map-cesium 的浏览器测试

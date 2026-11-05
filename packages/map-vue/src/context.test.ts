@@ -19,7 +19,7 @@ import {
   type ViewBounds,
   type ViewKind,
   type ViewState
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import { describe, expect, it, vi } from 'vitest';
 import { createApp, ref } from 'vue';
 import { type CameraControl, type FrameScheduler, INTERNAL_MAP_CONTEXT, MapContextState } from './context';

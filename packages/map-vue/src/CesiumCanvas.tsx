@@ -1,4 +1,4 @@
-import type { MapSession, MapView } from '@yzt/map-core';
+import type { MapSession, MapView } from '@mx/map-core';
 import {
   defineComponent,
   inject,
@@ -34,7 +34,7 @@ async function createCesiumView(options: SceneViewOptions, loadRuntime: MapRunti
   if (!loadRuntime) {
     throw new Error('没有地图运行时：app 要在地图页外面 provide MAP_RUNTIME');
   }
-  const [{ CesiumView, createCesiumScene }] = await Promise.all([import('@yzt/map-cesium'), loadRuntime('3d')]);
+  const [{ CesiumView, createCesiumScene }] = await Promise.all([import('@mx/map-cesium'), loadRuntime('3d')]);
   return new CesiumView({ ...options, active: false, createScene: createCesiumScene });
 }
 

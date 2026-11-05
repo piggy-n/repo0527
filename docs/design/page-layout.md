@@ -2,7 +2,7 @@
 
 决策：[ADR 0016](../adr/0016-ui-components-in-libs-ui.md)（通用 UI 组件放在 `packages/ui`）
 设计稿：2026-09-30 确认（阶段三 3.1，静态 HTML，未入库）
-组件：`packages/ui`（`@yzt/ui`）的分栏布局 `MxSplitLayout`、面板 `MxPanel`、区块 `MxSection`、标题 `MxTitle`（阶段三 3.2 实现），用法见 [modules/ui.md](../modules/ui.md)
+组件：`packages/ui`（`@mx/ui`）的分栏布局 `MxSplitLayout`、面板 `MxPanel`、区块 `MxSection`、标题 `MxTitle`（阶段三 3.2 实现），用法见 [modules/ui.md](../modules/ui.md)
 
 本文规定业务页面内容区的排布：页面分几块、间距多大、面板和标题长什么样、窄屏怎么收。顶部栏和内容区背景属于 `app/layout`，见 [modules/layout.md](../modules/layout.md)。
 

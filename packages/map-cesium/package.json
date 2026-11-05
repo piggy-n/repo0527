@@ -1,5 +1,5 @@
 {
-  "name": "@yzt/map-cesium",
+  "name": "@mx/map-cesium",
   "private": true,
   "type": "module",
   "exports": {
@@ -14,8 +14,8 @@
   "dependencies": {
     "@maplibre/maplibre-gl-style-spec": "catalog:",
     "@turf/simplify": "catalog:",
-    "@yzt/map-core": "workspace:*",
-    "@yzt/utils": "workspace:*",
+    "@mx/map-core": "workspace:*",
+    "@mx/utils": "workspace:*",
     "nanoevents": "catalog:"
   },
   "peerDependencies": {

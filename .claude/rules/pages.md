@@ -1,11 +1,11 @@
 ---
 paths:
-  - "apps/web/src/app/**"
-  - "apps/web/src/pages/**"
-  - "apps/web/src/shared/router/**"
-  - "apps/web/src/shared/auth/**"
-  - "apps/web/src/shared/perf/**"
-  - "apps/web/src/features/auth/**"
+  - "apps/yzt/src/app/**"
+  - "apps/yzt/src/pages/**"
+  - "apps/yzt/src/shared/router/**"
+  - "apps/yzt/src/shared/auth/**"
+  - "apps/yzt/src/shared/perf/**"
+  - "apps/yzt/src/features/auth/**"
 ---
 
 # 路由、页面与会话

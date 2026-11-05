@@ -3,12 +3,12 @@ paths:
   - "packages/map-core/**"
   - "packages/map-vue/**"
   - "packages/map-cesium/**"
-  - "apps/web/src/shared/map/**"
-  - "apps/web/src/features/{resource-map,scene-models,data-query,monitoring-indicators,indicator-simulation,ai-chat}/**"
-  - "apps/web/src/pages/{current-map,data-query,space-monitoring-indicators,indicator-simulation,ai-chat}/**"
-  - "apps/web/src/pages/dev/{map,map-3d,map-ui,resources,nav-grid,data-query,monitoring-indicators,indicator-simulation}/**"
-  - "apps/web/src/app/map-*"
-  - "apps/web/src/**/*.worker.ts"
+  - "apps/yzt/src/shared/map/**"
+  - "apps/yzt/src/features/{resource-map,scene-models,data-query,monitoring-indicators,indicator-simulation,ai-chat}/**"
+  - "apps/yzt/src/pages/{current-map,data-query,space-monitoring-indicators,indicator-simulation,ai-chat}/**"
+  - "apps/yzt/src/pages/dev/{map,map-3d,map-ui,resources,nav-grid,data-query,monitoring-indicators,indicator-simulation}/**"
+  - "apps/yzt/src/app/map-*"
+  - "apps/yzt/src/**/*.worker.ts"
 ---
 
 # 地图（ADR 0020～0063，总览见 `docs/modules/map-overview.md`，设计见 `docs/modules/map-core.md`、`docs/modules/map-vue.md`、`docs/modules/shared-map.md`）
@@ -76,6 +76,6 @@ paths:
 
 ## 资源与 Worker
 
-- 接收外部回调的模块（如 `onError`）在入口用 `@yzt/utils` 的 `safeReporter` 包装：回调自己抛错不能打断内部的状态转换和资源释放
+- 接收外部回调的模块（如 `onError`）在入口用 `@mx/utils` 的 `safeReporter` 包装：回调自己抛错不能打断内部的状态转换和资源释放
 - 持有资源的对象实现 `Disposable`，监听和子对象都登记进内部的 `DisposableStack`；释放后等待中的操作以 `AbortError` 结束（ADR 0023）
-- 二维不自建渲染 Worker；主线程热点先实测再移出；自建的 Worker 一律用 `@yzt/utils` 的通信层（有类型的消息、`AbortSignal` 取消、归实例所有并可释放），取消分层与故障语义见 ADR 0025，用法见 `docs/modules/utils.md`；Worker 入口 `*.worker.ts` 只调用 `serveWorker`，处理函数放在普通模块里，入口由 `tsconfig.worker.json`（`webworker` 环境，不含 DOM）检查（ADR 0085）；Worker 内的缓存不转移出去，对外只传复制品或一次性产物
+- 二维不自建渲染 Worker；主线程热点先实测再移出；自建的 Worker 一律用 `@mx/utils` 的通信层（有类型的消息、`AbortSignal` 取消、归实例所有并可释放），取消分层与故障语义见 ADR 0025，用法见 `docs/modules/utils.md`；Worker 入口 `*.worker.ts` 只调用 `serveWorker`，处理函数放在普通模块里，入口由 `tsconfig.worker.json`（`webworker` 环境，不含 DOM）检查（ADR 0085）；Worker 内的缓存不转移出去，对外只传复制品或一次性产物

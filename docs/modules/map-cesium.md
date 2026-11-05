@@ -1,6 +1,6 @@
 # map-cesium：三维视图
 
-`packages/map-cesium`（`@yzt/map-cesium`）是二维 MapLibre 适配器的三维对应：一个实现 `MapView` 的 `CesiumView`，镜像会话的样式（栅格底图和 GeoJSON 覆盖物）、同步相机、把画布上的输入交给工具（ADR 0020、0024、0079、0080）。三维阶段的范围与交互见 ADR 0078，分步计划见 [roadmap](../archive/roadmap.md)"三维阶段的范围与取舍"。
+`packages/map-cesium`（`@mx/map-cesium`）是二维 MapLibre 适配器的三维对应：一个实现 `MapView` 的 `CesiumView`，镜像会话的样式（栅格底图和 GeoJSON 覆盖物）、同步相机、把画布上的输入交给工具（ADR 0020、0024、0079、0080）。三维阶段的范围与交互见 ADR 0078，分步计划见 [roadmap](../archive/roadmap.md)"三维阶段的范围与取舍"。
 
 ## 结构
 
@@ -100,7 +100,7 @@
 - 过滤条件用 style-spec 的 `featureFilter`，样式属性用 `normalizePropertyExpression` 按要素求值；只求三维用到的属性，写错的属性取默认值，不影响其他属性
 - 级别按 `Math.round(zoom)` 取整，换了一级才重新推导；漫游时不按级别重新推导（ADR 0103）：相机在地下，画布中心的视线从椭球内部穿出，级别随视线上下在 3～26 之间跳，每跳一级重建一次省界的贴地线，Worker 会分配内存失败（`Array buffer allocation failed`）；图层、数据、级别和位置都没变时给出上次的结果对象，场景按对象判断哪些图层不用重画
 - 线和面按这一级的半个像素简化（`simplifyTolerance`）：省界 2 万个点的贴地线要几秒才建好，简化后 6 级约 1 千个点
-- 图层的 `metadata` 用 `overlayDetailMetadata(level)`（`@yzt/map-core`）写了细节上限时，按 `min(当前级别, 上限)` 求值样式和简化，超过上限后还是同一个结果、不重建；级别范围仍按实际级别判断。只给铺满大范围、只做背景的图层用，现在只有静态底图（11 级，ADR 0135）
+- 图层的 `metadata` 用 `overlayDetailMetadata(level)`（`@mx/map-core`）写了细节上限时，按 `min(当前级别, 上限)` 求值样式和简化，超过上限后还是同一个结果、不重建；级别范围仍按实际级别判断。只给铺满大范围、只做背景的图层用，现在只有静态底图（11 级，ADR 0135）
 - 软件渲染下，有贴地的大面时第一批帧很慢，主线程卡在同步的 `readPixels` 上（退出漫游后实测 20 秒左右），开发机和 CI 上都要算进等待时间；真实显卡上没有实测（ADR 0135）
 - 外环横跨整个世界的面（区划遮罩）收成方框（`shrinkWorldRing`），相邻的重复点去掉（`cleanPath`）：这两种情况都会让 Cesium 停止渲染
 - 样式不变、形状个数相同、线和面合计不超过 500 个点时只改坐标：第一次改时把坐标换成每帧读取的属性，测量画线时不重建。每帧读取的贴地线和面每帧都在主线程上重建几何，边界跨级重新简化时如果也走这条路，13 级左右一帧要几百毫秒，所以点多的照常重建（ADR 0082）
@@ -170,7 +170,7 @@
 - 相机按 `WalkRig.eye`；进站时臂为 0（飞到眼睛处），落地后再拉出去。滚轮、中键拖动第一人称改视场角，第三人称调远近；切到第三人称时视场角回到 60°
 - 点击、悬停和遮挡判断用的深度拾取点，在人物看得见时先 `seeThroughAvatar`；遮挡判断的距离在局部系里比
 - `WalkAvatar`：每次步行一个，`alpha` 第一次超过 0.02 时 `Model.fromGltfAsync` 加载，失败报告一次 `avatar-failed`；模型矩阵是局部系里脚下的位置、绕 z 轴转 (π/2 − 朝向)、缩放到 1.72 米高；颜色的 alpha 跟着 `avatarAlpha`；和瓦片集共用 `createHeadlightShader` 的写法（各自一个实例）。步态的相位交给 `animationTime`，`animateWhilePaused` 让场景时钟不走也播；停下时移除动画、各关节设成原始矩阵的副本（设 `undefined` 只复位、不重算蒙皮），重新走起来前设回 `undefined`。Cesium 的类型声明里 `ModelNode.matrix` 不接受 `undefined`、`getNode` 不会返回 `undefined`，和文档、实际不符，代码里有注释
-- 人物模型 `apps/web/public/roam/Cesium_Man.glb` 入库：Cesium Man，© 2017 Cesium，CC BY 4.0（Khronos glTF-Sample-Assets 的 `Models/CesiumMan`），模型上的 Cesium 标志是商标；同目录 `CREDITS.txt` 随产物部署
+- 人物模型 `apps/yzt/public/roam/Cesium_Man.glb` 入库：Cesium Man，© 2017 Cesium，CC BY 4.0（Khronos glTF-Sample-Assets 的 `Models/CesiumMan`），模型上的 Cesium 标志是商标；同目录 `CREDITS.txt` 随产物部署
 
 ## 测试
 

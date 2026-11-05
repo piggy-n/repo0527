@@ -25,7 +25,7 @@
 
 - 普通文字、主标题、Canvas 数值和坐标轴统一使用新项目已有普惠体 3.x，400 / 600；不引入旧 2.0 字体文件；面板标题和导出图片标题保留下面的宋体
 - 旧 Dashboard Serif 是已重命名的思源宋体 Heavy 子集，只有 528 个字符映射，缺少“救、援、博、物、馆”等指标用字，造成同一行逐字回退；已改用同授权官方思源宋体 CN Heavy 2.003 完整地区字库，不引入方正粗黑宋
-- 字体均放在 `apps/web/public/fonts/`，不入库；不内联、转换或再次制作子集
+- 字体均放在 `apps/yzt/public/fonts/`，不入库；不内联、转换或再次制作子集
 - 大屏标题与浅蓝视觉仅用于驾驶舱；年份选择器和详情弹窗优先复用 Element 与现行标题规范，不修改全局主题
 - 原字体授权证据：旧 `public/images/jsc/fonts/LICENSE-source-han-serif.txt`、`SOURCES-alibaba.md`；新正文规范见 [fonts.md](../design/fonts.md)
 
@@ -194,7 +194,7 @@
 
 ## 素材清单与接入约定
 
-新项目背景只使用 WebP。2026-10-21 用户从 `C:\Users\13273\Desktop\img` 补充三张图片，已按用途复制、重命名到 `apps/web/src/features/city-dashboard/assets/`，保留桌面原件。直接使用用户给定字节，没有转换旧 PNG、重新压缩或改图；仅驾驶舱局部样式引用，不修改全局主题。三张必需背景已齐，无新增待补背景。
+新项目背景只使用 WebP。2026-10-21 用户从 `C:\Users\13273\Desktop\img` 补充三张图片，已按用途复制、重命名到 `apps/yzt/src/features/city-dashboard/assets/`，保留桌面原件。直接使用用户给定字节，没有转换旧 PNG、重新压缩或改图；仅驾驶舱局部样式引用，不修改全局主题。三张必需背景已齐，无新增待补背景。
 
 | 目标文件 | 用户原文件、实际尺寸 | 使用位置 | 接入方式 |
 |---|---|---|---|
@@ -211,7 +211,7 @@ SHA-256（与桌面原件逐字节一致）：`bg.webp` 为 `1eccd169cef758dbe5b
 ## 字体排查与文件记录
 
 - 旧字库：`dashboard-serif.woff2`，528 个字符映射，900；缺字是主要原因，不是简单的加载延迟。普惠体 3.x 两个字重各有 29,197 个映射，本模块文字无缺字
-- 替代文件：`apps/web/public/fonts/SourceHanSerifCN-Heavy.otf`，官方 2.003R，30,930 个映射，900；固定标题、四分类、全部 96 指标名称及单位的覆盖检查缺字数为 0
+- 替代文件：`apps/yzt/public/fonts/SourceHanSerifCN-Heavy.otf`，官方 2.003R，30,930 个映射，900；固定标题、四分类、全部 96 指标名称及单位的覆盖检查缺字数为 0
 - 官方来源：[Source Han Serif 2.003R](https://github.com/adobe-fonts/source-han-serif/releases/tag/2.003R)，提交 `7889f11bf31170b5d092a083b357c8c8130f89e0`，`SubsetOTF/CN/SourceHanSerifCN-Heavy.otf`（官方 CN 地区完整文件，未再次裁剪）
 - 文件大小 11,862,952 字节；SHA-256：`053e911fdb1a55d4d8512a1f11203f1fb9a7291e34bc260474b8c80358c69fa6`；同目录保留官方 SIL OFL 1.1 许可证，不提交字体文件
 - 正文/主标题/图表坐标轴只用既有普惠体 3.x 400 / 600；卡片/区块/地图标题使用驾驶舱局部宋体 900；普通详情外壳与标题使用项目规范的普惠体 600
@@ -328,7 +328,7 @@ SHA-256（与桌面原件逐字节一致）：`bg.webp` 为 `1eccd169cef758dbe5b
 
 ### 性能测量方法与限制
 
-可复测脚本：在 `apps/web` 执行 `node tools/measure-city-dashboard/cli.ts dist d3`，第四参数可设 CPU 倍率。脚本自动起停仅供本次测试的本地静态服务，注入固定前端测试会话，不导入应用源码或访问后端；三轮新上下文冷启动，每轮随后同上下文缓存加载。1920×1080、Chromium SwiftShader；测试服务器明确设静态文件 `max-age=3600`，结果不能代替部署服务器缓存验收。
+可复测脚本：在 `apps/yzt` 执行 `node tools/measure-city-dashboard/cli.ts dist d3`，第四参数可设 CPU 倍率。脚本自动起停仅供本次测试的本地静态服务，注入固定前端测试会话，不导入应用源码或访问后端；三轮新上下文冷启动，每轮随后同上下文缓存加载。1920×1080、Chromium SwiftShader；测试服务器明确设静态文件 `max-age=3600`，结果不能代替部署服务器缓存验收。
 
 生命周期脚本 `node tools/measure-city-dashboard/lifecycle.ts <预览地址>` 在同一文档内通过真实预览按钮连续进入退出 30 次，每轮切共享幸福长分类，记录强制 GC 后堆、DOM、监听、画布及 WebGL 对象计数。它操作预览里的“D3 预览工具”按钮，当时的预览已经不在了，复测前要先做一个带这些按钮的预览。两个脚本的原始 JSON 都写进 `local/measure/city-dashboard/`，不入库；本文记录的那几轮结果没有保留。
 
@@ -407,7 +407,7 @@ SHA-256（与桌面原件逐字节一致）：`bg.webp` 为 `1eccd169cef758dbe5b
 
 ### 素材与交互修正
 
-用户目录 `C:\Users\13273\Desktop\svg` 的原文件保留，副本按用途命名，统一放在 `apps/web/src/assets/icons/`，由 `pnpm icons` 规范化并登记，再经 `SvgIcon` 引用。
+用户目录 `C:\Users\13273\Desktop\svg` 的原文件保留，副本按用途命名，统一放在 `apps/yzt/src/assets/icons/`，由 `pnpm icons` 规范化并登记，再经 `SvgIcon` 引用。
 
 | 用户原文件 | 正式名称 | 使用位置 |
 |---|---|---|

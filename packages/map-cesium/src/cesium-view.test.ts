@@ -20,7 +20,7 @@ import {
   type WalkPhase,
   type WalkRoam,
   type WalkView
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import type { Feature, FeatureCollection, GeoJSON } from 'geojson';
 import { createNanoEvents } from 'nanoevents';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';

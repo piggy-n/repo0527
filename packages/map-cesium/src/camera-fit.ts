@@ -1,4 +1,4 @@
-import type { CameraState, LngLat, ViewBounds, ViewPadding } from '@yzt/map-core';
+import type { CameraState, LngLat, ViewBounds, ViewPadding } from '@mx/map-core';
 
 // 三维的定位按二维的取景算出相机（ADR 0079 第 4 节）：Web 墨卡托、512 像素瓦片，和 MapLibre 的 fitBounds、offset 一致
 

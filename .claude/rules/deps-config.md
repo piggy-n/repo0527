@@ -5,14 +5,14 @@ paths:
   - "pnpm-lock.yaml"
   - ".github/**"
   - ".oxlintrc.json"
-  - "apps/web/.env*"
-  - "apps/web/vite.config.ts"
-  - "apps/web/tsconfig*.json"
+  - "apps/yzt/.env*"
+  - "apps/yzt/vite.config.ts"
+  - "apps/yzt/tsconfig*.json"
   - "packages/*/tsconfig*.json"
   - "packages/*/vitest.config.ts"
   - "tsconfig.package*.json"
   - "vitest.shared.ts"
-  - "apps/web/src/shared/config/**"
+  - "apps/yzt/src/shared/config/**"
 ---
 
 # 依赖、配置与 CI

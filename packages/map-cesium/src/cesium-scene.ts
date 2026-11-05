@@ -11,7 +11,7 @@ import type {
   UndergroundView,
   Unsubscribe,
   WalkView
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import type { Position } from 'geojson';
 import {
   BoundingSphere,

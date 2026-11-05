@@ -47,31 +47,31 @@ Claude Code 读写匹配的文件时自动加载 `.claude/rules/` 里对应的�
 ## 目录结构
 
 ```
-apps/web/src/
+apps/yzt/src/
 ├─ app/        应用装配：入口、路由、Pinia、全局插件、布局、字体声明
 ├─ pages/      路由页面，只负责组合 features
 ├─ features/   按业务域划分：api.ts、queries.ts、store.ts、components/、composables/
 └─ shared/     应用内通用：HTTP 客户端、鉴权、存储、通用 composables、查询表单、表格加载状态与类型、加载耗时的标记（perf）、项目级的公共地图能力（map）、城市体检指标的目录与取值（city-indicators）、对话头像（chat-avatar）、只供测试的辅助（testing）
 
-packages/      workspace 内部包，导出 TS 源码，不构建；统一用 @yzt/<name> 导入（ADR 0143）
-├─ utils/       @yzt/utils       纯 TS 工具，不依赖框架（目前是 Worker 通信层）
-├─ ui/          @yzt/ui          Mx* 通用组件（布局、面板、区块、标题，ADR 0016）
-├─ theme/       @yzt/theme       设计令牌、Element 主题、全局基础样式，只有 Sass 入口
-├─ icons/       @yzt/icons       图标组件与 SVG 规范化工具（ADR 0014）
-├─ map-core/    @yzt/map-core    地图内核，不依赖 Vue
-├─ map-cesium/  @yzt/map-cesium  Cesium 三维
-└─ map-vue/     @yzt/map-vue     地图与 Vue 的衔接
+packages/      workspace 内部包，导出 TS 源码，不构建；统一用 @mx/<name> 导入（ADR 0143）
+├─ utils/       @mx/utils       纯 TS 工具，不依赖框架（目前是 Worker 通信层）
+├─ ui/          @mx/ui          Mx* 通用组件（布局、面板、区块、标题，ADR 0016）
+├─ theme/       @mx/theme       设计令牌、Element 主题、全局基础样式，只有 Sass 入口
+├─ icons/       @mx/icons       图标组件与 SVG 规范化工具（ADR 0014）
+├─ map-core/    @mx/map-core    地图内核，不依赖 Vue
+├─ map-cesium/  @mx/map-cesium  Cesium 三维
+└─ map-vue/     @mx/map-vue     地图与 Vue 的衔接
 ```
 
 - `pages/dev/<名称>/`：开发页面，和业务页面分开放，只注册在 `devRoutes`，生产构建不包含，业务代码不导入
-- `apps/web/tools/`：Node 直接运行的 TS 工具脚本（如 `pnpm title:generate`、加载耗时的实测 `measure:map-load`），相对导入写 `.ts` 扩展名，只用可剥离的语法（`erasableSyntaxOnly`）
-- `apps/web/public/fonts/`：唯一的字体目录，不入库
+- `apps/yzt/tools/`：Node 直接运行的 TS 工具脚本（如 `pnpm title:generate`、加载耗时的实测 `measure:map-load`），相对导入写 `.ts` 扩展名，只用可剥离的语法（`erasableSyntaxOnly`）
+- `apps/yzt/public/fonts/`：唯一的字体目录，不入库
 - `local/`（仓库根目录，不入库）：模型、原型、探查结果、实测数据和手动测试文件，环境变量 `YZT_LOCAL_DIR` 可以指到别处（worktree 指回主目录）；开发服务器把 `/3dt/*`、`/design.local/*` 映射到这里，地址不变；`public/` 只放要发布的文件，字体是构建输入、留在原处（ADR 0141，见 `docs/config/local-files.md`）
 
 ## 依赖方向
 
 - `pages → features → shared → packages`，`app` 可以依赖所有目录；features 之间不互相导入，需要复用的内容上移到 shared 或 packages；包之间的方向见 `.claude/rules/packages.md`
-- 同一单元（一个 feature、一个包、shared、pages、app）内部只用相对路径；跨单元只用别名，引用包只写 `@yzt/<name>`
+- 同一单元（一个 feature、一个包、shared、pages、app）内部只用相对路径；跨单元只用别名，引用包只写 `@mx/<name>`
 - 由 lint 检查（`.oxlintrc.json` 的 `boundaries/dependencies`，说明见 `docs/config/oxlintrc.md`）；分层有变化时同步修改（ADR 0006）
 
 ## 编码约定
@@ -117,7 +117,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - `computed` 不抛异常：可能失败的计算把失败表示成数据（结果对象），或者放在调用方的 `try/catch` 里直接计算。Vue 3.5 中 `computed` 抛错时，异常在调度器检查依赖时抛出，读取方的 `try/catch` 接不住；之后依赖不变时再读取，返回上一次成功的旧值（ADR 0028 背景第 8 条）
 - 组合式函数发起的请求在作用域销毁时（`onScopeDispose`）取消，请求返回后再检查一次是否已取消：晚到的结果不写入会话、store 等共享状态，被取消的请求不显示错误。写法见 `useLoginForm`，原因见 `docs/modules/auth.md` 的登录表单
 - 新的操作先作废上一次，再做可能失败的准备（如点选的规划）；准备出错也是这次操作的失败，进入失败和重试，不抛给调用方（写法见 `features/resource-map/composables/useFeaturePick.ts` 的 `execute`）
-- 异步按 ADR 0039 分类：能写成状态收敛的不写成操作；可替换操作（同一件事的先后请求，如定位、查询所在区县）在同一通道里后发覆盖先发，用 `@yzt/utils` 的 `LatestController`，不手写递增计数；服务端写操作（删除、保存）不适用，按业务防重复、串行或允许并发，不随组件卸载取消
+- 异步按 ADR 0039 分类：能写成状态收敛的不写成操作；可替换操作（同一件事的先后请求，如定位、查询所在区县）在同一通道里后发覆盖先发，用 `@mx/utils` 的 `LatestController`，不手写递增计数；服务端写操作（删除、保存）不适用，按业务防重复、串行或允许并发，不随组件卸载取消
 - 异步操作在每个等待点（`await`）返回后都要重新确认自己仍然有效（信号没有中止、仍是最新的请求），再继续执行：等待会因中止而结束，不等于返回时一定没中止
 - 命名：状态快照的序号叫 revision（只增不减，比较新旧）；一次意图用信号表示（operation，只能作废，不比较大小）；version 只用于外部格式（样式规范的 `version: 8`、依赖版本）（ADR 0039）
 - 跳转写 `{ name: RouteName.xxx }`，不写路径字符串；结束会话统一调用 `app/session-end.ts` 的 `endSession()`；需要持久化的状态只走 `shared/storage`，不直接调用 idb-keyval 或 localStorage。细则见 `pages.md`、`state.md`
@@ -140,7 +140,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 |---|---|---|
 | 0 | 只改文档、注释 | 不运行 |
 | 1 | 局部改动：单个 feature、页面、组件，使用方很少的 shared 模块 | `pnpm typecheck`、`pnpm lint`、`pnpm test:changed` |
-| 2 | 影响面大：packages、shared 的公共能力或接口（`test:changed` 选中几十个文件）、全局样式、路由、页面的加载或缓存 | 级别 1，加 `pnpm build:intranet` 和相关的冒烟用例（`pnpm --filter @yzt/web test:smoke <文件名>`） |
+| 2 | 影响面大：packages、shared 的公共能力或接口（`test:changed` 选中几十个文件）、全局样式、路由、页面的加载或缓存 | 级别 1，加 `pnpm build:intranet` 和相关的冒烟用例（`pnpm --filter yzt test:smoke <文件名>`） |
 | 3 | 依赖、Vite、tsconfig、lint、CI、构建插件、`.env`，鉴权、会话、HTTP 的核心；发布前 | 和 CI 相同的全量（`docs/commands.md` 的"质量检查"） |
 
 - `test:changed` 只沿 import 关系选测试：`.module.scss` 和被 import 的 JSON 选得到；全局样式（`packages/theme`、`app/styles`）一个也选不到，`.env`、运行时才请求的文件同样查不到，不能因为它没选中测试就算通过
@@ -164,8 +164,8 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 
 ## 常用命令
 
-- `pnpm --filter @yzt/web dev`：启动开发服务器；`dev:intranet` 用内网配置
+- `pnpm --filter yzt dev`：启动开发服务器；`dev:intranet` 用内网配置
 - `pnpm typecheck`、`pnpm lint`（`lint:fix` 自动修复）、`pnpm test:changed`（只跑相关测试）
-- `pnpm test`：所有包的测试，逐个包串行；`pnpm --filter @yzt/<name> test` 只跑一个包；`pnpm --filter @yzt/web test:unit`、`test:browser` 只跑一个项目；第一次跑浏览器测试前运行 `test:browser:install`
-- `pnpm build`、`pnpm build:intranet`（内网，不请求天地图）；`pnpm --filter @yzt/web test:smoke <文件名>`：生产冒烟
+- `pnpm test`：所有包的测试，逐个包串行；`pnpm --filter @mx/<name> test` 只跑一个包；`pnpm --filter yzt test:unit`、`test:browser` 只跑一个项目；第一次跑浏览器测试前运行 `test:browser:install`
+- `pnpm build`、`pnpm build:intranet`（内网，不请求天地图）；`pnpm --filter yzt test:smoke <文件名>`：生产冒烟
 - 其余命令（实测、探查、依赖更新）见 `docs/commands.md`；要账号或 token 的脚本由用户在自己的终端运行

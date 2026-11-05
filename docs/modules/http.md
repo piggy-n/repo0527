@@ -1,6 +1,6 @@
 # shared/http：HTTP 客户端
 
-对应目录：`apps/web/src/shared/http/`、`apps/web/src/app/http.ts`
+对应目录：`apps/yzt/src/shared/http/`、`apps/yzt/src/app/http.ts`
 相关决策：ADR 0008（同源代理）、ADR 0011（axios + zod + MSW）
 
 ## 文件

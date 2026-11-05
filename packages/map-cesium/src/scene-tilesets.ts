@@ -1,4 +1,4 @@
-import type { PreparedTileset, TilesetLighting } from '@yzt/map-core';
+import type { PreparedTileset, TilesetLighting } from '@mx/map-core';
 import {
   type BoundingSphere,
   Cesium3DTileset,

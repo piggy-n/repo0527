@@ -1,0 +1,227 @@
+import { MxTitle } from '@mx/ui';
+import { ElRadioButton, ElRadioGroup, ElSlider } from 'element-plus';
+import { defineComponent, type PropType, type VNodeChild } from 'vue';
+import { simulationIndicator, standardWalkMinutes, walkMeters, walkOptions } from '../model/indicators';
+import {
+  indicatorName,
+  isStandard,
+  paramApplies,
+  PARAM_LABELS,
+  type ParamKey,
+  POP_CHANGE_RANGE,
+  RECOGNITION_LABELS,
+  type Recognition,
+  type Rule,
+  RULE_LABELS,
+  signedPercent,
+  type SimulationConditions,
+  type SimulationParams,
+  walkMinutesOf,
+  withWalkMinutes
+} from '../model/params';
+import styles from './ParamFields.module.scss';
+
+const RULES: readonly Rule[] = ['new', 'old'];
+const RECOGNITIONS: readonly Recognition[] = ['half', 'intersect'];
+
+// 选项的说明：写清楚取自 Excel 的哪条规则
+const RULE_NOTES: Readonly<Record<Rule, string>> = {
+  new: '卫生服务站、文化活动站按步行 15 分钟（1000 米），2025 年起采用',
+  old: '站点按步行 5 分钟（300 米），服务中心仍为 15 分钟'
+};
+const RECOGNITION_NOTES: Readonly<Record<Recognition, string>> = {
+  half: '住宅图斑 50% 以上面积位于服务范围内时认定为覆盖',
+  intersect: '与服务范围相交的住宅图斑即认定为覆盖，与消防救援、派出所覆盖率的认定方式一致'
+};
+
+// 单选组的值换回选项；不在选项里的忽略
+const pick = <T extends string>(options: readonly T[], value: unknown): T | undefined =>
+  options.find(option => option === value);
+
+const scenarioTag = (show: boolean) => show && <span class={styles.scenario}>自定义口径</span>;
+
+/** 参数的编辑项：编排阶段的参数节点只编辑一项，人工干预编辑所选指标用得上的全部；改动交给拥有者，组件不保存 */
+export const ParamFields = defineComponent({
+  name: 'ParamFields',
+  props: {
+    keys: { type: Array as PropType<readonly ParamKey[]>, required: true },
+    conditions: { type: Object as PropType<SimulationConditions>, required: true },
+    modelValue: { type: Object as PropType<SimulationParams>, required: true },
+    /** 浮层的标题已经写了参数名：不再显示区块标题，只留一行说明和右侧的取值或情景标记 */
+    bare: Boolean
+  },
+  emits: {
+    'update:modelValue': (params: SimulationParams) => typeof params === 'object'
+  },
+  setup(props, { emit }) {
+    const update = (patch: Partial<SimulationParams>) => emit('update:modelValue', { ...props.modelValue, ...patch });
+
+    // 一项参数：区块标题（可带紧跟的灰色说明）、右侧的当前值或情景标记，下面是编辑控件
+    const field = (key: ParamKey, content: VNodeChild, extra?: () => VNodeChild, description?: string) => {
+      let head: VNodeChild;
+      if (!props.bare) {
+        head = <MxTitle description={description}>{{ default: () => PARAM_LABELS[key], extra }}</MxTitle>;
+      } else if (description !== undefined || extra) {
+        head = (
+          <div class={styles.head}>
+            <span class={styles.description}>{description}</span>
+            {extra?.()}
+          </div>
+        );
+      }
+      return (
+        <div key={key} class={styles.field}>
+          {head}
+          <div>{content}</div>
+        </div>
+      );
+    };
+
+    // 一项指标的步行时长：名称和标准时长、改后的距离，下面是可选的几档
+    const renderWalkRow = (id: string) => {
+      const { modelValue: params } = props;
+      const indicator = simulationIndicator(id);
+      const minutes = walkMinutesOf(params, id);
+      if (minutes === null) {
+        return null;
+      }
+      const options = walkOptions(indicator);
+      return (
+        <div key={id} class={styles.walkRow}>
+          <div class={styles.walkHead}>
+            <span class={styles.walkName} title={indicatorName(id, params)}>
+              {indicator.short}
+              <small>标准 {standardWalkMinutes(indicator)} 分钟</small>
+            </span>
+            <span class={styles.value}>{walkMeters(minutes)} 米</span>
+          </div>
+          <ElRadioGroup
+            class="radio-group-block"
+            size="small"
+            modelValue={minutes}
+            aria-label={`${indicator.short}的步行时长（分钟）`}
+            onUpdate:modelValue={value => {
+              const chosen = options.find(option => option === value);
+              if (chosen !== undefined) {
+                emit('update:modelValue', withWalkMinutes(params, id, chosen));
+              }
+            }}
+          >
+            {options.map(option => (
+              <ElRadioButton key={option} value={option}>
+                {option}
+              </ElRadioButton>
+            ))}
+          </ElRadioGroup>
+        </div>
+      );
+    };
+
+    const render = (key: ParamKey): VNodeChild => {
+      const { conditions, modelValue: params } = props;
+      const scenario = () => scenarioTag(!isStandard(key, params));
+      // 这项参数作用于哪些已选指标
+      const scope = `作用于${conditions.indicatorIds
+        .filter(id => paramApplies(key, id))
+        .map(id => simulationIndicator(id).short)
+        .join('、')}`;
+      switch (key) {
+        case 'rule':
+          return field(
+            key,
+            <>
+              <ElRadioGroup
+                size="small"
+                modelValue={params.rule}
+                aria-label={PARAM_LABELS.rule}
+                onUpdate:modelValue={value => {
+                  const rule = pick(RULES, value);
+                  if (rule) {
+                    update({ rule });
+                  }
+                }}
+              >
+                {RULES.map(rule => (
+                  <ElRadioButton key={rule} value={rule}>
+                    {RULE_LABELS[rule]}
+                    {rule === 'new' && '（标准）'}
+                  </ElRadioButton>
+                ))}
+              </ElRadioGroup>
+              <p class={styles.note}>{RULE_NOTES[params.rule]}</p>
+            </>,
+            scenario,
+            scope
+          );
+        case 'recognition':
+          return field(
+            key,
+            <>
+              <ElRadioGroup
+                size="small"
+                modelValue={params.recognition}
+                aria-label={PARAM_LABELS.recognition}
+                onUpdate:modelValue={value => {
+                  const recognition = pick(RECOGNITIONS, value);
+                  if (recognition) {
+                    update({ recognition });
+                  }
+                }}
+              >
+                {RECOGNITIONS.map(recognition => (
+                  <ElRadioButton key={recognition} value={recognition}>
+                    {RECOGNITION_LABELS[recognition]}
+                    {recognition === 'half' && '（标准）'}
+                  </ElRadioButton>
+                ))}
+              </ElRadioGroup>
+              <p class={styles.note}>{RECOGNITION_NOTES[params.recognition]}</p>
+            </>,
+            scenario,
+            scope
+          );
+        case 'popChange':
+          return field(
+            key,
+            <>
+              <ElSlider
+                class={styles.slider}
+                size="small"
+                modelValue={params.popChange}
+                min={POP_CHANGE_RANGE.min}
+                max={POP_CHANGE_RANGE.max}
+                step={POP_CHANGE_RANGE.step}
+                showStops
+                showTooltip={false}
+                ariaLabel={PARAM_LABELS.popChange}
+                onUpdate:modelValue={value => {
+                  if (typeof value === 'number') {
+                    update({ popChange: value });
+                  }
+                }}
+              />
+              <p class={styles.note}>以七普常住人口为基准，仅影响人均类指标</p>
+            </>,
+            () => [scenario(), <span class={styles.value}>{signedPercent(params.popChange)}</span>],
+            scope
+          );
+        case 'walk':
+          return field(
+            key,
+            <>
+              <div class={styles.walkList}>
+                {conditions.indicatorIds.filter(id => paramApplies(key, id)).map(renderWalkRow)}
+              </div>
+              <p class={styles.note}>
+                单位：分钟。5、10、15 分钟按计算方法为 300、500、1000 米，更长的按每分钟约 67 米换算；最长为标准时长的 3 倍，且不超过 30 分钟
+              </p>
+            </>,
+            scenario,
+            '每项指标单独设置，名称和结果同步变化'
+          );
+      }
+    };
+
+    return () => <div class={styles.root}>{props.keys.map(render)}</div>;
+  }
+});

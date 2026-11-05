@@ -163,11 +163,11 @@ DOCX 是唯一需要另议的新依赖：旧项目使用 `docx-preview`，当前
 
 公共基础的单元测试使用 MSW 覆盖 JSON 回归、成功文件流、文件名、MIME、失败信封、401、超时与取消。实际 multipart 字段及非文本二进制字节完整性在 Chromium 验证：MSW/jsdom 的 File 与原生 FormData 混用会丢失文件名和内容，模拟 XHR Blob 也会将非 UTF-8 字节转为替换字符，不能用这个模拟结果冒充原生传输证据。
 
-浏览器测试入口为 `apps/web/tools/file-transfer/`，只访问本地固定接口，不访问后端。Playwright 启停本 worktree 的 4186 端口服务，不复用占用该端口的服务，另有 180 秒退出上限。`src/shared/file-transfer/browser-fixture.ts` 仅由这组测试动态加载，生产入口不导入。
+浏览器测试入口为 `apps/yzt/tools/file-transfer/`，只访问本地固定接口，不访问后端。Playwright 启停本 worktree 的 4186 端口服务，不复用占用该端口的服务，另有 180 秒退出上限。`src/shared/file-transfer/browser-fixture.ts` 仅由这组测试动态加载，生产入口不导入。
 
 ```sh
-pnpm --filter @yzt/web test:unit src/shared/http src/shared/file-transfer src/features/file-management src/pages/file-management src/app/http.test.ts
-pnpm --filter @yzt/web exec playwright test --config tools/file-transfer/playwright.config.ts
+pnpm --filter yzt test:unit src/shared/http src/shared/file-transfer src/features/file-management src/pages/file-management src/app/http.test.ts
+pnpm --filter yzt exec playwright test --config tools/file-transfer/playwright.config.ts
 pnpm typecheck
 pnpm lint
 pnpm build

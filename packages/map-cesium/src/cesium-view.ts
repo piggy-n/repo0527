@@ -35,8 +35,8 @@ import {
   type WalkPlayer,
   type WalkRoam,
   type WalkRoamStatus
-} from '@yzt/map-core';
-import { safeReporter } from '@yzt/utils';
+} from '@mx/map-core';
+import { safeReporter } from '@mx/utils';
 import type { GeoJSON } from 'geojson';
 import { createNanoEvents } from 'nanoevents';
 import { fitBoundsCamera, paddedCenter } from './camera-fit';

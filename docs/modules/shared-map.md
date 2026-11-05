@@ -254,7 +254,7 @@ boundaries.setOpacity(0.6);
 
 ## 行政区边界的数据（ADR 0033）
 
-`boundary/data/` 下的三份边界由 `apps/web/tools/boundaries` 的脚本从旧项目转换而来：
+`boundary/data/` 下的三份边界由 `apps/yzt/tools/boundaries` 的脚本从旧项目转换而来：
 
 | 文件 | 来源（yzt 836f03b `public/static/geojson/`） | 要素 | 原始大小 → 转换后 |
 |---|---|---|---|
@@ -264,7 +264,7 @@ boundaries.setOpacity(0.6);
 
 - 转换：坐标保留 6 位小数（约 0.1 米，原始数据有 14～15 位），属性只留 `name` 和 `code`（省取 `adcode`、市取 `code`、县取 `gb`），去掉 `crs`（县界标的是 CGCS2000，与 WGS 84 相差不到 1 米）。原始文件的结构不符合时报错，不生成残缺的数据
 - 县界大幅简化过（每个县约 89 个点），放大后和市界、省界对不齐；没有更精细的数据，原样迁移
-- 重新生成：先把旧仓库 `master-demo` 上的三个文件导出到一个临时目录（`git show master-demo:public/static/geojson/江苏省界.json > <目录>/江苏省界.json`，另两个同理），再在仓库根目录运行 `pnpm --filter @yzt/web boundaries:generate <目录>`
+- 重新生成：先把旧仓库 `master-demo` 上的三个文件导出到一个临时目录（`git show master-demo:public/static/geojson/江苏省界.json > <目录>/江苏省界.json`，另两个同理），再在仓库根目录运行 `pnpm --filter yzt boundaries:generate <目录>`
 
 ## 工具栏（ADR 0034、0053）
 
@@ -546,7 +546,7 @@ region.select(null);       // 回到全省：清掉高亮，回到默认视角
 ```
 
 - 状态是 `{ selected, boundary }`：`selected` 为 `null` 是全省；`boundary` 是 `none`（全省）、`loading`、`ready`（带边界）或 `failed`（带原因，`retry()` 重新加载）。只有 `ready` 时有高亮，加载中不显示上一个区划的高亮
-- 每次选择从 `LatestController`（`@yzt/utils`，ADR 0039 第 2 条）取一个信号：换选、回到全省、作用域销毁时中止，晚到的结果（成功或失败）都不写入。边界到位后在选择时开始的相机操作下定位：`fitBounds(范围, { duration: 1100, maxZoom: 14.5, pitch: 0 })`，四边留白由登记的悬浮元素决定（ADR 0029）。视图没就绪时等到就绪（引擎失败后重试成功也照样定位）；有了新的相机操作时不定位，高亮照常
+- 每次选择从 `LatestController`（`@mx/utils`，ADR 0039 第 2 条）取一个信号：换选、回到全省、作用域销毁时中止，晚到的结果（成功或失败）都不写入。边界到位后在选择时开始的相机操作下定位：`fitBounds(范围, { duration: 1100, maxZoom: 14.5, pitch: 0 })`，四边留白由登记的悬浮元素决定（ADR 0029）。视图没就绪时等到就绪（引擎失败后重试成功也照样定位）；有了新的相机操作时不定位，高亮照常
 - 选择（和重试）是一次相机操作（ADR 0038、0039）：开始时用 `beginCameraOperation()` 作废之前没完成的定位，边界到位、确认自己的选择没过期后 `operation.run(...)`；等视图、等待返回后再确认都在 `run` 里。之后又有了新的操作（用户拖动缩放、"默认视角"、坐标定位、再选别的区划），边界到位后只高亮、不定位；相机的变化本身（如上一次定位的动画）不算新的操作。页面加载期间选的区划，就绪时初始适配让给它
 - 再选当前的区划什么也不做；不认识的代码抛错。从市或区县回到全省时调用页面传入的 `goToDefaultView`，本来就是全省时不调用
 - 面板上的点击由 `nextRegionSelection(selected, clicked)` 换成 `select` 的参数（同旧项目）：点别的区划选它；选中市或它的区县时这个市都算选中，再点它回到全省；再点已选中的区县回到所在的市
@@ -790,7 +790,7 @@ sides.activate('right');
 - `MapPanelGroup` 支持可选的 `<功能 ID>-footer` 插槽，参数仍为 `PanelSlotProps`，返回空数组时不占底栏空间；仅渲染当前且正在显示的功能底栏，切走、收起、隐藏或页面停用时卸载，确认弹层随之关闭。内容交给 `MxPanel.footer`，与滚动内容同级，位置不随滚动变化。现状底图仅在有符号覆盖时通过 `legend-footer` 提供 `ResourceLegendReset`，沿用原有恢复全部符号的确认操作
 - 内容区不随外壳压缩（`flex: none`）。原来是 `min-height: 0`：两组面板都打开、外壳被压矮时，内容区缩到可见的高度，子元素溢出到它外面；纵向 flex 的滚动区域把下内边距算在内容区的下边，滚到底时内容贴着底边（2026-10-16 用户在区划定位、资源详情上发现，浏览器测试 `MapPanelGroup.browser.test.tsx` 先复现再修）
 - 外壳代表整组登记为贴右边的悬浮元素；隐藏（没有打开的功能、窄屏时让给左边）时尺寸为 0，不算进定位的留白。原来区划定位、坐标定位、点选、图例各自的登记去掉了
-- 窄屏用全应用的断点（`@yzt/ui` 的 `COMPACT_MEDIA_QUERY`，1200）：两边都有东西要显示时只显示最后操作的一边；`visibleSides` 只推导显示，不改资源面板的收起状态和右边已打开的功能，变宽后两边按各自的状态显示
+- 窄屏用全应用的断点（`@mx/ui` 的 `COMPACT_MEDIA_QUERY`，1200）：两边都有东西要显示时只显示最后操作的一边；`visibleSides` 只推导显示，不改资源面板的收起状态和右边已打开的功能，变宽后两边按各自的状态显示
 
 ## 地图状态的提示（ADR 0030）
 
@@ -858,7 +858,7 @@ sides.activate('right');
 | `location/press-gesture.test.ts` | 单击、长按进入拖动、移动的容差、拖动与按住时的取消、重复按下、没按下时的操作、释放后停止计时（假定时器） | Node |
 | `location/location-info.test.ts` | 位置信息放在上方、超出可视区域上边时翻到下方（包括上边登记了元素）、左右限制在可视区域里（避开右侧面板）、小三角的位置和限制、可视区域比卡片窄；所在区划的各种文字 | Node |
 | `location/CoordinateLocatePanel.test.tsx` | 空白时不提示；打开时显示已有的点；识别结果、规范写法、认不出来；切换格式；粘贴一对坐标；填反；"定位"按原值、空白时提示；回车与输入法；拾取开关、"拾取中"、关闭；卸载时取消拾取 | jsdom |
-| `apps/web/tools/boundaries/boundaries.test.ts` | 边界数据的转换：文件对应关系、坐标取整与去掉高程、只留名称和代码、去掉 `crs`、原始结构不符合或没有要素时报错 | Node |
+| `apps/yzt/tools/boundaries/boundaries.test.ts` | 边界数据的转换：文件对应关系、坐标取整与去掉高程、只留名称和代码、去掉 `crs`、原始结构不符合或没有要素时报错 | Node |
 | `basemap/basemap-style.test.ts` | 可选的底图与初始状态；每种底图的组成、瓦片地址、缩放范围与透明度；ID 的分组前缀与组合后的校验；改透明度只产生 `setPaintProperty`；切换底图时背景不动；关闭天地图时任何选择都没有天地图；静态底图的组成、只引用本地文件、透明度、切到无底图；缩略图（南京附近的 10 级瓦片，底图加注记；静态底图是打包的小图；无底图、关闭天地图时矢量和影像没有） | Node |
 
 - 底图的推导逐一改坏 22 处（关闭时仍给出全部选项或仍建数据源、注记图层用错、少一个子域名、缺少缩放范围、占位符被转义、行列写反、不带 key、背景缺失或在底图上面、注记不跟透明度、影像用矢量的透明度、ID 不带前缀或重复等），全部由断言发现

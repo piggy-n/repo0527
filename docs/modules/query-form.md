@@ -1,6 +1,6 @@
 # 查询表单（shared/query-form）
 
-对应目录：`apps/web/src/shared/query-form/`；样式在 `packages/theme/src/element-theme.scss` 的 `form-query` 变体。
+对应目录：`apps/yzt/src/shared/query-form/`；样式在 `packages/theme/src/element-theme.scss` 的 `form-query` 变体。
 
 列表页表格上方的查询条件。按是否换行分三种情况：条件和按钮都放得下一行时排成一行；条件放得下、按钮放不下时按钮另起一行；条件放不下时换行，标签统一宽度并两端对齐。视觉规则见 [design/page-layout.md](../design/page-layout.md) 的"筛选栏"。
 

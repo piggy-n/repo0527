@@ -17,7 +17,7 @@ import type {
   WalkPlayer,
   WalkSpawnPoint,
   WalkView
-} from '@yzt/map-core';
+} from '@mx/map-core';
 import type { OverlayLayer } from './overlay-plan';
 import type { ImageryPlan } from './scene-style';
 

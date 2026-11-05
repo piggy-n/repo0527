@@ -1,8 +1,8 @@
 ---
 paths:
-  - "apps/web/src/features/indicator-simulation/**"
-  - "apps/web/src/pages/indicator-simulation/**"
-  - "apps/web/src/pages/dev/indicator-simulation/**"
+  - "apps/yzt/src/features/indicator-simulation/**"
+  - "apps/yzt/src/pages/indicator-simulation/**"
+  - "apps/yzt/src/pages/dev/indicator-simulation/**"
 ---
 
 # 城市国土空间监测指标AI计算

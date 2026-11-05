@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { overlayDetailMetadata } from '@yzt/map-core';
+import { overlayDetailMetadata } from '@mx/map-core';
 import type { Feature, FeatureCollection, GeoJSON, Geometry, GeoJsonProperties, LineString, Position } from 'geojson';
 import { describe, expect, it } from 'vitest';
 import {

@@ -16,15 +16,15 @@ docs/
 │  ├─ README.md               ADR 索引、门槛与模板
 │  └─ NNNN-*.md
 ├─ config/                    重要配置文件的逐项说明
-│  ├─ package-json.md         根目录与 apps/web 的 package.json
+│  ├─ package-json.md         根目录与 apps/yzt 的 package.json
 │  ├─ tsconfig.md             应用和包的 tsconfig（app、worker、node，包的 lib、test）
 │  ├─ oxlintrc.md             .oxlintrc.json（lint 规则与依赖方向）
 │  ├─ pnpm-workspace.md       pnpm-workspace.yaml（workspace、catalog、冷却期、安装脚本）
 │  ├─ ci-workflow.md          .github/workflows/ci.yml
-│  ├─ vite-config.md          apps/web/vite.config.ts（插件、别名、代理）
+│  ├─ vite-config.md          apps/yzt/vite.config.ts（插件、别名、代理）
 │  ├─ local-files.md          未入库的本地文件（local/）：目录划分、YZT_LOCAL_DIR、开发服务器的映射
 │  ├─ internal-packages.md    packages/* 内部包的配置、依赖声明、测试与新建清单
-│  └─ env.md                  apps/web/.env（环境变量、类型与校验）
+│  └─ env.md                  apps/yzt/.env（环境变量、类型与校验）
 ├─ modules/                   内部模块的用法与设计说明
 │  ├─ http.md                 shared/http：HTTP 客户端、ApiError、回调注入
 │  ├─ auth.md                 鉴权：会话、角色、页面权限、路由守卫、登录接口与表单

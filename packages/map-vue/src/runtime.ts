@@ -1,4 +1,4 @@
-import type { ViewKind } from '@yzt/map-core';
+import type { ViewKind } from '@mx/map-core';
 import type { InjectionKey } from 'vue';
 
 /** 加载某个框架的运行时并做好全局设置（ADR 0079 第 2 节）：由 app 在地图页外面 provide，画布第一次需要时调用 */

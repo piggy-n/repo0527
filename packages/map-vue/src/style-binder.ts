@@ -1,4 +1,4 @@
-import type { StyleGroup, StyleModel } from '@yzt/map-core';
+import type { StyleGroup, StyleModel } from '@mx/map-core';
 import { computed, type ComputedRef, watch, type WatchHandle } from 'vue';
 
 /** 拥有者给出的推导函数：从自己的状态推导出整个分组（ADR 0028） */

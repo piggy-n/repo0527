@@ -1,12 +1,12 @@
 ---
 paths:
   - "**/*.test.{ts,tsx}"
-  - "apps/web/tools/smoke/**"
-  - "apps/web/src/test-setup.ts"
+  - "apps/yzt/tools/smoke/**"
+  - "apps/yzt/src/test-setup.ts"
   - "packages/*/src/test-setup*.ts"
   - "packages/*/vitest.config.ts"
   - "vitest.shared.ts"
-  - "apps/web/src/shared/testing/**"
+  - "apps/yzt/src/shared/testing/**"
 ---
 
 # 测试

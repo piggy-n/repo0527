@@ -2,7 +2,7 @@
 
 相关决策：ADR 0141（集中到 `local/`）、ADR 0013（字体）、ADR 0081（模型）
 
-模型、原型、探查结果这些文件不入库，集中放在仓库根目录的 `local/`（`.gitignore` 的 `/local/`）。`apps/web/public/` 只放要发布的文件：构建时 Vite 会把它整个复制到产物。
+模型、原型、探查结果这些文件不入库，集中放在仓库根目录的 `local/`（`.gitignore` 的 `/local/`）。`apps/yzt/public/` 只放要发布的文件：构建时 Vite 会把它整个复制到产物。
 
 ## 目录
 
@@ -13,16 +13,16 @@
 | `local/design-src/` | 原型的构建脚本和检查截图 | 手动运行、查看，开发服务器不提供 |
 | `local/probe/` | 后端探查结果：`resource-classes/` 是 `probe:resource-classes` 的默认输出，其他目录是用 `--out` 存下的某一轮 | [commands.md](../commands.md) |
 | `local/measure/` | 实测数据：`map-load/`、`city-dashboard/` 是脚本的默认输出，`builds/` 放对比用的构建，用完删掉 | [modules/perf.md](../modules/perf.md)、[modules/city-dashboard.md](../modules/city-dashboard.md) |
-| `local/scope-test-files/` | 自定义监测范围的验收文件，`scope-files:generate` 能重新生成 | [`tools/scope-test-files/说明.md`](../../apps/web/tools/scope-test-files/说明.md) |
+| `local/scope-test-files/` | 自定义监测范围的验收文件，`scope-files:generate` 能重新生成 | [`tools/scope-test-files/说明.md`](../../apps/yzt/tools/scope-test-files/说明.md) |
 
 不放在这里的：
 
 | 位置 | 内容 | 原因 |
 |---|---|---|
-| `apps/web/public/fonts/` | 授权不能入库的字体（[design/fonts.md](../design/fonts.md)） | 构建输入，要复制进产物（ADR 0013） |
-| `apps/web/public/3dt/manifest.json` | 模型清单 | 入库，随产物发布，格式由代码里的 zod 校验 |
-| 每个检出自己的 `local/smoke-results/`、`local/file-transfer-results/` | Playwright 的输出和截图 | 每次运行先清空，所以不跟 `YZT_LOCAL_DIR`，多个 worktree 才不会互相删掉（2026-11-05 从 `apps/web/*-results.local/` 挪来） |
-| `apps/web/.env.local` | 个人临时覆盖的环境变量 | Vite 的约定（[env.md](env.md)） |
+| `apps/yzt/public/fonts/` | 授权不能入库的字体（[design/fonts.md](../design/fonts.md)） | 构建输入，要复制进产物（ADR 0013） |
+| `apps/yzt/public/3dt/manifest.json` | 模型清单 | 入库，随产物发布，格式由代码里的 zod 校验 |
+| 每个检出自己的 `local/smoke-results/`、`local/file-transfer-results/` | Playwright 的输出和截图 | 每次运行先清空，所以不跟 `YZT_LOCAL_DIR`，多个 worktree 才不会互相删掉（2026-11-05 从 `apps/yzt/*-results.local/` 挪来） |
+| `apps/yzt/.env.local` | 个人临时覆盖的环境变量 | Vite 的约定（[env.md](env.md)） |
 
 ## 指到别处
 
@@ -34,7 +34,7 @@ worktree 里没有这些文件。要看模型或原型时指回主目录（Power
 
 ```powershell
 $env:YZT_LOCAL_DIR = 'C:\work\repo0527\local'
-pnpm --filter @yzt/web dev
+pnpm --filter yzt dev
 ```
 
 不设时 worktree 的 `local/` 是空的：`/3dt/manifest.json` 正常，模型在三维模型面板里显示加载失败，原型地址回退到单页应用。

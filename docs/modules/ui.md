@@ -1,6 +1,6 @@
 # 通用 UI 组件（packages/ui）
 
-对应目录：`packages/ui/`，导入名 `@yzt/ui`
+对应目录：`packages/ui/`，导入名 `@mx/ui`
 相关决策：[ADR 0016](../adr/0016-ui-components-in-libs-ui.md)；设计规范：[design/page-layout.md](../design/page-layout.md)
 
 内部包（ADR 0143）：外部只从入口导入，内部只用相对路径，不读取 `import.meta.env`、store、router，不引用应用代码。这些规则由 lint 的 `boundaries` 和包的 `tsconfig.lib.json` 检查（见 [config/internal-packages.md](../config/internal-packages.md)）。
@@ -30,10 +30,10 @@ packages/ui/src/
 
 | 入口 | 用法 | 内容 |
 |---|---|---|
-| `index.ts` | `import { MxPanel, useSplitLayout } from '@yzt/ui'` | 组件、组合式函数、常量、类型 |
-| `_index.scss` | `@use '@yzt/ui';` 之后写 `ui.$compact` | Sass 变量 |
+| `index.ts` | `import { MxPanel, useSplitLayout } from '@mx/ui'` | 组件、组合式函数、常量、类型 |
+| `_index.scss` | `@use '@mx/ui';` 之后写 `ui.$compact` | Sass 变量 |
 
-Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不了 CSS 变量，断点只能以 Sass 变量的形式提供给样式。应用中写 `@use '@yzt/ui'` 能找到它，是因为包的 `exports` 用 `sass` 条件指向它（见 [config/internal-packages.md](../config/internal-packages.md) 的"Sass 入口"）。Sass 入口只放变量，不写会输出 CSS 的规则，否则每个 `@use` 它的样式文件都会重复输出一份。
+Sass 入口是"只从 `index.ts` 导入"的唯一例外：媒体查询里用不了 CSS 变量，断点只能以 Sass 变量的形式提供给样式。应用中写 `@use '@mx/ui'` 能找到它，是因为包的 `exports` 用 `sass` 条件指向它（见 [config/internal-packages.md](../config/internal-packages.md) 的"Sass 入口"）。Sass 入口只放变量，不写会输出 CSS 的规则，否则每个 `@use` 它的样式文件都会重复输出一份。
 
 ## 窄屏断点
 
@@ -282,11 +282,11 @@ TSX 中给组件传多个插槽时，子元素写成对象：`{{ default: () => 
 
 ## 类型检查
 
-包的 `tsconfig.lib.json` 不加载 `vite/client`，而 `*.module.scss` 的类型本来由它提供，所以 `src/css-modules.d.ts` 单独声明（与 `@yzt/icons` 的做法相同）。应用只沿导入进入包，`tsconfig.test.json` 的 `include` 也不含它，所以不会和 `vite/client` 的同名声明同时出现。
+包的 `tsconfig.lib.json` 不加载 `vite/client`，而 `*.module.scss` 的类型本来由它提供，所以 `src/css-modules.d.ts` 单独声明（与 `@mx/icons` 的做法相同）。应用只沿导入进入包，`tsconfig.test.json` 的 `include` 也不含它，所以不会和 `vite/client` 的同名声明同时出现。
 
 ## 组件依赖的 CSS 变量
 
-组件的样式使用 `@yzt/theme` 输出的 CSS 变量（定义在 `packages/theme/src/tokens.scss`），不 import 它的 SCSS（ADR 0016、0143）。换一个应用使用 `@yzt/ui`，要先引用 `@yzt/theme` 或自己提供这些变量：
+组件的样式使用 `@mx/theme` 输出的 CSS 变量（定义在 `packages/theme/src/tokens.scss`），不 import 它的 SCSS（ADR 0016、0143）。换一个应用使用 `@mx/ui`，要先引用 `@mx/theme` 或自己提供这些变量：
 
 | 组件 | 变量 |
 |---|---|
