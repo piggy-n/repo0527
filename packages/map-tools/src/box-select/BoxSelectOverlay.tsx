@@ -1,6 +1,6 @@
 import type { ScreenBox } from '@mx/map-core';
+import { useShownElementSize } from '@mx/map-vue';
 import { defineComponent, type PropType, type Ref, ref } from 'vue';
-import { useShownElementSize } from '../../composables/useShownElementSize';
 import type { PointerHintContent } from '../pointer-hint/pointer-hint';
 import { PointerHint } from '../pointer-hint/PointerHint';
 import styles from './BoxSelectOverlay.module.scss';

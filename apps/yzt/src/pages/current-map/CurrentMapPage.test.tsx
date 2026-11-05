@@ -22,6 +22,7 @@ import {
 } from '@mx/map-core';
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { CesiumCanvas, MapCanvas, type SceneViewOptions } from '@mx/map-vue';
+import { formatDistance } from '@mx/map-tools';
 import { DOMWrapper, mount } from '@vue/test-utils';
 import { ElSlider } from 'element-plus';
 import { HttpResponse, http as mock } from 'msw';
@@ -35,7 +36,6 @@ import cityFile from '@/shared/map/boundary/data/jiangsu-city.json?raw';
 import countyFile from '@/shared/map/boundary/data/jiangsu-county.json?raw';
 import { JIANGSU_BOUNDS } from '@/shared/map/jiangsu';
 import { formatCoordinate, formatLngLat } from '@/shared/map/location/coordinate-format';
-import { formatDistance } from '@/shared/map/measure/measure-labels';
 import { createMemoryStore } from '@/shared/storage/key-value-store';
 import { required } from '@/shared/testing/required';
 import { CurrentMapPage } from './CurrentMapPage';
@@ -941,6 +941,8 @@ describe('CurrentMapPage', () => {
     await nextTick();
     expect(overlayItems(wrapper)[0]).toStrictEqual({ text: total, x: 50, y: 0 });
 
+    // 图标由页面给出（@mx/map-tools 不依赖应用的图标）
+    expect(wrapper.find('[aria-label="删除这条测量"] svg').exists()).toBe(true);
     await wrapper.get('[aria-label="删除这条测量"]').trigger('click');
     expect(overlayItems(wrapper)).toStrictEqual([{ text: '单击开始测距', x: 30, y: 40 }]);
     expect(map.geojson.has('measure')).toBe(false);

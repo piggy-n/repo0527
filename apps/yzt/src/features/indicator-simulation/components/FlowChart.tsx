@@ -1,5 +1,5 @@
 import { computed, defineComponent, type PropType, ref, watch } from 'vue';
-import { useShownElementSize } from '@/shared/composables/useShownElementSize';
+import { useShownElementSize } from '@mx/map-vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { flowCamera, type FlowView } from '../flow/camera';
 import type { FlowFrame, NodeFrame } from '../flow/frame';

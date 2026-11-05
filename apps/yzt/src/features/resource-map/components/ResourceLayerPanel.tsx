@@ -1,11 +1,9 @@
 import { ArrowDown, ArrowUp, Search } from '@element-plus/icons-vue';
 import { useResizeObserver } from '@vueuse/core';
-import { useMapOverlay } from '@mx/map-vue';
+import { useMapOverlay, usePageActive, useShownElementSize } from '@mx/map-vue';
 import { MxPanel, MxTitle } from '@mx/ui';
 import { ElButton, ElIcon, ElInput, ElOption, ElSelect } from 'element-plus';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, watch } from 'vue';
-import { usePageActive } from '@/shared/composables/usePageActive';
-import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { CATALOG_ROOT } from '../catalog-order';
 import type { ResourceLayers } from '../composables/useResourceLayers';

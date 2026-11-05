@@ -300,9 +300,10 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 | 3 | ui、map-core、map-cesium、map-vue → utils，且写成 `@mx/*` | 包之间的依赖只能用包名 |
 | 4 | map-cesium、map-vue → map-core，且写成 `@mx/*` | 地图内核被三维和 Vue 衔接层使用 |
 | 5 | map-vue → map-cesium，且只能动态 `import()` | Cesium 体积大，只能懒加载 |
-| 6 | 禁止 utils、map-core、map-cesium 依赖 Vue 生态 | 这三个包要保持框架无关 |
-| 7 | 禁止 map-vue 依赖 vue-router、pinia、element-plus、`@element-plus/**` | map-vue 只负责地图与 Vue 的衔接，界面和项目配置放在 `shared/map`（ADR 0027 第 5 条） |
-| 8 | 全局禁止 `mapbox-gl` | 同上 |
+| 6 | map-tools → map-core、map-vue，且写成 `@mx/*` | 通用交互建在内核和 Vue 衔接上；没有反方向的放行，map-core、map-vue 不能依赖它（ADR 0145） |
+| 7 | 禁止 utils、map-core、map-cesium 依赖 Vue 生态 | 这三个包要保持框架无关 |
+| 8 | 禁止 map-vue、map-tools 依赖 vue-router、pinia、element-plus、`@element-plus/**` | 这两个包不依赖项目的界面框架，界面和项目配置放在 `shared/map`（ADR 0027 第 5 条、ADR 0145） |
+| 9 | 全局禁止 `mapbox-gl` | 同上 |
 
 只靠 pnpm 的严格模式不够：它能拦住没声明的依赖，但拦不住 map-vue 静态导入 map-cesium，也拦不住有人把 vue 声明进 map-core。
 
@@ -326,10 +327,11 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 | 跨单元用相对路径（如 app 用 `../../shared/...`） | 策略 2–4（阶段二补充） |
 | 单元内部使用别名 | 策略 1 |
 | shared 依赖 feature、pages 依赖 app | 策略 2–4 |
-| utils、map-core 依赖 vue | 包的策略 6 |
-| map-vue 依赖 element-plus、pinia、vue-router | 包的策略 7（阶段五） |
+| utils、map-core 依赖 vue | 包的策略 7 |
+| map-vue、map-tools 依赖 element-plus、pinia、vue-router | 包的策略 8（阶段五；map-tools 2026-11-05 验证） |
 | 静态导入 map-cesium | 包的策略 5 |
 | 包之间反方向依赖（map-cesium → map-vue、map-core → ui、ui → map-core）、用相对路径跨包 | 包的默认禁止（2026-11-05 验证） |
+| map-core、map-vue 依赖 map-tools（包名或相对路径）；map-tools 依赖 ui、utils、icons、map-cesium；map-tools 用相对路径导入应用代码 | 包的默认禁止（2026-11-05 验证） |
 | 包的测试文件违反方向 | 同上：`packages/*/src/**` 包括测试（2026-11-05 验证） |
 | 应用用相对路径导入 workspace 包的内部文件 | 策略 5（阶段二） |
 | 包用相对路径导入应用代码 | packages override（阶段二） |

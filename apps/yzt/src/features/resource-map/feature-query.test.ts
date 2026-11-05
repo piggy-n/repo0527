@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { bbox } from '@turf/bbox';
 import type { Geometry, LineString, Point, Polygon, Position } from 'geojson';
 import type {
@@ -10,8 +9,8 @@ import type {
   ScreenPoint,
   ViewKind
 } from '@mx/map-core';
+import { isValidPolygonal, QUERY_VERTEX_LIMIT, screenBoxPolygon, vertexCount } from '@mx/map-tools';
 import { describe, expect, it } from 'vitest';
-import { isValidPolygonal, QUERY_VERTEX_LIMIT, screenBoxPolygon, vertexCount } from '@/shared/map/query-geometry';
 import type { RegionScope } from '@/shared/map/region/region-scope';
 import type { ResourceTreeCategory, ResourceTreeLayer } from './api';
 import { buildCatalog } from './catalog';

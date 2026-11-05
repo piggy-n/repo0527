@@ -1,11 +1,11 @@
 import type { ScreenPoint, ViewKind } from '@mx/map-core';
+import { useShownElementSize } from '@mx/map-vue';
+import { PointerHint } from '@mx/map-tools';
 import { computed, defineComponent, onScopeDispose, type PropType, ref, shallowRef } from 'vue';
 import { z } from 'zod';
-import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import cityUrl from '@/shared/map/boundary/data/jiangsu-city.json?url';
 import provinceUrl from '@/shared/map/boundary/data/jiangsu-province.json?url';
 import type { BasemapId } from '@/shared/map/basemap/basemap-style';
-import { PointerHint } from '@/shared/map/pointer-hint/PointerHint';
 import type { ModelEntry } from './model-samples';
 import type { LoadStatus, ModelDemo } from './useModelDemo';
 import styles from './SceneSketch.module.scss';

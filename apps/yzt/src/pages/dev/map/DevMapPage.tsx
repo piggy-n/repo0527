@@ -11,10 +11,10 @@ import {
   useMap,
   useMapOverlay
 } from '@mx/map-vue';
+import { MEASURE_TOOL_IDS, MeasureOverlay, useMeasure } from '@mx/map-tools';
 import { computed, defineComponent, type PropType, ref, shallowRef } from 'vue';
+import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
-import { MeasureOverlay } from '@/shared/map/measure/MeasureOverlay';
-import { MEASURE_TOOL_IDS, useMeasure } from '@/shared/map/measure/useMeasure';
 import styles from './DevMapPage.module.scss';
 
 const INITIAL_CAMERA: CameraState = { center: [119.4, 32.9], zoom: 6.5, bearing: 0, pitch: 0 };
@@ -483,7 +483,7 @@ export const DevMapPage = defineComponent({
           <CesiumCanvas onUnsupported={recordSkipped} />
           {overlayVisible.value && <OverlayPanel />}
           {lastProbe.value && <ProbeLabel probe={lastProbe.value} />}
-          <MeasureOverlay measure={measure} />
+          <MeasureOverlay measure={measure}>{{ removeIcon: () => <SvgIcon name="close" size={12} /> }}</MeasureOverlay>
           <MapStatusNotice />
         </div>
         {errors.value.length > 0 && (

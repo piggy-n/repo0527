@@ -2,6 +2,7 @@
 paths:
   - "packages/map-core/**"
   - "packages/map-vue/**"
+  - "packages/map-tools/**"
   - "packages/map-cesium/**"
   - "apps/yzt/src/shared/map/**"
   - "apps/yzt/src/features/{resource-map,scene-models,data-query,monitoring-indicators,indicator-simulation,ai-chat}/**"
@@ -11,7 +12,7 @@ paths:
   - "apps/yzt/src/**/*.worker.ts"
 ---
 
-# 地图（ADR 0020～0063，总览见 `docs/modules/map-overview.md`，设计见 `docs/modules/map-core.md`、`docs/modules/map-vue.md`、`docs/modules/shared-map.md`）
+# 地图（ADR 0020～0063，总览见 `docs/modules/map-overview.md`，设计见 `docs/modules/map-core.md`、`docs/modules/map-vue.md`、`docs/modules/map-tools.md`、`docs/modules/shared-map.md`）
 
 ## 选型
 
@@ -24,7 +25,7 @@ paths:
 
 - map-core 持有地图会话状态（样式模型、相机、当前工具、选择状态），它是二维和三维共同的唯一真相源；Manager 修改会话状态，不直接写引擎
 - 样式按分组推导：每个拥有者用纯函数从自己的状态推导出分组并整体替换；跨分组的修改用一次 `setGroups` 提交，批次不跨 `await`；交给会话的 GeoJSON 数据和样式图片不能原地修改，要换新对象（ADR 0022、0045）
-- 地图能力按 ADR 0027 分层：与框架无关的逻辑在 map-core，Vue 衔接在 map-vue，项目级的公共能力（底图、行政区、工具栏界面）在 `shared/map`，业务数据驱动的图层在 feature，页面挑选组合；用组合，不做带开关的全能地图组件。一项能力放哪一层看它是否属于某个业务域，不看有几个使用方
+- 地图能力按 ADR 0027 分层：与框架无关的逻辑在 map-core，Vue 衔接在 map-vue，和业务、江苏都无关的通用交互（绘制、逐点编辑、测量、框选手势、鼠标旁的提示）在 `@mx/map-tools`（ADR 0145），项目级的公共能力（底图、行政区、工具栏界面）在 `shared/map`，业务数据驱动的图层在 feature，页面挑选组合；用组合，不做带开关的全能地图组件。一项能力放哪一层看它是否属于某个业务域，不看有几个使用方
 - 页面用 `provideMap()` 创建会话，用 `map.bindStyle()` 把拥有者的推导函数（`() => StyleGroup`）绑定到分组，只能在同一个组件的 setup 里绑定；拥有者不提交样式，"不显示"用推导结果返回空分组表达（ADR 0028）
 - 业务地图的画布用 `shared/map/backend-request.ts` 的 `JIANGSU_MAP_OPTIONS`（后端校验瓦片的 token，见 `docs/archive/migration.md`）：只给发往 `appConfig.apiBaseUrl` 的请求带 token，天地图等第三方不带；token 放请求头，不拼进地址。瓦片的 401 由 app 通过 `MAP_ERROR_REPORTER` 注入的 `reportMapError` 接收，和接口的 401 走同一个 `onUnauthorized`，页面不另外处理
 - 引用别的分组数据源的推导，要依赖被引用方的状态，保证两者在同一轮变化、一起提交；拥有者的数据源、图层和样式图片的 ID 以分组名为前缀（ADR 0027、0028、0045）
@@ -50,9 +51,9 @@ paths:
 
 - 交互工具用 `map.registerTools()` 在页面的 setup 里登记，同一时间只有一个当前工具；工具声明光标和手势，只由适配器应用；工具只拿到 `ToolView`（`kind`、`pick`、`project`、`queryRendered`），不碰原生地图（ADR 0034、0047）
 - 工具要接管按在自己手柄上的拖动（如逐点编辑的节点）时声明 `capturesPress(point, view)`，只对手柄返回 true，按在别处仍平移地图（ADR 0122）
-- 关掉拖动平移的工具要临时拖动地图时声明 `panModifier`，值取 `shared/map` 的 `currentPanKey()`（Mac 用 ⌘，其他用 Ctrl），平移和手型光标由适配器负责，工具不自己监听修饰键（ADR 0056）
+- 关掉拖动平移的工具要临时拖动地图时声明 `panModifier`，值取 `@mx/map-tools` 的 `currentPanKey()`（Mac 用 ⌘，其他用 Ctrl），平移和手型光标由适配器负责，工具不自己监听修饰键（ADR 0056）
 - 工具栏的按钮由页面挑选（`items`），动作的回调由页面给出（`actions`）；开关面板的动作，由页面通过 `pressed` 告诉工具栏显示为按下，工具栏不保存开关（ADR 0034、0036）
-- 地图上跟着鼠标的提示用 `shared/map/pointer-hint` 的 `PointerHint`（靠边时翻到另一侧），不在各个浮层里各写一套；挂在地图上某一点的卡片（如位置信息）只放在可视区域里（上下文的 `overlayPadding()`，ADR 0055）
+- 地图上跟着鼠标的提示用 `@mx/map-tools` 的 `PointerHint`（靠边时翻到另一侧），不在各个浮层里各写一套；挂在地图上某一点的卡片（如位置信息）只放在可视区域里（上下文的 `overlayPadding()`，ADR 0055）
 
 ## MapLibre 的写法
 
@@ -65,7 +66,7 @@ paths:
 - 行政区边界的入口：现状底图在业务组，打开功能标签；其他地图页给 `MapViewControls` 传 `boundaries` 和 `boundariesOpen`，点开是底图同款的浮层，不另放工具栏，开关由页面持有（窄屏时计入 `useSideExclusion`）；默认级别由页面设置（ADR 0128）
 - 内网的静态底图用本地市界直接绘制面、线和地名，不用图片，也不用天地图的截图或瓦片；地名、各市分色是 `static-options.ts` 里的开关，不进 `.env`，默认都关（全省 CREAM）；陆地色是换算好的不透明 HEX，不用透明度变量；绑定 `basemap-labels` 分组的页面在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`，打开地名后漏传时整个视图进入 `failed`；改了配色、分色开关或边界数据运行 `basemap:generate`（ADR 0133、0134）
 - 区划目录和区划边界只用本地数据（`shared/map/region`），目录与市界、县界数据由测试保证逐条一致（ADR 0036）；经纬度的识别、显示和复制只用 `shared/map/location/coordinate-format.ts` 的纯函数（ADR 0037）
-- 区划裁剪按区划边界的几何，不按要素属性里的区划代码过滤（业务数据的代码和区划目录对不上）：区划外用 `region-clip` 分组的遮罩盖住；显示和查询的范围都取 `readyBoundary`；点选、框选的渲染要素先按范围过滤再去重、计数，发给后端的几何只用 `query-geometry.ts` 的 `queryGeometry` 整理（误差不超过 2 像素、有效、最多 120 个坐标），整理不出来时提示范围太复杂（ADR 0051）
+- 区划裁剪按区划边界的几何，不按要素属性里的区划代码过滤（业务数据的代码和区划目录对不上）：区划外用 `region-clip` 分组的遮罩盖住；显示和查询的范围都取 `readyBoundary`；点选、框选的渲染要素先按范围过滤再去重、计数，发给后端的几何只用 `@mx/map-tools` 的 `queryGeometry` 整理（误差不超过 2 像素、有效、最多 120 个坐标），整理不出来时提示范围太复杂（ADR 0051）
 
 ## 地图页
 

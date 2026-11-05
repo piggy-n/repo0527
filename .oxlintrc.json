@@ -169,6 +169,13 @@
                 }
               },
               {
+                "from": { "element": { "type": "package", "captured": { "name": "map-tools" } } },
+                "allow": {
+                  "to": { "element": { "type": "package", "captured": { "name": "{map-core,map-vue}" } } },
+                  "dependency": { "source": "@mx/*" }
+                }
+              },
+              {
                 "from": { "element": { "type": "package", "captured": { "name": "{utils,map-core,map-cesium}" } } },
                 "disallow": {
                   "to": {
@@ -179,7 +186,7 @@
                 }
               },
               {
-                "from": { "element": { "type": "package", "captured": { "name": "map-vue" } } },
+                "from": { "element": { "type": "package", "captured": { "name": "{map-vue,map-tools}" } } },
                 "disallow": {
                   "to": { "module": { "source": ["vue-router", "pinia", "element-plus", "@element-plus/**"] } }
                 }

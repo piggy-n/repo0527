@@ -1,6 +1,6 @@
 import { BROWSE_TOOL } from '@mx/map-core';
+import { MEASURE_TOOL_IDS, type MeasureToolId } from '@mx/map-tools';
 import type { IconName } from '../../icons/SvgIcon';
-import { MEASURE_TOOL_IDS, type MeasureToolId } from '../measure/useMeasure';
 
 /** 点选工具的 ID：按钮在工具栏上，实现由业务模块登记（ADR 0047 第 6 节） */
 export const FEATURE_PICK_TOOL = 'feature-pick';

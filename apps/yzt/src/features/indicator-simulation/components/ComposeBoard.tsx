@@ -1,6 +1,7 @@
 import { VideoPlay } from '@element-plus/icons-vue';
 import { useResizeObserver } from '@vueuse/core';
 import { MxPanel } from '@mx/ui';
+import { usePageActive } from '@mx/map-vue';
 import { ElButton, ElPopover, ElTag } from 'element-plus';
 import {
   computed,
@@ -17,7 +18,6 @@ import {
   watch
 } from 'vue';
 import { ChatAvatar } from '@/shared/chat-avatar/ChatAvatar';
-import { usePageActive } from '@/shared/composables/usePageActive';
 import { useSortableList } from '@/shared/composables/useSortableList';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import { districtsOf, JIANGSU_CITIES, shortRegionName } from '@/shared/map/region/region-catalog';

@@ -1,6 +1,6 @@
 import type { ScreenPoint } from '@mx/map-core';
+import { useShownElementSize } from '@mx/map-vue';
 import { computed, defineComponent, type PropType, ref } from 'vue';
-import { useShownElementSize } from '../../composables/useShownElementSize';
 import { pointerHintSides, type Size } from './pointer-hint';
 import styles from './PointerHint.module.scss';
 

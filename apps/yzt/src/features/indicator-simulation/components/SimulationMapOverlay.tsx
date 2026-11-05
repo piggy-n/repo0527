@@ -1,7 +1,6 @@
-import { useMap } from '@mx/map-vue';
+import { useMap, useShownElementSize } from '@mx/map-vue';
+import { PointerHint } from '@mx/map-tools';
 import { computed, defineComponent, type PropType, ref } from 'vue';
-import { useShownElementSize } from '@/shared/composables/useShownElementSize';
-import { PointerHint } from '@/shared/map/pointer-hint/PointerHint';
 import type { SimulationMap } from '../composables/useSimulationMap';
 import { type LabelLevel, labelLevels } from '../map/label-layout';
 import { DISTRICTS_GROUP } from '../map/map-frame';

@@ -21,7 +21,7 @@ paths:
 
 ## 页面缓存与加载
 
-- 切走时要保留状态的页面在路由 meta 写 `keepAlive: true`，由 `AppLayout` 里常驻的 `KeepAlive` 缓存，布局卸载（回到登录页）时清空；环境变量 `VITE_PAGE_STATE_RESET=true` 时不缓存、每次进入都是初始状态（`.env` 提交的是 true，ADR 0114、0138），它只管页面缓存，不影响偏好（ADR 0140）；`routes.test.ts` 列出缓存的页面（ADR 0063）。被缓存的页面里量尺寸用 `shared/composables` 的 `useShownElementSize`，不直接用 `useElementSize`（停用期间量到 0，恢复的第一帧会按 0 排版）；停用时要结束的临时交互用 `usePageActive`。画布型页面的根元素用 `height: 100%`：内容区不是弹性容器，`flex: 1` 不生效，浮层全是绝对定位时整页高度为 0（见 `docs/design/page-layout.md`）
+- 切走时要保留状态的页面在路由 meta 写 `keepAlive: true`，由 `AppLayout` 里常驻的 `KeepAlive` 缓存，布局卸载（回到登录页）时清空；环境变量 `VITE_PAGE_STATE_RESET=true` 时不缓存、每次进入都是初始状态（`.env` 提交的是 true，ADR 0114、0138），它只管页面缓存，不影响偏好（ADR 0140）；`routes.test.ts` 列出缓存的页面（ADR 0063）。被缓存的页面里量尺寸用 `@mx/map-vue` 的 `useShownElementSize`，不直接用 `useElementSize`（停用期间量到 0，恢复的第一帧会按 0 排版）；停用时要结束的临时交互用 `usePageActive`。画布型页面的根元素用 `height: 100%`：内容区不是弹性容器，`flex: 1` 不生效，浮层全是绝对定位时整页高度为 0（见 `docs/design/page-layout.md`）
 - 加载耗时用 `shared/perf` 的 `LoadTrace` 标记（User Timing，留在产物里、不上报），登录到地图的步骤清单和实测脚本的 `STEPS` 由测试保证一致；改加载方式（预加载、拆分块、换框架）前后用 `measure:map-load` 实测，几种做法用 `--builds` 交替比较，模拟第一次访问用新的浏览器上下文、不禁用缓存（ADR 0061，见 `docs/modules/perf.md`）
 
 ## 会话

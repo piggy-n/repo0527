@@ -152,7 +152,7 @@ session.tool.on('input', (event, view) => ...);  // 只读的输入，和当前�
 - 输入只交给当前工具；Esc 先交给工具，工具没有返回 `true` 并且它是临时任务时退出
 - 交给当前工具之前先发出 `input` 事件（输入和来自哪个视图的 `kind`，按键也发出），用于跟踪鼠标位置这类和当前工具无关的显示（5D.3 的状态栏）。监听者抛错时当前工具照样收到这次输入（`try/finally`），错误仍抛给调用方，由适配器的 `#guard` 报告
 - 工具的光标、要关掉的手势是工具上的声明，由视图读 `activeTool` 后应用（ADR 0034 第 3 条）
-- 关掉了拖动平移的工具可以声明 `panModifier`（`'ctrl'` 或 `'meta'`）：按住这个键时左键拖动平移地图，这次拖动不交给工具（ADR 0056）。map-core 不判断平台，由使用方给出（`shared/map` 的 `currentPanKey()`）
+- 关掉了拖动平移的工具可以声明 `panModifier`（`'ctrl'` 或 `'meta'`）：按住这个键时左键拖动平移地图，这次拖动不交给工具（ADR 0056）。map-core 不判断平台，由使用方给出（`@mx/map-tools` 的 `currentPanKey()`）
 - 开着拖动平移的工具可以声明 `capturesPress(point, view)`：左键按在它认领的位置（如编辑的节点）时，这次拖动交给工具、不平移地图（ADR 0122）。`session.tool.capturesPress` 转问当前工具；MapLibre 适配器在 `mousedown` 时问，接管就调用地图事件的 `preventDefault()`，按下照样交给工具。只在二维生效
 - 释放时让当前工具退出；之后登记、激活、转交输入都抛错
 

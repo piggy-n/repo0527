@@ -1,4 +1,4 @@
-import { provideMap } from '@mx/map-vue';
+import { provideMap, usePageActive } from '@mx/map-vue';
 import { ElMessage } from 'element-plus';
 import { computed, defineComponent, ref, Transition, watch } from 'vue';
 import { AiDock } from '@/features/indicator-simulation/components/AiDock';
@@ -26,7 +26,6 @@ import { BASEMAP_STYLE_ROOT } from '@/shared/map/basemap/static-basemap';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
-import { usePageActive } from '@/shared/composables/usePageActive';
 import { JIANGSU_CAMERA } from '@/shared/map/jiangsu';
 import styles from './IndicatorSimulationPage.module.scss';
 

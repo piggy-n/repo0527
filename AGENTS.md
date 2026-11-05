@@ -60,7 +60,8 @@ packages/      workspace 内部包，导出 TS 源码，不构建；统一用 @m
 ├─ icons/       @mx/icons       图标组件与 SVG 规范化工具（ADR 0014）
 ├─ map-core/    @mx/map-core    地图内核，不依赖 Vue
 ├─ map-cesium/  @mx/map-cesium  Cesium 三维
-└─ map-vue/     @mx/map-vue     地图与 Vue 的衔接
+├─ map-vue/     @mx/map-vue     地图与 Vue 的衔接
+└─ map-tools/   @mx/map-tools   地图的通用交互：绘制、逐点编辑、测量、框选手势、鼠标旁的提示（ADR 0145）
 ```
 
 - `pages/dev/<名称>/`：开发页面，和业务页面分开放，只注册在 `devRoutes`，生产构建不包含，业务代码不导入

@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineComponent, KeepAlive, nextTick, type Ref, ref } from 'vue';
-import { usePageActive } from './usePageActive';
+import { usePageActive } from './use-page-active';
 
 describe('usePageActive', () => {
   it('KeepAlive 停用时为 false，激活时回到 true', async () => {

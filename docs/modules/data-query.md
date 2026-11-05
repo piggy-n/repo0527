@@ -15,7 +15,7 @@ result-layers.ts     预览（query-preview）和结果（query-result）的样�
 composables/
   useDataQuery       编排：页签、提交、重置、预览分组；创建下面这些拥有者
   useAttributeForm   属性查询的表单（自然语言也回填到这里）
-  useSpatialForm     空间查询的图层和范围；范围来自 shared/map/draw 的绘制工具或上传的 shp
+  useSpatialForm     空间查询的图层和范围；范围来自 @mx/map-tools 的绘制工具或上传的 shp
   useAdvancedForm    高级查询：点击插入、可以直接改的 SQL
   useNaturalLanguage 模拟解析：等 2 秒、按规则匹配；作废表示成结果，不抛错
   useQueryResult     最后一次提交的查询：结果表（usePagedList）、命中的要素、定位、第一个结果

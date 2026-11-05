@@ -1,8 +1,6 @@
 import type { ScreenPoint } from '@mx/map-core';
-import { useMap } from '@mx/map-vue';
-import { computed, defineComponent, type PropType, ref } from 'vue';
-import { useShownElementSize } from '../../composables/useShownElementSize';
-import { SvgIcon } from '../../icons/SvgIcon';
+import { useMap, useShownElementSize } from '@mx/map-vue';
+import { computed, defineComponent, type PropType, ref, type SlotsType, type VNode } from 'vue';
 import { PointerHint } from '../pointer-hint/PointerHint';
 import { labelSide, measureHint, type MeasureLabel, measureLabels } from './measure-labels';
 import { type Measure, measureKindOf } from './useMeasure';
@@ -26,7 +24,11 @@ export const MeasureOverlay = defineComponent({
   props: {
     measure: { type: Object as PropType<Measure>, required: true }
   },
-  setup(props) {
+  slots: Object as SlotsType<{
+    // 删除按钮的图标：包不依赖应用的图标，由使用方给出
+    removeIcon?: () => VNode[];
+  }>,
+  setup(props, { slots }) {
     const map = useMap();
     const root = ref<HTMLElement>();
     const canvas = useShownElementSize(root);
@@ -75,7 +77,7 @@ export const MeasureOverlay = defineComponent({
               title="删除这条测量"
               onClick={() => props.measure.remove(measurementId)}
             >
-              <SvgIcon name="close" size={12} />
+              {slots.removeIcon?.()}
             </button>
           )}
         </div>

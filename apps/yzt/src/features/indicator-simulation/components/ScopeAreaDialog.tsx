@@ -1,11 +1,11 @@
 import { MxTitle } from '@mx/ui';
 import { MapCanvas, useMap, useMapOverlay } from '@mx/map-vue';
+import { BoxSelectOverlay } from '@mx/map-tools';
 import { ElButton, ElDialog, ElInput, ElMessage, ElTooltip } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, type VNodeChild, watch } from 'vue';
 import { type IconName, SvgIcon } from '@/shared/icons/SvgIcon';
 import { JIANGSU_MAP_OPTIONS } from '@/shared/map/backend-request';
 import type { Boundaries } from '@/shared/map/boundary/useBoundaries';
-import { BoxSelectOverlay } from '@/shared/map/box-select/BoxSelectOverlay';
 import { JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import { MAP_TOOLTIP_PROPS } from '@/shared/map/tooltip';

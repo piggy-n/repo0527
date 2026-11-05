@@ -1,9 +1,8 @@
 import { ArrowDown, ArrowUp, Close } from '@element-plus/icons-vue';
-import { useMapOverlay } from '@mx/map-vue';
+import { useMapOverlay, usePageActive } from '@mx/map-vue';
 import { MxPanel } from '@mx/ui';
 import { ElButton } from 'element-plus';
 import { defineComponent, type PropType, ref, type SlotsType, type VNode } from 'vue';
-import { usePageActive } from '../../composables/usePageActive';
 import type { PanelGroup } from './usePanelGroup';
 import styles from './MapPanelGroup.module.scss';
 

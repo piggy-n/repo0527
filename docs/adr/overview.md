@@ -11,7 +11,7 @@
 | 组件写法 | Vue 3 + TSX，不用 `.vue` 单文件组件 | 0001 | [code-style](../code-style.md) |
 | TypeScript 与 lint | 只用 TS 7，不引入依赖 TS JS API 的工具；oxlint + oxlint-tsgolint；规则只分 `error`、`off`；不开 `incremental` | 0003、0006、0009 | [oxlintrc](../config/oxlintrc.md)、[tsconfig](../config/tsconfig.md) |
 | 模块边界 | `pages → features → shared → packages`，lint 检查；包单入口，不读 env、store、router | 0004、0006、0143 | [oxlintrc](../config/oxlintrc.md) |
-| 内部包 | `packages/*` 的 `exports` 直接指向源码，不单独构建、不发布；前缀 `@mx/`，应用叫 `yzt`（旧文档里的 `@yzt/`、`apps/web` 是同一个东西）；每个包自己跑测试，`pnpm test` 逐个包串行；共用依赖的版本放 catalog，要和应用共用一份的写 peer；`shared/map` 暂不拆 | 0014、0143、0144 | [internal-packages](../config/internal-packages.md) |
+| 内部包 | `packages/*` 的 `exports` 直接指向源码，不单独构建、不发布；前缀 `@mx/`，应用叫 `yzt`（旧文档里的 `@yzt/`、`apps/web` 是同一个东西）；每个包自己跑测试，`pnpm test` 逐个包串行；共用依赖的版本放 catalog，要和应用共用一份的写 peer；地图的通用交互拆成 `@mx/map-tools`，`shared/map` 留下的暂不拆 | 0014、0143、0144、0145 | [internal-packages](../config/internal-packages.md) |
 | 依赖维护 | 一般用 `^`，不遵守语义化版本的精确锁定；发布满 3 天才能安装；大版本一次升一个 | 0005 | [package-json](../config/package-json.md)、[pnpm-workspace](../config/pnpm-workspace.md) |
 | CI 与冒烟 | GitHub Actions 全量跑，push 到 main 触发；生产构建上用本地固定接口做冒烟 | 0005、0040、0065 | [ci-workflow](../config/ci-workflow.md) |
 | 本地验证 | 按影响范围和风险分四级，只跑相关测试；改坏验证只用于修 bug 和关键逻辑 | 0139 | `AGENTS.md`"验证分级" |
@@ -54,7 +54,7 @@
 | 数据下载 | 普通用户的申请列表与统计报表，和系统管理共用 feature | 0127 | [system-management](../modules/system-management.md) |
 | 监测指标 | 条件、指标树、计算、成果四类拥有者；计算的轮询；边界入口在控制栏 | 0098、0128 | [monitoring-indicators](../modules/monitoring-indicators.md) |
 | 基本统计 | 报表、总览、计算三个拥有者；轮询用查询库的 `refetchInterval`；开放六种报表，变化类按本底年份查看 | 0100、0117 | [monitoring-statistics](../modules/monitoring-statistics.md) |
-| 数据查询 | 四个页面一个组件；高级查询暂时隐藏；地图控制和底图卡在右上角，结果横跨整页；通用绘制工具在 `shared/map/draw` | 0104、0112、0119 | [data-query](../modules/data-query.md) |
+| 数据查询 | 四个页面一个组件；高级查询暂时隐藏；地图控制和底图卡在右上角，结果横跨整页；通用绘制工具在 `@mx/map-tools` | 0104、0112、0119、0145 | [data-query](../modules/data-query.md) |
 | 指标 AI 计算 | 确定性数据、规则解析不接大模型；流程图为核心、结果并入同一布局；按计算规则的参数，没有目标值；自定义范围与先对话后补充；步行时长可调 | 0105～0109、0120、0121、0125、0129、0131 | [indicator-simulation](../modules/indicator-simulation.md) |
 | 城市指标 | 32 项来自 2026 年监测成果简报，其余模拟；统一从 `indicatorValue` 取 | 0130 | [city-indicators](../modules/city-indicators.md) |
 | 驾驶舱 | 独立路由、自身的 Three.js 渲染；"查询统计 → 专项统计"进入，新标签页打开 | 0077、0110 | [city-dashboard](../modules/city-dashboard.md) |

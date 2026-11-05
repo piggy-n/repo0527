@@ -10,7 +10,7 @@ import type {
   ViewBounds,
   ViewKind
 } from '@mx/map-core';
-import { lngLatAt, pixelSizeAt, queryGeometry, screenBoxPolygon } from '@/shared/map/query-geometry';
+import { lngLatAt, pixelSizeAt, queryGeometry, screenBoxPolygon } from '@mx/map-tools';
 import { clipToScope, intersectsScope, type RegionScope, scopeContains } from '@/shared/map/region/region-scope';
 import { type FeatureRecord, isFeatureGuid } from './api';
 import type { Resource, ResourceGeometry } from './catalog';

@@ -1,6 +1,6 @@
 import { EYE_HEIGHT, type WalkView } from '@mx/map-core';
+import { useShownElementSize } from '@mx/map-vue';
 import { computed, defineComponent, type PropType, ref, type VNode } from 'vue';
-import { useShownElementSize } from '../../composables/useShownElementSize';
 import { type CoordinateFormat, formatLngLat } from '../location/coordinate-format';
 import { eyeText, fitStatusLayout, type ScaleBar, type StatusLayout, type ViewAngles } from './status-bar';
 import type { MapReadout, ReadoutPosition } from './useMapReadout';

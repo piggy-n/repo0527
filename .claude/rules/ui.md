@@ -54,5 +54,5 @@ paths:
 - 列表页的筛选栏用 `shared/query-form` 的 `QueryForm`（控件等宽；条件不换行时标签按文字宽度，换行时标签统一宽度并两端对齐；按钮放不下就另起一行），不用 `<label>` 包住控件；工具栏和筛选栏的按钮按 `page-layout.md` "操作按钮"的对照表配图标，表格行内的文字按钮不加图标
 - 不给 `ElTree` 设置 `indent`：树的层级引导线按 Element 默认缩进 18 定位（见 `theme.md` 的"树的全局样式"）
 - 表格的空值由全局样式显示 `-`（见 `theme.md` 的"表格的全局样式"），列上不再用 `formatter` 或插槽处理空值
-- `packages/ui` 的组件只通过 CSS 变量使用令牌，不 import `@mx/theme` 的 SCSS；不能引用 `SvgIcon`，自定义图标由使用方通过插槽传入
+- `packages/ui`、`packages/map-tools` 的组件只通过 CSS 变量使用令牌，不 import `@mx/theme` 的 SCSS；不能引用 `SvgIcon`，自定义图标由使用方通过插槽传入
 - Element Plus 的外观只在 `packages/theme/src/element-theme.scss` 统一调整，页面和组件不单独覆盖 `--el-*` 变量；需要另一种外观时在其中定义变体 class（如 `input-filled`、`button-xl`），页面只引用 class，见 `docs/design/theme.md`；唯一的例外是 `packages/ui` 分栏布局内部抽屉的内边距（见 `docs/modules/ui.md`）

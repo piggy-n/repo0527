@@ -1,5 +1,6 @@
 import { BROWSE_TOOL, type MapTool, type ViewKind } from '@mx/map-core';
-import { provideMap } from '@mx/map-vue';
+import { provideMap, useShownElementSize } from '@mx/map-vue';
+import { MEASURE_TOOL_IDS } from '@mx/map-tools';
 import { useEventListener } from '@vueuse/core';
 import { ElRadioButton, ElRadioGroup, ElSwitch } from 'element-plus';
 import { computed, defineComponent, type PropType, ref, shallowRef, watch } from 'vue';
@@ -9,7 +10,6 @@ import { ResourceLegend } from '@/features/resource-map/components/ResourceLegen
 import { useResourceLayers } from '@/features/resource-map/composables/useResourceLayers';
 import { useResourcePanelLayout } from '@/features/resource-map/composables/useResourcePanelLayout';
 import { useResourceSymbols } from '@/features/resource-map/composables/useResourceSymbols';
-import { useShownElementSize } from '@/shared/composables/useShownElementSize';
 import { BasemapPanel } from '@/shared/map/basemap/BasemapPanel';
 import { basemapOption } from '@/shared/map/basemap/basemap-style';
 import { BasemapThumbnail } from '@/shared/map/basemap/BasemapThumbnail';
@@ -18,7 +18,6 @@ import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPan
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { MapCard } from '@/shared/map/card/MapCard';
 import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
-import { MEASURE_TOOL_IDS } from '@/shared/map/measure/useMeasure';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
