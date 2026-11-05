@@ -44,12 +44,12 @@
       {
         "paths": [
           { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
-          { "name": "maplibre-gl", "message": "maplibre-gl 只能在 libs/map-core/maplibre 和 app 中导入（ADR 0024）" },
+          { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
           { "name": "cesium", "message": "cesium 只能在 libs/map-cesium 和 app 中导入（ADR 0079）" }
         ],
         "patterns": [
           { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
-          { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 libs/map-core/maplibre 和 app 中导入（ADR 0024）" },
+          { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
           { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 libs/map-cesium 和 app 中导入（ADR 0079）" }
         ]
       }
@@ -84,7 +84,7 @@
       }
     },
     {
-      "files": ["apps/web/src/libs/map-core/maplibre/**"],
+      "files": ["packages/map-core/src/maplibre/**", "packages/*/src/test-setup.browser.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -109,11 +109,11 @@
           {
             "paths": [
               { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
-              { "name": "maplibre-gl", "message": "maplibre-gl 只能在 libs/map-core/maplibre 和 app 中导入（ADR 0024）" }
+              { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" }
             ],
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
-              { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 libs/map-core/maplibre 和 app 中导入（ADR 0024）" }
+              { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" }
             ]
           }
         ]

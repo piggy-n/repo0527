@@ -1,6 +1,6 @@
 import vueJsx from '@vitejs/plugin-vue-jsx';
 import { iconsPlugin } from '@yzt/icons/tools';
-import { loadEnv } from 'vite';
+import { loadEnv, normalizePath } from 'vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 // 与 vite 的 defineConfig 相同，只是类型里多了 test 字段
 import { configDefaults, defineConfig } from 'vitest/config';
@@ -53,6 +53,17 @@ export default defineConfig(({ mode }) => {
     resolve: {
       // 直接读取 tsconfig 的 paths，不再单独维护一份别名
       tsconfigPaths: true
+    },
+    build: {
+      rolldownOptions: {
+        output: {
+          // 包的入口都是 src/index.ts，分块默认会叫 src；换成包名（如 map-cesium），产物里才认得出
+          chunkFileNames: ({ facadeModuleId, name }) => {
+            const packageName = /\/packages\/([^/]+)\/src\/index\.ts$/.exec(normalizePath(facadeModuleId ?? ''))?.[1];
+            return `assets/${packageName ?? name}-[hash].js`;
+          }
+        }
+      }
     },
     server: {
       // 预览工具用 PORT 分配端口（.claude/launch.json 的 autoPort），被占用时直接失败；没有 PORT 时沿用 Vite 的默认端口

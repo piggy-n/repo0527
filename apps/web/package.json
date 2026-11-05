@@ -37,6 +37,7 @@
     "@vue/devtools-api": "^8.2.1",
     "@vueuse/core": "catalog:",
     "@yzt/icons": "workspace:*",
+    "@yzt/map-core": "workspace:*",
     "@yzt/ui": "workspace:*",
     "@yzt/utils": "workspace:*",
     "axios": "^1.20.0",
