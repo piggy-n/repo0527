@@ -1,7 +1,7 @@
 # vite.config.ts 配置说明
 
 对应文件：`apps/web/vite.config.ts`
-相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（libs 的 Sass 入口）、ADR 0079（Cesium 的运行时文件）
+相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（libs 的 Sass 入口）、ADR 0079（Cesium 的运行时文件）、ADR 0141（未入库的本地文件）
 
 ## 整体结构
 
@@ -13,7 +13,7 @@
 
 | 配置 | 值 | 说明 |
 |---|---|---|
-| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`staticFiles`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`staticFiles` 提供 Cesium 的运行时文件和资源的最小显示级别，`buildOutputPlugin` 只在构建时清理、检查产物，都见下文 |
+| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`staticFiles`、`localFiles`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`staticFiles` 提供 Cesium 的运行时文件和资源的最小显示级别，`localFiles` 只在开发服务器上提供未入库的模型和原型，`buildOutputPlugin` 只在构建时检查产物，都见下文 |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `css.preprocessorOptions.scss.loadPaths` | `[src/libs]` | libs 模块的 Sass 入口按模块名引用，见下文 |
 | `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
@@ -62,13 +62,19 @@ const staticFiles = viteStaticCopy({
 - 所有模式都启用：浏览器测试用真实的 Cesium，同样从 `/cesium/` 加载
 - 基础地址由 app 的三维运行时设置为 `${BASE_URL}cesium/`（[modules/map-cesium.md](../modules/map-cesium.md)"运行时"），没有写进 `define`、也不用 `window.CESIUM_BASE_URL`
 
+### 未入库的本地文件
+
+```ts
+const localFiles = localFilesPlugin({ '/3dt': localPath('3dt'), '/design.local': localPath('design') });
+```
+
+模型和原型放在仓库根目录的 `local/`，不放进 `public/`，构建就不会复制；开发服务器把这两个地址映射过去，地址和线上一致。目录划分、`YZT_LOCAL_DIR` 和具体行为见 [local-files.md](local-files.md)。
+
 ### 构建产物检查
 
 `tools/build-output/vite-plugin.ts` 的 `buildOutputPlugin` 只在 `build` 生效，每次公网、内网构建都会执行，不需要另跑命令：
 
-- Vite 复制 `public/` 后，在 `writeBundle` 清理当前输出目录内的 `design.local/`，源设计稿仍放在 `public/design.local/`。删除前确认输出目录与源码、`public` 不重叠，支持自定义 `outDir`
-- 同时删除输出目录 `3dt/` 下除 `manifest.json` 以外的内容：模型数据本机开发时放在 `public/3dt/`，服务器上单独部署（[deployment.md](../deployment.md)"3DT 模型数据单独部署"），清单随产物发布。Vite 仍会先复制再删除，本机放着全部模型（约 1.5 GB）时构建多花约 30 秒（2026-10-29 实测）；CI 没有模型数据，不受影响
-- 检查全部分块的模块清单，禁止包含 `src/pages/dev/`；再检查磁盘文件，禁止残留 `Dev*Page` 文件、`design.local` 和 `3dt/` 下清单以外的内容
+- 检查全部分块的模块清单，禁止包含 `src/pages/dev/`；再检查磁盘文件，禁止残留 `Dev*Page` 文件、`design.local` 和 `3dt/` 下清单以外的内容。只检查、不清理：原型和模型数据不放在 `public/`（[local-files.md](local-files.md)），放错了构建失败，错误信息写明该放到哪里
 - 从入口分块沿静态 `imports` 检查依赖，禁止包含 MapLibre（`maplibre-gl`）和 Cesium（`cesium`、`@cesium/*`）；不遍历动态导入，地图运行时仍可按需加载、预加载。map-vue 的上下文会连带 maplibre-gl，所以给地图页注入三维运行时的那一层也放在地图页的分块里（ADR 0079 第 2 节）
 - 关闭天地图时，有效的 `VITE_TIANDITU_KEY` 必须为空；扫描文本产物，禁止残留按 `production` 模式读取的公网 key，错误只报告文件名。未调用的天地图地址模板允许保留，不以域名字符串代替运行时开关
 
@@ -224,6 +230,7 @@ AI 对话的后端是另一个服务，用同样的写法加了第二条：`/ai-
 ## 修改时的检查清单
 
 - 新增代理规则：同步更新 `docs/deployment.md` 中的 nginx 示例，保持开发和生产一致
+- 新增映射到 `local/` 的地址：同时写进 [local-files.md](local-files.md) 和 `docs/deployment.md`（线上怎么提供）
 - 新增插件：确认它不依赖 TS 的 JS API（ADR 0003），并在本文登记；插件对测试同样生效，改完运行 `pnpm test`
 - 修改插件的选项：测试的转换缓存不包含插件选项，先执行 `pnpm --filter @yzt/web exec vitest --clearCache` 再运行测试
 - 改动路径别名：只改 tsconfig 的 `paths`，不要在这里加 `resolve.alias`

@@ -8,6 +8,8 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { configDefaults, defineConfig } from 'vitest/config';
 import { buildOutputPlugin } from './tools/build-output/vite-plugin.ts';
 import { iconsPaths } from './tools/icons/paths.ts';
+import { localPath } from './tools/local-files/paths.ts';
+import { localFilesPlugin } from './tools/local-files/vite-plugin.ts';
 import { titleOutlineConfig } from './tools/system-title/paths.ts';
 import { systemTitlePlugin } from './tools/system-title/vite-plugin.ts';
 
@@ -44,8 +46,11 @@ export default defineConfig(({ mode }) => {
     ]
   });
 
+  // 模型和原型不入库、不进产物，开发时从 local/ 提供，地址和线上一致（ADR 0141）
+  const localFiles = localFilesPlugin({ '/3dt': localPath('3dt'), '/design.local': localPath('design') });
+
   return {
-    plugins: [vueJsx(), ...generators, staticFiles, buildOutputPlugin()],
+    plugins: [vueJsx(), ...generators, staticFiles, localFiles, buildOutputPlugin()],
     resolve: {
       // 直接读取 tsconfig 的 paths，不再单独维护一份别名
       tsconfigPaths: true

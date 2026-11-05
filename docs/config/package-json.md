@@ -188,6 +188,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "opentype.js": "^2.0.0",
     "playwright": "^1.64.0",
     "sass-embedded": "^1.105.0",
+    "sirv": "^3.0.2",
     "typescript": "7.0.2",
     "vite": "^8.3.5",
     "vite-plugin-static-copy": "^4.1.1",
@@ -231,6 +232,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `vite` | 开发服务器与构建工具，8.x 内部使用 Rolldown 打包 | webpack、Rsbuild |
 | `@vitejs/plugin-vue-jsx` | 用 Babel 编译 Vue 的 TSX，支持 Vue 专有的 JSX 语义 | `@vitejs/plugin-vue`（SFC，ADR 0001 未采用） |
 | `vite-plugin-static-copy` | 把 Cesium 的 `Workers`、`Assets`、`ThirdParty` 复制到产物的 `cesium/`，开发服务器和测试时直接从 `node_modules` 提供（ADR 0079 第 1 节），见 [vite-config.md](vite-config.md)"Cesium 的运行时文件"。Cesium 官方的 Vite 示例用的也是它 | 在 `public/` 放一份副本（要入库或在安装后复制）、`vite-plugin-cesium`（第三方插件，通过全局的 `CESIUM_BASE_URL` 设置基础地址） |
+| `sirv` | 开发服务器把 `/3dt/*`、`/design.local/*` 映射到未入库的 `local/`（ADR 0141），见 [local-files.md](local-files.md)。Vite 提供 `public/` 用的也是它 | 手写中间件 |
 | `sass-embedded` | 编译 `*.module.scss`；通过嵌入协议调用原生 Dart Sass，比纯 JS 版 `sass` 快 | `sass`、Less、原生 CSS |
 | `@yzt/icons` | workspace 内部包（ADR 0014）。`workspace:*` 表示始终使用本仓库 `packages/icons` 的当前代码，pnpm 用符号链接连接，见 [internal-packages.md](internal-packages.md) | — |
 | `axios` | HTTP 请求，只在 `shared/http/client.ts` 中使用（ADR 0011） | ky、原生 fetch |

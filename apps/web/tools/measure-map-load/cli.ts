@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type Browser, type BrowserContext, type CDPSession, chromium, type Page, type Request } from 'playwright';
 import { preview, type PreviewServer } from 'vite';
+import { localPath } from '../local-files/paths.ts';
 import {
   type BuildResult,
   type FinishedRequest,
@@ -250,7 +251,7 @@ async function measureSwitch(session: Session): Promise<SceneRawRun> {
       () => false
     );
   if (!clicked) {
-    const shot = resolve(import.meta.dirname, 'results.local', `${options.label}-click-failed-${Date.now()}.png`);
+    const shot = localPath('measure/map-load', `${options.label}-click-failed-${Date.now()}.png`);
     await page.screenshot({ path: shot }).catch(() => undefined);
     console.log(`[measure] 点不了"三维"，截图：${shot}`);
   }
@@ -386,7 +387,7 @@ try {
   const results = await measureAll(targets, options);
   report(results);
 
-  const outputDir = resolve(import.meta.dirname, 'results.local');
+  const outputDir = localPath('measure/map-load');
   mkdirSync(outputDir, { recursive: true });
   const file = resolve(outputDir, `${options.label}-${new Date().toISOString().replaceAll(':', '-')}.json`);
   writeFileSync(file, JSON.stringify({ options: { ...options, url: options.url ?? 'vite preview' }, results }, null, 2));

@@ -13,7 +13,7 @@
 
 两条命令输出到同一个目录，后一次覆盖前一次；nginx 配置相同。
 
-两种构建都自动清理产物中的 `design.local/`（源设计稿保留），并检查开发页没有进入产物、MapLibre 没有成为入口的静态依赖；内网构建还检查天地图 key 已清空且未残留在文本产物中。检查失败时不能使用该次产物部署，规则见 [config/vite-config.md](config/vite-config.md) 的“构建产物检查”。
+两种构建都检查产物里没有原型和模型数据（`public/` 只放要发布的文件，见 [config/local-files.md](config/local-files.md)）、开发页没有进入产物、MapLibre 没有成为入口的静态依赖；内网构建还检查天地图 key 已清空且未残留在文本产物中。检查失败时不能使用该次产物部署，规则见 [config/vite-config.md](config/vite-config.md) 的“构建产物检查”。
 
 ### 构建前放入字体
 
@@ -25,7 +25,7 @@
 
 ### 3DT 模型数据单独部署
 
-三维模型的清单 `public/3dt/manifest.json` 入库，随构建进入 `dist/3dt/`。模型数据（`SZ_3DT/` 等，2026-10-29 合计约 1.5 GB）不入库，也不进产物：本机开发时放在 `apps/web/public/3dt/` 下，构建时删除 `dist/3dt/` 里清单以外的内容（[config/vite-config.md](config/vite-config.md) 的"构建产物检查"）。
+三维模型的清单 `public/3dt/manifest.json` 入库，随构建进入 `dist/3dt/`。模型数据（`SZ_3DT/` 等，2026-10-29 合计约 1.5 GB）不入库，也不进产物：本机开发时放在 `local/3dt/` 下，由开发服务器映射到 `/3dt/*`（[config/local-files.md](config/local-files.md)）；`public/3dt/` 里只有清单，产物检查保证 `dist/3dt/` 里没有别的内容（[config/vite-config.md](config/vite-config.md) 的"构建产物检查"）。
 
 服务器上把模型数据放在发布目录之外，例如前端在 `/opt/front/dist/` 时：
 
