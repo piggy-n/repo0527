@@ -10,7 +10,8 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   forbidOnly: true,
-  timeout: 45_000,
+  // 这个时限也管创建浏览器上下文（用例里的 test.setTimeout 这时还没生效），三维用例之后可能很慢
+  timeout: 90_000,
   expect: { timeout: 15_000 },
   // CI 上把失败写成注解：作业日志要登录才能看，注解不用
   reporter: process.env.CI ? [['line'], ['github']] : 'line',
@@ -21,7 +22,7 @@ export default defineConfig({
     viewport: { width: 1600, height: 900 },
     deviceScaleFactor: 1,
     serviceWorkers: 'block',
-    actionTimeout: 15_000,
+    actionTimeout: 30_000,
     navigationTimeout: 15_000,
     launchOptions: { args: ['--use-angle=swiftshader'] }
   },
