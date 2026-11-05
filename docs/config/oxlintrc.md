@@ -113,15 +113,15 @@ console.log(value);
 "settings": {
   "import/resolver": {
     "typescript": {
-      "project": ["apps/web/tsconfig.app.json", "packages/*/tsconfig.lib.json"],
+      "project": ["apps/yzt/tsconfig.app.json", "packages/*/tsconfig.lib.json"],
       "noWarnOnMultipleProjects": true
     }
   },
   "boundaries/elements": [
-    { "type": "app", "pattern": "apps/web/src/app" },
-    { "type": "pages", "pattern": "apps/web/src/pages" },
-    { "type": "feature", "pattern": "apps/web/src/features/*", "capture": ["name"] },
-    { "type": "shared", "pattern": "apps/web/src/shared" },
+    { "type": "app", "pattern": "apps/yzt/src/app" },
+    { "type": "pages", "pattern": "apps/yzt/src/pages" },
+    { "type": "feature", "pattern": "apps/yzt/src/features/*", "capture": ["name"] },
+    { "type": "shared", "pattern": "apps/yzt/src/shared" },
     { "type": "package", "pattern": "packages/*", "capture": ["name"] }
   ]
 }
@@ -214,17 +214,17 @@ boundaries 要知道 `@/features/map`、`@yzt/map-core` 实际指向哪个文件
 ### scripts 允许 console
 
 ```json
-{ "files": ["scripts/**", "apps/web/tools/**", "packages/*/tools/**"], "rules": { "no-console": "off" } }
+{ "files": ["scripts/**", "apps/yzt/tools/**", "packages/*/tools/**"], "rules": { "no-console": "off" } }
 ```
 
-命令行脚本本来就通过 console 输出结果。`apps/web/tools/`、`packages/*/tools/` 是阶段二加入的 Node 工具目录（例如 `pnpm title:generate`、`yzt-icons`）。
+命令行脚本本来就通过 console 输出结果。`apps/yzt/tools/`、`packages/*/tools/` 是阶段二加入的 Node 工具目录（例如 `pnpm title:generate`、`yzt-icons`）。
 
 ### 地图适配器和 app 放开地图引擎
 
 ```json
 { "files": ["packages/map-core/src/maplibre/**", "packages/*/src/test-setup.browser.ts"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、cesium 的两项 }] } }
 { "files": ["packages/map-cesium/src/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项 }] } }
-{ "files": ["apps/web/src/app/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项 }] } }
+{ "files": ["apps/yzt/src/app/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项 }] } }
 ```
 
 默认严格、例外显式：基础规则对所有文件禁止 maplibre-gl 和 cesium，这里只对各自的适配器、app 的装配（`setWorkerUrl`、`setCesiumBaseUrl`、CSS，ADR 0023、0079）和包的测试 setup（包的浏览器测试不依赖应用，自己设置 Worker 地址，ADR 0143）放开：MapLibre 适配器仍不能导入 cesium，map-cesium 仍不能导入 maplibre-gl。override 会**整体替换**规则的选项，所以没有放开的几项要在每个 override 里再写一遍，否则这些目录就不再限制它们。oxlint 没有独立的 `typescript/no-restricted-imports` 可以分开配置，重复无法避免。
@@ -241,11 +241,11 @@ boundaries 要知道 `@/features/map`、`@yzt/map-core` 实际指向哪个文件
 { "files": ["packages/*/src/**", "packages/*/tools/**"], "rules": { "boundaries/dependencies": [ ... ] } }
 ```
 
-包只允许依赖外部模块、Node 内置模块、本包内部的相对路径和按方向放行的其他包，不能导入应用代码，保证包可以脱离应用单独使用。阶段二用探针验证：`packages/icons` 导入 `apps/web/src/shared/...` 会报错。
+包只允许依赖外部模块、Node 内置模块、本包内部的相对路径和按方向放行的其他包，不能导入应用代码，保证包可以脱离应用单独使用。阶段二用探针验证：`packages/icons` 导入 `apps/yzt/src/shared/...` 会报错。
 
 策略见下文"包的策略"。放行 Node 内置模块的一条（boundaries 把 `node:fs` 这类归为 `origin: "core"`）供 `tools/` 使用；浏览器端的 `src/` 不需要单独禁止内置模块：`tsconfig.lib.json` 没有加载 Node 类型，导入 `node:fs` 会直接类型报错。
 
-### apps/web/src 的依赖方向
+### apps/yzt/src 的依赖方向
 
 应用源码的分层规则都在这个 override 里。
 

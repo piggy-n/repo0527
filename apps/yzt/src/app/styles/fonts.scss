@@ -1,5 +1,5 @@
 // 阿里巴巴普惠体 3.0，只声明 400 和 600，浏览器只下载页面实际用到的字重（见 docs/design/fonts.md）
-// 字体文件按授权不能提交到公开仓库，放在不入库的 apps/web/public/fonts/；缺失时回退到 --font-family-base 中的后续字体
+// 字体文件按授权不能提交到公开仓库，放在不入库的 apps/yzt/public/fonts/；缺失时回退到 --font-family-base 中的后续字体
 // 先尝试本机已安装的同款字体，再下载；下载完成前先用后备字体显示，不阻塞渲染
 
 @font-face {

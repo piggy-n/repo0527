@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { zipSync } from 'fflate';
 import { localPath } from '../local-files/paths.ts';
 
-// 生成自定义监测范围的验收文件（同目录的 说明.md）：pnpm --filter @yzt/web scope-files:generate
+// 生成自定义监测范围的验收文件（同目录的 说明.md）：pnpm --filter yzt scope-files:generate
 
 type Point = [number, number];
 type Transform = (point: Point) => Point;

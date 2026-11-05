@@ -1,6 +1,6 @@
 function required(name: string, value: string | undefined): string {
   if (!value) {
-    throw new Error(`缺少环境变量 ${name}，请检查 apps/web 下的 .env 文件`);
+    throw new Error(`缺少环境变量 ${name}，请检查 apps/yzt 下的 .env 文件`);
   }
   return value;
 }

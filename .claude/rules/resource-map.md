@@ -1,10 +1,10 @@
 ---
 paths:
-  - "apps/web/src/features/resource-map/**"
-  - "apps/web/src/pages/current-map/**"
-  - "apps/web/src/pages/dev/{resources,map-ui}/**"
-  - "apps/web/src/app/resource-layers*"
-  - "apps/web/tools/probe-resource-classes/**"
+  - "apps/yzt/src/features/resource-map/**"
+  - "apps/yzt/src/pages/current-map/**"
+  - "apps/yzt/src/pages/dev/{resources,map-ui}/**"
+  - "apps/yzt/src/app/resource-layers*"
+  - "apps/yzt/tools/probe-resource-classes/**"
 ---
 
 # 现状底图的资源图层

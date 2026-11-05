@@ -2,7 +2,7 @@ import { loadEnv } from 'vite';
 import { titleOutlineConfig } from './paths.ts';
 import { syncTitleOutline } from './sync.ts';
 
-// 手动同步文字轮廓：在 apps/web 下运行 pnpm title:generate
+// 手动同步文字轮廓：在 apps/yzt 下运行 pnpm title:generate
 const title = loadEnv('production', process.cwd(), 'VITE_').VITE_APP_TITLE;
 if (!title) {
   console.error('[system-title] .env 中没有 VITE_APP_TITLE');

@@ -28,7 +28,7 @@ import {
   summarizeSceneRun
 } from './scene-report.ts';
 
-// 实测"点击登录 → 地图第一次加载完成"或"进了地图以后第一次切到三维"（docs/modules/perf.md）：在 apps/web 下运行
+// 实测"点击登录 → 地图第一次加载完成"或"进了地图以后第一次切到三维"（docs/modules/perf.md）：在 apps/yzt 下运行
 // pnpm measure:map-load；账号密码从环境变量读取，脚本不保存它们；--mock-backend 时不连后端、不用账号
 const options = parseOptions(process.argv.slice(2));
 const loginName = options.mockBackend ? 'measure' : process.env.YZT_MEASURE_LOGIN_NAME;

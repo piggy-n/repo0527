@@ -5,10 +5,10 @@
 
 ## 什么是内部包
 
-内部包（internal package）是只在本仓库内使用、不发布到 npm 的 workspace 包。它不单独构建，`package.json` 的 `exports` 直接指向 TS 源码，由使用方（`apps/web` 的 Vite）编译：
+内部包（internal package）是只在本仓库内使用、不发布到 npm 的 workspace 包。它不单独构建，`package.json` 的 `exports` 直接指向 TS 源码，由使用方（`apps/yzt` 的 Vite）编译：
 
 ```
-apps/web  ──依赖 "@yzt/map-core": "workspace:*"──▶  node_modules/@yzt/map-core（符号链接）──▶ packages/map-core
+apps/yzt  ──依赖 "@yzt/map-core": "workspace:*"──▶  node_modules/@yzt/map-core（符号链接）──▶ packages/map-core
                                                     exports "." → ./src/index.ts
 ```
 
@@ -115,13 +115,13 @@ ls node_modules/.pnpm | grep -E '^(vue|maplibre-gl|cesium|element-plus)@'
 
 ## 测试
 
-每个包有自己的 `vitest.config.ts`，有浏览器测试的包分 `unit`、`browser` 两个项目，写法和 `apps/web` 相同（ADR 0143）。
+每个包有自己的 `vitest.config.ts`，有浏览器测试的包分 `unit`、`browser` 两个项目，写法和 `apps/yzt` 相同（ADR 0143）。
 
 - **共用设置：** 浏览器测试的设置（软件渲染、视口、不写失败截图）在根目录的 `vitest.shared.ts`，应用和各个包用同一份
 - **不依赖应用：** 包的测试不用应用的 setup。要 MapLibre 的包在 `src/test-setup.browser.ts` 里自己设置 Worker 地址和样式；要 Cesium 的包在配置里用 `viteStaticCopy` 提供 `/cesium/`；要挂载组件的包在 `src/test-setup.ts` 里调用 `enableAutoUnmount`
 - **串行：** `pnpm test`、`pnpm test:changed` 用 `--workspace-concurrency=1` 逐个包执行。这些浏览器测试用软件 WebGL，对负载敏感（ADR 0040），不能让两个包同时开浏览器；依赖在前，web 最后
 - **选测试：** 改 `packages/map-core` 的 `map-session.ts` 时，`--changed` 在 map-core 选中 3 个文件，map-vue 7 个，map-cesium 3 个，web 90 个，utils 0 个（2026-11-05 实测）
-- **浏览器：** 用同一个版本的 Playwright，装一次（`pnpm --filter @yzt/web test:browser:install`）就够
+- **浏览器：** 用同一个版本的 Playwright，装一次（`pnpm --filter yzt test:browser:install`）就够
 
 ## Sass 入口
 
@@ -150,13 +150,13 @@ ls node_modules/.pnpm | grep -E '^(vue|maplibre-gl|cesium|element-plus)@'
 
 ## 分块的名字
 
-包的入口都是 `src/index.ts`，Rolldown 按目录给分块命名，默认都会叫 `src-xxx.js`。`apps/web/vite.config.ts` 的 `chunkFileNames` 把它换成包名（`map-cesium-xxx.js`），产物里才认得出。
+包的入口都是 `src/index.ts`，Rolldown 按目录给分块命名，默认都会叫 `src-xxx.js`。`apps/yzt/vite.config.ts` 的 `chunkFileNames` 把它换成包名（`map-cesium-xxx.js`），产物里才认得出。
 
 ## 踩过的坑
 
 **给已安装的包新增 `bin` 后，命令不会出现。** lockfile 没有变化时，`pnpm install` 直接跳过链接。处理办法：
 
-- 推荐：在使用方删掉再加回这个依赖，`pnpm --filter @yzt/web remove @yzt/icons`，然后 `pnpm --filter @yzt/web add "@yzt/icons@workspace:*"`
+- 推荐：在使用方删掉再加回这个依赖，`pnpm --filter yzt remove @yzt/icons`，然后 `pnpm --filter yzt add "@yzt/icons@workspace:*"`
 - 或者 `pnpm install --force`，但**必须先停掉所有开发服务器、测试等正在运行的 Node 进程**。阶段二实测：开发服务器运行时，sass 的 `dart.exe` 占用着文件，强制重装中途失败，把 sass-embedded 平台包里的二进制文件删掉了，之后所有 SCSS 编译都会失败（报 `sass --embedded is unavailable in pure JS mode`）。停掉进程后再执行一次 `pnpm install --force` 可以恢复
 
 全新 clone 后的首次安装会正常链接（已在干净目录中验证）。

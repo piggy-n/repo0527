@@ -1,11 +1,11 @@
 ---
 paths:
-  - "apps/web/src/features/**/api.ts"
-  - "apps/web/src/features/**/queries.ts"
-  - "apps/web/src/features/ai-chat/ai-client.ts"
-  - "apps/web/src/shared/http/**"
-  - "apps/web/src/shared/auth/session-guard*"
-  - "apps/web/src/app/http.ts"
+  - "apps/yzt/src/features/**/api.ts"
+  - "apps/yzt/src/features/**/queries.ts"
+  - "apps/yzt/src/features/ai-chat/ai-client.ts"
+  - "apps/yzt/src/shared/http/**"
+  - "apps/yzt/src/shared/auth/session-guard*"
+  - "apps/yzt/src/app/http.ts"
 ---
 
 # 接口请求（ADR 0011，用法见 `docs/modules/http.md`）

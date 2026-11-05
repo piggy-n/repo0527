@@ -4,7 +4,7 @@
 
 ## 构建产物
 
-构建后，`apps/web/dist/` 是纯静态文件，由 nginx 等静态服务器提供。按部署环境选择构建命令（ADR 0032）：
+构建后，`apps/yzt/dist/` 是纯静态文件，由 nginx 等静态服务器提供。按部署环境选择构建命令（ADR 0032）：
 
 | 环境 | 命令 | 区别 |
 |---|---|---|
@@ -17,7 +17,7 @@
 
 ### 构建前放入字体
 
-普惠体的字体文件按授权不能提交到公开仓库（ADR 0012），所以仓库和 CI 中都没有。用于部署的构建，要在构建前把字体放进 `apps/web/public/fonts/`（文件名和来源见 [design/fonts.md](design/fonts.md)），构建时整个目录会被复制到 `dist/fonts/`。
+普惠体的字体文件按授权不能提交到公开仓库（ADR 0012），所以仓库和 CI 中都没有。用于部署的构建，要在构建前把字体放进 `apps/yzt/public/fonts/`（文件名和来源见 [design/fonts.md](design/fonts.md)），构建时整个目录会被复制到 `dist/fonts/`。
 
 构建完成后检查 `dist/fonts/` 下有 `AlibabaPuHuiTi-3-55-Regular.woff2` 和 `AlibabaPuHuiTi-3-75-SemiBold.woff2`。缺少时页面仍能正常使用，但正文会显示为微软雅黑。
 
@@ -53,7 +53,7 @@
 
 - 键是资源的 `code`，值是 0～15 的整数；没写的资源不限制，`{}` 表示都不限制
 - 文件读不到或者格式不对（包括 nginx 回退成 `index.html`）时，用构建时带上的层级，浏览器控制台有一条警告；整份不用，不会只用对的那几项
-- `dist` 每次发布整体替换，确定下来的值要同步回仓库的 `apps/web/src/features/resource-map/resource-min-zooms.json`，否则下次发布就还原了
+- `dist` 每次发布整体替换，确定下来的值要同步回仓库的 `apps/yzt/src/features/resource-map/resource-min-zooms.json`，否则下次发布就还原了
 - 构建时 `VITE_RESOURCE_MIN_ZOOM_ENABLED=false` 的产物不读这个文件，都不限制；改这个开关要重新构建
 - 村级调查区、界线、路面范围的层级不只看实测大小（ADR 0136），放开前先确认后端的瓦片缓存
 

@@ -6,7 +6,7 @@
 
 - 开发地址：`/dev/map-ui`，也可从 `/dev/theme` 顶部的「已验收页面样例」进入
 - 默认端口以已启动的服务为准；本轮使用 `http://localhost:5174/dev/map-ui`
-- 源码：`apps/web/src/pages/dev/map-ui/`
+- 源码：`apps/yzt/src/pages/dev/map-ui/`
 - 仅注册在开发路由，不进入生产产物；不启动额外服务
 
 样例直接装配真实的资源图层、图例、功能面板、行政区设置、工具栏、底图浮层与标题组件。样例样式只负责画布、说明和状态表的布局，不复制组件内部样式。
@@ -100,9 +100,9 @@
 相关自动检查：
 
 ```text
-pnpm --filter ./apps/web test:unit src/features/resource-map/components/ResourceLayerPanel.test.tsx -t 年份
-pnpm --filter ./apps/web test:unit src/app/router/routes.test.ts
-pnpm --filter ./apps/web test:browser src/features/resource-map/components/ResourceLayerPanel.browser.test.tsx src/features/resource-map/components/ResourceLegend.browser.test.tsx src/shared/map/panel-group/MapPanelGroup.browser.test.tsx
+pnpm --filter ./apps/yzt test:unit src/features/resource-map/components/ResourceLayerPanel.test.tsx -t 年份
+pnpm --filter ./apps/yzt test:unit src/app/router/routes.test.ts
+pnpm --filter ./apps/yzt test:browser src/features/resource-map/components/ResourceLayerPanel.browser.test.tsx src/features/resource-map/components/ResourceLegend.browser.test.tsx src/shared/map/panel-group/MapPanelGroup.browser.test.tsx
 pnpm typecheck
 pnpm build
 ```

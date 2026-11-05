@@ -12,7 +12,7 @@ describe('文字轮廓', () => {
   it.each(outlines)('"$text"的轮廓与配置一致', ({ text, letterSpacing = 0, outputPath }) => {
     expect(
       readOutlineSpec(outputPath),
-      '文字轮廓已过期：请在本机放好字体后，在 apps/web 下运行 pnpm title:generate，见 docs/modules/system-title.md'
+      '文字轮廓已过期：请在本机放好字体后，在 apps/yzt 下运行 pnpm title:generate，见 docs/modules/system-title.md'
     ).toEqual({ text, letterSpacing });
   });
 });

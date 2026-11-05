@@ -42,7 +42,7 @@ export type Channel = (typeof CHANNELS)[number];
 const SCENARIOS = ['login', 'switch-3d'] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
-/** 一份要测的构建：名称用在报告里，目录相对 apps/web */
+/** 一份要测的构建：名称用在报告里，目录相对 apps/yzt */
 export interface Build {
   readonly name: string;
   readonly dir: string;

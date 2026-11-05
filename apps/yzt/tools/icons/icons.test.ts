@@ -10,7 +10,7 @@ describe('项目图标', () => {
 
     expect(
       isUpToDate(report),
-      `图标尚未处理，请在 apps/web 下运行 pnpm icons（见 docs/modules/icons.md）：\n${describeReport(report).join('\n')}`
+      `图标尚未处理，请在 apps/yzt 下运行 pnpm icons（见 docs/modules/icons.md）：\n${describeReport(report).join('\n')}`
     ).toBe(true);
   });
 });

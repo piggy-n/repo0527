@@ -1,7 +1,7 @@
 # 图标（@yzt/icons 与 SvgIcon）
 
 相关决策：ADR 0014
-对应目录：`packages/icons/`（通用部分）、`apps/web/src/assets/icons/`（项目的图标文件）、`apps/web/src/shared/icons/`（项目的图标组件与注册表）
+对应目录：`packages/icons/`（通用部分）、`apps/yzt/src/assets/icons/`（项目的图标文件）、`apps/yzt/src/shared/icons/`（项目的图标组件与注册表）
 
 ## 怎么用
 
@@ -26,8 +26,8 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
 
 城市国土空间监测指标AI计算（原名指标智能推演）`simulation-*` 共 11 个（年份、监测范围、监测指标、参数、覆盖率类、人均类，以及计算步骤的条件解析、数据准备、数据核查、空间分析、指标计算；原来的 AI 闪光图标 S14 删除，AI 统一用 `shared/chat-avatar` 的机器人头像，ADR 0109），取自用户确认的第二版原型，项目自绘，24 × 24、描边 1.5；评价分级、结论生成复用 `dashboard-bar`、`menu-report`，拖动手柄、关闭、面板收起展开复用既有图标。
 
-1. 把 SVG 放进 `apps/web/src/assets/icons/`，文件名随意（例如设计导出的 `UserAvatar.svg`、`map_layer.svg`）
-2. 开发服务器开着时会自动处理；没开时在 `apps/web` 下运行 `pnpm icons`
+1. 把 SVG 放进 `apps/yzt/src/assets/icons/`，文件名随意（例如设计导出的 `UserAvatar.svg`、`map_layer.svg`）
+2. 开发服务器开着时会自动处理；没开时在 `apps/yzt` 下运行 `pnpm icons`
 3. 处理结果：
    - 文件名改为短横线命名：`UserAvatar.svg` → `user-avatar.svg`，组件里写 `name="user-avatar"`
    - 内容被规范化（见下文），原地写回
@@ -77,7 +77,7 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
 | 开发服务器启动、图标目录有变化 | `iconsPlugin` 自动处理，出错只打印，不影响开发服务器 |
 | `pnpm icons` | 手动处理（`yzt-icons` 命令，由 `@yzt/icons` 提供） |
 | `pnpm build` | 构建开始时处理一次；有无法处理的文件（如中文名）时构建失败 |
-| `pnpm test`（CI 也会运行） | `apps/web/tools/icons/icons.test.ts` 以检查模式运行，有未处理的文件或注册表过期时失败，并提示运行 `pnpm icons` |
+| `pnpm test`（CI 也会运行） | `apps/yzt/tools/icons/icons.test.ts` 以检查模式运行，有未处理的文件或注册表过期时失败，并提示运行 `pnpm icons` |
 
 测试模式下不启用插件：测试只检查已提交的结果，不在运行测试时改动源文件（与系统名称的轮廓相同）。所有输入都在仓库中，所以 CI 能完整检查。
 
@@ -114,11 +114,11 @@ packages/icons/
 
 | 文件 | 作用 |
 |---|---|
-| `apps/web/src/assets/icons/*.svg` | 规范化后的图标文件 |
-| `apps/web/src/shared/icons/icons.json` | 生成的注册表：`{ 名字: { viewBox, attrs?, body } }` |
-| `apps/web/src/shared/icons/SvgIcon.ts` | `createIconComponent(icons)` 得到的项目图标组件、`IconName`、`iconNames` |
-| `apps/web/tools/icons/paths.ts` | 图标目录与注册表的位置，插件和检查测试共用 |
-| `apps/web/tools/icons/icons.test.ts` | CI 中的检查 |
+| `apps/yzt/src/assets/icons/*.svg` | 规范化后的图标文件 |
+| `apps/yzt/src/shared/icons/icons.json` | 生成的注册表：`{ 名字: { viewBox, attrs?, body } }` |
+| `apps/yzt/src/shared/icons/SvgIcon.ts` | `createIconComponent(icons)` 得到的项目图标组件、`IconName`、`iconNames` |
+| `apps/yzt/tools/icons/paths.ts` | 图标目录与注册表的位置，插件和检查测试共用 |
+| `apps/yzt/tools/icons/icons.test.ts` | CI 中的检查 |
 
 ## 设计理由
 
@@ -148,7 +148,7 @@ packages/icons/
 
 ### 第三方图标
 
-地图页的图标来自 [Tabler Icons](https://tabler.io/icons) 3.49.0（`@tabler/icons`，2026-10-05 发布，MIT 许可，版权 Paweł Kuna）。许可原文在 `apps/web/src/assets/icons/LICENSE-tabler-icons.txt`，和图标放在一起；图标工具只处理 `.svg`，这个文件不受影响。
+地图页的图标来自 [Tabler Icons](https://tabler.io/icons) 3.49.0（`@tabler/icons`，2026-10-05 发布，MIT 许可，版权 Paweł Kuna）。许可原文在 `apps/yzt/src/assets/icons/LICENSE-tabler-icons.txt`，和图标放在一起；图标工具只处理 `.svg`，这个文件不受影响。
 
 - 只取用到的单个 SVG，不安装整个包：从 jsDelivr 下载 `icons/outline/<名字>.svg`
 - 文件按用途命名，不用 Tabler 的名字，以后换图不用改代码

@@ -10,7 +10,7 @@
 
 - 第七版（2026-11-03 确认，先对话、后补充范围）：`indicator-simulation-v7/`，三个阶段都能操作；计算流程只画步骤，流程图以真实页面为准（ADR 0107），区县的值是原型里的示意
 - 第一到六版已删除（每个主题只留最新版），确认的结论在 ADR 0105～0108、0121
-- 自定义范围的验收文件：`pnpm --filter @yzt/web scope-files:generate` 生成到 `local/scope-test-files/`，每个文件的预期见 [`tools/scope-test-files/说明.md`](../../apps/web/tools/scope-test-files/说明.md)
+- 自定义范围的验收文件：`pnpm --filter yzt scope-files:generate` 生成到 `local/scope-test-files/`，每个文件的预期见 [`tools/scope-test-files/说明.md`](../../apps/yzt/tools/scope-test-files/说明.md)
 - 原型用 GSAP 的时间线兼作推演时钟、直接操作 MapLibre，正式实现按 ADR 0105 拆开，不照搬原型代码
 
 ## 分步实施

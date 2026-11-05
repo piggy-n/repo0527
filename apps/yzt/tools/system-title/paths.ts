@@ -6,7 +6,7 @@ export interface OutlineConfig {
   outlines: OutlineSpec[];
 }
 
-/** 要生成的文字轮廓；appRoot 是 apps/web 目录，title 是 VITE_APP_TITLE。Vite 插件、命令行和检查测试共用 */
+/** 要生成的文字轮廓；appRoot 是 apps/yzt 目录，title 是 VITE_APP_TITLE。Vite 插件、命令行和检查测试共用 */
 export function titleOutlineConfig(appRoot: string, title: string): OutlineConfig {
   const outputDir = resolve(appRoot, 'src/shared/system-title');
   return {

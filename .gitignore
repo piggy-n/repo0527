@@ -2,7 +2,7 @@
 node_modules/
 dist/
 *.local
-apps/web/public/fonts/
+apps/yzt/public/fonts/
 # 模型、原型、探查结果、实测数据等未入库的本地文件（ADR 0141）
 /local/
 /README.md

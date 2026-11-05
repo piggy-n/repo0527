@@ -99,11 +99,11 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 - run: pnpm install --frozen-lockfile
 - run: pnpm typecheck
 - run: pnpm lint
-- run: pnpm --filter @yzt/web exec playwright install --with-deps --only-shell chromium
+- run: pnpm --filter yzt exec playwright install --with-deps --only-shell chromium
 - run: pnpm test
 - run: pnpm build
 - run: pnpm build:intranet
-- run: pnpm --filter @yzt/web test:smoke
+- run: pnpm --filter yzt test:smoke
   timeout-minutes: 10
   env:
     DEBUG: pw:webserver
@@ -118,7 +118,7 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 | `pnpm test` | 逐个包执行 `vitest run`（ADR 0010、0143），依赖在前、web 最后，不同包的浏览器测试不会同时运行；有浏览器测试的包分 `unit`、`browser` 两个项目（ADR 0040）。GitHub Actions 会设置 `CI` 环境变量，Vitest 检测到后会拒绝带 `.only` 的测试，避免其他用例被悄悄跳过（已验证） |
 | `pnpm build` | 公网生产构建，自动清理本地设计稿副本，检查没有开发页、入口没有静态引入 MapLibre |
 | `pnpm build:intranet` | 内网生产构建，执行同样的产物检查，并检查关闭天地图时没有携带 key；输出覆盖上一份公网产物 |
-| `pnpm --filter @yzt/web test:smoke` | Playwright 访问刚生成的内网生产产物，以本地固定接口验证登录、地图就绪、缓存恢复与分块失败恢复（ADR 0065），以及三维的预加载、切换、模型加载和步行进站（生成的测试模型）；不访问真实后端和天地图，预览进程由测试自动关闭 |
+| `pnpm --filter yzt test:smoke` | Playwright 访问刚生成的内网生产产物，以本地固定接口验证登录、地图就绪、缓存恢复与分块失败恢复（ADR 0065），以及三维的预加载、切换、模型加载和步行进站（生成的测试模型）；不访问真实后端和天地图，预览进程由测试自动关闭 |
 
 ### 冒烟收尾卡住的排查
 

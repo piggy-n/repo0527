@@ -3,12 +3,12 @@ paths:
   - "packages/map-core/**"
   - "packages/map-vue/**"
   - "packages/map-cesium/**"
-  - "apps/web/src/shared/map/**"
-  - "apps/web/src/features/{resource-map,scene-models,data-query,monitoring-indicators,indicator-simulation,ai-chat}/**"
-  - "apps/web/src/pages/{current-map,data-query,space-monitoring-indicators,indicator-simulation,ai-chat}/**"
-  - "apps/web/src/pages/dev/{map,map-3d,map-ui,resources,nav-grid,data-query,monitoring-indicators,indicator-simulation}/**"
-  - "apps/web/src/app/map-*"
-  - "apps/web/src/**/*.worker.ts"
+  - "apps/yzt/src/shared/map/**"
+  - "apps/yzt/src/features/{resource-map,scene-models,data-query,monitoring-indicators,indicator-simulation,ai-chat}/**"
+  - "apps/yzt/src/pages/{current-map,data-query,space-monitoring-indicators,indicator-simulation,ai-chat}/**"
+  - "apps/yzt/src/pages/dev/{map,map-3d,map-ui,resources,nav-grid,data-query,monitoring-indicators,indicator-simulation}/**"
+  - "apps/yzt/src/app/map-*"
+  - "apps/yzt/src/**/*.worker.ts"
 ---
 
 # 地图（ADR 0020～0063，总览见 `docs/modules/map-overview.md`，设计见 `docs/modules/map-core.md`、`docs/modules/map-vue.md`、`docs/modules/shared-map.md`）

@@ -2,27 +2,27 @@
 
 所有命令都在**仓库根目录**执行。每条命令按四部分说明：作用、什么时候用、执行了什么、注意事项。
 
-脚本定义在根目录和 `apps/web` 的 `package.json` 里，字段说明见 [config/package-json.md](config/package-json.md)。
+脚本定义在根目录和 `apps/yzt` 的 `package.json` 里，字段说明见 [config/package-json.md](config/package-json.md)。
 
 ## 速查表
 
 | 场景 | 命令 |
 |---|---|
 | 刚 clone / 切分支 / 拉代码后 | `pnpm install` |
-| 第一次运行浏览器测试前（每台机器一次，升级 playwright 后再运行一次） | `pnpm --filter @yzt/web test:browser:install` |
-| 本地开发 | `pnpm --filter @yzt/web dev` |
-| 本地开发（内网配置，不请求天地图） | `pnpm --filter @yzt/web dev:intranet` |
+| 第一次运行浏览器测试前（每台机器一次，升级 playwright 后再运行一次） | `pnpm --filter yzt test:browser:install` |
+| 本地开发 | `pnpm --filter yzt dev` |
+| 本地开发（内网配置，不请求天地图） | `pnpm --filter yzt dev:intranet` |
 | 改完代码的常规检查（级别 1，见 ADR 0139） | `pnpm typecheck` → `pnpm lint` → `pnpm test:changed` |
-| 全量检查（级别 3，和 CI 相同，需已安装浏览器） | `pnpm typecheck` → `pnpm lint` → `pnpm test` → `pnpm build` → `pnpm build:intranet` → `pnpm --filter @yzt/web test:smoke` |
+| 全量检查（级别 3，和 CI 相同，需已安装浏览器） | `pnpm typecheck` → `pnpm lint` → `pnpm test` → `pnpm build` → `pnpm build:intranet` → `pnpm --filter yzt test:smoke` |
 | 自动修复 lint 问题 | `pnpm lint:fix` |
-| 写代码时持续运行测试 | `pnpm --filter @yzt/web test:watch` |
-| 只跑单元测试 / 只跑浏览器测试 | `pnpm --filter @yzt/web test:unit` / `pnpm --filter @yzt/web test:browser` |
-| 生产产物的浏览器冒烟（只跑某个文件时后面加文件名） | `pnpm build:intranet` → `pnpm --filter @yzt/web test:smoke` |
+| 写代码时持续运行测试 | `pnpm --filter yzt test:watch` |
+| 只跑单元测试 / 只跑浏览器测试 | `pnpm --filter yzt test:unit` / `pnpm --filter yzt test:browser` |
+| 生产产物的浏览器冒烟（只跑某个文件时后面加文件名） | `pnpm build:intranet` → `pnpm --filter yzt test:smoke` |
 | 内网部署的构建 | `pnpm build:intranet` |
-| 预览构建产物 | `pnpm --filter @yzt/web preview` |
-| 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter @yzt/web measure:map-load` |
-| 探查资源的分类字段、瓦片是否合并（只读，要能连后端） | `pnpm --filter @yzt/web probe:resource-classes` |
-| 生成自定义监测范围的验收文件 | `pnpm --filter @yzt/web scope-files:generate` |
+| 预览构建产物 | `pnpm --filter yzt preview` |
+| 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter yzt measure:map-load` |
+| 探查资源的分类字段、瓦片是否合并（只读，要能连后端） | `pnpm --filter yzt probe:resource-classes` |
+| 生成自定义监测范围的验收文件 | `pnpm --filter yzt scope-files:generate` |
 | 每月检查依赖 | `pnpm deps:check` |
 | 范围内升级 | `pnpm deps:update:within-range` |
 | 大版本升级 | `pnpm deps:update:allow-major` |
@@ -77,13 +77,13 @@
 **常见写法**：
 
 ```bash
-pnpm --filter @yzt/web add lodash-es
+pnpm --filter yzt add lodash-es
 ```
 
 给应用添加运行时依赖。
 
 ```bash
-pnpm --filter @yzt/web add -D some-tool
+pnpm --filter yzt add -D some-tool
 ```
 
 给应用添加开发依赖。
@@ -110,22 +110,22 @@ pnpm add -Dw -E some-tool
 
 ## 二、开发与预览
 
-### `pnpm --filter @yzt/web dev`
+### `pnpm --filter yzt dev`
 
 **作用**：启动 Vite 开发服务器，修改代码后浏览器自动更新（HMR）。
 
 **什么时候用**：日常开发。
 
-**执行了什么**：在 `apps/web` 里运行 `vite`。Vite 按需编译浏览器请求的模块：TSX 交给 `@vitejs/plugin-vue-jsx`（Babel），`*.module.scss` 交给 sass-embedded，`@/` 别名按 tsconfig 的 `paths` 解析。
+**执行了什么**：在 `apps/yzt` 里运行 `vite`。Vite 按需编译浏览器请求的模块：TSX 交给 `@vitejs/plugin-vue-jsx`（Babel），`*.module.scss` 交给 sass-embedded，`@/` 别名按 tsconfig 的 `paths` 解析。
 
 **注意事项**：
 
 - **开发服务器不做类型检查**。Vite 只把 TS 转成 JS，类型错误不会阻止页面运行。类型问题要看编辑器提示，或者运行 `pnpm typecheck`
 - 默认端口是 5173，被占用时 Vite 会自动换下一个端口，以终端输出的地址为准；设了 `PORT` 环境变量时用它，被占用时直接失败（供 Claude 桌面端的预览分配端口，见 [config/vite-config.md](config/vite-config.md)"开发服务器的端口"）
-- `--filter @yzt/web` 指定在哪个包里运行；也可以 `cd apps/web` 后执行 `pnpm dev`
+- `--filter yzt` 指定在哪个包里运行；也可以 `cd apps/yzt` 后执行 `pnpm dev`
 - 模型（`/3dt/*`）和原型（`/design.local/*`）从未入库的 `local/` 提供；在 worktree 里运行时用 `YZT_LOCAL_DIR` 指回主目录，见 [config/local-files.md](config/local-files.md)
 
-### `pnpm --filter @yzt/web dev:intranet`
+### `pnpm --filter yzt dev:intranet`
 
 **作用**：用内网部署的配置启动开发服务器，地图不向天地图发任何请求。
 
@@ -135,17 +135,17 @@ pnpm add -Dw -E some-tool
 
 **注意事项**：和 `dev` 用同一个默认端口，同时运行两个时用 `--port` 指定另一个端口。
 
-### `pnpm --filter @yzt/web preview`
+### `pnpm --filter yzt preview`
 
 **作用**：在本地启动一个静态服务器，预览 `pnpm build` 的产物。
 
 **什么时候用**：想确认构建产物能正常运行，例如检查资源路径、懒加载的模块。
 
-**执行了什么**：用 `vite preview` 托管 `apps/web/dist`。
+**执行了什么**：用 `vite preview` 托管 `apps/yzt/dist`。
 
 **注意事项**：必须先运行 `pnpm build` 或 `pnpm build:intranet`，预览的是最近一次构建的产物；它只用于本地检查，不能当生产服务器。
 
-### `pnpm --filter @yzt/web title:generate`
+### `pnpm --filter yzt title:generate`
 
 **作用**：重新生成系统名称（取自 `.env` 的 `VITE_APP_TITLE`）和登录页 `WELCOME!` 的 SVG 轮廓。
 
@@ -155,7 +155,7 @@ pnpm add -Dw -E some-tool
 
 **注意事项**：需要本机有优设标题黑字体文件（不入库），缺少时退出码为 1；生成后记得提交 JSON。详见 [modules/system-title.md](modules/system-title.md)。
 
-### `pnpm --filter @yzt/web boundaries:generate <目录>`
+### `pnpm --filter yzt boundaries:generate <目录>`
 
 **作用**：把旧项目的省、市、县界 GeoJSON 转换成地图用的边界数据（ADR 0033）。
 
@@ -165,7 +165,7 @@ pnpm add -Dw -E some-tool
 
 **注意事项**：目录是旧项目（yzt）的 `public/static/geojson`。旧仓库可能停在其他分支上，最好先用 `git show master-demo:public/static/geojson/<文件名>` 导出到一个临时目录再转换；原始文件的结构不符合时报错退出。详见 [modules/shared-map.md](modules/shared-map.md)"行政区边界的数据"。
 
-### `pnpm --filter @yzt/web basemap:generate`
+### `pnpm --filter yzt basemap:generate`
 
 **作用**：由市界、县界生成内网静态底图的地名点和缩略图（ADR 0133）。
 
@@ -175,7 +175,7 @@ pnpm add -Dw -E some-tool
 
 **注意事项**：不访问网络，约 1 秒完成。
 
-### `pnpm --filter @yzt/web measure:map-load`
+### `pnpm --filter yzt measure:map-load`
 
 **作用**：实测"点击登录 → 地图第一次加载完成"在不同网络下的耗时，输出各步骤、各资源的中位数（5E.1）；加 `--scenario switch-3d` 测进了地图以后第一次切到三维（3D.5a）。
 
@@ -185,7 +185,7 @@ pnpm add -Dw -E some-tool
 
 **注意事项**：要先在自己的终端设置环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD`（加 `--mock-backend` 时不连后端、不用账号，配内网构建比较几种做法）；默认三档网络各 5 次，Slow 4G 每次约 20 秒，全部跑完约 5 分钟，期间会弹出浏览器窗口。对比几份构建时不用这个脚本（它会先构建 `dist`），直接运行 `cli.ts` 并给出 `--builds`。参数（次数、网络、停留时长、CPU 降速、多份构建等）和实测的前提见 [modules/perf.md](modules/perf.md)。
 
-### `pnpm --filter @yzt/web probe:resource-classes`
+### `pnpm --filter yzt probe:resource-classes`
 
 **作用**：只读探查现状底图的资源：每个瓦片集有哪些字段、取值和分布，各瓦片级别保留了哪些字段；给出候选的分类字段和要交给切片的字段清单。
 
@@ -195,15 +195,15 @@ pnpm add -Dw -E some-tool
 
 **注意事项**：要能连上后端，并在自己的终端设置环境变量 `YZT_PROBE_TOKEN`（取法见 `--help`），token 不写进任何输出；用 `--base-url` 给出后端地址（不带 `/backend`）。后端共用，默认 2 个并发，全部 183 个瓦片集要跑一段时间，可以先用 `--codes` 试几个资源；`--exact` 按取值逐个 COUNT，只在选定的资源上用。要确认图例列全了时用 `--enumerate=资源:字段,...`：只枚举这些字段的全部取值，结果写到 `distinct-values.json`，请求数约等于抽样漏掉的取值数；千万行的表一次查询可能要几分钟，用 `--timeout=<秒>` 调大上限（默认 120，超时不重试）。同一级别的瓦片颜色不一致时用 `--tile-check=资源,...`：只解码这些资源最新一年 6～12 级瓦片的几何（覆盖全省的网格，一个级别最多 `--tiles-per-zoom` 张，默认 25），判断是不是把要素合并成了一个，结果写到 `tile-check.md`（结论、逐级别的数字、能和页面对照的瓦片网格、同一地点跨级别的取值）和 `tile-check.json`；`资源:字段` 可以指定字段，`rules` 是全部有分类规则的资源，请求多，先查几个。换后端环境或重新切片后用 `--tile-cost` 实测瓦片的大小和耗时，给出最小显示级别的建议：默认最新一年的 12～5 级，一个级别最多 6 张（`--tiles-per-zoom`），标准是单张解压后 6 MB（`--max-tile-mb`，ADR 0132）、收完 2 秒（`--max-tile-seconds`）；从高级别往低查，一超标就停，更低的级别不再请求，默认只开 1 个并发，失败不重试，耗时才准；耗时超过上限时再测一次，两次都超才算；结果写到 `tile-cost.md`（要确认的资源、响应头、逐级别的数字）、`tile-cost.json`（同时是进度，中断后重新运行跳过已测完的瓦片集，`--refresh` 时重测）和 `resource-min-zooms.json`（建议的配置，人工确认后可以直接替换发布目录里的同名文件，见 [deployment.md](deployment.md)；第一次请求很慢的 3 个资源不按实测放开，ADR 0136、0137）。分布来自抽样，字段和取值是候选，业务含义要人确认。这个目录不依赖第三方库，可以单独拷到能连后端的机器上，用 Node 24 运行。
 
-### `pnpm --filter @yzt/web scope-files:generate`
+### `pnpm --filter yzt scope-files:generate`
 
-**作用**：生成自定义监测范围的验收文件（正常的 GeoJSON、Shapefile、各种不能使用的文件），写到 `local/scope-test-files/`（不入库，约 64 MB）。每个文件的预期见 [`tools/scope-test-files/说明.md`](../apps/web/tools/scope-test-files/说明.md)。
+**作用**：生成自定义监测范围的验收文件（正常的 GeoJSON、Shapefile、各种不能使用的文件），写到 `local/scope-test-files/`（不入库，约 64 MB）。每个文件的预期见 [`tools/scope-test-files/说明.md`](../apps/yzt/tools/scope-test-files/说明.md)。
 
 **什么时候用**：手动验收指标 AI 计算的上传范围，或者读取规则变了要更新文件时。
 
 **执行了什么**：Node 直接运行 `tools/scope-test-files/cli.ts`，只重建 A、B、C 三个目录。
 
-### `pnpm --filter @yzt/web icons`
+### `pnpm --filter yzt icons`
 
 **作用**：规范化 `src/assets/icons/` 中的全部 SVG（改名、去固定颜色等），并更新注册表 `src/shared/icons/icons.json`。
 
@@ -227,7 +227,7 @@ pnpm lint
 pnpm test
 pnpm build
 pnpm build:intranet
-pnpm --filter @yzt/web test:smoke
+pnpm --filter yzt test:smoke
 ```
 
 ### `pnpm typecheck`
@@ -286,7 +286,7 @@ pnpm --filter @yzt/web test:smoke
 
 **什么时候用**：需要全量验证时（级别 3）；平时用 `test:changed`。
 
-**执行了什么**：根目录的 `pnpm -r --workspace-concurrency=1 test` 逐个包执行 `vitest run`，依赖在前、web 最后，某个包失败就停（ADR 0143）。包用自己的 `vitest.config.ts`；`apps/web` 里：
+**执行了什么**：根目录的 `pnpm -r --workspace-concurrency=1 test` 逐个包执行 `vitest run`，依赖在前、web 最后，某个包失败就停（ADR 0143）。包用自己的 `vitest.config.ts`；`apps/yzt` 里：
 
 1. 读取 `vite.config.ts`（与开发、构建共用插件、别名和 `.env`，模式为 `test`）
 2. 运行两个项目（ADR 0040）：`unit` 跑 `src/**/*.test.{ts,tsx}` 和 `tools/**/*.test.ts`（不含 `*.browser.test.*`），默认环境是 jsdom，第一行写了 `// @vitest-environment node` 的文件用 Node 环境；`browser` 跑 `src/**/*.browser.test.{ts,tsx}`，在 Playwright 启动的 Chromium 无界面版里运行
@@ -296,20 +296,20 @@ pnpm --filter @yzt/web test:smoke
 **注意事项**：
 
 - 测试文件和源文件放在一起，显式从 `vitest` 导入 `describe`、`it`、`expect`（不开 `globals`）
-- 只跑一个包：`pnpm --filter @yzt/map-core test`；只跑某个目录或文件：`pnpm --filter @yzt/web test -- src/app/router`
+- 只跑一个包：`pnpm --filter @yzt/map-core test`；只跑某个目录或文件：`pnpm --filter yzt test -- src/app/router`
 - 本地 `it.only` 会让其他用例被跳过，lint 会报错；CI 中 Vitest 会直接拒绝运行
 - Vitest 只转译不做类型检查，测试文件的类型由 `pnpm typecheck` 检查
-- 改了 Vite 插件的选项、或怀疑测试用的是旧的转换结果时，先清缓存：`pnpm --filter @yzt/web exec vitest --clearCache`（缓存键不含插件选项，见 [config/vite-config.md](config/vite-config.md)"测试耗时"）
+- 改了 Vite 插件的选项、或怀疑测试用的是旧的转换结果时，先清缓存：`pnpm --filter yzt exec vitest --clearCache`（缓存键不含插件选项，见 [config/vite-config.md](config/vite-config.md)"测试耗时"）
 - CI 上约 5～6 分钟（2026-11-04）；本机内存紧张时写 `pnpm -r --workspace-concurrency=1 test --maxWorkers=2`，web 的单元测试约 10 分钟
 - 本机没有安装浏览器时，`browser` 项目会报找不到浏览器，先运行 `test:browser:install`
 
-### `pnpm --filter @yzt/web test:unit`、`test:browser`
+### `pnpm --filter yzt test:unit`、`test:browser`
 
 **作用**：只跑其中一个项目（`vitest run --project unit` / `--project browser`）。
 
 **什么时候用**：只改了一边的代码时；排查浏览器测试的问题时。
 
-**注意事项**：浏览器测试里 `console` 的输出在本会话这类简洁报告器下不显示，要看时加 `--reporter=default`，例如 `pnpm --filter @yzt/web test:browser -- --reporter=default`
+**注意事项**：浏览器测试里 `console` 的输出在本会话这类简洁报告器下不显示，要看时加 `--reporter=default`，例如 `pnpm --filter yzt test:browser -- --reporter=default`
 
 ### `pnpm test:changed`
 
@@ -326,7 +326,7 @@ pnpm --filter @yzt/web test:smoke
 - 改包里的代码时，包自己的测试和依赖它的包、web 的测试都能选中（沿 workspace 链接找，ADR 0143）；每个包启动一次 Vitest，没有相关测试时也要多花 1～3 秒
 - 内存紧张时加 `--maxWorkers=2`：`pnpm -r --workspace-concurrency=1 test:changed --maxWorkers=2`
 
-### `pnpm --filter @yzt/web test:browser:install`
+### `pnpm --filter yzt test:browser:install`
 
 **作用**：下载浏览器测试用的 Chromium 无界面版（`playwright install --only-shell chromium`）。
 
@@ -337,11 +337,11 @@ pnpm --filter @yzt/web test:smoke
 - 浏览器放在用户目录的 Playwright 缓存里（Windows 是 `%LOCALAPPDATA%\ms-playwright`），不在仓库里；无界面版解压后约 280 MB
 - CI 用 `playwright install --with-deps --only-shell chromium`，同时安装 Linux 上需要的系统库（见 [config/ci-workflow.md](config/ci-workflow.md)）
 
-### `pnpm --filter @yzt/web test:smoke`
+### `pnpm --filter yzt test:smoke`
 
 **作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）；三维（`scene.spec.ts`，3D.5c）检查二维稳定后预加载了三维运行时、切到三维画面稳定、加载一个生成的测试模型并定位、点"漫游"步行进站（导航网格的 Worker 分块，左侧换成漫游面板）、漫游时没有状态栏和视图控件（ADR 0095、0097），Esc 退出漫游回到地面后回到二维复用画布。
 
-**什么时候用**：先运行 `pnpm build:intranet`；修改加载、路由或页面缓存后运行，CI 在内网构建后自动执行。只跑某个文件时在命令后面加文件名，如 `pnpm --filter @yzt/web test:smoke system-management`。
+**什么时候用**：先运行 `pnpm build:intranet`；修改加载、路由或页面缓存后运行，CI 在内网构建后自动执行。只跑某个文件时在命令后面加文件名，如 `pnpm --filter yzt test:smoke system-management`。
 
 **执行了什么**：已有 Playwright Test 从 `tools/smoke/playwright.config.ts` 读取配置，自动启动并关闭 4173 端口上的产物预览；接口在浏览器中替换为固定响应，地图使用本地省界和真实引擎，未知接口与公网请求使测试失败。
 
@@ -349,7 +349,7 @@ pnpm --filter @yzt/web test:smoke
 
 构建时决定的开关，冒烟和构建读同一份配置，只验证这次构建的取值（如 `resource-min-zooms.spec.ts`：`.env` 的 `VITE_RESOURCE_MIN_ZOOM_ENABLED` 现在是 `false`，打开时的用例被跳过；`application.spec.ts` 的底图偏好同样按 `VITE_PREFERENCES_ENABLED`、`VITE_PREFERENCE_BASEMAP` 选用例，见 ADR 0140）。要验证另一个取值，不改 `.env`，在同一个终端设环境变量后构建和冒烟（`loadEnv` 优先取环境变量），PowerShell 里写 `$env:VITE_RESOURCE_MIN_ZOOM_ENABLED = 'true'`，结束后 `Remove-Item Env:VITE_RESOURCE_MIN_ZOOM_ENABLED`，再按原来的配置构建一次。
 
-### `pnpm --filter @yzt/web test:watch`
+### `pnpm --filter yzt test:watch`
 
 **作用**：监听文件变化，自动重跑受影响的测试。
 
@@ -361,7 +361,7 @@ pnpm --filter @yzt/web test:smoke
 
 **什么时候用**：提交前确认能构建成功；需要部署产物时。
 
-**执行了什么**：根目录的 `pnpm -r build` 在 `apps/web` 里执行 `vite build`：Rolldown 打包、压缩，输出到 `apps/web/dist`。文件名带内容哈希，CSS Modules 的类名也会哈希化。
+**执行了什么**：根目录的 `pnpm -r build` 在 `apps/yzt` 里执行 `vite build`：Rolldown 打包、压缩，输出到 `apps/yzt/dist`。文件名带内容哈希，CSS Modules 的类名也会哈希化。
 
 构建内置产物检查：检查没有开发页面、原型和模型数据，MapLibre 没有进入入口的静态依赖；失败时构建也失败，具体规则见 [config/vite-config.md](config/vite-config.md) 的“构建产物检查”。
 
@@ -377,11 +377,11 @@ pnpm --filter @yzt/web test:smoke
 
 **什么时候用**：给内网环境出部署产物时。
 
-**执行了什么**：根目录的 `pnpm -r build:intranet` 在 `apps/web` 里执行 `vite build --mode intranet`，在 `.env` 之上加载 `.env.intranet`，其余和 `pnpm build` 相同（ADR 0032）。没有这个脚本的包被跳过。
+**执行了什么**：根目录的 `pnpm -r build:intranet` 在 `apps/yzt` 里执行 `vite build --mode intranet`，在 `.env` 之上加载 `.env.intranet`，其余和 `pnpm build` 相同（ADR 0032）。没有这个脚本的包被跳过。
 
 **注意事项**：
 
-- 和 `pnpm build` 输出到同一个 `apps/web/dist`，后一次构建覆盖前一次；部署前确认执行的是对应环境的命令
+- 和 `pnpm build` 输出到同一个 `apps/yzt/dist`，后一次构建覆盖前一次；部署前确认执行的是对应环境的命令
 - 仍是生产构建（`import.meta.env.PROD` 为真），开发页面同样被剔除
 - `.env.intranet` 同时关闭天地图并清空 key；构建检查会拒绝有效 key 非空的关闭配置，以及文本产物中残留的公网 key
 
@@ -465,8 +465,8 @@ pnpm --filter @yzt/web test:smoke
 
 | 命令 | 用途 |
 |---|---|
-| `pnpm --filter @yzt/web exec tsc -b --verbose` | 看 `tsc -b` 为什么判定某个项目需要重查或可以跳过 |
-| `pnpm --filter @yzt/web exec tsc -p tsconfig.app.json --listFilesOnly` | 列出这份 tsconfig 实际包含的所有文件，包括依赖的 `.d.ts` |
+| `pnpm --filter yzt exec tsc -b --verbose` | 看 `tsc -b` 为什么判定某个项目需要重查或可以跳过 |
+| `pnpm --filter yzt exec tsc -p tsconfig.app.json --listFilesOnly` | 列出这份 tsconfig 实际包含的所有文件，包括依赖的 `.d.ts` |
 | `pnpm exec oxlint --print-config` | 打印合并后的 lint 配置，确认规则是否生效 |
 | `pnpm exec oxlint --debug=files` | 列出 lint 会检查哪些文件 |
 | `ESLINT_PLUGIN_BOUNDARIES_DEBUG=1 pnpm lint` | 打印 boundaries 对每条依赖的判断依据（PowerShell 里先执行 `$env:ESLINT_PLUGIN_BOUNDARIES_DEBUG=1`） |

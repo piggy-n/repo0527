@@ -1,5 +1,5 @@
 {
-  "name": "@yzt/web",
+  "name": "yzt",
   "private": true,
   "type": "module",
   "scripts": {

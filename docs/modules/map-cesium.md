@@ -170,7 +170,7 @@
 - 相机按 `WalkRig.eye`；进站时臂为 0（飞到眼睛处），落地后再拉出去。滚轮、中键拖动第一人称改视场角，第三人称调远近；切到第三人称时视场角回到 60°
 - 点击、悬停和遮挡判断用的深度拾取点，在人物看得见时先 `seeThroughAvatar`；遮挡判断的距离在局部系里比
 - `WalkAvatar`：每次步行一个，`alpha` 第一次超过 0.02 时 `Model.fromGltfAsync` 加载，失败报告一次 `avatar-failed`；模型矩阵是局部系里脚下的位置、绕 z 轴转 (π/2 − 朝向)、缩放到 1.72 米高；颜色的 alpha 跟着 `avatarAlpha`；和瓦片集共用 `createHeadlightShader` 的写法（各自一个实例）。步态的相位交给 `animationTime`，`animateWhilePaused` 让场景时钟不走也播；停下时移除动画、各关节设成原始矩阵的副本（设 `undefined` 只复位、不重算蒙皮），重新走起来前设回 `undefined`。Cesium 的类型声明里 `ModelNode.matrix` 不接受 `undefined`、`getNode` 不会返回 `undefined`，和文档、实际不符，代码里有注释
-- 人物模型 `apps/web/public/roam/Cesium_Man.glb` 入库：Cesium Man，© 2017 Cesium，CC BY 4.0（Khronos glTF-Sample-Assets 的 `Models/CesiumMan`），模型上的 Cesium 标志是商标；同目录 `CREDITS.txt` 随产物部署
+- 人物模型 `apps/yzt/public/roam/Cesium_Man.glb` 入库：Cesium Man，© 2017 Cesium，CC BY 4.0（Khronos glTF-Sample-Assets 的 `Models/CesiumMan`），模型上的 Cesium 标志是商标；同目录 `CREDITS.txt` 随产物部署
 
 ## 测试
 

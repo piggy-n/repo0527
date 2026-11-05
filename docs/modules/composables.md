@@ -1,6 +1,6 @@
 # 通用组合式函数（shared/composables）
 
-对应目录：`apps/web/src/shared/composables/`
+对应目录：`apps/yzt/src/shared/composables/`
 
 多个功能都会用到、和业务无关的组合式函数。只属于某个业务域的放在 `features/<域>/composables/`。
 

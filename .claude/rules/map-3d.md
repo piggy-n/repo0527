@@ -2,10 +2,10 @@
 paths:
   - "packages/map-cesium/**"
   - "packages/map-core/src/scene/**"
-  - "apps/web/src/features/scene-models/**"
-  - "apps/web/src/pages/current-map/**"
-  - "apps/web/src/pages/dev/{map-3d,nav-grid}/**"
-  - "apps/web/public/{3dt,roam}/**"
+  - "apps/yzt/src/features/scene-models/**"
+  - "apps/yzt/src/pages/current-map/**"
+  - "apps/yzt/src/pages/dev/{map-3d,nav-grid}/**"
+  - "apps/yzt/public/{3dt,roam}/**"
 ---
 
 # 三维（ADR 0078、0079，设计见 `docs/modules/map-cesium.md`）

@@ -1,7 +1,7 @@
 # 字体
 
 相关决策：ADR 0012、ADR 0013
-对应文件：`apps/web/src/app/styles/fonts.scss`、`packages/theme/src/tokens.scss`
+对应文件：`apps/yzt/src/app/styles/fonts.scss`、`packages/theme/src/tokens.scss`
 
 ## 总览
 
@@ -11,7 +11,7 @@
 | 系统名称 | 优设标题黑 | 生成 SVG 轮廓，页面不加载这款字体，见 [modules/system-title.md](../modules/system-title.md) |
 | 后备 | 微软雅黑等系统字体 | 字体文件缺失或下载完成前显示 |
 
-所有字体文件都放在 `apps/web/public/fonts/`，不入库。
+所有字体文件都放在 `apps/yzt/public/fonts/`，不入库。
 
 设计规范原文里的 `--font-family-title` 令牌已删除：标题字体不作为网页字体加载，用它写的文字只会显示后备字体。
 
@@ -30,7 +30,7 @@
 ## 目录约定
 
 ```
-apps/web/public/fonts/                   唯一的字体目录，在 .gitignore 中
+apps/yzt/public/fonts/                   唯一的字体目录，在 .gitignore 中
 ├─ AlibabaPuHuiTi-3-55-Regular.woff2     正文 400，页面加载
 ├─ AlibabaPuHuiTi-3-75-SemiBold.woff2    正文 600，页面加载
 └─ YouSheBiaoTiHei-2.ttf                 优设标题黑，只供 pnpm title:generate 生成轮廓
@@ -97,6 +97,6 @@ apps/web/public/fonts/                   唯一的字体目录，在 .gitignore 
 
 ## 修改时的检查清单
 
-- 增加字重：在 `fonts.scss` 增加一个 `@font-face`，把官方 WOFF2 放进 `apps/web/public/fonts/`，更新本文和 [theme.md](theme.md)；注意每个字重约 5 MB
+- 增加字重：在 `fonts.scss` 增加一个 `@font-face`，把官方 WOFF2 放进 `apps/yzt/public/fonts/`，更新本文和 [theme.md](theme.md)；注意每个字重约 5 MB
 - 升级字体版本：同时更新 `local()` 中的名称（可从字体文件的 name 表读取）
 - 不要把字体文件移到 `src/` 下用相对路径引用：那样 Vite 构建时会解析它，文件缺失时构建直接失败，CI 也会失败

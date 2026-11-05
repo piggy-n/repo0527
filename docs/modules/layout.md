@@ -1,6 +1,6 @@
 # 布局（app/layout）
 
-对应目录：`apps/web/src/app/layout/`
+对应目录：`apps/yzt/src/app/layout/`
 设计稿：2026-09-30 确认，沿用旧项目的顶部栏（`src/layout/components/TheHeader.vue`）
 
 业务页面共用的布局：顶部栏（Logo 与系统名称、导航、消息、用户菜单）加内容区。登录页、404 不使用布局。

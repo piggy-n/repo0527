@@ -1,6 +1,6 @@
 # 加载耗时的标记与实测（shared/perf）
 
-对应目录：`apps/web/src/shared/perf/`（标记）、`apps/web/src/shared/map/useMapLoadMarks.ts`（地图页的标记）、`apps/web/tools/measure-map-load/`（实测脚本）
+对应目录：`apps/yzt/src/shared/perf/`（标记）、`apps/yzt/src/shared/map/useMapLoadMarks.ts`（地图页的标记）、`apps/yzt/tools/measure-map-load/`（实测脚本）
 
 5E 的加载策略按"先实测、再定方案"（[map-core.md](map-core.md)"地图资源的加载策略"第 8 条）：先给"点击登录 → 地图第一次加载完成"打上标记，在不同网络下测出时间花在哪里，再决定要不要预加载、预加载什么。标记留在产物里，三维阶段和阶段七复测时直接用。
 
@@ -61,15 +61,15 @@ trace.mark('session');  // 记下 login-to-map:session，并量出从 start 到�
 ## 实测脚本
 
 ```bash
-pnpm --filter @yzt/web measure:map-load
+pnpm --filter yzt measure:map-load
 ```
 
-先 `vite build`，再用 `vite preview` 提供构建产物（接口按 `vite.config.ts` 的代理转发到后端），用 Playwright 打开登录页、登录、等到画面稳定，每档网络测几次取中位数。参数加在命令后面，例如 `pnpm --filter @yzt/web measure:map-load --runs 3 --profiles slow4g --label baseline`。
+先 `vite build`，再用 `vite preview` 提供构建产物（接口按 `vite.config.ts` 的代理转发到后端），用 Playwright 打开登录页、登录、等到画面稳定，每档网络测几次取中位数。参数加在命令后面，例如 `pnpm --filter yzt measure:map-load --runs 3 --profiles slow4g --label baseline`。
 
 对比几种做法时，先把每种做法各自构建到一个目录（`vite build --outDir ../../local/measure/builds/<名称> --emptyOutDir`，不入库，用完删掉），再不经过构建直接运行脚本：
 
 ```bash
-pnpm --filter @yzt/web exec node tools/measure-map-load/cli.ts --runs 3 --label variants --builds "baseline=../../local/measure/builds/baseline,preload=../../local/measure/builds/preload"
+pnpm --filter yzt exec node tools/measure-map-load/cli.ts --runs 3 --label variants --builds "baseline=../../local/measure/builds/baseline,preload=../../local/measure/builds/preload"
 ```
 
 账号密码从环境变量读取，在自己的终端里设置（PowerShell 是 `$env:YZT_MEASURE_LOGIN_NAME = '...'`、`$env:YZT_MEASURE_PASSWORD = '...'`）：
@@ -81,7 +81,7 @@ pnpm --filter @yzt/web exec node tools/measure-map-load/cli.ts --runs 3 --label 
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
-| `--builds` | `dist=dist` | 要测的构建，写成 `名称=目录,名称=目录`（目录相对 `apps/web`）；有多份时每份各起一个 `vite preview`，每档网络的第 i 次依次测完所有构建再进入下一次（网络的波动平均分到每一份上），最后多输出一张对比表，第一份是参照 |
+| `--builds` | `dist=dist` | 要测的构建，写成 `名称=目录,名称=目录`（目录相对 `apps/yzt`）；有多份时每份各起一个 `vite preview`，每档网络的第 i 次依次测完所有构建再进入下一次（网络的波动平均分到每一份上），最后多输出一张对比表，第一份是参照 |
 | `--runs` | 5 | 每档网络测几次 |
 | `--profiles` | `none,fast4g,slow4g` | 网络：不限速、Fast 4G、Slow 4G |
 | `--dwell` | 5000 | 登录页停留的毫秒数，模拟输入账号密码；预加载在这段时间里进行 |

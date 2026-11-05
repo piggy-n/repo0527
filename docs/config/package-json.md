@@ -1,6 +1,6 @@
 # package.json 配置说明
 
-对应文件：根目录 `package.json`、`apps/web/package.json`（`packages/*` 的见 [internal-packages.md](internal-packages.md)）
+对应文件：根目录 `package.json`、`apps/yzt/package.json`（`packages/*` 的见 [internal-packages.md](internal-packages.md)）
 相关决策：ADR 0003（TypeScript 7）、ADR 0005（依赖维护）、ADR 0006（lint）、ADR 0143（catalog、串行测试）
 脚本的详细用法见 [commands.md](../commands.md)
 
@@ -11,7 +11,7 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 | 文件 | 身份 | 放什么 |
 |---|---|---|
 | 根 `package.json` | workspace 根 | 整个仓库共用的工具（lint、TS）、跨包脚本、pnpm 与 Node 的版本声明 |
-| `apps/web/package.json` | 应用包 `@yzt/web` | 应用自己的运行时依赖和构建工具 |
+| `apps/yzt/package.json` | 应用包 `yzt` | 应用自己的运行时依赖和构建工具 |
 | `packages/*/package.json` | 内部包 `@yzt/<name>` | 见 [internal-packages.md](internal-packages.md) |
 
 判断一个依赖放哪里：只有一个包用到的放那个包；两个及以上的包用到的版本写进 `pnpm-workspace.yaml` 的 `catalog`，各包写 `catalog:`；对整个仓库生效的（oxlint 扫描所有文件）放根目录。往根目录安装依赖要加 `-w`，例如 `pnpm add -Dw oxlint`。
@@ -111,11 +111,11 @@ pnpm workspace 里，每个目录都是一个独立的"包"，各自声明自己
 
 pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装上。项目实际不运行 ESLint，这是已知的代价（ADR 0006）。
 
-## apps/web/package.json
+## apps/yzt/package.json
 
 ```json
 {
-  "name": "@yzt/web",
+  "name": "yzt",
   "private": true,
   "type": "module",
   "scripts": {
@@ -208,7 +208,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 
 ### name
 
-`@yzt/web` 和内部包 `@yzt/<name>` 使用同一个作用域，一眼能看出属于同一个项目。脚本里用 `pnpm --filter @yzt/web <脚本>` 指定在哪个包里执行。
+`yzt` 和内部包 `@yzt/<name>` 使用同一个作用域，一眼能看出属于同一个项目。脚本里用 `pnpm --filter yzt <脚本>` 指定在哪个包里执行。
 
 ### type: module
 
@@ -297,9 +297,9 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 ## 修改时的检查清单
 
 - 新增依赖前，先确认现有依赖里没有同类库（AGENTS.md）；再查 `pnpm-lock.yaml` 里是否已经有其他包间接依赖它，有的话优先选同一版本，避免打包两份
-- 升级 element-plus 后：检查它依赖的 `@vueuse/core` 版本，`apps/web` 的版本范围跟着调整
+- 升级 element-plus 后：检查它依赖的 `@vueuse/core` 版本，`apps/yzt` 的版本范围跟着调整
 - 往根目录装依赖加 `-w`；精确锁定加 `-E`
 - 改了 `devEngines.runtime`：同步检查 CI 能否装到对应的 Node，`@types/node` 的大版本是否一致
-- 升级 `typescript`：根目录和 `apps/web` 两处同时改，保持同一版本；同时评估 `oxlint-tsgolint` 是否要跟着升
+- 升级 `typescript`：根目录和 `apps/yzt` 两处同时改，保持同一版本；同时评估 `oxlint-tsgolint` 是否要跟着升
 - 升级 `cesium`：读 CHANGES.md 的 Breaking Changes，按大版本对待；核对 `buildModuleUrl.setBaseUrl` 仍然存在（`packages/map-cesium/src/runtime.ts` 的模块扩充）和静态文件的目录（[vite-config.md](vite-config.md)），再跑 map-cesium 的浏览器测试
 - 安装时出现 `ERR_PNPM_IGNORED_BUILDS`：在 `pnpm-workspace.yaml` 的 `allowBuilds` 里逐个决定，见 [pnpm-workspace.md](pnpm-workspace.md)

@@ -1,8 +1,8 @@
 ---
 paths:
-  - "apps/web/src/features/city-dashboard/**"
-  - "apps/web/src/pages/city-dashboard/**"
-  - "apps/web/src/shared/city-indicators/**"
+  - "apps/yzt/src/features/city-dashboard/**"
+  - "apps/yzt/src/pages/city-dashboard/**"
+  - "apps/yzt/src/shared/city-indicators/**"
 ---
 
 # 城市体检驾驶舱

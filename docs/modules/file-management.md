@@ -26,7 +26,7 @@ CI 的 Chromium headless shell 不包含 PDF 阅读器；本轮另用完整 Edge
 
 设计理由：以现有文件列表为上下文，复用 FileCategoryTree、FileFilterBar、MxSplitLayout、MxPanel、MxSection 与 Element 组件。元数据和文件分区，整批共用元数据与进度，不引入逐文件独立上传任务。相较重写一份静态样式，这样能直接检查已验收组件的实际排版与键盘交互。
 
-- 源码：`apps/web/src/pages/dev/file-management/`，开发路由 `/dev/file-management`；只在 `devRoutes` 注册，生产构建不包含原型。确认后将弹窗与草稿规则迁到 feature 的 `FileUploadDialog`、`useFileUploadForm`，原型复用正式组件，仅模拟请求结果
+- 源码：`apps/yzt/src/pages/dev/file-management/`，开发路由 `/dev/file-management`；只在 `devRoutes` 注册，生产构建不包含原型。确认后将弹窗与草稿规则迁到 feature 的 `FileUploadDialog`、`useFileUploadForm`，原型复用正式组件，仅模拟请求结果
 - 当时的离线设计稿（`design.local/file-upload-preview.html`）、生成脚本和截图没有保留；持久的可维护来源是上述开发组件，关闭规则由 feature 与原型的测试维护
 - 原型只使用固定数据、真实 File 选择对象与模拟进度，不读取文件内容、不发上传/下载请求、不保存偏好。分类切换展示实际分类控件，但固定样例不按后台分类过滤；列表没有复制业务删除操作。下载、查看下一轮补充，不能将本轮当作完整文件管理验收
 
@@ -122,7 +122,7 @@ PDF 使用浏览器自带阅读器，其内部工具栏和解码错误由浏览�
 
 相关 20 个单元/组件测试文件共 175 项通过，真实 Chromium 的 DOCX 测试 2 项、内网产物冒烟 4 项通过；类型检查、lint、公网与内网构建通过。新增覆盖文件接口参数和失败信封、独立取消与重试、会话/卸载/过期边界、晚到结果、URL 释放、TXT 纯文本与空内容、DOCX 损坏与真实渲染。自建 fixture 不进入生产产物，构建检查确认 DOCX 为动态依赖。
 
-复查命令（在 `apps/web`，lint/类型检查/构建在仓库根目录）：
+复查命令（在 `apps/yzt`，lint/类型检查/构建在仓库根目录）：
 
 ```sh
 pnpm exec vitest run --project unit --maxWorkers=4 src/features/file-management src/shared/http src/shared/file-transfer src/pages/dev/file-management src/pages/file-management src/app/http.test.ts src/app/router/routes.test.ts

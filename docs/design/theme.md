@@ -1,6 +1,6 @@
 # 主题落地：设计令牌与 Element Plus 映射
 
-对应文件：`packages/theme/src/`（`@yzt/theme`，令牌、Element 主题、全局基础样式，ADR 0143）；`apps/web/src/app/styles/`（字体声明和样式入口）
+对应文件：`packages/theme/src/`（`@yzt/theme`，令牌、Element 主题、全局基础样式，ADR 0143）；`apps/yzt/src/app/styles/`（字体声明和样式入口）
 规范原文：[color-and-typography.md](color-and-typography.md)
 
 规范是**参考**而不是硬性要求（2026-09-29 确认）：色值、字号、阴影优先取自规范；规范和 Element 的交互风格冲突时（例如悬停方向），优先和 Element 保持一致。
@@ -22,8 +22,8 @@ Element    --el-color-*、--el-text-color-* ……                  element-them
 | `element-theme.scss` | 把令牌映射到 Element 的 CSS 变量 |
 | `base.scss` | `body`、滚动条等全局基础样式 |
 | `_index.scss` | 包的 Sass 入口（`@use '@yzt/theme'`），按上面的顺序加载 |
-| `apps/web/src/app/styles/fonts.scss` | 字体声明。留在应用：字体文件不入库，地址依赖应用的 `public`（ADR 0012、0013）；`--font-family-base` 只写字体名，没有字体文件时回退到后面的字体 |
-| `apps/web/src/app/styles/index.scss` | 应用的样式入口：先 `fonts`，再 `@yzt/theme` |
+| `apps/yzt/src/app/styles/fonts.scss` | 字体声明。留在应用：字体文件不入库，地址依赖应用的 `public`（ADR 0012、0013）；`--font-family-base` 只写字体名，没有字体文件时回退到后面的字体 |
+| `apps/yzt/src/app/styles/index.scss` | 应用的样式入口：先 `fonts`，再 `@yzt/theme` |
 
 `main.ts` 中必须先 import `element-plus/dist/index.css`，再 import `./styles/index.scss`。两边都在 `:root` 上定义变量，优先级相同，后加载的生效。
 

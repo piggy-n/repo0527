@@ -1,11 +1,11 @@
 # 环境变量配置说明
 
-对应文件：`apps/web/.env`、`apps/web/src/shared/config/`
+对应文件：`apps/yzt/.env`、`apps/yzt/src/shared/config/`
 相关决策：ADR 0008（接口走同源代理）、ADR 0031（天地图的开关与 key）、ADR 0032（内网的构建模式）、ADR 0140（偏好的开关）
 
 ## 文件与优先级
 
-Vite 按运行模式加载 `apps/web` 下的 `.env` 文件，后者覆盖前者：
+Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者：
 
 ```
 .env  <  .env.local  <  .env.[mode]  <  .env.[mode].local

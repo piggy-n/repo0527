@@ -1,8 +1,8 @@
 ---
 paths:
-  - "apps/web/src/features/*/store.ts"
-  - "apps/web/src/shared/auth/session-store.ts"
-  - "apps/web/src/shared/storage/**"
+  - "apps/yzt/src/features/*/store.ts"
+  - "apps/yzt/src/shared/auth/session-store.ts"
+  - "apps/yzt/src/shared/storage/**"
 ---
 
 # 状态与偏好

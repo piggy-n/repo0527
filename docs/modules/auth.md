@@ -1,7 +1,7 @@
 # 鉴权（shared/auth 与 features/auth）
 
 相关决策：ADR 0015
-对应目录：`apps/web/src/shared/auth/`、`apps/web/src/features/auth/`
+对应目录：`apps/yzt/src/shared/auth/`、`apps/yzt/src/features/auth/`
 
 - `shared/auth`：登录会话、角色、token 过期判断，应用的各部分都会用到
 - `features/auth`：登录接口、密码加密，只有登录功能使用

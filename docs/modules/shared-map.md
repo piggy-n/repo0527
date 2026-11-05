@@ -254,7 +254,7 @@ boundaries.setOpacity(0.6);
 
 ## 行政区边界的数据（ADR 0033）
 
-`boundary/data/` 下的三份边界由 `apps/web/tools/boundaries` 的脚本从旧项目转换而来：
+`boundary/data/` 下的三份边界由 `apps/yzt/tools/boundaries` 的脚本从旧项目转换而来：
 
 | 文件 | 来源（yzt 836f03b `public/static/geojson/`） | 要素 | 原始大小 → 转换后 |
 |---|---|---|---|
@@ -264,7 +264,7 @@ boundaries.setOpacity(0.6);
 
 - 转换：坐标保留 6 位小数（约 0.1 米，原始数据有 14～15 位），属性只留 `name` 和 `code`（省取 `adcode`、市取 `code`、县取 `gb`），去掉 `crs`（县界标的是 CGCS2000，与 WGS 84 相差不到 1 米）。原始文件的结构不符合时报错，不生成残缺的数据
 - 县界大幅简化过（每个县约 89 个点），放大后和市界、省界对不齐；没有更精细的数据，原样迁移
-- 重新生成：先把旧仓库 `master-demo` 上的三个文件导出到一个临时目录（`git show master-demo:public/static/geojson/江苏省界.json > <目录>/江苏省界.json`，另两个同理），再在仓库根目录运行 `pnpm --filter @yzt/web boundaries:generate <目录>`
+- 重新生成：先把旧仓库 `master-demo` 上的三个文件导出到一个临时目录（`git show master-demo:public/static/geojson/江苏省界.json > <目录>/江苏省界.json`，另两个同理），再在仓库根目录运行 `pnpm --filter yzt boundaries:generate <目录>`
 
 ## 工具栏（ADR 0034、0053）
 
@@ -858,7 +858,7 @@ sides.activate('right');
 | `location/press-gesture.test.ts` | 单击、长按进入拖动、移动的容差、拖动与按住时的取消、重复按下、没按下时的操作、释放后停止计时（假定时器） | Node |
 | `location/location-info.test.ts` | 位置信息放在上方、超出可视区域上边时翻到下方（包括上边登记了元素）、左右限制在可视区域里（避开右侧面板）、小三角的位置和限制、可视区域比卡片窄；所在区划的各种文字 | Node |
 | `location/CoordinateLocatePanel.test.tsx` | 空白时不提示；打开时显示已有的点；识别结果、规范写法、认不出来；切换格式；粘贴一对坐标；填反；"定位"按原值、空白时提示；回车与输入法；拾取开关、"拾取中"、关闭；卸载时取消拾取 | jsdom |
-| `apps/web/tools/boundaries/boundaries.test.ts` | 边界数据的转换：文件对应关系、坐标取整与去掉高程、只留名称和代码、去掉 `crs`、原始结构不符合或没有要素时报错 | Node |
+| `apps/yzt/tools/boundaries/boundaries.test.ts` | 边界数据的转换：文件对应关系、坐标取整与去掉高程、只留名称和代码、去掉 `crs`、原始结构不符合或没有要素时报错 | Node |
 | `basemap/basemap-style.test.ts` | 可选的底图与初始状态；每种底图的组成、瓦片地址、缩放范围与透明度；ID 的分组前缀与组合后的校验；改透明度只产生 `setPaintProperty`；切换底图时背景不动；关闭天地图时任何选择都没有天地图；静态底图的组成、只引用本地文件、透明度、切到无底图；缩略图（南京附近的 10 级瓦片，底图加注记；静态底图是打包的小图；无底图、关闭天地图时矢量和影像没有） | Node |
 
 - 底图的推导逐一改坏 22 处（关闭时仍给出全部选项或仍建数据源、注记图层用错、少一个子域名、缺少缩放范围、占位符被转义、行列写反、不带 key、背景缺失或在底图上面、注记不跟透明度、影像用矢量的透明度、ID 不带前缀或重复等），全部由断言发现

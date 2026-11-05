@@ -8,7 +8,7 @@ import {
 } from '../../src/shared/map/basemap/static-palette.ts';
 import { labelCollection, type RegionCollection, thumbnailSvg } from './generate.ts';
 
-// 由边界数据生成静态底图的地名点和缩略图：在 apps/web 下运行 pnpm basemap:generate（ADR 0133、0134）
+// 由边界数据生成静态底图的地名点和缩略图：在 apps/yzt 下运行 pnpm basemap:generate（ADR 0133、0134）
 const dataDir = resolve(process.cwd(), 'src/shared/map/boundary/data');
 const outputDir = resolve(process.cwd(), 'src/shared/map/basemap');
 const read = (name: string) => JSON.parse(readFileSync(resolve(dataDir, name), 'utf8')) as RegionCollection;
