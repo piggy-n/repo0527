@@ -58,7 +58,9 @@ runs-on: ubuntu-latest
 
 类型检查、lint、构建的结果和操作系统无关，用 Linux 最快、最常见。开发机是 Windows，CI 是 Linux，正好还能发现路径大小写之类的跨平台问题。
 
-整个作业的 `timeout-minutes` 为 20，生产冒烟步骤为 5。超时仍按失败处理，不跳过用例或自动重试，避免进程退出异常一直耗尽 GitHub 默认的 6 小时上限。
+整个作业的 `timeout-minutes` 为 30，生产冒烟步骤为 10。超时仍按失败处理，不跳过用例或自动重试，避免进程退出异常一直耗尽 GitHub 默认的 6 小时上限。
+
+2026-11-05 从 20、5 放宽：冒烟增加到 38 项后，正常时已要 213～287 秒，同一份代码在不同的运行器上，测试步骤也从 295 秒变到 469 秒。2026-11-03、04 有 5 次失败确认是冒烟步骤到了 5 分钟的上限。上限只用来发现卡住，要明显大于正常耗时。
 
 ### 检出代码
 
@@ -100,7 +102,7 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 - run: pnpm build
 - run: pnpm build:intranet
 - run: pnpm --filter @yzt/web test:smoke
-  timeout-minutes: 5
+  timeout-minutes: 10
   env:
     DEBUG: pw:webserver
 ```
@@ -121,6 +123,8 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 2026-10-21 核对日志：pnpm 12.6.0 在 Linux 上会留下被启动脚本的进程组，使 Playwright 关闭预览时一直等待输出管道结束，见 [pnpm #15555](https://github.com/pnpm/pnpm/issues/15555)。这次将锁定的 pnpm 升为最新稳定版 12.14.0；该修复从 12.7.0 起提供，业务依赖不随之升级。
 
 CI 的 `DEBUG: pw:webserver` 输出预览服务的启动与退出。正常结束应同时看到 `Terminated the WebServer` 和测试汇总；只打印最后一项用例名称不能证明用例失败或整组通过。以后发生停滞时，先结合该日志区分用例、浏览器清理和预览服务退出，不增加重试来掩盖问题。
+
+CI 上 Playwright 另外用 `github` 报告器，把失败的用例写成注解：作业日志要登录才能看，注解不用登录，在运行页面和接口里都看得到。
 
 ## Actions 为什么用 commit SHA 固定
 

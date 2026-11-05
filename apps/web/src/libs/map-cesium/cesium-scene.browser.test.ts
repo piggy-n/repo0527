@@ -881,7 +881,8 @@ describe('CesiumScene', () => {
     scene.on('walknotice', notice => notices.push(notice));
 
     scene.startWalk({ navigation, spawn: EAST_SPAWN, speed: 4, view: 'third', avatar: NO_AVATAR });
-    await expect(waitForFrames(() => notices.length > 0)).resolves.toBe('ok');
+    // 要等飞进去、拉开相机再请求模型，CI 的软件渲染上曾超过默认的 10 秒
+    await expect(waitForFrames(() => notices.length > 0, 30000)).resolves.toBe('ok');
     await failingFrames(30, () => true);
 
     expect(phases).toStrictEqual(['entering', 'walking']);

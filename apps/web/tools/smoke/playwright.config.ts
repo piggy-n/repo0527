@@ -12,7 +12,8 @@ export default defineConfig({
   forbidOnly: true,
   timeout: 45_000,
   expect: { timeout: 15_000 },
-  reporter: 'line',
+  // CI 上把失败写成注解：作业日志要登录才能看，注解不用
+  reporter: process.env.CI ? [['line'], ['github']] : 'line',
   use: {
     baseURL: 'http://127.0.0.1:4173',
     browserName: 'chromium',
