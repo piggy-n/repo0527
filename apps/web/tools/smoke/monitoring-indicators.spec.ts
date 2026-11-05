@@ -8,7 +8,7 @@ interface Backend {
   tiles: string[];
 }
 
-// 本地接口样本：字段按 2026-10-28 只读核对的真实接口（docs/migration.md）
+// 本地接口样本：字段按 2026-10-28 只读核对的真实接口（docs/archive/migration.md）
 const listLeaf = (dm: string, mc: string, status: string, result: string) => ({
   result, reason: '', children: [], mc, sfjy: false, jb: null, bz: '城区', dm, status
 });

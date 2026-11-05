@@ -12,7 +12,7 @@
 3. 需要补的逻辑写在拥有者或纯函数里，和界面一起提交；改了已经接受的 ADR，就新写一份
 4. 改坏验证，再在真实页面上按设计稿验收，最后同步文档
 
-本文分两部分：第一部分记录做了什么，第二部分按主题整理可以学到的东西。各块的细节在 [roadmap.md](../roadmap.md) 的"5D 地图页界面的专门设计"，用法在 [modules/shared-map.md](../modules/shared-map.md)，区域和视觉规范在 [design/page-layout.md](../design/page-layout.md) 的"画布型"。
+本文分两部分：第一部分记录做了什么，第二部分按主题整理可以学到的东西。各块的细节在 [roadmap.md](../roadmap.md) 的"5D 地图页界面的专门设计"，用法在 [modules/shared-map.md](../../modules/shared-map.md)，区域和视觉规范在 [design/page-layout.md](../../design/page-layout.md) 的"画布型"。
 
 ---
 

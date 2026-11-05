@@ -7,7 +7,7 @@
 
 做法和阶段五一样"先原型、再分步"：先在 `/dev/map-3d` 做了能操作的原型（真实的地图页外壳加示意画面），用户确认后写进 ADR 0078；再分成 3D.1～3D.5 五步、3D.4 又分成 a～d，每一步先说明设计、由用户选定取舍，写 ADR，实现后在真实页面上验证、逐处改坏，用户验收后提交。
 
-本文分两部分：做了什么、可以学到什么。各步骤的细节在 [roadmap.md](../roadmap.md) 的三维一节，模块的用法在 [map-cesium.md](../modules/map-cesium.md)、[map-core.md](../modules/map-core.md)、[map-vue.md](../modules/map-vue.md)、[shared-map.md](../modules/shared-map.md)，实测数据在 [perf.md](../modules/perf.md)。
+本文分两部分：做了什么、可以学到什么。各步骤的细节在 [roadmap.md](../roadmap.md) 的三维一节，模块的用法在 [map-cesium.md](../../modules/map-cesium.md)、[map-core.md](../../modules/map-core.md)、[map-vue.md](../../modules/map-vue.md)、[shared-map.md](../../modules/shared-map.md)，实测数据在 [perf.md](../../modules/perf.md)。
 
 ---
 

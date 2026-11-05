@@ -1,6 +1,6 @@
 # map-cesium：三维视图
 
-`libs/map-cesium`（`@yzt/map-cesium`）是二维 MapLibre 适配器的三维对应：一个实现 `MapView` 的 `CesiumView`，镜像会话的样式（栅格底图和 GeoJSON 覆盖物）、同步相机、把画布上的输入交给工具（ADR 0020、0024、0079、0080）。三维阶段的范围与交互见 ADR 0078，分步计划见 [roadmap](../roadmap.md)"三维阶段的范围与取舍"。
+`libs/map-cesium`（`@yzt/map-cesium`）是二维 MapLibre 适配器的三维对应：一个实现 `MapView` 的 `CesiumView`，镜像会话的样式（栅格底图和 GeoJSON 覆盖物）、同步相机、把画布上的输入交给工具（ADR 0020、0024、0079、0080）。三维阶段的范围与交互见 ADR 0078，分步计划见 [roadmap](../archive/roadmap.md)"三维阶段的范围与取舍"。
 
 ## 结构
 

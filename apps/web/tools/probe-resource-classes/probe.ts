@@ -10,7 +10,7 @@ import {
 } from './analyze.ts';
 import { readTileBody } from './mvt.ts';
 
-// 请求后端做只读探查：资源树、属性分页、瓦片，接口的行为见 docs/migration.md；后端共用，默认只开 2 个并发
+// 请求后端做只读探查：资源树、属性分页、瓦片，接口的行为见 docs/archive/migration.md；后端共用，默认只开 2 个并发
 
 export interface ResourceInfo {
   readonly code: string;
@@ -67,7 +67,7 @@ export interface ProbeOptions {
   readonly concurrency: number;
   /** 按取值逐个查总数：结果准确，但每个取值一次 COUNT，只在选定的资源上用 */
   readonly exact: boolean;
-  /** 总数超过它的表不查准确分布：62 万个要素统计一次要 8 s（docs/roadmap.md 5C.6） */
+  /** 总数超过它的表不查准确分布：62 万个要素统计一次要 8 s（docs/archive/roadmap.md 5C.6） */
   readonly exactLimit: number;
   readonly refresh: boolean;
   /** 单个请求的上限（秒）：千万行的表一次 COUNT 可能要几分钟，枚举时调大 */
@@ -92,7 +92,7 @@ export interface ProbeResult {
 /** token 失效或没有权限：继续请求没有意义，整个探查停下来 */
 export class ProbeAuthError extends Error {}
 
-/** 抽样的城市：南北、沿海都有，稀疏的资源也能取到要素（docs/migration.md 的实测用的也是这几处） */
+/** 抽样的城市：南北、沿海都有，稀疏的资源也能取到要素（docs/archive/migration.md 的实测用的也是这几处） */
 export const SAMPLE_POINTS: readonly (readonly [lng: number, lat: number, name: string])[] = [
   [118.8, 32.05, '南京'],
   [120.62, 31.3, '苏州'],
@@ -189,7 +189,7 @@ export function samplePages(total: number, pageSize: number, pages: number): num
 
 const quoted = (value: string) => `'${value.replaceAll("'", "''")}'`;
 
-/** 条件的写法：字段名加双引号、小写，值里的单引号要双写（docs/migration.md 的接口实测） */
+/** 条件的写法：字段名加双引号、小写，值里的单引号要双写（docs/archive/migration.md 的接口实测） */
 export function equalsCondition(field: string, value: string): string {
   return `"${field}" = ${quoted(value)}`;
 }

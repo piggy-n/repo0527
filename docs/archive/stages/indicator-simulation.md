@@ -2,7 +2,7 @@
 
 日期：2026-10-28～2026-10-29。分支 `indicator-simulation`，独立 worktree，从本地 main `3068b55` 切出，S14 前合入了当时的本地 main（`24eb400`）。全部完成，等用户验收后合入本地 main，没有推送。
 
-这是新页面，不是迁移：纯前端的"城市国土空间监测指标 AI 模拟计算"，条件编排 → AI 推演 → 结果展示，全部是确定性的模拟数据。两轮 HTML 原型后确认第二版，设计与取舍见 [ADR 0105](../adr/0105-indicator-simulation.md)，各部分的用法见 [modules/indicator-simulation.md](../modules/indicator-simulation.md)。
+这是新页面，不是迁移：纯前端的"城市国土空间监测指标 AI 模拟计算"，条件编排 → AI 推演 → 结果展示，全部是确定性的模拟数据。两轮 HTML 原型后确认第二版，设计与取舍见 [ADR 0105](../../adr/0105-indicator-simulation.md)，各部分的用法见 [modules/indicator-simulation.md](../../modules/indicator-simulation.md)。
 
 ## 一、做了什么
 
@@ -62,7 +62,7 @@
 
 ### 踩过的坑
 
-- **页面根元素高度为 0**：S7 把推演阶段改成全部绝对定位后，页面根元素在不是弹性容器的内容区里 `flex: 1` 不生效，整页空白；S7 的实测没发现，S8 实测时才看到。改成和现状底图一样的 `height: 100%`，规则补进 [page-layout.md](../design/page-layout.md) 的"画布型"
+- **页面根元素高度为 0**：S7 把推演阶段改成全部绝对定位后，页面根元素在不是弹性容器的内容区里 `flex: 1` 不生效，整页空白；S7 的实测没发现，S8 实测时才看到。改成和现状底图一样的 `height: 100%`，规则补进 [page-layout.md](../../design/page-layout.md) 的"画布型"
 - **`scrollIntoView` 会滚动 `overflow: hidden` 的祖先**：浏览器测试工具点元素前会先滚动到可见，把整个推演阶段滚出了画面；页签露出选中项也因此只滚页签条自己
 - **阶段条换行**：1200 宽结果阶段"重新编排"比"停止"宽 28 像素，阶段条换成两行；下面的面板改为按量出的高度排，不假设一行
 - **jsdom 没有画布**：ECharts 在组件测试里替换成占位组件，只检查分区和配置，图表本身在页面验收（与 `AiResultPanel.test.tsx` 相同）

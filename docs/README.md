@@ -10,8 +10,8 @@ docs/
 ├─ code-style.md              代码风格（格式、换行、注释）
 ├─ commands.md                常用命令：作用、时机、执行过程、注意事项
 ├─ deployment.md              部署要求（nginx 回退与接口转发）
-├─ roadmap.md                 阶段路线图：内容、学习点、状态与后续事项
-├─ migration.md               各模块的迁移基线与进度
+├─ docs/archive/roadmap.md                 阶段路线图：内容、学习点、状态与后续事项
+├─ docs/archive/migration.md               各模块的迁移基线与进度
 ├─ adr/                       架构决策记录
 │  ├─ README.md               ADR 索引与模板
 │  └─ NNNN-*.md
@@ -74,30 +74,30 @@ docs/
 第一次接触这个项目：
 
 1. 根目录 `AGENTS.md`：项目目标、技术栈、目录结构、必须遵守的规则
-2. [roadmap.md](roadmap.md)：整个重构分几个阶段、现在进行到哪里
+2. [docs/archive/roadmap.md](archive/roadmap.md)：整个重构分几个阶段、现在进行到哪里
 3. [adr/README.md](adr/README.md)，然后按编号读 ADR：理解每个关键选择的理由
-4. [stages/](stages/) 下的阶段总结，按顺序读：每个阶段做了什么、学到什么
-   - [阶段一：工程基础](stages/stage-1-engineering-foundation.md)
-   - [阶段二：应用骨架、数据层与鉴权](stages/stage-2-app-skeleton-and-auth.md)
-   - [阶段三：页面布局与第一个列表页](stages/stage-3-layout-and-first-list.md)
-   - [阶段四：地图内核](stages/stage-4-map-core.md)
-   - [阶段五 5A：地图骨架](stages/stage-5a-map-skeleton.md)
-   - [阶段五 5B：公共地图能力](stages/stage-5b-public-map-capabilities.md)
-   - [阶段五 5C：现状底图业务](stages/stage-5c-current-map-business.md)
-   - [阶段五 5D：地图页界面的专门设计](stages/stage-5d-map-ui.md)
-   - [阶段五 5E：加载策略、页面缓存与阶段五回顾](stages/stage-5e-wrap-up.md)
-   - [阶段五验收与后续修复](stages/stage-5-acceptance-review.md)
-   - [城市体检驾驶舱独立验收](stages/city-dashboard-acceptance.md)
-   - [阶段五之后的代码审查与整改](stages/post-5e-code-review.md)：继续迁移前先读，写法和会话核对的统一做法在这里
-   - [main 分支的第二次全面审查与整改](stages/main-full-review.md)：在上一篇之后读，写法指标、测试里取必需值的做法和仍待决定的事项在这里
-   - [三维阶段：Cesium 三维、模型与漫游](stages/stage-3d-cesium-and-roaming.md)：二三维切换、覆盖物镜像、3DT 模型、漫游与导航网格、预加载与生产冒烟
-   - [系统管理与消息的重新迁移](stages/system-message-migration.md)：Element 弹框的开关与过渡、同一个组件由真实数据和样例数据驱动、改坏验证测不出来时怎么办
-   - [现状底图的调整（2026-10-28）](stages/current-map-adjustments.md)：默认值记例外、两份顺序、意图里用用户看到的单位、没有 key 的兄弟节点怎样被重建、能推导的状态不另存
-   - [城市国土空间监测指标的迁移](stages/space-monitoring-indicators-migration.md)：实测推翻旧代码的兜底假设、计算轮询按 ADR 0039 归类、查询结果标上 ID
-   - [城市国土空间监测基本统计的迁移](stages/space-monitoring-statistics-migration.md)：轮询交给查询库、跟踪写成纯函数的状态机、宽屏收起侧栏放进组件库
-   - [数据查询的迁移](stages/data-query-migration.md)：四个路由一个组件按专题加 key、四个拥有者加一个编排者、通用的绘制工具、查询缓存的 key 里有 File
-   - [城市国土空间监测指标AI计算（原名指标智能推演）](stages/indicator-simulation.md)：引擎只管状态和时间、动效从进度来，先预告再执行的同一份规则，页面缓存与可叠加的暂停，减少动画就是直接到终态
-   - [阶段性迁移验收（第三次全面审查，2026-10-30）](stages/main-acceptance-review.md)：全部检查与逐页验收的结果、写法整改，以及作为后续基线的待办与已知问题清单（tag `acceptance-2026-10-30`）
+4. [stages/](archive/stages/) 下的阶段总结，按顺序读：每个阶段做了什么、学到什么
+   - [阶段一：工程基础](archive/stages/stage-1-engineering-foundation.md)
+   - [阶段二：应用骨架、数据层与鉴权](archive/stages/stage-2-app-skeleton-and-auth.md)
+   - [阶段三：页面布局与第一个列表页](archive/stages/stage-3-layout-and-first-list.md)
+   - [阶段四：地图内核](archive/stages/stage-4-map-core.md)
+   - [阶段五 5A：地图骨架](archive/stages/stage-5a-map-skeleton.md)
+   - [阶段五 5B：公共地图能力](archive/stages/stage-5b-public-map-capabilities.md)
+   - [阶段五 5C：现状底图业务](archive/stages/stage-5c-current-map-business.md)
+   - [阶段五 5D：地图页界面的专门设计](archive/stages/stage-5d-map-ui.md)
+   - [阶段五 5E：加载策略、页面缓存与阶段五回顾](archive/stages/stage-5e-wrap-up.md)
+   - [阶段五验收与后续修复](archive/stages/stage-5-acceptance-review.md)
+   - [城市体检驾驶舱独立验收](archive/stages/city-dashboard-acceptance.md)
+   - [阶段五之后的代码审查与整改](archive/stages/post-5e-code-review.md)：继续迁移前先读，写法和会话核对的统一做法在这里
+   - [main 分支的第二次全面审查与整改](archive/stages/main-full-review.md)：在上一篇之后读，写法指标、测试里取必需值的做法和仍待决定的事项在这里
+   - [三维阶段：Cesium 三维、模型与漫游](archive/stages/stage-3d-cesium-and-roaming.md)：二三维切换、覆盖物镜像、3DT 模型、漫游与导航网格、预加载与生产冒烟
+   - [系统管理与消息的重新迁移](archive/stages/system-message-migration.md)：Element 弹框的开关与过渡、同一个组件由真实数据和样例数据驱动、改坏验证测不出来时怎么办
+   - [现状底图的调整（2026-10-28）](archive/stages/current-map-adjustments.md)：默认值记例外、两份顺序、意图里用用户看到的单位、没有 key 的兄弟节点怎样被重建、能推导的状态不另存
+   - [城市国土空间监测指标的迁移](archive/stages/space-monitoring-indicators-migration.md)：实测推翻旧代码的兜底假设、计算轮询按 ADR 0039 归类、查询结果标上 ID
+   - [城市国土空间监测基本统计的迁移](archive/stages/space-monitoring-statistics-migration.md)：轮询交给查询库、跟踪写成纯函数的状态机、宽屏收起侧栏放进组件库
+   - [数据查询的迁移](archive/stages/data-query-migration.md)：四个路由一个组件按专题加 key、四个拥有者加一个编排者、通用的绘制工具、查询缓存的 key 里有 File
+   - [城市国土空间监测指标AI计算（原名指标智能推演）](archive/stages/indicator-simulation.md)：引擎只管状态和时间、动效从进度来，先预告再执行的同一份规则，页面缓存与可叠加的暂停，减少动画就是直接到终态
+   - [阶段性迁移验收（第三次全面审查，2026-10-30）](archive/stages/main-acceptance-review.md)：全部检查与逐页验收的结果、写法整改，以及作为后续基线的待办与已知问题清单（tag `acceptance-2026-10-30`）
 5. [commands.md](commands.md)：日常要用的命令
 
 地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR。想弄清某个配置项时，直接查 [config/](config/) 下对应的文档。做界面之前，先读 [design/](design/) 下的规范和主题说明，并按 [UI 工作流程](design/ui-workflow.md) 完成交互原型和实际页面验证。

@@ -1,7 +1,7 @@
 # AI 对话
 
 对应代码：`features/ai-chat/`、`pages/ai-chat/AiChatPage.tsx`；路由 `/ai-chat`，全部登录角色
-旧项目：`views/ai-chat/index.vue`、`components/AiChat/ChatPanel.vue`、`api/ai/ai-api.js`、`services/ai-map-service.js`、`components/CommonMap/managers/AiResultLayerManager.js`、`styles/ai-chat.css`（基线见 [migration.md](../migration.md)"AI 对话：最小迁移"）
+旧项目：`views/ai-chat/index.vue`、`components/AiChat/ChatPanel.vue`、`api/ai/ai-api.js`、`services/ai-map-service.js`、`components/CommonMap/managers/AiResultLayerManager.js`、`styles/ai-chat.css`（基线见 [docs/archive/migration.md](../archive/migration.md)"AI 对话：最小迁移"）
 
 ## 范围（2026-10-28 用户确认）
 

@@ -12,7 +12,7 @@ import {
 } from './probe.ts';
 import { tilesToCheck } from './tile-check.ts';
 
-// 实测瓦片的大小和耗时，给出最小显示级别的建议（docs/migration.md"最小显示级别的实测"）。
+// 实测瓦片的大小和耗时，给出最小显示级别的建议（docs/archive/migration.md"最小显示级别的实测"）。
 // 每个瓦片集从高级别往低查，一超标就停：更低的级别往往更重（旧环境有 42 MB、20 s 的瓦片），不为了测量去请求它们
 
 export interface TileCostLimits {

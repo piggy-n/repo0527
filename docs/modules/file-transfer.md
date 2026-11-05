@@ -4,7 +4,7 @@
 
 本轮由文件管理会话负责 `shared/http` 的传输扩展、`shared/file-transfer` 及其测试和本文。资源管理只消费公共接口，业务接口、Excel 校验与刷新由资源管理维护。公共基础首个提交不包含业务 UI、预览依赖、公共主题或锁文件变更；提交号另记迁移记录，由用户协调合入 main。
 
-依据：[HTTP](http.md)、[ADR 0011](../adr/0011-http-client-axios-zod-msw.md)、[ADR 0017](../adr/0017-server-state-with-tanstack-query.md)、[ADR 0039](../adr/0039-async-supersede-rules.md)。旧项目核对记录见 [迁移进度](../migration.md)。
+依据：[HTTP](http.md)、[ADR 0011](../adr/0011-http-client-axios-zod-msw.md)、[ADR 0017](../adr/0017-server-state-with-tanstack-query.md)、[ADR 0039](../adr/0039-async-supersede-rules.md)。旧项目核对记录见 [迁移进度](../archive/migration.md)。
 
 ## 三个使用场景
 
@@ -39,7 +39,7 @@ http.post(url, formData, {
 - 保留现有 zod 推导、`query`、`signal`、`timeout`、`silent`、`envelope` 行为，不向 feature 暴露 Axios 配置或事件类型
 - 使用现有 Axios 实例和 app 注入的鉴权回调；浏览器生成 multipart boundary，不手工设置 FormData 的 Content-Type
 - 不自动把对象转换成 FormData，避免单文件 `file`、多文件 `files` 和数组字段名被隐式改写
-- `percent` 为 0～100 的整数，向下取整：界面直接显示它，只有全部传完才是 100（各处按 `=== 100` 进入"处理中"）；无法计算时为 null，只显示已传输字节与进行中状态。2026-10-26 审查时发现之前给的是浮点数，上传弹窗、下载区和资源导入会显示"33.333…%"，测试只用了能整除的数据，见[第二次全面审查](../stages/main-full-review.md)
+- `percent` 为 0～100 的整数，向下取整：界面直接显示它，只有全部传完才是 100（各处按 `=== 100` 进入"处理中"）；无法计算时为 null，只显示已传输字节与进行中状态。2026-10-26 审查时发现之前给的是浮点数，上传弹窗、下载区和资源导入会显示"33.333…%"，测试只用了能整除的数据，见[第二次全面审查](../archive/stages/main-full-review.md)
 - MIME 判断用 `shared/http/transfer` 的 `baseMimeType`（去掉参数、统一小写），二进制响应的识别和下载后补类型共用
 
 Axios 已提供 FormData、进度回调与浏览器 Blob 响应能力，公共基础无需新增依赖，见 [请求配置](https://axios-http.com/docs/req_config)与 [FormData 文档](https://axios-http.com/docs/multipart)。

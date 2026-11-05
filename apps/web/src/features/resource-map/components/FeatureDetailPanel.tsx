@@ -187,7 +187,7 @@ export const FeatureDetailPanel = defineComponent({
           {renderTitle(mode === 'box' ? `框选 · ${name}` : name, `${target.year} · ${countOf(list)}`)}
           {mode === 'box' &&
             pages &&
-            // 低级别的瓦片可能不带 guid，批量高亮匹配不到（docs/migration.md"框选的实测"）
+            // 低级别的瓦片可能不带 guid，批量高亮匹配不到（docs/archive/migration.md"框选的实测"）
             renderNotice('info', '低级别下地图上可能看不到高亮，放大到 14 级以上可以看到')}
           <div
             ref={containerProps.ref}

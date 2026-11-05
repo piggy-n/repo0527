@@ -17,7 +17,7 @@ export interface TileLayer {
   readonly features: readonly TileFeature[];
 }
 
-/** 瓦片接口的返回：空内容、瓦片，或者 HTTP 200 里的错误（后端用 JSON 报"系统异常"，见 docs/migration.md） */
+/** 瓦片接口的返回：空内容、瓦片，或者 HTTP 200 里的错误（后端用 JSON 报"系统异常"，见 docs/archive/migration.md） */
 export type TileBody =
   | { readonly kind: 'empty' }
   | { readonly kind: 'tile'; readonly layers: readonly TileLayer[] }

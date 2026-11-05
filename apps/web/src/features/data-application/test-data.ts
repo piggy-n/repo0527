@@ -1,4 +1,4 @@
-// 测试用的虚构记录，字段结构按 2026-10-27 实测接口（docs/migration.md）：没有值的字段整个键都不出现
+// 测试用的虚构记录，字段结构按 2026-10-27 实测接口（docs/archive/migration.md）：没有值的字段整个键都不出现
 
 type RawRecord = Record<string, unknown>;
 

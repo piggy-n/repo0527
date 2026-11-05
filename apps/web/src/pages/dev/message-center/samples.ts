@@ -1,6 +1,6 @@
 import type { Message } from '@/features/message-center/api';
 
-// 消息组件样例的固定数据：字段按 2026-10-27 只读核对的真实接口整理（docs/migration.md），人名是虚构的。
+// 消息组件样例的固定数据：字段按 2026-10-27 只读核对的真实接口整理（docs/archive/migration.md），人名是虚构的。
 // 真实接口一次返回全部消息（当时 505 条，497 条是报表通知），没有分页和未读数接口
 
 const REPORT_NAMES = [

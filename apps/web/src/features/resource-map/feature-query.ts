@@ -28,7 +28,7 @@ export interface QueryCapability {
   readonly detail: boolean;
 }
 
-// 分页结果带 guid 的数据集，逐个实测登记（2026-10-14，年份见 docs/migration.md）；没有登记的不做后端范围识别
+// 分页结果带 guid 的数据集，逐个实测登记（2026-10-14，年份见 docs/archive/migration.md）；没有登记的不做后端范围识别
 const IDENTIFIABLE: ReadonlySet<string> = new Set([
   'bgdc_dltb',
   'bgdc_dltb_czc',

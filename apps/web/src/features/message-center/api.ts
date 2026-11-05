@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { http } from '@/shared/http/client';
 
-// 字段按 2026-10-27 只读核对的真实返回（docs/migration.md）：每条记录都有同一组键，没有值的是 null；
+// 字段按 2026-10-27 只读核对的真实返回（docs/archive/migration.md）：每条记录都有同一组键，没有值的是 null；
 // 发送人、处室、优先级等界面用不到的字段不声明，解析时丢弃
 
 /** 消息的类型：审批提醒、资源消息、报表通知（实测 table 占了绝大多数） */

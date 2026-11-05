@@ -10,7 +10,7 @@
 
 - 旧项目各页面自己算：数据查询页的 `getSpatialQueryFitPadding`、指标页的 padding 判断各写一份，注释里还记着"padding 不能超过画布尺寸，否则 fitBounds 会静默不动"
 - 5A.2c 实测：画布 420 宽、左右 padding 共 400 时，`fitBounds` 只剩 20px 可用，缩到 z1.33、中心偏到 163.9°
-- 5A.3 决定画布型的界面后置到 5D 专门设计（[roadmap.md](../roadmap.md)"阶段五"），这套计算不能依赖任何一种具体布局
+- 5A.3 决定画布型的界面后置到 5D 专门设计（[docs/archive/roadmap.md](../archive/roadmap.md)"阶段五"），这套计算不能依赖任何一种具体布局
 - map-core 的 `fitBounds` 不保留 padding，会话相机的中心就是画布的几何中心（ADR 0024）；padding 每次定位时传入
 
 ## 候选方案

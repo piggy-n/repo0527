@@ -7,14 +7,14 @@
 
 - 小改动直接做；涉及选型、架构或不容易回退的决定，先说明设计理由和替代方案，讨论后再动手（ADR 0139）
 - 一次推进一个小步骤，不擅自扩大范围
-- 重要决策写成 ADR（`docs/adr/`）；阶段结束时把新结论同步到本文件，并更新 `docs/roadmap.md` 的状态与调整
+- 重要决策写成 ADR（`docs/adr/`）；阶段结束时把新结论同步到本文件，并更新 `docs/archive/roadmap.md` 的状态与调整
 - 新页面、较大的布局变化或新的交互形式先按设计规范提供可在浏览器操作的 HTML 原型或真实组件预览，确认后再开发；截图只作状态记录，不能代替交互设计稿。主题与组件库层面的改动在 `/dev/theme` 实际操作并截图确认
 - UI 修改按 `docs/design/ui-workflow.md`：先对照规范、已验收组件与真实页面，修改后主动检查、修复，再交给用户验收；交付说明实际验证的尺寸、状态和未验证项，不能以构建通过代替 UI 验证
 - 后续页面迁移参考 `/dev/theme` 和 `/dev/map-ui` 的真实组件样例，使用范围及复查路径见 `docs/design/current-map-reference.md`；样例不挂载地图引擎、不读取业务接口或持久化偏好，地图渲染与查询仍在业务页面验收
 - 浅灰底主标题按 ADR 0076 复用 `MxPanel headerTone="muted"`，Element 弹窗用 `dialog-panel-header` + `MxTitle`；尺寸、留白和适用范围见 `docs/design/page-layout.md` 的"浅灰底面板标题栏"
 - UI 验证允许必要的短时浏览器测试，优先复用用户已启动的服务；无合适服务或需要测试隔离时，允许自动退出并清理的临时测试 / 预览服务。不启动长期 `dev`、`start`、监听或后台常驻服务，不停止用户服务；生产冒烟仍遵守独立内网产物预览的约定。此项补充此前“只运行 build、不启动服务”的 UI 验证限制
 - 提交信息使用 Conventional Commits 格式（`feat` / `fix` / `refactor` / `docs` / `chore` 等）
-- 后端有些级别、有些资源暂时没有数据（瓦片为空、缺字段、接口报错）时，不为适配这种现状调整既定方案，记进 `docs/migration.md` 或 roadmap 的待办
+- 后端有些级别、有些资源暂时没有数据（瓦片为空、缺字段、接口报错）时，不为适配这种现状调整既定方案，记进 `docs/archive/migration.md` 或 roadmap 的待办
 
 ## 技术栈
 
@@ -125,7 +125,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 ### TypeScript 与 Vue
 
 - 避免 `any`；外部数据先用 `unknown` 接收，再收窄类型；只用于类型的导入写 `import type`
-- 不用非空断言（`value!`）：可能为空的值显式判断后提前返回或抛错；测试里缺少依赖的元素、作用域返回值时用 `shared/testing/required` 的 `required(value, '说明')` 抛出说明缺什么的错误，不在之后的属性访问上报错（见 `docs/stages/main-full-review.md`）
+- 不用非空断言（`value!`）：可能为空的值显式判断后提前返回或抛错；测试里缺少依赖的元素、作用域返回值时用 `shared/testing/required` 的 `required(value, '说明')` 抛出说明缺什么的错误，不在之后的属性访问上报错（见 `docs/archive/stages/main-full-review.md`）
 - 组件用 `defineComponent` + TSX，样式用 `*.module.scss`
 - 不挂 `globalProperties`，不用 `getCurrentInstance().proxy`，不往 `window` 上挂对象，不使用 API 自动导入；依赖一律显式 `import` 或通过 provide / inject 获取
 - 跨组件通信按 props / emit → provide / inject → Pinia 的顺序选择，不使用无类型的字符串事件总线
@@ -228,7 +228,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 样式按分组推导：每个拥有者用纯函数从自己的状态推导出分组并整体替换；跨分组的修改用一次 `setGroups` 提交，批次不跨 `await`；交给会话的 GeoJSON 数据和样式图片不能原地修改，要换新对象（ADR 0022、0045）
 - 地图能力按 ADR 0027 分层：与框架无关的逻辑在 map-core，Vue 衔接在 map-vue，项目级的公共能力（底图、行政区、工具栏界面）在 `shared/map`，业务数据驱动的图层在 feature，页面挑选组合；用组合，不做带开关的全能地图组件。一项能力放哪一层看它是否属于某个业务域，不看有几个使用方
 - 页面用 `provideMap()` 创建会话，用 `map.bindStyle()` 把拥有者的推导函数（`() => StyleGroup`）绑定到分组，只能在同一个组件的 setup 里绑定；拥有者不提交样式，"不显示"用推导结果返回空分组表达（ADR 0028）
-- 业务地图的画布用 `shared/map/backend-request.ts` 的 `JIANGSU_MAP_OPTIONS`（后端校验瓦片的 token，见 `docs/migration.md`）：只给发往 `appConfig.apiBaseUrl` 的请求带 token，天地图等第三方不带；token 放请求头，不拼进地址。瓦片的 401 由 app 通过 `MAP_ERROR_REPORTER` 注入的 `reportMapError` 接收，和接口的 401 走同一个 `onUnauthorized`，页面不另外处理
+- 业务地图的画布用 `shared/map/backend-request.ts` 的 `JIANGSU_MAP_OPTIONS`（后端校验瓦片的 token，见 `docs/archive/migration.md`）：只给发往 `appConfig.apiBaseUrl` 的请求带 token，天地图等第三方不带；token 放请求头，不拼进地址。瓦片的 401 由 app 通过 `MAP_ERROR_REPORTER` 注入的 `reportMapError` 接收，和接口的 401 走同一个 `onUnauthorized`，页面不另外处理
 - 引用别的分组数据源的推导，要依赖被引用方的状态，保证两者在同一轮变化、一起提交；拥有者的数据源、图层和样式图片的 ID 以分组名为前缀（ADR 0027、0028、0045）
 - `shared/map` 和 feature 的地图能力按"拥有者"写（ADR 0031）：组合式函数持有状态（`shallowRef`，整体替换，值没变时不替换）并提供操作（参数不合法时抛错），推导分组的是纯函数；面板等界面通过 props 拿到拥有者，只显示和调用
 - 默认视角 `useDefaultView(map)` 只在 `provideMap` 所在组件的 setup 里调用一次，其他组件通过 props 拿到 `goToDefaultView`（ADR 0033）
@@ -244,7 +244,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - fill 图层要用 `['geometry-type']` 限定为面：MapLibre 会把线也当成环填充；要写 `['Polygon', 'MultiPolygon']`，三维按要素原来的类型求值
 - 内网的静态底图用本地市界直接绘制面、线和地名，不用图片，也不用天地图的截图或瓦片；地名、各市分色是 `static-options.ts` 里的开关，不进 `.env`，默认都关（全省 CREAM）；陆地色是换算好的不透明 HEX，不用透明度变量；绑定 `basemap-labels` 分组的页面在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`，打开地名后漏传时整个视图进入 `failed`；改了配色、分色开关或边界数据运行 `basemap:generate`（ADR 0133、0134）
 - line 图层的 `line-dasharray` 不在常量和按要素取值之间切换（MapLibre 6.12 的缺陷会报错）：线型不同的要素按线型拆成多个图层，每层的线型是常量，实线不设（ADR 0046）
-- 只随级别变化（常量或按 `zoom` 的 `step`）的 `fill-pattern` 设 `'fill-pattern-transition': { duration: 0 }`：过渡期间 MapLibre 按旧图片取图集位置，换花纹后会画错约 300 毫秒（见 `docs/migration.md` 的"切换填充方式的闪烁"）
+- 只随级别变化（常量或按 `zoom` 的 `step`）的 `fill-pattern` 设 `'fill-pattern-transition': { duration: 0 }`：过渡期间 MapLibre 按旧图片取图集位置，换花纹后会画错约 300 毫秒（见 `docs/archive/migration.md` 的"切换填充方式的闪烁"）
 - 区划目录和区划边界只用本地数据（`shared/map/region`），目录与市界、县界数据由测试保证逐条一致（ADR 0036）；经纬度的识别、显示和复制只用 `shared/map/location/coordinate-format.ts` 的纯函数（ADR 0037）
 - 资源的年份是按 `code` 的显示状态：单个资源用拥有者的 `setYear`，批量用 `setYearForAll`（有这一年的资源不论是否勾选都切过去），不另存"当前年份"；拥有者记下的最后一次批量设置的年份（`batchYear`）只给选择框回显，不参与推导，也不代替各资源的年份（ADR 0116）；界面条目的身份、名称和符号按 `code`，年份作为单独的字段显示（ADR 0052）
 - 资源按属性分类按 ADR 0123：取值、名称、颜色写在 `features/resource-map/class-dictionaries.ts`，`style-registry.ts` 按 `code` 登记字段和字典，一个资源一行；取值是符号覆盖的键，改名称不影响已保存的覆盖。图例和地图都只用资源实际有的类别，地类规则用 `only` 列出（ADR 0124），不只在图例里过滤。新的分类先用 `probe:resource-classes` 探查、人工确认，前端不统计瓦片（ADR 0043）
@@ -303,7 +303,7 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 只迁移旧项目中实际在用的模块。不迁移：资源中心（含独立的知识图谱页；但代码放在 `views/resource-center/` 下的文件管理、资源管理"自助取数"用到的图谱数据和布局要迁移）、资源共享、统计分析、旧版 resource-management、`views/sys` 与动态菜单路由、`/home` 测试页、mockjs、backend-switcher
 - 先读懂旧模块的行为，再按新架构重写，不逐行照搬；类结构和算法有价值的，保留设计并补上类型
 - 按真实接口返回（先实际请求一次看结构）和 TypeScript 类型写逻辑，不照搬旧代码为各种假设情况写的兜底判断：zod schema 已经保证的字段不再判空，不写 `|| ''`、`Array.isArray(...) ? ... : []` 这类兜底；确实可能缺失的字段在 schema 里写 `.optional()`，由类型提示调用方处理
-- 开始迁移一个模块时，在 `docs/migration.md` 记下 yzt 的基线 commit，之后用 `git diff <基线>..master-demo -- <路径>` 同步旧仓库的新改动（旧仓库可能停在其他分支上，不写 `HEAD`）
+- 开始迁移一个模块时，在 `docs/archive/migration.md` 记下 yzt 的基线 commit，之后用 `git diff <基线>..master-demo -- <路径>` 同步旧仓库的新改动（旧仓库可能停在其他分支上，不写 `HEAD`）
 
 ## 依赖维护（ADR 0005）
 
@@ -322,15 +322,15 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 
 - 必须遵守的规则写在本文件里，保持简短；决策理由、配置说明和学习资料放在 `docs/`，和代码一起提交
 - `docs/README.md`：文档索引、阅读顺序与维护约定
-- `docs/roadmap.md`：阶段路线图，每个阶段的内容、学习点、状态，以及各文档中"到某阶段再做"的事项
+- `docs/archive/roadmap.md`：阶段路线图，每个阶段的内容、学习点、状态，以及各文档中"到某阶段再做"的事项
 - `docs/code-style.md`：完整代码风格
 - `docs/adr/`：架构决策记录，编号递增，接受后不再修改；决策有变化时新写一份，并注明取代了哪一份
 - `docs/config/`：重要配置文件的逐项说明；修改配置文件时同步更新
 - `docs/design/`：设计规范原文、主题落地说明与页面布局规范；修改令牌、Element 映射或布局规则时同步更新
 - `docs/modules/`：shared、libs、packages 以及 app 中布局等模块的用法与设计说明；新增或修改这些模块时同步更新
 - `docs/commands.md`：常用命令说明；新增或修改脚本时同步更新
-- `docs/stages/`：各阶段总结与学习笔记，每个阶段结束时新增一篇
-- `docs/migration.md`：各模块的迁移基线与进度
+- `docs/archive/stages/`：各阶段总结与学习笔记，每个阶段结束时新增一篇
+- `docs/archive/migration.md`：各模块的迁移基线与进度
 
 ## 常用命令
 

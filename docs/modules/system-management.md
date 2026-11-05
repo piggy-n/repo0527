@@ -1,6 +1,6 @@
 # 系统管理、数据下载与消息
 
-管理员的资源审核、申请详情、统计报表与下载，普通用户的数据下载，以及所有角色的消息弹框。决策见 [ADR 0092](../adr/0092-system-management.md)（系统管理）、[ADR 0093](../adr/0093-header-message-popover.md)（消息）和 [ADR 0127](../adr/0127-resource-application-for-users.md)（数据下载）；旧代码与真实接口的核对见 [migration.md](../migration.md)"系统管理与消息中心：接口实测"。
+管理员的资源审核、申请详情、统计报表与下载，普通用户的数据下载，以及所有角色的消息弹框。决策见 [ADR 0092](../adr/0092-system-management.md)（系统管理）、[ADR 0093](../adr/0093-header-message-popover.md)（消息）和 [ADR 0127](../adr/0127-resource-application-for-users.md)（数据下载）；旧代码与真实接口的核对见 [docs/archive/migration.md](../archive/migration.md)"系统管理与消息中心：接口实测"。
 
 ## 分层
 
@@ -123,7 +123,7 @@ app/router、app/layout        四个路由；顶栏在统计报表上也选中"
 
 - **下载**：`shared/file-transfer` 的 `useRowDownloads` 和 `DownloadButton`（见 [file-transfer.md](file-transfer.md)）。申请用 `fetchApplicationFile`（`POST /api/apply/download/{id}`，`http.postBlob`），报表用 `fetchReportFile`（`GET /statistics/download?id=`）；没有响应头的文件名时用名称加 `.zip`（旧页面的写法）。列表和弹窗共用同一份下载状态，在哪里点都显示进度；结果由页面提示（"已交给浏览器下载"或失败原因）
 - **数据准备的状态**放在 `shared/data-request`（`prepare-status.ts`、`PrepareStatusText`）：取值是申请的 `storage_status`（英文）。报表的 `status` 是中文文字，不是同一套，由报表的接口换算成这些值，`PrepareStatusText` 的 `label` 显示原文
-- **统计报表**（`features/statistics-report`）：`POST /statistics/page`（正文 `name`、`pageNum`、`pageSize`）、`useReportList`（`usePagedList`，名称去掉首尾空格）、`ReportFilterBar`（报表名称）、`ReportTable`（序号、年份、报表名称、开始时间、完成时间、状态、下载）。字段按 2026-11 的联调样本（[migration.md](../migration.md)"统计报表：联调样本"）：`status` 是换算的结果（`success`、`processing`、`failed`，未处理和认不出的是 `undefined`），`statusText` 是后端的文字；`status` 是 `success` 才能下载；时间可能是 `null`，由表格的全局样式显示"-"
+- **统计报表**（`features/statistics-report`）：`POST /statistics/page`（正文 `name`、`pageNum`、`pageSize`）、`useReportList`（`usePagedList`，名称去掉首尾空格）、`ReportFilterBar`（报表名称）、`ReportTable`（序号、年份、报表名称、开始时间、完成时间、状态、下载）。字段按 2026-11 的联调样本（[docs/archive/migration.md](../archive/migration.md)"统计报表：联调样本"）：`status` 是换算的结果（`success`、`processing`、`failed`，未处理和认不出的是 `undefined`），`statusText` 是后端的文字；`status` 是 `success` 才能下载；时间可能是 `null`，由表格的全局样式显示"-"
 - **`ReportListPanel`**（feature 里，系统管理和数据下载共用）：筛选、表格、分页与下载；只在统计报表栏目显示时存在
 
 ### 验证（2026-10-27）
@@ -229,9 +229,9 @@ schema 的 `transform` 转成 `Message`：`msgId` → `id`，`createTime` → `c
 
 ## 待联调
 
-- 用普通用户账号请求申请和统计报表（"只看到本人的申请"靠后端保证，见 [migration.md](../migration.md)"数据下载：与旧页面的差异"）
+- 用普通用户账号请求申请和统计报表（"只看到本人的申请"靠后端保证，见 [docs/archive/migration.md](../archive/migration.md)"数据下载：与旧页面的差异"）
 - 审核的成功返回、准备完成后的下载（文件名、类型、大小）、驳回原因：没有真实样本，不对真实后端做写操作
-- 统计报表：除"处理成功"以外的状态文字、没开始和没完成的任务的时间、真实的下载（文件名、类型、大小），见 [migration.md](../migration.md)"统计报表：联调样本"
+- 统计报表：除"处理成功"以外的状态文字、没开始和没完成的任务的时间、真实的下载（文件名、类型、大小），见 [docs/archive/migration.md](../archive/migration.md)"统计报表：联调样本"
 - 统计任务请后端在审核列表里排除；待审核的申请没有申请人
 - 消息已读、全部已读的成功返回；全部已读请后端接收提交时看到的消息 ID，之后到达的新消息保持未读（ADR 0093）
 - 消息列表请后端加分页和未读数接口：现在每 60 秒传一次未读的整个列表，打开弹框传一次全部（当时约 225 KB）

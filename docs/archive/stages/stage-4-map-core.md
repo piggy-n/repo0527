@@ -5,7 +5,7 @@
 
 阶段四的目标：重新设计地图内核，替换旧项目里"活着的二维地图就是真相源"的结构，为接近无感的二三维切换打基础。先修掉阶段三验收后发现的一批文件管理和会话问题，然后读旧代码、定位置和版本，用八份 ADR 定下二三维关系、样式模型、资源释放、视图接口和 Worker 契约，再按依赖顺序实现地图会话、MapLibre 适配器和 Worker 通信层，并在开发页里用真实的 MapLibre 验证。
 
-整体的阶段划分见 [roadmap.md](../roadmap.md)。本文分两部分：第一部分记录做了什么、每项改动的目的；第二部分按主题整理可以学到的知识、设计理由和替代方案。模块的用法在 [modules/map-core.md](../modules/map-core.md) 和 [modules/utils.md](../modules/utils.md)。
+整体的阶段划分见 [roadmap.md](../roadmap.md)。本文分两部分：第一部分记录做了什么、每项改动的目的；第二部分按主题整理可以学到的知识、设计理由和替代方案。模块的用法在 [modules/map-core.md](../../modules/map-core.md) 和 [modules/utils.md](../../modules/utils.md)。
 
 ---
 
@@ -79,7 +79,7 @@ apps/web/src/
 
 | 改动 | 目的 |
 |---|---|
-| 读旧项目的二维、三维和二三维切换代码，整理出值得保留的设计和 8 个要改进的问题（[map-core.md](../modules/map-core.md) 附录） | 先弄清旧结构真正的边界：是 MapLibre 的样式文档，不是"引擎" |
+| 读旧项目的二维、三维和二三维切换代码，整理出值得保留的设计和 8 个要改进的问题（[map-core.md](../../modules/map-core.md) 附录） | 先弄清旧结构真正的边界：是 MapLibre 的样式文档，不是"引擎" |
 | map-core 放在 `libs/map-core`，不拆成包（ADR 0018） | 不满足拆包条件；引入 map-cesium 时再把 utils、map-core、map-cesium 一起评估 |
 | MapLibre 用 6.x（ADR 0019） | 5.x 的版本线已经停止；6.x 的事件和样式属性都有具体类型 |
 | 记录迁移基线 `836f03b` | 阶段结束时确认，旧仓库 `master-demo` 在这期间没有新提交 |
@@ -122,7 +122,7 @@ apps/web/src/
 ### 6. 开发页面规范与加载策略
 
 - 开发页面集中到 `pages/dev/<名称>/`：组件 `Dev<名称>Page`，路由名 `dev<名称>`，路径 `/dev/<名称>`，只注册在 `devRoutes`，生产构建不包含；`routes.test.ts` 检查路径与路由名是否对应
-- 地图资源的加载策略先定原则：不绑定默认的二维或三维模式，由 app 的解析函数决定；运行时按框架组织并注入；登录页空闲时预加载预测的默认框架。阶段五实测后再写 ADR（[map-core.md](../modules/map-core.md)"地图资源的加载策略"）
+- 地图资源的加载策略先定原则：不绑定默认的二维或三维模式，由 app 的解析函数决定；运行时按框架组织并注入；登录页空闲时预加载预测的默认框架。阶段五实测后再写 ADR（[map-core.md](../../modules/map-core.md)"地图资源的加载策略"）
 
 ### 7. Worker 通信层（4.3）
 

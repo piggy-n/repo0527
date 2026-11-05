@@ -3,7 +3,7 @@ import { fetchFile } from '@/shared/file-transfer';
 import { http, type TransferProgress } from '@/shared/http/client';
 import { filePreviewType, type FileTransferTarget } from './file-types';
 
-// 字段按 2026-10-08 实测的返回确定（docs/migration.md）；bucket、createdId 等用不到的字段不声明，解析时丢弃
+// 字段按 2026-10-08 实测的返回确定（docs/archive/migration.md）；bucket、createdId 等用不到的字段不声明，解析时丢弃
 const fileRecordSchema = z.object({
   id: z.string(),
   categoryId: z.string(),

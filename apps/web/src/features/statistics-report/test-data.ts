@@ -1,4 +1,4 @@
-// 测试用的记录，结构按联调拿到的 /statistics/page 返回（docs/migration.md）：没有值的键写成 null，每行都带 null 的
+// 测试用的记录，结构按联调拿到的 /statistics/page 返回（docs/archive/migration.md）：没有值的键写成 null，每行都带 null 的
 // pageNum、pageSize；ID 是超过安全整数的长数字串，状态是中文文字
 
 type RawRecord = Record<string, unknown>;

@@ -5,7 +5,7 @@
 
 阶段五迁移现状底图，内容约为阶段四的三倍，拆成 5A～5E 五个子阶段（[roadmap.md](../roadmap.md)"阶段五"）。5A 的目标是把地图接进 Vue：定下地图能力怎样分层、页面怎样组装，实现 map-vue，并让现状底图的空页面能显示地图。开始前先修掉阶段四评审发现的几处视图同步问题；中途决定把地图页的界面后置到 5D 专门设计，5A～5C 先做逻辑，界面只做到能联调。
 
-本文分两部分：第一部分记录做了什么、每项改动的目的；第二部分按主题整理可以学到的知识、设计理由和替代方案。模块的用法在 [modules/map-vue.md](../modules/map-vue.md)、[modules/shared-map.md](../modules/shared-map.md) 和 [modules/map-core.md](../modules/map-core.md)。
+本文分两部分：第一部分记录做了什么、每项改动的目的；第二部分按主题整理可以学到的知识、设计理由和替代方案。模块的用法在 [modules/map-vue.md](../../modules/map-vue.md)、[modules/shared-map.md](../../modules/shared-map.md) 和 [modules/map-core.md](../../modules/map-core.md)。
 
 ---
 

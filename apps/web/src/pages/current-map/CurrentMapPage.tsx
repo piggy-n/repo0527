@@ -80,7 +80,7 @@ const TOOLBAR_GROUPS = [
   ['clear']
 ] as const;
 
-/** 现状底图：区域按 ADR 0053 划分，各块的界面在 5D.1～5D.8 逐块设计（docs/roadmap.md"5D 地图页界面的专门设计"） */
+/** 现状底图：区域按 ADR 0053 划分，各块的界面在 5D.1～5D.8 逐块设计（docs/archive/roadmap.md"5D 地图页界面的专门设计"） */
 export const CurrentMapPage = defineComponent({
   name: 'CurrentMapPage',
   setup() {

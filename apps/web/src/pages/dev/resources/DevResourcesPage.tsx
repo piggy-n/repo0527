@@ -35,7 +35,7 @@ const SOURCE_LAYER_EXCEPTIONS: Readonly<Record<string, string>> = {
 };
 const MISSING_RESOURCE = 'dev_missing';
 // 标注实验：字形只放 0-255 一个区段，汉字靠 localIdeographFontFamily 用本地字体画。public/fonts 不入库（ADR 0013），
-// 要先把字形放到 public/fonts/glyphs/Noto Sans Regular/0-255.pbf，见 migration.md 的现状底图实测
+// 要先把字形放到 public/fonts/glyphs/Noto Sans Regular/0-255.pbf，见 docs/archive/migration.md 的现状底图实测
 const GLYPHS = `${window.location.origin}/fonts/glyphs/{fontstack}/{range}.pbf`;
 const LABEL_SAMPLES = ['水田', '城镇住宅用地', '乡村道路（硬化）', 'Ⅰ级水源地', '长江 Changjiang 2022', '0.5亩·河流'];
 

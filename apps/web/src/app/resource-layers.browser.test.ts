@@ -269,7 +269,7 @@ function uniform(fillStyle: 'diagonal' | 'backDiagonal'): Readonly<Record<string
 
 describe('面的花纹（ADR 0045）', () => {
   // 统一样式的花纹只随级别变化，MapLibre 会给它做过渡；过渡期间按旧图片取图集位置，而重新加载的瓦片里只有新图片，
-  // 约 300 毫秒里画出别的花纹（docs/migration.md"切换填充方式的闪烁"）
+  // 约 300 毫秒里画出别的花纹（docs/archive/migration.md"切换填充方式的闪烁"）
   it('切换填充方式：每一帧要么是原来的花纹，要么是新的花纹，中间不画出别的花纹', async () => {
     // 中心落在一个图斑里，15.5 级是最密的一档
     using ctx = setup({ center: [118.513, 31.9215], zoom: 15.5, bearing: 0, pitch: 0 });

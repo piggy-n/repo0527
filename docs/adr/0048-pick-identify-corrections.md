@@ -6,7 +6,7 @@
 
 ## 背景
 
-5C.6a-3 用真实数据验收点选时（2026-10-14，开发服务器 + 真实后端，详见 [migration.md](../migration.md) 的"现状底图：点选的实测"）发现两个问题。
+5C.6a-3 用真实数据验收点选时（2026-10-14，开发服务器 + 真实后端，详见 [docs/archive/migration.md](../archive/migration.md) 的"现状底图：点选的实测"）发现两个问题。
 
 ### 分页结果带不带 `guid` 按数据集区分
 
@@ -43,7 +43,7 @@ ADR 0047 前后不一致：第 2 节规定 14 级以上没有渲染要素时，�
 - 后端范围识别逐个数据集登记（2026-10-14 实测，年份见背景）：`bgdc_dltb`、`bgdc_dltb_czc`、`bgdc_czcdyd`、`csxhjctb_hydl`、`csxhjctb_lvll`。没有登记的数据集（包括还不知道的）不做后端范围识别，识别时用渲染要素。实测到某个数据集的分页结果带 `guid` 后加进表里
 - 查详情仍按前缀：`bgdc_*`、`csxhjctb_*` 可以，`szy_*`、`lcsh_*`、`gtkjgh_*` 不可以（ADR 0047 第 1 节不变）。两种能力都没有的资源，详情按 ADR 0047 第 3 节只显示瓦片属性
 - 登记按数据集，不分年份：`hydl`、`lvll` 的 2022～2024 年是否也带 `guid` 留作待验证项（roadmap），验证前沿用，不为此引入运行时探测或缓存
-- 能力表仍在 `features/resource-map/feature-query.ts`；实测的做法和结果（含年份）记在 migration.md
+- 能力表仍在 `features/resource-map/feature-query.ts`；实测的做法和结果（含年份）记在 docs/archive/migration.md
 - 请后端在分页范围查询的结果里统一返回 `guid`，后端改好后只需改表
 
 ### 2. 识别方式

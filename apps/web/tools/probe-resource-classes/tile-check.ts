@@ -15,7 +15,7 @@ import {
 } from './probe.ts';
 import { CURRENT_RULE_FIELDS } from './report.ts';
 
-// 查同一级别的瓦片颜色为什么不一致（docs/migration.md"低级别瓦片的颜色"）：解码几何，看瓦片是不是把要素合并成了一个。
+// 查同一级别的瓦片颜色为什么不一致（docs/archive/migration.md"低级别瓦片的颜色"）：解码几何，看瓦片是不是把要素合并成了一个。
 // 前端按每个要素的属性配色，合并后整张瓦片只有一种颜色，颜色取决于这个要素带的属性
 
 export type MainGeometry = 'polygon' | 'line' | 'point';

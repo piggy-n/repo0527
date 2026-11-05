@@ -9,7 +9,7 @@ import {
 } from './indicator-tree';
 import { type IndicatorResult, type ResultGeometry, resultLayersOf } from './result-layers';
 
-// 返回结构按 2026-10-28 的实测写，见 docs/migration.md 的"城市国土空间监测指标：接口实测"
+// 返回结构按 2026-10-28 的实测写，见 docs/archive/migration.md 的"城市国土空间监测指标：接口实测"
 
 /** 指标树的来源：计算用全部指标（/tree/list），展示只要计算完成的（/tree/out） */
 export type IndicatorTreeSource = 'calculation' | 'result';

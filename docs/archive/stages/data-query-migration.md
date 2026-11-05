@@ -1,6 +1,6 @@
 # 数据查询的迁移
 
-日期：2026-10-28 迁移，2026-10-29 验收。分支 `migrate-data-query`，从 main `ebec3c6` 切出；旧项目基线 `master-demo` 的 `b4f3987`。验收时修好分支上类型检查和 lint 的报错，全部检查通过后以合并提交合入 main 并推送。决策见 [ADR 0104](../adr/0104-data-query-migration.md)，用法见 [modules/data-query.md](../modules/data-query.md)，接口实测和与旧页面的差异见 [migration.md](../migration.md)。
+日期：2026-10-28 迁移，2026-10-29 验收。分支 `migrate-data-query`，从 main `ebec3c6` 切出；旧项目基线 `master-demo` 的 `b4f3987`。验收时修好分支上类型检查和 lint 的报错，全部检查通过后以合并提交合入 main 并推送。决策见 [ADR 0104](../../adr/0104-data-query-migration.md)，用法见 [modules/data-query.md](../../modules/data-query.md)，接口实测和与旧页面的差异见 [migration.md](../migration.md)。
 
 本次按"最小必要迁移"做：保留旧页面的四种查询、结果表和导出，界面换成新项目的规范；高级查询从单独的按钮并入页签，统计图、统计表（写死的假数据）不迁移。
 

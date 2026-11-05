@@ -43,7 +43,7 @@
 - **位置**：`useFileDownloads`、`useFilePreview`、`useResourceStatus`、`useResourceImport`、`useResourceDetail`、`useDirectoryEditor`、`useFileUpload`
 - **原因**：这些组合式函数在发请求前判断 `session.isActive()`，过期就直接 `return`；收到结果后也把"过期"当成"换了会话"，丢弃结果
 - **后果**：
-  - token 过期后点下载、启停、导入，什么都不发生，也没有提示。按 [auth.md](../modules/auth.md) 的设计，过期应该由 `shared/http` 在发请求前发现，提示"登录状态已过期"并回到登录页，组合式函数的预先判断把这条路堵住了
+  - token 过期后点下载、启停、导入，什么都不发生，也没有提示。按 [auth.md](../../modules/auth.md) 的设计，过期应该由 `shared/http` 在发请求前发现，提示"登录状态已过期"并回到登录页，组合式函数的预先判断把这条路堵住了
   - 上传过程中 token 过期：服务端已经接受了这一批，返回成功，但界面不认这个结果，`phase` 一直停在 `processing`，按钮显示"上传中"，直到换会话
   - 下载过程中过期：文件已经收完，却被丢弃，任务列表也被清空
 - **修法**：组合式函数只比较"提交时的会话还是不是同一个"（第 3 条），过期交给 `shared/http`。已经发出的请求照常完成，下一个请求触发统一的过期处理
@@ -88,7 +88,7 @@ sessionGuard.isCurrent(token);               // 响应后
 
 按第一部分的三类全部展开，并顺带：多行 JSX 改为 `return (`；大的渲染函数拆成 `renderXxx()`（`ResourceDetailPanel`、`ResourceDirectoryPanel`、`FilePreviewDialog`、`FileUploadDialog`、`FileDownloadPanel`）；长串三元改成提前返回或查表；非空断言改成显式判断；驾驶舱入场时间线里的 `timeline!`、`shell.value!` 改为局部变量。驾驶舱的两个实测脚本（`tools/measure-city-dashboard/`，最长一行 221 字符）按 `measure-map-load` 的写法拆成函数，行为不变。
 
-这一条写进了 [code-style.md](../code-style.md) 的"语句与块"，AGENTS.md 的"格式"留一句指向它。
+这一条写进了 [code-style.md](../../code-style.md) 的"语句与块"，AGENTS.md 的"格式"留一句指向它。
 
 ### 9. 写死的值（规范）
 
@@ -101,7 +101,7 @@ sessionGuard.isCurrent(token);               // 响应后
 
 ### 10. AGENTS.md 混进界面细节（文档）
 
-AGENTS.md 约定"必须遵守的规则写在本文件里，保持简短"。阶段五之后加入的 9 条现状底图界面细节（字号、像素间距、延时毫秒数等）和一条浅灰标题栏的尺寸说明，原样移到 [current-map-reference.md](../design/current-map-reference.md)"已确认的界面细节"和已有的 [page-layout.md](../design/page-layout.md)"浅灰底面板标题栏"，AGENTS.md 各留一句指向它们。写操作的会话核对规则改为引用 `useSessionGuard`。
+AGENTS.md 约定"必须遵守的规则写在本文件里，保持简短"。阶段五之后加入的 9 条现状底图界面细节（字号、像素间距、延时毫秒数等）和一条浅灰标题栏的尺寸说明，原样移到 [current-map-reference.md](../../design/current-map-reference.md)"已确认的界面细节"和已有的 [page-layout.md](../../design/page-layout.md)"浅灰底面板标题栏"，AGENTS.md 各留一句指向它们。写操作的会话核对规则改为引用 `useSessionGuard`。
 
 ## 三、检查过、没有发现问题的部分
 

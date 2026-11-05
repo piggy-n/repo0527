@@ -1,6 +1,6 @@
 # 数据查询（features/data-query）
 
-对应目录：`apps/web/src/features/data-query/`、`apps/web/src/pages/data-query/`；决策见 [ADR 0104](../adr/0104-data-query-migration.md)，迁移记录见 [migration.md](../migration.md)"数据查询"。
+对应目录：`apps/web/src/features/data-query/`、`apps/web/src/pages/data-query/`；决策见 [ADR 0104](../adr/0104-data-query-migration.md)，迁移记录见 [docs/archive/migration.md](../archive/migration.md)"数据查询"。
 
 查询统计菜单下的四个页面共用 `DataQueryPage`，专题由路由的 `props` 给出（`topic`）。实测页 `/dev/data-query` 挂真实页面、请求真实接口（查询接口不校验登录）。
 
