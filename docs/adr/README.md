@@ -148,6 +148,7 @@
 | [0137](0137-resource-min-zoom-deploy-file.md) | 资源的最小显示级别放进部署文件 | 已接受（修改 0132 的层级写进代码） |
 | [0138](0138-page-state-reset-on-by-default.md) | 离开页面后重置：`.env` 提交的取值改为 true | 已接受（修改 0114 的默认取值） |
 | [0139](0139-verification-levels.md) | 迭代期的验证分级与协作方式 | 已接受 |
+| [0140](0140-preference-switches.md) | 偏好的开关：一个总开关加每项一个分项开关 | 已接受（修改 0114、0138 里底图偏好的做法） |
 
 ## 模板
 

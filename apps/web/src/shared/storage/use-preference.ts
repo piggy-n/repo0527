@@ -1,5 +1,6 @@
 import { getCurrentScope, onScopeDispose, watch } from 'vue';
 import { z } from 'zod';
+import { appConfig, type PreferenceName } from '../config/app-config';
 import type { PreferenceScope } from './preference-scope';
 
 /** 读取最多等这么久，超时按默认值继续（ADR 0042 第 5 节） */
@@ -10,8 +11,8 @@ export const PREFERENCE_WRITE_DEBOUNCE = 300;
 
 /** 拥有者给出的部分（ADR 0042 第 4 节）：名称、版本、schema、转换与合并 */
 export interface PreferenceOptions<T> {
-  /** 键的后半段，如 resource-layers */
-  readonly name: string;
+  /** 键的后半段，如 resource-layers；同时决定用哪个开关（ADR 0140） */
+  readonly name: PreferenceName;
   /** 存储格式的版本：格式变化时加 1，其他版本的数据当作没有存过 */
   readonly version: number;
   /** 存下的值的 schema，包括自洽的检查（ADR 0042 第 3 节） */
@@ -19,7 +20,7 @@ export interface PreferenceOptions<T> {
   /** 当前状态的存储格式（普通数据）；被侦听，变化后写入 */
   readonly snapshot: () => T;
   /**
-   * 恢复结束时调用一次：校验过的值，或 null（没有存过、读取失败、超时、格式不对、恢复之前已经操作过）。
+   * 恢复结束时调用一次：校验过的值，或 null（没有存过、开关关闭、读取失败、超时、格式不对、恢复之前已经操作过）。
    * 拥有者按自己的规则把它合并进当前状态，不直接使用
    */
   readonly restore: (stored: T | null) => void;
@@ -37,6 +38,15 @@ export function usePreference<T>(scope: PreferenceScope, options: PreferenceOpti
   const { name, version, schema, snapshot, restore } = options;
   const { store, signal, onError } = scope;
   if (signal.aborted) {
+    return;
+  }
+  // 开关关闭时不读不写，旧数据留着；恢复照样要结束，useResourceLayers 等它才合并目录（ADR 0140）
+  if (!appConfig.preferences[name]) {
+    try {
+      restore(null);
+    } catch (error) {
+      onError(error);
+    }
     return;
   }
   const key = scope.key(name);

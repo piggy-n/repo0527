@@ -43,6 +43,22 @@ function tianditu(enabled: string | undefined, key: string | undefined): Tiandit
   return { key: matching('VITE_TIANDITU_KEY', key, TIANDITU_KEY_PATTERN, '不是有效的天地图 key（应为 32 位十六进制）') };
 }
 
+// 总开关和分项开关都为 true 才生效；总开关关闭时分项开关照样校验，拼错了不等到打开时才发现（ADR 0140）
+function preferenceSwitches() {
+  const enabled = flag('VITE_PREFERENCES_ENABLED', import.meta.env.VITE_PREFERENCES_ENABLED);
+  const item = (name: string, value: string | undefined) => {
+    const on = flag(name, value);
+    return enabled && on;
+  };
+  return {
+    basemap: item('VITE_PREFERENCE_BASEMAP', import.meta.env.VITE_PREFERENCE_BASEMAP),
+    boundaries: item('VITE_PREFERENCE_BOUNDARIES', import.meta.env.VITE_PREFERENCE_BOUNDARIES),
+    'resource-layers': item('VITE_PREFERENCE_RESOURCE_LAYERS', import.meta.env.VITE_PREFERENCE_RESOURCE_LAYERS),
+    'resource-symbols': item('VITE_PREFERENCE_RESOURCE_SYMBOLS', import.meta.env.VITE_PREFERENCE_RESOURCE_SYMBOLS),
+    'resource-panel': item('VITE_PREFERENCE_RESOURCE_PANEL', import.meta.env.VITE_PREFERENCE_RESOURCE_PANEL)
+  };
+}
+
 /** 校验过的应用配置；自定义环境变量只在这里读取 */
 export const appConfig = {
   /** 系统名称 */
@@ -60,8 +76,13 @@ export const appConfig = {
   tianditu: tianditu(import.meta.env.VITE_TIANDITU_ENABLED, import.meta.env.VITE_TIANDITU_KEY),
   /** AI 对话后端的基础地址，与 apiBaseUrl 是两个服务 */
   aiApiBaseUrl: required('VITE_AI_API_BASE_URL', import.meta.env.VITE_AI_API_BASE_URL),
-  /** 离开页面后重置：为 true 时不缓存页面，每次进入都是初始状态（ADR 0114） */
+  /** 离开页面后重置：为 true 时不缓存页面，每次进入都是初始状态（ADR 0114）；不影响偏好（ADR 0140） */
   pageStateReset: flag('VITE_PAGE_STATE_RESET', import.meta.env.VITE_PAGE_STATE_RESET),
+  /** 各项偏好是否生效，已经合并了总开关；为 false 的不读不写（ADR 0140） */
+  preferences: preferenceSwitches(),
   /** 资源的最小显示级别：为 false 时不限制，各级都请求瓦片（ADR 0132） */
   resourceMinZoomEnabled: flag('VITE_RESOURCE_MIN_ZOOM_ENABLED', import.meta.env.VITE_RESOURCE_MIN_ZOOM_ENABLED)
 } as const;
+
+/** 偏好的名称：新增偏好先在 preferenceSwitches 登记开关，否则 usePreference 的 name 通不过类型检查 */
+export type PreferenceName = keyof typeof appConfig.preferences;
