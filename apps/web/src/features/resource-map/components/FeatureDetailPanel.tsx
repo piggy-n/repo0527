@@ -100,7 +100,7 @@ export const FeatureDetailPanel = defineComponent({
     pick: { type: Object as PropType<FeaturePick>, required: true }
   },
   setup(props) {
-    // 很快结束的识别和加载不显示提示（AGENTS.md"加载状态"）
+    // 很快结束的识别和加载不显示提示（.claude/rules/ui.md"加载状态"）
     const identifying = useDelayedFlag(() => props.pick.state.value.kind === 'identifying');
     const candidates = computed(() => {
       const state = props.pick.state.value;

@@ -428,7 +428,7 @@ store.clear();
 
 ## 还没做的
 
-有了使用方再做，各项的时机也登记在 [docs/archive/roadmap.md](../archive/roadmap.md) 的"后续阶段要带上的事项"：
+有了使用方再做，还要做的登记在 [backlog](../backlog.md)，下表是当时的记录：
 
 | 内容 | 时机 |
 |---|---|

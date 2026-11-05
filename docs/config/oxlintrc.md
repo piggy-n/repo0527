@@ -340,8 +340,8 @@ workspace 包只允许依赖外部模块、Node 内置模块和本包内部的�
 | 修改 lodash 的导入限制 | 基础规则和"地图适配器和 app 放开地图引擎"的三个 override 一起改 |
 | 新增一个 feature | 不用改，`features/*` 自动匹配 |
 | 新增 ADR 0004 已列出的 lib 模块 | 不用改，策略里已经写好了名字 |
-| 新增一个新名字的 lib 模块 | 在策略 6–9 中补充它的依赖关系，并同步 AGENTS.md 与 ADR |
-| 调整分层 | 同时改 `boundaries/elements`、策略、tsconfig `paths`、AGENTS.md，并写新的 ADR |
+| 新增一个新名字的 lib 模块 | 在策略 6–9 中补充它的依赖关系，并同步 `.claude/rules/libs.md` 与 ADR |
+| 调整分层 | 同时改 `boundaries/elements`、策略、tsconfig `paths`、`AGENTS.md` 和 `.claude/rules/libs.md`，并写新的 ADR |
 | 新增 app 或 package | 补充对应的元素和 `import/resolver` 配置 |
 
 ### 调试方法

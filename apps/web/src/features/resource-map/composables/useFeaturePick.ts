@@ -227,7 +227,7 @@ export function useFeaturePick(
   }
   const camera = map.useCamera();
   const scope = options.scope ?? (() => null);
-  // 页面的回调抛错不能打断识别（AGENTS.md"接收外部回调的模块"）
+  // 页面的回调抛错不能打断识别（.claude/rules/map.md"接收外部回调的模块"）
   const notifyStart = () => {
     try {
       options.onIdentifyStart?.();

@@ -72,7 +72,7 @@ minimumReleaseAgeExclude:
   - some-package@1.2.3
 ```
 
-冷却期过后删掉这条豁免（AGENTS.md）。
+冷却期过后删掉这条豁免（`.claude/rules/deps-config.md`）。
 
 ## allowBuilds
 

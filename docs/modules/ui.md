@@ -272,7 +272,7 @@ jsdom 没有布局（`getClientRects()` 总是空的、没有 ResizeObserver）�
 
 ### 抽屉的内边距
 
-Element 抽屉的内容区默认有 20px 内边距，侧栏的面板要占满抽屉，所以布局在自己的抽屉上设置了 `--el-drawer-padding-primary: 0`（`MxSplitLayout.module.scss` 的 `.drawer`）。这是 AGENTS.md"Element 的外观只在 `element-theme.scss` 中调整"的例外：它只作用于布局内部使用的这一个抽屉，是布局结构的一部分，不改变 Element 在其他地方的外观；放在 app 的 `element-theme.scss` 里，`libs/ui` 就要依赖 app 定义的全局 class。
+Element 抽屉的内容区默认有 20px 内边距，侧栏的面板要占满抽屉，所以布局在自己的抽屉上设置了 `--el-drawer-padding-primary: 0`（`MxSplitLayout.module.scss` 的 `.drawer`）。这是 `.claude/rules/ui.md`"Element 的外观只在 `element-theme.scss` 中调整"的例外：它只作用于布局内部使用的这一个抽屉，是布局结构的一部分，不改变 Element 在其他地方的外观；放在 app 的 `element-theme.scss` 里，`libs/ui` 就要依赖 app 定义的全局 class。
 
 ## 插槽的写法
 

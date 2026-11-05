@@ -1,46 +1,48 @@
-# yzt 重构（repo0527）
+# yzt（repo0527）
 
-用 Vue 3 + TSX + TypeScript 重写 `C:\work\zhjsqdxin`（江苏省统一调查监测现状图，master-demo 分支）。
-这是学习型重构：迁移的同时学习 Vue 3、TS、架构设计、面向对象与设计模式、monorepo 和前端工程化。
+用 Vue 3 + TSX + TypeScript 重写 `C:\work\zhjsqdxin`（江苏省统一调查监测现状图，master-demo 分支）。迁移基本完成，现在以迭代开发为主。
+
+本文件只放每个任务都要遵守、lint 又管不到的规则。其余规则按目录放在 `.claude/rules/`，见下面的"规则文件"。
 
 ## 协作方式
 
 - 小改动直接做；涉及选型、架构或不容易回退的决定，先说明设计理由和替代方案，讨论后再动手（ADR 0139）
 - 一次推进一个小步骤，不擅自扩大范围
-- 重要决策写成 ADR（`docs/adr/`）；阶段结束时把新结论同步到本文件，并更新 `docs/archive/roadmap.md` 的状态与调整
-- 新页面、较大的布局变化或新的交互形式先按设计规范提供可在浏览器操作的 HTML 原型或真实组件预览，确认后再开发；截图只作状态记录，不能代替交互设计稿。主题与组件库层面的改动在 `/dev/theme` 实际操作并截图确认
-- UI 修改按 `docs/design/ui-workflow.md`：先对照规范、已验收组件与真实页面，修改后主动检查、修复，再交给用户验收；交付说明实际验证的尺寸、状态和未验证项，不能以构建通过代替 UI 验证
-- 后续页面迁移参考 `/dev/theme` 和 `/dev/map-ui` 的真实组件样例，使用范围及复查路径见 `docs/design/current-map-reference.md`；样例不挂载地图引擎、不读取业务接口或持久化偏好，地图渲染与查询仍在业务页面验收
-- 浅灰底主标题按 ADR 0076 复用 `MxPanel headerTone="muted"`，Element 弹窗用 `dialog-panel-header` + `MxTitle`；尺寸、留白和适用范围见 `docs/design/page-layout.md` 的"浅灰底面板标题栏"
-- UI 验证允许必要的短时浏览器测试，优先复用用户已启动的服务；无合适服务或需要测试隔离时，允许自动退出并清理的临时测试 / 预览服务。不启动长期 `dev`、`start`、监听或后台常驻服务，不停止用户服务；生产冒烟仍遵守独立内网产物预览的约定。此项补充此前“只运行 build、不启动服务”的 UI 验证限制
 - 提交信息使用 Conventional Commits 格式（`feat` / `fix` / `refactor` / `docs` / `chore` 等）
-- 后端有些级别、有些资源暂时没有数据（瓦片为空、缺字段、接口报错）时，不为适配这种现状调整既定方案，记进 `docs/archive/migration.md` 或 roadmap 的待办
+- 难回退、跨模块的决定才写 ADR（`docs/adr/`），取值和界面细节写进配置说明或设计文档；规则变了直接改本文件或对应的规则文件（ADR 0142）
+- 后端有些级别、有些资源暂时没有数据（瓦片为空、缺字段、接口报错）时，不为适配这种现状调整既定方案，记进 `docs/backlog.md`
+
+## 规则文件
+
+Claude Code 读写匹配的文件时自动加载 `.claude/rules/` 里对应的文件。其他工具不会加载，改这些位置前先读对应的文件。
+
+| 文件 | 适用范围 | 内容 |
+|---|---|---|
+| `ui.md` | `*.tsx`、`*.scss`、`docs/design/` | UI 流程与验证、TSX 写法、加载状态与列表、确认框等 Element 组件、设计令牌与样式 |
+| `testing.md` | `*.test.*`、`tools/smoke/`、`shared/testing/` | 测试的写法、环境、模拟、改坏验证 |
+| `http.md` | `api.ts`、`queries.ts`、`shared/http/`、`session-guard` | 接口函数、查询、写操作的会话核对 |
+| `pages.md` | `app/`、`pages/`、`shared/router/`、`shared/auth/`、`shared/perf/` | 路由、权限、导航、开发页、页面缓存、加载耗时、结束会话 |
+| `state.md` | `features/*/store.ts`、`shared/storage/` | Pinia、偏好的持久化与开关 |
+| `libs.md` | `libs/`、`packages/` | 拆包规则、libs 内部的依赖方向、内部包 |
+| `map.md` | 地图的 libs、`shared/map/`、用到地图的 feature 和页面、`*.worker.ts` | 会话、样式分组、拥有者、相机操作、工具、地图页、Worker |
+| `map-3d.md` | `map-cesium`、`map-core/scene`、`scene-models`、现状底图页 | 三维、二三维切换、漫游、导航网格 |
+| `resource-map.md` | `resource-map`、现状底图页、`probe-resource-classes` | 年份、分类、最小显示级别、已确认的界面细节 |
+| `indicator-simulation.md` | 指标 AI 计算 | 叫法、引擎、流程图、自定义范围 |
+| `city-dashboard.md` | 驾驶舱、`shared/city-indicators` | 范围、入场、保存图片 |
+| `deps-config.md` | `package.json`、`pnpm-*`、`.github/`、`.oxlintrc.json`、`.env*`、`vite.config.ts`、`tsconfig*`、`shared/config/` | 依赖维护、环境变量、CI |
 
 ## 技术栈
 
-已确定：
-
 - Vue 3 + TSX（`defineComponent`），不使用 `.vue` 单文件组件（ADR 0001）
-- TypeScript strict，Vite，Pinia，Vue Router，Element Plus，pnpm workspace
+- TypeScript strict，Vite，Pinia 4，Vue Router 5，Element Plus，pnpm workspace
 - Element Plus 组件显式具名导入，样式全量引入 `element-plus/dist/index.css`，语言包用 `ElConfigProvider` 设置
-- Vue Router 5，手写路由表，history 模式，不启用文件路由（ADR 0007）
-- Pinia 4，只用 setup store
 - 只用 TypeScript 7 一个版本；不引入依赖 TS JS API 的工具（vue-tsc、typescript-eslint 等），lint 用 oxlint + oxlint-tsgolint（ADR 0003），规则与依赖方向检查见 ADR 0006
-- tsconfig 不开启 `incremental`：TS 7.0.2 的增量检查在 `declare global` 文件变化后会给出过期结果（ADR 0009）
-- 二维地图用 MapLibre GL JS 6，只用具名导入；`setWorkerUrl`、CSS 这类全局设置由 app 懒加载完成（登录页空闲时预加载，或首次进入地图时）；禁止引入 `mapbox-gl`（2.0 起为专有许可）（ADR 0002、0019、0023、0061）
-- 三维地图用 Cesium，精确锁定版本（1.146.0，ADR 0002、0079）；Worker、资源等运行时文件由 `vite-plugin-static-copy` 复制到产物的 `cesium/`，基础地址由 app 的三维运行时设置
+- 接口：axios + zod 4 + TanStack Vue Query 5；测试：Vitest 5 + jsdom + `@vue/test-utils`，真实引擎或布局用浏览器模式，接口用 MSW 2.x
+- 地图：二维 MapLibre GL JS 6，三维 Cesium（精确锁定版本）；距离和面积用 geographiclib-geodesic，其他几何用 turf v7 的单个包
+- 偏好存 IndexedDB（idb-keyval），会话存 localStorage
 - 资源管理"自助取数"的知识图谱用 ECharts 的 graph 系列，坐标用 d3-force 计算，不引入 G6（ADR 0089）；名称写在节点里、字号按屏幕上的直径自适应，水资源图是总节点连四个大类的放射布局，数据在 `extraction/water-relations.json`（ADR 0126）
 - AI 对话回答的 Markdown 用 marked 转换、DOMPurify 净化后显示，只在 `features/ai-chat/markdown.ts` 中使用
-- 距离和面积用 geographiclib-geodesic 按椭球面计算，不另写公式（ADR 0035）；其他几何计算按需安装 turf v7 的单个包，不用 `@turf/turf` 全家桶（ADR 0037）
-- 地图内核的事件用 nanoevents；资源释放用标准的 `Disposable` / `DisposableStack`，运行时由 `app/main.ts` 全局引入的 core-js 补齐（ADR 0023）
 - 浏览器目标用 Vite 默认值，不兼容旧浏览器，不引入 `@vitejs/plugin-legacy`
-- 测试用 Vitest 5 + jsdom + `@vue/test-utils`，配置写在 `vite.config.ts` 的 `test` 字段（ADR 0010）；依赖真实引擎或布局的测试用 Vitest 浏览器模式（Playwright 驱动的 Chromium 无界面版，ADR 0040）
-- HTTP 用 axios + zod 4，测试中用 MSW 2.x 模拟接口（ADR 0011）
-- 接口数据用 TanStack Vue Query 5 管理，全局关闭失败重试和切回窗口时的自动刷新（ADR 0017）
-- 登录密码用 sm-crypto-v2 做 SM2 加密，公钥放在 `.env`；token 过期判断用 jwt-decode；会话存 localStorage（ADR 0015）
-- CI 用 GitHub Actions：冻结安装 → 类型检查 → lint → 安装浏览器 → 测试 → 公网、内网构建 → 生产产物冒烟（ADR 0005、0040、0065）；构建自动清理设计稿副本和 3DT 模型数据并检查开发页、入口静态依赖和天地图 key，见 docs/config/vite-config.md
-
-- 偏好（资源图层、底图、边界的选择等）用 IndexedDB 持久化，经 `shared/storage` 的键值接口读写，实现用 idb-keyval；会话仍存 localStorage（ADR 0042）
 
 ## 目录结构
 
@@ -58,46 +60,30 @@ apps/web/src/
    └─ map-vue/     @yzt/map-vue     地图与 Vue 的衔接
 ```
 
-- `pages/dev/<名称>/`：开发页面（主题预览 `/dev/theme`、地图开发页 `/dev/map`、资源图层实测 `/dev/resources`、三维的交互原型 `/dev/map-3d`、导航网格实测与步行地图预览 `/dev/nav-grid`），和业务页面分开放。组件名 `Dev<名称>Page`，路由名 `dev<名称>`（值为 `dev-<名称>`），路径 `/dev/<名称>`；只注册在 `app/router/routes.ts` 的 `devRoutes` 里，生产构建不包含；业务代码不导入开发页面。`routes.test.ts` 检查路径与路由名是否对应
-- `packages/*`：workspace 内部包，`exports` 直接指向 `src/index.ts`，不单独构建（ADR 0014）；目前有 `@yzt/icons`（图标组件与 SVG 规范化工具）。新建包按 `docs/config/internal-packages.md`
+- `pages/dev/<名称>/`：开发页面，和业务页面分开放，只注册在 `devRoutes`，生产构建不包含，业务代码不导入
+- `packages/*`：workspace 内部包，目前有 `@yzt/icons`；应用通过 `@yzt/<name>` 使用
 - `apps/web/tools/`：Node 直接运行的 TS 工具脚本（如 `pnpm title:generate`、加载耗时的实测 `measure:map-load`），相对导入写 `.ts` 扩展名，只用可剥离的语法（`erasableSyntaxOnly`）
-- `apps/web/public/fonts/`：唯一的字体目录，不入库（ADR 0013），见 `docs/design/fonts.md`
+- `apps/web/public/fonts/`：唯一的字体目录，不入库
 - `local/`（仓库根目录，不入库）：模型、原型、探查结果、实测数据和手动测试文件，环境变量 `YZT_LOCAL_DIR` 可以指到别处（worktree 指回主目录）；开发服务器把 `/3dt/*`、`/design.local/*` 映射到这里，地址不变；`public/` 只放要发布的文件，字体是构建输入、留在原处（ADR 0141，见 `docs/config/local-files.md`）
 
 ## 依赖方向
 
-- `pages → features → shared → libs`，`app` 可以依赖所有目录
-- features 之间不互相导入，需要复用的内容上移到 shared 或 libs
-- libs 内部：`utils ← ui`，`utils ← map-core ← map-cesium`，`map-vue → map-core`；map-vue 只能用动态 `import()` 引用 map-cesium
-- `utils`、`map-core`、`map-cesium` 不依赖 vue、element-plus、pinia；`map-vue` 不依赖 element-plus、pinia、vue-router，项目配置和地图界面放在 `shared/map`（ADR 0027）
-- 应用通过 `@yzt/<name>` 使用 `packages/*`，不用相对路径；包只能依赖外部模块和包内部文件，不能导入应用代码；包同样遵守下面"libs 的拆包规则"
+- `pages → features → shared → libs`，`app` 可以依赖所有目录；features 之间不互相导入，需要复用的内容上移到 shared 或 libs
 - 同一单元（一个 feature、一个 lib 模块、shared、pages、app）内部只用相对路径；跨单元只用别名，引用 libs 只写 `@yzt/<name>`
-- 以上规则由 lint 强制检查（根目录 `.oxlintrc.json` 的 `boundaries/dependencies`），分层有变化时同步修改（ADR 0006）
-
-## libs 的拆包规则（ADR 0004）
-
-- 每个模块只有一个入口 `index.ts`，外部只能从 `@yzt/<name>` 导入，不直接引用模块内部文件
-- 例外：需要给样式共享 Sass 变量（如断点）时，模块根目录可以有 Sass 入口 `_index.scss`，只放变量，不输出 CSS；应用用 `@use '<name>'` 引用（`vite.config.ts` 的 `loadPaths`，ADR 0016）
-- 模块内部只用相对路径，不使用 `@/`
-- 不读取 `import.meta.env`、store、router 或全局单例，需要的依赖通过构造参数或函数参数传入
-- 模块之间不能循环依赖
-- map-core 放在 libs（ADR 0018）；包不能依赖 libs，所以 `utils ← map-core ← map-cesium` 要拆包时一起拆，引入 map-cesium 时评估
-- `apps/web/tsconfig.libs.json` 只检查 libs 的源码（不含测试）：不加载 `vite/client` 类型，不配置 `@/*`，读取 env 和使用 `@/` 在类型检查时报错（ADR 0006）；libs 需要的环境类型（如 CSS Modules）单独声明，不能加回 `vite/client`
+- 由 lint 检查（`.oxlintrc.json` 的 `boundaries/dependencies`，说明见 `docs/config/oxlintrc.md`）；分层有变化时同步修改（ADR 0006）
 
 ## 编码约定
 
 ### 格式
 
-以根目录 `.editorconfig` + WebStorm 格式化为准：UTF-8、2 空格缩进、120 列、单引号、语句末尾加分号、不加尾随逗号、`if` / `else` 必须带大括号。
-完整说明见 `docs/code-style.md`。格式规则只交给一个工具负责，lint 不管格式。
+以根目录 `.editorconfig` + WebStorm 格式化为准：UTF-8、2 空格缩进、120 列、单引号、语句末尾加分号、不加尾随逗号、`if` / `else` 必须带大括号。lint 不管格式，完整说明和例子见 `docs/code-style.md`。
 JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<ElButton type="primary" onClick={goHome}>`）；一旦换行，第一个属性从下一行开始，每个属性独占一行。
-不把多条语句或 `if` 的分支压在一行（`if (a) { return; }`、`() => { a(); b(); }` 都要展开）；多行 JSX 用 `return (` 包住，条件渲染的多行 JSX 加括号；小数写出整数位（`0.85`），换行的 `&&`、`||` 放在行尾。完整的规则和例子见 `docs/code-style.md` 的"语句与块"
+不把多条语句或 `if` 的分支压在一行（`if (a) { return; }`、`() => { a(); b(); }` 都要展开）；多行 JSX 用 `return (` 包住，条件渲染的多行 JSX 加括号；小数写出整数位（`0.85`），换行的 `&&`、`||` 放在行尾。
 
 ### lint（ADR 0006）
 
 - 规则只分 `error` 和 `off` 两级，不用 `warn`；提交代码前 `pnpm lint` 必须通过
 - 在代码里关闭规则要写明原因：`// oxlint-disable-next-line <规则> -- 原因`；不再需要的关闭注释会报错
-- 类的私有成员用 TS 的 `private` 或 `#`，不用下划线前缀
 
 ### 注释
 
@@ -108,19 +94,15 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 不写文件头的作者、日期注释，不保留注释掉的旧代码，这些由 git 记录
 - JSON 文件不写注释（包括 `.oxlintrc.json` 这类允许 JSONC 的文件），配置说明写在 `docs/config/` 对应的文档里
 
-### 依赖
+### 依赖与语法
 
 - 通用问题优先用成熟稳定的库，不重复造轮子：比如 `lodash-es`（判断、防抖节流、深拷贝）、`tippy.js`（提示交互）
 - `lodash-es` 按需具名导入，例如 `import { debounce } from 'lodash-es'`，保证未用到的函数能被 tree-shaking 掉
 - 媒体查询、尺寸监听这类组合式工具用 `@vueuse/core`，同样按需具名导入；版本与 element-plus 内部依赖的版本保持一致，避免打包两份（见 `docs/config/package-json.md`）
 - 原生语法已经足够清晰时直接用原生，例如 `?.`、`??`、`Array.isArray`、`Object.entries`
 - 引入新依赖前先确认现有依赖里没有同类库，同一类问题只保留一个库
-
-### 语法
-
 - 优先用现代 ES 语法：解构、展开、箭头函数、模板字符串、可选链、空值合并、`async` / `await`
 - 可读性优先：解构用于给值起有意义的名字，不为了缩短代码写多层嵌套解构或长串三元表达式
-- 只用 `const` / `let` 和 `===`
 
 ### TypeScript 与 Vue
 
@@ -129,50 +111,24 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 组件用 `defineComponent` + TSX，样式用 `*.module.scss`
 - 不挂 `globalProperties`，不用 `getCurrentInstance().proxy`，不往 `window` 上挂对象，不使用 API 自动导入；依赖一律显式 `import` 或通过 provide / inject 获取
 - 跨组件通信按 props / emit → provide / inject → Pinia 的顺序选择，不使用无类型的字符串事件总线
-- TSX 中插槽函数的参数要手动标注类型：Vue 的 JSX 类型不会按组件的 `SlotsType` 推断插槽参数，也不检查插槽名（ADR 0003）
-- TSX 中双向绑定写 `modelValue` + `onUpdate:modelValue`，不用 `v-model`：`v-model` 的值不做类型检查
-- 路由表在 `app/router/routes.ts`；路由名常量在 `shared/router/route-names.ts`，跳转写 `{ name: RouteName.xxx }`，不写路径字符串；页面级参数用路由的 `props` 传入，不放在 `meta` 里
-- 程序式跳转用 `shared/router/navigate`，返回 true 后才执行成功提示等后续动作；导航异常由 app 统一提示与恢复，调用方不重复提示（ADR 0064）
-- 页面权限写在路由 meta 上：不登录也能访问的页面加 `public: true`，限定角色写 `roles`；不另外维护路径清单。`routes.test.ts` 列出了全部公开页面和限定角色的页面，修改时同步更新（ADR 0015）
-- 切走时要保留状态的页面在路由 meta 写 `keepAlive: true`，由 `AppLayout` 里常驻的 `KeepAlive` 缓存，布局卸载（回到登录页）时清空；环境变量 `VITE_PAGE_STATE_RESET=true` 时不缓存、每次进入都是初始状态（`.env` 提交的是 true，ADR 0114、0138），它只管页面缓存，不影响偏好（ADR 0140）；`routes.test.ts` 列出缓存的页面（ADR 0063）。被缓存的页面里量尺寸用 `shared/composables` 的 `useShownElementSize`，不直接用 `useElementSize`（停用期间量到 0，恢复的第一帧会按 0 排版）；停用时要结束的临时交互用 `usePageActive`。画布型页面的根元素用 `height: 100%`：内容区不是弹性容器，`flex: 1` 不生效，浮层全是绝对定位时整页高度为 0（见 `docs/design/page-layout.md`）
-- TSX 里同一个父元素下有几个按条件出现、可能同时变化的兄弟元素时，每个都给 `key`：TSX 没有模板编译器加的标记，Vue 把没有 key 的同类元素按顺序配对，里面的 `KeepAlive` 和有状态的组件会被重建（写法见 `pages/current-map/CurrentMapPage.tsx` 的浮层）
-- 顶部导航配置在 `app/layout/menus.ts`，导航项的权限从路由 meta 读取，不在菜单里另写角色；新增业务页时先加路由再加导航项
-- 登录会话只通过 `shared/auth` 的 `useSessionStore` 读写，不直接读写 localStorage 中的 token
-- 需要持久化的状态由拥有者接收页面提供的偏好范围（`shared/storage`），用共用的流程恢复和写入，不直接调用 idb-keyval 或 localStorage；存下的值读出时用 zod 校验（包括自洽），按拥有者的规则合并，不直接使用（ADR 0042）
-- 每项偏好由 `.env` 的总开关 `VITE_PREFERENCES_ENABLED` 和自己的分项开关 `VITE_PREFERENCE_*` 控制，都为 true 才生效（`.env` 现在只关着底图）；只在 `usePreference` 按 `name` 判断，拥有者和页面不另外判断。关闭时不读不写，用 `restore(null)` 按"没有存过"结束恢复，旧数据保留。新增偏好要先在 `app-config.ts` 的 `preferenceSwitches` 登记开关，否则 `name` 通不过类型检查，步骤见 `docs/modules/storage.md`（ADR 0140）
-- 结束会话（退出、过期、其他标签页退出）统一调用 `app/session-end.ts` 的 `endSession()`（同时清空查询缓存），不要只调用 `session.clear()`；跳转和提示由调用方负责，见 `docs/modules/auth.md`
 - 界面与逻辑分离：表单、提交这类交互逻辑写成组合式函数（`features/<域>/composables/useXxx`，通用的放 `shared/composables`），组合式函数不渲染、不跳转、不弹提示，这些由组件和页面决定（见 `docs/modules/auth.md` 的登录三层）
 - `computed` 不抛异常：可能失败的计算把失败表示成数据（结果对象），或者放在调用方的 `try/catch` 里直接计算。Vue 3.5 中 `computed` 抛错时，异常在调度器检查依赖时抛出，读取方的 `try/catch` 接不住；之后依赖不变时再读取，返回上一次成功的旧值（ADR 0028 背景第 8 条）
 - 组合式函数发起的请求在作用域销毁时（`onScopeDispose`）取消，请求返回后再检查一次是否已取消：晚到的结果不写入会话、store 等共享状态，被取消的请求不显示错误。写法见 `useLoginForm`，原因见 `docs/modules/auth.md` 的登录表单
 - 新的操作先作废上一次，再做可能失败的准备（如点选的规划）；准备出错也是这次操作的失败，进入失败和重试，不抛给调用方（写法见 `features/resource-map/composables/useFeaturePick.ts` 的 `execute`）
 - 异步按 ADR 0039 分类：能写成状态收敛的不写成操作；可替换操作（同一件事的先后请求，如定位、查询所在区县）在同一通道里后发覆盖先发，用 `@yzt/utils` 的 `LatestController`，不手写递增计数；服务端写操作（删除、保存）不适用，按业务防重复、串行或允许并发，不随组件卸载取消
+- 异步操作在每个等待点（`await`）返回后都要重新确认自己仍然有效（信号没有中止、仍是最新的请求），再继续执行：等待会因中止而结束，不等于返回时一定没中止
 - 命名：状态快照的序号叫 revision（只增不减，比较新旧）；一次意图用信号表示（operation，只能作废，不比较大小）；version 只用于外部格式（样式规范的 `version: 8`、依赖版本）（ADR 0039）
-- 加载状态用 `shared/composables` 的 `useDelayedFlag` 延迟显示，防重复提交的标志仍立即生效
-- 加载耗时用 `shared/perf` 的 `LoadTrace` 标记（User Timing，留在产物里、不上报），登录到地图的步骤清单和实测脚本的 `STEPS` 由测试保证一致；改加载方式（预加载、拆分块、换框架）前后用 `measure:map-load` 实测，几种做法用 `--builds` 交替比较，模拟第一次访问用新的浏览器上下文、不禁用缓存（ADR 0061，见 `docs/modules/perf.md`）
-- 确认框（`ElMessageBox`）不随组件卸载关闭：组件卸载时关闭自己打开的确认框；用户确认后，先检查组件是否已销毁、会话是否还是打开确认框时的那一个，再执行操作（写法见 `features/file-management/composables/useFileRemoval.ts`）
-- 同一时间只能打开一个 `ElMessageBox`：组件卸载时只能用 `ElMessageBox.close()` 关闭，它会关掉所有确认框，有多个时会把别处的一起关掉、对方按"取消"处理；需要多个弹框并存时，改用渲染在组件内的确认框（如基于 `ElDialog`），随组件卸载自然销毁
-- 表格行内操作（如删除）的进行中状态按行 ID 记录，不用单个 mutation 的 `variables` / `isPending` 判断是哪一行；操作入口对同一行防重复
-- 回车触发提交或查询时排除输入法选字：`event.key === 'Enter' && !event.isComposing`
-- `ElColorPicker` 拖动时的 `active-change` 只设临时预览，确认（`change`）才写入；它没有关闭事件，Esc、点外面时把颜色重置回 `modelValue` 并再发一次 `active-change`，所以由拥有者规定"预览等于确认过的值就是没有预览"，`modelValue` 绑确认过的值、不含预览；取色器随组件卸载时什么也不报，编辑器卸载、换了目标时丢弃自己目标的预览（ADR 0044，写法见 `features/resource-map/components/SymbolEditor.tsx`）
-- 列表的加载状态按 `docs/modules/table.md` 区分：没有数据时用 `shared/table` 的 `TableSkeleton`，显示着旧数据时用延迟遮罩，后台刷新当前条件的缓存不提示；遮罩不要直接跟着 `isFetching`；加载失败、没有数据可显示时用 `TableLoadError`（居中的说明和重试）
-- 给组件传 `id` 等未声明的透传属性会报类型错误（组件只接受声明的 props 和 `class`、`style`），需要标记时用 `data-*`
-- 拖动排序用 `shared/composables` 的 `useSortableList`，不直接导入 `sortablejs`（测试模拟放下时除外）：放下后由它还原 DOM，顺序交给拥有者，Vue 按数据重新渲染；只能按住手柄拖，手柄同时支持上下方向键（ADR 0054）
-- `useVirtualList` 这类把数据放进深层 `ref` 的工具，给出的行是响应式代理；交给按对象身份比较的拥有者（如点选的 `choose`）前按序号取原数组里的对象；同一个虚拟列表先后显示两轮结果时容器不重新挂载、滚动位置保留，新一轮按列表的身份显式回到顶部（写法见 `features/resource-map/components/FeatureDetailPanel.tsx`）
+- 跳转写 `{ name: RouteName.xxx }`，不写路径字符串；结束会话统一调用 `app/session-end.ts` 的 `endSession()`；需要持久化的状态只走 `shared/storage`，不直接调用 idb-keyval 或 localStorage。细则见 `pages.md`、`state.md`
+- 自定义环境变量只在 `shared/config/app-config.ts` 中读取和校验，其他代码使用 `appConfig`；内网与公网的差异只写在 `.env.intranet`，代码不判断模式名；`VITE_` 开头的变量会写进构建产物，不能放密钥。细则见 `deps-config.md`
+
+### 写法的来源
+
+- 先读懂旧模块的行为，再按新架构重写，不逐行照搬；类结构和算法有价值的，保留设计并补上类型
+- 按真实接口返回（先实际请求一次看结构）和 TypeScript 类型写逻辑，不照搬旧代码为各种假设情况写的兜底判断：zod schema 已经保证的字段不再判空，不写 `|| ''`、`Array.isArray(...) ? ... : []` 这类兜底；确实可能缺失的字段在 schema 里写 `.optional()`，由类型提示调用方处理
 
 ### 测试
 
-- 测试文件和源文件放在一起，命名 `*.test.ts` / `*.test.tsx`；显式从 `vitest` 导入 `describe`、`it`、`expect`，不开 `globals`
-- 生产产物冒烟在 `tools/smoke/*.spec.ts`，用已有的 `playwright/test` 独立运行；先做内网构建，只用本地固定接口，不访问后端或天地图，不导入应用源码（ADR 0065）
-- 浏览器测试命名 `*.browser.test.{ts,tsx}`（ADR 0040）：只写依赖真实引擎或真实布局的行为，能用假对象测的仍写普通测试；只用本地数据，不请求后端和天地图；`whenReady()` 只表示整体加载完成，验证画面要等渲染条件（如 `idle` 之后查到目标要素）；要等的事件在触发操作前登记，可能挂起的等待和超时赛跑，结束后清理监听和定时器；只持续几秒的过渡状态不轮询（慢的机器上会错过），在写进 DOM 的同一轮微任务里接住（写法见 `DashboardEntrance.browser.test.tsx` 的 `whenEntered`）；每个用例自己创建容器、会话和视图，结束时释放并移除容器（同一文件的用例共用一个页面）
-- 不用 DOM 的测试文件（纯逻辑、libs 的会话与 Worker 通信层、`tools/` 脚本）第一行写 `// @vitest-environment node`：默认的 jsdom 每个文件要多花约 1 秒创建（见 `docs/config/vite-config.md` 的"测试耗时"）
-- 工具函数、鉴权、HTTP 错误处理这类纯逻辑要写测试；页面和组件测试关键交互
-- pages、features 的测试用 `createMemoryHistory()` 建只含所需路由的最小路由，不导入 `app` 的路由表（测试文件同样受依赖方向约束）；`app` 自己的测试可以用真实路由表，例如检查导航与路由权限是否一致
-- 模拟环境变量用 `vi.stubEnv`，用例结束后会自动撤销（`unstubEnvs`）；部署时决定的开关，用例不依赖 `.env` 的取值：单元测试自己固定（模块加载时就读取的，放进 `vi.hoisted`；很多用例依赖默认行为的，固定在 `vite.config.ts` 的 `test.env`），生产冒烟用 `loadEnv` 读构建用的取值，验证对应的行为
-- 模拟接口用 MSW 的 `setupServer()`，并设置 `onUnhandledRequest: 'error'`；不用 `vi.mock('axios')`；依赖第三方类的代码（如 MapLibre 适配器）依赖自己定义的窄接口，测试注入实现它的假对象，并用 `expectTypeOf` 检查真实的类满足它，不用 `vi.mock` 整个库
-- 修 bug 和关键逻辑的测试写完后，故意改坏被测代码，确认测试会失败，并确认失败原因是断言而不是代码报错或超时（可能一直挂起的等待要和必然更晚结束的等待赛跑：只经过微任务的用 `setTimeout(0)`，经过消息往返的按轮数推进事件循环，不用固定时长，见 `docs/modules/utils.md` 的测试）；修 bug 时先写能复现问题的测试
-- `vite.config.ts` 的 `test.server.deps.inline: ['element-plus']` 不能删：不加的话 Element 表单的校验在测试中永远通过（见 `docs/config/vite-config.md`）
-- 不提交 `.only`：lint 的 `vitest/no-focused-tests` 会报错，CI 中 Vitest 也会拒绝运行
-- `mount` 挂载的组件在每个用例结束后由 `src/test-setup.ts` 自动卸载（`enableAutoUnmount`），不用逐个 `unmount()`；Element 放在 `body` 下的弹出层不归组件管，挂到 `body` 的测试仍要在 `afterEach` 里清空它
+测试文件和源文件放在一起，显式从 `vitest` 导入。工具函数、鉴权、HTTP 错误处理这类纯逻辑要写测试，页面和组件测试关键交互；修 bug 时先写能复现问题的测试。细则见 `testing.md`。
 
 ### 验证分级（ADR 0139）
 
@@ -190,159 +146,24 @@ JSX 标签：属性少、值简单、不超过 120 列的保持单行（如 `<El
 - 改 `packages/*` 时加上该包自己的测试（`pnpm --filter <包名> test`）
 - UI 改动按 `docs/design/ui-workflow.md` 另外验证，这里的检查不能代替
 
-### Pinia
-
-- 只用 setup store：`defineStore('id', () => { ...; return { ... } })`；全部 state 都要 return，否则 devtools 和插件看不到；需要重置时自己写 `reset`
-- 命名 `useXxxStore`；业务域的 store 放在 `features/<域>/store.ts`，跨域共用的放在 `shared/`
-- 只放跨组件共享的客户端状态；组件内部状态留在组件里，接口数据不放进 store
-- 解构 state 和 getter 用 `storeToRefs`，action 可以直接解构
-- store 不做路由跳转和 UI 提示（不用 `useRouter`、`ElMessage`），由调用方处理
-- 每个 store 文件末尾加 HMR：`if (import.meta.hot) { import.meta.hot.accept(acceptHMRUpdate(useXxxStore, import.meta.hot)); }`；不加的话，修改 store 后页面会继续使用旧的 store 实例
-- `app/main.ts` 中 pinia 要先于 router 安装
-
-### 配置与环境变量
-
-- 路径别名只在 tsconfig 的 `paths` 中配置，Vite 通过 `resolve.tsconfigPaths` 读取，不另配 `resolve.alias`
-- 自定义环境变量只在 `shared/config/app-config.ts` 中读取和校验，其他代码使用 `appConfig`；Vite 内置的 `DEV`、`PROD`、`MODE`、`BASE_URL` 可以直接读取。新增变量要在 `shared/config/import-meta-env.ts` 中声明类型
-- `VITE_` 开头的变量会写进构建产物，不能放密钥；只给 `vite.config.ts` 用的变量不加 `VITE_` 前缀
-- 接口请求走同源的 `appConfig.apiBaseUrl`（`/backend`），由 Vite 或 nginx 转发到后端（ADR 0008）
-- 天地图只通过 `appConfig.tianditu`（`{ key } | null`）使用；为 `null` 时不发任何公网请求，界面上也不出现依赖天地图的选项（ADR 0031）；这时底图是"静态底图"（默认）和"无底图"（ADR 0133）
-- 内网与公网的差异只写在 `.env.intranet`（`pnpm build:intranet`、`dev:intranet`），代码只读 `appConfig`，不判断模式名；区分生产与开发用 `PROD` / `DEV`，不用 `MODE`（ADR 0032）
-
-### 接口请求（ADR 0011，用法见 `docs/modules/http.md`）
-
-- 接口函数写在 `features/<域>/api.ts`，统一用 `shared/http/client.ts` 的 `http.get / post / put / delete`，不直接使用 axios
-- 每个请求都传 zod schema，返回值类型由 schema 推断（`z.infer`），不另外手写 interface；对象中可能缺失的字段写 `.optional()`（zod 4 中 `z.unknown()` 字段默认必填）
-- 失败时抛出 `ApiError`，按 `kind` 区分；接口函数里不弹提示，全局提示由 app 注入，需要自己处理时传 `silent: true`
-- 成功时没有 `{ code, msg, data }` 外层的接口（如要素查询）传 `envelope: false`，schema 描述整个返回体；失败时的信封仍按业务码转成 `ApiError`（ADR 0047）
-- 支持取消的场景把 `AbortSignal` 传给接口函数
-- 查询和变更写在 `features/<域>/queries.ts`，用 TanStack Vue Query 的 `useQuery` / `useMutation`；`queryFn` 把收到的 `signal` 交给接口函数，组件不直接拼 query key；接口数据由查询缓存持有，不放进 Pinia，组件里也不另存一份
-- 服务端写操作用 `shared/auth/session-guard` 的 `useSessionGuard` 核对会话：提交时 `capture()`，`mutationFn` 发请求前 `assertCurrent()`（调度期间换了会话就不用新凭据发送旧操作），响应后 `isCurrent()`（旧会话不刷新新缓存、不报告成功）；已发出的写操作不随卸载取消。只是过期不算换会话，组合式函数不另外判断 `isActive()`，由 shared/http 在发请求前统一按登录过期处理；路由已限定的角色也不在组合式函数里重复判断
-- shared/http 不依赖路由、UI 和鉴权，这些由 `app/http.ts` 通过 `configureHttp` 注入
-- 例外：AI 对话的后端是第二个服务（同源 `/ai-backend`、Bearer、没有信封、SSE），最小迁移时暂由 `features/ai-chat/ai-client.ts` 用 `fetch` 请求，错误仍转成 `ApiError`，AI 的 401 不结束系统会话；重构时统一进 shared/http，其他模块不照搬（见 `docs/modules/ai-chat.md`）
-- `useQuery` 的 key 变化后，`data` 要到下一轮调度才换成新 key 的结果；同步读取或在侦听里要知道结果属于哪个 key 时，用 `select` 给结果标上 key 再比较（写法见 `features/resource-map/queries.ts` 的 `useFeatureDetailQuery`）
-
-### 地图（ADR 0020～0063，三维见 ADR 0078、0079，总览见 `docs/modules/map-overview.md`，设计见 `docs/modules/map-core.md`、`docs/modules/map-vue.md`、`docs/modules/map-cesium.md`、`docs/modules/shared-map.md`）
-
-- map-core 持有地图会话状态（样式模型、相机、当前工具、选择状态），它是二维和三维共同的唯一真相源；Manager 修改会话状态，不直接写引擎
-- 样式按分组推导：每个拥有者用纯函数从自己的状态推导出分组并整体替换；跨分组的修改用一次 `setGroups` 提交，批次不跨 `await`；交给会话的 GeoJSON 数据和样式图片不能原地修改，要换新对象（ADR 0022、0045）
-- 地图能力按 ADR 0027 分层：与框架无关的逻辑在 map-core，Vue 衔接在 map-vue，项目级的公共能力（底图、行政区、工具栏界面）在 `shared/map`，业务数据驱动的图层在 feature，页面挑选组合；用组合，不做带开关的全能地图组件。一项能力放哪一层看它是否属于某个业务域，不看有几个使用方
-- 页面用 `provideMap()` 创建会话，用 `map.bindStyle()` 把拥有者的推导函数（`() => StyleGroup`）绑定到分组，只能在同一个组件的 setup 里绑定；拥有者不提交样式，"不显示"用推导结果返回空分组表达（ADR 0028）
-- 业务地图的画布用 `shared/map/backend-request.ts` 的 `JIANGSU_MAP_OPTIONS`（后端校验瓦片的 token，见 `docs/archive/migration.md`）：只给发往 `appConfig.apiBaseUrl` 的请求带 token，天地图等第三方不带；token 放请求头，不拼进地址。瓦片的 401 由 app 通过 `MAP_ERROR_REPORTER` 注入的 `reportMapError` 接收，和接口的 401 走同一个 `onUnauthorized`，页面不另外处理
-- 引用别的分组数据源的推导，要依赖被引用方的状态，保证两者在同一轮变化、一起提交；拥有者的数据源、图层和样式图片的 ID 以分组名为前缀（ADR 0027、0028、0045）
-- `shared/map` 和 feature 的地图能力按"拥有者"写（ADR 0031）：组合式函数持有状态（`shallowRef`，整体替换，值没变时不替换）并提供操作（参数不合法时抛错），推导分组的是纯函数；面板等界面通过 props 拿到拥有者，只显示和调用
-- 默认视角 `useDefaultView(map)` 只在 `provideMap` 所在组件的 setup 里调用一次，其他组件通过 props 拿到 `goToDefaultView`（ADR 0033）
-- 用户发起的定位是一次相机操作，作废之前没完成的定位：用上下文的 `runCameraOperation(camera => ...)` 执行；要先异步准备数据的，开始时 `const operation = beginCameraOperation()`，准备好、确认自己的请求没过期后 `operation.run(camera => ...)`；页面初始化的定位用 `currentCameraOperation().run(...)`，不开始新的操作。等就绪、跨视图失败等待、等待后的再确认都由 `run` 负责；每个操作只能 `run` 一次；回调拿到的相机控制只在回调期间有效，不要存下来。不要用相机变化判断请求是否过期（ADR 0038、0039）
-- 上下文的 `view` 只在视图就绪时有值，只有 `kind`、`pick`、`project`、`queryRendered`；浮层只判断 `view` 是否为 `null`，不另外判断 `viewState`（ADR 0039）
-- 和当前工具无关的鼠标位置（如状态栏的经纬度）用上下文的 `pointer`（工具模型的输入事件，一帧最多更新一次），不自己监听画布或原生地图的鼠标事件（ADR 0053 第 5 节）
-- 异步操作在每个等待点（`await`）返回后都要重新确认自己仍然有效（信号没有中止、仍是最新的请求），再继续执行：等待会因中止而结束，不等于返回时一定没中止
-- 交互工具用 `map.registerTools()` 在页面的 setup 里登记，同一时间只有一个当前工具；工具声明光标和手势，只由适配器应用；工具只拿到 `ToolView`（`kind`、`pick`、`project`、`queryRendered`），不碰原生地图（ADR 0034、0047）
-- 工具要接管按在自己手柄上的拖动（如逐点编辑的节点）时声明 `capturesPress(point, view)`，只对手柄返回 true，按在别处仍平移地图（ADR 0122）
-- 关掉拖动平移的工具要临时拖动地图时声明 `panModifier`，值取 `shared/map` 的 `currentPanKey()`（Mac 用 ⌘，其他用 Ctrl），平移和手型光标由适配器负责，工具不自己监听修饰键（ADR 0056）
-- 工具栏的按钮由页面挑选（`items`），动作的回调由页面给出（`actions`）；开关面板的动作，由页面通过 `pressed` 告诉工具栏显示为按下，工具栏不保存开关（ADR 0034、0036）
-- 行政区边界的入口：现状底图在业务组，打开功能标签；其他地图页给 `MapViewControls` 传 `boundaries` 和 `boundariesOpen`，点开是底图同款的浮层，不另放工具栏，开关由页面持有（窄屏时计入 `useSideExclusion`）；默认级别由页面设置（ADR 0128）
-- fill 图层要用 `['geometry-type']` 限定为面：MapLibre 会把线也当成环填充；要写 `['Polygon', 'MultiPolygon']`，三维按要素原来的类型求值
-- 内网的静态底图用本地市界直接绘制面、线和地名，不用图片，也不用天地图的截图或瓦片；地名、各市分色是 `static-options.ts` 里的开关，不进 `.env`，默认都关（全省 CREAM）；陆地色是换算好的不透明 HEX，不用透明度变量；绑定 `basemap-labels` 分组的页面在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`，打开地名后漏传时整个视图进入 `failed`；改了配色、分色开关或边界数据运行 `basemap:generate`（ADR 0133、0134）
-- line 图层的 `line-dasharray` 不在常量和按要素取值之间切换（MapLibre 6.12 的缺陷会报错）：线型不同的要素按线型拆成多个图层，每层的线型是常量，实线不设（ADR 0046）
-- 只随级别变化（常量或按 `zoom` 的 `step`）的 `fill-pattern` 设 `'fill-pattern-transition': { duration: 0 }`：过渡期间 MapLibre 按旧图片取图集位置，换花纹后会画错约 300 毫秒（见 `docs/archive/migration.md` 的"切换填充方式的闪烁"）
-- 区划目录和区划边界只用本地数据（`shared/map/region`），目录与市界、县界数据由测试保证逐条一致（ADR 0036）；经纬度的识别、显示和复制只用 `shared/map/location/coordinate-format.ts` 的纯函数（ADR 0037）
-- 资源的年份是按 `code` 的显示状态：单个资源用拥有者的 `setYear`，批量用 `setYearForAll`（有这一年的资源不论是否勾选都切过去），不另存"当前年份"；拥有者记下的最后一次批量设置的年份（`batchYear`）只给选择框回显，不参与推导，也不代替各资源的年份（ADR 0116）；界面条目的身份、名称和符号按 `code`，年份作为单独的字段显示（ADR 0052）
-- 资源按属性分类按 ADR 0123：取值、名称、颜色写在 `features/resource-map/class-dictionaries.ts`，`style-registry.ts` 按 `code` 登记字段和字典，一个资源一行；取值是符号覆盖的键，改名称不影响已保存的覆盖。图例和地图都只用资源实际有的类别，地类规则用 `only` 列出（ADR 0124），不只在图例里过滤。新的分类先用 `probe:resource-classes` 探查、人工确认，前端不统计瓦片（ADR 0043）
-- 资源的最小显示级别按 ADR 0132、0137：层级写在 `features/resource-map/resource-min-zooms.json`，是单张瓦片 6 MB 的实测结果（`probe:resource-classes --tile-cost`，换后端环境或重新切片后重测），脚本的 `ZOOM_FLOORS` 和它一致；这个文件构建时带上一份，同时复制到发布目录，部署时换它、刷新页面就生效，读不到或不合法时用带上的那份，确定的值要同步回仓库（`docs/deployment.md`）；村级调查区、界线、路面范围第一次请求很慢，定 8 级，不按实测放开（ADR 0136）；数据源和图层用同一个级别，只给图层设时瓦片失败会一路请求更低的级别。`VITE_RESOURCE_MIN_ZOOM_ENABLED=false` 时不限制、不读文件，只用于排查和应急；提示、瓦片请求和点选都从目录的 `resource.minzoom` 取值，不单独读开关
-- 区划裁剪按区划边界的几何，不按要素属性里的区划代码过滤（业务数据的代码和区划目录对不上）：区划外用 `region-clip` 分组的遮罩盖住；显示和查询的范围都取 `readyBoundary`；点选、框选的渲染要素先按范围过滤再去重、计数，发给后端的几何只用 `query-geometry.ts` 的 `queryGeometry` 整理（误差不超过 2 像素、有效、最多 120 个坐标），整理不出来时提示范围太复杂（ADR 0051）
-- 地图页的区域按 ADR 0070：行政区、图例、区划定位、坐标定位共用 `usePanelGroup` + `MapPanelGroup`，查询详情由独立 `FeatureDetailWindow` 展示，底图保留按钮左侧的 `MapOptionsPopover`；外壳负责标题、关闭和悬浮元素登记，内容不重复处理。功能入口打开时标签前移，直接点标签只切换；统一关闭只影响功能组。功能与详情同列上下排列，布局由 `panelStackLayout`、`usePanelStack` 管理，空间不足只收起非当前内容。有临时交互的内容接收 `active`，隐藏或收起时结束交互，关闭时卸载；窄屏仍由 `useSideExclusion` 决定最后操作的一边
-- 地图页的界面按 5D 的设计稿（ADR 0053～0055）及后续已确认调整：当前工具、面板开关、视图状态、失败原因等仍是组合式函数、store 或纯函数里的数据，组件只显示和调用，测试放在逻辑上；随尺寸变化的排法写成纯函数（如 `mapPageLayout`、`fitStatusLayout`），组件只交给它量到的尺寸。新的界面块先出可操作的 HTML 原型（`local/design/`，不入库，用 `/design.local/<主题>/` 打开）或真实组件预览，用户确认后再实现，按 `docs/design/ui-workflow.md` 验证
-- 现状底图已确认的界面细节（已选择图层区域、透明度浮层、图例的浏览与编辑、功能容器与标签、底图 Popover、地图 Tooltip、区划定位、标题栏底色）记在 `docs/design/current-map-reference.md` 的"已确认的界面细节"，改这些界面前先读，用户确认新的调整后同步更新那里
-- 接收外部回调的模块（如 `onError`）在入口用 `@yzt/utils` 的 `safeReporter` 包装：回调自己抛错不能打断内部的状态转换和资源释放
-- 地图的加载与失败提示由 `shared/map` 的 `describeMapStatus` 推导，界面只负责显示；引擎失败用上下文的 `retry()` 重建，不在页面里换画布的 `key`（ADR 0030）
-- 地图上跟着鼠标的提示用 `shared/map/pointer-hint` 的 `PointerHint`（靠边时翻到另一侧），不在各个浮层里各写一套；挂在地图上某一点的卡片（如位置信息）只放在可视区域里（上下文的 `overlayPadding()`，ADR 0055）
-- 贴边、会挡住定位的悬浮元素用 `useMapOverlay(element, edge)` 登记，`fitBounds`、`flyTo` 不传 `padding` 时自动避开；不定位、只要让被挡住的位置露出来时用相机控制的 `reveal`；页面不自己算定位用的 padding 和平移量，也不用布局的尺寸常量（ADR 0029、0037）
-- 会话的选择状态只存要素身份（数据源 + 业务主键），属性、几何、候选列表和详情留在 feature 的查询缓存里，高亮分组从选择和查询结果推导（ADR 0022、0047）
-- 只有 MapLibre 适配器能写二维地图（lint 只允许 `libs/map-core/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；Cesium 镜像会话状态，不实现二维的引擎接口；二三维共用的是生命周期、相机、输入、拾取、投影、渲染要素查询这几个视图接口（ADR 0024、0047；三维的渲染要素查询返回空数组）
-- Cesium 同样只在 `libs/map-cesium` 和 `app` 导入（lint 检查，包括 `cesium/Build/...` 和 `@cesium/*`）；`CesiumView` 只依赖窄接口 `SceneLike`，唯一调用 Cesium 的是 `CesiumScene`，测试注入假场景（ADR 0079）
-- 三维的 GeoJSON 覆盖物由 map-cesium 按样式自动镜像（line、fill、circle，按整级求值、简化到半个像素，ADR 0080），拥有者不为三维另写分组；铺满大范围、只做背景的图层用 `overlayDetailMetadata` 写细节上限，超过后不再加细、不再重建（ADR 0135）；`symbol`、`fill-pattern` 等清单外的写法三维不画。三维期间点/框选不识别；三维独有的读数（视点高度、朝向）用就绪视图的 `eyeHeight()`、`heading()`
-- 三维独有的内容（3D Tiles 瓦片集、钻地、漫游）由会话的 `scene` 持有，页面用 `map.bindScene(() => SceneContent)` 绑定拥有者的推导函数（一个上下文只绑定一个）；瓦片集的状态从上下文的 `sceneStatus` 读，就绪时带建议的相机，定位用它做相机操作；漫游的进度从 `roamStatus` 读，漫游开始时开始一次相机操作，被别的定位作废就退出。模型清单 `public/3dt/manifest.json` 入库、模型数据不入库（ADR 0081、0083），也不进构建产物；本机放在 `local/3dt/`（ADR 0141），服务器上放在发布目录之外、由 nginx 提供（`docs/deployment.md`）
-- 漫游时页面只留漫游面板和小地图，隐藏业务工具栏、功能面板、底图、区划条、视图控件和状态栏：只隐藏，不改各拥有者的状态，退出后原样显示；进入时切回移动，漫游只在换成移动以外的工具时退出（ADR 0084、0095、0097）。漫游时左侧的漫游面板替换三维模型面板，步行和路线在面板里切换，速度共用米/秒。没有单独的钻地：漫游地下的模型时由拥有者推导出地下空间（地表固定半透明、不显示地面上的模型），退出漫游就回到地面
-- 导航网格在 `map-core/scene/nav`，不依赖 Cesium、DOM：`buildNavigation` 在主线程下载叶节点瓦片、在 Worker 里构建；行走碰撞、寻路、平面图用同一份区域（`labels`）；平面图正北朝上（按根节点局部系的方位角旋转）、按区域着色（`planRegions`、`renderFloorMap`，ADR 0085）
-- 步行是会话三维内容的 `roam`（`kind: 'walk'`）：拥有者建好导航网格（按模型缓存）后交给会话，视图选出生点、接管键鼠逐帧行走；行走、点击、脱困、出生点的规则在 map-core 的 `Walker` 和纯函数里，Cesium 一侧（`scene-walk.ts`）只做输入、深度拾取和相机；回到出生点、脱困这类一次性命令写成计数；漫游期间每帧关掉 Cesium 的相机控制（flyTo 结束后它会被打开）（ADR 0086）；已经在模型里时挪相机不用 flyTo（在地下飞总会先升到地面以上），近处直接设、远处用 `Blackout` 闪切，漫游时覆盖物不按级别重建（ADR 0103）
-- 漫游时的室内地图（小地图、完整地图）在 `features/scene-models`：楼层和着色用 `indoorMapOf` 按导航网格缓存，步行时人的位置来自步行状态的 `player`，路线漫游时按走过的米数从路线上取、路线画在地图上（`route-track.ts`，ADR 0097 第 6 节，路线漫游不能瞬移）；完整地图打开时用步行意图的 `paused` 暂停，双击瞬移用 `teleport` 计数；地图的取景、缩放是纯函数（ADR 0087）
-- 第三人称（ADR 0090）：人称是步行意图的 `view`，相机的挂法（弹簧臂、防穿墙、转身、淡出）在 map-core 的 `WalkRig`，人物模型 `public/roam/Cesium_Man.glb`（CC BY 4.0，署名见同目录 `CREDITS.txt`）由拥有者给出地址；入口暂不开放，现状底图页不给 `RoamPanel` 传 `personSwitch`
-- 二三维切换用上下文的 `map.setDimension(kind)`：页面同时放 `<MapCanvas>` 和 `<CesiumCanvas>`，每种视图一个画布，上下文的 `view` 等只反映当前种类；切换时要做的业务（如 `basemap.selectForDimension`：三维默认影像、二维默认矢量）由页面在同一处调用。三维画布第一次切到三维时才加载，运行时由 app 的 `withMapRuntime` 通过 `MAP_RUNTIME` 注入，不在 `main.ts` 里安装（会把 maplibre-gl 带进入口，ADR 0079 第 2、8 节）
-- 地图页的路由组件用 `app/map-framework.ts` 的 `withMapRuntime` 包装：同时加载默认框架（`defaultMapFramework()`）的运行时和页面，都到了以后设置运行时、预热 Worker 池再返回页面；登录页空闲时 `app/map-preload.ts` 用同一个加载函数预加载，所以地图页分块的模块不在顶层做重的计算（ADR 0061）；二维第一次画面稳定后由三维画布请 app 空闲时预加载三维运行时（`MAP_RUNTIME_PRELOAD`，省流量模式跳过，ADR 0091）；交给 MapLibre 的容器元素只用静态 class，可变的 class 放在外层元素上，否则 Vue 会冲掉 MapLibre 自己加的 class
-- 地图页被缓存时（ADR 0063）：`MapCanvas` 在页面停用时暂停视图、激活时恢复，隐藏期间的定位等恢复后再执行；视图恢复时先按容器尺寸调整画布，暂停时进行中的定位动画直接到终点并写回会话；面板内容在页面停用时按隐藏处理（`active` 为 false）
-- 相机事件带 `view` 和 `cause`（`user` / `program` / `sync`），不用时间窗口判断回声（ADR 0024）
-- 一个不合法的图层会让整个视图进入 `failed`，样式出现新版本时自动恢复（ADR 0026）；来自后端等外部配置的图层，由拥有者在配置变化时先校验自己的分组，不合法的不提交给会话
-- 带 `sourceId` 的错误（瓦片、GeoJSON 加载失败）不算样式失败，记在视图的数据源错误里；拥有者从上下文的 `sourceErrors` 按数据源 ID 推导自己的加载失败，不监听原生的 `error` 事件，也不自己清除（ADR 0041）
-- 持有资源的对象实现 `Disposable`，监听和子对象都登记进内部的 `DisposableStack`；释放后等待中的操作以 `AbortError` 结束（ADR 0023）
-- 视图上的差异（如三维期间不画二维标注）由适配器自己处理，不改会话状态；框架独有的功能按能力声明，独有状态由各自的模块保管，切换框架时保留
-- 样式表达式和过滤条件在三维、Worker 里一律用 `@maplibre/maplibre-gl-style-spec` 求值，不手写求值器；它保证求值语义一致，不保证渲染效果一致，三维的支持范围按清单降级（ADR 0024）
-- 二维不自建渲染 Worker；主线程热点先实测再移出；自建的 Worker 一律用 `@yzt/utils` 的通信层（有类型的消息、`AbortSignal` 取消、归实例所有并可释放），取消分层与故障语义见 ADR 0025，用法见 `docs/modules/utils.md`；Worker 入口 `*.worker.ts` 只调用 `serveWorker`，处理函数放在普通模块里，入口由 `tsconfig.worker.json`（`webworker` 环境，不含 DOM）检查（ADR 0085）；Worker 内的缓存不转移出去，对外只传复制品或一次性产物
-
-### 样式与设计规范
-
-- 字体文件按授权不能提交到仓库（ADR 0012）；正文字体普惠体 3.0 只有 400、600 两个字重，改 `font-weight` 即可
-- 业务图标用 `shared/icons/SvgIcon`（`name` 有类型检查），不直接写 `<img>` 或内联 SVG（按数据画的图形不是图标，如图例的符号预览，可以直接用 SVG）；新图标放进 `apps/web/src/assets/icons/`，由 `@yzt/icons` 自动规范化（改名、颜色改为 currentColor），多色图标文件名以 `-color` 结尾，见 `docs/modules/icons.md`；Element 组件的图标属性仍用 `@element-plus/icons-vue`
-- AI 助手与用户的头像（机器人位图、"我"）用 `shared/chat-avatar` 的 `ChatAvatar`，不在页面里另放图片或画渐变圆球（ADR 0109，见 `docs/modules/chat-avatar.md`）
-- 系统名称用 `shared/system-title` 的 `SystemTitle` 组件（SVG 轮廓，大小和颜色跟随 `font-size`、`color`），不要把优设标题黑作为网页字体加载；修改名称见 `docs/modules/system-title.md`
-
-- 设计参考 `docs/design/color-and-typography.md`，落地方式见 `docs/design/theme.md`；规范和 Element Plus 的交互风格冲突时，优先和 Element 保持一致
-- 颜色、字号、字重、行高、阴影、圆角一律使用令牌（`var(--color-*)`、`var(--radius-*)` 等 CSS 变量），不写死色值和字号（圆形、胶囊形写 `50%` / `999px`）；规范里没有的值先补进规范和 `app/styles/tokens.scss`
-- 间距在布局一级（页面边距、面板之间、面板内边距、区块之间）使用 `--space-*` 令牌；组件内部的细小间距可以写数值，不为它们增加令牌
-- 字号只用双数
-- 页面排布按 `docs/design/page-layout.md`：分栏型页面由 `libs/ui` 的布局、面板、区块、标题组件组成（ADR 0016）；页面不设背景，侧栏宽度只用固定档位，高度靠布局占满、面板内部滚动，不写 `calc(100% - 32px)` 这类计算
-- 列表页的筛选栏用 `shared/query-form` 的 `QueryForm`（控件等宽；条件不换行时标签按文字宽度，换行时标签统一宽度并两端对齐；按钮放不下就另起一行），不用 `<label>` 包住控件；工具栏和筛选栏的按钮按 `page-layout.md` "操作按钮"的对照表配图标，表格行内的文字按钮不加图标
-- 不给 `ElTree` 设置 `indent`：树的层级引导线按 Element 默认缩进 18 定位（见 `theme.md` 的"树的全局样式"）
-- 表格的空值由全局样式显示 `-`（见 `theme.md` 的"表格的全局样式"），列上不再用 `formatter` 或插槽处理空值
-- `libs/ui` 的组件只通过 CSS 变量使用令牌，不 import app 的 SCSS；不能引用 `SvgIcon`，自定义图标由使用方通过插槽传入
-- Element Plus 的外观只在 `app/styles/element-theme.scss` 统一调整，页面和组件不单独覆盖 `--el-*` 变量；需要另一种外观时在其中定义变体 class（如 `input-filled`、`button-xl`），页面只引用 class，见 `docs/design/theme.md`；唯一的例外是 `libs/ui` 分栏布局内部抽屉的内边距（见 `docs/modules/ui.md`）
-
-## 迁移规则
-
-- 城市体检驾驶舱纳入阶段六，含自身的 Three.js 立体行政区地图；三维阶段（ADR 0078）只指现状底图的 Cesium 模块。先确认交互预览再分步实施，固定指标（`shared/city-indicators` 的 `indicatorValue`：32 项来自 2026 年监测成果简报、其余模拟，ADR 0130）与真实业务数据验收分开；入场按局部可见时长编排，不修改 GSAP 全局 ticker；图片保存复用 `shared/file-transfer`，缺少部署字体时沿用后备字体并保留卸载取消。范围、性能条件与基线见 `docs/modules/city-dashboard.md`
-- 城市国土空间监测指标AI计算（原名指标智能推演，ADR 0105～0109）是新页面，不是迁移，全部用确定性的数据（市级标准值取 `indicatorValue`，页面不直接用 `mockIndicatorValue`；区县值由市值反推，ADR 0130）：界面上统一叫"计算""条件配置""自定义口径""调整条件"，不提 Excel，代码标识符沿用 simulation；参数按 Excel 的计算规则、按指标类型生效，除目标值外偏离标准口径就是"自定义口径"，不改指标的定义（例外是步行时长：名称、服务距离和结果一起变，都按参数得到，用 `indicatorName`、`indicatorShort`、`serviceMeters`，不直接读目录里的名称和距离，ADR 0125）；AI 计算指令和计算中的对话按规则解析、不接大模型，输入框的占位是完整示例、空着时 Tab 填入；引擎（`features/indicator-simulation/engine`）只管步骤状态与时间，时钟注入、测试用假时钟；推演流程图的节点状态、打字由 `flow/frame.ts` 从步骤进度计算，各步的时长按推理的话多少给，不另开计时器；结果展示是推演阶段的另一个视图（左侧推演结果、主区地图），地图画布第一次推演完成时创建；这一页不跟随系统的减少动画，开关只在 `motion.ts`；叙述、结果摘要、地图着色由纯函数从计算结果生成；结果展示只存用户选过的部分、总是看最新一版，其余推导；页面缓存期间推演暂停；自定义监测范围（ADR 0121）由 `useScopeEditor` 持有，在弹窗里上传、绘制、逐点编辑，读文件、整理和与区县求交用 `shared/map/area` 的 Worker（`createAreaAnalyzer`），覆盖分析随范围存进条件，计算和显示不重算；指令没写范围时不默认全省，停在条件配置标为待补充（由 `missingConditions` 推导，不另设状态），冲突要用户确认，开始、自动开始、重算都先过 `canRun`，回复和弹窗确定补齐后自动继续、条件库点选不自动开始，弹窗和结果地图用 `useCanvasHolder` 换手（ADR 0129）；弹窗打开时直接定位（`frame`），悬停只高亮 `covers[].geometry`，不能用的原因按类型写给用户、原话收进"查看原因"；覆盖方式写成占比，不用"全部 / 部分"标签，说法是"完整覆盖 / 部分覆盖"（ADR 0131）。见 `docs/modules/indicator-simulation.md`
-- 只迁移旧项目中实际在用的模块。不迁移：资源中心（含独立的知识图谱页；但代码放在 `views/resource-center/` 下的文件管理、资源管理"自助取数"用到的图谱数据和布局要迁移）、资源共享、统计分析、旧版 resource-management、`views/sys` 与动态菜单路由、`/home` 测试页、mockjs、backend-switcher
-- 先读懂旧模块的行为，再按新架构重写，不逐行照搬；类结构和算法有价值的，保留设计并补上类型
-- 按真实接口返回（先实际请求一次看结构）和 TypeScript 类型写逻辑，不照搬旧代码为各种假设情况写的兜底判断：zod schema 已经保证的字段不再判空，不写 `|| ''`、`Array.isArray(...) ? ... : []` 这类兜底；确实可能缺失的字段在 schema 里写 `.optional()`，由类型提示调用方处理
-- 开始迁移一个模块时，在 `docs/archive/migration.md` 记下 yzt 的基线 commit，之后用 `git diff <基线>..master-demo -- <路径>` 同步旧仓库的新改动（旧仓库可能停在其他分支上，不写 `HEAD`）
-
-## 依赖维护（ADR 0005）
-
-- 一般依赖用 `^`；不遵守语义化版本的包精确锁定：Cesium、TypeScript、oxlint（`jsPlugins` 处于 alpha 阶段）、oxlint-tsgolint（内置 TS）
-- 0.x 版本的包，小版本升级按大版本对待
-- 新版本发布满 3 天（`minimumReleaseAge: 4320`）才能安装，防止装到刚发布的恶意版本；紧急安全补丁用 `minimumReleaseAgeExclude` 临时豁免该版本，冷却期过后删除豁免
-- Node 与 pnpm 的版本在根 `package.json` 的 `devEngines` 中声明，CI 从这里读取；`@types/node` 跟随 Node 的大版本，不随 latest 升级
-- workflow 中的 Actions 用 commit SHA 固定并注释版本号，随 `pnpm deps:check` 一起检查更新
-- 小版本和补丁：CI 通过后合并
-- 大版本：先读 Breaking Changes 和迁移指南再决定；等出过几个补丁版本再升；一次只升一个包，单独提交，并在提交说明里写明迁移内容
-- 每月手动检查一次（`pnpm deps:check`），接入 Renovate 后改为每周自动处理；安全告警随时处理
-- `pnpm-lock.yaml` 必须提交
-- 依赖的安装脚本默认不执行，是否放行在 `pnpm-workspace.yaml` 的 `allowBuilds` 中逐个决定
-
 ## 文档
 
-- 必须遵守的规则写在本文件里，保持简短；决策理由、配置说明和学习资料放在 `docs/`，和代码一起提交
-- `docs/README.md`：文档索引、阅读顺序与维护约定
-- `docs/archive/roadmap.md`：阶段路线图，每个阶段的内容、学习点、状态，以及各文档中"到某阶段再做"的事项
-- `docs/code-style.md`：完整代码风格
-- `docs/adr/`：架构决策记录，编号递增，接受后不再修改；决策有变化时新写一份，并注明取代了哪一份
+决策理由、配置说明和学习资料放在 `docs/`，和代码一起提交。
+
+- `docs/README.md`：文档索引与维护约定
+- `docs/backlog.md`：唯一的待办清单，解决一项删一行
+- `docs/adr/overview.md`：按主题列现行结论，查决策从这里开始；`docs/adr/`：决策记录，编号递增，接受后不再修改，决策有变化时新写一份并注明取代了哪一份
+- `docs/modules/`：shared、libs、packages 以及 app 中布局等模块的用法与设计；用法或设计变化时更新
 - `docs/config/`：重要配置文件的逐项说明；修改配置文件时同步更新
-- `docs/design/`：设计规范原文、主题落地说明与页面布局规范；修改令牌、Element 映射或布局规则时同步更新
-- `docs/modules/`：shared、libs、packages 以及 app 中布局等模块的用法与设计说明；新增或修改这些模块时同步更新
-- `docs/commands.md`：常用命令说明；新增或修改脚本时同步更新
-- `docs/archive/stages/`：各阶段总结与学习笔记，每个阶段结束时新增一篇
-- `docs/archive/migration.md`：各模块的迁移基线与进度
+- `docs/design/`：设计规范、主题落地与页面布局；修改令牌、Element 映射或布局规则时同步更新
+- `docs/commands.md`：常用命令；新增或修改脚本时同步更新
+- `docs/code-style.md`：完整代码风格
+- `docs/archive/`：路线图、迁移记录（含接口实测）和阶段总结，只查不改
 
 ## 常用命令
 
-- `pnpm --filter @yzt/web dev`：启动开发服务器
-- `pnpm typecheck`：所有包的类型检查（`tsc -b`）
-- `pnpm lint`：lint 检查（含类型感知规则与依赖方向）；`pnpm lint:fix` 自动修复可安全修复的问题
-- `pnpm build`：所有包的生产构建；`pnpm build:intranet` 是内网部署的构建（不请求天地图）
-- `pnpm --filter @yzt/web dev:intranet`：用内网配置启动开发服务器
-- `pnpm test`：所有包的测试（`vitest run`，`apps/web` 里有 `unit`、`browser` 两个项目）；`pnpm --filter @yzt/web test:watch` 监听模式；`test:unit`、`test:browser` 只跑其中一个；`test:changed` 只跑和改动相关的测试（相对 main，含未提交的改动）；第一次跑浏览器测试前运行 `pnpm --filter @yzt/web test:browser:install`
-- CI（`.github/workflows/ci.yml`）依次运行 `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm lint`、安装 Chromium 无界面版、`pnpm test`、`pnpm build`、`pnpm build:intranet`、`pnpm --filter @yzt/web test:smoke`
-- `pnpm --filter @yzt/web measure:map-load`：实测"点击登录 → 地图第一次加载完成"（先构建；账号密码从环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD` 读，由用户在自己的终端运行）
-- `pnpm --filter @yzt/web probe:resource-classes`：只读探查资源的字段和分类候选，`--tile-check` 查瓦片是否把要素合并，`--tile-cost` 实测瓦片的大小和耗时、给出最小显示级别的建议（要能连后端；token 从环境变量 `YZT_PROBE_TOKEN` 读，由用户在自己的终端运行）
-- `pnpm deps:check`：检查过期的依赖和 GitHub Actions
-- `pnpm deps:update:within-range`：在版本范围内更新依赖和 Actions
-- `pnpm deps:update:allow-major`：交互式选择要升级大版本的依赖和 Actions
+- `pnpm --filter @yzt/web dev`：启动开发服务器；`dev:intranet` 用内网配置
+- `pnpm typecheck`、`pnpm lint`（`lint:fix` 自动修复）、`pnpm --filter @yzt/web test:changed`（只跑相关测试）
+- `pnpm test`：所有包的测试；`pnpm --filter @yzt/web test:unit`、`test:browser` 只跑一个项目；第一次跑浏览器测试前运行 `test:browser:install`
+- `pnpm build`、`pnpm build:intranet`（内网，不请求天地图）；`pnpm --filter @yzt/web test:smoke <文件名>`：生产冒烟
+- 其余命令（实测、探查、依赖更新）见 `docs/commands.md`；要账号或 token 的脚本由用户在自己的终端运行
