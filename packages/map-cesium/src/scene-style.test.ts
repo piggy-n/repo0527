@@ -103,6 +103,7 @@ describe('planSceneStyle', () => {
         [
           { id: 'landuse', type: 'fill', source: 'tiles', 'source-layer': 'dltb' },
           { id: 'label', type: 'symbol', source: 'shapes' },
+          { id: 'tile-label', type: 'symbol', source: 'tiles', 'source-layer': 'names', layout: { 'text-field': 'x' } },
           { id: 'hatched', type: 'fill', source: 'shapes', paint: { 'fill-pattern': 'hatch' } },
           { id: 'from-tilejson', type: 'raster', source: 'tilejson' },
           { id: 'by-quadkey', type: 'raster', source: 'quadkey' },
@@ -117,7 +118,8 @@ describe('planSceneStyle', () => {
     expect(plan.overlays).toStrictEqual([]);
     expect(plan.unsupported).toStrictEqual([
       { layerId: 'landuse', reason: '矢量瓦片（MVT）本阶段不在三维显示' },
-      { layerId: 'label', reason: '三维暂不支持 symbol 图层' },
+      { layerId: 'label', reason: '三维只画 symbol 图层的文字，这个图层没有 text-field' },
+      { layerId: 'tile-label', reason: '矢量瓦片（MVT）本阶段不在三维显示' },
       { layerId: 'hatched', reason: '三维不支持 fill-pattern' },
       { layerId: 'from-tilejson', reason: '三维只支持直接给出 tiles 的 xyz 瓦片' },
       { layerId: 'by-quadkey', reason: '瓦片地址里有三维不支持的占位符' },

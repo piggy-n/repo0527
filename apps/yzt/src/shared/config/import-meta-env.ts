@@ -16,6 +16,7 @@ declare global {
     readonly VITE_PAGE_STATE_RESET?: string;
     readonly VITE_PREFERENCES_ENABLED?: string;
     readonly VITE_PREFERENCE_BASEMAP?: string;
+    readonly VITE_PREFERENCE_BASEMAP_LABELS?: string;
     readonly VITE_PREFERENCE_BOUNDARIES?: string;
     readonly VITE_PREFERENCE_RESOURCE_LAYERS?: string;
     readonly VITE_PREFERENCE_RESOURCE_SYMBOLS?: string;

@@ -6,18 +6,24 @@ import {
   featureFilter,
   type FeatureFilter,
   type FillLayerSpecification,
+  Formatted,
   latest,
   type LineLayerSpecification,
   type PropertyValueSpecification,
   type StylePropertyExpression,
-  type StylePropertySpecification
+  type StylePropertySpecification,
+  type SymbolLayerSpecification
 } from '@maplibre/maplibre-gl-style-spec';
 import { simplify } from '@turf/simplify';
 import { overlayDetailLimit } from '@mx/map-core';
 import type { GeoJSON, Geometry, GeoJsonProperties, Position } from 'geojson';
 
-/** 三维画的覆盖物图层：对应二维 geojson 数据源上的 line、fill、circle 图层（ADR 0080 第 1 节） */
-export type OverlayLayerSpecification = LineLayerSpecification | FillLayerSpecification | CircleLayerSpecification;
+/** 三维画的覆盖物图层：对应二维 geojson 数据源上的 line、fill、circle 图层（ADR 0080 第 1 节）和有文字的 symbol 图层（ADR 0146） */
+export type OverlayLayerSpecification =
+  | LineLayerSpecification
+  | FillLayerSpecification
+  | CircleLayerSpecification
+  | SymbolLayerSpecification;
 
 /** 一个覆盖物图层和它的数据：data 是地址时由视图下载 */
 export interface OverlaySpec {
@@ -61,7 +67,18 @@ export interface PointShape {
   readonly strokeWidth: number;
 }
 
-export type OverlayShape = LineShape | PolygonShape | PointShape;
+/** 一段文字：只有文字、大小、颜色和描边，三维不做避让（ADR 0146） */
+export interface LabelShape {
+  readonly kind: 'label';
+  readonly position: Position;
+  readonly text: string;
+  readonly size: number;
+  readonly color: RgbaColor;
+  readonly haloColor: RgbaColor;
+  readonly haloWidth: number;
+}
+
+export type OverlayShape = LineShape | PolygonShape | PointShape | LabelShape;
 
 /** 一个二维图层在三维画出的形状 */
 export interface OverlayLayer {
@@ -235,42 +252,61 @@ const USED_PAINT: Readonly<Record<OverlayLayerSpecification['type'], readonly st
     'circle-stroke-width',
     'circle-stroke-color',
     'circle-stroke-opacity'
-  ]
+  ],
+  symbol: ['text-color', 'text-opacity', 'text-halo-color', 'text-halo-width']
 };
 
 const PAINT_SPECS: Readonly<Record<OverlayLayerSpecification['type'], Readonly<Record<string, object>>>> = {
   line: latest.paint_line,
   fill: latest.paint_fill,
-  circle: latest.paint_circle
+  circle: latest.paint_circle,
+  symbol: latest.paint_symbol
 };
 
-function compile(layer: OverlayLayerSpecification): Compiled {
-  const cached = compiledLayers.get(layer);
-  if (cached) {
-    return cached;
-  }
-  const specs = PAINT_SPECS[layer.type];
-  const paint: Readonly<Record<string, unknown>> = layer.paint ?? {};
-  const properties = new Map<string, StylePropertyExpression>();
-  for (const name of USED_PAINT[layer.type]) {
+// 用到的布局属性：只有文字有，其余图层的布局不影响求值
+const USED_LAYOUT: Readonly<Record<OverlayLayerSpecification['type'], readonly string[]>> = {
+  line: [],
+  fill: [],
+  circle: [],
+  symbol: ['text-field', 'text-size']
+};
+
+function compileProperties(
+  layerId: string,
+  names: readonly string[],
+  specs: Readonly<Record<string, object>>,
+  values: Readonly<Record<string, unknown>>,
+  properties: Map<string, StylePropertyExpression>
+): void {
+  for (const name of names) {
     // latest 的类型由规范的 JSON 推断，字段是宽的 string，和 StylePropertySpecification 对不上
     const specification = specs[name] as StylePropertySpecification | undefined;
     if (!specification) {
       continue;
     }
     // 没写的属性用规范里的默认值
-    const value = name in paint ? paint[name] : specification.default;
+    const value = name in values ? values[name] : specification.default;
     if (value === undefined) {
       continue;
     }
     try {
       // 样式的写法由 style-spec 自己校验，这里只把形状交给它
       const input = value as PropertyValueSpecification<unknown>;
-      properties.set(name, expression.normalizePropertyExpression(input, `${layer.id}.${name}`, specification));
+      properties.set(name, expression.normalizePropertyExpression(input, `${layerId}.${name}`, specification));
     } catch {
       // 写错的属性不画进三维，按调用方给的默认值，不影响其他属性和图层
     }
   }
+}
+
+function compile(layer: OverlayLayerSpecification): Compiled {
+  const cached = compiledLayers.get(layer);
+  if (cached) {
+    return cached;
+  }
+  const properties = new Map<string, StylePropertyExpression>();
+  compileProperties(layer.id, USED_PAINT[layer.type], PAINT_SPECS[layer.type], layer.paint ?? {}, properties);
+  compileProperties(layer.id, USED_LAYOUT[layer.type], latest.layout_symbol, layer.layout ?? {}, properties);
   const compiled: Compiled = { filter: featureFilter(layer.filter, `${layer.id}.filter`), properties };
   compiledLayers.set(layer, compiled);
   return compiled;
@@ -338,6 +374,15 @@ class LayerEvaluator {
   numbers(name: string, feature: SpecFeature): readonly number[] | null {
     const value: unknown = this.#compiled.properties.get(name)?.evaluate({ zoom: this.#zoom }, feature);
     return Array.isArray(value) && value.every(item => typeof item === 'number') ? value : null;
+  }
+
+  // text-field 用表达式时求值得到 Formatted，写常量时是字符串；取不到时是空串
+  text(name: string, feature: SpecFeature): string {
+    const value: unknown = this.#compiled.properties.get(name)?.evaluate({ zoom: this.#zoom }, feature);
+    if (value instanceof Formatted) {
+      return value.toString();
+    }
+    return typeof value === 'string' ? value : '';
   }
 
   // 透明度乘进 alpha
@@ -431,6 +476,22 @@ function pointShapes(evaluator: LayerEvaluator, feature: FlatFeature, out: Overl
   }
 }
 
+function labelShapes(evaluator: LayerEvaluator, feature: FlatFeature, out: OverlayShape[]): void {
+  const target = specFeature(feature);
+  const text = evaluator.text('text-field', target);
+  const size = evaluator.number('text-size', target, 16);
+  const opacity = evaluator.number('text-opacity', target, 1);
+  if (text === '' || size <= 0 || opacity <= 0) {
+    return;
+  }
+  const color = evaluator.color('text-color', target, opacity);
+  const haloColor = evaluator.color('text-halo-color', target, opacity);
+  const haloWidth = evaluator.number('text-halo-width', target, 0);
+  for (const position of cleanPath(pointsOf(feature.geometry))) {
+    out.push({ kind: 'label', position, text, size, color, haloColor, haloWidth });
+  }
+}
+
 // 图层、数据、级别和位置都没变时给出上次的结果：会话里没变的分组保留原来的图层对象，
 // 场景按对象判断哪些图层要重画，测量画线时别的覆盖物不重建
 interface Planned {
@@ -459,8 +520,10 @@ function planLayer(spec: OverlaySpec, data: GeoJSON, zoomLevel: number): Overlay
       lineShapes(evaluator, feature, shapes);
     } else if (spec.layer.type === 'fill') {
       polygonShapes(evaluator, feature, shapes);
-    } else {
+    } else if (spec.layer.type === 'circle') {
       pointShapes(evaluator, feature, shapes);
+    } else {
+      labelShapes(evaluator, feature, shapes);
     }
   }
   const result: OverlayLayer = { id: spec.layer.id, order: spec.order, shapes };

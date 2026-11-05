@@ -13,10 +13,17 @@
   gap: var(--space-md);
 }
 
+// 角上的入口相对它定位
+.item {
+  position: relative;
+  min-width: 0;
+}
+
 .option {
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 100%;
   padding: 0;
   border: 0;
   background: none;
@@ -82,4 +89,62 @@
   border-radius: 50%;
   background-color: var(--color-primary);
   color: var(--color-text-inverse);
+}
+
+// 当前缩略图左上角的入口：不占高度，点开才有标注和透明度
+.adjust {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-mask);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text-regular);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-primary-border-hover);
+    outline-offset: 1px;
+  }
+}
+
+.adjusting,
+.adjusting:hover {
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+.adjustments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+// 和 OpacitySlider 同一套网格：名称 40、中间、百分比 36，开关和百分比右对齐
+.labels {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.labelsName {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.labelsSwitch {
+  grid-column: 3;
+  justify-self: end;
 }

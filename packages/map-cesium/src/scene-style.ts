@@ -147,7 +147,12 @@ export function planSceneStyle(style: StyleSpecification): SceneStylePlan {
       }
       continue;
     }
-    if (layer.type === 'line' || layer.type === 'fill' || layer.type === 'circle') {
+    // symbol 只画文字：没有文字的（只有图标）不算支持（ADR 0146）
+    if (layer.type === 'symbol' && layer.layout?.['text-field'] === undefined) {
+      unsupported.push({ layerId: layer.id, reason: '三维只画 symbol 图层的文字，这个图层没有 text-field' });
+      continue;
+    }
+    if (layer.type === 'line' || layer.type === 'fill' || layer.type === 'circle' || layer.type === 'symbol') {
       const result = planOverlay(layer, style.sources[layer.source], order);
       if (result.ok) {
         overlays.push(result.value);

@@ -177,7 +177,7 @@ describe('MapViewControls', () => {
       expect(boundaries.visible.value.county).toBe(true);
     });
 
-    it('透明度在浮层的操作栏：默认收起，点开后拖动改拥有者；× 关闭浮层', async () => {
+    it('没有操作栏；透明度入口和勾选同一行：默认收起，点开后拖动改拥有者；Esc 关闭浮层', async () => {
       const { wrapper, boundaries, open } = mountWithBoundaries();
       await entry(wrapper).trigger('click');
       await vi.waitFor(() => expect(popoverShown()).toBe(true));
@@ -189,7 +189,9 @@ describe('MapViewControls', () => {
       expect(boundaries.opacity.value).toBe(0.4);
       expect(popover()?.text()).toContain('40%');
 
-      await popover()?.get('button[aria-label="关闭行政区边界"]').trigger('click');
+      expect(popover()?.find('button[aria-label="关闭行政区边界"]').exists()).toBe(false);
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await nextTick();
       expect(open.value).toBe(false);
     });
 

@@ -1,5 +1,6 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
+import { createPinia } from 'pinia';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 import { AiResultPanel } from '@/features/ai-chat/components/AiResultPanel';
@@ -14,7 +15,7 @@ afterEach(() => {
 function mountPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return mount(AiChatPage, {
-    global: { plugins: [[VueQueryPlugin, { queryClient }]], stubs: { MapCanvas: true, ChatPanel: true } },
+    global: { plugins: [createPinia(), [VueQueryPlugin, { queryClient }]], stubs: { MapCanvas: true, ChatPanel: true } },
     attachTo: document.body
   });
 }

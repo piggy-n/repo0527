@@ -20,16 +20,17 @@
 | `useMapLoadMarks.ts` | 登录后第一次进入地图时，记下地图页开始创建、视图就绪、第一次画面稳定（见 [perf.md](perf.md)） |
 | `basemap/basemap-style.ts` | 底图目录与推导：可选的底图、初始状态、`createBasemapStyles` 给出两个分组的推导函数（纯函数，ADR 0031） |
 | `basemap/static-basemap.ts` | 内网静态底图的两个分组和页面要传的 `BASEMAP_STYLE_ROOT`（ADR 0133） |
-| `basemap/static-options.ts` | 静态底图的开关（地名、各市分色）：只在这里改，不进 `.env`，默认都关（ADR 0134） |
+| `basemap/static-options.ts` | 静态底图的开关（各市分色）：只在这里改，不进 `.env`，默认关（ADR 0134） |
 | `basemap/static-palette.ts` | 静态底图的配色，地图样式和缩略图共用 |
 | `basemap/data/jiangsu-labels.json`、`basemap/images/static-thumbnail.svg` | 静态底图的地名点和缩略图，由 `pnpm basemap:generate` 生成，不手改 |
-| `basemap/useBasemap.ts` | 底图的拥有者：持有选择和透明度，提供操作和两个推导函数 |
-| `basemap/BasemapPanel.tsx` | 底图的切换：缩略图只写类型（公网三张、内网两张）、当前底图的透明度（设计稿 5D.4） |
-| `basemap/BasemapCard.tsx` | 底图入口：当前底图的缩略图卡片，点开是左侧的底图浮层；开关由页面持有，现状底图、数据查询、指标、AI 对话、指标 AI 计算共用（ADR 0111） |
-| `popover/MapOptionsPopover.tsx` | 底图左侧箭头 Popover：入口切换、透明度、关闭与定位避让，定位后报告顶部，开关由页面持有（ADR 0070） |
-| `OpacityToggle.tsx` | 底图与行政区边界共用的透明度展开图标，选中状态独立于 Tooltip |
+| `basemap/useBasemap.ts` | 底图的拥有者：持有选择、透明度和标注的显隐，提供操作和两个推导函数 |
+| `basemap/BasemapPanel.tsx` | 底图的切换：缩略图只写类型（公网三张、内网两张），点了告诉使用方；当前缩略图角上的入口点开标注和透明度（ADR 0146） |
+| `basemap/BasemapCard.tsx` | 底图入口：当前底图的缩略图卡片，点开是左侧的底图浮层，选了底图就关闭；开关由页面持有，现状底图、数据查询、指标、AI 对话、指标 AI 计算共用（ADR 0111） |
+| `popover/MapOptionsPopover.tsx` | 底图、行政区边界的左侧箭头 Popover：入口切换、关闭与定位避让，定位后报告顶部，开关由页面持有；内容通过插槽参数拿到 `close`（ADR 0070、0146） |
+| `popover/useLightDismiss.ts` | 浮层的轻量关闭：单击外部（拖动不算）、按 Esc（ADR 0146） |
+| `OpacityToggle.tsx` | 行政区边界的透明度展开图标，选中状态独立于 Tooltip |
 | `tooltip.ts` | 地图 Tooltip 的统一显隐参数，避免快速扫过图标时延迟关闭与淡出重叠 |
-| `boundary/BoundarySettingsPanel.tsx` | 现状底图的行政区边界标签内容，复用原边界面板与透明度入口 |
+| `boundary/BoundarySettingsPanel.tsx` | 行政区边界的内容（现状底图的功能标签、其他地图页的浮层）：复用边界面板，透明度入口和勾选同一行 |
 | `panel-group/panel-stack.ts`、`usePanelStack.ts` | 同列功能与详情的高度分配、手动收起和小高度下的自动收起 |
 | `basemap/BasemapThumbnail.tsx` | 底图的缩略图：注记叠在底图上，按 `focus` 对准；静态底图只有一张图；无底图是浅色方格与居中禁用图标（面板和底图卡共用） |
 | `boundary/data/` | 省、市、县界的 GeoJSON，由转换脚本生成（见"行政区边界的数据"） |
@@ -109,13 +110,13 @@ const { goToDefaultView } = useDefaultView(map);
 |---|---|---|---|
 | 矢量底图 | 公网（默认） | 背景 + 天地图 `vec` | 天地图 `cva` |
 | 影像底图 | 公网 | 背景 + 天地图 `img` | 天地图 `cia` |
-| 静态底图 | 内网（默认） | 省外底色 + 市界上的面和线 | 默认空；打开开关时是市、区县地名 |
+| 静态底图 | 内网（默认） | 省外底色 + 市界上的面和线 | 市、区县地名；标注默认关，这时是空的 |
 | 无底图 | 都有 | 背景 | 空 |
 
 ```ts
 // 页面 setup：拥有者的状态随页面，进入页面时重新开始；root 给静态底图的地名用（ADR 0133）
 const map = provideMap({ groups: ['basemap', 'basemap-labels'], camera: JIANGSU_CAMERA, root: BASEMAP_STYLE_ROOT });
-const basemap = useBasemap();
+const basemap = useBasemap({ preferences: usePreferenceScope() });
 map.bindStyle({ basemap: basemap.deriveGroup, 'basemap-labels': basemap.deriveLabelsGroup });
 
 // 面板通过 props 拿到 basemap，只显示和调用
@@ -125,6 +126,8 @@ basemap.opacity.value;    // 当前底图的透明度（0～1），无底图时�
 basemap.select('imagery');
 basemap.setOpacity(0.6);
 basemap.selectForDimension('3d'); // 切换二三维后选默认的底图
+basemap.labelsVisible.value;      // 标注是否显示，所有底图共用一个
+basemap.setLabelsVisible(false);
 ```
 
 - `selectForDimension(kind)`（ADR 0078 第 2 节）：三维选影像、二维选矢量；没有这种底图（关闭天地图）时不变。页面切换 `map.setDimension` 后调用。它只换显示的底图，偏好只存用户自己用 `select` 选的（ADR 0114）
@@ -134,6 +137,7 @@ basemap.selectForDimension('3d'); // 切换二三维后选默认的底图
 - 状态是一个 `shallowRef`，变化时整体替换；选择或透明度没变时不替换，推导函数包在 `computed` 里（提交器就是这样做的）时不会重新推导。滑块拖动时会重复给出相同的值
 - 不合法的调用直接抛错，状态不变：选择不可用的底图（如关闭天地图时选矢量）、透明度不是 0～1 之间的有限数、无底图时修改透明度。界面只提供可用的操作，这些都是编程错误；错误在操作里抛出，不进入推导和 `computed`
 - 记住选择（5C.3，ADR 0042）：页面传入偏好的范围 `useBasemap({ preferences })` 时，先用默认值，读到存下的偏好后替换一次（`basemap-preference.ts`）：选中的底图当前可用就恢复它，不可用（换了部署环境）时保留当前的选择；每种底图的透明度经校验（0～1）后照样恢复。之后选择、改透明度防抖写入。格式是版本 2（版本 1 里内网只能存"无底图"，不算用户的选择，ADR 0133）。`.env` 现在关着这一项（`VITE_PREFERENCE_BASEMAP=false`，ADR 0140），每次进入都是默认底图。用法与规则见 [storage.md](storage.md)
+- 标注（ADR 0146）：全局一个，切换底图、二三维时沿用；默认公网开、内网关（`initialLabelsVisible`）。偏好单独一项 `basemap-labels`，默认打开，底图偏好关着也记住。状态是单独的 `shallowRef`：和 `BasemapState` 放在一起时，一项偏好恢复会让另一项以为用户操作过而放弃恢复。使用 `useBasemap` 的业务页都传偏好的范围，标注在页面之间共用；开发页不传
 
 - 状态（`BasemapState`）只有选中的底图和每种底图的透明度（0～1），可以直接序列化；透明度同时作用于底图和注记，不影响背景
 - 背景是 `basemap-background`（`#F3F5F8`，静态底图时是省外底色 `#E6EAF0`），无论选哪种底图都在最底下：无底图时显示它，瓦片加载中和调低透明度时与它混合
@@ -145,19 +149,19 @@ basemap.selectForDimension('3d'); // 切换二三维后选默认的底图
 ### 静态底图（ADR 0133、0134）
 
 - 不用图片：和行政区边界同一份市界（`jiangsu-city.json`）直接画面和线，任何级别都清晰，和边界严格重合。评估过单张图片、瓦片金字塔，实测对比见 ADR 0133
-- 开关在 `static-options.ts` 的 `STATIC_BASEMAP_OPTIONS`，只在代码里改，不进 `.env`：`labels`（地名，默认关）、`cityColors`（各市分色，默认关，全省用 `STATIC_LAND_COLOR`，即 CREAM）。改了 `cityColors` 要运行 `basemap:generate` 更新缩略图；改默认值后"默认都关闭"那条用例要同步
+- 地名在页面上开关（ADR 0146），不再有代码开关。`static-options.ts` 的 `STATIC_BASEMAP_OPTIONS` 只剩 `cityColors`（各市分色，默认关，全省用 `STATIC_LAND_COLOR`，即 CREAM），只在代码里改，不进 `.env`。改了它要运行 `basemap:generate` 更新缩略图；改默认值后"默认关闭"那条用例要同步
 - 陆地的四种颜色是不透明的 HEX：原色按 75% 叠在省外底色 `#E6EAF0` 上换算（CREAM `#F7F3E6 → #F3F1E9`，其余见 ADR 0134），原色写在 `static-palette.ts` 的注释里。没有透明度常量，`fill-opacity` 只有底图的透明度滑块
 - 打开分色时各市按 `code` 取色（`static-palette.ts`），相邻的市不同色，由测试按共用顶点判断。苏州和泰州隔着长江相邻，看地图容易漏掉
-- 地名点由 `pnpm basemap:generate` 生成，取面内离边界最远的点；打开地名时市名一直显示，区县从 8.5 级起显示，市名避让时优先
-- 地名只有汉字，用 `JIANGSU_MAP_OPTIONS` 的 `localIdeographFontFamily` 在本地画，不请求字形。样式校验要求有 `glyphs`，所以绑定注记分组的页面都要在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`（地名关闭时也传，打开开关不用改页面），地址不会被请求；打开地名后漏传时整个视图进入 `failed`，`pages/map-pages.test.ts` 检查
-- 三维：面和线由 map-cesium 镜像，用 `ClassificationType.TERRAIN`，不会染到模型上；到 11 级不再加细、不再重建（`overlayDetailMetadata`，ADR 0135）；地名不画（三维不支持 `symbol`）。切换二三维时保持静态底图
+- 地名点由 `pnpm basemap:generate` 生成，取面内离边界最远的点；打开标注时市名一直显示，区县从 8.5 级起显示，市名避让时优先
+- 地名只有汉字，用 `JIANGSU_MAP_OPTIONS` 的 `localIdeographFontFamily` 在本地画，不请求字形。样式校验要求有 `glyphs`，所以绑定注记分组的页面都要在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`，地址不会被请求；打开标注后漏传时整个视图进入 `failed`，`pages/map-pages.test.ts` 检查
+- 三维：面和线由 map-cesium 镜像，用 `ClassificationType.TERRAIN`，不会染到模型上；到 11 级不再加细、不再重建（`overlayDetailMetadata`，ADR 0135）；地名画成文字，不做避让（ADR 0146）。切换二三维时保持静态底图
 - 面的过滤条件要写 `['Polygon', 'MultiPolygon']`：三维按要素原来的类型求值，只写 `Polygon` 时南京（MultiPolygon）会被滤掉
 - 改了配色、分色开关或边界数据后运行 `basemap:generate`；缩略图和当前配置是否一致由测试检查
 
-### 面板与底图卡（设计稿 5D.4）
+### 面板与底图卡（设计稿 5D.4、ADR 0146）
 
 ```tsx
-<BasemapPanel basemap={basemap} />
+<BasemapPanel basemap={basemap} onPicked={close} />   // close 来自 MapOptionsPopover 默认插槽的参数
 const current = basemapOption(basemap.selected.value);   // { id, label: '矢量底图', shortLabel: '矢量' }
 <MapCard
   label={current.shortLabel}
@@ -170,10 +174,11 @@ const current = basemapOption(basemap.selected.value);   // { id, label: '矢量
 
 - 缩略图只写类型（选项的 `shortLabel`：矢量、影像、静态、无底图），名称叠在缩略图右下角，沿用底图卡的半透明底色，选中时为主色底、反白文字；无障碍名称是全称，当前的用 `aria-pressed`、主色描边和右上角的勾（`SvgIcon` 的 `check`）
 - 缩略图由拥有者给出（`basemap.thumbnails`，`basemapThumbnails(tianditu)` 纯函数）：天地图南京所在的那张 10 级瓦片（849, 415），底图和配套的注记各一张，放大到 160% 后按 `focus`（86% 67%，南京在瓦片里的位置）对准。和底图的数据源用同一个地址模板（`tileUrl`）；静态底图是打包的 SVG，没有注记（`labels` 为 `null`），`focus` 居中，放大到 160% 后全省正好露出来；无底图为 `null`，显示和地图背景同色的方格；关闭天地图时矢量、影像为 `null`，不请求天地图。组件不读 `appConfig`
-- 透明度用共用的 `OpacitySlider`：滑块按百分比显示、不带刻度、右边写出百分比，拖动过程中实时交出 0～1。底图 Popover 的顶部操作栏与行政区标签的选项行各自用 `OpacityToggle` 控制下方滑块，默认隐藏，关闭重开恢复隐藏、数值保留。页面把 `basemap.opacity` 与 `setOpacity` 交给 `MapOptionsPopover`，内部的 `BasemapPanel` 用 `showOpacity={false}` 避免重复；行政区仍由 `BoundaryPanel` 的 `showOpacity` 控制。选择无底图时隐藏透明度入口并收起滑块，切回后按需展开。Element 的滑块宽 100%，两端各留 `--space-md`（12）并计入宽度（`box-sizing: border-box`）；端点圆点悬浮放大到 24 时，与名称及百分比仍保留至少 8 间距
-- 现状底图页的底图使用 `MapOptionsPopover`，行政区已并入功能标签。按 ADR 0070 及后续界面反馈，底图再次点击入口或右上关闭按钮关闭；外部点击、失焦和 Esc 不关闭，页面停用仍关闭。`visible` 与更新监听保持受控，入口单独切换，忽略 Element 的自动显隐请求；禁用组件的触发按键拦截，键盘通过原生按钮点击执行同一开关
-- 底图 Popover 在入口左侧间隔 12、带箭头，宽 320，固定定位并限制在视口内；窄屏限制宽度，内容自然撑高，无内部滚动区。`afterWrite` 定位修饰器报告真实顶部，右侧面板列在它上方留 12；透明度展开与视口变化都会重新定位。`OpacityToggle` 的独立选中类和 `aria-pressed` 跟随展开状态，不依赖 Tooltip 的 `aria-expanded`
-- 底图不显示标题，顶部留 8、左右及底部留 12；顶部操作栏高 24，透明度与关闭按钮靠右排列、间隔 8，不加背景或分隔线，与缩略图间隔 4。缩略图等宽、高 60，独占整行；滑块在缩略图下方另起一行，行距 8，不增加内部滚动区
+- 底图面板默认只有缩略图（ADR 0146）。当前缩略图左上角的入口（`aria-pressed` 跟着展开状态）点开两行：标注开关（`ElSwitch` 的 small）、透明度滑块；面板接收 `active`（`MapOptionsPopover` 默认插槽的参数），不显示时收起，每次打开都是收起的；调过的值在拥有者里。无底图没有入口。行政区用 `BoundarySettingsPanel`，选项行的 `OpacityToggle` 控制下方滑块
+- 透明度用共用的 `OpacitySlider`：滑块按百分比显示、不带刻度、右边写出百分比，拖动过程中实时交出 0～1。Element 的滑块宽 100%，两端各留 `--space-md`（12）并计入宽度（`box-sizing: border-box`）；端点圆点悬浮放大到 24 时，与名称及百分比仍保留至少 8 间距
+- 关闭（ADR 0146）：选了底图（内容调插槽参数的 `close`）、再点入口、单击外部、按 Esc、页面停用。`useLightDismiss` 在 `document` 的捕获阶段监听：按下到松开移动超过 4 像素算拖动，不关闭，MapLibre 拖动后吞掉 click、Cesium 不吞，都走这一条；从浮层里按下、拖到外面松手不关闭；按键触发外部的按钮也算点击；Esc 不再往下传，当前工具不会同时结束。`close` 和 Esc 把焦点还给入口，单击外部不抢焦点。`visible` 与更新监听保持受控，忽略 Element 的自动显隐请求；禁用组件的触发按键拦截，键盘通过原生按钮点击执行同一开关
+- 底图 Popover 在入口左侧间隔 12、带箭头，宽 320，固定定位并限制在视口内；窄屏限制宽度，内容自然撑高，无内部滚动区。`afterWrite` 定位修饰器报告真实顶部，右侧面板列在它上方留 12；内容变高和视口变化都会重新定位：外壳自己监听内容的尺寸，Element 的监听只在 `visible` 变化时开始，`persistent` 为 false 时内容挂载时已经可见，它不会开始；顶部要等这一轮渲染后再量，Element 的位置要等 Vue 渲染才写进 DOM（`MapOptionsPopover.browser.test.tsx`）。`OpacityToggle` 的独立选中类和 `aria-pressed` 跟随展开状态，不依赖 Tooltip 的 `aria-expanded`
+- 底图不显示标题和操作栏，四周留 12。缩略图等宽、高 60，独占整行，收起时面板高 86；展开的两行在缩略图下方，间隔 12、行距 8，面板高 154，不增加内部滚动区
 - 底图卡（ADR 0066）：基础控制栏下方的 80 × 56 缩略图，四周留 2，右下角写简称（矢量、影像、静态、无底图），无障碍名称写全称"底图：矢量底图"（`MapCard` 的 `name`）；名称和简称用 `basemapOption(id)` 按 ID 取
 - `MapCard` 有封面时使用缩略图变体，无封面仍保留 56 × 56 的图标卡。面板打开时沿用主色外边框和独立焦点框，缩略图名称使用主色底；现状底图的图例入口已移至右上工具栏
 - `Basemap` 接口里的函数都写成函数类型的属性（`readonly deriveGroup: () => StyleGroup`），不写方法签名：它们是闭包，页面直接取出来交给 `bindStyle`，写成方法签名时 lint 的 `unbound-method` 会报错
@@ -293,7 +298,7 @@ boundaries.setOpacity(0.6);
 - 页面不传 `dimension` 时（不支持三维）不显示 2D/3D 和它前面的分隔线，默认视角是最后一段（ADR 0111；原来 3D 照常显示、`aria-disabled`，提示"三维暂未开放"）
 - 页面传了 `dimension`（`ViewKind`）时两格都可用：当前的一格高亮，点另一格发出 `update:dimension`，点当前的不发；切换本身和切换时换底图都由页面决定（三维原型 `/dev/map-3d` 已使用，业务页在三维阶段接入）
 - `defaultView`（默认 true）为 false 时不显示默认视角和它下面的分隔线：现状底图在地下空间时传 false，飞到全省会离开模型（ADR 0084）
-- 行政区边界（ADR 0128）：页面传 `boundaries` 才有这个入口，排在指北针一段和默认视角之间，整组 223 高（没有 2D/3D 时）。开关由页面持有，写法同底图卡：`boundariesOpen`、`update:boundariesOpen`，窄屏让给另一边时 `boundariesVisible` 为 false，页面把 `boundariesOpen` 计入 `useSideExclusion` 的 `rightOpen`。点开是 `MapOptionsPopover`（`placement="left-end"`）+ `BoundaryPanel`（`showOpacity={false}`）；现状底图的入口在业务组，不传。名称和图标取 `TOOLBAR_ACTIONS.boundaries`，和业务组是同一条
+- 行政区边界（ADR 0128）：页面传 `boundaries` 才有这个入口，排在指北针一段和默认视角之间，整组 223 高（没有 2D/3D 时）。开关由页面持有，写法同底图卡：`boundariesOpen`、`update:boundariesOpen`，窄屏让给另一边时 `boundariesVisible` 为 false，页面把 `boundariesOpen` 计入 `useSideExclusion` 的 `rightOpen`。点开是 `MapOptionsPopover`（`placement="left-end"`）+ `BoundarySettingsPanel`（透明度入口和勾选同一行，ADR 0146）；现状底图的入口在业务组，不传。名称和图标取 `TOOLBAR_ACTIONS.boundaries`，和业务组是同一条
 - 滚轮和触控板的缩放速率 `SCROLL_ZOOM_RATES`：滚轮 1/600、触控板 1/150（MapLibre 默认 1/450、1/100），首轮先调低灵敏度，用普通鼠标和触控板实际试过后再定。画布的 `scrollZoomRates` 只在创建地图时生效，由适配器设到 MapLibre 的 `scrollZoom` 上
 
 ## 状态栏（ADR 0053 第 5 节）
@@ -666,9 +671,12 @@ sides.activate('right');
 | `pages/current-map/CurrentMapPage.test.tsx` | 页面绑定的分组与叠放（底图、注记、省界，区划高亮在边界之上，测量叠在最上面）；区划定位：工具栏开关面板、选中后高亮并定位、用关闭按钮或工具栏关面板都不清选择、再点回到全省和默认视角（市界用替换的 fetch 提供）；坐标定位：区划定位和坐标定位是功能面板的两个 Tab（切走时隐藏、取消拾取、输入保留，再点正在显示的入口关闭）、窄屏时右边让出去以后再点坐标定位、图例是重新显示（输入保留，让出去时入口不显示为按下）、资源详情切走时保留、再单击时切回、关闭时清除选择（ADR 0053）、输入后定位与位置信息（两种格式、所在区划）、拾取与提示、长按拖动与 Esc（假定时器）、关闭面板取消拾取、图钉随相机移动、单击开关位置信息（右键不算）、画布重建时先隐藏、拖动时视口坐标换成画布坐标、测量时图钉不响应、"清除"；状态栏：比例尺、"中心"、鼠标的位置在下一帧写入、写法跟着坐标定位面板、没有版权控件；把缩放范围交给画布；第一次就绪时定位、画布重建后不再定位；"默认视角"按钮；失败重试后补做；测量的完整交互：提示跟随鼠标和状态、画的过程中含鼠标所在点的长度、末点的总长、标签随相机移动、× 和"清除"、换成测面，结果标签的摆放（总长在旁边、总面积居中），画布重建时标签先隐藏、就绪后重新显示；当前区划：没选时不显示，选中后写出区划，"回到全省"清除；区划定位与其他相机操作的先后（ADR 0038）：加载期间点"默认视角"（相机没变）、上一次定位的动画中选中区县、地图加载期间选中区划、加载期间拖动或坐标定位（这几个用例重新导入页面，区划边界从没有缓存开始，边界文件的请求由用例放行）（用假地图，鼠标事件经过真实的适配器） | jsdom |
 | `map-status.test.ts` | 各状态的显示内容、两种引擎失败、样式失败、没有原因、不是 Error 的原因 | Node |
 | `MapStatusNotice.test.tsx` | 引擎失败时显示原因和"重试"，点击后重新创建地图，重试过程不抛错 | jsdom |
-| `basemap/BasemapPanel.test.tsx` | 三张缩略图只写类型、当前的按下，点一张选中、无底图时没有透明度；缩略图叠着注记和底图、无底图没有图片；滑块按百分比显示、右边写出百分比、拖动时交给拥有者 0～1 的值；关闭天地图时是"静态"和"无底图"，能来回切换；静态底图的缩略图只有一张图 | jsdom |
+| `basemap/BasemapPanel.test.tsx` | 默认只有缩略图；点一张选中并告诉使用方；入口跟着当前底图、无底图没有，点开有标注和透明度、再点收起；标注开关交给拥有者；缩略图叠着注记和底图、无底图没有图片；滑块按百分比显示、拖动时交给拥有者 0～1 的值；关闭天地图时是"静态"和"无底图"，标注默认关；静态底图的缩略图只有一张图 | jsdom |
+| `basemap/BasemapCard.test.tsx` | 卡片的简称和全称；选了底图、单击外部、Esc、再点卡片关闭，焦点按规则回到卡片；入口和开关不关闭；不能显示时不算按下 | jsdom |
+| `popover/useLightDismiss.test.ts` | 单击外部关闭且照常传给被点的元素；拖动、从里面拖出去不关闭；按键触发也算；Esc 不再往下传；没显示时和作用域结束后不管 | jsdom |
+| `popover/MapOptionsPopover.browser.test.tsx` | 真实布局：内容变高后重新定位、不超出视口，上方的面板拿到新的顶部 | Chromium |
 | `card/MapCard.test.tsx` | 图在上、字在下（图标和铺满的图都一样）、点击通知、按下、只写简称时的无障碍名称 | jsdom |
-| `basemap/useBasemap.test.ts` | 默认读取配置；两种配置下的初始状态；切换后推导出所选底图和注记；透明度作用于当前底图、每种底图各自记住；相同的值不触发重新推导；不合法的调用抛错且状态不变 | Node |
+| `basemap/useBasemap.test.ts` | 默认读取配置；两种配置下的初始状态；切换后推导出所选底图和注记；透明度作用于当前底图、每种底图各自记住；标注全局一个、切换时沿用，切换标注不重新推导底图；相同的值不触发重新推导；不合法的调用抛错且状态不变 | Node |
 | `boundary/boundary-style.test.ts` | 级别与初始状态；数据源是三份文件的地址；三级的叠放、线宽、虚线；透明度乘在基础值上；关闭的级别不在样式里；ID 前缀与校验；改透明度只产生 `setPaintProperty`；开关一级只增删这一级；面板的线型示意（同色、同不透明度和虚线，线宽取中间一档） | Node |
 | `panel-group/panel-group.test.ts` | 打开的功能按固定顺序、切换不改已打开的、关掉当前的切到最近显示过的、入口的三种点击、整组被隐藏时入口不关闭；Tab 区的滚动位置；面板组不替换没变的状态、不认识的功能抛错；窄屏时左右只显示一边 | Node |
 | `panel-group/useSideExclusion.test.ts` | 窄屏时操作哪边显示哪边，变宽后两边都显示 | jsdom |
@@ -683,7 +691,7 @@ sides.activate('right');
 | `status-bar/MapStatusBar.test.tsx` | 比例尺和经纬度、按写法显示、"中心"、角度不为 0 时才显示、没有读数时不显示；按根元素和三把量尺量出的宽度取舍（`ResizeObserver` 替身） | jsdom |
 | `region/RegionLocatePanel.test.tsx` | 市的列表与简称；点市、点区县、再点退回上一级，格子的按下；当前位置的各级、只有上一级能点、点上一级回去；搜索结果、标出关键字（包括只在市名里的）、点一条选中、没有结果；回车，输入法选字不算；延迟显示加载中；失败与重试 | jsdom |
 | `boundary/BoundaryPanel.test.tsx` | 勾选、取消某一级后改变状态，都不勾选时没有滑块；线型示意（省界的线宽、县界的虚线）；滑块按百分比显示、拖动时交给拥有者 0～1 的值 | jsdom |
-| `basemap/basemap-preference.test.ts` | 恢复上次的底图和透明度（包括内网的静态底图）；修改后防抖写入；存下的底图不可用时保留当前的选择；版本 1 的"无底图"不盖住默认的静态底图；透明度越界时当作没有存过；合并函数（假定时器、内存存储） | jsdom |
+| `basemap/basemap-preference.test.ts` | 恢复上次的底图和透明度（包括内网的静态底图）；标注单独一项，两项一起恢复时互不干扰；修改后防抖写入；存下的底图不可用时保留当前的选择；版本 1 的"无底图"不盖住默认的静态底图；透明度越界时当作没有存过；合并函数（假定时器、内存存储） | jsdom |
 | `basemap/static-basemap.test.ts` | 开关的默认值和两种取值下的分组；陆地色的换算关系、滑块的透明度；每个市都有颜色、相邻的市不同色、缩略图和当前配置一致；面保留 MultiPolygon；地名和区划目录逐条对应、只有汉字、落在自己的行政区里；区县地名的最小级别 | Node |
 | `boundary/boundary-preference.test.ts` | 恢复上次的级别和透明度、推导随之变化；修改后防抖写入；缺少级别时当作没有存过；不传范围时和原来一样 | jsdom |
 | `boundary/useBoundaries.test.ts` | 初始状态；开关某一级、透明度；值没变时不重新推导；不合法的透明度抛错；每次调用各有一份状态 | Node |

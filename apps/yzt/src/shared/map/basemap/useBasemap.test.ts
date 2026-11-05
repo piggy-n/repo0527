@@ -38,6 +38,9 @@ describe('useBasemap', () => {
     expect(basemap.selected.value).toBe('static');
     expect(basemap.opacity.value).toBe(1);
     expect(Object.keys(basemap.deriveGroup().sources)).toStrictEqual(['basemap-static']);
+    expect(basemap.labelsVisible.value).toBe(false);
+    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
+    basemap.setLabelsVisible(true);
     expect(basemap.deriveLabelsGroup()).toStrictEqual(staticLabelsGroup(1));
     expect(JSON.stringify([basemap.deriveGroup(), basemap.deriveLabelsGroup()])).not.toContain('tianditu');
   });
@@ -113,6 +116,37 @@ describe('useBasemap', () => {
     basemap.select('imagery');
     expect(basemap.opacity.value).toBe(0.2);
     expect(opacities(basemap.deriveGroup())).toStrictEqual({ 'basemap-imagery': 0.2 });
+  });
+
+  it('开启天地图时标注默认显示；关掉后切换底图、二三维都沿用，无底图时也保留', () => {
+    const basemap = useBasemap({ tianditu: TIANDITU });
+    expect(basemap.labelsVisible.value).toBe(true);
+    expect(Object.keys(basemap.deriveLabelsGroup().sources)).toStrictEqual(['basemap-labels-vector']);
+
+    basemap.setLabelsVisible(false);
+    expect(basemap.labelsVisible.value).toBe(false);
+    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
+
+    basemap.select('imagery');
+    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
+    basemap.selectForDimension('2d');
+    expect(basemap.deriveLabelsGroup().layers).toStrictEqual([]);
+    basemap.select('none');
+    expect(basemap.labelsVisible.value).toBe(false);
+
+    basemap.select('imagery');
+    basemap.setLabelsVisible(true);
+    expect(Object.keys(basemap.deriveLabelsGroup().sources)).toStrictEqual(['basemap-labels-imagery']);
+  });
+
+  it('切换标注不影响底图分组，也不重新推导它', () => {
+    const basemap = useBasemap({ tianditu: TIANDITU });
+    const group = computed(() => basemap.deriveGroup());
+    const initial = group.value;
+
+    basemap.setLabelsVisible(false);
+
+    expect(group.value).toBe(initial);
   });
 
   it('包进 computed 时只在状态变化后重新推导；相同的选择和透明度不触发', () => {

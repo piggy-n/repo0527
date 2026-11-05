@@ -9,6 +9,7 @@ const appRoot = fileURLToPath(new URL('../..', import.meta.url));
 const env = loadEnv('intranet', appRoot, 'VITE_');
 const pageStateReset = env.VITE_PAGE_STATE_RESET === 'true';
 const basemapPreference = env.VITE_PREFERENCES_ENABLED === 'true' && env.VITE_PREFERENCE_BASEMAP === 'true';
+const labelsPreference = env.VITE_PREFERENCES_ENABLED === 'true' && env.VITE_PREFERENCE_BASEMAP_LABELS === 'true';
 
 // 存着无底图（内网默认是静态底图）、和默认不同的透明度：恢复过、写入过都看得出来
 const STORED_BASEMAP = { version: 2, value: { selected: 'none', opacity: { vector: 1, imagery: 1, static: 0.5 } } };
@@ -31,6 +32,9 @@ const IN_PREFERENCE_STORE = `(mode, access) => new Promise((resolve, reject) => 
 
 const readStoredBasemap = (page: Page) =>
   page.evaluate<unknown>(`(${IN_PREFERENCE_STORE})('readonly', store => store.get('smoke/basemap'))`);
+
+const readStoredLabels = (page: Page) =>
+  page.evaluate<unknown>(`(${IN_PREFERENCE_STORE})('readonly', store => store.get('smoke/basemap-labels'))`);
 
 /** 通过真实登录表单提交，只替换接口响应 */
 async function login(page: Page): Promise<void> {
@@ -180,6 +184,31 @@ test('底图偏好打开：恢复存下的，换了写入（ADR 0140）', async 
     version: 2,
     value: { ...STORED_BASEMAP.value, selected: 'static' }
   });
+});
+
+test('标注的偏好：和底图偏好无关，打开后写入，重新进入时恢复（ADR 0146）', async ({ page }) => {
+  test.skip(!labelsPreference, '这次构建关闭了标注偏好');
+  await page.goto('/login');
+  await login(page);
+  await readyMap(page);
+  const card = page.locator('button[aria-label^="底图："]');
+  const labels = page.getByRole('switch', { name: '底图标注' });
+  const showLabels = async () => {
+    await card.click();
+    await page.getByRole('button', { name: '调整标注和透明度' }).click();
+  };
+
+  await showLabels();
+  await expect(labels).toHaveAttribute('aria-checked', 'false');
+  await labels.locator('..').click();
+  await expect.poll(() => readStoredLabels(page)).toEqual({ version: 1, value: true });
+
+  await leaveForFileManagement(page);
+  await page.goto('/current-map');
+  await readyMap(page);
+
+  await showLabels();
+  await expect(labels).toHaveAttribute('aria-checked', 'true');
 });
 
 for (const prefix of ['LoginPage', 'CurrentMapPage', 'map-runtime']) {

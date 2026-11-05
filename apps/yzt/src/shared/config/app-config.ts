@@ -52,6 +52,7 @@ function preferenceSwitches() {
   };
   return {
     basemap: item('VITE_PREFERENCE_BASEMAP', import.meta.env.VITE_PREFERENCE_BASEMAP),
+    'basemap-labels': item('VITE_PREFERENCE_BASEMAP_LABELS', import.meta.env.VITE_PREFERENCE_BASEMAP_LABELS),
     boundaries: item('VITE_PREFERENCE_BOUNDARIES', import.meta.env.VITE_PREFERENCE_BOUNDARIES),
     'resource-layers': item('VITE_PREFERENCE_RESOURCE_LAYERS', import.meta.env.VITE_PREFERENCE_RESOURCE_LAYERS),
     'resource-symbols': item('VITE_PREFERENCE_RESOURCE_SYMBOLS', import.meta.env.VITE_PREFERENCE_RESOURCE_SYMBOLS),

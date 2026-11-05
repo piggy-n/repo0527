@@ -17,9 +17,9 @@ import {
 } from './static-palette';
 import { staticBasemapGroup, staticLabelsGroup } from './static-basemap';
 
-// 用例自己固定开关：改默认值只影响"默认都关闭"那一条
-const ALL_ON: StaticBasemapOptions = { labels: true, cityColors: true };
-const ALL_OFF: StaticBasemapOptions = { labels: false, cityColors: false };
+// 用例自己固定开关：改默认值只影响"默认关闭"那一条
+const ALL_ON: StaticBasemapOptions = { cityColors: true };
+const ALL_OFF: StaticBasemapOptions = { cityColors: false };
 
 type Ring = readonly (readonly [number, number])[];
 
@@ -85,18 +85,13 @@ const paintOf = (layers: ReturnType<typeof staticBasemapGroup>['layers'], id: st
   layers.find(layer => layer.id === id)?.paint;
 
 describe('开关', () => {
-  it('默认关闭地名和分色；不传选项时按默认值', () => {
+  it('默认关闭分色；不传选项时按默认值', () => {
     expect(STATIC_BASEMAP_OPTIONS).toStrictEqual(ALL_OFF);
     expect(staticBasemapGroup(1)).toStrictEqual(staticBasemapGroup(1, STATIC_BASEMAP_OPTIONS));
-    expect(staticLabelsGroup(1)).toStrictEqual(staticLabelsGroup(1, STATIC_BASEMAP_OPTIONS));
   });
 
-  it('关闭地名：注记分组是空的，不引用地名数据', () => {
-    expect(staticLabelsGroup(1, ALL_OFF)).toStrictEqual({ sources: {}, layers: [] });
-  });
-
-  it('打开地名：区县和市两层，市名在上；数据是本地文件', () => {
-    const { sources, layers } = staticLabelsGroup(1, ALL_ON);
+  it('地名：区县和市两层，市名在上；数据是本地文件', () => {
+    const { sources, layers } = staticLabelsGroup(1);
     const source = sources['basemap-labels-static'];
 
     expect(layers.map(({ id, type }) => [id, type])).toStrictEqual([
@@ -121,7 +116,7 @@ describe('开关', () => {
 
   it('打开全部开关时，ID 以所在分组的名称为前缀，组合后通过样式模型的校验', () => {
     const base = staticBasemapGroup(1, ALL_ON);
-    const named = staticLabelsGroup(1, ALL_ON);
+    const named = staticLabelsGroup(1);
     const model = new StyleModel({ groups: ['basemap', 'basemap-labels'] });
 
     expect(() => model.setGroups({ basemap: base, 'basemap-labels': named })).not.toThrow();
@@ -162,7 +157,7 @@ describe('面、线和透明度', () => {
 
   it('滑块的透明度作用于面、线（乘在 90% 上）和地名，底色不变', () => {
     const { layers } = staticBasemapGroup(0.5, ALL_ON);
-    const labelLayers = staticLabelsGroup(0.5, ALL_ON).layers;
+    const labelLayers = staticLabelsGroup(0.5).layers;
 
     expect(paintOf(layers, 'basemap-background')).toStrictEqual({ 'background-color': '#E6EAF0' });
     expect(paintOf(layers, 'basemap-static-land')).toMatchObject({ 'fill-opacity': 0.5 });
@@ -281,7 +276,7 @@ describe('地名数据', () => {
   });
 
   it('区县的地名在 8.5 级才出现，市名一直在；各图层只取自己这一级', () => {
-    const [county, city] = staticLabelsGroup(1, ALL_ON).layers;
+    const [county, city] = staticLabelsGroup(1).layers;
 
     expect(county?.minzoom).toBe(8.5);
     expect(city?.minzoom).toBeUndefined();

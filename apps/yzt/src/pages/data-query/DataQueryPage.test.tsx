@@ -1,5 +1,6 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
 import { DOMWrapper, mount, type VueWrapper } from '@vue/test-utils';
+import { createPinia } from 'pinia';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataQueryPage } from './DataQueryPage';
 
@@ -24,7 +25,7 @@ function mountPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return mount(DataQueryPage, {
     props: { topic: 'space-monitoring' },
-    global: { plugins: [[VueQueryPlugin, { queryClient }]], stubs: { MapCanvas: true } },
+    global: { plugins: [createPinia(), [VueQueryPlugin, { queryClient }]], stubs: { MapCanvas: true } },
     attachTo: document.body
   });
 }

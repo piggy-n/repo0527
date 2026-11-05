@@ -1,7 +1,15 @@
 // @vitest-environment node
 import type { Position } from 'geojson';
 import { describe, expect, it } from 'vitest';
-import type { LineShape, OverlayLayer, OverlayShape, PointShape, PolygonShape } from './overlay-plan';
+import type {
+  LabelShape,
+  LineShape,
+  OverlayLayer,
+  OverlayShape,
+  PointShape,
+  PolygonShape,
+  RgbaColor
+} from './overlay-plan';
 import { LIVE_POINT_LIMIT, movableInPlace, sameCoordinates } from './overlay-update';
 
 const BLUE = [0, 0, 1, 1] as const;
@@ -35,7 +43,42 @@ const point = (latitude: number): PointShape => ({
   strokeWidth: 1
 });
 
+const label = (latitude: number, text = '南京市', color: RgbaColor = BLUE): LabelShape => ({
+  kind: 'label',
+  position: [119, latitude],
+  text,
+  size: 14,
+  color,
+  haloColor: RED,
+  haloWidth: 1.5
+});
+
 const layer = (...shapes: OverlayShape[]): OverlayLayer => ({ id: 'measure-line', order: 0, shapes });
+
+describe('文字（ADR 0146）', () => {
+  it('跨级再推导一次、文字和样式都没变：不重建，坐标也不用动', () => {
+    expect(movableInPlace(layer(label(32)), layer(label(32)))).toBe(true);
+    expect(sameCoordinates(label(32), label(32))).toBe(true);
+  });
+
+  it('只换位置：不重建，换坐标；文字或颜色（透明度）变了要重建', () => {
+    expect(movableInPlace(layer(label(32)), layer(label(33)))).toBe(true);
+    expect(sameCoordinates(label(32), label(33))).toBe(false);
+    expect(movableInPlace(layer(label(32)), layer(label(32, '玄武区')))).toBe(false);
+    expect(movableInPlace(layer(label(32)), layer(label(32, '南京市', RED)))).toBe(false);
+  });
+
+  it('文字不算每帧要重建的点数，一百多个也能就地更新', () => {
+    const many = Array.from({ length: LIVE_POINT_LIMIT + 1 }, (_, index) => label(index / 100));
+
+    expect(movableInPlace(layer(...many), layer(...many))).toBe(true);
+  });
+
+  it('文字和点不是同一种形状', () => {
+    expect(movableInPlace(layer(label(32)), layer(point(32)))).toBe(false);
+    expect(sameCoordinates(label(32), point(32))).toBe(false);
+  });
+});
 
 describe('movableInPlace', () => {
   it('形状个数、样式都没变的小图层只换坐标：测量画线时不重建', () => {

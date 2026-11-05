@@ -21,6 +21,7 @@ import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
 import { useDefaultView } from '@/shared/map/useDefaultView';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
 import { SCROLL_ZOOM_RATES } from '@/shared/map/view-controls/zoom';
+import { usePreferenceScope } from '@/shared/storage/preference-scope';
 import styles from './SpaceMonitoringIndicatorsPage.module.scss';
 
 /**
@@ -44,7 +45,7 @@ export const SpaceMonitoringIndicatorsPage = defineComponent({
     });
     const { goToDefaultView } = useDefaultView(map);
     // 底图和行政区边界不记偏好，不影响现状底图记住的选择；默认省、市、县界都显示（同旧页面）
-    const basemap = useBasemap();
+    const basemap = useBasemap({ preferences: usePreferenceScope() });
     const boundaries = useBoundaries();
     boundaries.setVisible('city', true);
     boundaries.setVisible('county', true);

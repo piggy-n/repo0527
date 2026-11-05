@@ -21,7 +21,7 @@ import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
-import { MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
+import { type MapOptionsContext, MapOptionsPopover } from '@/shared/map/popover/MapOptionsPopover';
 import { FEATURE_PICK_TOOL } from '@/shared/map/toolbar/toolbar-items';
 import { MapToolbar } from '@/shared/map/toolbar/MapToolbar';
 import { MapViewControls } from '@/shared/map/view-controls/MapViewControls';
@@ -240,11 +240,8 @@ const MapPrototype = defineComponent({
         <div class={layout.cards}>
           <MapOptionsPopover
             name="prototype-basemap"
-            label="底图"
-            opacity={basemap.opacity.value}
             open={basemapOpen.value}
             visible={sides.right.value}
-            onOpacityChange={basemap.setOpacity}
             onUpdate:open={changeBasemapOpen}
           >
             {{
@@ -257,7 +254,9 @@ const MapPrototype = defineComponent({
                   {{ cover: () => [<BasemapThumbnail thumbnail={basemap.thumbnails[current.id]} />] }}
                 </MapCard>
               ],
-              default: () => [<BasemapPanel basemap={basemap} showOpacity={false} />]
+              default: ({ active, close }: MapOptionsContext) => [
+                <BasemapPanel basemap={basemap} active={active} onPicked={close} />
+              ]
             }}
           </MapOptionsPopover>
         </div>

@@ -551,8 +551,38 @@ describe('CesiumView', () => {
 
     expect(onUnsupported).toHaveBeenCalledExactlyOnceWith({
       layerId: 'boundaries-names',
-      reason: '三维暂不支持 symbol 图层'
+      reason: '三维只画 symbol 图层的文字，这个图层没有 text-field'
     });
+  });
+
+  it('有文字的 symbol 图层画成文字，不报告；关掉后（空分组）文字消失（ADR 0146）', async () => {
+    const { session, scene, view, onUnsupported } = setup();
+    await view.whenReady();
+    const labels: StyleGroup = {
+      sources: {
+        names: {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: [
+              { type: 'Feature', properties: { name: '南京市' }, geometry: { type: 'Point', coordinates: [118.7, 32] } }
+            ]
+          }
+        }
+      },
+      layers: [
+        { id: 'boundaries-names', type: 'symbol', source: 'names', layout: { 'text-field': ['get', 'name'] } }
+      ]
+    };
+
+    session.style.setGroup('boundaries', labels);
+    await flush();
+    expect(scene.overlays.flatMap(({ shapes }) => shapes)).toMatchObject([{ kind: 'label', text: '南京市' }]);
+    expect(onUnsupported).not.toHaveBeenCalled();
+
+    session.style.setGroup('boundaries', { sources: {}, layers: [] });
+    await flush();
+    expect(scene.overlays).toStrictEqual([]);
   });
 
   it('影像的瓦片错误按数据源记第一条，数据源移除时忘掉', async () => {

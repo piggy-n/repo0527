@@ -67,7 +67,7 @@ packages/utils         LatestController、safeReporter、Worker 通信层
 | 现状底图的界面 | 功能标签与独立详情同列排布、底图 Popover、紧凑图例与编辑视图、面板标题、指北针、状态栏在左下角、上移下移按钮、"已选择图层"；以设计文档"已确认的界面细节"为准 | 0057～0060、0066～0074、0094～0096、0102、0116 | [current-map-reference.md](../design/current-map-reference.md) |
 | 控制栏与边界入口 | 不支持三维的地图不显示 2D/3D；底图入口是 `BasemapCard`；除现状底图外的地图页在控制栏放行政区边界入口 | 0111、0128 | [shared-map.md](shared-map.md) |
 | 资源的分类与显示级别 | 取值、名称、颜色写在字典，`style-registry.ts` 按 `code` 登记；图例和地图只用实际有的类别；最小显示级别按单张瓦片 6 MB 实测，放进可替换的部署文件；第一次请求很慢的资源定 8 级 | 0123、0124、0132、0136、0137 | [archive/migration.md](../archive/migration.md)"现状底图：资源分类的探查" |
-| 内网静态底图 | 用本地市界直接绘制面、线和地名，不用图片；地名和各市分色是代码开关，默认都关 | 0133、0134 | [shared-map.md](shared-map.md) |
+| 内网静态底图 | 用本地市界直接绘制面、线和地名，不用图片；地名在页面上开关（二三维都画），各市分色是代码开关，默认都关 | 0133、0134、0146 | [shared-map.md](shared-map.md) |
 | 加载与页面缓存 | 登录页空闲时预加载地图页并预热 Worker 池；字体不推迟；`KeepAlive` 加路由 meta，停用期间暂停视图；`.env` 的开关决定离开页面后是否重置 | 0061～0063、0114、0138 | [map-core.md](map-core.md)、[perf.md](perf.md)、[layout.md](layout.md) |
 | 三维的运行时与切换 | 范围与交互已定；Cesium 只在 `map-cesium` 和 app 导入，`CesiumView` 依赖窄接口；`setDimension` 切换，二维稳定后空闲时预加载三维运行时 | 0078、0079、0091 | [map-cesium.md](map-cesium.md) |
 | 三维覆盖物 | GeoJSON 按样式自动镜像，按整级求值、简化到半个像素；只换坐标时有点数上限，停下后改回静态，重建时等新实体画好；背景图层有细节上限 | 0080、0082、0099、0103、0135 | [map-cesium.md](map-cesium.md) |

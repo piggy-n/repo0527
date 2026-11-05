@@ -31,6 +31,7 @@ import {
   type Entity,
   HeadingPitchRange,
   ImageryLayer,
+  LabelStyle,
   Math as CesiumMath,
   Matrix4,
   PerspectiveFrustum,
@@ -39,7 +40,8 @@ import {
   RuntimeError,
   SceneTransforms,
   Transforms,
-  UrlTemplateImageryProvider
+  UrlTemplateImageryProvider,
+  VerticalOrigin
 } from 'cesium';
 import { createNanoEvents } from 'nanoevents';
 import {
@@ -767,6 +769,24 @@ export class CesiumScene implements SceneLike {
   // 贴地的线和面按样式里的顺序叠放；点不被地球遮挡（ADR 0080 第 1 节）
   #addShape(shape: OverlayShape, order: number): OverlayItem {
     const { entities } = this.#widget;
+    if (shape.kind === 'label') {
+      const [position] = positionsOf([shape.position]);
+      const entity = entities.add({
+        position,
+        label: {
+          text: shape.text,
+          // 字体跟页面走：引擎不认识应用的字体令牌，从画布容器继承的样式里取
+          font: `${shape.size}px ${getComputedStyle(this.#widget.container).fontFamily}`,
+          fillColor: colorOf(shape.color),
+          outlineColor: colorOf(shape.haloColor),
+          // 二维的 text-halo-width 是向外的宽度，画布的描边一半在字里面
+          outlineWidth: shape.haloWidth * 2,
+          style: LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: VerticalOrigin.CENTER
+        }
+      });
+      return { entity, geometry: position ? [position] : [], live: false };
+    }
     if (shape.kind === 'line') {
       const color = colorOf(shape.color);
       const geometry = positionsOf(shape.path);
@@ -817,7 +837,7 @@ export class CesiumScene implements SceneLike {
         continue;
       }
       this.#moveShape(item, shape);
-      if (shape.kind !== 'point') {
+      if (shape.kind === 'line' || shape.kind === 'polygon') {
         entry.movedAt = performance.now();
       }
     }
@@ -855,8 +875,8 @@ export class CesiumScene implements SceneLike {
 
   #moveShape(item: OverlayItem, shape: OverlayShape): void {
     const { entity } = item;
-    if (shape.kind === 'point') {
-      // 点的位置本来就是每帧更新的，直接换
+    if (shape.kind === 'point' || shape.kind === 'label') {
+      // 点和文字的位置本来就是每帧更新的，直接换
       entity.position = new ConstantPositionProperty(positionsOf([shape.position])[0]);
       return;
     }

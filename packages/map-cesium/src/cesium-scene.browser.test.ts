@@ -15,7 +15,7 @@ import { Cartesian3, Math as CesiumMath, Matrix4, Transforms } from 'cesium';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { MAPLIBRE_FOVY, zoomToDistance } from './camera-math';
 import { CesiumScene } from './cesium-scene';
-import { type OverlayLayerSpecification, planOverlays } from './overlay-plan';
+import { type LabelShape, type OverlayLayerSpecification, planOverlays } from './overlay-plan';
 import { setCesiumBaseUrl } from './runtime';
 import type { ImageryPlan } from './scene-style';
 
@@ -492,6 +492,41 @@ describe('CesiumScene', () => {
     );
     expect(drawn).toBe('ok');
     expect(failures).toStrictEqual([]);
+  }, 30000);
+
+  // 实心方块：中心的像素一定是文字的颜色
+  const SQUARE_LABEL: LabelShape = {
+    kind: 'label',
+    position: [119, 32],
+    text: '■',
+    size: 64,
+    color: [1, 0, 0, 1],
+    haloColor: [1, 1, 1, 1],
+    haloWidth: 1
+  };
+
+  it('文字画在经纬度对应的位置上，移除后露出地球；只换位置时跟着走（ADR 0146）', async () => {
+    const scene = createScene(960, 640, true);
+    scene.jumpTo({ center: [119, 32], zoom: 8, bearing: 0, pitch: 0 });
+
+    scene.setOverlays([{ id: 'names', order: 0, shapes: [SQUARE_LABEL] }]);
+    await expect(waitForFrames(() => near(colorAt(scene, [119, 32]), [255, 0, 0]))).resolves.toBe('ok');
+
+    scene.setOverlays([{ id: 'names', order: 0, shapes: [{ ...SQUARE_LABEL, position: [119.5, 32.3] }] }]);
+    await expect(waitForFrames(() => near(colorAt(scene, [119.5, 32.3]), [255, 0, 0]))).resolves.toBe('ok');
+    expect(near(colorAt(scene, [119, 32]), [255, 0, 0])).toBe(false);
+
+    scene.setOverlays([]);
+    await expect(waitForFrames(() => near(colorAt(scene, [119.5, 32.3]), [0xdf, 0xe7, 0xf2]))).resolves.toBe('ok');
+  }, 30000);
+
+  it('相机倾斜时文字不被地球切掉', async () => {
+    const scene = createScene(960, 640, true);
+    scene.jumpTo({ center: [119, 32], zoom: 8, bearing: 0, pitch: 70 });
+
+    scene.setOverlays([{ id: 'names', order: 0, shapes: [SQUARE_LABEL] }]);
+
+    await expect(waitForFrames(() => near(colorAt(scene, [119, 32]), [255, 0, 0]))).resolves.toBe('ok');
   }, 30000);
 
   it('样式变了要重建：旧的线留到新的画好，重建期间每一帧都看得到线（ADR 0080 第 1 节）', async () => {

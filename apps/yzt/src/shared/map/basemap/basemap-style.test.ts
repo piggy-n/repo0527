@@ -9,7 +9,8 @@ import {
   type BasemapState,
   type BasemapStyles,
   createBasemapStyles,
-  initialBasemapState
+  initialBasemapState,
+  initialLabelsVisible
 } from './basemap-style';
 import { staticBasemapGroup, staticLabelsGroup } from './static-basemap';
 
@@ -45,7 +46,7 @@ function state(selected: BasemapId, opacity: Partial<BasemapState['opacity']> = 
 // 两个分组组合成完整的样式；StyleModel 提交时会校验 ID 重复和引用不存在的数据源
 function compose(styles: BasemapStyles, basemap: BasemapState) {
   const model = new StyleModel({ groups: ['basemap', 'basemap-labels'] });
-  model.setGroups({ basemap: styles.basemapGroup(basemap), 'basemap-labels': styles.labelsGroup(basemap) });
+  model.setGroups({ basemap: styles.basemapGroup(basemap), 'basemap-labels': styles.labelsGroup(basemap, true) });
   return model.current;
 }
 
@@ -73,6 +74,11 @@ describe('可选的底图与初始状态', () => {
     });
   });
 
+  it('进入时天地图的注记显示，静态底图的地名不显示（ADR 0134）', () => {
+    expect(initialLabelsVisible(TIANDITU)).toBe(true);
+    expect(initialLabelsVisible(null)).toBe(false);
+  });
+
   it('按 ID 取一种底图的名称和简称：底图卡写简称，无障碍名称写全称（ADR 0057）', () => {
     expect(basemapOption('vector')).toBe(basemapOptions(TIANDITU)[0]);
     expect(basemapOption('imagery')).toStrictEqual({ id: 'imagery', label: '影像底图', shortLabel: '影像' });
@@ -91,7 +97,7 @@ describe('createBasemapStyles：开启天地图', () => {
       sources: { 'basemap-vector': tiandituSource('vec') },
       layers: [BACKGROUND, rasterLayer('basemap-vector', 0.6)]
     });
-    expect(styles.labelsGroup(basemap)).toStrictEqual({
+    expect(styles.labelsGroup(basemap, true)).toStrictEqual({
       sources: { 'basemap-labels-vector': tiandituSource('cva') },
       layers: [rasterLayer('basemap-labels-vector', 0.6)]
     });
@@ -104,7 +110,7 @@ describe('createBasemapStyles：开启天地图', () => {
       sources: { 'basemap-imagery': tiandituSource('img') },
       layers: [BACKGROUND, rasterLayer('basemap-imagery', 0.3)]
     });
-    expect(styles.labelsGroup(basemap)).toStrictEqual({
+    expect(styles.labelsGroup(basemap, true)).toStrictEqual({
       sources: { 'basemap-labels-imagery': tiandituSource('cia') },
       layers: [rasterLayer('basemap-labels-imagery', 0.3)]
     });
@@ -114,13 +120,13 @@ describe('createBasemapStyles：开启天地图', () => {
     const basemap = state('none', { vector: 0.6, imagery: 0.3 });
 
     expect(styles.basemapGroup(basemap)).toStrictEqual({ sources: {}, layers: [BACKGROUND] });
-    expect(styles.labelsGroup(basemap)).toStrictEqual({ sources: {}, layers: [] });
+    expect(styles.labelsGroup(basemap, true)).toStrictEqual({ sources: {}, layers: [] });
   });
 
   it.each(SELECTIONS)('%s：ID 以所在分组的名称为前缀，组合后通过样式模型的校验', selected => {
     const basemap = state(selected);
     const base = styles.basemapGroup(basemap);
-    const labels = styles.labelsGroup(basemap);
+    const labels = styles.labelsGroup(basemap, true);
 
     for (const id of [...Object.keys(base.sources), ...base.layers.map(layer => layer.id)]) {
       expect(id).toMatch(/^basemap-(?!labels-)/);
@@ -128,6 +134,13 @@ describe('createBasemapStyles：开启天地图', () => {
     for (const id of [...Object.keys(labels.sources), ...labels.layers.map(layer => layer.id)]) {
       expect(id).toMatch(/^basemap-labels-/);
     }
+    expect(() => compose(styles, basemap)).not.toThrow();
+  });
+
+  it.each(SELECTIONS)('%s：标注关闭时注记分组是空的，底图分组不变', selected => {
+    const basemap = state(selected);
+
+    expect(styles.labelsGroup(basemap, false)).toStrictEqual({ sources: {}, layers: [] });
     expect(() => compose(styles, basemap)).not.toThrow();
   });
 
@@ -166,7 +179,7 @@ describe('createBasemapStyles：关闭天地图（内网部署）', () => {
     const basemap = state(selected);
 
     expect(styles.basemapGroup(basemap)).toStrictEqual({ sources: {}, layers: [BACKGROUND] });
-    expect(styles.labelsGroup(basemap)).toStrictEqual({ sources: {}, layers: [] });
+    expect(styles.labelsGroup(basemap, true)).toStrictEqual({ sources: {}, layers: [] });
   });
 
   it.each(SELECTIONS)('选择 %s 时推导结果里没有天地图', selected => {
@@ -177,7 +190,11 @@ describe('createBasemapStyles：关闭天地图（内网部署）', () => {
     const basemap = state('static', { vector: 0.3, imagery: 0.2, static: 0.5 });
 
     expect(styles.basemapGroup(basemap)).toStrictEqual(staticBasemapGroup(0.5));
-    expect(styles.labelsGroup(basemap)).toStrictEqual(staticLabelsGroup(0.5));
+    expect(styles.labelsGroup(basemap, true)).toStrictEqual(staticLabelsGroup(0.5));
+  });
+
+  it('静态底图的标注关闭时没有地名，也不引用地名数据', () => {
+    expect(styles.labelsGroup(state('static'), false)).toStrictEqual({ sources: {}, layers: [] });
   });
 
   it('改静态底图的透明度只产生 setPaintProperty，不重新下载数据', () => {
