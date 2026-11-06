@@ -87,6 +87,14 @@
       "kind": "oblique",
       "underground": false,
       "tileset": "XZ_GC_3DT/tileset.json"
+    },
+    {
+      "id": "wx-jkq",
+      "name": "无锡经开区",
+      "cityCode": "320200",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "JKQ/tileset.json"
     }
   ]
 }
