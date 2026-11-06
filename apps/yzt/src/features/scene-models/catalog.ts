@@ -77,7 +77,7 @@ export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string):
   }));
 }
 
-/** 按市分组，市和组内都按清单里第一次出现的先后；关键字匹配模型名或市名 */
+/** 按市分组，只有市一级、没有模型的市不出现；市按区划代码排，组内按清单的先后；关键字匹配模型名或市名 */
 export function groupByCity(models: readonly SceneModel[], keyword: string): readonly ModelCity[] {
   const text = keyword.trim();
   const cities = new Map<string, { cityCode: string; cityName: string; models: SceneModel[] }>();
@@ -92,5 +92,5 @@ export function groupByCity(models: readonly SceneModel[], keyword: string): rea
       cities.set(model.cityCode, { cityCode: model.cityCode, cityName: model.cityName, models: [model] });
     }
   }
-  return [...cities.values()];
+  return [...cities.values()].toSorted((a, b) => a.cityCode.localeCompare(b.cityCode));
 }

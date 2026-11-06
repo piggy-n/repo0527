@@ -91,7 +91,7 @@
   color: var(--color-text-inverse);
 }
 
-// 当前缩略图左上角的入口：不占高度，点开才有标注和透明度
+// 当前缩略图左上角的入口：不占高度，点开才有标注和透明度；平时隐藏，悬停在这张缩略图上、键盘聚焦或展开时显示
 .adjust {
   position: absolute;
   top: 4px;
@@ -108,6 +108,14 @@
   box-shadow: var(--shadow-sm);
   color: var(--color-text-regular);
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+
+  .item:hover &,
+  &:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
 
   &:hover {
     color: var(--color-primary);
@@ -123,6 +131,16 @@
 .adjusting:hover {
   background-color: var(--color-primary);
   color: var(--color-text-inverse);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+// 没有悬停的设备一直显示
+@media (hover: none) {
+  .adjust {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .adjustments {
