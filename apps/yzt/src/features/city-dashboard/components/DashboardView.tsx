@@ -55,6 +55,7 @@ export const DashboardView = defineComponent({
 
     function renderTooltip() {
       const { indicator, city } = tooltip;
+      return null;
       if (!tooltip.context.value || !indicator.value || !city.value) {
         return null;
       }

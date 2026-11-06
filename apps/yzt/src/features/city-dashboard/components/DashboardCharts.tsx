@@ -247,15 +247,8 @@ export const DashboardCharts = defineComponent({
           </div>
           <div class={styles.detailScroll}>{renderDetailPlot(selected, comparison)}</div>
           {hoveredCity.value && (
-            <div class={styles.detailTooltip}>
-              <TooltipTable
-                indicator={selected}
-                comparison={comparison}
-                cities={model.cities.value}
-                city={hoveredCity.value}
-                activeYear={model.state.value.activeYear}
-                legend={detailLegend.value}
-              />
+            <div>
+
             </div>
           )}
         </div>

@@ -207,7 +207,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
       // ECharts 5 的刻度标签继承全局文字颜色，6 的主题改成了灰色
       axisLabel: {
         interval: 0,
-        rotate: !detail && cities.length > 8 ? 38 : 0,
+        rotate: 0,
         margin: 10,
         color: '#0F4FA6',
         fontSize,
