@@ -1,14 +1,11 @@
 import type { PreparedTile, PreparedTileset } from '../prepare-tileset';
-import { identity, type Mat4, multiply } from './nav-frame';
+import { identity, isMatrix, type Mat4, multiply } from './nav-frame';
 
 /** 最精细一级的瓦片：内容坐标经 toLocal 换到根节点局部系 */
 export interface NavLeaf {
   readonly url: string;
   readonly toLocal: Mat4;
 }
-
-const isMatrix = (value: unknown): value is readonly number[] =>
-  Array.isArray(value) && value.length === 16 && value.every(item => typeof item === 'number' && Number.isFinite(item));
 
 function tileTransform(tile: PreparedTile): readonly number[] | null {
   const { transform } = tile;

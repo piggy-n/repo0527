@@ -21,7 +21,7 @@
 | `session/map-session.ts` | `MapSession`：组合样式、相机、当前工具、选择状态与三维内容，统一释放 |
 | `scene/scene-content-model.ts` | `SceneContentModel`：三维独有的内容（瓦片集、钻地、路线漫游或步行），整体替换、校验、合并通知；`SceneStatus`、按种类区分的 `RoamStatus` 等三维视图报告的类型（ADR 0081、0083、0086） |
 | `scene/route-path.ts` | `RoutePath`：路线漫游的几何，累计三维长度、按走过的距离取视点和朝向；`smoothAngle`（ADR 0083） |
-| `scene/prepare-tileset.ts` | `prepareTileset`：3D Tiles 索引的整理（外部索引并进来、空占位、目录外的引用、循环、几何误差、绝对地址），下载函数注入（ADR 0081；导航网格也要用，从 map-cesium 移来，ADR 0085） |
+| `scene/prepare-tileset.ts` | `prepareTileset`：3D Tiles 索引的整理（外部索引的根节点换到引用它的位置、空占位、目录外的引用、循环、几何误差、绝对地址），下载函数注入（ADR 0081、0148；导航网格也要用，从 map-cesium 移来，ADR 0085） |
 | `scene/nav/` | 导航网格（ADR 0085）：`b3dm.ts` 解析、`heightfield.ts` 高度场、`regions.ts` 区域、`nav-grid.ts` 查询（`NavGrid`）、`spawn.ts` 出生点、`levels.ts` 楼层、`floor-map.ts` 按区域着色的平面图、`nav-frame.ts` 坐标系、`nav-leaves.ts` 叶节点、`nav-build.ts` 构建流程；`nav-grid.worker.ts` 是 Worker 入口，处理函数在 `nav-worker-handlers.ts`；`walker.ts` 步行者和点击、脱困、出生点的规则（ADR 0086）；`third-person.ts` 第三人称的弹簧臂、点穿人物和步态（ADR 0090）；`nav-testing.ts` 只供测试 |
 | `selection/selection-model.ts` | `SelectionModel`：选中的要素，只存数据源和业务主键（ADR 0047 第 4 节） |
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`PanModifier`、`ToolView` |
