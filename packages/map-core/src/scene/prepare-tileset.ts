@@ -1,9 +1,10 @@
-// 3D Tiles 索引的整理（ADR 0081 第 3 节）：沿用旧项目 prepareLocalTileset 的规则，不依赖 Cesium
+// 3D Tiles 索引的整理（ADR 0081 第 3 节，外部索引和误差的规则见 ADR 0148）：不依赖 Cesium
+import { isMatrix, multiply } from './nav/nav-frame';
 
 /** 下载一个 JSON；signal 中止时以它的原因结束 */
 export type LoadJson = (url: string, signal: AbortSignal) => Promise<unknown>;
 
-/** 整理后的瓦片节点：内容地址都是绝对地址，外部索引已经并进来 */
+/** 整理后的瓦片节点：内容地址都是绝对地址，外部索引的根节点已经换到引用它的位置 */
 export interface PreparedTile {
   readonly [key: string]: unknown;
   readonly geometricError: number;
@@ -65,23 +66,52 @@ interface Context {
   readonly signal: AbortSignal;
 }
 
-// 节点的误差：叶节点为 0（不用再细分，旧项目里错误的误差会让 Cesium 选不稳层级），没有内容的取子节点的最大值；
-// 没有内容、下面都是叶节点的（白膜的根）保留自己的误差：取 0 时 Cesium 不再细分，什么也不画
+// 节点的误差：叶节点为 0（不用再细分，旧项目里错误的误差会让 Cesium 选不稳层级），有内容的用自己的；
+// 没有内容的取自己和子节点的较大值：它或子节点被改小，Cesium 停在没有内容的节点上，这一块就空了
 function errorOf(tile: JsonObject, children: readonly PreparedTile[], hasContent: boolean, where: string): number {
   if (children.length === 0) {
     return 0;
-  }
-  if (!hasContent) {
-    const fromChildren = Math.max(...children.map(child => child.geometricError));
-    if (fromChildren > 0) {
-      return fromChildren;
-    }
   }
   const error = tile.geometricError;
   if (typeof error !== 'number' || !Number.isFinite(error)) {
     throw new Error(`${where} 的 geometricError 不是数`);
   }
-  return error;
+  return hasContent ? error : Math.max(error, ...children.map(child => child.geometricError));
+}
+
+function transformOf(tile: JsonObject, where: string): readonly number[] | undefined {
+  const { transform } = tile;
+  if (transform === undefined) {
+    return undefined;
+  }
+  if (!isMatrix(transform)) {
+    throw new Error(`${where} 的 transform 不是 16 个数`);
+  }
+  return transform;
+}
+
+// 引用瓦片的 transform 在外、外部根节点的在内，和 Cesium 加载外部索引时的层级相同；结果要写进 JSON，用普通数组
+function composeTransform(
+  outer: readonly number[] | undefined,
+  inner: readonly number[] | undefined
+): readonly number[] | undefined {
+  if (outer && inner) {
+    return Array.from(multiply(outer, inner));
+  }
+  return outer ?? inner;
+}
+
+// 把内层节点放到外层节点的位置（ADR 0148）：transform 相乘，refine 省略时沿用外层的，和 Cesium 按父节点继承一致
+function hoist(outer: JsonObject, inner: PreparedTile, outerWhere: string, innerWhere: string): PreparedTile {
+  const transform = composeTransform(transformOf(outer, outerWhere), transformOf(inner, innerWhere));
+  const refine = inner.refine ?? outer.refine;
+  return {
+    ...without(inner, ['transform', 'refine']),
+    geometricError: inner.geometricError,
+    boundingVolume: inner.boundingVolume,
+    ...(transform ? { transform } : {}),
+    ...(refine === undefined ? {} : { refine })
+  };
 }
 
 async function readTileset(url: string, context: Context): Promise<JsonObject> {
@@ -94,55 +124,71 @@ async function readTileset(url: string, context: Context): Promise<JsonObject> {
   return json;
 }
 
+// 整理一个瓦片，返回放在它的位置上的节点：空占位为空，外部根节点没有内容时是它的子节点，其他情况一个；
+// 索引的根（inline 为 false）总是一个节点
 async function prepareTile(
   tile: JsonObject,
   source: string,
   ancestors: readonly string[],
-  context: Context
-): Promise<PreparedTile | null> {
+  context: Context,
+  inline: boolean
+): Promise<readonly PreparedTile[]> {
   const where = `${source} 的瓦片`;
-  field(tile, 'boundingVolume', where);
+  const boundingVolume = field(tile, 'boundingVolume', where);
   const uri = contentUri(tile);
   const target = uri === undefined ? undefined : new URL(uri, source).href;
   if (target !== undefined && !target.startsWith(context.directory)) {
     if (isEmptyPlaceholder(tile)) {
-      return null;
+      return [];
     }
     throw new Error(`瓦片引用超出数据目录：${uri ?? ''}`);
   }
   const rawChildren = Array.isArray(tile.children) ? tile.children : [];
+  if (target !== undefined && new URL(target).pathname.endsWith('.json')) {
+    // 3D Tiles 规定引用外部索引的瓦片不能有子节点：Cesium 遇到时的显示和可见判断对不上
+    if (rawChildren.length > 0) {
+      throw new Error(`${where} 引用了外部索引，不能再有子节点：${uri ?? ''}`);
+    }
+    if (ancestors.includes(target)) {
+      throw new Error(`索引循环引用：${uri ?? ''}`);
+    }
+    const external = await readTileset(target, context);
+    const rootWhere = `${target} 的瓦片`;
+    const [root] = await prepareTile(field(external, 'root', target), target, [...ancestors, target], context, false);
+    if (!root) {
+      return [];
+    }
+    // Cesium 对外部索引总是走到它的根节点，引用瓦片自己不参与选择，所以根节点换到引用瓦片的位置
+    const placed = hoist(tile, root, where, rootWhere);
+    // 根节点没有内容时 Cesium 在它不细分期间继续画上一级，换上来的空节点做不到，改为换上它的子节点
+    if (inline && !placed.content) {
+      return (placed.children ?? []).map(child => hoist(placed, child, rootWhere, rootWhere));
+    }
+    return [placed];
+  }
   // 子节点一起整理，按原来的顺序；循环引用按各自的祖先链判断，互不影响
   const prepared = await Promise.all(
     rawChildren.map(async child => {
       if (!isObject(child)) {
         throw new Error(`${where} 的子节点不是对象`);
       }
-      return prepareTile(child, source, ancestors, context);
+      return prepareTile(child, source, ancestors, context, true);
     })
   );
-  const children = prepared.filter(child => child !== null);
+  const children = prepared.flat();
   const rest = without(tile, ['content', 'children', 'geometricError', 'boundingVolume']);
-  const boundingVolume = field(tile, 'boundingVolume', where);
-  if (target !== undefined && new URL(target).pathname.endsWith('.json')) {
-    // 外部索引：读进来作为第一个子节点，自己不再有内容
-    if (ancestors.includes(target)) {
-      throw new Error(`索引循环引用：${uri ?? ''}`);
-    }
-    const external = await readTileset(target, context);
-    const root = await prepareTile(field(external, 'root', target), target, [...ancestors, target], context);
-    const merged = root ? [root, ...children] : children;
-    return { ...rest, boundingVolume, geometricError: errorOf(tile, merged, false, where), children: merged };
-  }
   // 内容地址统一写作 uri（旧版的 url 去掉）
   const content =
     target === undefined ? undefined : { ...without(isObject(tile.content) ? tile.content : {}, ['url']), uri: target };
-  return {
-    ...rest,
-    boundingVolume,
-    geometricError: errorOf(tile, children, content !== undefined, where),
-    ...(content ? { content } : {}),
-    ...(children.length > 0 ? { children } : {})
-  };
+  return [
+    {
+      ...rest,
+      boundingVolume,
+      geometricError: errorOf(tile, children, content !== undefined, where),
+      ...(content ? { content } : {}),
+      ...(children.length > 0 ? { children } : {})
+    }
+  ];
 }
 
 // 子节点的误差不超过父节点：旧项目的数据里有中间节点写着万米级的误差
@@ -153,13 +199,13 @@ function constrain(tile: PreparedTile, parentError: number): PreparedTile {
 }
 
 /**
- * 读入并整理 3D Tiles 索引：合并外部索引、去掉数据目录外的空占位、拒绝目录外的引用和循环引用、
+ * 读入并整理 3D Tiles 索引：外部索引的根节点换到引用它的位置、去掉数据目录外的空占位、拒绝目录外的引用和循环引用、
  * 修正几何误差，内容地址改成绝对地址；只读索引，不下载模型
  */
 export async function prepareTileset(url: string, load: LoadJson, signal: AbortSignal): Promise<PreparedTileset> {
   const context: Context = { directory: new URL('.', url).href, load, signal };
   const json = await readTileset(url, context);
-  const root = await prepareTile(field(json, 'root', url), url, [url], context);
+  const [root] = await prepareTile(field(json, 'root', url), url, [url], context, false);
   if (!root) {
     throw new Error(`${url} 的根节点是空占位`);
   }

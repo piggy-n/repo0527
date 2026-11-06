@@ -5,6 +5,10 @@ export type Point3 = [number, number, number];
 /** 列主序的 4×4 矩阵，同 3D Tiles 的 transform */
 export type Mat4 = Float64Array;
 
+/** 索引里的 transform 是否为 16 个有限的数 */
+export const isMatrix = (value: unknown): value is readonly number[] =>
+  Array.isArray(value) && value.length === 16 && value.every(item => typeof item === 'number' && Number.isFinite(item));
+
 export function identity(): Mat4 {
   const out = new Float64Array(16);
   out[0] = 1;
