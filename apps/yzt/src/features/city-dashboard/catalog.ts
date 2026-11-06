@@ -42,9 +42,14 @@ function reportedFirst(indicators: readonly Indicator[]): readonly Indicator[] {
   return [...indicators.filter(hasReportData), ...indicators.filter(indicator => !hasReportData(indicator))];
 }
 
+// 展示分支：驾驶舱不显示城市内涝积水点数量
+const HIDDEN_INDICATORS = new Set(['B-12']);
+
 /** 四类指标只持有目录引用，不复制或生成展示值；顺序只属于驾驶舱，目录和 AI 计算页不受影响 */
 export const CATEGORIES: readonly DashboardCategory[] = INDICATOR_CATEGORIES.map(({ id, name }) => ({
   id,
   name,
-  indicators: reportedFirst(INDICATORS.filter(indicator => indicator.categoryId === id))
+  indicators: reportedFirst(
+    INDICATORS.filter(indicator => indicator.categoryId === id && !HIDDEN_INDICATORS.has(indicator.id))
+  )
 }));
