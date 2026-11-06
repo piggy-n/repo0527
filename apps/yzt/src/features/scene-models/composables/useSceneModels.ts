@@ -89,7 +89,7 @@ export interface SceneModels {
   /** 模型当前显示的瓦片集的状态；没勾选、还没有报告时是 loading */
   readonly stateOf: (id: string) => ModelLoadState;
   readonly effectOf: (id: string) => string;
-  /** 勾选后只有这一个模型时，等它就绪后飞过去；多选、取消勾选不动相机 */
+  /** 每次勾选一个模型都等它就绪后飞过去，不看已经勾了几个；取消勾选不动相机 */
   readonly setChecked: (id: string, checked: boolean) => void;
   readonly setEffect: (id: string, effectId: string) => void;
   /** 一次新的相机操作：飞到模型；地下的模型也只是飞过去，没有单独的钻地（ADR 0097 第 5 节） */
@@ -178,7 +178,7 @@ export function useSceneModels(
   const navigationBuild = shallowRef<NavigationBuild | null>(null);
   // 路线漫游时打开完整地图：记下打开前是否在播放，关上时接着播放
   const routeMap = shallowRef<{ readonly resume: boolean } | null>(null);
-  // 单独勾选的模型等就绪后要飞过去：勾选时开始的相机操作，再勾选别的、取消勾选时放弃，有了别的定位时由 run 放弃
+  // 新勾选的模型等就绪后要飞过去：勾选时开始的相机操作，取消勾选它时放弃，再勾选别的或有了别的定位时由 run 放弃
   const pendingLocate = shallowRef<{ readonly modelId: string; readonly operation: CameraOperation } | null>(null);
   // 漫游开始时的相机操作：中止（有了别的定位）就退出漫游
   let roamSignal: AbortSignal | null = null;
@@ -215,10 +215,14 @@ export function useSceneModels(
     }
     if (checked) {
       loaded.value = [...loaded.value, id];
-      pendingLocate.value = loaded.value.length === 1 ? { modelId: id, operation: map.beginCameraOperation() } : null;
+      // 每次勾选都飞到新勾选的这个，不看已经勾了几个；新的相机操作作废还没飞的上一个
+      pendingLocate.value = { modelId: id, operation: map.beginCameraOperation() };
       return;
     }
-    pendingLocate.value = null;
+    // 取消勾选不动相机，只放弃飞向它自己
+    if (pendingLocate.value?.modelId === id) {
+      pendingLocate.value = null;
+    }
     loaded.value = loaded.value.filter(item => item !== id);
     // 卸载时这个模型的效果、重试次数、导航网格一起忘掉；在它里面漫游的一并结束
     shownEffects.value = new Map([...shownEffects.value].filter(([modelId]) => modelId !== id));
