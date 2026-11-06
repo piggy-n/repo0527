@@ -12,7 +12,7 @@ import {
 } from 'vue';
 import styles from './CesiumCanvas.module.scss';
 import { FailedView } from './failed-view';
-import { MAP_RUNTIME, MAP_RUNTIME_PRELOAD, type MapRuntimeLoader } from './runtime';
+import { CESIUM_ENGINE, MAP_RUNTIME, MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE, type MapRuntimeLoader } from './runtime';
 import { injectMapState } from './use-map';
 
 /** 三维不支持、跳过的图层；和 map-cesium 的同名类型结构相同（map-vue 只能动态引用 map-cesium，这里按结构声明） */
@@ -41,7 +41,8 @@ async function createCesiumView(options: SceneViewOptions, loadRuntime: MapRunti
 /**
  * 三维画布（ADR 0079 第 8 节）：和二维的 MapCanvas 并列放在页面里，叠在同一块区域上。
  * 第一次切到三维时才加载 Cesium 并创建视图；加载失败时挂上失败的视图，上下文的 retry 重新加载。
- * 二维第一次画面稳定以后请 app 预加载三维的运行时（ADR 0091）
+ * 二维第一次画面稳定以后请 app 预加载三维的运行时（ADR 0091）。
+ * 三维引擎是 maplibre 时什么也不挂：三维由 MapCanvas 的视图承担（ADR 0147 第 1 节）
  */
 export const CesiumCanvas = defineComponent({
   name: 'CesiumCanvas',
@@ -53,6 +54,9 @@ export const CesiumCanvas = defineComponent({
   },
   setup(props) {
     const state = injectMapState('CesiumCanvas');
+    if (inject(MAP_SCENE_ENGINE, CESIUM_ENGINE).kind !== 'cesium') {
+      return () => null;
+    }
     const loadRuntime = inject(MAP_RUNTIME, null);
     const preloadRuntime = inject(MAP_RUNTIME_PRELOAD, null);
     const container = ref<HTMLElement>();

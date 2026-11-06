@@ -4,6 +4,7 @@ paths:
   - "packages/map-vue/**"
   - "packages/map-tools/**"
   - "packages/map-cesium/**"
+  - "packages/map-three/**"
   - "apps/yzt/src/shared/map/**"
   - "apps/yzt/src/features/{resource-map,scene-models,data-query,monitoring-indicators,indicator-simulation,ai-chat}/**"
   - "apps/yzt/src/pages/{current-map,data-query,space-monitoring-indicators,indicator-simulation,ai-chat}/**"

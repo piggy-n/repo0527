@@ -48,7 +48,12 @@ export interface FitBoundsOptions {
 
 /** 二三维共用的视图接口：生命周期、程序定位、拾取、投影与渲染要素查询（ADR 0024、0047）；输入由视图交给会话的工具模型（ADR 0034） */
 export interface MapView extends Disposable {
+  /** 当前的种类 */
   readonly kind: ViewKind;
+  /** 支持的种类（ADR 0147 第 2 节）：MapLibre 引擎的视图同时担任二维和三维；不写时只有 kind 这一种 */
+  readonly kinds?: readonly ViewKind[];
+  /** 换成另一种支持的种类：上下文切换维度时调用，画布和相机不变；只有支持多种种类的视图有这项能力 */
+  setKind?(kind: ViewKind): void;
   readonly state: ViewState;
   /** 只在 failed 状态下有值 */
   readonly failure: MapViewFailure | null;

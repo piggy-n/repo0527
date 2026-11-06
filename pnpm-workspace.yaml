@@ -11,6 +11,8 @@ catalog:
   "@turf/simplify": ^7.4.0
   "@types/geojson": ^7946.0.16
   "@types/node": ^24.19.0
+  # three、@types/three 沿用应用原来的精确版本（0.x）；驾驶舱和 @mx/map-three 共用一份（ADR 0147 第 5 节）
+  "@types/three": 0.183.1
   "@vitejs/plugin-vue-jsx": ^5.1.6
   "@vitest/browser-playwright": ^5.0.5
   "@vue/test-utils": ^2.5.1
@@ -23,6 +25,7 @@ catalog:
   nanoevents: ^10.0.0
   playwright: ^1.64.0
   sass-embedded: ^1.105.0
+  three: 0.183.2
   typescript: 7.0.2
   vite: ^8.3.5
   vite-plugin-static-copy: ^4.1.1

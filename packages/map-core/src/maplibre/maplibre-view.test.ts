@@ -1,8 +1,11 @@
 import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Geometry } from 'geojson';
 import { GPUInitializationError, type Map as MapLibreMap } from 'maplibre-gl';
+import { createNanoEvents } from 'nanoevents';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
+import { NO_SCENE_STATUS, type SceneStatus } from '../scene/scene-content-model';
+import type { TilesetSphere } from '../scene/tileset-camera';
 import { MapSession } from '../session/map-session';
 import { type StyleGroup, StyleModel } from '../style/style-model';
 import type { MapTool, ToolView } from '../tool/tool-model';
@@ -20,6 +23,7 @@ import type {
   RenderedFeatureLike
 } from './map-like';
 import { MapLibreView, type MapLibreViewOptions } from './maplibre-view';
+import type { SceneRenderer, SceneRendererEvents } from './scene-renderer';
 
 const NANJING: CameraState = { center: [118.8, 32.05], zoom: 8, bearing: 0, pitch: 0 };
 
@@ -159,6 +163,7 @@ class FakeMap implements MapLike {
   on(type: 'resize', listener: () => void): MapSubscription;
   on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
+  on(type: 'render' | 'webglcontextlost' | 'webglcontextrestored', listener: () => void): MapSubscription;
   on(type: string, listener: (event: never) => void): MapSubscription {
     // 各个重载的回调都能接收 FakeEvent 中各自需要的字段
     const callback = listener as (event: FakeEvent) => void;
@@ -299,6 +304,14 @@ class FakeMap implements MapLike {
     return this.canvasContainer;
   }
 
+  getLayer(): unknown {
+    return undefined;
+  }
+  moveLayer(): void {}
+  getLayersOrder(): string[] {
+    return [];
+  }
+  triggerRepaint(): void {}
   remove(): void {
     this.removed = true;
     this.calls.push(['remove']);
@@ -379,7 +392,10 @@ type Groups = 'basemap' | 'business';
 
 function setup(
   options: Partial<
-    Pick<MapLibreViewOptions<Groups>, 'active' | 'mapOptions' | 'createMap' | 'onError' | 'scrollZoomRates'>
+    Pick<
+      MapLibreViewOptions<Groups>,
+      'active' | 'mapOptions' | 'createMap' | 'onError' | 'scrollZoomRates' | 'loadSceneRenderer' | 'loadJson'
+    >
   > = {},
   camera = NANJING
 ) {
@@ -2392,5 +2408,105 @@ describe('MapLibreView 的状态转换（穷举短序列）', { timeout: 20_000 
     // 交错之后能走到"样式失败后加载又完成、激活时重建"这条路径：从 failed 先回到 initializing 再失败
     expect(reached).toContain('failed(style) → initializing');
     expect(reached).toContain('initializing → failed(engine)');
+  });
+});
+
+// 三维渲染器：拾取总打到模型，投影总在固定位置；只用来看视图在三维时把拾取、投影交给它
+function fakeRenderer(): SceneRenderer {
+  const emitter = createNanoEvents<SceneRendererEvents>();
+  const sphere: TilesetSphere = { center: [118.8, 32.05], radius: 50 };
+  return {
+    attach: () => undefined,
+    detach: () => undefined,
+    loseContext: () => undefined,
+    prerender: () => undefined,
+    render: () => undefined,
+    endFrame: () => undefined,
+    addTileset: async () => sphere,
+    updateTileset: () => undefined,
+    removeTileset: () => undefined,
+    pick: () => ({ lngLat: [118.8, 32.05], height: 15 }),
+    project: () => ({ x: 7, y: 9 }),
+    on: (event, callback) => emitter.on(event, callback),
+    [Symbol.dispose]: () => undefined
+  };
+}
+
+const STATION_JSON = {
+  asset: { version: '1.1' },
+  geometricError: 10,
+  root: { boundingVolume: { sphere: [0, 0, 0, 10] }, geometricError: 0, content: { uri: 'a.glb' } }
+};
+
+// 推进到下一轮宏任务：渲染器的加载、索引的整理都在微任务里
+const nextTask = () => new Promise(resolve => setTimeout(resolve, 0));
+
+const sceneSetup = () => setup({ loadSceneRenderer: async () => fakeRenderer, loadJson: async () => STATION_JSON });
+
+describe('MapLibreView as the 3D view of the MapLibre engine (ADR 0147)', () => {
+  it('supports only 2D without a scene renderer', () => {
+    using ctx = setup();
+    ctx.map.fire('style.load');
+
+    expect(ctx.view.kinds).toStrictEqual(['2d']);
+    expect(() => ctx.view.setKind('3d')).toThrow('MapLibreView 不支持 3d');
+  });
+
+  it('switches kind in place: tools, camera changes and the scene status follow the current kind', async () => {
+    using ctx = sceneSetup();
+    const { tool, views } = recordingTool();
+    ctx.session.tool.register('probe', tool);
+    ctx.session.tool.activate('probe');
+    ctx.map.fire('style.load');
+    const changes: CameraChange[] = [];
+    ctx.session.camera.on('change', change => changes.push(change));
+    const statuses: SceneStatus[] = [];
+    ctx.view.onSceneStatusChange(status => statuses.push(status));
+    ctx.session.scene.set({
+      tilesets: [{ id: 'station', url: 'https://models.test/station/tileset.json', show: true, lighting: 'sun', attempt: 0 }],
+      underground: null
+    });
+    await nextTask();
+    expect(ctx.view.sceneStatus).toBe(NO_SCENE_STATUS);
+
+    ctx.view.setKind('3d');
+    await nextTask();
+    await nextTask();
+    ctx.map.mouse('mousemove', 5, 5);
+    ctx.map.drag(119, 32);
+
+    expect(ctx.view.kind).toBe('3d');
+    expect(ctx.view.state).toBe('ready');
+    expect(views.map(view => view.kind)).toStrictEqual(['3d']);
+    expect(changes.at(-1)?.view).toBe('3d');
+    expect(ctx.view.sceneStatus.get('station')?.state).toBe('ready');
+
+    ctx.view.setKind('2d');
+
+    expect(statuses.at(-1)).toBe(NO_SCENE_STATUS);
+    expect(ctx.view.sceneStatus).toBe(NO_SCENE_STATUS);
+  });
+
+  it('picks and projects models through the renderer in 3D only', async () => {
+    using ctx = sceneSetup();
+    ctx.map.fire('style.load');
+    ctx.session.scene.set({
+      tilesets: [{ id: 'station', url: 'https://models.test/station/tileset.json', show: true, lighting: 'sun', attempt: 0 }],
+      underground: null
+    });
+    ctx.view.setKind('3d');
+    await nextTask();
+    await nextTask();
+
+    expect(ctx.view.pick({ x: 1, y: 1 })).toStrictEqual({
+      kind: 'hit',
+      surface: 'model',
+      lngLat: [118.8, 32.05],
+      height: 15
+    });
+    expect(ctx.view.project([118.8, 32.05], 15)).toStrictEqual({ x: 7, y: 9 });
+
+    ctx.view.setKind('2d');
+    expect(ctx.view.pick({ x: 1, y: 1 })).toMatchObject({ kind: 'hit', surface: 'map' });
   });
 });

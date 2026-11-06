@@ -1,6 +1,6 @@
-import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type { LayerSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Geometry } from 'geojson';
-import type { MapOptions } from 'maplibre-gl';
+import type { CustomLayerInterface, MapOptions } from 'maplibre-gl';
 import type { CameraCause } from '../camera/camera-model';
 import type { ViewPadding } from '../view/map-view';
 import type { StyleTarget } from './apply-style-command';
@@ -70,6 +70,8 @@ export interface MapLike extends StyleTarget {
   /** 没有相机动画和过渡、请求的瓦片都已加载并画出之后；每次进入这种状态触发一次 */
   on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
+  /** 画完一帧；GL 上下文丢失、恢复（ADR 0147 第 2 节，三维模型层用） */
+  on(type: 'render' | 'webglcontextlost' | 'webglcontextrestored', listener: () => void): MapSubscription;
   /** 按容器现在的尺寸调整画布，同步发出 resize；平时由 MapLibre 自己的尺寸监听在下一帧调用 */
   resize(): void;
   getCenter(): { readonly lng: number; readonly lat: number };
@@ -113,5 +115,14 @@ export interface MapLike extends StyleTarget {
   readonly doubleClickZoom: GestureHandlerLike;
   readonly boxZoom: GestureHandlerLike;
   readonly scrollZoom: ScrollZoomLike;
+  /** 样式命令加普通图层；三维模型层（custom layer）只由适配器加上（ADR 0147 第 5 节） */
+  addLayer(layer: LayerSpecification | CustomLayerInterface, beforeId?: string): void;
+  getLayer(id: string): unknown;
+  /** 不给 beforeId 时挪到最上面 */
+  moveLayer(id: string, beforeId?: string): void;
+  /** 图层 ID，从下到上 */
+  getLayersOrder(): string[];
+  /** 请求重画下一帧：三维内容自己变了（瓦片到了）时用 */
+  triggerRepaint(): void;
   remove(): void;
 }

@@ -6,14 +6,14 @@
 
 | 文件 | 内容 | 是否导入 Cesium | 测试 |
 |---|---|---|---|
-| `camera-math.ts` | 缩放级与距离互换、视场角对齐、正俯视与方位的处理 | 否 | node |
+| `camera-math.ts` | 视场角对齐、正俯视与方位的处理（缩放级与距离互换在 map-core 的 `camera-distance`，两种引擎共用） | 否 | node |
 | `camera-fit.ts` | 和二维一样的取景：`fitBoundsCamera`、带留白定位的 `paddedCenter` | 否 | node |
 | `url-template.ts` | 数据源的多个瓦片地址合成带 `{s}` 的模板 | 否 | node |
 | `scene-style.ts` | `planSceneStyle`：样式 → 影像图层、地球底色、覆盖物图层、不支持的图层 | 否 | node |
 | `overlay-update.ts` | `movableInPlace`：图层再次推导时能不能只换坐标（样式、个数不变，线和面不超过 500 个点，ADR 0082）；`sameCoordinates`：形状的坐标没变（ADR 0099） | 否 | node |
 | `overlay-plan.ts` | `planOverlays`：覆盖物图层和数据 → 形状（按整级求值样式、简化到半个像素、遮罩外环收成方框、去掉重复点；`symbol` 图层的文字，ADR 0146） | 否 | node |
 | `scene-like.ts` | 窄接口 `SceneLike`、`ScenePose`、`TilesetOptions`、`WebGLUnavailableError` | 否 | — |
-| `cesium-view.ts` | `CesiumView`：生命周期、相机同步与精确还原、样式镜像、覆盖物数据的下载、工具输入与临时拖动、数据源错误、视点高度、三维内容 | 否（只依赖 `SceneLike`） | jsdom，注入假场景 |
+| `cesium-view.ts` | `CesiumView`：生命周期、相机同步与精确还原、样式镜像、覆盖物数据的下载、工具输入与临时拖动、数据源错误、视点高度、三维内容（瓦片集的同步用 map-core 的 `SceneTilesetSync`） | 否（只依赖 `SceneLike`） | jsdom，注入假场景 |
 | `cesium-scene.ts` | `CesiumScene`：唯一调用 Cesium 的门面 | 是 | 浏览器，真实 Cesium |
 | `scene-tilesets.ts` | `CesiumScene` 用的瓦片集：Blob 地址创建、参数、头灯光照、首批瓦片与失败的事件 | 是 | 随 `CesiumScene` 的浏览器测试 |
 | `scene-underground.ts` | `CesiumScene` 用的钻地：占地矩形、地表透明、土层与背景、退出时飞回地表上方 | 是 | 随 `CesiumScene` 的浏览器测试 |
@@ -128,7 +128,7 @@
 
 ## 三维内容（ADR 0081）
 
-会话的 `scene`（`SceneContentModel`，见 [map-core.md](map-core.md)）是三维独有的内容：瓦片集和钻地。`CesiumView` 镜像它，和样式一样暂停期间只记下"有变化"，恢复时再应用。
+会话的 `scene`（`SceneContentModel`，见 [map-core.md](map-core.md)）是三维独有的内容：瓦片集和钻地。`CesiumView` 镜像它，和样式一样暂停期间只记下"有变化"，恢复时再应用。下面瓦片集的比较、加载、状态和同组的规则在 map-core 的 `SceneTilesetSync`，MapLibre 引擎也用它（ADR 0147 第 3 节，[map-three.md](map-three.md)），`SceneLike` 的瓦片集方法就是它要的 `TilesetHost`。
 
 - 按瓦片集 ID 比较：新的加载，不要的移除；地址或 `attempt` 变了先移除再重新加载；其余只改显示和光照（`updateTileset`）
 - 加载：`prepareTileset`（map-core，ADR 0085 从这里移过去）整理索引（下载用 `loadJson`）→ `SceneLike.addTileset` 建好并加进场景，返回建议的相机（包围球整个进入画布，俯角 55°）。中止的不报告；索引、建瓦片集、瓦片下载失败都记成 `failed`

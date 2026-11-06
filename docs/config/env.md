@@ -41,6 +41,7 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_PREFERENCE_RESOURCE_SYMBOLS` | `true` | 同上 | 资源图层的符号样式（`resource-symbols`） |
 | `VITE_PREFERENCE_RESOURCE_PANEL` | `true` | 同上 | 资源图层面板的收起和高度比例（`resource-panel`） |
 | `VITE_RESOURCE_MIN_ZOOM_ENABLED` | `true` | `appConfig.resourceMinZoomEnabled`、`fetchResourceMinZooms`、`builtInMinZooms` | 资源的最小显示级别（ADR 0132、0137）。`true` 时按发布目录的 `resource-min-zooms.json` 限制（读不到时用构建带上的那份），没到层级不请求瓦片、提示放大到几级；`false` 时不读文件、不限制，低级别的瓦片可能有十几 MB，只用于排查和应急 |
+| `VITE_MAP_3D_ENGINE` | `cesium` | `appConfig.map3dEngine`、`app/map-runtime-provider.ts`、`vite.config.ts` | 三维引擎（ADR 0147）。`cesium` 是现有的 Cesium，三维是另一块画布；`maplibre` 是 MapLibre + Three.js，二三维共用 MapLibre 的画布和视图，正在实施（3C.1 做到三维模型的加载、定位和换白模效果，资源图层、地下和漫游在后面几步）。app 按它把引擎的描述注入地图（`MAP_SCENE_ENGINE`），页面不判断它；构建时只在 `cesium` 时复制 Cesium 的运行时文件到 `cesium/`（约 7 MB）。换引擎要重新构建；通过 ADR 0147 第 9 节的门槛之前 `.env` 保持 `cesium`，公网、内网要不同时写在 `.env.intranet` |
 
 ## 两类变量
 
@@ -62,6 +63,8 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 `shared/config/app-config.ts` 集中读取并校验：缺失或为空时，在启动时抛出"缺少环境变量 XXX"，不带着空值继续运行（已验证）。其他代码只使用 `appConfig`。
 
 有固定格式的变量还会校验格式。`VITE_LOGIN_PUBLIC_KEY` 必须是 `04` 开头、共 130 位的十六进制（未压缩格式的 SM2 公钥），复制时少了字符会在启动时报错，而不是等到登录时才失败（已验证）。天地图开启时，`VITE_TIANDITU_KEY` 必须是 32 位十六进制。
+
+取值固定的变量也在启动时校验：`VITE_MAP_3D_ENGINE` 只能是 `cesium` 或 `maplibre`。
 
 开关类变量（如 `VITE_TIANDITU_ENABLED`）只接受小写的 `true`、`false`，其他值（`TRUE`、`1`、`yes`）在启动时报错，不按"非空即真"处理：`.env` 里的值都是字符串，`'false'` 也是非空的。
 

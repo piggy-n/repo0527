@@ -44,12 +44,15 @@
         "paths": [
           { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
           { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
-          { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
+          { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
+          { "name": "three", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
+          { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" }
         ],
         "patterns": [
           { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
           { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
-          { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
+          { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
+          { "regex": "^(three|3d-tiles-renderer)/", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" }
         ]
       }
     ],
@@ -83,6 +86,26 @@
       }
     },
     {
+      "files": ["packages/map-three/src/**", "apps/yzt/src/features/city-dashboard/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
+              { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
+              { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
+            ],
+            "patterns": [
+              { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
+              { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
+              { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["packages/map-core/src/maplibre/**", "packages/*/src/test-setup.browser.ts"],
       "rules": {
         "no-restricted-imports": [
@@ -90,11 +113,14 @@
           {
             "paths": [
               { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
-              { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
+              { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
+              { "name": "three", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
+              { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" }
             ],
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
-              { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
+              { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
+              { "regex": "^(three|3d-tiles-renderer)/", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" }
             ]
           }
         ]
@@ -108,11 +134,14 @@
           {
             "paths": [
               { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
-              { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" }
+              { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
+              { "name": "three", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
+              { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" }
             ],
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
-              { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" }
+              { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
+              { "regex": "^(three|3d-tiles-renderer)/", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" }
             ]
           }
         ]
@@ -148,14 +177,14 @@
               { "allow": { "to": { "module": { "origin": "core" } } } },
               { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": "@(./|+(../))**" } } },
               {
-                "from": { "element": { "type": "package", "captured": { "name": "{ui,map-core,map-cesium,map-vue}" } } },
+                "from": { "element": { "type": "package", "captured": { "name": "{ui,map-core,map-cesium,map-three,map-vue}" } } },
                 "allow": {
                   "to": { "element": { "type": "package", "captured": { "name": "utils" } } },
                   "dependency": { "source": "@mx/*" }
                 }
               },
               {
-                "from": { "element": { "type": "package", "captured": { "name": "{map-cesium,map-vue}" } } },
+                "from": { "element": { "type": "package", "captured": { "name": "{map-cesium,map-three,map-vue}" } } },
                 "allow": {
                   "to": { "element": { "type": "package", "captured": { "name": "map-core" } } },
                   "dependency": { "source": "@mx/*" }
@@ -164,7 +193,7 @@
               {
                 "from": { "element": { "type": "package", "captured": { "name": "map-vue" } } },
                 "allow": {
-                  "to": { "element": { "type": "package", "captured": { "name": "map-cesium" } } },
+                  "to": { "element": { "type": "package", "captured": { "name": "{map-cesium,map-three}" } } },
                   "dependency": { "source": "@mx/*", "nodeKind": "dynamic-import" }
                 }
               },
@@ -176,7 +205,7 @@
                 }
               },
               {
-                "from": { "element": { "type": "package", "captured": { "name": "{utils,map-core,map-cesium}" } } },
+                "from": { "element": { "type": "package", "captured": { "name": "{utils,map-core,map-cesium,map-three}" } } },
                 "disallow": {
                   "to": {
                     "module": {

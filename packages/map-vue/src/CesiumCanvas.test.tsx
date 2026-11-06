@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, onMounted, provide, ref } from 'vue';
 import { CesiumCanvas, type SceneViewOptions } from './CesiumCanvas';
 import { type MapHandle, provideMap } from './provide-map';
-import { MAP_RUNTIME_PRELOAD, type MapRuntimePreloader } from './runtime';
+import { MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE, type MapRuntimePreloader } from './runtime';
 import { injectMapState } from './use-map';
 
 const CAMERA: CameraState = { center: [119.5, 33], zoom: 6.8, bearing: 0, pitch: 0 };
@@ -205,6 +205,24 @@ describe('CesiumCanvas', () => {
     expect(handle.viewState.value).toBe('failed');
     expect(errors).toHaveLength(1);
     expect(String(errors[0])).toContain('没有地图运行时');
+  });
+
+  it('三维引擎是 maplibre 时什么也不挂：切到三维也不加载 Cesium 视图（ADR 0147 第 1 节）', async () => {
+    const factory = controlledFactory();
+    let map: MapHandle<'basemap'> | undefined;
+    const wrapper = mount(
+      defineComponent(() => {
+        provide(MAP_SCENE_ENGINE, { kind: 'maplibre', loadRenderer: () => Promise.reject(new Error('不该加载')) });
+        map = provideMap({ groups: ['basemap'], camera: CAMERA, onError: () => undefined });
+        return () => <CesiumCanvas createView={factory.createView} />;
+      })
+    );
+
+    map?.setDimension('3d');
+    await flush();
+
+    expect(factory.requests).toHaveLength(0);
+    expect(wrapper.find('[data-scene-canvas]').exists()).toBe(false);
   });
 
   it('支持清单之外的图层的回调原样交给视图', async () => {

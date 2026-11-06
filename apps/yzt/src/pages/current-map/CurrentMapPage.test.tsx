@@ -108,6 +108,7 @@ class FakeMap implements MapLike {
   on(type: 'resize', listener: () => void): MapSubscription;
   on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
+  on(type: 'render' | 'webglcontextlost' | 'webglcontextrestored', listener: () => void): MapSubscription;
   on(type: string, listener: (event: never) => void): MapSubscription {
     const callback = listener as (event: FakeEvent) => void;
     const listeners = this.#listeners.get(type) ?? new Set();
@@ -187,6 +188,14 @@ class FakeMap implements MapLike {
   readonly boxZoom = fakeGesture();
   readonly scrollZoom = { wheelRate: 0, trackpadRate: 0, setWheelZoomRate: (rate: number) => void (this.scrollZoom.wheelRate = rate), setZoomRate: (rate: number) => void (this.scrollZoom.trackpadRate = rate) };
 
+  getLayer(): unknown {
+    return undefined;
+  }
+  moveLayer(): void {}
+  getLayersOrder(): string[] {
+    return [];
+  }
+  triggerRepaint(): void {}
   remove(): void {}
 
   /** 模拟用户拖动：带原始的 DOM 事件 */

@@ -5,6 +5,7 @@ export {
   type CameraState,
   type ViewKind
 } from './camera/camera-model';
+export { distanceToZoom, MAPLIBRE_FOVY, zoomToDistance } from './camera/camera-distance';
 export type { Unsubscribe } from './events';
 export type {
   CameraEventData,
@@ -19,6 +20,17 @@ export type {
   ScrollZoomLike
 } from './maplibre/map-like';
 export { MapLibreView, type MapLibreViewOptions, type ScrollZoomRates } from './maplibre/maplibre-view';
+export type {
+  AnchorMatrices,
+  CreateSceneRenderer,
+  Matrix4Array,
+  SceneFrame,
+  ScenePick,
+  SceneRenderer,
+  SceneRendererEvents,
+  SceneRendererLoader,
+  SceneSurface
+} from './maplibre/scene-renderer';
 export { cumulativeDistances, geodesicArea, geodesicDistance, lineLength } from './measure/geodesic';
 export {
   type MeasureDraft,
@@ -85,7 +97,7 @@ export {
   type Navigation
 } from './scene/nav/nav-build';
 export { NAV_DEFAULTS, type NavGridData, type NavMeta, type NavOptions, type RawNavGrid } from './scene/nav/nav-data';
-export { type NavFrame, navigationFrame, type Point3 } from './scene/nav/nav-frame';
+export { fromEcef, type NavFrame, navigationFrame, type Point3, toEcef } from './scene/nav/nav-frame';
 export { NavGrid, type NavGridSource, type NavPoint } from './scene/nav/nav-grid';
 export { findSpawn, type SpawnOptions } from './scene/nav/spawn';
 export { seeThroughAvatar, startPitch, WalkCycle, WalkRig } from './scene/nav/third-person';
@@ -113,6 +125,13 @@ export {
 } from './scene/nav/walker';
 export { type LoadJson, type PreparedTile, type PreparedTileset, prepareTileset } from './scene/prepare-tileset';
 export { EYE_HEIGHT, RoutePath, type RoutePose, smoothAngle } from './scene/route-path';
+export { TILESET_PITCH, tilesetCamera, type TilesetSphere } from './scene/tileset-camera';
+export {
+  SceneTilesetSync,
+  type SceneTilesetSyncOptions,
+  type TilesetHost,
+  type TilesetOptions
+} from './scene/tileset-sync';
 export { MapSession, type MapSessionOptions } from './session/map-session';
 export { diffSnapshot, diffStyle, type ImageCommand, type StyleCommand, type StyleSnapshot } from './style/diff-style';
 export { overlayDetailLimit, overlayDetailMetadata } from './style/overlay-detail';

@@ -17,10 +17,11 @@ import type {
 import { MapLibreView } from '@mx/map-core';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
-import { defineComponent, inject, KeepAlive, nextTick, ref, type ShallowRef } from 'vue';
+import { defineComponent, inject, KeepAlive, nextTick, provide, ref, type ShallowRef } from 'vue';
 import { INTERNAL_MAP_CONTEXT, type MapContext } from './context';
 import { MapCanvas } from './MapCanvas';
 import { type MapHandle, provideMap } from './provide-map';
+import { MAP_SCENE_ENGINE, type SceneEngine } from './runtime';
 import { useMap, useMapOverlay } from './use-map';
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
@@ -87,6 +88,7 @@ class FakeMap implements MapLike {
   on(type: 'resize', listener: () => void): MapSubscription;
   on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
+  on(type: 'render' | 'webglcontextlost' | 'webglcontextrestored', listener: () => void): MapSubscription;
   on(type: string, listener: (event: never) => void): MapSubscription {
     const callback = listener as (event: FakeEvent) => void;
     const listeners = this.#listeners.get(type) ?? new Set();
@@ -161,6 +163,14 @@ class FakeMap implements MapLike {
   readonly boxZoom = fakeGesture();
   readonly scrollZoom = { setWheelZoomRate: () => undefined, setZoomRate: () => undefined };
 
+  getLayer(): unknown {
+    return undefined;
+  }
+  moveLayer(): void {}
+  getLayersOrder(): string[] {
+    return [];
+  }
+  triggerRepaint(): void {}
   remove(): void {
     this.onRemove?.();
     this.removed = true;
@@ -815,5 +825,28 @@ describe('MapCanvas', () => {
 
       expect(picked).toStrictEqual([{ kind: 'hit', surface: 'map', lngLat: [119, 31] }]);
     });
+  });
+
+  it('三维引擎是 maplibre 时同一个视图担任三维：切到三维不重建、不隐藏，加载三维渲染器的函数交给视图（ADR 0147 第 2 节）', async () => {
+    const maps: FakeMap[] = [];
+    const engine: SceneEngine = { kind: 'maplibre', loadRenderer: () => Promise.reject(new Error('还没有瓦片集')) };
+    let map: MapHandle<'basemap'> | undefined;
+    const wrapper = mount(
+      defineComponent(() => {
+        provide(MAP_SCENE_ENGINE, engine);
+        map = provideMap({ groups: ['basemap'], camera: CAMERA, onError: () => undefined });
+        return () => <MapCanvas createMap={createFakeMap(maps)} />;
+      })
+    );
+    maps[0]?.fire('style.load');
+    await nextTick();
+
+    map?.setDimension('3d');
+    await nextTick();
+
+    expect(maps).toHaveLength(1);
+    expect(map?.viewState.value).toBe('ready');
+    expect(map?.view.value?.kind).toBe('3d');
+    expect(wrapper.get('[data-map-view-state]').attributes('style')).toBeUndefined();
   });
 });

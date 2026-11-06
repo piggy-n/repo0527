@@ -1,8 +1,10 @@
 import { GPUInitializationError, Map as MapLibreMap } from 'maplibre-gl';
 import { safeReporter } from '@mx/utils';
 import { createNanoEvents } from 'nanoevents';
-import type { CameraCause, CameraState } from '../camera/camera-model';
+import type { CameraCause, CameraState, ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
+import type { LoadJson } from '../scene/prepare-tileset';
+import { NO_SCENE_STATUS, type SceneStatus } from '../scene/scene-content-model';
 import type { MapSession } from '../session/map-session';
 import { diffSnapshot, type StyleCommand, type StyleSnapshot } from '../style/diff-style';
 import type { StyleImages } from '../style/style-image';
@@ -24,6 +26,8 @@ import type { LngLat, MapInputEvent, MapPointerEvent, PickResult, ScreenPoint } 
 import { canTransition, deferred, type LiveViewState } from '../view/view-lifecycle';
 import { applyStyleCommand } from './apply-style-command';
 import type { MapLibreMapOptions, MapLike, MapMouseEventLike, MapMouseEventType, MapMoveEventLike } from './map-like';
+import { MapLibreScene } from './maplibre-scene';
+import type { SceneRendererLoader } from './scene-renderer';
 import { ModifierPan } from '../view/modifier-pan';
 
 export interface MapLibreViewOptions<G extends string> {
@@ -39,6 +43,13 @@ export interface MapLibreViewOptions<G extends string> {
   readonly onError?: (error: unknown) => void;
   /** 滚轮缩放的速率；不传的一项用 MapLibre 的默认值（滚轮 1/450、触控板 1/100） */
   readonly scrollZoomRates?: ScrollZoomRates;
+  /**
+   * MapLibre 引擎的三维（ADR 0147 第 2 节）：给出时这个视图同时担任二维和三维，第一次要加瓦片集时加载渲染器；
+   * 不给时只有二维
+   */
+  readonly loadSceneRenderer?: SceneRendererLoader;
+  /** 下载瓦片集的索引；默认用 fetch，测试时换掉 */
+  readonly loadJson?: LoadJson;
 }
 
 /** 滚轮缩放的速率（ADR 0053 第 3 节）：wheel 是普通鼠标的滚轮，trackpad 是触控板，数值越小越慢 */
@@ -52,6 +63,7 @@ interface MapLibreViewEvents {
   resize: () => void;
   settle: () => void;
   sourceerrorchange: (errors: SourceErrors) => void;
+  scenestatuschange: (status: SceneStatus) => void;
 }
 
 /**
@@ -126,9 +138,23 @@ function reportToConsole(error: unknown): void {
   console.error('[MapLibreView]', error);
 }
 
-/** 二维视图：唯一写 MapLibre 地图的地方，把会话的样式和相机同步到地图（ADR 0020、0022、0024、0026） */
+async function fetchJson(url: string, signal: AbortSignal): Promise<unknown> {
+  const response = await fetch(url, { signal });
+  if (!response.ok) {
+    throw new Error(`下载 ${url} 失败：${response.status}`);
+  }
+  const data: unknown = await response.json();
+  return data;
+}
+
+/**
+ * 二维视图：唯一写 MapLibre 地图的地方，把会话的样式和相机同步到地图（ADR 0020、0022、0024、0026）。
+ * 给了三维渲染器时同时担任三维（ADR 0147 第 2 节），种类随上下文的维度切换
+ */
 export class MapLibreView<const G extends string> implements MapView {
-  readonly kind = '2d';
+  /** 支持的种类 */
+  readonly kinds: readonly ViewKind[];
+  #kind: ViewKind = '2d';
   readonly #session: MapSession<G>;
   readonly #map: MapLike | undefined;
   // 按住修饰键临时拖动（ADR 0056）；和地图一起创建
@@ -150,13 +176,20 @@ export class MapLibreView<const G extends string> implements MapView {
   #rejected = false;
   // 当前工具让视图关掉的手势；切换工具时只恢复这些，页面创建地图时就关掉的不会被打开
   readonly #disabledGestures = new Set<keyof Gestures>();
-  // 交给工具的视图能力：只有拾取、投影和渲染要素查询（ADR 0034 第 2 条、ADR 0047 第 4 节）
-  readonly #toolView: ToolView = Object.freeze({
-    kind: '2d',
-    pick: (point: ScreenPoint) => this.pick(point),
-    project: (lngLat: LngLat) => this.project(lngLat),
-    queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => this.queryRendered(area, options)
-  });
+  // 三维内容（ADR 0147 第 2 节）；没给渲染器、地图没创建出来时没有
+  readonly #scene: MapLibreScene | undefined;
+  // 交给工具的视图能力：只有种类、拾取、投影和渲染要素查询（ADR 0034 第 2 条、ADR 0047 第 4 节）；种类随维度变化
+  readonly #toolView: ToolView = (() => {
+    const currentKind = () => this.#kind;
+    return Object.freeze({
+      get kind(): ViewKind {
+        return currentKind();
+      },
+      pick: (point: ScreenPoint) => this.pick(point),
+      project: (lngLat: LngLat, height?: number) => this.project(lngLat, height),
+      queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => this.queryRendered(area, options)
+    });
+  })();
 
   constructor({
     session,
@@ -165,10 +198,13 @@ export class MapLibreView<const G extends string> implements MapView {
     mapOptions,
     createMap = createMapLibreMap,
     onError = reportToConsole,
-    scrollZoomRates
+    scrollZoomRates,
+    loadSceneRenderer,
+    loadJson = fetchJson
   }: MapLibreViewOptions<G>) {
     this.#session = session;
     this.#active = active;
+    this.kinds = loadSceneRenderer ? ['2d', '3d'] : ['2d'];
     // 报告器自己抛错时不能打断状态转换和资源释放，也不能冒进 MapLibre 的事件分发
     this.#onError = safeReporter(onError, 'MapLibreView');
     const { current: style, images, revision } = session.style;
@@ -200,6 +236,7 @@ export class MapLibreView<const G extends string> implements MapView {
       // 例如不支持 WebGL2 时的 GPUInitializationError：不抛出，交给 whenReady 和 statechange 表达
       this.#map = undefined;
       this.#pan = undefined;
+      this.#scene = undefined;
       this.#stack = stack.move();
       this.#fail(error);
       return;
@@ -239,6 +276,27 @@ export class MapLibreView<const G extends string> implements MapView {
     ]) {
       stack.defer(() => subscription.unsubscribe());
     }
+    this.#scene = loadSceneRenderer
+      ? stack.use(
+          new MapLibreScene({
+            map,
+            scene: session.scene,
+            loadRenderer: loadSceneRenderer,
+            loadJson,
+            onError: this.#onError,
+            onStatus: status => this.#onSceneStatus(status)
+          })
+        )
+      : undefined;
+    if (this.#scene) {
+      const scene = this.#scene;
+      for (const subscription of [
+        map.on('render', () => this.#guard(() => scene.endFrame())),
+        map.on('webglcontextlost', () => this.#guard(() => scene.loseContext()))
+      ]) {
+        stack.defer(() => subscription.unsubscribe());
+      }
+    }
     for (const type of Object.keys(POINTER_TYPES) as MapMouseEventType[]) {
       const subscription = map.on(type, event =>
         this.#guard(() => {
@@ -262,8 +320,40 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#stack = stack.move();
   }
 
+  /** 当前的种类：只支持二维的视图总是 2d */
+  get kind(): ViewKind {
+    return this.#kind;
+  }
+
   get state(): ViewState {
     return this.#state;
+  }
+
+  /** 三维内容的加载状态（ADR 0081 第 2 节）；显示二维时为空 */
+  get sceneStatus(): SceneStatus {
+    return this.#kind === '3d' ? (this.#scene?.status ?? NO_SCENE_STATUS) : NO_SCENE_STATUS;
+  }
+
+  onSceneStatusChange(callback: (status: SceneStatus) => void): Unsubscribe {
+    return this.on('scenestatuschange', callback);
+  }
+
+  /**
+   * 换成另一种种类（ADR 0147 第 2 节）：由上下文在切换维度时调用，画布、相机都不变；
+   * 切到三维时加上模型层、追上积下的三维内容，切回二维时撤下模型层。不支持的种类抛错
+   */
+  setKind(kind: ViewKind): void {
+    this.#assertAlive();
+    if (!this.kinds.includes(kind)) {
+      throw new Error(`MapLibreView 不支持 ${kind}`);
+    }
+    if (kind === this.#kind) {
+      return;
+    }
+    this.#pan?.cancel();
+    this.#kind = kind;
+    this.#syncScene();
+    this.#emitter.emit('scenestatuschange', this.sceneStatus);
   }
 
   get failure(): MapViewFailure | null {
@@ -331,15 +421,29 @@ export class MapLibreView<const G extends string> implements MapView {
     );
   }
 
-  /** 二维总是命中地图平面，没有高度 */
-  pick({ x, y }: ScreenPoint): PickResult {
-    const { lng, lat } = this.#readyMap().unproject([x, y]);
+  /** 三维时先打显示着的模型（带椭球高）；其余命中地图平面，没有高度 */
+  pick(point: ScreenPoint): PickResult {
+    const map = this.#readyMap();
+    const model = this.#kind === '3d' ? this.#scene?.pick(point) : null;
+    if (model) {
+      return { kind: 'hit', surface: 'model', lngLat: model.lngLat, height: model.height };
+    }
+    const { lng, lat } = map.unproject([point.x, point.y]);
     return { kind: 'hit', surface: 'map', lngLat: [lng, lat] };
   }
 
-  /** 二维忽略高度；结果可能在画布之外 */
-  project([lng, lat]: LngLat): ScreenPoint {
-    const { x, y } = this.#readyMap().project([lng, lat]);
+  /**
+   * 二维忽略高度，结果可能在画布之外；三维时不在地面上的点按模型层最近一帧的相机投影，
+   * 还没画过、在相机背后时为 null（地面上的点两种算法相差不到 0.1 像素，用 MapLibre 的）
+   */
+  project(lngLat: LngLat): ScreenPoint;
+  project(lngLat: LngLat, height?: number): ScreenPoint | null;
+  project([lng, lat]: LngLat, height?: number): ScreenPoint | null {
+    const map = this.#readyMap();
+    if (this.#kind === '3d' && height !== undefined && height !== 0) {
+      return this.#scene?.project([lng, lat], height) ?? null;
+    }
+    const { x, y } = map.project([lng, lat]);
     return { x, y };
   }
 
@@ -407,6 +511,8 @@ export class MapLibreView<const G extends string> implements MapView {
       if (this.#mapStyle.status === 'loaded') {
         this.#ready.resolve();
       }
+      // 整体加载换掉了地图上的全部图层：三维模型层要重新加上
+      this.#syncScene();
     } else if (this.#active) {
       // 首次加载、失败后恢复，或者恢复显示时因整体重建而中断的激活
       this.#activate(map);
@@ -528,6 +634,7 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#forgetSourceErrors(commands.flatMap(({ command, args }) => (command === 'removeSource' ? [args[0]] : [])));
     if (applied && !this.#rejected) {
       this.#mapStyle = { status: 'loaded', revision, style: snapshot.style, images: snapshot.images };
+      this.#scene?.keepOnTop();
     } else {
       // 地图和记录可能已经不一致
       this.#rebuild(map);
@@ -558,6 +665,8 @@ export class MapLibreView<const G extends string> implements MapView {
       this.#setState('initializing');
     }
     this.#mapStyle = { status: 'loading', revision, style: current, images };
+    // 整体加载会去掉三维模型层，加载完成后再加上
+    this.#syncScene();
     // 所有数据源重新创建，错误会重新出现
     this.#forgetSourceErrors();
     try {
@@ -596,8 +705,20 @@ export class MapLibreView<const G extends string> implements MapView {
     const { lng, lat } = map.getCenter();
     this.#session.camera.set(
       { center: [lng, lat], zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() },
-      { view: '2d', cause }
+      { view: this.#kind, cause }
     );
+  }
+
+  // 模型层只在显示三维、视图就绪、样式已加载时挂在地图上
+  #syncScene(): void {
+    this.#scene?.update(this.#kind === '3d' && this.#state === 'ready', this.#mapStyle.status === 'loaded');
+  }
+
+  // 显示二维时三维内容的状态不报告；切到三维时 setKind 报告一次
+  #onSceneStatus(status: SceneStatus): void {
+    if (this.#kind === '3d') {
+      this.#emitter.emit('scenestatuschange', status);
+    }
   }
 
   #readyMap(): MapLike {
@@ -712,6 +833,7 @@ export class MapLibreView<const G extends string> implements MapView {
     }
     this.#state = state;
     this.#failure = nextFailure;
+    this.#syncScene();
     this.#emitter.emit('statechange', state);
   }
 

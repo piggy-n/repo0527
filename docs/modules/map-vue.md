@@ -108,7 +108,8 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 - `mapOptions` 只在创建地图时生效；要换选项、或者引擎失败后重新创建，给组件换一个 `key`
 - `scrollZoomRates`：滚轮（`wheel`）和触控板（`trackpad`）的缩放速率，同样只在创建地图时生效，交给适配器（ADR 0053 第 3 节）
 - 一个上下文的每种视图只能有一个画布：第二个二维画布挂不上时，先释放它刚创建的视图，再把错误交给 Vue
-- 当前显示的是三维时外层设 `visibility: hidden`：不占交互，尺寸保留，切回时不用重新量画布
+- 当前显示的是 Cesium 的三维时外层设 `visibility: hidden`：不占交互，尺寸保留，切回时不用重新量画布
+- 三维引擎是 `maplibre` 时（ADR 0147 第 2 节），创建视图时交给它加载三维渲染器的函数（`loadSceneRenderer`），这个视图同时担任二维和三维，切到三维也不隐藏；重试时当前种类是哪一种都由它重建（[map-three.md](map-three.md)）
 - 引擎失败后，上下文的 `retry()` 让当前种类的画布先卸下、释放旧视图，再在同一个容器里创建新视图（ADR 0030）；`createMap` 等 props 按重试时的值生效
 - 运行中的错误（MapLibre 的 `error` 事件、应用命令失败）交给 `provideMap` 的 `onError`；视图失败时不弹提示，由 `shared/map` 读视图状态决定
 
@@ -119,6 +120,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 - 切换时旧的当前视图暂停、新的恢复，投影修订号加 1，鼠标位置清空；还没有这种视图时状态是 `idle`，等它的画布挂上
 - 绑定在旧视图上的 `whenReady`、`whenSettled` 以 `AbortError` 结束；等待中的相机操作在新的当前视图就绪后执行（和视图被替换一样，ADR 0039 第 3 条）
 - 页面用 `map.setDimension` 切换；切换时要做的业务（如换底图）由页面决定（现状底图见 [shared-map.md](shared-map.md)"底图"）
+- 同一个视图担任两种种类（MapLibre 引擎，ADR 0147 第 2 节）：视图声明 `kinds`，挂上时在每种种类下都登记，维度正好是它支持的另一种时先 `setKind`；切换维度时不暂停、恢复，调用它的 `setKind`，受限入口的 `kind` 跟着变，投影修订号照样加 1、等待照样重新绑定。这时另一块画布不能再挂同一种视图
 
 ## 三维画布 `<CesiumCanvas>`
 
@@ -129,6 +131,13 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 - 加载失败（分块下载失败、没有注入运行时）时报告错误并挂上 `FailedView`：上下文照常显示引擎失败，`retry()` 重新加载；加载期间卸载时，加载到的视图直接释放、不挂上
 - props：`onUnsupported`（支持清单之外的图层，页面在开发环境下打印）；测试用的 `createView`
 - 运行时注入：map-vue 不能依赖 app。app 的 `withMapRuntime` 给地图页包一层组件（`app/map-runtime-provider.ts`），`provide(MAP_RUNTIME, …)`；这一层随地图页的分块动态加载，map-vue 连带 maplibre-gl 不进入口包（ADR 0023、0061、0079 第 2 节）
+- 三维引擎是 `maplibre` 时什么也不挂，也不预加载 Cesium 的运行时
+
+## 三维引擎的注入（ADR 0147 第 1 节）
+
+- app 按 `appConfig.map3dEngine` 在同一层 `provide(MAP_SCENE_ENGINE, …)`，值是 map-vue 导出的 `CESIUM_ENGINE` 或 `MAPLIBRE_ENGINE`；没有 provide 时按 Cesium。页面和拥有者不读它，照常放 `<MapCanvas>`、`<CesiumCanvas>`，照常 `setDimension`、`bindScene`
+- 描述是对象：`{ kind: 'cesium' }` 由 `<CesiumCanvas>` 承担三维，运行时经 `MAP_RUNTIME` 加载；`{ kind: 'maplibre', loadRenderer }` 由 `<MapCanvas>` 的视图承担三维，`loadRenderer` 里写 `import('@mx/map-three')`（只有 map-vue 能动态导入它）。测试可以注入假的 `loadRenderer`；3C.2 在描述里加能力声明
+- `maplibre` 下 map-three 还不预加载（ADR 0091 的预加载只对 Cesium），见 `docs/backlog.md`
 
 ## 只读上下文 `useMap()`
 

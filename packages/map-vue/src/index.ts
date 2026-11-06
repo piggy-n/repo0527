@@ -4,11 +4,15 @@ export { MapCanvas, type MapCanvasMapOptions } from './MapCanvas';
 export type { OverlayEdge, OverlayOptions, OverlayPadding } from './overlay';
 export { type MapHandle, provideMap, type ProvideMapOptions } from './provide-map';
 export {
+  CESIUM_ENGINE,
   MAP_ERROR_REPORTER,
   MAP_RUNTIME,
   MAP_RUNTIME_PRELOAD,
+  MAP_SCENE_ENGINE,
+  MAPLIBRE_ENGINE,
   type MapRuntimeLoader,
-  type MapRuntimePreloader
+  type MapRuntimePreloader,
+  type SceneEngine
 } from './runtime';
 export type { SceneDerivation } from './scene-binder';
 export type { StyleDerivation } from './style-binder';

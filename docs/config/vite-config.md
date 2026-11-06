@@ -59,7 +59,7 @@ const staticFiles = viteStaticCopy({
 - `resource-min-zooms.json` 是资源的最小显示级别（ADR 0137）：源码导入它作为内置的层级，同时复制到产物根目录，部署时换这个文件就能改；不放进 `public/`，因为 Vite 不让源码导入 `public/` 的文件。`stripBase: 3` 去掉 `src/features/resource-map`，文件直接在 `dist/` 下。生产冒烟检查它确实进了产物
 - Cesium 运行时按基础地址请求 Worker、资源（地球的贴图、着色器用到的数据）和第三方文件（Draco 解码等），这些文件不经过打包（ADR 0079 第 1 节）。`vite-plugin-static-copy` 构建时把它们复制到产物的 `cesium/`（2026-10-26 实测约 6.9 MB），开发服务器和测试时从 `node_modules` 直接提供，不复制、不入库
 - `stripBase: 4` 去掉 `node_modules/cesium/Build/Cesium` 四层目录，保留 `Workers`、`Assets`、`ThirdParty`；升级 Cesium 后核对这几个目录还在原来的位置
-- 所有模式都启用：浏览器测试用真实的 Cesium，同样从 `/cesium/` 加载
+- 三维引擎是 `maplibre` 时不复制（`loadEnv` 读 `VITE_MAP_3D_ENGINE`，ADR 0147 第 7 节）：那时不会加载 Cesium，这 7 MB 不该进产物；测试模式总是提供：浏览器测试用真实的 Cesium，同样从 `/cesium/` 加载。资源的最小显示级别那一项不受影响
 - 基础地址由 app 的三维运行时设置为 `${BASE_URL}cesium/`（[modules/map-cesium.md](../modules/map-cesium.md)"运行时"），没有写进 `define`、也不用 `window.CESIUM_BASE_URL`
 
 ### 未入库的本地文件
@@ -75,7 +75,7 @@ const localFiles = localFilesPlugin({ '/3dt': localPath('3dt'), '/design.local':
 `tools/build-output/vite-plugin.ts` 的 `buildOutputPlugin` 只在 `build` 生效，每次公网、内网构建都会执行，不需要另跑命令：
 
 - 检查全部分块的模块清单，禁止包含 `src/pages/dev/`；再检查磁盘文件，禁止残留 `Dev*Page` 文件、`design.local` 和 `3dt/` 下清单以外的内容。只检查、不清理：原型和模型数据不放在 `public/`（[local-files.md](local-files.md)），放错了构建失败，错误信息写明该放到哪里
-- 从入口分块沿静态 `imports` 检查依赖，禁止包含 MapLibre（`maplibre-gl`）和 Cesium（`cesium`、`@cesium/*`）；不遍历动态导入，地图运行时仍可按需加载、预加载。map-vue 的上下文会连带 maplibre-gl，所以给地图页注入三维运行时的那一层也放在地图页的分块里（ADR 0079 第 2 节）
+- 从入口分块沿静态 `imports` 检查依赖，禁止包含 MapLibre（`maplibre-gl`）、Cesium（`cesium`、`@cesium/*`）和 Three.js（`three`、`3d-tiles-renderer`，驾驶舱和 `@mx/map-three` 都只能在动态分块里，ADR 0147 第 7 节）；两种三维引擎都要成立，CI 另用 `VITE_MAP_3D_ENGINE=maplibre` 构建一次；不遍历动态导入，地图运行时仍可按需加载、预加载。map-vue 的上下文会连带 maplibre-gl，所以给地图页注入三维运行时的那一层也放在地图页的分块里（ADR 0079 第 2 节）
 - 关闭天地图时，有效的 `VITE_TIANDITU_KEY` 必须为空；扫描文本产物，禁止残留按 `production` 模式读取的公网 key，错误只报告文件名。未调用的天地图地址模板允许保留，不以域名字符串代替运行时开关
 
 检查失败会让构建失败。本机部署构建和 CI 使用同一套检查；CI 同时执行公网和内网构建。

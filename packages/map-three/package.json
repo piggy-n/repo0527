@@ -1,0 +1,32 @@
+{
+  "name": "@mx/map-three",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:changed": "vitest run --changed main --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "3d-tiles-renderer": "^0.5.4",
+    "@mx/map-core": "workspace:*",
+    "@mx/utils": "workspace:*",
+    "nanoevents": "catalog:",
+    "three": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/three": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "jsdom": "catalog:",
+    "maplibre-gl": "catalog:",
+    "playwright": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

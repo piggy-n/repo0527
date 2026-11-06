@@ -172,7 +172,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "shpjs": "^6.2.0",
     "sm-crypto-v2": "^1.15.1",
     "sortablejs": "^1.15.7",
-    "three": "0.183.2",
+    "three": "catalog:",
     "vue": "^3.5.43",
     "vue-router": "^5.3.1",
     "zod": "^4.6.7"
@@ -184,7 +184,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "@types/geojson": "^7946.0.16",
     "@types/node": "^24.19.0",
     "@types/sortablejs": "^1.15.9",
-    "@types/three": "0.183.1",
+    "@types/three": "catalog:",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
     "@vitest/browser-playwright": "^5.0.5",
     "@vue/test-utils": "^2.5.1",
@@ -249,6 +249,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `sm-crypto-v2` | 登录密码的 SM2 加密，只在 `features/auth/password.ts` 中使用；底层是 `@noble/curves`，已与旧项目的 sm-crypto 交叉验证兼容（ADR 0015） | sm-crypto |
 | `maplibre-gl` | 二维地图（ADR 0002、0019），只在 map-core 的适配器和 app 的装配中导入。6.x 只提供 ESM，Worker 由 app 用 `?worker&url` 导入后交给 `setWorkerUrl`；依赖里的 `@types/geojson`、`@maplibre/maplibre-gl-style-spec` 不会暴露给应用，要用时自己声明，版本与它保持一致。主模块约 1 MB、Worker 510 KB，地图页必须懒加载 | mapbox-gl（2.0 起为专有许可）、OpenLayers |
 | `cesium` | 三维地图（ADR 0002、0079），只在 `packages/map-cesium` 和 app 的装配中导入（lint 检查）。不遵守语义化版本，精确锁定（ADR 0005）；`cesium` 是聚合包，代码在它依赖的 `@cesium/engine`、`@cesium/widgets` 里（1.146.0 对应 26.4.0、16.3.0）；它对子包写的是 `^`，所以子包也在 `pnpm-workspace.yaml` 的 `overrides` 钉住，升级时一起改（见 [pnpm-workspace.md](pnpm-workspace.md)）。本项目只用 engine 的 `CesiumWidget`，导入写 `cesium`。Worker、资源和第三方文件不经过打包，由 `vite-plugin-static-copy` 复制到产物的 `cesium/`；地图页第一次切到三维时才加载 | MapLibre 的地球投影（没有 3D Tiles、第一人称相机）、deck.gl |
+| `three`、`@types/three` | 驾驶舱的江苏地图（`features/city-dashboard`），和 MapLibre 引擎的三维（`packages/map-three`，ADR 0147）共用；版本写在 catalog，沿用原来的精确版本。lint 只允许这两处导入，产物检查要求它只在动态分块里 | — |
 | `@maplibre/maplibre-gl-style-spec` | MapLibre 样式规范的工具：map-core 用它的 `diff` 对比样式快照（ADR 0022），以后在三维和 Worker 里求值表达式和过滤条件（ADR 0021、0024）。它本来就是 maplibre-gl 的依赖，pnpm 不允许使用没有声明的包，所以自己声明；版本范围与 maplibre-gl 声明的相同（`^26.4.4`），两者解析到同一个版本，只打包一份 | 手写求值器（旧项目的做法，ADR 0020） |
 | `@types/geojson` | GeoJSON 的类型，并提供全局命名空间 `GeoJSON`：style-spec 和 maplibre-gl 的声明文件依赖它，要在 tsconfig 的 `types` 中加载，否则相关类型会悄悄变成错误类型（见 [tsconfig.md](tsconfig.md)）。版本范围与 maplibre-gl 依赖的相同 | — |
 | `geographiclib-geodesic` | 椭球面上的距离和面积（ADR 0024 第 4 条、ADR 0035），在 map-core 的测量和 `shared/map/area`（自定义范围的面积、周长，在 Worker 里运行，不能导入 map-core 的入口）中使用。Karney 算法的作者维护，MIT 许可，自带类型；只有 CommonJS 格式的压缩包（32 KB），由 Vite 预构建处理。参数是先纬度后经度，map-core 的封装负责转换 | geodesy（Vincenty，没有椭球面积）、turf（球面） |

@@ -3,10 +3,22 @@ import {
   MapLibreView,
   type MapLibreViewOptions,
   type MapLike,
-  type ScrollZoomRates
+  type ScrollZoomRates,
+  type ViewKind
 } from '@mx/map-core';
-import { defineComponent, onActivated, onDeactivated, onMounted, onUnmounted, type PropType, ref, watch } from 'vue';
+import {
+  defineComponent,
+  inject,
+  onActivated,
+  onDeactivated,
+  onMounted,
+  onUnmounted,
+  type PropType,
+  ref,
+  watch
+} from 'vue';
 import styles from './MapCanvas.module.scss';
+import { CESIUM_ENGINE, MAP_SCENE_ENGINE } from './runtime';
 import { injectMapState } from './use-map';
 
 /** 创建地图时的选项；样式和相机来自会话，不在这里传 */
@@ -14,6 +26,7 @@ export type MapCanvasMapOptions = NonNullable<MapLibreViewOptions<string>['mapOp
 
 /**
  * 二维地图画布（ADR 0028 第 4 条）：挂载后用会话的当前快照创建视图，卸载时先卸下再释放；引擎失败后可以通过上下文的 retry 重新创建。
+ * 三维引擎是 maplibre 时，同一个视图同时担任三维（ADR 0147 第 2 节），切到三维也不隐藏。
  * 外层元素接收页面的 class；交给 MapLibre 的内层容器只用静态 class，否则 Vue 会冲掉 MapLibre 加的 class
  */
 export const MapCanvas = defineComponent({
@@ -28,6 +41,9 @@ export const MapCanvas = defineComponent({
   },
   setup(props) {
     const state = injectMapState('MapCanvas');
+    const engine = inject(MAP_SCENE_ENGINE, CESIUM_ENGINE);
+    // 这块画布承担的种类
+    const kinds: readonly ViewKind[] = engine.kind === 'maplibre' ? ['2d', '3d'] : ['2d'];
     const container = ref<HTMLElement>();
     let view: MapLibreView<string> | undefined;
 
@@ -38,12 +54,13 @@ export const MapCanvas = defineComponent({
       const created = new MapLibreView({
         session: state.session,
         container: container.value,
-        // 页面停用期间、当前显示的是三维时以暂停状态创建，由上下文在需要时恢复（ADR 0063、0079 第 8 节）
-        active: state.shouldRun('2d'),
+        // 页面停用期间、当前显示的不是这块画布承担的种类时以暂停状态创建，由上下文在需要时恢复（ADR 0063、0079 第 8 节）
+        active: state.shouldRun(...kinds),
         mapOptions: props.mapOptions,
         scrollZoomRates: props.scrollZoomRates,
         createMap: props.createMap,
-        onError: state.onError
+        onError: state.onError,
+        loadSceneRenderer: engine.kind === 'maplibre' ? engine.loadRenderer : undefined
       });
       // 挂不上（同一个上下文已经有画布）时先释放刚创建的视图，再把错误交给 Vue
       try {
@@ -72,9 +89,9 @@ export const MapCanvas = defineComponent({
     };
 
     onMounted(createView);
-    // 引擎失败后重试：在同一个容器里重新创建视图（ADR 0030）；当前显示的是三维时重试的是三维视图
+    // 引擎失败后重试：在同一个容器里重新创建视图（ADR 0030）；当前显示的是 Cesium 的三维时重试的是三维视图
     watch(state.retryRequests, () => {
-      if (state.context.dimension.value !== '2d') {
+      if (!kinds.includes(state.context.dimension.value)) {
         return;
       }
       disposeView();
@@ -87,8 +104,8 @@ export const MapCanvas = defineComponent({
     onUnmounted(disposeView);
 
     return () => {
-      // 显示三维时隐藏但保留尺寸，切回时不用重新量画布
-      const hidden = state.context.dimension.value !== '2d';
+      // 显示 Cesium 的三维时隐藏但保留尺寸，切回时不用重新量画布
+      const hidden = !kinds.includes(state.context.dimension.value);
       return (
         <div
           class={styles.root}

@@ -129,6 +129,7 @@ session[Symbol.dispose]();
 - 会话的 `scene`：`{ tilesets, underground, roam? }`，和样式模型一样整体替换、每次替换修订号加 1、同一轮事件循环只通知一次；同一个对象不算变化
 - `set` 时校验：瓦片集 ID 不重复、地址是绝对地址（瓦片地址按它解析）、`attempt` 是非负整数、钻地指向已有的瓦片集、地表不透明度在 0～1；不合法时抛错，内容和修订号不变
 - 二维视图不读它；三维视图镜像它，按 ID 的状态通过可选的 `sceneStatus` / `onSceneStatusChange` 报告
+- 两种三维引擎共用的瓦片集同步（ADR 0147 第 3 节）：`SceneTilesetSync` 按会话的瓦片集增删改引擎里的瓦片集（地址、重试次数变了就重新加载，其余的只改显示和光照；同组的换显示时新的首批瓦片到了才撤下旧的），汇总状态；引擎实现 `TilesetHost`（`addTileset`、`updateTileset`、`removeTileset`），瓦片失败、首批瓦片到位由视图转给它的 `failed`、`initial`。让包围球进入画布的相机是 `tilesetCamera`（俯角 55°），缩放级和距离的换算是 `camera/camera-distance.ts`，两种引擎共用
 - `roam`（ADR 0083）：路线漫游的意图 `{ kind: 'route', id, path, playing, speed, run }`，`path` 是脚下地板的 `[经度, 纬度, 椭球高]`；校验至少两个点、坐标是数、速度（米/秒，ADR 0097）是正数、遍数是非负整数。没有漫游时不写。三维视图通过可选的 `roamStatus` / `onRoamStatusChange` 报告进度
 
 ### MapSession
@@ -200,6 +201,8 @@ store.clear();
 创建地图时默认 `attributionControl: false`，不用 MapLibre 的版权控件：摆法 A 的右下角是基础组，底图不写署名（5D.3 用户决定，以后换成内网底图），见 ADR 0053 第 5 节。调用方仍可通过 `mapOptions.attributionControl` 覆盖。2026-10-15 之前是 `{ compact: true, customAttribution: '' }`（去掉 MapLibre 链接、保留数据源署名）
 
 选项 `scrollZoomRates: { wheel?, trackpad? }` 在创建地图后设到 `map.scrollZoom`（`setWheelZoomRate`、`setZoomRate`），不传的一项用 MapLibre 的默认值（滚轮 1/450、触控板 1/100）；`MapLike` 为此加了 `scrollZoom`（ADR 0053 第 3 节）。
+
+选项 `loadSceneRenderer`（MapLibre 引擎的三维，ADR 0147 第 2 节）：给出时视图声明 `kinds = ['2d', '3d']`，`setKind` 切换当前种类，`ToolView.kind`、相机事件的 `view` 跟着变；三维内容由 `MapLibreScene` 管：第一次要加瓦片集时加载渲染器，显示三维、视图就绪、样式已加载时把 custom layer 的外壳 `SceneLayer` 挂到地图最上面，整体重建、GL 上下文恢复后重新挂上。三维时 `pick` 先打模型、`project` 对不在地面上的点按模型层最近一帧的相机算。`MapLike` 为此加了 `getLayer`、`moveLayer`、`getLayersOrder`、`triggerRepaint` 和 `render`、`webglcontextlost`、`webglcontextrestored` 事件，`addLayer` 也接受 custom layer。渲染器的窄接口 `SceneRenderer` 和细节见 [map-three.md](map-three.md)。
 
 **样式同步**：
 

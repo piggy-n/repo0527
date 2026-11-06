@@ -15,17 +15,15 @@ import {
   NO_SCENE_STATUS,
   NO_SOURCE_ERRORS,
   type PickResult,
-  prepareTileset,
   type RenderedFeature,
   type RoamStatus,
   RoutePath,
   type RouteRoam,
   type SceneRoam,
   type SceneStatus,
+  SceneTilesetSync,
   type ScreenPoint,
   type SourceErrors,
-  type TilesetLayer,
-  type TilesetStatus,
   type ToolView,
   type Unsubscribe,
   type ViewBounds,
@@ -41,13 +39,7 @@ import type { GeoJSON } from 'geojson';
 import { createNanoEvents } from 'nanoevents';
 import { fitBoundsCamera, paddedCenter } from './camera-fit';
 import { isGeoJson, type OverlaySpec, planOverlays } from './overlay-plan';
-import {
-  type CreateScene,
-  type SceneLike,
-  type ScenePose,
-  type TilesetOptions,
-  WebGLUnavailableError
-} from './scene-like';
+import { type CreateScene, type SceneLike, type ScenePose, WebGLUnavailableError } from './scene-like';
 import { planSceneStyle, type UnsupportedLayer } from './scene-style';
 
 export interface CesiumViewOptions<G extends string> {
@@ -98,20 +90,6 @@ type RoamEntry =
 // 进度每变这么多米报告一次（最快 2× 时每秒约 6 次）
 const ROAM_REPORT_STEP = 0.5;
 
-// 一个瓦片集的加载（ADR 0081 第 2 节）：layer 是会话里最近的写法
-interface TilesetEntry {
-  layer: TilesetLayer;
-  readonly controller: AbortController;
-  status: TilesetStatus;
-  // 已经加进场景，之后才能改显示和光照；applied 是最近交给场景的
-  applied: TilesetOptions | null;
-  // 显示后首批瓦片到过：换白膜效果时，新的到了才撤下旧的
-  initial: boolean;
-}
-
-const sameOptions = (a: TilesetOptions | null, b: TilesetOptions) =>
-  a !== null && a.show === b.show && a.lighting === b.lighting;
-
 // 离开三维时记下的精确相机；暂停期间会话的相机有了 sync 之外的变化就不能还原（ADR 0020 第 5 条）
 interface SavedPose {
   readonly pose: ScenePose;
@@ -153,10 +131,9 @@ export class CesiumView<const G extends string> implements MapView {
   readonly #remote = new Map<string, RemoteData>();
   readonly #loadJson: (url: string, signal: AbortSignal) => Promise<unknown>;
   readonly #downloads = new AbortController();
-  // 三维内容（ADR 0081）：按 ID 的瓦片集，每组正在显示的那一个；暂停期间变了，恢复时再应用
-  readonly #tilesets = new Map<string, TilesetEntry>();
-  readonly #groupShown = new Map<string, string>();
-  #sceneStatus: SceneStatus = NO_SCENE_STATUS;
+  // 三维内容（ADR 0081）：瓦片集交给两种引擎共用的同步（ADR 0147 第 3 节），场景没创建出来时没有；
+  // 暂停期间变了，恢复时再应用
+  readonly #tilesets: SceneTilesetSync | undefined;
   #sceneStale = false;
   // 漫游（ADR 0083、0086）：场景里正在进行的，和报告出去的进度、状态
   #roam: RoamEntry | null = null;
@@ -193,6 +170,7 @@ export class CesiumView<const G extends string> implements MapView {
       // 例如不支持 WebGL：不抛出，交给 whenReady 和 statechange 表达
       this.#scene = undefined;
       this.#pan = undefined;
+      this.#tilesets = undefined;
       this.#stack = stack.move();
       this.#fail(error);
       return;
@@ -228,8 +206,8 @@ export class CesiumView<const G extends string> implements MapView {
       scene.on('resize', () => this.#emitter.emit('resize')),
       scene.on('settle', () => this.#onSettle()),
       scene.on('imageryerror', (sourceId, error) => this.#recordSourceError(sourceId, error)),
-      scene.on('tilesetfailed', (id, error) => this.#onTilesetFailed(id, error)),
-      scene.on('tilesetinitial', id => this.#guard(() => this.#onTilesetInitial(scene, id))),
+      scene.on('tilesetfailed', (id, error) => this.#tilesets?.failed(id, error)),
+      scene.on('tilesetinitial', id => this.#guard(() => this.#tilesets?.initial(id))),
       scene.on('routeprogress', distance => this.#onRouteProgress(distance)),
       scene.on('routeend', () => this.#onRouteEnd()),
       scene.on('walkphase', phase => this.#onWalkPhase(phase)),
@@ -242,7 +220,13 @@ export class CesiumView<const G extends string> implements MapView {
     stack.defer(session.style.on('change', () => this.#guard(() => this.#onStyleChange(scene))));
     stack.defer(session.tool.on('change', () => this.#guard(() => this.#onToolChange(scene))));
     stack.defer(session.scene.on('change', () => this.#guard(() => this.#onSceneChange(scene))));
-    stack.defer(() => this.#tilesets.forEach(({ controller }) => controller.abort()));
+    this.#tilesets = stack.use(
+      new SceneTilesetSync({
+        host: scene,
+        loadJson,
+        onStatus: status => this.#emitter.emit('scenestatuschange', status)
+      })
+    );
     stack.defer(session.camera.on('change', ({ cause }) => this.#onSessionCamera(cause)));
     this.#stack = stack.move();
 
@@ -273,7 +257,7 @@ export class CesiumView<const G extends string> implements MapView {
 
   /** 三维内容的加载状态（ADR 0081 第 2 节） */
   get sceneStatus(): SceneStatus {
-    return this.#sceneStatus;
+    return this.#tilesets?.status ?? NO_SCENE_STATUS;
   }
 
   onSceneStatusChange(callback: (status: SceneStatus) => void): Unsubscribe {
@@ -394,7 +378,6 @@ export class CesiumView<const G extends string> implements MapView {
     this.#state = 'disposed';
     this.#failure = null;
     this.#sourceErrors = NO_SOURCE_ERRORS;
-    this.#sceneStatus = NO_SCENE_STATUS;
     this.#roam = null;
     this.#roamStatus = null;
     this.#emitter.events = {};
@@ -586,124 +569,8 @@ export class CesiumView<const G extends string> implements MapView {
   #applyScene(scene: SceneLike): void {
     this.#sceneStale = false;
     const { tilesets, underground } = this.#session.scene.current;
-    const wanted = new Map(tilesets.map(layer => [layer.id, layer]));
-    let changed = false;
-    for (const [id, entry] of this.#tilesets) {
-      const layer = wanted.get(id);
-      if (!layer || layer.url !== entry.layer.url || layer.attempt !== entry.layer.attempt) {
-        entry.controller.abort();
-        if (entry.applied) {
-          scene.removeTileset(id);
-        }
-        this.#tilesets.delete(id);
-        changed = true;
-      }
-    }
-    for (const layer of tilesets) {
-      const entry = this.#tilesets.get(layer.id);
-      if (entry) {
-        entry.layer = layer;
-      } else {
-        this.#loadTileset(scene, layer);
-        changed = true;
-      }
-    }
-    this.#applyVisibility(scene);
+    this.#tilesets?.apply(tilesets);
     scene.setUnderground(underground);
-    if (changed) {
-      this.#publishSceneStatus();
-    }
-  }
-
-  #loadTileset(scene: SceneLike, layer: TilesetLayer): void {
-    const entry: TilesetEntry = {
-      layer,
-      controller: new AbortController(),
-      status: { state: 'loading' },
-      applied: null,
-      initial: false
-    };
-    this.#tilesets.set(layer.id, entry);
-    void this.#prepareAndAdd(scene, entry);
-  }
-
-  // 整理索引、交给场景；中止的不报告，失败记进状态
-  async #prepareAndAdd(scene: SceneLike, entry: TilesetEntry): Promise<void> {
-    const { signal } = entry.controller;
-    try {
-      const prepared = await prepareTileset(entry.layer.url, this.#loadJson, signal);
-      signal.throwIfAborted();
-      const options = this.#optionsFor(entry);
-      const camera = await scene.addTileset(entry.layer.id, prepared, options, signal);
-      signal.throwIfAborted();
-      entry.applied = options;
-      entry.status = { state: 'ready', camera };
-      this.#applyVisibility(scene);
-    } catch (error) {
-      if (signal.aborted) {
-        return;
-      }
-      entry.status = { state: 'failed', error };
-    }
-    this.#publishSceneStatus();
-  }
-
-  // 同组（白膜的各种效果）要显示的那个首批瓦片到了，才撤下上一个（ADR 0081 第 5 节）
-  #optionsFor({ layer }: TilesetEntry): TilesetOptions {
-    if (layer.group === undefined || layer.show) {
-      return { show: layer.show, lighting: layer.lighting };
-    }
-    const requested = this.#requestedIn(layer.group);
-    const kept = requested !== undefined && !requested.initial && this.#groupShown.get(layer.group) === layer.id;
-    return { show: kept, lighting: layer.lighting };
-  }
-
-  #requestedIn(group: string): TilesetEntry | undefined {
-    return [...this.#tilesets.values()].find(({ layer }) => layer.group === group && layer.show);
-  }
-
-  #applyVisibility(scene: SceneLike): void {
-    const groups = new Set([...this.#tilesets.values()].flatMap(({ layer }) => (layer.group ? [layer.group] : [])));
-    for (const group of this.#groupShown.keys()) {
-      groups.add(group);
-    }
-    for (const group of groups) {
-      const requested = this.#requestedIn(group);
-      if (!requested) {
-        this.#groupShown.delete(group);
-      } else if (requested.initial) {
-        this.#groupShown.set(group, requested.layer.id);
-      }
-    }
-    for (const entry of this.#tilesets.values()) {
-      const options = this.#optionsFor(entry);
-      if (entry.applied && !sameOptions(entry.applied, options)) {
-        scene.updateTileset(entry.layer.id, options);
-        entry.applied = options;
-      }
-    }
-  }
-
-  #onTilesetInitial(scene: SceneLike, id: string): void {
-    const entry = this.#tilesets.get(id);
-    if (entry && !entry.initial) {
-      entry.initial = true;
-      this.#applyVisibility(scene);
-    }
-  }
-
-  // 瓦片失败：每个瓦片集记第一条，重试（换重试次数）后重新开始
-  #onTilesetFailed(id: string, error: unknown): void {
-    const entry = this.#tilesets.get(id);
-    if (entry && entry.status.state !== 'failed') {
-      entry.status = { state: 'failed', error };
-      this.#publishSceneStatus();
-    }
-  }
-
-  #publishSceneStatus(): void {
-    this.#sceneStatus = new Map([...this.#tilesets].map(([id, { status }]) => [id, status]));
-    this.#emitter.emit('scenestatuschange', this.#sceneStatus);
   }
 
   // 场景在漫游：相机的变化都是漫游引起的

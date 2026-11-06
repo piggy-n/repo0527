@@ -28,7 +28,7 @@ import { useMapOverlay } from './use-map';
 
 // 卸下之后仍会发事件的视图：MapLibreView 释放时会清空监听，接口本身并不保证这一点
 class FakeView implements MapView {
-  readonly kind: ViewKind;
+  kind: ViewKind;
   // 上下文让它暂停、恢复的次数；状态变化由用例用 emit 模拟
   pauseCalls = 0;
   resumeCalls = 0;
@@ -1098,6 +1098,95 @@ describe('MapContextState 的三维内容状态（ADR 0081 第 2 节）', () => 
     globe.setRoamStatus(walking);
     env.state.context.setDimension('2d');
     expect(env.state.context.roamStatus.value).toBeNull();
+  });
+});
+
+// MapLibre 引擎的视图：同时担任二三维，种类由上下文切换（ADR 0147 第 2 节）；三维内容的状态只在三维时报告
+class DualFakeView extends SceneFakeView {
+  readonly kinds: readonly ViewKind[] = ['2d', '3d'];
+  readonly setKindCalls: ViewKind[] = [];
+  #status: SceneStatus = NO_SCENE_STATUS;
+
+  constructor() {
+    super();
+    this.kind = '2d';
+  }
+
+  setKind(kind: ViewKind): void {
+    this.setKindCalls.push(kind);
+    this.kind = kind;
+    this.setSceneStatus(kind === '3d' ? this.#status : NO_SCENE_STATUS);
+  }
+
+  loadScene(status: SceneStatus): void {
+    this.#status = status;
+    if (this.kind === '3d') {
+      this.setSceneStatus(status);
+    }
+  }
+}
+
+describe('MapContextState 的同一个视图担任二三维（ADR 0147 第 2 节）', () => {
+  it('在两种种类下登记；切换维度只换它的种类，不暂停、恢复，受限入口和三维内容状态跟着变', () => {
+    using env = setup();
+    const view = new DualFakeView();
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+    const loading: SceneStatus = new Map([['station', { state: 'loading' }]]);
+    view.loadScene(loading);
+    const revision = env.state.context.projectionRevision.value;
+
+    env.state.context.setDimension('3d');
+
+    expect(view.setKindCalls).toStrictEqual(['3d']);
+    expect([view.pauseCalls, view.resumeCalls]).toStrictEqual([0, 0]);
+    expect(env.state.context.viewState.value).toBe('ready');
+    expect(env.state.context.view.value?.kind).toBe('3d');
+    expect(env.state.context.sceneStatus.value).toBe(loading);
+    expect(env.state.context.projectionRevision.value).toBe(revision + 1);
+
+    env.state.context.setDimension('2d');
+
+    expect(view.setKindCalls).toStrictEqual(['3d', '2d']);
+    expect(env.state.context.view.value?.kind).toBe('2d');
+    expect(env.state.context.sceneStatus.value).toBe(NO_SCENE_STATUS);
+  });
+
+  it('维度已经是三维时挂上：先换成三维再登记', () => {
+    using env = setup();
+    env.state.context.setDimension('3d');
+    const view = new DualFakeView();
+
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+
+    expect(view.setKindCalls).toStrictEqual(['3d']);
+    expect(env.state.context.view.value?.kind).toBe('3d');
+  });
+
+  it('切换期间等待中的相机操作在同一个视图上执行', () => {
+    using env = setup();
+    const view = new DualFakeView();
+    env.state.attachView(view, CANVAS);
+    env.state.context.runCameraOperation(camera => camera.flyTo({ zoom: 17 }));
+
+    env.state.context.setDimension('3d');
+    view.emit('ready');
+
+    expect(view.flyToCalls).toStrictEqual([{ zoom: 17 }]);
+  });
+
+  it('另一块画布不能再挂三维；卸下后两种种类都空出来', () => {
+    using env = setup();
+    const view = new DualFakeView();
+    env.state.attachView(view, CANVAS);
+
+    expect(() => env.state.attachView(new SceneFakeView(), CANVAS)).toThrow('每种视图只能有一个画布：3d');
+    env.state.detachView(view);
+    env.state.context.setDimension('3d');
+
+    expect(env.state.context.viewState.value).toBe('idle');
+    expect(view.sceneListeners).toBe(0);
   });
 });
 
