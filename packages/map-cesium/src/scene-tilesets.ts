@@ -10,11 +10,14 @@ import {
 } from 'cesium';
 import type { TilesetOptions } from './scene-like';
 
-// 沿用旧项目实测的参数（ADR 0081 第 3 节）：站内要最精细一级，显存约 200 MB，缓存要放大；移动时不请求、不预加载
+const MEGABYTE = 1024 * 1024;
+
+// 沿用旧项目实测的参数（ADR 0081 第 3 节）：移动时不请求、不预加载。显存预算按倾斜摄影定（取值的理由见
+// docs/modules/map-cesium.md）：缓存要放得下视野里最粗一级的全部块，屏幕误差才能降回 16
 const TILESET_OPTIONS = {
   maximumScreenSpaceError: 16,
-  cacheBytes: 384 * 1024 * 1024,
-  maximumCacheOverflowBytes: 256 * 1024 * 1024,
+  cacheBytes: 1024 * MEGABYTE,
+  maximumCacheOverflowBytes: 512 * MEGABYTE,
   cullRequestsWhileMoving: true,
   preloadWhenHidden: false,
   preloadFlightDestinations: false,
@@ -46,6 +49,15 @@ export function createHeadlightShader(): CustomShader {
   });
 }
 
+// Cesium 标成 @private、类型声明里没有，但它的文档和超出预算的警告都让看这个值；版本精确锁定，改名时浏览器测试会失败
+/** 按显存调整后的屏幕误差（只读） */
+export function memoryAdjustedError(tileset: Cesium3DTileset): number {
+  const { memoryAdjustedScreenSpaceError } = tileset as Cesium3DTileset & {
+    readonly memoryAdjustedScreenSpaceError: number;
+  };
+  return memoryAdjustedScreenSpaceError;
+}
+
 export interface SceneTilesetEvents {
   readonly failed: (id: string, error: unknown) => void;
   readonly initial: (id: string) => void;
@@ -54,6 +66,8 @@ export interface SceneTilesetEvents {
 interface Entry {
   readonly tileset: Cesium3DTileset;
   readonly unsubscribe: () => void;
+  // 上一个 tick 读到的按显存调整后的屏幕误差
+  adjustedError: number;
 }
 
 /** 场景里的 3D Tiles 瓦片集（ADR 0081 第 3 节）：按 ID 加、改、删，瓦片失败和首批瓦片到位通过回调报告 */
@@ -62,11 +76,14 @@ export class SceneTilesets implements Disposable {
   readonly #events: SceneTilesetEvents;
   readonly #entries = new Map<string, Entry>();
   readonly #headlight = createHeadlightShader();
+  readonly #stopWatching: () => void;
   #disposed = false;
 
   constructor(widget: CesiumWidget, events: SceneTilesetEvents) {
     this.#widget = widget;
     this.#events = events;
+    // postUpdate 每个 tick 都触发，在 Cesium 调整屏幕误差之后
+    this.#stopWatching = widget.scene.postUpdate.addEventListener(() => this.#renderWhileAdjusting());
   }
 
   /** 建好瓦片集并加进场景；signal 中止或已释放时销毁建好的瓦片集、以原因结束 */
@@ -103,7 +120,8 @@ export class SceneTilesets implements Disposable {
       unsubscribe: () => {
         unsubscribeFailed();
         unsubscribeInitial();
-      }
+      },
+      adjustedError: memoryAdjustedError(tileset)
     });
     this.#widget.scene.requestRender();
     return tileset.boundingSphere;
@@ -151,10 +169,27 @@ export class SceneTilesets implements Disposable {
 
   [Symbol.dispose](): void {
     this.#disposed = true;
+    this.#stopWatching();
     for (const id of this.#entries.keys()) {
       this.remove(id);
     }
     this.#headlight.destroy();
+  }
+
+  // 超出显存预算时 Cesium 每个 tick 放大屏幕误差，卸载瓦片却只在渲染的帧里做：按需渲染下两次渲染之间它一直涨，
+  // 越过没有内容的根节点后整棵树都不画（见 docs/modules/map-cesium.md）。变了就请求渲染，和连续渲染一样及时卸载
+  #renderWhileAdjusting(): void {
+    let changed = false;
+    for (const entry of this.#entries.values()) {
+      const error = memoryAdjustedError(entry.tileset);
+      if (error !== entry.adjustedError) {
+        entry.adjustedError = error;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.#widget.scene.requestRender();
+    }
   }
 
   #apply(tileset: Cesium3DTileset, { show, lighting }: TilesetOptions): void {
