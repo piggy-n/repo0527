@@ -196,7 +196,7 @@ describe('useSceneModels', () => {
     ]);
   });
 
-  it('单独勾选一个模型时就绪后飞过去；多选、取消勾选、有了别的定位时不动相机', async () => {
+  it('每次勾选一个模型都在就绪后飞过去，不看已经勾了几个；取消勾选、有了别的定位时不动相机', async () => {
     using ctx = setup();
     ctx.owner.setChecked('city', true);
     await nextTick();
@@ -205,30 +205,54 @@ describe('useSceneModels', () => {
     await nextTick();
     expect(ctx.flyTo).toHaveBeenCalledExactlyOnceWith(CAMERA);
 
-    // 多选：后勾选的不飞；取消勾选剩下一个也不飞
+    // 已经勾了一个，再勾选的照样飞
     ctx.owner.setChecked('white', true);
     ctx.ready('city', 'white/plain');
+    await nextTick();
+    expect(ctx.flyTo).toHaveBeenCalledTimes(2);
+
+    // 取消勾选不飞，剩下一个也不飞
     ctx.owner.setChecked('city', false);
     await nextTick();
-    expect(ctx.flyTo).toHaveBeenCalledOnce();
+    expect(ctx.flyTo).toHaveBeenCalledTimes(2);
 
-    // 单独勾选、还没就绪时又勾选了别的
-    ctx.owner.setChecked('white', false);
+    // 还没就绪时取消勾选别的模型，不影响飞向新勾选的
+    ctx.sceneStatus.value = new Map();
     ctx.owner.setChecked('station', true);
-    ctx.owner.setChecked('city', true);
-    ctx.ready('station', 'city');
+    ctx.owner.setChecked('white', false);
+    ctx.ready('station');
     await nextTick();
-    expect(ctx.flyTo).toHaveBeenCalledOnce();
+    expect(ctx.flyTo).toHaveBeenCalledTimes(3);
 
-    // 单独勾选、还没就绪时有了别的定位
-    ctx.owner.setChecked('station', false);
+    // 还没就绪时取消勾选它自己：不飞
+    ctx.sceneStatus.value = new Map();
+    ctx.owner.setChecked('city', true);
     ctx.owner.setChecked('city', false);
+    ctx.ready('city');
+    await nextTick();
+    expect(ctx.flyTo).toHaveBeenCalledTimes(3);
+
+    // 还没就绪时又勾选了别的：飞向后勾选的那个，先勾选的不再飞
+    ctx.owner.setChecked('station', false);
     ctx.sceneStatus.value = new Map();
     ctx.owner.setChecked('white', true);
-    ctx.runCameraOperation(() => {});
+    ctx.owner.setChecked('city', true);
     ctx.ready('white/plain');
     await nextTick();
-    expect(ctx.flyTo).toHaveBeenCalledOnce();
+    expect(ctx.flyTo).toHaveBeenCalledTimes(3);
+    ctx.ready('white/plain', 'city');
+    await nextTick();
+    expect(ctx.flyTo).toHaveBeenCalledTimes(4);
+
+    // 还没就绪时有了别的定位
+    ctx.owner.setChecked('white', false);
+    ctx.owner.setChecked('city', false);
+    ctx.sceneStatus.value = new Map();
+    ctx.owner.setChecked('station', true);
+    ctx.runCameraOperation(() => {});
+    ctx.ready('station');
+    await nextTick();
+    expect(ctx.flyTo).toHaveBeenCalledTimes(4);
   });
 
   it('单独勾选的模型加载失败后重试，就绪时照样飞过去', async () => {

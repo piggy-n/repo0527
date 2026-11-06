@@ -84,7 +84,8 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
       ['sz-station', '苏州市'],
       ['sz-white', '苏州市'],
       ['xz-gc', '徐州市'],
-      ['wx-jkq', '无锡市']
+      ['wx-jkq', '无锡市'],
+      ['wx-jkq2', '无锡市']
     ]);
     const urls = models.flatMap(({ effects }) => effects.map(({ url }) => url));
     expect(urls.every(url => url.startsWith('https://maps.test/yzt/3dt/'))).toBe(true);
@@ -115,14 +116,15 @@ describe('buildModelCatalog', () => {
 });
 
 describe('groupByCity', () => {
-  it('按市分组、按清单的先后；关键字匹配模型名或市名', () => {
+  it('按市分组、市按区划代码排、组内按清单的先后；关键字匹配模型名或市名', () => {
     const catalog = buildModelCatalog(sceneManifestSchema.parse(MANIFEST), MANIFEST_URL);
     const summary = (keyword: string) =>
       groupByCity(catalog, keyword).map(({ cityName, models }) => [cityName, models.map(({ id }) => id)]);
 
+    // 清单里苏州在前，南京的代码小排在前面
     expect(summary('')).toStrictEqual([
-      ['苏州市', ['sz-station', 'sz-white']],
-      ['南京市', ['nj-oblique']]
+      ['南京市', ['nj-oblique']],
+      ['苏州市', ['sz-station', 'sz-white']]
     ]);
     expect(summary(' 白膜 ')).toStrictEqual([['苏州市', ['sz-white']]]);
     expect(summary('南京')).toStrictEqual([['南京市', ['nj-oblique']]]);

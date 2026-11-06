@@ -172,17 +172,17 @@ describe('SceneModelPanel', () => {
     expect(wrapper.text()).toContain('暂无三维模型');
   });
 
-  it('按市分组、默认展开，带数量；点市收起；搜索时只列匹配的、不能收起，没有匹配时提示', async () => {
+  it('按市分组、按区划代码排、默认展开，带数量；点市收起；搜索时只列匹配的、不能收起，没有匹配时提示', async () => {
     const { wrapper } = mountPanel();
-    expect(cityRows(wrapper)).toStrictEqual(['苏州市2', '南京市1']);
+    expect(cityRows(wrapper)).toStrictEqual(['南京市1', '苏州市2']);
     expect(wrapper.findAll('[data-model]').map(row => row.attributes('data-model'))).toStrictEqual([
+      'city',
       'station',
-      'white',
-      'city'
+      'white'
     ]);
 
     await wrapper.findAll('button[aria-expanded]')[0]?.trigger('click');
-    expect(wrapper.findAll('[data-model]').map(row => row.attributes('data-model'))).toStrictEqual(['city']);
+    expect(wrapper.findAll('[data-model]').map(row => row.attributes('data-model'))).toStrictEqual(['station', 'white']);
 
     await wrapper.get('input[placeholder="搜索模型或所属市"]').setValue('白膜');
     expect(cityRows(wrapper)).toStrictEqual(['苏州市1']);
