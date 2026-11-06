@@ -67,6 +67,7 @@ import {
 import type { OverlayLayer, OverlayShape, RgbaColor } from './overlay-plan';
 import { movableInPlace, sameCoordinates } from './overlay-update';
 import { SceneRoute } from './scene-route';
+import { holdCameraSteady } from './scene-steady-camera';
 import { SceneWalk } from './scene-walk';
 import { SceneTilesets } from './scene-tilesets';
 import { footprintOf, SceneUnderground } from './scene-underground';
@@ -244,6 +245,8 @@ export class CesiumScene implements SceneLike {
     // 每一帧的相机变化都报告，状态栏和浮层才跟得上
     camera.percentageChanged = 0.001;
     this.#applyFov();
+    // 相机静止时撤销 Cesium 读朝向带来的舍入漂移，否则有些姿态下每秒还要重画几帧、moveEnd 不触发
+    stack.defer(holdCameraSteady(scene));
 
     stack.defer(camera.changed.addEventListener(() => this.#onCameraChange()));
     stack.defer(camera.moveEnd.addEventListener(() => this.#onCameraIdle()));
