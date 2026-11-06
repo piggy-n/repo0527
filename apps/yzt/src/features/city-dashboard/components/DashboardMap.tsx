@@ -78,7 +78,7 @@ export const DashboardMap = defineComponent({
       const blob = await exporting.run('map', async signal => {
         const snapshot = map.capture();
         await exporting.waitForFonts(signal);
-        drawMapLabels(snapshot, indicator);
+        drawMapLabels(snapshot);
         return imageWithTitle(snapshot.canvas, exportTitle, '#D3EFFD');
       });
       if (blob) {
@@ -86,7 +86,7 @@ export const DashboardMap = defineComponent({
       }
     }
 
-    // 三维地图上的城市标签：名称和数值，点开详情；避让后离开锚点的画一条引线
+    // 三维地图上的城市标签：只显示名称（展示分支），点开详情；避让后离开锚点的画一条引线
     function renderLabel(label: MapLabel) {
       const { model } = props;
       const value = model.mapValues.value[label.code];
@@ -109,9 +109,6 @@ export const DashboardMap = defineComponent({
           }}
         >
           <strong>{label.name}</strong>
-          {props.valuesVisible && value !== null && (
-            <span>{formatValue(map.displayValues.value[label.code], indicator, indicator.unit.length <= 3)}</span>
-          )}
         </button>
       );
     }

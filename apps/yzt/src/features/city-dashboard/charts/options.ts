@@ -200,7 +200,8 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
     },
     xAxis: {
       type: 'category',
-      data: cities.map(city => city.name.replace(/市$/, '')),
+      // 展示分支：横轴用 A、B、C… 代替城市名
+      data: cities.map((_, index) => String.fromCharCode(65 + index)),
       axisLine: { lineStyle: { color: '#B5D1E8' } },
       axisTick: { show: false },
       // ECharts 5 的刻度标签继承全局文字颜色，6 的主题改成了灰色
