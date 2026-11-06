@@ -18,11 +18,11 @@ import { AnimatedModel, type ModelPlacement } from './animated-model';
 import { FrameMath, toNdc } from './frame';
 import { TilesetEntry } from './tileset-entry';
 
-// 缓存预算同 Cesium（scene-tilesets 的 cacheBytes 加 maximumCacheOverflowBytes，ADR 0147 第 5 节）；
-// 满了以后放宽屏幕误差的自适应缓存是 3C.4
+// 缓存预算和 Cesium 的数值相同（scene-tilesets 的 cacheBytes 加 maximumCacheOverflowBytes，ADR 0147 第 5 节）；
+// Cesium 是每个瓦片集各一份，这里所有瓦片集共用一份，总量更紧。满了以后放宽屏幕误差的自适应缓存是 3C.4
 const MEGABYTE = 1024 * 1024;
-const CACHE_BYTES = 384 * MEGABYTE;
-const CACHE_OVERFLOW_BYTES = 256 * MEGABYTE;
+const CACHE_BYTES = 1024 * MEGABYTE;
+const CACHE_OVERFLOW_BYTES = 512 * MEGABYTE;
 
 // MapLibre 每帧给的矩阵可能复用同一个数组：留到拾取、投影时用的要复制一份
 function copyFrame({ mainMatrix, fallbackMatrix, projectionMatrix, transition, clippingPlane }: SceneFrame): SceneFrame {

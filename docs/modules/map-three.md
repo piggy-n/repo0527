@@ -36,7 +36,7 @@ map-core/maplibre  MapLibreView ── MapLibreScene ── SceneLayer（custom 
 - **坐标**：每个瓦片集一个局部系（x 东、y 上、z 南，米），锚在包围球的球心；东、北一米对应的经纬度按 WGS84 椭球的两个曲率半径算，竖直方向和 MapLibre 的高度比例一致。远处的模型也有足够的精度。
 - **投影过渡**：墨卡托、地球各用一个矩阵，过渡段在裁剪空间按 MapLibre 着色器的 `mix(flat, globe, t)` 插值，z<12 也画；地球背面（锚点在裁剪面后面）整个不画。
 - **相机**：从裁剪矩阵拆出 Three 的相机（同 maplibre-gl-three 的 MapCameraSync），瓦片的视锥裁剪、屏幕误差、拾取都用它。
-- **瓦片**：每个瓦片集一个 `TilesRenderer`，整理后的索引用 Blob 地址交给它（内容地址都是绝对地址）；屏幕误差 16，和 Cesium 相同。所有瓦片集共用一个 LRU 缓存，预算同 Cesium：384 MB，最多再溢出 256 MB。满了以后拒绝加载（`stats.refused`），放宽屏幕误差的自适应缓存是 3C.4。
+- **瓦片**：每个瓦片集一个 `TilesRenderer`，整理后的索引用 Blob 地址交给它（内容地址都是绝对地址）；屏幕误差 16，和 Cesium 相同。所有瓦片集共用一个 LRU 缓存，数值同 Cesium：1 GB，最多再溢出 512 MB（2026-11-06 Cesium 调大以后跟着调）。Cesium 的预算是每个瓦片集各一份，这里是所有瓦片集的总量，同时显示几个大模型时更紧。满了以后拒绝加载（`stats.refused`），放宽屏幕误差的自适应缓存是 3C.4。
 - **首批瓦片到位**：瓦片集显示后，某一帧更新完已经没有排队、下载、解析中的瓦片（`loadProgress` 为 1），算首批到位；不在视野里时第一帧就到，同 Cesium 的 `initialTilesLoaded`。
 
 ## 光照
