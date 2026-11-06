@@ -34,6 +34,7 @@
 ├─ dist/      每次发布整体替换，含 3dt/manifest.json
 └─ 3dt/       模型数据，增删模型时单独上传，发布前端时不动
    ├─ JKQ/
+   ├─ JKQ2/
    ├─ SZ_3DT/
    ├─ SZ_WhiteModel/
    └─ XZ_GC_3DT/

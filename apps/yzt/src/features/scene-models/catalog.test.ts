@@ -84,7 +84,8 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
       ['sz-station', '苏州市'],
       ['sz-white', '苏州市'],
       ['xz-gc', '徐州市'],
-      ['wx-jkq', '无锡市']
+      ['wx-jkq', '无锡市'],
+      ['wx-jkq2', '无锡市']
     ]);
     const urls = models.flatMap(({ effects }) => effects.map(({ url }) => url));
     expect(urls.every(url => url.startsWith('https://maps.test/yzt/3dt/'))).toBe(true);

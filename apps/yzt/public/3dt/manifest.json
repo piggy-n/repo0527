@@ -90,11 +90,19 @@
     },
     {
       "id": "wx-jkq",
-      "name": "无锡经开区",
+      "name": "经开区",
       "cityCode": "320200",
       "kind": "oblique",
       "underground": false,
       "tileset": "JKQ/tileset.json"
+    },
+    {
+      "id": "wx-jkq2",
+      "name": "经开区2",
+      "cityCode": "320200",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "JKQ2/tileset.json"
     }
   ]
 }
