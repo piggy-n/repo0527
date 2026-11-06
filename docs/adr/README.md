@@ -13,7 +13,7 @@
 | 编号 | 标题 | 状态 |
 |---|---|---|
 | [0001](0001-tsx-instead-of-sfc.md) | 组件使用 TSX，不使用 SFC | 已接受 |
-| [0002](0002-map-libraries.md) | 二维地图用 MapLibre，Cesium 精确锁版本 | 已接受（大版本由 0019 确定） |
+| [0002](0002-map-libraries.md) | 二维地图用 MapLibre，Cesium 精确锁版本 | 已接受（大版本由 0019 确定；三维另加 MapLibre + Three.js 引擎由 0147 修改） |
 | [0003](0003-typescript-7-toolchain.md) | TypeScript 7 与工具链 | 已接受（`incremental` 一条已被 0009 取代） |
 | [0004](0004-module-boundaries.md) | 模块边界与拆包预留 | 已接受（拆包由 0143 落地） |
 | [0005](0005-dependency-maintenance-and-ci.md) | 依赖维护与持续集成 | 已接受 |
@@ -31,11 +31,11 @@
 | [0017](0017-server-state-with-tanstack-query.md) | 接口数据用 TanStack Vue Query 管理 | 已接受 |
 | [0018](0018-map-core-in-libs.md) | map-core 放在 libs/map-core | 已接受（位置由 0143 改为 packages/map-core） |
 | [0019](0019-maplibre-v6.md) | 二维地图用 MapLibre GL JS 6 | 已接受 |
-| [0020](0020-map-session-state-as-source-of-truth.md) | 二三维关系：地图会话状态是唯一的真相源 | 已接受（选择状态的范围由 0022 修正，方案 B 的比较由 0024 修正） |
+| [0020](0020-map-session-state-as-source-of-truth.md) | 二三维关系：地图会话状态是唯一的真相源 | 已接受（选择状态的范围由 0022 修正，方案 B 的比较由 0024 修正；第 4 节的能力声明由 0147 补充到引擎） |
 | [0021](0021-worker-strategy.md) | Worker 策略：二维不自建渲染 Worker，统一通信层与瓦片数据服务 | 已接受（第 5 条的表述由 0024 修正，第 3、4 条由 0025 补充，第 2 条的图例统计由 0043 定为不做） |
 | [0022](0022-style-model-and-session-commits.md) | 样式模型与会话提交：分组推导、快照对比 | 已接受（第 4 条与第 5 条中 `failed` 的含义由 0026 修正；分组加上样式图片由 0045 补充；第 6 条的选择状态由 0047 补充） |
 | [0023](0023-disposal-events-and-map-runtime.md) | 资源释放、事件与地图运行时装配 | 已接受（运行时的加载时机与预加载由 0061 补充） |
-| [0024](0024-shared-view-interfaces.md) | 二三维共用的视图接口 | 已接受（渲染要素的只读查询由 0047 补充） |
+| [0024](0024-shared-view-interfaces.md) | 二三维共用的视图接口 | 已接受（渲染要素的只读查询由 0047 补充；视图的种类随维度变化由 0147 修改） |
 | [0025](0025-worker-contract-and-tile-data-service.md) | Worker 通信契约与瓦片数据服务的约束 | 已接受 |
 | [0026](0026-view-sync-failures.md) | 视图同步的失败处理：错误事件、加载失败与恢复 | 已接受（第 4 条的"不另加 API"由 0030 修正；第 1、2 条只适用于不带数据源的错误，由 0041 修正） |
 | [0027](0027-map-capability-layers.md) | 地图能力的分层与页面组装 | 已接受（通用交互的位置由 0145 改为 packages/map-tools） |
@@ -89,8 +89,8 @@
 | [0075](0075-file-transfer-and-preview.md) | 公共文件传输与文件管理预览 | 已接受 |
 | [0076](0076-muted-panel-header.md) | 按需复用浅灰底面板标题栏 | 已接受 |
 | [0077](0077-city-dashboard-isolated-rendering.md) | 城市体检驾驶舱独立渲染与资源所有权 | 已接受 |
-| [0078](0078-3d-scope-and-interaction.md) | 三维阶段的范围与交互 | 已接受 |
-| [0079](0079-cesium-view-and-dimension-switch.md) | Cesium 运行时、三维视图与二三维切换 | 已接受（修正 0002 的 Cesium 版本） |
+| [0078](0078-3d-scope-and-interaction.md) | 三维阶段的范围与交互 | 已接受（第 1 节三维里不显示资源图层只适用于 Cesium 引擎，由 0147 修改） |
+| [0079](0079-cesium-view-and-dimension-switch.md) | Cesium 运行时、三维视图与二三维切换 | 已接受（修正 0002 的 Cesium 版本；第 2、8 节由 0147 扩展到两种引擎） |
 | [0080](0080-3d-overlays-measure-and-status.md) | 三维的覆盖物、测量、临时拖动与状态栏 | 已接受（三维期间暂停 0048、0049 中三维的识别；第 1 节的只改坐标、等画好由 0082 修正；symbol 的文字由 0146 补上） |
 | [0081](0081-3d-models-scene-content-and-underground.md) | 三维模型：3DT 清单、会话的三维内容与钻地 | 已接受（第 6 节钻地时隐藏白膜由 0084 改为隐藏地面上的模型） |
 | [0082](0082-3d-overlay-live-limit-and-rebuild-wait.md) | 三维覆盖物：只换坐标的点数上限、重建时等新实体画好 | 已接受（修正 0080 第 1 节） |
@@ -157,6 +157,7 @@
 | [0144](0144-rename-app-and-scope.md) | 应用改名 yzt，公共包前缀改为 @mx | 已接受 |
 | [0145](0145-map-tools-package.md) | 地图的通用交互拆成 @mx/map-tools | 已接受 |
 | [0146](0146-basemap-panel-and-labels.md) | 底图面板默认只有切换按钮，标注改成页面操作，浮层可以点外部和 Esc 关闭，三维画文字 | 已接受（修改 0069 第 3 节、0134 第 1 节、0080 和 0133 里三维不画 symbol，补充 0140） |
+| [0147](0147-maplibre-three-3d-engine.md) | 三维加入 MapLibre + Three.js 引擎，和 Cesium 用 .env 选择 | 已接受（修改 0002、0020 第 4 节、0024、0078 第 1 节、0079 第 2、8 节） |
 
 ## 模板
 

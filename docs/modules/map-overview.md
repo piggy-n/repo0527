@@ -22,6 +22,8 @@ packages/utils         LatestController、safeReporter、Worker 通信层
 
 三维（`packages/map-cesium`，3D.1 起，见 [map-cesium.md](map-cesium.md)）放在 map-core 之上，只能由 map-vue 动态导入；只有它和 app 能导入 `cesium`。依赖方向由 lint 检查（ADR 0006、0079）。
 
+ADR 0147 决定加入第二种三维引擎：MapLibre + Three.js，新包 `@mx/map-three`，正在实施，二三维共用一块画布。用 `VITE_MAP_3D_ENGINE` 选择引擎，过门槛之前默认仍是 Cesium。
+
 ## 贯穿全局的几条原则
 
 | 原则 | 一句话 | 出处 |
@@ -40,7 +42,7 @@ packages/utils         LatestController、safeReporter、Worker 通信层
 | 主题 | 现在的结论 | ADR | 文档 |
 |---|---|---|---|
 | 位置与拆包 | map-core、map-cesium、map-vue、map-tools、utils 是内部包（`packages/*`），单入口；通用交互已拆成 map-tools，`shared/map` 留下的等第二个地图项目的需求清楚了再拆 | 0004、0143、0145 | [internal-packages](../config/internal-packages.md)、[map-tools](map-tools.md) |
-| 引擎与版本 | MapLibre GL JS 6，具名导入；Cesium 精确锁定；不用 mapbox-gl | 0002（大版本由 0019 确定）、0019 | [map-core.md](map-core.md) |
+| 引擎与版本 | MapLibre GL JS 6，具名导入；Cesium 精确锁定；不用 mapbox-gl；三维另加 MapLibre + Three.js 引擎（实施中），不用 `maplibre-gl-three` | 0002（大版本由 0019 确定）、0019、0147 | [map-core.md](map-core.md) |
 | 分层与组装 | 五层的职责；能力按拥有者写，页面挑选组合，不做带开关的全能地图组件 | 0027 | 本文、[shared-map.md](shared-map.md) |
 | 会话 | 样式、相机、当前工具、选择状态（只存要素身份）、三维内容（瓦片集、钻地，页面用 `bindScene` 绑定）；二三维共同的唯一真相源 | 0020（选择状态的范围由 0022 修正，方案比较由 0024 修正）、0047、0081 | [map-core.md](map-core.md) |
 | 样式模型与提交 | 分组推导、整体替换，跨分组的修改一次提交，视图按修订号增量同步；分组可以带样式图片，图片是快照的一部分 | 0022（`failed` 的含义由 0026 修正）、0045 | [map-core.md](map-core.md) |
@@ -69,7 +71,7 @@ packages/utils         LatestController、safeReporter、Worker 通信层
 | 资源的分类与显示级别 | 取值、名称、颜色写在字典，`style-registry.ts` 按 `code` 登记；图例和地图只用实际有的类别；最小显示级别按单张瓦片 6 MB 实测，放进可替换的部署文件；第一次请求很慢的资源定 8 级 | 0123、0124、0132、0136、0137 | [archive/migration.md](../archive/migration.md)"现状底图：资源分类的探查" |
 | 内网静态底图 | 用本地市界直接绘制面、线和地名，不用图片；地名在页面上开关（二三维都画），各市分色是代码开关，默认都关 | 0133、0134、0146 | [shared-map.md](shared-map.md) |
 | 加载与页面缓存 | 登录页空闲时预加载地图页并预热 Worker 池；字体不推迟；`KeepAlive` 加路由 meta，停用期间暂停视图；`.env` 的开关决定离开页面后是否重置 | 0061～0063、0114、0138 | [map-core.md](map-core.md)、[perf.md](perf.md)、[layout.md](layout.md) |
-| 三维的运行时与切换 | 范围与交互已定；Cesium 只在 `map-cesium` 和 app 导入，`CesiumView` 依赖窄接口；`setDimension` 切换，二维稳定后空闲时预加载三维运行时 | 0078、0079、0091 | [map-cesium.md](map-cesium.md) |
+| 三维的运行时与切换 | 范围与交互已定；Cesium 只在 `map-cesium` 和 app 导入，`CesiumView` 依赖窄接口；`setDimension` 切换，二维稳定后空闲时预加载三维运行时。两种引擎用 `VITE_MAP_3D_ENGINE` 选择，app 注入，页面不判断；MapLibre 引擎下一个视图同时担任二三维，过门槛后才改为默认 | 0078、0079、0091、0147 | [map-cesium.md](map-cesium.md) |
 | 三维覆盖物 | GeoJSON 按样式自动镜像，按整级求值、简化到半个像素；只换坐标时有点数上限，停下后改回静态，重建时等新实体画好；背景图层有细节上限 | 0080、0082、0099、0103、0135 | [map-cesium.md](map-cesium.md) |
 | 三维模型与漫游 | 静态清单描述 3D Tiles，会话的 `scene` 持有；路线和步行是 `roam`，合并成一个漫游入口，没有单独的钻地；导航网格是纯 TS，在 Worker 里构建；室内地图、第三人称（入口暂不开放） | 0081、0083～0087、0090、0097、0102、0103 | [map-cesium.md](map-cesium.md)、[map-core.md](map-core.md) |
 
