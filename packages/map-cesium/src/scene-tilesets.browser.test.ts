@@ -223,7 +223,7 @@ describe('SceneTilesets 的显存预算', () => {
     tileset.cacheBytes = CACHE_BYTES;
     tileset.maximumCacheOverflowBytes = OVERFLOW_BYTES;
     // 俯视，相机高 360 米：各块的屏幕误差约 19～39，在 16 时全部要细分（约 11 MB）。
-    // 不用斜视：Cesium 的相机斜着时大约每 10 个 tick 自己认为变了一次、重画一帧，会掩盖按需渲染下的问题
+    // 用正北朝上的正俯视：裸的 CesiumWidget 没有撤销相机的舍入漂移（holdCameraSteady），斜着时没动也会隔几个 tick 重画一帧，掩盖按需渲染下的问题
     const height = 360;
     camera.setView({
       destination: Cartesian3.fromDegrees(...MODEL_AT, height),

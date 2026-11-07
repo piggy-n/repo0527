@@ -371,6 +371,22 @@ function nextEvent(scene: CesiumScene, event: 'tilesetfailed' | 'tilesetinitial'
   });
 }
 
+// 下一次相机停下或画面稳定；和超时赛跑，结束后退订
+function nextSignal(scene: CesiumScene, event: 'cameraidle' | 'settle', timeout = 10000) {
+  let unsubscribe: (() => void) | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const fired = new Promise<'ok'>(resolve => {
+    unsubscribe = scene.on(event, () => resolve('ok'));
+  });
+  const expired = new Promise<'timeout'>(resolve => {
+    timer = setTimeout(() => resolve('timeout'), timeout);
+  });
+  return Promise.race([fired, expired]).finally(() => {
+    unsubscribe?.();
+    clearTimeout(timer);
+  });
+}
+
 describe('CesiumScene', () => {
   it('相机的写入和读回互逆：中心、缩放级、方位、俯角都还原，正俯视时方位不丢', () => {
     const scene = createScene();
@@ -450,6 +466,36 @@ describe('CesiumScene', () => {
     const expected = zoomToDistance(8, 32, 640, MAPLIBRE_FOVY);
     expect(Math.abs(scene.eyeHeight() - expected) / expected).toBeLessThan(0.001);
   });
+
+  it('相机停下后场景停下、报告相机停下：Cesium 读朝向的舍入误差不算相机在动（见 map-cesium.md"相机的舍入漂移"）', async () => {
+    const scene = createScene();
+    // 不撤销漂移时，这些姿态停下以后 up、right 还在漂：每秒重画几帧到十几帧、moveEnd 不触发（实测，姿态换一点就可能不漂）
+    const cameras: CameraState[] = [
+      { center: MODEL_AT, zoom: 15, bearing: 90, pitch: 0 },
+      { center: MODEL_AT, zoom: 13, bearing: 0, pitch: 45 },
+      { center: MODEL_AT, zoom: 15, bearing: 300, pitch: 30 },
+      { center: MODEL_AT, zoom: 17, bearing: 0, pitch: 30 },
+      { center: MODEL_AT, zoom: 17, bearing: 200, pitch: 30 }
+    ];
+    const draws = countDraws();
+    const stopAt = async (camera: CameraState) => {
+      const stopped = Promise.all([nextSignal(scene, 'cameraidle'), nextSignal(scene, 'settle')]);
+      scene.jumpTo(camera);
+      const [idle, settle] = await stopped;
+      // 停下时请求的那一帧画完以后不再重画
+      await waitForFrames(idleFor(draws, 2));
+      const drawnFrames = await failingFrames(90, idleFor(draws, 1));
+      return { idle: idle === 'ok' && settle === 'ok' ? 'ok' : 'timeout', drawnFrames };
+    };
+    const results: Awaited<ReturnType<typeof stopAt>>[] = [];
+
+    for (const camera of cameras) {
+      // oxlint-disable-next-line no-await-in-loop -- 同一个场景依次定位，上一个停下以后才能数下一个的重画
+      results.push(await stopAt(camera));
+    }
+
+    expect(results).toStrictEqual(cameras.map(() => ({ idle: 'ok', drawnFrames: 0 })));
+  }, 90000);
 
   it('画布的尺寸就是容器的 CSS 尺寸', () => {
     const scene = createScene(720, 480);
