@@ -7,6 +7,7 @@ import {
   Math as CesiumMath,
   Matrix4,
   PerspectiveFrustum,
+  type Scene,
   Transforms
 } from 'cesium';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -153,8 +154,8 @@ const box = (size: number, height = THICKNESS) => ({
   box: [0, 0, height / 2, size / 2, 0, 0, 0, size / 2, 0, 0, 0, height / 2]
 });
 
-// 和 JKQ2 一样：根节点没有内容，下面直接是各块的根；块按 REPLACE 细分成叶节点
-function blocksTileset(rootError: number): PreparedTileset {
+// 和 JKQ2 一样：根节点没有内容，下面直接是各块的根；块按 REPLACE 细分成叶节点。step 为 0 时各块一样高（俯视平地）
+function blocksTileset(rootError: number, step = STEP): PreparedTileset {
   const leafUrl = urlOf(groundGlb(LEAF, LEAF_TRIANGLES));
   const blockUrl = urlOf(groundGlb(BLOCK, 4));
   const blocks: PreparedTile[] = [];
@@ -168,7 +169,7 @@ function blocksTileset(rootError: number): PreparedTileset {
       }))
     );
     blocks.push({
-      transform: translation(((index % 4) - 1.5) * BLOCK, (Math.floor(index / 4) - 1.5) * BLOCK, index * STEP),
+      transform: translation(((index % 4) - 1.5) * BLOCK, (Math.floor(index / 4) - 1.5) * BLOCK, index * step),
       boundingVolume: box(BLOCK),
       geometricError: BLOCK_ERROR,
       content: { uri: blockUrl },
@@ -181,7 +182,7 @@ function blocksTileset(rootError: number): PreparedTileset {
     geometricError: rootError,
     root: {
       transform: Matrix4.toArray(transform),
-      boundingVolume: box(BLOCK * 4, TOP),
+      boundingVolume: box(BLOCK * 4, 15 * step + THICKNESS),
       geometricError: rootError,
       refine: 'REPLACE',
       children: blocks
@@ -196,6 +197,42 @@ function within<T>(promise: Promise<T>, timeout: number): Promise<T | 'timeout'>
     timer = setTimeout(() => resolve('timeout'), timeout);
   });
   return Promise.race([promise, expired]).finally(() => clearTimeout(timer));
+}
+
+// 场景里建好的那个瓦片集：预算由测试压低
+function findTileset(scene: Scene): Cesium3DTileset {
+  for (let index = 0; index < scene.primitives.length; index++) {
+    const primitive: unknown = scene.primitives.get(index);
+    if (primitive instanceof Cesium3DTileset) {
+      return primitive;
+    }
+  }
+  throw new Error('场景里没有瓦片集');
+}
+
+// 按 tick 等条件：postUpdate 每个 tick 都触发，渲染与否都是
+function ticker(scene: Scene) {
+  let ticks = 0;
+  const checks = new Set<() => void>();
+  const stop = scene.postUpdate.addEventListener(() => {
+    ticks++;
+    checks.forEach(check => check());
+  });
+  const until = (check: () => boolean) =>
+    new Promise<void>(resolve => {
+      const listener = () => {
+        if (check()) {
+          checks.delete(listener);
+          resolve();
+        }
+      };
+      checks.add(listener);
+    });
+  const after = (count: number) => {
+    const start = ticks;
+    return until(() => ticks - start >= count);
+  };
+  return { until, after, stop };
 }
 
 describe('SceneTilesets 的显存预算', () => {
@@ -300,5 +337,69 @@ describe('SceneTilesets 的显存预算', () => {
     expect(emptyFrames).toBe(0);
     expect(frames.at(-1)).toBeGreaterThan(0);
     expect(settled).not.toBe('timeout');
+  }, 90000);
+
+  it('俯视平地、各块一样远时放不下的一级被整级丢掉：定了地板后停在能放下的最细一级，不再反复加载和卸载', async () => {
+    const widget = createWidget();
+    const { scene, camera } = widget;
+    const failures: unknown[] = [];
+    const tilesets = new SceneTilesets(widget, { failed: (_id, error) => failures.push(error), initial: () => {} });
+    disposables.push(tilesets);
+    await tilesets.add('flat', blocksTileset(35, 0), { show: true, lighting: 'sun' }, new AbortController().signal);
+    const tileset = findTileset(scene);
+    tileset.cacheBytes = CACHE_BYTES;
+    tileset.maximumCacheOverflowBytes = OVERFLOW_BYTES;
+    // 俯视，相机高 360 米：16 个块离相机一样远，屏幕误差约 19，在 16 时全部要细分（约 11 MB），放不下；
+    // 没有地板时 Cesium 涨过 19 整级丢掉叶节点、显存归零、又降回 16 重新加载，如此循环
+    camera.setView({
+      destination: Cartesian3.fromDegrees(...MODEL_AT, 360),
+      orientation: { heading: 0, pitch: -CesiumMath.PI_OVER_TWO, roll: 0 }
+    });
+    const { until, after, stop } = ticker(scene);
+    disposables.push({ [Symbol.dispose]: stop });
+    let decreases = 0;
+    let lastError = memoryAdjustedError(tileset);
+    let ticksSinceChange = 0;
+    let visible = 0;
+    let lastFrameVisible = 0;
+    let frames = 0;
+    disposables.push({ [Symbol.dispose]: tileset.tileVisible.addEventListener(() => visible++) });
+    disposables.push({
+      [Symbol.dispose]: scene.postRender.addEventListener(() => {
+        frames++;
+        lastFrameVisible = visible;
+        visible = 0;
+      })
+    });
+    disposables.push({
+      [Symbol.dispose]: scene.postUpdate.addEventListener(() => {
+        const error = memoryAdjustedError(tileset);
+        if (error < lastError) {
+          decreases++;
+        }
+        ticksSinceChange = error === lastError ? ticksSinceChange + 1 : 0;
+        lastError = error;
+      })
+    });
+
+    expect(await within(until(() => memoryAdjustedError(tileset) > 16), 15000)).not.toBe('timeout');
+    expect(await within(until(() => ticksSinceChange >= 60), 30000)).not.toBe('timeout');
+    const [settled] = tilesets.inspect();
+    expect(settled?.screenSpaceErrorFloor).toBeGreaterThan(16);
+    expect(settled?.memoryAdjustedScreenSpaceError).toBe(settled?.screenSpaceErrorFloor);
+    // 再过 300 个 tick：没有新的加载和卸载，误差也不变
+    expect(await within(after(300), 30000)).not.toBe('timeout');
+    const [later] = tilesets.inspect();
+    expect(later?.loaded).toBe(settled?.loaded);
+    expect(later?.unloaded).toBe(settled?.unloaded);
+    expect(later?.memoryAdjustedScreenSpaceError).toBe(settled?.memoryAdjustedScreenSpaceError);
+    // 地板定下之前最多回落一次
+    expect(decreases).toBeLessThanOrEqual(1);
+    // 像用户动了一下相机那样再画一帧：画得出瓦片（块的根）
+    const rendered = frames;
+    scene.requestRender();
+    expect(await within(until(() => frames > rendered), 5000)).not.toBe('timeout');
+    expect(lastFrameVisible).toBeGreaterThan(0);
+    expect(failures).toEqual([]);
   }, 90000);
 });

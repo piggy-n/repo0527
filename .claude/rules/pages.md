@@ -17,7 +17,7 @@ paths:
 - 程序式跳转用 `shared/router/navigate`，返回 true 后才执行成功提示等后续动作；导航异常由 app 统一提示与恢复，调用方不重复提示（ADR 0064）
 - 页面权限写在路由 meta 上：不登录也能访问的页面加 `public: true`，限定角色写 `roles`；不另外维护路径清单。`routes.test.ts` 列出了全部公开页面和限定角色的页面，修改时同步更新（ADR 0015）
 - 顶部导航配置在 `app/layout/menus.ts`，导航项的权限从路由 meta 读取，不在菜单里另写角色；新增业务页时先加路由再加导航项
-- `pages/dev/<名称>/`：开发页面（主题预览 `/dev/theme`、地图开发页 `/dev/map`、资源图层实测 `/dev/resources`、三维的交互原型 `/dev/map-3d`、导航网格实测与步行地图预览 `/dev/nav-grid`），和业务页面分开放。组件名 `Dev<名称>Page`，路由名 `dev<名称>`（值为 `dev-<名称>`），路径 `/dev/<名称>`；只注册在 `app/router/routes.ts` 的 `devRoutes` 里，生产构建不包含；业务代码不导入开发页面。`routes.test.ts` 检查路径与路由名是否对应
+- `pages/dev/<名称>/`：开发页面（主题预览 `/dev/theme`、地图开发页 `/dev/map`、资源图层实测 `/dev/resources`、三维的交互原型 `/dev/map-3d`、导航网格实测与步行地图预览 `/dev/nav-grid`、瓦片集加载诊断 `/dev/tileset-probe`），和业务页面分开放。组件名 `Dev<名称>Page`，路由名 `dev<名称>`（值为 `dev-<名称>`），路径 `/dev/<名称>`；只注册在 `app/router/routes.ts` 的 `devRoutes` 里，生产构建不包含；业务代码不导入开发页面。`routes.test.ts` 检查路径与路由名是否对应
 
 ## 页面缓存与加载
 

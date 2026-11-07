@@ -17,7 +17,7 @@
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `build.rolldownOptions.output.chunkFileNames` | 函数 | 包入口所在的分块按包名命名，见下文"分块的名字" |
 | `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
-| `server.proxy` | `/backend/` → `PROXY_TARGET`；`/ai-backend/` → `AI_PROXY_TARGET` | 同源代理，见下文 |
+| `server.proxy` | `/backend/` → `PROXY_TARGET`；`/ai-backend/` → `AI_PROXY_TARGET`；设了 `YZT_3DT_PROXY` 时 `/3dt/` → 它 | 同源代理，见下文 |
 | `test` | 见下文 | Vitest 的配置（ADR 0010） |
 
 ### 生成类插件（generators）
@@ -65,10 +65,14 @@ const staticFiles = viteStaticCopy({
 ### 未入库的本地文件
 
 ```ts
-const localFiles = localFilesPlugin({ '/3dt': localPath('3dt'), '/design.local': localPath('design') });
+const modelProxy = env.YZT_3DT_PROXY;
+const localFiles = localFilesPlugin({
+  ...(modelProxy ? {} : { '/3dt': localPath('3dt') }),
+  '/design.local': localPath('design')
+});
 ```
 
-模型和原型放在仓库根目录的 `local/`，不放进 `public/`，构建就不会复制；开发服务器把这两个地址映射过去，地址和线上一致。目录划分、`YZT_LOCAL_DIR` 和具体行为见 [local-files.md](local-files.md)。
+模型和原型放在仓库根目录的 `local/`，不放进 `public/`，构建就不会复制；开发服务器把这两个地址映射过去，地址和线上一致。目录划分、`YZT_LOCAL_DIR` 和具体行为见 [local-files.md](local-files.md)。设了 `YZT_3DT_PROXY` 时 `/3dt/` 不映射到本地目录，改由 `server.proxy` 整个代理到那台服务器（清单也从它取），本机没有的模型就能在诊断页上加载。
 
 ### 构建产物检查
 

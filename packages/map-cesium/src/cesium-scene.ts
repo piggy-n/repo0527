@@ -66,6 +66,7 @@ import {
 } from './scene-like';
 import type { OverlayLayer, OverlayShape, RgbaColor } from './overlay-plan';
 import { movableInPlace, sameCoordinates } from './overlay-update';
+import type { SceneInspection } from './scene-inspection';
 import { SceneRoute } from './scene-route';
 import { holdCameraSteady } from './scene-steady-camera';
 import { SceneWalk } from './scene-walk';
@@ -182,6 +183,12 @@ export class CesiumScene implements SceneLike {
   // 相机在动时不算画面稳定；相机、影像变了以后重新等一次
   #moving = false;
   #settled = false;
+  // 诊断用的累计次数（inspect）
+  #ticks = 0;
+  #frames = 0;
+  #renderErrors = 0;
+  #cameraChanges = 0;
+  #cameraIdles = 0;
 
   /** preserveDrawingBuffer 只给浏览器测试读画布的像素用 */
   constructor(container: HTMLElement, { preserveDrawingBuffer = false }: { preserveDrawingBuffer?: boolean } = {}) {
@@ -252,13 +259,24 @@ export class CesiumScene implements SceneLike {
     stack.defer(camera.moveEnd.addEventListener(() => this.#onCameraIdle()));
     stack.defer(
       scene.postRender.addEventListener(() => {
+        this.#frames++;
         this.#removeRetired();
         this.#checkSettled();
         // 放在移除之后：这一帧的 canAnimate 还没算上改回静态时新加的实体
         this.#settleLive();
       })
     );
-    stack.defer(scene.renderError.addEventListener((_scene, error: unknown) => this.#emitter.emit('failure', error)));
+    stack.defer(
+      scene.postUpdate.addEventListener(() => {
+        this.#ticks++;
+      })
+    );
+    stack.defer(
+      scene.renderError.addEventListener((_scene, error: unknown) => {
+        this.#renderErrors++;
+        this.#emitter.emit('failure', error);
+      })
+    );
     if (canvas.tabIndex < 0) {
       canvas.tabIndex = 0;
     }
@@ -705,15 +723,34 @@ export class CesiumScene implements SceneLike {
   }
 
   #onCameraChange(): void {
+    this.#cameraChanges++;
     this.#moving = true;
     this.#settled = false;
     this.#emitter.emit('camerachange');
   }
 
   #onCameraIdle(): void {
+    this.#cameraIdles++;
     this.#moving = false;
     this.#emitter.emit('cameraidle');
     this.#widget.scene.requestRender();
+  }
+
+  /** 诊断读数（开发页用）：渲染循环、相机和每个瓦片集的显存、屏幕误差、加载情况 */
+  inspect(): SceneInspection {
+    const { scene, canvas } = this.#widget;
+    return {
+      ticks: this.#ticks,
+      frames: this.#frames,
+      renderErrors: this.#renderErrors,
+      cameraChanges: this.#cameraChanges,
+      cameraIdles: this.#cameraIdles,
+      drawingBufferWidth: scene.drawingBufferWidth,
+      drawingBufferHeight: scene.drawingBufferHeight,
+      devicePixelRatio: window.devicePixelRatio,
+      renderer: rendererOf(canvas),
+      tilesets: this.#tilesets.inspect()
+    };
   }
 
   // 新加的实体都画好了才移除被替换的：在那之前新旧都在，半透明的线短暂地叠深一些（ADR 0082 第 2 节）。
@@ -905,5 +942,17 @@ export class CesiumScene implements SceneLike {
   }
 }
 
-/** 创建真实的三维场景 */
-export const createCesiumScene: CreateScene = container => new CesiumScene(container);
+// 浏览器报告的显卡：同一块画布再取一次上下文拿到的是 Cesium 建好的那个；扩展不可用、上下文丢失时为空
+function rendererOf(canvas: HTMLCanvasElement): string {
+  const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+  const info = gl?.getExtension('WEBGL_debug_renderer_info');
+  if (!gl || !info) {
+    return '';
+  }
+  const renderer: unknown = gl.getParameter(info.UNMASKED_RENDERER_WEBGL);
+  return typeof renderer === 'string' ? renderer : '';
+}
+
+/** 创建真实的三维场景；返回具体的类型，开发页才拿得到诊断读数 */
+export const createCesiumScene = ((container: HTMLElement): CesiumScene =>
+  new CesiumScene(container)) satisfies CreateScene;

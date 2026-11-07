@@ -679,9 +679,35 @@ describe('CesiumScene', () => {
     await expect(initial).resolves.toBe('box');
     await expect(waitForFrames(() => near(colorAt(scene, MODEL_AT), [255, 0, 0]))).resolves.toBe('ok');
 
+    // 诊断读数：画出来的瓦片集有显存占用和加载次数，预算和屏幕误差是设定值，渲染循环的计数在走
+    const inspection = scene.inspect();
+    expect(inspection.frames).toBeGreaterThan(0);
+    expect(inspection.ticks).toBeGreaterThanOrEqual(inspection.frames);
+    expect(inspection.renderErrors).toBe(0);
+    expect(inspection.drawingBufferWidth).toBeGreaterThan(0);
+    expect(typeof inspection.renderer).toBe('string');
+    const [box] = inspection.tilesets;
+    expect(inspection.tilesets).toHaveLength(1);
+    expect(box).toMatchObject({
+      id: 'box',
+      show: true,
+      cacheBytes: 1024 * 1024 * 1024,
+      maximumCacheOverflowBytes: 512 * 1024 * 1024,
+      maximumScreenSpaceError: 16,
+      memoryAdjustedScreenSpaceError: 16,
+      unloaded: 0,
+      failed: 0
+    });
+    expect(box?.totalMemoryUsageInBytes).toBeGreaterThan(0);
+    expect(box?.loaded).toBeGreaterThanOrEqual(1);
+    expect(box?.statistics.numberOfTilesWithContentReady).toBeGreaterThanOrEqual(1);
+    expect(box?.statistics.numberOfTilesTotal).toBe(1);
+
     scene.updateTileset('box', { show: false, lighting: 'sun' });
     await expect(waitForFrames(() => !near(colorAt(scene, MODEL_AT), [255, 0, 0]))).resolves.toBe('ok');
+    expect(scene.inspect().tilesets[0]?.show).toBe(false);
     scene.removeTileset('box');
+    expect(scene.inspect().tilesets).toEqual([]);
   }, 30000);
 
   it('瓦片下载失败时报告；加进来之前中止的以中止的原因结束', async () => {
@@ -695,6 +721,7 @@ describe('CesiumScene', () => {
       new AbortController().signal
     );
     await expect(failed).resolves.toBe('missing');
+    expect(scene.inspect().tilesets.find(({ id }) => id === 'missing')?.failed).toBeGreaterThanOrEqual(1);
 
     const controller = new AbortController();
     const adding = scene.addTileset('late', boxTileset(), { show: true, lighting: 'headlight' }, controller.signal);
