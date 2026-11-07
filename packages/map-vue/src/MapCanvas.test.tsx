@@ -21,8 +21,10 @@ import { defineComponent, inject, KeepAlive, nextTick, provide, ref, type Shallo
 import { INTERNAL_MAP_CONTEXT, type MapContext } from './context';
 import { MapCanvas } from './MapCanvas';
 import { type MapHandle, provideMap } from './provide-map';
-import { MAP_SCENE_ENGINE, type SceneEngine } from './runtime';
+import { CESIUM_ENGINE, MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE, type SceneEngine } from './runtime';
 import { useMap, useMapOverlay } from './use-map';
+
+type Projection = Parameters<MapLike['setProjection']>[0];
 
 const CAMERA: CameraState = { center: [119.4, 32.9], zoom: 7, bearing: 0, pitch: 0 };
 const JIANGSU: readonly [number, number, number, number] = [116.3, 30.7, 121.9, 35.2];
@@ -171,6 +173,27 @@ class FakeMap implements MapLike {
     return [];
   }
   triggerRepaint(): void {}
+  projection: Projection | undefined;
+  getProjection(): Projection | undefined {
+    return this.projection;
+  }
+  setProjection(projection: Projection): void {
+    this.projection = projection;
+  }
+  maxPitch = 60;
+  getMaxPitch(): number {
+    return this.maxPitch;
+  }
+  setMaxPitch(maxPitch: number): void {
+    this.maxPitch = maxPitch;
+  }
+  readonly _camera = {
+    transform: {
+      getCameraAltitude: () => 1000,
+      isPointOnMapSurface: () => true,
+      isLocationOccluded: () => false
+    }
+  };
   remove(): void {
     this.onRemove?.();
     this.removed = true;
@@ -271,6 +294,39 @@ function setupCached(createMap: (options: MapLibreMapOptions) => FakeMap) {
   return { shown, handle };
 }
 
+// 加载三维模块的次数由用例控制：fail 为真时下载失败
+function maplibrePage(options: { fail?: boolean; preload?: (load: () => Promise<unknown>) => void } = {}) {
+  const maps: FakeMap[] = [];
+  const loads = { count: 0, fail: options.fail ?? false };
+  const engine: SceneEngine = {
+    kind: 'maplibre',
+    capabilities: MAPLIBRE_ENGINE.capabilities,
+    loadRenderer: () => {
+      loads.count++;
+      return loads.fail ? Promise.reject(new Error('三维模块下载失败')) : new Promise(() => undefined);
+    }
+  };
+  let map: MapHandle<'basemap'> | undefined;
+  const Page = defineComponent(() => {
+    map = provideMap({ groups: ['basemap'], camera: CAMERA, onError: () => undefined });
+    return () => <MapCanvas createMap={createFakeMap(maps)} />;
+  });
+  // 引擎和预加载像 app 一样由页面外面的一层提供：provideMap 从上层取三维引擎的能力
+  const wrapper = mount(
+    defineComponent(() => {
+      provide(MAP_SCENE_ENGINE, engine);
+      if (options.preload) {
+        provide(MAP_RUNTIME_PRELOAD, options.preload);
+      }
+      return () => <Page />;
+    })
+  );
+  const handle = map;
+  if (!handle) {
+    throw new Error('没有创建地图句柄');
+  }
+  return { maps, loads, engine, map: handle, wrapper };
+}
 
 describe('MapCanvas', () => {
   it('挂载后用会话的完整快照创建视图；外层接收页面的 class，MapLibre 加在内层容器上的 class 不会被冲掉', async () => {
@@ -827,26 +883,92 @@ describe('MapCanvas', () => {
     });
   });
 
-  it('三维引擎是 maplibre 时同一个视图担任三维：切到三维不重建、不隐藏，加载三维渲染器的函数交给视图（ADR 0147 第 2 节）', async () => {
+  describe('三维引擎是 maplibre（ADR 0147 第 2 节）', () => {
+    it('同一个视图担任三维：切到三维不重建、不隐藏，第一次切到三维时加载三维模块', async () => {
+      const { maps, loads, map, wrapper } = maplibrePage();
+      maps[0]?.fire('style.load');
+      await nextTick();
+      expect(loads.count).toBe(0);
+
+      map.setDimension('3d');
+      await nextTick();
+
+      expect(maps).toHaveLength(1);
+      expect(loads.count).toBe(1);
+      expect(map.viewState.value).toBe('initializing');
+      expect(wrapper.get('[data-map-view-state]').attributes('style')).toBeUndefined();
+      expect(map.sceneCapabilities).toStrictEqual({ styleLayers: true, identify: true });
+    });
+
+    it('三维模块加载失败只让三维失败：切回二维可用，三维里重试只重新加载模块、不重建地图', async () => {
+      const { maps, loads, map } = maplibrePage({ fail: true });
+      maps[0]?.fire('style.load');
+      map.setDimension('3d');
+      await settled(Promise.resolve());
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(map.viewState.value).toBe('failed');
+      expect(map.failure.value?.kind).toBe('module');
+
+      map.setDimension('2d');
+      expect(map.viewState.value).toBe('ready');
+      expect(map.failure.value).toBeNull();
+
+      map.setDimension('3d');
+      loads.fail = false;
+      map.retry();
+      await nextTick();
+
+      expect(loads.count).toBe(2);
+      expect(map.viewState.value).toBe('initializing');
+      expect(maps).toHaveLength(1);
+      expect(maps[0]?.removed).toBe(false);
+    });
+
+    it('二维第一次画面稳定以后，把加载三维模块的函数交给预加载', async () => {
+      const preload = vi.fn<(load: () => Promise<unknown>) => void>();
+      const { maps, engine } = maplibrePage({ preload });
+      maps[0]?.fire('style.load');
+      await nextTick();
+      expect(preload).not.toHaveBeenCalled();
+
+      maps[0]?.fire('idle');
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(preload).toHaveBeenCalledOnce();
+      expect(preload).toHaveBeenCalledWith(engine.kind === 'maplibre' ? engine.loadRenderer : undefined);
+    });
+
+    it('等二维稳定期间切到三维不预加载：三维模块已经在加载', async () => {
+      const preload = vi.fn<(load: () => Promise<unknown>) => void>();
+      const { maps, map } = maplibrePage({ preload });
+      maps[0]?.fire('style.load');
+      await nextTick();
+
+      map.setDimension('3d');
+      maps[0]?.fire('idle');
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(preload).not.toHaveBeenCalled();
+    });
+  });
+
+  it('三维引擎是 cesium 时二维画布不预加载（由三维画布预加载 Cesium 的运行时）', async () => {
     const maps: FakeMap[] = [];
-    const engine: SceneEngine = { kind: 'maplibre', loadRenderer: () => Promise.reject(new Error('还没有瓦片集')) };
-    let map: MapHandle<'basemap'> | undefined;
-    const wrapper = mount(
+    const preload = vi.fn<(load: () => Promise<unknown>) => void>();
+    mount(
       defineComponent(() => {
-        provide(MAP_SCENE_ENGINE, engine);
-        map = provideMap({ groups: ['basemap'], camera: CAMERA, onError: () => undefined });
+        provide(MAP_SCENE_ENGINE, CESIUM_ENGINE);
+        provide(MAP_RUNTIME_PRELOAD, preload);
+        provideMap({ groups: ['basemap'], camera: CAMERA, onError: () => undefined });
         return () => <MapCanvas createMap={createFakeMap(maps)} />;
       })
     );
     maps[0]?.fire('style.load');
     await nextTick();
+    maps[0]?.fire('idle');
+    await new Promise(resolve => setTimeout(resolve, 0));
 
-    map?.setDimension('3d');
-    await nextTick();
-
-    expect(maps).toHaveLength(1);
-    expect(map?.viewState.value).toBe('ready');
-    expect(map?.view.value?.kind).toBe('3d');
-    expect(wrapper.get('[data-map-view-state]').attributes('style')).toBeUndefined();
+    expect(preload).not.toHaveBeenCalled();
   });
 });

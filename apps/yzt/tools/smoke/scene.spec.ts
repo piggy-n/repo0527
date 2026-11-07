@@ -1,6 +1,15 @@
+import { fileURLToPath } from 'node:url';
 import type { Page } from 'playwright/test';
+import { loadEnv } from 'vite';
 import { expect, test } from './fixtures.ts';
 import { roomB3dm, roomManifest, roomTileset } from './scene-model.ts';
+
+// Cesium 引擎的三维；MapLibre 引擎的产物由 scene-maplibre.spec.ts 测（ADR 0147）
+const appRoot = fileURLToPath(new URL('../..', import.meta.url));
+test.skip(
+  loadEnv('intranet', appRoot, 'VITE_').VITE_MAP_3D_ENGINE === 'maplibre',
+  '只在 VITE_MAP_3D_ENGINE=cesium 构建的产物上运行'
+);
 
 /** 通过真实登录表单提交，只替换接口响应 */
 async function login(page: Page): Promise<void> {

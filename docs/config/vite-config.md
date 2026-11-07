@@ -75,7 +75,7 @@ const localFiles = localFilesPlugin({ '/3dt': localPath('3dt'), '/design.local':
 `tools/build-output/vite-plugin.ts` 的 `buildOutputPlugin` 只在 `build` 生效，每次公网、内网构建都会执行，不需要另跑命令：
 
 - 检查全部分块的模块清单，禁止包含 `src/pages/dev/`；再检查磁盘文件，禁止残留 `Dev*Page` 文件、`design.local` 和 `3dt/` 下清单以外的内容。只检查、不清理：原型和模型数据不放在 `public/`（[local-files.md](local-files.md)），放错了构建失败，错误信息写明该放到哪里
-- 从入口分块沿静态 `imports` 检查依赖，禁止包含 MapLibre（`maplibre-gl`）、Cesium（`cesium`、`@cesium/*`）和 Three.js（`three`、`3d-tiles-renderer`，驾驶舱和 `@mx/map-three` 都只能在动态分块里，ADR 0147 第 7 节）；两种三维引擎都要成立，CI 另用 `VITE_MAP_3D_ENGINE=maplibre` 构建一次；不遍历动态导入，地图运行时仍可按需加载、预加载。map-vue 的上下文会连带 maplibre-gl，所以给地图页注入三维运行时的那一层也放在地图页的分块里（ADR 0079 第 2 节）
+- 从入口分块沿静态 `imports` 检查依赖，禁止包含 MapLibre（`maplibre-gl`）、Cesium（`cesium`、`@cesium/*`）和 Three.js（`three`、`3d-tiles-renderer`，驾驶舱和 `@mx/map-three` 都只能在动态分块里，ADR 0147 第 7 节）；两种三维引擎都要成立，CI 另用 `VITE_MAP_3D_ENGINE=maplibre` 内网构建一次（再跑这种引擎的三维冒烟）；不遍历动态导入，地图运行时仍可按需加载、预加载。map-vue 的上下文会连带 maplibre-gl，所以给地图页注入三维运行时的那一层也放在地图页的分块里（ADR 0079 第 2 节）
 - 关闭天地图时，有效的 `VITE_TIANDITU_KEY` 必须为空；扫描文本产物，禁止残留按 `production` 模式读取的公网 key，错误只报告文件名。未调用的天地图地址模板允许保留，不以域名字符串代替运行时开关
 
 检查失败会让构建失败。本机部署构建和 CI 使用同一套检查；CI 同时执行公网和内网构建。

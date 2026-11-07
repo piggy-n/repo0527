@@ -217,7 +217,7 @@ function identifySignature(state: ResourceLayersState): string {
 export function useFeaturePick(
   map: Pick<
     MapContext,
-    'useCamera' | 'select' | 'beginCameraOperation' | 'runCameraOperation' | 'view' | 'pointer'
+    'useCamera' | 'select' | 'beginCameraOperation' | 'runCameraOperation' | 'view' | 'pointer' | 'sceneCapabilities'
   >,
   resources: Pick<ResourceLayers, 'state' | 'configErrors'>,
   options: FeaturePickOptions = {}
@@ -623,8 +623,9 @@ export function useFeaturePick(
   );
 
   const handleInput = (event: MapInputEvent, view: ToolView): boolean => {
-    // 三维期间不识别：资源图层不在三维显示，单击和框选什么也不做（ADR 0080 第 5 节）；Esc 照样清除二维的结果
-    if (view.kind === '3d' && event.type !== 'key' && event.type !== 'leave') {
+    // 三维引擎不能识别时三维期间不识别：资源图层不在三维显示，单击和框选什么也不做（ADR 0080 第 5 节）；Esc 照样清除二维的结果。
+    // 能识别时（MapLibre 引擎，ADR 0147）照常识别，三维的识别规则见 identifyStep
+    if (view.kind === '3d' && !map.sceneCapabilities.identify && event.type !== 'key' && event.type !== 'leave') {
       return false;
     }
     switch (event.type) {
@@ -725,7 +726,8 @@ export function useFeaturePick(
       if (!hintOpen.value || point === null || view === null || gesture.value.kind === 'drawing') {
         return null;
       }
-      return { point, lines: view.kind === '3d' ? sceneHintLines : hintLines };
+      const unsupported = view.kind === '3d' && !map.sceneCapabilities.identify;
+      return { point, lines: unsupported ? sceneHintLines : hintLines };
     }),
     detail,
     tools: { [FEATURE_PICK_TOOL]: pickTool },

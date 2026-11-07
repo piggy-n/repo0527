@@ -23,6 +23,17 @@ describe('describeMapStatus', () => {
     expect(status).toMatchObject({ kind: 'engine-failed', title: '地图无法显示', technical: 'setStyle failed' });
   });
 
+  it('三维模块加载失败：只说三维显示不了、二维照常可用，可以重试', () => {
+    const status = describeMapStatus('failed', { kind: 'module', error: new Error('Failed to fetch dynamically imported module') });
+
+    expect(status).toEqual({
+      kind: 'engine-failed',
+      title: '三维无法显示',
+      detail: '三维模块加载失败，可以重试；切回二维照常可用。',
+      technical: 'Failed to fetch dynamically imported module'
+    });
+  });
+
   it('样式失败：说明会自动恢复，不提供重试，技术细节单独给出', () => {
     const status = describeMapStatus('failed', {
       kind: 'style',

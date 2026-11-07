@@ -10,7 +10,7 @@
 每次推送到 `main`，或者有 Pull Request 时，GitHub 会在一台干净的 Linux 机器上从零执行：
 
 ```
-检出代码 → 安装 pnpm → 安装 Node → pnpm install --frozen-lockfile → 类型检查 → lint → 安装 Chromium → 测试 → 公网构建及产物检查 → 内网构建及产物检查 → 生产冒烟
+检出代码 → 安装 pnpm → 安装 Node → pnpm install --frozen-lockfile → 类型检查 → lint → 安装 Chromium → 测试 → 另一种三维引擎的内网构建及其三维冒烟 → 公网构建及产物检查 → 内网构建及产物检查 → 生产冒烟
 ```
 
 任何一步失败，这次运行就标红。它回答的问题是："在一台没有任何本地缓存和个人配置的机器上，这份代码还能不能通过所有检查？"
@@ -101,6 +101,14 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 - run: pnpm lint
 - run: pnpm --filter yzt exec playwright install --with-deps --only-shell chromium
 - run: pnpm test
+- run: pnpm build:intranet
+  env:
+    VITE_MAP_3D_ENGINE: maplibre
+- run: pnpm --filter yzt test:smoke scene-maplibre
+  timeout-minutes: 5
+  env:
+    VITE_MAP_3D_ENGINE: maplibre
+    DEBUG: pw:webserver
 - run: pnpm build
 - run: pnpm build:intranet
 - run: pnpm --filter yzt test:smoke
@@ -116,9 +124,11 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 | `pnpm lint` | oxlint，包括类型感知规则和依赖方向检查 |
 | `playwright install --with-deps --only-shell chromium` | 安装浏览器测试用的 Chromium 无界面版和它在 Linux 上需要的系统库（ADR 0040）。不缓存：Playwright 不建议缓存浏览器，系统库也缓存不了 |
 | `pnpm test` | 逐个包执行 `vitest run`（ADR 0010、0143），依赖在前、web 最后，不同包的浏览器测试不会同时运行；有浏览器测试的包分 `unit`、`browser` 两个项目（ADR 0040）。GitHub Actions 会设置 `CI` 环境变量，Vitest 检测到后会拒绝带 `.only` 的测试，避免其他用例被悄悄跳过（已验证） |
+| `pnpm build:intranet`（`VITE_MAP_3D_ENGINE=maplibre`） | 默认以外的三维引擎也构建一次，入口的静态依赖检查对两种取值都要成立（ADR 0147 第 7 节）；用内网构建，后面的冒烟才能跑在它上面。之后的构建覆盖这次的产物 |
+| `pnpm --filter yzt test:smoke scene-maplibre` | 只跑 MapLibre 引擎的三维冒烟（`scene-maplibre.spec.ts`，见 [map-three.md](../modules/map-three.md)"测试"）；用例用 `loadEnv` 读同一个变量判断产物用的引擎，所以这一步也要设它。软件渲染下约 15 秒，时限 5 分钟 |
 | `pnpm build` | 公网生产构建，自动清理本地设计稿副本，检查没有开发页、入口没有静态引入 MapLibre |
 | `pnpm build:intranet` | 内网生产构建，执行同样的产物检查，并检查关闭天地图时没有携带 key；输出覆盖上一份公网产物 |
-| `pnpm --filter yzt test:smoke` | Playwright 访问刚生成的内网生产产物，以本地固定接口验证登录、地图就绪、缓存恢复与分块失败恢复（ADR 0065），以及三维的预加载、切换、模型加载和步行进站（生成的测试模型）；不访问真实后端和天地图，预览进程由测试自动关闭 |
+| `pnpm --filter yzt test:smoke` | Playwright 访问刚生成的内网生产产物，以本地固定接口验证登录、地图就绪、缓存恢复与分块失败恢复（ADR 0065），以及三维的预加载、切换、模型加载和步行进站（生成的测试模型，Cesium 引擎；`scene-maplibre.spec.ts` 在这份产物上跳过）；不访问真实后端和天地图，预览进程由测试自动关闭 |
 
 ### 冒烟收尾卡住的排查
 

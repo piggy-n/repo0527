@@ -21,9 +21,10 @@ import {
   type ViewState
 } from '@mx/map-core';
 import { describe, expect, it, vi } from 'vitest';
-import { createApp, ref } from 'vue';
+import { createApp, effectScope, ref, watch } from 'vue';
 import { type CameraControl, type FrameScheduler, INTERNAL_MAP_CONTEXT, MapContextState } from './context';
 import { type Box, resolveOverlayOptions } from './overlay';
+import { MAPLIBRE_ENGINE } from './runtime';
 import { useMapOverlay } from './use-map';
 
 // 卸下之后仍会发事件的视图：MapLibreView 释放时会清空监听，接口本身并不保证这一点
@@ -1118,6 +1119,17 @@ class DualFakeView extends SceneFakeView {
     this.setSceneStatus(kind === '3d' ? this.#status : NO_SCENE_STATUS);
   }
 
+  retryCalls = 0;
+  retry(): void {
+    this.retryCalls++;
+  }
+
+  /** 模拟失败：原因和状态一起变 */
+  fail(failure: MapViewFailure): void {
+    this.failure = failure;
+    this.emit('failed');
+  }
+
   loadScene(status: SceneStatus): void {
     this.#status = status;
     if (this.kind === '3d') {
@@ -1188,6 +1200,81 @@ describe('MapContextState 的同一个视图担任二三维（ADR 0147 第 2 节
     expect(env.state.context.viewState.value).toBe('idle');
     expect(view.sceneListeners).toBe(0);
   });
+
+  it('同步侦听维度时调用 whenReady：视图已经换好种类，等的是新种类这一轮，不因为换租约中止', async () => {
+    using env = setup();
+    const view = new DualFakeView();
+    env.state.attachView(view, CANVAS);
+    view.emit('ready');
+    const seen: ViewKind[] = [];
+    let waited: Promise<unknown> | undefined;
+    const scope = effectScope();
+    scope.run(() =>
+      watch(
+        env.state.context.dimension,
+        () => {
+          seen.push(view.kind);
+          waited = env.state.context.whenReady().then(
+            () => 'ready',
+            (error: unknown) => error
+          );
+        },
+        { flush: 'sync' }
+      )
+    );
+
+    env.state.context.setDimension('3d');
+    const result = await waited;
+    scope.stop();
+
+    expect(seen).toStrictEqual(['3d']);
+    expect(result).toBe('ready');
+  });
+
+  it('当前种类的模块加载失败时，retry 让视图自己重新加载，不请画布重建', () => {
+    using env = setup();
+    const view = new DualFakeView();
+    env.state.attachView(view, CANVAS);
+    env.state.context.setDimension('3d');
+    view.fail({ kind: 'module', error: new Error('三维模块下载失败') });
+    const requests = env.state.retryRequests.value;
+
+    env.state.context.retry();
+
+    expect(view.retryCalls).toBe(1);
+    expect(env.state.retryRequests.value).toBe(requests);
+  });
+
+  it('引擎失败时 retry 仍请画布重建，不调用视图的 retry', () => {
+    using env = setup();
+    const view = new DualFakeView();
+    env.state.attachView(view, CANVAS);
+    view.fail({ kind: 'engine', cause: 'unknown', error: new Error('WebGL 上下文创建失败') });
+    const requests = env.state.retryRequests.value;
+
+    env.state.context.retry();
+
+    expect(view.retryCalls).toBe(0);
+    expect(env.state.retryRequests.value).toBe(requests + 1);
+  });
+});
+
+describe('MapContextState 的三维能力（ADR 0147 第 3 节）', () => {
+  it('没有给出时按 Cesium：三维不显示样式图层、不识别；给出时原样提供', () => {
+    const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
+    using session = new MapSession({ groups: ['basemap'], camera });
+    using cesium = new MapContextState(session, () => undefined, resolveOverlayOptions());
+    using maplibre = new MapContextState(
+      session,
+      () => undefined,
+      resolveOverlayOptions(),
+      undefined,
+      MAPLIBRE_ENGINE.capabilities
+    );
+
+    expect(cesium.context.sceneCapabilities).toStrictEqual({ styleLayers: false, identify: false });
+    expect(maplibre.context.sceneCapabilities).toStrictEqual({ styleLayers: true, identify: true });
+  });
 });
 
 describe('MapContextState 的二三维切换（ADR 0079 第 8 节）', () => {
@@ -1208,6 +1295,40 @@ describe('MapContextState 的二三维切换（ADR 0079 第 8 节）', () => {
     env.state.attachView(globe, CANVAS);
     expect(env.state.context.viewState.value).toBe('ready');
     expect(env.state.context.view.value?.kind).toBe('3d');
+  });
+
+  it('再次切到三维时同步侦听维度的 whenReady 等的是三维视图，不因为换租约中止', async () => {
+    using env = setup();
+    const flat = new FakeView('2d');
+    const globe = new FakeView('3d');
+    env.state.attachView(flat, CANVAS);
+    env.state.attachView(globe, CANVAS);
+    flat.emit('ready');
+    globe.emit('paused');
+    let waited: Promise<unknown> | undefined;
+    const scope = effectScope();
+    scope.run(() =>
+      watch(
+        env.state.context.dimension,
+        kind => {
+          waited =
+            kind === '3d'
+              ? env.state.context.whenReady().then(
+                  () => 'ready',
+                  (error: unknown) => error
+                )
+              : undefined;
+        },
+        { flush: 'sync' }
+      )
+    );
+
+    env.state.context.setDimension('3d');
+    globe.emit('ready');
+    const result = await waited;
+    scope.stop();
+
+    expect(result).toBe('ready');
   });
 
   it('切回二维：三维暂停、二维恢复；不是当前种类的视图的事件不反映到上下文', () => {

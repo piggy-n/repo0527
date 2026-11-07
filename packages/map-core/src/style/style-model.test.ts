@@ -46,6 +46,11 @@ const image = (fill = 0, overrides: Partial<StyleImage> = {}): StyleImage => ({
 const commandsOf = (change: StyleChange | undefined) =>
   change?.commands.map(({ command, args }) => [command, args[0]] as const);
 
+// 三维模型层叠在 business 下面
+function slotted() {
+  return new StyleModel({ groups: ['basemap', 'business', 'highlight'], sceneBelow: 'business' });
+}
+
 describe('StyleModel', () => {
   it('composes groups in the declared order with the root properties', () => {
     using model = createModel();
@@ -364,6 +369,44 @@ describe('StyleModel', () => {
       await nextMicrotask();
 
       expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the 3D model layer slot (ADR 0147)', () => {
+    it('has no slot without sceneBelow: the model layer goes on top', () => {
+      using model = createModel();
+      model.setGroups({ basemap: lineGroup('roads'), business: lineGroup('parcels') });
+
+      expect(model.sceneBefore).toBeUndefined();
+    });
+
+    it('places the model layer under the first layer of the declared group or any group above it', async () => {
+      using model = slotted();
+      const changes: StyleChange[] = [];
+      model.on('change', change => changes.push(change));
+
+      model.setGroups({ basemap: lineGroup('roads'), business: lineGroup('parcels') });
+      expect(model.sceneBefore).toBe('parcels-line');
+      await nextMicrotask();
+      expect(changes.at(-1)?.sceneBefore).toBe('parcels-line');
+
+      // 声明的分组空了，上面的分组还有图层
+      model.setGroups({ business: EMPTY, highlight: lineGroup('picked') });
+      expect(model.sceneBefore).toBe('picked-line');
+      await nextMicrotask();
+      expect(changes.at(-1)?.sceneBefore).toBe('picked-line');
+
+      // 以上都空了：在最上面，通知里也没有这一项
+      model.setGroup('highlight', EMPTY);
+      expect(model.sceneBefore).toBeUndefined();
+      await nextMicrotask();
+      expect(changes.at(-1)).not.toHaveProperty('sceneBefore');
+    });
+
+    it('rejects a slot that is not a declared group', () => {
+      expect(
+        () => new StyleModel({ groups: ['basemap'], sceneBelow: 'labels' as 'basemap' })
+      ).toThrow('三维模型层所在的分组 labels 没有声明');
     });
   });
 });

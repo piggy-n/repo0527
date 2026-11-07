@@ -42,11 +42,11 @@ trace.mark('session');  // 记下 login-to-map:session，并量出从 start 到�
 | 步骤 | 时刻 | 在哪里记 |
 |---|---|---|
 | 开始 `start` | 点"三维"：上下文的 `dimension` 变成 `3d` 的同一刻（同步侦听） | `shared/map/useSwitchTo3dMarks` |
-| `runtime` | 三维运行时（map-cesium 的分块，含 Cesium）加载完、设置好；之后再切换不加载，这一步不记 | `app/map-framework.ts` 的 `prepareMapRuntime` |
-| `view-ready` | 三维视图就绪 | `useSwitchTo3dMarks` |
+| `runtime` | 三维运行时（map-cesium 的分块，含 Cesium）加载完、设置好；之后再切换不加载，这一步不记。MapLibre 引擎（ADR 0147）没有要全局设置的三维运行时，不记 | `app/map-framework.ts` 的 `prepareMapRuntime` |
+| `view-ready` | 三维视图就绪；MapLibre 引擎下是同一个视图换成三维、三维模块（map-three）也加载好 | `useSwitchTo3dMarks` |
 | `settled` | 三维第一次画面稳定（场景的 `settle`：相机停下、视野里的瓦片都已画出） | `useSwitchTo3dMarks` |
 
-步骤的清单是 `SWITCH_TO_3D_STEPS`，实测脚本的 `SCENE_STEPS` 和它一致（`tools/measure-map-load/scene-report.test.ts` 保证）。切回二维、页面卸载时停止等待，这一轮停在已经记下的步骤；上下文的当前视图按种类取，切过去时三维视图还没挂上，`whenReady` 等的就是新挂上的三维视图。
+步骤的清单是 `SWITCH_TO_3D_STEPS`，实测脚本的 `SCENE_STEPS` 和它一致（`tools/measure-map-load/scene-report.test.ts` 保证）。切回二维、页面卸载时停止等待，这一轮停在已经记下的步骤；上下文的当前视图按种类取，切过去时三维视图还没挂上，`whenReady` 等的就是新挂上的三维视图。上下文先换租约、让同一个视图换好种类，再改 `dimension`，所以同步侦听里的 `whenReady` 不会被换租约中止（3C.2 修正：以前 Cesium 第二次切到三维、MapLibre 引擎每次切到三维都只有 `start`，见 [map-vue.md](map-vue.md)"二三维切换"）。
 
 ### 画面稳定
 

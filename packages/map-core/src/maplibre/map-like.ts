@@ -1,4 +1,8 @@
-import type { LayerSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type {
+  LayerSpecification,
+  ProjectionSpecification,
+  StyleSpecification
+} from '@maplibre/maplibre-gl-style-spec';
 import type { Geometry } from 'geojson';
 import type { CustomLayerInterface, MapOptions } from 'maplibre-gl';
 import type { CameraCause } from '../camera/camera-model';
@@ -44,6 +48,19 @@ export interface ScrollZoomLike {
 
 export interface CameraEventData {
   readonly cause: CameraCause;
+}
+
+/**
+ * MapLibre 相机当前的变换（ADR 0147 第 2 节）：只用三维的视点高度、拾取打到天空、点在地球背面这三项。
+ * 6.12 的类型里有，后两项标了 @internal，升级时由契约测试发现变化；换投影时整个换掉，每次现取
+ */
+export interface CameraTransformLike {
+  /** 相机在海平面以上的高度，米 */
+  getCameraAltitude(): number;
+  /** 画布上的点打不打得到地面：地平线以上、地球以外的天空打不到 */
+  isPointOnMapSurface(point: { readonly x: number; readonly y: number }): boolean;
+  /** 地面上的点被地球挡住（在地球背面） */
+  isLocationOccluded(lngLat: { readonly lng: number; readonly lat: number }): boolean;
 }
 
 /** queryRenderedFeatures 返回的要素：几何是取值时才从瓦片坐标换算的 */
@@ -124,5 +141,12 @@ export interface MapLike extends StyleTarget {
   getLayersOrder(): string[];
   /** 请求重画下一帧：三维内容自己变了（瓦片到了）时用 */
   triggerRepaint(): void;
+  /** 投影；同时担任二三维的视图切换种类时设置（ADR 0147 第 2 节）。样式加载完成之前调用会抛错 */
+  getProjection(): ProjectionSpecification | undefined;
+  setProjection(projection: ProjectionSpecification): void;
+  getMaxPitch(): number;
+  /** 当前俯角超过新的上限时 MapLibre 自己收回并发出不带 eventData 的 move，所以先把相机放到上限以内再调用 */
+  setMaxPitch(maxPitch: number): void;
+  readonly _camera: { readonly transform: CameraTransformLike };
   remove(): void;
 }

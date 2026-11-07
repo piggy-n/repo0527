@@ -25,12 +25,19 @@ export interface StyleChange {
   readonly commands: readonly StyleCommand[];
   readonly style: StyleSpecification;
   readonly images: StyleImages;
+  /** 三维模型层插在这个图层下面，见 StyleSnapshot */
+  readonly sceneBefore?: string;
 }
 
 export interface StyleModelOptions<G extends string> {
   /** 分组的叠放顺序，从下到上 */
   readonly groups: readonly G[];
   readonly root?: StyleRoot;
+  /**
+   * MapLibre 引擎的三维模型层叠在这个分组下面（ADR 0147 第 2 节）：它和以上的分组画在模型上面，以下的被模型挡住；
+   * 不给时模型层在最上面。Cesium 引擎不看这一项
+   */
+  readonly sceneBelow?: G;
 }
 
 interface StyleModelEvents {
@@ -42,7 +49,8 @@ const EMPTY_GROUP: StyleGroup = { sources: {}, layers: [] };
 function compose<G extends string>(
   root: StyleRoot,
   order: readonly G[],
-  groups: ReadonlyMap<G, StyleGroup>
+  groups: ReadonlyMap<G, StyleGroup>,
+  sceneBelow: G | undefined
 ): StyleSnapshot {
   const sources: Record<string, SourceSpecification> = {};
   const layers: LayerSpecification[] = [];
@@ -50,8 +58,13 @@ function compose<G extends string>(
   const sourceOwners = new Map<string, G>();
   const layerOwners = new Map<string, G>();
   const imageOwners = new Map<string, G>();
+  // 三维模型层下面的图层个数：sceneBelow 之前各分组的图层
+  let below: number | undefined;
 
   for (const id of order) {
+    if (id === sceneBelow) {
+      below = layers.length;
+    }
     const group = groups.get(id) ?? EMPTY_GROUP;
     for (const [sourceId, source] of Object.entries(group.sources)) {
       const owner = sourceOwners.get(sourceId);
@@ -87,13 +100,16 @@ function compose<G extends string>(
     }
   }
 
-  return { style: { ...root, version: 8, sources, layers }, images };
+  const style: StyleSpecification = { ...root, version: 8, sources, layers };
+  const sceneBefore = below === undefined ? undefined : layers[below]?.id;
+  return sceneBefore === undefined ? { style, images } : { style, images, sceneBefore };
 }
 
 /** 样式模型：按分组组合样式，提交时修订号加 1，同一轮事件循环的变化合并通知（ADR 0022） */
 export class StyleModel<const G extends string> implements Disposable {
   readonly #order: readonly G[];
   readonly #root: StyleRoot;
+  readonly #sceneBelow: G | undefined;
   readonly #events = new ModelEvents<StyleModelEvents>('StyleModel');
   #groups = new Map<G, StyleGroup>();
   #current: StyleSnapshot;
@@ -102,13 +118,17 @@ export class StyleModel<const G extends string> implements Disposable {
   #notified: { revision: number; snapshot: StyleSnapshot };
   #flushScheduled = false;
 
-  constructor({ groups, root = {} }: StyleModelOptions<G>) {
+  constructor({ groups, root = {}, sceneBelow }: StyleModelOptions<G>) {
     if (new Set(groups).size !== groups.length) {
       throw new Error(`分组 ID 重复：${groups.join(', ')}`);
     }
+    if (sceneBelow !== undefined && !groups.includes(sceneBelow)) {
+      throw new Error(`三维模型层所在的分组 ${sceneBelow} 没有声明`);
+    }
     this.#order = [...groups];
     this.#root = root;
-    this.#current = compose(root, this.#order, this.#groups);
+    this.#sceneBelow = sceneBelow;
+    this.#current = compose(root, this.#order, this.#groups, sceneBelow);
     this.#notified = { revision: 0, snapshot: this.#current };
   }
 
@@ -120,6 +140,11 @@ export class StyleModel<const G extends string> implements Disposable {
   /** 当前快照里的样式图片，和 current 是同一份快照 */
   get images(): StyleImages {
     return this.#current.images;
+  }
+
+  /** 当前快照里三维模型层插在哪个图层下面，和 current 是同一份快照 */
+  get sceneBefore(): string | undefined {
+    return this.#current.sceneBefore;
   }
 
   /** 每次提交加 1 */
@@ -159,7 +184,7 @@ export class StyleModel<const G extends string> implements Disposable {
       return;
     }
     // 先组合再改状态：校验失败时整次提交不生效
-    const snapshot = compose(this.#root, this.#order, next);
+    const snapshot = compose(this.#root, this.#order, next, this.#sceneBelow);
     this.#groups = next;
     this.#current = snapshot;
     this.#revision++;
@@ -191,7 +216,8 @@ export class StyleModel<const G extends string> implements Disposable {
       toRevision: this.#revision,
       commands,
       style: this.#current.style,
-      images: this.#current.images
+      images: this.#current.images,
+      ...(this.#current.sceneBefore === undefined ? {} : { sceneBefore: this.#current.sceneBefore })
     });
   }
 

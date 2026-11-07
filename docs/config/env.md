@@ -41,7 +41,7 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_PREFERENCE_RESOURCE_SYMBOLS` | `true` | 同上 | 资源图层的符号样式（`resource-symbols`） |
 | `VITE_PREFERENCE_RESOURCE_PANEL` | `true` | 同上 | 资源图层面板的收起和高度比例（`resource-panel`） |
 | `VITE_RESOURCE_MIN_ZOOM_ENABLED` | `true` | `appConfig.resourceMinZoomEnabled`、`fetchResourceMinZooms`、`builtInMinZooms` | 资源的最小显示级别（ADR 0132、0137）。`true` 时按发布目录的 `resource-min-zooms.json` 限制（读不到时用构建带上的那份），没到层级不请求瓦片、提示放大到几级；`false` 时不读文件、不限制，低级别的瓦片可能有十几 MB，只用于排查和应急 |
-| `VITE_MAP_3D_ENGINE` | `cesium` | `appConfig.map3dEngine`、`app/map-runtime-provider.ts`、`vite.config.ts` | 三维引擎（ADR 0147）。`cesium` 是现有的 Cesium，三维是另一块画布；`maplibre` 是 MapLibre + Three.js，二三维共用 MapLibre 的画布和视图，正在实施（3C.1 做到三维模型的加载、定位和换白模效果，资源图层、地下和漫游在后面几步）。app 按它把引擎的描述注入地图（`MAP_SCENE_ENGINE`），页面不判断它；构建时只在 `cesium` 时复制 Cesium 的运行时文件到 `cesium/`（约 7 MB）。换引擎要重新构建；通过 ADR 0147 第 9 节的门槛之前 `.env` 保持 `cesium`，公网、内网要不同时写在 `.env.intranet` |
+| `VITE_MAP_3D_ENGINE` | `cesium` | `appConfig.map3dEngine`、`app/map-runtime-provider.ts`、`vite.config.ts` | 三维引擎（ADR 0147）。`cesium` 是现有的 Cesium，三维是另一块画布；`maplibre` 是 MapLibre + Three.js，二三维共用 MapLibre 的画布和视图，正在实施（3C.2 做到地球投影、三维里显示资源图层和覆盖物、三维模型的加载和定位、三维里的点/框选和测量，地下、漫游和缓存在后面几步，见 [map-three.md](../modules/map-three.md)）。app 按它把引擎的描述注入地图（`MAP_SCENE_ENGINE`），页面不判断它；构建时只在 `cesium` 时复制 Cesium 的运行时文件到 `cesium/`（约 7 MB）。换引擎要重新构建；通过 ADR 0147 第 9 节的门槛之前 `.env` 保持 `cesium`，公网、内网要不同时写在 `.env.intranet` |
 
 ## 两类变量
 

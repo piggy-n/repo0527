@@ -58,7 +58,10 @@ export const ResourceLegend = defineComponent({
     symbols: { type: Object as PropType<ResourceSymbols>, required: true },
     /** 正在显示；切到别的 Tab、让给另一边时为 false */
     active: { type: Boolean, default: true },
-    /** 当前显示的是三维：只显示说明，和隐藏时一样卸载条目和编辑器，浏览和编辑目标保留（ADR 0080 第 5 节） */
+    /**
+     * 当前显示的是三维、三维里不显示资源图层（Cesium 引擎）：只显示说明，和隐藏时一样卸载条目和编辑器，
+     * 浏览和编辑目标保留（ADR 0080 第 5 节）；MapLibre 引擎的三维照常显示资源图层，不传（ADR 0147）
+     */
     scene: { type: Boolean, default: false }
   },
   emits: {

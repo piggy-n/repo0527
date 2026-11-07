@@ -1,4 +1,4 @@
-import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type { LayerSpecification, ProjectionSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Geometry } from 'geojson';
 import { GPUInitializationError, type Map as MapLibreMap } from 'maplibre-gl';
 import { createNanoEvents } from 'nanoevents';
@@ -85,7 +85,7 @@ interface FakeCamera {
   pitch: number;
 }
 
-const CAMERA_CALLS = new Set(['jumpTo', 'flyTo', 'panBy', 'fitBounds', 'remove']);
+const CAMERA_CALLS = new Set(['jumpTo', 'flyTo', 'panBy', 'fitBounds', 'remove', 'setProjection', 'setMaxPitch']);
 
 // 只模拟适配器用到的行为：记录调用；相机方法立即到位，并像 MapLibre 一样同步触发 move、合并 eventData
 // 记下设置过的滚轮缩放速率
@@ -104,7 +104,18 @@ class FakeScrollZoom {
 
 class FakeMap implements MapLike {
   readonly calls: unknown[][] = [];
-  readonly maxPitch = 60;
+  maxPitch = 60;
+  projection: ProjectionSpecification | undefined;
+  // MapLibre 相机的变换：天空、地球背面由用例设置
+  readonly transform = {
+    altitude: 1234,
+    sky: (_point: { readonly x: number; readonly y: number }) => false,
+    occluded: (_lngLat: { readonly lng: number; readonly lat: number }) => false,
+    getCameraAltitude: () => this.transform.altitude,
+    isPointOnMapSurface: (point: { readonly x: number; readonly y: number }) => !this.transform.sky(point),
+    isLocationOccluded: (lngLat: { readonly lng: number; readonly lat: number }) => this.transform.occluded(lngLat)
+  };
+  readonly _camera = { transform: this.transform };
   readonly #listeners = new Map<string, Set<(event: FakeEvent) => void>>();
   camera: FakeCamera;
   // 调用时抛错
@@ -312,6 +323,28 @@ class FakeMap implements MapLike {
     return [];
   }
   triggerRepaint(): void {}
+
+  getProjection(): ProjectionSpecification | undefined {
+    return this.projection;
+  }
+
+  setProjection(projection: ProjectionSpecification): void {
+    this.calls.push(['setProjection', projection]);
+    this.projection = projection;
+  }
+
+  getMaxPitch(): number {
+    return this.maxPitch;
+  }
+
+  // 像 MapLibre 一样：俯角超过新的上限时收回，发出不带 eventData 的移动
+  setMaxPitch(maxPitch: number): void {
+    this.calls.push(['setMaxPitch', maxPitch]);
+    this.maxPitch = maxPitch;
+    if (this.camera.pitch > maxPitch) {
+      this.moveTo({ ...this.camera, pitch: maxPitch }, {});
+    }
+  }
   remove(): void {
     this.removed = true;
     this.calls.push(['remove']);
@@ -2443,6 +2476,19 @@ const nextTask = () => new Promise(resolve => setTimeout(resolve, 0));
 
 const sceneSetup = () => setup({ loadSceneRenderer: async () => fakeRenderer, loadJson: async () => STATION_JSON });
 
+// 三维模块的加载由用例控制：每次加载记一项，resolve、reject 结束它
+function moduleSetup() {
+  const loads: { resolve: () => void; reject: (error: unknown) => void }[] = [];
+  const ctx = setup({
+    loadSceneRenderer: () =>
+      new Promise((resolve, reject) => loads.push({ resolve: () => resolve(fakeRenderer), reject })),
+    loadJson: async () => STATION_JSON
+  });
+  return Object.assign(ctx, { loads });
+}
+
+const callNames = (calls: readonly unknown[][]) => calls.map(([name]) => name);
+
 describe('MapLibreView as the 3D view of the MapLibre engine (ADR 0147)', () => {
   it('supports only 2D without a scene renderer', () => {
     using ctx = setup();
@@ -2508,5 +2554,237 @@ describe('MapLibreView as the 3D view of the MapLibre engine (ADR 0147)', () => 
 
     ctx.view.setKind('2d');
     expect(ctx.view.pick({ x: 1, y: 1 })).toMatchObject({ kind: 'hit', surface: 'map' });
+  });
+
+  it('switching to 3D while ready: globe projection, a higher pitch limit and the session camera, all written as sync', () => {
+    using ctx = sceneSetup();
+    ctx.map.fire('style.load');
+    const changes: CameraChange[] = [];
+    ctx.session.camera.on('change', change => changes.push(change));
+
+    ctx.view.setKind('3d');
+
+    expect(ctx.map.projection).toStrictEqual({ type: 'globe' });
+    expect(ctx.map.maxPitch).toBe(85);
+    expect(ctx.map.calls.findLast(([name]) => name === 'jumpTo')).toStrictEqual([
+      'jumpTo',
+      { center: [118.8, 32.05], zoom: 8, bearing: 0, pitch: 0 },
+      { cause: 'sync' }
+    ]);
+    // 相机没变时会话不发变化；有变化的只能是 sync
+    expect(changes.every(({ view, cause }) => view === '3d' && cause === 'sync')).toBe(true);
+  });
+
+  it('switching back to 2D brings the pitch within the 2D limit before lowering it, so MapLibre never moves on its own', () => {
+    using ctx = sceneSetup();
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    ctx.map.moveTo({ ...ctx.map.camera, pitch: 80 }, { originalEvent: new MouseEvent('mousemove') });
+    expect(ctx.session.camera.current.pitch).toBe(80);
+    const changes: CameraChange[] = [];
+    ctx.session.camera.on('change', change => changes.push(change));
+
+    ctx.view.setKind('2d');
+
+    expect(ctx.map.maxPitch).toBe(60);
+    expect(ctx.map.projection).toStrictEqual({ type: 'mercator' });
+    expect(ctx.session.camera.current.pitch).toBe(60);
+    expect(changes.length).toBeGreaterThan(0);
+    expect(changes.every(({ view, cause }) => view === '2d' && cause === 'sync')).toBe(true);
+  });
+
+  it('uses the page maxPitch as the 2D limit', () => {
+    using ctx = setup({
+      mapOptions: { maxPitch: 45 },
+      loadSceneRenderer: async () => fakeRenderer,
+      loadJson: async () => STATION_JSON
+    });
+    ctx.map.maxPitch = 45;
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    expect(ctx.map.maxPitch).toBe(85);
+
+    ctx.view.setKind('2d');
+
+    expect(ctx.map.maxPitch).toBe(45);
+  });
+
+  it('applies the limits of the current kind when it becomes ready in 3D, before syncing the camera', () => {
+    using ctx = sceneSetup();
+    ctx.view.setKind('3d');
+    expect(ctx.map.calls).toStrictEqual([]);
+
+    ctx.map.fire('style.load');
+
+    expect(callNames(ctx.map.calls).slice(0, 3)).toStrictEqual(['setMaxPitch', 'setProjection', 'jumpTo']);
+    expect(ctx.map.projection).toStrictEqual({ type: 'globe' });
+  });
+
+  it('a 2D-only view never touches the projection or the pitch limit', () => {
+    using ctx = setup();
+    ctx.map.fire('style.load');
+
+    expect(callNames(ctx.map.calls)).not.toContain('setProjection');
+    expect(callNames(ctx.map.calls)).not.toContain('setMaxPitch');
+  });
+
+  it('sets the globe again after a full rebuild in 3D: the new style comes with its own projection', async () => {
+    using ctx = sceneSetup();
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    ctx.map.failOn = 'addSource';
+    ctx.session.style.setGroup('business', lineGroup('roads'));
+    await nextMicrotask();
+    ctx.map.failOn = undefined;
+    expect(callNames(ctx.map.styleCalls()).at(-1)).toBe('setStyle');
+    // MapLibre 整体加载新样式时投影回到样式里写的（这里没有，即墨卡托）
+    ctx.map.projection = undefined;
+
+    ctx.map.fire('style.load');
+
+    expect(ctx.map.projection).toStrictEqual({ type: 'globe' });
+  });
+
+  it('is initializing in 3D until the 3D module loads; tools get no input and settle waits meanwhile', async () => {
+    using ctx = moduleSetup();
+    const { tool, inputs } = recordingTool();
+    ctx.session.tool.register('probe', tool);
+    ctx.session.tool.activate('probe');
+    ctx.map.fire('style.load');
+    let settles = 0;
+    ctx.view.on('settle', () => settles++);
+
+    ctx.view.setKind('3d');
+    ctx.map.mouse('click', 5, 5);
+    ctx.map.fire('idle');
+
+    expect(ctx.view.state).toBe('initializing');
+    expect(ctx.states.at(-1)).toBe('initializing');
+    expect(inputs).toStrictEqual([]);
+    expect(settles).toBe(0);
+    expect(() => ctx.view.pick({ x: 1, y: 1 })).toThrow('只能在 ready 时');
+    const ready = ctx.view.whenReady();
+    expect(await settled(ready)).toBe('pending');
+
+    ctx.loads[0]?.resolve();
+    await nextTask();
+    ctx.map.fire('idle');
+
+    expect(ctx.view.state).toBe('ready');
+    expect(ctx.states.at(-1)).toBe('ready');
+    expect(await settled(ready)).toBeUndefined();
+    expect(settles).toBe(1);
+    expect(ctx.loads).toHaveLength(1);
+  });
+
+  it('a failed 3D module fails only the 3D kind: 2D stays ready, retry reloads the module without a new map', async () => {
+    using ctx = moduleSetup();
+    ctx.map.fire('style.load');
+    const map = ctx.map;
+    ctx.view.setKind('3d');
+    // 先接住结果：失败发生在等待的下一轮之前
+    const ready = ctx.view.whenReady().then(
+      () => 'resolved',
+      (reason: unknown) => reason
+    );
+    const error = new Error('三维模块下载失败');
+
+    ctx.loads[0]?.reject(error);
+    await nextTask();
+
+    expect(ctx.view.state).toBe('failed');
+    expect(ctx.view.failure).toStrictEqual({ kind: 'module', error });
+    // 每次读到同一个对象：上下文按引用判断原因变了没有
+    expect(ctx.view.failure).toBe(ctx.view.failure);
+    expect(await ready).toBe(error);
+    expect(ctx.errors).toContain(error);
+
+    ctx.view.setKind('2d');
+    expect(ctx.view.state).toBe('ready');
+    expect(ctx.view.failure).toBeNull();
+    // 切回三维不自动重新加载，等 retry
+    ctx.view.setKind('3d');
+    expect(ctx.view.state).toBe('failed');
+    expect(ctx.loads).toHaveLength(1);
+
+    ctx.view.retry();
+    expect(ctx.view.state).toBe('initializing');
+    const retried = ctx.view.whenReady();
+    ctx.loads[1]?.resolve();
+    await nextTask();
+
+    expect(ctx.view.state).toBe('ready');
+    expect(await settled(retried)).toBeUndefined();
+    // 还是同一个地图，没有重建
+    expect(ctx.map).toBe(map);
+    expect(map.removed).toBe(false);
+    expect(ctx.states).toStrictEqual(['ready', 'initializing', 'failed', 'ready', 'failed', 'initializing', 'ready']);
+  });
+
+  it('retry does nothing in 2D, while the 3D module is fine, or for a 2D-only view', async () => {
+    using ctx = moduleSetup();
+    ctx.map.fire('style.load');
+    ctx.view.retry();
+    ctx.view.setKind('3d');
+    ctx.view.retry();
+    ctx.loads[0]?.resolve();
+    await nextTask();
+    ctx.view.retry();
+
+    expect(ctx.loads).toHaveLength(1);
+    using flat = setup();
+    flat.map.fire('style.load');
+    flat.view.retry();
+    expect(flat.view.state).toBe('ready');
+  });
+
+  it('a paused view stays paused whatever the 3D module does, and is ready again on resume', async () => {
+    using ctx = moduleSetup();
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    ctx.view.pause();
+
+    ctx.loads[0]?.resolve();
+    await nextTask();
+    expect(ctx.view.state).toBe('paused');
+
+    ctx.view.resume();
+    expect(ctx.view.state).toBe('ready');
+  });
+
+  it('reads the eye height and heading from the MapLibre camera in 3D only', async () => {
+    using ctx = sceneSetup();
+    ctx.map.fire('style.load');
+    expect(ctx.view.eyeHeight()).toBeNull();
+    expect(ctx.view.heading()).toBeNull();
+
+    ctx.view.setKind('3d');
+    await nextTask();
+    ctx.map.moveTo({ ...ctx.map.camera, bearing: -30 }, { originalEvent: new MouseEvent('mousemove') });
+
+    expect(ctx.view.eyeHeight()).toBe(1234);
+    expect(ctx.view.heading()).toBe(330);
+  });
+
+  it('misses the sky and hides ground points behind the globe in 3D only', async () => {
+    // 打不到模型的渲染器：拾取落到地面或天空
+    using ctx = setup({
+      loadSceneRenderer: async () => () => ({ ...fakeRenderer(), pick: () => null }),
+      loadJson: async () => STATION_JSON
+    });
+    ctx.map.fire('style.load');
+    ctx.map.transform.sky = ({ y }) => y < 100;
+    ctx.map.transform.occluded = ({ lng }) => lng > 150;
+
+    expect(ctx.view.pick({ x: 10, y: 10 })).toMatchObject({ kind: 'hit', surface: 'map' });
+    expect(ctx.view.project([160, 30])).toStrictEqual({ x: 4200, y: 300 });
+
+    ctx.view.setKind('3d');
+    await nextTask();
+
+    expect(ctx.view.pick({ x: 10, y: 10 })).toStrictEqual({ kind: 'miss' });
+    expect(ctx.view.pick({ x: 10, y: 200 })).toMatchObject({ kind: 'hit', surface: 'map' });
+    expect(ctx.view.project([160, 30])).toBeNull();
+    expect(ctx.view.project([118, 33])).toStrictEqual({ x: 0, y: 0 });
   });
 });

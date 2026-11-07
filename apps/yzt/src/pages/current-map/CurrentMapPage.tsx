@@ -90,9 +90,11 @@ export const CurrentMapPage = defineComponent({
   setup() {
     // 注记压在资源图层上面，地名不被不透明的地类图斑盖住（2026-10-11 定，ADR 0033 第 4 条留到 5C 的问题）；
     // 选中要素的高亮在资源之上、注记之下（ADR 0047 第 5 节）；区划裁剪的遮罩盖住区划外的资源和高亮，注记、边界在它上面
-    // （ADR 0051）；边界压在注记上面，区划高亮在边界之上，测量在最上面
+    // （ADR 0051）；边界压在注记上面，区划高亮在边界之上，测量在最上面。
+    // MapLibre 引擎的三维模型挡住注记以下的分组，注记、边界、区划高亮和测量画在模型上面（ADR 0147 第 2 节）
     const map = provideMap({
       groups: ['basemap', 'resources', 'selection', 'region-clip', 'basemap-labels', 'boundaries', 'region', 'measure'],
+      sceneBelow: 'basemap-labels',
       camera: JIANGSU_CAMERA,
       root: BASEMAP_STYLE_ROOT
     });
@@ -340,6 +342,8 @@ export const CurrentMapPage = defineComponent({
       // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示；漫游时区划不适用
       const scopeShown = (!phone || !sides.left.value) && !underground;
       const scene = map.dimension.value === '3d';
+      // 三维里不显示资源图层（Cesium 引擎）：图例只有说明（ADR 0080 第 5 节）；MapLibre 引擎照常显示（ADR 0147）
+      const resourcesHidden = scene && !map.sceneCapabilities.styleLayers;
       const indoorMap = models.indoorMap.value;
       const player = models.roamPlayer.value;
       const route = models.routeTrack.value;
@@ -398,13 +402,13 @@ export const CurrentMapPage = defineComponent({
                         layers={resources}
                         symbols={symbols}
                         active={active}
-                        scene={map.dimension.value === '3d'}
+                        scene={resourcesHidden}
                         onEditingChange={value => (legendEditing.value = value)}
                       />
                     ],
-                    // 三维时图例只有说明，不显示全部恢复默认（ADR 0080 第 5 节）
+                    // 三维里不显示资源图层时图例只有说明，不显示全部恢复默认（ADR 0080 第 5 节）
                     'legend-footer': () =>
-                      !legendEditing.value && map.dimension.value === '2d' && symbols.overrides.value.size > 0
+                      !legendEditing.value && !resourcesHidden && symbols.overrides.value.size > 0
                         ? [<ResourceLegendReset symbols={symbols} />]
                         : [],
                     'region-locate': () => [<RegionLocatePanel region={region} />],

@@ -138,8 +138,8 @@ export const CesiumCanvas = defineComponent({
         return;
       }
       await state.context.whenSettled(preloading.signal);
-      if (!view && !loading && !showing3d()) {
-        preloadRuntime('3d');
+      if (!view && !loading && !showing3d() && loadRuntime) {
+        preloadRuntime(() => loadRuntime('3d'));
       }
     };
     onMounted(() => {

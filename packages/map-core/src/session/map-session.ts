@@ -8,6 +8,8 @@ export interface MapSessionOptions<G extends string> {
   /** 样式分组的叠放顺序，从下到上 */
   readonly groups: readonly G[];
   readonly root?: StyleRoot;
+  /** MapLibre 引擎的三维模型层叠在这个分组下面；不给时在最上面（见 StyleModelOptions） */
+  readonly sceneBelow?: G;
   readonly camera: CameraState;
 }
 
@@ -23,10 +25,10 @@ export class MapSession<const G extends string> implements Disposable {
   readonly scene: SceneContentModel;
   readonly #stack: DisposableStack;
 
-  constructor({ groups, root, camera }: MapSessionOptions<G>) {
+  constructor({ groups, root, sceneBelow, camera }: MapSessionOptions<G>) {
     // 构造中途抛错时，已创建的部分随 using 释放；成功后用 move 把所有权转给实例
     using stack = new DisposableStack();
-    this.style = stack.use(new StyleModel({ groups, root }));
+    this.style = stack.use(new StyleModel({ groups, root, sceneBelow }));
     this.camera = stack.use(new CameraModel(camera));
     this.tool = stack.use(new ToolModel());
     this.selection = stack.use(new SelectionModel());

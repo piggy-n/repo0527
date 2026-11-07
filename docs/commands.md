@@ -339,7 +339,7 @@ pnpm --filter yzt test:smoke
 
 ### `pnpm --filter yzt test:smoke`
 
-**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）；三维（`scene.spec.ts`，3D.5c）检查二维稳定后预加载了三维运行时、切到三维画面稳定、加载一个生成的测试模型并定位、点"漫游"步行进站（导航网格的 Worker 分块，左侧换成漫游面板）、漫游时没有状态栏和视图控件（ADR 0095、0097），Esc 退出漫游回到地面后回到二维复用画布。
+**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）；三维（`scene.spec.ts`，3D.5c）检查二维稳定后预加载了三维运行时、切到三维画面稳定、加载一个生成的测试模型并定位、点"漫游"步行进站（导航网格的 Worker 分块，左侧换成漫游面板）、漫游时没有状态栏和视图控件（ADR 0095、0097），Esc 退出漫游回到地面后回到二维复用画布。MapLibre 引擎的三维（`scene-maplibre.spec.ts`，ADR 0147）只在 `VITE_MAP_3D_ENGINE=maplibre` 构建的产物上运行，`scene.spec.ts` 反过来只在 `cesium` 上：检查二维稳定后预加载了 map-three、切到三维还是同一块画布，三维里画出静态底图、测距和坐标定位可用、能加载生成的模型。
 
 **什么时候用**：先运行 `pnpm build:intranet`；修改加载、路由或页面缓存后运行，CI 在内网构建后自动执行。只跑某个文件时在命令后面加文件名，如 `pnpm --filter yzt test:smoke system-management`。
 
@@ -347,7 +347,7 @@ pnpm --filter yzt test:smoke
 
 **注意事项**：需要已安装 Chromium；4173 端口须空闲，不复用已有服务。三维的模型数据不入库，冒烟拦下清单和瓦片，换成自己生成的一间 12 米见方的屋子（`tools/smoke/scene-model.ts`）；软件渲染下这个用例约 30 秒，用例的时限放到 3 分钟。不会自动构建，不能在公网产物上运行；输出写入已忽略的 `local/smoke-results/`，不依赖账号、私有字体或真实后端，不设毫秒性能门槛。`pnpm test` 不包含这组 `*.spec.ts` 用例。
 
-构建时决定的开关，冒烟和构建读同一份配置，只验证这次构建的取值（如 `resource-min-zooms.spec.ts`：`.env` 的 `VITE_RESOURCE_MIN_ZOOM_ENABLED` 现在是 `false`，打开时的用例被跳过；`application.spec.ts` 的底图偏好同样按 `VITE_PREFERENCES_ENABLED`、`VITE_PREFERENCE_BASEMAP` 选用例，见 ADR 0140）。要验证另一个取值，不改 `.env`，在同一个终端设环境变量后构建和冒烟（`loadEnv` 优先取环境变量），PowerShell 里写 `$env:VITE_RESOURCE_MIN_ZOOM_ENABLED = 'true'`，结束后 `Remove-Item Env:VITE_RESOURCE_MIN_ZOOM_ENABLED`，再按原来的配置构建一次。
+构建时决定的开关，冒烟和构建读同一份配置，只验证这次构建的取值（如 `resource-min-zooms.spec.ts`：`.env` 的 `VITE_RESOURCE_MIN_ZOOM_ENABLED` 现在是 `false`，打开时的用例被跳过；`application.spec.ts` 的底图偏好同样按 `VITE_PREFERENCES_ENABLED`、`VITE_PREFERENCE_BASEMAP` 选用例，见 ADR 0140）。要验证另一个取值，不改 `.env`，在同一个终端设环境变量后构建和冒烟（`loadEnv` 优先取环境变量），PowerShell 里写 `$env:VITE_RESOURCE_MIN_ZOOM_ENABLED = 'true'`，结束后 `Remove-Item Env:VITE_RESOURCE_MIN_ZOOM_ENABLED`，再按原来的配置构建一次。三维引擎同样：`$env:VITE_MAP_3D_ENGINE = 'maplibre'` 后 `pnpm build:intranet`、`pnpm --filter yzt test:smoke scene-maplibre`（CI 也这样跑）。
 
 ### `pnpm --filter yzt test:watch`
 

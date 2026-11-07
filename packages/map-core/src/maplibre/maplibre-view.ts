@@ -1,3 +1,4 @@
+import type { ProjectionSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { GPUInitializationError, Map as MapLibreMap } from 'maplibre-gl';
 import { safeReporter } from '@mx/utils';
 import { createNanoEvents } from 'nanoevents';
@@ -25,8 +26,15 @@ import type { RenderedFeature, RenderedQueryOptions, ScreenBox } from '../view/r
 import type { LngLat, MapInputEvent, MapPointerEvent, PickResult, ScreenPoint } from '../view/view-input';
 import { canTransition, deferred, type LiveViewState } from '../view/view-lifecycle';
 import { applyStyleCommand } from './apply-style-command';
-import type { MapLibreMapOptions, MapLike, MapMouseEventLike, MapMouseEventType, MapMoveEventLike } from './map-like';
-import { MapLibreScene } from './maplibre-scene';
+import type {
+  CameraTransformLike,
+  MapLibreMapOptions,
+  MapLike,
+  MapMouseEventLike,
+  MapMouseEventType,
+  MapMoveEventLike
+} from './map-like';
+import { MapLibreScene, type SceneModuleState } from './maplibre-scene';
 import type { SceneRendererLoader } from './scene-renderer';
 import { ModifierPan } from '../view/modifier-pan';
 
@@ -76,6 +84,12 @@ interface MapStyle extends StyleSnapshot {
 }
 
 const CAMERA_CAUSES: readonly string[] = ['user', 'program', 'sync'] satisfies CameraCause[];
+
+// 三维的投影和俯角上限（ADR 0147 第 2 节）：MapLibre 的地球预设在 z11～12 过渡到墨卡托；二维沿用页面的上限，没给时同 MapLibre 的 60
+const GLOBE: ProjectionSpecification = Object.freeze({ type: 'globe' });
+const MERCATOR: ProjectionSpecification = Object.freeze({ type: 'mercator' });
+const MAX_PITCH_3D = 85;
+const DEFAULT_MAX_PITCH = 60;
 
 function isCameraCause(value: unknown): value is CameraCause {
   return typeof value === 'string' && CAMERA_CAUSES.includes(value);
@@ -130,6 +144,12 @@ function toPointerEvent(type: MapMouseEventType, { point, originalEvent }: MapMo
   };
 }
 
+// MapLibre 相机当前的变换：换投影时整个换掉，每次现取（见 CameraTransformLike）
+function cameraTransform(map: MapLike): CameraTransformLike {
+  // oxlint-disable-next-line no-underscore-dangle -- MapLibre 6.12 只在 _camera 上提供相机的变换，没有公开的方法
+  return map._camera.transform;
+}
+
 function createMapLibreMap(options: MapLibreMapOptions): MapLike {
   return new MapLibreMap(options);
 }
@@ -164,8 +184,16 @@ export class MapLibreView<const G extends string> implements MapView {
   readonly #stack: DisposableStack;
   // 当前这一轮整体加载的结果（创建地图、整体重建、重新加载各算一轮），本轮的成功、失败、释放都结束它
   #ready = deferred();
+  // 地图本身的生命周期；对外的 state、failure 在地图就绪时按当前种类给出（见 #presented）
   #state: ViewState = 'initializing';
   #failure: MapViewFailure | null = null;
+  // 最近一次通知出去的对外状态：变化时才发 statechange
+  #shownState: ViewState = 'initializing';
+  #shownFailure: MapViewFailure | null = null;
+  // 三维模块加载失败的原因，加载状态变化时换掉
+  #moduleFailure: MapViewFailure | null = null;
+  // 二维的俯角上限：页面的 maxPitch，没给时同 MapLibre
+  readonly #maxPitch2d: number;
   #sourceErrors = NO_SOURCE_ERRORS;
   #active: boolean;
   #mapStyle: MapStyle;
@@ -205,10 +233,11 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#session = session;
     this.#active = active;
     this.kinds = loadSceneRenderer ? ['2d', '3d'] : ['2d'];
+    this.#maxPitch2d = mapOptions?.maxPitch ?? DEFAULT_MAX_PITCH;
     // 报告器自己抛错时不能打断状态转换和资源释放，也不能冒进 MapLibre 的事件分发
     this.#onError = safeReporter(onError, 'MapLibreView');
-    const { current: style, images, revision } = session.style;
-    this.#mapStyle = { status: 'loading', revision, style, images };
+    const { current: style, images, revision, sceneBefore } = session.style;
+    this.#mapStyle = { status: 'loading', revision, style, images, sceneBefore };
 
     using stack = new DisposableStack();
     stack.defer(() => this.#ready.reject(new DOMException('MapLibreView 已释放', 'AbortError')));
@@ -248,7 +277,7 @@ export class MapLibreView<const G extends string> implements MapView {
         container: map.getCanvasContainer(),
         // 地图内容跟着指针走，视野反向移动
         pan: (from, to) => map.panBy([from.x - to.x, from.y - to.y], { animate: false }, { cause: 'user' }),
-        modifier: () => (this.#state === 'ready' ? (this.#session.tool.activeTool.panModifier ?? null) : null),
+        modifier: () => (this.state === 'ready' ? (this.#session.tool.activeTool.panModifier ?? null) : null),
         // 没有就绪时不应用光标，进入 ready 时按当前工具应用
         onCursorChange: () => {
           if (this.#state === 'ready') {
@@ -284,7 +313,8 @@ export class MapLibreView<const G extends string> implements MapView {
             loadRenderer: loadSceneRenderer,
             loadJson,
             onError: this.#onError,
-            onStatus: status => this.#onSceneStatus(status)
+            onStatus: status => this.#onSceneStatus(status),
+            onModuleChange: state => this.#onModuleChange(state)
           })
         )
       : undefined;
@@ -325,8 +355,9 @@ export class MapLibreView<const G extends string> implements MapView {
     return this.#kind;
   }
 
+  /** 地图就绪时按当前种类给出：三维在三维模块加载中是 initializing，加载失败是 failed（原因是 module） */
   get state(): ViewState {
-    return this.#state;
+    return this.#presented().state;
   }
 
   /** 三维内容的加载状态（ADR 0081 第 2 节）；显示二维时为空 */
@@ -339,8 +370,8 @@ export class MapLibreView<const G extends string> implements MapView {
   }
 
   /**
-   * 换成另一种种类（ADR 0147 第 2 节）：由上下文在切换维度时调用，画布、相机都不变；
-   * 切到三维时加上模型层、追上积下的三维内容，切回二维时撤下模型层。不支持的种类抛错
+   * 换成另一种种类（ADR 0147 第 2 节）：由上下文在切换维度时调用，画布不变；投影、俯角上限跟着换，相机按会话同步过来。
+   * 第一次切到三维时加载三维模块，加上模型层、追上积下的三维内容；切回二维时撤下模型层。不支持的种类抛错
    */
   setKind(kind: ViewKind): void {
     this.#assertAlive();
@@ -352,20 +383,44 @@ export class MapLibreView<const G extends string> implements MapView {
     }
     this.#pan?.cancel();
     this.#kind = kind;
+    // 加载失败过的不自动重新加载，等 retry（同 Cesium 的三维画布）
+    if (kind === '3d' && this.#scene?.module.kind === 'idle') {
+      this.#scene.load();
+    }
+    const map = this.#map;
+    // 没有就绪时，激活时按当前种类设置
+    if (this.#state === 'ready' && map !== undefined) {
+      this.#guard(() => this.#applyKind(map));
+    }
     this.#syncScene();
     this.#emitter.emit('scenestatuschange', this.sceneStatus);
+    this.#notifyState();
   }
 
   get failure(): MapViewFailure | null {
-    return this.#failure;
+    return this.#presented().failure;
+  }
+
+  /** 当前种类的模块加载失败时重新加载，不重建地图；其他时候什么也不做（引擎失败要重建视图） */
+  retry(): void {
+    this.#assertAlive();
+    if (this.#kind === '3d' && this.#scene?.module.kind === 'failed') {
+      this.#scene.load();
+    }
   }
 
   get sourceErrors(): SourceErrors {
     return this.#sourceErrors;
   }
 
+  /** 三维时还要等这一次三维模块的加载 */
   whenReady(): Promise<void> {
-    return this.#ready.promise;
+    const scene = this.#scene;
+    if (this.#kind !== '3d' || scene === undefined) {
+      return this.#ready.promise;
+    }
+    const loaded = scene.whenLoaded();
+    return this.#ready.promise.then(() => loaded);
   }
 
   pause(): void {
@@ -421,12 +476,18 @@ export class MapLibreView<const G extends string> implements MapView {
     );
   }
 
-  /** 三维时先打显示着的模型（带椭球高）；其余命中地图平面，没有高度 */
+  /** 三维时先打显示着的模型（带椭球高），再打地面，指向天空时是 miss；二维总是命中地图平面，没有高度 */
   pick(point: ScreenPoint): PickResult {
     const map = this.#readyMap();
-    const model = this.#kind === '3d' ? this.#scene?.pick(point) : null;
-    if (model) {
-      return { kind: 'hit', surface: 'model', lngLat: model.lngLat, height: model.height };
+    if (this.#kind === '3d') {
+      const model = this.#scene?.pick(point);
+      if (model) {
+        return { kind: 'hit', surface: 'model', lngLat: model.lngLat, height: model.height };
+      }
+      // 俯角大时地平线以上是天空，地球投影时球外也是：MapLibre 的 unproject 仍会给出一个地面上的点
+      if (!cameraTransform(map).isPointOnMapSurface(point)) {
+        return { kind: 'miss' };
+      }
     }
     const { lng, lat } = map.unproject([point.x, point.y]);
     return { kind: 'hit', surface: 'map', lngLat: [lng, lat] };
@@ -434,17 +495,34 @@ export class MapLibreView<const G extends string> implements MapView {
 
   /**
    * 二维忽略高度，结果可能在画布之外；三维时不在地面上的点按模型层最近一帧的相机投影，
-   * 还没画过、在相机背后时为 null（地面上的点两种算法相差不到 0.1 像素，用 MapLibre 的）
+   * 还没画过、在相机背后时为 null（地面上的点两种算法相差不到 0.1 像素，用 MapLibre 的），地面上的点在地球背面时为 null
    */
   project(lngLat: LngLat): ScreenPoint;
   project(lngLat: LngLat, height?: number): ScreenPoint | null;
   project([lng, lat]: LngLat, height?: number): ScreenPoint | null {
     const map = this.#readyMap();
-    if (this.#kind === '3d' && height !== undefined && height !== 0) {
-      return this.#scene?.project([lng, lat], height) ?? null;
+    if (this.#kind === '3d') {
+      if (height !== undefined && height !== 0) {
+        return this.#scene?.project([lng, lat], height) ?? null;
+      }
+      if (cameraTransform(map).isLocationOccluded({ lng, lat })) {
+        return null;
+      }
     }
     const { x, y } = map.project([lng, lat]);
     return { x, y };
+  }
+
+  /** 三维时视点在海平面以上的高度（米），来自 MapLibre 自己的相机；二维时为 null */
+  eyeHeight(): number | null {
+    const map = this.#readyMap();
+    return this.#kind === '3d' ? cameraTransform(map).getCameraAltitude() : null;
+  }
+
+  /** 三维时视点的朝向（度，正北为 0、顺时针，0～360）；二维时为 null */
+  heading(): number | null {
+    const map = this.#readyMap();
+    return this.#kind === '3d' ? ((map.getBearing() % 360) + 360) % 360 : null;
   }
 
   /** 这些数据源在已应用的样式里的图层上画出的要素，从上到下；几何只在要时换算 */
@@ -511,7 +589,8 @@ export class MapLibreView<const G extends string> implements MapView {
       if (this.#mapStyle.status === 'loaded') {
         this.#ready.resolve();
       }
-      // 整体加载换掉了地图上的全部图层：三维模型层要重新加上
+      // 整体加载的新样式带着自己的投影：按当前种类再设一次；地图上的全部图层也换了，三维模型层要重新加上
+      this.#applyProjection(map);
       this.#syncScene();
     } else if (this.#active) {
       // 首次加载、失败后恢复，或者恢复显示时因整体重建而中断的激活
@@ -567,6 +646,11 @@ export class MapLibreView<const G extends string> implements MapView {
       bearing,
       pitch
     } = this.#session.camera.current;
+    // 同时担任二三维时先按当前种类设投影和俯角上限（ADR 0147 第 2 节）；此时还不是 ready，收回俯角时的 move 不会写回
+    if (this.kinds.length > 1) {
+      this.#setMaxPitch(map);
+      this.#applyProjection(map);
+    }
     // 此时还不是 ready，jumpTo 触发的 move 不会写回；地图收敛过的实际值（如俯角上限）下面按 sync 写回，不算意图
     map.jumpTo({ center: [lng, lat], zoom, bearing, pitch }, { cause: 'sync' });
     this.#writeCamera(map, 'sync');
@@ -611,9 +695,9 @@ export class MapLibreView<const G extends string> implements MapView {
 
   #catchUp(map: MapLike): void {
     const mapStyle = this.#mapStyle;
-    const { current, images, revision } = this.#session.style;
+    const { current, images, revision, sceneBefore } = this.#session.style;
     if (mapStyle.status === 'loaded' && mapStyle.revision !== revision) {
-      const snapshot = { style: current, images };
+      const snapshot = { style: current, images, sceneBefore };
       this.#apply(map, diffSnapshot(mapStyle, snapshot), revision, snapshot);
     }
   }
@@ -633,8 +717,10 @@ export class MapLibreView<const G extends string> implements MapView {
     // 数据源移除（包括换了地址的先移除再添加）后，旧的错误不再属于它
     this.#forgetSourceErrors(commands.flatMap(({ command, args }) => (command === 'removeSource' ? [args[0]] : [])));
     if (applied && !this.#rejected) {
-      this.#mapStyle = { status: 'loaded', revision, style: snapshot.style, images: snapshot.images };
-      this.#scene?.keepOnTop();
+      const { style, images, sceneBefore } = snapshot;
+      this.#mapStyle = { status: 'loaded', revision, style, images, sceneBefore };
+      // 增量命令新加的图层排在最上面：模型层挪回页面声明的位置
+      this.#scene?.place(sceneBefore);
     } else {
       // 地图和记录可能已经不一致
       this.#rebuild(map);
@@ -657,14 +743,14 @@ export class MapLibreView<const G extends string> implements MapView {
 
   // 用当前快照整体加载；完成后触发 style.load，期间的变化届时追上；失败时只有 error（见 #onMapError）
   #rebuild(map: MapLike): void {
-    const { current, images, revision } = this.#session.style;
+    const { current, images, revision, sceneBefore } = this.#session.style;
     // 新的一轮开始：激活因此中止时，等待的人等到本轮结束，而不是拿到上一轮早已成功的结果
     this.#renewReady();
     // 从失败开始的新一轮先回到 initializing（先换 Promise 再通知）：失败后重新加载，以及报错后加载仍然完成、激活时追赶触发的重建
     if (this.#state === 'failed') {
       this.#setState('initializing');
     }
-    this.#mapStyle = { status: 'loading', revision, style: current, images };
+    this.#mapStyle = { status: 'loading', revision, style: current, images, sceneBefore };
     // 整体加载会去掉三维模型层，加载完成后再加上
     this.#syncScene();
     // 所有数据源重新创建，错误会重新出现
@@ -694,9 +780,9 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#finishAnimation = duration === 0 ? null : finish;
   }
 
-  // 加载中、暂停时的画面不算：加载中样式还没生效，暂停时显示的是另一个视图
+  // 加载中、暂停时的画面不算：加载中样式还没生效，暂停时显示的是另一个视图；三维模块还没加载好时也不算
   #onIdle(): void {
-    if (this.#state === 'ready') {
+    if (this.state === 'ready') {
       this.#emitter.emit('settle');
     }
   }
@@ -709,9 +795,86 @@ export class MapLibreView<const G extends string> implements MapView {
     );
   }
 
-  // 模型层只在显示三维、视图就绪、样式已加载时挂在地图上
+  // 模型层只在显示三维、视图就绪、样式已加载时挂在地图上，插在已应用的快照声明的位置
   #syncScene(): void {
-    this.#scene?.update(this.#kind === '3d' && this.#state === 'ready', this.#mapStyle.status === 'loaded');
+    this.#scene?.update(
+      this.#kind === '3d' && this.#state === 'ready',
+      this.#mapStyle.status === 'loaded',
+      this.#mapStyle.sceneBefore
+    );
+  }
+
+  // 已经就绪时换种类：先按会话的相机跳过去（俯角放进新的上限），再改上限和投影，MapLibre 不会自己收回俯角发出 program 的移动；
+  // 投影换完后地图收敛过的实际值按 sync 写回
+  #applyKind(map: MapLike): void {
+    const {
+      center: [lng, lat],
+      zoom,
+      bearing,
+      pitch
+    } = this.#session.camera.current;
+    map.jumpTo({ center: [lng, lat], zoom, bearing, pitch: Math.min(pitch, this.#maxPitch()) }, { cause: 'sync' });
+    this.#setMaxPitch(map);
+    this.#applyProjection(map);
+    this.#writeCamera(map, 'sync');
+  }
+
+  #maxPitch(): number {
+    return this.#kind === '3d' ? MAX_PITCH_3D : this.#maxPitch2d;
+  }
+
+  #setMaxPitch(map: MapLike): void {
+    const maxPitch = this.#maxPitch();
+    if (map.getMaxPitch() !== maxPitch) {
+      map.setMaxPitch(maxPitch);
+    }
+  }
+
+  // 三维是地球，二维是样式自己的投影（没有时墨卡托）；只在同时担任二三维、样式已加载时设置，整体重建的样式加载完成时再设
+  #applyProjection(map: MapLike): void {
+    if (this.kinds.length <= 1 || this.#mapStyle.status !== 'loaded') {
+      return;
+    }
+    const wanted = this.#kind === '3d' ? GLOBE : (this.#mapStyle.style.projection ?? MERCATOR);
+    const current = map.getProjection() ?? MERCATOR;
+    if (JSON.stringify(current.type) !== JSON.stringify(wanted.type)) {
+      map.setProjection(wanted);
+    }
+  }
+
+  #onModuleChange(state: SceneModuleState): void {
+    this.#moduleFailure = state.kind === 'failed' ? Object.freeze({ kind: 'module', error: state.error }) : null;
+    this.#notifyState();
+  }
+
+  // 对外的状态：地图没有就绪、显示二维时就是地图的；显示三维时还看三维模块（ADR 0147 第 2 节）
+  #presented(): { readonly state: ViewState; readonly failure: MapViewFailure | null } {
+    const module = this.#scene?.module;
+    if (this.#state !== 'ready' || this.#kind !== '3d' || module === undefined) {
+      return { state: this.#state, failure: this.#failure };
+    }
+    if (module.kind === 'ready') {
+      return { state: 'ready', failure: null };
+    }
+    if (module.kind === 'failed') {
+      return { state: 'failed', failure: this.#moduleFailure };
+    }
+    // 加载中（切到三维时就开始加载，不会停在还没要过）
+    return { state: 'initializing', failure: null };
+  }
+
+  // 对外的状态或失败原因变了才通知
+  #notifyState(): void {
+    if (this.#state === 'disposed') {
+      return;
+    }
+    const { state, failure } = this.#presented();
+    if (state === this.#shownState && failure === this.#shownFailure) {
+      return;
+    }
+    this.#shownState = state;
+    this.#shownFailure = failure;
+    this.#emitter.emit('statechange', state);
   }
 
   // 显示二维时三维内容的状态不报告；切到三维时 setKind 报告一次
@@ -721,24 +884,26 @@ export class MapLibreView<const G extends string> implements MapView {
     }
   }
 
+  // 对外就绪时才能用：显示三维时三维模块也要加载好
   #readyMap(): MapLike {
     this.#assertAlive();
-    if (this.#state !== 'ready' || this.#map === undefined) {
-      throw new Error(`MapLibreView 当前状态为 ${this.#state}，只能在 ready 时定位、拾取、投影和查询`);
+    const { state } = this.#presented();
+    if (state !== 'ready' || this.#map === undefined) {
+      throw new Error(`MapLibreView 当前状态为 ${state}，只能在 ready 时定位、拾取、投影和查询`);
     }
     return this.#map;
   }
 
   // 只有就绪且没有暂停的视图把输入交给工具：二三维切换时只有当前显示的视图在转交（ADR 0034 第 3 条）；
-  // 临时拖动的松开和派生的单击不交给工具（ADR 0056 第 2 节）
+  // 三维模块没加载好时同样不转交；临时拖动的松开和派生的单击不交给工具（ADR 0056 第 2 节）
   #onInput(event: MapInputEvent): void {
-    if (this.#state === 'ready' && (event.type === 'key' || this.#pan?.swallows(event.type) !== true)) {
+    if (this.state === 'ready' && (event.type === 'key' || this.#pan?.swallows(event.type) !== true)) {
       this.#session.tool.dispatch(event, this.#toolView);
     }
   }
 
   #capturesPress(point: ScreenPoint): boolean {
-    return this.#state === 'ready' && this.#session.tool.capturesPress(point, this.#toolView);
+    return this.state === 'ready' && this.#session.tool.capturesPress(point, this.#toolView);
   }
 
   // 没有就绪时不应用，进入 ready（首次激活、恢复显示）时再按当前工具应用；切换工具时结束临时拖动
@@ -834,7 +999,7 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#state = state;
     this.#failure = nextFailure;
     this.#syncScene();
-    this.#emitter.emit('statechange', state);
+    this.#notifyState();
   }
 
   // MapLibre 的事件回调里不能抛错，否则会打断它自己的事件分发

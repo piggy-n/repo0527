@@ -27,7 +27,7 @@
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`PanModifier`、`ToolView` |
 | `measure/geodesic.ts` | 椭球面上的距离、累计距离、折线总长、多边形面积（geographiclib-geodesic，ADR 0035） |
 | `measure/measure-store.ts` | `MeasureStore`：测量的状态与测距、测面两个工具（ADR 0035） |
-| `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位、拾取、投影、渲染要素查询）；三维的可选能力 `eyeHeight`、`heading`、`sceneStatus`、`roamStatus` |
+| `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位、拾取、投影、渲染要素查询）；三维的可选能力 `eyeHeight`、`heading`、`sceneStatus`、`roamStatus`；同时担任二三维的视图的 `kinds`、`setKind`、`retry`，失败原因 `module`（ADR 0147） |
 | `view/rendered-features.ts` | 渲染要素查询的类型：`ScreenBox`、`RenderedQueryOptions`、`RenderedFeature`（ADR 0047 第 4 节） |
 | `view/view-input.ts` | 输入、拾取、投影的类型（ADR 0024 第 2、7、8 条） |
 | `maplibre/map-like.ts` | `MapLike`：适配器用到的 MapLibre 方法（窄接口）；连同方法签名用到的类型从入口导出，map-vue 的测试据此实现假地图 |
@@ -115,6 +115,7 @@ session[Symbol.dispose]();
 - 所有分组引用都没变的提交被忽略；内容相同的新对象照样让修订号加 1，但对比后没有命令就不通知
 - 同一轮事件循环里的提交合并成一次通知（微任务）；通知前先记下快照，监听器里再次提交时，下一次通知从这里开始对比
 - 释放后丢弃待发的通知、清空监听器，再提交或订阅会抛错；读取 `current`、`revision` 仍然可以
+- 可选的 `sceneBelow`（ADR 0147 第 2 节，3C.2）：MapLibre 引擎的三维模型层叠在哪个分组下面。组合快照时顺便算出 `sceneBefore`，即这个分组及以上各分组里的第一个图层（都为空时没有，模型层在最上面）；它随快照（`StyleSnapshot`、`StyleChange`）一起走，视图按已应用的快照摆放模型层，对比快照时不看它。不给时模型层在最上面；不是声明过的分组时构造抛错。Cesium 不看这一项
 
 ### CameraModel
 
@@ -202,7 +203,13 @@ store.clear();
 
 选项 `scrollZoomRates: { wheel?, trackpad? }` 在创建地图后设到 `map.scrollZoom`（`setWheelZoomRate`、`setZoomRate`），不传的一项用 MapLibre 的默认值（滚轮 1/450、触控板 1/100）；`MapLike` 为此加了 `scrollZoom`（ADR 0053 第 3 节）。
 
-选项 `loadSceneRenderer`（MapLibre 引擎的三维，ADR 0147 第 2 节）：给出时视图声明 `kinds = ['2d', '3d']`，`setKind` 切换当前种类，`ToolView.kind`、相机事件的 `view` 跟着变；三维内容由 `MapLibreScene` 管：第一次要加瓦片集时加载渲染器，显示三维、视图就绪、样式已加载时把 custom layer 的外壳 `SceneLayer` 挂到地图最上面，整体重建、GL 上下文恢复后重新挂上。三维时 `pick` 先打模型、`project` 对不在地面上的点按模型层最近一帧的相机算。`MapLike` 为此加了 `getLayer`、`moveLayer`、`getLayersOrder`、`triggerRepaint` 和 `render`、`webglcontextlost`、`webglcontextrestored` 事件，`addLayer` 也接受 custom layer。渲染器的窄接口 `SceneRenderer` 和细节见 [map-three.md](map-three.md)。
+选项 `loadSceneRenderer`（MapLibre 引擎的三维，ADR 0147 第 2 节）：给出时视图声明 `kinds = ['2d', '3d']`，`setKind` 切换当前种类，`ToolView.kind`、相机事件的 `view` 跟着变。细节见 [map-three.md](map-three.md)"一个视图两种种类"，要点：
+
+- 换种类时投影、俯角上限跟着换（三维是地球、85°，二维是样式自己的投影和页面的上限），相机按会话同步；激活、整体重建的样式加载完成时按当前种类再设。只支持二维的视图不碰投影和俯角上限
+- 对外的 `state`、`failure` 按当前种类给出：地图就绪时，三维在三维模块加载中是 `initializing`，加载失败是 `failed`（原因是 `module`），二维照常 `ready`；`whenReady()` 在三维时还要等这一次模块加载，`retry()` 只重新加载模块；工具的输入、画面稳定（`settle`）、定位和拾取都按对外的状态。地图自己的生命周期和状态转换表不变
+- 三维内容由 `MapLibreScene` 管：第一次切到三维时加载三维模块，显示三维、视图就绪、样式已加载、模块已加载时把 custom layer 的外壳 `SceneLayer` 插在已应用快照的 `sceneBefore` 下面（没有时在最上面），增量命令以后挪回原位，整体重建、GL 上下文恢复后重新挂上
+- 三维时 `pick` 先打模型、再打地面，指向天空是 `miss`；`project` 对不在地面上的点按模型层最近一帧的相机算，地面上的点在地球背面时为 `null`；`eyeHeight()`、`heading()` 来自 MapLibre 的相机，二维时为 `null`
+- `MapLike` 为此加了 `getLayer`、`moveLayer`、`getLayersOrder`、`triggerRepaint`、`getProjection`、`setProjection`、`getMaxPitch`、`setMaxPitch`、`_camera.transform`（`CameraTransformLike`：相机高度、点打不打得到地面、点在不在地球背面，后两项在 6.12 的类型里标了 `@internal`，只经 `cameraTransform()` 一处读取）和 `render`、`webglcontextlost`、`webglcontextrestored` 事件，`addLayer` 也接受 custom layer。渲染器的窄接口 `SceneRenderer` 见 [map-three.md](map-three.md)
 
 **样式同步**：
 

@@ -1,4 +1,8 @@
-import type { LayerSpecification, SourceSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type {
+  LayerSpecification,
+  ProjectionSpecification,
+  SourceSpecification
+} from '@maplibre/maplibre-gl-style-spec';
 import type { Polygon } from 'geojson';
 import {
   type CameraEventData,
@@ -197,6 +201,22 @@ class FakeMap implements MapLike {
   }
   triggerRepaint(): void {}
   remove(): void {}
+  // 投影、俯角上限和相机的变换只在三维引擎是 maplibre 时用到
+  getProjection(): ProjectionSpecification | undefined {
+    return undefined;
+  }
+  setProjection(): void {}
+  getMaxPitch(): number {
+    return 60;
+  }
+  setMaxPitch(): void {}
+  readonly _camera = {
+    transform: {
+      getCameraAltitude: () => 1000,
+      isPointOnMapSurface: () => true,
+      isLocationOccluded: () => false
+    }
+  };
 
   /** 模拟用户拖动：带原始的 DOM 事件 */
   drag(lng: number, lat: number): void {

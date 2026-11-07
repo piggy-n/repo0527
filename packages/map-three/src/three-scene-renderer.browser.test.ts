@@ -52,13 +52,14 @@ async function within<T>(promise: Promise<T>, label: string): Promise<T> {
   }
 }
 
-async function setup(camera: CameraState, projection: 'mercator' | 'globe' = 'mercator') {
+// 视图切到三维时投影总是地球（ADR 0147 第 2 节），z12 以上和墨卡托相同；background 是底图的颜色
+async function setup(camera: CameraState, background = '#000000') {
   const container = document.body.appendChild(document.createElement('div'));
   container.style.cssText = `position: absolute; left: 0; top: 0; width: ${WIDTH}px; height: ${HEIGHT}px`;
-  const session = new MapSession({ groups: ['basemap'], camera, root: { projection: { type: projection } } });
+  const session = new MapSession({ groups: ['basemap'], camera });
   session.style.setGroup('basemap', {
     sources: {},
-    layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#000000' } }]
+    layers: [{ id: 'background', type: 'background', paint: { 'background-color': background } }]
   });
   const errors: unknown[] = [];
   let renderer: ThreeSceneRenderer | undefined;
@@ -82,6 +83,8 @@ async function setup(camera: CameraState, projection: 'mercator' | 'globe' = 'me
   });
   await view.whenReady();
   view.setKind('3d');
+  // 三维还要等三维模块加载好
+  await view.whenReady();
   const canvas = required(container.querySelector('canvas'), '地图画布');
   return {
     session,
@@ -143,6 +146,76 @@ function pixel(canvas: HTMLCanvasElement, { x, y }: ScreenPoint): [number, numbe
   return [data[0] ?? 0, data[1] ?? 0, data[2] ?? 0];
 }
 
+// 逐帧检测用：底图是不透明的蓝灰色，清屏色是全透明；采样点是画布中心（模型）和四周 100 像素处
+const BACKGROUND = '#204060';
+const MIDDLE: ScreenPoint = { x: WIDTH / 2, y: HEIGHT / 2 };
+const SAMPLES: readonly ScreenPoint[] = [
+  MIDDLE,
+  ...[
+    [-100, 0],
+    [100, 0],
+    [0, -100],
+    [0, 100]
+  ].map(([dx = 0, dy = 0]) => ({ x: MIDDLE.x + dx, y: MIDDLE.y + dy }))
+];
+
+// 读画布上一个点的颜色和透明度（CSS 像素，设备像素比为 1）
+function rgba(canvas: HTMLCanvasElement, { x, y }: ScreenPoint): [number, number, number, number] {
+  const gl = required(canvas.getContext('webgl2'), 'WebGL2 上下文');
+  const data = new Uint8Array(4);
+  gl.readPixels(Math.round(x), canvas.height - Math.round(y) - 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, data);
+  return [data[0] ?? 0, data[1] ?? 0, data[2] ?? 0, data[3] ?? 0];
+}
+
+// 立方体是红色的（光照下也是红色为主）
+const isModelRed = ([r, g, b]: readonly number[]) => (r ?? 0) > 40 && (r ?? 0) > (g ?? 0) * 2 && (r ?? 0) > (b ?? 0) * 2;
+
+async function nextFrames(count: number): Promise<void> {
+  for (let i = 0; i < count; i++) {
+    // oxlint-disable-next-line no-await-in-loop -- 一帧一帧地等
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  }
+}
+
+// 从 from 到 to（含）每次走 step
+function steps(from: number, to: number, step: number): number[] {
+  const count = Math.round((to - from) / step);
+  return Array.from({ length: count + 1 }, (_, i) => from + i * step);
+}
+
+/**
+ * 逐帧检测：每一帧读一次采样点，全是清屏色（什么都没画）算空白帧；绘制缓冲是保留的，读到的是最近画完的一帧。
+ * 模型层挂着时，地图每画完一帧（render 事件里渲染器的 endFrame）再读画布中心，不是红色算没画出模型
+ */
+function watchFrames(ctx: Context) {
+  const counts = { sampled: 0, blank: 0, rendered: 0, missing: 0 };
+  let frame = 0;
+  const sample = () => {
+    counts.sampled++;
+    if (SAMPLES.every(point => rgba(ctx.canvas, point)[3] === 0)) {
+      counts.blank++;
+    }
+    frame = requestAnimationFrame(sample);
+  };
+  frame = requestAnimationFrame(sample);
+  const { renderer } = ctx;
+  const endFrame = renderer.endFrame.bind(renderer);
+  renderer.endFrame = () => {
+    endFrame();
+    counts.rendered++;
+    if (!isModelRed(rgba(ctx.canvas, MIDDLE))) {
+      counts.missing++;
+    }
+  };
+  return {
+    stop: () => {
+      cancelAnimationFrame(frame);
+      renderer.endFrame = endFrame;
+      return { ...counts };
+    }
+  };
+}
+
 describe('ThreeSceneRenderer 在 MapLibre 的自写层里', { timeout: TEST_TIMEOUT }, () => {
   it('墨卡托：拾取到模型表面的真实经纬度和椭球高，再投影回画布误差小于 1 像素', async () => {
     const ctx = await setup({ center: MODEL_AT, zoom: 17, bearing: 30, pitch: 50 });
@@ -169,7 +242,7 @@ describe('ThreeSceneRenderer 在 MapLibre 的自写层里', { timeout: TEST_TIME
     ['地球（z10.5）', 10.5, 3000],
     ['地球投影的过渡段（z11.6）', 11.6, 1200]
   ])('%s：拾取—投影往返误差同样小于 1 像素', async (_, zoom, half) => {
-    const ctx = await setup({ center: MODEL_AT, zoom, bearing: 0, pitch: 30 }, 'globe');
+    const ctx = await setup({ center: MODEL_AT, zoom, bearing: 0, pitch: 30 });
     await addBox(ctx, half);
 
     const errors = roundTrip(ctx, AROUND_CENTER);
@@ -198,8 +271,6 @@ describe('ThreeSceneRenderer 在 MapLibre 的自写层里', { timeout: TEST_TIME
     const url = URL.createObjectURL(new Blob([await swingingArmGlb(40)]));
     onTestFinished(() => URL.revokeObjectURL(url));
 
-    // 第一次要加瓦片集时才创建渲染器：先在画面外加一个立方体
-    await loadBox(ctx, 10, [MODEL_AT[0] + 0.05, MODEL_AT[1]]);
     await ctx.renderer.addModel('arm', url, { lngLat: MODEL_AT, height: 0 }, new AbortController().signal);
     // 手臂离地 30 米处的一行像素：上半截左右摆，这一行的颜色跟着变
     const upper = required(ctx.view.project(MODEL_AT, 30), '手臂上半截在画布上的位置');
@@ -245,5 +316,57 @@ describe('ThreeSceneRenderer 在 MapLibre 的自写层里', { timeout: TEST_TIME
 
     expect(ctx.view.sceneStatus.get('box')?.state).toBe('ready');
     expect(Math.max(...roundTrip(ctx, AROUND_CENTER))).toBeLessThan(1);
+  });
+
+  // 逐帧检测（ADR 0147 3C.2 的验收）：投影切换、缩放穿过 z12 时没有空白帧，三维的每一帧都画出模型
+  describe('逐帧检测', () => {
+    // 立方体的半边长按级别取，在画布中心占一块
+    it.each([
+      ['z16 俯仰 60', 16, 60, 200],
+      ['z9 俯仰 30', 9, 30, 6000]
+    ])('二三维切换（%s）：没有空白帧，三维的每一帧都画出模型', async (_, zoom, pitch, half) => {
+      const ctx = await setup({ center: MODEL_AT, zoom, bearing: 0, pitch }, BACKGROUND);
+      await addBox(ctx, half);
+      await until(() => isModelRed(rgba(ctx.canvas, MIDDLE)), '画出立方体');
+      const frames = watchFrames(ctx);
+
+      ctx.view.setKind('2d');
+      await nextFrames(12);
+      ctx.view.setKind('3d');
+      await nextFrames(12);
+      const { blank, sampled, rendered, missing } = frames.stop();
+
+      expect(sampled).toBeGreaterThanOrEqual(20);
+      expect(blank).toBe(0);
+      expect(rendered).toBeGreaterThan(0);
+      expect(missing).toBe(0);
+      expect(ctx.errors).toStrictEqual([]);
+    });
+
+    it('缩放穿过 z12（逐级跳和飞行动画）：没有空白帧，每一帧都画出模型', async () => {
+      const ctx = await setup({ center: MODEL_AT, zoom: 13.5, bearing: 0, pitch: 30 }, BACKGROUND);
+      await addBox(ctx, 3000);
+      await until(() => isModelRed(rgba(ctx.canvas, MIDDLE)), '画出立方体');
+      const frames = watchFrames(ctx);
+
+      for (const zoom of [...steps(13.5, 10, -0.25), ...steps(10, 13.5, 0.25)]) {
+        ctx.view.flyTo({ zoom }, { duration: 0 });
+        // oxlint-disable-next-line no-await-in-loop -- 每一级画一帧再跳下一级
+        await nextFrames(1);
+      }
+      for (const zoom of [10, 13.5]) {
+        ctx.view.flyTo({ zoom }, { duration: 1200 });
+        // oxlint-disable-next-line no-await-in-loop -- 一段飞完再飞回来
+        await until(() => Math.abs(ctx.session.camera.current.zoom - zoom) < 0.01, `飞到 z${zoom}`);
+      }
+      await nextFrames(2);
+      const { blank, sampled, rendered, missing } = frames.stop();
+
+      expect(sampled).toBeGreaterThanOrEqual(40);
+      expect(blank).toBe(0);
+      expect(rendered).toBeGreaterThanOrEqual(30);
+      expect(missing).toBe(0);
+      expect(ctx.errors).toStrictEqual([]);
+    });
   });
 });

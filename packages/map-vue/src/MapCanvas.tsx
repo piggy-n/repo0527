@@ -18,7 +18,7 @@ import {
   watch
 } from 'vue';
 import styles from './MapCanvas.module.scss';
-import { CESIUM_ENGINE, MAP_SCENE_ENGINE } from './runtime';
+import { CESIUM_ENGINE, MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE } from './runtime';
 import { injectMapState } from './use-map';
 
 /** 创建地图时的选项；样式和相机来自会话，不在这里传 */
@@ -89,7 +89,27 @@ export const MapCanvas = defineComponent({
     };
 
     onMounted(createView);
-    // 引擎失败后重试：在同一个容器里重新创建视图（ADR 0030）；当前显示的是 Cesium 的三维时重试的是三维视图
+
+    // maplibre 下二维第一次画面稳定以后预加载三维模块（ADR 0091 的做法，ADR 0147 第 2 节）：等待期间切到三维（换了租约）、
+    // 画布卸载时作废；切过三维就已经在加载了
+    const preloadRuntime = inject(MAP_RUNTIME_PRELOAD, null);
+    const preloading = new AbortController();
+    const preloadAfterSettled = async () => {
+      if (engine.kind !== 'maplibre' || !preloadRuntime || state.context.dimension.value !== '2d') {
+        return;
+      }
+      await state.context.whenSettled(preloading.signal);
+      if (state.context.dimension.value === '2d') {
+        preloadRuntime(engine.loadRenderer);
+      }
+    };
+    onMounted(() => {
+      preloadAfterSettled().catch(() => undefined);
+    });
+    onUnmounted(() => preloading.abort());
+
+    // 引擎失败后重试：在同一个容器里重新创建视图（ADR 0030）；当前显示的是 Cesium 的三维时重试的是三维视图。
+    // maplibre 下三维模块加载失败不走这里：上下文让视图自己重新加载，地图不重建（ADR 0147 第 2 节）
     watch(state.retryRequests, () => {
       if (!kinds.includes(state.context.dimension.value)) {
         return;

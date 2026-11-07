@@ -12,6 +12,7 @@ export {
   MAPLIBRE_ENGINE,
   type MapRuntimeLoader,
   type MapRuntimePreloader,
+  type SceneCapabilities,
   type SceneEngine
 } from './runtime';
 export type { SceneDerivation } from './scene-binder';

@@ -39,10 +39,16 @@ jobs:
       # 浏览器测试用的 Chromium 无界面版及其系统依赖（ADR 0040）；不缓存，Playwright 不建议缓存浏览器
       - run: pnpm --filter yzt exec playwright install --with-deps --only-shell chromium
       - run: pnpm test
-      # 默认以外的三维引擎也构建一次，入口的静态依赖检查同样要成立（ADR 0147 第 7 节）；之后的构建覆盖这次的产物
-      - run: pnpm build
+      # 默认以外的三维引擎也内网构建一次，入口的静态依赖检查同样要成立，再跑这种引擎的三维冒烟（ADR 0147 第 7 节）；
+      # 冒烟用 loadEnv 读同一个变量判断产物用的引擎。之后的构建覆盖这次的产物
+      - run: pnpm build:intranet
         env:
           VITE_MAP_3D_ENGINE: maplibre
+      - run: pnpm --filter yzt test:smoke scene-maplibre
+        timeout-minutes: 5
+        env:
+          VITE_MAP_3D_ENGINE: maplibre
+          DEBUG: pw:webserver
       - run: pnpm build
       - run: pnpm build:intranet
       # 使用刚生成的生产产物和本地固定数据，不访问真实后端或天地图
