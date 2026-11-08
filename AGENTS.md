@@ -25,7 +25,7 @@ Claude Code 读写匹配的文件时自动加载 `.claude/rules/` 里对应的�
 | `state.md` | `features/*/store.ts`、`shared/storage/` | Pinia、偏好的持久化与开关 |
 | `packages.md` | `packages/`、`tsconfig.package*`、`vitest.shared.ts` | 拆包规则、包之间的依赖方向、依赖声明、包的测试 |
 | `map.md` | 地图的包、`shared/map/`、用到地图的 feature 和页面、`*.worker.ts` | 会话、样式分组、拥有者、相机操作、工具、地图页、Worker |
-| `map-3d.md` | `map-cesium`、`map-core/scene`、`scene-models`、现状底图页 | 三维、二三维切换、漫游、导航网格 |
+| `map-3d.md` | `map-cesium`、`map-three`、`map-core/scene`、`map-core/maplibre/roam`、`scene-models`、现状底图页 | 三维、二三维切换、漫游、导航网格 |
 | `resource-map.md` | `resource-map`、现状底图页、`probe-resource-classes` | 年份、分类、最小显示级别、已确认的界面细节 |
 | `indicator-simulation.md` | 指标 AI 计算 | 叫法、引擎、流程图、自定义范围 |
 | `city-dashboard.md` | 驾驶舱、`shared/city-indicators` | 范围、入场、保存图片 |

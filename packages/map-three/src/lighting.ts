@@ -28,11 +28,16 @@ export function createSunLights(): Object3D[] {
 
 const HEADLIGHT_SHADER_KEY = 'mx-headlight';
 
+/** 头灯按距离压暗远处的开关（0 关、1 开）：一个渲染器里所有头灯材质共用这一个 uniform */
+export interface FogUniform {
+  value: number;
+}
+
 /**
  * 头灯（从 map-cesium 的 scene-tilesets 移植）：不受场景光照影响，正对视线的面亮、斜掠的面暗，和时间无关；
- * 法线用视点坐标的屏幕空间导数求，材质双面
+ * 法线用视点坐标的屏幕空间导数求，材质双面。步行时 15～180 米之间把远处压到 0.45（uFog，同 Cesium）
  */
-function headlightVariant(source: Material): MeshBasicMaterial {
+function headlightVariant(source: Material, fog: FogUniform): MeshBasicMaterial {
   const variant = new MeshBasicMaterial({ side: DoubleSide });
   const { map, color, vertexColors, transparent, opacity, alphaTest } = source as Material & {
     map?: Texture | null;
@@ -45,18 +50,20 @@ function headlightVariant(source: Material): MeshBasicMaterial {
   variant.opacity = opacity;
   variant.alphaTest = alphaTest;
   variant.onBeforeCompile = shader => {
+    shader.uniforms.uFog = fog;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vHeadlightPosition;')
       .replace('#include <project_vertex>', '#include <project_vertex>\nvHeadlightPosition = mvPosition.xyz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vHeadlightPosition;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vHeadlightPosition;\nuniform float uFog;')
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
         {
           vec3 normalView = normalize(cross(dFdx(vHeadlightPosition), dFdy(vHeadlightPosition)));
           float facing = abs(dot(normalView, normalize(-vHeadlightPosition)));
-          diffuseColor.rgb *= (0.5 + 0.5 * facing) * 1.15;
+          float fog = mix(1.0, 0.45, smoothstep(15.0, 180.0, length(vHeadlightPosition)) * uFog);
+          diffuseColor.rgb *= (0.5 + 0.5 * facing) * fog * 1.15;
         }`
       );
   };
@@ -68,6 +75,12 @@ function headlightVariant(source: Material): MeshBasicMaterial {
 export class TilesetMaterials {
   readonly #originals = new WeakMap<Mesh, Material | Material[]>();
   readonly #variants = new Map<Material, MeshBasicMaterial>();
+  readonly #fog: FogUniform;
+
+  /** fog 是渲染器共用的远处压暗开关 */
+  constructor(fog: FogUniform) {
+    this.#fog = fog;
+  }
 
   /** 新加载的模型：记下原来的材质、改成双面（Cesium 一侧关掉了背面剔除），按光照换上 */
   adopt(model: Object3D, lighting: TilesetLighting): void {
@@ -123,7 +136,7 @@ export class TilesetMaterials {
   #variant(material: Material): MeshBasicMaterial {
     let variant = this.#variants.get(material);
     if (!variant) {
-      variant = headlightVariant(material);
+      variant = headlightVariant(material, this.#fog);
       this.#variants.set(material, variant);
     }
     return variant;

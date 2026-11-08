@@ -94,6 +94,12 @@ class FakeRenderer implements SceneRenderer {
   project() {
     return { x: 10, y: 20 };
   }
+  setLift(): void {}
+  lowestHeight(): number | null {
+    return null;
+  }
+  setInteriorFog(): void {}
+  setMarker(): void {}
   on<E extends keyof SceneRendererEvents>(event: E, callback: SceneRendererEvents[E]) {
     return this.emitter.on(event, callback);
   }

@@ -1,11 +1,16 @@
 import {
+  buildNavigation,
   type CameraState,
   EMPTY_SCENE_CONTENT,
+  type Navigation,
+  prepareTileset,
+  type RouteRoam,
   type SceneContent,
   type ScreenPoint,
   type StyleGroup,
   type TilesetLayer,
-  type TilesetStatus
+  type TilesetStatus,
+  type WalkRoam
 } from '@mx/map-core';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, onTestFinished } from 'vitest';
@@ -17,7 +22,7 @@ import { CESIUM_ENGINE, MAP_RUNTIME, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE, type Sce
 
 // 两种三维引擎的契约测试（ADR 0147 第 3 节）：同一组用例分别跑真实的 Cesium 和 MapLibre + Three，
 // 和页面一样只通过 provideMap、bindScene、setDimension、相机操作和上下文的状态使用地图。
-// 3C.1 覆盖三维内容的增删、状态、失败和重试，以及 GL 上下文的丢失和恢复（只有 maplibre）
+// 3C.1 覆盖三维内容的增删、状态、失败和重试，以及 GL 上下文的丢失和恢复（只有 maplibre）；3C.3 加上漫游的开始、暂停、退出
 
 // 夹具是提交在 src/testing/scene-fixtures 的文本文件，由测试的开发服务器提供：box 是边长 80 米的红色立方体（glTF，缓冲内嵌），
 // 放在 [120.66, 31.31] 的地面上；broken 是同一个瓦片集，但瓦片的地址不存在
@@ -222,6 +227,102 @@ function pixel({ x, y }: ScreenPoint): [number, number, number] {
 const dominant = (color: readonly number[], channel: 0 | 1 | 2) =>
   color.every((value, index) => index === channel || (color[channel] ?? 0) > value * 2) && (color[channel] ?? 0) > 60;
 
+// 漫游的屋子（3C.3）：room 是 20 × 20 米、4 米高的一间，地板在 [120.66, 31.31] 地下 10 米；glTF 是文本的，
+// 导航网格只读 b3dm，测试里把它的缓冲解出来拼成 GLB 再包成 b3dm
+const ROOM_FLOOR = -10;
+const ROOM_URL = `${FIXTURES}/room/tileset.json`;
+
+interface TextGltf {
+  readonly buffers: readonly { readonly uri: string }[];
+}
+
+// GLB 的块按 4 字节对齐
+const pad = (length: number) => Math.ceil(length / 4) * 4;
+
+function glbOf(gltf: TextGltf): ArrayBuffer {
+  const [buffer] = gltf.buffers;
+  if (!buffer) {
+    throw new Error('屋子的 glTF 没有缓冲');
+  }
+  const bin = Uint8Array.from(atob(buffer.uri.slice(buffer.uri.indexOf(',') + 1)), char => char.charCodeAt(0));
+  const json = new TextEncoder().encode(JSON.stringify({ ...gltf, buffers: [{ byteLength: bin.length }] }));
+  const jsonChunk = new Uint8Array(pad(json.length)).fill(0x20);
+  jsonChunk.set(json);
+  const binChunk = new Uint8Array(pad(bin.length));
+  binChunk.set(bin);
+  const out = new ArrayBuffer(12 + 8 + jsonChunk.length + 8 + binChunk.length);
+  const view = new DataView(out);
+  view.setUint32(0, 0x46546c67, true);
+  view.setUint32(4, 2, true);
+  view.setUint32(8, out.byteLength, true);
+  view.setUint32(12, jsonChunk.length, true);
+  view.setUint32(16, 0x4e4f534a, true);
+  new Uint8Array(out).set(jsonChunk, 20);
+  view.setUint32(20 + jsonChunk.length, binChunk.length, true);
+  view.setUint32(24 + jsonChunk.length, 0x004e4942, true);
+  new Uint8Array(out).set(binChunk, 28 + jsonChunk.length);
+  return out;
+}
+
+// GLB 包成 b3dm：28 字节的头、只有 BATCH_LENGTH 的特征表（按 8 字节对齐）
+function b3dmOf(glb: ArrayBuffer): ArrayBuffer {
+  const text = JSON.stringify({ BATCH_LENGTH: 0 });
+  const feature = new TextEncoder().encode(text.padEnd(Math.ceil(text.length / 8) * 8, ' '));
+  const out = new ArrayBuffer(28 + feature.length + glb.byteLength);
+  const view = new DataView(out);
+  new Uint8Array(out).set(new TextEncoder().encode('b3dm'), 0);
+  view.setUint32(4, 1, true);
+  view.setUint32(8, out.byteLength, true);
+  view.setUint32(12, feature.length, true);
+  new Uint8Array(out).set(feature, 28);
+  new Uint8Array(out).set(new Uint8Array(glb), 28 + feature.length);
+  return out;
+}
+
+const fetchJson = async (url: string): Promise<unknown> => (await fetch(url)).json();
+
+// 屋子的导航网格：拥有者在页面里也是这样建的（主线程下载、Worker 里建）
+async function roomNavigation(): Promise<Navigation> {
+  const signal = new AbortController().signal;
+  const prepared = await prepareTileset(ROOM_URL, fetchJson, signal);
+  const gltf = (await fetchJson(`${FIXTURES}/room/room.gltf`)) as TextGltf;
+  return buildNavigation(prepared, { signal, download: async () => b3dmOf(glbOf(gltf)) });
+}
+
+// 地下的屋子：会话有地下空间，maplibre 下漫游时抬高
+function roomContent(roam?: RouteRoam | WalkRoam): SceneContent {
+  const tilesets = [layer('room', ROOM_URL, { lighting: 'headlight' })];
+  const underground = { tilesetId: 'room', surfaceOpacity: 0.25 };
+  return roam ? { tilesets, underground, roam } : { tilesets, underground };
+}
+
+// 等 count 帧
+const frames = (count: number) =>
+  new Promise<void>(resolve => {
+    let left = count;
+    const step = () => (--left <= 0 ? resolve() : requestAnimationFrame(step));
+    requestAnimationFrame(step);
+  });
+
+// 两次相机差不多：漫游结束飞回以后
+const sameCamera = (a: CameraState, b: CameraState) =>
+  Math.abs(a.center[0] - b.center[0]) < 1e-4 &&
+  Math.abs(a.center[1] - b.center[1]) < 1e-4 &&
+  Math.abs(a.zoom - b.zoom) < 0.05 &&
+  Math.abs(a.pitch - b.pitch) < 0.5;
+
+// 漫游的进度和人的位置
+const routeDistance = (page: Page) =>
+  page.map.roamStatus.value?.kind === 'route' ? page.map.roamStatus.value.distance : Number.NaN;
+const walkPlayer = (page: Page) =>
+  page.map.roamStatus.value?.kind === 'walk' ? page.map.roamStatus.value.player : null;
+const walkPhase = (page: Page) => (page.map.roamStatus.value?.kind === 'walk' ? page.map.roamStatus.value.phase : null);
+// 真实的视点高度在地板上方一个眼高：maplibre 下抬高着，对外减掉抬高量
+const eyeOnFloor = (page: Page, floor: number) =>
+  Math.abs((page.map.view.value?.eyeHeight() ?? Number.NaN) - (floor + 1.6)) < 0.05;
+
+const pressKey = (type: 'keydown' | 'keyup', code: string) => window.dispatchEvent(new KeyboardEvent(type, { code }));
+
 describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
 describe.each([
   ['cesium', CESIUM_ENGINE],
@@ -376,6 +477,95 @@ describe.each([
 
     expect(query().length > 0).toBe(engine.capabilities.identify);
     expect(page.map.sceneCapabilities).toBe(engine.capabilities);
+  });
+
+  it('路线漫游：放到起点，视点在地板上方 1.6 米；播放时前进、暂停时停住；结束后回到开始前的相机', async () => {
+    const page = await mountPage(engine);
+    const navigation = await roomNavigation();
+    page.content.value = roomContent();
+    await until(() => page.stateOf('room') === 'ready', '屋子就绪');
+    const camera = cameraOf(page);
+    await frames(2);
+    const before = camera.value;
+    const real = (x: number, y: number) => navigation.frame.toLngLat([x, y, 0]);
+    const route: RouteRoam = {
+      kind: 'route',
+      id: 'route-1',
+      path: [real(-8, -6), real(-8, 6)],
+      playing: false,
+      speed: 2,
+      run: 0
+    };
+
+    page.content.value = roomContent(route);
+    await until(() => page.map.roamStatus.value?.kind === 'route', '开始路线');
+    expect(page.map.roamStatus.value).toMatchObject({ id: 'route-1', distance: 0, finished: false });
+    await until(() => eyeOnFloor(page, ROOM_FLOOR), '放到起点');
+    page.content.value = roomContent({ ...route, playing: true });
+    await until(() => routeDistance(page) > 1, '沿路线往前走');
+    page.content.value = roomContent({ ...route, playing: false });
+    await frames(3);
+    const paused = routeDistance(page);
+    await frames(15);
+    expect(routeDistance(page)).toBe(paused);
+
+    page.content.value = roomContent();
+    await until(() => page.map.roamStatus.value === null, '漫游结束');
+    await until(() => sameCamera(camera.value, before), '飞回开始前的相机');
+    expect(page.errors).toStrictEqual([]);
+  });
+
+  it('步行：落到出生点、按 W 往前走，暂停时不走，瞬移到指定位置；结束后回到开始前的相机', async () => {
+    const page = await mountPage(engine);
+    const navigation = await roomNavigation();
+    page.content.value = roomContent();
+    await until(() => page.stateOf('room') === 'ready', '屋子就绪');
+    const camera = cameraOf(page);
+    await frames(2);
+    const before = camera.value;
+    const [lng, lat, height] = navigation.frame.toLngLat([0, -6, 0]);
+    const walk: WalkRoam = {
+      kind: 'walk',
+      id: 'walk-1',
+      navigation,
+      spawn: { lng, lat, height, heading: 0 },
+      speed: 2,
+      respawn: 0,
+      unstuck: 0,
+      paused: false,
+      teleport: null,
+      view: 'first',
+      avatar: `${window.location.origin}/avatar.glb`
+    };
+
+    page.content.value = roomContent(walk);
+    await until(() => walkPhase(page) !== null, '开始步行');
+    expect(walkPhase(page)).toBe('entering');
+    await until(() => walkPhase(page) === 'walking' && walkPlayer(page) !== null, '落到出生点');
+    const spawn = walkPlayer(page);
+    expect(Math.hypot((spawn?.x ?? Number.NaN) - 0, (spawn?.y ?? Number.NaN) + 6)).toBeLessThan(0.5);
+    await until(() => eyeOnFloor(page, ROOM_FLOOR), '视点在出生点上方');
+
+    pressKey('keydown', 'KeyW');
+    await until(() => (walkPlayer(page)?.y ?? Number.NaN) > (spawn?.y ?? 0) + 0.5, '往北走');
+    pressKey('keyup', 'KeyW');
+
+    page.content.value = roomContent({ ...walk, paused: true });
+    await frames(3);
+    const stopped = walkPlayer(page)?.y;
+    pressKey('keydown', 'KeyW');
+    await frames(15);
+    pressKey('keyup', 'KeyW');
+    expect(walkPlayer(page)?.y).toBe(stopped);
+
+    // 完整地图打开（暂停）时双击瞬移
+    page.content.value = roomContent({ ...walk, paused: true, teleport: { count: 1, spot: { x: 5, y: 5, floor: 0 } } });
+    await until(() => Math.hypot((walkPlayer(page)?.x ?? 0) - 5, (walkPlayer(page)?.y ?? 0) - 5) < 0.01, '瞬移');
+
+    page.content.value = roomContent();
+    await until(() => page.map.roamStatus.value === null, '漫游结束');
+    await until(() => sameCamera(camera.value, before), '飞回开始前的相机');
+    expect(page.errors).toStrictEqual([]);
   });
 
   it.runIf(name === 'maplibre')('叠放：sceneBelow 以下的分组被模型挡住，以上的画在模型上面（只有 maplibre）', async () => {

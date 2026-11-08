@@ -4,7 +4,7 @@ import { loadEnv } from 'vite';
 import { expect, test } from './fixtures.ts';
 import { roomB3dm, roomManifest, roomTileset } from './scene-model.ts';
 
-// MapLibre 引擎的三维（ADR 0147 3C.2）：只在 VITE_MAP_3D_ENGINE=maplibre 构建的产物上运行，CI 在那次构建之后单独跑这个文件
+// MapLibre 引擎的三维（ADR 0147 3C.2、3C.3）：只在 VITE_MAP_3D_ENGINE=maplibre 构建的产物上运行，CI 在那次构建之后单独跑这个文件
 const appRoot = fileURLToPath(new URL('../..', import.meta.url));
 const engine = loadEnv('intranet', appRoot, 'VITE_').VITE_MAP_3D_ENGINE;
 
@@ -68,8 +68,9 @@ async function landShare(page: Page, canvas: Locator): Promise<number> {
 
 test.skip(engine !== 'maplibre', '只在 VITE_MAP_3D_ENGINE=maplibre 构建的产物上运行');
 
-// 产物装配：动态加载的 map-three 分块、预加载、一块画布担任二三维；静态底图、测距、坐标定位的位置点、三维模型在三维里可用
-test('MapLibre 引擎的三维：二维稳定后预加载三维模块，切到三维还是同一块画布，底图、测距、位置点、模型都可用', async ({
+// 产物装配：动态加载的 map-three 分块、预加载、一块画布担任二三维；静态底图、测距、坐标定位的位置点、三维模型在三维里可用；
+// 步行进站只为确认导航网格的 Worker 在产物里能加载、构建，抬高后能进出，不测业务细节
+test('MapLibre 引擎的三维：二维稳定后预加载三维模块，切到三维还是同一块画布，底图、测距、位置点、模型、步行都可用', async ({
   context,
   page
 }) => {
@@ -156,6 +157,16 @@ test('MapLibre 引擎的三维：二维稳定后预加载三维模块，切到�
     await expect(locate).toBeEnabled({ timeout: 60_000 });
     await locate.click();
     await expect(page.locator('[data-map-status]')).toHaveCount(0);
+
+    // 已加载里的"漫游"：有出生点的从步行开始，地下的屋子抬高，黑幕下进站（ADR 0147 第 4 节）；退出时同样回到地面
+    await loaded.getByRole('button', { name: '漫游', exact: true }).click();
+    const bar = page.locator('[data-roam-panel]');
+    await expect(bar.getByRole('button', { name: '回到起始点', exact: true })).toBeVisible({ timeout: 90_000 });
+    expect(wasRequested(/\/assets\/nav-grid\.worker-[\w-]+\.js$/), '导航网格的 Worker 分块').toBe(true);
+    await expect(page.locator('[data-map-status-bar]')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(bar).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '二维', exact: true })).toBeVisible({ timeout: 30_000 });
 
     // 回到二维：还是同一块画布
     await page.getByRole('button', { name: '二维', exact: true }).click({ timeout: 60_000 });

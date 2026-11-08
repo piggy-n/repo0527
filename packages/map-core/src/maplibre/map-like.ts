@@ -40,8 +40,8 @@ export interface GestureHandlerLike {
   disable(): void;
 }
 
-/** 滚轮缩放：普通鼠标的滚轮和触控板分开调速率（ADR 0053 第 3 节） */
-export interface ScrollZoomLike {
+/** 滚轮缩放：普通鼠标的滚轮和触控板分开调速率（ADR 0053 第 3 节）；漫游期间关掉 */
+export interface ScrollZoomLike extends GestureHandlerLike {
   setWheelZoomRate(rate: number): void;
   setZoomRate(rate: number): void;
 }
@@ -57,6 +57,8 @@ export interface CameraEventData {
 export interface CameraTransformLike {
   /** 相机在海平面以上的高度，米 */
   getCameraAltitude(): number;
+  /** 相机所在的经纬度：开始漫游时从这里算视点 */
+  getCameraLngLat(): { readonly lng: number; readonly lat: number };
   /** 画布上的点打不打得到地面：地平线以上、地球以外的天空打不到 */
   isPointOnMapSurface(point: { readonly x: number; readonly y: number }): boolean;
   /** 地面上的点被地球挡住（在地球背面） */
@@ -95,8 +97,9 @@ export interface MapLike extends StyleTarget {
   getZoom(): number;
   getBearing(): number;
   getPitch(): number;
+  /** elevation 是中心点的高度（米）：只有漫游的第一人称相机给，那时 centerClampedToGround 关着 */
   jumpTo(
-    camera: { center: [number, number]; zoom: number; bearing: number; pitch: number },
+    camera: { center: [number, number]; zoom: number; bearing: number; pitch: number; elevation?: number },
     eventData: CameraEventData
   ): void;
   flyTo(
@@ -132,6 +135,11 @@ export interface MapLike extends StyleTarget {
   readonly doubleClickZoom: GestureHandlerLike;
   readonly boxZoom: GestureHandlerLike;
   readonly scrollZoom: ScrollZoomLike;
+  /** 下面四种手势只在漫游期间关掉（ADR 0147 第 4 节），工具不声明 */
+  readonly dragRotate: GestureHandlerLike;
+  readonly keyboard: GestureHandlerLike;
+  readonly touchZoomRotate: GestureHandlerLike;
+  readonly touchPitch: GestureHandlerLike;
   /** 样式命令加普通图层；三维模型层（custom layer）只由适配器加上（ADR 0147 第 5 节） */
   addLayer(layer: LayerSpecification | CustomLayerInterface, beforeId?: string): void;
   getLayer(id: string): unknown;
@@ -147,6 +155,15 @@ export interface MapLike extends StyleTarget {
   getMaxPitch(): number;
   /** 当前俯角超过新的上限时 MapLibre 自己收回并发出不带 eventData 的 move，所以先把相机放到上限以内再调用 */
   setMaxPitch(maxPitch: number): void;
+  /** 漫游期间放宽到 24 级（ADR 0147 第 5 节），结束时还原；同样先把相机放到上限以内再收紧 */
+  getMaxZoom(): number;
+  setMaxZoom(maxZoom: number): void;
+  /** 竖直视场角（度）：漫游时 60°，结束时还原 */
+  getVerticalFieldOfView(): number;
+  setVerticalFieldOfView(fov: number, eventData: CameraEventData): void;
+  /** 中心点的高度夹到地面：漫游时关掉，第一人称的目标点不在地面上（PoC 的坑 3） */
+  getCenterClampedToGround(): boolean;
+  setCenterClampedToGround(clamped: boolean): void;
   readonly _camera: { readonly transform: CameraTransformLike };
   remove(): void;
 }

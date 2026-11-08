@@ -33,6 +33,8 @@
 | `maplibre/map-like.ts` | `MapLike`：适配器用到的 MapLibre 方法（窄接口）；连同方法签名用到的类型从入口导出，map-vue 的测试据此实现假地图 |
 | `maplibre/apply-style-command.ts` | `applyStyleCommand`：一条命令对应一次地图方法调用 |
 | `maplibre/maplibre-view.ts` | `MapLibreView`：二维视图，唯一写 MapLibre 地图的地方 |
+| `maplibre/roam/` | MapLibre 引擎的漫游（ADR 0147 第 4 节）：`MapLibreRoam` 接管地图、抬高、进出和报告进度，`RouteRoamer`、`WalkRoamer` 是从 map-cesium 移植的路线和步行（只用真实坐标，经 `RoamHost` 设相机、拾取、投影），`roam-camera.ts` 是真实视点和 MapLibre 相机的换算；见 [map-three.md](map-three.md)"漫游" |
+| `view/blackout.ts` | `Blackout`：闪切用的黑幕（ADR 0086、0103），两种引擎的漫游共用，从入口导出（3C.3 从 map-cesium 移来） |
 | `view/modifier-pan.ts` | `ModifierPan`：按住修饰键临时拖动地图，截下这次按下、把指针的移动交给视图平移、给出临时的光标（ADR 0056、0080 第 4 节）；二维、三维的视图共用，从入口导出 |
 | `events.ts` | `Unsubscribe` 类型 |
 | `model-events.ts` | `ModelEvents`：会话各模型共用的事件与释放（ADR 0034 第 7 条），模块内部使用，不从入口导出 |
@@ -349,7 +351,7 @@ store.clear();
 
 ## 第一人称步行（ADR 0086）
 
-迁自旧项目 `FirstPersonRoam.js` 的第一人称部分，规则和参数不变；Cesium 那一半（键鼠、深度拾取、相机）在 map-cesium 的 `scene-walk.ts`。
+迁自旧项目 `FirstPersonRoam.js` 的第一人称部分，规则和参数不变；Cesium 那一半（键鼠、深度拾取、相机）在 map-cesium 的 `scene-walk.ts`，MapLibre 那一半在 `maplibre/roam/walk-roamer.ts`（从它移植，见 [map-three.md](map-three.md)"漫游"）。
 
 - 会话的意图 `WalkRoam`：导航网格、清单的出生点、速度，回到出生点和脱困写成计数（加 1 就做一次）；完整地图打开时 `paused`，在完整地图上双击的瞬移 `teleport: { count, spot }`（ADR 0087）。视图报告 `{ kind: 'walk', phase, notice, notices, player }`，`player`（`WalkPlayer`）是人的局部坐标、地板、偏航、水平视场角和点击移动的落点，进到站内以后每帧变了才报告
 - `Walker`：局部系里的位置、楼层、视点高度和朝向。`walk` 每 0.1 米做一次 `moveFloor` 碰撞，被挡时偏转 0、±0.5、±1 弧度顺墙滑；`follow` 沿点击的路径走，穿闸机的直线不做碰撞、地板按比例过渡；`settleEye` 让视点平滑跟随地板，偏差夹在 -0.4～+0.15 米；俯仰限制在 ±80°

@@ -1,7 +1,7 @@
 import type { CameraState } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 import type { LoadJson, PreparedTileset } from '../scene/prepare-tileset';
-import type { SceneContentModel, SceneStatus } from '../scene/scene-content-model';
+import type { SceneContent, SceneContentModel, SceneStatus } from '../scene/scene-content-model';
 import { tilesetCamera } from '../scene/tileset-camera';
 import { SceneTilesetSync, type TilesetOptions } from '../scene/tileset-sync';
 import { deferred, type Deferred } from '../view/view-lifecycle';
@@ -36,6 +36,8 @@ export interface MapLibreSceneOptions {
   readonly onStatus: (status: SceneStatus) => void;
   /** 三维模块的加载状态变了 */
   readonly onModuleChange: (state: SceneModuleState) => void;
+  /** 瓦片集之外的三维内容（漫游、地下）要应用：和瓦片集同时，只在显示三维、渲染器建好以后 */
+  readonly onContent?: (content: SceneContent) => void;
 }
 
 const IDLE: SceneModuleState = Object.freeze({ kind: 'idle' });
@@ -53,6 +55,7 @@ export class MapLibreScene implements Disposable {
   readonly #loadRenderer: SceneRendererLoader;
   readonly #onError: (error: unknown) => void;
   readonly #onModuleChange: (state: SceneModuleState) => void;
+  readonly #onContent: ((content: SceneContent) => void) | undefined;
   readonly #sync: SceneTilesetSync;
   readonly #unsubscribeContent: Unsubscribe;
   #module: SceneModuleState = IDLE;
@@ -71,12 +74,22 @@ export class MapLibreScene implements Disposable {
   #stale = true;
   #disposed = false;
 
-  constructor({ map, scene, loadRenderer, loadJson, onError, onStatus, onModuleChange }: MapLibreSceneOptions) {
+  constructor({
+    map,
+    scene,
+    loadRenderer,
+    loadJson,
+    onError,
+    onStatus,
+    onModuleChange,
+    onContent
+  }: MapLibreSceneOptions) {
     this.#map = map;
     this.#content = scene;
     this.#loadRenderer = loadRenderer;
     this.#onError = onError;
     this.#onModuleChange = onModuleChange;
+    this.#onContent = onContent;
     this.#sync = new SceneTilesetSync({
       host: {
         addTileset: (id, tileset, options, signal) => this.#addTileset(id, tileset, options, signal),
@@ -95,6 +108,11 @@ export class MapLibreScene implements Disposable {
 
   get module(): SceneModuleState {
     return this.#module;
+  }
+
+  /** 三维模块加载好以后的渲染器（漫游用它拾取、投影、抬高）；还没加载时为 null */
+  get renderer(): SceneRenderer | null {
+    return this.#renderer;
   }
 
   /** 加载三维模块：还没要过、上次失败时开始加载；加载中、已加载时什么也不做 */
@@ -239,7 +257,9 @@ export class MapLibreScene implements Disposable {
 
   #applyContent(): void {
     this.#stale = false;
-    this.#sync.apply(this.#content.current.tilesets);
+    const content = this.#content.current;
+    this.#sync.apply(content.tilesets);
+    this.#onContent?.(content);
   }
 
   // 模型层挂在地图上，当且仅当显示三维、样式已加载、渲染器已创建

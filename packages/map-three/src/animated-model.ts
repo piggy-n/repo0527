@@ -39,7 +39,7 @@ function disposeObject(root: Object3D): void {
 }
 
 /**
- * 一个 glTF 模型和它的全部动画（ADR 0147 第 3 节的 glTF、骨骼动画验收；第三人称的人物在 3C.3 用它）：
+ * 一个 glTF 模型和它的全部动画（ADR 0147 第 3 节的 glTF、骨骼动画验收；第三人称的人物以后用它，ADR 0090 的入口没开放）：
  * 局部系锚在放置点，动画按真实时间推进
  */
 export class AnimatedModel implements Disposable {

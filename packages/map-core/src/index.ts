@@ -25,6 +25,8 @@ export type {
   CreateSceneRenderer,
   Matrix4Array,
   SceneFrame,
+  SceneLift,
+  SceneMarker,
   ScenePick,
   SceneRenderer,
   SceneRendererEvents,
@@ -176,3 +178,4 @@ export type {
 } from './view/view-input';
 export { canTransition, type Deferred, deferred, type LiveViewState } from './view/view-lifecycle';
 export { type ClientPoint, ModifierPan, type ModifierPanOptions } from './view/modifier-pan';
+export { Blackout } from './view/blackout';

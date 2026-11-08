@@ -89,7 +89,7 @@ const CAMERA_CALLS = new Set(['jumpTo', 'flyTo', 'panBy', 'fitBounds', 'remove',
 
 // 只模拟适配器用到的行为：记录调用；相机方法立即到位，并像 MapLibre 一样同步触发 move、合并 eventData
 // 记下设置过的滚轮缩放速率
-class FakeScrollZoom {
+class FakeScrollZoom extends FakeGesture {
   wheelRate: number | undefined;
   trackpadRate: number | undefined;
 
@@ -112,6 +112,7 @@ class FakeMap implements MapLike {
     sky: (_point: { readonly x: number; readonly y: number }) => false,
     occluded: (_lngLat: { readonly lng: number; readonly lat: number }) => false,
     getCameraAltitude: () => this.transform.altitude,
+    getCameraLngLat: () => ({ lng: this.camera.lng, lat: this.camera.lat }),
     isPointOnMapSurface: (point: { readonly x: number; readonly y: number }) => !this.transform.sky(point),
     isLocationOccluded: (lngLat: { readonly lng: number; readonly lat: number }) => this.transform.occluded(lngLat)
   };
@@ -131,6 +132,13 @@ class FakeMap implements MapLike {
   readonly doubleClickZoom = new FakeGesture();
   readonly boxZoom = new FakeGesture();
   readonly scrollZoom = new FakeScrollZoom();
+  readonly dragRotate = new FakeGesture();
+  readonly keyboard = new FakeGesture();
+  readonly touchZoomRotate = new FakeGesture();
+  readonly touchPitch = new FakeGesture();
+  maxZoom = 22;
+  fov = 36.87;
+  clamped = true;
 
   constructor(readonly options: MapLibreMapOptions) {
     const [lng, lat] = options.center as [number, number];
@@ -335,6 +343,34 @@ class FakeMap implements MapLike {
 
   getMaxPitch(): number {
     return this.maxPitch;
+  }
+
+  getMaxZoom(): number {
+    return this.maxZoom;
+  }
+
+  setMaxZoom(maxZoom: number): void {
+    this.calls.push(['setMaxZoom', maxZoom]);
+    this.maxZoom = maxZoom;
+  }
+
+  getVerticalFieldOfView(): number {
+    return this.fov;
+  }
+
+  setVerticalFieldOfView(fov: number, eventData: CameraEventData): void {
+    this.calls.push(['setVerticalFieldOfView', fov]);
+    this.fov = fov;
+    this.moveTo(this.camera, eventData);
+  }
+
+  getCenterClampedToGround(): boolean {
+    return this.clamped;
+  }
+
+  setCenterClampedToGround(clamped: boolean): void {
+    this.calls.push(['setCenterClampedToGround', clamped]);
+    this.clamped = clamped;
   }
 
   // 像 MapLibre 一样：俯角超过新的上限时收回，发出不带 eventData 的移动
@@ -2460,6 +2496,10 @@ function fakeRenderer(): SceneRenderer {
     removeTileset: () => undefined,
     pick: () => ({ lngLat: [118.8, 32.05], height: 15 }),
     project: () => ({ x: 7, y: 9 }),
+    setLift: () => undefined,
+    lowestHeight: () => null,
+    setInteriorFog: () => undefined,
+    setMarker: () => undefined,
     on: (event, callback) => emitter.on(event, callback),
     [Symbol.dispose]: () => undefined
   };
@@ -2786,5 +2826,117 @@ describe('MapLibreView as the 3D view of the MapLibre engine (ADR 0147)', () => 
     expect(ctx.view.pick({ x: 10, y: 200 })).toMatchObject({ kind: 'hit', surface: 'map' });
     expect(ctx.view.project([160, 30])).toBeNull();
     expect(ctx.view.project([118, 33])).toStrictEqual({ x: 0, y: 0 });
+  });
+});
+
+// 设图层可见性的调用："图层 取值"
+const visibility = (calls: readonly unknown[][]) =>
+  calls.flatMap(([name, layer, property, value]) =>
+    name === 'setLayoutProperty' && property === 'visibility' ? [`${String(layer)} ${String(value)}`] : []
+  );
+
+describe('MapLibreView roaming in the MapLibre engine (ADR 0147 §4)', () => {
+  const STATION = { id: 'station', url: 'https://models.test/station/tileset.json', show: true, lighting: 'headlight' } as const;
+  const ROUTE = {
+    kind: 'route',
+    id: 'route-1',
+    path: [
+      [118.8, 32.05, -5],
+      [118.8001, 32.05, -5]
+    ],
+    playing: false,
+    speed: 1,
+    run: 0
+  } as const;
+
+  // 地下的车站：包围盒最低处 -6 米，抬高 7 米；拾取打到的点在抬高前的真实高度
+  async function roaming() {
+    const ctx = setup({
+      loadSceneRenderer: async () => () => ({ ...fakeRenderer(), lowestHeight: () => -6 }),
+      loadJson: async () => STATION_JSON
+    });
+    const { tool, inputs } = recordingTool();
+    ctx.session.tool.register('probe', tool);
+    ctx.session.tool.activate('probe');
+    ctx.map.fire('style.load');
+    ctx.session.style.setGroup('business', lineGroup('dltb'));
+    await vi.advanceTimersByTimeAsync(0);
+    ctx.view.setKind('3d');
+    await vi.advanceTimersByTimeAsync(0);
+    ctx.session.scene.set({
+      tilesets: [{ ...STATION, attempt: 0 }],
+      underground: { tilesetId: 'station', surfaceOpacity: 0.25 },
+      roam: ROUTE
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    return Object.assign(ctx, { inputs });
+  }
+
+  it('hides the 2D layers while lifted, reports real heights and keeps the input from the tool', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
+    try {
+      using ctx = await roaming();
+      const statuses: unknown[] = [];
+      ctx.view.onRoamStatusChange(status => statuses.push(status));
+      ctx.map.calls.length = 0;
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(visibility(ctx.map.calls)).toStrictEqual(['dltb-line none']);
+      expect(ctx.view.roamStatus).toMatchObject({ kind: 'route', id: 'route-1', distance: 0 });
+      // MapLibre 的相机高度是抬高后的，对外减掉抬高量
+      ctx.map.transform.altitude = 5.6;
+      expect(ctx.view.eyeHeight()).toBeCloseTo(-1.4, 9);
+      // 打不到模型时是天空，不回退到抬高后的地面
+      expect(ctx.view.pick({ x: 1, y: 1 })).toMatchObject({ kind: 'hit', surface: 'model', height: 15 });
+      // 会话的相机按真实的视点：视点在地下，退化成视点正下方
+      expect(ctx.session.camera.current.center[0]).toBeCloseTo(118.8, 6);
+      expect(ctx.session.camera.current.pitch).toBe(0);
+      ctx.map.mouse('click', 5, 5);
+      expect(ctx.inputs).toStrictEqual([]);
+      // 抬高期间新加的图层同样隐藏
+      ctx.map.calls.length = 0;
+      ctx.session.style.setGroup('basemap', lineGroup('tdt'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(visibility(ctx.map.calls)).toContain('tdt-line none');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('another positioning stops the roam at once and gives the layers, gestures and input back', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
+    try {
+      using ctx = await roaming();
+      await vi.advanceTimersByTimeAsync(200);
+      ctx.map.calls.length = 0;
+
+      ctx.view.flyTo({ center: [119, 32], zoom: 12 });
+
+      expect(visibility(ctx.map.calls)).toStrictEqual(['dltb-line visible']);
+      expect(ctx.map.maxZoom).toBe(22);
+      expect(ctx.map.dragPan.enabled).toBe(true);
+      expect(callNames(ctx.map.calls).at(-1)).toBe('flyTo');
+      ctx.map.mouse('click', 5, 5);
+      expect(ctx.inputs).toHaveLength(1);
+      expect(ctx.view.eyeHeight()).toBe(1234);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaving 3D in the middle of a roam puts the camera straight back', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
+    try {
+      using ctx = await roaming();
+      await vi.advanceTimersByTimeAsync(200);
+
+      ctx.view.setKind('2d');
+
+      expect(visibility(ctx.map.calls).at(-1)).toBe('dltb-line visible');
+      expect(ctx.map.camera).toMatchObject({ lng: NANJING.center[0], lat: NANJING.center[1] });
+      expect(ctx.view.kind).toBe('2d');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

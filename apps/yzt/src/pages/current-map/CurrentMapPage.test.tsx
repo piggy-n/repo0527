@@ -190,7 +190,24 @@ class FakeMap implements MapLike {
   readonly dragPan = fakeGesture();
   readonly doubleClickZoom = fakeGesture();
   readonly boxZoom = fakeGesture();
-  readonly scrollZoom = { wheelRate: 0, trackpadRate: 0, setWheelZoomRate: (rate: number) => void (this.scrollZoom.wheelRate = rate), setZoomRate: (rate: number) => void (this.scrollZoom.trackpadRate = rate) };
+  readonly scrollZoom = { ...fakeGesture(), wheelRate: 0, trackpadRate: 0, setWheelZoomRate: (rate: number) => void (this.scrollZoom.wheelRate = rate), setZoomRate: (rate: number) => void (this.scrollZoom.trackpadRate = rate) };
+  // 漫游接管地图时才用到（ADR 0147 第 4 节），这里的测试不漫游
+  readonly dragRotate = fakeGesture();
+  readonly keyboard = fakeGesture();
+  readonly touchZoomRotate = fakeGesture();
+  readonly touchPitch = fakeGesture();
+  getMaxZoom(): number {
+    return 22;
+  }
+  setMaxZoom(): void {}
+  getVerticalFieldOfView(): number {
+    return 36.87;
+  }
+  setVerticalFieldOfView(): void {}
+  getCenterClampedToGround(): boolean {
+    return true;
+  }
+  setCenterClampedToGround(): void {}
 
   getLayer(): unknown {
     return undefined;
@@ -213,6 +230,7 @@ class FakeMap implements MapLike {
   readonly _camera = {
     transform: {
       getCameraAltitude: () => 1000,
+      getCameraLngLat: () => ({ lng: this.camera.lng, lat: this.camera.lat }),
       isPointOnMapSurface: () => true,
       isLocationOccluded: () => false
     }

@@ -5,7 +5,7 @@ import { createNanoEvents } from 'nanoevents';
 import type { CameraCause, CameraState, ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 import type { LoadJson } from '../scene/prepare-tileset';
-import { NO_SCENE_STATUS, type SceneStatus } from '../scene/scene-content-model';
+import { NO_SCENE_STATUS, type RoamStatus, type SceneStatus } from '../scene/scene-content-model';
 import type { MapSession } from '../session/map-session';
 import { diffSnapshot, type StyleCommand, type StyleSnapshot } from '../style/diff-style';
 import type { StyleImages } from '../style/style-image';
@@ -35,6 +35,7 @@ import type {
   MapMoveEventLike
 } from './map-like';
 import { MapLibreScene, type SceneModuleState } from './maplibre-scene';
+import { MapLibreRoam } from './roam/maplibre-roam';
 import type { SceneRendererLoader } from './scene-renderer';
 import { ModifierPan } from '../view/modifier-pan';
 
@@ -72,6 +73,7 @@ interface MapLibreViewEvents {
   settle: () => void;
   sourceerrorchange: (errors: SourceErrors) => void;
   scenestatuschange: (status: SceneStatus) => void;
+  roamstatuschange: (status: RoamStatus | null) => void;
 }
 
 /**
@@ -206,6 +208,10 @@ export class MapLibreView<const G extends string> implements MapView {
   readonly #disabledGestures = new Set<keyof Gestures>();
   // 三维内容（ADR 0147 第 2 节）；没给渲染器、地图没创建出来时没有
   readonly #scene: MapLibreScene | undefined;
+  // 漫游（ADR 0147 第 4 节）：和三维内容一起创建
+  readonly #roam: MapLibreRoam | undefined;
+  // 漫游抬高期间二维图层隐藏着：应用样式命令、整体重建以后再隐藏一遍
+  #layersHidden = false;
   // 交给工具的视图能力：只有种类、拾取、投影和渲染要素查询（ADR 0034 第 2 条、ADR 0047 第 4 节）；种类随维度变化
   readonly #toolView: ToolView = (() => {
     const currentKind = () => this.#kind;
@@ -266,6 +272,7 @@ export class MapLibreView<const G extends string> implements MapView {
       this.#map = undefined;
       this.#pan = undefined;
       this.#scene = undefined;
+      this.#roam = undefined;
       this.#stack = stack.move();
       this.#fail(error);
       return;
@@ -305,6 +312,7 @@ export class MapLibreView<const G extends string> implements MapView {
     ]) {
       stack.defer(() => subscription.unsubscribe());
     }
+    // 漫游先于三维内容释放：它还要用渲染器
     this.#scene = loadSceneRenderer
       ? stack.use(
           new MapLibreScene({
@@ -314,7 +322,23 @@ export class MapLibreView<const G extends string> implements MapView {
             loadJson,
             onError: this.#onError,
             onStatus: status => this.#onSceneStatus(status),
-            onModuleChange: state => this.#onModuleChange(state)
+            onModuleChange: state => this.#onModuleChange(state),
+            onContent: content => this.#guard(() => this.#roam?.apply(content, true))
+          })
+        )
+      : undefined;
+    this.#roam = loadSceneRenderer
+      ? stack.use(
+          new MapLibreRoam({
+            map,
+            cameraTransform: () => cameraTransform(map),
+            container,
+            renderer: () => this.#scene?.renderer ?? null,
+            tilesetState: id => this.#scene?.status.get(id)?.state,
+            currentCamera: () => this.#session.camera.current,
+            flyTo: (camera, duration) => this.#guard(() => this.#fly(map, camera, { duration })),
+            onTakeover: state => this.#guard(() => this.#onRoamTakeover(map, state)),
+            onStatus: status => this.#emitter.emit('roamstatuschange', status)
           })
         )
       : undefined;
@@ -369,6 +393,15 @@ export class MapLibreView<const G extends string> implements MapView {
     return this.on('scenestatuschange', callback);
   }
 
+  /** 漫游的进度（ADR 0083、0086、0147 第 4 节）；没有漫游时为 null */
+  get roamStatus(): RoamStatus | null {
+    return this.#roam?.status ?? null;
+  }
+
+  onRoamStatusChange(callback: (status: RoamStatus | null) => void): Unsubscribe {
+    return this.on('roamstatuschange', callback);
+  }
+
   /**
    * 换成另一种种类（ADR 0147 第 2 节）：由上下文在切换维度时调用，画布不变；投影、俯角上限跟着换，相机按会话同步过来。
    * 第一次切到三维时加载三维模块，加上模型层、追上积下的三维内容；切回二维时撤下模型层。不支持的种类抛错
@@ -382,6 +415,10 @@ export class MapLibreView<const G extends string> implements MapView {
       return;
     }
     this.#pan?.cancel();
+    // 离开三维：漫游停下，地图还原、相机回到开始前（页面切二维前一般已经结束了漫游）
+    if (kind !== '3d') {
+      this.#guard(() => this.#roam?.suspend());
+    }
     this.#kind = kind;
     // 加载失败过的不自动重新加载，等 retry（同 Cesium 的三维画布）
     if (kind === '3d' && this.#scene?.module.kind === 'idle') {
@@ -427,6 +464,7 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#assertAlive();
     this.#active = false;
     this.#pan?.cancel();
+    this.#roam?.pause();
     if (this.#state === 'ready') {
       // 还在进行的定位动画直接到终点，在暂停之前按 program 写回会话：暂停期间地图的移动不写回，
       // 恢复时按会话的相机同步，否则会回到动画的中途（页面被缓存时实测，ADR 0063）
@@ -446,11 +484,18 @@ export class MapLibreView<const G extends string> implements MapView {
     if (this.#state === 'paused' && this.#map !== undefined) {
       this.#activate(this.#map);
     }
+    this.#guard(() => this.#roam?.resume());
   }
 
-  flyTo({ center, zoom, bearing, pitch }: Partial<CameraState>, { duration, padding }: FlyToOptions = {}): void {
+  /** 漫游时先让它停下、不飞回（同 CesiumView 的 #detachRoam），相机交给这次定位 */
+  flyTo(camera: Partial<CameraState>, options: FlyToOptions = {}): void {
     const map = this.#readyMap();
-    // MapLibre 的 padding 会留在地图上，改变"会话相机的中心就是画布中心"；换成只对这一次有效的 offset（ADR 0037）
+    this.#roam?.detach();
+    this.#fly(map, camera, options);
+  }
+
+  // MapLibre 的 padding 会留在地图上，改变"会话相机的中心就是画布中心"；换成只对这一次有效的 offset（ADR 0037）
+  #fly(map: MapLike, { center, zoom, bearing, pitch }: Partial<CameraState>, { duration, padding }: FlyToOptions): void {
     const offset = center && padding !== undefined ? centerOffset(padding) : undefined;
     const options: Parameters<MapLike['flyTo']>[0] = withoutUndefined({
       center: center && [center[0], center[1]],
@@ -469,6 +514,7 @@ export class MapLibreView<const G extends string> implements MapView {
     { padding, maxZoom, duration, pitch }: FitBoundsOptions = {}
   ): void {
     const map = this.#readyMap();
+    this.#roam?.detach();
     const options = withoutUndefined({ padding, maxZoom, duration, pitch });
     map.fitBounds([west, south, east, north], options, { cause: 'program' });
     this.#animating(duration, () =>
@@ -483,6 +529,10 @@ export class MapLibreView<const G extends string> implements MapView {
       const model = this.#scene?.pick(point);
       if (model) {
         return { kind: 'hit', surface: 'model', lngLat: model.lngLat, height: model.height };
+      }
+      // 漫游抬高期间二维隐藏着，地图上的点也不是真实的位置
+      if (this.#layersHidden) {
+        return { kind: 'miss' };
       }
       // 俯角大时地平线以上是天空，地球投影时球外也是：MapLibre 的 unproject 仍会给出一个地面上的点
       if (!cameraTransform(map).isPointOnMapSurface(point)) {
@@ -502,8 +552,9 @@ export class MapLibreView<const G extends string> implements MapView {
   project([lng, lat]: LngLat, height?: number): ScreenPoint | null {
     const map = this.#readyMap();
     if (this.#kind === '3d') {
-      if (height !== undefined && height !== 0) {
-        return this.#scene?.project([lng, lat], height) ?? null;
+      // 漫游抬高期间地面上的点也跟着抬高，由渲染器加上抬高量
+      if ((height !== undefined && height !== 0) || (this.#roam?.lift ?? 0) > 0) {
+        return this.#scene?.project([lng, lat], height ?? 0) ?? null;
       }
       if (cameraTransform(map).isLocationOccluded({ lng, lat })) {
         return null;
@@ -513,10 +564,10 @@ export class MapLibreView<const G extends string> implements MapView {
     return { x, y };
   }
 
-  /** 三维时视点在海平面以上的高度（米），来自 MapLibre 自己的相机；二维时为 null */
+  /** 三维时视点在海平面以上的高度（米），来自 MapLibre 自己的相机，漫游抬高期间减掉抬高量；二维时为 null */
   eyeHeight(): number | null {
     const map = this.#readyMap();
-    return this.#kind === '3d' ? cameraTransform(map).getCameraAltitude() : null;
+    return this.#kind === '3d' ? cameraTransform(map).getCameraAltitude() - (this.#roam?.lift ?? 0) : null;
   }
 
   /** 三维时视点的朝向（度，正北为 0、顺时针，0～360）；二维时为 null */
@@ -589,9 +640,13 @@ export class MapLibreView<const G extends string> implements MapView {
       if (this.#mapStyle.status === 'loaded') {
         this.#ready.resolve();
       }
-      // 整体加载的新样式带着自己的投影：按当前种类再设一次；地图上的全部图层也换了，三维模型层要重新加上
+      // 整体加载的新样式带着自己的投影：按当前种类再设一次；地图上的全部图层也换了，三维模型层要重新加上，
+      // 漫游抬高期间新的图层也要隐藏
       this.#applyProjection(map);
       this.#syncScene();
+      if (this.#layersHidden) {
+        this.#setLayersVisible(map, false);
+      }
     } else if (this.#active) {
       // 首次加载、失败后恢复，或者恢复显示时因整体重建而中断的激活
       this.#activate(map);
@@ -651,8 +706,11 @@ export class MapLibreView<const G extends string> implements MapView {
       this.#setMaxPitch(map);
       this.#applyProjection(map);
     }
-    // 此时还不是 ready，jumpTo 触发的 move 不会写回；地图收敛过的实际值（如俯角上限）下面按 sync 写回，不算意图
-    map.jumpTo({ center: [lng, lat], zoom, bearing, pitch }, { cause: 'sync' });
+    // 此时还不是 ready，jumpTo 触发的 move 不会写回；地图收敛过的实际值（如俯角上限）下面按 sync 写回，不算意图。
+    // 漫游接管着地图时相机归漫游，恢复时由它放回第一人称的位置
+    if (!this.#roam?.engaged) {
+      map.jumpTo({ center: [lng, lat], zoom, bearing, pitch }, { cause: 'sync' });
+    }
     this.#writeCamera(map, 'sync');
     this.#applyTool(map);
     this.#enter('ready');
@@ -719,8 +777,11 @@ export class MapLibreView<const G extends string> implements MapView {
     if (applied && !this.#rejected) {
       const { style, images, sceneBefore } = snapshot;
       this.#mapStyle = { status: 'loaded', revision, style, images, sceneBefore };
-      // 增量命令新加的图层排在最上面：模型层挪回页面声明的位置
+      // 增量命令新加的图层排在最上面：模型层挪回页面声明的位置；漫游抬高期间命令改出来的可见图层再隐藏
       this.#scene?.place(sceneBefore);
+      if (this.#layersHidden) {
+        this.#setLayersVisible(map, false);
+      }
     } else {
       // 地图和记录可能已经不一致
       this.#rebuild(map);
@@ -787,12 +848,40 @@ export class MapLibreView<const G extends string> implements MapView {
     }
   }
 
+  // 漫游时地图的中心不在地面上、还可能抬高着：会话的相机由漫游按真实的视点换算（ADR 0147 第 4 节）
   #writeCamera(map: MapLike, cause: CameraCause): void {
+    const roaming = this.#roam?.sessionCamera(map.getCanvas().clientHeight);
+    if (roaming) {
+      this.#session.camera.set(roaming, { view: this.#kind, cause });
+      return;
+    }
     const { lng, lat } = map.getCenter();
     this.#session.camera.set(
       { center: [lng, lat], zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() },
       { view: this.#kind, cause }
     );
+  }
+
+  // 漫游接管、抬高变了：抬高时隐藏二维图层；接管结束后按当前工具恢复手势、光标
+  #onRoamTakeover(map: MapLike, { engaged, lifted }: { readonly engaged: boolean; readonly lifted: boolean }): void {
+    if (lifted !== this.#layersHidden) {
+      this.#layersHidden = lifted;
+      this.#setLayersVisible(map, !lifted);
+    }
+    if (!engaged && this.#state === 'ready') {
+      this.#applyTool(map);
+    }
+  }
+
+  // 已应用的快照里的图层：隐藏时都设成不可见，恢复时按快照的取值；样式还没加载完时等 style.load 再设
+  #setLayersVisible(map: MapLike, visible: boolean): void {
+    const { status, style } = this.#mapStyle;
+    if (status !== 'loaded') {
+      return;
+    }
+    for (const layer of style.layers) {
+      map.setLayoutProperty(layer.id, 'visibility', visible ? (layer.layout?.visibility ?? 'visible') : 'none');
+    }
   }
 
   // 模型层只在显示三维、视图就绪、样式已加载时挂在地图上，插在已应用的快照声明的位置
@@ -881,6 +970,8 @@ export class MapLibreView<const G extends string> implements MapView {
   #onSceneStatus(status: SceneStatus): void {
     if (this.#kind === '3d') {
       this.#emitter.emit('scenestatuschange', status);
+      // 漫游可能在等要抬高的瓦片集就绪
+      this.#guard(() => this.#roam?.onSceneStatus());
     }
   }
 
@@ -897,6 +988,10 @@ export class MapLibreView<const G extends string> implements MapView {
   // 只有就绪且没有暂停的视图把输入交给工具：二三维切换时只有当前显示的视图在转交（ADR 0034 第 3 条）；
   // 三维模块没加载好时同样不转交；临时拖动的松开和派生的单击不交给工具（ADR 0056 第 2 节）
   #onInput(event: MapInputEvent): void {
+    // 漫游接管键鼠，相当于一个工具：输入不交给当前工具（三维里能点选，路线漫游时点一下会弹出要素详情）
+    if (this.#roam?.engaged) {
+      return;
+    }
     if (this.state === 'ready' && (event.type === 'key' || this.#pan?.swallows(event.type) !== true)) {
       this.#session.tool.dispatch(event, this.#toolView);
     }
@@ -916,6 +1011,10 @@ export class MapLibreView<const G extends string> implements MapView {
 
   // 光标和手势是当前工具的声明；只恢复自己关掉的手势。切换工具和进入 ready 时调用
   #applyTool(map: MapLike): void {
+    // 漫游接管着手势和光标：结束时再按当前工具应用
+    if (this.#roam?.engaged) {
+      return;
+    }
     const { gestures, persistent } = this.#session.tool.activeTool;
     this.#applyCursor(map);
     // 临时任务多由面板、工具栏上的按钮激活（也可能在加载期间），焦点还在按钮上，按键到不了地图；

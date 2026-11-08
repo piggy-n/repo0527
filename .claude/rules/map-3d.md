@@ -3,6 +3,7 @@ paths:
   - "packages/map-cesium/**"
   - "packages/map-three/**"
   - "packages/map-core/src/scene/**"
+  - "packages/map-core/src/maplibre/roam/**"
   - "apps/yzt/src/features/scene-models/**"
   - "apps/yzt/src/pages/current-map/**"
   - "apps/yzt/src/pages/dev/{map-3d,nav-grid}/**"
@@ -11,7 +12,7 @@ paths:
 
 # 三维（ADR 0078、0079、0147，设计见 `docs/modules/map-cesium.md`）
 
-- 两种三维引擎（ADR 0147）：现有的 Cesium，和正在实施的 MapLibre + Three.js（新包 `@mx/map-three`，二三维共用一块画布和一个视图）。用 `VITE_MAP_3D_ENGINE` 选择，过门槛之前默认 `cesium`。页面和拥有者不判断引擎，一种引擎做不到的按能力声明（上下文的 `sceneCapabilities`：三维里显示样式图层、三维里识别，和 `dimension` 一起决定图例、点/框选怎样显示）；MapLibre 引擎下模型层叠在页面用 `provideMap` 的 `sceneBelow` 声明的分组下面，以上的分组画在模型上面；两种引擎实现同一份契约（`SceneContent`、`MapView`、`ToolView`），跑同一组契约测试；新的三维功能只在 MapLibre 引擎下做。MapLibre 引擎下，地下的模型要抬高，抬高只存在于渲染适配器内部，拾取、相机、漫游状态对外都是真实椭球高。性能验收要测生产包，不测 PoC。下面各条描述 Cesium 引擎
+- 两种三维引擎（ADR 0147）：现有的 Cesium，和正在实施的 MapLibre + Three.js（新包 `@mx/map-three`，二三维共用一块画布和一个视图）。用 `VITE_MAP_3D_ENGINE` 选择，过门槛之前默认 `cesium`。页面和拥有者不判断引擎，一种引擎做不到的按能力声明（上下文的 `sceneCapabilities`：三维里显示样式图层、三维里识别，和 `dimension` 一起决定图例、点/框选怎样显示）；MapLibre 引擎下模型层叠在页面用 `provideMap` 的 `sceneBelow` 声明的分组下面，以上的分组画在模型上面；两种引擎实现同一份契约（`SceneContent`、`MapView`、`ToolView`），跑同一组契约测试；新的三维功能只在 MapLibre 引擎下做。MapLibre 引擎下，地下的模型要抬高，抬高只存在于渲染适配器内部，拾取、相机、漫游状态对外都是真实椭球高。MapLibre 引擎的漫游在 map-core 的 `maplibre/roam/`：从 map-cesium 移植的路线、步行只用真实坐标，经 `RoamHost` 设相机、拾取，抬高只在 `MapLibreRoam` 的相机换算和渲染器里；Cesium 一侧只修缺陷，手感只在 MapLibre 一侧调（[map-three.md](../../docs/modules/map-three.md)"漫游"）。性能验收要测生产包，不测 PoC。下面各条描述 Cesium 引擎
 - 三维地图用 Cesium，精确锁定版本（1.146.0，ADR 0002、0079）；Worker、资源等运行时文件由 `vite-plugin-static-copy` 复制到产物的 `cesium/`，基础地址由 app 的三维运行时设置
 - Cesium 同样只在 `packages/map-cesium` 和 `app` 导入（lint 检查，包括 `cesium/Build/...` 和 `@cesium/*`）；`CesiumView` 只依赖窄接口 `SceneLike`，唯一调用 Cesium 的是 `CesiumScene`，测试注入假场景（ADR 0079）
 - 二三维切换用上下文的 `map.setDimension(kind)`：页面同时放 `<MapCanvas>` 和 `<CesiumCanvas>`，每种视图一个画布，上下文的 `view` 等只反映当前种类；切换时要做的业务（如 `basemap.selectForDimension`：三维默认影像、二维默认矢量）由页面在同一处调用。三维画布第一次切到三维时才加载，运行时由 app 的 `withMapRuntime` 通过 `MAP_RUNTIME` 注入，不在 `main.ts` 里安装（会把 maplibre-gl 带进入口，ADR 0079 第 2、8 节）

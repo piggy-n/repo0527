@@ -22,14 +22,14 @@ export const FIXTURE_ORIGIN = 'https://fixture.test';
 
 const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
 
-/** 东北天局部系到地心坐标（列主序），3D Tiles 根节点的 transform */
-export function enuToEcef([lng, lat]: LngLat): number[] {
+/** 东北天局部系到地心坐标（列主序），3D Tiles 根节点的 transform；原点在 height 米的椭球高处 */
+export function enuToEcef([lng, lat]: LngLat, height = 0): number[] {
   const lambda = toRadians(lng);
   const phi = toRadians(lat);
   const east = [-Math.sin(lambda), Math.cos(lambda), 0];
   const north = [-Math.sin(phi) * Math.cos(lambda), -Math.sin(phi) * Math.sin(lambda), Math.cos(phi)];
   const up = [Math.cos(phi) * Math.cos(lambda), Math.cos(phi) * Math.sin(lambda), Math.sin(phi)];
-  return [...east, 0, ...north, 0, ...up, 0, ...toEcef(lng, lat, 0), 1];
+  return [...east, 0, ...north, 0, ...up, 0, ...toEcef(lng, lat, height), 1];
 }
 
 async function exportGlb(object: Group | Mesh, animations: AnimationClip[] = []): Promise<ArrayBuffer> {
@@ -99,6 +99,60 @@ export function swingingArmGlb(height: number): Promise<ArrayBuffer> {
   const group = new Group();
   group.add(mesh);
   return exportGlb(group, [clip]);
+}
+
+/**
+ * 两层的屋子（ADR 0147 第 4 节的验收）：20 × 20 米，下层地板在局部 0 米，东半边 5 米高处是上层，四面墙和 8 米高的顶板；
+ * 原点在屋子中央的下层地板上（glTF 的 y 朝上）
+ */
+export function roomGlb(): Promise<ArrayBuffer> {
+  const material = new MeshBasicMaterial({ color: 0xff0000 });
+  const group = new Group();
+  const slab = (width: number, depth: number, x: number, y: number, z: number, height = 0.2) =>
+    group.add(new Mesh(new BoxGeometry(width, height, depth).translate(x, y - height / 2, z), material));
+  slab(20, 20, 0, 0, 0);
+  slab(10, 20, 5, 5, 0);
+  slab(20, 20, 0, 8.2, 0);
+  for (const [width, depth, x, z] of [
+    [20, 0.2, 0, -10],
+    [20, 0.2, 0, 10],
+    [0.2, 20, -10, 0],
+    [0.2, 20, 10, 0]
+  ] as const) {
+    group.add(new Mesh(new BoxGeometry(width, 8, depth).translate(x, 4, z), material));
+  }
+  return exportGlb(group);
+}
+
+/** 屋子的瓦片集：下层地板在 at 处 floor 米的椭球高上，根节点是盒子 */
+export function roomTileset(at: LngLat, floor: number, content = 'room.glb'): unknown {
+  const boundingVolume = { box: [0, 0, 4, 10.2, 0, 0, 0, 10.2, 0, 0, 0, 4.4] };
+  return {
+    asset: { version: '1.1' },
+    geometricError: 40,
+    root: {
+      transform: enuToEcef(at, floor),
+      boundingVolume,
+      geometricError: 40,
+      refine: 'ADD',
+      children: [{ boundingVolume, geometricError: 0, content: { uri: content } }]
+    }
+  };
+}
+
+/** GLB 包成 b3dm（导航网格只读 b3dm）：28 字节的头、只有 BATCH_LENGTH 的特征表（按 8 字节对齐） */
+export function b3dmOf(glb: ArrayBuffer): ArrayBuffer {
+  const featureText = JSON.stringify({ BATCH_LENGTH: 0 });
+  const feature = new TextEncoder().encode(featureText.padEnd(Math.ceil(featureText.length / 8) * 8, ' '));
+  const out = new ArrayBuffer(28 + feature.length + glb.byteLength);
+  const view = new DataView(out);
+  new Uint8Array(out).set(new TextEncoder().encode('b3dm'), 0);
+  view.setUint32(4, 1, true);
+  view.setUint32(8, out.byteLength, true);
+  view.setUint32(12, feature.length, true);
+  new Uint8Array(out).set(feature, 28);
+  new Uint8Array(out).set(new Uint8Array(glb), 28 + feature.length);
+  return out;
 }
 
 /** 拦下 https://fixture.test/ 的 fetch，按路径给出内存里的内容；返回撤销函数 */

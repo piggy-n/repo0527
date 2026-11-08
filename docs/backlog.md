@@ -39,7 +39,7 @@
 
 - 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像
 - Cesium 引擎的三维 MVT：资源图层在三维不显示，三维点/框选不识别（MapLibre 引擎已经显示、能识别，ADR 0147）；接入时对齐解码库版本、点选改用瓦片数据服务、避免和 MapLibre 重复下载（ADR 0091）
-- MapLibre 三维引擎（ADR 0147）：3C.3、3C.4 没做；`maplibre` 下漫游入口不起作用、缩放上限仍是页面的 18 级，真实显卡上的画面和逐帧检测没有验证，清单见 [map-three](modules/map-three.md)"还没做的"
+- MapLibre 三维引擎（ADR 0147）：3C.4 没做；第三人称的人物模型没做（入口没开放）；真实显卡上的画面、逐帧检测、第一人称的手感和站内明暗没有验证，清单见 [map-three](modules/map-three.md)"还没做的"
 - AI 对话：MVT 结果、点击结果要素的弹窗、历史按内容搜索、对话随页面缓存、结果区的联动，见 [ai-chat](modules/ai-chat.md)"待办"
 - 数据查询：高级查询的导出；高级查询本身暂时隐藏（ADR 0119）
 - 分类：地类图斑、地类图斑（城镇村）是否也只列实际类别，要先枚举（ADR 0124）
@@ -91,7 +91,7 @@
 
 - 继续拆 `shared/map`：通用交互已经拆成 `@mx/map-tools`（ADR 0145）；工具栏、面板等通用界面，以及混着江苏内容的 `location`、`area`，等第二个地图项目的需求清楚了再说
 - 接入 Renovate；改用 Pull Request 后给 `main` 设分支保护（[ci-workflow](config/ci-workflow.md)）
-- 两种三维引擎的契约测试补上漫游的开始、暂停、退出（ADR 0147 第 3 节，3C.3）；业务端到端测试、覆盖率门槛
+- 业务端到端测试、覆盖率门槛
 - 冒烟的 `static-basemap.spec.ts` 三维部分按 Cesium 的画布写，只在默认的 `cesium` 产物上跑得通；`maplibre` 成为默认引擎之前要改成按引擎取画布
 - Worker 池的调度、缓存淘汰、内存预算，见 [utils](modules/utils.md)"还没做的"；瓦片数据服务等接入 MVT 时（[map-core](modules/map-core.md)"还没做的"）
 - 运行中 WebGL 上下文丢失（ADR 0030）：真实环境遇到再做

@@ -54,6 +54,23 @@ export interface ScenePick {
 }
 
 /**
+ * 抬高（ADR 0147 第 4 节）：MapLibre 把相机限制在 0 米以上，漫游地下的模型时把它抬高 meters 米。
+ * 抬高期间只画这个瓦片集，画模型之前用 backdrop 清屏，盖住二维和天空
+ */
+export interface SceneLift {
+  readonly tilesetId: string;
+  readonly meters: number;
+  /** CSS 颜色 */
+  readonly backdrop: string;
+}
+
+/** 点击移动的落点：真实的经纬度和椭球高（脚下的地板） */
+export interface SceneMarker {
+  readonly lngLat: LngLat;
+  readonly height: number;
+}
+
+/**
  * 三维渲染器（ADR 0147 第 2、5 节）：一个 WebGLRenderer 和 MapLibre 共用 GL 上下文；内容（瓦片集）和 GPU 资源分开，
  * 撤下层、上下文丢失时内容都保留
  */
@@ -73,10 +90,21 @@ export interface SceneRenderer extends Disposable {
   addTileset(id: string, tileset: PreparedTileset, options: TilesetOptions, signal: AbortSignal): Promise<TilesetSphere>;
   updateTileset(id: string, options: TilesetOptions): void;
   removeTileset(id: string): void;
-  /** 按最近一帧的相机拾取显示着的模型；没有打到、还没画过时为 null */
+  /**
+   * 按最近一帧的相机拾取画出的模型，跳过半透明的表面（同 Cesium 的深度拾取，隔着玻璃点到的是后面）；
+   * 结果是真实的高度（抬高时减回去）。没有打到、还没画过时为 null
+   */
   pick(point: ScreenPoint): ScenePick | null;
-  /** 按最近一帧的相机投影；还没画过、在相机背后时为 null */
+  /** 按最近一帧的相机投影真实的位置（抬高时加上抬高量）；还没画过、在相机背后时为 null */
   project(lngLat: LngLat, height: number): ScreenPoint | null;
+  /** 抬高一个瓦片集，null 时恢复；没有这个瓦片集时不抬高 */
+  setLift(lift: SceneLift | null): void;
+  /** 瓦片集根节点包围盒最低处的真实椭球高（米）；没有这个瓦片集、根索引还没读到时为 null */
+  lowestHeight(id: string): number | null;
+  /** 头灯按距离压暗远处：步行时打开（同 Cesium 的 uFog） */
+  setInteriorFog(enabled: boolean): void;
+  /** 点击移动的落点光环；null 撤掉 */
+  setMarker(marker: SceneMarker | null): void;
   on<E extends keyof SceneRendererEvents>(event: E, callback: SceneRendererEvents[E]): Unsubscribe;
 }
 
