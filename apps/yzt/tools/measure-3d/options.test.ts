@@ -19,6 +19,14 @@ describe('parseOptions', () => {
     expect(parseOptions(['--upload-mb', 'off,16,64']).uploadMBs).toEqual([null, 16, 64]);
   });
 
+  it('PowerShell 把没加引号的逗号列表传成空格分隔：上传预算一样能读', () => {
+    expect(parseOptions(['--upload-mb', 'off 16']).uploadMBs).toEqual([null, 16]);
+  });
+
+  it('PowerShell 把没加引号的逗号列表传成空格分隔：场景一样能读', () => {
+    expect(parseOptions(['--only', 'z17 z19']).only).toEqual(['z17', 'z19']);
+  });
+
   it('视口、在路上的帧数', () => {
     const options = parseOptions(['--viewport', '1920x1080', '--pacing', '0']);
     expect(options.viewport).toEqual({ width: 1920, height: 1080 });

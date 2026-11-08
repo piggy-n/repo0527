@@ -51,6 +51,9 @@ function positive(name: string, text: string): number {
   return value;
 }
 
+// 逗号或空格分隔：PowerShell 把没加引号的 off,16 当成数组，传进来变成 "off 16"
+const listItems = (text: string) => text.split(/[,\s]+/).filter(Boolean);
+
 export function parseOptions(argv: readonly string[]): Options {
   const options: { -readonly [K in keyof Options]: Options[K] } = {
     only: [],
@@ -84,7 +87,7 @@ export function parseOptions(argv: readonly string[]): Options {
       case '--':
         break;
       case '--only':
-        options.only = next().split(',').map(item => item.trim()).filter(Boolean);
+        options.only = listItems(next());
         break;
       case '--list':
         options.list = true;
@@ -93,9 +96,7 @@ export function parseOptions(argv: readonly string[]): Options {
         options.repeat = Math.round(positive(name, next()));
         break;
       case '--upload-mb':
-        options.uploadMBs = next()
-          .split(',')
-          .map(item => (item === 'off' ? null : positive(name, item)));
+        options.uploadMBs = listItems(next()).map(item => (item === 'off' ? null : positive(name, item)));
         break;
       case '--basemap': {
         const value = next();
