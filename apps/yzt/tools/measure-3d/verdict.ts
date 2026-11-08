@@ -10,8 +10,14 @@ const FRAME_RATIO = 1.1;
 // 清晰度：最差 10% 的格子不低于 Cesium 的这个比例。这只是提醒哪里可能糊，最后看图。
 // 校准（docs/modules/map-three.md）：PoC 的默认缓存明显糊是 0.90，正常的都在 0.95 以上
 const SHARPNESS_RATIO = 0.93;
+// 最差一格：局部糊一块时最差 10% 看不出来（132 格里连着 4 格）。校准：看不出差别的最低 0.92，看得出糊的 0.85、0.89
+const WORST_CELL_RATIO = 0.9;
 // 等稳定是每 200 毫秒查一次：差这么多分不出先后
 const STABLE_SAMPLE_MS = 200;
+/** 同样的静止画面，每帧 JS 差这么多倍就算机器不稳定 */
+export const MACHINE_DRIFT_RATIO = 1.5;
+/** 三角形到 Cesium 终点的这个比例算到了：Cesium 自己各遍的终点就差这么多 */
+export const FILL_REACHED_RATIO = 0.98;
 
 export type VerdictGroup = '画质' | '到稳定' | '帧时间' | '主线程' | '振荡';
 
@@ -150,6 +156,16 @@ export function sceneVerdict(runs: readonly RunResult[], quality: SceneQuality |
     unit: '倍',
     pass: ratio === null ? null : ratio >= SHARPNESS_RATIO
   });
+  const cells = quality?.stable.ratios.filter(value => value !== null) ?? [];
+  const worstCell = cells.length > 0 ? Math.min(...cells) : null;
+  rows.push({
+    group: '画质',
+    condition: `清晰度最差的一格不低于 Cesium 的 ${WORST_CELL_RATIO} 倍（局部糊一块时最差 10% 看不出来）`,
+    subject: worstCell,
+    reference: null,
+    unit: '倍',
+    pass: worstCell === null ? null : worstCell >= WORST_CELL_RATIO
+  });
   const hold = qualityRun('maplibre')?.hold;
   const referenceHold = qualityRun('cesium')?.hold;
   rows.push({
@@ -183,6 +199,23 @@ export function fillSampleAt(trace: readonly SceneSample[], t: number): SceneSam
 export function fillReachedAt(trace: readonly SceneSample[], triangles: number): number | null {
   const lastBelow = trace.findLastIndex(sample => sample.triangles < triangles);
   return trace[lastBelow + 1]?.t ?? null;
+}
+
+/**
+ * 同一种引擎、同一个场景的静止画面，每帧 JS 最多差几倍：工作量相同，差得多说明运行期间机器被别的事占着，
+ * 这次的帧时间要打折扣。算不出来时是 null
+ */
+export function machineDrift(runs: readonly RunResult[]): number | null {
+  const groups = new Map<string, number[]>();
+  for (const run of runs) {
+    const js = run.kind === 'perf' ? run.static?.js?.p50 : undefined;
+    if (js) {
+      const key = `${run.scene}/${run.variant === 'cesium' ? 'cesium' : 'maplibre'}`;
+      groups.set(key, (groups.get(key) ?? []).concat(js));
+    }
+  }
+  const ratios = [...groups.values()].filter(values => values.length > 1).map(values => Math.max(...values) / Math.min(...values));
+  return ratios.length > 0 ? Math.max(...ratios) : null;
 }
 
 /** 全部能判断、全部通过才算通过；缺数据时不算通过 */

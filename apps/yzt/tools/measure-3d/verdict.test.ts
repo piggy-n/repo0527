@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BenchStats, SceneSample, PhaseResult } from './bench-api.ts';
 import type { RunResult, SceneQuality } from './results.ts';
-import { allPassed, fillReachedAt, fillSampleAt, median, sceneVerdict } from './verdict.ts';
+import { allPassed, fillReachedAt, fillSampleAt, machineDrift, median, sceneVerdict } from './verdict.ts';
 
 const STATS: BenchStats = {
   tilesVisible: 30,
@@ -80,7 +80,7 @@ function qualityRun(variant: string, loaded = 0, events = 0): RunResult {
 
 const QUALITY: SceneQuality = {
   scene: 's',
-  stable: { cells: 100, medianRatio: 1, worstDecileRatio: 0.95, ratios: [] },
+  stable: { cells: 100, medianRatio: 1, worstDecileRatio: 0.95, ratios: [1, null, 0.92] },
   afterFlight: null,
   heatmap: 'h.png',
   worstCrops: 'c.png',
@@ -146,6 +146,14 @@ describe('sceneVerdict', () => {
     expect(rowOf(sceneVerdict(passing(), blurry), '清晰度').pass).toBe(false);
   });
 
+  it('局部糊了一块：最差 10% 看不出来，最差一格抓得到', () => {
+    const local: SceneQuality = { ...QUALITY, stable: { ...QUALITY.stable, worstDecileRatio: 0.95, ratios: [1, 0.85, 0.89] } };
+    const rows = sceneVerdict(passing(), local);
+    expect(rowOf(rows, '最差 10% 的格子').pass).toBe(true);
+    expect(rowOf(rows, '最差的一格').pass).toBe(false);
+    expect(rowOf(rows, '最差的一格').subject).toBe(0.85);
+  });
+
   it('静止观察期间还在加载、卸载：来回折腾，不通过', () => {
     const rows = sceneVerdict([perf('maplibre'), perf('cesium'), qualityRun('maplibre', 12), qualityRun('cesium')], QUALITY);
     expect(rowOf(rows, '没有瓦片加载').pass).toBe(false);
@@ -202,6 +210,31 @@ describe('飞行后的过程', () => {
   it('一开始就够了是 0；一直没到是 null', () => {
     expect(fillReachedAt(trace, 500)).toBe(0);
     expect(fillReachedAt(trace, 1000)).toBeNull();
+  });
+});
+
+const staticJs = (variant: string, p50: number, scene = 's'): RunResult => ({
+  ...perf(variant),
+  scene,
+  static: { ...phase(p50, p50, p50), js: { samples: 100, mean: p50, p50, p95: p50, p99: p50, max: p50 } }
+});
+
+describe('machineDrift', () => {
+  it('同一种引擎、同一个场景比；MapLibre 的各个方案静止时工作量相同，算一组', () => {
+    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-up16', 5), staticJs('maplibre-no-budget', 3)])).toBe(2.5);
+  });
+
+  it('引擎和场景不同的不比：工作量本来就不同', () => {
+    expect(machineDrift([staticJs('maplibre', 2), staticJs('cesium', 9)])).toBeNull();
+    expect(machineDrift([staticJs('maplibre', 2, 'a'), staticJs('maplibre', 9, 'b')])).toBeNull();
+  });
+
+  it('取最不稳定的一组', () => {
+    expect(machineDrift([staticJs('cesium', 4), staticJs('cesium', 4.4), staticJs('maplibre', 2), staticJs('maplibre', 3)])).toBe(1.5);
+  });
+
+  it('画质和采样那几遍不算：它们没有静止段', () => {
+    expect(machineDrift([qualityRun('maplibre')])).toBeNull();
   });
 });
 

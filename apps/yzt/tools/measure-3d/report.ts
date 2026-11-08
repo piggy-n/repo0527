@@ -1,7 +1,17 @@
 import type { SceneSample, PhaseResult } from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
 import type { MeasureResults, RunResult } from './results.ts';
-import { allPassed, fillReachedAt, fillSampleAt, median, sceneVerdict, type VerdictRow } from './verdict.ts';
+import {
+  allPassed,
+  FILL_REACHED_RATIO,
+  fillReachedAt,
+  fillSampleAt,
+  MACHINE_DRIFT_RATIO,
+  machineDrift,
+  median,
+  sceneVerdict,
+  type VerdictRow
+} from './verdict.ts';
 
 // 从 raw.json 的内容生成报告；每跑完一遍就重新生成一次，中断了也留得下
 
@@ -149,12 +159,13 @@ function fillLines(perf: readonly { readonly id: string; readonly label: string;
   ]);
   const parts = ['**飞行后的过程（第一遍）：** 每格是屏幕误差 / 三角形（万）', '', table(['方案', ...FILL_TIMES.map(t => `${t / 1000} 秒`), '最后'], rows), ''];
   const reference = perf.find(item => item.id === 'cesium');
-  const target = reference ? pick(reference.runs, run => finalOf(run)?.triangles) : null;
-  if (target !== null) {
+  const final = reference ? pick(reference.runs, run => finalOf(run)?.triangles) : null;
+  if (final !== null) {
+    const target = final * FILL_REACHED_RATIO;
     for (const { id, label, runs } of measured) {
       if (id !== 'cesium') {
         const reached = pick(runs, run => fillReachedAt(run.settle?.trace ?? [], target));
-        parts.push(`${label} 到 Cesium 终点的三角形（${number(target / WAN)} 万）用了 ${reached === null ? '—' : number(reached / 1000, 2)} 秒`, '');
+        parts.push(`${label} 到 Cesium 终点的 ${FILL_REACHED_RATIO * 100}%（${number(target / WAN)} 万个三角形）用了 ${reached === null ? '—' : number(reached / 1000, 2)} 秒`, '');
       }
     }
   }
@@ -187,6 +198,11 @@ export function renderReport(results: MeasureResults): string {
   if (meta.quick) {
     parts.push('> **⚠ 这次用了 --quick，每段时长都被缩短，只用来确认脚本能跑。**', '');
   }
+  const drift = machineDrift(runs);
+  const unsteady = drift !== null && drift > MACHINE_DRIFT_RATIO;
+  if (unsteady) {
+    parts.push(`> **⚠ 运行期间机器状态不稳定：同样的静止画面，每帧 JS 最多差 ${number(drift)} 倍，帧时间的比较要打折扣。** 关掉其他程序和远程连接，插上电源再跑一次。`, '');
+  }
 
   parts.push('## 验收', '');
   for (const scene of results.scenes) {
@@ -207,6 +223,7 @@ export function renderReport(results: MeasureResults): string {
       ['每帧 GPU 耗时', env.gpuTimer ? '可用' : '取不到（没有 EXT_disjoint_timer_query_webgl2）'],
       ['空页面的帧间隔（毫秒）', `不等 ${number(env.floorMs['pacing-0'], 2)}；最多 1 帧在路上 ${number(env.floorMs['pacing-1'], 2)}（PoC 的做法）；最多 2 帧 ${number(env.floorMs['pacing-2'], 2)}`],
       ['这次用的', `最多 ${meta.pacing} 帧在路上`],
+      ['机器状态', drift === null ? '算不出' : `同样的静止画面，每帧 JS 最多差 ${number(drift)} 倍（超过 ${MACHINE_DRIFT_RATIO} 倍算不稳定）`],
       ['底图', meta.basemap === 'arcgis' ? 'ArcGIS 影像（两个引擎相同）' : '无底图（两个引擎相同）'],
       ['视口', `${meta.viewport.width}×${meta.viewport.height}`],
       ['MapLibre 多重采样', meta.antialias ? '开' : '不开（和产品一样）']
