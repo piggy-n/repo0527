@@ -272,6 +272,8 @@ describe('ThreeSceneRenderer 在 MapLibre 的自写层里', { timeout: TEST_TIME
     onTestFinished(() => URL.revokeObjectURL(url));
 
     await ctx.renderer.addModel('arm', url, { lngLat: MODEL_AT, height: 0 }, new AbortController().signal);
+    // 不在地面上的点按最近一帧投影：加载得快时可能还没画过，先等一帧
+    await until(() => ctx.view.project(MODEL_AT, 30) !== null, '画过一帧');
     // 手臂离地 30 米处的一行像素：上半截左右摆，这一行的颜色跟着变
     const upper = required(ctx.view.project(MODEL_AT, 30), '手臂上半截在画布上的位置');
     const row = Array.from({ length: 33 }, (_, i) => ({ x: upper.x - 160 + i * 10, y: upper.y }));
