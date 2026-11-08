@@ -8,6 +8,7 @@ import {
   ShadowMode,
   UniformType
 } from 'cesium';
+import type { TilesetInspection, TilesetStatistics } from './scene-inspection';
 import type { TilesetOptions } from './scene-like';
 
 const MEGABYTE = 1024 * 1024;
@@ -58,6 +59,17 @@ export function memoryAdjustedError(tileset: Cesium3DTileset): number {
   return memoryAdjustedScreenSpaceError;
 }
 
+// 同样标成 @private 的统计：只读它的计数
+function readStatistics(tileset: Cesium3DTileset): TilesetStatistics {
+  const { statistics } = tileset as Cesium3DTileset & { readonly statistics: TilesetStatistics };
+  return {
+    selected: statistics.selected,
+    numberOfPendingRequests: statistics.numberOfPendingRequests,
+    numberOfTilesProcessing: statistics.numberOfTilesProcessing,
+    numberOfTrianglesSelected: statistics.numberOfTrianglesSelected
+  };
+}
+
 export interface SceneTilesetEvents {
   readonly failed: (id: string, error: unknown) => void;
   readonly initial: (id: string) => void;
@@ -68,6 +80,10 @@ interface Entry {
   readonly unsubscribe: () => void;
   // 上一个 tick 读到的按显存调整后的屏幕误差
   adjustedError: number;
+  // 读数用的累计次数
+  loaded: number;
+  unloaded: number;
+  failed: number;
 }
 
 /** 场景里的 3D Tiles 瓦片集（ADR 0081 第 3 节）：按 ID 加、改、删，瓦片失败和首批瓦片到位通过回调报告 */
@@ -111,18 +127,29 @@ export class SceneTilesets implements Disposable {
     }
     this.#apply(tileset, options);
     this.#widget.scene.primitives.add(tileset);
-    const unsubscribeFailed = tileset.tileFailed.addEventListener(({ message }: { message: unknown }) =>
-      this.#events.failed(id, new Error(`瓦片集 ${id} 的瓦片加载失败`, { cause: message }))
-    );
-    const unsubscribeInitial = tileset.initialTilesLoaded.addEventListener(() => this.#events.initial(id));
-    this.#entries.set(id, {
+    const unsubscribers: (() => void)[] = [];
+    const entry: Entry = {
       tileset,
-      unsubscribe: () => {
-        unsubscribeFailed();
-        unsubscribeInitial();
-      },
-      adjustedError: memoryAdjustedError(tileset)
-    });
+      unsubscribe: () => unsubscribers.forEach(unsubscribe => unsubscribe()),
+      adjustedError: memoryAdjustedError(tileset),
+      loaded: 0,
+      unloaded: 0,
+      failed: 0
+    };
+    unsubscribers.push(
+      tileset.tileFailed.addEventListener(({ message }: { message: unknown }) => {
+        entry.failed++;
+        this.#events.failed(id, new Error(`瓦片集 ${id} 的瓦片加载失败`, { cause: message }));
+      }),
+      tileset.initialTilesLoaded.addEventListener(() => this.#events.initial(id)),
+      tileset.tileLoad.addEventListener(() => {
+        entry.loaded++;
+      }),
+      tileset.tileUnload.addEventListener(() => {
+        entry.unloaded++;
+      })
+    );
+    this.#entries.set(id, entry);
     this.#widget.scene.requestRender();
     return tileset.boundingSphere;
   }
@@ -155,6 +182,27 @@ export class SceneTilesets implements Disposable {
   setInteriorFog(enabled: boolean): void {
     this.#headlight.setUniform('uFog', enabled ? 1 : 0);
     this.#widget.scene.requestRender();
+  }
+
+  /** 读数：每个瓦片集的显存、屏幕误差、统计和累计次数 */
+  inspect(): TilesetInspection[] {
+    return [...this.#entries].map(([id, entry]) => {
+      const { tileset } = entry;
+      return {
+        id,
+        show: tileset.show,
+        cacheBytes: tileset.cacheBytes,
+        maximumCacheOverflowBytes: tileset.maximumCacheOverflowBytes,
+        maximumScreenSpaceError: tileset.maximumScreenSpaceError,
+        memoryAdjustedScreenSpaceError: memoryAdjustedError(tileset),
+        totalMemoryUsageInBytes: tileset.totalMemoryUsageInBytes,
+        tilesLoaded: tileset.tilesLoaded,
+        statistics: readStatistics(tileset),
+        loaded: entry.loaded,
+        unloaded: entry.unloaded,
+        failed: entry.failed
+      };
+    });
   }
 
   /** 有显示着的瓦片集：没有时拾取模型注定落空 */

@@ -50,7 +50,6 @@ import {
 import { createNanoEvents } from 'nanoevents';
 import { frustumFov, normalizeBearing, readablePitch, writablePitch } from './camera-math';
 import {
-  type CreateScene,
   type RoutePlayback,
   type SceneEvents,
   type SceneGestures,
@@ -62,6 +61,7 @@ import {
 } from './scene-like';
 import type { OverlayLayer, OverlayShape, RgbaColor } from './overlay-plan';
 import { movableInPlace, sameCoordinates } from './overlay-update';
+import type { SceneInspection } from './scene-inspection';
 import { SceneRoute } from './scene-route';
 import { holdCameraSteady } from './scene-steady-camera';
 import { SceneWalk } from './scene-walk';
@@ -175,6 +175,8 @@ export class CesiumScene implements SceneLike {
   // 相机在动时不算画面稳定；相机、影像变了以后重新等一次
   #moving = false;
   #settled = false;
+  // 读数用的累计帧数（inspect）
+  #frames = 0;
 
   /** preserveDrawingBuffer 只给浏览器测试读画布的像素用 */
   constructor(container: HTMLElement, { preserveDrawingBuffer = false }: { preserveDrawingBuffer?: boolean } = {}) {
@@ -245,6 +247,7 @@ export class CesiumScene implements SceneLike {
     stack.defer(camera.moveEnd.addEventListener(() => this.#onCameraIdle()));
     stack.defer(
       scene.postRender.addEventListener(() => {
+        this.#frames++;
         this.#removeRetired();
         this.#checkSettled();
         // 放在移除之后：这一帧的 canAnimate 还没算上改回静态时新加的实体
@@ -883,6 +886,17 @@ export class CesiumScene implements SceneLike {
     }
   }
 
+  /** 读数（性能测量用）：帧数、影像是否到齐和每个瓦片集的显存、屏幕误差、加载情况 */
+  inspect(): SceneInspection {
+    const { scene } = this.#widget;
+    return { frames: this.#frames, imageryLoaded: scene.globe.tilesLoaded, tilesets: this.#tilesets.inspect() };
+  }
+
+  /** 请求画一帧（性能测量静止时每帧都画） */
+  requestFrame(): void {
+    this.#widget.scene.requestRender();
+  }
+
   #removeOverlay(id: string, entry: OverlayEntry): void {
     for (const { entity } of entry.items) {
       this.#widget.entities.remove(entity);
@@ -892,4 +906,4 @@ export class CesiumScene implements SceneLike {
 }
 
 /** 创建真实的三维场景 */
-export const createCesiumScene: CreateScene = container => new CesiumScene(container);
+export const createCesiumScene = (container: HTMLElement): CesiumScene => new CesiumScene(container);
