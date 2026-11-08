@@ -135,6 +135,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "title:generate": "node tools/system-title/cli.ts",
     "boundaries:generate": "node tools/boundaries/cli.ts",
     "measure:map-load": "vite build && node tools/measure-map-load/cli.ts",
+    "measure:3d": "node tools/measure-3d/cli.ts",
     "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
   },
   "dependencies": {

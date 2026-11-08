@@ -1,0 +1,78 @@
+import { MapLibreView, type SceneSurface } from '@mx/map-core';
+import type { ThreeSceneRenderer as Renderer } from '@mx/map-three';
+import { setupMapRuntime } from '../../../src/app/map-runtime.ts';
+import type { EngineHandle, EngineOptions } from './bench.ts';
+
+const MB = 1024 * 1024;
+
+/** MapLibre 引擎：真实的 MapLibreView 和 ThreeSceneRenderer，和产品一样在第一次切到三维时动态导入 */
+export async function startMapLibre({ session, container, params, onError }: EngineOptions): Promise<EngineHandle> {
+  setupMapRuntime();
+  const uploadMB = params.get('uploadMB');
+  let renderer: Renderer | null = null;
+  let surface: SceneSurface | null = null;
+  const view = new MapLibreView({
+    session,
+    container,
+    onError,
+    // 缩放上限放宽（产品的 18 级是页面定的，测量要到 z19）；其余和产品一样，多重采样默认不开
+    mapOptions: {
+      maxZoom: 24,
+      ...(params.get('antialias') === '1' ? { canvasContextAttributes: { antialias: true } } : {})
+    },
+    loadSceneRenderer: async () => {
+      const { ThreeSceneRenderer } = await import('@mx/map-three');
+      // 拿到 surface 才能请求重画：静止时每帧都画要用
+      class BenchRenderer extends ThreeSceneRenderer {
+        override attach(next: SceneSurface): void {
+          surface = next;
+          super.attach(next);
+        }
+      }
+      const uploadOption =
+        uploadMB === null ? {} : { uploadBytesPerFrame: uploadMB === 'off' ? null : Number(uploadMB) * MB };
+      return () => {
+        renderer = new BenchRenderer(uploadOption);
+        return renderer;
+      };
+    }
+  });
+  await view.whenReady();
+  view.setKind('3d');
+  await view.whenReady();
+  const inspect = () => {
+    if (!renderer) {
+      throw new Error('三维渲染器还没有创建');
+    }
+    return renderer.inspect();
+  };
+  return {
+    view,
+    config: { uploadMB: uploadMB ?? '产品的默认值', antialias: params.get('antialias') === '1' },
+    stats() {
+      const state = inspect();
+      const tilesets = Object.values(state.tilesets);
+      const sum = (read: (item: (typeof tilesets)[number]) => number) => tilesets.reduce((total, item) => total + read(item), 0);
+      return {
+        tilesVisible: sum(item => item.visible),
+        triangles: state.triangles,
+        cacheMB: state.cachedBytes / MB,
+        errorTarget: Math.max(0, ...tilesets.map(item => item.errorTarget)),
+        refused: state.refused,
+        loaded: sum(item => item.loaded),
+        unloaded: sum(item => item.unloaded),
+        failed: sum(item => item.failed),
+        loading: state.loading,
+        uploadPending: state.uploadPending,
+        uploadedMB: state.uploadedBytes / MB,
+        locked: state.locked
+      };
+    },
+    isStable() {
+      const state = inspect();
+      return state.settled && Object.values(state.tilesets).some(item => item.loaded > 0);
+    },
+    frames: () => renderer?.inspect().frames ?? 0,
+    requestFrame: () => surface?.requestRepaint()
+  };
+}

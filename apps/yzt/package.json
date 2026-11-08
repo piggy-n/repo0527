@@ -20,6 +20,7 @@
     "boundaries:generate": "node tools/boundaries/cli.ts",
     "basemap:generate": "node tools/static-basemap/cli.ts",
     "measure:map-load": "vite build && node tools/measure-map-load/cli.ts",
+    "measure:3d": "node tools/measure-3d/cli.ts",
     "probe:resource-classes": "node tools/probe-resource-classes/cli.ts",
     "scope-files:generate": "node tools/scope-test-files/cli.ts",
     "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
@@ -72,6 +73,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@mx/map-three": "workspace:*",
     "@types/d3-force": "3.0.10",
     "@types/d3-geo": "3.1.1",
     "@types/d3-polygon": "3.0.2",

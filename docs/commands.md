@@ -21,6 +21,7 @@
 | 内网部署的构建 | `pnpm build:intranet` |
 | 预览构建产物 | `pnpm --filter yzt preview` |
 | 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter yzt measure:map-load` |
+| 三维两种引擎的性能对比（显卡机器上，ADR 0147 3C.4） | `pnpm --filter yzt measure:3d` |
 | 探查资源的分类字段、瓦片是否合并（只读，要能连后端） | `pnpm --filter yzt probe:resource-classes` |
 | 生成自定义监测范围的验收文件 | `pnpm --filter yzt scope-files:generate` |
 | 每月检查依赖 | `pnpm deps:check` |
@@ -184,6 +185,16 @@ pnpm add -Dw -E some-tool
 **执行了什么**：先 `vite build`，再由 Node 运行 `tools/measure-map-load/cli.ts`：用 `vite preview` 提供产物，Playwright 驱动本机的 Edge，每次用新的浏览器上下文打开登录页、停留几秒、登录、等到画面稳定；网络和 CPU 用 CDP 限速。原始数据写进 `local/measure/map-load/`（不入库）。
 
 **注意事项**：要先在自己的终端设置环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD`（加 `--mock-backend` 时不连后端、不用账号，配内网构建比较几种做法）；默认三档网络各 5 次，Slow 4G 每次约 20 秒，全部跑完约 5 分钟，期间会弹出浏览器窗口。对比几份构建时不用这个脚本（它会先构建 `dist`），直接运行 `cli.ts` 并给出 `--builds`。参数（次数、网络、停留时长、CPU 降速、多份构建等）和实测的前提见 [modules/perf.md](modules/perf.md)。
+
+### `pnpm --filter yzt measure:3d`
+
+**作用**：用生产代码比较 MapLibre 引擎和 Cesium 的倾斜摄影 z17、z19：到稳定、两遍飞行的帧时间、长任务和归因、显存、截图的清晰度，按 ADR 0147 3C.4 的条件逐项判断。
+
+**什么时候用**：改了 `packages/map-three` 的缓存、上传或渲染之后；改默认引擎之前（ADR 0147 第 9 节）。
+
+**执行了什么**：Node 运行 `tools/measure-3d/cli.ts`：启动前检查（模型、端口、渲染器，空页面校准帧间隔的下限）→ 用 `tools/measure-3d/vite.config.ts` 按生产模式构建测量页 → 每遍一个新的浏览器进程 → 写 `local/measure-3d/<时间>/`（`report.md`、`quality.html`、`manual.md`、`raw.json`、`shots/`、`profiles/`，不入库）。每跑完一遍就重新写一次报告，中断了也留得下。
+
+**注意事项**：只在有真实显卡的机器上有意义，看到软件渲染直接退出（`--allow-software` 只用来确认脚本能跑）。全部跑完估计 30～40 分钟，期间会弹出浏览器窗口，不要用这台机器。步骤和口径见 [modules/map-three.md](modules/map-three.md)"性能验收"，参数见 `--help`。
 
 ### `pnpm --filter yzt probe:resource-classes`
 
