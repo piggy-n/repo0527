@@ -17,16 +17,64 @@ import { DEFAULT_LRU_CACHE, LRUCache } from '3d-tiles-renderer';
 import { createNanoEvents } from 'nanoevents';
 import { Color, Matrix4, Raycaster, WebGLRenderer } from 'three';
 import { AnimatedModel, type ModelPlacement } from './animated-model';
+import { type BudgetPose, ErrorScale } from './error-scale';
 import { FrameMath, toNdc } from './frame';
 import type { FogUniform } from './lighting';
-import { TilesetEntry } from './tileset-entry';
+import { TileUploader } from './tile-uploader';
+import { TilesetEntry, type TilesetEntryInspection } from './tileset-entry';
 import { WalkMarker } from './walk-marker';
 
 // 缓存预算和 Cesium 的数值相同（scene-tilesets 的 cacheBytes 加 maximumCacheOverflowBytes，ADR 0147 第 5 节）；
-// Cesium 是每个瓦片集各一份，这里所有瓦片集共用一份，总量更紧。满了以后放宽屏幕误差的自适应缓存是 3C.4
+// Cesium 是每个瓦片集各一份，这里所有瓦片集共用一份，总量更紧。放不下时放宽屏幕误差，见 docs/modules/map-three.md"缓存"
 const MEGABYTE = 1024 * 1024;
 const CACHE_BYTES = 1024 * MEGABYTE;
 const CACHE_OVERFLOW_BYTES = 512 * MEGABYTE;
+// 每帧上传的字节（ADR 0147 第 5 节）：第一版，显卡机器上实测后再调，见 docs/modules/map-three.md"上传"
+const UPLOAD_BYTES_PER_FRAME = 32 * MEGABYTE;
+const FRAME_MS = 1000 / 60;
+
+/** 构造参数都有默认值，性能测量时换着比较 */
+export interface ThreeSceneRendererOptions {
+  /** 缓存淘汰到的大小（字节） */
+  readonly cacheBytes?: number;
+  /** 到它不再加载（字节） */
+  readonly cacheLimitBytes?: number;
+  /** 每帧提前上传的字节；null 时不提前上传，第一次绘制时才上传 */
+  readonly uploadBytesPerFrame?: number | null;
+}
+
+/** 读数（只读快照）：给性能测量和测试，业务代码不用 */
+export interface ThreeSceneInspection {
+  /** 累计：画过的帧数 */
+  readonly frames: number;
+  /** 最近一帧：画瓦片、模型的绘制调用数和三角形数 */
+  readonly drawCalls: number;
+  readonly triangles: number;
+  /** Three 跟踪的 GPU 资源数 */
+  readonly geometries: number;
+  readonly textures: number;
+  readonly cachedBytes: number;
+  readonly pinnedBytes: number;
+  readonly cacheBytes: number;
+  readonly cacheLimitBytes: number;
+  /** 屏幕误差放宽的倍数 */
+  readonly errorScale: number;
+  /** 锁在这个姿态上：相机不离开就不再收紧 */
+  readonly locked: boolean;
+  /** 最粗一层也放不下，再放宽也没有用 */
+  readonly saturated: boolean;
+  /** 最近一帧因为缓存满没能排队的瓦片数 */
+  readonly refused: number;
+  /** 下载、解析、等待上传的瓦片数 */
+  readonly loading: number;
+  /** 等待上传的瓦片数 */
+  readonly uploadPending: number;
+  /** 累计提前上传的字节 */
+  readonly uploadedBytes: number;
+  /** 瓦片都到了，放宽的倍数也不再变 */
+  readonly settled: boolean;
+  readonly tilesets: Readonly<Record<string, TilesetEntryInspection>>;
+}
 
 // MapLibre 每帧给的矩阵可能复用同一个数组：留到拾取、投影时用的要复制一份
 function copyFrame({ mainMatrix, fallbackMatrix, projectionMatrix, transition, clippingPlane }: SceneFrame): SceneFrame {
@@ -54,6 +102,10 @@ export class ThreeSceneRenderer implements SceneRenderer {
   readonly #fog: FogUniform = { value: 0 };
   readonly #marker = new WalkMarker(this.#math);
   readonly #backdrop = new Color();
+  readonly #scale: ErrorScale;
+  readonly #uploader: TileUploader;
+  readonly #cacheBytes: number;
+  readonly #cacheLimitBytes: number;
   #surface: SceneSurface | null = null;
   #webgl: WebGLRenderer | null = null;
   #attached = false;
@@ -62,11 +114,27 @@ export class ThreeSceneRenderer implements SceneRenderer {
   // 抬高（ADR 0147 第 4 节）：只在这个瓦片集还在时生效
   #lift: SceneLift | null = null;
   #disposed = false;
+  // 读数：累计帧数、最近一帧的时刻和这一帧的结果
+  #frames = 0;
+  #lastFrameAt = 0;
+  #pinnedBytes = 0;
+  #refused = 0;
+  #steady = true;
+  // 新瓦片到了、还没有画过的一帧：这时读数还是旧的
+  #framePending = false;
 
-  constructor() {
+  constructor({
+    cacheBytes = CACHE_BYTES,
+    cacheLimitBytes = CACHE_BYTES + CACHE_OVERFLOW_BYTES,
+    uploadBytesPerFrame = UPLOAD_BYTES_PER_FRAME
+  }: ThreeSceneRendererOptions = {}) {
+    this.#cacheBytes = cacheBytes;
+    this.#cacheLimitBytes = cacheLimitBytes;
     this.#cache.unloadPriorityCallback = DEFAULT_LRU_CACHE.unloadPriorityCallback;
-    this.#cache.minBytesSize = CACHE_BYTES;
-    this.#cache.maxBytesSize = CACHE_BYTES + CACHE_OVERFLOW_BYTES;
+    this.#cache.minBytesSize = cacheBytes;
+    this.#cache.maxBytesSize = cacheLimitBytes;
+    this.#scale = new ErrorScale({ hardBytes: cacheLimitBytes });
+    this.#uploader = new TileUploader(uploadBytesPerFrame, () => this.#requestFrame());
   }
 
   attach(surface: SceneSurface): void {
@@ -79,19 +147,24 @@ export class ThreeSceneRenderer implements SceneRenderer {
     if (!this.#webgl) {
       const webgl = new WebGLRenderer({ canvas: surface.canvas, context: surface.gl });
       webgl.autoClear = false;
+      // 一帧有多次 render：读数要整帧的
+      webgl.info.autoReset = false;
       // 视口每帧按画布的实际像素设，不跟着设备像素比再放大
       webgl.setPixelRatio(1);
       this.#webgl = webgl;
     }
     this.#attached = true;
+    this.#uploader.setActive(true);
     surface.requestRepaint();
   }
 
   detach(): void {
     this.#attached = false;
+    this.#uploader.setActive(false);
   }
 
   loseContext(): void {
+    this.#uploader.setActive(false);
     this.#dropRenderer();
     this.#frame = null;
   }
@@ -106,11 +179,14 @@ export class ThreeSceneRenderer implements SceneRenderer {
       return;
     }
     this.#frame = copyFrame(frame);
+    this.#framePending = false;
     const { canvas } = surface;
     const lifted = this.#activeLift();
     // 先作废 Three 的状态缓存：MapLibre 改过 GL 状态，之后的上传和绘制都从真实的状态开始
     webgl.resetState();
     webgl.setViewport(0, 0, canvas.width, canvas.height);
+    this.#uploader.run(webgl);
+    webgl.info.reset();
     if (lifted) {
       // 抬高期间二维、天空都不该看到：先用底色盖住（模板缓冲是 MapLibre 的，不清）
       webgl.setClearColor(this.#backdrop.set(lifted.backdrop), 1);
@@ -118,13 +194,16 @@ export class ThreeSceneRenderer implements SceneRenderer {
     } else {
       webgl.clearDepth();
     }
+    const drawn: TilesetEntry[] = [];
     for (const [id, entry] of this.#tilesets) {
       if (lifted && id !== lifted.tilesetId) {
         entry.skipFrame();
       } else if (entry.prepare(frame, surface, canvas.width, canvas.height)) {
         webgl.render(entry.scene, entry.camera);
+        drawn.push(entry);
       }
     }
+    this.#adjustErrorScale(drawn, surface);
     let animating = false;
     if (!lifted) {
       for (const model of this.#models.values()) {
@@ -165,12 +244,15 @@ export class ThreeSceneRenderer implements SceneRenderer {
       cache: this.#cache,
       math: this.#math,
       fog: this.#fog,
+      uploader: this.#uploader,
       events: {
         failed: error => this.#emitter.emit('tilesetfailed', id, new Error(`瓦片集 ${id} 的瓦片加载失败`, { cause: error })),
         initial: () => this.#emitter.emit('tilesetinitial', id),
-        repaint: () => this.#surface?.requestRepaint()
+        repaint: () => this.#requestFrame()
       }
     });
+    entry.setErrorScale(this.#scale.value);
+    this.#scale.release();
     this.#tilesets.set(id, entry);
     try {
       const sphere = await entry.load(signal);
@@ -192,6 +274,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
 
   updateTileset(id: string, options: TilesetOptions): void {
     this.#tilesets.get(id)?.setOptions(options);
+    this.#scale.release();
     this.#surface?.requestRepaint();
   }
 
@@ -202,6 +285,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
     }
     this.#tilesets.delete(id);
     entry[Symbol.dispose]();
+    this.#scale.release();
     this.#surface?.requestRepaint();
   }
 
@@ -266,6 +350,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       entry.setLift(lift?.tilesetId === id ? lift.meters : 0);
     }
     this.#marker.setLift(this.#activeLift()?.meters ?? 0);
+    this.#scale.release();
     this.#surface?.requestRepaint();
   }
 
@@ -288,6 +373,36 @@ export class ThreeSceneRenderer implements SceneRenderer {
     this.#surface?.requestRepaint();
   }
 
+  /** 读数（性能测量、测试用） */
+  inspect(): ThreeSceneInspection {
+    const info = this.#webgl?.info;
+    const uploadPending = this.#uploader.pending;
+    let loading = 0;
+    for (const entry of this.#tilesets.values()) {
+      loading += entry.loading;
+    }
+    return {
+      frames: this.#frames,
+      drawCalls: info?.render.calls ?? 0,
+      triangles: info?.render.triangles ?? 0,
+      geometries: info?.memory.geometries ?? 0,
+      textures: info?.memory.textures ?? 0,
+      cachedBytes: (this.#cache as unknown as { readonly cachedBytes: number }).cachedBytes,
+      pinnedBytes: this.#pinnedBytes,
+      cacheBytes: this.#cacheBytes,
+      cacheLimitBytes: this.#cacheLimitBytes,
+      errorScale: this.#scale.value,
+      locked: this.#scale.locked,
+      saturated: this.#scale.saturated,
+      refused: this.#refused,
+      loading,
+      uploadPending,
+      uploadedBytes: this.#uploader.uploadedBytes,
+      settled: this.#steady && !this.#framePending && loading === 0 && uploadPending === 0,
+      tilesets: Object.fromEntries([...this.#tilesets].map(([id, entry]) => [id, entry.inspect()]))
+    };
+  }
+
   on<E extends keyof SceneRendererEvents>(event: E, callback: SceneRendererEvents[E]): Unsubscribe {
     return this.#emitter.on(event, callback);
   }
@@ -306,8 +421,50 @@ export class ThreeSceneRenderer implements SceneRenderer {
     }
     this.#models.clear();
     this.#marker[Symbol.dispose]();
+    this.#uploader[Symbol.dispose]();
     this.#dropRenderer();
     this.#emitter.events = {};
+  }
+
+  #requestFrame(): void {
+    this.#framePending = true;
+    this.#surface?.requestRepaint();
+  }
+
+  // 这一帧所有瓦片集更新完了：按缓存的状况调屏幕误差，下一帧生效（规则见 ErrorScale）
+  #adjustErrorScale(drawn: readonly TilesetEntry[], surface: SceneSurface): void {
+    const now = performance.now();
+    const elapsedMs = this.#lastFrameAt === 0 ? FRAME_MS : now - this.#lastFrameAt;
+    this.#lastFrameAt = now;
+    this.#frames++;
+    let pose: BudgetPose | null = null;
+    let refused = 0;
+    let pinnedBytes = 0;
+    let pendingBytes = 0;
+    let usedTiles = 0;
+    for (const entry of drawn) {
+      const demand = entry.demand();
+      refused += demand.refused;
+      pinnedBytes += demand.pinnedBytes;
+      pendingBytes += demand.pendingBytes;
+      usedTiles += demand.usedTiles;
+      pose ??= entry.pose();
+    }
+    this.#refused = refused;
+    this.#pinnedBytes = pinnedBytes;
+    if (!pose) {
+      this.#steady = true;
+      return;
+    }
+    const { cachedBytes } = this.#cache as unknown as { readonly cachedBytes: number };
+    const motion = this.#scale.update({ refused, cachedBytes, pinnedBytes, pendingBytes, usedTiles }, pose, elapsedMs);
+    this.#steady = motion === 'steady';
+    if (!this.#steady) {
+      surface.requestRepaint();
+    }
+    for (const entry of this.#tilesets.values()) {
+      entry.setErrorScale(this.#scale.value);
+    }
   }
 
   // 抬高的瓦片集还在时才算抬高：被移除以后照常画其他内容

@@ -8,7 +8,8 @@ import {
   type TilesetSphere
 } from '@mx/map-core';
 import { abortReason } from '@mx/utils';
-import { type LRUCache, TilesRenderer } from '3d-tiles-renderer';
+import type { LRUCache } from '3d-tiles-renderer';
+import { TilesRenderer } from '3d-tiles-renderer';
 import {
   Box3,
   Group,
@@ -22,9 +23,12 @@ import {
   Sphere,
   Vector3
 } from 'three';
+import type { BudgetPose } from './error-scale';
 import type { FrameMath } from './frame';
 import { createSunLights, type FogUniform, TilesetMaterials } from './lighting';
 import { LocalFrame } from './local-frame';
+import { type TileInternals, TileLoadPlugin } from './tile-load-plugin';
+import type { TileUploader } from './tile-uploader';
 
 export interface TilesetEntryEvents {
   /** 瓦片的内容加载失败 */
@@ -43,7 +47,44 @@ export interface TilesetEntryOptions {
   readonly math: FrameMath;
   /** 渲染器共用的头灯远处压暗开关 */
   readonly fog: FogUniform;
+  /** 所有瓦片集共用的上传队列 */
+  readonly uploader: TileUploader;
   readonly events: TilesetEntryEvents;
+}
+
+/** 一个瓦片集这一帧对缓存的需求 */
+export interface TilesetDemand {
+  readonly refused: number;
+  /** 在用的瓦片的字节 */
+  readonly pinnedBytes: number;
+  /** 还要加载的瓦片的估计字节 */
+  readonly pendingBytes: number;
+  readonly usedTiles: number;
+}
+
+/** 一个瓦片集的读数 */
+export interface TilesetEntryInspection {
+  readonly show: boolean;
+  readonly errorTarget: number;
+  /** 这一帧显示的瓦片数 */
+  readonly visible: number;
+  /** 累计：瓦片加载完成、被卸载、加载失败的次数 */
+  readonly loaded: number;
+  readonly unloaded: number;
+  readonly failed: number;
+}
+
+// 库的这些字段运行时有、类型声明里没有
+interface TilesInternals {
+  readonly usedSet: Set<TileInternals>;
+  readonly loadingTiles: Set<TileInternals>;
+  readonly stats: {
+    readonly refused: number;
+    readonly queued: number;
+    readonly downloading: number;
+    readonly parsing: number;
+    readonly visible: number;
+  };
 }
 
 /** 拾取到的点：经纬度、真实的椭球高（抬高时已减回去）和到相机的距离（米） */
@@ -54,6 +95,8 @@ export interface TilesetHit {
 
 // 和 Cesium 的 maximumScreenSpaceError 相同（scene-tilesets 的 TILESET_OPTIONS）
 const ERROR_TARGET = 16;
+// 一层完成这么多块瓦片才估计这一层的大小：一块特别大的瓦片不能让需求一下子超过上限，放宽了就收不回来
+const MIN_SIZE_SAMPLES = 3;
 
 // 命中的面用的材质；多材质的网格按面的材质序号取
 function hitMaterial({ object, face }: Intersection): Material | undefined {
@@ -86,8 +129,19 @@ export class TilesetEntry implements Disposable {
   #drawn = false;
   // 抬高量（米，ADR 0147 第 4 节）：局部系里沿 y 上移，拾取的命中点减回去
   #lift = 0;
+  readonly #cache: LRUCache;
+  // 最近一次更新以来还算着"在用"：共用的缓存淘汰不掉，不画的瓦片集要解除
+  #pinned = false;
+  // 每一层完成的瓦片的总字节和块数，估计还要加载的字节用
+  readonly #sizeByDepth = new Map<number, { bytes: number; count: number }>();
+  // 样本够了的最深一层：没到过的层按它估计
+  #deepestSized = -1;
+  #loaded = 0;
+  #unloaded = 0;
+  #failed = 0;
 
-  constructor({ prepared, options, cache, math, fog, events }: TilesetEntryOptions) {
+  constructor({ prepared, options, cache, math, fog, uploader, events }: TilesetEntryOptions) {
+    this.#cache = cache;
     this.#math = math;
     this.#events = events;
     this.#options = options;
@@ -97,12 +151,21 @@ export class TilesetEntry implements Disposable {
     const tiles = new TilesRenderer(this.#url);
     tiles.lruCache = cache;
     tiles.errorTarget = ERROR_TARGET;
+    tiles.registerPlugin(new TileLoadPlugin(uploader, cache));
     tiles.setCamera(this.camera);
     tiles.setResolution(this.camera, 1, 1);
-    tiles.addEventListener('load-model', ({ scene }) => this.#materials.adopt(scene, this.#options.lighting));
-    tiles.addEventListener('dispose-model', ({ scene }) => this.#materials.release(scene));
+    tiles.addEventListener('load-model', ({ scene, tile }) => {
+      this.#materials.adopt(scene, this.#options.lighting);
+      this.#loaded++;
+      this.#rememberSize(tile as unknown as TileInternals);
+    });
+    tiles.addEventListener('dispose-model', ({ scene }) => {
+      this.#materials.release(scene);
+      this.#unloaded++;
+    });
     tiles.addEventListener('load-error', ({ tile, error }) => {
       if (tile) {
+        this.#failed++;
         events.failed(error);
       }
     });
@@ -201,6 +264,65 @@ export class TilesetEntry implements Disposable {
   /** 这一帧不画（抬高别的瓦片集期间）：也拾取不到 */
   skipFrame(): void {
     this.#drawn = false;
+    this.#releaseUsed();
+  }
+
+  /** 屏幕误差放宽 scale 倍 */
+  setErrorScale(scale: number): void {
+    this.tiles.errorTarget = ERROR_TARGET * scale;
+  }
+
+  /** 这一帧对缓存的需求：最近一次 prepare 之后读 */
+  demand(): TilesetDemand {
+    const { usedSet, loadingTiles, stats } = this.tiles as unknown as TilesInternals;
+    let pinnedBytes = 0;
+    for (const tile of usedSet) {
+      pinnedBytes += this.#cache.getMemoryUsage(tile);
+    }
+    // 缓存满的时候排不进队的瓦片不知道是哪些，按最深一层算
+    let pendingBytes = stats.refused * this.#sizeAt(this.#deepestSized);
+    for (const tile of loadingTiles) {
+      // 已经不要了、但还在下载的不算：它们不占需求，算上的话放宽以后需求也不降，会一直放宽到它们下载完
+      if (tile.internal.hasRenderableContent && usedSet.has(tile)) {
+        pendingBytes += this.#sizeAt(tile.internal.depth);
+      }
+    }
+    return {
+      refused: stats.refused,
+      pinnedBytes,
+      pendingBytes,
+      usedTiles: usedSet.size
+    };
+  }
+
+  /** 现在正在下载、解析、等待上传的瓦片数：请求被取消时不一定还有下一帧，要现读 */
+  get loading(): number {
+    const { queued, downloading, parsing } = (this.tiles as unknown as TilesInternals).stats;
+    return queued + downloading + parsing;
+  }
+
+  /** 最近一帧的相机：地心坐标，离地高度取局部系的 y */
+  pose(): BudgetPose | null {
+    const frame = this.#frame;
+    if (!frame) {
+      return null;
+    }
+    const position = new Vector3().copy(this.camera.position).applyMatrix4(frame.toEcef);
+    const direction = this.camera.getWorldDirection(new Vector3()).transformDirection(frame.toEcef);
+    return { position: [position.x, position.y, position.z], direction: [direction.x, direction.y, direction.z], height: this.camera.position.y };
+  }
+
+  inspect(): TilesetEntryInspection {
+    const { stats } = this.tiles as unknown as TilesInternals;
+    return {
+      show: this.#options.show,
+      errorTarget: this.tiles.errorTarget,
+      // 不画的瓦片集不再更新：库的统计停在之前
+      visible: this.#drawn ? stats.visible : 0,
+      loaded: this.#loaded,
+      unloaded: this.#unloaded,
+      failed: this.#failed
+    };
   }
 
   /** 画一帧之前：按这一帧的投影换算相机、选瓦片；不显示、根索引没到、在地球背面时不画 */
@@ -208,16 +330,19 @@ export class TilesetEntry implements Disposable {
     this.#drawn = false;
     const localFrame = this.#frame;
     if (!this.#options.show || !localFrame) {
+      this.#releaseUsed();
       return false;
     }
     this.#anchor ??= surface.anchor(...localFrame.anchor);
     if (this.#math.behindGlobe(frame, this.#anchor)) {
+      this.#releaseUsed();
       return false;
     }
     this.#math.syncCamera(this.camera, this.#math.clipMatrix(frame, this.#anchor, this.#clip), frame);
     this.scene.updateMatrixWorld(true);
     this.tiles.setResolution(this.camera, width, height);
     this.tiles.update();
+    this.#pinned = true;
     if (!this.#initial && this.tiles.root && this.tiles.loadProgress === 1) {
       this.#initial = true;
       this.#events.initial();
@@ -251,6 +376,40 @@ export class TilesetEntry implements Disposable {
     URL.revokeObjectURL(this.#url);
     this.tiles.dispose();
     this.#materials.dispose();
+  }
+
+  // 不再更新的瓦片集不会自己解除"在用"：所有瓦片集共用一个缓存，不解除的话它占的字节别的瓦片集永远用不上
+  #releaseUsed(): void {
+    if (!this.#pinned) {
+      return;
+    }
+    this.#pinned = false;
+    const { usedSet } = this.tiles as unknown as TilesInternals;
+    for (const tile of usedSet) {
+      this.#cache.markUnused(tile);
+    }
+    usedSet.clear();
+  }
+
+  #rememberSize(tile: TileInternals): void {
+    const { depth } = tile.internal;
+    const size = this.#sizeByDepth.get(depth) ?? { bytes: 0, count: 0 };
+    size.bytes += this.#cache.getMemoryUsage(tile);
+    size.count++;
+    this.#sizeByDepth.set(depth, size);
+    if (size.count >= MIN_SIZE_SAMPLES) {
+      this.#deepestSized = Math.max(this.#deepestSized, depth);
+    }
+  }
+
+  // 这一层一块瓦片的估计大小；样本不够时按样本够了的最深一层，都不够时不估计
+  #sizeAt(depth: number): number {
+    const size = this.#sizeByDepth.get(depth);
+    if (size && size.count >= MIN_SIZE_SAMPLES) {
+      return size.bytes / size.count;
+    }
+    const deepest = this.#sizeByDepth.get(this.#deepestSized);
+    return deepest ? deepest.bytes / deepest.count : 0;
   }
 
   // 地心坐标到局部系，抬高时再沿局部系的 y 上移

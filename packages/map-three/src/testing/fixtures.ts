@@ -4,6 +4,7 @@ import {
   AnimationClip,
   Bone,
   BoxGeometry,
+  DataTexture,
   Float32BufferAttribute,
   Group,
   Mesh,
@@ -136,6 +137,58 @@ export function roomTileset(at: LngLat, floor: number, content = 'room.glb'): un
       geometricError: 40,
       refine: 'ADD',
       children: [{ boundingVolume, geometricError: 0, content: { uri: content } }]
+    }
+  };
+}
+
+/** 边长 2 × half 米、贴一张 size × size 贴图的立方体：瓦片的显存主要看贴图 */
+export function texturedBoxGlb(half: number, size: number): Promise<ArrayBuffer> {
+  const pixels = new Uint8Array(size * size * 4).fill(255);
+  const map = new DataTexture(pixels, size, size);
+  map.needsUpdate = true;
+  const geometry = new BoxGeometry(half * 2, half * 2, half * 2).translate(0, half, 0);
+  return exportGlb(new Mesh(geometry, new MeshBasicMaterial({ map })));
+}
+
+/**
+ * JKQ2 那样的瓦片集：根节点只分组（没有内容），下面 blocks × blocks 个并排的块，每块一个粗的瓦片，下面一组 4 块细的。
+ * 各块离相机一样远时，细的那一层要么全要、要么全不要；blockError、fineError 是粗、细两层的几何误差
+ */
+export function blockTileset(
+  at: LngLat,
+  { blocks, spacing, blockError, fineError }: { blocks: number; spacing: number; blockError: number; fineError: number }
+): unknown {
+  const half = (blocks * spacing) / 2;
+  const fine = (x: number, y: number) => ({
+    boundingVolume: { box: [x, y, 5, spacing / 4, 0, 0, 0, spacing / 4, 0, 0, 0, 5] },
+    geometricError: fineError,
+    content: { uri: 'fine.glb' }
+  });
+  const children = Array.from({ length: blocks * blocks }, (_, index) => {
+    const x = (index % blocks) * spacing - half + spacing / 2;
+    const y = Math.floor(index / blocks) * spacing - half + spacing / 2;
+    return {
+      boundingVolume: { box: [x, y, 5, spacing / 2, 0, 0, 0, spacing / 2, 0, 0, 0, 5] },
+      geometricError: blockError,
+      refine: 'REPLACE',
+      content: { uri: 'block.glb' },
+      children: [
+        fine(x - spacing / 4, y - spacing / 4),
+        fine(x + spacing / 4, y - spacing / 4),
+        fine(x - spacing / 4, y + spacing / 4),
+        fine(x + spacing / 4, y + spacing / 4)
+      ]
+    };
+  });
+  return {
+    asset: { version: '1.1' },
+    geometricError: blockError,
+    root: {
+      transform: enuToEcef(at),
+      boundingVolume: { box: [0, 0, 5, half, 0, 0, 0, half, 0, 0, 0, 5] },
+      geometricError: blockError,
+      refine: 'REPLACE',
+      children
     }
   };
 }
