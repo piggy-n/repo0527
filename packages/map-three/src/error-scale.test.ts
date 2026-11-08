@@ -198,9 +198,10 @@ describe('ErrorScale', () => {
     const scale = new ErrorScale(BUDGET);
     scale.update({ ...NONE, refused: 1, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 1 }, POSE, 100);
     scale.release();
-    const high = { ...NONE, pinnedBytes: 1400 * MB, usedTiles: 10 };
+    const high = { ...NONE, pinnedBytes: 1500 * MB, usedTiles: 10 };
     expect(scale.update(high, POSE, 1000)).toBe('steady');
-    const low = { ...NONE, pinnedBytes: 1300 * MB, usedTiles: 10 };
+    // 1397 MB：实测放得下、也显示得出差别的一档（放得下 1504 MB 时比 Cesium 粗一块），不能停在这里
+    const low = { ...NONE, pinnedBytes: 1397 * MB, usedTiles: 10 };
     expect(scale.update(low, POSE, FRAME)).toBe('lowering');
   });
 
@@ -272,6 +273,27 @@ describe('ErrorScale', () => {
     const stalled = new ErrorScale(BUDGET);
     stalled.update(full, POSE, 5000);
     expect(stalled.value).toBeCloseTo(1.05 ** 6, 5);
+  });
+
+  it('帧快的时候也按时间折算：不比 60 帧时涨得快', () => {
+    const full = { ...NONE, refused: 5, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 100 };
+    const fast = new ErrorScale(BUDGET);
+    // 四帧合起来是 60 帧时的一帧
+    for (let frame = 0; frame < 4; frame++) {
+      fast.update(full, POSE, FRAME / 4);
+    }
+    expect(fast.value).toBeCloseTo(1.05, 5);
+  });
+
+  it('帧快的时候放不下的条件一消失就停在那里：下限不比当时高', () => {
+    const full = { ...NONE, refused: 5, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 100 };
+    const light = { ...NONE, pinnedBytes: 100 * MB, usedTiles: 10 };
+    const scale = new ErrorScale(BUDGET);
+    scale.update(full, POSE, FRAME / 4);
+    const raised = scale.value;
+    expect(raised).toBeCloseTo(1.05 ** 0.25, 5);
+    expect(scale.update(light, POSE, FRAME / 4)).toBe('steady');
+    expect(scale.value).toBe(raised);
   });
 
   it('帧慢时一步放过了头：收回到放不下的倍数再高一步，不再往下', () => {
@@ -381,6 +403,15 @@ describe('ErrorScale', () => {
     }
     expect(motion).toBe('raising');
     expect(scale.locked).toBe(true);
+  });
+
+  it('估计只比上限高一截时不放宽：放得下的数据不能被估计锁在下限上', () => {
+    const scale = new ErrorScale(BUDGET);
+    // 第一次加载时同样的误差实际只要 1476 MB；收紧途中估计算出来接近 2 GB
+    const overestimated = { ...NONE, cachedBytes: 1100 * MB, pinnedBytes: 1100 * MB, pendingBytes: 800 * MB, usedTiles: 100 };
+    expect(scale.update(overestimated, POSE, FRAME)).toBe('steady');
+    expect(scale.value).toBe(1);
+    expect(scale.locked).toBe(false);
   });
 
   it('内容变了就解锁', () => {

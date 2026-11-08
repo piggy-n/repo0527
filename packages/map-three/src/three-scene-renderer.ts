@@ -29,8 +29,8 @@ import { WalkMarker } from './walk-marker';
 const MEGABYTE = 1024 * 1024;
 const CACHE_BYTES = 1024 * MEGABYTE;
 const CACHE_OVERFLOW_BYTES = 512 * MEGABYTE;
-// 每帧上传的字节（ADR 0147 第 5 节）：第一版，显卡机器上实测后再调，见 docs/modules/map-three.md"上传"
-const UPLOAD_BYTES_PER_FRAME = 32 * MEGABYTE;
+// 每帧上传的字节（ADR 0147 第 5 节）：GPU 耗时每 MB 约 0.5 毫秒，这么多放得进 60 帧的一帧。实测见 docs/modules/map-three.md"上传"
+const UPLOAD_BYTES_PER_FRAME = 16 * MEGABYTE;
 const FRAME_MS = 1000 / 60;
 
 /** 构造参数都有默认值，性能测量时换着比较 */

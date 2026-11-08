@@ -33,21 +33,24 @@ export interface BudgetPose {
  */
 export type ScaleMotion = 'raising' | 'lowering' | 'evicting' | 'settling' | 'steady';
 
-// 16.7 毫秒变 5%：60 帧时一秒约 18 倍。太快会放过头，太慢画面要等；放过头的上限是一帧的量
+// 16.7 毫秒变 5%，按时间折算，和帧率无关：一秒约 18 倍。太快会放过头，太慢画面要等；放过头的上限是一帧的量
 const RATE_PER_FRAME = 1.05;
 const FRAME_MS = 1000 / 60;
 // 一帧最多按这么久算：卡住的那一帧不能一下子放宽很多
 const MAX_ELAPSED_MS = 100;
 // 缓存里还有这么多可以淘汰的就不算放不下：等淘汰，不放宽
 const EVICTABLE_RATIO = 0.02;
-// 相机停着时，估计的总量超过上限这么多就提前放宽，不等真的装满；估得不准的时候也只是少涨或多涨一点，涨到条件消失就停
-const PREDICT_RATIO = 1.2;
+// 相机停着时，估计的总量超过上限这么多就提前放宽，不等真的装满：只为了每细一级大 7～20 倍的数据，它们的估计远超这条线。
+// 估计会偏高（正在被替换的父瓦片也算在内，排队的按平均大小算）；放得下的数据超线的话会被锁在下限上，比第一次加载粗。
+// 1.2 倍时倾斜摄影 z19 飞完就是这样，放不放得下交给真的装满来判断
+const PREDICT_RATIO = 2;
 // 放宽了这么多倍、在用的瓦片数都没变：已经是最粗的一层，再放宽也没有用。真实数据相邻两层的误差差 2～5 倍
 const SATURATE_FACTOR = 8;
 // 等淘汰时缓存这么久没有变小就不等了：库不会淘汰"淘汰后低于下限"的瓦片，单块瓦片比溢出的额度还大时会一直停在这里
 const EVICT_STALL_MS = 1000;
-// 需求低于上限的这个比例才收紧：有下限防来回折腾，这条线只是不要贴着上限走。太低的话飞行后收紧到一半就停，比第一次加载粗
-const LOWER_RATIO = 0.9;
+// 需求低于上限的这个比例才收紧：有下限防来回折腾，这条线只是不要贴着上限走。太低的话收紧到一半就停：
+// 90% 时倾斜摄影 z19 停在 1397 MB，比放得下的 1504 MB 粗一块，截图上看得出来
+const LOWER_RATIO = 0.97;
 // 只防数值失控：没有内容的节点总是往下走，再大也至少画出最粗的一层
 const MAX_SCALE = 256;
 // 相机离开放宽时的位置超过高度的这个比例，或者转过这个角度，才算换了姿态（同 JKQ 的排查）
@@ -169,8 +172,9 @@ export class ErrorScale {
     }
     this.#lockedAt = pose;
     this.#floorWhileMoving = this.#stillMs < SETTLE_MS;
-    this.#floor = Math.min(MAX_SCALE, this.#value * RATE_PER_FRAME);
-    this.#value = Math.max(this.#floor, Math.min(MAX_SCALE, this.#value * rate));
+    // 帧快时一帧只涨一点（按时间折算），下限跟着；帧慢时一步可能放过头，下限最多算 5%，多出来的能收回去
+    this.#floor = Math.min(MAX_SCALE, this.#value * Math.min(rate, RATE_PER_FRAME));
+    this.#value = Math.min(MAX_SCALE, this.#value * rate);
     if (usedTiles < this.#baseTiles) {
       this.#baseValue = this.#value;
       this.#baseTiles = usedTiles;
