@@ -1,4 +1,4 @@
-import type { BenchStats, LongTaskStats, PageSetup, PhaseResult, ShotCoverage } from './bench-api.ts';
+import type { BenchStats, SceneSample, LongTaskStats, PageSetup, PhaseResult, ShotCoverage } from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
 import type { BlurEvent, SharpnessComparison } from './sharpness.ts';
 import type { RunKind } from './scenes.ts';
@@ -14,6 +14,16 @@ export interface MemoryReadings {
   readonly gpuAtStableMB: number | null;
   readonly gpuPeakMB: number | null;
   readonly gpuUnavailable: string | null;
+}
+
+/** 飞行结束到稳定 */
+export interface SettleResult {
+  readonly stable: boolean;
+  /** 从飞行结束算 */
+  readonly ms: number;
+  readonly longTasks: LongTaskStats;
+  /** 飞行结束后的读数，一直记到稳定以后再过一会儿 */
+  readonly trace: readonly SceneSample[];
 }
 
 export interface RunResult {
@@ -39,9 +49,9 @@ export interface RunResult {
   static?: PhaseResult;
   image?: ShotCoverage;
   flightCold?: PhaseResult;
-  settle?: { readonly stable: boolean; readonly ms: number; readonly longTasks: LongTaskStats };
+  settle?: SettleResult;
   flightWarm?: PhaseResult;
-  recovery?: { readonly stable: boolean; readonly ms: number; readonly longTasks: LongTaskStats };
+  recovery?: SettleResult;
   atRecovered?: BenchStats;
   memory?: MemoryReadings;
   quality?: QualityResult;

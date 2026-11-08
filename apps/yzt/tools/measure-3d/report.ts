@@ -1,7 +1,7 @@
-import type { PhaseResult } from './bench-api.ts';
+import type { SceneSample, PhaseResult } from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
 import type { MeasureResults, RunResult } from './results.ts';
-import { allPassed, median, sceneVerdict, type VerdictRow } from './verdict.ts';
+import { allPassed, fillReachedAt, fillSampleAt, median, sceneVerdict, type VerdictRow } from './verdict.ts';
 
 // 从 raw.json 的内容生成报告；每跑完一遍就重新生成一次，中断了也留得下
 
@@ -35,6 +35,24 @@ function summaryCell(runs: readonly RunResult[], read: (run: RunResult) => Phase
 }
 
 const STATUS_ORDER: readonly RunResult['status'][] = ['failed', 'invalid', 'timeout', 'ok'];
+const WAN = 10000;
+
+// 飞行中画得多细：工作量少可能只是画得粗
+function flightDetail(runs: readonly RunResult[], phase: 'flightCold' | 'flightWarm'): string {
+  const of = (read: (trace: readonly SceneSample[]) => number | null) =>
+    pick(runs, run => {
+      const trace = run[phase]?.trace;
+      return trace && trace.length > 0 ? read(trace) : null;
+    });
+  const errorMedian = of(trace => median(trace.map(sample => sample.errorTarget)));
+  if (errorMedian === null) {
+    return '—';
+  }
+  const errorMax = of(trace => Math.max(...trace.map(sample => sample.errorTarget)));
+  const trianglesMedian = of(trace => median(trace.map(sample => sample.triangles)));
+  const trianglesMin = of(trace => Math.min(...trace.map(sample => sample.triangles)));
+  return `${number(errorMedian)} / ${number(errorMax)} / ${number((trianglesMedian ?? 0) / WAN)} / ${number((trianglesMin ?? 0) / WAN)}`;
+}
 
 // 每一项是一行，各方案一列
 const METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => string])[] = [
@@ -50,12 +68,14 @@ const METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => strin
   ['第一遍飞行：帧间隔', runs => summaryCell(runs, run => run.flightCold?.interval)],
   ['第一遍飞行：≥33 / ≥50 / ≥100 毫秒的帧', runs => `${integer(pick(runs, run => run.flightCold?.over.ms33))} / ${integer(pick(runs, run => run.flightCold?.over.ms50))} / ${integer(pick(runs, run => run.flightCold?.over.ms100))}`],
   ['第一遍飞行：长任务 次数 / 最长', runs => `${integer(pick(runs, run => run.flightCold?.longTasks.count))} / ${integer(pick(runs, run => run.flightCold?.longTasks.maxMs))}`],
-  ['第一遍飞行：上传 贴图 / 缓冲（MB）/ 最多的一帧', runs => `${integer(pick(runs, run => run.flightCold?.uploads.textureMB))} / ${integer(pick(runs, run => run.flightCold?.uploads.bufferMB))} / ${number(pick(runs, run => run.flightCold?.uploads.maxFrameMB))}`],
+  ['第一遍飞行：屏幕误差 中位 / 最高，三角形（万）中位 / 最低', runs => flightDetail(runs, 'flightCold')],
+  ['第一遍飞行：上传 贴图 / 缓冲（MB）/ 最多的一帧', runs =>`${integer(pick(runs, run => run.flightCold?.uploads.textureMB))} / ${integer(pick(runs, run => run.flightCold?.uploads.bufferMB))} / ${number(pick(runs, run => run.flightCold?.uploads.maxFrameMB))}`],
   ['飞行后补齐（秒）', runs => number((pick(runs, run => run.settle?.ms) ?? Number.NaN) / 1000)],
   ['第二遍飞行：每帧工作量', runs => summaryCell(runs, run => run.flightWarm?.work)],
   ['第二遍飞行：帧间隔', runs => summaryCell(runs, run => run.flightWarm?.interval)],
   ['第二遍飞行：≥33 / ≥50 / ≥100 毫秒的帧', runs => `${integer(pick(runs, run => run.flightWarm?.over.ms33))} / ${integer(pick(runs, run => run.flightWarm?.over.ms50))} / ${integer(pick(runs, run => run.flightWarm?.over.ms100))}`],
-  ['第二遍飞行：长任务 次数 / 最长', runs => `${integer(pick(runs, run => run.flightWarm?.longTasks.count))} / ${integer(pick(runs, run => run.flightWarm?.longTasks.maxMs))}`],
+  ['第二遍飞行：屏幕误差 中位 / 最高，三角形（万）中位 / 最低', runs => flightDetail(runs, 'flightWarm')],
+  ['第二遍飞行：长任务 次数 / 最长', runs =>`${integer(pick(runs, run => run.flightWarm?.longTasks.count))} / ${integer(pick(runs, run => run.flightWarm?.longTasks.maxMs))}`],
   ['画面恢复（秒）', runs => number((pick(runs, run => run.recovery?.ms) ?? Number.NaN) / 1000)],
   ['稳定时：瓦片 / 三角形', runs => `${integer(pick(runs, run => run.atStable?.tilesVisible))} / ${integer(pick(runs, run => run.atStable?.triangles))}`],
   ['稳定时：屏幕误差 / 引擎估算的模型显存（MB）', runs => `${number(pick(runs, run => run.atStable?.errorTarget))} / ${integer(pick(runs, run => run.atStable?.cacheMB))}`],
@@ -95,11 +115,50 @@ function uploadTable(runs: readonly RunResult[], phase: 'flightCold' | 'flightWa
 const moduleParts = (modules: ProfileSummary['modules']) => modules.map(item => `${item.name} ${number(item.ms)}`).join('，') || '—';
 
 function profileLines(title: string, summary: ProfileSummary): string[] {
+  if (summary.longTasks === 0) {
+    return [`**${title}：** 忙碌共 ${integer(summary.totalBusyMs)} 毫秒；没有长任务`, ''];
+  }
   return [
-    `**${title}：** 忙碌共 ${integer(summary.totalBusyMs)} 毫秒；长任务合计：${moduleParts(summary.modules)}`,
+    `**${title}：** 忙碌共 ${integer(summary.totalBusyMs)} 毫秒；长任务 ${summary.longTasks} 个，合计：${moduleParts(summary.modules)}`,
     ...summary.longest.map((segment, index) => `- 第 ${index + 1} 长 ${integer(segment.durationMs)} 毫秒：${moduleParts(segment.modules)}`),
     ''
   ];
+}
+
+// 飞行后的过程取这几个时刻（毫秒）
+const FILL_TIMES: readonly number[] = [0, 250, 500, 1000, 1500, 2000, 3000];
+
+function fillCell(runs: readonly RunResult[], read: (run: RunResult) => SceneSample | null | undefined): string {
+  const value = (key: 'errorTarget' | 'triangles') => pick(runs, run => read(run)?.[key]);
+  const error = value('errorTarget');
+  return error === null ? '—' : `${number(error)} / ${number((value('triangles') ?? 0) / WAN)}`;
+}
+
+const finalOf = (run: RunResult) => run.settle?.trace.at(-1);
+
+/** 飞行后画面怎样变：两个引擎终点的粗细不同，只比"补齐"的时间看不出用户看到什么 */
+function fillLines(perf: readonly { readonly id: string; readonly label: string; readonly runs: readonly RunResult[] }[]): string[] {
+  const measured = perf.filter(item => item.runs.some(run => run.settle?.trace.length));
+  if (measured.length === 0) {
+    return [];
+  }
+  const rows = measured.map(({ label, runs }) => [
+    label,
+    ...FILL_TIMES.map(t => fillCell(runs, run => fillSampleAt(run.settle?.trace ?? [], t))),
+    fillCell(runs, finalOf)
+  ]);
+  const parts = ['**飞行后的过程（第一遍）：** 每格是屏幕误差 / 三角形（万）', '', table(['方案', ...FILL_TIMES.map(t => `${t / 1000} 秒`), '最后'], rows), ''];
+  const reference = perf.find(item => item.id === 'cesium');
+  const target = reference ? pick(reference.runs, run => finalOf(run)?.triangles) : null;
+  if (target !== null) {
+    for (const { id, label, runs } of measured) {
+      if (id !== 'cesium') {
+        const reached = pick(runs, run => fillReachedAt(run.settle?.trace ?? [], target));
+        parts.push(`${label} 到 Cesium 终点的三角形（${number(target / WAN)} 万）用了 ${reached === null ? '—' : number(reached / 1000, 2)} 秒`, '');
+      }
+    }
+  }
+  return parts;
 }
 
 const METHOD = `- **都是生产代码：** 真实的 \`MapSession\`、\`MapLibreView\` + \`ThreeSceneRenderer\`、\`CesiumView\` + \`CesiumScene\`，生产模式构建；页面只有底图和模型。按包分块，方便归因，运行的代码相同。
@@ -107,11 +166,11 @@ const METHOD = `- **都是生产代码：** 真实的 \`MapSession\`、\`MapLibr
 - **模型来自本机服务：** 没有网络延迟，"到稳定"是下限；主线程的解析成本不受影响。
 - **每帧工作量：** 同一帧的 JS 加 GPU，验收的 p50、p95、p99 看它。帧间隔有下限（见"有效性"里的校准），看不出余量；工作量不受影响。
 - **≥50 毫秒的帧：** 看实际帧间隔：这个长度远高于下限，而且能抓到不在工作量里的卡顿（垃圾回收、合成）。
-- **每帧 GPU：** \`EXT_disjoint_timer_query_webgl2\`，只包住这一帧的回调。MapLibre 默认帧缓冲的解析在合成阶段，不在计时内；Cesium 的离屏解析在计时内，这一点略偏向 MapLibre。
+- **每帧 GPU：** \`EXT_disjoint_timer_query_webgl2\`，只包住这一帧的回调。Cesium 开 4 倍多重采样，离屏解析在计时内；MapLibre 默认不开（和产品一样），所以 GPU 这一项不是同样的画法，要比就加 \`--antialias\` 再跑一次。
 - **上传假设：** 每帧的 \`texImage2D\`、\`texSubImage2D\`、\`bufferData\` 的字节和 \`generateMipmap\` 次数，和这一帧的 GPU 耗时放在一起。按上传量分桶后 GPU 耗时随上传量上涨，才说明尖峰来自上传。
-- **长任务归因：** 单独跑一遍带 CDP CPU 采样，每段连续忙碌按分块（three、maplibre-gl、cesium……）和原生调用（\`linkProgram\`、\`texSubImage2D\`）汇总。\`profiles/\` 里的 \`.cpuprofile\` 可以用 DevTools 打开。
+- **长任务归因：** 单独跑一遍带 CDP CPU 采样，页面报的每个长任务按分块（three、maplibre-gl、cesium……）和原生调用（\`linkProgram\`、\`texSubImage2D\`）汇总。\`profiles/\` 里的 \`.cpuprofile\` 可以用 DevTools 打开。
 - **清晰度：** 单独跑一遍，同一相机拍截图。见 \`quality.html\` 的说明。
-- **到稳定：** 引擎报告瓦片都到了（MapLibre 还要上传队列空、屏幕误差不再变），连续 1 秒。
+- **到稳定：** 引擎报告瓦片都到了（MapLibre 还要上传队列空、屏幕误差不再变），连续 1 秒。飞行后补齐从飞行结束的时刻算；这个数只说明引擎不再动，不说明画面一样细：Cesium 飞完不一定回到飞行前的粗细，要一起看"飞行后的过程"。
 - **显存：** Windows 的 GPU Process Memory 计数器，取 GPU 进程的专用显存，采样的最大值不是真正的瞬时峰值。`;
 
 /** report.md */
@@ -170,6 +229,7 @@ export function renderReport(results: MeasureResults): string {
   parts.push('## 各场景并排', '', '帧时间单位是毫秒，四个数是 p50 / p95 / p99 / 最长；重复跑的取中位数。', '');
   for (const scene of results.scenes) {
     const perf = results.variants.map(({ id, label }) => ({
+      id,
       label,
       runs: runs.filter(run => run.scene === scene.id && run.variant === id && run.kind === 'perf')
     }));
@@ -184,6 +244,7 @@ export function renderReport(results: MeasureResults): string {
       ),
       ''
     );
+    parts.push(...fillLines(perf));
     parts.push('**GPU 耗时随上传量（第一遍飞行）：**', '');
     for (const item of perf) {
       const uploads = uploadTable(item.runs, 'flightCold');

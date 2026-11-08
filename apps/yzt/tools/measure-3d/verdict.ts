@@ -1,3 +1,4 @@
+import type { SceneSample } from './bench-api.ts';
 import type { RunResult, SceneQuality } from './results.ts';
 
 // ADR 0147 3C.4 的验收：同模型同视角和 Cesium 比，这些条件要同时满足，不能靠降低画质换帧率。
@@ -168,6 +169,20 @@ export function sceneVerdict(runs: readonly RunResult[], quality: SceneQuality |
     pass: hold && referenceHold ? hold.blurEvents.length <= referenceHold.blurEvents.length : null
   });
   return rows;
+}
+
+/** 离飞行结束 t 毫秒时的读数：那一刻之前最后一次记录；第一次记录比 0 晚一点点，算作 0 */
+export function fillSampleAt(trace: readonly SceneSample[], t: number): SceneSample | null {
+  return trace.findLast(sample => sample.t <= t) ?? trace[0] ?? null;
+}
+
+/**
+ * 飞行结束多久以后，显示的三角形不再少于 triangles：两个引擎终点的粗细不同时，"补齐"的时间不能直接比，
+ * 要看画面到同样的粗细用了多久。瓦片替换的中途三角形会回落，所以看最后一次低于它的时候。一直没到时是 null
+ */
+export function fillReachedAt(trace: readonly SceneSample[], triangles: number): number | null {
+  const lastBelow = trace.findLastIndex(sample => sample.triangles < triangles);
+  return trace[lastBelow + 1]?.t ?? null;
 }
 
 /** 全部能判断、全部通过才算通过；缺数据时不算通过 */

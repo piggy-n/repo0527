@@ -35,8 +35,13 @@ export default defineConfig({
         bench: resolve(here, 'page/index.html'),
         compare: resolve(here, 'page/compare.html')
       },
+      // 下面关掉"连依赖一起放进分块"时，rolldown 要求这两项，否则可能生成顺序不对的分块；探针也靠它最先执行
+      preserveEntrySignatures: false,
       output: {
+        strictExecutionOrder: true,
         codeSplitting: {
+          // 默认会把依赖也放进同一个分块：实测 maplibre-gl 跑进了 map-cesium，three 跑进了 3d-tiles-renderer，归因的名字全错
+          includeDependenciesRecursively: false,
           groups: [{ name: id => packageChunk(id) ?? null, debugName: 'packages' }]
         }
       }

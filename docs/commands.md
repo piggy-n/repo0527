@@ -194,7 +194,7 @@ pnpm add -Dw -E some-tool
 
 **执行了什么**：Node 运行 `tools/measure-3d/cli.ts`：启动前检查（模型、端口、渲染器，空页面校准帧间隔的下限）→ 用 `tools/measure-3d/vite.config.ts` 按生产模式构建测量页 → 每遍一个新的浏览器进程 → 写 `local/measure-3d/<时间>/`（`report.md`、`quality.html`、`manual.md`、`raw.json`、`shots/`、`profiles/`，不入库）。每跑完一遍就重新写一次报告，中断了也留得下。
 
-**注意事项**：只在有真实显卡的机器上有意义，看到软件渲染直接退出（`--allow-software` 只用来确认脚本能跑）。全部跑完估计 30～40 分钟，期间会弹出浏览器窗口，不要用这台机器。步骤和口径见 [modules/map-three.md](modules/map-three.md)"性能验收"，参数见 `--help`。
+**注意事项**：只在有真实显卡的机器上有意义，看到软件渲染直接退出（`--allow-software` 只用来确认脚本能跑）。默认参数实测 29 分钟（2026-11-08，RTX 3060），`--upload-mb` 每多一个方案多约 6 分钟，期间会弹出浏览器窗口，不要用这台机器。步骤和口径见 [modules/map-three.md](modules/map-three.md)"性能验收"，参数见 `--help`。
 
 ### `pnpm --filter yzt probe:resource-classes`
 

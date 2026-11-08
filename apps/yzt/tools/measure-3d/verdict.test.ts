@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { BenchStats, PhaseResult } from './bench-api.ts';
+import type { BenchStats, SceneSample, PhaseResult } from './bench-api.ts';
 import type { RunResult, SceneQuality } from './results.ts';
-import { allPassed, median, sceneVerdict } from './verdict.ts';
+import { allPassed, fillReachedAt, fillSampleAt, median, sceneVerdict } from './verdict.ts';
 
 const STATS: BenchStats = {
   tilesVisible: 30,
@@ -24,6 +24,7 @@ const LONG_TASKS = { count: 1, maxMs: 80, totalMs: 80, over100: 0, over200: 0, o
 function phase(p50: number, p95: number, p99: number, over50 = 0): PhaseResult {
   const summary = { samples: 100, mean: p50, p50, p95, p99, max: p99 };
   return {
+    endedAt: 20000,
     durationMs: 15000,
     frames: 100,
     renders: 100,
@@ -39,6 +40,8 @@ function phase(p50: number, p95: number, p99: number, over50 = 0): PhaseResult {
   };
 }
 
+const settle = (ms: number) => ({ stable: true, ms, longTasks: LONG_TASKS, trace: [] });
+
 function perf(variant: string, overrides: Partial<RunResult> = {}, repeat = 0): RunResult {
   return {
     id: `s/${variant}/perf-${repeat + 1}`,
@@ -52,7 +55,7 @@ function perf(variant: string, overrides: Partial<RunResult> = {}, repeat = 0): 
     atStable: STATS,
     flightCold: phase(10, 20, 30),
     flightWarm: phase(8, 15, 20),
-    settle: { stable: true, ms: 2000, longTasks: LONG_TASKS },
+    settle: settle(2000),
     ...overrides
   };
 }
@@ -86,8 +89,7 @@ const QUALITY: SceneQuality = {
 };
 
 const load = (ttStableMs: number) => ({ stable: true, ttStableMs, ttFromNavigationMs: 0, longTasks: LONG_TASKS });
-const settle = (ms: number) => ({ stable: true, ms, longTasks: LONG_TASKS });
-const passing = () => [perf('maplibre'), perf('cesium'), qualityRun('maplibre'), qualityRun('cesium')];
+const passing =() => [perf('maplibre'), perf('cesium'), qualityRun('maplibre'), qualityRun('cesium')];
 const rowOf = (rows: ReturnType<typeof sceneVerdict>, text: string) => {
   const row = rows.find(item => item.condition.includes(text));
   if (!row) {
@@ -169,6 +171,37 @@ describe('sceneVerdict', () => {
     expect(rowOf(rows, '到稳定').pass).toBeNull();
     expect(rowOf(rows, '清晰度').pass).toBeNull();
     expect(allPassed(rows)).toBe(false);
+  });
+});
+
+const fillSample = (t: number, triangles: number): SceneSample => ({
+  t,
+  tiles: 60,
+  triangles,
+  errorTarget: 30,
+  loading: 0,
+  uploadPending: 0,
+  cacheMB: 1300,
+  loaded: 100
+});
+
+describe('飞行后的过程', () => {
+  const trace =[fillSample(0, 800), fillSample(100, 900), fillSample(200, 850), fillSample(300, 910), fillSample(400, 920)];
+
+  it('某一刻的读数：那一刻之前最后一次记录', () => {
+    expect(fillSampleAt(trace, 250)?.t).toBe(200);
+    expect(fillSampleAt(trace, 9999)?.t).toBe(400);
+    expect(fillSampleAt([fillSample(0.1, 800)], 0)?.triangles).toBe(800);
+    expect(fillSampleAt([], 0)).toBeNull();
+  });
+
+  it('到某个粗细的时间：替换瓦片的中途回落过，看最后一次低于它之后', () => {
+    expect(fillReachedAt(trace, 900)).toBe(300);
+  });
+
+  it('一开始就够了是 0；一直没到是 null', () => {
+    expect(fillReachedAt(trace, 500)).toBe(0);
+    expect(fillReachedAt(trace, 1000)).toBeNull();
   });
 });
 

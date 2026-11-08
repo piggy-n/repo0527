@@ -67,8 +67,29 @@ export interface UploadStats {
   readonly buckets: readonly UploadBucket[];
 }
 
+/** 一个长任务：页面时钟（performance.now） */
+export interface LongTaskWindow {
+  readonly startTime: number;
+  readonly duration: number;
+}
+
+/** 某一刻的读数：看飞行中和飞行后画面怎样变化 */
+export interface SceneSample {
+  /** 离这一段开始的毫秒数（飞行中从飞行开始算，飞行后从飞行结束算） */
+  readonly t: number;
+  readonly tiles: number;
+  readonly triangles: number;
+  readonly errorTarget: number;
+  readonly loading: number;
+  readonly uploadPending: number | null;
+  readonly cacheMB: number;
+  readonly loaded: number;
+}
+
 /** 一段时间的统计（静止、飞行） */
 export interface PhaseResult {
+  /** 这段时间结束的时刻（performance.now）：统计本身还要等一会儿，飞行后的计时要从这里算 */
+  readonly endedAt: number;
   readonly durationMs: number;
   readonly frames: number;
   readonly renders: number;
@@ -90,6 +111,8 @@ export interface PhaseResult {
   };
   readonly longTasks: LongTaskStats;
   readonly uploads: UploadStats;
+  /** 飞行中的读数：帧时间和上传量比的是工作量，这个看同样的工作量画得多细 */
+  readonly trace?: readonly SceneSample[];
 }
 
 export interface StableResult {

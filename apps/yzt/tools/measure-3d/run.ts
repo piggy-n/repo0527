@@ -1,18 +1,28 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CDPSession, Page } from 'playwright';
-import type { BenchCamera, BenchStats, LongTaskStats, PageSetup, PhaseResult, ShotCoverage, StableResult } from './bench-api.ts';
+import type {
+  BenchCamera,
+  BenchStats,
+  SceneSample,
+  LongTaskStats,
+  LongTaskWindow,
+  PageSetup,
+  PhaseResult,
+  ShotCoverage,
+  StableResult
+} from './bench-api.ts';
 import { gpuProcessId, launchBrowser, type LaunchedBrowser, sampleGpuMemory } from './browser.ts';
 import type { Options } from './options.ts';
 import { type CpuProfile, summarizeProfile } from './profile.ts';
-import type { QualityResult, RunResult } from './results.ts';
+import type { QualityResult, RunResult, SettleResult } from './results.ts';
 import { aerialFlight, type Run } from './scenes.ts';
 import { blurEvents, type SharpnessGrid } from './sharpness.ts';
 
 // 跑一遍：每遍一个新的浏览器进程和空缓存，显存、堆、磁盘缓存都从零开始
 
-const NORMAL = { warmupMs: 1000, staticMs: 6000, flightMs: 15000, settleMs: 20000, basemapMs: 10000, memoryEveryMs: 5000, holdSeconds: 30, holdEveryMs: 1000 };
-const QUICK = { warmupMs: 300, staticMs: 2000, flightMs: 4000, settleMs: 8000, basemapMs: 3000, memoryEveryMs: 5000, holdSeconds: 4, holdEveryMs: 1000 };
+const NORMAL = { warmupMs: 1000, staticMs: 6000, flightMs: 15000, settleMs: 20000, afterSettleMs: 3000, basemapMs: 10000, memoryEveryMs: 5000, holdSeconds: 30, holdEveryMs: 1000 };
+const QUICK = { warmupMs: 300, staticMs: 2000, flightMs: 4000, settleMs: 8000, afterSettleMs: 1000, basemapMs: 3000, memoryEveryMs: 5000, holdSeconds: 4, holdEveryMs: 1000 };
 
 // 模型覆盖的像素比例低于这个值，就算模型没有画出来
 const MIN_MODEL_COVERAGE_PCT = 0.2;
@@ -141,12 +151,13 @@ async function loadPage(run: Run, ctx: RunContext, { page }: Session, result: Ru
 
 const waitStable = (page: Page, timeoutMs: number) =>
   call<StableResult>(page, `window.benchProbe.waitStable(${timeoutMs}, ${STABLE_STREAK})`);
-// 飞行结束以后等到稳定：先画几帧，引擎才知道相机停了（Cesium 动着的时候不请求瓦片，这时看起来什么都不缺）
-async function waitSettled(page: Page, timeoutMs: number) {
-  const from = await call<number>(page, 'window.benchProbe.now()');
+// 飞行结束以后等到稳定：先画几帧，引擎才知道相机停了（Cesium 动着的时候不请求瓦片，这时看起来什么都不缺）。
+// 从飞行结束的时刻算（from）：统计飞行的结果还要等一会儿，等的这段也是用户看到的。稳定后再看 watchMs，看画面还变不变
+async function waitSettled(page: Page, from: number, timeoutMs: number, watchMs: number): Promise<SettleResult> {
   await call(page, 'window.benchProbe.waitFrames(5)');
   const { stable, at } = await waitStable(page, timeoutMs);
-  return { stable, at, from, ms: at - from };
+  const trace = await call<SceneSample[]>(page, `window.benchProbe.finishFillTrace(${watchMs})`);
+  return { stable, ms: at - from, longTasks: await longTasks(page, from, at), trace };
 }
 
 const longTasks = (page: Page, from: number, to: number) => call<LongTaskStats>(page, `window.benchProbe.longTasks(${from}, ${to + 1})`);
@@ -230,14 +241,12 @@ async function runPerf(run: Run, ctx: RunContext, session: Session, result: RunR
   ctx.progress('飞行（第一遍）');
   result.flightCold = await flight(page, keyframes, times.flightMs);
   ctx.progress('等瓦片补齐');
-  const settle = await waitSettled(page, times.settleMs);
-  result.settle = { stable: settle.stable, ms: settle.ms, longTasks: await longTasks(page, settle.from, settle.at) };
+  result.settle = await waitSettled(page, result.flightCold.endedAt, times.settleMs, times.afterSettleMs);
   await sample();
   ctx.progress('飞行（第二遍）');
   result.flightWarm = await flight(page, keyframes, times.flightMs);
   ctx.progress('等画面恢复');
-  const recovered = await waitSettled(page, times.settleMs);
-  result.recovery = { stable: recovered.stable, ms: recovered.ms, longTasks: await longTasks(page, recovered.from, recovered.at) };
+  result.recovery = await waitSettled(page, result.flightWarm.endedAt, times.settleMs, times.afterSettleMs);
   result.atRecovered = await stats(page);
   await sample();
   result.memory = { heapPeakMB: heapPeak, gpuAtStableMB: gpuAtStable, gpuPeakMB: peakGpu, gpuUnavailable };
@@ -284,6 +293,7 @@ async function runQuality(run: Run, ctx: RunContext, session: Session, result: R
   ctx.progress('飞一圈回来再拍');
   await flight(page, await flightPath(page, run, ctx.options), times.flightMs);
   const settled = await waitStable(page, times.settleMs);
+  await call(page, 'window.benchProbe.finishFillTrace(0)');
   const end = settled.stable ? await save('-after-flight') : null;
   const quality: QualityResult = {
     shot: shot.file,
@@ -304,9 +314,12 @@ async function runProfile(run: Run, ctx: RunContext, session: Session, result: R
   const { page, cdp } = session;
   const name = fileName(run.id);
   const stop = async (suffix: string) => {
+    const endedAt = await call<number>(page, 'window.benchProbe.now()');
     const { profile } = (await cdp.send('Profiler.stop')) as unknown as { profile: CpuProfile };
     writeFileSync(join(ctx.outDir, `profiles/${name}-${suffix}.cpuprofile`), ctx.redact(JSON.stringify(profile)));
-    return summarizeProfile(profile);
+    // longtask 的回调要到下一个任务才来
+    await sleep(150);
+    return summarizeProfile(profile, await call<LongTaskWindow[]>(page, 'window.benchProbe.longTaskWindows()'), endedAt);
   };
   await cdp.send('Profiler.enable');
   await cdp.send('Profiler.setSamplingInterval', { interval: 1000 });
@@ -318,6 +331,7 @@ async function runProfile(run: Run, ctx: RunContext, session: Session, result: R
   ctx.progress('飞行（CPU 采样）');
   await cdp.send('Profiler.start');
   await flight(page, await flightPath(page, run, ctx.options), times.flightMs);
+  await call(page, 'window.benchProbe.finishFillTrace(0)');
   const flying = await stop('flight');
   result.profile = { load, flight: flying };
 }

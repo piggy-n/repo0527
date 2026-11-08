@@ -1,6 +1,8 @@
 import type {
   BenchCamera,
+  SceneSample,
   LongTaskStats,
+  LongTaskWindow,
   PageSetup,
   PhaseResult,
   ShotCoverage,
@@ -303,6 +305,47 @@ function longTaskStats(from: number, to: number): LongTaskStats {
   };
 }
 
+// ---------- 飞行中和飞行后的读数 ----------
+
+// 飞行中隔这么久记一次：读数只有几十微秒，这个频率不影响帧时间
+const FLIGHT_SAMPLE_MS = 250;
+// 飞行后隔这么久记一次：这段不量帧时间，要看清楚画面怎样变化
+const FILL_SAMPLE_MS = 50;
+const fill: { timer: ReturnType<typeof setInterval> | null; samples: SceneSample[]; from: number } = { timer: null, samples: [], from: 0 };
+
+function sceneSample(from: number): SceneSample | null {
+  const stats = window.bench?.stats();
+  return stats
+    ? {
+        t: performance.now() - from,
+        tiles: stats.tilesVisible,
+        triangles: stats.triangles,
+        errorTarget: stats.errorTarget,
+        loading: stats.loading,
+        uploadPending: stats.uploadPending,
+        cacheMB: stats.cacheMB,
+        loaded: stats.loaded
+      }
+    : null;
+}
+
+function sampleInto(samples: SceneSample[], from: number): void {
+  const sample = sceneSample(from);
+  if (sample) {
+    samples.push(sample);
+  }
+}
+
+function startFillTrace(): void {
+  if (fill.timer !== null) {
+    clearInterval(fill.timer);
+  }
+  fill.samples = [];
+  fill.from = performance.now();
+  sampleInto(fill.samples, fill.from);
+  fill.timer = setInterval(() => sampleInto(fill.samples, fill.from), FILL_SAMPLE_MS);
+}
+
 // ---------- 统计 ----------
 
 function percentile(sorted: Float64Array, p: number): number {
@@ -404,6 +447,7 @@ async function endPhase(): Promise<PhaseResult> {
   const over = (limit: number) => intervals.reduce((n, value) => n + (value >= limit ? 1 : 0), 0);
   const gpuSummary = summarize(gpuMs);
   return {
+    endedAt: end,
     durationMs: end - started.start,
     frames: count,
     renders,
@@ -480,6 +524,9 @@ export interface Probe {
   waitBasemap(timeoutMs: number): Promise<{ idle: boolean; waitedMs: number }>;
   waitFrames(count: number): Promise<boolean>;
   longTasks(from: number, to: number): LongTaskStats;
+  longTaskWindows(): LongTaskWindow[];
+  /** 再看 watchMs 毫秒（期间继续请求帧），结束飞行后的记录 */
+  finishFillTrace(watchMs: number): Promise<SceneSample[]>;
   now(): number;
   record(durationMs: number): Promise<PhaseResult>;
   flight(keyframes: readonly BenchCamera[], durationMs: number): Promise<PhaseResult>;
@@ -550,6 +597,22 @@ export const probe: Probe = {
 
   longTasks: longTaskStats,
 
+  longTaskWindows: () => longTasks.map(({ startTime, duration }) => ({ startTime, duration })),
+
+  async finishFillTrace(watchMs) {
+    const end = performance.now() + watchMs;
+    while (performance.now() < end) {
+      window.bench?.tick();
+      // oxlint-disable-next-line no-await-in-loop -- 按固定间隔请求帧
+      await sleep(200);
+    }
+    if (fill.timer !== null) {
+      clearInterval(fill.timer);
+      fill.timer = null;
+    }
+    return fill.samples;
+  },
+
   now: () => performance.now(),
 
   async record(durationMs) {
@@ -560,8 +623,13 @@ export const probe: Probe = {
 
   async flight(keyframes, durationMs) {
     beginPhase();
+    const trace: SceneSample[] = [];
+    const from = performance.now();
+    const timer = setInterval(() => sampleInto(trace, from), FLIGHT_SAMPLE_MS);
     await fly(keyframes, durationMs);
-    return endPhase();
+    clearInterval(timer);
+    startFillTrace();
+    return { ...(await endPhase()), trace };
   },
 
   // 模型显示和隐藏各拍一张，比较后才知道模型是不是真的画出来了
