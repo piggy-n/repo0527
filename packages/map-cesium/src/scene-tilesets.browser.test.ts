@@ -452,6 +452,10 @@ describe('SceneTilesets 的显存预算', () => {
     expect(inspection?.memoryAdjustedScreenSpaceError).toBeLessThan(rootSse);
     expect(inspection?.memoryAdjustedScreenSpaceError).toBeGreaterThan(16);
     expect(inspection?.statistics.selected).toBeGreaterThan(0);
+    // 压住以后 Cesium 每个 tick 还在涨、又被压回：不为这个每个 tick 都画一帧
+    const framesBefore = frames;
+    expect(await within(after(120), 20000)).not.toBe('timeout');
+    expect(frames - framesBefore).toBeLessThan(30);
     // 清晰度：画的是块的根（误差 8），贴图没有，密度为 0
     expect(inspection?.selection?.count).toBeGreaterThan(0);
     expect(inspection?.selection?.coarsestError).toBe(BLOCK_ERROR);

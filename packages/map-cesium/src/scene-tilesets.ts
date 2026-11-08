@@ -331,17 +331,19 @@ export class SceneTilesets implements Disposable {
       if (error === entry.adjustedError) {
         continue;
       }
-      changed = true;
       // 涨过根节点的屏幕误差时 Cesium 一个瓦片都不画（根节点没有内容的 JKQ2 整个消失）：压回根节点以下，
-      // 已经加载的瓦片继续画，显存超预算就超着，没加载的那些不再加载
+      // 已经加载的瓦片继续画，显存超预算就超着，没加载的那些不再加载。压住以后 Cesium 每个 tick 还会再涨 2%，
+      // 又被压回来：画的东西没变，不为这个请求渲染
       const cap = this.#rootCap(entry);
       if (error > cap) {
         entry.tileset.maximumScreenSpaceError = cap;
         entry.floor ??= this.#cameraPose();
         entry.peakError = cap;
+        changed ||= entry.adjustedError !== cap;
         entry.adjustedError = cap;
         continue;
       }
+      changed = true;
       entry.peakError = Math.max(entry.peakError, error);
       if (error < entry.adjustedError && entry.peakError > entry.configuredError) {
         // setter 会把调整后的值也设成地板
