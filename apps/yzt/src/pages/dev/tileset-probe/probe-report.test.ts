@@ -26,6 +26,17 @@ interface Numbers {
   readonly unloaded?: number;
   readonly failed?: number;
   readonly tilesLoaded?: boolean;
+  /** 给了纹素密度才算画过；其他清晰度的数跟着给默认值 */
+  readonly density?: number;
+  readonly blurry?: number;
+  readonly errorPx?: number;
+  readonly coarsest?: number;
+}
+
+function selectionOf({ density, blurry = 0, errorPx = 8, coarsest = 7.2 }: Numbers) {
+  return density === undefined
+    ? null
+    : { count: 50, texelDensity: density, blurryShare: blurry, errorPixels: errorPx, coarsestError: coarsest };
 }
 
 function tilesetOf(id: string, numbers: Numbers): TilesetInspection {
@@ -51,6 +62,7 @@ function tilesetOf(id: string, numbers: Numbers): TilesetInspection {
       numberOfTilesTotal: 1000,
       numberOfLoadedTilesTotal: loaded
     },
+    selection: selectionOf(numbers),
     loaded,
     unloaded,
     failed
@@ -117,10 +129,15 @@ const SEQUENCE = sessionOf({
   ],
   samples: [
     sampleOf(0, 0, { frames: 10, loaded: 5, memoryMB: 100, sse: 16, selected: 10, pending: 4, tilesLoaded: false }),
-    sampleOf(250, 0, { frames: 14, loaded: 8, memoryMB: 300, sse: 20, selected: 5, pending: 2 }, { count: 1, maxMs: 120 }),
-    sampleOf(500, 0, { frames: 20, loaded: 9, memoryMB: 200, sse: 18, selected: 25 }, { count: 2, maxMs: 300 }),
-    sampleOf(750, 1, { frames: 26, loaded: 12, memoryMB: 400, sse: 18, selected: 40 }),
-    sampleOf(1000, 1, { frames: 30, loaded: 20, unloaded: 6, memoryMB: 350, sse: 24, selected: 10 }),
+    sampleOf(
+      250,
+      0,
+      { frames: 14, loaded: 8, memoryMB: 300, sse: 20, selected: 5, pending: 2, density: 1.2 },
+      { count: 1, maxMs: 120 }
+    ),
+    sampleOf(500, 0, { frames: 20, loaded: 9, memoryMB: 200, sse: 18, selected: 25, density: 1.3 }, { count: 2, maxMs: 300 }),
+    sampleOf(750, 1, { frames: 26, loaded: 12, memoryMB: 400, sse: 18, selected: 40, density: 2 }),
+    sampleOf(1000, 1, { frames: 30, loaded: 20, unloaded: 6, memoryMB: 350, sse: 24, selected: 10, density: 1 }),
     sampleOf(1500, 1, {
       frames: 32,
       loaded: 21,
@@ -132,7 +149,11 @@ const SEQUENCE = sessionOf({
       selected: 30,
       pending: 1,
       processing: 2,
-      tilesLoaded: false
+      tilesLoaded: false,
+      density: 1.5,
+      blurry: 0.25,
+      errorPx: 12.345,
+      coarsest: 14.6
     })
   ]
 });
@@ -150,7 +171,8 @@ describe('summarizeInspection', () => {
           processing: 2,
           loaded: 3,
           failed: 1,
-          tilesLoaded: false
+          tilesLoaded: false,
+          density: 1.5
         })
       ])
     );
@@ -165,7 +187,9 @@ describe('summarizeInspection', () => {
       loaded: 8,
       unloaded: 1,
       failed: 1,
-      tilesLoaded: false
+      tilesLoaded: false,
+      // 第一个画过的瓦片集的清晰度
+      selection: { count: 50, texelDensity: 1.5, blurryShare: 0, errorPixels: 8, coarsestError: 7.2 }
     });
   });
 
@@ -180,7 +204,8 @@ describe('summarizeInspection', () => {
       loaded: 0,
       unloaded: 0,
       failed: 0,
-      tilesLoaded: false
+      tilesLoaded: false,
+      selection: null
     });
   });
 });
@@ -212,7 +237,15 @@ describe('buildProbeReport', () => {
         tilesLoadedEnd: true,
         longTasks: { count: 3, maxMs: 300 },
         // 10 → 5 虽然跌了一半，起点不到 20，不算
-        selectedDrops: 0
+        selectedDrops: 0,
+        // 第一次采样还没画过：起点取第一次有密度的
+        densityStart: 1.2,
+        densityMin: 1.2,
+        densityEnd: 1.3,
+        blurryShareEnd: 0,
+        errorPixelsEnd: 8,
+        coarsestErrorEnd: 7.2,
+        densityDrops: 0
       },
       {
         label: 'z16 倾斜',
@@ -235,9 +268,30 @@ describe('buildProbeReport', () => {
         tilesLoadedEnd: false,
         longTasks: { count: 0, maxMs: 0 },
         // 40 → 10
-        selectedDrops: 1
+        selectedDrops: 1,
+        // 2 → 1 跌了一半算一次，回到 1.5 不算
+        densityStart: 2,
+        densityMin: 1,
+        densityEnd: 1.5,
+        blurryShareEnd: 0.25,
+        errorPixelsEnd: 12.35,
+        coarsestErrorEnd: 14.6,
+        densityDrops: 1
       }
     ]);
+  });
+
+  it('清晰→模糊按纹素密度的高点算：低两成以上算一次，之后从新的高点重新算；瓦片数变多也照样算', () => {
+    const densities = [2, 1.9, 1.5, 0.8, 2.2, 1.7, 1.75];
+    const session = sessionOf({
+      poses: [{ label: 'z16 俯视', camera: CAMERA, startedMs: 0, endedMs: 1750 }],
+      samples: densities.map((density, index) => sampleOf(index * 250, 0, { selected: 10 + index * 20, density }))
+    });
+    const [row] = buildProbeReport(session).json.poses;
+    // 2 → 1.5（25%）、1.5 → 0.8（47%）、2.2 → 1.7（23%）
+    expect(row?.densityDrops).toBe(3);
+    expect(row?.selectedDrops).toBe(0);
+    expect(row?.densityMin).toBe(0.8);
   });
 
   it('Markdown 有环境、每个姿态一行的表、事件和怎么读', () => {
@@ -260,10 +314,12 @@ describe('buildProbeReport', () => {
     expect(markdown).toContain('- 屏幕：1920 × 1080，窗口 1920 × 969，devicePixelRatio 1\n');
     expect(markdown).toContain('- 瓦片集：显存预算 1024 MB + 溢出 512 MB，屏幕误差上限 16（设定 16）\n');
     expect(markdown).toContain(
-      '| z16 俯视 | 0.5 | 10 / 20 | 300 / 200 | 16 / 20 / 18 | — | 4 / 0 / 0 | 25 | 0 + 0 | 是 | 3 / 300 | 0 |\n'
+      '| z16 俯视 | 0.5 | 10 / 20 | 300 / 200 | 16 / 20 / 18 | — | 4 / 0 / 0 | 25 | 0 + 0 | 是 | 3 / 300 | ' +
+        '1.20 / 1.20 / 1.30 | 0% | 8.00 px / 7.20 m | 0 | 0 |\n'
     );
     expect(markdown).toContain(
-      '| z16 倾斜 | 1 | 12 / 24 | 400 / 360 | 18 / 24 / 24 | 24 | 12 / 7 / 1 | 30 | 1 + 2 | 否 | 0 / 0 | 1 |\n'
+      '| z16 倾斜 | 1 | 12 / 24 | 400 / 360 | 18 / 24 / 24 | 24 | 12 / 7 / 1 | 30 | 1 + 2 | 否 | 0 / 0 | ' +
+        '2.00 / 1.00 / 1.50 | 25% | 12.35 px / 14.60 m | 1 | 1 |\n'
     );
     expect(markdown).toContain('## 事件\n\n- 1.2 s 起 [console.warn] ×3：Tile slow again\n- 3 s 起 [WebGL 上下文丢失] ×1：webglcontextlost\n');
     expect(markdown).toContain('## 怎么读\n');

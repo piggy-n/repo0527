@@ -17,6 +17,22 @@ export interface TilesetStatistics {
   readonly numberOfLoadedTilesTotal: number;
 }
 
+/**
+ * 上一帧画出的瓦片合起来的清晰度（map-cesium.md"诊断读数"）：贴图像素相对屏幕像素的密度、几何误差在屏幕上的像素数，
+ * 都按各瓦片的投影面积加权；肉眼的"清晰→模糊"看它们，不看瓦片数
+ */
+export interface TileSelectionSummary {
+  readonly count: number;
+  /** 每个屏幕像素对应的贴图像素（线密度，开方后），小于 1 时贴图比屏幕粗 */
+  readonly texelDensity: number;
+  /** 贴图比屏幕粗（密度小于 1）的瓦片占投影面积的比例 */
+  readonly blurryShare: number;
+  /** 几何误差换算到屏幕上的像素数 */
+  readonly errorPixels: number;
+  /** 画出的瓦片里最粗的几何误差（米） */
+  readonly coarsestError: number;
+}
+
 /** 一个瓦片集的读数 */
 export interface TilesetInspection {
   readonly id: string;
@@ -34,6 +50,8 @@ export interface TilesetInspection {
   /** 没有待请求、处理中的瓦片 */
   readonly tilesLoaded: boolean;
   readonly statistics: TilesetStatistics;
+  /** 上一帧画出的瓦片的清晰度；还没画过时为 null */
+  readonly selection: TileSelectionSummary | null;
   /** 加进场景以来的累计：瓦片加载完成、被卸载、加载失败的次数 */
   readonly loaded: number;
   readonly unloaded: number;

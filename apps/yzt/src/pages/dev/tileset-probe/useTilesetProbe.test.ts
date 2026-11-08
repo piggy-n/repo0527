@@ -57,6 +57,7 @@ function inspectionOf(calls: number, readings: Readings): SceneInspection {
           numberOfTilesTotal: 100,
           numberOfLoadedTilesTotal: calls
         },
+        selection: null,
         loaded: calls,
         unloaded: Math.floor(calls / 2),
         failed: 0
@@ -179,7 +180,7 @@ describe('useTilesetProbe', () => {
     expect(json.session.environment.cacheBytes).toBe(1024 * MB);
     expect(json.session.environment.requestedScreenSpaceError).toBe(24);
     expect(markdown).toContain(
-      '| z18 倾斜 | 0.5 | 4 / 6 | 170 / 170 | 16 / 16 / 16 | — | 2 / 1 / 0 | 30 | 0 + 0 | 是 | 0 / 0 | 0 |'
+      '| z18 倾斜 | 0.5 | 4 / 6 | 170 / 170 | 16 / 16 / 16 | — | 2 / 1 / 0 | 30 | 0 + 0 | 是 | 0 / 0 | — / — / — | — | — px / — m | 0 | 0 |'
     );
   });
 

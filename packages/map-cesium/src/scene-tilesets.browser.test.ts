@@ -154,10 +154,11 @@ const box = (size: number, height = THICKNESS) => ({
   box: [0, 0, height / 2, size / 2, 0, 0, 0, size / 2, 0, 0, 0, height / 2]
 });
 
-// 和 JKQ2 一样：根节点没有内容，下面直接是各块的根；块按 REPLACE 细分成叶节点。step 为 0 时各块一样高（俯视平地）
-function blocksTileset(rootError: number, step = STEP): PreparedTileset {
+// 和 JKQ2 一样：根节点没有内容，下面直接是各块的根；块按 REPLACE 细分成叶节点。step 为 0 时各块一样高（俯视平地），
+// blockTriangles 决定块的根有多重
+function blocksTileset(rootError: number, step = STEP, blockTriangles = 4): PreparedTileset {
   const leafUrl = urlOf(groundGlb(LEAF, LEAF_TRIANGLES));
-  const blockUrl = urlOf(groundGlb(BLOCK, 4));
+  const blockUrl = urlOf(groundGlb(BLOCK, blockTriangles));
   const blocks: PreparedTile[] = [];
   for (let index = 0; index < 16; index++) {
     const leaves: PreparedTile[] = [-1, 1].flatMap(dy =>
@@ -396,6 +397,64 @@ describe('SceneTilesets 的显存预算', () => {
     // 地板定下之前最多回落一次
     expect(decreases).toBeLessThanOrEqual(1);
     // 像用户动了一下相机那样再画一帧：画得出瓦片（块的根）
+    const rendered = frames;
+    scene.requestRender();
+    expect(await within(until(() => frames > rendered), 5000)).not.toBe('timeout');
+    expect(lastFrameVisible).toBeGreaterThan(0);
+    expect(failures).toEqual([]);
+  }, 90000);
+
+  it('连块的根都放不下时（根节点没有内容的 JKQ2 在远处）：误差压在根节点以下，已加载的块继续画、不整个消失', async () => {
+    const widget = createWidget();
+    const { scene, camera } = widget;
+    const failures: unknown[] = [];
+    const tilesets = new SceneTilesets(widget, { failed: (_id, error) => failures.push(error), initial: () => {} });
+    disposables.push(tilesets);
+    // 块的根和叶节点一样重（约 172 KB），16 个块约 2.7 MB；预算 1 MB + 0.5 MB 连根都放不下
+    const rootError = 35;
+    await tilesets.add(
+      'heavy',
+      blocksTileset(rootError, 0, LEAF_TRIANGLES),
+      { show: true, lighting: 'sun' },
+      new AbortController().signal
+    );
+    const tileset = findTileset(scene);
+    tileset.cacheBytes = CACHE_BYTES;
+    tileset.maximumCacheOverflowBytes = CACHE_BYTES / 2;
+    camera.setView({
+      destination: Cartesian3.fromDegrees(...MODEL_AT, 360),
+      orientation: { heading: 0, pitch: -CesiumMath.PI_OVER_TWO, roll: 0 }
+    });
+    const { fovy } = camera.frustum instanceof PerspectiveFrustum ? camera.frustum : { fovy: undefined };
+    if (fovy === undefined) {
+      throw new Error('相机不是透视投影');
+    }
+    // 根节点的屏幕误差：到包围盒顶面的距离
+    const rootSse = (rootError * HEIGHT) / ((360 - THICKNESS) * 2 * Math.tan(fovy / 2));
+    const { until, after, stop } = ticker(scene);
+    disposables.push({ [Symbol.dispose]: stop });
+    let visible = 0;
+    let lastFrameVisible = 0;
+    let frames = 0;
+    disposables.push({ [Symbol.dispose]: tileset.tileVisible.addEventListener(() => visible++) });
+    disposables.push({
+      [Symbol.dispose]: scene.postRender.addEventListener(() => {
+        frames++;
+        lastFrameVisible = visible;
+        visible = 0;
+      })
+    });
+
+    // Cesium 开始放大以后再过 300 个 tick：没有压住的话它会涨过根节点、整树不画
+    expect(await within(until(() => memoryAdjustedError(tileset) > 16), 15000)).not.toBe('timeout');
+    expect(await within(after(300), 30000)).not.toBe('timeout');
+    const [inspection] = tilesets.inspect();
+    expect(inspection?.memoryAdjustedScreenSpaceError).toBeLessThan(rootSse);
+    expect(inspection?.memoryAdjustedScreenSpaceError).toBeGreaterThan(16);
+    expect(inspection?.statistics.selected).toBeGreaterThan(0);
+    // 清晰度：画的是块的根（误差 8），贴图没有，密度为 0
+    expect(inspection?.selection?.count).toBeGreaterThan(0);
+    expect(inspection?.selection?.coarsestError).toBe(BLOCK_ERROR);
     const rendered = frames;
     scene.requestRender();
     expect(await within(until(() => frames > rendered), 5000)).not.toBe('timeout');

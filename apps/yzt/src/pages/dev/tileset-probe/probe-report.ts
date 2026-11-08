@@ -1,4 +1,4 @@
-import type { SceneInspection, TilesetInspection } from '@mx/map-cesium';
+import type { SceneInspection, TileSelectionSummary, TilesetInspection } from '@mx/map-cesium';
 import type { CameraState } from '@mx/map-core';
 
 // 诊断报告（纯函数）：会话里是原始采样，报告按姿态汇总成一行；Markdown 给人看，JSON 留着进一步分析
@@ -94,6 +94,8 @@ export interface InspectionTotals {
   readonly failed: number;
   /** 每个瓦片集都已就绪；没有瓦片集时为 false */
   readonly tilesLoaded: boolean;
+  /** 上一帧画出的瓦片的清晰度（第一个画过的瓦片集）；还没画过时为 null */
+  readonly selection: TileSelectionSummary | null;
 }
 
 /** 一个姿态汇总成的一行；累计计数都是这个姿态期间的增量 */
@@ -118,8 +120,20 @@ export interface PoseSummary {
   readonly processingEnd: number;
   readonly tilesLoadedEnd: boolean;
   readonly longTasks: ProbeLongTasks;
-  /** 清晰→模糊的次数：相邻两次采样里选中的瓦片数从不少于 20 跌去三成以上 */
+  /** 选中的瓦片数骤降的次数：相邻两次采样里从不少于 20 跌去三成以上；只反映整级被丢掉，看不出纹理变粗 */
   readonly selectedDrops: number;
+  /** 纹素密度（每个屏幕像素的贴图像素）：姿态里第一次画出时、最低、结束时；没画过时为 null */
+  readonly densityStart: number | null;
+  readonly densityMin: number | null;
+  readonly densityEnd: number | null;
+  /** 结束时贴图比屏幕粗的瓦片占投影面积的比例 */
+  readonly blurryShareEnd: number | null;
+  /** 结束时几何误差在屏幕上的像素数（按面积加权） */
+  readonly errorPixelsEnd: number | null;
+  /** 结束时画出的最粗一级的几何误差（米） */
+  readonly coarsestErrorEnd: number | null;
+  /** 肉眼的清晰→模糊次数：纹素密度比姿态里的高点低两成以上 */
+  readonly densityDrops: number;
 }
 
 export interface ProbeReport {
@@ -136,6 +150,8 @@ const MB = 1024 * 1024;
 // 清晰→模糊的判定：前一次采样选中的瓦片不少于这么多，这一次又少了三成以上
 const DROP_FLOOR = 20;
 const DROP_RATIO = 0.7;
+// 纹素密度比姿态里的高点低了这个比例算一次清晰→模糊
+const DENSITY_DROP = 0.2;
 
 const MODE_LABELS: Readonly<Record<ProbeMode, string>> = { sequence: '自动序列', manual: '手动记录' };
 const EVENT_LABELS: Readonly<Record<ProbeEventKind, string>> = {
@@ -166,6 +182,8 @@ export function summarizeInspection({ tilesets }: SceneInspection): InspectionTo
     selected: sum(tileset => tileset.statistics.selected),
     pending: sum(tileset => tileset.statistics.numberOfPendingRequests),
     processing: sum(tileset => tileset.statistics.numberOfTilesProcessing),
+    // 探针一次只加一个瓦片集：清晰度取第一个画过的
+    selection: tilesets.find(tileset => tileset.selection !== null)?.selection ?? null,
     loaded: sum(tileset => tileset.loaded),
     unloaded: sum(tileset => tileset.unloaded),
     failed: sum(tileset => tileset.failed),
@@ -194,7 +212,48 @@ function emptySummary(label: string, durationS: number): PoseSummary {
     processingEnd: 0,
     tilesLoadedEnd: false,
     longTasks: { count: 0, maxMs: 0 },
-    selectedDrops: 0
+    selectedDrops: 0,
+    densityStart: null,
+    densityMin: null,
+    densityEnd: null,
+    blurryShareEnd: null,
+    errorPixelsEnd: null,
+    coarsestErrorEnd: null,
+    densityDrops: 0
+  };
+}
+
+// 肉眼看到的"清晰→模糊"：纹素密度比这个姿态里到目前为止的最高值低了 DENSITY_DROP 以上算一次，之后从新的高点重新算
+function countDensityDrops(densities: readonly number[]): number {
+  let drops = 0;
+  let peak = 0;
+  for (const density of densities) {
+    if (peak > 0 && density < peak * (1 - DENSITY_DROP)) {
+      drops++;
+      peak = density;
+    }
+    peak = Math.max(peak, density);
+  }
+  return drops;
+}
+
+type Clarity = Pick<
+  PoseSummary,
+  'densityStart' | 'densityMin' | 'densityEnd' | 'blurryShareEnd' | 'errorPixelsEnd' | 'coarsestErrorEnd' | 'densityDrops'
+>;
+
+// 清晰度的数都保留两位：密度常在 0.5～3 之间
+const two = (value: number | null): number | null => (value === null ? null : Math.round(value * 100) / 100);
+
+function roundClarity(clarity: Clarity): Clarity {
+  return {
+    densityStart: two(clarity.densityStart),
+    densityMin: two(clarity.densityMin),
+    densityEnd: two(clarity.densityEnd),
+    blurryShareEnd: two(clarity.blurryShareEnd),
+    errorPixelsEnd: two(clarity.errorPixelsEnd),
+    coarsestErrorEnd: two(clarity.coarsestErrorEnd),
+    densityDrops: clarity.densityDrops
   };
 }
 
@@ -219,7 +278,18 @@ function summarizePose(
     (current, index) =>
       index > 0 && totals[index - 1].selected >= DROP_FLOOR && current.selected < totals[index - 1].selected * DROP_RATIO
   ).length;
+  const densities = totals.flatMap(({ selection }) => (selection ? [selection.texelDensity] : []));
+  const clarity = {
+    densityStart: densities.at(0) ?? null,
+    densityMin: densities.length === 0 ? null : Math.min(...densities),
+    densityEnd: end.selection?.texelDensity ?? null,
+    blurryShareEnd: end.selection?.blurryShare ?? null,
+    errorPixelsEnd: end.selection?.errorPixels ?? null,
+    coarsestErrorEnd: end.selection?.coarsestError ?? null,
+    densityDrops: countDensityDrops(densities)
+  };
   return {
+    ...roundClarity(clarity),
     label,
     durationS,
     samples: samples.length,
@@ -273,10 +343,17 @@ function rowOf(row: PoseSummary): string {
     `${row.pendingEnd} + ${row.processingEnd}`,
     row.tilesLoadedEnd ? '是' : '否',
     `${row.longTasks.count} / ${fmt(row.longTasks.maxMs)}`,
+    `${clarity(row.densityStart)} / ${clarity(row.densityMin)} / ${clarity(row.densityEnd)}`,
+    row.blurryShareEnd === null ? '—' : `${Math.round(row.blurryShareEnd * 100)}%`,
+    `${clarity(row.errorPixelsEnd)} px / ${clarity(row.coarsestErrorEnd)} m`,
+    String(row.densityDrops),
     String(row.selectedDrops)
   ];
   return `| ${cells.join(' | ')} |`;
 }
+
+// 清晰度的数保留两位，没画过时是破折号
+const clarity = (value: number | null): string => (value === null ? '—' : value.toFixed(2));
 
 // 相同的事件合成一条，记第一次出现的时刻
 function eventLines(events: readonly ProbeEvent[]): string[] {
@@ -325,8 +402,9 @@ function markdownOf(session: ProbeSession, rows: readonly PoseSummary[]): string
     '## 各姿态',
     '',
     '| 姿态 | 时长 (s) | 帧 / tick | 显存峰值 / 结束 (MB) | 调整后误差 最小 / 最大 / 结束 | 误差地板 | 加载 / 卸载 / 失败 | ' +
-      '结束时选中 | 等待 + 处理 | 全部就绪 | 长任务 次数 / 最长 (ms) | 清晰→模糊 |',
-    '|---|---|---|---|---|---|---|---|---|---|---|---|',
+      '结束时选中 | 等待 + 处理 | 全部就绪 | 长任务 次数 / 最长 (ms) | 纹素密度 起 / 最低 / 终 | 模糊面积 | ' +
+      '几何误差 / 最粗一级 | 清晰→模糊 | 选中数骤降 |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
     ...rows.map(rowOf),
     '',
     '## 事件',
@@ -338,6 +416,11 @@ function markdownOf(session: ProbeSession, rows: readonly PoseSummary[]): string
     '- 显存峰值接近预算（预算 + 溢出），同一姿态里"调整后误差"又从最小升到最大，说明 Cesium 为了把显存压回预算放宽了精度：' +
       '这就是先清晰、后模糊',
     '- "误差地板"是这个姿态里为了不超显存定下的最低精度，有值说明显存不够、精度被钉在了这个数上',
+    '- "纹素密度"是画出的瓦片每个屏幕像素对应几个贴图像素（按各瓦片在屏幕上的面积加权）：大于 1 贴图比屏幕细，' +
+      '小于 1 肉眼就能看出糊；"模糊面积"是密度小于 1 的瓦片占画面的比例；"几何误差"是画出的瓦片的几何误差折成屏幕像素，' +
+      '越大轮廓越走样，后面是画出的最粗一级的几何误差（米），对着索引能知道画的是哪一级',
+    '- "清晰→模糊"按纹素密度算：密度比这个姿态里的高点低了两成以上算一次，包括细一级换成粗一级、显存不够放宽精度；' +
+      '"选中数骤降"只在整级瓦片被丢掉时才会有，纹理变粗、瓦片数反而变多的情况它看不出来',
     '- 相机没动的姿态里"加载 / 卸载"都很大、"清晰→模糊"不为 0，说明瓦片装进来又被丢掉、再装回来，在循环',
     '- 结束时"等待 + 处理"不为 0 或"全部就绪"为否，说明这个姿态在时限内没有加载完；"失败"不为 0 时看事件里的瓦片加载失败',
     '- 长任务多、最长超过 1000 ms，说明主线程被解码卡住；事件里的 WebGL 上下文丢失会让画面整个消失',
