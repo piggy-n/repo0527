@@ -139,7 +139,7 @@ describe('useTilesetProbe', () => {
     expect(fake.jumps).toEqual([{ center: FIT.center, zoom: 15, bearing: 0, pitch: 0 }]);
     expect(probe.poseLabel.value).toBe('z15 俯视');
 
-    await vi.advanceTimersByTimeAsync(4000);
+    await vi.advanceTimersByTimeAsync(5000);
 
     expect(probe.phase.value).toEqual({ kind: 'done' });
     expect(fake.jumps.map(({ zoom, pitch }) => [zoom, pitch])).toEqual([
@@ -147,40 +147,46 @@ describe('useTilesetProbe', () => {
       [15, 55],
       [16, 0],
       [16, 55],
+      [16.5, 0],
+      [16.5, 55],
       [17, 0],
       [17, 55],
       [18, 0],
       [18, 55]
     ]);
     expect(fake.dispose).toHaveBeenCalledTimes(1);
-    expect(probe.elapsedS.value).toBe(4);
-    expect(probe.sampleCount.value).toBe(17);
+    expect(probe.elapsedS.value).toBe(5);
+    expect(probe.sampleCount.value).toBe(21);
 
     const { json, markdown } = required(probe.report.value, '报告');
     // 每 250 毫秒一次采样：第一个姿态 0、250、500，之后每个姿态两次
-    expect(json.session.samples.map(({ poseIndex }) => poseIndex)).toEqual([0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]);
+    expect(json.session.samples.map(({ poseIndex }) => poseIndex)).toEqual([
+      0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9
+    ]);
     expect(json.poses.map(({ label, durationS }) => [label, durationS])).toEqual([
       ['z15 俯视', 0.5],
       ['z15 倾斜', 0.5],
       ['z16 俯视', 0.5],
       ['z16 倾斜', 0.5],
+      ['z16.5 俯视', 0.5],
+      ['z16.5 倾斜', 0.5],
       ['z17 俯视', 0.5],
       ['z17 倾斜', 0.5],
       ['z18 俯视', 0.5],
       ['z18 倾斜', 0.5]
     ]);
     // 累计计数按差值：第一个姿态从自己的第一次采样起算，其余从上一个姿态的最后一次采样起算，每个姿态都隔两次 inspect
-    expect(json.poses.map(({ loaded }) => loaded)).toEqual(Array<number>(8).fill(2));
-    expect(json.poses.map(({ unloaded }) => unloaded)).toEqual(Array<number>(8).fill(1));
-    expect(json.poses.map(({ frames }) => frames)).toEqual(Array<number>(8).fill(4));
-    expect(json.poses.map(({ ticks }) => ticks)).toEqual(Array<number>(8).fill(6));
-    expect(json.poses.map(({ memoryEndMB }) => memoryEndMB)).toEqual([30, 50, 70, 90, 110, 130, 150, 170]);
+    expect(json.poses.map(({ loaded }) => loaded)).toEqual(Array<number>(10).fill(2));
+    expect(json.poses.map(({ unloaded }) => unloaded)).toEqual(Array<number>(10).fill(1));
+    expect(json.poses.map(({ frames }) => frames)).toEqual(Array<number>(10).fill(4));
+    expect(json.poses.map(({ ticks }) => ticks)).toEqual(Array<number>(10).fill(6));
+    expect(json.poses.map(({ memoryEndMB }) => memoryEndMB)).toEqual([30, 50, 70, 90, 110, 130, 150, 170, 190, 210]);
     expect(json.poses.every(({ tilesLoadedEnd }) => tilesLoadedEnd)).toBe(true);
     expect(json.session.environment.renderer).toBe('NVIDIA GeForce RTX 3060');
     expect(json.session.environment.cacheBytes).toBe(1024 * MB);
     expect(json.session.environment.requestedScreenSpaceError).toBe(24);
     expect(markdown).toContain(
-      '| z18 倾斜 | 0.5 | 4 / 6 | 170 / 170 | 16 / 16 / 16 | — | 2 / 1 / 0 | 30 | 0 + 0 | 是 | 0 / 0 | — / — / — | — | — px / — m | 0 | 0 |'
+      '| z18 倾斜 | 0.5 | 4 / 6 | 210 / 210 | 16 / 16 / 16 | — | 2 / 1 / 0 | 30 | 0 + 0 | 是 | 0 / 0 | — / — / — | — | — px / — m | 0 | 0 |'
     );
   });
 
@@ -188,11 +194,11 @@ describe('useTilesetProbe', () => {
     const { probe, container } = setup({}, { ...STEADY, tilesLoaded: false });
     await probe.start(container, MODEL, 'sequence', SETTINGS);
 
-    await vi.advanceTimersByTimeAsync(16_000);
+    await vi.advanceTimersByTimeAsync(20_000);
 
     expect(probe.phase.value).toEqual({ kind: 'done' });
     const { json } = required(probe.report.value, '报告');
-    expect(json.poses.map(({ durationS }) => durationS)).toEqual(Array<number>(8).fill(2));
+    expect(json.poses.map(({ durationS }) => durationS)).toEqual(Array<number>(10).fill(2));
     expect(json.poses.every(({ tilesLoadedEnd }) => !tilesLoadedEnd)).toBe(true);
   });
 

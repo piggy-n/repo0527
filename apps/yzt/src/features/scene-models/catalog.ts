@@ -33,6 +33,8 @@ export interface SceneModel {
   readonly cityName: string;
   readonly kind: ModelKind;
   readonly underground: boolean;
+  /** 清单给的屏幕误差上限；没给的用默认值 */
+  readonly maximumScreenSpaceError?: number;
   /** 白膜的各种效果；其他模型只有一种，id 为空串 */
   readonly effects: readonly ModelEffect[];
   /** 默认的效果：白膜的第一种 */
@@ -67,6 +69,7 @@ export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string):
     cityName: cityNameOf(model.cityCode),
     kind: model.kind,
     underground: model.underground,
+    ...(model.maximumScreenSpaceError === undefined ? {} : { maximumScreenSpaceError: model.maximumScreenSpaceError }),
     effects:
       model.kind === 'white'
         ? model.effects.map(({ id, label, tileset }) => ({ id, label, url: resolve(tileset) }))

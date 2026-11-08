@@ -86,6 +86,10 @@ export const DevTilesetProbePage = defineComponent({
     );
     const mode = ref<ProbeMode>('sequence');
     const screenSpaceError = ref(DEFAULT_SCREEN_SPACE_ERROR);
+    // 换模型时先填上业务页面实际用的值：清单里给了就用它，没给是引擎的默认值
+    watch(selected, model => {
+      screenSpaceError.value = model?.maximumScreenSpaceError ?? DEFAULT_SCREEN_SPACE_ERROR;
+    });
     const container = ref<HTMLElement>();
     const probe = useTilesetProbe({ loadRuntime });
 

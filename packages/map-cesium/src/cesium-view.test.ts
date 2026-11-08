@@ -930,6 +930,21 @@ describe('CesiumView 的三维内容（ADR 0081）', () => {
     expect(reports.map(status => status.get('station')?.state)).toStrictEqual(['loading', 'ready']);
   });
 
+  it('清单给了屏幕误差上限的瓦片集把它交给场景，改了只更新、不重新加载', async () => {
+    const { session, scene, view } = setup({ loadJson: indexLoader });
+    await view.whenReady();
+    session.scene.set({ tilesets: [tilesetLayer('jkq', { maximumScreenSpaceError: 8 })], underground: null });
+    await settle();
+    pending(scene, 'jkq').resolve(CAMERA_AT_MODEL);
+    await flush();
+    expect(scene.tilesets.get('jkq')).toStrictEqual({ show: true, lighting: 'sun', maximumScreenSpaceError: 8 });
+
+    session.scene.set({ tilesets: [tilesetLayer('jkq', { maximumScreenSpaceError: 12 })], underground: null });
+    await settle();
+    expect(scene.tilesets.get('jkq')).toStrictEqual({ show: true, lighting: 'sun', maximumScreenSpaceError: 12 });
+    expect(scene.removed).toStrictEqual([]);
+  });
+
   it('去掉的从场景移除、进行中的加载中止；只改显示不重新加载；地址或重试次数变了重新加载', async () => {
     const { session, scene, view } = setup({ loadJson: indexLoader });
     await view.whenReady();

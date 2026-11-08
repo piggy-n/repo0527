@@ -465,4 +465,50 @@ describe('SceneTilesets 的显存预算', () => {
     expect(lastFrameVisible).toBeGreaterThan(0);
     expect(failures).toEqual([]);
   }, 90000);
+
+  it('涨上去以后换了姿态：从设定值重来，不把上一个姿态的峰值当成新姿态的地板', async () => {
+    const widget = createWidget();
+    const { scene, camera } = widget;
+    const failures: unknown[] = [];
+    const tilesets = new SceneTilesets(widget, { failed: (_id, error) => failures.push(error), initial: () => {} });
+    disposables.push(tilesets);
+    await tilesets.add('blocks', blocksTileset(35), { show: true, lighting: 'sun' }, new AbortController().signal);
+    const tileset = findTileset(scene);
+    tileset.cacheBytes = CACHE_BYTES;
+    tileset.maximumCacheOverflowBytes = OVERFLOW_BYTES;
+    const { until, stop } = ticker(scene);
+    disposables.push({ [Symbol.dispose]: stop });
+    let lastError = memoryAdjustedError(tileset);
+    let ticksSinceChange = 0;
+    disposables.push({
+      [Symbol.dispose]: scene.postUpdate.addEventListener(() => {
+        const error = memoryAdjustedError(tileset);
+        ticksSinceChange = error === lastError ? ticksSinceChange + 1 : 0;
+        lastError = error;
+      })
+    });
+    const lookDown = (height: number) =>
+      camera.setView({
+        destination: Cartesian3.fromDegrees(...MODEL_AT, height),
+        orientation: { heading: 0, pitch: -CesiumMath.PI_OVER_TWO, roll: 0 }
+      });
+
+    // 第一个姿态和第一个用例相同：俯视 360 米放不下，Cesium 把误差涨上去
+    lookDown(360);
+    expect(await within(until(() => memoryAdjustedError(tileset) > 16), 15000)).not.toBe('timeout');
+    expect(await within(until(() => ticksSinceChange >= 60), 30000)).not.toBe('timeout');
+    const [raised] = tilesets.inspect();
+    expect(raised?.memoryAdjustedScreenSpaceError).toBeGreaterThan(16);
+
+    // 升到 900 米：各块的屏幕误差只有 5～6，只要块的根，设定值 16 放得下。
+    // 峰值要是留着，缓存卸载上一个姿态的叶节点后 Cesium 开始回落，第一次回落就被钉在上一个姿态的峰值上
+    lookDown(900);
+    ticksSinceChange = 0;
+    expect(await within(until(() => ticksSinceChange >= 60), 30000)).not.toBe('timeout');
+    const [moved] = tilesets.inspect();
+    expect(moved?.screenSpaceErrorFloor).toBeNull();
+    expect(moved?.memoryAdjustedScreenSpaceError).toBe(16);
+    expect(moved?.statistics.selected).toBeGreaterThan(0);
+    expect(failures).toEqual([]);
+  }, 90000);
 });

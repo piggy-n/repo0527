@@ -110,7 +110,10 @@ interface TilesetEntry {
 }
 
 const sameOptions = (a: TilesetOptions | null, b: TilesetOptions) =>
-  a !== null && a.show === b.show && a.lighting === b.lighting;
+  a !== null &&
+  a.show === b.show &&
+  a.lighting === b.lighting &&
+  a.maximumScreenSpaceError === b.maximumScreenSpaceError;
 
 // 离开三维时记下的精确相机；暂停期间会话的相机有了 sync 之外的变化就不能还原（ADR 0020 第 5 条）
 interface SavedPose {
@@ -650,12 +653,14 @@ export class CesiumView<const G extends string> implements MapView {
 
   // 同组（白膜的各种效果）要显示的那个首批瓦片到了，才撤下上一个（ADR 0081 第 5 节）
   #optionsFor({ layer }: TilesetEntry): TilesetOptions {
+    const { lighting, maximumScreenSpaceError } = layer;
+    const rest = { lighting, ...(maximumScreenSpaceError === undefined ? {} : { maximumScreenSpaceError }) };
     if (layer.group === undefined || layer.show) {
-      return { show: layer.show, lighting: layer.lighting };
+      return { show: layer.show, ...rest };
     }
     const requested = this.#requestedIn(layer.group);
     const kept = requested !== undefined && !requested.initial && this.#groupShown.get(layer.group) === layer.id;
-    return { show: kept, lighting: layer.lighting };
+    return { show: kept, ...rest };
   }
 
   #requestedIn(group: string): TilesetEntry | undefined {

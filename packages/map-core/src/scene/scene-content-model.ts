@@ -17,6 +17,8 @@ export interface TilesetLayer {
   /** 同组的只显示一个（白膜的各种效果）：换显示的那个时，旧的留到新的首批瓦片到位 */
   readonly group?: string;
   readonly lighting: TilesetLighting;
+  /** 这个瓦片集的屏幕误差上限（像素，正数），不写用引擎的默认值 16；倾斜摄影要看得更细时按模型调小，显存按每级 4 倍算 */
+  readonly maximumScreenSpaceError?: number;
   /** 失败后重试时加 1，视图看到新的值就重新加载 */
   readonly attempt: number;
 }
@@ -197,7 +199,7 @@ function validateRoam(roam: SceneRoam): void {
 
 function validate({ tilesets, underground, roam }: SceneContent): void {
   const ids = new Set<string>();
-  for (const { id, url, attempt } of tilesets) {
+  for (const { id, url, attempt, maximumScreenSpaceError: screenError } of tilesets) {
     if (ids.has(id)) {
       throw new Error(`瓦片集 ID 重复：${id}`);
     }
@@ -207,6 +209,9 @@ function validate({ tilesets, underground, roam }: SceneContent): void {
     }
     if (!Number.isInteger(attempt) || attempt < 0) {
       throw new Error(`瓦片集 ${id} 的重试次数不是非负整数：${attempt}`);
+    }
+    if (screenError !== undefined && !(Number.isFinite(screenError) && screenError > 0)) {
+      throw new Error(`瓦片集 ${id} 的屏幕误差不是正数：${screenError}`);
     }
   }
   if (underground) {

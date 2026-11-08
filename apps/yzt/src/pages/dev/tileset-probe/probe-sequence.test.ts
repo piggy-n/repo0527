@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { probePoses } from './probe-sequence';
 
 describe('probePoses', () => {
-  it('级别 15～18 各俯视、倾斜一次，共 8 个姿态，都对着同一个中心、正北朝上', () => {
+  it('级别 15、16、16.5、17、18 各俯视、倾斜一次，共 10 个姿态，都对着同一个中心、正北朝上', () => {
     const poses = probePoses([120.3, 31.5]);
 
     expect(poses.map(({ label }) => label)).toEqual([
@@ -11,6 +11,8 @@ describe('probePoses', () => {
       'z15 倾斜',
       'z16 俯视',
       'z16 倾斜',
+      'z16.5 俯视',
+      'z16.5 倾斜',
       'z17 俯视',
       'z17 倾斜',
       'z18 俯视',
@@ -21,6 +23,8 @@ describe('probePoses', () => {
       [15, 55],
       [16, 0],
       [16, 55],
+      [16.5, 0],
+      [16.5, 55],
       [17, 0],
       [17, 55],
       [18, 0],

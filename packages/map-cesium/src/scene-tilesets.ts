@@ -90,8 +90,8 @@ export interface SceneTilesetEvents {
   readonly initial: (id: string) => void;
 }
 
-// 定地板时的相机：位置、朝向和椭球高
-interface FloorPose {
+// 屏幕误差开始涨时的相机：位置、朝向和椭球高
+interface CameraPose {
   readonly position: Cartesian3;
   readonly direction: Cartesian3;
   readonly height: number;
@@ -102,11 +102,13 @@ interface Entry {
   readonly unsubscribe: () => void;
   // 设定的屏幕误差；Cesium 按显存放大后回落时不低于这个姿态下的峰值（地板）
   configuredError: number;
-  // 上一个 tick 读到的按显存调整后的屏幕误差，以及这个姿态下涨到的最高值
+  // 上一个 tick 读到的按显存调整后的屏幕误差，以及这个姿态下看到的上涨里最高的
   adjustedError: number;
   peakError: number;
-  // 定了地板时记下的相机；相机离开得够远才放开
-  floor: FloorPose | null;
+  // 这个姿态下第一次涨时记下的相机；相机离开得够远就从设定值重来，峰值不带到下一个姿态
+  pose: CameraPose | null;
+  // 已经把 maximumScreenSpaceError 提到峰值（地板）或压到根节点以下
+  pinned: boolean;
   // 诊断用的累计次数
   loaded: number;
   unloaded: number;
@@ -167,10 +169,9 @@ export class SceneTilesets implements Disposable {
   constructor(widget: CesiumWidget, events: SceneTilesetEvents) {
     this.#widget = widget;
     this.#events = events;
-    // postUpdate 每个 tick 都触发，在 Cesium 调整屏幕误差之后；相机停下时看要不要放开地板；
+    // postUpdate 每个 tick 都触发，在 Cesium 调整屏幕误差之后；
     // preRender 只在真的画一帧之前触发，这时上一帧画过的瓦片收齐了
     const stopAdjusting = widget.scene.postUpdate.addEventListener(() => this.#watchAdjusting());
-    const stopIdle = widget.camera.moveEnd.addEventListener(() => this.#releaseFloors());
     const stopFrames = widget.scene.preRender.addEventListener(() => {
       for (const entry of this.#entries.values()) {
         entry.lastFrameTiles = entry.frameTiles;
@@ -179,7 +180,6 @@ export class SceneTilesets implements Disposable {
     });
     this.#stopWatching = () => {
       stopAdjusting();
-      stopIdle();
       stopFrames();
     };
   }
@@ -214,7 +214,8 @@ export class SceneTilesets implements Disposable {
       configuredError: TILESET_OPTIONS.maximumScreenSpaceError,
       adjustedError: memoryAdjustedError(tileset),
       peakError: TILESET_OPTIONS.maximumScreenSpaceError,
-      floor: null,
+      pose: null,
+      pinned: false,
       loaded: 0,
       unloaded: 0,
       failed: 0,
@@ -284,7 +285,7 @@ export class SceneTilesets implements Disposable {
         cacheBytes: tileset.cacheBytes,
         maximumCacheOverflowBytes: tileset.maximumCacheOverflowBytes,
         maximumScreenSpaceError: tileset.maximumScreenSpaceError,
-        screenSpaceErrorFloor: entry.floor ? tileset.maximumScreenSpaceError : null,
+        screenSpaceErrorFloor: entry.pinned ? tileset.maximumScreenSpaceError : null,
         memoryAdjustedScreenSpaceError: memoryAdjustedError(tileset),
         totalMemoryUsageInBytes: tileset.totalMemoryUsageInBytes,
         tilesLoaded: tileset.tilesLoaded,
@@ -323,10 +324,16 @@ export class SceneTilesets implements Disposable {
   // 超出显存预算时 Cesium 每个 tick 放大屏幕误差，卸载瓦片却只在渲染的帧里做：按需渲染下两次渲染之间它一直涨，
   // 越过没有内容的根节点后整棵树都不画（见 docs/modules/map-cesium.md）。变了就请求渲染，和连续渲染一样及时卸载。
   // 放大后一回落就把地板定在这个姿态下的峰值：放不下的那一级被整级丢掉以后显存远低于缓存，Cesium 会立刻降回去重新加载，
-  // 再整级丢掉，这样循环不止（俯视平地时各块离相机一样远，一级要么全要、要么全不要）
+  // 再整级丢掉，这样循环不止（俯视平地时各块离相机一样远，一级要么全要、要么全不要）。
+  // 峰值只算这个姿态下看到的上涨：相机离开开始涨的位置就从设定值重来（每个 tick 看，等 moveEnd 来不及：
+  // 换姿态后缓存一卸载 Cesium 就开始回落，上一个姿态的峰值会被当成新姿态的地板）
   #watchAdjusting(): void {
     let changed = false;
     for (const entry of this.#entries.values()) {
+      if (entry.pose && this.#leftPose(entry.pose)) {
+        this.#resetFloor(entry);
+        continue;
+      }
       const error = memoryAdjustedError(entry.tileset);
       if (error === entry.adjustedError) {
         continue;
@@ -337,18 +344,21 @@ export class SceneTilesets implements Disposable {
       const cap = this.#rootCap(entry);
       if (error > cap) {
         entry.tileset.maximumScreenSpaceError = cap;
-        entry.floor ??= this.#cameraPose();
+        entry.pose ??= this.#cameraPose();
+        entry.pinned = true;
         entry.peakError = cap;
         changed ||= entry.adjustedError !== cap;
         entry.adjustedError = cap;
         continue;
       }
       changed = true;
-      entry.peakError = Math.max(entry.peakError, error);
-      if (error < entry.adjustedError && entry.peakError > entry.configuredError) {
+      if (error > entry.adjustedError) {
+        entry.pose ??= this.#cameraPose();
+        entry.peakError = Math.max(entry.peakError, error);
+      } else if (entry.peakError > entry.configuredError) {
         // setter 会把调整后的值也设成地板
         entry.tileset.maximumScreenSpaceError = entry.peakError;
-        entry.floor ??= this.#cameraPose();
+        entry.pinned = true;
         entry.adjustedError = entry.peakError;
         continue;
       }
@@ -376,25 +386,16 @@ export class SceneTilesets implements Disposable {
     return scene.drawingBufferHeight / (2 * Math.tan(fovy / 2));
   }
 
-  // 相机换了姿态（离定地板的位置够远，或者转过头去）再从设定值重新来：视野变了，放得下的一级也变了
-  #releaseFloors(): void {
+  // 相机换了姿态：离开始涨的位置够远（按当时的椭球高算），或者转过头去。视野变了，放得下的一级也变了
+  #leftPose(pose: CameraPose): boolean {
     const { camera } = this.#widget;
-    for (const entry of this.#entries.values()) {
-      const { floor } = entry;
-      if (!floor) {
-        continue;
-      }
-      const moved =
-        Cartesian3.distance(camera.positionWC, floor.position) >
-        FLOOR_RELEASE_DISTANCE_RATIO * Math.max(1, Math.abs(floor.height));
-      const turned = Cartesian3.angleBetween(camera.directionWC, floor.direction) > FLOOR_RELEASE_ANGLE;
-      if (moved || turned) {
-        this.#resetFloor(entry);
-      }
-    }
+    const moved =
+      Cartesian3.distance(camera.positionWC, pose.position) >
+      FLOOR_RELEASE_DISTANCE_RATIO * Math.max(1, Math.abs(pose.height));
+    return moved || Cartesian3.angleBetween(camera.directionWC, pose.direction) > FLOOR_RELEASE_ANGLE;
   }
 
-  #cameraPose(): FloorPose {
+  #cameraPose(): CameraPose {
     const { camera } = this.#widget;
     return {
       position: Cartesian3.clone(camera.positionWC),
@@ -403,8 +404,10 @@ export class SceneTilesets implements Disposable {
     };
   }
 
+  // 从设定值重来：setter 会把 Cesium 调整后的值也设回去
   #resetFloor(entry: Entry): void {
-    entry.floor = null;
+    entry.pose = null;
+    entry.pinned = false;
     entry.peakError = entry.configuredError;
     entry.adjustedError = entry.configuredError;
     entry.tileset.maximumScreenSpaceError = entry.configuredError;
