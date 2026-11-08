@@ -123,6 +123,9 @@ const flat = (count: number, factor = 1) => Array.from({ length: count }, (_, i)
 const sloped = (count: number, near: number, far: number) =>
   Array.from({ length: count }, (_, i) => near + ((far - near) * i) / (count - 1));
 
+// 飞行中：每帧挪一点
+const flying = (frame: number): BudgetPose => ({ ...POSE, position: [frame * 0.5, 1000, 0] });
+
 describe('ErrorScale', () => {
   it('放得下时不放宽', () => {
     const scale = new ErrorScale(BUDGET);
@@ -319,7 +322,7 @@ describe('ErrorScale', () => {
     }
     const raised = scale.value;
     expect(scale.locked).toBe(true);
-    // 动着的时候不收紧；停下：不到 500 毫秒时还在等，要再画一帧，倍数不动
+    // 动着的时候不收紧；停下：还没停稳时在等，要再画一帧，倍数不动
     expect(scale.update(light, { ...POSE, position: [10.5, 1000, 0] }, FRAME)).toBe('settling');
     expect(scale.value).toBe(raised);
     last = { ...POSE, position: [10.5, 1000, 0] };
@@ -344,6 +347,39 @@ describe('ErrorScale', () => {
       expect(scale.update(light, last, FRAME)).toBe('steady');
     }
     expect(scale.value).toBe(held);
+    expect(scale.locked).toBe(true);
+  });
+
+  it('相机动着的时候估计超线不放宽，真的放不下才放宽：一时超线不能让后面一路都画得粗', () => {
+    const scale = new ErrorScale(BUDGET);
+    // 估计的总量是上限的两倍，缓存还没满
+    const predicted = { ...NONE, cachedBytes: 1100 * MB, pinnedBytes: 1100 * MB, pendingBytes: 2000 * MB, usedTiles: 100 };
+    // 第一帧只是让它知道相机原来在哪：没有上一帧时算没动
+    scale.update(NONE, flying(0), FRAME);
+    for (let frame = 1; frame <= 60; frame++) {
+      scale.update(predicted, flying(frame), FRAME);
+    }
+    expect(scale.value).toBe(1);
+    expect(scale.locked).toBe(false);
+    // 缓存真的满了，没有可淘汰的
+    const full = { ...NONE, refused: 5, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 100 };
+    expect(scale.update(full, flying(61), FRAME)).toBe('raising');
+    expect(scale.value).toBeGreaterThan(1);
+  });
+
+  it('相机停稳以后估计超线就提前放宽，不等真的装满', () => {
+    const scale = new ErrorScale(BUDGET);
+    const predicted = { ...NONE, cachedBytes: 1100 * MB, pinnedBytes: 1100 * MB, pendingBytes: 2000 * MB, usedTiles: 100 };
+    const moved: BudgetPose = { ...POSE, position: [100, 1000, 0] };
+    scale.update(NONE, POSE, FRAME);
+    // 刚动过：还不预测
+    expect(scale.update(predicted, moved, FRAME)).not.toBe('raising');
+    expect(scale.value).toBe(1);
+    let motion = 'steady';
+    for (let frame = 0; frame < 60 && motion !== 'raising'; frame++) {
+      motion = scale.update(predicted, moved, FRAME);
+    }
+    expect(motion).toBe('raising');
     expect(scale.locked).toBe(true);
   });
 

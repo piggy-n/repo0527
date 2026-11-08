@@ -40,7 +40,7 @@ const FRAME_MS = 1000 / 60;
 const MAX_ELAPSED_MS = 100;
 // 缓存里还有这么多可以淘汰的就不算放不下：等淘汰，不放宽
 const EVICTABLE_RATIO = 0.02;
-// 估计的总量超过上限这么多时提前放宽，不等真的装满；估得不准的时候也只是少涨或多涨一点，涨到条件消失就停
+// 相机停着时，估计的总量超过上限这么多就提前放宽，不等真的装满；估得不准的时候也只是少涨或多涨一点，涨到条件消失就停
 const PREDICT_RATIO = 1.2;
 // 放宽了这么多倍、在用的瓦片数都没变：已经是最粗的一层，再放宽也没有用。真实数据相邻两层的误差差 2～5 倍
 const SATURATE_FACTOR = 8;
@@ -55,8 +55,8 @@ const RELEASE_DISTANCE_RATIO = 0.25;
 const RELEASE_DIRECTION_COS = Math.cos((10 * Math.PI) / 180);
 // 贴地时高度接近 0：至少走这么远才算移动
 const MIN_RELEASE_METERS = 5;
-// 相机这么久没动算停稳
-const SETTLE_MS = 500;
+// 相机这么久没动算停稳：飞行后要先等这么久才收紧，也才算稳定，太长会直接拖慢补齐；太短的话拖动中间一停就开始加载
+const SETTLE_MS = 200;
 
 function samePose(a: BudgetPose, b: BudgetPose): boolean {
   return a.position.every((value, axis) => value === b.position[axis]) && a.direction.every((value, axis) => value === b.direction[axis]);
@@ -139,7 +139,9 @@ export class ErrorScale {
     const demand = pinnedBytes + pendingBytes;
     const full = refused > 0 && cachedBytes - pinnedBytes < hardBytes * EVICTABLE_RATIO;
     const rate = RATE_PER_FRAME ** (Math.min(elapsedMs, MAX_ELAPSED_MS) / FRAME_MS);
-    if ((full || demand >= hardBytes * PREDICT_RATIO) && !this.#saturated && this.#value < MAX_SCALE) {
+    // 预测只在相机停着时用：动着的时候需求一直在变，一时超线就放宽的话倍数只升不降，后面一路都画得粗
+    const predicted = settled && demand >= hardBytes * PREDICT_RATIO;
+    if ((full || predicted) && !this.#saturated && this.#value < MAX_SCALE) {
       this.#raise(rate, pose, usedTiles);
       return this.#saturated ? 'steady' : 'raising';
     }
