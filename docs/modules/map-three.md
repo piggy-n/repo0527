@@ -154,7 +154,7 @@ MapLibre 里叠放只由图层顺序决定（6.12 源码）：第一个三维层
 **经开区（JKQ、JKQ2，不在验收里）：** 单个模型 20 GB 以上，只放在服务器上，不用拷到本地。设了 `YZT_3DT_PROXY` 后工具把 `/3dt/` 转到服务器，只取看到的瓦片；启动时先查一次，地址不对就停下。和分支 `claude/tileset-loop-7f3a` 的诊断页 `/dev/tileset-probe` 是同一个环境变量，那个页面只测 Cesium，要比 MapLibre 引擎用这里的工具。
 
 ```powershell
-$env:YZT_3DT_PROXY = 'http://192.168.1.180'
+$env:YZT_3DT_PROXY = 'http://<服务器地址>:<nginx 提供 /3dt/ 的端口>'
 pnpm --filter yzt measure:3d --only jkq- --repeat 1
 ```
 
