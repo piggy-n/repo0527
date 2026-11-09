@@ -11,6 +11,7 @@ import type {
   UploadBucket,
   UploadStats
 } from '../bench-api.ts';
+import { longTaskStats } from '../long-task-stats.ts';
 import { blankPixels, decodeShot } from './shots.ts';
 
 // 测量探针：要最先执行（bench.ts 的第一个导入），接管 requestAnimationFrame。两种引擎用同一份代码量，
@@ -84,10 +85,16 @@ watchUploads();
 
 // 页面最后创建的 WebGL2 上下文就是引擎用的
 let context: WebGL2RenderingContext | null = null;
+// 创建 WebGL 上下文的时段：加载期最长的任务常常就是它，和瓦片无关
+const contextWindows: LongTaskWindow[] = [];
 // oxlint-disable-next-line typescript/unbound-method -- 下面用 call 带上 this
 const nativeGetContext = HTMLCanvasElement.prototype.getContext;
 HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...rest: unknown[]) {
+  const startTime = performance.now();
   const result = (nativeGetContext as (...args: unknown[]) => RenderingContext | null).call(this, type, ...rest);
+  if (type.startsWith('webgl')) {
+    contextWindows.push({ startTime, duration: performance.now() - startTime });
+  }
   if (type === 'webgl2' && result) {
     context = result as WebGL2RenderingContext;
   }
@@ -292,18 +299,7 @@ new PerformanceObserver(list => {
   }
 }).observe({ type: 'longtask', buffered: true });
 
-function longTaskStats(from: number, to: number): LongTaskStats {
-  const durations = longTasks.filter(({ startTime }) => startTime >= from && startTime < to).map(({ duration }) => duration);
-  const over = (limit: number) => durations.filter(value => value >= limit).length;
-  return {
-    count: durations.length,
-    maxMs: durations.length > 0 ? Math.max(...durations) : 0,
-    totalMs: durations.reduce((sum, value) => sum + value, 0),
-    over100: over(100),
-    over200: over(200),
-    over500: over(500)
-  };
-}
+const longTasksBetween = (from: number, to: number): LongTaskStats => longTaskStats(longTasks, contextWindows, from, to);
 
 // ---------- 飞行中和飞行后的读数 ----------
 
@@ -458,7 +454,7 @@ async function endPhase(): Promise<PhaseResult> {
     gpuUnavailable: gpu.extension ? (gpuSummary ? null : '计时查询没有返回结果') : gpu.reason,
     fenceTimeouts,
     over: { ms33: over(33.3), ms50: over(50), ms100: over(100), ms200: over(200) },
-    longTasks: longTaskStats(started.start, end + 1),
+    longTasks: longTasksBetween(started.start, end + 1),
     uploads: uploadStats(count)
   };
 }
@@ -595,7 +591,7 @@ export const probe: Probe = {
 
   waitFrames,
 
-  longTasks: longTaskStats,
+  longTasks: longTasksBetween,
 
   longTaskWindows: () => longTasks.map(({ startTime, duration }) => ({ startTime, duration })),
 

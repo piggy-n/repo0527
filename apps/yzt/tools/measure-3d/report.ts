@@ -69,6 +69,7 @@ const METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => strin
   ['状态', runs => `${STATUS[STATUS_ORDER.find(status => runs.some(run => run.status === status)) ?? 'failed']}（${runs.length} 遍）`],
   ['到稳定（秒）', runs => number((pick(runs, run => run.load?.ttStableMs) ?? Number.NaN) / 1000)],
   ['加载期长任务：最长 / 总和（毫秒）', runs => `${integer(pick(runs, run => run.load?.longTasks.maxMs))} / ${integer(pick(runs, run => run.load?.longTasks.totalMs))}`],
+  ['加载期：创建 WebGL 上下文 / 除去它最长的长任务（毫秒）', runs => `${integer(pick(runs, run => run.load?.longTasks.contextMs))} / ${integer(pick(runs, run => run.load?.longTasks.maxWithoutContextMs))}`],
   ['静止：每帧工作量 p50 / p95 / p99 / 最长', runs => summaryCell(runs, run => run.static?.work)],
   ['静止：每帧 JS', runs => summaryCell(runs, run => run.static?.js)],
   ['静止：每帧 GPU', runs => summaryCell(runs, run => run.static?.gpu)],
@@ -179,7 +180,7 @@ const METHOD = `- **都是生产代码：** 真实的 \`MapSession\`、\`MapLibr
 - **≥50 毫秒的帧：** 看实际帧间隔：这个长度远高于下限，而且能抓到不在工作量里的卡顿（垃圾回收、合成）。
 - **每帧 GPU：** \`EXT_disjoint_timer_query_webgl2\`，只包住这一帧的回调。Cesium 开 4 倍多重采样，离屏解析在计时内；MapLibre 默认不开（和产品一样），所以 GPU 这一项不是同样的画法，要比就加 \`--antialias\` 再跑一次。
 - **上传假设：** 每帧的 \`texImage2D\`、\`texSubImage2D\`、\`bufferData\` 的字节和 \`generateMipmap\` 次数，和这一帧的 GPU 耗时放在一起。按上传量分桶后 GPU 耗时随上传量上涨，才说明尖峰来自上传。
-- **长任务归因：** 单独跑一遍带 CDP CPU 采样，页面报的每个长任务按分块（three、maplibre-gl、cesium……）和原生调用（\`linkProgram\`、\`texSubImage2D\`）汇总。\`profiles/\` 里的 \`.cpuprofile\` 可以用 DevTools 打开。
+- **长任务归因：** 单独跑一遍带 CDP CPU 采样，页面报的每个长任务按分块（three、maplibre-gl、cesium……）和原生调用（\`linkProgram\`、\`texSubImage2D\`）汇总。\`profiles/\` 里的 \`.cpuprofile\` 可以用 DevTools 打开。创建 WebGL 上下文另外包住 \`getContext\` 量，每一遍都有：它和瓦片无关，同一台机器上 0.6～1.2 秒来回跳。
 - **清晰度：** 单独跑一遍，同一相机拍截图。见 \`quality.html\` 的说明。
 - **到稳定：** 引擎报告瓦片都到了（MapLibre 还要上传队列空、屏幕误差不再变），连续 1 秒。飞行后补齐从飞行结束的时刻算；这个数只说明引擎不再动，不说明画面一样细：Cesium 飞完不一定回到飞行前的粗细，要一起看"飞行后的过程"。
 - **显存：** Windows 的 GPU Process Memory 计数器，取 GPU 进程的专用显存，采样的最大值不是真正的瞬时峰值。`;

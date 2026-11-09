@@ -19,7 +19,7 @@ const STATS: BenchStats = {
   locked: false
 };
 
-const LONG_TASKS = { count: 1, maxMs: 80, totalMs: 80, over100: 0, over200: 0, over500: 0 };
+const LONG_TASKS = { count: 1, maxMs: 80, totalMs: 80, over100: 0, over200: 0, over500: 0, contextMs: 0, maxWithoutContextMs: 80 };
 
 function phase(p50: number, p95: number, p99: number, over50 = 0): PhaseResult {
   const summary = { samples: 100, mean: p50, p50, p95, p99, max: p99 };

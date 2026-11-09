@@ -47,6 +47,10 @@ export interface LongTaskStats {
   readonly over100: number;
   readonly over200: number;
   readonly over500: number;
+  /** 这段时间里创建 WebGL 上下文花的时间 */
+  readonly contextMs: number;
+  /** 最长的任务，减去其中创建 WebGL 上下文的部分：那部分和瓦片无关，只看驱动和机器 */
+  readonly maxWithoutContextMs: number;
 }
 
 /** 上传量在这个范围的帧，它们的 GPU 耗时：用来判断尖峰是不是上传造成的 */
