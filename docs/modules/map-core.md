@@ -336,6 +336,14 @@ store.clear();
 - **MapLibre 的拖动平移在 `document` 上监听 `mousemove`、`mouseup`**（5B.3 验证时发现）：浏览器自动化的拖动操作、直接派发在 `window` 上的鼠标事件都不会让地图移动；在画布上派发、让事件冒泡上去才行。拖动后松手不触发 `click`（拖动距离超过 `clickTolerance`），工具不会把拖地图当成单击
 - **交给 MapLibre 的容器元素只能用静态 class**：MapLibre 会给容器加 `maplibregl-map` 等 class，它自己的 CSS 依赖它们；容器上的 class 绑定一变化，Vue 就会重设 `class` 属性把它们冲掉。阶段五写 map-vue 时同样遵守
 
+**地球投影下中心不变的 `flyTo` 会把地图弄坏（6.12.0）：** 路径长度是 `Math.acos(dot(a, b))`（`globeDistanceOfLocationsPixels`），没有截断。中心几乎不变时点积会舍入到 1 以上，`acos` 得到 NaN，路径长度、曲线、时长、缩放依次变成 NaN，`_invViewProjMatrix` 是 null，下一行抛 `Cannot read properties of null (reading '0')`。之后每一帧都抛错，地图不能再用。
+
+- **实测：** 只改缩放来回飞 400 次（一半从 z10 出发，一半从 z13.5）崩 13 次，`acos` 收到大于 1 的值也正好 13 次。按代码，只有当前还在地球投影时（z12 以下）才走这段，记下的前 6 次也都是从 z10 出发，所以从 z12 以下出发约 6.5%，这个比例是推算的。点积舍入和中心的具体数值有关：江苏范围内，同一个中心和自己算点积约 12% 超过 1；中心差 0.1 米时 0.25%，差 0.2 米以上 10 万次里没有。
+- **为什么像偶发：** 时长为 0 的 `flyTo` 不走这段计算结果（最后一帧直接用目标缩放），要有动画才坏；是否超过 1 又取决于到达当前中心的浮点路径，所以固定的中心换个状态就不一定崩。`three-scene-renderer.browser.test.ts` 的"缩放穿过 z12"偶尔失败就是这个。
+- **规避（`maplibre/globe-fly.ts`）：** 地球投影下目标中心和当前中心差 0.9 米以内，`flyTo` 换成 `easeTo`，`fitBounds` 加 `linear: true`。这时两者的路径相同，都是缩放随时间线性变化；`easeTo` 的默认时长是固定的，没给时长时按 `flyTo` 的公式算。二维不走这段，不换。
+- **怎样测：** 路径长度在调用 `flyTo` 时就算好了，下一次调用停掉上一段，所以不用等动画：`vi.spyOn(Math, 'acos')` 扫 1500 个中心，只看 `acos` 收到了什么。没有规避时收到 76 次大于 1 的值。
+- 升级 MapLibre 时看上游有没有截断，截断了就去掉 `globe-fly.ts`。
+
 ## 导航网格（ADR 0085）
 
 步行漫游用的 2.5D 高度场，迁自旧项目的 `navGrid.js`、`navGridWorker.js` 和 `indoorMap/levels.js`，规则和参数不变；在苏州站的数据上和旧代码逐格比对一致（地板、净空、区域编号和大小）。

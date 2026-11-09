@@ -146,6 +146,12 @@ class FakeMap implements MapLike {
   }
 
   readonly flyToCalls: unknown[] = [];
+  easeTo(): void {}
+
+  cameraForBounds(): undefined {
+    return undefined;
+  }
+
   flyTo(camera: { center?: [number, number]; zoom?: number }, eventData: CameraEventData): void {
     this.flyToCalls.push(camera);
     this.moveTo(camera.center ?? [this.camera.lng, this.camera.lat], camera.zoom ?? this.camera.zoom, eventData);

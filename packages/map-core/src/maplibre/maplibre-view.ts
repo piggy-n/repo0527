@@ -1,5 +1,5 @@
 import type { ProjectionSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { GPUInitializationError, Map as MapLibreMap } from 'maplibre-gl';
+import { GPUInitializationError, LngLat as MapLibreLngLat, Map as MapLibreMap } from 'maplibre-gl';
 import { safeReporter } from '@mx/utils';
 import { createNanoEvents } from 'nanoevents';
 import type { CameraCause, CameraState, ViewKind } from '../camera/camera-model';
@@ -26,6 +26,7 @@ import type { RenderedFeature, RenderedQueryOptions, ScreenBox } from '../view/r
 import type { LngLat, MapInputEvent, MapPointerEvent, PickResult, ScreenPoint } from '../view/view-input';
 import { canTransition, deferred, type LiveViewState } from '../view/view-lifecycle';
 import { applyStyleCommand } from './apply-style-command';
+import { sameCenterOnGlobe, zoomFlightDuration } from './globe-fly';
 import type {
   CameraTransformLike,
   MapLibreMapOptions,
@@ -505,8 +506,28 @@ export class MapLibreView<const G extends string> implements MapView {
       duration,
       offset
     });
+    if (this.#sameCenterOnGlobe(map, center)) {
+      const eased = withoutUndefined({ ...options, duration: duration ?? this.#zoomFlight(map, zoom) });
+      map.easeTo(eased, { cause: 'program' });
+      this.#animating(eased.duration, () => map.easeTo({ ...eased, duration: 0 }, { cause: 'program' }));
+      return;
+    }
     map.flyTo(options, { cause: 'program' });
     this.#animating(duration, () => map.flyTo({ ...options, duration: 0 }, { cause: 'program' }));
+  }
+
+  // 地球投影下中心不变时不能用 flyTo，见 globe-fly.ts。二维不算路径的 acos，不受影响
+  #sameCenterOnGlobe(map: MapLike, center: LngLat | undefined): boolean {
+    if (map.getProjection()?.type !== 'globe') {
+      return false;
+    }
+    const { lng, lat } = map.getCenter();
+    return !center || sameCenterOnGlobe([lng, lat], center);
+  }
+
+  // flyTo 没给时长时自己算，easeTo 的默认时长是固定的；缩放没变时交给 easeTo 的默认值，和 flyTo 这时的做法相同
+  #zoomFlight(map: MapLike, zoom: number | undefined): number | undefined {
+    return zoom === undefined || zoom === map.getZoom() ? undefined : zoomFlightDuration(map.getZoom(), zoom);
   }
 
   fitBounds(
@@ -515,11 +536,30 @@ export class MapLibreView<const G extends string> implements MapView {
   ): void {
     const map = this.#readyMap();
     this.#roam?.detach();
-    const options = withoutUndefined({ padding, maxZoom, duration, pitch });
-    map.fitBounds([west, south, east, north], options, { cause: 'program' });
-    this.#animating(duration, () =>
-      map.fitBounds([west, south, east, north], { ...options, duration: 0 }, { cause: 'program' })
-    );
+    const bounds: [number, number, number, number] = [west, south, east, north];
+    const options = this.#fitOptions(map, bounds, withoutUndefined({ padding, maxZoom, duration, pitch }));
+    map.fitBounds(bounds, options, { cause: 'program' });
+    this.#animating(options.duration, () => map.fitBounds(bounds, { ...options, duration: 0 }, { cause: 'program' }));
+  }
+
+  // fitBounds 默认走 flyTo：目标的中心不变时（定位过以后只缩放过，再定位一次）换成走直线，见 globe-fly.ts
+  #fitOptions<Options extends { readonly padding?: ViewPadding; readonly maxZoom?: number; readonly duration?: number }>(
+    map: MapLike,
+    bounds: [number, number, number, number],
+    options: Options
+  ): Options & { readonly duration?: number; readonly linear?: true } {
+    if (map.getProjection()?.type !== 'globe') {
+      return options;
+    }
+    const target = map.cameraForBounds(bounds, options);
+    if (!target?.center) {
+      return options;
+    }
+    const { lng, lat } = MapLibreLngLat.convert(target.center);
+    if (!this.#sameCenterOnGlobe(map, [lng, lat])) {
+      return options;
+    }
+    return { ...options, linear: true, ...withoutUndefined({ duration: options.duration ?? this.#zoomFlight(map, target.zoom) }) };
   }
 
   /** 三维时先打显示着的模型（带椭球高），再打地面，指向天空时是 miss；二维总是命中地图平面，没有高度 */

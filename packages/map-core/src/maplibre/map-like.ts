@@ -4,7 +4,7 @@ import type {
   StyleSpecification
 } from '@maplibre/maplibre-gl-style-spec';
 import type { Geometry } from 'geojson';
-import type { CustomLayerInterface, MapOptions } from 'maplibre-gl';
+import type { CustomLayerInterface, LngLatLike, MapOptions } from 'maplibre-gl';
 import type { CameraCause } from '../camera/camera-model';
 import type { ViewPadding } from '../view/map-view';
 import type { StyleTarget } from './apply-style-command';
@@ -113,13 +113,30 @@ export interface MapLike extends StyleTarget {
     },
     eventData: CameraEventData
   ): void;
+  /** 地球投影下中心不变时代替 flyTo，见 globe-fly.ts */
+  easeTo(
+    camera: {
+      center?: [number, number];
+      zoom?: number;
+      bearing?: number;
+      pitch?: number;
+      duration?: number;
+      offset?: [number, number];
+    },
+    eventData: CameraEventData
+  ): void;
   /** 视野按屏幕像素移动（地图内容反向移动）；animate 为 false 时同步到位，和 jumpTo 一样发出 movestart、move */
   panBy(offset: [number, number], options: { animate: false }, eventData: CameraEventData): void;
   fitBounds(
     bounds: [number, number, number, number],
-    options: { padding?: ViewPadding; maxZoom?: number; duration?: number },
+    options: { padding?: ViewPadding; maxZoom?: number; duration?: number; linear?: boolean },
     eventData: CameraEventData
   ): void;
+  /** fitBounds 会到的相机；放不下时没有 */
+  cameraForBounds(
+    bounds: [number, number, number, number],
+    options: { padding?: ViewPadding; maxZoom?: number }
+  ): { readonly center?: LngLatLike; readonly zoom?: number } | undefined;
   unproject(point: [number, number]): { readonly lng: number; readonly lat: number };
   /** 点或矩形（两个对角点）里画出的要素，从上到下；layers 只能是地图上有的图层 */
   queryRenderedFeatures(

@@ -1,5 +1,5 @@
 import { type CameraState, type LngLat, MapLibreView, MapSession, type ScreenPoint } from '@mx/map-core';
-import { describe, expect, it, onTestFinished } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { boxGlb, boxTileset, FIXTURE_ORIGIN, serveFixtures, swingingArmGlb } from './testing/fixtures';
 import { required } from './testing/required';
 import { ThreeSceneRenderer } from './three-scene-renderer';
@@ -318,6 +318,36 @@ describe('ThreeSceneRenderer 在 MapLibre 的自写层里', { timeout: TEST_TIME
 
     expect(ctx.view.sceneStatus.get('box')?.state).toBe('ready');
     expect(Math.max(...roundTrip(ctx, AROUND_CENTER))).toBeLessThan(1);
+  });
+
+  // MapLibre 地球投影下的 flyTo 中心不变时，acos 收到舍入到 1 以上的点积，缩放变成 NaN，地图就坏了（maplibre-view 的 globe-fly.ts）。
+  // 路径长度在调用时就算好了，下一次调用停掉上一段：不等动画，一次扫很多个中心，只看 acos 收到了什么
+  it('z12 以下中心不变的飞行、定位：acos 不会收到大于 1 的点积，飞得到终点', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup({ center: MODEL_AT, zoom: 10, bearing: 0, pitch: 30 }, BACKGROUND);
+    const acos = vi.spyOn(Math, 'acos');
+    onTestFinished(() => acos.mockRestore());
+    const oversized = () => acos.mock.calls.filter(([value]) => value > 1).length;
+    const STEP = 1.37e-5;
+    const centerOf = (index: number): LngLat => [MODEL_AT[0] + index * STEP, MODEL_AT[1] + ((index * 7919) % 1500) * STEP];
+    for (let index = 0; index < 1500; index++) {
+      ctx.view.flyTo({ center: centerOf(index), zoom: 10 }, { duration: 0 });
+      ctx.view.flyTo({ zoom: 11.5 + (index % 3) }, { duration: 100 });
+    }
+    expect(oversized()).toBe(0);
+    // 定位到同一个范围：缩小了再定位一次，目标的中心就是现在的中心
+    for (let index = 0; index < 500; index++) {
+      const [lng, lat] = centerOf(index);
+      const bounds = [lng - 0.15, lat - 0.15, lng + 0.15, lat + 0.15] as const;
+      ctx.view.fitBounds(bounds, { duration: 0 });
+      ctx.view.flyTo({ zoom: 8 }, { duration: 0 });
+      ctx.view.fitBounds(bounds, { duration: 100 });
+    }
+    expect(oversized()).toBe(0);
+    ctx.view.flyTo({ center: MODEL_AT, zoom: 10 }, { duration: 0 });
+    ctx.view.flyTo({ zoom: 13.5 }, { duration: 200 });
+    await until(() => Math.abs(ctx.session.camera.current.zoom - 13.5) < 0.01, '飞到 z13.5');
+    expect(oversized()).toBe(0);
+    expect(ctx.errors).toStrictEqual([]);
   });
 
   // 逐帧检测（ADR 0147 3C.2 的验收）：投影切换、缩放穿过 z12 时没有空白帧，三维的每一帧都画出模型

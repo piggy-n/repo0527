@@ -85,7 +85,7 @@ interface FakeCamera {
   pitch: number;
 }
 
-const CAMERA_CALLS = new Set(['jumpTo', 'flyTo', 'panBy', 'fitBounds', 'remove', 'setProjection', 'setMaxPitch']);
+const CAMERA_CALLS = new Set(['jumpTo', 'flyTo', 'easeTo', 'panBy', 'fitBounds', 'remove', 'setProjection', 'setMaxPitch']);
 
 // 只模拟适配器用到的行为：记录调用；相机方法立即到位，并像 MapLibre 一样同步触发 move、合并 eventData
 // 记下设置过的滚轮缩放速率
@@ -241,6 +241,19 @@ class FakeMap implements MapLike {
     this.#animated(camera.duration, () =>
       this.moveTo({ ...this.camera, lng, lat, zoom: camera.zoom ?? this.camera.zoom }, eventData)
     );
+  }
+
+  easeTo(camera: { center?: [number, number]; zoom?: number; duration?: number }, eventData: CameraEventData): void {
+    this.calls.push(['easeTo', camera, eventData]);
+    const [lng, lat] = camera.center ?? [this.camera.lng, this.camera.lat];
+    this.#animated(camera.duration, () =>
+      this.moveTo({ ...this.camera, lng, lat, zoom: camera.zoom ?? this.camera.zoom }, eventData)
+    );
+  }
+
+  // 和 fitBounds 到位的地方相同
+  cameraForBounds([west, south, east, north]: [number, number, number, number], options: { maxZoom?: number }) {
+    return { center: { lng: (west + east) / 2, lat: (south + north) / 2 }, zoom: options.maxZoom ?? 10, bearing: 0 };
   }
 
   // 和 unproject 一样每 100 像素 1 度
@@ -2910,7 +2923,7 @@ describe('MapLibreView roaming in the MapLibre engine (ADR 0147 §4)', () => {
       await vi.advanceTimersByTimeAsync(200);
       ctx.map.calls.length = 0;
 
-      ctx.view.flyTo({ center: [119, 32], zoom: 12 });
+      ctx.view.flyTo({ center: [119.5, 32], zoom: 12 });
 
       expect(visibility(ctx.map.calls)).toStrictEqual(['dltb-line visible']);
       expect(ctx.map.maxZoom).toBe(22);
@@ -2938,5 +2951,108 @@ describe('MapLibreView roaming in the MapLibre engine (ADR 0147 §4)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// MapLibre 地球投影下的 flyTo 中心不变时会把缩放算成 NaN，见 globe-fly.ts
+function onGlobe() {
+  const ctx = setup();
+  ctx.map.fire('style.load');
+  ctx.map.projection = { type: 'globe' };
+  return ctx;
+}
+const named = (calls: readonly (readonly unknown[])[], name: string) => calls.filter(([call]) => call === name);
+
+describe('MapLibreView 地球投影下中心不变的定位', () => {
+  it('只改缩放：走 easeTo，时长和 flyTo 默认的相同', () => {
+    using ctx = onGlobe();
+    const { zoom } = ctx.session.camera.current;
+    ctx.view.flyTo({ zoom: zoom + 3.5 });
+    expect(named(ctx.map.calls, 'flyTo')).toStrictEqual([]);
+    const [[, options, eventData] = []] = named(ctx.map.calls, 'easeTo');
+    expect(options).toStrictEqual({ zoom: zoom + 3.5, duration: expect.closeTo((1000 * 3.5 * Math.LN2) / 1.42 / 1.2, 5) as number });
+    expect(eventData).toStrictEqual({ cause: 'program' });
+    expect(ctx.session.camera.current.zoom).toBe(zoom + 3.5);
+  });
+
+  it('给了时长就用给的', () => {
+    using ctx = onGlobe();
+    ctx.view.flyTo({ zoom: 12 }, { duration: 300 });
+    expect(named(ctx.map.calls, 'easeTo').at(-1)?.[1]).toStrictEqual({ zoom: 12, duration: 300 });
+  });
+
+  it('缩放也没变（只转方向）：时长交给 MapLibre 的默认值，不是 0', () => {
+    using ctx = onGlobe();
+    ctx.view.flyTo({ bearing: 30 });
+    expect(named(ctx.map.calls, 'easeTo').at(-1)?.[1]).toStrictEqual({ bearing: 30 });
+  });
+
+  it('目标就是当前的中心：也走 easeTo', () => {
+    using ctx = onGlobe();
+    const { center } = ctx.session.camera.current;
+    ctx.view.flyTo({ center, zoom: 12 }, { duration: 300 });
+    expect(named(ctx.map.calls, 'flyTo')).toStrictEqual([]);
+    expect(named(ctx.map.calls, 'easeTo')).toHaveLength(1);
+  });
+
+  it('中心变了：还是 flyTo', () => {
+    using ctx = onGlobe();
+    ctx.view.flyTo({ center: [120, 31], zoom: 12 }, { duration: 300 });
+    expect(named(ctx.map.calls, 'flyTo')).toHaveLength(1);
+    expect(named(ctx.map.calls, 'easeTo')).toStrictEqual([]);
+  });
+
+  it('二维不受影响：还是 flyTo', () => {
+    using ctx = setup();
+    ctx.map.fire('style.load');
+    ctx.view.flyTo({ zoom: 12 }, { duration: 300 });
+    expect(named(ctx.map.calls, 'flyTo')).toHaveLength(1);
+    expect(named(ctx.map.calls, 'easeTo')).toStrictEqual([]);
+  });
+
+  it('暂停时动画直接到终点：用同样的方法', () => {
+    using ctx = onGlobe();
+    ctx.map.animate = true;
+    ctx.view.flyTo({ zoom: 12 }, { duration: 300 });
+    ctx.view.pause();
+    expect(ctx.map.calls.at(-1)).toStrictEqual(['easeTo', { zoom: 12, duration: 0 }, { cause: 'program' }]);
+    expect(ctx.session.camera.current.zoom).toBe(12);
+  });
+
+  it('fitBounds 的目标中心不变：走直线，时长和 flyTo 默认的相同', () => {
+    using ctx = onGlobe();
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 9, duration: 0 });
+    ctx.view.flyTo({ zoom: 5.5 }, { duration: 0 });
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 9 });
+    expect(named(ctx.map.calls, 'fitBounds').at(-1)).toStrictEqual([
+      'fitBounds',
+      [118, 31, 120, 33],
+      { maxZoom: 9, linear: true, duration: expect.closeTo((1000 * 3.5 * Math.LN2) / 1.42 / 1.2, 5) as number },
+      { cause: 'program' }
+    ]);
+  });
+
+  it('fitBounds 给了时长就用给的，暂停时用同样的走法到终点', () => {
+    using ctx = onGlobe();
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 9, duration: 0 });
+    ctx.map.animate = true;
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 7, duration: 300 });
+    expect(named(ctx.map.calls, 'fitBounds').at(-1)?.[2]).toStrictEqual({ maxZoom: 7, duration: 300, linear: true });
+    ctx.view.pause();
+    expect(ctx.map.calls.at(-1)?.[2]).toStrictEqual({ maxZoom: 7, duration: 0, linear: true });
+  });
+
+  it('fitBounds 的中心变了：还是原来的走法', () => {
+    using ctx = onGlobe();
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 9 });
+    expect(named(ctx.map.calls, 'fitBounds').at(-1)?.[2]).toStrictEqual({ maxZoom: 9 });
+  });
+
+  it('二维的 fitBounds 不受影响', () => {
+    using ctx = setup();
+    ctx.map.fire('style.load');
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 9, duration: 0 });
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 7 });
+    expect(named(ctx.map.calls, 'fitBounds').at(-1)?.[2]).toStrictEqual({ maxZoom: 7 });
   });
 });
