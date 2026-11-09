@@ -118,11 +118,13 @@ interface Entry {
   lastFrameTiles: Cesium3DTile[];
 }
 
-// 一帧画出的瓦片合起来的清晰度：贴图像素数开方除以投影直径（像素），几何误差换算成像素，都按投影面积加权
+// 一帧画出的瓦片合起来的清晰度：贴图像素数开方除以投影直径（像素），几何误差换算成像素，都按投影面积加权。
+// 相机在包围球里的不算，单个瓦片的面积不超过画布：JKQ 实测有少数瓦片的包围球大到把别的瓦片的权重压成 0
 function summarizeSelection(
   tiles: readonly Cesium3DTile[],
   cameraPosition: Cartesian3,
-  pixelsPerMeterAtUnitDistance: number
+  pixelsPerMeterAtUnitDistance: number,
+  viewportArea: number
 ): TileSelectionSummary | null {
   if (tiles.length === 0) {
     return null;
@@ -134,9 +136,12 @@ function summarizeSelection(
   let coarsestError = 0;
   for (const tile of tiles) {
     const { radius, center } = tile.boundingSphere;
-    const distance = Math.max(1, Cartesian3.distance(cameraPosition, center) - radius);
+    const distance = Cartesian3.distance(cameraPosition, center) - radius;
+    if (!(distance > 1)) {
+      continue;
+    }
     const diameter = (2 * radius * pixelsPerMeterAtUnitDistance) / distance;
-    const tileArea = Math.PI * (diameter / 2) ** 2;
+    const tileArea = Math.min(viewportArea, Math.PI * (diameter / 2) ** 2);
     const texels = (tile.content?.texturesByteLength ?? 0) / 4;
     const tileDensity = Math.sqrt(texels) / Math.max(1, diameter);
     area += tileArea;
@@ -293,7 +298,8 @@ export class SceneTilesets implements Disposable {
         selection: summarizeSelection(
           entry.lastFrameTiles,
           this.#widget.camera.positionWC,
-          this.#pixelsPerMeterAtUnitDistance()
+          this.#pixelsPerMeterAtUnitDistance(),
+          this.#widget.scene.drawingBufferWidth * this.#widget.scene.drawingBufferHeight
         ),
         loaded: entry.loaded,
         unloaded: entry.unloaded,
