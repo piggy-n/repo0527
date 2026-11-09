@@ -4,7 +4,6 @@ import { type BudgetPose, type CachePressure, ErrorScale } from './error-scale';
 
 const MB = 1024 * 1024;
 const BUDGET = { softBytes: 1024 * MB, hardBytes: 1536 * MB };
-// 收紧的线：上限的 90%
 const FRAME = 1000 / 60;
 const POSE: BudgetPose = { position: [0, 1000, 0], direction: [0, -1, 0], height: 1000 };
 const NONE: CachePressure = { refused: 0, cachedBytes: 0, pinnedBytes: 0, pendingBytes: 0, usedTiles: 0 };
@@ -176,12 +175,10 @@ describe('ErrorScale', () => {
     // 走了不到高度的 25%：还算这个姿态
     const near: BudgetPose = { ...POSE, position: [200, 1000, 0] };
     expect(scale.update({ ...NONE, pinnedBytes: 100 * MB, usedTiles: 10 }, near, FRAME)).toBe('steady');
-    // 走远了：解锁，相机停稳以后收紧
+    // 走远了：解锁，需求远低于上限，还在动也收紧
     const far: BudgetPose = { ...POSE, position: [300, 1000, 0] };
-    expect(scale.update({ ...NONE, pinnedBytes: 100 * MB, usedTiles: 10 }, far, FRAME)).toBe('settling');
+    expect(scale.update({ ...NONE, pinnedBytes: 100 * MB, usedTiles: 10 }, far, FRAME)).toBe('lowering');
     expect(scale.locked).toBe(false);
-    expect(scale.value).toBe(raised);
-    expect(scale.update({ ...NONE, pinnedBytes: 100 * MB, usedTiles: 10 }, far, 600)).toBe('lowering');
     expect(scale.value).toBeLessThan(raised);
   });
 
@@ -190,7 +187,7 @@ describe('ErrorScale', () => {
     scale.update({ ...NONE, refused: 1, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 1 }, POSE, FRAME);
     const angle = (11 * Math.PI) / 180;
     const turned: BudgetPose = { ...POSE, direction: [Math.sin(angle), -Math.cos(angle), 0] };
-    expect(scale.update({ ...NONE }, turned, FRAME)).toBe('settling');
+    expect(scale.update({ ...NONE }, turned, FRAME)).toBe('lowering');
     expect(scale.locked).toBe(false);
   });
 
@@ -387,6 +384,111 @@ describe('ErrorScale', () => {
     const full = { ...NONE, refused: 5, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 100 };
     expect(scale.update(full, flying(61), FRAME)).toBe('raising');
     expect(scale.value).toBeGreaterThan(1);
+  });
+
+  it('飞行中放宽过，后半段需求远低于上限：动着也收紧，不一路画得粗', () => {
+    const scale = new ErrorScale(BUDGET);
+    const full = { ...NONE, refused: 5, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 100 };
+    scale.update(NONE, flying(0), FRAME);
+    for (let frame = 1; frame <= 20; frame++) {
+      scale.update(full, flying(frame), FRAME);
+    }
+    const raised = scale.value;
+    expect(raised).toBeGreaterThan(2);
+    // 实测倾斜摄影 z19：飞行后半段缓存 1030 MB，在用的 830 MB，倍数还停在最高处
+    const light = { ...NONE, cachedBytes: 1030 * MB, pinnedBytes: 830 * MB, usedTiles: 37 };
+    const away = flying(1000);
+    expect(scale.update(light, away, FRAME)).toBe('lowering');
+    expect(scale.value).toBeLessThan(raised);
+    expect(scale.locked).toBe(false);
+  });
+
+  it('飞行中放宽过，还没离开放宽时的姿态：不收紧', () => {
+    const scale = new ErrorScale(BUDGET);
+    const full = { ...NONE, refused: 5, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 100 };
+    scale.update(NONE, flying(0), FRAME);
+    for (let frame = 1; frame <= 20; frame++) {
+      scale.update(full, flying(frame), FRAME);
+    }
+    const raised = scale.value;
+    const light = { ...NONE, cachedBytes: 1030 * MB, pinnedBytes: 830 * MB, usedTiles: 37 };
+    expect(scale.update(light, flying(21), FRAME)).toBe('settling');
+    expect(scale.value).toBe(raised);
+  });
+
+  it('相机动着的时候需求离上限不到两成就不收紧，留出变化的余地', () => {
+    const scale = new ErrorScale(BUDGET);
+    const full = { ...NONE, refused: 5, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 100 };
+    scale.update(NONE, flying(0), FRAME);
+    for (let frame = 1; frame <= 20; frame++) {
+      scale.update(full, flying(frame), FRAME);
+    }
+    const raised = scale.value;
+    const away = flying(1000);
+    // 上限的 85%：停着的时候要收紧，动着不收紧
+    const near = { ...NONE, cachedBytes: 1400 * MB, pinnedBytes: 1306 * MB, usedTiles: 60 };
+    expect(scale.update(near, away, FRAME)).toBe('settling');
+    expect(scale.value).toBe(raised);
+    // 上限的 75%：收紧
+    const room = { ...NONE, cachedBytes: 1400 * MB, pinnedBytes: 1152 * MB, usedTiles: 50 };
+    expect(scale.update(room, flying(1001), FRAME)).toBe('lowering');
+    expect(scale.value).toBeLessThan(raised);
+  });
+
+  it('飞行中收紧过又放不下：这一路不再收紧，停稳后重新判断', () => {
+    const scale = new ErrorScale(BUDGET);
+    const full = { ...NONE, refused: 5, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 100 };
+    const light = { ...NONE, cachedBytes: 1030 * MB, pinnedBytes: 300 * MB, usedTiles: 20 };
+    scale.update(NONE, flying(0), FRAME);
+    scale.update(full, flying(1), FRAME);
+    // 走远了，收紧一次
+    expect(scale.update(light, flying(1000), FRAME)).toBe('lowering');
+    // 又放不下了，再走远：这一路不再试
+    expect(scale.update(full, flying(1001), FRAME)).toBe('raising');
+    const raised = scale.value;
+    expect(scale.update(light, flying(2000), FRAME)).toBe('settling');
+    expect(scale.value).toBe(raised);
+    // 停稳以后重新判断
+    const stopped = flying(2000);
+    let motion = 'settling';
+    for (let frame = 0; frame < 40 && motion === 'settling'; frame++) {
+      motion = scale.update(light, stopped, FRAME);
+    }
+    expect(motion).toBe('lowering');
+    expect(scale.value).toBeLessThan(raised);
+    // 下一路又可以试
+    for (let frame = 0; frame < 200; frame++) {
+      scale.update(light, stopped, FRAME);
+    }
+    scale.update(full, stopped, FRAME);
+    const second = flying(3000);
+    expect(scale.update(light, second, FRAME)).toBe('lowering');
+  });
+
+  it('飞行中刚放过了头，收回到下限不算试过：再放不下时还可以收紧', () => {
+    const scale = new ErrorScale(BUDGET);
+    const full = { ...NONE, refused: 5, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 100 };
+    const light = { ...NONE, cachedBytes: 1030 * MB, pinnedBytes: 300 * MB, usedTiles: 20 };
+    scale.update(NONE, flying(0), FRAME);
+    // 帧慢：一步放过了头，同一个姿态附近收回到下限
+    scale.update(full, flying(1), 100);
+    expect(scale.update(light, flying(2), 100)).toBe('lowering');
+    expect(scale.locked).toBe(true);
+    // 又放不下，走远以后还能收紧
+    expect(scale.update(full, flying(3), FRAME)).toBe('raising');
+    expect(scale.update(light, flying(1000), FRAME)).toBe('lowering');
+  });
+
+  it('一整层放不下的数据飞行中：收紧只试一次，不把缓存来回装满（模拟里 15 秒重新加载 8 GB）', () => {
+    const world = new World(flat(246));
+    const scale = new ErrorScale(BUDGET);
+    // 每秒走高度的一半：放宽以后半秒就算离开了那个姿态
+    for (let frame = 0; frame < 15 * 60; frame++) {
+      const pressure = world.step(scale.value, BUDGET);
+      scale.update(pressure, { ...POSE, position: [frame * 8.5, 1000, 0] }, FRAME);
+    }
+    expect(world.reloadedBytes).toBeLessThan(BUDGET.hardBytes / 2);
+    expect(world.loadedBytes).toBeLessThan(BUDGET.hardBytes * 2.5);
   });
 
   it('相机停稳以后估计超线就提前放宽，不等真的装满', () => {

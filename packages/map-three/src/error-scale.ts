@@ -51,6 +51,9 @@ const EVICT_STALL_MS = 1000;
 // 需求低于上限的这个比例才收紧：有下限防来回折腾，这条线只是不要贴着上限走。太低的话收紧到一半就停：
 // 90% 时倾斜摄影 z19 停在 1397 MB，比放得下的 1504 MB 粗一块，截图上看得出来
 const LOWER_RATIO = 0.97;
+// 相机动着的时候需求低于上限的这个比例才收紧：看到的多少一直在变，要留余地，贴着上限走的话放宽、收紧来回换。
+// 不收紧的话飞行后半段看到的少了也一路画得粗（倾斜摄影 z19 第二遍飞行三角形中位数 59 万，Cesium 79 万）
+const MOVING_LOWER_RATIO = 0.8;
 // 只防数值失控：没有内容的节点总是往下走，再大也至少画出最粗的一层
 const MAX_SCALE = 256;
 // 相机离开放宽时的位置超过高度的这个比例，或者转过这个角度，才算换了姿态（同 JKQ 的排查）
@@ -82,8 +85,9 @@ function movedAway(from: BudgetPose, to: BudgetPose): boolean {
 /**
  * 真的放不下才放宽；一放宽就锁在这个姿态：相机不离开，就不再收紧到放不下的倍数以下。这个下限只升不降，所以同一个姿态下一定停下，
  * 不会整级丢掉后又加载回来（Cesium 低于预算就收紧，模拟里就是这样来回折腾）。帧慢时一步放过了头，可以收回到下限。
- * 相机动着的时候只放宽不收紧（每动一下就收紧的话，停下之前要白加载好几次）；这时定的下限只对那一路的画面成立，
- * 停稳后重新判断一次，停着定的不再放开，所以判断的次数是有限的
+ * 相机动着的时候离开锁定的姿态、需求离上限还有两成才收紧；收紧过又放不下，这一路就不再收紧：每细一级大很多的数据，
+ * 一收紧就碰到放不下的一层，再试就是来回折腾。动着时定的下限只对那一路的画面成立，停稳后重新判断一次，
+ * 停着定的不再放开，所以判断的次数是有限的
  */
 export class ErrorScale {
   readonly #budget: TileBudget;
@@ -98,6 +102,9 @@ export class ErrorScale {
   // 相机多久没动了；一开始算停稳的：第一次加载时相机本来就没动
   #stillMs = SETTLE_MS;
   #saturated = false;
+  // 这一路（相机上次停稳以来）解锁后收紧过；收紧过又放不下
+  #loweredMoving = false;
+  #lowerFailed = false;
   // 这一轮放宽的起点：倍数和在用的瓦片数
   #baseValue = 1;
   #baseTiles = 0;
@@ -136,6 +143,10 @@ export class ErrorScale {
     this.#stillMs = this.#lastPose && !samePose(this.#lastPose, pose) ? 0 : this.#stillMs + elapsedMs;
     this.#lastPose = pose;
     const settled = this.#stillMs >= SETTLE_MS;
+    if (settled) {
+      this.#loweredMoving = false;
+      this.#lowerFailed = false;
+    }
     if (this.#lockedAt && (movedAway(this.#lockedAt, pose) || (this.#floorWhileMoving && settled))) {
       this.release();
     }
@@ -156,9 +167,11 @@ export class ErrorScale {
     this.#lastCachedBytes = Number.POSITIVE_INFINITY;
     this.#evictStalledMs = 0;
     if (this.#value > this.#floor && demand < hardBytes * LOWER_RATIO) {
-      if (!settled) {
+      if (!settled && (this.#lowerFailed || demand >= hardBytes * MOVING_LOWER_RATIO)) {
         return 'settling';
       }
+      // 锁定时收回到下限不算试过：下限以上是已知放得下的
+      this.#loweredMoving ||= !settled && !this.#lockedAt;
       this.#value = Math.max(this.#floor, this.#value / rate);
       return 'lowering';
     }
@@ -166,6 +179,7 @@ export class ErrorScale {
   }
 
   #raise(rate: number, pose: BudgetPose, usedTiles: number): void {
+    this.#lowerFailed ||= this.#loweredMoving;
     if (!this.#lockedAt) {
       this.#baseValue = this.#value;
       this.#baseTiles = usedTiles;
