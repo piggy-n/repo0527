@@ -23,6 +23,37 @@ describe('variants', () => {
   });
 });
 
+describe('variants 的对照方案', () => {
+  it('动着也请求、解析并发各是一个方案，只有 MapLibre', () => {
+    const list = variants([], { noCull: true, parseJobs: [12] });
+    expect(list.map(item => [item.id, item.engine, item.cull, item.parseJobs])).toEqual([
+      ['cesium', 'cesium', undefined, undefined],
+      ['maplibre', 'maplibre', undefined, undefined],
+      ['maplibre-no-cull', 'maplibre', false, undefined],
+      ['maplibre-parse12', 'maplibre', undefined, 12]
+    ]);
+  });
+
+  it('对照方案只跑 perf：画质和采样只有要比的两个方案', () => {
+    const list = variants([], { noCull: true, parseJobs: [12] });
+    const runs = buildRuns(selectScenes(['z19']), list, 1);
+    expect(runs.filter(run => run.kind === 'perf')).toHaveLength(4);
+    expect(runs.filter(run => run.kind !== 'perf').map(run => run.id)).toEqual([
+      'oblique-z19/cesium/quality',
+      'oblique-z19/cesium/profile',
+      'oblique-z19/maplibre/quality',
+      'oblique-z19/maplibre/profile'
+    ]);
+  });
+});
+
+describe('经开区的场景', () => {
+  it('jkq- 选中 JKQ 的四个：z16 俯视、倾斜，用户说糊的 z16.5，和 z17 倾斜', () => {
+    expect(selectScenes(['jkq-']).map(scene => scene.id)).toEqual(['jkq-z16', 'jkq-z16-tilt', 'jkq-z16.5', 'jkq-z17-tilt']);
+    expect(selectScenes(['jkq-']).every(scene => !scene.acceptance && scene.camera.center === null)).toBe(true);
+  });
+});
+
 describe('buildRuns', () => {
   const scenes = selectScenes([]);
   const list = variants([null]);

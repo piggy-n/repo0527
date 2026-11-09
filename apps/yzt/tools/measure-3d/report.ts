@@ -1,4 +1,4 @@
-import type { SceneSample, PhaseResult } from './bench-api.ts';
+import type { SceneSample, PhaseResult, TileQueues } from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
 import type { MeasureResults, RunResult } from './results.ts';
 import {
@@ -64,6 +64,17 @@ function flightDetail(runs: readonly RunResult[], phase: 'flightCold' | 'flightW
   return `${number(errorMedian)} / ${number(errorMax)} / ${number((trianglesMedian ?? 0) / WAN)} / ${number((trianglesMin ?? 0) / WAN)}`;
 }
 
+// 瓦片排在哪一步（MapLibre 引擎）：飞行中的中位数。Cesium 没有这些读数
+function queueDetail(runs: readonly RunResult[], phase: 'flightCold' | 'flightWarm'): string {
+  const of = (read: (queues: TileQueues) => number) =>
+    pick(runs, run => median((run[phase]?.trace ?? []).map(sample => (sample.queues ? read(sample.queues) : null))));
+  const value = of(queues => queues.used);
+  if (value === null) {
+    return '—';
+  }
+  return `${integer(of(queues => queues.downloading))} / ${integer(of(queues => queues.parsing))} / ${integer(of(queues => queues.culled))} / ${integer(value)} / ${integer(of(queues => queues.usedOutOfView))}`;
+}
+
 // 每一项是一行，各方案一列
 const METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => string])[] = [
   ['状态', runs => `${STATUS[STATUS_ORDER.find(status => runs.some(run => run.status === status)) ?? 'failed']}（${runs.length} 遍）`],
@@ -80,12 +91,14 @@ const METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => strin
   ['第一遍飞行：≥33 / ≥50 / ≥100 毫秒的帧', runs => `${integer(pick(runs, run => run.flightCold?.over.ms33))} / ${integer(pick(runs, run => run.flightCold?.over.ms50))} / ${integer(pick(runs, run => run.flightCold?.over.ms100))}`],
   ['第一遍飞行：长任务 次数 / 最长', runs => `${integer(pick(runs, run => run.flightCold?.longTasks.count))} / ${integer(pick(runs, run => run.flightCold?.longTasks.maxMs))}`],
   ['第一遍飞行：屏幕误差 中位 / 最高，三角形（万）中位 / 最低', runs => flightDetail(runs, 'flightCold')],
+  ['第一遍飞行：下载中 / 解析中 / 没请求 / 在用 / 其中视野外（块，中位）', runs => queueDetail(runs, 'flightCold')],
   ['第一遍飞行：上传 贴图 / 缓冲（MB）/ 最多的一帧', runs =>`${integer(pick(runs, run => run.flightCold?.uploads.textureMB))} / ${integer(pick(runs, run => run.flightCold?.uploads.bufferMB))} / ${number(pick(runs, run => run.flightCold?.uploads.maxFrameMB))}`],
   ['飞行后补齐（秒）', runs => number((pick(runs, run => run.settle?.ms) ?? Number.NaN) / 1000)],
   ['第二遍飞行：每帧工作量', runs => summaryCell(runs, run => run.flightWarm?.work)],
   ['第二遍飞行：帧间隔', runs => summaryCell(runs, run => run.flightWarm?.interval)],
   ['第二遍飞行：≥33 / ≥50 / ≥100 毫秒的帧', runs => `${integer(pick(runs, run => run.flightWarm?.over.ms33))} / ${integer(pick(runs, run => run.flightWarm?.over.ms50))} / ${integer(pick(runs, run => run.flightWarm?.over.ms100))}`],
   ['第二遍飞行：屏幕误差 中位 / 最高，三角形（万）中位 / 最低', runs => flightDetail(runs, 'flightWarm')],
+  ['第二遍飞行：下载中 / 解析中 / 没请求 / 在用 / 其中视野外（块，中位）', runs => queueDetail(runs, 'flightWarm')],
   ['第二遍飞行：长任务 次数 / 最长', runs =>`${integer(pick(runs, run => run.flightWarm?.longTasks.count))} / ${integer(pick(runs, run => run.flightWarm?.longTasks.maxMs))}`],
   ['画面恢复（秒）', runs => number((pick(runs, run => run.recovery?.ms) ?? Number.NaN) / 1000)],
   ['稳定时：瓦片 / 三角形', runs => `${integer(pick(runs, run => run.atStable?.tilesVisible))} / ${integer(pick(runs, run => run.atStable?.triangles))}`],

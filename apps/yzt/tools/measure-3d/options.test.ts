@@ -23,6 +23,19 @@ describe('parseOptions', () => {
     expect(parseOptions(['--upload-mb', 'off 16']).uploadMBs).toEqual([null, 16]);
   });
 
+  it('上传预算写 none：不对照上传预算', () => {
+    expect(parseOptions(['--upload-mb', 'none']).uploadMBs).toEqual([]);
+  });
+
+  it('对照方案：默认都没有，可以要动着也请求和解析并发', () => {
+    expect(parseOptions([]).noCull).toBe(false);
+    expect(parseOptions([]).parseJobs).toEqual([]);
+    expect(parseOptions(['--no-cull']).noCull).toBe(true);
+    expect(parseOptions(['--parse-jobs', '8,12']).parseJobs).toEqual([8, 12]);
+    expect(parseOptions(['--parse-jobs', '8 12']).parseJobs).toEqual([8, 12]);
+    expect(() => parseOptions(['--parse-jobs', '0'])).toThrow('--parse-jobs');
+  });
+
   it('PowerShell 把没加引号的逗号列表传成空格分隔：场景一样能读', () => {
     expect(parseOptions(['--only', 'z17 z19']).only).toEqual(['z17', 'z19']);
   });

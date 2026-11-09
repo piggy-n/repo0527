@@ -7,7 +7,7 @@ import { decodeShot } from './shots.ts';
 
 // 测量页：只有底图和模型，没有面板、定时器和业务图层，不让页面自己的工作混进测量。
 // 走真实的会话、视图和引擎（ADR 0147 第 7 节：性能验收要测生产代码），这里不写层、场景和缓存算法。
-// 参数都在地址上：engine、models、center、zoom、pitch、bearing、basemap、uploadMB、antialias、pacing
+// 参数都在地址上：engine、models、center、zoom、pitch、bearing、basemap、uploadMB、cull、parseJobs、antialias、pacing
 
 /** 一种引擎交给测量页的 */
 export interface EngineHandle {

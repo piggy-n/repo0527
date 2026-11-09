@@ -27,6 +27,10 @@ export interface Variant {
   readonly engine: 'cesium' | 'maplibre';
   /** 每帧上传的 MB；undefined 用产品的默认值，null 不提前上传 */
   readonly uploadMB?: number | null;
+  /** false：相机走得快时也请求 */
+  readonly cull?: false;
+  /** 同时解析的瓦片数；undefined 用瓦片库的默认值 */
+  readonly parseJobs?: number;
 }
 
 /** 一遍：perf 量帧时间和加载，quality 拍画面，profile 带 CPU 采样 */
@@ -65,11 +69,16 @@ export const SCENES: readonly Scene[] = [
   aerial('white-station-z18', '白模加车站 z18', [WHITE, STATION], STATION_CENTER, 18),
   remote('jkq-z16', '经开区 z16 俯视', JKQ, 16, 0),
   remote('jkq-z16-tilt', '经开区 z16 倾斜', JKQ, 16, 55),
+  remote('jkq-z16.5', '经开区 z16.5 俯视', JKQ, 16.5, 0),
+  remote('jkq-z17-tilt', '经开区 z17 倾斜', JKQ, 17, 55),
   remote('jkq2-z15', '经开区2 z15 俯视', JKQ2, 15, 0),
   remote('jkq2-z16-tilt', '经开区2 z16 倾斜', JKQ2, 16, 55)
 ];
 
-export function variants(uploadMBs: readonly (number | null)[]): Variant[] {
+export function variants(
+  uploadMBs: readonly (number | null)[],
+  { noCull = false, parseJobs = [] }: { readonly noCull?: boolean; readonly parseJobs?: readonly number[] } = {}
+): Variant[] {
   return [
     { id: 'cesium', label: 'Cesium', engine: 'cesium' },
     { id: 'maplibre', label: 'MapLibre', engine: 'maplibre' },
@@ -80,7 +89,9 @@ export function variants(uploadMBs: readonly (number | null)[]): Variant[] {
         engine: 'maplibre',
         uploadMB
       })
-    )
+    ),
+    ...(noCull ? [{ id: 'maplibre-no-cull', label: 'MapLibre，动着也请求', engine: 'maplibre', cull: false } as const] : []),
+    ...parseJobs.map((jobs): Variant => ({ id: `maplibre-parse${jobs}`, label: `MapLibre，同时解析 ${jobs} 块`, engine: 'maplibre', parseJobs: jobs }))
   ];
 }
 
@@ -98,7 +109,7 @@ export function buildRuns(scenes: readonly Scene[], list: readonly Variant[], re
   }
   for (const scene of scenes) {
     for (const variant of list) {
-      if (variant.uploadMB === undefined) {
+      if (variant.id === 'cesium' || variant.id === 'maplibre') {
         runs.push({ id: `${scene.id}/${variant.id}/quality`, scene, variant, kind: 'quality', repeat: 0 });
         runs.push({ id: `${scene.id}/${variant.id}/profile`, scene, variant, kind: 'profile', repeat: 0 });
       }

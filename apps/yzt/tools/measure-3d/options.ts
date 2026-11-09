@@ -8,7 +8,9 @@ export const HELP = `MapLibre 引擎和 Cesium 的性能对比（ADR 0147 3C.4�
                          默认只跑验收场景（倾斜摄影 z17、z19）；jkq、jkq2 要设环境变量 YZT_3DT_PROXY 指向服务器
   --list                 列出所有场景后退出
   --repeat <n>           perf 每个场景跑几遍（默认 3），报告取中位数
-  --upload-mb <列表>     MapLibre 另外对照的上传预算，off 是不提前上传（默认 off），如 off,16,64
+  --upload-mb <列表>     MapLibre 另外对照的上传预算，off 是不提前上传（默认 off），如 off,16,64；none 是不对照
+  --no-cull              MapLibre 另外对照相机走得快时也请求瓦片
+  --parse-jobs <列表>    MapLibre 另外对照同时解析的瓦片数（瓦片库默认 5），如 8,12
   --basemap <arcgis|none> 底图（默认 arcgis，两个引擎相同），没网时用 none
   --viewport <宽x高>     视口（默认 1600x900）
   --pacing <n>           在路上的帧数上限：1 是 PoC 的做法（默认 2），0 是不等
@@ -29,6 +31,10 @@ export interface Options {
   readonly repeat: number;
   /** 另外对照的上传预算（MB），null 是不提前上传 */
   readonly uploadMBs: readonly (number | null)[];
+  /** 另外对照相机走得快时也请求 */
+  readonly noCull: boolean;
+  /** 另外对照的同时解析的瓦片数 */
+  readonly parseJobs: readonly number[];
   readonly basemap: 'arcgis' | 'none';
   readonly viewport: { readonly width: number; readonly height: number };
   readonly pacing: number;
@@ -60,6 +66,8 @@ export function parseOptions(argv: readonly string[]): Options {
     list: false,
     repeat: 3,
     uploadMBs: [null],
+    noCull: false,
+    parseJobs: [],
     basemap: 'arcgis',
     viewport: { width: 1600, height: 900 },
     pacing: 2,
@@ -96,7 +104,15 @@ export function parseOptions(argv: readonly string[]): Options {
         options.repeat = Math.round(positive(name, next()));
         break;
       case '--upload-mb':
-        options.uploadMBs = listItems(next()).map(item => (item === 'off' ? null : positive(name, item)));
+        options.uploadMBs = listItems(next())
+          .filter(item => item !== 'none')
+          .map(item => (item === 'off' ? null : positive(name, item)));
+        break;
+      case '--no-cull':
+        options.noCull = true;
+        break;
+      case '--parse-jobs':
+        options.parseJobs = listItems(next()).map(item => Math.round(positive(name, item)));
         break;
       case '--basemap': {
         const value = next();

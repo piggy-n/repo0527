@@ -8,6 +8,18 @@ export interface BenchCamera {
   readonly pitch: number;
 }
 
+/** MapLibre 引擎的瓦片队列：哪一步排着队，就是哪一步跟不上 */
+export interface TileQueues {
+  /** 等下载和下载中的 */
+  readonly downloading: number;
+  readonly parsing: number;
+  /** 这一帧因为相机走得快没有请求的 */
+  readonly culled: number;
+  /** 这一帧在用的，和其中视野外的：REPLACE 的节点要等全部子节点，视野外的也算 */
+  readonly used: number;
+  readonly usedOutOfView: number;
+}
+
 /** 两种引擎统一的读数；引擎没有的项是 null */
 export interface BenchStats {
   readonly tilesVisible: number;
@@ -29,6 +41,8 @@ export interface BenchStats {
   readonly uploadedMB: number | null;
   /** 锁在当前姿态（MapLibre 引擎）；Cesium 没有这一项 */
   readonly locked: boolean | null;
+  /** Cesium 没有这一项 */
+  readonly queues: TileQueues | null;
 }
 
 export interface Summary {
@@ -88,6 +102,7 @@ export interface SceneSample {
   readonly uploadPending: number | null;
   readonly cacheMB: number;
   readonly loaded: number;
+  readonly queues: TileQueues | null;
 }
 
 /** 一段时间的统计（静止、飞行） */

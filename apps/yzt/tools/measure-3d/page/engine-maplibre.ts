@@ -9,6 +9,8 @@ const MB = 1024 * 1024;
 export async function startMapLibre({ session, container, params, onError }: EngineOptions): Promise<EngineHandle> {
   setupMapRuntime();
   const uploadMB = params.get('uploadMB');
+  const cull = params.get('cull');
+  const parseJobs = params.get('parseJobs');
   let renderer: Renderer | null = null;
   let surface: SceneSurface | null = null;
   const view = new MapLibreView({
@@ -29,10 +31,13 @@ export async function startMapLibre({ session, container, params, onError }: Eng
           super.attach(next);
         }
       }
-      const uploadOption =
-        uploadMB === null ? {} : { uploadBytesPerFrame: uploadMB === 'off' ? null : Number(uploadMB) * MB };
+      const rendererOptions = {
+        ...(uploadMB === null ? {} : { uploadBytesPerFrame: uploadMB === 'off' ? null : Number(uploadMB) * MB }),
+        ...(cull === 'off' ? { cullRequestsWhileMoving: false } : {}),
+        ...(parseJobs === null ? {} : { parseJobs: Number(parseJobs) })
+      };
       return () => {
-        renderer = new BenchRenderer(uploadOption);
+        renderer = new BenchRenderer(rendererOptions);
         return renderer;
       };
     }
@@ -48,7 +53,12 @@ export async function startMapLibre({ session, container, params, onError }: Eng
   };
   return {
     view,
-    config: { uploadMB: uploadMB ?? '产品的默认值', antialias: params.get('antialias') === '1' },
+    config: {
+      uploadMB: uploadMB ?? '产品的默认值',
+      cull: cull ?? '产品的默认值',
+      parseJobs: parseJobs ?? '产品的默认值',
+      antialias: params.get('antialias') === '1'
+    },
     stats() {
       const state = inspect();
       const tilesets = Object.values(state.tilesets);
@@ -65,7 +75,14 @@ export async function startMapLibre({ session, container, params, onError }: Eng
         loading: state.loading,
         uploadPending: state.uploadPending,
         uploadedMB: state.uploadedBytes / MB,
-        locked: state.locked
+        locked: state.locked,
+        queues: {
+          downloading: sum(item => item.downloading),
+          parsing: sum(item => item.parsing),
+          culled: sum(item => item.culled),
+          used: sum(item => item.used),
+          usedOutOfView: sum(item => item.usedOutOfView)
+        }
       };
     },
     isStable() {

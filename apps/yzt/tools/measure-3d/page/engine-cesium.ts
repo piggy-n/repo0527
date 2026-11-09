@@ -46,7 +46,8 @@ export async function startCesium({ session, container, onError }: EngineOptions
         loading: sum(item => item.statistics.numberOfPendingRequests + item.statistics.numberOfTilesProcessing),
         uploadPending: null,
         uploadedMB: null,
-        locked: null
+        locked: null,
+        queues: null
       };
     },
     isStable() {

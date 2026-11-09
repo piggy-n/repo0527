@@ -16,7 +16,8 @@ const STATS: BenchStats = {
   loading: 0,
   uploadPending: 0,
   uploadedMB: 0,
-  locked: false
+  locked: false,
+  queues: null
 };
 
 const LONG_TASKS = { count: 1, maxMs: 80, totalMs: 80, over100: 0, over200: 0, over500: 0, contextMs: 0, maxWithoutContextMs: 80 };
@@ -29,7 +30,8 @@ const fillSample = (t: number, triangles: number): SceneSample => ({
   loading: 0,
   uploadPending: 0,
   cacheMB: 1300,
-  loaded: 100
+  loaded: 100,
+  queues: null
 });
 
 function phase(p50: number, p95: number, p99: number, over50 = 0, triangles = 500000): PhaseResult {
