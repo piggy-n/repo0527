@@ -72,10 +72,29 @@ function portFree(port: number): Promise<boolean> {
   });
 }
 
+// 地址写错、服务器没开时在这里停下，不要等第一遍超时
+async function checkModelServer(server: string, paths: readonly string[]): Promise<string[]> {
+  const problems = await Promise.all(
+    paths.map(async path => {
+      try {
+        const response = await fetch(new URL(`/3dt/${path}`, server), { signal: AbortSignal.timeout(15000) });
+        await response.body?.cancel();
+        return response.ok ? null : `模型服务器上取不到 ${path}：HTTP ${response.status}。检查 YZT_3DT_PROXY（${server}）。`;
+      } catch (error) {
+        return `模型服务器访问不了：${server}（${String(error)}）。检查 YZT_3DT_PROXY 和网络。`;
+      }
+    })
+  );
+  return [...new Set(problems.filter(problem => problem !== null))];
+}
+
 async function checkFiles(): Promise<void> {
   const problems: string[] = [];
-  if (!modelsProxy) {
-    const missing = [...new Set(scenes.flatMap(scene => scene.models.map(model => model.path)))].filter(path => !existsSync(join(modelsDir, path)));
+  const paths = [...new Set(scenes.flatMap(scene => scene.models.map(model => model.path)))];
+  if (modelsProxy) {
+    problems.push(...(await checkModelServer(modelsProxy, paths)));
+  } else {
+    const missing = paths.filter(path => !existsSync(join(modelsDir, path)));
     if (missing.length > 0) {
       problems.push(
         `模型目录里缺文件：${missing.join('、')}。\n    模型目录：${redact(modelsDir)}\n    把模型放到 local/3dt，或设置 YZT_LOCAL_DIR；模型在服务器上时设置 YZT_3DT_PROXY。`
@@ -222,6 +241,9 @@ async function main(): Promise<void> {
   const { basemap, warning } = await checkBasemap();
   if (warning) {
     warnings.push(warning);
+  }
+  if (modelsProxy) {
+    warnings.push('模型经 YZT_3DT_PROXY 从服务器取：到稳定、补齐都含网络时间，只看两种引擎之间的差别。验收场景不要这样跑。');
   }
   for (const line of warnings) {
     console.warn(`  ! ${line}`);

@@ -175,7 +175,7 @@ function fillLines(perf: readonly { readonly id: string; readonly label: string;
 
 const METHOD = `- **都是生产代码：** 真实的 \`MapSession\`、\`MapLibreView\` + \`ThreeSceneRenderer\`、\`CesiumView\` + \`CesiumScene\`，生产模式构建；页面只有底图和模型。按包分块，方便归因，运行的代码相同。
 - **冷启动：** 每遍一个新的浏览器进程和空的配置目录，服务端发 \`Cache-Control: no-store\`。操作系统的文件缓存控制不了。
-- **模型来自本机服务：** 没有网络延迟，"到稳定"是下限；主线程的解析成本不受影响。
+- **模型来自本机服务（设了 \`YZT_3DT_PROXY\` 时除外）：** 没有网络延迟，"到稳定"是下限；主线程的解析成本不受影响。
 - **每帧工作量：** 同一帧的 JS 加 GPU，验收的 p50、p95、p99 看它。帧间隔有下限（见"有效性"里的校准），看不出余量；工作量不受影响。
 - **≥50 毫秒的帧：** 看实际帧间隔：这个长度远高于下限，而且能抓到不在工作量里的卡顿（垃圾回收、合成）。
 - **每帧 GPU：** \`EXT_disjoint_timer_query_webgl2\`，只包住这一帧的回调。Cesium 开 4 倍多重采样，离屏解析在计时内；MapLibre 默认不开（和产品一样），所以 GPU 这一项不是同样的画法，要比就加 \`--antialias\` 再跑一次。

@@ -2,6 +2,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 // 测量用的静态服务：只读，地址和磁盘路径一一对应。禁止浏览器缓存：每遍都是冷启动，换出的瓦片也要重新请求
 
@@ -32,12 +33,15 @@ function respond(res: ServerResponse, status: number, text: string): void {
 }
 
 async function proxy(target: string, path: string, res: ServerResponse): Promise<void> {
-  const upstream = await fetch(new URL(path, target));
+  // 浏览器取消了请求（瓦片不要了）上游也不再下载：两种引擎都经常取消，不然连接一直占着，等上游超时断开时没人接这个错，工具就崩了
+  const abort = new AbortController();
+  res.once('close', () => abort.abort());
+  const upstream = await fetch(new URL(path, target), { signal: abort.signal });
   res.statusCode = upstream.status;
   res.setHeader('Content-Type', upstream.headers.get('content-type') ?? 'application/octet-stream');
   res.setHeader('Cache-Control', 'no-store');
   if (upstream.body) {
-    Readable.fromWeb(upstream.body).pipe(res);
+    await pipeline(Readable.fromWeb(upstream.body), res);
   } else {
     res.end();
   }
@@ -61,7 +65,14 @@ function handle({ files, modelsProxy }: Mounts, req: IncomingMessage, res: Serve
     return;
   }
   if (modelsProxy && path.startsWith('/3dt/')) {
-    proxy(modelsProxy, path, res).catch((error: unknown) => respond(res, 502, String(error)));
+    proxy(modelsProxy, path, res).catch((error: unknown) => {
+      // 已经开始发了就只能断开，断开也是告诉浏览器这个瓦片失败了
+      if (res.headersSent) {
+        res.destroy();
+      } else {
+        respond(res, 502, String(error));
+      }
+    });
     return;
   }
   const mount = Object.entries(files).find(([prefix]) => path.startsWith(prefix));
