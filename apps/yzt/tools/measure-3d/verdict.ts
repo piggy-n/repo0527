@@ -2,7 +2,7 @@ import type { SceneSample } from './bench-api.ts';
 import type { RunResult, SceneQuality } from './results.ts';
 
 // ADR 0147 3C.4 的验收：同模型同视角和 Cesium 比，这些条件要同时满足，不能靠降低画质换帧率。
-// 重复跑的每一项取中位数。阈值可以在复测前调，这里一处改
+// 重复跑的每一项取中位数。阈值可以在复测前调，这里一处改；和 ADR 原文不同的几项见 docs/modules/map-three.md"性能验收"
 
 const TRIANGLE_RATIO = 0.9;
 const STABLE_RATIO = 1.2;
@@ -12,12 +12,12 @@ const FRAME_RATIO = 1.1;
 const SHARPNESS_RATIO = 0.93;
 // 最差一格：局部糊一块时最差 10% 看不出来（132 格里连着 4 格）。校准：看不出差别的最低 0.92，看得出糊的 0.85、0.89
 const WORST_CELL_RATIO = 0.9;
-// 等稳定是每 200 毫秒查一次：差这么多分不出先后
-const STABLE_SAMPLE_MS = 200;
 /** 同样的静止画面，每帧 JS 差这么多倍就算机器不稳定 */
 export const MACHINE_DRIFT_RATIO = 1.5;
 /** 三角形到 Cesium 终点的这个比例算到了：Cesium 自己各遍的终点就差这么多 */
 export const FILL_REACHED_RATIO = 0.98;
+// 飞行结束后这么久以内要到 Cesium 终点的粗细。三遍实测 0.83～0.87 秒，那时飞行中还不收紧，起点偏粗
+const FILL_REACHED_MS = 1000;
 
 export type VerdictGroup = '画质' | '到稳定' | '帧时间' | '主线程' | '振荡';
 
@@ -28,17 +28,21 @@ export interface VerdictRow {
   readonly subject: number | null;
   readonly reference: number | null;
   readonly unit: string;
-  /** 能不能判断：缺数据时为 null */
+  /** 能不能判断：缺数据时为 null。一直没到 Cesium 终点时 subject 是 null、这里是 false */
   readonly pass: boolean | null;
 }
 
-export function median(values: readonly (number | null | undefined)[]): number | null {
-  const numbers = values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value)).toSorted((a, b) => a - b);
-  if (numbers.length === 0) {
+function middleOf(values: readonly number[]): number | null {
+  const sorted = values.toSorted((a, b) => a - b);
+  if (sorted.length === 0) {
     return null;
   }
-  const middle = Math.floor(numbers.length / 2);
-  return numbers.length % 2 ? (numbers[middle] ?? null) : ((numbers[middle - 1] ?? 0) + (numbers[middle] ?? 0)) / 2;
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? (sorted[middle] ?? null) : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
+}
+
+export function median(values: readonly (number | null | undefined)[]): number | null {
+  return middleOf(values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value)));
 }
 
 const usable = (runs: readonly RunResult[]) => runs.filter(run => run.status !== 'failed' && run.status !== 'invalid');
@@ -55,7 +59,7 @@ interface RowSpec {
 const noMoreThan = (ratio: number) => (subject: number, reference: number) => subject <= reference * ratio;
 const atLeast = (ratio: number) => (subject: number, reference: number) => subject >= reference * ratio;
 
-function frameRows(label: string, phase: 'flightCold' | 'flightWarm'): RowSpec[] {
+function flightRows(label: string, phase: 'flightCold' | 'flightWarm'): RowSpec[] {
   const work = (key: 'p50' | 'p95' | 'p99') => ({
     group: '帧时间' as const,
     condition: `${label}每帧工作量 ${key} 不超过 Cesium 的 ${FRAME_RATIO} 倍`,
@@ -64,6 +68,14 @@ function frameRows(label: string, phase: 'flightCold' | 'flightWarm'): RowSpec[]
     passes: noMoreThan(FRAME_RATIO)
   });
   return [
+    // 帧时间比的是工作量，工作量少可能只是画得粗
+    {
+      group: '画质',
+      condition: `${label}三角形中位数不少于 Cesium 的 ${TRIANGLE_RATIO * 100}%`,
+      read: run => median((run[phase]?.trace ?? []).map(sample => sample.triangles)),
+      unit: '个',
+      passes: atLeast(TRIANGLE_RATIO)
+    },
     work('p50'),
     work('p95'),
     work('p99'),
@@ -77,7 +89,7 @@ function frameRows(label: string, phase: 'flightCold' | 'flightWarm'): RowSpec[]
   ];
 }
 
-const ROWS: readonly RowSpec[] = [
+const STABLE_ROWS: readonly RowSpec[] = [
   {
     group: '画质',
     condition: `稳定后显示的三角形不少于 Cesium 的 ${TRIANGLE_RATIO * 100}%`,
@@ -91,20 +103,16 @@ const ROWS: readonly RowSpec[] = [
     read: run => run.load?.ttStableMs,
     unit: '毫秒',
     passes: noMoreThan(STABLE_RATIO)
-  },
-  {
-    group: '到稳定',
-    condition: '飞行后补齐的时间不超过 Cesium',
-    read: run => run.settle?.ms,
-    unit: '毫秒',
-    passes: (subject, reference) => subject <= reference + STABLE_SAMPLE_MS
-  },
-  ...frameRows('第一遍飞行', 'flightCold'),
-  ...frameRows('第二遍飞行', 'flightWarm'),
+  }
+];
+
+const FLIGHT_ROWS: readonly RowSpec[] = [
+  ...flightRows('第一遍飞行', 'flightCold'),
+  ...flightRows('第二遍飞行', 'flightWarm'),
   {
     group: '主线程',
-    condition: '加载期最长的长任务不超过 Cesium',
-    read: run => run.load?.longTasks.maxMs,
+    condition: '加载期最长的长任务（除去创建 WebGL 上下文）不超过 Cesium',
+    read: run => run.load?.longTasks.maxWithoutContextMs,
     unit: '毫秒',
     passes: noMoreThan(1)
   },
@@ -130,6 +138,39 @@ function compare(spec: RowSpec, subjectRuns: readonly RunResult[], referenceRuns
   };
 }
 
+const finalTriangles = (run: RunResult) => run.settle?.trace.at(-1)?.triangles;
+
+// Cesium 飞完停在比飞行前粗的地方不再补，MapLibre 会细化回第一次加载的粗细：比"补完用了多久"，等于要比什么也不做还快。
+// 所以看画面到 Cesium 的粗细用了多久，再看终点是不是不比它粗
+function fillRows(subjectRuns: readonly RunResult[], referenceRuns: readonly RunResult[]): VerdictRow[] {
+  const subjectFinal = median(usable(subjectRuns).map(finalTriangles));
+  const referenceFinal = median(usable(referenceRuns).map(finalTriangles));
+  const measured = usable(subjectRuns).flatMap(run => (run.settle?.trace.length ? [run.settle.trace] : []));
+  // 没到的一遍算最慢：多数遍没到时中位数是无穷大，不通过
+  const reached =
+    referenceFinal === null
+      ? null
+      : middleOf(measured.map(trace => fillReachedAt(trace, referenceFinal * FILL_REACHED_RATIO) ?? Number.POSITIVE_INFINITY));
+  return [
+    {
+      group: '到稳定',
+      condition: `飞行后 ${FILL_REACHED_MS / 1000} 秒内到 Cesium 终点的 ${FILL_REACHED_RATIO * 100}%`,
+      subject: reached === null || !Number.isFinite(reached) ? null : reached,
+      reference: null,
+      unit: '毫秒',
+      pass: reached === null ? null : reached <= FILL_REACHED_MS
+    },
+    {
+      group: '画质',
+      condition: '飞行后终点的三角形不少于 Cesium',
+      subject: subjectFinal,
+      reference: referenceFinal,
+      unit: '个',
+      pass: subjectFinal === null || referenceFinal === null ? null : subjectFinal >= referenceFinal
+    }
+  ];
+}
+
 /** 一个场景的验收：runs 是这个场景的所有遍 */
 export function sceneVerdict(runs: readonly RunResult[], quality: SceneQuality | undefined): VerdictRow[] {
   const perf = (variant: string) => runs.filter(run => run.variant === variant && run.kind === 'perf');
@@ -146,7 +187,12 @@ export function sceneVerdict(runs: readonly RunResult[], quality: SceneQuality |
       pass: refused === null ? null : refused === 0
     }
   ];
-  rows.push(...ROWS.map(spec => compare(spec, subjectRuns, perf('cesium'))));
+  const referenceRuns = perf('cesium');
+  rows.push(
+    ...STABLE_ROWS.map(spec => compare(spec, subjectRuns, referenceRuns)),
+    ...fillRows(subjectRuns, referenceRuns),
+    ...FLIGHT_ROWS.map(spec => compare(spec, subjectRuns, referenceRuns))
+  );
   const ratio = quality?.stable.worstDecileRatio ?? null;
   rows.push({
     group: '画质',
