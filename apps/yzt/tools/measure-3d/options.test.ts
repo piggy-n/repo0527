@@ -27,13 +27,17 @@ describe('parseOptions', () => {
     expect(parseOptions(['--upload-mb', 'none']).uploadMBs).toEqual([]);
   });
 
-  it('对照方案：默认都没有，可以要动着也请求和解析并发', () => {
-    expect(parseOptions([]).noCull).toBe(false);
-    expect(parseOptions([]).parseJobs).toEqual([]);
-    expect(parseOptions(['--no-cull']).noCull).toBe(true);
-    expect(parseOptions(['--parse-jobs', '8,12']).parseJobs).toEqual([8, 12]);
-    expect(parseOptions(['--parse-jobs', '8 12']).parseJobs).toEqual([8, 12]);
-    expect(() => parseOptions(['--parse-jobs', '0'])).toThrow('--parse-jobs');
+  it('动着不请求的窗口：默认不对照，off 是动着也请求', () => {
+    expect(parseOptions([]).cullWindows).toEqual([]);
+    expect(parseOptions(['--cull-window', 'off,0.3,0.5']).cullWindows).toEqual([null, 0.3, 0.5]);
+    expect(parseOptions(['--cull-window', 'off 0.3']).cullWindows).toEqual([null, 0.3]);
+    expect(() => parseOptions(['--cull-window', '0'])).toThrow('--cull-window');
+  });
+
+  it('帧率上限：默认不封顶', () => {
+    expect(parseOptions([]).fps).toBeNull();
+    expect(parseOptions(['--fps', '60']).fps).toBe(60);
+    expect(() => parseOptions(['--fps', '0'])).toThrow('--fps');
   });
 
   it('PowerShell 把没加引号的逗号列表传成空格分隔：场景一样能读', () => {

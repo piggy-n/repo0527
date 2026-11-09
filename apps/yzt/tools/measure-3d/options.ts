@@ -9,11 +9,11 @@ export const HELP = `MapLibre 引擎和 Cesium 的性能对比（ADR 0147 3C.4�
   --list                 列出所有场景后退出
   --repeat <n>           perf 每个场景跑几遍（默认 3），报告取中位数
   --upload-mb <列表>     MapLibre 另外对照的上传预算，off 是不提前上传（默认 off），如 off,16,64；none 是不对照
-  --no-cull              MapLibre 另外对照相机走得快时也请求瓦片
-  --parse-jobs <列表>    MapLibre 另外对照同时解析的瓦片数（瓦片库默认 5），如 8,12
+  --cull-window <列表>   MapLibre 另外对照动着不请求的窗口（秒），off 是动着也请求，如 off,0.3,0.5
   --basemap <arcgis|none> 底图（默认 arcgis，两个引擎相同），没网时用 none
   --viewport <宽x高>     视口（默认 1600x900）
   --pacing <n>           在路上的帧数上限：1 是 PoC 的做法（默认 2），0 是不等
+  --fps <n>              帧率封顶（默认不封顶），如 60：比飞行中画得多细时用，Cesium 的判断受帧间隔影响
   --antialias            MapLibre 打开多重采样（默认和产品一样不开），和 Cesium 比边缘时用
   --out <目录>           结果写到这里（默认 local/measure-3d/<时间>）
   --port <n>             本地服务的端口（默认 5283）
@@ -31,10 +31,10 @@ export interface Options {
   readonly repeat: number;
   /** 另外对照的上传预算（MB），null 是不提前上传 */
   readonly uploadMBs: readonly (number | null)[];
-  /** 另外对照相机走得快时也请求 */
-  readonly noCull: boolean;
-  /** 另外对照的同时解析的瓦片数 */
-  readonly parseJobs: readonly number[];
+  /** 另外对照的动着不请求的窗口（秒），null 是动着也请求 */
+  readonly cullWindows: readonly (number | null)[];
+  /** 帧率上限，null 是不封顶 */
+  readonly fps: number | null;
   readonly basemap: 'arcgis' | 'none';
   readonly viewport: { readonly width: number; readonly height: number };
   readonly pacing: number;
@@ -66,8 +66,8 @@ export function parseOptions(argv: readonly string[]): Options {
     list: false,
     repeat: 3,
     uploadMBs: [null],
-    noCull: false,
-    parseJobs: [],
+    cullWindows: [],
+    fps: null,
     basemap: 'arcgis',
     viewport: { width: 1600, height: 900 },
     pacing: 2,
@@ -108,11 +108,11 @@ export function parseOptions(argv: readonly string[]): Options {
           .filter(item => item !== 'none')
           .map(item => (item === 'off' ? null : positive(name, item)));
         break;
-      case '--no-cull':
-        options.noCull = true;
+      case '--cull-window':
+        options.cullWindows = listItems(next()).map(item => (item === 'off' ? null : positive(name, item)));
         break;
-      case '--parse-jobs':
-        options.parseJobs = listItems(next()).map(item => Math.round(positive(name, item)));
+      case '--fps':
+        options.fps = positive(name, next());
         break;
       case '--basemap': {
         const value = next();

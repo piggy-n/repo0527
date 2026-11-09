@@ -237,6 +237,7 @@ export function renderReport(results: MeasureResults): string {
       ['每帧 GPU 耗时', env.gpuTimer ? '可用' : '取不到（没有 EXT_disjoint_timer_query_webgl2）'],
       ['空页面的帧间隔（毫秒）', `不等 ${number(env.floorMs['pacing-0'], 2)}；最多 1 帧在路上 ${number(env.floorMs['pacing-1'], 2)}（PoC 的做法）；最多 2 帧 ${number(env.floorMs['pacing-2'], 2)}`],
       ['这次用的', `最多 ${meta.pacing} 帧在路上`],
+      ['帧率上限', meta.fps === null ? '不封顶' : `${meta.fps} 帧`],
       ['机器状态', drift === null ? '算不出' : `同样的静止画面，每帧 JS 最多差 ${number(drift)} 倍（超过 ${MACHINE_DRIFT_RATIO} 倍算不稳定）`],
       ['底图', meta.basemap === 'arcgis' ? 'ArcGIS 影像（两个引擎相同）' : '无底图（两个引擎相同）'],
       ['视口', `${meta.viewport.width}×${meta.viewport.height}`],

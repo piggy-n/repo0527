@@ -356,8 +356,18 @@ describe('ThreeSceneRenderer 动着的时候不请求', () => {
     expect(await within(() => fineRequests() > 0, 30000)).toBe(true);
   });
 
+  it('窗口短时，同样的速度也请求（对照）', { timeout: TEST_TIMEOUT }, async () => {
+    // 100 米/秒，0.2 秒走 20 米，比细的瓦片（约 37 米）短
+    const ctx = await setup({ ...ROOMY, requestCullSeconds: 0.2 }, FAR_CAMERA);
+    showBlocks(ctx, await serveBlocks('short-window'));
+    await settle(ctx);
+    const fineRequests = countRequests('/short-window/fine.glb');
+    moveCamera(ctx, 17, circle(100));
+    expect(await within(() => fineRequests() > 0, 30000)).toBe(true);
+  });
+
   it('关掉时动着也请求（对照）', { timeout: TEST_TIMEOUT }, async () => {
-    const ctx = await setup({ ...ROOMY, cullRequestsWhileMoving: false }, FAR_CAMERA);
+    const ctx = await setup({ ...ROOMY, requestCullSeconds: null }, FAR_CAMERA);
     showBlocks(ctx, await serveBlocks('always'));
     await settle(ctx);
     const fineRequests = countRequests('/always/fine.glb');

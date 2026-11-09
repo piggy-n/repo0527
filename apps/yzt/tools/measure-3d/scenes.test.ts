@@ -24,18 +24,18 @@ describe('variants', () => {
 });
 
 describe('variants 的对照方案', () => {
-  it('动着也请求、解析并发各是一个方案，只有 MapLibre', () => {
-    const list = variants([], { noCull: true, parseJobs: [12] });
-    expect(list.map(item => [item.id, item.engine, item.cull, item.parseJobs])).toEqual([
-      ['cesium', 'cesium', undefined, undefined],
-      ['maplibre', 'maplibre', undefined, undefined],
-      ['maplibre-no-cull', 'maplibre', false, undefined],
-      ['maplibre-parse12', 'maplibre', undefined, 12]
+  it('动着不请求的窗口各是一个方案，只有 MapLibre', () => {
+    const list = variants([], [null, 0.3]);
+    expect(list.map(item => [item.id, item.engine, item.requestCullSeconds])).toEqual([
+      ['cesium', 'cesium', undefined],
+      ['maplibre', 'maplibre', undefined],
+      ['maplibre-no-cull', 'maplibre', null],
+      ['maplibre-cull0.3', 'maplibre', 0.3]
     ]);
   });
 
   it('对照方案只跑 perf：画质和采样只有要比的两个方案', () => {
-    const list = variants([], { noCull: true, parseJobs: [12] });
+    const list = variants([], [null, 0.3]);
     const runs = buildRuns(selectScenes(['z19']), list, 1);
     expect(runs.filter(run => run.kind === 'perf')).toHaveLength(4);
     expect(runs.filter(run => run.kind !== 'perf').map(run => run.id)).toEqual([

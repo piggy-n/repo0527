@@ -11,6 +11,7 @@ import type {
   UploadBucket,
   UploadStats
 } from '../bench-api.ts';
+import { FrameCap } from '../frame-cap.ts';
 import { longTaskStats } from '../long-task-stats.ts';
 import { blankPixels, decodeShot } from './shots.ts';
 
@@ -25,6 +26,8 @@ const MB = 1048576;
 // 在路上的帧数上限：解除 vsync 后 JS 提交得比 GPU 快，不等的话命令堆积，一串 2 毫秒的帧之后主线程被堵几秒。
 // PoC 等上一帧执行完（1），帧间隔有约 20 毫秒的下限；0 是不等
 const pacing = Number(new URLSearchParams(location.search).get('pacing') ?? 2);
+const fpsText = new URLSearchParams(location.search).get('fps');
+const frameCap = new FrameCap(fpsText === null ? null : Number(fpsText));
 
 const frames = {
   intervals: new Float32Array(MAX_FRAMES),
@@ -253,7 +256,7 @@ function tick(stamp: number): void {
   if (queue.length === 0) {
     return;
   }
-  if (!canStartFrame()) {
+  if (!canStartFrame() || !frameCap.ready(performance.now())) {
     scheduleTick();
     return;
   }

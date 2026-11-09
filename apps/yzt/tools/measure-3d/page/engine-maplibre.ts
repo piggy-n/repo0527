@@ -9,8 +9,7 @@ const MB = 1024 * 1024;
 export async function startMapLibre({ session, container, params, onError }: EngineOptions): Promise<EngineHandle> {
   setupMapRuntime();
   const uploadMB = params.get('uploadMB');
-  const cull = params.get('cull');
-  const parseJobs = params.get('parseJobs');
+  const cullWindow = params.get('cullWindow');
   let renderer: Renderer | null = null;
   let surface: SceneSurface | null = null;
   const view = new MapLibreView({
@@ -33,8 +32,7 @@ export async function startMapLibre({ session, container, params, onError }: Eng
       }
       const rendererOptions = {
         ...(uploadMB === null ? {} : { uploadBytesPerFrame: uploadMB === 'off' ? null : Number(uploadMB) * MB }),
-        ...(cull === 'off' ? { cullRequestsWhileMoving: false } : {}),
-        ...(parseJobs === null ? {} : { parseJobs: Number(parseJobs) })
+        ...(cullWindow === null ? {} : { requestCullSeconds: cullWindow === 'off' ? null : Number(cullWindow) })
       };
       return () => {
         renderer = new BenchRenderer(rendererOptions);
@@ -55,8 +53,7 @@ export async function startMapLibre({ session, container, params, onError }: Eng
     view,
     config: {
       uploadMB: uploadMB ?? '产品的默认值',
-      cull: cull ?? '产品的默认值',
-      parseJobs: parseJobs ?? '产品的默认值',
+      cullWindow: cullWindow ?? '产品的默认值',
       antialias: params.get('antialias') === '1'
     },
     stats() {

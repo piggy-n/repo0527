@@ -31,6 +31,8 @@ const CACHE_BYTES = 1024 * MEGABYTE;
 const CACHE_OVERFLOW_BYTES = 512 * MEGABYTE;
 // 每帧上传的字节（ADR 0147 第 5 节）：GPU 耗时每 MB 约 0.5 毫秒，这么多放得进 60 帧的一帧。实测见 docs/modules/map-three.md"上传"
 const UPLOAD_BYTES_PER_FRAME = 16 * MEGABYTE;
+// 相机这么多秒走的路达到瓦片直径就不请求（同 Cesium：60 帧的路）。取值和实测见 docs/modules/map-three.md"动着的时候不请求"
+const REQUEST_CULL_SECONDS = 1;
 const FRAME_MS = 1000 / 60;
 
 /** 构造参数都有默认值，性能测量时换着比较 */
@@ -41,10 +43,8 @@ export interface ThreeSceneRendererOptions {
   readonly cacheLimitBytes?: number;
   /** 每帧提前上传的字节；null 时不提前上传，第一次绘制时才上传 */
   readonly uploadBytesPerFrame?: number | null;
-  /** 相机比瓦片走得快时不请求，默认打开 */
-  readonly cullRequestsWhileMoving?: boolean;
-  /** 同时解析的瓦片数；不写时用瓦片库的默认值 */
-  readonly parseJobs?: number;
+  /** 相机这么多秒走的路达到瓦片直径就不请求；null 时动着也请求 */
+  readonly requestCullSeconds?: number | null;
 }
 
 /** 读数（只读快照）：给性能测量和测试，业务代码不用 */
@@ -110,8 +110,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
   readonly #uploader: TileUploader;
   readonly #cacheBytes: number;
   readonly #cacheLimitBytes: number;
-  readonly #cullRequestsWhileMoving: boolean;
-  readonly #parseJobs: number | undefined;
+  readonly #requestCullSeconds: number | null;
   #surface: SceneSurface | null = null;
   #webgl: WebGLRenderer | null = null;
   #attached = false;
@@ -133,13 +132,11 @@ export class ThreeSceneRenderer implements SceneRenderer {
     cacheBytes = CACHE_BYTES,
     cacheLimitBytes = CACHE_BYTES + CACHE_OVERFLOW_BYTES,
     uploadBytesPerFrame = UPLOAD_BYTES_PER_FRAME,
-    cullRequestsWhileMoving = true,
-    parseJobs
+    requestCullSeconds = REQUEST_CULL_SECONDS
   }: ThreeSceneRendererOptions = {}) {
     this.#cacheBytes = cacheBytes;
     this.#cacheLimitBytes = cacheLimitBytes;
-    this.#cullRequestsWhileMoving = cullRequestsWhileMoving;
-    this.#parseJobs = parseJobs;
+    this.#requestCullSeconds = requestCullSeconds;
     this.#cache.unloadPriorityCallback = DEFAULT_LRU_CACHE.unloadPriorityCallback;
     this.#cache.minBytesSize = cacheBytes;
     this.#cache.maxBytesSize = cacheLimitBytes;
@@ -255,8 +252,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       math: this.#math,
       fog: this.#fog,
       uploader: this.#uploader,
-      cullRequestsWhileMoving: this.#cullRequestsWhileMoving,
-      ...(this.#parseJobs === undefined ? {} : { parseJobs: this.#parseJobs }),
+      requestCullSeconds: this.#requestCullSeconds,
       events: {
         failed: error => this.#emitter.emit('tilesetfailed', id, new Error(`瓦片集 ${id} 的瓦片加载失败`, { cause: error })),
         initial: () => this.#emitter.emit('tilesetinitial', id),

@@ -6,7 +6,7 @@ const at = (x: number): [number, number, number] => [x, 0, 0];
 
 // 匀速走几帧：speed 米/秒，frameMs 毫秒一帧
 function moving(speed: number, frameMs: number, frames = 5): RequestCull {
-  const cull = new RequestCull();
+  const cull = new RequestCull(1);
   for (let frame = 0; frame <= frames; frame++) {
     cull.update(at((speed * frame * frameMs) / 1000), frame * frameMs);
   }
@@ -15,7 +15,7 @@ function moving(speed: number, frameMs: number, frames = 5): RequestCull {
 
 describe('RequestCull', () => {
   it('第一帧还不知道相机动不动：先不请求，相机没动的话下一帧就请求', () => {
-    const cull = new RequestCull();
+    const cull = new RequestCull(1);
     cull.update(at(1000), 0);
     expect(cull.culls(1)).toBe(true);
     expect(cull.culls(1e9)).toBe(true);
@@ -24,7 +24,7 @@ describe('RequestCull', () => {
   });
 
   it('第一帧之后相机在动：马上按速度算', () => {
-    const cull = new RequestCull();
+    const cull = new RequestCull(1);
     cull.update(at(0), 0);
     cull.update(at(10), 20);
     expect(cull.culls(100)).toBe(true);
@@ -47,8 +47,16 @@ describe('RequestCull', () => {
     }
   });
 
+  it('窗口是参数：窗口短，一样的速度放行更多', () => {
+    const cull = new RequestCull(0.5);
+    cull.update(at(0), 0);
+    cull.update(at(100), 1000);
+    expect(cull.culls(24)).toBe(true);
+    expect(cull.culls(26)).toBe(false);
+  });
+
   it('按三个方向的距离算', () => {
-    const cull = new RequestCull();
+    const cull = new RequestCull(1);
     cull.update([0, 0, 0], 0);
     cull.update([30, 40, 0], 1000);
     expect(cull.culls(24)).toBe(true);
@@ -80,7 +88,7 @@ describe('RequestCull', () => {
   });
 
   it('隔很久才又动一点：速度很小', () => {
-    const cull = new RequestCull();
+    const cull = new RequestCull(1);
     cull.update(at(0), 0);
     cull.update(at(10), 60000);
     expect(cull.culls(1)).toBe(false);

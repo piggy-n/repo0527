@@ -114,6 +114,7 @@ export interface MeasureResults {
     readonly viewport: { readonly width: number; readonly height: number };
     readonly repeat: number;
     readonly pacing: number;
+    readonly fps: number | null;
     readonly antialias: boolean;
     readonly plannedTotal: number;
   };

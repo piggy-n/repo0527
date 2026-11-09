@@ -27,10 +27,8 @@ export interface Variant {
   readonly engine: 'cesium' | 'maplibre';
   /** 每帧上传的 MB；undefined 用产品的默认值，null 不提前上传 */
   readonly uploadMB?: number | null;
-  /** false：相机走得快时也请求 */
-  readonly cull?: false;
-  /** 同时解析的瓦片数；undefined 用瓦片库的默认值 */
-  readonly parseJobs?: number;
+  /** 相机这么多秒走的路达到瓦片直径就不请求；undefined 用产品的默认值，null 动着也请求 */
+  readonly requestCullSeconds?: number | null;
 }
 
 /** 一遍：perf 量帧时间和加载，quality 拍画面，profile 带 CPU 采样 */
@@ -75,10 +73,7 @@ export const SCENES: readonly Scene[] = [
   remote('jkq2-z16-tilt', '经开区2 z16 倾斜', JKQ2, 16, 55)
 ];
 
-export function variants(
-  uploadMBs: readonly (number | null)[],
-  { noCull = false, parseJobs = [] }: { readonly noCull?: boolean; readonly parseJobs?: readonly number[] } = {}
-): Variant[] {
+export function variants(uploadMBs: readonly (number | null)[], cullWindows: readonly (number | null)[] = []): Variant[] {
   return [
     { id: 'cesium', label: 'Cesium', engine: 'cesium' },
     { id: 'maplibre', label: 'MapLibre', engine: 'maplibre' },
@@ -90,8 +85,14 @@ export function variants(
         uploadMB
       })
     ),
-    ...(noCull ? [{ id: 'maplibre-no-cull', label: 'MapLibre，动着也请求', engine: 'maplibre', cull: false } as const] : []),
-    ...parseJobs.map((jobs): Variant => ({ id: `maplibre-parse${jobs}`, label: `MapLibre，同时解析 ${jobs} 块`, engine: 'maplibre', parseJobs: jobs }))
+    ...cullWindows.map(
+      (requestCullSeconds): Variant => ({
+        id: requestCullSeconds === null ? 'maplibre-no-cull' : `maplibre-cull${requestCullSeconds}`,
+        label: requestCullSeconds === null ? 'MapLibre，动着也请求' : `MapLibre，动着按 ${requestCullSeconds} 秒的路算`,
+        engine: 'maplibre',
+        requestCullSeconds
+      })
+    )
   ];
 }
 

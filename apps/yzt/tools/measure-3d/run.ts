@@ -59,11 +59,11 @@ function pageUrl({ scene, variant }: Run, { baseUrl, options }: RunContext): str
   if (variant.uploadMB !== undefined) {
     params.set('uploadMB', variant.uploadMB === null ? 'off' : String(variant.uploadMB));
   }
-  if (variant.cull === false) {
-    params.set('cull', 'off');
+  if (variant.requestCullSeconds !== undefined) {
+    params.set('cullWindow', variant.requestCullSeconds === null ? 'off' : String(variant.requestCullSeconds));
   }
-  if (variant.parseJobs !== undefined) {
-    params.set('parseJobs', String(variant.parseJobs));
+  if (options.fps !== null) {
+    params.set('fps', String(options.fps));
   }
   if (options.antialias) {
     params.set('antialias', '1');

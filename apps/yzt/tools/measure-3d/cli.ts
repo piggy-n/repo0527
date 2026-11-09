@@ -51,7 +51,7 @@ if (options.help) {
   process.exit(0);
 }
 const scenes = selectScenes(options.only);
-const list = variants(options.uploadMBs, { noCull: options.noCull, parseJobs: options.parseJobs });
+const list = variants(options.uploadMBs, options.cullWindows);
 if (options.list) {
   for (const scene of SCENES) {
     console.log(`${scene.id.padEnd(22)} ${scene.title}${scene.acceptance ? '（验收）' : ''}`);
@@ -274,6 +274,7 @@ async function main(): Promise<void> {
       viewport: options.viewport,
       repeat: options.repeat,
       pacing: options.pacing,
+      fps: options.fps,
       antialias: options.antialias,
       plannedTotal: runs.length
     },

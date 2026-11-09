@@ -50,10 +50,8 @@ export interface TilesetEntryOptions {
   readonly fog: FogUniform;
   /** 所有瓦片集共用的上传队列 */
   readonly uploader: TileUploader;
-  /** 相机比瓦片走得快时不请求 */
-  readonly cullRequestsWhileMoving: boolean;
-  /** 同时解析的瓦片数；不写时用瓦片库的默认值。这个队列是库里所有瓦片集共用的，性能测量时换着比较 */
-  readonly parseJobs?: number;
+  /** 相机这么多秒走的路达到瓦片直径就不请求；null 时动着也请求 */
+  readonly requestCullSeconds: number | null;
   readonly events: TilesetEntryEvents;
 }
 
@@ -160,8 +158,8 @@ export class TilesetEntry implements Disposable {
   readonly #culled = new Set<TileInternals>();
   readonly #sphere = new Sphere();
 
-  constructor({ prepared, options, cache, math, fog, uploader, cullRequestsWhileMoving, parseJobs, events }: TilesetEntryOptions) {
-    this.#requestCull = cullRequestsWhileMoving ? new RequestCull() : null;
+  constructor({ prepared, options, cache, math, fog, uploader, requestCullSeconds, events }: TilesetEntryOptions) {
+    this.#requestCull = requestCullSeconds === null ? null : new RequestCull(requestCullSeconds);
     this.#cache = cache;
     this.#math = math;
     this.#events = events;
@@ -173,9 +171,6 @@ export class TilesetEntry implements Disposable {
     tiles.lruCache = cache;
     tiles.errorTarget = ERROR_TARGET;
     tiles.registerPlugin(new TileLoadPlugin(uploader, cache));
-    if (parseJobs !== undefined) {
-      tiles.parseQueue.maxJobs = parseJobs;
-    }
     // 库没有按瓦片决定要不要请求的接口：选瓦片时调用的这个方法是唯一的入口。版本锁定，浏览器测试用真实的库验证
     const internals = tiles as unknown as TilesInternals;
     const queue = internals.queueTileForDownload.bind(tiles);

@@ -10,23 +10,27 @@ function pathPattern(path: string): RegExp {
   return new RegExp(parts.join('[\\\\/]+'), 'gi');
 }
 
-export function createRedactor(repoRoot: string): (text: string) => string {
+// 全是数字的名字不当成名字：结果里到处是数字，替换了 raw.json 就不是合法的 JSON 了。它们在路径里时由用户目录那条规则去掉
+const replaceable = (name: string) => name.length > 2 && !/^\d+$/.test(name);
+
+export function createRedactor(
+  repoRoot: string,
+  { username, machine }: { readonly username: string; readonly machine: string } = { username: userInfo().username, machine: hostname() }
+): (text: string) => string {
   const rules: readonly (readonly [RegExp, string])[] = [
     [/tk=[^&\s"']+/g, 'tk=***'],
     [pathPattern(repoRoot), '<仓库>'],
     [pathPattern(homedir()), '<用户目录>']
   ];
-  const { username } = userInfo();
-  const machine = hostname();
   return text => {
     let out = text;
     for (const [pattern, replacement] of rules) {
       out = out.replace(pattern, replacement);
     }
-    if (machine.length > 2) {
+    if (replaceable(machine)) {
       out = out.replace(new RegExp(`\\b${escape(machine)}\\b`, 'gi'), '<主机>');
     }
-    if (username.length > 2) {
+    if (replaceable(username)) {
       out = out.replace(new RegExp(`\\b${escape(username)}\\b`, 'g'), '<用户>');
     }
     return out;
