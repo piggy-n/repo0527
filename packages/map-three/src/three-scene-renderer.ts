@@ -41,6 +41,10 @@ export interface ThreeSceneRendererOptions {
   readonly cacheLimitBytes?: number;
   /** 每帧提前上传的字节；null 时不提前上传，第一次绘制时才上传 */
   readonly uploadBytesPerFrame?: number | null;
+  /** 相机比瓦片走得快时不请求，默认打开 */
+  readonly cullRequestsWhileMoving?: boolean;
+  /** 同时解析的瓦片数；不写时用瓦片库的默认值 */
+  readonly parseJobs?: number;
 }
 
 /** 读数（只读快照）：给性能测量和测试，业务代码不用 */
@@ -106,6 +110,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
   readonly #uploader: TileUploader;
   readonly #cacheBytes: number;
   readonly #cacheLimitBytes: number;
+  readonly #cullRequestsWhileMoving: boolean;
+  readonly #parseJobs: number | undefined;
   #surface: SceneSurface | null = null;
   #webgl: WebGLRenderer | null = null;
   #attached = false;
@@ -126,10 +132,14 @@ export class ThreeSceneRenderer implements SceneRenderer {
   constructor({
     cacheBytes = CACHE_BYTES,
     cacheLimitBytes = CACHE_BYTES + CACHE_OVERFLOW_BYTES,
-    uploadBytesPerFrame = UPLOAD_BYTES_PER_FRAME
+    uploadBytesPerFrame = UPLOAD_BYTES_PER_FRAME,
+    cullRequestsWhileMoving = true,
+    parseJobs
   }: ThreeSceneRendererOptions = {}) {
     this.#cacheBytes = cacheBytes;
     this.#cacheLimitBytes = cacheLimitBytes;
+    this.#cullRequestsWhileMoving = cullRequestsWhileMoving;
+    this.#parseJobs = parseJobs;
     this.#cache.unloadPriorityCallback = DEFAULT_LRU_CACHE.unloadPriorityCallback;
     this.#cache.minBytesSize = cacheBytes;
     this.#cache.maxBytesSize = cacheLimitBytes;
@@ -245,6 +255,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
       math: this.#math,
       fog: this.#fog,
       uploader: this.#uploader,
+      cullRequestsWhileMoving: this.#cullRequestsWhileMoving,
+      ...(this.#parseJobs === undefined ? {} : { parseJobs: this.#parseJobs }),
       events: {
         failed: error => this.#emitter.emit('tilesetfailed', id, new Error(`瓦片集 ${id} 的瓦片加载失败`, { cause: error })),
         initial: () => this.#emitter.emit('tilesetinitial', id),
@@ -442,7 +454,9 @@ export class ThreeSceneRenderer implements SceneRenderer {
     let pinnedBytes = 0;
     let pendingBytes = 0;
     let usedTiles = 0;
+    let culled = false;
     for (const entry of drawn) {
+      culled ||= entry.culled > 0;
       const demand = entry.demand();
       refused += demand.refused;
       pinnedBytes += demand.pinnedBytes;
@@ -458,7 +472,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
     }
     const { cachedBytes } = this.#cache as unknown as { readonly cachedBytes: number };
     const motion = this.#scale.update({ refused, cachedBytes, pinnedBytes, pendingBytes, usedTiles }, pose, elapsedMs);
-    this.#steady = motion === 'steady';
+    // 有没请求的瓦片时要再画一帧：相机停下以后没有别的理由再画，它们就永远不会被请求
+    this.#steady = motion === 'steady' && !culled;
     if (!this.#steady) {
       surface.requestRepaint();
     }

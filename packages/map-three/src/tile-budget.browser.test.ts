@@ -265,6 +265,164 @@ describe('ThreeSceneRenderer 的缓存预算', () => {
   });
 });
 
+// 在 ms 毫秒内等到条件：等不到时返回 false，由断言报告，不是用例超时
+async function within(accept: () => boolean, ms: number): Promise<boolean> {
+  try {
+    await Promise.race([
+      until(accept, '条件'),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('timeout')), ms);
+      })
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// 记下对某个地址的请求次数
+function countRequests(suffix: string): () => number {
+  const served = window.fetch;
+  let count = 0;
+  window.fetch = async (input, init) => {
+    if (String(input instanceof Request ? input.url : input).endsWith(suffix)) {
+      count++;
+    }
+    return served(input, init);
+  };
+  onTestFinished(() => {
+    window.fetch = served;
+  });
+  return () => count;
+}
+
+const METERS_PER_DEGREE = 111320;
+const degreesEast = (meters: number) => meters / (METERS_PER_DEGREE * Math.cos((MODEL_AT[1] * Math.PI) / 180));
+
+// 相机每帧按时间走，返回停下的函数：路线是离开模型中心的偏移（米）。一定在下一帧才开始
+function moveCamera(ctx: Context, zoom: number, path: (seconds: number) => readonly [number, number]): () => void {
+  const start = performance.now();
+  let frame = 0;
+  const step = () => {
+    const [east, north] = path((performance.now() - start) / 1000);
+    ctx.view.flyTo({ center: [MODEL_AT[0] + degreesEast(east), MODEL_AT[1] + north / METERS_PER_DEGREE], zoom }, { duration: 0 });
+    frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+  const stop = () => cancelAnimationFrame(frame);
+  onTestFinished(stop);
+  return stop;
+}
+
+// 绕模型中心转圈：细的瓦片直径约 37 米，粗的约 71 米。不走回头路，帧慢时算出的速度也不变小
+const CIRCLE_METERS = 40;
+const circle = (speed: number) => (time: number) => {
+  const angle = (speed * time) / CIRCLE_METERS;
+  return [CIRCLE_METERS * Math.cos(angle), CIRCLE_METERS * Math.sin(angle)] as const;
+};
+// z15 俯视：粗的一层够了，只有它们；z17 要细的一层
+const FAR_CAMERA: CameraState = { ...CAMERA, zoom: 15 };
+const ROOMY = { cacheBytes: 64 * 1024 * KB, cacheLimitBytes: 96 * 1024 * KB };
+
+describe('ThreeSceneRenderer 动着的时候不请求', () => {
+  it('相机比瓦片走得快时不请求这块瓦片；停下以后不用别的帧也会请求', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup(ROOMY, FAR_CAMERA);
+    showBlocks(ctx, await serveBlocks('moving'));
+    const far = await settle(ctx);
+    expect(far.tilesets.blocks?.visible).toBe(16);
+    const fineRequests = countRequests('/moving/fine.glb');
+    const stop = moveCamera(ctx, 17, circle(100));
+    expect(await within(() => (inspect(ctx).tilesets.blocks?.culled ?? 0) > 0, 30000)).toBe(true);
+    await seconds(2);
+    const moving = inspect(ctx);
+    expect(fineRequests()).toBe(0);
+    expect(moving.tilesets.blocks?.culled).toBeGreaterThan(0);
+    // 已经到了的照样显示
+    expect(moving.tilesets.blocks?.visible).toBeGreaterThan(0);
+    expect(moving.settled).toBe(false);
+    stop();
+    expect(await within(() => inspect(ctx).settled, 30000)).toBe(true);
+    expect(inspect(ctx).tilesets.blocks?.visible).toBe(64);
+    expect(fineRequests()).toBeGreaterThan(0);
+    expect(inspect(ctx).tilesets.blocks?.culled).toBe(0);
+  });
+
+  it('比瓦片走得慢时照样请求', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup(ROOMY, FAR_CAMERA);
+    showBlocks(ctx, await serveBlocks('slowly'));
+    await settle(ctx);
+    const fineRequests = countRequests('/slowly/fine.glb');
+    moveCamera(ctx, 17, circle(10));
+    expect(await within(() => fineRequests() > 0, 30000)).toBe(true);
+  });
+
+  it('关掉时动着也请求（对照）', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup({ ...ROOMY, cullRequestsWhileMoving: false }, FAR_CAMERA);
+    showBlocks(ctx, await serveBlocks('always'));
+    await settle(ctx);
+    const fineRequests = countRequests('/always/fine.glb');
+    moveCamera(ctx, 17, circle(100));
+    expect(await within(() => fineRequests() > 0, 30000)).toBe(true);
+    expect(inspect(ctx).tilesets.blocks?.culled).toBe(0);
+  });
+
+  it('边飞边打开模型：一开始也不把看到的全请求了，停下才加载', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup(ROOMY, CAMERA);
+    const url = await serveBlocks('flying-in');
+    // 比粗的瓦片也快：一块都不请求
+    const stop = moveCamera(ctx, 17, circle(200));
+    await seconds(1);
+    const blockRequests = countRequests('/flying-in/block.glb');
+    let initial = 0;
+    onTestFinished(
+      ctx.renderer.on('tilesetinitial', () => {
+        initial++;
+      })
+    );
+    showBlocks(ctx, url);
+    expect(await within(() => (inspect(ctx).tilesets.blocks?.culled ?? 0) > 0, 30000)).toBe(true);
+    await seconds(1);
+    expect(blockRequests()).toBe(0);
+    expect(inspect(ctx).tilesets.blocks?.loaded).toBe(0);
+    expect(inspect(ctx).settled).toBe(false);
+    // 还有没请求的瓦片时不算首批瓦片到了：同组的白膜要等这个事件才撤下上一个
+    expect(initial).toBe(0);
+    stop();
+    expect(await within(() => inspect(ctx).settled && (inspect(ctx).tilesets.blocks?.visible ?? 0) > 0, 30000)).toBe(true);
+    expect(initial).toBe(1);
+  });
+
+  it('要的瓦片都到了时，动着也不算有没请求的：按需渲染停得下来', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup(ROOMY, FAR_CAMERA);
+    showBlocks(ctx, await serveBlocks('all-here'));
+    await settle(ctx);
+    moveCamera(ctx, 15, circle(100));
+    await seconds(1);
+    expect(inspect(ctx).tilesets.blocks?.culled).toBe(0);
+  });
+
+  it('没请求的瓦片也算需求：放不下的一层不会因为动着就收紧过去', { timeout: TEST_TIMEOUT }, async () => {
+    // 细的一层约 22 MB，放不下；这个上限下有 3 块细的到过，知道它们多大
+    const ctx = await setup({ cacheBytes: 1200 * KB, cacheLimitBytes: 1600 * KB });
+    showBlocks(ctx, await serveBlocks('demand'));
+    const still = await settle(ctx);
+    expect(still.errorScale).toBeGreaterThan(1.5);
+    let lowest = still.errorScale;
+    const watch = () => {
+      lowest = Math.min(lowest, inspect(ctx).errorScale);
+    };
+    // 往东走，离开锁定的姿态（高度的四分之一，约 92 米）：解锁以后在用的只有粗的一层，需求远低于上限
+    const stop = moveCamera(ctx, 17, time => [100 * time, 0]);
+    await within(() => {
+      watch();
+      return false;
+    }, 2500);
+    stop();
+    expect(inspect(ctx).locked).toBe(false);
+    expect(lowest).toBeGreaterThan(1.5);
+  });
+});
+
 const maxPerFrame = (ctx: Context, key: 'textures' | 'buffers') => Math.max(0, ...ctx.renderer.frames.map(frame => frame[key]));
 
 describe('ThreeSceneRenderer 的上传预算', () => {

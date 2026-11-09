@@ -1,5 +1,5 @@
 import type { LRUCache, TilesRenderer } from '3d-tiles-renderer';
-import type { Object3D } from 'three';
+import type { Object3D, Sphere } from 'three';
 import type { TileUploader } from './tile-uploader';
 
 /** 3d-tiles-renderer 运行时有、类型声明里没有的瓦片字段 */
@@ -11,8 +11,13 @@ export interface TileInternals {
     readonly depth: number;
     readonly hasContent: boolean;
     readonly hasRenderableContent: boolean;
+    readonly loadingState: number;
   };
-  readonly engineData: { readonly scene: Object3D | null };
+  readonly traversal: { readonly inFrustum: boolean };
+  readonly engineData: {
+    readonly scene: Object3D | null;
+    readonly boundingVolume: { getSphere(target: Sphere): void };
+  };
 }
 
 interface ParseTile {

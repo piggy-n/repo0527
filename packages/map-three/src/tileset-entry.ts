@@ -27,6 +27,7 @@ import type { BudgetPose } from './error-scale';
 import type { FrameMath } from './frame';
 import { createSunLights, type FogUniform, TilesetMaterials } from './lighting';
 import { LocalFrame } from './local-frame';
+import { RequestCull } from './request-cull';
 import { type TileInternals, TileLoadPlugin } from './tile-load-plugin';
 import type { TileUploader } from './tile-uploader';
 
@@ -49,6 +50,10 @@ export interface TilesetEntryOptions {
   readonly fog: FogUniform;
   /** 所有瓦片集共用的上传队列 */
   readonly uploader: TileUploader;
+  /** 相机比瓦片走得快时不请求 */
+  readonly cullRequestsWhileMoving: boolean;
+  /** 同时解析的瓦片数；不写时用瓦片库的默认值。这个队列是库里所有瓦片集共用的，性能测量时换着比较 */
+  readonly parseJobs?: number;
   readonly events: TilesetEntryEvents;
 }
 
@@ -72,12 +77,21 @@ export interface TilesetEntryInspection {
   readonly loaded: number;
   readonly unloaded: number;
   readonly failed: number;
+  /** 这一帧因为相机走得快没有请求的瓦片数 */
+  readonly culled: number;
+  /** 现在：等下载和下载中的、解析中的瓦片数 */
+  readonly downloading: number;
+  readonly parsing: number;
+  /** 这一帧在用的瓦片数，和其中视野外的：REPLACE 的节点要等全部子节点，视野外的也算 */
+  readonly used: number;
+  readonly usedOutOfView: number;
 }
 
 // 库的这些字段运行时有、类型声明里没有
 interface TilesInternals {
   readonly usedSet: Set<TileInternals>;
   readonly loadingTiles: Set<TileInternals>;
+  queueTileForDownload(tile: TileInternals): void;
   readonly stats: {
     readonly refused: number;
     readonly queued: number;
@@ -97,6 +111,8 @@ export interface TilesetHit {
 const ERROR_TARGET = 16;
 // 一层完成这么多块瓦片才估计这一层的大小：一块特别大的瓦片不能让需求一下子超过上限，放宽了就收不回来
 const MIN_SIZE_SAMPLES = 3;
+// 瓦片还没有请求过：库的常量 UNLOADED，类型声明里没有导出
+const UNLOADED = 0;
 
 // 命中的面用的材质；多材质的网格按面的材质序号取
 function hitMaterial({ object, face }: Intersection): Material | undefined {
@@ -139,8 +155,13 @@ export class TilesetEntry implements Disposable {
   #loaded = 0;
   #unloaded = 0;
   #failed = 0;
+  readonly #requestCull: RequestCull | null;
+  // 这一帧因为相机走得快没有请求的瓦片
+  readonly #culled = new Set<TileInternals>();
+  readonly #sphere = new Sphere();
 
-  constructor({ prepared, options, cache, math, fog, uploader, events }: TilesetEntryOptions) {
+  constructor({ prepared, options, cache, math, fog, uploader, cullRequestsWhileMoving, parseJobs, events }: TilesetEntryOptions) {
+    this.#requestCull = cullRequestsWhileMoving ? new RequestCull() : null;
     this.#cache = cache;
     this.#math = math;
     this.#events = events;
@@ -152,6 +173,19 @@ export class TilesetEntry implements Disposable {
     tiles.lruCache = cache;
     tiles.errorTarget = ERROR_TARGET;
     tiles.registerPlugin(new TileLoadPlugin(uploader, cache));
+    if (parseJobs !== undefined) {
+      tiles.parseQueue.maxJobs = parseJobs;
+    }
+    // 库没有按瓦片决定要不要请求的接口：选瓦片时调用的这个方法是唯一的入口。版本锁定，浏览器测试用真实的库验证
+    const internals = tiles as unknown as TilesInternals;
+    const queue = internals.queueTileForDownload.bind(tiles);
+    internals.queueTileForDownload = tile => {
+      if (this.#cullsRequest(tile)) {
+        this.#culled.add(tile);
+      } else {
+        queue(tile);
+      }
+    };
     tiles.setCamera(this.camera);
     tiles.setResolution(this.camera, 1, 1);
     tiles.addEventListener('load-model', ({ scene, tile }) => {
@@ -287,12 +321,21 @@ export class TilesetEntry implements Disposable {
         pendingBytes += this.#sizeAt(tile.internal.depth);
       }
     }
+    // 没有请求的也算：这一路还是要它们。不算的话动着的时候需求总是很低，一路收紧，停下时要从最细的一层开始放宽
+    for (const tile of this.#culled) {
+      pendingBytes += this.#sizeAt(tile.internal.depth);
+    }
     return {
       refused: stats.refused,
       pinnedBytes,
       pendingBytes,
       usedTiles: usedSet.size
     };
+  }
+
+  /** 这一帧因为相机走得快没有请求的瓦片数：不是 0 时要再画一帧，相机停下才请求得到 */
+  get culled(): number {
+    return this.#culled.size;
   }
 
   /** 现在正在下载、解析、等待上传的瓦片数：请求被取消时不一定还有下一帧，要现读 */
@@ -313,7 +356,13 @@ export class TilesetEntry implements Disposable {
   }
 
   inspect(): TilesetEntryInspection {
-    const { stats } = this.tiles as unknown as TilesInternals;
+    const { stats, usedSet } = this.tiles as unknown as TilesInternals;
+    let usedOutOfView = 0;
+    for (const tile of usedSet) {
+      if (!tile.traversal.inFrustum) {
+        usedOutOfView++;
+      }
+    }
     return {
       show: this.#options.show,
       errorTarget: this.tiles.errorTarget,
@@ -321,7 +370,12 @@ export class TilesetEntry implements Disposable {
       visible: this.#drawn ? stats.visible : 0,
       loaded: this.#loaded,
       unloaded: this.#unloaded,
-      failed: this.#failed
+      failed: this.#failed,
+      culled: this.#culled.size,
+      downloading: stats.queued + stats.downloading,
+      parsing: stats.parsing,
+      used: usedSet.size,
+      usedOutOfView
     };
   }
 
@@ -341,9 +395,11 @@ export class TilesetEntry implements Disposable {
     this.#math.syncCamera(this.camera, this.#math.clipMatrix(frame, this.#anchor, this.#clip), frame);
     this.scene.updateMatrixWorld(true);
     this.tiles.setResolution(this.camera, width, height);
+    this.#updateRequestCull();
     this.tiles.update();
     this.#pinned = true;
-    if (!this.#initial && this.tiles.root && this.tiles.loadProgress === 1) {
+    // 还有没请求的瓦片时库的进度也是 1：要等它们都到了才算
+    if (!this.#initial && this.tiles.root && this.tiles.loadProgress === 1 && this.#culled.size === 0) {
       this.#initial = true;
       this.#events.initial();
     }
@@ -376,6 +432,23 @@ export class TilesetEntry implements Disposable {
     URL.revokeObjectURL(this.#url);
     this.tiles.dispose();
     this.#materials.dispose();
+  }
+
+  #updateRequestCull(): void {
+    this.#culled.clear();
+    const pose = this.#requestCull ? this.pose() : null;
+    if (pose) {
+      this.#requestCull?.update(pose.position, performance.now());
+    }
+  }
+
+  // 只拦还没开始的瓦片。外部索引在整理时都展开了，走到这里的都是有内容的瓦片
+  #cullsRequest(tile: TileInternals): boolean {
+    if (!this.#requestCull || tile.internal.loadingState !== UNLOADED) {
+      return false;
+    }
+    tile.engineData.boundingVolume.getSphere(this.#sphere);
+    return this.#requestCull.culls(this.#sphere.radius);
   }
 
   // 不再更新的瓦片集不会自己解除"在用"：所有瓦片集共用一个缓存，不解除的话它占的字节别的瓦片集永远用不上
