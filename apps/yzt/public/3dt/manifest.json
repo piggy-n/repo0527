@@ -94,8 +94,7 @@
       "cityCode": "320200",
       "kind": "oblique",
       "underground": false,
-      "tileset": "JKQ/tileset.json",
-      "maximumScreenSpaceError": 8
+      "tileset": "JKQ/tileset.json"
     },
     {
       "id": "wx-jkq2",

@@ -17,7 +17,7 @@ export interface TilesetLayer {
   /** 同组的只显示一个（白膜的各种效果）：换显示的那个时，旧的留到新的首批瓦片到位 */
   readonly group?: string;
   readonly lighting: TilesetLighting;
-  /** 这个瓦片集的屏幕误差上限（像素，正数），不写用引擎的默认值 16；倾斜摄影要看得更细时按模型调小，显存按每级 4 倍算 */
+  /** 这个瓦片集的屏幕误差上限（像素，正数），不写用引擎的默认值（8）；放不下的模型按模型调大，显存按每级 4 倍算 */
   readonly maximumScreenSpaceError?: number;
   /** 失败后重试时加 1，视图看到新的值就重新加载 */
   readonly attempt: number;

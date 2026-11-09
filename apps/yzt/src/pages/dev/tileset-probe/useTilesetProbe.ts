@@ -49,7 +49,7 @@ export type ProbePhase =
   | { readonly kind: 'done' }
   | { readonly kind: 'failed'; readonly error: unknown };
 
-/** 一次记录的设置：瓦片集的屏幕误差（像素，Cesium 默认 16） */
+/** 一次记录的设置：瓦片集的屏幕误差（像素，引擎默认 8） */
 export interface ProbeSettings {
   readonly maximumScreenSpaceError: number;
 }

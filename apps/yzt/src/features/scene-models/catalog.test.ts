@@ -91,14 +91,8 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
     expect(urls.every(url => url.startsWith('https://maps.test/yzt/3dt/'))).toBe(true);
     const lengths = models.flatMap(({ routes }) => routes.map(({ length }) => Math.round(length)));
     expect(lengths).toStrictEqual([125, 133, 58]);
-    // 经开区（JKQ）在 16.5 级以上要看到块根下面的一级，单独设 8（docs/modules/map-cesium.md）
-    expect(models.map(({ maximumScreenSpaceError }) => maximumScreenSpaceError)).toStrictEqual([
-      undefined,
-      undefined,
-      undefined,
-      8,
-      undefined
-    ]);
+    // 屏幕误差上限统一用引擎的默认值 8，清单只写例外（docs/modules/map-cesium.md）
+    expect(models.every(({ maximumScreenSpaceError }) => maximumScreenSpaceError === undefined)).toBe(true);
   });
 });
 

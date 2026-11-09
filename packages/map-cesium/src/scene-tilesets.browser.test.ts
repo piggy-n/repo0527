@@ -148,6 +148,8 @@ const LEAF_TRIANGLES = 4096;
 // 缓存 1 MB、溢出 2 MB：上限约是 4 块的叶节点
 const CACHE_BYTES = 1024 * 1024;
 const OVERFLOW_BYTES = 2 * 1024 * 1024;
+// 用例的高度和预算都按设定值 16 算的，显式传 16（引擎的默认值是 8）
+const TEST_OPTIONS = { show: true, lighting: 'sun', maximumScreenSpaceError: 16 } as const;
 
 const translation = (x: number, y: number, z = 0) => Matrix4.toArray(Matrix4.fromTranslation(new Cartesian3(x, y, z)));
 const box = (size: number, height = THICKNESS) => ({
@@ -245,8 +247,7 @@ describe('SceneTilesets 的显存预算', () => {
     disposables.push(tilesets);
 
     const rootError = 35;
-    const options = { show: true, lighting: 'sun' } as const;
-    await tilesets.add('blocks', blocksTileset(rootError), options, new AbortController().signal);
+    await tilesets.add('blocks', blocksTileset(rootError), TEST_OPTIONS, new AbortController().signal);
     // 预算由测试压低：从场景里取出建好的瓦片集
     let tileset: Cesium3DTileset | undefined;
     for (let index = 0; index < scene.primitives.length; index++) {
@@ -346,7 +347,7 @@ describe('SceneTilesets 的显存预算', () => {
     const failures: unknown[] = [];
     const tilesets = new SceneTilesets(widget, { failed: (_id, error) => failures.push(error), initial: () => {} });
     disposables.push(tilesets);
-    await tilesets.add('flat', blocksTileset(35, 0), { show: true, lighting: 'sun' }, new AbortController().signal);
+    await tilesets.add('flat', blocksTileset(35, 0), TEST_OPTIONS, new AbortController().signal);
     const tileset = findTileset(scene);
     tileset.cacheBytes = CACHE_BYTES;
     tileset.maximumCacheOverflowBytes = OVERFLOW_BYTES;
@@ -415,7 +416,7 @@ describe('SceneTilesets 的显存预算', () => {
     await tilesets.add(
       'heavy',
       blocksTileset(rootError, 0, LEAF_TRIANGLES),
-      { show: true, lighting: 'sun' },
+      TEST_OPTIONS,
       new AbortController().signal
     );
     const tileset = findTileset(scene);
@@ -472,7 +473,7 @@ describe('SceneTilesets 的显存预算', () => {
     const failures: unknown[] = [];
     const tilesets = new SceneTilesets(widget, { failed: (_id, error) => failures.push(error), initial: () => {} });
     disposables.push(tilesets);
-    await tilesets.add('blocks', blocksTileset(35), { show: true, lighting: 'sun' }, new AbortController().signal);
+    await tilesets.add('blocks', blocksTileset(35), TEST_OPTIONS, new AbortController().signal);
     const tileset = findTileset(scene);
     tileset.cacheBytes = CACHE_BYTES;
     tileset.maximumCacheOverflowBytes = OVERFLOW_BYTES;

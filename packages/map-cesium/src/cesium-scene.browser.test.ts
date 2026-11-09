@@ -693,8 +693,8 @@ describe('CesiumScene', () => {
       show: true,
       cacheBytes: 1024 * 1024 * 1024,
       maximumCacheOverflowBytes: 1024 * 1024 * 1024,
-      maximumScreenSpaceError: 16,
-      memoryAdjustedScreenSpaceError: 16,
+      maximumScreenSpaceError: 8,
+      memoryAdjustedScreenSpaceError: 8,
       unloaded: 0,
       failed: 0
     });

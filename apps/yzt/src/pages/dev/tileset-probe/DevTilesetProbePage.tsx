@@ -1,3 +1,4 @@
+import { DEFAULT_SCREEN_SPACE_ERROR } from '@mx/map-cesium';
 import { MAP_RUNTIME } from '@mx/map-vue';
 import { ElButton, ElInputNumber, ElOption, ElRadioButton, ElRadioGroup, ElSelect } from 'element-plus';
 import { computed, defineComponent, inject, ref, type VNode, watch } from 'vue';
@@ -24,8 +25,7 @@ const PHASE_LABELS: Readonly<Record<ProbePhase['kind'], string>> = {
 
 const MODE_LABELS: Readonly<Record<ProbeMode, string>> = { sequence: '自动序列', manual: '手动记录' };
 
-// 屏幕误差（像素）：Cesium 的默认值 16，可调范围
-const DEFAULT_SCREEN_SPACE_ERROR = 16;
+// 屏幕误差（像素）的可调范围；默认值取引擎的
 const MIN_SCREEN_SPACE_ERROR = 1;
 const MAX_SCREEN_SPACE_ERROR = 64;
 

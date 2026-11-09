@@ -23,11 +23,14 @@ const FLOOR_RELEASE_ANGLE = CesiumMath.toRadians(10);
 // 放大后的屏幕误差不超过根节点屏幕误差的这个比例：超过了 Cesium 一个瓦片都不画
 const ROOT_CAP_RATIO = 0.9;
 
+/** 瓦片集屏幕误差上限（像素）的默认值：2026-11-09 用户按显卡复测定为 8，之前沿用旧项目的 16；清单可以按模型覆盖 */
+export const DEFAULT_SCREEN_SPACE_ERROR = 8;
+
 // 沿用旧项目实测的参数（ADR 0081 第 3 节）：移动时不请求、不预加载。显存预算按倾斜摄影定（取值的理由见
 // docs/modules/map-cesium.md）：缓存加溢出要放得下视野里最粗一级的全部块（JKQ2 远看块根就要 1.7 GB），
 // 否则 Cesium 一个瓦片都不画
 const TILESET_OPTIONS = {
-  maximumScreenSpaceError: 16,
+  maximumScreenSpaceError: DEFAULT_SCREEN_SPACE_ERROR,
   cacheBytes: 1024 * MEGABYTE,
   maximumCacheOverflowBytes: 1024 * MEGABYTE,
   cullRequestsWhileMoving: true,
