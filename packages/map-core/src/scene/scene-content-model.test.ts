@@ -154,6 +154,8 @@ describe('SceneContentModel', () => {
       [{ tilesets: [tileset('a', { url: '/3dt/a.json' })], underground: null }, '瓦片集 a 的地址不是绝对地址'],
       [{ tilesets: [tileset('a', { attempt: 1.5 })], underground: null }, '重试次数不是非负整数'],
       [{ tilesets: [tileset('a', { attempt: -1 })], underground: null }, '重试次数不是非负整数'],
+      [{ tilesets: [tileset('a', { maximumScreenSpaceError: 0 })], underground: null }, '屏幕误差不是正数'],
+      [{ tilesets: [tileset('a', { maximumScreenSpaceError: Number.NaN })], underground: null }, '屏幕误差不是正数'],
       [{ tilesets: [tileset('a')], underground: { tilesetId: 'b', surfaceOpacity: 0.3 } }, '钻地的瓦片集不存在：b'],
       [{ tilesets: [tileset('a')], underground: { tilesetId: 'a', surfaceOpacity: 1.2 } }, '不在 0～1 之间'],
       [{ tilesets: [tileset('a')], underground: { tilesetId: 'a', surfaceOpacity: Number.NaN } }, '不在 0～1 之间']

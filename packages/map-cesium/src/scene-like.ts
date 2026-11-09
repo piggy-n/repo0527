@@ -32,6 +32,8 @@ export interface ScenePose {
 export interface TilesetOptions {
   readonly show: boolean;
   readonly lighting: TilesetLighting;
+  /** 设定的屏幕误差（像素），不传用场景的默认值（`DEFAULT_SCREEN_SPACE_ERROR`，8）；显存放不下时 Cesium 会临时放大它 */
+  readonly maximumScreenSpaceError?: number;
 }
 
 /** 路线漫游的播放（ADR 0083 第 3 节）：speed 是米/秒（ADR 0097 第 4 节） */

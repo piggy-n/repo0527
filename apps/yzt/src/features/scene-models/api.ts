@@ -32,6 +32,8 @@ const common = {
   name: nonEmpty,
   cityCode: cityCodeSchema,
   underground: z.boolean(),
+  /** 瓦片集的屏幕误差上限（像素，正数），不写用引擎的默认值 8；显存放不下的模型按模型调大（docs/modules/map-cesium.md） */
+  maximumScreenSpaceError: z.number().positive().optional(),
   /** 步行的出生点，3D.4 使用 */
   spawn: spawnSchema.optional(),
   /** 预置的漫游路线，3D.4 使用 */

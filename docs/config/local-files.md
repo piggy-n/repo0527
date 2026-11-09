@@ -41,6 +41,17 @@ pnpm --filter yzt dev
 
 工具脚本的默认输出同样跟着这个变量，所以 worktree 指回主目录后，实测和探查的结果也写进主目录。
 
+## 模型从服务器取
+
+本机没有某个模型的数据（JKQ、JKQ2 只在服务器上）时，环境变量 `YZT_3DT_PROXY` 让开发服务器把 `/3dt/` 整个代理到那台服务器，清单和模型都从它取，`local/3dt/` 这时不再映射。它也只从进程的环境变量读（PowerShell）：
+
+```powershell
+$env:YZT_3DT_PROXY = 'http://192.168.1.180'
+pnpm --filter yzt dev:intranet
+```
+
+用途是在有显卡的机器上跑瓦片集的诊断页 `/dev/tileset-probe`（[modules/map-cesium.md](../modules/map-cesium.md)"诊断读数"）。
+
 ## 开发服务器
 
 `tools/local-files/vite-plugin.ts` 的 `localFilesPlugin` 用 [sirv](https://github.com/lukeed/sirv) 提供静态文件，`vite.config.ts` 里写映射：`/3dt` → `local/3dt`，`/design.local` → `local/design`。

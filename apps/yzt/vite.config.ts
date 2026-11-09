@@ -59,8 +59,13 @@ export default defineConfig(({ mode }) => {
     ]
   });
 
-  // 模型和原型不入库、不进产物，开发时从 local/ 提供，地址和线上一致（ADR 0141）
-  const localFiles = localFilesPlugin({ '/3dt': localPath('3dt'), '/design.local': localPath('design') });
+  // 模型和原型不入库、不进产物，开发时从 local/ 提供，地址和线上一致（ADR 0141）；
+  // 设了 YZT_3DT_PROXY 时模型改由那台服务器提供（在显卡机器上跑瓦片集的诊断页，见 docs/config/local-files.md）
+  const modelProxy = env.YZT_3DT_PROXY;
+  const localFiles = localFilesPlugin({
+    ...(modelProxy ? {} : { '/3dt': localPath('3dt') }),
+    '/design.local': localPath('design')
+  });
 
   return {
     plugins: [vueJsx(), ...generators, staticFiles, localFiles, buildOutputPlugin()],
@@ -90,7 +95,9 @@ export default defineConfig(({ mode }) => {
           target: env.AI_PROXY_TARGET,
           changeOrigin: true,
           rewrite: path => path.slice(aiApiBaseUrl.length)
-        }
+        },
+        // 清单和模型数据都从那台服务器取：和部署后的地址一样，不改清单
+        ...(modelProxy ? { '/3dt/': { target: modelProxy, changeOrigin: true } } : {})
       }
     },
     test: {
