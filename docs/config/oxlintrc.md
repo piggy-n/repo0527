@@ -187,6 +187,7 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 - cesium（3D.1 加入）：同样的写法，只对 `packages/map-cesium/src/` 和 `app/` 放开（ADR 0079）。`patterns` 拦住 `cesium/Build/...` 下的样式表和 `@cesium/engine` 等子包。map-cesium 里的代码约定从聚合包 `cesium` 导入，升级时只看一个版本；这一条 lint 不检查
 - three、3d-tiles-renderer（3C.1 加入）：只对 `packages/map-three/src/` 和驾驶舱 `features/city-dashboard/` 放开（ADR 0147 第 5 节；驾驶舱比 map-three 早，原来就用 three）。`patterns` 拦住 `three/examples/...`、`3d-tiles-renderer/plugins` 这类子路径。`app/` 的 override 只保留 lodash 两项，所以 app 也能导入，和 maplibre-gl、cesium 一样
 - gaussian-splat-lite（LCC2 加入）：只对 `packages/map-three/src/` 放开（ADR 0149 第 2 节）。驾驶舱和 map-three 原来共用一个 override，现在分成两个，驾驶舱的那个仍然禁止它；`app/` 的 override 也写上它，所以和 maplibre-gl、cesium、three 不同，app 不能导入。包的 `exports` 只有入口，不用 `patterns`
+- proj4（LCC2 的配准工具加入）：只对 `apps/yzt/tools/lcc2-register/` 放开（ADR 0149 第 4 节：清单存换算好的摆放，运行时不换算）。它已经是 `shpjs` 的依赖、从应用里解析得到，所以要靠 lint 拦。基础规则和每个放开别的库的 override（包括 `app/`）都写上它，`patterns` 拦 `proj4/dist/...`、`proj4/lib/...` 这类子路径；工具目录的 override 写基础规则里除 proj4 以外的各项
 
 ### 第三组：类型感知规则
 
@@ -224,11 +225,12 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 ### 地图适配器和 app 放开地图引擎
 
 ```json
-{ "files": ["packages/map-three/src/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、cesium 的两项 }] } }
-{ "files": ["apps/yzt/src/features/city-dashboard/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、cesium 的两项、gaussian-splat-lite }] } }
-{ "files": ["packages/map-core/src/maplibre/**", "packages/*/src/test-setup.browser.ts"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、cesium 的两项、three 的三项、gaussian-splat-lite }] } }
-{ "files": ["packages/map-cesium/src/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、three 的三项、gaussian-splat-lite }] } }
-{ "files": ["apps/yzt/src/app/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、gaussian-splat-lite }] } }
+{ "files": ["packages/map-three/src/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、cesium 的两项、proj4 的两项 }] } }
+{ "files": ["apps/yzt/src/features/city-dashboard/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、cesium 的两项、gaussian-splat-lite、proj4 的两项 }] } }
+{ "files": ["packages/map-core/src/maplibre/**", "packages/*/src/test-setup.browser.ts"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、cesium 的两项、three 的三项、gaussian-splat-lite、proj4 的两项 }] } }
+{ "files": ["packages/map-cesium/src/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、three 的三项、gaussian-splat-lite、proj4 的两项 }] } }
+{ "files": ["apps/yzt/src/app/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、gaussian-splat-lite、proj4 的两项 }] } }
+{ "files": ["apps/yzt/tools/lcc2-register/**"], "rules": { "no-restricted-imports": ["error", { 基础规则里除 proj4 以外的各项 }] } }
 ```
 
 默认严格、例外显式：基础规则对所有文件禁止 maplibre-gl 和 cesium，这里只对各自的适配器、app 的装配（`setWorkerUrl`、`setCesiumBaseUrl`、CSS，ADR 0023、0079）和包的测试 setup（包的浏览器测试不依赖应用，自己设置 Worker 地址，ADR 0143）放开：MapLibre 适配器仍不能导入 cesium、three，map-cesium 仍不能导入 maplibre-gl、three，map-three 仍不能导入 maplibre-gl、cesium（custom layer 的外壳在 MapLibre 适配器里，ADR 0147 第 5 节）。map-three 的 override 放在测试 setup 那一条前面：override 后写的生效，map-three 的 `test-setup.browser.ts` 要能设置 MapLibre 的 Worker 地址。override 会**整体替换**规则的选项，所以没有放开的几项要在每个 override 里再写一遍，否则这些目录就不再限制它们。oxlint 没有独立的 `typescript/no-restricted-imports` 可以分开配置，重复无法避免。
@@ -238,6 +240,8 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 2026-10-09 用探针验证：`packages/map-core/style` 里的类型导入、`shared` 里导入 `maplibre-gl/dist/maplibre-gl.css`、`features` 里的导入都报错；`app` 和 `packages/map-core/src/maplibre` 里的导入通过；`app` 里导入 `lodash/debounce` 仍然报错。
 
 2026-10-26 加入 cesium 后再验证：`shared` 里导入 `cesium`（类型导入）、`cesium/Build/.../widgets.css`、`@cesium/engine` 都报错；`packages/map-core/src/maplibre` 里导入 `cesium`、`packages/map-cesium` 里导入 `maplibre-gl` 报错；`packages/map-cesium` 和 `app` 里导入 `cesium` 通过，`app` 里导入 `lodash/debounce` 仍然报错。
+
+2026-11-10 加入 proj4 后验证：`shared`、`app` 里导入 `proj4`，`packages/map-three/src` 里导入 `proj4/dist/proj4-src.js` 都报错；`apps/yzt/tools/lcc2-register` 里导入 `proj4` 通过。
 
 2026-11-06 加入 three 和 map-three 后再验证：`shared`、`packages/map-core` 里导入 `three` 报错，驾驶舱里导入通过；`packages/map-three` 里导入 `maplibre-gl`、`vue` 报错；map-vue 静态导入 `@mx/map-three` 报错（`MAPLIBRE_ENGINE` 里的动态 `import()` 通过）。
 

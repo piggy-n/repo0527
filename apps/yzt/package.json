@@ -21,6 +21,7 @@
     "basemap:generate": "node tools/static-basemap/cli.ts",
     "measure:map-load": "vite build && node tools/measure-map-load/cli.ts",
     "measure:3d": "node tools/measure-3d/cli.ts",
+    "lcc2:register": "node tools/lcc2-register/cli.ts",
     "probe:resource-classes": "node tools/probe-resource-classes/cli.ts",
     "scope-files:generate": "node tools/scope-test-files/cli.ts",
     "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
@@ -88,6 +89,7 @@
     "msw": "^2.15.0",
     "opentype.js": "^2.0.0",
     "playwright": "catalog:",
+    "proj4": "^2.22.0",
     "sass-embedded": "catalog:",
     "sirv": "^3.0.2",
     "typescript": "catalog:",
