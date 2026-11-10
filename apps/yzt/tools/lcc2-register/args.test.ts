@@ -33,6 +33,11 @@ describe('parseOptions', () => {
     expect(parseOptions(['--no-fit', 'a.lcc2']).fit).toBe(false);
   });
 
+  it('开关不带值：--no-fit=false 不当成"不拟合"，报错', () => {
+    expect(() => parseOptions(['a.lcc2', '--no-fit=false'])).toThrow('不带值');
+    expect(() => parseOptions(['--help=0'])).toThrow('不带值');
+  });
+
   it('写错的值报错', () => {
     expect(() => parseOptions(['a.lcc2', '--shift', '1,2'])).toThrow('--shift');
     expect(() => parseOptions(['a.lcc2', '--yaw', 'abc'])).toThrow('--yaw');
@@ -46,7 +51,8 @@ describe('parseOptions', () => {
     expect(() => parseOptions(['a.lcc2', '--fit'])).toThrow('不认识');
   });
 
-  it('--help 不要求索引', () => {
+  it('--help、-h 不要求索引', () => {
     expect(parseOptions(['--help']).help).toBe(true);
+    expect(parseOptions(['-h']).help).toBe(true);
   });
 });

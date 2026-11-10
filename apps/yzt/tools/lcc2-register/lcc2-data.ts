@@ -4,12 +4,12 @@ export type Vec3 = readonly [number, number, number];
 
 const vec3 = z.tuple([z.number(), z.number(), z.number()]);
 
-// 只取工具要用的字段，其余字段不管（索引的格式见 LCC2 白皮书）
+// 只取工具要用的字段，其余字段不管（索引的格式见 LCC2 白皮书）；meshFiles 是碰撞网格，相对索引所在的目录
 const indexSchema = z.object({
   epsg: z.number().int(),
   offset: vec3,
   root: z.object({
-    boundingBox: z.object({ min: vec3, max: vec3 })
+    meshFiles: z.array(z.string())
   })
 });
 

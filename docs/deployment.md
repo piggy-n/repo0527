@@ -42,27 +42,28 @@
 
 - 地址不变：页面请求同源的 `/3dt/manifest.json`，清单里的 `tileset` 写相对清单的路径（如 `SZ_3DT/tileset.json`），不写服务器地址，开发和部署用同一份清单
 - 清单从 `dist` 取、模型数据从模型目录取（nginx 配置见下）：清单的格式由代码里的 zod 校验，跟着代码一起发布
-- 新增模型：先把目录上传到模型目录，再改清单、发布前端。清单里有、服务器上没有的模型，在三维模型面板里显示加载失败，其他模型不受影响。显存放不下的模型可以给它写 `maximumScreenSpaceError`（像素，不写是 8，放不下的写 16），取值和代价见 [map-cesium](modules/map-cesium.md) 的"瓦片集的显存预算"
+- 新增模型：先把目录上传到模型目录，再改清单、发布前端；LCC2 模型重新上传时，转发上有缓存的先清空缓存（见下面"重新上传以后"）。清单里有、服务器上没有的模型，在三维模型面板里显示加载失败，其他模型不受影响。显存放不下的模型可以给它写 `maximumScreenSpaceError`（像素，不写是 8，放不下的写 16），取值和代价见 [map-cesium](modules/map-cesium.md) 的"瓦片集的显存预算"
 - 模型的文件多（`XZ_GC_3DT` 有 1000 多个），打成压缩包上传后在服务器上解压
 
 ### LCC2（高斯泼溅）模型的转发
 
-LCC2 模型（`kind: 'splat'`）和其他模型一样平铺在 `/3dt/` 下，层级是 `3dt/<模型名>/lcc2-sog-result/<模型名>.lcc2`（[config/3dt-manifest.md](config/3dt-manifest.md)）。一份数据可能有几个 GB，留在数据方的服务器上，nginx 按模型目录转发，页面看到的仍是同源的 `/3dt/...`，不另开前缀（ADR 0149 第 3 节）；数据放在本机的模型目录里时由上面的 `alias` 提供，要求相同。
+LCC2 模型（`kind: 'splat'`）和其他模型一样平铺在 `/3dt/` 下，层级是 `3dt/<模型名>/lcc2-sog-result/<模型名>.lcc2`（[config/3dt-manifest.md](config/3dt-manifest.md)）。一份数据可能有几个 GB，留在数据方的服务器上，nginx 按模型目录转发，页面看到的仍是同源的 `/3dt/...`，不另开前缀（ADR 0149 第 3 节）；数据放在本机的模型目录里时由下面"nginx 需要的配置"里的 `alias` 提供，要求相同。
 
 gaussian-splat-lite 按段读数据块（`.sog`）：先请求 `bytes=0-4095`，再按需要读后面的段。转发要满足：
 
 - **支持 Range**：返回 206 和 `Content-Range`。返回 200 时库把整个文件下载下来，能显示，但慢，也更占内存。nginx 提供静态文件、转发不加缓存时都原样支持；
 - **不压缩**：`.sog`、`.lcc2`、`.ply`、`.btree` 不在 `mime.types` 里，按 `default_type`（通常是 `application/octet-stream`）发送，不要把它或 `*` 加进 `gzip_types`，也不要放预压缩的 `.gz`；转发时让上游也不压缩（`proxy_set_header Accept-Encoding ""`）。`Content-Encoding` 不是 identity 时库不用 Range；
-- **`ETag` 不变**：库会比较同一个文件前后两次的 `ETag`。nginx 的静态文件按修改时间和大小生成；转发时原样带上游的，不要 `proxy_hide_header ETag`，上游有几台机器时各台的文件和修改时间要一致。文件重新上传后 `ETag` 变了，库会重新下载；
-- **要缓存时用 `slice`**：转发上加 `proxy_cache` 而不分片时，nginx 向上游要整个文件，Range 请求要等整个文件下载完才有响应。要缓存就用 `slice` 按 1 MB 分片缓存（`ngx_http_slice_module`，用 `nginx -V` 看有没有 `--with-http_slice_module`）；不需要缓存就不写 `proxy_cache`。分片时 nginx 检查各片的 `ETag` 一致，上一条不满足会报错；
-- **中文文件名**：清单里的地址按 URL 编码写（`%E6%A5%9A...`）。`location` 按解码后的路径匹配，配置文件要存成 UTF-8；`proxy_pass` 不带路径时，浏览器发来的编码地址原样转给上游，所以上游也要在 `/3dt/<模型名>/` 下提供；带路径时 nginx 用解码后的地址替换前缀，中文一定要用下面的 curl 验收。放在本机时，Windows 上打的压缩包在 Linux 上解压，中文文件名可能变成乱码（GBK），用 `unzip -O CP936` 或者 7-Zip、tar 打包，解压后用 `ls` 看一眼。
+- **`ETag` 不变**：库用第一段（`bytes=0-4095`）的 `ETag` 和后面每一段比，不一样就当文件变了，这个数据块在这次打开页面期间加载失败、不重试，刷新页面才读新的文件。nginx 的静态文件按修改时间和大小生成；转发时原样带上游的，不要 `proxy_hide_header ETag`，上游有几台机器时各台的文件和修改时间要一致；
+- **要缓存时用 `slice`**：转发上加 `proxy_cache` 而不分片时，没命中缓存的请求 nginx 向上游要整个文件：上游返回 `Accept-Ranges: bytes` 时，客户端要等下载到它请求的位置才有响应；上游不返回时，客户端拿到 200 和整个文件（见"支持 Range"）。要缓存就用 `slice` 按 1 MB 分片缓存（`ngx_http_slice_module`，用 `nginx -V` 看有没有 `--with-http_slice_module`）；不需要缓存就不写 `proxy_cache`。分片时 nginx 检查各片的 `ETag` 一致，上一条不满足会报错；
+- **重新上传以后**：数据方重新导出、重新上传 LCC2 以后，旧的分片还在缓存里（`inactive=7d`），新旧两份的 `ETag` 不一样，库读到就失败，旧的索引还会画在新的摆放上。所以先清空缓存目录（如 `/var/cache/nginx/3dt`）再 `nginx -s reload`，或者换一个模型目录名，然后再发布带新摆放的清单；没加缓存时只要先上传、再发布清单；
+- **中文文件名**：清单里的地址按 URL 编码写（`%E6%A5%9A...`）。`location` 按解码后的路径匹配，配置文件要存成 UTF-8；`proxy_pass` 不带路径时，浏览器发来的编码地址原样转给上游，所以上游也要在 `/3dt/<模型名>/` 下提供；带路径时 nginx 用解码后的地址替换前缀，中文一定要用下面的 curl 验收。放在本机时，用 Windows 自带的 `tar` 打成 `.tar`，文件名是 UTF-8；打成 `.zip`（包括 `tar -a` 打的）时文件名是 GBK、不标 UTF-8，在 Linux 上解压会变成乱码，只能用带 `-O` 的 unzip（Debian、Ubuntu 的版本有）`unzip -O CP936` 解压（2026-11-10 在中文 Windows 上验证，7-Zip 没有试过）。解压后都用 `ls` 看一眼。
 
 ```nginx
 # 写在 http 块里：要缓存时才需要
 # proxy_cache_path /var/cache/nginx/3dt keys_zone=lcc2:10m max_size=20g inactive=7d;
 
 server {
-    # ……上面"nginx 需要的配置"的内容……
+    # ……下面"nginx 需要的配置"的内容……
 
     # LCC2 模型留在数据方的服务器上：每个模型一个 location，比 /3dt/ 长，优先匹配
     location /3dt/楚王山1号/ {
@@ -81,10 +82,14 @@ server {
 }
 ```
 
-**验收**：取一个数据块，应当得到 206、`Content-Range`，没有 `Content-Encoding`，有 `ETag`；连着请求两次 `ETag` 相同。
+**验收**：取一个数据块的开头和跨 1 MB 边界的一段，都应当得到 206、对应的 `Content-Range`（文件 4297496 字节），没有 `Content-Encoding`，两次的 `ETag` 相同。加了缓存时，先清空缓存再测，两段才都从上游取（命中缓存的第二次请求总是一样的）；上游有几台机器时对每一台测一遍。
 
 ```bash
 curl -s -o /dev/null -D - -r 0-4095 "http://<主机>/3dt/%E6%A5%9A%E7%8E%8B%E5%B1%B11%E5%8F%B7/lcc2-sog-result/data/3dgs/0_0.sog"
+```
+
+```bash
+curl -s -o /dev/null -D - -r 1048000-1052095 "http://<主机>/3dt/%E6%A5%9A%E7%8E%8B%E5%B1%B11%E5%8F%B7/lcc2-sog-result/data/3dgs/0_0.sog"
 ```
 
 - 本机实测（2026-11-10）：开发服务器（Vite + sirv 提供 `local/3dt/`）对楚王山1号的 `0_0.sog` 返回 `206 Partial Content`、`Content-Range: bytes 0-4095/4297496`、`Content-Length: 4096`，没有压缩；开发服务器不发 `ETag`（`Cache-Control: no-store`）

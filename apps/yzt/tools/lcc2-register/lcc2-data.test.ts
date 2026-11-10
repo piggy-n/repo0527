@@ -7,15 +7,20 @@ const INDEX = {
   epsg: 4548,
   offset: [505745.458968483, 3793605.533563799, 59.739105],
   shift: [0, 0, 0],
-  root: { id: '0', boundingBox: { min: [-1, -2, -3], max: [4, 5, 6] }, childNum: 0 }
+  root: {
+    id: '0',
+    boundingBox: { min: [-1, -2, -3], max: [4, 5, 6] },
+    childNum: 0,
+    meshFiles: ['data/mesh/0_0.ply', 'data/mesh/0_1.ply']
+  }
 };
 
 describe('parseIndex', () => {
-  it('取 epsg、offset、根节点的包围盒，其余字段不管', () => {
+  it('取 epsg、offset、碰撞网格的文件，其余字段不管', () => {
     expect(parseIndex(JSON.stringify(INDEX))).toEqual({
       epsg: 4548,
       offset: INDEX.offset,
-      root: { boundingBox: INDEX.root.boundingBox }
+      root: { meshFiles: INDEX.root.meshFiles }
     });
   });
 

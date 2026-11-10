@@ -59,7 +59,7 @@ export interface SplatEntryInspection {
 
 const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
 
-// 裁剪盒四周多留的米数（ADR 0149）：盖住泼溅软的边缘和配准的误差（L.2 的验收是 0.5 米），倾斜模型不在边上和泼溅交错
+// 裁剪盒四周多留的米数（ADR 0149）：盖住泼溅软的边缘和配准的误差（L.2 要求 0.5 米，楚王山1号只确认到 1 米以内，见 backlog），倾斜模型不在边上和泼溅交错
 const CLIP_MARGIN = 1;
 
 /**

@@ -6,12 +6,12 @@ export const HELP = `LCC2 的配准：算出清单里 splat 模型的 placement�
 用法：pnpm --filter yzt lcc2:register <索引> [选项]
 
   <索引>                 .lcc2 索引的路径；相对路径从 local/3dt/ 下找（worktree 用 YZT_LOCAL_DIR 指回主目录），
-                         同级要有 info/poses.json（扫描轨迹）和 data/mesh/*.ply（碰撞网格）
+                         同级要有 info/poses.json（扫描轨迹）和索引 root.meshFiles 列的碰撞网格（data/mesh/*.ply）
   --shift <东,北,上>     人工修正（米），加在拟合的结果上，移动泼溅和网格；轨迹核对算上它
-  --yaw <度>             人工的偏航（度），绕局部系原点逆时针转；轨迹核对算上它
+  --yaw <度>             人工的偏航（度），绕局部系原点逆时针转；拟合在转过的轨迹上求平移，轨迹核对算上它
   --datum <米>           高程基准的差（米）：整体抬高，泼溅、网格、轨迹一起动，轨迹核对不算它
   --no-fit               不拟合轨迹和网格之间的平移，只用人工修正（轨迹不可信时）
-  --help                 显示这段说明
+  --help、-h             显示这段说明
 
 负数直接写，如 --shift -1.2,0.5,0；PowerShell 里逗号列表要加引号，或者用空格分隔再加引号
 `;
@@ -72,6 +72,12 @@ export function parseOptions(argv: readonly string[]): Options {
       }
       return argv[++i];
     };
+    // 开关不带值：--no-fit=false 不能被当成"不拟合"
+    const noValue = () => {
+      if (equals > 0) {
+        throw new Error(`参数 ${name} 不带值：${arg}`);
+      }
+    };
     switch (name) {
       case '--shift':
         options.shift = vector(name, value());
@@ -83,9 +89,12 @@ export function parseOptions(argv: readonly string[]): Options {
         options.datum = finite(name, value());
         break;
       case '--no-fit':
+        noValue();
         options.fit = false;
         break;
       case '--help':
+      case '-h':
+        noValue();
         options.help = true;
         break;
       default:

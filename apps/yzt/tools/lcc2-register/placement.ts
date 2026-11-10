@@ -47,19 +47,26 @@ export function roundPlacement(placement: Placement): Placement {
   };
 }
 
+/** 绕竖直轴逆时针转 yaw（度） */
+export function turn([x, y, z]: Vec3, yaw: number): Vec3 {
+  const cos = Math.cos(yaw * DEGREE);
+  const sin = Math.sin(yaw * DEGREE);
+  return [cos * x - sin * y, sin * x + cos * y, z];
+}
+
 /**
  * 轨迹点换到泼溅和网格的局部系：轨迹按 offset 摆放是对的（ADR 0149 背景），网格按修正摆放，
  * 所以轨迹点要经过修正的逆变换，才能和网格比
  */
 export function trajectoryToMesh(point: Vec3, correction: Correction): Vec3 {
-  const x = point[0] - correction.shift[0];
-  const y = point[1] - correction.shift[1];
-  const cos = Math.cos(correction.yaw * DEGREE);
-  const sin = Math.sin(correction.yaw * DEGREE);
-  return [cos * x + sin * y, -sin * x + cos * y, point[2] - correction.shift[2]];
+  const { shift, yaw } = correction;
+  return turn([point[0] - shift[0], point[1] - shift[1], point[2] - shift[2]], -yaw);
 }
 
-/** 拟合得到的平移（轨迹到网格）换成修正（网格到轨迹）：方向相反 */
-export function correctionFromFit(fitShift: Vec3): Vec3 {
-  return [-fitShift[0], -fitShift[1], -fitShift[2]];
+/**
+ * 拟合得到的平移（轨迹到网格）换成修正（网格到轨迹）。拟合是在转过 -yaw 的轨迹上做的（见 register.ts），
+ * 所以修正是 R(yaw)·(-平移)：网格先转 yaw 再平移，和轨迹对上
+ */
+export function correctionFromFit(fitShift: Vec3, yaw = 0): Vec3 {
+  return turn([-fitShift[0], -fitShift[1], -fitShift[2]], yaw);
 }

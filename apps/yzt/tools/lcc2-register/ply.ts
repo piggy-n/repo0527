@@ -1,4 +1,4 @@
-// 读 LCC2 的碰撞网格（data/mesh/*.ply）：二进制小端，顶点是 float 的 x、y、z，面是顶点序号的列表
+// 读 LCC2 的碰撞网格（data/mesh/*.ply）：二进制小端，顶点是 x、y、z，面是顶点序号的列表
 
 export interface Mesh {
   /** 顶点坐标，每 3 个一组 */
@@ -65,9 +65,12 @@ const END_HEADER = 'end_header\n';
 // 面的顶点序号：两种写法都有人用
 const FACE_INDEX_NAMES = new Set(['vertex_indices', 'vertex_index']);
 
-/** 读二进制小端的 PLY：顶点要有 float 的 x、y、z，面是 `property list` 的顶点序号 */
+/** 读二进制小端的 PLY：顶点要有 x、y、z，面是 `property list` 的顶点序号；序号越界、坐标不是有限数、长度和头部对不上都报错 */
 export function parsePly(bytes: Uint8Array): Mesh {
   const head = new TextDecoder('latin1').decode(bytes.subarray(0, Math.min(bytes.length, 64 * 1024)));
+  if (head.startsWith('ply\r\n')) {
+    throw new Error('PLY 的头部是 CRLF 换行，不支持');
+  }
   const headerEnd = head.indexOf(END_HEADER);
   if (!head.startsWith('ply\n') || headerEnd < 0) {
     throw new Error('不是 PLY 文件，或者头部不完整');
@@ -92,7 +95,42 @@ export function parsePly(bytes: Uint8Array): Mesh {
   }
 
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  let offset = headerEnd + END_HEADER.length;
+  let body: Body;
+  try {
+    body = readBody(view, headerEnd + END_HEADER.length, elements);
+  } catch (error) {
+    // 头部声明的数据比文件长时 DataView 越界
+    throw error instanceof RangeError ? new Error('PLY 文件比头部声明的短（文件不完整）', { cause: error }) : error;
+  }
+  const { positions, triangles, end } = body;
+  if (end !== bytes.length) {
+    throw new Error(
+      end > bytes.length
+        ? 'PLY 文件比头部声明的短（文件不完整）'
+        : `PLY 文件比头部声明的长 ${bytes.length - end} 字节`
+    );
+  }
+  if (!positions.every(Number.isFinite)) {
+    throw new Error('PLY 的顶点坐标里有不是有限数的值');
+  }
+  const vertexCount = positions.length / 3;
+  const outOfRange = triangles.find((index) => !(index >= 0 && index < vertexCount));
+  if (outOfRange !== undefined) {
+    throw new Error(`PLY 的面引用了不存在的顶点 ${outOfRange}（共 ${vertexCount} 个顶点）`);
+  }
+  return { positions, triangles: Uint32Array.from(triangles) };
+}
+
+interface Body {
+  readonly positions: Float32Array;
+  readonly triangles: readonly number[];
+  /** 读完以后的字节位置，应当正好是文件的长度 */
+  readonly end: number;
+}
+
+// 按头部声明的元素依次读数据；面的元素可以在顶点前面
+function readBody(view: DataView, start: number, elements: readonly Element[]): Body {
+  let offset = start;
   let positions = new Float32Array(0);
   const triangles: number[] = [];
   for (const element of elements) {
@@ -111,28 +149,28 @@ export function parsePly(bytes: Uint8Array): Mesh {
           offset += SCALAR_SIZES[property.type];
         });
       }
-    } else {
-      for (let i = 0; i < element.count; i++) {
-        for (const property of element.properties) {
-          if (!property.countType) {
-            offset += SCALAR_SIZES[property.type];
-            continue;
-          }
-          const count = readScalar(view, offset, property.countType);
-          offset += SCALAR_SIZES[property.countType];
-          const indices: number[] = [];
-          for (let k = 0; k < count; k++) {
-            indices.push(readScalar(view, offset, property.type));
-            offset += SCALAR_SIZES[property.type];
-          }
-          if (element.name === 'face' && FACE_INDEX_NAMES.has(property.name)) {
-            for (let k = 1; k + 1 < indices.length; k++) {
-              triangles.push(indices[0], indices[k], indices[k + 1]);
-            }
+      continue;
+    }
+    for (let i = 0; i < element.count; i++) {
+      for (const property of element.properties) {
+        if (!property.countType) {
+          offset += SCALAR_SIZES[property.type];
+          continue;
+        }
+        const count = readScalar(view, offset, property.countType);
+        offset += SCALAR_SIZES[property.countType];
+        const indices: number[] = [];
+        for (let k = 0; k < count; k++) {
+          indices.push(readScalar(view, offset, property.type));
+          offset += SCALAR_SIZES[property.type];
+        }
+        if (element.name === 'face' && FACE_INDEX_NAMES.has(property.name)) {
+          for (let k = 1; k + 1 < indices.length; k++) {
+            triangles.push(indices[0], indices[k], indices[k + 1]);
           }
         }
       }
     }
   }
-  return { positions, triangles: Uint32Array.from(triangles) };
+  return { positions, triangles, end: offset };
 }

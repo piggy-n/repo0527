@@ -61,6 +61,10 @@ export function createFloorGridBuilder(cellSize = DEFAULT_CELL_SIZE): FloorGridB
   let triangleCount = 0;
 
   const push = (column: number, row: number, height: number) => {
+    // NaN 会通过下面的范围判断，存进去变成离原点 6.5 公里的方格
+    if (![column, row, height].every(Number.isFinite)) {
+      throw new Error(`网格里有不是有限数的坐标：方格 (${column}, ${row})，高度 ${height}`);
+    }
     if (Math.abs(column) >= KEY_OFFSET || Math.abs(row) >= KEY_OFFSET) {
       throw new Error(`网格超出范围：方格 (${column}, ${row})，离局部系原点太远`);
     }

@@ -62,4 +62,11 @@ describe('correctionFromFit', () => {
   it('方向相反：轨迹往网格挪的反过来就是网格往轨迹挪', () => {
     expect(correctionFromFit([15.3, -83.2, -24.1])).toEqual([-15.3, 83.2, 24.1]);
   });
+
+  it('拟合是在转过 -yaw 的轨迹上做的：修正要转回 +yaw', () => {
+    const [x, y, z] = correctionFromFit([1, 0, 2], 90);
+    expect(x).toBeCloseTo(0, 9);
+    expect(y).toBeCloseTo(-1, 9);
+    expect(z).toBe(-2);
+  });
 });

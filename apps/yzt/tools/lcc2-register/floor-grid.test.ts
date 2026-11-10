@@ -45,6 +45,14 @@ describe('buildFloorGrid', () => {
     expect([...floorsAt(grid, 1.1, 1.1)]).toEqual([2]);
   });
 
+  it('坐标不是有限数时报错，不存成离原点 6.5 公里的方格', () => {
+    const broken = {
+      positions: Float32Array.from([0, 0, 0, 1, 0, Number.NaN, 0, 1, 0]),
+      triangles: Uint32Array.from([0, 1, 2])
+    };
+    expect(() => buildFloorGrid([broken])).toThrow('不是有限数');
+  });
+
   it('同一高度的相邻三角形在一个方格里只算一层', () => {
     const grid = buildFloorGrid([rectangle(0, 0, 10, 10, 1)]);
     expect([...floorsAt(grid, 5.1, 5.1)]).toEqual([1]);

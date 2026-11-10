@@ -79,3 +79,45 @@ export function plyBytes(positions: readonly number[], faces: readonly (readonly
   }
   return bytes;
 }
+
+/** 网格写成 PLY 的字节（给要读文件的地方用） */
+export function meshPly({ positions, triangles }: Mesh): Uint8Array {
+  const faces: number[][] = [];
+  for (let t = 0; t < triangles.length; t += 3) {
+    faces.push([triangles[t], triangles[t + 1], triangles[t + 2]]);
+  }
+  return plyBytes([...positions], faces);
+}
+
+// 合成的场景：三条走廊，地面有几级台阶，水平、竖直方向都能定下来。
+// 台阶要比扫描仪高度的窗口（0.5 米）高，否则跨过台阶的点能用竖直平移补回来
+//   A：x 0～40、y 0～3，x 20 以东高 0.8 米
+//   B：x 37～40、y 3～30，y 15 以南高 1.6、以北高 2.4
+//   C：x 10～13、y 3～20，下沉 0.8 米
+export const CORRIDORS = [
+  rectangle(0, 0, 20, 3, 0),
+  rectangle(20, 0, 40, 3, 0.8),
+  rectangle(37, 3, 40, 15, 1.6),
+  rectangle(37, 15, 40, 30, 2.4),
+  rectangle(10, 3, 13, 20, -0.8)
+];
+
+function corridorFloor(x: number, y: number): number {
+  if (y < 3) {
+    return x < 20 ? 0 : 0.8;
+  }
+  if (x >= 37) {
+    return y < 15 ? 1.6 : 2.4;
+  }
+  return -0.8;
+}
+
+/** 沿三条走廊的中线走一遍，扫描仪离地 1.25 米 */
+export const CORRIDOR_WALK = walk(
+  [
+    { from: [1.5, 1.5], to: [38.5, 1.5] },
+    { from: [38.5, 1.5], to: [38.5, 28.5] },
+    { from: [11.5, 1.5], to: [11.5, 18.5] }
+  ],
+  corridorFloor
+);
