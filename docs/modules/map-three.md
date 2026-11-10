@@ -42,7 +42,7 @@ MapLibre 里叠放只由图层顺序决定（6.12 源码）：第一个三维层
 ## 能力声明和三维里的识别（3C.2）
 
 - `MAPLIBRE_ENGINE.capabilities` 是 `{ styleLayers: true, identify: true }`，Cesium 都是 false；上下文给出 `sceneCapabilities`（[map-vue.md](map-vue.md)"三维引擎的注入"）。
-- **开关**：app 注入引擎时按 `app/scene-options.ts` 的 `SCENE_OPTIONS.resourceLayers` 收窄。关着时（默认）`maplibre` 引擎注入的能力是 `{ styleLayers: false, identify: false }`，和 Cesium 一样；打开时用 `MAPLIBRE_ENGINE` 本身的。用户 2026-11-09 决定三维里暂不显示资源图层：放开要改页面设计，以后会放开，所以做成开关；只在代码里改，不进 `.env`（同静态底图的分色开关）。
+- **开关**：app 注入引擎时按 `shared/config/scene-options.ts` 的 `SCENE_OPTIONS.resourceLayers` 收窄。关着时（默认）`maplibre` 引擎注入的能力是 `{ styleLayers: false, identify: false }`，和 Cesium 一样；打开时用 `MAPLIBRE_ENGINE` 本身的。用户 2026-11-09 决定三维里暂不显示资源图层：放开要改页面设计，以后会放开，所以做成开关；只在代码里改，不进 `.env`（同静态底图的分色开关）。
 - 现状底图：三维且 `!styleLayers` 时资源图层的拥有者推导出空分组（`hiddenInScene`），MapLibre 不画、不请求资源的瓦片；框选的批量高亮画在资源的瓦片上，同样看 `hiddenInScene` 撤下，框选结果保留，切回二维再画；图例只有"三维模式暂不显示资源图层"的说明、不显示"全部恢复默认"。三维且 `!identify` 时点/框选不识别、提示"三维模式暂不支持点/框选"（ADR 0080 第 5 节）。Cesium 三维时二维视图暂停，不应用这期间的样式变化，切回二维时资源分组和切走前一样，没有要应用的差异，所以 Cesium 的行为不变。
 - 开关打开、能识别时沿用 ADR 0048、0049 给三维定的规则，不改识别的代码：能后端识别的资源查后端，其余用渲染要素（`identifyStep` 的"后端拾取不到时退回渲染要素"）。MapLibre 的三维有渲染要素，二维 14 级以上只用渲染要素的规则在三维不用：俯仰大时远处是低级别的瓦片，以画面中心的级别为准不可靠。
 

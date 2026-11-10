@@ -20,7 +20,7 @@
 | `useMapLoadMarks.ts` | 登录后第一次进入地图时，记下地图页开始创建、视图就绪、第一次画面稳定（见 [perf.md](perf.md)） |
 | `basemap/basemap-style.ts` | 底图目录与推导：可选的底图、初始状态、`createBasemapStyles` 给出两个分组的推导函数（纯函数，ADR 0031） |
 | `basemap/static-basemap.ts` | 内网静态底图的两个分组和页面要传的 `BASEMAP_STYLE_ROOT`（ADR 0133） |
-| `basemap/static-options.ts` | 静态底图的开关（各市分色）：只在这里改，不进 `.env`，默认关（ADR 0134） |
+| （各市分色的开关） | 在 `shared/config/static-basemap-options.ts`，只在那里改，不进 `.env`，默认关（ADR 0134，见[配置总览](../config/overview.md)） |
 | `basemap/static-palette.ts` | 静态底图的配色，地图样式和缩略图共用 |
 | `basemap/data/jiangsu-labels.json`、`basemap/images/static-thumbnail.svg` | 静态底图的地名点和缩略图，由 `pnpm basemap:generate` 生成，不手改 |
 | `basemap/useBasemap.ts` | 底图的拥有者：持有选择、透明度和标注的显隐，提供操作和两个推导函数 |
@@ -149,7 +149,7 @@ basemap.setLabelsVisible(false);
 ### 静态底图（ADR 0133、0134）
 
 - 不用图片：和行政区边界同一份市界（`jiangsu-city.json`）直接画面和线，任何级别都清晰，和边界严格重合。评估过单张图片、瓦片金字塔，实测对比见 ADR 0133
-- 地名在页面上开关（ADR 0146），不再有代码开关。`static-options.ts` 的 `STATIC_BASEMAP_OPTIONS` 只剩 `cityColors`（各市分色，默认关，全省用 `STATIC_LAND_COLOR`，即 CREAM），只在代码里改，不进 `.env`。改了它要运行 `basemap:generate` 更新缩略图；改默认值后"默认关闭"那条用例要同步
+- 地名在页面上开关（ADR 0146），不再有代码开关。`shared/config/static-basemap-options.ts` 的 `STATIC_BASEMAP_OPTIONS` 只剩 `cityColors`（各市分色，默认关，全省用 `STATIC_LAND_COLOR`，即 CREAM），只在代码里改，不进 `.env`。改了它要运行 `basemap:generate` 更新缩略图；改默认值后"默认关闭"那条用例要同步
 - 陆地的四种颜色是不透明的 HEX：原色按 75% 叠在省外底色 `#E6EAF0` 上换算（CREAM `#F7F3E6 → #F3F1E9`，其余见 ADR 0134），原色写在 `static-palette.ts` 的注释里。没有透明度常量，`fill-opacity` 只有底图的透明度滑块
 - 打开分色时各市按 `code` 取色（`static-palette.ts`），相邻的市不同色，由测试按共用顶点判断。苏州和泰州隔着长江相邻，看地图容易漏掉
 - 地名点由 `pnpm basemap:generate` 生成，取面内离边界最远的点；打开标注时市名一直显示，区县从 8.5 级起显示，市名避让时优先

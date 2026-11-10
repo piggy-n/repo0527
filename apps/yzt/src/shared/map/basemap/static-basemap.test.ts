@@ -8,7 +8,7 @@ import { districtsOf, JIANGSU_CITIES } from '../region/region-catalog';
 import { boundaryCode } from '../region/region-geometry';
 import labelsFile from './data/jiangsu-labels.json?raw';
 import thumbnailFile from './images/static-thumbnail.svg?raw';
-import { STATIC_BASEMAP_OPTIONS, type StaticBasemapOptions } from './static-options';
+import { STATIC_BASEMAP_OPTIONS, type StaticBasemapOptions } from '../../config/static-basemap-options';
 import {
   STATIC_CITY_COLORS,
   STATIC_LAND_COLOR,

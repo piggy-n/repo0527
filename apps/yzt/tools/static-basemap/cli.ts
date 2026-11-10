@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { STATIC_BASEMAP_OPTIONS } from '../../src/shared/map/basemap/static-options.ts';
+import { STATIC_BASEMAP_OPTIONS } from '../../src/shared/config/static-basemap-options.ts';
 import {
   STATIC_CITY_LINE_COLOR,
   STATIC_OUTSIDE_COLOR,
