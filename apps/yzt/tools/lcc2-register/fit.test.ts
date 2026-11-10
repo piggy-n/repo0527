@@ -22,7 +22,7 @@ describe('fitShift', () => {
     expect(fit.scannerScore).toBeGreaterThan(0.95);
   });
 
-  // cli.ts（register.ts）用的是默认参数：取样间隔、粗搜步长改大以后这里会差到 0.4～0.5 米
+  // register.ts 调 fitShift 用的是默认参数，默认值改坏时这里失败：比如取样间隔改成 5 米会差 0.4～0.5 米
   it.each<[string, Vec3]>([
     ['彭城广场那么大的平移', [-15.34, 83.24, 24.11]],
     ['几米的平移', [3.7, -2.4, -6.3]]

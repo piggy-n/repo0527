@@ -1,8 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
+import { z } from 'zod';
 import { localPath } from '../local-files/paths.ts';
 import { HELP, parseOptions } from './args.ts';
 import { CHECK_PASS_RATIO, type TrajectoryCheck } from './check.ts';
+import { ToolError } from './errors.ts';
 import { FIT_WINDOW, SCANNER_WINDOW } from './fit.ts';
 import { parseIndex, parsePoses, type Vec3 } from './lcc2-data.ts';
 import { type Placement, roundPlacement } from './placement.ts';
@@ -27,6 +29,23 @@ const json = (placement: Placement) => {
   return `{ "lng": ${lng}, "lat": ${lat}, "height": ${height}, "heading": ${heading} }`;
 };
 
+// 读 JSON 文件并校验：格式不对时说是哪个文件
+function readJson<T>(path: string, parse: (text: string) => T): T {
+  const text = readFileSync(path, 'utf8');
+  try {
+    return parse(text);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const issues = z.prettifyError(error).split(/\r?\n/).join('；');
+      throw new ToolError(`${path} 的内容不对：${issues}`, { cause: error });
+    }
+    if (error instanceof SyntaxError) {
+      throw new ToolError(`${path} 不是合法的 JSON：${error.message}`, { cause: error });
+    }
+    throw error;
+  }
+}
+
 // 一次读一个网格文件：彭城广场的样例有 79 个、约 200 MB
 function* readMeshes(root: string, files: readonly string[]) {
   for (const file of files) {
@@ -44,15 +63,15 @@ function main(): number {
 
   const indexPath = isAbsolute(options.index) ? options.index : localPath('3dt', options.index);
   const root = dirname(indexPath);
-  const index = parseIndex(readFileSync(indexPath, 'utf8'));
-  const trajectory = parsePoses(readFileSync(join(root, 'info/poses.json'), 'utf8'));
+  const index = readJson(indexPath, parseIndex);
+  const trajectory = readJson(join(root, 'info/poses.json'), parsePoses);
   const { meshFiles } = index.root;
   if (meshFiles.length === 0) {
-    throw new Error('索引的 root.meshFiles 是空的：这份数据没有碰撞网格，没法拟合和核对');
+    throw new ToolError('索引的 root.meshFiles 是空的：这份数据没有碰撞网格，没法拟合和核对');
   }
   const missing = meshFiles.filter((file) => !existsSync(join(root, file)));
   if (missing.length > 0) {
-    throw new Error(`索引里列的碰撞网格找不到 ${missing.length} 个，如 ${join(root, missing[0])}`);
+    throw new ToolError(`索引里列的碰撞网格找不到 ${missing.length} 个，如 ${join(root, missing[0])}`);
   }
 
   console.log(`${basename(indexPath)}：EPSG:${index.epsg}，offset (${index.offset.map((v) => v.toFixed(3)).join(', ')})`);
@@ -112,12 +131,17 @@ function main(): number {
 try {
   process.exitCode = main();
 } catch (error) {
-  console.error(`[lcc2-register] ${error instanceof Error ? error.message : String(error)}`);
-  if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+  // 参数、文件、数据不对时只打印一行原因；别的错是程序的问题，打印完整的错误、堆栈和原因
+  if (error instanceof ToolError) {
+    console.error(`[lcc2-register] ${error.message}`);
+  } else if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+    console.error(`[lcc2-register] ${error.message}`);
     console.error(
       `[lcc2-register] 索引的相对路径从 ${localPath('3dt')} 下找，worktree 里设 YZT_LOCAL_DIR 指回主目录；` +
         '模型目录里要有 info/poses.json 和索引 root.meshFiles 列的碰撞网格'
     );
+  } else {
+    console.error(error);
   }
   process.exitCode = 1;
 }

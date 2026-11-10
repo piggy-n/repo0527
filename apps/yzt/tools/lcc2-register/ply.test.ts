@@ -82,6 +82,13 @@ describe('parsePly', () => {
     expect(() => parsePly(plyBytes(positions, [[0, 1, -1]]))).toThrow('不存在的顶点 -1');
   });
 
+  it('头部的元素个数不是非负整数时报错，不当成文件不完整', () => {
+    for (const count of ['-1', '1.5', 'abc']) {
+      const bytes = new TextEncoder().encode(`ply\nformat binary_little_endian 1.0\nelement vertex ${count}\nend_header\n`);
+      expect(() => parsePly(bytes)).toThrow('PLY 头部的元素个数不对');
+    }
+  });
+
   it('坐标不是有限数报错', () => {
     expect(() => parsePly(plyBytes([0, 0, 0, Number.NaN, 0, 0, 0, 1, 0], [[0, 1, 2]]))).toThrow('不是有限数');
   });

@@ -1,4 +1,5 @@
 import type { Mesh } from './ply.ts';
+import { ToolError } from './errors.ts';
 
 // 碰撞网格按 xy 方格采样成多层的高度：每个方格中心往下看到的所有表面的高度（地面、台阶、桌面、地下的楼板）。
 // 方格要细：1 米的方格在坡上一格里高度差几十厘米，取"脚下最近的地面"会偏高（楚王山1号的轨迹核对因此不对）
@@ -63,10 +64,10 @@ export function createFloorGridBuilder(cellSize = DEFAULT_CELL_SIZE): FloorGridB
   const push = (column: number, row: number, height: number) => {
     // NaN 会通过下面的范围判断，存进去变成离原点 6.5 公里的方格
     if (![column, row, height].every(Number.isFinite)) {
-      throw new Error(`网格里有不是有限数的坐标：方格 (${column}, ${row})，高度 ${height}`);
+      throw new ToolError(`网格里有不是有限数的坐标：方格 (${column}, ${row})，高度 ${height}`);
     }
     if (Math.abs(column) >= KEY_OFFSET || Math.abs(row) >= KEY_OFFSET) {
-      throw new Error(`网格超出范围：方格 (${column}, ${row})，离局部系原点太远`);
+      throw new ToolError(`网格超出范围：方格 (${column}, ${row})，离局部系原点太远`);
     }
     keys.push((column + KEY_OFFSET) * KEY_BASE + (row + KEY_OFFSET));
     values.push(height);

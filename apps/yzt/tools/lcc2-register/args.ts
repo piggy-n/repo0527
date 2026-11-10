@@ -1,5 +1,6 @@
 // 命令行参数：pnpm --filter yzt lcc2:register 后面的参数原样传进来
 import type { Vec3 } from './lcc2-data.ts';
+import { ToolError } from './errors.ts';
 
 export const HELP = `LCC2 的配准：算出清单里 splat 模型的 placement（ADR 0149 第 4 节，docs/config/3dt-manifest.md）
 
@@ -29,7 +30,7 @@ export interface Options {
 function finite(name: string, text: string): number {
   const value = Number(text);
   if (text.trim() === '' || !Number.isFinite(value)) {
-    throw new Error(`参数 ${name} 要是数：${text}`);
+    throw new ToolError(`参数 ${name} 要是数：${text}`);
   }
   return value;
 }
@@ -38,7 +39,7 @@ function vector(name: string, text: string): Vec3 {
   // 逗号或空格分隔：PowerShell 把没加引号的 1,2,3 当成数组，传进来变成 "1 2 3"
   const parts = text.split(/[,\s]+/).filter(Boolean);
   if (parts.length !== 3) {
-    throw new Error(`参数 ${name} 要写三个数（东,北,上）：${text}`);
+    throw new ToolError(`参数 ${name} 要写三个数（东,北,上）：${text}`);
   }
   const [east, north, up] = parts.map((part) => finite(name, part));
   return [east, north, up];
@@ -68,14 +69,14 @@ export function parseOptions(argv: readonly string[]): Options {
         return arg.slice(equals + 1);
       }
       if (i + 1 >= argv.length) {
-        throw new Error(`参数 ${name} 缺少值`);
+        throw new ToolError(`参数 ${name} 缺少值`);
       }
       return argv[++i];
     };
     // 开关不带值：--no-fit=false 不能被当成"不拟合"
     const noValue = () => {
       if (equals > 0) {
-        throw new Error(`参数 ${name} 不带值：${arg}`);
+        throw new ToolError(`参数 ${name} 不带值：${arg}`);
       }
     };
     switch (name) {
@@ -99,7 +100,7 @@ export function parseOptions(argv: readonly string[]): Options {
         break;
       default:
         if (name.startsWith('--')) {
-          throw new Error(`不认识的参数：${arg}`);
+          throw new ToolError(`不认识的参数：${arg}`);
         }
         positional.push(arg);
     }
@@ -108,7 +109,7 @@ export function parseOptions(argv: readonly string[]): Options {
     return options;
   }
   if (positional.length !== 1) {
-    throw new Error(`要给且只给一个 .lcc2 索引的路径，现在是 ${positional.length} 个`);
+    throw new ToolError(`要给且只给一个 .lcc2 索引的路径，现在是 ${positional.length} 个`);
   }
   options.index = positional[0];
   return options;

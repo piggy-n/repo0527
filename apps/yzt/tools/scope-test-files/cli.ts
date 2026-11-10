@@ -27,7 +27,7 @@ interface Projection {
 }
 
 const out = localPath('scope-test-files');
-// proj4 是 shpjs 的依赖，应用没有直接依赖它：经 shpjs 取同一份，投影和页面读取时用的是同一个版本
+// proj4 经 shpjs 取：页面读 Shapefile 时用的是 shpjs 带的那份，投影和它用同一个版本（yzt 的开发依赖里也有 proj4，给 LCC2 的配准工具用）
 const requireApp = createRequire(import.meta.url);
 const proj4 = createRequire(requireApp.resolve('shpjs'))('proj4') as (wkt: string) => Projection;
 

@@ -1,4 +1,5 @@
 // 读 LCC2 的碰撞网格（data/mesh/*.ply）：二进制小端，顶点是 x、y、z，面是顶点序号的列表
+import { ToolError } from './errors.ts';
 
 export interface Mesh {
   /** 顶点坐标，每 3 个一组 */
@@ -37,7 +38,7 @@ function scalarType(name: string | undefined): ScalarType {
   }
   const alias = name === undefined ? undefined : SCALAR_ALIASES[name];
   if (!alias) {
-    throw new Error(`PLY 里有不认识的类型：${name}`);
+    throw new ToolError(`PLY 里有不认识的类型：${name}`);
   }
   return alias;
 }
@@ -69,20 +70,24 @@ const FACE_INDEX_NAMES = new Set(['vertex_indices', 'vertex_index']);
 export function parsePly(bytes: Uint8Array): Mesh {
   const head = new TextDecoder('latin1').decode(bytes.subarray(0, Math.min(bytes.length, 64 * 1024)));
   if (head.startsWith('ply\r\n')) {
-    throw new Error('PLY 的头部是 CRLF 换行，不支持');
+    throw new ToolError('PLY 的头部是 CRLF 换行，不支持');
   }
   const headerEnd = head.indexOf(END_HEADER);
   if (!head.startsWith('ply\n') || headerEnd < 0) {
-    throw new Error('不是 PLY 文件，或者头部不完整');
+    throw new ToolError('不是 PLY 文件，或者头部不完整');
   }
   const elements: Element[] = [];
   for (const line of head.slice(0, headerEnd).split('\n')) {
     const words = line.trim().split(/\s+/);
     if (words[0] === 'format' && words[1] !== 'binary_little_endian') {
-      throw new Error(`只支持二进制小端的 PLY：${line}`);
+      throw new ToolError(`只支持二进制小端的 PLY：${line}`);
     }
     if (words[0] === 'element') {
-      elements.push({ name: words[1] ?? '', count: Number(words[2]), properties: [] });
+      const count = Number(words[2]);
+      if (!(Number.isSafeInteger(count) && count >= 0)) {
+        throw new ToolError(`PLY 头部的元素个数不对：${line}`);
+      }
+      elements.push({ name: words[1] ?? '', count, properties: [] });
     }
     const element = elements.at(-1);
     if (words[0] === 'property' && element) {
@@ -100,23 +105,23 @@ export function parsePly(bytes: Uint8Array): Mesh {
     body = readBody(view, headerEnd + END_HEADER.length, elements);
   } catch (error) {
     // 头部声明的数据比文件长时 DataView 越界
-    throw error instanceof RangeError ? new Error('PLY 文件比头部声明的短（文件不完整）', { cause: error }) : error;
+    throw error instanceof RangeError ? new ToolError('PLY 文件比头部声明的短（文件不完整）', { cause: error }) : error;
   }
   const { positions, triangles, end } = body;
   if (end !== bytes.length) {
-    throw new Error(
+    throw new ToolError(
       end > bytes.length
         ? 'PLY 文件比头部声明的短（文件不完整）'
         : `PLY 文件比头部声明的长 ${bytes.length - end} 字节`
     );
   }
   if (!positions.every(Number.isFinite)) {
-    throw new Error('PLY 的顶点坐标里有不是有限数的值');
+    throw new ToolError('PLY 的顶点坐标里有不是有限数的值');
   }
   const vertexCount = positions.length / 3;
   const outOfRange = triangles.find((index) => !(index >= 0 && index < vertexCount));
   if (outOfRange !== undefined) {
-    throw new Error(`PLY 的面引用了不存在的顶点 ${outOfRange}（共 ${vertexCount} 个顶点）`);
+    throw new ToolError(`PLY 的面引用了不存在的顶点 ${outOfRange}（共 ${vertexCount} 个顶点）`);
   }
   return { positions, triangles: Uint32Array.from(triangles) };
 }
@@ -137,7 +142,7 @@ function readBody(view: DataView, start: number, elements: readonly Element[]): 
     if (element.name === 'vertex') {
       const axes = ['x', 'y', 'z'].map((axis) => element.properties.findIndex((property) => property.name === axis));
       if (axes.some((index) => index < 0) || element.properties.some((property) => property.countType)) {
-        throw new Error('PLY 的顶点要有 x、y、z，不能有列表属性');
+        throw new ToolError('PLY 的顶点要有 x、y、z，不能有列表属性');
       }
       positions = new Float32Array(element.count * 3);
       for (let i = 0; i < element.count; i++) {

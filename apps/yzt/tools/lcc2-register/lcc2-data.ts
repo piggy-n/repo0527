@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ToolError } from './errors.ts';
 
 export type Vec3 = readonly [number, number, number];
 
@@ -34,7 +35,7 @@ export function parsePoses(text: string): Vec3[] {
   const { poses, fusionPoses } = posesSchema.parse(JSON.parse(stripBom(text)));
   const all = [...(poses ?? []), ...(fusionPoses ?? []).flat()];
   if (all.length === 0) {
-    throw new Error('poses.json 里没有轨迹点');
+    throw new ToolError('poses.json 里没有轨迹点');
   }
   return all.map((pose) => pose.T);
 }

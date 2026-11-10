@@ -1,4 +1,5 @@
 import { checkTrajectory, type TrajectoryCheck } from './check.ts';
+import { ToolError } from './errors.ts';
 import { type Fit, FIT_WINDOW, fitShift, SCANNER_WINDOW, scoreShift } from './fit.ts';
 import { createFloorGridBuilder, type FloorGrid } from './floor-grid.ts';
 import { type Lcc2Index, samplePath, type Vec3 } from './lcc2-data.ts';
@@ -41,7 +42,7 @@ export interface FitReport {
   readonly fit: Fit;
   /** 只转 -yaw、不平移时，宽窗口满足的比例 */
   readonly asIsScore: number;
-  /** 水平偏 0.5 米（东、西、北、南）时扫描仪窗口满足的比例：看峰有多尖 */
+  /** 拟合的平移沿网格系的 x、y 各偏 ±0.5 米（给了偏航时是转过的网格轴，不是正东正北）时扫描仪窗口满足的比例：看峰有多尖 */
   readonly nearby: readonly number[];
 }
 
@@ -71,7 +72,9 @@ export function register(input: RegisterInput, options: RegisterOptions): Regist
     try {
       builder.add(parsePly(bytes));
     } catch (error) {
-      throw new Error(`${name}：${message(error)}`, { cause: error });
+      // 数据的问题带上文件名照样是一行的原因；别的错是程序的问题，原因留在 cause 里
+      const Wrapper = error instanceof ToolError ? ToolError : Error;
+      throw new Wrapper(`${name}：${message(error)}`, { cause: error });
     }
     meshCount++;
   }

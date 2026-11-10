@@ -1,4 +1,5 @@
 import proj4 from 'proj4';
+import { ToolError } from './errors.ts';
 
 // CGCS2000 3 度带、坐标不带带号的高斯-克吕格投影：EPSG:4534 的中央经线是 75°E，往后每个编号东移 3 度，到 4554（135°E）
 const FIRST_EPSG = 4534;
@@ -15,7 +16,7 @@ const DEGREE = Math.PI / 180;
 /** 投影的 proj4 定义；只认 CGCS2000 3 度带不带带号的 EPSG:4534～4554 */
 export function projectionDefinition(epsg: number): string {
   if (!Number.isInteger(epsg) || epsg < FIRST_EPSG || epsg > LAST_EPSG) {
-    throw new Error(`不支持 EPSG:${epsg}：工具只认 CGCS2000 3 度带、不带带号的 EPSG:${FIRST_EPSG}～${LAST_EPSG}`);
+    throw new ToolError(`不支持 EPSG:${epsg}：工具只认 CGCS2000 3 度带、不带带号的 EPSG:${FIRST_EPSG}～${LAST_EPSG}`);
   }
   const centralMeridian = FIRST_CENTRAL_MERIDIAN + 3 * (epsg - FIRST_EPSG);
   return `+proj=tmerc +lat_0=0 +lon_0=${centralMeridian} +k=1 +x_0=500000 +y_0=0 +ellps=GRS80 +units=m +no_defs`;
@@ -33,7 +34,7 @@ export function gridProjection(epsg: number): GridProjection {
   const toLngLat = (east: number, north: number): readonly [number, number] => {
     const [lng, lat] = converter.forward([east, north]);
     if (lng === undefined || lat === undefined) {
-      throw new Error(`投影换算失败：(${east}, ${north})`);
+      throw new ToolError(`投影换算失败：(${east}, ${north})`);
     }
     return [lng, lat];
   };
