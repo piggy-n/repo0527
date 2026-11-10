@@ -27,12 +27,14 @@
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`PanModifier`、`ToolView` |
 | `measure/geodesic.ts` | 椭球面上的距离、累计距离、折线总长、多边形面积（geographiclib-geodesic，ADR 0035） |
 | `measure/measure-store.ts` | `MeasureStore`：测量的状态与测距、测面两个工具（ADR 0035） |
-| `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位、拾取、投影、渲染要素查询）；三维的可选能力 `eyeHeight`、`heading`、`sceneStatus`、`roamStatus` |
+| `view/map-view.ts` | `MapView`：二三维共用的视图接口（生命周期、程序定位、拾取、投影、渲染要素查询）；三维的可选能力 `eyeHeight`、`heading`、`sceneStatus`、`roamStatus`；同时担任二三维的视图的 `kinds`、`setKind`、`retry`，失败原因 `module`（ADR 0147） |
 | `view/rendered-features.ts` | 渲染要素查询的类型：`ScreenBox`、`RenderedQueryOptions`、`RenderedFeature`（ADR 0047 第 4 节） |
 | `view/view-input.ts` | 输入、拾取、投影的类型（ADR 0024 第 2、7、8 条） |
 | `maplibre/map-like.ts` | `MapLike`：适配器用到的 MapLibre 方法（窄接口）；连同方法签名用到的类型从入口导出，map-vue 的测试据此实现假地图 |
 | `maplibre/apply-style-command.ts` | `applyStyleCommand`：一条命令对应一次地图方法调用 |
 | `maplibre/maplibre-view.ts` | `MapLibreView`：二维视图，唯一写 MapLibre 地图的地方 |
+| `maplibre/roam/` | MapLibre 引擎的漫游（ADR 0147 第 4 节）：`MapLibreRoam` 接管地图、抬高、进出和报告进度，`RouteRoamer`、`WalkRoamer` 是从 map-cesium 移植的路线和步行（只用真实坐标，经 `RoamHost` 设相机、拾取、投影），`roam-camera.ts` 是真实视点和 MapLibre 相机的换算；见 [map-three.md](map-three.md)"漫游" |
+| `view/blackout.ts` | `Blackout`：闪切用的黑幕（ADR 0086、0103），两种引擎的漫游共用，从入口导出（3C.3 从 map-cesium 移来） |
 | `view/modifier-pan.ts` | `ModifierPan`：按住修饰键临时拖动地图，截下这次按下、把指针的移动交给视图平移、给出临时的光标（ADR 0056、0080 第 4 节）；二维、三维的视图共用，从入口导出 |
 | `events.ts` | `Unsubscribe` 类型 |
 | `model-events.ts` | `ModelEvents`：会话各模型共用的事件与释放（ADR 0034 第 7 条），模块内部使用，不从入口导出 |
@@ -115,6 +117,7 @@ session[Symbol.dispose]();
 - 所有分组引用都没变的提交被忽略；内容相同的新对象照样让修订号加 1，但对比后没有命令就不通知
 - 同一轮事件循环里的提交合并成一次通知（微任务）；通知前先记下快照，监听器里再次提交时，下一次通知从这里开始对比
 - 释放后丢弃待发的通知、清空监听器，再提交或订阅会抛错；读取 `current`、`revision` 仍然可以
+- 可选的 `sceneBelow`（ADR 0147 第 2 节，3C.2）：MapLibre 引擎的三维模型层叠在哪个分组下面。组合快照时顺便算出 `sceneBefore`，即这个分组及以上各分组里的第一个图层（都为空时没有，模型层在最上面）；它随快照（`StyleSnapshot`、`StyleChange`）一起走，视图按已应用的快照摆放模型层，对比快照时不看它。不给时模型层在最上面；不是声明过的分组时构造抛错。Cesium 不看这一项
 
 ### CameraModel
 
@@ -129,6 +132,7 @@ session[Symbol.dispose]();
 - 会话的 `scene`：`{ tilesets, underground, roam? }`，和样式模型一样整体替换、每次替换修订号加 1、同一轮事件循环只通知一次；同一个对象不算变化
 - `set` 时校验：瓦片集 ID 不重复、地址是绝对地址（瓦片地址按它解析）、`attempt` 是非负整数、`maximumScreenSpaceError`（可选，这个瓦片集的屏幕误差上限）是正数、钻地指向已有的瓦片集、地表不透明度在 0～1；不合法时抛错，内容和修订号不变
 - 二维视图不读它；三维视图镜像它，按 ID 的状态通过可选的 `sceneStatus` / `onSceneStatusChange` 报告
+- 两种三维引擎共用的瓦片集同步（ADR 0147 第 3 节）：`SceneTilesetSync` 按会话的瓦片集增删改引擎里的瓦片集（地址、重试次数变了就重新加载，其余的只改显示和光照；同组的换显示时新的首批瓦片到了才撤下旧的），汇总状态；引擎实现 `TilesetHost`（`addTileset`、`updateTileset`、`removeTileset`），瓦片失败、首批瓦片到位由视图转给它的 `failed`、`initial`。让包围球进入画布的相机是 `tilesetCamera`（俯角 55°），缩放级和距离的换算是 `camera/camera-distance.ts`，两种引擎共用
 - `roam`（ADR 0083）：路线漫游的意图 `{ kind: 'route', id, path, playing, speed, run }`，`path` 是脚下地板的 `[经度, 纬度, 椭球高]`；校验至少两个点、坐标是数、速度（米/秒，ADR 0097）是正数、遍数是非负整数。没有漫游时不写。三维视图通过可选的 `roamStatus` / `onRoamStatusChange` 报告进度
 
 ### MapSession
@@ -200,6 +204,14 @@ store.clear();
 创建地图时默认 `attributionControl: false`，不用 MapLibre 的版权控件：摆法 A 的右下角是基础组，底图不写署名（5D.3 用户决定，以后换成内网底图），见 ADR 0053 第 5 节。调用方仍可通过 `mapOptions.attributionControl` 覆盖。2026-10-15 之前是 `{ compact: true, customAttribution: '' }`（去掉 MapLibre 链接、保留数据源署名）
 
 选项 `scrollZoomRates: { wheel?, trackpad? }` 在创建地图后设到 `map.scrollZoom`（`setWheelZoomRate`、`setZoomRate`），不传的一项用 MapLibre 的默认值（滚轮 1/450、触控板 1/100）；`MapLike` 为此加了 `scrollZoom`（ADR 0053 第 3 节）。
+
+选项 `loadSceneRenderer`（MapLibre 引擎的三维，ADR 0147 第 2 节）：给出时视图声明 `kinds = ['2d', '3d']`，`setKind` 切换当前种类，`ToolView.kind`、相机事件的 `view` 跟着变。细节见 [map-three.md](map-three.md)"一个视图两种种类"，要点：
+
+- 换种类时投影、俯角上限跟着换（三维是地球、85°，二维是样式自己的投影和页面的上限），相机按会话同步；激活、整体重建的样式加载完成时按当前种类再设。只支持二维的视图不碰投影和俯角上限
+- 对外的 `state`、`failure` 按当前种类给出：地图就绪时，三维在三维模块加载中是 `initializing`，加载失败是 `failed`（原因是 `module`），二维照常 `ready`；`whenReady()` 在三维时还要等这一次模块加载，`retry()` 只重新加载模块；工具的输入、画面稳定（`settle`）、定位和拾取都按对外的状态。地图自己的生命周期和状态转换表不变
+- 三维内容由 `MapLibreScene` 管：第一次切到三维时加载三维模块，显示三维、视图就绪、样式已加载、模块已加载时把 custom layer 的外壳 `SceneLayer` 插在已应用快照的 `sceneBefore` 下面（没有时在最上面），增量命令以后挪回原位，整体重建、GL 上下文恢复后重新挂上
+- 三维时 `pick` 先打模型、再打地面，指向天空是 `miss`；`project` 对不在地面上的点按模型层最近一帧的相机算，地面上的点在地球背面时为 `null`；`eyeHeight()`、`heading()` 来自 MapLibre 的相机，二维时为 `null`
+- `MapLike` 为此加了 `getLayer`、`moveLayer`、`getLayersOrder`、`triggerRepaint`、`getProjection`、`setProjection`、`getMaxPitch`、`setMaxPitch`、`_camera.transform`（`CameraTransformLike`：相机高度、点打不打得到地面、点在不在地球背面，后两项在 6.12 的类型里标了 `@internal`，只经 `cameraTransform()` 一处读取）和 `render`、`webglcontextlost`、`webglcontextrestored` 事件，`addLayer` 也接受 custom layer。渲染器的窄接口 `SceneRenderer` 见 [map-three.md](map-three.md)
 
 **样式同步**：
 
@@ -324,6 +336,14 @@ store.clear();
 - **MapLibre 的拖动平移在 `document` 上监听 `mousemove`、`mouseup`**（5B.3 验证时发现）：浏览器自动化的拖动操作、直接派发在 `window` 上的鼠标事件都不会让地图移动；在画布上派发、让事件冒泡上去才行。拖动后松手不触发 `click`（拖动距离超过 `clickTolerance`），工具不会把拖地图当成单击
 - **交给 MapLibre 的容器元素只能用静态 class**：MapLibre 会给容器加 `maplibregl-map` 等 class，它自己的 CSS 依赖它们；容器上的 class 绑定一变化，Vue 就会重设 `class` 属性把它们冲掉。阶段五写 map-vue 时同样遵守
 
+**地球投影下中心不变的 `flyTo` 会把地图弄坏（6.12.0）：** 路径长度是 `Math.acos(dot(a, b))`（`globeDistanceOfLocationsPixels`），没有截断。中心几乎不变时点积会舍入到 1 以上，`acos` 得到 NaN，路径长度、曲线、时长、缩放依次变成 NaN，`_invViewProjMatrix` 是 null，下一行抛 `Cannot read properties of null (reading '0')`。之后每一帧都抛错，地图不能再用。
+
+- **实测：** 只改缩放来回飞 400 次（一半从 z10 出发，一半从 z13.5）崩 13 次，`acos` 收到大于 1 的值也正好 13 次。按代码，只有当前还在地球投影时（z12 以下）才走这段，记下的前 6 次也都是从 z10 出发，所以从 z12 以下出发约 6.5%，这个比例是推算的。点积舍入和中心的具体数值有关：江苏范围内，同一个中心和自己算点积约 12% 超过 1；中心差 0.1 米时 0.25%，差 0.2 米以上 10 万次里没有。
+- **为什么像偶发：** 时长为 0 的 `flyTo` 不走这段计算结果（最后一帧直接用目标缩放），要有动画才坏；是否超过 1 又取决于到达当前中心的浮点路径，所以固定的中心换个状态就不一定崩。`three-scene-renderer.browser.test.ts` 的"缩放穿过 z12"偶尔失败就是这个。
+- **规避（`maplibre/globe-fly.ts`）：** 地球投影下目标中心和当前中心差 0.9 米以内，`flyTo` 换成 `easeTo`，`fitBounds` 加 `linear: true`。这时两者的路径相同，都是缩放随时间线性变化；`easeTo` 的默认时长是固定的，没给时长时按 `flyTo` 的公式算。二维不走这段，不换。
+- **怎样测：** 路径长度在调用 `flyTo` 时就算好了，下一次调用停掉上一段，所以不用等动画：`vi.spyOn(Math, 'acos')` 扫 1500 个中心，只看 `acos` 收到了什么。没有规避时收到 76 次大于 1 的值。
+- 升级 MapLibre 时看上游有没有截断，截断了就去掉 `globe-fly.ts`。
+
 ## 导航网格（ADR 0085）
 
 步行漫游用的 2.5D 高度场，迁自旧项目的 `navGrid.js`、`navGridWorker.js` 和 `indoorMap/levels.js`，规则和参数不变；在苏州站的数据上和旧代码逐格比对一致（地板、净空、区域编号和大小）。
@@ -339,7 +359,7 @@ store.clear();
 
 ## 第一人称步行（ADR 0086）
 
-迁自旧项目 `FirstPersonRoam.js` 的第一人称部分，规则和参数不变；Cesium 那一半（键鼠、深度拾取、相机）在 map-cesium 的 `scene-walk.ts`。
+迁自旧项目 `FirstPersonRoam.js` 的第一人称部分，规则和参数不变；Cesium 那一半（键鼠、深度拾取、相机）在 map-cesium 的 `scene-walk.ts`，MapLibre 那一半在 `maplibre/roam/walk-roamer.ts`（从它移植，见 [map-three.md](map-three.md)"漫游"）。
 
 - 会话的意图 `WalkRoam`：导航网格、清单的出生点、速度，回到出生点和脱困写成计数（加 1 就做一次）；完整地图打开时 `paused`，在完整地图上双击的瞬移 `teleport: { count, spot }`（ADR 0087）。视图报告 `{ kind: 'walk', phase, notice, notices, player }`，`player`（`WalkPlayer`）是人的局部坐标、地板、偏航、水平视场角和点击移动的落点，进到站内以后每帧变了才报告
 - `Walker`：局部系里的位置、楼层、视点高度和朝向。`walk` 每 0.1 米做一次 `moveFloor` 碰撞，被挡时偏转 0、±0.5、±1 弧度顺墙滑；`follow` 沿点击的路径走，穿闸机的直线不做碰撞、地板按比例过渡；`settleEye` 让视点平滑跟随地板，偏差夹在 -0.4～+0.15 米；俯仰限制在 ±80°

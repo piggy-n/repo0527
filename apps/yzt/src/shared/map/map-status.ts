@@ -32,6 +32,15 @@ function describeFailure(failure: MapViewFailure | null): MapStatus {
       technical: messageOf(failure.error)
     };
   }
+  // MapLibre 引擎下只有三维的模块没加载上（ADR 0147 第 2 节）：重试只重新加载它，二维不受影响
+  if (failure?.kind === 'module') {
+    return {
+      kind: 'engine-failed',
+      title: '三维无法显示',
+      detail: '三维模块加载失败，可以重试；切回二维照常可用。',
+      technical: messageOf(failure.error)
+    };
+  }
   if (failure?.cause === 'webgl-unavailable') {
     return {
       kind: 'engine-failed',

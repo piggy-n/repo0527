@@ -1,6 +1,6 @@
 # tsconfig 配置说明
 
-对应文件：`apps/yzt/tsconfig.json`、`apps/yzt/tsconfig.app.json`、`apps/yzt/tsconfig.worker.json`、`apps/yzt/tsconfig.node.json`，根目录的 `tsconfig.package.json`、`tsconfig.package.node.json`，以及各个包的 tsconfig
+对应文件：`apps/yzt/tsconfig.json`、`apps/yzt/tsconfig.app.json`、`apps/yzt/tsconfig.worker.json`、`apps/yzt/tsconfig.measure.json`、`apps/yzt/tsconfig.node.json`，根目录的 `tsconfig.package.json`、`tsconfig.package.node.json`，以及各个包的 tsconfig
 相关决策：ADR 0003（TypeScript 7）、ADR 0004（模块边界）、ADR 0006（依赖方向检查）、ADR 0143（libs 搬成包）
 
 ## 为什么拆成多个文件
@@ -12,7 +12,8 @@
 | `tsconfig.json` | 不检查任何文件，只列出引用 | — |
 | `tsconfig.app.json` | `src/` | DOM + `vite/client` + `geojson` |
 | `tsconfig.worker.json` | `src/**/*.worker.ts` 及其依赖 | `webworker`，不含 DOM（ADR 0085） |
-| `tsconfig.node.json` | `vite.config.ts`、`tools/` | Node |
+| `tsconfig.measure.json` | `tools/measure-3d/page/`：三维测量页，在浏览器里运行 | DOM + `vite/client` + `geojson` |
+| `tsconfig.node.json` | `vite.config.ts`、`tools/`（除了上面的测量页） | Node |
 
 这种写法叫 **solution 风格**：根 `tsconfig.json` 用 `"files": []` 表示自己不包含文件，再用 `references` 指向真正干活的配置。运行 `tsc -b`（build 模式）时，TS 会依次检查每个被引用的项目。
 
@@ -26,6 +27,7 @@
   "references": [
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.worker.json" },
+    { "path": "./tsconfig.measure.json" },
     { "path": "./tsconfig.node.json" }
   ]
 }

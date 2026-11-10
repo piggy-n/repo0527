@@ -1,8 +1,11 @@
-import type { LayerSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type { LayerSpecification, ProjectionSpecification } from '@maplibre/maplibre-gl-style-spec';
 import type { Geometry } from 'geojson';
 import { GPUInitializationError, type Map as MapLibreMap } from 'maplibre-gl';
+import { createNanoEvents } from 'nanoevents';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { CameraChange, CameraState } from '../camera/camera-model';
+import { NO_SCENE_STATUS, type SceneStatus } from '../scene/scene-content-model';
+import type { TilesetSphere } from '../scene/tileset-camera';
 import { MapSession } from '../session/map-session';
 import { type StyleGroup, StyleModel } from '../style/style-model';
 import type { MapTool, ToolView } from '../tool/tool-model';
@@ -20,6 +23,7 @@ import type {
   RenderedFeatureLike
 } from './map-like';
 import { MapLibreView, type MapLibreViewOptions } from './maplibre-view';
+import type { SceneRenderer, SceneRendererEvents } from './scene-renderer';
 
 const NANJING: CameraState = { center: [118.8, 32.05], zoom: 8, bearing: 0, pitch: 0 };
 
@@ -81,11 +85,11 @@ interface FakeCamera {
   pitch: number;
 }
 
-const CAMERA_CALLS = new Set(['jumpTo', 'flyTo', 'panBy', 'fitBounds', 'remove']);
+const CAMERA_CALLS = new Set(['jumpTo', 'flyTo', 'easeTo', 'panBy', 'fitBounds', 'remove', 'setProjection', 'setMaxPitch']);
 
 // 只模拟适配器用到的行为：记录调用；相机方法立即到位，并像 MapLibre 一样同步触发 move、合并 eventData
 // 记下设置过的滚轮缩放速率
-class FakeScrollZoom {
+class FakeScrollZoom extends FakeGesture {
   wheelRate: number | undefined;
   trackpadRate: number | undefined;
 
@@ -100,7 +104,19 @@ class FakeScrollZoom {
 
 class FakeMap implements MapLike {
   readonly calls: unknown[][] = [];
-  readonly maxPitch = 60;
+  maxPitch = 60;
+  projection: ProjectionSpecification | undefined;
+  // MapLibre 相机的变换：天空、地球背面由用例设置
+  readonly transform = {
+    altitude: 1234,
+    sky: (_point: { readonly x: number; readonly y: number }) => false,
+    occluded: (_lngLat: { readonly lng: number; readonly lat: number }) => false,
+    getCameraAltitude: () => this.transform.altitude,
+    getCameraLngLat: () => ({ lng: this.camera.lng, lat: this.camera.lat }),
+    isPointOnMapSurface: (point: { readonly x: number; readonly y: number }) => !this.transform.sky(point),
+    isLocationOccluded: (lngLat: { readonly lng: number; readonly lat: number }) => this.transform.occluded(lngLat)
+  };
+  readonly _camera = { transform: this.transform };
   readonly #listeners = new Map<string, Set<(event: FakeEvent) => void>>();
   camera: FakeCamera;
   // 调用时抛错
@@ -116,6 +132,13 @@ class FakeMap implements MapLike {
   readonly doubleClickZoom = new FakeGesture();
   readonly boxZoom = new FakeGesture();
   readonly scrollZoom = new FakeScrollZoom();
+  readonly dragRotate = new FakeGesture();
+  readonly keyboard = new FakeGesture();
+  readonly touchZoomRotate = new FakeGesture();
+  readonly touchPitch = new FakeGesture();
+  maxZoom = 22;
+  fov = 36.87;
+  clamped = true;
 
   constructor(readonly options: MapLibreMapOptions) {
     const [lng, lat] = options.center as [number, number];
@@ -159,6 +182,7 @@ class FakeMap implements MapLike {
   on(type: 'resize', listener: () => void): MapSubscription;
   on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
+  on(type: 'render' | 'webglcontextlost' | 'webglcontextrestored', listener: () => void): MapSubscription;
   on(type: string, listener: (event: never) => void): MapSubscription {
     // 各个重载的回调都能接收 FakeEvent 中各自需要的字段
     const callback = listener as (event: FakeEvent) => void;
@@ -217,6 +241,19 @@ class FakeMap implements MapLike {
     this.#animated(camera.duration, () =>
       this.moveTo({ ...this.camera, lng, lat, zoom: camera.zoom ?? this.camera.zoom }, eventData)
     );
+  }
+
+  easeTo(camera: { center?: [number, number]; zoom?: number; duration?: number }, eventData: CameraEventData): void {
+    this.calls.push(['easeTo', camera, eventData]);
+    const [lng, lat] = camera.center ?? [this.camera.lng, this.camera.lat];
+    this.#animated(camera.duration, () =>
+      this.moveTo({ ...this.camera, lng, lat, zoom: camera.zoom ?? this.camera.zoom }, eventData)
+    );
+  }
+
+  // 和 fitBounds 到位的地方相同
+  cameraForBounds([west, south, east, north]: [number, number, number, number], options: { maxZoom?: number }) {
+    return { center: { lng: (west + east) / 2, lat: (south + north) / 2 }, zoom: options.maxZoom ?? 10, bearing: 0 };
   }
 
   // 和 unproject 一样每 100 像素 1 度
@@ -299,6 +336,64 @@ class FakeMap implements MapLike {
     return this.canvasContainer;
   }
 
+  getLayer(): unknown {
+    return undefined;
+  }
+  moveLayer(): void {}
+  getLayersOrder(): string[] {
+    return [];
+  }
+  triggerRepaint(): void {}
+
+  getProjection(): ProjectionSpecification | undefined {
+    return this.projection;
+  }
+
+  setProjection(projection: ProjectionSpecification): void {
+    this.calls.push(['setProjection', projection]);
+    this.projection = projection;
+  }
+
+  getMaxPitch(): number {
+    return this.maxPitch;
+  }
+
+  getMaxZoom(): number {
+    return this.maxZoom;
+  }
+
+  setMaxZoom(maxZoom: number): void {
+    this.calls.push(['setMaxZoom', maxZoom]);
+    this.maxZoom = maxZoom;
+  }
+
+  getVerticalFieldOfView(): number {
+    return this.fov;
+  }
+
+  setVerticalFieldOfView(fov: number, eventData: CameraEventData): void {
+    this.calls.push(['setVerticalFieldOfView', fov]);
+    this.fov = fov;
+    this.moveTo(this.camera, eventData);
+  }
+
+  getCenterClampedToGround(): boolean {
+    return this.clamped;
+  }
+
+  setCenterClampedToGround(clamped: boolean): void {
+    this.calls.push(['setCenterClampedToGround', clamped]);
+    this.clamped = clamped;
+  }
+
+  // 像 MapLibre 一样：俯角超过新的上限时收回，发出不带 eventData 的移动
+  setMaxPitch(maxPitch: number): void {
+    this.calls.push(['setMaxPitch', maxPitch]);
+    this.maxPitch = maxPitch;
+    if (this.camera.pitch > maxPitch) {
+      this.moveTo({ ...this.camera, pitch: maxPitch }, {});
+    }
+  }
   remove(): void {
     this.removed = true;
     this.calls.push(['remove']);
@@ -379,7 +474,10 @@ type Groups = 'basemap' | 'business';
 
 function setup(
   options: Partial<
-    Pick<MapLibreViewOptions<Groups>, 'active' | 'mapOptions' | 'createMap' | 'onError' | 'scrollZoomRates'>
+    Pick<
+      MapLibreViewOptions<Groups>,
+      'active' | 'mapOptions' | 'createMap' | 'onError' | 'scrollZoomRates' | 'loadSceneRenderer' | 'loadJson'
+    >
   > = {},
   camera = NANJING
 ) {
@@ -2392,5 +2490,569 @@ describe('MapLibreView 的状态转换（穷举短序列）', { timeout: 20_000 
     // 交错之后能走到"样式失败后加载又完成、激活时重建"这条路径：从 failed 先回到 initializing 再失败
     expect(reached).toContain('failed(style) → initializing');
     expect(reached).toContain('initializing → failed(engine)');
+  });
+});
+
+// 三维渲染器：拾取总打到模型，投影总在固定位置；只用来看视图在三维时把拾取、投影交给它
+function fakeRenderer(): SceneRenderer {
+  const emitter = createNanoEvents<SceneRendererEvents>();
+  const sphere: TilesetSphere = { center: [118.8, 32.05], radius: 50 };
+  return {
+    attach: () => undefined,
+    detach: () => undefined,
+    loseContext: () => undefined,
+    prerender: () => undefined,
+    render: () => undefined,
+    endFrame: () => undefined,
+    addTileset: async () => sphere,
+    updateTileset: () => undefined,
+    removeTileset: () => undefined,
+    pick: () => ({ lngLat: [118.8, 32.05], height: 15 }),
+    project: () => ({ x: 7, y: 9 }),
+    setLift: () => undefined,
+    lowestHeight: () => null,
+    setInteriorFog: () => undefined,
+    setMarker: () => undefined,
+    on: (event, callback) => emitter.on(event, callback),
+    [Symbol.dispose]: () => undefined
+  };
+}
+
+const STATION_JSON = {
+  asset: { version: '1.1' },
+  geometricError: 10,
+  root: { boundingVolume: { sphere: [0, 0, 0, 10] }, geometricError: 0, content: { uri: 'a.glb' } }
+};
+
+// 推进到下一轮宏任务：渲染器的加载、索引的整理都在微任务里
+const nextTask = () => new Promise(resolve => setTimeout(resolve, 0));
+
+const sceneSetup = () => setup({ loadSceneRenderer: async () => fakeRenderer, loadJson: async () => STATION_JSON });
+
+// 三维模块的加载由用例控制：每次加载记一项，resolve、reject 结束它
+function moduleSetup() {
+  const loads: { resolve: () => void; reject: (error: unknown) => void }[] = [];
+  const ctx = setup({
+    loadSceneRenderer: () =>
+      new Promise((resolve, reject) => loads.push({ resolve: () => resolve(fakeRenderer), reject })),
+    loadJson: async () => STATION_JSON
+  });
+  return Object.assign(ctx, { loads });
+}
+
+const callNames = (calls: readonly unknown[][]) => calls.map(([name]) => name);
+
+describe('MapLibreView as the 3D view of the MapLibre engine (ADR 0147)', () => {
+  it('supports only 2D without a scene renderer', () => {
+    using ctx = setup();
+    ctx.map.fire('style.load');
+
+    expect(ctx.view.kinds).toStrictEqual(['2d']);
+    expect(() => ctx.view.setKind('3d')).toThrow('MapLibreView 不支持 3d');
+  });
+
+  it('switches kind in place: tools, camera changes and the scene status follow the current kind', async () => {
+    using ctx = sceneSetup();
+    const { tool, views } = recordingTool();
+    ctx.session.tool.register('probe', tool);
+    ctx.session.tool.activate('probe');
+    ctx.map.fire('style.load');
+    const changes: CameraChange[] = [];
+    ctx.session.camera.on('change', change => changes.push(change));
+    const statuses: SceneStatus[] = [];
+    ctx.view.onSceneStatusChange(status => statuses.push(status));
+    ctx.session.scene.set({
+      tilesets: [{ id: 'station', url: 'https://models.test/station/tileset.json', show: true, lighting: 'sun', attempt: 0 }],
+      underground: null
+    });
+    await nextTask();
+    expect(ctx.view.sceneStatus).toBe(NO_SCENE_STATUS);
+
+    ctx.view.setKind('3d');
+    await nextTask();
+    await nextTask();
+    ctx.map.mouse('mousemove', 5, 5);
+    ctx.map.drag(119, 32);
+
+    expect(ctx.view.kind).toBe('3d');
+    expect(ctx.view.state).toBe('ready');
+    expect(views.map(view => view.kind)).toStrictEqual(['3d']);
+    expect(changes.at(-1)?.view).toBe('3d');
+    expect(ctx.view.sceneStatus.get('station')?.state).toBe('ready');
+
+    ctx.view.setKind('2d');
+
+    expect(statuses.at(-1)).toBe(NO_SCENE_STATUS);
+    expect(ctx.view.sceneStatus).toBe(NO_SCENE_STATUS);
+  });
+
+  it('picks and projects models through the renderer in 3D only', async () => {
+    using ctx = sceneSetup();
+    ctx.map.fire('style.load');
+    ctx.session.scene.set({
+      tilesets: [{ id: 'station', url: 'https://models.test/station/tileset.json', show: true, lighting: 'sun', attempt: 0 }],
+      underground: null
+    });
+    ctx.view.setKind('3d');
+    await nextTask();
+    await nextTask();
+
+    expect(ctx.view.pick({ x: 1, y: 1 })).toStrictEqual({
+      kind: 'hit',
+      surface: 'model',
+      lngLat: [118.8, 32.05],
+      height: 15
+    });
+    expect(ctx.view.project([118.8, 32.05], 15)).toStrictEqual({ x: 7, y: 9 });
+
+    ctx.view.setKind('2d');
+    expect(ctx.view.pick({ x: 1, y: 1 })).toMatchObject({ kind: 'hit', surface: 'map' });
+  });
+
+  it('switching to 3D while ready: globe projection, a higher pitch limit and the session camera, all written as sync', () => {
+    using ctx = sceneSetup();
+    ctx.map.fire('style.load');
+    const changes: CameraChange[] = [];
+    ctx.session.camera.on('change', change => changes.push(change));
+
+    ctx.view.setKind('3d');
+
+    expect(ctx.map.projection).toStrictEqual({ type: 'globe' });
+    expect(ctx.map.maxPitch).toBe(85);
+    expect(ctx.map.calls.findLast(([name]) => name === 'jumpTo')).toStrictEqual([
+      'jumpTo',
+      { center: [118.8, 32.05], zoom: 8, bearing: 0, pitch: 0 },
+      { cause: 'sync' }
+    ]);
+    // 相机没变时会话不发变化；有变化的只能是 sync
+    expect(changes.every(({ view, cause }) => view === '3d' && cause === 'sync')).toBe(true);
+  });
+
+  it('switching back to 2D brings the pitch within the 2D limit before lowering it, so MapLibre never moves on its own', () => {
+    using ctx = sceneSetup();
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    ctx.map.moveTo({ ...ctx.map.camera, pitch: 80 }, { originalEvent: new MouseEvent('mousemove') });
+    expect(ctx.session.camera.current.pitch).toBe(80);
+    const changes: CameraChange[] = [];
+    ctx.session.camera.on('change', change => changes.push(change));
+
+    ctx.view.setKind('2d');
+
+    expect(ctx.map.maxPitch).toBe(60);
+    expect(ctx.map.projection).toStrictEqual({ type: 'mercator' });
+    expect(ctx.session.camera.current.pitch).toBe(60);
+    expect(changes.length).toBeGreaterThan(0);
+    expect(changes.every(({ view, cause }) => view === '2d' && cause === 'sync')).toBe(true);
+  });
+
+  it('uses the page maxPitch as the 2D limit', () => {
+    using ctx = setup({
+      mapOptions: { maxPitch: 45 },
+      loadSceneRenderer: async () => fakeRenderer,
+      loadJson: async () => STATION_JSON
+    });
+    ctx.map.maxPitch = 45;
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    expect(ctx.map.maxPitch).toBe(85);
+
+    ctx.view.setKind('2d');
+
+    expect(ctx.map.maxPitch).toBe(45);
+  });
+
+  it('applies the limits of the current kind when it becomes ready in 3D, before syncing the camera', () => {
+    using ctx = sceneSetup();
+    ctx.view.setKind('3d');
+    expect(ctx.map.calls).toStrictEqual([]);
+
+    ctx.map.fire('style.load');
+
+    expect(callNames(ctx.map.calls).slice(0, 3)).toStrictEqual(['setMaxPitch', 'setProjection', 'jumpTo']);
+    expect(ctx.map.projection).toStrictEqual({ type: 'globe' });
+  });
+
+  it('a 2D-only view never touches the projection or the pitch limit', () => {
+    using ctx = setup();
+    ctx.map.fire('style.load');
+
+    expect(callNames(ctx.map.calls)).not.toContain('setProjection');
+    expect(callNames(ctx.map.calls)).not.toContain('setMaxPitch');
+  });
+
+  it('sets the globe again after a full rebuild in 3D: the new style comes with its own projection', async () => {
+    using ctx = sceneSetup();
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    ctx.map.failOn = 'addSource';
+    ctx.session.style.setGroup('business', lineGroup('roads'));
+    await nextMicrotask();
+    ctx.map.failOn = undefined;
+    expect(callNames(ctx.map.styleCalls()).at(-1)).toBe('setStyle');
+    // MapLibre 整体加载新样式时投影回到样式里写的（这里没有，即墨卡托）
+    ctx.map.projection = undefined;
+
+    ctx.map.fire('style.load');
+
+    expect(ctx.map.projection).toStrictEqual({ type: 'globe' });
+  });
+
+  it('is initializing in 3D until the 3D module loads; tools get no input and settle waits meanwhile', async () => {
+    using ctx = moduleSetup();
+    const { tool, inputs } = recordingTool();
+    ctx.session.tool.register('probe', tool);
+    ctx.session.tool.activate('probe');
+    ctx.map.fire('style.load');
+    let settles = 0;
+    ctx.view.on('settle', () => settles++);
+
+    ctx.view.setKind('3d');
+    ctx.map.mouse('click', 5, 5);
+    ctx.map.fire('idle');
+
+    expect(ctx.view.state).toBe('initializing');
+    expect(ctx.states.at(-1)).toBe('initializing');
+    expect(inputs).toStrictEqual([]);
+    expect(settles).toBe(0);
+    expect(() => ctx.view.pick({ x: 1, y: 1 })).toThrow('只能在 ready 时');
+    const ready = ctx.view.whenReady();
+    expect(await settled(ready)).toBe('pending');
+
+    ctx.loads[0]?.resolve();
+    await nextTask();
+    ctx.map.fire('idle');
+
+    expect(ctx.view.state).toBe('ready');
+    expect(ctx.states.at(-1)).toBe('ready');
+    expect(await settled(ready)).toBeUndefined();
+    expect(settles).toBe(1);
+    expect(ctx.loads).toHaveLength(1);
+  });
+
+  it('a failed 3D module fails only the 3D kind: 2D stays ready, retry reloads the module without a new map', async () => {
+    using ctx = moduleSetup();
+    ctx.map.fire('style.load');
+    const map = ctx.map;
+    ctx.view.setKind('3d');
+    // 先接住结果：失败发生在等待的下一轮之前
+    const ready = ctx.view.whenReady().then(
+      () => 'resolved',
+      (reason: unknown) => reason
+    );
+    const error = new Error('三维模块下载失败');
+
+    ctx.loads[0]?.reject(error);
+    await nextTask();
+
+    expect(ctx.view.state).toBe('failed');
+    expect(ctx.view.failure).toStrictEqual({ kind: 'module', error });
+    // 每次读到同一个对象：上下文按引用判断原因变了没有
+    expect(ctx.view.failure).toBe(ctx.view.failure);
+    expect(await ready).toBe(error);
+    expect(ctx.errors).toContain(error);
+
+    ctx.view.setKind('2d');
+    expect(ctx.view.state).toBe('ready');
+    expect(ctx.view.failure).toBeNull();
+    // 切回三维不自动重新加载，等 retry
+    ctx.view.setKind('3d');
+    expect(ctx.view.state).toBe('failed');
+    expect(ctx.loads).toHaveLength(1);
+
+    ctx.view.retry();
+    expect(ctx.view.state).toBe('initializing');
+    const retried = ctx.view.whenReady();
+    ctx.loads[1]?.resolve();
+    await nextTask();
+
+    expect(ctx.view.state).toBe('ready');
+    expect(await settled(retried)).toBeUndefined();
+    // 还是同一个地图，没有重建
+    expect(ctx.map).toBe(map);
+    expect(map.removed).toBe(false);
+    expect(ctx.states).toStrictEqual(['ready', 'initializing', 'failed', 'ready', 'failed', 'initializing', 'ready']);
+  });
+
+  it('retry does nothing in 2D, while the 3D module is fine, or for a 2D-only view', async () => {
+    using ctx = moduleSetup();
+    ctx.map.fire('style.load');
+    ctx.view.retry();
+    ctx.view.setKind('3d');
+    ctx.view.retry();
+    ctx.loads[0]?.resolve();
+    await nextTask();
+    ctx.view.retry();
+
+    expect(ctx.loads).toHaveLength(1);
+    using flat = setup();
+    flat.map.fire('style.load');
+    flat.view.retry();
+    expect(flat.view.state).toBe('ready');
+  });
+
+  it('a paused view stays paused whatever the 3D module does, and is ready again on resume', async () => {
+    using ctx = moduleSetup();
+    ctx.map.fire('style.load');
+    ctx.view.setKind('3d');
+    ctx.view.pause();
+
+    ctx.loads[0]?.resolve();
+    await nextTask();
+    expect(ctx.view.state).toBe('paused');
+
+    ctx.view.resume();
+    expect(ctx.view.state).toBe('ready');
+  });
+
+  it('reads the eye height and heading from the MapLibre camera in 3D only', async () => {
+    using ctx = sceneSetup();
+    ctx.map.fire('style.load');
+    expect(ctx.view.eyeHeight()).toBeNull();
+    expect(ctx.view.heading()).toBeNull();
+
+    ctx.view.setKind('3d');
+    await nextTask();
+    ctx.map.moveTo({ ...ctx.map.camera, bearing: -30 }, { originalEvent: new MouseEvent('mousemove') });
+
+    expect(ctx.view.eyeHeight()).toBe(1234);
+    expect(ctx.view.heading()).toBe(330);
+  });
+
+  it('misses the sky and hides ground points behind the globe in 3D only', async () => {
+    // 打不到模型的渲染器：拾取落到地面或天空
+    using ctx = setup({
+      loadSceneRenderer: async () => () => ({ ...fakeRenderer(), pick: () => null }),
+      loadJson: async () => STATION_JSON
+    });
+    ctx.map.fire('style.load');
+    ctx.map.transform.sky = ({ y }) => y < 100;
+    ctx.map.transform.occluded = ({ lng }) => lng > 150;
+
+    expect(ctx.view.pick({ x: 10, y: 10 })).toMatchObject({ kind: 'hit', surface: 'map' });
+    expect(ctx.view.project([160, 30])).toStrictEqual({ x: 4200, y: 300 });
+
+    ctx.view.setKind('3d');
+    await nextTask();
+
+    expect(ctx.view.pick({ x: 10, y: 10 })).toStrictEqual({ kind: 'miss' });
+    expect(ctx.view.pick({ x: 10, y: 200 })).toMatchObject({ kind: 'hit', surface: 'map' });
+    expect(ctx.view.project([160, 30])).toBeNull();
+    expect(ctx.view.project([118, 33])).toStrictEqual({ x: 0, y: 0 });
+  });
+});
+
+// 设图层可见性的调用："图层 取值"
+const visibility = (calls: readonly unknown[][]) =>
+  calls.flatMap(([name, layer, property, value]) =>
+    name === 'setLayoutProperty' && property === 'visibility' ? [`${String(layer)} ${String(value)}`] : []
+  );
+
+describe('MapLibreView roaming in the MapLibre engine (ADR 0147 §4)', () => {
+  const STATION = { id: 'station', url: 'https://models.test/station/tileset.json', show: true, lighting: 'headlight' } as const;
+  const ROUTE = {
+    kind: 'route',
+    id: 'route-1',
+    path: [
+      [118.8, 32.05, -5],
+      [118.8001, 32.05, -5]
+    ],
+    playing: false,
+    speed: 1,
+    run: 0
+  } as const;
+
+  // 地下的车站：包围盒最低处 -6 米，抬高 7 米；拾取打到的点在抬高前的真实高度
+  async function roaming() {
+    const ctx = setup({
+      loadSceneRenderer: async () => () => ({ ...fakeRenderer(), lowestHeight: () => -6 }),
+      loadJson: async () => STATION_JSON
+    });
+    const { tool, inputs } = recordingTool();
+    ctx.session.tool.register('probe', tool);
+    ctx.session.tool.activate('probe');
+    ctx.map.fire('style.load');
+    ctx.session.style.setGroup('business', lineGroup('dltb'));
+    await vi.advanceTimersByTimeAsync(0);
+    ctx.view.setKind('3d');
+    await vi.advanceTimersByTimeAsync(0);
+    ctx.session.scene.set({
+      tilesets: [{ ...STATION, attempt: 0 }],
+      underground: { tilesetId: 'station', surfaceOpacity: 0.25 },
+      roam: ROUTE
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    return Object.assign(ctx, { inputs });
+  }
+
+  it('hides the 2D layers while lifted, reports real heights and keeps the input from the tool', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
+    try {
+      using ctx = await roaming();
+      const statuses: unknown[] = [];
+      ctx.view.onRoamStatusChange(status => statuses.push(status));
+      ctx.map.calls.length = 0;
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(visibility(ctx.map.calls)).toStrictEqual(['dltb-line none']);
+      expect(ctx.view.roamStatus).toMatchObject({ kind: 'route', id: 'route-1', distance: 0 });
+      // MapLibre 的相机高度是抬高后的，对外减掉抬高量
+      ctx.map.transform.altitude = 5.6;
+      expect(ctx.view.eyeHeight()).toBeCloseTo(-1.4, 9);
+      // 打不到模型时是天空，不回退到抬高后的地面
+      expect(ctx.view.pick({ x: 1, y: 1 })).toMatchObject({ kind: 'hit', surface: 'model', height: 15 });
+      // 会话的相机按真实的视点：视点在地下，退化成视点正下方
+      expect(ctx.session.camera.current.center[0]).toBeCloseTo(118.8, 6);
+      expect(ctx.session.camera.current.pitch).toBe(0);
+      ctx.map.mouse('click', 5, 5);
+      expect(ctx.inputs).toStrictEqual([]);
+      // 抬高期间新加的图层同样隐藏
+      ctx.map.calls.length = 0;
+      ctx.session.style.setGroup('basemap', lineGroup('tdt'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(visibility(ctx.map.calls)).toContain('tdt-line none');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('another positioning stops the roam at once and gives the layers, gestures and input back', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
+    try {
+      using ctx = await roaming();
+      await vi.advanceTimersByTimeAsync(200);
+      ctx.map.calls.length = 0;
+
+      ctx.view.flyTo({ center: [119.5, 32], zoom: 12 });
+
+      expect(visibility(ctx.map.calls)).toStrictEqual(['dltb-line visible']);
+      expect(ctx.map.maxZoom).toBe(22);
+      expect(ctx.map.dragPan.enabled).toBe(true);
+      expect(callNames(ctx.map.calls).at(-1)).toBe('flyTo');
+      ctx.map.mouse('click', 5, 5);
+      expect(ctx.inputs).toHaveLength(1);
+      expect(ctx.view.eyeHeight()).toBe(1234);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaving 3D in the middle of a roam puts the camera straight back', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
+    try {
+      using ctx = await roaming();
+      await vi.advanceTimersByTimeAsync(200);
+
+      ctx.view.setKind('2d');
+
+      expect(visibility(ctx.map.calls).at(-1)).toBe('dltb-line visible');
+      expect(ctx.map.camera).toMatchObject({ lng: NANJING.center[0], lat: NANJING.center[1] });
+      expect(ctx.view.kind).toBe('2d');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// MapLibre 地球投影下的 flyTo 中心不变时会把缩放算成 NaN，见 globe-fly.ts
+function onGlobe() {
+  const ctx = setup();
+  ctx.map.fire('style.load');
+  ctx.map.projection = { type: 'globe' };
+  return ctx;
+}
+const named = (calls: readonly (readonly unknown[])[], name: string) => calls.filter(([call]) => call === name);
+
+describe('MapLibreView 地球投影下中心不变的定位', () => {
+  it('只改缩放：走 easeTo，时长和 flyTo 默认的相同', () => {
+    using ctx = onGlobe();
+    const { zoom } = ctx.session.camera.current;
+    ctx.view.flyTo({ zoom: zoom + 3.5 });
+    expect(named(ctx.map.calls, 'flyTo')).toStrictEqual([]);
+    const [[, options, eventData] = []] = named(ctx.map.calls, 'easeTo');
+    expect(options).toStrictEqual({ zoom: zoom + 3.5, duration: expect.closeTo((1000 * 3.5 * Math.LN2) / 1.42 / 1.2, 5) as number });
+    expect(eventData).toStrictEqual({ cause: 'program' });
+    expect(ctx.session.camera.current.zoom).toBe(zoom + 3.5);
+  });
+
+  it('给了时长就用给的', () => {
+    using ctx = onGlobe();
+    ctx.view.flyTo({ zoom: 12 }, { duration: 300 });
+    expect(named(ctx.map.calls, 'easeTo').at(-1)?.[1]).toStrictEqual({ zoom: 12, duration: 300 });
+  });
+
+  it('缩放也没变（只转方向）：时长交给 MapLibre 的默认值，不是 0', () => {
+    using ctx = onGlobe();
+    ctx.view.flyTo({ bearing: 30 });
+    expect(named(ctx.map.calls, 'easeTo').at(-1)?.[1]).toStrictEqual({ bearing: 30 });
+  });
+
+  it('目标就是当前的中心：也走 easeTo', () => {
+    using ctx = onGlobe();
+    const { center } = ctx.session.camera.current;
+    ctx.view.flyTo({ center, zoom: 12 }, { duration: 300 });
+    expect(named(ctx.map.calls, 'flyTo')).toStrictEqual([]);
+    expect(named(ctx.map.calls, 'easeTo')).toHaveLength(1);
+  });
+
+  it('中心变了：还是 flyTo', () => {
+    using ctx = onGlobe();
+    ctx.view.flyTo({ center: [120, 31], zoom: 12 }, { duration: 300 });
+    expect(named(ctx.map.calls, 'flyTo')).toHaveLength(1);
+    expect(named(ctx.map.calls, 'easeTo')).toStrictEqual([]);
+  });
+
+  it('二维不受影响：还是 flyTo', () => {
+    using ctx = setup();
+    ctx.map.fire('style.load');
+    ctx.view.flyTo({ zoom: 12 }, { duration: 300 });
+    expect(named(ctx.map.calls, 'flyTo')).toHaveLength(1);
+    expect(named(ctx.map.calls, 'easeTo')).toStrictEqual([]);
+  });
+
+  it('暂停时动画直接到终点：用同样的方法', () => {
+    using ctx = onGlobe();
+    ctx.map.animate = true;
+    ctx.view.flyTo({ zoom: 12 }, { duration: 300 });
+    ctx.view.pause();
+    expect(ctx.map.calls.at(-1)).toStrictEqual(['easeTo', { zoom: 12, duration: 0 }, { cause: 'program' }]);
+    expect(ctx.session.camera.current.zoom).toBe(12);
+  });
+
+  it('fitBounds 的目标中心不变：走直线，时长和 flyTo 默认的相同', () => {
+    using ctx = onGlobe();
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 9, duration: 0 });
+    ctx.view.flyTo({ zoom: 5.5 }, { duration: 0 });
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 9 });
+    expect(named(ctx.map.calls, 'fitBounds').at(-1)).toStrictEqual([
+      'fitBounds',
+      [118, 31, 120, 33],
+      { maxZoom: 9, linear: true, duration: expect.closeTo((1000 * 3.5 * Math.LN2) / 1.42 / 1.2, 5) as number },
+      { cause: 'program' }
+    ]);
+  });
+
+  it('fitBounds 给了时长就用给的，暂停时用同样的走法到终点', () => {
+    using ctx = onGlobe();
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 9, duration: 0 });
+    ctx.map.animate = true;
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 7, duration: 300 });
+    expect(named(ctx.map.calls, 'fitBounds').at(-1)?.[2]).toStrictEqual({ maxZoom: 7, duration: 300, linear: true });
+    ctx.view.pause();
+    expect(ctx.map.calls.at(-1)?.[2]).toStrictEqual({ maxZoom: 7, duration: 0, linear: true });
+  });
+
+  it('fitBounds 的中心变了：还是原来的走法', () => {
+    using ctx = onGlobe();
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 9 });
+    expect(named(ctx.map.calls, 'fitBounds').at(-1)?.[2]).toStrictEqual({ maxZoom: 9 });
+  });
+
+  it('二维的 fitBounds 不受影响', () => {
+    using ctx = setup();
+    ctx.map.fire('style.load');
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 9, duration: 0 });
+    ctx.view.fitBounds([118, 31, 120, 33], { maxZoom: 7 });
+    expect(named(ctx.map.calls, 'fitBounds').at(-1)?.[2]).toStrictEqual({ maxZoom: 7 });
   });
 });

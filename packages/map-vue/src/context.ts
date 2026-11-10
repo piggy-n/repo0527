@@ -41,6 +41,7 @@ import {
   type OverlayPadding,
   revealOffset
 } from './overlay';
+import { CESIUM_ENGINE, type SceneCapabilities } from './runtime';
 
 /**
  * 就绪视图的受限入口：只有拾取、投影、渲染要素查询和视点高度；移动相机通过相机操作
@@ -93,7 +94,10 @@ const animationFrame: FrameScheduler = callback => {
 export interface MapContext {
   /** 当前显示二维还是三维（ADR 0079 第 8 节）：下面的视图、状态、失败、数据源错误、指针都只反映这一种视图 */
   readonly dimension: Readonly<Ref<ViewKind>>;
-  /** 切换二维、三维：当前的视图暂停，另一种视图恢复；还没有这种视图时状态是 idle，等它的画布挂上 */
+  /**
+   * 切换二维、三维：当前的视图暂停，另一种视图恢复；还没有这种视图时状态是 idle，等它的画布挂上。
+   * 当前视图同时担任两种种类时（MapLibre 引擎）只换它的种类
+   */
   setDimension(kind: ViewKind): void;
   /** 就绪的视图，只在视图为 ready 时有值（ADR 0039 第 4 条） */
   readonly view: Readonly<ShallowRef<MapViewport | null>>;
@@ -106,7 +110,12 @@ export interface MapContext {
   readonly sceneStatus: Readonly<ShallowRef<SceneStatus>>;
   /** 当前视图报告的漫游进度（ADR 0083 第 2 节）；没有在漫游、二维、没有视图时为 null */
   readonly roamStatus: Readonly<ShallowRef<RoamStatus | null>>;
-  /** 引擎失败后重新创建视图；其他时候什么也不做（样式失败会在出现新版本时自动恢复） */
+  /** 三维引擎能做什么（ADR 0147 第 3 节）：和 dimension 一起决定三维里显示什么；不随视图就绪变化 */
+  readonly sceneCapabilities: SceneCapabilities;
+  /**
+   * 引擎失败后重新创建视图；当前种类的模块加载失败（MapLibre 引擎的三维）时只重新加载这个模块，不重建地图；
+   * 其他时候什么也不做（样式失败会在出现新版本时自动恢复）
+   */
   retry(): void;
   /**
    * 等到有视图且这一轮加载完成；视图失败时以原因结束；等待的视图被卸下或替换、上下文释放时以 AbortError 结束，
@@ -165,9 +174,15 @@ interface OverlayEntry {
   readonly edge: OverlayEdge;
 }
 
+// 视图支持的种类
+const kindsOf = (view: MapView): readonly ViewKind[] => view.kinds ?? [view.kind];
+
 function createViewport(view: MapView): MapViewport {
   return Object.freeze({
-    kind: view.kind,
+    // 同时担任二三维的视图，种类随维度变化（ADR 0147 第 2 节）
+    get kind(): ViewKind {
+      return view.kind;
+    },
     pick: (point: ScreenPoint) => view.pick(point),
     project: (lngLat: LngLat, height?: number) => view.project(lngLat, height),
     queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => view.queryRendered(area, options),
@@ -233,7 +248,7 @@ export class MapContextState implements Disposable {
   readonly #operations = new WeakMap<AbortSignal, CameraOperation>();
   readonly #overlays = new Set<OverlayEntry>();
   readonly #overlayOptions: Required<OverlayOptions>;
-  // 每种视图一个画布；只有当前种类的视图生效，其他的暂停
+  // 每种视图一个画布；只有当前种类的视图生效，其他的暂停。同时担任二三维的视图在两种种类下是同一项（ADR 0147 第 2 节）
   readonly #views = new Map<ViewKind, AttachedView>();
   readonly #dimension = ref<ViewKind>('2d');
   // 所在页面没有被缓存停用（ADR 0063）：停用时所有视图都暂停
@@ -245,7 +260,8 @@ export class MapContextState implements Disposable {
     session: MapSession<string>,
     onError: (error: unknown) => void,
     overlayOptions: Required<OverlayOptions>,
-    requestFrame: FrameScheduler = animationFrame
+    requestFrame: FrameScheduler = animationFrame,
+    sceneCapabilities: SceneCapabilities = CESIUM_ENGINE.capabilities
   ) {
     this.session = session;
     this.onError = onError;
@@ -268,6 +284,7 @@ export class MapContextState implements Disposable {
       sourceErrors: shallowReadonly(this.#sourceErrors),
       sceneStatus: shallowReadonly(this.#sceneStatus),
       roamStatus: shallowReadonly(this.#roamStatus),
+      sceneCapabilities,
       retry: () => this.#retry(),
       whenReady: (signal?: AbortSignal) => this.#whenReady(signal),
       whenSettled: (signal?: AbortSignal) => this.#whenSettled(signal),
@@ -293,9 +310,9 @@ export class MapContextState implements Disposable {
     return this.#retryRequests;
   }
 
-  /** 画布创建这种视图时，视图应不应该运行：页面没有停用、并且是当前显示的种类；否则以暂停状态创建 */
-  shouldRun(kind: ViewKind): boolean {
-    return this.#pageActive && this.#dimension.value === kind;
+  /** 画布创建支持这些种类的视图时，视图应不应该运行：页面没有停用、并且当前显示的是其中一种；否则以暂停状态创建 */
+  shouldRun(...kinds: readonly ViewKind[]): boolean {
+    return this.#pageActive && kinds.includes(this.#dimension.value);
   }
 
   /** 所在页面被 KeepAlive 停用、重新激活（ADR 0063）：停用时当前视图暂停，激活时恢复；各个画布都会调用，重复调用不起作用 */
@@ -312,10 +329,19 @@ export class MapContextState implements Disposable {
     }
   }
 
-  /** 画布组件挂载后挂上视图和它的容器（量可视区域用）；每种视图只能有一个画布 */
+  /**
+   * 画布组件挂载后挂上视图和它的容器（量可视区域用）；每种视图只能有一个画布。
+   * 同时担任二三维的视图在它支持的每种种类下都登记，支持当前维度时先换成这种种类
+   */
   attachView(view: MapView, canvas: HTMLElement): void {
-    if (this.#views.has(view.kind)) {
-      throw new Error(`一个地图上下文的每种视图只能有一个画布：${view.kind}`);
+    const kinds = kindsOf(view);
+    const taken = kinds.find(kind => this.#views.has(kind));
+    if (taken) {
+      throw new Error(`一个地图上下文的每种视图只能有一个画布：${taken}`);
+    }
+    const dimension = this.#dimension.value;
+    if (kinds.includes(dimension) && view.kind !== dimension) {
+      view.setKind?.(dimension);
     }
     const viewport = createViewport(view);
     // 不是当前种类的视图的事件不反映到上下文
@@ -360,7 +386,9 @@ export class MapContextState implements Disposable {
       unsubscribeRoamStatus?.();
     };
     const attached: AttachedView = { view, viewport, canvas, unsubscribe, detached: new AbortController() };
-    this.#views.set(view.kind, attached);
+    for (const kind of kinds) {
+      this.#views.set(kind, attached);
+    }
     if (this.#current === attached) {
       this.#becomeCurrent(attached);
     }
@@ -374,7 +402,11 @@ export class MapContextState implements Disposable {
     }
     const wasCurrent = this.#current === attached;
     attached.unsubscribe();
-    this.#views.delete(view.kind);
+    for (const [kind, item] of this.#views) {
+      if (item === attached) {
+        this.#views.delete(kind);
+      }
+    }
     if (wasCurrent) {
       this.#clearPointer();
       this.#syncView();
@@ -432,15 +464,27 @@ export class MapContextState implements Disposable {
     this.#lease = new AbortController();
   }
 
-  // 切换种类：旧的当前视图暂停，新的恢复；投影跟着视图变了（ADR 0079 第 8 节）
+  // 切换种类：旧的当前视图暂停，新的恢复；投影跟着视图变了（ADR 0079 第 8 节）。
+  // 当前视图也支持新的种类时（MapLibre 引擎，ADR 0147 第 2 节）不暂停、恢复，通知它换种类，画布和相机不变。
+  // 先作废绑定在旧种类上的等待、让同一个视图换好种类，再改维度：同步侦听维度的人（如切到三维的耗时标记）
+  // 在侦听里调用 whenReady，等的是新种类这一轮的结果
   #setDimension(kind: ViewKind): void {
     if (this.#dimension.value === kind) {
       return;
     }
     const previous = this.#current;
-    this.#dimension.value = kind;
+    const sameView = previous !== null && this.#views.get(kind) === previous;
     this.#renewLease();
     this.#clearPointer();
+    if (sameView) {
+      previous.view.setKind?.(kind);
+    }
+    this.#dimension.value = kind;
+    if (sameView) {
+      this.#projectionRevision.value++;
+      this.#becomeCurrent(previous);
+      return;
+    }
     if (previous && this.#pageActive) {
       previous.view.pause();
     }
@@ -475,9 +519,13 @@ export class MapContextState implements Disposable {
     this.#pointer.value = null;
   }
 
+  // 引擎失败由画布重建视图；当前种类的模块加载失败由视图自己重新加载，画布和地图都不变（ADR 0147 第 2 节）
   #retry(): void {
-    if (this.#failure.value?.kind === 'engine') {
+    const failure = this.#failure.value;
+    if (failure?.kind === 'engine') {
       this.#retryRequests.value++;
+    } else if (failure?.kind === 'module') {
+      this.#current?.view.retry?.();
     }
   }
 

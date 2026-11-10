@@ -1,10 +1,14 @@
 import { mount } from '@vue/test-utils';
 import {
+  CESIUM_ENGINE,
   MAP_ERROR_REPORTER,
   MAP_RUNTIME,
   MAP_RUNTIME_PRELOAD,
+  MAP_SCENE_ENGINE,
+  MAPLIBRE_ENGINE,
   type MapRuntimeLoader,
-  type MapRuntimePreloader
+  type MapRuntimePreloader,
+  type SceneEngine
 } from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, inject } from 'vue';
@@ -35,5 +39,20 @@ describe('withRuntimeLoader', () => {
     expect(receivedPreload).toBe(preload);
     expect(receivedReporter).toBe(reportMapError);
     expect(wrapper.text()).toBe('320100');
+  });
+
+  it.each([
+    ['cesium', CESIUM_ENGINE],
+    ['maplibre', MAPLIBRE_ENGINE]
+  ] as const)('按 .env 的三维引擎（%s）注入引擎的描述，页面只拿到描述（ADR 0147 第 1 节）', (engine, expected) => {
+    let received: SceneEngine | null = null;
+    const Page = defineComponent(() => {
+      received = inject(MAP_SCENE_ENGINE, null);
+      return () => null;
+    });
+
+    mount(withRuntimeLoader(Page, vi.fn<MapRuntimeLoader>(), vi.fn<MapRuntimePreloader>(), engine));
+
+    expect(received).toBe(expected);
   });
 });

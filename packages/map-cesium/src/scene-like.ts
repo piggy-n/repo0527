@@ -6,10 +6,9 @@ import type {
   Navigation,
   NavPoint,
   PickResult,
-  PreparedTileset,
   RoutePath,
   ScreenPoint,
-  TilesetLighting,
+  TilesetHost,
   UndergroundView,
   Unsubscribe,
   WalkNotice,
@@ -28,13 +27,8 @@ export interface ScenePose {
   readonly up: readonly [number, number, number];
 }
 
-/** 瓦片集可以随时改的部分 */
-export interface TilesetOptions {
-  readonly show: boolean;
-  readonly lighting: TilesetLighting;
-  /** 设定的屏幕误差（像素），不传用场景的默认值（`DEFAULT_SCREEN_SPACE_ERROR`，8）；显存放不下时 Cesium 会临时放大它 */
-  readonly maximumScreenSpaceError?: number;
-}
+// 瓦片集的选项定义在 map-core，两种三维引擎共用（ADR 0147 第 3 节）；场景的其他模块仍从这里导入
+export type { TilesetOptions } from '@mx/map-core';
 
 /** 路线漫游的播放（ADR 0083 第 3 节）：speed 是米/秒（ADR 0097 第 4 节） */
 export interface RoutePlayback {
@@ -92,8 +86,11 @@ export interface SceneEvents {
   failure: (error: unknown) => void;
 }
 
-/** CesiumView 用到的场景能力（ADR 0079 第 3 节）：只有 CesiumScene 实现它时调用 Cesium，测试注入假场景 */
-export interface SceneLike extends Disposable {
+/**
+ * CesiumView 用到的场景能力（ADR 0079 第 3 节）：只有 CesiumScene 实现它时调用 Cesium，测试注入假场景；
+ * 瓦片集的增删改见 map-core 的 TilesetHost
+ */
+export interface SceneLike extends TilesetHost, Disposable {
   /** 画布中心对着的地面点换算成的二三维共用相机；画布还没有尺寸时为 null */
   readCamera(): CameraState | null;
   /** 立即定位；画布还没有尺寸时不动 */
@@ -132,13 +129,6 @@ export interface SceneLike extends Disposable {
    * 样式和形状个数都没变时只改坐标
    */
   setOverlays(layers: readonly OverlayLayer[]): void;
-  /**
-   * 把整理好的索引交给 Cesium，建好后加进场景（ADR 0081 第 3 节），给出让整个瓦片集进入画布的相机；
-   * signal 中止时销毁建好的瓦片集、以中止的原因结束
-   */
-  addTileset(id: string, tileset: PreparedTileset, options: TilesetOptions, signal: AbortSignal): Promise<CameraState>;
-  updateTileset(id: string, options: TilesetOptions): void;
-  removeTileset(id: string): void;
   /** 钻地观察（ADR 0081 第 6 节）；瓦片集还没加进来时，等加进来再生效 */
   setUnderground(underground: UndergroundView | null): void;
   /**

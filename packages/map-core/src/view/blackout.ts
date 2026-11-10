@@ -49,6 +49,18 @@ export class Blackout implements Disposable {
     }
   }
 
+  /** 立即全黑再亮起来：盖住已经同步完成的切换（MapLibre 漫游被别的定位接管时去掉抬高） */
+  flash(): void {
+    clearTimeout(this.#timer);
+    this.#timer = undefined;
+    const overlay = this.#ensureOverlay();
+    overlay.style.transition = 'none';
+    overlay.style.opacity = '1';
+    // 先按全黑排一次版，之后的渐变才从全黑开始
+    overlay.getBoundingClientRect();
+    this.#fade(0, FADE_IN, 'ease-out');
+  }
+
   /** 立即撤掉，不渐变 */
   clear(): void {
     clearTimeout(this.#timer);

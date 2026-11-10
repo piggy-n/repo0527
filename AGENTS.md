@@ -25,7 +25,7 @@ Claude Code 读写匹配的文件时自动加载 `.claude/rules/` 里对应的�
 | `state.md` | `features/*/store.ts`、`shared/storage/` | Pinia、偏好的持久化与开关 |
 | `packages.md` | `packages/`、`tsconfig.package*`、`vitest.shared.ts` | 拆包规则、包之间的依赖方向、依赖声明、包的测试 |
 | `map.md` | 地图的包、`shared/map/`、用到地图的 feature 和页面、`*.worker.ts` | 会话、样式分组、拥有者、相机操作、工具、地图页、Worker |
-| `map-3d.md` | `map-cesium`、`map-core/scene`、`scene-models`、现状底图页 | 三维、二三维切换、漫游、导航网格 |
+| `map-3d.md` | `map-cesium`、`map-three`、`map-core/scene`、`map-core/maplibre/roam`、`scene-models`、现状底图页 | 三维、二三维切换、漫游、导航网格 |
 | `resource-map.md` | `resource-map`、现状底图页、`probe-resource-classes` | 年份、分类、最小显示级别、已确认的界面细节 |
 | `indicator-simulation.md` | 指标 AI 计算 | 叫法、引擎、流程图、自定义范围 |
 | `city-dashboard.md` | 驾驶舱、`shared/city-indicators` | 范围、入场、保存图片 |
@@ -38,7 +38,7 @@ Claude Code 读写匹配的文件时自动加载 `.claude/rules/` 里对应的�
 - Element Plus 组件显式具名导入，样式全量引入 `element-plus/dist/index.css`，语言包用 `ElConfigProvider` 设置
 - 只用 TypeScript 7 一个版本；不引入依赖 TS JS API 的工具（vue-tsc、typescript-eslint 等），lint 用 oxlint + oxlint-tsgolint（ADR 0003），规则与依赖方向检查见 ADR 0006
 - 接口：axios + zod 4 + TanStack Vue Query 5；测试：Vitest 5 + jsdom + `@vue/test-utils`，真实引擎或布局用浏览器模式，接口用 MSW 2.x
-- 地图：二维 MapLibre GL JS 6，三维 Cesium（精确锁定版本）；距离和面积用 geographiclib-geodesic，其他几何用 turf v7 的单个包
+- 地图：二维 MapLibre GL JS 6，三维 Cesium（精确锁定版本），另有实施中的 MapLibre + Three.js 引擎，用 `VITE_MAP_3D_ENGINE` 选择（ADR 0147）；距离和面积用 geographiclib-geodesic，其他几何用 turf v7 的单个包
 - 偏好存 IndexedDB（idb-keyval），会话存 localStorage
 - 资源管理"自助取数"的知识图谱用 ECharts 的 graph 系列，坐标用 d3-force 计算，不引入 G6（ADR 0089）；名称写在节点里、字号按屏幕上的直径自适应，水资源图是总节点连四个大类的放射布局，数据在 `extraction/water-relations.json`（ADR 0126）
 - AI 对话回答的 Markdown 用 marked 转换、DOMPurify 净化后显示，只在 `features/ai-chat/markdown.ts` 中使用
@@ -60,6 +60,7 @@ packages/      workspace 内部包，导出 TS 源码，不构建；统一用 @m
 ├─ icons/       @mx/icons       图标组件与 SVG 规范化工具（ADR 0014）
 ├─ map-core/    @mx/map-core    地图内核，不依赖 Vue
 ├─ map-cesium/  @mx/map-cesium  Cesium 三维
+├─ map-three/   @mx/map-three   MapLibre 引擎的三维（Three.js，画在 MapLibre 的 custom layer 里）
 ├─ map-vue/     @mx/map-vue     地图与 Vue 的衔接
 └─ map-tools/   @mx/map-tools   地图的通用交互：绘制、逐点编辑、测量、框选手势、鼠标旁的提示（ADR 0145）
 ```

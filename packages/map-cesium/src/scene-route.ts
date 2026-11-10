@@ -1,6 +1,5 @@
-import { type RoutePath, type RoutePose, smoothAngle } from '@mx/map-core';
+import { Blackout, type RoutePath, type RoutePose, smoothAngle } from '@mx/map-core';
 import { Cartesian3, Math as CesiumMath, type CesiumWidget } from 'cesium';
-import { Blackout } from './scene-blackout';
 import type { RoutePlayback } from './scene-like';
 import { keepInputsOff, releaseCamera, type RoamSaved, takeOverCamera } from './scene-roam-camera';
 

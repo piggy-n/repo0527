@@ -1,16 +1,20 @@
-import type {
-  CameraState,
-  ClientPoint,
-  LngLat,
-  MapPointerEvent,
-  NavPoint,
-  PickResult,
-  PreparedTileset,
-  RoutePath,
-  ScreenPoint,
-  UndergroundView,
-  Unsubscribe,
-  WalkView
+import {
+  type CameraState,
+  type ClientPoint,
+  distanceToZoom,
+  type LngLat,
+  MAPLIBRE_FOVY,
+  type MapPointerEvent,
+  type NavPoint,
+  type PickResult,
+  type PreparedTileset,
+  type RoutePath,
+  type ScreenPoint,
+  tilesetCamera,
+  type UndergroundView,
+  type Unsubscribe,
+  type WalkView,
+  zoomToDistance
 } from '@mx/map-core';
 import type { Position } from 'geojson';
 import {
@@ -44,15 +48,7 @@ import {
   VerticalOrigin
 } from 'cesium';
 import { createNanoEvents } from 'nanoevents';
-import {
-  distanceToZoom,
-  frustumFov,
-  MAPLIBRE_FOVY,
-  normalizeBearing,
-  readablePitch,
-  writablePitch,
-  zoomToDistance
-} from './camera-math';
+import { frustumFov, normalizeBearing, readablePitch, writablePitch } from './camera-math';
 import {
   type CreateScene,
   type RoutePlayback,
@@ -76,9 +72,6 @@ import type { ImageryPlan } from './scene-style';
 
 // 没有 background 图层时地球的底色（旧项目的取值）
 const DEFAULT_BASE_COLOR = '#dfe7f2';
-
-// 定位模型时的俯角（距竖直方向），和旧项目的 HeadingPitchRange(0, -35°) 一样
-const TILESET_PITCH = 55;
 
 // 只换坐标的形状停下这么久（毫秒）改回静态的实体：每帧读取的实体 Cesium 每帧重建几何、一直重画（ADR 0099）
 const LIVE_SETTLE_DELAY = 500;
@@ -680,16 +673,9 @@ export class CesiumScene implements SceneLike {
 
   // 让整个包围球进入画布的相机：竖直方向放下球的直径，和旧项目的 flyToBoundingSphere 一样斜着看
   #cameraFor(sphere: BoundingSphere): CameraState {
-    const { height } = this.size();
     const { longitude, latitude } = Cartographic.fromCartesian(sphere.center);
-    const lat = CesiumMath.toDegrees(latitude);
-    const distance = Math.max(1, sphere.radius / Math.sin(MAPLIBRE_FOVY / 2));
-    return {
-      center: [CesiumMath.toDegrees(longitude), lat],
-      zoom: distanceToZoom(distance, lat, Math.max(1, height), MAPLIBRE_FOVY),
-      bearing: 0,
-      pitch: TILESET_PITCH
-    };
+    const center: LngLat = [CesiumMath.toDegrees(longitude), CesiumMath.toDegrees(latitude)];
+    return tilesetCamera({ center, radius: sphere.radius }, this.size().height);
   }
 
   #hit(surface: 'model' | 'ellipsoid', world: Cartesian3): PickResult {
@@ -736,12 +722,13 @@ export class CesiumScene implements SceneLike {
     this.#widget.scene.requestRender();
   }
 
-  /** 诊断读数（开发页用）：渲染循环、相机和每个瓦片集的显存、屏幕误差、加载情况 */
+  /** 诊断读数（开发页和性能测量用）：渲染循环、相机、影像是否到齐和每个瓦片集的显存、屏幕误差、加载情况 */
   inspect(): SceneInspection {
     const { scene, canvas } = this.#widget;
     return {
       ticks: this.#ticks,
       frames: this.#frames,
+      imageryLoaded: scene.globe.tilesLoaded,
       renderErrors: this.#renderErrors,
       cameraChanges: this.#cameraChanges,
       cameraIdles: this.#cameraIdles,
@@ -932,6 +919,11 @@ export class CesiumScene implements SceneLike {
     if (entity.polygon) {
       entity.polygon.hierarchy = read;
     }
+  }
+
+  /** 请求画一帧（性能测量静止时每帧都画） */
+  requestFrame(): void {
+    this.#widget.scene.requestRender();
   }
 
   #removeOverlay(id: string, entry: OverlayEntry): void {

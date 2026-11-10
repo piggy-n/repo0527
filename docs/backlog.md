@@ -38,10 +38,12 @@
 ## 未完成的功能
 
 - 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像
-- 三维的后续顺序（用户 2026-11-09 定）：3C.4 在显卡机器上复测 → `feat/map-three` 合入 main，默认仍是 `cesium` → `maplibre` 三维先不显示资源图层 → `maplibre` 下加 LCC2 → 过 [ADR 0147](adr/0147-maplibre-three-3d-engine.md) 第 9 节的门槛，默认改为 `maplibre` → Cesium 下方案 B 和叠画布 LCC2 的 PoC；不接 XGRIDS 的 LCC Web SDK（AppKey 绑定域名，在线授权要连外网，离线授权会过期）
+- 三维的后续顺序（用户 2026-11-09 定）：`maplibre` 三维先不显示资源图层 → `maplibre` 下加 LCC2 → 过 [ADR 0147](adr/0147-maplibre-three-3d-engine.md) 第 9 节的门槛，默认改为 `maplibre` → Cesium 下方案 B 和叠画布 LCC2 的 PoC；不接 XGRIDS 的 LCC Web SDK（AppKey 绑定域名，在线授权要连外网，离线授权会过期）
 - 三维的资源图层：暂不显示（用户 2026-11-09 决定，放开要改页面设计），Cesium 下三维点/框选也不识别；`maplibre` 引擎现在会显示、能点/框选，要加开关和 Cesium 保持一致。以后放开时 Cesium 走方案 B（迁移旧项目的 Worker 栅格化），接入时对齐解码库版本、点选改用瓦片数据服务、避免和 MapLibre 重复下载（ADR 0091）
 - LCC2（高斯泼溅）：只在 `maplibre` 下做，另写 ADR，参照 PoC（`poc/maplibre-three-gpu` 分支，不合入）在 `@mx/map-three` 里实现；运行时直接读数据方服务器上的 LCC2，同源转发要支持 Range；`three` 升到 0.187 以上单独提交并验证驾驶舱；PoC 里和倾斜模型的配准差约 85 米没查清；LCC2 格式的授权条款可能要求界面上署名 XGRIDS，待确认
 - Cesium 下的 LCC2：只做 Three.js 叠画布的 PoC，重点看两块画布不共用深度时，和倾斜模型、地形的遮挡对不对
+- MapLibre 三维引擎（ADR 0147）：3C.4 的验收在同步 main、按实测窗口后（第八次实测）只差 z19 飞行中的三角形（88%）和 z17 飞行后补齐（1.10 秒），用户 2026-11-09 接受（[map-three](modules/map-three.md)"接受的两项差距"）；多重采样先不开，不放在 3C.4，用户之后自己用 `--antialias` 对照再定；经开区（JKQ）的服务器 2026-11-09 连不上，先不测，能连上时复测：经网络时实测的窗口多长、z16 倾斜停下后还会不会被锁粗、是哪一条放宽的；第三人称的人物模型没做（入口没开放）；真实显卡上的画面、逐帧检测、第一人称的手感和站内明暗没有验证，清单见 [map-three](modules/map-three.md)"还没做的"
+- MapLibre 6.12 地球投影下中心不变的 `flyTo` 算出 NaN，地图就坏了（`acos` 没有截断）：`map-core/maplibre/globe-fly.ts` 规避着，可以给上游提 issue，上游修好后去掉（[map-core](modules/map-core.md)"MapLibre 6 的实测行为"）
 - AI 对话：MVT 结果、点击结果要素的弹窗、历史按内容搜索、对话随页面缓存、结果区的联动，见 [ai-chat](modules/ai-chat.md)"待办"
 - 数据查询：高级查询的导出；高级查询本身暂时隐藏（ADR 0119）
 - 分类：地类图斑、地类图斑（城镇村）是否也只列实际类别，要先枚举（ADR 0124）
@@ -57,6 +59,7 @@
 - 上传、下载统一成一套能力：五个 feature 已用 `shared/file-transfer`，只有文件预览还自己调 `createObjectURL`；核对后可以删掉这一项
 - 第一次漫游时站内空间没分析完就切到路线再切回步行，撤掉路线会飞回开始前的位置（只在进入后约 3 秒内来回切换时出现）
 - 偶发失败的单元测试：三维阶段记下 4 次里有 1 次失败，没抓到用例名，再遇到时记下来
+- `prepareTileset` 对只有一个叶节点（根节点就是内容）的瓦片集，把整个瓦片集的误差整理成 0，Cesium 因此不加载它；真实数据没有这种瓦片集，测试夹具都多一层根节点（2026-11-05 发现）
 - 没有页面测试的接线：页面把路线交给小地图、完整地图打开时空格不让路线走，只在真实页面上手动验证过
 
 ## 临时处理（联调或重构时清理）
@@ -95,7 +98,8 @@
 
 - 继续拆 `shared/map`：通用交互已经拆成 `@mx/map-tools`（ADR 0145）；工具栏、面板等通用界面，以及混着江苏内容的 `location`、`area`，等第二个地图项目的需求清楚了再说
 - 接入 Renovate；改用 Pull Request 后给 `main` 设分支保护（[ci-workflow](config/ci-workflow.md)）
-- `MapView` 的约定写成二三维共跑的契约测试；业务端到端测试、覆盖率门槛
+- 业务端到端测试、覆盖率门槛
+- 冒烟的 `static-basemap.spec.ts` 三维部分按 Cesium 的画布写，只在默认的 `cesium` 产物上跑得通；`maplibre` 成为默认引擎之前要改成按引擎取画布
 - Worker 池的调度、缓存淘汰、内存预算，见 [utils](modules/utils.md)"还没做的"；瓦片数据服务等接入 MVT 时（[map-core](modules/map-core.md)"还没做的"）
 - 运行中 WebGL 上下文丢失（ADR 0030）：真实环境遇到再做
 - 暂不修复的两个安全告警等上游换大版本，见 [package-json](config/package-json.md)"暂不修复的安全告警"

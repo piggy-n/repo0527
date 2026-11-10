@@ -1,0 +1,217 @@
+// 屏幕误差的放宽倍数（ADR 0147 第 5 节）：显存放不下时放宽，规则和理由见 docs/modules/map-three.md"缓存"。
+// 这里只有判断，不碰瓦片库和 Three：输入是这一帧的缓存状况和相机
+
+/** 缓存的上限（字节）：到这里不再加载 */
+export interface TileBudget {
+  readonly hardBytes: number;
+}
+
+/** 这一帧的缓存状况，所有显示着的瓦片集合起来 */
+export interface CachePressure {
+  /** 因为缓存满没能排队的瓦片数 */
+  readonly refused: number;
+  /** 缓存里的全部字节 */
+  readonly cachedBytes: number;
+  /** 这一帧在用的瓦片的字节：淘汰不掉的部分 */
+  readonly pinnedBytes: number;
+  /** 还要加载的瓦片的估计字节 */
+  readonly pendingBytes: number;
+  /** 这一帧在用的瓦片数（加载好的、没加载好的都算） */
+  readonly usedTiles: number;
+}
+
+/** 相机：位置（米，任意直角坐标系，前后帧相同）、朝向（单位向量）、离地高度（米） */
+export interface BudgetPose {
+  readonly position: readonly [number, number, number];
+  readonly direction: readonly [number, number, number];
+  readonly height: number;
+}
+
+/**
+ * raising、lowering：倍数变了；evicting：缓存满着但还有旧瓦片，等淘汰后拒绝的瓦片才排得上；
+ * settling：等相机停稳后收紧或重新判断。除了 steady 都要再画一帧
+ */
+export type ScaleMotion = 'raising' | 'lowering' | 'evicting' | 'settling' | 'steady';
+
+// 16.7 毫秒变 5%，按时间折算，和帧率无关：一秒约 18 倍。太快会放过头，太慢画面要等；放过头的上限是一帧的量
+const RATE_PER_FRAME = 1.05;
+const FRAME_MS = 1000 / 60;
+// 一帧最多按这么久算：卡住的那一帧不能一下子放宽很多
+const MAX_ELAPSED_MS = 100;
+// 缓存里还有这么多可以淘汰的就不算放不下：等淘汰，不放宽
+const EVICTABLE_RATIO = 0.02;
+// 相机停着时，估计的总量超过上限这么多就提前放宽，不等真的装满：只为了每细一级大 7～20 倍的数据，它们的估计远超这条线。
+// 估计会偏高（正在被替换的父瓦片也算在内，排队的按平均大小算）；放得下的数据超线的话会被锁在下限上，比第一次加载粗。
+// 1.2 倍时倾斜摄影 z19 飞完就是这样，放不放得下交给真的装满来判断
+const PREDICT_RATIO = 2;
+// 放宽了这么多倍、在用的瓦片数都没变：已经是最粗的一层，再放宽也没有用。真实数据相邻两层的误差差 2～5 倍
+const SATURATE_FACTOR = 8;
+// 等淘汰时缓存这么久没有变小就不等了：库不会淘汰"淘汰后低于下限"的瓦片，单块瓦片比溢出的额度还大时会一直停在这里
+const EVICT_STALL_MS = 1000;
+// 需求低于上限的这个比例才收紧：有下限防来回折腾，这条线只是不要贴着上限走。太低的话收紧到一半就停：
+// 90% 时倾斜摄影 z19 停在 1397 MB，比放得下的 1504 MB 粗一块，截图上看得出来
+const LOWER_RATIO = 0.97;
+// 相机动着的时候需求低于上限的这个比例才收紧：看到的多少一直在变，要留余地，贴着上限走的话放宽、收紧来回换。
+// 不收紧的话飞行后半段看到的少了也一路画得粗（倾斜摄影 z19 第二遍飞行三角形中位数 59 万，Cesium 79 万）
+const MOVING_LOWER_RATIO = 0.8;
+// 只防数值失控：没有内容的节点总是往下走，再大也至少画出最粗的一层
+const MAX_SCALE = 256;
+// 相机离开放宽时的位置超过高度的这个比例，或者转过这个角度，才算换了姿态（同 JKQ 的排查）
+const RELEASE_DISTANCE_RATIO = 0.25;
+const RELEASE_DIRECTION_COS = Math.cos((10 * Math.PI) / 180);
+// 贴地时高度接近 0：至少走这么远才算移动
+const MIN_RELEASE_METERS = 5;
+// 相机这么久没动算停稳：飞行后要先等这么久才收紧，也才算稳定，太长会直接拖慢补齐；太短的话拖动中间一停就开始加载
+const SETTLE_MS = 200;
+
+function samePose(a: BudgetPose, b: BudgetPose): boolean {
+  return a.position.every((value, axis) => value === b.position[axis]) && a.direction.every((value, axis) => value === b.direction[axis]);
+}
+
+function movedAway(from: BudgetPose, to: BudgetPose): boolean {
+  const distance = Math.hypot(
+    to.position[0] - from.position[0],
+    to.position[1] - from.position[1],
+    to.position[2] - from.position[2]
+  );
+  if (distance > Math.max(MIN_RELEASE_METERS, RELEASE_DISTANCE_RATIO * Math.abs(from.height))) {
+    return true;
+  }
+  const cos =
+    from.direction[0] * to.direction[0] + from.direction[1] * to.direction[1] + from.direction[2] * to.direction[2];
+  return cos < RELEASE_DIRECTION_COS;
+}
+
+/**
+ * 真的放不下才放宽；一放宽就锁在这个姿态：相机不离开，就不再收紧到放不下的倍数以下。这个下限只升不降，所以同一个姿态下一定停下，
+ * 不会整级丢掉后又加载回来（Cesium 低于预算就收紧，模拟里就是这样来回折腾）。帧慢时一步放过了头，可以收回到下限。
+ * 相机动着的时候离开锁定的姿态、需求离上限还有两成才收紧；收紧过又放不下，这一路就不再收紧：每细一级大很多的数据，
+ * 一收紧就碰到放不下的一层，再试就是来回折腾。动着时定的下限只对那一路的画面成立，停稳后重新判断一次，
+ * 停着定的不再放开，所以判断的次数是有限的
+ */
+export class ErrorScale {
+  readonly #budget: TileBudget;
+  #value = 1;
+  // 锁定时的相机；相机离开它就解锁
+  #lockedAt: BudgetPose | null = null;
+  // 这个姿态下收紧不到这以下：刚放不下的倍数再高一步
+  #floor = 1;
+  // 下限是相机动着的时候定的：停稳后放开
+  #floorWhileMoving = false;
+  #lastPose: BudgetPose | null = null;
+  // 相机多久没动了；一开始算停稳的：第一次加载时相机本来就没动
+  #stillMs = SETTLE_MS;
+  #saturated = false;
+  // 这一路（相机上次停稳以来）解锁后收紧过；收紧过又放不下
+  #loweredMoving = false;
+  #lowerFailed = false;
+  // 这一轮放宽的起点：倍数和在用的瓦片数
+  #baseValue = 1;
+  #baseTiles = 0;
+  // 等淘汰：上一帧的缓存大小，缓存没有变小已经多久
+  #lastCachedBytes = Number.POSITIVE_INFINITY;
+  #evictStalledMs = 0;
+  // 读数：累计因为缓存满、因为停着估计放不下而放宽的帧数
+  #raisedFull = 0;
+  #raisedPredicted = 0;
+
+  constructor(budget: TileBudget) {
+    this.#budget = budget;
+  }
+
+  get value(): number {
+    return this.#value;
+  }
+
+  get locked(): boolean {
+    return this.#lockedAt !== null;
+  }
+
+  get saturated(): boolean {
+    return this.#saturated;
+  }
+
+  /** 累计：因为缓存满而放宽的帧数 */
+  get raisedFull(): number {
+    return this.#raisedFull;
+  }
+
+  /** 累计：因为停着估计放不下（没装满）而放宽的帧数 */
+  get raisedPredicted(): number {
+    return this.#raisedPredicted;
+  }
+
+  /** 内容变了（瓦片集增删、显隐、抬高）：之前的判断不再成立，允许重新收紧 */
+  release(): void {
+    this.#lockedAt = null;
+    this.#floor = 1;
+    this.#floorWhileMoving = false;
+    this.#saturated = false;
+  }
+
+  /** 一帧的判断；elapsedMs 是离上一帧的时间。返回值不是 steady 时要再画一帧 */
+  update(pressure: CachePressure, pose: BudgetPose, elapsedMs: number): ScaleMotion {
+    const { hardBytes } = this.#budget;
+    const { refused, cachedBytes, pinnedBytes, pendingBytes, usedTiles } = pressure;
+    this.#stillMs = this.#lastPose && !samePose(this.#lastPose, pose) ? 0 : this.#stillMs + elapsedMs;
+    this.#lastPose = pose;
+    const settled = this.#stillMs >= SETTLE_MS;
+    if (settled) {
+      this.#loweredMoving = false;
+      this.#lowerFailed = false;
+    }
+    if (this.#lockedAt && (movedAway(this.#lockedAt, pose) || (this.#floorWhileMoving && settled))) {
+      this.release();
+    }
+    const demand = pinnedBytes + pendingBytes;
+    const full = refused > 0 && cachedBytes - pinnedBytes < hardBytes * EVICTABLE_RATIO;
+    const rate = RATE_PER_FRAME ** (Math.min(elapsedMs, MAX_ELAPSED_MS) / FRAME_MS);
+    // 预测只在相机停着时用：动着的时候需求一直在变，一时超线就放宽的话倍数只升不降，后面一路都画得粗
+    const predicted = settled && demand >= hardBytes * PREDICT_RATIO;
+    if ((full || predicted) && !this.#saturated && this.#value < MAX_SCALE) {
+      if (full) {
+        this.#raisedFull++;
+      } else {
+        this.#raisedPredicted++;
+      }
+      this.#raise(rate, pose, usedTiles);
+      return this.#saturated ? 'steady' : 'raising';
+    }
+    if (refused > 0 && !full) {
+      this.#evictStalledMs = cachedBytes < this.#lastCachedBytes ? 0 : this.#evictStalledMs + elapsedMs;
+      this.#lastCachedBytes = cachedBytes;
+      return this.#evictStalledMs < EVICT_STALL_MS ? 'evicting' : 'steady';
+    }
+    this.#lastCachedBytes = Number.POSITIVE_INFINITY;
+    this.#evictStalledMs = 0;
+    if (this.#value > this.#floor && demand < hardBytes * LOWER_RATIO) {
+      if (!settled && (this.#lowerFailed || demand >= hardBytes * MOVING_LOWER_RATIO)) {
+        return 'settling';
+      }
+      // 锁定时收回到下限不算试过：下限以上是已知放得下的
+      this.#loweredMoving ||= !settled && !this.#lockedAt;
+      this.#value = Math.max(this.#floor, this.#value / rate);
+      return 'lowering';
+    }
+    return this.#floorWhileMoving ? 'settling' : 'steady';
+  }
+
+  #raise(rate: number, pose: BudgetPose, usedTiles: number): void {
+    this.#lowerFailed ||= this.#loweredMoving;
+    if (!this.#lockedAt) {
+      this.#baseValue = this.#value;
+      this.#baseTiles = usedTiles;
+    }
+    this.#lockedAt = pose;
+    this.#floorWhileMoving = this.#stillMs < SETTLE_MS;
+    // 帧快时一帧只涨一点（按时间折算），下限跟着；帧慢时一步可能放过头，下限最多算 5%，多出来的能收回去
+    this.#floor = Math.min(MAX_SCALE, this.#value * Math.min(rate, RATE_PER_FRAME));
+    this.#value = Math.min(MAX_SCALE, this.#value * rate);
+    if (usedTiles < this.#baseTiles) {
+      this.#baseValue = this.#value;
+      this.#baseTiles = usedTiles;
+    } else if (this.#value >= this.#baseValue * SATURATE_FACTOR) {
+      this.#saturated = true;
+    }
+  }
+}

@@ -16,7 +16,7 @@
 | `MapCanvas.tsx` | `<MapCanvas>`：二维地图画布，挂载后创建视图、卸载时释放 |
 | `CesiumCanvas.tsx` | `<CesiumCanvas>`：三维画布，第一次切到三维时加载运行时和 map-cesium 再创建视图 |
 | `failed-view.ts` | `FailedView`：框架加载失败时挂上的视图，一直处于引擎失败 |
-| `runtime.ts` | `MAP_RUNTIME`：app 提供"加载某个框架的运行时"的函数用的注入键；`MAP_RUNTIME_PRELOAD`：app 提供"预加载某个框架的运行时"的函数（ADR 0091）；`MAP_ERROR_REPORTER`：app 提供地图错误的默认报告器 |
+| `runtime.ts` | `MAP_RUNTIME`：app 提供"加载某个框架的运行时"的函数用的注入键；`MAP_RUNTIME_PRELOAD`：app 提供"预加载"的函数，画布交给它要加载什么、它决定什么时候加载（ADR 0091）；三维引擎的描述 `SceneEngine`、能力 `SceneCapabilities`（ADR 0147）；`MAP_ERROR_REPORTER`：app 提供地图错误的默认报告器 |
 | `use-map.ts` | `useMap()`：子孙组件取只读上下文；`useMapOverlay()`：悬浮元素登记自己贴着的边 |
 | `use-page-active.ts` | `usePageActive()`：所在页面是否在显示（见"页面缓存"） |
 | `use-shown-element-size.ts` | `useShownElementSize()`：页面停用期间量到的尺寸不采用（见"页面缓存"） |
@@ -108,8 +108,10 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 - `mapOptions` 只在创建地图时生效；要换选项、或者引擎失败后重新创建，给组件换一个 `key`
 - `scrollZoomRates`：滚轮（`wheel`）和触控板（`trackpad`）的缩放速率，同样只在创建地图时生效，交给适配器（ADR 0053 第 3 节）
 - 一个上下文的每种视图只能有一个画布：第二个二维画布挂不上时，先释放它刚创建的视图，再把错误交给 Vue
-- 当前显示的是三维时外层设 `visibility: hidden`：不占交互，尺寸保留，切回时不用重新量画布
-- 引擎失败后，上下文的 `retry()` 让当前种类的画布先卸下、释放旧视图，再在同一个容器里创建新视图（ADR 0030）；`createMap` 等 props 按重试时的值生效
+- 当前显示的是 Cesium 的三维时外层设 `visibility: hidden`：不占交互，尺寸保留，切回时不用重新量画布
+- 三维引擎是 `maplibre` 时（ADR 0147 第 2 节），创建视图时交给它加载三维模块的函数（`loadSceneRenderer`），这个视图同时担任二维和三维，切到三维也不隐藏（[map-three.md](map-three.md)）
+- 引擎失败后，上下文的 `retry()` 让当前种类的画布先卸下、释放旧视图，再在同一个容器里创建新视图（ADR 0030）；`createMap` 等 props 按重试时的值生效。`maplibre` 下三维模块加载失败（失败原因是 `module`）不走这里，地图不重建，见下面"三维引擎的注入"
+- 预加载（ADR 0091 的做法）：三维引擎是 `maplibre`、挂载时显示的是二维，就等上下文的 `whenSettled`（二维第一次画面稳定），那时仍是二维就把描述里的 `loadRenderer` 交给注入的 `MAP_RUNTIME_PRELOAD`；等待期间切到三维（换了租约）、卸载时作废。切过三维的已经在加载，不用预加载
 - 运行中的错误（MapLibre 的 `error` 事件、应用命令失败）交给 `provideMap` 的 `onError`；视图失败时不弹提示，由 `shared/map` 读视图状态决定
 
 ## 二三维切换（ADR 0079 第 8 节）
@@ -119,16 +121,26 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 - 切换时旧的当前视图暂停、新的恢复，投影修订号加 1，鼠标位置清空；还没有这种视图时状态是 `idle`，等它的画布挂上
 - 绑定在旧视图上的 `whenReady`、`whenSettled` 以 `AbortError` 结束；等待中的相机操作在新的当前视图就绪后执行（和视图被替换一样，ADR 0039 第 3 条）
 - 页面用 `map.setDimension` 切换；切换时要做的业务（如换底图）由页面决定（现状底图见 [shared-map.md](shared-map.md)"底图"）
+- 同一个视图担任两种种类（MapLibre 引擎，ADR 0147 第 2 节）：视图声明 `kinds`，挂上时在每种种类下都登记，维度正好是它支持的另一种时先 `setKind`；切换维度时不暂停、恢复，调用它的 `setKind`，受限入口的 `kind` 跟着变，投影修订号照样加 1、等待照样重新绑定。这时另一块画布不能再挂同一种视图
+- 切换的顺序：先换租约（绑定在旧种类上的等待中止）、同一个视图先换好种类，最后才改 `dimension`。同步侦听 `dimension` 的人（如切到三维的耗时标记，`flush: 'sync'`）在侦听里调用 `whenReady`，等的是新种类这一轮的结果；以前先改维度，这次等待随即被换租约中止，Cesium 第二次切到三维、MapLibre 引擎每次切到三维都记不下耗时（3C.2 修正）
 
 ## 三维画布 `<CesiumCanvas>`
 
 - 和 `<MapCanvas>` 并列放在页面里，外层绝对定位叠在同一块区域上（页面的根元素要相对定位）；当前显示的是二维时 `visibility: hidden`
 - 第一次切到三维时才加载：同时动态导入 `@mx/map-cesium` 和调用注入的运行时加载函数（`MAP_RUNTIME`），都到了再创建 `CesiumView`；之后一直保留（ADR 0020 第 4 条）
-- 预加载（ADR 0091）：挂载时显示的是二维，就等上下文的 `whenSettled`（二维第一次画面稳定），那时三维视图还没有、也没在加载就调用注入的 `MAP_RUNTIME_PRELOAD`（`'3d'`），不等结果；等待期间切到三维、卸载时作废。什么时候真的加载（浏览器空闲、省流量模式跳过）由 app 决定，没有 provide 时不预加载
+- 预加载（ADR 0091）：挂载时显示的是二维，就等上下文的 `whenSettled`（二维第一次画面稳定），那时三维视图还没有、也没在加载就把"加载 Cesium 的运行时"（`() => loadRuntime('3d')`）交给注入的 `MAP_RUNTIME_PRELOAD`，不等结果；等待期间切到三维、卸载时作废。什么时候真的加载（浏览器空闲、省流量模式跳过）由 app 决定，没有 provide 时不预加载
 - 视图总是以暂停状态创建，挂上后由 `shouldRun('3d')` 决定是否恢复：加载期间用户可能已经切回二维、页面也可能被停用
 - 加载失败（分块下载失败、没有注入运行时）时报告错误并挂上 `FailedView`：上下文照常显示引擎失败，`retry()` 重新加载；加载期间卸载时，加载到的视图直接释放、不挂上
 - props：`onUnsupported`（支持清单之外的图层，页面在开发环境下打印）；测试用的 `createView`
 - 运行时注入：map-vue 不能依赖 app。app 的 `withMapRuntime` 给地图页包一层组件（`app/map-runtime-provider.ts`），`provide(MAP_RUNTIME, …)`；这一层随地图页的分块动态加载，map-vue 连带 maplibre-gl 不进入口包（ADR 0023、0061、0079 第 2 节）
+- 三维引擎是 `maplibre` 时什么也不挂，也不预加载 Cesium 的运行时
+
+## 三维引擎的注入（ADR 0147 第 1 节）
+
+- app 按 `appConfig.map3dEngine` 在同一层 `provide(MAP_SCENE_ENGINE, …)`，值是 map-vue 导出的 `CESIUM_ENGINE` 或 `MAPLIBRE_ENGINE`；没有 provide 时按 Cesium。页面和拥有者不读它，照常放 `<MapCanvas>`、`<CesiumCanvas>`，照常 `setDimension`、`bindScene`
+- 描述是对象：`{ kind: 'cesium', capabilities }` 由 `<CesiumCanvas>` 承担三维，运行时经 `MAP_RUNTIME` 加载；`{ kind: 'maplibre', capabilities, loadRenderer }` 由 `<MapCanvas>` 的视图承担三维，`loadRenderer` 里写 `import('@mx/map-three')`（只有 map-vue 能动态导入它）。测试可以注入假的 `loadRenderer`
+- 能力声明 `capabilities`（ADR 0147 第 3 节、ADR 0020 第 4 节）：`styleLayers` 是三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记），`identify` 是三维期间点/框选能识别。Cesium 两项都是 false（ADR 0080 第 5 节），MapLibre 都是 true。`provideMap` 从上层取引擎（同一个组件里 provide 的取不到，和 app 一样放在页面外面一层），上下文原样给出 `sceneCapabilities`：静态，不随视图就绪变化，页面和拥有者用它和 `dimension` 决定显示什么（现状底图的图例、点/框选，见 [map-three.md](map-three.md)）
+- 三维模块加载失败只让三维失败：视图的失败原因是 `module`，上下文的 `retry()` 调用视图的 `retry()` 只重新加载模块，不请画布重建（`retryRequests` 不变）
 
 ## 只读上下文 `useMap()`
 
@@ -144,7 +156,8 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 | `sourceErrors` | 当前视图的数据源错误（`ReadonlyMap<数据源 ID, 错误>`，ADR 0041 第 5 节）：挂上视图时取它的记录、随 `sourceerrorchange` 更新；没有视图时是空表，替换视图（包括引擎失败后重试）后从新视图的记录开始，旧视图上的错误不留下。拥有者按数据源 ID 的前缀从中推导自己的"加载失败" |
 | `sceneStatus` | 当前视图报告的三维内容状态（按瓦片集 ID 的 `loading`、`ready` 带建议的相机、`failed` 带错误，ADR 0081）：只在当前视图是三维时有内容，二维、没有视图时是空表；切换、替换视图后取新视图的报告 |
 | `roamStatus` | 当前视图报告的漫游状态，按 `kind` 区分：路线的进度（ADR 0083）、步行的阶段、人称、提示和人的位置（ADR 0086、0087、0090）；没有在漫游、二维、没有视图时为 null |
-| `retry()` | 引擎失败后重新创建视图；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
+| `sceneCapabilities` | 三维引擎的能力（`styleLayers`、`identify`，ADR 0147）：静态，和 `dimension` 一起决定三维里显示什么 |
+| `retry()` | 引擎失败后重新创建视图；当前种类的模块加载失败（`module`）时只让视图重新加载模块，不重建；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
 | `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@mx/utils` 的 `abortReason`）。等待结束、返回之前 `signal` 中止或视图被卸下，同样以中止结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪。定位不用它，用相机操作 |
 | `whenSettled(signal?)` | 等到视图下一次画面稳定（视图的 `settle` 事件：没有动画，视野里的瓦片都已画出），用于加载耗时的标记（5E.1，见 [perf.md](perf.md)）。没有视图时等视图挂上；和 `whenReady` 一样绑定具体的视图实例，它被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束，`signal` 中止时以它的原因结束；结束时取消订阅。在 Promise 外面订阅，订阅本身出错（视图已释放）时以这个错误结束 |
 | `useCamera()` | 在调用方的作用域里订阅相机，作用域销毁时取消；不在组件 setup 或 `effectScope` 里调用时抛错 |

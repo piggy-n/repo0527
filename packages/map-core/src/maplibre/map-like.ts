@@ -1,6 +1,10 @@
-import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type {
+  LayerSpecification,
+  ProjectionSpecification,
+  StyleSpecification
+} from '@maplibre/maplibre-gl-style-spec';
 import type { Geometry } from 'geojson';
-import type { MapOptions } from 'maplibre-gl';
+import type { CustomLayerInterface, LngLatLike, MapOptions } from 'maplibre-gl';
 import type { CameraCause } from '../camera/camera-model';
 import type { ViewPadding } from '../view/map-view';
 import type { StyleTarget } from './apply-style-command';
@@ -36,14 +40,29 @@ export interface GestureHandlerLike {
   disable(): void;
 }
 
-/** 滚轮缩放：普通鼠标的滚轮和触控板分开调速率（ADR 0053 第 3 节） */
-export interface ScrollZoomLike {
+/** 滚轮缩放：普通鼠标的滚轮和触控板分开调速率（ADR 0053 第 3 节）；漫游期间关掉 */
+export interface ScrollZoomLike extends GestureHandlerLike {
   setWheelZoomRate(rate: number): void;
   setZoomRate(rate: number): void;
 }
 
 export interface CameraEventData {
   readonly cause: CameraCause;
+}
+
+/**
+ * MapLibre 相机当前的变换（ADR 0147 第 2 节）：只用三维的视点高度、拾取打到天空、点在地球背面这三项。
+ * 6.12 的类型里有，后两项标了 @internal，升级时由契约测试发现变化；换投影时整个换掉，每次现取
+ */
+export interface CameraTransformLike {
+  /** 相机在海平面以上的高度，米 */
+  getCameraAltitude(): number;
+  /** 相机所在的经纬度：开始漫游时从这里算视点 */
+  getCameraLngLat(): { readonly lng: number; readonly lat: number };
+  /** 画布上的点打不打得到地面：地平线以上、地球以外的天空打不到 */
+  isPointOnMapSurface(point: { readonly x: number; readonly y: number }): boolean;
+  /** 地面上的点被地球挡住（在地球背面） */
+  isLocationOccluded(lngLat: { readonly lng: number; readonly lat: number }): boolean;
 }
 
 /** queryRenderedFeatures 返回的要素：几何是取值时才从瓦片坐标换算的 */
@@ -70,17 +89,32 @@ export interface MapLike extends StyleTarget {
   /** 没有相机动画和过渡、请求的瓦片都已加载并画出之后；每次进入这种状态触发一次 */
   on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
+  /** 画完一帧；GL 上下文丢失、恢复（ADR 0147 第 2 节，三维模型层用） */
+  on(type: 'render' | 'webglcontextlost' | 'webglcontextrestored', listener: () => void): MapSubscription;
   /** 按容器现在的尺寸调整画布，同步发出 resize；平时由 MapLibre 自己的尺寸监听在下一帧调用 */
   resize(): void;
   getCenter(): { readonly lng: number; readonly lat: number };
   getZoom(): number;
   getBearing(): number;
   getPitch(): number;
+  /** elevation 是中心点的高度（米）：只有漫游的第一人称相机给，那时 centerClampedToGround 关着 */
   jumpTo(
-    camera: { center: [number, number]; zoom: number; bearing: number; pitch: number },
+    camera: { center: [number, number]; zoom: number; bearing: number; pitch: number; elevation?: number },
     eventData: CameraEventData
   ): void;
   flyTo(
+    camera: {
+      center?: [number, number];
+      zoom?: number;
+      bearing?: number;
+      pitch?: number;
+      duration?: number;
+      offset?: [number, number];
+    },
+    eventData: CameraEventData
+  ): void;
+  /** 地球投影下中心不变时代替 flyTo，见 globe-fly.ts */
+  easeTo(
     camera: {
       center?: [number, number];
       zoom?: number;
@@ -95,9 +129,14 @@ export interface MapLike extends StyleTarget {
   panBy(offset: [number, number], options: { animate: false }, eventData: CameraEventData): void;
   fitBounds(
     bounds: [number, number, number, number],
-    options: { padding?: ViewPadding; maxZoom?: number; duration?: number },
+    options: { padding?: ViewPadding; maxZoom?: number; duration?: number; linear?: boolean },
     eventData: CameraEventData
   ): void;
+  /** fitBounds 会到的相机；放不下时没有 */
+  cameraForBounds(
+    bounds: [number, number, number, number],
+    options: { padding?: ViewPadding; maxZoom?: number }
+  ): { readonly center?: LngLatLike; readonly zoom?: number } | undefined;
   unproject(point: [number, number]): { readonly lng: number; readonly lat: number };
   /** 点或矩形（两个对角点）里画出的要素，从上到下；layers 只能是地图上有的图层 */
   queryRenderedFeatures(
@@ -113,5 +152,35 @@ export interface MapLike extends StyleTarget {
   readonly doubleClickZoom: GestureHandlerLike;
   readonly boxZoom: GestureHandlerLike;
   readonly scrollZoom: ScrollZoomLike;
+  /** 下面四种手势只在漫游期间关掉（ADR 0147 第 4 节），工具不声明 */
+  readonly dragRotate: GestureHandlerLike;
+  readonly keyboard: GestureHandlerLike;
+  readonly touchZoomRotate: GestureHandlerLike;
+  readonly touchPitch: GestureHandlerLike;
+  /** 样式命令加普通图层；三维模型层（custom layer）只由适配器加上（ADR 0147 第 5 节） */
+  addLayer(layer: LayerSpecification | CustomLayerInterface, beforeId?: string): void;
+  getLayer(id: string): unknown;
+  /** 不给 beforeId 时挪到最上面 */
+  moveLayer(id: string, beforeId?: string): void;
+  /** 图层 ID，从下到上 */
+  getLayersOrder(): string[];
+  /** 请求重画下一帧：三维内容自己变了（瓦片到了）时用 */
+  triggerRepaint(): void;
+  /** 投影；同时担任二三维的视图切换种类时设置（ADR 0147 第 2 节）。样式加载完成之前调用会抛错 */
+  getProjection(): ProjectionSpecification | undefined;
+  setProjection(projection: ProjectionSpecification): void;
+  getMaxPitch(): number;
+  /** 当前俯角超过新的上限时 MapLibre 自己收回并发出不带 eventData 的 move，所以先把相机放到上限以内再调用 */
+  setMaxPitch(maxPitch: number): void;
+  /** 漫游期间放宽到 24 级（ADR 0147 第 5 节），结束时还原；同样先把相机放到上限以内再收紧 */
+  getMaxZoom(): number;
+  setMaxZoom(maxZoom: number): void;
+  /** 竖直视场角（度）：漫游时 60°，结束时还原 */
+  getVerticalFieldOfView(): number;
+  setVerticalFieldOfView(fov: number, eventData: CameraEventData): void;
+  /** 中心点的高度夹到地面：漫游时关掉，第一人称的目标点不在地面上（PoC 的坑 3） */
+  getCenterClampedToGround(): boolean;
+  setCenterClampedToGround(clamped: boolean): void;
+  readonly _camera: { readonly transform: CameraTransformLike };
   remove(): void;
 }

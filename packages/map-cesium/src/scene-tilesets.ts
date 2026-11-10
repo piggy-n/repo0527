@@ -84,7 +84,8 @@ function readStatistics(tileset: Cesium3DTileset): TilesetStatistics {
     numberOfTilesProcessing: statistics.numberOfTilesProcessing,
     numberOfTilesWithContentReady: statistics.numberOfTilesWithContentReady,
     numberOfTilesTotal: statistics.numberOfTilesTotal,
-    numberOfLoadedTilesTotal: statistics.numberOfLoadedTilesTotal
+    numberOfLoadedTilesTotal: statistics.numberOfLoadedTilesTotal,
+    numberOfTrianglesSelected: statistics.numberOfTrianglesSelected
   };
 }
 

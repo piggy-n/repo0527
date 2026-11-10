@@ -21,6 +21,7 @@
 | 内网部署的构建 | `pnpm build:intranet` |
 | 预览构建产物 | `pnpm --filter yzt preview` |
 | 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter yzt measure:map-load` |
+| 三维两种引擎的性能对比（显卡机器上，ADR 0147 3C.4） | `pnpm --filter yzt measure:3d` |
 | 探查资源的分类字段、瓦片是否合并（只读，要能连后端） | `pnpm --filter yzt probe:resource-classes` |
 | 生成自定义监测范围的验收文件 | `pnpm --filter yzt scope-files:generate` |
 | 每月检查依赖 | `pnpm deps:check` |
@@ -185,6 +186,16 @@ pnpm add -Dw -E some-tool
 
 **注意事项**：要先在自己的终端设置环境变量 `YZT_MEASURE_LOGIN_NAME`、`YZT_MEASURE_PASSWORD`（加 `--mock-backend` 时不连后端、不用账号，配内网构建比较几种做法）；默认三档网络各 5 次，Slow 4G 每次约 20 秒，全部跑完约 5 分钟，期间会弹出浏览器窗口。对比几份构建时不用这个脚本（它会先构建 `dist`），直接运行 `cli.ts` 并给出 `--builds`。参数（次数、网络、停留时长、CPU 降速、多份构建等）和实测的前提见 [modules/perf.md](modules/perf.md)。
 
+### `pnpm --filter yzt measure:3d`
+
+**作用**：用生产代码比较 MapLibre 引擎和 Cesium 的倾斜摄影 z17、z19：到稳定、两遍飞行的帧时间、长任务和归因、显存、截图的清晰度，按 ADR 0147 3C.4 的条件逐项判断。
+
+**什么时候用**：改了 `packages/map-three` 的缓存、上传或渲染之后；改默认引擎之前（ADR 0147 第 9 节）。
+
+**执行了什么**：Node 运行 `tools/measure-3d/cli.ts`：启动前检查（模型、端口、渲染器，空页面校准帧间隔的下限）→ 用 `tools/measure-3d/vite.config.ts` 按生产模式构建测量页 → 每遍一个新的浏览器进程 → 写 `local/measure-3d/<时间>/`（`report.md`、`quality.html`、`manual.md`、`raw.json`、`shots/`、`profiles/`，不入库）。每跑完一遍就重新写一次报告，中断了也留得下。
+
+**注意事项**：只在有真实显卡的机器上有意义，看到软件渲染直接退出（`--allow-software` 只用来确认脚本能跑）。默认参数实测 30 分钟（2026-11-08，RTX 3060），每多一个对照方案多约 8 分钟，期间会弹出浏览器窗口，不要用这台机器。`--cull-window` 对照动着不请求的窗口：产品默认按实测的加载时间，`1` 是 Cesium 的固定 1 秒，`off` 是动着也请求。步骤和口径见 [modules/map-three.md](modules/map-three.md)"性能验收"，参数见 `--help`。
+
 ### `pnpm --filter yzt probe:resource-classes`
 
 **作用**：只读探查现状底图的资源：每个瓦片集有哪些字段、取值和分布，各瓦片级别保留了哪些字段；给出候选的分类字段和要交给切片的字段清单。
@@ -339,7 +350,7 @@ pnpm --filter yzt test:smoke
 
 ### `pnpm --filter yzt test:smoke`
 
-**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）；三维（`scene.spec.ts`，3D.5c）检查二维稳定后预加载了三维运行时、切到三维画面稳定、加载一个生成的测试模型并定位、点"漫游"步行进站（导航网格的 Worker 分块，左侧换成漫游面板）、漫游时没有状态栏和视图控件（ADR 0095、0097），Esc 退出漫游回到地面后回到二维复用画布。
+**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）；三维（`scene.spec.ts`，3D.5c）检查二维稳定后预加载了三维运行时、切到三维画面稳定、加载一个生成的测试模型并定位、点"漫游"步行进站（导航网格的 Worker 分块，左侧换成漫游面板）、漫游时没有状态栏和视图控件（ADR 0095、0097），Esc 退出漫游回到地面后回到二维复用画布。MapLibre 引擎的三维（`scene-maplibre.spec.ts`，ADR 0147）只在 `VITE_MAP_3D_ENGINE=maplibre` 构建的产物上运行，`scene.spec.ts` 反过来只在 `cesium` 上：检查二维稳定后预加载了 map-three、切到三维还是同一块画布，三维里画出静态底图、测距和坐标定位可用、能加载生成的模型。
 
 **什么时候用**：先运行 `pnpm build:intranet`；修改加载、路由或页面缓存后运行，CI 在内网构建后自动执行。只跑某个文件时在命令后面加文件名，如 `pnpm --filter yzt test:smoke system-management`。
 
@@ -347,7 +358,7 @@ pnpm --filter yzt test:smoke
 
 **注意事项**：需要已安装 Chromium；4173 端口须空闲，不复用已有服务。三维的模型数据不入库，冒烟拦下清单和瓦片，换成自己生成的一间 12 米见方的屋子（`tools/smoke/scene-model.ts`）；软件渲染下这个用例约 30 秒，用例的时限放到 3 分钟。不会自动构建，不能在公网产物上运行；输出写入已忽略的 `local/smoke-results/`，不依赖账号、私有字体或真实后端，不设毫秒性能门槛。`pnpm test` 不包含这组 `*.spec.ts` 用例。
 
-构建时决定的开关，冒烟和构建读同一份配置，只验证这次构建的取值（如 `resource-min-zooms.spec.ts`：`.env` 的 `VITE_RESOURCE_MIN_ZOOM_ENABLED` 现在是 `false`，打开时的用例被跳过；`application.spec.ts` 的底图偏好同样按 `VITE_PREFERENCES_ENABLED`、`VITE_PREFERENCE_BASEMAP` 选用例，见 ADR 0140）。要验证另一个取值，不改 `.env`，在同一个终端设环境变量后构建和冒烟（`loadEnv` 优先取环境变量），PowerShell 里写 `$env:VITE_RESOURCE_MIN_ZOOM_ENABLED = 'true'`，结束后 `Remove-Item Env:VITE_RESOURCE_MIN_ZOOM_ENABLED`，再按原来的配置构建一次。
+构建时决定的开关，冒烟和构建读同一份配置，只验证这次构建的取值（如 `resource-min-zooms.spec.ts`：`.env` 的 `VITE_RESOURCE_MIN_ZOOM_ENABLED` 现在是 `false`，打开时的用例被跳过；`application.spec.ts` 的底图偏好同样按 `VITE_PREFERENCES_ENABLED`、`VITE_PREFERENCE_BASEMAP` 选用例，见 ADR 0140）。要验证另一个取值，不改 `.env`，在同一个终端设环境变量后构建和冒烟（`loadEnv` 优先取环境变量），PowerShell 里写 `$env:VITE_RESOURCE_MIN_ZOOM_ENABLED = 'true'`，结束后 `Remove-Item Env:VITE_RESOURCE_MIN_ZOOM_ENABLED`，再按原来的配置构建一次。三维引擎同样：`$env:VITE_MAP_3D_ENGINE = 'maplibre'` 后 `pnpm build:intranet`、`pnpm --filter yzt test:smoke scene-maplibre`（CI 也这样跑）。
 
 ### `pnpm --filter yzt test:watch`
 

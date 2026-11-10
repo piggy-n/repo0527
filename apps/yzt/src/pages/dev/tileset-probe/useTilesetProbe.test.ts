@@ -29,6 +29,7 @@ function inspectionOf(calls: number, readings: Readings): SceneInspection {
   return {
     ticks: calls * 3,
     frames: calls * 2,
+    imageryLoaded: true,
     renderErrors: 0,
     cameraChanges: calls,
     cameraIdles: 0,
@@ -55,7 +56,8 @@ function inspectionOf(calls: number, readings: Readings): SceneInspection {
           numberOfTilesProcessing: 0,
           numberOfTilesWithContentReady: calls,
           numberOfTilesTotal: 100,
-          numberOfLoadedTilesTotal: calls
+          numberOfLoadedTilesTotal: calls,
+          numberOfTrianglesSelected: 0
         },
         selection: null,
         loaded: calls,

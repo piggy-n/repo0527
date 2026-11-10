@@ -1,6 +1,6 @@
 # workspace 内部包的配置约定
 
-对应目录：`packages/*`（utils、ui、theme、icons、map-core、map-cesium、map-vue、map-tools）
+对应目录：`packages/*`（utils、ui、theme、icons、map-core、map-cesium、map-three、map-vue、map-tools）
 相关决策：ADR 0004（模块边界）、ADR 0014（第一个内部包）、ADR 0143（libs 全部搬成包）、ADR 0145（map-tools）
 
 ## 什么是内部包
@@ -18,8 +18,8 @@ apps/yzt  ──依赖 "@mx/map-core": "workspace:*"──▶  node_modules/@mx/
 
 ```
 utils ◀── ui
-utils ◀── map-core ◀── map-cesium
-utils、map-core ◀── map-vue ┄┄动态 import()┄┄▶ map-cesium
+utils ◀── map-core ◀── map-cesium、map-three
+utils、map-core ◀── map-vue ┄┄动态 import()┄┄▶ map-cesium、map-three
 map-core、map-vue ◀── map-tools
 icons、theme 不依赖其他包
 ```

@@ -60,7 +60,8 @@ function tilesetOf(id: string, numbers: Numbers): TilesetInspection {
       numberOfTilesProcessing: processing,
       numberOfTilesWithContentReady: loaded - unloaded,
       numberOfTilesTotal: 1000,
-      numberOfLoadedTilesTotal: loaded
+      numberOfLoadedTilesTotal: loaded,
+      numberOfTrianglesSelected: 0
     },
     selection: selectionOf(numbers),
     loaded,
@@ -75,6 +76,7 @@ function inspectionOf(numbers: Numbers, tilesets = [tilesetOf('jkq', numbers)]):
   return {
     ticks: frames * 2,
     frames,
+    imageryLoaded: true,
     renderErrors: 0,
     cameraChanges: 0,
     cameraIdles: 0,

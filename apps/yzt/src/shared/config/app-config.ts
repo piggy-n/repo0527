@@ -35,6 +35,20 @@ export interface TiandituConfig {
   readonly key: string;
 }
 
+/** 三维引擎（ADR 0147）：cesium 是现有的 Cesium，maplibre 是 MapLibre + Three.js，二三维共用一块画布 */
+export type Map3dEngine = 'cesium' | 'maplibre';
+
+const MAP_3D_ENGINES: readonly Map3dEngine[] = ['cesium', 'maplibre'];
+
+function map3dEngine(value: string | undefined): Map3dEngine {
+  const text = required('VITE_MAP_3D_ENGINE', value);
+  const engine = MAP_3D_ENGINES.find(item => item === text);
+  if (!engine) {
+    throw new Error(`环境变量 VITE_MAP_3D_ENGINE 只能是 ${MAP_3D_ENGINES.join(' 或 ')}，当前是 "${text}"`);
+  }
+  return engine;
+}
+
 // 开关和 key 合成一个值：关闭时不读 key，开启时 key 必须有效（ADR 0031）
 function tianditu(enabled: string | undefined, key: string | undefined): TiandituConfig | null {
   if (!flag('VITE_TIANDITU_ENABLED', enabled)) {
@@ -82,7 +96,9 @@ export const appConfig = {
   /** 各项偏好是否生效，已经合并了总开关；为 false 的不读不写（ADR 0140） */
   preferences: preferenceSwitches(),
   /** 资源的最小显示级别：为 false 时不限制，各级都请求瓦片（ADR 0132） */
-  resourceMinZoomEnabled: flag('VITE_RESOURCE_MIN_ZOOM_ENABLED', import.meta.env.VITE_RESOURCE_MIN_ZOOM_ENABLED)
+  resourceMinZoomEnabled: flag('VITE_RESOURCE_MIN_ZOOM_ENABLED', import.meta.env.VITE_RESOURCE_MIN_ZOOM_ENABLED),
+  /** 三维引擎（ADR 0147）：换引擎要重新构建，页面和拥有者不判断它，由 app 注入地图 */
+  map3dEngine: map3dEngine(import.meta.env.VITE_MAP_3D_ENGINE)
 } as const;
 
 /** 偏好的名称：新增偏好先在 preferenceSwitches 登记开关，否则 usePreference 的 name 通不过类型检查 */

@@ -1,4 +1,8 @@
-import type { LayerSpecification, SourceSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type {
+  LayerSpecification,
+  ProjectionSpecification,
+  SourceSpecification
+} from '@maplibre/maplibre-gl-style-spec';
 import type { Polygon } from 'geojson';
 import {
   type CameraEventData,
@@ -108,6 +112,7 @@ class FakeMap implements MapLike {
   on(type: 'resize', listener: () => void): MapSubscription;
   on(type: 'idle', listener: () => void): MapSubscription;
   on(type: MapMouseEventType, listener: (event: MapMouseEventLike) => void): MapSubscription;
+  on(type: 'render' | 'webglcontextlost' | 'webglcontextrestored', listener: () => void): MapSubscription;
   on(type: string, listener: (event: never) => void): MapSubscription {
     const callback = listener as (event: FakeEvent) => void;
     const listeners = this.#listeners.get(type) ?? new Set();
@@ -141,6 +146,12 @@ class FakeMap implements MapLike {
   }
 
   readonly flyToCalls: unknown[] = [];
+  easeTo(): void {}
+
+  cameraForBounds(): undefined {
+    return undefined;
+  }
+
   flyTo(camera: { center?: [number, number]; zoom?: number }, eventData: CameraEventData): void {
     this.flyToCalls.push(camera);
     this.moveTo(camera.center ?? [this.camera.lng, this.camera.lat], camera.zoom ?? this.camera.zoom, eventData);
@@ -185,9 +196,51 @@ class FakeMap implements MapLike {
   readonly dragPan = fakeGesture();
   readonly doubleClickZoom = fakeGesture();
   readonly boxZoom = fakeGesture();
-  readonly scrollZoom = { wheelRate: 0, trackpadRate: 0, setWheelZoomRate: (rate: number) => void (this.scrollZoom.wheelRate = rate), setZoomRate: (rate: number) => void (this.scrollZoom.trackpadRate = rate) };
+  readonly scrollZoom = { ...fakeGesture(), wheelRate: 0, trackpadRate: 0, setWheelZoomRate: (rate: number) => void (this.scrollZoom.wheelRate = rate), setZoomRate: (rate: number) => void (this.scrollZoom.trackpadRate = rate) };
+  // 漫游接管地图时才用到（ADR 0147 第 4 节），这里的测试不漫游
+  readonly dragRotate = fakeGesture();
+  readonly keyboard = fakeGesture();
+  readonly touchZoomRotate = fakeGesture();
+  readonly touchPitch = fakeGesture();
+  getMaxZoom(): number {
+    return 22;
+  }
+  setMaxZoom(): void {}
+  getVerticalFieldOfView(): number {
+    return 36.87;
+  }
+  setVerticalFieldOfView(): void {}
+  getCenterClampedToGround(): boolean {
+    return true;
+  }
+  setCenterClampedToGround(): void {}
 
+  getLayer(): unknown {
+    return undefined;
+  }
+  moveLayer(): void {}
+  getLayersOrder(): string[] {
+    return [];
+  }
+  triggerRepaint(): void {}
   remove(): void {}
+  // 投影、俯角上限和相机的变换只在三维引擎是 maplibre 时用到
+  getProjection(): ProjectionSpecification | undefined {
+    return undefined;
+  }
+  setProjection(): void {}
+  getMaxPitch(): number {
+    return 60;
+  }
+  setMaxPitch(): void {}
+  readonly _camera = {
+    transform: {
+      getCameraAltitude: () => 1000,
+      getCameraLngLat: () => ({ lng: this.camera.lng, lat: this.camera.lat }),
+      isPointOnMapSurface: () => true,
+      isLocationOccluded: () => false
+    }
+  };
 
   /** 模拟用户拖动：带原始的 DOM 事件 */
   drag(lng: number, lat: number): void {

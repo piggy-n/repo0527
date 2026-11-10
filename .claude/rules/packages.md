@@ -18,8 +18,8 @@ paths:
 
 ## 依赖方向（lint 检查）
 
-- `utils ← ui`，`utils ← map-core ← map-cesium`，`map-vue → map-core`，`map-tools → map-core、map-vue`；map-vue 只能用动态 `import()` 引用 map-cesium；`map-core`、`map-vue` 不能反过来依赖 map-tools；`icons`、`theme` 不依赖其他包
-- `utils`、`map-core`、`map-cesium` 不依赖 vue、element-plus、pinia；`map-vue`、`map-tools` 不依赖 element-plus、pinia、vue-router，项目配置和地图界面放在 `shared/map`（ADR 0027、0145）；`map-tools` 也不依赖 `@mx/ui`，图标由使用方通过插槽传入
+- `utils ← ui`，`utils ← map-core ← map-cesium、map-three`，`map-vue → map-core`，`map-tools → map-core、map-vue`；map-vue 只能用动态 `import()` 引用 map-cesium、map-three；`map-core`、`map-vue` 不能反过来依赖 map-tools；`icons`、`theme` 不依赖其他包
+- `utils`、`map-core`、`map-cesium`、`map-three` 不依赖 vue、element-plus、pinia；`map-vue`、`map-tools` 不依赖 element-plus、pinia、vue-router，项目配置和地图界面放在 `shared/map`（ADR 0027、0145）；`map-tools` 也不依赖 `@mx/ui`，图标由使用方通过插槽传入
 - 应用通过 `@mx/<name>` 使用包，不用相对路径；包只能依赖外部模块、声明过的包和包内部文件，不能导入应用代码
 - 以上规则由 lint 强制检查（根目录 `.oxlintrc.json` 的 `boundaries/dependencies`），分层有变化时同步修改（ADR 0006）
 

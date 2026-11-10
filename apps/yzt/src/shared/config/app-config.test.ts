@@ -58,6 +58,20 @@ describe('appConfig', () => {
     await expect(loadAppConfig()).rejects.toThrow('缺少环境变量 VITE_RESOURCE_MIN_ZOOM_ENABLED');
   });
 
+  it('三维引擎只能是 cesium 或 maplibre，不能为空（ADR 0147）', async () => {
+    vi.stubEnv('VITE_MAP_3D_ENGINE', 'maplibre');
+    expect((await loadAppConfig()).map3dEngine).toBe('maplibre');
+
+    vi.stubEnv('VITE_MAP_3D_ENGINE', 'cesium');
+    expect((await loadAppConfig()).map3dEngine).toBe('cesium');
+
+    vi.stubEnv('VITE_MAP_3D_ENGINE', 'three');
+    await expect(loadAppConfig()).rejects.toThrow('VITE_MAP_3D_ENGINE 只能是 cesium 或 maplibre，当前是 "three"');
+
+    vi.stubEnv('VITE_MAP_3D_ENGINE', '');
+    await expect(loadAppConfig()).rejects.toThrow('缺少环境变量 VITE_MAP_3D_ENGINE');
+  });
+
   describe('偏好的开关（ADR 0140）', () => {
     const ITEMS = [
       ['basemap', 'VITE_PREFERENCE_BASEMAP'],

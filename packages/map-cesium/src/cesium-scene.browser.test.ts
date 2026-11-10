@@ -3,17 +3,18 @@ import {
   buildNavigation,
   type CameraState,
   EYE_HEIGHT,
+  MAPLIBRE_FOVY,
   type PreparedTileset,
   RoutePath,
   type ScreenPoint,
   type WalkNotice,
   type WalkPhase,
-  type WalkPlayer
+  type WalkPlayer,
+  zoomToDistance
 } from '@mx/map-core';
 import type { GeoJSON, Position } from 'geojson';
 import { Cartesian3, Math as CesiumMath, Matrix4, Transforms } from 'cesium';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { MAPLIBRE_FOVY, zoomToDistance } from './camera-math';
 import { CesiumScene } from './cesium-scene';
 import { type LabelShape, type OverlayLayerSpecification, planOverlays } from './overlay-plan';
 import { setCesiumBaseUrl } from './runtime';

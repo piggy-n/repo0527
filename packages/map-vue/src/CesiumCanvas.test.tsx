@@ -11,7 +11,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, onMounted, provide, ref } from 'vue';
 import { CesiumCanvas, type SceneViewOptions } from './CesiumCanvas';
 import { type MapHandle, provideMap } from './provide-map';
-import { MAP_RUNTIME_PRELOAD, type MapRuntimePreloader } from './runtime';
+import {
+  MAP_RUNTIME,
+  MAP_RUNTIME_PRELOAD,
+  MAP_SCENE_ENGINE,
+  MAPLIBRE_ENGINE,
+  type MapRuntimeLoader,
+  type MapRuntimePreloader
+} from './runtime';
 import { injectMapState } from './use-map';
 
 const CAMERA: CameraState = { center: [119.5, 33], zoom: 6.8, bearing: 0, pitch: 0 };
@@ -207,6 +214,27 @@ describe('CesiumCanvas', () => {
     expect(String(errors[0])).toContain('没有地图运行时');
   });
 
+  it('三维引擎是 maplibre 时什么也不挂：切到三维也不加载 Cesium 视图（ADR 0147 第 1 节）', async () => {
+    const factory = controlledFactory();
+    let map: MapHandle<'basemap'> | undefined;
+    const wrapper = mount(
+      defineComponent(() => {
+        provide(MAP_SCENE_ENGINE, {
+          ...MAPLIBRE_ENGINE,
+          loadRenderer: () => Promise.reject(new Error('不该加载'))
+        });
+        map = provideMap({ groups: ['basemap'], camera: CAMERA, onError: () => undefined });
+        return () => <CesiumCanvas createView={factory.createView} />;
+      })
+    );
+
+    map?.setDimension('3d');
+    await flush();
+
+    expect(factory.requests).toHaveLength(0);
+    expect(wrapper.find('[data-scene-canvas]').exists()).toBe(false);
+  });
+
   it('支持清单之外的图层的回调原样交给视图', async () => {
     const createView = vi.fn<(options: SceneViewOptions) => Promise<MapView>>(() =>
       Promise.resolve(new FakeSceneView())
@@ -281,6 +309,7 @@ class FakeFlatView implements MapView {
 // 页面放一个挂着假二维视图的画布和三维画布，provide 预加载的函数
 function setupPreload() {
   const preload = vi.fn<MapRuntimePreloader>();
+  const loadRuntime = vi.fn<MapRuntimeLoader>(async () => undefined);
   const flat = new FakeFlatView();
   const factory = controlledFactory();
   const shown = ref(true);
@@ -300,6 +329,7 @@ function setupPreload() {
     defineComponent(() => {
       handle = provideMap({ groups: ['basemap'], camera: CAMERA });
       provide(MAP_RUNTIME_PRELOAD, preload);
+      provide(MAP_RUNTIME, loadRuntime);
       return () => (
         <div>
           <FlatCanvas />
@@ -311,13 +341,13 @@ function setupPreload() {
   if (!handle) {
     throw new Error('没有创建地图句柄');
   }
-  return { preload, flat, factory, shown, map: handle };
+  return { preload, loadRuntime, flat, factory, shown, map: handle };
 }
 
 describe('CesiumCanvas 的预加载（ADR 0091）', () => {
 
   it('二维第一次画面稳定以后请 app 预加载三维的运行时，只请求一次', async () => {
-    const { preload, flat } = setupPreload();
+    const { preload, loadRuntime, flat } = setupPreload();
     await flush();
     expect(preload).not.toHaveBeenCalled();
 
@@ -326,7 +356,11 @@ describe('CesiumCanvas 的预加载（ADR 0091）', () => {
     flat.settle();
     await flush();
 
-    expect(preload.mock.calls).toStrictEqual([['3d']]);
+    expect(preload).toHaveBeenCalledOnce();
+    // 交给 app 的是加载 Cesium 运行时的函数，app 决定什么时候调用
+    expect(loadRuntime).not.toHaveBeenCalled();
+    await preload.mock.calls[0]?.[0]();
+    expect(loadRuntime.mock.calls).toStrictEqual([['3d']]);
   });
 
   it('二维稳定之前就切到三维：不预加载，切换时照常加载', async () => {

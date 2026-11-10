@@ -1,4 +1,5 @@
 import {
+  Blackout,
   chooseSpawn,
   type ClickResolution,
   headingToYaw,
@@ -31,7 +32,6 @@ import {
   Matrix4,
   SceneTransforms
 } from 'cesium';
-import { Blackout } from './scene-blackout';
 import { keepInputsOff, releaseCamera, type RoamSaved, takeOverCamera } from './scene-roam-camera';
 import type { SceneWalkStart } from './scene-like';
 import { WalkAvatar } from './scene-walk-avatar';

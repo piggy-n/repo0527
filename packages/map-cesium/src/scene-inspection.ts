@@ -1,4 +1,4 @@
-// 场景的诊断读数（只读快照）：给开发页记录瓦片集的显存、屏幕误差和加载情况，业务代码不用
+// 场景的诊断读数（只读快照）：给开发页和性能测量记录瓦片集的显存、屏幕误差和加载情况，业务代码不用
 
 /** Cesium 瓦片集统计里和加载有关的计数（Cesium3DTilesetStatistics，类型声明里没有） */
 export interface TilesetStatistics {
@@ -15,6 +15,8 @@ export interface TilesetStatistics {
   readonly numberOfTilesTotal: number;
   /** 累计加载过的瓦片数（卸载后重新加载也计） */
   readonly numberOfLoadedTilesTotal: number;
+  /** 这一帧选中的瓦片的三角形数 */
+  readonly numberOfTrianglesSelected: number;
 }
 
 /**
@@ -63,6 +65,8 @@ export interface SceneInspection {
   /** 累计：渲染循环跑过的 tick 数（渲染与否都计）、真正画出的帧数 */
   readonly ticks: number;
   readonly frames: number;
+  /** 影像瓦片都到了（同地球的 tilesLoaded） */
+  readonly imageryLoaded: boolean;
   /** 累计：渲染出错的次数（WebGL 上下文丢失时每个 tick 一次） */
   readonly renderErrors: number;
   /** 累计：相机变化、相机停下的次数 */

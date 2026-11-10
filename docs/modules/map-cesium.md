@@ -6,14 +6,14 @@
 
 | 文件 | 内容 | 是否导入 Cesium | 测试 |
 |---|---|---|---|
-| `camera-math.ts` | 缩放级与距离互换、视场角对齐、正俯视与方位的处理 | 否 | node |
+| `camera-math.ts` | 视场角对齐、正俯视与方位的处理（缩放级与距离互换在 map-core 的 `camera-distance`，两种引擎共用） | 否 | node |
 | `camera-fit.ts` | 和二维一样的取景：`fitBoundsCamera`、带留白定位的 `paddedCenter` | 否 | node |
 | `url-template.ts` | 数据源的多个瓦片地址合成带 `{s}` 的模板 | 否 | node |
 | `scene-style.ts` | `planSceneStyle`：样式 → 影像图层、地球底色、覆盖物图层、不支持的图层 | 否 | node |
 | `overlay-update.ts` | `movableInPlace`：图层再次推导时能不能只换坐标（样式、个数不变，线和面不超过 500 个点，ADR 0082）；`sameCoordinates`：形状的坐标没变（ADR 0099） | 否 | node |
 | `overlay-plan.ts` | `planOverlays`：覆盖物图层和数据 → 形状（按整级求值样式、简化到半个像素、遮罩外环收成方框、去掉重复点；`symbol` 图层的文字，ADR 0146） | 否 | node |
 | `scene-like.ts` | 窄接口 `SceneLike`、`ScenePose`、`TilesetOptions`、`WebGLUnavailableError` | 否 | — |
-| `cesium-view.ts` | `CesiumView`：生命周期、相机同步与精确还原、样式镜像、覆盖物数据的下载、工具输入与临时拖动、数据源错误、视点高度、三维内容 | 否（只依赖 `SceneLike`） | jsdom，注入假场景 |
+| `cesium-view.ts` | `CesiumView`：生命周期、相机同步与精确还原、样式镜像、覆盖物数据的下载、工具输入与临时拖动、数据源错误、视点高度、三维内容（瓦片集的同步用 map-core 的 `SceneTilesetSync`） | 否（只依赖 `SceneLike`） | jsdom，注入假场景 |
 | `cesium-scene.ts` | `CesiumScene`：唯一调用 Cesium 的门面 | 是 | 浏览器，真实 Cesium |
 | `scene-tilesets.ts` | `CesiumScene` 用的瓦片集：Blob 地址创建、参数、头灯光照、首批瓦片与失败的事件 | 是 | 随 `CesiumScene` 的浏览器测试 |
 | `scene-underground.ts` | `CesiumScene` 用的钻地：占地矩形、地表透明、土层与背景、退出时飞回地表上方 | 是 | 随 `CesiumScene` 的浏览器测试 |
@@ -137,7 +137,7 @@
 
 ## 三维内容（ADR 0081）
 
-会话的 `scene`（`SceneContentModel`，见 [map-core.md](map-core.md)）是三维独有的内容：瓦片集和钻地。`CesiumView` 镜像它，和样式一样暂停期间只记下"有变化"，恢复时再应用。
+会话的 `scene`（`SceneContentModel`，见 [map-core.md](map-core.md)）是三维独有的内容：瓦片集和钻地。`CesiumView` 镜像它，和样式一样暂停期间只记下"有变化"，恢复时再应用。下面瓦片集的比较、加载、状态和同组的规则在 map-core 的 `SceneTilesetSync`，MapLibre 引擎也用它（ADR 0147 第 3 节，[map-three.md](map-three.md)），`SceneLike` 的瓦片集方法就是它要的 `TilesetHost`。
 
 - 按瓦片集 ID 比较：新的加载，不要的移除；地址或 `attempt` 变了先移除再重新加载；其余只改显示和光照（`updateTileset`）
 - 加载：`prepareTileset`（map-core，ADR 0085 从这里移过去）整理索引（下载用 `loadJson`）→ `SceneLike.addTileset` 建好并加进场景，返回建议的相机（包围球整个进入画布，俯角 55°）。中止的不报告；索引、建瓦片集、瓦片下载失败都记成 `failed`
@@ -169,6 +169,10 @@
 - 清晰度（`selection`，上一帧画出的瓦片，`tileVisible` 收集、`preRender` 换帧）：每个瓦片的贴图像素数开方除以包围球的投影直径（像素）得到纹素密度，小于 1 贴图比屏幕粗；几何误差除以到包围球的距离、乘上画布高 / (2 tan(竖直视场角 / 2)) 得到屏幕像素数；都按投影面积加权，再给出密度小于 1 的面积占比和最粗一级的几何误差。相机在包围球里的瓦片不算，单个瓦片的面积不超过画布（2026-11-09：JKQ 的报告里密度、几何误差全是 0，是少数瓦片的包围球大到把别的瓦片的权重压成 0，彭城广场正常；改口径前后彭城广场的读数一样，JKQ 要重跑才知道，原因要看它的索引）。肉眼的"先清晰后模糊"看它：细一级换成粗一级、显存不够放宽精度都会让密度下降，而瓦片数可能反而变多（JKQ 的 `top/` 单元换成块根：512 像素贴图换成 256 像素，数量从 1 变 16），只看选中数看不出来
 - `createCesiumScene` 返回具体的 `CesiumScene`（`satisfies CreateScene`），开发页才拿得到 `inspect`；`CesiumView` 仍只依赖 `SceneLike`
 - 开发页 `/dev/tileset-probe`（`pages/dev/tileset-probe/`）：从清单选一个模型加进真实的场景，按 15、16、16.5、17、18 级（16.5 在倾斜摄影的块根和第 1 层交界附近）、俯视和倾斜各一组的固定相机序列停留，每 250 毫秒记一次读数，连同控制台警告、长任务、上下文丢失一起导出 JSON 和 Markdown 报告；也可以手动操作相机录一段。报告里每个姿态的"清晰→模糊"按纹素密度算（比姿态里的高点低两成以上算一次），"选中数骤降"是旧口径，只在整级被丢掉时才有；屏幕误差可以在页面上改，换模型时先填上清单里这个模型的值（没给是默认的 8），和业务页面一致。2026-11-08 用户在 RTX 3060 上跑了 JKQ、JKQ2 各 6 个设定值的报告，结论见"瓦片集的显存预算"。模型只在服务器上时用 `YZT_3DT_PROXY` 让开发服务器代理 `/3dt/`（[config/local-files.md](../config/local-files.md)）
+
+## 读数
+
+`CesiumScene.inspect()`（`scene-inspection.ts`）是只读快照：帧数、影像是否到齐，每个瓦片集的预算、屏幕误差、显存、瓦片数、三角形数、累计的加载和卸载次数。给两种引擎的性能对比用（[map-three.md](map-three.md)"性能验收"），业务代码不用；`requestFrame()` 让对比时静止也每帧都画。`createCesiumScene` 因此返回具体的 `CesiumScene`。
 
 ## 路线漫游（ADR 0083）
 

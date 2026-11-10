@@ -74,7 +74,8 @@ export function withMapRuntime(
     return withRuntimeLoader(
       page,
       framework => prepareMapRuntime(framework),
-      framework => preloadRuntimeWhenIdle(() => prepareMapRuntime(framework))
+      // 画布交来要预加载的内容（Cesium 的运行时、MapLibre 引擎的三维模块），这里只决定时机
+      load => preloadRuntimeWhenIdle(load)
     );
   };
 }
