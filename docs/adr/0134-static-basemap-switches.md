@@ -14,7 +14,7 @@ ADR 0133 的静态底图默认各市分色、带市县地名。用户看过后�
 
 | 问题 | 候选 | 选择 |
 |---|---|---|
-| 开关放在哪 | 环境变量；`static-basemap.ts` 里的常量；单独的小文件 | 单独的小文件 `static-options.ts`：用户明确不进 `.env`；`static-basemap.ts` 有 `?url` 导入，Node 直接运行的生成工具读不了它，缩略图也要跟着分色开关 |
+| 开关放在哪 | 环境变量；`static-basemap.ts` 里的常量；单独的小文件 | 单独的小文件 `shared/config/static-basemap-options.ts`：用户明确不进 `.env`；`static-basemap.ts` 有 `?url` 导入，Node 直接运行的生成工具读不了它，缩略图也要跟着分色开关 |
 | 颜色怎么变淡 | `fill-opacity` 乘 0.75；颜色值带透明度；换算成不透明 HEX | 不透明 HEX（用户要求）：颜色在任何背景上都一样，滑块的 100% 就是完全不透明，没有多一层透明度要理解 |
 | 换算放在哪 | 运行时用函数计算；生成工具计算；直接写结果 | 直接写结果：换算只做一次，配色表一眼能看到实际颜色，换算关系由测试核对 |
 | 关闭分色时的颜色表达式 | 13 个市都写同一个颜色的 `match`；一个常量 | 常量：没有多余的分支，代码不存在的市也不会落到兜底的底色 |
@@ -24,7 +24,7 @@ ADR 0133 的静态底图默认各市分色、带市县地名。用户看过后�
 ### 1. 开关
 
 ```ts
-// shared/map/basemap/static-options.ts
+// shared/config/static-basemap-options.ts
 export const STATIC_BASEMAP_OPTIONS: StaticBasemapOptions = { labels: false, cityColors: false };
 ```
 

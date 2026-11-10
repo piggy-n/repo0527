@@ -36,6 +36,7 @@ paths:
 - 路径别名只在 tsconfig 的 `paths` 中配置，Vite 通过 `resolve.tsconfigPaths` 读取，不另配 `resolve.alias`
 - 自定义环境变量只在 `shared/config/app-config.ts` 中读取和校验，其他代码使用 `appConfig`；Vite 内置的 `DEV`、`PROD`、`MODE`、`BASE_URL` 可以直接读取。新增变量要在 `shared/config/import-meta-env.ts` 中声明类型
 - `VITE_` 开头的变量会写进构建产物，不能放密钥；只给 `vite.config.ts` 用的变量不加 `VITE_` 前缀
+- 新增开关先按 `docs/config/overview.md` 的"新增一个开关时放哪"选类别，并在总览登记；所有部署都一样的产品开关只放 `shared/config/<主题>-options.ts`，只写类型和常量、不导入别的模块（Node 直接运行的工具也会读），不进 `.env`，也不散放在页面、feature 或包里
 - 内网与公网的差异只写在 `.env.intranet`（`pnpm build:intranet`、`dev:intranet`），代码只读 `appConfig`，不判断模式名；区分生产与开发用 `PROD` / `DEV`，不用 `MODE`（ADR 0032）
 - tsconfig 不开启 `incremental`：TS 7.0.2 的增量检查在 `declare global` 文件变化后会给出过期结果（ADR 0009）
 

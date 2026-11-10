@@ -74,7 +74,7 @@ docs/
 
 - 做新任务：根目录 `AGENTS.md`，看 [backlog.md](backlog.md) 有没有相关的待办
 - 查决策：[adr/overview.md](adr/overview.md)；地图部分先读 [modules/map-overview.md](modules/map-overview.md)，再按主题去读 ADR
-- 查配置项：[config/](config/) 下对应的文档；查命令：[commands.md](commands.md)
+- 查配置项：先看[配置总览](config/overview.md)，再看 [config/](config/) 下对应的文档；查命令：[commands.md](commands.md)
 - 做界面：先读 [design/](design/) 下的规范和主题说明，并按 [UI 工作流程](design/ui-workflow.md) 完成交互原型和实际页面验证
 - 联调接口：[archive/migration.md](archive/migration.md) 的接口实测和模块文档
 - 想系统了解项目是怎么建起来的：[archive/README.md](archive/README.md) 的阅读顺序

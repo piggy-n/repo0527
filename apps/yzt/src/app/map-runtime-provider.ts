@@ -12,7 +12,7 @@ import {
 import { type Component, defineComponent, h, provide } from 'vue';
 import { type Map3dEngine, appConfig } from '@/shared/config/app-config';
 import { reportMapError } from '@/shared/map/backend-request';
-import { SCENE_OPTIONS, type SceneOptions } from './scene-options';
+import { SCENE_OPTIONS, type SceneOptions } from '@/shared/config/scene-options';
 
 const SCENE_ENGINES: Readonly<Record<Map3dEngine, SceneEngine>> = { cesium: CESIUM_ENGINE, maplibre: MAPLIBRE_ENGINE };
 

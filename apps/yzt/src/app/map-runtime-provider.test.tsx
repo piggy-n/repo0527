@@ -16,7 +16,7 @@ import type { Map3dEngine } from '@/shared/config/app-config';
 import { reportMapError } from '@/shared/map/backend-request';
 import { required } from '@/shared/testing/required';
 import { withRuntimeLoader } from './map-runtime-provider';
-import { SCENE_OPTIONS, type SceneOptions } from './scene-options';
+import { SCENE_OPTIONS, type SceneOptions } from '@/shared/config/scene-options';
 
 // 注入给页面的三维引擎
 function injectedEngine(engine: Map3dEngine, options?: SceneOptions): SceneEngine {

@@ -10,7 +10,7 @@ import type {
 import { overlayDetailMetadata, type StyleGroup, type StyleRoot } from '@mx/map-core';
 import cityUrl from '../boundary/data/jiangsu-city.json?url';
 import labelsUrl from './data/jiangsu-labels.json?url';
-import { STATIC_BASEMAP_OPTIONS } from './static-options';
+import { STATIC_BASEMAP_OPTIONS } from '../../config/static-basemap-options';
 import {
   STATIC_CITY_COLORS,
   STATIC_CITY_LINE_COLOR,

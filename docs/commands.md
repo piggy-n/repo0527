@@ -170,7 +170,7 @@ pnpm add -Dw -E some-tool
 
 **作用**：由市界、县界生成内网静态底图的地名点和缩略图（ADR 0133）。
 
-**什么时候用**：边界数据、`static-palette.ts` 的配色、`static-options.ts` 的分色开关变化时。平时不用运行，生成结果已经提交；缩略图和当前配置对不上时 `static-basemap.test.ts` 会失败。
+**什么时候用**：边界数据、`static-palette.ts` 的配色、`shared/config/static-basemap-options.ts` 的分色开关变化时。平时不用运行，生成结果已经提交；缩略图和当前配置对不上时 `static-basemap.test.ts` 会失败。
 
 **执行了什么**：Node 直接运行 `tools/static-basemap/cli.ts`，读取 `src/shared/map/boundary/data/` 的市界、县界，写入 `src/shared/map/basemap/data/jiangsu-labels.json` 和 `src/shared/map/basemap/images/static-thumbnail.svg`，打印各自的大小。
 
