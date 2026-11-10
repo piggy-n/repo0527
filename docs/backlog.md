@@ -40,7 +40,7 @@
 - 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像
 - 三维的后续顺序（用户 2026-11-09 定）：3C.4 在显卡机器上复测 → `feat/map-three` 合入 main，默认仍是 `cesium` → `maplibre` 三维先不显示资源图层 → `maplibre` 下加 LCC2 → 过 [ADR 0147](adr/0147-maplibre-three-3d-engine.md) 第 9 节的门槛，默认改为 `maplibre` → Cesium 下方案 B 和叠画布 LCC2 的 PoC；不接 XGRIDS 的 LCC Web SDK（AppKey 绑定域名，在线授权要连外网，离线授权会过期）
 - 三维的资源图层：暂不显示（用户 2026-11-09 决定，放开要改页面设计），Cesium 下三维点/框选也不识别；`maplibre` 引擎现在会显示、能点/框选，要加开关和 Cesium 保持一致。以后放开时 Cesium 走方案 B（迁移旧项目的 Worker 栅格化），接入时对齐解码库版本、点选改用瓦片数据服务、避免和 MapLibre 重复下载（ADR 0091）
-- LCC2（高斯泼溅）：只在 `maplibre` 下做，参照 PoC（`poc/maplibre-three-gpu` 分支，不合入）在 `@mx/map-three` 里实现，方案见 [ADR 0149](adr/0149-lcc2-gaussian-splats.md)（草稿，待讨论）；运行时直接读数据方服务器上的 LCC2，同源转发要支持 Range；`three` 升到 0.187 以上单独提交并验证驾驶舱；和倾斜模型差约 85 米是样例的泼溅相对自己的扫描轨迹平移了，成因和两份数据的高程基准要问数据方；LCC2 格式的授权条款可能要求界面上署名 XGRIDS，待确认
+- LCC2（高斯泼溅）：只在 `maplibre` 下做，参照 PoC（`poc/maplibre-three-gpu` 分支，不合入）在 `@mx/map-three` 里实现，方案见 [ADR 0149](adr/0149-lcc2-gaussian-splats.md)（提议中）；运行时直接读数据方服务器上的 LCC2，同源转发要支持 Range；`three` 升到 0.187 以上单独提交并验证驾驶舱；和倾斜模型差约 85 米是样例的泼溅相对自己的扫描轨迹平移了，成因和两份数据的高程基准要问数据方；LCC2 格式的授权条款可能要求界面上署名 XGRIDS，待确认
 - Cesium 下的 LCC2：只做 Three.js 叠画布的 PoC，重点看两块画布不共用深度时，和倾斜模型、地形的遮挡对不对
 - AI 对话：MVT 结果、点击结果要素的弹窗、历史按内容搜索、对话随页面缓存、结果区的联动，见 [ai-chat](modules/ai-chat.md)"待办"
 - 数据查询：高级查询的导出；高级查询本身暂时隐藏（ADR 0119）
