@@ -261,6 +261,14 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
       import('@/pages/dev/tileset-probe/DevTilesetProbePage').then(({ DevTilesetProbePage }) => DevTilesetProbePage)
     ),
     meta: { title: '瓦片集加载诊断', public: true }
+  },
+  {
+    path: '/dev/splat-watch',
+    name: RouteName.devSplatWatch,
+    component: withMapRuntime(() =>
+      import('@/pages/dev/splat-watch/DevSplatWatchPage').then(({ DevSplatWatchPage }) => DevSplatWatchPage)
+    ),
+    meta: { title: '高斯泼溅的 GL 监听和预算', public: true }
   }
 ] : [];
 

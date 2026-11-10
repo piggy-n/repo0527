@@ -18,7 +18,8 @@ const STATS: BenchStats = {
   uploadedMB: 0,
   locked: false,
   queues: null,
-  budget: null
+  budget: null,
+  splats: null
 };
 
 const LONG_TASKS = { count: 1, maxMs: 80, totalMs: 80, over100: 0, over200: 0, over500: 0, contextMs: 0, maxWithoutContextMs: 80 };
@@ -33,7 +34,8 @@ const fillSample = (t: number, triangles: number): SceneSample => ({
   cacheMB: 1300,
   loaded: 100,
   queues: null,
-  budget: null
+  budget: null,
+  splats: null
 });
 
 function phase(p50: number, p95: number, p99: number, over50 = 0, triangles = 500000): PhaseResult {
@@ -311,6 +313,11 @@ describe('machineDrift', () => {
   it('引擎和场景不同的不比：工作量本来就不同', () => {
     expect(machineDrift([staticJs('maplibre', 2), staticJs('cesium', 9)])).toBeNull();
     expect(machineDrift([staticJs('maplibre', 2, 'a'), staticJs('maplibre', 9, 'b')])).toBeNull();
+  });
+
+  it('泼溅的预算不同，画的就不同：每个预算各算一组', () => {
+    expect(machineDrift([staticJs('maplibre-splat3m', 2), staticJs('maplibre-splat10m', 8)])).toBeNull();
+    expect(machineDrift([staticJs('maplibre-splat3m', 2), staticJs('maplibre-splat3m', 2.4), staticJs('maplibre-splat10m', 8)])).toBeCloseTo(1.2);
   });
 
   it('取最不稳定的一组', () => {

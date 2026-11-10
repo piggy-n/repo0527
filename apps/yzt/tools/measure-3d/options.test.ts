@@ -35,6 +35,15 @@ describe('parseOptions', () => {
     expect(() => parseOptions(['--cull-window', '0'])).toThrow('--cull-window');
   });
 
+  it('泼溅的预算：默认 300 万、600 万、1000 万，3m、3e6、3000000 都认，重复的只留一个', () => {
+    expect(parseOptions([]).splatBudgets).toEqual([3_000_000, 6_000_000, 10_000_000]);
+    expect(parseOptions(['--splat-budget', '3m,6e6 10000000']).splatBudgets).toEqual([3_000_000, 6_000_000, 10_000_000]);
+    expect(parseOptions(['--splat-budget', '1.5m,1500000']).splatBudgets).toEqual([1_500_000]);
+    expect(() => parseOptions(['--splat-budget', '0'])).toThrow('--splat-budget');
+    expect(() => parseOptions(['--splat-budget', '3.5'])).toThrow('--splat-budget');
+    expect(() => parseOptions(['--splat-budget', '3k'])).toThrow('--splat-budget');
+  });
+
   it('帧率上限：默认不封顶', () => {
     expect(parseOptions([]).fps).toBeNull();
     expect(parseOptions(['--fps', '60']).fps).toBe(60);

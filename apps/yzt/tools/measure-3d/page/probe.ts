@@ -312,6 +312,9 @@ const FLIGHT_SAMPLE_MS = 250;
 const FILL_SAMPLE_MS = 50;
 const fill: { timer: ReturnType<typeof setInterval> | null; samples: SceneSample[]; from: number } = { timer: null, samples: [], from: 0 };
 
+// 三个通道都不低于它算接近白色（0～255）
+const BRIGHT_LEVEL = 235;
+
 function sceneSample(from: number): SceneSample | null {
   const stats = window.bench?.stats();
   return stats
@@ -325,7 +328,8 @@ function sceneSample(from: number): SceneSample | null {
         cacheMB: stats.cacheMB,
         loaded: stats.loaded,
         queues: stats.queues,
-        budget: stats.budget
+        budget: stats.budget,
+        splats: stats.splats
       }
     : null;
 }
@@ -633,20 +637,29 @@ export const probe: Probe = {
     return { ...(await endPhase()), trace };
   },
 
-  // 模型显示和隐藏各拍一张，比较后才知道模型是不是真的画出来了
+  // 模型显示和隐藏各拍一张，比较后才知道模型是不是真的画出来了；模型的像素里再数接近白色的（泼溅的亮处偏白）
   async analyzeShots(withModel, withoutModel) {
     const [a, b] = await Promise.all([decodeShot(withModel), decodeShot(withoutModel)]);
     let changed = 0;
+    let bright = 0;
     for (let i = 0; i < a.data.length; i += 4) {
+      const red = a.data[i] ?? 0;
+      const green = a.data[i + 1] ?? 0;
+      const blue = a.data[i + 2] ?? 0;
       const difference =
-        Math.abs((a.data[i] ?? 0) - (b.data[i] ?? 0)) +
-        Math.abs((a.data[i + 1] ?? 0) - (b.data[i + 1] ?? 0)) +
-        Math.abs((a.data[i + 2] ?? 0) - (b.data[i + 2] ?? 0));
+        Math.abs(red - (b.data[i] ?? 0)) + Math.abs(green - (b.data[i + 1] ?? 0)) + Math.abs(blue - (b.data[i + 2] ?? 0));
       if (difference > 24) {
         changed += 1;
+        if (Math.min(red, green, blue) >= BRIGHT_LEVEL) {
+          bright += 1;
+        }
       }
     }
-    return { blank: blankPixels(a), modelCoveragePct: (changed / (a.data.length / 4)) * 100 };
+    return {
+      blank: blankPixels(a),
+      modelCoveragePct: (changed / (a.data.length / 4)) * 100,
+      brightPct: changed > 0 ? (bright / changed) * 100 : null
+    };
   }
 };
 

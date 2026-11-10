@@ -12,11 +12,12 @@ import type {
   ShotCoverage,
   StableResult
 } from './bench-api.ts';
-import { gpuProcessId, launchBrowser, type LaunchedBrowser, sampleGpuMemory } from './browser.ts';
+import { type BrowserProcesses, browserProcesses, launchBrowser, type LaunchedBrowser, type MemorySample, sampleMemory } from './browser.ts';
 import type { Options } from './options.ts';
 import { type CpuProfile, summarizeProfile } from './profile.ts';
 import type { QualityResult, RunResult, SettleResult } from './results.ts';
 import { aerialFlight, type Run } from './scenes.ts';
+import type { SplatModel } from './splat-models.ts';
 import { blurEvents, type SharpnessGrid } from './sharpness.ts';
 
 // 跑一遍：每遍一个新的浏览器进程和空缓存，显存、堆、磁盘缓存都从零开始
@@ -36,17 +37,28 @@ const call = <T>(page: Page, expression: string) => page.evaluate<T>(expression)
 
 export interface RunContext {
   readonly options: Options;
+  /** 场景里的泼溅：清单里读到的地址和摆放（cli 启动时按 ID 取好） */
+  readonly splats: ReadonlyMap<string, SplatModel>;
   readonly baseUrl: string;
   readonly outDir: string;
   readonly redact: (text: string) => string;
   readonly progress: (phase: string) => void;
 }
 
-function pageUrl({ scene, variant }: Run, { baseUrl, options }: RunContext): string {
+function pageUrl({ scene, variant }: Run, { baseUrl, options, splats }: RunContext): string {
   const { center, zoom, pitch, bearing } = scene.camera;
   const params = new URLSearchParams({
     engine: variant.engine,
     models: scene.models.map(model => model.path).join(','),
+    splats: JSON.stringify(
+      scene.splats.map(id => {
+        const model = splats.get(id);
+        if (!model) {
+          throw new Error(`清单里没有取到泼溅 ${id}`);
+        }
+        return model;
+      })
+    ),
     basemap: options.basemap,
     pacing: String(options.pacing),
     zoom: String(zoom),
@@ -61,6 +73,9 @@ function pageUrl({ scene, variant }: Run, { baseUrl, options }: RunContext): str
   }
   if (variant.cullWindow !== undefined) {
     params.set('cullWindow', variant.cullWindow === null ? 'off' : String(variant.cullWindow));
+  }
+  if (variant.splatBudget !== undefined) {
+    params.set('splatBudget', String(variant.splatBudget));
   }
   if (options.fps !== null) {
     params.set('fps', String(options.fps));
@@ -102,14 +117,15 @@ interface Session {
   readonly page: Page;
   readonly cdp: CDPSession;
   readonly launched: LaunchedBrowser;
-  readonly gpuPid: number | null;
+  readonly processes: BrowserProcesses;
 }
 
 async function open(result: RunResult, { options, redact }: RunContext): Promise<Session> {
   const launched = await launchBrowser(options);
-  const gpuPid = await gpuProcessId(launched.browser);
   const context = await launched.browser.newContext({ viewport: options.viewport, deviceScaleFactor: 1 });
   const page = await context.newPage();
+  // 渲染进程在打开页面以后才有
+  const processes = await browserProcesses(launched.browser);
   const pageErrors: string[] = [];
   let glErrors = 0;
   page.on('pageerror', error => {
@@ -125,7 +141,7 @@ async function open(result: RunResult, { options, redact }: RunContext): Promise
     }
   });
   const cdp = await context.newCDPSession(page);
-  return { page, cdp, launched, gpuPid };
+  return { page, cdp, launched, processes };
 }
 
 async function loadPage(run: Run, ctx: RunContext, { page }: Session, result: RunResult): Promise<StableResult> {
@@ -187,35 +203,46 @@ async function setModelVisible(page: Page, visible: boolean): Promise<void> {
 const screenshot = (page: Page, type: 'png' | 'jpeg' = 'png') =>
   page.screenshot({ timeout: 120000, animations: 'allow', type, ...(type === 'jpeg' ? { quality: 85 } : {}) });
 
+// 采样的最大值；这次没读到时不变
+const peak = (current: number | null, value: number | null) => (value === null ? current : Math.max(current ?? 0, value));
+
 async function runPerf(run: Run, ctx: RunContext, session: Session, result: RunResult): Promise<void> {
   const times = ctx.options.quick ? QUICK : NORMAL;
-  const { page, cdp, gpuPid } = session;
+  const { page, cdp, processes } = session;
   await cdp.send('Performance.enable');
   let peakGpu: number | null = null;
-  let gpuAtStable: number | null = null;
   let gpuUnavailable: string | null = null;
   let heapPeak: number | null = null;
-  let busy = false;
-  const sample = async (): Promise<number | null> => {
-    if (busy) {
+  let rendererPeak: number | null = null;
+  let gpuProcessPeak: number | null = null;
+  const read = async (): Promise<MemorySample> => {
+    const metrics = await cdp.send('Performance.getMetrics').catch(() => null);
+    const heap = metrics?.metrics.find(item => item.name === 'JSHeapUsedSize')?.value;
+    if (heap !== undefined) {
+      heapPeak = Math.max(heapPeak ?? 0, heap / 1048576);
+    }
+    const memory = await sampleMemory(processes);
+    rendererPeak = peak(rendererPeak, memory.rendererPrivateMB);
+    gpuProcessPeak = peak(gpuProcessPeak, memory.gpuProcessPrivateMB);
+    if ('unavailable' in memory.gpu) {
+      gpuUnavailable = memory.gpu.unavailable;
+    } else {
+      peakGpu = Math.max(peakGpu ?? 0, memory.gpu.dedicatedMB);
+    }
+    return memory;
+  };
+  // 同一时间只读一次：定时的那次还没读完就跳过；fresh 时等它读完再读一次（稳定时的读数要在稳定以后）
+  let inflight: Promise<MemorySample> | null = null;
+  const sample = async (fresh = false): Promise<MemorySample | null> => {
+    if (inflight && !fresh) {
       return null;
     }
-    busy = true;
+    await inflight?.catch(() => undefined);
+    inflight = read();
     try {
-      const metrics = await cdp.send('Performance.getMetrics').catch(() => null);
-      const heap = metrics?.metrics.find(item => item.name === 'JSHeapUsedSize')?.value;
-      if (heap !== undefined) {
-        heapPeak = Math.max(heapPeak ?? 0, heap / 1048576);
-      }
-      const gpu = await sampleGpuMemory(gpuPid);
-      if ('unavailable' in gpu) {
-        gpuUnavailable = gpu.unavailable;
-        return null;
-      }
-      peakGpu = Math.max(peakGpu ?? 0, gpu.dedicatedMB);
-      return gpu.dedicatedMB;
+      return await inflight;
     } finally {
-      busy = false;
+      inflight = null;
     }
   };
   ctx.progress('加载');
@@ -225,7 +252,7 @@ async function runPerf(run: Run, ctx: RunContext, session: Session, result: RunR
   } finally {
     clearInterval(sampler);
   }
-  gpuAtStable = await sample();
+  const atStable = await sample(true);
   await call(page, `window.benchProbe.waitBasemap(${times.basemapMs})`);
 
   ctx.progress('静止帧');
@@ -255,7 +282,15 @@ async function runPerf(run: Run, ctx: RunContext, session: Session, result: RunR
   result.recovery = await waitSettled(page, result.flightWarm.endedAt, times.settleMs, times.afterSettleMs);
   result.atRecovered = await stats(page);
   await sample();
-  result.memory = { heapPeakMB: heapPeak, gpuAtStableMB: gpuAtStable, gpuPeakMB: peakGpu, gpuUnavailable };
+  result.memory = {
+    heapPeakMB: heapPeak,
+    gpuAtStableMB: atStable && 'dedicatedMB' in atStable.gpu ? atStable.gpu.dedicatedMB : null,
+    gpuPeakMB: peakGpu,
+    gpuUnavailable,
+    rendererAtStableMB: atStable?.rendererPrivateMB ?? null,
+    rendererPeakMB: rendererPeak,
+    gpuProcessPeakMB: gpuProcessPeak
+  };
 }
 
 async function runQuality(run: Run, ctx: RunContext, session: Session, result: RunResult): Promise<void> {

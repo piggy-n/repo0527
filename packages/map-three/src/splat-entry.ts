@@ -55,6 +55,10 @@ export interface SplatEntryInspection {
   readonly cpuBytes: number;
   readonly gpuBytes: number;
   readonly pendingBytes: number;
+  /** 累计下载的字节 */
+  readonly downloadedBytes: number;
+  /** 解码用的 WASM 内存的峰值：不在 cpuBytes 里，CPU 内存要一起看（L.3） */
+  readonly peakWasmBytes: number;
 }
 
 const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
@@ -233,7 +237,9 @@ export class SplatEntry implements Disposable {
       loadProgress: stats.loadProgress,
       cpuBytes: stats.residentCpuBytes,
       gpuBytes: stats.residentGpuBytes,
-      pendingBytes: stats.pendingBytes
+      pendingBytes: stats.pendingBytes,
+      downloadedBytes: stats.downloadedBytes,
+      peakWasmBytes: stats.peakWasmMemoryBytes
     };
   }
 

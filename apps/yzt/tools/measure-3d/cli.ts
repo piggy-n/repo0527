@@ -11,18 +11,22 @@ import { createRedactor } from './redact.ts';
 import { renderManual, renderQualityPage, renderReport } from './report.ts';
 import type { Environment, MeasureResults, SceneQuality } from './results.ts';
 import { runOnce } from './run.ts';
-import { buildRuns, type Run, SCENES, selectScenes, variants } from './scenes.ts';
+import { buildRuns, PENGCHENG_SPLAT, type Run, SCENES, selectScenes, splatVariants, variants, variantsOf } from './scenes.ts';
 import { startServer } from './server.ts';
 import type { SharpnessComparison } from './sharpness.ts';
+import { decodedPath, type ManifestSource, manifestSource, readManifest, resolveSplats, type SplatModel } from './splat-models.ts';
 import { PAGE_OUT_DIR } from './vite.config.ts';
 
-// MapLibre 引擎和 Cesium 的性能对比（ADR 0147 3C.4）：在 apps/yzt 下运行 pnpm measure:3d，步骤见 docs/modules/map-three.md"性能验收"
+// MapLibre 引擎和 Cesium 的性能对比（ADR 0147 3C.4），高斯泼溅的预算（ADR 0149 L.3，--only splat）：在 apps/yzt 下运行 pnpm measure:3d，
+// 步骤见 docs/modules/map-three.md"性能验收""泼溅的预算"
 
 const appRoot = resolve(import.meta.dirname, '../..');
 const repoRoot = resolve(appRoot, '../..');
 const redact = createRedactor(repoRoot);
 const modelsDir = localPath('3dt');
 const modelsProxy = process.env.YZT_3DT_PROXY || null;
+// 泼溅场景的模型从清单读，和开发服务器同一个来源（splat-models.ts）
+const manifest: ManifestSource = manifestSource(join(modelsDir, 'manifest.json'), join(appRoot, 'public/3dt/manifest.json'), modelsProxy);
 
 const stripImages = ({ cells, medianRatio, worstDecileRatio, ratios }: SharpnessComparison): SharpnessComparison => ({
   cells,
@@ -52,9 +56,11 @@ if (options.help) {
 }
 const scenes = selectScenes(options.only);
 const list = variants(options.uploadMBs, options.cullWindows);
+const splatList = splatVariants(options.splatBudgets);
 if (options.list) {
   for (const scene of SCENES) {
-    console.log(`${scene.id.padEnd(22)} ${scene.title}${scene.acceptance ? '（验收）' : ''}`);
+    const note = scene.acceptance ? '（验收）' : scene.splats.length > 0 ? '（高斯泼溅，比较 --splat-budget）' : '';
+    console.log(`${scene.id.padEnd(22)} ${scene.title}${note}`);
   }
   process.exit(0);
 }
@@ -88,13 +94,38 @@ async function checkModelServer(server: string, paths: readonly string[]): Promi
   return [...new Set(problems.filter(problem => problem !== null))];
 }
 
-async function checkFiles(): Promise<void> {
+function describeManifest(source: ManifestSource): string {
+  if (source.kind === 'proxy') {
+    return `服务器上的清单（${source.url}）`;
+  }
+  return source.kind === 'local' ? '本地清单 local/3dt/manifest.json' : '入库的清单 public/3dt/manifest.json';
+}
+
+// 泼溅场景的模型按 ID 从清单里取：缺了说明怎么补（彭城广场的样例只在本地清单里）
+async function resolveSceneSplats(): Promise<{ splats: Map<string, SplatModel>; problems: string[] }> {
+  const ids = [...new Set(scenes.flatMap(scene => scene.splats))];
+  if (ids.length === 0) {
+    return { splats: new Map(), problems: [] };
+  }
+  try {
+    const models = resolveSplats(await readManifest(manifest), ids);
+    return { splats: new Map(models.map(model => [model.id, model])), problems: [] };
+  } catch (error) {
+    const hint = ids.includes(PENGCHENG_SPLAT)
+      ? `\n    彭城广场的 LCC2 样例（${PENGCHENG_SPLAT}）只写在本地清单 local/3dt/manifest.json 里，做法见 docs/modules/map-three.md"泼溅的预算"。`
+      : '';
+    return { splats: new Map(), problems: [`${describeManifest(manifest)}：${String(error instanceof Error ? error.message : error)}${hint}`] };
+  }
+}
+
+async function checkFiles(splats: ReadonlyMap<string, SplatModel>): Promise<void> {
   const problems: string[] = [];
   const paths = [...new Set(scenes.flatMap(scene => scene.models.map(model => model.path)))];
+  const splatPaths = [...splats.values()].map(model => model.path);
   if (modelsProxy) {
-    problems.push(...(await checkModelServer(modelsProxy, paths)));
+    problems.push(...(await checkModelServer(modelsProxy, [...paths, ...splatPaths])));
   } else {
-    const missing = paths.filter(path => !existsSync(join(modelsDir, path)));
+    const missing = [...paths, ...splatPaths.map(decodedPath)].filter(path => !existsSync(join(modelsDir, path)));
     if (missing.length > 0) {
       problems.push(
         `模型目录里缺文件：${missing.join('、')}。\n    模型目录：${redact(modelsDir)}\n    把模型放到 local/3dt，或设置 YZT_LOCAL_DIR；模型在服务器上时设置 YZT_3DT_PROXY。`
@@ -233,9 +264,25 @@ async function compareScenes(results: MeasureResults, outDir: string, baseUrl: s
 
 // ---------- 运行 ----------
 
+function runSummary(result: MeasureResults['runs'][number]): string {
+  if (result.status === 'failed') {
+    return `失败：${result.error}（已记录，继续下一遍）`;
+  }
+  const loaded = `${result.status}，到稳定 ${((result.load?.ttStableMs ?? 0) / 1000).toFixed(1)} 秒`;
+  const splats = result.atStable?.splats;
+  if (splats) {
+    return `${loaded}，可见的高斯 ${Math.round(splats.visible / 1e4)} 万 / 预算 ${Math.round(splats.budget / 1e4)} 万`;
+  }
+  return `${loaded}，屏幕误差 ${result.atStable?.errorTarget.toFixed(1)}，瓦片 ${result.atStable?.tilesVisible}`;
+}
+
 async function main(): Promise<void> {
   console.log('检查环境……');
-  await checkFiles();
+  const { splats, problems } = await resolveSceneSplats();
+  if (problems.length > 0) {
+    fail(problems);
+  }
+  await checkFiles(splats);
   const warnings: string[] = [];
   const environment = await checkRenderer(warnings);
   const { basemap, warning } = await checkBasemap();
@@ -262,7 +309,8 @@ async function main(): Promise<void> {
   const outDir = options.out ? resolve(options.out) : localPath('measure-3d', timestamp());
   mkdirSync(join(outDir, 'shots'), { recursive: true });
   mkdirSync(join(outDir, 'profiles'), { recursive: true });
-  const runs: readonly Run[] = buildRuns(scenes, list, options.repeat);
+  const runs: readonly Run[] = buildRuns(scenes, list, options.repeat, splatList);
+  const used = [...new Set(scenes.flatMap(scene => variantsOf(scene, list, splatList)))];
   const results: MeasureResults = {
     meta: {
       startedAt: new Date().toISOString(),
@@ -276,12 +324,19 @@ async function main(): Promise<void> {
       pacing: options.pacing,
       fps: options.fps,
       antialias: options.antialias,
-      plannedTotal: runs.length
+      plannedTotal: runs.length,
+      ...(splats.size > 0 ? { manifest: describeManifest(manifest) } : {})
     },
     environment,
     warnings,
-    scenes: scenes.map(({ id, title, acceptance }) => ({ id, title, acceptance })),
-    variants: list.map(({ id, label }) => ({ id, label })),
+    scenes: scenes.map(scene => ({
+      id: scene.id,
+      title: scene.title,
+      acceptance: scene.acceptance,
+      splat: scene.splats.length > 0,
+      variants: variantsOf(scene, list, splatList).map(variant => variant.id)
+    })),
+    variants: used.map(({ id, label }) => ({ id, label })),
     runs: [],
     quality: []
   };
@@ -330,6 +385,7 @@ async function main(): Promise<void> {
       // oxlint-disable-next-line no-await-in-loop -- 一遍一遍地跑，同时跑会互相影响
       const result = await runOnce(run, {
         options: runOptions,
+        splats,
         baseUrl: server.url,
         outDir,
         redact,
@@ -337,11 +393,7 @@ async function main(): Promise<void> {
       });
       results.runs.push(result);
       save();
-      console.log(
-        result.status === 'failed'
-          ? `    失败：${result.error}（已记录，继续下一遍）`
-          : `    ${result.status}，到稳定 ${((result.load?.ttStableMs ?? 0) / 1000).toFixed(1)} 秒，屏幕误差 ${result.atStable?.errorTarget.toFixed(1)}，瓦片 ${result.atStable?.tilesVisible}`
-      );
+      console.log(`    ${runSummary(result)}`);
     }
     console.log('\n比较截图……');
     // 帧时间这些已经写好了：比较截图出错不能把它们带没

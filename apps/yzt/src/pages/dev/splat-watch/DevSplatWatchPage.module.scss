@@ -1,0 +1,95 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--color-bg-page);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  padding: var(--space-md) var(--space-lg);
+  font-size: var(--font-size-base);
+  background-color: var(--color-bg-container);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.select {
+  width: 240px;
+}
+
+.switch {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--color-text-regular);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.aside {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-md);
+  align-items: flex-start;
+  width: 360px;
+  padding: var(--space-md);
+  overflow-y: auto;
+  font-size: var(--font-size-base);
+  background-color: var(--color-bg-container);
+  border-right: 1px solid var(--color-border);
+}
+
+.help {
+  color: var(--color-text-regular);
+
+  ol {
+    padding-left: 20px;
+    margin: 8px 0 0;
+  }
+
+  li + li {
+    margin-top: 4px;
+  }
+}
+
+.readouts {
+  padding: 0;
+  margin: 0;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  list-style: none;
+
+  li + li {
+    margin-top: 6px;
+  }
+}
+
+.map {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.status {
+  position: absolute;
+  top: var(--space-md);
+  left: var(--space-md);
+  padding: 4px 8px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-container);
+  border-radius: var(--radius-sm);
+}
