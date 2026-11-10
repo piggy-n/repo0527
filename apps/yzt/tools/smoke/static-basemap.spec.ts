@@ -26,6 +26,13 @@ async function login(page: Page): Promise<void> {
   await page.getByRole('button', { name: '登录', exact: true }).click();
 }
 
+/** 当前缩略图角上的入口平时隐藏、不接收点击，悬停在缩略图上才出现（ADR 0146） */
+async function openAdjustments(page: Page): Promise<void> {
+  const adjust = page.getByRole('button', { name: '调整标注和透明度' });
+  await adjust.locator('..').hover();
+  await adjust.click();
+}
+
 async function measured(page: Page, name: string, timeout: number): Promise<void> {
   await expect
     .poll(() => page.evaluate(entry => performance.getEntriesByName(entry, 'measure').length > 0, name), {
@@ -136,7 +143,7 @@ test('静态底图的标注：默认关闭、不下载，打开后二三维都�
   const withoutLabels = await textShare(page, flat);
 
   await card.click();
-  await page.getByRole('button', { name: '调整标注和透明度' }).click();
+  await openAdjustments(page);
   const labels = page.getByRole('switch', { name: '底图标注' });
   await expect(labels).toHaveAttribute('aria-checked', 'false');
   await labels.locator('..').click();
@@ -159,7 +166,7 @@ test('静态底图的标注：默认关闭、不下载，打开后二三维都�
   const withLabels = await textShare(page, globe);
 
   await card.click();
-  await page.getByRole('button', { name: '调整标注和透明度' }).click();
+  await openAdjustments(page);
   await labels.locator('..').click();
   await page.keyboard.press('Escape');
   await expect(labels).toHaveCount(0);
