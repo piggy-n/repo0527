@@ -43,7 +43,7 @@ function setup(store: KeyValueStore, catalog: ResourceCatalog | null = CATALOG) 
       {
         sourceErrors: shallowRef(NO_SOURCE_ERRORS),
         dimension: shallowRef('2d'),
-        sceneCapabilities: { styleLayers: false, identify: false }
+        sceneCapabilities: { styleLayers: false, identify: false, splats: false }
       },
       { catalog: source, tileBase: 'http://localhost/tiles/', preferences: scope }
     )

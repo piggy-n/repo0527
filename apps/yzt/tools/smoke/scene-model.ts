@@ -117,7 +117,64 @@ export function roomTileset(): object {
   };
 }
 
-/** 只有这间屋子的清单：地下的室内模型，出生点在地板中央、朝东 */
+// 高斯泼溅（ADR 0149）：屋子以东约 200 米、地面上一个 40 米见方的绿色正方形，11 × 11 个扁平的高斯。
+// 目录名是中文，清单里按 URL 编码写，层级同楚王山1号；库只读二进制的 PLY（不读 ASCII），所以也是生成的
+const SPLAT_AT = [120.662, 31.31] as const;
+const SPLAT_NAME = '冒烟泼溅';
+const SPLAT_SIZE = 40;
+const SPLAT_COUNT = 11;
+
+/** 泼溅的目录（清单里的写法，URL 编码） */
+export const SPLAT_DIRECTORY = encodeURIComponent(SPLAT_NAME);
+
+function splatPly(): Buffer {
+  const properties = ['x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity', 'scale_0', 'scale_1', 'scale_2'].concat(
+    ['rot_0', 'rot_1', 'rot_2', 'rot_3']
+  );
+  const total = SPLAT_COUNT * SPLAT_COUNT;
+  const header = Buffer.from(
+    ['ply', 'format binary_little_endian 1.0', `element vertex ${total}`]
+      .concat(properties.map(name => `property float ${name}`), ['end_header', ''])
+      .join('\n')
+  );
+  const body = Buffer.alloc(total * properties.length * 4);
+  const spacing = SPLAT_SIZE / (SPLAT_COUNT - 1);
+  const radius = Math.log(spacing * 0.75);
+  for (let i = 0; i < total; i++) {
+    const x = (i % SPLAT_COUNT) * spacing - SPLAT_SIZE / 2;
+    const y = Math.floor(i / SPLAT_COUNT) * spacing - SPLAT_SIZE / 2;
+    // 绿色：基础颜色是 0.5 + 0.282 × f_dc；不透明度、尺度按 3DGS 的写法（sigmoid、exp）
+    const values = [x, y, 0, -1.77, 1.77, -1.77, 6, radius, radius, Math.log(0.05), 1, 0, 0, 0];
+    values.forEach((value, index) => body.writeFloatLE(value, (i * properties.length + index) * 4));
+  }
+  return Buffer.concat([header, body]);
+}
+
+function splatIndex(): Buffer {
+  const half = SPLAT_SIZE / 2;
+  const boundingBox = { min: [-half, -half, -0.2], max: [half, half, 0.2] };
+  const data = { '3dgs': { name: 0, start: 0, count: SPLAT_COUNT * SPLAT_COUNT } };
+  const index = {
+    version: '0.0.3',
+    totalLevels: 1,
+    offset: [0, 0, 0],
+    root: { id: '0', boundingBox, splatFiles: ['data/3dgs/0.ply'], child: { '0': { id: '0_0', boundingBox, data } } }
+  };
+  // 真实数据的索引开头有 BOM
+  return Buffer.from(`\uFEFF${JSON.stringify(index)}`);
+}
+
+/** 泼溅的文件：按 /3dt/ 以下的路径（URL 编码）给出内容 */
+export function splatFiles(): ReadonlyMap<string, Buffer> {
+  return new Map([
+    [`${SPLAT_DIRECTORY}/lcc2-sog-result/${SPLAT_DIRECTORY}.lcc2`, splatIndex()],
+    [`${SPLAT_DIRECTORY}/lcc2-sog-result/data/3dgs/0.ply`, splatPly()]
+  ]);
+}
+
+/**
+ * 冒烟的清单：地下的室内模型（出生点在地板中央、朝东），和一份高斯泼溅（ADR 0149，只有 maplibre 引擎列出）
+ */
 export function roomManifest(): object {
   return {
     models: [
@@ -129,6 +186,15 @@ export function roomManifest(): object {
         underground: true,
         tileset: 'smoke-room/tileset.json',
         spawn: { lng: ROOM_AT[0], lat: ROOM_AT[1], height: -HALF, heading: 90 }
+      },
+      {
+        id: 'smoke-splat',
+        name: SPLAT_NAME,
+        cityCode: '320500',
+        kind: 'splat',
+        underground: false,
+        lcc2: `${SPLAT_DIRECTORY}/lcc2-sog-result/${SPLAT_DIRECTORY}.lcc2`,
+        placement: { lng: SPLAT_AT[0], lat: SPLAT_AT[1], height: 0, heading: 0 }
       }
     ]
   };

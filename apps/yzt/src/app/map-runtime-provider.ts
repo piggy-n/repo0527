@@ -16,10 +16,10 @@ import { SCENE_OPTIONS, type SceneOptions } from '@/shared/config/scene-options'
 
 const SCENE_ENGINES: Readonly<Record<Map3dEngine, SceneEngine>> = { cesium: CESIUM_ENGINE, maplibre: MAPLIBRE_ENGINE };
 
-// 开关关着时 maplibre 引擎的能力和 Cesium 一样：三维里不显示资源图层，点/框选不识别
+// 开关关着时 maplibre 引擎在资源图层上和 Cesium 一样：三维里不显示资源图层，点/框选不识别；高斯泼溅照常（ADR 0149）
 const MAPLIBRE_WITHOUT_RESOURCES: SceneEngine = Object.freeze({
   ...MAPLIBRE_ENGINE,
-  capabilities: CESIUM_ENGINE.capabilities
+  capabilities: Object.freeze({ ...MAPLIBRE_ENGINE.capabilities, styleLayers: false, identify: false })
 });
 
 function sceneEngineOf(engine: Map3dEngine, { resourceLayers }: SceneOptions): SceneEngine {

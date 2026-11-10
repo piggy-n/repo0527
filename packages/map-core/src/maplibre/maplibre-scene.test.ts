@@ -1,6 +1,7 @@
 import { createNanoEvents } from 'nanoevents';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SceneContentModel, type SceneStatus, type TilesetLayer } from '../scene/scene-content-model';
+import { SceneContentModel, type SceneStatus, type SplatLayer, type TilesetLayer } from '../scene/scene-content-model';
+import type { SplatOptions, SplatSource } from '../scene/splat-sync';
 import type { TilesetSphere } from '../scene/tileset-camera';
 import type { TilesetOptions } from '../scene/tileset-sync';
 import { MapLibreScene, type SceneMap, type SceneModuleState } from './maplibre-scene';
@@ -56,6 +57,7 @@ class FakeSceneMap implements SceneMap {
 }
 
 const SPHERE: TilesetSphere = { center: [120.66, 31.31], radius: 40 };
+const SPLAT_SPHERE: TilesetSphere = { center: [117.06, 34.27], radius: 120 };
 
 class FakeRenderer implements SceneRenderer {
   readonly calls: string[] = [];
@@ -88,6 +90,16 @@ class FakeRenderer implements SceneRenderer {
   removeTileset(id: string): void {
     this.calls.push(`remove ${id}`);
   }
+  async addSplat(id: string, source: SplatSource, options: SplatOptions): Promise<TilesetSphere> {
+    this.calls.push(`add splat ${id} ${source.placement.height} ${options.show ? 'show' : 'hide'}`);
+    return SPLAT_SPHERE;
+  }
+  updateSplat(id: string, options: SplatOptions): void {
+    this.calls.push(`update splat ${id} ${options.show ? 'show' : 'hide'}`);
+  }
+  removeSplat(id: string): void {
+    this.calls.push(`remove splat ${id}`);
+  }
   pick() {
     return { lngLat: [120.66, 31.31] as const, height: 12 };
   }
@@ -114,6 +126,15 @@ const tileset = (attempt = 0): TilesetLayer => ({
   show: true,
   lighting: 'sun',
   attempt
+});
+
+const splat = (extra: Partial<SplatLayer> = {}): SplatLayer => ({
+  id: 'cws',
+  url: 'https://models.test/cws/cws.lcc2',
+  show: true,
+  placement: { lng: 117.06, lat: 34.27, height: 59.7, heading: 0 },
+  attempt: 0,
+  ...extra
 });
 
 const TILESET_JSON = {
@@ -189,6 +210,33 @@ describe('MapLibreScene', () => {
     expect(renderer.calls).toStrictEqual(['attach', 'add station sun']);
     expect(scene.status.get('station')).toMatchObject({ state: 'ready', camera: { center: SPHERE.center, pitch: 55 } });
     expect(await settled(scene.whenLoaded())).toBeUndefined();
+  });
+
+  it('高斯泼溅（ADR 0149）：交给渲染器、就绪时带建议的相机，状态和瓦片集合在一起；只改显示不重新加载，数据失败进入 failed', async () => {
+    const ctx = setup();
+    const { content, renderer, scene, statuses } = ctx;
+    content.set({ tilesets: [tileset()], splats: [splat()], underground: null });
+    await shown(ctx);
+
+    // 瓦片集要先下载、整理索引，泼溅直接交给渲染器
+    expect(renderer.calls).toStrictEqual(['attach', 'add splat cws 59.7 show', 'add station sun']);
+    expect(scene.status.get('station')?.state).toBe('ready');
+    expect(scene.status.get('cws')).toMatchObject({ state: 'ready', camera: { center: SPLAT_SPHERE.center, pitch: 55 } });
+    expect(statuses.at(-1)).toBe(scene.status);
+
+    content.set({ tilesets: [tileset()], splats: [splat({ show: false })], underground: null });
+    await flush();
+    expect(renderer.calls.at(-1)).toBe('update splat cws hide');
+
+    const error = new Error('数据块下载失败');
+    renderer.emitter.emit('splatfailed', 'cws', error);
+    expect(scene.status.get('cws')).toStrictEqual({ state: 'failed', error });
+    expect(scene.status.get('station')?.state).toBe('ready');
+
+    content.set({ tilesets: [tileset()], underground: null });
+    await flush();
+    expect(renderer.calls.at(-1)).toBe('remove splat cws');
+    expect([...scene.status.keys()]).toStrictEqual(['station']);
   });
 
   it('不显示三维时加载好三维模块也不挂模型层、不应用内容', async () => {

@@ -7,13 +7,15 @@ import {
   type RouteRoam,
   type SceneContent,
   type ScreenPoint,
+  type SplatLayer,
   type StyleGroup,
   type TilesetLayer,
   type TilesetStatus,
   type WalkRoam
 } from '@mx/map-core';
 import { mount } from '@vue/test-utils';
-import { describe, expect, it, onTestFinished } from 'vitest';
+import { afterAll, describe, expect, it, onTestFinished } from 'vitest';
+import { commands } from 'vitest/browser';
 import { defineComponent, effectScope, provide, shallowRef, watch } from 'vue';
 import { CesiumCanvas } from './CesiumCanvas';
 import { MapCanvas } from './MapCanvas';
@@ -22,7 +24,8 @@ import { CESIUM_ENGINE, MAP_RUNTIME, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE, type Sce
 
 // 两种三维引擎的契约测试（ADR 0147 第 3 节）：同一组用例分别跑真实的 Cesium 和 MapLibre + Three，
 // 和页面一样只通过 provideMap、bindScene、setDimension、相机操作和上下文的状态使用地图。
-// 3C.1 覆盖三维内容的增删、状态、失败和重试，以及 GL 上下文的丢失和恢复（只有 maplibre）；3C.3 加上漫游的开始、暂停、退出
+// 3C.1 覆盖三维内容的增删、状态、失败和重试，以及 GL 上下文的丢失和恢复（只有 maplibre）；3C.3 加上漫游的开始、暂停、退出；
+// LCC2 高斯泼溅（ADR 0149）按能力声明：能显示的引擎加载、定位、拾取、移除，不能的忽略
 
 // 夹具是提交在 src/testing/scene-fixtures 的文本文件，由测试的开发服务器提供：box 是边长 80 米的红色立方体（glTF，缓冲内嵌），
 // 放在 [120.66, 31.31] 的地面上；broken 是同一个瓦片集，但瓦片的地址不存在
@@ -83,6 +86,82 @@ const layer = (id: string, url: string, extra: Partial<TilesetLayer> = {}): Tile
   url,
   show: true,
   lighting: 'sun',
+  attempt: 0,
+  ...extra
+});
+
+// 高斯泼溅的夹具（ADR 0149）：60 米见方、绿色的扁平高斯铺成的正方形，放在 MODEL_AT 的地面上。
+// 库在自己的 Worker 里下载数据块、只读二进制的 PLY，所以在测试时生成、写到包里不入库的目录，由开发服务器提供
+// （做法同 map-three 的 testing/lcc2-fixture；包的测试之间不互相导入）
+const SPLAT_PROPERTIES = ['x', 'y', 'z', 'f_dc_0', 'f_dc_1', 'f_dc_2', 'opacity', 'scale_0', 'scale_1', 'scale_2'];
+const SPLAT_ROTATION = ['rot_0', 'rot_1', 'rot_2', 'rot_3'];
+
+function splatSquarePly(size: number, count: number): Uint8Array {
+  const properties = [...SPLAT_PROPERTIES, ...SPLAT_ROTATION];
+  const header = new TextEncoder().encode(
+    ['ply', 'format binary_little_endian 1.0', `element vertex ${count * count}`]
+      .concat(properties.map(name => `property float ${name}`), ['end_header', ''])
+      .join('\n')
+  );
+  const stride = properties.length * 4;
+  const bytes = new Uint8Array(header.length + count * count * stride);
+  bytes.set(header);
+  const view = new DataView(bytes.buffer, header.length);
+  const spacing = size / (count - 1);
+  // 绿色：基础颜色 0.5 + 0.282 × f_dc
+  const green = [-1.77, 1.77, -1.77];
+  for (let i = 0; i < count * count; i++) {
+    const x = (i % count) * spacing - size / 2;
+    const y = Math.floor(i / count) * spacing - size / 2;
+    const values = [x, y, 0, ...green, 6, Math.log(spacing * 0.75), Math.log(spacing * 0.75), Math.log(0.05), 1, 0, 0, 0];
+    values.forEach((value, index) => view.setFloat32(i * stride + index * 4, value, true));
+  }
+  return bytes;
+}
+
+function splatSquareIndex(size: number, count: number): Uint8Array {
+  const boundingBox = { min: [-size / 2, -size / 2, -0.2], max: [size / 2, size / 2, 0.2] };
+  const data = { '3dgs': { name: 0, start: 0, count: count * count } };
+  const index = {
+    version: '0.0.3',
+    totalLevels: 1,
+    offset: [0, 0, 0],
+    root: { id: '0', boundingBox, splatFiles: ['data/3dgs/0.ply'], child: { '0': { id: '0_0', boundingBox, data } } }
+  };
+  return new TextEncoder().encode(`\uFEFF${JSON.stringify(index)}`);
+}
+
+const toBase64 = (bytes: Uint8Array) => {
+  let text = '';
+  for (let start = 0; start < bytes.length; start += 0x8000) {
+    text += String.fromCharCode(...bytes.subarray(start, start + 0x8000));
+  }
+  return btoa(text);
+};
+
+// 每个文件写一份，第一次用到时写，文件跑完删掉
+let splatUrl: Promise<string> | null = null;
+function writtenSplat(): Promise<string> {
+  splatUrl ??= (async () => {
+    const directory = 'node_modules/.tmp/splat-fixtures/contract';
+    const files: [string, Uint8Array][] = [
+      [`${directory}/square.lcc2`, splatSquareIndex(60, 21)],
+      [`${directory}/data/3dgs/0.ply`, splatSquarePly(60, 21)]
+    ];
+    await Promise.all(files.map(([path, bytes]) => commands.writeFile(path, toBase64(bytes), 'base64')));
+    afterAll(async () => {
+      await Promise.all(files.map(([path]) => commands.removeFile(path)));
+    });
+    return `${window.location.origin}/${directory}/square.lcc2`;
+  })();
+  return splatUrl;
+}
+
+const splatLayer = (url: string, extra: Partial<SplatLayer> = {}): SplatLayer => ({
+  id: 'square',
+  url,
+  show: true,
+  placement: { lng: MODEL_AT[0], lat: MODEL_AT[1], height: 0, heading: 0 },
   attempt: 0,
   ...extra
 });
@@ -622,6 +701,70 @@ describe.each([
     expect(loads).toBe(2);
     expect(document.querySelector('.maplibregl-canvas')).toBe(canvas);
   });
+
+  it.runIf(engine.capabilities.splats)(
+    '高斯泼溅（能显示的引擎）：先加载中，就绪时带建议的相机，按它定位后拾取到泼溅；GL 上下文丢失后恢复还在；删掉以后状态里不再有它',
+    async () => {
+      const page = await mountPage(engine);
+      const url = await writtenSplat();
+
+      page.content.value = { tilesets: [], splats: [splatLayer(url)], underground: null };
+      await until(() => page.stateOf('square') === 'ready', '泼溅就绪');
+      expect(page.history).toContain('square:loading');
+      const ready = page.map.sceneStatus.value.get('square');
+      if (ready?.state !== 'ready') {
+        throw new Error('泼溅没有就绪');
+      }
+      expect(ready.camera.center[0]).toBeCloseTo(MODEL_AT[0], 4);
+      expect(ready.camera.center[1]).toBeCloseTo(MODEL_AT[1], 4);
+      page.map.runCameraOperation(camera => camera.flyTo(ready.camera, { duration: 0, padding: 0 }));
+      const pickedHeight = () => {
+        const hit = page.map.view.value?.pick({ x: WIDTH / 2, y: HEIGHT / 2 });
+        return hit?.kind === 'hit' && hit.surface === 'model' ? (hit.height ?? null) : null;
+      };
+      await until(() => pickedHeight() !== null, '画布中心拾取到泼溅');
+      expect(pickedHeight()).toBeCloseTo(0, 0);
+      await until(() => dominant(pixel({ x: WIDTH / 2, y: HEIGHT / 2 }), 1), '画出绿色的泼溅');
+
+      const canvas = document.querySelector<HTMLCanvasElement>('.maplibregl-canvas');
+      const gl = canvas?.getContext('webgl2');
+      const lose = gl?.getExtension('WEBGL_lose_context');
+      if (!canvas || !gl || !lose) {
+        throw new Error('没有 MapLibre 的画布或 WEBGL_lose_context');
+      }
+      const lost = new Promise<void>(resolve => canvas.addEventListener('webglcontextlost', () => resolve(), { once: true }));
+      lose.loseContext();
+      await lost;
+      await new Promise(resolve => setTimeout(resolve, 0));
+      lose.restoreContext();
+      await until(() => !gl.isContextLost() && pickedHeight() !== null, '恢复后再次拾取到泼溅');
+      await until(() => dominant(pixel({ x: WIDTH / 2, y: HEIGHT / 2 }), 1), '恢复后再次画出泼溅');
+      expect(page.stateOf('square')).toBe('ready');
+
+      page.content.value = { tilesets: [], underground: null };
+      await until(() => page.stateOf('square') === undefined, '删掉泼溅');
+      expect(pickedHeight()).toBeNull();
+      expect(page.errors).toStrictEqual([]);
+    }
+  );
+
+  it.skipIf(engine.capabilities.splats)(
+    '高斯泼溅（不能显示的引擎）：忽略会话里的泼溅，状态里没有它，瓦片集照常',
+    async () => {
+      const page = await mountPage(engine);
+      const url = await writtenSplat();
+
+      page.content.value = {
+        tilesets: [layer('box', `${FIXTURES}/box/tileset.json`)],
+        splats: [splatLayer(url)],
+        underground: null
+      };
+      await until(() => page.stateOf('box') === 'ready', '瓦片集就绪');
+
+      expect([...page.map.sceneStatus.value.keys()]).toStrictEqual(['box']);
+      expect(page.errors).toStrictEqual([]);
+    }
+  );
 
   it.runIf(name === 'maplibre')('GL 上下文丢失后恢复：瓦片集仍是就绪，照样拾取到模型（只有 maplibre）', async () => {
     const page = await mountPage(engine);

@@ -25,8 +25,8 @@ const CJDCQ = layer('bgdc_cjdcq', 'Polygon', 2023, 2024);
 const HYDL = layer('csxhjctb_hydl', 'Line', 2023, 2024, 2025);
 const CATALOG = catalogOf(DLTB, CJDCQ, HYDL);
 
-const CESIUM_LIKE: SceneCapabilities = { styleLayers: false, identify: false };
-const MAPLIBRE_LIKE: SceneCapabilities = { styleLayers: true, identify: true };
+const CESIUM_LIKE: SceneCapabilities = { styleLayers: false, identify: false, splats: false };
+const MAPLIBRE_LIKE: SceneCapabilities = { styleLayers: true, identify: true, splats: true };
 
 // 拥有者在 effectScope 里创建，用例结束时停止它的侦听器；目录、数据源错误和维度由测试控制，三维引擎默认按 Cesium
 function setup(options: Partial<ResourceLayersOptions> = {}, sceneCapabilities = CESIUM_LIKE) {

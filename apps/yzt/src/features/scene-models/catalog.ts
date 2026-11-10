@@ -1,13 +1,17 @@
-import { RoutePath } from '@mx/map-core';
+import { RoutePath, type SplatSource } from '@mx/map-core';
 import { findRegion } from '@/shared/map/region/region-catalog';
 import type { ManifestModel, SceneManifest } from './api';
 
 export type ModelKind = ManifestModel['kind'];
 
+// 瓦片集模型的清单项：出生点、路线只在它们上面
+type TilesetManifestModel = Exclude<ManifestModel, { kind: 'splat' }>;
+
 export const MODEL_KIND_LABELS: Readonly<Record<ModelKind, string>> = {
   oblique: '倾斜摄影',
   white: '白膜',
-  indoor: '室内'
+  indoor: '室内',
+  splat: '高斯泼溅'
 };
 
 export interface ModelEffect {
@@ -21,7 +25,7 @@ export interface ModelEffect {
 export interface ModelRoute {
   readonly id: string;
   readonly name: string;
-  readonly path: NonNullable<ManifestModel['routes']>[number]['path'];
+  readonly path: NonNullable<TilesetManifestModel['routes']>[number]['path'];
   readonly length: number;
 }
 
@@ -35,12 +39,14 @@ export interface SceneModel {
   readonly underground: boolean;
   /** 清单给的屏幕误差上限；没给的用默认值 */
   readonly maximumScreenSpaceError?: number;
-  /** 白膜的各种效果；其他模型只有一种，id 为空串 */
+  /** 白膜的各种效果；倾斜摄影、室内只有一种，id 为空串；高斯泼溅没有瓦片集，为空 */
   readonly effects: readonly ModelEffect[];
   /** 默认的效果：白膜的第一种 */
   readonly defaultEffect: string;
-  readonly spawn: ManifestModel['spawn'];
+  readonly spawn: TilesetManifestModel['spawn'];
   readonly routes: readonly ModelRoute[];
+  /** 高斯泼溅（ADR 0149）的索引地址和摆放；其他模型为 null */
+  readonly splat: SplatSource | null;
 }
 
 /** 按市分组的目录 */
@@ -62,22 +68,32 @@ function cityNameOf(code: string): string {
 /** 清单换成目录：地址按清单的地址解析成绝对地址（ADR 0081 第 1 节） */
 export function buildModelCatalog(manifest: SceneManifest, manifestUrl: string): readonly SceneModel[] {
   const resolve = (path: string) => new URL(path, manifestUrl).href;
-  return manifest.models.map(model => ({
-    id: model.id,
-    name: model.name,
-    cityCode: model.cityCode,
-    cityName: cityNameOf(model.cityCode),
-    kind: model.kind,
-    underground: model.underground,
-    ...(model.maximumScreenSpaceError === undefined ? {} : { maximumScreenSpaceError: model.maximumScreenSpaceError }),
-    effects:
-      model.kind === 'white'
-        ? model.effects.map(({ id, label, tileset }) => ({ id, label, url: resolve(tileset) }))
-        : [{ id: '', label: '', url: resolve(model.tileset) }],
-    defaultEffect: model.kind === 'white' ? model.effects[0].id : '',
-    spawn: model.spawn,
-    routes: (model.routes ?? []).map(({ id, name, path }) => ({ id, name, path, length: new RoutePath(path).total }))
-  }));
+  return manifest.models.map(model => {
+    const shared = {
+      id: model.id,
+      name: model.name,
+      cityCode: model.cityCode,
+      cityName: cityNameOf(model.cityCode),
+      kind: model.kind,
+      underground: model.underground
+    };
+    if (model.kind === 'splat') {
+      const splat = { url: resolve(model.lcc2), placement: model.placement };
+      return { ...shared, effects: [], defaultEffect: '', spawn: undefined, routes: [], splat };
+    }
+    return {
+      ...shared,
+      ...(model.maximumScreenSpaceError === undefined ? {} : { maximumScreenSpaceError: model.maximumScreenSpaceError }),
+      effects:
+        model.kind === 'white'
+          ? model.effects.map(({ id, label, tileset }) => ({ id, label, url: resolve(tileset) }))
+          : [{ id: '', label: '', url: resolve(model.tileset) }],
+      defaultEffect: model.kind === 'white' ? model.effects[0].id : '',
+      spawn: model.spawn,
+      routes: (model.routes ?? []).map(({ id, name, path }) => ({ id, name, path, length: new RoutePath(path).total })),
+      splat: null
+    };
+  });
 }
 
 /** 按市分组，只有市一级、没有模型的市不出现；市按区划代码排，组内按清单的先后；关键字匹配模型名或市名 */

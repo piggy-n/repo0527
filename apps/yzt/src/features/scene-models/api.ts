@@ -27,11 +27,26 @@ const effectSchema = z.strictObject({ id: nonEmpty, label: nonEmpty, tileset: no
 // 市代码必须在区划目录里，市名取自目录（清单不写名称）
 const cityCodeSchema = z.string().refine(code => findRegion(code)?.level === 'city', { message: '不是区划目录里的市' });
 
-const common = {
+const base = {
   id: nonEmpty,
   name: nonEmpty,
   cityCode: cityCodeSchema,
-  underground: z.boolean(),
+  underground: z.boolean()
+};
+
+// LCC2 的摆放（ADR 0149 第 3 节）：配准后的最终值，运行时不按数据带的 epsg、offset 换算
+const placementSchema = z.strictObject({
+  lng: z.number().min(-180).max(180),
+  lat: z.number().min(-90).max(90),
+  /** 原点的椭球高，米 */
+  height: z.number(),
+  /** 局部 x 轴（网格东）从正东逆时针转的角度，度，包括子午线收敛角 */
+  heading: z.number()
+});
+
+// 瓦片集模型（白膜、倾斜摄影、室内）共有的
+const common = {
+  ...base,
   /** 瓦片集的屏幕误差上限（像素，正数），不写用引擎的默认值 8；显存放不下的模型按模型调大（docs/modules/map-cesium.md） */
   maximumScreenSpaceError: z.number().positive().optional(),
   /** 步行的出生点，3D.4 使用 */
@@ -40,10 +55,12 @@ const common = {
   routes: z.array(routeSchema).optional()
 };
 
-// 白膜用 effects（第一种是默认），其他用 tileset；严格对象，两者写错位置时整份清单不合法
+// 白膜用 effects（第一种是默认），倾斜摄影、室内用 tileset，高斯泼溅（ADR 0149）用 lcc2 和 placement；
+// 严格对象，写错位置时整份清单不合法。泼溅第一版只显示和拾取，不写出生点、路线和屏幕误差
 const modelSchema = z.discriminatedUnion('kind', [
   z.strictObject({ ...common, kind: z.literal('white'), effects: z.array(effectSchema).nonempty() }),
-  z.strictObject({ ...common, kind: z.enum(['oblique', 'indoor']), tileset: nonEmpty })
+  z.strictObject({ ...common, kind: z.enum(['oblique', 'indoor']), tileset: nonEmpty }),
+  z.strictObject({ ...base, kind: z.literal('splat'), lcc2: nonEmpty, placement: placementSchema })
 ]);
 
 function duplicate(ids: readonly string[]): string | undefined {
@@ -55,7 +72,7 @@ function repeatedId(models: readonly z.infer<typeof modelSchema>[]): string | un
   return [
     duplicate(models.map(({ id }) => id)),
     ...models.map(model => (model.kind === 'white' ? duplicate(model.effects.map(({ id }) => id)) : undefined)),
-    ...models.map(({ routes = [] }) => duplicate(routes.map(({ id }) => id)))
+    ...models.map(model => (model.kind === 'splat' ? undefined : duplicate((model.routes ?? []).map(({ id }) => id))))
   ].find(id => id !== undefined);
 }
 

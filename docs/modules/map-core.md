@@ -132,7 +132,7 @@ session[Symbol.dispose]();
 - 会话的 `scene`：`{ tilesets, underground, roam? }`，和样式模型一样整体替换、每次替换修订号加 1、同一轮事件循环只通知一次；同一个对象不算变化
 - `set` 时校验：瓦片集 ID 不重复、地址是绝对地址（瓦片地址按它解析）、`attempt` 是非负整数、`maximumScreenSpaceError`（可选，这个瓦片集的屏幕误差上限）是正数、钻地指向已有的瓦片集、地表不透明度在 0～1；不合法时抛错，内容和修订号不变
 - 二维视图不读它；三维视图镜像它，按 ID 的状态通过可选的 `sceneStatus` / `onSceneStatusChange` 报告
-- 两种三维引擎共用的瓦片集同步（ADR 0147 第 3 节）：`SceneTilesetSync` 按会话的瓦片集增删改引擎里的瓦片集（地址、重试次数变了就重新加载，其余的只改显示和光照；同组的换显示时新的首批瓦片到了才撤下旧的），汇总状态；引擎实现 `TilesetHost`（`addTileset`、`updateTileset`、`removeTileset`），瓦片失败、首批瓦片到位由视图转给它的 `failed`、`initial`。让包围球进入画布的相机是 `tilesetCamera`（俯角 55°），缩放级和距离的换算是 `camera/camera-distance.ts`，两种引擎共用
+- 两种三维引擎共用的瓦片集同步（ADR 0147 第 3 节）：`SceneTilesetSync` 按会话的瓦片集增删改引擎里的瓦片集（地址、重试次数变了就重新加载，其余的只改显示和光照；同组的换显示时新的首批瓦片到了才撤下旧的），汇总状态；引擎实现 `TilesetHost`（`addTileset`、`updateTileset`、`removeTileset`），瓦片失败、首批瓦片到位由视图转给它的 `failed`、`initial`。让包围球进入画布的相机是 `tilesetCamera`（俯角 55°），缩放级和距离的换算是 `camera/camera-distance.ts`，两种引擎共用。高斯泼溅（会话的 `splats`，ADR 0149）同样由 `SceneSplatSync` 同步：地址、摆放、重试次数变了就重新加载，其余的只改显示；引擎实现 `SplatHost`，只有 MapLibre 引擎用它，状态和瓦片集的合成一份（`mergeSceneStatus`），ID 由会话校验不重复，地下空间只能是瓦片集。瓦片集的 `clippedBySplats`（倾斜摄影在泼溅的范围里不画）和显示、光照一样只更新、不重新加载
 - `roam`（ADR 0083）：路线漫游的意图 `{ kind: 'route', id, path, playing, speed, run }`，`path` 是脚下地板的 `[经度, 纬度, 椭球高]`；校验至少两个点、坐标是数、速度（米/秒，ADR 0097）是正数、遍数是非负整数。没有漫游时不写。三维视图通过可选的 `roamStatus` / `onRoamStatusChange` 报告进度
 
 ### MapSession

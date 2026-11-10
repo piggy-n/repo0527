@@ -139,7 +139,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 
 - app 按 `appConfig.map3dEngine` 在同一层 `provide(MAP_SCENE_ENGINE, …)`，值是 map-vue 导出的 `CESIUM_ENGINE` 或 `MAPLIBRE_ENGINE`；没有 provide 时按 Cesium。页面和拥有者不读它，照常放 `<MapCanvas>`、`<CesiumCanvas>`，照常 `setDimension`、`bindScene`
 - 描述是对象：`{ kind: 'cesium', capabilities }` 由 `<CesiumCanvas>` 承担三维，运行时经 `MAP_RUNTIME` 加载；`{ kind: 'maplibre', capabilities, loadRenderer }` 由 `<MapCanvas>` 的视图承担三维，`loadRenderer` 里写 `import('@mx/map-three')`（只有 map-vue 能动态导入它）。测试可以注入假的 `loadRenderer`
-- 能力声明 `capabilities`（ADR 0147 第 3 节、ADR 0020 第 4 节）：`styleLayers` 是三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记），`identify` 是三维期间点/框选能识别。Cesium 两项都是 false（ADR 0080 第 5 节），MapLibre 都是 true。app 注入时可以收窄：现状底图三维里的资源图层由 `shared/config/scene-options.ts` 的开关关着，这时注入的 `maplibre` 引擎两项都是 false（[map-three.md](map-three.md)"能力声明和三维里的识别"）。`provideMap` 从上层取引擎（同一个组件里 provide 的取不到，和 app 一样放在页面外面一层），上下文原样给出 `sceneCapabilities`：静态，不随视图就绪变化，页面和拥有者用它和 `dimension` 决定显示什么（现状底图的图例、点/框选，见 [map-three.md](map-three.md)）
+- 能力声明 `capabilities`（ADR 0147 第 3 节、ADR 0020 第 4 节）：`styleLayers` 是三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记），`identify` 是三维期间点/框选能识别，`splats` 是能显示 LCC2 高斯泼溅（ADR 0149）。Cesium 三项都是 false（ADR 0080 第 5 节），MapLibre 都是 true。app 注入时可以收窄：现状底图三维里的资源图层由 `shared/config/scene-options.ts` 的开关关着，这时注入的 `maplibre` 引擎前两项是 false、`splats` 仍是 true（[map-three.md](map-three.md)"能力声明和三维里的识别"）。`provideMap` 从上层取引擎（同一个组件里 provide 的取不到，和 app 一样放在页面外面一层），上下文原样给出 `sceneCapabilities`：静态，不随视图就绪变化，页面和拥有者用它和 `dimension` 决定显示什么（现状底图的图例、点/框选，见 [map-three.md](map-three.md)）
 - 三维模块加载失败只让三维失败：视图的失败原因是 `module`，上下文的 `retry()` 调用视图的 `retry()` 只重新加载模块，不请画布重建（`retryRequests` 不变）
 
 ## 只读上下文 `useMap()`
@@ -156,7 +156,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 | `sourceErrors` | 当前视图的数据源错误（`ReadonlyMap<数据源 ID, 错误>`，ADR 0041 第 5 节）：挂上视图时取它的记录、随 `sourceerrorchange` 更新；没有视图时是空表，替换视图（包括引擎失败后重试）后从新视图的记录开始，旧视图上的错误不留下。拥有者按数据源 ID 的前缀从中推导自己的"加载失败" |
 | `sceneStatus` | 当前视图报告的三维内容状态（按瓦片集 ID 的 `loading`、`ready` 带建议的相机、`failed` 带错误，ADR 0081）：只在当前视图是三维时有内容，二维、没有视图时是空表；切换、替换视图后取新视图的报告 |
 | `roamStatus` | 当前视图报告的漫游状态，按 `kind` 区分：路线的进度（ADR 0083）、步行的阶段、人称、提示和人的位置（ADR 0086、0087、0090）；没有在漫游、二维、没有视图时为 null |
-| `sceneCapabilities` | 三维引擎的能力（`styleLayers`、`identify`，ADR 0147）：静态，和 `dimension` 一起决定三维里显示什么 |
+| `sceneCapabilities` | 三维引擎的能力（`styleLayers`、`identify`、`splats`，ADR 0147、0149）：静态，和 `dimension` 一起决定三维里显示什么 |
 | `retry()` | 引擎失败后重新创建视图；当前种类的模块加载失败（`module`）时只让视图重新加载模块，不重建；样式失败（出现新版本时自动恢复）和没有失败时什么也不做 |
 | `whenReady(signal?)` | 等到有视图且这一轮加载完成。视图失败时以失败的原因结束；等待的视图被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束；`signal` 中止时以它的原因结束（不是错误对象时改用 `AbortError`，用 `@mx/utils` 的 `abortReason`）。等待结束、返回之前 `signal` 中止或视图被卸下，同样以中止结束。等待绑定具体的视图实例，旧视图就绪不算新视图就绪。定位不用它，用相机操作 |
 | `whenSettled(signal?)` | 等到视图下一次画面稳定（视图的 `settle` 事件：没有动画，视野里的瓦片都已画出），用于加载耗时的标记（5E.1，见 [perf.md](perf.md)）。没有视图时等视图挂上；和 `whenReady` 一样绑定具体的视图实例，它被卸下或替换、`provideMap` 所在的组件卸载时以 `AbortError` 结束，`signal` 中止时以它的原因结束；结束时取消订阅。在 Promise 外面订阅，订阅本身出错（视图已释放）时以这个错误结束 |

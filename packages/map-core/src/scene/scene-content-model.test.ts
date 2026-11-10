@@ -10,6 +10,7 @@ import {
   type RouteRoam,
   type SceneContent,
   SceneContentModel,
+  type SplatLayer,
   type TilesetLayer,
   type WalkRoam
 } from './scene-content-model';
@@ -82,6 +83,36 @@ describe('SceneContentModel', () => {
 
     model.set(content);
 
+    expect(model.current).toBe(content);
+  });
+
+  it('高斯泼溅：地址是绝对地址、重试次数是非负整数、摆放是数，ID 和瓦片集不重复，不能当地下空间（ADR 0149）', () => {
+    using model = new SceneContentModel();
+    const placement = { lng: 117.06, lat: 34.27, height: 59.7, heading: -0.04 };
+    const splat = (extra: Partial<SplatLayer> = {}): SplatLayer => ({
+      id: 'cws',
+      url: 'https://maps.test/3dt/cws/cws.lcc2',
+      show: true,
+      placement,
+      attempt: 0,
+      ...extra
+    });
+    const content: SceneContent = { tilesets: [tileset('a')], splats: [splat()], underground: null };
+    model.set(content);
+    expect(model.current).toBe(content);
+
+    const invalid: readonly (readonly [SceneContent, string])[] = [
+      [{ tilesets: [], splats: [splat({ url: '3dt/cws.lcc2' })], underground: null }, '不是绝对地址'],
+      [{ tilesets: [], splats: [splat({ attempt: -1 })], underground: null }, '重试次数'],
+      [{ tilesets: [], splats: [splat({ placement: { ...placement, heading: Number.NaN } })], underground: null }, '摆放'],
+      [{ tilesets: [], splats: [splat({ placement: { ...placement, lat: 91 } })], underground: null }, '纬度'],
+      [{ tilesets: [tileset('cws')], splats: [splat()], underground: null }, 'ID 重复'],
+      [{ tilesets: [], splats: [splat(), splat()], underground: null }, 'ID 重复'],
+      [{ tilesets: [], splats: [splat()], underground: { tilesetId: 'cws', surfaceOpacity: 0.25 } }, '钻地的瓦片集不存在']
+    ];
+    for (const [item, message] of invalid) {
+      expect(() => model.set(item)).toThrow(message);
+    }
     expect(model.current).toBe(content);
   });
 

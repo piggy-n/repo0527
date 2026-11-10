@@ -1272,8 +1272,8 @@ describe('MapContextState 的三维能力（ADR 0147 第 3 节）', () => {
       MAPLIBRE_ENGINE.capabilities
     );
 
-    expect(cesium.context.sceneCapabilities).toStrictEqual({ styleLayers: false, identify: false });
-    expect(maplibre.context.sceneCapabilities).toStrictEqual({ styleLayers: true, identify: true });
+    expect(cesium.context.sceneCapabilities).toStrictEqual({ styleLayers: false, identify: false, splats: false });
+    expect(maplibre.context.sceneCapabilities).toStrictEqual({ styleLayers: true, identify: true, splats: true });
   });
 });
 

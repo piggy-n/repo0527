@@ -19,6 +19,35 @@ export interface TilesetLayer {
   readonly lighting: TilesetLighting;
   /** 这个瓦片集的屏幕误差上限（像素，正数），不写用引擎的默认值（8）；放不下的模型按模型调大，显存按每级 4 倍算 */
   readonly maximumScreenSpaceError?: number;
+  /**
+   * 显示着的高斯泼溅的范围里不画这个瓦片集（ADR 0149）：同一处的倾斜摄影和 LCC2 表面几乎重合，一起画会互相穿插，
+   * 进到 LCC2 里面时倾斜模型的表面像盖子一样挡住。只在范围重叠时生效，泼溅卸载、隐藏后恢复；不能画泼溅的引擎忽略
+   */
+  readonly clippedBySplats?: boolean;
+  /** 失败后重试时加 1，视图看到新的值就重新加载 */
+  readonly attempt: number;
+}
+
+/**
+ * LCC2 的摆放（ADR 0149 第 3 节）：数据的局部系（网格的东、北、上，Z 向上，米）的原点和朝向，由配准算好写进清单；
+ * 不用数据自带的 offset
+ */
+export interface SplatPlacement {
+  readonly lng: number;
+  readonly lat: number;
+  /** 原点的椭球高（米），口径和其他模型相同 */
+  readonly height: number;
+  /** 局部 x 轴从正东逆时针转的角度（度），包括子午线收敛角 */
+  readonly heading: number;
+}
+
+/** 一份 LCC2 高斯泼溅（ADR 0149）：只有能力声明支持的引擎（maplibre）画，其他引擎忽略 */
+export interface SplatLayer {
+  readonly id: string;
+  /** .lcc2 索引的绝对地址：数据文件按它解析相对的路径 */
+  readonly url: string;
+  readonly show: boolean;
+  readonly placement: SplatPlacement;
   /** 失败后重试时加 1，视图看到新的值就重新加载 */
   readonly attempt: number;
 }
@@ -84,6 +113,8 @@ export type SceneRoam = RouteRoam | WalkRoam;
 /** 三维独有的内容；二维视图不读 */
 export interface SceneContent {
   readonly tilesets: readonly TilesetLayer[];
+  /** 高斯泼溅（ADR 0149）；没有时不写。ID 和瓦片集共用一个空间，状态都在 SceneStatus 里 */
+  readonly splats?: readonly SplatLayer[];
   readonly underground: UndergroundView | null;
   /** 没有漫游时不写 */
   readonly roam?: SceneRoam;
@@ -134,13 +165,13 @@ export interface WalkRoamStatus {
 
 export type RoamStatus = RouteRoamStatus | WalkRoamStatus;
 
-/** 视图报告的瓦片集状态；就绪后带上让整个瓦片集进入画布的相机 */
+/** 视图报告的瓦片集（或高斯泼溅）状态；就绪后带上让整个模型进入画布的相机 */
 export type TilesetStatus =
   | { readonly state: 'loading' }
   | { readonly state: 'ready'; readonly camera: CameraState }
   | { readonly state: 'failed'; readonly error: unknown };
 
-/** 按瓦片集 ID 的状态；每次变化换一个新的 Map */
+/** 按瓦片集、高斯泼溅的 ID 的状态；每次变化换一个新的 Map */
 export type SceneStatus = ReadonlyMap<string, TilesetStatus>;
 
 export const NO_SCENE_STATUS: SceneStatus = new Map();
@@ -197,7 +228,20 @@ function validateRoam(roam: SceneRoam): void {
   }
 }
 
-function validate({ tilesets, underground, roam }: SceneContent): void {
+function validateSplat({ id, url, attempt, placement }: SplatLayer): void {
+  if (!URL.canParse(url)) {
+    throw new Error(`高斯泼溅 ${id} 的地址不是绝对地址：${url}`);
+  }
+  if (!isCount(attempt)) {
+    throw new Error(`高斯泼溅 ${id} 的重试次数不是非负整数：${attempt}`);
+  }
+  const { lng, lat, height, heading } = placement;
+  if (![lng, lat, height, heading].every(Number.isFinite) || Math.abs(lat) > 90) {
+    throw new Error(`高斯泼溅 ${id} 的摆放有不是数的值，或者纬度超出范围`);
+  }
+}
+
+function validate({ tilesets, splats = [], underground, roam }: SceneContent): void {
   const ids = new Set<string>();
   for (const { id, url, attempt, maximumScreenSpaceError: screenError } of tilesets) {
     if (ids.has(id)) {
@@ -207,17 +251,25 @@ function validate({ tilesets, underground, roam }: SceneContent): void {
     if (!URL.canParse(url)) {
       throw new Error(`瓦片集 ${id} 的地址不是绝对地址：${url}`);
     }
-    if (!Number.isInteger(attempt) || attempt < 0) {
+    if (!isCount(attempt)) {
       throw new Error(`瓦片集 ${id} 的重试次数不是非负整数：${attempt}`);
     }
     if (screenError !== undefined && !(Number.isFinite(screenError) && screenError > 0)) {
       throw new Error(`瓦片集 ${id} 的屏幕误差不是正数：${screenError}`);
     }
   }
-  if (underground) {
-    if (!ids.has(underground.tilesetId)) {
-      throw new Error(`钻地的瓦片集不存在：${underground.tilesetId}`);
+  // 地下空间只能是瓦片集：先查它，再把泼溅的 ID 加进来查重复
+  if (underground && !ids.has(underground.tilesetId)) {
+    throw new Error(`钻地的瓦片集不存在：${underground.tilesetId}`);
+  }
+  for (const splat of splats) {
+    if (ids.has(splat.id)) {
+      throw new Error(`三维模型 ID 重复：${splat.id}`);
     }
+    ids.add(splat.id);
+    validateSplat(splat);
+  }
+  if (underground) {
     const { surfaceOpacity } = underground;
     if (!(surfaceOpacity >= 0 && surfaceOpacity <= 1)) {
       throw new Error(`地表不透明度不在 0～1 之间：${surfaceOpacity}`);

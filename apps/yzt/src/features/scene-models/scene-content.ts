@@ -3,6 +3,7 @@ import type {
   NavPoint,
   SceneContent,
   SceneRoam,
+  SplatLayer,
   TilesetLayer,
   TilesetStatus,
   WalkView
@@ -72,7 +73,7 @@ export interface SceneModelsState {
   readonly avatar: string;
 }
 
-/** 瓦片集的 ID：白膜每种效果一个，其他模型一个 */
+/** 瓦片集的 ID：白膜每种效果一个，其他模型一个；高斯泼溅没有瓦片集，状态也按模型 ID 报告 */
 export function tilesetIdOf(model: SceneModel, effectId: string): string {
   return model.kind === 'white' ? `${model.id}/${effectId}` : model.id;
 }
@@ -89,7 +90,7 @@ export function currentTilesetId(model: SceneModel, effects: ReadonlyMap<string,
 
 /**
  * 推导会话的三维内容（ADR 0081 第 2、5、6 节）：勾选的模型各一个瓦片集，白膜显示过的效果都留着、只显示当前的；
- * 地下、室内的用头灯光照。漫游地下的模型时在地下空间（ADR 0097 第 5 节）：地表固定半透明，
+ * 地下、室内的用头灯光照；高斯泼溅（ADR 0149）各一份泼溅，ID 是模型 ID，倾斜摄影在泼溅的范围里不画。漫游地下的模型时在地下空间（ADR 0097 第 5 节）：地表固定半透明，
  * 不显示地面上的模型（白膜、倾斜摄影会挡住地下空间，ADR 0084）
  */
 export function deriveSceneContent(models: readonly SceneModel[], state: SceneModelsState): SceneContent {
@@ -97,9 +98,16 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
   const roaming = state.roam && state.loaded.includes(state.roam.modelId) ? byId.get(state.roam.modelId) : undefined;
   const undergroundModel = roaming?.underground ? roaming : undefined;
   const tilesets: TilesetLayer[] = [];
+  const splats: SplatLayer[] = [];
   for (const id of state.loaded) {
     const model = byId.get(id);
     if (!model) {
+      continue;
+    }
+    if (model.splat) {
+      const { url, placement } = model.splat;
+      const hidden = !model.underground && undergroundModel !== undefined;
+      splats.push({ id, url, placement, show: !hidden, attempt: state.attempts.get(id) ?? 0 });
       continue;
     }
     const current = currentEffect(model, state.effects);
@@ -119,7 +127,9 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
         lighting,
         attempt: state.attempts.get(tilesetId) ?? 0,
         ...(model.kind === 'white' ? { group: model.id } : {}),
-        ...(maximumScreenSpaceError === undefined ? {} : { maximumScreenSpaceError })
+        ...(maximumScreenSpaceError === undefined ? {} : { maximumScreenSpaceError }),
+        // 倾斜摄影和同一处的 LCC2 一起显示时，在泼溅的范围里不画（ADR 0149）
+        ...(model.kind === 'oblique' ? { clippedBySplats: true } : {})
       });
     }
   }
@@ -127,7 +137,8 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
     ? { tilesetId: currentTilesetId(undergroundModel, state.effects), surfaceOpacity: SURFACE_OPACITY }
     : null;
   const roam = roamOf(byId, state);
-  return roam ? { tilesets, underground, roam } : { tilesets, underground };
+  const content: SceneContent = splats.length > 0 ? { tilesets, splats, underground } : { tilesets, underground };
+  return roam ? { ...content, roam } : content;
 }
 
 // 漫游的模型还勾选着、路线还在时才交给会话；步行要等导航网格建好

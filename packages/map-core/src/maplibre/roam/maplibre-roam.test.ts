@@ -138,6 +138,11 @@ class FakeRenderer implements SceneRenderer {
   }
   updateTileset(): void {}
   removeTileset(): void {}
+  async addSplat(): Promise<TilesetSphere> {
+    return { center: MODEL_AT, radius: 10 };
+  }
+  updateSplat(): void {}
+  removeSplat(): void {}
   pick(): null {
     return null;
   }
