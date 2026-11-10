@@ -15,6 +15,7 @@
     "3d-tiles-renderer": "^0.5.4",
     "@mx/map-core": "workspace:*",
     "@mx/utils": "workspace:*",
+    "gaussian-splat-lite": "1.6.1",
     "nanoevents": "catalog:",
     "three": "catalog:"
   },

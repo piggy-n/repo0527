@@ -186,6 +186,7 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 - maplibre-gl（阶段四加入）：只有 MapLibre 适配器能写二维地图（ADR 0020、0024），所以默认禁止导入，由下文的 override 只对 `packages/map-core/src/maplibre/`、`app/` 和包的 `test-setup.browser.ts` 放开。`paths` 拦住包本身（类型导入也算），`patterns` 拦住 `maplibre-gl/dist/...` 下的 CSS 和 Worker 文件
 - cesium（3D.1 加入）：同样的写法，只对 `packages/map-cesium/src/` 和 `app/` 放开（ADR 0079）。`patterns` 拦住 `cesium/Build/...` 下的样式表和 `@cesium/engine` 等子包。map-cesium 里的代码约定从聚合包 `cesium` 导入，升级时只看一个版本；这一条 lint 不检查
 - three、3d-tiles-renderer（3C.1 加入）：只对 `packages/map-three/src/` 和驾驶舱 `features/city-dashboard/` 放开（ADR 0147 第 5 节；驾驶舱比 map-three 早，原来就用 three）。`patterns` 拦住 `three/examples/...`、`3d-tiles-renderer/plugins` 这类子路径。`app/` 的 override 只保留 lodash 两项，所以 app 也能导入，和 maplibre-gl、cesium 一样
+- gaussian-splat-lite（LCC2 加入）：只对 `packages/map-three/src/` 放开（ADR 0149 第 2 节）。驾驶舱和 map-three 原来共用一个 override，现在分成两个，驾驶舱的那个仍然禁止它。包的 `exports` 只有入口，不用 `patterns`
 
 ### 第三组：类型感知规则
 

@@ -613,6 +613,9 @@ importers:
       '@mx/utils':
         specifier: workspace:*
         version: link:../utils
+      gaussian-splat-lite:
+        specifier: 1.6.1
+        version: 1.6.1(three@0.187.0)
       nanoevents:
         specifier: 'catalog:'
         version: 10.0.0
@@ -2676,6 +2679,13 @@ packages:
 
   function-bind@1.1.2:
     resolution: {integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==}
+
+  gaussian-splat-lite@1.6.1:
+    resolution: {integrity: sha512-C5KXpMFAYJxq/CMSdgkzbRNAmB4AFrTRPXBPmAQvIaCfNs+KysFjz34xNopmSmE43o2O4G/ak+ljhwig4w+BYg==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
+    peerDependencies:
+      three: '>=0.187.0'
 
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
@@ -5787,6 +5797,10 @@ snapshots:
     optional: true
 
   function-bind@1.1.2: {}
+
+  gaussian-splat-lite@1.6.1(three@0.187.0):
+    dependencies:
+      three: 0.187.0
 
   gensync@1.0.0-beta.2: {}
 
