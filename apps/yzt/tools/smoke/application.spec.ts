@@ -193,9 +193,12 @@ test('标注的偏好：和底图偏好无关，打开后写入，重新进入�
   await readyMap(page);
   const card = page.locator('button[aria-label^="底图："]');
   const labels = page.getByRole('switch', { name: '底图标注' });
+  const adjust = page.getByRole('button', { name: '调整标注和透明度' });
   const showLabels = async () => {
     await card.click();
-    await page.getByRole('button', { name: '调整标注和透明度' }).click();
+    // 入口平时隐藏、不接收点击，悬停在当前缩略图上才出现（ADR 0146）
+    await adjust.locator('..').hover();
+    await adjust.click();
   };
 
   await showLabels();
