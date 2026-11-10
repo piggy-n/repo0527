@@ -219,7 +219,7 @@ export function useFeaturePick(
     MapContext,
     'useCamera' | 'select' | 'beginCameraOperation' | 'runCameraOperation' | 'view' | 'pointer' | 'sceneCapabilities'
   >,
-  resources: Pick<ResourceLayers, 'state' | 'configErrors'>,
+  resources: Pick<ResourceLayers, 'state' | 'configErrors' | 'hiddenInScene'>,
   options: FeaturePickOptions = {}
 ): FeaturePick {
   if (!getCurrentScope()) {
@@ -624,7 +624,7 @@ export function useFeaturePick(
 
   const handleInput = (event: MapInputEvent, view: ToolView): boolean => {
     // 三维引擎不能识别时三维期间不识别：资源图层不在三维显示，单击和框选什么也不做（ADR 0080 第 5 节）；Esc 照样清除二维的结果。
-    // 能识别时（MapLibre 引擎，ADR 0147）照常识别，三维的识别规则见 identifyStep
+    // 能识别时（MapLibre 引擎且三维的资源图层开关打开，ADR 0147）照常识别，三维的识别规则见 identifyStep
     if (view.kind === '3d' && !map.sceneCapabilities.identify && event.type !== 'key' && event.type !== 'leave') {
       return false;
     }
@@ -700,7 +700,12 @@ export function useFeaturePick(
     }
     const { target, candidates } = current.list;
     const { code } = target.resource;
-    if (!isShown(resources.state.value, target) || resources.configErrors.value.has(code)) {
+    // 三维里资源分组为空时（ADR 0147）批量高亮引用的数据源不在样式里，结果保留，切回二维再画
+    if (
+      resources.hiddenInScene.value ||
+      !isShown(resources.state.value, target) ||
+      resources.configErrors.value.has(code)
+    ) {
       return null;
     }
     return {

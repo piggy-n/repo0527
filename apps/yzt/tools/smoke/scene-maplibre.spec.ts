@@ -117,6 +117,12 @@ test('MapLibre 引擎的三维：二维稳定后预加载三维模块，切到�
     await expect
       .poll(() => landShare(page, flat), { message: '三维画出静态底图的陆地', timeout: 60_000 })
       .toBeGreaterThan(MIN_LAND_SHARE);
+    // 三维里暂不显示资源图层（app/scene-options.ts 的开关默认关着）：图例只有说明，和 Cesium 一样；打开开关时改这里
+    const legend = page.getByRole('button', { name: '图例', exact: true });
+    await legend.click();
+    await expect(page.locator('[data-legend-scene-note]')).toBeVisible();
+    await legend.click();
+    await expect(page.locator('[data-legend-scene-note]')).toHaveCount(0);
 
     // 测距：在画布中间点两下、双击结束，得到一条可以删除的测量
     await page.getByRole('button', { name: '测距', exact: true }).click();

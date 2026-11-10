@@ -40,7 +40,11 @@ function setup(store: KeyValueStore, catalog: ResourceCatalog | null = CATALOG) 
   const { scope } = createTestPreferenceScope(store);
   const owner = effect.run(() =>
     useResourceLayers(
-      { sourceErrors: shallowRef(NO_SOURCE_ERRORS) },
+      {
+        sourceErrors: shallowRef(NO_SOURCE_ERRORS),
+        dimension: shallowRef('2d'),
+        sceneCapabilities: { styleLayers: false, identify: false }
+      },
       { catalog: source, tileBase: 'http://localhost/tiles/', preferences: scope }
     )
   );

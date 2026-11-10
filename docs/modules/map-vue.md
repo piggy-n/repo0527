@@ -139,7 +139,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 
 - app 按 `appConfig.map3dEngine` 在同一层 `provide(MAP_SCENE_ENGINE, …)`，值是 map-vue 导出的 `CESIUM_ENGINE` 或 `MAPLIBRE_ENGINE`；没有 provide 时按 Cesium。页面和拥有者不读它，照常放 `<MapCanvas>`、`<CesiumCanvas>`，照常 `setDimension`、`bindScene`
 - 描述是对象：`{ kind: 'cesium', capabilities }` 由 `<CesiumCanvas>` 承担三维，运行时经 `MAP_RUNTIME` 加载；`{ kind: 'maplibre', capabilities, loadRenderer }` 由 `<MapCanvas>` 的视图承担三维，`loadRenderer` 里写 `import('@mx/map-three')`（只有 map-vue 能动态导入它）。测试可以注入假的 `loadRenderer`
-- 能力声明 `capabilities`（ADR 0147 第 3 节、ADR 0020 第 4 节）：`styleLayers` 是三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记），`identify` 是三维期间点/框选能识别。Cesium 两项都是 false（ADR 0080 第 5 节），MapLibre 都是 true。`provideMap` 从上层取引擎（同一个组件里 provide 的取不到，和 app 一样放在页面外面一层），上下文原样给出 `sceneCapabilities`：静态，不随视图就绪变化，页面和拥有者用它和 `dimension` 决定显示什么（现状底图的图例、点/框选，见 [map-three.md](map-three.md)）
+- 能力声明 `capabilities`（ADR 0147 第 3 节、ADR 0020 第 4 节）：`styleLayers` 是三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记），`identify` 是三维期间点/框选能识别。Cesium 两项都是 false（ADR 0080 第 5 节），MapLibre 都是 true。app 注入时可以收窄：现状底图三维里的资源图层由 `app/scene-options.ts` 的开关关着，这时注入的 `maplibre` 引擎两项都是 false（[map-three.md](map-three.md)"能力声明和三维里的识别"）。`provideMap` 从上层取引擎（同一个组件里 provide 的取不到，和 app 一样放在页面外面一层），上下文原样给出 `sceneCapabilities`：静态，不随视图就绪变化，页面和拥有者用它和 `dimension` 决定显示什么（现状底图的图例、点/框选，见 [map-three.md](map-three.md)）
 - 三维模块加载失败只让三维失败：视图的失败原因是 `module`，上下文的 `retry()` 调用视图的 `retry()` 只重新加载模块，不请画布重建（`retryRequests` 不变）
 
 ## 只读上下文 `useMap()`

@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { NO_SOURCE_ERRORS, type SourceErrors } from '@mx/map-core';
+import { NO_SOURCE_ERRORS, type SourceErrors, type ViewKind } from '@mx/map-core';
+import type { SceneCapabilities } from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { computed, effectScope, nextTick, shallowRef, watch } from 'vue';
 import type { ResourceTreeCategory, ResourceTreeLayer } from '../api';
@@ -24,23 +25,27 @@ const CJDCQ = layer('bgdc_cjdcq', 'Polygon', 2023, 2024);
 const HYDL = layer('csxhjctb_hydl', 'Line', 2023, 2024, 2025);
 const CATALOG = catalogOf(DLTB, CJDCQ, HYDL);
 
-// 拥有者在 effectScope 里创建，用例结束时停止它的侦听器；目录和数据源错误由测试控制
-function setup(options: Partial<ResourceLayersOptions> = {}) {
+const CESIUM_LIKE: SceneCapabilities = { styleLayers: false, identify: false };
+const MAPLIBRE_LIKE: SceneCapabilities = { styleLayers: true, identify: true };
+
+// 拥有者在 effectScope 里创建，用例结束时停止它的侦听器；目录、数据源错误和维度由测试控制，三维引擎默认按 Cesium
+function setup(options: Partial<ResourceLayersOptions> = {}, sceneCapabilities = CESIUM_LIKE) {
   const scope = effectScope();
   const catalog = shallowRef<ResourceCatalog | undefined>(undefined);
   const sourceErrors = shallowRef<SourceErrors>(NO_SOURCE_ERRORS);
+  const dimension = shallowRef<ViewKind>('2d');
   const errors: unknown[] = [];
   const onError = (error: unknown) => errors.push(error);
   const resolved: ResourceLayersOptions = { catalog, tileBase: TILE_BASE, onError, ...options };
-  const owner = scope.run(() => useResourceLayers({ sourceErrors }, resolved));
+  const owner = scope.run(() => useResourceLayers({ sourceErrors, dimension, sceneCapabilities }, resolved));
   if (!owner) {
     throw new Error('拥有者没有创建');
   }
-  return { owner, catalog, sourceErrors, errors, [Symbol.dispose]: () => scope.stop() };
+  return { owner, catalog, sourceErrors, dimension, errors, [Symbol.dispose]: () => scope.stop() };
 }
 
-async function loaded(options: Partial<ResourceLayersOptions> = {}) {
-  const ctx = setup(options);
+async function loaded(options: Partial<ResourceLayersOptions> = {}, sceneCapabilities = CESIUM_LIKE) {
+  const ctx = setup(options, sceneCapabilities);
   ctx.catalog.value = CATALOG;
   await nextTick();
   return ctx;
@@ -93,6 +98,33 @@ describe('useResourceLayers', () => {
 
     expect(ctx.owner.state.value.order).toStrictEqual(['bgdc_dltb', 'csxhjctb_hydl']);
     expect(layerIds(ctx.owner)).toStrictEqual(['resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
+  });
+
+  it('三维引擎不画样式图层时（Cesium，或 maplibre 的开关关着）三维里推导出空分组，切回二维恢复（ADR 0147）', async () => {
+    using ctx = await loaded();
+    // 和页面的 bindStyle 一样在响应式的推导里读，维度变化时要重新推导
+    const group = computed(() => ctx.owner.deriveGroup());
+    expect(ctx.owner.hiddenInScene.value).toBe(false);
+    expect(group.value.layers).toHaveLength(1);
+
+    ctx.dimension.value = '3d';
+
+    expect(ctx.owner.hiddenInScene.value).toBe(true);
+    expect(group.value).toStrictEqual({ sources: {}, layers: [] });
+
+    ctx.dimension.value = '2d';
+
+    expect(ctx.owner.hiddenInScene.value).toBe(false);
+    expect(group.value.layers.map(({ id }) => id)).toStrictEqual(['resources-bgdc_dltb']);
+  });
+
+  it('三维引擎画样式图层时（maplibre 的开关打开）三维里照常推导', async () => {
+    using ctx = await loaded({}, MAPLIBRE_LIKE);
+
+    ctx.dimension.value = '3d';
+
+    expect(ctx.owner.hiddenInScene.value).toBe(false);
+    expect(layerIds(ctx.owner)).toStrictEqual(['resources-bgdc_dltb']);
   });
 
   it('操作整体替换状态，推导随之变化；值没变时不替换', async () => {

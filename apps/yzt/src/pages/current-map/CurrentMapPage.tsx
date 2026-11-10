@@ -342,8 +342,8 @@ export const CurrentMapPage = defineComponent({
       // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示；漫游时区划不适用
       const scopeShown = (!phone || !sides.left.value) && !underground;
       const scene = map.dimension.value === '3d';
-      // 三维里不显示资源图层（Cesium 引擎）：图例只有说明（ADR 0080 第 5 节）；MapLibre 引擎照常显示（ADR 0147）
-      const resourcesHidden = scene && !map.sceneCapabilities.styleLayers;
+      // 三维里不显示资源图层时图例只有说明（ADR 0080 第 5 节）：Cesium 引擎，或 maplibre 引擎的开关关着（ADR 0147）
+      const resourcesHidden = resources.hiddenInScene.value;
       const indoorMap = models.indoorMap.value;
       const player = models.roamPlayer.value;
       const route = models.routeTrack.value;

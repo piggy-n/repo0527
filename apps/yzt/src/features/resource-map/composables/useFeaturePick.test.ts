@@ -196,9 +196,16 @@ function setup(
   const view = shallowRef<MapViewport | null>(contextView('2d'));
   const mapPointer = shallowRef<ScreenPoint | null>(null);
   const map = { useCamera: () => fake.camera, select, view, pointer: mapPointer, sceneCapabilities, ...fake };
-  // 校验结果可以由用例中途改变
+  // 校验结果、三维里资源分组是否为空可以由用例中途改变
   const errors = shallowRef(invalid);
-  const resources = { state: shallowRef(state), errors, configErrors: computed(() => errors.value) };
+  const hidden = shallowRef(false);
+  const resources = {
+    state: shallowRef(state),
+    errors,
+    configErrors: computed(() => errors.value),
+    hidden,
+    hiddenInScene: computed(() => hidden.value)
+  };
   let owner: FeaturePick | undefined;
   const Host = defineComponent({
     setup() {
@@ -1088,6 +1095,22 @@ describe('useFeaturePick：框选', () => {
     send(click(100, 100), [rendered(DLTB, 3), rendered(DLTB, 4)]);
     expect(kindOf(owner)).toBe('candidates');
     expect(layerIds(owner)).toStrictEqual([]);
+  });
+
+  it('三维里资源分组为空时（ADR 0147）批量高亮跟着撤下，不引用不在样式里的数据源；框选结果保留，回到二维再画', () => {
+    mockDetail();
+    const { owner, send, resources } = setup(15);
+    dragBox(send, [rendered(DLTB, 1), rendered(DLTB, 2)]);
+    expect(layerIds(owner)).toHaveLength(3);
+
+    resources.hidden.value = true;
+
+    expect(layerIds(owner)).toStrictEqual([]);
+    expect(candidatesOf(owner)).toHaveLength(2);
+
+    resources.hidden.value = false;
+
+    expect(layerIds(owner)).toHaveLength(3);
   });
 
   it('批量高亮和资源用同一个最小显示级别，级别跟着目录走（ADR 0137）', () => {

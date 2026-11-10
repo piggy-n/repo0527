@@ -70,6 +70,11 @@ export interface ResourceLayers {
    * moveTarget、checkedDropTarget 换成目录树里的调整。位置越界、键重复时抛错
    */
   readonly move: (target: TreeMove) => void;
+  /**
+   * 三维且三维引擎不画样式图层（Cesium，或 maplibre 的开关关着，ADR 0147）：分组为空，图例只有说明；
+   * 引用资源数据源的推导（框选的批量高亮）这时也不能有图层
+   */
+  readonly hiddenInScene: ComputedRef<boolean>;
   readonly deriveGroup: () => StyleGroup;
 }
 
@@ -92,9 +97,11 @@ function reportToConsole(error: unknown): void {
   console.error('[resource-map]', error);
 }
 
+const NO_RESOURCES: StyleGroup = Object.freeze({ sources: Object.freeze({}), layers: Object.freeze([]) });
+
 /** 创建资源图层的拥有者，在 provideMap 所在组件的 setup 中调用 */
 export function useResourceLayers(
-  map: Pick<MapContext, 'sourceErrors'>,
+  map: Pick<MapContext, 'sourceErrors' | 'dimension' | 'sceneCapabilities'>,
   options: ResourceLayersOptions
 ): ResourceLayers {
   const tileBase = options.tileBase ?? resourceTileBase(appConfig.apiBaseUrl, window.location.origin);
@@ -213,6 +220,9 @@ export function useResourceLayers(
 
   const batchYears = computed(() => batchYearOptions(catalog.value));
 
+  // Cesium 三维时二维视图暂停、不应用这期间的样式变化，切回二维时分组和切走前一样，所以 Cesium 的行为不变
+  const hiddenInScene = computed(() => map.dimension.value === '3d' && !map.sceneCapabilities.styleLayers);
+
   const move = (target: TreeMove) => {
     const current = state.value;
     const order = treeOrder(current.catalog?.categories ?? [], current.order, target);
@@ -236,12 +246,15 @@ export function useResourceLayers(
     ),
     setYearForAll,
     move,
+    hiddenInScene,
     deriveGroup: () =>
-      resourcesGroup({
-        state: state.value,
-        invalid: configErrors.value,
-        tileBase,
-        overrideOf: options.symbols?.overrideOf
-      })
+      hiddenInScene.value
+        ? NO_RESOURCES
+        : resourcesGroup({
+            state: state.value,
+            invalid: configErrors.value,
+            tileBase,
+            overrideOf: options.symbols?.overrideOf
+          })
   };
 }
