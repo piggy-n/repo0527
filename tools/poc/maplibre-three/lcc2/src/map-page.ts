@@ -28,36 +28,13 @@ import {
 } from 'three';
 import { prepareTileset } from '../../../../../packages/map-core/src/scene/prepare-tileset.ts';
 import { collisionNodes, type CollisionMesh, LCC_URL, loadCollisionMesh, loadIndex } from './lcc-meta.ts';
+import { ecefToEnu, EPSG_4548, lccOrigin, lccToEcefMatrix, meridional, primeVertical, WGS84_LL } from './placement.ts';
 
 const params = new URLSearchParams(location.search);
 setWorkerUrl(workerUrl);
 performance.setResourceTimingBufferSize(50000);
 
 // ---------- 坐标 ----------
-
-const EPSG_4548 = '+proj=tmerc +lat_0=0 +lon_0=117 +k=1 +x_0=500000 +y_0=0 +ellps=GRS80 +units=m +no_defs';
-const WGS84_LL = '+proj=longlat +datum=WGS84 +no_defs';
-const A = 6378137;
-const F = 1 / 298.257223563;
-const E2 = F * (2 - F);
-const primeVertical = (lat: number) => A / Math.sqrt(1 - E2 * Math.sin(MathUtils.degToRad(lat)) ** 2);
-const meridional = (lat: number) => (A * (1 - E2)) / (1 - E2 * Math.sin(MathUtils.degToRad(lat)) ** 2) ** 1.5;
-
-function ecefOf(lng: number, lat: number, height: number): Vector3 {
-  const lon = MathUtils.degToRad(lng);
-  const la = MathUtils.degToRad(lat);
-  const n = primeVertical(lat);
-  return new Vector3((n + height) * Math.cos(la) * Math.cos(lon), (n + height) * Math.cos(la) * Math.sin(lon), (n * (1 - E2) + height) * Math.sin(la));
-}
-
-function ecefToEnu(lng: number, lat: number, height: number): Matrix4 {
-  const lon = MathUtils.degToRad(lng);
-  const la = MathUtils.degToRad(lat);
-  const east = new Vector3(-Math.sin(lon), Math.cos(lon), 0);
-  const up = new Vector3(Math.cos(la) * Math.cos(lon), Math.cos(la) * Math.sin(lon), Math.sin(la));
-  const south = new Vector3(Math.sin(la) * Math.cos(lon), Math.sin(la) * Math.sin(lon), -Math.cos(la));
-  return new Matrix4().makeBasis(east, up, south).setPosition(ecefOf(lng, lat, height)).invert();
-}
 
 function enuToMercator(lng: number, lat: number): Matrix4 {
   const anchor = MercatorCoordinate.fromLngLat([lng, lat], 0);
@@ -80,23 +57,10 @@ function enuToGlobe(lng: number, lat: number): Matrix4 {
 }
 
 const index = await loadIndex();
-const [originLng, originLat] = proj4(EPSG_4548, WGS84_LL, [index.offset[0], index.offset[1]]);
-
-/** LCC2 局部（网格 x、y，高度 z）到地心：原点和两个网格方向按 proj4 算，高度取椭球高 */
-function lccToEcefMatrix(): Matrix4 {
-  const at = (x: number, y: number, z: number) => {
-    const [lng, lat] = proj4(EPSG_4548, WGS84_LL, [index.offset[0] + x, index.offset[1] + y]);
-    return ecefOf(lng, lat, index.offset[2] + z);
-  };
-  const origin = at(0, 0, 0);
-  const axisX = at(100, 0, 0).sub(origin).multiplyScalar(0.01);
-  const axisY = at(0, 100, 0).sub(origin).multiplyScalar(0.01);
-  const axisZ = at(0, 0, 100).sub(origin).multiplyScalar(0.01);
-  return new Matrix4().makeBasis(axisX, axisY, axisZ).setPosition(origin);
-}
+const [originLng, originLat] = lccOrigin(index);
 
 const worldFromEcef = ecefToEnu(originLng, originLat, 0);
-const worldFromLcc = worldFromEcef.clone().multiply(lccToEcefMatrix());
+const worldFromLcc = worldFromEcef.clone().multiply(lccToEcefMatrix(index));
 
 // ---------- 地图 ----------
 

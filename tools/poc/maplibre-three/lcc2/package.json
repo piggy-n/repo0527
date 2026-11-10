@@ -5,10 +5,15 @@
   "scripts": {
     "dev": "vite --port 5273 --strictPort",
     "build": "vite build",
-    "preview": "vite preview --port 5273 --strictPort"
+    "preview": "vite preview --port 5273 --strictPort",
+    "dev:cesium": "vite --port 5283 --strictPort --open /cesium.html"
   },
   "dependencies": {
     "3d-tiles-renderer": "0.5.4",
+    "@cesium/core": "0.1.0",
+    "@cesium/engine": "26.4.0",
+    "@cesium/widgets": "16.3.0",
+    "cesium": "1.146.0",
     "gaussian-splat-lite": "1.6.1",
     "maplibre-gl": "6.12.0",
     "proj4": "2.20.2",

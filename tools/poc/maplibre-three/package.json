@@ -7,7 +7,8 @@
     "build": "vite build",
     "preview": "vite preview --port 5273 --strictPort",
     "measure": "node tools/measure.mjs",
-    "manual": "node tools/manual.mjs"
+    "manual": "node tools/manual.mjs",
+    "overlay": "node tools/overlay.mjs"
   },
   "dependencies": {
     "3d-tiles-renderer": "^0.5.4",

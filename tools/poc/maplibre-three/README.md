@@ -122,6 +122,7 @@ pnpm exec playwright install chromium
 | `bench-c.html`、`bench-cesium.html`、`src/bench/` | 测量用的页面，只有底图和模型 |
 | `src/own-layer.ts`、`src/roam-scene.ts` | 方案 C 的自写 custom layer 和独立 Three 场景 |
 | `lcc2/` | LCC2 工程，依赖的 `three` 版本不同，所以单独安装 |
+| `lcc2/cesium.html`、`tools/overlay.mjs` | 另一个验证：Cesium 上叠一块 Three.js 画布画 LCC2，见 `CESIUM-OVERLAY.md` |
 | `index.html`、`src/main.ts` | 早期的综合测试页，人工检查对齐时用 |
 
 Cesium 对照组直接用 `packages/map-cesium` 的 `SceneTilesets`（缓存 384 MB 加 256 MB 溢出）、`SceneUnderground` 和相机换算，所以这个目录要留在完整的仓库里。各项指标的口径写在生成的 `report.md` 末尾。

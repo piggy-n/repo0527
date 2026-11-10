@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>LCC2 叠在 Cesium 上 PoC</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #20262c; overflow: hidden; }
+      /* 两块画布放在同一个容器里：下面是 Cesium，上面是 Three */
+      #map { position: relative; width: 100%; height: 100%; }
+      #panel {
+        position: absolute; left: 8px; top: 8px; z-index: 10; width: 250px; max-height: calc(100% - 16px); overflow: auto;
+        padding: 6px 8px; background: rgba(16, 20, 24, 0.84); color: #e8edf2; border-radius: 6px;
+        font: 11px/1.4 Consolas, monospace; white-space: pre-wrap; pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="panel"></div>
+    <script type="module" src="/src/cesium-page.ts"></script>
+  </body>
+</html>

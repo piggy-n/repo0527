@@ -15,6 +15,8 @@ export const MODELS_DIR = join(LOCAL_DIR, '3dt');
 export const LCC2_DIR = process.env.LCC2_DIR ? resolve(process.env.LCC2_DIR) : join(LOCAL_DIR, 'lcc2', 'render2');
 export const ROAM_DIR = join(REPO_ROOT, 'apps', 'yzt', 'public', 'roam');
 export const CESIUM_RUNTIME_DIR = join(POC_DIR, 'node_modules', 'cesium', 'Build', 'Cesium');
+// LCC2 工程自己装了一份 Cesium（叠画布的页面用），运行时文件从它那里取
+export const LCC_CESIUM_RUNTIME_DIR = join(LCC_APP_DIR, 'node_modules', 'cesium', 'Build', 'Cesium');
 
 /** 样例目录里的 .lcc2 索引文件名；目录不存在时返回空数组 */
 export function listLccFiles() {
