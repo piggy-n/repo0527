@@ -159,6 +159,7 @@
 | [0146](0146-basemap-panel-and-labels.md) | 底图面板默认只有切换按钮，标注改成页面操作，浮层可以点外部和 Esc 关闭，三维画文字 | 已接受（修改 0069 第 3 节、0134 第 1 节、0080 和 0133 里三维不画 symbol，补充 0140） |
 | [0147](0147-maplibre-three-3d-engine.md) | 三维加入 MapLibre + Three.js 引擎，和 Cesium 用 .env 选择 | 已接受（修改 0002、0020 第 4 节、0024、0078 第 1 节、0079 第 2、8 节；三维里的资源图层现由开关关着） |
 | [0148](0148-tileset-external-roots-and-empty-errors.md) | 整理 3D Tiles 索引：外部索引的根节点换到引用它的位置，没有内容的节点不改小误差 | 已接受（修改 0081 第 3 节） |
+| [0149](0149-lcc2-gaussian-splats.md) | LCC2 高斯泼溅：只在 `maplibre` 引擎下用 gaussian-splat-lite 加载，位置按数据集配准 | 提议中 |
 
 ## 模板
 
