@@ -30,6 +30,11 @@ describe('createRedactor', () => {
     expect(short('ab cd')).toBe('ab cd');
   });
 
+  it('Linux 的绝对路径连开头的斜杠一起去掉', () => {
+    const posix = createRedactor('/home/runner/work/repo', { username: 'alice', machine: 'desk-01' });
+    expect(posix('打开 /home/runner/work/repo/x 和 \\/home\\/runner\\/work\\/repo\\/y')).toBe('打开 <仓库>/x 和 <仓库>\\/y');
+  });
+
   it('不给名字时用这台机器的', () => {
     expect(createRedactor('C:/repo')('C:/repo/x')).toBe('<仓库>/x');
   });

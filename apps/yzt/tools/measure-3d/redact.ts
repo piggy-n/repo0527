@@ -5,9 +5,11 @@ import { homedir, hostname, userInfo } from 'node:os';
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
 function pathPattern(path: string): RegExp {
-  // 同一个路径可能写成反斜杠、正斜杠或 JSON 转义后的双反斜杠
+  // 同一个路径可能写成反斜杠、正斜杠或 JSON 转义后的双反斜杠；Linux 的绝对路径开头的分隔符也要一起匹配
+  const separator = '[\\\\/]+';
+  const leading = /^[\\/]/.test(path) ? separator : '';
   const parts = path.split(/[\\/]+/).filter(Boolean).map(escape);
-  return new RegExp(parts.join('[\\\\/]+'), 'gi');
+  return new RegExp(leading + parts.join(separator), 'gi');
 }
 
 // 全是数字的名字不当成名字：结果里到处是数字，替换了 raw.json 就不是合法的 JSON 了。它们在路径里时由用户目录那条规则去掉
