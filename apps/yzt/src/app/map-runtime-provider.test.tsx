@@ -67,12 +67,12 @@ describe('withRuntimeLoader', () => {
     const maplibre = injectedEngine('maplibre', off);
 
     expect(maplibre).toMatchObject({ kind: 'maplibre', loadRenderer: MAPLIBRE_ENGINE.loadRenderer });
-    expect(maplibre.capabilities).toStrictEqual({ styleLayers: false, identify: false });
+    expect(maplibre.capabilities).toStrictEqual({ styleLayers: false, identify: false, splats: true });
     expect(injectedEngine('cesium', off)).toBe(CESIUM_ENGINE);
   });
 
   it('不传开关时按 SCENE_OPTIONS：默认关着，三维里不显示资源图层（用户 2026-11-09 决定）', () => {
     expect(SCENE_OPTIONS.resourceLayers).toBe(false);
-    expect(injectedEngine('maplibre').capabilities).toStrictEqual({ styleLayers: false, identify: false });
+    expect(injectedEngine('maplibre').capabilities).toStrictEqual({ styleLayers: false, identify: false, splats: true });
   });
 });

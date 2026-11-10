@@ -46,7 +46,8 @@
           { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
           { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
           { "name": "three", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
-          { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" }
+          { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
+          { "name": "gaussian-splat-lite", "message": "gaussian-splat-lite 只能在 packages/map-three 中导入（ADR 0149）" }
         ],
         "patterns": [
           { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
@@ -86,7 +87,7 @@
       }
     },
     {
-      "files": ["packages/map-three/src/**", "apps/yzt/src/features/city-dashboard/**"],
+      "files": ["packages/map-three/src/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -95,6 +96,27 @@
               { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
               { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
               { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
+            ],
+            "patterns": [
+              { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
+              { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
+              { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["apps/yzt/src/features/city-dashboard/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
+              { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
+              { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
+              { "name": "gaussian-splat-lite", "message": "gaussian-splat-lite 只能在 packages/map-three 中导入（ADR 0149）" }
             ],
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
@@ -115,7 +137,8 @@
               { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
               { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
               { "name": "three", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
-              { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" }
+              { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
+              { "name": "gaussian-splat-lite", "message": "gaussian-splat-lite 只能在 packages/map-three 中导入（ADR 0149）" }
             ],
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
@@ -136,7 +159,8 @@
               { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
               { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
               { "name": "three", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
-              { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" }
+              { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
+              { "name": "gaussian-splat-lite", "message": "gaussian-splat-lite 只能在 packages/map-three 中导入（ADR 0149）" }
             ],
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
@@ -154,7 +178,8 @@
           "error",
           {
             "paths": [
-              { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" }
+              { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
+              { "name": "gaussian-splat-lite", "message": "gaussian-splat-lite 只能在 packages/map-three 中导入（ADR 0149）" }
             ],
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" }

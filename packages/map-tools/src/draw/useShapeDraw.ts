@@ -1,5 +1,14 @@
 import { useEventListener } from '@vueuse/core';
-import type { LngLat, MapInputEvent, MapTool, ScreenBox, ScreenPoint, StyleGroup, ToolView } from '@mx/map-core';
+import type {
+  LngLat,
+  MapInputEvent,
+  MapTool,
+  PickOptions,
+  ScreenBox,
+  ScreenPoint,
+  StyleGroup,
+  ToolView
+} from '@mx/map-core';
 import type { MapContext } from '@mx/map-vue';
 import { computed, type ComputedRef, getCurrentScope, type ShallowRef, shallowReadonly, shallowRef, watch } from 'vue';
 import {
@@ -59,9 +68,9 @@ export interface ShapeDraw {
   readonly deriveGroup: () => StyleGroup;
 }
 
-// 拾取到的经纬度；拾取不到时为 null
-function pickAt(view: ToolView, point: ScreenPoint): LngLat | null {
-  const result = view.pick(point);
+// 拾取到的经纬度；拾取不到时为 null。跟着鼠标的预览传 hover：跳过高斯泼溅（ADR 0149），落点照常打到它
+function pickAt(view: ToolView, point: ScreenPoint, options?: PickOptions): LngLat | null {
+  const result = view.pick(point, options);
   return result.kind === 'hit' ? result.lngLat : null;
 }
 
@@ -186,7 +195,7 @@ export function useShapeDraw(
       }
       case 'move': {
         if (current) {
-          draft.value = { ...current, preview: pickAt(view, event.point) };
+          draft.value = { ...current, preview: pickAt(view, event.point, { hover: true }) };
         }
         return current !== null;
       }

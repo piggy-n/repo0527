@@ -1,11 +1,17 @@
 import type { CameraState } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 import type { LoadJson, PreparedTileset } from '../scene/prepare-tileset';
-import type { SceneContent, SceneContentModel, SceneStatus } from '../scene/scene-content-model';
+import {
+  NO_SCENE_STATUS,
+  type SceneContent,
+  type SceneContentModel,
+  type SceneStatus
+} from '../scene/scene-content-model';
 import { tilesetCamera } from '../scene/tileset-camera';
+import { mergeSceneStatus, SceneSplatSync, type SplatOptions, type SplatSource } from '../scene/splat-sync';
 import { SceneTilesetSync, type TilesetOptions } from '../scene/tileset-sync';
 import { deferred, type Deferred } from '../view/view-lifecycle';
-import type { LngLat, ScreenPoint } from '../view/view-input';
+import type { LngLat, PickOptions, ScreenPoint } from '../view/view-input';
 import { SCENE_LAYER_ID, SceneLayer, type SceneLayerMap } from './scene-layer';
 import type { ScenePick, SceneRenderer, SceneRendererLoader } from './scene-renderer';
 
@@ -32,7 +38,7 @@ export interface MapLibreSceneOptions {
   readonly loadRenderer: SceneRendererLoader;
   readonly loadJson: LoadJson;
   readonly onError: (error: unknown) => void;
-  /** 瓦片集的状态变了 */
+  /** 瓦片集、高斯泼溅的状态变了 */
   readonly onStatus: (status: SceneStatus) => void;
   /** 三维模块的加载状态变了 */
   readonly onModuleChange: (state: SceneModuleState) => void;
@@ -56,8 +62,12 @@ export class MapLibreScene implements Disposable {
   readonly #onError: (error: unknown) => void;
   readonly #onModuleChange: (state: SceneModuleState) => void;
   readonly #onContent: ((content: SceneContent) => void) | undefined;
+  readonly #onStatus: (status: SceneStatus) => void;
   readonly #sync: SceneTilesetSync;
+  readonly #splats: SceneSplatSync;
   readonly #unsubscribeContent: Unsubscribe;
+  // 瓦片集和泼溅合在一起的状态
+  #status: SceneStatus = NO_SCENE_STATUS;
   #module: SceneModuleState = IDLE;
   // 这一次加载的结果：重试时换一个新的
   #loaded: Deferred = deferred();
@@ -90,6 +100,7 @@ export class MapLibreScene implements Disposable {
     this.#onError = onError;
     this.#onModuleChange = onModuleChange;
     this.#onContent = onContent;
+    this.#onStatus = onStatus;
     this.#sync = new SceneTilesetSync({
       host: {
         addTileset: (id, tileset, options, signal) => this.#addTileset(id, tileset, options, signal),
@@ -97,13 +108,21 @@ export class MapLibreScene implements Disposable {
         removeTileset: id => this.#renderer?.removeTileset(id)
       },
       loadJson,
-      onStatus
+      onStatus: () => this.#publishStatus()
+    });
+    this.#splats = new SceneSplatSync({
+      host: {
+        addSplat: (id, source, options, signal) => this.#addSplat(id, source, options, signal),
+        updateSplat: (id, options) => this.#renderer?.updateSplat(id, options),
+        removeSplat: id => this.#renderer?.removeSplat(id)
+      },
+      onStatus: () => this.#publishStatus()
     });
     this.#unsubscribeContent = scene.on('change', () => this.#onContentChange());
   }
 
   get status(): SceneStatus {
-    return this.#sync.status;
+    return this.#status;
   }
 
   get module(): SceneModuleState {
@@ -179,9 +198,9 @@ export class MapLibreScene implements Disposable {
     this.#renderer?.loseContext();
   }
 
-  /** 显示三维时拾取模型 */
-  pick(point: ScreenPoint): ScenePick | null {
-    return this.#active ? (this.#renderer?.pick(point) ?? null) : null;
+  /** 显示三维时拾取模型；悬停时不打高斯泼溅 */
+  pick(point: ScreenPoint, options?: PickOptions): ScenePick | null {
+    return this.#active ? (this.#renderer?.pick(point, options) ?? null) : null;
   }
 
   /** 显示三维时按模型层最近一帧的相机投影；还没画过时为 null */
@@ -197,6 +216,7 @@ export class MapLibreScene implements Disposable {
     this.#loaded.reject(new DOMException('三维内容已释放', 'AbortError'));
     this.#unsubscribeContent();
     this.#sync[Symbol.dispose]();
+    this.#splats[Symbol.dispose]();
     this.#unsubscribeRenderer?.();
     this.#renderer?.[Symbol.dispose]();
     this.#renderer = null;
@@ -230,9 +250,11 @@ export class MapLibreScene implements Disposable {
     this.#layer = new SceneLayer(renderer, this.#onError);
     const unsubscribeFailed = renderer.on('tilesetfailed', (id, error) => this.#sync.failed(id, error));
     const unsubscribeInitial = renderer.on('tilesetinitial', id => this.#sync.initial(id));
+    const unsubscribeSplatFailed = renderer.on('splatfailed', (id, error) => this.#splats.failed(id, error));
     this.#unsubscribeRenderer = () => {
       unsubscribeFailed();
       unsubscribeInitial();
+      unsubscribeSplatFailed();
     };
   }
 
@@ -259,6 +281,7 @@ export class MapLibreScene implements Disposable {
     this.#stale = false;
     const content = this.#content.current;
     this.#sync.apply(content.tilesets);
+    this.#splats.apply(content.splats ?? []);
     this.#onContent?.(content);
   }
 
@@ -293,5 +316,20 @@ export class MapLibreScene implements Disposable {
     const sphere = await renderer.addTileset(id, tileset, options, signal);
     signal.throwIfAborted();
     return tilesetCamera(sphere, this.#map.getCanvas().clientHeight);
+  }
+
+  async #addSplat(id: string, source: SplatSource, options: SplatOptions, signal: AbortSignal): Promise<CameraState> {
+    const renderer = this.#renderer;
+    if (!renderer) {
+      throw new Error('三维模块还没有加载');
+    }
+    const sphere = await renderer.addSplat(id, source, options, signal);
+    signal.throwIfAborted();
+    return tilesetCamera(sphere, this.#map.getCanvas().clientHeight);
+  }
+
+  #publishStatus(): void {
+    this.#status = mergeSceneStatus(this.#sync.status, this.#splats.status);
+    this.#onStatus(this.#status);
   }
 }

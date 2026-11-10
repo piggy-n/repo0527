@@ -18,6 +18,7 @@ import {
   Matrix4,
   type Mesh,
   PerspectiveCamera,
+  Plane,
   type Raycaster,
   Scene,
   Sphere,
@@ -55,6 +56,22 @@ export interface TilesetEntryOptions {
   readonly events: TilesetEntryEvents;
 }
 
+/** 裁剪盒（ADR 0149）：盒子的局部系（原点在盒子中心，轴和盒子的边平行）到地心坐标，和三个方向的半边长（米） */
+export interface ClipBox {
+  readonly toEcef: Matrix4;
+  readonly half: Vector3;
+}
+
+// 盒子六个面的平面（盒子的局部系）：法线朝外，盒子里面在每个平面的负侧
+const BOX_FACES = [
+  [1, 0, 0, 'x'],
+  [-1, 0, 0, 'x'],
+  [0, 1, 0, 'y'],
+  [0, -1, 0, 'y'],
+  [0, 0, 1, 'z'],
+  [0, 0, -1, 'z']
+] as const;
+
 /** 一个瓦片集这一帧对缓存的需求 */
 export interface TilesetDemand {
   readonly refused: number;
@@ -87,6 +104,8 @@ export interface TilesetEntryInspection {
   /** 这一帧在用的瓦片数，和其中视野外的：REPLACE 的节点要等全部子节点，视野外的也算 */
   readonly used: number;
   readonly usedOutOfView: number;
+  /** 正在被高斯泼溅的范围裁剪（ADR 0149） */
+  readonly clipped: boolean;
 }
 
 // 库的这些字段运行时有、类型声明里没有
@@ -165,6 +184,12 @@ export class TilesetEntry implements Disposable {
   // 相机动着时请求的瓦片和请求的时刻：能画了以后算加载要多久
   readonly #requestedAt = new WeakMap<TileInternals, number>();
   readonly #sphere = new Sphere();
+  // 裁剪平面（这个瓦片集的场景坐标，抬高时跟着上移）：所有材质共用这个数组，原地改；空的时候不裁
+  readonly #clipPlanes: Plane[] = [];
+  // 渲染器给的显示着的泼溅的范围：只用第一个和这个瓦片集重叠的
+  #clipBoxes: readonly ClipBox[] = [];
+  // 根索引的包围球（地心坐标）：判断和裁剪盒是否重叠
+  #ecefSphere: Sphere | null = null;
 
   constructor({ prepared, options, cache, math, fog, uploader, requestCullWindow, events }: TilesetEntryOptions) {
     this.#requestCull = requestCullWindow === null ? null : new RequestCull(requestCullWindow);
@@ -172,7 +197,7 @@ export class TilesetEntry implements Disposable {
     this.#math = math;
     this.#events = events;
     this.#options = options;
-    this.#materials = new TilesetMaterials(fog);
+    this.#materials = new TilesetMaterials(fog, this.#clipPlanes);
     // 整理后的索引里内容都是绝对地址，用 Blob 地址交给瓦片库，读到根索引后释放
     this.#url = URL.createObjectURL(new Blob([JSON.stringify(prepared)], { type: 'application/json' }));
     const tiles = new TilesRenderer(this.#url);
@@ -232,7 +257,9 @@ export class TilesetEntry implements Disposable {
           return;
         }
         this.#frame = LocalFrame.fromEcefCenter(sphere.center);
+        this.#ecefSphere = sphere;
         this.#placeRoot();
+        this.#placeClip();
         resolve({ center: this.#frame.anchor, radius: sphere.radius });
       };
       const onError = ({ tile, error }: { tile: unknown; error: Error }) => {
@@ -263,13 +290,22 @@ export class TilesetEntry implements Disposable {
     }
     this.#options = options;
     this.tiles.errorTarget = this.#errorTarget();
+    this.#placeClip();
   }
+
+  /** 显示着的高斯泼溅的范围（ADR 0149）：选项要求裁剪、和这个瓦片集重叠时裁掉第一个重叠的盒子里面的部分 */
+  setClipBoxes(boxes: readonly ClipBox[]): void {
+    this.#clipBoxes = boxes;
+    this.#placeClip();
+  }
+
 
   /** 抬高 meters 米（ADR 0147 第 4 节）：0 时恢复 */
   setLift(meters: number): void {
     if (meters !== this.#lift) {
       this.#lift = meters;
       this.#placeRoot();
+      this.#placeClip();
     }
   }
 
@@ -384,7 +420,8 @@ export class TilesetEntry implements Disposable {
       downloading: stats.queued + stats.downloading,
       parsing: stats.parsing,
       used: usedSet.size,
-      usedOutOfView
+      usedOutOfView,
+      clipped: this.#clipPlanes.length > 0
     };
   }
 
@@ -428,7 +465,8 @@ export class TilesetEntry implements Disposable {
     const { origin, direction } = raycaster.ray;
     origin.set(ndc[0], ndc[1], -1).unproject(this.camera);
     direction.set(ndc[0], ndc[1], 1).unproject(this.camera).sub(origin).normalize();
-    const hit = raycaster.intersectObject(this.tiles.group, true).find(opaque);
+    // 裁掉的部分画不出来，也不该拾取到
+    const hit = raycaster.intersectObject(this.tiles.group, true).find(item => opaque(item) && !this.#isClipped(item.point));
     if (!hit) {
       return null;
     }
@@ -441,6 +479,37 @@ export class TilesetEntry implements Disposable {
     URL.revokeObjectURL(this.#url);
     this.tiles.dispose();
     this.#materials.dispose();
+  }
+
+  // 按选项、重叠和抬高量重算裁剪平面：盒子的局部系 → 地心坐标 → 这个瓦片集的局部系，再整体上移抬高量
+  #placeClip(): void {
+    const planes = this.#clipPlanes;
+    const frame = this.#frame;
+    const box = this.#options.clippedBySplats ? this.#clipBoxes.find(item => this.#overlaps(item)) : undefined;
+    planes.length = 0;
+    if (!box || !frame) {
+      return;
+    }
+    const matrix = new Matrix4().makeTranslation(0, this.#lift, 0).multiply(frame.fromEcef).multiply(box.toEcef);
+    for (const [x, y, z, axis] of BOX_FACES) {
+      planes.push(new Plane(new Vector3(x, y, z), -box.half[axis]).applyMatrix4(matrix));
+    }
+  }
+
+  // 根索引的包围球和盒子相交：球心换到盒子的局部系，离盒子最近的点不超过半径
+  #overlaps({ toEcef, half }: ClipBox): boolean {
+    const sphere = this.#ecefSphere;
+    if (!sphere) {
+      return false;
+    }
+    const center = sphere.center.clone().applyMatrix4(toEcef.clone().invert());
+    const nearest = center.clone().clamp(half.clone().negate(), half);
+    return nearest.distanceTo(center) <= sphere.radius;
+  }
+
+  #isClipped(point: Vector3): boolean {
+    const planes = this.#clipPlanes;
+    return planes.length > 0 && planes.every(plane => plane.distanceToPoint(point) < 0);
   }
 
   #updateRequestCull(): void {

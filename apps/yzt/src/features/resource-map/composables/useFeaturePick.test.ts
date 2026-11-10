@@ -186,7 +186,7 @@ function setup(
   initialScope: RegionScope | null = null,
   onIdentifyStart = vi.fn<() => void>(),
   // 三维引擎的能力：默认按 Cesium，三维期间不识别
-  sceneCapabilities: SceneCapabilities = { styleLayers: false, identify: false }
+  sceneCapabilities: SceneCapabilities = { styleLayers: false, identify: false, splats: false }
 ) {
   const fake = fakeCamera(zoom);
   // 区划裁剪的范围，可以由用例中途改变
@@ -390,7 +390,8 @@ describe('useFeaturePick：识别', () => {
     const requests = mockIdentify(() => page(2, [{ guid: guid(1) }, { guid: guid(2) }]));
     const { owner, send, onIdentifyStart } = setup(16, STATE, new Map(), null, vi.fn(), {
       styleLayers: true,
-      identify: true
+      identify: true,
+      splats: true
     });
 
     expect(send(click(), [rendered(DLTB, 1)], '3d')).toBe(true);
@@ -402,7 +403,7 @@ describe('useFeaturePick：识别', () => {
   });
 
   it('三维引擎能识别时三维里可以框选', () => {
-    const { owner, send } = setup(16, STATE, new Map(), null, vi.fn(), { styleLayers: true, identify: true });
+    const { owner, send } = setup(16, STATE, new Map(), null, vi.fn(), { styleLayers: true, identify: true, splats: true });
 
     expect(send(pointer('down', FROM), [], '3d')).toBe(true);
     send(pointer('move', TO), [], '3d');
@@ -822,7 +823,8 @@ describe('useFeaturePick：框选', () => {
     flat.pick.activate?.();
     const { owner, pick, view, mapPointer } = setup(15, STATE, new Map(), null, vi.fn(), {
       styleLayers: true,
-      identify: true
+      identify: true,
+      splats: true
     });
     view.value = contextView('3d');
     mapPointer.value = { x: 50, y: 60 };

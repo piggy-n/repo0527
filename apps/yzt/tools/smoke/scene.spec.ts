@@ -68,6 +68,10 @@ test('三维：二维稳定后预加载运行时，切到三维、加载模型�
     await expect(page.locator('.cesium-widget canvas')).toBeVisible();
     await expect(page.locator('[data-map-status]')).toHaveCount(0);
 
+    // 清单里的高斯泼溅只有 maplibre 引擎能显示，Cesium 下不列出（ADR 0149）
+    await expect(page.locator('[data-model="smoke-room"]')).toHaveCount(1);
+    await expect(page.locator('[data-model="smoke-splat"]')).toHaveCount(0);
+
     // 勾选生成的屋子，加载好以后定位：地下的模型也只是飞过去，没有单独的钻地（ADR 0097）
     await page.locator('[data-model="smoke-room"] .el-checkbox').click();
     const loaded = page.locator('[data-loaded="smoke-room"]');

@@ -129,10 +129,10 @@ session[Symbol.dispose]();
 
 ### SceneContentModel（ADR 0081 第 2 节）
 
-- 会话的 `scene`：`{ tilesets, underground, roam? }`，和样式模型一样整体替换、每次替换修订号加 1、同一轮事件循环只通知一次；同一个对象不算变化
-- `set` 时校验：瓦片集 ID 不重复、地址是绝对地址（瓦片地址按它解析）、`attempt` 是非负整数、`maximumScreenSpaceError`（可选，这个瓦片集的屏幕误差上限）是正数、钻地指向已有的瓦片集、地表不透明度在 0～1；不合法时抛错，内容和修订号不变
+- 会话的 `scene`：`{ tilesets, splats?, underground, roam? }`，和样式模型一样整体替换、每次替换修订号加 1、同一轮事件循环只通知一次；同一个对象不算变化。`splats` 是 LCC2 高斯泼溅（ADR 0149：`.lcc2` 索引的地址、配准后的 `placement`、显示、重试次数），没有时不写；只有能力声明 `splats` 的引擎画它
+- `set` 时校验：瓦片集 ID 不重复、地址是绝对地址（瓦片地址按它解析）、`attempt` 是非负整数、`maximumScreenSpaceError`（可选，这个瓦片集的屏幕误差上限）是正数、钻地指向已有的瓦片集、地表不透明度在 0～1；泼溅的地址是绝对地址、`attempt` 是非负整数、摆放的四个值是有限的数且纬度在 ±90 以内，泼溅和瓦片集的 ID 合在一起不重复（状态在同一份 `SceneStatus` 里），钻地只能指向瓦片集；不合法时抛错，内容和修订号不变
 - 二维视图不读它；三维视图镜像它，按 ID 的状态通过可选的 `sceneStatus` / `onSceneStatusChange` 报告
-- 两种三维引擎共用的瓦片集同步（ADR 0147 第 3 节）：`SceneTilesetSync` 按会话的瓦片集增删改引擎里的瓦片集（地址、重试次数变了就重新加载，其余的只改显示和光照；同组的换显示时新的首批瓦片到了才撤下旧的），汇总状态；引擎实现 `TilesetHost`（`addTileset`、`updateTileset`、`removeTileset`），瓦片失败、首批瓦片到位由视图转给它的 `failed`、`initial`。让包围球进入画布的相机是 `tilesetCamera`（俯角 55°），缩放级和距离的换算是 `camera/camera-distance.ts`，两种引擎共用
+- 两种三维引擎共用的瓦片集同步（ADR 0147 第 3 节）：`SceneTilesetSync` 按会话的瓦片集增删改引擎里的瓦片集（地址、重试次数变了就重新加载，其余的只改显示和光照；同组的换显示时新的首批瓦片到了才撤下旧的），汇总状态；引擎实现 `TilesetHost`（`addTileset`、`updateTileset`、`removeTileset`），瓦片失败、首批瓦片到位由视图转给它的 `failed`、`initial`。让包围球进入画布的相机是 `tilesetCamera`（俯角 55°），缩放级和距离的换算是 `camera/camera-distance.ts`，两种引擎共用。高斯泼溅（会话的 `splats`，ADR 0149）同样由 `SceneSplatSync` 同步：地址、摆放、重试次数变了就重新加载，其余的只改显示；引擎实现 `SplatHost`，只有 MapLibre 引擎用它，状态和瓦片集的合成一份（`mergeSceneStatus`），ID 由会话校验不重复，地下空间只能是瓦片集。瓦片集的 `clippedBySplats`（倾斜摄影在泼溅的范围里不画）和显示、光照一样只更新、不重新加载
 - `roam`（ADR 0083）：路线漫游的意图 `{ kind: 'route', id, path, playing, speed, run }`，`path` 是脚下地板的 `[经度, 纬度, 椭球高]`；校验至少两个点、坐标是数、速度（米/秒，ADR 0097）是正数、遍数是非负整数。没有漫游时不写。三维视图通过可选的 `roamStatus` / `onRoamStatusChange` 报告进度
 
 ### MapSession
@@ -287,7 +287,7 @@ store.clear();
 
 **输入、拾取、投影与工具（5B.3，ADR 0034）**：
 
-- `pick(point)` 用 `unproject` 得到经纬度，二维总是 `{ kind: 'hit', surface: 'map' }`，没有高度；`project(lngLat)` 用 MapLibre 的 `project`，忽略高度，结果可能在画布之外。两者和定位一样只在 `ready` 时可用
+- `pick(point, options?)` 用 `unproject` 得到经纬度，二维总是 `{ kind: 'hit', surface: 'map' }`，没有高度。`options.hover`（`PickOptions`，ADR 0149）标出每帧都会调的悬停拾取：状态栏指针下的读数、绘制和逐点编辑跟着鼠标的预览传它，点击的落点、测量、坐标定位、点选不传。三维里悬停时不打高斯泼溅（射线拾取每次可能几十毫秒），打到泼溅的地方按后面的模型或地面算；没有泼溅的引擎（Cesium）忽略它，`ToolView`、`MapView`、渲染器的 `pick` 都带这个参数。`project(lngLat)` 用 MapLibre 的 `project`，忽略高度，结果可能在画布之外。两者和定位一样只在 `ready` 时可用
 - 订阅 MapLibre 的 `mousedown`、`mousemove`、`mouseup`、`click`、`dblclick`、`mouseout`，转成 `down`、`move`、`up`、`click`、`dblclick`、`leave`，带画布上的点、按键和四个修饰键；地图容器上的 `keydown` 转成 `{ type: 'key', key }`（地图获得焦点时才收到，不影响页面上的输入框）
 - 当前工具是临时任务时，切换工具和进入 ready（首次就绪、重建、恢复显示）时把键盘焦点移到画布上（`focus({ preventScroll: true })`）：临时任务多由工具栏、面板上的按钮激活，焦点还在按钮上，Esc 到不了地图（5B 收尾时用户发现拾取开启后按 Esc 没反应）；加载期间开启的临时任务，就绪后补上焦点。常驻模式不移，进入页面时（"移动"）不会抢走焦点
 - 只有 `ready` 的视图把输入交给 `session.tool.dispatch`：初始化中、暂停（切到三维）时不转交，二三维切换时只有当前显示的视图在转交。交给工具的是冻结的 `{ kind, pick, project }`

@@ -8,7 +8,7 @@
 
 | 目录 | 内容 | 谁用 |
 |---|---|---|
-| `local/3dt/` | 三维模型数据（`SZ_3DT/` 等，约 1.5 GB），不含清单 | 开发服务器映射到 `/3dt/*`；线上由 nginx 提供（[deployment.md](../deployment.md)） |
+| `local/3dt/` | 三维模型数据（`SZ_3DT/` 等，约 1.5 GB；LCC2 的楚王山1号 299 MB，层级见 [3dt-manifest.md](3dt-manifest.md)），不含清单 | 开发服务器映射到 `/3dt/*`；线上由 nginx 提供（[deployment.md](../deployment.md)） |
 | `local/design/` | 可以打开的交互原型，每个主题只留最新版 | 开发服务器映射到 `/design.local/*` |
 | `local/design-src/` | 原型的构建脚本和检查截图 | 手动运行、查看，开发服务器不提供 |
 | `local/probe/` | 后端探查结果：`resource-classes/` 是 `probe:resource-classes` 的默认输出，其他目录是用 `--out` 存下的某一轮 | [commands.md](../commands.md) |

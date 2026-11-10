@@ -33,7 +33,7 @@
 | 开关 | 文件 | 默认 | 作用 | ADR |
 |---|---|---|---|---|
 | `STATIC_BASEMAP_OPTIONS.cityColors` | `shared/config/static-basemap-options.ts` | `false` | 静态底图各市分色；关着时全省同一种陆地色。改了要运行 `basemap:generate` 更新缩略图 | 0134、0146 |
-| `SCENE_OPTIONS.resourceLayers` | `shared/config/scene-options.ts` | `false` | `maplibre` 引擎的三维里显示资源图层、点/框选能识别；关着时和 Cesium 一样。放开前要先改页面设计 | 0147 |
+| `SCENE_OPTIONS.resourceLayers` | `shared/config/scene-options.ts` | `false` | `maplibre` 引擎的三维里显示资源图层、点/框选能识别；关着时这两项和 Cesium 一样，高斯泼溅不受影响（ADR 0149）。放开前要先改页面设计 | 0147 |
 
 这类文件只写类型和常量，不导入别的模块：Node 直接运行的工具也会导入它们（`basemap:generate` 读分色开关），读不了 Vite 专用的写法。
 
@@ -43,7 +43,7 @@
 
 | 文件 | 发布位置 | 仓库里的来源 | 作用 | ADR |
 |---|---|---|---|---|
-| 三维模型清单 | `dist/3dt/manifest.json` | `apps/yzt/public/3dt/manifest.json` | 三维模型面板列出哪些模型、在哪个市、什么类型；格式由代码里的 zod 校验 | 0081 |
+| 三维模型清单 | `dist/3dt/manifest.json` | `apps/yzt/public/3dt/manifest.json` | 三维模型面板列出哪些模型、在哪个市、什么类型；格式由代码里的 zod 校验，逐项说明见 [3dt-manifest.md](3dt-manifest.md) | 0081、0149 |
 | 资源的最小显示级别 | `dist/resource-min-zooms.json` | `apps/yzt/src/features/resource-map/resource-min-zooms.json` | 每个资源放大到几级才显示；读不到或格式不对时用构建时带上的，`VITE_RESOURCE_MIN_ZOOM_ENABLED=false` 时不读 | 0132、0137 |
 
 ## 开发和工具用的环境变量

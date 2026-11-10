@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { SceneModel } from './catalog';
-import { deriveSceneContent, type SceneModelsState } from './scene-content';
+import { deriveSceneContent, type RouteChoice, type SceneModelsState } from './scene-content';
 
 const oblique = (id: string, extra: Partial<SceneModel> = {}): SceneModel => ({
   id,
@@ -14,6 +14,7 @@ const oblique = (id: string, extra: Partial<SceneModel> = {}): SceneModel => ({
   defaultEffect: '',
   spawn: undefined,
   routes: [],
+  splat: null,
   ...extra
 });
 
@@ -28,7 +29,7 @@ const loaded = (ids: readonly string[]): SceneModelsState => ({
 });
 
 describe('deriveSceneContent', () => {
-  it('清单给了屏幕误差上限的模型，瓦片集带上它；没给的不写这一项', () => {
+  it('清单给了屏幕误差上限的模型，瓦片集带上它；没给的不写这一项；倾斜摄影在泼溅的范围里不画（ADR 0149）', () => {
     const models = [oblique('jkq', { maximumScreenSpaceError: 8 }), oblique('jkq2')];
 
     const { tilesets } = deriveSceneContent(models, loaded(['jkq', 'jkq2']));
@@ -40,9 +41,56 @@ describe('deriveSceneContent', () => {
         show: true,
         lighting: 'sun',
         attempt: 0,
-        maximumScreenSpaceError: 8
+        maximumScreenSpaceError: 8,
+        clippedBySplats: true
       },
-      { id: 'jkq2', url: 'https://maps.test/3dt/jkq2/tileset.json', show: true, lighting: 'sun', attempt: 0 }
+      {
+        id: 'jkq2',
+        url: 'https://maps.test/3dt/jkq2/tileset.json',
+        show: true,
+        lighting: 'sun',
+        attempt: 0,
+        clippedBySplats: true
+      }
     ]);
+    // 室内、白膜不裁
+    const indoor = deriveSceneContent([oblique('room', { kind: 'indoor', underground: true })], loaded(['room']));
+    expect(indoor.tilesets[0]).not.toHaveProperty('clippedBySplats');
+  });
+
+  it('高斯泼溅（ADR 0149）各一份泼溅，ID 是模型 ID，带上重试次数；没有泼溅时不写 splats', () => {
+    const placement = { lng: 117.06, lat: 34.27, height: 59.7, heading: -0.04 };
+    const url = 'https://maps.test/3dt/cws/lcc2-sog-result/cws.lcc2';
+    const models = [
+      oblique('xz'),
+      oblique('cws', { kind: 'splat', effects: [], splat: { url, placement } })
+    ];
+
+    const content = deriveSceneContent(models, { ...loaded(['cws', 'xz']), attempts: new Map([['cws', 2]]) });
+
+    expect(content.tilesets.map(({ id }) => id)).toStrictEqual(['xz']);
+    expect(content.splats).toStrictEqual([{ id: 'cws', url, placement, show: true, attempt: 2 }]);
+    expect('splats' in deriveSceneContent(models, loaded(['xz']))).toBe(false);
+  });
+
+  it('漫游地下的模型时不显示地面上的泼溅，和地面上的瓦片集一样（ADR 0097 第 5 节）', () => {
+    const path: [number, number, number][] = [
+      [120.666, 31.3175, -5.1],
+      [120.6662, 31.3175, -5.1]
+    ];
+    const station = oblique('station', {
+      kind: 'indoor',
+      underground: true,
+      routes: [{ id: 'enter', name: '进站', path, length: 19 }]
+    });
+    const splat = { url: 'https://maps.test/3dt/cws/cws.lcc2', placement: { lng: 117.06, lat: 34.27, height: 59.7, heading: 0 } };
+    const models = [station, oblique('cws', { kind: 'splat', effects: [], splat })];
+    const state = loaded(['station', 'cws']);
+    const roam: RouteChoice = { kind: 'route', modelId: 'station', routeId: 'enter', id: 'r1', playing: false, speed: 4, run: 0 };
+
+    expect(deriveSceneContent(models, state).splats?.[0]?.show).toBe(true);
+    const roaming = deriveSceneContent(models, { ...state, roam });
+    expect(roaming.splats?.[0]?.show).toBe(false);
+    expect(roaming.underground?.tilesetId).toBe('station');
   });
 });

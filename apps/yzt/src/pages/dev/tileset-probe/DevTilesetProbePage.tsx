@@ -71,7 +71,8 @@ export const DevTilesetProbePage = defineComponent({
   setup() {
     const loadRuntime = inject(MAP_RUNTIME, null);
     const query = useSceneModelsQuery(true);
-    const models = computed(() => query.data.value ?? []);
+    // 只看瓦片集：高斯泼溅（ADR 0149）没有瓦片集
+    const models = computed(() => (query.data.value ?? []).filter(model => model.splat === null));
     const selectedId = ref('');
     const selected = computed(() => models.value.find(model => model.id === selectedId.value) ?? null);
     // 清单已在查询缓存里时立即选上

@@ -143,6 +143,25 @@ describe('useShapeDraw 多边形', () => {
     expect(activeTool.value).toBe('browse');
   });
 
+  it('跟着鼠标的预览用悬停的拾取（跳过高斯泼溅，ADR 0149），单击加的节点用完整的拾取', () => {
+    const { draw } = setup();
+    draw.toggle('polygon');
+    const picks: (boolean | undefined)[] = [];
+    const view: ToolView = {
+      ...toolView(),
+      pick: (point, options) => {
+        picks.push(options?.hover);
+        return toolView().pick(point);
+      }
+    };
+    const polygon = draw.tools[DRAW_TOOL_IDS.polygon];
+    polygon.handleInput?.(pointer('click', 0, 0), view);
+    polygon.handleInput?.(pointer('move', 50, 50), view);
+    polygon.handleInput?.(pointer('click', 100, 0), view);
+
+    expect(picks).toStrictEqual([undefined, true, undefined]);
+  });
+
   it('不足三个节点时双击取消这一次；Esc 在画时取消、没在画时不处理', () => {
     const { draw, send, onComplete } = setup();
     draw.toggle('polygon');

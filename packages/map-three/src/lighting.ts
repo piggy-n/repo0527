@@ -8,6 +8,7 @@ import {
   type Mesh,
   MeshBasicMaterial,
   type Object3D,
+  type Plane,
   type Texture
 } from 'three';
 
@@ -37,8 +38,9 @@ export interface FogUniform {
  * 头灯（从 map-cesium 的 scene-tilesets 移植）：不受场景光照影响，正对视线的面亮、斜掠的面暗，和时间无关；
  * 法线用视点坐标的屏幕空间导数求，材质双面。步行时 15～180 米之间把远处压到 0.45（uFog，同 Cesium）
  */
-function headlightVariant(source: Material, fog: FogUniform): MeshBasicMaterial {
+function headlightVariant(source: Material, fog: FogUniform, clipPlanes: Plane[]): MeshBasicMaterial {
   const variant = new MeshBasicMaterial({ side: DoubleSide });
+  clipBy(variant, clipPlanes);
   const { map, color, vertexColors, transparent, opacity, alphaTest } = source as Material & {
     map?: Texture | null;
     color?: Color;
@@ -71,15 +73,24 @@ function headlightVariant(source: Material, fog: FogUniform): MeshBasicMaterial 
   return variant;
 }
 
-/** 一个瓦片集里各个网格的材质：原来的材质留着，头灯时换成变体，变体按原材质缓存 */
+// 裁剪平面（ADR 0149）：一个瓦片集的材质共用同一个数组，瓦片集原地改它；平面围成一个盒子、法线朝外，
+// 只裁掉在所有平面负侧的（盒子里面），数组为空时不裁。Three 在着色器里 discard，不改 GL 状态
+function clipBy(material: Material, clipPlanes: Plane[]): void {
+  material.clippingPlanes = clipPlanes;
+  material.clipIntersection = true;
+}
+
+/** 一个瓦片集里各个网格的材质：原来的材质留着，头灯时换成变体，变体按原材质缓存；都按同一组平面裁剪 */
 export class TilesetMaterials {
   readonly #originals = new WeakMap<Mesh, Material | Material[]>();
   readonly #variants = new Map<Material, MeshBasicMaterial>();
   readonly #fog: FogUniform;
+  readonly #clipPlanes: Plane[];
 
-  /** fog 是渲染器共用的远处压暗开关 */
-  constructor(fog: FogUniform) {
+  /** fog 是渲染器共用的远处压暗开关；clipPlanes 是这个瓦片集的裁剪平面，由瓦片集原地修改 */
+  constructor(fog: FogUniform, clipPlanes: Plane[]) {
     this.#fog = fog;
+    this.#clipPlanes = clipPlanes;
   }
 
   /** 新加载的模型：记下原来的材质、改成双面（Cesium 一侧关掉了背面剔除），按光照换上 */
@@ -92,6 +103,7 @@ export class TilesetMaterials {
       this.#originals.set(mesh, mesh.material);
       for (const material of [mesh.material].flat()) {
         material.side = DoubleSide;
+        clipBy(material, this.#clipPlanes);
       }
     });
     this.apply(model, lighting);
@@ -136,7 +148,7 @@ export class TilesetMaterials {
   #variant(material: Material): MeshBasicMaterial {
     let variant = this.#variants.get(material);
     if (!variant) {
-      variant = headlightVariant(material, this.#fog);
+      variant = headlightVariant(material, this.#fog, this.#clipPlanes);
       this.#variants.set(material, variant);
     }
     return variant;

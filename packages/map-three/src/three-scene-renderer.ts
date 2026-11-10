@@ -1,5 +1,6 @@
 import type {
   LngLat,
+  PickOptions,
   PreparedTileset,
   SceneFrame,
   SceneLift,
@@ -9,6 +10,8 @@ import type {
   SceneRendererEvents,
   SceneSurface,
   ScreenPoint,
+  SplatOptions,
+  SplatSource,
   TilesetOptions,
   TilesetSphere,
   Unsubscribe
@@ -22,7 +25,8 @@ import { FrameMath, toNdc } from './frame';
 import type { FogUniform } from './lighting';
 import { TileUploader } from './tile-uploader';
 import type { CullWindow } from './request-cull';
-import { TilesetEntry, type TilesetEntryInspection } from './tileset-entry';
+import { SplatEntry, type SplatEntryInspection, type SplatLibrary } from './splat-entry';
+import { type ClipBox, TilesetEntry, type TilesetEntryInspection } from './tileset-entry';
 import { WalkMarker } from './walk-marker';
 
 // 缓存预算和 Cesium 的数值相同（scene-tilesets 的 cacheBytes 加 maximumCacheOverflowBytes，1 GB + 1 GB，ADR 0147 第 5 节）；
@@ -35,6 +39,9 @@ const UPLOAD_BYTES_PER_FRAME = 16 * MEGABYTE;
 // 相机在一块瓦片加载完之前走的路达到瓦片直径就不请求，加载时间按实测（request-cull.ts）。实测见 docs/modules/map-three.md"动着的时候不请求"
 const REQUEST_CULL_WINDOW: CullWindow = 'auto';
 const FRAME_MS = 1000 / 60;
+// 高斯泼溅的总预算（高斯个数，ADR 0149 第 5 节）：加了几份就平分，隐藏的、还在读索引的也算（隐藏的调度器仍占着数据）；
+// 不是内存上限，默认值等显卡机器实测后再定（L.3）
+const SPLAT_BUDGET = 3_000_000;
 
 /** 构造参数都有默认值，性能测量时换着比较 */
 export interface ThreeSceneRendererOptions {
@@ -46,6 +53,8 @@ export interface ThreeSceneRendererOptions {
   readonly uploadBytesPerFrame?: number | null;
   /** 相机在这个窗口里走的路达到瓦片直径就不请求：秒数，'auto' 按实测的加载时间；null 时动着也请求 */
   readonly requestCullWindow?: CullWindow | null;
+  /** 高斯泼溅的总预算（高斯个数），加了几份就平分 */
+  readonly splatBudget?: number;
 }
 
 /** 读数（只读快照）：给性能测量和测试，业务代码不用 */
@@ -86,6 +95,9 @@ export interface ThreeSceneInspection {
   /** 瓦片都到了，放宽的倍数也不再变 */
   readonly settled: boolean;
   readonly tilesets: Readonly<Record<string, TilesetEntryInspection>>;
+  /** 高斯泼溅的总预算和各份的读数（ADR 0149 第 5 节：和瓦片集分开管，一起报） */
+  readonly splatBudget: number;
+  readonly splats: Readonly<Record<string, SplatEntryInspection>>;
 }
 
 // MapLibre 每帧给的矩阵可能复用同一个数组：留到拾取、投影时用的要复制一份
@@ -106,6 +118,9 @@ function copyFrame({ mainMatrix, fallbackMatrix, projectionMatrix, transition, c
 export class ThreeSceneRenderer implements SceneRenderer {
   readonly #emitter = createNanoEvents<SceneRendererEvents>();
   readonly #tilesets = new Map<string, TilesetEntry>();
+  readonly #splats = new Map<string, SplatEntry>();
+  // 还在读索引的泼溅和这次加载的信号：同一个 ID 先中止、紧接着重新加时（同步换摆放、重试），上一份还没走到 catch 里移除
+  readonly #loadingSplats = new WeakMap<SplatEntry, AbortSignal>();
   readonly #models = new Map<string, AnimatedModel>();
   readonly #math = new FrameMath();
   readonly #cache = new LRUCache();
@@ -119,6 +134,9 @@ export class ThreeSceneRenderer implements SceneRenderer {
   readonly #cacheBytes: number;
   readonly #cacheLimitBytes: number;
   readonly #requestCullWindow: CullWindow | null;
+  readonly #splatBudget: number;
+  // gaussian-splat-lite 单独分块，第一次加泼溅时才下载；失败后下次重新下载
+  #splatLibrary: Promise<SplatLibrary> | null = null;
   #surface: SceneSurface | null = null;
   #webgl: WebGLRenderer | null = null;
   #attached = false;
@@ -142,8 +160,10 @@ export class ThreeSceneRenderer implements SceneRenderer {
     cacheBytes = CACHE_BYTES,
     cacheLimitBytes = CACHE_BYTES + CACHE_OVERFLOW_BYTES,
     uploadBytesPerFrame = UPLOAD_BYTES_PER_FRAME,
-    requestCullWindow = REQUEST_CULL_WINDOW
+    requestCullWindow = REQUEST_CULL_WINDOW,
+    splatBudget = SPLAT_BUDGET
   }: ThreeSceneRendererOptions = {}) {
+    this.#splatBudget = splatBudget;
     this.#cacheBytes = cacheBytes;
     this.#cacheLimitBytes = cacheLimitBytes;
     this.#requestCullWindow = requestCullWindow;
@@ -168,7 +188,12 @@ export class ThreeSceneRenderer implements SceneRenderer {
       webgl.info.autoReset = false;
       // 视口每帧按画布的实际像素设，不跟着设备像素比再放大
       webgl.setPixelRatio(1);
+      // 倾斜模型在泼溅的范围里裁掉（ADR 0149）：材质上的平面要它打开；在着色器里 discard，不改 MapLibre 的 GL 状态
+      webgl.localClippingEnabled = true;
       this.#webgl = webgl;
+      for (const entry of this.#splats.values()) {
+        entry.setRenderer(webgl);
+      }
     }
     this.#attached = true;
     this.#uploader.setActive(true);
@@ -230,6 +255,14 @@ export class ThreeSceneRenderer implements SceneRenderer {
         animating ||= model.animating;
       }
     }
+    // 泼溅是半透明的、不写深度：在不透明的瓦片、模型之后画，用它们的深度做遮挡
+    for (const entry of this.#splats.values()) {
+      if (lifted) {
+        entry.skipFrame();
+      } else if (entry.prepare(frame, surface)) {
+        webgl.render(entry.scene, entry.camera);
+      }
+    }
     // 光环在瓦片之后画：深度测试用瓦片写下的深度，墙和柱子挡得住
     if (this.#marker.prepare(frame, surface, performance.now())) {
       webgl.render(this.#marker.scene, this.#marker.camera);
@@ -279,6 +312,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       if (this.#lift?.tilesetId === id) {
         entry.setLift(this.#lift.meters);
       }
+      entry.setClipBoxes(this.#splatClipBoxes());
       this.#surface?.requestRepaint();
       return sphere;
     } catch (error) {
@@ -307,6 +341,61 @@ export class ThreeSceneRenderer implements SceneRenderer {
     this.#surface?.requestRepaint();
   }
 
+  async addSplat(id: string, source: SplatSource, options: SplatOptions, signal: AbortSignal): Promise<TilesetSphere> {
+    this.#assertAlive();
+    this.#releaseAbortedSplat(id);
+    const library = await this.#loadSplatLibrary();
+    signal.throwIfAborted();
+    this.#assertAlive();
+    this.#releaseAbortedSplat(id);
+    const entry = new SplatEntry({
+      library,
+      source,
+      options,
+      math: this.#math,
+      budget: this.#splatBudget,
+      events: {
+        failed: error => this.#emitter.emit('splatfailed', id, new Error(`高斯泼溅 ${id} 的数据加载失败`, { cause: error })),
+        repaint: () => this.#surface?.requestRepaint()
+      }
+    });
+    this.#splats.set(id, entry);
+    this.#loadingSplats.set(entry, signal);
+    this.#shareSplatBudget();
+    entry.setRenderer(this.#webgl);
+    try {
+      const sphere = await entry.load(signal);
+      signal.throwIfAborted();
+      this.#assertAlive();
+      this.#loadingSplats.delete(entry);
+      this.#clipTilesets();
+      return sphere;
+    } catch (error) {
+      if (this.#splats.get(id) === entry) {
+        this.#splats.delete(id);
+        this.#shareSplatBudget();
+      }
+      entry[Symbol.dispose]();
+      throw error;
+    }
+  }
+
+  updateSplat(id: string, options: SplatOptions): void {
+    this.#splats.get(id)?.setOptions(options);
+    this.#clipTilesets();
+  }
+
+  removeSplat(id: string): void {
+    const entry = this.#splats.get(id);
+    if (!entry) {
+      return;
+    }
+    this.#splats.delete(id);
+    entry[Symbol.dispose]();
+    this.#shareSplatBudget();
+    this.#clipTilesets();
+  }
+
   /**
    * 加一个 glTF 模型并播放它的动画（第三人称的人物以后用，现在只有测试用到）；
    * signal 中止时以它的原因结束
@@ -330,15 +419,17 @@ export class ThreeSceneRenderer implements SceneRenderer {
     return this.#models.get(id)?.time ?? null;
   }
 
-  pick(point: ScreenPoint): ScenePick | null {
+  pick(point: ScreenPoint, { hover = false }: PickOptions = {}): ScenePick | null {
     const canvas = this.#surface?.canvas;
     if (!this.#frame || !canvas) {
       return null;
     }
     const ndc = toNdc(point, { width: canvas.clientWidth, height: canvas.clientHeight });
     let nearest: { distance: number; lngLatHeight: [number, number, number] } | null = null;
-    // 每个瓦片集有自己的局部系，同一条视线上的距离都是米、起点相同，可以直接比较
-    for (const entry of this.#tilesets.values()) {
+    // 每个瓦片集、泼溅有自己的局部系，同一条视线上的距离都是米、起点相同，可以直接比较。
+    // 悬停时不打泼溅：每帧都会调用，泼溅的射线拾取每次可能几十毫秒（ADR 0149），打到泼溅的地方按后面的算
+    const entries = hover ? [...this.#tilesets.values()] : [...this.#tilesets.values(), ...this.#splats.values()];
+    for (const entry of entries) {
       const hit = entry.pick(this.#raycaster, ndc);
       if (hit && (!nearest || hit.distance < nearest.distance)) {
         nearest = hit;
@@ -422,7 +513,9 @@ export class ThreeSceneRenderer implements SceneRenderer {
       uploadPending,
       uploadedBytes: this.#uploader.uploadedBytes,
       settled: this.#steady && !this.#framePending && loading === 0 && uploadPending === 0,
-      tilesets: Object.fromEntries([...this.#tilesets].map(([id, entry]) => [id, entry.inspect()]))
+      tilesets: Object.fromEntries([...this.#tilesets].map(([id, entry]) => [id, entry.inspect()])),
+      splatBudget: this.#splatBudget,
+      splats: Object.fromEntries([...this.#splats].map(([id, entry]) => [id, entry.inspect()]))
     };
   }
 
@@ -439,6 +532,10 @@ export class ThreeSceneRenderer implements SceneRenderer {
       entry[Symbol.dispose]();
     }
     this.#tilesets.clear();
+    for (const entry of this.#splats.values()) {
+      entry[Symbol.dispose]();
+    }
+    this.#splats.clear();
     for (const model of this.#models.values()) {
       model[Symbol.dispose]();
     }
@@ -503,10 +600,58 @@ export class ThreeSceneRenderer implements SceneRenderer {
     return lift && lift.meters !== 0 && this.#tilesets.has(lift.tilesetId) ? lift : null;
   }
 
-  // 丢掉 WebGLRenderer：它跟踪的 GPU 资源随之作废，下次画时重新上传；内容（瓦片、模型）保留
+  // 丢掉 WebGLRenderer：它跟踪的 GPU 资源随之作废，下次画时重新上传；内容（瓦片、泼溅、模型）保留。
+  // 泼溅库的绘制对象绑定在渲染器上，一起丢掉
   #dropRenderer(): void {
+    for (const entry of this.#splats.values()) {
+      entry.setRenderer(null);
+    }
     this.#webgl?.dispose();
     this.#webgl = null;
+  }
+
+  #loadSplatLibrary(): Promise<SplatLibrary> {
+    this.#splatLibrary ??= import('gaussian-splat-lite').catch((error: unknown) => {
+      this.#splatLibrary = null;
+      throw error;
+    });
+    return this.#splatLibrary;
+  }
+
+  // 同一个 ID 已经有一份：加载已中止、只是还没清理的直接释放，否则是重复加
+  #releaseAbortedSplat(id: string): void {
+    const previous = this.#splats.get(id);
+    if (!previous) {
+      return;
+    }
+    if (!this.#loadingSplats.get(previous)?.aborted) {
+      throw new Error(`高斯泼溅 ${id} 已经加过`);
+    }
+    this.#splats.delete(id);
+    previous[Symbol.dispose]();
+    this.#shareSplatBudget();
+  }
+
+  // 显示着、读到索引的泼溅的范围（ADR 0149）
+  #splatClipBoxes(): ClipBox[] {
+    return [...this.#splats.values()].flatMap(entry => entry.clipBox() ?? []);
+  }
+
+  // 泼溅加上、移除、显示变了：交给每个瓦片集，要求裁剪、范围重叠的在盒子里不画
+  #clipTilesets(): void {
+    const boxes = this.#splatClipBoxes();
+    for (const entry of this.#tilesets.values()) {
+      entry.setClipBoxes(boxes);
+    }
+    this.#surface?.requestRepaint();
+  }
+
+  // 总预算按份平分：多加一份不会让总的高斯个数翻倍
+  #shareSplatBudget(): void {
+    const share = Math.max(1, Math.floor(this.#splatBudget / Math.max(1, this.#splats.size)));
+    for (const entry of this.#splats.values()) {
+      entry.setBudget(share);
+    }
   }
 
   #assertAlive(): void {

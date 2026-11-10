@@ -9,6 +9,7 @@ import {
   type MapViewFailure,
   NO_SCENE_STATUS,
   NO_SOURCE_ERRORS,
+  type PickOptions,
   type PickResult,
   type RenderedFeature,
   type RenderedQueryOptions,
@@ -49,7 +50,8 @@ import { CESIUM_ENGINE, type SceneCapabilities } from './runtime';
  */
 export interface MapViewport {
   readonly kind: ViewKind;
-  pick(point: ScreenPoint): PickResult;
+  /** 悬停（每帧都调的读数、跟着鼠标的预览）时传 hover：跳过高斯泼溅（ADR 0149） */
+  pick(point: ScreenPoint, options?: PickOptions): PickResult;
   project(lngLat: LngLat, height?: number): ScreenPoint | null;
   queryRendered(area: ScreenPoint | ScreenBox, options: RenderedQueryOptions): readonly RenderedFeature[];
   /** 视点在椭球面以上的高度，单位米；视图没有这项能力（二维）时为 null（ADR 0080 第 6 节） */
@@ -183,7 +185,7 @@ function createViewport(view: MapView): MapViewport {
     get kind(): ViewKind {
       return view.kind;
     },
-    pick: (point: ScreenPoint) => view.pick(point),
+    pick: (point: ScreenPoint, options?: PickOptions) => view.pick(point, options),
     project: (lngLat: LngLat, height?: number) => view.project(lngLat, height),
     queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => view.queryRendered(area, options),
     eyeHeight: () => view.eyeHeight?.() ?? null,

@@ -9,6 +9,8 @@ export interface SceneCapabilities {
   readonly styleLayers: boolean;
   /** 三维期间点/框选能识别：三维视图的渲染要素查询有结果 */
   readonly identify: boolean;
+  /** 三维里能显示 LCC2 高斯泼溅（ADR 0149）：不能的引擎忽略会话里的泼溅，三维模型面板也不列出这类模型 */
+  readonly splats: boolean;
 }
 
 /**
@@ -20,16 +22,16 @@ export type SceneEngine =
   | { readonly kind: 'cesium'; readonly capabilities: SceneCapabilities }
   | { readonly kind: 'maplibre'; readonly capabilities: SceneCapabilities; readonly loadRenderer: SceneRendererLoader };
 
-/** 现有的 Cesium 三维：资源图层不在三维显示，三维期间不识别（ADR 0080 第 5 节） */
+/** 现有的 Cesium 三维：资源图层不在三维显示，三维期间不识别（ADR 0080 第 5 节），没有高斯泼溅（ADR 0149） */
 export const CESIUM_ENGINE: Extract<SceneEngine, { kind: 'cesium' }> = Object.freeze({
   kind: 'cesium',
-  capabilities: Object.freeze({ styleLayers: false, identify: false })
+  capabilities: Object.freeze({ styleLayers: false, identify: false, splats: false })
 });
 
 /** MapLibre + Three.js（ADR 0147）：@mx/map-three 和 three 在预加载或第一次切到三维时才下载 */
 export const MAPLIBRE_ENGINE: Extract<SceneEngine, { kind: 'maplibre' }> = Object.freeze({
   kind: 'maplibre',
-  capabilities: Object.freeze({ styleLayers: true, identify: true }),
+  capabilities: Object.freeze({ styleLayers: true, identify: true, splats: true }),
   loadRenderer: () => import('@mx/map-three').then(({ createSceneRenderer }) => createSceneRenderer)
 });
 

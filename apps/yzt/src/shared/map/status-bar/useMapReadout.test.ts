@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { CameraState, LngLat, PickResult, RoamStatus, ScreenPoint } from '@mx/map-core';
+import type { CameraState, LngLat, PickOptions, PickResult, RoamStatus, ScreenPoint } from '@mx/map-core';
 import type { MapViewport } from '@mx/map-vue';
 import { describe, expect, it } from 'vitest';
 import { effectScope, ref, shallowRef } from 'vue';
@@ -9,10 +9,12 @@ import { useMapReadout } from './useMapReadout';
 function fakeViewport(camera: { readonly value: CameraState }) {
   const projection = { degreesPerPixel: 0.01, miss: false };
   const picks: ScreenPoint[] = [];
+  const hovers: boolean[] = [];
   const viewport: MapViewport = {
     kind: '2d',
-    pick: (point: ScreenPoint): PickResult => {
+    pick: (point: ScreenPoint, options?: PickOptions): PickResult => {
       picks.push(point);
+      hovers.push(options?.hover === true);
       if (projection.miss) {
         return { kind: 'miss' };
       }
@@ -37,7 +39,7 @@ function fakeViewport(camera: { readonly value: CameraState }) {
     eyeHeight: () => eye.height,
     heading: () => eye.heading
   };
-  return { viewport, sceneViewport, eye, projection, picks };
+  return { viewport, sceneViewport, eye, projection, picks, hovers };
 }
 
 function setup() {
@@ -130,6 +132,19 @@ describe('useMapReadout', () => {
     ctx.pointer.value = { x: 600, y: 200 };
     expect(lngLatOf(ctx.readout.position.value)).toStrictEqual(['119.80', '33.00']);
     expect(ctx.readout.position.value?.center).toBe(false);
+  });
+
+  it('指针下的经纬度每帧都读，用悬停的拾取（跳过高斯泼溅，ADR 0149）；比例尺不用', () => {
+    using ctx = setup();
+    ctx.view.value = ctx.viewport;
+    void ctx.readout.scale.value;
+    const scalePicks = ctx.hovers.length;
+
+    ctx.pointer.value = { x: 600, y: 200 };
+    void ctx.readout.position.value;
+
+    expect(ctx.hovers.slice(0, scalePicks).every(hover => !hover)).toBe(true);
+    expect(ctx.hovers.slice(scalePicks)).toStrictEqual([true]);
   });
 
   it('鼠标不动、地图缩放或画布尺寸变化时，随投影修订号重新拾取', () => {

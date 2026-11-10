@@ -53,6 +53,8 @@ export {
   SceneContentModel,
   type SceneRoam,
   type SceneStatus,
+  type SplatLayer,
+  type SplatPlacement,
   type TilesetLayer,
   type TilesetLighting,
   type TilesetStatus,
@@ -127,6 +129,14 @@ export {
 } from './scene/nav/walker';
 export { type LoadJson, type PreparedTile, type PreparedTileset, prepareTileset } from './scene/prepare-tileset';
 export { EYE_HEIGHT, RoutePath, type RoutePose, smoothAngle } from './scene/route-path';
+export {
+  mergeSceneStatus,
+  SceneSplatSync,
+  type SceneSplatSyncOptions,
+  type SplatHost,
+  type SplatOptions,
+  type SplatSource
+} from './scene/splat-sync';
 export { TILESET_PITCH, tilesetCamera, type TilesetSphere } from './scene/tileset-camera';
 export {
   SceneTilesetSync,
@@ -172,6 +182,7 @@ export type {
   MapKeyEvent,
   MapPointerEvent,
   Modifiers,
+  PickOptions,
   PickResult,
   PickSurface,
   ScreenPoint

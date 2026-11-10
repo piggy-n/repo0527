@@ -1,8 +1,9 @@
 import type { Unsubscribe } from '../events';
 import type { PreparedTileset } from '../scene/prepare-tileset';
+import type { SplatOptions, SplatSource } from '../scene/splat-sync';
 import type { TilesetSphere } from '../scene/tileset-camera';
 import type { TilesetOptions } from '../scene/tileset-sync';
-import type { LngLat, ScreenPoint } from '../view/view-input';
+import type { LngLat, PickOptions, ScreenPoint } from '../view/view-input';
 
 // MapLibre 引擎的三维渲染器和 MapLibre 适配器之间的窄接口（ADR 0147 第 5 节）：
 // 适配器持有 custom layer 的外壳，每帧把矩阵、投影过渡值和 GL 上下文交给渲染器；渲染器（@mx/map-three）不碰 MapLibre
@@ -41,10 +42,11 @@ export interface SceneFrame {
   readonly clippingPlane: readonly [number, number, number, number];
 }
 
-/** 渲染器报告的事件：瓦片失败、显示后首批瓦片到位 */
+/** 渲染器报告的事件：瓦片失败、显示后首批瓦片到位、高斯泼溅的数据加载失败 */
 export interface SceneRendererEvents {
   tilesetfailed: (id: string, error: unknown) => void;
   tilesetinitial: (id: string) => void;
+  splatfailed: (id: string, error: unknown) => void;
 }
 
 /** 拾取到的模型表面：真实的经纬度和椭球高 */
@@ -91,10 +93,17 @@ export interface SceneRenderer extends Disposable {
   updateTileset(id: string, options: TilesetOptions): void;
   removeTileset(id: string): void;
   /**
-   * 按最近一帧的相机拾取画出的模型，跳过半透明的表面（同 Cesium 的深度拾取，隔着玻璃点到的是后面）；
-   * 结果是真实的高度（抬高时减回去）。没有打到、还没画过时为 null
+   * 加一份 LCC2 高斯泼溅（ADR 0149）：读索引、按摆放放进场景，给出包围球；数据随相机流式加载。
+   * signal 中止时释放建好的、以中止的原因结束
    */
-  pick(point: ScreenPoint): ScenePick | null;
+  addSplat(id: string, source: SplatSource, options: SplatOptions, signal: AbortSignal): Promise<TilesetSphere>;
+  updateSplat(id: string, options: SplatOptions): void;
+  removeSplat(id: string): void;
+  /**
+   * 按最近一帧的相机拾取画出的模型（瓦片集和高斯泼溅），跳过半透明的表面（同 Cesium 的深度拾取，隔着玻璃点到的是后面）；
+   * 结果是真实的高度（抬高时减回去）。没有打到、还没画过时为 null；悬停时不打高斯泼溅（ADR 0149）
+   */
+  pick(point: ScreenPoint, options?: PickOptions): ScenePick | null;
   /** 按最近一帧的相机投影真实的位置（抬高时加上抬高量）；还没画过、在相机背后时为 null */
   project(lngLat: LngLat, height: number): ScreenPoint | null;
   /** 抬高一个瓦片集，null 时恢复；没有这个瓦片集时不抬高 */

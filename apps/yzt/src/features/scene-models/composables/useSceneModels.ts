@@ -44,10 +44,10 @@ import {
   type WalkChoice
 } from '../scene-content';
 
-/** 拥有者用到的上下文 */
+/** 拥有者用到的上下文：引擎不支持高斯泼溅时（sceneCapabilities.splats）目录里不列出这类模型（ADR 0149） */
 export type SceneModelsContext = Pick<
   MapContext,
-  'sceneStatus' | 'roamStatus' | 'runCameraOperation' | 'beginCameraOperation'
+  'sceneStatus' | 'roamStatus' | 'runCameraOperation' | 'beginCameraOperation' | 'sceneCapabilities'
 >;
 
 /** 漫游的方式：步行或路线，同一次漫游里在面板上切换（ADR 0097 第 2 节） */
@@ -80,7 +80,7 @@ export interface SceneModelsOptions {
 }
 
 export interface SceneModels {
-  /** 目录：清单还没到、失败时为空 */
+  /** 目录：清单还没到、失败时为空；引擎不支持的种类（Cesium 下的高斯泼溅）不在里面 */
   readonly models: ComputedRef<readonly SceneModel[]>;
   /** 清单已经到了：区分"还没有目录"和"目录是空的" */
   readonly hasCatalog: ComputedRef<boolean>;
@@ -167,7 +167,9 @@ export function useSceneModels(
   catalog: MaybeRefOrGetter<readonly SceneModel[] | undefined>,
   { loadNavigation = defaultLoadNavigation, avatarUrl = walkAvatarUrl() }: SceneModelsOptions = {}
 ): SceneModels {
-  const models = computed(() => toValue(catalog) ?? []);
+  const models = computed(() =>
+    (toValue(catalog) ?? []).filter(model => model.kind !== 'splat' || map.sceneCapabilities.splats)
+  );
   const hasCatalog = computed(() => toValue(catalog) !== undefined);
   const loaded = shallowRef<readonly string[]>([]);
   const effects = shallowRef<ReadonlyMap<string, string>>(new Map());
@@ -226,8 +228,9 @@ export function useSceneModels(
     loaded.value = loaded.value.filter(item => item !== id);
     // 卸载时这个模型的效果、重试次数、导航网格一起忘掉；在它里面漫游的一并结束
     shownEffects.value = new Map([...shownEffects.value].filter(([modelId]) => modelId !== id));
-    const tilesetIds = new Set(model.effects.map(effect => tilesetIdOf(model, effect.id)));
-    attempts.value = new Map([...attempts.value].filter(([tilesetId]) => !tilesetIds.has(tilesetId)));
+    // 重试次数按瓦片集 ID 记；高斯泼溅没有瓦片集，按模型 ID 记
+    const attemptIds = new Set(model.splat ? [model.id] : model.effects.map(effect => tilesetIdOf(model, effect.id)));
+    attempts.value = new Map([...attempts.value].filter(([attemptId]) => !attemptIds.has(attemptId)));
     if (navigations.value.has(id)) {
       navigations.value = new Map([...navigations.value].filter(([modelId]) => modelId !== id));
     }

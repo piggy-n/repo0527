@@ -186,6 +186,7 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 - maplibre-gl（阶段四加入）：只有 MapLibre 适配器能写二维地图（ADR 0020、0024），所以默认禁止导入，由下文的 override 只对 `packages/map-core/src/maplibre/`、`app/` 和包的 `test-setup.browser.ts` 放开。`paths` 拦住包本身（类型导入也算），`patterns` 拦住 `maplibre-gl/dist/...` 下的 CSS 和 Worker 文件
 - cesium（3D.1 加入）：同样的写法，只对 `packages/map-cesium/src/` 和 `app/` 放开（ADR 0079）。`patterns` 拦住 `cesium/Build/...` 下的样式表和 `@cesium/engine` 等子包。map-cesium 里的代码约定从聚合包 `cesium` 导入，升级时只看一个版本；这一条 lint 不检查
 - three、3d-tiles-renderer（3C.1 加入）：只对 `packages/map-three/src/` 和驾驶舱 `features/city-dashboard/` 放开（ADR 0147 第 5 节；驾驶舱比 map-three 早，原来就用 three）。`patterns` 拦住 `three/examples/...`、`3d-tiles-renderer/plugins` 这类子路径。`app/` 的 override 只保留 lodash 两项，所以 app 也能导入，和 maplibre-gl、cesium 一样
+- gaussian-splat-lite（LCC2 加入）：只对 `packages/map-three/src/` 放开（ADR 0149 第 2 节）。驾驶舱和 map-three 原来共用一个 override，现在分成两个，驾驶舱的那个仍然禁止它；`app/` 的 override 也写上它，所以和 maplibre-gl、cesium、three 不同，app 不能导入。包的 `exports` 只有入口，不用 `patterns`
 
 ### 第三组：类型感知规则
 
@@ -223,10 +224,11 @@ boundaries 要知道 `@/features/map`、`@mx/map-core` 实际指向哪个文件�
 ### 地图适配器和 app 放开地图引擎
 
 ```json
-{ "files": ["packages/map-three/src/**", "apps/yzt/src/features/city-dashboard/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、cesium 的两项 }] } }
-{ "files": ["packages/map-core/src/maplibre/**", "packages/*/src/test-setup.browser.ts"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、cesium 的两项、three 的三项 }] } }
-{ "files": ["packages/map-cesium/src/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、three 的三项 }] } }
-{ "files": ["apps/yzt/src/app/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项 }] } }
+{ "files": ["packages/map-three/src/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、cesium 的两项 }] } }
+{ "files": ["apps/yzt/src/features/city-dashboard/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、cesium 的两项、gaussian-splat-lite }] } }
+{ "files": ["packages/map-core/src/maplibre/**", "packages/*/src/test-setup.browser.ts"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、cesium 的两项、three 的三项、gaussian-splat-lite }] } }
+{ "files": ["packages/map-cesium/src/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、maplibre-gl 的两项、three 的三项、gaussian-splat-lite }] } }
+{ "files": ["apps/yzt/src/app/**"], "rules": { "no-restricted-imports": ["error", { lodash 的两项、gaussian-splat-lite }] } }
 ```
 
 默认严格、例外显式：基础规则对所有文件禁止 maplibre-gl 和 cesium，这里只对各自的适配器、app 的装配（`setWorkerUrl`、`setCesiumBaseUrl`、CSS，ADR 0023、0079）和包的测试 setup（包的浏览器测试不依赖应用，自己设置 Worker 地址，ADR 0143）放开：MapLibre 适配器仍不能导入 cesium、three，map-cesium 仍不能导入 maplibre-gl、three，map-three 仍不能导入 maplibre-gl、cesium（custom layer 的外壳在 MapLibre 适配器里，ADR 0147 第 5 节）。map-three 的 override 放在测试 setup 那一条前面：override 后写的生效，map-three 的 `test-setup.browser.ts` 要能设置 MapLibre 的 Worker 地址。override 会**整体替换**规则的选项，所以没有放开的几项要在每个 override 里再写一遍，否则这些目录就不再限制它们。oxlint 没有独立的 `typescript/no-restricted-imports` 可以分开配置，重复无法避免。

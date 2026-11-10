@@ -117,6 +117,22 @@ describe('SceneTilesetSync', () => {
     expect(host.calls).toStrictEqual(['add jkq show', 'add station show', 'update jkq show sun']);
   });
 
+  it('泼溅范围里的裁剪（ADR 0149）交给引擎，改了只更新、不重新加载；不写的不带这一项', async () => {
+    const { host, sync } = setup();
+    sync.apply([layer('xz', { clippedBySplats: true }), layer('station')]);
+    await flush();
+    host.resolve('xz');
+    host.resolve('station');
+    await flush();
+    expect(host.options.get('xz')).toStrictEqual({ show: true, lighting: 'sun', clippedBySplats: true });
+    expect(host.options.get('station')).toStrictEqual({ show: true, lighting: 'sun' });
+
+    sync.apply([layer('xz'), layer('station')]);
+
+    expect(host.options.get('xz')).toStrictEqual({ show: true, lighting: 'sun' });
+    expect(host.calls).toStrictEqual(['add xz show', 'add station show', 'update xz show sun']);
+  });
+
   it('索引下载失败、引擎报告瓦片失败都进入 failed；每个瓦片集只记第一条', async () => {
     const { host, sync, states } = setup(async url => {
       if (url.includes('broken')) {

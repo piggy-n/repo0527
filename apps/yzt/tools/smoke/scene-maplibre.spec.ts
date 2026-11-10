@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import type { Locator, Page } from 'playwright/test';
 import { loadEnv } from 'vite';
 import { expect, test } from './fixtures.ts';
-import { roomB3dm, roomManifest, roomTileset } from './scene-model.ts';
+import { roomB3dm, roomManifest, roomTileset, splatFiles } from './scene-model.ts';
 
 // MapLibre 引擎的三维（ADR 0147 3C.2、3C.3）：只在 VITE_MAP_3D_ENGINE=maplibre 构建的产物上运行，CI 在那次构建之后单独跑这个文件
 const appRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -66,6 +66,29 @@ async function landShare(page: Page, canvas: Locator): Promise<number> {
   return page.evaluate<number>(`(${SHARE_OF_COLORS})(${input})`);
 }
 
+// 生成的高斯泼溅是绿色的（scene-model.ts）：截图里明显偏绿的像素占比
+const GREEN_SHARE = `async ({ png }) => {
+  const image = new Image();
+  image.src = 'data:image/png;base64,' + png;
+  await image.decode();
+  const buffer = document.createElement('canvas');
+  buffer.width = image.width;
+  buffer.height = image.height;
+  const context = buffer.getContext('2d', { willReadFrequently: true });
+  context.drawImage(image, 0, 0);
+  const { data } = context.getImageData(0, 0, buffer.width, buffer.height);
+  let matched = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    matched += data[i + 1] > 120 && data[i + 1] > data[i] * 1.6 && data[i + 1] > data[i + 2] * 1.6 ? 1 : 0;
+  }
+  return matched / (data.length / 4);
+}`;
+
+async function greenShare(page: Page, canvas: Locator): Promise<number> {
+  const png = (await canvas.screenshot()).toString('base64');
+  return page.evaluate<number>(`(${GREEN_SHARE})(${JSON.stringify({ png })})`);
+}
+
 test.skip(engine !== 'maplibre', '只在 VITE_MAP_3D_ENGINE=maplibre 构建的产物上运行');
 
 // 产物装配：动态加载的 map-three 分块、预加载、一块画布担任二三维；静态底图、测距、坐标定位的位置点、三维模型在三维里可用；
@@ -81,6 +104,15 @@ test('MapLibre 引擎的三维：二维稳定后预加载三维模块，切到�
   await context.route('**/3dt/smoke-room/tileset.json', route => route.fulfill({ json: roomTileset() }));
   await context.route('**/3dt/smoke-room/room.b3dm', route =>
     route.fulfill({ body: roomB3dm(), contentType: 'application/octet-stream' })
+  );
+  // 高斯泼溅的索引和数据块（数据块由库的 Worker 下载）；不支持 Range，整个文件给出，库照样能用
+  const splats = splatFiles();
+  await context.route(
+    url => url.pathname.startsWith('/3dt/') && splats.has(url.pathname.slice('/3dt/'.length)),
+    route => {
+      const body = splats.get(new URL(route.request().url()).pathname.slice('/3dt/'.length));
+      return body ? route.fulfill({ body, contentType: 'application/octet-stream' }) : route.fallback();
+    }
   );
   const requested = new Set<string>();
   const failed: string[] = [];
@@ -173,6 +205,23 @@ test('MapLibre 引擎的三维：二维稳定后预加载三维模块，切到�
     await page.keyboard.press('Escape');
     await expect(bar).toHaveCount(0);
     await expect(page.getByRole('button', { name: '二维', exact: true })).toBeVisible({ timeout: 30_000 });
+
+    // 高斯泼溅（ADR 0149）：库是单独的分块，勾选泼溅以前不下载；加载好以后定位，画出来
+    // 分块按入口文件命名：gaussian-splat-lite.module-<hash>.js
+    const splatChunk = /\/assets\/gaussian-splat-lite[\w.-]*\.js$/;
+    expect(wasRequested(splatChunk), '勾选泼溅以前不下载泼溅库').toBe(false);
+    await page.locator('[data-model="smoke-splat"] .el-checkbox').click();
+    const splat = page.locator('[data-loaded="smoke-splat"]');
+    await expect(splat.getByRole('button', { name: '定位', exact: true })).toBeEnabled({ timeout: 60_000 });
+    await splat.getByRole('button', { name: '定位', exact: true }).click();
+    // 底图里没有这种绿色：占比超过 0.5% 就是画出来了（斜着看，2026-11-10 实测约 1.7%）
+    await expect
+      .poll(() => greenShare(page, flat), { message: '画出绿色的泼溅', timeout: 60_000 })
+      .toBeGreaterThan(0.005);
+    expect(wasRequested(splatChunk), '泼溅库的分块').toBe(true);
+    expect(wasRequested(/\/3dt\/.+\/data\/3dgs\/0\.ply$/), '数据块经 /3dt/ 下载').toBe(true);
+    await page.locator('[data-model="smoke-splat"] .el-checkbox').click();
+    await expect(splat).toHaveCount(0);
 
     // 回到二维：还是同一块画布
     await page.getByRole('button', { name: '二维', exact: true }).click({ timeout: 60_000 });

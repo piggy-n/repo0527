@@ -75,7 +75,8 @@ export function useMapReadout(map: ReadoutSource): MapReadout {
       const height = eye.value;
       return height !== null && belowSurface(height) ? null : { lngLat: camera.value.center, center: true };
     }
-    const picked = view.pick(pointer);
+    // 鼠标移动、相机每次变化都会读：悬停的拾取跳过高斯泼溅（ADR 0149），停在泼溅上时读的是后面的模型或地面
+    const picked = view.pick(pointer, { hover: true });
     return picked.kind === 'hit' ? { lngLat: picked.lngLat, center: false } : null;
   });
 

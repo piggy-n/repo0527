@@ -14,6 +14,8 @@ export interface TilesetOptions {
   readonly lighting: TilesetLighting;
   /** 设定的屏幕误差（像素），不传用引擎的默认值（8）；显存放不下时引擎会临时放大它 */
   readonly maximumScreenSpaceError?: number;
+  /** 显示着的高斯泼溅的范围里不画（ADR 0149）；不写是 false */
+  readonly clippedBySplats?: boolean;
 }
 
 /**
@@ -53,11 +55,12 @@ const sameOptions = (a: TilesetOptions | null, b: TilesetOptions) =>
   a !== null &&
   a.show === b.show &&
   a.lighting === b.lighting &&
-  a.maximumScreenSpaceError === b.maximumScreenSpaceError;
+  a.maximumScreenSpaceError === b.maximumScreenSpaceError &&
+  a.clippedBySplats === b.clippedBySplats;
 
 /**
  * 按会话的瓦片集增删改引擎里的瓦片集（ADR 0081 第 2、5 节），两种三维引擎共用（ADR 0147 第 3 节）：
- * 地址、重试次数变了就重新加载，其余的只改显示、光照和屏幕误差；同组的换显示时，新的首批瓦片到了才撤下旧的
+ * 地址、重试次数变了就重新加载，其余的只改显示、光照、屏幕误差和泼溅范围里的裁剪；同组的换显示时，新的首批瓦片到了才撤下旧的
  */
 export class SceneTilesetSync implements Disposable {
   readonly #host: TilesetHost;
@@ -176,8 +179,12 @@ export class SceneTilesetSync implements Disposable {
 
   // 同组（白膜的各种效果）要显示的那个首批瓦片到了，才撤下上一个（ADR 0081 第 5 节）
   #optionsFor({ layer }: TilesetEntry): TilesetOptions {
-    const { lighting, maximumScreenSpaceError } = layer;
-    const rest = { lighting, ...(maximumScreenSpaceError === undefined ? {} : { maximumScreenSpaceError }) };
+    const { lighting, maximumScreenSpaceError, clippedBySplats } = layer;
+    const rest = {
+      lighting,
+      ...(maximumScreenSpaceError === undefined ? {} : { maximumScreenSpaceError }),
+      ...(clippedBySplats === undefined ? {} : { clippedBySplats })
+    };
     if (layer.group === undefined || layer.show) {
       return { show: layer.show, ...rest };
     }

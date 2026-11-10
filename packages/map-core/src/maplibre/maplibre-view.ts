@@ -23,7 +23,7 @@ import {
   type ViewState
 } from '../view/map-view';
 import type { RenderedFeature, RenderedQueryOptions, ScreenBox } from '../view/rendered-features';
-import type { LngLat, MapInputEvent, MapPointerEvent, PickResult, ScreenPoint } from '../view/view-input';
+import type { LngLat, MapInputEvent, MapPointerEvent, PickOptions, PickResult, ScreenPoint } from '../view/view-input';
 import { canTransition, deferred, type LiveViewState } from '../view/view-lifecycle';
 import { applyStyleCommand } from './apply-style-command';
 import { sameCenterOnGlobe, zoomFlightDuration } from './globe-fly';
@@ -220,7 +220,7 @@ export class MapLibreView<const G extends string> implements MapView {
       get kind(): ViewKind {
         return currentKind();
       },
-      pick: (point: ScreenPoint) => this.pick(point),
+      pick: (point: ScreenPoint, options?: PickOptions) => this.pick(point, options),
       project: (lngLat: LngLat, height?: number) => this.project(lngLat, height),
       queryRendered: (area: ScreenPoint | ScreenBox, options: RenderedQueryOptions) => this.queryRendered(area, options)
     });
@@ -562,11 +562,14 @@ export class MapLibreView<const G extends string> implements MapView {
     return { ...options, linear: true, ...withoutUndefined({ duration: options.duration ?? this.#zoomFlight(map, target.zoom) }) };
   }
 
-  /** 三维时先打显示着的模型（带椭球高），再打地面，指向天空时是 miss；二维总是命中地图平面，没有高度 */
-  pick(point: ScreenPoint): PickResult {
+  /**
+   * 三维时先打显示着的模型（带椭球高），再打地面，指向天空时是 miss；二维总是命中地图平面，没有高度。
+   * 悬停时模型里不打高斯泼溅（ADR 0149）
+   */
+  pick(point: ScreenPoint, options?: PickOptions): PickResult {
     const map = this.#readyMap();
     if (this.#kind === '3d') {
-      const model = this.#scene?.pick(point);
+      const model = this.#scene?.pick(point, options);
       if (model) {
         return { kind: 'hit', surface: 'model', lngLat: model.lngLat, height: model.height };
       }

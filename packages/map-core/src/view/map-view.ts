@@ -2,7 +2,7 @@ import type { CameraState, ViewKind } from '../camera/camera-model';
 import type { Unsubscribe } from '../events';
 import type { RoamStatus, SceneStatus } from '../scene/scene-content-model';
 import type { RenderedFeature, RenderedQueryOptions, ScreenBox } from './rendered-features';
-import type { LngLat, PickResult, ScreenPoint } from './view-input';
+import type { LngLat, PickOptions, PickResult, ScreenPoint } from './view-input';
 
 /** 视图的生命周期（ADR 0022 第 5 条、ADR 0026）；还没创建时没有视图对象，即文档里的 idle；样式加载失败的 failed 在样式出现新版本时自动恢复 */
 export type ViewState = 'initializing' | 'ready' | 'paused' | 'failed' | 'disposed';
@@ -74,8 +74,8 @@ export interface MapView extends Disposable {
   /** 只在 ready 时可用：定位应由当前显示的视图发起 */
   flyTo(target: Partial<CameraState>, options?: FlyToOptions): void;
   fitBounds(bounds: ViewBounds, options?: FitBoundsOptions): void;
-  /** 只在 ready 时可用：屏幕上的点打到哪个表面的哪个位置（ADR 0024 第 2 条） */
-  pick(point: ScreenPoint): PickResult;
+  /** 只在 ready 时可用：屏幕上的点打到哪个表面的哪个位置（ADR 0024 第 2 条）；悬停时跳过高斯泼溅（ADR 0149） */
+  pick(point: ScreenPoint, options?: PickOptions): PickResult;
   /** 只在 ready 时可用：经纬度在屏幕上的位置；三维中点在相机背后时为 null（ADR 0024 第 7 条） */
   project(lngLat: LngLat, height?: number): ScreenPoint | null;
   /** 只在 ready 时可用：屏幕上的点或矩形里画出的要素，从上到下；三维没有渲染要素可查，返回空数组（ADR 0047 第 4 节） */

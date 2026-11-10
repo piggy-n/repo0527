@@ -9,7 +9,7 @@ import {
   type SceneStatus,
   type WalkView
 } from '@mx/map-core';
-import type { CameraControl } from '@mx/map-vue';
+import type { CameraControl, SceneCapabilities } from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { effectScope, nextTick, shallowRef } from 'vue';
 import { required } from '@/shared/testing/required';
@@ -44,11 +44,24 @@ const CATALOG = buildModelCatalog(
           { id: 'window', label: '内置效果1', tileset: 'W/window/tileset.json' }
         ]
       },
-      { id: 'city', name: '倾斜', cityCode: '320100', kind: 'oblique', underground: false, tileset: 'C/tileset.json' }
+      { id: 'city', name: '倾斜', cityCode: '320100', kind: 'oblique', underground: false, tileset: 'C/tileset.json' },
+      {
+        id: 'scan',
+        name: '扫描',
+        cityCode: '320300',
+        kind: 'splat',
+        underground: false,
+        lcc2: 'L/lcc2-sog-result/L.lcc2',
+        placement: { lng: 117.06, lat: 34.27, height: 59.7, heading: 0 }
+      }
     ]
   }),
   'https://maps.test/3dt/manifest.json'
 );
+
+// 两种引擎的能力（同 map-vue 的 CESIUM_ENGINE、MAPLIBRE_ENGINE）：这个文件在 node 环境里跑，不在运行时导入 map-vue
+const MAPLIBRE: SceneCapabilities = { styleLayers: true, identify: true, splats: true };
+const CESIUM: SceneCapabilities = { styleLayers: false, identify: false, splats: false };
 
 const CAMERA: CameraState = { center: [120.66, 31.31], zoom: 16, bearing: 0, pitch: 55 };
 const AVATAR_URL = 'https://maps.test/roam/Cesium_Man.glb';
@@ -84,7 +97,7 @@ interface PendingBuild {
   readonly reject: (error: Error) => void;
 }
 
-function setup(catalog = CATALOG) {
+function setup(catalog = CATALOG, sceneCapabilities = MAPLIBRE) {
   const builds: PendingBuild[] = [];
   const loadNavigation = (url: string, { signal, onProgress }: Pick<PendingBuild, 'signal' | 'onProgress'>) =>
     new Promise<Navigation>((resolve, reject) => builds.push({ url, signal, onProgress, resolve, reject }));
@@ -112,7 +125,7 @@ function setup(catalog = CATALOG) {
   );
   const scope = effectScope();
   const owner = scope.run(() =>
-    useSceneModels({ sceneStatus, roamStatus, runCameraOperation, beginCameraOperation }, catalog, {
+    useSceneModels({ sceneStatus, roamStatus, runCameraOperation, beginCameraOperation, sceneCapabilities }, catalog, {
       loadNavigation,
       avatarUrl: AVATAR_URL
     })
@@ -146,6 +159,26 @@ describe('useSceneModels', () => {
       ['station', true, 'headlight', null]
     ]);
     expect(ctx.owner.deriveContent().tilesets[0]?.url).toBe('https://maps.test/3dt/C/tileset.json');
+  });
+
+  it('高斯泼溅（ADR 0149）：引擎支持时在目录里，勾选后交给会话、状态按模型 ID、就绪后能定位；Cesium 下不列出', () => {
+    using ctx = setup();
+    expect(ctx.owner.models.value.map(({ id }) => id)).toContain('scan');
+
+    ctx.owner.setChecked('scan', true);
+    expect(ctx.owner.deriveContent().splats?.map(({ id, url }) => [id, url])).toStrictEqual([
+      ['scan', 'https://maps.test/3dt/L/lcc2-sog-result/L.lcc2']
+    ]);
+    expect(ctx.owner.stateOf('scan')).toBe('loading');
+    ctx.ready('scan');
+    expect(ctx.owner.stateOf('scan')).toBe('ready');
+    ctx.owner.locate('scan');
+    expect(ctx.flyTo).toHaveBeenCalledWith(CAMERA);
+    ctx.owner.setChecked('scan', false);
+    expect(ctx.owner.deriveContent()).not.toHaveProperty('splats');
+
+    using cesium = setup(CATALOG, CESIUM);
+    expect(cesium.owner.models.value.map(({ id }) => id)).toStrictEqual(['station', 'white', 'city']);
   });
 
   it('换白膜效果：显示过的留在场景里、只显示当前的，换回来不重新加载', () => {
@@ -276,6 +309,14 @@ describe('useSceneModels', () => {
     ctx.owner.setChecked('station', false);
     ctx.owner.setChecked('station', true);
     expect(ctx.owner.deriveContent().tilesets[0]?.attempt).toBe(0);
+
+    // 高斯泼溅的重试次数按模型 ID 记，卸载时一样忘掉（ADR 0149）
+    ctx.owner.setChecked('scan', true);
+    ctx.owner.retry('scan');
+    expect(ctx.owner.deriveContent().splats?.[0]?.attempt).toBe(1);
+    ctx.owner.setChecked('scan', false);
+    ctx.owner.setChecked('scan', true);
+    expect(ctx.owner.deriveContent().splats?.[0]?.attempt).toBe(0);
   });
 
   it('重试只加当前效果的次数', () => {

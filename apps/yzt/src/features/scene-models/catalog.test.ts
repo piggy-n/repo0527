@@ -37,6 +37,15 @@ const MANIFEST = {
       kind: 'oblique',
       underground: false,
       tileset: 'NJ/tileset.json'
+    },
+    {
+      id: 'xz-splat',
+      name: '楚王山',
+      cityCode: '320300',
+      kind: 'splat',
+      underground: false,
+      lcc2: '%E6%A5%9A/lcc2-sog-result/%E6%A5%9A.lcc2',
+      placement: { lng: 117.06, lat: 34.27, height: 59.7, heading: -0.04 }
     }
   ]
 };
@@ -47,8 +56,12 @@ function withModel(patch: Record<string, unknown>): unknown {
   return { models: [{ ...MANIFEST.models[2], ...patch }] };
 }
 
+function withSplat(patch: Record<string, unknown>): unknown {
+  return { models: [{ ...MANIFEST.models[3], ...patch }] };
+}
+
 describe('sceneManifestSchema', () => {
-  it('两种写法都通过：白膜用 effects，其他用 tileset；出生点和路线可以不写', () => {
+  it('三种写法都通过：白膜用 effects，高斯泼溅用 lcc2 和 placement，其他用 tileset；出生点和路线可以不写', () => {
     expect(parse(MANIFEST).success).toBe(true);
     expect(parse({ models: [] }).success).toBe(true);
   });
@@ -69,6 +82,14 @@ describe('sceneManifestSchema', () => {
       withModel({ routes: [{ id: 'r', name: 'R', path: [[120, 31], [121, 31]] }] }),
       // ID 重复
       { models: [MANIFEST.models[2], MANIFEST.models[2]] },
+      // 高斯泼溅（ADR 0149）：没有索引、没有摆放、摆放缺一项或超出范围、写了瓦片集的字段（第一版不漫游）
+      withSplat({ lcc2: undefined }),
+      withSplat({ placement: undefined }),
+      withSplat({ placement: { lng: 117.06, lat: 34.27, height: 59.7 } }),
+      withSplat({ placement: { lng: 117.06, lat: 94.27, height: 59.7, heading: 0 } }),
+      withSplat({ tileset: 'a/tileset.json' }),
+      withSplat({ routes: [] }),
+      withSplat({ maximumScreenSpaceError: 8 }),
       'not a manifest'
     ];
 
@@ -85,10 +106,15 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
       ['sz-white', '苏州市'],
       ['xz-gc', '徐州市'],
       ['wx-jkq', '无锡市'],
-      ['wx-jkq2', '无锡市']
+      ['wx-jkq2', '无锡市'],
+      ['xz-cws1', '徐州市']
     ]);
-    const urls = models.flatMap(({ effects }) => effects.map(({ url }) => url));
+    const urls = models.flatMap(({ effects, splat }) => [...effects.map(({ url }) => url), ...(splat ? [splat.url] : [])]);
     expect(urls.every(url => url.startsWith('https://maps.test/yzt/3dt/'))).toBe(true);
+    // 模型平铺在 3dt 下，层级同楚王山1号；中文按 URL 编码写（ADR 0149 第 3 节）
+    expect(models.find(({ id }) => id === 'xz-cws1')?.splat?.url).toBe(
+      `https://maps.test/yzt/3dt/${encodeURIComponent('楚王山1号')}/lcc2-sog-result/${encodeURIComponent('楚王山1号.lcc2')}`
+    );
     const lengths = models.flatMap(({ routes }) => routes.map(({ length }) => Math.round(length)));
     expect(lengths).toStrictEqual([125, 133, 58]);
     // 屏幕误差上限统一用引擎的默认值 8，清单只写例外（docs/modules/map-cesium.md）
@@ -118,7 +144,8 @@ describe('buildModelCatalog', () => {
     expect(catalog.map(({ id, cityName, defaultEffect }) => [id, cityName, defaultEffect])).toStrictEqual([
       ['sz-station', '苏州市', ''],
       ['sz-white', '苏州市', 'plain'],
-      ['nj-oblique', '南京市', '']
+      ['nj-oblique', '南京市', ''],
+      ['xz-splat', '徐州市', '']
     ]);
     expect(catalog[0]?.effects).toStrictEqual([
       { id: '', label: '', url: 'https://maps.test/yzt/3dt/SZ_3DT/tileset.json' }
@@ -129,6 +156,17 @@ describe('buildModelCatalog', () => {
     ]);
     expect(catalog[0]?.routes).toHaveLength(1);
     expect(catalog[2]?.routes).toStrictEqual([]);
+    // 高斯泼溅没有瓦片集，带上索引的绝对地址和摆放；其他模型没有泼溅
+    expect(catalog[3]).toMatchObject({
+      kind: 'splat',
+      effects: [],
+      routes: [],
+      splat: {
+        url: 'https://maps.test/yzt/3dt/%E6%A5%9A/lcc2-sog-result/%E6%A5%9A.lcc2',
+        placement: { lng: 117.06, lat: 34.27, height: 59.7, heading: -0.04 }
+      }
+    });
+    expect(catalog.slice(0, 3).map(({ splat }) => splat)).toStrictEqual([null, null, null]);
   });
 });
 
@@ -141,6 +179,7 @@ describe('groupByCity', () => {
     // 清单里苏州在前，南京的代码小排在前面
     expect(summary('')).toStrictEqual([
       ['南京市', ['nj-oblique']],
+      ['徐州市', ['xz-splat']],
       ['苏州市', ['sz-station', 'sz-white']]
     ]);
     expect(summary(' 白膜 ')).toStrictEqual([['苏州市', ['sz-white']]]);

@@ -921,7 +921,7 @@ describe('MapCanvas', () => {
       expect(loads.count).toBe(1);
       expect(map.viewState.value).toBe('initializing');
       expect(wrapper.get('[data-map-view-state]').attributes('style')).toBeUndefined();
-      expect(map.sceneCapabilities).toStrictEqual({ styleLayers: true, identify: true });
+      expect(map.sceneCapabilities).toStrictEqual({ styleLayers: true, identify: true, splats: true });
     });
 
     it('三维模块加载失败只让三维失败：切回二维可用，三维里重试只重新加载模块、不重建地图', async () => {
