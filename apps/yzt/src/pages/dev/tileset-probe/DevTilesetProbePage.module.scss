@@ -1,0 +1,125 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--color-bg-page);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-lg);
+  align-items: center;
+  padding: var(--space-md) var(--space-lg);
+  font-size: var(--font-size-base);
+  background-color: var(--color-bg-container);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.select {
+  width: 300px;
+}
+
+.field {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.number {
+  width: 120px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  // Element 默认给相邻按钮加左外边距，这里统一用 gap
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
+// 状态行：一组"标签 值"，窄屏时换行
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--space-lg);
+  padding: var(--space-sm) var(--space-lg);
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-regular);
+  background-color: var(--color-bg-container);
+  border-bottom: 1px solid var(--color-border);
+
+  > div {
+    display: flex;
+    gap: 6px;
+  }
+
+  dt {
+    color: var(--color-text-secondary);
+  }
+
+  dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.error {
+  color: var(--color-danger-text);
+}
+
+.help {
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-compact);
+  color: var(--color-text-regular);
+  background-color: var(--color-bg-container);
+  border-bottom: 1px solid var(--color-border);
+
+  summary {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-title);
+    cursor: pointer;
+  }
+
+  ol {
+    padding-left: 20px;
+    margin: var(--space-sm) 0 0;
+  }
+
+  li + li {
+    margin-top: 4px;
+  }
+
+  code {
+    padding: 1px 4px;
+    background-color: var(--color-neutral-bg);
+    border-radius: var(--radius-sm);
+  }
+}
+
+// 画布占满剩下的高度；交给 Cesium 的容器只用这一个静态 class
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}

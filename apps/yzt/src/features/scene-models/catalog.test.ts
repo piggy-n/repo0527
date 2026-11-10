@@ -91,6 +91,23 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
     expect(urls.every(url => url.startsWith('https://maps.test/yzt/3dt/'))).toBe(true);
     const lengths = models.flatMap(({ routes }) => routes.map(({ length }) => Math.round(length)));
     expect(lengths).toStrictEqual([125, 133, 58]);
+    // 屏幕误差上限统一用引擎的默认值 8，清单只写例外（docs/modules/map-cesium.md）
+    expect(models.every(({ maximumScreenSpaceError }) => maximumScreenSpaceError === undefined)).toBe(true);
+  });
+});
+
+describe('清单里的屏幕误差上限', () => {
+  it('是正数才通过；目录带上它，没写的不出现这一项', () => {
+    expect(parse(withModel({ maximumScreenSpaceError: 8 })).success).toBe(true);
+    expect(parse(withModel({ maximumScreenSpaceError: 0 })).success).toBe(false);
+    expect(parse(withModel({ maximumScreenSpaceError: '8' })).success).toBe(false);
+
+    const catalogOf = (patch: Record<string, unknown>) =>
+      buildModelCatalog(sceneManifestSchema.parse(withModel(patch)), MANIFEST_URL);
+    const [tuned] = catalogOf({ maximumScreenSpaceError: 8 });
+    expect(tuned?.maximumScreenSpaceError).toBe(8);
+    const [plain] = catalogOf({});
+    expect(plain !== undefined && 'maximumScreenSpaceError' in plain).toBe(false);
   });
 });
 

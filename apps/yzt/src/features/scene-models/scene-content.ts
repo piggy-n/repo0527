@@ -105,6 +105,7 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
     const current = currentEffect(model, state.effects);
     const kept = state.shownEffects.get(id) ?? [];
     const lighting = model.underground || model.kind === 'indoor' ? 'headlight' : 'sun';
+    const { maximumScreenSpaceError } = model;
     for (const effect of model.effects) {
       if (effect.id !== current && !kept.includes(effect.id)) {
         continue;
@@ -117,7 +118,8 @@ export function deriveSceneContent(models: readonly SceneModel[], state: SceneMo
         show: effect.id === current && !hidden,
         lighting,
         attempt: state.attempts.get(tilesetId) ?? 0,
-        ...(model.kind === 'white' ? { group: model.id } : {})
+        ...(model.kind === 'white' ? { group: model.id } : {}),
+        ...(maximumScreenSpaceError === undefined ? {} : { maximumScreenSpaceError })
       });
     }
   }

@@ -253,6 +253,14 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
       import('@/pages/dev/resources/DevResourcesPage').then(({ DevResourcesPage }) => DevResourcesPage)
     ),
     meta: { title: '资源图层实测', public: true }
+  },
+  {
+    path: '/dev/tileset-probe',
+    name: RouteName.devTilesetProbe,
+    component: withMapRuntime(() =>
+      import('@/pages/dev/tileset-probe/DevTilesetProbePage').then(({ DevTilesetProbePage }) => DevTilesetProbePage)
+    ),
+    meta: { title: '瓦片集加载诊断', public: true }
   }
 ] : [];
 

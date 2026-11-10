@@ -101,6 +101,22 @@ describe('SceneTilesetSync', () => {
     ]);
   });
 
+  it('清单给了屏幕误差上限的交给引擎，改了只更新、不重新加载；不写的不带这一项', async () => {
+    const { host, sync } = setup();
+    sync.apply([layer('jkq', { maximumScreenSpaceError: 8 }), layer('station')]);
+    await flush();
+    host.resolve('jkq');
+    host.resolve('station');
+    await flush();
+    expect(host.options.get('jkq')).toStrictEqual({ show: true, lighting: 'sun', maximumScreenSpaceError: 8 });
+    expect(host.options.get('station')).toStrictEqual({ show: true, lighting: 'sun' });
+
+    sync.apply([layer('jkq', { maximumScreenSpaceError: 12 }), layer('station')]);
+
+    expect(host.options.get('jkq')).toStrictEqual({ show: true, lighting: 'sun', maximumScreenSpaceError: 12 });
+    expect(host.calls).toStrictEqual(['add jkq show', 'add station show', 'update jkq show sun']);
+  });
+
   it('索引下载失败、引擎报告瓦片失败都进入 failed；每个瓦片集只记第一条', async () => {
     const { host, sync, states } = setup(async url => {
       if (url.includes('broken')) {
