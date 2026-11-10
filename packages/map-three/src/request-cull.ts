@@ -1,31 +1,55 @@
-// 相机动得比瓦片快时不请求这块瓦片（同 Cesium 的 cullRequestsWhileMoving）：等它到了相机已经走了，白占网络和显存。
-// 经开区 z16 倾斜飞一圈，不这样要加载 2125 MB，Cesium 只加载 128 MB，见 docs/modules/map-three.md"动着的时候不请求"
-
-const MIN_DIAMETER_METERS = 1;
-// 速度平滑的时间常数：相机更新和画面不在同一时刻，一帧算出的速度会抖（实测 150 米/秒时有一帧算成 54），
-// 抖一下就会把看到的瓦片全请求了。相机停下后约 0.2 秒开始放行，大的瓦片先放行
-const SMOOTH_MS = 100;
-
+// 动着的时候不请求（docs/modules/map-three.md"动着的时候不请求"）：相机在一块瓦片加载完之前走的路达到瓦片的直径，就不请求它
 type Position = readonly [number, number, number];
 
-/** 只有判断：输入每一帧的相机位置，回答这么大的瓦片现在要不要请求 */
+/** 窗口：固定的秒数，或者 'auto' 按实测的加载时间 */
+export type CullWindow = number | 'auto';
+
+// 很小的瓦片直径按这么多米算：相机几乎不动时照样请求
+const MIN_DIAMETER_METERS = 1;
+// 速度的平滑：时间常数（毫秒）
+const SMOOTH_MS = 100;
+// 一帧走的路不到这么多米算停下了：停下的那一帧起全部请求，不等平滑的速度降下来
+const STILL_METERS = 0.001;
+// 按实测时窗口的范围（秒），和还没有实测时用的值（同 Cesium：60 帧的路）
+const MIN_WINDOW_SECONDS = 0.2;
+const MAX_WINDOW_SECONDS = 2;
+const INITIAL_WINDOW_SECONDS = 1;
+// 加载时间取最近这么多块的中位数，个别卡住的请求不带偏；不到 MIN_SAMPLES 块时用初始值
+const SAMPLES = 32;
+const MIN_SAMPLES = 3;
+
+/** 相机这一路的速度，和由它决定的不请求哪些瓦片；每帧选瓦片之前 update 一次 */
 export class RequestCull {
-  readonly #windowSeconds: number;
+  readonly #window: CullWindow;
   #position: Position | null = null;
   #at = 0;
-  // 平滑后的速度（米/秒）
+  // 米/秒；第一帧还不知道相机动不动，是无穷大
   #speed = 0;
+  #still = false;
+  // 动着时请求的瓦片从请求到能画用的毫秒数：环形缓冲
+  readonly #samples: number[] = [];
+  #nextSample = 0;
+  #windowSeconds: number;
 
-  /** 相机 windowSeconds 秒走的路达到瓦片的直径就不请求 */
-  constructor(windowSeconds: number) {
-    this.#windowSeconds = windowSeconds;
+  constructor(window: CullWindow) {
+    this.#window = window;
+    this.#windowSeconds = window === 'auto' ? INITIAL_WINDOW_SECONDS : window;
   }
 
-  /** 一帧的相机：位置（米，直角坐标）和时刻（毫秒） */
+  /** 现在用的窗口（秒） */
+  get windowSeconds(): number {
+    return this.#windowSeconds;
+  }
+
+  /** 相机在动：这时请求的瓦片要记加载时间 */
+  get moving(): boolean {
+    return this.#position !== null && !this.#still;
+  }
+
   update(position: Position, nowMs: number): void {
+    this.#windowSeconds = this.#measuredWindow();
     const last = this.#position;
     if (!last) {
-      // 第一帧还不知道相机动不动：先不请求，下一帧就知道了。边飞边打开模型时，不然一进来就把看到的全请求了
       this.#position = position;
       this.#at = nowMs;
       this.#speed = Number.POSITIVE_INFINITY;
@@ -35,14 +59,43 @@ export class RequestCull {
     if (elapsedMs <= 0) {
       return;
     }
-    const current = Math.hypot(position[0] - last[0], position[1] - last[1], position[2] - last[2]) / (elapsedMs / 1000);
-    this.#speed = Number.isFinite(this.#speed) ? this.#speed + (current - this.#speed) * (1 - Math.exp(-elapsedMs / SMOOTH_MS)) : current;
+    const meters = Math.hypot(position[0] - last[0], position[1] - last[1], position[2] - last[2]);
+    const current = meters / (elapsedMs / 1000);
+    this.#still = meters < STILL_METERS;
+    this.#speed = Number.isFinite(this.#speed)
+      ? this.#speed + (current - this.#speed) * (1 - Math.exp(-elapsedMs / SMOOTH_MS))
+      : current;
     this.#position = position;
     this.#at = nowMs;
   }
 
-  /** 这个半径（米）的瓦片现在不请求 */
+  /** 一块相机动着时请求的瓦片能画了：从请求到这时用了 ms 毫秒。窗口按它们的中位数算，下一帧生效 */
+  recordLoad(ms: number): void {
+    if (this.#samples.length < SAMPLES) {
+      this.#samples.push(ms);
+    } else {
+      this.#samples[this.#nextSample] = ms;
+      this.#nextSample = (this.#nextSample + 1) % SAMPLES;
+    }
+  }
+
   culls(radiusMeters: number): boolean {
+    if (this.#still) {
+      return false;
+    }
     return this.#speed * this.#windowSeconds >= Math.max(radiusMeters * 2, MIN_DIAMETER_METERS);
+  }
+
+  #measuredWindow(): number {
+    if (this.#window !== 'auto') {
+      return this.#window;
+    }
+    if (this.#samples.length < MIN_SAMPLES) {
+      return INITIAL_WINDOW_SECONDS;
+    }
+    const sorted = this.#samples.toSorted((a, b) => a - b);
+    const middle = sorted.length >> 1;
+    const median = sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+    return Math.min(MAX_WINDOW_SECONDS, Math.max(MIN_WINDOW_SECONDS, median / 1000));
   }
 }

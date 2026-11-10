@@ -111,6 +111,9 @@ export class ErrorScale {
   // 等淘汰：上一帧的缓存大小，缓存没有变小已经多久
   #lastCachedBytes = Number.POSITIVE_INFINITY;
   #evictStalledMs = 0;
+  // 读数：累计因为缓存满、因为停着估计放不下而放宽的帧数
+  #raisedFull = 0;
+  #raisedPredicted = 0;
 
   constructor(budget: TileBudget) {
     this.#budget = budget;
@@ -126,6 +129,16 @@ export class ErrorScale {
 
   get saturated(): boolean {
     return this.#saturated;
+  }
+
+  /** 累计：因为缓存满而放宽的帧数 */
+  get raisedFull(): number {
+    return this.#raisedFull;
+  }
+
+  /** 累计：因为停着估计放不下（没装满）而放宽的帧数 */
+  get raisedPredicted(): number {
+    return this.#raisedPredicted;
   }
 
   /** 内容变了（瓦片集增删、显隐、抬高）：之前的判断不再成立，允许重新收紧 */
@@ -156,6 +169,11 @@ export class ErrorScale {
     // 预测只在相机停着时用：动着的时候需求一直在变，一时超线就放宽的话倍数只升不降，后面一路都画得粗
     const predicted = settled && demand >= hardBytes * PREDICT_RATIO;
     if ((full || predicted) && !this.#saturated && this.#value < MAX_SCALE) {
+      if (full) {
+        this.#raisedFull++;
+      } else {
+        this.#raisedPredicted++;
+      }
       this.#raise(rate, pose, usedTiles);
       return this.#saturated ? 'steady' : 'raising';
     }

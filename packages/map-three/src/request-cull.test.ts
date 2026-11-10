@@ -55,6 +55,59 @@ describe('RequestCull', () => {
     expect(cull.culls(26)).toBe(false);
   });
 
+  it('auto：窗口取最近加载时间的中位数，下一帧生效；不到 3 块时按 1 秒', () => {
+    const cull = new RequestCull('auto');
+    cull.update(at(0), 0);
+    expect(cull.windowSeconds).toBe(1);
+    cull.recordLoad(300);
+    cull.recordLoad(500);
+    cull.update(at(1), 16);
+    expect(cull.windowSeconds).toBe(1);
+    cull.recordLoad(400);
+    expect(cull.windowSeconds).toBe(1);
+    cull.update(at(2), 32);
+    expect(cull.windowSeconds).toBe(0.4);
+    // 1 米/帧的 16 毫秒约 62 米/秒，0.4 秒走约 25 米
+    expect(cull.culls(12)).toBe(true);
+    expect(cull.culls(13)).toBe(false);
+  });
+
+  it('auto：个别卡住的请求不带偏，只看最近 32 块', () => {
+    const cull = new RequestCull('auto');
+    for (const ms of [300, 300, 300, 300, 60000]) {
+      cull.recordLoad(ms);
+    }
+    cull.update(at(0), 0);
+    expect(cull.windowSeconds).toBe(0.3);
+    for (let i = 0; i < 32; i++) {
+      cull.recordLoad(1500);
+    }
+    cull.update(at(0), 16);
+    expect(cull.windowSeconds).toBe(1.5);
+  });
+
+  it('auto：窗口限在 0.2～2 秒', () => {
+    const fast = new RequestCull('auto');
+    const slow = new RequestCull('auto');
+    for (let i = 0; i < 3; i++) {
+      fast.recordLoad(20);
+      slow.recordLoad(8000);
+    }
+    fast.update(at(0), 0);
+    slow.update(at(0), 0);
+    expect(fast.windowSeconds).toBe(0.2);
+    expect(slow.windowSeconds).toBe(2);
+  });
+
+  it('固定的窗口不看加载时间', () => {
+    const cull = new RequestCull(0.5);
+    for (let i = 0; i < 3; i++) {
+      cull.recordLoad(1500);
+    }
+    cull.update(at(0), 0);
+    expect(cull.windowSeconds).toBe(0.5);
+  });
+
   it('按三个方向的距离算', () => {
     const cull = new RequestCull(1);
     cull.update([0, 0, 0], 0);
@@ -70,21 +123,20 @@ describe('RequestCull', () => {
     expect(cull.culls(35.7)).toBe(true);
   });
 
-  it('相机停下以后大的瓦片先放行，一直停着都会放行', () => {
+  it('相机停下的那一帧起全部放行，不等平滑的速度降下来；再动时接着拦', () => {
     const cull = moving(470, 20);
     const stopped = (470 * 5 * 20) / 1000;
-    const still = (untilMs: number, fromMs: number) => {
-      for (let time = fromMs + 20; time <= untilMs; time += 20) {
-        cull.update(at(stopped), time);
-      }
-    };
-    still(120, 100);
-    expect(cull.culls(100)).toBe(true);
-    still(400, 120);
-    expect(cull.culls(100)).toBe(false);
-    expect(cull.culls(5)).toBe(true);
-    still(1200, 400);
+    expect(cull.moving).toBe(true);
+    cull.update(at(stopped), 120);
+    expect(cull.moving).toBe(false);
     expect(cull.culls(0)).toBe(false);
+    cull.update(at(stopped + 9.4), 140);
+    expect(cull.moving).toBe(true);
+    expect(cull.culls(100)).toBe(true);
+  });
+
+  it('第一帧之前不算在动：没有更新过就没有速度', () => {
+    expect(new RequestCull(1).moving).toBe(false);
   });
 
   it('隔很久才又动一点：速度很小', () => {

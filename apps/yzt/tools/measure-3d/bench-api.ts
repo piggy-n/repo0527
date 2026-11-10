@@ -20,6 +20,19 @@ export interface TileQueues {
   readonly usedOutOfView: number;
 }
 
+/** MapLibre 引擎放宽屏幕误差的依据和动着不请求的窗口 */
+export interface BudgetReadings {
+  /** 需求（在用的加上还要加载的估计）、其中还要加载的、再其中没请求的（MB） */
+  readonly demandMB: number;
+  readonly pendingMB: number;
+  readonly culledMB: number;
+  /** 累计：因为装满、因为停着估计放不下而放宽的帧数 */
+  readonly raisedFull: number;
+  readonly raisedPredicted: number;
+  /** 动着不请求的窗口（秒，各瓦片集里最长的）；动着也请求时为 null */
+  readonly cullWindow: number | null;
+}
+
 /** 两种引擎统一的读数；引擎没有的项是 null */
 export interface BenchStats {
   readonly tilesVisible: number;
@@ -43,6 +56,8 @@ export interface BenchStats {
   readonly locked: boolean | null;
   /** Cesium 没有这一项 */
   readonly queues: TileQueues | null;
+  /** Cesium 没有这一项 */
+  readonly budget: BudgetReadings | null;
 }
 
 export interface Summary {
@@ -103,6 +118,7 @@ export interface SceneSample {
   readonly cacheMB: number;
   readonly loaded: number;
   readonly queues: TileQueues | null;
+  readonly budget: BudgetReadings | null;
 }
 
 /** 一段时间的统计（静止、飞行） */

@@ -27,8 +27,8 @@ export interface Variant {
   readonly engine: 'cesium' | 'maplibre';
   /** 每帧上传的 MB；undefined 用产品的默认值，null 不提前上传 */
   readonly uploadMB?: number | null;
-  /** 相机这么多秒走的路达到瓦片直径就不请求；undefined 用产品的默认值，null 动着也请求 */
-  readonly requestCullSeconds?: number | null;
+  /** 相机在这个窗口里走的路达到瓦片直径就不请求（秒，auto 按实测的加载时间）；undefined 用产品的默认值，null 动着也请求 */
+  readonly cullWindow?: number | 'auto' | null;
 }
 
 /** 一遍：perf 量帧时间和加载，quality 拍画面，profile 带 CPU 采样 */
@@ -73,7 +73,7 @@ export const SCENES: readonly Scene[] = [
   remote('jkq2-z16-tilt', '经开区2 z16 倾斜', JKQ2, 16, 55)
 ];
 
-export function variants(uploadMBs: readonly (number | null)[], cullWindows: readonly (number | null)[] = []): Variant[] {
+export function variants(uploadMBs: readonly (number | null)[], cullWindows: readonly (number | 'auto' | null)[] = []): Variant[] {
   return [
     { id: 'cesium', label: 'Cesium', engine: 'cesium' },
     { id: 'maplibre', label: 'MapLibre', engine: 'maplibre' },
@@ -85,15 +85,18 @@ export function variants(uploadMBs: readonly (number | null)[], cullWindows: rea
         uploadMB
       })
     ),
-    ...cullWindows.map(
-      (requestCullSeconds): Variant => ({
-        id: requestCullSeconds === null ? 'maplibre-no-cull' : `maplibre-cull${requestCullSeconds}`,
-        label: requestCullSeconds === null ? 'MapLibre，动着也请求' : `MapLibre，动着按 ${requestCullSeconds} 秒的路算`,
-        engine: 'maplibre',
-        requestCullSeconds
-      })
-    )
+    ...cullWindows.map((cullWindow): Variant => ({ ...cullVariant(cullWindow), engine: 'maplibre', cullWindow }))
   ];
+}
+
+function cullVariant(cullWindow: number | 'auto' | null): Pick<Variant, 'id' | 'label'> {
+  if (cullWindow === null) {
+    return { id: 'maplibre-no-cull', label: 'MapLibre，动着也请求' };
+  }
+  if (cullWindow === 'auto') {
+    return { id: 'maplibre-cull-auto', label: 'MapLibre，动着按实测的加载时间算' };
+  }
+  return { id: `maplibre-cull${cullWindow}`, label: `MapLibre，动着按 ${cullWindow} 秒的路算` };
 }
 
 /** 要跑的所有遍：每个场景每个方案 repeat 遍 perf；只有验收要比的两个方案多跑一遍画质和一遍采样 */

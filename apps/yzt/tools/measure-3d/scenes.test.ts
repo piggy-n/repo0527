@@ -25,12 +25,13 @@ describe('variants', () => {
 
 describe('variants 的对照方案', () => {
   it('动着不请求的窗口各是一个方案，只有 MapLibre', () => {
-    const list = variants([], [null, 0.3]);
-    expect(list.map(item => [item.id, item.engine, item.requestCullSeconds])).toEqual([
+    const list = variants([], [null, 0.3, 'auto']);
+    expect(list.map(item => [item.id, item.engine, item.cullWindow])).toEqual([
       ['cesium', 'cesium', undefined],
       ['maplibre', 'maplibre', undefined],
       ['maplibre-no-cull', 'maplibre', null],
-      ['maplibre-cull0.3', 'maplibre', 0.3]
+      ['maplibre-cull0.3', 'maplibre', 0.3],
+      ['maplibre-cull-auto', 'maplibre', 'auto']
     ]);
   });
 

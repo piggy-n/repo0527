@@ -516,6 +516,19 @@ describe('ErrorScale', () => {
     expect(scale.locked).toBe(false);
   });
 
+  it('读数分开记放宽的原因：装满了、停着估计放不下', () => {
+    const scale = new ErrorScale(BUDGET);
+    const full = { ...NONE, refused: 5, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 100 };
+    scale.update(full, POSE, FRAME);
+    scale.update(full, POSE, FRAME);
+    expect([scale.raisedFull, scale.raisedPredicted]).toStrictEqual([2, 0]);
+
+    const predicted = { ...NONE, cachedBytes: 1100 * MB, pinnedBytes: 1100 * MB, pendingBytes: 2000 * MB, usedTiles: 100 };
+    scale.release();
+    scale.update(predicted, POSE, FRAME);
+    expect([scale.raisedFull, scale.raisedPredicted]).toStrictEqual([2, 1]);
+  });
+
   it('内容变了就解锁', () => {
     const scale = new ErrorScale(BUDGET);
     scale.update({ ...NONE, refused: 1, cachedBytes: 1536 * MB, pinnedBytes: 1536 * MB, usedTiles: 1 }, POSE, FRAME);

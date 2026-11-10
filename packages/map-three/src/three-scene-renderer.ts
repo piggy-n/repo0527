@@ -21,6 +21,7 @@ import { type BudgetPose, ErrorScale } from './error-scale';
 import { FrameMath, toNdc } from './frame';
 import type { FogUniform } from './lighting';
 import { TileUploader } from './tile-uploader';
+import type { CullWindow } from './request-cull';
 import { TilesetEntry, type TilesetEntryInspection } from './tileset-entry';
 import { WalkMarker } from './walk-marker';
 
@@ -31,8 +32,8 @@ const CACHE_BYTES = 1024 * MEGABYTE;
 const CACHE_OVERFLOW_BYTES = 1024 * MEGABYTE;
 // 每帧上传的字节（ADR 0147 第 5 节）：GPU 耗时每 MB 约 0.5 毫秒，这么多放得进 60 帧的一帧。实测见 docs/modules/map-three.md"上传"
 const UPLOAD_BYTES_PER_FRAME = 16 * MEGABYTE;
-// 相机这么多秒走的路达到瓦片直径就不请求（同 Cesium：60 帧的路）。取值和实测见 docs/modules/map-three.md"动着的时候不请求"
-const REQUEST_CULL_SECONDS = 1;
+// 相机在一块瓦片加载完之前走的路达到瓦片直径就不请求，加载时间按实测（request-cull.ts）。实测见 docs/modules/map-three.md"动着的时候不请求"
+const REQUEST_CULL_WINDOW: CullWindow = 'auto';
 const FRAME_MS = 1000 / 60;
 
 /** 构造参数都有默认值，性能测量时换着比较 */
@@ -43,8 +44,8 @@ export interface ThreeSceneRendererOptions {
   readonly cacheLimitBytes?: number;
   /** 每帧提前上传的字节；null 时不提前上传，第一次绘制时才上传 */
   readonly uploadBytesPerFrame?: number | null;
-  /** 相机这么多秒走的路达到瓦片直径就不请求；null 时动着也请求 */
-  readonly requestCullSeconds?: number | null;
+  /** 相机在这个窗口里走的路达到瓦片直径就不请求：秒数，'auto' 按实测的加载时间；null 时动着也请求 */
+  readonly requestCullWindow?: CullWindow | null;
 }
 
 /** 读数（只读快照）：给性能测量和测试，业务代码不用 */
@@ -69,6 +70,13 @@ export interface ThreeSceneInspection {
   readonly saturated: boolean;
   /** 最近一帧因为缓存满没能排队的瓦片数 */
   readonly refused: number;
+  /** 最近一帧的需求（在用的加上还要加载的估计），其中还要加载的，再其中没请求的（字节） */
+  readonly demandBytes: number;
+  readonly pendingBytes: number;
+  readonly culledBytes: number;
+  /** 累计：因为缓存满、因为停着估计放不下而放宽的帧数 */
+  readonly raisedFull: number;
+  readonly raisedPredicted: number;
   /** 下载、解析、等待上传的瓦片数 */
   readonly loading: number;
   /** 等待上传的瓦片数 */
@@ -110,7 +118,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
   readonly #uploader: TileUploader;
   readonly #cacheBytes: number;
   readonly #cacheLimitBytes: number;
-  readonly #requestCullSeconds: number | null;
+  readonly #requestCullWindow: CullWindow | null;
   #surface: SceneSurface | null = null;
   #webgl: WebGLRenderer | null = null;
   #attached = false;
@@ -123,6 +131,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
   #frames = 0;
   #lastFrameAt = 0;
   #pinnedBytes = 0;
+  #pendingBytes = 0;
+  #culledBytes = 0;
   #refused = 0;
   #steady = true;
   // 新瓦片到了、还没有画过的一帧：这时读数还是旧的
@@ -132,11 +142,11 @@ export class ThreeSceneRenderer implements SceneRenderer {
     cacheBytes = CACHE_BYTES,
     cacheLimitBytes = CACHE_BYTES + CACHE_OVERFLOW_BYTES,
     uploadBytesPerFrame = UPLOAD_BYTES_PER_FRAME,
-    requestCullSeconds = REQUEST_CULL_SECONDS
+    requestCullWindow = REQUEST_CULL_WINDOW
   }: ThreeSceneRendererOptions = {}) {
     this.#cacheBytes = cacheBytes;
     this.#cacheLimitBytes = cacheLimitBytes;
-    this.#requestCullSeconds = requestCullSeconds;
+    this.#requestCullWindow = requestCullWindow;
     this.#cache.unloadPriorityCallback = DEFAULT_LRU_CACHE.unloadPriorityCallback;
     this.#cache.minBytesSize = cacheBytes;
     this.#cache.maxBytesSize = cacheLimitBytes;
@@ -252,7 +262,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       math: this.#math,
       fog: this.#fog,
       uploader: this.#uploader,
-      requestCullSeconds: this.#requestCullSeconds,
+      requestCullWindow: this.#requestCullWindow,
       events: {
         failed: error => this.#emitter.emit('tilesetfailed', id, new Error(`瓦片集 ${id} 的瓦片加载失败`, { cause: error })),
         initial: () => this.#emitter.emit('tilesetinitial', id),
@@ -403,6 +413,11 @@ export class ThreeSceneRenderer implements SceneRenderer {
       locked: this.#scale.locked,
       saturated: this.#scale.saturated,
       refused: this.#refused,
+      demandBytes: this.#pinnedBytes + this.#pendingBytes,
+      pendingBytes: this.#pendingBytes,
+      culledBytes: this.#culledBytes,
+      raisedFull: this.#scale.raisedFull,
+      raisedPredicted: this.#scale.raisedPredicted,
       loading,
       uploadPending,
       uploadedBytes: this.#uploader.uploadedBytes,
@@ -449,6 +464,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
     let refused = 0;
     let pinnedBytes = 0;
     let pendingBytes = 0;
+    let culledBytes = 0;
     let usedTiles = 0;
     let culled = false;
     for (const entry of drawn) {
@@ -457,11 +473,14 @@ export class ThreeSceneRenderer implements SceneRenderer {
       refused += demand.refused;
       pinnedBytes += demand.pinnedBytes;
       pendingBytes += demand.pendingBytes;
+      culledBytes += demand.culledBytes;
       usedTiles += demand.usedTiles;
       pose ??= entry.pose();
     }
     this.#refused = refused;
     this.#pinnedBytes = pinnedBytes;
+    this.#pendingBytes = pendingBytes;
+    this.#culledBytes = culledBytes;
     if (!pose) {
       this.#steady = true;
       return;

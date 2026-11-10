@@ -47,7 +47,8 @@ export async function startCesium({ session, container, onError }: EngineOptions
         uploadPending: null,
         uploadedMB: null,
         locked: null,
-        queues: null
+        queues: null,
+        budget: null
       };
     },
     isStable() {

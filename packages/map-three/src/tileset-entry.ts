@@ -27,7 +27,7 @@ import type { BudgetPose } from './error-scale';
 import type { FrameMath } from './frame';
 import { createSunLights, type FogUniform, TilesetMaterials } from './lighting';
 import { LocalFrame } from './local-frame';
-import { RequestCull } from './request-cull';
+import { type CullWindow, RequestCull } from './request-cull';
 import { type TileInternals, TileLoadPlugin } from './tile-load-plugin';
 import type { TileUploader } from './tile-uploader';
 
@@ -50,8 +50,8 @@ export interface TilesetEntryOptions {
   readonly fog: FogUniform;
   /** 所有瓦片集共用的上传队列 */
   readonly uploader: TileUploader;
-  /** 相机这么多秒走的路达到瓦片直径就不请求；null 时动着也请求 */
-  readonly requestCullSeconds: number | null;
+  /** 相机在这个窗口里走的路达到瓦片直径就不请求（'auto' 按实测的加载时间）；null 时动着也请求 */
+  readonly requestCullWindow: CullWindow | null;
   readonly events: TilesetEntryEvents;
 }
 
@@ -62,6 +62,8 @@ export interface TilesetDemand {
   readonly pinnedBytes: number;
   /** 还要加载的瓦片的估计字节 */
   readonly pendingBytes: number;
+  /** 其中因为相机走得快没有请求的 */
+  readonly culledBytes: number;
   readonly usedTiles: number;
 }
 
@@ -77,6 +79,8 @@ export interface TilesetEntryInspection {
   readonly failed: number;
   /** 这一帧因为相机走得快没有请求的瓦片数 */
   readonly culled: number;
+  /** 动着不请求的窗口（秒）；动着也请求时为 null */
+  readonly cullWindow: number | null;
   /** 现在：等下载和下载中的、解析中的瓦片数 */
   readonly downloading: number;
   readonly parsing: number;
@@ -158,10 +162,12 @@ export class TilesetEntry implements Disposable {
   readonly #requestCull: RequestCull | null;
   // 这一帧因为相机走得快没有请求的瓦片
   readonly #culled = new Set<TileInternals>();
+  // 相机动着时请求的瓦片和请求的时刻：能画了以后算加载要多久
+  readonly #requestedAt = new WeakMap<TileInternals, number>();
   readonly #sphere = new Sphere();
 
-  constructor({ prepared, options, cache, math, fog, uploader, requestCullSeconds, events }: TilesetEntryOptions) {
-    this.#requestCull = requestCullSeconds === null ? null : new RequestCull(requestCullSeconds);
+  constructor({ prepared, options, cache, math, fog, uploader, requestCullWindow, events }: TilesetEntryOptions) {
+    this.#requestCull = requestCullWindow === null ? null : new RequestCull(requestCullWindow);
     this.#cache = cache;
     this.#math = math;
     this.#events = events;
@@ -172,7 +178,7 @@ export class TilesetEntry implements Disposable {
     const tiles = new TilesRenderer(this.#url);
     tiles.lruCache = cache;
     tiles.errorTarget = this.#errorTarget();
-    tiles.registerPlugin(new TileLoadPlugin(uploader, cache));
+    tiles.registerPlugin(new TileLoadPlugin(uploader, cache, tile => this.#onTileReady(tile)));
     // 库没有按瓦片决定要不要请求的接口：选瓦片时调用的这个方法是唯一的入口。版本锁定，浏览器测试用真实的库验证
     const internals = tiles as unknown as TilesInternals;
     const queue = internals.queueTileForDownload.bind(tiles);
@@ -180,6 +186,7 @@ export class TilesetEntry implements Disposable {
       if (this.#cullsRequest(tile)) {
         this.#culled.add(tile);
       } else {
+        this.#noteRequest(tile);
         queue(tile);
       }
     };
@@ -321,13 +328,15 @@ export class TilesetEntry implements Disposable {
       }
     }
     // 没有请求的也算：这一路还是要它们。不算的话动着的时候需求总是很低，一路收紧，停下时要从最细的一层开始放宽
+    let culledBytes = 0;
     for (const tile of this.#culled) {
-      pendingBytes += this.#sizeAt(tile.internal.depth);
+      culledBytes += this.#sizeAt(tile.internal.depth);
     }
     return {
       refused: stats.refused,
       pinnedBytes,
-      pendingBytes,
+      pendingBytes: pendingBytes + culledBytes,
+      culledBytes,
       usedTiles: usedSet.size
     };
   }
@@ -371,6 +380,7 @@ export class TilesetEntry implements Disposable {
       unloaded: this.#unloaded,
       failed: this.#failed,
       culled: this.#culled.size,
+      cullWindow: this.#requestCull?.windowSeconds ?? null,
       downloading: stats.queued + stats.downloading,
       parsing: stats.parsing,
       used: usedSet.size,
@@ -438,6 +448,26 @@ export class TilesetEntry implements Disposable {
     const pose = this.#requestCull ? this.pose() : null;
     if (pose) {
       this.#requestCull?.update(pose.position, performance.now());
+    }
+  }
+
+  // 动着时请求的记下时刻。停着时请求的不算：停下时看到的一次全请求，排队很长，不代表动着的时候要等多久
+  #noteRequest(tile: TileInternals): void {
+    if (!this.#requestCull || tile.internal.loadingState !== UNLOADED) {
+      return;
+    }
+    if (this.#requestCull.moving) {
+      this.#requestedAt.set(tile, performance.now());
+    } else {
+      this.#requestedAt.delete(tile);
+    }
+  }
+
+  #onTileReady(tile: TileInternals): void {
+    const requestedAt = this.#requestedAt.get(tile);
+    if (requestedAt !== undefined) {
+      this.#requestedAt.delete(tile);
+      this.#requestCull?.recordLoad(performance.now() - requestedAt);
     }
   }
 

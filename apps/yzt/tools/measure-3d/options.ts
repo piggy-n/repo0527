@@ -9,7 +9,8 @@ export const HELP = `MapLibre 引擎和 Cesium 的性能对比（ADR 0147 3C.4�
   --list                 列出所有场景后退出
   --repeat <n>           perf 每个场景跑几遍（默认 3），报告取中位数
   --upload-mb <列表>     MapLibre 另外对照的上传预算，off 是不提前上传（默认 off），如 off,16,64；none 是不对照
-  --cull-window <列表>   MapLibre 另外对照动着不请求的窗口（秒），off 是动着也请求，如 off,0.3,0.5
+  --cull-window <列表>   MapLibre 另外对照动着不请求的窗口（秒），产品默认是 auto（按实测的加载时间），
+                         off 是动着也请求，如 off,1,0.5
   --basemap <arcgis|none> 底图（默认 arcgis，两个引擎相同），没网时用 none
   --viewport <宽x高>     视口（默认 1600x900）
   --pacing <n>           在路上的帧数上限：1 是 PoC 的做法（默认 2），0 是不等
@@ -32,7 +33,7 @@ export interface Options {
   /** 另外对照的上传预算（MB），null 是不提前上传 */
   readonly uploadMBs: readonly (number | null)[];
   /** 另外对照的动着不请求的窗口（秒），null 是动着也请求 */
-  readonly cullWindows: readonly (number | null)[];
+  readonly cullWindows: readonly (number | 'auto' | null)[];
   /** 帧率上限，null 是不封顶 */
   readonly fps: number | null;
   readonly basemap: 'arcgis' | 'none';
@@ -109,7 +110,12 @@ export function parseOptions(argv: readonly string[]): Options {
           .map(item => (item === 'off' ? null : positive(name, item)));
         break;
       case '--cull-window':
-        options.cullWindows = listItems(next()).map(item => (item === 'off' ? null : positive(name, item)));
+        options.cullWindows = listItems(next()).map(item => {
+          if (item === 'off') {
+            return null;
+          }
+          return item === 'auto' ? 'auto' : positive(name, item);
+        });
         break;
       case '--fps':
         options.fps = positive(name, next());

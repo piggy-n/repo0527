@@ -27,9 +27,10 @@ describe('parseOptions', () => {
     expect(parseOptions(['--upload-mb', 'none']).uploadMBs).toEqual([]);
   });
 
-  it('动着不请求的窗口：默认不对照，off 是动着也请求', () => {
+  it('动着不请求的窗口：默认不对照，off 是动着也请求，auto 按实测的加载时间', () => {
     expect(parseOptions([]).cullWindows).toEqual([]);
     expect(parseOptions(['--cull-window', 'off,0.3,0.5']).cullWindows).toEqual([null, 0.3, 0.5]);
+    expect(parseOptions(['--cull-window', '1,auto']).cullWindows).toEqual([1, 'auto']);
     expect(parseOptions(['--cull-window', 'off 0.3']).cullWindows).toEqual([null, 0.3]);
     expect(() => parseOptions(['--cull-window', '0'])).toThrow('--cull-window');
   });

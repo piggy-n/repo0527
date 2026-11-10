@@ -29,17 +29,19 @@ interface ParseTile {
  * - 没有内容的节点（JKQ2 的根节点）屏幕误差当作无穷大，一律往下走：不管放宽多少，停下的都是有内容的层，整棵树不会都不画。
  *   它没有什么可替换的，也当作 ADD：库对 REPLACE 的节点要等子节点全到才显示它们（放不下一部分时永远等不到），
  *   还会把视野外的子节点一起加载（532 个块时就是 3.7 GB）
- * - 解析完先按预算上传，传完才算加载完：库这时还认为它没到，父节点继续显示，不会有空洞
+ * - 解析完先按预算上传，传完才算加载完：库这时还认为它没到，父节点继续显示，不会有空洞；传完时告诉 onReady
  */
 export class TileLoadPlugin {
   readonly name = 'MX_TILE_LOAD';
   readonly #uploader: TileUploader;
   readonly #cache: LRUCache;
+  readonly #onReady: (tile: TileInternals) => void;
   #tiles: (TilesRenderer & ParseTile) | null = null;
 
-  constructor(uploader: TileUploader, cache: LRUCache) {
+  constructor(uploader: TileUploader, cache: LRUCache, onReady: (tile: TileInternals) => void) {
     this.#uploader = uploader;
     this.#cache = cache;
+    this.#onReady = onReady;
   }
 
   init(tiles: TilesRenderer & ParseTile): void {
@@ -66,6 +68,9 @@ export class TileLoadPlugin {
     // 缓存满了的瓦片库马上会丢弃，不用传
     if (scene && !signal.aborted && !this.#cache.isFull()) {
       await this.#uploader.enqueue(scene, signal);
+      if (!signal.aborted) {
+        this.#onReady(tile);
+      }
     }
   }
 }

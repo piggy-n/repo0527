@@ -378,7 +378,7 @@ describe('ThreeSceneRenderer 动着的时候不请求', () => {
 
   it('窗口短时，同样的速度也请求（对照）', { timeout: TEST_TIMEOUT }, async () => {
     // 100 米/秒，0.2 秒走 20 米，比细的瓦片（约 37 米）短
-    const ctx = await setup({ ...ROOMY, requestCullSeconds: 0.2 }, FAR_CAMERA);
+    const ctx = await setup({ ...ROOMY, requestCullWindow: 0.2 }, FAR_CAMERA);
     showBlocks(ctx, await serveBlocks('short-window'));
     await settle(ctx);
     const fineRequests = countRequests('/short-window/fine.glb');
@@ -387,13 +387,31 @@ describe('ThreeSceneRenderer 动着的时候不请求', () => {
   });
 
   it('关掉时动着也请求（对照）', { timeout: TEST_TIMEOUT }, async () => {
-    const ctx = await setup({ ...ROOMY, requestCullSeconds: null }, FAR_CAMERA);
+    const ctx = await setup({ ...ROOMY, requestCullWindow: null }, FAR_CAMERA);
     showBlocks(ctx, await serveBlocks('always'));
     await settle(ctx);
     const fineRequests = countRequests('/always/fine.glb');
     moveCamera(ctx, 17, circle(100));
     expect(await within(() => fineRequests() > 0, 30000)).toBe(true);
     expect(inspect(ctx).tilesets.blocks?.culled).toBe(0);
+  });
+
+  it('窗口按动着时请求的瓦片实测：本机加载快，窗口缩短；停着时加载的不算', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup(ROOMY, FAR_CAMERA);
+    showBlocks(ctx, await serveBlocks('measured-fast'));
+    const far = await settle(ctx);
+    expect(far.tilesets.blocks?.cullWindow).toBe(1);
+    // 20 米/秒，按开始的 1 秒走 20 米，比细的瓦片（约 37 米）短：动着也请求，到了就是样本
+    moveCamera(ctx, 17, circle(20));
+    expect(await within(() => (inspect(ctx).tilesets.blocks?.cullWindow ?? 1) < 0.5, 30000)).toBe(true);
+  });
+
+  it('加载慢时窗口跟着变长', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup(ROOMY, FAR_CAMERA);
+    showBlocks(ctx, await serveBlocks('measured-slow', { fineDelayMs: 1500 }));
+    await settle(ctx);
+    moveCamera(ctx, 17, circle(20));
+    expect(await within(() => (inspect(ctx).tilesets.blocks?.cullWindow ?? 0) > 1.2, 30000)).toBe(true);
   });
 
   it('边飞边打开模型：一开始也不把看到的全请求了，停下才加载', { timeout: TEST_TIMEOUT }, async () => {

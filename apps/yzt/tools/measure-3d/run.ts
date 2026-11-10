@@ -59,8 +59,8 @@ function pageUrl({ scene, variant }: Run, { baseUrl, options }: RunContext): str
   if (variant.uploadMB !== undefined) {
     params.set('uploadMB', variant.uploadMB === null ? 'off' : String(variant.uploadMB));
   }
-  if (variant.requestCullSeconds !== undefined) {
-    params.set('cullWindow', variant.requestCullSeconds === null ? 'off' : String(variant.requestCullSeconds));
+  if (variant.cullWindow !== undefined) {
+    params.set('cullWindow', variant.cullWindow === null ? 'off' : String(variant.cullWindow));
   }
   if (options.fps !== null) {
     params.set('fps', String(options.fps));

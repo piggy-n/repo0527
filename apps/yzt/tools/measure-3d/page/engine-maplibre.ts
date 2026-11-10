@@ -1,9 +1,23 @@
 import { MapLibreView, type SceneSurface } from '@mx/map-core';
-import type { ThreeSceneRenderer as Renderer } from '@mx/map-three';
+import type { CullWindow, ThreeSceneRenderer as Renderer } from '@mx/map-three';
 import { setupMapRuntime } from '../../../src/app/map-runtime.ts';
 import type { EngineHandle, EngineOptions } from './bench.ts';
 
 const MB = 1024 * 1024;
+
+// 地址上的 cullWindow：off 是动着也请求，auto 按实测的加载时间，其余是秒数
+const cullWindowOf = (value: string): CullWindow | null => {
+  if (value === 'off') {
+    return null;
+  }
+  return value === 'auto' ? 'auto' : Number(value);
+};
+
+// 各瓦片集里最长的窗口；都不拦时为 null
+const longestWindow = (windows: readonly (number | null)[]): number | null => {
+  const values = windows.filter(value => value !== null);
+  return values.length > 0 ? Math.max(...values) : null;
+};
 
 /** MapLibre 引擎：真实的 MapLibreView 和 ThreeSceneRenderer，和产品一样在第一次切到三维时动态导入 */
 export async function startMapLibre({ session, container, params, onError }: EngineOptions): Promise<EngineHandle> {
@@ -32,7 +46,7 @@ export async function startMapLibre({ session, container, params, onError }: Eng
       }
       const rendererOptions = {
         ...(uploadMB === null ? {} : { uploadBytesPerFrame: uploadMB === 'off' ? null : Number(uploadMB) * MB }),
-        ...(cullWindow === null ? {} : { requestCullSeconds: cullWindow === 'off' ? null : Number(cullWindow) })
+        ...(cullWindow === null ? {} : { requestCullWindow: cullWindowOf(cullWindow) })
       };
       return () => {
         renderer = new BenchRenderer(rendererOptions);
@@ -79,6 +93,14 @@ export async function startMapLibre({ session, container, params, onError }: Eng
           culled: sum(item => item.culled),
           used: sum(item => item.used),
           usedOutOfView: sum(item => item.usedOutOfView)
+        },
+        budget: {
+          demandMB: state.demandBytes / MB,
+          pendingMB: state.pendingBytes / MB,
+          culledMB: state.culledBytes / MB,
+          raisedFull: state.raisedFull,
+          raisedPredicted: state.raisedPredicted,
+          cullWindow: longestWindow(tilesets.map(item => item.cullWindow))
         }
       };
     },
