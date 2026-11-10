@@ -65,7 +65,7 @@ catalog:
 
 **不遵守语义化版本的包**（Cesium、TypeScript）在这里写精确版本，peer 写 `catalog:` 同样是精确版本。
 
-`three`、`@types/three` 沿用应用原来的精确版本（0.183.2、0.183.1）：驾驶舱和 `@mx/map-three` 共用一份（ADR 0147 第 5 节）；要升到 0.187 以上（LCC2）时按大版本单独提交，跑驾驶舱的测试和冒烟。
+`three`、`@types/three` 写精确版本（0.187.0、0.187.0）：驾驶舱和 `@mx/map-three` 共用一份（ADR 0147 第 5 节），LCC2 的 `gaussian-splat-lite` 要求 0.187 以上（ADR 0149）。0.x 的小版本按大版本单独提交，升级时跑驾驶舱的测试和冒烟、人工看入场和发光的边界，以及 map-three 的测试。
 
 已验证（pnpm 12.14，2026-11-05）：
 
