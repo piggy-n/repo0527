@@ -2,7 +2,7 @@
 
 /** 三维的开关（ADR 0147） */
 export interface SceneOptions {
-  /** maplibre 引擎的三维里显示资源图层、点/框选能识别；关闭时和 Cesium 一样（Cesium 不受影响） */
+  /** maplibre 引擎的三维里显示资源图层、点/框选能识别；关闭时这两项和 Cesium 一样，高斯泼溅照常（Cesium 不受影响） */
   readonly resourceLayers: boolean;
 }
 

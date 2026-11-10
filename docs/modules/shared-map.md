@@ -45,7 +45,7 @@
 | `view-controls/useCompassButton.ts` | 指北针：旋转和俯仰回到 0，中心和级别不变 |
 | `view-controls/MapViewControls.tsx` | 基础组：层级、放大、缩小、指北针、行政区边界（页面给出拥有者才有）、默认视角、2D/3D（不支持三维的页面没有）（ADR 0053 第 3 节、ADR 0058、ADR 0111、ADR 0128） |
 | `status-bar/status-bar.ts` | 状态栏的纯函数：比例尺的整齐长度、视点高度的写法、显示的角度、放不下时的取舍（ADR 0053 第 5 节、ADR 0080 第 6 节） |
-| `status-bar/useMapReadout.ts` | 状态栏的读数：比例尺（三维是视点高度）、鼠标所在或画布中心的经纬度、角度，步行时的朝向，从地图上下文推导 |
+| `status-bar/useMapReadout.ts` | 状态栏的读数：比例尺（三维是视点高度）、鼠标所在或画布中心的经纬度、角度，步行时的朝向，从地图上下文推导。鼠标所在的经纬度用悬停的拾取（跳过高斯泼溅，ADR 0149）：停在泼溅上时读的是后面的模型或地面，斜着看有视差 |
 | `status-bar/MapStatusBar.tsx` | 左下角的状态栏：只显示，按量出的宽度取舍 |
 | `area/area-geometry.ts` | 自定义范围的几何：限值 `AREA_LIMITS`、坐标检查、整理成有效的面、节点多时简化、面积与周长（见"自定义范围"，ADR 0121） |
 | `area/area-file.ts` | 读范围文件：GeoJSON、Shapefile 的压缩包或同一组文件；读不了时返回原因 |

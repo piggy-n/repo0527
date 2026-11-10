@@ -1,5 +1,6 @@
 import type {
   LngLat,
+  PickOptions,
   PreparedTileset,
   SceneFrame,
   SceneLift,
@@ -38,7 +39,8 @@ const UPLOAD_BYTES_PER_FRAME = 16 * MEGABYTE;
 // 相机在一块瓦片加载完之前走的路达到瓦片直径就不请求，加载时间按实测（request-cull.ts）。实测见 docs/modules/map-three.md"动着的时候不请求"
 const REQUEST_CULL_WINDOW: CullWindow = 'auto';
 const FRAME_MS = 1000 / 60;
-// 高斯泼溅的总预算（高斯个数，ADR 0149 第 5 节）：显示几份就平分；不是内存上限，默认值等显卡机器实测后再定（L.3）
+// 高斯泼溅的总预算（高斯个数，ADR 0149 第 5 节）：加了几份就平分，隐藏的、还在读索引的也算（隐藏的调度器仍占着数据）；
+// 不是内存上限，默认值等显卡机器实测后再定（L.3）
 const SPLAT_BUDGET = 3_000_000;
 
 /** 构造参数都有默认值，性能测量时换着比较 */
@@ -51,7 +53,7 @@ export interface ThreeSceneRendererOptions {
   readonly uploadBytesPerFrame?: number | null;
   /** 相机在这个窗口里走的路达到瓦片直径就不请求：秒数，'auto' 按实测的加载时间；null 时动着也请求 */
   readonly requestCullWindow?: CullWindow | null;
-  /** 高斯泼溅的总预算（高斯个数），几份泼溅平分 */
+  /** 高斯泼溅的总预算（高斯个数），加了几份就平分 */
   readonly splatBudget?: number;
 }
 
@@ -117,6 +119,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
   readonly #emitter = createNanoEvents<SceneRendererEvents>();
   readonly #tilesets = new Map<string, TilesetEntry>();
   readonly #splats = new Map<string, SplatEntry>();
+  // 还在读索引的泼溅和这次加载的信号：同一个 ID 先中止、紧接着重新加时（同步换摆放、重试），上一份还没走到 catch 里移除
+  readonly #loadingSplats = new WeakMap<SplatEntry, AbortSignal>();
   readonly #models = new Map<string, AnimatedModel>();
   readonly #math = new FrameMath();
   readonly #cache = new LRUCache();
@@ -339,15 +343,11 @@ export class ThreeSceneRenderer implements SceneRenderer {
 
   async addSplat(id: string, source: SplatSource, options: SplatOptions, signal: AbortSignal): Promise<TilesetSphere> {
     this.#assertAlive();
-    if (this.#splats.has(id)) {
-      throw new Error(`高斯泼溅 ${id} 已经加过`);
-    }
+    this.#releaseAbortedSplat(id);
     const library = await this.#loadSplatLibrary();
     signal.throwIfAborted();
     this.#assertAlive();
-    if (this.#splats.has(id)) {
-      throw new Error(`高斯泼溅 ${id} 已经加过`);
-    }
+    this.#releaseAbortedSplat(id);
     const entry = new SplatEntry({
       library,
       source,
@@ -360,12 +360,14 @@ export class ThreeSceneRenderer implements SceneRenderer {
       }
     });
     this.#splats.set(id, entry);
+    this.#loadingSplats.set(entry, signal);
     this.#shareSplatBudget();
     entry.setRenderer(this.#webgl);
     try {
       const sphere = await entry.load(signal);
       signal.throwIfAborted();
       this.#assertAlive();
+      this.#loadingSplats.delete(entry);
       this.#clipTilesets();
       return sphere;
     } catch (error) {
@@ -417,15 +419,17 @@ export class ThreeSceneRenderer implements SceneRenderer {
     return this.#models.get(id)?.time ?? null;
   }
 
-  pick(point: ScreenPoint): ScenePick | null {
+  pick(point: ScreenPoint, { hover = false }: PickOptions = {}): ScenePick | null {
     const canvas = this.#surface?.canvas;
     if (!this.#frame || !canvas) {
       return null;
     }
     const ndc = toNdc(point, { width: canvas.clientWidth, height: canvas.clientHeight });
     let nearest: { distance: number; lngLatHeight: [number, number, number] } | null = null;
-    // 每个瓦片集、泼溅有自己的局部系，同一条视线上的距离都是米、起点相同，可以直接比较
-    for (const entry of [...this.#tilesets.values(), ...this.#splats.values()]) {
+    // 每个瓦片集、泼溅有自己的局部系，同一条视线上的距离都是米、起点相同，可以直接比较。
+    // 悬停时不打泼溅：每帧都会调用，泼溅的射线拾取每次可能几十毫秒（ADR 0149），打到泼溅的地方按后面的算
+    const entries = hover ? [...this.#tilesets.values()] : [...this.#tilesets.values(), ...this.#splats.values()];
+    for (const entry of entries) {
       const hit = entry.pick(this.#raycaster, ndc);
       if (hit && (!nearest || hit.distance < nearest.distance)) {
         nearest = hit;
@@ -612,6 +616,20 @@ export class ThreeSceneRenderer implements SceneRenderer {
       throw error;
     });
     return this.#splatLibrary;
+  }
+
+  // 同一个 ID 已经有一份：加载已中止、只是还没清理的直接释放，否则是重复加
+  #releaseAbortedSplat(id: string): void {
+    const previous = this.#splats.get(id);
+    if (!previous) {
+      return;
+    }
+    if (!this.#loadingSplats.get(previous)?.aborted) {
+      throw new Error(`高斯泼溅 ${id} 已经加过`);
+    }
+    this.#splats.delete(id);
+    previous[Symbol.dispose]();
+    this.#shareSplatBudget();
   }
 
   // 显示着、读到索引的泼溅的范围（ADR 0149）

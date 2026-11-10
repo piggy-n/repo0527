@@ -44,6 +44,19 @@ const HEIGHT = 480;
 
 const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 
+// 等一个可能一直不来的事件，超时以说明失败
+async function within<T>(promise: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${WAIT_TIMEOUT} ms 内没有等到${label}`)), WAIT_TIMEOUT);
+  });
+  try {
+    return await Promise.race([promise, expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // 每一帧检查一次，条件成立时结束；超时以说明失败，结束后不再检查
 async function until(accept: () => boolean, label: string): Promise<void> {
   let frame = 0;
@@ -139,8 +152,13 @@ const toBase64 = (bytes: Uint8Array) => {
   return btoa(text);
 };
 
-// 每个文件写一份，第一次用到时写，文件跑完删掉
+// 每个文件写一份，第一次用到时写；文件跑完删掉写过的。afterAll 要在收集用例时登记，运行中登记的 Vitest 不执行
 let splatUrl: Promise<string> | null = null;
+const writtenFiles: string[] = [];
+afterAll(async () => {
+  await Promise.all(writtenFiles.splice(0).map(file => commands.removeFile(file)));
+});
+
 function writtenSplat(): Promise<string> {
   splatUrl ??= (async () => {
     const directory = 'node_modules/.tmp/splat-fixtures/contract';
@@ -148,10 +166,8 @@ function writtenSplat(): Promise<string> {
       [`${directory}/square.lcc2`, splatSquareIndex(60, 21)],
       [`${directory}/data/3dgs/0.ply`, splatSquarePly(60, 21)]
     ];
-    await Promise.all(files.map(([path, bytes]) => commands.writeFile(path, toBase64(bytes), 'base64')));
-    afterAll(async () => {
-      await Promise.all(files.map(([path]) => commands.removeFile(path)));
-    });
+    await Promise.all(files.map(([file, bytes]) => commands.writeFile(file, toBase64(bytes), 'base64')));
+    writtenFiles.push(...files.map(([file]) => file));
     return `${window.location.origin}/${directory}/square.lcc2`;
   })();
   return splatUrl;
@@ -734,7 +750,7 @@ describe.each([
       }
       const lost = new Promise<void>(resolve => canvas.addEventListener('webglcontextlost', () => resolve(), { once: true }));
       lose.loseContext();
-      await lost;
+      await within(lost, 'GL 上下文丢失');
       await new Promise(resolve => setTimeout(resolve, 0));
       lose.restoreContext();
       await until(() => !gl.isContextLost() && pickedHeight() !== null, '恢复后再次拾取到泼溅');
@@ -787,7 +803,7 @@ describe.each([
 
     const lost = new Promise<void>(resolve => canvas.addEventListener('webglcontextlost', () => resolve(), { once: true }));
     lose.loseContext();
-    await lost;
+    await within(lost, 'GL 上下文丢失');
     // 在派发丢失事件的同一个任务里调用 restoreContext，Chromium 不恢复（2026-11-06 实测）
     await new Promise(resolve => setTimeout(resolve, 0));
     lose.restoreContext();

@@ -101,6 +101,29 @@ describe('useShapeEdit', () => {
     expect(edit.selected.value).toEqual({ part: 0, ring: 0, index: 0 });
   });
 
+  it('拖动中的预览用悬停的拾取（跳过高斯泼溅，ADR 0149），松手时按完整的拾取放下', () => {
+    const { tool, edit, ring } = setup();
+    edit.toggle();
+    // 悬停时打到"后面"：比完整的拾取往东 0.01 度
+    const hovers: boolean[] = [];
+    const view: ToolView = {
+      ...toolView(),
+      pick: ({ x, y }, options) => {
+        hovers.push(options?.hover === true);
+        const shift = options?.hover ? 0.01 : 0;
+        return { kind: 'hit', surface: 'map', lngLat: [118 + x / 1000 + shift, 33 - y / 1000] };
+      }
+    };
+    tool.handleInput?.(pointer('down', 100, 100), view);
+    tool.handleInput?.(pointer('move', 150, 80), view);
+    expect(hovers).toStrictEqual([true]);
+    expect(JSON.stringify(edit.deriveGroup().sources)).toContain('118.16');
+
+    tool.handleInput?.(pointer('up', 150, 80), view);
+    expect(hovers).toStrictEqual([true, false]);
+    expect(ring()?.[0]).toEqual([118.15, 32.92]);
+  });
+
   it('按下后移动不到 3 像素只是选中，不改范围', () => {
     const { edit, send, onChange } = setup();
     edit.toggle();

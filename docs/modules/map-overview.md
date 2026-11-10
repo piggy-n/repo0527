@@ -22,7 +22,7 @@ packages/utils         LatestController、safeReporter、Worker 通信层
 
 三维（`packages/map-cesium`，3D.1 起，见 [map-cesium.md](map-cesium.md)）放在 map-core 之上，只能由 map-vue 动态导入；只有它和 app 能导入 `cesium`。依赖方向由 lint 检查（ADR 0006、0079）。
 
-ADR 0147 加入第二种三维引擎：MapLibre + Three.js，新包 `@mx/map-three`（3C.1 起，现在做到 3C.4，见 [map-three.md](map-three.md)），二三维共用 MapLibre 的画布和视图，三维是地球投影，覆盖物在三维里照常显示，资源图层能在三维里显示、现在由 app 的开关关着（同 Cesium），模型层叠在页面声明的分组（`sceneBelow`）下面；custom layer 的外壳在 map-core 的 MapLibre 适配器里，三维内容在 map-three，只能由 map-vue 动态导入，只有它（和驾驶舱）能导入 `three`。用 `VITE_MAP_3D_ENGINE` 选择引擎，app 注入，过门槛之前默认仍是 Cesium。
+ADR 0147 加入第二种三维引擎：MapLibre + Three.js，新包 `@mx/map-three`（3C.1 起，现在做到 3C.4，见 [map-three.md](map-three.md)），二三维共用 MapLibre 的画布和视图，三维是地球投影，覆盖物在三维里照常显示，资源图层能在三维里显示、现在由 app 的开关关着（这一点同 Cesium），模型层叠在页面声明的分组（`sceneBelow`）下面；custom layer 的外壳在 map-core 的 MapLibre 适配器里，三维内容在 map-three，只能由 map-vue 动态导入，只有它（和驾驶舱）能导入 `three`。用 `VITE_MAP_3D_ENGINE` 选择引擎，app 注入，过门槛之前默认仍是 Cesium。
 
 ## 贯穿全局的几条原则
 
@@ -71,7 +71,7 @@ ADR 0147 加入第二种三维引擎：MapLibre + Three.js，新包 `@mx/map-thr
 | 资源的分类与显示级别 | 取值、名称、颜色写在字典，`style-registry.ts` 按 `code` 登记；图例和地图只用实际有的类别；最小显示级别按单张瓦片 6 MB 实测，放进可替换的部署文件；第一次请求很慢的资源定 8 级 | 0123、0124、0132、0136、0137 | [archive/migration.md](../archive/migration.md)"现状底图：资源分类的探查" |
 | 内网静态底图 | 用本地市界直接绘制面、线和地名，不用图片；地名在页面上开关（二三维都画），各市分色是代码开关，默认都关 | 0133、0134、0146 | [shared-map.md](shared-map.md) |
 | 加载与页面缓存 | 登录页空闲时预加载地图页并预热 Worker 池；字体不推迟；`KeepAlive` 加路由 meta，停用期间暂停视图；`.env` 的开关决定离开页面后是否重置 | 0061～0063、0114、0138 | [map-core.md](map-core.md)、[perf.md](perf.md)、[layout.md](layout.md) |
-| 三维的运行时与切换 | 范围与交互已定；Cesium 只在 `map-cesium` 和 app 导入，`CesiumView` 依赖窄接口；`setDimension` 切换，二维稳定后空闲时预加载三维运行时。两种引擎用 `VITE_MAP_3D_ENGINE` 选择，app 注入，页面不判断；MapLibre 引擎下一个视图同时担任二三维（`kinds`、`setKind`，三维模块加载失败只让三维失败，`retry` 只重新加载它），二维稳定后预加载 map-three；引擎的能力（`sceneCapabilities`）决定三维里的资源图层、图例、点/框选，`maplibre` 的能力由 app 按 `shared/config/scene-options.ts` 的开关收窄（默认关，同 Cesium）；瓦片集的同步两种引擎共用，过门槛后才改为默认 | 0078、0079、0091、0147 | [map-cesium.md](map-cesium.md)、[map-three.md](map-three.md) |
+| 三维的运行时与切换 | 范围与交互已定；Cesium 只在 `map-cesium` 和 app 导入，`CesiumView` 依赖窄接口；`setDimension` 切换，二维稳定后空闲时预加载三维运行时。两种引擎用 `VITE_MAP_3D_ENGINE` 选择，app 注入，页面不判断；MapLibre 引擎下一个视图同时担任二三维（`kinds`、`setKind`，三维模块加载失败只让三维失败，`retry` 只重新加载它），二维稳定后预加载 map-three；引擎的能力（`sceneCapabilities`）决定三维里的资源图层、图例、点/框选，`maplibre` 的能力由 app 按 `shared/config/scene-options.ts` 的开关收窄（默认关：资源图层、点/框选同 Cesium，高斯泼溅照常）；瓦片集的同步两种引擎共用，过门槛后才改为默认 | 0078、0079、0091、0147 | [map-cesium.md](map-cesium.md)、[map-three.md](map-three.md) |
 | 三维覆盖物 | GeoJSON 按样式自动镜像，按整级求值、简化到半个像素；只换坐标时有点数上限，停下后改回静态，重建时等新实体画好；背景图层有细节上限 | 0080、0082、0099、0103、0135 | [map-cesium.md](map-cesium.md) |
 | 三维模型与漫游 | 静态清单描述 3D Tiles，会话的 `scene` 持有；加载前整理索引，外部索引的根节点换到引用它的位置，没有内容的节点不改小误差；路线和步行是 `roam`，合并成一个漫游入口，没有单独的钻地；导航网格是纯 TS，在 Worker 里构建；室内地图、第三人称（入口暂不开放）。LCC2 高斯泼溅只在 `maplibre` 下用 gaussian-splat-lite 显示和拾取，清单存配准后的摆放，数据平铺在 `3dt/` 下经同源转发；同一处的倾斜模型在 LCC2 的范围里裁掉 | 0081、0083～0087、0090、0097、0102、0103、0148、0149 | [map-cesium.md](map-cesium.md)、[map-core.md](map-core.md) |
 

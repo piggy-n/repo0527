@@ -165,25 +165,48 @@ async function addSquare(ctx: Context, layer: SplatLayer = square()): Promise<vo
   await until(() => pickedHeight(ctx) !== null, '拾取到泼溅');
 }
 
-// 立方体立在 0 米的地面上、顶在 16 米；泼溅的正方形也在 0 米，索引的包围盒顶到 20 米，盒子盖住立方体
-async function boxAndSplat(ctx: Context, splat: SplatLayer | null, half = 8): Promise<TilesetLayer> {
+// 立方体立在 0 米的地面上、顶在 2 × half 米；泼溅的正方形也在 0 米，索引的包围盒顶到 20 米，盒子盖住 16 米高的立方体
+async function serveBox(half: number): Promise<TilesetLayer> {
   const glb = await boxGlb(half);
   onTestFinished(serveFixtures({ '/box/tileset.json': boxTileset(MODEL_AT, half), '/box/box.glb': glb }));
-  const box: TilesetLayer = {
-    id: 'box',
-    url: `${FIXTURE_ORIGIN}/box/tileset.json`,
-    show: true,
-    lighting: 'sun',
-    attempt: 0,
-    clippedBySplats: true
-  };
-  ctx.session.scene.set({ tilesets: [box], ...(splat ? { splats: [splat] } : {}), underground: null });
-  await until(() => ctx.view.sceneStatus.get('box')?.state === 'ready', '立方体就绪');
+  return { id: 'box', url: `${FIXTURE_ORIGIN}/box/tileset.json`, show: true, lighting: 'sun', attempt: 0, clippedBySplats: true };
+}
+
+// 瓦片集就绪只是读到了根索引：等立方体的内容加载完、再画一帧
+async function boxContentDrawn(ctx: Context): Promise<void> {
+  await until(() => {
+    const box = ctx.renderer.inspect().tilesets.box;
+    return box !== undefined && box.loaded > 0 && box.downloading === 0 && box.parsing === 0;
+  }, '立方体的内容加载完');
+  await new Promise(resolve => requestAnimationFrame(resolve));
+}
+
+// 泼溅的数据块都到了、画过一帧
+async function splatDrawn(ctx: Context): Promise<void> {
+  await until(() => ctx.view.sceneStatus.get('square')?.state === 'ready', '泼溅就绪');
+  await until(() => ctx.renderer.inspect().splats.square?.loadProgress === 1, '泼溅的数据块都到了');
+  await new Promise(resolve => requestAnimationFrame(resolve));
+}
+
+// 先只有立方体：画出来、拾取得到顶面，才能说后面是裁掉的
+async function boxFirst(ctx: Context, half = 8): Promise<TilesetLayer> {
+  const box = await serveBox(half);
+  ctx.session.scene.set({ tilesets: [box], underground: null });
+  await boxContentDrawn(ctx);
+  await until(() => isRed(pixel(ctx.canvas, MIDDLE)) && pickedHeight(ctx) !== null, '画出立方体');
+  expect(pickedHeight(ctx)).toBeCloseTo(half * 2, 0);
   return box;
 }
+
 const tall = (extra: Partial<SplatLayer> = {}) =>
   square({ url: tallUrl, placement: { lng: MODEL_AT[0], lat: MODEL_AT[1], height: 0, heading: 0 }, ...extra });
 const clipped = (ctx: Context) => ctx.renderer.inspect().tilesets.box?.clipped;
+
+// 写下的夹具文件在整个文件跑完以后删掉：afterAll 要在收集用例时登记，运行中登记的 Vitest 不执行
+const cleanups: (() => Promise<void>)[] = [];
+afterAll(async () => {
+  await Promise.all(cleanups.splice(0).map(cleanup => cleanup()));
+});
 
 describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
   beforeAll(async () => {
@@ -192,9 +215,7 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
       writeSplatSquare('高方块', { size: 60, count: 31, color: [0, 1, 0], top: 20 })
     ]);
     [url, tallUrl] = written.map(item => item.url);
-    afterAll(async () => {
-      await Promise.all(written.map(({ cleanup }) => cleanup()));
-    });
+    cleanups.push(...written.map(({ cleanup }) => cleanup));
   });
 
   it('加载：就绪时带建议的相机，画出来，拾取到的高度是摆放的高度，拾取—投影往返小于 1 像素', async () => {
@@ -256,6 +277,57 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
     expect(ctx.renderer.inspect().splats).toStrictEqual({});
   });
 
+  it('读索引时换了摆放：上一份已中止、还没清理，新的一份照常加载，不报"已经加过"', async () => {
+    const ctx = await setup();
+    // 索引在主线程下载：扣住它，让上一份停在读索引上
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const original = window.fetch;
+    window.fetch = async (input, init) => {
+      const target = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (target === url) {
+        await gate;
+      }
+      return original(input, init);
+    };
+    onTestFinished(() => {
+      window.fetch = original;
+    });
+
+    ctx.session.scene.set({ tilesets: [], splats: [facing(0)], underground: null });
+    await until(() => ctx.renderer.inspect().splats.square !== undefined, '上一份开始读索引');
+    ctx.session.scene.set({ tilesets: [], splats: [facing(30)], underground: null });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    release?.();
+    await until(() => ['ready', 'failed'].includes(ctx.view.sceneStatus.get('square')?.state ?? ''), '加载结束');
+
+    const status = ctx.view.sceneStatus.get('square');
+    expect(status?.state === 'failed' ? String(status.error) : status?.state).toBe('ready');
+    expect(Object.keys(ctx.renderer.inspect().splats)).toStrictEqual(['square']);
+  });
+
+  it('悬停的拾取跳过泼溅，打到后面的立方体；不写 hover 的照常打到泼溅（ADR 0149）', async () => {
+    const ctx = await setup();
+    const glb = await boxGlb(8);
+    onTestFinished(serveFixtures({ '/box/tileset.json': boxTileset(MODEL_AT, 8), '/box/box.glb': glb }));
+    const box: TilesetLayer = { id: 'box', url: `${FIXTURE_ORIGIN}/box/tileset.json`, show: true, lighting: 'sun', attempt: 0 };
+    // 正方形在 30 米，立方体顶在 16 米：俯视时中心先打到泼溅，后面是立方体，旁边是地面
+    ctx.session.scene.set({ tilesets: [box], splats: [square()], underground: null });
+    await boxContentDrawn(ctx);
+    await splatDrawn(ctx);
+    const aside = { x: MIDDLE.x + 90, y: MIDDLE.y };
+    const hover = (point: ScreenPoint) => ctx.view.pick(point, { hover: true });
+
+    expect(pickedHeight(ctx)).toBeCloseTo(GROUND, 0);
+    expect(hover(MIDDLE)).toMatchObject({ kind: 'hit', surface: 'model' });
+    const behind = hover(MIDDLE);
+    expect(behind.kind === 'hit' ? behind.height : null).toBeCloseTo(16, 0);
+    expect(pickedHeight(ctx, aside)).toBeCloseTo(GROUND, 0);
+    expect(hover(aside)).toMatchObject({ kind: 'hit', surface: 'map' });
+  });
+
   it('索引不存在时进入 failed，换成在的地址以后就绪', async () => {
     const ctx = await setup();
     ctx.session.scene.set({ tilesets: [], splats: [square({ url: url.replace(/\.lcc2$/, '-missing.lcc2') })], underground: null });
@@ -282,9 +354,9 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
     });
     await until(() => ctx.view.sceneStatus.get('box')?.state === 'ready', '立方体就绪');
     // 两样都画出来以后再看中心：泼溅后画、做深度测试，被立方体挡住
+    await boxContentDrawn(ctx);
     await until(() => isGreen(pixel(ctx.canvas, { x: MIDDLE.x + 90, y: MIDDLE.y })), '立方体外画出泼溅');
-    await until(() => ctx.renderer.inspect().splats.square?.loadProgress === 1, '泼溅都到了');
-    await new Promise(resolve => requestAnimationFrame(resolve));
+    await splatDrawn(ctx);
 
     expect(pixel(ctx.canvas, MIDDLE)).toSatisfy(isRed);
     expect(pickedHeight(ctx)).toBeCloseTo(16, 0);
@@ -294,10 +366,11 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
   describe('要求裁剪的瓦片集（倾斜摄影）在泼溅的范围里不画（ADR 0149）', () => {
     it('重叠时立方体在盒子里不画、拾取不到，画出后面的泼溅；隐藏、卸载泼溅后恢复', async () => {
       const ctx = await setup();
-      const box = await boxAndSplat(ctx, tall());
-      await until(() => ctx.view.sceneStatus.get('square')?.state === 'ready', '泼溅就绪');
-      await until(() => isGreen(pixel(ctx.canvas, MIDDLE)), '中心画出泼溅（立方体被裁掉）');
+      const box = await boxFirst(ctx);
 
+      ctx.session.scene.set({ tilesets: [box], splats: [tall()], underground: null });
+      await splatDrawn(ctx);
+      await until(() => isGreen(pixel(ctx.canvas, MIDDLE)), '中心画出泼溅（立方体被裁掉）');
       expect(clipped(ctx)).toBe(true);
       expect(pickedHeight(ctx)).toBeCloseTo(0, 0);
 
@@ -308,6 +381,7 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
 
       ctx.session.scene.set({ tilesets: [box], splats: [tall()], underground: null });
       await until(() => isGreen(pixel(ctx.canvas, MIDDLE)), '再显示泼溅后又裁掉');
+      expect(pickedHeight(ctx)).toBeCloseTo(0, 0);
       ctx.session.scene.set({ tilesets: [box], underground: null });
       await until(() => isRed(pixel(ctx.canvas, MIDDLE)), '卸载泼溅后画出立方体');
       expect(clipped(ctx)).toBe(false);
@@ -317,35 +391,42 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
 
     it('只裁盒子里面：比盒子高的立方体（顶在 80 米），顶面照常画出、拾取到', async () => {
       const ctx = await setup();
-      await boxAndSplat(ctx, tall(), 40);
-      await until(() => ctx.view.sceneStatus.get('square')?.state === 'ready', '泼溅就绪');
-      await until(() => clipped(ctx) && isRed(pixel(ctx.canvas, MIDDLE)), '裁剪时照样画出立方体的顶面');
+      const box = await boxFirst(ctx, 40);
 
+      ctx.session.scene.set({ tilesets: [box], splats: [tall()], underground: null });
+      await splatDrawn(ctx);
+      expect(clipped(ctx)).toBe(true);
+      expect(pixel(ctx.canvas, MIDDLE)).toSatisfy(isRed);
       expect(pickedHeight(ctx)).toBeCloseTo(80, 0);
     });
 
     it('范围不重叠时不裁：泼溅在 500 米以外', async () => {
       const ctx = await setup();
       const far = tall({ placement: { lng: MODEL_AT[0] + 0.0055, lat: MODEL_AT[1], height: 0, heading: 0 } });
-      await boxAndSplat(ctx, far);
-      await until(() => ctx.view.sceneStatus.get('square')?.state === 'ready', '泼溅就绪');
-      await until(() => isRed(pixel(ctx.canvas, MIDDLE)), '画出立方体');
+      const box = await boxFirst(ctx);
 
+      ctx.session.scene.set({ tilesets: [box], splats: [far], underground: null });
+      await splatDrawn(ctx);
       expect(clipped(ctx)).toBe(false);
+      expect(pixel(ctx.canvas, MIDDLE)).toSatisfy(isRed);
       expect(pickedHeight(ctx)).toBeCloseTo(16, 0);
     });
 
     it('先加泼溅、后加立方体也裁；不要求裁剪的瓦片集不裁', async () => {
       const ctx = await setup();
       ctx.session.scene.set({ tilesets: [], splats: [tall()], underground: null });
-      await until(() => ctx.view.sceneStatus.get('square')?.state === 'ready', '泼溅就绪');
-      const box = await boxAndSplat(ctx, tall());
-      await until(() => isGreen(pixel(ctx.canvas, MIDDLE)), '中心画出泼溅（立方体被裁掉）');
+      await splatDrawn(ctx);
+      const box = await serveBox(8);
+      ctx.session.scene.set({ tilesets: [box], splats: [tall()], underground: null });
+      await boxContentDrawn(ctx);
       expect(clipped(ctx)).toBe(true);
+      expect(pixel(ctx.canvas, MIDDLE)).toSatisfy(isGreen);
+      expect(pickedHeight(ctx)).toBeCloseTo(0, 0);
 
       ctx.session.scene.set({ tilesets: [{ ...box, clippedBySplats: false }], splats: [tall()], underground: null });
       await until(() => isRed(pixel(ctx.canvas, MIDDLE)), '不要求裁剪时画出立方体');
       expect(clipped(ctx)).toBe(false);
+      expect(pickedHeight(ctx)).toBeCloseTo(16, 0);
     });
   });
 

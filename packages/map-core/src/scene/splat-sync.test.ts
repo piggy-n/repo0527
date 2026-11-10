@@ -6,16 +6,19 @@ import { mergeSceneStatus, SceneSplatSync, type SplatHost, type SplatOptions, ty
 
 const CAMERA: CameraState = { center: [117.06, 34.27], zoom: 17, bearing: 0, pitch: 55 };
 
-// 引擎一侧：每次加入挂起，测试决定成功还是失败
+// 引擎一侧：每次加入挂起，测试决定成功还是失败；ignoresAbort 时不理中止，照样等测试交回结果（晚到的结果）
 class FakeHost implements SplatHost {
   readonly calls: string[] = [];
   readonly pending = new Map<string, { resolve: (camera: CameraState) => void; reject: (error: unknown) => void }>();
+  ignoresAbort = false;
 
   addSplat(id: string, source: SplatSource, options: SplatOptions, signal: AbortSignal): Promise<CameraState> {
     this.calls.push(`add ${id} ${source.placement.height} ${options.show ? 'show' : 'hide'}`);
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      signal.addEventListener('abort', () => reject(new DOMException('加载已中止', 'AbortError')));
+      if (!this.ignoresAbort) {
+        signal.addEventListener('abort', () => reject(new DOMException('加载已中止', 'AbortError')));
+      }
     });
   }
 
@@ -78,7 +81,7 @@ describe('SceneSplatSync', () => {
     expect(host.calls).toStrictEqual(['add cws 59.7 show', 'update cws hide', 'update cws show']);
   });
 
-  it('地址、摆放、重试次数变了就移除重新加载；加载中被替换的不报告结果', async () => {
+  it('地址、摆放、重试次数变了就移除重新加载；还没加进引擎的不用移除', async () => {
     const { host, sync, states } = setup();
 
     sync.apply([layer('cws')]);
@@ -95,6 +98,25 @@ describe('SceneSplatSync', () => {
     stale?.resolve(CAMERA);
     await flush();
     expect(states()).toStrictEqual({ cws: 'loading' });
+  });
+
+  it('加载中被替换的不报告结果：引擎在中止以后才交回成功或失败，也不改状态、不再通知', async () => {
+    const { host, sync, statuses, states } = setup();
+    host.ignoresAbort = true;
+
+    sync.apply([layer('cws')]);
+    const resolved = host.pending.get('cws');
+    sync.apply([layer('cws', { attempt: 1 })]);
+    const rejected = host.pending.get('cws');
+    sync.apply([layer('cws', { attempt: 2 })]);
+    const published = statuses.length;
+    resolved?.resolve(CAMERA);
+    rejected?.reject(new Error('索引 404'));
+    await flush();
+
+    expect(statuses).toHaveLength(published);
+    expect(states()).toStrictEqual({ cws: 'loading' });
+    expect(host.calls).toStrictEqual(['add cws 59.7 show', 'add cws 59.7 show', 'add cws 59.7 show']);
   });
 
   it('加载失败、数据块失败都进入 failed，只记第一条；加载中报告的失败不被就绪盖掉', async () => {

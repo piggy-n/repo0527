@@ -29,9 +29,9 @@
 | `box-select/BoxSelectOverlay.tsx` | 点/框选的浮层：拖动框选时的矩形（设计稿 5D.7 保留原来的外观）和鼠标旁的提示（ADR 0056） |
 | `pan-key.ts` | 临时拖动地图的键：Mac 用 ⌘、其他平台用 Ctrl，交给工具声明的修饰键和提示里的写法（ADR 0056） |
 | `draw/shape-draw.ts` | 绘制范围的类型、提示文案和 `draw` 分组的推导（纯函数，ADR 0104） |
-| `draw/useShapeDraw.ts` | 绘制的拥有者：框选、多边形两个工具，只保留一个画完的范围；框选的矩形和提示交给 `BoxSelectOverlay`（见"绘制范围"） |
+| `draw/useShapeDraw.ts` | 绘制的拥有者：框选、多边形两个工具，只保留一个画完的范围；框选的矩形和提示交给 `BoxSelectOverlay`（见"绘制范围"）。多边形跟着鼠标的预览用悬停的拾取（`pick(point, { hover: true })`，跳过高斯泼溅，ADR 0149），单击加的节点用完整的拾取，在三维里两者可能差一点（现在只在二维用） |
 | `draw/shape-edit.ts` | 逐点编辑的纯函数：手柄（节点、边的中点）、按到哪一个、移动、插入、删除节点，`shape-edit` 分组的推导（ADR 0122） |
-| `draw/useShapeEdit.ts` | 逐点编辑的拥有者：一个工具，按在手柄上时接管拖动，拖完才交出新的范围；选中、删除、提示（见"逐点编辑"） |
+| `draw/useShapeEdit.ts` | 逐点编辑的拥有者：一个工具，按在手柄上时接管拖动，拖完才交出新的范围；选中、删除、提示（见"逐点编辑"）。拖动中的预览用悬停的拾取（跳过高斯泼溅，ADR 0149），松手时在松手处按完整的拾取放下，打不到时用最后一次预览的位置 |
 | `query-geometry.ts` | 发给后端的几何：整理（简化、舍入、有效性，ADR 0051）、屏幕框四角拾取成多边形、一个像素对应的经纬度距离；2026-10-28 从 `features/resource-map` 移来 |
 | `measure/measure-style.ts` | `measure` 分组的推导（纯函数，ADR 0035） |
 | `measure/measure-labels.ts` | 测量的标签、单位格式、标签放在哪一边与鼠标旁的提示（纯函数，ADR 0055） |

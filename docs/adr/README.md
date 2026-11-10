@@ -92,7 +92,7 @@
 | [0078](0078-3d-scope-and-interaction.md) | 三维阶段的范围与交互 | 已接受（第 1 节三维里不显示资源图层只适用于 Cesium 引擎，由 0147 修改） |
 | [0079](0079-cesium-view-and-dimension-switch.md) | Cesium 运行时、三维视图与二三维切换 | 已接受（修正 0002 的 Cesium 版本；第 2、8 节由 0147 扩展到两种引擎） |
 | [0080](0080-3d-overlays-measure-and-status.md) | 三维的覆盖物、测量、临时拖动与状态栏 | 已接受（三维期间暂停 0048、0049 中三维的识别；第 1 节的只改坐标、等画好由 0082 修正；symbol 的文字由 0146 补上） |
-| [0081](0081-3d-models-scene-content-and-underground.md) | 三维模型：3DT 清单、会话的三维内容与钻地 | 已接受（第 6 节钻地时隐藏白膜由 0084 改为隐藏地面上的模型；第 3 节整理索引的误差规则由 0148 修改） |
+| [0081](0081-3d-models-scene-content-and-underground.md) | 三维模型：3DT 清单、会话的三维内容与钻地 | 已接受（第 6 节钻地时隐藏白膜由 0084 改为隐藏地面上的模型；第 3 节整理索引的误差规则由 0148 修改；第 1 节清单的模型种类由 0149 补充高斯泼溅） |
 | [0082](0082-3d-overlay-live-limit-and-rebuild-wait.md) | 三维覆盖物：只换坐标的点数上限、重建时等新实体画好 | 已接受（修正 0080 第 1 节） |
 | [0083](0083-3d-route-roam.md) | 三维路线漫游：清单里的路线、会话的漫游意图 | 已接受（选工具退出漫游由 0084 改为移动以外的工具；漫游状态按种类区分、路线和步行换手由 0086 补充） |
 | [0084](0084-underground-space-entries-and-ground-models.md) | 地下空间时隐藏不适用的入口；钻地时隐藏地面上的模型；徐州倾斜摄影 | 已接受（修改 0081 第 6 节的钻地时隐藏白膜） |
@@ -159,7 +159,7 @@
 | [0146](0146-basemap-panel-and-labels.md) | 底图面板默认只有切换按钮，标注改成页面操作，浮层可以点外部和 Esc 关闭，三维画文字 | 已接受（修改 0069 第 3 节、0134 第 1 节、0080 和 0133 里三维不画 symbol，补充 0140） |
 | [0147](0147-maplibre-three-3d-engine.md) | 三维加入 MapLibre + Three.js 引擎，和 Cesium 用 .env 选择 | 已接受（修改 0002、0020 第 4 节、0024、0078 第 1 节、0079 第 2、8 节；三维里的资源图层现由开关关着） |
 | [0148](0148-tileset-external-roots-and-empty-errors.md) | 整理 3D Tiles 索引：外部索引的根节点换到引用它的位置，没有内容的节点不改小误差 | 已接受（修改 0081 第 3 节） |
-| [0149](0149-lcc2-gaussian-splats.md) | LCC2 高斯泼溅：只在 `maplibre` 引擎下用 gaussian-splat-lite 加载，位置按数据集配准 | 已接受 |
+| [0149](0149-lcc2-gaussian-splats.md) | LCC2 高斯泼溅：只在 `maplibre` 引擎下用 gaussian-splat-lite 加载，位置按数据集配准 | 已接受（补充 0081 第 1 节：清单加 `kind: 'splat'`） |
 
 ## 模板
 

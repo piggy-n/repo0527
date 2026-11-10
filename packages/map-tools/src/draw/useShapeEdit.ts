@@ -1,4 +1,4 @@
-import type { MapInputEvent, MapTool, ScreenPoint, StyleGroup, ToolView } from '@mx/map-core';
+import type { LngLat, MapInputEvent, MapTool, ScreenPoint, StyleGroup, ToolView } from '@mx/map-core';
 import type { MapContext } from '@mx/map-vue';
 import type { MultiPolygon } from 'geojson';
 import { computed, type ComputedRef, getCurrentScope, type ShallowRef, shallowReadonly, shallowRef } from 'vue';
@@ -56,6 +56,13 @@ interface Drag {
   readonly result: { readonly geometry: MultiPolygon; readonly ref: VertexRef } | null;
 }
 
+// 手柄拖到 lngLat：节点移过去，边的中点插入新的节点
+function placed({ handle, geometry }: Drag, lngLat: LngLat): NonNullable<Drag['result']> {
+  return handle.kind === 'vertex'
+    ? { geometry: moveVertex(geometry, handle.ref, lngLat), ref: handle.ref }
+    : insertVertex(geometry, handle.ref, lngLat);
+}
+
 /**
  * 创建逐点编辑的拥有者（ADR 0122），在页面的 setup 中调用：拖动节点移动，拖动边的中点插入节点，
  * 单击选中节点后按 Delete 删除。按在节点上时由工具接管拖动，其余地方照常平移地图；只在二维编辑
@@ -107,24 +114,23 @@ export function useShapeEdit(
     if (current.result === null && Math.hypot(point.x - current.from.x, point.y - current.from.y) < DRAG_THRESHOLD) {
       return true;
     }
-    const picked = view.pick(point);
+    // 拖动中的预览是悬停的拾取：跳过高斯泼溅（ADR 0149），松手时再按完整的拾取放下
+    const picked = view.pick(point, { hover: true });
     if (picked.kind !== 'hit') {
       return true;
     }
-    const { handle } = current;
-    const result =
-      handle.kind === 'vertex'
-        ? { geometry: moveVertex(current.geometry, handle.ref, picked.lngLat), ref: handle.ref }
-        : insertVertex(current.geometry, handle.ref, picked.lngLat);
-    drag.value = { ...current, result };
+    drag.value = { ...current, result: placed(current, picked.lngLat) };
     return true;
   };
 
-  const onRelease = (): boolean => {
-    const current = drag.value;
-    if (!current) {
+  const onRelease = (point: ScreenPoint, view: ToolView): boolean => {
+    const dragged = drag.value;
+    if (!dragged) {
       return false;
     }
+    // 拖过的手柄按松手处完整的拾取放下（打得到泼溅）；打不到时用最后一次预览的位置
+    const picked = dragged.result ? view.pick(point) : null;
+    const current = picked?.kind === 'hit' ? { ...dragged, result: placed(dragged, picked.lngLat) } : dragged;
     drag.value = null;
     if (current.result) {
       selected.value = current.result.ref;
@@ -168,7 +174,7 @@ export function useShapeEdit(
       case 'move':
         return onMove(event.point, view);
       case 'up':
-        return event.button === 0 && onRelease();
+        return event.button === 0 && onRelease(event.point, view);
       case 'click':
         // 点在空白处取消选中；点在手柄上的已经在松开时处理
         if (event.button === 0 && !hit(event.point, view)) {

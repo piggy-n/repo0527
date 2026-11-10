@@ -11,7 +11,7 @@ import { tilesetCamera } from '../scene/tileset-camera';
 import { mergeSceneStatus, SceneSplatSync, type SplatOptions, type SplatSource } from '../scene/splat-sync';
 import { SceneTilesetSync, type TilesetOptions } from '../scene/tileset-sync';
 import { deferred, type Deferred } from '../view/view-lifecycle';
-import type { LngLat, ScreenPoint } from '../view/view-input';
+import type { LngLat, PickOptions, ScreenPoint } from '../view/view-input';
 import { SCENE_LAYER_ID, SceneLayer, type SceneLayerMap } from './scene-layer';
 import type { ScenePick, SceneRenderer, SceneRendererLoader } from './scene-renderer';
 
@@ -198,9 +198,9 @@ export class MapLibreScene implements Disposable {
     this.#renderer?.loseContext();
   }
 
-  /** 显示三维时拾取模型 */
-  pick(point: ScreenPoint): ScenePick | null {
-    return this.#active ? (this.#renderer?.pick(point) ?? null) : null;
+  /** 显示三维时拾取模型；悬停时不打高斯泼溅 */
+  pick(point: ScreenPoint, options?: PickOptions): ScenePick | null {
+    return this.#active ? (this.#renderer?.pick(point, options) ?? null) : null;
   }
 
   /** 显示三维时按模型层最近一帧的相机投影；还没画过时为 null */

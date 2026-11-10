@@ -15,6 +15,15 @@ export type PickResult =
   | { readonly kind: 'miss' }
   | { readonly kind: 'hit'; readonly surface: PickSurface; readonly lngLat: LngLat; readonly height?: number };
 
+/** 拾取的选项 */
+export interface PickOptions {
+  /**
+   * 悬停：每帧都会调用的拾取（状态栏的读数、绘制和逐点编辑跟着鼠标的预览），跳过代价大的表面：高斯泼溅（ADR 0149）的射线拾取
+   * 每次可能几十毫秒，打到泼溅的地方按后面的模型或地面算。点击的落点、测量、坐标定位、点选不写；没有泼溅的引擎忽略它
+   */
+  readonly hover?: boolean;
+}
+
 export interface Modifiers {
   readonly shift: boolean;
   readonly ctrl: boolean;

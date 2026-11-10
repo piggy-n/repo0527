@@ -182,6 +182,7 @@ export type {
   MapKeyEvent,
   MapPointerEvent,
   Modifiers,
+  PickOptions,
   PickResult,
   PickSurface,
   ScreenPoint

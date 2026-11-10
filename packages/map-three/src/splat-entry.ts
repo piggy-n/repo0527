@@ -21,13 +21,14 @@ import {
 } from 'three';
 import type { FrameMath } from './frame';
 import { LocalFrame } from './local-frame';
+import { retriedByLibrary } from './splat-errors';
 import type { ClipBox, TilesetHit } from './tileset-entry';
 
 /** gaussian-splat-lite 的模块：单独分块，第一次加载 LCC2 时才下载（ADR 0149 第 2 节） */
 export type SplatLibrary = typeof import('gaussian-splat-lite');
 
 export interface SplatEntryEvents {
-  /** 数据（索引、数据块）加载失败，库不再重试的 */
+  /** 数据块加载失败、库不会再重试（数据不对、404 这类）；库自己会重试的不报告（retriedByLibrary）。索引失败由 load 拒绝 */
   readonly failed: (error: unknown) => void;
   /** 有新内容要画：数据到了、排序完了 */
   readonly repaint: () => void;
@@ -113,7 +114,11 @@ export class SplatEntry implements Disposable {
       maxConcurrentLoads: 2,
       fadeDurationMs: 0,
       onChange: () => events.repaint(),
-      onError: (error, url) => events.failed(new Error(`读取 ${url} 失败`, { cause: error }))
+      onError: (error, url) => {
+        if (!retriedByLibrary(error)) {
+          events.failed(new Error(`读取 ${url} 失败`, { cause: error }));
+        }
+      }
     });
     scheduler.group.matrixAutoUpdate = false;
     scheduler.group.matrix.copy(placementMatrix(source.placement));
@@ -146,7 +151,7 @@ export class SplatEntry implements Disposable {
     this.#options = options;
   }
 
-  /** 预算（高斯个数）：渲染器按显示的泼溅分配总预算 */
+  /** 预算（高斯个数）：渲染器按加了几份泼溅平分总预算 */
   setBudget(budget: number): void {
     this.#scheduler.splatBudget = budget;
   }

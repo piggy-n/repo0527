@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { SceneModel } from './catalog';
-import { deriveSceneContent, type SceneModelsState } from './scene-content';
+import { deriveSceneContent, type RouteChoice, type SceneModelsState } from './scene-content';
 
 const oblique = (id: string, extra: Partial<SceneModel> = {}): SceneModel => ({
   id,
@@ -71,5 +71,26 @@ describe('deriveSceneContent', () => {
     expect(content.tilesets.map(({ id }) => id)).toStrictEqual(['xz']);
     expect(content.splats).toStrictEqual([{ id: 'cws', url, placement, show: true, attempt: 2 }]);
     expect('splats' in deriveSceneContent(models, loaded(['xz']))).toBe(false);
+  });
+
+  it('漫游地下的模型时不显示地面上的泼溅，和地面上的瓦片集一样（ADR 0097 第 5 节）', () => {
+    const path: [number, number, number][] = [
+      [120.666, 31.3175, -5.1],
+      [120.6662, 31.3175, -5.1]
+    ];
+    const station = oblique('station', {
+      kind: 'indoor',
+      underground: true,
+      routes: [{ id: 'enter', name: '进站', path, length: 19 }]
+    });
+    const splat = { url: 'https://maps.test/3dt/cws/cws.lcc2', placement: { lng: 117.06, lat: 34.27, height: 59.7, heading: 0 } };
+    const models = [station, oblique('cws', { kind: 'splat', effects: [], splat })];
+    const state = loaded(['station', 'cws']);
+    const roam: RouteChoice = { kind: 'route', modelId: 'station', routeId: 'enter', id: 'r1', playing: false, speed: 4, run: 0 };
+
+    expect(deriveSceneContent(models, state).splats?.[0]?.show).toBe(true);
+    const roaming = deriveSceneContent(models, { ...state, roam });
+    expect(roaming.splats?.[0]?.show).toBe(false);
+    expect(roaming.underground?.tilesetId).toBe('station');
   });
 });

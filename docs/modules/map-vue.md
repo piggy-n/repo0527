@@ -150,7 +150,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 | `view.value.eyeHeight()` | 就绪视图的视点高度（米），只有三维视图有，二维为 `null`；在相机变化时读取（ADR 0080 第 6 节） |
 | `view.value.heading()` | 就绪视图的视点朝向（度，正北为 0、顺时针），只有三维视图有，二维为 `null`；步行时状态栏用（ADR 0086 第 3 节） |
 | `setDimension(kind)` | 切换二维、三维：旧的当前视图暂停、新的恢复；切换时的业务（如换底图）由页面决定 |
-| `view` | 就绪视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`pick`、`project`、`queryRendered`（ADR 0047）和三维的读数 `eyeHeight`、`heading`；只在视图为 `ready` 时有值，同一个视图的入口始终是同一个对象（ADR 0039 第 4 条）。移动相机不在这里，通过相机操作 |
+| `view` | 就绪视图的受限入口 `MapViewport`：冻结的普通对象，只有 `kind`、`pick`（第二个参数 `{ hover }` 标出悬停的拾取，跳过高斯泼溅，ADR 0149）、`project`、`queryRendered`（ADR 0047）和三维的读数 `eyeHeight`、`heading`；只在视图为 `ready` 时有值，同一个视图的入口始终是同一个对象（ADR 0039 第 4 条）。移动相机不在这里，通过相机操作 |
 | `viewState` | `idle`（没有视图）、`initializing`、`ready`、`paused`、`failed` |
 | `failure` | 视图失败的原因（`MapViewFailure`），只在 `failed` 时有值，卸下视图时清空（ADR 0030） |
 | `sourceErrors` | 当前视图的数据源错误（`ReadonlyMap<数据源 ID, 错误>`，ADR 0041 第 5 节）：挂上视图时取它的记录、随 `sourceerrorchange` 更新；没有视图时是空表，替换视图（包括引擎失败后重试）后从新视图的记录开始，旧视图上的错误不留下。拥有者按数据源 ID 的前缀从中推导自己的"加载失败" |

@@ -228,8 +228,9 @@ export function useSceneModels(
     loaded.value = loaded.value.filter(item => item !== id);
     // 卸载时这个模型的效果、重试次数、导航网格一起忘掉；在它里面漫游的一并结束
     shownEffects.value = new Map([...shownEffects.value].filter(([modelId]) => modelId !== id));
-    const tilesetIds = new Set(model.effects.map(effect => tilesetIdOf(model, effect.id)));
-    attempts.value = new Map([...attempts.value].filter(([tilesetId]) => !tilesetIds.has(tilesetId)));
+    // 重试次数按瓦片集 ID 记；高斯泼溅没有瓦片集，按模型 ID 记
+    const attemptIds = new Set(model.splat ? [model.id] : model.effects.map(effect => tilesetIdOf(model, effect.id)));
+    attempts.value = new Map([...attempts.value].filter(([attemptId]) => !attemptIds.has(attemptId)));
     if (navigations.value.has(id)) {
       navigations.value = new Map([...navigations.value].filter(([modelId]) => modelId !== id));
     }

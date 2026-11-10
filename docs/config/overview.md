@@ -33,7 +33,7 @@
 | 开关 | 文件 | 默认 | 作用 | ADR |
 |---|---|---|---|---|
 | `STATIC_BASEMAP_OPTIONS.cityColors` | `shared/config/static-basemap-options.ts` | `false` | 静态底图各市分色；关着时全省同一种陆地色。改了要运行 `basemap:generate` 更新缩略图 | 0134、0146 |
-| `SCENE_OPTIONS.resourceLayers` | `shared/config/scene-options.ts` | `false` | `maplibre` 引擎的三维里显示资源图层、点/框选能识别；关着时和 Cesium 一样。放开前要先改页面设计 | 0147 |
+| `SCENE_OPTIONS.resourceLayers` | `shared/config/scene-options.ts` | `false` | `maplibre` 引擎的三维里显示资源图层、点/框选能识别；关着时这两项和 Cesium 一样，高斯泼溅不受影响（ADR 0149）。放开前要先改页面设计 | 0147 |
 
 这类文件只写类型和常量，不导入别的模块：Node 直接运行的工具也会导入它们（`basemap:generate` 读分色开关），读不了 Vite 专用的写法。
 

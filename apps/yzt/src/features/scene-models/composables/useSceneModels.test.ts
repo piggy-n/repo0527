@@ -309,6 +309,14 @@ describe('useSceneModels', () => {
     ctx.owner.setChecked('station', false);
     ctx.owner.setChecked('station', true);
     expect(ctx.owner.deriveContent().tilesets[0]?.attempt).toBe(0);
+
+    // 高斯泼溅的重试次数按模型 ID 记，卸载时一样忘掉（ADR 0149）
+    ctx.owner.setChecked('scan', true);
+    ctx.owner.retry('scan');
+    expect(ctx.owner.deriveContent().splats?.[0]?.attempt).toBe(1);
+    ctx.owner.setChecked('scan', false);
+    ctx.owner.setChecked('scan', true);
+    expect(ctx.owner.deriveContent().splats?.[0]?.attempt).toBe(0);
   });
 
   it('重试只加当前效果的次数', () => {
