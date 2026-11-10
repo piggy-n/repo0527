@@ -22,6 +22,7 @@
 | 预览构建产物 | `pnpm --filter yzt preview` |
 | 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter yzt measure:map-load` |
 | 三维两种引擎的性能对比（显卡机器上，ADR 0147 3C.4） | `pnpm --filter yzt measure:3d` |
+| 算 LCC2 模型在清单里的摆放（ADR 0149） | `pnpm --filter yzt lcc2:register <索引>` |
 | 探查资源的分类字段、瓦片是否合并（只读，要能连后端） | `pnpm --filter yzt probe:resource-classes` |
 | 生成自定义监测范围的验收文件 | `pnpm --filter yzt scope-files:generate` |
 | 每月检查依赖 | `pnpm deps:check` |
@@ -195,6 +196,21 @@ pnpm add -Dw -E some-tool
 **执行了什么**：Node 运行 `tools/measure-3d/cli.ts`：启动前检查（模型、端口、渲染器，空页面校准帧间隔的下限）→ 用 `tools/measure-3d/vite.config.ts` 按生产模式构建测量页 → 每遍一个新的浏览器进程 → 写 `local/measure-3d/<时间>/`（`report.md`、`quality.html`、`manual.md`、`raw.json`、`shots/`、`profiles/`，不入库）。每跑完一遍就重新写一次报告，中断了也留得下。
 
 **注意事项**：只在有真实显卡的机器上有意义，看到软件渲染直接退出（`--allow-software` 只用来确认脚本能跑）。默认参数实测 30 分钟（2026-11-08，RTX 3060），每多一个对照方案多约 8 分钟，期间会弹出浏览器窗口，不要用这台机器。`--cull-window` 对照动着不请求的窗口：产品默认按实测的加载时间，`1` 是 Cesium 的固定 1 秒，`off` 是动着也请求。步骤和口径见 [modules/map-three.md](modules/map-three.md)"性能验收"，参数见 `--help`。
+
+### `pnpm --filter yzt lcc2:register <索引>`
+
+**作用**：算出 LCC2 模型写进清单的 `placement`（经纬度、高度、朝向），同时打印按索引的 `offset` 原样换算的位置作对照（ADR 0149 第 4 节）。
+
+**什么时候用**：清单加 LCC2 模型、数据方重新导出以后。
+
+**执行了什么**：Node 运行 `tools/lcc2-register/cli.ts`（读文件、打印；计算在 `register.ts`）：读 `.lcc2` 索引、同级的 `info/poses.json`（扫描轨迹）和索引 `root.meshFiles` 列的碰撞网格（`data/mesh/*.ply`，按 0.2 米的方格采样出各层表面的高度）；拟合泼溅和网格相对轨迹的平移（水平先按"脚下 0.3～2.5 米有表面"粗搜，再和竖直一起按扫描仪离地 1～1.5 米细调）；加上人工修正和高程基准的差，用 proj4 换成经纬度，朝向包括子午线收敛角；最后做轨迹核对，打印离脚下的表面 1～1.5 米的比例和高度分布。
+
+**注意事项**：
+- 索引的相对路径从 `local/3dt/` 下找，worktree 里设 `YZT_LOCAL_DIR` 指回主目录；也可以写绝对路径
+- 只认 CGCS2000 3 度带、不带带号的 EPSG:4534～4554（江苏是 4548～4550）
+- `--shift 东,北,上`、`--yaw 度`：人工修正，移动泼溅和网格，核对算上它；给了 `--yaw` 时拟合在转过 -yaw 的轨迹上求平移，再和偏航组成修正；`--datum 米`：高程基准的差，整体抬高，核对不算它，徐州写 5.47（[config/3dt-manifest.md](config/3dt-manifest.md)）；`--no-fit`：轨迹不可信时不拟合
+- 核对不通过（不到 80%）时以失败退出，最后一行写"核对不通过，不要写进清单"；通过时输出的 `"placement": {...}` 原样写进清单。参数写错、文件找不到时只打印原因（找不到文件时提示相对路径从哪里找）
+- 楚王山1号（17 个网格文件）约 1 秒，彭城广场的样例（79 个、1565 万个三角形）约 25 秒；proj4 只是这个工具的开发依赖，运行时代码不能导入（lint 检查）
 
 ### `pnpm --filter yzt probe:resource-classes`
 

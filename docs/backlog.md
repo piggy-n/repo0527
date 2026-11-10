@@ -34,7 +34,7 @@
 - 城市现状数据 `csxhjctb_*` 的字段对照表待用户提供，拿到之前详情显示编码
 - 自助取数：几何类型只有三张数据表有，分类节点生成的是"XX图层"（[迁移记录](archive/migration.md)"自助取数的几何类型"）
 - 状态未核实：图层按年份重复返回、瓦片不压缩、没有 ETag、错误也返回 200（2026-10 的记录，后端已换过一次）；`/file/page` 不校验 token
-- LCC2 数据（问数据方，ADR 0149）：彭城广场样例的泼溅和碰撞网格相对自己的扫描轨迹整体平移约 85 米，为什么；`offset` 的 z 和徐州倾斜摄影各用什么高程基准；能否重新导出、让 `offset` 直接可用；数据归谁、能否在内网和公网发布（索引里写着 "XGrids all rights reserved"）。答复回来只改清单里的摆放
+- LCC2 数据（问数据方，ADR 0149）：彭城广场样例的泼溅和碰撞网格相对自己的扫描轨迹整体平移约 85 米，为什么（楚王山1号没有这个问题，三者相差不到 0.1 米）；`offset` 的 z 和徐州倾斜摄影各用什么高程基准（彭城广场按轨迹定的地面比 XZ 低 5.47 米，清单暂按 XZ 的口径抬高，见 [3dt-manifest](config/3dt-manifest.md)）；能否重新导出、让 `offset` 直接可用；数据归谁、能否在内网和公网发布（索引里写着 "XGrids all rights reserved"）。答复回来只改清单里的摆放
 - LCC2 授权（问法务，ADR 0149 第 8 节）：白皮书条款要求的署名 "Data Organization Format originated from XGRIDS" 放在地图的署名控件里够不够，我们的读取和显示算不算"派生作品"；`gaussian-splat-lite` 的 LICENSE、NOTICE 怎么随产物提供。答复回来只改署名的文字
 
 ## 未完成的功能
@@ -42,7 +42,8 @@
 - 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像
 - 三维的后续顺序（用户 2026-11-09 定）：`maplibre` 下加 LCC2 → 过 [ADR 0147](adr/0147-maplibre-three-3d-engine.md) 第 9 节的门槛，默认改为 `maplibre` → Cesium 下方案 B 和叠画布 LCC2 的 PoC；不接 XGRIDS 的 LCC Web SDK（AppKey 绑定域名，在线授权要连外网，离线授权会过期）
 - 三维的资源图层：暂不显示（用户 2026-11-09 决定，放开要改页面设计），三维点/框选也不识别；`maplibre` 引擎由 `shared/config/scene-options.ts` 的开关关着，放开时先改页面设计再打开开关。Cesium 放开时走方案 B（迁移旧项目的 Worker 栅格化），接入时对齐解码库版本、点选改用瓦片数据服务、避免和 MapLibre 重复下载（ADR 0091）
-- LCC2（高斯泼溅）：只在 `maplibre` 下做，按 [ADR 0149](adr/0149-lcc2-gaussian-splats.md) 第 9 节分 L.1～L.3 实施，参照 PoC（`poc/maplibre-three-gpu` 分支，不合入）；L.1（显示、拾取）已做，楚王山1号先按 `offset` 摆放（未配准，[3dt-manifest](config/3dt-manifest.md)）；L.2 写配准工具和 `docs/deployment.md` 的转发要求（支持 Range），把 GL 监听放进开发页；L.3 在显卡机器上定预算、看画面，再跑一遍 GL 监听（软件渲染下去掉每帧的保护也不出错，看不出必要性）
+- LCC2（高斯泼溅）：只在 `maplibre` 下做，按 [ADR 0149](adr/0149-lcc2-gaussian-splats.md) 第 9 节分 L.1～L.3 实施，参照 PoC（`poc/maplibre-three-gpu` 分支，不合入）；L.1（显示、拾取）已做；L.2 的配准工具（`lcc2:register`）、楚王山1号的配准、`docs/deployment.md` 的转发要求已做，还差把 GL 监听放进开发页，0.5 米的目视验收没做成（见下一条）；L.3 在显卡机器上定预算、看画面，再跑一遍 GL 监听（软件渲染下去掉每帧的保护也不出错，看不出必要性）
+- LCC2 配准的 0.5 米验收（ADR 0149 第 9 节 L.2）：楚王山1号和影像只确认到 1 米以内（ArcGIS 这里约 0.5 米/像素，路大多在树冠下，旁边没有倾斜模型），等有和倾斜模型重叠的 LCC2、控制点或更清晰的影像时再验；`docs/deployment.md` 的 nginx 转发没有实测，首次部署时按其中的 curl 验收
 - Cesium 下的 LCC2：只做 Three.js 叠画布的 PoC，重点看两块画布不共用深度时，和倾斜模型、地形的遮挡对不对
 - MapLibre 三维引擎（ADR 0147）：3C.4 的验收在同步 main、按实测窗口后（第八次实测）只差 z19 飞行中的三角形（88%）和 z17 飞行后补齐（1.10 秒），用户 2026-11-09 接受（[map-three](modules/map-three.md)"接受的两项差距"）；多重采样先不开，不放在 3C.4，用户之后自己用 `--antialias` 对照再定；经开区（JKQ）的服务器 2026-11-09 连不上，先不测，能连上时复测：经网络时实测的窗口多长、z16 倾斜停下后还会不会被锁粗、是哪一条放宽的；第三人称的人物模型没做（入口没开放）；真实显卡上的画面、逐帧检测、第一人称的手感和站内明暗没有验证，清单见 [map-three](modules/map-three.md)"还没做的"
 - MapLibre 6.12 地球投影下中心不变的 `flyTo` 算出 NaN，地图就坏了（`acos` 没有截断）：`map-core/maplibre/globe-fly.ts` 规避着，可以给上游提 issue，上游修好后去掉（[map-core](modules/map-core.md)"MapLibre 6 的实测行为"）

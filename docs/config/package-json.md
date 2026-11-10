@@ -136,6 +136,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "boundaries:generate": "node tools/boundaries/cli.ts",
     "measure:map-load": "vite build && node tools/measure-map-load/cli.ts",
     "measure:3d": "node tools/measure-3d/cli.ts",
+    "lcc2:register": "node tools/lcc2-register/cli.ts",
     "icons": "yzt-icons src/assets/icons src/shared/icons/icons.json"
   },
   "dependencies": {
@@ -193,6 +194,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "msw": "^2.15.0",
     "opentype.js": "^2.0.0",
     "playwright": "^1.64.0",
+    "proj4": "^2.22.0",
     "sass-embedded": "^1.105.0",
     "sirv": "^3.0.2",
     "typescript": "7.0.2",
@@ -271,6 +273,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `nanoevents` | 地图内核的带类型事件（ADR 0023）。实现只有 25 行，无依赖；`on` 返回取消订阅的函数，直接登记到释放栈。map-core 对外只暴露自己的 `Unsubscribe` 类型，不暴露它的类型 | mitt（`on` 不返回取消函数，2023 年后没有发布）、`EventTarget` |
 | `core-js` | 补齐资源释放的标准接口：只在 `app/main.ts` 的最前面引入 `es/symbol/dispose`、`es/disposable-stack` 两个模块（ADR 0023）。入口包实测增加 21.8 KB（gzip 7.9 KB）。安装脚本不执行（见 pnpm-workspace.md）；lint 的 `no-unassigned-import` 已放行 `core-js/**` | 在 utils 里自己实现约 60 行 |
 | `msw` | 测试中在网络层模拟接口，只用 `msw/node`；安装脚本不放行（见 pnpm-workspace.md） | axios-mock-adapter |
+| `proj4` | LCC2 配准工具 `tools/lcc2-register/` 把 EPSG 投影坐标换成经纬度（ADR 0149 第 4 节）；只是开发依赖，运行时代码不能导入（lint 的 `no-restricted-imports`，见 [oxlintrc.md](oxlintrc.md)），清单里存换算好的摆放。和 `shpjs` 带进来的是同一份 2.22.0，自带类型 | 运行时按 `offset` 换算（ADR 0149 没有采用）、手写高斯投影 |
 | `opentype.js` | 解析字体、把系统名称转成 SVG 轮廓，只在 `tools/system-title/` 中使用（ADR 0012）；2.0 没有自带类型，用本地的最小声明 | fontkit、harfbuzzjs |
 | `vitest` | 测试运行器，复用 `vite.config.ts`（ADR 0010） | Jest |
 | `@vitest/browser-playwright` | Vitest 浏览器模式的 Playwright 驱动（ADR 0040），会带上 `@vitest/browser`。它对 `vitest` 的依赖是精确版本，两者要一起升级 | WebdriverIO 驱动、Vitest 默认的 preview（不能无界面运行） |
