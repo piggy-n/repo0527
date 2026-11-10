@@ -40,7 +40,6 @@
 - 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像
 - Cesium 引擎的三维 MVT：资源图层在三维不显示，三维点/框选不识别（MapLibre 引擎已经显示、能识别，ADR 0147）；接入时对齐解码库版本、点选改用瓦片数据服务、避免和 MapLibre 重复下载（ADR 0091）
 - MapLibre 三维引擎（ADR 0147）：3C.4 第四次实测 z17、z19 全部通过；移植动着的时候不请求以后经开区倾斜好了很多，z19 飞行中变粗，窗口还要定（`pnpm --filter yzt measure:3d`，[map-three](modules/map-three.md)"性能验收"）；第三人称的人物模型没做（入口没开放）；真实显卡上的画面、逐帧检测、第一人称的手感和站内明暗没有验证，清单见 [map-three](modules/map-three.md)"还没做的"
-- `feat/map-three` 下次同步 main（`dda0687b` 起）时，MapLibre 引擎要跟上瓦片集的改动：缓存改成和 Cesium 相同的 1 GB + 1 GB（`three-scene-renderer.ts` 现在是 1 GB + 512 MB，这边是所有瓦片集共用一份，取值按 ADR 0147 第 5 节定，注释要和实际一致）；默认屏幕误差改成 8（`tileset-entry.ts` 的 `ERROR_TARGET` 现在是 16）；`TilesetOptions.maximumScreenSpaceError` 映射过来（现在忽略，要按瓦片集算，不能只靠共用的 `ErrorScale` 倍数）。这几项会改变验收的基准，同步后要重跑完整验收（`docs/modules/map-cesium.md`"瓦片集的显存预算"）
 - MapLibre 6.12 地球投影下中心不变的 `flyTo` 算出 NaN，地图就坏了（`acos` 没有截断）：`map-core/maplibre/globe-fly.ts` 规避着，可以给上游提 issue，上游修好后去掉（[map-core](modules/map-core.md)"MapLibre 6 的实测行为"）
 - AI 对话：MVT 结果、点击结果要素的弹窗、历史按内容搜索、对话随页面缓存、结果区的联动，见 [ai-chat](modules/ai-chat.md)"待办"
 - 数据查询：高级查询的导出；高级查询本身暂时隐藏（ADR 0119）

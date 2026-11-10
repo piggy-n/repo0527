@@ -24,11 +24,11 @@ import { TileUploader } from './tile-uploader';
 import { TilesetEntry, type TilesetEntryInspection } from './tileset-entry';
 import { WalkMarker } from './walk-marker';
 
-// 缓存预算和 Cesium 的数值相同（scene-tilesets 的 cacheBytes 加 maximumCacheOverflowBytes，ADR 0147 第 5 节）；
+// 缓存预算和 Cesium 的数值相同（scene-tilesets 的 cacheBytes 加 maximumCacheOverflowBytes，1 GB + 1 GB，ADR 0147 第 5 节）；
 // Cesium 是每个瓦片集各一份，这里所有瓦片集共用一份，总量更紧。放不下时放宽屏幕误差，见 docs/modules/map-three.md"缓存"
 const MEGABYTE = 1024 * 1024;
 const CACHE_BYTES = 1024 * MEGABYTE;
-const CACHE_OVERFLOW_BYTES = 512 * MEGABYTE;
+const CACHE_OVERFLOW_BYTES = 1024 * MEGABYTE;
 // 每帧上传的字节（ADR 0147 第 5 节）：GPU 耗时每 MB 约 0.5 毫秒，这么多放得进 60 帧的一帧。实测见 docs/modules/map-three.md"上传"
 const UPLOAD_BYTES_PER_FRAME = 16 * MEGABYTE;
 // 相机这么多秒走的路达到瓦片直径就不请求（同 Cesium：60 帧的路）。取值和实测见 docs/modules/map-three.md"动着的时候不请求"

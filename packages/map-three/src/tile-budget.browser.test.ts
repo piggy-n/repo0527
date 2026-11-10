@@ -1,4 +1,4 @@
-import { type CameraState, type LngLat, MapLibreView, MapSession, type SceneFrame } from '@mx/map-core';
+import { type CameraState, type LngLat, MapLibreView, MapSession, type SceneFrame, type TilesetLayer } from '@mx/map-core';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { blockTileset, FIXTURE_ORIGIN, serveFixtures, texturedBoxGlb } from './testing/fixtures';
 import { required } from './testing/required';
@@ -150,9 +150,12 @@ async function serveBlocks(
   return `${FIXTURE_ORIGIN}/${path}/tileset.json`;
 }
 
-function showBlocks(ctx: Context, url: string): void {
+// 网格按屏幕误差上限 16 设计（见 GRID 的注释），不跟着引擎的默认值变
+const GRID_SCREEN_ERROR = { maximumScreenSpaceError: 16 };
+
+function showBlocks(ctx: Context, url: string, screenError: Pick<TilesetLayer, 'maximumScreenSpaceError'> = GRID_SCREEN_ERROR): void {
   ctx.session.scene.set({
-    tilesets: [{ id: 'blocks', url, show: true, lighting: 'sun', attempt: 0 }],
+    tilesets: [{ id: 'blocks', url, show: true, lighting: 'sun', attempt: 0, ...screenError }],
     underground: null
   });
 }
@@ -177,6 +180,23 @@ describe('ThreeSceneRenderer 的缓存预算', () => {
     expect(state.refused).toBe(0);
     // 细的一层全到了：4 × 4 × 4 块
     expect(state.tilesets.blocks?.visible).toBe(64);
+  });
+
+  it('屏幕误差上限不写用 8，写了用它；改了只更新、不重新加载', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup({ cacheBytes: 64 * 1024 * KB, cacheLimitBytes: 96 * 1024 * KB });
+    const url = await serveBlocks('screen-error');
+    showBlocks(ctx, url, {});
+    const fine = await settle(ctx);
+    expect(fine.tilesets.blocks?.errorTarget).toBe(8);
+    expect(fine.tilesets.blocks?.visible).toBe(64);
+
+    // 粗的一层约 31 像素：上限 40 时细的一层不要了
+    showBlocks(ctx, url, { maximumScreenSpaceError: 40 });
+    await within(() => inspect(ctx).tilesets.blocks?.visible === 16, 10000);
+    const coarse = inspect(ctx);
+    expect(coarse.tilesets.blocks?.errorTarget).toBe(40);
+    expect(coarse.tilesets.blocks?.visible).toBe(16);
+    expect(coarse.tilesets.blocks?.loaded).toBe(fine.tilesets.blocks?.loaded);
   });
 
   it('一整层放不下：放宽到那一层丢掉，不拒绝，之后不再加载回来', { timeout: TEST_TIMEOUT }, async () => {
@@ -250,8 +270,8 @@ describe('ThreeSceneRenderer 的缓存预算', () => {
     const firstUrl = `${FIXTURE_ORIGIN}/first/tileset.json`;
     ctx.session.scene.set({
       tilesets: [
-        { id: 'blocks', url: firstUrl, show: false, lighting: 'sun', attempt: 0 },
-        { id: 'other', url: secondUrl, show: true, lighting: 'sun', attempt: 0 }
+        { id: 'blocks', url: firstUrl, show: false, lighting: 'sun', attempt: 0, ...GRID_SCREEN_ERROR },
+        { id: 'other', url: secondUrl, show: true, lighting: 'sun', attempt: 0, ...GRID_SCREEN_ERROR }
       ],
       underground: null
     });

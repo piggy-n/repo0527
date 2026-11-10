@@ -26,7 +26,7 @@ export interface BenchStats {
   readonly triangles: number;
   /** 引擎自己估算的模型显存（MB） */
   readonly cacheMB: number;
-  /** 实际用的屏幕误差（基准 16，变大说明放不下） */
+  /** 实际用的屏幕误差（清单不写时基准是 8，变大说明放不下） */
   readonly errorTarget: number;
   /** 缓存满了没能排队的瓦片；Cesium 没有这一项 */
   readonly refused: number | null;

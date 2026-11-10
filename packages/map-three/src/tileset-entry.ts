@@ -105,8 +105,8 @@ export interface TilesetHit {
   readonly lngLatHeight: [number, number, number];
 }
 
-// 和 Cesium 的 maximumScreenSpaceError 相同（scene-tilesets 的 TILESET_OPTIONS）
-const ERROR_TARGET = 16;
+// 屏幕误差上限的默认值，和 Cesium 相同（map-cesium 的 DEFAULT_SCREEN_SPACE_ERROR）；清单可以按模型改
+const ERROR_TARGET = 8;
 // 一层完成这么多块瓦片才估计这一层的大小：一块特别大的瓦片不能让需求一下子超过上限，放宽了就收不回来
 const MIN_SIZE_SAMPLES = 3;
 // 瓦片还没有请求过：库的常量 UNLOADED，类型声明里没有导出
@@ -136,6 +136,8 @@ export class TilesetEntry implements Disposable {
   readonly #clip = new Matrix4();
   readonly #url: string;
   #options: TilesetOptions;
+  // 所有瓦片集共用的放宽倍数，乘在各自的屏幕误差上限上
+  #errorScale = 1;
   #frame: LocalFrame | null = null;
   #anchor: AnchorMatrices | null = null;
   #initial = false;
@@ -169,7 +171,7 @@ export class TilesetEntry implements Disposable {
     this.#url = URL.createObjectURL(new Blob([JSON.stringify(prepared)], { type: 'application/json' }));
     const tiles = new TilesRenderer(this.#url);
     tiles.lruCache = cache;
-    tiles.errorTarget = ERROR_TARGET;
+    tiles.errorTarget = this.#errorTarget();
     tiles.registerPlugin(new TileLoadPlugin(uploader, cache));
     // 库没有按瓦片决定要不要请求的接口：选瓦片时调用的这个方法是唯一的入口。版本锁定，浏览器测试用真实的库验证
     const internals = tiles as unknown as TilesInternals;
@@ -253,6 +255,7 @@ export class TilesetEntry implements Disposable {
       this.#materials.apply(this.tiles.group, options.lighting);
     }
     this.#options = options;
+    this.tiles.errorTarget = this.#errorTarget();
   }
 
   /** 抬高 meters 米（ADR 0147 第 4 节）：0 时恢复 */
@@ -298,7 +301,8 @@ export class TilesetEntry implements Disposable {
 
   /** 屏幕误差放宽 scale 倍 */
   setErrorScale(scale: number): void {
-    this.tiles.errorTarget = ERROR_TARGET * scale;
+    this.#errorScale = scale;
+    this.tiles.errorTarget = this.#errorTarget();
   }
 
   /** 这一帧对缓存的需求：最近一次 prepare 之后读 */
@@ -478,6 +482,10 @@ export class TilesetEntry implements Disposable {
     }
     const deepest = this.#sizeByDepth.get(this.#deepestSized);
     return deepest ? deepest.bytes / deepest.count : 0;
+  }
+
+  #errorTarget(): number {
+    return (this.#options.maximumScreenSpaceError ?? ERROR_TARGET) * this.#errorScale;
   }
 
   // 地心坐标到局部系，抬高时再沿局部系的 y 上移
