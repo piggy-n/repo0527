@@ -1,6 +1,6 @@
 # 0149. LCC2 高斯泼溅：只在 `maplibre` 引擎下用 gaussian-splat-lite 加载，位置按数据集配准
 
-- 状态：已接受（2026-11-09 用户确认；第 1、9 节"倾斜模型在 LCC2 的范围里裁掉"是 2026-11-10 用户同意后补进的，在合入 main 之前；补充 ADR 0081 第 1 节：清单加 `kind: 'splat'`；第 4 节楚王山1号"未配准"的临时摆放已在 L.2 换成配准工具的结果，竖直方向按 XZ 的口径，见 `docs/config/3dt-manifest.md`；L.3 已在 RTX 3060 上测过，默认预算保持 300 万，数据见 `docs/modules/map-three.md`"泼溅的预算"；第 8 节：LCC2 模型和格式的授权不用处理，用户 2026-11-11 确认模型由数据方提供、对方已有授权；`gaussian-splat-lite` 的 LICENSE、NOTICE 由构建带进产物的 `licenses/`，见 `docs/config/vite-config.md`"第三方许可"）
+- 状态：已接受（2026-11-09 用户确认；第 1、9 节"倾斜模型在 LCC2 的范围里裁掉"是 2026-11-10 用户同意后补进的，在合入 main 之前；补充 ADR 0081 第 1 节：清单加 `kind: 'splat'`；第 4 节楚王山1号"未配准"的临时摆放已在 L.2 换成配准工具的结果，竖直方向按 XZ 的口径，见 `docs/config/3dt-manifest.md`；L.3 已在 RTX 3060 上测过，默认预算保持 300 万，数据见 `docs/modules/map-three.md`"泼溅的预算"；第 8 节：LCC2 模型和格式的授权不用处理，用户 2026-11-11 确认模型由数据方提供、对方已有授权；`gaussian-splat-lite` 的 LICENSE、NOTICE 由构建带进产物的 `licenses/`，见 `docs/config/vite-config.md`"第三方许可"；候选方案里 `cesium` 下叠画布的 PoC 做过，由 0152 定为不做）
 - 日期：2026-11-09
 - 关联：ADR 0147（第 3～6 节，第 8 节"之后"一行）；ADR 0081（模型清单）；ADR 0005（依赖维护）；ADR 0143（catalog）
 
