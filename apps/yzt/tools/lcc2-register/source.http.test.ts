@@ -13,14 +13,14 @@ const HALF_BODY = { 'Content-Type': 'application/octet-stream', 'Content-Length'
 
 let server: Server | undefined;
 
-async function serve(sendMesh: (response: ServerResponse) => void): Promise<string> {
+// 路径以 suffix 结尾的请求交给 send，其余的正常返回
+async function serve(suffix: string, send: (response: ServerResponse) => void): Promise<string> {
   const created = createServer((request, response) => {
-    if (request.url?.endsWith('.lcc2')) {
-      response.end(JSON.stringify(INDEX));
-    } else if (request.url?.endsWith('poses.json')) {
-      response.end(JSON.stringify(POSES));
+    const url = request.url ?? '';
+    if (url.endsWith(suffix)) {
+      send(response);
     } else {
-      sendMesh(response);
+      response.end(JSON.stringify(url.endsWith('.lcc2') ? INDEX : POSES));
     }
   });
   server = created;
@@ -43,9 +43,10 @@ afterEach(() => {
 
 describe('readModel：响应体读到一半', () => {
   it('发了响应头和一部分就不再发：按超时报错，说是哪个文件', async () => {
-    const proxy = await serve((response) => {
+    // 挂在第一个请求上：超时是每个请求单独算的，前面没有别的请求，机器忙时也不会超时在别的文件上
+    const proxy = await serve('.lcc2', (response) => {
       response.writeHead(200, HALF_BODY);
-      response.write('ply');
+      response.write('{');
     });
     // 不超时的话一直挂着：和比超时长得多的定时器赛跑，失败在断言上
     const never = new Promise<string>((resolve) => {
@@ -57,12 +58,12 @@ describe('readModel：响应体读到一半', () => {
     );
     const error = await Promise.race([failure, never]);
     expect(error).toBeInstanceOf(ToolError);
-    expect((error as ToolError).message).toContain('m.ply');
+    expect((error as ToolError).message).toContain('a.lcc2');
     expect((error as ToolError).message).toContain('0.3 秒内没有读完');
   });
 
   it('连接中途断开：一行原因，说是哪个文件', async () => {
-    const proxy = await serve((response) => {
+    const proxy = await serve('m.ply', (response) => {
       response.writeHead(200, HALF_BODY);
       response.write('ply', () => response.destroy());
     });

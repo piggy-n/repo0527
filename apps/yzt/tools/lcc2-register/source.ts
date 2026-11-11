@@ -44,14 +44,14 @@ interface Source {
   missing?(paths: readonly string[]): string[];
 }
 
-function localFailure(path: string, code: string, hint: string): string {
+function localFailure(path: string, code: string, hint: string, isDirectory: string): string {
   if (code === 'ENOENT') {
     return `找不到 ${path}${hint}`;
   }
-  return `读不到 ${path}：${code === 'EISDIR' ? '这是目录，要给 .lcc2 索引文件' : code}`;
+  return `读不到 ${path}：${code === 'EISDIR' ? isDirectory : code}`;
 }
 
-function localFile(path: string, hint: string): ModelFile {
+function localFile(path: string, hint: string, isDirectory = '这是目录'): ModelFile {
   return {
     location: path,
     read: async () => {
@@ -59,7 +59,7 @@ function localFile(path: string, hint: string): ModelFile {
         return await readFile(path);
       } catch (error) {
         if (error instanceof Error && 'code' in error && typeof error.code === 'string') {
-          throw new ToolError(localFailure(path, error.code, hint), { cause: error });
+          throw new ToolError(localFailure(path, error.code, hint, isDirectory), { cause: error });
         }
         throw error;
       }
@@ -70,7 +70,7 @@ function localFile(path: string, hint: string): ModelFile {
 function localSource(indexPath: string, hint: string): Source {
   const root = dirname(indexPath);
   return {
-    index: localFile(indexPath, hint),
+    index: localFile(indexPath, hint, '这是目录，要给 .lcc2 索引文件'),
     file: (path) => localFile(join(root, path), hint),
     missing: (paths) => paths.map((path) => join(root, path)).filter((path) => !existsSync(path))
   };

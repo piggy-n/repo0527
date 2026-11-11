@@ -233,6 +233,16 @@ describe('readModel：失败时一行原因', () => {
     expect(await failureOf(NAME)).toContain('要给 .lcc2 索引文件');
   });
 
+  it('索引以外的文件是目录：只说是目录，不让人去改索引的路径', async () => {
+    writeLocalModel();
+    const poses = join(localRoot, `${NAME}/lcc2-sog-result/info/poses.json`);
+    rmSync(poses);
+    mkdirSync(poses);
+    const message = await failureOf(RELATIVE);
+    expect(message).toContain('这是目录');
+    expect(message).not.toContain('要给 .lcc2 索引文件');
+  });
+
   it('本机缺碰撞网格：读网格之前就说缺几个、第一个是哪个', async () => {
     writeLocalModel();
     rmSync(join(localRoot, `${NAME}/lcc2-sog-result/data/mesh/0.ply`));
