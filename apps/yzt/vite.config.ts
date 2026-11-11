@@ -54,7 +54,7 @@ export default defineConfig(({ mode }) => {
   });
 
   // 模型和原型不入库、不进产物，开发时从 local/ 提供，地址和线上一致（ADR 0141）；
-  // 设了 YZT_3DT_PROXY 时模型改由那台服务器提供（在显卡机器上跑瓦片集的诊断页，见 docs/config/local-files.md）
+  // 设了 YZT_3DT_PROXY 时模型改由那台服务器提供（在显卡机器上看只在服务器上的模型，见 docs/config/local-files.md）
   const modelProxy = env.YZT_3DT_PROXY;
   const localFiles = localFilesPlugin({
     ...(modelProxy ? {} : { '/3dt': localPath('3dt') }),

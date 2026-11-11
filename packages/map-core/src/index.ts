@@ -146,7 +146,6 @@ export {
 } from './scene/tileset-sync';
 export { MapSession, type MapSessionOptions } from './session/map-session';
 export { diffSnapshot, diffStyle, type ImageCommand, type StyleCommand, type StyleSnapshot } from './style/diff-style';
-export { overlayDetailLimit, overlayDetailMetadata } from './style/overlay-detail';
 export type { StyleImage, StyleImages } from './style/style-image';
 export {
   type StyleChange,
