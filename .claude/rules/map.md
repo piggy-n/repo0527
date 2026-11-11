@@ -8,7 +8,7 @@ paths:
   - "apps/yzt/src/shared/map/**"
   - "apps/yzt/src/features/{resource-map,scene-models,data-query,monitoring-indicators,indicator-simulation,ai-chat}/**"
   - "apps/yzt/src/pages/{current-map,data-query,space-monitoring-indicators,indicator-simulation,ai-chat}/**"
-  - "apps/yzt/src/pages/dev/{map,map-3d,map-ui,resources,nav-grid,data-query,monitoring-indicators,indicator-simulation}/**"
+  - "apps/yzt/src/pages/dev/{map,map-3d,map-ui,resources,nav-grid,data-query,monitoring-indicators,indicator-simulation,splat-watch}/**"
   - "apps/yzt/src/app/map-*"
   - "apps/yzt/src/**/*.worker.ts"
 ---
