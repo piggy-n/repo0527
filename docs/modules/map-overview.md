@@ -69,7 +69,7 @@ packages/utils         LatestController、safeReporter、Worker 通信层
 | 现状底图的界面 | 功能标签与独立详情同列排布、底图 Popover、紧凑图例与编辑视图、面板标题、指北针、状态栏在左下角、上移下移按钮、"已选择图层"；以设计文档"已确认的界面细节"为准 | 0057～0060、0066～0074、0094～0096、0102、0116 | [current-map-reference.md](../design/current-map-reference.md) |
 | 控制栏与边界入口 | 不支持三维的地图不显示 2D/3D；底图入口是 `BasemapCard`；除现状底图外的地图页在控制栏放行政区边界入口 | 0111、0128 | [shared-map.md](shared-map.md) |
 | 资源的分类与显示级别 | 取值、名称、颜色写在字典，`style-registry.ts` 按 `code` 登记；图例和地图只用实际有的类别；最小显示级别按单张瓦片 6 MB 实测，放进可替换的部署文件；第一次请求很慢的资源定 8 级 | 0123、0124、0132、0136、0137 | [archive/migration.md](../archive/migration.md)"现状底图：资源分类的探查" |
-| 内网静态底图 | 用本地市界直接绘制面、线和地名，不用图片；地名在页面上开关（二三维都画），各市分色是代码开关，默认都关 | 0133、0134、0146 | [shared-map.md](shared-map.md) |
+| 内网静态底图 | 用本地市界直接绘制面、线和地名，不用图片；地名在页面上开关（二三维都画），默认关；陆地全省一种颜色 | 0133、0134、0146 | [shared-map.md](shared-map.md) |
 | 加载与页面缓存 | 登录页空闲时预加载地图页并预热 Worker 池；字体不推迟；`KeepAlive` 加路由 meta，停用期间暂停视图；`.env` 的开关决定离开页面后是否重置 | 0061～0063、0114、0138 | [map-core.md](map-core.md)、[perf.md](perf.md)、[layout.md](layout.md) |
 | 三维的运行时与切换 | 范围与交互已定；`setDimension` 切换，`MapCanvas` 的一个视图同时担任二三维（`kinds`、`setKind`），第一次切到三维时加载 map-three，加载失败只让三维失败，`retry` 只重新加载它；二维稳定后空闲时预加载 map-three。app 注入引擎的描述，页面不判断；引擎的能力（`sceneCapabilities`）决定三维里的资源图层、图例、点/框选，由 app 收窄后注入（三维里不显示资源图层、不识别，高斯泼溅照常；等页面重新设计，没有开关）。Cesium 引擎由 0153 移除；Cesium 下的资源图层（方案 B）做过 PoC，不迁移，代码在分支 `poc/cesium-mvt-raster` 和标签 `poc-plan-b-2026-11` | 0078、0091、0147、0151、0153 | [map-three.md](map-three.md)、[map-vue.md](map-vue.md) |
 | 三维覆盖物 | 覆盖物是二维样式的图层，三维里照常显示（ADR 0147 第 2 节）；ADR 0080、0082、0099、0103、0135 的 GeoJSON 镜像、点数上限和细节上限是 Cesium 引擎的做法，随 0153 移除 | 0080、0147、0153 | [map-three.md](map-three.md) |

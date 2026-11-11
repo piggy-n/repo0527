@@ -31,11 +31,9 @@
 
 所有部署都一样的产品决定，以后可能会改，所以做成开关。只在代码里改，不进 `.env`。
 
-| 开关 | 文件 | 默认 | 作用 | ADR |
-|---|---|---|---|---|
-| `STATIC_BASEMAP_OPTIONS.cityColors` | `shared/config/static-basemap-options.ts` | `false` | 静态底图各市分色；关着时全省同一种陆地色。改了要运行 `basemap:generate` 更新缩略图 | 0134、0146 |
+现在代码里没有这类开关：最后两个都在 2026-11-11 去掉了，`SCENE_OPTIONS` 随 ADR 0153 删除，`STATIC_BASEMAP_OPTIONS.cityColors` 由用户决定取消、全省固定一种陆地色（见 ADR 0134 的状态行）。以后要加时按下面的"新增一个开关时放哪"新建文件，在这里登记成表格（开关、文件、默认、作用、ADR）。
 
-这类文件只写类型和常量，不导入别的模块：Node 直接运行的工具也会导入它们（`basemap:generate` 读分色开关），读不了 Vite 专用的写法。
+这类文件只写类型和常量，不导入别的模块：Node 直接运行的工具要用时也能导入，它们读不了 Vite 专用的写法。
 
 ## 运行时文件
 

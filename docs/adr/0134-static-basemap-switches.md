@@ -1,6 +1,6 @@
 # 0134. 静态底图的默认外观：地名、分色改为代码开关，陆地色换算成不透明 HEX
 
-- 状态：已接受
+- 状态：已接受（地名的开关由 0146 改成页面操作；`cityColors` 开关用户 2026-11-11 决定取消，全省固定用 CREAM，`STATIC_CITY_COLORS` 和 `static-basemap-options.ts` 一起删掉，第 2 节只留 CREAM 一种颜色，见 [shared-map.md](../modules/shared-map.md)"静态底图"）
 - 日期：2026-11-03
 - 修改 ADR 0133 第 2、3 节的默认外观；绘制方式、底图目录、默认选中静态底图不变
 

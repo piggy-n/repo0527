@@ -1,6 +1,5 @@
 import type {
   BackgroundLayerSpecification,
-  ExpressionSpecification,
   FillLayerSpecification,
   FilterSpecification,
   GeoJSONSourceSpecification,
@@ -10,13 +9,7 @@ import type {
 import type { StyleGroup, StyleRoot } from '@mx/map-core';
 import cityUrl from '../boundary/data/jiangsu-city.json?url';
 import labelsUrl from './data/jiangsu-labels.json?url';
-import { STATIC_BASEMAP_OPTIONS } from '../../config/static-basemap-options';
-import {
-  STATIC_CITY_COLORS,
-  STATIC_CITY_LINE_COLOR,
-  STATIC_LAND_COLOR,
-  STATIC_OUTSIDE_COLOR
-} from './static-palette';
+import { STATIC_CITY_LINE_COLOR, STATIC_LAND_COLOR, STATIC_OUTSIDE_COLOR } from './static-palette';
 
 /**
  * 静态底图的地名只有汉字，由 MapLibre 用本地字体画，这个地址不会被请求；样式校验要求有 text-field 时必须有 glyphs。
@@ -34,23 +27,16 @@ const BACKGROUND: BackgroundLayerSpecification = {
 const CITY_SOURCE_ID = 'basemap-static';
 const CITY_SOURCE: GeoJSONSourceSpecification = { type: 'geojson', data: cityUrl };
 
-const CITY_COLOR: ExpressionSpecification = [
-  'match',
-  ['get', 'code'],
-  ...Object.entries(STATIC_CITY_COLORS).flat(),
-  STATIC_OUTSIDE_COLOR
-] as unknown as ExpressionSpecification;
-
 // MapLibre 画的时候面都是 Polygon；按 GeoJSON 原来的类型求值（featureFilter）时南京是 MultiPolygon，不写会被滤掉
 const POLYGONS: FilterSpecification = ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false];
 
-function landLayer(opacity: number, cityColors: boolean): FillLayerSpecification {
+function landLayer(opacity: number): FillLayerSpecification {
   return {
     id: 'basemap-static-land',
     type: 'fill',
     source: CITY_SOURCE_ID,
     filter: POLYGONS,
-    paint: { 'fill-color': cityColors ? CITY_COLOR : STATIC_LAND_COLOR, 'fill-opacity': opacity }
+    paint: { 'fill-color': STATIC_LAND_COLOR, 'fill-opacity': opacity }
   };
 }
 
@@ -68,11 +54,11 @@ function cityLineLayer(opacity: number): LineLayerSpecification {
   };
 }
 
-/** 静态底图的 basemap 分组：省外的底色、陆地的面和市之间的细线（ADR 0133、0134） */
-export function staticBasemapGroup(opacity: number, options = STATIC_BASEMAP_OPTIONS): StyleGroup {
+/** 静态底图的 basemap 分组：省外的底色、全省一种颜色的陆地和市之间的细线（ADR 0133、0134） */
+export function staticBasemapGroup(opacity: number): StyleGroup {
   return {
     sources: { [CITY_SOURCE_ID]: CITY_SOURCE },
-    layers: [BACKGROUND, landLayer(opacity, options.cityColors), cityLineLayer(opacity)]
+    layers: [BACKGROUND, landLayer(opacity), cityLineLayer(opacity)]
   };
 }
 
