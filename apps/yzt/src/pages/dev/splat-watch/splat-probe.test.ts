@@ -64,10 +64,9 @@ describe('SplatProbe（/dev/splat-watch）', () => {
     watches.length = 0;
   });
 
-  it('引擎是 maplibre，渲染器只换总预算；挂上后读得到显卡和渲染器的读数', async () => {
+  it('引擎能显示高斯泼溅，渲染器只换总预算；挂上后读得到显卡和渲染器的读数', async () => {
     const probe = new SplatProbe(() => Promise.resolve(module));
     const engine = probe.engine(6_000_000);
-    expect(engine.kind).toBe('maplibre');
     expect(engine.capabilities.splats).toBe(true);
 
     const renderer = await mount(probe, 6_000_000, fakeGl('RTX 3060'));

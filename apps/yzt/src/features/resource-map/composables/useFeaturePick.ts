@@ -624,7 +624,7 @@ export function useFeaturePick(
 
   const handleInput = (event: MapInputEvent, view: ToolView): boolean => {
     // 三维引擎不能识别时三维期间不识别：资源图层不在三维显示，单击和框选什么也不做（ADR 0080 第 5 节）；Esc 照样清除二维的结果。
-    // 能识别时（MapLibre 引擎且三维的资源图层开关打开，ADR 0147）照常识别，三维的识别规则见 identifyStep
+    // 能识别时（三维引擎的能力 identify 为 true；app 现在注入 false，ADR 0153）照常识别，三维的识别规则见 identifyStep
     if (view.kind === '3d' && !map.sceneCapabilities.identify && event.type !== 'key' && event.type !== 'leave') {
       return false;
     }

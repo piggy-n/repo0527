@@ -6,7 +6,7 @@ const here = import.meta.dirname;
 /** 页面的产物目录：在 node_modules 下，不入库，也不和应用的 dist 混在一起 */
 export const PAGE_OUT_DIR = resolve(here, '../../node_modules/.cache/measure-3d');
 
-// 按包分块：CPU 采样按分块归因（profile.ts），才知道时间花在 three、maplibre-gl 还是 cesium
+// 按包分块：CPU 采样按分块归因（profile.ts），才知道时间花在 three、maplibre-gl 还是 map-three
 function packageChunk(id: string): string | undefined {
   const normalized = id.replaceAll('\\', '/');
   const workspace = /\/packages\/([^/]+)\/src\//.exec(normalized);
@@ -40,7 +40,7 @@ export default defineConfig({
       output: {
         strictExecutionOrder: true,
         codeSplitting: {
-          // 默认会把依赖也放进同一个分块：实测 maplibre-gl 跑进了 map-cesium，three 跑进了 3d-tiles-renderer，归因的名字全错
+          // 默认会把依赖也放进同一个分块：一个包会跑进第一个导入它的包的分块（实测 three 跑进了 3d-tiles-renderer），归因的名字全错
           includeDependenciesRecursively: false,
           groups: [{ name: id => packageChunk(id) ?? null, debugName: 'packages' }]
         }

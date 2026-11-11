@@ -1,4 +1,4 @@
-// 3D Tiles 索引的整理（ADR 0081 第 3 节，外部索引和误差的规则见 ADR 0148）：不依赖 Cesium
+// 3D Tiles 索引的整理（ADR 0081 第 3 节，外部索引和误差的规则见 ADR 0148）：不依赖渲染引擎
 import { isMatrix, multiply } from './nav/nav-frame';
 
 /** 下载一个 JSON；signal 中止时以它的原因结束 */
@@ -13,7 +13,7 @@ export interface PreparedTile {
   readonly children?: readonly PreparedTile[];
 }
 
-/** 整理后的索引：可以直接交给 Cesium */
+/** 整理后的索引：可以直接交给渲染器 */
 export interface PreparedTileset {
   readonly [key: string]: unknown;
   readonly geometricError: number;
@@ -66,8 +66,9 @@ interface Context {
   readonly signal: AbortSignal;
 }
 
-// 节点的误差：叶节点为 0（不用再细分，旧项目里错误的误差会让 Cesium 选不稳层级），有内容的用自己的；
-// 没有内容的取自己和子节点的较大值：它或子节点被改小，Cesium 停在没有内容的节点上，这一块就空了
+// 下面几条规则按当时 Cesium 引擎的瓦片选择定（ADR 0148），3d-tiles-renderer 下没有逐条核对（docs/backlog.md）。
+// 节点的误差：叶节点为 0（不用再细分，旧项目里错误的误差会让当时的 Cesium 选不稳层级），有内容的用自己的；
+// 没有内容的取自己和子节点的较大值：它或子节点被改小，当时的 Cesium 停在没有内容的节点上，这一块就空了
 function errorOf(tile: JsonObject, children: readonly PreparedTile[], hasContent: boolean, where: string): number {
   if (children.length === 0) {
     return 0;
@@ -90,7 +91,7 @@ function transformOf(tile: JsonObject, where: string): readonly number[] | undef
   return transform;
 }
 
-// 引用瓦片的 transform 在外、外部根节点的在内，和 Cesium 加载外部索引时的层级相同；结果要写进 JSON，用普通数组
+// 引用瓦片的 transform 在外、外部根节点的在内，和当时 Cesium 加载外部索引时的层级相同；结果要写进 JSON，用普通数组
 function composeTransform(
   outer: readonly number[] | undefined,
   inner: readonly number[] | undefined
@@ -101,7 +102,7 @@ function composeTransform(
   return outer ?? inner;
 }
 
-// 把内层节点放到外层节点的位置（ADR 0148）：transform 相乘，refine 省略时沿用外层的，和 Cesium 按父节点继承一致
+// 把内层节点放到外层节点的位置（ADR 0148）：transform 相乘，refine 省略时沿用外层的，和当时 Cesium 按父节点继承一致
 function hoist(outer: JsonObject, inner: PreparedTile, outerWhere: string, innerWhere: string): PreparedTile {
   const transform = composeTransform(transformOf(outer, outerWhere), transformOf(inner, innerWhere));
   const refine = inner.refine ?? outer.refine;
@@ -145,7 +146,7 @@ async function prepareTile(
   }
   const rawChildren = Array.isArray(tile.children) ? tile.children : [];
   if (target !== undefined && new URL(target).pathname.endsWith('.json')) {
-    // 3D Tiles 规定引用外部索引的瓦片不能有子节点：Cesium 遇到时的显示和可见判断对不上
+    // 3D Tiles 规定引用外部索引的瓦片不能有子节点：当时的 Cesium 遇到时的显示和可见判断对不上
     if (rawChildren.length > 0) {
       throw new Error(`${where} 引用了外部索引，不能再有子节点：${uri ?? ''}`);
     }
@@ -158,9 +159,9 @@ async function prepareTile(
     if (!root) {
       return [];
     }
-    // Cesium 对外部索引总是走到它的根节点，引用瓦片自己不参与选择，所以根节点换到引用瓦片的位置
+    // 当时的 Cesium 对外部索引总是走到它的根节点，引用瓦片自己不参与选择，所以根节点换到引用瓦片的位置
     const placed = hoist(tile, root, where, rootWhere);
-    // 根节点没有内容时 Cesium 在它不细分期间继续画上一级，换上来的空节点做不到，改为换上它的子节点
+    // 根节点没有内容时当时的 Cesium 在它不细分期间继续画上一级，换上来的空节点做不到，改为换上它的子节点
     if (inline && !placed.content) {
       return (placed.children ?? []).map(child => hoist(placed, child, rootWhere, rootWhere));
     }

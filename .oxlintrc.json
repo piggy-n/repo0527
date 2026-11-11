@@ -44,7 +44,6 @@
         "paths": [
           { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
           { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
-          { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
           { "name": "three", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
           { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
           { "name": "gaussian-splat-lite", "message": "gaussian-splat-lite 只能在 packages/map-three 中导入（ADR 0149）" },
@@ -53,7 +52,6 @@
         "patterns": [
           { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
           { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
-          { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
           { "regex": "^(three|3d-tiles-renderer)/", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
           { "regex": "^proj4/", "message": "proj4 只能在配准工具 apps/yzt/tools/lcc2-register 中导入，运行时不换算坐标（ADR 0149 第 4 节）" }
         ]
@@ -97,13 +95,11 @@
             "paths": [
               { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
               { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
-              { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
               { "name": "proj4", "message": "proj4 只能在配准工具 apps/yzt/tools/lcc2-register 中导入，运行时不换算坐标（ADR 0149 第 4 节）" }
             ],
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
               { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
-              { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
               { "regex": "^proj4/", "message": "proj4 只能在配准工具 apps/yzt/tools/lcc2-register 中导入，运行时不换算坐标（ADR 0149 第 4 节）" }
             ]
           }
@@ -119,14 +115,12 @@
             "paths": [
               { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
               { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
-              { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
               { "name": "gaussian-splat-lite", "message": "gaussian-splat-lite 只能在 packages/map-three 中导入（ADR 0149）" },
               { "name": "proj4", "message": "proj4 只能在配准工具 apps/yzt/tools/lcc2-register 中导入，运行时不换算坐标（ADR 0149 第 4 节）" }
             ],
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
               { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
-              { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
               { "regex": "^proj4/", "message": "proj4 只能在配准工具 apps/yzt/tools/lcc2-register 中导入，运行时不换算坐标（ADR 0149 第 4 节）" }
             ]
           }
@@ -141,7 +135,6 @@
           {
             "paths": [
               { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
-              { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
               { "name": "three", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
               { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
               { "name": "gaussian-splat-lite", "message": "gaussian-splat-lite 只能在 packages/map-three 中导入（ADR 0149）" },
@@ -149,31 +142,6 @@
             ],
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
-              { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
-              { "regex": "^(three|3d-tiles-renderer)/", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
-              { "regex": "^proj4/", "message": "proj4 只能在配准工具 apps/yzt/tools/lcc2-register 中导入，运行时不换算坐标（ADR 0149 第 4 节）" }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": ["packages/map-cesium/src/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
-              { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
-              { "name": "three", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
-              { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
-              { "name": "gaussian-splat-lite", "message": "gaussian-splat-lite 只能在 packages/map-three 中导入（ADR 0149）" },
-              { "name": "proj4", "message": "proj4 只能在配准工具 apps/yzt/tools/lcc2-register 中导入，运行时不换算坐标（ADR 0149 第 4 节）" }
-            ],
-            "patterns": [
-              { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
-              { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
               { "regex": "^(three|3d-tiles-renderer)/", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
               { "regex": "^proj4/", "message": "proj4 只能在配准工具 apps/yzt/tools/lcc2-register 中导入，运行时不换算坐标（ADR 0149 第 4 节）" }
             ]
@@ -209,7 +177,6 @@
             "paths": [
               { "name": "lodash-es", "importNames": ["default"], "message": "lodash-es 按需具名导入" },
               { "name": "maplibre-gl", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
-              { "name": "cesium", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
               { "name": "three", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
               { "name": "3d-tiles-renderer", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" },
               { "name": "gaussian-splat-lite", "message": "gaussian-splat-lite 只能在 packages/map-three 中导入（ADR 0149）" }
@@ -217,7 +184,6 @@
             "patterns": [
               { "regex": "^lodash(/|$)", "message": "使用 lodash-es 并按需具名导入" },
               { "regex": "^maplibre-gl/", "message": "maplibre-gl 只能在 packages/map-core/src/maplibre 和 app 中导入（ADR 0024）" },
-              { "regex": "^(cesium/|@cesium/)", "message": "cesium 只能在 packages/map-cesium 和 app 中导入（ADR 0079）" },
               { "regex": "^(three|3d-tiles-renderer)/", "message": "three、3d-tiles-renderer 只能在 packages/map-three 和驾驶舱中导入（ADR 0147）" }
             ]
           }
@@ -238,14 +204,14 @@
               { "allow": { "to": { "module": { "origin": "core" } } } },
               { "allow": { "dependency": { "relationship": { "to": "internal" }, "source": "@(./|+(../))**" } } },
               {
-                "from": { "element": { "type": "package", "captured": { "name": "{ui,map-core,map-cesium,map-three,map-vue}" } } },
+                "from": { "element": { "type": "package", "captured": { "name": "{ui,map-core,map-three,map-vue}" } } },
                 "allow": {
                   "to": { "element": { "type": "package", "captured": { "name": "utils" } } },
                   "dependency": { "source": "@mx/*" }
                 }
               },
               {
-                "from": { "element": { "type": "package", "captured": { "name": "{map-cesium,map-three,map-vue}" } } },
+                "from": { "element": { "type": "package", "captured": { "name": "{map-three,map-vue}" } } },
                 "allow": {
                   "to": { "element": { "type": "package", "captured": { "name": "map-core" } } },
                   "dependency": { "source": "@mx/*" }
@@ -254,7 +220,7 @@
               {
                 "from": { "element": { "type": "package", "captured": { "name": "map-vue" } } },
                 "allow": {
-                  "to": { "element": { "type": "package", "captured": { "name": "{map-cesium,map-three}" } } },
+                  "to": { "element": { "type": "package", "captured": { "name": "map-three" } } },
                   "dependency": { "source": "@mx/*", "nodeKind": "dynamic-import" }
                 }
               },
@@ -266,7 +232,7 @@
                 }
               },
               {
-                "from": { "element": { "type": "package", "captured": { "name": "{utils,map-core,map-cesium,map-three}" } } },
+                "from": { "element": { "type": "package", "captured": { "name": "{utils,map-core,map-three}" } } },
                 "disallow": {
                   "to": {
                     "module": {

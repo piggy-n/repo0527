@@ -6,8 +6,8 @@ import { GRID_COLS, GRID_ROWS, type SharpnessGrid, sharpnessGrid } from '../shar
 import { decodeShot } from './shots.ts';
 
 // 测量页：只有底图和模型，没有面板、定时器和业务图层，不让页面自己的工作混进测量。
-// 走真实的会话、视图和引擎（ADR 0147 第 7 节：性能验收要测生产代码），这里不写层、场景和缓存算法。
-// 参数都在地址上：engine、models、splats、center、zoom、pitch、bearing、basemap、uploadMB、cullWindow、splatBudget、antialias、pacing、fps
+// 走真实的会话、视图和引擎（ADR 0147 第 7 节：性能要测生产代码），这里不写层、场景和缓存算法。
+// 参数都在地址上：models、splats、center、zoom、pitch、bearing、basemap、uploadMB、cullWindow、splatBudget、antialias、pacing、fps
 
 /** 地址上的 splats（JSON）：清单里的泼溅，地址相对 /3dt/（splat-models.ts） */
 interface SplatParam {
@@ -16,7 +16,7 @@ interface SplatParam {
   readonly placement: SplatLayer['placement'];
 }
 
-/** 一种引擎交给测量页的 */
+/** 引擎交给测量页的（engine-maplibre.ts） */
 export interface EngineHandle {
   readonly view: MapView;
   readonly config: Readonly<Record<string, unknown>>;
@@ -37,7 +37,6 @@ export interface EngineOptions {
 
 /** 测量脚本用的接口 */
 export interface BenchApi {
-  readonly engine: string;
   readonly config: Readonly<Record<string, unknown>>;
   /** 开始加载模型的时刻（performance.now） */
   readonly loadStartedAt: number;
@@ -110,12 +109,8 @@ const session = new MapSession<'basemap'>({ groups: ['basemap'], camera: initial
 session.style.setGroup('basemap', basemap());
 
 const splatParams = JSON.parse(params.get('splats') ?? '[]') as readonly SplatParam[];
-const engineName = params.get('engine') ?? 'maplibre';
 const options: EngineOptions = { session, container, params, splatCount: splatParams.length, onError: report };
-const handle =
-  engineName === 'cesium'
-    ? await (await import('./engine-cesium.ts')).startCesium(options)
-    : await (await import('./engine-maplibre.ts')).startMapLibre(options);
+const handle = await (await import('./engine-maplibre.ts')).startMapLibre(options);
 const { view } = handle;
 
 let settled = false;
@@ -176,7 +171,6 @@ const loadStartedAt = performance.now();
 session.scene.set(sceneContent(true));
 
 window.bench = {
-  engine: engineName,
   config: handle.config,
   loadStartedAt,
   errors,

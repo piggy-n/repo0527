@@ -48,7 +48,6 @@ export interface RunContext {
 function pageUrl({ scene, variant }: Run, { baseUrl, options, splats }: RunContext): string {
   const { center, zoom, pitch, bearing } = scene.camera;
   const params = new URLSearchParams({
-    engine: variant.engine,
     models: scene.models.map(model => model.path).join(','),
     splats: JSON.stringify(
       scene.splats.map(id => {
@@ -96,8 +95,8 @@ function classify(result: RunResult): void {
   } else if (result.image && result.image.modelCoveragePct < MIN_MODEL_COVERAGE_PCT) {
     invalid.push(`模型没有画出来（隐藏前后只差 ${result.image.modelCoveragePct.toFixed(2)}% 的像素）`);
   }
-  const refused = result.atStable?.refused;
-  if (typeof refused === 'number' && refused > 0) {
+  const refused = result.atStable?.refused ?? 0;
+  if (refused > 0) {
     result.notes.push(`到稳定时还有 ${refused} 块瓦片因为缓存满了没有加载`);
   }
   if ((result.flightCold?.fenceTimeouts ?? 0) > 0) {
@@ -152,9 +151,9 @@ async function loadPage(run: Run, ctx: RunContext, { page }: Session, result: Ru
   } catch (error) {
     throw new Error(`页面没有就绪：${result.pageErrors?.[0] ?? String(error).split('\n')[0]}`, { cause: error });
   }
-  result.setup = await call<PageSetup & { engine: string; config: Record<string, unknown> }>(
+  result.setup = await call<PageSetup & { config: Record<string, unknown> }>(
     page,
-    '({ ...window.benchProbe.attach(), engine: window.bench.engine, config: window.bench.config })'
+    '({ ...window.benchProbe.attach(), config: window.bench.config })'
   );
   const stable = await waitStable(page, loadTimeoutMs);
   const loadStartedAt = await call<number>(page, 'window.bench.loadStartedAt');
@@ -173,7 +172,7 @@ async function loadPage(run: Run, ctx: RunContext, { page }: Session, result: Ru
 
 const waitStable = (page: Page, timeoutMs: number) =>
   call<StableResult>(page, `window.benchProbe.waitStable(${timeoutMs}, ${STABLE_STREAK})`);
-// 飞行结束以后等到稳定：先画几帧，引擎才知道相机停了（Cesium 动着的时候不请求瓦片，这时看起来什么都不缺）。
+// 飞行结束以后等到稳定：先画几帧，引擎才知道相机停了（动着的时候有的瓦片不请求，这时看起来什么都不缺）。
 // 从飞行结束的时刻算（from）：统计飞行的结果还要等一会儿，等的这段也是用户看到的。稳定后再看 watchMs，看画面还变不变
 async function waitSettled(page: Page, from: number, timeoutMs: number, watchMs: number): Promise<SettleResult> {
   await call(page, 'window.benchProbe.waitFrames(5)');
@@ -187,7 +186,7 @@ const stats = (page: Page) => call<BenchStats>(page, 'window.bench.stats()');
 const flight = (page: Page, keyframes: readonly BenchCamera[], ms: number) =>
   call<PhaseResult>(page, `window.benchProbe.flight(${JSON.stringify(keyframes)}, ${ms})`);
 
-// 飞行的路径：两个引擎要相同，所以按场景的相机算；模型只在服务器上时中心是建议相机给的，只能读回来
+// 飞行的路径：各个方案要相同，所以按场景的相机算；模型只在服务器上时中心是建议相机给的，只能读回来
 async function flightPath(page: Page, { scene }: Run, options: Options): Promise<BenchCamera[]> {
   const { center } = scene.camera;
   const camera = center ? { ...scene.camera, center } : await call<BenchCamera>(page, 'window.bench.camera()');

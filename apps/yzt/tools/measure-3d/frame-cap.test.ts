@@ -24,7 +24,7 @@ describe('FrameCap', () => {
     expect(passed.length).toBeLessThan(362);
   });
 
-  it('相邻两帧不会很短：Cesium 按一帧走的路判断要不要请求，短帧会把瓦片放行', () => {
+  it('相邻两帧不会很短：按帧算的预算跟着帧数走，短帧会多放一份', () => {
     // 第一帧之后的那一帧算"卡了一下"，单独有用例
     const passed = run(new FrameCap(60), 3, 3000).slice(1);
     const intervals = passed.slice(1).map((time, index) => time - (passed[index] ?? 0));

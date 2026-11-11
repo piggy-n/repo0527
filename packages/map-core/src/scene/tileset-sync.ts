@@ -19,7 +19,7 @@ export interface TilesetOptions {
 }
 
 /**
- * 承载瓦片集的引擎（ADR 0147 第 3 节）：Cesium 的场景、MapLibre 引擎的 Three 渲染器都实现它。
+ * 承载瓦片集的引擎（ADR 0147 第 3 节）：MapLibre 引擎的三维内容（MapLibreScene，交给 Three 渲染器）实现它。
  * 瓦片失败、首批瓦片到位由引擎各自报告，视图转给 SceneTilesetSync 的 failed、initial
  */
 export interface TilesetHost {
@@ -59,7 +59,7 @@ const sameOptions = (a: TilesetOptions | null, b: TilesetOptions) =>
   a.clippedBySplats === b.clippedBySplats;
 
 /**
- * 按会话的瓦片集增删改引擎里的瓦片集（ADR 0081 第 2、5 节），两种三维引擎共用（ADR 0147 第 3 节）：
+ * 按会话的瓦片集增删改引擎里的瓦片集（ADR 0081 第 2、5 节），引擎实现 TilesetHost（ADR 0147 第 3 节）：
  * 地址、重试次数变了就重新加载，其余的只改显示、光照、屏幕误差和泼溅范围里的裁剪；同组的换显示时，新的首批瓦片到了才撤下旧的
  */
 export class SceneTilesetSync implements Disposable {

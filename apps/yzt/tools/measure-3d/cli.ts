@@ -17,7 +17,7 @@ import type { SharpnessComparison } from './sharpness.ts';
 import { decodedPath, manifestLabel, type ManifestSource, manifestSource, readManifest, resolveSplats, type SplatModel } from './splat-models.ts';
 import { PAGE_OUT_DIR } from './vite.config.ts';
 
-// MapLibre 引擎和 Cesium 的性能对比（ADR 0147 3C.4），高斯泼溅的预算（ADR 0149 L.3，--only splat）：在 apps/yzt 下运行 pnpm measure:3d，
+// 三维（MapLibre 引擎）的性能实测，高斯泼溅的预算（ADR 0149 L.3，--only splat）：在 apps/yzt 下运行 pnpm measure:3d，
 // 步骤见 docs/modules/map-three.md"性能验收""泼溅的预算"
 
 const appRoot = resolve(import.meta.dirname, '../..');
@@ -57,7 +57,7 @@ const list = variants(options.uploadMBs, options.cullWindows);
 const splatList = splatVariants(options.splatBudgets);
 if (options.list) {
   for (const scene of SCENES) {
-    const note = scene.acceptance ? '（验收）' : scene.splats.length > 0 ? '（高斯泼溅，比较 --splat-budget）' : '';
+    const note = scene.byDefault ? '（默认）' : scene.splats.length > 0 ? '（高斯泼溅，比较 --splat-budget）' : '';
     console.log(`${scene.id.padEnd(22)} ${scene.title}${note}`);
   }
   process.exit(0);
@@ -101,7 +101,7 @@ function whereManifest(source: ManifestSource | null): string {
 }
 
 // 泼溅场景的模型按 ID 从清单读，和开发服务器同一个来源（splat-models.ts）；缺了说明怎么补（彭城广场的样例只在本地清单里）。
-// 只在有泼溅场景时才解析代理的地址：写错了不影响 --help 和引擎对比
+// 只在有泼溅场景时才解析代理的地址：写错了不影响 --help 和瓦片集的场景
 async function resolveSceneSplats(): Promise<{ splats: Map<string, SplatModel>; source: ManifestSource | null; problems: string[] }> {
   const ids = [...new Set(scenes.flatMap(scene => scene.splats))];
   if (ids.length === 0) {
@@ -152,9 +152,9 @@ async function checkBasemap(): Promise<{ basemap: 'arcgis' | 'none'; warning: st
     });
     return response.ok
       ? { basemap: 'arcgis', warning: null }
-      : { basemap: 'none', warning: `ArcGIS 影像返回 ${response.status}，改用无底图（两个引擎相同）。` };
+      : { basemap: 'none', warning: `ArcGIS 影像返回 ${response.status}，改用无底图（各个方案相同）。` };
   } catch {
-    return { basemap: 'none', warning: 'ArcGIS 影像访问不了，改用无底图（两个引擎相同）。' };
+    return { basemap: 'none', warning: 'ArcGIS 影像访问不了，改用无底图（各个方案相同）。' };
   }
 }
 
@@ -209,19 +209,19 @@ function timestamp(date = new Date()): string {
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
-// ---------- 对比截图 ----------
+// ---------- 飞行前后的截图 ----------
 
 interface PageComparison extends SharpnessComparison {
   readonly heatmap: string;
   readonly worstCrops: string;
 }
 
+// 画质那一遍飞一圈回来的截图和飞行前的比：同一相机，引擎应该细化回原来的样子。飞行后没稳定、没拍的场景不比
 async function compareScenes(results: MeasureResults, outDir: string, baseUrl: string): Promise<void> {
   const pairs = results.scenes.flatMap(scene => {
-    const qualityOf = (variant: string) => results.runs.find(run => run.scene === scene.id && run.variant === variant && run.kind === 'quality')?.quality;
-    const subject = qualityOf('maplibre');
-    const reference = qualityOf('cesium');
-    return subject && reference ? [{ scene: scene.id, subject, reference }] : [];
+    const quality = results.runs.find(run => run.scene === scene.id && run.kind === 'quality')?.quality;
+    const after = quality?.shotAfterFlight;
+    return quality && after ? [{ scene: scene.id, after, before: quality.shot, withoutModel: quality.shotWithoutModel }] : [];
   });
   if (pairs.length === 0) {
     return;
@@ -231,32 +231,15 @@ async function compareScenes(results: MeasureResults, outDir: string, baseUrl: s
     const page = await browser.newPage();
     await page.goto(`${baseUrl}/compare.html`);
     await page.waitForFunction('typeof window.compareShots === "function"');
-    const read = (file: string) => readFileSync(join(outDir, file)).toString('base64');
-    const compare = (subject: string, reference: string, withoutModel: string) =>
-      page.evaluate<PageComparison>(`window.compareShots(${JSON.stringify(read(subject))}, ${JSON.stringify(read(reference))}, ${JSON.stringify(read(withoutModel))})`);
-    for (const { scene, subject, reference } of pairs) {
-      // oxlint-disable-next-line no-await-in-loop -- 一对一对地比，内存里同时只有两张图
-      const stable = await compare(subject.shot, reference.shot, reference.shotWithoutModel);
+    const read = (file: string) => JSON.stringify(readFileSync(join(outDir, file)).toString('base64'));
+    for (const { scene, after, before, withoutModel } of pairs) {
+      // oxlint-disable-next-line no-await-in-loop -- 一个场景一个场景地比，内存里同时只有两张图
+      const comparison = await page.evaluate<PageComparison>(`window.compareShots(${read(after)}, ${read(before)}, ${read(withoutModel)})`);
       const heatmap = `shots/${scene}-heatmap.png`;
       const worstCrops = `shots/${scene}-worst.png`;
-      writeFileSync(join(outDir, heatmap), Buffer.from(stable.heatmap, 'base64'));
-      writeFileSync(join(outDir, worstCrops), Buffer.from(stable.worstCrops, 'base64'));
-      const { shotAfterFlight: subjectEnd } = subject;
-      const { shotAfterFlight: referenceEnd } = reference;
-      const afterFlight =
-        subjectEnd && referenceEnd
-          ? // oxlint-disable-next-line no-await-in-loop -- 同上
-            await compare(subjectEnd, referenceEnd, reference.shotWithoutModel)
-          : null;
-      const entry: SceneQuality = {
-        scene,
-        stable: stripImages(stable),
-        afterFlight: afterFlight ? stripImages(afterFlight) : null,
-        heatmap,
-        worstCrops,
-        subject: subject.shot,
-        reference: reference.shot
-      };
+      writeFileSync(join(outDir, heatmap), Buffer.from(comparison.heatmap, 'base64'));
+      writeFileSync(join(outDir, worstCrops), Buffer.from(comparison.worstCrops, 'base64'));
+      const entry: SceneQuality = { scene, afterFlight: stripImages(comparison), heatmap, worstCrops };
       results.quality.push(entry);
     }
   } finally {
@@ -292,7 +275,7 @@ async function main(): Promise<void> {
     warnings.push(warning);
   }
   if (modelsProxy) {
-    warnings.push('模型经 YZT_3DT_PROXY 从服务器取：到稳定、补齐都含网络时间，只看两种引擎之间的差别。验收场景不要这样跑。');
+    warnings.push('模型经 YZT_3DT_PROXY 从服务器取：到稳定、补齐都含网络时间，只看各个方案之间的差别。默认的场景（倾斜摄影 z17、z19）不要这样跑。');
   }
   for (const line of warnings) {
     console.warn(`  ! ${line}`);
@@ -334,7 +317,7 @@ async function main(): Promise<void> {
     scenes: scenes.map(scene => ({
       id: scene.id,
       title: scene.title,
-      acceptance: scene.acceptance,
+      byDefault: scene.byDefault,
       splat: scene.splats.length > 0,
       variants: variantsOf(scene, list, splatList).map(variant => variant.id)
     })),
@@ -359,7 +342,6 @@ async function main(): Promise<void> {
   const server = await startServer(options.port, {
     files: {
       '/3dt/': modelsDir,
-      '/cesium/': join(appRoot, 'node_modules/cesium/Build/Cesium'),
       '/': PAGE_OUT_DIR
     },
     modelsProxy
@@ -397,7 +379,7 @@ async function main(): Promise<void> {
       save();
       console.log(`    ${runSummary(result)}`);
     }
-    console.log('\n比较截图……');
+    console.log('\n比较飞行前后的截图……');
     // 帧时间这些已经写好了：比较截图出错不能把它们带没
     await compareScenes(results, outDir, server.url).catch((error: unknown) => {
       results.warnings.push(`比较截图失败：${String(error).split(String.fromCharCode(10))[0]}。截图都在 shots/ 里，可以直接看。`);

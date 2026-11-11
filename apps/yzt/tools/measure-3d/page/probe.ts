@@ -17,7 +17,7 @@ import { shotCoverage } from '../shot-coverage.ts';
 import { texture3dBytes } from '../upload-bytes.ts';
 import { blankPixels, decodeShot } from './shots.ts';
 
-// 测量探针：要最先执行（bench.ts 的第一个导入），接管 requestAnimationFrame。两种引擎用同一份代码量，
+// 测量探针：要最先执行（bench.ts 的第一个导入），接管 requestAnimationFrame。
 // 只依赖 rAF、PerformanceObserver 和 WebGL，不碰引擎内部。来自 ADR 0147 的 PoC，改了三处：
 // 帧间隔的下限（允许几帧在路上）、每帧工作量（JS 加 GPU）、每帧的上传量
 
@@ -475,7 +475,7 @@ async function endPhase(): Promise<PhaseResult> {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-// 按时间走：慢的引擎丢帧但走的路一样，下载和解析的压力也一样
+// 按时间走：慢的方案丢帧但走的路一样，下载和解析的压力也一样
 function fly(keyframes: readonly BenchCamera[], durationMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const start = performance.now();

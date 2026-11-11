@@ -52,10 +52,10 @@ export interface SplatLayer {
   readonly attempt: number;
 }
 
-/** 钻地观察：这个瓦片集占地范围里的地表半透明（ADR 0081 第 6 节） */
+/** 地下空间（ADR 0081 第 6 节）：漫游时 MapLibre 引擎抬高这个瓦片集，期间隐藏全部二维图层（ADR 0147 第 4 节） */
 export interface UndergroundView {
   readonly tilesetId: string;
-  /** 地表的不透明度，0～1 */
+  /** 地表的不透明度，0～1；原来给 Cesium 引擎的地表用，现在没有视图读（ADR 0153） */
   readonly surfaceOpacity: number;
 }
 

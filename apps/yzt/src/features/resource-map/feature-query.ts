@@ -143,7 +143,7 @@ export type IdentifyStep =
   | { readonly kind: 'server' }
   | { readonly kind: 'none' };
 
-// 查不查后端：二维 14 级以上只用渲染要素；三维（没有渲染要素）和低级别下能后端识别的查后端
+// 查不查后端：二维 14 级以上只用渲染要素；三维（不论查不查得到渲染要素）和低级别下能后端识别的查后端
 function usesBackend(capability: QueryCapability, view: ViewKind, zoom: number): boolean {
   return capability.identify && !(view === '2d' && zoom >= RENDERED_PICK_ZOOM);
 }

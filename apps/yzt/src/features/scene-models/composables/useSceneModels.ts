@@ -80,7 +80,7 @@ export interface SceneModelsOptions {
 }
 
 export interface SceneModels {
-  /** 目录：清单还没到、失败时为空；引擎不支持的种类（Cesium 下的高斯泼溅）不在里面 */
+  /** 目录：清单还没到、失败时为空；引擎不支持的种类（能力声明 splats 为 false 时的高斯泼溅）不在里面 */
   readonly models: ComputedRef<readonly SceneModel[]>;
   /** 清单已经到了：区分"还没有目录"和"目录是空的" */
   readonly hasCatalog: ComputedRef<boolean>;

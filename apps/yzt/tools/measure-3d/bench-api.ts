@@ -8,7 +8,7 @@ export interface BenchCamera {
   readonly pitch: number;
 }
 
-/** MapLibre 引擎的瓦片队列：哪一步排着队，就是哪一步跟不上 */
+/** 瓦片队列：哪一步排着队，就是哪一步跟不上 */
 export interface TileQueues {
   /** 等下载和下载中的 */
   readonly downloading: number;
@@ -20,7 +20,7 @@ export interface TileQueues {
   readonly usedOutOfView: number;
 }
 
-/** MapLibre 引擎放宽屏幕误差的依据和动着不请求的窗口 */
+/** 放宽屏幕误差的依据和动着不请求的窗口 */
 export interface BudgetReadings {
   /** 需求（在用的加上还要加载的估计）、其中还要加载的、再其中没请求的（MB） */
   readonly demandMB: number;
@@ -33,7 +33,7 @@ export interface BudgetReadings {
   readonly cullWindow: number | null;
 }
 
-/** 高斯泼溅的读数（MapLibre 引擎，ADR 0149 第 5 节）：库自己估计的数，各份加起来 */
+/** 高斯泼溅的读数（ADR 0149 第 5 节）：库自己估计的数，各份加起来 */
 export interface SplatReadings {
   /** 渲染器的总预算（高斯个数） */
   readonly budget: number;
@@ -53,7 +53,7 @@ export interface SplatReadings {
   readonly peakWasmMB: number;
 }
 
-/** 两种引擎统一的读数；引擎没有的项是 null */
+/** 引擎的读数（ThreeSceneRenderer.inspect() 整理后的） */
 export interface BenchStats {
   readonly tilesVisible: number;
   readonly triangles: number;
@@ -61,24 +61,22 @@ export interface BenchStats {
   readonly cacheMB: number;
   /** 实际用的屏幕误差（清单不写时基准是 8，变大说明放不下） */
   readonly errorTarget: number;
-  /** 缓存满了没能排队的瓦片；Cesium 没有这一项 */
-  readonly refused: number | null;
+  /** 缓存满了没能排队的瓦片 */
+  readonly refused: number;
   /** 累计：瓦片加载完成、被卸载、加载失败的次数 */
   readonly loaded: number;
   readonly unloaded: number;
   readonly failed: number;
   /** 还在下载、解析、上传的瓦片 */
   readonly loading: number;
-  /** 等待上传的瓦片、累计提前上传的字节（MB）；Cesium 没有这两项 */
-  readonly uploadPending: number | null;
-  readonly uploadedMB: number | null;
-  /** 锁在当前姿态（MapLibre 引擎）；Cesium 没有这一项 */
-  readonly locked: boolean | null;
-  /** Cesium 没有这一项 */
-  readonly queues: TileQueues | null;
-  /** Cesium 没有这一项 */
-  readonly budget: BudgetReadings | null;
-  /** 没有泼溅时（和 Cesium）是 null */
+  /** 等待上传的瓦片、累计提前上传的字节（MB） */
+  readonly uploadPending: number;
+  readonly uploadedMB: number;
+  /** 锁在当前姿态 */
+  readonly locked: boolean;
+  readonly queues: TileQueues;
+  readonly budget: BudgetReadings;
+  /** 没有泼溅时是 null */
   readonly splats: SplatReadings | null;
 }
 
@@ -136,11 +134,11 @@ export interface SceneSample {
   readonly triangles: number;
   readonly errorTarget: number;
   readonly loading: number;
-  readonly uploadPending: number | null;
+  readonly uploadPending: number;
   readonly cacheMB: number;
   readonly loaded: number;
-  readonly queues: TileQueues | null;
-  readonly budget: BudgetReadings | null;
+  readonly queues: TileQueues;
+  readonly budget: BudgetReadings;
   readonly splats: SplatReadings | null;
 }
 

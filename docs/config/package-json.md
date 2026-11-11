@@ -153,7 +153,6 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
     "@vueuse/core": "^15.0.0",
     "@mx/icons": "workspace:*",
     "axios": "^1.20.0",
-    "cesium": "1.146.0",
     "core-js": "^3.50.0",
     "d3-force": "3.0.0",
     "d3-geo": "3.1.1",
@@ -241,7 +240,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `@vueuse/core` | 组合式工具集，按需具名导入，未用到的函数会被 tree-shake。目前在 `packages/ui` 的分栏布局中用 `useMediaQuery`（窄屏断点）、`useResizeObserver`（侧栏内容显示后写回滚动位置），在 `packages/map-vue` 的 `useShownElementSize` 中用 `useElementSize`，在 `packages/map-tools` 的绘制工具中用 `useEventListener`，都会在作用域销毁时自动移除监听。element-plus 2.14.6 内部依赖 15.0.0，所以这里也用 15，打包时只有一份；15.0.0 还没出过补丁版本，但它已经随 Element 在项目中运行，选 14 反而会多打包一份 | 手写 matchMedia、ResizeObserver 的封装 |
 | `vite` | 开发服务器与构建工具，8.x 内部使用 Rolldown 打包 | webpack、Rsbuild |
 | `@vitejs/plugin-vue-jsx` | 用 Babel 编译 Vue 的 TSX，支持 Vue 专有的 JSX 语义 | `@vitejs/plugin-vue`（SFC，ADR 0001 未采用） |
-| `vite-plugin-static-copy` | 把 Cesium 的 `Workers`、`Assets`、`ThirdParty` 复制到产物的 `cesium/`，开发服务器和测试时直接从 `node_modules` 提供（ADR 0079 第 1 节），见 [vite-config.md](vite-config.md)"Cesium 的运行时文件"。Cesium 官方的 Vite 示例用的也是它 | 在 `public/` 放一份副本（要入库或在安装后复制）、`vite-plugin-cesium`（第三方插件，通过全局的 `CESIUM_BASE_URL` 设置基础地址） |
+| `vite-plugin-static-copy` | 把源码里的资源的最小显示级别 `resource-min-zooms.json` 复制到产物根目录（ADR 0137），见 [vite-config.md](vite-config.md)"不经过打包的文件"。只有应用用到，版本写在这里，不在 catalog；原来还复制 Cesium 的运行时文件，随引擎移除（ADR 0153） | 放进 `public/`（源码就导入不了它）、自己写插件 |
 | `sirv` | 开发服务器把 `/3dt/*`、`/design.local/*` 映射到未入库的 `local/`（ADR 0141），见 [local-files.md](local-files.md)。Vite 提供 `public/` 用的也是它 | 手写中间件 |
 | `sass-embedded` | 编译 `*.module.scss`；通过嵌入协议调用原生 Dart Sass，比纯 JS 版 `sass` 快 | `sass`、Less、原生 CSS |
 | `@mx/icons` | workspace 内部包（ADR 0014）。`workspace:*` 表示始终使用本仓库 `packages/icons` 的当前代码，pnpm 用符号链接连接，见 [internal-packages.md](internal-packages.md) | — |
@@ -251,8 +250,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `jwt-decode` | 读取登录 token 的过期时间，只在 `shared/auth/token.ts` 中使用；不校验签名（ADR 0015） | 手写 base64url 解码 |
 | `sm-crypto-v2` | 登录密码的 SM2 加密，只在 `features/auth/password.ts` 中使用；底层是 `@noble/curves`，已与旧项目的 sm-crypto 交叉验证兼容（ADR 0015） | sm-crypto |
 | `maplibre-gl` | 二维地图（ADR 0002、0019），只在 map-core 的适配器和 app 的装配中导入。6.x 只提供 ESM，Worker 由 app 用 `?worker&url` 导入后交给 `setWorkerUrl`；依赖里的 `@types/geojson`、`@maplibre/maplibre-gl-style-spec` 不会暴露给应用，要用时自己声明，版本与它保持一致。主模块约 1 MB、Worker 510 KB，地图页必须懒加载 | mapbox-gl（2.0 起为专有许可）、OpenLayers |
-| `cesium` | 三维地图（ADR 0002、0079），只在 `packages/map-cesium` 和 app 的装配中导入（lint 检查）。不遵守语义化版本，精确锁定（ADR 0005）；`cesium` 是聚合包，代码在它依赖的 `@cesium/engine`、`@cesium/widgets` 里（1.146.0 对应 26.4.0、16.3.0）；它对子包写的是 `^`，所以子包也在 `pnpm-workspace.yaml` 的 `overrides` 钉住，升级时一起改（见 [pnpm-workspace.md](pnpm-workspace.md)）。本项目只用 engine 的 `CesiumWidget`，导入写 `cesium`。Worker、资源和第三方文件不经过打包，由 `vite-plugin-static-copy` 复制到产物的 `cesium/`；地图页第一次切到三维时才加载 | MapLibre 的地球投影（没有 3D Tiles、第一人称相机）、deck.gl |
-| `three`、`@types/three` | 驾驶舱的江苏地图（`features/city-dashboard`），和 MapLibre 引擎的三维（`packages/map-three`，ADR 0147）共用；版本写在 catalog，沿用原来的精确版本。lint 只允许这两处导入，产物检查要求它只在动态分块里 | — |
+| `three`、`@types/three` | 驾驶舱的江苏地图（`features/city-dashboard`），和三维（`packages/map-three`，ADR 0147）共用；版本写在 catalog，沿用原来的精确版本。lint 只允许这两处导入，产物检查要求它只在动态分块里 | — |
 | `gaussian-splat-lite` | LCC2 高斯泼溅（ADR 0149），只在 `packages/map-three` 中导入（lint 检查，驾驶舱也不能用），单独分块，第一次加载 LCC2 模型时才下载。Apache-2.0，基于 Three.js（要求 0.187 以上），支持 LCC2 的流式 LOD，LICENSE、NOTICE 由构建从安装的包里带进产物的 `licenses/`（[vite-config.md](vite-config.md)"第三方许可"）。一个人维护、发版很快，精确锁定在 PoC 验证过的 1.6.1，按"发布满 3 天"升级、不跟最新；它会在渲染回调以外调用 GL，每次升级重跑 GL 监听（[map-three.md](../modules/map-three.md)"高斯泼溅"） | XGRIDS 的 LCC Web SDK（AppKey 绑定域名，要在线授权）、自己写读取和渲染 |
 | `@maplibre/maplibre-gl-style-spec` | MapLibre 样式规范的工具：map-core 用它的 `diff` 对比样式快照（ADR 0022），以后在三维和 Worker 里求值表达式和过滤条件（ADR 0021、0024）。它本来就是 maplibre-gl 的依赖，pnpm 不允许使用没有声明的包，所以自己声明；版本范围与 maplibre-gl 声明的相同（`^26.4.4`），两者解析到同一个版本，只打包一份 | 手写求值器（旧项目的做法，ADR 0020） |
 | `@types/geojson` | GeoJSON 的类型，并提供全局命名空间 `GeoJSON`：style-spec 和 maplibre-gl 的声明文件依赖它，要在 tsconfig 的 `types` 中加载，否则相关类型会悄悄变成错误类型（见 [tsconfig.md](tsconfig.md)）。版本范围与 maplibre-gl 依赖的相同 | — |
@@ -262,7 +260,7 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 | `@turf/intersect` | 识别范围和区划求交（ADR 0051，`shared/map/region/region-scope.ts`）；自定义范围与区县求交、自己和自己求交整理成有效的面（ADR 0121，`shared/map/area`）。turf v7 的单个包，自带类型；底层是 `polyclip-ts`（0.x，用 `bignumber.js` 做精确计算） | 差集、手写多边形裁剪 |
 | `@turf/boolean-intersects` | 要素的几何和区划范围是否相交（ADR 0051），只在 `shared/map/region/region-scope.ts` 中使用。turf v7 的单个包，处理点、线、面和多部分的几何 | 只判断要素的一个顶点 |
 | `@turf/bbox-clip` | 求交前先按识别范围的外包矩形裁掉区划远处的边（Sutherland–Hodgman），在 `shared/map/region/region-scope.ts` 和 `shared/map/area/area-coverage.ts`（节点多的自定义范围先裁到区县的外包框）中使用；南京市界的求交从约 140 ms 降到 1～20 ms（见 modules/shared-map.md"区划裁剪"） | 直接求交、自己写矩形裁剪 |
-| `@turf/simplify` | Douglas-Peucker 算法简化：发给后端的几何放不进地址时（ADR 0051 第 4 节，`packages/map-tools/src/query-geometry.ts`，简化不保证结果有效，由同一个文件里的有效性检查把关）；三维的覆盖物按这一级的半个像素简化（ADR 0080 第 2 节，`packages/map-cesium/overlay-plan.ts`）；节点多的自定义范围在分析前简化、缩略图的轮廓（ADR 0121，`shared/map/area/area-geometry.ts`） | 自己写简化 |
+| `@turf/simplify` | Douglas-Peucker 算法简化：发给后端的几何放不进地址时（ADR 0051 第 4 节，`packages/map-tools/src/query-geometry.ts`，简化不保证结果有效，由同一个文件里的有效性检查把关）；节点多的自定义范围在分析前简化、缩略图的轮廓（ADR 0121，`shared/map/area/area-geometry.ts`） | 自己写简化 |
 | `shpjs` | 读 Shapefile 的 .shp，按 .prj 用 proj4 转为经纬度（ADR 0121），只在 `shared/map/area/area-file.ts` 中使用，在 Worker 里按需动态导入。MIT 许可；6.x 是纯 ESM，依赖 `proj4`、`but-unzip`、`parsedbf`；不带类型声明，只在 `shared/map/area/shpjs.d.ts` 声明用到的 `parseShp`（`tsconfig.worker.json` 要包含这个文件） | 自己写 .shp 解析和投影换算、`shapefile`（不读 .prj，2019 年后没有发布） |
 | `fflate` | 解压上传的 Shapefile 压缩包（ADR 0121），只在 `shared/map/area/area-file.ts` 中使用：先只读目录、按解压后的大小拦下过大的压缩包，再解压用得上的文件。MIT 许可，无依赖，自带类型；0.x 的小版本按大版本对待。依赖树里原有同一版本 | shpjs 自带的解压（读不到目录，说不清缺了哪个文件）、JSZip |
 | `d3-force` | 资源管理"自助取数"知识图谱的力导布局（ADR 0089、0126），只在 `features/resource-management/extraction/graph-layout.ts` 中使用，随关系图的运行时懒加载。精确锁定旧项目 D3 7.9 的子包版本，和 `d3-geo`、`d3-polygon` 一样；依赖 `d3-dispatch`、`d3-quadtree`、`d3-timer`。类型来自 `@types/d3-force` | ECharts 自带的力导（坐标和旧页面不同）、G6 4（ADR 0089） |
@@ -307,5 +305,4 @@ pnpm 会把 `eslint` 当作 `eslint-plugin-boundaries` 的 peer 依赖自动装�
 - 往根目录装依赖加 `-w`；精确锁定加 `-E`
 - 改了 `devEngines.runtime`：同步检查 CI 能否装到对应的 Node，`@types/node` 的大版本是否一致
 - 升级 `typescript`：根目录和 `apps/yzt` 两处同时改，保持同一版本；同时评估 `oxlint-tsgolint` 是否要跟着升
-- 升级 `cesium`：读 CHANGES.md 的 Breaking Changes，按大版本对待；核对 `buildModuleUrl.setBaseUrl` 仍然存在（`packages/map-cesium/src/runtime.ts` 的模块扩充）和静态文件的目录（[vite-config.md](vite-config.md)），再跑 map-cesium 的浏览器测试
 - 安装时出现 `ERR_PNPM_IGNORED_BUILDS`：在 `pnpm-workspace.yaml` 的 `allowBuilds` 里逐个决定，见 [pnpm-workspace.md](pnpm-workspace.md)

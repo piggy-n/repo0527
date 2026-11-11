@@ -1,25 +1,26 @@
 // 命令行参数：pnpm --filter yzt measure:3d 后面的参数原样传进来
 
-export const HELP = `MapLibre 引擎和 Cesium 的性能对比（ADR 0147 3C.4）、高斯泼溅的预算（ADR 0149 L.3），在显卡机器上运行
+export const HELP = `三维（MapLibre 引擎，@mx/map-three）的性能实测、高斯泼溅的预算（ADR 0149 L.3），在显卡机器上运行
 
 用法：pnpm --filter yzt measure:3d [选项]
 
   --only <列表>          只跑部分场景，逗号分隔、按子串匹配，如 --only z19 或 --only jkq2
-                         默认只跑验收场景（倾斜摄影 z17、z19）；jkq、jkq2 要设环境变量 YZT_3DT_PROXY 指向服务器；
+                         默认只跑倾斜摄影 z17、z19；jkq、jkq2 要设环境变量 YZT_3DT_PROXY 指向服务器；
                          泼溅场景要写出 splat 才选得中，如 --only splat-pc
   --list                 列出所有场景后退出
   --repeat <n>           perf 每个场景跑几遍（默认 3），报告取中位数
-  --upload-mb <列表>     MapLibre 另外对照的上传预算，off 是不提前上传（默认 off），如 off,16,64；none 是不对照
-  --cull-window <列表>   MapLibre 另外对照动着不请求的窗口（秒），产品默认是 auto（按实测的加载时间），
+  --upload-mb <列表>     另外对照的上传预算，off 是不提前上传（默认 off），如 off,16,64；none 是不对照
+  --cull-window <列表>   另外对照动着不请求的窗口（秒），产品默认是 auto（按实测的加载时间），
                          off 是动着也请求，如 off,1,0.5
   --splat-budget <列表>  高斯泼溅场景（--only splat）比较的总预算（高斯个数），默认 3m,6m,10m（ADR 0149 L.3）；
-                         写 3m、3e6 或 3000000 都行。泼溅场景只有 MapLibre 引擎，模型从清单里读，
-                         local/3dt/manifest.json 在时用它（和开发服务器一样），见 docs/modules/map-three.md"泼溅的预算"
-  --basemap <arcgis|none> 底图（默认 arcgis，两个引擎相同），没网时用 none
+                         写 3m、3e6 或 3000000 都行。模型从清单里读，local/3dt/manifest.json 在时用它
+                         （和开发服务器一样），见 docs/modules/map-three.md"泼溅的预算"
+  --basemap <arcgis|none> 底图（默认 arcgis），没网时用 none
   --viewport <宽x高>     视口（默认 1600x900）
   --pacing <n>           在路上的帧数上限：1 是 PoC 的做法（默认 2），0 是不等
-  --fps <n>              帧率封顶（默认不封顶），如 60：比飞行中画得多细时用，Cesium 的判断受帧间隔影响
-  --antialias            MapLibre 打开多重采样（默认和产品一样不开），和 Cesium 比边缘时用
+  --fps <n>              帧率封顶（默认不封顶），如 60：测量页解除了 vsync，帧比显示器多，按帧算的上传预算
+                         每秒也传得多；要看用户的显示器上飞行中画得多细时用
+  --antialias            打开多重采样（默认和产品一样不开），看开了以后的边缘和每帧 GPU 时用
   --out <目录>           结果写到这里（默认 local/measure-3d/<时间>）
   --port <n>             本地服务的端口（默认 5283）
   --load-timeout <秒>    等模型稳定的上限（默认 120）

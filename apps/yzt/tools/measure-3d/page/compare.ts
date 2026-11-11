@@ -1,7 +1,7 @@
 import { compareSharpness, GRID_COLS, GRID_ROWS, sharpnessGrid, type SharpnessComparison } from '../sharpness.ts';
 import { decodeShot } from './shots.ts';
 
-// 截图对比：只用来解码和画图，算法在 sharpness.ts。在页面里跑是因为 Node 这边没有图片解码
+// 截图对比（飞一圈回来的和飞行前的）：只用来解码和画图，算法在 sharpness.ts。在页面里跑是因为 Node 这边没有图片解码
 
 export interface ShotComparison extends SharpnessComparison {
   /** 热力图：比值低的格子标红（PNG，base64） */
@@ -66,7 +66,7 @@ function drawHeatmap(subject: Pixels, ratios: readonly (number | null)[]): strin
     }
     const x = (cell % GRID_COLS) * cellWidth;
     const y = Math.floor(cell / GRID_COLS) * cellHeight;
-    // 不到 0.93 的格子越低越红（和验收的阈值相同），高于 1.1 的标绿，其余不盖
+    // 不到 0.93 的格子越低越红，高于 1.1 的标绿，其余不盖：数字只是提醒，最后看图
     if (ratio < 0.93) {
       context.fillStyle = `rgba(230, 40, 40, ${Math.min(0.6, (0.93 - ratio) * 2 + 0.15)})`;
       context.fillRect(x, y, cellWidth, cellHeight);

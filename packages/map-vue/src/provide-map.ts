@@ -3,7 +3,7 @@ import { safeReporter } from '@mx/utils';
 import { getCurrentInstance, inject, onBeforeMount, onBeforeUnmount, onUnmounted, provide } from 'vue';
 import { INTERNAL_MAP_CONTEXT, type MapContext, MapContextState } from './context';
 import { type OverlayOptions, resolveOverlayOptions } from './overlay';
-import { CESIUM_ENGINE, MAP_ERROR_REPORTER, MAP_SCENE_ENGINE } from './runtime';
+import { MAP_ERROR_REPORTER, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE } from './runtime';
 import { SceneBinder, type SceneDerivation } from './scene-binder';
 import { StyleBinder, type StyleDerivation } from './style-binder';
 
@@ -42,7 +42,7 @@ export function provideMap<const G extends string>(options: ProvideMapOptions<G>
   const session = new MapSession(options);
   const binder = new StyleBinder(session.style, onError);
   const sceneBinder = new SceneBinder(session.scene, onError);
-  const { capabilities } = inject(MAP_SCENE_ENGINE, CESIUM_ENGINE);
+  const { capabilities } = inject(MAP_SCENE_ENGINE, MAPLIBRE_ENGINE);
   const state = new MapContextState(session, onError, overlayOptions, undefined, capabilities);
   provide(INTERNAL_MAP_CONTEXT, state);
 

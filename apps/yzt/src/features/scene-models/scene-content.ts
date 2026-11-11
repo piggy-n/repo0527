@@ -10,7 +10,7 @@ import type {
 } from '@mx/map-core';
 import type { SceneModel } from './catalog';
 
-/** 漫游地下的模型时地表的不透明度（ADR 0097 第 5 节：没有单独的钻地，不能调） */
+/** 漫游地下的模型时地表的不透明度（ADR 0097 第 5 节）：会话照常带上，但没有视图再读它，MapLibre 引擎抬高期间隐藏全部二维图层（ADR 0153） */
 export const SURFACE_OPACITY = 0.25;
 
 /** 路线漫游（ADR 0083）：哪个模型的哪条路线；id 每次开始换一个，run 是第几遍；速度是米/秒（ADR 0097 第 4 节） */
@@ -44,7 +44,7 @@ export type RoamChoice = RouteChoice | WalkChoice;
 
 /**
  * 第三人称的人物模型（ADR 0090 第 4 节）：Cesium 官方示例模型 Cesium Man，随应用部署在 `${BASE_URL}roam/` 下，
- * 来源和许可见 docs/modules/map-cesium.md
+ * 来源和许可见 public/roam/CREDITS.txt
  */
 export function walkAvatarUrl(): string {
   return new URL(`${import.meta.env.BASE_URL}roam/Cesium_Man.glb`, window.location.href).href;
@@ -90,8 +90,8 @@ export function currentTilesetId(model: SceneModel, effects: ReadonlyMap<string,
 
 /**
  * 推导会话的三维内容（ADR 0081 第 2、5、6 节）：勾选的模型各一个瓦片集，白膜显示过的效果都留着、只显示当前的；
- * 地下、室内的用头灯光照；高斯泼溅（ADR 0149）各一份泼溅，ID 是模型 ID，倾斜摄影在泼溅的范围里不画。漫游地下的模型时在地下空间（ADR 0097 第 5 节）：地表固定半透明，
- * 不显示地面上的模型（白膜、倾斜摄影会挡住地下空间，ADR 0084）
+ * 地下、室内的用头灯光照；高斯泼溅（ADR 0149）各一份泼溅，ID 是模型 ID，倾斜摄影在泼溅的范围里不画。漫游地下的模型时在地下空间（ADR 0097 第 5 节）：
+ * 不显示地面上的模型（白膜、倾斜摄影会挡住地下空间，ADR 0084）；MapLibre 引擎抬高这个模型期间隐藏全部二维图层，地表的不透明度没有视图读（ADR 0153）
  */
 export function deriveSceneContent(models: readonly SceneModel[], state: SceneModelsState): SceneContent {
   const byId = new Map(models.map(model => [model.id, model]));

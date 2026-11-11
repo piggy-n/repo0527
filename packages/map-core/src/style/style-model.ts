@@ -35,7 +35,7 @@ export interface StyleModelOptions<G extends string> {
   readonly root?: StyleRoot;
   /**
    * MapLibre 引擎的三维模型层叠在这个分组下面（ADR 0147 第 2 节）：它和以上的分组画在模型上面，以下的被模型挡住；
-   * 不给时模型层在最上面。Cesium 引擎不看这一项
+   * 不给时模型层在最上面
    */
   readonly sceneBelow?: G;
 }

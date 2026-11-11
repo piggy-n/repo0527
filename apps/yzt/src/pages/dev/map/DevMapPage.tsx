@@ -2,15 +2,7 @@ import type { FilterSpecification, LayerSpecification } from '@maplibre/maplibre
 import type { Feature, FeatureCollection, Polygon } from 'geojson';
 import { ElButton } from 'element-plus';
 import type { CameraState, LngLat, MapTool, ScreenPoint, StyleGroup, ViewBounds } from '@mx/map-core';
-import {
-  CesiumCanvas,
-  MapCanvas,
-  type OverlayPadding,
-  provideMap,
-  type UnsupportedLayer,
-  useMap,
-  useMapOverlay
-} from '@mx/map-vue';
+import { MapCanvas, type OverlayPadding, provideMap, useMap, useMapOverlay } from '@mx/map-vue';
 import { MEASURE_TOOL_IDS, MeasureOverlay, useMeasure } from '@mx/map-tools';
 import { computed, defineComponent, type PropType, ref, shallowRef } from 'vue';
 import { SvgIcon } from '@/shared/icons/SvgIcon';
@@ -355,9 +347,6 @@ export const DevMapPage = defineComponent({
 
     const camera = map.useCamera();
     const { viewState, activeTool, dimension } = map;
-    // 三维跳过的图层（ADR 0079 第 7 节），按图层 ID
-    const skipped = shallowRef<readonly UnsupportedLayer[]>([]);
-    const recordSkipped = (layer: UnsupportedLayer) => (skipped.value = [...skipped.value, layer]);
     const toggleTool = (id: string) => (activeTool.value === id ? map.releaseTool(id) : map.activateTool(id));
 
     const nextVersion = (): DataVersion => (version.value === 0 ? 1 : 0);
@@ -462,8 +451,6 @@ export const DevMapPage = defineComponent({
             <dd data-dimension={dimension.value}>
               {dimension.value} · {viewState.value}
             </dd>
-            <dt>三维跳过</dt>
-            <dd data-skipped>{skipped.value.map(({ layerId }) => layerId).join('、') || '-'}</dd>
             <dt>会话相机</dt>
             <dd data-camera>{formatCamera(camera.value)}</dd>
             <dt>数据版本</dt>
@@ -480,7 +467,6 @@ export const DevMapPage = defineComponent({
         </header>
         <div class={styles.mapArea}>
           <MapCanvas key={canvasKey.value} createMap={failNextCreation.value ? failingCreateMap : undefined} />
-          <CesiumCanvas onUnsupported={recordSkipped} />
           {overlayVisible.value && <OverlayPanel />}
           {lastProbe.value && <ProbeLabel probe={lastProbe.value} />}
           <MeasureOverlay measure={measure}>{{ removeIcon: () => <SvgIcon name="close" size={12} /> }}</MeasureOverlay>

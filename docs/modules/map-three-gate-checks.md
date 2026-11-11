@@ -1,6 +1,6 @@
 # MapLibre 引擎改为默认之前：显卡机器上的检查
 
-2026-11-10 已做完，默认值已改（ADR 0150）。这份清单留给以后换引擎、大版本升级时复用。
+2026-11-10 已做完，默认值已改（ADR 0150）；之后 ADR 0153 移除了 Cesium，只剩 MapLibre 一种三维引擎。这份清单留给以后换引擎、大版本升级时复用：和 Cesium 对照的部分（第 5 条的判定、第 4 条的对照和记录表里"和 Cesium 比较"的几项、"带回来以后"的切换步骤）已经不适用，复用时换成当时的对照对象（比如上一个版本）或去掉。
 
 ADR 0147 第 9 节的第 4、5 条只能在有真实显卡的机器上做（开发机是软件 WebGL，手感、帧时间、显存都不算数）。第 1～3 条的结果见 [map-three.md](map-three.md)"改为默认引擎的门槛"。
 
@@ -14,7 +14,7 @@ ADR 0147 第 9 节的第 4、5 条只能在有真实显卡的机器上做（开�
 
 ## 第 5 条：生产包复测（约 30 分钟，期间不要用这台机器）
 
-先关掉设过 `YZT_3DT_PROXY` 的终端，否则验收场景也会走网络。
+先关掉设过 `YZT_3DT_PROXY` 的终端，否则默认的场景也会走网络。
 
 ```powershell
 pnpm --filter yzt measure:3d
@@ -22,18 +22,17 @@ pnpm --filter yzt measure:3d
 
 默认跑倾斜摄影 z17、z19，每种方案 3 遍，结果写到 `local/measure-3d/<时间>/`。屏幕上会轮流弹出浏览器窗口，不要关、不要最小化。跑完打开结果目录的 `quality.html`，把结论填进同目录的 `manual.md`，再把整个目录带回来。
 
-通过的线在 `report.md` 里逐项判断。两项差距 2026-11-09 已接受，报告里照样标不通过，只要数字没有变差就算过（[map-three.md](map-three.md)"接受的两项差距"）。报告开头如果警告机器不稳定（每帧 JS 差 1.5 倍以上），帧时间要打折扣，最好重跑一次。
+2026-11-10 时 `report.md` 按 ADR 0147 3C.4 的线逐项和 Cesium 比，两项差距 2026-11-09 已接受（[map-three.md](map-three.md)"和 Cesium 并排的实测记录"）。Cesium 移除以后报告里没有这些线，只有两项检查（稳定时没有被拒绝的瓦片、静止时没有加载卸载）和读数；复用时拿读数和上一次的结果目录比，看有没有变差。报告开头如果警告机器不稳定（每帧 JS 差 1.5 倍以上），帧时间要打折扣，最好重跑一次。
 
 ## 第 4 条：人工检查
 
-用 MapLibre 引擎启动公网配置（端口 5273 在天地图 key 的白名单里，换端口底图加载不出来），用自己的账号登录：
+启动公网配置（端口 5273 在天地图 key 的白名单里，换端口底图加载不出来），用自己的账号登录：
 
 ```powershell
-$env:VITE_MAP_3D_ENGINE = 'maplibre'
 pnpm --filter yzt dev
 ```
 
-看 Cesium 作对照时，关掉上面的服务，在新的终端直接运行 `pnpm --filter yzt dev`，默认就是 Cesium。
+2026-11-10 时用 `VITE_MAP_3D_ENGINE` 另开一个 Cesium 的服务作对照；这个变量随 Cesium 删了（ADR 0153），现在没有可以并排的引擎。
 
 ## 记录表
 
@@ -75,8 +74,4 @@ pnpm --filter yzt dev
 
 ## 带回来以后
 
-读 `report.md`、`manual.md` 和这份记录，门槛结论写进 [map-three.md](map-three.md)。都通过后另写一份 ADR 改默认值（ADR 0147 第 9 节）。要同时改的：
-
-- `apps/yzt/.env` 的 `VITE_MAP_3D_ENGINE`；
-- `.github/workflows/ci.yml`：默认以外的那一种引擎换成 `cesium`，冒烟换成 `scene`；
-- `docs/config/env.md`、`docs/adr/overview.md`、`.claude/rules/map-3d.md`、`AGENTS.md` 里写着"过门槛之前默认 cesium"的地方。
+读 `report.md`、`manual.md` 和这份记录，门槛结论写进 [map-three.md](map-three.md)。2026-11-10 都通过后另写了 ADR 0150 改默认值，同时改了 `.env` 的 `VITE_MAP_3D_ENGINE`、CI 里默认以外的那一种引擎和冒烟、文档和规则里"过门槛之前默认 cesium"的地方。只有一种引擎以后（ADR 0153）没有这个开关，再换引擎时按那时的 ADR 定要改的地方。

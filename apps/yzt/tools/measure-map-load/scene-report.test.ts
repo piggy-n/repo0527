@@ -15,7 +15,7 @@ const ORIGIN = 'http://localhost:4173';
 function raw(overrides: Partial<SceneRawRun> = {}): SceneRawRun {
   return {
     settled: true,
-    measures: { runtime: 900, 'view-ready': 1400, settled: 2100 },
+    measures: { 'view-ready': 1400, settled: 2100 },
     stayStart: 10_000,
     traceStart: 15_000,
     longTasks: [],
@@ -35,20 +35,18 @@ describe('步骤与应用一致', () => {
 });
 
 describe('summarizeSceneRun', () => {
-  it('认出 map-cesium 分块和 Cesium 的运行时文件；停留期间和点了以后的下载分开算', () => {
+  it('认出 map-three 分块；停留期间和点了以后的下载分开算', () => {
     const summary = summarizeSceneRun(
       raw({
         requests: [
-          { url: `${ORIGIN}/assets/map-cesium-DyB417k0.js`, finish: -1200, bytes: 1_000_000 },
-          { url: `${ORIGIN}/cesium/Workers/createVerticesFromHeightmap.js`, finish: 1500, bytes: 0 },
-          { url: `${ORIGIN}/cesium/Assets/approximateTerrainHeights.json`, finish: 1100, bytes: 90_000 },
+          { url: `${ORIGIN}/assets/map-three-DyB417k0.js`, finish: -1200, bytes: 1_000_000 },
+          { url: `${ORIGIN}/assets/map-tools-Cq2x9Lb1.js`, finish: 1100, bytes: 90_000 },
           { url: `${ORIGIN}/assets/CurrentMapPage-BsDuioMe.js`, finish: 300, bytes: 2000 }
         ]
       })
     );
 
     expect(summary.chunk).toStrictEqual({ finish: -1200, bytes: 1_000_000 });
-    expect(summary.cesiumFiles).toStrictEqual({ count: 2, lastFinish: 1500 });
     expect(summary.bytesBeforeStart).toBe(1_000_000);
     expect(summary.bytesAfterStart).toBe(92_000);
     expect(summary.heapGrowth).toBe(55 * 1024 * 1024);
@@ -69,7 +67,7 @@ describe('summarizeSceneRun', () => {
     expect(summary.stayLongTasks).toStrictEqual({ count: 2, total: 200, longest: 120 });
   });
 
-  it('没有 map-cesium 分块的请求时为 null', () => {
+  it('没有 map-three 分块的请求时为 null', () => {
     expect(summarizeSceneRun(raw()).chunk).toBeNull();
   });
 });
@@ -77,14 +75,14 @@ describe('summarizeSceneRun', () => {
 describe('formatSceneReport、formatSceneComparison', () => {
   const runs = [
     summarizeSceneRun(raw()),
-    summarizeSceneRun(raw({ measures: { runtime: 1100, 'view-ready': 1600, settled: 2500 } })),
-    summarizeSceneRun(raw({ settled: false, measures: { runtime: 9000 } }))
+    summarizeSceneRun(raw({ measures: { 'view-ready': 1600, settled: 2500 } })),
+    summarizeSceneRun(raw({ settled: false, measures: { 'view-ready': 9000 } }))
   ];
 
   it('每档一行，只取完成了的几次的中位数', () => {
     const text = formatSceneReport([{ profile: 'fast4g', runs }]);
 
-    expect(text).toContain('| Fast 4G | 2/3 | 1000 | 1500 | 2300 |');
+    expect(text).toContain('| Fast 4G | 2/3 | 1500 | 2300 |');
     expect(text).toContain('55.0 MB');
   });
 

@@ -37,16 +37,15 @@ trace.mark('session');  // 记下 login-to-map:session，并量出从 start 到�
 
 ### 切到三维（`switchTo3d`，3D.5a）
 
-第一次切到三维时才加载 Cesium（ADR 0079 第 2 节），是否预加载按实测决定。每次点"三维"开始一轮：
+三维模块（`@mx/map-three` 的分块）在二维第一次画面稳定后的空闲时预加载，没预加载到时第一次切到三维才加载（ADR 0091 的做法，ADR 0147 第 2 节）。每次点"三维"开始一轮：
 
 | 步骤 | 时刻 | 在哪里记 |
 |---|---|---|
 | 开始 `start` | 点"三维"：上下文的 `dimension` 变成 `3d` 的同一刻（同步侦听） | `shared/map/useSwitchTo3dMarks` |
-| `runtime` | 三维运行时（map-cesium 的分块，含 Cesium）加载完、设置好；之后再切换不加载，这一步不记。MapLibre 引擎（ADR 0147）没有要全局设置的三维运行时，不记 | `app/map-framework.ts` 的 `prepareMapRuntime` |
-| `view-ready` | 三维视图就绪；MapLibre 引擎下是同一个视图换成三维、三维模块（map-three）也加载好 | `useSwitchTo3dMarks` |
+| `view-ready` | 三维视图就绪：同一个视图换成三维、三维模块也加载好 | `useSwitchTo3dMarks` |
 | `settled` | 三维第一次画面稳定（场景的 `settle`：相机停下、视野里的瓦片都已画出） | `useSwitchTo3dMarks` |
 
-步骤的清单是 `SWITCH_TO_3D_STEPS`，实测脚本的 `SCENE_STEPS` 和它一致（`tools/measure-map-load/scene-report.test.ts` 保证）。切回二维、页面卸载时停止等待，这一轮停在已经记下的步骤；上下文的当前视图按种类取，切过去时三维视图还没挂上，`whenReady` 等的就是新挂上的三维视图。上下文先换租约、让同一个视图换好种类，再改 `dimension`，所以同步侦听里的 `whenReady` 不会被换租约中止（3C.2 修正：以前 Cesium 第二次切到三维、MapLibre 引擎每次切到三维都只有 `start`，见 [map-vue.md](map-vue.md)"二三维切换"）。
+步骤的清单是 `SWITCH_TO_3D_STEPS`，实测脚本的 `SCENE_STEPS` 和它一致（`tools/measure-map-load/scene-report.test.ts` 保证）。切回二维、页面卸载时停止等待，这一轮停在已经记下的步骤。上下文先换租约、让同一个视图换好种类，再改 `dimension`，所以同步侦听里的 `whenReady` 等的是三维这一轮的结果，不会被换租约中止（3C.2 修正：以前每次切到三维都只有 `start`，见 [map-vue.md](map-vue.md)"二三维切换"）。ADR 0153 移除 Cesium 时去掉了 `runtime` 这一步：它记的是 Cesium 运行时加载完、设置好，MapLibre 引擎没有要全局设置的三维运行时。
 
 ### 画面稳定
 
@@ -95,7 +94,7 @@ pnpm --filter yzt exec node tools/measure-map-load/cli.ts --runs 3 --label varia
 | `--stay` | 5000 | `switch-3d`：二维画面稳定以后停留多少毫秒再点"三维"，模拟先看一会儿二维；预加载在这段时间里进行 |
 | `--mock-backend` | 不加 | 不连后端：在浏览器里拦下 `/backend` 的请求，登录给假的 token、资源目录为空，不用账号；配内网构建（不请求天地图）时整个实测不出本机，用来比较几种做法的相对差别 |
 
-`switch-3d` 每一次：新的浏览器上下文、限速、登录，等到 `login-to-map:settled`，停留 `--stay` 毫秒，读一次 JS 堆（CDP 的 `JSHeapUsedSize`，先回收），点"三维"，等到 `switch-to-3d:settled`，再读一次 JS 堆。输出的表：步骤；map-cesium 分块、Cesium 运行时文件（复制到产物 `cesium/` 的 Worker 脚本和资源）的完成时刻；停留期间和点了以后各下载了多少；JS 堆增加多少；二维停留期间的长任务（预加载执行脚本会不会卡住二维）。
+`switch-3d` 每一次：新的浏览器上下文、限速、登录，等到 `login-to-map:settled`，停留 `--stay` 毫秒，读一次 JS 堆（CDP 的 `JSHeapUsedSize`，先回收），点"三维"，等到 `switch-to-3d:settled`，再读一次 JS 堆。输出的表：步骤；map-three 分块的完成时刻和大小；停留期间和点了以后各下载了多少；JS 堆增加多少；二维停留期间的长任务（预加载执行脚本会不会卡住二维）。
 
 两档限速取 Chrome DevTools 的预设（DevTools 按 0.9 折算吞吐量、放大延迟）：
 
@@ -259,6 +258,8 @@ Slow 4G 下的资源（毫秒，从发出登录请求算起）：
 - **用户的决定**：保留 final（看得见的底图先到，Slow 4G 的画面稳定没达到 ADR 0061 的验收标准，记在这里）；字体不推迟（[ADR 0062](../adr/0062-font-loading-not-deferred.md)：收益只在慢网络的第一次访问，代价每次访问都有）
 
 ## 3D.5a 切到三维的实测（2026-10-27，ADR 0091）
+
+以下是当时 Cesium 引擎的实测记录，Cesium 已移除（ADR 0153）；表里的"三维运行时"、map-cesium 分块和 Cesium 文件，现在的 `switch-3d` 报告里都没有了。预加载的做法留了下来，现在预加载的是 map-three 的分块。
 
 内网构建（不请求天地图，三维没有影像）、`--mock-backend`、无界面 Edge（`--headless`）、登录页停留 2 秒、二维稳定后停留 5 秒（`--stay 5000`），三份构建交替测量，每档 3 次取中位数，原始数据 `local/measure/map-load/switch3d-2026-10-28T05-07-17.316Z.json`。除了 baseline，每份都是对地图页的一处本地改动，构建后还原，不提交：
 

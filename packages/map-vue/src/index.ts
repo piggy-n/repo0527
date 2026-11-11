@@ -1,16 +1,12 @@
-export { CesiumCanvas, type SceneViewOptions, type UnsupportedLayer } from './CesiumCanvas';
 export type { CameraControl, CameraOperation, MapContext, MapViewport, MapViewState } from './context';
 export { MapCanvas, type MapCanvasMapOptions } from './MapCanvas';
 export type { OverlayEdge, OverlayOptions, OverlayPadding } from './overlay';
 export { type MapHandle, provideMap, type ProvideMapOptions } from './provide-map';
 export {
-  CESIUM_ENGINE,
   MAP_ERROR_REPORTER,
-  MAP_RUNTIME,
   MAP_RUNTIME_PRELOAD,
   MAP_SCENE_ENGINE,
   MAPLIBRE_ENGINE,
-  type MapRuntimeLoader,
   type MapRuntimePreloader,
   type SceneCapabilities,
   type SceneEngine

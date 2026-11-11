@@ -1,7 +1,7 @@
 # vite.config.ts 配置说明
 
 对应文件：`apps/yzt/vite.config.ts`
-相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（@mx/ui 的 Sass 入口）、ADR 0143（libs 搬成包）、ADR 0079（Cesium 的运行时文件）、ADR 0141（未入库的本地文件）、ADR 0149 第 8 节（gaussian-splat-lite 的 LICENSE、NOTICE）
+相关决策：ADR 0001（TSX）、ADR 0008（接口同源代理）、ADR 0010（测试）、ADR 0016（@mx/ui 的 Sass 入口）、ADR 0143（libs 搬成包）、ADR 0137（资源的最小显示级别）、ADR 0141（未入库的本地文件）、ADR 0149 第 8 节（gaussian-splat-lite 的 LICENSE、NOTICE）
 
 ## 整体结构
 
@@ -13,7 +13,7 @@
 
 | 配置 | 值 | 说明 |
 |---|---|---|
-| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`staticFiles`、`localFiles`、`thirdPartyNoticesPlugin()`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`staticFiles` 提供 Cesium 的运行时文件和资源的最小显示级别，`localFiles` 只在开发服务器上提供未入库的模型和原型，`thirdPartyNoticesPlugin` 构建时随附第三方包的 LICENSE、NOTICE，`buildOutputPlugin` 只在构建时检查产物，都见下文 |
+| `plugins` | `vueJsx()`、`systemTitlePlugin()`、`iconsPlugin()`、`staticFiles`、`localFiles`、`thirdPartyNoticesPlugin()`、`buildOutputPlugin()` | `vueJsx` 用 Babel 编译 Vue 的 TSX（ADR 0001）；两个 generators 在测试模式下不启用：`systemTitlePlugin` 同步系统名称的 SVG 轮廓（见 [modules/system-title.md](../modules/system-title.md)），`iconsPlugin` 规范化图标并更新注册表（见 [modules/icons.md](../modules/icons.md)）；`staticFiles` 把资源的最小显示级别复制到产物，`localFiles` 只在开发服务器上提供未入库的模型和原型，`thirdPartyNoticesPlugin` 构建时随附第三方包的 LICENSE、NOTICE，`buildOutputPlugin` 只在构建时检查产物，都见下文 |
 | `resolve.tsconfigPaths` | `true` | 直接读取 tsconfig 的 `paths`，路径别名只在一处定义 |
 | `build.rolldownOptions.output.chunkFileNames` | 函数 | 包入口所在的分块按包名命名，见下文"分块的名字" |
 | `server.port`、`server.strictPort` | 有 `PORT` 环境变量时取它，并且端口被占用时直接失败 | 见下文"开发服务器的端口" |
@@ -43,11 +43,6 @@ const generators =
 const staticFiles = viteStaticCopy({
   targets: [
     {
-      src: 'node_modules/cesium/Build/Cesium/{Workers,Assets,ThirdParty}/**/*',
-      dest: 'cesium',
-      rename: { stripBase: 4 }
-    },
-    {
       src: 'src/features/resource-map/resource-min-zooms.json',
       dest: '.',
       rename: { stripBase: 3 }
@@ -57,10 +52,7 @@ const staticFiles = viteStaticCopy({
 ```
 
 - `resource-min-zooms.json` 是资源的最小显示级别（ADR 0137）：源码导入它作为内置的层级，同时复制到产物根目录，部署时换这个文件就能改；不放进 `public/`，因为 Vite 不让源码导入 `public/` 的文件。`stripBase: 3` 去掉 `src/features/resource-map`，文件直接在 `dist/` 下。生产冒烟检查它确实进了产物
-- Cesium 运行时按基础地址请求 Worker、资源（地球的贴图、着色器用到的数据）和第三方文件（Draco 解码等），这些文件不经过打包（ADR 0079 第 1 节）。`vite-plugin-static-copy` 构建时把它们复制到产物的 `cesium/`（2026-10-26 实测约 6.9 MB），开发服务器和测试时从 `node_modules` 直接提供，不复制、不入库
-- `stripBase: 4` 去掉 `node_modules/cesium/Build/Cesium` 四层目录，保留 `Workers`、`Assets`、`ThirdParty`；升级 Cesium 后核对这几个目录还在原来的位置
-- 三维引擎是 `maplibre` 时不复制（`loadEnv` 读 `VITE_MAP_3D_ENGINE`，ADR 0147 第 7 节）：那时不会加载 Cesium，这 7 MB 不该进产物；测试模式总是提供：浏览器测试用真实的 Cesium，同样从 `/cesium/` 加载。资源的最小显示级别那一项不受影响
-- 基础地址由 app 的三维运行时设置为 `${BASE_URL}cesium/`（[modules/map-cesium.md](../modules/map-cesium.md)"运行时"），没有写进 `define`、也不用 `window.CESIUM_BASE_URL`
+- 原来还把 Cesium 的运行时文件复制到产物的 `cesium/`，随引擎移除（ADR 0153）
 
 ### 未入库的本地文件
 
@@ -72,14 +64,14 @@ const localFiles = localFilesPlugin({
 });
 ```
 
-模型和原型放在仓库根目录的 `local/`，不放进 `public/`，构建就不会复制；开发服务器把这两个地址映射过去，地址和线上一致。目录划分、`YZT_LOCAL_DIR` 和具体行为见 [local-files.md](local-files.md)。设了 `YZT_3DT_PROXY` 时 `/3dt/` 不映射到本地目录，改由 `server.proxy` 整个代理到那台服务器（清单也从它取），本机没有的模型就能在诊断页上加载。
+模型和原型放在仓库根目录的 `local/`，不放进 `public/`，构建就不会复制；开发服务器把这两个地址映射过去，地址和线上一致。目录划分、`YZT_LOCAL_DIR` 和具体行为见 [local-files.md](local-files.md)。设了 `YZT_3DT_PROXY` 时 `/3dt/` 不映射到本地目录，改由 `server.proxy` 整个代理到那台服务器（清单也从它取），本机没有的模型也能在开发服务器上加载。
 
 ### 构建产物检查
 
 `tools/build-output/vite-plugin.ts` 的 `buildOutputPlugin` 只在 `build` 生效，每次公网、内网构建都会执行，不需要另跑命令：
 
 - 检查全部分块的模块清单，禁止包含 `src/pages/dev/`；再检查磁盘文件，禁止残留 `Dev*Page` 文件、`design.local` 和 `3dt/` 下清单以外的内容。只检查、不清理：原型和模型数据不放在 `public/`（[local-files.md](local-files.md)），放错了构建失败，错误信息写明该放到哪里
-- 从入口分块沿静态 `imports` 检查依赖，禁止包含 MapLibre（`maplibre-gl`）、Cesium（`cesium`、`@cesium/*`）和 Three.js（`three`、`3d-tiles-renderer`，驾驶舱和 `@mx/map-three` 都只能在动态分块里，ADR 0147 第 7 节）；两种三维引擎都要成立，CI 另用 `VITE_MAP_3D_ENGINE=cesium` 内网构建一次（再跑这种引擎的三维冒烟）；不遍历动态导入，地图运行时仍可按需加载、预加载。map-vue 的上下文会连带 maplibre-gl，所以给地图页注入三维运行时的那一层也放在地图页的分块里（ADR 0079 第 2 节）
+- 从入口分块沿静态 `imports` 检查依赖，禁止包含 MapLibre（`maplibre-gl`）和 Three.js（`three`、`3d-tiles-renderer`，驾驶舱和 `@mx/map-three` 都只能在动态分块里，ADR 0147 第 7 节）；不遍历动态导入，地图运行时仍可按需加载、预加载。map-vue 的上下文会连带 maplibre-gl，所以给地图页包的那一层（注入预加载三维模块的函数和三维引擎的能力）也放在地图页的分块里（ADR 0079 第 2 节）
 - 关闭天地图时，有效的 `VITE_TIANDITU_KEY` 必须为空；扫描文本产物，禁止残留按 `production` 模式读取的公网 key，错误只报告文件名。未调用的天地图地址模板允许保留，不以域名字符串代替运行时开关
 
 检查失败会让构建失败。本机部署构建和 CI 使用同一套检查；CI 同时执行公网和内网构建。
@@ -91,13 +83,13 @@ const localFiles = localFilesPlugin({
 | 包 | 带上的文件 | 说明 |
 |---|---|---|
 | `echarts` | `LICENSE`、`NOTICE`、`licenses/LICENSE-d3` | LICENSE 末尾指向 d3 的 BSD 3-Clause 全文 |
-| `gaussian-splat-lite` | `LICENSE`、`NOTICE`、`THIRD_PARTY_LICENSES.md` | ADR 0149 第 8 节；NOTICE 指向的 THIRD_PARTY_LICENSES.md 是这个包的第三方许可全文和声明，包括 XGRIDS 对 LCC2 格式的声明，内容以文件为准。`cesium` 引擎的产物里也有它的分块（只是不加载），所以同样带上 |
+| `gaussian-splat-lite` | `LICENSE`、`NOTICE`、`THIRD_PARTY_LICENSES.md` | ADR 0149 第 8 节；NOTICE 指向的 THIRD_PARTY_LICENSES.md 是这个包的第三方许可全文和声明，包括 XGRIDS 对 LCC2 格式的声明，内容以文件为准 |
 
 - 文件不入库，每次构建从 `node_modules` 读，清单里的文件升级后自然是新版本的内容
 - 构建只在两种情况下失败，错误写明包名和文件：产物里有带 NOTICE（`NOTICE`、`NOTICE.txt` 等）的包，却完全不在清单里；清单里列的文件不存在了（升级后改名或删掉）。新加这样的包时，先看它的 NOTICE、LICENSE 里还指向哪些文件，再一起写进清单
 - 检查不到、要人工核对的：清单里的包升级后 NOTICE、LICENSE 新指向的文件（`echarts` 写的是 `^`，小版本会自己升）；NOTICE 不叫 `NOTICE*` 的包；Worker 里的依赖（Worker 单独打包，不在主构建的分块里）；[deployment.md](../deployment.md) 的表。2026-11-11 装的依赖里带 NOTICE 的只有这两个包和 Playwright、TypeScript 这类开发工具
 - 清单里的包没进产物时不带它的文件；同一个包打进了两个版本时构建失败（只带一个版本的文件不对）
-- 范围之外：其余依赖的许可没有随产物提供，包括没有 NOTICE 的 Apache-2.0 包（Cesium、3d-tiles-renderer、idb-keyval、docx-preview 等）的 LICENSE、Cesium 的 LICENSE.md 里的第三方代码声明，以及 MIT、BSD 包的版权声明。要不要提供、怎么提供还没定，记在 [backlog](../backlog.md)。Vite 自带的 `build.license` 只收集 LICENSE、不收 NOTICE，这里没有用
+- 范围之外：其余依赖的许可没有随产物提供，包括没有 NOTICE 的 Apache-2.0 包（3d-tiles-renderer、idb-keyval、docx-preview 等）的 LICENSE，以及 MIT、BSD 包的版权声明。要不要提供、怎么提供还没定，记在 [backlog](../backlog.md)。Vite 自带的 `build.license` 只收集 LICENSE、不收 NOTICE，这里没有用
 
 ### 测试
 
@@ -107,7 +99,7 @@ const localFiles = localFilesPlugin({
 |---|---|---|
 | `fsModuleCache` | `true` | 把转换结果缓存到根目录的 `node_modules/.vitest-cache`，之后的运行跳过转换，见下文"测试耗时" |
 | `unstubEnvs` | `true` | 每个用例结束后撤销 `vi.stubEnv`。已用对照实验验证：关掉后，一个用例修改的环境变量会泄漏到下一个用例 |
-| `env` | `VITE_RESOURCE_MIN_ZOOM_ENABLED`、`VITE_PREFERENCES_ENABLED`、五个 `VITE_PREFERENCE_*`，都是 `'true'` | 固定部署时决定的开关：很多用例依赖"有最小显示级别""偏好照常恢复"的行为，改 `.env` 不影响测试（ADR 0132、0140）。测试开关本身的用例用 `vi.stubEnv` 覆盖 |
+| `env` | `VITE_RESOURCE_MIN_ZOOM_ENABLED`、`VITE_PREFERENCES_ENABLED`、六个 `VITE_PREFERENCE_*`，都是 `'true'` | 固定部署时决定的开关：很多用例依赖"有最小显示级别""偏好照常恢复"的行为，改 `.env` 不影响测试（ADR 0132、0140）。测试开关本身的用例用 `vi.stubEnv` 覆盖 |
 
 `unit` 项目：
 
@@ -178,7 +170,7 @@ Vitest 5 运行结束时会打印各部分所占的比例：导入 32～36%、�
 
 **Node 环境**：在 Node 环境下也能通过的测试文件——纯逻辑、包里的会话与 Worker 通信层、`tools/` 下的 Node 脚本——在第一行写 `// @vitest-environment node`。忘了写只是慢一点；写了但实际用到 DOM，会因为 `document` 未定义而直接失败，不会悄悄通过。Node 和 jsdom 有细小差别，例如 `DOMException` 在 Node 和浏览器里都是 `Error` 的实例，在 jsdom 里不是（Worker 通信层的错误处理两种都兼容）。
 
-**大库在文件开头导入**：Vitest 不转换也不预构建 Cesium，交给 Node 直接加载，入口转到 `@cesium/engine`、`@cesium/widgets` 约 1400 个 ESM 文件。单独导入约 2～3 秒、内存多约 115 MB；2026-10-28/29 全量测试的负载下，`map-framework.test.ts` 在用例里第一次导入它用了 28～41 秒，超过用例的超时。Vitest 不给收集阶段（导入测试文件和它的静态依赖）计时，只限制 Worker 启动的时间（2026-10-29 读 Vitest 5.0.5 的源码确认），所以要导入整个大库的测试在文件开头静态导入，用例里的动态导入拿到的是模块表里已有的模块，不靠加大用例的超时。`map-runtime-3d.test.ts` 一开始就是静态导入，没有出现过超时。
+**大库在文件开头导入**：Vitest 不给收集阶段（导入测试文件和它的静态依赖）计时，只限制 Worker 启动的时间（2026-10-29 读 Vitest 5.0.5 的源码确认），用例里第一次导入大库的时间算进用例的超时。所以要导入整个大库的测试在文件开头静态导入，用例里的动态导入拿到的是模块表里已有的模块，不靠加大用例的超时。这条来自 Cesium：交给 Node 直接加载约 1400 个 ESM 文件，2026-10-28/29 全量测试的负载下在用例里第一次导入用了 28～41 秒（引擎已移除，ADR 0153）。
 
 ### 包的 Sass 入口
 
@@ -249,4 +241,3 @@ AI 对话的后端是另一个服务，用同样的写法加了第二条：`/ai-
 - 改动路径别名：只改 tsconfig 的 `paths`，不要在这里加 `resolve.alias`
 - 新增包的 Sass 入口：不用改这里，写在包的 `exports` 的 `sass` 条件里，见 [internal-packages.md](internal-packages.md) 的"Sass 入口"
 - 新增或升级带 NOTICE 的依赖：看它的 NOTICE、LICENSE 里指向哪些文件，同步 `thirdPartyNoticesPlugin` 的 `NOTICE_PACKAGES` 和 `docs/deployment.md` 的"第三方许可"。构建只拦得住两种遗漏：带 NOTICE 的包完全没列，或者列的文件不存在了；清单里的包升级后新指向的文件、Worker 里的依赖、deployment.md 的表都要人工核对
-- 升级 Cesium：核对 `Build/Cesium` 下的三个目录和 `stripBase` 的层数，构建后产物的 `cesium/` 里能找到 `Workers/`、`Assets/`、`ThirdParty/`，再跑 map-cesium 的浏览器测试

@@ -1,39 +1,28 @@
 import type { SceneSample } from './bench-api.ts';
-import type { RunResult, SceneQuality } from './results.ts';
+import type { RunResult } from './results.ts';
+import { DEFAULT_VARIANT } from './scenes.ts';
 
-// ADR 0147 3C.4 的验收：同模型同视角和 Cesium 比，这些条件要同时满足，不能靠降低画质换帧率。
-// 重复跑的每一项取中位数。阈值可以在复测前调，这里一处改；和 ADR 原文不同的几项见 docs/modules/map-three.md"性能验收"
+// 每个场景的检查：不和别的引擎比，只看本来就不该出现的情况，看的是产品的默认值。重复跑的取中位数
 
-const TRIANGLE_RATIO = 0.9;
-const STABLE_RATIO = 1.2;
-const FRAME_RATIO = 1.1;
-// 清晰度：最差 10% 的格子不低于 Cesium 的这个比例。这只是提醒哪里可能糊，最后看图。
-// 校准（docs/modules/map-three.md）：PoC 的默认缓存明显糊是 0.90，正常的都在 0.95 以上
-const SHARPNESS_RATIO = 0.93;
-// 最差一格：局部糊一块时最差 10% 看不出来（132 格里连着 4 格）。校准：看不出差别的最低 0.92，看得出糊的 0.85、0.89
-const WORST_CELL_RATIO = 0.9;
 /** 同样的静止画面，每帧 JS 差这么多倍就算机器不稳定 */
 export const MACHINE_DRIFT_RATIO = 1.5;
-/** 三角形到 Cesium 终点的这个比例算到了：Cesium 自己各遍的终点就差这么多 */
-export const FILL_REACHED_RATIO = 0.98;
-// 飞行结束后这么久以内要到 Cesium 终点的粗细。三遍实测 0.83～0.87 秒，那时飞行中还不收紧，起点偏粗
-const FILL_REACHED_MS = 1000;
 
-export type VerdictGroup = '画质' | '到稳定' | '帧时间' | '主线程' | '振荡';
+export type CheckGroup = '画质' | '振荡';
 
-export interface VerdictRow {
-  readonly group: VerdictGroup;
+export interface CheckRow {
+  readonly group: CheckGroup;
   readonly condition: string;
-  /** 这一项的 MapLibre、Cesium 的值；没有时为 null */
-  readonly subject: number | null;
-  readonly reference: number | null;
+  /** 这一项的读数；没有时为 null */
+  readonly value: number | null;
   readonly unit: string;
-  /** 能不能判断：缺数据时为 null。一直没到 Cesium 终点时 subject 是 null、这里是 false */
+  /** 能不能判断：缺数据时为 null */
   readonly pass: boolean | null;
 }
 
-function middleOf(values: readonly number[]): number | null {
-  const sorted = values.toSorted((a, b) => a - b);
+export function median(values: readonly (number | null | undefined)[]): number | null {
+  const sorted = values
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    .toSorted((a, b) => a - b);
   if (sorted.length === 0) {
     return null;
   }
@@ -41,196 +30,30 @@ function middleOf(values: readonly number[]): number | null {
   return sorted.length % 2 ? (sorted[middle] ?? null) : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
 }
 
-export function median(values: readonly (number | null | undefined)[]): number | null {
-  return middleOf(values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value)));
-}
-
 const usable = (runs: readonly RunResult[]) => runs.filter(run => run.status !== 'failed' && run.status !== 'invalid');
 
-interface RowSpec {
-  readonly group: VerdictGroup;
-  readonly condition: string;
-  readonly read: (run: RunResult) => number | null | undefined;
-  readonly unit: string;
-  /** 比较 MapLibre 和 Cesium */
-  readonly passes: (subject: number, reference: number) => boolean;
-}
-
-const noMoreThan = (ratio: number) => (subject: number, reference: number) => subject <= reference * ratio;
-const atLeast = (ratio: number) => (subject: number, reference: number) => subject >= reference * ratio;
-
-function flightRows(label: string, phase: 'flightCold' | 'flightWarm'): RowSpec[] {
-  const work = (key: 'p50' | 'p95' | 'p99') => ({
-    group: '帧时间' as const,
-    condition: `${label}每帧工作量 ${key} 不超过 Cesium 的 ${FRAME_RATIO} 倍`,
-    read: (run: RunResult) => run[phase]?.work?.[key],
-    unit: '毫秒',
-    passes: noMoreThan(FRAME_RATIO)
-  });
+/** 一个场景的检查：runs 是这个场景的所有遍 */
+export function sceneChecks(runs: readonly RunResult[]): CheckRow[] {
+  const ofDefault = runs.filter(run => run.variant === DEFAULT_VARIANT);
+  const refused = median(usable(ofDefault.filter(run => run.kind === 'perf')).map(run => run.atStable?.refused));
+  const hold = ofDefault.find(run => run.kind === 'quality')?.quality?.hold;
+  const churn = hold ? hold.loaded + hold.unloaded : null;
   return [
-    // 帧时间比的是工作量，工作量少可能只是画得粗
-    {
-      group: '画质',
-      condition: `${label}三角形中位数不少于 Cesium 的 ${TRIANGLE_RATIO * 100}%`,
-      read: run => median((run[phase]?.trace ?? []).map(sample => sample.triangles)),
-      unit: '个',
-      passes: atLeast(TRIANGLE_RATIO)
-    },
-    work('p50'),
-    work('p95'),
-    work('p99'),
-    {
-      group: '帧时间',
-      condition: `${label}≥50 毫秒的帧不多于 Cesium`,
-      read: run => run[phase]?.over.ms50,
-      unit: '帧',
-      passes: noMoreThan(1)
-    }
-  ];
-}
-
-const STABLE_ROWS: readonly RowSpec[] = [
-  {
-    group: '画质',
-    condition: `稳定后显示的三角形不少于 Cesium 的 ${TRIANGLE_RATIO * 100}%`,
-    read: run => run.atStable?.triangles,
-    unit: '个',
-    passes: atLeast(TRIANGLE_RATIO)
-  },
-  {
-    group: '到稳定',
-    condition: `从开始加载到稳定不超过 Cesium 的 ${STABLE_RATIO} 倍`,
-    read: run => run.load?.ttStableMs,
-    unit: '毫秒',
-    passes: noMoreThan(STABLE_RATIO)
-  }
-];
-
-const FLIGHT_ROWS: readonly RowSpec[] = [
-  ...flightRows('第一遍飞行', 'flightCold'),
-  ...flightRows('第二遍飞行', 'flightWarm'),
-  {
-    group: '主线程',
-    condition: '加载期最长的长任务（除去创建 WebGL 上下文）不超过 Cesium',
-    read: run => run.load?.longTasks.maxWithoutContextMs,
-    unit: '毫秒',
-    passes: noMoreThan(1)
-  },
-  {
-    group: '主线程',
-    condition: '飞行中最长的长任务不超过 Cesium',
-    read: run => Math.max(run.flightCold?.longTasks.maxMs ?? 0, run.flightWarm?.longTasks.maxMs ?? 0),
-    unit: '毫秒',
-    passes: noMoreThan(1)
-  }
-];
-
-function compare(spec: RowSpec, subjectRuns: readonly RunResult[], referenceRuns: readonly RunResult[]): VerdictRow {
-  const subject = median(usable(subjectRuns).map(spec.read));
-  const reference = median(usable(referenceRuns).map(spec.read));
-  return {
-    group: spec.group,
-    condition: spec.condition,
-    subject,
-    reference,
-    unit: spec.unit,
-    pass: subject === null || reference === null ? null : spec.passes(subject, reference)
-  };
-}
-
-const finalTriangles = (run: RunResult) => run.settle?.trace.at(-1)?.triangles;
-
-// Cesium 飞完停在比飞行前粗的地方不再补，MapLibre 会细化回第一次加载的粗细：比"补完用了多久"，等于要比什么也不做还快。
-// 所以看画面到 Cesium 的粗细用了多久，再看终点是不是不比它粗
-function fillRows(subjectRuns: readonly RunResult[], referenceRuns: readonly RunResult[]): VerdictRow[] {
-  const subjectFinal = median(usable(subjectRuns).map(finalTriangles));
-  const referenceFinal = median(usable(referenceRuns).map(finalTriangles));
-  const measured = usable(subjectRuns).flatMap(run => (run.settle?.trace.length ? [run.settle.trace] : []));
-  // 没到的一遍算最慢：多数遍没到时中位数是无穷大，不通过
-  const reached =
-    referenceFinal === null
-      ? null
-      : middleOf(measured.map(trace => fillReachedAt(trace, referenceFinal * FILL_REACHED_RATIO) ?? Number.POSITIVE_INFINITY));
-  return [
-    {
-      group: '到稳定',
-      condition: `飞行后 ${FILL_REACHED_MS / 1000} 秒内到 Cesium 终点的 ${FILL_REACHED_RATIO * 100}%`,
-      subject: reached === null || !Number.isFinite(reached) ? null : reached,
-      reference: null,
-      unit: '毫秒',
-      pass: reached === null ? null : reached <= FILL_REACHED_MS
-    },
-    {
-      group: '画质',
-      condition: '飞行后终点的三角形不少于 Cesium',
-      subject: subjectFinal,
-      reference: referenceFinal,
-      unit: '个',
-      pass: subjectFinal === null || referenceFinal === null ? null : subjectFinal >= referenceFinal
-    }
-  ];
-}
-
-/** 一个场景的验收：runs 是这个场景的所有遍 */
-export function sceneVerdict(runs: readonly RunResult[], quality: SceneQuality | undefined): VerdictRow[] {
-  const perf = (variant: string) => runs.filter(run => run.variant === variant && run.kind === 'perf');
-  const qualityRun = (variant: string) => runs.find(run => run.variant === variant && run.kind === 'quality')?.quality;
-  const subjectRuns = perf('maplibre');
-  const refused = median(usable(subjectRuns).map(run => run.atStable?.refused));
-  const rows: VerdictRow[] = [
     {
       group: '画质',
       condition: '稳定时没有被拒绝的瓦片',
-      subject: refused,
-      reference: null,
+      value: refused,
       unit: '块',
       pass: refused === null ? null : refused === 0
+    },
+    {
+      group: '振荡',
+      condition: '静止观察期间没有瓦片加载、卸载',
+      value: churn,
+      unit: '次',
+      pass: churn === null ? null : churn === 0
     }
   ];
-  const referenceRuns = perf('cesium');
-  rows.push(
-    ...STABLE_ROWS.map(spec => compare(spec, subjectRuns, referenceRuns)),
-    ...fillRows(subjectRuns, referenceRuns),
-    ...FLIGHT_ROWS.map(spec => compare(spec, subjectRuns, referenceRuns))
-  );
-  const ratio = quality?.stable.worstDecileRatio ?? null;
-  rows.push({
-    group: '画质',
-    condition: `清晰度最差 10% 的格子不低于 Cesium 的 ${SHARPNESS_RATIO} 倍（还要人工看对比图）`,
-    subject: ratio,
-    reference: null,
-    unit: '倍',
-    pass: ratio === null ? null : ratio >= SHARPNESS_RATIO
-  });
-  const cells = quality?.stable.ratios.filter(value => value !== null) ?? [];
-  const worstCell = cells.length > 0 ? Math.min(...cells) : null;
-  rows.push({
-    group: '画质',
-    condition: `清晰度最差的一格不低于 Cesium 的 ${WORST_CELL_RATIO} 倍（局部糊一块时最差 10% 看不出来）`,
-    subject: worstCell,
-    reference: null,
-    unit: '倍',
-    pass: worstCell === null ? null : worstCell >= WORST_CELL_RATIO
-  });
-  const hold = qualityRun('maplibre')?.hold;
-  const referenceHold = qualityRun('cesium')?.hold;
-  rows.push({
-    group: '振荡',
-    condition: '静止观察期间没有瓦片加载、卸载',
-    subject: hold ? hold.loaded + hold.unloaded : null,
-    reference: referenceHold ? referenceHold.loaded + referenceHold.unloaded : null,
-    unit: '次',
-    pass: hold ? hold.loaded + hold.unloaded === 0 : null
-  });
-  rows.push({
-    group: '振荡',
-    condition: '静止观察期间画面变糊的次数不多于 Cesium',
-    subject: hold ? hold.blurEvents.length : null,
-    reference: referenceHold ? referenceHold.blurEvents.length : null,
-    unit: '次',
-    pass: hold && referenceHold ? hold.blurEvents.length <= referenceHold.blurEvents.length : null
-  });
-  return rows;
 }
 
 /** 离飞行结束 t 毫秒时的读数：那一刻之前最后一次记录；第一次记录比 0 晚一点点，算作 0 */
@@ -239,16 +62,7 @@ export function fillSampleAt(trace: readonly SceneSample[], t: number): SceneSam
 }
 
 /**
- * 飞行结束多久以后，显示的三角形不再少于 triangles：两个引擎终点的粗细不同时，"补齐"的时间不能直接比，
- * 要看画面到同样的粗细用了多久。瓦片替换的中途三角形会回落，所以看最后一次低于它的时候。一直没到时是 null
- */
-export function fillReachedAt(trace: readonly SceneSample[], triangles: number): number | null {
-  const lastBelow = trace.findLastIndex(sample => sample.triangles < triangles);
-  return trace[lastBelow + 1]?.t ?? null;
-}
-
-/**
- * 同一种引擎、同一个场景的静止画面，每帧 JS 最多差几倍：工作量相同，差得多说明运行期间机器被别的事占着，
+ * 同一个场景的静止画面，每帧 JS 最多差几倍：工作量相同，差得多说明运行期间机器被别的事占着，
  * 这次的帧时间要打折扣。算不出来时是 null
  */
 export function machineDrift(runs: readonly RunResult[]): number | null {
@@ -256,8 +70,8 @@ export function machineDrift(runs: readonly RunResult[]): number | null {
   for (const run of runs) {
     const js = run.kind === 'perf' ? run.static?.js?.p50 : undefined;
     if (js) {
-      // MapLibre 的各个对照方案静止时画的一样；泼溅的预算不同，画的就不同，各算各的
-      const workload = run.variant === 'cesium' || run.variant.startsWith('maplibre-splat') ? run.variant : 'maplibre';
+      // 各个对照方案静止时画的一样；泼溅的预算不同，画的就不同，各算各的
+      const workload = run.variant.startsWith('maplibre-splat') ? run.variant : DEFAULT_VARIANT;
       const key = `${run.scene}/${workload}`;
       groups.set(key, (groups.get(key) ?? []).concat(js));
     }
@@ -267,4 +81,4 @@ export function machineDrift(runs: readonly RunResult[]): number | null {
 }
 
 /** 全部能判断、全部通过才算通过；缺数据时不算通过 */
-export const allPassed = (rows: readonly VerdictRow[]) => rows.every(row => row.pass === true);
+export const allPassed = (rows: readonly CheckRow[]) => rows.every(row => row.pass === true);

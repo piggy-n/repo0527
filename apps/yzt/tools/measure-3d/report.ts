@@ -1,17 +1,7 @@
 import type { BudgetReadings, SceneSample, PhaseResult, SplatReadings, TileQueues } from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
-import type { MeasureResults, RunResult } from './results.ts';
-import {
-  allPassed,
-  FILL_REACHED_RATIO,
-  fillReachedAt,
-  fillSampleAt,
-  MACHINE_DRIFT_RATIO,
-  machineDrift,
-  median,
-  sceneVerdict,
-  type VerdictRow
-} from './verdict.ts';
+import type { MeasureResults, QualityResult, RunResult, SceneQuality } from './results.ts';
+import { allPassed, type CheckRow, fillSampleAt, MACHINE_DRIFT_RATIO, machineDrift, median, sceneChecks } from './verdict.ts';
 
 // 从 raw.json 的内容生成报告；每跑完一遍就重新生成一次，中断了也留得下
 
@@ -64,10 +54,10 @@ function flightDetail(runs: readonly RunResult[], phase: 'flightCold' | 'flightW
   return `${number(errorMedian)} / ${number(errorMax)} / ${number((trianglesMedian ?? 0) / WAN)} / ${number((trianglesMin ?? 0) / WAN)}`;
 }
 
-// 瓦片排在哪一步（MapLibre 引擎）：飞行中的中位数。Cesium 没有这些读数
+// 瓦片排在哪一步：飞行中的中位数
 function queueDetail(runs: readonly RunResult[], phase: 'flightCold' | 'flightWarm'): string {
   const of = (read: (queues: TileQueues) => number) =>
-    pick(runs, run => median((run[phase]?.trace ?? []).map(sample => (sample.queues ? read(sample.queues) : null))));
+    pick(runs, run => median((run[phase]?.trace ?? []).map(sample => read(sample.queues))));
   const value = of(queues => queues.used);
   if (value === null) {
     return '—';
@@ -75,9 +65,9 @@ function queueDetail(runs: readonly RunResult[], phase: 'flightCold' | 'flightWa
   return `${integer(of(queues => queues.downloading))} / ${integer(of(queues => queues.parsing))} / ${integer(of(queues => queues.culled))} / ${integer(value)} / ${integer(of(queues => queues.usedOutOfView))}`;
 }
 
-// 窗口和放宽的原因（MapLibre 引擎）：窗口取这一段的中位数，放宽的帧数是这一段里新增的。Cesium 没有这些读数
+// 窗口和放宽的原因：窗口取这一段的中位数，放宽的帧数是这一段里新增的
 function budgetDetail(runs: readonly RunResult[], phase: 'flightCold' | 'settle' | 'flightWarm'): string {
-  const budgets = (run: RunResult) => (run[phase]?.trace ?? []).flatMap(sample => (sample.budget ? [sample.budget] : []));
+  const budgets = (run: RunResult) => (run[phase]?.trace ?? []).map(sample => sample.budget);
   const added = (read: (budget: BudgetReadings) => number) =>
     pick(runs, run => {
       const list = budgets(run);
@@ -216,7 +206,7 @@ function splatLines(results: MeasureResults): string[] {
   const parts = [
     '## 高斯泼溅的预算（ADR 0149 L.3）',
     '',
-    `只有 MapLibre 引擎。模型来自${results.meta.manifest ?? '清单'}。帧时间单位是毫秒，四个数是 p50 / p95 / p99 / 最长；重复跑的取中位数。稳定时可见的高斯不到预算的 ${SPLAT_FILLED_RATIO * 100}% 时算"没用满"：这个视角稳定时要不了这么多，稳定时的行不代表这个预算的开销；飞行要经过要得更多的视角，飞行和峰值的行仍然反映它。`,
+    `模型来自${results.meta.manifest ?? '清单'}。帧时间单位是毫秒，四个数是 p50 / p95 / p99 / 最长；重复跑的取中位数。稳定时可见的高斯不到预算的 ${SPLAT_FILLED_RATIO * 100}% 时算"没用满"：这个视角稳定时要不了这么多，稳定时的行不代表这个预算的开销；飞行要经过要得更多的视角，飞行和峰值的行仍然反映它。`,
     ''
   ];
   for (const scene of splatScenes) {
@@ -240,13 +230,27 @@ function splatLines(results: MeasureResults): string[] {
   return parts;
 }
 
-const verdictMark = ({ pass }: VerdictRow) => (pass === null ? '算不出' : pass ? '通过' : '**不通过**');
+const checkMark = ({ pass }: CheckRow) => (pass === null ? '算不出' : pass ? '通过' : '**不通过**');
 
-function verdictTable(rows: readonly VerdictRow[]): string {
+function checkTable(rows: readonly CheckRow[]): string {
   return table(
-    ['类别', '条件', 'MapLibre', 'Cesium', '结果'],
-    rows.map(row => [row.group, row.condition, `${number(row.subject, 2)} ${row.unit}`, row.reference === null ? '—' : `${number(row.reference, 2)} ${row.unit}`, verdictMark(row)])
+    ['类别', '条件', '读数', '结果'],
+    rows.map(row => [row.group, row.condition, `${integer(row.value)} ${row.unit}`, checkMark(row)])
   );
+}
+
+// 飞一圈回来和飞行前比的清晰度：数字只提醒哪里可能糊，图在 quality.html
+function sharpnessLines(item: SceneQuality | undefined): string[] {
+  if (!item) {
+    return [];
+  }
+  const { cells, medianRatio, worstDecileRatio, ratios } = item.afterFlight;
+  const values = ratios.filter(value => value !== null);
+  const worst = values.length > 0 ? Math.min(...values) : null;
+  return [
+    `**飞一圈回来的清晰度（和飞行前比）：** 比了 ${cells} 格，中位数 ${number(medianRatio, 2)}，最差 10% ${number(worstDecileRatio, 2)}，最差一格 ${number(worst, 2)}；图在 \`quality.html\``,
+    ''
+  ];
 }
 
 function uploadTable(runs: readonly RunResult[], phase: 'flightCold' | 'flightWarm'): string | null {
@@ -290,51 +294,40 @@ function fillCell(runs: readonly RunResult[], read: (run: RunResult) => SceneSam
 
 const finalOf = (run: RunResult) => run.settle?.trace.at(-1);
 
-/** 飞行后画面怎样变：两个引擎终点的粗细不同，只比"补齐"的时间看不出用户看到什么 */
-function fillLines(perf: readonly { readonly id: string; readonly label: string; readonly runs: readonly RunResult[] }[]): string[] {
+/** 飞行后画面怎样变："补齐"的时间只说明引擎不再动，看不出画面怎样一步步变细 */
+function fillLines(perf: readonly { readonly label: string; readonly runs: readonly RunResult[] }[]): string[] {
   const measured = perf.filter(item => item.runs.some(run => run.settle?.trace.length));
   if (measured.length === 0) {
     return [];
   }
-  const rows = measured.map(({ label, runs }) => [
-    label,
-    ...FILL_TIMES.map(t => fillCell(runs, run => fillSampleAt(run.settle?.trace ?? [], t))),
-    fillCell(runs, finalOf)
-  ]);
-  const parts = ['**飞行后的过程（第一遍）：** 每格是屏幕误差 / 三角形（万）', '', table(['方案', ...FILL_TIMES.map(t => `${t / 1000} 秒`), '最后'], rows), ''];
-  const reference = perf.find(item => item.id === 'cesium');
-  const final = reference ? pick(reference.runs, run => finalOf(run)?.triangles) : null;
-  if (final !== null) {
-    const target = final * FILL_REACHED_RATIO;
-    for (const { id, label, runs } of measured) {
-      if (id !== 'cesium') {
-        const reached = pick(runs, run => fillReachedAt(run.settle?.trace ?? [], target));
-        parts.push(`${label} 到 Cesium 终点的 ${FILL_REACHED_RATIO * 100}%（${number(target / WAN)} 万个三角形）用了 ${reached === null ? '—' : number(reached / 1000, 2)} 秒`, '');
-      }
-    }
-  }
-  return parts;
+  const rows = measured.map(({ label, runs }) =>
+    [label].concat(
+      FILL_TIMES.map(t => fillCell(runs, run => fillSampleAt(run.settle?.trace ?? [], t))),
+      fillCell(runs, finalOf)
+    )
+  );
+  return ['**飞行后的过程（第一遍）：** 每格是屏幕误差 / 三角形（万）', '', table(['方案', ...FILL_TIMES.map(t => `${t / 1000} 秒`), '最后'], rows), ''];
 }
 
-const METHOD = `- **都是生产代码：** 真实的 \`MapSession\`、\`MapLibreView\` + \`ThreeSceneRenderer\`、\`CesiumView\` + \`CesiumScene\`，生产模式构建；页面只有底图和模型。按包分块，方便归因，运行的代码相同。
+const METHOD = `- **都是生产代码：** 真实的 \`MapSession\`、\`MapLibreView\` + \`ThreeSceneRenderer\`，生产模式构建；页面只有底图和模型。按包分块，方便归因，运行的代码相同。
 - **冷启动：** 每遍一个新的浏览器进程和空的配置目录，服务端发 \`Cache-Control: no-store\`。操作系统的文件缓存控制不了。
 - **模型来自本机服务（设了 \`YZT_3DT_PROXY\` 时除外）：** 没有网络延迟，"到稳定"是下限；主线程的解析成本不受影响。
-- **每帧工作量：** 同一帧的 JS 加 GPU，验收的 p50、p95、p99 看它。帧间隔有下限（见"有效性"里的校准），看不出余量；工作量不受影响。
+- **每帧工作量：** 同一帧的 JS 加 GPU，比较方案时 p50、p95、p99 看它。帧间隔有下限（见"有效性"里的校准），看不出余量；工作量不受影响。
 - **≥50 毫秒的帧：** 看实际帧间隔：这个长度远高于下限，而且能抓到不在工作量里的卡顿（垃圾回收、合成）。
-- **每帧 GPU：** \`EXT_disjoint_timer_query_webgl2\`，只包住这一帧的回调。Cesium 开 4 倍多重采样，离屏解析在计时内；MapLibre 默认不开（和产品一样），所以 GPU 这一项不是同样的画法，要比就加 \`--antialias\` 再跑一次。
+- **每帧 GPU：** \`EXT_disjoint_timer_query_webgl2\`，只包住这一帧的回调。默认和产品一样不开多重采样；加 \`--antialias\` 打开后，离屏解析也在计时内。
 - **上传假设：** 每帧的 \`texImage2D\`、\`texSubImage2D\`、\`texImage3D\`、\`texSubImage3D\`、\`bufferData\` 的字节和 \`generateMipmap\` 次数，和这一帧的 GPU 耗时放在一起。按上传量分桶后 GPU 耗时随上传量上涨，才说明尖峰来自上传。
-- **长任务归因：** 单独跑一遍带 CDP CPU 采样，页面报的每个长任务按分块（three、maplibre-gl、cesium……）和原生调用（\`linkProgram\`、\`texSubImage2D\`）汇总。\`profiles/\` 里的 \`.cpuprofile\` 可以用 DevTools 打开。创建 WebGL 上下文另外包住 \`getContext\` 量，每一遍都有：它和瓦片无关，同一台机器上 0.6～1.2 秒来回跳。
-- **清晰度：** 单独跑一遍，同一相机拍截图。见 \`quality.html\` 的说明。
-- **到稳定：** 引擎报告瓦片都到了（MapLibre 还要上传队列空、屏幕误差不再变），连续 1 秒。飞行后补齐从飞行结束的时刻算；这个数只说明引擎不再动，不说明画面一样细：Cesium 飞完不一定回到飞行前的粗细，要一起看"飞行后的过程"。所以验收不比这个数，比到 Cesium 终点的 98% 用了多久，和终点的三角形。
+- **长任务归因：** 单独跑一遍带 CDP CPU 采样，页面报的每个长任务按分块（three、maplibre-gl、map-three……）和原生调用（\`linkProgram\`、\`texSubImage2D\`）汇总。\`profiles/\` 里的 \`.cpuprofile\` 可以用 DevTools 打开。创建 WebGL 上下文另外包住 \`getContext\` 量，每一遍都有：它和瓦片无关，同一台机器上 0.6～1.2 秒来回跳。
+- **清晰度：** 单独跑一遍画质：静止观察时每秒截一张，看画面有没有变糊；飞一圈回来再拍一张，和飞行前同一相机的那张比。见 \`quality.html\` 的说明。
+- **到稳定：** 引擎报告瓦片都到了、上传队列空、屏幕误差不再变，连续 1 秒。飞行后补齐从飞行结束的时刻算；这个数只说明引擎不再动，不说明画面回到了飞行前的粗细，要一起看"飞行后的过程"和飞一圈回来的清晰度。
 - **显存：** Windows 的 GPU Process Memory 计数器，取 GPU 进程的专用显存。"峰值"是加载时、稳定时和每遍飞行结束补齐后这些采样的最大值，不是真正的瞬时峰值，飞行途中不采样（读计数器要起 PowerShell，会干扰帧时间）。
 - **CPU 内存：** 渲染进程（页面和它的 Worker，备用的空进程也算，只有几十 MB）、GPU 进程的私有内存（提交的字节，\`Get-Process\` 的 PrivateMemorySize64），和显存同时采样。
-- **高斯泼溅（ADR 0149 L.3）：** 只有 MapLibre 引擎，每个预算一个方案，都是产品的设置（\`limit\`、\`maxSh: 0\`、并发 2），只换总预算。"稳定"是每份都读到了索引、当前视角要的细节都到了（库的 \`loadProgress\` 为 1）、没有在加载的分块。"库估计"是库自己报的数（CPU 不含 Worker 的堆和还没放进存储的副本）。库在渲染回调外上传、排序，这部分不在"每帧 GPU"里，上传量记在下一帧。"接近白色"是模型的像素里三个通道都不低于 235 的比例，同一个相机下软件渲染和显卡比，看亮处偏白是不是软件渲染造成的。`;
+- **高斯泼溅（ADR 0149 L.3）：** 每个预算一个方案，都是产品的设置（\`limit\`、\`maxSh: 0\`、并发 2），只换总预算。"稳定"是每份都读到了索引、当前视角要的细节都到了（库的 \`loadProgress\` 为 1）、没有在加载的分块。"库估计"是库自己报的数（CPU 不含 Worker 的堆和还没放进存储的副本）。库在渲染回调外上传、排序，这部分不在"每帧 GPU"里，上传量记在下一帧。"接近白色"是模型的像素里三个通道都不低于 235 的比例，同一个相机下软件渲染和显卡比，看亮处偏白是不是软件渲染造成的。`;
 
 /** report.md */
 export function renderReport(results: MeasureResults): string {
   const { meta, environment: env, runs, quality } = results;
   const onlySplats = results.scenes.length > 0 && results.scenes.every(scene => scene.splat);
-  const title = onlySplats ? '# 高斯泼溅的预算实测（ADR 0149 L.3）' : '# MapLibre 引擎和 Cesium 的实测（ADR 0147 3C.4）';
+  const title = onlySplats ? '# 高斯泼溅的预算实测（ADR 0149 L.3）' : '# 三维实测（MapLibre 引擎）';
   const parts: string[] = [title, ''];
   parts.push(`生成时间：${meta.updatedAt}　提交：${meta.commit ?? '未知'}　进度：${runs.length} / ${meta.plannedTotal}${meta.finished ? '' : '（还在跑或被中断）'}`, '');
   if (env.software) {
@@ -354,19 +347,25 @@ export function renderReport(results: MeasureResults): string {
 
   parts.push(...splatLines(results));
   if (!onlySplats) {
-    parts.push('## 验收', '');
+    parts.push('## 检查', '');
   }
   for (const scene of results.scenes) {
     const sceneRuns = runs.filter(run => run.scene === scene.id);
-    // 泼溅场景不和 Cesium 比，上面单独一节
+    // 泼溅场景比较预算，上面单独一节
     if (sceneRuns.length === 0 || scene.splat) {
       continue;
     }
-    const rows = sceneVerdict(sceneRuns, quality.find(item => item.scene === scene.id));
-    parts.push(`### ${scene.title}${scene.acceptance ? '' : '（不在验收里）'}：${allPassed(rows) ? '全部通过' : '没有全部通过'}`, '', verdictTable(rows), '');
+    const rows = sceneChecks(sceneRuns);
+    parts.push(
+      `### ${scene.title}：${allPassed(rows) ? '全部通过' : '没有全部通过'}`,
+      '',
+      checkTable(rows),
+      '',
+      ...sharpnessLines(quality.find(item => item.scene === scene.id))
+    );
   }
   if (!onlySplats) {
-    parts.push('"截图不比 Cesium 糊"最后要人工看 `quality.html`，结论写进 `manual.md`。', '');
+    parts.push('画面清不清楚、飞一圈回来有没有变糊，最后要人工看 `quality.html`，结论写进 `manual.md`。', '');
   }
 
   parts.push('## 有效性', '');
@@ -379,9 +378,9 @@ export function renderReport(results: MeasureResults): string {
       ['这次用的', `最多 ${meta.pacing} 帧在路上`],
       ['帧率上限', meta.fps === null ? '不封顶' : `${meta.fps} 帧`],
       ['机器状态', drift === null ? '算不出' : `同样的静止画面，每帧 JS 最多差 ${number(drift)} 倍（超过 ${MACHINE_DRIFT_RATIO} 倍算不稳定）`],
-      ['底图', meta.basemap === 'arcgis' ? 'ArcGIS 影像（两个引擎相同）' : '无底图（两个引擎相同）'],
+      ['底图', meta.basemap === 'arcgis' ? 'ArcGIS 影像' : '无底图'],
       ['视口', `${meta.viewport.width}×${meta.viewport.height}`],
-      ['MapLibre 多重采样', meta.antialias ? '开' : '不开（和产品一样）']
+      ['多重采样', meta.antialias ? '开（--antialias）' : '不开（和产品一样）']
     ]),
     ''
   );
@@ -401,7 +400,6 @@ export function renderReport(results: MeasureResults): string {
   parts.push('## 各场景并排', '', '帧时间单位是毫秒，四个数是 p50 / p95 / p99 / 最长；重复跑的取中位数。', '');
   for (const scene of results.scenes) {
     const perf = sceneVariants(results, scene).map(({ id, label }) => ({
-      id,
       label,
       runs: runs.filter(run => run.scene === scene.id && run.variant === id && run.kind === 'perf')
     }));
@@ -499,10 +497,9 @@ ${splat}`;
 
 | 项目 | 怎么看 | 结果 |
 |---|---|---|
-| 不比 Cesium 糊（z17） | 左右两张同一相机的截图，看建筑的纹理、文字、边缘；热力图里标红的格子重点看 | |
-| 不比 Cesium 糊（z19） | 同上 | |
+| 画面清不清楚 | 每个场景稳定后的截图，看建筑的纹理、文字、边缘 | |
+| 飞一圈回来的画面 | 和飞行前同一相机的两张并排，热力图里标红的格子重点看 | |
 | 清晰度的数字和肉眼相符吗 | 标红的格子，肉眼也觉得糊吗；没标红但肉眼觉得糊的地方有吗。不相符时告诉我哪里，我再调算法 | |
-| 飞一圈回来的画面 | "飞行后"那一组 | |
 
 **其他观察：**
 ${splat}`;
@@ -510,33 +507,52 @@ ${splat}`;
 
 const IMAGE_STYLE = 'max-width:100%;display:block;margin:4px 0';
 
-/** quality.html：并排的截图、热力图和最差几格的放大 */
-export function renderQualityPage(results: MeasureResults): string {
-  const sections = results.quality.map(item => {
-    const scene = results.scenes.find(({ id }) => id === item.scene);
-    const after = item.afterFlight
-      ? `<p>飞一圈回来：比了 ${item.afterFlight.cells} 格，中位数 ${number(item.afterFlight.medianRatio, 2)}，最差 10% ${number(item.afterFlight.worstDecileRatio, 2)}</p>`
-      : '';
+const figure = (caption: string, src: string) => `<figure><figcaption>${caption}</figcaption><img src="${src}" style="${IMAGE_STYLE}"></figure>`;
+
+// 一个场景：飞行前后的截图并排，比过的再加比值、热力图和最差几格的放大
+function qualitySection(title: string, shots: QualityResult, compared: SceneQuality | undefined): string {
+  if (!shots.shotAfterFlight) {
     return `<section>
-<h2>${scene?.title ?? item.scene}</h2>
-<p>MapLibre / Cesium 的清晰度比值：比了 ${item.stable.cells} 格，中位数 <b>${number(item.stable.medianRatio, 2)}</b>，最差 10% <b>${number(item.stable.worstDecileRatio, 2)}</b></p>
-${after}
-<div class="pair"><figure><figcaption>MapLibre</figcaption><img src="${item.subject}" style="${IMAGE_STYLE}"></figure><figure><figcaption>Cesium</figcaption><img src="${item.reference}" style="${IMAGE_STYLE}"></figure></div>
-<h3>热力图（格子里是比值，低于 0.93 标红、高于 1.1 标绿）</h3>
-<img src="${item.heatmap}" style="${IMAGE_STYLE}">
-<h3>比值最低的几格，放大 3 倍（左 MapLibre，右 Cesium）</h3>
-<img src="${item.worstCrops}" style="${IMAGE_STYLE}">
+<h2>${title}</h2>
+<p>飞一圈回来没有稳定，没有拍，不比较。</p>
+<div class="pair">${figure('稳定后', shots.shot)}</div>
 </section>`;
+  }
+  const pair = `<div class="pair">${figure('飞一圈回来', shots.shotAfterFlight)}${figure('飞行前', shots.shot)}</div>`;
+  if (!compared) {
+    return `<section>
+<h2>${title}</h2>
+<p>没有比较结果：全部跑完以后才比，比较出错时 report.md 里有提示。</p>
+${pair}
+</section>`;
+  }
+  const { cells, medianRatio, worstDecileRatio } = compared.afterFlight;
+  return `<section>
+<h2>${title}</h2>
+<p>飞一圈回来 / 飞行前的清晰度比值：比了 ${cells} 格，中位数 <b>${number(medianRatio, 2)}</b>，最差 10% <b>${number(worstDecileRatio, 2)}</b></p>
+${pair}
+<h3>热力图（画在飞一圈回来的那张上，格子里是比值，低于 0.93 标红、高于 1.1 标绿）</h3>
+<img src="${compared.heatmap}" style="${IMAGE_STYLE}">
+<h3>比值最低的几格，放大 3 倍（左 飞一圈回来，右 飞行前）</h3>
+<img src="${compared.worstCrops}" style="${IMAGE_STYLE}">
+</section>`;
+}
+
+/** quality.html：每个场景飞行前后的截图，比过的还有热力图和最差几格的放大 */
+export function renderQualityPage(results: MeasureResults): string {
+  const sections = results.scenes.flatMap(scene => {
+    const shots = results.runs.find(run => run.scene === scene.id && run.kind === 'quality')?.quality;
+    return shots ? [qualitySection(scene.title, shots, results.quality.find(item => item.scene === scene.id))] : [];
   });
   return `<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>截图对比</title>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>飞行前后的截图</title>
 <style>
 body{font:15px/1.6 system-ui,"Microsoft YaHei",sans-serif;margin:24px;background:#fff;color:#222}
 .pair{display:flex;gap:8px}.pair figure{flex:1;margin:0;min-width:0}figcaption{font-weight:600}
 section{margin-bottom:48px}
 </style></head><body>
-<h1>截图对比（ADR 0147 3C.4）</h1>
-<p>怎样算：每张图先缩小一半（去掉像素级的锯齿），分成 16×9 格，每格算对数亮度的梯度能量，再除以缩小 4 倍后的梯度能量。取对数和比值是为了抵消两个引擎光照的不同：光照差异是乘性的、整片的，糊是高频丢失。只比模型占到四分之一以上的格子。数字只是提醒哪里可能糊，<b>结论以人看图为准</b>，写进 manual.md。</p>
+<h1>飞行前后的截图</h1>
+<p>每个场景同一相机的两张截图：稳定后，和飞一圈回来稳定后。清晰度怎样算：每张图先缩小一半（去掉像素级的锯齿），分成 16×9 格，每格算对数亮度的梯度能量，再除以缩小 4 倍后的梯度能量。取对数和比值，亮度、对比度整片的变化就不算糊，糊是高频丢失。比值是飞一圈回来除以飞行前，只比模型占到四分之一以上的格子。数字只是提醒哪里可能糊，<b>结论以人看图为准</b>，写进 manual.md。</p>
 ${sections.join('\n') || '<p>还没有结果。</p>'}
 </body></html>
 `;

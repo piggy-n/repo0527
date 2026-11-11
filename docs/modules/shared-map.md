@@ -154,8 +154,8 @@ basemap.setLabelsVisible(false);
 - 打开分色时各市按 `code` 取色（`static-palette.ts`），相邻的市不同色，由测试按共用顶点判断。苏州和泰州隔着长江相邻，看地图容易漏掉
 - 地名点由 `pnpm basemap:generate` 生成，取面内离边界最远的点；打开标注时市名一直显示，区县从 8.5 级起显示，市名避让时优先
 - 地名只有汉字，用 `JIANGSU_MAP_OPTIONS` 的 `localIdeographFontFamily` 在本地画，不请求字形。样式校验要求有 `glyphs`，所以绑定注记分组的页面都要在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`，地址不会被请求；打开标注后漏传时整个视图进入 `failed`，`pages/map-pages.test.ts` 检查
-- 三维：面和线由 map-cesium 镜像，用 `ClassificationType.TERRAIN`，不会染到模型上；到 11 级不再加细、不再重建（`overlayDetailMetadata`，ADR 0135）；地名画成文字，不做避让（ADR 0146）。切换二三维时保持静态底图
-- 面的过滤条件要写 `['Polygon', 'MultiPolygon']`：三维按要素原来的类型求值，只写 `Polygon` 时南京（MultiPolygon）会被滤掉
+- 三维：和二维是同一个 MapLibre 视图，面、线和地名照常按样式画，被模型挡住还是画在模型上面见 [map-three.md](map-three.md)"叠放"。切换二三维时保持静态底图。ADR 0135 的细节上限（`overlayDetailMetadata`）和 ADR 0146 的"三维画成文字、不做避让"是 Cesium 镜像覆盖物时的做法，随 Cesium 移除（ADR 0153）
+- 面的过滤条件要写 `['Polygon', 'MultiPolygon']`：MapLibre 画的时候都是 `Polygon`，按 GeoJSON 原来的类型求值（`featureFilter`）时南京是 `MultiPolygon`，只写 `Polygon` 会被滤掉
 - 改了配色、分色开关或边界数据后运行 `basemap:generate`；缩略图和当前配置是否一致由测试检查
 
 ### 面板与底图卡（设计稿 5D.4、ADR 0146）
@@ -176,7 +176,7 @@ const current = basemapOption(basemap.selected.value);   // { id, label: '矢量
 - 缩略图由拥有者给出（`basemap.thumbnails`，`basemapThumbnails(tianditu)` 纯函数）：天地图南京所在的那张 10 级瓦片（849, 415），底图和配套的注记各一张，放大到 160% 后按 `focus`（86% 67%，南京在瓦片里的位置）对准。和底图的数据源用同一个地址模板（`tileUrl`）；静态底图是打包的 SVG，没有注记（`labels` 为 `null`），`focus` 居中，放大到 160% 后全省正好露出来；无底图为 `null`，显示和地图背景同色的方格；关闭天地图时矢量、影像为 `null`，不请求天地图。组件不读 `appConfig`
 - 底图面板默认只有缩略图（ADR 0146）。当前缩略图左上角的入口（`aria-pressed` 跟着展开状态）点开两行：标注开关（`ElSwitch` 的 small）、透明度滑块；面板接收 `active`（`MapOptionsPopover` 默认插槽的参数），不显示时收起，每次打开都是收起的；调过的值在拥有者里。无底图没有入口。行政区用 `BoundarySettingsPanel`，选项行的 `OpacityToggle` 控制下方滑块
 - 透明度用共用的 `OpacitySlider`：滑块按百分比显示、不带刻度、右边写出百分比，拖动过程中实时交出 0～1。Element 的滑块宽 100%，两端各留 `--space-md`（12）并计入宽度（`box-sizing: border-box`）；端点圆点悬浮放大到 24 时，与名称及百分比仍保留至少 8 间距
-- 关闭（ADR 0146）：选了底图（内容调插槽参数的 `close`）、再点入口、单击外部、按 Esc、页面停用。`useLightDismiss` 在 `document` 的捕获阶段监听：按下到松开移动超过 4 像素算拖动，不关闭，MapLibre 拖动后吞掉 click、Cesium 不吞，都走这一条；从浮层里按下、拖到外面松手不关闭；按键触发外部的按钮也算点击；Esc 不再往下传，当前工具不会同时结束。`close` 和 Esc 把焦点还给入口，单击外部不抢焦点。`visible` 与更新监听保持受控，忽略 Element 的自动显隐请求；禁用组件的触发按键拦截，键盘通过原生按钮点击执行同一开关
+- 关闭（ADR 0146）：选了底图（内容调插槽参数的 `close`）、再点入口、单击外部、按 Esc、页面停用。`useLightDismiss` 在 `document` 的捕获阶段监听：按下到松开移动超过 4 像素算拖动，不关闭，不靠 MapLibre 拖动后吞掉 click；从浮层里按下、拖到外面松手不关闭；按键触发外部的按钮也算点击；Esc 不再往下传，当前工具不会同时结束。`close` 和 Esc 把焦点还给入口，单击外部不抢焦点。`visible` 与更新监听保持受控，忽略 Element 的自动显隐请求；禁用组件的触发按键拦截，键盘通过原生按钮点击执行同一开关
 - 底图 Popover 在入口左侧间隔 12、带箭头，宽 320，固定定位并限制在视口内；窄屏限制宽度，内容自然撑高，无内部滚动区。`afterWrite` 定位修饰器报告真实顶部，右侧面板列在它上方留 12；内容变高和视口变化都会重新定位：外壳自己监听内容的尺寸，Element 的监听只在 `visible` 变化时开始，`persistent` 为 false 时内容挂载时已经可见，它不会开始；顶部要等这一轮渲染后再量，Element 的位置要等 Vue 渲染才写进 DOM（`MapOptionsPopover.browser.test.tsx`）。`OpacityToggle` 的独立选中类和 `aria-pressed` 跟随展开状态，不依赖 Tooltip 的 `aria-expanded`
 - 底图不显示标题和操作栏，四周留 12。缩略图等宽、高 60，独占整行，收起时面板高 86；展开的两行在缩略图下方，间隔 12、行距 8，面板高 154，不增加内部滚动区
 - 底图卡（ADR 0066）：基础控制栏下方的 80 × 56 缩略图，四周留 2，右下角写简称（矢量、影像、静态、无底图），无障碍名称写全称"底图：矢量底图"（`MapCard` 的 `name`）；名称和简称用 `basemapOption(id)` 按 ID 取
@@ -669,7 +669,7 @@ sides.activate('right');
 | `jiangsu.test.ts` | 江苏的范围包含省界数据，四边多出的不超过 0.05° | Node |
 | `backend-request.test.ts` | 三种瓦片地址带 token；天地图、其他域名、站内静态文件、前缀相近的路径不带；每次请求读取当前 token；后端瓦片的 401 交给 `onUnauthorized` 并带上发出时的 token；没带 token 的瓦片、第三方地址、其他状态码只打印。Worker 里的请求真正带上请求头、401 回到登录页见冒烟 `data-query.spec.ts` | jsdom |
 | `pages/current-map/CurrentMapPage.test.tsx` | 页面绑定的分组与叠放（底图、注记、省界，区划高亮在边界之上，测量叠在最上面）；区划定位：工具栏开关面板、选中后高亮并定位、用关闭按钮或工具栏关面板都不清选择、再点回到全省和默认视角（市界用替换的 fetch 提供）；坐标定位：区划定位和坐标定位是功能面板的两个 Tab（切走时隐藏、取消拾取、输入保留，再点正在显示的入口关闭）、窄屏时右边让出去以后再点坐标定位、图例是重新显示（输入保留，让出去时入口不显示为按下）、资源详情切走时保留、再单击时切回、关闭时清除选择（ADR 0053）、输入后定位与位置信息（两种格式、所在区划）、拾取与提示、长按拖动与 Esc（假定时器）、关闭面板取消拾取、图钉随相机移动、单击开关位置信息（右键不算）、画布重建时先隐藏、拖动时视口坐标换成画布坐标、测量时图钉不响应、"清除"；状态栏：比例尺、"中心"、鼠标的位置在下一帧写入、写法跟着坐标定位面板、没有版权控件；把缩放范围交给画布；第一次就绪时定位、画布重建后不再定位；"默认视角"按钮；失败重试后补做；测量的完整交互：提示跟随鼠标和状态、画的过程中含鼠标所在点的长度、末点的总长、标签随相机移动、× 和"清除"、换成测面，结果标签的摆放（总长在旁边、总面积居中），画布重建时标签先隐藏、就绪后重新显示；当前区划：没选时不显示，选中后写出区划，"回到全省"清除；区划定位与其他相机操作的先后（ADR 0038）：加载期间点"默认视角"（相机没变）、上一次定位的动画中选中区县、地图加载期间选中区划、加载期间拖动或坐标定位（这几个用例重新导入页面，区划边界从没有缓存开始，边界文件的请求由用例放行）（用假地图，鼠标事件经过真实的适配器） | jsdom |
-| `map-status.test.ts` | 各状态的显示内容、两种引擎失败、样式失败、没有原因、不是 Error 的原因 | Node |
+| `map-status.test.ts` | 各状态的显示内容、引擎失败（不支持 WebGL2、其他错误）、三维模块加载失败、样式失败、没有原因、不是 Error 的原因 | Node |
 | `MapStatusNotice.test.tsx` | 引擎失败时显示原因和"重试"，点击后重新创建地图，重试过程不抛错 | jsdom |
 | `basemap/BasemapPanel.test.tsx` | 默认只有缩略图；点一张选中并告诉使用方；入口跟着当前底图、无底图没有，点开有标注和透明度、再点收起；标注开关交给拥有者；缩略图叠着注记和底图、无底图没有图片；滑块按百分比显示、拖动时交给拥有者 0～1 的值；关闭天地图时是"静态"和"无底图"，标注默认关；静态底图的缩略图只有一张图 | jsdom |
 | `basemap/BasemapCard.test.tsx` | 卡片的简称和全称；选了底图、单击外部、Esc、再点卡片关闭，焦点按规则回到卡片；入口和开关不关闭；不能显示时不算按下 | jsdom |

@@ -45,7 +45,7 @@ docs/
 │  ├─ map-core.md             地图内核：会话与 MapLibre 适配器、实测行为、加载策略；附录为旧代码分析
 │  ├─ map-vue.md              packages/map-vue：provideMap、样式绑定、MapCanvas、相机操作、定位可视区域、二三维切换
 │  ├─ map-tools.md            packages/map-tools：绘制、逐点编辑、测量、框选手势、鼠标旁的提示、发给后端的几何
-│  ├─ map-cesium.md           packages/map-cesium：CesiumView、相机换算、样式镜像的支持清单、拾取与投影
+│  ├─ map-cesium.md           已移除的 Cesium 引擎：代码和完整文档在标签 cesium-engine-2026-11（ADR 0153）
 │  ├─ map-three.md            packages/map-three：MapLibre 引擎的三维，custom layer、瓦片集、光照、拾取、GL 上下文丢失
 │  ├─ map-three-gate-checks.md  MapLibre 引擎改为默认之前，显卡机器上的人工检查和复测
 │  ├─ shared-map.md           shared/map：底图、边界、默认视角、工具栏、测量、区划定位、坐标定位、状态提示

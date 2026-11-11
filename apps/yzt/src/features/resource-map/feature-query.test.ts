@@ -229,7 +229,8 @@ describe('identifyStep', () => {
     expect(identifyStep(both, '2d', 13.99, [])).toStrictEqual({ kind: 'server' });
   });
 
-  it('三维没有渲染要素，不论级别，能后端识别的查后端', () => {
+  it('三维里不论级别、有没有渲染要素，能后端识别的都查后端', () => {
+    expect(identifyStep(both, '3d', 16, found)).toStrictEqual({ kind: 'server' });
     expect(identifyStep(both, '3d', 16, [])).toStrictEqual({ kind: 'server' });
   });
 
@@ -419,7 +420,7 @@ describe('planIdentify', () => {
     expect(tasks[2]).toStrictEqual({ kind: 'server', target: DLTB, geometry: { type: 'Point', coordinates: [0, 0] } });
   });
 
-  it('三维没有渲染要素：能后端识别的资源仍查后端，其他的没有结果', () => {
+  it('三维里查不到渲染要素时：能后端识别的资源仍查后端，其他的没有结果', () => {
     const tasks = planIdentify([LCTL, HYDL, DLTB, SZY], ORIGIN, 16, fakeView([], { kind: '3d' }).view);
 
     expect(kindsOf(tasks)).toStrictEqual([
@@ -481,7 +482,7 @@ describe('planBox', () => {
     expect(queries).toHaveLength(2);
   });
 
-  it('三维没有渲染要素：登记的数据集都查后端', () => {
+  it('三维里查不到渲染要素时：登记的数据集都查后端', () => {
     const tasks = planBox([HYDL, LCTL, DLTB], BOX, 16, fakeView([], { kind: '3d' }).view);
 
     expect(kindsOf(tasks)).toStrictEqual([

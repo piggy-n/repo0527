@@ -69,7 +69,7 @@ describe('sharpnessGrid', () => {
     expect(comparison.cells).toBe(16 * 9);
   });
 
-  it('亮度整体乘一个数（两个引擎的光照不同）不影响', () => {
+  it('亮度整体乘一个数（光照不同）不影响', () => {
     const base = sharpnessGrid(texture(1));
     const dimmer = sharpnessGrid(texture(1, { gain: 0.5 }));
     const comparison = compareSharpness(dimmer, base);

@@ -25,11 +25,11 @@ const CJDCQ = layer('bgdc_cjdcq', 'Polygon', 2023, 2024);
 const HYDL = layer('csxhjctb_hydl', 'Line', 2023, 2024, 2025);
 const CATALOG = catalogOf(DLTB, CJDCQ, HYDL);
 
-const CESIUM_LIKE: SceneCapabilities = { styleLayers: false, identify: false, splats: false };
+const HIDDEN_IN_SCENE: SceneCapabilities = { styleLayers: false, identify: false, splats: true };
 const MAPLIBRE_LIKE: SceneCapabilities = { styleLayers: true, identify: true, splats: true };
 
-// 拥有者在 effectScope 里创建，用例结束时停止它的侦听器；目录、数据源错误和维度由测试控制，三维引擎默认按 Cesium
-function setup(options: Partial<ResourceLayersOptions> = {}, sceneCapabilities = CESIUM_LIKE) {
+// 拥有者在 effectScope 里创建，用例结束时停止它的侦听器；目录、数据源错误和维度由测试控制，三维引擎的能力默认同 app 注入的（三维里不画样式图层、不识别）
+function setup(options: Partial<ResourceLayersOptions> = {}, sceneCapabilities = HIDDEN_IN_SCENE) {
   const scope = effectScope();
   const catalog = shallowRef<ResourceCatalog | undefined>(undefined);
   const sourceErrors = shallowRef<SourceErrors>(NO_SOURCE_ERRORS);
@@ -44,7 +44,7 @@ function setup(options: Partial<ResourceLayersOptions> = {}, sceneCapabilities =
   return { owner, catalog, sourceErrors, dimension, errors, [Symbol.dispose]: () => scope.stop() };
 }
 
-async function loaded(options: Partial<ResourceLayersOptions> = {}, sceneCapabilities = CESIUM_LIKE) {
+async function loaded(options: Partial<ResourceLayersOptions> = {}, sceneCapabilities = HIDDEN_IN_SCENE) {
   const ctx = setup(options, sceneCapabilities);
   ctx.catalog.value = CATALOG;
   await nextTick();
@@ -100,7 +100,7 @@ describe('useResourceLayers', () => {
     expect(layerIds(ctx.owner)).toStrictEqual(['resources-csxhjctb_hydl', 'resources-bgdc_dltb']);
   });
 
-  it('三维引擎不画样式图层时（Cesium，或 maplibre 的开关关着）三维里推导出空分组，切回二维恢复（ADR 0147）', async () => {
+  it('三维引擎不画样式图层时（app 注入的能力）三维里推导出空分组，切回二维恢复（ADR 0147、0153）', async () => {
     using ctx = await loaded();
     // 和页面的 bindStyle 一样在响应式的推导里读，维度变化时要重新推导
     const group = computed(() => ctx.owner.deriveGroup());
@@ -118,7 +118,7 @@ describe('useResourceLayers', () => {
     expect(group.value.layers.map(({ id }) => id)).toStrictEqual(['resources-bgdc_dltb']);
   });
 
-  it('三维引擎画样式图层时（maplibre 的开关打开）三维里照常推导', async () => {
+  it('三维引擎画样式图层时（能力 styleLayers 为 true）三维里照常推导', async () => {
     using ctx = await loaded({}, MAPLIBRE_LIKE);
 
     ctx.dimension.value = '3d';

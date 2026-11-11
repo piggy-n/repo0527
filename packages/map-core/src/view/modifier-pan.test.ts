@@ -1,18 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { PanModifier } from '../tool/tool-model';
-import { type ClientPoint, ModifierPan, type ModifierPanOptions } from './modifier-pan';
+import { type ClientPoint, ModifierPan } from './modifier-pan';
 import type { MapPointerEvent } from './view-input';
 
 // 画布在画布容器里，挂到文档上：指针事件冒泡到文档，和真实页面一样
-function setup(initial: PanModifier | null = 'ctrl', downEvents?: ModifierPanOptions['downEvents']) {
+function setup(initial: PanModifier | null = 'ctrl') {
   const container = document.createElement('div');
   const canvas = document.createElement('canvas');
   container.append(canvas);
   document.body.append(container);
-  // 引擎在画布容器的冒泡阶段收到按下：MapLibre 用 mousedown，Cesium 用 pointerdown
+  // 引擎（MapLibre）在画布容器的冒泡阶段收到按下
   const engineDowns: MouseEvent[] = [];
   container.addEventListener('mousedown', event => engineDowns.push(event));
-  container.addEventListener('pointerdown', event => engineDowns.push(event));
   const pans: (readonly [ClientPoint, ClientPoint])[] = [];
   const errors: unknown[] = [];
   let modifier = initial;
@@ -20,7 +19,6 @@ function setup(initial: PanModifier | null = 'ctrl', downEvents?: ModifierPanOpt
   let panFailure: Error | null = null;
   const pan = new ModifierPan({
     container,
-    ...(downEvents ? { downEvents } : {}),
     pan: (from, to) => {
       if (panFailure !== null) {
         throw panFailure;
@@ -108,6 +106,31 @@ describe('ModifierPan', () => {
     ]);
   });
 
+  it('swallows another press made during the pan, such as the right button, and keeps panning', () => {
+    using ctx = setup();
+
+    press(ctx.canvas, { ctrlKey: true, clientX: 0, clientY: 0 });
+    move(ctx.canvas, 5, 5, { ctrlKey: true });
+    press(ctx.canvas, { button: 2, ctrlKey: true, clientX: 5, clientY: 5 });
+    move(ctx.canvas, 9, 9, { ctrlKey: true, buttons: 3 });
+    release(ctx.canvas);
+
+    // 右键的按下也截下：MapLibre 不开始右键拖动的旋转、俯仰
+    expect(ctx.engineDowns).toStrictEqual([]);
+    expect(ctx.pans).toStrictEqual([
+      [
+        { x: 0, y: 0 },
+        { x: 5, y: 5 }
+      ],
+      [
+        { x: 5, y: 5 },
+        { x: 9, y: 9 }
+      ]
+    ]);
+    // 松开后派生的单击仍属于这次临时拖动，不交给工具
+    expect(ctx.pan.swallows('click')).toBe(true);
+  });
+
   it('leaves other presses to MapLibre and does not pan', () => {
     using ctx = setup();
 
@@ -122,28 +145,6 @@ describe('ModifierPan', () => {
 
     expect(ctx.engineDowns).toHaveLength(4);
     expect(ctx.pans).toStrictEqual([]);
-  });
-
-  it('takes over both events of the same press when pointerdown is among the down events, as Cesium needs', () => {
-    using ctx = setup('ctrl', ['pointerdown', 'mousedown']);
-    const pointerDown = (init: MouseEventInit = {}) =>
-      ctx.canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, ...init }));
-
-    pointerDown({ ctrlKey: true, clientX: 0, clientY: 0 });
-    press(ctx.canvas, { ctrlKey: true, clientX: 0, clientY: 0 });
-    move(ctx.canvas, 4, 3, { ctrlKey: true });
-    release(ctx.canvas);
-    // 不按修饰键的按下照常交给引擎，两种事件都到
-    pointerDown();
-    press(ctx.canvas);
-
-    expect(ctx.engineDowns.map(({ type }) => type)).toStrictEqual(['pointerdown', 'mousedown']);
-    expect(ctx.pans).toStrictEqual([
-      [
-        { x: 0, y: 0 },
-        { x: 4, y: 3 }
-      ]
-    ]);
   });
 
   it('uses ⌘ when the modifier is meta', () => {

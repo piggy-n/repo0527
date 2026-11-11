@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { type ExpressionSpecification, type Feature, featureFilter } from '@maplibre/maplibre-gl-style-spec';
-import { overlayDetailLimit, StyleModel } from '@mx/map-core';
+import { StyleModel } from '@mx/map-core';
 import { describe, expect, it } from 'vitest';
 import cityFile from '../boundary/data/jiangsu-city.json?raw';
 import countyFile from '../boundary/data/jiangsu-county.json?raw';
@@ -147,14 +147,6 @@ describe('面、线和透明度', () => {
     expect(paintOf(staticBasemapGroup(1, options).layers, 'basemap-static-land')).toMatchObject({ 'fill-opacity': 1 });
   });
 
-  it('三维的面和线到 11 级不再加细，靠近模型时不重建全省的几何（ADR 0135）', () => {
-    const { layers } = staticBasemapGroup(1, ALL_OFF);
-    const limit = (id: string) => overlayDetailLimit(layers.find(layer => layer.id === id)?.metadata);
-
-    expect(limit('basemap-static-land')).toBe(11);
-    expect(limit('basemap-static-line')).toBe(11);
-  });
-
   it('滑块的透明度作用于面、线（乘在 90% 上）和地名，底色不变', () => {
     const { layers } = staticBasemapGroup(0.5, ALL_ON);
     const labelLayers = staticLabelsGroup(0.5).layers;
@@ -225,7 +217,7 @@ describe('各市的配色', () => {
     }
   });
 
-  it('面只取面要素，三维按原来的类型求值时 MultiPolygon（南京）也要留下', () => {
+  it('面只取面要素：MapLibre 的类型 3、GeoJSON 原来的 Polygon 和 MultiPolygon（南京）都留下', () => {
     const land = staticBasemapGroup(1).layers.find(layer => layer.id === 'basemap-static-land');
     const { filter } = featureFilter(land && 'filter' in land ? land.filter : undefined, 'basemap-static-land.filter');
     const accepts = (type: Feature['type']) => filter({ zoom: 8 }, { type, properties: {} });

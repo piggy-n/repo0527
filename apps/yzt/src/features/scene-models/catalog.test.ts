@@ -125,7 +125,7 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
     );
     const lengths = models.flatMap(({ routes }) => routes.map(({ length }) => Math.round(length)));
     expect(lengths).toStrictEqual([125, 133, 58]);
-    // 屏幕误差上限统一用引擎的默认值 8，清单只写例外（docs/modules/map-cesium.md）
+    // 屏幕误差上限统一用引擎的默认值 8，清单只写例外（docs/config/3dt-manifest.md）
     expect(models.every(({ maximumScreenSpaceError }) => maximumScreenSpaceError === undefined)).toBe(true);
   });
 });

@@ -261,7 +261,7 @@ describe('prepareTileset', () => {
     };
     collectEmpty(prepared.root);
     expect(empty).toStrictEqual([prepared.root]);
-    // 根的误差不能改小：改小后远处 Cesium 在根上停下，整个模型都不画
+    // 根的误差不能改小：改小后远处当时的 Cesium 在根上停下，整个模型都不画
     expect(prepared.geometricError).toBe(4424.79);
     expect(prepared.root.geometricError).toBe(4424.79);
     const top = prepared.root.children?.[0];
@@ -365,7 +365,7 @@ describe('prepareTileset', () => {
     });
 
     const [empty, withContent, single] = prepared.root.children ?? [];
-    // 没有内容的 10 抬到子节点的 50：取 10 时子节点被压到 10，Cesium 停在没有内容的子节点上，这一块就空了
+    // 没有内容的 10 抬到子节点的 50：取 10 时子节点被压到 10，当时的 Cesium 停在没有内容的子节点上，这一块就空了
     expect([empty?.geometricError, empty?.children?.[0]?.geometricError]).toStrictEqual([50, 50]);
     // 有内容的用自己的 20，子节点的 40 压到 20；叶节点为 0；索引的误差等于根节点的
     expect([withContent?.geometricError, withContent?.children?.[0]?.geometricError]).toStrictEqual([20, 20]);
@@ -373,7 +373,7 @@ describe('prepareTileset', () => {
     expect([prepared.geometricError, prepared.root.geometricError]).toStrictEqual([100, 100]);
   });
 
-  it('没有内容的节点下面都是叶节点时用自己的误差：取 0 时 Cesium 不再细分，什么也不画（白膜的索引）', async () => {
+  it('没有内容的节点下面都是叶节点时用自己的误差：取 0 时当时的 Cesium 不再细分，什么也不画（白膜的索引）', async () => {
     const prepared = await prepare({
       [`${BASE}tileset.json`]: {
         geometricError: 774.14,

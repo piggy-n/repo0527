@@ -49,7 +49,7 @@ export function byteRange(header: string | undefined, size: number): ByteRange {
 }
 
 async function proxy(target: string, path: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  // 浏览器取消了请求（瓦片不要了）上游也不再下载：两种引擎都经常取消，不然连接一直占着，等上游超时断开时没人接这个错，工具就崩了
+  // 浏览器取消了请求（瓦片不要了）上游也不再下载：引擎经常取消，不然连接一直占着，等上游超时断开时没人接这个错，工具就崩了
   const abort = new AbortController();
   res.once('close', () => abort.abort());
   const { range } = req.headers;

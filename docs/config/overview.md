@@ -24,7 +24,8 @@
 | 离开页面后是否重置 | `VITE_PAGE_STATE_RESET` | 0114、0138 |
 | 偏好存哪些 | `VITE_PREFERENCES_ENABLED`（总开关）和 6 个 `VITE_PREFERENCE_*`（分项） | 0140 |
 | 资源的最小显示级别 | `VITE_RESOURCE_MIN_ZOOM_ENABLED` | 0132、0137 |
-| 三维引擎 | `VITE_MAP_3D_ENGINE`（`cesium` / `maplibre`） | 0147 |
+
+三维引擎不再用变量选择，只有 MapLibre + Three.js（ADR 0153）。
 
 ## 代码里的产品开关
 
@@ -33,7 +34,6 @@
 | 开关 | 文件 | 默认 | 作用 | ADR |
 |---|---|---|---|---|
 | `STATIC_BASEMAP_OPTIONS.cityColors` | `shared/config/static-basemap-options.ts` | `false` | 静态底图各市分色；关着时全省同一种陆地色。改了要运行 `basemap:generate` 更新缩略图 | 0134、0146 |
-| `SCENE_OPTIONS.resourceLayers` | `shared/config/scene-options.ts` | `false` | `maplibre` 引擎的三维里显示资源图层、点/框选能识别；关着时这两项和 Cesium 一样，高斯泼溅不受影响（ADR 0149）。放开前要先改页面设计 | 0147 |
 
 这类文件只写类型和常量，不导入别的模块：Node 直接运行的工具也会导入它们（`basemap:generate` 读分色开关），读不了 Vite 专用的写法。
 
@@ -63,4 +63,4 @@
 3. **部署以后要由运维调整、不想重新构建的数据**：运行时文件。写清楚格式、校验，以及读不到时退回什么（参照最小显示级别），写进 [deployment.md](../deployment.md) 和本页。
 4. **只影响本机开发或工具**：不带 `VITE_` 的变量或进程环境变量，写进 [env.md](env.md)"不放进 `.env` 的变量"。
 
-不在页面、feature 或包里散放开关常量；包里只放和项目无关的默认行为，项目的决定由 app 注入（例如三维引擎的能力由 app 按 `SCENE_OPTIONS` 收窄）。
+不在页面、feature 或包里散放开关常量；包里只放和项目无关的默认行为，项目的决定由 app 注入（例如三维引擎的能力由 app 收窄后注入，`app/map-runtime-provider.ts`）。

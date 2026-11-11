@@ -12,7 +12,7 @@ export type MapStatus =
 
 const ENGINE_TITLE = '地图无法显示';
 
-// Worker 里的异常传回主线程后是只有 name、message、stack 的普通对象（Cesium 的 TaskProcessor），不是 Error
+// Worker 里的异常传回主线程后可能是只有 name、message、stack 的普通对象，不是 Error
 function messageOf(error: unknown): string {
   if (error instanceof Error) {
     return error.message;

@@ -15,8 +15,8 @@ import {
 // 瓦片集的两种光照（ADR 0081 第 3 节、ADR 0147 第 5 节）：地面上的按太阳，地下、室内用以相机为光源的头灯
 
 /**
- * 太阳：环境光加一个固定方向的平行光（局部系里东南方向、高度角 50°）。Cesium 按当前时刻的太阳，
- * 三维里看不出时刻，这里不跟（3C.1 的差别，见 docs/modules/map-three.md）
+ * 太阳：环境光加一个固定方向的平行光（局部系里东南方向、高度角 50°）。不跟当前时刻的太阳：
+ * 三维里看不出时刻（见 docs/modules/map-three.md）
  */
 export function createSunLights(): Object3D[] {
   const sun = new DirectionalLight(0xffffff, 2);
@@ -35,8 +35,8 @@ export interface FogUniform {
 }
 
 /**
- * 头灯（从 map-cesium 的 scene-tilesets 移植）：不受场景光照影响，正对视线的面亮、斜掠的面暗，和时间无关；
- * 法线用视点坐标的屏幕空间导数求，材质双面。步行时 15～180 米之间把远处压到 0.45（uFog，同 Cesium）
+ * 头灯：不受场景光照影响，正对视线的面亮、斜掠的面暗，和时间无关；
+ * 法线用视点坐标的屏幕空间导数求，材质双面。步行时 15～180 米之间把远处压到 0.45（uFog）
  */
 function headlightVariant(source: Material, fog: FogUniform, clipPlanes: Plane[]): MeshBasicMaterial {
   const variant = new MeshBasicMaterial({ side: DoubleSide });
@@ -93,7 +93,7 @@ export class TilesetMaterials {
     this.#clipPlanes = clipPlanes;
   }
 
-  /** 新加载的模型：记下原来的材质、改成双面（Cesium 一侧关掉了背面剔除），按光照换上 */
+  /** 新加载的模型：记下原来的材质、改成双面（不剔除背面），按光照换上 */
   adopt(model: Object3D, lighting: TilesetLighting): void {
     model.traverse(object => {
       const mesh = object as Mesh;

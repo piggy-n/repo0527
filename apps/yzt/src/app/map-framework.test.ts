@@ -1,16 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type Component, defineComponent } from 'vue';
 import { loginToMap } from '@/shared/perf/login-to-map';
-import { switchTo3d } from '@/shared/perf/switch-to-3d';
-import {
-  defaultMapFramework,
-  loadMapRuntime,
-  type MapRuntime,
-  prepareMapRuntime,
-  withMapRuntime
-} from './map-framework';
-// 第一次导入整个 Cesium 放在收集阶段：全量测试的负载下要 30～40 秒，收集不计入用例的超时（docs/config/vite-config.md 的"测试耗时"）
-import { setupSceneRuntime } from './map-runtime-3d';
+import { loadMapRuntime, type MapRuntime, withMapRuntime } from './map-framework';
 
 // 由测试决定何时结束的加载
 function pending<T>() {
@@ -70,48 +61,11 @@ describe('withMapRuntime', () => {
   });
 });
 
-describe('prepareMapRuntime', () => {
-  it('加载这个框架的运行时并设置，不预热', async () => {
-    const setup = vi.fn<() => void>();
-    const prewarm = vi.fn<() => void>();
-    const load = vi.fn<(framework: '2d' | '3d') => Promise<MapRuntime>>(() => Promise.resolve({ setup, prewarm }));
-
-    await prepareMapRuntime('3d', load);
-
-    expect(load).toHaveBeenCalledWith('3d');
-    expect(setup).toHaveBeenCalledOnce();
-    expect(prewarm).not.toHaveBeenCalled();
-  });
-
-  it('三维的设置好以后记下切到三维的 runtime 步骤，二维的不记', async () => {
-    const steps: string[] = [];
-    vi.spyOn(switchTo3d, 'mark').mockImplementation(step => steps.push(step));
-    const runtime = { setup: () => undefined, prewarm: () => undefined };
-
-    await prepareMapRuntime('2d', () => Promise.resolve(runtime));
-    expect(steps).toStrictEqual([]);
-    await prepareMapRuntime('3d', () => Promise.resolve(runtime));
-    expect(steps).toStrictEqual(['runtime']);
-  });
-});
-
-describe('框架', () => {
-  it('默认框架是二维', () => {
-    expect(defaultMapFramework()).toBe('2d');
-  });
-
-  it('二维的运行时是 map-runtime 的设置和预热', async () => {
-    const runtime = await loadMapRuntime('2d');
+describe('loadMapRuntime', () => {
+  it('运行时是 map-runtime 的设置和预热', async () => {
+    const runtime = await loadMapRuntime();
     const { setupMapRuntime, prewarmMapRuntime } = await import('./map-runtime');
 
     expect(runtime).toStrictEqual({ setup: setupMapRuntime, prewarm: prewarmMapRuntime });
-  });
-
-  // map-runtime-3d 已在文件开头导入，这里的动态导入直接取模块表里的同一个模块
-  it('三维的运行时是 map-runtime-3d 的设置，没有要预热的', async () => {
-    const runtime = await loadMapRuntime('3d');
-
-    expect(runtime).toMatchObject({ setup: setupSceneRuntime });
-    expect(runtime.prewarm()).toBeUndefined();
   });
 });

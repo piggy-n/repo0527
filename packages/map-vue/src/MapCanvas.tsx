@@ -3,8 +3,7 @@ import {
   MapLibreView,
   type MapLibreViewOptions,
   type MapLike,
-  type ScrollZoomRates,
-  type ViewKind
+  type ScrollZoomRates
 } from '@mx/map-core';
 import {
   defineComponent,
@@ -18,15 +17,15 @@ import {
   watch
 } from 'vue';
 import styles from './MapCanvas.module.scss';
-import { CESIUM_ENGINE, MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE } from './runtime';
+import { MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE } from './runtime';
 import { injectMapState } from './use-map';
 
 /** 创建地图时的选项；样式和相机来自会话，不在这里传 */
 export type MapCanvasMapOptions = NonNullable<MapLibreViewOptions<string>['mapOptions']>;
 
 /**
- * 二维地图画布（ADR 0028 第 4 条）：挂载后用会话的当前快照创建视图，卸载时先卸下再释放；引擎失败后可以通过上下文的 retry 重新创建。
- * 三维引擎是 maplibre 时，同一个视图同时担任三维（ADR 0147 第 2 节），切到三维也不隐藏。
+ * 地图画布（ADR 0028 第 4 条）：挂载后用会话的当前快照创建视图，卸载时先卸下再释放；引擎失败后可以通过上下文的 retry 重新创建。
+ * 同一个视图同时担任二维和三维（ADR 0147 第 2 节），切到三维时第一次加载三维模块。
  * 外层元素接收页面的 class；交给 MapLibre 的内层容器只用静态 class，否则 Vue 会冲掉 MapLibre 加的 class
  */
 export const MapCanvas = defineComponent({
@@ -41,9 +40,7 @@ export const MapCanvas = defineComponent({
   },
   setup(props) {
     const state = injectMapState('MapCanvas');
-    const engine = inject(MAP_SCENE_ENGINE, CESIUM_ENGINE);
-    // 这块画布承担的种类
-    const kinds: readonly ViewKind[] = engine.kind === 'maplibre' ? ['2d', '3d'] : ['2d'];
+    const engine = inject(MAP_SCENE_ENGINE, MAPLIBRE_ENGINE);
     const container = ref<HTMLElement>();
     let view: MapLibreView<string> | undefined;
 
@@ -54,13 +51,13 @@ export const MapCanvas = defineComponent({
       const created = new MapLibreView({
         session: state.session,
         container: container.value,
-        // 页面停用期间、当前显示的不是这块画布承担的种类时以暂停状态创建，由上下文在需要时恢复（ADR 0063、0079 第 8 节）
-        active: state.shouldRun(...kinds),
+        // 页面停用期间以暂停状态创建，由上下文在激活时恢复（ADR 0063）
+        active: state.shouldRun('2d', '3d'),
         mapOptions: props.mapOptions,
         scrollZoomRates: props.scrollZoomRates,
         createMap: props.createMap,
         onError: state.onError,
-        loadSceneRenderer: engine.kind === 'maplibre' ? engine.loadRenderer : undefined
+        loadSceneRenderer: engine.loadRenderer
       });
       // 挂不上（同一个上下文已经有画布）时先释放刚创建的视图，再把错误交给 Vue
       try {
@@ -90,12 +87,12 @@ export const MapCanvas = defineComponent({
 
     onMounted(createView);
 
-    // maplibre 下二维第一次画面稳定以后预加载三维模块（ADR 0091 的做法，ADR 0147 第 2 节）：等待期间切到三维（换了租约）、
+    // 二维第一次画面稳定以后预加载三维模块（ADR 0091 的做法，ADR 0147 第 2 节）：等待期间切到三维（换了租约）、
     // 画布卸载时作废；切过三维就已经在加载了
     const preloadRuntime = inject(MAP_RUNTIME_PRELOAD, null);
     const preloading = new AbortController();
     const preloadAfterSettled = async () => {
-      if (engine.kind !== 'maplibre' || !preloadRuntime || state.context.dimension.value !== '2d') {
+      if (!preloadRuntime || state.context.dimension.value !== '2d') {
         return;
       }
       await state.context.whenSettled(preloading.signal);
@@ -108,12 +105,9 @@ export const MapCanvas = defineComponent({
     });
     onUnmounted(() => preloading.abort());
 
-    // 引擎失败后重试：在同一个容器里重新创建视图（ADR 0030）；当前显示的是 Cesium 的三维时重试的是三维视图。
-    // maplibre 下三维模块加载失败不走这里：上下文让视图自己重新加载，地图不重建（ADR 0147 第 2 节）
+    // 引擎失败后重试：在同一个容器里重新创建视图（ADR 0030）。
+    // 三维模块加载失败不走这里：上下文让视图自己重新加载，地图不重建（ADR 0147 第 2 节）
     watch(state.retryRequests, () => {
-      if (!kinds.includes(state.context.dimension.value)) {
-        return;
-      }
       disposeView();
       createView();
     });
@@ -123,18 +117,10 @@ export const MapCanvas = defineComponent({
     // 早于 provideMap 所在组件的 onUnmounted：先释放视图，后释放会话
     onUnmounted(disposeView);
 
-    return () => {
-      // 显示 Cesium 的三维时隐藏但保留尺寸，切回时不用重新量画布
-      const hidden = !kinds.includes(state.context.dimension.value);
-      return (
-        <div
-          class={styles.root}
-          style={hidden ? { visibility: 'hidden' } : undefined}
-          data-map-view-state={state.context.viewState.value}
-        >
-          <div ref={container} class={styles.container} />
-        </div>
-      );
-    };
+    return () => (
+      <div class={styles.root} data-map-view-state={state.context.viewState.value}>
+        <div ref={container} class={styles.container} />
+      </div>
+    );
   }
 });

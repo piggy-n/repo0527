@@ -2,7 +2,7 @@ import type { BenchCamera } from './bench-api.ts';
 
 // 场景和方案：同一个场景的各个方案用相同的相机和飞行路径（场景和路径来自 ADR 0147 的 PoC）
 
-// MapLibre 的缩放级口径（512 像素瓦片），同 packages/map-cesium 的 camera-math
+// MapLibre 的缩放级口径（512 像素瓦片）：z0 时赤道上每像素的米数
 const METERS_PER_PIXEL_AT_ZOOM_0 = 78271.516964;
 
 export interface SceneModel {
@@ -13,21 +13,20 @@ export interface SceneModel {
 export interface Scene {
   readonly id: string;
   readonly title: string;
-  /** ADR 0147 3C.4 的验收场景 */
-  readonly acceptance: boolean;
+  /** 没写 --only 时跑的场景 */
+  readonly byDefault: boolean;
   /** 瓦片集 */
   readonly models: readonly SceneModel[];
-  /** 高斯泼溅（ADR 0149）：清单里的模型 ID，地址和摆放从清单读（splat-models.ts）；有泼溅的场景只有 MapLibre 引擎，比较预算 */
+  /** 高斯泼溅（ADR 0149）：清单里的模型 ID，地址和摆放从清单读（splat-models.ts）；有泼溅的场景比较预算 */
   readonly splats: readonly string[];
   /** 没有中心时用模型的建议相机（模型只在服务器上、不知道坐标时） */
   readonly camera: Omit<BenchCamera, 'center'> & { readonly center: readonly [number, number] | null };
 }
 
-/** 方案：Cesium，或者 MapLibre 引擎的某个上传预算、泼溅预算 */
+/** 方案：产品的默认值，或者另外对照的某个上传预算、动着不请求的窗口、泼溅预算 */
 export interface Variant {
   readonly id: string;
   readonly label: string;
-  readonly engine: 'cesium' | 'maplibre';
   /** 每帧上传的 MB；undefined 用产品的默认值，null 不提前上传 */
   readonly uploadMB?: number | null;
   /** 相机在这个窗口里走的路达到瓦片直径就不请求（秒，auto 按实测的加载时间）；undefined 用产品的默认值，null 动着也请求 */
@@ -35,6 +34,9 @@ export interface Variant {
   /** 高斯泼溅的总预算（高斯个数）；undefined 用产品的默认值 */
   readonly splatBudget?: number;
 }
+
+/** 产品默认设置的方案：画质、采样和检查都只看它，其余方案只跑 perf 对照 */
+export const DEFAULT_VARIANT = 'maplibre';
 
 /** 一遍：perf 量帧时间和加载，quality 拍画面，profile 带 CPU 采样 */
 export type RunKind = 'perf' | 'quality' | 'profile';
@@ -60,13 +62,13 @@ const STATION_CENTER = [120.6660669, 31.317559] as const;
 export const PENGCHENG_SPLAT = 'xz-pc-lcc2';
 export const CHUWANGSHAN_SPLAT = 'xz-cws1';
 
-function aerial(id: string, title: string, models: readonly SceneModel[], center: readonly [number, number], zoom: number, acceptance = false): Scene {
-  return { id, title, acceptance, models, splats: [], camera: { center, zoom, pitch: 55, bearing: 20 } };
+function aerial(id: string, title: string, models: readonly SceneModel[], center: readonly [number, number], zoom: number, byDefault = false): Scene {
+  return { id, title, byDefault, models, splats: [], camera: { center, zoom, pitch: 55, bearing: 20 } };
 }
 
 // 只在服务器上的模型：相机用模型建议相机的落点（模型在空中时不在它正下方），俯视和倾斜各一个姿态
 function remote(id: string, title: string, model: SceneModel, zoom: number, pitch: number): Scene {
-  return { id, title, acceptance: false, models: [model], splats: [], camera: { center: null, zoom, pitch, bearing: 0 } };
+  return { id, title, byDefault: false, models: [model], splats: [], camera: { center: null, zoom, pitch, bearing: 0 } };
 }
 
 // 高斯泼溅：中心为 null 时用模型的建议中心；楚王山1号 z18 这个视角要不了 600 万以上，场景为什么这样选见 map-three.md 的"泼溅的预算"
@@ -79,7 +81,7 @@ function splat(
   zoom: number,
   pitch = 55
 ): Scene {
-  return { id, title, acceptance: false, models, splats, camera: { center, zoom, pitch, bearing: 20 } };
+  return { id, title, byDefault: false, models, splats, camera: { center, zoom, pitch, bearing: 20 } };
 }
 
 export const SCENES: readonly Scene[] = [
@@ -100,33 +102,30 @@ export const SCENES: readonly Scene[] = [
   splat('splat-cws1-z18', '楚王山1号 z18', [CHUWANGSHAN_SPLAT], [], null, 18)
 ];
 
-/** 泼溅场景的方案：MapLibre 引擎，每个总预算一个 */
+/** 泼溅场景的方案：每个总预算一个 */
 export function splatVariants(budgets: readonly number[]): Variant[] {
   return budgets.map(splatBudget => ({
     id: `maplibre-splat${splatBudget / 1e6}m`,
     label: `MapLibre，泼溅预算 ${(splatBudget / 1e4).toLocaleString('en-US')} 万`,
-    engine: 'maplibre',
     splatBudget
   }));
 }
 
-/** 这个场景跑哪些方案：有泼溅的比较预算（Cesium 画不了泼溅），其余比较两种引擎 */
+/** 这个场景跑哪些方案：有泼溅的比较泼溅预算，其余是产品的默认值和另外对照的上传预算、窗口 */
 export const variantsOf = (scene: Scene, list: readonly Variant[], splatList: readonly Variant[]): readonly Variant[] =>
   scene.splats.length > 0 ? splatList : list;
 
 export function variants(uploadMBs: readonly (number | null)[], cullWindows: readonly (number | 'auto' | null)[] = []): Variant[] {
   return [
-    { id: 'cesium', label: 'Cesium', engine: 'cesium' },
-    { id: 'maplibre', label: 'MapLibre', engine: 'maplibre' },
+    { id: DEFAULT_VARIANT, label: 'MapLibre' },
     ...uploadMBs.map(
       (uploadMB): Variant => ({
         id: uploadMB === null ? 'maplibre-no-budget' : `maplibre-up${uploadMB}`,
         label: uploadMB === null ? 'MapLibre，不提前上传' : `MapLibre，每帧上传 ${uploadMB} MB`,
-        engine: 'maplibre',
         uploadMB
       })
     ),
-    ...cullWindows.map((cullWindow): Variant => ({ ...cullVariant(cullWindow), engine: 'maplibre', cullWindow }))
+    ...cullWindows.map((cullWindow): Variant => ({ ...cullVariant(cullWindow), cullWindow }))
   ];
 }
 
@@ -141,8 +140,8 @@ function cullVariant(cullWindow: number | 'auto' | null): Pick<Variant, 'id' | '
 }
 
 /**
- * 要跑的所有遍：每个场景每个方案 repeat 遍 perf；只有验收要比的两个方案多跑一遍画质和一遍采样。
- * 泼溅场景的方案是 splatList：每个预算多跑一遍采样（加载新分块时卡不卡），不比画质（没有 Cesium 可比）
+ * 要跑的所有遍：每个场景每个方案 repeat 遍 perf；只有产品的默认值多跑一遍画质和一遍采样。
+ * 泼溅场景的方案是 splatList：每个预算多跑一遍采样（加载新分块时卡不卡），不跑画质
  */
 export function buildRuns(scenes: readonly Scene[], list: readonly Variant[], repeat: number, splatList: readonly Variant[] = []): Run[] {
   const runs: Run[] = [];
@@ -159,10 +158,10 @@ export function buildRuns(scenes: readonly Scene[], list: readonly Variant[], re
   for (const scene of scenes) {
     for (const variant of variantsOf(scene, list, splatList)) {
       const splatScene = scene.splats.length > 0;
-      if (!splatScene && (variant.id === 'cesium' || variant.id === 'maplibre')) {
+      if (!splatScene && variant.id === DEFAULT_VARIANT) {
         runs.push({ id: `${scene.id}/${variant.id}/quality`, scene, variant, kind: 'quality', repeat: 0 });
       }
-      if (splatScene || variant.id === 'cesium' || variant.id === 'maplibre') {
+      if (splatScene || variant.id === DEFAULT_VARIANT) {
         runs.push({ id: `${scene.id}/${variant.id}/profile`, scene, variant, kind: 'profile', repeat: 0 });
       }
     }
@@ -189,10 +188,10 @@ export function aerialFlight({ center, zoom, pitch, bearing }: BenchCamera, view
   ];
 }
 
-/** 按子串选场景；没写时选验收场景。泼溅场景要写出 splat 才选得中：--only z19 这样的引擎对比不能带上要本地清单的场景 */
+/** 按子串选场景；没写时选默认的场景。泼溅场景要写出 splat 才选得中：--only z19 不能带上要本地清单的场景 */
 export function selectScenes(only: readonly string[]): Scene[] {
   if (only.length === 0) {
-    return SCENES.filter(scene => scene.acceptance);
+    return SCENES.filter(scene => scene.byDefault);
   }
   return SCENES.filter(scene =>
     only.some(pattern => scene.id.includes(pattern) && (scene.splats.length === 0 || pattern.includes('splat')))

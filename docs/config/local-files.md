@@ -13,7 +13,7 @@
 | `local/design-src/` | 原型的构建脚本和检查截图 | 手动运行、查看，开发服务器不提供 |
 | `local/probe/` | 后端探查结果：`resource-classes/` 是 `probe:resource-classes` 的默认输出，其他目录是用 `--out` 存下的某一轮 | [commands.md](../commands.md) |
 | `local/measure/` | 实测数据：`map-load/`、`city-dashboard/` 是脚本的默认输出，`builds/` 放对比用的构建，用完删掉 | [modules/perf.md](../modules/perf.md)、[modules/city-dashboard.md](../modules/city-dashboard.md) |
-| `local/measure-3d/` | 三维两种引擎的性能对比，`measure:3d` 的默认输出，每次一个带时间的目录 | [modules/map-three.md](../modules/map-three.md)"性能验收" |
+| `local/measure-3d/` | 三维的性能实测，`measure:3d` 的默认输出，每次一个带时间的目录 | [modules/map-three.md](../modules/map-three.md)"性能验收" |
 | `local/scope-test-files/` | 自定义监测范围的验收文件，`scope-files:generate` 能重新生成 | [`tools/scope-test-files/说明.md`](../../apps/yzt/tools/scope-test-files/说明.md) |
 
 不放在这里的：
@@ -53,9 +53,9 @@ pnpm --filter yzt dev:intranet
 
 测试服务器上提供 `/opt/front/3dt/` 的 nginx 在 5173 端口（`/etc/nginx/nginx.conf`，2026-11-11 确认）；80 端口是 nginx 的默认页，`:18010` 是后端，都没有 `/3dt/`。这个地址上有 LCC2 模型和 `XZ_GC_3DT`，没有 JKQ、JKQ2（2026-11-11 请求是 404）；要看经开区时写放着它们的服务器：`http://<服务器地址>:<nginx 提供 /3dt/ 的端口>`。
 
-服务器的 `/3dt/manifest.json` 来自它的 `dist/`，要发布前端才更新，所以新加进清单的模型在发布之前看不到。开发服务器没有内置的办法替换清单（代理转发整个 `/3dt/`，`local/3dt/manifest.json` 这时也不生效）：用浏览器 DevTools 的 Local Overrides，或者一次性的 Playwright 脚本 `context.route('**/3dt/manifest.json', ...)` 换成入库的清单（写法见 `tools/smoke/scene-maplibre.spec.ts`）。
+服务器的 `/3dt/manifest.json` 来自它的 `dist/`，要发布前端才更新，所以新加进清单的模型在发布之前看不到。开发服务器没有内置的办法替换清单（代理转发整个 `/3dt/`，`local/3dt/manifest.json` 这时也不生效）：用浏览器 DevTools 的 Local Overrides，或者一次性的 Playwright 脚本 `context.route('**/3dt/manifest.json', ...)` 换成入库的清单（写法见 `tools/smoke/scene.spec.ts`）。
 
-用途是在有显卡的机器上跑瓦片集的诊断页 `/dev/tileset-probe`（[modules/map-cesium.md](../modules/map-cesium.md)"诊断读数"）。`measure:3d` 和配准工具 `lcc2:register` 用同一个变量，从 `<它>/3dt/` 读模型（[commands.md](../commands.md)）。
+用途是在有显卡的机器上看、测服务器上的模型。`measure:3d` 和配准工具 `lcc2:register` 用同一个变量，从 `<它>/3dt/` 读模型（[commands.md](../commands.md)）。原来的瓦片集诊断页 `/dev/tileset-probe` 读的是 Cesium 的读数，随引擎删掉（ADR 0153）。
 
 ## 开发服务器
 

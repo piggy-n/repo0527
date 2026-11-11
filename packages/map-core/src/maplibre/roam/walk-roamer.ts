@@ -22,7 +22,7 @@ import { Blackout } from '../../view/blackout';
 import { anglesOf, type RoamEye } from './roam-camera';
 import type { RoamHost } from './roam-host';
 
-// 从 map-cesium 的 scene-walk 移植（ADR 0086、0087、0090）；Cesium 一侧只修缺陷（ADR 0147 第 6 节），手感只在这里调
+// 步行（ADR 0086、0087、0090）
 
 // 室内要比二维（约 37°）宽得多的竖直视场角；第一人称滚轮改视场角（相机不动，贴着墙缩放也不穿模），每像素滚动量约 0.12%
 const WALK_FOVY = (60 * Math.PI) / 180;

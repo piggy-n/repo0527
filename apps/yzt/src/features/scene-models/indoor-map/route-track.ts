@@ -30,7 +30,7 @@ export interface RouteTrack {
 /** 正北朝上的平面里的一条折线（东、北，米） */
 export type PlaneLine = readonly (readonly [east: number, north: number])[];
 
-// 路线漫游的竖直视场角是 60°（map-cesium 的 scene-route），小地图的视野扇形按 16:9 的画布换成水平的
+// 路线漫游的竖直视场角是 60°（map-core 的 maplibre/roam/route-roamer），小地图的视野扇形按 16:9 的画布换成水平的
 const ROUTE_HFOV = 2 * Math.atan(Math.tan(Math.PI / 6) * (16 / 9));
 
 /** 路线的折线换到导航网格的局部系，带累计的米数（三维长度，楼梯的高差也算，同 RoutePath） */

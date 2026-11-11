@@ -12,11 +12,10 @@ import {
 
 /** 和 src/shared/perf/switch-to-3d.ts 的步骤一致（由测试保证）；开始是点"三维"的时刻 */
 export const SCENE_TRACE_NAME = 'switch-to-3d';
-export const SCENE_STEPS = ['runtime', 'view-ready', 'settled'] as const;
+export const SCENE_STEPS = ['view-ready', 'settled'] as const;
 export type SceneStep = (typeof SCENE_STEPS)[number];
 
 const STEP_LABELS: Record<SceneStep, string> = {
-  runtime: '三维运行时',
   'view-ready': '视图就绪',
   settled: '画面稳定'
 };
@@ -39,9 +38,8 @@ export interface SceneRawRun {
   readonly heapAfter: number;
 }
 
-const CHUNK = /\/assets\/map-cesium-[\w-]+\.js$/;
-// Cesium 运行时按需取的文件：Worker 脚本、资源、第三方库（复制到产物的 cesium/）
-const CESIUM_FILES = /\/cesium\/(Workers|Assets|ThirdParty)\//;
+// 三维模块：map-three 的分块（ADR 0147 第 7 节）
+const CHUNK = /\/assets\/map-three-[\w-]+\.js$/;
 
 interface Download {
   readonly finish: number;
@@ -51,10 +49,8 @@ interface Download {
 export interface SceneRunSummary {
   readonly settled: boolean;
   readonly steps: Readonly<Partial<Record<SceneStep, number>>>;
-  /** map-cesium 分块（含 Cesium）的完成时刻和压缩后的大小 */
+  /** map-three 分块的完成时刻和压缩后的大小 */
   readonly chunk: Download | null;
-  /** Cesium 运行时文件：个数、最后一个的完成时刻 */
-  readonly cesiumFiles: { readonly count: number; readonly lastFinish: number | null };
   /** 停留期间下载的总量（预加载花的流量），点了以后下载的总量 */
   readonly bytesBeforeStart: number;
   readonly bytesAfterStart: number;
@@ -77,16 +73,11 @@ export function summarizeSceneRun(raw: SceneRawRun): SceneRunSummary {
       (latest, request) => (!latest || request.finish > latest.finish ? request : latest),
       undefined
     );
-  const files = raw.requests.filter(({ url }) => CESIUM_FILES.test(pathOf(url)));
   const stayTasks = raw.longTasks.filter(({ startTime }) => startTime >= raw.stayStart && startTime < raw.traceStart);
   return {
     settled: raw.settled,
     steps: raw.measures,
     chunk: chunk ? { finish: chunk.finish, bytes: chunk.bytes } : null,
-    cesiumFiles: {
-      count: files.length,
-      lastFinish: files.length > 0 ? Math.max(...files.map(({ finish }) => finish)) : null
-    },
     bytesBeforeStart: sum(raw.requests.filter(({ finish }) => finish <= 0).map(({ bytes }) => bytes)),
     bytesAfterStart: sum(raw.requests.filter(({ finish }) => finish > 0).map(({ bytes }) => bytes)),
     unfinished: raw.unfinished.map(pathOf),
@@ -122,15 +113,13 @@ export function formatSceneReport(results: readonly SceneProfileResult[]): strin
     })
   ];
   const resources = [
-    '| 网络 | map-cesium 分块 | Cesium 文件（最后一个） | 停留期间下载 | 点了以后下载 | JS 堆增加 |',
-    '|---|---|---|---|---|---|',
+    '| 网络 | map-three 分块 | 停留期间下载 | 点了以后下载 | JS 堆增加 |',
+    '|---|---|---|---|---|',
     ...rows.map(({ label, done }) => {
       const chunk = `${ms(medianOf(done, run => run.chunk?.finish))}（${kb(medianOf(done, run => run.chunk?.bytes))}）`;
-      const lastFile = ms(medianOf(done, run => run.cesiumFiles.lastFinish));
-      const files = `${lastFile}（${ms(medianOf(done, run => run.cesiumFiles.count))} 个）`;
       const before = kb(medianOf(done, run => run.bytesBeforeStart));
       const after = kb(medianOf(done, run => run.bytesAfterStart));
-      return `| ${label} | ${chunk} | ${files} | ${before} | ${after} | ${mb(medianOf(done, run => run.heapGrowth))} |`;
+      return `| ${label} | ${chunk} | ${before} | ${after} | ${mb(medianOf(done, run => run.heapGrowth))} |`;
     })
   ];
   const longTasks = [
@@ -174,7 +163,7 @@ export interface SceneBuildResult {
   readonly profiles: readonly SceneProfileResult[];
 }
 
-/** 多份构建的对比：每份一行，第一份是参照；画面稳定、三维运行时、停留期间长任务的总时长和下载量，都是中位数 */
+/** 多份构建的对比：每份一行，第一份是参照；画面稳定、视图就绪、停留期间长任务的总时长和下载量，都是中位数 */
 export function formatSceneComparison(builds: readonly SceneBuildResult[]): string {
   const [reference] = builds;
   if (!reference) {
@@ -205,7 +194,7 @@ export function formatSceneComparison(builds: readonly SceneBuildResult[]): stri
   return [
     ...table(`三维画面稳定（毫秒，括号里是和 ${reference.build} 的差）：`, run => run.steps.settled, ms, true),
     '',
-    ...table(`三维运行时（毫秒，括号里是和 ${reference.build} 的差）：`, run => run.steps.runtime, ms, true),
+    ...table(`三维视图就绪（毫秒，括号里是和 ${reference.build} 的差）：`, run => run.steps['view-ready'], ms, true),
     '',
     ...table('二维停留期间长任务的总时长（毫秒）：', run => run.stayLongTasks.total, ms, false),
     '',

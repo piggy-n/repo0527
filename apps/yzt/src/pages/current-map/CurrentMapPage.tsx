@@ -1,13 +1,6 @@
 import { useEventListener } from '@vueuse/core';
 import { BROWSE_TOOL, type ViewKind } from '@mx/map-core';
-import {
-  CesiumCanvas,
-  MapCanvas,
-  provideMap,
-  type UnsupportedLayer,
-  usePageActive,
-  useShownElementSize
-} from '@mx/map-vue';
+import { MapCanvas, provideMap, usePageActive, useShownElementSize } from '@mx/map-vue';
 import { BoxSelectOverlay, MeasureOverlay, useMeasure } from '@mx/map-tools';
 import { computed, defineComponent, KeepAlive, ref, watch } from 'vue';
 import { FeatureDetailWindow } from '@/features/resource-map/components/FeatureDetailWindow';
@@ -69,11 +62,6 @@ const PANEL_LABELS = {
 };
 
 type FunctionPanel = (typeof FUNCTION_PANELS)[number];
-
-// 三维跳过的图层（ADR 0079 第 7 节）：开发环境下每个图层提示一次，生产环境不提示
-const reportUnsupported = import.meta.env.DEV
-  ? ({ layerId, reason }: UnsupportedLayer) => console.warn(`[三维] 跳过图层 ${layerId}：${reason}`)
-  : undefined;
 
 // 地图操作、测量、定位、显示辅助、清理分组
 const TOOLBAR_GROUPS = [
@@ -342,7 +330,7 @@ export const CurrentMapPage = defineComponent({
       // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示；漫游时区划不适用
       const scopeShown = (!phone || !sides.left.value) && !underground;
       const scene = map.dimension.value === '3d';
-      // 三维里不显示资源图层时图例只有说明（ADR 0080 第 5 节）：Cesium 引擎，或 maplibre 引擎的开关关着（ADR 0147）
+      // 三维里不显示资源图层时图例只有说明（ADR 0080 第 5 节）：三维引擎的能力 styleLayers 为 false（ADR 0153）
       const resourcesHidden = resources.hiddenInScene.value;
       const indoorMap = models.indoorMap.value;
       const player = models.roamPlayer.value;
@@ -357,7 +345,6 @@ export const CurrentMapPage = defineComponent({
           data-map-page={phone ? 'phone' : 'wide'}
         >
           <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS}scrollZoomRates={SCROLL_ZOOM_RATES} />
-          <CesiumCanvas onUnsupported={reportUnsupported} />
           <MeasureOverlay measure={measure}>{{ removeIcon: () => <SvgIcon name="close" size={12} /> }}</MeasureOverlay>
           <LocationOverlay location={location} />
           <BoxSelectOverlay pick={pick} />

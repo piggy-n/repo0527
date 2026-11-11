@@ -25,7 +25,7 @@ export interface RouteRoamerEvents {
 }
 
 /**
- * 路线漫游的相机（ADR 0083 第 3 节，从 map-cesium 的 SceneRoute 移植）：放到起点以后，播放时每帧按真实流逝的时间推进，
+ * 路线漫游的相机（ADR 0083 第 3 节）：放到起点以后，播放时每帧按真实流逝的时间推进，
  * 朝向看前方并平滑；暂停时左键拖动原地转头，继续后转回路线的朝向。进出、抬高和黑幕由 MapLibreRoam 负责
  */
 export class RouteRoamer implements Disposable {

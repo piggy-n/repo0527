@@ -1,6 +1,6 @@
 # 地图与 Vue 的衔接（map-vue）
 
-> 状态：5A.2 完成了 `provideMap`、样式绑定、画布组件 `<MapCanvas>` 和只读上下文 `useMap()`；5A.3 加入定位可视区域（`useMapOverlay`）、失败原因与重试；5B.3 加入交互工具的登记与切换、视图入口的拾取和投影；5B 之后加入相机操作，5C.0d 改为相机操作对象、视图入口只在就绪时有值；3D.1 加入二三维切换（每种视图一个画布）、三维画布 `<CesiumCanvas>` 和运行时注入（ADR 0079 第 8 节）。设计依据是 ADR 0027（分层）、ADR 0028（上下文）、ADR 0029（定位可视区域）、ADR 0030（失败原因）、ADR 0034（交互工具）、ADR 0038 和 0039（相机操作）。
+> 状态：5A.2 完成了 `provideMap`、样式绑定、画布组件 `<MapCanvas>` 和只读上下文 `useMap()`；5A.3 加入定位可视区域（`useMapOverlay`）、失败原因与重试；5B.3 加入交互工具的登记与切换、视图入口的拾取和投影；5B 之后加入相机操作，5C.0d 改为相机操作对象、视图入口只在就绪时有值；3D.1 加入二三维切换（每种视图一个画布）、三维画布 `<CesiumCanvas>` 和运行时注入（ADR 0079 第 8 节）；ADR 0147 让 `<MapCanvas>` 的视图同时担任三维，ADR 0153 删掉了 `<CesiumCanvas>` 和运行时注入。设计依据是 ADR 0027（分层）、ADR 0028（上下文）、ADR 0029（定位可视区域）、ADR 0030（失败原因）、ADR 0034（交互工具）、ADR 0038 和 0039（相机操作）。
 
 `packages/map-vue` 把 map-core 的地图会话和视图接到 Vue 的组件树与响应式系统上。它只做衔接：不依赖 element-plus、pinia、vue-router（lint 强制），不读项目配置，除画布容器外不渲染界面。项目级的地图能力（底图、行政区、工具栏界面、失败提示）在 `shared/map`。
 
@@ -13,10 +13,8 @@
 | `scene-binder.ts` | `SceneBinder`：把拥有者推导的三维内容提交给会话（ADR 0081 第 2 节） |
 | `context.ts` | `MapContextState`：会话、当前视图、视图状态、`whenReady`、`whenSettled`、`useCamera`、相机操作、悬浮元素的登记表与 `overlayPadding`，对外的只读上下文与视图的受限入口 |
 | `overlay.ts` | `computeOverlayPadding`：按悬浮元素的实际占用算出定位用的 padding；`revealOffset`：被挡住的位置挪进可视区域的平移量（纯函数） |
-| `MapCanvas.tsx` | `<MapCanvas>`：二维地图画布，挂载后创建视图、卸载时释放 |
-| `CesiumCanvas.tsx` | `<CesiumCanvas>`：三维画布，第一次切到三维时加载运行时和 map-cesium 再创建视图 |
-| `failed-view.ts` | `FailedView`：框架加载失败时挂上的视图，一直处于引擎失败 |
-| `runtime.ts` | `MAP_RUNTIME`：app 提供"加载某个框架的运行时"的函数用的注入键；`MAP_RUNTIME_PRELOAD`：app 提供"预加载"的函数，画布交给它要加载什么、它决定什么时候加载（ADR 0091）；三维引擎的描述 `SceneEngine`、能力 `SceneCapabilities`（ADR 0147）；`MAP_ERROR_REPORTER`：app 提供地图错误的默认报告器 |
+| `MapCanvas.tsx` | `<MapCanvas>`：地图画布，挂载后创建视图、卸载时释放；同一个视图担任二维和三维 |
+| `runtime.ts` | `MAP_RUNTIME_PRELOAD`：app 提供"预加载"的函数，画布交给它要加载什么、它决定什么时候加载（ADR 0091）；三维引擎的描述 `SceneEngine`、能力 `SceneCapabilities`、`MAPLIBRE_ENGINE` 和注入键 `MAP_SCENE_ENGINE`（ADR 0147）；`MAP_ERROR_REPORTER`：app 提供地图错误的默认报告器 |
 | `use-map.ts` | `useMap()`：子孙组件取只读上下文；`useMapOverlay()`：悬浮元素登记自己贴着的边 |
 | `use-page-active.ts` | `usePageActive()`：所在页面是否在显示（见"页面缓存"） |
 | `use-shown-element-size.ts` | `useShownElementSize()`：页面停用期间量到的尺寸不采用（见"页面缓存"） |
@@ -104,42 +102,30 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 - 渲染两层元素：外层接收页面的 `class`、`style`；内层交给 MapLibre，只用一个静态 class。页面的 class 变化时 Vue 只重设外层，MapLibre 加在内层的 `maplibregl-map` 等 class 不会被冲掉（map-core.md"MapLibre 6 的实测行为"）
 - 内层容器的尺寸是 `width/height: 100%`，不用绝对定位：MapLibre 的 CSS 会给它加 `position: relative`
 - `onMounted` 时用会话的当前快照创建 `MapLibreView` 并挂到上下文上；`onUnmounted` 时先卸下再释放，等待中的 `whenReady` 以 `AbortError` 结束
-- 所在页面被 `KeepAlive` 缓存时（ADR 0063）：画布的 `onDeactivated`、`onActivated` 告诉上下文（`setPageActive`），由上下文暂停、恢复当前视图；两种画布都会告诉，重复的不起作用。暂停期间上下文的 `view` 为 null、`viewState` 是 `paused`，相机操作等恢复后再执行，工具收不到输入；停用期间、或者当前显示的是三维时，新视图以暂停状态创建（`shouldRun`）
+- 所在页面被 `KeepAlive` 缓存时（ADR 0063）：画布的 `onDeactivated`、`onActivated` 告诉上下文（`setPageActive`），由上下文暂停、恢复当前视图。暂停期间上下文的 `view` 为 null、`viewState` 是 `paused`，相机操作等恢复后再执行，工具收不到输入；停用期间新视图以暂停状态创建（`shouldRun`）
 - `mapOptions` 只在创建地图时生效；要换选项、或者引擎失败后重新创建，给组件换一个 `key`
 - `scrollZoomRates`：滚轮（`wheel`）和触控板（`trackpad`）的缩放速率，同样只在创建地图时生效，交给适配器（ADR 0053 第 3 节）
 - 一个上下文的每种视图只能有一个画布：第二个二维画布挂不上时，先释放它刚创建的视图，再把错误交给 Vue
-- 当前显示的是 Cesium 的三维时外层设 `visibility: hidden`：不占交互，尺寸保留，切回时不用重新量画布
-- 三维引擎是 `maplibre` 时（ADR 0147 第 2 节），创建视图时交给它加载三维模块的函数（`loadSceneRenderer`），这个视图同时担任二维和三维，切到三维也不隐藏（[map-three.md](map-three.md)）
-- 引擎失败后，上下文的 `retry()` 让当前种类的画布先卸下、释放旧视图，再在同一个容器里创建新视图（ADR 0030）；`createMap` 等 props 按重试时的值生效。`maplibre` 下三维模块加载失败（失败原因是 `module`）不走这里，地图不重建，见下面"三维引擎的注入"
-- 预加载（ADR 0091 的做法）：三维引擎是 `maplibre`、挂载时显示的是二维，就等上下文的 `whenSettled`（二维第一次画面稳定），那时仍是二维就把描述里的 `loadRenderer` 交给注入的 `MAP_RUNTIME_PRELOAD`；等待期间切到三维（换了租约）、卸载时作废。切过三维的已经在加载，不用预加载
+- 创建视图时交给它加载三维模块的函数（`loadSceneRenderer`，取自注入的三维引擎），这个视图同时担任二维和三维（ADR 0147 第 2 节，[map-three.md](map-three.md)）
+- 引擎失败后，上下文的 `retry()` 让画布先卸下、释放旧视图，再在同一个容器里创建新视图（ADR 0030）；`createMap` 等 props 按重试时的值生效。三维模块加载失败（失败原因是 `module`）不走这里，地图不重建，见下面"三维引擎的注入"
+- 预加载（ADR 0091 的做法）：挂载时显示的是二维，就等上下文的 `whenSettled`（二维第一次画面稳定），那时仍是二维就把描述里的 `loadRenderer` 交给注入的 `MAP_RUNTIME_PRELOAD`；等待期间切到三维（换了租约）、卸载时作废。切过三维的已经在加载，不用预加载；没有 provide 时不预加载。什么时候真的加载（浏览器空闲、省流量模式跳过）由 app 决定
 - 运行中的错误（MapLibre 的 `error` 事件、应用命令失败）交给 `provideMap` 的 `onError`；视图失败时不弹提示，由 `shared/map` 读视图状态决定
 
 ## 二三维切换（ADR 0079 第 8 节）
 
-- 上下文按种类保存视图：二维画布、三维画布各挂一个，同一种只能有一个。`dimension` 是当前显示的种类（默认二维），`setDimension(kind)` 切换
+- 上下文按种类保存视图，同一种只能有一个。现在只有 `<MapCanvas>` 一块画布，它的视图在两种种类下都登记（ADR 0153）；按种类分开保存是 ADR 0079 每种视图一块画布时的设计，契约没有改。`dimension` 是当前显示的种类（默认二维），`setDimension(kind)` 切换
 - 对外的 `view`、`viewState`、`failure`、`sourceErrors`、`pointer`、投影修订号都只反映当前种类的视图；另一种视图的状态、尺寸、数据源错误变化不反映到上下文
 - 切换时旧的当前视图暂停、新的恢复，投影修订号加 1，鼠标位置清空；还没有这种视图时状态是 `idle`，等它的画布挂上
 - 绑定在旧视图上的 `whenReady`、`whenSettled` 以 `AbortError` 结束；等待中的相机操作在新的当前视图就绪后执行（和视图被替换一样，ADR 0039 第 3 条）
 - 页面用 `map.setDimension` 切换；切换时要做的业务（如换底图）由页面决定（现状底图见 [shared-map.md](shared-map.md)"底图"）
-- 同一个视图担任两种种类（MapLibre 引擎，ADR 0147 第 2 节）：视图声明 `kinds`，挂上时在每种种类下都登记，维度正好是它支持的另一种时先 `setKind`；切换维度时不暂停、恢复，调用它的 `setKind`，受限入口的 `kind` 跟着变，投影修订号照样加 1、等待照样重新绑定。这时另一块画布不能再挂同一种视图
-- 切换的顺序：先换租约（绑定在旧种类上的等待中止）、同一个视图先换好种类，最后才改 `dimension`。同步侦听 `dimension` 的人（如切到三维的耗时标记，`flush: 'sync'`）在侦听里调用 `whenReady`，等的是新种类这一轮的结果；以前先改维度，这次等待随即被换租约中止，Cesium 第二次切到三维、MapLibre 引擎每次切到三维都记不下耗时（3C.2 修正）
+- 同一个视图担任两种种类（ADR 0147 第 2 节）：视图声明 `kinds`，挂上时在每种种类下都登记，维度正好是它支持的另一种时先 `setKind`；切换维度时不暂停、恢复，调用它的 `setKind`，受限入口的 `kind` 跟着变，投影修订号照样加 1、等待照样重新绑定。这时另一块画布不能再挂同一种视图
+- 切换的顺序：先换租约（绑定在旧种类上的等待中止）、同一个视图先换好种类，最后才改 `dimension`。同步侦听 `dimension` 的人（如切到三维的耗时标记，`flush: 'sync'`）在侦听里调用 `whenReady`，等的是新种类这一轮的结果；以前先改维度，这次等待随即被换租约中止，切到三维记不下耗时（3C.2 修正）
 
-## 三维画布 `<CesiumCanvas>`
+## 三维引擎的注入（ADR 0147 第 1 节、ADR 0153）
 
-- 和 `<MapCanvas>` 并列放在页面里，外层绝对定位叠在同一块区域上（页面的根元素要相对定位）；当前显示的是二维时 `visibility: hidden`
-- 第一次切到三维时才加载：同时动态导入 `@mx/map-cesium` 和调用注入的运行时加载函数（`MAP_RUNTIME`），都到了再创建 `CesiumView`；之后一直保留（ADR 0020 第 4 条）
-- 预加载（ADR 0091）：挂载时显示的是二维，就等上下文的 `whenSettled`（二维第一次画面稳定），那时三维视图还没有、也没在加载就把"加载 Cesium 的运行时"（`() => loadRuntime('3d')`）交给注入的 `MAP_RUNTIME_PRELOAD`，不等结果；等待期间切到三维、卸载时作废。什么时候真的加载（浏览器空闲、省流量模式跳过）由 app 决定，没有 provide 时不预加载
-- 视图总是以暂停状态创建，挂上后由 `shouldRun('3d')` 决定是否恢复：加载期间用户可能已经切回二维、页面也可能被停用
-- 加载失败（分块下载失败、没有注入运行时）时报告错误并挂上 `FailedView`：上下文照常显示引擎失败，`retry()` 重新加载；加载期间卸载时，加载到的视图直接释放、不挂上
-- props：`onUnsupported`（支持清单之外的图层，页面在开发环境下打印）；测试用的 `createView`
-- 运行时注入：map-vue 不能依赖 app。app 的 `withMapRuntime` 给地图页包一层组件（`app/map-runtime-provider.ts`），`provide(MAP_RUNTIME, …)`；这一层随地图页的分块动态加载，map-vue 连带 maplibre-gl 不进入口包（ADR 0023、0061、0079 第 2 节）
-- 三维引擎是 `maplibre` 时什么也不挂，也不预加载 Cesium 的运行时
-
-## 三维引擎的注入（ADR 0147 第 1 节）
-
-- app 按 `appConfig.map3dEngine` 在同一层 `provide(MAP_SCENE_ENGINE, …)`，值是 map-vue 导出的 `CESIUM_ENGINE` 或 `MAPLIBRE_ENGINE`；没有 provide 时按 Cesium。页面和拥有者不读它，照常放 `<MapCanvas>`、`<CesiumCanvas>`，照常 `setDimension`、`bindScene`
-- 描述是对象：`{ kind: 'cesium', capabilities }` 由 `<CesiumCanvas>` 承担三维，运行时经 `MAP_RUNTIME` 加载；`{ kind: 'maplibre', capabilities, loadRenderer }` 由 `<MapCanvas>` 的视图承担三维，`loadRenderer` 里写 `import('@mx/map-three')`（只有 map-vue 能动态导入它）。测试可以注入假的 `loadRenderer`
-- 能力声明 `capabilities`（ADR 0147 第 3 节、ADR 0020 第 4 节）：`styleLayers` 是三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记），`identify` 是三维期间点/框选能识别，`splats` 是能显示 LCC2 高斯泼溅（ADR 0149）。Cesium 三项都是 false（ADR 0080 第 5 节），MapLibre 都是 true。app 注入时可以收窄：现状底图三维里的资源图层由 `shared/config/scene-options.ts` 的开关关着，这时注入的 `maplibre` 引擎前两项是 false、`splats` 仍是 true（[map-three.md](map-three.md)"能力声明和三维里的识别"）。`provideMap` 从上层取引擎（同一个组件里 provide 的取不到，和 app 一样放在页面外面一层），上下文原样给出 `sceneCapabilities`：静态，不随视图就绪变化，页面和拥有者用它和 `dimension` 决定显示什么（现状底图的图例、点/框选，见 [map-three.md](map-three.md)）
+- map-vue 不能依赖 app。app 的 `withMapRuntime` 给地图页包一层组件（`app/map-runtime-provider.ts`），在这一层 `provide(MAP_SCENE_ENGINE, …)`、`MAP_RUNTIME_PRELOAD`、`MAP_ERROR_REPORTER`；这一层随地图页的分块动态加载，map-vue 连带 maplibre-gl 不进入口包（ADR 0023、0061、0079 第 2 节）。页面和拥有者不读引擎，照常放 `<MapCanvas>`，照常 `setDimension`、`bindScene`
+- 描述是对象 `{ capabilities, loadRenderer }`：`loadRenderer` 里写 `import('@mx/map-three')`（只有 map-vue 能动态导入它），由 `<MapCanvas>` 的视图在第一次切到三维（或预加载）时调用。map-vue 导出完整能力的 `MAPLIBRE_ENGINE`，没有 provide 时用它。测试可以注入假的 `loadRenderer`
+- 能力声明 `capabilities`（ADR 0147 第 3 节、ADR 0020 第 4 节）：`styleLayers` 是三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记），`identify` 是三维期间点/框选能识别，`splats` 是能显示 LCC2 高斯泼溅（ADR 0149）。`MAPLIBRE_ENGINE` 三项都是 true，app 注入时收窄：三维里暂不显示资源图层，注入的引擎前两项是 false、`splats` 仍是 true（[map-three.md](map-three.md)"能力声明和三维里的识别"）。`provideMap` 从上层取引擎（同一个组件里 provide 的取不到，和 app 一样放在页面外面一层），上下文原样给出 `sceneCapabilities`：静态，不随视图就绪变化，页面和拥有者用它和 `dimension` 决定显示什么（现状底图的图例、点/框选，见 [map-three.md](map-three.md)）
 - 三维模块加载失败只让三维失败：视图的失败原因是 `module`，上下文的 `retry()` 调用视图的 `retry()` 只重新加载模块，不请画布重建（`retryRequests` 不变）
 
 ## 只读上下文 `useMap()`

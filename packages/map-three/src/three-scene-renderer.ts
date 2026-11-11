@@ -29,8 +29,8 @@ import { SplatEntry, type SplatEntryInspection, type SplatLibrary } from './spla
 import { type ClipBox, TilesetEntry, type TilesetEntryInspection } from './tileset-entry';
 import { WalkMarker } from './walk-marker';
 
-// 缓存预算和 Cesium 的数值相同（scene-tilesets 的 cacheBytes 加 maximumCacheOverflowBytes，1 GB + 1 GB，ADR 0147 第 5 节）；
-// Cesium 是每个瓦片集各一份，这里所有瓦片集共用一份，总量更紧。放不下时放宽屏幕误差，见 docs/modules/map-three.md"缓存"
+// 缓存预算 1 GB + 1 GB（ADR 0147 第 5 节，沿用当时 Cesium 每个瓦片集的数值），所有瓦片集共用一份。
+// 放不下时放宽屏幕误差，见 docs/modules/map-three.md"缓存"
 const MEGABYTE = 1024 * 1024;
 const CACHE_BYTES = 1024 * MEGABYTE;
 const CACHE_OVERFLOW_BYTES = 1024 * MEGABYTE;

@@ -7,7 +7,7 @@ import type {
   LineLayerSpecification,
   SymbolLayerSpecification
 } from '@maplibre/maplibre-gl-style-spec';
-import { overlayDetailMetadata, type StyleGroup, type StyleRoot } from '@mx/map-core';
+import type { StyleGroup, StyleRoot } from '@mx/map-core';
 import cityUrl from '../boundary/data/jiangsu-city.json?url';
 import labelsUrl from './data/jiangsu-labels.json?url';
 import { STATIC_BASEMAP_OPTIONS } from '../../config/static-basemap-options';
@@ -41,11 +41,8 @@ const CITY_COLOR: ExpressionSpecification = [
   STATIC_OUTSIDE_COLOR
 ] as unknown as ExpressionSpecification;
 
-// 三维按要素原来的类型求值：不写 MultiPolygon 的话南京会被滤掉
+// MapLibre 画的时候面都是 Polygon；按 GeoJSON 原来的类型求值（featureFilter）时南京是 MultiPolygon，不写会被滤掉
 const POLYGONS: FilterSpecification = ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false];
-
-// 三维的面和线到 11 级不再加细：约 1.6 万个顶点、误差约 19 米；不设上限时靠近模型要重建约 6 万个（ADR 0135）
-const OVERLAY_DETAIL = overlayDetailMetadata(11);
 
 function landLayer(opacity: number, cityColors: boolean): FillLayerSpecification {
   return {
@@ -53,7 +50,6 @@ function landLayer(opacity: number, cityColors: boolean): FillLayerSpecification
     type: 'fill',
     source: CITY_SOURCE_ID,
     filter: POLYGONS,
-    metadata: OVERLAY_DETAIL,
     paint: { 'fill-color': cityColors ? CITY_COLOR : STATIC_LAND_COLOR, 'fill-opacity': opacity }
   };
 }
@@ -63,7 +59,6 @@ function cityLineLayer(opacity: number): LineLayerSpecification {
     id: 'basemap-static-line',
     type: 'line',
     source: CITY_SOURCE_ID,
-    metadata: OVERLAY_DETAIL,
     layout: { 'line-join': 'round' },
     paint: {
       'line-color': STATIC_CITY_LINE_COLOR,

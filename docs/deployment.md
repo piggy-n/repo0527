@@ -24,9 +24,9 @@
 | `licenses/echarts/` | `LICENSE`、`NOTICE`、`licenses/LICENSE-d3` |
 | `licenses/gaussian-splat-lite/` | `LICENSE`、`NOTICE`、`THIRD_PARTY_LICENSES.md`（这个包的第三方许可和声明，包括 XGRIDS 对 LCC2 格式的声明，ADR 0149 第 8 节） |
 
-这不是全部依赖的许可：没有 NOTICE 的包（包括 Cesium 和其他 Apache-2.0 包）的许可没有随产物提供，分发前要定（[backlog](backlog.md)"上线前"）。
+这不是全部依赖的许可：没有 NOTICE 的包（MIT、BSD，以及不带 NOTICE 的 Apache-2.0 包）的许可没有随产物提供，分发前要定（[backlog](backlog.md)"上线前"）。
 
-两种三维引擎的产物都有这两个目录：`cesium` 时不加载高斯泼溅，但它的分块仍在产物里。文件在构建时从安装的版本里取，不入库；随 `dist` 一起发布，不要删。nginx 不用另配，由 `location /` 直接提供，没有扩展名的文件按默认类型下载。哪些包、带哪些文件，以及构建怎么检查，见 [config/vite-config.md](config/vite-config.md) 的“第三方许可”。
+文件在构建时从安装的版本里取，不入库；随 `dist` 一起发布，不要删。nginx 不用另配，由 `location /` 直接提供，没有扩展名的文件按默认类型下载。哪些包、带哪些文件，以及构建怎么检查，见 [config/vite-config.md](config/vite-config.md) 的“第三方许可”。
 
 ### 构建前放入字体
 
@@ -55,7 +55,7 @@
 
 - 地址不变：页面请求同源的 `/3dt/manifest.json`，清单里的 `tileset` 写相对清单的路径（如 `SZ_3DT/tileset.json`），不写服务器地址，开发和部署用同一份清单
 - 清单从 `dist` 取、模型数据从模型目录取（nginx 配置见下）：清单的格式由代码里的 zod 校验，跟着代码一起发布
-- 新增模型：先把目录上传到模型目录，再改清单、发布前端；LCC2 模型重新上传时，转发上有缓存的先清空缓存（见下面"重新上传以后"）。清单里有、服务器上没有的模型，在三维模型面板里显示加载失败，其他模型不受影响。显存放不下的模型可以给它写 `maximumScreenSpaceError`（像素，不写是 8，放不下的写 16），取值和代价见 [map-cesium](modules/map-cesium.md) 的"瓦片集的显存预算"
+- 新增模型：先把目录上传到模型目录，再改清单、发布前端；LCC2 模型重新上传时，转发上有缓存的先清空缓存（见下面"重新上传以后"）。清单里有、服务器上没有的模型，在三维模型面板里显示加载失败，其他模型不受影响。显存放不下的模型可以给它写 `maximumScreenSpaceError`（像素，不写是 8，放不下的写 16），取值见 [config/3dt-manifest.md](config/3dt-manifest.md)
 - 模型的文件多（`XZ_GC_3DT` 有 1000 多个），打成压缩包上传后在服务器上解压
 
 ### LCC2（高斯泼溅）模型的转发
@@ -177,6 +177,5 @@ server {
 
 ## 待补充
 
-- Cesium 的运行时文件（ADR 0091，只有 `VITE_MAP_3D_ENGINE=cesium` 的产物才有）：三维的 Worker 脚本、资源复制在 `cesium/` 下，每个 Worker 实例都会请求一遍同一个脚本。带哈希的 `cesium/Workers/chunk-*.js` 配长缓存，不带哈希的入口脚本（如 `cesium/Workers/createVerticesFromHeightmap.js`）和 `cesium/Assets/` 用协商缓存；首次部署时补充并验证
 - 矢量瓦片的 gzip 压缩：后端不压缩瓦片，地类图斑低层级单张可达数 MB（2026-10-09 实测 z5 约 8.6 MB，z8 的一张 gzip 后为原来的 31%，见 [docs/archive/migration.md](archive/migration.md)"现状底图：接口实测"）。新项目的瓦片走同源的 `/backend/api/tiles/`，在 `/backend/` 的转发里对 `application/x-protobuf` 开启 gzip（旧项目 README 的写法：`gzip_proxied any`、`gzip_types application/x-protobuf …`）；首次部署时补充并验证
 - 静态资源缓存：带哈希的 `assets/*` 可以长期缓存，`index.html` 不应缓存；`fonts/*` 每个约 5 MB、文件名带版本号，应长期缓存；`3dt/` 的模型文件不带哈希，用协商缓存。首次部署时补充

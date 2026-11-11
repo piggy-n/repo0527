@@ -1,65 +1,29 @@
 import type { Component } from 'vue';
 import { loginToMap } from '@/shared/perf/login-to-map';
 import { preloadRuntimeWhenIdle } from './map-preload';
-import { switchTo3d } from '@/shared/perf/switch-to-3d';
 
-/** 地图框架：二维是 MapLibre，三维是 Cesium（ADR 0061 第 1 节、ADR 0079 第 2 节） */
-export type MapFramework = '2d' | '3d';
-
-/** 进入地图时先用哪个框架；现在固定是二维，三维在第一次切换时才加载（ADR 0079 第 2 节），以后按部署配置、用户配置或上次使用的框架回答 */
-export function defaultMapFramework(): MapFramework {
-  return '2d';
-}
-
-/** 一个框架的运行时：模块加载后先做全局设置，地图页分块也到了再预热 */
+/** 地图的运行时（MapLibre，二三维共用，ADR 0147）：模块加载后先做全局设置，地图页分块也到了再预热 */
 export interface MapRuntime {
   setup(): void;
   prewarm(): void;
 }
 
-// 各框架的运行时都是动态导入：maplibre-gl、cesium 不进入入口包（ADR 0019、0023、0079）
-const RUNTIME_LOADERS: Readonly<Record<MapFramework, () => Promise<MapRuntime>>> = {
-  '2d': () =>
-    import('./map-runtime').then(({ setupMapRuntime, prewarmMapRuntime }) => ({
-      setup: setupMapRuntime,
-      prewarm: prewarmMapRuntime
-    })),
-  // Cesium 的 Worker 按需创建，没有可以提前建好的池
-  '3d': () =>
-    import('./map-runtime-3d').then(({ setupSceneRuntime }) => ({
-      setup: setupSceneRuntime,
-      prewarm: () => undefined
-    }))
-};
-
-/** 加载框架的运行时，不做设置 */
-export function loadMapRuntime(framework: MapFramework): Promise<MapRuntime> {
-  return RUNTIME_LOADERS[framework]();
+/** 加载运行时，不做设置；动态导入，maplibre-gl 不进入口包（ADR 0019、0023） */
+export function loadMapRuntime(): Promise<MapRuntime> {
+  return import('./map-runtime').then(({ setupMapRuntime, prewarmMapRuntime }) => ({
+    setup: setupMapRuntime,
+    prewarm: prewarmMapRuntime
+  }));
 }
 
 /**
- * 加载框架的运行时并做好设置；地图页的画布第一次需要另一个框架时调用（ADR 0079 第 2 节）。重复调用时模块已在模块表里，设置也只做一次。
- * 三维的记下切到三维的 runtime 步骤（docs/modules/perf.md）
- */
-export async function prepareMapRuntime(
-  framework: MapFramework,
-  load: (framework: MapFramework) => Promise<MapRuntime> = loadMapRuntime
-): Promise<void> {
-  const runtime = await load(framework);
-  runtime.setup();
-  if (framework === '3d') {
-    switchTo3d.mark('runtime');
-  }
-}
-
-/**
- * 地图页的加载函数（ADR 0061 第 2 节）：同时加载默认框架的运行时和页面，都到了以后设置运行时、预热，再返回包了一层的页面
- * （页面里的画布从这一层取加载其他框架运行时的函数，ADR 0079 第 2 节）。
+ * 地图页的加载函数（ADR 0061 第 2 节）：同时加载运行时和页面，都到了以后设置运行时、预热，再返回包了一层的页面
+ * （页面里的画布从这一层取预加载三维模块的函数和三维引擎，ADR 0079 第 2 节、ADR 0091）。
  * 路由和登录页的预加载共用它；页面模块执行时不创建地图，所以设置放在页面加载之后也来得及
  */
 export function withMapRuntime(
   loadPage: () => Promise<Component>,
-  loadRuntime: () => Promise<MapRuntime> = () => loadMapRuntime(defaultMapFramework())
+  loadRuntime: () => Promise<MapRuntime> = loadMapRuntime
 ): () => Promise<Component> {
   return async () => {
     const [runtime, page, { withRuntimeLoader }] = await Promise.all([
@@ -71,11 +35,7 @@ export function withMapRuntime(
     // 两个分块都下完再预热：Worker 脚本不和它们抢带宽（实验里提前预热让 Slow 4G 的视图就绪晚了 0.8 秒）
     runtime.prewarm();
     loginToMap.mark('runtime');
-    return withRuntimeLoader(
-      page,
-      framework => prepareMapRuntime(framework),
-      // 画布交来要预加载的内容（Cesium 的运行时、MapLibre 引擎的三维模块），这里只决定时机
-      load => preloadRuntimeWhenIdle(load)
-    );
+    // 画布交来要预加载的内容（MapLibre 引擎的三维模块），这里只决定时机
+    return withRuntimeLoader(page, load => preloadRuntimeWhenIdle(load));
   };
 }

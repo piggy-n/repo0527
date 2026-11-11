@@ -11,13 +11,8 @@ export interface ClientPoint {
 }
 
 export interface ModifierPanOptions {
-  /** 画布的容器：在它的捕获阶段截下按下，先于引擎和画布上的监听 */
+  /** 画布的容器：在它的捕获阶段截下按下（mousedown，MapLibre 的手势用鼠标事件），先于引擎和画布上的监听 */
   readonly container: HTMLElement;
-  /**
-   * 截下哪些按下事件，默认只有 mousedown（MapLibre 的手势用鼠标事件）。
-   * 三维要加上 pointerdown：Cesium 的相机控制用指针事件，同一次按下的两种事件都要截下
-   */
-  readonly downEvents?: readonly ('mousedown' | 'pointerdown')[];
   /** 指针从 from 移到 to：地图内容跟着指针走；from、to 相同时不调用 */
   readonly pan: (from: ClientPoint, to: ClientPoint) => void;
   /** 现在按哪个键临时拖动：视图就绪、当前工具声明了修饰键时才有 */
@@ -45,13 +40,11 @@ export class ModifierPan implements Disposable {
 
   constructor(options: ModifierPanOptions) {
     this.#options = options;
-    const { container, downEvents = ['mousedown'] } = options;
+    const { container } = options;
     const document = container.ownerDocument;
     const listening = { capture: true, signal: this.#listeners.signal };
     // 捕获阶段：先于引擎在画布容器、画布上的监听，截下的按下它收不到
-    for (const type of downEvents) {
-      container.addEventListener(type, this.#onMouseDown, listening);
-    }
+    container.addEventListener('mousedown', this.#onMouseDown, listening);
     // 指针移出画布后也要继续拖动、知道左键松开
     document.addEventListener('mousemove', this.#onMouseMove, listening);
     document.addEventListener('mouseup', this.#onMouseUp, listening);
@@ -86,7 +79,7 @@ export class ModifierPan implements Disposable {
   #onMouseDown = this.#guarded((event: MouseEvent) => {
     this.#readKeys(event);
     if (this.#last !== null) {
-      // 同一次按下的另一种事件（pointerdown 之后的 mousedown）一并截下
+      // 临时拖动期间又来的按下（如再按右键）一并截下
       event.stopPropagation();
       return;
     }
