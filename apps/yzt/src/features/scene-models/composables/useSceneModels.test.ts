@@ -59,9 +59,9 @@ const CATALOG = buildModelCatalog(
   'https://maps.test/3dt/manifest.json'
 );
 
-// 两种引擎的能力（同 map-vue 的 CESIUM_ENGINE、MAPLIBRE_ENGINE）：这个文件在 node 环境里跑，不在运行时导入 map-vue
+// 引擎的能力（同 map-vue 的 MAPLIBRE_ENGINE），和不能显示高斯泼溅时的：这个文件在 node 环境里跑，不在运行时导入 map-vue
 const MAPLIBRE: SceneCapabilities = { styleLayers: true, identify: true, splats: true };
-const CESIUM: SceneCapabilities = { styleLayers: false, identify: false, splats: false };
+const NO_SPLATS: SceneCapabilities = { ...MAPLIBRE, splats: false };
 
 const CAMERA: CameraState = { center: [120.66, 31.31], zoom: 16, bearing: 0, pitch: 55 };
 const AVATAR_URL = 'https://maps.test/roam/Cesium_Man.glb';
@@ -161,7 +161,7 @@ describe('useSceneModels', () => {
     expect(ctx.owner.deriveContent().tilesets[0]?.url).toBe('https://maps.test/3dt/C/tileset.json');
   });
 
-  it('高斯泼溅（ADR 0149）：引擎支持时在目录里，勾选后交给会话、状态按模型 ID、就绪后能定位；Cesium 下不列出', () => {
+  it('高斯泼溅（ADR 0149）：引擎支持时在目录里，勾选后交给会话、状态按模型 ID、就绪后能定位；不能显示时不列出', () => {
     using ctx = setup();
     expect(ctx.owner.models.value.map(({ id }) => id)).toContain('scan');
 
@@ -177,8 +177,8 @@ describe('useSceneModels', () => {
     ctx.owner.setChecked('scan', false);
     expect(ctx.owner.deriveContent()).not.toHaveProperty('splats');
 
-    using cesium = setup(CATALOG, CESIUM);
-    expect(cesium.owner.models.value.map(({ id }) => id)).toStrictEqual(['station', 'white', 'city']);
+    using noSplats = setup(CATALOG, NO_SPLATS);
+    expect(noSplats.owner.models.value.map(({ id }) => id)).toStrictEqual(['station', 'white', 'city']);
   });
 
   it('换白膜效果：显示过的留在场景里、只显示当前的，换回来不重新加载', () => {

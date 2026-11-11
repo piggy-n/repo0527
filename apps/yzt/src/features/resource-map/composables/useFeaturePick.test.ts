@@ -185,8 +185,8 @@ function setup(
   invalid: ReadonlyMap<string, readonly string[]> = new Map(),
   initialScope: RegionScope | null = null,
   onIdentifyStart = vi.fn<() => void>(),
-  // 三维引擎的能力：默认按 Cesium，三维期间不识别
-  sceneCapabilities: SceneCapabilities = { styleLayers: false, identify: false, splats: false }
+  // 三维引擎的能力：默认是三维的资源图层开关关着时的，三维期间不识别
+  sceneCapabilities: SceneCapabilities = { styleLayers: false, identify: false, splats: true }
 ) {
   const fake = fakeCamera(zoom);
   // 区划裁剪的范围，可以由用例中途改变

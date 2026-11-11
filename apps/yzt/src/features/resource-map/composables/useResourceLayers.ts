@@ -71,7 +71,7 @@ export interface ResourceLayers {
    */
   readonly move: (target: TreeMove) => void;
   /**
-   * 三维且三维引擎不画样式图层（Cesium，或 maplibre 的开关关着，ADR 0147）：分组为空，图例只有说明；
+   * 三维且三维引擎不画样式图层（三维的资源图层开关关着，ADR 0147）：分组为空，图例只有说明；
    * 引用资源数据源的推导（框选的批量高亮）这时也不能有图层
    */
   readonly hiddenInScene: ComputedRef<boolean>;
@@ -220,7 +220,6 @@ export function useResourceLayers(
 
   const batchYears = computed(() => batchYearOptions(catalog.value));
 
-  // Cesium 三维时二维视图暂停、不应用这期间的样式变化，切回二维时分组和切走前一样，所以 Cesium 的行为不变
   const hiddenInScene = computed(() => map.dimension.value === '3d' && !map.sceneCapabilities.styleLayers);
 
   const move = (target: TreeMove) => {

@@ -44,7 +44,7 @@ export type RoamChoice = RouteChoice | WalkChoice;
 
 /**
  * 第三人称的人物模型（ADR 0090 第 4 节）：Cesium 官方示例模型 Cesium Man，随应用部署在 `${BASE_URL}roam/` 下，
- * 来源和许可见 docs/modules/map-cesium.md
+ * 来源和许可见 public/roam/CREDITS.txt
  */
 export function walkAvatarUrl(): string {
   return new URL(`${import.meta.env.BASE_URL}roam/Cesium_Man.glb`, window.location.href).href;

@@ -29,7 +29,7 @@ function isEditable(target: EventTarget | null): boolean {
 }
 
 /**
- * 步行地图的组件预览（3D.4d）：不挂 Cesium，用真实的导航网格模拟一个人在走；右上角是小地图，点开是完整地图。
+ * 步行地图的组件预览（3D.4d）：不挂三维地图，用真实的导航网格模拟一个人在走；右上角是小地图，点开是完整地图。
  * W/A/S/D、方向键行走转向（碰撞同真实的步行），"模拟点击移动"在前方 10 米放一个落点并走过去，完整地图里双击瞬移
  */
 export const WalkMapPreview = defineComponent({

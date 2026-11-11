@@ -1260,20 +1260,16 @@ describe('MapContextState 的同一个视图担任二三维（ADR 0147 第 2 节
 });
 
 describe('MapContextState 的三维能力（ADR 0147 第 3 节）', () => {
-  it('没有给出时按 Cesium：三维不显示样式图层、不识别；给出时原样提供', () => {
+  it('没有给出时是 MapLibre 引擎的完整能力；给出时原样提供', () => {
     const camera = { center: [119.4, 32.9] as const, zoom: 7, bearing: 0, pitch: 0 };
+    const narrowed = { styleLayers: false, identify: false, splats: true };
     using session = new MapSession({ groups: ['basemap'], camera });
-    using cesium = new MapContextState(session, () => undefined, resolveOverlayOptions());
-    using maplibre = new MapContextState(
-      session,
-      () => undefined,
-      resolveOverlayOptions(),
-      undefined,
-      MAPLIBRE_ENGINE.capabilities
-    );
+    using full = new MapContextState(session, () => undefined, resolveOverlayOptions());
+    using given = new MapContextState(session, () => undefined, resolveOverlayOptions(), undefined, narrowed);
 
-    expect(cesium.context.sceneCapabilities).toStrictEqual({ styleLayers: false, identify: false, splats: false });
-    expect(maplibre.context.sceneCapabilities).toStrictEqual({ styleLayers: true, identify: true, splats: true });
+    expect(full.context.sceneCapabilities).toBe(MAPLIBRE_ENGINE.capabilities);
+    expect(full.context.sceneCapabilities).toStrictEqual({ styleLayers: true, identify: true, splats: true });
+    expect(given.context.sceneCapabilities).toBe(narrowed);
   });
 });
 

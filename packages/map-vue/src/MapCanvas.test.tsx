@@ -21,7 +21,7 @@ import { defineComponent, inject, KeepAlive, nextTick, provide, ref, type Shallo
 import { INTERNAL_MAP_CONTEXT, type MapContext } from './context';
 import { MapCanvas } from './MapCanvas';
 import { type MapHandle, provideMap } from './provide-map';
-import { CESIUM_ENGINE, MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE, type SceneEngine } from './runtime';
+import { MAP_RUNTIME_PRELOAD, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE, type SceneEngine } from './runtime';
 import { useMap, useMapOverlay } from './use-map';
 
 type Projection = Parameters<MapLike['setProjection']>[0];
@@ -323,7 +323,6 @@ function maplibrePage(options: { fail?: boolean; preload?: (load: () => Promise<
   const maps: FakeMap[] = [];
   const loads = { count: 0, fail: options.fail ?? false };
   const engine: SceneEngine = {
-    kind: 'maplibre',
     capabilities: MAPLIBRE_ENGINE.capabilities,
     loadRenderer: () => {
       loads.count++;
@@ -907,7 +906,7 @@ describe('MapCanvas', () => {
     });
   });
 
-  describe('三维引擎是 maplibre（ADR 0147 第 2 节）', () => {
+  describe('同一个视图担任三维（ADR 0147 第 2 节）', () => {
     it('同一个视图担任三维：切到三维不重建、不隐藏，第一次切到三维时加载三维模块', async () => {
       const { maps, loads, map, wrapper } = maplibrePage();
       maps[0]?.fire('style.load');
@@ -960,7 +959,7 @@ describe('MapCanvas', () => {
       await new Promise(resolve => setTimeout(resolve, 0));
 
       expect(preload).toHaveBeenCalledOnce();
-      expect(preload).toHaveBeenCalledWith(engine.kind === 'maplibre' ? engine.loadRenderer : undefined);
+      expect(preload).toHaveBeenCalledWith(engine.loadRenderer);
     });
 
     it('等二维稳定期间切到三维不预加载：三维模块已经在加载', async () => {
@@ -975,24 +974,5 @@ describe('MapCanvas', () => {
 
       expect(preload).not.toHaveBeenCalled();
     });
-  });
-
-  it('三维引擎是 cesium 时二维画布不预加载（由三维画布预加载 Cesium 的运行时）', async () => {
-    const maps: FakeMap[] = [];
-    const preload = vi.fn<(load: () => Promise<unknown>) => void>();
-    mount(
-      defineComponent(() => {
-        provide(MAP_SCENE_ENGINE, CESIUM_ENGINE);
-        provide(MAP_RUNTIME_PRELOAD, preload);
-        provideMap({ groups: ['basemap'], camera: CAMERA, onError: () => undefined });
-        return () => <MapCanvas createMap={createFakeMap(maps)} />;
-      })
-    );
-    maps[0]?.fire('style.load');
-    await nextTick();
-    maps[0]?.fire('idle');
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    expect(preload).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,7 @@ import type { LoadTrace } from '../perf/load-trace';
 import { type SwitchTo3dStep, switchTo3d } from '../perf/switch-to-3d';
 
 /**
- * 每次切到三维时开始一轮，记下三维视图就绪和第一次画面稳定（docs/modules/perf.md）；运行时加载完由 app 记。
+ * 每次切到三维时开始一轮，记下三维视图就绪和第一次画面稳定（docs/modules/perf.md）。
  * 在 provideMap 所在组件的 setup 里调用；切回二维、页面卸载时停止等待，这一轮停在已经记下的步骤
  */
 export function useSwitchTo3dMarks(

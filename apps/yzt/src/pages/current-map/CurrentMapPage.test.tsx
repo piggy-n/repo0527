@@ -6,7 +6,6 @@ import type {
 import type { Polygon } from 'geojson';
 import {
   type CameraEventData,
-  type CameraState,
   type GestureHandlerLike,
   geodesicDistance,
   type MapLibreMapOptions,
@@ -15,17 +14,16 @@ import {
   type MapMouseEventType,
   type MapMoveEventLike,
   type MapSession,
+  type MapSessionOptions,
   type MapSubscription,
-  type MapView,
-  NO_SOURCE_ERRORS,
   type RenderedFeatureLike,
-  type SceneStatus,
-  type Unsubscribe,
-  type ViewBounds,
-  type ViewState
+  type SceneRenderer,
+  tilesetCamera,
+  type TilesetSphere,
+  type ViewBounds
 } from '@mx/map-core';
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query';
-import { CesiumCanvas, MapCanvas, type SceneViewOptions } from '@mx/map-vue';
+import { MAP_SCENE_ENGINE, MAPLIBRE_ENGINE, MapCanvas, type SceneEngine } from '@mx/map-vue';
 import { formatDistance } from '@mx/map-tools';
 import { DOMWrapper, mount } from '@vue/test-utils';
 import { ElSlider } from 'element-plus';
@@ -43,6 +41,19 @@ import { formatCoordinate, formatLngLat } from '@/shared/map/location/coordinate
 import { createMemoryStore } from '@/shared/storage/key-value-store';
 import { required } from '@/shared/testing/required';
 import { CurrentMapPage } from './CurrentMapPage';
+
+// 页面在 provideMap 里创建会话：记下来，三维的用例从会话读三维内容和当前工具（地图本身是假的，见下面的 FakeMap）
+const sessions = vi.hoisted((): MapSession<string>[] => []);
+vi.mock('@mx/map-core', async importOriginal => {
+  const actual = await importOriginal<typeof import('@mx/map-core')>();
+  class RecordedMapSession<G extends string> extends actual.MapSession<G> {
+    constructor(options: MapSessionOptions<G>) {
+      super(options);
+      sessions.push(this);
+    }
+  }
+  return { ...actual, MapSession: RecordedMapSession };
+});
 
 interface FakeEvent {
   readonly error?: Error;
@@ -266,89 +277,73 @@ class FakeMap implements MapLike {
   }
 }
 
-/** 三维视图的替身：恢复即就绪；三维内容的状态由用例报告，记下定位 */
-class FakeSceneView implements MapView {
-  readonly kind = '3d';
-  state: ViewState = 'paused';
-  readonly failure = null;
-  readonly sourceErrors = NO_SOURCE_ERRORS;
-  sceneStatus: SceneStatus = new Map();
-  readonly flyToCalls: Partial<CameraState>[] = [];
-  readonly #states = new Set<(state: ViewState) => void>();
-  readonly #statuses = new Set<(status: SceneStatus) => void>();
+// 瓦片集就绪时渲染器给出的包围球：三维视图按它算出建议的相机
+const MODEL_SPHERE: TilesetSphere = { center: [120.666, 31.3175], height: 0, radius: 120 };
 
-  constructor(readonly session: MapSession<string>) {}
+// 三维视图下载的 tileset.json：只要能通过 prepareTileset 的校验
+const TILESET_JSON = {
+  asset: { version: '1.1' },
+  geometricError: 10,
+  root: { boundingVolume: { sphere: [0, 0, 0, 10] }, geometricError: 0, content: { uri: 'a.glb' } }
+};
 
-  whenReady(): Promise<void> {
-    return Promise.resolve();
-  }
-  pause(): void {
-    this.#set('paused');
-  }
-  resume(): void {
-    this.#set('ready');
-  }
-  flyTo(target: Partial<CameraState>): void {
-    this.flyToCalls.push(target);
-  }
-  fitBounds(): void {}
-  pick() {
-    return { kind: 'miss' } as const;
-  }
-  project() {
-    return null;
-  }
-  queryRendered() {
-    return [];
-  }
-
-  report(status: SceneStatus): void {
-    this.sceneStatus = status;
-    this.#statuses.forEach(listener => listener(status));
-  }
-
-  onSceneStatusChange(callback: (status: SceneStatus) => void): Unsubscribe {
-    this.#statuses.add(callback);
-    return () => this.#statuses.delete(callback);
-  }
-
-  on(event: string, callback: (state: never) => void): Unsubscribe {
-    if (event !== 'statechange') {
-      return () => undefined;
-    }
-    const listener = callback as (state: ViewState) => void;
-    this.#states.add(listener);
-    return () => this.#states.delete(listener);
-  }
-
-  [Symbol.dispose](): void {}
-
-  #set(state: ViewState): void {
-    this.state = state;
-    this.#states.forEach(listener => listener(state));
-  }
+/**
+ * 三维渲染器的替身（真实的是 @mx/map-three）：瓦片集等用例调用 ready 才就绪；拾取、投影都落空。
+ * 三维视图第一次切到三维时创建它
+ */
+function fakeRenderer() {
+  const pending = new Map<string, (sphere: TilesetSphere) => void>();
+  const renderer: SceneRenderer = {
+    attach: () => undefined,
+    detach: () => undefined,
+    loseContext: () => undefined,
+    prerender: () => undefined,
+    render: () => undefined,
+    endFrame: () => undefined,
+    addTileset: (id, _tileset, _options, signal) =>
+      new Promise((resolve, reject) => {
+        pending.set(id, resolve);
+        signal.addEventListener('abort', () => reject(new DOMException('瓦片集已撤下', 'AbortError')), { once: true });
+      }),
+    updateTileset: () => undefined,
+    removeTileset: id => void pending.delete(id),
+    addSplat: () => new Promise(() => undefined),
+    updateSplat: () => undefined,
+    removeSplat: () => undefined,
+    pick: () => null,
+    project: () => null,
+    setLift: () => undefined,
+    lowestHeight: () => null,
+    setInteriorFog: () => undefined,
+    setMarker: () => undefined,
+    on: () => () => undefined,
+    [Symbol.dispose]: () => undefined
+  };
+  /** 让还在加载的瓦片集就绪；还没交给渲染器时抛错 */
+  const ready = (id: string) => required(pending.get(id), `瓦片集 ${id} 没有在加载`)(MODEL_SPHERE);
+  return { renderer, ready };
 }
 
 interface PageModules {
   readonly page: typeof CurrentMapPage;
   readonly canvas: typeof MapCanvas;
-  readonly sceneCanvas: typeof CesiumCanvas;
 }
 
-const STATIC_MODULES: PageModules = { page: CurrentMapPage, canvas: MapCanvas, sceneCanvas: CesiumCanvas };
+const STATIC_MODULES: PageModules = { page: CurrentMapPage, canvas: MapCanvas };
 
 // 区划边界的加载器是整个应用共用的，同一个文件只解析一次：重新导入页面，边界从没有缓存开始，像第一次打开页面
 async function freshModules(): Promise<PageModules> {
   vi.resetModules();
-  const [{ CurrentMapPage: page }, { MapCanvas: canvas, CesiumCanvas: sceneCanvas }] = await Promise.all([
+  const [{ CurrentMapPage: page }, { MapCanvas: canvas }] = await Promise.all([
     import('./CurrentMapPage'),
     import('@mx/map-vue')
   ]);
-  return { page, canvas, sceneCanvas };
+  return { page, canvas };
 }
 
 /**
  * 页面里的画布用真实的 MapLibre，jsdom 里创建不出来；用 stubs 换成注入了假地图的同一个组件。
+ * 三维是同一个视图，三维模块换成渲染器的替身，能力同 app 按三维的开关收窄后的（三维里不显示资源图层）。
  * 第一次创建可以设为失败，模拟引擎失败后重试；canvasKey 变化时画布重建
  */
 function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAlive = false } = {}) {
@@ -356,7 +351,17 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
   // keepAlive 时页面放在 KeepAlive 里，pageShown 为 false 时停用（缓存），和布局里一样（ADR 0063）
   const pageShown = ref(true);
   const maps: FakeMap[] = [];
-  const scenes: FakeSceneView[] = [];
+  const renderers: ReturnType<typeof fakeRenderer>[] = [];
+  const engine: SceneEngine = {
+    capabilities: { ...MAPLIBRE_ENGINE.capabilities, styleLayers: false, identify: false },
+    loadRenderer: () =>
+      Promise.resolve(() => {
+        const created = fakeRenderer();
+        renderers.push(created);
+        return created.renderer;
+      })
+  };
+  const firstSession = sessions.length;
   // 记录组件实际更新次数，验证高频输入不会带动整页或整份列表重渲染
   const updates = new Map<string, number>();
   let attempts = 0;
@@ -375,17 +380,6 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
     inheritAttrs: false,
     setup: (_, { attrs }) => () => <RealCanvas {...attrs} key={canvasKey.value} createMap={createMap} />
   });
-  // 三维画布同样换成注入了替身视图的同一个组件，第一次切到三维时才创建
-  const RealSceneCanvas = { ...modules.sceneCanvas, name: 'RealCesiumCanvas' } as typeof CesiumCanvas;
-  const createSceneView = ({ session }: SceneViewOptions) => {
-    const view = new FakeSceneView(session);
-    scenes.push(view);
-    return Promise.resolve(view);
-  };
-  const SceneCanvasWithFakeView = defineComponent({
-    inheritAttrs: false,
-    setup: (_, { attrs }) => () => <RealSceneCanvas {...attrs} createView={createSceneView} />
-  });
   // 每个页面用新的查询缓存，资源目录不在用例之间残留
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // 页面按会话创建偏好的范围；测试里没有登录，范围为 null，不读不写
@@ -396,7 +390,9 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
   const wrapper = mount(root, {
     global: {
       plugins: [createPinia(), [VueQueryPlugin, { queryClient }]],
-      stubs: { MapCanvas: CanvasWithFakeMap, CesiumCanvas: SceneCanvasWithFakeView },
+      stubs: { MapCanvas: CanvasWithFakeMap },
+      // 像 app 一样在地图页外面提供三维引擎
+      provide: { [MAP_SCENE_ENGINE as symbol]: engine },
       mixins: [
         {
           updated(this: ComponentPublicInstance) {
@@ -409,13 +405,15 @@ function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAl
       ]
     }
   });
-  return { wrapper, maps, scenes, canvasKey, pageShown, updates };
+  const session = () => sessions[firstSession];
+  return { wrapper, maps, renderers, session, canvasKey, pageShown, updates };
 }
 
 // 资源树默认返回测试数据（结构同实测）；用例可以换成失败的响应
 const TREE_URL = '/backend/resource-map/base/tree';
 const server = setupServer(
   mock.get(TREE_URL, () => HttpResponse.json(resourceTreeResponse())),
+  mock.get('*/3dt/*/tileset.json', () => HttpResponse.json(TILESET_JSON)),
   mock.get('*/resource-min-zooms.json', () => HttpResponse.json(builtInMinZooms()))
 );
 
@@ -537,7 +535,12 @@ function stubBoundaryFetch() {
   vi.stubGlobal(
     'fetch',
     vi.fn<(url: string) => Promise<Response>>(url =>
-      Promise.resolve(new Response(url.includes('county') ? countyFile : cityFile))
+      // 三维视图下载 tileset.json 也用 fetch
+      Promise.resolve(
+        url.endsWith('/tileset.json')
+          ? Response.json(TILESET_JSON)
+          : new Response(url.includes('county') ? countyFile : cityFile)
+      )
     )
   );
 }
@@ -670,11 +673,15 @@ function mockManifest() {
   return () => requests;
 }
 
-// 步行先建导航网格：这里让它的瓦片集请求失败，返回请求的次数
+// 步行先建导航网格：这里让它的瓦片集请求失败，返回请求的次数。
+// 三维视图加载勾选的模型时请求同一个地址，用 fetch（Accept 是 */*），照常返回；导航网格经 http 客户端（axios 带 application/json）
 function failNavigation() {
   let requests = 0;
   server.use(
-    mock.get('*/3dt/SZ_3DT/tileset.json', () => {
+    mock.get('*/3dt/SZ_3DT/tileset.json', ({ request }) => {
+      if (!request.headers.get('accept')?.includes('application/json')) {
+        return HttpResponse.json(TILESET_JSON);
+      }
       requests++;
       return new HttpResponse(null, { status: 404 });
     })
@@ -695,7 +702,18 @@ async function switchTo(wrapper: ReturnType<typeof mountPage>['wrapper'], label:
   await settle();
 }
 
-const sceneOf = (page: ReturnType<typeof mountPage>) => required(page.scenes[0], '没有创建三维视图');
+// 三维：页面的会话，和让瓦片集就绪的函数（等三维视图下载 tileset.json、交给渲染器，就绪的状态传到页面）
+function sceneOf(page: ReturnType<typeof mountPage>) {
+  const session = required(page.session(), '没有创建地图会话');
+  const renderer = required(page.renderers[0], '没有创建三维渲染器');
+  return {
+    session,
+    ready: async (id: string) => {
+      await vi.waitFor(() => renderer.ready(id));
+      await settle();
+    }
+  };
+}
 
 const basemapCardOf = (wrapper: PageWrapper) => wrapper.get('[data-map-cards] button:last-child');
 
@@ -1756,7 +1774,8 @@ describe('CurrentMapPage', () => {
   });
 
   describe('三维模型（ADR 0081）', () => {
-    const MODEL_CAMERA: CameraState = { center: [120.666, 31.3175], zoom: 17, bearing: 0, pitch: 55 };
+    // 三维视图按渲染器给出的包围球算出建议的相机；jsdom 里画布的高度是 0
+    const MODEL_CAMERA = tilesetCamera(MODEL_SPHERE, 0);
 
     it('三维时左侧换成三维模型面板、第一次切过去才读清单；两边的收起各自保留', async () => {
       const requests = mockManifest();
@@ -1801,17 +1820,20 @@ describe('CurrentMapPage', () => {
 
       await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
       await settle();
-      const view = sceneOf(page);
-      expect(view.session.scene.current.tilesets.map(({ id, lighting }) => [id, lighting])).toStrictEqual([
+      const scene = sceneOf(page);
+      expect(scene.session.scene.current.tilesets.map(({ id, lighting }) => [id, lighting])).toStrictEqual([
         ['sz-station', 'headlight']
       ]);
 
-      view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
-      await nextTick();
+      await scene.ready('sz-station');
       await button(wrapper, '定位').trigger('click');
       await settle();
-      expect(view.flyToCalls.at(-1)).toMatchObject({ center: MODEL_CAMERA.center, zoom: 17, pitch: 55 });
-      expect(view.session.scene.current.underground).toBeNull();
+      expect(page.map.flyToCalls.at(-1)).toMatchObject({
+        center: MODEL_CAMERA.center,
+        zoom: MODEL_CAMERA.zoom,
+        pitch: MODEL_CAMERA.pitch
+      });
+      expect(scene.session.scene.current.underground).toBeNull();
       expect(wrapper.get('[data-loaded="sz-station"]').text()).not.toContain('钻地');
       expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(true);
     });
@@ -1833,18 +1855,17 @@ describe('CurrentMapPage', () => {
       await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
       await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
       await settle();
-      const view = sceneOf(page);
-      view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
-      await nextTick();
+      const scene = sceneOf(page);
+      await scene.ready('sz-station');
       await button(wrapper, '测距').trigger('click');
-      expect(view.session.tool.active).toBe('measure-distance');
+      expect(scene.session.tool.active).toBe('measure-distance');
       expect(shownPanels(wrapper)).toStrictEqual(['legend']);
       expect(wrapper.get('[data-region-scope]').text()).toBe('江苏省›南京市回到全省');
 
       await button(wrapper, '漫游').trigger('click');
       await settle();
-      expect(view.session.scene.current.underground).toStrictEqual({ tilesetId: 'sz-station', surfaceOpacity: 0.25 });
-      expect(view.session.tool.active).toBe('browse');
+      expect(scene.session.scene.current.underground).toStrictEqual({ tilesetId: 'sz-station', surfaceOpacity: 0.25 });
+      expect(scene.session.tool.active).toBe('browse');
       expect(labels()).not.toContain('测距');
       for (const label of ['默认视角', '放大', '缩小', '二维', '三维']) {
         expect(labels()).not.toContain(label);
@@ -1857,7 +1878,7 @@ describe('CurrentMapPage', () => {
 
       await button(wrapper, '退出漫游').trigger('click');
       await settle();
-      expect(view.session.scene.current.underground).toBeNull();
+      expect(scene.session.scene.current.underground).toBeNull();
       expect(button(wrapper, '移动').attributes('aria-pressed')).toBe('true');
       expect(labels()).toEqual(expect.arrayContaining(['默认视角', '放大', '缩小', '二维', '三维']));
       expect(wrapper.find('[data-map-status-bar]').exists()).toBe(true);
@@ -1876,9 +1897,8 @@ describe('CurrentMapPage', () => {
       await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
       await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
       await settle();
-      const view = sceneOf(page);
-      view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
-      await nextTick();
+      const scene = sceneOf(page);
+      await scene.ready('sz-station');
       const start = () => startRoute(wrapper);
       const key = async (value: string) => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: value }));
@@ -1888,30 +1908,30 @@ describe('CurrentMapPage', () => {
       // 正在测距时开始：开始漫游切回移动，漫游不因此退出（ADR 0084、0097）
       await button(wrapper, '测距').trigger('click');
       await start();
-      expect(view.session.tool.active).toBe('browse');
-      expect(view.session.scene.current.roam).toMatchObject({ kind: 'route', playing: false, speed: 4, run: 0 });
+      expect(scene.session.tool.active).toBe('browse');
+      expect(scene.session.scene.current.roam).toMatchObject({ kind: 'route', playing: false, speed: 4, run: 0 });
       expect(wrapper.find('[data-roam-panel]').exists()).toBe(true);
       await key(' ');
-      expect(view.session.scene.current.roam).toMatchObject({ playing: true });
+      expect(scene.session.scene.current.roam).toMatchObject({ playing: true });
       await key(' ');
-      expect(view.session.scene.current.roam).toMatchObject({ playing: false });
+      expect(scene.session.scene.current.roam).toMatchObject({ playing: false });
       await key('Escape');
-      expect(view.session.scene.current.roam).toBeUndefined();
+      expect(scene.session.scene.current.roam).toBeUndefined();
       expect(wrapper.find('[data-roam-panel]').exists()).toBe(false);
 
       // 漫游地下的模型时工具栏隐藏；当前工具换成移动以外的照样退出
       await start();
       expect(wrapper.find('button[aria-label="测距"]').exists()).toBe(false);
-      view.session.tool.activate('measure-distance');
+      scene.session.tool.activate('measure-distance');
       await settle();
-      expect(view.session.scene.current.roam).toBeUndefined();
+      expect(scene.session.scene.current.roam).toBeUndefined();
 
-      view.session.tool.activate('browse');
+      scene.session.tool.activate('browse');
       await start();
       expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(false);
       // 退出漫游同时回到地面，马上能切回二维（ADR 0097 第 5 节）
       await key('Escape');
-      expect(view.session.scene.current.underground).toBeNull();
+      expect(scene.session.scene.current.underground).toBeNull();
       expect(wrapper.find('button[aria-label="二维"]').exists()).toBe(true);
     });
 
@@ -1924,9 +1944,8 @@ describe('CurrentMapPage', () => {
       await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
       await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
       await settle();
-      const view = sceneOf(page);
-      view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
-      await nextTick();
+      const scene = sceneOf(page);
+      await scene.ready('sz-station');
       await startRoute(wrapper);
       const key = async (value: string) => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: value }));
@@ -1937,14 +1956,14 @@ describe('CurrentMapPage', () => {
       await nextTick();
       await key(' ');
       await key('Escape');
-      expect(view.session.scene.current.roam).toMatchObject({ kind: 'route', playing: false });
+      expect(scene.session.scene.current.roam).toMatchObject({ kind: 'route', playing: false });
 
       pageShown.value = true;
       await nextTick();
       await key(' ');
-      expect(view.session.scene.current.roam).toMatchObject({ playing: true });
+      expect(scene.session.scene.current.roam).toMatchObject({ playing: true });
       await key('Escape');
-      expect(view.session.scene.current.roam).toBeUndefined();
+      expect(scene.session.scene.current.roam).toBeUndefined();
     });
 
     it('步行（ADR 0086、0097）：已加载里点"漫游"从步行开始，分析站内空间失败时可以重试；Esc 退出，空格不拦截', async () => {
@@ -1956,9 +1975,8 @@ describe('CurrentMapPage', () => {
       await vi.waitFor(() => expect(wrapper.find('[data-model="sz-station"]').exists()).toBe(true));
       await wrapper.get('[data-model="sz-station"] input[type="checkbox"]').setValue(true);
       await settle();
-      const view = sceneOf(page);
-      view.report(new Map([['sz-station', { state: 'ready', camera: MODEL_CAMERA }]]));
-      await nextTick();
+      const scene = sceneOf(page);
+      await scene.ready('sz-station');
 
       await button(wrapper, '漫游').trigger('click');
       await settle();
@@ -1966,7 +1984,7 @@ describe('CurrentMapPage', () => {
       // 漫游期间工具栏隐藏
       expect(wrapper.find('button[aria-label="测距"]').exists()).toBe(false);
       await vi.waitFor(() => expect(wrapper.get('[data-roam-panel]').text()).toContain('站内空间分析失败，请重试'));
-      expect(view.session.scene.current.roam).toBeUndefined();
+      expect(scene.session.scene.current.roam).toBeUndefined();
       await button(wrapper, '重试').trigger('click');
       await vi.waitFor(() => expect(requests()).toBe(2));
 
@@ -2006,14 +2024,13 @@ describe('CurrentMapPage', () => {
       await search().setValue('广');
       await wrapper.get('[data-model="square"] input[type="checkbox"]').setValue(true);
       await settle();
-      const view = sceneOf(page);
-      view.report(new Map([['square', { state: 'ready', camera: MODEL_CAMERA }]]));
-      await nextTick();
+      const scene = sceneOf(page);
+      await scene.ready('square');
 
       await button(wrapper, '漫游').trigger('click');
       await settle();
-      expect(view.session.scene.current.roam).toMatchObject({ kind: 'route', speed: 4 });
-      expect(view.session.scene.current.underground).toBeNull();
+      expect(scene.session.scene.current.roam).toMatchObject({ kind: 'route', speed: 4 });
+      expect(scene.session.scene.current.underground).toBeNull();
       expect(wrapper.find('[data-scene-model-panel]').exists()).toBe(false);
       expect(wrapper.get('[data-roam-panel]').text()).toContain('广场 · 倾斜摄影');
       for (const label of ['测距', '图例', '放大', '二维', '三维', '默认视角']) {

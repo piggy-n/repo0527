@@ -17,15 +17,14 @@ import { mount } from '@vue/test-utils';
 import { afterAll, describe, expect, it, onTestFinished } from 'vitest';
 import { commands } from 'vitest/browser';
 import { defineComponent, effectScope, provide, shallowRef, watch } from 'vue';
-import { CesiumCanvas } from './CesiumCanvas';
 import { MapCanvas } from './MapCanvas';
 import { type MapHandle, provideMap } from './provide-map';
-import { CESIUM_ENGINE, MAP_RUNTIME, MAP_SCENE_ENGINE, MAPLIBRE_ENGINE, type SceneEngine } from './runtime';
+import { MAP_SCENE_ENGINE, MAPLIBRE_ENGINE, type SceneEngine } from './runtime';
 
-// 两种三维引擎的契约测试（ADR 0147 第 3 节）：同一组用例分别跑真实的 Cesium 和 MapLibre + Three，
-// 和页面一样只通过 provideMap、bindScene、setDimension、相机操作和上下文的状态使用地图。
-// 3C.1 覆盖三维内容的增删、状态、失败和重试，以及 GL 上下文的丢失和恢复（只有 maplibre）；3C.3 加上漫游的开始、暂停、退出；
-// LCC2 高斯泼溅（ADR 0149）按能力声明：能显示的引擎加载、定位、拾取、移除，不能的忽略
+// 三维的契约测试（ADR 0147 第 3 节）：用真实的 MapLibre + Three，和页面一样只通过 provideMap、bindScene、setDimension、
+// 相机操作和上下文的状态使用地图。3C.1 覆盖三维内容的增删、状态、失败和重试，以及 GL 上下文的丢失和恢复；
+// 3C.3 加上漫游的开始、暂停、退出；LCC2 高斯泼溅（ADR 0149）的加载、定位、拾取、移除。
+// 以前同一组用例也跑 Cesium，ADR 0153 移除了它
 
 // 夹具是提交在 src/testing/scene-fixtures 的文本文件，由测试的开发服务器提供：box 是边长 80 米的红色立方体（glTF，缓冲内嵌），
 // 放在 [120.66, 31.31] 的地面上；broken 是同一个瓦片集，但瓦片的地址不存在
@@ -36,7 +35,7 @@ const BACKGROUND: StyleGroup = {
   sources: {},
   layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#202020' } }]
 };
-// 软件渲染下 Cesium 的启动、瓦片的加载都慢：用例的时限放宽到 60 秒；可能一直等不到的条件和它赛跑
+// 软件渲染下三维模块的启动、瓦片的加载都慢：用例的时限放宽到 60 秒；可能一直等不到的条件和它赛跑
 const TEST_TIMEOUT = 60000;
 const WAIT_TIMEOUT = 45000;
 const WIDTH = 640;
@@ -79,18 +78,6 @@ async function until(accept: () => boolean, label: string): Promise<void> {
   } finally {
     cancelAnimationFrame(frame);
     clearTimeout(timer);
-  }
-}
-
-// Cesium 的运行时（ADR 0079 第 2 节）：应用里由 app 注入，这里只设置基础地址；map-vue 只能动态导入 map-cesium。
-// 应用的运行时还引入 CesiumWidget.css，包里不能导入 cesium 的文件，只补上让画布铺满容器的两条
-async function loadRuntime(): Promise<void> {
-  const { setCesiumBaseUrl } = await import('@mx/map-cesium');
-  setCesiumBaseUrl('/cesium/');
-  if (!document.querySelector('style[data-cesium-widget]')) {
-    const style = document.head.appendChild(document.createElement('style'));
-    style.dataset.cesiumWidget = '';
-    style.textContent = '.cesium-widget, .cesium-widget canvas { width: 100%; height: 100%; }';
   }
 }
 
@@ -206,6 +193,8 @@ function square(id: string, half: number, color: string): StyleGroup {
 }
 
 interface PageOptions {
+  /** 三维引擎；默认是真实的 MapLibre 引擎 */
+  readonly engine?: SceneEngine;
   /** 切到三维后等到就绪；三维模块加载失败的用例不等 */
   readonly waitReady?: boolean;
   /** 资源（被模型挡住）和注记（画在模型上面）分组，sceneBelow 是 labels */
@@ -213,8 +202,8 @@ interface PageOptions {
   readonly labels?: StyleGroup;
 }
 
-// 页面：两块画布、底图、三维内容的推导函数；切到三维、等视图就绪。引擎和运行时像 app 一样由页面外面的一层提供
-async function mountPage(engine: SceneEngine, { waitReady = true, resources, labels }: PageOptions = {}) {
+// 页面：画布、底图、三维内容的推导函数；切到三维、等视图就绪。引擎像 app 一样由页面外面的一层提供
+async function mountPage({ engine = MAPLIBRE_ENGINE, waitReady = true, resources, labels }: PageOptions = {}) {
   const content = shallowRef<SceneContent>(EMPTY_SCENE_CONTENT);
   const errors: unknown[] = [];
   let handle: MapHandle<Group> | undefined;
@@ -238,13 +227,11 @@ async function mountPage(engine: SceneEngine, { waitReady = true, resources, lab
             canvasContextAttributes: { preserveDrawingBuffer: true, antialias: false }
           }}
         />
-        <CesiumCanvas />
       </div>
     );
   });
   const Provider = defineComponent(() => {
     provide(MAP_SCENE_ENGINE, engine);
-    provide(MAP_RUNTIME, loadRuntime);
     return () => <Page />;
   });
   const wrapper = mount(Provider, { attachTo: document.body });
@@ -384,7 +371,7 @@ async function roomNavigation(): Promise<Navigation> {
   return buildNavigation(prepared, { signal, download: async () => b3dmOf(glbOf(gltf)) });
 }
 
-// 地下的屋子：会话有地下空间，maplibre 下漫游时抬高
+// 地下的屋子：会话有地下空间，漫游时抬高
 function roomContent(roam?: RouteRoam | WalkRoam): SceneContent {
   const tilesets = [layer('room', ROOM_URL, { lighting: 'headlight' })];
   const underground = { tilesetId: 'room', surfaceOpacity: 0.25 };
@@ -412,19 +399,15 @@ const routeDistance = (page: Page) =>
 const walkPlayer = (page: Page) =>
   page.map.roamStatus.value?.kind === 'walk' ? page.map.roamStatus.value.player : null;
 const walkPhase = (page: Page) => (page.map.roamStatus.value?.kind === 'walk' ? page.map.roamStatus.value.phase : null);
-// 真实的视点高度在地板上方一个眼高：maplibre 下抬高着，对外减掉抬高量
+// 真实的视点高度在地板上方一个眼高：抬高着，对外减掉抬高量
 const eyeOnFloor = (page: Page, floor: number) =>
   Math.abs((page.map.view.value?.eyeHeight() ?? Number.NaN) - (floor + 1.6)) < 0.05;
 
 const pressKey = (type: 'keydown' | 'keyup', code: string) => window.dispatchEvent(new KeyboardEvent(type, { code }));
 
 describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
-describe.each([
-  ['cesium', CESIUM_ENGINE],
-  ['maplibre', MAPLIBRE_ENGINE]
-] as const)('%s', (name, engine) => {
   it('加上瓦片集：先加载中，就绪时带建议的相机；按它定位后画布中心拾取到模型', async () => {
-    const page = await mountPage(engine);
+    const page = await mountPage();
 
     page.content.value = { tilesets: [layer('box', `${FIXTURES}/box/tileset.json`)], underground: null };
     await until(() => page.stateOf('box') === 'ready', '瓦片集就绪');
@@ -448,7 +431,7 @@ describe.each([
   });
 
   it('只改显示和光照时不重新加载；删掉以后状态里不再有它', async () => {
-    const page = await mountPage(engine);
+    const page = await mountPage();
     page.content.value = { tilesets: [layer('box', `${FIXTURES}/box/tileset.json`)], underground: null };
     await until(() => page.stateOf('box') === 'ready', '瓦片集就绪');
     const loaded = page.history.length;
@@ -467,7 +450,7 @@ describe.each([
   });
 
   it('索引下载失败、瓦片下载失败都进入 failed；换重试次数后重新加载', async () => {
-    const page = await mountPage(engine);
+    const page = await mountPage();
 
     page.content.value = {
       tilesets: [layer('missing', `${FIXTURES}/missing/tileset.json`), layer('broken', `${FIXTURES}/broken/tileset.json`)],
@@ -493,7 +476,7 @@ describe.each([
   });
 
   it('相机：相机操作的定位写回会话，投影和读数跟着变', async () => {
-    const page = await mountPage(engine);
+    const page = await mountPage();
     const camera = cameraOf(page);
     const target: CameraState = { center: MODEL_AT, zoom: 15, bearing: 30, pitch: 40 };
 
@@ -516,7 +499,7 @@ describe.each([
   });
 
   it('拾取—投影往返：打到模型表面的点带高度投影回画布，误差小于 1 像素', async () => {
-    const page = await mountPage(engine);
+    const page = await mountPage();
     await locateBox(page);
     const view = readyView(page);
 
@@ -537,7 +520,7 @@ describe.each([
   });
 
   it('维度切换：二维、三维都就绪，种类跟着变，相机不变', async () => {
-    const page = await mountPage(engine);
+    const page = await mountPage();
     const camera = cameraOf(page);
     page.map.runCameraOperation(control =>
       control.flyTo({ center: MODEL_AT, zoom: 16, bearing: 20, pitch: 45 }, { duration: 0, padding: 0 })
@@ -555,29 +538,27 @@ describe.each([
     expect(camera.value.center[1]).toBeCloseTo(MODEL_AT[1], 4);
     expect(camera.value.zoom).toBeCloseTo(16, 1);
     expect(camera.value.pitch).toBeCloseTo(45, 0);
-    // maplibre 下二三维是同一块画布（ADR 0147 第 2 节），cesium 下三维另有一块
+    // 二三维是同一块画布（ADR 0147 第 2 节）
     expect(document.querySelector('.maplibregl-canvas')).toBe(flatCanvas);
-    expect(document.querySelectorAll('.cesium-widget canvas')).toHaveLength(name === 'cesium' ? 1 : 0);
     expect(page.errors).toStrictEqual([]);
   });
 
-  it('能力声明和三维里的渲染要素一致：能识别的引擎在三维里查得到二维样式的图层', async () => {
-    const page = await mountPage(engine, { resources: square('parcel', 0.01, '#3050d0') });
+  it('能力声明和三维里的渲染要素一致：能识别时在三维里查得到二维样式的图层', async () => {
+    const page = await mountPage({ resources: square('parcel', 0.01, '#3050d0') });
     page.map.runCameraOperation(control =>
       control.flyTo({ center: MODEL_AT, zoom: 15, bearing: 0, pitch: 30 }, { duration: 0, padding: 0 })
     );
     const query = () =>
       page.map.view.value?.queryRendered({ x: WIDTH / 2, y: HEIGHT / 2 }, { sources: ['parcel'] }) ?? [];
 
-    // 能识别的等到查到为止；不能识别的（三维的渲染要素查询为空）等一帧
-    await (engine.capabilities.identify ? until(() => query().length > 0, '三维里查到资源图层') : nextFrame());
+    await until(() => query().length > 0, '三维里查到资源图层');
 
-    expect(query().length > 0).toBe(engine.capabilities.identify);
-    expect(page.map.sceneCapabilities).toBe(engine.capabilities);
+    expect(page.map.sceneCapabilities).toBe(MAPLIBRE_ENGINE.capabilities);
+    expect(page.map.sceneCapabilities.identify).toBe(true);
   });
 
   it('路线漫游：放到起点，视点在地板上方 1.6 米；播放时前进、暂停时停住；结束后回到开始前的相机', async () => {
-    const page = await mountPage(engine);
+    const page = await mountPage();
     const navigation = await roomNavigation();
     page.content.value = roomContent();
     await until(() => page.stateOf('room') === 'ready', '屋子就绪');
@@ -613,7 +594,7 @@ describe.each([
   });
 
   it('步行：落到出生点、按 W 往前走，暂停时不走，瞬移到指定位置；结束后回到开始前的相机', async () => {
-    const page = await mountPage(engine);
+    const page = await mountPage();
     const navigation = await roomNavigation();
     page.content.value = roomContent();
     await until(() => page.stateOf('room') === 'ready', '屋子就绪');
@@ -665,9 +646,9 @@ describe.each([
     expect(page.errors).toStrictEqual([]);
   });
 
-  it.runIf(name === 'maplibre')('叠放：sceneBelow 以下的分组被模型挡住，以上的画在模型上面（只有 maplibre）', async () => {
+  it('叠放：sceneBelow 以下的分组被模型挡住，以上的画在模型上面', async () => {
     // 资源是一大块蓝色，注记是模型正下方的一小块绿色
-    const page = await mountPage(engine, {
+    const page = await mountPage({
       resources: square('parcel', 0.01, '#3050d0'),
       labels: square('label', 0.00005, '#20c040')
     });
@@ -692,7 +673,7 @@ describe.each([
     expect(dominant(pixel(onModel), 0)).toBe(true);
   });
 
-  it.runIf(name === 'maplibre')('三维模块加载失败只让三维失败：二维照常可用，重试只重新加载模块（只有 maplibre）', async () => {
+  it('三维模块加载失败只让三维失败：二维照常可用，重试只重新加载模块', async () => {
     let fail = true;
     let loads = 0;
     const flaky: SceneEngine = {
@@ -702,7 +683,7 @@ describe.each([
         return fail ? Promise.reject(new Error('三维模块下载失败')) : MAPLIBRE_ENGINE.loadRenderer();
       }
     };
-    const page = await mountPage(flaky, { waitReady: false });
+    const page = await mountPage({ engine: flaky, waitReady: false });
     await until(() => page.map.viewState.value === 'failed', '三维失败');
     expect(page.map.failure.value?.kind).toBe('module');
     const canvas = document.querySelector('.maplibregl-canvas');
@@ -720,10 +701,10 @@ describe.each([
     expect(document.querySelector('.maplibregl-canvas')).toBe(canvas);
   });
 
-  it.runIf(engine.capabilities.splats)(
-    '高斯泼溅（能显示的引擎）：先加载中，就绪时带建议的相机，按它定位后拾取到泼溅；GL 上下文丢失后恢复还在；删掉以后状态里不再有它',
+  it(
+    '高斯泼溅：先加载中，就绪时带建议的相机，按它定位后拾取到泼溅；GL 上下文丢失后恢复还在；删掉以后状态里不再有它',
     async () => {
-      const page = await mountPage(engine);
+      const page = await mountPage();
       const url = await writtenSplat();
 
       page.content.value = { tilesets: [], splats: [splatLayer(url)], underground: null };
@@ -766,8 +747,8 @@ describe.each([
     }
   );
 
-  it.runIf(engine.capabilities.splats)('离地的泼溅：按建议的相机定位后，画布中心是模型，不是它脚下的地面', async () => {
-    const page = await mountPage(engine);
+  it('离地的泼溅：按建议的相机定位后，画布中心是模型，不是它脚下的地面', async () => {
+    const page = await mountPage();
     const url = await writtenSplat();
     const height = 150;
     const placement = { lng: MODEL_AT[0], lat: MODEL_AT[1], height, heading: 0 };
@@ -792,26 +773,8 @@ describe.each([
     expect(page.errors).toStrictEqual([]);
   });
 
-  it.skipIf(engine.capabilities.splats)(
-    '高斯泼溅（不能显示的引擎）：忽略会话里的泼溅，状态里没有它，瓦片集照常',
-    async () => {
-      const page = await mountPage(engine);
-      const url = await writtenSplat();
-
-      page.content.value = {
-        tilesets: [layer('box', `${FIXTURES}/box/tileset.json`)],
-        splats: [splatLayer(url)],
-        underground: null
-      };
-      await until(() => page.stateOf('box') === 'ready', '瓦片集就绪');
-
-      expect([...page.map.sceneStatus.value.keys()]).toStrictEqual(['box']);
-      expect(page.errors).toStrictEqual([]);
-    }
-  );
-
-  it.runIf(name === 'maplibre')('GL 上下文丢失后恢复：瓦片集仍是就绪，照样拾取到模型（只有 maplibre）', async () => {
-    const page = await mountPage(engine);
+  it('GL 上下文丢失后恢复：瓦片集仍是就绪，照样拾取到模型', async () => {
+    const page = await mountPage();
     page.content.value = { tilesets: [layer('box', `${FIXTURES}/box/tileset.json`)], underground: null };
     await until(() => page.stateOf('box') === 'ready', '瓦片集就绪');
     page.map.runCameraOperation(camera =>
@@ -839,5 +802,4 @@ describe.each([
 
     expect(page.stateOf('box')).toBe('ready');
   });
-});
 });

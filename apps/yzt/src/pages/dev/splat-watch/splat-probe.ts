@@ -55,9 +55,8 @@ export class SplatProbe implements Disposable {
   }
 
   /** 这个预算的引擎：每次换预算重新建地图，拿一个新的 */
-  engine(budget: number): Extract<SceneEngine, { kind: 'maplibre' }> {
+  engine(budget: number): SceneEngine {
     return {
-      kind: 'maplibre',
       capabilities: MAPLIBRE_ENGINE.capabilities,
       loadRenderer: async () => {
         const module = await this.#load();

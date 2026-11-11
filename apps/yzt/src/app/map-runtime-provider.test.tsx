@@ -1,11 +1,9 @@
 import { mount } from '@vue/test-utils';
 import {
   MAP_ERROR_REPORTER,
-  MAP_RUNTIME,
   MAP_RUNTIME_PRELOAD,
   MAP_SCENE_ENGINE,
   MAPLIBRE_ENGINE,
-  type MapRuntimeLoader,
   type MapRuntimePreloader,
   type SceneEngine
 } from '@mx/map-vue';
@@ -23,31 +21,27 @@ function injectedEngine(options?: SceneOptions): SceneEngine {
     received.engine = inject(MAP_SCENE_ENGINE, null);
     return () => null;
   });
-  mount(withRuntimeLoader(Page, vi.fn<MapRuntimeLoader>(), vi.fn<MapRuntimePreloader>(), options));
+  mount(withRuntimeLoader(Page, vi.fn<MapRuntimePreloader>(), options));
   return required(received.engine, '页面拿到的三维引擎');
 }
 
 describe('withRuntimeLoader', () => {
-  it('页面里能取到加载、预加载运行时的函数和地图错误的报告器，路由给的参数照常传到页面', () => {
-    const load = vi.fn<MapRuntimeLoader>(() => Promise.resolve());
+  it('页面里能取到预加载的函数和地图错误的报告器，路由给的参数照常传到页面', () => {
     const preload = vi.fn<MapRuntimePreloader>();
-    let received: MapRuntimeLoader | null = null;
     let receivedPreload: MapRuntimePreloader | null = null;
     let receivedReporter: ((error: unknown) => void) | null = null;
     const Page = defineComponent({
       props: { regionCode: { type: String, required: true } },
       setup(props) {
-        received = inject(MAP_RUNTIME, null);
         receivedPreload = inject(MAP_RUNTIME_PRELOAD, null);
         receivedReporter = inject(MAP_ERROR_REPORTER, null);
         return () => <p>{props.regionCode}</p>;
       }
     });
-    const Wrapped = withRuntimeLoader(Page, load, preload);
+    const Wrapped = withRuntimeLoader(Page, preload);
 
     const wrapper = mount(Wrapped, { attrs: { regionCode: '320100' } });
 
-    expect(received).toBe(load);
     expect(receivedPreload).toBe(preload);
     expect(receivedReporter).toBe(reportMapError);
     expect(wrapper.text()).toBe('320100');
@@ -60,7 +54,7 @@ describe('withRuntimeLoader', () => {
   it('三维的资源图层开关关着时，三维里不画样式图层、不识别，照常加载 map-three、显示高斯泼溅', () => {
     const engine = injectedEngine({ resourceLayers: false });
 
-    expect(engine).toMatchObject({ loadRenderer: MAPLIBRE_ENGINE.loadRenderer });
+    expect(engine.loadRenderer).toBe(MAPLIBRE_ENGINE.loadRenderer);
     expect(engine.capabilities).toStrictEqual({ styleLayers: false, identify: false, splats: true });
   });
 

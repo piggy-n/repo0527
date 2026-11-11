@@ -42,7 +42,7 @@ import {
   type OverlayPadding,
   revealOffset
 } from './overlay';
-import { CESIUM_ENGINE, type SceneCapabilities } from './runtime';
+import { MAPLIBRE_ENGINE, type SceneCapabilities } from './runtime';
 
 /**
  * 就绪视图的受限入口：只有拾取、投影、渲染要素查询和视点高度；移动相机通过相机操作
@@ -98,7 +98,7 @@ export interface MapContext {
   readonly dimension: Readonly<Ref<ViewKind>>;
   /**
    * 切换二维、三维：当前的视图暂停，另一种视图恢复；还没有这种视图时状态是 idle，等它的画布挂上。
-   * 当前视图同时担任两种种类时（MapLibre 引擎）只换它的种类
+   * 当前视图同时担任两种种类时（MapCanvas 的视图）只换它的种类
    */
   setDimension(kind: ViewKind): void;
   /** 就绪的视图，只在视图为 ready 时有值（ADR 0039 第 4 条） */
@@ -115,7 +115,7 @@ export interface MapContext {
   /** 三维引擎能做什么（ADR 0147 第 3 节）：和 dimension 一起决定三维里显示什么；不随视图就绪变化 */
   readonly sceneCapabilities: SceneCapabilities;
   /**
-   * 引擎失败后重新创建视图；当前种类的模块加载失败（MapLibre 引擎的三维）时只重新加载这个模块，不重建地图；
+   * 引擎失败后重新创建视图；当前种类的模块加载失败（三维模块）时只重新加载这个模块，不重建地图；
    * 其他时候什么也不做（样式失败会在出现新版本时自动恢复）
    */
   retry(): void;
@@ -263,7 +263,7 @@ export class MapContextState implements Disposable {
     onError: (error: unknown) => void,
     overlayOptions: Required<OverlayOptions>,
     requestFrame: FrameScheduler = animationFrame,
-    sceneCapabilities: SceneCapabilities = CESIUM_ENGINE.capabilities
+    sceneCapabilities: SceneCapabilities = MAPLIBRE_ENGINE.capabilities
   ) {
     this.session = session;
     this.onError = onError;
@@ -467,7 +467,7 @@ export class MapContextState implements Disposable {
   }
 
   // 切换种类：旧的当前视图暂停，新的恢复；投影跟着视图变了（ADR 0079 第 8 节）。
-  // 当前视图也支持新的种类时（MapLibre 引擎，ADR 0147 第 2 节）不暂停、恢复，通知它换种类，画布和相机不变。
+  // 当前视图也支持新的种类时（MapCanvas 的视图，ADR 0147 第 2 节）不暂停、恢复，通知它换种类，画布和相机不变。
   // 先作废绑定在旧种类上的等待、让同一个视图换好种类，再改维度：同步侦听维度的人（如切到三维的耗时标记）
   // 在侦听里调用 whenReady，等的是新种类这一轮的结果
   #setDimension(kind: ViewKind): void {
