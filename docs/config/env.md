@@ -43,7 +43,7 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_PREFERENCE_RESOURCE_LAYERS` | `true` | 同上 | 资源图层的勾选、透明度、顺序和年份（`resource-layers`） |
 | `VITE_PREFERENCE_RESOURCE_SYMBOLS` | `true` | 同上 | 资源图层的符号样式（`resource-symbols`） |
 | `VITE_PREFERENCE_RESOURCE_PANEL` | `true` | 同上 | 资源图层面板的收起和高度比例（`resource-panel`） |
-| `VITE_RESOURCE_MIN_ZOOM_ENABLED` | `true` | `appConfig.resourceMinZoomEnabled`、`fetchResourceMinZooms`、`builtInMinZooms` | 资源的最小显示级别（ADR 0132、0137）。`true` 时按发布目录的 `resource-min-zooms.json` 限制（读不到时用构建带上的那份），没到层级不请求瓦片、提示放大到几级；`false` 时不读文件、不限制，低级别的瓦片可能有十几 MB，只用于排查和应急 |
+| `VITE_RESOURCE_MIN_ZOOM_ENABLED` | `false` | `appConfig.resourceMinZoomEnabled`、`fetchResourceMinZooms`、`builtInMinZooms` | 资源的最小显示级别（ADR 0132、0137）。`true` 时按发布目录的 `resource-min-zooms.json` 限制（读不到时用构建带上的那份），没到层级不请求瓦片、提示放大到几级；`false` 时不读文件、不限制，各级都请求瓦片，低级别的瓦片可能有十几 MB。**现在暂时关着：** 用户 2026-11-04 确定先不打开（`88c4a99` 改成 `false`），层级表和部署的文件都不生效；层级表和实测的瓦片大小也还对不上（水域面层不在表里，永久基本农田图斑的 8 级偏低）。打开前按 [backlog](../backlog.md)"最小显示级别"两条重测层级，再在真实后端上换一次文件确认 |
 | `VITE_MAP_3D_ENGINE` | `maplibre` | `appConfig.map3dEngine`、`app/map-runtime-provider.ts`、`vite.config.ts` | 三维引擎（ADR 0147、0150）。`cesium` 是可选的 Cesium，三维是另一块画布；`maplibre`（默认）是 MapLibre + Three.js，二三维共用 MapLibre 的画布和视图（地球投影、三维里的覆盖物和测量、三维模型、地下、漫游和缓存；资源图层和三维里的点/框选由 `shared/config/scene-options.ts` 的开关关着，开关只在代码里改，不进 `.env`，见 [map-three.md](../modules/map-three.md)）。app 按它把引擎的描述注入地图（`MAP_SCENE_ENGINE`），页面不判断它；构建时只在 `cesium` 时复制 Cesium 的运行时文件到 `cesium/`（约 7 MB）。换引擎要重新构建；公网、内网要不同时写在 `.env.intranet` |
 
 ## 两类变量
