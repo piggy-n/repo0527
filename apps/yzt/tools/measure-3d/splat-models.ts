@@ -40,7 +40,15 @@ export async function readManifest(source: ManifestSource): Promise<unknown> {
     }
     return response.json();
   }
-  return JSON.parse(readFileSync(source.file, 'utf8').replace(/^﻿/, ''));
+  return JSON.parse(readFileSync(source.file, 'utf8').replace(/^\uFEFF/, ''));
+}
+
+/** 写进结果的说明：结果可能带到别处，服务器的地址不写进去 */
+export function manifestLabel(source: ManifestSource): string {
+  if (source.kind === 'proxy') {
+    return '服务器上的清单（YZT_3DT_PROXY）';
+  }
+  return source.kind === 'local' ? '本地清单 local/3dt/manifest.json' : '入库的清单 public/3dt/manifest.json';
 }
 
 // 清单里的地址相对清单（/3dt/manifest.json）；测量的服务只提供 /3dt/ 下的文件

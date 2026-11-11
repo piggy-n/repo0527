@@ -212,7 +212,7 @@ export async function sampleMemory({ gpu, renderers }: BrowserProcesses): Promis
   const gpuQuery =
     gpu === null
       ? '$gpu = $null'
-      : `try { $gpu = @(Get-CimInstance -ClassName Win32_PerfFormattedData_GPUPerformanceCounters_GPUProcessMemory -Filter "Name LIKE 'pid_${gpu}_%'" | Select-Object DedicatedUsage) } catch { $gpu = 'failed' }`;
+      : `try { $gpu = @(Get-CimInstance -ClassName Win32_PerfFormattedData_GPUPerformanceCounters_GPUProcessMemory -Filter "Name LIKE 'pid_${gpu}_%'" -ErrorAction Stop | Select-Object DedicatedUsage) } catch { $gpu = 'failed' }`;
   const processQuery =
     pids.length === 0 ? '$processes = @()' : `$processes = @(Get-Process -Id ${pids.join(',')} -ErrorAction SilentlyContinue | Select-Object Id,PrivateMemorySize64)`;
   try {

@@ -1,6 +1,5 @@
-// 诊断用：监听共用的 GL 上下文（ADR 0149 第 2 节，做法同 PoC 的 gl-watch.js），给测试和开发页 /dev/splat-watch。
-// 每次调用后读 GL 错误；渲染回调外来自泼溅库的调用单独计数，说明保护确实有东西要守。
-// 每次调用都读错误会让 GPU 同步，帧率大降：只在诊断时打开，不能和帧时间一起量
+// 诊断用：监听共用的 GL 上下文，给测试和开发页 /dev/splat-watch（ADR 0149 第 2 节）。
+// 每次调用都读错误会让 GPU 同步：开着时帧时间不算数，读数的含义见 docs/modules/map-three.md 的"GL 监听"
 
 // 错误最多记这么多条，之后只计数：驱动出问题时每帧都可能报错
 const MAX_ERRORS = 100;
@@ -43,11 +42,11 @@ export interface GlError {
 }
 
 export interface GlWatch extends Disposable {
-  /** 每次调用后读到的 GL 错误，最多前 100 条 */
+  /** 每次调用后读到的 GL 错误，最多前 100 条；没监听的方法出的错记在下一次监听到的调用上 */
   readonly errors: readonly GlError[];
   /** GL 错误的总数（含没记下的） */
   readonly errorCount: number;
-  /** 渲染回调外、调用栈里有 gaussian-splat-lite 的调用次数 */
+  /** 渲染回调外、调用栈里有 gaussian-splat-lite 的调用次数：只数 WATCHED 的方法，调用栈只看得到 10 帧，是下限 */
   readonly libraryOutside: number;
   /** 同上，按方法分 */
   readonly libraryOutsideByMethod: Readonly<Record<string, number>>;

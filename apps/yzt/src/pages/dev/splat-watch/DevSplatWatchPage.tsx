@@ -24,7 +24,7 @@ const renderHelp = () => (
     <summary>怎么用（在显卡机器上）</summary>
     <ol>
       <li>
-        开发服务器 <code>pnpm --filter yzt dev</code>，用 Chrome 打开 <code>/dev/splat-watch</code>；确认右边的"显卡"是真实的显卡，不是
+        开发服务器 <code>pnpm --filter yzt dev</code>，用 Chrome 打开 <code>/dev/splat-watch</code>；确认左边的"显卡"是真实的显卡，不是
         SwiftShader 或 Basic Render Driver
       </li>
       <li>彭城广场的 LCC2 样例要先写进本地清单（docs/modules/map-three.md"泼溅的预算"），楚王山1号在入库的清单里</li>
@@ -63,6 +63,14 @@ export const DevSplatWatchPage = defineComponent({
     );
     const splat = computed(() => find(splatModels.value, splatId.value));
     const reference = computed(() => find(references.value, referenceId.value));
+    // 清掉对照后只有泼溅可看：地图和复制的结果用同一个值
+    const shownMode = computed<WatchMode>(() => (reference.value ? mode.value : 'splat'));
+    const modelHint = computed(() => {
+      if (query.isError.value) {
+        return '清单加载失败';
+      }
+      return query.isPending.value ? '读取清单…' : '清单里没有高斯泼溅';
+    });
 
     const probe = new SplatProbe();
     onScopeDispose(() => probe[Symbol.dispose]());
@@ -78,7 +86,7 @@ export const DevSplatWatchPage = defineComponent({
         model: splat.value?.name ?? '无',
         budget: budget.value,
         reference: reference.value?.name ?? null,
-        mode: MODE_LABELS[mode.value]
+        mode: MODE_LABELS[shownMode.value]
       });
       await navigator.clipboard.writeText(text);
       copied.value = true;
@@ -92,7 +100,7 @@ export const DevSplatWatchPage = defineComponent({
         <ElSelect
           class={styles.select}
           modelValue={splatId.value}
-          placeholder={query.isPending.value ? '读取清单…' : '清单里没有高斯泼溅'}
+          placeholder={modelHint.value}
           onUpdate:modelValue={(value: string) => {
             splatId.value = value;
           }}
@@ -127,7 +135,7 @@ export const DevSplatWatchPage = defineComponent({
           ))}
         </ElSelect>
         <ElRadioGroup
-          modelValue={mode.value}
+          modelValue={shownMode.value}
           disabled={reference.value === null}
           onUpdate:modelValue={(value: string | number | boolean | undefined) => {
             mode.value = value as WatchMode;
@@ -170,8 +178,8 @@ export const DevSplatWatchPage = defineComponent({
           <aside class={styles.aside}>
             {renderHelp()}
             <ul class={styles.readouts}>
-              {lines.value.map(line => (
-                <li key={line}>{line}</li>
+              {lines.value.map((line, index) => (
+                <li key={index}>{line}</li>
               ))}
             </ul>
             <ElButton onClick={() => void copy()}>{copied.value ? '已复制' : '复制结果'}</ElButton>
@@ -182,7 +190,7 @@ export const DevSplatWatchPage = defineComponent({
                 <SplatWatchMap
                   splat={splat.value}
                   reference={reference.value}
-                  mode={reference.value ? mode.value : 'splat'}
+                  mode={shownMode.value}
                   background={background.value}
                 />
               )

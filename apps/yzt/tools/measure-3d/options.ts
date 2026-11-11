@@ -5,7 +5,8 @@ export const HELP = `MapLibre 引擎和 Cesium 的性能对比（ADR 0147 3C.4�
 用法：pnpm --filter yzt measure:3d [选项]
 
   --only <列表>          只跑部分场景，逗号分隔、按子串匹配，如 --only z19 或 --only jkq2
-                         默认只跑验收场景（倾斜摄影 z17、z19）；jkq、jkq2 要设环境变量 YZT_3DT_PROXY 指向服务器
+                         默认只跑验收场景（倾斜摄影 z17、z19）；jkq、jkq2 要设环境变量 YZT_3DT_PROXY 指向服务器；
+                         泼溅场景要写出 splat 才选得中，如 --only splat-pc
   --list                 列出所有场景后退出
   --repeat <n>           perf 每个场景跑几遍（默认 3），报告取中位数
   --upload-mb <列表>     MapLibre 另外对照的上传预算，off 是不提前上传（默认 off），如 off,16,64；none 是不对照
@@ -69,7 +70,8 @@ const listItems = (text: string) => text.split(/[,\s]+/).filter(Boolean);
 // 高斯个数：3m 是 300 万，也认 3e6、3000000；要是正整数
 function splatCount(text: string): number {
   const millions = /^(\d+(?:\.\d+)?)m$/i.exec(text);
-  const value = millions ? Number(millions[1]) * 1e6 : Number(text);
+  // 乘完取整：4.1 * 1e6 在浮点数里是 4099999.9999999995
+  const value = millions ? Math.round(Number(millions[1]) * 1e6) : Number(text);
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`--splat-budget 要是正整数个高斯，如 3m、3e6 或 3000000：${text}`);
   }
@@ -133,9 +135,14 @@ export function parseOptions(argv: readonly string[]): Options {
           return item === 'auto' ? 'auto' : positive(name, item);
         });
         break;
-      case '--splat-budget':
-        options.splatBudgets = [...new Set(listItems(next()).map(splatCount))];
+      case '--splat-budget': {
+        const budgets = listItems(next());
+        if (budgets.length === 0) {
+          throw new Error('--splat-budget 至少写一个预算');
+        }
+        options.splatBudgets = [...new Set(budgets.map(splatCount))];
         break;
+      }
       case '--fps':
         options.fps = positive(name, next());
         break;

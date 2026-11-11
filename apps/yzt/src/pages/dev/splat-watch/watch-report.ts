@@ -10,6 +10,14 @@ const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|basic render|software a
 
 const grouped = (value: number) => Math.round(value).toLocaleString('en-US');
 
+// 地图按需重画：不动时这半秒没有新帧，写 0.0 像是卡住了
+function fpsText(fps: number | null): string {
+  if (fps === null) {
+    return '—';
+  }
+  return fps === 0 ? '静止（这半秒没画新帧）' : fps.toFixed(1);
+}
+
 /** 页面当前的设置：写进结果，回来时知道是在什么条件下看的 */
 export interface WatchSettings {
   readonly model: string;
@@ -28,7 +36,7 @@ export function readoutLines(snapshot: ProbeSnapshot | null): string[] {
   const sum = (read: (item: (typeof splats)[number]) => number) => splats.reduce((total, item) => total + read(item), 0);
   const lines = [
     `显卡：${gpu ?? '未知'}${gpu && SOFTWARE_RENDERER.test(gpu) ? '（软件渲染，帧率和画面不算数）' : ''}`,
-    `帧率：${fps === null ? '—' : fps.toFixed(1)}${watch ? '（开着 GL 监听，帧率不算数）' : ''}`,
+    `帧率：${fpsText(fps)}${watch ? '（开着 GL 监听，帧率不算数）' : ''}`,
     `可见的高斯：${(sum(item => item.visibleSplats) / WAN).toFixed(1)} 万 / 总预算 ${grouped(inspection.splatBudget / WAN)} 万`,
     `加载进度：${splats.length === 0 ? '—' : `${Math.round(Math.min(...splats.map(item => item.loadProgress)) * 100)}%`}；分块 驻留 ${sum(item => item.residentChunks)}、加载中 ${sum(item => item.loadingChunks)}`,
     `库估计：GPU ${grouped(sum(item => item.gpuBytes) / MB)} MB，CPU ${grouped(sum(item => item.cpuBytes) / MB)} MB，WASM 峰值 ${grouped(Math.max(0, ...splats.map(item => item.peakWasmBytes)) / MB)} MB；累计下载 ${grouped(sum(item => item.downloadedBytes) / MB)} MB`,

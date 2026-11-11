@@ -1,7 +1,7 @@
 import { MapLibreView, type SceneSurface } from '@mx/map-core';
-import type { CullWindow, ThreeSceneInspection, ThreeSceneRenderer as Renderer } from '@mx/map-three';
+import type { CullWindow, ThreeSceneRenderer as Renderer } from '@mx/map-three';
 import { setupMapRuntime } from '../../../src/app/map-runtime.ts';
-import type { SplatReadings } from '../bench-api.ts';
+import { splatReadings, splatsSettled } from '../splat-readings.ts';
 import type { EngineHandle, EngineOptions } from './bench.ts';
 
 const MB = 1024 * 1024;
@@ -19,27 +19,6 @@ const longestWindow = (windows: readonly (number | null)[]): number | null => {
   const values = windows.filter(value => value !== null);
   return values.length > 0 ? Math.max(...values) : null;
 };
-
-// 泼溅的读数：各份加起来，加载进度取最低的；没有泼溅时为 null
-function splatReadings(state: ThreeSceneInspection): SplatReadings | null {
-  const entries = Object.values(state.splats);
-  if (entries.length === 0) {
-    return null;
-  }
-  const sum = (read: (item: (typeof entries)[number]) => number) => entries.reduce((total, item) => total + read(item), 0);
-  return {
-    budget: state.splatBudget,
-    visible: sum(item => item.visibleSplats),
-    residentChunks: sum(item => item.residentChunks),
-    loadingChunks: sum(item => item.loadingChunks),
-    loadProgress: Math.min(...entries.map(item => item.loadProgress)),
-    cpuMB: sum(item => item.cpuBytes) / MB,
-    gpuMB: sum(item => item.gpuBytes) / MB,
-    pendingMB: sum(item => item.pendingBytes) / MB,
-    downloadedMB: sum(item => item.downloadedBytes) / MB,
-    peakWasmMB: Math.max(...entries.map(item => item.peakWasmBytes)) / MB
-  };
-}
 
 /** MapLibre 引擎：真实的 MapLibreView 和 ThreeSceneRenderer，和产品一样在第一次切到三维时动态导入 */
 export async function startMapLibre({ session, container, params, splatCount, onError }: EngineOptions): Promise<EngineHandle> {
@@ -127,7 +106,7 @@ export async function startMapLibre({ session, container, params, splatCount, on
           raisedPredicted: state.raisedPredicted,
           cullWindow: longestWindow(tilesets.map(item => item.cullWindow))
         },
-        splats: splatReadings(state)
+        splats: splatReadings(state.splatBudget, Object.values(state.splats))
       };
     },
     // 瓦片集：瓦片到了、不再调整（settled 不看泼溅）；泼溅：每份都读到了索引，当前视角要的细节都到了、没有在加载的分块
@@ -136,10 +115,7 @@ export async function startMapLibre({ session, container, params, splatCount, on
       const tilesets = Object.values(state.tilesets);
       const splats = Object.values(state.splats);
       const tilesReady = state.settled && (tilesets.length === 0 || tilesets.some(item => item.loaded > 0));
-      const splatsReady =
-        splats.length === splatCount &&
-        splats.every(item => item.visibleSplats > 0 && item.loadingChunks === 0 && item.loadProgress >= 1);
-      return tilesets.length + splats.length > 0 && tilesReady && splatsReady;
+      return tilesets.length + splats.length > 0 && tilesReady && splatsSettled(splats, splatCount);
     },
     frames: () => renderer?.inspect().frames ?? 0,
     requestFrame: () => surface?.requestRepaint()

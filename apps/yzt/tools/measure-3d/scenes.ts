@@ -69,9 +69,7 @@ function remote(id: string, title: string, model: SceneModel, zoom: number, pitc
   return { id, title, acceptance: false, models: [model], splats: [], camera: { center: null, zoom, pitch, bearing: 0 } };
 }
 
-// 高斯泼溅：中心为 null 时用模型的建议中心。比 300 万、600 万、1000 万要看得到这么多：楚王山1号最细一级只有 1187 万个，
-// 所以预算主要看彭城广场的样例。库按距离分档要细节（limit），z18 俯瞰要不了 1000 万时，z19 近看、更斜的那个能用满；
-// 和 XZ 一起开时倾斜模型在泼溅的范围里裁掉，显存要两者一起看
+// 高斯泼溅：中心为 null 时用模型的建议中心；楚王山1号 z18 这个视角要不了 600 万以上，场景为什么这样选见 map-three.md 的"泼溅的预算"
 function splat(
   id: string,
   title: string,
@@ -191,10 +189,10 @@ export function aerialFlight({ center, zoom, pitch, bearing }: BenchCamera, view
   ];
 }
 
-/** 按子串选场景；没写时选验收场景 */
+/** 按子串选场景；没写时选验收场景。泼溅场景要写出 splat 才选得中：--only z19 这样的引擎对比不能带上要本地清单的场景 */
 export function selectScenes(only: readonly string[]): Scene[] {
   if (only.length === 0) {
     return SCENES.filter(scene => scene.acceptance);
   }
-  return SCENES.filter(scene => only.some(pattern => scene.id.includes(pattern)));
+  return SCENES.filter(scene => only.some(pattern => scene.id.includes(pattern) && (scene.splats.length === 0 || pattern.includes('splat'))));
 }

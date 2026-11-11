@@ -138,7 +138,7 @@ const METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => strin
 
 // ---------- 高斯泼溅的预算（ADR 0149 L.3） ----------
 
-// 可见的高斯到预算的这么多算用满了：不到说明这个视角要不了这么多，这一列和小预算测的是同一件事
+// 稳定时可见的高斯到预算的这么多算用满了：不到说明这个视角稳定时要不了这么多，飞行和峰值的行仍然反映这个预算的开销
 export const SPLAT_FILLED_RATIO = 0.9;
 
 const splatOf = (run: RunResult, read: (splats: SplatReadings) => number) => {
@@ -146,7 +146,7 @@ const splatOf = (run: RunResult, read: (splats: SplatReadings) => number) => {
   return splats ? read(splats) : null;
 };
 
-// 飞行中画得多少：中位、最低（万）
+// 飞行中画得多少：中位、最低、最高（万）
 function splatFlight(runs: readonly RunResult[], phase: 'flightCold' | 'flightWarm'): string {
   const of = (read: (values: readonly number[]) => number | null) =>
     pick(runs, run => {
@@ -154,7 +154,13 @@ function splatFlight(runs: readonly RunResult[], phase: 'flightCold' | 'flightWa
       return values.length > 0 ? read(values) : null;
     });
   const middle = of(values => median(values));
-  return middle === null ? '—' : `${number(middle / WAN)} / ${number((of(values => Math.min(...values)) ?? 0) / WAN)}`;
+  return middle === null ? '—' : `${number(middle / WAN)} / ${number((of(values => Math.min(...values)) ?? 0) / WAN)} / ${number((of(values => Math.max(...values)) ?? 0) / WAN)}`;
+}
+
+// 各遍里最大的：长任务的"最长"不能取中位数，两遍的中点可能是 50 毫秒以下、根本不存在的长任务
+function maxOf(runs: readonly RunResult[], read: (run: RunResult) => number | undefined): number | null {
+  const values = runs.map(read).filter(value => value !== undefined);
+  return values.length > 0 ? Math.max(...values) : null;
 }
 
 /** 可见的高斯占预算的比例（中位数）；没有读数时为 null */
@@ -185,13 +191,13 @@ const SPLAT_METRICS: readonly (readonly [string, (runs: readonly RunResult[]) =>
   ['第一遍飞行：每帧工作量', runs => summaryCell(runs, run => run.flightCold?.work)],
   ['第一遍飞行：每帧 GPU', runs => summaryCell(runs, run => run.flightCold?.gpu)],
   ['第一遍飞行：≥33 / ≥50 / ≥100 毫秒的帧', runs => `${integer(pick(runs, run => run.flightCold?.over.ms33))} / ${integer(pick(runs, run => run.flightCold?.over.ms50))} / ${integer(pick(runs, run => run.flightCold?.over.ms100))}`],
-  ['第一遍飞行：长任务 次数 / 最长', runs => `${integer(pick(runs, run => run.flightCold?.longTasks.count))} / ${integer(pick(runs, run => run.flightCold?.longTasks.maxMs))}`],
-  ['第一遍飞行：可见的高斯（万）中位 / 最低', runs => splatFlight(runs, 'flightCold')],
+  ['第一遍飞行：长任务 次数（中位数）/ 最长（各遍最大）', runs => `${integer(pick(runs, run => run.flightCold?.longTasks.count))} / ${integer(maxOf(runs, run => run.flightCold?.longTasks.maxMs))}`],
+  ['第一遍飞行：可见的高斯（万）中位 / 最低 / 最高', runs => splatFlight(runs, 'flightCold')],
   ['第一遍飞行：上传 贴图 / 缓冲（MB）/ 最多的一帧', runs => `${integer(pick(runs, run => run.flightCold?.uploads.textureMB))} / ${integer(pick(runs, run => run.flightCold?.uploads.bufferMB))} / ${number(pick(runs, run => run.flightCold?.uploads.maxFrameMB))}`],
   ['飞行后补齐（秒）', runs => number((pick(runs, run => run.settle?.ms) ?? Number.NaN) / 1000)],
   ['第二遍飞行：每帧工作量', runs => summaryCell(runs, run => run.flightWarm?.work)],
   ['第二遍飞行：≥33 / ≥50 / ≥100 毫秒的帧', runs => `${integer(pick(runs, run => run.flightWarm?.over.ms33))} / ${integer(pick(runs, run => run.flightWarm?.over.ms50))} / ${integer(pick(runs, run => run.flightWarm?.over.ms100))}`],
-  ['第二遍飞行：可见的高斯（万）中位 / 最低', runs => splatFlight(runs, 'flightWarm')],
+  ['第二遍飞行：可见的高斯（万）中位 / 最低 / 最高', runs => splatFlight(runs, 'flightWarm')],
   ['加载期：最长的长任务，除去创建 WebGL 上下文（毫秒）', runs => integer(pick(runs, run => run.load?.longTasks.maxWithoutContextMs))],
   ['模型占画面 / 其中接近白色（%）', runs => `${number(pick(runs, run => run.image?.modelCoveragePct))} / ${number(pick(runs, run => run.image?.brightPct))}`],
   ['页面错误 / GL 错误', runs => `${integer(pick(runs, run => run.pageErrors?.length ?? 0))} / ${integer(pick(runs, run => run.glErrors ?? 0))}`]
@@ -210,7 +216,7 @@ function splatLines(results: MeasureResults): string[] {
   const parts = [
     '## 高斯泼溅的预算（ADR 0149 L.3）',
     '',
-    `只有 MapLibre 引擎。模型来自${results.meta.manifest ?? '清单'}。帧时间单位是毫秒，四个数是 p50 / p95 / p99 / 最长；重复跑的取中位数。可见的高斯不到预算的 ${SPLAT_FILLED_RATIO * 100}% 时这一列"没用满"：这个视角要不了这么多，和小预算测的是同一件事。`,
+    `只有 MapLibre 引擎。模型来自${results.meta.manifest ?? '清单'}。帧时间单位是毫秒，四个数是 p50 / p95 / p99 / 最长；重复跑的取中位数。稳定时可见的高斯不到预算的 ${SPLAT_FILLED_RATIO * 100}% 时算"没用满"：这个视角稳定时要不了这么多，稳定时的行不代表这个预算的开销；飞行要经过要得更多的视角，飞行和峰值的行仍然反映它。`,
     ''
   ];
   for (const scene of splatScenes) {
@@ -316,11 +322,11 @@ const METHOD = `- **都是生产代码：** 真实的 \`MapSession\`、\`MapLibr
 - **每帧工作量：** 同一帧的 JS 加 GPU，验收的 p50、p95、p99 看它。帧间隔有下限（见"有效性"里的校准），看不出余量；工作量不受影响。
 - **≥50 毫秒的帧：** 看实际帧间隔：这个长度远高于下限，而且能抓到不在工作量里的卡顿（垃圾回收、合成）。
 - **每帧 GPU：** \`EXT_disjoint_timer_query_webgl2\`，只包住这一帧的回调。Cesium 开 4 倍多重采样，离屏解析在计时内；MapLibre 默认不开（和产品一样），所以 GPU 这一项不是同样的画法，要比就加 \`--antialias\` 再跑一次。
-- **上传假设：** 每帧的 \`texImage2D\`、\`texSubImage2D\`、\`bufferData\` 的字节和 \`generateMipmap\` 次数，和这一帧的 GPU 耗时放在一起。按上传量分桶后 GPU 耗时随上传量上涨，才说明尖峰来自上传。
+- **上传假设：** 每帧的 \`texImage2D\`、\`texSubImage2D\`、\`texImage3D\`、\`texSubImage3D\`、\`bufferData\` 的字节和 \`generateMipmap\` 次数，和这一帧的 GPU 耗时放在一起。按上传量分桶后 GPU 耗时随上传量上涨，才说明尖峰来自上传。
 - **长任务归因：** 单独跑一遍带 CDP CPU 采样，页面报的每个长任务按分块（three、maplibre-gl、cesium……）和原生调用（\`linkProgram\`、\`texSubImage2D\`）汇总。\`profiles/\` 里的 \`.cpuprofile\` 可以用 DevTools 打开。创建 WebGL 上下文另外包住 \`getContext\` 量，每一遍都有：它和瓦片无关，同一台机器上 0.6～1.2 秒来回跳。
 - **清晰度：** 单独跑一遍，同一相机拍截图。见 \`quality.html\` 的说明。
 - **到稳定：** 引擎报告瓦片都到了（MapLibre 还要上传队列空、屏幕误差不再变），连续 1 秒。飞行后补齐从飞行结束的时刻算；这个数只说明引擎不再动，不说明画面一样细：Cesium 飞完不一定回到飞行前的粗细，要一起看"飞行后的过程"。所以验收不比这个数，比到 Cesium 终点的 98% 用了多久，和终点的三角形。
-- **显存：** Windows 的 GPU Process Memory 计数器，取 GPU 进程的专用显存，采样的最大值不是真正的瞬时峰值。
+- **显存：** Windows 的 GPU Process Memory 计数器，取 GPU 进程的专用显存。"峰值"是加载时、稳定时和每遍飞行结束补齐后这些采样的最大值，不是真正的瞬时峰值，飞行途中不采样（读计数器要起 PowerShell，会干扰帧时间）。
 - **CPU 内存：** 渲染进程（页面和它的 Worker，备用的空进程也算，只有几十 MB）、GPU 进程的私有内存（提交的字节，\`Get-Process\` 的 PrivateMemorySize64），和显存同时采样。
 - **高斯泼溅（ADR 0149 L.3）：** 只有 MapLibre 引擎，每个预算一个方案，都是产品的设置（\`limit\`、\`maxSh: 0\`、并发 2），只换总预算。"稳定"是每份都读到了索引、当前视角要的细节都到了（库的 \`loadProgress\` 为 1）、没有在加载的分块。"库估计"是库自己报的数（CPU 不含 Worker 的堆和还没放进存储的副本）。库在渲染回调外上传、排序，这部分不在"每帧 GPU"里，上传量记在下一帧。"接近白色"是模型的像素里三个通道都不低于 235 的比例，同一个相机下软件渲染和显卡比，看亮处偏白是不是软件渲染造成的。`;
 

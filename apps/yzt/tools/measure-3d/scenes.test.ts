@@ -10,6 +10,11 @@ describe('selectScenes', () => {
   it('按子串选', () => {
     expect(selectScenes(['jkq2']).map(scene => scene.id)).toEqual(['jkq2-z15', 'jkq2-z16-tilt']);
   });
+
+  it('按级别选时不带上泼溅场景：它们要本地清单，引擎对比用不到', () => {
+    expect(selectScenes(['z19']).map(scene => scene.id)).toEqual(['oblique-z19']);
+    expect(selectScenes(['z18']).map(scene => scene.id)).toEqual(['white-station-z18']);
+  });
 });
 
 describe('variants', () => {
@@ -37,7 +42,7 @@ describe('variants 的对照方案', () => {
 
   it('对照方案只跑 perf：画质和采样只有要比的两个方案', () => {
     const list = variants([], [null, 0.3]);
-    const runs = buildRuns(selectScenes(['z19']), list, 1);
+    const runs = buildRuns(selectScenes(['z19']), list, 1, splatVariants([3e6, 6e6, 1e7]));
     expect(runs.filter(run => run.kind === 'perf')).toHaveLength(4);
     expect(runs.filter(run => run.kind !== 'perf').map(run => run.id)).toEqual([
       'oblique-z19/cesium/quality',
@@ -126,6 +131,7 @@ describe('泼溅场景（ADR 0149 L.3）', () => {
   it('和瓦片集的场景一起跑时各跑各的方案', () => {
     const runs = buildRuns(selectScenes(['z19', 'splat-cws1']), list, 1, budgets);
     const perScene = (id: string) => [...new Set(runs.filter(run => run.scene.id === id).map(run => run.variant.id))];
+    expect([...new Set(runs.map(run => run.scene.id))]).toEqual(['oblique-z19', 'splat-cws1-z18']);
     expect(perScene('oblique-z19')).toEqual(['cesium', 'maplibre', 'maplibre-no-budget']);
     expect(perScene('splat-cws1-z18')).toEqual(['maplibre-splat3m', 'maplibre-splat6m', 'maplibre-splat10m']);
   });

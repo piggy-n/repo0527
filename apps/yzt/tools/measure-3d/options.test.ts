@@ -39,6 +39,8 @@ describe('parseOptions', () => {
     expect(parseOptions([]).splatBudgets).toEqual([3_000_000, 6_000_000, 10_000_000]);
     expect(parseOptions(['--splat-budget', '3m,6e6 10000000']).splatBudgets).toEqual([3_000_000, 6_000_000, 10_000_000]);
     expect(parseOptions(['--splat-budget', '1.5m,1500000']).splatBudgets).toEqual([1_500_000]);
+    expect(parseOptions(['--splat-budget', '4.1m']).splatBudgets).toEqual([4_100_000]);
+    expect(() => parseOptions(['--splat-budget', ','])).toThrow('至少写一个预算');
     expect(() => parseOptions(['--splat-budget', '0'])).toThrow('--splat-budget');
     expect(() => parseOptions(['--splat-budget', '3.5'])).toThrow('--splat-budget');
     expect(() => parseOptions(['--splat-budget', '3k'])).toThrow('--splat-budget');

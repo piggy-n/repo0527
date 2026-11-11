@@ -2,6 +2,7 @@ import type { SceneContent, StyleGroup } from '@mx/map-core';
 import { MAP_SCENE_ENGINE, MapCanvas, provideMap } from '@mx/map-vue';
 import { computed, defineComponent, onMounted, onUnmounted, type PropType, provide, watch } from 'vue';
 import type { SceneModel } from '@/features/scene-models/catalog';
+import { MapStatusNotice } from '@/shared/map/MapStatusNotice';
 import type { SplatProbe } from './splat-probe';
 import styles from './DevSplatWatchPage.module.scss';
 
@@ -46,7 +47,7 @@ const backgroundStyle = (color: string): StyleGroup => ({
   layers: [{ id: 'basemap-background', type: 'background', paint: { 'background-color': color } }]
 });
 
-/** 地图：只有背景色、一份泼溅和可选的对照模型；泼溅第一次就绪时飞到它的建议相机 */
+/** 地图：只有背景色、一份泼溅和可选的对照模型；换到这份泼溅后第一次就绪时飞到它的建议相机 */
 export const SplatWatchMap = defineComponent({
   name: 'SplatWatchMap',
   props: {
@@ -63,13 +64,13 @@ export const SplatWatchMap = defineComponent({
     onMounted(() => map.setDimension('3d'));
 
     const statusOf = (model: SceneModel | null) => (model ? map.sceneStatus.value.get(model.id) : undefined);
-    const located = new Set<string>();
+    let located: string | null = null;
     watch(
       () => statusOf(props.splat),
       status => {
         const id = props.splat?.id;
-        if (id && status?.state === 'ready' && !located.has(id)) {
-          located.add(id);
+        if (id && status?.state === 'ready' && located !== id) {
+          located = id;
           map.runCameraOperation(control => control.flyTo(status.camera));
         }
       }
@@ -90,6 +91,7 @@ export const SplatWatchMap = defineComponent({
     return () => (
       <div class={styles.map}>
         <MapCanvas class={styles.canvas} />
+        <MapStatusNotice />
         {statusText.value && <div class={styles.status}>{statusText.value}</div>}
       </div>
     );

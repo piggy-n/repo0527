@@ -68,6 +68,10 @@ describe('readoutLines', () => {
     ]);
   });
 
+  it('这半秒没有新帧时说静止，不写 0.0', () => {
+    expect(readoutLines({ ...snapshot(null), fps: 0 })[1]).toBe('帧率：静止（这半秒没画新帧）');
+  });
+
   it('软件渲染时提醒帧率和画面不算数', () => {
     expect(readoutLines(snapshot(null, 'ANGLE (Google, SwiftShader Device)'))[0]).toContain('软件渲染');
   });

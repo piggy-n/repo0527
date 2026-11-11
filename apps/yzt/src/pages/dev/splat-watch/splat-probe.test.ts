@@ -1,21 +1,22 @@
 import type { SceneFrame, SceneSurface } from '@mx/map-core';
 import type { GlWatch, ThreeSceneInspection, ThreeSceneRendererOptions } from '@mx/map-three';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { required } from '@/shared/testing/required';
 import { type MapThreeModule, SplatProbe } from './splat-probe';
 
 // 假的 map-three：渲染器记下构造参数、render 时问监听现在算不算在回调里；监听记下监听的上下文、是否已撤掉
 class FakeRenderer {
-  static created: FakeRenderer[] = [];
   frames = 0;
   insideDuringRender: boolean | null = null;
-  constructor(readonly options?: ThreeSceneRendererOptions) {
-    FakeRenderer.created.push(this);
-  }
+  failNextRender = false;
+  constructor(readonly options?: ThreeSceneRendererOptions) {}
   attach(_surface: SceneSurface): void {}
   render(_frame: SceneFrame): void {
     this.frames++;
     this.insideDuringRender = watches.at(-1)?.inside() ?? null;
+    if (this.failNextRender) {
+      throw new Error('这一帧出错');
+    }
   }
   inspect(): ThreeSceneInspection {
     return { frames: this.frames } as ThreeSceneInspection;
@@ -59,6 +60,10 @@ async function mount(probe: SplatProbe, budget: number, gl: WebGL2RenderingConte
 }
 
 describe('SplatProbe（/dev/splat-watch）', () => {
+  beforeEach(() => {
+    watches.length = 0;
+  });
+
   it('引擎是 maplibre，渲染器只换总预算；挂上后读得到显卡和渲染器的读数', async () => {
     const probe = new SplatProbe(() => Promise.resolve(module));
     const engine = probe.engine(6_000_000);
@@ -119,6 +124,36 @@ describe('SplatProbe（/dev/splat-watch）', () => {
       renderer.render({} as SceneFrame);
     }
     expect(probe.snapshot(1500).fps).toBe(60);
+  });
+
+  it('一帧出错以后，之后的调用还算在回调外', async () => {
+    const probe = new SplatProbe(() => Promise.resolve(module));
+    const renderer = await mount(probe, 3_000_000, fakeGl('A'));
+    probe.setWatching(true, 1000);
+    renderer.failNextRender = true;
+    expect(() => renderer.render({} as SceneFrame)).toThrow('这一帧出错');
+    expect(renderer.insideDuringRender).toBe(true);
+    expect(required(watches.at(-1), '监听').inside()).toBe(false);
+  });
+
+  it('显卡名优先读没打码的', async () => {
+    const UNMASKED = 7;
+    const gl = {
+      RENDERER: 1,
+      getExtension: () => ({ UNMASKED_RENDERER_WEBGL: UNMASKED }),
+      getParameter: (name: number) => (name === UNMASKED ? 'RTX 3060' : 'WebKit WebGL')
+    } as unknown as WebGL2RenderingContext;
+    const probe = new SplatProbe(() => Promise.resolve(module));
+    await mount(probe, 3_000_000, gl);
+    expect(probe.snapshot().gpu).toBe('RTX 3060');
+  });
+
+  it('卸下以后再打开监听，不会监听旧的上下文', async () => {
+    const probe = new SplatProbe(() => Promise.resolve(module));
+    await mount(probe, 3_000_000, fakeGl('A'));
+    probe.detach();
+    probe.setWatching(true);
+    expect(watches).toHaveLength(0);
   });
 
   it('卸下以后不再读那个渲染器', async () => {

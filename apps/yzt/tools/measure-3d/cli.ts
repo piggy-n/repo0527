@@ -14,7 +14,7 @@ import { runOnce } from './run.ts';
 import { buildRuns, PENGCHENG_SPLAT, type Run, SCENES, selectScenes, splatVariants, variants, variantsOf } from './scenes.ts';
 import { startServer } from './server.ts';
 import type { SharpnessComparison } from './sharpness.ts';
-import { decodedPath, type ManifestSource, manifestSource, readManifest, resolveSplats, type SplatModel } from './splat-models.ts';
+import { decodedPath, manifestLabel, type ManifestSource, manifestSource, readManifest, resolveSplats, type SplatModel } from './splat-models.ts';
 import { PAGE_OUT_DIR } from './vite.config.ts';
 
 // MapLibre 引擎和 Cesium 的性能对比（ADR 0147 3C.4），高斯泼溅的预算（ADR 0149 L.3，--only splat）：在 apps/yzt 下运行 pnpm measure:3d，
@@ -25,8 +25,6 @@ const repoRoot = resolve(appRoot, '../..');
 const redact = createRedactor(repoRoot);
 const modelsDir = localPath('3dt');
 const modelsProxy = process.env.YZT_3DT_PROXY || null;
-// 泼溅场景的模型从清单读，和开发服务器同一个来源（splat-models.ts）
-const manifest: ManifestSource = manifestSource(join(modelsDir, 'manifest.json'), join(appRoot, 'public/3dt/manifest.json'), modelsProxy);
 
 const stripImages = ({ cells, medianRatio, worstDecileRatio, ratios }: SharpnessComparison): SharpnessComparison => ({
   cells,
@@ -94,27 +92,31 @@ async function checkModelServer(server: string, paths: readonly string[]): Promi
   return [...new Set(problems.filter(problem => problem !== null))];
 }
 
-function describeManifest(source: ManifestSource): string {
-  if (source.kind === 'proxy') {
-    return `服务器上的清单（${source.url}）`;
+// 控制台上的说明：要带服务器地址，fetch 的错误里没有它
+function whereManifest(source: ManifestSource | null): string {
+  if (source === null) {
+    return `YZT_3DT_PROXY（${modelsProxy}）`;
   }
-  return source.kind === 'local' ? '本地清单 local/3dt/manifest.json' : '入库的清单 public/3dt/manifest.json';
+  return source.kind === 'proxy' ? `服务器上的清单（${source.url}）` : manifestLabel(source);
 }
 
-// 泼溅场景的模型按 ID 从清单里取：缺了说明怎么补（彭城广场的样例只在本地清单里）
-async function resolveSceneSplats(): Promise<{ splats: Map<string, SplatModel>; problems: string[] }> {
+// 泼溅场景的模型按 ID 从清单读，和开发服务器同一个来源（splat-models.ts）；缺了说明怎么补（彭城广场的样例只在本地清单里）。
+// 只在有泼溅场景时才解析代理的地址：写错了不影响 --help 和引擎对比
+async function resolveSceneSplats(): Promise<{ splats: Map<string, SplatModel>; source: ManifestSource | null; problems: string[] }> {
   const ids = [...new Set(scenes.flatMap(scene => scene.splats))];
   if (ids.length === 0) {
-    return { splats: new Map(), problems: [] };
+    return { splats: new Map(), source: null, problems: [] };
   }
+  let source: ManifestSource | null = null;
   try {
-    const models = resolveSplats(await readManifest(manifest), ids);
-    return { splats: new Map(models.map(model => [model.id, model])), problems: [] };
+    source = manifestSource(join(modelsDir, 'manifest.json'), join(appRoot, 'public/3dt/manifest.json'), modelsProxy);
+    const models = resolveSplats(await readManifest(source), ids);
+    return { splats: new Map(models.map(model => [model.id, model])), source, problems: [] };
   } catch (error) {
     const hint = ids.includes(PENGCHENG_SPLAT)
       ? `\n    彭城广场的 LCC2 样例（${PENGCHENG_SPLAT}）只写在本地清单 local/3dt/manifest.json 里，做法见 docs/modules/map-three.md"泼溅的预算"。`
       : '';
-    return { splats: new Map(), problems: [`${describeManifest(manifest)}：${String(error instanceof Error ? error.message : error)}${hint}`] };
+    return { splats: new Map(), source, problems: [`${whereManifest(source)}：${String(error instanceof Error ? error.message : error)}${hint}`] };
   }
 }
 
@@ -278,7 +280,7 @@ function runSummary(result: MeasureResults['runs'][number]): string {
 
 async function main(): Promise<void> {
   console.log('检查环境……');
-  const { splats, problems } = await resolveSceneSplats();
+  const { splats, source: manifest, problems } = await resolveSceneSplats();
   if (problems.length > 0) {
     fail(problems);
   }
@@ -325,7 +327,7 @@ async function main(): Promise<void> {
       fps: options.fps,
       antialias: options.antialias,
       plannedTotal: runs.length,
-      ...(splats.size > 0 ? { manifest: describeManifest(manifest) } : {})
+      ...(manifest ? { manifest: manifestLabel(manifest) } : {})
     },
     environment,
     warnings,
@@ -407,7 +409,7 @@ async function main(): Promise<void> {
   }
   console.log(`\n完成 ${results.runs.length}/${runs.length}，用时 ${minutes(Date.now() - startedAt)}`);
   console.log(`结果目录：${outDir}`);
-  console.log('看 quality.html、填 manual.md，然后把整个结果目录带回来。');
+  console.log(scenes.every(scene => scene.splats.length > 0) ? '填 manual.md，然后把整个结果目录带回来。' : '看 quality.html、填 manual.md，然后把整个结果目录带回来。');
   // Playwright 的连接可能还留着句柄：明确退出，不留进程
   process.exit(results.runs.length > 0 && results.runs.every(run => run.status === 'failed') ? 4 : 0);
 }
