@@ -283,8 +283,10 @@ describe('ThreeSceneRenderer 在 MapLibre 的自写层里', { timeout: TEST_TIME
       throw new Error('瓦片集没有就绪');
     }
 
+    // 方块底面贴地，球心离地 40 米：相机朝北，视线穿过球心后落在它以北 40·tan(俯角) 米
+    const north = (status.camera.center[1] - MODEL_AT[1]) * 111320;
     expect(status.camera.center[0]).toBeCloseTo(MODEL_AT[0], 3);
-    expect(status.camera.center[1]).toBeCloseTo(MODEL_AT[1], 3);
+    expect(Math.abs(north - 40 * Math.tan((55 * Math.PI) / 180))).toBeLessThan(1);
     expect(status.camera.pitch).toBe(55);
   });
 

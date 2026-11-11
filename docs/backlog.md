@@ -34,8 +34,9 @@
 - 城市现状数据 `csxhjctb_*` 的字段对照表待用户提供，拿到之前详情显示编码
 - 自助取数：几何类型只有三张数据表有，分类节点生成的是"XX图层"（[迁移记录](archive/migration.md)"自助取数的几何类型"）
 - 状态未核实：图层按年份重复返回、瓦片不压缩、没有 ETag、错误也返回 200（2026-10 的记录，后端已换过一次）；`/file/page` 不校验 token
-- LCC2 数据（问数据方，ADR 0149）：彭城广场样例的泼溅和碰撞网格相对自己的扫描轨迹整体平移约 85 米，为什么（楚王山1号没有这个问题，三者相差不到 0.1 米）；`offset` 的 z 和徐州倾斜摄影各用什么高程基准（彭城广场按轨迹定的地面比 XZ 低 5.47 米，清单暂按 XZ 的口径抬高，见 [3dt-manifest](config/3dt-manifest.md)）；能否重新导出、让 `offset` 直接可用；数据归谁、能否在内网和公网发布（索引里写着 "XGrids all rights reserved"）。答复回来只改清单里的摆放
-- LCC2 授权（问法务，ADR 0149 第 8 节；默认引擎改为 `maplibre` 以后用户就能看到 LCC2 模型，对外发布前要解决，ADR 0150）：白皮书条款要求的署名 "Data Organization Format originated from XGRIDS" 放在地图的署名控件里够不够，我们的读取和显示算不算"派生作品"；`gaussian-splat-lite` 的 LICENSE、NOTICE 怎么随产物提供。答复回来只改署名的文字
+- LCC2 数据（问数据方，ADR 0149）：彭城广场样例的泼溅和碰撞网格相对自己的扫描轨迹整体平移约 85 米，为什么（楚王山1号没有这个问题，三者相差不到 0.1 米）；`offset` 的 z 和徐州倾斜摄影各用什么高程基准（彭城广场按轨迹定的地面比 XZ 低 5.47 米，清单暂按 XZ 的口径抬高，见 [3dt-manifest](config/3dt-manifest.md)）；能否重新导出、让 `offset` 直接可用。答复回来只改清单里的摆放
+- 地类图斑 2025（`bgdc_dltb_2025`）的瓦片 z5、z8、z12 都返回 200 加 JSON "系统异常"（2026-11-11），MapLibre 报 `Unable to parse the tile`，勾选时控制台每块瓦片一条；问后端有没有这个瓦片集
+- `gaussian-splat-lite` 的 LICENSE、NOTICE 随产物提供（Apache-2.0，分发构建产物时要带，ADR 0149 第 8 节）。LCC2 模型和格式的授权不用处理（用户 2026-11-11 确认：模型由数据方提供，对方已有授权）
 
 ## 未完成的功能
 
@@ -44,10 +45,10 @@
 - 三维的资源图层：暂不显示（用户 2026-11-09 决定，放开要改页面设计），三维点/框选也不识别；`maplibre` 引擎由 `shared/config/scene-options.ts` 的开关关着，放开时先改页面设计再打开开关。Cesium 放开时走方案 B（迁移旧项目的 Worker 栅格化），接入时对齐解码库版本、点选改用瓦片数据服务、避免和 MapLibre 重复下载（ADR 0091）
 - LCC2（高斯泼溅，[ADR 0149](adr/0149-lcc2-gaussian-splats.md)）还没有结论的：楚王山1号亮处偏白来自数据、库还是软件渲染；每帧的 GL 保护是否必要，见 [map-three.md](modules/map-three.md)"泼溅的预算"
 - LCC2 配准的 0.5 米验收（ADR 0149 第 9 节 L.2）：楚王山1号和影像只确认到 1 米以内（ArcGIS 这里约 0.5 米/像素，路大多在树冠下，旁边没有倾斜模型），等有和倾斜模型重叠的 LCC2、控制点或更清晰的影像时再验；`docs/deployment.md` 的 nginx 转发没有实测，首次部署时按其中的 curl 验收
+- 正式的 LCC2 数据只在服务器上，本地拿不到（用户 2026-11-11）：`lcc2:register` 读本地的索引、`info/poses.json` 和 `data/mesh/*.ply`，配准正式模型要数据方给这几个文件（楚王山1号的网格约 30 MB，不含泼溅数据），或者改工具从 `/3dt/` 读
 - Cesium 下的 LCC2：只做 Three.js 叠画布的 PoC，重点看两块画布不共用深度时，和倾斜模型、地形的遮挡对不对
 - MapLibre 三维引擎（ADR 0147）：默认已改为 `maplibre`（ADR 0150），门槛的结果见 [map-three](modules/map-three.md)"改为默认引擎的门槛"；多重采样先不开，不放在 3C.4，用户之后自己用 `--antialias` 对照再定；经开区（JKQ）的服务器 2026-11-09 连不上，先不测，能连上时复测：经网络时实测的窗口多长、z16 倾斜停下后还会不会被锁粗、是哪一条放宽的；第三人称的人物模型没做（入口没开放）；真实显卡上没做的：右键转向、和 Cesium 同位置对照站内明暗、z12 和二三维切换的逐帧录像
 - 业务页的缩放上限 18 级（`JIANGSU_ZOOM_RANGE`），三维是否单独放开到 19 级待定；放开后要补看拖动时模型相对底图的滑动
-- 显卡机器上 `maplibre` 的现状底图控制台有 109 条 `[map] Error`（2026-11-10，来自 `reportMapError`，读到的文字没有带具体错误）：展开一条看是不是瓦片请求失败，再和 Cesium 比
 - MapLibre 6.12 地球投影下中心不变的 `flyTo` 算出 NaN，地图就坏了（`acos` 没有截断）：`map-core/maplibre/globe-fly.ts` 规避着，可以给上游提 issue，上游修好后去掉（[map-core](modules/map-core.md)"MapLibre 6 的实测行为"）
 - AI 对话：MVT 结果、点击结果要素的弹窗、历史按内容搜索、对话随页面缓存、结果区的联动，见 [ai-chat](modules/ai-chat.md)"待办"
 - 数据查询：高级查询的导出；高级查询本身暂时隐藏（ADR 0119）

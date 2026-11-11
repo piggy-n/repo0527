@@ -155,7 +155,7 @@ const keepDrawing = () => {
 
 const setCamera = (camera: BenchCamera) => view.flyTo({ ...camera, center: [camera.center[0], camera.center[1]] }, { duration: 0 });
 
-// 模型只在服务器上、不知道坐标时（center 没写）：就绪后用模型的建议中心
+// 模型只在服务器上、不知道坐标时（center 没写）：就绪后用模型建议相机的落点（模型在空中时不在它正下方）
 if (!centerText) {
   let placed = false;
   view.onSceneStatusChange?.(status => {

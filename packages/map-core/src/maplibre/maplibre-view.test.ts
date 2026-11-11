@@ -2496,7 +2496,7 @@ describe('MapLibreView 的状态转换（穷举短序列）', { timeout: 20_000 
 // 三维渲染器：拾取总打到模型，投影总在固定位置；只用来看视图在三维时把拾取、投影交给它
 function fakeRenderer(): SceneRenderer {
   const emitter = createNanoEvents<SceneRendererEvents>();
-  const sphere: TilesetSphere = { center: [118.8, 32.05], radius: 50 };
+  const sphere: TilesetSphere = { center: [118.8, 32.05], height: 0, radius: 50 };
   return {
     attach: () => undefined,
     detach: () => undefined,

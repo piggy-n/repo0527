@@ -673,9 +673,9 @@ export class CesiumScene implements SceneLike {
 
   // 让整个包围球进入画布的相机：竖直方向放下球的直径，和旧项目的 flyToBoundingSphere 一样斜着看
   #cameraFor(sphere: BoundingSphere): CameraState {
-    const { longitude, latitude } = Cartographic.fromCartesian(sphere.center);
+    const { longitude, latitude, height } = Cartographic.fromCartesian(sphere.center);
     const center: LngLat = [CesiumMath.toDegrees(longitude), CesiumMath.toDegrees(latitude)];
-    return tilesetCamera({ center, radius: sphere.radius }, this.size().height);
+    return tilesetCamera({ center, height, radius: sphere.radius }, this.size().height);
   }
 
   #hit(surface: 'model' | 'ellipsoid', world: Cartesian3): PickResult {

@@ -56,8 +56,8 @@ class FakeSceneMap implements SceneMap {
   }
 }
 
-const SPHERE: TilesetSphere = { center: [120.66, 31.31], radius: 40 };
-const SPLAT_SPHERE: TilesetSphere = { center: [117.06, 34.27], radius: 120 };
+const SPHERE: TilesetSphere = { center: [120.66, 31.31], height: 0, radius: 40 };
+const SPLAT_SPHERE: TilesetSphere = { center: [117.06, 34.27], height: 0, radius: 120 };
 
 class FakeRenderer implements SceneRenderer {
   readonly calls: string[] = [];

@@ -14,7 +14,7 @@ const PITCHES = [
   { pitch: 55, label: '倾斜' }
 ] as const;
 
-/** 诊断的固定序列：对着瓦片集的中心、正北朝上，级别 15、16、16.5、17、18 各俯视、倾斜一次，共 10 个姿态 */
+/** 诊断的固定序列：对着瓦片集建议相机的落点、正北朝上，级别 15、16、16.5、17、18 各俯视、倾斜一次，共 10 个姿态 */
 export function probePoses(center: readonly [number, number]): ProbePose[] {
   return ZOOMS.flatMap(zoom =>
     PITCHES.map(({ pitch, label }) => ({

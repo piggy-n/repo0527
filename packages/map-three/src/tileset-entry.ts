@@ -260,7 +260,8 @@ export class TilesetEntry implements Disposable {
         this.#ecefSphere = sphere;
         this.#placeRoot();
         this.#placeClip();
-        resolve({ center: this.#frame.anchor, radius: sphere.radius });
+        const { x, y, z } = sphere.center;
+        resolve({ center: this.#frame.anchor, height: fromEcef([x, y, z])[2], radius: sphere.radius });
       };
       const onError = ({ tile, error }: { tile: unknown; error: Error }) => {
         if (tile === null) {
