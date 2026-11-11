@@ -6,7 +6,8 @@ export const HELP = `LCC2 的配准：算出清单里 splat 模型的 placement�
 
 用法：pnpm --filter yzt lcc2:register <索引> [选项]
 
-  <索引>                 .lcc2 索引的路径；相对路径从 local/3dt/ 下找（worktree 用 YZT_LOCAL_DIR 指回主目录），
+  <索引>                 .lcc2 索引的路径或完整的 http(s) 地址；相对路径从 local/3dt/ 下找（worktree 用 YZT_LOCAL_DIR 指回主目录），
+                         设了环境变量 YZT_3DT_PROXY 时从 <它>/3dt/ 读，中文照写，工具会编码；
                          同级要有 info/poses.json（扫描轨迹）和索引 root.meshFiles 列的碰撞网格（data/mesh/*.ply）
   --shift <东,北,上>     人工修正（米），加在拟合的结果上，移动泼溅和网格；轨迹核对算上它
   --yaw <度>             人工的偏航（度），绕局部系原点逆时针转；拟合在转过的轨迹上求平移，轨迹核对算上它

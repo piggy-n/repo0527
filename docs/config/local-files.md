@@ -47,11 +47,13 @@ pnpm --filter yzt dev
 本机没有某个模型的数据（JKQ、JKQ2 只在服务器上）时，环境变量 `YZT_3DT_PROXY` 让开发服务器把 `/3dt/` 整个代理到那台服务器，清单和模型都从它取，`local/3dt/` 这时不再映射。它也只从进程的环境变量读（PowerShell）：
 
 ```powershell
-$env:YZT_3DT_PROXY = 'http://192.168.1.180'
+$env:YZT_3DT_PROXY = 'http://192.168.1.180:5173'
 pnpm --filter yzt dev:intranet
 ```
 
-用途是在有显卡的机器上跑瓦片集的诊断页 `/dev/tileset-probe`（[modules/map-cesium.md](../modules/map-cesium.md)"诊断读数"）。
+测试服务器上提供 `/opt/front/3dt/` 的 nginx 在 5173 端口（`/etc/nginx/nginx.conf`，2026-11-11 确认）；80 端口是 nginx 的默认页，`:18010` 是后端，都没有 `/3dt/`。服务器的 `/3dt/manifest.json` 来自它的 `dist/`，要发布前端才更新，所以新加进清单的模型在发布之前看不到：页面要先看时，只替换清单这一个响应。
+
+用途是在有显卡的机器上跑瓦片集的诊断页 `/dev/tileset-probe`（[modules/map-cesium.md](../modules/map-cesium.md)"诊断读数"）。配准工具 `lcc2:register` 用同一个变量，同一个相对路径改从 `<它>/3dt/` 读（[commands.md](../commands.md)）。
 
 ## 开发服务器
 

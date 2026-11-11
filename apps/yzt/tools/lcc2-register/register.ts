@@ -14,7 +14,7 @@ import {
 import { parsePly } from './ply.ts';
 import { gridProjection } from './projection.ts';
 
-// 配准的计算（ADR 0149 第 4 节），不读文件、不打印：cli.ts 读好文件交进来，按结果打印
+// 配准的计算（ADR 0149 第 4 节），不读文件、不打印：source.ts 读文件，cli.ts 交进来、按结果打印
 
 /** 核对和打分时轨迹的取样间隔（米） */
 export const SAMPLE_SPACING = 0.5;
@@ -34,7 +34,9 @@ export interface RegisterInput {
   /** 扫描轨迹，LCC2 局部系 */
   readonly trajectory: readonly Vec3[];
   /** 碰撞网格：文件名（报错时用）和内容；可以边读边交，读完的不留在内存里 */
-  readonly meshes: Iterable<{ readonly name: string; readonly bytes: Uint8Array }>;
+  readonly meshes:
+    | Iterable<{ readonly name: string; readonly bytes: Uint8Array }>
+    | AsyncIterable<{ readonly name: string; readonly bytes: Uint8Array }>;
 }
 
 export interface FitReport {
@@ -65,10 +67,10 @@ export interface Registration {
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-export function register(input: RegisterInput, options: RegisterOptions): Registration {
+export async function register(input: RegisterInput, options: RegisterOptions): Promise<Registration> {
   const builder = createFloorGridBuilder();
   let meshCount = 0;
-  for (const { name, bytes } of input.meshes) {
+  for await (const { name, bytes } of input.meshes) {
     try {
       builder.add(parsePly(bytes));
     } catch (error) {
