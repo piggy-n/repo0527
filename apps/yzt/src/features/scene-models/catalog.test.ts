@@ -107,7 +107,12 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
       ['xz-gc', '徐州市'],
       ['wx-jkq', '无锡市'],
       ['wx-jkq2', '无锡市'],
-      ['xz-cws1', '徐州市']
+      ['xz-cws1', '徐州市'],
+      ['xz-cws2', '徐州市'],
+      ['xz-cws3', '徐州市'],
+      ['xz-tls1', '徐州市'],
+      ['xz-tsm', '徐州市'],
+      ['xz-gshm', '徐州市']
     ]);
     const urls = models.flatMap(({ effects, splat }) => [...effects.map(({ url }) => url), ...(splat ? [splat.url] : [])]);
     expect(urls.every(url => url.startsWith('https://maps.test/yzt/3dt/'))).toBe(true);
@@ -119,6 +124,23 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
     expect(lengths).toStrictEqual([125, 133, 58]);
     // 屏幕误差上限统一用引擎的默认值 8，清单只写例外（docs/modules/map-cesium.md）
     expect(models.every(({ maximumScreenSpaceError }) => maximumScreenSpaceError === undefined)).toBe(true);
+  });
+});
+
+describe('入库的清单里的高斯泼溅', () => {
+  it('索引的地址按段编码，目录和文件名都对应模型的名称', () => {
+    const { models } = sceneManifestSchema.parse(JSON.parse(manifestText));
+    const splats = models.flatMap(model => (model.kind === 'splat' ? [model] : []));
+
+    expect(splats.length).toBeGreaterThan(0);
+    for (const { name, lcc2 } of splats) {
+      const path = decodeURIComponent(lcc2);
+      const directory = `${name}/lcc2-sog-result/`;
+      const file = `${name}.lcc2`;
+      expect(path.slice(0, directory.length)).toBe(directory);
+      expect(path.slice(-file.length)).toBe(file);
+      expect(path.split('/').map(encodeURIComponent).join('/')).toBe(lcc2);
+    }
   });
 });
 

@@ -27,8 +27,11 @@ const TURNED_WALK = CORRIDOR_WALK.map((point): Vec3 => {
 });
 
 describe('register', () => {
-  it('偏航：轨迹相对网格转了 2° 再平移，给出这个偏航时拟合出的修正和摆放都对得上', () => {
-    const result = register({ index: INDEX, trajectory: TURNED_WALK, meshes: MESHES }, { ...DEFAULTS, yaw: TRUTH.yaw });
+  it('偏航：轨迹相对网格转了 2° 再平移，给出这个偏航时拟合出的修正和摆放都对得上', async () => {
+    const result = await register(
+      { index: INDEX, trajectory: TURNED_WALK, meshes: MESHES },
+      { ...DEFAULTS, yaw: TRUTH.yaw }
+    );
 
     expect(Math.abs(result.correction.shift[0] - TRUTH.shift[0])).toBeLessThan(0.25);
     expect(Math.abs(result.correction.shift[1] - TRUTH.shift[1])).toBeLessThan(0.25);
@@ -44,10 +47,10 @@ describe('register', () => {
     expect(result.placement.heading).toBeCloseTo(expected.heading, 4);
   });
 
-  it('偏航加人工修正：人工修正不跟着转，直接加在修正上，摆放按它往东、往北挪', () => {
+  it('偏航加人工修正：人工修正不跟着转，直接加在修正上，摆放按它往东、往北挪', async () => {
     const turned = { ...DEFAULTS, yaw: TRUTH.yaw };
-    const base = register({ index: INDEX, trajectory: TURNED_WALK, meshes: MESHES }, turned);
-    const moved = register(
+    const base = await register({ index: INDEX, trajectory: TURNED_WALK, meshes: MESHES }, turned);
+    const moved = await register(
       { index: INDEX, trajectory: TURNED_WALK, meshes: MESHES },
       { ...turned, shift: [3, -2, 0.5] }
     );
@@ -61,9 +64,9 @@ describe('register', () => {
     expect(moved.placement.height - base.placement.height).toBeCloseTo(0.5, 9);
   });
 
-  it('人工修正加在拟合的结果上，核对算上它', () => {
-    const base = register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES }, DEFAULTS);
-    const moved = register(
+  it('人工修正加在拟合的结果上，核对算上它', async () => {
+    const base = await register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES }, DEFAULTS);
+    const moved = await register(
       { index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES },
       { ...DEFAULTS, shift: [0.3, -0.2, 0.1] }
     );
@@ -73,17 +76,20 @@ describe('register', () => {
     expect(moved.check.inWindow).toBeLessThan(base.check.inWindow);
   });
 
-  it('高程基准的差只加在高度上，核对不变', () => {
-    const base = register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES }, DEFAULTS);
-    const raised = register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES }, { ...DEFAULTS, datum: 5.47 });
+  it('高程基准的差只加在高度上，核对不变', async () => {
+    const base = await register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES }, DEFAULTS);
+    const raised = await register(
+      { index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES },
+      { ...DEFAULTS, datum: 5.47 }
+    );
     expect(raised.placement.height).toBeCloseTo(base.placement.height + 5.47, 9);
     expect(raised.placement.lng).toBe(base.placement.lng);
     expect(raised.check).toEqual(base.check);
     expect(raised.failed).toBe(false);
   });
 
-  it('核对不通过时 failed 为 true', () => {
-    const result = register(
+  it('核对不通过时 failed 为 true', async () => {
+    const result = await register(
       { index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES },
       { ...DEFAULTS, shift: [0, 0, 10] }
     );
@@ -91,8 +97,8 @@ describe('register', () => {
     expect(result.failed).toBe(true);
   });
 
-  it('不拟合：只用人工修正', () => {
-    const result = register(
+  it('不拟合：只用人工修正', async () => {
+    const result = await register(
       { index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES },
       { ...DEFAULTS, fit: false, shift: [1, 2, 3] }
     );
@@ -100,11 +106,34 @@ describe('register', () => {
     expect(result.correction.shift).toEqual([1, 2, 3]);
   });
 
-  it('网格文件读不了：报错里有文件名', () => {
+  it('网格可以边读边交：和一次交完的结果一样', async () => {
+    const stream = async function* () {
+      yield* MESHES;
+    };
+    const streamed = await register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: stream() }, DEFAULTS);
+    const whole = await register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES }, DEFAULTS);
+    expect(streamed.meshCount).toBe(MESHES.length);
+    expect(streamed.placement).toEqual(whole.placement);
+  });
+
+  it('网格一个一个取：第一个解析失败时不再取下一个', async () => {
+    let pulled = 0;
+    const stream = async function* () {
+      pulled++;
+      yield { name: 'data/mesh/bad.ply', bytes: new TextEncoder().encode('hello') };
+      pulled++;
+      yield* MESHES;
+    };
+    const run = register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: stream() }, DEFAULTS);
+    await expect(run).rejects.toThrow('data/mesh/bad.ply');
+    expect(pulled).toBe(1);
+  });
+
+  it('网格文件读不了：报错里有文件名', async () => {
     const broken = [{ name: 'data/mesh/bad.ply', bytes: new TextEncoder().encode('hello') }];
-    const run = () => register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: broken }, DEFAULTS);
-    expect(run).toThrow('data/mesh/bad.ply：不是 PLY 文件');
+    const run = register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: broken }, DEFAULTS);
+    await expect(run).rejects.toThrow('data/mesh/bad.ply：不是 PLY 文件');
     // 数据的问题仍是 ToolError（命令行只打印一行），原来的错留在 cause 里
-    expect(run).toThrow(ToolError);
+    await expect(run).rejects.toThrow(ToolError);
   });
 });
