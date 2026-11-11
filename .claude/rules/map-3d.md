@@ -6,7 +6,7 @@ paths:
   - "packages/map-core/src/maplibre/roam/**"
   - "apps/yzt/src/features/scene-models/**"
   - "apps/yzt/src/pages/current-map/**"
-  - "apps/yzt/src/pages/dev/{map-3d,nav-grid}/**"
+  - "apps/yzt/src/pages/dev/{map-3d,nav-grid,splat-watch}/**"
   - "apps/yzt/public/{3dt,roam}/**"
 ---
 
