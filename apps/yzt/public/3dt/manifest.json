@@ -157,6 +157,33 @@
       "underground": false,
       "lcc2": "%E9%BE%9F%E5%B1%B1%E6%B1%89%E5%A2%93/lcc2-sog-result/20260921%E9%BE%9F%E5%B1%B1%E6%B1%89%E5%A2%93.lcc2",
       "placement": { "lng": 117.1312244, "lat": 34.3084234, "height": 38.24, "heading": -0.074 }
+    },
+    {
+      "id": "xz-tls2",
+      "name": "驮篮山2号",
+      "cityCode": "320300",
+      "kind": "splat",
+      "underground": false,
+      "lcc2": "%E9%A9%AE%E7%AF%AE%E5%B1%B12%E5%8F%B7/lcc2-sog-result/%E9%A9%AE%E7%AF%AE%E5%B1%B12%E5%8F%B7.lcc2",
+      "placement": { "lng": 117.258553, "lat": 34.3064735, "height": 49.03, "heading": -0.146 }
+    },
+    {
+      "id": "xz-ddsh",
+      "name": "东洞山楚王墓",
+      "cityCode": "320300",
+      "kind": "splat",
+      "underground": false,
+      "lcc2": "%E4%B8%9C%E6%B4%9E%E5%B1%B1%E6%A5%9A%E7%8E%8B%E5%A2%93/lcc2-sog-result/%E4%B8%9C%E6%B4%9E%E5%B1%B1%E6%A5%9A%E7%8E%8B%E5%A2%93.lcc2",
+      "placement": { "lng": 117.244982, "lat": 34.2930005, "height": 41.18, "heading": -0.138 }
+    },
+    {
+      "id": "xz-szs",
+      "name": "狮子山楚王墓",
+      "cityCode": "320300",
+      "kind": "splat",
+      "underground": false,
+      "lcc2": "%E7%8B%AE%E5%AD%90%E5%B1%B1%E6%A5%9A%E7%8E%8B%E5%A2%93/lcc2-sog-result/%E7%8B%AE%E5%AD%90%E5%B1%B1%E6%A5%9A%E7%8E%8B.lcc2",
+      "placement": { "lng": 117.2193888, "lat": 34.2458529, "height": 38.64, "heading": -0.123 }
     }
   ]
 }

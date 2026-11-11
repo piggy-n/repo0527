@@ -112,7 +112,10 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
       ['xz-cws3', '徐州市'],
       ['xz-tls1', '徐州市'],
       ['xz-tsm', '徐州市'],
-      ['xz-gshm', '徐州市']
+      ['xz-gshm', '徐州市'],
+      ['xz-tls2', '徐州市'],
+      ['xz-ddsh', '徐州市'],
+      ['xz-szs', '徐州市']
     ]);
     const urls = models.flatMap(({ effects, splat }) => [...effects.map(({ url }) => url), ...(splat ? [splat.url] : [])]);
     expect(urls.every(url => url.startsWith('https://maps.test/yzt/3dt/'))).toBe(true);
@@ -128,18 +131,17 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
 });
 
 describe('入库的清单里的高斯泼溅', () => {
-  it('索引的地址按段编码，目录和文件名都对应模型的名称', () => {
+  it('索引的地址按段编码，目录对应模型的名称', () => {
     const { models } = sceneManifestSchema.parse(JSON.parse(manifestText));
     const splats = models.flatMap(model => (model.kind === 'splat' ? [model] : []));
 
     expect(splats.length).toBeGreaterThan(0);
     for (const { name, lcc2 } of splats) {
-      const path = decodeURIComponent(lcc2);
-      const directory = `${name}/lcc2-sog-result/`;
-      const file = `${name}.lcc2`;
-      expect(path.slice(0, directory.length)).toBe(directory);
-      expect(path.slice(-file.length)).toBe(file);
-      expect(path.split('/').map(encodeURIComponent).join('/')).toBe(lcc2);
+      // 索引的文件名不一定是模型名（龟山汉墓、狮子山楚王墓），目录是
+      const [directory, result, file] = decodeURIComponent(lcc2).split('/');
+      expect([directory, result]).toStrictEqual([name, 'lcc2-sog-result']);
+      expect(file?.slice(-'.lcc2'.length)).toBe('.lcc2');
+      expect([directory, result, file].map(part => encodeURIComponent(part ?? '')).join('/')).toBe(lcc2);
     }
   });
 });
