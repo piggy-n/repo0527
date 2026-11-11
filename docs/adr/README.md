@@ -157,10 +157,11 @@
 | [0144](0144-rename-app-and-scope.md) | 应用改名 yzt，公共包前缀改为 @mx | 已接受 |
 | [0145](0145-map-tools-package.md) | 地图的通用交互拆成 @mx/map-tools | 已接受 |
 | [0146](0146-basemap-panel-and-labels.md) | 底图面板默认只有切换按钮，标注改成页面操作，浮层可以点外部和 Esc 关闭，三维画文字 | 已接受（修改 0069 第 3 节、0134 第 1 节、0080 和 0133 里三维不画 symbol，补充 0140） |
-| [0147](0147-maplibre-three-3d-engine.md) | 三维加入 MapLibre + Three.js 引擎，和 Cesium 用 .env 选择 | 已接受（修改 0002、0020 第 4 节、0024、0078 第 1 节、0079 第 2、8 节；三维里的资源图层现由开关关着；默认值由 0150 改为 `maplibre`） |
+| [0147](0147-maplibre-three-3d-engine.md) | 三维加入 MapLibre + Three.js 引擎，和 Cesium 用 .env 选择 | 已接受（修改 0002、0020 第 4 节、0024、0078 第 1 节、0079 第 2、8 节；三维里的资源图层现由开关关着；默认值由 0150 改为 `maplibre`；第 6 节的方案 B 由 0151 定为不迁移） |
 | [0148](0148-tileset-external-roots-and-empty-errors.md) | 整理 3D Tiles 索引：外部索引的根节点换到引用它的位置，没有内容的节点不改小误差 | 已接受（修改 0081 第 3 节） |
 | [0149](0149-lcc2-gaussian-splats.md) | LCC2 高斯泼溅：只在 `maplibre` 引擎下用 gaussian-splat-lite 加载，位置按数据集配准 | 已接受（补充 0081 第 1 节：清单加 `kind: 'splat'`） |
 | [0150](0150-default-3d-engine-maplibre.md) | 三维默认引擎改为 MapLibre + Three.js | 已接受（修改 0147 第 1 节的默认值、第 7 节 CI 的另一种引擎） |
+| [0151](0151-plan-b-not-migrated.md) | Cesium 下的资源图层（方案 B）不迁移，三维引擎仍按部署选择 | 已接受（修改 0147 第 6 节第 3 条、第 8 节的"之后"） |
 
 ## 模板
 
