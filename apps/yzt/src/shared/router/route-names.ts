@@ -17,7 +17,6 @@ export const RouteName = {
   devMonitoringStatistics: 'dev-monitoring-statistics',
   devIndicatorSimulation: 'dev-indicator-simulation',
   devDataQuery: 'dev-data-query',
-  devTilesetProbe: 'dev-tileset-probe',
   devSplatWatch: 'dev-splat-watch',
   currentMap: 'current-map',
   cityDashboard: 'city-dashboard',

@@ -1,8 +1,8 @@
-// 画面的清晰度（docs/modules/map-three.md"怎样判断不比 Cesium 糊"）：不数瓦片，看画面。
+// 画面的清晰度（算法和校准见 docs/modules/map-three.md）：不数瓦片，看画面。
 // 分格算对数亮度的梯度能量，再除以缩小 4 倍后的梯度能量：
-// - 取对数：光照是乘在亮度上的，取对数后变成加减，梯度里就没有了，两个引擎的明暗不同不影响
+// - 取对数：光照是乘在亮度上的，取对数后变成加减，梯度里就没有了，明暗整体变了不影响
 // - 除以缩小后的：糊是丢了高频，低频还在；同一格里自己比自己，对比度整体高低也不影响
-// - 先缩小一半：像素级的锯齿（MapLibre 没开多重采样、Cesium 开着）不算清晰。瓦片粗一级时贴图糊了不止一个像素，缩小一半后还看得出来
+// - 先缩小一半：像素级的锯齿（没开多重采样时的边缘）不算清晰。瓦片粗一级时贴图糊了不止一个像素，缩小一半后还看得出来
 
 /** 一张图：每个像素 4 个字节（RGBA） */
 export interface Pixels {
@@ -95,7 +95,7 @@ export function sharpnessGrid(pixels: Pixels, cols = GRID_COLS, rows = GRID_ROWS
 export interface SharpnessComparison {
   /** 比了多少格 */
   readonly cells: number;
-  /** C / Cesium 的比值：中位数、最差 10% 的那个值 */
+  /** subject / reference 的比值：中位数、最差 10% 的那个值 */
   readonly medianRatio: number | null;
   readonly worstDecileRatio: number | null;
   /** 每格的比值，不比的格子是 null */

@@ -3,7 +3,7 @@ import type { ProfileSummary } from './profile.ts';
 import type { BlurEvent, SharpnessComparison } from './sharpness.ts';
 import type { RunKind } from './scenes.ts';
 
-// 结果的结构：raw.json 就是它，报告和验收判断都从它算
+// 结果的结构：raw.json 就是它，报告和检查都从它算
 
 export type RunStatus = 'ok' | 'timeout' | 'invalid' | 'failed';
 
@@ -41,7 +41,7 @@ export interface RunResult {
   notes: string[];
   error?: string;
   durationS?: number;
-  setup?: PageSetup & { readonly engine: string; readonly config: Readonly<Record<string, unknown>> };
+  setup?: PageSetup & { readonly config: Readonly<Record<string, unknown>> };
   load?: {
     readonly stable: boolean;
     /** 从开始加载模型算 */
@@ -81,16 +81,14 @@ export interface QualityResult {
   };
 }
 
-/** 一个场景的截图对比（MapLibre / Cesium） */
+/** 一个场景飞一圈回来的截图和飞行前的比：同一相机，引擎应该细化回原来的样子。截图的文件名在画质那一遍里 */
 export interface SceneQuality {
   readonly scene: string;
-  readonly stable: SharpnessComparison;
-  readonly afterFlight: SharpnessComparison | null;
+  /** 飞行后 / 飞行前 */
+  readonly afterFlight: SharpnessComparison;
   /** 文件名（相对结果目录） */
   readonly heatmap: string;
   readonly worstCrops: string;
-  readonly subject: string;
-  readonly reference: string;
 }
 
 export interface Environment {
@@ -130,8 +128,8 @@ export interface MeasureResults {
   readonly scenes: readonly {
     readonly id: string;
     readonly title: string;
-    readonly acceptance: boolean;
-    /** 有泼溅：比较预算，不和 Cesium 比 */
+    readonly byDefault: boolean;
+    /** 有泼溅：比较预算，不跑画质 */
     readonly splat?: boolean;
     /** 这个场景跑的方案；不写时是全部方案 */
     readonly variants?: readonly string[];
