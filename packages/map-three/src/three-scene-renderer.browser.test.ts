@@ -238,6 +238,29 @@ describe('ThreeSceneRenderer 在 MapLibre 的自写层里', { timeout: TEST_TIME
     expect(ctx.errors).toStrictEqual([]);
   });
 
+  // 垂直俯视时 MapLibre 的远裁剪面只比地面低 1%（这块画布 z18 不到 2 米），不能把地下的模型裁掉
+  it('垂直俯视时，地面以下的模型照样画出、拾取得到', async () => {
+    const ctx = await setup({ center: MODEL_AT, zoom: 18, bearing: 0, pitch: 0 });
+    const glb = await boxGlb(5);
+    onTestFinished(serveFixtures({ '/box/tileset.json': boxTileset(MODEL_AT, 5, 'box.glb', -30), '/box/box.glb': glb }));
+    ctx.session.scene.set({
+      tilesets: [{ id: 'box', url: `${FIXTURE_ORIGIN}/box/tileset.json`, show: true, lighting: 'sun', attempt: 0 }],
+      underground: null
+    });
+    const center = { x: WIDTH / 2, y: HEIGHT / 2 };
+
+    await expect.poll(() => isModelRed(pixel(ctx.canvas, center)), { timeout: WAIT_TIMEOUT }).toBe(true);
+
+    const hit = ctx.view.pick(center);
+    if (hit.kind !== 'hit') {
+      throw new Error('画布中心没有拾取到东西');
+    }
+    expect(hit.surface).toBe('model');
+    // 边长 10 米，底面在 -30 米：看到的是 -20 米的顶面
+    expect(hit.height).toBeCloseTo(-20, 0);
+    expect(ctx.errors).toStrictEqual([]);
+  });
+
   it.each([
     ['地球（z10.5）', 10.5, 3000],
     ['地球投影的过渡段（z11.6）', 11.6, 1200]

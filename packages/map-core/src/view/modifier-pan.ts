@@ -58,7 +58,8 @@ export class ModifierPan implements Disposable {
     // 不移动鼠标时也要知道修饰键的变化；点/框选不抢焦点，只能在文档上监听
     document.addEventListener('keydown', this.#onKey, listening);
     document.addEventListener('keyup', this.#onKey, listening);
-    document.defaultView?.addEventListener('blur', this.#onBlur, listening);
+    // 不用捕获：捕获阶段窗口也收到页面里元素的 blur（按下画布时焦点从工具栏按钮移走），那不是窗口失焦
+    document.defaultView?.addEventListener('blur', this.#onBlur, { signal: this.#listeners.signal });
   }
 
   /** 应当显示的光标：临时拖动的手型，或者工具声明的光标 */

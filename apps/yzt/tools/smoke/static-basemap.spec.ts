@@ -1,5 +1,12 @@
+import { fileURLToPath } from 'node:url';
 import type { Locator, Page } from 'playwright/test';
+import { loadEnv } from 'vite';
 import { expect, test } from './fixtures.ts';
+
+// 三维的画布按构建用的引擎取（ADR 0147）：maplibre 二三维共用一块画布
+const appRoot = fileURLToPath(new URL('../..', import.meta.url));
+const SCENE_CANVAS =
+  loadEnv('intranet', appRoot, 'VITE_').VITE_MAP_3D_ENGINE === 'maplibre' ? '.maplibregl-canvas' : '.cesium-widget canvas';
 
 // 静态底图陆地的颜色（src/shared/map/basemap/static-palette.ts）；冒烟不导入应用源码，这里按值比较。
 // 四种都算上，分色开关打开时不用改这里
@@ -116,7 +123,7 @@ test('静态底图：内网默认选中，二三维都画得出来，能一键�
   await measured(page, 'switch-to-3d:settled', 60_000);
   await expect(page.locator('[data-map-status]')).toHaveCount(0);
   await expect(card).toHaveAttribute('aria-label', '底图：静态底图');
-  const globe = page.locator('.cesium-widget canvas').first();
+  const globe = page.locator(SCENE_CANVAS).first();
   await expect
     .poll(() => landShare(page, globe), { message: '三维画出陆地的面', timeout: 60_000 })
     .toBeGreaterThan(MIN_LAND_SHARE);
@@ -126,7 +133,7 @@ test('静态底图：内网默认选中，二三维都画得出来，能一键�
   expect(requested.filter(path => path.includes('/glyphs/')), '不请求字形').toEqual([]);
 });
 
-// 地名默认关闭，在页面上打开（ADR 0146）；二维 MapLibre 用本地字体画，三维 Cesium 用画布写字
+// 地名默认关闭，在页面上打开（ADR 0146）；MapLibre 用本地字体画，三维是 Cesium 时用画布写字
 test('静态底图的标注：默认关闭、不下载，打开后二三维都画出地名，不请求字形', async ({ page }) => {
   test.setTimeout(180_000);
   const requested: string[] = [];
@@ -158,7 +165,7 @@ test('静态底图的标注：默认关闭、不下载，打开后二三维都�
   await page.getByRole('button', { name: '三维', exact: true }).click();
   await measured(page, 'switch-to-3d:settled', 60_000);
   await expect(page.locator('[data-map-status]')).toHaveCount(0);
-  const globe = page.locator('.cesium-widget canvas').first();
+  const globe = page.locator(SCENE_CANVAS).first();
   // 先等三维画稳：记下有地名时的比例，关掉后比较差值
   await expect(globe).toBeVisible();
   await expect.poll(() => landShare(page, globe), { timeout: 60_000 }).toBeGreaterThan(MIN_LAND_SHARE);

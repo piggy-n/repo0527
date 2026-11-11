@@ -51,13 +51,13 @@ export function boxGlb(half: number): Promise<ArrayBuffer> {
  * 立方体放在 at 的地面上的瓦片集；content 是相对地址。根节点只分组、下面一个带内容的叶节点，和真实数据一样
  * （只有一个叶节点时 prepareTileset 把整个瓦片集的误差整理成 0）
  */
-export function boxTileset(at: LngLat, half: number, content = 'box.glb'): unknown {
+export function boxTileset(at: LngLat, half: number, content = 'box.glb', height = 0): unknown {
   const boundingVolume = { sphere: [0, 0, half, half * 1.8] };
   return {
     asset: { version: '1.1' },
     geometricError: half * 4,
     root: {
-      transform: enuToEcef(at),
+      transform: enuToEcef(at, height),
       boundingVolume,
       geometricError: half * 4,
       refine: 'ADD',
