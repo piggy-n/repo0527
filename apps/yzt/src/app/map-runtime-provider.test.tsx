@@ -12,16 +12,15 @@ import { defineComponent, inject } from 'vue';
 import { reportMapError } from '@/shared/map/backend-request';
 import { required } from '@/shared/testing/required';
 import { withRuntimeLoader } from './map-runtime-provider';
-import { SCENE_OPTIONS, type SceneOptions } from '@/shared/config/scene-options';
 
 // 注入给页面的三维引擎
-function injectedEngine(options?: SceneOptions): SceneEngine {
+function injectedEngine(): SceneEngine {
   const received: { engine?: SceneEngine | null } = {};
   const Page = defineComponent(() => {
     received.engine = inject(MAP_SCENE_ENGINE, null);
     return () => null;
   });
-  mount(withRuntimeLoader(Page, vi.fn<MapRuntimePreloader>(), options));
+  mount(withRuntimeLoader(Page, vi.fn<MapRuntimePreloader>()));
   return required(received.engine, '页面拿到的三维引擎');
 }
 
@@ -47,19 +46,10 @@ describe('withRuntimeLoader', () => {
     expect(wrapper.text()).toBe('320100');
   });
 
-  it('三维的资源图层开关开着时注入完整的引擎描述，页面只拿到描述（ADR 0147 第 1 节）', () => {
-    expect(injectedEngine({ resourceLayers: true })).toBe(MAPLIBRE_ENGINE);
-  });
-
-  it('三维的资源图层开关关着时，三维里不画样式图层、不识别，照常加载 map-three、显示高斯泼溅', () => {
-    const engine = injectedEngine({ resourceLayers: false });
+  it('注入的三维引擎照常加载 map-three；三维里不画样式图层、不识别（等页面重新设计），高斯泼溅照常', () => {
+    const engine = injectedEngine();
 
     expect(engine.loadRenderer).toBe(MAPLIBRE_ENGINE.loadRenderer);
     expect(engine.capabilities).toStrictEqual({ styleLayers: false, identify: false, splats: true });
-  });
-
-  it('不传开关时按 SCENE_OPTIONS：默认关着，三维里不显示资源图层（用户 2026-11-09 决定）', () => {
-    expect(SCENE_OPTIONS.resourceLayers).toBe(false);
-    expect(injectedEngine().capabilities).toStrictEqual({ styleLayers: false, identify: false, splats: true });
   });
 });

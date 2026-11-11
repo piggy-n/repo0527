@@ -140,7 +140,7 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
     await expect
       .poll(() => landShare(page, flat), { message: '三维画出静态底图的陆地', timeout: 60_000 })
       .toBeGreaterThan(MIN_LAND_SHARE);
-    // 三维里暂不显示资源图层（shared/config/scene-options.ts 的开关默认关着）：图例只有说明；打开开关时改这里
+    // 三维里暂不显示资源图层（app 注入的能力，等页面重新设计，ADR 0153）：图例只有说明；放开时改这里
     const legend = page.getByRole('button', { name: '图例', exact: true });
     await legend.click();
     await expect(page.locator('[data-legend-scene-note]')).toBeVisible();
