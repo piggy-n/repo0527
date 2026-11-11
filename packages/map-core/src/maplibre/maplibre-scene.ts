@@ -53,7 +53,7 @@ const READY: SceneModuleState = Object.freeze({ kind: 'ready' });
 /**
  * MapLibre 引擎的三维内容（ADR 0147 第 2 节）：视图第一次切到三维时加载三维模块，失败时由视图的 retry 重新加载；
  * 模型层只在显示三维、样式已加载、模块已加载时挂在地图上，插在 before 图层下面（没有时在最上面）；
- * 三维内容在不显示三维时不应用，切回三维再应用（同 Cesium 暂停时的做法）
+ * 三维内容在不显示三维时不应用，切回三维再应用
  */
 export class MapLibreScene implements Disposable {
   readonly #map: SceneMap;

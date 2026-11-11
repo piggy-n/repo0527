@@ -10,7 +10,7 @@ const MIN_DIAMETER_METERS = 1;
 const SMOOTH_MS = 100;
 // 一帧走的路不到这么多米算停下了：停下的那一帧起全部请求，不等平滑的速度降下来
 const STILL_METERS = 0.001;
-// 按实测时窗口的范围（秒），和还没有实测时用的值（同 Cesium：60 帧的路）
+// 按实测时窗口的范围（秒），和还没有实测时用的值（60 帧走的路）
 const MIN_WINDOW_SECONDS = 0.2;
 const MAX_WINDOW_SECONDS = 2;
 const INITIAL_WINDOW_SECONDS = 1;

@@ -12,7 +12,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@mx/map-cesium": "workspace:*",
     "@mx/map-core": "workspace:*",
     "@mx/map-three": "workspace:*",
     "@mx/utils": "workspace:*",
@@ -27,14 +26,12 @@
     "@vitejs/plugin-vue-jsx": "catalog:",
     "@vitest/browser-playwright": "catalog:",
     "@vue/test-utils": "catalog:",
-    "cesium": "catalog:",
     "jsdom": "catalog:",
     "maplibre-gl": "catalog:",
     "playwright": "catalog:",
     "sass-embedded": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-static-copy": "catalog:",
     "vitest": "catalog:",
     "vue": "catalog:"
   }

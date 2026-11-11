@@ -2,7 +2,7 @@ import type { AnchorMatrices, SceneFrame, SceneMarker, SceneSurface } from '@mx/
 import { Color, DoubleSide, Matrix4, Mesh, PerspectiveCamera, PlaneGeometry, Scene, ShaderMaterial } from 'three';
 import type { FrameMath } from './frame';
 
-// 光环直径（米）；抬离地面一点，免得和地板的深度打架闪烁（同 map-cesium 的 scene-walk-marker）
+// 光环直径（米）；抬离地面一点，免得和地板的深度打架闪烁
 const SIZE = 1;
 const LIFT = 0.03;
 const FADE_IN = 100;
@@ -42,7 +42,7 @@ void main() {
 `;
 
 /**
- * 点击移动的落点光环（ADR 0086 第 4 节，从 map-cesium 的 WalkMarker 移植）：贴在目标地面上的一块平面，
+ * 点击移动的落点光环（ADR 0086 第 4 节）：贴在目标地面上的一块平面，
  * 做深度测试（墙、柱子挡得住），半透明不写深度，不影响拾取；局部系锚在落点
  */
 export class WalkMarker implements Disposable {

@@ -38,7 +38,7 @@ const TARGET_DISTANCE = 10;
 const TARGET_MAX_ZOOM = 23.5;
 // 抬高后视点的最低处要高出 0 米这么多
 const LIFT_MARGIN = 2;
-/** 退出时相机在模型里或地下：换到视点正上方这么高（同 Cesium 的 EXIT_HEIGHT） */
+/** 退出时相机在模型里或地下：换到视点正上方这么高 */
 export const EXIT_HEIGHT = 120;
 // 退出时的俯角上限：要看得到地面，会话的相机才有中心点
 const EXIT_MAX_PITCH = 60;
@@ -144,7 +144,7 @@ export function firstPersonCamera(
 
 /**
  * 会话的相机（ADR 0147 第 4 节，真实的高度）：中心在 0 米面上。视点在 0 米以上、视线打得到 0 米面时，
- * 中心是交点；否则（在地下、平视或往上看）退化成视点正下方、俯角 0，同 Cesium 打不到地球时的做法
+ * 中心是交点；否则（在地下、平视或往上看）退化成视点正下方、俯角 0
  */
 export function groundCamera(eye: RoamEye, viewportHeight: number): CameraState {
   const { lng, lat, height, heading, pitch } = anglesOf(eye);

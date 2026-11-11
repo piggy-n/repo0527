@@ -69,11 +69,11 @@ export interface MapLibreRoamOptions {
   readonly onStatus: (status: RoamStatus | null) => void;
 }
 
-// 抬高期间画模型之前的底色：同 Cesium 相机在地下时的背景（scene-underground 的 UNDERGROUND_BACKGROUND）
+// 抬高期间画模型之前的底色
 const BACKDROP = '#1e2226';
-// 结束漫游时飞回开始前的位置（毫秒，同 Cesium 的 BACK_FLIGHT）
+// 结束漫游时飞回开始前的位置（毫秒）
 const BACK_FLIGHT = 1200;
-// 路线进度每变这么多米报告一次（同 CesiumView）
+// 路线进度每变这么多米报告一次
 const ROAM_REPORT_STEP = 0.5;
 // 第一人称要往上看：俯仰放到 MapLibre 允许的上限
 const ROAM_MAX_PITCH = 180;
@@ -91,7 +91,7 @@ const ROAM_GESTURES = [
 type RoamGesture = (typeof ROAM_GESTURES)[number];
 const PROGRAM: CameraEventData = Object.freeze({ cause: 'program' });
 
-// 场景里正在进行的漫游：roam 是最近应用的意图；detached 是被别的定位接管、已经停下（同 CesiumView）
+// 场景里正在进行的漫游：roam 是最近应用的意图；detached 是被别的定位接管、已经停下
 type RoamEntry =
   | { readonly kind: 'route'; roam: RouteRoam; readonly path: RoutePath; detached: boolean }
   | { readonly kind: 'walk'; roam: WalkRoam; detached: boolean };
@@ -181,7 +181,7 @@ export class MapLibreRoam implements RoamHost, Disposable {
   }
 
   /**
-   * 按会话的三维内容开始、改变或结束漫游（同 CesiumView 的 #applyRoam）；back 决定结束时是否飞回。
+   * 按会话的三维内容开始、改变或结束漫游；back 决定结束时是否飞回。
    * 换了一次漫游（ID 或种类变了）时直接开始新的，已经在模型里时不重新进出
    */
   apply({ roam: wanted, underground }: SceneContent, back: boolean): void {

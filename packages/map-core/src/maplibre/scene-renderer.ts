@@ -100,7 +100,7 @@ export interface SceneRenderer extends Disposable {
   updateSplat(id: string, options: SplatOptions): void;
   removeSplat(id: string): void;
   /**
-   * 按最近一帧的相机拾取画出的模型（瓦片集和高斯泼溅），跳过半透明的表面（同 Cesium 的深度拾取，隔着玻璃点到的是后面）；
+   * 按最近一帧的相机拾取画出的模型（瓦片集和高斯泼溅），跳过半透明的表面（隔着玻璃点到的是后面）；
    * 结果是真实的高度（抬高时减回去）。没有打到、还没画过时为 null；悬停时不打高斯泼溅（ADR 0149）
    */
   pick(point: ScreenPoint, options?: PickOptions): ScenePick | null;
@@ -110,7 +110,7 @@ export interface SceneRenderer extends Disposable {
   setLift(lift: SceneLift | null): void;
   /** 瓦片集根节点包围盒最低处的真实椭球高（米）；没有这个瓦片集、根索引还没读到时为 null */
   lowestHeight(id: string): number | null;
-  /** 头灯按距离压暗远处：步行时打开（同 Cesium 的 uFog） */
+  /** 头灯按距离压暗远处：步行时打开 */
   setInteriorFog(enabled: boolean): void;
   /** 点击移动的落点光环；null 撤掉 */
   setMarker(marker: SceneMarker | null): void;

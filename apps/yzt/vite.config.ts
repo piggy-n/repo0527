@@ -13,7 +13,7 @@ import { titleOutlineConfig } from './tools/system-title/paths.ts';
 import { systemTitlePlugin } from './tools/system-title/vite-plugin.ts';
 import { thirdPartyNoticesPlugin } from './tools/third-party-notices/vite-plugin.ts';
 
-// 包的入口都是 src/index.ts，分块默认会叫 src；换成包名（如 map-cesium），产物里才认得出
+// 包的入口都是 src/index.ts，分块默认会叫 src；换成包名（如 map-three），产物里才认得出
 function chunkName({ moduleIds, name }: { moduleIds: string[]; name: string }): string {
   if (name !== 'src') {
     return name;

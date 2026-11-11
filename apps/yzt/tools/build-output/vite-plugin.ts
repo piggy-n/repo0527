@@ -2,11 +2,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadEnv, normalizePath, type Plugin, type ResolvedConfig, type Rolldown } from 'vite';
 
-// 地图引擎只能经由动态导入出现：二维的 MapLibre、三维的 Cesium（含拆出的 @cesium/* 包）和 Three.js（ADR 0147 第 7 节）
+// 地图引擎只能经由动态导入出现：MapLibre 和三维的 Three.js（ADR 0147 第 7 节）
 const MAP_ENGINES = [
   { name: 'MapLibre', path: '/node_modules/maplibre-gl/' },
-  { name: 'Cesium', path: '/node_modules/cesium/' },
-  { name: 'Cesium', path: '/node_modules/@cesium/' },
   { name: 'Three.js', path: '/node_modules/three/' },
   { name: '3d-tiles-renderer', path: '/node_modules/3d-tiles-renderer/' }
 ];

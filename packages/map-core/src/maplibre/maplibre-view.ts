@@ -421,7 +421,7 @@ export class MapLibreView<const G extends string> implements MapView {
       this.#guard(() => this.#roam?.suspend());
     }
     this.#kind = kind;
-    // 加载失败过的不自动重新加载，等 retry（同 Cesium 的三维画布）
+    // 加载失败过的不自动重新加载，等 retry
     if (kind === '3d' && this.#scene?.module.kind === 'idle') {
       this.#scene.load();
     }
@@ -488,7 +488,7 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#guard(() => this.#roam?.resume());
   }
 
-  /** 漫游时先让它停下、不飞回（同 CesiumView 的 #detachRoam），相机交给这次定位 */
+  /** 漫游时先让它停下、不飞回，相机交给这次定位 */
   flyTo(camera: Partial<CameraState>, options: FlyToOptions = {}): void {
     const map = this.#readyMap();
     this.#roam?.detach();

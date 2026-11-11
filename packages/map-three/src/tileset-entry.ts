@@ -44,7 +44,7 @@ export interface TilesetEntryEvents {
 export interface TilesetEntryOptions {
   readonly prepared: PreparedTileset;
   readonly options: TilesetOptions;
-  /** 所有瓦片集共用的缓存（预算同 Cesium） */
+  /** 所有瓦片集共用的缓存 */
   readonly cache: LRUCache;
   readonly math: FrameMath;
   /** 渲染器共用的头灯远处压暗开关 */
@@ -128,7 +128,7 @@ export interface TilesetHit {
   readonly lngLatHeight: [number, number, number];
 }
 
-// 屏幕误差上限的默认值，和 Cesium 相同（map-cesium 的 DEFAULT_SCREEN_SPACE_ERROR）；清单可以按模型改
+// 屏幕误差上限的默认值；清单可以按模型改（docs/config/3dt-manifest.md）
 const ERROR_TARGET = 8;
 // 一层完成这么多块瓦片才估计这一层的大小：一块特别大的瓦片不能让需求一下子超过上限，放宽了就收不回来
 const MIN_SIZE_SAMPLES = 3;
@@ -141,7 +141,7 @@ function hitMaterial({ object, face }: Intersection): Material | undefined {
   return Array.isArray(material) ? material[face?.materialIndex ?? 0] : material;
 }
 
-// 半透明的表面不算：同 Cesium 的深度拾取（深度只记录不透明物体），隔着玻璃点到的是后面
+// 半透明的表面不算：隔着玻璃点到的是后面
 const opaque = (hit: Intersection) => hitMaterial(hit)?.transparent !== true;
 
 /**

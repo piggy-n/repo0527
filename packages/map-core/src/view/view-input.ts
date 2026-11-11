@@ -7,7 +7,7 @@ export interface ScreenPoint {
 /** [经度, 纬度]，单位是度 */
 export type LngLat = readonly [lng: number, lat: number];
 
-/** 拾取命中的表面：二维总是 map（地图平面）；三维按模型、地形、椭球的顺序由 map-cesium 决定（ADR 0024 第 2 条） */
+/** 拾取命中的表面（ADR 0024 第 2 条）：打到三维模型是 model，否则是地图表面 map；ellipsoid、terrain 现在没有视图给出 */
 export type PickSurface = 'map' | 'ellipsoid' | 'terrain' | 'model';
 
 /** 拾取的结果；什么都没打到时是 miss，不悄悄退回到别的表面。高度的单位是米，以椭球面为基准 */

@@ -19,7 +19,7 @@ export interface TilesetOptions {
 }
 
 /**
- * 承载瓦片集的引擎（ADR 0147 第 3 节）：Cesium 的场景、MapLibre 引擎的 Three 渲染器都实现它。
+ * 承载瓦片集的引擎（ADR 0147 第 3 节）：MapLibre 引擎的三维内容（MapLibreScene，交给 Three 渲染器）实现它。
  * 瓦片失败、首批瓦片到位由引擎各自报告，视图转给 SceneTilesetSync 的 failed、initial
  */
 export interface TilesetHost {

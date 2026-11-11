@@ -1,4 +1,4 @@
-// 3D Tiles 索引的整理（ADR 0081 第 3 节，外部索引和误差的规则见 ADR 0148）：不依赖 Cesium
+// 3D Tiles 索引的整理（ADR 0081 第 3 节，外部索引和误差的规则见 ADR 0148）：不依赖渲染引擎
 import { isMatrix, multiply } from './nav/nav-frame';
 
 /** 下载一个 JSON；signal 中止时以它的原因结束 */
@@ -13,7 +13,7 @@ export interface PreparedTile {
   readonly children?: readonly PreparedTile[];
 }
 
-/** 整理后的索引：可以直接交给 Cesium */
+/** 整理后的索引：可以直接交给渲染器 */
 export interface PreparedTileset {
   readonly [key: string]: unknown;
   readonly geometricError: number;
