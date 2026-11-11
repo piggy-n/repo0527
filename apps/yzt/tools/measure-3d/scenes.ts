@@ -10,6 +10,12 @@ export interface SceneModel {
   readonly path: string;
 }
 
+/** 资源图层（方案 B 的 PoC）：勾选哪些资源（代码见 src/pages/dev/plan-b/slice.ts），重图层要不要最小级别 */
+export interface SceneResources {
+  readonly codes: readonly string[];
+  readonly unrestricted?: boolean;
+}
+
 export interface Scene {
   readonly id: string;
   readonly title: string;
@@ -21,6 +27,8 @@ export interface Scene {
   readonly splats: readonly string[];
   /** 没有中心时用模型的建议相机（模型只在服务器上、不知道坐标时） */
   readonly camera: Omit<BenchCamera, 'center'> & { readonly center: readonly [number, number] | null };
+  /** 有它的场景没有模型：比较 Cesium 的 Worker 栅格化（方案 B）和 MapLibre 原生绘制 */
+  readonly resources?: SceneResources;
 }
 
 /** 方案：Cesium，或者 MapLibre 引擎的某个上传预算、泼溅预算 */
@@ -82,6 +90,33 @@ function splat(
   return { id, title, acceptance: false, models, splats, camera: { center, zoom, pitch, bearing: 20 } };
 }
 
+const PROFILED_RESOURCE_SCENE = 'res-all-z10';
+const NANJING = [118.8, 32.05] as const;
+const HAIAN = [120.41, 32.6] as const;
+const WATER = 'csxhjctb_hyda';
+const ALL_RESOURCES = ['bgdc_xzqjx', 'bgdc_dltb', 'bgdc_yjjbnttb', WATER];
+
+// 资源图层（方案 B 的 PoC）：瓦片经本地服务转到后端，要能访问后端
+function resources(
+  id: string,
+  title: string,
+  codes: readonly string[],
+  center: readonly [number, number],
+  zoom: number,
+  pitch = 0,
+  unrestricted = false
+): Scene {
+  return {
+    id,
+    title,
+    acceptance: false,
+    models: [],
+    splats: [],
+    camera: { center, zoom, pitch, bearing: pitch === 0 ? 0 : 20 },
+    resources: { codes, ...(unrestricted ? { unrestricted } : {}) }
+  };
+}
+
 export const SCENES: readonly Scene[] = [
   aerial('oblique-z17', '倾斜摄影 z17', [OBLIQUE], OBLIQUE_CENTER, 17, true),
   aerial('oblique-z19', '倾斜摄影 z19', [OBLIQUE], OBLIQUE_CENTER, 19, true),
@@ -97,7 +132,14 @@ export const SCENES: readonly Scene[] = [
   splat('splat-pc-z18', '彭城广场 LCC2 z18', [PENGCHENG_SPLAT], [], OBLIQUE_CENTER, 18),
   splat('splat-pc-z19', '彭城广场 LCC2 z19 近看', [PENGCHENG_SPLAT], [], OBLIQUE_CENTER, 19, 65),
   splat('splat-pc-xz-z18', '彭城广场 LCC2 加倾斜摄影 z18', [PENGCHENG_SPLAT], [OBLIQUE], OBLIQUE_CENTER, 18),
-  splat('splat-cws1-z18', '楚王山1号 z18', [CHUWANGSHAN_SPLAT], [], null, 18)
+  splat('splat-cws1-z18', '楚王山1号 z18', [CHUWANGSHAN_SPLAT], [], null, 18),
+  resources('res-water-z10', '水域面层 南京 z10', [WATER], NANJING, 10),
+  resources('res-all-z10', '四个资源 南京 z10', ALL_RESOURCES, NANJING, 10),
+  resources('res-all-z12-tilt', '四个资源 南京 z12 倾斜 60°', ALL_RESOURCES, NANJING, 12, 60),
+  resources('res-landuse-z14', '地类图斑加界线 南京 z14', ['bgdc_xzqjx', 'bgdc_dltb'], NANJING, 14.2),
+  resources('res-farmland-z12', '基本农田（花纹）加水域 海安 z12', ['bgdc_yjjbnttb', WATER], HAIAN, 12.2),
+  // 压力场景：水域不设最小级别，Cesium 连祖先级别一起请求（z8 一张 18.8 MB）；要写出 stress 才选得中
+  resources('res-stress-water-z10', '水域面层不设最小级别 南京 z10', [WATER], NANJING, 10, 0, true)
 ];
 
 /** 泼溅场景的方案：MapLibre 引擎，每个总预算一个 */
@@ -111,8 +153,13 @@ export function splatVariants(budgets: readonly number[]): Variant[] {
 }
 
 /** 这个场景跑哪些方案：有泼溅的比较预算（Cesium 画不了泼溅），其余比较两种引擎 */
-export const variantsOf = (scene: Scene, list: readonly Variant[], splatList: readonly Variant[]): readonly Variant[] =>
-  scene.splats.length > 0 ? splatList : list;
+export const variantsOf = (scene: Scene, list: readonly Variant[], splatList: readonly Variant[]): readonly Variant[] => {
+  if (scene.resources) {
+    // 资源图层只比两种引擎，上传预算这些对照和它无关
+    return list.filter(variant => variant.id === 'cesium' || variant.id === 'maplibre');
+  }
+  return scene.splats.length > 0 ? splatList : list;
+};
 
 export function variants(uploadMBs: readonly (number | null)[], cullWindows: readonly (number | 'auto' | null)[] = []): Variant[] {
   return [
@@ -162,7 +209,9 @@ export function buildRuns(scenes: readonly Scene[], list: readonly Variant[], re
       if (!splatScene && (variant.id === 'cesium' || variant.id === 'maplibre')) {
         runs.push({ id: `${scene.id}/${variant.id}/quality`, scene, variant, kind: 'quality', repeat: 0 });
       }
-      if (splatScene || variant.id === 'cesium' || variant.id === 'maplibre') {
+      // 资源图层的场景只给一个做 CPU 采样：主线程的开销看长任务和每帧 JS 就够，全做要多跑十遍
+      const profiled = scene.resources ? scene.id === PROFILED_RESOURCE_SCENE : true;
+      if (profiled && (splatScene || variant.id === 'cesium' || variant.id === 'maplibre')) {
         runs.push({ id: `${scene.id}/${variant.id}/profile`, scene, variant, kind: 'profile', repeat: 0 });
       }
     }
@@ -195,6 +244,13 @@ export function selectScenes(only: readonly string[]): Scene[] {
     return SCENES.filter(scene => scene.acceptance);
   }
   return SCENES.filter(scene =>
-    only.some(pattern => scene.id.includes(pattern) && (scene.splats.length === 0 || pattern.includes('splat')))
+    only.some(
+      pattern =>
+        scene.id.includes(pattern) &&
+        (scene.splats.length === 0 || pattern.includes('splat')) &&
+        // 资源图层的场景要写出 res 才选得中（--only z10 这样的写法不带上它们），压力场景还要写出 stress
+        (!scene.resources || pattern.includes('res')) &&
+        (!scene.resources?.unrestricted || pattern.includes('stress'))
+    )
   );
 }

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { createServer } from 'node:net';
 import { cpus, release, totalmem, type, version } from 'node:os';
 import { join, resolve } from 'node:path';
-import { build } from 'vite';
+import { build, loadEnv } from 'vite';
 import { localPath } from '../local-files/paths.ts';
 import { INTEGRATED_RENDERER, launchBrowser, listAdapters, probeRenderer, SOFTWARE_RENDERER } from './browser.ts';
 import { HELP, type Options, parseOptions } from './options.ts';
@@ -25,6 +25,8 @@ const repoRoot = resolve(appRoot, '../..');
 const redact = createRedactor(repoRoot);
 const modelsDir = localPath('3dt');
 const modelsProxy = process.env.YZT_3DT_PROXY || null;
+// 资源图层的矢量瓦片从哪个后端取：同开发服务器，环境变量优先，其次 .env 的 PROXY_TARGET
+const backendProxy = process.env.PROXY_TARGET || loadEnv('production', appRoot, 'PROXY_').PROXY_TARGET || null;
 
 const stripImages = ({ cells, medianRatio, worstDecileRatio, ratios }: SharpnessComparison): SharpnessComparison => ({
   cells,
@@ -57,7 +59,8 @@ const list = variants(options.uploadMBs, options.cullWindows);
 const splatList = splatVariants(options.splatBudgets);
 if (options.list) {
   for (const scene of SCENES) {
-    const note = scene.acceptance ? '（验收）' : scene.splats.length > 0 ? '（高斯泼溅，比较 --splat-budget）' : '';
+    const resourceNote = scene.resources ? '（资源图层，方案 B 的 PoC，要写出 res 才选得中）' : '';
+    const note = scene.acceptance ? '（验收）' : scene.splats.length > 0 ? '（高斯泼溅，比较 --splat-budget）' : resourceNote;
     console.log(`${scene.id.padEnd(22)} ${scene.title}${note}`);
   }
   process.exit(0);
@@ -132,6 +135,21 @@ async function checkFiles(splats: ReadonlyMap<string, SplatModel>): Promise<void
       problems.push(
         `模型目录里缺文件：${missing.join('、')}。\n    模型目录：${redact(modelsDir)}\n    把模型放到 local/3dt，或设置 YZT_LOCAL_DIR；模型在服务器上时设置 YZT_3DT_PROXY。`
       );
+    }
+  }
+  if (scenes.some(scene => scene.resources)) {
+    if (!backendProxy) {
+      problems.push('资源图层的场景要后端的矢量瓦片：设置环境变量 PROXY_TARGET，或在 apps/yzt/.env 里写 PROXY_TARGET。');
+    } else {
+      try {
+        const response = await fetch(new URL('/api/tiles/csxhjctb_hyda_2024/10/850/415.pbf', backendProxy), { signal: AbortSignal.timeout(20000) });
+        await response.body?.cancel();
+        if (!response.ok) {
+          problems.push(`后端的矢量瓦片取不到：HTTP ${response.status}（${backendProxy}）。`);
+        }
+      } catch (error) {
+        problems.push(`后端访问不了：${backendProxy}（${String(error)}）。资源图层的场景要在能访问后端的网络里跑。`);
+      }
     }
   }
   if (!(await portFree(options.port))) {
@@ -271,6 +289,10 @@ function runSummary(result: MeasureResults['runs'][number]): string {
     return `失败：${result.error}（已记录，继续下一遍）`;
   }
   const loaded = `${result.status}，到稳定 ${((result.load?.ttStableMs ?? 0) / 1000).toFixed(1)} 秒`;
+  const tiles = result.resources?.tilesAtStable;
+  if (tiles) {
+    return `${loaded}，瓦片请求 ${tiles.requests} 张、${(tiles.bytes / 1048576).toFixed(1)} MB`;
+  }
   const splats = result.atStable?.splats;
   if (splats) {
     return `${loaded}，可见的高斯 ${Math.round(splats.visible / 1e4)} 万 / 预算 ${Math.round(splats.budget / 1e4)} 万`;
@@ -336,6 +358,7 @@ async function main(): Promise<void> {
       title: scene.title,
       acceptance: scene.acceptance,
       splat: scene.splats.length > 0,
+      ...(scene.resources ? { resources: true } : {}),
       variants: variantsOf(scene, list, splatList).map(variant => variant.id)
     })),
     variants: used.map(({ id, label }) => ({ id, label })),
@@ -362,7 +385,8 @@ async function main(): Promise<void> {
       '/cesium/': join(appRoot, 'node_modules/cesium/Build/Cesium'),
       '/': PAGE_OUT_DIR
     },
-    modelsProxy
+    modelsProxy,
+    backendProxy
   });
 
   let stopping = false;
@@ -391,7 +415,9 @@ async function main(): Promise<void> {
         baseUrl: server.url,
         outDir,
         redact,
-        progress: phase => console.log(`    ${phase}`)
+        progress: phase => console.log(`    ${phase}`),
+        tiles: () => server.tiles(),
+        resetTiles: () => server.resetTiles()
       });
       results.runs.push(result);
       save();

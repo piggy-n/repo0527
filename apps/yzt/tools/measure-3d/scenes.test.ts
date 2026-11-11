@@ -153,7 +153,28 @@ describe('aerialFlight', () => {
     expect(frames.every(frame => frame.pitch >= 0)).toBe(true);
   });
 
-  it('所有场景都有模型：瓦片集或泼溅', () => {
-    expect(SCENES.every(scene => scene.models.length + scene.splats.length > 0)).toBe(true);
+  it('所有场景都有内容：瓦片集、泼溅，或者资源图层（方案 B 的 PoC）', () => {
+    expect(
+      SCENES.every(scene => scene.models.length + scene.splats.length + (scene.resources?.codes.length ?? 0) > 0)
+    ).toBe(true);
+  });
+
+  it('资源图层的场景要写出 res 才选得中，压力场景还要写出 stress；只比两种引擎，只有一个场景做 CPU 采样', () => {
+    expect(selectScenes([]).some(scene => scene.resources)).toBe(false);
+    expect(selectScenes(['z10']).some(scene => scene.resources)).toBe(false);
+    expect(selectScenes(['res-']).map(scene => scene.id)).toEqual([
+      'res-water-z10',
+      'res-all-z10',
+      'res-all-z12-tilt',
+      'res-landuse-z14',
+      'res-farmland-z12'
+    ]);
+    expect(selectScenes(['res-stress']).map(scene => scene.id)).toEqual(['res-stress-water-z10']);
+    const runs = buildRuns(selectScenes(['res-']), variants([null]), 1);
+    expect(new Set(runs.map(run => run.variant.id))).toEqual(new Set(['cesium', 'maplibre']));
+    expect(runs.filter(run => run.kind === 'profile').map(run => run.id)).toEqual([
+      'res-all-z10/cesium/profile',
+      'res-all-z10/maplibre/profile'
+    ]);
   });
 });

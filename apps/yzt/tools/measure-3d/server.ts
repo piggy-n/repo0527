@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { extname, join, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import type { TileTotals } from './bench-api.ts';
 
 // 测量用的静态服务：只读，地址和磁盘路径一一对应。禁止浏览器缓存：每遍都是冷启动，换出的瓦片也要重新请求。
 // 支持 Range：泼溅库读 .sog 时先要 bytes=0-4095 再按段读，收到 200 会整个下载，更慢也更占内存（ADR 0149 第 3 节，同 nginx 的要求）
@@ -25,6 +26,39 @@ export interface Mounts {
   readonly files: Readonly<Record<string, string>>;
   /** 给了时 /3dt/ 转到这个地址（模型只在服务器上时，同应用的 YZT_3DT_PROXY） */
   readonly modelsProxy: string | null;
+  /** 给了时 /backend/ 去掉前缀转到这个地址（资源图层的矢量瓦片，同开发服务器的 PROXY_TARGET） */
+  readonly backendProxy?: string | null;
+}
+
+const BACKEND_PREFIX = '/backend';
+
+interface TileLog {
+  requests: number;
+  bytes: number;
+  failed: number;
+  levels: Record<string, { requests: number; bytes: number }>;
+}
+
+const emptyLog = (): TileLog => ({ requests: 0, bytes: 0, failed: 0, levels: {} });
+
+// 后端的瓦片：整张读完再回复，才数得出字节数；两种引擎走同一条路。禁止浏览器缓存，同模型
+async function proxyTile(target: string, path: string, res: ServerResponse, log: TileLog): Promise<void> {
+  const abort = new AbortController();
+  res.once('close', () => abort.abort());
+  const upstream = await fetch(new URL(path, target), { signal: abort.signal });
+  const body = Buffer.from(await upstream.arrayBuffer());
+  const level = /\/(\d+)\/\d+\/\d+\.pbf$/.exec(path)?.[1] ?? '?';
+  const entry = (log.levels[level] ??= { requests: 0, bytes: 0 });
+  entry.requests++;
+  entry.bytes += body.byteLength;
+  log.requests++;
+  log.bytes += body.byteLength;
+  log.failed += upstream.ok ? 0 : 1;
+  res.statusCode = upstream.status;
+  res.setHeader('Content-Type', upstream.headers.get('content-type') ?? 'application/octet-stream');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Content-Length', body.byteLength);
+  res.end(body);
 }
 
 function respond(res: ServerResponse, status: number, text: string): void {
@@ -92,7 +126,7 @@ function serveFile(path: string, req: IncomingMessage, res: ServerResponse): voi
     .pipe(res);
 }
 
-function handle({ files, modelsProxy }: Mounts, req: IncomingMessage, res: ServerResponse): void {
+function handle({ files, modelsProxy, backendProxy }: Mounts, log: TileLog, req: IncomingMessage, res: ServerResponse): void {
   let path: string;
   try {
     path = decodeURIComponent((req.url ?? '/').split('?')[0] ?? '/');
@@ -103,6 +137,17 @@ function handle({ files, modelsProxy }: Mounts, req: IncomingMessage, res: Serve
   if (modelsProxy && path.startsWith('/3dt/')) {
     proxy(modelsProxy, path, req, res).catch((error: unknown) => {
       // 已经开始发了就只能断开，断开也是告诉浏览器这个瓦片失败了
+      if (res.headersSent) {
+        res.destroy();
+      } else {
+        respond(res, 502, String(error));
+      }
+    });
+    return;
+  }
+  if (backendProxy && path.startsWith(`${BACKEND_PREFIX}/`)) {
+    proxyTile(backendProxy, path.slice(BACKEND_PREFIX.length), res, log).catch((error: unknown) => {
+      log.failed++;
       if (res.headersSent) {
         res.destroy();
       } else {
@@ -134,16 +179,24 @@ function handle({ files, modelsProxy }: Mounts, req: IncomingMessage, res: Serve
 
 export interface StaticServer {
   readonly url: string;
+  /** 经 /backend/ 的瓦片请求，从上次清零算起 */
+  tiles(): TileTotals;
+  resetTiles(): void;
   close(): Promise<void>;
 }
 
 export function startServer(port: number, mounts: Mounts): Promise<StaticServer> {
   return new Promise((resolvePromise, reject) => {
-    const server = createServer((req, res) => handle(mounts, req, res));
+    let log = emptyLog();
+    const server = createServer((req, res) => handle(mounts, log, req, res));
     server.once('error', reject);
     server.listen(port, '127.0.0.1', () => {
       resolvePromise({
         url: `http://127.0.0.1:${port}`,
+        tiles: () => structuredClone(log),
+        resetTiles: () => {
+          log = emptyLog();
+        },
         close: () =>
           new Promise(done => {
             server.closeAllConnections();

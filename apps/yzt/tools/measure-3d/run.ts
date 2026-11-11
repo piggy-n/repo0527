@@ -9,13 +9,15 @@ import type {
   LongTaskWindow,
   PageSetup,
   PhaseResult,
+  RasterStats,
   ShotCoverage,
-  StableResult
+  StableResult,
+  TileTotals
 } from './bench-api.ts';
 import { type BrowserProcesses, browserProcesses, launchBrowser, type LaunchedBrowser, type MemorySample, sampleMemory } from './browser.ts';
 import type { Options } from './options.ts';
 import { type CpuProfile, summarizeProfile } from './profile.ts';
-import type { QualityResult, RunResult, SettleResult } from './results.ts';
+import type { CpuSample, QualityResult, RunResult, SettleResult } from './results.ts';
 import { aerialFlight, type Run } from './scenes.ts';
 import type { SplatModel } from './splat-models.ts';
 import { blurEvents, type SharpnessGrid } from './sharpness.ts';
@@ -43,6 +45,9 @@ export interface RunContext {
   readonly outDir: string;
   readonly redact: (text: string) => string;
   readonly progress: (phase: string) => void;
+  /** 经本地服务转到后端的瓦片请求，累计值（资源图层的场景用） */
+  readonly tiles: () => TileTotals;
+  readonly resetTiles: () => void;
 }
 
 function pageUrl({ scene, variant }: Run, { baseUrl, options, splats }: RunContext): string {
@@ -67,6 +72,12 @@ function pageUrl({ scene, variant }: Run, { baseUrl, options, splats }: RunConte
   });
   if (center) {
     params.set('center', center.join(','));
+  }
+  if (scene.resources) {
+    params.set('resources', scene.resources.codes.join(','));
+    if (scene.resources.unrestricted) {
+      params.set('unrestricted', '1');
+    }
   }
   if (variant.uploadMB !== undefined) {
     params.set('uploadMB', variant.uploadMB === null ? 'off' : String(variant.uploadMB));
@@ -203,6 +214,11 @@ async function setModelVisible(page: Page, visible: boolean): Promise<void> {
 const screenshot = (page: Page, type: 'png' | 'jpeg' = 'png') =>
   page.screenshot({ timeout: 120000, animations: 'allow', type, ...(type === 'jpeg' ? { quality: 85 } : {}) });
 
+const cpuOf = (memory: MemorySample | null): CpuSample => ({
+  rendererS: memory?.rendererCpuS ?? null,
+  gpuProcessS: memory?.gpuProcessCpuS ?? null
+});
+
 // 采样的最大值；这次没读到时不变
 const peak = (current: number | null, value: number | null) => (value === null ? current : Math.max(current ?? 0, value));
 
@@ -253,6 +269,11 @@ async function runPerf(run: Run, ctx: RunContext, session: Session, result: RunR
     clearInterval(sampler);
   }
   const atStable = await sample(true);
+  // 资源图层的场景：到稳定时的瓦片请求、栅格化读数和进程的 CPU 时间，整遍结束时再读一次
+  const rasterStats = () => call<RasterStats | null>(page, 'window.bench.rasterStats()');
+  const resourcesAtStable = run.scene.resources
+    ? { tiles: ctx.tiles(), raster: await rasterStats(), cpu: cpuOf(atStable), loadStartedAt: await call<number>(page, 'window.bench.loadStartedAt') }
+    : null;
   await call(page, `window.benchProbe.waitBasemap(${times.basemapMs})`);
 
   ctx.progress('静止帧');
@@ -281,7 +302,19 @@ async function runPerf(run: Run, ctx: RunContext, session: Session, result: RunR
   ctx.progress('等画面恢复');
   result.recovery = await waitSettled(page, result.flightWarm.endedAt, times.settleMs, times.afterSettleMs);
   result.atRecovered = await stats(page);
-  await sample();
+  const atEnd = await sample(true);
+  if (resourcesAtStable) {
+    const raster = resourcesAtStable.raster;
+    result.resources = {
+      tilesAtStable: resourcesAtStable.tiles,
+      tilesAtEnd: ctx.tiles(),
+      rasterAtStable: raster,
+      rasterAtEnd: await rasterStats(),
+      cpuAtStable: resourcesAtStable.cpu,
+      cpuAtEnd: cpuOf(atEnd),
+      firstBitmapMs: raster?.firstBitmapAt === null || raster?.firstBitmapAt === undefined ? null : raster.firstBitmapAt - resourcesAtStable.loadStartedAt
+    };
+  }
   result.memory = {
     heapPeakMB: heapPeak,
     gpuAtStableMB: atStable && 'dedicatedMB' in atStable.gpu ? atStable.gpu.dedicatedMB : null,
@@ -390,6 +423,7 @@ export async function runOnce(run: Run, ctx: RunContext): Promise<RunResult> {
   };
   const startedAt = Date.now();
   let session: Session | null = null;
+  ctx.resetTiles();
   try {
     session = await open(result, ctx);
     const opened = session;

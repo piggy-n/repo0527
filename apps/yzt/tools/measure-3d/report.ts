@@ -1,4 +1,4 @@
-import type { BudgetReadings, SceneSample, PhaseResult, SplatReadings, TileQueues } from './bench-api.ts';
+import type { BudgetReadings, PhaseResult, SceneSample, SplatReadings, TileQueues, TileTotals } from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
 import type { MeasureResults, RunResult } from './results.ts';
 import {
@@ -208,6 +208,87 @@ function sceneVariants(results: MeasureResults, scene: MeasureResults['scenes'][
   return results.variants.filter(({ id }) => scene.variants?.includes(id) ?? true);
 }
 
+const MB = 1048576;
+
+const levelsCell = (tiles: TileTotals | undefined) =>
+  Object.entries(tiles?.levels ?? {})
+    .map(([level, { requests, bytes }]) => `z${level}×${requests}（${number(bytes / MB)} MB）`)
+    .join('，') || '—';
+
+// 资源图层的场景（方案 B 的 PoC）：瓦片请求两种引擎都经本地服务，口径相同；CPU 秒数是渲染进程的（主线程加全部 Worker）
+const RESOURCE_METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => string])[] = [
+  ['到稳定（秒）', runs => number((pick(runs, run => run.load?.ttStableMs) ?? Number.NaN) / 1000)],
+  ['第一张位图（秒，只有 Cesium）', runs => number((pick(runs, run => run.resources?.firstBitmapMs) ?? Number.NaN) / 1000)],
+  [
+    '到稳定：瓦片请求（张 / MB）',
+    runs => `${integer(pick(runs, run => run.resources?.tilesAtStable.requests))} / ${number((pick(runs, run => run.resources?.tilesAtStable.bytes) ?? Number.NaN) / MB)}`
+  ],
+  ['到稳定：各级的瓦片请求（第一遍）', runs => levelsCell(runs[0]?.resources?.tilesAtStable)],
+  [
+    '整遍：瓦片请求（张 / MB）',
+    runs => `${integer(pick(runs, run => run.resources?.tilesAtEnd.requests))} / ${number((pick(runs, run => run.resources?.tilesAtEnd.bytes) ?? Number.NaN) / MB)}`
+  ],
+  [
+    '渲染进程的 CPU 秒数：到稳定 / 整遍',
+    runs => `${number(pick(runs, run => run.resources?.cpuAtStable.rendererS))} / ${number(pick(runs, run => run.resources?.cpuAtEnd.rendererS))}`
+  ],
+  [
+    'GPU 进程的 CPU 秒数：到稳定 / 整遍',
+    runs => `${number(pick(runs, run => run.resources?.cpuAtStable.gpuProcessS))} / ${number(pick(runs, run => run.resources?.cpuAtEnd.gpuProcessS))}`
+  ],
+  ['加载期长任务：最长 / 总和（毫秒）', runs => `${integer(pick(runs, run => run.load?.longTasks.maxMs))} / ${integer(pick(runs, run => run.load?.longTasks.totalMs))}`],
+  ['静止：每帧 JS / GPU 的 p50（毫秒）', runs => `${number(pick(runs, run => run.static?.js?.p50))} / ${number(pick(runs, run => run.static?.gpu?.p50))}`],
+  [
+    '第一遍飞行：帧间隔 p50 / p95 / p99，≥50 毫秒的帧',
+    runs =>
+      `${number(pick(runs, run => run.flightCold?.interval?.p50))} / ${number(pick(runs, run => run.flightCold?.interval?.p95))} / ${number(pick(runs, run => run.flightCold?.interval?.p99))}，${integer(pick(runs, run => run.flightCold?.over.ms50))}`
+  ],
+  ['第一遍飞行：每帧 JS / GPU 的 p95', runs => `${number(pick(runs, run => run.flightCold?.js?.p95))} / ${number(pick(runs, run => run.flightCold?.gpu?.p95))}`],
+  ['第一遍飞行：长任务 最长 / 总和（毫秒）', runs => `${integer(pick(runs, run => run.flightCold?.longTasks.maxMs))} / ${integer(pick(runs, run => run.flightCold?.longTasks.totalMs))}`],
+  ['飞行后补齐（秒）', runs => number((pick(runs, run => run.settle?.ms) ?? Number.NaN) / 1000)],
+  [
+    '第二遍飞行：帧间隔 p50 / p95，≥50 毫秒的帧',
+    runs => `${number(pick(runs, run => run.flightWarm?.interval?.p50))} / ${number(pick(runs, run => run.flightWarm?.interval?.p95))}，${integer(pick(runs, run => run.flightWarm?.over.ms50))}`
+  ],
+  ['显存（MB）：稳定 / 峰值', runs => `${integer(pick(runs, run => run.memory?.gpuAtStableMB))} / ${integer(pick(runs, run => run.memory?.gpuPeakMB))}`],
+  ['渲染进程内存（MB）：稳定 / 峰值；JS 堆峰值', runs => `${integer(pick(runs, run => run.memory?.rendererAtStableMB))} / ${integer(pick(runs, run => run.memory?.rendererPeakMB))}；${integer(pick(runs, run => run.memory?.heapPeakMB))}`],
+  [
+    'Worker 累计到稳定（毫秒）：解码 / 绘制 / 转位图',
+    runs =>
+      `${integer(pick(runs, run => run.resources?.rasterAtStable?.decodeMs))} / ${integer(pick(runs, run => run.resources?.rasterAtStable?.drawMs))} / ${integer(pick(runs, run => run.resources?.rasterAtStable?.bitmapMs))}`
+  ],
+  [
+    '位图到稳定：请求 / 画出 / 失败，Worker 数',
+    runs =>
+      `${integer(pick(runs, run => run.resources?.rasterAtStable?.requested))} / ${integer(pick(runs, run => run.resources?.rasterAtStable?.bitmaps))} / ${integer(pick(runs, run => run.resources?.rasterAtStable?.failed))}，${integer(pick(runs, run => run.resources?.rasterAtStable?.workers))}`
+  ],
+  [
+    '位图整遍：请求 / 画出；几何缓存（MB）',
+    runs =>
+      `${integer(pick(runs, run => run.resources?.rasterAtEnd?.requested))} / ${integer(pick(runs, run => run.resources?.rasterAtEnd?.bitmaps))}；${number((pick(runs, run => run.resources?.rasterAtEnd?.cacheBytes) ?? Number.NaN) / MB)}`
+  ]
+];
+
+function resourceLines(results: MeasureResults): string[] {
+  const scenes = results.scenes.filter(scene => scene.resources);
+  if (scenes.length === 0) {
+    return [];
+  }
+  const lines = [
+    '## 资源图层：Cesium 的 Worker 栅格化（方案 B）和 MapLibre 原生绘制',
+    '',
+    'PoC 的读数，不做验收判断。瓦片请求两种引擎都经本地服务转到后端，数的是同一个口径；CPU 秒数是整个渲染进程的（主线程加全部 Worker）。各项取各遍的中位数。',
+    ''
+  ];
+  for (const scene of scenes) {
+    const variants = sceneVariants(results, scene);
+    const runsOf = variants.map(({ id }) => results.runs.filter(run => run.scene === scene.id && run.variant === id && run.kind === 'perf'));
+    const rows = RESOURCE_METRICS.map(([name, read]) => [name].concat(runsOf.map(read)));
+    lines.push(`### ${scene.title}`, '', table(['项目'].concat(variants.map(({ label }) => label)), rows), '');
+  }
+  return lines;
+}
+
 function splatLines(results: MeasureResults): string[] {
   const splatScenes = results.scenes.filter(scene => scene.splat);
   if (splatScenes.length === 0) {
@@ -353,13 +434,14 @@ export function renderReport(results: MeasureResults): string {
   }
 
   parts.push(...splatLines(results));
+  parts.push(...resourceLines(results));
   if (!onlySplats) {
     parts.push('## 验收', '');
   }
   for (const scene of results.scenes) {
     const sceneRuns = runs.filter(run => run.scene === scene.id);
-    // 泼溅场景不和 Cesium 比，上面单独一节
-    if (sceneRuns.length === 0 || scene.splat) {
+    // 泼溅场景不和 Cesium 比，上面单独一节；资源图层的场景也另列一节，不做 3C.4 的判断
+    if (sceneRuns.length === 0 || scene.splat || scene.resources) {
       continue;
     }
     const rows = sceneVerdict(sceneRuns, quality.find(item => item.scene === scene.id));

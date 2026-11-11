@@ -53,6 +53,37 @@ export interface SplatReadings {
   readonly peakWasmMB: number;
 }
 
+/** 栅格化 Worker 的累计读数（方案 B 的 PoC，只有 Cesium）：同 @mx/map-cesium 的 VectorStats，这里只列报告用到的 */
+export interface RasterStats {
+  readonly workers: number;
+  readonly sources: number;
+  readonly requested: number;
+  readonly bitmaps: number;
+  readonly failed: number;
+  readonly pending: number;
+  readonly rendered: number;
+  readonly fetched: number;
+  readonly bytes: number;
+  readonly fetchMs: number;
+  readonly decodeMs: number;
+  readonly drawMs: number;
+  readonly bitmapMs: number;
+  readonly roundTripMs: number;
+  readonly cacheTiles: number;
+  readonly cacheBytes: number;
+  readonly firstBitmapAt: number | null;
+  readonly lastBitmapAt: number | null;
+  readonly levels: Readonly<Record<string, number>>;
+}
+
+/** 经本地服务转到后端的瓦片请求（两种引擎口径相同）：按级别的张数和字节数 */
+export interface TileTotals {
+  readonly requests: number;
+  readonly bytes: number;
+  readonly failed: number;
+  readonly levels: Readonly<Record<string, { readonly requests: number; readonly bytes: number }>>;
+}
+
 /** 两种引擎统一的读数；引擎没有的项是 null */
 export interface BenchStats {
   readonly tilesVisible: number;

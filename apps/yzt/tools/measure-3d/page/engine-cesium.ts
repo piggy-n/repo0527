@@ -5,13 +5,15 @@ import type { EngineHandle, EngineOptions } from './bench.ts';
 const MB = 1024 * 1024;
 
 /** Cesium 引擎：真实的 CesiumView 和 CesiumScene */
-export async function startCesium({ session, container, onError }: EngineOptions): Promise<EngineHandle> {
+export async function startCesium({ session, container, params, onError }: EngineOptions): Promise<EngineHandle> {
   setupSceneRuntime();
   let scene: CesiumScene | null = null;
   const view = new CesiumView({
     session,
     container,
     onError,
+    // 方案 B 的 PoC：地址上的 sampling=nearest 时位图不插值
+    vectors: { sampling: params.get('sampling') === 'nearest' ? 'nearest' : 'linear' },
     createScene: target => {
       scene = createCesiumScene(target);
       return scene;
@@ -63,6 +65,8 @@ export async function startCesium({ session, container, onError }: EngineOptions
       );
     },
     frames: () => scene?.inspect().frames ?? 0,
-    requestFrame: () => scene?.requestFrame()
+    requestFrame: () => scene?.requestFrame(),
+    resourcesIdle: () => scene?.vectorsIdle ?? false,
+    rasterStats: async () => (await scene?.vectorStats()) ?? null
   };
 }

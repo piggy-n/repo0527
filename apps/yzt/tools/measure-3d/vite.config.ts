@@ -24,6 +24,8 @@ export default defineConfig({
   base: '/',
   logLevel: 'warn',
   publicDir: false,
+  // 资源图层的场景（方案 B 的 PoC）导入应用的 resourcesGroup，里面用应用的别名
+  resolve: { alias: { '@': resolve(here, '../../src') } },
   worker: { format: 'es' },
   build: {
     outDir: PAGE_OUT_DIR,

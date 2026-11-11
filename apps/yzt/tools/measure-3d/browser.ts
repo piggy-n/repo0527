@@ -191,9 +191,17 @@ export interface MemorySample {
   /** 渲染进程（全部，备用的空进程只有几十 MB）、GPU 进程的私有内存（MB，提交的字节）；读不到时为 null */
   readonly rendererPrivateMB: number | null;
   readonly gpuProcessPrivateMB: number | null;
+  /** 进程累计的 CPU 秒数：渲染进程里有主线程和它的 Worker */
+  readonly rendererCpuS: number | null;
+  readonly gpuProcessCpuS: number | null;
 }
 
-const NO_PROCESS_MEMORY = { rendererPrivateMB: null, gpuProcessPrivateMB: null } as const;
+const NO_PROCESS_MEMORY = { rendererPrivateMB: null, gpuProcessPrivateMB: null, rendererCpuS: null, gpuProcessCpuS: null } as const;
+
+function cpuSeconds(rows: readonly Record<string, unknown>[], pids: readonly number[]): number | null {
+  const matched = rows.filter(row => pids.includes(Number(row.Id)));
+  return matched.length > 0 ? matched.reduce((total, row) => total + Number(row.Cpu ?? 0), 0) : null;
+}
 
 function privateMB(rows: readonly Record<string, unknown>[], pids: readonly number[]): number | null {
   const matched = rows.filter(row => pids.includes(Number(row.Id)));
@@ -214,7 +222,7 @@ export async function sampleMemory({ gpu, renderers }: BrowserProcesses): Promis
       ? '$gpu = $null'
       : `try { $gpu = @(Get-CimInstance -ClassName Win32_PerfFormattedData_GPUPerformanceCounters_GPUProcessMemory -Filter "Name LIKE 'pid_${gpu}_%'" -ErrorAction Stop | Select-Object DedicatedUsage) } catch { $gpu = 'failed' }`;
   const processQuery =
-    pids.length === 0 ? '$processes = @()' : `$processes = @(Get-Process -Id ${pids.join(',')} -ErrorAction SilentlyContinue | Select-Object Id,PrivateMemorySize64)`;
+    pids.length === 0 ? '$processes = @()' : `$processes = @(Get-Process -Id ${pids.join(',')} -ErrorAction SilentlyContinue | Select-Object Id,PrivateMemorySize64,@{n='Cpu';e={$_.TotalProcessorTime.TotalSeconds}})`;
   try {
     const parsed = JSON.parse(await powershell(`${gpuQuery}; ${processQuery}; @{ gpu = $gpu; processes = $processes } | ConvertTo-Json -Compress -Depth 4`)) as {
       readonly gpu: unknown;
@@ -223,7 +231,9 @@ export async function sampleMemory({ gpu, renderers }: BrowserProcesses): Promis
     const processes = Array.isArray(parsed.processes) ? (parsed.processes as Record<string, unknown>[]) : [];
     const memory = {
       rendererPrivateMB: privateMB(processes, renderers),
-      gpuProcessPrivateMB: gpu === null ? null : privateMB(processes, [gpu])
+      gpuProcessPrivateMB: gpu === null ? null : privateMB(processes, [gpu]),
+      rendererCpuS: cpuSeconds(processes, renderers),
+      gpuProcessCpuS: gpu === null ? null : cpuSeconds(processes, [gpu])
     };
     if (gpu === null) {
       return { gpu: { unavailable: '找不到 GPU 进程的 pid' }, ...memory };

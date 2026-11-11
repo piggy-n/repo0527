@@ -1,4 +1,13 @@
-import type { BenchStats, SceneSample, LongTaskStats, PageSetup, PhaseResult, ShotCoverage } from './bench-api.ts';
+import type {
+  BenchStats,
+  LongTaskStats,
+  PageSetup,
+  PhaseResult,
+  RasterStats,
+  SceneSample,
+  ShotCoverage,
+  TileTotals
+} from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
 import type { BlurEvent, SharpnessComparison } from './sharpness.ts';
 import type { RunKind } from './scenes.ts';
@@ -31,6 +40,24 @@ export interface SettleResult {
   readonly trace: readonly SceneSample[];
 }
 
+/** 进程累计的 CPU 秒数：渲染进程里有主线程和全部 Worker，两种引擎可以直接比 */
+export interface CpuSample {
+  readonly rendererS: number | null;
+  readonly gpuProcessS: number | null;
+}
+
+/** 资源图层场景的读数（方案 B 的 PoC）：到稳定时和整遍结束时各一次，都是累计值 */
+export interface ResourceReadings {
+  readonly tilesAtStable: TileTotals;
+  readonly tilesAtEnd: TileTotals;
+  readonly rasterAtStable: RasterStats | null;
+  readonly rasterAtEnd: RasterStats | null;
+  readonly cpuAtStable: CpuSample;
+  readonly cpuAtEnd: CpuSample;
+  /** 第一张有内容的位图到达，从开始加载算（只有 Cesium） */
+  readonly firstBitmapMs: number | null;
+}
+
 export interface RunResult {
   readonly id: string;
   readonly scene: string;
@@ -61,6 +88,7 @@ export interface RunResult {
   memory?: MemoryReadings;
   quality?: QualityResult;
   profile?: { readonly load: ProfileSummary; readonly flight: ProfileSummary };
+  resources?: ResourceReadings;
   pageErrors?: readonly string[];
   glErrors?: number;
 }
@@ -133,6 +161,8 @@ export interface MeasureResults {
     readonly acceptance: boolean;
     /** 有泼溅：比较预算，不和 Cesium 比 */
     readonly splat?: boolean;
+    /** 资源图层的场景（方案 B 的 PoC）：不做 3C.4 的验收判断，另列一节 */
+    readonly resources?: boolean;
     /** 这个场景跑的方案；不写时是全部方案 */
     readonly variants?: readonly string[];
   }[];
