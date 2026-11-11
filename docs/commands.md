@@ -391,7 +391,7 @@ pnpm --filter yzt test:smoke
 
 **执行了什么**：根目录的 `pnpm -r build` 在 `apps/yzt` 里执行 `vite build`：Rolldown 打包、压缩，输出到 `apps/yzt/dist`。文件名带内容哈希，CSS Modules 的类名也会哈希化。
 
-构建内置产物检查：检查没有开发页面、原型和模型数据，MapLibre 没有进入入口的静态依赖；失败时构建也失败，具体规则见 [config/vite-config.md](config/vite-config.md) 的“构建产物检查”。
+构建内置产物检查：检查没有开发页面、原型和模型数据，MapLibre 没有进入入口的静态依赖；失败时构建也失败，具体规则见 [config/vite-config.md](config/vite-config.md) 的“构建产物检查”。构建还把带 NOTICE 的依赖的 LICENSE、NOTICE 放进 `dist/licenses/`；产物里有带 NOTICE 却没列出的包、或列出的文件不存在时构建失败，见同一文档的“第三方许可”。
 
 **注意事项**：
 

@@ -86,6 +86,7 @@
 - 瓦片集的屏幕误差上限统一成默认 8（用户 2026-11-09 看过 JKQ 的显卡复测后决定，见 [map-cesium](modules/map-cesium.md)"瓦片集的显存预算"）：JKQ 在 16 级以上每个姿态都顶在 2 GB、一半细一半粗，要整级清楚得让每个瓦片的贴图小下来（现在不论哪一级都约 7.7 MB 一个）。数据侧能重新导出时让 CesiumLab 开纹理压缩（KTX2）或把贴图缩到 512～1024 像素，再用 `/dev/tileset-probe` 跑 8，看 z16.5、z17 俯视的显存是否降到 2 GB 以内、结束时是否整级。新模型先用诊断页跑一遍，8 下放不下、来回加载的在清单里写 16；JKQ2 和彭城广场在 8 下还没有跑过诊断。JKQ 在 z16 显示的是块根，想保留 512 像素的 `top/` 单元要改 `prepareTileset` 的误差规则（ADR 0148），还没定
 - JKQ 的诊断报告里少数瓦片的包围球大得离谱（清晰度列曾全是 0）：拿到 `JKQ/tileset.json`、`top/0.json`、一个 `top/0-xxxx.json` 和一个 `Tile_xxx/Tile_xxx.json` 后查是哪一级、是不是 `prepareTileset` 合并 `transform` 的问题；只影响报告的清晰度读数，不影响显示
 - 地图署名与审图号：用天地图上线公网前按其版权要求处理；本地边界数据要不要标来源和审图号，向主管部门确认
+- 第三方许可：产物现在只随附带 NOTICE 的包（echarts、gaussian-splat-lite）的文件，其余依赖的许可没有随产物提供，包括没有 NOTICE 的 Apache-2.0 包（Cesium、3d-tiles-renderer、idb-keyval、docx-preview 等）的 LICENSE、Cesium 的 LICENSE.md 里的第三方代码声明（`map-cesium` 的分块两种引擎的产物里都有），以及 MIT、BSD 包的版权声明。分发前要定提供哪些、怎么提供（[vite-config](config/vite-config.md)"第三方许可"）
 - 旧前端公开了登录用的 SM2 私钥，建议后端更换密钥对，换后只改 `.env`
 - 确定部署的网络条件后复查字体加载时机（ADR 0062）；驾驶舱的完整思源宋体约 11 MiB，是否分片或统一普惠体（[验收报告](archive/stages/city-dashboard-acceptance.md)）
 - 驾驶舱：暖刷新波动、低端 GPU、触控、慢网、数小时运行、真实统计数据都没有验收结论；固定指标不算业务验收

@@ -86,18 +86,18 @@ const localFiles = localFilesPlugin({
 
 ### 第三方许可
 
-`tools/third-party-notices/vite-plugin.ts` 的 `thirdPartyNoticesPlugin` 只在 `build` 生效。Apache-2.0 的包分发时要带上 LICENSE 和 NOTICE，所以构建时看全部分块的模块清单：用到的包在 `NOTICE_PACKAGES` 里列出的，把列出的文件从安装的那个版本里读出来，放到产物的 `licenses/<包名>/`，路径和文件名不变（NOTICE、LICENSE 里按文件名指向别的文件）。部署时的位置见 [deployment.md](../deployment.md) 的"第三方许可"。
+`tools/third-party-notices/vite-plugin.ts` 的 `thirdPartyNoticesPlugin` 只在 `build` 生效，只处理带 NOTICE 的包：Apache-2.0 的包带了 NOTICE，分发时就要随附它。这样的包随附 NOTICE、LICENSE，以及两者指向的文件。构建时看全部分块的模块清单：用到的包在 `NOTICE_PACKAGES` 里列出的，把列出的文件从安装的那个版本里读出来，放到产物的 `licenses/<包名>/`，路径和文件名不变（NOTICE、LICENSE 里按文件名指向别的文件）。部署时的位置见 [deployment.md](../deployment.md) 的"第三方许可"。
 
 | 包 | 带上的文件 | 说明 |
 |---|---|---|
 | `echarts` | `LICENSE`、`NOTICE`、`licenses/LICENSE-d3` | LICENSE 末尾指向 d3 的 BSD 3-Clause 全文 |
-| `gaussian-splat-lite` | `LICENSE`、`NOTICE`、`THIRD_PARTY_LICENSES.md` | ADR 0149 第 8 节；NOTICE 指向的 THIRD_PARTY_LICENSES.md 是 SparkJS、SuperSplat、ruzstd、flate2（MIT）和 zlib-rs（zlib 许可）的全文。`cesium` 引擎的产物里也有它的分块（只是不加载），所以同样带上 |
+| `gaussian-splat-lite` | `LICENSE`、`NOTICE`、`THIRD_PARTY_LICENSES.md` | ADR 0149 第 8 节；NOTICE 指向的 THIRD_PARTY_LICENSES.md 是这个包的第三方许可全文和声明，包括 XGRIDS 对 LCC2 格式的声明，内容以文件为准。`cesium` 引擎的产物里也有它的分块（只是不加载），所以同样带上 |
 
-- 文件不入库，每次构建从 `node_modules` 读，升级后自然是新版本的内容。升级后清单里的文件没有了（改名或删掉），构建失败，错误写明包名和文件
-- 产物里出现带 NOTICE（`NOTICE`、`NOTICE.txt` 等）却不在清单里的包，构建失败：先看它的 NOTICE、LICENSE 里还指向哪些文件，再一起写进清单
-- 清单里的包没进产物时不带它的文件
-- 只看主构建的分块，Worker 单独打包，里面的依赖不在检查范围。2026-11-11 装的依赖里带 NOTICE 的只有这两个包和 Playwright、TypeScript 这类开发工具
-- 只处理带 NOTICE 的包：其余依赖（MIT、BSD，以及 Cesium 这类没有 NOTICE 的 Apache-2.0 包）的许可全文不随产物提供。Vite 自带的 `build.license` 只收集 LICENSE、不收 NOTICE，这里没有用
+- 文件不入库，每次构建从 `node_modules` 读，清单里的文件升级后自然是新版本的内容
+- 构建只在两种情况下失败，错误写明包名和文件：产物里有带 NOTICE（`NOTICE`、`NOTICE.txt` 等）的包，却完全不在清单里；清单里列的文件不存在了（升级后改名或删掉）。新加这样的包时，先看它的 NOTICE、LICENSE 里还指向哪些文件，再一起写进清单
+- 检查不到、要人工核对的：清单里的包升级后 NOTICE、LICENSE 新指向的文件（`echarts` 写的是 `^`，小版本会自己升）；NOTICE 不叫 `NOTICE*` 的包；Worker 里的依赖（Worker 单独打包，不在主构建的分块里）；[deployment.md](../deployment.md) 的表。2026-11-11 装的依赖里带 NOTICE 的只有这两个包和 Playwright、TypeScript 这类开发工具
+- 清单里的包没进产物时不带它的文件；同一个包打进了两个版本时构建失败（只带一个版本的文件不对）
+- 范围之外：其余依赖的许可没有随产物提供，包括没有 NOTICE 的 Apache-2.0 包（Cesium、3d-tiles-renderer、idb-keyval、docx-preview 等）的 LICENSE、Cesium 的 LICENSE.md 里的第三方代码声明，以及 MIT、BSD 包的版权声明。要不要提供、怎么提供还没定，记在 [backlog](../backlog.md)。Vite 自带的 `build.license` 只收集 LICENSE、不收 NOTICE，这里没有用
 
 ### 测试
 
@@ -248,5 +248,5 @@ AI 对话的后端是另一个服务，用同样的写法加了第二条：`/ai-
 - 修改插件的选项：测试的转换缓存不包含插件选项，先执行 `pnpm --filter yzt exec vitest --clearCache` 再运行测试
 - 改动路径别名：只改 tsconfig 的 `paths`，不要在这里加 `resolve.alias`
 - 新增包的 Sass 入口：不用改这里，写在包的 `exports` 的 `sass` 条件里，见 [internal-packages.md](internal-packages.md) 的"Sass 入口"
-- 新增或升级带 NOTICE 的依赖：看它的 NOTICE、LICENSE 里指向哪些文件，同步 `thirdPartyNoticesPlugin` 的 `NOTICE_PACKAGES` 和 `docs/deployment.md` 的"第三方许可"；漏了的话构建会失败
+- 新增或升级带 NOTICE 的依赖：看它的 NOTICE、LICENSE 里指向哪些文件，同步 `thirdPartyNoticesPlugin` 的 `NOTICE_PACKAGES` 和 `docs/deployment.md` 的"第三方许可"。构建只拦得住两种遗漏：带 NOTICE 的包完全没列，或者列的文件不存在了；清单里的包升级后新指向的文件、Worker 里的依赖、deployment.md 的表都要人工核对
 - 升级 Cesium：核对 `Build/Cesium` 下的三个目录和 `stripBase` 的层数，构建后产物的 `cesium/` 里能找到 `Workers/`、`Assets/`、`ThirdParty/`，再跑 map-cesium 的浏览器测试

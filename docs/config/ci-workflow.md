@@ -126,7 +126,7 @@ pnpm/action-setup 必须排在 setup-node 前面，因为 setup-node 的 pnpm �
 | `pnpm test` | 逐个包执行 `vitest run`（ADR 0010、0143），依赖在前、web 最后，不同包的浏览器测试不会同时运行；有浏览器测试的包分 `unit`、`browser` 两个项目（ADR 0040）。GitHub Actions 会设置 `CI` 环境变量，Vitest 检测到后会拒绝带 `.only` 的测试，避免其他用例被悄悄跳过（已验证） |
 | `pnpm build:intranet`（`VITE_MAP_3D_ENGINE=cesium`） | 默认以外的三维引擎也构建一次，入口的静态依赖检查对两种取值都要成立（ADR 0147 第 7 节）；用内网构建，后面的冒烟才能跑在它上面。之后的构建覆盖这次的产物 |
 | `pnpm --filter yzt test:smoke scene.spec static-basemap` | 只跑 Cesium 引擎的三维冒烟（`scene.spec.ts`）和按引擎取画布的静态底图；用例用 `loadEnv` 读同一个变量判断产物用的引擎，所以这一步也要设它。软件渲染下约 1 分钟，时限 5 分钟 |
-| `pnpm build` | 公网生产构建，自动清理本地设计稿副本，检查没有开发页、入口没有静态引入 MapLibre |
+| `pnpm build` | 公网生产构建，自动清理本地设计稿副本，检查没有开发页、入口没有静态引入 MapLibre；把带 NOTICE 的依赖的许可文件放进 `dist/licenses/`，有带 NOTICE 却没列出的包时失败（[vite-config.md](vite-config.md)"第三方许可"） |
 | `pnpm build:intranet` | 内网生产构建，执行同样的产物检查，并检查关闭天地图时没有携带 key；输出覆盖上一份公网产物 |
 | `pnpm --filter yzt test:smoke` | Playwright 访问刚生成的内网生产产物，以本地固定接口验证登录、地图就绪、缓存恢复与分块失败恢复（ADR 0065），以及三维的预加载、切换、模型加载和步行进站（生成的测试模型，MapLibre 引擎，`scene-maplibre.spec.ts`；`scene.spec.ts` 在这份产物上跳过）；不访问真实后端和天地图，预览进程由测试自动关闭 |
 
