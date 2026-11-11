@@ -492,7 +492,7 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
     expect(center?.x).toBeCloseTo(WIDTH / 2, 0);
     expect(center?.y).toBeCloseTo(HEIGHT / 2, 0);
     expect(view.heading()).toBeCloseTo(target.bearing, 0);
-    // 15 级、俯仰 40 的视点约 1.1 千米高：由级别和距离的换算（map-core 的 camera-distance）得到
+    // 15 级、俯仰 40 的视点约 1.1 千米高：视点高度来自 MapLibre 相机的 getCameraAltitude
     expect(view.eyeHeight()).toBeGreaterThan(900);
     expect(view.eyeHeight()).toBeLessThan(1400);
     expect(page.errors).toStrictEqual([]);

@@ -229,7 +229,8 @@ describe('identifyStep', () => {
     expect(identifyStep(both, '2d', 13.99, [])).toStrictEqual({ kind: 'server' });
   });
 
-  it('三维里查不到渲染要素时，不论级别，能后端识别的查后端', () => {
+  it('三维里不论级别、有没有渲染要素，能后端识别的都查后端', () => {
+    expect(identifyStep(both, '3d', 16, found)).toStrictEqual({ kind: 'server' });
     expect(identifyStep(both, '3d', 16, [])).toStrictEqual({ kind: 'server' });
   });
 
