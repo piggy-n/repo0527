@@ -36,13 +36,16 @@
 - 状态未核实：图层按年份重复返回、瓦片不压缩、没有 ETag、错误也返回 200（2026-10 的记录，后端已换过一次）；`/file/page` 不校验 token
 - LCC2 数据（问数据方，ADR 0149）：彭城广场样例的泼溅和碰撞网格相对自己的扫描轨迹整体平移约 85 米，为什么（楚王山1号没有这个问题，三者相差不到 0.1 米）；`offset` 的 z 和徐州倾斜摄影各用什么高程基准（彭城广场按轨迹定的地面比 XZ 低 5.47 米，清单暂按 XZ 的口径抬高，见 [3dt-manifest](config/3dt-manifest.md)）；能否重新导出、让 `offset` 直接可用。答复回来只改清单里的摆放
 - 地类图斑 2025（`bgdc_dltb_2025`）的瓦片 z5、z8、z12 都返回 200 加 JSON "系统异常"（2026-11-11），MapLibre 报 `Unable to parse the tile`，勾选时控制台每块瓦片一条；问后端有没有这个瓦片集
+- 资源树的年份里列着、瓦片却返回 200 加 JSON "系统异常"的还有（2026-11-10，南京处 z6～z14，没带 token）：水域面层 `csxhjctb_hyda_2026`，行政区界线 `bgdc_xzqjx` 的 2019、2021、2023、2024、2025，永久基本农田图斑 `bgdc_yjjbnttb_2025`，生态保护红线 `bgdc_stbhhx_2021`，永久基本农田 `gtkjgh_yjjbntbhtb_2026`；和上一条一起问后端
+- 资源树的年份里列着、瓦片是空的（2026-11-10，南京 118.8, 32.05 处 z6、z8、z10、z12、z14 都是 0 字节，同一处别的年份有数据）：地类图斑 2023、2024（2022 年 z14 有），水域面层 2021、2022、2023（2024、2025 有）；问后端是没切片还是没有数据
+- 最小显示级别表和瓦片大小对不上（2026-11-10，开关打开前要重测，`probe:resource-classes --tile-cost`）：水域面层不在表里，2024 年南京处 z6 一张 23.8 MB、z8 18.8 MB、z9 2.6 MB，按 6 MB 的规则应该是 9 级；永久基本农田图斑定的是 8 级，2022 年 z10 的 851/416、854/413、854/414 三张有 6.5～8.5 MB
 - `gaussian-splat-lite` 的 LICENSE、NOTICE 随产物提供（Apache-2.0，分发构建产物时要带，ADR 0149 第 8 节）。LCC2 模型和格式的授权不用处理（用户 2026-11-11 确认：模型由数据方提供，对方已有授权）
 
 ## 未完成的功能
 
 - 修改密码（另一把 SM2 公钥、另一种密文格式）、修改头像
-- 三维的后续顺序（用户 2026-11-09 定）：（`maplibre` 下加 LCC2、默认改为 `maplibre` 已完成，ADR 0149、0150）Cesium 下方案 B 和叠画布 LCC2 的 PoC；不接 XGRIDS 的 LCC Web SDK（AppKey 绑定域名，在线授权要连外网，离线授权会过期）
-- 三维的资源图层：暂不显示（用户 2026-11-09 决定，放开要改页面设计），三维点/框选也不识别；`maplibre` 引擎由 `shared/config/scene-options.ts` 的开关关着，放开时先改页面设计再打开开关。Cesium 放开时走方案 B（迁移旧项目的 Worker 栅格化），接入时对齐解码库版本、点选改用瓦片数据服务、避免和 MapLibre 重复下载（ADR 0091）
+- 三维的后续顺序（用户 2026-11-09 定）：（`maplibre` 下加 LCC2、默认改为 `maplibre` 已完成，ADR 0149、0150；Cesium 下的方案 B 做过 PoC，定为不迁移，ADR 0151）Cesium 下叠画布 LCC2 的 PoC；不接 XGRIDS 的 LCC Web SDK（AppKey 绑定域名，在线授权要连外网，离线授权会过期）
+- 三维的资源图层：暂不显示（用户 2026-11-09 决定，放开要改页面设计），三维点/框选也不识别；`maplibre` 引擎由 `shared/config/scene-options.ts` 的开关关着，放开时先改页面设计再打开开关。`cesium` 引擎下不显示也不识别，方案 B 不迁移（[ADR 0151](adr/0151-plan-b-not-migrated.md)）
 - LCC2（高斯泼溅，[ADR 0149](adr/0149-lcc2-gaussian-splats.md)）还没有结论的：楚王山1号亮处偏白来自数据、库还是软件渲染；每帧的 GL 保护是否必要，见 [map-three.md](modules/map-three.md)"泼溅的预算"
 - LCC2 配准的 0.5 米验收（ADR 0149 第 9 节 L.2）：楚王山1号和影像只确认到 1 米以内（ArcGIS 这里约 0.5 米/像素，路大多在树冠下，旁边没有倾斜模型），等有和倾斜模型重叠的 LCC2、控制点或更清晰的影像时再验；`docs/deployment.md` 的 nginx 转发没有实测，首次部署时按其中的 curl 验收
 - 清单新加的 LCC2（`xz-cws2`、`xz-cws3`、`xz-tls1`、`xz-tsm`、`xz-gshm`、`xz-tls2`、`xz-ddsh`、`xz-szs`）只把轨迹和网格叠在影像上目视过（楚王山2号偏约 2～4 米，驮篮山1号、土山墓、龟山汉墓和楚王山3号 1～3 米，后三个只看了落在哪里，[3dt-manifest.md](config/3dt-manifest.md)）：还没在 `maplibre` 引擎下俯视泼溅和影像比，高度没有逐处核对，影像也只能核对入口和露天的部分
@@ -122,6 +125,8 @@
 - 开发时的热更新：改了被缓存页面用到的文件后会报 Vue 的 `emitsOptions` 之类的错误，刷新即可，生产构建没有这个问题
 
 ## 不迁移的范围
+
+旧项目 Cesium 里的矢量瓦片栅格化（`views/current-map-new/cesium/` 的 MvtRasterLayer、MvtTileWorkerPool、tileRenderer、MvtLabelLayer 等）：做过 PoC，不迁移（[ADR 0151](adr/0151-plan-b-not-migrated.md)）。
 
 资源中心（含独立的知识图谱页；但代码放在 `views/resource-center/` 下的文件管理、资源管理"自助取数"用到的图谱数据和布局要迁移）、资源共享、统计分析、旧版 resource-management、`views/sys` 与动态菜单路由、`/home` 测试页、mockjs、backend-switcher。
 
