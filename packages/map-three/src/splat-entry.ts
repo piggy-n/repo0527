@@ -267,7 +267,7 @@ export class SplatEntry implements Disposable {
     }
     this.#box = box.clone();
     const sphere = box.clone().applyMatrix4(this.#scheduler.group.matrix).getBoundingSphere(new Sphere());
-    const [lng, lat] = this.#frame.toLngLatHeight(sphere.center);
-    return { center: [lng, lat], radius: sphere.radius };
+    const [lng, lat, height] = this.#frame.toLngLatHeight(sphere.center);
+    return { center: [lng, lat], height, radius: sphere.radius };
   }
 }

@@ -64,7 +64,7 @@ function aerial(id: string, title: string, models: readonly SceneModel[], center
   return { id, title, acceptance, models, splats: [], camera: { center, zoom, pitch: 55, bearing: 20 } };
 }
 
-// 只在服务器上的模型：相机用模型的建议中心，俯视和倾斜各一个姿态
+// 只在服务器上的模型：相机用模型建议相机的落点（模型在空中时不在它正下方），俯视和倾斜各一个姿态
 function remote(id: string, title: string, model: SceneModel, zoom: number, pitch: number): Scene {
   return { id, title, acceptance: false, models: [model], splats: [], camera: { center: null, zoom, pitch, bearing: 0 } };
 }

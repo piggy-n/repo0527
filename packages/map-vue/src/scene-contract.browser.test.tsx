@@ -441,7 +441,9 @@ describe.each([
     }, '画布中心拾取到模型');
 
     expect(ready.camera.center[0]).toBeCloseTo(MODEL_AT[0], 3);
-    expect(ready.camera.center[1]).toBeCloseTo(MODEL_AT[1], 3);
+    // 夹具的球心离地 40 米：两种引擎的视线都穿过球心，地面上的落点在球心以北 40·tan(俯角) 米
+    const north = (ready.camera.center[1] - MODEL_AT[1]) * 111320;
+    expect(Math.abs(north - 40 * Math.tan((ready.camera.pitch * Math.PI) / 180))).toBeLessThan(1);
     expect(page.errors).toStrictEqual([]);
   });
 
@@ -763,6 +765,32 @@ describe.each([
       expect(page.errors).toStrictEqual([]);
     }
   );
+
+  it.runIf(engine.capabilities.splats)('离地的泼溅：按建议的相机定位后，画布中心是模型，不是它脚下的地面', async () => {
+    const page = await mountPage(engine);
+    const url = await writtenSplat();
+    const height = 150;
+    const placement = { lng: MODEL_AT[0], lat: MODEL_AT[1], height, heading: 0 };
+
+    page.content.value = { tilesets: [], splats: [splatLayer(url, { placement })], underground: null };
+    await until(() => page.stateOf('square') === 'ready', '泼溅就绪');
+    const ready = page.map.sceneStatus.value.get('square');
+    if (ready?.state !== 'ready') {
+      throw new Error('泼溅没有就绪');
+    }
+    // 相机朝北：视线要穿过 height 高处的球心，地面上的落点在球心以北 height·tan(俯角)
+    const north = (ready.camera.center[1] - MODEL_AT[1]) * 111320;
+    expect(Math.abs(north - height * Math.tan((ready.camera.pitch * Math.PI) / 180))).toBeLessThan(2);
+    page.map.runCameraOperation(camera => camera.flyTo(ready.camera, { duration: 0, padding: 0 }));
+    const pickedHeight = () => {
+      const hit = page.map.view.value?.pick({ x: WIDTH / 2, y: HEIGHT / 2 });
+      return hit?.kind === 'hit' && hit.surface === 'model' ? (hit.height ?? null) : null;
+    };
+    await until(() => pickedHeight() !== null, '画布中心拾取到离地的泼溅');
+
+    expect(pickedHeight()).toBeCloseTo(height, 0);
+    expect(page.errors).toStrictEqual([]);
+  });
 
   it.skipIf(engine.capabilities.splats)(
     '高斯泼溅（不能显示的引擎）：忽略会话里的泼溅，状态里没有它，瓦片集照常',
