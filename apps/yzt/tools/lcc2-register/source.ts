@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { z } from 'zod';
@@ -39,6 +40,15 @@ interface Source {
   readonly index: ModelFile;
   /** 相对索引所在目录的文件 */
   file(path: string, notExpected: readonly string[]): ModelFile;
+  /** 列出缺的文件的位置；只有本机能便宜地查，HTTP 上读到缺的那个时才报错 */
+  missing?(paths: readonly string[]): string[];
+}
+
+function localFailure(path: string, code: string, hint: string): string {
+  if (code === 'ENOENT') {
+    return `找不到 ${path}${hint}`;
+  }
+  return `读不到 ${path}：${code === 'EISDIR' ? '这是目录，要给 .lcc2 索引文件' : code}`;
 }
 
 function localFile(path: string, hint: string): ModelFile {
@@ -48,8 +58,8 @@ function localFile(path: string, hint: string): ModelFile {
       try {
         return await readFile(path);
       } catch (error) {
-        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-          throw new ToolError(`找不到 ${path}${hint}`, { cause: error });
+        if (error instanceof Error && 'code' in error && typeof error.code === 'string') {
+          throw new ToolError(localFailure(path, error.code, hint), { cause: error });
         }
         throw error;
       }
@@ -61,24 +71,26 @@ function localSource(indexPath: string, hint: string): Source {
   const root = dirname(indexPath);
   return {
     index: localFile(indexPath, hint),
-    file: (path) => localFile(join(root, path), hint)
+    file: (path) => localFile(join(root, path), hint),
+    missing: (paths) => paths.map((path) => join(root, path)).filter((path) => !existsSync(path))
   };
 }
 
-// 报错里的地址把中文还原，看得出是哪个模型
+// 报错里的地址把中文还原，看得出是哪个模型；%25 不还原，否则显示的地址和真正请求的不一样
 function readable(url: string): string {
   try {
-    return decodeURI(url);
+    return decodeURI(url.replaceAll('%25', '%2525'));
   } catch {
     return url;
   }
 }
 
-// fetch 失败时 message 只有 fetch failed，真正的原因在 cause 里
+// fetch 失败时 message 只有 fetch failed，真正的原因在 cause 里；一个主机名有几个地址时 cause 是 message 为空的 AggregateError
 function networkReason(error: unknown): string {
   const cause = error instanceof Error ? error.cause : undefined;
-  if (cause instanceof Error && cause.message) {
-    return cause.message;
+  const first: unknown = cause instanceof AggregateError ? cause.errors[0] : cause;
+  if (first instanceof Error && first.message) {
+    return first.message;
   }
   return error instanceof Error ? error.message : String(error);
 }
@@ -139,6 +151,15 @@ function httpUrl(text: string, name: string): URL {
   return url;
 }
 
+// 相对地址要接在路径后面，路径要以 / 结尾；基准的查询串和片段在解析相对地址时自动丢掉
+function asDirectory(url: URL): URL {
+  const directory = new URL(url);
+  if (!directory.pathname.endsWith('/')) {
+    directory.pathname += '/';
+  }
+  return directory;
+}
+
 function openSource(target: string, options: SourceOptions): Source {
   const { localRoot, proxy, timeout = REQUEST_TIMEOUT } = options;
   if (/^https?:\/\//i.test(target)) {
@@ -148,8 +169,7 @@ function openSource(target: string, options: SourceOptions): Source {
     return localSource(target, '');
   }
   if (proxy) {
-    const base = httpUrl(proxy, 'YZT_3DT_PROXY');
-    const root = base.href.endsWith('/') ? base : new URL(`${base.href}/`);
+    const root = asDirectory(httpUrl(proxy, 'YZT_3DT_PROXY'));
     return httpSource(new URL(`3dt/${encodePath(target)}`, root), timeout, `（YZT_3DT_PROXY 是 ${proxy}）`);
   }
   return localSource(
@@ -169,7 +189,9 @@ async function readJson<T>(file: ModelFile, parse: (text: string) => T): Promise
       throw new ToolError(`${file.location} 的内容不对：${issues}`, { cause: error });
     }
     if (error instanceof SyntaxError) {
-      throw new ToolError(`${file.location} 不是合法的 JSON：${error.message}`, { cause: error });
+      // V8 的报错里会引用一段原文，可能带换行
+      const reason = error.message.split(/\r?\n/).join(' ');
+      throw new ToolError(`${file.location} 不是合法的 JSON：${reason}`, { cause: error });
     }
     throw error;
   }
@@ -191,6 +213,10 @@ export async function readModel(target: string, options: SourceOptions): Promise
   const { meshFiles } = index.root;
   if (meshFiles.length === 0) {
     throw new ToolError('索引的 root.meshFiles 是空的：这份数据没有碰撞网格，没法拟合和核对');
+  }
+  const missing = source.missing?.(meshFiles) ?? [];
+  if (missing.length > 0) {
+    throw new ToolError(`索引里列的碰撞网格找不到 ${missing.length} 个，如 ${missing[0]}`);
   }
   return { location: source.index.location, index, trajectory, meshes: readMeshes(source, meshFiles) };
 }

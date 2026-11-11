@@ -28,7 +28,10 @@ const TURNED_WALK = CORRIDOR_WALK.map((point): Vec3 => {
 
 describe('register', () => {
   it('偏航：轨迹相对网格转了 2° 再平移，给出这个偏航时拟合出的修正和摆放都对得上', async () => {
-    const result = await register({ index: INDEX, trajectory: TURNED_WALK, meshes: MESHES }, { ...DEFAULTS, yaw: TRUTH.yaw });
+    const result = await register(
+      { index: INDEX, trajectory: TURNED_WALK, meshes: MESHES },
+      { ...DEFAULTS, yaw: TRUTH.yaw }
+    );
 
     expect(Math.abs(result.correction.shift[0] - TRUTH.shift[0])).toBeLessThan(0.25);
     expect(Math.abs(result.correction.shift[1] - TRUTH.shift[1])).toBeLessThan(0.25);
@@ -75,7 +78,10 @@ describe('register', () => {
 
   it('高程基准的差只加在高度上，核对不变', async () => {
     const base = await register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES }, DEFAULTS);
-    const raised = await register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES }, { ...DEFAULTS, datum: 5.47 });
+    const raised = await register(
+      { index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES },
+      { ...DEFAULTS, datum: 5.47 }
+    );
     expect(raised.placement.height).toBeCloseTo(base.placement.height + 5.47, 9);
     expect(raised.placement.lng).toBe(base.placement.lng);
     expect(raised.check).toEqual(base.check);
@@ -108,6 +114,19 @@ describe('register', () => {
     const whole = await register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: MESHES }, DEFAULTS);
     expect(streamed.meshCount).toBe(MESHES.length);
     expect(streamed.placement).toEqual(whole.placement);
+  });
+
+  it('网格一个一个取：第一个解析失败时不再取下一个', async () => {
+    let pulled = 0;
+    const stream = async function* () {
+      pulled++;
+      yield { name: 'data/mesh/bad.ply', bytes: new TextEncoder().encode('hello') };
+      pulled++;
+      yield* MESHES;
+    };
+    const run = register({ index: INDEX, trajectory: CORRIDOR_WALK, meshes: stream() }, DEFAULTS);
+    await expect(run).rejects.toThrow('data/mesh/bad.ply');
+    expect(pulled).toBe(1);
   });
 
   it('网格文件读不了：报错里有文件名', async () => {

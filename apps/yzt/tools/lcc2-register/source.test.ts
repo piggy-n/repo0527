@@ -4,9 +4,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToolError } from './errors.ts';
+import { register } from './register.ts';
 import { readModel, type SourceOptions } from './source.ts';
+import { CORRIDOR_WALK, CORRIDORS, meshPly } from './test-meshes.ts';
 
 const NAME = '楚王山1号';
 const ENCODED = '%E6%A5%9A%E7%8E%8B%E5%B1%B11%E5%8F%B7';
@@ -17,13 +19,15 @@ const DIRECTORY = `/3dt/${ENCODED}/lcc2-sog-result`;
 
 const INDEX = { epsg: 4548, offset: [1, 2, 3], root: { meshFiles: ['data/mesh/0.ply', 'data/mesh/1.ply'] } };
 const POSES = { poses: [{ T: [1, 2, 3] }], fusionPoses: null };
-const MESH_0 = new TextEncoder().encode('ply mesh 0');
-const MESH_1 = new TextEncoder().encode('ply mesh 1');
+// 不是合法的 UTF-8：按文本读会被改掉
+const MESH_0 = new Uint8Array([0x70, 0xff, 0x80, 0x00]);
+const MESH_1 = new Uint8Array([0x70, 0x00, 0xfe, 0xc0]);
 
 // 键是请求的路径（编码后的原样）
 type Responder = () => Response | Promise<Response>;
 const binary = (bytes: Uint8Array) => () =>
   new HttpResponse(bytes, { headers: { 'Content-Type': 'application/octet-stream' } });
+const notFound: Responder = () => HttpResponse.html('<html>404</html>', { status: 404 });
 const indexResponse: Responder = () =>
   HttpResponse.text(JSON.stringify(INDEX), { headers: { 'Content-Type': 'application/octet-stream' } });
 const posesResponse: Responder = () => HttpResponse.json(POSES);
@@ -46,7 +50,7 @@ function serve(overrides: Record<string, Responder> = {}, origin = PROXY) {
       const { pathname } = new URL(request.url);
       requests.push(pathname);
       const responder = files[pathname];
-      return responder ? responder() : new HttpResponse('<html>404</html>', { status: 404 });
+      return responder ? responder() : notFound();
     })
   );
 }
@@ -68,9 +72,9 @@ function writeLocalModel() {
 }
 
 async function meshesOf(model: Awaited<ReturnType<typeof readModel>>) {
-  const meshes: { name: string; text: string }[] = [];
+  const meshes: { name: string; bytes: number[] }[] = [];
   for await (const { name, bytes } of model.meshes) {
-    meshes.push({ name, text: new TextDecoder().decode(bytes) });
+    meshes.push({ name, bytes: Array.from(bytes) });
   }
   return meshes;
 }
@@ -90,8 +94,8 @@ async function failureOf(target: string, extra: Partial<SourceOptions> = {}) {
 }
 
 const EXPECTED_MESHES = [
-  { name: 'data/mesh/0.ply', text: 'ply mesh 0' },
-  { name: 'data/mesh/1.ply', text: 'ply mesh 1' }
+  { name: 'data/mesh/0.ply', bytes: Array.from(MESH_0) },
+  { name: 'data/mesh/1.ply', bytes: Array.from(MESH_1) }
 ];
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
@@ -100,6 +104,7 @@ beforeEach(() => {
   requests.length = 0;
 });
 afterEach(() => {
+  vi.restoreAllMocks();
   server.resetHandlers();
   rmSync(localRoot, { recursive: true, force: true });
 });
@@ -128,10 +133,26 @@ describe('readModel：从哪里读', () => {
     expect(model.location).toBe(`${PROXY}/3dt/${RELATIVE}`);
   });
 
-  it('代理的地址以 / 结尾、相对路径用反斜杠：地址一样', async () => {
+  it('相对路径用反斜杠：地址一样', async () => {
     serve();
-    await readModel(RELATIVE.replaceAll('/', '\\'), options({ proxy: `${PROXY}/` }));
+    await readModel(RELATIVE.replaceAll('/', '\\'), options({ proxy: PROXY }));
     expect(requests[0]).toBe(INDEX_PATH);
+  });
+
+  it.each(['/yzt', '/yzt/', '/yzt?x=1', '/yzt#a'])('代理的地址带路径 %s：路径留着，再接 3dt', async (suffix) => {
+    serve({ [`/yzt${INDEX_PATH}`]: indexResponse, [`/yzt${DIRECTORY}/info/poses.json`]: posesResponse });
+    await readModel(RELATIVE, options({ proxy: `${PROXY}${suffix}` }));
+    expect(requests[0]).toBe(`/yzt${INDEX_PATH}`);
+  });
+
+  it('索引里的文件名也按段编码：# 和反斜杠不改变请求的地址', async () => {
+    const index = { ...INDEX, root: { meshFiles: ['data\\mesh\\a#1.ply'] } };
+    serve({
+      [INDEX_PATH]: () => HttpResponse.text(JSON.stringify(index)),
+      [`${DIRECTORY}/data/mesh/a%231.ply`]: binary(MESH_0)
+    });
+    await meshesOf(await readModel(RELATIVE, options({ proxy: PROXY })));
+    expect(requests.at(-1)).toBe(`${DIRECTORY}/data/mesh/a%231.ply`);
   });
 
   it('文件名里的 #、% 按段编码，不当成地址的一部分', async () => {
@@ -175,8 +196,26 @@ describe('readModel：读取', () => {
     expect(countMeshRequests()).toBe(2);
   });
 
+  it('二进制的网格经 HTTP 读出来能解析、配准', async () => {
+    const index = {
+      epsg: 4548,
+      offset: [505745.46, 3793605.53, 59.74],
+      root: { meshFiles: CORRIDORS.map((_, i) => `data/mesh/${i}.ply`) }
+    };
+    serve({
+      [INDEX_PATH]: () => HttpResponse.text(JSON.stringify(index)),
+      [`${DIRECTORY}/info/poses.json`]: () =>
+        HttpResponse.json({ poses: CORRIDOR_WALK.map((T) => ({ T })), fusionPoses: null }),
+      ...Object.fromEntries(CORRIDORS.map((mesh, i) => [`${DIRECTORY}/data/mesh/${i}.ply`, binary(meshPly(mesh))]))
+    });
+    const model = await readModel(RELATIVE, options({ proxy: PROXY }));
+    const result = await register(model, { shift: [0, 0, 0], yaw: 0, datum: 0, fit: true });
+    expect(result.meshCount).toBe(CORRIDORS.length);
+    expect(result.failed).toBe(false);
+  });
+
   it('索引带 BOM 也能读', async () => {
-    serve({ [INDEX_PATH]: () => HttpResponse.text(`﻿${JSON.stringify(INDEX)}`) });
+    serve({ [INDEX_PATH]: () => HttpResponse.text(`\uFEFF${JSON.stringify(INDEX)}`) });
     const model = await readModel(RELATIVE, options({ proxy: PROXY }));
     expect(model.index.epsg).toBe(4548);
   });
@@ -189,25 +228,42 @@ describe('readModel：失败时一行原因', () => {
     expect(message).toContain('YZT_LOCAL_DIR');
   });
 
-  it('本机缺碰撞网格：说是哪个文件', async () => {
+  it('给的是目录：说要给索引文件', async () => {
     writeLocalModel();
-    rmSync(join(localRoot, `${NAME}/lcc2-sog-result/data/mesh/1.ply`));
-    expect(await failureOf(RELATIVE)).toContain(join(localRoot, `${NAME}/lcc2-sog-result/data/mesh/1.ply`));
+    expect(await failureOf(NAME)).toContain('要给 .lcc2 索引文件');
   });
 
-  it('索引 404：说地址、状态和代理', async () => {
-    serve({ [INDEX_PATH]: () => new HttpResponse('nope', { status: 404 }) });
+  it('本机缺碰撞网格：读网格之前就说缺几个、第一个是哪个', async () => {
+    writeLocalModel();
+    rmSync(join(localRoot, `${NAME}/lcc2-sog-result/data/mesh/0.ply`));
+    rmSync(join(localRoot, `${NAME}/lcc2-sog-result/data/mesh/1.ply`));
+    const reading = readModel(RELATIVE, options());
+    await expect(reading).rejects.toThrow('找不到 2 个');
+    await expect(reading).rejects.toThrow(join(localRoot, `${NAME}/lcc2-sog-result/data/mesh/0.ply`));
+  });
+
+  it('索引 404：说地址、状态和代理，不说回退到页面', async () => {
+    serve({ [INDEX_PATH]: notFound });
     const message = await failureOf(RELATIVE, { proxy: PROXY });
     expect(message).toContain(`${PROXY}/3dt/${RELATIVE}`);
     expect(message).toContain('HTTP 404');
     expect(message).toContain(`YZT_3DT_PROXY 是 ${PROXY}`);
+    expect(message).not.toContain('回退');
   });
 
   it('碰撞网格 404：说是哪个文件', async () => {
-    serve({ [`${DIRECTORY}/data/mesh/1.ply`]: () => new HttpResponse('nope', { status: 404 }) });
+    serve({ [`${DIRECTORY}/data/mesh/1.ply`]: notFound });
     const message = await failureOf(RELATIVE, { proxy: PROXY });
     expect(message).toContain('data/mesh/1.ply');
     expect(message).toContain('HTTP 404');
+  });
+
+  it('相对路径写成了编码后的样子：% 按原文编码，报错显示真正请求的地址', async () => {
+    serve();
+    const message = await failureOf(`${ENCODED}/x.lcc2`, { proxy: PROXY });
+    const requested = `/3dt/${ENCODED.replaceAll('%', '%25')}/x.lcc2`;
+    expect(requests).toEqual([requested]);
+    expect(message).toContain(requested);
   });
 
   it('索引 200 但回退成了页面：说返回的是网页', async () => {
@@ -241,8 +297,8 @@ describe('readModel：失败时一行原因', () => {
     expect(await failureOf(RELATIVE, { proxy: PROXY })).toContain('text/html');
   });
 
-  it('索引不是 JSON：说不是合法的 JSON', async () => {
-    serve({ [INDEX_PATH]: () => HttpResponse.text('garbage') });
+  it('索引不是 JSON：说不是合法的 JSON，响应里的换行不进报错', async () => {
+    serve({ [INDEX_PATH]: () => HttpResponse.text('garbage\nmore\n') });
     expect(await failureOf(RELATIVE, { proxy: PROXY })).toContain('不是合法的 JSON');
   });
 
@@ -262,9 +318,25 @@ describe('readModel：失败时一行原因', () => {
     expect(message).toContain('0.02 秒内没有读完');
   });
 
-  it('连不上：说地址', async () => {
+  it('连不上：说地址，没有更具体的原因时用 fetch 的说法', async () => {
     serve({ [INDEX_PATH]: () => HttpResponse.error() });
-    expect(await failureOf(RELATIVE, { proxy: PROXY })).toContain(`${PROXY}/3dt/${RELATIVE}`);
+    const message = await failureOf(RELATIVE, { proxy: PROXY });
+    expect(message).toContain(`${PROXY}/3dt/${RELATIVE}`);
+    expect(message).toContain('Failed to fetch');
+  });
+
+  it('连不上：说 cause 里真正的原因', async () => {
+    const cause = new Error('connect ECONNREFUSED 192.0.2.1:5173');
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('fetch failed', { cause }));
+    const message = await failureOf(RELATIVE, { proxy: PROXY });
+    expect(message).toContain('ECONNREFUSED');
+    expect(message).not.toContain('fetch failed');
+  });
+
+  it('主机名有几个地址都连不上：原因在 AggregateError 的第一项里', async () => {
+    const cause = new AggregateError([new Error('connect ECONNREFUSED ::1:5173')], '');
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('fetch failed', { cause }));
+    expect(await failureOf(RELATIVE, { proxy: PROXY })).toContain('ECONNREFUSED ::1:5173');
   });
 
   it('YZT_3DT_PROXY 不是 http 地址：说变量名', async () => {

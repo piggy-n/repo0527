@@ -127,6 +127,23 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
   });
 });
 
+describe('入库的清单里的高斯泼溅', () => {
+  it('索引的地址按段编码，目录和文件名都对应模型的名称', () => {
+    const { models } = sceneManifestSchema.parse(JSON.parse(manifestText));
+    const splats = models.flatMap(model => (model.kind === 'splat' ? [model] : []));
+
+    expect(splats.length).toBeGreaterThan(0);
+    for (const { name, lcc2 } of splats) {
+      const path = decodeURIComponent(lcc2);
+      const directory = `${name}/lcc2-sog-result/`;
+      const file = `${name}.lcc2`;
+      expect(path.slice(0, directory.length)).toBe(directory);
+      expect(path.slice(-file.length)).toBe(file);
+      expect(path.split('/').map(encodeURIComponent).join('/')).toBe(lcc2);
+    }
+  });
+});
+
 describe('清单里的屏幕误差上限', () => {
   it('是正数才通过；目录带上它，没写的不出现这一项', () => {
     expect(parse(withModel({ maximumScreenSpaceError: 8 })).success).toBe(true);

@@ -52,7 +52,7 @@
 |---|---|---|
 | `PROXY_TARGET`、`AI_PROXY_TARGET` | `.env`（不带 `VITE_`，不进产物） | 开发服务器和 `vite preview` 的接口代理目标 |
 | `YZT_LOCAL_DIR` | 进程环境变量 | 未入库的本地文件放在哪里（ADR 0141） |
-| `YZT_3DT_PROXY` | 进程环境变量 | 开发服务器把 `/3dt/` 整个代理到别的服务器，用来看服务器上的大模型 |
+| `YZT_3DT_PROXY` | 进程环境变量 | 开发服务器把 `/3dt/` 整个代理到别的服务器，用来看服务器上的大模型；`measure:3d`、`lcc2:register` 也改从 `<它>/3dt/` 读模型 |
 
 ## 新增一个开关时放哪
 

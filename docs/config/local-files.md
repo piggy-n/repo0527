@@ -44,16 +44,18 @@ pnpm --filter yzt dev
 
 ## 模型从服务器取
 
-本机没有某个模型的数据（JKQ、JKQ2 只在服务器上）时，环境变量 `YZT_3DT_PROXY` 让开发服务器把 `/3dt/` 整个代理到那台服务器，清单和模型都从它取，`local/3dt/` 这时不再映射。它也只从进程的环境变量读（PowerShell）：
+本机没有某个模型的数据（JKQ、JKQ2 只在服务器上）时，环境变量 `YZT_3DT_PROXY` 让开发服务器把 `/3dt/` 整个代理到那台服务器，清单和模型都从它取，`local/3dt/` 这时不再映射。它只在进程的环境变量里设，不写进 `.env`：工具脚本由 Node 直接运行，读不到 `.env`，写在 `.env.local` 里只对开发服务器生效（PowerShell）：
 
 ```powershell
 $env:YZT_3DT_PROXY = 'http://192.168.1.180:5173'
 pnpm --filter yzt dev:intranet
 ```
 
-测试服务器上提供 `/opt/front/3dt/` 的 nginx 在 5173 端口（`/etc/nginx/nginx.conf`，2026-11-11 确认）；80 端口是 nginx 的默认页，`:18010` 是后端，都没有 `/3dt/`。服务器的 `/3dt/manifest.json` 来自它的 `dist/`，要发布前端才更新，所以新加进清单的模型在发布之前看不到：页面要先看时，只替换清单这一个响应。
+测试服务器上提供 `/opt/front/3dt/` 的 nginx 在 5173 端口（`/etc/nginx/nginx.conf`，2026-11-11 确认）；80 端口是 nginx 的默认页，`:18010` 是后端，都没有 `/3dt/`。这个地址上有 LCC2 模型和 `XZ_GC_3DT`，没有 JKQ、JKQ2（2026-11-11 请求是 404）；要看经开区时写放着它们的服务器：`http://<服务器地址>:<nginx 提供 /3dt/ 的端口>`。
 
-用途是在有显卡的机器上跑瓦片集的诊断页 `/dev/tileset-probe`（[modules/map-cesium.md](../modules/map-cesium.md)"诊断读数"）。配准工具 `lcc2:register` 用同一个变量，同一个相对路径改从 `<它>/3dt/` 读（[commands.md](../commands.md)）。
+服务器的 `/3dt/manifest.json` 来自它的 `dist/`，要发布前端才更新，所以新加进清单的模型在发布之前看不到。开发服务器没有内置的办法替换清单（代理转发整个 `/3dt/`，`local/3dt/manifest.json` 这时也不生效）：用浏览器 DevTools 的 Local Overrides，或者一次性的 Playwright 脚本 `context.route('**/3dt/manifest.json', ...)` 换成入库的清单（写法见 `tools/smoke/scene-maplibre.spec.ts`）。
+
+用途是在有显卡的机器上跑瓦片集的诊断页 `/dev/tileset-probe`（[modules/map-cesium.md](../modules/map-cesium.md)"诊断读数"）。`measure:3d` 和配准工具 `lcc2:register` 用同一个变量，从 `<它>/3dt/` 读模型（[commands.md](../commands.md)）。
 
 ## 开发服务器
 
