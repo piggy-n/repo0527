@@ -1,14 +1,8 @@
 import type { Locator, Page } from 'playwright/test';
 import { expect, test } from './fixtures.ts';
 
-// 静态底图陆地的颜色（src/shared/map/basemap/static-palette.ts）；冒烟不导入应用源码，这里按值比较。
-// 四种都算上，分色开关打开时不用改这里
-const LAND_COLORS = [
-  [0xf3, 0xf1, 0xe9],
-  [0xee, 0xf1, 0xe7],
-  [0xf2, 0xed, 0xe6],
-  [0xeb, 0xf0, 0xeb]
-];
+// 静态底图陆地的颜色（src/shared/map/basemap/static-palette.ts）；冒烟不导入应用源码，这里按值比较
+const LAND_COLORS = [[0xf3, 0xf1, 0xe9]];
 // 三维贴地的面经过混合，比较时留一点余量
 const TOLERANCE = 3;
 // 默认视角下全省占画面的比例远大于它；没有陆地时只有面板文字的边缘偶尔碰上，远小于它

@@ -1,10 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { STATIC_BASEMAP_OPTIONS } from '../../src/shared/config/static-basemap-options.ts';
 import {
   STATIC_CITY_LINE_COLOR,
-  STATIC_OUTSIDE_COLOR,
-  staticCityColors
+  STATIC_LAND_COLOR,
+  STATIC_OUTSIDE_COLOR
 } from '../../src/shared/map/basemap/static-palette.ts';
 import { labelCollection, type RegionCollection, thumbnailSvg } from './generate.ts';
 
@@ -19,7 +18,7 @@ const counties = read('jiangsu-county.json');
 const outputs = {
   'data/jiangsu-labels.json': JSON.stringify(labelCollection(cities, counties)),
   'images/static-thumbnail.svg': thumbnailSvg(cities, {
-    cityColors: staticCityColors(STATIC_BASEMAP_OPTIONS.cityColors),
+    landColor: STATIC_LAND_COLOR,
     outsideColor: STATIC_OUTSIDE_COLOR,
     lineColor: STATIC_CITY_LINE_COLOR
   })

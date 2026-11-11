@@ -3,12 +3,7 @@ import { expect, test } from './fixtures.ts';
 import { roomB3dm, roomManifest, roomTileset, splatFiles } from './scene-model.ts';
 
 // 静态底图陆地的颜色（src/shared/map/basemap/static-palette.ts），同 static-basemap.spec.ts；冒烟不导入应用源码
-const LAND_COLORS = [
-  [0xf3, 0xf1, 0xe9],
-  [0xee, 0xf1, 0xe7],
-  [0xf2, 0xed, 0xe6],
-  [0xeb, 0xf0, 0xeb]
-];
+const LAND_COLORS = [[0xf3, 0xf1, 0xe9]];
 const TOLERANCE = 3;
 const MIN_LAND_SHARE = 0.05;
 

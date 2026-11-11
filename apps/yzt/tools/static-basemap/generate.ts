@@ -142,7 +142,7 @@ const mercatorY = (lat: number) => {
 };
 
 export interface ThumbnailOptions {
-  readonly cityColors: Readonly<Record<string, string>>;
+  readonly landColor: string;
   readonly outsideColor: string;
   readonly lineColor: string;
 }
@@ -153,7 +153,7 @@ const HEIGHT = 200;
 const PROVINCE_HEIGHT = 116;
 const PATH_SIMPLIFY_TOLERANCE = 0.4;
 
-/** 底图卡和面板用的缩略图：全省的市按静态底图的配色画成 SVG */
+/** 底图卡和面板用的缩略图：全省的市按静态底图的配色画成 SVG，每个市一条 path，描边是市之间的细线 */
 export function thumbnailSvg(cities: RegionCollection, options: ThumbnailOptions): string {
   const points = cities.features.flatMap(feature => polygonsOf(feature).flat(2));
   const xs = points.map(point => mercatorX(x(point)));
@@ -168,10 +168,6 @@ export function thumbnailSvg(cities: RegionCollection, options: ThumbnailOptions
   ];
 
   const paths = cities.features.map(feature => {
-    const color = options.cityColors[feature.properties.code];
-    if (!color) {
-      throw new Error(`[static-basemap] ${feature.properties.name}（${feature.properties.code}）没有配色`);
-    }
     const data = polygonsOf(feature)
       .map(rings => {
         const projected = rings.map(ring => ring.map(project));
@@ -181,7 +177,7 @@ export function thumbnailSvg(cities: RegionCollection, options: ThumbnailOptions
           .join('');
       })
       .join('');
-    return `<path fill="${color}" d="${data}"/>`;
+    return `<path fill="${options.landColor}" d="${data}"/>`;
   });
 
   return (

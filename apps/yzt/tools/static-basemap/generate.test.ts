@@ -84,15 +84,14 @@ describe('labelCollection', () => {
 });
 
 describe('thumbnailSvg', () => {
-  const options = { cityColors: { '1': '#111111', '2': '#222222' }, outsideColor: '#333333', lineColor: '#444444' };
+  const options = { landColor: '#111111', outsideColor: '#333333', lineColor: '#444444' };
   const cities = regions(['1', '甲市', [square(118, 32, 1)]], ['2', '乙市', [square(119, 32, 1)]]);
 
-  it('省外是底色，每个市按自己的颜色画，市之间是细线', () => {
+  it('省外是底色，每个市一条陆地色的 path，市之间是细线', () => {
     const svg = thumbnailSvg(cities, options);
 
     expect(svg).toContain('fill="#333333"');
-    expect(svg).toContain('fill="#111111"');
-    expect(svg).toContain('fill="#222222"');
+    expect([...svg.matchAll(/<path fill="#111111" d="M[^"]+"\/>/g)]).toHaveLength(2);
     expect(svg).toContain('stroke="#444444"');
   });
 
@@ -101,9 +100,5 @@ describe('thumbnailSvg', () => {
 
     expect(Math.min(...coordinates)).toBeCloseTo(42, 0);
     expect(Math.max(...coordinates)).toBeCloseTo(158, 0);
-  });
-
-  it('有市没有配色时报错，说出是哪个市', () => {
-    expect(() => thumbnailSvg(regions(['9', '丁市', [square(0, 0, 1)]]), options)).toThrow('丁市（9）没有配色');
   });
 });
