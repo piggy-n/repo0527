@@ -1,6 +1,6 @@
 # 0150. 三维默认引擎改为 MapLibre + Three.js
 
-- 状态：已接受（2026-11-10 用户确认；后果里待定的 Cesium 下的资源图层（方案 B）由 0151、叠画布的 LCC2 由 0152 定为不做；后果里的署名和 `gaussian-splat-lite` 的 LICENSE、NOTICE 见 0149 的状态行）
+- 状态：已接受（2026-11-10 用户确认；后果里待定的 Cesium 下的资源图层（方案 B）由 0151、叠画布的 LCC2 由 0152 定为不做；后果里的署名和 `gaussian-splat-lite` 的 LICENSE、NOTICE 见 0149 的状态行；`cesium` 仍可选、CI 的另一种引擎、`test.env` 固定 `cesium` 由 0153 取代，Cesium 引擎已移除）
 - 日期：2026-11-10
 - 修改：ADR 0147 第 1 节的默认值（`.env`）、第 7 节 CI 里"默认以外的那一种"
 

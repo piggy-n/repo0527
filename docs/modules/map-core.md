@@ -8,7 +8,7 @@
 - 组合优先于继承：最多一层抽象基类（例如统一管理资源释放），不做 `BaseManager → LayerManager → MvtLayerManager` 这样的多层继承。目前一层也没有用到
 - 依赖通过构造参数传入（包的拆包规则），所有对象在一个地方组装：页面调用 map-vue 的 `provideMap()` 创建会话、绑定样式（ADR 0028，见 [map-vue.md](map-vue.md)）。map-core 不依赖 Vue、Element，不读 store 和全局单例；提示、接口请求、鉴权头由使用方传入
 - 核心能力是二三维之间接近无感的切换：用户在一个框架里的操作和状态，切到另一个框架时尽量保留；框架独有的功能保持独有（ADR 0020）
-- map-core 持有地图会话状态（样式模型、相机、当前工具、选择状态），它是二三维共同的唯一真相源。Manager 修改会话状态，不直接写引擎；只有 MapLibre 适配器写二维地图，Cesium 镜像会话状态（ADR 0020）。jsdom 里没有 WebGL，Manager 的测试断言会话状态即可
+- map-core 持有地图会话状态（样式模型、相机、当前工具、选择状态），它是二三维共同的唯一真相源。Manager 修改会话状态，不直接写引擎；只有 MapLibre 视图写地图，二维和三维都是它（ADR 0020、0147、0153）。jsdom 里没有 WebGL，Manager 的测试断言会话状态即可
 
 ## 结构
 
@@ -34,7 +34,7 @@
 | `maplibre/apply-style-command.ts` | `applyStyleCommand`：一条命令对应一次地图方法调用 |
 | `maplibre/maplibre-view.ts` | `MapLibreView`：二维视图，唯一写 MapLibre 地图的地方 |
 | `maplibre/roam/` | MapLibre 引擎的漫游（ADR 0147 第 4 节）：`MapLibreRoam` 接管地图、抬高、进出和报告进度，`RouteRoamer`、`WalkRoamer` 是从 map-cesium 移植的路线和步行（只用真实坐标，经 `RoamHost` 设相机、拾取、投影），`roam-camera.ts` 是真实视点和 MapLibre 相机的换算；见 [map-three.md](map-three.md)"漫游" |
-| `view/blackout.ts` | `Blackout`：闪切用的黑幕（ADR 0086、0103），两种引擎的漫游共用，从入口导出（3C.3 从 map-cesium 移来） |
+| `view/blackout.ts` | `Blackout`：闪切用的黑幕（ADR 0086、0103），漫游用，从入口导出（3C.3 从 map-cesium 移来） |
 | `view/modifier-pan.ts` | `ModifierPan`：按住修饰键临时拖动地图，截下这次按下、把指针的移动交给视图平移、给出临时的光标（ADR 0056、0080 第 4 节）；二维、三维的视图共用，从入口导出 |
 | `events.ts` | `Unsubscribe` 类型 |
 | `model-events.ts` | `ModelEvents`：会话各模型共用的事件与释放（ADR 0034 第 7 条），模块内部使用，不从入口导出 |
@@ -88,8 +88,7 @@ session[Symbol.dispose]();
               按装配方声明的顺序拼成完整样式；同一轮事件循环的提交合并通知
                                    │ diffSnapshot(上一份, 这一份)：GeoJSON 数据、样式图片按引用比较
                                    ▼
-              StyleCommand[] ──▶ MapLibre 适配器（唯一写二维地图的地方，记下已应用的快照）
-                             └──▶ Cesium 镜像（以后）
+              StyleCommand[] ──▶ MapLibre 适配器（唯一写地图的地方，二三维共用，记下已应用的快照）
 
 相机、当前工具、选择状态：各自独立，各自发事件，变化时不重算样式
 ```
@@ -117,7 +116,7 @@ session[Symbol.dispose]();
 - 所有分组引用都没变的提交被忽略；内容相同的新对象照样让修订号加 1，但对比后没有命令就不通知
 - 同一轮事件循环里的提交合并成一次通知（微任务）；通知前先记下快照，监听器里再次提交时，下一次通知从这里开始对比
 - 释放后丢弃待发的通知、清空监听器，再提交或订阅会抛错；读取 `current`、`revision` 仍然可以
-- 可选的 `sceneBelow`（ADR 0147 第 2 节，3C.2）：MapLibre 引擎的三维模型层叠在哪个分组下面。组合快照时顺便算出 `sceneBefore`，即这个分组及以上各分组里的第一个图层（都为空时没有，模型层在最上面）；它随快照（`StyleSnapshot`、`StyleChange`）一起走，视图按已应用的快照摆放模型层，对比快照时不看它。不给时模型层在最上面；不是声明过的分组时构造抛错。Cesium 不看这一项
+- 可选的 `sceneBelow`（ADR 0147 第 2 节，3C.2）：MapLibre 引擎的三维模型层叠在哪个分组下面。组合快照时顺便算出 `sceneBefore`，即这个分组及以上各分组里的第一个图层（都为空时没有，模型层在最上面）；它随快照（`StyleSnapshot`、`StyleChange`）一起走，视图按已应用的快照摆放模型层，对比快照时不看它。不给时模型层在最上面；不是声明过的分组时构造抛错
 
 ### CameraModel
 
@@ -132,7 +131,7 @@ session[Symbol.dispose]();
 - 会话的 `scene`：`{ tilesets, splats?, underground, roam? }`，和样式模型一样整体替换、每次替换修订号加 1、同一轮事件循环只通知一次；同一个对象不算变化。`splats` 是 LCC2 高斯泼溅（ADR 0149：`.lcc2` 索引的地址、配准后的 `placement`、显示、重试次数），没有时不写；只有能力声明 `splats` 的引擎画它
 - `set` 时校验：瓦片集 ID 不重复、地址是绝对地址（瓦片地址按它解析）、`attempt` 是非负整数、`maximumScreenSpaceError`（可选，这个瓦片集的屏幕误差上限）是正数、钻地指向已有的瓦片集、地表不透明度在 0～1；泼溅的地址是绝对地址、`attempt` 是非负整数、摆放的四个值是有限的数且纬度在 ±90 以内，泼溅和瓦片集的 ID 合在一起不重复（状态在同一份 `SceneStatus` 里），钻地只能指向瓦片集；不合法时抛错，内容和修订号不变
 - 二维视图不读它；三维视图镜像它，按 ID 的状态通过可选的 `sceneStatus` / `onSceneStatusChange` 报告
-- 两种三维引擎共用的瓦片集同步（ADR 0147 第 3 节）：`SceneTilesetSync` 按会话的瓦片集增删改引擎里的瓦片集（地址、重试次数变了就重新加载，其余的只改显示和光照；同组的换显示时新的首批瓦片到了才撤下旧的），汇总状态；引擎实现 `TilesetHost`（`addTileset`、`updateTileset`、`removeTileset`），瓦片失败、首批瓦片到位由视图转给它的 `failed`、`initial`。让包围球进入画布的相机是 `tilesetCamera`（俯角 55°，算上球心的椭球高：视线穿过球心，不是球心脚下的地面；有悬浮面板留白时球心会偏离可视区中心，模型越高偏得越多），缩放级和距离的换算是 `camera/camera-distance.ts`，两种引擎共用。高斯泼溅（会话的 `splats`，ADR 0149）同样由 `SceneSplatSync` 同步：地址、摆放、重试次数变了就重新加载，其余的只改显示；引擎实现 `SplatHost`，只有 MapLibre 引擎用它，状态和瓦片集的合成一份（`mergeSceneStatus`），ID 由会话校验不重复，地下空间只能是瓦片集。瓦片集的 `clippedBySplats`（倾斜摄影在泼溅的范围里不画）和显示、光照一样只更新、不重新加载
+- 三维的瓦片集同步（ADR 0147 第 3 节）：`SceneTilesetSync` 按会话的瓦片集增删改引擎里的瓦片集（地址、重试次数变了就重新加载，其余的只改显示和光照；同组的换显示时新的首批瓦片到了才撤下旧的），汇总状态；引擎实现 `TilesetHost`（`addTileset`、`updateTileset`、`removeTileset`），瓦片失败、首批瓦片到位由视图转给它的 `failed`、`initial`。让包围球进入画布的相机是 `tilesetCamera`（俯角 55°，算上球心的椭球高：视线穿过球心，不是球心脚下的地面；有悬浮面板留白时球心会偏离可视区中心，模型越高偏得越多），缩放级和距离的换算是 `camera/camera-distance.ts`。高斯泼溅（会话的 `splats`，ADR 0149）同样由 `SceneSplatSync` 同步：地址、摆放、重试次数变了就重新加载，其余的只改显示；引擎实现 `SplatHost`，状态和瓦片集的合成一份（`mergeSceneStatus`），ID 由会话校验不重复，地下空间只能是瓦片集。瓦片集的 `clippedBySplats`（倾斜摄影在泼溅的范围里不画）和显示、光照一样只更新、不重新加载
 - `roam`（ADR 0083）：路线漫游的意图 `{ kind: 'route', id, path, playing, speed, run }`，`path` 是脚下地板的 `[经度, 纬度, 椭球高]`；校验至少两个点、坐标是数、速度（米/秒，ADR 0097）是正数、遍数是非负整数。没有漫游时不写。三维视图通过可选的 `roamStatus` / `onRoamStatusChange` 报告进度
 
 ### MapSession
@@ -287,7 +286,7 @@ store.clear();
 
 **输入、拾取、投影与工具（5B.3，ADR 0034）**：
 
-- `pick(point, options?)` 用 `unproject` 得到经纬度，二维总是 `{ kind: 'hit', surface: 'map' }`，没有高度。`options.hover`（`PickOptions`，ADR 0149）标出每帧都会调的悬停拾取：状态栏指针下的读数、绘制和逐点编辑跟着鼠标的预览传它，点击的落点、测量、坐标定位、点选不传。三维里悬停时不打高斯泼溅（射线拾取每次可能几十毫秒），打到泼溅的地方按后面的模型或地面算；没有泼溅的引擎（Cesium）忽略它，`ToolView`、`MapView`、渲染器的 `pick` 都带这个参数。`project(lngLat)` 用 MapLibre 的 `project`，忽略高度，结果可能在画布之外。两者和定位一样只在 `ready` 时可用
+- `pick(point, options?)` 用 `unproject` 得到经纬度，二维总是 `{ kind: 'hit', surface: 'map' }`，没有高度。`options.hover`（`PickOptions`，ADR 0149）标出每帧都会调的悬停拾取：状态栏指针下的读数、绘制和逐点编辑跟着鼠标的预览传它，点击的落点、测量、坐标定位、点选不传。三维里悬停时不打高斯泼溅（射线拾取每次可能几十毫秒），打到泼溅的地方按后面的模型或地面算；`ToolView`、`MapView`、渲染器的 `pick` 都带这个参数。`project(lngLat)` 用 MapLibre 的 `project`，忽略高度，结果可能在画布之外。两者和定位一样只在 `ready` 时可用
 - 订阅 MapLibre 的 `mousedown`、`mousemove`、`mouseup`、`click`、`dblclick`、`mouseout`，转成 `down`、`move`、`up`、`click`、`dblclick`、`leave`，带画布上的点、按键和四个修饰键；地图容器上的 `keydown` 转成 `{ type: 'key', key }`（地图获得焦点时才收到，不影响页面上的输入框）
 - 当前工具是临时任务时，切换工具和进入 ready（首次就绪、重建、恢复显示）时把键盘焦点移到画布上（`focus({ preventScroll: true })`）：临时任务多由工具栏、面板上的按钮激活，焦点还在按钮上，Esc 到不了地图（5B 收尾时用户发现拾取开启后按 Esc 没反应）；加载期间开启的临时任务，就绪后补上焦点。常驻模式不移，进入页面时（"移动"）不会抢走焦点
 - 只有 `ready` 的视图把输入交给 `session.tool.dispatch`：初始化中、暂停（切到三维）时不转交，二三维切换时只有当前显示的视图在转交。交给工具的是冻结的 `{ kind, pick, project }`
@@ -295,7 +294,7 @@ store.clear();
 - 工具的钩子抛错时由 `#guard` 交给 `onError`，不冒进 MapLibre 的事件分发
 - 释放时取消鼠标事件的订阅、移除按键监听（释放后的状态挡住了转交，所以测试直接确认 `removeEventListener` 被调用）
 
-**按住修饰键临时拖动（ADR 0056）**：由 `ModifierPan` 负责，和地图一起创建、一起释放。它不认识引擎：视图给出画布容器、截下哪些按下事件（二维只有 `mousedown`，三维还有 Cesium 用的 `pointerdown`）和平移的函数 `pan(from, to)`（客户区坐标）；MapLibre 适配器按 `from - to` 的位移 `panBy`，三维见 [map-cesium.md](map-cesium.md)"输入与工具"。
+**按住修饰键临时拖动（ADR 0056）**：由 `ModifierPan` 负责，和地图一起创建、一起释放。它不认识引擎：视图给出画布容器（在它的捕获阶段截下 `mousedown`）和平移的函数 `pan(from, to)`（客户区坐标）；MapLibre 适配器按 `from - to` 的位移 `panBy`，二三维相同。
 
 - 为什么要自己平移：所装 MapLibre（6.12）的拖动平移只认没按 Ctrl 的左键，左键加 Ctrl 是旋转和俯仰，而且只在按下时判断；打开它的拖动平移也拖不动
 - 开始：视图就绪、当前工具声明了 `panModifier`、左键按下时按着这个键。`ModifierPan` 在画布容器的捕获阶段截下这次按下（`stopPropagation`，不阻止默认行为，画布照常获得焦点）：MapLibre 在同一个元素的冒泡阶段监听按下，收不到它，所以不旋转、不俯仰，也不发出 `mousedown` 地图事件，工具不会开始框选
@@ -359,7 +358,7 @@ store.clear();
 
 ## 第一人称步行（ADR 0086）
 
-迁自旧项目 `FirstPersonRoam.js` 的第一人称部分，规则和参数不变；Cesium 那一半（键鼠、深度拾取、相机）在 map-cesium 的 `scene-walk.ts`，MapLibre 那一半在 `maplibre/roam/walk-roamer.ts`（从它移植，见 [map-three.md](map-three.md)"漫游"）。
+迁自旧项目 `FirstPersonRoam.js` 的第一人称部分，规则和参数不变；引擎那一半（键鼠、拾取、相机）在 `maplibre/roam/walk-roamer.ts`（从 map-cesium 的 `scene-walk.ts` 移植，见 [map-three.md](map-three.md)"漫游"）。
 
 - 会话的意图 `WalkRoam`：导航网格、清单的出生点、速度，回到出生点和脱困写成计数（加 1 就做一次）；完整地图打开时 `paused`，在完整地图上双击的瞬移 `teleport: { count, spot }`（ADR 0087）。视图报告 `{ kind: 'walk', phase, notice, notices, player }`，`player`（`WalkPlayer`）是人的局部坐标、地板、偏航、水平视场角和点击移动的落点，进到站内以后每帧变了才报告
 - `Walker`：局部系里的位置、楼层、视点高度和朝向。`walk` 每 0.1 米做一次 `moveFloor` 碰撞，被挡时偏转 0、±0.5、±1 弧度顺墙滑；`follow` 沿点击的路径走，穿闸机的直线不做碰撞、地板按比例过渡；`settleEye` 让视点平滑跟随地板，偏差夹在 -0.4～+0.15 米；俯仰限制在 ±80°
@@ -370,7 +369,7 @@ store.clear();
 
 ## 第三人称（ADR 0090）
 
-迁自旧项目 `FirstPersonRoam.js` 的第三人称部分和 `RoamAvatar.js` 的步态，参数不变；入口暂不开放（页面上只有第一人称）。
+迁自旧项目 `FirstPersonRoam.js` 的第三人称部分和 `RoamAvatar.js` 的步态，参数不变；入口暂不开放（页面上只有第一人称）。人物模型只有 Cesium 画过，随 Cesium 移除（ADR 0153），MapLibre 引擎下换到第三人称时看不到人，以后用 `AnimatedModel` 做（[map-three.md](map-three.md)、`docs/backlog.md`）。
 
 - 会话的 `WalkRoam` 有 `view`（`first` | `third`）和人物模型的绝对地址 `avatar`；步行状态的 `view` 是视图正在用的人称
 - `WalkRig`：相机的挂法。第一人称臂长为 0，相机在眼睛上；第三人称绕的点比眼睛高 0.25 米，默认离人 4 米（`zoom` 在 1.5～8 米之间调），沿视线反方向每 0.1 米查一次 `NavGrid.isFree`（四周留 0.25 米），被挡时立即缩短、挡的过去了慢慢放回；切换时沿臂滑出、收回。俯仰第三人称 -75°～25°（`Walker.limitPitch`），切过去时至少俯看 18°（`startPitch`）；人走动时每秒最多转 540° 朝向走的方向；相机离人 0.6～1.4 米之间人淡入淡出（`avatarAlpha`）
@@ -388,7 +387,7 @@ store.clear();
 | `applyStyleCommand` | 一条命令对应一次地图方法调用 | 假对象，jsdom |
 | `MapLibreView` | 生命周期、样式修订的跟踪、暂停恢复、出错重建、相机读写；状态转换的穷举短序列 | 注入 `createMap` 换成假地图，jsdom |
 | `MapLibreView`（`maplibre-view.browser.test.ts`） | 真实的 MapLibre（ADR 0040）：首次加载与俯角收敛后按 `sync` 写回、增量提交后画出要素且不整体重建、规范以外的图层属性触发整体重建、不合法的图层进入 `failed(style)` 后自动恢复、拾取与投影、画布尺寸变化；样式图片在首次加载、只改图片（换像素、换格式、去掉）、整体重建后都在，没有缺图；声明了 Ctrl 的工具按住 Ctrl 拖动是平移、不旋转，右键拖动照常旋转（对照："移动"里按住 Ctrl 拖动是 MapLibre 的旋转） | Chromium 无界面版，软件渲染 |
-| `ModifierPan` | 截下按下（包括同一次按下的 `pointerdown` 和 `mousedown`）、交出指针移动、结束的各种情况、吞掉的输入、光标的切换与通知、失焦、释放后不再监听 | 真实的 DOM 事件，jsdom |
+| `ModifierPan` | 截下按下、交出指针移动、结束的各种情况、吞掉的输入、光标的切换与通知、失焦、释放后不再监听 | 真实的 DOM 事件，jsdom |
 | 真实 MapLibre | 渲染、Worker、事件、尺寸监听、中心点 | 开发页 `/dev/map`，浏览器 |
 
 - 工具模型的输入事件（5D.3）：先发出 `input` 再交给当前工具、按键也发出；监听者抛错时工具照样收到输入，错误抛给调用方。改坏 2 处（不发出、去掉 `try/finally`），连同默认关掉版权控件 1 处，全部由断言发现
@@ -430,7 +429,7 @@ store.clear();
 7. **缓存比预加载更重要**：产物文件名带 hash，部署时给 `/assets/*` 设置长期缓存（`immutable`），`index.html` 不缓存，并开启压缩；预加载真正起作用的是第一次访问和每次部署后的第一次访问（阶段七）
 8. **用数据决定**：阶段五给"点击登录 → 地图第一次加载完成"打性能标记，在禁用缓存、限速的条件下对比有无预加载，再写 ADR
 
-决定见 [ADR 0061](../adr/0061-map-resource-loading.md)（2026-10-16，实测后）：进入地图时同时加载运行时和地图页分块，都到了再预热 Worker 池；登录页空闲时用同一个加载函数预加载，只在省流量模式时跳过（修正第 4 条）；默认框架由 `app/map-framework.ts` 的 `defaultMapFramework()` 回答，现在固定是二维，map-vue 的运行时注入留到三维阶段（第 2 条）；求交库不按需加载。字体的加载时机另见 [ADR 0062](../adr/0062-font-loading-not-deferred.md)（不推迟）。
+决定见 [ADR 0061](../adr/0061-map-resource-loading.md)（2026-10-16，实测后）：进入地图时同时加载运行时和地图页分块，都到了再预热 Worker 池；登录页空闲时用同一个加载函数预加载，只在省流量模式时跳过（修正第 4 条）；默认框架当时由 `app/map-framework.ts` 的 `defaultMapFramework()` 回答、固定是二维，map-vue 的运行时注入留到三维阶段（第 2 条）；求交库不按需加载。三维改由同一个 MapLibre 视图担任以后（ADR 0147、0153），`app/map-framework.ts` 只有一个运行时（`loadMapRuntime()`），第 2、3、6 条里另一个框架的运行时和 Cesium 的静态资源不再有对象；三维模块在二维稳定后预加载（ADR 0091 的做法，[perf.md](perf.md)"切到三维"）。字体的加载时机另见 [ADR 0062](../adr/0062-font-loading-not-deferred.md)（不推迟）。
 
 实测（5E.1、5E.2）：标记、实测脚本和数据见 [perf.md](perf.md)。第 8 条的"禁用缓存"实测时改为每次用新的浏览器上下文（缓存为空、照常工作）：禁用缓存时 MapLibre 的每个 Worker 都会重新下载一次 Worker 脚本，真实的第一次访问不会这样。
 
@@ -462,7 +461,7 @@ store.clear();
 
 - 图例统计的主线程耗时：已定（5C.4 实测后决定，ADR 0043），不做统计：旧项目统计只为发现表外编码，已由 ADR 0041 的静态规则代替；实测全省 18.9 万个要素 327～563 ms、z13 只要几毫秒，以后要"只看当前视野的地类"时按这组数字选做法
 - 高亮用 feature-state 还是按要素 ID 过滤的图层：做高亮时实测（ADR 0022）
-- 三维样式的支持清单：实现镜像之前写出（ADR 0024）
+- 三维样式的支持清单（ADR 0024）：不再需要，三维和二维是同一个 MapLibre 视图，照常画全部样式（ADR 0147、0153）
 - 瓦片是否因用户或权限而不同：2026-10-09 实测瓦片不校验 token，带不带 token 内容相同（[docs/archive/migration.md](../archive/migration.md)"现状底图：接口实测"）；以后会不会按权限过滤仍要向后端确认，再决定缓存键是否包含权限范围（ADR 0025）
 
 已确定：map-core 放在 `packages/map-core`（ADR 0018）；MapLibre 用 6.x（ADR 0019）；地图会话状态是唯一真相源（ADR 0020）；Worker 策略（ADR 0021）；样式模型与会话提交（ADR 0022）；资源释放、事件与运行时装配（ADR 0023）；视图接口（ADR 0024）；Worker 通信契约与瓦片数据服务（ADR 0025）；迁移基线 `836f03b` 已记入 [docs/archive/migration.md](../archive/migration.md)。

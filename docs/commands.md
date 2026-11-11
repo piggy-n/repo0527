@@ -21,7 +21,7 @@
 | 内网部署的构建 | `pnpm build:intranet` |
 | 预览构建产物 | `pnpm --filter yzt preview` |
 | 实测"点击登录 → 地图第一次加载完成"、"第一次切到三维" | `pnpm --filter yzt measure:map-load` |
-| 三维两种引擎的性能对比、高斯泼溅的预算（显卡机器上，ADR 0147 3C.4、ADR 0149 L.3） | `pnpm --filter yzt measure:3d` |
+| 三维的性能实测、高斯泼溅的预算（显卡机器上，ADR 0149 L.3） | `pnpm --filter yzt measure:3d` |
 | 算 LCC2 模型在清单里的摆放（ADR 0149） | `pnpm --filter yzt lcc2:register <索引>` |
 | 探查资源的分类字段、瓦片是否合并（只读，要能连后端） | `pnpm --filter yzt probe:resource-classes` |
 | 生成自定义监测范围的验收文件 | `pnpm --filter yzt scope-files:generate` |
@@ -189,13 +189,13 @@ pnpm add -Dw -E some-tool
 
 ### `pnpm --filter yzt measure:3d`
 
-**作用**：用生产代码比较 MapLibre 引擎和 Cesium 的倾斜摄影 z17、z19：到稳定、两遍飞行的帧时间、长任务和归因、显存、截图的清晰度，按 ADR 0147 3C.4 的条件逐项判断。
+**作用**：用生产代码测 MapLibre 引擎的倾斜摄影 z17、z19：到稳定、两遍飞行的帧时间、长任务和归因、显存、清晰度（飞一圈回来和飞行前比），并检查稳定时没有被拒绝的瓦片、静止时没有加载和卸载。以前按 ADR 0147 3C.4 和 Cesium 逐项比较，Cesium 引擎已移除（ADR 0153）。
 
-**什么时候用**：改了 `packages/map-three` 的缓存、上传或渲染之后；改默认引擎之前（ADR 0147 第 9 节）；定高斯泼溅的默认预算、升级 `gaussian-splat-lite` 以后（`--only splat`，ADR 0149 L.3）。
+**什么时候用**：改了 `packages/map-three` 的缓存、上传或渲染之后；定高斯泼溅的默认预算、升级 `gaussian-splat-lite` 以后（`--only splat`，ADR 0149 L.3）。
 
 **执行了什么**：Node 运行 `tools/measure-3d/cli.ts`：启动前检查（模型、端口、渲染器，空页面校准帧间隔的下限）→ 用 `tools/measure-3d/vite.config.ts` 按生产模式构建测量页 → 每遍一个新的浏览器进程 → 写 `local/measure-3d/<时间>/`（`report.md`、`quality.html`、`manual.md`、`raw.json`、`shots/`、`profiles/`，不入库）。每跑完一遍就重新写一次报告，中断了也留得下。
 
-**注意事项**：只在有真实显卡的机器上有意义，看到软件渲染直接退出（`--allow-software` 只用来确认脚本能跑）。默认参数实测 30 分钟（2026-11-08，RTX 3060），每多一个对照方案多约 8 分钟，期间会弹出浏览器窗口，不要用这台机器。`--cull-window` 对照动着不请求的窗口：产品默认按实测的加载时间，`1` 是 Cesium 的固定 1 秒，`off` 是动着也请求。`--only splat` 只跑高斯泼溅的场景：只有 MapLibre 引擎，按 `--splat-budget`（默认 `3m,6m,10m`）每个预算一个方案，模型从清单读（`local/3dt/manifest.json` 在时用它，和开发服务器一样），报告开头是"高斯泼溅的预算"一节；彭城广场的样例要先写进本地清单。步骤和口径见 [modules/map-three.md](modules/map-three.md)"性能验收"和"泼溅的预算"，参数见 `--help`。
+**注意事项**：只在有真实显卡的机器上有意义，看到软件渲染直接退出（`--allow-software` 只用来确认脚本能跑）。默认参数实测 30 分钟（2026-11-08，RTX 3060，那时还要跑 Cesium 一个方案，现在应当更短，没有再测），每多一个对照方案多约 8 分钟，期间会弹出浏览器窗口，不要用这台机器。`--cull-window` 对照动着不请求的窗口：产品默认按实测的加载时间，`1` 是固定 1 秒，`off` 是动着也请求。`--only splat` 只跑高斯泼溅的场景：按 `--splat-budget`（默认 `3m,6m,10m`）每个预算一个方案，模型从清单读（`local/3dt/manifest.json` 在时用它，和开发服务器一样），报告开头是"高斯泼溅的预算"一节；彭城广场的样例要先写进本地清单。步骤和口径见 [modules/map-three.md](modules/map-three.md)"性能验收"和"泼溅的预算"，参数见 `--help`。
 
 ### `pnpm --filter yzt lcc2:register <索引>`
 
@@ -367,7 +367,7 @@ pnpm --filter yzt test:smoke
 
 ### `pnpm --filter yzt test:smoke`
 
-**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）；三维（`scene.spec.ts`，3D.5c）检查二维稳定后预加载了三维运行时、切到三维画面稳定、加载一个生成的测试模型并定位、点"漫游"步行进站（导航网格的 Worker 分块，左侧换成漫游面板）、漫游时没有状态栏和视图控件（ADR 0095、0097），Esc 退出漫游回到地面后回到二维复用画布。MapLibre 引擎的三维（`scene-maplibre.spec.ts`，ADR 0147）只在 `VITE_MAP_3D_ENGINE=maplibre` 构建的产物上运行，`scene.spec.ts` 反过来只在 `cesium` 上：检查二维稳定后预加载了 map-three、切到三维还是同一块画布，三维里画出静态底图、测距和坐标定位可用、能加载生成的模型。
+**作用**：用真实 Chromium 访问生产构建，检查登录到地图、页面缓存与尺寸恢复、三个分块的失败提示与刷新恢复（ADR 0065）；三维（`scene.spec.ts`，3D.5c、ADR 0147）检查二维稳定后预加载了 map-three、切到三维还是同一块画布、画面稳定，三维里画出静态底图、测距和坐标定位可用，加载一个生成的测试模型并定位、点"漫游"步行进站（导航网格的 Worker 分块，左侧换成漫游面板）、漫游时没有状态栏和视图控件（ADR 0095、0097），Esc 退出漫游回到地面；再加载一份生成的高斯泼溅并画出来（ADR 0149），最后回到二维复用画布。
 
 **什么时候用**：先运行 `pnpm build:intranet`；修改加载、路由或页面缓存后运行，CI 在内网构建后自动执行。只跑某个文件时在命令后面加文件名，如 `pnpm --filter yzt test:smoke system-management`。
 
@@ -375,7 +375,7 @@ pnpm --filter yzt test:smoke
 
 **注意事项**：需要已安装 Chromium；4173 端口须空闲，不复用已有服务。三维的模型数据不入库，冒烟拦下清单和瓦片，换成自己生成的一间 12 米见方的屋子（`tools/smoke/scene-model.ts`）；软件渲染下这个用例约 30 秒，用例的时限放到 3 分钟。不会自动构建，不能在公网产物上运行；输出写入已忽略的 `local/smoke-results/`，不依赖账号、私有字体或真实后端，不设毫秒性能门槛。`pnpm test` 不包含这组 `*.spec.ts` 用例。
 
-构建时决定的开关，冒烟和构建读同一份配置，只验证这次构建的取值（如 `resource-min-zooms.spec.ts`：`.env` 的 `VITE_RESOURCE_MIN_ZOOM_ENABLED` 现在是 `false`，打开时的用例被跳过；`application.spec.ts` 的底图偏好同样按 `VITE_PREFERENCES_ENABLED`、`VITE_PREFERENCE_BASEMAP` 选用例，见 ADR 0140）。要验证另一个取值，不改 `.env`，在同一个终端设环境变量后构建和冒烟（`loadEnv` 优先取环境变量），PowerShell 里写 `$env:VITE_RESOURCE_MIN_ZOOM_ENABLED = 'true'`，结束后 `Remove-Item Env:VITE_RESOURCE_MIN_ZOOM_ENABLED`，再按原来的配置构建一次。三维引擎同样：`$env:VITE_MAP_3D_ENGINE = 'maplibre'` 后 `pnpm build:intranet`、`pnpm --filter yzt test:smoke scene-maplibre`（CI 也这样跑）。
+构建时决定的开关，冒烟和构建读同一份配置，只验证这次构建的取值（如 `resource-min-zooms.spec.ts`：`.env` 的 `VITE_RESOURCE_MIN_ZOOM_ENABLED` 现在是 `false`，打开时的用例被跳过；`application.spec.ts` 的底图偏好同样按 `VITE_PREFERENCES_ENABLED`、`VITE_PREFERENCE_BASEMAP` 选用例，见 ADR 0140）。要验证另一个取值，不改 `.env`，在同一个终端设环境变量后构建和冒烟（`loadEnv` 优先取环境变量），PowerShell 里写 `$env:VITE_RESOURCE_MIN_ZOOM_ENABLED = 'true'`，结束后 `Remove-Item Env:VITE_RESOURCE_MIN_ZOOM_ENABLED`，再按原来的配置构建一次。
 
 ### `pnpm --filter yzt test:watch`
 

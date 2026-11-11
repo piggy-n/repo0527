@@ -216,7 +216,7 @@ TS 7 的 `strict` 默认已经是 `true`，这里显式写出来，是为了不�
 
 **配置要逐个包写 `tsBuildInfoFile`：** `extends` 里的相对路径相对写它的那份配置，放在公共配置里，所有包会用同一个位置。
 
-**包被检查多次：** 应用的 `tsc -b` 会沿导入把用到的包按 app 的规则再查一遍，依赖它的包也会（map-vue 的程序里有 map-core、map-cesium 的源码）。这是有意保留的：改用项目引用（`composite`）要输出声明文件，配置会复杂很多。全部包的 `pnpm typecheck` 约 9 秒（2026-11-05，并行）。
+**包被检查多次：** 应用的 `tsc -b` 会沿导入把用到的包按 app 的规则再查一遍，依赖它的包也会（map-vue 的程序里有 map-core、map-three 的源码）。这是有意保留的：改用项目引用（`composite`）要输出声明文件，配置会复杂很多。全部包的 `pnpm typecheck` 约 9 秒（2026-11-05，并行）。
 
 **CSS Modules 的类型：** `*.module.scss` 的模块声明来自 `vite/client`，`tsconfig.lib.json` 不加载它，所以 `src/css-modules.d.ts` 单独声明（`ui`、`map-vue`、`map-tools`、`icons` 各一份）。应用的程序只沿导入进入包，看不到这份文件；`tsconfig.test.json` 的 `include` 也不含它，不会和 `vite/client` 同时出现。
 

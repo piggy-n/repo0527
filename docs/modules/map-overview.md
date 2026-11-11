@@ -20,9 +20,9 @@ packages/map-core      地图会话（样式、相机、当前工具）、视图
 packages/utils         LatestController、safeReporter、Worker 通信层
 ```
 
-三维（`packages/map-cesium`，3D.1 起，见 [map-cesium.md](map-cesium.md)）放在 map-core 之上，只能由 map-vue 动态导入；只有它和 app 能导入 `cesium`。依赖方向由 lint 检查（ADR 0006、0079）。
+三维是 MapLibre + Three.js（ADR 0147、0153）：`@mx/map-three`（见 [map-three.md](map-three.md)）放在 map-core 之上，只能由 map-vue 动态导入，只有它（和驾驶舱）能导入 `three`；依赖方向由 lint 检查（ADR 0006）。二三维共用 MapLibre 的画布和视图，三维是地球投影，覆盖物在三维里照常显示，资源图层能在三维里显示、现在 app 注入的能力里关着（等页面重新设计），模型层叠在页面声明的分组（`sceneBelow`）下面；custom layer 的外壳在 map-core 的 MapLibre 适配器里，三维内容在 map-three。
 
-ADR 0147 加入第二种三维引擎：MapLibre + Three.js，新包 `@mx/map-three`（3C.1 起，现在做到 3C.4，见 [map-three.md](map-three.md)），二三维共用 MapLibre 的画布和视图，三维是地球投影，覆盖物在三维里照常显示，资源图层能在三维里显示、现在由 app 的开关关着（这一点同 Cesium），模型层叠在页面声明的分组（`sceneBelow`）下面；custom layer 的外壳在 map-core 的 MapLibre 适配器里，三维内容在 map-three，只能由 map-vue 动态导入，只有它（和驾驶舱）能导入 `three`。用 `VITE_MAP_3D_ENGINE` 选择引擎，app 注入，默认是 MapLibre 引擎（ADR 0150）。
+3D.1 起的 Cesium 引擎（`packages/map-cesium`）在 ADR 0147 以后保留为可选，ADR 0153 把它从 main 移除，代码在标签 `cesium-engine-2026-11`（[map-cesium.md](map-cesium.md)）。
 
 ## 贯穿全局的几条原则
 
@@ -41,13 +41,13 @@ ADR 0147 加入第二种三维引擎：MapLibre + Three.js，新包 `@mx/map-thr
 
 | 主题 | 现在的结论 | ADR | 文档 |
 |---|---|---|---|
-| 位置与拆包 | map-core、map-cesium、map-three、map-vue、map-tools、utils 是内部包（`packages/*`），单入口；通用交互已拆成 map-tools，`shared/map` 留下的等第二个地图项目的需求清楚了再拆 | 0004、0143、0145 | [internal-packages](../config/internal-packages.md)、[map-tools](map-tools.md) |
-| 引擎与版本 | MapLibre GL JS 6，具名导入；Cesium 精确锁定；不用 mapbox-gl；三维默认 MapLibre + Three.js 引擎，Cesium 保留为可选，不用 `maplibre-gl-three`；引擎每个部署在构建时选一种，页面上不给用户切换 | 0002（大版本由 0019 确定）、0019、0147、0150、0151 | [map-core.md](map-core.md)、[map-three.md](map-three.md) |
+| 位置与拆包 | map-core、map-three、map-vue、map-tools、utils 是内部包（`packages/*`），单入口；通用交互已拆成 map-tools，`shared/map` 留下的等第二个地图项目的需求清楚了再拆 | 0004、0143、0145 | [internal-packages](../config/internal-packages.md)、[map-tools](map-tools.md) |
+| 引擎与版本 | MapLibre GL JS 6，具名导入；不用 mapbox-gl；三维只用 MapLibre + Three.js，不用 `maplibre-gl-three`；Cesium 引擎已移除，代码在标签 `cesium-engine-2026-11` | 0002（大版本由 0019 确定）、0019、0147、0153 | [map-core.md](map-core.md)、[map-three.md](map-three.md) |
 | 分层与组装 | 五层的职责；能力按拥有者写，页面挑选组合，不做带开关的全能地图组件 | 0027 | 本文、[shared-map.md](shared-map.md) |
 | 会话 | 样式、相机、当前工具、选择状态（只存要素身份）、三维内容（瓦片集、钻地，页面用 `bindScene` 绑定）；二三维共同的唯一真相源 | 0020（选择状态的范围由 0022 修正，方案比较由 0024 修正）、0047、0081 | [map-core.md](map-core.md) |
 | 样式模型与提交 | 分组推导、整体替换，跨分组的修改一次提交，视图按修订号增量同步；分组可以带样式图片，图片是快照的一部分 | 0022（`failed` 的含义由 0026 修正）、0045 | [map-core.md](map-core.md) |
 | map-vue 上下文 | `provideMap`、`useMap`、`bindStyle`；`view` 只在就绪时有值，只有拾取和投影 | 0028（第 5 条由 0039 修正） | [map-vue.md](map-vue.md) |
-| 视图接口与二三维 | 共用生命周期、相机、输入、拾取、投影、渲染要素查询（三维返回空数组）；相机事件带 `view` 和 `cause`；Cesium 镜像会话 | 0024、0047 | [map-core.md](map-core.md) |
+| 视图接口与二三维 | 共用生命周期、相机、输入、拾取、投影、渲染要素查询（三维返回空数组）；相机事件带 `view` 和 `cause`；一个视图可以随维度换种类（ADR 0147） | 0024、0047 | [map-core.md](map-core.md) |
 | 视图失败 | 样式失败在出现新的提交时自动恢复；引擎失败只能重建视图；状态转换按表执行；带数据源的错误（瓦片出错）不算样式失败，记作视图的数据源错误 | 0026（第 4 条由 0030 修正，第 1、2 条由 0041 修正）、0030、0041 | [map-core.md](map-core.md)"状态转换"、[map-vue.md](map-vue.md) |
 | 资源释放与运行时 | `Disposable`、nanoevents；maplibre-gl 的全局设置在登录页空闲时预加载或首次进入地图时懒加载，同时预热 Worker 池 | 0023、0061 | [map-core.md](map-core.md) |
 | Worker | 二维不自建渲染 Worker；自建的 Worker 统一用通信层；瓦片数据服务的约束 | 0021（第 5 条由 0024 修正，第 3、4 条由 0025 补充）、0025 | [utils.md](utils.md) |
@@ -71,9 +71,9 @@ ADR 0147 加入第二种三维引擎：MapLibre + Three.js，新包 `@mx/map-thr
 | 资源的分类与显示级别 | 取值、名称、颜色写在字典，`style-registry.ts` 按 `code` 登记；图例和地图只用实际有的类别；最小显示级别按单张瓦片 6 MB 实测，放进可替换的部署文件；第一次请求很慢的资源定 8 级 | 0123、0124、0132、0136、0137 | [archive/migration.md](../archive/migration.md)"现状底图：资源分类的探查" |
 | 内网静态底图 | 用本地市界直接绘制面、线和地名，不用图片；地名在页面上开关（二三维都画），各市分色是代码开关，默认都关 | 0133、0134、0146 | [shared-map.md](shared-map.md) |
 | 加载与页面缓存 | 登录页空闲时预加载地图页并预热 Worker 池；字体不推迟；`KeepAlive` 加路由 meta，停用期间暂停视图；`.env` 的开关决定离开页面后是否重置 | 0061～0063、0114、0138 | [map-core.md](map-core.md)、[perf.md](perf.md)、[layout.md](layout.md) |
-| 三维的运行时与切换 | 范围与交互已定；Cesium 只在 `map-cesium` 和 app 导入，`CesiumView` 依赖窄接口；`setDimension` 切换，二维稳定后空闲时预加载三维运行时。两种引擎用 `VITE_MAP_3D_ENGINE` 选择，app 注入，页面不判断；MapLibre 引擎下一个视图同时担任二三维（`kinds`、`setKind`，三维模块加载失败只让三维失败，`retry` 只重新加载它），二维稳定后预加载 map-three；引擎的能力（`sceneCapabilities`）决定三维里的资源图层、图例、点/框选，`maplibre` 的能力由 app 按 `shared/config/scene-options.ts` 的开关收窄（默认关：资源图层、点/框选同 Cesium，高斯泼溅照常）；瓦片集的同步两种引擎共用，过门槛后才改为默认；`cesium` 下三维不显示资源图层，旧项目的 Worker 栅格化（方案 B）做过 PoC，不迁移，代码在分支 `poc/cesium-mvt-raster` 和标签 `poc-plan-b-2026-11` | 0078、0079、0091、0147、0151 | [map-cesium.md](map-cesium.md)、[map-three.md](map-three.md) |
-| 三维覆盖物 | GeoJSON 按样式自动镜像，按整级求值、简化到半个像素；只换坐标时有点数上限，停下后改回静态，重建时等新实体画好；背景图层有细节上限 | 0080、0082、0099、0103、0135 | [map-cesium.md](map-cesium.md) |
-| 三维模型与漫游 | 静态清单描述 3D Tiles，会话的 `scene` 持有；加载前整理索引，外部索引的根节点换到引用它的位置，没有内容的节点不改小误差；路线和步行是 `roam`，合并成一个漫游入口，没有单独的钻地；导航网格是纯 TS，在 Worker 里构建；室内地图、第三人称（入口暂不开放）。LCC2 高斯泼溅只在 `maplibre` 下用 gaussian-splat-lite 显示和拾取，清单存配准后的摆放，数据平铺在 `3dt/` 下经同源转发；同一处的倾斜模型在 LCC2 的范围里裁掉；`cesium` 下叠一块 Three.js 画布显示 LCC2（方案 3）做过 PoC，不做，代码在分支 `poc/cesium-three-lcc2` 和标签 `poc-plan-3-2026-11` | 0081、0083～0087、0090、0097、0102、0103、0148、0149、0152 | [map-cesium.md](map-cesium.md)、[map-core.md](map-core.md) |
+| 三维的运行时与切换 | 范围与交互已定；`setDimension` 切换，`MapCanvas` 的一个视图同时担任二三维（`kinds`、`setKind`），第一次切到三维时加载 map-three，加载失败只让三维失败，`retry` 只重新加载它；二维稳定后空闲时预加载 map-three。app 注入引擎的描述，页面不判断；引擎的能力（`sceneCapabilities`）决定三维里的资源图层、图例、点/框选，由 app 收窄后注入（三维里不显示资源图层、不识别，高斯泼溅照常；等页面重新设计，没有开关）。Cesium 引擎由 0153 移除；Cesium 下的资源图层（方案 B）做过 PoC，不迁移，代码在分支 `poc/cesium-mvt-raster` 和标签 `poc-plan-b-2026-11` | 0078、0091、0147、0151、0153 | [map-three.md](map-three.md)、[map-vue.md](map-vue.md) |
+| 三维覆盖物 | 覆盖物是二维样式的图层，三维里照常显示（ADR 0147 第 2 节）；ADR 0080、0082、0099、0103、0135 的 GeoJSON 镜像、点数上限和细节上限是 Cesium 引擎的做法，随 0153 移除 | 0080、0147、0153 | [map-three.md](map-three.md) |
+| 三维模型与漫游 | 静态清单描述 3D Tiles，会话的 `scene` 持有；加载前整理索引，外部索引的根节点换到引用它的位置，没有内容的节点不改小误差；路线和步行是 `roam`，合并成一个漫游入口，没有单独的钻地；导航网格是纯 TS，在 Worker 里构建；室内地图、第三人称（入口暂不开放）。LCC2 高斯泼溅只在 `maplibre` 下用 gaussian-splat-lite 显示和拾取，清单存配准后的摆放，数据平铺在 `3dt/` 下经同源转发；同一处的倾斜模型在 LCC2 的范围里裁掉；Cesium 下叠一块 Three.js 画布显示 LCC2（方案 3）做过 PoC，不做，代码在分支 `poc/cesium-three-lcc2` 和标签 `poc-plan-3-2026-11` | 0081、0083～0087、0090、0097、0102、0103、0148、0149、0152 | [map-three.md](map-three.md)、[map-core.md](map-core.md) |
 
 ## 阅读顺序
 

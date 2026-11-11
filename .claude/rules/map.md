@@ -3,7 +3,6 @@ paths:
   - "packages/map-core/**"
   - "packages/map-vue/**"
   - "packages/map-tools/**"
-  - "packages/map-cesium/**"
   - "packages/map-three/**"
   - "apps/yzt/src/shared/map/**"
   - "apps/yzt/src/features/{resource-map,scene-models,data-query,monitoring-indicators,indicator-simulation,ai-chat}/**"
@@ -32,7 +31,7 @@ paths:
 - 引用别的分组数据源的推导，要依赖被引用方的状态，保证两者在同一轮变化、一起提交；拥有者的数据源、图层和样式图片的 ID 以分组名为前缀（ADR 0027、0028、0045）
 - `shared/map` 和 feature 的地图能力按"拥有者"写（ADR 0031）：组合式函数持有状态（`shallowRef`，整体替换，值没变时不替换）并提供操作（参数不合法时抛错），推导分组的是纯函数；面板等界面通过 props 拿到拥有者，只显示和调用
 - 会话的选择状态只存要素身份（数据源 + 业务主键），属性、几何、候选列表和详情留在 feature 的查询缓存里，高亮分组从选择和查询结果推导（ADR 0022、0047）
-- 只有 MapLibre 适配器能写二维地图（lint 只允许 `packages/map-core/src/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；Cesium 镜像会话状态，不实现二维的引擎接口；二三维共用的是生命周期、相机、输入、拾取、投影、渲染要素查询这几个视图接口（ADR 0024、0047；三维的渲染要素查询返回空数组）
+- 只有 MapLibre 适配器能写二维地图（lint 只允许 `packages/map-core/src/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；二三维共用的是生命周期、相机、输入、拾取、投影、渲染要素查询这几个视图接口（ADR 0024、0047；三维的渲染要素查询返回空数组）
 - 视图上的差异（如三维期间不画二维标注）由适配器自己处理，不改会话状态；框架独有的功能按能力声明，独有状态由各自的模块保管，切换框架时保留
 - 样式表达式和过滤条件在三维、Worker 里一律用 `@maplibre/maplibre-gl-style-spec` 求值，不手写求值器；它保证求值语义一致，不保证渲染效果一致，三维的支持范围按清单降级（ADR 0024）
 
@@ -74,7 +73,7 @@ paths:
 
 - 地图页的区域按 ADR 0070：行政区、图例、区划定位、坐标定位共用 `usePanelGroup` + `MapPanelGroup`，查询详情由独立 `FeatureDetailWindow` 展示，底图保留按钮左侧的 `MapOptionsPopover`；外壳负责标题、关闭和悬浮元素登记，内容不重复处理。功能入口打开时标签前移，直接点标签只切换；统一关闭只影响功能组。功能与详情同列上下排列，布局由 `panelStackLayout`、`usePanelStack` 管理，空间不足只收起非当前内容。有临时交互的内容接收 `active`，隐藏或收起时结束交互，关闭时卸载；窄屏仍由 `useSideExclusion` 决定最后操作的一边
 - 地图页的界面按 5D 的设计稿（ADR 0053～0055）及后续已确认调整：当前工具、面板开关、视图状态、失败原因等仍是组合式函数、store 或纯函数里的数据，组件只显示和调用，测试放在逻辑上；随尺寸变化的排法写成纯函数（如 `mapPageLayout`、`fitStatusLayout`），组件只交给它量到的尺寸。新的界面块先出可操作的 HTML 原型（`local/design/`，不入库，用 `/design.local/<主题>/` 打开）或真实组件预览，用户确认后再实现，按 `docs/design/ui-workflow.md` 验证
-- 地图页的路由组件用 `app/map-framework.ts` 的 `withMapRuntime` 包装：同时加载默认框架（`defaultMapFramework()`）的运行时和页面，都到了以后设置运行时、预热 Worker 池再返回页面；登录页空闲时 `app/map-preload.ts` 用同一个加载函数预加载，所以地图页分块的模块不在顶层做重的计算（ADR 0061）；二维第一次画面稳定后由画布把要预加载的内容（Cesium 的运行时、MapLibre 引擎的 map-three）交给 app 注入的 `MAP_RUNTIME_PRELOAD`，app 决定空闲时加载、省流量模式跳过（ADR 0091、0147）；交给 MapLibre 的容器元素只用静态 class，可变的 class 放在外层元素上，否则 Vue 会冲掉 MapLibre 自己加的 class
+- 地图页的路由组件用 `app/map-framework.ts` 的 `withMapRuntime` 包装：同时加载 MapLibre 的运行时和页面，都到了以后设置运行时、预热 Worker 池再返回页面；登录页空闲时 `app/map-preload.ts` 用同一个加载函数预加载，所以地图页分块的模块不在顶层做重的计算（ADR 0061）；二维第一次画面稳定后由画布把要预加载的内容（三维模块 map-three）交给 app 注入的 `MAP_RUNTIME_PRELOAD`，app 决定空闲时加载、省流量模式跳过（ADR 0091、0147）；交给 MapLibre 的容器元素只用静态 class，可变的 class 放在外层元素上，否则 Vue 会冲掉 MapLibre 自己加的 class
 - 地图页被缓存时（ADR 0063）：`MapCanvas` 在页面停用时暂停视图、激活时恢复，隐藏期间的定位等恢复后再执行；视图恢复时先按容器尺寸调整画布，暂停时进行中的定位动画直接到终点并写回会话；面板内容在页面停用时按隐藏处理（`active` 为 false）
 
 ## 资源与 Worker

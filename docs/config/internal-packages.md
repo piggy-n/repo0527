@@ -1,6 +1,6 @@
 # workspace 内部包的配置约定
 
-对应目录：`packages/*`（utils、ui、theme、icons、map-core、map-cesium、map-three、map-vue、map-tools）
+对应目录：`packages/*`（utils、ui、theme、icons、map-core、map-three、map-vue、map-tools）
 相关决策：ADR 0004（模块边界）、ADR 0014（第一个内部包）、ADR 0143（libs 全部搬成包）、ADR 0145（map-tools）
 
 ## 什么是内部包
@@ -18,8 +18,8 @@ apps/yzt  ──依赖 "@mx/map-core": "workspace:*"──▶  node_modules/@mx/
 
 ```
 utils ◀── ui
-utils ◀── map-core ◀── map-cesium、map-three
-utils、map-core ◀── map-vue ┄┄动态 import()┄┄▶ map-cesium、map-three
+utils ◀── map-core ◀── map-three
+utils、map-core ◀── map-vue ┄┄动态 import()┄┄▶ map-three
 map-core、map-vue ◀── map-tools
 icons、theme 不依赖其他包
 ```
@@ -85,18 +85,18 @@ packages/map-core/
 
 | 写法 | 什么时候用 | 例子 |
 |---|---|---|
-| `peerDependencies` + `devDependencies` | 要和应用共用同一份：有全局状态，或者两份会互不相通 | `vue`、`element-plus`、`maplibre-gl`（`setWorkerUrl`）、`cesium`（`buildModuleUrl.setBaseUrl`） |
+| `peerDependencies` + `devDependencies` | 要和应用共用同一份：有全局状态，或者两份会互不相通 | `vue`、`element-plus`、`maplibre-gl`（`setWorkerUrl`） |
 | `dependencies` | 其他运行时依赖，包括别的内部包 | `nanoevents`、`@turf/simplify`、`@vueuse/core`、`@mx/utils` |
 | `devDependencies` | 只有测试和类型检查用 | `vitest`、`@vue/test-utils`、`@types/geojson` |
 
 两个及以上的包用到的依赖在 `pnpm-workspace.yaml` 的 `catalog` 写版本，这里写 `catalog:`（见 [pnpm-workspace.md](pnpm-workspace.md)）。
 
-**catalog 不是可选的。** 经符号链接解析后，包里的 `import 'cesium'` 从 `packages/map-cesium` 往上找，用的是包自己的 `node_modules`（devDependencies 装的那一份），不是应用的。peer 只是声明"由应用提供"，真正让两边是同一份的，是版本完全相同、pnpm 链接到 `.pnpm` 下的同一个目录。版本不同时不会报错，只会悄悄出现两份：`setWorkerUrl` 设到一份上，地图用的是另一份。
+**catalog 不是可选的。** 经符号链接解析后，包里的 `import 'maplibre-gl'` 从 `packages/map-core` 往上找，用的是包自己的 `node_modules`（devDependencies 装的那一份），不是应用的。peer 只是声明"由应用提供"，真正让两边是同一份的，是版本完全相同、pnpm 链接到 `.pnpm` 下的同一个目录。版本不同时不会报错，只会悄悄出现两份：`setWorkerUrl` 设到一份上，地图用的是另一份。
 
 装完依赖后可以这样确认：
 
 ```bash
-ls node_modules/.pnpm | grep -E '^(vue|maplibre-gl|cesium|element-plus)@'
+ls node_modules/.pnpm | grep -E '^(vue|maplibre-gl|three|element-plus)@'
 ```
 
 ## tsconfig
@@ -120,9 +120,9 @@ ls node_modules/.pnpm | grep -E '^(vue|maplibre-gl|cesium|element-plus)@'
 每个包有自己的 `vitest.config.ts`，有浏览器测试的包分 `unit`、`browser` 两个项目，写法和 `apps/yzt` 相同（ADR 0143）。
 
 - **共用设置：** 浏览器测试的设置（软件渲染、视口、不写失败截图）在根目录的 `vitest.shared.ts`，应用和各个包用同一份
-- **不依赖应用：** 包的测试不用应用的 setup。要 MapLibre 的包在 `src/test-setup.browser.ts` 里自己设置 Worker 地址和样式；要 Cesium 的包在配置里用 `viteStaticCopy` 提供 `/cesium/`；要挂载组件的包在 `src/test-setup.ts` 里调用 `enableAutoUnmount`
+- **不依赖应用：** 包的测试不用应用的 setup。要 MapLibre 的包在 `src/test-setup.browser.ts` 里自己设置 Worker 地址和样式；要挂载组件的包在 `src/test-setup.ts` 里调用 `enableAutoUnmount`
 - **串行：** `pnpm test`、`pnpm test:changed` 用 `--workspace-concurrency=1` 逐个包执行。这些浏览器测试用软件 WebGL，对负载敏感（ADR 0040），不能让两个包同时开浏览器；依赖在前，web 最后
-- **选测试：** 改 `packages/map-core` 的 `map-session.ts` 时，`--changed` 在 map-core 选中 3 个文件，map-vue 7 个，map-cesium 3 个，web 90 个，utils 0 个（2026-11-05 实测）
+- **选测试：** 改 `packages/map-core` 的 `map-session.ts` 时，`--changed` 在 map-core 选中 3 个文件，map-vue 7 个，web 90 个，utils 0 个（2026-11-05 实测）
 - **浏览器：** 用同一个版本的 Playwright，装一次（`pnpm --filter yzt test:browser:install`）就够
 
 ## Sass 入口
@@ -152,7 +152,7 @@ ls node_modules/.pnpm | grep -E '^(vue|maplibre-gl|cesium|element-plus)@'
 
 ## 分块
 
-包的入口都是 `src/index.ts`，Rolldown 按目录给分块命名，默认都会叫 `src-xxx.js`。`apps/yzt/vite.config.ts` 的 `chunkFileNames` 把它换成包名（`map-cesium-xxx.js`），产物里才认得出。
+包的入口都是 `src/index.ts`，Rolldown 按目录给分块命名，默认都会叫 `src-xxx.js`。`apps/yzt/vite.config.ts` 的 `chunkFileNames` 把它换成包名（`map-three-xxx.js`），产物里才认得出。
 
 **`sideEffects`：** 入口把包里的模块都连在一起。Rolldown 判断不出某个模块没有副作用时（顶层写 `new Map(...)` 就会这样），经入口导入一个名字，所有模块都算可达，同样的页面组合下它们进同一个分块。`@mx/map-tools` 实测：工具栏只取 `MEASURE_TOOL_IDS`，整个包连同 turf 都进了工具栏的分块，不用它们的 AI 对话页多加载约 26 KB（ADR 0145）。写 `"sideEffects": false` 后只有用到的模块进分块。代价是模块不能在导入时产生副作用；`*.module.scss` 取了类名，不算。
 
@@ -174,7 +174,7 @@ ls node_modules/.pnpm | grep -E '^(vue|maplibre-gl|cesium|element-plus)@'
 1. 建目录和 `package.json`（参考上文）；有 Vue 组件时把 `vue` 设为 peer 依赖；两个包以上用到的依赖放进 catalog
 2. 复制 `tsconfig.json`、`tsconfig.lib.json`、`tsconfig.test.json`、`tsconfig.node.json`、`vitest.config.ts`，按需调整 `include`、`types`
 3. `.oxlintrc.json` 的 `import/resolver` 的 `project` 数组已用 `packages/*/tsconfig.lib.json` 通配，不用改；新包要依赖或被依赖时，在 `packages` override 里补上方向
-4. 在使用方添加 `workspace:*` 依赖，运行 `pnpm install`，确认 `.pnpm` 里没有多出 Vue、MapLibre、Cesium 的第二份
+4. 在使用方添加 `workspace:*` 依赖，运行 `pnpm install`，确认 `.pnpm` 里没有多出 Vue、MapLibre、Three.js 的第二份
 5. 运行 `pnpm typecheck`、`pnpm lint`、`pnpm --filter <包名> test`，确认新包被覆盖
 6. 构建后比较产物：入口大小不变，入口没有带上地图引擎；再看各页面静态加载的分块（总量和页面用不到的模块），不只看总大小
 7. 在 `docs/modules/` 写模块说明，并在 AGENTS.md 的目录结构中登记

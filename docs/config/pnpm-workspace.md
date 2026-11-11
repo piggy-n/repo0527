@@ -8,7 +8,7 @@
 ## 这个文件管什么
 
 1. 声明 workspace 包含哪些目录
-2. 依赖版本的统一入口（`catalog`）和对间接依赖的强制版本（`overrides`）
+2. 依赖版本的统一入口（`catalog`）。现在没有 `overrides`：原来钉住 Cesium 的子包，随引擎移除（ADR 0153）
 3. pnpm 的项目级设置。pnpm 较新的版本把项目设置集中到这个文件，`.npmrc` 主要用于 registry 地址和认证
 
 当前内容：
@@ -19,14 +19,9 @@ packages:
   - "packages/*"
 
 catalog:
-  cesium: 1.146.0
+  maplibre-gl: ^6.12.0
   vue: ^3.5.43
   # 其余见文件
-
-overrides:
-  "@cesium/core": 0.1.0
-  "@cesium/engine": 26.4.0
-  "@cesium/widgets": 16.3.0
 
 minimumReleaseAge: 4320
 
@@ -54,16 +49,16 @@ pnpm 的 `node_modules` 是严格的：每个包只能访问自己声明过的�
 
 ```yaml
 catalog:
-  cesium: 1.146.0
   maplibre-gl: ^6.12.0
+  three: 0.187.0
   vue: ^3.5.43
 ```
 
 两个及以上的包用到的依赖在这里写一次版本，各包的 `package.json` 写 `"vue": "catalog:"`（dependencies、devDependencies、peerDependencies 都可以写）；只有一个包用到的依赖仍写在那个包里（ADR 0143）。
 
-**为什么必须统一：** 包经符号链接解析时，`import 'cesium'` 找的是包自己的 `node_modules`，不是应用的。版本完全相同时，pnpm 把它们链接到 `.pnpm` 下的同一个目录，才是同一份；版本不同时不报错，悄悄出现两份，MapLibre 的 `setWorkerUrl`、Cesium 的 `setBaseUrl`、Vue 的响应式都会互不相通。
+**为什么必须统一：** 包经符号链接解析时，`import 'maplibre-gl'` 找的是包自己的 `node_modules`，不是应用的。版本完全相同时，pnpm 把它们链接到 `.pnpm` 下的同一个目录，才是同一份；版本不同时不报错，悄悄出现两份，MapLibre 的 `setWorkerUrl`、Vue 的响应式都会互不相通。
 
-**不遵守语义化版本的包**（Cesium、TypeScript）在这里写精确版本，peer 写 `catalog:` 同样是精确版本。
+**不遵守语义化版本的包**（TypeScript）在这里写精确版本，peer 写 `catalog:` 同样是精确版本。
 
 `three`、`@types/three` 写精确版本（0.187.0、0.187.0）：驾驶舱和 `@mx/map-three` 共用一份（ADR 0147 第 5 节），LCC2 的 `gaussian-splat-lite` 要求 0.187 以上（ADR 0149）。0.x 的小版本按大版本单独提交，升级时跑驾驶舱的测试和冒烟、人工看入场和发光的边界，以及 map-three 的测试。
 
@@ -73,20 +68,7 @@ catalog:
 - `pnpm outdated -r`（`pnpm deps:check`）能列出 catalog 里的依赖
 - `pnpm update -r --latest` 只改 catalog 里的版本，`package.json` 保持 `catalog:`
 
-## overrides
-
-```yaml
-overrides:
-  "@cesium/core": 0.1.0
-  "@cesium/engine": 26.4.0
-  "@cesium/widgets": 16.3.0
-```
-
-`cesium` 是聚合包，catalog 把它钉在 1.146.0，但它对子包写的是 `^26.4.0`、`^16.3.0`、`^0.1.0`。只靠 lockfile 才能停在配套的版本：一旦刷新 lockfile，子包就会升上去。2026-11-05 在 PoC 工程里实测，解析到 `@cesium/engine` 26.5.0 后构建失败（它移除了 `ForEach`）。
-
-三个子包一起钉，只钉 engine 时 widgets 仍然可能升到不配套的版本。
-
-**升级 `cesium` 时：** 查新版本 `package.json` 里三个子包的版本，和 catalog 一起改。只改 catalog 时，新的聚合包会配旧的子包，不一定会报错。
+只剩一个包用到的依赖移回那个包：`vite-plugin-static-copy` 原来还给 map-vue 的测试复制 Cesium 的文件，现在只有应用用，写在 `apps/yzt/package.json`（`^4.1.1`）。
 
 ## minimumReleaseAge
 
@@ -157,5 +139,4 @@ pnpm 从 10 开始默认**不执行**依赖包的安装脚本（`preinstall`、`
 - 改了 `minimumReleaseAge`：运行 `pnpm install --frozen-lockfile`，确认现有 lockfile 仍然通过校验
 - 新增 `allowBuilds` 项：写明由哪个依赖引入、为什么这样选
 - 新增 `packages` 目录：确认 `pnpm -r typecheck`、`pnpm -r build` 能覆盖新包
-- 第二个包用到某个依赖时：把版本挪进 `catalog`，两个包都写 `catalog:`
-- 升级 `cesium`：`overrides` 里的三个子包一起改
+- 第二个包用到某个依赖时：把版本挪进 `catalog`，两个包都写 `catalog:`；只剩一个包用到时挪回那个包

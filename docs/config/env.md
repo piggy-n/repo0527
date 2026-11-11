@@ -34,7 +34,7 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 | `PROXY_TARGET` | `http://192.168.1.180:18010` | 只在 `vite.config.ts` | 开发服务器与 `vite preview` 的代理目标 |
 | `VITE_AI_API_BASE_URL` | `/ai-backend` | `vite.config.ts`（代理前缀）、`appConfig.aiApiBaseUrl` | AI 对话后端的基础地址。AI 后端是另一个服务（Bearer 鉴权、没有信封），同样走同源代理，见 [modules/ai-chat.md](../modules/ai-chat.md) |
 | `AI_PROXY_TARGET` | `http://localhost:8090` | 只在 `vite.config.ts` | AI 后端的代理目标，沿用旧项目的本机开发地址，尚未联调 |
-| `YZT_3DT_PROXY` | 不设 | `vite.config.ts` 和工具脚本 | 设了（如 `http://192.168.1.180:5173`）时开发服务器把 `/3dt/` 整个代理到那台服务器，本地的 `local/3dt/` 不再映射；在显卡机器上跑瓦片集的诊断页时用，`measure:3d`、`lcc2:register` 也从它取模型。这个示例地址上有 LCC2 模型和 `XZ_GC_3DT`，没有 JKQ、JKQ2。只在进程的环境变量里设，不写进 `.env`：工具脚本读不到 `.env`，写在 `.env.local` 里只对开发服务器生效（[local-files.md](local-files.md)） |
+| `YZT_3DT_PROXY` | 不设 | `vite.config.ts` 和工具脚本 | 设了（如 `http://192.168.1.180:5173`）时开发服务器把 `/3dt/` 整个代理到那台服务器，本地的 `local/3dt/` 不再映射；在显卡机器上测三维时用，`measure:3d`、`lcc2:register` 也从它取模型。这个示例地址上有 LCC2 模型和 `XZ_GC_3DT`，没有 JKQ、JKQ2。只在进程的环境变量里设，不写进 `.env`：工具脚本读不到 `.env`，写在 `.env.local` 里只对开发服务器生效（[local-files.md](local-files.md)） |
 | `VITE_PAGE_STATE_RESET` | `true` | `appConfig.pageStateReset`、`AppLayout` | 离开页面后是否重置（ADR 0114，提交的取值见 ADR 0138）。`false` 时现状底图、指标 AI 计算切走再回来保留上次的状态；`true` 时不缓存页面，每次进入都是初始状态。只管页面缓存，偏好是否恢复看下面的开关（ADR 0140） |
 | `VITE_PREFERENCES_ENABLED` | `true` | `appConfig.preferences`、`usePreference` | 偏好（IndexedDB）的总开关（ADR 0140）。`false` 时下面各项都不读不写，存下的数据保留，重新打开后还能恢复 |
 | `VITE_PREFERENCE_BASEMAP` | `false` | 同上 | 底图和透明度（`basemap`）。`false` 时每次进入都是默认底图 |
@@ -44,7 +44,8 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 | `VITE_PREFERENCE_RESOURCE_SYMBOLS` | `true` | 同上 | 资源图层的符号样式（`resource-symbols`） |
 | `VITE_PREFERENCE_RESOURCE_PANEL` | `true` | 同上 | 资源图层面板的收起和高度比例（`resource-panel`） |
 | `VITE_RESOURCE_MIN_ZOOM_ENABLED` | `false` | `appConfig.resourceMinZoomEnabled`、`fetchResourceMinZooms`、`builtInMinZooms` | 资源的最小显示级别（ADR 0132、0137）。`true` 时按发布目录的 `resource-min-zooms.json` 限制（读不到时用构建带上的那份），没到层级不请求瓦片、提示放大到几级；`false` 时不读文件、不限制，各级都请求瓦片，低级别的瓦片可能有十几 MB。**现在暂时关着：** 用户 2026-11-04 确定先不打开（`88c4a99` 改成 `false`），层级表和部署的文件都不生效；层级表和实测的瓦片大小也还对不上（水域面层不在表里，永久基本农田图斑的 8 级偏低）。打开前按 [backlog](../backlog.md)"最小显示级别"两条重测层级，再在真实后端上换一次文件确认 |
-| `VITE_MAP_3D_ENGINE` | `maplibre` | `appConfig.map3dEngine`、`app/map-runtime-provider.ts`、`vite.config.ts` | 三维引擎（ADR 0147、0150）。`cesium` 是可选的 Cesium，三维是另一块画布；`maplibre`（默认）是 MapLibre + Three.js，二三维共用 MapLibre 的画布和视图（地球投影、三维里的覆盖物和测量、三维模型、地下、漫游和缓存；资源图层和三维里的点/框选由 `shared/config/scene-options.ts` 的开关关着，开关只在代码里改，不进 `.env`，见 [map-three.md](../modules/map-three.md)）。app 按它把引擎的描述注入地图（`MAP_SCENE_ENGINE`），页面不判断它；构建时只在 `cesium` 时复制 Cesium 的运行时文件到 `cesium/`（约 7 MB）。换引擎要重新构建；公网、内网要不同时写在 `.env.intranet` |
+
+三维引擎不再用变量选择：Cesium 引擎已移除，`VITE_MAP_3D_ENGINE` 跟着删掉，三维只有 MapLibre + Three.js（ADR 0153）。三维里暂不显示资源图层、点/框选不识别，由 app 注入的能力决定，没有开关（ADR 0153）。
 
 ## 两类变量
 
@@ -66,8 +67,6 @@ Vite 按运行模式加载 `apps/yzt` 下的 `.env` 文件，后者覆盖前者�
 `shared/config/app-config.ts` 集中读取并校验：缺失或为空时，在启动时抛出"缺少环境变量 XXX"，不带着空值继续运行（已验证）。其他代码只使用 `appConfig`。
 
 有固定格式的变量还会校验格式。`VITE_LOGIN_PUBLIC_KEY` 必须是 `04` 开头、共 130 位的十六进制（未压缩格式的 SM2 公钥），复制时少了字符会在启动时报错，而不是等到登录时才失败（已验证）。天地图开启时，`VITE_TIANDITU_KEY` 必须是 32 位十六进制。
-
-取值固定的变量也在启动时校验：`VITE_MAP_3D_ENGINE` 只能是 `cesium` 或 `maplibre`。
 
 开关类变量（如 `VITE_TIANDITU_ENABLED`）只接受小写的 `true`、`false`，其他值（`TRUE`、`1`、`yes`）在启动时报错，不按"非空即真"处理：`.env` 里的值都是字符串，`'false'` 也是非空的。
 
