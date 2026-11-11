@@ -51,7 +51,10 @@ export const DevPlanBPage = defineComponent({
     const basemap = useBasemap({ tianditu: null });
     const checked = shallowRef<ReadonlySet<string>>(new Set(SLICE.map(({ code }) => code)));
     const opacity = ref(1);
-    const labels = ref(true);
+    // 标注先不做（用户 2026-11-10）：代码留着，默认关
+    const labels = ref(false);
+    // 地址上的 ?sampling=nearest：位图不插值
+    const sampling = new URLSearchParams(window.location.search).get('sampling') === 'nearest' ? 'nearest' : 'linear';
     const unrestricted = ref(false);
     const tileBase = resourceTileBase(appConfig.apiBaseUrl, window.location.origin);
 
@@ -83,7 +86,7 @@ export const DevPlanBPage = defineComponent({
           scene = createCesiumScene(container);
           return scene;
         },
-        vectors: { requestHeaders: url => backendTransformRequest(url).headers, identifyKeys: ['guid'] }
+        vectors: { requestHeaders: url => backendTransformRequest(url).headers, identifyKeys: ['guid'], sampling }
       });
     };
 

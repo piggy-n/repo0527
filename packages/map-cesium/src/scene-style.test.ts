@@ -116,10 +116,19 @@ describe('planSceneStyle', () => {
 
     expect(plan.imagery).toStrictEqual([]);
     expect(plan.overlays).toStrictEqual([]);
+    // 方案 B 的 PoC：矢量瓦片的图层按数据源收进 vectors，面、线、点画进位图，有文字的 symbol 只取文字
+    expect(plan.vectors.map(({ sourceId, tiles, layers, labelLayers }) => ({ sourceId, tiles, layers, labelLayers }))).toStrictEqual([
+      {
+        sourceId: 'tiles',
+        tiles: 'https://mvt.cn/{z}/{x}/{y}',
+        layers: [{ id: 'landuse', type: 'fill', source: 'tiles', 'source-layer': 'dltb' }],
+        labelLayers: [
+          { id: 'tile-label', type: 'symbol', source: 'tiles', 'source-layer': 'names', layout: { 'text-field': 'x' } }
+        ]
+      }
+    ]);
     expect(plan.unsupported).toStrictEqual([
-      { layerId: 'landuse', reason: '矢量瓦片（MVT）本阶段不在三维显示' },
       { layerId: 'label', reason: '三维只画 symbol 图层的文字，这个图层没有 text-field' },
-      { layerId: 'tile-label', reason: '矢量瓦片（MVT）本阶段不在三维显示' },
       { layerId: 'hatched', reason: '三维不支持 fill-pattern' },
       { layerId: 'from-tilejson', reason: '三维只支持直接给出 tiles 的 xyz 瓦片' },
       { layerId: 'by-quadkey', reason: '瓦片地址里有三维不支持的占位符' },

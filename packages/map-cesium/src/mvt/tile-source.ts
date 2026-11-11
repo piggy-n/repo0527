@@ -238,6 +238,7 @@ export class TileSource {
           this.#bytes += loaded.bytes;
           this.#trim();
         }
+        return loaded;
       },
       () => undefined
     );

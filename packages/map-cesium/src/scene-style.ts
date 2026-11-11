@@ -217,11 +217,9 @@ export function planSceneStyle(style: StyleSpecification): SceneStylePlan {
     }
     unsupported.push({ layerId: layer.id, reason: `三维暂不支持 ${layer.type} 图层` });
   }
-  return {
-    imagery,
-    baseColor,
-    overlays,
-    vectors: [...vectors.values()].map(draft => ({ ...draft, key: JSON.stringify(draft) })),
-    unsupported
-  };
+  const plans: VectorPlan[] = [];
+  for (const draft of vectors.values()) {
+    plans.push({ ...draft, key: JSON.stringify(draft) });
+  }
+  return { imagery, baseColor, overlays, vectors: plans, unsupported };
 }

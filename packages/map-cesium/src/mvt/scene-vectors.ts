@@ -11,6 +11,8 @@ import {
   LabelStyle,
   Math as CesiumMath,
   SceneTransforms,
+  TextureMagnificationFilter,
+  TextureMinificationFilter,
   UrlTemplateImageryProvider,
   VerticalOrigin,
   WebMercatorTilingScheme
@@ -42,6 +44,11 @@ export interface VectorOptions {
   readonly requestHeaders?: (url: string) => Readonly<Record<string, string>> | undefined;
   /** 识别时另外要留下的属性 */
   readonly identifyKeys?: readonly string[];
+  /**
+   * 位图的采样：linear（默认）放大、缩小时插值，画面软，透明边缘发灰（没预乘的贴图插值到透明像素的黑色）；
+   * nearest 不插值，边缘干净，倾斜时远处会闪
+   */
+  readonly sampling?: 'linear' | 'nearest';
 }
 
 export interface VectorHit {
@@ -400,7 +407,12 @@ export class SceneVectors implements Disposable {
       const labels = plan.labelLayers.map(
         layer => new VectorLabels(this.#widget, pool, plan.sourceId, layer, loaded, this.#events.zoom)
       );
-      this.#entries.set(plan.sourceId, { plan, layer: layers.addImageryProvider(provider), unsubscribe, loaded, labels });
+      const layer = layers.addImageryProvider(provider);
+      if (options.sampling === 'nearest') {
+        layer.magnificationFilter = TextureMagnificationFilter.NEAREST;
+        layer.minificationFilter = TextureMinificationFilter.NEAREST;
+      }
+      this.#entries.set(plan.sourceId, { plan, layer, unsubscribe, loaded, labels });
       labels.forEach(item => item.schedule());
     }
     // 依次提到最上面：和样式里数据源的顺序一致，都在栅格底图上面

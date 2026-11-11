@@ -3,8 +3,10 @@ import {
   expression,
   featureFilter,
   type FeatureFilter,
+  Formatted,
   latest,
   type PropertyValueSpecification,
+  ResolvedImage,
   type StylePropertyExpression,
   type StylePropertySpecification,
   type SymbolLayerSpecification
@@ -22,8 +24,8 @@ export interface FillPaint {
   readonly opacity: number;
   /** 填充是否完全不透明：相邻图斑之间的细缝只在这时补 */
   readonly opaque: boolean;
-  /** 描边：fill 是没写、跟填充色，none 是不画（写了透明色，或关了 fill-antialias） */
-  readonly outline: string | 'fill' | 'none';
+  /** 描边的 CSS 颜色；'fill' 是没写、跟填充色，'none' 是不画（写了透明色，或关了 fill-antialias） */
+  readonly outline: string;
   /** 花纹图片的 ID */
   readonly pattern: string | null;
 }
@@ -161,8 +163,24 @@ function cssOf(color: unknown): string | null {
 
 const numberOr = (value: unknown, fallback: number) => (typeof value === 'number' && Number.isFinite(value) ? value : fallback);
 
-const CAPS: readonly string[] = ['butt', 'round', 'square'];
-const JOINS: readonly string[] = ['bevel', 'round', 'miter'];
+const CAPS: ReadonlySet<unknown> = new Set<CanvasLineCap>(['butt', 'round', 'square']);
+const JOINS: ReadonlySet<unknown> = new Set<CanvasLineJoin>(['bevel', 'round', 'miter']);
+const isCap = (value: unknown): value is CanvasLineCap => CAPS.has(value);
+const isJoin = (value: unknown): value is CanvasLineJoin => JOINS.has(value);
+
+// 求值结果里的文字：字符串、数字原样，Formatted（text-field）、ResolvedImage（fill-pattern）取它们的文字
+function textOf(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (value instanceof Formatted) {
+    return value.toString();
+  }
+  return value instanceof ResolvedImage ? value.name : '';
+}
 
 /** 一个图层编译后的结果：按"缩放级 + 用到的属性值"记住求值结果，十万个要素也只求值几十次 */
 export class CompiledLayer {
@@ -256,14 +274,14 @@ export class CompiledLayer {
         opacity,
         opaque: fill instanceof Color && fill.a * opacity >= 0.999,
         outline: !antialias || (this.#hasOutline && outline === null) ? 'none' : (outline ?? 'fill'),
-        // 求值结果是 ResolvedImage，转成字符串就是图片的 ID
-        pattern: pattern === undefined || pattern === null ? null : String(pattern)
+        // 求值结果是 ResolvedImage，名字就是图片的 ID
+        pattern: textOf(pattern) || null
       };
     }
     if (this.type === 'line') {
       const dash = paint('line-dasharray');
-      const cap = String(read(this.#layout, 'line-cap'));
-      const join = String(read(this.#layout, 'line-join'));
+      const cap = read(this.#layout, 'line-cap');
+      const join = read(this.#layout, 'line-join');
       return {
         type: 'line',
         color: cssOf(paint('line-color')),
@@ -271,8 +289,8 @@ export class CompiledLayer {
         width: numberOr(paint('line-width'), 1),
         dash: Array.isArray(dash) && dash.length > 0 ? dash.map(Number) : null,
         offset: numberOr(paint('line-offset'), 0),
-        cap: CAPS.includes(cap) ? (cap as CanvasLineCap) : 'butt',
-        join: JOINS.includes(join) ? (join as CanvasLineJoin) : 'miter'
+        cap: isCap(cap) ? cap : 'butt',
+        join: isJoin(join) ? join : 'miter'
       };
     }
     return {
@@ -333,7 +351,7 @@ export class CompiledLabelLayer {
     }
     try {
       const value: unknown = this.#layout.get('text-field')?.evaluate({ zoom }, feature);
-      return value === undefined || value === null ? '' : String(value);
+      return textOf(value);
     } catch {
       return '';
     }
