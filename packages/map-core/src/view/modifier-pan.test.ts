@@ -184,6 +184,27 @@ describe('ModifierPan', () => {
     expect(ctx.pans).toStrictEqual([]);
   });
 
+  // 点工具栏按钮后焦点在按钮上：按下画布时焦点移走，这个按钮的 blur 不是窗口失焦
+  it('keeps panning when focus moves away from an element of the page during the press', () => {
+    using ctx = setup();
+    const button = document.createElement('button');
+    document.body.append(button);
+    button.focus();
+
+    press(ctx.canvas, { ctrlKey: true, clientX: 100, clientY: 100 });
+    button.blur();
+    move(ctx.canvas, 110, 100, { ctrlKey: true });
+    button.remove();
+
+    expect(ctx.pans).toStrictEqual([
+      [
+        { x: 100, y: 100 },
+        { x: 110, y: 100 }
+      ]
+    ]);
+    expect(ctx.pan.cursor('crosshair')).toBe('grabbing');
+  });
+
   it('swallows the release and clicks derived from a pan until the next press', () => {
     using ctx = setup();
     const swallowed = () => POINTER_TYPES.filter(type => ctx.pan.swallows(type));
