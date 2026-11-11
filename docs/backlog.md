@@ -102,7 +102,6 @@
 - 继续拆 `shared/map`：通用交互已经拆成 `@mx/map-tools`（ADR 0145）；工具栏、面板等通用界面，以及混着江苏内容的 `location`、`area`，等第二个地图项目的需求清楚了再说
 - 接入 Renovate；改用 Pull Request 后给 `main` 设分支保护（[ci-workflow](config/ci-workflow.md)）
 - 业务端到端测试、覆盖率门槛
-- 冒烟的 `static-basemap.spec.ts` 三维部分按 Cesium 的画布写，只在默认的 `cesium` 产物上跑得通；`maplibre` 成为默认引擎之前要改成按引擎取画布
 - Worker 池的调度、缓存淘汰、内存预算，见 [utils](modules/utils.md)"还没做的"；瓦片数据服务等接入 MVT 时（[map-core](modules/map-core.md)"还没做的"）
 - 运行中 WebGL 上下文丢失（ADR 0030）：真实环境遇到再做
 - 暂不修复的两个安全告警等上游换大版本，见 [package-json](config/package-json.md)"暂不修复的安全告警"
