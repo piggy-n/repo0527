@@ -17,6 +17,8 @@ import type {
   WalkSpawnPoint,
   WalkView
 } from '@mx/map-core';
+import type { PatternImage } from './mvt/mvt-protocol';
+import type { VectorOptions, VectorPlan } from './mvt/scene-vectors';
 import type { OverlayLayer } from './overlay-plan';
 import type { ImageryPlan } from './scene-style';
 
@@ -122,6 +124,8 @@ export interface SceneLike extends TilesetHost, Disposable {
   heading(): number;
   /** 影像图层整体替换：按 ID 增删改，按给出的顺序从下到上叠放 */
   setImagery(imagery: readonly ImageryPlan[]): void;
+  /** 矢量瓦片的数据源整体替换（方案 B 的 PoC）：位图在 Worker 里画，叠在影像图层上面；images 是样式的图片（花纹） */
+  setVectors(vectors: readonly VectorPlan[], images: Readonly<Record<string, PatternImage>>, options: VectorOptions): void;
   /** 地球的底色；null 用场景的默认颜色 */
   setBaseColor(color: string | null): void;
   /**

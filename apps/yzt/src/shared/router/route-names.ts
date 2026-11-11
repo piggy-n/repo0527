@@ -19,6 +19,7 @@ export const RouteName = {
   devDataQuery: 'dev-data-query',
   devTilesetProbe: 'dev-tileset-probe',
   devSplatWatch: 'dev-splat-watch',
+  devPlanB: 'dev-plan-b',
   currentMap: 'current-map',
   cityDashboard: 'city-dashboard',
   landChangeQuery: 'land-change-query',

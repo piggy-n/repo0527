@@ -60,6 +60,8 @@ import {
   type TilesetOptions,
   WebGLUnavailableError
 } from './scene-like';
+import type { PatternImage } from './mvt/mvt-protocol';
+import { SceneVectors, type VectorHit, type VectorOptions, type VectorPlan, type VectorStats } from './mvt/scene-vectors';
 import type { OverlayLayer, OverlayShape, RgbaColor } from './overlay-plan';
 import { movableInPlace, sameCoordinates } from './overlay-update';
 import type { SceneInspection } from './scene-inspection';
@@ -166,6 +168,7 @@ export class CesiumScene implements SceneLike {
   #retiring: Entity[] = [];
   #flying = false;
   readonly #tilesets: SceneTilesets;
+  readonly #vectors: SceneVectors;
   readonly #underground: SceneUnderground;
   readonly #route: SceneRoute;
   readonly #walk: SceneWalk;
@@ -216,6 +219,12 @@ export class CesiumScene implements SceneLike {
         initial: id => this.#emitter.emit('tilesetinitial', id)
       })
     );
+    this.#vectors = stack.use(
+      new SceneVectors(widget, {
+        error: (sourceId, error) => this.#emitter.emit('imageryerror', sourceId, error),
+        zoom: () => this.readCamera()?.zoom ?? 0
+      })
+    );
     this.#underground = stack.use(new SceneUnderground(widget));
     this.#route = stack.use(
       new SceneRoute(widget, {
@@ -254,6 +263,7 @@ export class CesiumScene implements SceneLike {
       scene.postRender.addEventListener(() => {
         this.#frames++;
         this.#removeRetired();
+        this.#vectors.afterRender();
         this.#checkSettled();
         // 放在移除之后：这一帧的 canAnimate 还没算上改回静态时新加的实体
         this.#settleLive();
@@ -481,6 +491,33 @@ export class CesiumScene implements SceneLike {
     }
     this.#settled = false;
     this.#widget.scene.requestRender();
+  }
+
+  setVectors(vectors: readonly VectorPlan[], images: Readonly<Record<string, PatternImage>>, options: VectorOptions): void {
+    this.#vectors.apply(vectors, images, options);
+    this.#settled = false;
+    this.#widget.scene.requestRender();
+  }
+
+  /** 识别屏幕上一点的矢量要素（方案 B 的 PoC）：没打到地球时为空 */
+  async identifyVectors(point: ScreenPoint, tolerance: number): Promise<VectorHit[]> {
+    const ground = this.#widget.camera.pickEllipsoid(new Cartesian2(point.x, point.y), Ellipsoid.WGS84);
+    const camera = this.readCamera();
+    if (!ground || !camera) {
+      return [];
+    }
+    const { longitude, latitude } = Cartographic.fromCartesian(ground);
+    return this.#vectors.identify(CesiumMath.toDegrees(longitude), CesiumMath.toDegrees(latitude), camera.zoom, tolerance);
+  }
+
+  /** 栅格化 Worker 的累计读数（方案 B 的 PoC，测量用）；没有矢量数据源时为 null */
+  vectorStats(): Promise<VectorStats | null> {
+    return this.#vectors.stats();
+  }
+
+  /** 矢量数据源的位图都画完了（方案 B 的 PoC，测量用） */
+  get vectorsIdle(): boolean {
+    return this.#vectors.idle && this.#widget.scene.globe.tilesLoaded;
   }
 
   setBaseColor(color: string | null): void {
@@ -718,6 +755,7 @@ export class CesiumScene implements SceneLike {
   #onCameraIdle(): void {
     this.#cameraIdles++;
     this.#moving = false;
+    this.#vectors.cameraIdle();
     this.#emitter.emit('cameraidle');
     this.#widget.scene.requestRender();
   }
@@ -756,7 +794,7 @@ export class CesiumScene implements SceneLike {
   // 相机停下、影像瓦片和覆盖物都画好了才算稳定
   #checkSettled(): void {
     const { scene, clock } = this.#widget;
-    const drawn = scene.globe.tilesLoaded && clock.canAnimate && this.#retiring.length === 0;
+    const drawn = scene.globe.tilesLoaded && clock.canAnimate && this.#retiring.length === 0 && this.#vectors.idle;
     if (!this.#settled && !this.#moving && drawn) {
       this.#settled = true;
       this.#emitter.emit('settle');

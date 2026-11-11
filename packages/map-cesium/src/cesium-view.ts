@@ -40,6 +40,7 @@ import { createNanoEvents } from 'nanoevents';
 import { fitBoundsCamera, paddedCenter } from './camera-fit';
 import { isGeoJson, type OverlaySpec, planOverlays } from './overlay-plan';
 import { type CreateScene, type SceneLike, type ScenePose, WebGLUnavailableError } from './scene-like';
+import type { VectorOptions } from './mvt/scene-vectors';
 import { planSceneStyle, type UnsupportedLayer } from './scene-style';
 
 export interface CesiumViewOptions<G extends string> {
@@ -55,6 +56,8 @@ export interface CesiumViewOptions<G extends string> {
   readonly createScene: CreateScene;
   /** 下载 JSON：数据源地址上的 GeoJSON、瓦片集的索引（ADR 0080、0081）；默认用 fetch，测试时换掉 */
   readonly loadJson?: (url: string, signal: AbortSignal) => Promise<unknown>;
+  /** 矢量瓦片的请求头和识别要留的属性（方案 B 的 PoC） */
+  readonly vectors?: VectorOptions;
 }
 
 // 地址上的数据：每个地址下载一次
@@ -131,6 +134,7 @@ export class CesiumView<const G extends string> implements MapView {
   readonly #remote = new Map<string, RemoteData>();
   readonly #loadJson: (url: string, signal: AbortSignal) => Promise<unknown>;
   readonly #downloads = new AbortController();
+  readonly #vectorOptions: VectorOptions;
   // 三维内容（ADR 0081）：瓦片集交给两种引擎共用的同步（ADR 0147 第 3 节），场景没创建出来时没有；
   // 暂停期间变了，恢复时再应用
   readonly #tilesets: SceneTilesetSync | undefined;
@@ -153,12 +157,14 @@ export class CesiumView<const G extends string> implements MapView {
     onError = reportToConsole,
     onUnsupported = () => undefined,
     createScene,
-    loadJson = fetchJson
+    loadJson = fetchJson,
+    vectors = {}
   }: CesiumViewOptions<G>) {
     this.#session = session;
     this.#onError = safeReporter(onError, 'CesiumView');
     this.#onUnsupported = safeReporter(onUnsupported, 'CesiumView');
     this.#loadJson = loadJson;
+    this.#vectorOptions = vectors;
     using stack = new DisposableStack();
     stack.defer(() => this.#ready.reject(new DOMException('CesiumView 已释放', 'AbortError')));
     stack.defer(() => this.#downloads.abort(new DOMException('CesiumView 已释放', 'AbortError')));
@@ -473,6 +479,7 @@ export class CesiumView<const G extends string> implements MapView {
     this.#styleStale = false;
     const plan = planSceneStyle(this.#session.style.current);
     scene.setImagery(plan.imagery);
+    scene.setVectors(plan.vectors, this.#session.style.images, this.#vectorOptions);
     scene.setBaseColor(plan.baseColor);
     this.#overlays = plan.overlays;
     this.#download(plan.overlays);
@@ -483,7 +490,7 @@ export class CesiumView<const G extends string> implements MapView {
         this.#onUnsupported(layer);
       }
     }
-    const sources = new Set([...plan.imagery, ...plan.overlays].map(({ sourceId }) => sourceId));
+    const sources = new Set([...plan.imagery, ...plan.overlays, ...plan.vectors].map(({ sourceId }) => sourceId));
     const remaining = [...this.#sourceErrors].filter(([sourceId]) => sources.has(sourceId));
     if (remaining.length !== this.#sourceErrors.size) {
       this.#setSourceErrors(remaining.length > 0 ? new Map(remaining) : NO_SOURCE_ERRORS);

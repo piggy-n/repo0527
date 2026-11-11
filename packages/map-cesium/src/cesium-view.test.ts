@@ -237,6 +237,12 @@ class FakeScene implements SceneLike {
     this.imagery = imagery;
   }
 
+  vectors: readonly unknown[] = [];
+
+  setVectors(vectors: readonly unknown[]): void {
+    this.vectors = vectors;
+  }
+
   setBaseColor(color: string | null): void {
     this.baseColor = color;
   }

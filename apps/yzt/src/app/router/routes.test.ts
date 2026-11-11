@@ -47,7 +47,8 @@ describe('路由表', () => {
       RouteName.devIndicatorSimulation,
       RouteName.devDataQuery,
       RouteName.devTilesetProbe,
-      RouteName.devSplatWatch
+      RouteName.devSplatWatch,
+      RouteName.devPlanB
     ].toSorted());
   });
 

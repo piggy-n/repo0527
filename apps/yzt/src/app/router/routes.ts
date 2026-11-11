@@ -269,6 +269,12 @@ const devRoutes: RouteRecordRaw[] = import.meta.env.DEV ? [
       import('@/pages/dev/splat-watch/DevSplatWatchPage').then(({ DevSplatWatchPage }) => DevSplatWatchPage)
     ),
     meta: { title: '高斯泼溅的 GL 监听和预算', public: true }
+  },
+  {
+    path: '/dev/plan-b',
+    name: RouteName.devPlanB,
+    component: withMapRuntime(() => import('@/pages/dev/plan-b/DevPlanBPage').then(({ DevPlanBPage }) => DevPlanBPage)),
+    meta: { title: '方案 B：Cesium 的 Worker 栅格化', public: true }
   }
 ] : [];
 

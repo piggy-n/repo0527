@@ -515,6 +515,9 @@ importers:
 
   packages/map-cesium:
     dependencies:
+      '@mapbox/vector-tile':
+        specifier: ^3.0.0
+        version: 3.0.0
       '@maplibre/maplibre-gl-style-spec':
         specifier: 'catalog:'
         version: 26.4.4
@@ -530,6 +533,9 @@ importers:
       nanoevents:
         specifier: 'catalog:'
         version: 10.0.0
+      pbf:
+        specifier: ^5.1.2
+        version: 5.1.2
     devDependencies:
       '@types/geojson':
         specifier: 'catalog:'

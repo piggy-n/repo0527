@@ -12,11 +12,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@mapbox/vector-tile": "^3.0.0",
     "@maplibre/maplibre-gl-style-spec": "catalog:",
-    "@turf/simplify": "catalog:",
     "@mx/map-core": "workspace:*",
     "@mx/utils": "workspace:*",
-    "nanoevents": "catalog:"
+    "@turf/simplify": "catalog:",
+    "nanoevents": "catalog:",
+    "pbf": "^5.1.2"
   },
   "peerDependencies": {
     "cesium": "catalog:"

@@ -5,3 +5,6 @@ export type { SceneInspection, TileSelectionSummary, TilesetInspection, TilesetS
 export { DEFAULT_SCREEN_SPACE_ERROR } from './scene-tilesets';
 export { type CreateScene, WebGLUnavailableError } from './scene-like';
 export type { UnsupportedLayer } from './scene-style';
+export type { MvtPoolStats } from './mvt/mvt-pool';
+export type { IdentifiedFeature } from './mvt/mvt-protocol';
+export type { VectorHit, VectorOptions, VectorStats } from './mvt/scene-vectors';

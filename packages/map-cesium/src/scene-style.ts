@@ -1,4 +1,6 @@
 import type { LayerSpecification, SourceSpecification, StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
+import type { VectorLayerSpecification } from './mvt/mvt-protocol';
+import type { VectorPlan } from './mvt/scene-vectors';
 import type { OverlayLayerSpecification, OverlaySpec } from './overlay-plan';
 import { type TileUrlTemplate, tileUrlTemplate } from './url-template';
 
@@ -27,6 +29,8 @@ export interface SceneStylePlan {
   readonly baseColor: string | null;
   /** GeoJSON 覆盖物，按样式里的顺序；形状在数据就绪后按级别推导（ADR 0080 第 1 节） */
   readonly overlays: readonly OverlaySpec[];
+  /** 矢量瓦片的数据源（方案 B 的 PoC）：每个数据源一个，按第一个图层在样式里的位置从下到上 */
+  readonly vectors: readonly VectorPlan[];
   readonly unsupported: readonly UnsupportedLayer[];
 }
 
@@ -42,9 +46,6 @@ type Result<T> = { readonly ok: true; readonly value: T } | { readonly ok: false
 const fail = (reason: string): Result<never> => ({ ok: false, reason });
 
 function sourceReason(source: SourceSpecification | undefined): string {
-  if (source?.type === 'vector') {
-    return '矢量瓦片（MVT）本阶段不在三维显示';
-  }
   return `三维不支持 ${source?.type ?? '未知'} 数据源`;
 }
 
@@ -119,6 +120,50 @@ function planOverlay(
   return { ok: true, value: { layer, order, sourceId: layer.source, data: source.data } };
 }
 
+// MapLibre 的默认值：vector 数据源 0～22 级
+const DEFAULT_VECTOR_MAX_ZOOM = 22;
+
+interface VectorDraft {
+  readonly sourceId: string;
+  readonly tiles: string;
+  readonly minzoom: number;
+  readonly maxzoom: number;
+  readonly promoteId: string | null;
+  readonly layers: VectorLayerSpecification[];
+  readonly labelLayers: Extract<LayerSpecification, { type: 'symbol' }>[];
+}
+
+// 矢量数据源上的图层（方案 B 的 PoC）：fill、line、circle 画进 Worker 栅格化的位图，有文字的 symbol 只取文字
+function planVector(
+  layer: Extract<LayerSpecification, { type: 'fill' | 'line' | 'circle' | 'symbol' }>,
+  source: Extract<SourceSpecification, { type: 'vector' }>,
+  drafts: Map<string, VectorDraft>
+): Result<null> {
+  const [tiles] = source.tiles ?? [];
+  if (tiles === undefined || source.url !== undefined || (source.scheme ?? 'xyz') !== 'xyz') {
+    return fail('三维只支持直接给出 tiles 的 xyz 矢量瓦片');
+  }
+  let draft = drafts.get(layer.source);
+  if (!draft) {
+    draft = {
+      sourceId: layer.source,
+      tiles,
+      minzoom: source.minzoom ?? 0,
+      maxzoom: source.maxzoom ?? DEFAULT_VECTOR_MAX_ZOOM,
+      promoteId: typeof source.promoteId === 'string' ? source.promoteId : null,
+      layers: [],
+      labelLayers: []
+    };
+    drafts.set(layer.source, draft);
+  }
+  if (layer.type === 'symbol') {
+    draft.labelLayers.push(layer);
+  } else {
+    draft.layers.push(layer);
+  }
+  return { ok: true, value: null };
+}
+
 /**
  * 从二维的样式推导三维的影像图层、地球底色和覆盖物，支持清单之外的图层列出原因
  * （ADR 0024 第 10 节、ADR 0079 第 7 节、ADR 0080 第 1 节）
@@ -127,6 +172,7 @@ export function planSceneStyle(style: StyleSpecification): SceneStylePlan {
   const imagery: ImageryPlan[] = [];
   const overlays: OverlaySpec[] = [];
   const unsupported: UnsupportedLayer[] = [];
+  const vectors = new Map<string, VectorDraft>();
   let baseColor: string | null = null;
   for (const [order, layer] of style.layers.entries()) {
     if (layer.type === 'background') {
@@ -153,7 +199,15 @@ export function planSceneStyle(style: StyleSpecification): SceneStylePlan {
       continue;
     }
     if (layer.type === 'line' || layer.type === 'fill' || layer.type === 'circle' || layer.type === 'symbol') {
-      const result = planOverlay(layer, style.sources[layer.source], order);
+      const source = style.sources[layer.source];
+      if (source?.type === 'vector') {
+        const planned = planVector(layer, source, vectors);
+        if (!planned.ok) {
+          unsupported.push({ layerId: layer.id, reason: planned.reason });
+        }
+        continue;
+      }
+      const result = planOverlay(layer, source, order);
       if (result.ok) {
         overlays.push(result.value);
       } else {
@@ -161,9 +215,13 @@ export function planSceneStyle(style: StyleSpecification): SceneStylePlan {
       }
       continue;
     }
-    const source = 'source' in layer ? style.sources[layer.source] : undefined;
-    const reason = source?.type === 'vector' ? sourceReason(source) : `三维暂不支持 ${layer.type} 图层`;
-    unsupported.push({ layerId: layer.id, reason });
+    unsupported.push({ layerId: layer.id, reason: `三维暂不支持 ${layer.type} 图层` });
   }
-  return { imagery, baseColor, overlays, unsupported };
+  return {
+    imagery,
+    baseColor,
+    overlays,
+    vectors: [...vectors.values()].map(draft => ({ ...draft, key: JSON.stringify(draft) })),
+    unsupported
+  };
 }
