@@ -42,23 +42,9 @@ export default defineConfig(({ mode }) => {
           iconsPlugin(iconsPaths(process.cwd()))
         ];
 
-  // Cesium 按基础地址请求的 Worker、资源和第三方文件，复制到产物的 cesium/，开发服务器同样提供（ADR 0079 第 1 节）；
-  // 三维引擎是 maplibre 时不复制（约 7 MB，ADR 0147 第 7 节），测试总要：浏览器测试用真实的 Cesium。
   // 资源的最小显示级别复制到产物根目录，部署时换这个文件就能改（ADR 0137）
-  const cesiumFiles =
-    mode === 'test' || env.VITE_MAP_3D_ENGINE !== 'maplibre'
-      ? [
-          {
-            src: 'node_modules/cesium/Build/Cesium/{Workers,Assets,ThirdParty}/**/*',
-            dest: 'cesium',
-            // 去掉 node_modules/cesium/Build/Cesium 四层，保留 Workers 等目录
-            rename: { stripBase: 4 }
-          }
-        ]
-      : [];
   const staticFiles = viteStaticCopy({
     targets: [
-      ...cesiumFiles,
       {
         src: 'src/features/resource-map/resource-min-zooms.json',
         dest: '.',
@@ -116,7 +102,6 @@ export default defineConfig(({ mode }) => {
       // 部署时决定的开关，很多用例依赖它的默认行为：固定下来，改 .env 不影响测试（ADR 0132、0140）
       env: {
         VITE_RESOURCE_MIN_ZOOM_ENABLED: 'true',
-        VITE_MAP_3D_ENGINE: 'cesium',
         VITE_PREFERENCES_ENABLED: 'true',
         VITE_PREFERENCE_BASEMAP: 'true',
         VITE_PREFERENCE_BASEMAP_LABELS: 'true',
