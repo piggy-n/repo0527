@@ -21,7 +21,7 @@ import { createNanoEvents } from 'nanoevents';
 import { Color, Matrix4, Raycaster, WebGLRenderer } from 'three';
 import { AnimatedModel, type ModelPlacement } from './animated-model';
 import { type BudgetPose, ErrorScale } from './error-scale';
-import { FrameMath, toNdc } from './frame';
+import { FrameMath, toNdc, withDeeperFar } from './frame';
 import type { FogUniform } from './lighting';
 import { TileUploader } from './tile-uploader';
 import type { CullWindow } from './request-cull';
@@ -214,12 +214,13 @@ export class ThreeSceneRenderer implements SceneRenderer {
   // 什么也不画：有它时 MapLibre 在画图层之前作废自己的 GL 状态缓存
   prerender(): void {}
 
-  render(frame: SceneFrame): void {
+  render(mapFrame: SceneFrame): void {
     const webgl = this.#webgl;
     const surface = this.#surface;
     if (!this.#attached || !webgl || !surface) {
       return;
     }
+    const frame = withDeeperFar(mapFrame);
     this.#frame = copyFrame(frame);
     this.#framePending = false;
     const { canvas } = surface;

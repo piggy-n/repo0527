@@ -4,6 +4,35 @@ import { MathUtils, Matrix4, type PerspectiveCamera, Vector3, Vector4 } from 'th
 // 每帧的投影换算（ADR 0147 第 5 节，做法来自 PoC 的 own-layer）：一个锚点的局部系（x 东、y 上、z 南，米）到裁剪空间，
 // 再从这个矩阵拆出 Three 的相机。局部系按锚点各算一份，远处的模型也有足够的精度
 
+// 远裁剪面往后放宽多少个近裁剪面的距离：MapLibre 的近裁剪面是画布高度的 1/50，相机到地面约 1.5 个画布高度，放宽约一个相机高度
+const FAR_EXTENSION_NEARS = 75;
+
+/**
+ * 墨卡托投影时把远裁剪面往地下放宽：MapLibre 只留到地面以下 1%，垂直俯视时 z18 只有约 3.5 米，地下的模型会被裁掉、
+ * 瓦片也不选。渲染器画模型前后都清深度，不和 MapLibre 共用深度。地球投影的远裁剪面本来就够远，过渡段（z12 以下）1% 也有几十米
+ */
+export function withDeeperFar(frame: SceneFrame): SceneFrame {
+  if (frame.transition > 0) {
+    return frame;
+  }
+  const { projectionMatrix, mainMatrix } = frame;
+  const p10 = projectionMatrix[10] ?? 0;
+  const p14 = projectionMatrix[14] ?? 0;
+  const near = p14 / (p10 - 1);
+  const far = p14 / (p10 + 1) + near * FAR_EXTENSION_NEARS;
+  // 裁剪空间的 z = A × w - B：换一组 A、B，等于 z 行换成 scale × z 行 + shift × w 行，x、y、w 不变
+  const scale = (2 * far * near) / (far - near) / -p14;
+  const shift = (far + near) / (far - near) - -p10 * scale;
+  const extend = (matrix: ArrayLike<number>) => {
+    const out = Float64Array.from(matrix);
+    for (let column = 0; column < 4; column++) {
+      out[column * 4 + 2] = (matrix[column * 4 + 2] ?? 0) * scale + (matrix[column * 4 + 3] ?? 0) * shift;
+    }
+    return out;
+  };
+  return { ...frame, mainMatrix: extend(mainMatrix), projectionMatrix: extend(projectionMatrix) };
+}
+
 /** 换算时复用的矩阵，避免每帧分配 */
 export class FrameMath {
   readonly #flat = new Matrix4();
