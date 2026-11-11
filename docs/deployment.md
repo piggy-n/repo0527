@@ -15,6 +15,19 @@
 
 两种构建都检查产物里没有原型和模型数据（`public/` 只放要发布的文件，见 [config/local-files.md](config/local-files.md)）、开发页没有进入产物、MapLibre 没有成为入口的静态依赖；内网构建还检查天地图 key 已清空且未残留在文本产物中。检查失败时不能使用该次产物部署，规则见 [config/vite-config.md](config/vite-config.md) 的“构建产物检查”。
 
+### 第三方许可
+
+`dist/licenses/<包名>/` 放的是产物里用到的、带 NOTICE 的包要随附的文件：NOTICE、LICENSE，以及两者指向的文件，文件名和包里一样。现在有两个包：
+
+| 目录 | 文件 |
+|---|---|
+| `licenses/echarts/` | `LICENSE`、`NOTICE`、`licenses/LICENSE-d3` |
+| `licenses/gaussian-splat-lite/` | `LICENSE`、`NOTICE`、`THIRD_PARTY_LICENSES.md`（这个包的第三方许可和声明，包括 XGRIDS 对 LCC2 格式的声明，ADR 0149 第 8 节） |
+
+这不是全部依赖的许可：没有 NOTICE 的包（包括 Cesium 和其他 Apache-2.0 包）的许可没有随产物提供，分发前要定（[backlog](backlog.md)"上线前"）。
+
+两种三维引擎的产物都有这两个目录：`cesium` 时不加载高斯泼溅，但它的分块仍在产物里。文件在构建时从安装的版本里取，不入库；随 `dist` 一起发布，不要删。nginx 不用另配，由 `location /` 直接提供，没有扩展名的文件按默认类型下载。哪些包、带哪些文件，以及构建怎么检查，见 [config/vite-config.md](config/vite-config.md) 的“第三方许可”。
+
 ### 构建前放入字体
 
 普惠体的字体文件按授权不能提交到公开仓库（ADR 0012），所以仓库和 CI 中都没有。用于部署的构建，要在构建前把字体放进 `apps/yzt/public/fonts/`（文件名和来源见 [design/fonts.md](design/fonts.md)），构建时整个目录会被复制到 `dist/fonts/`。

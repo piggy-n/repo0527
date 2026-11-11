@@ -11,6 +11,7 @@ import { localPath } from './tools/local-files/paths.ts';
 import { localFilesPlugin } from './tools/local-files/vite-plugin.ts';
 import { titleOutlineConfig } from './tools/system-title/paths.ts';
 import { systemTitlePlugin } from './tools/system-title/vite-plugin.ts';
+import { thirdPartyNoticesPlugin } from './tools/third-party-notices/vite-plugin.ts';
 
 // 包的入口都是 src/index.ts，分块默认会叫 src；换成包名（如 map-cesium），产物里才认得出
 function chunkName({ moduleIds, name }: { moduleIds: string[]; name: string }): string {
@@ -75,7 +76,7 @@ export default defineConfig(({ mode }) => {
   });
 
   return {
-    plugins: [vueJsx(), ...generators, staticFiles, localFiles, buildOutputPlugin()],
+    plugins: [vueJsx(), ...generators, staticFiles, localFiles, thirdPartyNoticesPlugin(), buildOutputPlugin()],
     resolve: {
       // 直接读取 tsconfig 的 paths，不再单独维护一份别名
       tsconfigPaths: true

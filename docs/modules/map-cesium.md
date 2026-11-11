@@ -139,7 +139,7 @@
 
 ## 三维内容（ADR 0081）
 
-会话的 `scene`（`SceneContentModel`，见 [map-core.md](map-core.md)）是三维独有的内容：瓦片集和钻地。高斯泼溅（`splats`，ADR 0149）Cesium 不显示：能力声明 `splats` 是 false，`CesiumView` 不看这一项、状态里也没有它；瓦片集的 `clippedBySplats` 也不看（以后用 3D Tiles 的裁剪多边形实现同一条规则）。`CesiumView` 镜像它，和样式一样暂停期间只记下"有变化"，恢复时再应用。下面瓦片集的比较、加载、状态和同组的规则在 map-core 的 `SceneTilesetSync`，MapLibre 引擎也用它（ADR 0147 第 3 节，[map-three.md](map-three.md)），`SceneLike` 的瓦片集方法就是它要的 `TilesetHost`。
+会话的 `scene`（`SceneContentModel`，见 [map-core.md](map-core.md)）是三维独有的内容：瓦片集和钻地。高斯泼溅（`splats`，ADR 0149）Cesium 不显示：能力声明 `splats` 是 false，`CesiumView` 不看这一项、状态里也没有它；瓦片集的 `clippedBySplats` 也不看。叠一块 Three.js 画布显示 LCC2 做过 PoC，定为不做（ADR 0152）；出现了必须在 Cesium 下显示 LCC2 的部署时，再用 3D Tiles 的裁剪多边形实现同一条裁剪规则。`CesiumView` 镜像它，和样式一样暂停期间只记下"有变化"，恢复时再应用。下面瓦片集的比较、加载、状态和同组的规则在 map-core 的 `SceneTilesetSync`，MapLibre 引擎也用它（ADR 0147 第 3 节，[map-three.md](map-three.md)），`SceneLike` 的瓦片集方法就是它要的 `TilesetHost`。
 
 - 按瓦片集 ID 比较：新的加载，不要的移除；地址或 `attempt` 变了先移除再重新加载；其余只改显示和光照（`updateTileset`）
 - 加载：`prepareTileset`（map-core，ADR 0085 从这里移过去）整理索引（下载用 `loadJson`）→ `SceneLike.addTileset` 建好并加进场景，返回建议的相机（包围球整个进入画布，俯角 55°）。中止的不报告；索引、建瓦片集、瓦片下载失败都记成 `failed`
