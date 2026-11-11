@@ -37,5 +37,8 @@ export function splatReadings(budget: number, entries: readonly SplatEntryReadin
 
 /** 泼溅稳定了：每份都读到了索引，当前视角要的细节都到了、没有在加载的分块 */
 export function splatsSettled(entries: readonly SplatEntryReading[], expected: number): boolean {
-  return entries.length === expected && entries.every(item => item.visibleSplats > 0 && item.loadingChunks === 0 && item.loadProgress >= 1);
+  return (
+    entries.length === expected &&
+    entries.every(item => item.visibleSplats > 0 && item.loadingChunks === 0 && item.loadProgress >= 1)
+  );
 }

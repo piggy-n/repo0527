@@ -22,7 +22,15 @@ describe('splatReadings', () => {
   });
 
   it('各份加起来，进度取最低的，WASM 峰值取最大的', () => {
-    const other = { ...entry, visibleSplats: 500_000, residentChunks: 2, loadingChunks: 1, loadProgress: 0.5, cpuBytes: 40 * MB, peakWasmBytes: 28 * MB };
+    const other = {
+      ...entry,
+      visibleSplats: 500_000,
+      residentChunks: 2,
+      loadingChunks: 1,
+      loadProgress: 0.5,
+      cpuBytes: 40 * MB,
+      peakWasmBytes: 28 * MB
+    };
     expect(splatReadings(6_000_000, [entry, other])).toEqual({
       budget: 6_000_000,
       visible: 1_500_000,

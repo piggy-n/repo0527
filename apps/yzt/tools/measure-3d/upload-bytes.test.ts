@@ -14,9 +14,15 @@ const HALF_FLOAT = 0x140b;
 const UNSIGNED_INT_10F_11F_11F_REV = 0x8c3b;
 
 // texSubImage3D(target, level, x, y, z, width, height, depth, format, type, data)
-const subImage = (width: number, height: number, depth: number, format: number, type: number, data: unknown) => [0, 0, 0, 0, 0, width, height, depth, format, type, data];
+function subImage(width: number, height: number, depth: number, format: number, type: number, data: unknown) {
+  return [0, 0, 0, 0, 0, width, height, depth, format, type, data];
+}
+
 // texImage3D(target, level, internalformat, width, height, depth, border, format, type, data)
-const image = (width: number, height: number, depth: number, format: number, type: number, data: unknown) => [0, 0, 0, width, height, depth, 0, format, type, data];
+function image(width: number, height: number, depth: number, format: number, type: number, data: unknown) {
+  return [0, 0, 0, width, height, depth, 0, format, type, data];
+}
+
 const SUB = [5, 8] as const;
 const FULL = [3, 7] as const;
 
@@ -28,7 +34,7 @@ describe('bytesPerTexel', () => {
     [RGBA_INTEGER, UNSIGNED_INT, 16],
     [RG_INTEGER, UNSIGNED_SHORT, 4],
     [RGBA, FLOAT, 16]
-  ])('格式 %#x、类型 %#x：%i 字节', (format, type, bytes) => {
+  ])('格式 %d、类型 %d：%d 字节', (format, type, bytes) => {
     expect(bytesPerTexel(format, type)).toBe(bytes);
   });
 

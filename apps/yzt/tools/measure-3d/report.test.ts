@@ -171,7 +171,7 @@ describe('有瓦片集场景的报告（ADR 0147 的对比不受泼溅影响）'
     const report = renderReport(results(engineRuns, scenes));
     expect(report).toContain('# MapLibre 引擎和 Cesium 的实测（ADR 0147 3C.4）');
     expect(report).toContain('## 验收');
-    expect(report).toContain('| Cesium');
+    expect(report).toContain('| 指标 | Cesium | MapLibre |');
     expect(report).not.toContain('## 高斯泼溅的预算');
     expect(renderManual(results(engineRuns, scenes))).toContain('quality.html');
   });

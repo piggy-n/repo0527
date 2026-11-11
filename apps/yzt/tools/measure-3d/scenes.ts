@@ -194,5 +194,7 @@ export function selectScenes(only: readonly string[]): Scene[] {
   if (only.length === 0) {
     return SCENES.filter(scene => scene.acceptance);
   }
-  return SCENES.filter(scene => only.some(pattern => scene.id.includes(pattern) && (scene.splats.length === 0 || pattern.includes('splat'))));
+  return SCENES.filter(scene =>
+    only.some(pattern => scene.id.includes(pattern) && (scene.splats.length === 0 || pattern.includes('splat')))
+  );
 }

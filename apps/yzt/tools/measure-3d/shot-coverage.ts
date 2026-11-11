@@ -21,7 +21,8 @@ export function shotCoverage(withModel: Pixels, withoutModel: Pixels): ShotCover
     const red = a[i] ?? 0;
     const green = a[i + 1] ?? 0;
     const blue = a[i + 2] ?? 0;
-    const difference = Math.abs(red - (b[i] ?? 0)) + Math.abs(green - (b[i + 1] ?? 0)) + Math.abs(blue - (b[i + 2] ?? 0));
+    const difference =
+      Math.abs(red - (b[i] ?? 0)) + Math.abs(green - (b[i + 1] ?? 0)) + Math.abs(blue - (b[i + 2] ?? 0));
     if (difference > CHANGED_LEVEL) {
       changed += 1;
       if (Math.min(red, green, blue) >= BRIGHT_LEVEL) {
