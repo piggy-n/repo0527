@@ -33,6 +33,26 @@ export interface BudgetReadings {
   readonly cullWindow: number | null;
 }
 
+/** 高斯泼溅的读数（MapLibre 引擎，ADR 0149 第 5 节）：库自己估计的数，各份加起来 */
+export interface SplatReadings {
+  /** 渲染器的总预算（高斯个数） */
+  readonly budget: number;
+  /** 画着的高斯个数：到不了预算说明这个视角要不了这么多 */
+  readonly visible: number;
+  readonly residentChunks: number;
+  readonly loadingChunks: number;
+  /** 当前视角要的细节到了多少，0～1，取各份里最低的 */
+  readonly loadProgress: number;
+  /** 库估计的 CPU 缓存、GPU 存储、还没放进存储的副本（MB） */
+  readonly cpuMB: number;
+  readonly gpuMB: number;
+  readonly pendingMB: number;
+  /** 累计下载（MB） */
+  readonly downloadedMB: number;
+  /** 解码用的 WASM 内存的峰值（MB），不在 cpuMB 里 */
+  readonly peakWasmMB: number;
+}
+
 /** 两种引擎统一的读数；引擎没有的项是 null */
 export interface BenchStats {
   readonly tilesVisible: number;
@@ -58,6 +78,8 @@ export interface BenchStats {
   readonly queues: TileQueues | null;
   /** Cesium 没有这一项 */
   readonly budget: BudgetReadings | null;
+  /** 没有泼溅时（和 Cesium）是 null */
+  readonly splats: SplatReadings | null;
 }
 
 export interface Summary {
@@ -119,6 +141,7 @@ export interface SceneSample {
   readonly loaded: number;
   readonly queues: TileQueues | null;
   readonly budget: BudgetReadings | null;
+  readonly splats: SplatReadings | null;
 }
 
 /** 一段时间的统计（静止、飞行） */
@@ -172,4 +195,6 @@ export interface PageSetup {
 export interface ShotCoverage {
   readonly blank: boolean;
   readonly modelCoveragePct: number;
+  /** 模型的像素里接近白色的比例（%）：泼溅的亮处偏白（ADR 0149 风险），同一相机下软件渲染和显卡比；没有模型像素时为 null */
+  readonly brightPct: number | null;
 }

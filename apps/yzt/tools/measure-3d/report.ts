@@ -1,4 +1,4 @@
-import type { BudgetReadings, SceneSample, PhaseResult, TileQueues } from './bench-api.ts';
+import type { BudgetReadings, SceneSample, PhaseResult, SplatReadings, TileQueues } from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
 import type { MeasureResults, RunResult } from './results.ts';
 import {
@@ -93,6 +93,10 @@ function budgetDetail(runs: readonly RunResult[], phase: 'flightCold' | 'settle'
   return `${number(window, 2)} / ${integer(full)} / ${integer(added(budget => budget.raisedPredicted))}`;
 }
 
+// 私有内存（提交的字节）：渲染进程里有页面和它的 Worker
+const memoryCell = (runs: readonly RunResult[]) =>
+  `${integer(pick(runs, run => run.memory?.rendererAtStableMB))} / ${integer(pick(runs, run => run.memory?.rendererPeakMB))}，${integer(pick(runs, run => run.memory?.gpuProcessPeakMB))}`;
+
 // 每一项是一行，各方案一列
 const METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => string])[] = [
   ['状态', runs => `${STATUS[STATUS_ORDER.find(status => runs.some(run => run.status === status)) ?? 'failed']}（${runs.length} 遍）`],
@@ -126,10 +130,115 @@ const METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => strin
   ['稳定时：屏幕误差 / 引擎估算的模型显存（MB）', runs => `${number(pick(runs, run => run.atStable?.errorTarget))} / ${integer(pick(runs, run => run.atStable?.cacheMB))}`],
   ['恢复后：瓦片 / 三角形 / 屏幕误差', runs => `${integer(pick(runs, run => run.atRecovered?.tilesVisible))} / ${integer(pick(runs, run => run.atRecovered?.triangles))} / ${number(pick(runs, run => run.atRecovered?.errorTarget))}`],
   ['显存：稳定时 / 峰值（MB）', runs => `${integer(pick(runs, run => run.memory?.gpuAtStableMB))} / ${integer(pick(runs, run => run.memory?.gpuPeakMB))}`],
+  ['CPU 内存：渲染进程 稳定时 / 峰值，GPU 进程峰值（MB）', memoryCell],
   ['JS 堆峰值（MB）', runs => integer(pick(runs, run => run.memory?.heapPeakMB))],
   ['模型占画面的比例（%）', runs => number(pick(runs, run => run.image?.modelCoveragePct))],
   ['页面错误 / GL 错误', runs => `${integer(pick(runs, run => run.pageErrors?.length ?? 0))} / ${integer(pick(runs, run => run.glErrors ?? 0))}`]
 ];
+
+// ---------- 高斯泼溅的预算（ADR 0149 L.3） ----------
+
+// 稳定时可见的高斯到预算的这么多算用满了：不到说明这个视角稳定时要不了这么多，飞行和峰值的行仍然反映这个预算的开销
+export const SPLAT_FILLED_RATIO = 0.9;
+
+const splatOf = (run: RunResult, read: (splats: SplatReadings) => number) => {
+  const splats = run.atStable?.splats;
+  return splats ? read(splats) : null;
+};
+
+// 飞行中画得多少：中位、最低、最高（万）
+function splatFlight(runs: readonly RunResult[], phase: 'flightCold' | 'flightWarm'): string {
+  const of = (read: (values: readonly number[]) => number | null) =>
+    pick(runs, run => {
+      const values = (run[phase]?.trace ?? []).flatMap(sample => (sample.splats ? [sample.splats.visible] : []));
+      return values.length > 0 ? read(values) : null;
+    });
+  const middle = of(values => median(values));
+  return middle === null ? '—' : `${number(middle / WAN)} / ${number((of(values => Math.min(...values)) ?? 0) / WAN)} / ${number((of(values => Math.max(...values)) ?? 0) / WAN)}`;
+}
+
+// 各遍里最大的：长任务的"最长"不能取中位数，两遍的中点可能是 50 毫秒以下、根本不存在的长任务
+function maxOf(runs: readonly RunResult[], read: (run: RunResult) => number | undefined): number | null {
+  const values = runs.map(read).filter(value => value !== undefined);
+  return values.length > 0 ? Math.max(...values) : null;
+}
+
+/** 可见的高斯占预算的比例（中位数）；没有读数时为 null */
+export function splatFill(runs: readonly RunResult[]): number | null {
+  return pick(runs, run => splatOf(run, splats => splats.visible / splats.budget));
+}
+
+const SPLAT_METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => string])[] = [
+  ['状态', runs => `${STATUS[STATUS_ORDER.find(status => runs.some(run => run.status === status)) ?? 'failed']}（${runs.length} 遍）`],
+  ['到稳定（秒）', runs => number((pick(runs, run => run.load?.ttStableMs) ?? Number.NaN) / 1000)],
+  [
+    '稳定时：可见的高斯 / 预算（万），用满了吗',
+    runs => {
+      const fill = splatFill(runs);
+      const visible = pick(runs, run => splatOf(run, splats => splats.visible));
+      const budget = pick(runs, run => splatOf(run, splats => splats.budget));
+      const verdict = fill === null ? '' : fill >= SPLAT_FILLED_RATIO ? '，用满' : `，**没用满（${number(fill * 100, 0)}%）**`;
+      return `${number((visible ?? Number.NaN) / WAN)} / ${number((budget ?? Number.NaN) / WAN)}${verdict}`;
+    }
+  ],
+  ['稳定时：驻留分块 / 累计下载（MB）', runs => `${integer(pick(runs, run => splatOf(run, splats => splats.residentChunks)))} / ${integer(pick(runs, run => splatOf(run, splats => splats.downloadedMB)))}`],
+  ['显存（GPU 进程专用）：稳定时 / 峰值（MB）', runs => `${integer(pick(runs, run => run.memory?.gpuAtStableMB))} / ${integer(pick(runs, run => run.memory?.gpuPeakMB))}`],
+  ['库估计：GPU / CPU / WASM 峰值（MB，稳定时）', runs => `${integer(pick(runs, run => splatOf(run, splats => splats.gpuMB)))} / ${integer(pick(runs, run => splatOf(run, splats => splats.cpuMB)))} / ${integer(pick(runs, run => splatOf(run, splats => splats.peakWasmMB)))}`],
+  ['CPU 内存：渲染进程 稳定时 / 峰值，GPU 进程峰值（MB）', memoryCell],
+  ['JS 堆峰值（MB）', runs => integer(pick(runs, run => run.memory?.heapPeakMB))],
+  ['静止：每帧工作量 p50 / p95 / p99 / 最长', runs => summaryCell(runs, run => run.static?.work)],
+  ['静止：每帧 GPU', runs => summaryCell(runs, run => run.static?.gpu)],
+  ['第一遍飞行：每帧工作量', runs => summaryCell(runs, run => run.flightCold?.work)],
+  ['第一遍飞行：每帧 GPU', runs => summaryCell(runs, run => run.flightCold?.gpu)],
+  ['第一遍飞行：≥33 / ≥50 / ≥100 毫秒的帧', runs => `${integer(pick(runs, run => run.flightCold?.over.ms33))} / ${integer(pick(runs, run => run.flightCold?.over.ms50))} / ${integer(pick(runs, run => run.flightCold?.over.ms100))}`],
+  ['第一遍飞行：长任务 次数（中位数）/ 最长（各遍最大）', runs => `${integer(pick(runs, run => run.flightCold?.longTasks.count))} / ${integer(maxOf(runs, run => run.flightCold?.longTasks.maxMs))}`],
+  ['第一遍飞行：可见的高斯（万）中位 / 最低 / 最高', runs => splatFlight(runs, 'flightCold')],
+  ['第一遍飞行：上传 贴图 / 缓冲（MB）/ 最多的一帧', runs => `${integer(pick(runs, run => run.flightCold?.uploads.textureMB))} / ${integer(pick(runs, run => run.flightCold?.uploads.bufferMB))} / ${number(pick(runs, run => run.flightCold?.uploads.maxFrameMB))}`],
+  ['飞行后补齐（秒）', runs => number((pick(runs, run => run.settle?.ms) ?? Number.NaN) / 1000)],
+  ['第二遍飞行：每帧工作量', runs => summaryCell(runs, run => run.flightWarm?.work)],
+  ['第二遍飞行：≥33 / ≥50 / ≥100 毫秒的帧', runs => `${integer(pick(runs, run => run.flightWarm?.over.ms33))} / ${integer(pick(runs, run => run.flightWarm?.over.ms50))} / ${integer(pick(runs, run => run.flightWarm?.over.ms100))}`],
+  ['第二遍飞行：可见的高斯（万）中位 / 最低 / 最高', runs => splatFlight(runs, 'flightWarm')],
+  ['加载期：最长的长任务，除去创建 WebGL 上下文（毫秒）', runs => integer(pick(runs, run => run.load?.longTasks.maxWithoutContextMs))],
+  ['模型占画面 / 其中接近白色（%）', runs => `${number(pick(runs, run => run.image?.modelCoveragePct))} / ${number(pick(runs, run => run.image?.brightPct))}`],
+  ['页面错误 / GL 错误', runs => `${integer(pick(runs, run => run.pageErrors?.length ?? 0))} / ${integer(pick(runs, run => run.glErrors ?? 0))}`]
+];
+
+/** 这个场景跑的方案（泼溅场景只有各个预算） */
+function sceneVariants(results: MeasureResults, scene: MeasureResults['scenes'][number]) {
+  return results.variants.filter(({ id }) => scene.variants?.includes(id) ?? true);
+}
+
+function splatLines(results: MeasureResults): string[] {
+  const splatScenes = results.scenes.filter(scene => scene.splat);
+  if (splatScenes.length === 0) {
+    return [];
+  }
+  const parts = [
+    '## 高斯泼溅的预算（ADR 0149 L.3）',
+    '',
+    `只有 MapLibre 引擎。模型来自${results.meta.manifest ?? '清单'}。帧时间单位是毫秒，四个数是 p50 / p95 / p99 / 最长；重复跑的取中位数。稳定时可见的高斯不到预算的 ${SPLAT_FILLED_RATIO * 100}% 时算"没用满"：这个视角稳定时要不了这么多，稳定时的行不代表这个预算的开销；飞行要经过要得更多的视角，飞行和峰值的行仍然反映它。`,
+    ''
+  ];
+  for (const scene of splatScenes) {
+    const perf = sceneVariants(results, scene).map(({ id, label }) => ({
+      label,
+      runs: results.runs.filter(run => run.scene === scene.id && run.variant === id && run.kind === 'perf')
+    }));
+    if (perf.every(item => item.runs.length === 0)) {
+      continue;
+    }
+    parts.push(
+      `### ${scene.title}`,
+      '',
+      table(
+        ['指标', ...perf.map(item => item.label)],
+        SPLAT_METRICS.map(([name, read]) => [name].concat(perf.map(item => (item.runs.length === 0 ? '还没跑' : read(item.runs)))))
+      ),
+      ''
+    );
+  }
+  return parts;
+}
 
 const verdictMark = ({ pass }: VerdictRow) => (pass === null ? '算不出' : pass ? '通过' : '**不通过**');
 
@@ -213,16 +322,20 @@ const METHOD = `- **都是生产代码：** 真实的 \`MapSession\`、\`MapLibr
 - **每帧工作量：** 同一帧的 JS 加 GPU，验收的 p50、p95、p99 看它。帧间隔有下限（见"有效性"里的校准），看不出余量；工作量不受影响。
 - **≥50 毫秒的帧：** 看实际帧间隔：这个长度远高于下限，而且能抓到不在工作量里的卡顿（垃圾回收、合成）。
 - **每帧 GPU：** \`EXT_disjoint_timer_query_webgl2\`，只包住这一帧的回调。Cesium 开 4 倍多重采样，离屏解析在计时内；MapLibre 默认不开（和产品一样），所以 GPU 这一项不是同样的画法，要比就加 \`--antialias\` 再跑一次。
-- **上传假设：** 每帧的 \`texImage2D\`、\`texSubImage2D\`、\`bufferData\` 的字节和 \`generateMipmap\` 次数，和这一帧的 GPU 耗时放在一起。按上传量分桶后 GPU 耗时随上传量上涨，才说明尖峰来自上传。
+- **上传假设：** 每帧的 \`texImage2D\`、\`texSubImage2D\`、\`texImage3D\`、\`texSubImage3D\`、\`bufferData\` 的字节和 \`generateMipmap\` 次数，和这一帧的 GPU 耗时放在一起。按上传量分桶后 GPU 耗时随上传量上涨，才说明尖峰来自上传。
 - **长任务归因：** 单独跑一遍带 CDP CPU 采样，页面报的每个长任务按分块（three、maplibre-gl、cesium……）和原生调用（\`linkProgram\`、\`texSubImage2D\`）汇总。\`profiles/\` 里的 \`.cpuprofile\` 可以用 DevTools 打开。创建 WebGL 上下文另外包住 \`getContext\` 量，每一遍都有：它和瓦片无关，同一台机器上 0.6～1.2 秒来回跳。
 - **清晰度：** 单独跑一遍，同一相机拍截图。见 \`quality.html\` 的说明。
 - **到稳定：** 引擎报告瓦片都到了（MapLibre 还要上传队列空、屏幕误差不再变），连续 1 秒。飞行后补齐从飞行结束的时刻算；这个数只说明引擎不再动，不说明画面一样细：Cesium 飞完不一定回到飞行前的粗细，要一起看"飞行后的过程"。所以验收不比这个数，比到 Cesium 终点的 98% 用了多久，和终点的三角形。
-- **显存：** Windows 的 GPU Process Memory 计数器，取 GPU 进程的专用显存，采样的最大值不是真正的瞬时峰值。`;
+- **显存：** Windows 的 GPU Process Memory 计数器，取 GPU 进程的专用显存。"峰值"是加载时、稳定时和每遍飞行结束补齐后这些采样的最大值，不是真正的瞬时峰值，飞行途中不采样（读计数器要起 PowerShell，会干扰帧时间）。
+- **CPU 内存：** 渲染进程（页面和它的 Worker，备用的空进程也算，只有几十 MB）、GPU 进程的私有内存（提交的字节，\`Get-Process\` 的 PrivateMemorySize64），和显存同时采样。
+- **高斯泼溅（ADR 0149 L.3）：** 只有 MapLibre 引擎，每个预算一个方案，都是产品的设置（\`limit\`、\`maxSh: 0\`、并发 2），只换总预算。"稳定"是每份都读到了索引、当前视角要的细节都到了（库的 \`loadProgress\` 为 1）、没有在加载的分块。"库估计"是库自己报的数（CPU 不含 Worker 的堆和还没放进存储的副本）。库在渲染回调外上传、排序，这部分不在"每帧 GPU"里，上传量记在下一帧。"接近白色"是模型的像素里三个通道都不低于 235 的比例，同一个相机下软件渲染和显卡比，看亮处偏白是不是软件渲染造成的。`;
 
 /** report.md */
 export function renderReport(results: MeasureResults): string {
   const { meta, environment: env, runs, quality } = results;
-  const parts: string[] = ['# MapLibre 引擎和 Cesium 的实测（ADR 0147 3C.4）', ''];
+  const onlySplats = results.scenes.length > 0 && results.scenes.every(scene => scene.splat);
+  const title = onlySplats ? '# 高斯泼溅的预算实测（ADR 0149 L.3）' : '# MapLibre 引擎和 Cesium 的实测（ADR 0147 3C.4）';
+  const parts: string[] = [title, ''];
   parts.push(`生成时间：${meta.updatedAt}　提交：${meta.commit ?? '未知'}　进度：${runs.length} / ${meta.plannedTotal}${meta.finished ? '' : '（还在跑或被中断）'}`, '');
   if (env.software) {
     parts.push(`> **⚠ 这次是软件渲染（${env.gpu}），所有帧时间、GPU 数字都无效，只用来确认脚本能跑。**`, '');
@@ -239,16 +352,22 @@ export function renderReport(results: MeasureResults): string {
     parts.push(`> **⚠ 运行期间机器状态不稳定：同样的静止画面，每帧 JS 最多差 ${number(drift)} 倍，帧时间的比较要打折扣。** 关掉其他程序和远程连接，插上电源再跑一次。`, '');
   }
 
-  parts.push('## 验收', '');
+  parts.push(...splatLines(results));
+  if (!onlySplats) {
+    parts.push('## 验收', '');
+  }
   for (const scene of results.scenes) {
     const sceneRuns = runs.filter(run => run.scene === scene.id);
-    if (sceneRuns.length === 0) {
+    // 泼溅场景不和 Cesium 比，上面单独一节
+    if (sceneRuns.length === 0 || scene.splat) {
       continue;
     }
     const rows = sceneVerdict(sceneRuns, quality.find(item => item.scene === scene.id));
     parts.push(`### ${scene.title}${scene.acceptance ? '' : '（不在验收里）'}：${allPassed(rows) ? '全部通过' : '没有全部通过'}`, '', verdictTable(rows), '');
   }
-  parts.push('"截图不比 Cesium 糊"最后要人工看 `quality.html`，结论写进 `manual.md`。', '');
+  if (!onlySplats) {
+    parts.push('"截图不比 Cesium 糊"最后要人工看 `quality.html`，结论写进 `manual.md`。', '');
+  }
 
   parts.push('## 有效性', '');
   parts.push(
@@ -281,12 +400,19 @@ export function renderReport(results: MeasureResults): string {
 
   parts.push('## 各场景并排', '', '帧时间单位是毫秒，四个数是 p50 / p95 / p99 / 最长；重复跑的取中位数。', '');
   for (const scene of results.scenes) {
-    const perf = results.variants.map(({ id, label }) => ({
+    const perf = sceneVariants(results, scene).map(({ id, label }) => ({
       id,
       label,
       runs: runs.filter(run => run.scene === scene.id && run.variant === id && run.kind === 'perf')
     }));
-    if (perf.every(item => item.runs.length === 0)) {
+    // 泼溅场景的数字在上面那一节，这里只留长任务归因
+    if (perf.every(item => item.runs.length === 0) || scene.splat) {
+      for (const variant of sceneVariants(results, scene)) {
+        const profile = runs.find(run => run.scene === scene.id && run.variant === variant.id && run.kind === 'profile')?.profile;
+        if (profile) {
+          parts.push(`**长任务归因：${scene.title}，${variant.label}**`, '', ...profileLines('加载期', profile.load), ...profileLines('飞行中', profile.flight));
+        }
+      }
       continue;
     }
     parts.push(`### ${scene.title}`, '');
@@ -305,13 +431,13 @@ export function renderReport(results: MeasureResults): string {
         parts.push(item.label, '', uploads, '');
       }
     }
-    for (const variant of results.variants) {
+    for (const variant of sceneVariants(results, scene)) {
       const profile = runs.find(run => run.scene === scene.id && run.variant === variant.id && run.kind === 'profile')?.profile;
       if (profile) {
         parts.push(`**长任务归因：${variant.label}**`, '', ...profileLines('加载期', profile.load), ...profileLines('飞行中', profile.flight));
       }
     }
-    for (const variant of results.variants) {
+    for (const variant of sceneVariants(results, scene)) {
       const hold = runs.find(run => run.scene === scene.id && run.variant === variant.id && run.kind === 'quality')?.quality?.hold;
       if (hold) {
         const events = hold.blurEvents.map(event => `第 ${event.index} 秒 ${number(event.share * 100, 0)}%`).join('，') || '没有';
@@ -337,8 +463,34 @@ export function renderReport(results: MeasureResults): string {
   return parts.join('\n');
 }
 
+const SPLAT_MANUAL = `
+
+## 高斯泼溅（ADR 0149 L.3）
+
+在同一台机器上开开发服务器，打开 \`/dev/splat-watch\`，按 300 万、600 万、1000 万各看一遍（步骤见 docs/modules/map-three.md"泼溅的预算"）。
+
+| 项目 | 怎么看 | 300 万 | 600 万 | 1000 万 |
+|---|---|---|---|---|
+| 移动时的手感 | 拖动、转动、缩放，卡不卡、有没有一顿一顿 | | | |
+| 转动时排序闪不闪 | 原地转动，前后的高斯有没有闪烁、穿插 | | | |
+| 加载新分块时 | 飞到没看过的地方，有没有卡顿、空洞多久补上 | | | |
+| 细节够不够 | 近处的地面、树、文字清不清楚，和小预算比差别大不大 | | | |
+| 亮处偏白 | 浅色的墙面、地面、楼梯上方是不是一片白；和 report.md 的"其中接近白色"、软件渲染的数对照 | | | |
+| GL 监听 | 页面上"GL 错误"是不是 0，"库在渲染回调外的调用"有多少 | | | |
+
+**选哪个预算作默认值，为什么：**
+
+`;
+
 /** manual.md：脚本判断不了的 */
 export function renderManual(results: MeasureResults): string {
+  const splat = results.scenes.some(scene => scene.splat) ? SPLAT_MANUAL : '';
+  if (results.scenes.every(scene => scene.splat)) {
+    return `# 人工检查
+
+环境：${results.environment.gpu}
+${splat}`;
+  }
   return `# 人工检查
 
 环境：${results.environment.gpu}
@@ -353,8 +505,7 @@ export function renderManual(results: MeasureResults): string {
 | 飞一圈回来的画面 | "飞行后"那一组 | |
 
 **其他观察：**
-
-`;
+${splat}`;
 }
 
 const IMAGE_STYLE = 'max-width:100%;display:block;margin:4px 0';

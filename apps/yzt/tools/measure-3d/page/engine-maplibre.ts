@@ -1,6 +1,7 @@
 import { MapLibreView, type SceneSurface } from '@mx/map-core';
 import type { CullWindow, ThreeSceneRenderer as Renderer } from '@mx/map-three';
 import { setupMapRuntime } from '../../../src/app/map-runtime.ts';
+import { splatReadings, splatsSettled } from '../splat-readings.ts';
 import type { EngineHandle, EngineOptions } from './bench.ts';
 
 const MB = 1024 * 1024;
@@ -20,10 +21,11 @@ const longestWindow = (windows: readonly (number | null)[]): number | null => {
 };
 
 /** MapLibre 引擎：真实的 MapLibreView 和 ThreeSceneRenderer，和产品一样在第一次切到三维时动态导入 */
-export async function startMapLibre({ session, container, params, onError }: EngineOptions): Promise<EngineHandle> {
+export async function startMapLibre({ session, container, params, splatCount, onError }: EngineOptions): Promise<EngineHandle> {
   setupMapRuntime();
   const uploadMB = params.get('uploadMB');
   const cullWindow = params.get('cullWindow');
+  const splatBudget = params.get('splatBudget');
   let renderer: Renderer | null = null;
   let surface: SceneSurface | null = null;
   const view = new MapLibreView({
@@ -46,7 +48,8 @@ export async function startMapLibre({ session, container, params, onError }: Eng
       }
       const rendererOptions = {
         ...(uploadMB === null ? {} : { uploadBytesPerFrame: uploadMB === 'off' ? null : Number(uploadMB) * MB }),
-        ...(cullWindow === null ? {} : { requestCullWindow: cullWindowOf(cullWindow) })
+        ...(cullWindow === null ? {} : { requestCullWindow: cullWindowOf(cullWindow) }),
+        ...(splatBudget === null ? {} : { splatBudget: Number(splatBudget) })
       };
       return () => {
         renderer = new BenchRenderer(rendererOptions);
@@ -68,6 +71,7 @@ export async function startMapLibre({ session, container, params, onError }: Eng
     config: {
       uploadMB: uploadMB ?? '产品的默认值',
       cullWindow: cullWindow ?? '产品的默认值',
+      splatBudget: splatBudget ?? '产品的默认值',
       antialias: params.get('antialias') === '1'
     },
     stats() {
@@ -101,12 +105,17 @@ export async function startMapLibre({ session, container, params, onError }: Eng
           raisedFull: state.raisedFull,
           raisedPredicted: state.raisedPredicted,
           cullWindow: longestWindow(tilesets.map(item => item.cullWindow))
-        }
+        },
+        splats: splatReadings(state.splatBudget, Object.values(state.splats))
       };
     },
+    // 瓦片集：瓦片到了、不再调整（settled 不看泼溅）；泼溅：每份都读到了索引，当前视角要的细节都到了、没有在加载的分块
     isStable() {
       const state = inspect();
-      return state.settled && Object.values(state.tilesets).some(item => item.loaded > 0);
+      const tilesets = Object.values(state.tilesets);
+      const splats = Object.values(state.splats);
+      const tilesReady = state.settled && (tilesets.length === 0 || tilesets.some(item => item.loaded > 0));
+      return tilesets.length + splats.length > 0 && tilesReady && splatsSettled(splats, splatCount);
     },
     frames: () => renderer?.inspect().frames ?? 0,
     requestFrame: () => surface?.requestRepaint()

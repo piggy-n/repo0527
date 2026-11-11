@@ -13,6 +13,8 @@ import type {
 } from '../bench-api.ts';
 import { FrameCap } from '../frame-cap.ts';
 import { longTaskStats } from '../long-task-stats.ts';
+import { shotCoverage } from '../shot-coverage.ts';
+import { texture3dBytes } from '../upload-bytes.ts';
 import { blankPixels, decodeShot } from './shots.ts';
 
 // 测量探针：要最先执行（bench.ts 的第一个导入），接管 requestAnimationFrame。两种引擎用同一份代码量，
@@ -75,6 +77,12 @@ function watchUploads(): void {
   });
   wrap('texSubImage2D', args => {
     uploads.texture += sizeFromArgs(args, 4);
+  });
+  wrap('texImage3D', args => {
+    uploads.texture += texture3dBytes(args, 3, 7);
+  });
+  wrap('texSubImage3D', args => {
+    uploads.texture += texture3dBytes(args, 5, 8);
   });
   wrap('generateMipmap', () => {
     uploads.mipmaps += 1;
@@ -325,7 +333,8 @@ function sceneSample(from: number): SceneSample | null {
         cacheMB: stats.cacheMB,
         loaded: stats.loaded,
         queues: stats.queues,
-        budget: stats.budget
+        budget: stats.budget,
+        splats: stats.splats
       }
     : null;
 }
@@ -633,20 +642,10 @@ export const probe: Probe = {
     return { ...(await endPhase()), trace };
   },
 
-  // 模型显示和隐藏各拍一张，比较后才知道模型是不是真的画出来了
+  // 模型显示和隐藏各拍一张，比较后才知道模型是不是真的画出来了；模型的像素里再数接近白色的（泼溅的亮处偏白）
   async analyzeShots(withModel, withoutModel) {
     const [a, b] = await Promise.all([decodeShot(withModel), decodeShot(withoutModel)]);
-    let changed = 0;
-    for (let i = 0; i < a.data.length; i += 4) {
-      const difference =
-        Math.abs((a.data[i] ?? 0) - (b.data[i] ?? 0)) +
-        Math.abs((a.data[i + 1] ?? 0) - (b.data[i + 1] ?? 0)) +
-        Math.abs((a.data[i + 2] ?? 0) - (b.data[i + 2] ?? 0));
-      if (difference > 24) {
-        changed += 1;
-      }
-    }
-    return { blank: blankPixels(a), modelCoveragePct: (changed / (a.data.length / 4)) * 100 };
+    return { blank: blankPixels(a), ...shotCoverage(a, b) };
   }
 };
 

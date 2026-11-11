@@ -9,7 +9,7 @@ import {
 } from '@mx/map-core';
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest';
 import { boxGlb, boxTileset, FIXTURE_ORIGIN, serveFixtures } from './testing/fixtures';
-import { watchGl } from './testing/gl-watch';
+import { watchGl } from './gl-watch';
 import { writeSplatSquare } from './testing/lcc2-fixture';
 import { required } from './testing/required';
 import { ThreeSceneRenderer } from './three-scene-renderer';
@@ -449,7 +449,10 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
     }
 
     expect(watch.errors).toStrictEqual([]);
+    expect(watch.errorCount).toBe(0);
     expect(ctx.errors).toStrictEqual([]);
+    // 开发页按方法显示：分开的次数加起来等于总数
+    expect(Object.values(watch.libraryOutsideByMethod).reduce((total, count) => total + count, 0)).toBe(watch.libraryOutside);
     // 库确实在渲染回调外调用了 GL（后台排序、分块上传）：保护有东西要守。这么小的数据去掉保护也不出错，
     // 真实数据要在开发页上用同样的监听再看（docs/modules/map-three.md"高斯泼溅"）
     expect(watch.libraryOutside).toBeGreaterThan(0);

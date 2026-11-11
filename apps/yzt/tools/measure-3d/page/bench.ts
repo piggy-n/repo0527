@@ -1,13 +1,20 @@
 // 探针要最先执行（第一个导入）：它接管 requestAnimationFrame，引擎是动态导入的，一定在它之后
 import { probe } from './probe.ts';
-import { type CameraState, MapSession, type MapView, type StyleGroup, type TilesetLayer } from '@mx/map-core';
+import { type CameraState, MapSession, type MapView, type SplatLayer, type StyleGroup, type TilesetLayer } from '@mx/map-core';
 import type { BenchCamera, BenchStats } from '../bench-api.ts';
 import { GRID_COLS, GRID_ROWS, type SharpnessGrid, sharpnessGrid } from '../sharpness.ts';
 import { decodeShot } from './shots.ts';
 
 // 测量页：只有底图和模型，没有面板、定时器和业务图层，不让页面自己的工作混进测量。
 // 走真实的会话、视图和引擎（ADR 0147 第 7 节：性能验收要测生产代码），这里不写层、场景和缓存算法。
-// 参数都在地址上：engine、models、center、zoom、pitch、bearing、basemap、uploadMB、cullWindow、antialias、pacing、fps
+// 参数都在地址上：engine、models、splats、center、zoom、pitch、bearing、basemap、uploadMB、cullWindow、splatBudget、antialias、pacing、fps
+
+/** 地址上的 splats（JSON）：清单里的泼溅，地址相对 /3dt/（splat-models.ts） */
+interface SplatParam {
+  readonly id: string;
+  readonly path: string;
+  readonly placement: SplatLayer['placement'];
+}
 
 /** 一种引擎交给测量页的 */
 export interface EngineHandle {
@@ -23,6 +30,8 @@ export interface EngineOptions {
   readonly session: MapSession<'basemap'>;
   readonly container: HTMLElement;
   readonly params: URLSearchParams;
+  /** 要加载几份泼溅：都读到索引、到齐了才算稳定 */
+  readonly splatCount: number;
   readonly onError: (error: unknown) => void;
 }
 
@@ -100,8 +109,9 @@ const initialCamera: CameraState = {
 const session = new MapSession<'basemap'>({ groups: ['basemap'], camera: initialCamera });
 session.style.setGroup('basemap', basemap());
 
+const splatParams = JSON.parse(params.get('splats') ?? '[]') as readonly SplatParam[];
 const engineName = params.get('engine') ?? 'maplibre';
-const options: EngineOptions = { session, container, params, onError: report };
+const options: EngineOptions = { session, container, params, splatCount: splatParams.length, onError: report };
 const handle =
   engineName === 'cesium'
     ? await (await import('./engine-cesium.ts')).startCesium(options)
@@ -113,14 +123,27 @@ view.on('settle', () => {
   settled = true;
 });
 
+// 和泼溅一起开的倾斜模型在泼溅的范围里裁掉，同现状底图（ADR 0149 第 1 节）
 const tilesets = (show: boolean): TilesetLayer[] =>
   (params.get('models') ?? '').split(',').filter(Boolean).map(path => ({
     id: path,
     url: new URL(`/3dt/${path}`, location.href).href,
     show,
     lighting: 'sun',
+    clippedBySplats: splatParams.length > 0,
     attempt: 0
   }));
+
+const splats = (show: boolean): SplatLayer[] =>
+  splatParams.map(({ id, path, placement }) => ({
+    id,
+    url: new URL(`/3dt/${path}`, location.href).href,
+    show,
+    placement,
+    attempt: 0
+  }));
+
+const sceneContent = (show: boolean) => ({ tilesets: tilesets(show), splats: splats(show), underground: null });
 
 let continuous = false;
 const keepDrawing = () => {
@@ -150,7 +173,7 @@ if (!centerText) {
 }
 
 const loadStartedAt = performance.now();
-session.scene.set({ tilesets: tilesets(true), underground: null });
+session.scene.set(sceneContent(true));
 
 window.bench = {
   engine: engineName,
@@ -168,7 +191,7 @@ window.bench = {
   },
   setCamera,
   setModelVisible(visible) {
-    session.scene.set({ tilesets: tilesets(visible), underground: null });
+    session.scene.set(sceneContent(visible));
     handle.requestFrame();
   },
   renders: () => handle.frames(),

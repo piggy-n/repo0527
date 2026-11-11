@@ -14,6 +14,11 @@ export interface MemoryReadings {
   readonly gpuAtStableMB: number | null;
   readonly gpuPeakMB: number | null;
   readonly gpuUnavailable: string | null;
+  /** 渲染进程（页面和它的 Worker）的私有内存（MB）：泼溅的 CPU 内存看它（ADR 0149 第 5 节） */
+  readonly rendererAtStableMB?: number | null;
+  readonly rendererPeakMB?: number | null;
+  /** GPU 进程的私有内存（MB）：驱动在内存里留的副本 */
+  readonly gpuProcessPeakMB?: number | null;
 }
 
 /** 飞行结束到稳定 */
@@ -117,10 +122,20 @@ export interface MeasureResults {
     readonly fps: number | null;
     readonly antialias: boolean;
     readonly plannedTotal: number;
+    /** 泼溅场景的模型从哪份清单读的；没有泼溅场景时不写 */
+    readonly manifest?: string;
   };
   readonly environment: Environment;
   readonly warnings: string[];
-  readonly scenes: readonly { readonly id: string; readonly title: string; readonly acceptance: boolean }[];
+  readonly scenes: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly acceptance: boolean;
+    /** 有泼溅：比较预算，不和 Cesium 比 */
+    readonly splat?: boolean;
+    /** 这个场景跑的方案；不写时是全部方案 */
+    readonly variants?: readonly string[];
+  }[];
   readonly variants: readonly { readonly id: string; readonly label: string }[];
   readonly runs: RunResult[];
   readonly quality: SceneQuality[];

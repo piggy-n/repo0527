@@ -6,6 +6,7 @@ export {
   ThreeSceneRenderer,
   type ThreeSceneRendererOptions
 } from './three-scene-renderer';
+export { type GlError, type GlWatch, watchGl } from './gl-watch';
 export type { CullWindow } from './request-cull';
 export type { SplatEntryInspection } from './splat-entry';
 export type { TilesetEntryInspection } from './tileset-entry';

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { aerialFlight, buildRuns, SCENES, selectScenes, variants } from './scenes.ts';
+import { aerialFlight, buildRuns, SCENES, selectScenes, splatVariants, variants } from './scenes.ts';
 
 describe('selectScenes', () => {
   it('默认选验收场景：倾斜摄影 z17、z19', () => {
@@ -9,6 +9,11 @@ describe('selectScenes', () => {
 
   it('按子串选', () => {
     expect(selectScenes(['jkq2']).map(scene => scene.id)).toEqual(['jkq2-z15', 'jkq2-z16-tilt']);
+  });
+
+  it('按级别选时不带上泼溅场景：它们要本地清单，引擎对比用不到', () => {
+    expect(selectScenes(['z19']).map(scene => scene.id)).toEqual(['oblique-z19']);
+    expect(selectScenes(['z18']).map(scene => scene.id)).toEqual(['white-station-z18']);
   });
 });
 
@@ -37,7 +42,7 @@ describe('variants 的对照方案', () => {
 
   it('对照方案只跑 perf：画质和采样只有要比的两个方案', () => {
     const list = variants([], [null, 0.3]);
-    const runs = buildRuns(selectScenes(['z19']), list, 1);
+    const runs = buildRuns(selectScenes(['z19']), list, 1, splatVariants([3e6, 6e6, 1e7]));
     expect(runs.filter(run => run.kind === 'perf')).toHaveLength(4);
     expect(runs.filter(run => run.kind !== 'perf').map(run => run.id)).toEqual([
       'oblique-z19/cesium/quality',
@@ -87,6 +92,51 @@ describe('buildRuns', () => {
   });
 });
 
+describe('泼溅场景（ADR 0149 L.3）', () => {
+  const list = variants([null]);
+  const budgets = splatVariants([3e6, 6e6, 1e7]);
+
+  it('splat 选中四个场景，都不在验收里；splat-pc 是彭城广场的三个', () => {
+    expect(selectScenes(['splat']).map(scene => scene.id)).toEqual(['splat-pc-z18', 'splat-pc-z19', 'splat-pc-xz-z18', 'splat-cws1-z18']);
+    expect(selectScenes(['splat-pc']).map(scene => scene.id)).toEqual(['splat-pc-z18', 'splat-pc-z19', 'splat-pc-xz-z18']);
+    expect(selectScenes(['splat']).every(scene => !scene.acceptance)).toBe(true);
+    expect(selectScenes([]).some(scene => scene.splats.length > 0)).toBe(false);
+  });
+
+  it('每个预算一个 MapLibre 方案', () => {
+    expect(budgets.map(item => [item.id, item.engine, item.splatBudget, item.label])).toEqual([
+      ['maplibre-splat3m', 'maplibre', 3_000_000, 'MapLibre，泼溅预算 300 万'],
+      ['maplibre-splat6m', 'maplibre', 6_000_000, 'MapLibre，泼溅预算 600 万'],
+      ['maplibre-splat10m', 'maplibre', 10_000_000, 'MapLibre，泼溅预算 1,000 万']
+    ]);
+  });
+
+  it('泼溅场景只跑预算的方案，不跑 Cesium、不比画质，每个预算一遍采样', () => {
+    const runs = buildRuns(selectScenes(['splat-pc-z18']), list, 2, budgets);
+    expect(runs.filter(run => run.kind === 'perf').map(run => run.variant.id)).toEqual([
+      'maplibre-splat3m',
+      'maplibre-splat6m',
+      'maplibre-splat10m',
+      'maplibre-splat10m',
+      'maplibre-splat6m',
+      'maplibre-splat3m'
+    ]);
+    expect(runs.filter(run => run.kind !== 'perf').map(run => run.id)).toEqual([
+      'splat-pc-z18/maplibre-splat3m/profile',
+      'splat-pc-z18/maplibre-splat6m/profile',
+      'splat-pc-z18/maplibre-splat10m/profile'
+    ]);
+  });
+
+  it('和瓦片集的场景一起跑时各跑各的方案', () => {
+    const runs = buildRuns(selectScenes(['z19', 'splat-cws1']), list, 1, budgets);
+    const perScene = (id: string) => [...new Set(runs.filter(run => run.scene.id === id).map(run => run.variant.id))];
+    expect([...new Set(runs.map(run => run.scene.id))]).toEqual(['oblique-z19', 'splat-cws1-z18']);
+    expect(perScene('oblique-z19')).toEqual(['cesium', 'maplibre', 'maplibre-no-budget']);
+    expect(perScene('splat-cws1-z18')).toEqual(['maplibre-splat3m', 'maplibre-splat6m', 'maplibre-splat10m']);
+  });
+});
+
 describe('aerialFlight', () => {
   const camera = { center: [117.18, 34.26] as const, zoom: 17, pitch: 55, bearing: 20 };
 
@@ -103,7 +153,7 @@ describe('aerialFlight', () => {
     expect(frames.every(frame => frame.pitch >= 0)).toBe(true);
   });
 
-  it('所有场景都有模型', () => {
-    expect(SCENES.every(scene => scene.models.length > 0)).toBe(true);
+  it('所有场景都有模型：瓦片集或泼溅', () => {
+    expect(SCENES.every(scene => scene.models.length + scene.splats.length > 0)).toBe(true);
   });
 });

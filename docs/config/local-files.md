@@ -60,7 +60,7 @@ pnpm --filter yzt dev:intranet
 - 地址和线上一致，清单里的 `tileset` 仍然写相对路径（[deployment.md](../deployment.md)）
 - 排在 Vite 的中间件之前，原型的脚本和样式不经过转换，和放在 `public/` 时一样
 - 放进新文件不用重启；目录地址（`/design.local/<主题>/`）打开目录里的 `index.html`，不用写全
-- 目录里没有的文件交给后面的中间件，`/3dt/manifest.json` 就这样继续从 `public` 提供。所以 `local/3dt/` 里不放 `manifest.json`，否则会盖住入库的那份
+- 目录里没有的文件交给后面的中间件，`/3dt/manifest.json` 就这样继续从 `public` 提供。所以 `local/3dt/` 里平时不放 `manifest.json`，否则会盖住入库的那份。例外是临时要看不入库的模型：ADR 0149 L.3 的彭城广场 LCC2 样例就是复制入库的清单再加一项，开发服务器和 `measure:3d` 都读它（[map-three.md](../modules/map-three.md)"泼溅的预算"）；用完删掉，入库的清单改了要重新生成
 - 只在开发服务器上生效：`vite preview` 没有模型（产物里也没有），测试不读这些目录
 
 构建由 `tools/build-output/vite-plugin.ts` 检查：产物里出现 `design.local` 或 `3dt/` 下清单以外的内容时构建失败（[vite-config.md](vite-config.md)"构建产物检查"）。

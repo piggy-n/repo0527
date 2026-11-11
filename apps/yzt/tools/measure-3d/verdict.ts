@@ -256,7 +256,9 @@ export function machineDrift(runs: readonly RunResult[]): number | null {
   for (const run of runs) {
     const js = run.kind === 'perf' ? run.static?.js?.p50 : undefined;
     if (js) {
-      const key = `${run.scene}/${run.variant === 'cesium' ? 'cesium' : 'maplibre'}`;
+      // MapLibre 的各个对照方案静止时画的一样；泼溅的预算不同，画的就不同，各算各的
+      const workload = run.variant === 'cesium' || run.variant.startsWith('maplibre-splat') ? run.variant : 'maplibre';
+      const key = `${run.scene}/${workload}`;
       groups.set(key, (groups.get(key) ?? []).concat(js));
     }
   }
