@@ -34,8 +34,8 @@
 | `maplibre/apply-style-command.ts` | `applyStyleCommand`：一条命令对应一次地图方法调用 |
 | `maplibre/maplibre-view.ts` | `MapLibreView`：二维视图，唯一写 MapLibre 地图的地方 |
 | `maplibre/roam/` | MapLibre 引擎的漫游（ADR 0147 第 4 节）：`MapLibreRoam` 接管地图、抬高、进出和报告进度，`RouteRoamer`、`WalkRoamer` 是从 map-cesium 移植的路线和步行（只用真实坐标，经 `RoamHost` 设相机、拾取、投影），`roam-camera.ts` 是真实视点和 MapLibre 相机的换算；见 [map-three.md](map-three.md)"漫游" |
-| `view/blackout.ts` | `Blackout`：闪切用的黑幕（ADR 0086、0103），漫游用，从入口导出（3C.3 从 map-cesium 移来） |
-| `view/modifier-pan.ts` | `ModifierPan`：按住修饰键临时拖动地图，截下这次按下、把指针的移动交给视图平移、给出临时的光标（ADR 0056、0080 第 4 节）；二维、三维的视图共用，从入口导出 |
+| `view/blackout.ts` | `Blackout`：闪切用的黑幕（ADR 0086、0103），包里的漫游用，不从入口导出 |
+| `view/modifier-pan.ts` | `ModifierPan`：按住修饰键临时拖动地图，截下这次按下、把指针的移动交给视图平移、给出临时的光标（ADR 0056、0080 第 4 节）；二维、三维的视图共用，只在包里用，不从入口导出 |
 | `events.ts` | `Unsubscribe` 类型 |
 | `model-events.ts` | `ModelEvents`：会话各模型共用的事件与释放（ADR 0034 第 7 条），模块内部使用，不从入口导出 |
 

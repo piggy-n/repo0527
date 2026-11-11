@@ -59,8 +59,8 @@ export const ResourceLegend = defineComponent({
     /** 正在显示；切到别的 Tab、让给另一边时为 false */
     active: { type: Boolean, default: true },
     /**
-     * 当前显示的是三维、三维里不显示资源图层（三维的资源图层开关关着，ADR 0147）：只显示说明，和隐藏时一样卸载条目和编辑器，
-     * 浏览和编辑目标保留（ADR 0080 第 5 节）；开关开着时三维照常显示资源图层，不传
+     * 当前显示的是三维、三维里不显示资源图层（三维引擎的能力 `styleLayers` 为 false，app 注入的收窄能力，ADR 0153）：
+     * 只显示说明，和隐藏时一样卸载条目和编辑器，浏览和编辑目标保留（ADR 0080 第 5 节）；能力为 true 时三维照常显示资源图层，不传
      */
     scene: { type: Boolean, default: false }
   },

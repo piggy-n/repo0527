@@ -106,6 +106,31 @@ describe('ModifierPan', () => {
     ]);
   });
 
+  it('swallows another press made during the pan, such as the right button, and keeps panning', () => {
+    using ctx = setup();
+
+    press(ctx.canvas, { ctrlKey: true, clientX: 0, clientY: 0 });
+    move(ctx.canvas, 5, 5, { ctrlKey: true });
+    press(ctx.canvas, { button: 2, ctrlKey: true, clientX: 5, clientY: 5 });
+    move(ctx.canvas, 9, 9, { ctrlKey: true, buttons: 3 });
+    release(ctx.canvas);
+
+    // 右键的按下也截下：MapLibre 不开始右键拖动的旋转、俯仰
+    expect(ctx.engineDowns).toStrictEqual([]);
+    expect(ctx.pans).toStrictEqual([
+      [
+        { x: 0, y: 0 },
+        { x: 5, y: 5 }
+      ],
+      [
+        { x: 5, y: 5 },
+        { x: 9, y: 9 }
+      ]
+    ]);
+    // 松开后派生的单击仍属于这次临时拖动，不交给工具
+    expect(ctx.pan.swallows('click')).toBe(true);
+  });
+
   it('leaves other presses to MapLibre and does not pan', () => {
     using ctx = setup();
 

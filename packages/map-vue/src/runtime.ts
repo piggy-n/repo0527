@@ -6,7 +6,7 @@ import type { InjectionKey } from 'vue';
  * app 注入时收窄：现在三维里不显示资源图层、不识别，等页面重新设计（ADR 0153）
  */
 export interface SceneCapabilities {
-  /** 三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记），不只是镜像的 GeoJSON 覆盖物 */
+  /** 三维里照常画二维样式的全部图层（矢量瓦片、花纹、注记） */
   readonly styleLayers: boolean;
   /** 三维期间点/框选能识别：三维视图的渲染要素查询有结果 */
   readonly identify: boolean;

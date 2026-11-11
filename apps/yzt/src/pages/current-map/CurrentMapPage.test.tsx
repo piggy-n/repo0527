@@ -343,7 +343,7 @@ async function freshModules(): Promise<PageModules> {
 
 /**
  * 页面里的画布用真实的 MapLibre，jsdom 里创建不出来；用 stubs 换成注入了假地图的同一个组件。
- * 三维是同一个视图，三维模块换成渲染器的替身，能力同 app 按三维的开关收窄后的（三维里不显示资源图层）。
+ * 三维是同一个视图，三维模块换成渲染器的替身，能力同 app 注入的（三维里不显示资源图层、不识别）。
  * 第一次创建可以设为失败，模拟引擎失败后重试；canvasKey 变化时画布重建
  */
 function mountPage({ failFirstCreation = false, modules = STATIC_MODULES, keepAlive = false } = {}) {

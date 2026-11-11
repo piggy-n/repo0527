@@ -5,7 +5,7 @@ export {
   type CameraState,
   type ViewKind
 } from './camera/camera-model';
-export { distanceToZoom, MAPLIBRE_FOVY, zoomToDistance } from './camera/camera-distance';
+export { distanceToZoom, MAPLIBRE_FOVY } from './camera/camera-distance';
 export type { Unsubscribe } from './events';
 export type {
   CameraEventData,
@@ -187,5 +187,3 @@ export type {
   ScreenPoint
 } from './view/view-input';
 export { canTransition, type Deferred, deferred, type LiveViewState } from './view/view-lifecycle';
-export { type ClientPoint, ModifierPan, type ModifierPanOptions } from './view/modifier-pan';
-export { Blackout } from './view/blackout';

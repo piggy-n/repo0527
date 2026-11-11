@@ -217,7 +217,7 @@ describe('各市的配色', () => {
     }
   });
 
-  it('面只取面要素，三维按原来的类型求值时 MultiPolygon（南京）也要留下', () => {
+  it('面只取面要素：MapLibre 的类型 3、GeoJSON 原来的 Polygon 和 MultiPolygon（南京）都留下', () => {
     const land = staticBasemapGroup(1).layers.find(layer => layer.id === 'basemap-static-land');
     const { filter } = featureFilter(land && 'filter' in land ? land.filter : undefined, 'basemap-static-land.filter');
     const accepts = (type: Feature['type']) => filter({ zoom: 8 }, { type, properties: {} });

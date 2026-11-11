@@ -330,7 +330,7 @@ export const CurrentMapPage = defineComponent({
       // 手机宽度时资源面板展开，中间一列没有宽度，区划条不显示；漫游时区划不适用
       const scopeShown = (!phone || !sides.left.value) && !underground;
       const scene = map.dimension.value === '3d';
-      // 三维里不显示资源图层时图例只有说明（ADR 0080 第 5 节）：三维的资源图层开关关着（ADR 0147）
+      // 三维里不显示资源图层时图例只有说明（ADR 0080 第 5 节）：三维引擎的能力 styleLayers 为 false（ADR 0153）
       const resourcesHidden = resources.hiddenInScene.value;
       const indoorMap = models.indoorMap.value;
       const player = models.roamPlayer.value;

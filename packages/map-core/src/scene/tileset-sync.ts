@@ -59,7 +59,7 @@ const sameOptions = (a: TilesetOptions | null, b: TilesetOptions) =>
   a.clippedBySplats === b.clippedBySplats;
 
 /**
- * 按会话的瓦片集增删改引擎里的瓦片集（ADR 0081 第 2、5 节），两种三维引擎共用（ADR 0147 第 3 节）：
+ * 按会话的瓦片集增删改引擎里的瓦片集（ADR 0081 第 2、5 节），引擎实现 TilesetHost（ADR 0147 第 3 节）：
  * 地址、重试次数变了就重新加载，其余的只改显示、光照、屏幕误差和泼溅范围里的裁剪；同组的换显示时，新的首批瓦片到了才撤下旧的
  */
 export class SceneTilesetSync implements Disposable {

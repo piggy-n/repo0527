@@ -41,7 +41,7 @@ const CITY_COLOR: ExpressionSpecification = [
   STATIC_OUTSIDE_COLOR
 ] as unknown as ExpressionSpecification;
 
-// 三维按要素原来的类型求值：不写 MultiPolygon 的话南京会被滤掉
+// MapLibre 画的时候面都是 Polygon；按 GeoJSON 原来的类型求值（featureFilter）时南京是 MultiPolygon，不写会被滤掉
 const POLYGONS: FilterSpecification = ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false];
 
 function landLayer(opacity: number, cityColors: boolean): FillLayerSpecification {

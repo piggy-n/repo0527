@@ -185,7 +185,7 @@ function setup(
   invalid: ReadonlyMap<string, readonly string[]> = new Map(),
   initialScope: RegionScope | null = null,
   onIdentifyStart = vi.fn<() => void>(),
-  // 三维引擎的能力：默认是三维的资源图层开关关着时的，三维期间不识别
+  // 三维引擎的能力：默认同 app 注入的，三维期间不识别
   sceneCapabilities: SceneCapabilities = { styleLayers: false, identify: false, splats: true }
 ) {
   const fake = fakeCamera(zoom);

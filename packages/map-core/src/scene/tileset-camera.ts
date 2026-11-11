@@ -18,7 +18,7 @@ export interface TilesetSphere {
 }
 
 /**
- * 让整个包围球进入画布的相机（ADR 0081 第 2 节）：竖直方向放下球的直径，两种三维引擎共用。
+ * 让整个包围球进入画布的相机（ADR 0081 第 2 节）：竖直方向放下球的直径。
  * 相机状态描述的是视线和地面的交点，所以球心在空中时交点要沿视线往前挪，球心才在画面中央
  */
 export function tilesetCamera({ center, height, radius }: TilesetSphere, viewportHeight: number): CameraState {

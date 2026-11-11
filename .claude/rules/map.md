@@ -31,9 +31,9 @@ paths:
 - 引用别的分组数据源的推导，要依赖被引用方的状态，保证两者在同一轮变化、一起提交；拥有者的数据源、图层和样式图片的 ID 以分组名为前缀（ADR 0027、0028、0045）
 - `shared/map` 和 feature 的地图能力按"拥有者"写（ADR 0031）：组合式函数持有状态（`shallowRef`，整体替换，值没变时不替换）并提供操作（参数不合法时抛错），推导分组的是纯函数；面板等界面通过 props 拿到拥有者，只显示和调用
 - 会话的选择状态只存要素身份（数据源 + 业务主键），属性、几何、候选列表和详情留在 feature 的查询缓存里，高亮分组从选择和查询结果推导（ADR 0022、0047）
-- 只有 MapLibre 适配器能写二维地图（lint 只允许 `packages/map-core/src/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；二三维共用的是生命周期、相机、输入、拾取、投影、渲染要素查询这几个视图接口（ADR 0024、0047；三维的渲染要素查询返回空数组）
-- 视图上的差异（如三维期间不画二维标注）由适配器自己处理，不改会话状态；框架独有的功能按能力声明，独有状态由各自的模块保管，切换框架时保留
-- 样式表达式和过滤条件在三维、Worker 里一律用 `@maplibre/maplibre-gl-style-spec` 求值，不手写求值器；它保证求值语义一致，不保证渲染效果一致，三维的支持范围按清单降级（ADR 0024）
+- 只有 MapLibre 适配器能写二维地图（lint 只允许 `packages/map-core/src/maplibre/` 和 `app/` 导入 maplibre-gl），不提供通用的原生地图出口，其他代码只能通过它的只读方法查询、投影；二三维共用的是生命周期、相机、输入、拾取、投影、渲染要素查询这几个视图接口（ADR 0024、0047）；三维是同一个 MapLibre 视图，渲染要素查询照样查二维样式的图层，三维里点/框选用不用由能力 `identify` 决定（ADR 0147）
+- 视图上的差异（如漫游时抬高地下的模型期间隐藏二维图层）由适配器自己处理，不改会话状态；一种维度独有的功能按能力声明，独有状态由各自的模块保管，切换维度时保留
+- 样式表达式和过滤条件在 Worker 等地图以外的地方一律用 `@maplibre/maplibre-gl-style-spec` 求值，不手写求值器，保证和 MapLibre 的语义一致（ADR 0024）；二三维是同一个 MapLibre 视图，样式不另做三维的支持清单
 
 ## 相机与视图
 
@@ -57,7 +57,7 @@ paths:
 
 ## MapLibre 的写法
 
-- fill 图层要用 `['geometry-type']` 限定为面：MapLibre 会把线也当成环填充；要写 `['Polygon', 'MultiPolygon']`，三维按要素原来的类型求值
+- fill 图层要用 `['geometry-type']` 限定为面：MapLibre 会把线也当成环填充；要写 `['Polygon', 'MultiPolygon']`：MapLibre 画的时候面都是 `Polygon`，按 GeoJSON 原来的类型求值（`featureFilter` 直接用 GeoJSON 要素，如测试）时多个面的要素是 `MultiPolygon`，只写 `Polygon` 会被滤掉
 - line 图层的 `line-dasharray` 不在常量和按要素取值之间切换（MapLibre 6.12 的缺陷会报错）：线型不同的要素按线型拆成多个图层，每层的线型是常量，实线不设（ADR 0046）
 - 只随级别变化（常量或按 `zoom` 的 `step`）的 `fill-pattern` 设 `'fill-pattern-transition': { duration: 0 }`：过渡期间 MapLibre 按旧图片取图集位置，换花纹后会画错约 300 毫秒（见 `docs/archive/migration.md` 的"切换填充方式的闪烁"）
 

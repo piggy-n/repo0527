@@ -155,7 +155,7 @@ basemap.setLabelsVisible(false);
 - 地名点由 `pnpm basemap:generate` 生成，取面内离边界最远的点；打开标注时市名一直显示，区县从 8.5 级起显示，市名避让时优先
 - 地名只有汉字，用 `JIANGSU_MAP_OPTIONS` 的 `localIdeographFontFamily` 在本地画，不请求字形。样式校验要求有 `glyphs`，所以绑定注记分组的页面都要在 `provideMap` 传 `root: BASEMAP_STYLE_ROOT`，地址不会被请求；打开标注后漏传时整个视图进入 `failed`，`pages/map-pages.test.ts` 检查
 - 三维：和二维是同一个 MapLibre 视图，面、线和地名照常按样式画，被模型挡住还是画在模型上面见 [map-three.md](map-three.md)"叠放"。切换二三维时保持静态底图。ADR 0135 的细节上限（`overlayDetailMetadata`）和 ADR 0146 的"三维画成文字、不做避让"是 Cesium 镜像覆盖物时的做法，随 Cesium 移除（ADR 0153）
-- 面的过滤条件要写 `['Polygon', 'MultiPolygon']`：三维按要素原来的类型求值，只写 `Polygon` 时南京（MultiPolygon）会被滤掉
+- 面的过滤条件要写 `['Polygon', 'MultiPolygon']`：MapLibre 画的时候都是 `Polygon`，按 GeoJSON 原来的类型求值（`featureFilter`）时南京是 `MultiPolygon`，只写 `Polygon` 会被滤掉
 - 改了配色、分色开关或边界数据后运行 `basemap:generate`；缩略图和当前配置是否一致由测试检查
 
 ### 面板与底图卡（设计稿 5D.4、ADR 0146）

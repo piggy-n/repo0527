@@ -424,7 +424,7 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
     }, '画布中心拾取到模型');
 
     expect(ready.camera.center[0]).toBeCloseTo(MODEL_AT[0], 3);
-    // 夹具的球心离地 40 米：两种引擎的视线都穿过球心，地面上的落点在球心以北 40·tan(俯角) 米
+    // 夹具的球心离地 40 米：视线穿过球心，地面上的落点在球心以北 40·tan(俯角) 米
     const north = (ready.camera.center[1] - MODEL_AT[1]) * 111320;
     expect(Math.abs(north - 40 * Math.tan((ready.camera.pitch * Math.PI) / 180))).toBeLessThan(1);
     expect(page.errors).toStrictEqual([]);
@@ -492,7 +492,7 @@ describe('三维内容的契约', { timeout: TEST_TIMEOUT }, () => {
     expect(center?.x).toBeCloseTo(WIDTH / 2, 0);
     expect(center?.y).toBeCloseTo(HEIGHT / 2, 0);
     expect(view.heading()).toBeCloseTo(target.bearing, 0);
-    // 15 级、俯仰 40 的视点约 1.1 千米高：两种引擎由同一套级别和距离的换算得到
+    // 15 级、俯仰 40 的视点约 1.1 千米高：由级别和距离的换算（map-core 的 camera-distance）得到
     expect(view.eyeHeight()).toBeGreaterThan(900);
     expect(view.eyeHeight()).toBeLessThan(1400);
     expect(page.errors).toStrictEqual([]);
