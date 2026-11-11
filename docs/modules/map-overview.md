@@ -22,7 +22,7 @@ packages/utils         LatestController、safeReporter、Worker 通信层
 
 三维（`packages/map-cesium`，3D.1 起，见 [map-cesium.md](map-cesium.md)）放在 map-core 之上，只能由 map-vue 动态导入；只有它和 app 能导入 `cesium`。依赖方向由 lint 检查（ADR 0006、0079）。
 
-ADR 0147 加入第二种三维引擎：MapLibre + Three.js，新包 `@mx/map-three`（3C.1 起，现在做到 3C.4，见 [map-three.md](map-three.md)），二三维共用 MapLibre 的画布和视图，三维是地球投影，覆盖物在三维里照常显示，资源图层能在三维里显示、现在由 app 的开关关着（这一点同 Cesium），模型层叠在页面声明的分组（`sceneBelow`）下面；custom layer 的外壳在 map-core 的 MapLibre 适配器里，三维内容在 map-three，只能由 map-vue 动态导入，只有它（和驾驶舱）能导入 `three`。用 `VITE_MAP_3D_ENGINE` 选择引擎，app 注入，过门槛之前默认仍是 Cesium。
+ADR 0147 加入第二种三维引擎：MapLibre + Three.js，新包 `@mx/map-three`（3C.1 起，现在做到 3C.4，见 [map-three.md](map-three.md)），二三维共用 MapLibre 的画布和视图，三维是地球投影，覆盖物在三维里照常显示，资源图层能在三维里显示、现在由 app 的开关关着（这一点同 Cesium），模型层叠在页面声明的分组（`sceneBelow`）下面；custom layer 的外壳在 map-core 的 MapLibre 适配器里，三维内容在 map-three，只能由 map-vue 动态导入，只有它（和驾驶舱）能导入 `three`。用 `VITE_MAP_3D_ENGINE` 选择引擎，app 注入，默认是 MapLibre 引擎（ADR 0150）。
 
 ## 贯穿全局的几条原则
 
@@ -42,7 +42,7 @@ ADR 0147 加入第二种三维引擎：MapLibre + Three.js，新包 `@mx/map-thr
 | 主题 | 现在的结论 | ADR | 文档 |
 |---|---|---|---|
 | 位置与拆包 | map-core、map-cesium、map-three、map-vue、map-tools、utils 是内部包（`packages/*`），单入口；通用交互已拆成 map-tools，`shared/map` 留下的等第二个地图项目的需求清楚了再拆 | 0004、0143、0145 | [internal-packages](../config/internal-packages.md)、[map-tools](map-tools.md) |
-| 引擎与版本 | MapLibre GL JS 6，具名导入；Cesium 精确锁定；不用 mapbox-gl；三维另加 MapLibre + Three.js 引擎（实施中），不用 `maplibre-gl-three` | 0002（大版本由 0019 确定）、0019、0147 | [map-core.md](map-core.md)、[map-three.md](map-three.md) |
+| 引擎与版本 | MapLibre GL JS 6，具名导入；Cesium 精确锁定；不用 mapbox-gl；三维默认 MapLibre + Three.js 引擎，Cesium 保留为可选，不用 `maplibre-gl-three` | 0002（大版本由 0019 确定）、0019、0147、0150 | [map-core.md](map-core.md)、[map-three.md](map-three.md) |
 | 分层与组装 | 五层的职责；能力按拥有者写，页面挑选组合，不做带开关的全能地图组件 | 0027 | 本文、[shared-map.md](shared-map.md) |
 | 会话 | 样式、相机、当前工具、选择状态（只存要素身份）、三维内容（瓦片集、钻地，页面用 `bindScene` 绑定）；二三维共同的唯一真相源 | 0020（选择状态的范围由 0022 修正，方案比较由 0024 修正）、0047、0081 | [map-core.md](map-core.md) |
 | 样式模型与提交 | 分组推导、整体替换，跨分组的修改一次提交，视图按修订号增量同步；分组可以带样式图片，图片是快照的一部分 | 0022（`failed` 的含义由 0026 修正）、0045 | [map-core.md](map-core.md) |

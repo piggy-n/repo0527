@@ -1,5 +1,7 @@
 # map-cesium：三维视图
 
+默认的三维引擎是 MapLibre + Three.js（ADR 0150，[map-three.md](map-three.md)）。这个包在 `VITE_MAP_3D_ENGINE=cesium` 时才用，只修缺陷、跟版本（ADR 0147 第 6 节）。
+
 `packages/map-cesium`（`@mx/map-cesium`）是二维 MapLibre 适配器的三维对应：一个实现 `MapView` 的 `CesiumView`，镜像会话的样式（栅格底图和 GeoJSON 覆盖物）、同步相机、把画布上的输入交给工具（ADR 0020、0024、0079、0080）。三维阶段的范围与交互见 ADR 0078，分步计划见 [roadmap](../archive/roadmap.md)"三维阶段的范围与取舍"。
 
 ## 结构

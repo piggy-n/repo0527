@@ -1,6 +1,6 @@
 # map-three：MapLibre 引擎的三维
 
-`packages/map-three`（`@mx/map-three`）是 ADR 0147 的第二种三维引擎：MapLibre + Three.js。三维模型用 Three.js 画在 MapLibre 的 custom layer 里，和二维共用一块画布、一个 WebGL 上下文、一个视图。用 `VITE_MAP_3D_ENGINE=maplibre` 选择（[env.md](../config/env.md)），通过 ADR 0147 第 9 节的门槛之前默认仍是 Cesium（[map-cesium.md](map-cesium.md)）。
+`packages/map-three`（`@mx/map-three`）是 ADR 0147 的第二种三维引擎：MapLibre + Three.js。三维模型用 Three.js 画在 MapLibre 的 custom layer 里，和二维共用一块画布、一个 WebGL 上下文、一个视图。用 `VITE_MAP_3D_ENGINE=maplibre` 选择（[env.md](../config/env.md)），默认用它（ADR 0150），Cesium 保留为可选（[map-cesium.md](map-cesium.md)）。
 
 现在做到 3C.4：一个视图担任二三维，切到三维是地球投影；覆盖物在三维里照常显示，模型层和它们的叠放由页面声明；三维里能测量、坐标定位；资源图层能在三维里显示、点/框选，现在由 app 的开关关着，这一点和 Cesium 一样（见下面"能力声明和三维里的识别"）；三维模块在二维稳定后预加载，加载失败只让三维失败；步行、路线漫游和室内地图可用，漫游地下的模型时把它抬高（ADR 0147 第 4 节）；放不下时放宽屏幕误差，新瓦片按每帧预算上传。3C.4 的验收在显卡机器上跑，倾斜摄影 z17、z19 全部通过，见下面"性能验收"的第四次实测；经开区（不在验收里）飞行中还比 Cesium 差。LCC2 高斯泼溅做到 ADR 0149 的 L.1（显示和拾取）、L.2 的配准和 L.3 的预算（默认 300 万），见下面"高斯泼溅"。
 
@@ -578,7 +578,7 @@ node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('apps/yzt/pub
 
 ## 改为默认引擎的门槛（ADR 0147 第 9 节）
 
-2026-11-10 核对，最终的代码是提交 `8d231735`。**五条都通过（有记录下来的接受项），改默认值要另写一份 ADR，由用户决定；现在默认仍是 `cesium`。** 做法和记录表见 [map-three-gate-checks.md](map-three-gate-checks.md)。
+2026-11-10 核对，最终的代码是提交 `8d231735`。**五条都通过（有记录下来的接受项），默认值 2026-11-10 改为 `maplibre`（ADR 0150）。** 做法和记录表见 [map-three-gate-checks.md](map-three-gate-checks.md)。
 
 | 条 | 现状 |
 |---|---|

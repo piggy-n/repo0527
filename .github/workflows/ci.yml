@@ -43,11 +43,11 @@ jobs:
       # 冒烟用 loadEnv 读同一个变量判断产物用的引擎。之后的构建覆盖这次的产物
       - run: pnpm build:intranet
         env:
-          VITE_MAP_3D_ENGINE: maplibre
-      - run: pnpm --filter yzt test:smoke scene-maplibre
+          VITE_MAP_3D_ENGINE: cesium
+      - run: pnpm --filter yzt test:smoke scene.spec static-basemap
         timeout-minutes: 5
         env:
-          VITE_MAP_3D_ENGINE: maplibre
+          VITE_MAP_3D_ENGINE: cesium
           DEBUG: pw:webserver
       - run: pnpm build
       - run: pnpm build:intranet
