@@ -14,6 +14,25 @@ function firstScreenCards(root: HTMLElement): HTMLElement[] {
   return cards.filter(card => card.offsetTop < list.clientHeight);
 }
 
+// 时间线里逐帧改位移、缩放或透明度的元素（首屏卡片另算）
+const LAYERED = [
+  '[data-enter="title"]',
+  '[data-enter="title-text"]',
+  '[data-enter="map-title"]',
+  '[data-enter="left"]',
+  '[data-filter-group]',
+  '[data-enter="legend"]',
+  '[data-enter="timeline"]',
+  '[data-scene="surface"]',
+  '[data-scene="wash"]',
+  '[data-scene="honeycomb"]',
+  '[data-scene="grid"]',
+  '[data-scene="haze"]',
+  '[data-scene="particles"]',
+  '[data-scene="mist"]',
+  '[data-scene="orbit"]'
+].join(', ');
+
 /**
  * 页面入场的编排：地图先入场（或失败降级），之后标题、侧栏、卡片和背景按时间线进入；
  * 时间线只在页面可见时推进（playVisibleTimeline）。减少动画时直接到终态
@@ -50,6 +69,9 @@ export function useDashboardEntrance(shell: Ref<HTMLElement | undefined>, reduce
   // 时间线的时刻（秒）按旧页面调好的节奏，标题、侧栏、卡片、背景依次错开
   function buildTimeline(root: HTMLElement): gsap.core.Timeline {
     const timeline = gsap.timeline({ paused: true, onComplete: finish });
+    const cards = firstScreenCards(root);
+    // 入场期间先提升为独立图层：按初始比例光栅化一次，不随每帧的缩放重画整屏大图；revert 时一并去掉
+    gsap.set([...root.querySelectorAll(LAYERED), ...cards], { willChange: 'transform, opacity' });
     timeline.fromTo(
       '[data-enter="title"]',
       { yPercent: -85, autoAlpha: 0, clipPath: 'inset(0 35%)' },
@@ -81,7 +103,7 @@ export function useDashboardEntrance(shell: Ref<HTMLElement | undefined>, reduce
       { x: 0, y: 0, autoAlpha: 1, duration: 0.5, stagger: 0.1, ease: 'power2.out' },
       0.57
     );
-    firstScreenCards(root).forEach((card, index) => {
+    cards.forEach((card, index) => {
       const start = 0.48 + index * 0.12;
       timeline.fromTo(
         card,

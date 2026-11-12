@@ -146,10 +146,15 @@ export const DashboardMap = defineComponent({
           <DashboardMapFrame />
           <div class={styles.texture} data-scene="surface" aria-hidden="true" />
           <div class={styles.orbit} data-scene="orbit" aria-hidden="true">
-            <svg viewBox="0 0 600 600">
-              <circle class={styles.orbitOuter} cx="300" cy="300" r="310" />
-              <circle class={styles.orbitTicks} cx="300" cy="300" r="294" />
-              <circle class={styles.orbitInner} cx="300" cy="300" r="270" />
+            {/* 每个圆环单独一个 svg，旋转整个 svg：SVG 内部元素的旋转不能交给合成线程，会每帧重绘 */}
+            <svg class={styles.orbitOuter} viewBox="0 0 600 600">
+              <circle cx="300" cy="300" r="310" />
+            </svg>
+            <svg class={styles.orbitTicks} viewBox="0 0 600 600">
+              <circle cx="300" cy="300" r="294" />
+            </svg>
+            <svg class={styles.orbitInner} viewBox="0 0 600 600">
+              <circle cx="300" cy="300" r="270" />
             </svg>
           </div>
           <div class={styles.mist} data-scene="mist" aria-hidden="true" />

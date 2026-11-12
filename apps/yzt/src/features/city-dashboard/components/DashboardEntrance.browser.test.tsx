@@ -41,9 +41,13 @@ describe('整屏入场生命周期', () => {
     expect(wrapper.attributes('data-dashboard-phase')).toBe('map-entering');
     expect(wrapper.find('[aria-label="大屏筛选条件"]').attributes('inert')).toBeDefined();
     await panelsEntering;
+    // 入场期间逐帧变换的元素提升为图层，ready 后连同其他内联样式一起去掉
+    const layered = '[data-filter-group], [data-enter="left"], [data-enter="title"], [data-scene="wash"]';
+    expect((wrapper.get('[data-enter="title"]').element as HTMLElement).style.willChange).toBe('transform, opacity');
     await vi.waitFor(() => expect(wrapper.attributes('data-dashboard-phase')).toBe('ready'), { timeout: 30000 });
-    for (const group of wrapper.findAll('[data-filter-group], [data-enter="left"], [data-enter="title"]')) {
+    for (const group of wrapper.findAll(layered)) {
       expect((group.element as HTMLElement).style.transform).toBe('');
+      expect((group.element as HTMLElement).style.willChange).toBe('');
       expect(getComputedStyle(group.element).visibility).toBe('visible');
     }
     expect(wrapper.find('[aria-label="大屏筛选条件"]').attributes('inert')).toBeUndefined();
