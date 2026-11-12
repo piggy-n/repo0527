@@ -211,8 +211,22 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
     await page.locator('[data-model="smoke-splat"] .el-checkbox').click();
     await expect(splat).toHaveCount(0);
 
+    // 三维的缩放上限 20 级、二维 18 级（JIANGSU_SCENE_ZOOM_RANGE）：三维放大到头，切回二维时收回到 18 级
+    const level = page.getByRole('status', { name: /^当前层级/ });
+    const zoomIn = page.getByRole('button', { name: '放大', exact: true });
+    // 每次重试可用就点一下：连点时目标级别累计，到 20 级按钮就不可用
+    await expect(async () => {
+      if (await zoomIn.isEnabled()) {
+        await zoomIn.click();
+      }
+      await expect(zoomIn).toBeDisabled({ timeout: 100 });
+    }).toPass({ timeout: 30_000 });
+    await expect(level).toHaveAttribute('aria-label', '当前层级 20（20.0）', { timeout: 30_000 });
+
     // 回到二维：还是同一块画布
     await page.getByRole('button', { name: '二维', exact: true }).click({ timeout: 60_000 });
+    await expect(level).toHaveAttribute('aria-label', '当前层级 18（18.0）');
+    await expect(zoomIn).toBeDisabled();
     await expect(flat).toBeVisible();
     expect(await original.evaluate((element: { isConnected: boolean }) => element.isConnected)).toBe(true);
     expect(failed, 'assets/ 的文件都要拿到').toEqual([]);

@@ -17,7 +17,7 @@ import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
 import { MapCard } from '@/shared/map/card/MapCard';
-import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
+import { JIANGSU_CAMERA, JIANGSU_SCENE_ZOOM_RANGE, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { MapPanelGroup, type PanelSlotProps } from '@/shared/map/panel-group/MapPanelGroup';
 import { usePanelGroup } from '@/shared/map/panel-group/usePanelGroup';
 import { useSideExclusion } from '@/shared/map/panel-group/useSideExclusion';
@@ -338,7 +338,7 @@ const MapPrototype = defineComponent({
                   <div class={layout.controls}>
                     <MapViewControls
                       goToDefaultView={goToDefaultView}
-                      zoomRange={JIANGSU_ZOOM_RANGE}
+                      zoomRange={dimension.value === '3d' ? JIANGSU_SCENE_ZOOM_RANGE : JIANGSU_ZOOM_RANGE}
                       dimension={dimension.value}
                       onUpdate:dimension={switchDimension}
                     />

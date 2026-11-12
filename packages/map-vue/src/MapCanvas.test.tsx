@@ -175,10 +175,13 @@ class FakeMap implements MapLike {
   readonly keyboard = fakeGesture();
   readonly touchZoomRotate = fakeGesture();
   readonly touchPitch = fakeGesture();
+  maxZoom = 22;
   getMaxZoom(): number {
-    return 22;
+    return this.maxZoom;
   }
-  setMaxZoom(): void {}
+  setMaxZoom(maxZoom: number): void {
+    this.maxZoom = maxZoom;
+  }
   getVerticalFieldOfView(): number {
     return 36.87;
   }
@@ -319,7 +322,9 @@ function setupCached(createMap: (options: MapLibreMapOptions) => FakeMap) {
 }
 
 // 加载三维模块的次数由用例控制：fail 为真时下载失败
-function maplibrePage(options: { fail?: boolean; preload?: (load: () => Promise<unknown>) => void } = {}) {
+function maplibrePage(
+  options: { fail?: boolean; preload?: (load: () => Promise<unknown>) => void; sceneMaxZoom?: number } = {}
+) {
   const maps: FakeMap[] = [];
   const loads = { count: 0, fail: options.fail ?? false };
   const engine: SceneEngine = {
@@ -332,7 +337,7 @@ function maplibrePage(options: { fail?: boolean; preload?: (load: () => Promise<
   let map: MapHandle<'basemap'> | undefined;
   const Page = defineComponent(() => {
     map = provideMap({ groups: ['basemap'], camera: CAMERA, onError: () => undefined });
-    return () => <MapCanvas createMap={createFakeMap(maps)} />;
+    return () => <MapCanvas createMap={createFakeMap(maps)} sceneMaxZoom={options.sceneMaxZoom} />;
   });
   // 引擎和预加载像 app 一样由页面外面的一层提供：provideMap 从上层取三维引擎的能力
   const wrapper = mount(
@@ -921,6 +926,18 @@ describe('MapCanvas', () => {
       expect(map.viewState.value).toBe('initializing');
       expect(wrapper.get('[data-map-view-state]').attributes('style')).toBeUndefined();
       expect(map.sceneCapabilities).toStrictEqual({ styleLayers: true, identify: true, splats: true });
+    });
+
+    it('三维的缩放上限交给视图：切到三维时用它，切回二维时回到地图选项的上限', async () => {
+      const { maps, map } = maplibrePage({ sceneMaxZoom: 20 });
+      maps[0]?.fire('style.load');
+      await nextTick();
+      expect(maps[0]?.maxZoom).toBe(22);
+
+      map.setDimension('3d');
+      expect(maps[0]?.maxZoom).toBe(20);
+      map.setDimension('2d');
+      expect(maps[0]?.maxZoom).toBe(22);
     });
 
     it('三维模块加载失败只让三维失败：切回二维可用，三维里重试只重新加载模块、不重建地图', async () => {

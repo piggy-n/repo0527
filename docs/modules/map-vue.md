@@ -105,6 +105,7 @@ const point = view.value?.project([118.8, 32.05]); // view 只在就绪时有值
 - 所在页面被 `KeepAlive` 缓存时（ADR 0063）：画布的 `onDeactivated`、`onActivated` 告诉上下文（`setPageActive`），由上下文暂停、恢复当前视图。暂停期间上下文的 `view` 为 null、`viewState` 是 `paused`，相机操作等恢复后再执行，工具收不到输入；停用期间新视图以暂停状态创建（`shouldRun`）
 - `mapOptions` 只在创建地图时生效；要换选项、或者引擎失败后重新创建，给组件换一个 `key`
 - `scrollZoomRates`：滚轮（`wheel`）和触控板（`trackpad`）的缩放速率，同样只在创建地图时生效，交给适配器（ADR 0053 第 3 节）
+- `sceneMaxZoom`：三维的缩放上限，同样只在创建地图时生效；不传时同二维（`mapOptions.maxZoom`）。切换维度时由视图换上限，三维切二维时超过的级别在切换的那一次跳转里收回（[map-three.md](map-three.md)"一个视图两种种类"）
 - 一个上下文的每种视图只能有一个画布：第二个二维画布挂不上时，先释放它刚创建的视图，再把错误交给 Vue
 - 创建视图时交给它加载三维模块的函数（`loadSceneRenderer`，取自注入的三维引擎），这个视图同时担任二维和三维（ADR 0147 第 2 节，[map-three.md](map-three.md)）
 - 引擎失败后，上下文的 `retry()` 让画布先卸下、释放旧视图，再在同一个容器里创建新视图（ADR 0030）；`createMap` 等 props 按重试时的值生效。三维模块加载失败（失败原因是 `module`）不走这里，地图不重建，见下面"三维引擎的注入"

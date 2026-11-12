@@ -4,9 +4,11 @@ import type { CameraControl, CameraOperation } from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { shallowRef } from 'vue';
 import { useZoomButtons } from './useZoomButtons';
-import { canZoom, levelOf, levelTitle, zoomBase, zoomTarget } from './zoom';
+import { canZoom, clampZoom, levelOf, levelTitle, zoomBase, zoomTarget } from './zoom';
 
 const RANGE = { minZoom: 5, maxZoom: 18 };
+// 三维的范围（JIANGSU_SCENE_ZOOM_RANGE）
+const SCENE_RANGE = { minZoom: 5, maxZoom: 20 };
 
 describe('层级与缩放的纯函数', () => {
   it('层级向下取整，浮点误差不让 7.9999999 显示成 7', () => {
@@ -25,6 +27,9 @@ describe('层级与缩放的纯函数', () => {
     expect(canZoom(18, 1, RANGE)).toBe(false);
     expect(canZoom(5, -1, RANGE)).toBe(false);
     expect(canZoom(5, 1, RANGE)).toBe(true);
+    expect(clampZoom(19.6, RANGE)).toBe(18);
+    expect(clampZoom(4, RANGE)).toBe(5);
+    expect(clampZoom(12.3, RANGE)).toBe(12.3);
   });
 
   it('上一次按钮缩放还有效时从它的目标算起，作废以后从相机的级别算起', () => {
@@ -110,6 +115,26 @@ describe('useZoomButtons', () => {
     // 相机还停在 17.5（动画被打断），按钮马上恢复可用
     interrupt();
     expect(zoom.canZoomIn.value).toBe(true);
+  });
+
+  it('范围随二三维变化：三维能放大到 20；放大途中切回二维，上一次的目标超出二维的范围，从 18 算起', () => {
+    const { map, flyTo, camera } = fakeMap(18);
+    const range = shallowRef(SCENE_RANGE);
+    const zoom = useZoomButtons(map, range);
+    expect(zoom.canZoomIn.value).toBe(true);
+
+    zoom.zoomIn();
+    zoom.zoomIn();
+    expect(zooms(flyTo)).toStrictEqual([19, 20]);
+    expect(zoom.canZoomIn.value).toBe(false);
+
+    // 切到二维：视图把相机收回到 18，切换不作废按钮的相机操作
+    range.value = RANGE;
+    camera.value = { ...camera.value, zoom: 18 };
+    expect(zoom.canZoomIn.value).toBe(false);
+    zoom.zoomOut();
+
+    expect(zooms(flyTo).at(-1)).toBe(17);
   });
 
   it('最小级别时缩小不可用', () => {
