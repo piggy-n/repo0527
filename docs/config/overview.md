@@ -13,6 +13,8 @@
 
 用户偏好不是配置：它是存在 IndexedDB 里的用户数据（`shared/storage`）。哪些偏好会被存下来，由下面的 `VITE_PREFERENCE_*` 决定（ADR 0140）。
 
+发布的默认符号（`apps/yzt/src/features/resource-map/resource-symbol-defaults.json`，ADR 0154）也不在这四类里：它是图例样式的默认值，属于 feature 的数据，和字典、登记表放在一起，不是 `shared/config` 的开关，部署时也不能换。由 `symbols:import` 从某个人调好的样式写入，提交后重新构建生效，步骤见 [storage.md](../modules/storage.md)"发布的默认符号"。
+
 ## 构建时的环境变量
 
 取值和逐项说明见 [env.md](env.md)，这里只按用途分组：

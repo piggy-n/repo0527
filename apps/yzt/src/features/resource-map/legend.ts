@@ -137,7 +137,7 @@ function legendEntry(resource: Resource, year: number, override: ResourceSymbolO
   const { code, name } = resource;
   const style = resourceStyle(code);
   const rule = style.color;
-  const swatch = swatchOf(uniformSymbol(resource, override));
+  const swatch = swatchOf(uniformSymbol(resource, override, style));
   if (!rule) {
     return { kind: 'symbol', code, name, year, swatch };
   }
@@ -145,7 +145,7 @@ function legendEntry(resource: Resource, year: number, override: ResourceSymbolO
   const values = classItems(rule).map(item => ({
     key: item.key,
     label: item.label,
-    swatch: swatchOf(classSymbol(resource, item, override))
+    swatch: swatchOf(classSymbol(resource, item, override, style))
   }));
   const colors = values.slice(0, PREVIEW_COLORS).map(value => swatchColor(value.swatch));
   if (rule.kind === 'landuse-code' || rule.kind === 'landuse-name') {

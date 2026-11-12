@@ -108,7 +108,7 @@ const localFiles = localFilesPlugin({
 | `include` | `['src/**/*.test.{ts,tsx}', 'tools/**/*.test.ts']` | 测试文件和源文件放在一起；`tools/` 下是 Node 端的检查测试，例如图标是否已规范化 |
 | `exclude` | 默认值加上 `src/**/*.browser.test.{ts,tsx}` | 浏览器测试只在 `browser` 项目里跑 |
 | `environment` | `'jsdom'` | 在 Node 里模拟 DOM，挂载组件用。不用 DOM 的测试文件在第一行写 `// @vitest-environment node` 改用 Node 环境，见下文"测试耗时" |
-| `setupFiles` | `['src/test-setup.ts']` | 每个测试文件运行前执行。里面调用 `@vue/test-utils` 的 `enableAutoUnmount(afterEach)`：每个用例结束后卸载用 `mount` 挂载的组件，查询、定时器、ResizeObserver 随之停止，进行中的查询被取消，不会有晚到的请求落到下一个用例（之前出现过 MSW 报"没有匹配的处理函数"）。用例里手动 `unmount()` 过的组件会再卸载一次，这一版 Vue 下是空操作，不报错也不警告。已用对照实验验证：去掉这一项后，前一个用例挂载的组件没有被卸载 |
+| `setupFiles` | `['src/test-setup.ts']` | 每个测试文件运行前执行。里面调用 `@vue/test-utils` 的 `enableAutoUnmount(afterEach)`：每个用例结束后卸载用 `mount` 挂载的组件，查询、定时器、ResizeObserver 随之停止，进行中的查询被取消，不会有晚到的请求落到下一个用例（之前出现过 MSW 报"没有匹配的处理函数"）。用例里手动 `unmount()` 过的组件会再卸载一次，这一版 Vue 下是空操作，不报错也不警告。已用对照实验验证：去掉这一项后，前一个用例挂载的组件没有被卸载。另外把发布的默认符号 `resource-symbol-defaults.json` 换成空的（ADR 0154）：它是随时会换的导入数据，其他测试按代码算出的默认符号断言；测试文件自己 `vi.mock` 同一个文件时用它自己的（`symbol-defaults.test.ts`），`?raw` 读原文不受影响。已验证：写进一份默认符号、去掉这一项后，`style-registry.test.ts` 里断言默认颜色的 4 个用例失败 |
 | `server.deps.inline` | `['element-plus']` | 让 Vitest 处理 element-plus，而不是交给 Node 直接加载。不加的话，Element 表单的校验在测试中永远通过，见下文 |
 
 `browser` 项目（ADR 0040）：
