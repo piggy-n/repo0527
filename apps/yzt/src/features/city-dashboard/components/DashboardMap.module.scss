@@ -62,13 +62,13 @@
   right: -8%;
   top: 18%;
   bottom: 3%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   transform: perspective(900px) rotateX(42deg);
   pointer-events: none;
 
+  // 三个圆环叠在一起；viewBox 居中缩放，绕盒子中心旋转就是绕圆心旋转
   svg {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     overflow: visible;
@@ -79,26 +79,31 @@
     stroke: #3892df;
     stroke-width: 2;
     vector-effect: non-scaling-stroke;
-    transform-origin: 300px 300px;
   }
 }
 
 .orbit .orbitOuter {
-  stroke-width: 2.5;
-  stroke-dasharray: 160 70 12 40;
-  opacity: 0.28;
   animation: orbit-turn 80s linear infinite;
+
+  circle {
+    stroke-width: 2.5;
+    stroke-dasharray: 160 70 12 40;
+    opacity: 0.28;
+  }
 }
 
 .orbit .orbitInner {
-  stroke: #51b2fd;
-  stroke-width: 3.5;
-  stroke-dasharray: 80 160;
-  opacity: 0.4;
   animation: orbit-turn 55s linear infinite reverse;
+
+  circle {
+    stroke: #51b2fd;
+    stroke-width: 3.5;
+    stroke-dasharray: 80 160;
+    opacity: 0.4;
+  }
 }
 
-.orbit .orbitTicks {
+.orbit .orbitTicks circle {
   stroke-width: 1.5;
   stroke-dasharray: 1 13;
   opacity: 0.28;

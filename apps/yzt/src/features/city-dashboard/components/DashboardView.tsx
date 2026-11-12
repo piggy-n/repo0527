@@ -1,5 +1,9 @@
-import { defineComponent, ref } from 'vue';
+import { defineComponent, onScopeDispose, ref } from 'vue';
 import { useDocumentVisibility, useResizeObserver } from '@vueuse/core';
+import { decodeImages } from '../animation/decode-images';
+import pageBackground from '../assets/bg.webp';
+import headerSkyline from '../assets/header-skyline.webp';
+import mapBackground from '../assets/mapbg.webp';
 import { createMockData } from '../data/mock-data';
 import { useDashboard } from '../composables/useDashboard';
 import { useDashboardEntrance } from '../composables/useDashboardEntrance';
@@ -29,6 +33,9 @@ export const DashboardView = defineComponent({
     const density = ref(1);
     const visibility = useDocumentVisibility();
     const tooltip = useDashboardTooltip(model, visibility);
+    // 标题和背景在面板入场时才第一次显示，趁地图入场先解码
+    const decoding = decodeImages([headerSkyline, pageBackground, mapBackground]);
+    onScopeDispose(() => decoding[Symbol.dispose]());
 
     useResizeObserver(shell, entries => {
       const size = entries[0]?.contentRect;

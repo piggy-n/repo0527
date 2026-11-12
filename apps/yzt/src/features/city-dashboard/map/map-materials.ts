@@ -104,7 +104,8 @@ export function updateRegionMaterials(
 ) {
   const color = new Color(getMapColor(value));
   gsap.killTweensOf(materials.top.color);
-  if (duration) {
+  // 已经是目标颜色（如入场时数值出现）不再过渡，免得地图白白逐帧重画；GSAP 过渡的终值有舍入，按 8 位色比较
+  if (duration && materials.top.color.getHex() !== color.getHex()) {
     gsap.to(materials.top.color, {
       r: color.r,
       g: color.g,

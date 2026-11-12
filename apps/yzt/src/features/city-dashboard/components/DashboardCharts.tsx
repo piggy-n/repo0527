@@ -1,4 +1,4 @@
-import { computed, defineComponent, ref, shallowRef, watch, type PropType } from 'vue';
+import { computed, defineComponent, onMounted, ref, shallowRef, watch, type PropType } from 'vue';
 import { ElButton, ElDialog } from 'element-plus';
 import { MxTitle } from '@mx/ui';
 import { usePreferredReducedMotion, useResizeObserver } from '@vueuse/core';
@@ -6,6 +6,7 @@ import { SvgIcon } from '@/shared/icons/SvgIcon';
 import { CITIES } from '../catalog';
 import { formatValue } from '../calculations';
 import { createChartOption, isStacked } from '../charts/options';
+import { warmUpChart } from '../charts/warm-up';
 import { useCardNavigation } from '../composables/useCardNavigation';
 import type { DashboardModel } from '../composables/useDashboard';
 import { useImageExport } from '../composables/useImageExport';
@@ -124,6 +125,18 @@ export const DashboardCharts = defineComponent({
       }
     );
     watch(() => props.model.state.value.categoryId, closeDetail);
+
+    // 入场揭示图表之前预热一次：挂载时页面还没绘制、没有动画，第一次绘制的开销放在这里
+    onMounted(() => {
+      if (props.active || reduced.value) {
+        return;
+      }
+      const card = cards.value.find(item => item.comparison.length);
+      const plot = list.value?.querySelector<HTMLElement>('[role="img"]');
+      if (card && plot && plot.clientWidth > 0 && plot.clientHeight > 0) {
+        warmUpChart(card.option, plot.clientWidth, plot.clientHeight);
+      }
+    });
 
     /** 卡片和详情复用操作入口，下载状态按指标和视图分别记录 */
     function renderActions(indicator: Indicator, expanded = false) {
