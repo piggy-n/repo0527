@@ -23,14 +23,9 @@ export function levelTitle(zoom: number): string {
   return `当前层级 ${levelOf(zoom)}（${zoom.toFixed(1)}）`;
 }
 
-/** 截断在缩放范围里 */
-export function clampZoom(zoom: number, { minZoom, maxZoom }: ZoomRange): number {
-  return Math.min(maxZoom, Math.max(minZoom, zoom));
-}
-
 /** 按钮缩放的目标级别：固定 ±1，截断在缩放范围里（ADR 0053 第 3 节） */
-export function zoomTarget(from: number, step: 1 | -1, range: ZoomRange): number {
-  return clampZoom(from + step, range);
+export function zoomTarget(from: number, step: 1 | -1, { minZoom, maxZoom }: ZoomRange): number {
+  return Math.min(maxZoom, Math.max(minZoom, from + step));
 }
 
 /** 还能不能往这个方向缩放：到了范围的边界时不能 */

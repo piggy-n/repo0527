@@ -1,8 +1,7 @@
 import type { MapContext } from '@mx/map-vue';
-import { computed, type ComputedRef, type MaybeRefOrGetter, shallowRef, toValue } from 'vue';
+import { computed, type ComputedRef, type MaybeRefOrGetter, shallowRef, toValue, watch } from 'vue';
 import {
   canZoom,
-  clampZoom,
   levelOf,
   levelTitle,
   type PendingZoom,
@@ -29,13 +28,21 @@ export interface ZoomButtons {
  * 在组件的 setup 中调用
  */
 export function useZoomButtons(
-  map: Pick<MapContext, 'useCamera' | 'beginCameraOperation'>,
+  map: Pick<MapContext, 'useCamera' | 'beginCameraOperation' | 'dimension'>,
   range: MaybeRefOrGetter<ZoomRange>
 ): ZoomButtons {
   const camera = map.useCamera();
   const pending = shallowRef<PendingZoom | null>(null);
-  // 范围变了以后，上一次按钮缩放的目标可能在新范围以外（三维放大到 20 级的途中切到二维），从范围以内算起
-  const base = () => clampZoom(zoomBase(pending.value, camera.value.zoom), toValue(range));
+  const base = () => zoomBase(pending.value, camera.value.zoom);
+  // 切换二三维时视图按会话的相机跳过去（打断动画，三维切二维时收回超过的级别），不作废相机操作：
+  // 记下的目标不再是相机要去的级别，切换的同一刻丢掉，之后从当时的级别算起
+  watch(
+    map.dimension,
+    () => {
+      pending.value = null;
+    },
+    { flush: 'sync' }
+  );
 
   const zoom = (step: 1 | -1) => {
     const from = base();

@@ -1,10 +1,10 @@
 // @vitest-environment node
-import type { CameraState } from '@mx/map-core';
+import type { CameraState, ViewKind } from '@mx/map-core';
 import type { CameraControl, CameraOperation } from '@mx/map-vue';
 import { describe, expect, it, vi } from 'vitest';
 import { shallowRef } from 'vue';
 import { useZoomButtons } from './useZoomButtons';
-import { canZoom, clampZoom, levelOf, levelTitle, zoomBase, zoomTarget } from './zoom';
+import { canZoom, levelOf, levelTitle, zoomBase, zoomTarget } from './zoom';
 
 const RANGE = { minZoom: 5, maxZoom: 18 };
 // 三维的范围（JIANGSU_SCENE_ZOOM_RANGE）
@@ -27,9 +27,6 @@ describe('层级与缩放的纯函数', () => {
     expect(canZoom(18, 1, RANGE)).toBe(false);
     expect(canZoom(5, -1, RANGE)).toBe(false);
     expect(canZoom(5, 1, RANGE)).toBe(true);
-    expect(clampZoom(19.6, RANGE)).toBe(18);
-    expect(clampZoom(4, RANGE)).toBe(5);
-    expect(clampZoom(12.3, RANGE)).toBe(12.3);
   });
 
   it('上一次按钮缩放还有效时从它的目标算起，作废以后从相机的级别算起', () => {
@@ -43,9 +40,13 @@ describe('层级与缩放的纯函数', () => {
   });
 });
 
-/** 假的地图上下文：相机由用例改；每次开始操作作废上一次，run 立即执行；interrupt 模拟滚轮等别的相机操作 */
-function fakeMap(zoom: number) {
+/**
+ * 假的地图上下文：相机、维度由用例改；每次开始操作作废上一次，run 立即执行；interrupt 模拟滚轮等别的相机操作。
+ * 切换维度像上下文一样不作废相机操作，相机由用例先按视图的跳转改好
+ */
+function fakeMap(zoom: number, kind: ViewKind = '2d') {
   const camera = shallowRef<CameraState>({ center: [119, 32], zoom, bearing: 0, pitch: 0 });
+  const dimension = shallowRef(kind);
   let current = new AbortController();
   const flyTo = vi.fn<CameraControl['flyTo']>();
   const control: CameraControl = {
@@ -62,7 +63,13 @@ function fakeMap(zoom: number) {
     const signal = next();
     return { signal, run: action => action(control) };
   };
-  return { camera, flyTo, map: { useCamera: () => camera, beginCameraOperation }, interrupt: () => void next() };
+  return {
+    camera,
+    dimension,
+    flyTo,
+    map: { useCamera: () => camera, beginCameraOperation, dimension },
+    interrupt: () => void next()
+  };
 }
 
 const zooms = (flyTo: ReturnType<typeof fakeMap>['flyTo']) => flyTo.mock.calls.map(([target]) => target.zoom);
@@ -117,24 +124,41 @@ describe('useZoomButtons', () => {
     expect(zoom.canZoomIn.value).toBe(true);
   });
 
-  it('范围随二三维变化：三维能放大到 20；放大途中切回二维，上一次的目标超出二维的范围，从 18 算起', () => {
-    const { map, flyTo, camera } = fakeMap(18);
+  it('三维放大到 20，切二维收回到 18，再切回三维：从 18 算起，放大可用、缩小到 17', () => {
+    const { map, flyTo, camera, dimension } = fakeMap(18, '3d');
     const range = shallowRef(SCENE_RANGE);
     const zoom = useZoomButtons(map, range);
-    expect(zoom.canZoomIn.value).toBe(true);
 
     zoom.zoomIn();
     zoom.zoomIn();
+    camera.value = { ...camera.value, zoom: 20 };
     expect(zooms(flyTo)).toStrictEqual([19, 20]);
     expect(zoom.canZoomIn.value).toBe(false);
 
-    // 切到二维：视图把相机收回到 18，切换不作废按钮的相机操作
-    range.value = RANGE;
+    // 视图先按会话的相机跳过去（收回到 18），再改维度；范围随页面的下一次渲染换
     camera.value = { ...camera.value, zoom: 18 };
+    dimension.value = '2d';
+    range.value = RANGE;
     expect(zoom.canZoomIn.value).toBe(false);
-    zoom.zoomOut();
+    dimension.value = '3d';
+    range.value = SCENE_RANGE;
 
+    expect(zoom.level.value).toBe(18);
+    expect(zoom.canZoomIn.value).toBe(true);
+    zoom.zoomOut();
     expect(zooms(flyTo).at(-1)).toBe(17);
+  });
+
+  it('切换维度打断了放大的动画：相机停在半路，从停下的级别算起', () => {
+    const { map, flyTo, camera, dimension } = fakeMap(16);
+    const zoom = useZoomButtons(map, RANGE);
+
+    zoom.zoomIn();
+    camera.value = { ...camera.value, zoom: 16.4 };
+    dimension.value = '3d';
+    zoom.zoomIn();
+
+    expect(zooms(flyTo)).toStrictEqual([17, 17.4]);
   });
 
   it('最小级别时缩小不可用', () => {
