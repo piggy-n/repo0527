@@ -6,14 +6,15 @@ import type { TileUploader } from './tile-uploader';
 export interface TileInternals {
   geometricError: number;
   refine?: string;
-  readonly children: readonly { refine?: string }[];
+  readonly children: readonly TileInternals[];
   readonly internal: {
     readonly depth: number;
     readonly hasContent: boolean;
     readonly hasRenderableContent: boolean;
     readonly loadingState: number;
   };
-  readonly traversal: { readonly inFrustum: boolean };
+  /** 最近一次更新时的：在不在视野里、屏幕误差（像素，和 errorTarget 比） */
+  readonly traversal: { readonly inFrustum: boolean; readonly error: number };
   readonly engineData: {
     readonly scene: Object3D | null;
     readonly boundingVolume: { getSphere(target: Sphere): void };

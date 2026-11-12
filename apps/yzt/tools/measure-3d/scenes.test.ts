@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { aerialFlight, buildRuns, SCENES, selectScenes, splatVariants, variants } from './scenes.ts';
+import { aerialFlight, buildRuns, SCENES, selectScenes, splatVariants, variants, withCamera } from './scenes.ts';
 
 describe('selectScenes', () => {
   it('默认选倾斜摄影 z17、z19', () => {
@@ -42,6 +42,25 @@ describe('variants 的对照方案', () => {
     ]);
   });
 
+  it('缓存上限的各档各是一个方案', () => {
+    const list = variants([], [], [4, 6]);
+    expect(list.map(item => [item.id, item.cacheGB, item.label])).toEqual([
+      ['maplibre', undefined, 'MapLibre'],
+      ['maplibre-cache4g', 4, 'MapLibre，缓存上限 4 GB'],
+      ['maplibre-cache6g', 6, 'MapLibre，缓存上限 6 GB']
+    ]);
+  });
+
+  it('缓存上限的各档也跑画质（截图和默认值比），不跑采样；其他对照方案只跑 perf', () => {
+    const list = variants([null], [], [4]);
+    const runs = buildRuns(selectScenes(['jkq-z16-tilt']), list, 1);
+    expect(runs.filter(run => run.kind !== 'perf').map(run => run.id)).toEqual([
+      'jkq-z16-tilt/maplibre/quality',
+      'jkq-z16-tilt/maplibre/profile',
+      'jkq-z16-tilt/maplibre-cache4g/quality'
+    ]);
+  });
+
   it('对照方案只跑 perf：画质和采样只有产品的默认值', () => {
     const list = variants([], [null, 0.3]);
     const runs = buildRuns(selectScenes(['z19']), list, 1, splatVariants([3e6, 6e6, 1e7]));
@@ -57,6 +76,26 @@ describe('经开区的场景', () => {
   it('jkq- 选中 JKQ 的四个：z16 俯视、倾斜，用户说糊的 z16.5，和 z17 倾斜', () => {
     expect(selectScenes(['jkq-']).map(scene => scene.id)).toEqual(['jkq-z16', 'jkq-z16-tilt', 'jkq-z16.5', 'jkq-z17-tilt']);
     expect(selectScenes(['jkq-']).every(scene => !scene.byDefault && scene.camera.center === null)).toBe(true);
+  });
+
+  it('--at：换成给的相机，模型和 id 不变，标题注明', () => {
+    const camera = { center: [120.41, 31.51] as const, zoom: 17.2, pitch: 60, bearing: 30 };
+    const [moved] = selectScenes(['jkq-z16-tilt']).map(scene => withCamera(scene, camera));
+    expect(moved?.id).toBe('jkq-z16-tilt');
+    expect(moved?.camera).toEqual(camera);
+    expect(moved?.models.map(model => model.path)).toEqual(['wuxi/3dtiles/经开区/tileset.json']);
+    expect(moved?.title).toBe('经开区 z16 倾斜（--at 的相机）');
+  });
+
+  it('新吴区02、03 各四个，姿态同经开区，模型都在服务器上', () => {
+    const xwq02 = selectScenes(['xwq02']);
+    expect(xwq02.map(scene => scene.id)).toEqual(['xwq02-z16', 'xwq02-z16-tilt', 'xwq02-z16.5', 'xwq02-z17-tilt']);
+    expect(xwq02.map(scene => [scene.camera.zoom, scene.camera.pitch])).toEqual(
+      selectScenes(['jkq-']).map(scene => [scene.camera.zoom, scene.camera.pitch])
+    );
+    expect(xwq02.every(scene => scene.models[0]?.path === 'wuxi/3dtiles/新吴区02/tileset.json')).toBe(true);
+    expect(selectScenes(['xwq']).filter(scene => scene.models[0]?.path.includes('新吴区03'))).toHaveLength(4);
+    expect(selectScenes(['xwq']).every(scene => !scene.byDefault && scene.camera.center === null)).toBe(true);
   });
 });
 

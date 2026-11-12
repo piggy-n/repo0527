@@ -3,11 +3,13 @@ import { probe } from './probe.ts';
 import { type CameraState, MapSession, type MapView, type SplatLayer, type StyleGroup, type TilesetLayer } from '@mx/map-core';
 import type { BenchCamera, BenchStats } from '../bench-api.ts';
 import { GRID_COLS, GRID_ROWS, type SharpnessGrid, sharpnessGrid } from '../sharpness.ts';
+import { showReadout } from './look.ts';
 import { decodeShot } from './shots.ts';
 
 // 测量页：只有底图和模型，没有面板、定时器和业务图层，不让页面自己的工作混进测量。
 // 走真实的会话、视图和引擎（ADR 0147 第 7 节：性能要测生产代码），这里不写层、场景和缓存算法。
-// 参数都在地址上：models、splats、center、zoom、pitch、bearing、basemap、uploadMB、cullWindow、splatBudget、antialias、pacing、fps
+// 参数都在地址上：models、splats、center、zoom、pitch、bearing、basemap、uploadMB、cullWindow、splatBudget、cacheGB、antialias、pacing、fps，
+// --look 时还有 look、label
 
 /** 地址上的 splats（JSON）：清单里的泼溅，地址相对 /3dt/（splat-models.ts） */
 interface SplatParam {
@@ -193,4 +195,8 @@ window.bench = {
   camera: () => session.camera.current,
   sharpnessOf: async base64 => sharpnessGrid(await decodeShot(base64), GRID_COLS, GRID_ROWS)
 };
+// --look：不测量，人在窗口里看，左上角显示读数
+if (params.get('look') === '1') {
+  showReadout(params.get('label') ?? '', () => handle.stats(), () => session.camera.current);
+}
 window.benchReady = true;

@@ -178,8 +178,9 @@ describe('ThreeSceneRenderer 的缓存预算', () => {
     const state = await settle(ctx);
     expect(state.errorScale).toBe(1);
     expect(state.refused).toBe(0);
-    // 细的一层全到了：4 × 4 × 4 块
+    // 细的一层全到了：4 × 4 × 4 块，都够细
     expect(state.tilesets.blocks?.visible).toBe(64);
+    expect(state.tilesets.blocks?.detail).toEqual({ sharp: 64, relaxed: 0, waiting: 0, finest: 0 });
   });
 
   it('屏幕误差上限不写用 8，写了用它；改了只更新、不重新加载', { timeout: TEST_TIMEOUT }, async () => {
@@ -206,8 +207,9 @@ describe('ThreeSceneRenderer 的缓存预算', () => {
     expect(state.refused).toBe(0);
     expect(state.locked).toBe(true);
     expect(state.errorScale).toBeGreaterThan(1.5);
-    // 粗的一层都显示着
+    // 粗的一层都显示着：约 31 像素，超过上限 16，是放宽了才停在这一级
     expect(state.tilesets.blocks?.visible).toBe(16);
+    expect(state.tilesets.blocks?.detail).toEqual({ sharp: 0, relaxed: 16, waiting: 0, finest: 0 });
     expect(state.pinnedBytes).toBeLessThanOrEqual(BLOCK_LEVEL_FITS.cacheLimitBytes);
     // 同一个姿态再等一会：倍数、加载和卸载的次数都不再变，也不再画（按需渲染停得下来）
     await seconds(3);
@@ -357,8 +359,11 @@ describe('ThreeSceneRenderer 动着的时候不请求', () => {
     const moving = inspect(ctx);
     expect(fineRequests()).toBe(0);
     expect(moving.tilesets.blocks?.culled).toBeGreaterThan(0);
-    // 已经到了的照样显示
+    // 已经到了的照样显示：没放宽，粗的一层是在等细的
     expect(moving.tilesets.blocks?.visible).toBeGreaterThan(0);
+    expect(moving.errorScale).toBe(1);
+    expect(moving.tilesets.blocks?.detail.waiting).toBeGreaterThan(0);
+    expect(moving.tilesets.blocks?.detail.relaxed).toBe(0);
     expect(moving.settled).toBe(false);
     stop();
     expect(await within(() => inspect(ctx).settled, 30000)).toBe(true);

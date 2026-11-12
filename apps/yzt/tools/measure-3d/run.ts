@@ -45,7 +45,8 @@ export interface RunContext {
   readonly progress: (phase: string) => void;
 }
 
-function pageUrl({ scene, variant }: Run, { baseUrl, options, splats }: RunContext): string {
+/** 测量页的地址：场景的相机、模型和方案的参数（--look 也用它） */
+export function pageUrl({ scene, variant }: Pick<Run, 'scene' | 'variant'>, { baseUrl, options, splats }: Pick<RunContext, 'baseUrl' | 'options' | 'splats'>): string {
   const { center, zoom, pitch, bearing } = scene.camera;
   const params = new URLSearchParams({
     models: scene.models.map(model => model.path).join(','),
@@ -75,6 +76,9 @@ function pageUrl({ scene, variant }: Run, { baseUrl, options, splats }: RunConte
   }
   if (variant.splatBudget !== undefined) {
     params.set('splatBudget', String(variant.splatBudget));
+  }
+  if (variant.cacheGB !== undefined) {
+    params.set('cacheGB', String(variant.cacheGB));
   }
   if (options.fps !== null) {
     params.set('fps', String(options.fps));

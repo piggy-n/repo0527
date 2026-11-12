@@ -20,8 +20,25 @@ export interface TileQueues {
   readonly usedOutOfView: number;
 }
 
+/**
+ * 显示的瓦片按细不细分（块数，各瓦片集加起来，DisplayedDetail）：屏幕误差和清单的上限比，不算放宽。
+ * 停下后 relaxed、waiting 都是 0 才是按规则整级清楚
+ */
+export interface DetailReadings {
+  /** 够细 */
+  readonly sharp: number;
+  /** 放宽了才停在这一级 */
+  readonly relaxed: number;
+  /** 要更细的一级，还没到 */
+  readonly waiting: number;
+  /** 数据里没有更细的了 */
+  readonly finest: number;
+}
+
 /** 放宽屏幕误差的依据和动着不请求的窗口 */
 export interface BudgetReadings {
+  /** 缓存的上限：到它不再加载（MB） */
+  readonly limitMB: number;
   /** 需求（在用的加上还要加载的估计）、其中还要加载的、再其中没请求的（MB） */
   readonly demandMB: number;
   readonly pendingMB: number;
@@ -74,6 +91,7 @@ export interface BenchStats {
   readonly uploadedMB: number;
   /** 锁在当前姿态 */
   readonly locked: boolean;
+  readonly detail: DetailReadings;
   readonly queues: TileQueues;
   readonly budget: BudgetReadings;
   /** 没有泼溅时是 null */
@@ -137,6 +155,8 @@ export interface SceneSample {
   readonly uploadPending: number;
   readonly cacheMB: number;
   readonly loaded: number;
+  readonly locked: boolean;
+  readonly detail: DetailReadings;
   readonly queues: TileQueues;
   readonly budget: BudgetReadings;
   readonly splats: SplatReadings | null;

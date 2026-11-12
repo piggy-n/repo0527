@@ -5,7 +5,8 @@ import type { RunResult } from './results.ts';
 import { allPassed, fillSampleAt, machineDrift, median, sceneChecks } from './verdict.ts';
 
 const QUEUES = { downloading: 0, parsing: 0, culled: 0, used: 30, usedOutOfView: 0 };
-const BUDGET = { demandMB: 600, pendingMB: 0, culledMB: 0, raisedFull: 0, raisedPredicted: 0, cullWindow: 0.5 };
+const DETAIL = { sharp: 30, relaxed: 0, waiting: 0, finest: 0 };
+const BUDGET = { limitMB: 2048, demandMB: 600, pendingMB: 0, culledMB: 0, raisedFull: 0, raisedPredicted: 0, cullWindow: 0.5 };
 
 const STATS: BenchStats = {
   tilesVisible: 30,
@@ -20,6 +21,7 @@ const STATS: BenchStats = {
   uploadPending: 0,
   uploadedMB: 0,
   locked: false,
+  detail: DETAIL,
   queues: QUEUES,
   budget: BUDGET,
   splats: null
@@ -36,6 +38,8 @@ const fillSample = (t: number, triangles: number): SceneSample => ({
   uploadPending: 0,
   cacheMB: 1300,
   loaded: 100,
+  locked: false,
+  detail: DETAIL,
   queues: QUEUES,
   budget: BUDGET,
   splats: null
