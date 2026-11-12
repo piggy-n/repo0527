@@ -332,6 +332,8 @@ function sceneSample(from: number): SceneSample | null {
         uploadPending: stats.uploadPending,
         cacheMB: stats.cacheMB,
         loaded: stats.loaded,
+        locked: stats.locked,
+        detail: stats.detail,
         queues: stats.queues,
         budget: stats.budget,
         splats: stats.splats

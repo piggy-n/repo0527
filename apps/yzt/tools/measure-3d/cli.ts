@@ -6,12 +6,24 @@ import { join, resolve } from 'node:path';
 import { build } from 'vite';
 import { localPath } from '../local-files/paths.ts';
 import { INTEGRATED_RENDERER, launchBrowser, listAdapters, probeRenderer, SOFTWARE_RENDERER } from './browser.ts';
-import { HELP, type Options, parseOptions } from './options.ts';
+import { runLook } from './look.ts';
+import { HELP, type Options, parseOptions, uploadBudgets } from './options.ts';
 import { createRedactor } from './redact.ts';
 import { renderManual, renderQualityPage, renderReport } from './report.ts';
-import type { Environment, MeasureResults, SceneQuality } from './results.ts';
+import type { Environment, MeasureResults, SceneQuality, ShotPair } from './results.ts';
 import { runOnce } from './run.ts';
-import { buildRuns, PENGCHENG_SPLAT, type Run, SCENES, selectScenes, splatVariants, variants, variantsOf } from './scenes.ts';
+import {
+  buildRuns,
+  DEFAULT_VARIANT,
+  PENGCHENG_SPLAT,
+  type Run,
+  SCENES,
+  selectScenes,
+  splatVariants,
+  variants,
+  variantsOf,
+  withCamera
+} from './scenes.ts';
 import { startServer } from './server.ts';
 import type { SharpnessComparison } from './sharpness.ts';
 import { decodedPath, manifestLabel, type ManifestSource, manifestSource, readManifest, resolveSplats, type SplatModel } from './splat-models.ts';
@@ -52,8 +64,9 @@ if (options.help) {
   console.log(HELP);
   process.exit(0);
 }
-const scenes = selectScenes(options.only);
-const list = variants(options.uploadMBs, options.cullWindows);
+const { at } = options;
+const scenes = selectScenes(options.only).map(scene => (at ? withCamera(scene, at) : scene));
+const list = variants(uploadBudgets(options), options.cullWindows, options.cacheGBs);
 const splatList = splatVariants(options.splatBudgets);
 if (options.list) {
   for (const scene of SCENES) {
@@ -64,6 +77,19 @@ if (options.list) {
 }
 if (scenes.length === 0) {
   fail([`--only ${options.only.join(',')} 没有选中任何场景，用 --list 看全部场景。`]);
+}
+// --look 配 --at 时模型由 --only 选：不写的话默认的第一个是徐州的倾斜摄影，在别处的相机下窗口全是空的
+if (at && options.look && options.only.length === 0) {
+  fail(['--look 配 --at 时要用 --only 写出模型所在的场景，如 --only jkq-z16-tilt：不写的话默认开徐州的倾斜摄影，这个相机下可能什么都没有。']);
+}
+// 换成同一个相机，几个场景就是跑几遍一样的（--look 只开第一个场景，不拦）
+if (at && !options.look && scenes.length > 1) {
+  const chosen = scenes.map(scene => scene.id).join('、');
+  fail([
+    options.only.length === 0
+      ? `--at 只能配一个场景，没写 --only 时默认跑 ${scenes.length} 个场景（${chosen}）。用 --only 写出一个完整的场景 ID，如 --only jkq-z16-tilt。`
+      : `--at 只能配一个场景，--only 选中了 ${scenes.length} 个（${chosen}）。写出完整的场景 ID 时只选它，如 --only jkq-z16。`
+  ]);
 }
 
 // ---------- 启动前检查 ----------
@@ -216,14 +242,24 @@ interface PageComparison extends SharpnessComparison {
   readonly worstCrops: string;
 }
 
-// 画质那一遍飞一圈回来的截图和飞行前的比：同一相机，引擎应该细化回原来的样子。飞行后没稳定、没拍的场景不比
+// 画质那一遍的截图，每个场景每个方案比两种：飞一圈回来和飞行前（同一相机，引擎应该细化回原来的样子，飞行后没稳定、没拍的不比）；
+// 缓存上限的各档再拿产品默认值稳定后的那张和自己的比（同一相机）。只比状态正常的遍：超时、无效时截图不是稳定后的
 async function compareScenes(results: MeasureResults, outDir: string, baseUrl: string): Promise<void> {
-  const pairs = results.scenes.flatMap(scene => {
-    const quality = results.runs.find(run => run.scene === scene.id && run.kind === 'quality')?.quality;
-    const after = quality?.shotAfterFlight;
-    return quality && after ? [{ scene: scene.id, after, before: quality.shot, withoutModel: quality.shotWithoutModel }] : [];
-  });
-  if (pairs.length === 0) {
+  const settledShots = (scene: string, variant: string) => {
+    const run = results.runs.find(item => item.scene === scene && item.variant === variant && item.kind === 'quality');
+    return run?.status === 'ok' ? run.quality : undefined;
+  };
+  const entries = results.scenes.flatMap(scene =>
+    (scene.variants ?? []).flatMap(variant => {
+      const own = settledShots(scene.id, variant);
+      if (!own) {
+        return [];
+      }
+      const fallback = variant === DEFAULT_VARIANT ? undefined : settledShots(scene.id, DEFAULT_VARIANT);
+      return [{ scene: scene.id, variant, own, fallback }];
+    })
+  );
+  if (entries.length === 0) {
     return;
   }
   const { browser } = await launchBrowser(options);
@@ -232,15 +268,29 @@ async function compareScenes(results: MeasureResults, outDir: string, baseUrl: s
     await page.goto(`${baseUrl}/compare.html`);
     await page.waitForFunction('typeof window.compareShots === "function"');
     const read = (file: string) => JSON.stringify(readFileSync(join(outDir, file)).toString('base64'));
-    for (const { scene, after, before, withoutModel } of pairs) {
-      // oxlint-disable-next-line no-await-in-loop -- 一个场景一个场景地比，内存里同时只有两张图
-      const comparison = await page.evaluate<PageComparison>(`window.compareShots(${read(after)}, ${read(before)}, ${read(withoutModel)})`);
-      const heatmap = `shots/${scene}-heatmap.png`;
-      const worstCrops = `shots/${scene}-worst.png`;
+    // 一对一对地比，内存里同时只有两张图
+    const compare = async (name: string, subject: string, reference: string, withoutModel: string): Promise<ShotPair> => {
+      const comparison = await page.evaluate<PageComparison>(`window.compareShots(${read(subject)}, ${read(reference)}, ${read(withoutModel)})`);
+      const heatmap = `shots/${name}-heatmap.png`;
+      const worstCrops = `shots/${name}-worst.png`;
       writeFileSync(join(outDir, heatmap), Buffer.from(comparison.heatmap, 'base64'));
       writeFileSync(join(outDir, worstCrops), Buffer.from(comparison.worstCrops, 'base64'));
-      const entry: SceneQuality = { scene, afterFlight: stripImages(comparison), heatmap, worstCrops };
-      results.quality.push(entry);
+      return { comparison: stripImages(comparison), heatmap, worstCrops };
+    };
+    for (const { scene, variant, own, fallback } of entries) {
+      const name = `${scene}__${variant}`;
+      const after = own.shotAfterFlight;
+      // oxlint-disable-next-line no-await-in-loop -- 一对一对地比
+      const afterFlight = after ? await compare(name, after, own.shot, own.shotWithoutModel) : null;
+      // 找模型所在格子的遮罩由参照的那张和它同一次加载的无模型截图算：两次加载的底图不一定一样齐
+      const versusDefault = fallback
+        ? // oxlint-disable-next-line no-await-in-loop -- 一对一对地比
+          await compare(`${name}-versus-default`, fallback.shot, own.shot, own.shotWithoutModel)
+        : null;
+      if (afterFlight || versusDefault) {
+        const entry: SceneQuality = { scene, variant, afterFlight, versusDefault };
+        results.quality.push(entry);
+      }
     }
   } finally {
     await browser.close().catch(() => undefined);
@@ -259,6 +309,36 @@ function runSummary(result: MeasureResults['runs'][number]): string {
     return `${loaded}，可见的高斯 ${Math.round(splats.visible / 1e4)} 万 / 预算 ${Math.round(splats.budget / 1e4)} 万`;
   }
   return `${loaded}，屏幕误差 ${result.atStable?.errorTarget.toFixed(1)}，瓦片 ${result.atStable?.tilesVisible}`;
+}
+
+const SERVED = { '/3dt/': modelsDir, '/': PAGE_OUT_DIR };
+
+// --look：不测量、不写结果，开第一个场景的窗口看
+async function look(splats: ReadonlyMap<string, SplatModel>, basemap: Options['basemap']): Promise<void> {
+  const [scene] = scenes;
+  if (!scene) {
+    return;
+  }
+  if (scenes.length > 1) {
+    console.warn(`  ! --look 只开第一个场景：${scene.title}`);
+  }
+  const server = await startServer(options.port, { files: SERVED, modelsProxy });
+  let stopping = false;
+  process.on('SIGINT', () => {
+    stopping = true;
+  });
+  try {
+    await runLook(scene, variantsOf(scene, list, splatList), {
+      baseUrl: server.url,
+      options: { ...options, basemap },
+      splats,
+      stopping: () => stopping
+    });
+  } finally {
+    await server.close();
+  }
+  // Playwright 的连接可能还留着句柄：明确退出，不留进程
+  process.exit(0);
 }
 
 async function main(): Promise<void> {
@@ -290,6 +370,10 @@ async function main(): Promise<void> {
   } else if (!existsSync(join(PAGE_OUT_DIR, 'index.html'))) {
     fail(['--skip-build 时要先有构建好的页面：去掉这个参数运行一次。']);
   }
+  if (options.look) {
+    await look(splats, basemap);
+    return;
+  }
 
   const outDir = options.out ? resolve(options.out) : localPath('measure-3d', timestamp());
   mkdirSync(join(outDir, 'shots'), { recursive: true });
@@ -310,7 +394,8 @@ async function main(): Promise<void> {
       fps: options.fps,
       antialias: options.antialias,
       plannedTotal: runs.length,
-      ...(manifest ? { manifest: manifestLabel(manifest) } : {})
+      ...(manifest ? { manifest: manifestLabel(manifest) } : {}),
+      ...(at ? { at } : {})
     },
     environment,
     warnings,
@@ -339,13 +424,7 @@ async function main(): Promise<void> {
   };
   save();
 
-  const server = await startServer(options.port, {
-    files: {
-      '/3dt/': modelsDir,
-      '/': PAGE_OUT_DIR
-    },
-    modelsProxy
-  });
+  const server = await startServer(options.port, { files: SERVED, modelsProxy });
 
   let stopping = false;
   process.on('SIGINT', () => {
@@ -379,7 +458,7 @@ async function main(): Promise<void> {
       save();
       console.log(`    ${runSummary(result)}`);
     }
-    console.log('\n比较飞行前后的截图……');
+    console.log('\n比较截图……');
     // 帧时间这些已经写好了：比较截图出错不能把它们带没
     await compareScenes(results, outDir, server.url).catch((error: unknown) => {
       results.warnings.push(`比较截图失败：${String(error).split(String.fromCharCode(10))[0]}。截图都在 shots/ 里，可以直接看。`);

@@ -1,6 +1,8 @@
-import type { BudgetReadings, SceneSample, PhaseResult, SplatReadings, TileQueues } from './bench-api.ts';
+import type { BenchStats, BudgetReadings, DetailReadings, SceneSample, PhaseResult, SplatReadings, TileQueues } from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
-import type { MeasureResults, QualityResult, RunResult, SceneQuality } from './results.ts';
+import type { MeasureResults, QualityResult, RunResult, RunStatus, ShotPair } from './results.ts';
+import { DEFAULT_VARIANT } from './scenes.ts';
+import type { SharpnessComparison } from './sharpness.ts';
 import { allPassed, type CheckRow, fillSampleAt, MACHINE_DRIFT_RATIO, machineDrift, median, sceneChecks } from './verdict.ts';
 
 // 从 raw.json 的内容生成报告；每跑完一遍就重新生成一次，中断了也留得下
@@ -66,7 +68,7 @@ function queueDetail(runs: readonly RunResult[], phase: 'flightCold' | 'flightWa
 }
 
 // 窗口和放宽的原因：窗口取这一段的中位数，放宽的帧数是这一段里新增的
-function budgetDetail(runs: readonly RunResult[], phase: 'flightCold' | 'settle' | 'flightWarm'): string {
+function budgetDetail(runs: readonly RunResult[], phase: 'flightCold' | 'settle' | 'flightWarm' | 'recovery'): string {
   const budgets = (run: RunResult) => (run[phase]?.trace ?? []).map(sample => sample.budget);
   const added = (read: (budget: BudgetReadings) => number) =>
     pick(runs, run => {
@@ -81,6 +83,34 @@ function budgetDetail(runs: readonly RunResult[], phase: 'flightCold' | 'settle'
     return '—';
   }
   return `${number(window, 2)} / ${integer(full)} / ${integer(added(budget => budget.raisedPredicted))}`;
+}
+
+// 显示的瓦片按细不细分（块）：够细 / 放宽了才停在这一级 / 等更细的 / 已是最细。中间两项（放宽、等着）都是 0 才是按规则整级清楚。
+// ADD 的瓦片不分（DisplayedDetail），有的时候写在后面
+function detailCell(runs: readonly RunResult[], read: (run: RunResult) => DetailReadings | undefined): string {
+  const of = (key: keyof DetailReadings) => pick(runs, run => read(run)?.[key]);
+  const sharp = of('sharp');
+  if (sharp === null) {
+    return '—';
+  }
+  const additive = of('additive') ?? 0;
+  const note = additive > 0 ? `（另有 ADD 的 ${integer(additive)} 块不分）` : '';
+  return `${integer(sharp)} / ${integer(of('relaxed'))} / ${integer(of('waiting'))} / ${integer(of('finest'))}${note}`;
+}
+
+// 需求、上限和锁定，只是读数：放宽以后缓存在同一个上限停止接收，稳定时需求一般就在上限以下，看不出细一级放不放得下；
+// 要分清看放宽的原因（装满 / 估计、被拒绝的）和更大一档同一相机下是不是整级清楚。锁定按遍数，不取中位数
+function demandCell(runs: readonly RunResult[], read: (run: RunResult) => BenchStats | undefined): string {
+  const measured = runs.flatMap(run => {
+    const value = read(run);
+    return value ? [value] : [];
+  });
+  if (measured.length === 0) {
+    return '—';
+  }
+  const demand = median(measured.map(item => item.budget.demandMB));
+  const limit = median(measured.map(item => item.budget.limitMB));
+  return `${integer(demand)} / ${integer(limit)}，锁定 ${measured.filter(item => item.locked).length} / ${measured.length} 遍`;
 }
 
 // 私有内存（提交的字节）：渲染进程里有页面和它的 Worker
@@ -116,9 +146,15 @@ const METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => strin
   ['第二遍飞行：窗口（秒，中位）/ 放宽的帧 装满 / 估计', runs => budgetDetail(runs, 'flightWarm')],
   ['第二遍飞行：长任务 次数 / 最长', runs =>`${integer(pick(runs, run => run.flightWarm?.longTasks.count))} / ${integer(pick(runs, run => run.flightWarm?.longTasks.maxMs))}`],
   ['画面恢复（秒）', runs => number((pick(runs, run => run.recovery?.ms) ?? Number.NaN) / 1000)],
+  ['画面恢复：窗口（秒，中位）/ 放宽的帧 装满 / 估计', runs => budgetDetail(runs, 'recovery')],
   ['稳定时：瓦片 / 三角形', runs => `${integer(pick(runs, run => run.atStable?.tilesVisible))} / ${integer(pick(runs, run => run.atStable?.triangles))}`],
   ['稳定时：屏幕误差 / 引擎估算的模型显存（MB）', runs => `${number(pick(runs, run => run.atStable?.errorTarget))} / ${integer(pick(runs, run => run.atStable?.cacheMB))}`],
+  ['稳定时：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块）', runs => detailCell(runs, run => run.atStable?.detail)],
+  ['加载到稳定：放宽的帧 装满 / 估计', runs => `${integer(pick(runs, run => run.atStable?.budget.raisedFull))} / ${integer(pick(runs, run => run.atStable?.budget.raisedPredicted))}`],
+  ['稳定时：需求 / 缓存上限（MB），锁定', runs => demandCell(runs, run => run.atStable)],
   ['恢复后：瓦片 / 三角形 / 屏幕误差', runs => `${integer(pick(runs, run => run.atRecovered?.tilesVisible))} / ${integer(pick(runs, run => run.atRecovered?.triangles))} / ${number(pick(runs, run => run.atRecovered?.errorTarget))}`],
+  ['恢复后：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块）', runs => detailCell(runs, run => run.atRecovered?.detail)],
+  ['恢复后：需求 / 缓存上限（MB），锁定', runs => demandCell(runs, run => run.atRecovered)],
   ['显存：稳定时 / 峰值（MB）', runs => `${integer(pick(runs, run => run.memory?.gpuAtStableMB))} / ${integer(pick(runs, run => run.memory?.gpuPeakMB))}`],
   ['CPU 内存：渲染进程 稳定时 / 峰值，GPU 进程峰值（MB）', memoryCell],
   ['JS 堆峰值（MB）', runs => integer(pick(runs, run => run.memory?.heapPeakMB))],
@@ -239,18 +275,51 @@ function checkTable(rows: readonly CheckRow[]): string {
   );
 }
 
-// 飞一圈回来和飞行前比的清晰度：数字只提醒哪里可能糊，图在 quality.html
-function sharpnessLines(item: SceneQuality | undefined): string[] {
-  if (!item) {
-    return [];
-  }
-  const { cells, medianRatio, worstDecileRatio, ratios } = item.afterFlight;
+function ratioText({ cells, medianRatio, worstDecileRatio, ratios }: SharpnessComparison): string {
   const values = ratios.filter(value => value !== null);
   const worst = values.length > 0 ? Math.min(...values) : null;
-  return [
-    `**飞一圈回来的清晰度（和飞行前比）：** 比了 ${cells} 格，中位数 ${number(medianRatio, 2)}，最差 10% ${number(worstDecileRatio, 2)}，最差一格 ${number(worst, 2)}；图在 \`quality.html\``,
-    ''
-  ];
+  return `比了 ${cells} 格，中位数 ${number(medianRatio, 2)}，最差 10% ${number(worstDecileRatio, 2)}，最差一格 ${number(worst, 2)}`;
+}
+
+const qualityRunOf = (results: MeasureResults, scene: string, variant: string) =>
+  results.runs.find(run => run.scene === scene && run.variant === variant && run.kind === 'quality');
+
+// 截图不能比的原因，按状态分：超时是模型没稳定；无效可能已经稳定，只是画面空白或模型没画出来；失败可能根本没有截图
+const UNUSABLE: Readonly<Record<Exclude<RunStatus, 'ok'>, string>> = {
+  timeout: '超时（等稳定超过了时限），截图不一定是稳定后的',
+  invalid: '无效（画面空白或模型没画出来，原因见 report.md 的"失败、超时和无效"）',
+  failed: '失败，可能没有截图'
+};
+const statusText = (status: RunStatus) => (status === 'ok' ? '正常' : UNUSABLE[status]);
+
+// 截图比出来的清晰度：飞一圈回来和飞行前比；缓存上限的各档，产品默认值和它比。只比状态正常的遍（cli.ts），
+// 有一边不正常时写出来，不然看不出是没比还是还没跑完。数字只提醒哪里可能糊，图在 quality.html
+function sharpnessLines(results: MeasureResults, scene: MeasureResults['scenes'][number]): string[] {
+  const fallback = qualityRunOf(results, scene.id, DEFAULT_VARIANT);
+  return sceneVariants(results, scene).flatMap(({ id, label }) => {
+    const own = qualityRunOf(results, scene.id, id);
+    if (!own) {
+      return [];
+    }
+    const compared = results.quality.find(item => item.scene === scene.id && item.variant === id);
+    const lines: string[] = [];
+    const afterTitle = `**飞一圈回来的清晰度（${id === DEFAULT_VARIANT ? '' : `${label}，`}和飞行前比）：**`;
+    if (compared?.afterFlight) {
+      lines.push(`${afterTitle} ${ratioText(compared.afterFlight.comparison)}；图在 \`quality.html\``, '');
+    } else if (own.status !== 'ok') {
+      lines.push(`${afterTitle} 这一遍${UNUSABLE[own.status]}，没比`, '');
+    }
+    if (id === DEFAULT_VARIANT || !fallback) {
+      return lines;
+    }
+    const versusTitle = `**产品默认值和${label}比（稳定后同一相机，低于 1 是默认值在那里更糊）：**`;
+    if (compared?.versusDefault) {
+      lines.push(`${versusTitle} ${ratioText(compared.versusDefault.comparison)}；图在 \`quality.html\``, '');
+    } else if (own.status !== 'ok' || fallback.status !== 'ok') {
+      lines.push(`${versusTitle} 默认值那一遍${statusText(fallback.status)}；这一档${statusText(own.status)}。没比`, '');
+    }
+    return lines;
+  });
 }
 
 function uploadTable(runs: readonly RunResult[], phase: 'flightCold' | 'flightWarm'): string | null {
@@ -292,6 +361,24 @@ function fillCell(runs: readonly RunResult[], read: (run: RunResult) => SceneSam
   return error === null ? '—' : `${number(error)} / ${number((value('triangles') ?? 0) / WAN)}`;
 }
 
+// 放宽了才停在这一级的、等更细的瓦片（块）：飞完是在等加载，还是停在了放宽的一级。ADD 的不分，有的时候写在后面
+function fillDetailCell(runs: readonly RunResult[], read: (run: RunResult) => SceneSample | null | undefined): string {
+  const relaxed = pick(runs, run => read(run)?.detail.relaxed);
+  if (relaxed === null) {
+    return '—';
+  }
+  const additive = pick(runs, run => read(run)?.detail.additive) ?? 0;
+  const note = additive > 0 ? `，ADD ${integer(additive)}` : '';
+  return `${integer(relaxed)} / ${integer(pick(runs, run => read(run)?.detail.waiting))}${note}`;
+}
+
+// 飞行后显示的瓦片那张表的说明：放宽的原因在哪几行。"放宽的帧"各行只数自己那一段新增的，放宽又会一直带下去
+const FILL_DETAIL_TITLE =
+  '**飞行后显示的瓦片（第一遍）：** 每格是放宽了才停在这一级 / 等更细的（块）。等着的一直不归零是加载跟不上。' +
+  '最后还有放宽的，原因看上表各段的"放宽的帧 装满 / 估计"：各行只数自己那一段新增的，放宽却会一直带下去（动着时需求不低于上限的 80%、停着不低于 97% 就不收紧，也不再算一次放宽），' +
+  '所以第一遍飞行之后要从"加载到稳定"看起，加上"第一遍飞行""飞行后"；第二遍飞行之后再加"第二遍飞行""画面恢复"。段与段之间的空档不在任何一行里。' +
+  '细一级放不放得下看更大一档：它在这张表最后是不是 0 / 0（整级清楚）';
+
 const finalOf = (run: RunResult) => run.settle?.trace.at(-1);
 
 /** 飞行后画面怎样变："补齐"的时间只说明引擎不再动，看不出画面怎样一步步变细 */
@@ -300,13 +387,24 @@ function fillLines(perf: readonly { readonly label: string; readonly runs: reado
   if (measured.length === 0) {
     return [];
   }
-  const rows = measured.map(({ label, runs }) =>
-    [label].concat(
-      FILL_TIMES.map(t => fillCell(runs, run => fillSampleAt(run.settle?.trace ?? [], t))),
-      fillCell(runs, finalOf)
-    )
-  );
-  return ['**飞行后的过程（第一遍）：** 每格是屏幕误差 / 三角形（万）', '', table(['方案', ...FILL_TIMES.map(t => `${t / 1000} 秒`), '最后'], rows), ''];
+  const rows = (render: typeof fillCell) =>
+    measured.map(({ label, runs }) =>
+      [label].concat(
+        FILL_TIMES.map(t => render(runs, run => fillSampleAt(run.settle?.trace ?? [], t))),
+        render(runs, finalOf)
+      )
+    );
+  const headers = ['方案', ...FILL_TIMES.map(t => `${t / 1000} 秒`), '最后'];
+  return [
+    '**飞行后的过程（第一遍）：** 每格是屏幕误差 / 三角形（万）',
+    '',
+    table(headers, rows(fillCell)),
+    '',
+    FILL_DETAIL_TITLE,
+    '',
+    table(headers, rows(fillDetailCell)),
+    ''
+  ];
 }
 
 const METHOD = `- **都是生产代码：** 真实的 \`MapSession\`、\`MapLibreView\` + \`ThreeSceneRenderer\`，生产模式构建；页面只有底图和模型。按包分块，方便归因，运行的代码相同。
@@ -325,7 +423,7 @@ const METHOD = `- **都是生产代码：** 真实的 \`MapSession\`、\`MapLibr
 
 /** report.md */
 export function renderReport(results: MeasureResults): string {
-  const { meta, environment: env, runs, quality } = results;
+  const { meta, environment: env, runs } = results;
   const onlySplats = results.scenes.length > 0 && results.scenes.every(scene => scene.splat);
   const title = onlySplats ? '# 高斯泼溅的预算实测（ADR 0149 L.3）' : '# 三维实测（MapLibre 引擎）';
   const parts: string[] = [title, ''];
@@ -361,7 +459,7 @@ export function renderReport(results: MeasureResults): string {
       '',
       checkTable(rows),
       '',
-      ...sharpnessLines(quality.find(item => item.scene === scene.id))
+      ...sharpnessLines(results, scene)
     );
   }
   if (!onlySplats) {
@@ -480,6 +578,12 @@ const SPLAT_MANUAL = `
 
 `;
 
+// 比较了缓存上限：多一项肉眼比各档
+const tierRow = (results: MeasureResults) =>
+  results.runs.some(run => run.kind === 'quality' && run.variant !== DEFAULT_VARIANT)
+    ? '| 缓存上限的各档 | "和产品默认值比"里两张并排，热力图标红的是默认值更糊的地方：肉眼看得出差别吗，到哪一档以后看不出了 | |\n'
+    : '';
+
 /** manual.md：脚本判断不了的 */
 export function renderManual(results: MeasureResults): string {
   const splat = results.scenes.some(scene => scene.splat) ? SPLAT_MANUAL : '';
@@ -499,7 +603,7 @@ ${splat}`;
 |---|---|---|
 | 画面清不清楚 | 每个场景稳定后的截图，看建筑的纹理、文字、边缘 | |
 | 飞一圈回来的画面 | 和飞行前同一相机的两张并排，热力图里标红的格子重点看 | |
-| 清晰度的数字和肉眼相符吗 | 标红的格子，肉眼也觉得糊吗；没标红但肉眼觉得糊的地方有吗。不相符时告诉我哪里，我再调算法 | |
+${tierRow(results)}| 清晰度的数字和肉眼相符吗 | 标红的格子，肉眼也觉得糊吗；没标红但肉眼觉得糊的地方有吗。不相符时告诉我哪里，我再调算法 | |
 
 **其他观察：**
 ${splat}`;
@@ -509,41 +613,91 @@ const IMAGE_STYLE = 'max-width:100%;display:block;margin:4px 0';
 
 const figure = (caption: string, src: string) => `<figure><figcaption>${caption}</figcaption><img src="${src}" style="${IMAGE_STYLE}"></figure>`;
 
-// 一个场景：飞行前后的截图并排，比过的再加比值、热力图和最差几格的放大
-function qualitySection(title: string, shots: QualityResult, compared: SceneQuality | undefined): string {
+const NOT_COMPARED = '<p>没有比较结果：全部跑完以后才比，比较出错时 report.md 里有提示。</p>';
+
+const ratioHtml = ({ cells, medianRatio, worstDecileRatio }: SharpnessComparison) =>
+  `比了 ${cells} 格，中位数 <b>${number(medianRatio, 2)}</b>，最差 10% <b>${number(worstDecileRatio, 2)}</b>`;
+
+// 热力图和最差几格：left、right 是放大图左右两边各是哪一张
+const pairImages = (pair: ShotPair, heading: string, onto: string, left: string, right: string) => `<${heading}>热力图（画在${onto}的那张上，格子里是比值，低于 0.93 标红、高于 1.1 标绿）</${heading}>
+<img src="${pair.heatmap}" style="${IMAGE_STYLE}">
+<${heading}>比值最低的几格，放大 3 倍（左 ${left}，右 ${right}）</${heading}>
+<img src="${pair.worstCrops}" style="${IMAGE_STYLE}">`;
+
+// 截图的说明：只有正常的那一遍是"稳定后"；超时是没稳定，无效、失败照实写
+const CAPTIONS: Readonly<Record<RunStatus, string>> = { ok: '稳定后', timeout: '不一定稳定（超时）', invalid: '无效', failed: '失败' };
+
+// 飞行前后：截图并排，比过的再加比值、热力图和最差几格的放大
+function afterFlightPart(shots: QualityResult, status: RunStatus, pair: ShotPair | null): string {
+  if (status !== 'ok') {
+    return `<p>这一遍${UNUSABLE[status]}，不比较。</p>
+<div class="pair">${figure(CAPTIONS[status], shots.shot)}</div>`;
+  }
   if (!shots.shotAfterFlight) {
-    return `<section>
-<h2>${title}</h2>
-<p>飞一圈回来没有稳定，没有拍，不比较。</p>
-<div class="pair">${figure('稳定后', shots.shot)}</div>
-</section>`;
+    return `<p>飞一圈回来没有稳定，没有拍，不比较。</p>
+<div class="pair">${figure('稳定后', shots.shot)}</div>`;
   }
-  const pair = `<div class="pair">${figure('飞一圈回来', shots.shotAfterFlight)}${figure('飞行前', shots.shot)}</div>`;
-  if (!compared) {
-    return `<section>
-<h2>${title}</h2>
-<p>没有比较结果：全部跑完以后才比，比较出错时 report.md 里有提示。</p>
-${pair}
-</section>`;
+  const images = `<div class="pair">${figure('飞一圈回来', shots.shotAfterFlight)}${figure('飞行前', shots.shot)}</div>`;
+  if (!pair) {
+    return `${NOT_COMPARED}\n${images}`;
   }
-  const { cells, medianRatio, worstDecileRatio } = compared.afterFlight;
-  return `<section>
-<h2>${title}</h2>
-<p>飞一圈回来 / 飞行前的清晰度比值：比了 ${cells} 格，中位数 <b>${number(medianRatio, 2)}</b>，最差 10% <b>${number(worstDecileRatio, 2)}</b></p>
-${pair}
-<h3>热力图（画在飞一圈回来的那张上，格子里是比值，低于 0.93 标红、高于 1.1 标绿）</h3>
-<img src="${compared.heatmap}" style="${IMAGE_STYLE}">
-<h3>比值最低的几格，放大 3 倍（左 飞一圈回来，右 飞行前）</h3>
-<img src="${compared.worstCrops}" style="${IMAGE_STYLE}">
-</section>`;
+  return `<p>飞一圈回来 / 飞行前的清晰度比值：${ratioHtml(pair.comparison)}</p>
+${images}
+${pairImages(pair, 'h3', '飞一圈回来', '飞一圈回来', '飞行前')}`;
 }
 
-/** quality.html：每个场景飞行前后的截图，比过的还有热力图和最差几格的放大 */
+/** 画质那一遍的截图和状态；失败的那一遍可能没有截图 */
+interface ShotsOfRun {
+  readonly shots: QualityResult | undefined;
+  readonly status: RunStatus;
+}
+
+// 缓存上限的一档和产品默认值：稳定后同一相机的两张，热力图画在默认值那张上，红的是默认值更糊的地方
+function versusDefaultPart(own: QualityResult, ownStatus: RunStatus, fallback: ShotsOfRun | undefined, pair: ShotPair | null): string {
+  if (!fallback) {
+    return '';
+  }
+  const fallbackFigure = fallback.shots ? figure(`产品默认值，${CAPTIONS[fallback.status]}`, fallback.shots.shot) : '';
+  const images = `<div class="pair">${fallbackFigure}${figure(`这一档，${CAPTIONS[ownStatus]}`, own.shot)}</div>`;
+  let body = `${NOT_COMPARED}\n${images}`;
+  if (ownStatus !== 'ok' || fallback.status !== 'ok') {
+    body = `<p>默认值那一遍${statusText(fallback.status)}；这一档${statusText(ownStatus)}。不比较。</p>\n${images}`;
+  } else if (pair) {
+    body = `<p>产品默认值 / 这一档的清晰度比值：${ratioHtml(pair.comparison)}，低于 1 是默认值在那里更糊</p>
+${images}
+${pairImages(pair, 'h4', '产品默认值', '产品默认值', '这一档')}`;
+  }
+  return `<h3>和产品默认值比（同一相机）</h3>\n${body}`;
+}
+
+/** quality.html：每个场景每个跑了画质的方案一节，飞行前后的截图，缓存上限的各档再和产品默认值比 */
 export function renderQualityPage(results: MeasureResults): string {
-  const sections = results.scenes.flatMap(scene => {
-    const shots = results.runs.find(run => run.scene === scene.id && run.kind === 'quality')?.quality;
-    return shots ? [qualitySection(scene.title, shots, results.quality.find(item => item.scene === scene.id))] : [];
-  });
+  const shotsOf = (scene: string, variant: string): ShotsOfRun | undefined => {
+    const run = qualityRunOf(results, scene, variant);
+    return run ? { shots: run.quality, status: run.status } : undefined;
+  };
+  const sections = results.scenes.flatMap(scene =>
+    sceneVariants(results, scene).flatMap(({ id, label }) => {
+      const own = shotsOf(scene.id, id);
+      if (!own) {
+        return [];
+      }
+      const heading = `<h2>${id === DEFAULT_VARIANT ? scene.title : `${scene.title}，${label}`}</h2>`;
+      // 这一遍失败、没有截图：留一行说明，不然看起来像还没跑到
+      if (!own.shots) {
+        return [`<section>\n${heading}\n<p>画质这一遍${CAPTIONS[own.status]}，没有截图，原因见 report.md 的"失败、超时和无效"。</p>\n</section>`];
+      }
+      const compared = results.quality.find(item => item.scene === scene.id && item.variant === id);
+      const fallback = id === DEFAULT_VARIANT ? undefined : shotsOf(scene.id, DEFAULT_VARIANT);
+      return [
+        `<section>
+${heading}
+${afterFlightPart(own.shots, own.status, compared?.afterFlight ?? null)}
+${versusDefaultPart(own.shots, own.status, fallback, compared?.versusDefault ?? null)}
+</section>`
+      ];
+    })
+  );
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><title>飞行前后的截图</title>
 <style>
@@ -552,7 +706,7 @@ body{font:15px/1.6 system-ui,"Microsoft YaHei",sans-serif;margin:24px;background
 section{margin-bottom:48px}
 </style></head><body>
 <h1>飞行前后的截图</h1>
-<p>每个场景同一相机的两张截图：稳定后，和飞一圈回来稳定后。清晰度怎样算：每张图先缩小一半（去掉像素级的锯齿），分成 16×9 格，每格算对数亮度的梯度能量，再除以缩小 4 倍后的梯度能量。取对数和比值，亮度、对比度整片的变化就不算糊，糊是高频丢失。比值是飞一圈回来除以飞行前，只比模型占到四分之一以上的格子。数字只是提醒哪里可能糊，<b>结论以人看图为准</b>，写进 manual.md。</p>
+<p>每个场景同一相机的两张截图：稳定后，和飞一圈回来稳定后；比较缓存上限时每一档一节，再拿产品默认值稳定后的那张和这一档的比。清晰度怎样算：每张图先缩小一半（去掉像素级的锯齿），分成 16×9 格，每格算对数亮度的梯度能量，再除以缩小 4 倍后的梯度能量。取对数和比值，亮度、对比度整片的变化就不算糊，糊是高频丢失。比值是飞一圈回来除以飞行前、产品默认值除以这一档，只比模型占到四分之一以上的格子。数字只是提醒哪里可能糊，<b>结论以人看图为准</b>，写进 manual.md。</p>
 ${sections.join('\n') || '<p>还没有结果。</p>'}
 </body></html>
 `;

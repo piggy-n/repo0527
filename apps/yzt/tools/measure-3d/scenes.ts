@@ -23,7 +23,7 @@ export interface Scene {
   readonly camera: Omit<BenchCamera, 'center'> & { readonly center: readonly [number, number] | null };
 }
 
-/** 方案：产品的默认值，或者另外对照的某个上传预算、动着不请求的窗口、泼溅预算 */
+/** 方案：产品的默认值，或者另外对照的某个上传预算、动着不请求的窗口、缓存上限、泼溅预算 */
 export interface Variant {
   readonly id: string;
   readonly label: string;
@@ -31,12 +31,17 @@ export interface Variant {
   readonly uploadMB?: number | null;
   /** 相机在这个窗口里走的路达到瓦片直径就不请求（秒，auto 按实测的加载时间）；undefined 用产品的默认值，null 动着也请求 */
   readonly cullWindow?: number | 'auto' | null;
+  /** 瓦片缓存的上限（GB）：到它不再加载，淘汰到它的一半；undefined 用产品的默认值（1 GB + 1 GB） */
+  readonly cacheGB?: number;
   /** 高斯泼溅的总预算（高斯个数）；undefined 用产品的默认值 */
   readonly splatBudget?: number;
 }
 
-/** 产品默认设置的方案：画质、采样和检查都只看它，其余方案只跑 perf 对照 */
+/** 产品默认设置的方案：采样和检查只看它，画质另外给缓存上限的各档跑（比清晰度），其余方案只跑 perf 对照 */
 export const DEFAULT_VARIANT = 'maplibre';
+
+/** 这个方案也跑画质：产品的默认值，和比较缓存上限的各档（同一相机的截图和默认值比） */
+export const takesQualityRun = (variant: Variant): boolean => variant.id === DEFAULT_VARIANT || variant.cacheGB !== undefined;
 
 /** 一遍：perf 量帧时间和加载，quality 拍画面，profile 带 CPU 采样 */
 export type RunKind = 'perf' | 'quality' | 'profile';
@@ -55,6 +60,8 @@ const STATION: SceneModel = { path: 'suzhou/3dtiles/星海广场站/tileset.json
 const WHITE: SceneModel = { path: 'suzhou/3dtiles/星海广场站周边建筑白模/plain/tileset.json' };
 const JKQ: SceneModel = { path: 'wuxi/3dtiles/经开区/tileset.json' };
 const JKQ2: SceneModel = { path: 'wuxi/3dtiles/经开区2/tileset.json' };
+const XWQ02: SceneModel = { path: 'wuxi/3dtiles/新吴区02/tileset.json' };
+const XWQ03: SceneModel = { path: 'wuxi/3dtiles/新吴区03/tileset.json' };
 const OBLIQUE_CENTER = [117.1807, 34.2657] as const;
 const STATION_CENTER = [120.6660669, 31.317559] as const;
 
@@ -97,6 +104,15 @@ export const SCENES: readonly Scene[] = [
   remote('jkq-z17-tilt', '经开区 z17 倾斜', JKQ, 17, 55),
   remote('jkq2-z15', '经开区2 z15 俯视', JKQ2, 15, 0),
   remote('jkq2-z16-tilt', '经开区2 z16 倾斜', JKQ2, 16, 55),
+  // 新吴区02、03 的结构和经开区一样（根 → top/0.json → Tile_*），姿态也一样：看屏幕误差 8 下放不放得下
+  remote('xwq02-z16', '新吴区02 z16 俯视', XWQ02, 16, 0),
+  remote('xwq02-z16-tilt', '新吴区02 z16 倾斜', XWQ02, 16, 55),
+  remote('xwq02-z16.5', '新吴区02 z16.5 俯视', XWQ02, 16.5, 0),
+  remote('xwq02-z17-tilt', '新吴区02 z17 倾斜', XWQ02, 17, 55),
+  remote('xwq03-z16', '新吴区03 z16 俯视', XWQ03, 16, 0),
+  remote('xwq03-z16-tilt', '新吴区03 z16 倾斜', XWQ03, 16, 55),
+  remote('xwq03-z16.5', '新吴区03 z16.5 俯视', XWQ03, 16.5, 0),
+  remote('xwq03-z17-tilt', '新吴区03 z17 倾斜', XWQ03, 17, 55),
   splat('splat-pc-z18', '彭城广场 LCC2 z18', [PENGCHENG_SPLAT], [], OBLIQUE_CENTER, 18),
   splat('splat-pc-z19', '彭城广场 LCC2 z19 近看', [PENGCHENG_SPLAT], [], OBLIQUE_CENTER, 19, 65),
   splat('splat-pc-xz-z18', '彭城广场 LCC2 加倾斜摄影 z18', [PENGCHENG_SPLAT], [OBLIQUE], OBLIQUE_CENTER, 18),
@@ -116,7 +132,11 @@ export function splatVariants(budgets: readonly number[]): Variant[] {
 export const variantsOf = (scene: Scene, list: readonly Variant[], splatList: readonly Variant[]): readonly Variant[] =>
   scene.splats.length > 0 ? splatList : list;
 
-export function variants(uploadMBs: readonly (number | null)[], cullWindows: readonly (number | 'auto' | null)[] = []): Variant[] {
+export function variants(
+  uploadMBs: readonly (number | null)[],
+  cullWindows: readonly (number | 'auto' | null)[] = [],
+  cacheGBs: readonly number[] = []
+): Variant[] {
   return [
     { id: DEFAULT_VARIANT, label: 'MapLibre' },
     ...uploadMBs.map(
@@ -126,7 +146,8 @@ export function variants(uploadMBs: readonly (number | null)[], cullWindows: rea
         uploadMB
       })
     ),
-    ...cullWindows.map((cullWindow): Variant => ({ ...cullVariant(cullWindow), cullWindow }))
+    ...cullWindows.map((cullWindow): Variant => ({ ...cullVariant(cullWindow), cullWindow })),
+    ...cacheGBs.map((cacheGB): Variant => ({ id: `maplibre-cache${cacheGB}g`, label: `MapLibre，缓存上限 ${cacheGB} GB`, cacheGB }))
   ];
 }
 
@@ -141,7 +162,7 @@ function cullVariant(cullWindow: number | 'auto' | null): Pick<Variant, 'id' | '
 }
 
 /**
- * 要跑的所有遍：每个场景每个方案 repeat 遍 perf；只有产品的默认值多跑一遍画质和一遍采样。
+ * 要跑的所有遍：每个场景每个方案 repeat 遍 perf；产品的默认值多跑一遍画质和一遍采样，缓存上限的各档多跑一遍画质。
  * 泼溅场景的方案是 splatList：每个预算多跑一遍采样（加载新分块时卡不卡），不跑画质
  */
 export function buildRuns(scenes: readonly Scene[], list: readonly Variant[], repeat: number, splatList: readonly Variant[] = []): Run[] {
@@ -159,7 +180,7 @@ export function buildRuns(scenes: readonly Scene[], list: readonly Variant[], re
   for (const scene of scenes) {
     for (const variant of variantsOf(scene, list, splatList)) {
       const splatScene = scene.splats.length > 0;
-      if (!splatScene && variant.id === DEFAULT_VARIANT) {
+      if (!splatScene && takesQualityRun(variant)) {
         runs.push({ id: `${scene.id}/${variant.id}/quality`, scene, variant, kind: 'quality', repeat: 0 });
       }
       if (splatScene || variant.id === DEFAULT_VARIANT) {
@@ -189,12 +210,23 @@ export function aerialFlight({ center, zoom, pitch, bearing }: BenchCamera, view
   ];
 }
 
-/** 按子串选场景；没写时选默认的场景。泼溅场景要写出 splat 才选得中：--only z19 不带上比预算的泼溅场景 */
+/** --at：场景换成这个相机，模型和方案不变；id 不变，标题注明（结果的 meta.at 里有相机） */
+export function withCamera(scene: Scene, camera: BenchCamera): Scene {
+  return { ...scene, title: `${scene.title}（--at 的相机）`, camera };
+}
+
+/**
+ * 按子串选场景；没写时选默认的场景。写出完整的场景 ID 时只选它（jkq-z16 不带上 jkq-z16-tilt、jkq-z16.5）。
+ * 泼溅场景要写出 splat 才选得中：--only z19 不带上比预算的泼溅场景
+ */
 export function selectScenes(only: readonly string[]): Scene[] {
   if (only.length === 0) {
     return SCENES.filter(scene => scene.byDefault);
   }
+  const ids = new Set(SCENES.map(scene => scene.id));
   return SCENES.filter(scene =>
-    only.some(pattern => scene.id.includes(pattern) && (scene.splats.length === 0 || pattern.includes('splat')))
+    only.some(pattern =>
+      ids.has(pattern) ? scene.id === pattern : scene.id.includes(pattern) && (scene.splats.length === 0 || pattern.includes('splat'))
+    )
   );
 }

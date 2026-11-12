@@ -3,11 +3,13 @@ import { probe } from './probe.ts';
 import { type CameraState, MapSession, type MapView, type SplatLayer, type StyleGroup, type TilesetLayer } from '@mx/map-core';
 import type { BenchCamera, BenchStats } from '../bench-api.ts';
 import { GRID_COLS, GRID_ROWS, type SharpnessGrid, sharpnessGrid } from '../sharpness.ts';
+import { LookControl, showReadout } from './look.ts';
 import { decodeShot } from './shots.ts';
 
 // 测量页：只有底图和模型，没有面板、定时器和业务图层，不让页面自己的工作混进测量。
 // 走真实的会话、视图和引擎（ADR 0147 第 7 节：性能要测生产代码），这里不写层、场景和缓存算法。
-// 参数都在地址上：models、splats、center、zoom、pitch、bearing、basemap、uploadMB、cullWindow、splatBudget、antialias、pacing、fps
+// 参数都在地址上：models、splats、center、zoom、pitch、bearing、basemap、uploadMB、cullWindow、splatBudget、cacheGB、antialias、pacing、fps，
+// --look 时还有 look、label
 
 /** 地址上的 splats（JSON）：清单里的泼溅，地址相对 /3dt/（splat-models.ts） */
 interface SplatParam {
@@ -54,6 +56,10 @@ export interface BenchApi {
   stats(): BenchStats;
   /** 当前相机（模型的建议相机可能换过中心） */
   camera(): CameraState;
+  /** 相机到了场景的位置（没写中心时要等模型就绪后那一跳） */
+  placed(): boolean;
+  /** --look 的窗口（跟随、用户操作、按 R 重新稳定）；不是 --look 时为 null */
+  readonly look: LookControl | null;
   /** 算一张截图按格的清晰度 */
   sharpnessOf(base64: string): Promise<SharpnessGrid>;
 }
@@ -150,22 +156,31 @@ const keepDrawing = () => {
 
 const setCamera = (camera: BenchCamera) => view.flyTo({ ...camera, center: [camera.center[0], camera.center[1]] }, { duration: 0 });
 
-// 模型只在服务器上、不知道坐标时（center 没写）：就绪后用模型建议相机的落点（模型在空中时不在它正下方）
+// 相机到了场景的位置：写了中心时一开始就是。没写时（模型只在服务器上、不知道坐标）就绪后跳到模型建议相机的落点
+// （模型在空中时不在它正下方），跳完的下一帧才算：--look 在这之前不同步这个窗口，这一跳不算用户动的
+let placed = centerText !== null;
+let jumped = false;
 if (!centerText) {
-  let placed = false;
   view.onSceneStatusChange?.(status => {
-    if (placed) {
+    if (jumped) {
       return;
     }
     for (const item of status.values()) {
       if (item.state === 'ready') {
-        placed = true;
+        jumped = true;
         setCamera({ ...initialCamera, center: item.camera.center });
+        window.requestAnimationFrame(() => {
+          placed = true;
+        });
+        handle.requestFrame();
         break;
       }
     }
   });
 }
+
+// --look 的窗口：跟随、用户操作、按 R 重新稳定（page/look.ts）
+const look = params.get('look') === '1' ? new LookControl(container, () => session.camera.current, setCamera) : null;
 
 const loadStartedAt = performance.now();
 session.scene.set(sceneContent(true));
@@ -191,6 +206,12 @@ window.bench = {
   renders: () => handle.frames(),
   stats: () => handle.stats(),
   camera: () => session.camera.current,
+  placed: () => placed,
+  look,
   sharpnessOf: async base64 => sharpnessGrid(await decodeShot(base64), GRID_COLS, GRID_ROWS)
 };
+// --look：不测量，人在窗口里看，左上角显示读数
+if (look) {
+  showReadout(params.get('label') ?? '', () => handle.stats(), () => session.camera.current, look);
+}
 window.benchReady = true;

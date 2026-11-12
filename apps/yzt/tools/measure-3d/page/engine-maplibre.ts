@@ -5,6 +5,7 @@ import { splatReadings, splatsSettled } from '../splat-readings.ts';
 import type { EngineHandle, EngineOptions } from './bench.ts';
 
 const MB = 1024 * 1024;
+const GB = 1024 * MB;
 
 // 地址上的 cullWindow：off 是动着也请求，auto 按实测的加载时间，其余是秒数
 const cullWindowOf = (value: string): CullWindow | null => {
@@ -26,6 +27,7 @@ export async function startMapLibre({ session, container, params, splatCount, on
   const uploadMB = params.get('uploadMB');
   const cullWindow = params.get('cullWindow');
   const splatBudget = params.get('splatBudget');
+  const cacheGB = params.get('cacheGB');
   let renderer: Renderer | null = null;
   let surface: SceneSurface | null = null;
   const view = new MapLibreView({
@@ -49,7 +51,9 @@ export async function startMapLibre({ session, container, params, splatCount, on
       const rendererOptions = {
         ...(uploadMB === null ? {} : { uploadBytesPerFrame: uploadMB === 'off' ? null : Number(uploadMB) * MB }),
         ...(cullWindow === null ? {} : { requestCullWindow: cullWindowOf(cullWindow) }),
-        ...(splatBudget === null ? {} : { splatBudget: Number(splatBudget) })
+        ...(splatBudget === null ? {} : { splatBudget: Number(splatBudget) }),
+        // 缓存上限这一档：到它不再加载，淘汰到它的一半（和产品的 1 GB + 1 GB 同一个比例）
+        ...(cacheGB === null ? {} : { cacheBytes: (Number(cacheGB) * GB) / 2, cacheLimitBytes: Number(cacheGB) * GB })
       };
       return () => {
         renderer = new BenchRenderer(rendererOptions);
@@ -72,6 +76,7 @@ export async function startMapLibre({ session, container, params, splatCount, on
       uploadMB: uploadMB ?? '产品的默认值',
       cullWindow: cullWindow ?? '产品的默认值',
       splatBudget: splatBudget ?? '产品的默认值',
+      cacheGB: cacheGB ?? '产品的默认值',
       antialias: params.get('antialias') === '1'
     },
     stats() {
@@ -91,6 +96,13 @@ export async function startMapLibre({ session, container, params, splatCount, on
         uploadPending: state.uploadPending,
         uploadedMB: state.uploadedBytes / MB,
         locked: state.locked,
+        detail: {
+          sharp: sum(item => item.detail.sharp),
+          relaxed: sum(item => item.detail.relaxed),
+          waiting: sum(item => item.detail.waiting),
+          finest: sum(item => item.detail.finest),
+          additive: sum(item => item.detail.additive)
+        },
         queues: {
           downloading: sum(item => item.downloading),
           parsing: sum(item => item.parsing),
@@ -99,6 +111,7 @@ export async function startMapLibre({ session, container, params, splatCount, on
           usedOutOfView: sum(item => item.usedOutOfView)
         },
         budget: {
+          limitMB: state.cacheLimitBytes / MB,
           demandMB: state.demandBytes / MB,
           pendingMB: state.pendingBytes / MB,
           culledMB: state.culledBytes / MB,

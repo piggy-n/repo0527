@@ -84,12 +84,31 @@ export interface TilesetDemand {
   readonly usedTiles: number;
 }
 
+/**
+ * 这一帧显示的瓦片按细不细分（块数）：屏幕误差和清单的上限比，不算放宽的倍数。
+ * 停下后 relaxed、waiting 都是 0 才是按规则整级清楚；finest 是数据里没有更细的了。
+ * 只分 REPLACE 的瓦片：ADD 的和子节点一起显示，显示它不等于在等子节点，单独计数
+ */
+export interface DisplayedDetail {
+  /** 屏幕误差不超过上限 */
+  readonly sharp: number;
+  /** 超过上限、不超过放宽后的上限：放宽了才停在这一级 */
+  readonly relaxed: number;
+  /** 超过放宽后的上限：要更细的一级，还没到（在下载、没请求、被拒绝），这一块先顶着 */
+  readonly waiting: number;
+  /** 超过上限、没有子节点 */
+  readonly finest: number;
+  /** ADD 的瓦片，不分 */
+  readonly additive: number;
+}
+
 /** 一个瓦片集的读数 */
 export interface TilesetEntryInspection {
   readonly show: boolean;
   readonly errorTarget: number;
   /** 这一帧显示的瓦片数 */
   readonly visible: number;
+  readonly detail: DisplayedDetail;
   /** 累计：瓦片加载完成、被卸载、加载失败的次数 */
   readonly loaded: number;
   readonly unloaded: number;
@@ -111,6 +130,7 @@ export interface TilesetEntryInspection {
 // 库的这些字段运行时有、类型声明里没有
 interface TilesInternals {
   readonly usedSet: Set<TileInternals>;
+  readonly visibleTiles: Set<TileInternals>;
   readonly loadingTiles: Set<TileInternals>;
   queueTileForDownload(tile: TileInternals): void;
   readonly stats: {
@@ -161,6 +181,8 @@ export class TilesetEntry implements Disposable {
   #options: TilesetOptions;
   // 所有瓦片集共用的放宽倍数，乘在各自的屏幕误差上限上
   #errorScale = 1;
+  // 最近一次选瓦片时用的屏幕误差上限：倍数在这一帧画完后才改，读数要和选瓦片时的比
+  #selectedWith = ERROR_TARGET;
   #frame: LocalFrame | null = null;
   #anchor: AnchorMatrices | null = null;
   #initial = false;
@@ -413,6 +435,7 @@ export class TilesetEntry implements Disposable {
       errorTarget: this.tiles.errorTarget,
       // 不画的瓦片集不再更新：库的统计停在之前
       visible: this.#drawn ? stats.visible : 0,
+      detail: this.#displayedDetail(),
       loaded: this.#loaded,
       unloaded: this.#unloaded,
       failed: this.#failed,
@@ -443,6 +466,7 @@ export class TilesetEntry implements Disposable {
     this.scene.updateMatrixWorld(true);
     this.tiles.setResolution(this.camera, width, height);
     this.#updateRequestCull();
+    this.#selectedWith = this.tiles.errorTarget;
     this.tiles.update();
     this.#pinned = true;
     // 还有没请求的瓦片时库的进度也是 1：要等它们都到了才算
@@ -586,6 +610,33 @@ export class TilesetEntry implements Disposable {
 
   #errorTarget(): number {
     return (this.#options.maximumScreenSpaceError ?? ERROR_TARGET) * this.#errorScale;
+  }
+
+  // 只在读数时算，不在每帧里：屏幕误差是库最近一次更新时算的，和那时的上限比
+  #displayedDetail(): DisplayedDetail {
+    const detail = { sharp: 0, relaxed: 0, waiting: 0, finest: 0, additive: 0 };
+    if (!this.#drawn) {
+      return detail;
+    }
+    const { visibleTiles } = this.tiles as unknown as TilesInternals;
+    const base = this.#options.maximumScreenSpaceError ?? ERROR_TARGET;
+    const errorTarget = this.#selectedWith;
+    for (const tile of visibleTiles) {
+      const { error } = tile.traversal;
+      // ADD 的不管细不细都显示，子节点在视野外、被优化跳过时也什么都不等：看不出是不是在等
+      if (tile.refine === 'ADD') {
+        detail.additive++;
+      } else if (error <= base) {
+        detail.sharp++;
+      } else if (tile.children.length === 0) {
+        detail.finest++;
+      } else if (error <= errorTarget) {
+        detail.relaxed++;
+      } else {
+        detail.waiting++;
+      }
+    }
+    return detail;
   }
 
   // 地心坐标到局部系，抬高时再沿局部系的 y 上移

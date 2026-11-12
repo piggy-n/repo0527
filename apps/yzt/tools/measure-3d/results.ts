@@ -1,4 +1,4 @@
-import type { BenchStats, SceneSample, LongTaskStats, PageSetup, PhaseResult, ShotCoverage } from './bench-api.ts';
+import type { BenchCamera, BenchStats, SceneSample, LongTaskStats, PageSetup, PhaseResult, ShotCoverage } from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
 import type { BlurEvent, SharpnessComparison } from './sharpness.ts';
 import type { RunKind } from './scenes.ts';
@@ -81,14 +81,21 @@ export interface QualityResult {
   };
 }
 
-/** 一个场景飞一圈回来的截图和飞行前的比：同一相机，引擎应该细化回原来的样子。截图的文件名在画质那一遍里 */
-export interface SceneQuality {
-  readonly scene: string;
-  /** 飞行后 / 飞行前 */
-  readonly afterFlight: SharpnessComparison;
-  /** 文件名（相对结果目录） */
+/** 同一相机的两张截图比出来的：比值，热力图和最差几格的文件名（相对结果目录） */
+export interface ShotPair {
+  readonly comparison: SharpnessComparison;
   readonly heatmap: string;
   readonly worstCrops: string;
+}
+
+/** 一个场景一个方案的截图比较；截图的文件名在画质那一遍里 */
+export interface SceneQuality {
+  readonly scene: string;
+  readonly variant: string;
+  /** 飞一圈回来 / 飞行前：引擎应该细化回原来的样子。飞行后没稳定、没拍时为 null */
+  readonly afterFlight: ShotPair | null;
+  /** 产品默认值稳定后 / 这个方案稳定后：只有缓存上限的各档有，低于 1 是默认值在那里更糊 */
+  readonly versusDefault: ShotPair | null;
 }
 
 export interface Environment {
@@ -122,6 +129,8 @@ export interface MeasureResults {
     readonly plannedTotal: number;
     /** 泼溅场景的模型从哪份清单读的；没有泼溅场景时不写 */
     readonly manifest?: string;
+    /** --at 的相机：场景都换成了它；没写时不写 */
+    readonly at?: BenchCamera;
   };
   readonly environment: Environment;
   readonly warnings: string[];

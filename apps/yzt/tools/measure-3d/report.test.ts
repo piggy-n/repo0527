@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { BenchStats, PhaseResult, SplatReadings } from './bench-api.ts';
+import type { BenchStats, PhaseResult, SceneSample, SplatReadings } from './bench-api.ts';
 import { renderManual, renderQualityPage, renderReport, splatFill } from './report.ts';
 import type { MeasureResults, QualityResult, RunResult, SceneQuality } from './results.ts';
 
@@ -30,8 +30,9 @@ const stats = (splats: SplatReadings | null, refused = 0): BenchStats => ({
   uploadPending: 0,
   uploadedMB: 0,
   locked: false,
+  detail: { sharp: 0, relaxed: 0, waiting: 0, finest: 0, additive: 0 },
   queues: { downloading: 0, parsing: 0, culled: 0, used: 0, usedOutOfView: 0 },
-  budget: { demandMB: 0, pendingMB: 0, culledMB: 0, raisedFull: 0, raisedPredicted: 0, cullWindow: null },
+  budget: { limitMB: 2048, demandMB: 0, pendingMB: 0, culledMB: 0, raisedFull: 0, raisedPredicted: 0, cullWindow: null },
   splats
 });
 
@@ -69,6 +70,7 @@ const phase = (work: readonly [number, number, number, number], longTasks: { rea
   }) as unknown as PhaseResult;
 
 const flight = (count: number, maxMs: number) => phase([5, 5, 5, 5], { count, maxMs });
+const LONG_TASKS = { count: 0, maxMs: 0, totalMs: 0, over100: 0, over200: 0, over500: 0, contextMs: 0, maxWithoutContextMs: 0 };
 const tilesetRun = (variant: string, refused = 0): RunResult => ({
   ...run(variant, SPLATS),
   id: `oblique-z19/${variant}/perf-1`,
@@ -83,10 +85,10 @@ const SHOTS: QualityResult = {
   hold: { seconds: 30, loaded: 0, unloaded: 0, blurEvents: [] }
 };
 
-const qualityRun = (shots: QualityResult = SHOTS): RunResult => ({
-  id: 'oblique-z19/maplibre/quality',
+const qualityRun = (shots: QualityResult = SHOTS, variant = 'maplibre'): RunResult => ({
+  id: `oblique-z19/${variant}/quality`,
   scene: 'oblique-z19',
-  variant: 'maplibre',
+  variant,
   kind: 'quality',
   repeat: 0,
   status: 'ok',
@@ -96,10 +98,67 @@ const qualityRun = (shots: QualityResult = SHOTS): RunResult => ({
 
 const COMPARED: SceneQuality = {
   scene: 'oblique-z19',
-  afterFlight: { cells: 120, medianRatio: 1.01, worstDecileRatio: 0.96, ratios: [1, null, 0.88, 1.02] },
-  heatmap: 'shots/oblique-z19-heatmap.png',
-  worstCrops: 'shots/oblique-z19-worst.png'
+  variant: 'maplibre',
+  afterFlight: {
+    comparison: { cells: 120, medianRatio: 1.01, worstDecileRatio: 0.96, ratios: [1, null, 0.88, 1.02] },
+    heatmap: 'shots/oblique-z19__maplibre-heatmap.png',
+    worstCrops: 'shots/oblique-z19__maplibre-worst.png'
+  },
+  versusDefault: null
 };
+
+// 缓存上限 6 GB 这一档：自己的截图，和默认值比的结果
+const TIER = 'maplibre-cache6g';
+const TIER_SHOTS: QualityResult = {
+  ...SHOTS,
+  shot: 'shots/oblique-z19__maplibre-cache6g__quality.png',
+  shotAfterFlight: 'shots/oblique-z19__maplibre-cache6g__quality-after-flight.png'
+};
+const TIER_COMPARED: SceneQuality = {
+  scene: 'oblique-z19',
+  variant: TIER,
+  afterFlight: null,
+  versusDefault: {
+    comparison: { cells: 100, medianRatio: 0.91, worstDecileRatio: 0.72, ratios: [0.9, 0.65, null] },
+    heatmap: 'shots/oblique-z19__maplibre-cache6g-versus-default-heatmap.png',
+    worstCrops: 'shots/oblique-z19__maplibre-cache6g-versus-default-worst.png'
+  }
+};
+const TIER_SCENE = { ...TILESET_SCENE, variants: ['maplibre', TIER] };
+
+// 某一刻累计放宽的帧（装满、估计）
+const budgetAt = (t: number, raisedFull: number, raisedPredicted: number): SceneSample => ({
+  ...sample(t, 0, 0),
+  budget: { ...stats(null).budget, raisedFull, raisedPredicted }
+});
+
+// 恢复后停在粗的一级：放宽了的、等着的瓦片，需求低于上限
+const coarse = (locked: boolean): RunResult => ({
+  ...tilesetRun('maplibre'),
+  atRecovered: {
+    ...stats(null),
+    locked,
+    detail: { sharp: 40, relaxed: 12, waiting: 3, finest: 1, additive: 0 },
+    budget: { ...stats(null).budget, limitMB: 2048, demandMB: 1400 }
+  }
+});
+
+// 飞行后的一份读数：只有放宽了的、等着的块数不同
+const sample = (t: number, relaxed: number, waiting: number): SceneSample => ({
+  t,
+  tiles: 0,
+  triangles: 0,
+  errorTarget: 8,
+  loading: 0,
+  uploadPending: 0,
+  cacheMB: 0,
+  loaded: 0,
+  locked: true,
+  detail: { sharp: 0, relaxed, waiting, finest: 0, additive: 0 },
+  queues: stats(null).queues,
+  budget: stats(null).budget,
+  splats: null
+});
 
 function results(runs: RunResult[], scenes: MeasureResults['scenes'] = [SPLAT_SCENE], quality: SceneQuality[] = []): MeasureResults {
   return {
@@ -137,7 +196,8 @@ function results(runs: RunResult[], scenes: MeasureResults['scenes'] = [SPLAT_SC
       { id: 'maplibre', label: 'MapLibre' },
       { id: 'maplibre-no-budget', label: 'MapLibre，不提前上传' },
       { id: 'maplibre-splat3m', label: 'MapLibre，泼溅预算 300 万' },
-      { id: 'maplibre-splat10m', label: 'MapLibre，泼溅预算 1,000 万' }
+      { id: 'maplibre-splat10m', label: 'MapLibre，泼溅预算 1,000 万' },
+      { id: TIER, label: 'MapLibre，缓存上限 6 GB' }
     ],
     runs,
     quality
@@ -220,6 +280,93 @@ describe('有瓦片集场景的报告', () => {
     expect(renderReport(results(tilesetRuns, [TILESET_SCENE]))).not.toContain('**飞一圈回来的清晰度');
   });
 
+  it('显示的瓦片按细不细分、需求对上限和锁定，各读各的字段；锁定按遍数', () => {
+    const report = renderReport(results([coarse(true), coarse(true), coarse(false)], [TILESET_SCENE]));
+    expect(report).toContain('| 恢复后：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块） | 40 / 12 / 3 / 1 |');
+    expect(report).toContain('| 恢复后：需求 / 缓存上限（MB），锁定 | 1,400 / 2,048，锁定 2 / 3 遍 |');
+  });
+
+  it('ADD 的瓦片不分，有的时候写在后面；加载到稳定放宽的原因单独一行', () => {
+    const additive: RunResult = {
+      ...tilesetRun('maplibre'),
+      atStable: {
+        ...stats(null),
+        detail: { sharp: 5, relaxed: 0, waiting: 0, finest: 0, additive: 7 },
+        budget: { ...stats(null).budget, raisedFull: 3, raisedPredicted: 11 }
+      }
+    };
+    const report = renderReport(results([additive], [TILESET_SCENE]));
+    expect(report).toContain('| 稳定时：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块） | 5 / 0 / 0 / 0（另有 ADD 的 7 块不分） |');
+    expect(report).toContain('| 加载到稳定：放宽的帧 装满 / 估计 | 3 / 11 |');
+  });
+
+  it('需求低于上限、锁着不再判成"锁在粗的一级"：放宽以后缓存在上限停止接收，看不出放不放得下；放宽的原因指到各段的那几行', () => {
+    // 带飞行后的轨迹，飞行后的表格和它的说明才会出来
+    const locked: RunResult = {
+      ...coarse(true),
+      settle: { stable: true, ms: 900, longTasks: LONG_TASKS, trace: [sample(0, 0, 30), sample(3500, 12, 0)] }
+    };
+    const report = renderReport(results([locked], [TILESET_SCENE]));
+    expect(report).toContain('**飞行后显示的瓦片（第一遍）：**');
+    expect(report).not.toContain('锁在了粗的一级');
+    expect(report).not.toContain('需求又低于上限');
+    // 放宽会一直带下去：要从加载到稳定看起；段与段之间的空档不在任何一行里
+    expect(report).toContain('第一遍飞行之后要从"加载到稳定"看起，加上"第一遍飞行""飞行后"');
+    expect(report).toContain('第二遍飞行之后再加"第二遍飞行""画面恢复"');
+    expect(report).toContain('段与段之间的空档不在任何一行里');
+    expect(report).toContain('细一级放不放得下看更大一档');
+  });
+
+  it('飞行后、画面恢复各一行放宽的原因：只数那一段新增的', () => {
+    const recovered: RunResult = {
+      ...tilesetRun('maplibre'),
+      settle: { stable: true, ms: 900, longTasks: LONG_TASKS, trace: [budgetAt(0, 2, 0), budgetAt(800, 2, 5)] },
+      recovery: { stable: true, ms: 700, longTasks: LONG_TASKS, trace: [budgetAt(0, 4, 5), budgetAt(600, 9, 8)] }
+    };
+    const report = renderReport(results([recovered], [TILESET_SCENE]));
+    expect(report).toContain('| 飞行后：窗口（秒，中位）/ 放宽的帧 装满 / 估计 | — / 0 / 5 |');
+    expect(report).toContain('| 画面恢复：窗口（秒，中位）/ 放宽的帧 装满 / 估计 | — / 5 / 3 |');
+  });
+
+  it('飞行后显示的瓦片：每个时刻放宽了的、等着的块数；有 ADD 的写在后面', () => {
+    const settled: RunResult = {
+      ...tilesetRun('maplibre'),
+      settle: { stable: true, ms: 900, longTasks: LONG_TASKS, trace: [sample(0, 0, 30), sample(400, 7, 2), sample(3500, 9, 0)] }
+    };
+    const report = renderReport(results([settled], [TILESET_SCENE]));
+    expect(report).toContain('**飞行后显示的瓦片（第一遍）：**');
+    // 0、0.25 秒还是第一份，0.5～3 秒是 0.4 秒那份，最后是 3.5 秒那份
+    expect(report).toContain('| MapLibre | 0 / 30 | 0 / 30 | 7 / 2 | 7 / 2 | 7 / 2 | 7 / 2 | 7 / 2 | 9 / 0 |');
+    const additive = { ...sample(0, 1, 2), detail: { sharp: 0, relaxed: 1, waiting: 2, finest: 0, additive: 4 } };
+    const withAdd: RunResult = { ...tilesetRun('maplibre'), settle: { stable: true, ms: 900, longTasks: LONG_TASKS, trace: [additive] } };
+    expect(renderReport(results([withAdd], [TILESET_SCENE]))).toContain('| MapLibre | 1 / 2，ADD 4 |');
+  });
+
+  it('缓存上限的一档：和产品默认值比的清晰度写进检查一节，人工检查多一项', () => {
+    const runs = [tilesetRun('maplibre'), tilesetRun(TIER), qualityRun(), qualityRun(TIER_SHOTS, TIER)];
+    const report = renderReport(results(runs, [TIER_SCENE], [COMPARED, TIER_COMPARED]));
+    expect(report).toContain('**飞一圈回来的清晰度（和飞行前比）：** 比了 120 格');
+    expect(report).toContain('**产品默认值和MapLibre，缓存上限 6 GB比（稳定后同一相机，低于 1 是默认值在那里更糊）：** 比了 100 格，中位数 0.91，最差 10% 0.72，最差一格 0.65');
+    expect(report).toContain('| 指标 | MapLibre | MapLibre，缓存上限 6 GB |');
+    expect(renderManual(results(runs, [TIER_SCENE]))).toContain('| 缓存上限的各档 |');
+    expect(renderManual(results([tilesetRun('maplibre'), qualityRun()], [TILESET_SCENE]))).not.toContain('缓存上限的各档');
+  });
+
+  it('有一边不正常时不比，报告里按状态写出两边：超时是没稳定，无效、失败另外说', () => {
+    const timedOut: RunResult = { ...qualityRun(), status: 'timeout' };
+    const runs = [tilesetRun('maplibre'), tilesetRun(TIER), timedOut, qualityRun(TIER_SHOTS, TIER)];
+    const report = renderReport(results(runs, [TIER_SCENE]));
+    expect(report).toContain('**飞一圈回来的清晰度（和飞行前比）：** 这一遍超时（等稳定超过了时限），截图不一定是稳定后的，没比');
+    expect(report).toContain('默认值那一遍超时（等稳定超过了时限），截图不一定是稳定后的；这一档正常。没比');
+    const invalid: RunResult = { ...qualityRun(TIER_SHOTS, TIER), status: 'invalid' };
+    const invalidReport = renderReport(results([tilesetRun('maplibre'), qualityRun(), invalid], [TIER_SCENE]));
+    expect(invalidReport).toContain('这一档无效（画面空白或模型没画出来');
+    expect(invalidReport).not.toContain('这一档超时');
+    // 失败的那一遍没有截图：没有画质的结果
+    const failed: RunResult = { id: 'oblique-z19/maplibre/quality', scene: 'oblique-z19', variant: 'maplibre', kind: 'quality', repeat: 0, status: 'failed', notes: [] };
+    expect(renderReport(results([failed, qualityRun(TIER_SHOTS, TIER)], [TIER_SCENE]))).toContain('默认值那一遍失败，可能没有截图；这一档正常。没比');
+  });
+
   it('两种场景一起跑：三维实测的报告，多一节泼溅', () => {
     const filled = run('maplibre-splat3m', SPLATS);
     const scenes = [TILESET_SCENE, SPLAT_SCENE];
@@ -252,8 +399,51 @@ describe('quality.html', () => {
     expect(page).toContain('比了 120 格，中位数 <b>1.01</b>，最差 10% <b>0.96</b>');
     expect(page).toContain(`src="${SHOTS.shot}"`);
     expect(page).toContain(`src="${SHOTS.shotAfterFlight}"`);
-    expect(page).toContain(`src="${COMPARED.heatmap}"`);
-    expect(page).toContain(`src="${COMPARED.worstCrops}"`);
+    expect(page).toContain(`src="${COMPARED.afterFlight?.heatmap}"`);
+    expect(page).toContain(`src="${COMPARED.afterFlight?.worstCrops}"`);
+    expect(page).not.toContain('和产品默认值比');
+  });
+
+  it('缓存上限的一档单独一节：产品默认值和这一档稳定后的截图并排，热力图画在默认值那张上', () => {
+    const page = renderQualityPage(
+      results([qualityRun(), qualityRun(TIER_SHOTS, TIER)], [TIER_SCENE], [COMPARED, TIER_COMPARED])
+    );
+    expect(page).toContain('<h2>倾斜摄影 z19</h2>');
+    expect(page).toContain('<h2>倾斜摄影 z19，MapLibre，缓存上限 6 GB</h2>');
+    const tier = page.slice(page.indexOf('缓存上限 6 GB</h2>'));
+    expect(tier).toContain('<h3>和产品默认值比（同一相机）</h3>');
+    expect(tier).toContain('比了 100 格，中位数 <b>0.91</b>，最差 10% <b>0.72</b>，低于 1 是默认值在那里更糊');
+    expect(tier).toContain(`src="${SHOTS.shot}"`);
+    expect(tier).toContain(`src="${TIER_SHOTS.shot}"`);
+    expect(tier).toContain(`src="${TIER_COMPARED.versusDefault?.heatmap}"`);
+    // 这一档飞行前后还没比
+    expect(tier).toContain('没有比较结果');
+  });
+
+  it('有一边不正常：按状态写出、不比，截图的说明不写"稳定后"', () => {
+    const page = renderQualityPage(results([qualityRun(), { ...qualityRun(TIER_SHOTS, TIER), status: 'timeout' }], [TIER_SCENE]));
+    const tier = page.slice(page.indexOf('缓存上限 6 GB</h2>'));
+    expect(tier).toContain('这一遍超时（等稳定超过了时限），截图不一定是稳定后的，不比较');
+    expect(tier).toContain('默认值那一遍正常；这一档超时（等稳定超过了时限），截图不一定是稳定后的。不比较');
+    expect(tier).toContain('<figcaption>这一档，不一定稳定（超时）</figcaption>');
+    expect(tier).toContain('<figcaption>产品默认值，稳定后</figcaption>');
+    // 无效的不说超时、不说没稳定
+    const invalidPage = renderQualityPage(results([qualityRun(), { ...qualityRun(TIER_SHOTS, TIER), status: 'invalid' }], [TIER_SCENE]));
+    const invalidTier = invalidPage.slice(invalidPage.indexOf('缓存上限 6 GB</h2>'));
+    expect(invalidTier).toContain('<figcaption>这一档，无效</figcaption>');
+    expect(invalidTier).toContain('这一遍无效（画面空白或模型没画出来');
+    expect(invalidTier).not.toContain('等稳定超过了时限');
+    expect(invalidTier).not.toContain('不一定稳定');
+    // 默认值那一遍失败、没有截图：只放这一档的
+    const failed: RunResult = { id: 'oblique-z19/maplibre/quality', scene: 'oblique-z19', variant: 'maplibre', kind: 'quality', repeat: 0, status: 'failed', notes: [] };
+    const failedPage = renderQualityPage(results([failed, qualityRun(TIER_SHOTS, TIER)], [TIER_SCENE]));
+    expect(failedPage).toContain('默认值那一遍失败，可能没有截图；这一档正常。不比较');
+    expect(failedPage).not.toContain('<figcaption>产品默认值');
+    // 默认值那一节自己也留一行说明；只有它、它又失败了，不能显示成"还没有结果"
+    expect(failedPage).toContain('<h2>倾斜摄影 z19</h2>\n<p>画质这一遍失败，没有截图，原因见 report.md');
+    const onlyFailed = renderQualityPage(results([failed], [TILESET_SCENE]));
+    expect(onlyFailed).not.toContain('还没有结果');
+    expect(onlyFailed).toContain('画质这一遍失败');
   });
 
   it('还没比较时先放截图', () => {
