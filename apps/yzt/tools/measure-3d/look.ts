@@ -1,7 +1,7 @@
 import type { Page } from 'playwright';
 import type { BenchCamera } from './bench-api.ts';
 import { launchBrowser } from './browser.ts';
-import { syncStep } from './look-sync.ts';
+import { ignoreBusy, segmentMs, syncStep } from './look-sync.ts';
 import { pageUrl, type RunContext } from './run.ts';
 import type { Scene, Variant } from './scenes.ts';
 
@@ -9,19 +9,26 @@ import type { Scene, Variant } from './scenes.ts';
 // 页面就是测量页，读数在页面左上角（page/look.ts）
 
 const SYNC_EVERY_MS = 150;
+// 跟随的一段走完以后再等这么久才算停下：最后一次在路上读到的相机和终点不同，不留余量会被当成用户动了它
+const FOLLOW_SLACK_MS = 2 * SYNC_EVERY_MS;
 // 封顶 60 帧：几个窗口一起不封顶时互相抢显卡，和用户平时看到的也不一样
 const LOOK_FPS = 60;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// 浏览器里的代码用字符串调用：这边的 tsconfig 没有 DOM
+// 浏览器里的代码用字符串调用：这边的 tsconfig 没有 DOM。相机还没到场景的位置时（等模型就绪后那一跳）当作没就绪
 const readCamera = (page: Page): Promise<BenchCamera | null> =>
   page.isClosed()
     ? Promise.resolve(null)
-    : page.evaluate<BenchCamera | null>('window.benchReady === true ? window.bench.camera() : null').catch(() => null);
+    : page
+        .evaluate<BenchCamera | null>('window.benchReady === true && window.bench.placed() ? window.bench.camera() : null')
+        .catch(() => null);
 
-const setCamera = (page: Page, camera: BenchCamera) =>
-  page.isClosed() ? Promise.resolve() : page.evaluate(`window.bench.setCamera(${JSON.stringify(camera)})`).catch(() => undefined);
+// 跟随的窗口一帧一帧地走过去（page/look.ts 的 createFollower），不瞬移
+const follow = (page: Page, camera: BenchCamera, ms: number) =>
+  page.isClosed()
+    ? Promise.resolve()
+    : page.evaluate(`window.bench.followTo(${JSON.stringify(camera)}, ${Math.round(ms)})`).catch(() => undefined);
 
 // 窗口并排：第 index 个放在左数第 index 个位置，屏幕放不下时用户自己挪
 async function placeWindow(page: Page, index: number, { width, height }: { width: number; height: number }): Promise<void> {
@@ -63,21 +70,30 @@ export async function runLook(scene: Scene, list: readonly Variant[], ctx: LookC
     console.log('拖动、右键转动、滚轮缩放任意一个窗口，其余的跟着它。关掉所有窗口或按 Ctrl+C 结束。');
     let known: (BenchCamera | null)[] = pages.map(() => null);
     let last: BenchCamera | null = null;
+    let syncedAt = Date.now();
+    // 跟随的窗口在这之前还在自己走：读到的变化是它自己在走，不算用户动了它
+    const busyUntil = pages.map(() => 0);
     while (!ctx.stopping() && pages.some(page => !page.isClosed())) {
       // oxlint-disable-next-line no-await-in-loop -- 一轮一轮地同步
       const current = await Promise.all(pages.map(readCamera));
-      const { target, followers } = syncStep(current, known, last);
+      const now = Date.now();
+      const { target, followers } = syncStep(current, ignoreBusy(known, current, busyUntil.map(until => until > now)), last);
       if (target) {
+        const ms = segmentMs(now - syncedAt);
+        for (const index of followers) {
+          busyUntil[index] = now + ms + FOLLOW_SLACK_MS;
+        }
         // oxlint-disable-next-line no-await-in-loop -- 同上
         await Promise.all(
           followers
             .map(index => pages[index])
             .filter(page => page !== undefined)
-            .map(page => setCamera(page, target))
+            .map(page => follow(page, target, ms))
         );
         last = target;
       }
-      known = current.map((camera, index) => (target && followers.includes(index) ? target : camera));
+      syncedAt = now;
+      known = current;
       // oxlint-disable-next-line no-await-in-loop -- 同上
       await sleep(SYNC_EVERY_MS);
     }

@@ -5,7 +5,7 @@ import type { RunResult } from './results.ts';
 import { allPassed, fillSampleAt, machineDrift, median, sceneChecks } from './verdict.ts';
 
 const QUEUES = { downloading: 0, parsing: 0, culled: 0, used: 30, usedOutOfView: 0 };
-const DETAIL = { sharp: 30, relaxed: 0, waiting: 0, finest: 0 };
+const DETAIL = { sharp: 30, relaxed: 0, waiting: 0, finest: 0, additive: 0 };
 const BUDGET = { limitMB: 2048, demandMB: 600, pendingMB: 0, culledMB: 0, raisedFull: 0, raisedPredicted: 0, cullWindow: 0.5 };
 
 const STATS: BenchStats = {
@@ -180,6 +180,11 @@ describe('machineDrift', () => {
   it('泼溅的预算不同，画的就不同：每个预算各算一组', () => {
     expect(machineDrift([staticJs('maplibre-splat3m', 2), staticJs('maplibre-splat10m', 8)])).toBeNull();
     expect(machineDrift([staticJs('maplibre-splat3m', 2), staticJs('maplibre-splat3m', 2.4), staticJs('maplibre-splat10m', 8)])).toBeCloseTo(1.2);
+  });
+
+  it('缓存上限不同，静止时画的就不同（大的放宽得少）：每一档各算一组，不和默认值比', () => {
+    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-cache6g', 4)])).toBeNull();
+    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-cache6g', 4), staticJs('maplibre-cache6g', 4.4)])).toBeCloseTo(1.1);
   });
 
   it('取最不稳定的一组', () => {

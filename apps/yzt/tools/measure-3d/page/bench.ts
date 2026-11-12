@@ -3,7 +3,7 @@ import { probe } from './probe.ts';
 import { type CameraState, MapSession, type MapView, type SplatLayer, type StyleGroup, type TilesetLayer } from '@mx/map-core';
 import type { BenchCamera, BenchStats } from '../bench-api.ts';
 import { GRID_COLS, GRID_ROWS, type SharpnessGrid, sharpnessGrid } from '../sharpness.ts';
-import { showReadout } from './look.ts';
+import { createFollower, showReadout } from './look.ts';
 import { decodeShot } from './shots.ts';
 
 // 测量页：只有底图和模型，没有面板、定时器和业务图层，不让页面自己的工作混进测量。
@@ -56,6 +56,10 @@ export interface BenchApi {
   stats(): BenchStats;
   /** 当前相机（模型的建议相机可能换过中心） */
   camera(): CameraState;
+  /** 相机到了场景的位置（没写中心时要等模型就绪后那一跳） */
+  placed(): boolean;
+  /** --look 的跟随窗口：ms 毫秒内一帧一帧地走到这个相机 */
+  followTo(camera: BenchCamera, ms: number): void;
   /** 算一张截图按格的清晰度 */
   sharpnessOf(base64: string): Promise<SharpnessGrid>;
 }
@@ -152,17 +156,23 @@ const keepDrawing = () => {
 
 const setCamera = (camera: BenchCamera) => view.flyTo({ ...camera, center: [camera.center[0], camera.center[1]] }, { duration: 0 });
 
-// 模型只在服务器上、不知道坐标时（center 没写）：就绪后用模型建议相机的落点（模型在空中时不在它正下方）
+// 相机到了场景的位置：写了中心时一开始就是。没写时（模型只在服务器上、不知道坐标）就绪后跳到模型建议相机的落点
+// （模型在空中时不在它正下方），跳完的下一帧才算：--look 在这之前不同步这个窗口，这一跳不算用户动的
+let placed = centerText !== null;
+let jumped = false;
 if (!centerText) {
-  let placed = false;
   view.onSceneStatusChange?.(status => {
-    if (placed) {
+    if (jumped) {
       return;
     }
     for (const item of status.values()) {
       if (item.state === 'ready') {
-        placed = true;
+        jumped = true;
         setCamera({ ...initialCamera, center: item.camera.center });
+        window.requestAnimationFrame(() => {
+          placed = true;
+        });
+        handle.requestFrame();
         break;
       }
     }
@@ -193,6 +203,8 @@ window.bench = {
   renders: () => handle.frames(),
   stats: () => handle.stats(),
   camera: () => session.camera.current,
+  placed: () => placed,
+  followTo: createFollower(() => session.camera.current, setCamera),
   sharpnessOf: async base64 => sharpnessGrid(await decodeShot(base64), GRID_COLS, GRID_ROWS)
 };
 // --look：不测量，人在窗口里看，左上角显示读数

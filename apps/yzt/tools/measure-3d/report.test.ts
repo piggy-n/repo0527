@@ -30,7 +30,7 @@ const stats = (splats: SplatReadings | null, refused = 0): BenchStats => ({
   uploadPending: 0,
   uploadedMB: 0,
   locked: false,
-  detail: { sharp: 0, relaxed: 0, waiting: 0, finest: 0 },
+  detail: { sharp: 0, relaxed: 0, waiting: 0, finest: 0, additive: 0 },
   queues: { downloading: 0, parsing: 0, culled: 0, used: 0, usedOutOfView: 0 },
   budget: { limitMB: 2048, demandMB: 0, pendingMB: 0, culledMB: 0, raisedFull: 0, raisedPredicted: 0, cullWindow: null },
   splats
@@ -132,7 +132,7 @@ const coarse = (locked: boolean): RunResult => ({
   atRecovered: {
     ...stats(null),
     locked,
-    detail: { sharp: 40, relaxed: 12, waiting: 3, finest: 1 },
+    detail: { sharp: 40, relaxed: 12, waiting: 3, finest: 1, additive: 0 },
     budget: { ...stats(null).budget, limitMB: 2048, demandMB: 1400 }
   }
 });
@@ -148,7 +148,7 @@ const sample = (t: number, relaxed: number, waiting: number): SceneSample => ({
   cacheMB: 0,
   loaded: 0,
   locked: true,
-  detail: { sharp: 0, relaxed, waiting, finest: 0 },
+  detail: { sharp: 0, relaxed, waiting, finest: 0, additive: 0 },
   queues: stats(null).queues,
   budget: stats(null).budget,
   splats: null
@@ -280,6 +280,24 @@ describe('有瓦片集场景的报告', () => {
     expect(report).toContain('| 恢复后：需求 / 缓存上限（MB），锁定 | 1,400 / 2,048，锁定 2 / 3 遍 |');
   });
 
+  it('ADD 的瓦片不分，有的时候写在后面；加载到稳定放宽的原因单独一行', () => {
+    const additive: RunResult = {
+      ...tilesetRun('maplibre'),
+      atStable: {
+        ...stats(null),
+        detail: { sharp: 5, relaxed: 0, waiting: 0, finest: 0, additive: 7 },
+        budget: { ...stats(null).budget, raisedFull: 3, raisedPredicted: 11 }
+      }
+    };
+    const report = renderReport(results([additive], [TILESET_SCENE]));
+    expect(report).toContain('| 稳定时：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块） | 5 / 0 / 0 / 0（另有 ADD 的 7 块不分） |');
+    expect(report).toContain('| 加载到稳定：放宽的帧 装满 / 估计 | 3 / 11 |');
+  });
+
+  it('需求低于上限、锁着不再判成"锁在粗的一级"：放宽以后缓存在上限停止接收，看不出放不放得下', () => {
+    expect(renderReport(results([coarse(true)], [TILESET_SCENE]))).not.toContain('锁在了粗的一级');
+  });
+
   it('飞行后显示的瓦片：每个时刻放宽了的、等着的块数', () => {
     const settled: RunResult = {
       ...tilesetRun('maplibre'),
@@ -299,6 +317,14 @@ describe('有瓦片集场景的报告', () => {
     expect(report).toContain('| 指标 | MapLibre | MapLibre，缓存上限 6 GB |');
     expect(renderManual(results(runs, [TIER_SCENE]))).toContain('| 缓存上限的各档 |');
     expect(renderManual(results([tilesetRun('maplibre'), qualityRun()], [TILESET_SCENE]))).not.toContain('缓存上限的各档');
+  });
+
+  it('有一边没稳定时不比，报告里写出两边的状态', () => {
+    const timedOut: RunResult = { ...qualityRun(), status: 'timeout' };
+    const runs = [tilesetRun('maplibre'), tilesetRun(TIER), timedOut, qualityRun(TIER_SHOTS, TIER)];
+    const report = renderReport(results(runs, [TIER_SCENE]));
+    expect(report).toContain('**飞一圈回来的清晰度（和飞行前比）：** 这一遍⚠ 超时，截图不是稳定后的，没比');
+    expect(report).toContain('默认值那一遍⚠ 超时、这一档正常，有一边没稳定，没比');
   });
 
   it('两种场景一起跑：三维实测的报告，多一节泼溅', () => {
@@ -352,6 +378,15 @@ describe('quality.html', () => {
     expect(tier).toContain(`src="${TIER_COMPARED.versusDefault?.heatmap}"`);
     // 这一档飞行前后还没比
     expect(tier).toContain('没有比较结果');
+  });
+
+  it('有一边没稳定：写出状态、不比，截图的说明不写"稳定后"', () => {
+    const page = renderQualityPage(results([qualityRun(), { ...qualityRun(TIER_SHOTS, TIER), status: 'timeout' }], [TIER_SCENE]));
+    const tier = page.slice(page.indexOf('缓存上限 6 GB</h2>'));
+    expect(tier).toContain('这一遍⚠ 超时，截图不是稳定后的，不比较');
+    expect(tier).toContain('默认值那一遍正常、这一档⚠ 超时：有一边没稳定，不比较');
+    expect(tier).toContain('<figcaption>这一档，没稳定（⚠ 超时）</figcaption>');
+    expect(tier).toContain('<figcaption>产品默认值，稳定后</figcaption>');
   });
 
   it('还没比较时先放截图', () => {

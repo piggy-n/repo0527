@@ -86,17 +86,20 @@ export interface TilesetDemand {
 
 /**
  * 这一帧显示的瓦片按细不细分（块数）：屏幕误差和清单的上限比，不算放宽的倍数。
- * 停下后 relaxed、waiting 都是 0 才是按规则整级清楚；finest 是数据里没有更细的了
+ * 停下后 relaxed、waiting 都是 0 才是按规则整级清楚；finest 是数据里没有更细的了。
+ * 只分 REPLACE 的瓦片：ADD 的和子节点一起显示，显示它不等于在等子节点，单独计数
  */
 export interface DisplayedDetail {
   /** 屏幕误差不超过上限 */
   readonly sharp: number;
   /** 超过上限、不超过放宽后的上限：放宽了才停在这一级 */
   readonly relaxed: number;
-  /** 超过放宽后的上限：要更细的一级，还没到（在下载、没请求、被拒绝） */
+  /** 超过放宽后的上限：要更细的一级，还没到（在下载、没请求、被拒绝），这一块先顶着 */
   readonly waiting: number;
   /** 超过上限、没有子节点 */
   readonly finest: number;
+  /** ADD 的瓦片，不分 */
+  readonly additive: number;
 }
 
 /** 一个瓦片集的读数 */
@@ -611,7 +614,7 @@ export class TilesetEntry implements Disposable {
 
   // 只在读数时算，不在每帧里：屏幕误差是库最近一次更新时算的，和那时的上限比
   #displayedDetail(): DisplayedDetail {
-    const detail = { sharp: 0, relaxed: 0, waiting: 0, finest: 0 };
+    const detail = { sharp: 0, relaxed: 0, waiting: 0, finest: 0, additive: 0 };
     if (!this.#drawn) {
       return detail;
     }
@@ -620,11 +623,10 @@ export class TilesetEntry implements Disposable {
     const errorTarget = this.#selectedWith;
     for (const tile of visibleTiles) {
       const { error } = tile.traversal;
-      // ADD 的节点和子节点一起显示：子节点显示着时这里已经有更细的
-      if (tile.refine === 'ADD' && tile.children.some(child => visibleTiles.has(child))) {
-        continue;
-      }
-      if (error <= base) {
+      // ADD 的不管细不细都显示，子节点在视野外、被优化跳过时也什么都不等：看不出是不是在等
+      if (tile.refine === 'ADD') {
+        detail.additive++;
+      } else if (error <= base) {
         detail.sharp++;
       } else if (tile.children.length === 0) {
         detail.finest++;

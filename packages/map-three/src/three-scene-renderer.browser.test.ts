@@ -239,6 +239,12 @@ describe('ThreeSceneRenderer 在 MapLibre 的自写层里', { timeout: TEST_TIME
   });
 
   // 垂直俯视时 MapLibre 的远裁剪面只比地面低 1%（这块画布 z18 不到 2 米），不能把地下的模型裁掉
+  it('ADD 的瓦片（立方体沿用根节点的 ADD）不按细不细分，单独计数', async () => {
+    const ctx = await setup({ center: MODEL_AT, zoom: 17, bearing: 30, pitch: 50 });
+    await addBox(ctx, 40);
+    expect(ctx.renderer.inspect().tilesets.box?.detail).toEqual({ sharp: 0, relaxed: 0, waiting: 0, finest: 0, additive: 1 });
+  });
+
   it('垂直俯视时，地面以下的模型照样画出、拾取得到', async () => {
     const ctx = await setup({ center: MODEL_AT, zoom: 18, bearing: 0, pitch: 0 });
     const glb = await boxGlb(5);

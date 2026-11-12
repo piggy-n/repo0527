@@ -33,6 +33,8 @@ export interface DetailReadings {
   readonly waiting: number;
   /** 数据里没有更细的了 */
   readonly finest: number;
+  /** ADD 的瓦片：和子节点一起显示，不分 */
+  readonly additive: number;
 }
 
 /** 放宽屏幕误差的依据和动着不请求的窗口 */

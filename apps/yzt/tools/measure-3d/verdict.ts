@@ -61,6 +61,9 @@ export function fillSampleAt(trace: readonly SceneSample[], t: number): SceneSam
   return trace.findLast(sample => sample.t <= t) ?? trace[0] ?? null;
 }
 
+// 静止时画的和产品默认值不同的方案：泼溅的预算、缓存上限（scenes.ts 的方案 id）
+const OWN_WORKLOAD = /^maplibre-(splat|cache)/;
+
 /**
  * 同一个场景的静止画面，每帧 JS 最多差几倍：工作量相同，差得多说明运行期间机器被别的事占着，
  * 这次的帧时间要打折扣。算不出来时是 null
@@ -70,8 +73,8 @@ export function machineDrift(runs: readonly RunResult[]): number | null {
   for (const run of runs) {
     const js = run.kind === 'perf' ? run.static?.js?.p50 : undefined;
     if (js) {
-      // 各个对照方案静止时画的一样；泼溅的预算不同，画的就不同，各算各的
-      const workload = run.variant.startsWith('maplibre-splat') ? run.variant : DEFAULT_VARIANT;
+      // 上传预算、窗口不同的方案静止时画的一样；泼溅的预算、缓存上限不同，画的就不同（缓存大了放宽得少），各算各的
+      const workload = OWN_WORKLOAD.test(run.variant) ? run.variant : DEFAULT_VARIANT;
       const key = `${run.scene}/${workload}`;
       groups.set(key, (groups.get(key) ?? []).concat(js));
     }

@@ -100,7 +100,8 @@ export async function startMapLibre({ session, container, params, splatCount, on
           sharp: sum(item => item.detail.sharp),
           relaxed: sum(item => item.detail.relaxed),
           waiting: sum(item => item.detail.waiting),
-          finest: sum(item => item.detail.finest)
+          finest: sum(item => item.detail.finest),
+          additive: sum(item => item.detail.additive)
         },
         queues: {
           downloading: sum(item => item.downloading),

@@ -78,6 +78,12 @@ if (options.list) {
 if (scenes.length === 0) {
   fail([`--only ${options.only.join(',')} 没有选中任何场景，用 --list 看全部场景。`]);
 }
+// 换成同一个相机，几个场景就是跑几遍一样的
+if (at && scenes.length > 1) {
+  fail([
+    `--at 只能配一个场景，--only 选中了 ${scenes.length} 个（${scenes.map(scene => scene.id).join('、')}）。用 --only 写出一个场景，如 --only jkq-z16-tilt。`
+  ]);
+}
 
 // ---------- 启动前检查 ----------
 
@@ -230,17 +236,19 @@ interface PageComparison extends SharpnessComparison {
 }
 
 // 画质那一遍的截图，每个场景每个方案比两种：飞一圈回来和飞行前（同一相机，引擎应该细化回原来的样子，飞行后没稳定、没拍的不比）；
-// 缓存上限的各档再拿产品默认值稳定后的那张和自己的比（同一相机）
+// 缓存上限的各档再拿产品默认值稳定后的那张和自己的比（同一相机）。只比状态正常的遍：超时、无效时截图不是稳定后的
 async function compareScenes(results: MeasureResults, outDir: string, baseUrl: string): Promise<void> {
-  const qualityOf = (scene: string, variant: string) =>
-    results.runs.find(run => run.scene === scene && run.variant === variant && run.kind === 'quality')?.quality;
+  const settledShots = (scene: string, variant: string) => {
+    const run = results.runs.find(item => item.scene === scene && item.variant === variant && item.kind === 'quality');
+    return run?.status === 'ok' ? run.quality : undefined;
+  };
   const entries = results.scenes.flatMap(scene =>
     (scene.variants ?? []).flatMap(variant => {
-      const own = qualityOf(scene.id, variant);
+      const own = settledShots(scene.id, variant);
       if (!own) {
         return [];
       }
-      const fallback = variant === DEFAULT_VARIANT ? undefined : qualityOf(scene.id, DEFAULT_VARIANT);
+      const fallback = variant === DEFAULT_VARIANT ? undefined : settledShots(scene.id, DEFAULT_VARIANT);
       return [{ scene: scene.id, variant, own, fallback }];
     })
   );
@@ -267,9 +275,10 @@ async function compareScenes(results: MeasureResults, outDir: string, baseUrl: s
       const after = own.shotAfterFlight;
       // oxlint-disable-next-line no-await-in-loop -- 一对一对地比
       const afterFlight = after ? await compare(name, after, own.shot, own.shotWithoutModel) : null;
+      // 找模型所在格子的遮罩由参照的那张和它同一次加载的无模型截图算：两次加载的底图不一定一样齐
       const versusDefault = fallback
         ? // oxlint-disable-next-line no-await-in-loop -- 一对一对地比
-          await compare(`${name}-versus-default`, fallback.shot, own.shot, fallback.shotWithoutModel)
+          await compare(`${name}-versus-default`, fallback.shot, own.shot, own.shotWithoutModel)
         : null;
       if (afterFlight || versusDefault) {
         const entry: SceneQuality = { scene, variant, afterFlight, versusDefault };
