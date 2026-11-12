@@ -6,7 +6,7 @@ import type { BenchCamera } from './bench-api.ts';
 const METERS_PER_PIXEL_AT_ZOOM_0 = 78271.516964;
 
 export interface SceneModel {
-  /** 相对 /3dt/ 的索引地址 */
+  /** 相对 /3dt/ 的索引地址，中文照写：本机按它找文件，请求时由 URL 编码 */
   readonly path: string;
 }
 
@@ -49,16 +49,17 @@ export interface Run {
   readonly repeat: number;
 }
 
-const OBLIQUE: SceneModel = { path: 'XZ_GC_3DT/tileset.json' };
-const STATION: SceneModel = { path: 'SZ_3DT/tileset.json' };
-const WHITE: SceneModel = { path: 'SZ_WhiteModel/plain/tileset.json' };
-const JKQ: SceneModel = { path: 'JKQ/tileset.json' };
-const JKQ2: SceneModel = { path: 'JKQ2/tileset.json' };
+// 目录的层级同清单（docs/config/3dt-manifest.md）；经开区2 不在清单里了，数据还在服务器上
+const OBLIQUE: SceneModel = { path: 'xuzhou/3dtiles/彭城广场/tileset.json' };
+const STATION: SceneModel = { path: 'suzhou/3dtiles/星海广场站/tileset.json' };
+const WHITE: SceneModel = { path: 'suzhou/3dtiles/星海广场站周边建筑白模/plain/tileset.json' };
+const JKQ: SceneModel = { path: 'wuxi/3dtiles/经开区/tileset.json' };
+const JKQ2: SceneModel = { path: 'wuxi/3dtiles/经开区2/tileset.json' };
 const OBLIQUE_CENTER = [117.1807, 34.2657] as const;
 const STATION_CENTER = [120.6660669, 31.317559] as const;
 
-// 高斯泼溅（ADR 0149 L.3）的清单 ID：彭城广场的 LCC2 样例（1.66 亿个高斯）不入库，写在本地清单里，
-// 楚王山1号（2334 万个）在入库的清单里。样例和 XZ 是同一处，相机也用 XZ 的中心
+// 高斯泼溅（ADR 0149 L.3）的清单 ID，都在入库的清单里：彭城广场（泼溅）就是 L.2、L.3 用的样例（1.66 亿个高斯），
+// 楚王山1号 2334 万个。样例和 XZ 是同一处，相机也用 XZ 的中心
 export const PENGCHENG_SPLAT = 'xz-pc-lcc2';
 export const CHUWANGSHAN_SPLAT = 'xz-cws1';
 
@@ -188,7 +189,7 @@ export function aerialFlight({ center, zoom, pitch, bearing }: BenchCamera, view
   ];
 }
 
-/** 按子串选场景；没写时选默认的场景。泼溅场景要写出 splat 才选得中：--only z19 不能带上要本地清单的场景 */
+/** 按子串选场景；没写时选默认的场景。泼溅场景要写出 splat 才选得中：--only z19 不带上比预算的泼溅场景 */
 export function selectScenes(only: readonly string[]): Scene[] {
   if (only.length === 0) {
     return SCENES.filter(scene => scene.byDefault);

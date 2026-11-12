@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { z } from 'zod';
 
-// 泼溅场景的模型从清单读（ADR 0149 L.3），和开发服务器同一个来源：彭城广场的 LCC2 样例只写在本地清单里，不入库。
+// 泼溅场景的模型从清单读（ADR 0149 L.3），和开发服务器同一个来源：本地清单在时用它（临时加不入库的模型）。
 // 清单的完整校验在 features/scene-models/api.ts（依赖应用的别名，Node 里导入不了），这里只校验要用的字段
 
 const placementSchema = z.object({ lng: z.number(), lat: z.number(), height: z.number(), heading: z.number() });

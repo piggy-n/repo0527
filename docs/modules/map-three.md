@@ -168,14 +168,14 @@ MapLibre 里叠放只由图层顺序决定（6.12 源码）：第一个三维层
 **在显卡机器上运行**（这台开发机只有软件 WebGL，帧时间、GPU、显存的数字都不算数）：
 
 1. 确认用的是独显：双显卡的机器到 Windows 设置 → 系统 → 显示 → 图形，把 Chrome 或 Edge 设为"高性能"。关掉其他占显卡的程序，插上电源，运行期间不要用这台机器。
-2. 模型放在仓库根的 `local/3dt`（要有 `XZ_GC_3DT`），或者设 `YZT_LOCAL_DIR` 指向包含 `3dt` 的目录。
+2. 模型按服务器上的层级放在仓库根的 `local/3dt`（要有 `xuzhou/3dtiles/彭城广场`，[3dt-manifest.md](../config/3dt-manifest.md)"目录层级"），或者设 `YZT_LOCAL_DIR` 指向包含 `3dt` 的目录。
 3. 运行 `pnpm --filter yzt measure:3d`。屏幕上会轮流弹出浏览器窗口，不要关、不要最小化。结果写到 `local/measure-3d/<时间>/`。
 4. 打开结果目录的 `quality.html` 看图，把结论写进 `manual.md`。
 5. 把整个结果目录带回来。
 
 只跑部分场景用 `--only z19`；比较上传预算用 `--upload-mb off,16,64`；全部参数见 `--help`。
 
-**经开区（JKQ、JKQ2，不在默认的场景里）：** 单个模型 20 GB 以上，只放在服务器上，不用拷到本地。设了 `YZT_3DT_PROXY` 后工具把 `/3dt/` 转到服务器，只取看到的瓦片；启动时先查一次，地址不对就停下。
+**经开区（JKQ、JKQ2，不在默认的场景里）：** 单个模型 20 GB 以上，只放在服务器上（`wuxi/3dtiles/经开区/`、`经开区2/`；经开区2 2026-11-11 移出了清单，场景还在），不用拷到本地。设了 `YZT_3DT_PROXY` 后工具把 `/3dt/` 转到服务器，只取看到的瓦片；启动时先查一次，地址不对就停下。
 
 ```powershell
 $env:YZT_3DT_PROXY = 'http://<服务器地址>:<nginx 提供 /3dt/ 的端口>'
@@ -444,17 +444,11 @@ MapLibre 丢失上下文时销毁样式和自定义层，恢复后重新加载�
   - "稳定"是每份泼溅都读到了索引、当前视角要的细节都到了（库的 `loadProgress` 为 1）、没有在加载的分块；瓦片集照旧。测量页的服务支持 Range（库先要 `bytes=0-4095`），和 nginx 的要求一样。
 - **开发页 `/dev/splat-watch`**（开发服务器，人看）：渲染器就是产品的，只换总预算（换预算会重建地图）。左边每半秒更新显卡、帧率、可见的高斯、加载进度、库估计的内存、GL 监听的错误数和库在回调外的调用；"复制结果"把这些和当前设置拼成一段文字。可以选同一处的倾斜摄影作对照，在"只看泼溅""只看对照""一起（裁掉）"之间切换，比亮处偏不偏白；背景深浅两档。GL 监听开着时帧率不算数，看手感前关掉。
 
-**彭城广场的样例写进本地清单**（不入库）：样例放在 `local/3dt/LCC2/render2/`（2.3 GB，`.lcc2` 索引和 `data/`、`info/`），在仓库根运行，复制入库的清单再加一项，`placement` 是 L.2 配准工具的结果（`docs/config/3dt-manifest.md`）：
-
-```powershell
-node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('apps/yzt/public/3dt/manifest.json','utf8'));const f=fs.readdirSync('local/3dt/LCC2/render2').find(n=>n.endsWith('.lcc2'));m.models.push({id:'xz-pc-lcc2',name:'\u5f6d\u57ce\u5e7f\u573a LCC2 \u6837\u4f8b',cityCode:'320300',kind:'splat',underground:false,lcc2:'LCC2/render2/'+encodeURIComponent(f),placement:{lng:117.1805333,lat:34.2664031,height:59.45,heading:-0.102}});fs.writeFileSync('local/3dt/manifest.json',JSON.stringify(m,null,2)+'\n')"
-```
-
-本地清单会盖住入库的那份（`docs/config/local-files.md`），测完删掉；入库的清单改了以后要重新生成。ID `xz-pc-lcc2` 是测量工具认的。
+**彭城广场的样例**（2.3 GB）2026-11-11 进了入库的清单，就是"彭城广场（泼溅）"（ID `xz-pc-lcc2`，测量工具认这个 ID），数据在 `xuzhou/lcc2/城下城（测试）/`（[3dt-manifest.md](../config/3dt-manifest.md)）。L.3 时它只在本地清单里（样例放在 `local/3dt/LCC2/render2/`，复制入库的清单再加一项），现在不用再生成本地清单；以前生成的 `local/3dt/manifest.json` 要删掉，它会盖住入库的那份。
 
 **在显卡机器上：**
 
-1. 同"性能验收"的第 1、2 步：独显、插电、关掉别的程序；模型在 `local/3dt`（要有 `XZ_GC_3DT`、`楚王山1号`、`LCC2/render2`），按上面生成本地清单。
+1. 同"性能验收"的第 1、2 步：独显、插电、关掉别的程序；模型按服务器上的层级放在 `local/3dt`（要有 `xuzhou/3dtiles/彭城广场`、`xuzhou/lcc2/楚王山1号`、`xuzhou/lcc2/城下城（测试）`），或者用 `YZT_3DT_PROXY` 从服务器取。
 2. 自动测量（约 40 分钟，期间不要用这台机器）：`pnpm --filter yzt measure:3d --only splat-pc --repeat 2`；楚王山1号另跑 `--only splat-cws1 --repeat 2`。结果写到 `local/measure-3d/<时间>/`。
 3. 开发页：`pnpm --filter yzt dev`，Chrome 打开 `/dev/splat-watch`，按页面左上"怎么用"看一遍，把每个预算的"复制结果"和感受填进结果目录的 `manual.md`。
 4. 把整个结果目录带回来。

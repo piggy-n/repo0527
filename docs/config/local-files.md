@@ -8,7 +8,7 @@
 
 | 目录 | 内容 | 谁用 |
 |---|---|---|
-| `local/3dt/` | 三维模型数据（`SZ_3DT/` 等，约 1.5 GB；LCC2 的楚王山1号 299 MB，层级见 [3dt-manifest.md](3dt-manifest.md)），不含清单 | 开发服务器映射到 `/3dt/*`；线上由 nginx 提供（[deployment.md](../deployment.md)） |
+| `local/3dt/` | 三维模型数据，层级和服务器上相同：`<市>/3dtiles/<模型名>/`、`<市>/lcc2/<目录>/`（[3dt-manifest.md](3dt-manifest.md)"目录层级"），不含清单 | 开发服务器映射到 `/3dt/*`；线上由 nginx 提供（[deployment.md](../deployment.md)） |
 | `local/design/` | 可以打开的交互原型，每个主题只留最新版 | 开发服务器映射到 `/design.local/*` |
 | `local/design-src/` | 原型的构建脚本和检查截图 | 手动运行、查看，开发服务器不提供 |
 | `local/probe/` | 后端探查结果：`resource-classes/` 是 `probe:resource-classes` 的默认输出，其他目录是用 `--out` 存下的某一轮 | [commands.md](../commands.md) |
@@ -44,16 +44,19 @@ pnpm --filter yzt dev
 
 ## 模型从服务器取
 
-本机没有某个模型的数据（JKQ、JKQ2 只在服务器上）时，环境变量 `YZT_3DT_PROXY` 让开发服务器把 `/3dt/` 整个代理到那台服务器，清单和模型都从它取，`local/3dt/` 这时不再映射。它只在进程的环境变量里设，不写进 `.env`：工具脚本由 Node 直接运行，读不到 `.env`，写在 `.env.local` 里只对开发服务器生效（PowerShell）：
+本机没有某个模型的数据（经开区、新吴区只在服务器上）时，环境变量 `YZT_3DT_PROXY` 让开发服务器把 `/3dt/` 整个代理到那台服务器，清单和模型都从它取，`local/3dt/` 这时不再映射。它只在进程的环境变量里设，不写进 `.env`：工具脚本由 Node 直接运行，读不到 `.env`，写在 `.env.local` 里只对开发服务器生效（PowerShell）：
 
 ```powershell
-$env:YZT_3DT_PROXY = 'http://192.168.1.180:5173'
+$env:YZT_3DT_PROXY = 'http://192.168.153.194:5173'
 pnpm --filter yzt dev:intranet
 ```
 
-测试服务器上提供 `/opt/front/3dt/` 的 nginx 在 5173 端口（`/etc/nginx/nginx.conf`，2026-11-11 确认）；80 端口是 nginx 的默认页，`:18010` 是后端，都没有 `/3dt/`。这个地址上有 LCC2 模型和 `XZ_GC_3DT`，没有 JKQ、JKQ2（2026-11-11 请求是 404）；要看经开区时写放着它们的服务器：`http://<服务器地址>:<nginx 提供 /3dt/ 的端口>`。
+两台服务器（2026-11-11）：
 
-服务器的 `/3dt/manifest.json` 来自它的 `dist/`，要发布前端才更新，所以新加进清单的模型在发布之前看不到。开发服务器没有内置的办法替换清单（代理转发整个 `/3dt/`，`local/3dt/manifest.json` 这时也不生效）：用浏览器 DevTools 的 Local Overrides，或者一次性的 Playwright 脚本 `context.route('**/3dt/manifest.json', ...)` 换成入库的清单（写法见 `tools/smoke/scene.spec.ts`）。
+- 内网服务器 `192.168.153.194`：5173 端口的 nginx 提供前端（`/opt/front/dcjcxzt/`）和 `/3dt/`（`/opt/front/3dt/` 的 alias，不开 gzip），按"目录层级"放着清单里的全部模型；
+- 测试服务器 `192.168.1.180`：提供 `/opt/front/3dt/` 的 nginx 也在 5173 端口（`/etc/nginx/nginx.conf`；80 端口是 nginx 的默认页，`:18010` 是后端，都没有 `/3dt/`）。目录还是原来平铺的，有 LCC2 模型和彭城广场的倾斜摄影（`XZ_GC_3DT`），没有经开区（请求是 404）。它的清单是旧路径，和它的目录对得上，页面上照样能看；`measure:3d` 的瓦片集场景按新的层级取，对它取不到，`lcc2:register` 的相对路径要写它的旧目录（如 `楚王山1号/lcc2-sog-result/楚王山1号.lcc2`）。
+
+服务器的 `/3dt/manifest.json` 是部署时放上去的那份，要发布前端才更新，所以新加进清单的模型在发布之前看不到；服务器换了目录层级、清单还是旧路径时，模型都加载失败。开发服务器没有内置的办法替换清单（代理转发整个 `/3dt/`，`local/3dt/manifest.json` 这时也不生效）：用浏览器 DevTools 的 Local Overrides，或者一次性的 Playwright 脚本 `context.route('**/3dt/manifest.json', ...)` 换成入库的清单（写法见 `tools/smoke/scene.spec.ts`）。
 
 用途是在有显卡的机器上看、测服务器上的模型。`measure:3d` 和配准工具 `lcc2:register` 用同一个变量，从 `<它>/3dt/` 读模型（[commands.md](../commands.md)）。原来的瓦片集诊断页 `/dev/tileset-probe` 读的是 Cesium 的读数，随引擎删掉（ADR 0153）。
 
@@ -64,7 +67,7 @@ pnpm --filter yzt dev:intranet
 - 地址和线上一致，清单里的 `tileset` 仍然写相对路径（[deployment.md](../deployment.md)）
 - 排在 Vite 的中间件之前，原型的脚本和样式不经过转换，和放在 `public/` 时一样
 - 放进新文件不用重启；目录地址（`/design.local/<主题>/`）打开目录里的 `index.html`，不用写全
-- 目录里没有的文件交给后面的中间件，`/3dt/manifest.json` 就这样继续从 `public` 提供。所以 `local/3dt/` 里平时不放 `manifest.json`，否则会盖住入库的那份。例外是临时要看不入库的模型：ADR 0149 L.3 的彭城广场 LCC2 样例就是复制入库的清单再加一项，开发服务器和 `measure:3d` 都读它（[map-three.md](../modules/map-three.md)"泼溅的预算"）；用完删掉，入库的清单改了要重新生成
+- 目录里没有的文件交给后面的中间件，`/3dt/manifest.json` 就这样继续从 `public` 提供。所以 `local/3dt/` 里平时不放 `manifest.json`，否则会盖住入库的那份。例外是临时要看不入库的模型：复制入库的清单再加一项，开发服务器和 `measure:3d` 都读它（ADR 0149 L.3 的彭城广场 LCC2 样例原来这样做，2026-11-11 进了入库的清单）；用完删掉，入库的清单改了要重新生成
 - 只在开发服务器上生效：`vite preview` 没有模型（产物里也没有），测试不读这些目录
 
 构建由 `tools/build-output/vite-plugin.ts` 检查：产物里出现 `design.local` 或 `3dt/` 下清单以外的内容时构建失败（[vite-config.md](vite-config.md)"构建产物检查"）。

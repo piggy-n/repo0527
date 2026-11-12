@@ -100,7 +100,7 @@ function whereManifest(source: ManifestSource | null): string {
   return source.kind === 'proxy' ? `服务器上的清单（${source.url}）` : manifestLabel(source);
 }
 
-// 泼溅场景的模型按 ID 从清单读，和开发服务器同一个来源（splat-models.ts）；缺了说明怎么补（彭城广场的样例只在本地清单里）。
+// 泼溅场景的模型按 ID 从清单读，和开发服务器同一个来源（splat-models.ts）；缺了说明怎么补（彭城广场的样例 2026-11-11 才入库）。
 // 只在有泼溅场景时才解析代理的地址：写错了不影响 --help 和瓦片集的场景
 async function resolveSceneSplats(): Promise<{ splats: Map<string, SplatModel>; source: ManifestSource | null; problems: string[] }> {
   const ids = [...new Set(scenes.flatMap(scene => scene.splats))];
@@ -114,7 +114,7 @@ async function resolveSceneSplats(): Promise<{ splats: Map<string, SplatModel>; 
     return { splats: new Map(models.map(model => [model.id, model])), source, problems: [] };
   } catch (error) {
     const hint = ids.includes(PENGCHENG_SPLAT)
-      ? `\n    彭城广场的 LCC2 样例（${PENGCHENG_SPLAT}）只写在本地清单 local/3dt/manifest.json 里，做法见 docs/modules/map-three.md"泼溅的预算"。`
+      ? `\n    彭城广场（泼溅）（${PENGCHENG_SPLAT}）2026-11-11 才进入库的清单：服务器上的清单要发布前端后才有它；local/3dt/manifest.json 是以前生成的本地清单时删掉它。`
       : '';
     return { splats: new Map(), source, problems: [`${whereManifest(source)}：${String(error instanceof Error ? error.message : error)}${hint}`] };
   }

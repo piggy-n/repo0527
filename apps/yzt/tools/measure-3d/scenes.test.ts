@@ -11,7 +11,7 @@ describe('selectScenes', () => {
     expect(selectScenes(['jkq2']).map(scene => scene.id)).toEqual(['jkq2-z15', 'jkq2-z16-tilt']);
   });
 
-  it('按级别选时不带上泼溅场景：它们要本地清单', () => {
+  it('按级别选时不带上泼溅场景：它们比的是预算，要写出 splat', () => {
     expect(selectScenes(['z19']).map(scene => scene.id)).toEqual(['oblique-z19']);
     expect(selectScenes(['z18']).map(scene => scene.id)).toEqual(['white-station-z18']);
   });
