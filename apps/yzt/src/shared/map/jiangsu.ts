@@ -8,3 +8,9 @@ export const JIANGSU_CAMERA: CameraState = { center: [119.5, 33.0], zoom: 6.8, b
 
 /** 地图的缩放范围，与旧项目一致：5 级能看到江苏和周边，天地图只到 18 级；画布的选项见 backend-request.ts 的 JIANGSU_MAP_OPTIONS */
 export const JIANGSU_ZOOM_RANGE = { minZoom: 5, maxZoom: 18 } as const;
+
+/**
+ * 三维的缩放范围：近看模型时放到 20 级（用户 2026-11-11 定），底图超过 18 级时放大 18 级的瓦片；
+ * 画布用 sceneMaxZoom 传上限，取值时查过的代价见 docs/modules/map-three.md"一个视图两种种类"的缩放上限
+ */
+export const JIANGSU_SCENE_ZOOM_RANGE = { minZoom: 5, maxZoom: 20 } as const;

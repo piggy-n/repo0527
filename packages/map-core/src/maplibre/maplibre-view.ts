@@ -53,6 +53,8 @@ export interface MapLibreViewOptions<G extends string> {
   readonly onError?: (error: unknown) => void;
   /** 滚轮缩放的速率；不传的一项用 MapLibre 的默认值（滚轮 1/450、触控板 1/100） */
   readonly scrollZoomRates?: ScrollZoomRates;
+  /** 三维的缩放上限；不给时同二维（`mapOptions.maxZoom`） */
+  readonly sceneMaxZoom?: number;
   /**
    * MapLibre 引擎的三维（ADR 0147 第 2 节）：给出时这个视图同时担任二维和三维，第一次要加瓦片集时加载渲染器；
    * 不给时只有二维
@@ -93,6 +95,8 @@ const GLOBE: ProjectionSpecification = Object.freeze({ type: 'globe' });
 const MERCATOR: ProjectionSpecification = Object.freeze({ type: 'mercator' });
 const MAX_PITCH_3D = 85;
 const DEFAULT_MAX_PITCH = 60;
+// MapLibre 默认的缩放上限：页面没给 maxZoom 时二维用它
+const DEFAULT_MAX_ZOOM = 22;
 
 function isCameraCause(value: unknown): value is CameraCause {
   return typeof value === 'string' && CAMERA_CAUSES.includes(value);
@@ -197,6 +201,9 @@ export class MapLibreView<const G extends string> implements MapView {
   #moduleFailure: MapViewFailure | null = null;
   // 二维的俯角上限：页面的 maxPitch，没给时同 MapLibre
   readonly #maxPitch2d: number;
+  // 二、三维的缩放上限：页面的 maxZoom（没给时同 MapLibre）和 sceneMaxZoom（没给时同二维）
+  readonly #maxZoom2d: number;
+  readonly #maxZoom3d: number;
   #sourceErrors = NO_SOURCE_ERRORS;
   #active: boolean;
   #mapStyle: MapStyle;
@@ -234,6 +241,7 @@ export class MapLibreView<const G extends string> implements MapView {
     createMap = createMapLibreMap,
     onError = reportToConsole,
     scrollZoomRates,
+    sceneMaxZoom,
     loadSceneRenderer,
     loadJson = fetchJson
   }: MapLibreViewOptions<G>) {
@@ -241,6 +249,8 @@ export class MapLibreView<const G extends string> implements MapView {
     this.#active = active;
     this.kinds = loadSceneRenderer ? ['2d', '3d'] : ['2d'];
     this.#maxPitch2d = mapOptions?.maxPitch ?? DEFAULT_MAX_PITCH;
+    this.#maxZoom2d = mapOptions?.maxZoom ?? DEFAULT_MAX_ZOOM;
+    this.#maxZoom3d = sceneMaxZoom ?? this.#maxZoom2d;
     // 报告器自己抛错时不能打断状态转换和资源释放，也不能冒进 MapLibre 的事件分发
     this.#onError = safeReporter(onError, 'MapLibreView');
     const { current: style, images, revision, sceneBefore } = session.style;
@@ -404,7 +414,7 @@ export class MapLibreView<const G extends string> implements MapView {
   }
 
   /**
-   * 换成另一种种类（ADR 0147 第 2 节）：由上下文在切换维度时调用，画布不变；投影、俯角上限跟着换，相机按会话同步过来。
+   * 换成另一种种类（ADR 0147 第 2 节）：由上下文在切换维度时调用，画布不变；投影、俯角和缩放上限跟着换，相机按会话同步过来。
    * 第一次切到三维时加载三维模块，加上模型层、追上积下的三维内容；切回二维时撤下模型层。不支持的种类抛错
    */
   setKind(kind: ViewKind): void {
@@ -744,9 +754,10 @@ export class MapLibreView<const G extends string> implements MapView {
       bearing,
       pitch
     } = this.#session.camera.current;
-    // 同时担任二三维时先按当前种类设投影和俯角上限（ADR 0147 第 2 节）；此时还不是 ready，收回俯角时的 move 不会写回
+    // 同时担任二三维时先按当前种类设投影和上限（ADR 0147 第 2 节），再跳到会话的相机：三维的缩放上限比二维高时，
+    // 先放宽才跳得过去；此时还不是 ready，收回俯角、缩放时的 move 不会写回
     if (this.kinds.length > 1) {
-      this.#setMaxPitch(map);
+      this.#setLimits(map);
       this.#applyProjection(map);
     }
     // 此时还不是 ready，jumpTo 触发的 move 不会写回；地图收敛过的实际值（如俯角上限）下面按 sync 写回，不算意图。
@@ -936,8 +947,8 @@ export class MapLibreView<const G extends string> implements MapView {
     );
   }
 
-  // 已经就绪时换种类：先按会话的相机跳过去（俯角放进新的上限），再改上限和投影，MapLibre 不会自己收回俯角发出 program 的移动；
-  // 投影换完后地图收敛过的实际值按 sync 写回
+  // 已经就绪时换种类：先按会话的相机跳过去（中心不变，俯角、缩放放进新的上限，不做动画），再改上限和投影，
+  // MapLibre 就不会自己收回而发出 program 的移动；投影换完后地图收敛过的实际值按 sync 写回
   #applyKind(map: MapLike): void {
     const {
       center: [lng, lat],
@@ -945,8 +956,11 @@ export class MapLibreView<const G extends string> implements MapView {
       bearing,
       pitch
     } = this.#session.camera.current;
-    map.jumpTo({ center: [lng, lat], zoom, bearing, pitch: Math.min(pitch, this.#maxPitch()) }, { cause: 'sync' });
-    this.#setMaxPitch(map);
+    map.jumpTo(
+      { center: [lng, lat], zoom: Math.min(zoom, this.#maxZoom()), bearing, pitch: Math.min(pitch, this.#maxPitch()) },
+      { cause: 'sync' }
+    );
+    this.#setLimits(map);
     this.#applyProjection(map);
     this.#writeCamera(map, 'sync');
   }
@@ -955,10 +969,22 @@ export class MapLibreView<const G extends string> implements MapView {
     return this.#kind === '3d' ? MAX_PITCH_3D : this.#maxPitch2d;
   }
 
-  #setMaxPitch(map: MapLike): void {
+  #maxZoom(): number {
+    return this.#kind === '3d' ? this.#maxZoom3d : this.#maxZoom2d;
+  }
+
+  // 按当前种类设俯角、缩放上限。漫游接管着地图时上限归漫游（放宽了，结束时还原成接管前的），页面停用后恢复时也不动
+  #setLimits(map: MapLike): void {
+    if (this.#roam?.engaged) {
+      return;
+    }
     const maxPitch = this.#maxPitch();
     if (map.getMaxPitch() !== maxPitch) {
       map.setMaxPitch(maxPitch);
+    }
+    const maxZoom = this.#maxZoom();
+    if (map.getMaxZoom() !== maxZoom) {
+      map.setMaxZoom(maxZoom);
     }
   }
 

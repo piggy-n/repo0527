@@ -41,7 +41,7 @@ export const MapViewControls = defineComponent({
   props: {
     /** 页面的 useDefaultView 给出的回调；不要在这里调用 useDefaultView（ADR 0033） */
     goToDefaultView: { type: Function as PropType<() => void>, required: true },
-    /** 和画布的缩放范围相同 */
+    /** 和画布当前种类的缩放范围相同：支持三维的页面按 dimension 传二维或三维的范围 */
     zoomRange: { type: Object as PropType<ZoomRange>, required: true },
     /** 当前是二维还是三维；不传时不显示 2D/3D（页面不支持三维，ADR 0111） */
     dimension: { type: String as PropType<ViewKind>, default: undefined },
@@ -60,7 +60,7 @@ export const MapViewControls = defineComponent({
   },
   setup(props, { emit }) {
     const map = useMap();
-    const zoom = useZoomButtons(map, props.zoomRange);
+    const zoom = useZoomButtons(map, () => props.zoomRange);
     const compass = useCompassButton(map);
 
     const dimensionButton = (value: ViewKind, label: string, text: string) => {

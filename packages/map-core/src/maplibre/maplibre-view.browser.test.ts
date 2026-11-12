@@ -8,7 +8,8 @@ import type { StyleGroup } from '../style/style-model';
 import { BROWSE_TOOL } from '../tool/tool-model';
 import type { SourceErrors, ViewState } from '../view/map-view';
 import type { LngLat, PickResult } from '../view/view-input';
-import { MapLibreView } from './maplibre-view';
+import { MapLibreView, type MapLibreViewOptions } from './maplibre-view';
+import type { SceneRenderer } from './scene-renderer';
 
 // 真实的 MapLibre（ADR 0040）：只用内联的 GeoJSON，不请求外部服务
 
@@ -72,8 +73,14 @@ async function dragRight(map: MapLibreMap, button: 0 | 2, init: MouseEventInit =
   await twoFrames();
 }
 
+type ViewOptions = Pick<MapLibreViewOptions<'data'>, 'mapOptions' | 'sceneMaxZoom' | 'loadSceneRenderer'>;
+
 // 每个用例自己的容器（尺寸写死）、会话和视图，结束时一起释放并移除容器：同一个文件的用例共用一个页面
-function setup(camera: CameraState = CAMERA, initial?: StyleGroup, { hidden = false }: { hidden?: boolean } = {}) {
+function setup(
+  camera: CameraState = CAMERA,
+  initial?: StyleGroup,
+  { hidden = false, options = {} }: { hidden?: boolean; options?: ViewOptions } = {}
+) {
   const container = document.body.appendChild(document.createElement('div'));
   container.style.width = '800px';
   container.style.height = '600px';
@@ -90,8 +97,9 @@ function setup(camera: CameraState = CAMERA, initial?: StyleGroup, { hidden = fa
   const view = new MapLibreView({
     session,
     container,
-    createMap: options => (created = new MapLibreMap(options)),
-    onError: error => errors.push(error)
+    createMap: mapOptions => (created = new MapLibreMap(mapOptions)),
+    onError: error => errors.push(error),
+    ...options
   });
   return {
     container,
@@ -208,6 +216,41 @@ function missingImages(map: MapLibreMap): string[] {
   const missing: string[] = [];
   map.on('styleimagemissing', ({ id }) => missing.push(id));
   return missing;
+}
+
+const noModels = () => Promise.reject(new Error('这里不加模型'));
+
+// 什么也不画的三维渲染器：只看切换二三维时 MapLibre 的相机，不需要 Three
+function emptyRenderer(): SceneRenderer {
+  return {
+    attach: () => undefined,
+    detach: () => undefined,
+    loseContext: () => undefined,
+    prerender: () => undefined,
+    render: () => undefined,
+    endFrame: () => undefined,
+    addTileset: noModels,
+    updateTileset: () => undefined,
+    removeTileset: () => undefined,
+    addSplat: noModels,
+    updateSplat: () => undefined,
+    removeSplat: () => undefined,
+    pick: () => null,
+    project: () => null,
+    setLift: () => undefined,
+    lowestHeight: () => null,
+    setInteriorFog: () => undefined,
+    setMarker: () => undefined,
+    on: () => () => undefined,
+    [Symbol.dispose]: () => undefined
+  };
+}
+
+// 画布中心拾到的地面点
+function middleOf(map: MapLibreMap): LngLat {
+  const canvas = map.getCanvas();
+  const { lng, lat } = map.unproject([canvas.clientWidth / 2, canvas.clientHeight / 2]);
+  return [lng, lat];
 }
 
 describe('MapLibreView（真实的 MapLibre）', () => {
@@ -608,5 +651,49 @@ describe('MapLibreView（真实的 MapLibre）', () => {
     expect(zoom).toBeCloseTo(end.zoom, 6);
     ctx.view.resume();
     expect(ctx.map.getZoom()).toBeCloseTo(end.zoom, 6);
+  });
+
+  it('二三维的缩放上限（二维 18、三维 20）：三维 z19.6 切二维时缩放和俯角在一次跳转里收回，中心和画面中心的地面点不动；切回三维相机不变', async () => {
+    const center: LngLat = [117.18, 34.26];
+    using ctx = setup({ center, zoom: 19.6, bearing: 30, pitch: 70 }, undefined, {
+      options: { mapOptions: { maxZoom: 18 }, sceneMaxZoom: 20, loadSceneRenderer: async () => emptyRenderer }
+    });
+    ctx.view.setKind('3d');
+    await withTimeout(ctx.view.whenReady(), '三维就绪');
+    // 创建时按二维的上限收敛过，三维就绪时先放宽再跳到会话的相机
+    expect(ctx.map.getProjection()?.type).toBe('globe');
+    expect(ctx.map.getMaxZoom()).toBe(20);
+    expect(ctx.map.getZoom()).toBeCloseTo(19.6, 6);
+    expect(ctx.map.getPitch()).toBeCloseTo(70, 6);
+    // MapLibre 自己收回缩放时发出的移动不带 cause
+    const causes: unknown[] = [];
+    ctx.map.on('move', event => causes.push((event as { cause?: unknown }).cause));
+    const changes: CameraChange[] = [];
+    ctx.session.camera.on('change', change => changes.push(change));
+
+    ctx.view.setKind('2d');
+
+    expect(ctx.map.getProjection()?.type).toBe('mercator');
+    expect(ctx.map.getMaxZoom()).toBe(18);
+    expect(ctx.map.getZoom()).toBeCloseTo(18, 9);
+    expect(ctx.map.getPitch()).toBeCloseTo(60, 6);
+    expect(ctx.map.getBearing()).toBeCloseTo(30, 6);
+    for (const [index, value] of [ctx.session.camera.current.center, middleOf(ctx.map)].flat().entries()) {
+      expect(value).toBeCloseTo(center[index % 2] ?? 0, 7);
+    }
+    expect(ctx.session.camera.current.zoom).toBeCloseTo(18, 9);
+    expect(causes.length).toBeGreaterThan(0);
+    expect(causes.every(cause => cause === 'sync')).toBe(true);
+    expect(changes.every(({ view, cause }) => view === '2d' && cause === 'sync')).toBe(true);
+
+    causes.length = 0;
+    ctx.view.setKind('3d');
+
+    expect(ctx.map.getMaxZoom()).toBe(20);
+    expect(ctx.map.getZoom()).toBeCloseTo(18, 9);
+    expect(ctx.map.getPitch()).toBeCloseTo(60, 6);
+    expect(middleOf(ctx.map)[0]).toBeCloseTo(center[0], 7);
+    expect(middleOf(ctx.map)[1]).toBeCloseTo(center[1], 7);
+    expect(causes.every(cause => cause === 'sync')).toBe(true);
   });
 });

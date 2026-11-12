@@ -25,7 +25,7 @@ import { BASEMAP_STYLE_ROOT } from '@/shared/map/basemap/static-basemap';
 import { useBasemap } from '@/shared/map/basemap/useBasemap';
 import { BoundarySettingsPanel } from '@/shared/map/boundary/BoundarySettingsPanel';
 import { useBoundaries } from '@/shared/map/boundary/useBoundaries';
-import { JIANGSU_CAMERA, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
+import { JIANGSU_CAMERA, JIANGSU_SCENE_ZOOM_RANGE, JIANGSU_ZOOM_RANGE } from '@/shared/map/jiangsu';
 import { CoordinateLocatePanel } from '@/shared/map/location/CoordinateLocatePanel';
 import { LocationOverlay } from '@/shared/map/location/LocationOverlay';
 import { useLocationPoint } from '@/shared/map/location/useLocationPoint';
@@ -344,7 +344,11 @@ export const CurrentMapPage = defineComponent({
           style={{ '--map-tools-width': toolbarColumns ? '72px' : '40px' }}
           data-map-page={phone ? 'phone' : 'wide'}
         >
-          <MapCanvas mapOptions={JIANGSU_MAP_OPTIONS}scrollZoomRates={SCROLL_ZOOM_RATES} />
+          <MapCanvas
+            mapOptions={JIANGSU_MAP_OPTIONS}
+            sceneMaxZoom={JIANGSU_SCENE_ZOOM_RANGE.maxZoom}
+            scrollZoomRates={SCROLL_ZOOM_RATES}
+          />
           <MeasureOverlay measure={measure}>{{ removeIcon: () => <SvgIcon name="close" size={12} /> }}</MeasureOverlay>
           <LocationOverlay location={location} />
           <BoxSelectOverlay pick={pick} />
@@ -446,7 +450,7 @@ export const CurrentMapPage = defineComponent({
                   <div class={styles.controls}>
                     <MapViewControls
                       goToDefaultView={goToDefaultView}
-                      zoomRange={JIANGSU_ZOOM_RANGE}
+                      zoomRange={scene ? JIANGSU_SCENE_ZOOM_RANGE : JIANGSU_ZOOM_RANGE}
                       dimension={map.dimension.value}
                       onUpdate:dimension={switchDimension}
                     />

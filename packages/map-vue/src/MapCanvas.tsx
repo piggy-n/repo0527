@@ -35,6 +35,8 @@ export const MapCanvas = defineComponent({
     mapOptions: { type: Object as PropType<MapCanvasMapOptions>, default: undefined },
     /** 滚轮缩放的速率，只在创建地图时生效（ADR 0053 第 3 节）；不传时用 MapLibre 的默认值 */
     scrollZoomRates: { type: Object as PropType<ScrollZoomRates>, default: undefined },
+    /** 三维的缩放上限，只在创建地图时生效；不传时同二维（`mapOptions.maxZoom`） */
+    sceneMaxZoom: { type: Number, default: undefined },
     /** 测试时替换成假地图 */
     createMap: { type: Function as PropType<(options: MapLibreMapOptions) => MapLike>, default: undefined }
   },
@@ -55,6 +57,7 @@ export const MapCanvas = defineComponent({
         active: state.shouldRun('2d', '3d'),
         mapOptions: props.mapOptions,
         scrollZoomRates: props.scrollZoomRates,
+        sceneMaxZoom: props.sceneMaxZoom,
         createMap: props.createMap,
         onError: state.onError,
         loadSceneRenderer: engine.loadRenderer

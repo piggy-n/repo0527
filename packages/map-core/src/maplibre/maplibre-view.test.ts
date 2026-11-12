@@ -85,7 +85,17 @@ interface FakeCamera {
   pitch: number;
 }
 
-const CAMERA_CALLS = new Set(['jumpTo', 'flyTo', 'easeTo', 'panBy', 'fitBounds', 'remove', 'setProjection', 'setMaxPitch']);
+const CAMERA_CALLS = new Set([
+  'jumpTo',
+  'flyTo',
+  'easeTo',
+  'panBy',
+  'fitBounds',
+  'remove',
+  'setProjection',
+  'setMaxPitch',
+  'setMaxZoom'
+]);
 
 // 只模拟适配器用到的行为：记录调用；相机方法立即到位，并像 MapLibre 一样同步触发 move、合并 eventData
 // 记下设置过的滚轮缩放速率
@@ -142,11 +152,12 @@ class FakeMap implements MapLike {
 
   constructor(readonly options: MapLibreMapOptions) {
     const [lng, lat] = options.center as [number, number];
+    this.maxZoom = options.maxZoom ?? 22;
     // MapLibre 创建地图时同样会收敛相机，但此时适配器还没有订阅 move
     this.camera = {
       lng,
       lat,
-      zoom: options.zoom ?? 0,
+      zoom: Math.min(options.zoom ?? 0, this.maxZoom),
       bearing: options.bearing ?? 0,
       pitch: Math.min(options.pitch ?? 0, this.maxPitch)
     };
@@ -362,9 +373,13 @@ class FakeMap implements MapLike {
     return this.maxZoom;
   }
 
+  // 像 MapLibre 一样：缩放超过新的上限时收回，发出不带 eventData 的移动
   setMaxZoom(maxZoom: number): void {
     this.calls.push(['setMaxZoom', maxZoom]);
     this.maxZoom = maxZoom;
+    if (this.camera.zoom > maxZoom) {
+      this.moveTo({ ...this.camera, zoom: maxZoom }, {});
+    }
   }
 
   getVerticalFieldOfView(): number {
@@ -418,7 +433,7 @@ class FakeMap implements MapLike {
 
   // 立即到位的移动：和 jumpTo 一样先发 movestart 再发 move
   moveTo(camera: FakeCamera, event: FakeEvent): void {
-    this.camera = { ...camera, pitch: Math.min(camera.pitch, this.maxPitch) };
+    this.camera = { ...camera, zoom: Math.min(camera.zoom, this.maxZoom), pitch: Math.min(camera.pitch, this.maxPitch) };
     this.fire('movestart', event);
     this.fire('move', event);
   }
@@ -476,7 +491,14 @@ function setup(
   options: Partial<
     Pick<
       MapLibreViewOptions<Groups>,
-      'active' | 'mapOptions' | 'createMap' | 'onError' | 'scrollZoomRates' | 'loadSceneRenderer' | 'loadJson'
+      | 'active'
+      | 'mapOptions'
+      | 'createMap'
+      | 'onError'
+      | 'scrollZoomRates'
+      | 'sceneMaxZoom'
+      | 'loadSceneRenderer'
+      | 'loadJson'
     >
   > = {},
   camera = NANJING
@@ -2544,6 +2566,19 @@ function moduleSetup() {
 }
 
 const callNames = (calls: readonly unknown[][]) => calls.map(([name]) => name);
+const cameraCalls = (calls: readonly unknown[][]) => callNames(calls).filter(name => CAMERA_CALLS.has(String(name)));
+
+// 现状底图页的缩放上限：二维 18 级，三维 20 级
+const zoomSetup = (camera?: CameraState) =>
+  setup(
+    {
+      mapOptions: { maxZoom: 18 },
+      sceneMaxZoom: 20,
+      loadSceneRenderer: async () => fakeRenderer,
+      loadJson: async () => STATION_JSON
+    },
+    camera
+  );
 
 describe('MapLibreView as the 3D view of the MapLibre engine (ADR 0147)', () => {
   it('supports only 2D without a scene renderer', () => {
@@ -2663,6 +2698,80 @@ describe('MapLibreView as the 3D view of the MapLibre engine (ADR 0147)', () => 
     ctx.view.setKind('2d');
 
     expect(ctx.map.maxPitch).toBe(45);
+  });
+
+  describe('zoom limits per kind: the page maxZoom for 2D, sceneMaxZoom for 3D', () => {
+    it('switching to 3D raises the limit without moving the camera', () => {
+      using ctx = zoomSetup();
+      ctx.map.fire('style.load');
+      const changes: CameraChange[] = [];
+      ctx.session.camera.on('change', change => changes.push(change));
+
+      ctx.view.setKind('3d');
+
+      expect(ctx.map.maxZoom).toBe(20);
+      expect(ctx.session.camera.current).toStrictEqual(NANJING);
+      expect(changes.every(({ cause }) => cause === 'sync')).toBe(true);
+    });
+
+    it('switching back to 2D above its limit: zoom and pitch come down in the same jump, the center stays, MapLibre never moves on its own', () => {
+      using ctx = zoomSetup();
+      ctx.map.fire('style.load');
+      ctx.view.setKind('3d');
+      ctx.map.moveTo(
+        { ...ctx.map.camera, zoom: 19.6, bearing: 30, pitch: 80 },
+        { originalEvent: new MouseEvent('mousemove') }
+      );
+      expect(ctx.session.camera.current.zoom).toBe(19.6);
+      const changes: CameraChange[] = [];
+      ctx.session.camera.on('change', change => changes.push(change));
+      ctx.map.calls.length = 0;
+
+      ctx.view.setKind('2d');
+
+      expect(cameraCalls(ctx.map.calls)).toStrictEqual(['jumpTo', 'setMaxPitch', 'setMaxZoom', 'setProjection']);
+      expect(ctx.map.calls[0]).toStrictEqual([
+        'jumpTo',
+        { center: [118.8, 32.05], zoom: 18, bearing: 30, pitch: 60 },
+        { cause: 'sync' }
+      ]);
+      expect(ctx.map.maxZoom).toBe(18);
+      expect(ctx.session.camera.current).toStrictEqual({ center: [118.8, 32.05], zoom: 18, bearing: 30, pitch: 60 });
+      expect(changes.length).toBeGreaterThan(0);
+      expect(changes.every(({ view, cause }) => view === '2d' && cause === 'sync')).toBe(true);
+    });
+
+    it('becoming ready in 3D with a camera above the 2D limit: raises the limit before the jump, the camera is kept', () => {
+      using ctx = zoomSetup({ ...NANJING, zoom: 19.5 });
+      // MapLibre 创建时按页面的 maxZoom 收敛了
+      expect(ctx.map.camera.zoom).toBe(18);
+      ctx.view.setKind('3d');
+
+      ctx.map.fire('style.load');
+
+      expect(cameraCalls(ctx.map.calls).slice(0, 4)).toStrictEqual([
+        'setMaxPitch',
+        'setMaxZoom',
+        'setProjection',
+        'jumpTo'
+      ]);
+      expect(ctx.map.camera.zoom).toBe(19.5);
+      expect(ctx.session.camera.current.zoom).toBe(19.5);
+    });
+
+    it('without sceneMaxZoom 3D uses the page maxZoom and never touches the limit', () => {
+      using ctx = setup({
+        mapOptions: { maxZoom: 18 },
+        loadSceneRenderer: async () => fakeRenderer,
+        loadJson: async () => STATION_JSON
+      });
+      ctx.map.fire('style.load');
+      ctx.view.setKind('3d');
+      ctx.view.setKind('2d');
+
+      expect(callNames(ctx.map.calls)).not.toContain('setMaxZoom');
+      expect(ctx.map.maxZoom).toBe(18);
+    });
   });
 
   it('applies the limits of the current kind when it becomes ready in 3D, before syncing the camera', () => {
@@ -2951,6 +3060,24 @@ describe('MapLibreView roaming in the MapLibre engine (ADR 0147 §4)', () => {
       expect(visibility(ctx.map.calls).at(-1)).toBe('dltb-line visible');
       expect(ctx.map.camera).toMatchObject({ lng: NANJING.center[0], lat: NANJING.center[1] });
       expect(ctx.view.kind).toBe('2d');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the page paused and resumed in the middle of a roam: the limits stay with the roam, so the eye can still look level', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
+    try {
+      using ctx = await roaming();
+      await vi.advanceTimersByTimeAsync(200);
+      expect(ctx.map.maxZoom).toBe(24);
+      expect(ctx.map.maxPitch).toBe(180);
+
+      ctx.view.pause();
+      ctx.view.resume();
+
+      expect(ctx.map.maxZoom).toBe(24);
+      expect(ctx.map.maxPitch).toBe(180);
     } finally {
       vi.useRealTimers();
     }
