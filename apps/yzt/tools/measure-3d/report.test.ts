@@ -126,6 +126,12 @@ const TIER_COMPARED: SceneQuality = {
 };
 const TIER_SCENE = { ...TILESET_SCENE, variants: ['maplibre', TIER] };
 
+// 某一刻累计放宽的帧（装满、估计）
+const budgetAt = (t: number, raisedFull: number, raisedPredicted: number): SceneSample => ({
+  ...sample(t, 0, 0),
+  budget: { ...stats(null).budget, raisedFull, raisedPredicted }
+});
+
 // 恢复后停在粗的一级：放宽了的、等着的瓦片，需求低于上限
 const coarse = (locked: boolean): RunResult => ({
   ...tilesetRun('maplibre'),
@@ -294,11 +300,33 @@ describe('有瓦片集场景的报告', () => {
     expect(report).toContain('| 加载到稳定：放宽的帧 装满 / 估计 | 3 / 11 |');
   });
 
-  it('需求低于上限、锁着不再判成"锁在粗的一级"：放宽以后缓存在上限停止接收，看不出放不放得下', () => {
-    expect(renderReport(results([coarse(true)], [TILESET_SCENE]))).not.toContain('锁在了粗的一级');
+  it('需求低于上限、锁着不再判成"锁在粗的一级"：放宽以后缓存在上限停止接收，看不出放不放得下；放宽的原因指到各段的那几行', () => {
+    // 带飞行后的轨迹，飞行后的表格和它的说明才会出来
+    const locked: RunResult = {
+      ...coarse(true),
+      settle: { stable: true, ms: 900, longTasks: LONG_TASKS, trace: [sample(0, 0, 30), sample(3500, 12, 0)] }
+    };
+    const report = renderReport(results([locked], [TILESET_SCENE]));
+    expect(report).toContain('**飞行后显示的瓦片（第一遍）：**');
+    expect(report).not.toContain('锁在了粗的一级');
+    expect(report).not.toContain('需求又低于上限');
+    expect(report).toContain('看上表"第一遍飞行"和"飞行后"两行的"放宽的帧 装满 / 估计"');
+    expect(report).toContain('"第二遍飞行""画面恢复"两行');
+    expect(report).toContain('细一级放不放得下看更大一档');
   });
 
-  it('飞行后显示的瓦片：每个时刻放宽了的、等着的块数', () => {
+  it('飞行后、画面恢复各一行放宽的原因：只数那一段新增的', () => {
+    const recovered: RunResult = {
+      ...tilesetRun('maplibre'),
+      settle: { stable: true, ms: 900, longTasks: LONG_TASKS, trace: [budgetAt(0, 2, 0), budgetAt(800, 2, 5)] },
+      recovery: { stable: true, ms: 700, longTasks: LONG_TASKS, trace: [budgetAt(0, 4, 5), budgetAt(600, 9, 8)] }
+    };
+    const report = renderReport(results([recovered], [TILESET_SCENE]));
+    expect(report).toContain('| 飞行后：窗口（秒，中位）/ 放宽的帧 装满 / 估计 | — / 0 / 5 |');
+    expect(report).toContain('| 画面恢复：窗口（秒，中位）/ 放宽的帧 装满 / 估计 | — / 5 / 3 |');
+  });
+
+  it('飞行后显示的瓦片：每个时刻放宽了的、等着的块数；有 ADD 的写在后面', () => {
     const settled: RunResult = {
       ...tilesetRun('maplibre'),
       settle: { stable: true, ms: 900, longTasks: LONG_TASKS, trace: [sample(0, 0, 30), sample(400, 7, 2), sample(3500, 9, 0)] }
@@ -307,6 +335,9 @@ describe('有瓦片集场景的报告', () => {
     expect(report).toContain('**飞行后显示的瓦片（第一遍）：**');
     // 0、0.25 秒还是第一份，0.5～3 秒是 0.4 秒那份，最后是 3.5 秒那份
     expect(report).toContain('| MapLibre | 0 / 30 | 0 / 30 | 7 / 2 | 7 / 2 | 7 / 2 | 7 / 2 | 7 / 2 | 9 / 0 |');
+    const additive = { ...sample(0, 1, 2), detail: { sharp: 0, relaxed: 1, waiting: 2, finest: 0, additive: 4 } };
+    const withAdd: RunResult = { ...tilesetRun('maplibre'), settle: { stable: true, ms: 900, longTasks: LONG_TASKS, trace: [additive] } };
+    expect(renderReport(results([withAdd], [TILESET_SCENE]))).toContain('| MapLibre | 1 / 2，ADD 4 |');
   });
 
   it('缓存上限的一档：和产品默认值比的清晰度写进检查一节，人工检查多一项', () => {
@@ -319,12 +350,19 @@ describe('有瓦片集场景的报告', () => {
     expect(renderManual(results([tilesetRun('maplibre'), qualityRun()], [TILESET_SCENE]))).not.toContain('缓存上限的各档');
   });
 
-  it('有一边没稳定时不比，报告里写出两边的状态', () => {
+  it('有一边不正常时不比，报告里按状态写出两边：超时是没稳定，无效、失败另外说', () => {
     const timedOut: RunResult = { ...qualityRun(), status: 'timeout' };
     const runs = [tilesetRun('maplibre'), tilesetRun(TIER), timedOut, qualityRun(TIER_SHOTS, TIER)];
     const report = renderReport(results(runs, [TIER_SCENE]));
-    expect(report).toContain('**飞一圈回来的清晰度（和飞行前比）：** 这一遍⚠ 超时，截图不是稳定后的，没比');
-    expect(report).toContain('默认值那一遍⚠ 超时、这一档正常，有一边没稳定，没比');
+    expect(report).toContain('**飞一圈回来的清晰度（和飞行前比）：** 这一遍超时，模型没稳定，截图不是稳定后的，没比');
+    expect(report).toContain('默认值那一遍超时，模型没稳定，截图不是稳定后的；这一档正常。没比');
+    const invalid: RunResult = { ...qualityRun(TIER_SHOTS, TIER), status: 'invalid' };
+    const invalidReport = renderReport(results([tilesetRun('maplibre'), qualityRun(), invalid], [TIER_SCENE]));
+    expect(invalidReport).toContain('这一档无效（画面空白或模型没画出来');
+    expect(invalidReport).not.toContain('这一档超时');
+    // 失败的那一遍没有截图：没有画质的结果
+    const failed: RunResult = { id: 'oblique-z19/maplibre/quality', scene: 'oblique-z19', variant: 'maplibre', kind: 'quality', repeat: 0, status: 'failed', notes: [] };
+    expect(renderReport(results([failed, qualityRun(TIER_SHOTS, TIER)], [TIER_SCENE]))).toContain('默认值那一遍失败，可能没有截图；这一档正常。没比');
   });
 
   it('两种场景一起跑：三维实测的报告，多一节泼溅', () => {
@@ -380,13 +418,23 @@ describe('quality.html', () => {
     expect(tier).toContain('没有比较结果');
   });
 
-  it('有一边没稳定：写出状态、不比，截图的说明不写"稳定后"', () => {
+  it('有一边不正常：按状态写出、不比，截图的说明不写"稳定后"', () => {
     const page = renderQualityPage(results([qualityRun(), { ...qualityRun(TIER_SHOTS, TIER), status: 'timeout' }], [TIER_SCENE]));
     const tier = page.slice(page.indexOf('缓存上限 6 GB</h2>'));
-    expect(tier).toContain('这一遍⚠ 超时，截图不是稳定后的，不比较');
-    expect(tier).toContain('默认值那一遍正常、这一档⚠ 超时：有一边没稳定，不比较');
-    expect(tier).toContain('<figcaption>这一档，没稳定（⚠ 超时）</figcaption>');
+    expect(tier).toContain('这一遍超时，模型没稳定，截图不是稳定后的，不比较');
+    expect(tier).toContain('默认值那一遍正常；这一档超时，模型没稳定，截图不是稳定后的。不比较');
+    expect(tier).toContain('<figcaption>这一档，没稳定（超时）</figcaption>');
     expect(tier).toContain('<figcaption>产品默认值，稳定后</figcaption>');
+    // 无效的不说"没稳定"
+    const invalidPage = renderQualityPage(results([qualityRun(), { ...qualityRun(TIER_SHOTS, TIER), status: 'invalid' }], [TIER_SCENE]));
+    const invalidTier = invalidPage.slice(invalidPage.indexOf('缓存上限 6 GB</h2>'));
+    expect(invalidTier).toContain('<figcaption>这一档，无效</figcaption>');
+    expect(invalidTier).not.toContain('没稳定');
+    // 默认值那一遍失败、没有截图：只放这一档的
+    const failed: RunResult = { id: 'oblique-z19/maplibre/quality', scene: 'oblique-z19', variant: 'maplibre', kind: 'quality', repeat: 0, status: 'failed', notes: [] };
+    const failedPage = renderQualityPage(results([failed, qualityRun(TIER_SHOTS, TIER)], [TIER_SCENE]));
+    expect(failedPage).toContain('默认值那一遍失败，可能没有截图；这一档正常。不比较');
+    expect(failedPage).not.toContain('<figcaption>产品默认值');
   });
 
   it('还没比较时先放截图', () => {

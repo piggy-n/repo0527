@@ -117,16 +117,30 @@ interface BlockSizes {
   readonly fineTexture?: number;
   /** 细的瓦片除了前 3 块，都晚这么久才下载完 */
   readonly fineDelayMs?: number;
+  /** 去掉所有 refine：按规范根节点默认 REPLACE，子节点沿用父节点的 */
+  readonly withoutRefine?: boolean;
+}
+
+// 去掉索引里所有的 refine 字段
+function stripRefine(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripRefine);
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'refine').map(([key, item]) => [key, stripRefine(item)]));
+  }
+  return value;
 }
 
 async function serveBlocks(
   path: string,
-  { blockTexture = BLOCK_TEXTURE, fineTexture = FINE_TEXTURE, fineDelayMs = 0 }: BlockSizes = {}
+  { blockTexture = BLOCK_TEXTURE, fineTexture = FINE_TEXTURE, fineDelayMs = 0, withoutRefine = false }: BlockSizes = {}
 ): Promise<string> {
   const [block, fine] = await Promise.all([texturedBoxGlb(20, blockTexture), texturedBoxGlb(10, fineTexture)]);
+  const tileset = blockTileset(MODEL_AT, GRID);
   onTestFinished(
     serveFixtures({
-      [`/${path}/tileset.json`]: blockTileset(MODEL_AT, GRID),
+      [`/${path}/tileset.json`]: withoutRefine ? stripRefine(tileset) : tileset,
       [`/${path}/block.glb`]: block,
       [`/${path}/fine.glb`]: fine
     })
@@ -179,6 +193,14 @@ describe('ThreeSceneRenderer 的缓存预算', () => {
     expect(state.errorScale).toBe(1);
     expect(state.refused).toBe(0);
     // 细的一层全到了：4 × 4 × 4 块，都够细
+    expect(state.tilesets.blocks?.visible).toBe(64);
+    expect(state.tilesets.blocks?.detail).toEqual({ sharp: 64, relaxed: 0, waiting: 0, finest: 0, additive: 0 });
+  });
+
+  it('索引里没写 refine：没有内容的根节点改成 ADD 前先把 REPLACE 传给子节点，瓦片照样按细不细分', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup({ cacheBytes: 64 * 1024 * KB, cacheLimitBytes: 96 * 1024 * KB });
+    showBlocks(ctx, await serveBlocks('no-refine', { withoutRefine: true }));
+    const state = await settle(ctx);
     expect(state.tilesets.blocks?.visible).toBe(64);
     expect(state.tilesets.blocks?.detail).toEqual({ sharp: 64, relaxed: 0, waiting: 0, finest: 0, additive: 0 });
   });

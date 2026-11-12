@@ -78,10 +78,13 @@ if (options.list) {
 if (scenes.length === 0) {
   fail([`--only ${options.only.join(',')} 没有选中任何场景，用 --list 看全部场景。`]);
 }
-// 换成同一个相机，几个场景就是跑几遍一样的
-if (at && scenes.length > 1) {
+// 换成同一个相机，几个场景就是跑几遍一样的（--look 只开第一个场景，不拦）
+if (at && !options.look && scenes.length > 1) {
+  const chosen = scenes.map(scene => scene.id).join('、');
   fail([
-    `--at 只能配一个场景，--only 选中了 ${scenes.length} 个（${scenes.map(scene => scene.id).join('、')}）。用 --only 写出一个场景，如 --only jkq-z16-tilt。`
+    options.only.length === 0
+      ? `--at 只能配一个场景，没写 --only 时默认跑 ${scenes.length} 个场景（${chosen}）。用 --only 写出一个完整的场景 ID，如 --only jkq-z16-tilt。`
+      : `--at 只能配一个场景，--only 选中了 ${scenes.length} 个（${chosen}）。写出完整的场景 ID 时只选它，如 --only jkq-z16。`
   ]);
 }
 

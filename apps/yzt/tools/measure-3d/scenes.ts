@@ -215,12 +215,18 @@ export function withCamera(scene: Scene, camera: BenchCamera): Scene {
   return { ...scene, title: `${scene.title}（--at 的相机）`, camera };
 }
 
-/** 按子串选场景；没写时选默认的场景。泼溅场景要写出 splat 才选得中：--only z19 不带上比预算的泼溅场景 */
+/**
+ * 按子串选场景；没写时选默认的场景。写出完整的场景 ID 时只选它（jkq-z16 不带上 jkq-z16-tilt、jkq-z16.5）。
+ * 泼溅场景要写出 splat 才选得中：--only z19 不带上比预算的泼溅场景
+ */
 export function selectScenes(only: readonly string[]): Scene[] {
   if (only.length === 0) {
     return SCENES.filter(scene => scene.byDefault);
   }
+  const ids = new Set(SCENES.map(scene => scene.id));
   return SCENES.filter(scene =>
-    only.some(pattern => scene.id.includes(pattern) && (scene.splats.length === 0 || pattern.includes('splat')))
+    only.some(pattern =>
+      ids.has(pattern) ? scene.id === pattern : scene.id.includes(pattern) && (scene.splats.length === 0 || pattern.includes('splat'))
+    )
   );
 }

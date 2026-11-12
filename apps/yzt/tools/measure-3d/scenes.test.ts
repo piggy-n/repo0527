@@ -11,6 +11,15 @@ describe('selectScenes', () => {
     expect(selectScenes(['jkq2']).map(scene => scene.id)).toEqual(['jkq2-z15', 'jkq2-z16-tilt']);
   });
 
+  it('写出完整的场景 ID 时只选它：jkq-z16 不带上 jkq-z16-tilt、jkq-z16.5', () => {
+    expect(selectScenes(['jkq-z16']).map(scene => scene.id)).toEqual(['jkq-z16']);
+    expect(selectScenes(['xwq02-z16']).map(scene => scene.id)).toEqual(['xwq02-z16']);
+    expect(selectScenes(['jkq-z16', 'xwq03-z16']).map(scene => scene.id)).toEqual(['jkq-z16', 'xwq03-z16']);
+    expect(selectScenes(['splat-pc-z18']).map(scene => scene.id)).toEqual(['splat-pc-z18']);
+    // 不是完整 ID 的照旧按子串
+    expect(selectScenes(['jkq-z16-']).map(scene => scene.id)).toEqual(['jkq-z16-tilt']);
+  });
+
   it('按级别选时不带上泼溅场景：它们比的是预算，要写出 splat', () => {
     expect(selectScenes(['z19']).map(scene => scene.id)).toEqual(['oblique-z19']);
     expect(selectScenes(['z18']).map(scene => scene.id)).toEqual(['white-station-z18']);

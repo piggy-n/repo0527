@@ -3,7 +3,7 @@ import { probe } from './probe.ts';
 import { type CameraState, MapSession, type MapView, type SplatLayer, type StyleGroup, type TilesetLayer } from '@mx/map-core';
 import type { BenchCamera, BenchStats } from '../bench-api.ts';
 import { GRID_COLS, GRID_ROWS, type SharpnessGrid, sharpnessGrid } from '../sharpness.ts';
-import { createFollower, showReadout } from './look.ts';
+import { LookControl, showReadout } from './look.ts';
 import { decodeShot } from './shots.ts';
 
 // 测量页：只有底图和模型，没有面板、定时器和业务图层，不让页面自己的工作混进测量。
@@ -58,8 +58,8 @@ export interface BenchApi {
   camera(): CameraState;
   /** 相机到了场景的位置（没写中心时要等模型就绪后那一跳） */
   placed(): boolean;
-  /** --look 的跟随窗口：ms 毫秒内一帧一帧地走到这个相机 */
-  followTo(camera: BenchCamera, ms: number): void;
+  /** --look 的窗口（跟随、用户操作、按 R 重新稳定）；不是 --look 时为 null */
+  readonly look: LookControl | null;
   /** 算一张截图按格的清晰度 */
   sharpnessOf(base64: string): Promise<SharpnessGrid>;
 }
@@ -179,6 +179,9 @@ if (!centerText) {
   });
 }
 
+// --look 的窗口：跟随、用户操作、按 R 重新稳定（page/look.ts）
+const look = params.get('look') === '1' ? new LookControl(container, () => session.camera.current, setCamera) : null;
+
 const loadStartedAt = performance.now();
 session.scene.set(sceneContent(true));
 
@@ -204,11 +207,11 @@ window.bench = {
   stats: () => handle.stats(),
   camera: () => session.camera.current,
   placed: () => placed,
-  followTo: createFollower(() => session.camera.current, setCamera),
+  look,
   sharpnessOf: async base64 => sharpnessGrid(await decodeShot(base64), GRID_COLS, GRID_ROWS)
 };
 // --look：不测量，人在窗口里看，左上角显示读数
-if (params.get('look') === '1') {
-  showReadout(params.get('label') ?? '', () => handle.stats(), () => session.camera.current);
+if (look) {
+  showReadout(params.get('label') ?? '', () => handle.stats(), () => session.camera.current, look);
 }
 window.benchReady = true;

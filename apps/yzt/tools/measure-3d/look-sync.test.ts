@@ -77,6 +77,21 @@ describe('syncStep', () => {
     expect(syncStep([at(120.42), at(120.405)], [at(120.42), at(120.4)], at(120.42)).leader).toBe(1);
   });
 
+  it('用户在操作的窗口优先领头，也不被跟随：跟随的窗口自己走动被误判时，不会把用户正在拖的窗口拽走', () => {
+    // 窗口 0 的变化其实是它自己在追（没报告成 busy），窗口 1 是用户在拖
+    const current = [at(120.405), at(120.42)];
+    const known = [at(120.4), at(120.41)];
+    expect(syncStep(current, known, null, [false, true])).toEqual({ leader: 1, target: at(120.42), followers: [0] });
+    // 不知道谁在操作时取第一个变了的：用户的窗口会收到跟随
+    expect(syncStep(current, known, null).followers).toEqual([1]);
+    // 用户在操作、但这一轮没动：不当领头，也不跟别人
+    expect(syncStep([at(120.43), at(120.41)], [at(120.42), at(120.41)], null, [false, true])).toEqual({
+      leader: 0,
+      target: at(120.43),
+      followers: []
+    });
+  });
+
   it('别的窗口动过以后才就绪的：跟到上一次的相机；已经就绪、没动的不跟', () => {
     const step = syncStep([at(120.41), at(120.4), at(120.4)], [at(120.41), null, at(120.4)], at(120.41));
     expect(step).toEqual({ leader: null, target: at(120.41), followers: [1] });

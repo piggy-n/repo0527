@@ -44,7 +44,10 @@ const MAX_SEGMENT_MS = 600;
 export const segmentMs = (intervalMs: number): number =>
   Math.min(MAX_SEGMENT_MS, Math.max(MIN_SEGMENT_MS, intervalMs * SEGMENT_RATIO));
 
-/** 跟随中（busy）的窗口在自己走：记下的相机换成这一轮读到的，它就不会被当成用户动过 */
+/**
+ * 跟随中（busy）的窗口在自己走：记下的相机换成这一轮读到的，它就不会被当成用户动过。
+ * busy 由页面报告（这一轮或上一轮在跟随、在重新稳定），不按 Node 的时钟估计：页面忙的时候命令会晚到
+ */
 export const ignoreBusy = (
   known: readonly (BenchCamera | null)[],
   current: readonly (BenchCamera | null)[],
@@ -63,22 +66,28 @@ const others = (current: readonly (BenchCamera | null)[], target: BenchCamera, a
 
 /**
  * current 是这一轮读到的各窗口的相机（还没就绪的为 null），known 是上一轮记下的（还没就绪的为 null），
- * last 是上一次跟过去的相机。和记下的不同就是被动过：取第一个，其余和它不同的都跟过去；
+ * last 是上一次跟过去的相机，driving 是页面报告的"用户在操作这个窗口"。和记下的不同就是被动过：
+ * 用户在操作的窗口优先，其次是第一个，其余和它不同的都跟过去（用户在操作的不跟）；
  * 没有窗口被动过时，刚就绪的窗口跟到 last（别的窗口已经动过了）
  */
 export function syncStep(
   current: readonly (BenchCamera | null)[],
   known: readonly (BenchCamera | null)[],
-  last: BenchCamera | null
+  last: BenchCamera | null,
+  driving: readonly boolean[] = []
 ): SyncStep {
-  const leader = current.findIndex((camera, index) => {
+  const moved = (index: number) => {
+    const camera = current[index];
     const before = known[index];
-    return camera !== null && before !== null && before !== undefined && !sameCamera(camera, before);
-  });
-  const moved = current[leader];
-  if (leader >= 0 && moved) {
-    return { leader, target: moved, followers: others(current, moved, index => index !== leader) };
+    return camera !== null && camera !== undefined && before !== null && before !== undefined && !sameCamera(camera, before);
+  };
+  const indices = current.map((_, index) => index);
+  const leader = indices.find(index => driving[index] && moved(index)) ?? indices.find(moved);
+  const target = leader === undefined ? undefined : current[leader];
+  const free = (index: number) => !driving[index];
+  if (leader !== undefined && target) {
+    return { leader, target, followers: others(current, target, index => index !== leader && free(index)) };
   }
-  const followers = last ? others(current, last, index => (known[index] ?? null) === null) : [];
+  const followers = last ? others(current, last, index => (known[index] ?? null) === null && free(index)) : [];
   return { leader: null, target: followers.length > 0 ? last : null, followers };
 }
