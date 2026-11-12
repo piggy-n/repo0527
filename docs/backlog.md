@@ -89,8 +89,9 @@
 - 地图署名与审图号：用天地图上线公网前按其版权要求处理；本地边界数据要不要标来源和审图号，向主管部门确认
 - 第三方许可：产物现在只随附带 NOTICE 的包（echarts、gaussian-splat-lite）的文件，其余依赖的许可没有随产物提供，包括没有 NOTICE 的 Apache-2.0 包（3d-tiles-renderer、idb-keyval、docx-preview 等）的 LICENSE，以及 MIT、BSD 包的版权声明。分发前要定提供哪些、怎么提供（[vite-config](config/vite-config.md)"第三方许可"）
 - 旧前端公开了登录用的 SM2 私钥，建议后端更换密钥对，换后只改 `.env`
-- 确定部署的网络条件后复查字体加载时机（ADR 0062）；驾驶舱的完整思源宋体约 11 MiB，是否分片或统一普惠体（[验收报告](archive/stages/city-dashboard-acceptance.md)）
+- 确定部署的网络条件后复查字体加载时机（ADR 0062）；驾驶舱的完整思源宋体约 11 MiB，是否分片或统一普惠体（[验收报告](archive/stages/city-dashboard-acceptance.md)）；2026-11-11 实测三个字体在地图入场刚开始时各占主线程 120～140ms 解码（`DecodeFont`），地图入场开头会顿一下（[模块文档](modules/city-dashboard.md)"入场卡顿"）
 - 驾驶舱：暖刷新波动、低端 GPU、触控、慢网、数小时运行、真实统计数据都没有验收结论；固定指标不算业务验收
+- 驾驶舱的粒子、雾带、薄雾、星环 CSS 动画在地图入场时就开始，那时在 `visibility: hidden` 里，Chrome 不交给合成线程（compositeFailed 1<<17），就绪后主线程仍每秒醒来更新它们（不重绘）；可以等可见后再开始动画（[模块文档](modules/city-dashboard.md)"入场卡顿"）
 - 待用户在真实页面或真实设备上验收：现状底图树拖动的地图叠放；资源管理目录在鼠标和粗指针并存的设备上的图标；AI 消息里的 32 头像；用户实际的 Shapefile 和有天地图时的观感，触屏上的绘制和拖动节点
 - 2026-10-29 至 11-03 的页面调整在路线图里标为"待验收"，后来是否验收没有记录（[路线图](archive/roadmap.md)"系统功能与页面优化"及之后几节）
 - 滚轮和触控板的缩放速率（滚轮 1/600、触控板 1/150）等用普通鼠标和触控板试过后再定
