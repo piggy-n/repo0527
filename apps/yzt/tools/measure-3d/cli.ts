@@ -78,6 +78,10 @@ if (options.list) {
 if (scenes.length === 0) {
   fail([`--only ${options.only.join(',')} 没有选中任何场景，用 --list 看全部场景。`]);
 }
+// --look 配 --at 时模型由 --only 选：不写的话默认的第一个是徐州的倾斜摄影，在别处的相机下窗口全是空的
+if (at && options.look && options.only.length === 0) {
+  fail(['--look 配 --at 时要用 --only 写出模型所在的场景，如 --only jkq-z16-tilt：不写的话默认开徐州的倾斜摄影，这个相机下可能什么都没有。']);
+}
 // 换成同一个相机，几个场景就是跑几遍一样的（--look 只开第一个场景，不拦）
 if (at && !options.look && scenes.length > 1) {
   const chosen = scenes.map(scene => scene.id).join('、');

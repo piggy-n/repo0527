@@ -17,6 +17,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 /** 页面报告的这一轮的状态（page/look.ts 的 LookState，这边的 tsconfig 没有 DOM，类型照写一份） */
 interface PageState {
   readonly camera: BenchCamera;
+  readonly heading: BenchCamera;
   readonly following: boolean;
   readonly driving: boolean;
   readonly resettle: boolean;
@@ -36,9 +37,9 @@ const follow = (page: Page, camera: BenchCamera, ms: number) =>
     ? Promise.resolve()
     : page.evaluate(`window.bench.look.followTo(${JSON.stringify(camera)}, ${Math.round(ms)})`).catch(() => undefined);
 
-// 不等它做完：几帧以后页面自己报告做完了
-const resettle = (page: Page) =>
-  page.isClosed() ? Promise.resolve() : page.evaluate('void window.bench.look.resettle()').catch(() => undefined);
+// 所有窗口在同一个相机重新稳定；不等它做完，几帧以后页面自己报告做完了。用户在操作的窗口页面自己不做
+const resettle = (page: Page, camera: BenchCamera) =>
+  page.isClosed() ? Promise.resolve() : page.evaluate(`void window.bench.look.resettle(${JSON.stringify(camera)})`).catch(() => undefined);
 
 // 窗口并排：第 index 个放在左数第 index 个位置，屏幕放不下时用户自己挪
 async function placeWindow(page: Page, index: number, { width, height }: { width: number; height: number }): Promise<void> {
@@ -90,11 +91,14 @@ export async function runLook(scene: Scene, list: readonly Variant[], ctx: LookC
       const now = Date.now();
       const current = states.map(state => state?.camera ?? null);
       const driving = states.map(state => state?.driving === true);
-      if (states.some(state => state?.resettle)) {
+      // 按 R：去按 R 的那个窗口要去的相机（它在跟随时是终点，不然是现在的），所有窗口都到那里重新稳定
+      const anchor = states.find(state => state?.resettle)?.heading;
+      if (anchor) {
         // oxlint-disable-next-line no-await-in-loop -- 同上
-        await Promise.all(pages.map(resettle));
-        wasFollowing = pages.map(() => true);
+        await Promise.all(pages.map(page => resettle(page, anchor)));
+        wasFollowing = driving.map(operated => !operated);
         known = current;
+        last = anchor;
         syncedAt = now;
         // oxlint-disable-next-line no-await-in-loop -- 同上
         await sleep(SYNC_EVERY_MS);

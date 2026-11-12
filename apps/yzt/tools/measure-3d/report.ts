@@ -286,7 +286,7 @@ const qualityRunOf = (results: MeasureResults, scene: string, variant: string) =
 
 // 截图不能比的原因，按状态分：超时是模型没稳定；无效可能已经稳定，只是画面空白或模型没画出来；失败可能根本没有截图
 const UNUSABLE: Readonly<Record<Exclude<RunStatus, 'ok'>, string>> = {
-  timeout: '超时，模型没稳定，截图不是稳定后的',
+  timeout: '超时（等稳定超过了时限），截图不一定是稳定后的',
   invalid: '无效（画面空白或模型没画出来，原因见 report.md 的"失败、超时和无效"）',
   failed: '失败，可能没有截图'
 };
@@ -372,11 +372,12 @@ function fillDetailCell(runs: readonly RunResult[], read: (run: RunResult) => Sc
   return `${integer(relaxed)} / ${integer(pick(runs, run => read(run)?.detail.waiting))}${note}`;
 }
 
-// 飞行后显示的瓦片那张表的说明：放宽的原因在哪几行。"放宽的帧"各行只数自己那一段新增的
+// 飞行后显示的瓦片那张表的说明：放宽的原因在哪几行。"放宽的帧"各行只数自己那一段新增的，放宽又会一直带下去
 const FILL_DETAIL_TITLE =
   '**飞行后显示的瓦片（第一遍）：** 每格是放宽了才停在这一级 / 等更细的（块）。等着的一直不归零是加载跟不上。' +
-  '最后还有放宽的，原因看上表"第一遍飞行"和"飞行后"两行的"放宽的帧 装满 / 估计"（各行只数自己那一段新增的：飞行中放宽、停下后没收回来的算在第一遍飞行里；' +
-  '第二遍飞行之后的看"第二遍飞行""画面恢复"两行）；细一级放不放得下看更大一档：它在这张表最后是不是 0 / 0（整级清楚）';
+  '最后还有放宽的，原因看上表各段的"放宽的帧 装满 / 估计"：各行只数自己那一段新增的，放宽却会一直带下去（动着时需求不低于上限的 80%、停着不低于 97% 就不收紧，也不再算一次放宽），' +
+  '所以第一遍飞行之后要从"加载到稳定"看起，加上"第一遍飞行""飞行后"；第二遍飞行之后再加"第二遍飞行""画面恢复"。段与段之间的空档不在任何一行里。' +
+  '细一级放不放得下看更大一档：它在这张表最后是不是 0 / 0（整级清楚）';
 
 const finalOf = (run: RunResult) => run.settle?.trace.at(-1);
 
@@ -624,7 +625,7 @@ const pairImages = (pair: ShotPair, heading: string, onto: string, left: string,
 <img src="${pair.worstCrops}" style="${IMAGE_STYLE}">`;
 
 // 截图的说明：只有正常的那一遍是"稳定后"；超时是没稳定，无效、失败照实写
-const CAPTIONS: Readonly<Record<RunStatus, string>> = { ok: '稳定后', timeout: '没稳定（超时）', invalid: '无效', failed: '失败' };
+const CAPTIONS: Readonly<Record<RunStatus, string>> = { ok: '稳定后', timeout: '不一定稳定（超时）', invalid: '无效', failed: '失败' };
 
 // 飞行前后：截图并排，比过的再加比值、热力图和最差几格的放大
 function afterFlightPart(shots: QualityResult, status: RunStatus, pair: ShotPair | null): string {
@@ -678,14 +679,19 @@ export function renderQualityPage(results: MeasureResults): string {
   const sections = results.scenes.flatMap(scene =>
     sceneVariants(results, scene).flatMap(({ id, label }) => {
       const own = shotsOf(scene.id, id);
-      if (!own?.shots) {
+      if (!own) {
         return [];
+      }
+      const heading = `<h2>${id === DEFAULT_VARIANT ? scene.title : `${scene.title}，${label}`}</h2>`;
+      // 这一遍失败、没有截图：留一行说明，不然看起来像还没跑到
+      if (!own.shots) {
+        return [`<section>\n${heading}\n<p>画质这一遍${CAPTIONS[own.status]}，没有截图，原因见 report.md 的"失败、超时和无效"。</p>\n</section>`];
       }
       const compared = results.quality.find(item => item.scene === scene.id && item.variant === id);
       const fallback = id === DEFAULT_VARIANT ? undefined : shotsOf(scene.id, DEFAULT_VARIANT);
       return [
         `<section>
-<h2>${id === DEFAULT_VARIANT ? scene.title : `${scene.title}，${label}`}</h2>
+${heading}
 ${afterFlightPart(own.shots, own.status, compared?.afterFlight ?? null)}
 ${versusDefaultPart(own.shots, own.status, fallback, compared?.versusDefault ?? null)}
 </section>`

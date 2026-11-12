@@ -7,7 +7,7 @@ import { interpolateCamera } from '../look-sync.ts';
 const READOUT_EVERY_MS = 500;
 // 滚轮、键盘没有"松开"：最后一次操作之后这么久内还算用户在操作这个窗口
 const DRIVING_GRACE_MS = 300;
-// 按 R 时先缩小这么多级再回来：相机离开锁定的姿态（高度的四分之一以上），放宽的下限解开，回来时按"跳到这里"重新判断
+// 按 R 时先缩小这么多级再到要去的相机：相机离开锁定的姿态（高度的四分之一以上），放宽的下限解开，到了以后按"跳到这里"重新判断
 const AWAY_ZOOM = 3;
 
 const integer = (value: number) => Math.round(value).toLocaleString('en-US');
@@ -19,22 +19,31 @@ export const cameraText = ({ center, zoom, pitch, bearing }: CameraState): strin
 /** Node 每一轮读的：相机，是不是在跟随（自己在走），用户是不是在操作这个窗口，按没按 R（读过就清掉） */
 export interface LookState {
   readonly camera: BenchCamera;
+  /** 这个窗口要去的相机：在跟随、重新稳定时是终点，不然是现在的相机。按 R 时所有窗口都去按 R 的那个窗口的这个相机 */
+  readonly heading: BenchCamera;
   readonly following: boolean;
   readonly driving: boolean;
   readonly resettle: boolean;
 }
 
+// MapLibre 用键盘移动相机的键（平移、缩放、配合 Shift 转动和俯仰）：只有这些算用户在操作，Shift、Ctrl 这些单按不算
+const CAMERA_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', '+', '-', '=', '_', 'PageUp', 'PageDown']);
+
 const nextFrame = () => new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
 
 /**
  * 一个 --look 窗口：跟随时每一帧按插值设一次相机，和测量的飞行一样，引擎看到的是连续的移动，不是瞬移加停下。
- * 用户一按下就停止跟随，操作期间不接受跟随，拖动不会被下一帧的跟随取消
+ * 用户一按下就停止跟随和重新稳定，操作期间两者都不接受，拖动不会被下一帧取消
  */
 export class LookControl {
   readonly #current: () => BenchCamera;
   readonly #setCamera: (camera: BenchCamera) => void;
   #frame = 0;
   #following = false;
+  // 正在走向的相机（跟随、重新稳定的终点）；没有时为 null
+  #heading: BenchCamera | null = null;
+  // 代次：新的跟随、重新稳定或用户操作都让进行中的那一次作废，等待中的下一帧回来后不再设相机
+  #generation = 0;
   #pointerDown = false;
   #drivenUntil = 0;
   #resettle = false;
@@ -64,9 +73,10 @@ export class LookControl {
     window.addEventListener('pointercancel', release, { capture: true });
     container.addEventListener('wheel', drive, { capture: true, passive: true });
     window.addEventListener('keydown', event => {
-      if (event.key === 'r' || event.key === 'R') {
+      // 按住不放时系统每隔几十毫秒重复一次按键：只认第一次
+      if ((event.key === 'r' || event.key === 'R') && !event.repeat) {
         this.#resettle = true;
-      } else {
+      } else if (CAMERA_KEYS.has(event.key)) {
         drive();
       }
     });
@@ -83,7 +93,8 @@ export class LookControl {
   state(): LookState {
     const resettle = this.#resettle;
     this.#resettle = false;
-    return { camera: this.#current(), following: this.#following, driving: this.driving, resettle };
+    const camera = this.#current();
+    return { camera, heading: this.#heading ?? camera, following: this.#following, driving: this.driving, resettle };
   }
 
   /** ms 毫秒内一帧一帧地走到 target；新的一段从当前位置接着走，前一段作废。用户在操作时不跟 */
@@ -91,38 +102,64 @@ export class LookControl {
     if (this.driving) {
       return;
     }
-    this.#stop();
+    const generation = this.#begin(target);
     const from = this.#current();
     const start = performance.now();
-    this.#following = true;
     const step = () => {
+      if (generation !== this.#generation) {
+        return;
+      }
       const t = Math.min(1, (performance.now() - start) / ms);
       this.#setCamera(interpolateCamera(from, target, t));
       if (t < 1) {
         this.#frame = window.requestAnimationFrame(step);
       } else {
-        this.#following = false;
+        this.#finish(generation);
       }
     };
     this.#frame = window.requestAnimationFrame(step);
   }
 
-  /** 先移开再回到现在的相机：放宽的下限解开，按"跳到这里"重新稳定。几个窗口一起做，比较才公平 */
-  async resettle(): Promise<void> {
+  /**
+   * 在 target 重新稳定：先移开再到 target，放宽的下限解开，按"跳到这里"重新判断。所有窗口用同一个 target 一起做，
+   * 比较才公平。用户在操作的窗口不做；中途用户一操作、又来一次跟随或重新稳定，这一次就作废，不再设相机
+   */
+  async resettle(target: BenchCamera): Promise<void> {
+    if (this.driving) {
+      return;
+    }
+    const generation = this.#begin(target);
+    this.#setCamera({ ...target, zoom: Math.max(0, target.zoom - AWAY_ZOOM) });
+    await nextFrame();
+    await nextFrame();
+    if (generation !== this.#generation) {
+      return;
+    }
+    this.#setCamera(target);
+    await nextFrame();
+    this.#finish(generation);
+  }
+
+  // 开始新的一次（跟随或重新稳定）：上一次作废，返回这一次的代次
+  #begin(target: BenchCamera): number {
     this.#stop();
-    const back = this.#current();
     this.#following = true;
-    this.#setCamera({ ...back, zoom: Math.max(0, back.zoom - AWAY_ZOOM) });
-    await nextFrame();
-    await nextFrame();
-    this.#setCamera(back);
-    await nextFrame();
-    this.#following = false;
+    this.#heading = target;
+    return this.#generation;
+  }
+
+  #finish(generation: number): void {
+    if (generation === this.#generation) {
+      this.#following = false;
+      this.#heading = null;
+    }
   }
 
   #stop(): void {
     window.cancelAnimationFrame(this.#frame);
+    this.#generation++;
     this.#following = false;
+    this.#heading = null;
   }
 }
 
