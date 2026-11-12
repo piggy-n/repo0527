@@ -6,9 +6,22 @@ import { useDashboard } from './useDashboard';
 
 const data = createMockData(2026);
 
+// 演示分支默认选中共享幸福，下面的用例仍从安全韧性开始
+function resilienceModel() {
+  const model = useDashboard(data);
+  model.selectCategory('resilience');
+  return model;
+}
+
 describe('驾驶舱筛选与图表联动', () => {
-  it('默认两年全部城市，清空年份后时间轴为空且不伪造均值', () => {
+  it('演示分支：进入时选中共享幸福和它的第一项', () => {
     const model = useDashboard(data);
+    expect(model.state.value).toMatchObject({ categoryId: 'happiness', indicatorId: 'A-32' });
+    expect(model.indicator.value.name).toBe('社区小学步行10分钟覆盖率');
+  });
+
+  it('默认两年全部城市，清空年份后时间轴为空且不伪造均值', () => {
+    const model = resilienceModel();
     expect(model.state.value.years).toEqual([2026, 2025]);
     expect(model.cities.value).toHaveLength(13);
     model.setYears([]);
@@ -21,7 +34,7 @@ describe('驾驶舱筛选与图表联动', () => {
   });
 
   it('时间轴只改当前年，不改变比较结果和最新年均值', () => {
-    const model = useDashboard(data);
+    const model = resilienceModel();
     const comparison = model.comparisons.value;
     model.setActiveYear(2025);
     expect(model.state.value.activeYear).toBe(2025);
@@ -34,7 +47,7 @@ describe('驾驶舱筛选与图表联动', () => {
   });
 
   it('城市过滤重算均值但不改变六年全市色阶', () => {
-    const model = useDashboard(data);
+    const model = resilienceModel();
     const classification = model.classification.value;
     expect(classification.sampleCount).toBe(6 * 13);
     model.setCities(['320100', '320100', 'unknown']);
@@ -48,7 +61,7 @@ describe('驾驶舱筛选与图表联动', () => {
   });
 
   it('快速切类别回到首项并重置卡片偏好；单项选择不影响筛选', () => {
-    const model = useDashboard(data);
+    const model = resilienceModel();
     const initial = model.indicator.value;
     model.setPreference(initial, { type: 'line', showAverage: false });
     model.selectCategory('happiness');

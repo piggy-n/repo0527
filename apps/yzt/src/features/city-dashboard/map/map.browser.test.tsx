@@ -7,7 +7,6 @@ import { DashboardMap } from '../components/DashboardMap';
 import { useDashboard } from '../composables/useDashboard';
 import { createMockData } from '../data/mock-data';
 import type { SceneCallbacks } from './types';
-import viewStyles from '../components/DashboardView.module.scss';
 
 const hosts: HTMLElement[] = [];
 afterEach(() => {
@@ -23,28 +22,27 @@ function host(): HTMLDivElement {
 }
 
 describe('驾驶舱真实地图引擎', () => {
-  it('窄地图的多行标题与固定提示表格保留间距', async () => {
+  it('演示分支：地图不渲染提示表格，三维标签只写城市名', async () => {
     const model = useDashboard(createMockData(2026));
-    model.selectCategory('happiness');
-    const { indicators } = model.category.value;
-    const indicator = required(indicators.find(item => item.name.startsWith('每10万人拥有的博物馆')), '博物馆指标');
-    model.selectIndicator(indicator.id);
     const wrapper = mount(DashboardMap, {
       attachTo: host(),
-      props: { model, reducedMotion: true, active: true, forceFallback: true },
-      attrs: { style: 'width:366px;height:600px;--ui-scale:0.9' },
-      slots: { default: () => <div class={viewStyles.tooltip} data-dashboard-tooltip>城市数据表格</div> }
+      props: { model, reducedMotion: true, active: true },
+      attrs: { style: 'width:900px;height:700px' },
+      slots: { default: () => <div data-dashboard-tooltip>城市数据表格</div> }
     });
     try {
-      await vi.waitFor(() => expect(wrapper.attributes('data-state')).toBe('ready'), { timeout: 10000 });
-      const title = wrapper.get('[data-enter="map-title"]').element.getBoundingClientRect();
-      const tooltip = wrapper.get('[data-dashboard-tooltip]').element.getBoundingClientRect();
-      expect(title.height).toBeGreaterThan(60);
-      expect(tooltip.top - title.bottom).toBeGreaterThanOrEqual(11);
+      const labels = () => wrapper.findAll('button[aria-haspopup="dialog"]');
+      await vi.waitFor(() => expect(labels()).toHaveLength(13), { timeout: 10000 });
+      expect(wrapper.find('[data-dashboard-tooltip]').exists()).toBe(false);
+      expect(labels().map(label => label.text())).toContain('南京市');
+      for (const label of labels()) {
+        expect(label.text()).toMatch(/^[一-龥]+市$/);
+        expect(label.attributes('aria-label')).toBe(`${label.text()}，查看详情`);
+      }
     } finally {
       wrapper.unmount();
     }
-  });
+  }, 15000);
 
   it('空闲和隐藏时不重绘，扫光不重复发布静止标签，销毁结束定时动画', async () => {
     const element = host();
@@ -144,7 +142,7 @@ describe('驾驶舱真实地图引擎', () => {
         // oxlint-disable-next-line no-await-in-loop -- 本轮降级完成后才能验证释放及下一轮
         await vi.waitFor(() => expect(wrapper.text()).toContain('地图采用简化显示'));
         expect(wrapper.findAll('canvas')).toHaveLength(1);
-        expect(wrapper.find('[aria-label="消防救援5分钟可达覆盖率二维分布图"]').exists()).toBe(true);
+        expect(wrapper.find('[aria-label="社区小学步行10分钟覆盖率二维分布图"]').exists()).toBe(true);
         model.setYears([]);
         // oxlint-disable-next-line no-await-in-loop -- 卸载前确认本轮筛选收敛
         await vi.waitFor(() => expect(wrapper.text()).toContain('请选择年份'));

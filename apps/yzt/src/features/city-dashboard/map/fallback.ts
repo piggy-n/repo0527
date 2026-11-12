@@ -4,8 +4,6 @@ import { GeoComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { LabelLayout } from 'echarts/features';
 import { CITIES } from '../catalog';
-import { formatValue } from '../calculations';
-import type { Indicator } from '../model';
 import type { DashboardRegions } from './region-geometry';
 import type { MapValues } from './types';
 
@@ -17,14 +15,6 @@ function cityCode(event: unknown): string | null {
     return null;
   }
   return CITIES.find(city => city.name === event.name)?.code ?? null;
-}
-
-// 简化地图上城市名称下面的数值；没有数值时只写名称
-function cityLabel(name: string, value: number | null | undefined, indicator: Indicator): string {
-  if (value === null || value === undefined) {
-    return name;
-  }
-  return `${name}\n${formatValue(value, indicator, indicator.unit.length <= 3)}`;
 }
 
 /** 二维降级沿用同一边界、值和色阶，不接入第二套地图服务 */
@@ -46,7 +36,7 @@ export function createFallback(
   chart.on('mouseout', () => hover(null));
   chart.getZr().on('globalout', () => hover(null));
   return {
-    update(values: MapValues, colors: Readonly<Record<string, string>>, indicator: Indicator): void {
+    update(values: MapValues, colors: Readonly<Record<string, string>>): void {
       const series: MapSeriesOption = {
         type: 'map',
         map: 'jiangsu-city-dashboard',
@@ -60,11 +50,8 @@ export function createFallback(
           fontSize: 15,
           color: '#0E4894',
           textBorderColor: '#FFF',
-          textBorderWidth: 3,
-          formatter: item => {
-            const city = CITIES.find(current => current.name === item.name);
-            return cityLabel(item.name, city ? values[city.code] : null, indicator);
-          }
+          // 演示分支：只写城市名，不写指标数值
+          textBorderWidth: 3
         },
         // 悬停和选中的颜色沿用 ECharts 5 的默认值，6 的主题改成了浅黄
         emphasis: {

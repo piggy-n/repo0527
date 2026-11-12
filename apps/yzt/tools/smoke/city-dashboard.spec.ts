@@ -40,16 +40,18 @@ test('驾驶舱需登录、独立懒加载，缺字体时地图详情及三类�
     expect(bytes.byteLength).toBeGreaterThan(10000);
   }
   await download('下载当前地图');
-  await download('下载消防救援5分钟可达覆盖率图表');
-  await page.getByRole('button', { name: /^南京市，.*查看详情$/ }).click();
-  await expect(page.getByText('南京市 · 当前查看城市')).toBeVisible();
+  await download('下载社区小学步行10分钟覆盖率图表');
+  await page.getByRole('button', { name: '南京市，查看详情', exact: true }).click();
+  // 演示分支：从地图打开的详情不突出城市、不写城市名
+  await expect(page.getByRole('heading', { name: '社区小学步行10分钟覆盖率（%）', exact: true })).toBeVisible();
+  await expect(page.getByText('当前查看城市')).toHaveCount(0);
   await download('下载详情图表');
   await page.getByRole('button', { name: '关闭此对话框', exact: true }).click();
   await page.getByRole('button', { name: '清空', exact: true }).click();
   await expect(page.getByText('请选择城市后查看比较数据').first()).toBeVisible();
-  await expect(page.getByRole('button', { name: '下载消防救援5分钟可达覆盖率图表', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '下载社区小学步行10分钟覆盖率图表', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '南京市', exact: true }).click();
-  await expect(page.getByRole('button', { name: '下载消防救援5分钟可达覆盖率图表', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '下载社区小学步行10分钟覆盖率图表', exact: true })).toBeEnabled();
 });
 
 test('没有 WebGL 时保留二维地图与导出', async ({ page }) => {
@@ -70,7 +72,7 @@ test('没有 WebGL 时保留二维地图与导出', async ({ page }) => {
   await expect(page).toHaveURL(/\/current-map$/);
   await page.goto('/city-dashboard');
   await expect(page.getByText('地图采用简化显示')).toBeVisible();
-  await expect(page.getByRole('img', { name: '消防救援5分钟可达覆盖率二维分布图', exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: '社区小学步行10分钟覆盖率二维分布图', exact: true })).toBeVisible();
   const waiting = page.waitForEvent('download');
   await page.getByRole('button', { name: '下载当前地图', exact: true }).click();
   expect(await (await waiting).failure()).toBeNull();
@@ -90,7 +92,7 @@ test.describe('驾驶舱触屏与系统减少动画', () => {
     await expect(page.locator('button[aria-haspopup="dialog"]')).toHaveCount(13);
     expect(await page.evaluate('document.documentElement.scrollWidth <= innerWidth')).toBe(true);
     const cdp = await context.newCDPSession(page);
-    const map = page.getByRole('img', { name: '消防救援5分钟可达覆盖率三维分布图', exact: true });
+    const map = page.getByRole('img', { name: '社区小学步行10分钟覆盖率三维分布图', exact: true });
     const mapBox = (await map.boundingBox())!;
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: mapBox.x + 90, y: mapBox.y + 110 }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: mapBox.x + 190, y: mapBox.y + 140 }] });

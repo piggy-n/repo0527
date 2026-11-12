@@ -42,9 +42,23 @@ function reportedFirst(indicators: readonly Indicator[]): readonly Indicator[] {
   return [...indicators.filter(hasReportData), ...indicators.filter(indicator => !hasReportData(indicator))];
 }
 
+// 演示分支：共享幸福把社区小学、社区体育设施、文艺场馆三项依次放到最前面（用户指定）
+const PINNED_FIRST: Partial<Record<IndicatorCategory['id'], readonly string[]>> = {
+  happiness: ['A-32', 'A-36', 'A04-1']
+};
+
+// 指定的几项按给定顺序排在前面，其余保持原来的顺序
+function pinnedFirst(id: IndicatorCategory['id'], indicators: readonly Indicator[]): readonly Indicator[] {
+  const pinned = PINNED_FIRST[id] ?? [];
+  const head = indicators
+    .filter(indicator => pinned.includes(indicator.id))
+    .toSorted((a, b) => pinned.indexOf(a.id) - pinned.indexOf(b.id));
+  return [...head, ...indicators.filter(indicator => !pinned.includes(indicator.id))];
+}
+
 /** 四类指标只持有目录引用，不复制或生成展示值；顺序只属于驾驶舱，目录和 AI 计算页不受影响 */
 export const CATEGORIES: readonly DashboardCategory[] = INDICATOR_CATEGORIES.map(({ id, name }) => ({
   id,
   name,
-  indicators: reportedFirst(INDICATORS.filter(indicator => indicator.categoryId === id))
+  indicators: pinnedFirst(id, reportedFirst(INDICATORS.filter(indicator => indicator.categoryId === id)))
 }));

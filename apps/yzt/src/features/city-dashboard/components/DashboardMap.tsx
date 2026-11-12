@@ -7,7 +7,6 @@ import { useDashboardMap } from '../composables/useDashboardMap';
 import { useImageExport } from '../composables/useImageExport';
 import { imageWithTitle, saveImage } from '../export/image-export';
 import { drawMapLabels } from '../export/map-export';
-import { formatValue } from '../calculations';
 import { mapLegendLevels } from '../map/config';
 import { DashboardTimeline } from './DashboardTimeline';
 import { DashboardMapFrame } from './DashboardMapFrame';
@@ -30,7 +29,8 @@ export const DashboardMap = defineComponent({
     detail: (_code: string) => true,
     settled: () => true
   },
-  setup(props, { emit, slots }) {
+  // 演示分支：不渲染默认插槽，驾驶舱经它显示的地图和卡片提示表格都不出现
+  setup(props, { emit }) {
     const canvas = ref<HTMLElement>();
     const heading = ref<HTMLElement>();
     const headingHeight = ref(50);
@@ -78,7 +78,7 @@ export const DashboardMap = defineComponent({
       const blob = await exporting.run('map', async signal => {
         const snapshot = map.capture();
         await exporting.waitForFonts(signal);
-        drawMapLabels(snapshot, indicator);
+        drawMapLabels(snapshot);
         return imageWithTitle(snapshot.canvas, exportTitle, '#D3EFFD');
       });
       if (blob) {
@@ -86,11 +86,9 @@ export const DashboardMap = defineComponent({
       }
     }
 
-    // 三维地图上的城市标签：名称和数值，点开详情；避让后离开锚点的画一条引线
+    // 三维地图上的城市标签：演示分支只显示名称，点开详情；避让后离开锚点的画一条引线
     function renderLabel(label: MapLabel) {
-      const { model } = props;
-      const value = model.mapValues.value[label.code];
-      const indicator = model.indicator.value;
+      const value = props.model.mapValues.value[label.code];
       return (
         <button
           key={label.code}
@@ -98,7 +96,7 @@ export const DashboardMap = defineComponent({
           class={[styles.label, value === null && styles.empty, map.hovered.value === label.code && styles.hovered]}
           style={{ left: `${label.x}px`, top: `${label.y}px` }}
           aria-haspopup="dialog"
-          aria-label={`${label.name}，${formatValue(value, indicator)}，查看详情`}
+          aria-label={`${label.name}，查看详情`}
           onPointerenter={() => map.hover(label.code)}
           onPointerleave={() => map.hover(null)}
           onFocus={() => map.hover(label.code)}
@@ -109,9 +107,6 @@ export const DashboardMap = defineComponent({
           }}
         >
           <strong>{label.name}</strong>
-          {props.valuesVisible && value !== null && (
-            <span>{formatValue(map.displayValues.value[label.code], indicator, indicator.unit.length <= 3)}</span>
-          )}
         </button>
       );
     }
@@ -201,7 +196,6 @@ export const DashboardMap = defineComponent({
               onChange={model.setActiveYear}
             />
           </div>
-          {slots.default?.()}
           {exporting.error.value && <p class={styles.error} role="alert">{exporting.error.value}</p>}
         </section>
       );

@@ -188,16 +188,7 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
       pageIconInactiveColor: '#AAA',
       pageTextStyle: { color: '#333' }
     },
-    // 唯一 DOM 表格由组件呈现，ECharts 只计算指示线与城市索引
-    tooltip: {
-      trigger: 'axis',
-      showContent: false,
-      axisPointer: {
-        type: preference.type === 'bar' ? 'shadow' : 'line',
-        shadowStyle: { color: 'rgba(67,142,251,0.08)' },
-        lineStyle: { color: '#89BFFF', type: 'dashed' }
-      }
-    },
+    // 演示分支：不设 tooltip，悬停时没有指示阴影，也不发出城市索引
     xAxis: {
       type: 'category',
       data: cities.map(city => city.name.replace(/市$/, '')),
@@ -205,6 +196,8 @@ export function createChartOption(input: ChartInput): DashboardChartOption {
       axisTick: { show: false },
       // ECharts 5 的刻度标签继承全局文字颜色，6 的主题改成了灰色
       axisLabel: {
+        // 演示分支：卡片和详情的横轴不显示城市名
+        show: false,
         interval: 0,
         rotate: !detail && cities.length > 8 ? 38 : 0,
         margin: 10,

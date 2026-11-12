@@ -61,7 +61,8 @@ describe('整屏入场生命周期', () => {
     await wrapper.setProps({ reducedMotion: true });
     await vi.waitFor(() => expect(wrapper.attributes('data-dashboard-phase')).toBe('ready'), { timeout: 30000 });
     expect(wrapper.findAll('button[aria-haspopup="dialog"]')).toHaveLength(13);
-    expect(wrapper.findAll('button[aria-haspopup="dialog"] > span')).toHaveLength(13);
+    // 演示分支：地图标签只写城市名，没有数值
+    expect(wrapper.findAll('button[aria-haspopup="dialog"] > span')).toHaveLength(0);
     wrapper.unmount();
     await nextTick();
     expect(host.querySelectorAll('canvas')).toHaveLength(0);

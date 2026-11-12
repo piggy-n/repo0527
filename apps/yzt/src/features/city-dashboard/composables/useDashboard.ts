@@ -18,11 +18,13 @@ export function useDashboard(data: DashboardData) {
   const availableYears = DASHBOARD_YEARS.filter(year => data.years.includes(year));
   const preferredYears = [2026, 2025].filter(year => availableYears.includes(year));
   const years = preferredYears.length ? preferredYears : availableYears.slice(0, 2);
+  // 演示分支：进入时默认选中"共享幸福"
+  const initialCategory = CATEGORIES.find(item => item.id === 'happiness') ?? CATEGORIES[0];
   const state = shallowRef<FilterState>({
     years,
     cityCodes: CITIES.map(city => city.code),
-    categoryId: 'resilience',
-    indicatorId: CATEGORIES[0].indicators[0].id,
+    categoryId: initialCategory.id,
+    indicatorId: initialCategory.indicators[0].id,
     activeYear: years[0] ?? null
   });
   const preferences = shallowRef<ReadonlyMap<string, ChartPreference>>(new Map());

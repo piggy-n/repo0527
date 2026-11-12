@@ -51,7 +51,7 @@ export function useDashboardMap(
   }
 
   function updateFallback(): void {
-    fallback?.update(displayValues.value, colors, model.indicator.value);
+    fallback?.update(displayValues.value, colors);
   }
 
   /** 标签数值与城市颜色使用同一进度，简化地图按较低频率重绘 */

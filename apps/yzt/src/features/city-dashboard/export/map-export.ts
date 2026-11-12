@@ -1,9 +1,7 @@
-import { formatValue } from '../calculations';
 import type { DashboardMapSnapshot } from '../map/types';
-import type { Indicator } from '../model';
 
 /** 将 DOM 城市标签绘入已冻结的地图像素，简化地图已自带标签 */
-export function drawMapLabels(snapshot: DashboardMapSnapshot, indicator: Indicator): void {
+export function drawMapLabels(snapshot: DashboardMapSnapshot): void {
   const context = snapshot.canvas.getContext('2d');
   if (!context) {
     throw new Error('地图导出画布不可用');
@@ -24,20 +22,14 @@ export function drawMapLabels(snapshot: DashboardMapSnapshot, indicator: Indicat
       context.lineWidth = 0.8;
       context.stroke();
     }
+    // 演示分支：和页面一样只画城市名，居中在标签位置
     context.font = `600 ${Math.max(14, 20 * snapshot.labelScale)}px "Alibaba PuHuiTi"`;
+    context.textBaseline = 'middle';
     context.fillStyle = '#0E4894';
     context.strokeStyle = '#FFFFFF';
     context.lineWidth = 1.5;
-    context.strokeText(label.name, label.x, label.y - 12);
-    context.fillText(label.name, label.x, label.y - 12);
-    context.font = `600 ${Math.max(12, 14 * snapshot.labelScale)}px "Alibaba PuHuiTi"`;
-    context.fillStyle = '#8B6500';
-    const value = snapshot.values[label.code];
-    if (value !== null) {
-      const text = formatValue(value, indicator, indicator.unit.length <= 3);
-      context.strokeText(text, label.x, label.y + 7);
-      context.fillText(text, label.x, label.y + 7);
-    }
+    context.strokeText(label.name, label.x, label.y);
+    context.fillText(label.name, label.x, label.y);
   });
   context.restore();
 }

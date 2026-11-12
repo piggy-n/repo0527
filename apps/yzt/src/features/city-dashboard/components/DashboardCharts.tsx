@@ -13,7 +13,6 @@ import { renderChartImage } from '../export/chart-export';
 import { imageWithTitle, saveImage } from '../export/image-export';
 import type { ChartHover, Comparison, Indicator } from '../model';
 import { DashboardPlot } from './DashboardPlot';
-import { TooltipTable } from './TooltipTable';
 import fonts from './DashboardFonts.module.scss';
 import styles from './DashboardCharts.module.scss';
 
@@ -58,7 +57,6 @@ export const DashboardCharts = defineComponent({
       }
     });
     const focusedCity = computed(() => CITIES.find(city => city.code === detail.value?.cityCode));
-    const hoveredCity = computed(() => CITIES.find(city => city.code === detailHover.value));
     // 从当前列表读取卡片，避免重渲染期间旧 ref 清理影响定位
     const cardElements = () => [...list.value?.querySelectorAll<HTMLElement>('[data-chart-id]') ?? []];
     // 悬停只更新提示，不重建整组图表配置，避免 setOption 与指示器事件互相触发
@@ -100,13 +98,14 @@ export const DashboardCharts = defineComponent({
       void navigation.locateIndicator(id, { scroll });
     }
 
-    function openDetail({ indicatorId, cityCode = null }: { indicatorId: string; cityCode?: string | null }): void {
+    // 演示分支：从地图点城市打开的详情也不突出城市，不标它的数值，不写城市名
+    function openDetail({ indicatorId }: { indicatorId: string; cityCode?: string | null }): void {
       const indicator = props.model.category.value.indicators.find(item => item.id === indicatorId);
       if (!indicator) {
         return;
       }
       emit('hover', null);
-      detail.value = { indicator, cityCode };
+      detail.value = { indicator, cityCode: null };
       detailLegend.value = { ...props.model.preference(indicator).legend };
       detailHover.value = null;
       detailVisible.value = true;
@@ -234,8 +233,8 @@ export const DashboardCharts = defineComponent({
       );
     }
 
+    // 演示分支：详情不显示悬停的提示表格
     function renderDetail(selected: Indicator, comparison: readonly Comparison[]) {
-      const { model } = props;
       return (
         <div class={styles.detail}>
           <h2 class={styles.fullTitle}>
@@ -246,18 +245,6 @@ export const DashboardCharts = defineComponent({
             {renderActions(selected, true)}
           </div>
           <div class={styles.detailScroll}>{renderDetailPlot(selected, comparison)}</div>
-          {hoveredCity.value && (
-            <div class={styles.detailTooltip}>
-              <TooltipTable
-                indicator={selected}
-                comparison={comparison}
-                cities={model.cities.value}
-                city={hoveredCity.value}
-                activeYear={model.state.value.activeYear}
-                legend={detailLegend.value}
-              />
-            </div>
-          )}
         </div>
       );
     }
