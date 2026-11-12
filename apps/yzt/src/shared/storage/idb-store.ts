@@ -15,5 +15,9 @@ export function createIdbStore(databaseName: string, storeName: string): KeyValu
   };
 }
 
+/** 偏好的数据库和仓库名：不能改名，改了等于丢掉所有人存下的偏好；导出符号的控制台片段也按它读（ADR 0154） */
+export const PREFERENCE_DATABASE = 'yzt-preferences';
+export const PREFERENCE_OBJECT_STORE = 'preferences';
+
 /** 整个应用共用的偏好存储 */
-export const preferenceStore: KeyValueStore = createIdbStore('yzt-preferences', 'preferences');
+export const preferenceStore: KeyValueStore = createIdbStore(PREFERENCE_DATABASE, PREFERENCE_OBJECT_STORE);

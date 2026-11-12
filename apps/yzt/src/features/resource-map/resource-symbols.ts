@@ -46,17 +46,48 @@ export interface SymbolPreview {
   readonly color: string;
 }
 
+/** 偏好的名称和存储格式的版本：页面保存、symbols:import 读导出的数据都按它（ADR 0044、0154） */
+export const RESOURCE_SYMBOLS_PREFERENCE = 'resource-symbols';
+export const RESOURCE_SYMBOLS_VERSION = 1;
+
+/** 代码给出的样式方式：按属性配色的资源默认是分类样式 */
+export const CODE_DEFAULT_MODE: SymbolMode = 'classified';
+
 const isEmpty = (override: SymbolOverride | undefined) => !override || Object.keys(override).length === 0;
 
-/** 去掉空的统一样式和取值；什么都不剩时为 undefined */
-export function pruneOverride(override: ResourceSymbolOverride): ResourceSymbolOverride | undefined {
+/**
+ * 一层覆盖决定的样式方式（ADR 0123 第 3 节、ADR 0154）：选过的方式；没选过时调过统一样式的是统一样式，
+ * 只调过取值的是分类样式；都没调过时由下面一层决定
+ */
+export function layerMode(override: ResourceSymbolOverride | undefined, below: SymbolMode): SymbolMode {
+  if (override?.mode) {
+    return override.mode;
+  }
+  if (override?.uniform) {
+    return 'uniform';
+  }
+  return override?.items ? 'classified' : below;
+}
+
+/**
+ * 去掉空的统一样式和取值，什么都不剩时为 undefined；样式方式和下面一层的默认方式相同、
+ * 由调过的内容也推得出时不记（ADR 0154）
+ */
+export function pruneOverride(
+  override: ResourceSymbolOverride,
+  defaultMode: SymbolMode = CODE_DEFAULT_MODE
+): ResourceSymbolOverride | undefined {
   const items = Object.entries(override.items ?? {}).filter(([, item]) => !isEmpty(item));
-  const hasUniform = !isEmpty(override.uniform);
-  const keepsMode = override.mode === 'uniform' || (override.mode === 'classified' && hasUniform);
-  const pruned: ResourceSymbolOverride = {
-    ...(hasUniform ? { uniform: override.uniform } : {}),
-    ...(keepsMode ? { mode: override.mode } : {}),
+  const content: ResourceSymbolOverride = {
+    ...(isEmpty(override.uniform) ? {} : { uniform: override.uniform }),
     ...(items.length > 0 ? { items: Object.fromEntries(items) } : {})
+  };
+  const { mode } = override;
+  const keepsMode = mode !== undefined && (mode !== defaultMode || mode !== layerMode(content, defaultMode));
+  const pruned: ResourceSymbolOverride = {
+    ...(content.uniform ? { uniform: content.uniform } : {}),
+    ...(keepsMode ? { mode } : {}),
+    ...(content.items ? { items: content.items } : {})
   };
   return Object.keys(pruned).length > 0 ? pruned : undefined;
 }
@@ -69,30 +100,33 @@ export function targetOverride(
   return item === undefined ? override?.uniform : override?.items?.[item];
 }
 
-/** 换掉目标的覆盖，去掉空的部分 */
+/** 换掉目标的覆盖，去掉空的部分；defaultMode 是资源的默认样式方式 */
 export function withTargetOverride(
   override: ResourceSymbolOverride | undefined,
   item: string | undefined,
-  next: SymbolOverride
+  next: SymbolOverride,
+  defaultMode: SymbolMode = CODE_DEFAULT_MODE
 ): ResourceSymbolOverride | undefined {
   if (item === undefined) {
-    return pruneOverride({ ...override, uniform: next });
+    return pruneOverride({ ...override, uniform: next }, defaultMode);
   }
-  return pruneOverride({ ...override, items: { ...override?.items, [item]: next } });
+  return pruneOverride({ ...override, items: { ...override?.items, [item]: next } }, defaultMode);
 }
 
 /** 推导用的覆盖：确认的覆盖再叠加临时预览 */
 export function effectiveOverride(
   overrides: SymbolOverrides,
   preview: SymbolPreview | null,
-  code: string
+  code: string,
+  defaultMode: SymbolMode = CODE_DEFAULT_MODE
 ): ResourceSymbolOverride | undefined {
   const override = overrides.get(code);
   if (preview?.code !== code) {
     return override;
   }
   const color: Partial<Record<ColorField, string>> = { [preview.field]: preview.color };
-  return withTargetOverride(override, preview.item, { ...targetOverride(override, preview.item), ...color });
+  const next = { ...targetOverride(override, preview.item), ...color };
+  return withTargetOverride(override, preview.item, next, defaultMode);
 }
 
 const colorSchema = z.string().refine(value => normalizeColor(value) !== null, '颜色解析不了');
@@ -140,11 +174,14 @@ export function toStoredSymbols(overrides: SymbolOverrides): StoredSymbols {
   return Object.fromEntries(overrides);
 }
 
-/** 存下的覆盖还原；空的部分去掉，什么都不剩的资源不留 */
-export function fromStoredSymbols(stored: StoredSymbols): SymbolOverrides {
+/** 存下的覆盖还原；空的部分去掉，什么都不剩的资源不留；defaultModeOf 给出各资源的默认样式方式 */
+export function fromStoredSymbols(
+  stored: StoredSymbols,
+  defaultModeOf: (code: string) => SymbolMode = () => CODE_DEFAULT_MODE
+): SymbolOverrides {
   return new Map(
     Object.entries(stored).flatMap(([code, override]) => {
-      const pruned = pruneOverride(override);
+      const pruned = pruneOverride(override, defaultModeOf(code));
       return pruned ? [[code, pruned] as const] : [];
     })
   );

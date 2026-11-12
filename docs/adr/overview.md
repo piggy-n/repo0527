@@ -31,6 +31,7 @@
 | 登录与会话 | 会话存 localStorage，SM2 用 sm-crypto-v2，权限声明在路由 meta 上；结束会话统一走 `endSession()` | 0015 | [auth](../modules/auth.md) |
 | 异步 | 能收敛的不写成操作；可替换操作用 `LatestController`；服务端写操作不适用；revision、operation、version 的命名 | 0039 | [utils](../modules/utils.md) |
 | 偏好 | IndexedDB + idb-keyval，经 `shared/storage`；一个总开关加每项一个分项开关 | 0042、0140 | [storage](../modules/storage.md) |
+| 发布的默认符号 | 某个人调好的图例样式经控制台片段导出、`symbols:import` 合并进 `resource-symbol-defaults.json`，叠加在算出的默认符号上，用户的覆盖再叠加在上面；不改偏好的版本和 schema，别人的自定义照样读出 | 0154 | [storage](../modules/storage.md)"发布的默认符号" |
 | 页面缓存 | 路由 meta 加布局里常驻的 `KeepAlive`；`VITE_PAGE_STATE_RESET=true` 时不缓存，`.env` 提交的是 true | 0063、0114、0138 | [layout](../modules/layout.md)、[composables](../modules/composables.md) |
 | 加载策略 | 登录页空闲时预加载地图页并预热 Worker 池；字体不推迟 | 0061、0062 | [perf](../modules/perf.md)、[fonts](../design/fonts.md) |
 

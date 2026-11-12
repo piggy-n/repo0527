@@ -7,6 +7,8 @@ import {
   effectiveOverride,
   fromStoredSymbols,
   pruneOverride,
+  RESOURCE_SYMBOLS_PREFERENCE,
+  RESOURCE_SYMBOLS_VERSION,
   type ResourceSymbolOverride,
   storedSymbolsSchema,
   type SymbolMode,
@@ -18,7 +20,7 @@ import {
   toStoredSymbols,
   withTargetOverride
 } from '../resource-symbols';
-import { classDefaultSymbol, defaultSymbol, resourceStyle, symbolModeOf } from '../style-registry';
+import { classDefaultSymbol, defaultSymbol, defaultSymbolMode, resourceStyle, symbolModeOf } from '../style-registry';
 import {
   COLOR_FIELDS,
   type ColorField,
@@ -130,6 +132,9 @@ const sameOverride = (a: ResourceSymbolOverride | undefined, b: ResourceSymbolOv
 const isTarget = (preview: SymbolPreview, target: SymbolTarget) =>
   preview.code === target.code && preview.item === target.item;
 
+// 用户没调过时的样式方式，整理覆盖时用它判断要不要记下选的方式（ADR 0154）
+const defaultModeOf = (code: string) => defaultSymbolMode(resourceStyle(code));
+
 // 目标对应的资源和默认符号
 interface ResolvedTarget {
   readonly resource: Resource;
@@ -144,13 +149,13 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
 
   if (options.preferences) {
     usePreference(options.preferences, {
-      name: 'resource-symbols',
-      version: 1,
+      name: RESOURCE_SYMBOLS_PREFERENCE,
+      version: RESOURCE_SYMBOLS_VERSION,
       schema: storedSymbolsSchema,
       snapshot: () => toStoredSymbols(overrides.value),
       restore: stored => {
         if (stored) {
-          overrides.value = fromStoredSymbols(stored);
+          overrides.value = fromStoredSymbols(stored, defaultModeOf);
         }
       }
     });
@@ -206,7 +211,7 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
     const current = overrides.value.get(target.code);
     const next = nextOverride(defaults, targetOverride(current, target.item), checkedPatch(resource, patch));
     clearPreviewIf(previewing => isTarget(previewing, target));
-    replace(target.code, withTargetOverride(current, target.item, next));
+    replace(target.code, withTargetOverride(current, target.item, next, defaultModeOf(target.code)));
   };
 
   const previewColor = (target: SymbolTarget, field: ColorField, color: string) => {
@@ -233,13 +238,13 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
       throw new Error(`资源 ${code} 不在目录里，或者不按属性配色`);
     }
     clearPreviewIf(previewing => previewing.code === code);
-    replace(code, pruneOverride({ ...overrides.value.get(code), mode }));
+    replace(code, pruneOverride({ ...overrides.value.get(code), mode }, defaultModeOf(code)));
   };
 
   return {
     overrides: shallowReadonly(overrides),
     preview: shallowReadonly(preview),
-    overrideOf: code => effectiveOverride(overrides.value, preview.value, code),
+    overrideOf: code => effectiveOverride(overrides.value, preview.value, code, defaultModeOf(code)),
     modeOf: code => {
       const style = resourceStyle(code);
       return resources.value?.has(code) && style.color ? symbolModeOf(style, overrides.value.get(code)) : null;
@@ -256,7 +261,8 @@ export function useResourceSymbols(options: ResourceSymbolsOptions): ResourceSym
     setMode,
     resetSymbol: target => {
       clearPreviewIf(previewing => isTarget(previewing, target));
-      replace(target.code, withTargetOverride(overrides.value.get(target.code), target.item, {}));
+      const { code, item } = target;
+      replace(code, withTargetOverride(overrides.value.get(code), item, {}, defaultModeOf(code)));
     },
     resetResource: code => {
       clearPreviewIf(previewing => previewing.code === code);

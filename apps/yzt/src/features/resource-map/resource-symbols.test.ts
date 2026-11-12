@@ -9,6 +9,7 @@ import { useResourceSymbols } from './composables/useResourceSymbols';
 import {
   effectiveOverride,
   fromStoredSymbols,
+  layerMode,
   pruneOverride,
   type ResourceSymbolOverride,
   storedSymbolsSchema,
@@ -132,6 +133,26 @@ describe('存储格式', () => {
     });
     expect(pruneOverride({ mode: 'classified' })).toBeUndefined();
     expect(pruneOverride({ mode: 'uniform' })).toStrictEqual({ mode: 'uniform' });
+  });
+
+  it('默认是统一样式时（ADR 0154）：选的分类样式都要记下，统一样式只在调过取值时记', () => {
+    const items = { 河流: { color: BLUE } };
+
+    expect(pruneOverride({ mode: 'classified' }, 'uniform')).toStrictEqual({ mode: 'classified' });
+    expect(pruneOverride({ mode: 'classified', items }, 'uniform')).toStrictEqual({ mode: 'classified', items });
+    expect(pruneOverride({ mode: 'uniform' }, 'uniform')).toBeUndefined();
+    expect(pruneOverride({ mode: 'uniform', items }, 'uniform')).toStrictEqual({ mode: 'uniform', items });
+  });
+
+  it('一层覆盖决定的样式方式：选过的方式，调过统一样式，只调过取值，都没有时由下面一层决定', () => {
+    const uniform = { color: BLACK };
+    const items = { 河流: { color: BLUE } };
+
+    expect(layerMode({ mode: 'classified', uniform }, 'uniform')).toBe('classified');
+    expect(layerMode({ uniform, items }, 'classified')).toBe('uniform');
+    expect(layerMode({ items }, 'uniform')).toBe('classified');
+    expect(layerMode({}, 'uniform')).toBe('uniform');
+    expect(layerMode(undefined, 'classified')).toBe('classified');
   });
 
   it('来回转换不变；还原时去掉空的部分，什么都不剩的资源不留', () => {

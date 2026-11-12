@@ -41,7 +41,15 @@ import {
 import { type ClassEntry, type ClassItem, type ColorRule, symbolClasses } from './classification';
 import { LANDUSE_FALLBACK_COLOR } from './landuse';
 import { paletteColor } from './palette';
-import type { ResourceSymbolOverride, SymbolMode } from './resource-symbols';
+import shippedSymbols from './resource-symbol-defaults.json';
+import {
+  CODE_DEFAULT_MODE,
+  fromStoredSymbols,
+  layerMode,
+  type ResourceSymbolOverride,
+  storedSymbolsSchema,
+  type SymbolMode
+} from './resource-symbols';
 import {
   classifiedLayers,
   darkenColor,
@@ -60,6 +68,8 @@ export interface ResourceStyle {
   /** 用这个属性作要素 ID，跨瓦片稳定，点选高亮用 */
   readonly promoteId?: string;
   readonly checked?: boolean;
+  /** 发布的默认符号（ADR 0154）：叠加在算出的默认符号上，用户的覆盖再叠加在它上面 */
+  readonly symbols?: ResourceSymbolOverride;
 }
 
 // 按取值配色的规则：字段加字典（ADR 0123）
@@ -130,10 +140,22 @@ const RESOURCE_STYLES = new Map<string, ResourceStyle>([
   ]
 ]);
 
+// 发布的默认符号（ADR 0154）：格式和用户保存的覆盖相同，由 symbols:import 从某个用户调好的样式写入
+const SHIPPED_SYMBOLS = fromStoredSymbols(storedSymbolsSchema.parse(shippedSymbols));
+
+// 登记表加上发布的默认符号；只有发布的默认符号的资源（不按属性配色）也在这里
+const STYLES: ReadonlyMap<string, ResourceStyle> = new Map(
+  [...new Set([...RESOURCE_STYLES.keys(), ...SHIPPED_SYMBOLS.keys()])].map(code => {
+    const symbols = SHIPPED_SYMBOLS.get(code);
+    const style: ResourceStyle = { ...RESOURCE_STYLES.get(code), ...(symbols ? { symbols } : {}) };
+    return [code, style];
+  })
+);
+
 const NO_STYLE: ResourceStyle = {};
 
 export function resourceStyle(code: string): ResourceStyle {
-  return RESOURCE_STYLES.get(code) ?? NO_STYLE;
+  return STYLES.get(code) ?? NO_STYLE;
 }
 
 /** 新出现的资源的透明度：100%（ADR 0053 第 6 节；旧项目是 0.9）。已经存下的透明度保留原值 */
@@ -179,41 +201,62 @@ function colorSymbol(geometry: ResourceGeometry, color: string): ResourceSymbol 
 // 统一符号的面是 0.35 透明度的填充加同色描边
 const FILL_ALPHA = 0.35;
 
-/** 统一符号的默认值，颜色按资源在目录里的顺序从配色板取 */
-export function defaultSymbol(resource: Resource): ResourceSymbol {
+/** 统一符号的默认值：颜色按资源在目录里的顺序从配色板取，再叠加发布的默认符号 */
+export function defaultSymbol(resource: Resource, style: ResourceStyle = resourceStyle(resource.code)): ResourceSymbol {
   const color = paletteColor(resource.index);
   const symbol = colorSymbol(resource.geometry, color);
-  return symbol.geometry === 'fill' ? { ...symbol, fillColor: withAlpha(color, FILL_ALPHA) } : symbol;
+  const computed = symbol.geometry === 'fill' ? { ...symbol, fillColor: withAlpha(color, FILL_ALPHA) } : symbol;
+  return resolveSymbol(computed, style.symbols?.uniform);
 }
 
 // 分类样式的纹理颜色是取值颜色加深（ADR 0046）：填充不透明，同色的花纹看不见
 const CLASS_PATTERN_DARKEN = 0.4;
 
-/** 分类样式里一个取值的默认值：取值的颜色作主色，面的纹理颜色加深 */
-export function classDefaultSymbol(resource: Resource, item: ClassItem): ResourceSymbol {
+/** 分类样式里一个取值的默认值：取值的颜色作主色，面的纹理颜色加深，再叠加发布的默认符号 */
+export function classDefaultSymbol(
+  resource: Resource,
+  item: ClassItem,
+  style: ResourceStyle = resourceStyle(resource.code)
+): ResourceSymbol {
   const symbol = colorSymbol(resource.geometry, item.color);
-  if (symbol.geometry !== 'fill') {
-    return symbol;
-  }
-  return { ...symbol, patternColor: darkenColor(item.color, CLASS_PATTERN_DARKEN) };
+  const computed =
+    symbol.geometry === 'fill' ? { ...symbol, patternColor: darkenColor(item.color, CLASS_PATTERN_DARKEN) } : symbol;
+  return resolveSymbol(computed, style.symbols?.items?.[item.key]);
 }
 
 /** 统一样式叠加覆盖后的符号 */
-export function uniformSymbol(resource: Resource, override?: ResourceSymbolOverride): ResourceSymbol {
-  return resolveSymbol(defaultSymbol(resource), override?.uniform);
+export function uniformSymbol(
+  resource: Resource,
+  override?: ResourceSymbolOverride,
+  style: ResourceStyle = resourceStyle(resource.code)
+): ResourceSymbol {
+  return resolveSymbol(defaultSymbol(resource, style), override?.uniform);
 }
 
 /** 分类样式里一个取值叠加覆盖后的符号 */
-export function classSymbol(resource: Resource, item: ClassItem, override?: ResourceSymbolOverride): ResourceSymbol {
-  return resolveSymbol(classDefaultSymbol(resource, item), override?.items?.[item.key]);
+export function classSymbol(
+  resource: Resource,
+  item: ClassItem,
+  override?: ResourceSymbolOverride,
+  style: ResourceStyle = resourceStyle(resource.code)
+): ResourceSymbol {
+  return resolveSymbol(classDefaultSymbol(resource, item, style), override?.items?.[item.key]);
 }
 
-/** 样式方式：不按属性配色的资源只有统一样式；没选过方式时，调过统一样式的按统一样式，其余按分类样式（ADR 0123 第 3 节） */
+/** 用户没调过时的样式方式：发布的默认符号决定，没有时是分类样式（ADR 0154） */
+export function defaultSymbolMode(style: ResourceStyle): SymbolMode {
+  return layerMode(style.symbols, CODE_DEFAULT_MODE);
+}
+
+/**
+ * 样式方式：不按属性配色的资源只有统一样式；用户没选过方式时，调过统一样式的按统一样式，只调过取值的按分类样式，
+ * 都没调过时用默认的方式（ADR 0123 第 3 节、ADR 0154）
+ */
 export function symbolModeOf(style: ResourceStyle, override?: ResourceSymbolOverride): SymbolMode {
   if (!style.color) {
     return 'uniform';
   }
-  return override?.mode ?? (override?.uniform ? 'uniform' : 'classified');
+  return layerMode(override, defaultSymbolMode(style));
 }
 
 /**
@@ -227,7 +270,7 @@ export function resourceStyleLayers(
 ): ResourceStyleLayers {
   const rule = style.color;
   if (!rule || symbolModeOf(style, override) === 'uniform') {
-    return symbolLayers(uniformSymbol(resource, override));
+    return symbolLayers(uniformSymbol(resource, override, style));
   }
-  return classifiedLayers(symbolClasses(rule), item => classSymbol(resource, item, override));
+  return classifiedLayers(symbolClasses(rule), item => classSymbol(resource, item, override, style));
 }

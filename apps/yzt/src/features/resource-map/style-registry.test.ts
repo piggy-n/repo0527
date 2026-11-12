@@ -445,6 +445,22 @@ describe('默认样式', () => {
     expect(symbolModeOf(resourceStyle('csxhjctb_tyhda'), { mode: 'classified' })).toBe('uniform');
   });
 
+  it('发布的默认符号（ADR 0154）：叠加在算出的默认符号上，决定没调过时的样式方式，用户的覆盖再叠加在上面', () => {
+    const hydl = resource('csxhjctb_hydl', 'line', 2);
+    const black = 'rgba(0, 0, 0, 1)';
+    const symbols = { mode: 'uniform', uniform: { color: black } } as const;
+    const style = { ...resourceStyle('csxhjctb_hydl'), symbols };
+
+    expect(symbolModeOf(style)).toBe('uniform');
+    expect(mainLayer(hydl, style)).toStrictEqual(mainOf({ geometry: 'line', color: black, width: 'M', dash: 'solid' }));
+    expect(mainLayer(hydl, style, { uniform: { width: 'L' } })).toStrictEqual(
+      mainOf({ geometry: 'line', color: black, width: 'L', dash: 'solid' })
+    );
+    // 用户只调过取值时仍按分类样式
+    const classified = mainLayer(hydl, style, { items: { 水渠: { width: 'XL' } } });
+    const width = classified.type === 'line' ? classified.paint['line-width'] : undefined;
+    expect(paintValueOf('line', 'line-width', width, { ccn: '水渠' }, 14)).toBe(sizePixels('line', 'XL'));
+  });
   it('各种组合放进样式都能通过 MapLibre 的校验', () => {
     const resources = [
       resource('szy_kt', 'fill'),

@@ -25,6 +25,7 @@
 | 算 LCC2 模型在清单里的摆放（ADR 0149） | `pnpm --filter yzt lcc2:register <索引>` |
 | 探查资源的分类字段、瓦片是否合并（只读，要能连后端） | `pnpm --filter yzt probe:resource-classes` |
 | 生成自定义监测范围的验收文件 | `pnpm --filter yzt scope-files:generate` |
+| 把调好的图例样式作为默认（先用控制台片段导出，ADR 0154） | `pnpm --filter yzt symbols:import <导出文件>`，确认后加 `--write` |
 | 每月检查依赖 | `pnpm deps:check` |
 | 范围内升级 | `pnpm deps:update:within-range` |
 | 大版本升级 | `pnpm deps:update:allow-major` |
@@ -230,6 +231,16 @@ pnpm add -Dw -E some-tool
 **什么时候用**：手动验收指标 AI 计算的上传范围，或者读取规则变了要更新文件时。
 
 **执行了什么**：Node 直接运行 `tools/scope-test-files/cli.ts`，只重建 A、B、C 三个目录。
+
+### `pnpm --filter yzt symbols:import <导出文件>`
+
+**作用**：把某个人在页面上调好的图例样式（资源图层的符号）合并进发布的默认符号 `src/features/resource-map/resource-symbol-defaults.json`（ADR 0154）。导出文件由控制台片段 `src/features/resource-map/symbol-defaults/export-snippet.js` 在部署的页面上生成，完整步骤见 [storage.md](modules/storage.md)"发布的默认符号"。
+
+**什么时候用**：要把调好的样式作为所有人的默认样式时。别人存下的自定义不受影响，他们没改过的字段跟着新的默认变。
+
+**执行了什么**：Node 运行 `tools/symbol-defaults/cli.ts`，它用 Vite 的 `runnerImport` 加载 `symbol-defaults/import.ts`，用页面的 schema 和登记表校验、合并，打印"资源 / 取值 / 字段：旧 → 新"的差异；默认只打印，`--write` 才写入。`--login <登录名>` 在文件里有几个账号时选一个，`--only code1,code2` 只导入部分资源。导出文件的相对路径按运行 pnpm 时所在的目录解析。
+
+**注意事项**：导出文件含登录名，放在 `local/symbol-defaults/`，不要提交。只有统一样式的资源离线确认不了还在不在目录里，工具列出来，对照页面核对。写入后看 `git diff`，按级别 1 检查后提交。
 
 ### `pnpm --filter yzt icons`
 
