@@ -6,7 +6,7 @@
       "cityCode": "320500",
       "kind": "indoor",
       "underground": true,
-      "tileset": "SZ_3DT/tileset.json",
+      "tileset": "suzhou/3dtiles/%E6%98%9F%E6%B5%B7%E5%B9%BF%E5%9C%BA%E7%AB%99/tileset.json",
       "spawn": { "lng": 120.6660669, "lat": 31.317559, "height": -5.1, "heading": 76 },
       "routes": [
         {
@@ -75,9 +75,9 @@
       "kind": "white",
       "underground": false,
       "effects": [
-        { "id": "plain", "label": "无纹理", "tileset": "SZ_WhiteModel/plain/tileset.json" },
-        { "id": "window", "label": "内置效果1", "tileset": "SZ_WhiteModel/window/tileset.json" },
-        { "id": "tech", "label": "内置效果2", "tileset": "SZ_WhiteModel/tech/tileset.json" }
+        { "id": "plain", "label": "无纹理", "tileset": "suzhou/3dtiles/%E6%98%9F%E6%B5%B7%E5%B9%BF%E5%9C%BA%E7%AB%99%E5%91%A8%E8%BE%B9%E5%BB%BA%E7%AD%91%E7%99%BD%E6%A8%A1/plain/tileset.json" },
+        { "id": "window", "label": "内置效果1", "tileset": "suzhou/3dtiles/%E6%98%9F%E6%B5%B7%E5%B9%BF%E5%9C%BA%E7%AB%99%E5%91%A8%E8%BE%B9%E5%BB%BA%E7%AD%91%E7%99%BD%E6%A8%A1/window/tileset.json" },
+        { "id": "tech", "label": "内置效果2", "tileset": "suzhou/3dtiles/%E6%98%9F%E6%B5%B7%E5%B9%BF%E5%9C%BA%E7%AB%99%E5%91%A8%E8%BE%B9%E5%BB%BA%E7%AD%91%E7%99%BD%E6%A8%A1/tech/tileset.json" }
       ]
     },
     {
@@ -86,7 +86,16 @@
       "cityCode": "320300",
       "kind": "oblique",
       "underground": false,
-      "tileset": "XZ_GC_3DT/tileset.json"
+      "tileset": "xuzhou/3dtiles/%E5%BD%AD%E5%9F%8E%E5%B9%BF%E5%9C%BA/tileset.json"
+    },
+    {
+      "id": "xz-pc-lcc2",
+      "name": "彭城广场（泼溅）",
+      "cityCode": "320300",
+      "kind": "splat",
+      "underground": false,
+      "lcc2": "xuzhou/lcc2/%E5%9F%8E%E4%B8%8B%E5%9F%8E%EF%BC%88%E6%B5%8B%E8%AF%95%EF%BC%89/lcc2-sog-result/20260922%E5%9C%B0%E4%B8%8B%E5%9F%8E.lcc2",
+      "placement": { "lng": 117.1805333, "lat": 34.2664031, "height": 59.45, "heading": -0.102 }
     },
     {
       "id": "wx-jkq",
@@ -94,15 +103,23 @@
       "cityCode": "320200",
       "kind": "oblique",
       "underground": false,
-      "tileset": "JKQ/tileset.json"
+      "tileset": "wuxi/3dtiles/%E7%BB%8F%E5%BC%80%E5%8C%BA/tileset.json"
     },
     {
-      "id": "wx-jkq2",
-      "name": "经开区2",
+      "id": "wx-xwq02",
+      "name": "新吴区02",
       "cityCode": "320200",
       "kind": "oblique",
       "underground": false,
-      "tileset": "JKQ2/tileset.json"
+      "tileset": "wuxi/3dtiles/%E6%96%B0%E5%90%B4%E5%8C%BA02/tileset.json"
+    },
+    {
+      "id": "wx-xwq03",
+      "name": "新吴区03",
+      "cityCode": "320200",
+      "kind": "oblique",
+      "underground": false,
+      "tileset": "wuxi/3dtiles/%E6%96%B0%E5%90%B4%E5%8C%BA03/tileset.json"
     },
     {
       "id": "xz-cws1",
@@ -110,7 +127,7 @@
       "cityCode": "320300",
       "kind": "splat",
       "underground": false,
-      "lcc2": "%E6%A5%9A%E7%8E%8B%E5%B1%B11%E5%8F%B7/lcc2-sog-result/%E6%A5%9A%E7%8E%8B%E5%B1%B11%E5%8F%B7.lcc2",
+      "lcc2": "xuzhou/lcc2/%E6%A5%9A%E7%8E%8B%E5%B1%B11%E5%8F%B7/lcc2-sog-result/%E6%A5%9A%E7%8E%8B%E5%B1%B11%E5%8F%B7.lcc2",
       "placement": { "lng": 117.0623891, "lat": 34.2699335, "height": 65.13, "heading": -0.035 }
     },
     {
@@ -119,7 +136,7 @@
       "cityCode": "320300",
       "kind": "splat",
       "underground": false,
-      "lcc2": "%E6%A5%9A%E7%8E%8B%E5%B1%B12%E5%8F%B7/lcc2-sog-result/%E6%A5%9A%E7%8E%8B%E5%B1%B12%E5%8F%B7.lcc2",
+      "lcc2": "xuzhou/lcc2/%E6%A5%9A%E7%8E%8B%E5%B1%B12%E5%8F%B7/lcc2-sog-result/%E6%A5%9A%E7%8E%8B%E5%B1%B12%E5%8F%B7.lcc2",
       "placement": { "lng": 117.0612299, "lat": 34.2719232, "height": 44.65, "heading": -0.034 }
     },
     {
@@ -128,7 +145,7 @@
       "cityCode": "320300",
       "kind": "splat",
       "underground": false,
-      "lcc2": "%E6%A5%9A%E7%8E%8B%E5%B1%B13%E5%8F%B7/lcc2-sog-result/%E6%A5%9A%E7%8E%8B%E5%B1%B13%E5%8F%B7.lcc2",
+      "lcc2": "xuzhou/lcc2/%E6%A5%9A%E7%8E%8B%E5%B1%B13%E5%8F%B7/lcc2-sog-result/%E6%A5%9A%E7%8E%8B%E5%B1%B13%E5%8F%B7.lcc2",
       "placement": { "lng": 117.0643511, "lat": 34.2715214, "height": 48.36, "heading": -0.036 }
     },
     {
@@ -137,7 +154,7 @@
       "cityCode": "320300",
       "kind": "splat",
       "underground": false,
-      "lcc2": "%E9%A9%AE%E7%AF%AE%E5%B1%B11%E5%8F%B7/lcc2-sog-result/%E9%A9%AE%E7%AF%AE%E5%B1%B11%E5%8F%B7.lcc2",
+      "lcc2": "xuzhou/lcc2/%E9%A9%AE%E7%AF%AE%E5%B1%B11%E5%8F%B7/lcc2-sog-result/%E9%A9%AE%E7%AF%AE%E5%B1%B11%E5%8F%B7.lcc2",
       "placement": { "lng": 117.2571863, "lat": 34.3057291, "height": 48.13, "heading": -0.145 }
     },
     {
@@ -146,7 +163,7 @@
       "cityCode": "320300",
       "kind": "splat",
       "underground": false,
-      "lcc2": "%E5%BE%90%E5%B7%9E%E5%8D%9A%E7%89%A9%E9%A6%86%E5%9C%9F%E5%B1%B1%E5%A2%93/lcc2-sog-result/%E5%BE%90%E5%B7%9E%E5%8D%9A%E7%89%A9%E9%A6%86%E5%9C%9F%E5%B1%B1%E5%A2%93.lcc2",
+      "lcc2": "xuzhou/lcc2/%E5%BE%90%E5%B7%9E%E5%8D%9A%E7%89%A9%E9%A6%86%E5%9C%9F%E5%B1%B1%E5%A2%93/lcc2-sog-result/%E5%BE%90%E5%B7%9E%E5%8D%9A%E7%89%A9%E9%A6%86%E5%9C%9F%E5%B1%B1%E5%A2%93.lcc2",
       "placement": { "lng": 117.1810873, "lat": 34.2525473, "height": 41.98, "heading": -0.102 }
     },
     {
@@ -155,7 +172,7 @@
       "cityCode": "320300",
       "kind": "splat",
       "underground": false,
-      "lcc2": "%E9%BE%9F%E5%B1%B1%E6%B1%89%E5%A2%93/lcc2-sog-result/20260921%E9%BE%9F%E5%B1%B1%E6%B1%89%E5%A2%93.lcc2",
+      "lcc2": "xuzhou/lcc2/%E9%BE%9F%E5%B1%B1%E6%B1%89%E5%A2%93/lcc2-sog-result/20260921%E9%BE%9F%E5%B1%B1%E6%B1%89%E5%A2%93.lcc2",
       "placement": { "lng": 117.1312244, "lat": 34.3084234, "height": 38.24, "heading": -0.074 }
     },
     {
@@ -164,7 +181,7 @@
       "cityCode": "320300",
       "kind": "splat",
       "underground": false,
-      "lcc2": "%E9%A9%AE%E7%AF%AE%E5%B1%B12%E5%8F%B7/lcc2-sog-result/%E9%A9%AE%E7%AF%AE%E5%B1%B12%E5%8F%B7.lcc2",
+      "lcc2": "xuzhou/lcc2/%E9%A9%AE%E7%AF%AE%E5%B1%B12%E5%8F%B7/lcc2-sog-result/%E9%A9%AE%E7%AF%AE%E5%B1%B12%E5%8F%B7.lcc2",
       "placement": { "lng": 117.258553, "lat": 34.3064735, "height": 49.03, "heading": -0.146 }
     },
     {
@@ -173,7 +190,7 @@
       "cityCode": "320300",
       "kind": "splat",
       "underground": false,
-      "lcc2": "%E4%B8%9C%E6%B4%9E%E5%B1%B1%E6%A5%9A%E7%8E%8B%E5%A2%93/lcc2-sog-result/%E4%B8%9C%E6%B4%9E%E5%B1%B1%E6%A5%9A%E7%8E%8B%E5%A2%93.lcc2",
+      "lcc2": "xuzhou/lcc2/%E4%B8%9C%E6%B4%9E%E5%B1%B1%E6%A5%9A%E7%8E%8B%E5%A2%93/lcc2-sog-result/%E4%B8%9C%E6%B4%9E%E5%B1%B1%E6%A5%9A%E7%8E%8B%E5%A2%93.lcc2",
       "placement": { "lng": 117.244982, "lat": 34.2930005, "height": 41.18, "heading": -0.138 }
     },
     {
@@ -182,7 +199,7 @@
       "cityCode": "320300",
       "kind": "splat",
       "underground": false,
-      "lcc2": "%E7%8B%AE%E5%AD%90%E5%B1%B1%E6%A5%9A%E7%8E%8B%E5%A2%93/lcc2-sog-result/%E7%8B%AE%E5%AD%90%E5%B1%B1%E6%A5%9A%E7%8E%8B.lcc2",
+      "lcc2": "xuzhou/lcc2/%E7%8B%AE%E5%AD%90%E5%B1%B1%E6%A5%9A%E7%8E%8B%E5%A2%93/lcc2-sog-result/%E7%8B%AE%E5%AD%90%E5%B1%B1%E6%A5%9A%E7%8E%8B.lcc2",
       "placement": { "lng": 117.2193888, "lat": 34.2458529, "height": 38.64, "heading": -0.123 }
     }
   ]

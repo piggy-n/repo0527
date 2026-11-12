@@ -74,7 +74,7 @@ describe('localFilesPlugin', () => {
       write('app/index.html', '<!doctype html><title>单页应用</title>');
       write('app/public/3dt/manifest.json', '{"from":"public"}');
       write('secret.txt', '不应该被读到');
-      write('local/3dt/SZ_3DT/tileset.json', '{"from":"local"}');
+      write('local/3dt/suzhou/3dtiles/星海广场站/tileset.json', '{"from":"local"}');
       write('local/design/主题 一/index.html', '<!doctype html><title>原型</title><script src="./app.js"></script>');
       write('local/design/主题 一/app.js', 'import "/不存在的模块"; console.log("原样");');
 
@@ -102,8 +102,8 @@ describe('localFilesPlugin', () => {
       rmSync(root, { recursive: true, force: true });
     });
 
-    it('模型文件从本地目录提供', async () => {
-      const res = await get('/3dt/SZ_3DT/tileset.json');
+    it('模型文件从本地目录提供，层级和服务器上一样', async () => {
+      const res = await get(`/3dt/suzhou/3dtiles/${encodeURIComponent('星海广场站')}/tileset.json`);
       expect(res.status).toBe(200);
       expect(res.type).toContain('application/json');
       expect(res.body).toBe('{"from":"local"}');

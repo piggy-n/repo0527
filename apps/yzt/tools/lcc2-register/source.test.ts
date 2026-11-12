@@ -12,10 +12,12 @@ import { CORRIDOR_WALK, CORRIDORS, meshPly } from './test-meshes.ts';
 
 const NAME = '楚王山1号';
 const ENCODED = '%E6%A5%9A%E7%8E%8B%E5%B1%B11%E5%8F%B7';
-const RELATIVE = `${NAME}/lcc2-sog-result/${NAME}.lcc2`;
+// 服务器上的层级：<市>/lcc2/<交付的目录>/lcc2-sog-result/（docs/config/3dt-manifest.md）
+const MODEL_DIRECTORY = `xuzhou/lcc2/${NAME}`;
+const RELATIVE = `${MODEL_DIRECTORY}/lcc2-sog-result/${NAME}.lcc2`;
 const PROXY = 'http://models.test:8088';
-const INDEX_PATH = `/3dt/${ENCODED}/lcc2-sog-result/${ENCODED}.lcc2`;
-const DIRECTORY = `/3dt/${ENCODED}/lcc2-sog-result`;
+const INDEX_PATH = `/3dt/xuzhou/lcc2/${ENCODED}/lcc2-sog-result/${ENCODED}.lcc2`;
+const DIRECTORY = `/3dt/xuzhou/lcc2/${ENCODED}/lcc2-sog-result`;
 
 const INDEX = { epsg: 4548, offset: [1, 2, 3], root: { meshFiles: ['data/mesh/0.ply', 'data/mesh/1.ply'] } };
 const POSES = { poses: [{ T: [1, 2, 3] }], fusionPoses: null };
@@ -66,9 +68,9 @@ function writeLocal(root: string, relative: string, content: string | Uint8Array
 
 function writeLocalModel() {
   writeLocal(localRoot, RELATIVE, JSON.stringify(INDEX));
-  writeLocal(localRoot, `${NAME}/lcc2-sog-result/info/poses.json`, JSON.stringify(POSES));
-  writeLocal(localRoot, `${NAME}/lcc2-sog-result/data/mesh/0.ply`, MESH_0);
-  writeLocal(localRoot, `${NAME}/lcc2-sog-result/data/mesh/1.ply`, MESH_1);
+  writeLocal(localRoot, `${MODEL_DIRECTORY}/lcc2-sog-result/info/poses.json`, JSON.stringify(POSES));
+  writeLocal(localRoot, `${MODEL_DIRECTORY}/lcc2-sog-result/data/mesh/0.ply`, MESH_0);
+  writeLocal(localRoot, `${MODEL_DIRECTORY}/lcc2-sog-result/data/mesh/1.ply`, MESH_1);
 }
 
 async function meshesOf(model: Awaited<ReturnType<typeof readModel>>) {
@@ -230,12 +232,12 @@ describe('readModel：失败时一行原因', () => {
 
   it('给的是目录：说要给索引文件', async () => {
     writeLocalModel();
-    expect(await failureOf(NAME)).toContain('要给 .lcc2 索引文件');
+    expect(await failureOf(MODEL_DIRECTORY)).toContain('要给 .lcc2 索引文件');
   });
 
   it('索引以外的文件是目录：只说是目录，不让人去改索引的路径', async () => {
     writeLocalModel();
-    const poses = join(localRoot, `${NAME}/lcc2-sog-result/info/poses.json`);
+    const poses = join(localRoot, `${MODEL_DIRECTORY}/lcc2-sog-result/info/poses.json`);
     rmSync(poses);
     mkdirSync(poses);
     const message = await failureOf(RELATIVE);
@@ -245,11 +247,11 @@ describe('readModel：失败时一行原因', () => {
 
   it('本机缺碰撞网格：读网格之前就说缺几个、第一个是哪个', async () => {
     writeLocalModel();
-    rmSync(join(localRoot, `${NAME}/lcc2-sog-result/data/mesh/0.ply`));
-    rmSync(join(localRoot, `${NAME}/lcc2-sog-result/data/mesh/1.ply`));
+    rmSync(join(localRoot, `${MODEL_DIRECTORY}/lcc2-sog-result/data/mesh/0.ply`));
+    rmSync(join(localRoot, `${MODEL_DIRECTORY}/lcc2-sog-result/data/mesh/1.ply`));
     const reading = readModel(RELATIVE, options());
     await expect(reading).rejects.toThrow('找不到 2 个');
-    await expect(reading).rejects.toThrow(join(localRoot, `${NAME}/lcc2-sog-result/data/mesh/0.ply`));
+    await expect(reading).rejects.toThrow(join(localRoot, `${MODEL_DIRECTORY}/lcc2-sog-result/data/mesh/0.ply`));
   });
 
   it('索引 404：说地址、状态和代理，不说回退到页面', async () => {

@@ -54,17 +54,18 @@ async function proxyTo(target: string): Promise<string> {
 }
 
 describe('模型代理', () => {
-  it('转发状态和类型，不让浏览器缓存', async () => {
+  it('转发状态和类型，不让浏览器缓存；中文的目录按编码后的地址转给上游', async () => {
     const target = await upstream((req, res) => {
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Cache-Control', 'max-age=3600');
       res.end(JSON.stringify({ url: req.url }));
     });
-    const response = await fetch(`${await proxyTo(target)}/3dt/JKQ2/tileset.json`);
+    const path = `/3dt/wuxi/3dtiles/${encodeURIComponent('经开区')}/tileset.json`;
+    const response = await fetch(`${await proxyTo(target)}${path}`);
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('application/json');
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(await response.json()).toEqual({ url: '/3dt/JKQ2/tileset.json' });
+    expect(await response.json()).toEqual({ url: path });
   });
 
   it('上游的 404 原样转发', async () => {

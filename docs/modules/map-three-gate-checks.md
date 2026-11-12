@@ -10,7 +10,7 @@ ADR 0147 第 9 节的第 4、5 条只能在有真实显卡的机器上做（开�
 
 1. 确认用的是独显：双显卡的机器到 Windows 设置 → 系统 → 显示 → 图形，把 Chrome 或 Edge 设为"高性能"。插上电源，关掉其他占显卡的程序。
 2. 拉取要测的提交，装依赖：`pnpm install --frozen-lockfile`。
-3. 模型放在 `local/3dt`：要有 `SZ_3DT`（星海广场站）、`SZ_WhiteModel`（白模）、`XZ_GC_3DT`（彭城广场）。
+3. 模型按服务器上的层级放在 `local/3dt`（[3dt-manifest.md](../config/3dt-manifest.md)"目录层级"）：要有 `suzhou/3dtiles/星海广场站`、`suzhou/3dtiles/星海广场站周边建筑白模`、`xuzhou/3dtiles/彭城广场`。
 
 ## 第 5 条：生产包复测（约 30 分钟，期间不要用这台机器）
 

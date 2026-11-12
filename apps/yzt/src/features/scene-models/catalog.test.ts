@@ -105,8 +105,10 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
       ['sz-station', '苏州市'],
       ['sz-white', '苏州市'],
       ['xz-gc', '徐州市'],
+      ['xz-pc-lcc2', '徐州市'],
       ['wx-jkq', '无锡市'],
-      ['wx-jkq2', '无锡市'],
+      ['wx-xwq02', '无锡市'],
+      ['wx-xwq03', '无锡市'],
       ['xz-cws1', '徐州市'],
       ['xz-cws2', '徐州市'],
       ['xz-cws3', '徐州市'],
@@ -119,9 +121,10 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
     ]);
     const urls = models.flatMap(({ effects, splat }) => [...effects.map(({ url }) => url), ...(splat ? [splat.url] : [])]);
     expect(urls.every(url => url.startsWith('https://maps.test/yzt/3dt/'))).toBe(true);
-    // 模型平铺在 3dt 下，层级同楚王山1号；中文按 URL 编码写（ADR 0149 第 3 节）
+    // 中文按 URL 编码写，相对清单解析后原样保留（ADR 0149 第 3 节）
+    const chuwangshan = encodeURIComponent('楚王山1号');
     expect(models.find(({ id }) => id === 'xz-cws1')?.splat?.url).toBe(
-      `https://maps.test/yzt/3dt/${encodeURIComponent('楚王山1号')}/lcc2-sog-result/${encodeURIComponent('楚王山1号.lcc2')}`
+      `https://maps.test/yzt/3dt/xuzhou/lcc2/${chuwangshan}/lcc2-sog-result/${chuwangshan}.lcc2`
     );
     const lengths = models.flatMap(({ routes }) => routes.map(({ length }) => Math.round(length)));
     expect(lengths).toStrictEqual([125, 133, 58]);
@@ -130,19 +133,52 @@ describe('入库的清单（public/3dt/manifest.json）', () => {
   });
 });
 
-describe('入库的清单里的高斯泼溅', () => {
-  it('索引的地址按段编码，目录对应模型的名称', () => {
-    const { models } = sceneManifestSchema.parse(JSON.parse(manifestText));
-    const splats = models.flatMap(model => (model.kind === 'splat' ? [model] : []));
+// 模型目录的层级（用户 2026-11-11 定，docs/config/3dt-manifest.md）：<市的拼音>/<类型>/<模型目录>/…
+const CITY_DIRECTORIES: Readonly<Record<string, string>> = { '320200': 'wuxi', '320300': 'xuzhou', '320500': 'suzhou' };
 
-    expect(splats.length).toBeGreaterThan(0);
-    for (const { name, lcc2 } of splats) {
-      // 索引的文件名不一定是模型名（龟山汉墓、狮子山楚王墓），目录是
-      const [directory, result, file] = decodeURIComponent(lcc2).split('/');
-      expect([directory, result]).toStrictEqual([name, 'lcc2-sog-result']);
-      expect(file?.slice(-'.lcc2'.length)).toBe('.lcc2');
-      expect([directory, result, file].map(part => encodeURIComponent(part ?? '')).join('/')).toBe(lcc2);
-    }
+type ManifestModel = SceneManifest['models'][number];
+
+function pathsOf(model: ManifestModel): string[] {
+  if (model.kind === 'splat') {
+    return [model.lcc2];
+  }
+  if (model.kind === 'white') {
+    return model.effects.map(({ tileset }) => tileset);
+  }
+  return [model.tileset];
+}
+
+// 不合层级时返回原因
+function layoutProblem(model: ManifestModel, path: string): string | null {
+  const parts = path.split('/').map(part => decodeURIComponent(part));
+  if (parts.map(part => encodeURIComponent(part)).join('/') !== path) {
+    return `${path}：没有按段编码`;
+  }
+  const [city, type, directory, ...rest] = parts;
+  if (city !== CITY_DIRECTORIES[model.cityCode]) {
+    return `${path}：市的目录不对`;
+  }
+  // LCC2 保留交付时的目录名和里面的层级，索引的文件名也不一定是模型名（龟山汉墓、狮子山楚王墓）
+  if (model.kind === 'splat') {
+    const [result, file] = rest;
+    const placed = type === 'lcc2' && rest.length === 2 && result === 'lcc2-sog-result' && file?.endsWith('.lcc2');
+    return placed ? null : `${path}：不是 lcc2/<目录>/lcc2-sog-result/<索引>.lcc2`;
+  }
+  // 3D Tiles 的目录名和清单里的名称相同
+  const placed = type === '3dtiles' && directory === model.name && rest.at(-1) === 'tileset.json';
+  return placed ? null : `${path}：不是 3dtiles/<模型名>/…/tileset.json`;
+}
+
+describe('入库的清单的目录层级', () => {
+  it('3D Tiles 在 <市>/3dtiles/<模型名>/ 下，LCC2 在 <市>/lcc2/<目录>/lcc2-sog-result/ 下，每一段按 URL 编码', () => {
+    const { models } = sceneManifestSchema.parse(JSON.parse(manifestText));
+    const problems = models.flatMap(model => pathsOf(model).map(path => layoutProblem(model, path)));
+
+    expect(problems.filter(problem => problem !== null)).toStrictEqual([]);
+    expect(models.find(({ id }) => id === 'xz-pc-lcc2')).toMatchObject({
+      name: '彭城广场（泼溅）',
+      lcc2: `xuzhou/lcc2/${encodeURIComponent('城下城（测试）')}/lcc2-sog-result/${encodeURIComponent('20260922地下城.lcc2')}`
+    });
   });
 });
 

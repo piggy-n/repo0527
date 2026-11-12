@@ -196,7 +196,7 @@ pnpm add -Dw -E some-tool
 
 **执行了什么**：Node 运行 `tools/measure-3d/cli.ts`：启动前检查（模型、端口、渲染器，空页面校准帧间隔的下限）→ 用 `tools/measure-3d/vite.config.ts` 按生产模式构建测量页 → 每遍一个新的浏览器进程 → 写 `local/measure-3d/<时间>/`（`report.md`、`quality.html`、`manual.md`、`raw.json`、`shots/`、`profiles/`，不入库）。每跑完一遍就重新写一次报告，中断了也留得下。
 
-**注意事项**：只在有真实显卡的机器上有意义，看到软件渲染直接退出（`--allow-software` 只用来确认脚本能跑）。默认参数实测 30 分钟（2026-11-08，RTX 3060，那时还要跑 Cesium 一个方案，现在应当更短，没有再测），每多一个对照方案多约 8 分钟，期间会弹出浏览器窗口，不要用这台机器。`--cull-window` 对照动着不请求的窗口：产品默认按实测的加载时间，`1` 是固定 1 秒，`off` 是动着也请求。`--only splat` 只跑高斯泼溅的场景：按 `--splat-budget`（默认 `3m,6m,10m`）每个预算一个方案，模型从清单读（`local/3dt/manifest.json` 在时用它，和开发服务器一样），报告开头是"高斯泼溅的预算"一节；彭城广场的样例要先写进本地清单。步骤和口径见 [modules/map-three.md](modules/map-three.md)"性能验收"和"泼溅的预算"，参数见 `--help`。
+**注意事项**：只在有真实显卡的机器上有意义，看到软件渲染直接退出（`--allow-software` 只用来确认脚本能跑）。默认参数实测 30 分钟（2026-11-08，RTX 3060，那时还要跑 Cesium 一个方案，现在应当更短，没有再测），每多一个对照方案多约 8 分钟，期间会弹出浏览器窗口，不要用这台机器。`--cull-window` 对照动着不请求的窗口：产品默认按实测的加载时间，`1` 是固定 1 秒，`off` 是动着也请求。`--only splat` 只跑高斯泼溅的场景：按 `--splat-budget`（默认 `3m,6m,10m`）每个预算一个方案，模型从清单读（`local/3dt/manifest.json` 在时用它，和开发服务器一样），报告开头是"高斯泼溅的预算"一节；彭城广场的样例 2026-11-11 起在入库的清单里（`xz-pc-lcc2`）。步骤和口径见 [modules/map-three.md](modules/map-three.md)"性能验收"和"泼溅的预算"，参数见 `--help`。
 
 ### `pnpm --filter yzt lcc2:register <索引>`
 
@@ -207,7 +207,7 @@ pnpm add -Dw -E some-tool
 **执行了什么**：Node 运行 `tools/lcc2-register/cli.ts`（打印；读文件在 `source.ts`，计算在 `register.ts`）：读 `.lcc2` 索引、同级的 `info/poses.json`（扫描轨迹）和索引 `root.meshFiles` 列的碰撞网格（`data/mesh/*.ply`，按 0.2 米的方格采样出各层表面的高度）；拟合泼溅和网格相对轨迹的平移（水平先按"脚下 0.3～2.5 米有表面"粗搜，再和竖直一起按扫描仪离地 1～1.5 米细调）；加上人工修正和高程基准的差，用 proj4 换成经纬度，朝向包括子午线收敛角；最后做轨迹核对，打印离脚下的表面 1～1.5 米的比例和高度分布。
 
 **注意事项**：
-- 索引的相对路径默认从 `local/3dt/` 下找，worktree 里设 `YZT_LOCAL_DIR` 指回主目录；设了环境变量 `YZT_3DT_PROXY` 时（和开发服务器同一个变量，[config/local-files.md](config/local-files.md)）同一个相对路径从 `<它>/3dt/` 读，中文照写，工具按段编码。绝对路径只读本机，完整的 `http(s)://` 地址只读那个地址，这两种都不看 `YZT_3DT_PROXY`
+- 索引的相对路径按服务器上的层级写（如 `xuzhou/lcc2/楚王山1号/lcc2-sog-result/楚王山1号.lcc2`，[config/3dt-manifest.md](config/3dt-manifest.md)"目录层级"），默认从 `local/3dt/` 下找，worktree 里设 `YZT_LOCAL_DIR` 指回主目录；设了环境变量 `YZT_3DT_PROXY` 时（和开发服务器同一个变量，[config/local-files.md](config/local-files.md)）同一个相对路径从 `<它>/3dt/` 读，中文照写，工具按段编码。绝对路径只读本机，完整的 `http(s)://` 地址只读那个地址，这两种都不看 `YZT_3DT_PROXY`
 - 从 HTTP 读时网格一个一个下载，解析完才取下一个，内存里只留一个文件；每个文件最多等 2 分钟。404、超时、连不上、返回网页（路径不存在时回退到页面）或后端的 JSON 错误，都只打印一行原因。本机模式在读网格之前先查缺了几个；HTTP 上不额外发请求，读到缺的那个才报错
 - 只认 CGCS2000 3 度带、不带带号的 EPSG:4534～4554（江苏是 4548～4550）
 - `--shift 东,北,上`、`--yaw 度`：人工修正，移动泼溅和网格，核对算上它；给了 `--yaw` 时拟合在转过 -yaw 的轨迹上求平移，再和偏航组成修正；`--datum 米`：高程基准的差，整体抬高，核对不算它，徐州写 5.47（[config/3dt-manifest.md](config/3dt-manifest.md)）；`--no-fit`：轨迹不可信时不拟合
