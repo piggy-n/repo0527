@@ -9,7 +9,7 @@ import { decodeShot } from './shots.ts';
 // 测量页：只有底图和模型，没有面板、定时器和业务图层，不让页面自己的工作混进测量。
 // 走真实的会话、视图和引擎（ADR 0147 第 7 节：性能要测生产代码），这里不写层、场景和缓存算法。
 // 参数都在地址上：models、splats、center、zoom、pitch、bearing、basemap、uploadMB、cullWindow、splatBudget、cacheGB、
-// releaseImages、antialias、pacing、fps，--look 时还有 look、label
+// keepImages、antialias、pacing、fps，--look 时还有 look、label
 
 /** 地址上的 splats（JSON）：清单里的泼溅，地址相对 /3dt/（splat-models.ts） */
 interface SplatParam {

@@ -2,7 +2,7 @@ import type { BenchStats, BudgetReadings, DetailReadings, LoadPeak, SceneSample,
 import type { ProfileSummary } from './profile.ts';
 import type { MeasureResults, QualityResult, RunResult, RunStatus, ShotPair, ZoomResult, ZoomStep } from './results.ts';
 import { modelName } from './run-notes.ts';
-import { DEFAULT_VARIANT, RELEASE_SUFFIX } from './scenes.ts';
+import { DEFAULT_VARIANT } from './scenes.ts';
 import type { SharpnessComparison } from './sharpness.ts';
 import { allPassed, type CheckRow, fillSampleAt, MACHINE_DRIFT_RATIO, machineDrift, median, sceneChecks } from './verdict.ts';
 
@@ -514,10 +514,10 @@ function zoomLines(results: MeasureResults, scene: MeasureResults['scenes'][numb
 // 一份读数里所有层完成的次数
 const totalLoads = (stats: BenchStats) => stats.levels.reduce((sum, level) => sum + level.loads, 0);
 
-/** 每一级瓦片的实际大小：数据本身的性质，各方案一样，取这个场景完成次数最多的那份读数；释放贴图的不取（贴图的记账要另外核对） */
+/** 每一级瓦片的实际大小：数据本身的性质，各方案一样，取这个场景完成次数最多的那份读数 */
 function levelLines(runs: readonly RunResult[]): string[] {
   const readings = runs
-    .flatMap(run => (run.variant.endsWith(RELEASE_SUFFIX) ? [] : [run.atStable, run.atRecovered, run.zoom?.zoomed?.at, run.zoom?.nudged?.at]))
+    .flatMap(run => [run.atStable, run.atRecovered, run.zoom?.zoomed?.at, run.zoom?.nudged?.at])
     .filter(stats => stats !== undefined);
   const richest = readings.reduce<BenchStats | null>((best, stats) => (best && totalLoads(best) >= totalLoads(stats) ? best : stats), null);
   if (!richest || richest.levels.length === 0) {

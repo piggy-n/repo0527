@@ -500,11 +500,6 @@ describe('有瓦片集场景的报告', () => {
     expect(report).toContain('| 经开区 | 3 | 120 | 4.25 |');
     expect(report).not.toContain('| 经开区 | 2 | 3 |');
     expect(renderReport(results([tilesetRun('maplibre')], [TILESET_SCENE]))).not.toContain('每一级瓦片的实际大小');
-    // 释放贴图的那一遍完成得再多也不取
-    const released: RunResult = { ...tilesetRun(`${TIER}-release`), atRecovered: { ...stats(null), levels: [level(2, 500, 0.5)] } };
-    const withRelease = renderReport(results([early, later, released], [TIER_SCENE]));
-    expect(withRelease).toContain('| 经开区 | 3 | 120 | 4.25 |');
-    expect(withRelease).not.toContain('| 经开区 | 2 | 500 |');
   });
 
   it('加载中需求最高的那一刻：需求、还要加载的、在用和在路上的块，那时完成的层写在每一级的大小下面', () => {

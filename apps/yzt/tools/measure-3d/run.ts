@@ -90,8 +90,8 @@ export function pageUrl({ scene, variant }: Pick<Run, 'scene' | 'variant'>, { ba
   if (variant.cacheGB !== undefined) {
     params.set('cacheGB', String(variant.cacheGB));
   }
-  if (variant.releaseImages) {
-    params.set('releaseImages', '1');
+  if (variant.keepImages) {
+    params.set('keepImages', '1');
   }
   if (options.fps !== null) {
     params.set('fps', String(options.fps));

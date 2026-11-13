@@ -81,7 +81,7 @@ export interface SceneRenderer extends Disposable {
   attach(surface: SceneSurface): void;
   /** 外壳从地图撤下（onRemove）：不再画，内容和 GPU 资源保留 */
   detach(): void;
-  /** GL 上下文丢失：丢掉渲染器和 GPU 资源，内容保留；恢复后再次 attach 时重新上传 */
+  /** GL 上下文丢失：丢掉渲染器和 GPU 资源，内容（瓦片集、模型）保留；恢复后再次 attach 时重新上传（内存里没留贴图的瓦片重新下载） */
   loseContext(): void;
   /** MapLibre 每帧在绘制图层之前调用 */
   prerender(): void;

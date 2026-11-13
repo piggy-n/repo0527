@@ -27,8 +27,8 @@ export const HELP = `三维（MapLibre 引擎，@mx/map-three）的性能实测�
   --cache-gb <列表>      另外对照的瓦片缓存上限（GB），到它不再加载、淘汰到它的一半，如 4,6；
                          产品默认是 2（1 GB 起淘汰），就是 MapLibre 那个方案，不用再写。每一档多跑一遍画质，
                          截图和产品默认值的比
-  --release-images       产品默认值和 --cache-gb 的每一档各加一个"上传后释放贴图"的对照（只跑 perf），
-                         比渲染进程和 GPU 进程的内存（ADR 0155 第 5 节）
+  --keep-images          产品默认值和 --cache-gb 的每一档各加一个"上传后保留贴图"的对照（只跑 perf）：
+                         产品默认释放内存里的贴图，比渲染进程和 GPU 进程的内存（ADR 0155 第 5 节）
   --zoom-in              产品默认值和 --cache-gb 的每一档多跑一遍"定位后放大一级"：加载稳定后放大一级，
                          记下屏幕误差、锁定和显示的瓦片，再移开又移回同一处比一次，看放大后有没有锁粗
   --splat-budget <列表>  高斯泼溅场景（--only splat）比较的总预算（高斯个数），默认 3m,6m,10m（ADR 0149 L.3）；
@@ -64,8 +64,8 @@ export interface Options {
   readonly cullWindows: readonly (number | 'auto' | null)[];
   /** 另外对照的瓦片缓存上限（GB） */
   readonly cacheGBs: readonly number[];
-  /** 加上"上传后释放贴图"的对照 */
-  readonly releaseImages: boolean;
+  /** 加上"上传后保留贴图"的对照 */
+  readonly keepImages: boolean;
   /** 跑画质的方案多跑一遍定位后放大一级 */
   readonly zoomIn: boolean;
   /** 泼溅场景比较的总预算（高斯个数） */
@@ -142,7 +142,7 @@ export function parseOptions(argv: readonly string[]): Options {
     uploadMBs: null,
     cullWindows: [],
     cacheGBs: [],
-    releaseImages: false,
+    keepImages: false,
     zoomIn: false,
     splatBudgets: [3e6, 6e6, 1e7],
     fps: null,
@@ -203,8 +203,8 @@ export function parseOptions(argv: readonly string[]): Options {
       case '--cache-gb':
         options.cacheGBs = [...new Set(listItems(next()).map(item => positive(name, item)))];
         break;
-      case '--release-images':
-        options.releaseImages = true;
+      case '--keep-images':
+        options.keepImages = true;
         break;
       case '--zoom-in':
         options.zoomIn = true;

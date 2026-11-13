@@ -74,6 +74,9 @@ export class TileUploader implements Disposable {
   readonly #camera = new PerspectiveCamera();
   #active = false;
   #uploadedBytes = 0;
+  // 这个上下文里提前传过的贴图：只释放它们，没提前传的要在第一次绘制时从内存里传。上下文丢了、撤下层时清空
+  #uploaded = new WeakSet<Texture>();
+  #releasedBytes = 0;
 
   /** bytesPerFrame 为 null 时不提前上传，第一次绘制时才上传 */
   constructor(bytesPerFrame: number | null, requestFrame: () => void) {
@@ -93,11 +96,32 @@ export class TileUploader implements Disposable {
     return this.#uploadedBytes;
   }
 
+  /** 累计释放了内存里那一份的贴图字节 */
+  get releasedBytes(): number {
+    return this.#releasedBytes;
+  }
+
   /** 能不能上传：层撤下、上下文丢失时不能。不能时不排队，已经排着的直接放行，退回第一次绘制时上传，不会卡住加载 */
   setActive(active: boolean): void {
     this.#active = active;
     if (!active) {
       this.#releaseAll();
+      // 之前传的不一定还在显存里（上下文丢了）：这以后到的瓦片的贴图不释放，留给下一次上传
+      this.#uploaded = new WeakSet();
+    }
+  }
+
+  /**
+   * 瓦片记完字节以后（库的 load-model 事件，ADR 0155 第 5 节）调用：这个上下文里提前传过的贴图，关掉内存里的那份（ImageBitmap）。
+   * 不能更早：上传预算和瓦片库都在传完以后才按贴图的宽高算字节，关了以后宽高是 0。之后不能再从内存上传，上下文丢了要重新下载
+   */
+  release(scene: Object3D): void {
+    for (const texture of collect(scene).textures) {
+      const image: unknown = texture.image;
+      if (this.#uploaded.has(texture) && image instanceof ImageBitmap) {
+        this.#releasedBytes += image.width * image.height * 4;
+        image.close();
+      }
     }
   }
 
@@ -161,6 +185,7 @@ export class TileUploader implements Disposable {
     if (texture) {
       job.nextTexture++;
       webgl.initTexture(texture);
+      this.#uploaded.add(texture);
       return textureBytes(texture);
     }
     this.#jobs.shift();
