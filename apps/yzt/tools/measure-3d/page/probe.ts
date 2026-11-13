@@ -1,6 +1,7 @@
 import type {
   BenchCamera,
   ContextEvents,
+  LoadPeak,
   SceneSample,
   LongTaskStats,
   LongTaskWindow,
@@ -57,7 +58,11 @@ const release = { insideScene: false, bytes: 0 };
 function releaseUploaded(args: readonly unknown[]): void {
   const source = args.at(-1);
   if (releaseImages && release.insideScene && source instanceof ImageBitmap) {
-    release.bytes += source.width * source.height * 4;
+    const { width, height } = source;
+    release.bytes += width * height * 4;
+    // 关之前把宽高钉在这个对象上：上传预算（TileUploader）和瓦片库的记账（瓦片传完以后才算字节）都在 close 之后读宽高，
+    // 关了以后原来的宽高变成 0，贴图就按 0 字节算，和对照方案不是同一份工作量
+    Object.defineProperties(source, { width: { value: width }, height: { value: height } });
     source.close();
   }
 }
@@ -391,6 +396,16 @@ function startFillTrace(): void {
   fill.timer = setInterval(() => sampleInto(fill.samples, fill.from), FILL_SAMPLE_MS);
 }
 
+// 加载中需求最高的那一刻：只留这一份读数，整段加载的读数太多（几分钟、每 50 毫秒一份）
+const loadWatch: { timer: ReturnType<typeof setInterval> | null; from: number; peak: LoadPeak | null } = { timer: null, from: 0, peak: null };
+
+function watchLoadPeak(): void {
+  const stats = window.bench?.stats();
+  if (stats && (!loadWatch.peak || stats.budget.demandMB > loadWatch.peak.stats.budget.demandMB)) {
+    loadWatch.peak = { t: performance.now() - loadWatch.from, stats };
+  }
+}
+
 // ---------- 统计 ----------
 
 function percentile(sorted: Float64Array, p: number): number {
@@ -582,6 +597,9 @@ export interface Probe {
   releasedMB(): number;
   /** 三维渲染器的 render 开始、结束：只释放这期间上传的贴图 */
   setInsideScene(inside: boolean): void;
+  /** 开始加载模型时开始记加载中需求最高的那一刻（bench.ts），到稳定后取 */
+  startLoadWatch(): void;
+  finishLoadWatch(): LoadPeak | null;
 }
 
 export const probe: Probe = {
@@ -695,6 +713,20 @@ export const probe: Probe = {
 
   setInsideScene(inside) {
     release.insideScene = inside;
+  },
+
+  startLoadWatch() {
+    loadWatch.from = performance.now();
+    loadWatch.peak = null;
+    loadWatch.timer = setInterval(watchLoadPeak, FILL_SAMPLE_MS);
+  },
+
+  finishLoadWatch() {
+    if (loadWatch.timer !== null) {
+      clearInterval(loadWatch.timer);
+      loadWatch.timer = null;
+    }
+    return loadWatch.peak;
   }
 };
 

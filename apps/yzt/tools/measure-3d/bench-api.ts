@@ -124,6 +124,12 @@ export interface BenchStats {
   readonly splats: SplatReadings | null;
 }
 
+/** 加载中需求最高的那一刻：离开始加载的毫秒数和那时的读数。停着估计超过上限 2 倍就放宽，首屏误放宽时看那一刻在估计什么 */
+export interface LoadPeak {
+  readonly t: number;
+  readonly stats: BenchStats;
+}
+
 export interface Summary {
   readonly samples: number;
   readonly mean: number;

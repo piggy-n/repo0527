@@ -7,11 +7,6 @@ import type { Options } from './options.ts';
 
 const run = promisify(execFile);
 
-// 软件渲染的标志；硬件名字里不会有这些
-export const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|basic render|software adapter|gdi generic|mesa offscreen/i;
-// 常见的集显：只用来提醒
-export const INTEGRATED_RENDERER = /intel.*(uhd|iris|hd graphics)|radeon\(tm\) graphics|radeon graphics|vega \d+ graphics/i;
-
 function chromeArgs({ viewport, allowSoftware }: Options): string[] {
   return [
     // 解除 vsync 和帧率上限：否则帧时间封顶在显示器刷新率，看不出余量

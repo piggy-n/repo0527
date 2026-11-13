@@ -1,8 +1,8 @@
-import type { BenchStats, BudgetReadings, DetailReadings, SceneSample, PhaseResult, SplatReadings, TileQueues } from './bench-api.ts';
+import type { BenchStats, BudgetReadings, DetailReadings, LoadPeak, SceneSample, PhaseResult, SplatReadings, TileQueues } from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
 import type { MeasureResults, QualityResult, RunResult, RunStatus, ShotPair, ZoomResult, ZoomStep } from './results.ts';
 import { modelName } from './run-notes.ts';
-import { DEFAULT_VARIANT } from './scenes.ts';
+import { DEFAULT_VARIANT, RELEASE_SUFFIX } from './scenes.ts';
 import type { SharpnessComparison } from './sharpness.ts';
 import { allPassed, type CheckRow, fillSampleAt, MACHINE_DRIFT_RATIO, machineDrift, median, sceneChecks } from './verdict.ts';
 
@@ -114,6 +114,21 @@ function demandCell(runs: readonly RunResult[], read: (run: RunResult) => BenchS
   return `${integer(demand)} / ${integer(limit)}，锁定 ${measured.filter(item => item.locked).length} / ${measured.length} 遍`;
 }
 
+// 加载中需求最高的那一刻：需求超过上限的 2 倍、停着就按估计放宽，这一行看那时估计了多少、有多少块还在路上
+function peakCell(runs: readonly RunResult[]): string {
+  const of = (read: (peak: LoadPeak) => number) =>
+    pick(runs, run => {
+      const peak = run.load?.peak;
+      return peak ? read(peak) : null;
+    });
+  const demand = of(peak => peak.stats.budget.demandMB);
+  if (demand === null) {
+    return '—';
+  }
+  const queues = `${integer(of(peak => peak.stats.queues.used))} / ${integer(of(peak => peak.stats.queues.downloading))} / ${integer(of(peak => peak.stats.queues.parsing))}`;
+  return `${integer(demand)} / ${integer(of(peak => peak.stats.budget.pendingMB))}，${queues}，${number((of(peak => peak.t) ?? Number.NaN) / 1000)}`;
+}
+
 // 私有内存（提交的字节）：渲染进程里有页面和它的 Worker
 const memoryCell = (runs: readonly RunResult[]) =>
   `${integer(pick(runs, run => run.memory?.rendererAtStableMB))} / ${integer(pick(runs, run => run.memory?.rendererPeakMB))}，${integer(pick(runs, run => run.memory?.gpuProcessPeakMB))}`;
@@ -152,6 +167,7 @@ const METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => strin
   ['稳定时：屏幕误差 / 引擎估算的模型显存（MB）', runs => `${number(pick(runs, run => run.atStable?.errorTarget))} / ${integer(pick(runs, run => run.atStable?.cacheMB))}`],
   ['稳定时：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块）', runs => detailCell(runs, run => run.atStable?.detail)],
   ['加载到稳定：放宽的帧 装满 / 估计', runs => `${integer(pick(runs, run => run.atStable?.budget.raisedFull))} / ${integer(pick(runs, run => run.atStable?.budget.raisedPredicted))}`],
+  ['加载中需求最高时：需求 / 其中还要加载的（MB），在用 / 下载中 / 解析中（块），离开始加载（秒）', peakCell],
   ['稳定时：需求 / 缓存上限（MB），锁定', runs => demandCell(runs, run => run.atStable)],
   ['恢复后：瓦片 / 三角形 / 屏幕误差', runs => `${integer(pick(runs, run => run.atRecovered?.tilesVisible))} / ${integer(pick(runs, run => run.atRecovered?.triangles))} / ${number(pick(runs, run => run.atRecovered?.errorTarget))}`],
   ['恢复后：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块）', runs => detailCell(runs, run => run.atRecovered?.detail)],
@@ -414,17 +430,38 @@ function fillLines(perf: readonly { readonly label: string; readonly runs: reado
 
 // ---------- 定位后放大一级（--zoom-in） ----------
 
-// 放大后比移开再移回的屏幕误差高这么多，算放大后锁粗了：同一个相机，只有按估计放宽锁住时才差这么多
+// 放大后比移开再移回的屏幕误差高这么多，算放大后比移回来粗
 export const ZOOM_COARSER_RATIO = 1.05;
 
-/** 放大后锁粗了吗：同一个相机，放大后的屏幕误差比移开再移回的高 5% 以上；没有移回来的读数时为 null */
-export function zoomedCoarser(zoom: ZoomResult | undefined): boolean | null {
+/**
+ * 放大后有没有按估计锁粗：estimate 是同一个相机放大后的屏幕误差比移回来的高 5% 以上，而且放大这一步新增了估计放宽；
+ * coarser 是粗了，但这一步没有估计放宽（装满的放宽、停在 97% 到上限之间不收紧、相机怎么过来的，都会让稳定值不同）；
+ * same 是差不到 5%。放大、移回没有读数时为 null
+ */
+export type ZoomVerdict = 'estimate' | 'coarser' | 'same';
+
+export function zoomVerdict(zoom: ZoomResult | undefined): ZoomVerdict | null {
+  const zoomed = zoom?.zoomed;
   const nudged = zoom?.nudged;
-  if (!zoom || !nudged) {
+  if (!zoom || !zoomed || !nudged) {
     return null;
   }
-  return zoom.zoomed.at.errorTarget > nudged.at.errorTarget * ZOOM_COARSER_RATIO;
+  if (zoomed.at.errorTarget <= nudged.at.errorTarget * ZOOM_COARSER_RATIO) {
+    return 'same';
+  }
+  return zoomed.at.budget.raisedPredicted > zoom.before.budget.raisedPredicted ? 'estimate' : 'coarser';
 }
+
+const ZOOM_VERDICT: Readonly<Record<ZoomVerdict, string>> = {
+  estimate: '**是：放大这一步按估计放宽了，比移开再移回的粗**',
+  coarser: '比移开再移回的粗，但放大这一步没有按估计放宽：不是估计的问题，看"放宽的帧 装满"和需求',
+  same: '否'
+};
+
+const verdictCell = (run: RunResult) => {
+  const verdict = zoomVerdict(run.zoom);
+  return verdict === null ? '算不出（放大或移回没有读数）' : ZOOM_VERDICT[verdict];
+};
 
 const zoomRunOf = (results: MeasureResults, scene: string, variant: string) =>
   results.runs.find(run => run.scene === scene && run.variant === variant && run.kind === 'zoom');
@@ -441,30 +478,22 @@ function zoomReading(at: BenchStats | undefined, since: BenchStats | undefined):
 const budgetReading = (at: BenchStats | undefined) =>
   at ? `${integer(at.budget.demandMB)} / ${integer(at.budget.limitMB)} / ${integer(at.cacheMB)}` : '—';
 
-function coarserCell(run: RunResult): string {
-  const coarser = zoomedCoarser(run.zoom);
-  if (coarser === null) {
-    return '算不出（没有移回来的读数）';
-  }
-  return coarser ? '**是：放大后比移开再移回的粗**' : '否';
-}
-
 const ZOOM_METRICS: readonly (readonly [string, (run: RunResult) => string])[] = [
   ['状态', run => STATUS[run.status]],
   ['首屏：屏幕误差，锁定，放宽的帧 装满 / 估计（加载到稳定）', run => zoomReading(run.zoom?.before, undefined)],
-  ['放大后补齐（秒）', run => number((run.zoom?.zoomed.settle.ms ?? Number.NaN) / 1000)],
-  ['放大后：屏幕误差，锁定，放宽的帧 装满 / 估计（放大以后新增）', run => zoomReading(run.zoom?.zoomed.at, run.zoom?.before)],
-  ['放大后：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块）', run => detailCell([run], item => item.zoom?.zoomed.at.detail)],
-  ['放大后：需求 / 缓存上限 / 缓存（MB）', run => budgetReading(run.zoom?.zoomed.at)],
-  ['移开再移回：屏幕误差，锁定，放宽的帧 装满 / 估计（移开以后新增）', run => zoomReading(run.zoom?.nudged?.at, run.zoom?.zoomed.at)],
+  ['放大后补齐（秒）', run => number((run.zoom?.zoomed?.settle.ms ?? Number.NaN) / 1000)],
+  ['放大后：屏幕误差，锁定，放宽的帧 装满 / 估计（放大以后新增）', run => zoomReading(run.zoom?.zoomed?.at, run.zoom?.before)],
+  ['放大后：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块）', run => detailCell([run], item => item.zoom?.zoomed?.at.detail)],
+  ['放大后：需求 / 缓存上限 / 缓存（MB）', run => budgetReading(run.zoom?.zoomed?.at)],
+  ['移开再移回：屏幕误差，锁定，放宽的帧 装满 / 估计（移开以后新增）', run => zoomReading(run.zoom?.nudged?.at, run.zoom?.zoomed?.at)],
   ['移开再移回：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块）', run => detailCell([run], item => item.zoom?.nudged?.at.detail)],
-  ['放大后锁粗了吗', coarserCell]
+  ['放大后按估计放宽锁粗了吗', verdictCell]
 ];
 
 const ZOOM_TITLE =
   '**定位后放大一级（--zoom-in）：** 加载稳定后放大一级、等到稳定，再往东移开一个视口高度又移回、等到稳定。' +
-  '同一个相机，放大后比移回来的屏幕误差高 5% 以上，是放大后按估计放宽锁粗了（用户看到的"放大 → 不请求，动一下相机才恢复"）；' +
-  '两次一样，是这一档在这个视角本来就要放宽，原因看"放宽的帧 装满 / 估计"';
+  '同一个相机，放大后比移回来的屏幕误差高 5% 以上、而且放大这一步新增了"估计"的放宽，才算放大后按估计放宽锁粗了' +
+  '（用户看到的"放大 → 不请求，动一下相机才恢复"）；粗了但没有估计放宽的单独写出；两次一样，是这一档在这个视角本来就要放宽，原因看"放宽的帧 装满 / 估计"';
 
 function zoomLines(results: MeasureResults, scene: MeasureResults['scenes'][number]): string[] {
   const measured = sceneVariants(results, scene).flatMap(({ id, label }) => {
@@ -485,23 +514,39 @@ function zoomLines(results: MeasureResults, scene: MeasureResults['scenes'][numb
 // 一份读数里所有层完成的次数
 const totalLoads = (stats: BenchStats) => stats.levels.reduce((sum, level) => sum + level.loads, 0);
 
-/** 每一级瓦片的实际大小：数据本身的性质，各方案一样，取这个场景完成次数最多的那份读数 */
+/** 每一级瓦片的实际大小：数据本身的性质，各方案一样，取这个场景完成次数最多的那份读数；释放贴图的不取（贴图的记账要另外核对） */
 function levelLines(runs: readonly RunResult[]): string[] {
   const readings = runs
-    .flatMap(run => [run.atStable, run.atRecovered, run.zoom?.zoomed.at, run.zoom?.nudged?.at])
+    .flatMap(run => (run.variant.endsWith(RELEASE_SUFFIX) ? [] : [run.atStable, run.atRecovered, run.zoom?.zoomed?.at, run.zoom?.nudged?.at]))
     .filter(stats => stats !== undefined);
   const richest = readings.reduce<BenchStats | null>((best, stats) => (best && totalLoads(best) >= totalLoads(stats) ? best : stats), null);
   if (!richest || richest.levels.length === 0) {
     return [];
   }
   return [
-    '**每一级瓦片的实际大小：** 取这个场景完成次数最多的那份读数，淘汰后又加载的再算一次。引擎按它估计还要加载的字节，一层完成 3 块之前不估计；' +
-      '粗的层每块比细的大得多时，旧版本开始加载、放大时按粗的估计细的，按估计放宽锁粗（2026-11-12 修）',
+    '**每一级瓦片的实际大小：** 取这个场景完成次数最多的那份读数，淘汰后又加载的再算一次。引擎按它估计还要加载的字节，一层完成 3 块之前不估计。' +
+      '首屏误放宽的原因推测是开始加载时细的一层按粗的一层的大小估计（2026-11-12 改成不估计），粗的层每块是不是比细的大得多，看这张表',
     '',
     table(
       ['模型', '层（根是 0）', '完成的次数', '平均（MB）'],
       richest.levels.map(level => [modelName(level.model), String(level.depth), integer(level.loads), number(level.averageMB, 2)])
     ),
+    '',
+    ...peakLevelLines(runs)
+  ];
+}
+
+// 产品默认值第一遍加载中需求最高的那一刻有样本的层：那时的估计按哪几层的大小算
+function peakLevelLines(runs: readonly RunResult[]): string[] {
+  const peak = runs.find(run => run.kind === 'perf' && run.variant === DEFAULT_VARIANT && run.load?.peak)?.load?.peak;
+  if (!peak) {
+    return [];
+  }
+  const { budget, levels } = peak.stats;
+  const sampled =
+    levels.map(level => `${modelName(level.model)} 第 ${level.depth} 层 ${integer(level.loads)} 块、平均 ${number(level.averageMB, 2)} MB`).join('；') || '还没有';
+  return [
+    `**产品默认值加载中需求最高时（离开始加载 ${number(peak.t / 1000)} 秒，需求 ${integer(budget.demandMB)} MB、其中还要加载的 ${integer(budget.pendingMB)} MB）完成的层：** ${sampled}。一层完成 3 块以上才估计它`,
     ''
   ];
 }
@@ -815,7 +860,8 @@ ${versusDefaultPart(own.shots, own.status, fallback, compared?.versusDefault ?? 
   const zoomSections = results.scenes.flatMap(scene =>
     sceneVariants(results, scene).flatMap(({ id, label }) => {
       const zoom = zoomRunOf(results, scene.id, id)?.zoom;
-      if (!zoom) {
+      // 放大那一步没做完时没有截图
+      if (!zoom?.zoomed) {
         return [];
       }
       const nudged = zoom.nudged ? figure(zoomCaption('移开再移回', zoom.nudged), zoom.nudged.shot) : '';

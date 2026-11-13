@@ -2,6 +2,7 @@ import type {
   BenchCamera,
   BenchStats,
   ContextEvents,
+  LoadPeak,
   LongTaskStats,
   ModelState,
   PageSetup,
@@ -62,6 +63,8 @@ export interface RunResult {
     /** 从打开页面算 */
     readonly ttFromNavigationMs: number;
     readonly longTasks: LongTaskStats;
+    /** 加载中需求最高的那一刻；一份读数也没有时为 null */
+    readonly peak?: LoadPeak | null;
   };
   atStable?: BenchStats;
   static?: PhaseResult;
@@ -93,15 +96,19 @@ export interface ZoomStep {
   readonly shot: string;
 }
 
-/** 加载稳定后放大一级，再移开又移回同一处：两次读数比，就知道放大后有没有锁粗（只有估计放宽、没装满时） */
+/**
+ * 加载稳定后放大一级，再移开又移回同一处：两次读数比，再看放大这一步有没有按估计放宽，就知道放大后有没有按估计锁粗。
+ * 每一步做完就写进结果，这一遍中途失败时前面的读数还在
+ */
 export interface ZoomResult {
   /** 放大前（加载稳定后）的读数：放宽的帧数是累计的，各步新增的要减它 */
   readonly before: BenchStats;
   /** 放大以后的相机 */
   readonly camera: BenchCamera;
-  readonly zoomed: ZoomStep;
-  /** 放大后没稳定时不做 */
-  readonly nudged: ZoomStep | null;
+  /** 没做完（中途失败）时为 null */
+  zoomed: ZoomStep | null;
+  /** 放大后没稳定、没做完时为 null */
+  nudged: ZoomStep | null;
 }
 
 /** 画质那一遍：截图的文件名、静止观察的结果 */

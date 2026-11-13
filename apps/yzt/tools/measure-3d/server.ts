@@ -68,10 +68,14 @@ export function byteRange(header: string | undefined, size: number): ByteRange {
   return start >= size || start > end ? 'unsatisfiable' : { start, end };
 }
 
+// 浏览器取消了请求（瓦片不要了）：不算失败，正常结束
 async function proxy(target: string, path: string, req: IncomingMessage, res: ServerResponse, idleMs: number): Promise<void> {
   // 浏览器取消了请求（瓦片不要了）上游也不再下载：引擎经常取消，不然连接一直占着，等上游超时断开时没人接这个错，工具就崩了
   const abort = new AbortController();
   res.once('close', () => abort.abort());
+  // 上游先出的错：正文出错时这边还没中止。浏览器取消时这边先中止，正文才出错；上游中途断开时 pipeline 也会关掉浏览器那边，
+  // 也会走到上面的中止，只看中止了没有就分不开这两种
+  let upstreamFailed = false;
   // 每收到一点东西（响应头、正文的一块）就重新计时
   let timer: ReturnType<typeof setTimeout> | undefined;
   const touch = () => {
@@ -95,13 +99,23 @@ async function proxy(target: string, path: string, req: IncomingMessage, res: Se
     if (upstream.body) {
       const body = Readable.fromWeb(upstream.body);
       body.on('data', touch);
+      // 在 pipeline 之前登记，先于它关掉浏览器那边
+      body.once('error', () => {
+        upstreamFailed ||= !abort.signal.aborted;
+      });
       await pipeline(body, res);
     } else {
       res.end();
     }
   } catch (error) {
     // 超时时 fetch、正文抛的是中止的原因；抛出去让调用方按超时回复
-    throw abort.signal.reason instanceof UpstreamTimeout ? abort.signal.reason : error;
+    if (abort.signal.reason instanceof UpstreamTimeout) {
+      throw abort.signal.reason;
+    }
+    if (abort.signal.aborted && !upstreamFailed) {
+      return;
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }
@@ -138,16 +152,16 @@ function handle({ files, modelsProxy, upstreamIdleMs = UPSTREAM_IDLE_MS }: Mount
     return;
   }
   if (modelsProxy && path.startsWith('/3dt/')) {
+    // 浏览器自己取消的 proxy 正常结束，不算失败；上游中途断开的算
     proxy(modelsProxy, path, req, res, upstreamIdleMs).catch((error: unknown) => {
       const timeout = error instanceof UpstreamTimeout;
-      // 浏览器自己取消的不算失败
       if (timeout) {
         stats.timeouts++;
-      } else if (!res.destroyed) {
+      } else {
         stats.failures++;
       }
       // 已经开始发了就只能断开，断开也是告诉浏览器这个瓦片失败了
-      if (res.headersSent) {
+      if (res.headersSent || res.destroyed) {
         res.destroy();
       } else {
         respond(res, timeout ? 504 : 502, String(error));

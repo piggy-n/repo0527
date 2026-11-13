@@ -6,10 +6,11 @@ import { join, resolve } from 'node:path';
 import { build } from 'vite';
 import { localPath } from '../local-files/paths.ts';
 import type { BenchStats } from './bench-api.ts';
-import { INTEGRATED_RENDERER, launchBrowser, listAdapters, probeRenderer, SOFTWARE_RENDERER } from './browser.ts';
+import { launchBrowser, listAdapters, probeRenderer } from './browser.ts';
 import { runLook } from './look.ts';
 import { HELP, type Options, parseOptions, uploadBudgets } from './options.ts';
 import { createRedactor } from './redact.ts';
+import { isIntegratedRenderer, SOFTWARE_RENDERER } from './renderer-class.ts';
 import { renderManual, renderQualityPage, renderReport } from './report.ts';
 import type { Environment, MeasureResults, SceneQuality, ShotPair } from './results.ts';
 import { runOnce } from './run.ts';
@@ -200,7 +201,7 @@ async function checkRenderer(warnings: string[]): Promise<Environment> {
   if (software) {
     warnings.push(`软件渲染：${info.renderer}。这次的帧时间无效，只用来确认脚本能跑。`);
   }
-  const integrated = !software && INTEGRATED_RENDERER.test(info.renderer);
+  const integrated = !software && isIntegratedRenderer(info.renderer);
   if (integrated) {
     warnings.push(
       adapters.length > 1
@@ -313,7 +314,7 @@ function runSummary(result: MeasureResults['runs'][number]): string {
   }
   const { zoom } = result;
   if (zoom) {
-    return `${loaded}，首屏${reading(zoom.before)}；放大后${reading(zoom.zoomed.at)}；移开再移回${zoom.nudged ? reading(zoom.nudged.at) : '没做'}`;
+    return `${loaded}，首屏${reading(zoom.before)}；放大后${zoom.zoomed ? reading(zoom.zoomed.at) : '没做完'}；移开再移回${zoom.nudged ? reading(zoom.nudged.at) : '没做'}`;
   }
   return `${loaded}，屏幕误差 ${result.atStable?.errorTarget.toFixed(1)}，瓦片 ${result.atStable?.tilesVisible}`;
 }

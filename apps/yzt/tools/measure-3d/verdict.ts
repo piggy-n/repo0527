@@ -74,9 +74,9 @@ export function machineDrift(runs: readonly RunResult[]): number | null {
     const js = run.kind === 'perf' ? run.static?.js?.p50 : undefined;
     if (js) {
       // 上传预算、窗口不同的方案静止时画的一样；泼溅的预算、缓存上限不同，画的就不同（缓存大了放宽得少），各算各的；
-      // 释放贴图的和它对照的方案画的一样，算一组
-      const base = run.variant.endsWith(RELEASE_SUFFIX) ? run.variant.slice(0, -RELEASE_SUFFIX.length) : run.variant;
-      const workload = OWN_WORKLOAD.test(base) ? base : DEFAULT_VARIANT;
+      // 释放贴图的也各算各的：内存的压力不同，不拿它判断机器稳不稳
+      const own = OWN_WORKLOAD.test(run.variant) || run.variant.endsWith(RELEASE_SUFFIX);
+      const workload = own ? run.variant : DEFAULT_VARIANT;
       const key = `${run.scene}/${workload}`;
       groups.set(key, (groups.get(key) ?? []).concat(js));
     }

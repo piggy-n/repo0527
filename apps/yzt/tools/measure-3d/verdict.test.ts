@@ -189,10 +189,10 @@ describe('machineDrift', () => {
     expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-cache6g', 4), staticJs('maplibre-cache6g', 4.4)])).toBeCloseTo(1.1);
   });
 
-  it('释放贴图的对照和它的方案画的一样：算一组', () => {
-    expect(machineDrift([staticJs('maplibre-cache6g', 4), staticJs('maplibre-cache6g-release', 5)])).toBeCloseTo(1.25);
-    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-release', 3)])).toBeCloseTo(1.5);
-    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-cache6g-release', 4)])).toBeNull();
+  it('释放贴图的对照各算一组：内存的压力不同，不和它的方案比', () => {
+    expect(machineDrift([staticJs('maplibre-cache6g', 4), staticJs('maplibre-cache6g-release', 5)])).toBeNull();
+    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-release', 3)])).toBeNull();
+    expect(machineDrift([staticJs('maplibre-release', 2), staticJs('maplibre-release', 2.4)])).toBeCloseTo(1.2);
   });
 
   it('取最不稳定的一组', () => {

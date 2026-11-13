@@ -194,6 +194,7 @@ const look = params.get('look') === '1' ? new LookControl(container, () => sessi
 
 const loadStartedAt = performance.now();
 session.scene.set(sceneContent(true));
+probe.startLoadWatch();
 
 window.bench = {
   config: handle.config,

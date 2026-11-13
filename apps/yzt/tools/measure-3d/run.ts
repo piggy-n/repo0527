@@ -5,6 +5,7 @@ import type {
   BenchCamera,
   BenchStats,
   ContextEvents,
+  LoadPeak,
   ModelState,
   SceneSample,
   LongTaskStats,
@@ -18,7 +19,7 @@ import { type BrowserProcesses, browserProcesses, launchBrowser, type LaunchedBr
 import type { Options } from './options.ts';
 import { type CpuProfile, summarizeProfile } from './profile.ts';
 import type { ProxyStats } from './server.ts';
-import type { QualityResult, RunResult, SettleResult, ZoomStep } from './results.ts';
+import type { QualityResult, RunResult, SettleResult, ZoomResult, ZoomStep } from './results.ts';
 import { runNotes } from './run-notes.ts';
 import { aerialFlight, nudge, type Run, zoomedIn } from './scenes.ts';
 import type { SplatModel } from './splat-models.ts';
@@ -119,7 +120,7 @@ function classify(result: RunResult): void {
   if ((result.flightCold?.fenceTimeouts ?? 0) > 0) {
     result.notes.push('有等 GPU 超过 15 秒的帧，帧时间可能失真');
   }
-  if (result.zoom && !result.zoom.zoomed.settle.stable) {
+  if (result.zoom && !result.zoom.zoomed?.settle.stable) {
     result.notes.push('放大一级以后没等到稳定，没有移开再移回');
   }
   result.notes.push(...invalid);
@@ -181,7 +182,8 @@ async function loadPage(run: Run, ctx: RunContext, { page }: Session, result: Ru
     stable: stable.stable,
     ttStableMs: stable.at - loadStartedAt,
     ttFromNavigationMs: stable.at,
-    longTasks: await longTasks(page, 0, stable.at)
+    longTasks: await longTasks(page, 0, stable.at),
+    peak: await call<LoadPeak | null>(page, 'window.benchProbe.finishLoadWatch()')
   };
   if (!stable.stable) {
     result.notes.push(`等了 ${Math.round(loadTimeoutMs / 1000)} 秒模型还没稳定`);
@@ -376,7 +378,7 @@ async function runQuality(run: Run, ctx: RunContext, session: Session, result: R
 }
 
 // 定位后放大一级（用户看到的"勾选模型 → 自动定位 → 放大 → 不请求，动一下相机才恢复"）：加载稳定后放大一级，
-// 再移开又移回同一处。放大后比移回来的粗，就是放大后锁粗了。等稳定的上限用加载的：放大要加载新的一层
+// 再移开又移回同一处，判断见 report.ts 的 zoomVerdict。等稳定的上限用加载的：放大要加载新的一层。每一步做完就写进结果
 async function runZoom(run: Run, ctx: RunContext, session: Session, result: RunResult): Promise<void> {
   const times = ctx.options.quick ? QUICK : NORMAL;
   const { page } = session;
@@ -392,17 +394,31 @@ async function runZoom(run: Run, ctx: RunContext, session: Session, result: RunR
   ctx.progress('加载');
   await loadPage(run, ctx, session, result);
   await call(page, `window.benchProbe.waitBasemap(${times.basemapMs})`);
-  const before = await stats(page);
   const from = await sceneCamera(page, run);
   const camera = zoomedIn(from);
+  const zoom: ZoomResult = { before: await stats(page), camera, zoomed: null, nudged: null };
+  result.zoom = zoom;
   ctx.progress('放大一级');
-  const zoomed = await step([from, camera], ZOOM_MS, '-zoomed');
-  let nudged: ZoomStep | null = null;
-  if (zoomed.settle.stable) {
+  zoom.zoomed = await step([from, camera], ZOOM_MS, '-zoomed');
+  if (zoom.zoomed.settle.stable) {
     ctx.progress('移开再移回');
-    nudged = await step(nudge(camera, ctx.options.viewport.height), NUDGE_MS, '-nudged');
+    zoom.nudged = await step(nudge(camera, ctx.options.viewport.height), NUDGE_MS, '-nudged');
   }
-  result.zoom = { before, camera, zoomed, nudged };
+}
+
+// 页面还在时读上下文丢失的次数和页面的错误：失败的那一遍（截图超时、evaluate 出错）也要分清是丢了上下文还是变慢
+// （ADR 0155 第 7 节）。页面崩溃、卡住时读不到，最多等 5 秒
+async function readPageState(page: Page, result: RunResult, redact: RunContext['redact']): Promise<void> {
+  const read = Promise.all([
+    call<ContextEvents>(page, 'window.benchProbe.contextEvents()'),
+    call<string[]>(page, 'window.bench.errors.slice(0, 20)')
+  ]).catch(() => null);
+  const state = await Promise.race([read, sleep(5000).then(() => null)]);
+  if (state) {
+    const [context, errors] = state;
+    result.context = context;
+    result.pageErrors = [...(result.pageErrors ?? []), ...errors.map(item => redact(item).slice(0, 300))];
+  }
 }
 
 async function runProfile(run: Run, ctx: RunContext, session: Session, result: RunResult): Promise<void> {
@@ -457,17 +473,17 @@ export async function runOnce(run: Run, ctx: RunContext): Promise<RunResult> {
         opened.launched.browser.on('disconnected', () => reject(new Error('浏览器进程退出了')));
       }),
       new Promise<never>((_, reject) => {
-        const limit = ctx.options.loadTimeoutMs + 300000;
+        // 放大一级要等三次稳定（加载、放大、移回），每次的上限都是加载的
+        const limit = (run.kind === 'zoom' ? 3 : 1) * ctx.options.loadTimeoutMs + 300000;
         setTimeout(() => reject(new Error('单遍超过时间上限，已中止')), limit).unref();
       })
     ]);
-    result.context = await call<ContextEvents>(opened.page, 'window.benchProbe.contextEvents()');
-    result.pageErrors = [...(result.pageErrors ?? []), ...(await call<string[]>(opened.page, 'window.bench.errors.slice(0, 20)')).map(item => ctx.redact(item).slice(0, 300))];
   } catch (error) {
     result.status = 'failed';
     result.error = ctx.redact(String(error instanceof Error ? error.message : error)).split('\n')[0]?.slice(0, 500);
   } finally {
     if (session) {
+      await readPageState(session.page, result, ctx.redact);
       session.launched.browser.removeAllListeners('disconnected');
       await Promise.race([session.launched.browser.close().catch(() => undefined), sleep(15000)]);
     }

@@ -196,19 +196,20 @@ describe('模型代理', () => {
     expect(await race(closed, false)).toBe(true);
   });
 
-  it('上游中途断开：这个请求断开，工具不崩，后面的请求照常', async () => {
+  it('上游中途断开：这个请求断开、记一次失败，工具不崩，后面的请求照常', async () => {
     let count = 0;
     const target = await upstream((_req, res) => {
       count++;
       if (count === 1) {
-        res.write(Buffer.alloc(1024), () => {
+        res.write(Buffer.alloc(64 * 1024), () => {
           res.destroy();
         });
       } else {
         res.end('ok');
       }
     });
-    const proxy = await proxyTo(target);
+    const server = await proxyServer(target);
+    const proxy = server.url;
     const ended = await race(
       new Promise<boolean>(resolve => {
         const request = get(`${proxy}/3dt/broken.glb`, response => {
@@ -221,6 +222,9 @@ describe('模型代理', () => {
       false
     );
     expect(ended).toBe(true);
+    // 计数在浏览器那边断开之后才记上：等一会儿
+    expect(await until(() => server.proxyStats().failures === 1)).toBe(true);
+    expect(server.proxyStats()).toEqual({ timeouts: 0, failures: 1 });
     const next = await fetch(`${proxy}/3dt/next.json`);
     expect(await next.text()).toBe('ok');
   });
