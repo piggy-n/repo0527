@@ -55,6 +55,11 @@ export interface ThreeSceneRendererOptions {
   readonly requestCullWindow?: CullWindow | null;
   /** 高斯泼溅的总预算（高斯个数），加了几份就平分 */
   readonly splatBudget?: number;
+  /**
+   * 瓦片记完字节以后释放内存里的贴图（ADR 0155 第 5 节，默认释放）：渲染进程省下约一个缓存大小；
+   * 代价是上下文丢了以后瓦片要重新下载。测量工具用 false 作对照
+   */
+  readonly releaseImages?: boolean;
 }
 
 /** 读数（只读快照）：给性能测量和测试，业务代码不用 */
@@ -92,6 +97,8 @@ export interface ThreeSceneInspection {
   readonly uploadPending: number;
   /** 累计提前上传的字节 */
   readonly uploadedBytes: number;
+  /** 累计释放了内存里那一份的贴图字节 */
+  readonly releasedBytes: number;
   /** 瓦片都到了，放宽的倍数也不再变 */
   readonly settled: boolean;
   readonly tilesets: Readonly<Record<string, TilesetEntryInspection>>;
@@ -114,6 +121,7 @@ function copyFrame({ mainMatrix, fallbackMatrix, projectionMatrix, transition, c
 /**
  * MapLibre 引擎的三维渲染器（ADR 0147 第 2、5 节）：一个 WebGLRenderer 和 MapLibre 共用 GL 上下文，
  * 每个瓦片集、模型各自的局部系和相机；撤下层时保留 GPU 资源，上下文丢失时丢掉渲染器，恢复后重新上传
+ * （瓦片的贴图上传后释放了内存里的那份，要重新下载）
  */
 export class ThreeSceneRenderer implements SceneRenderer {
   readonly #emitter = createNanoEvents<SceneRendererEvents>();
@@ -135,6 +143,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
   readonly #cacheLimitBytes: number;
   readonly #requestCullWindow: CullWindow | null;
   readonly #splatBudget: number;
+  readonly #releaseImages: boolean;
   // gaussian-splat-lite 单独分块，第一次加泼溅时才下载；失败后下次重新下载
   #splatLibrary: Promise<SplatLibrary> | null = null;
   #surface: SceneSurface | null = null;
@@ -161,9 +170,11 @@ export class ThreeSceneRenderer implements SceneRenderer {
     cacheLimitBytes = CACHE_BYTES + CACHE_OVERFLOW_BYTES,
     uploadBytesPerFrame = UPLOAD_BYTES_PER_FRAME,
     requestCullWindow = REQUEST_CULL_WINDOW,
-    splatBudget = SPLAT_BUDGET
+    splatBudget = SPLAT_BUDGET,
+    releaseImages = true
   }: ThreeSceneRendererOptions = {}) {
     this.#splatBudget = splatBudget;
+    this.#releaseImages = releaseImages;
     this.#cacheBytes = cacheBytes;
     this.#cacheLimitBytes = cacheLimitBytes;
     this.#requestCullWindow = requestCullWindow;
@@ -176,9 +187,10 @@ export class ThreeSceneRenderer implements SceneRenderer {
 
   attach(surface: SceneSurface): void {
     this.#assertAlive();
-    // 换了上下文（不同的地图）时旧的渲染器不能再用
+    // 换了上下文（不同的地图）时旧的渲染器不能再用，释放过贴图的瓦片也要重新下载
     if (this.#webgl && this.#surface?.gl !== surface.gl) {
       this.#dropRenderer();
+      this.#discardReleasedTiles();
     }
     this.#surface = surface;
     if (!this.#webgl) {
@@ -209,6 +221,17 @@ export class ThreeSceneRenderer implements SceneRenderer {
     this.#uploader.setActive(false);
     this.#dropRenderer();
     this.#frame = null;
+    this.#discardReleasedTiles();
+  }
+
+  // 释放过内存里贴图的瓦片不能再上传：卸载，恢复后重新下载。内容变了，放宽的判断重新来
+  #discardReleasedTiles(): void {
+    if (this.#releaseImages) {
+      for (const entry of this.#tilesets.values()) {
+        entry.discardContent();
+      }
+      this.#scale.release();
+    }
   }
 
   // 什么也不画：有它时 MapLibre 在画图层之前作废自己的 GL 状态缓存
@@ -297,6 +320,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       fog: this.#fog,
       uploader: this.#uploader,
       requestCullWindow: this.#requestCullWindow,
+      releaseImages: this.#releaseImages,
       events: {
         failed: error => this.#emitter.emit('tilesetfailed', id, new Error(`瓦片集 ${id} 的瓦片加载失败`, { cause: error })),
         initial: () => this.#emitter.emit('tilesetinitial', id),
@@ -513,6 +537,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       loading,
       uploadPending,
       uploadedBytes: this.#uploader.uploadedBytes,
+      releasedBytes: this.#uploader.releasedBytes,
       settled: this.#steady && !this.#framePending && loading === 0 && uploadPending === 0,
       tilesets: Object.fromEntries([...this.#tilesets].map(([id, entry]) => [id, entry.inspect()])),
       splatBudget: this.#splatBudget,

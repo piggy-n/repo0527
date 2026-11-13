@@ -60,17 +60,17 @@ describe('variants 的对照方案', () => {
     ]);
   });
 
-  it('上传后释放贴图：产品的默认值和每一档各一个对照，只跑 perf', () => {
+  it('上传后保留贴图：产品的默认值和每一档各一个对照，只跑 perf', () => {
     const list = variants([], [], [4], true);
-    expect(list.map(item => [item.id, item.cacheGB, item.releaseImages ?? false, item.label])).toEqual([
+    expect(list.map(item => [item.id, item.cacheGB, item.keepImages ?? false, item.label])).toEqual([
       ['maplibre', undefined, false, 'MapLibre'],
       ['maplibre-cache4g', 4, false, 'MapLibre，缓存上限 4 GB'],
-      ['maplibre-release', undefined, true, 'MapLibre，上传后释放贴图'],
-      ['maplibre-cache4g-release', 4, true, 'MapLibre，缓存上限 4 GB，上传后释放贴图']
+      ['maplibre-keep', undefined, true, 'MapLibre，上传后保留贴图'],
+      ['maplibre-cache4g-keep', 4, true, 'MapLibre，缓存上限 4 GB，上传后保留贴图']
     ]);
     const runs = buildRuns(selectScenes(['jkq-z16-tilt']), list, 1);
-    expect(runs.filter(run => run.variant.releaseImages && run.kind !== 'perf')).toEqual([]);
-    expect(variants([], [], [4]).some(item => item.releaseImages)).toBe(false);
+    expect(runs.filter(run => run.variant.keepImages && run.kind !== 'perf')).toEqual([]);
+    expect(variants([], [], [4]).some(item => item.keepImages)).toBe(false);
   });
 
   it('缓存上限的各档也跑画质（截图和默认值比），不跑采样；其他对照方案只跑 perf', () => {

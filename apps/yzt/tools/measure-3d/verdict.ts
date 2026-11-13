@@ -1,6 +1,6 @@
 import type { SceneSample } from './bench-api.ts';
 import type { RunResult } from './results.ts';
-import { DEFAULT_VARIANT, RELEASE_SUFFIX } from './scenes.ts';
+import { DEFAULT_VARIANT, KEEP_SUFFIX } from './scenes.ts';
 
 // 每个场景的检查：不和别的引擎比，只看本来就不该出现的情况，看的是产品的默认值。重复跑的取中位数
 
@@ -61,8 +61,9 @@ export function fillSampleAt(trace: readonly SceneSample[], t: number): SceneSam
   return trace.findLast(sample => sample.t <= t) ?? trace[0] ?? null;
 }
 
-// 静止时画的和产品默认值不同的方案：泼溅的预算、缓存上限（scenes.ts 的方案 id）；释放贴图的另外按后缀认
-const OWN_WORKLOAD = /^maplibre-(splat|cache)/;
+// 静止时画的、内存和产品默认值不同的方案：泼溅的预算、缓存上限，不提前上传（也不释放贴图，scenes.ts 的方案 id）；
+// 保留贴图的另外按后缀认
+const OWN_WORKLOAD = /^maplibre-(splat|cache|no-budget)/;
 
 /**
  * 同一个场景的静止画面，每帧 JS 最多差几倍：工作量相同，差得多说明运行期间机器被别的事占着，
@@ -74,8 +75,8 @@ export function machineDrift(runs: readonly RunResult[]): number | null {
     const js = run.kind === 'perf' ? run.static?.js?.p50 : undefined;
     if (js) {
       // 上传预算、窗口不同的方案静止时画的一样；泼溅的预算、缓存上限不同，画的就不同（缓存大了放宽得少），各算各的；
-      // 释放贴图的也各算各的：内存的压力不同，只和它自己的几遍比
-      const own = OWN_WORKLOAD.test(run.variant) || run.variant.endsWith(RELEASE_SUFFIX);
+      // 保留贴图的、不提前上传的（不提前上传的贴图不释放）也各算各的：内存的压力不同，只和它自己的几遍比
+      const own = OWN_WORKLOAD.test(run.variant) || run.variant.endsWith(KEEP_SUFFIX);
       const workload = own ? run.variant : DEFAULT_VARIANT;
       const key = `${run.scene}/${workload}`;
       groups.set(key, (groups.get(key) ?? []).concat(js));

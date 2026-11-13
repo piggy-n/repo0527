@@ -171,8 +171,13 @@ const staticJs = (variant: string, p50: number, scene = 's'): RunResult => ({
 });
 
 describe('machineDrift', () => {
-  it('同一个场景比；各个对照方案静止时工作量相同，算一组', () => {
-    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-up16', 5), staticJs('maplibre-no-budget', 3)])).toBe(2.5);
+  it('同一个场景比；上传预算、窗口不同的对照方案静止时工作量相同，算一组', () => {
+    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-up16', 5), staticJs('maplibre-cull0.5', 3)])).toBe(2.5);
+  });
+
+  it('不提前上传的对照自己一组：它的贴图也不释放，内存的压力不同', () => {
+    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-no-budget', 5)])).toBeNull();
+    expect(machineDrift([staticJs('maplibre-no-budget', 2), staticJs('maplibre-no-budget', 2.4)])).toBeCloseTo(1.2);
   });
 
   it('场景不同的不比：工作量本来就不同', () => {
@@ -189,10 +194,10 @@ describe('machineDrift', () => {
     expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-cache6g', 4), staticJs('maplibre-cache6g', 4.4)])).toBeCloseTo(1.1);
   });
 
-  it('释放贴图的对照各算一组：内存的压力不同，不和它的方案比', () => {
-    expect(machineDrift([staticJs('maplibre-cache6g', 4), staticJs('maplibre-cache6g-release', 5)])).toBeNull();
-    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-release', 3)])).toBeNull();
-    expect(machineDrift([staticJs('maplibre-release', 2), staticJs('maplibre-release', 2.4)])).toBeCloseTo(1.2);
+  it('保留贴图的对照各算一组：内存的压力不同，不和它的方案比', () => {
+    expect(machineDrift([staticJs('maplibre-cache6g', 4), staticJs('maplibre-cache6g-keep', 5)])).toBeNull();
+    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-keep', 3)])).toBeNull();
+    expect(machineDrift([staticJs('maplibre-keep', 2), staticJs('maplibre-keep', 2.4)])).toBeCloseTo(1.2);
   });
 
   it('取最不稳定的一组', () => {

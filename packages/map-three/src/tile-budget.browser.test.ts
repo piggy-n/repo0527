@@ -49,12 +49,30 @@ async function until(accept: () => boolean, label: string): Promise<void> {
 
 const seconds = (value: number) => new Promise(resolve => setTimeout(resolve, value * 1000));
 
+// 上传贴图的调用照常执行，调用的那一刻来源是关掉的 ImageBitmap（宽高是 0）时记一次。要在调用时看：
+// 上传以后才释放的那份，事后在调用记录里也是 0×0
+function watchTextureUploads(name: 'texImage2D' | 'texSubImage2D', onClosed: () => void) {
+  const original = WebGL2RenderingContext.prototype[name] as (...args: unknown[]) => unknown;
+  return vi.spyOn(WebGL2RenderingContext.prototype, name).mockImplementation(function (this: WebGL2RenderingContext, ...args: unknown[]) {
+    const source = args.at(-1);
+    if (source instanceof ImageBitmap && source.width === 0 && source.height === 0) {
+      onClosed();
+    }
+    return original.apply(this, args);
+  });
+}
+
 // 记下每一帧 render 里的上传次数：贴图、缓冲。只算 render 里的：MapLibre 自己的上传不在这里
 class RecordingRenderer extends ThreeSceneRenderer {
   readonly frames: { textures: number; buffers: number }[] = [];
+  #closedUploads = 0;
   readonly #textures = [
-    vi.spyOn(WebGL2RenderingContext.prototype, 'texSubImage2D'),
-    vi.spyOn(WebGL2RenderingContext.prototype, 'texImage2D')
+    watchTextureUploads('texSubImage2D', () => {
+      this.#closedUploads++;
+    }),
+    watchTextureUploads('texImage2D', () => {
+      this.#closedUploads++;
+    })
   ];
   readonly #buffers = vi.spyOn(WebGL2RenderingContext.prototype, 'bufferData');
 
@@ -68,6 +86,14 @@ class RecordingRenderer extends ThreeSceneRenderer {
     if (textures > 0 || buffers > 0) {
       this.frames.push({ textures, buffers });
     }
+  }
+
+  /**
+   * 上传了关掉的 ImageBitmap（宽高是 0）的次数：释放了还没传进这个上下文的贴图，第一次绘制时就会这样，
+   * Three 吞掉错误、瓦片画成黑的
+   */
+  closedUploads(): number {
+    return this.#closedUploads;
   }
 
   restore(): void {
@@ -86,10 +112,18 @@ async function setup(options: ThreeSceneRendererOptions, camera: CameraState = C
     layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#000000' } }]
   });
   let renderer: RecordingRenderer | undefined;
+  const errors: unknown[] = [];
   const view = new MapLibreView({
     session,
     container,
-    mapOptions: { maxZoom: 24, maxPitch: 85, centerClampedToGround: false, canvasContextAttributes: { antialias: false } },
+    onError: error => errors.push(error),
+    // 读像素要保留绘制缓冲
+    mapOptions: {
+      maxZoom: 24,
+      maxPitch: 85,
+      centerClampedToGround: false,
+      canvasContextAttributes: { antialias: false, preserveDrawingBuffer: true }
+    },
     loadSceneRenderer: async () => () => (renderer = new RecordingRenderer(options))
   });
   onTestFinished(() => {
@@ -104,6 +138,8 @@ async function setup(options: ThreeSceneRendererOptions, camera: CameraState = C
   return {
     session,
     view,
+    errors,
+    canvas: required(container.querySelector('canvas'), '地图画布'),
     get renderer(): RecordingRenderer {
       return required(renderer, '三维渲染器');
     }
@@ -591,6 +627,9 @@ describe('ThreeSceneRenderer 的上传预算', () => {
     expect(state.uploadedBytes).toBe(0);
     // 一组 4 块兄弟到齐才一起第一次绘制
     expect(maxPerFrame(ctx, 'textures')).toBeGreaterThanOrEqual(4);
+    // 没提前传的贴图不释放：第一次绘制时要从内存里传，释放了就传上一张关掉的图（Three 吞掉错误，瓦片画成黑的）
+    expect(state.releasedBytes).toBe(0);
+    expect(ctx.renderer.closedUploads()).toBe(0);
   });
 
   it('撤下层时不卡住加载：切到二维再回来，瓦片照样到齐', { timeout: TEST_TIMEOUT }, async () => {
@@ -602,5 +641,108 @@ describe('ThreeSceneRenderer 的上传预算', () => {
     ctx.view.setKind('3d');
     const state = await settle(ctx);
     expect(state.tilesets.blocks?.visible).toBe(64);
+    // 撤下期间放行的瓦片没提前传：不释放，挂回来以后照样画出贴图
+    expect(ctx.renderer.closedUploads()).toBe(0);
+  });
+});
+
+// 画布上亮的像素数：贴图是白的、底色是黑的，贴图坏了（上传不了）时画成黑的
+function brightPixels(canvas: HTMLCanvasElement): number {
+  const gl = required(canvas.getContext('webgl2'), 'WebGL2 上下文');
+  const data = new Uint8Array(canvas.width * canvas.height * 4);
+  gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, data);
+  let count = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    if ((data[index] ?? 0) + (data[index + 1] ?? 0) + (data[index + 2] ?? 0) > 300) {
+      count++;
+    }
+  }
+  return count;
+}
+
+// 等事件，等不到时以说明失败
+async function event(target: EventTarget, type: string, label: string): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      new Promise<void>(resolve => target.addEventListener(type, () => resolve(), { once: true })),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${WAIT_TIMEOUT} ms 内没有等到${label}`)), WAIT_TIMEOUT);
+      })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loseAndRestoreContext(canvas: HTMLCanvasElement): Promise<void> {
+  const gl = required(canvas.getContext('webgl2'), 'WebGL2 上下文');
+  const lose = required(gl.getExtension('WEBGL_lose_context'), 'WEBGL_lose_context 扩展');
+  const lost = event(canvas, 'webglcontextlost', 'GL 上下文丢失');
+  lose.loseContext();
+  await lost;
+  const restored = event(canvas, 'webglcontextrestored', 'GL 上下文恢复');
+  // 在派发丢失事件的同一个任务里调用 restoreContext，Chromium 不恢复（three-scene-renderer.browser.test.ts）
+  await new Promise(resolve => setTimeout(resolve, 0));
+  lose.restoreContext();
+  await restored;
+}
+
+describe('ThreeSceneRenderer 上传后释放贴图（ADR 0155 第 5 节）', () => {
+  const fineTextures = 64 * FINE_TEXTURE * FINE_TEXTURE * 4;
+
+  it('瓦片记完字节以后才释放内存里的贴图：缓存和上传预算照样按贴图算，画面照常', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup(ROOMY);
+    showBlocks(ctx, await serveBlocks('released'));
+    const state = await settle(ctx);
+    expect(state.tilesets.blocks?.visible).toBe(64);
+    // 释放以后贴图的宽高是 0：先释放再记账的话，缓存和上传预算只剩几何体
+    expect(state.cachedBytes).toBeGreaterThan(fineTextures);
+    expect(state.uploadedBytes).toBeGreaterThan(fineTextures);
+    // 细的 64 块的贴图都释放了
+    expect(state.releasedBytes).toBeGreaterThanOrEqual(fineTextures);
+    expect(brightPixels(ctx.canvas)).toBeGreaterThan(1000);
+    expect(ctx.errors).toEqual([]);
+  });
+
+  it('不释放时（测量工具的对照）：内存里的贴图留着', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup({ ...ROOMY, releaseImages: false });
+    showBlocks(ctx, await serveBlocks('kept'));
+    const state = await settle(ctx);
+    expect(state.tilesets.blocks?.visible).toBe(64);
+    expect(state.releasedBytes).toBe(0);
+    expect(state.cachedBytes).toBeGreaterThan(fineTextures);
+  });
+
+  it('上传做到一半时丢上下文：恢复以后没有传关掉的贴图，瓦片照样到齐', { timeout: TEST_TIMEOUT }, async () => {
+    // 一帧只传一步：一块瓦片先传贴图、下一帧传几何体，刚传完贴图的那一帧丢上下文。丢失事件是异步派发的，
+    // 浏览器里这块瓦片多半在事件之前就在丢掉的上下文里传完了；"传进丢掉的上下文的不释放"由 tile-uploader.test.ts 管
+    const ctx = await setup({ ...ROOMY, uploadBytesPerFrame: 1 });
+    showBlocks(ctx, await serveBlocks('half-uploaded'));
+    await until(() => (ctx.renderer.frames.at(-1)?.textures ?? 0) > 0 && inspect(ctx).uploadPending > 0, '刚传完一张贴图、还有等着的');
+    await loseAndRestoreContext(ctx.canvas);
+    const state = await settle(ctx);
+    expect(state.tilesets.blocks?.visible).toBe(64);
+    expect(ctx.renderer.closedUploads()).toBe(0);
+    expect(ctx.errors).toEqual([]);
+  });
+
+  it('释放过贴图的瓦片：上下文丢了、恢复以后重新下载，照样画出贴图', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup(ROOMY);
+    showBlocks(ctx, await serveBlocks('restored'));
+    const before = await settle(ctx);
+    expect(before.releasedBytes).toBeGreaterThanOrEqual(fineTextures);
+    const bright = brightPixels(ctx.canvas);
+    expect(bright).toBeGreaterThan(1000);
+    const fineRequests = countRequests('/restored/fine.glb');
+    await loseAndRestoreContext(ctx.canvas);
+    // 恢复以后画过几帧、瓦片都到了、不再变
+    await until(() => {
+      const state = inspect(ctx);
+      return state.frames > before.frames + 2 && state.settled && state.tilesets.blocks?.visible === 64;
+    }, '恢复后画出细的一层');
+    expect(fineRequests()).toBeGreaterThanOrEqual(64);
+    expect(brightPixels(ctx.canvas)).toBeGreaterThan(bright * 0.8);
+    expect(ctx.errors).toEqual([]);
   });
 });

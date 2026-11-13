@@ -61,8 +61,8 @@ describe('parseOptions', () => {
   });
 
   it('上传后释放贴图的对照、定位后放大一级：默认不加', () => {
-    expect(parseOptions([]).releaseImages).toBe(false);
-    expect(parseOptions(['--release-images']).releaseImages).toBe(true);
+    expect(parseOptions([]).keepImages).toBe(false);
+    expect(parseOptions(['--keep-images']).keepImages).toBe(true);
     expect(parseOptions([]).zoomIn).toBe(false);
     expect(parseOptions(['--zoom-in']).zoomIn).toBe(true);
   });

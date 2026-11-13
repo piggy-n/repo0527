@@ -1,9 +1,8 @@
-import { MapLibreView, type SceneFrame, type SceneSurface } from '@mx/map-core';
+import { MapLibreView, type SceneSurface } from '@mx/map-core';
 import type { CullWindow, ThreeSceneRenderer as Renderer } from '@mx/map-three';
 import { setupMapRuntime } from '../../../src/app/map-runtime.ts';
 import { splatReadings, splatsSettled } from '../splat-readings.ts';
 import type { EngineHandle, EngineOptions } from './bench.ts';
-import { probe } from './probe.ts';
 
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
@@ -42,20 +41,11 @@ export async function startMapLibre({ session, container, params, splatCount, on
     },
     loadSceneRenderer: async () => {
       const { ThreeSceneRenderer } = await import('@mx/map-three');
-      // 拿到 surface 才能请求重画：静止时每帧都画要用。render 期间告诉探针：上传后释放贴图只认这期间的上传
+      // 拿到 surface 才能请求重画：静止时每帧都画要用
       class BenchRenderer extends ThreeSceneRenderer {
         override attach(next: SceneSurface): void {
           surface = next;
           super.attach(next);
-        }
-
-        override render(frame: SceneFrame): void {
-          probe.setInsideScene(true);
-          try {
-            super.render(frame);
-          } finally {
-            probe.setInsideScene(false);
-          }
         }
       }
       const rendererOptions = {
@@ -63,7 +53,9 @@ export async function startMapLibre({ session, container, params, splatCount, on
         ...(cullWindow === null ? {} : { requestCullWindow: cullWindowOf(cullWindow) }),
         ...(splatBudget === null ? {} : { splatBudget: Number(splatBudget) }),
         // 缓存上限这一档：到它不再加载，淘汰到它的一半（和产品的 1 GB + 1 GB 同一个比例）
-        ...(cacheGB === null ? {} : { cacheBytes: (Number(cacheGB) * GB) / 2, cacheLimitBytes: Number(cacheGB) * GB })
+        ...(cacheGB === null ? {} : { cacheBytes: (Number(cacheGB) * GB) / 2, cacheLimitBytes: Number(cacheGB) * GB }),
+        // 产品默认释放内存里的贴图，保留是对照
+        ...(params.get('keepImages') === '1' ? { releaseImages: false } : {})
       };
       return () => {
         renderer = new BenchRenderer(rendererOptions);
@@ -87,7 +79,7 @@ export async function startMapLibre({ session, container, params, splatCount, on
       cullWindow: cullWindow ?? '产品的默认值',
       splatBudget: splatBudget ?? '产品的默认值',
       cacheGB: cacheGB ?? '产品的默认值',
-      releaseImages: params.get('releaseImages') === '1',
+      keepImages: params.get('keepImages') === '1',
       antialias: params.get('antialias') === '1'
     },
     stats() {
@@ -106,7 +98,7 @@ export async function startMapLibre({ session, container, params, splatCount, on
         loading: state.loading,
         uploadPending: state.uploadPending,
         uploadedMB: state.uploadedBytes / MB,
-        releasedMB: probe.releasedMB(),
+        releasedMB: state.releasedBytes / MB,
         locked: state.locked,
         detail: {
           sharp: sum(item => item.detail.sharp),

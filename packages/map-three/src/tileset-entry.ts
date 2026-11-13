@@ -53,6 +53,8 @@ export interface TilesetEntryOptions {
   readonly uploader: TileUploader;
   /** 相机在这个窗口里走的路达到瓦片直径就不请求（'auto' 按实测的加载时间）；null 时动着也请求 */
   readonly requestCullWindow: CullWindow | null;
+  /** 瓦片记完字节以后释放内存里的贴图（ADR 0155 第 5 节） */
+  readonly releaseImages: boolean;
   readonly events: TilesetEntryEvents;
 }
 
@@ -210,6 +212,10 @@ export class TilesetEntry implements Disposable {
   #loaded = 0;
   #unloaded = 0;
   #failed = 0;
+  // 加载好、还没卸载的瓦片：上下文丢了以后要它们重新下载
+  readonly #loadedTiles = new Set<TileInternals>();
+  readonly #uploader: TileUploader;
+  readonly #releaseImages: boolean;
   readonly #requestCull: RequestCull | null;
   // 这一帧因为相机走得快没有请求的瓦片
   readonly #culled = new Set<TileInternals>();
@@ -223,9 +229,11 @@ export class TilesetEntry implements Disposable {
   // 根索引的包围球（地心坐标）：判断和裁剪盒是否重叠
   #ecefSphere: Sphere | null = null;
 
-  constructor({ prepared, options, cache, math, fog, uploader, requestCullWindow, events }: TilesetEntryOptions) {
+  constructor({ prepared, options, cache, math, fog, uploader, requestCullWindow, releaseImages, events }: TilesetEntryOptions) {
     this.#requestCull = requestCullWindow === null ? null : new RequestCull(requestCullWindow);
     this.#cache = cache;
+    this.#uploader = uploader;
+    this.#releaseImages = releaseImages;
     this.#math = math;
     this.#events = events;
     this.#options = options;
@@ -249,14 +257,21 @@ export class TilesetEntry implements Disposable {
     };
     tiles.setCamera(this.camera);
     tiles.setResolution(this.camera, 1, 1);
+    // 库在记完这块瓦片的字节（缓存的记账）以后才派发 load-model：这时才能释放内存里的贴图
     tiles.addEventListener('load-model', ({ scene, tile }) => {
+      const loadedTile = tile as unknown as TileInternals;
       this.#materials.adopt(scene, this.#options.lighting);
       this.#loaded++;
-      this.#rememberSize(tile as unknown as TileInternals);
+      this.#loadedTiles.add(loadedTile);
+      this.#rememberSize(loadedTile);
+      if (this.#releaseImages) {
+        this.#uploader.release(scene);
+      }
     });
-    tiles.addEventListener('dispose-model', ({ scene }) => {
+    tiles.addEventListener('dispose-model', ({ scene, tile }) => {
       this.#materials.release(scene);
       this.#unloaded++;
+      this.#loadedTiles.delete(tile as unknown as TileInternals);
     });
     tiles.addEventListener('load-error', ({ tile, error }) => {
       if (tile) {
@@ -373,6 +388,20 @@ export class TilesetEntry implements Disposable {
   skipFrame(): void {
     this.#drawn = false;
     this.#releaseUsed();
+  }
+
+  /**
+   * 上下文丢了以后：释放过内存里贴图的瓦片不能再上传，从缓存里拿掉（库卸载它们、记成没请求），恢复后重新下载。
+   * 不释放贴图时不用：恢复后的渲染器从内存里重新上传
+   */
+  discardContent(): void {
+    if (!this.#releaseImages) {
+      return;
+    }
+    // 卸载时 dispose-model 把它从集合里删掉：Set 边遍历边删照样走完
+    for (const tile of this.#loadedTiles) {
+      this.#cache.remove(tile);
+    }
   }
 
   /** 屏幕误差放宽 scale 倍 */

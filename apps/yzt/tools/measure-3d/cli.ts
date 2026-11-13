@@ -68,7 +68,7 @@ if (options.help) {
 }
 const { at } = options;
 const scenes = selectScenes(options.only).map(scene => (at ? withCamera(scene, at) : scene));
-const list = variants(uploadBudgets(options), options.cullWindows, options.cacheGBs, options.releaseImages);
+const list = variants(uploadBudgets(options), options.cullWindows, options.cacheGBs, options.keepImages);
 const splatList = splatVariants(options.splatBudgets);
 if (options.list) {
   for (const scene of SCENES) {

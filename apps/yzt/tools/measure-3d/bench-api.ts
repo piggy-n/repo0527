@@ -111,7 +111,7 @@ export interface BenchStats {
   /** 等待上传的瓦片、累计提前上传的字节（MB） */
   readonly uploadPending: number;
   readonly uploadedMB: number;
-  /** 上传以后释放了内存副本的贴图（MB，累计）：只有"上传后释放贴图"的方案不是 0 */
+  /** 上传以后释放了内存里那份的贴图（MB，累计，渲染器的读数）：产品默认释放，保留贴图的对照是 0 */
   readonly releasedMB: number;
   /** 锁在当前姿态 */
   readonly locked: boolean;
