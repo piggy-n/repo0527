@@ -1,4 +1,4 @@
-import { type CameraState, type LngLat, MapLibreView, MapSession, type SceneFrame, type TilesetLayer } from '@mx/map-core';
+import { type CameraState, type LngLat, MapLibreView, MapSession, type SceneBudget, type SceneFrame, type TilesetLayer } from '@mx/map-core';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { blockTileset, FIXTURE_ORIGIN, serveFixtures, texturedBoxGlb } from './testing/fixtures';
 import { required } from './testing/required';
@@ -744,5 +744,99 @@ describe('ThreeSceneRenderer 上传后释放贴图（ADR 0155 第 5 节）', () 
     expect(fineRequests()).toBeGreaterThanOrEqual(64);
     expect(brightPixels(ctx.canvas)).toBeGreaterThan(bright * 0.8);
     expect(ctx.errors).toEqual([]);
+  });
+});
+
+// 测试用的预算来源：记下问过的显卡名字、挂上撤下，丢上下文时改成 lower
+function budgetSource(budget: SceneBudget, lower: SceneBudget) {
+  const listeners = new Set<(next: SceneBudget) => void>();
+  const source = {
+    renderers: [] as string[],
+    shownCalls: [] as boolean[],
+    lost: 0,
+    resolve(renderer: string): SceneBudget {
+      source.renderers.push(renderer);
+      return budget;
+    },
+    subscribe(listener: (next: SceneBudget) => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    contextLost(): void {
+      source.lost++;
+      source.change(lower);
+    },
+    shown(shown: boolean): void {
+      source.shownCalls.push(shown);
+    },
+    change(next: SceneBudget): void {
+      for (const listener of listeners) {
+        listener(next);
+      }
+    }
+  };
+  return source;
+}
+
+const budgetOf = ({ cacheBytes, cacheLimitBytes }: { cacheBytes: number; cacheLimitBytes: number }): SceneBudget => ({
+  cacheBytes,
+  cacheLimitBytes,
+  uploadBytesPerFrame: 16 * 1024 * KB,
+  splatBudget: 3_000_000
+});
+
+describe('ThreeSceneRenderer 的预算来源（ADR 0155）', () => {
+  it('第一次挂上时按显卡的名字定预算；切二维、切回来时告诉它撤下、挂上，不再问', { timeout: TEST_TIMEOUT }, async () => {
+    const source = budgetSource(budgetOf(ROOMY), budgetOf(BLOCK_LEVEL_FITS));
+    const ctx = await setup({ budgetSource: source });
+    expect(source.renderers).toHaveLength(1);
+    // 软件渲染时是 SwiftShader 的名字：只要是显卡报的字符串
+    expect(source.renderers[0]).toMatch(/\S/);
+    expect(inspect(ctx).cacheLimitBytes).toBe(ROOMY.cacheLimitBytes);
+    expect(source.shownCalls).toEqual([true]);
+    ctx.view.setKind('2d');
+    ctx.view.setKind('3d');
+    await ctx.view.whenReady();
+    expect(source.shownCalls).toEqual([true, false, true]);
+    expect(source.renderers).toHaveLength(1);
+  });
+
+  it('调小预算：放不下的一层放宽丢掉，缓存回到新的上限以内', { timeout: TEST_TIMEOUT }, async () => {
+    const source = budgetSource(budgetOf(ROOMY), budgetOf(BLOCK_LEVEL_FITS));
+    const ctx = await setup({ budgetSource: source });
+    showBlocks(ctx, await serveBlocks('lowered'));
+    const roomy = await settle(ctx);
+    expect(roomy.tilesets.blocks?.visible).toBe(64);
+    expect(roomy.errorScale).toBe(1);
+    source.change(budgetOf(BLOCK_LEVEL_FITS));
+    await within(() => {
+      const state = inspect(ctx);
+      return state.settled && state.tilesets.blocks?.visible === 16;
+    }, 30000);
+    const lowered = inspect(ctx);
+    expect(lowered.cacheLimitBytes).toBe(BLOCK_LEVEL_FITS.cacheLimitBytes);
+    expect(lowered.errorScale).toBeGreaterThan(1.5);
+    expect(lowered.tilesets.blocks?.visible).toBe(16);
+    expect(lowered.pinnedBytes).toBeLessThanOrEqual(BLOCK_LEVEL_FITS.cacheLimitBytes);
+  });
+
+  it('丢上下文：预算来源降一档，恢复以后按降了的预算', { timeout: TEST_TIMEOUT }, async () => {
+    const source = budgetSource(budgetOf(ROOMY), budgetOf(BLOCK_LEVEL_FITS));
+    const ctx = await setup({ budgetSource: source });
+    showBlocks(ctx, await serveBlocks('downgraded'));
+    const before = await settle(ctx);
+    expect(before.tilesets.blocks?.visible).toBe(64);
+    await loseAndRestoreContext(ctx.canvas);
+    expect(source.lost).toBe(1);
+    await within(() => {
+      const state = inspect(ctx);
+      return state.frames > before.frames + 2 && state.settled && state.tilesets.blocks?.visible === 16;
+    }, 30000);
+    expect(inspect(ctx).cacheLimitBytes).toBe(BLOCK_LEVEL_FITS.cacheLimitBytes);
+    expect(inspect(ctx).tilesets.blocks?.visible).toBe(16);
+    // 恢复以后不再按显卡重新定
+    expect(source.renderers).toHaveLength(1);
   });
 });

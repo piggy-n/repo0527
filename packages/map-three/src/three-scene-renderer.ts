@@ -2,6 +2,8 @@ import type {
   LngLat,
   PickOptions,
   PreparedTileset,
+  SceneBudget,
+  SceneBudgetSource,
   SceneFrame,
   SceneLift,
   SceneMarker,
@@ -60,6 +62,11 @@ export interface ThreeSceneRendererOptions {
    * 代价是上下文丢了以后瓦片要重新下载。测量工具用 false 作对照
    */
   readonly releaseImages?: boolean;
+  /**
+   * app 给的预算来源（ADR 0155 第 6 节）：第一次挂上时按显卡定预算，之后降档、恢复时改；
+   * 不给时一直用上面这几项（不写的用标准档）
+   */
+  readonly budgetSource?: SceneBudgetSource;
 }
 
 /** 读数（只读快照）：给性能测量和测试，业务代码不用 */
@@ -76,6 +83,8 @@ export interface ThreeSceneInspection {
   readonly pinnedBytes: number;
   readonly cacheBytes: number;
   readonly cacheLimitBytes: number;
+  /** 每帧提前上传的字节；null 不提前上传 */
+  readonly uploadBytesPerFrame: number | null;
   /** 屏幕误差放宽的倍数 */
   readonly errorScale: number;
   /** 锁在这个姿态上：相机不离开就不再收紧 */
@@ -105,6 +114,12 @@ export interface ThreeSceneInspection {
   /** 高斯泼溅的总预算和各份的读数（ADR 0149 第 5 节：和瓦片集分开管，一起报） */
   readonly splatBudget: number;
   readonly splats: Readonly<Record<string, SplatEntryInspection>>;
+}
+
+// WebGL 报的显卡名字（ANGLE 的写法）：读不到真实名字时用 RENDERER
+function rendererName(gl: WebGL2RenderingContext): string {
+  const debug = gl.getExtension('WEBGL_debug_renderer_info');
+  return String(gl.getParameter(debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
 }
 
 // MapLibre 每帧给的矩阵可能复用同一个数组：留到拾取、投影时用的要复制一份
@@ -139,11 +154,16 @@ export class ThreeSceneRenderer implements SceneRenderer {
   readonly #backdrop = new Color();
   readonly #scale: ErrorScale;
   readonly #uploader: TileUploader;
-  readonly #cacheBytes: number;
-  readonly #cacheLimitBytes: number;
+  #cacheBytes: number;
+  #cacheLimitBytes: number;
   readonly #requestCullWindow: CullWindow | null;
-  readonly #splatBudget: number;
+  #splatBudget: number;
+  #uploadBytesPerFrame: number | null;
   readonly #releaseImages: boolean;
+  readonly #budgetSource: SceneBudgetSource | null;
+  readonly #unsubscribeBudget: Unsubscribe | null;
+  // 预算来源已经按显卡定过预算：只在第一次挂上时问
+  #budgetResolved = false;
   // gaussian-splat-lite 单独分块，第一次加泼溅时才下载；失败后下次重新下载
   #splatLibrary: Promise<SplatLibrary> | null = null;
   #surface: SceneSurface | null = null;
@@ -171,10 +191,14 @@ export class ThreeSceneRenderer implements SceneRenderer {
     uploadBytesPerFrame = UPLOAD_BYTES_PER_FRAME,
     requestCullWindow = REQUEST_CULL_WINDOW,
     splatBudget = SPLAT_BUDGET,
-    releaseImages = true
+    releaseImages = true,
+    budgetSource
   }: ThreeSceneRendererOptions = {}) {
     this.#splatBudget = splatBudget;
+    this.#uploadBytesPerFrame = uploadBytesPerFrame;
     this.#releaseImages = releaseImages;
+    this.#budgetSource = budgetSource ?? null;
+    this.#unsubscribeBudget = budgetSource?.subscribe(budget => this.setBudget(budget)) ?? null;
     this.#cacheBytes = cacheBytes;
     this.#cacheLimitBytes = cacheLimitBytes;
     this.#requestCullWindow = requestCullWindow;
@@ -207,14 +231,46 @@ export class ThreeSceneRenderer implements SceneRenderer {
         entry.setRenderer(webgl);
       }
     }
+    // 显卡的名字只有拿到 MapLibre 的上下文才知道：第一次挂上时按它定预算，瓦片这时还没开始加载
+    if (this.#budgetSource && !this.#budgetResolved) {
+      this.#budgetResolved = true;
+      this.setBudget(this.#budgetSource.resolve(rendererName(surface.gl)));
+    }
     this.#attached = true;
     this.#uploader.setActive(true);
+    this.#budgetSource?.shown(true);
     surface.requestRepaint();
   }
 
   detach(): void {
     this.#attached = false;
     this.#uploader.setActive(false);
+    this.#budgetSource?.shown(false);
+  }
+
+  /**
+   * 改预算（ADR 0155 第 4 节：丢上下文降档、用户恢复画质）：缓存的上限调小以后，库在下一次更新时淘汰到新的大小，
+   * 淘汰不掉的按放宽的规则放宽；放宽的判断重新来
+   */
+  setBudget({ cacheBytes, cacheLimitBytes, uploadBytesPerFrame, splatBudget }: SceneBudget): void {
+    if (
+      cacheBytes === this.#cacheBytes &&
+      cacheLimitBytes === this.#cacheLimitBytes &&
+      uploadBytesPerFrame === this.#uploadBytesPerFrame &&
+      splatBudget === this.#splatBudget
+    ) {
+      return;
+    }
+    this.#cacheBytes = cacheBytes;
+    this.#cacheLimitBytes = cacheLimitBytes;
+    this.#uploadBytesPerFrame = uploadBytesPerFrame;
+    this.#splatBudget = splatBudget;
+    this.#cache.minBytesSize = cacheBytes;
+    this.#cache.maxBytesSize = cacheLimitBytes;
+    this.#scale.setBudget({ hardBytes: cacheLimitBytes });
+    this.#uploader.setBytesPerFrame(uploadBytesPerFrame);
+    this.#shareSplatBudget();
+    this.#requestFrame();
   }
 
   loseContext(): void {
@@ -222,6 +278,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
     this.#dropRenderer();
     this.#frame = null;
     this.#discardReleasedTiles();
+    // 降一档（ADR 0155 第 4 节）：预算来源经 subscribe 改预算，恢复后按新的预算加载
+    this.#budgetSource?.contextLost();
   }
 
   // 释放过内存里贴图的瓦片不能再上传：卸载，恢复后重新下载。内容变了，放宽的判断重新来
@@ -525,6 +583,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       pinnedBytes: this.#pinnedBytes,
       cacheBytes: this.#cacheBytes,
       cacheLimitBytes: this.#cacheLimitBytes,
+      uploadBytesPerFrame: this.#uploadBytesPerFrame,
       errorScale: this.#scale.value,
       locked: this.#scale.locked,
       saturated: this.#scale.saturated,
@@ -554,6 +613,11 @@ export class ThreeSceneRenderer implements SceneRenderer {
       return;
     }
     this.#disposed = true;
+    this.#unsubscribeBudget?.();
+    if (this.#attached) {
+      this.#attached = false;
+      this.#budgetSource?.shown(false);
+    }
     for (const entry of this.#tilesets.values()) {
       entry[Symbol.dispose]();
     }

@@ -66,7 +66,7 @@ function geometryBytes(geometry: BufferGeometry): number {
 
 /** 每个瓦片集的 TilesRenderer 把解析好的瓦片交给它，渲染器每帧画模型之前按预算处理 */
 export class TileUploader implements Disposable {
-  readonly #bytesPerFrame: number | null;
+  #bytesPerFrame: number | null;
   readonly #requestFrame: () => void;
   readonly #jobs: UploadJob[] = [];
   // Three 没有公开的方法单独上传几何体：把绘制范围设成 0 画一次（走到上传，不画任何东西），用同一个简单材质，不编译瓦片自己的着色器
@@ -99,6 +99,14 @@ export class TileUploader implements Disposable {
   /** 累计释放了内存里那一份的贴图字节 */
   get releasedBytes(): number {
     return this.#releasedBytes;
+  }
+
+  /** 改每帧的预算（降档、恢复画质）；改成 null 时排着的直接放行，退回第一次绘制时上传 */
+  setBytesPerFrame(bytesPerFrame: number | null): void {
+    this.#bytesPerFrame = bytesPerFrame;
+    if (bytesPerFrame === null) {
+      this.#releaseAll();
+    }
   }
 
   /** 能不能上传：层撤下、上下文丢失时不能。不能时不排队，已经排着的直接放行，退回第一次绘制时上传，不会卡住加载 */

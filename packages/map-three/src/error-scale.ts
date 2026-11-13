@@ -90,7 +90,7 @@ function movedAway(from: BudgetPose, to: BudgetPose): boolean {
  * 停着定的不再放开，所以判断的次数是有限的
  */
 export class ErrorScale {
-  readonly #budget: TileBudget;
+  #budget: TileBudget;
   #value = 1;
   // 锁定时的相机；相机离开它就解锁
   #lockedAt: BudgetPose | null = null;
@@ -139,6 +139,12 @@ export class ErrorScale {
   /** 累计：因为停着估计放不下（没装满）而放宽的帧数 */
   get raisedPredicted(): number {
     return this.#raisedPredicted;
+  }
+
+  /** 改上限（降档、恢复画质）：之前的判断不再成立 */
+  setBudget(budget: TileBudget): void {
+    this.#budget = budget;
+    this.release();
   }
 
   /** 内容变了（瓦片集增删、显隐、抬高）：之前的判断不再成立，允许重新收紧 */
