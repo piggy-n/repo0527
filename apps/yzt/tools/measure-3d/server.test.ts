@@ -15,6 +15,19 @@ function race<T>(promise: Promise<T>, fallback: T): Promise<T> {
   return Promise.race([promise, new Promise<T>(resolve => setTimeout(() => resolve(fallback), WAIT_MS))]);
 }
 
+// 条件成立时以 true 结束，过了 WAIT_MS 还不成立以 false 结束
+async function until(accept: () => boolean): Promise<boolean> {
+  const deadline = Date.now() + WAIT_MS;
+  while (!accept()) {
+    if (Date.now() > deadline) {
+      return false;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- 一轮一轮地看
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  return true;
+}
+
 const servers: Server[] = [];
 const proxies: StaticServer[] = [];
 
@@ -47,11 +60,18 @@ async function freePort(): Promise<number> {
   return port;
 }
 
-async function proxyTo(target: string): Promise<string> {
-  const proxy = await startServer(await freePort(), { files: {}, modelsProxy: target });
+async function proxyServer(target: string, upstreamIdleMs?: number): Promise<StaticServer> {
+  const proxy = await startServer(await freePort(), { files: {}, modelsProxy: target, ...(upstreamIdleMs === undefined ? {} : { upstreamIdleMs }) });
   proxies.push(proxy);
-  return proxy.url;
+  return proxy;
 }
+
+async function proxyTo(target: string): Promise<string> {
+  return (await proxyServer(target)).url;
+}
+
+// 上游没有动静时代理多久放弃：比 WAIT_MS 短得多，等不到超时就是断言失败
+const IDLE_MS = 200;
 
 describe('模型代理', () => {
   it('转发状态和类型，不让浏览器缓存；中文的目录按编码后的地址转给上游', async () => {
@@ -77,16 +97,67 @@ describe('模型代理', () => {
     expect(response.status).toBe(404);
   });
 
-  it('上游连不上：返回 502', async () => {
-    const proxy = await proxyTo('http://127.0.0.1:9');
-    const status = await fetch(`${proxy}/3dt/a.json`).then(
+  it('上游连不上：返回 502，记一次失败', async () => {
+    const proxy = await proxyServer('http://127.0.0.1:9');
+    const status = await fetch(`${proxy.url}/3dt/a.json`).then(
       response => response.status,
       () => null
     );
     expect(status).toBe(502);
+    expect(proxy.proxyStats()).toEqual({ timeouts: 0, failures: 1 });
   });
 
-  it('浏览器取消请求（瓦片不要了）：上游也不再下载', async () => {
+  it('上游一直不回响应头：到时间回 504，记一次超时', async () => {
+    const target = await upstream(() => {
+      // 什么也不发
+    });
+    const proxy = await proxyServer(target, IDLE_MS);
+    const response = await race(fetch(`${proxy.url}/3dt/wuxi/tileset.json`), null);
+    expect(response?.status).toBe(504);
+    expect(await response?.text()).toContain('没有动静');
+    expect(proxy.proxyStats()).toEqual({ timeouts: 1, failures: 0 });
+  });
+
+  it('正文发到一半停住：到时间断开，记一次超时；一直在发的不算', async () => {
+    const target = await upstream((req, res) => {
+      res.setHeader('Content-Type', 'model/gltf-binary');
+      res.write(Buffer.alloc(1024));
+      if (req.url?.endsWith('steady.glb')) {
+        // 每隔一会儿发一点，总时长超过空闲的上限：只要在动就不放弃
+        let count = 0;
+        const timer = setInterval(() => {
+          count++;
+          if (count < 6) {
+            res.write(Buffer.alloc(1024));
+          } else {
+            clearInterval(timer);
+            res.end();
+          }
+        }, IDLE_MS / 2);
+      }
+    });
+    const proxy = await proxyServer(target, IDLE_MS);
+    const steady = await race(
+      fetch(`${proxy.url}/3dt/steady.glb`).then(async response => (await response.arrayBuffer()).byteLength),
+      null
+    );
+    expect(steady).toBe(6 * 1024);
+    const stalled = await race(
+      fetch(`${proxy.url}/3dt/stalled.glb`)
+        .then(response => response.arrayBuffer())
+        .then(
+          () => 'finished',
+          () => 'broken'
+        ),
+      'waiting'
+    );
+    expect(stalled).toBe('broken');
+    // 断开在先、记数在后（pipeline 先关掉响应再抛错）
+    expect(await until(() => proxy.proxyStats().timeouts === 1)).toBe(true);
+    expect(proxy.proxyStats()).toEqual({ timeouts: 1, failures: 0 });
+  });
+
+  it('浏览器取消请求（瓦片不要了）：上游也不再下载，不算失败', async () => {
     const events = new EventEmitter();
     const closed = once(events, 'closed').then(() => true);
     const target = await upstream((_req, res) => {
@@ -94,9 +165,9 @@ describe('模型代理', () => {
       // 一直发，不结束：只有下游取消才会断开
       res.write(Buffer.alloc(1024));
     });
-    const proxy = await proxyTo(target);
+    const proxy = await proxyServer(target);
     await new Promise<void>(resolve => {
-      const request = get(`${proxy}/3dt/big.glb`, response => {
+      const request = get(`${proxy.url}/3dt/big.glb`, response => {
         response.once('data', () => {
           request.destroy();
           resolve();
@@ -105,6 +176,7 @@ describe('模型代理', () => {
       request.on('error', () => undefined);
     });
     expect(await race(closed, false)).toBe(true);
+    expect(proxy.proxyStats()).toEqual({ timeouts: 0, failures: 0 });
   });
 
   it('上游还没响应时浏览器取消：也不再等上游', async () => {
@@ -124,19 +196,20 @@ describe('模型代理', () => {
     expect(await race(closed, false)).toBe(true);
   });
 
-  it('上游中途断开：这个请求断开，工具不崩，后面的请求照常', async () => {
+  it('上游中途断开：这个请求断开、记一次失败，工具不崩，后面的请求照常', async () => {
     let count = 0;
     const target = await upstream((_req, res) => {
       count++;
       if (count === 1) {
-        res.write(Buffer.alloc(1024), () => {
+        res.write(Buffer.alloc(64 * 1024), () => {
           res.destroy();
         });
       } else {
         res.end('ok');
       }
     });
-    const proxy = await proxyTo(target);
+    const server = await proxyServer(target);
+    const proxy = server.url;
     const ended = await race(
       new Promise<boolean>(resolve => {
         const request = get(`${proxy}/3dt/broken.glb`, response => {
@@ -149,6 +222,9 @@ describe('模型代理', () => {
       false
     );
     expect(ended).toBe(true);
+    // 计数在浏览器那边断开之后才记上：等一会儿
+    expect(await until(() => server.proxyStats().failures === 1)).toBe(true);
+    expect(server.proxyStats()).toEqual({ timeouts: 0, failures: 1 });
     const next = await fetch(`${proxy}/3dt/next.json`);
     expect(await next.text()).toBe('ok');
   });

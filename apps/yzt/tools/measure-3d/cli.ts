@@ -5,10 +5,12 @@ import { cpus, release, totalmem, type, version } from 'node:os';
 import { join, resolve } from 'node:path';
 import { build } from 'vite';
 import { localPath } from '../local-files/paths.ts';
-import { INTEGRATED_RENDERER, launchBrowser, listAdapters, probeRenderer, SOFTWARE_RENDERER } from './browser.ts';
+import type { BenchStats } from './bench-api.ts';
+import { launchBrowser, listAdapters, probeRenderer } from './browser.ts';
 import { runLook } from './look.ts';
 import { HELP, type Options, parseOptions, uploadBudgets } from './options.ts';
 import { createRedactor } from './redact.ts';
+import { isIntegratedRenderer, SOFTWARE_RENDERER } from './renderer-class.ts';
 import { renderManual, renderQualityPage, renderReport } from './report.ts';
 import type { Environment, MeasureResults, SceneQuality, ShotPair } from './results.ts';
 import { runOnce } from './run.ts';
@@ -66,7 +68,7 @@ if (options.help) {
 }
 const { at } = options;
 const scenes = selectScenes(options.only).map(scene => (at ? withCamera(scene, at) : scene));
-const list = variants(uploadBudgets(options), options.cullWindows, options.cacheGBs);
+const list = variants(uploadBudgets(options), options.cullWindows, options.cacheGBs, options.releaseImages);
 const splatList = splatVariants(options.splatBudgets);
 if (options.list) {
   for (const scene of SCENES) {
@@ -199,7 +201,7 @@ async function checkRenderer(warnings: string[]): Promise<Environment> {
   if (software) {
     warnings.push(`软件渲染：${info.renderer}。这次的帧时间无效，只用来确认脚本能跑。`);
   }
-  const integrated = !software && INTEGRATED_RENDERER.test(info.renderer);
+  const integrated = !software && isIntegratedRenderer(info.renderer);
   if (integrated) {
     warnings.push(
       adapters.length > 1
@@ -299,6 +301,8 @@ async function compareScenes(results: MeasureResults, outDir: string, baseUrl: s
 
 // ---------- 运行 ----------
 
+const reading = (stats: BenchStats | undefined) => `屏幕误差 ${stats?.errorTarget.toFixed(1)}${stats?.locked ? '（锁定）' : ''}`;
+
 function runSummary(result: MeasureResults['runs'][number]): string {
   if (result.status === 'failed') {
     return `失败：${result.error}（已记录，继续下一遍）`;
@@ -307,6 +311,10 @@ function runSummary(result: MeasureResults['runs'][number]): string {
   const splats = result.atStable?.splats;
   if (splats) {
     return `${loaded}，可见的高斯 ${Math.round(splats.visible / 1e4)} 万 / 预算 ${Math.round(splats.budget / 1e4)} 万`;
+  }
+  const { zoom } = result;
+  if (zoom) {
+    return `${loaded}，首屏${reading(zoom.before)}；放大后${zoom.zoomed ? reading(zoom.zoomed.at) : '没做完'}；移开再移回${zoom.nudged ? reading(zoom.nudged.at) : '没做'}`;
   }
   return `${loaded}，屏幕误差 ${result.atStable?.errorTarget.toFixed(1)}，瓦片 ${result.atStable?.tilesVisible}`;
 }
@@ -378,7 +386,7 @@ async function main(): Promise<void> {
   const outDir = options.out ? resolve(options.out) : localPath('measure-3d', timestamp());
   mkdirSync(join(outDir, 'shots'), { recursive: true });
   mkdirSync(join(outDir, 'profiles'), { recursive: true });
-  const runs: readonly Run[] = buildRuns(scenes, list, options.repeat, splatList);
+  const runs: readonly Run[] = buildRuns(scenes, list, options.repeat, splatList, options.zoomIn);
   const used = [...new Set(scenes.flatMap(scene => variantsOf(scene, list, splatList)))];
   const results: MeasureResults = {
     meta: {
@@ -452,7 +460,8 @@ async function main(): Promise<void> {
         baseUrl: server.url,
         outDir,
         redact,
-        progress: phase => console.log(`    ${phase}`)
+        progress: phase => console.log(`    ${phase}`),
+        proxyStats: () => (modelsProxy ? server.proxyStats() : null)
       });
       results.runs.push(result);
       save();

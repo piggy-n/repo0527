@@ -165,6 +165,7 @@
 | [0152](0152-cesium-lcc2-overlay-not-adopted.md) | Cesium 下的 LCC2（方案 3：叠 Three.js 画布）不做 | 已接受（结束 0149 的叠画布 PoC、0150 待定的叠画布 LCC2；Cesium 引擎由 0153 移除） |
 | [0153](0153-remove-cesium-engine.md) | 移除 Cesium 引擎，三维只用 MapLibre + Three.js | 已接受（取代 0147 第 1、3、6 节和第 7 节里 Cesium 的部分、0150 的 Cesium 可选、0151 第 3 条；三维资源图层的开关一并删掉；代码在标签 `cesium-engine-2026-11`） |
 | [0154](0154-shipped-symbol-defaults.md) | 发布的默认符号：把某个人调好的图例样式作为默认 | 已接受（补充 0044 第 2 节，修改 0123 第 3 节） |
+| [0155](0155-scene-budget-tiers.md) | 三维的缓存按设备分档：部署配置为主，自动判断只往下调 | 已接受（补充 0147 第 5 节、0042） |
 
 ## 模板
 

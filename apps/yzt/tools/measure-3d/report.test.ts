@@ -29,10 +29,12 @@ const stats = (splats: SplatReadings | null, refused = 0): BenchStats => ({
   loading: 0,
   uploadPending: 0,
   uploadedMB: 0,
+  releasedMB: 0,
   locked: false,
   detail: { sharp: 0, relaxed: 0, waiting: 0, finest: 0, additive: 0 },
   queues: { downloading: 0, parsing: 0, culled: 0, used: 0, usedOutOfView: 0 },
   budget: { limitMB: 2048, demandMB: 0, pendingMB: 0, culledMB: 0, raisedFull: 0, raisedPredicted: 0, cullWindow: null },
+  levels: [],
   splats
 });
 
@@ -125,6 +127,62 @@ const TIER_COMPARED: SceneQuality = {
   }
 };
 const TIER_SCENE = { ...TILESET_SCENE, variants: ['maplibre', TIER] };
+
+// 经开区一层瓦片的实际大小
+const level = (depth: number, loads: number, averageMB: number) => ({ model: 'wuxi/3dtiles/经开区/tileset.json', depth, loads, averageMB });
+
+// 定位后放大一级（这一档）：首屏估计放宽 3 帧，放大以后累计到 zoomedRaised（默认又估计放宽了 4 帧），移开再移回没有再放宽；
+// nudgedError 为 null 时没有移回来
+const zoomRun = (
+  zoomedError: number,
+  nudgedError: number | null,
+  zoomedRaised = { raisedFull: 0, raisedPredicted: 7 }
+): RunResult => {
+  const settle = { stable: true, ms: 4200, longTasks: LONG_TASKS, trace: [] };
+  const raised = (raisedPredicted: number) => ({ ...stats(null).budget, raisedPredicted });
+  return {
+    id: `oblique-z19/${TIER}/zoom`,
+    scene: 'oblique-z19',
+    variant: TIER,
+    kind: 'zoom',
+    repeat: 0,
+    status: 'ok',
+    notes: [],
+    zoom: {
+      before: { ...stats(null), errorTarget: 9.4, locked: true, budget: raised(3) },
+      camera: { center: [120.41, 31.51], zoom: 20, pitch: 55, bearing: 20 },
+      zoomed: {
+        settle,
+        at: { ...stats(null), errorTarget: zoomedError, locked: true, cacheMB: 2500, budget: { ...stats(null).budget, ...zoomedRaised, demandMB: 3000, limitMB: 4096 } },
+        shot: 'shots/oblique-z19__maplibre-cache6g__zoom-zoomed.png'
+      },
+      nudged:
+        nudgedError === null
+          ? null
+          : {
+              settle,
+              at: { ...stats(null), errorTarget: nudgedError, budget: { ...stats(null).budget, ...zoomedRaised } },
+              shot: 'shots/oblique-z19__maplibre-cache6g__zoom-nudged.png'
+            }
+    }
+  };
+};
+
+// 画布实际画了这么多像素的一遍
+const canvasRun = (width: number, height: number): RunResult => ({
+  ...tilesetRun('maplibre'),
+  setup: {
+    renderer: 'gpu',
+    vendor: 'v',
+    drawingBuffer: [width, height],
+    cssSize: [width, height],
+    devicePixelRatio: 1,
+    samples: 0,
+    gpuTimer: true,
+    pacing: 2,
+    config: {}
+  }
+});
 
 // 某一刻累计放宽的帧（装满、估计）
 const budgetAt = (t: number, raisedFull: number, raisedPredicted: number): SceneSample => ({
@@ -286,6 +344,25 @@ describe('有瓦片集场景的报告', () => {
     expect(report).toContain('| 恢复后：需求 / 缓存上限（MB），锁定 | 1,400 / 2,048，锁定 2 / 3 遍 |');
   });
 
+  it('释放的贴图、上下文丢失、代理出错各一行；丢失和出错取各遍最多的', () => {
+    const quiet: RunResult = { ...tilesetRun('maplibre'), context: { lost: 0, restored: 0 }, proxy: { timeouts: 0, failures: 0 } };
+    const troubled: RunResult = {
+      ...tilesetRun('maplibre'),
+      atRecovered: { ...stats(null), releasedMB: 1234 },
+      context: { lost: 2, restored: 1 },
+      proxy: { timeouts: 3, failures: 1 }
+    };
+    const report = renderReport(results([quiet, troubled], [TILESET_SCENE]));
+    expect(report).toContain('| WebGL 上下文 丢失 / 恢复（次，各遍最多） | 2 / 1 |');
+    expect(report).toContain('| 经代理的请求 超时 / 失败（次，各遍最多） | 3 / 1 |');
+    expect(renderReport(results([troubled], [TILESET_SCENE]))).toContain('| 上传后释放的贴图（MB，累计到恢复后） | 1,234 |');
+  });
+
+  it('画布实际画的像素：和视口不同时标出来', () => {
+    expect(renderReport(results([canvasRun(1600, 900)], [TILESET_SCENE]))).toContain('| 画布（实际画的像素） | 1600×900，和视口相同 |');
+    expect(renderReport(results([canvasRun(1536, 864)], [TILESET_SCENE]))).toContain('| 画布（实际画的像素） | **1536×864，和视口 1600×900 不同** |');
+  });
+
   it('ADD 的瓦片不分，有的时候写在后面；加载到稳定放宽的原因单独一行', () => {
     const additive: RunResult = {
       ...tilesetRun('maplibre'),
@@ -386,6 +463,73 @@ describe('有瓦片集场景的报告', () => {
     }
   });
 
+  it('定位后放大一级：首屏、放大后、移开再移回各一行，放大后比移回来粗而且放大这一步按估计放宽了才判成按估计锁粗', () => {
+    const runs = [tilesetRun('maplibre'), tilesetRun(TIER), zoomRun(12, 8)];
+    const report = renderReport(results(runs, [TIER_SCENE]));
+    expect(report).toContain('**定位后放大一级（--zoom-in）：**');
+    expect(report).toContain('| 指标 | MapLibre，缓存上限 6 GB |');
+    // 放宽的帧是累计的：放大后只数放大以后新增的，移开再移回只数移开以后新增的
+    expect(report).toContain('| 首屏：屏幕误差，锁定，放宽的帧 装满 / 估计（加载到稳定） | 9.4，锁定，0 / 3 |');
+    expect(report).toContain('| 放大后：屏幕误差，锁定，放宽的帧 装满 / 估计（放大以后新增） | 12.0，锁定，0 / 4 |');
+    expect(report).toContain('| 放大后：需求 / 缓存上限 / 缓存（MB） | 3,000 / 4,096 / 2,500 |');
+    expect(report).toContain('| 移开再移回：屏幕误差，锁定，放宽的帧 装满 / 估计（移开以后新增） | 8.0，没锁，0 / 0 |');
+    expect(report).toContain('| 放大后按估计放宽锁粗了吗 | **是：放大这一步按估计放宽了，比移开再移回的粗** |');
+    const verdictOf = (zoom: RunResult) => renderReport(results([tilesetRun('maplibre'), zoom], [TIER_SCENE]));
+    expect(verdictOf(zoomRun(8.2, 8))).toContain('| 放大后按估计放宽锁粗了吗 | 否 |');
+    // 粗了，但放大这一步只有装满的放宽：不说成估计的问题
+    const full = verdictOf(zoomRun(12, 8, { raisedFull: 5, raisedPredicted: 3 }));
+    expect(full).toContain('| 放大后：屏幕误差，锁定，放宽的帧 装满 / 估计（放大以后新增） | 12.0，锁定，5 / 0 |');
+    expect(full).toContain('| 放大后按估计放宽锁粗了吗 | 比移开再移回的粗，但放大这一步没有按估计放宽：不是估计的问题，看"放宽的帧 装满"和需求 |');
+    expect(verdictOf(zoomRun(12, null))).toContain('| 放大后按估计放宽锁粗了吗 | 算不出（放大或移回没有读数） |');
+    // 放大那一步没做完（这一遍中途失败）：前面的读数照样写
+    const unfinished = zoomRun(12, null);
+    const failed: RunResult = { ...unfinished, status: 'failed', zoom: unfinished.zoom && { ...unfinished.zoom, zoomed: null } };
+    const failedReport = verdictOf(failed);
+    expect(failedReport).toContain('| 首屏：屏幕误差，锁定，放宽的帧 装满 / 估计（加载到稳定） | 9.4，锁定，0 / 3 |');
+    expect(failedReport).toContain('| 放大后：屏幕误差，锁定，放宽的帧 装满 / 估计（放大以后新增） | — |');
+    // 没跑 --zoom-in 时没有这一节
+    expect(renderReport(results([tilesetRun('maplibre')], [TIER_SCENE]))).not.toContain('定位后放大一级');
+  });
+
+  it('每一级瓦片的实际大小：取完成次数最多的那份读数，模型写目录名', () => {
+    const early: RunResult = { ...tilesetRun('maplibre'), atStable: { ...stats(null), levels: [level(2, 3, 20)] } };
+    const later: RunResult = { ...tilesetRun(TIER), atRecovered: { ...stats(null), levels: [level(2, 9, 21.5), level(3, 120, 4.25)] } };
+    const report = renderReport(results([early, later], [TIER_SCENE]));
+    expect(report).toContain('**每一级瓦片的实际大小：**');
+    expect(report).toContain('| 经开区 | 2 | 9 | 21.50 |');
+    expect(report).toContain('| 经开区 | 3 | 120 | 4.25 |');
+    expect(report).not.toContain('| 经开区 | 2 | 3 |');
+    expect(renderReport(results([tilesetRun('maplibre')], [TILESET_SCENE]))).not.toContain('每一级瓦片的实际大小');
+    // 释放贴图的那一遍完成得再多也不取
+    const released: RunResult = { ...tilesetRun(`${TIER}-release`), atRecovered: { ...stats(null), levels: [level(2, 500, 0.5)] } };
+    const withRelease = renderReport(results([early, later, released], [TIER_SCENE]));
+    expect(withRelease).toContain('| 经开区 | 3 | 120 | 4.25 |');
+    expect(withRelease).not.toContain('| 经开区 | 2 | 500 |');
+  });
+
+  it('加载中需求最高的那一刻：需求、还要加载的、在用和在路上的块，那时完成的层写在每一级的大小下面', () => {
+    const peakStats: BenchStats = {
+      ...stats(null),
+      queues: { downloading: 420, parsing: 5, culled: 0, used: 840, usedOutOfView: 50 },
+      budget: { ...stats(null).budget, demandMB: 9200, pendingMB: 8100 },
+      levels: [level(1, 3, 25.5), level(2, 12, 7.7)]
+    };
+    const loaded: RunResult = {
+      ...tilesetRun('maplibre'),
+      load: { stable: true, ttStableMs: 13000, ttFromNavigationMs: 14000, longTasks: LONG_TASKS, peak: { t: 2500, stats: peakStats } },
+      atRecovered: { ...stats(null), levels: [level(1, 3, 25.5), level(2, 120, 7.7), level(3, 700, 3.1)] }
+    };
+    const report = renderReport(results([loaded], [TILESET_SCENE]));
+    expect(report).toContain('| 加载中需求最高时：需求 / 其中还要加载的（MB），在用 / 下载中 / 解析中（块），离开始加载（秒） | 9,200 / 8,100，840 / 420 / 5，2.5 |');
+    expect(report).toContain(
+      '**产品默认值加载中需求最高时（离开始加载 2.5 秒，需求 9,200 MB、其中还要加载的 8,100 MB）完成的层：** 经开区 第 1 层 3 块、平均 25.50 MB；经开区 第 2 层 12 块、平均 7.70 MB。'
+    );
+    // 没有读数时（旧的结果）这一行是横线，也没有那一句
+    const old = renderReport(results([tilesetRun('maplibre')], [TILESET_SCENE]));
+    expect(old).toContain('| 加载中需求最高时：需求 / 其中还要加载的（MB），在用 / 下载中 / 解析中（块），离开始加载（秒） | — |');
+    expect(old).not.toContain('产品默认值加载中需求最高时');
+  });
+
   it('还没跑完一遍时也写得出报告', () => {
     expect(() => renderReport(results([], [TILESET_SCENE]))).not.toThrow();
     expect(() => renderReport(results([]))).not.toThrow();
@@ -418,6 +562,16 @@ describe('quality.html', () => {
     expect(tier).toContain(`src="${TIER_COMPARED.versusDefault?.heatmap}"`);
     // 这一档飞行前后还没比
     expect(tier).toContain('没有比较结果');
+  });
+
+  it('定位后放大一级：放大后和移开再移回的两张并排，说明里写屏幕误差和锁定', () => {
+    const page = renderQualityPage(results([qualityRun(), zoomRun(12, 8)], [TIER_SCENE]));
+    const zoom = page.slice(page.indexOf('<h1>定位后放大一级</h1>'));
+    expect(zoom).toContain('<h2>倾斜摄影 z19，MapLibre，缓存上限 6 GB：定位后放大一级</h2>');
+    expect(zoom).toContain('<figcaption>放大后：屏幕误差 12.0，锁定</figcaption>');
+    expect(zoom).toContain('<figcaption>移开再移回：屏幕误差 8.0</figcaption>');
+    expect(zoom).toContain('src="shots/oblique-z19__maplibre-cache6g__zoom-nudged.png"');
+    expect(renderQualityPage(results([qualityRun()], [TIER_SCENE]))).not.toContain('定位后放大一级');
   });
 
   it('有一边不正常：按状态写出、不比，截图的说明不写"稳定后"', () => {

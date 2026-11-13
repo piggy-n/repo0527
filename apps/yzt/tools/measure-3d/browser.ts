@@ -7,11 +7,6 @@ import type { Options } from './options.ts';
 
 const run = promisify(execFile);
 
-// 软件渲染的标志；硬件名字里不会有这些
-export const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|basic render|software adapter|gdi generic|mesa offscreen/i;
-// 常见的集显：只用来提醒
-export const INTEGRATED_RENDERER = /intel.*(uhd|iris|hd graphics)|radeon\(tm\) graphics|radeon graphics|vega \d+ graphics/i;
-
 function chromeArgs({ viewport, allowSoftware }: Options): string[] {
   return [
     // 解除 vsync 和帧率上限：否则帧时间封顶在显示器刷新率，看不出余量
@@ -184,7 +179,8 @@ export async function browserProcesses(browser: Browser): Promise<BrowserProcess
   }
 }
 
-export type GpuMemory = { readonly dedicatedMB: number } | { readonly unavailable: string };
+/** GPU 进程的专用显存，和共享 GPU 内存（专用的放不下时 Windows 用系统内存补上，涨了说明显存超了） */
+export type GpuMemory = { readonly dedicatedMB: number; readonly sharedMB: number } | { readonly unavailable: string };
 
 export interface MemorySample {
   readonly gpu: GpuMemory;
@@ -201,7 +197,7 @@ function privateMB(rows: readonly Record<string, unknown>[], pids: readonly numb
 }
 
 /**
- * 一次 PowerShell 读三样：\GPU Process Memory(*)\Dedicated Usage（经 WMI：中文系统上计数器的路径是本地化的，Get-Counter 用不了），
+ * 一次 PowerShell 读三样：\GPU Process Memory(*)\Dedicated Usage、Shared Usage（经 WMI：中文系统上计数器的路径是本地化的，Get-Counter 用不了），
  * 渲染进程和 GPU 进程的私有内存（Get-Process）。泼溅的 CPU 内存（ADR 0149 第 5 节）看渲染进程
  */
 export async function sampleMemory({ gpu, renderers }: BrowserProcesses): Promise<MemorySample> {
@@ -212,7 +208,7 @@ export async function sampleMemory({ gpu, renderers }: BrowserProcesses): Promis
   const gpuQuery =
     gpu === null
       ? '$gpu = $null'
-      : `try { $gpu = @(Get-CimInstance -ClassName Win32_PerfFormattedData_GPUPerformanceCounters_GPUProcessMemory -Filter "Name LIKE 'pid_${gpu}_%'" -ErrorAction Stop | Select-Object DedicatedUsage) } catch { $gpu = 'failed' }`;
+      : `try { $gpu = @(Get-CimInstance -ClassName Win32_PerfFormattedData_GPUPerformanceCounters_GPUProcessMemory -Filter "Name LIKE 'pid_${gpu}_%'" -ErrorAction Stop | Select-Object DedicatedUsage,SharedUsage) } catch { $gpu = 'failed' }`;
   const processQuery =
     pids.length === 0 ? '$processes = @()' : `$processes = @(Get-Process -Id ${pids.join(',')} -ErrorAction SilentlyContinue | Select-Object Id,PrivateMemorySize64)`;
   try {
@@ -232,8 +228,9 @@ export async function sampleMemory({ gpu, renderers }: BrowserProcesses): Promis
       return { gpu: { unavailable: 'WMI 查询失败' }, ...memory };
     }
     const rows = Array.isArray(parsed.gpu) ? (parsed.gpu as Record<string, unknown>[]) : [];
+    const sum = (key: string) => rows.reduce((total, row) => total + Number(row[key] ?? 0), 0) / 1048576;
     return rows.length > 0
-      ? { gpu: { dedicatedMB: rows.reduce((total, row) => total + Number(row.DedicatedUsage ?? 0), 0) / 1048576 }, ...memory }
+      ? { gpu: { dedicatedMB: sum('DedicatedUsage'), sharedMB: sum('SharedUsage') }, ...memory }
       : { gpu: { unavailable: 'GPU 进程没有计数器实例（软件渲染时常见）' }, ...memory };
   } catch {
     return { gpu: { unavailable: 'PowerShell 查询失败' }, ...NO_PROCESS_MEMORY };

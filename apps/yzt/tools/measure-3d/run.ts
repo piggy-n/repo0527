@@ -4,6 +4,9 @@ import type { CDPSession, Page } from 'playwright';
 import type {
   BenchCamera,
   BenchStats,
+  ContextEvents,
+  LoadPeak,
+  ModelState,
   SceneSample,
   LongTaskStats,
   LongTaskWindow,
@@ -15,8 +18,10 @@ import type {
 import { type BrowserProcesses, browserProcesses, launchBrowser, type LaunchedBrowser, type MemorySample, sampleMemory } from './browser.ts';
 import type { Options } from './options.ts';
 import { type CpuProfile, summarizeProfile } from './profile.ts';
-import type { QualityResult, RunResult, SettleResult } from './results.ts';
-import { aerialFlight, type Run } from './scenes.ts';
+import type { ProxyStats } from './server.ts';
+import type { QualityResult, RunResult, SettleResult, ZoomResult, ZoomStep } from './results.ts';
+import { runNotes } from './run-notes.ts';
+import { aerialFlight, nudge, type Run, zoomedIn } from './scenes.ts';
 import type { SplatModel } from './splat-models.ts';
 import { blurEvents, type SharpnessGrid } from './sharpness.ts';
 
@@ -29,6 +34,9 @@ const QUICK = { warmupMs: 300, staticMs: 2000, flightMs: 4000, settleMs: 8000, a
 const MIN_MODEL_COVERAGE_PCT = 0.2;
 const GL_ERROR = /GL_INVALID|GL_OUT_OF_MEMORY|CONTEXT_LOST|too many errors/i;
 const STABLE_STREAK = 5;
+// 定位后放大一级：放大像滚轮放大一级那么快；移开再移回像用户动一下相机
+const ZOOM_MS = 600;
+const NUDGE_MS = 2000;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -43,6 +51,8 @@ export interface RunContext {
   readonly outDir: string;
   readonly redact: (text: string) => string;
   readonly progress: (phase: string) => void;
+  /** 代理累计的超时、失败次数（server.ts）；没有代理时为 null */
+  readonly proxyStats: () => ProxyStats | null;
 }
 
 /** 测量页的地址：场景的相机、模型和方案的参数（--look 也用它） */
@@ -80,6 +90,9 @@ export function pageUrl({ scene, variant }: Pick<Run, 'scene' | 'variant'>, { ba
   if (variant.cacheGB !== undefined) {
     params.set('cacheGB', String(variant.cacheGB));
   }
+  if (variant.releaseImages) {
+    params.set('releaseImages', '1');
+  }
   if (options.fps !== null) {
     params.set('fps', String(options.fps));
   }
@@ -93,6 +106,7 @@ const fileName = (id: string) => id.replaceAll(/[\\/]/g, '__');
 
 // 模型没画出来的场景，帧率再高也没有意义；缓存满了以后队列也是空的，"到稳定"不能直接比
 function classify(result: RunResult): void {
+  result.notes.push(...runNotes(result));
   const invalid: string[] = [];
   if (result.image?.blank) {
     invalid.push('画面空白');
@@ -105,6 +119,12 @@ function classify(result: RunResult): void {
   }
   if ((result.flightCold?.fenceTimeouts ?? 0) > 0) {
     result.notes.push('有等 GPU 超过 15 秒的帧，帧时间可能失真');
+  }
+  const zoomed = result.zoom?.zoomed;
+  if (result.zoom && !zoomed) {
+    result.notes.push('放大一级那一步没做完（页面崩溃、超时或截图出错），没有放大后的读数');
+  } else if (zoomed && !zoomed.settle.stable) {
+    result.notes.push('放大一级以后没等到稳定，没有移开再移回');
   }
   result.notes.push(...invalid);
   if (result.status !== 'failed') {
@@ -165,11 +185,13 @@ async function loadPage(run: Run, ctx: RunContext, { page }: Session, result: Ru
     stable: stable.stable,
     ttStableMs: stable.at - loadStartedAt,
     ttFromNavigationMs: stable.at,
-    longTasks: await longTasks(page, 0, stable.at)
+    longTasks: await longTasks(page, 0, stable.at),
+    peak: await call<LoadPeak | null>(page, 'window.benchProbe.finishLoadWatch()')
   };
   if (!stable.stable) {
     result.notes.push(`等了 ${Math.round(loadTimeoutMs / 1000)} 秒模型还没稳定`);
   }
+  result.models = await call<Record<string, ModelState>>(page, 'window.bench.models()');
   result.atStable = await stats(page);
   return stable;
 }
@@ -190,12 +212,14 @@ const stats = (page: Page) => call<BenchStats>(page, 'window.bench.stats()');
 const flight = (page: Page, keyframes: readonly BenchCamera[], ms: number) =>
   call<PhaseResult>(page, `window.benchProbe.flight(${JSON.stringify(keyframes)}, ${ms})`);
 
-// 飞行的路径：各个方案要相同，所以按场景的相机算；模型只在服务器上时中心是建议相机给的，只能读回来
-async function flightPath(page: Page, { scene }: Run, options: Options): Promise<BenchCamera[]> {
+// 场景的相机：各个方案要相同，所以按场景的写法算；模型只在服务器上时中心是建议相机给的，只能读回来
+async function sceneCamera(page: Page, { scene }: Run): Promise<BenchCamera> {
   const { center } = scene.camera;
-  const camera = center ? { ...scene.camera, center } : await call<BenchCamera>(page, 'window.bench.camera()');
-  return aerialFlight(camera, options.viewport.height);
+  return center ? { ...scene.camera, center } : call<BenchCamera>(page, 'window.bench.camera()');
 }
+
+const flightPath = async (page: Page, run: Run, options: Options): Promise<BenchCamera[]> =>
+  aerialFlight(await sceneCamera(page, run), options.viewport.height);
 
 async function setModelVisible(page: Page, visible: boolean): Promise<void> {
   await call(page, `window.bench.setModelVisible(${visible})`);
@@ -214,6 +238,7 @@ async function runPerf(run: Run, ctx: RunContext, session: Session, result: RunR
   const { page, cdp, processes } = session;
   await cdp.send('Performance.enable');
   let peakGpu: number | null = null;
+  let peakShared: number | null = null;
   let gpuUnavailable: string | null = null;
   let heapPeak: number | null = null;
   let rendererPeak: number | null = null;
@@ -231,6 +256,7 @@ async function runPerf(run: Run, ctx: RunContext, session: Session, result: RunR
       gpuUnavailable = memory.gpu.unavailable;
     } else {
       peakGpu = Math.max(peakGpu ?? 0, memory.gpu.dedicatedMB);
+      peakShared = Math.max(peakShared ?? 0, memory.gpu.sharedMB);
     }
     return memory;
   };
@@ -289,6 +315,7 @@ async function runPerf(run: Run, ctx: RunContext, session: Session, result: RunR
     heapPeakMB: heapPeak,
     gpuAtStableMB: atStable && 'dedicatedMB' in atStable.gpu ? atStable.gpu.dedicatedMB : null,
     gpuPeakMB: peakGpu,
+    gpuSharedPeakMB: peakShared,
     gpuUnavailable,
     rendererAtStableMB: atStable?.rendererPrivateMB ?? null,
     rendererPeakMB: rendererPeak,
@@ -353,6 +380,54 @@ async function runQuality(run: Run, ctx: RunContext, session: Session, result: R
   result.quality = quality;
 }
 
+// 定位后放大一级（用户看到的"勾选模型 → 自动定位 → 放大 → 不请求，动一下相机才恢复"）：加载稳定后放大一级，
+// 再移开又移回同一处，判断见 report.ts 的 zoomVerdict。等稳定的上限用加载的：放大要加载新的一层。每一步做完就写进结果
+async function runZoom(run: Run, ctx: RunContext, session: Session, result: RunResult): Promise<void> {
+  const times = ctx.options.quick ? QUICK : NORMAL;
+  const { page } = session;
+  const { loadTimeoutMs } = ctx.options;
+  const step = async (keyframes: readonly BenchCamera[], ms: number, suffix: string): Promise<ZoomStep> => {
+    const moved = await flight(page, keyframes, ms);
+    const settle = await waitSettled(page, moved.endedAt, loadTimeoutMs, times.afterSettleMs);
+    const at = await stats(page);
+    const shot = `shots/${fileName(run.id)}${suffix}.png`;
+    writeFileSync(join(ctx.outDir, shot), await screenshot(page));
+    return { settle, at, shot };
+  };
+  ctx.progress('加载');
+  await loadPage(run, ctx, session, result);
+  await call(page, `window.benchProbe.waitBasemap(${times.basemapMs})`);
+  const from = await sceneCamera(page, run);
+  const camera = zoomedIn(from);
+  const zoom: ZoomResult = { before: await stats(page), camera, zoomed: null, nudged: null };
+  result.zoom = zoom;
+  ctx.progress('放大一级');
+  zoom.zoomed = await step([from, camera], ZOOM_MS, '-zoomed');
+  if (zoom.zoomed.settle.stable) {
+    ctx.progress('移开再移回');
+    zoom.nudged = await step(nudge(camera, ctx.options.viewport.height), NUDGE_MS, '-nudged');
+  }
+}
+
+// 页面还在时读上下文丢失的次数和页面的错误：失败的那一遍（截图超时、evaluate 出错）也要分清是丢了上下文还是变慢
+// （ADR 0155 第 7 节）。页面崩溃、卡住时读不到，最多等 5 秒
+// 读不到（页面崩溃、卡住、还没就绪）时 5 秒内以 null 结束
+const within = <T>(read: Promise<T>): Promise<T | null> => Promise.race([read.catch(() => null), sleep(5000).then(() => null)]);
+
+async function readPageState(page: Page, result: RunResult, redact: RunContext['redact']): Promise<void> {
+  // 分开读：页面没就绪时（初始化阶段就丢了上下文）没有 window.bench，探针一开始就在，上下文的计数照样读得到
+  const [context, errors] = await Promise.all([
+    within(call<ContextEvents>(page, 'window.benchProbe.contextEvents()')),
+    within(call<string[]>(page, 'window.bench.errors.slice(0, 20)'))
+  ]);
+  if (context) {
+    result.context = context;
+  }
+  if (errors) {
+    result.pageErrors = [...(result.pageErrors ?? []), ...errors.map(item => redact(item).slice(0, 300))];
+  }
+}
+
 async function runProfile(run: Run, ctx: RunContext, session: Session, result: RunResult): Promise<void> {
   const times = ctx.options.quick ? QUICK : NORMAL;
   const { page, cdp } = session;
@@ -392,11 +467,12 @@ export async function runOnce(run: Run, ctx: RunContext): Promise<RunResult> {
     notes: []
   };
   const startedAt = Date.now();
+  const proxyBefore = ctx.proxyStats();
   let session: Session | null = null;
   try {
     session = await open(result, ctx);
     const opened = session;
-    const body = run.kind === 'perf' ? runPerf : run.kind === 'quality' ? runQuality : runProfile;
+    const body = { perf: runPerf, quality: runQuality, profile: runProfile, zoom: runZoom }[run.kind];
     await Promise.race([
       body(run, ctx, opened, result),
       new Promise<never>((_, reject) => {
@@ -404,21 +480,26 @@ export async function runOnce(run: Run, ctx: RunContext): Promise<RunResult> {
         opened.launched.browser.on('disconnected', () => reject(new Error('浏览器进程退出了')));
       }),
       new Promise<never>((_, reject) => {
-        const limit = ctx.options.loadTimeoutMs + 300000;
+        // 放大一级要等三次稳定（加载、放大、移回），每次的上限都是加载的
+        const limit = (run.kind === 'zoom' ? 3 : 1) * ctx.options.loadTimeoutMs + 300000;
         setTimeout(() => reject(new Error('单遍超过时间上限，已中止')), limit).unref();
       })
     ]);
-    result.pageErrors = [...(result.pageErrors ?? []), ...(await call<string[]>(opened.page, 'window.bench.errors.slice(0, 20)')).map(item => ctx.redact(item).slice(0, 300))];
   } catch (error) {
     result.status = 'failed';
     result.error = ctx.redact(String(error instanceof Error ? error.message : error)).split('\n')[0]?.slice(0, 500);
   } finally {
     if (session) {
+      await readPageState(session.page, result, ctx.redact);
       session.launched.browser.removeAllListeners('disconnected');
       await Promise.race([session.launched.browser.close().catch(() => undefined), sleep(15000)]);
     }
   }
   result.durationS = (Date.now() - startedAt) / 1000;
+  const proxyAfter = ctx.proxyStats();
+  if (proxyBefore && proxyAfter) {
+    result.proxy = { timeouts: proxyAfter.timeouts - proxyBefore.timeouts, failures: proxyAfter.failures - proxyBefore.failures };
+  }
   classify(result);
   return result;
 }

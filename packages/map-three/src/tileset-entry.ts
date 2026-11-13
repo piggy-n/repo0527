@@ -102,6 +102,13 @@ export interface DisplayedDetail {
   readonly additive: number;
 }
 
+/** 一层完成的瓦片：层（根是 0）、完成的次数（淘汰后又加载的再算一次）、平均字节 */
+export interface TileLevelSize {
+  readonly depth: number;
+  readonly loads: number;
+  readonly averageBytes: number;
+}
+
 /** 一个瓦片集的读数 */
 export interface TilesetEntryInspection {
   readonly show: boolean;
@@ -109,6 +116,8 @@ export interface TilesetEntryInspection {
   /** 这一帧显示的瓦片数 */
   readonly visible: number;
   readonly detail: DisplayedDetail;
+  /** 每一层瓦片的实际大小，由浅到深：估计还要加载的字节用的就是它，不够 3 块的层不估计 */
+  readonly levels: readonly TileLevelSize[];
   /** 累计：瓦片加载完成、被卸载、加载失败的次数 */
   readonly loaded: number;
   readonly unloaded: number;
@@ -150,7 +159,8 @@ export interface TilesetHit {
 
 // 屏幕误差上限的默认值；清单可以按模型改（docs/config/3dt-manifest.md）
 const ERROR_TARGET = 8;
-// 一层完成这么多块瓦片才估计这一层的大小：一块特别大的瓦片不能让需求一下子超过上限，放宽了就收不回来
+// 一层完成这么多块瓦片才估计这一层的大小：一块特别大的瓦片不能让需求一下子超过上限，放宽了就收不回来。
+// 之前不估计，也不借别的层的大小：开始加载时只有粗的几层有样本，粗瓦片大时细的一层按它估计远超实际，停着就放宽锁住
 const MIN_SIZE_SAMPLES = 3;
 // 瓦片还没有请求过：库的常量 UNLOADED，类型声明里没有导出
 const UNLOADED = 0;
@@ -195,7 +205,7 @@ export class TilesetEntry implements Disposable {
   #pinned = false;
   // 每一层完成的瓦片的总字节和块数，估计还要加载的字节用
   readonly #sizeByDepth = new Map<number, { bytes: number; count: number }>();
-  // 样本够了的最深一层：没到过的层按它估计
+  // 样本够了的最深一层：排不进队的瓦片不知道是哪一层，按它估计
   #deepestSized = -1;
   #loaded = 0;
   #unloaded = 0;
@@ -381,8 +391,9 @@ export class TilesetEntry implements Disposable {
     // 缓存满的时候排不进队的瓦片不知道是哪些，按最深一层算
     let pendingBytes = stats.refused * this.#sizeAt(this.#deepestSized);
     for (const tile of loadingTiles) {
-      // 已经不要了、但还在下载的不算：它们不占需求，算上的话放宽以后需求也不降，会一直放宽到它们下载完
-      if (tile.internal.hasRenderableContent && usedSet.has(tile)) {
+      // 已经不要了、但还在下载的不算：它们不占需求，算上的话放宽以后需求也不降，会一直放宽到它们下载完。
+      // 淘汰后重新请求的也不算：库排队时就把它原来的字节记进了缓存，已经算在 pinnedBytes 里
+      if (tile.internal.hasRenderableContent && usedSet.has(tile) && this.#cache.getMemoryUsage(tile) === 0) {
         pendingBytes += this.#sizeAt(tile.internal.depth);
       }
     }
@@ -436,6 +447,9 @@ export class TilesetEntry implements Disposable {
       // 不画的瓦片集不再更新：库的统计停在之前
       visible: this.#drawn ? stats.visible : 0,
       detail: this.#displayedDetail(),
+      levels: [...this.#sizeByDepth]
+        .toSorted(([a], [b]) => a - b)
+        .map(([depth, { bytes, count }]) => ({ depth, loads: count, averageBytes: bytes / count })),
       loaded: this.#loaded,
       unloaded: this.#unloaded,
       failed: this.#failed,
@@ -598,14 +612,10 @@ export class TilesetEntry implements Disposable {
     }
   }
 
-  // 这一层一块瓦片的估计大小；样本不够时按样本够了的最深一层，都不够时不估计
+  // 这一层一块瓦片的估计大小；样本不够时不估计
   #sizeAt(depth: number): number {
     const size = this.#sizeByDepth.get(depth);
-    if (size && size.count >= MIN_SIZE_SAMPLES) {
-      return size.bytes / size.count;
-    }
-    const deepest = this.#sizeByDepth.get(this.#deepestSized);
-    return deepest ? deepest.bytes / deepest.count : 0;
+    return size && size.count >= MIN_SIZE_SAMPLES ? size.bytes / size.count : 0;
   }
 
   #errorTarget(): number {

@@ -1,8 +1,9 @@
-import { MapLibreView, type SceneSurface } from '@mx/map-core';
+import { MapLibreView, type SceneFrame, type SceneSurface } from '@mx/map-core';
 import type { CullWindow, ThreeSceneRenderer as Renderer } from '@mx/map-three';
 import { setupMapRuntime } from '../../../src/app/map-runtime.ts';
 import { splatReadings, splatsSettled } from '../splat-readings.ts';
 import type { EngineHandle, EngineOptions } from './bench.ts';
+import { probe } from './probe.ts';
 
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
@@ -41,11 +42,20 @@ export async function startMapLibre({ session, container, params, splatCount, on
     },
     loadSceneRenderer: async () => {
       const { ThreeSceneRenderer } = await import('@mx/map-three');
-      // 拿到 surface 才能请求重画：静止时每帧都画要用
+      // 拿到 surface 才能请求重画：静止时每帧都画要用。render 期间告诉探针：上传后释放贴图只认这期间的上传
       class BenchRenderer extends ThreeSceneRenderer {
         override attach(next: SceneSurface): void {
           surface = next;
           super.attach(next);
+        }
+
+        override render(frame: SceneFrame): void {
+          probe.setInsideScene(true);
+          try {
+            super.render(frame);
+          } finally {
+            probe.setInsideScene(false);
+          }
         }
       }
       const rendererOptions = {
@@ -77,6 +87,7 @@ export async function startMapLibre({ session, container, params, splatCount, on
       cullWindow: cullWindow ?? '产品的默认值',
       splatBudget: splatBudget ?? '产品的默认值',
       cacheGB: cacheGB ?? '产品的默认值',
+      releaseImages: params.get('releaseImages') === '1',
       antialias: params.get('antialias') === '1'
     },
     stats() {
@@ -95,6 +106,7 @@ export async function startMapLibre({ session, container, params, splatCount, on
         loading: state.loading,
         uploadPending: state.uploadPending,
         uploadedMB: state.uploadedBytes / MB,
+        releasedMB: probe.releasedMB(),
         locked: state.locked,
         detail: {
           sharp: sum(item => item.detail.sharp),
@@ -119,6 +131,9 @@ export async function startMapLibre({ session, container, params, splatCount, on
           raisedPredicted: state.raisedPredicted,
           cullWindow: longestWindow(tilesets.map(item => item.cullWindow))
         },
+        levels: Object.entries(state.tilesets).flatMap(([model, item]) =>
+          item.levels.map(({ depth, loads, averageBytes }) => ({ model, depth, loads, averageMB: averageBytes / MB }))
+        ),
         splats: splatReadings(state.splatBudget, Object.values(state.splats))
       };
     },
