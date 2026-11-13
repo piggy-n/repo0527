@@ -13,13 +13,19 @@ const MAX_REGIONS = 65535;
 /**
  * 算出"人能站住的节点"及其步行区域（ADR 0085）。能站住 = 这层地板在室内，且身体半径的圆盘覆盖到的每一格
  * 都有落差在台阶内的室内地板；按格子判定，不在圆周上采点（采样点落在格子边界上时会漏掉薄墙、细柱子）。
- * 相邻格落差不超过一级台阶就连通；闸机、站台边缘、电梯井壁把空间切成不同区域
+ * 不要求遮盖时（扫描模型，ADR 0156）室外的地板也算。相邻格落差不超过一级台阶就连通；闸机、站台边缘、电梯井壁把空间切成不同区域
  */
 export function labelRegions(
   raw: RawNavGrid,
-  { agentRadius = NAV_DEFAULTS.agentRadius, stepHeight = NAV_DEFAULTS.stepHeight } = {}
+  {
+    agentRadius = NAV_DEFAULTS.agentRadius,
+    stepHeight = NAV_DEFAULTS.stepHeight,
+    requireCover = NAV_DEFAULTS.requireCover
+  } = {}
 ): NavGridData {
-  const grid = new NavGrid({ ...raw, agentRadius, stepHeight });
+  const grid = new NavGrid({ ...raw, agentRadius, stepHeight, requireCover });
+  // 地板编码的最低位是遮盖：要求遮盖时看这一位，不要求时任何地板都算
+  const coverMask = requireCover ? 1 : 0;
   const { data } = raw;
   const { maxLevels, cellSize } = raw.meta;
   const total = data.length;
@@ -40,14 +46,14 @@ export function labelRegions(
       }
     }
   }
-  const hasIndoorFloorNear = (cx: number, cy: number, z: number) => {
+  const hasFloorNear = (cx: number, cy: number, z: number) => {
     const base = grid.cellBase(cx, cy);
     if (base === -1) {
       return false;
     }
     for (let i = 0; i < maxLevels && data[base + i] !== NAV_EMPTY; i++) {
       const value = data[base + i];
-      if (value & 1 && Math.abs((value >> 1) / HEIGHT_UNITS - z) <= stepHeight) {
+      if ((value & coverMask) === coverMask && Math.abs((value >> 1) / HEIGHT_UNITS - z) <= stepHeight) {
         return true;
       }
     }
@@ -57,7 +63,8 @@ export function labelRegions(
     if (walkState[index] === 0) {
       const floor = grid.nodeFloor(index);
       const { cx, cy } = grid.decode(index);
-      const fits = grid.nodeCovered(index) && disk.every(([ox, oy]) => hasIndoorFloorNear(cx + ox, cy + oy, floor));
+      const fits =
+        (!requireCover || grid.nodeCovered(index)) && disk.every(([ox, oy]) => hasFloorNear(cx + ox, cy + oy, floor));
       walkState[index] = fits ? 1 : -1;
     }
     return walkState[index] === 1;
@@ -87,5 +94,5 @@ export function labelRegions(
       sizes.push(tail);
     }
   }
-  return { ...raw, agentRadius, stepHeight, labels, sizes: Uint32Array.from(sizes) };
+  return { ...raw, agentRadius, stepHeight, requireCover, labels, sizes: Uint32Array.from(sizes) };
 }

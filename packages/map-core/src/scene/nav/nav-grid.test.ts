@@ -70,6 +70,29 @@ describe('labelRegions', () => {
     expect(grid.componentSize(left)).toBeGreaterThan(500);
   });
 
+  it('不要求遮盖时露天的地板也能站，也能出生（扫描模型，ADR 0156）；区域的面积和格子大小无关', () => {
+    const open = triangles(floorQuad(0, 0, 12, 12, 0));
+    const indoor = new NavGrid(labelRegions(buildNavGrid([open])));
+    expect(indoor.componentAt(6, 6, 0)).toBe(0);
+    expect(findSpawn(indoor, { x: 6, y: 6, z: 0 }, { mode: 'near', minArea: 50 })).toBeNull();
+
+    const coarse = new NavGrid(labelRegions(buildNavGrid([open]), { requireCover: false }));
+    const fine = new NavGrid(labelRegions(buildNavGrid([open], { cellSize: 0.1 }), { requireCover: false }));
+    expect(fine.requireCover).toBe(false);
+    const coarseId = coarse.componentAt(6, 6, 0);
+    const fineId = fine.componentAt(6, 6, 0);
+    expect(coarseId).toBeGreaterThan(0);
+    expect(fineId).toBeGreaterThan(0);
+    // 四周各缩进约一个身体半径，12 × 12 米剩 130～145 平方米；格数差 4 倍，面积差不多
+    expect(fine.componentSize(fineId)).toBeGreaterThan(coarse.componentSize(coarseId) * 3.5);
+    for (const area of [coarse.componentArea(coarseId), fine.componentArea(fineId)]) {
+      expect(area).toBeGreaterThan(130);
+      expect(area).toBeLessThan(145);
+    }
+    expect(findSpawn(fine, { x: 6, y: 6, z: 0 }, { mode: 'near', minArea: 100 })).toMatchObject({ floor: 0 });
+    expect(findSpawn(fine, { x: 6, y: 6, z: 0 }, { mode: 'near', minArea: 150 })).toBeNull();
+  });
+
   it('门比身体窄（0.4 米）时两边是两个区域，寻路不通', () => {
     const grid = corridor(0.4);
     const left = grid.componentOf(nodeAt(grid, 2, 2));
@@ -123,14 +146,14 @@ describe('NavGrid', () => {
 
   it('出生点：在目标附近、四周开阔、所在区域够大的室内地板', () => {
     const grid = corridor(1.2);
-    const spot = findSpawn(grid, { x: 5.1, y: 0.5, z: 0 }, { mode: 'near', minReach: 100 });
+    const spot = findSpawn(grid, { x: 5.1, y: 0.5, z: 0 }, { mode: 'near', minArea: 4 });
     if (!spot) {
       throw new Error('没有找到出生点');
     }
     expect(grid.isOpen(spot.x, spot.y, spot.floor, 0.6)).toBe(true);
     expect(Math.hypot(spot.x - 5.1, spot.y - 0.5)).toBeLessThan(2);
     // 区域不够大时找不到；top 模式只认不高于 below 的地板
-    expect(findSpawn(grid, { x: 2, y: 2, z: 0 }, { mode: 'near', minReach: 100000, maxRadius: 3 })).toBeNull();
+    expect(findSpawn(grid, { x: 2, y: 2, z: 0 }, { mode: 'near', minArea: 4000, maxRadius: 3 })).toBeNull();
     expect(findSpawn(grid, { x: 2, y: 2, z: 0 }, { mode: 'top', below: -1, maxRadius: 3 })).toBeNull();
   });
 });

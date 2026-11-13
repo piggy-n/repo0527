@@ -22,6 +22,7 @@ export interface NavGridSource extends RawNavGrid {
   readonly sizes?: Uint32Array;
   readonly agentRadius?: number;
   readonly stepHeight?: number;
+  readonly requireCover?: boolean;
 }
 
 const NEIGHBORS8: readonly (readonly [number, number])[] = [
@@ -105,6 +106,8 @@ export class NavGrid {
   readonly sizes: Uint32Array | null;
   readonly agentRadius: number;
   readonly stepHeight: number;
+  /** 头顶要有遮盖才算能站；扫描模型为 false（ADR 0156） */
+  readonly requireCover: boolean;
   /** 每块的节点数 */
   readonly blockSize: number;
   /** 块号 → 分块号：节点编号反解格子坐标时用 */
@@ -123,6 +126,7 @@ export class NavGrid {
     this.sizes = source.sizes ?? null;
     this.agentRadius = source.agentRadius ?? NAV_DEFAULTS.agentRadius;
     this.stepHeight = source.stepHeight ?? NAV_DEFAULTS.stepHeight;
+    this.requireCover = source.requireCover ?? NAV_DEFAULTS.requireCover;
     this.blockSize = CHUNK * CHUNK * source.meta.maxLevels;
     this.blockChunks = new Int32Array(Math.max(1, source.data.length / this.blockSize));
     source.chunkIndex.forEach((block, chunk) => {
@@ -239,6 +243,11 @@ export class NavGrid {
   /** 区域的格数 */
   componentSize(id: number): number {
     return this.sizes && id ? this.sizes[id] : 0;
+  }
+
+  /** 区域的面积（平方米）：格子大小不同的网格（扫描模型是 0.1 米，ADR 0156）按面积比阈值 */
+  componentArea(id: number): number {
+    return this.componentSize(id) * this.meta.cellSize ** 2;
   }
 
   /** 某格的地板高度（米，升序）；out、covered 由调用方复用，covered[i] 表示第 i 层头顶有遮盖 */

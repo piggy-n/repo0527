@@ -22,7 +22,7 @@
 | `scene/scene-content-model.ts` | `SceneContentModel`：三维独有的内容（瓦片集、钻地、路线漫游或步行），整体替换、校验、合并通知；`SceneStatus`、按种类区分的 `RoamStatus` 等三维视图报告的类型（ADR 0081、0083、0086） |
 | `scene/route-path.ts` | `RoutePath`：路线漫游的几何，累计三维长度、按走过的距离取视点和朝向；`smoothAngle`（ADR 0083） |
 | `scene/prepare-tileset.ts` | `prepareTileset`：3D Tiles 索引的整理（外部索引的根节点换到引用它的位置、空占位、目录外的引用、循环、几何误差、绝对地址），下载函数注入（ADR 0081、0148；导航网格也要用，从 map-cesium 移来，ADR 0085） |
-| `scene/nav/` | 导航网格（ADR 0085）：`b3dm.ts` 解析、`heightfield.ts` 高度场、`regions.ts` 区域、`nav-grid.ts` 查询（`NavGrid`）、`spawn.ts` 出生点、`levels.ts` 楼层、`floor-map.ts` 按区域着色的平面图、`nav-frame.ts` 坐标系、`nav-leaves.ts` 叶节点、`nav-build.ts` 构建流程；`nav-grid.worker.ts` 是 Worker 入口，处理函数在 `nav-worker-handlers.ts`；`walker.ts` 步行者和点击、脱困、出生点的规则（ADR 0086）；`third-person.ts` 第三人称的弹簧臂、点穿人物和步态（ADR 0090）；`nav-testing.ts` 只供测试 |
+| `scene/nav/` | 导航网格（ADR 0085）：`b3dm.ts` 解析、`ply.ts` LCC2 碰撞网格的解析（ADR 0156）、`heightfield.ts` 高度场、`regions.ts` 区域、`nav-grid.ts` 查询（`NavGrid`）、`spawn.ts` 出生点、`levels.ts` 楼层、`floor-map.ts` 按区域着色的平面图、`nav-frame.ts` 坐标系（瓦片集的和泼溅的）、`nav-leaves.ts` 叶节点、`nav-build.ts` 构建流程；`nav-grid.worker.ts` 是 Worker 入口，处理函数在 `nav-worker-handlers.ts`；`walker.ts` 步行者和点击、脱困、出生点的规则（ADR 0086）；`third-person.ts` 第三人称的弹簧臂、点穿人物和步态（ADR 0090）；`nav-testing.ts` 只供测试 |
 | `selection/selection-model.ts` | `SelectionModel`：选中的要素，只存数据源和业务主键（ADR 0047 第 4 节） |
 | `tool/tool-model.ts` | `ToolModel`：当前工具（ADR 0034），`MapTool`、`Gestures`、`PanModifier`、`ToolView` |
 | `measure/geodesic.ts` | 椭球面上的距离、累计距离、折线总长、多边形面积（geographiclib-geodesic，ADR 0035） |
@@ -348,9 +348,11 @@ store.clear();
 步行漫游用的 2.5D 高度场，迁自旧项目的 `navGrid.js`、`navGridWorker.js` 和 `indoorMap/levels.js`，规则和参数不变；在苏州站的数据上和旧代码逐格比对一致（地板、净空、区域编号和大小）。
 
 - 存储：每格最多 4 层地板，Int16 存高度（2 厘米）和"头顶有遮盖"，Uint8 存净空；按 32 × 32 格分块，空块不占内存。苏州站 3175 × 1075 格，地板格约 116 万
-- 区域（`labelRegions`）：身体半径 0.3 米的圆盘覆盖到的格子都有台阶（0.45 米）内的室内地板才能站人，相邻格落差在台阶内就连通；`NavGrid` 的行走碰撞、寻路、出生点都查同一份区域
-- 坐标系（`navigationFrame`）：瓦片集根节点的局部系，只支持旋转加平移；给出经纬度与局部坐标的互换、局部 y 轴的方位角（平面图按它旋转、保证正北朝上）和地面在局部系里的高度（楼层名用）
+- 区域（`labelRegions`）：身体半径 0.3 米的圆盘覆盖到的格子都有台阶（0.45 米）内的室内地板才能站人，相邻格落差在台阶内就连通；`NavGrid` 的行走碰撞、寻路、出生点都查同一份区域。区域、楼层大小的阈值都按面积（`componentArea`，平方米）比，和格子大小无关
+- 扫描模型（LCC2 的碰撞网格，ADR 0156）用 `SCAN_NAV_OPTIONS`：0.1 米的格子、半径 0.15 米、身高 1.2 米、不要求头顶有遮盖（`requireCover: false`，露天的地板也能站，出生点也找露天的）。墓道的地板只有 0.6～0.8 米宽、墙根是圆角，站点的参数下墓道断成一格一格的；两个调试模型的实测和比较见 ADR 0156 的背景
+- 坐标系（`navigationFrame`）：瓦片集根节点的局部系，只支持旋转加平移；给出经纬度与局部坐标的互换、局部 y 轴的方位角（平面图按它旋转、保证正北朝上）和地面在局部系里的高度（楼层名用）。泼溅用 `splatNavigationFrame(placement, ground)`：LCC2 的局部系按清单的 `placement` 放（东北天转 `heading`，同渲染器），地面取出生点的地板
 - 构建（`buildNavigation`）：主线程按整理后的索引找叶节点（根节点自己的 transform 不算），最多同时下载 4 个、报告进度，ArrayBuffer 转移给 Worker；Worker 解析、构建、算区域，类型化数组转移回来。每次构建一个 `WorkerHost`，结束后释放。中止时下载和 Worker 都停下；一个瓦片下载失败就停下其余的
+- 扫描模型的构建（`buildScanNavigation`）：拥有者给出碰撞网格的地址、三角形数、包围盒（读 `.lcc2` 索引）和局部系；总数不超过 `SCAN_MAX_TRIANGLES`（200 万）全读，超过的按包围盒离出生点由近到远读到上限（`partial`，网格只覆盖这一片）。下载、中止、Worker 同上，Worker 里读 PLY（`buildScan`）；两个调试模型（约 80 万个三角形、ply 约 20 MB）Node 单线程解析约 0.5 秒、构建加区域约 0.8 秒
 - 楼层（`detectLevels`）：高度直方图里成片的地面、高差 2 米以内的并成一层，每层的范围到与上下层的中点；地下从上往下 -1F、-2F
 - 平面图（`planRegions`、`renderFloorMap`）：区域按面积从大到小分配调色板里的颜色，跳过同一层其他区域已用的颜色，100 平方米以下和分不到的用中性色；同一区域按自己的高度范围渐变；人站不下的地板灰色。画图时按方位角旋转，第 0 行在最北边。调色板见 [color-and-typography.md](../design/color-and-typography.md) 的"导航网格平面图"
 - 耗时（苏州站，23 个叶节点）：Node 单线程解析约 0.1 秒、高度场约 1.8 秒、区域约 3 秒；浏览器里从整理索引到着色完成约 2.5 秒
@@ -361,10 +363,10 @@ store.clear();
 迁自旧项目 `FirstPersonRoam.js` 的第一人称部分，规则和参数不变；引擎那一半（键鼠、拾取、相机）在 `maplibre/roam/walk-roamer.ts`（从 map-cesium 的 `scene-walk.ts` 移植，见 [map-three.md](map-three.md)"漫游"）。
 
 - 会话的意图 `WalkRoam`：导航网格、清单的出生点、速度，回到出生点和脱困写成计数（加 1 就做一次）；完整地图打开时 `paused`，在完整地图上双击的瞬移 `teleport: { count, spot }`（ADR 0087）。视图报告 `{ kind: 'walk', phase, notice, notices, player }`，`player`（`WalkPlayer`）是人的局部坐标、地板、偏航、水平视场角和点击移动的落点，进到站内以后每帧变了才报告
-- `Walker`：局部系里的位置、楼层、视点高度和朝向。`walk` 每 0.1 米做一次 `moveFloor` 碰撞，被挡时偏转 0、±0.5、±1 弧度顺墙滑；`follow` 沿点击的路径走，穿闸机的直线不做碰撞、地板按比例过渡；`settleEye` 让视点平滑跟随地板，偏差夹在 -0.4～+0.15 米；俯仰限制在 ±80°
+- `Walker`：局部系里的位置、楼层、视点高度和朝向。`walk` 每半格（站点 0.1 米）做一次 `moveFloor` 碰撞，被挡时偏转 0、±0.5、±1 弧度顺墙滑；`follow` 沿点击的路径走，穿闸机的直线不做碰撞、地板按比例过渡；`settleEye` 让视点平滑跟随地板，偏差夹在 -0.4～+0.15 米；视点在地板以上 min(1.6, 净空 - 0.2) 米，矮墓道里跟着降低（ADR 0156），站点的净空都在 1.8 米以上，视点不变；俯仰限制在 ±80°
 - `resolveClick`：深度拾取到的点附近有高度差不多的地板算直接点中，否则在下 0.6 米到上 0.3 米之间找；优先和脚下同一区域；高差超过 0.5 米的小区域不去，点墙根反推出来的、在别的区域的要看得见才去。遮挡由调用方注入的 `VisibilityTest` 判断
 - `planMove`：同一区域寻路（最多 150 万节点）后拉直；走不到的同一层、10 米内、中间站不住的不超过 3 米、视点高度看得见就直线穿过，否则闪切
-- `unstuckSpot`、`chooseSpawn`：脱困找 30 米内开阔（0.6 米内都能站、区域 100 平方米以上）的地面；出生点依次看相机是否已在站内地下、是否贴近地面对着模型、清单的出生点、模型中心，"最上面一层"按地面高度往下 2 米以内算
+- `unstuckSpot`、`chooseSpawn`：脱困找 30 米内开阔（0.6 米内都能站、区域 100 平方米以上）的地面；出生点依次看相机是否已在站内地下、是否贴近地面对着模型、清单的出生点、模型中心，"最上面一层"按地面高度往下 2 米以内算；不要求遮盖的网格（扫描模型）画布中心、模型中心都落到附近最近的地板上，不往下找
 - `headingToYaw`、`yawToHeading`：清单的朝向（正北为 0）和局部系偏航的换算，局部 y 轴的方位角来自 `navigationFrame`
 
 ## 第三人称（ADR 0090）

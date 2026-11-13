@@ -133,3 +133,30 @@ export function navigationFrame(transform: readonly number[]): NavFrame {
     toLngLat: point => fromEcef(transformPoint(toWorld, point))
   };
 }
+
+/** 东、北、上加偏航的摆放：原点的经纬度、椭球高，局部 x 轴从正东逆时针转的角度（度）；同清单里泼溅的 placement */
+export interface FramePlacement {
+  readonly lng: number;
+  readonly lat: number;
+  readonly height: number;
+  readonly heading: number;
+}
+
+/**
+ * 泼溅（LCC2）的导航网格的局部系（ADR 0156 第 2 节）：碰撞网格在 LCC2 的局部系里（网格的东、北、上），按清单的 placement
+ * 放，摆法和渲染器相同。ground 是这个局部系里算作地面的高度（扫描模型取出生点的地板，楼层名、出生点按它算），
+ * 不给时同 navigationFrame，是原点处的椭球面
+ */
+export function splatNavigationFrame({ lng, lat, height, heading }: FramePlacement, ground?: number): NavFrame {
+  const lambda = toRadians(lng);
+  const phi = toRadians(lat);
+  const east = [-Math.sin(lambda), Math.cos(lambda), 0];
+  const north = [-Math.sin(phi) * Math.cos(lambda), -Math.sin(phi) * Math.sin(lambda), Math.cos(phi)];
+  const up = [Math.cos(phi) * Math.cos(lambda), Math.cos(phi) * Math.sin(lambda), Math.sin(phi)];
+  const cos = Math.cos(toRadians(heading));
+  const sin = Math.sin(toRadians(heading));
+  const xAxis = east.map((value, i) => cos * value + sin * north[i]);
+  const yAxis = east.map((value, i) => -sin * value + cos * north[i]);
+  const frame = navigationFrame([...xAxis, 0, ...yAxis, 0, ...up, 0, ...toEcef(lng, lat, height), 1]);
+  return ground === undefined ? frame : { ...frame, ground };
+}

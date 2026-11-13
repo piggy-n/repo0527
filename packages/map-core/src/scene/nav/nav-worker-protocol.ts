@@ -6,10 +6,17 @@ export interface NavTile {
   readonly toLocal: Float64Array;
 }
 
-/** 导航网格 Worker 的协议（ADR 0085 第 3 节）：瓦片转移进去，网格的类型化数组转移回来 */
+/**
+ * 导航网格 Worker 的协议（ADR 0085 第 3 节）：瓦片转移进去，网格的类型化数组转移回来。
+ * buildScan 是扫描模型（ADR 0156 第 2 节）：LCC2 碰撞网格的 PLY，坐标就是导航网格的局部系
+ */
 export interface NavWorkerProtocol {
   readonly build: {
     readonly request: { readonly tiles: readonly NavTile[]; readonly options: Partial<NavOptions> };
+    readonly response: NavGridData;
+  };
+  readonly buildScan: {
+    readonly request: { readonly meshes: readonly ArrayBuffer[]; readonly options: Partial<NavOptions> };
     readonly response: NavGridData;
   };
 }

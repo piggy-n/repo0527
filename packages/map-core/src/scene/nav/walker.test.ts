@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { EYE_HEIGHT } from '../route-path';
 import { buildNavGrid } from './heightfield';
+import { SCAN_NAV_OPTIONS } from './nav-data';
 import { NavGrid } from './nav-grid';
 import { floorQuad, triangles, twoLevelStation, wallQuad } from './nav-testing';
 import { labelRegions } from './regions';
@@ -31,6 +32,11 @@ function corridor(door: number) {
 
 function gridOf(...parts: number[][]) {
   return new NavGrid(labelRegions(buildNavGrid([triangles(...parts)])));
+}
+
+// 扫描模型的参数（ADR 0156）：0.1 米的格子、半径 0.15、身高 1.2、不要求遮盖
+function scanGridOf(...parts: number[][]) {
+  return new NavGrid(labelRegions(buildNavGrid([triangles(...parts)], SCAN_NAV_OPTIONS), SCAN_NAV_OPTIONS));
 }
 
 const open = corridor(1.2);
@@ -253,5 +259,59 @@ describe('脱困与出生点', () => {
     expect(chooseSpawn(station, { ...far, preferred: null })).toMatchObject({ yaw: 0.3 });
     const roof = gridOf(floorQuad(0, 0, 30, 30, -5));
     expect(chooseSpawn(roof, { ...far, preferred: null })).toBeNull();
+  });
+});
+
+describe('扫描模型（ADR 0156）', () => {
+  it('视点随净空降低：顶板 1.5 米高的矮墓道里离顶板 0.2 米，走出来回到眼高', () => {
+    // 12 × 4 米的地板，x < 6 的顶板 3 米高，x > 6 的 1.5 米高
+    const grid = scanGridOf(floorQuad(0, 0, 12, 4, 0), floorQuad(0, 0, 6, 4, 3), floorQuad(6, 0, 12, 4, 1.5));
+    const walker = new Walker(grid, { x: 2, y: 2, floor: 0, yaw: EAST });
+    expect(walker.eye).toBe(EYE_HEIGHT);
+    walkFor(walker, 7);
+    while (walker.settleEye(0.05)) {
+      // 等视点到位
+    }
+    expect(walker.position.x).toBeCloseTo(9, 6);
+    expect(walker.eye).toBeCloseTo(1.3, 6);
+    walker.look(-EAST, 0);
+    walkFor(walker, 7);
+    while (walker.settleEye(0.05)) {
+      // 等视点到位
+    }
+    expect(walker.eye).toBe(EYE_HEIGHT);
+  });
+
+  it('小区域按面积判断：0.1 米的格子上 6 × 6 米的高台（3000 多格）也是小区域，高出 1 米点了不去', () => {
+    const grid = scanGridOf(
+      floorQuad(0, 0, 20, 20, 0),
+      floorQuad(7, 7, 13, 13, 1),
+      wallQuad(7, 7, 13, 7, 0, 1),
+      wallQuad(13, 7, 13, 13, 0, 1),
+      wallQuad(13, 13, 7, 13, 0, 1),
+      wallQuad(7, 13, 7, 7, 0, 1)
+    );
+    const platform = grid.componentAt(10, 10, 1);
+    expect(grid.componentSize(platform)).toBeGreaterThan(2500);
+    expect(grid.componentArea(platform)).toBeLessThan(100);
+    const walker = new Walker(grid, { x: 3, y: 3, floor: 0, yaw: NORTH });
+    expect(resolveClick(walker, [10, 10, 1], seeAll)).toStrictEqual({ kind: 'refuse', reason: 'not-standable' });
+  });
+
+  it('出生点：画布中心、模型中心都落到附近最近的地板上，不往下找地面以下的室内', () => {
+    // 地面 0 米是露天的平台，下面 -4 米一层
+    const parts = [floorQuad(0, 0, 14, 14, 0), floorQuad(0, 0, 14, 14, -4)];
+    const context: SpawnContext = {
+      eye: [7, 7, 50],
+      eyeHeight: 50,
+      ground: [7, 7, 0],
+      yaw: 0.3,
+      preferred: null,
+      groundHeight: 0
+    };
+    expect(chooseSpawn(gridOf(...parts), context)).toMatchObject({ floor: -4 });
+    const scan = scanGridOf(...parts);
+    expect(chooseSpawn(scan, context)).toMatchObject({ floor: 0, yaw: 0.3 });
+    expect(chooseSpawn(scan, { ...context, ground: null })).toMatchObject({ floor: 0 });
   });
 });

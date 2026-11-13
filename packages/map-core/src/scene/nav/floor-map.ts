@@ -1,5 +1,5 @@
 // 按区域着色的平面图（ADR 0085 第 5 节）：正北朝上，区域按面积分配颜色、同一层不重复，同一区域按高度渐变
-import { MIN_REGION_CELLS, type NavLevel, nodeOnLevel } from './levels';
+import { MIN_REGION_AREA, type NavLevel, nodeOnLevel } from './levels';
 import { NAV_EMPTY } from './nav-data';
 import type { NavGrid } from './nav-grid';
 
@@ -66,7 +66,7 @@ export function planRegions(
   const { data } = grid;
   for (let i = 0; i < data.length; i++) {
     const id = data[i] === NAV_EMPTY ? 0 : grid.componentOf(i);
-    if (!id || grid.componentSize(id) < MIN_REGION_CELLS) {
+    if (!id || grid.componentArea(id) < MIN_REGION_AREA) {
       continue;
     }
     const z = grid.nodeFloor(i);

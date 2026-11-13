@@ -2,9 +2,9 @@
 import { abortReason, serveWorker } from '@mx/utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PreparedTileset } from '../prepare-tileset';
-import { buildNavigation, type NavBuildProgress } from './nav-build';
-import { toEcef, translation } from './nav-frame';
-import { b3dmOf, floorQuad, triangles } from './nav-testing';
+import { buildNavigation, buildScanNavigation, type NavBuildProgress, type ScanMesh } from './nav-build';
+import { splatNavigationFrame, toEcef, translation } from './nav-frame';
+import { b3dmOf, floorQuad, plyOf, triangles } from './nav-testing';
 import { navWorkerHandlers } from './nav-worker-handlers';
 import type { NavWorkerProtocol } from './nav-worker-protocol';
 
@@ -135,5 +135,73 @@ describe('buildNavigation', () => {
       buildNavigation(plain, { signal: new AbortController().signal, download: fetchTile, createWorker })
     ).rejects.toThrow('瓦片集根节点没有 transform');
     expect(fetchTile).not.toHaveBeenCalled();
+  });
+});
+
+// 扫描模型：12 × 4 米露天的地板，分成东西两个碰撞网格
+const SCAN_MESHES: readonly ScanMesh[] = [
+  { url: 'https://maps.test/west.ply', triangles: 2, min: [0, 0, 0], max: [6, 4, 0] },
+  { url: 'https://maps.test/east.ply', triangles: 2, min: [6, 0, 0], max: [12, 4, 0] }
+];
+const PLYS: Readonly<Record<string, ArrayBuffer>> = {
+  'https://maps.test/west.ply': plyOf(triangles(floorQuad(0, 0, 6, 4, 0))),
+  'https://maps.test/east.ply': plyOf(triangles(floorQuad(6, 0, 12, 4, 0)))
+};
+const SCAN_FRAME = splatNavigationFrame({ lng: 117.18, lat: 34.25, height: 42, heading: -0.1 }, 0);
+
+const downloadPly = (url: string) => {
+  const buffer = PLYS[url];
+  // 转移给 Worker 以后原来的就不能用了，每次给一份副本
+  return buffer ? Promise.resolve(buffer.slice(0)) : Promise.reject(new Error(`没有 ${url}`));
+};
+
+describe('buildScanNavigation', () => {
+  it('下载碰撞网格，在 Worker 里按扫描模型的参数构建：0.1 米的格子、露天的地板也能站', async () => {
+    const progress: NavBuildProgress[] = [];
+    const { grid, frame, partial } = await buildScanNavigation(
+      { meshes: SCAN_MESHES, frame: SCAN_FRAME, near: null },
+      {
+        signal: new AbortController().signal,
+        download: downloadPly,
+        createWorker,
+        onProgress: item => progress.push(item)
+      }
+    );
+
+    expect(progress).toStrictEqual([
+      { stage: 'download', done: 1, total: 2 },
+      { stage: 'download', done: 2, total: 2 },
+      { stage: 'build' }
+    ]);
+    expect(frame).toBe(SCAN_FRAME);
+    expect(partial).toBe(false);
+    expect(grid.meta.cellSize).toBe(0.1);
+    expect(grid.requireCover).toBe(false);
+    const west = grid.componentAt(1, 2, 0);
+    expect(west).toBeGreaterThan(0);
+    expect(grid.componentAt(11, 2, 0)).toBe(west);
+  });
+
+  it('超过上限时只读离 near 近的：由近到远，下一个放不下就停', async () => {
+    const fetchPly = vi.fn<typeof downloadPly>(downloadPly);
+    const { grid, partial } = await buildScanNavigation(
+      { meshes: SCAN_MESHES, frame: SCAN_FRAME, near: [11, 2, 0] },
+      { signal: new AbortController().signal, download: fetchPly, createWorker, maxTriangles: 3 }
+    );
+
+    expect(partial).toBe(true);
+    expect(fetchPly.mock.calls.map(([url]) => url)).toStrictEqual(['https://maps.test/east.ply']);
+    expect(grid.componentAt(9, 2, 0)).toBeGreaterThan(0);
+    expect(grid.cellOf(3, 2)).toBeNull();
+  });
+
+  it('没有碰撞网格时报错，不创建 Worker', async () => {
+    await expect(
+      buildScanNavigation(
+        { meshes: [], frame: SCAN_FRAME, near: null },
+        { signal: new AbortController().signal, download: downloadPly, createWorker }
+      )
+    ).rejects.toThrow('模型没有碰撞网格');
+    expect(createWorker).not.toHaveBeenCalled();
   });
 });
