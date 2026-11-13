@@ -10,6 +10,9 @@ describe('isIntegratedRenderer', () => {
     angle('Intel', 'Intel(R) UHD Graphics 620'),
     angle('Intel', 'Intel(R) HD Graphics 4600'),
     angle('Intel', 'Intel(R) Iris(R) Xe Graphics'),
+    angle('Intel', 'Intel(R) Iris(R) Plus Graphics 655'),
+    angle('Intel', 'Intel(R) Iris(R) Graphics 540'),
+    angle('Intel', 'Intel(R) Iris(TM) Pro Graphics 6200'),
     angle('Intel', 'Intel(R) Arc(TM) Graphics'),
     angle('Intel', 'Intel(R) Arc(TM) Pro Graphics'),
     angle('Intel', 'Intel(R) Arc(TM) 140V GPU (16GB)'),
@@ -20,10 +23,11 @@ describe('isIntegratedRenderer', () => {
     angle('AMD', 'AMD Radeon 890M Graphics'),
     angle('AMD', 'AMD Radeon(TM) 8060S Graphics'),
     angle('AMD', 'AMD Radeon(TM) Vega 8 Graphics'),
+    angle('AMD', 'AMD Radeon(TM) RX Vega 11 Graphics'),
     angle('AMD', 'AMD Radeon(TM) R7 Graphics'),
     angle('Qualcomm', 'Qualcomm(R) Adreno(TM) X1-85 GPU'),
     'ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)'
-  ])('集显：%s', renderer => {
+  ])('集显（名单里的）：%s', renderer => {
     expect(isIntegratedRenderer(renderer)).toBe(true);
   });
 
@@ -33,13 +37,20 @@ describe('isIntegratedRenderer', () => {
     angle('Intel', 'Intel(R) Arc(TM) A370M Graphics'),
     angle('Intel', 'Intel(R) Arc(TM) B580 Graphics'),
     angle('Intel', 'Intel(R) Arc(TM) Pro A60 Graphics'),
+    angle('Intel', 'Intel(R) Arc(TM) Pro A60M Graphics'),
+    angle('Intel', 'Intel(R) Arc(TM) Pro A30M Graphics'),
+    angle('Intel', 'Intel(R) Arc(TM) Pro B60 Graphics'),
+    angle('Intel', 'Intel(R) Arc(TM) Pro B50 Graphics'),
     angle('Intel', 'Intel(R) Iris(R) Xe MAX Graphics'),
+    // 名单以外的 Intel：当独显，给标准
+    angle('Intel', 'Intel(R) Arc(TM) X999 Graphics'),
     angle('AMD', 'AMD Radeon RX 6700 XT'),
     angle('AMD', 'AMD Radeon RX 7600M XT'),
     angle('AMD', 'Radeon RX Vega 56'),
+    angle('AMD', 'AMD Radeon(TM) RX Vega 64'),
     angle('AMD', 'AMD Radeon Pro 5500M'),
     'WebGL 2.0'
-  ])('独显、读不到型号：%s', renderer => {
+  ])('独显、名单以外的、读不到型号：%s', renderer => {
     expect(isIntegratedRenderer(renderer)).toBe(false);
   });
 

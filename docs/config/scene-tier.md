@@ -38,26 +38,42 @@
 | 显卡 | 档位 |
 |---|---|
 | 软件渲染（SwiftShader、llvmpipe、Microsoft Basic Render Driver） | 低 |
-| 集显（下面"集显的名字"） | 低 |
-| 独显、读不到型号 | 标准 |
+| 集显（下面"集显的名字"里的名单） | 低 |
+| 名单以外的：独显、新的或认不出的型号、读不到型号 | 标准 |
 
 ### 集显的名字
 
-Windows 上 Chrome、Edge 经 ANGLE 报"ANGLE (厂商, 驱动里的设备名 (0x设备号) Direct3D11 vs_5_0 ps_5_0, D3D11)"，按其中的设备名分（规则在 `tools/measure-3d/renderer-class.ts`，实现时搬进 app）：
+Windows 上 Chrome、Edge 经 ANGLE 报"ANGLE (厂商, 驱动里的设备名 (0x设备号) Direct3D11 vs_5_0 ps_5_0, D3D11)"，按其中的设备名对名单（规则在 `tools/measure-3d/renderer-class.ts`，实现时搬进 app）。名单以外的给标准：判成标准不比原来差，判成低会让 Arc Pro 这类专业卡吃亏，新的集显要补进名单。
 
-| 设备名 | 分到 | 来源 |
+| 设备名里有 | 分到 | 来源 |
 |---|---|---|
-| Intel 的：HD、UHD、Iris，Arc(TM) Graphics（Meteor Lake 起），Arc 140V / 130V（Lunar Lake），B390 / B370 这类集成的 Arc，Intel(R) Graphics | 集显 | HD、UHD、Iris 在浏览器里见过；Arc 140V 是驱动的设备名 "Intel(R) Arc(TM) 140V GPU (16GB)"（OpenGL 报的名字）；其余是按产品名推测的 |
-| Intel 的独立 Arc：A310～A770、笔记本的 A370M 等，B570、B580，Arc Pro A 系列，Iris Xe MAX | 独显 | 按产品名推测 |
-| AMD 的：不带型号的 Radeon(TM) Graphics，780M、890M 这类三位数加 M，8060S 这类四位数加 S，Radeon Vega 8 这类，老的 R7 Graphics | 集显 | Radeon(TM) Graphics 在浏览器里见过；其余按产品名推测 |
-| AMD 的 Radeon RX、Radeon Pro（RX Vega 56 也是独显） | 独显 | 按产品名推测 |
+| Intel 的 `HD Graphics`、`UHD Graphics` | 集显 | HD Graphics 在网上的 WebGL 报告里见过（"Intel(R) HD Graphics 4600"）；UHD 按产品名推测 |
+| Intel 的 `Iris(R) Xe Graphics`、`Iris(R) Plus Graphics`、`Iris(TM) Pro Graphics` | 集显 | 按产品名推测；Iris Xe MAX 是独显，不在名单里 |
+| Intel 不带型号的 `Arc(TM) Graphics`、`Arc(TM) Pro Graphics`（Meteor Lake 起） | 集显 | 按产品名推测 |
+| Intel 的 `Arc(TM) 140V`、`130V`（Lunar Lake），`140T`、`130T`（Arrow Lake） | 集显 | 140V 是驱动的设备名 "Intel(R) Arc(TM) 140V GPU (16GB)"（OpenGL 报的名字）；其余按产品名推测 |
+| Intel 的 `Arc(TM) B390`、`B370`（Panther Lake 集成的 Arc） | 集显 | 按产品名推测 |
+| 不带系列名的 `Intel(R) Graphics` | 集显 | 按产品名推测 |
+| AMD 不带型号的 `Radeon(TM) Graphics` | 集显 | 网上的 WebGL 报告里见过 |
+| AMD 的 `780M` 这类三位数加 M、`8060S` 这类四位数加 S、`Radeon Vega 8 Graphics`、`Radeon(TM) RX Vega 11 Graphics`（Ryzen 2400G、3400G、2700U、3700U 的集显）、`R7 Graphics` | 集显 | 按产品名推测 |
 | 高通 Adreno（Windows on ARM）、苹果 M 系列、ARM Mali | 集显 | 按产品名推测 |
-| NVIDIA，和上面都认不出的 | 独显（标准档） | RTX 3060 Laptop GPU 在浏览器里见过 |
+| 名单以外的：NVIDIA，独立的 Arc（A770、A370M、Pro A60M、Pro B60、B580），Iris Xe MAX，Radeon RX（独立的 RX Vega 56、64 报 "Radeon RX Vega"，后面不带 Graphics），Radeon Pro，认不出的 | 标准 | RTX 3060 Laptop GPU 在显卡机器上见过；其余按产品名推测 |
 
-规则是"Intel 除了独显都算集显"：Intel 以后的集显不用补；AMD 的集显换了命名要补规则。有了典型的客户机器（`docs/backlog.md`）后在它的浏览器里读一次核对。
+有了典型的客户机器（`docs/backlog.md`）后在它的浏览器里读一次核对。
 
 ## 自动降档
 
 - WebGL 上下文丢了：这次会话降一档。
-- 上次打开三维时页面崩溃（标签页被浏览器杀掉）：下次打开降一档，并提示。每个页面用自己的 id 记标记、可见时每 10 秒更新，打开三维时问一次别的页面还开着没有，不回答的才算崩溃（ADR 0155 第 4 节）。降下来的档位记在这台设备上，提示里的"恢复原来的画质"清掉它，`scene-tier.json` 里的档位改了以后也重新从配置开始。
-- 会误判成崩溃的：系统关机、结束浏览器、断电，前台的页面卡住 2 秒以上。
+- 上次打开三维时页面崩溃（标签页被浏览器杀掉）：下次打开降一档，并提示，提示里能恢复原来的画质（下面"崩溃标记"）。
+
+## 崩溃标记
+
+ADR 0155 第 4 节定的是"按页面的标记、打开三维时确认留下标记的页面还在不在、可以恢复"，这里是做法，实现时可以调整。
+
+- **键：** 每个页面一个键：前缀加页面 id，各写各的，没有跨页面的"读、改、写"（一份 `{ id: … }` 的 JSON 会互相覆盖：A 读到 {A, B}、B 正常离开写成 {A}、A 再写回 {A, B}，B 下次就被当成崩溃）。值是这个页面现在的档位。页面 id 每次打开、刷新都新生成，不存 sessionStorage：重新加载崩溃的标签页时是一个新的页面，才认得出旧的那个。内网走 HTTP，不是安全上下文，没有 `crypto.randomUUID`，用 `crypto.getRandomValues` 生成。
+- **什么时候写、删：** 档位高于低、三维开着、页面可见时写（打开三维、恢复了画质、重新可见）；切回二维、离开地图页、隐藏（`visibilitychange`）、`pagehide`、`freeze`、档位降到低时删自己的。不存时间：判断还在不在不看时间，崩溃后最常见的是马上点"重新加载"，那个标记的时间最新。
+- **确认还在不在：** 要写标记的页面先开一个很小的 Worker，Worker 听 BroadcastChannel，替页面回答"我还在"；Worker 回报就绪以后才写标记，不然刚写上就被问到会答不上。页面主线程忙着加载三维时 Worker 照样马上回答，页面崩溃时 Worker 跟着没了，所以"忙"和"死"分得开。打开三维时有别的页面的键才问，等到它们都回答或者 1 秒，没回答的算崩溃。
+- **等不等：** 没有别的页面的键时不等；有的话先等完，再按结果的档位创建渲染器。二维稳定后空闲时已经预加载了 map-three（[map-overview](../modules/map-overview.md)），没有下载可以藏这段等待；别的页面还开着时几毫秒就答完，只有真的崩溃了才等满 1 秒。Web Locks 能让浏览器自己判断页面还在不在，但只在安全上下文里有，内网的 HTTP 用不了。
+- **降档和去重：** 降到"崩溃页面当时的档位（它的键里存的）的下一档"和这台设备已经记的上限里更低的那个，不是在现在的基础上再降一档：两个页面同时发现同一次崩溃，结果一样，不会从高直接降到低。确认崩溃后马上删掉它的键；两个页面同时检查时可能各提示一次。
+- **设备记的降档：** 上限、崩溃时的档位、能不能恢复，和当时配置里的档位一起记；`scene-tier.json` 的档位变了就清掉，重新从配置开始。
+- **恢复：** 提示里的"恢复原来的画质"立即生效（渲染器改预算），清掉上限，并按升上去的档位写标记（不写的话再崩发现不了）。恢复过的那个档位再崩一次，降档记成不能恢复，提示里不再给"恢复"：只能部署方改配置，或者清掉浏览器的站点数据。
+- **会误判成崩溃的：** 系统关机、结束浏览器、断电（几个页面的标记一起留下，按一次崩溃算）。后台被节流、冻结、丢弃的标签页不算：隐藏时没有标记。
