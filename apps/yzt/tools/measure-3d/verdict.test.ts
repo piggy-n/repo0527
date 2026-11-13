@@ -25,6 +25,7 @@ const STATS: BenchStats = {
   detail: DETAIL,
   queues: QUEUES,
   budget: BUDGET,
+  levels: [],
   splats: null
 };
 

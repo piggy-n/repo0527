@@ -196,6 +196,10 @@ describe('ThreeSceneRenderer 的缓存预算', () => {
     // 细的一层全到了：4 × 4 × 4 块，都够细
     expect(state.tilesets.blocks?.visible).toBe(64);
     expect(state.tilesets.blocks?.detail).toEqual({ sharp: 64, relaxed: 0, waiting: 0, finest: 0, additive: 0 });
+    // 每一层的实际大小：粗的 16 块、细的 64 块，细的一块的贴图是粗的 64 倍
+    const [block, fine] = state.tilesets.blocks?.levels ?? [];
+    expect([block?.loads, fine?.loads]).toEqual([16, 64]);
+    expect(required(fine, '细的一层').averageBytes).toBeGreaterThan(required(block, '粗的一层').averageBytes * 10);
   });
 
   it('索引里没写 refine：没有内容的根节点改成 ADD 前先把 REPLACE 传给子节点，瓦片照样按细不细分', { timeout: TEST_TIMEOUT }, async () => {

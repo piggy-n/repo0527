@@ -84,6 +84,14 @@ export interface ContextEvents {
   readonly restored: number;
 }
 
+/** 一层完成的瓦片：模型（索引地址）、层（根是 0）、完成的次数（淘汰后又加载的再算一次）、平均大小 */
+export interface LevelSize {
+  readonly model: string;
+  readonly depth: number;
+  readonly loads: number;
+  readonly averageMB: number;
+}
+
 /** 引擎的读数（ThreeSceneRenderer.inspect() 整理后的） */
 export interface BenchStats {
   readonly tilesVisible: number;
@@ -110,6 +118,8 @@ export interface BenchStats {
   readonly detail: DetailReadings;
   readonly queues: TileQueues;
   readonly budget: BudgetReadings;
+  /** 每一级瓦片的实际大小：引擎按它估计还要加载的，不够 3 块的层不估计 */
+  readonly levels: readonly LevelSize[];
   /** 没有泼溅时是 null */
   readonly splats: SplatReadings | null;
 }

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { aerialFlight, buildRuns, SCENES, selectScenes, splatVariants, variants, withCamera } from './scenes.ts';
+import { aerialFlight, buildRuns, nudge, SCENES, selectScenes, splatVariants, variants, withCamera, zoomedIn } from './scenes.ts';
 
 describe('selectScenes', () => {
   it('默认选倾斜摄影 z17、z19', () => {
@@ -81,6 +81,13 @@ describe('variants 的对照方案', () => {
       'jkq-z16-tilt/maplibre/profile',
       'jkq-z16-tilt/maplibre-cache4g/quality'
     ]);
+  });
+
+  it('--zoom-in：跑画质的方案（产品默认值、缓存上限的各档）各多一遍定位后放大一级，释放贴图的、泼溅场景不跑', () => {
+    const list = variants([null], [], [4], true);
+    const runs = buildRuns(selectScenes(['jkq-z16-tilt', 'splat-pc-z18']), list, 1, splatVariants([3e6]), true);
+    expect(runs.filter(run => run.kind === 'zoom').map(run => run.id)).toEqual(['jkq-z16-tilt/maplibre/zoom', 'jkq-z16-tilt/maplibre-cache4g/zoom']);
+    expect(buildRuns(selectScenes(['jkq-z16-tilt']), list, 1).some(run => run.kind === 'zoom')).toBe(false);
   });
 
   it('对照方案只跑 perf：画质和采样只有产品的默认值', () => {
@@ -207,6 +214,17 @@ describe('aerialFlight', () => {
   it('俯视时俯仰不会变成负的', () => {
     const frames = aerialFlight({ ...camera, pitch: 0 }, 900);
     expect(frames.every(frame => frame.pitch >= 0)).toBe(true);
+  });
+
+  it('放大一级只改级别；移开再移回往东走一个视口高度（地面上）、回到同一个相机', () => {
+    expect(zoomedIn(camera)).toEqual({ ...camera, zoom: 18 });
+    const [from, away, back] = nudge(camera, 900);
+    expect(from).toEqual(camera);
+    expect(back).toEqual(camera);
+    // z17、纬度 34.26 时 900 像素约 445 米，往东走、不往北走
+    const metersEast = ((away?.center[0] ?? 0) - camera.center[0]) * 111320 * Math.cos((camera.center[1] * Math.PI) / 180);
+    expect(metersEast).toBeCloseTo((78271.516964 * Math.cos((camera.center[1] * Math.PI) / 180) * 900) / 2 ** 17, 0);
+    expect(away?.center[1]).toBe(camera.center[1]);
   });
 
   it('所有场景都有模型：瓦片集或泼溅', () => {

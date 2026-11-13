@@ -5,6 +5,7 @@ import { cpus, release, totalmem, type, version } from 'node:os';
 import { join, resolve } from 'node:path';
 import { build } from 'vite';
 import { localPath } from '../local-files/paths.ts';
+import type { BenchStats } from './bench-api.ts';
 import { INTEGRATED_RENDERER, launchBrowser, listAdapters, probeRenderer, SOFTWARE_RENDERER } from './browser.ts';
 import { runLook } from './look.ts';
 import { HELP, type Options, parseOptions, uploadBudgets } from './options.ts';
@@ -299,6 +300,8 @@ async function compareScenes(results: MeasureResults, outDir: string, baseUrl: s
 
 // ---------- 运行 ----------
 
+const reading = (stats: BenchStats | undefined) => `屏幕误差 ${stats?.errorTarget.toFixed(1)}${stats?.locked ? '（锁定）' : ''}`;
+
 function runSummary(result: MeasureResults['runs'][number]): string {
   if (result.status === 'failed') {
     return `失败：${result.error}（已记录，继续下一遍）`;
@@ -307,6 +310,10 @@ function runSummary(result: MeasureResults['runs'][number]): string {
   const splats = result.atStable?.splats;
   if (splats) {
     return `${loaded}，可见的高斯 ${Math.round(splats.visible / 1e4)} 万 / 预算 ${Math.round(splats.budget / 1e4)} 万`;
+  }
+  const { zoom } = result;
+  if (zoom) {
+    return `${loaded}，首屏${reading(zoom.before)}；放大后${reading(zoom.zoomed.at)}；移开再移回${zoom.nudged ? reading(zoom.nudged.at) : '没做'}`;
   }
   return `${loaded}，屏幕误差 ${result.atStable?.errorTarget.toFixed(1)}，瓦片 ${result.atStable?.tilesVisible}`;
 }
@@ -378,7 +385,7 @@ async function main(): Promise<void> {
   const outDir = options.out ? resolve(options.out) : localPath('measure-3d', timestamp());
   mkdirSync(join(outDir, 'shots'), { recursive: true });
   mkdirSync(join(outDir, 'profiles'), { recursive: true });
-  const runs: readonly Run[] = buildRuns(scenes, list, options.repeat, splatList);
+  const runs: readonly Run[] = buildRuns(scenes, list, options.repeat, splatList, options.zoomIn);
   const used = [...new Set(scenes.flatMap(scene => variantsOf(scene, list, splatList)))];
   const results: MeasureResults = {
     meta: {

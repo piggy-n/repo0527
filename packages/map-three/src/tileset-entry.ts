@@ -102,6 +102,13 @@ export interface DisplayedDetail {
   readonly additive: number;
 }
 
+/** 一层完成的瓦片：层（根是 0）、完成的次数（淘汰后又加载的再算一次）、平均字节 */
+export interface TileLevelSize {
+  readonly depth: number;
+  readonly loads: number;
+  readonly averageBytes: number;
+}
+
 /** 一个瓦片集的读数 */
 export interface TilesetEntryInspection {
   readonly show: boolean;
@@ -109,6 +116,8 @@ export interface TilesetEntryInspection {
   /** 这一帧显示的瓦片数 */
   readonly visible: number;
   readonly detail: DisplayedDetail;
+  /** 每一层瓦片的实际大小，由浅到深：估计还要加载的字节用的就是它，不够 3 块的层不估计 */
+  readonly levels: readonly TileLevelSize[];
   /** 累计：瓦片加载完成、被卸载、加载失败的次数 */
   readonly loaded: number;
   readonly unloaded: number;
@@ -438,6 +447,9 @@ export class TilesetEntry implements Disposable {
       // 不画的瓦片集不再更新：库的统计停在之前
       visible: this.#drawn ? stats.visible : 0,
       detail: this.#displayedDetail(),
+      levels: [...this.#sizeByDepth]
+        .toSorted(([a], [b]) => a - b)
+        .map(([depth, { bytes, count }]) => ({ depth, loads: count, averageBytes: bytes / count })),
       loaded: this.#loaded,
       unloaded: this.#unloaded,
       failed: this.#failed,

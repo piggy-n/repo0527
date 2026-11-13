@@ -34,6 +34,7 @@ const stats = (splats: SplatReadings | null, refused = 0): BenchStats => ({
   detail: { sharp: 0, relaxed: 0, waiting: 0, finest: 0, additive: 0 },
   queues: { downloading: 0, parsing: 0, culled: 0, used: 0, usedOutOfView: 0 },
   budget: { limitMB: 2048, demandMB: 0, pendingMB: 0, culledMB: 0, raisedFull: 0, raisedPredicted: 0, cullWindow: null },
+  levels: [],
   splats
 });
 
@@ -126,6 +127,37 @@ const TIER_COMPARED: SceneQuality = {
   }
 };
 const TIER_SCENE = { ...TILESET_SCENE, variants: ['maplibre', TIER] };
+
+// 经开区一层瓦片的实际大小
+const level = (depth: number, loads: number, averageMB: number) => ({ model: 'wuxi/3dtiles/经开区/tileset.json', depth, loads, averageMB });
+
+// 定位后放大一级（这一档）：首屏估计放宽 3 帧，放大后又放宽 4 帧，移开再移回没有再放宽；nudgedError 为 null 时没有移回来
+const zoomRun = (zoomedError: number, nudgedError: number | null): RunResult => {
+  const settle = { stable: true, ms: 4200, longTasks: LONG_TASKS, trace: [] };
+  const raised = (raisedPredicted: number) => ({ ...stats(null).budget, raisedPredicted });
+  return {
+    id: `oblique-z19/${TIER}/zoom`,
+    scene: 'oblique-z19',
+    variant: TIER,
+    kind: 'zoom',
+    repeat: 0,
+    status: 'ok',
+    notes: [],
+    zoom: {
+      before: { ...stats(null), errorTarget: 9.4, locked: true, budget: raised(3) },
+      camera: { center: [120.41, 31.51], zoom: 20, pitch: 55, bearing: 20 },
+      zoomed: {
+        settle,
+        at: { ...stats(null), errorTarget: zoomedError, locked: true, cacheMB: 2500, budget: { ...raised(7), demandMB: 3000, limitMB: 4096 } },
+        shot: 'shots/oblique-z19__maplibre-cache6g__zoom-zoomed.png'
+      },
+      nudged:
+        nudgedError === null
+          ? null
+          : { settle, at: { ...stats(null), errorTarget: nudgedError, budget: raised(7) }, shot: 'shots/oblique-z19__maplibre-cache6g__zoom-nudged.png' }
+    }
+  };
+};
 
 // 画布实际画了这么多像素的一遍
 const canvasRun = (width: number, height: number): RunResult => ({
@@ -422,6 +454,35 @@ describe('有瓦片集场景的报告', () => {
     }
   });
 
+  it('定位后放大一级：首屏、放大后、移开再移回各一行，同一个相机放大后比移回来粗时标出', () => {
+    const runs = [tilesetRun('maplibre'), tilesetRun(TIER), zoomRun(12, 8)];
+    const report = renderReport(results(runs, [TIER_SCENE]));
+    expect(report).toContain('**定位后放大一级（--zoom-in）：**');
+    expect(report).toContain('| 指标 | MapLibre，缓存上限 6 GB |');
+    // 放宽的帧是累计的：放大后只数放大以后新增的，移开再移回只数移开以后新增的
+    expect(report).toContain('| 首屏：屏幕误差，锁定，放宽的帧 装满 / 估计（加载到稳定） | 9.4，锁定，0 / 3 |');
+    expect(report).toContain('| 放大后：屏幕误差，锁定，放宽的帧 装满 / 估计（放大以后新增） | 12.0，锁定，0 / 4 |');
+    expect(report).toContain('| 放大后：需求 / 缓存上限 / 缓存（MB） | 3,000 / 4,096 / 2,500 |');
+    expect(report).toContain('| 移开再移回：屏幕误差，锁定，放宽的帧 装满 / 估计（移开以后新增） | 8.0，没锁，0 / 0 |');
+    expect(report).toContain('| 放大后锁粗了吗 | **是：放大后比移开再移回的粗** |');
+    expect(renderReport(results([tilesetRun('maplibre'), zoomRun(8.2, 8)], [TIER_SCENE]))).toContain('| 放大后锁粗了吗 | 否 |');
+    const notNudged = zoomRun(12, null);
+    expect(renderReport(results([tilesetRun('maplibre'), notNudged], [TIER_SCENE]))).toContain('| 放大后锁粗了吗 | 算不出（没有移回来的读数） |');
+    // 没跑 --zoom-in 时没有这一节
+    expect(renderReport(results([tilesetRun('maplibre')], [TIER_SCENE]))).not.toContain('定位后放大一级');
+  });
+
+  it('每一级瓦片的实际大小：取完成次数最多的那份读数，模型写目录名', () => {
+    const early: RunResult = { ...tilesetRun('maplibre'), atStable: { ...stats(null), levels: [level(2, 3, 20)] } };
+    const later: RunResult = { ...tilesetRun(TIER), atRecovered: { ...stats(null), levels: [level(2, 9, 21.5), level(3, 120, 4.25)] } };
+    const report = renderReport(results([early, later], [TIER_SCENE]));
+    expect(report).toContain('**每一级瓦片的实际大小：**');
+    expect(report).toContain('| 经开区 | 2 | 9 | 21.50 |');
+    expect(report).toContain('| 经开区 | 3 | 120 | 4.25 |');
+    expect(report).not.toContain('| 经开区 | 2 | 3 |');
+    expect(renderReport(results([tilesetRun('maplibre')], [TILESET_SCENE]))).not.toContain('每一级瓦片的实际大小');
+  });
+
   it('还没跑完一遍时也写得出报告', () => {
     expect(() => renderReport(results([], [TILESET_SCENE]))).not.toThrow();
     expect(() => renderReport(results([]))).not.toThrow();
@@ -454,6 +515,16 @@ describe('quality.html', () => {
     expect(tier).toContain(`src="${TIER_COMPARED.versusDefault?.heatmap}"`);
     // 这一档飞行前后还没比
     expect(tier).toContain('没有比较结果');
+  });
+
+  it('定位后放大一级：放大后和移开再移回的两张并排，说明里写屏幕误差和锁定', () => {
+    const page = renderQualityPage(results([qualityRun(), zoomRun(12, 8)], [TIER_SCENE]));
+    const zoom = page.slice(page.indexOf('<h1>定位后放大一级</h1>'));
+    expect(zoom).toContain('<h2>倾斜摄影 z19，MapLibre，缓存上限 6 GB：定位后放大一级</h2>');
+    expect(zoom).toContain('<figcaption>放大后：屏幕误差 12.0，锁定</figcaption>');
+    expect(zoom).toContain('<figcaption>移开再移回：屏幕误差 8.0</figcaption>');
+    expect(zoom).toContain('src="shots/oblique-z19__maplibre-cache6g__zoom-nudged.png"');
+    expect(renderQualityPage(results([qualityRun()], [TIER_SCENE]))).not.toContain('定位后放大一级');
   });
 
   it('有一边不正常：按状态写出、不比，截图的说明不写"稳定后"', () => {

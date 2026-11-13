@@ -29,6 +29,8 @@ export const HELP = `三维（MapLibre 引擎，@mx/map-three）的性能实测�
                          截图和产品默认值的比
   --release-images       产品默认值和 --cache-gb 的每一档各加一个"上传后释放贴图"的对照（只跑 perf），
                          比渲染进程和 GPU 进程的内存（ADR 0155 第 5 节）
+  --zoom-in              产品默认值和 --cache-gb 的每一档多跑一遍"定位后放大一级"：加载稳定后放大一级，
+                         记下屏幕误差、锁定和显示的瓦片，再移开又移回同一处比一次，看放大后有没有锁粗
   --splat-budget <列表>  高斯泼溅场景（--only splat）比较的总预算（高斯个数），默认 3m,6m,10m（ADR 0149 L.3）；
                          写 3m、3e6 或 3000000 都行。模型从清单里读，local/3dt/manifest.json 在时用它
                          （和开发服务器一样），见 docs/modules/map-three.md"泼溅的预算"
@@ -64,6 +66,8 @@ export interface Options {
   readonly cacheGBs: readonly number[];
   /** 加上"上传后释放贴图"的对照 */
   readonly releaseImages: boolean;
+  /** 跑画质的方案多跑一遍定位后放大一级 */
+  readonly zoomIn: boolean;
   /** 泼溅场景比较的总预算（高斯个数） */
   readonly splatBudgets: readonly number[];
   /** 帧率上限，null 是不封顶 */
@@ -139,6 +143,7 @@ export function parseOptions(argv: readonly string[]): Options {
     cullWindows: [],
     cacheGBs: [],
     releaseImages: false,
+    zoomIn: false,
     splatBudgets: [3e6, 6e6, 1e7],
     fps: null,
     basemap: 'arcgis',
@@ -200,6 +205,9 @@ export function parseOptions(argv: readonly string[]): Options {
         break;
       case '--release-images':
         options.releaseImages = true;
+        break;
+      case '--zoom-in':
+        options.zoomIn = true;
         break;
       case '--splat-budget': {
         const budgets = listItems(next());

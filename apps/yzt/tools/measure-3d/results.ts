@@ -82,6 +82,26 @@ export interface RunResult {
   context?: ContextEvents;
   /** 这一遍经代理的请求超时、失败的次数（没设 YZT_3DT_PROXY 时没有） */
   proxy?: ProxyStats;
+  /** 定位后放大一级（--zoom-in） */
+  zoom?: ZoomResult;
+}
+
+/** 定位后放大一级的一步：等到稳定（或超时）以后的读数和截图（相对结果目录） */
+export interface ZoomStep {
+  readonly settle: SettleResult;
+  readonly at: BenchStats;
+  readonly shot: string;
+}
+
+/** 加载稳定后放大一级，再移开又移回同一处：两次读数比，就知道放大后有没有锁粗（只有估计放宽、没装满时） */
+export interface ZoomResult {
+  /** 放大前（加载稳定后）的读数：放宽的帧数是累计的，各步新增的要减它 */
+  readonly before: BenchStats;
+  /** 放大以后的相机 */
+  readonly camera: BenchCamera;
+  readonly zoomed: ZoomStep;
+  /** 放大后没稳定时不做 */
+  readonly nudged: ZoomStep | null;
 }
 
 /** 画质那一遍：截图的文件名、静止观察的结果 */

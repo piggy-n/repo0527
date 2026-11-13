@@ -131,6 +131,9 @@ export async function startMapLibre({ session, container, params, splatCount, on
           raisedPredicted: state.raisedPredicted,
           cullWindow: longestWindow(tilesets.map(item => item.cullWindow))
         },
+        levels: Object.entries(state.tilesets).flatMap(([model, item]) =>
+          item.levels.map(({ depth, loads, averageBytes }) => ({ model, depth, loads, averageMB: averageBytes / MB }))
+        ),
         splats: splatReadings(state.splatBudget, Object.values(state.splats))
       };
     },

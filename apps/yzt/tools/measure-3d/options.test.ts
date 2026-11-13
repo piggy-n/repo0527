@@ -60,9 +60,11 @@ describe('parseOptions', () => {
     expect(() => parseOptions(['--cache-gb', 'big'])).toThrow('--cache-gb');
   });
 
-  it('上传后释放贴图的对照：默认不加', () => {
+  it('上传后释放贴图的对照、定位后放大一级：默认不加', () => {
     expect(parseOptions([]).releaseImages).toBe(false);
     expect(parseOptions(['--release-images']).releaseImages).toBe(true);
+    expect(parseOptions([]).zoomIn).toBe(false);
+    expect(parseOptions(['--zoom-in']).zoomIn).toBe(true);
   });
 
   it('泼溅的预算：默认 300 万、600 万、1000 万，3m、3e6、3000000 都认，重复的只留一个', () => {

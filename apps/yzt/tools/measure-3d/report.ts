@@ -1,6 +1,7 @@
 import type { BenchStats, BudgetReadings, DetailReadings, SceneSample, PhaseResult, SplatReadings, TileQueues } from './bench-api.ts';
 import type { ProfileSummary } from './profile.ts';
-import type { MeasureResults, QualityResult, RunResult, RunStatus, ShotPair } from './results.ts';
+import type { MeasureResults, QualityResult, RunResult, RunStatus, ShotPair, ZoomResult, ZoomStep } from './results.ts';
+import { modelName } from './run-notes.ts';
 import { DEFAULT_VARIANT } from './scenes.ts';
 import type { SharpnessComparison } from './sharpness.ts';
 import { allPassed, type CheckRow, fillSampleAt, MACHINE_DRIFT_RATIO, machineDrift, median, sceneChecks } from './verdict.ts';
@@ -411,6 +412,100 @@ function fillLines(perf: readonly { readonly label: string; readonly runs: reado
   ];
 }
 
+// ---------- 定位后放大一级（--zoom-in） ----------
+
+// 放大后比移开再移回的屏幕误差高这么多，算放大后锁粗了：同一个相机，只有按估计放宽锁住时才差这么多
+export const ZOOM_COARSER_RATIO = 1.05;
+
+/** 放大后锁粗了吗：同一个相机，放大后的屏幕误差比移开再移回的高 5% 以上；没有移回来的读数时为 null */
+export function zoomedCoarser(zoom: ZoomResult | undefined): boolean | null {
+  const nudged = zoom?.nudged;
+  if (!zoom || !nudged) {
+    return null;
+  }
+  return zoom.zoomed.at.errorTarget > nudged.at.errorTarget * ZOOM_COARSER_RATIO;
+}
+
+const zoomRunOf = (results: MeasureResults, scene: string, variant: string) =>
+  results.runs.find(run => run.scene === scene && run.variant === variant && run.kind === 'zoom');
+
+// 屏幕误差、锁定，和 since 以来新增的放宽的帧 装满 / 估计（读数是累计的）
+function zoomReading(at: BenchStats | undefined, since: BenchStats | undefined): string {
+  if (!at) {
+    return '—';
+  }
+  const added = (read: (budget: BudgetReadings) => number) => read(at.budget) - (since ? read(since.budget) : 0);
+  return `${number(at.errorTarget)}，${at.locked ? '锁定' : '没锁'}，${integer(added(budget => budget.raisedFull))} / ${integer(added(budget => budget.raisedPredicted))}`;
+}
+
+const budgetReading = (at: BenchStats | undefined) =>
+  at ? `${integer(at.budget.demandMB)} / ${integer(at.budget.limitMB)} / ${integer(at.cacheMB)}` : '—';
+
+function coarserCell(run: RunResult): string {
+  const coarser = zoomedCoarser(run.zoom);
+  if (coarser === null) {
+    return '算不出（没有移回来的读数）';
+  }
+  return coarser ? '**是：放大后比移开再移回的粗**' : '否';
+}
+
+const ZOOM_METRICS: readonly (readonly [string, (run: RunResult) => string])[] = [
+  ['状态', run => STATUS[run.status]],
+  ['首屏：屏幕误差，锁定，放宽的帧 装满 / 估计（加载到稳定）', run => zoomReading(run.zoom?.before, undefined)],
+  ['放大后补齐（秒）', run => number((run.zoom?.zoomed.settle.ms ?? Number.NaN) / 1000)],
+  ['放大后：屏幕误差，锁定，放宽的帧 装满 / 估计（放大以后新增）', run => zoomReading(run.zoom?.zoomed.at, run.zoom?.before)],
+  ['放大后：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块）', run => detailCell([run], item => item.zoom?.zoomed.at.detail)],
+  ['放大后：需求 / 缓存上限 / 缓存（MB）', run => budgetReading(run.zoom?.zoomed.at)],
+  ['移开再移回：屏幕误差，锁定，放宽的帧 装满 / 估计（移开以后新增）', run => zoomReading(run.zoom?.nudged?.at, run.zoom?.zoomed.at)],
+  ['移开再移回：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块）', run => detailCell([run], item => item.zoom?.nudged?.at.detail)],
+  ['放大后锁粗了吗', coarserCell]
+];
+
+const ZOOM_TITLE =
+  '**定位后放大一级（--zoom-in）：** 加载稳定后放大一级、等到稳定，再往东移开一个视口高度又移回、等到稳定。' +
+  '同一个相机，放大后比移回来的屏幕误差高 5% 以上，是放大后按估计放宽锁粗了（用户看到的"放大 → 不请求，动一下相机才恢复"）；' +
+  '两次一样，是这一档在这个视角本来就要放宽，原因看"放宽的帧 装满 / 估计"';
+
+function zoomLines(results: MeasureResults, scene: MeasureResults['scenes'][number]): string[] {
+  const measured = sceneVariants(results, scene).flatMap(({ id, label }) => {
+    const run = zoomRunOf(results, scene.id, id);
+    return run ? [{ label, run }] : [];
+  });
+  if (measured.length === 0) {
+    return [];
+  }
+  return [
+    ZOOM_TITLE,
+    '',
+    table(['指标', ...measured.map(item => item.label)], ZOOM_METRICS.map(([name, read]) => [name].concat(measured.map(item => read(item.run))))),
+    ''
+  ];
+}
+
+// 一份读数里所有层完成的次数
+const totalLoads = (stats: BenchStats) => stats.levels.reduce((sum, level) => sum + level.loads, 0);
+
+/** 每一级瓦片的实际大小：数据本身的性质，各方案一样，取这个场景完成次数最多的那份读数 */
+function levelLines(runs: readonly RunResult[]): string[] {
+  const readings = runs
+    .flatMap(run => [run.atStable, run.atRecovered, run.zoom?.zoomed.at, run.zoom?.nudged?.at])
+    .filter(stats => stats !== undefined);
+  const richest = readings.reduce<BenchStats | null>((best, stats) => (best && totalLoads(best) >= totalLoads(stats) ? best : stats), null);
+  if (!richest || richest.levels.length === 0) {
+    return [];
+  }
+  return [
+    '**每一级瓦片的实际大小：** 取这个场景完成次数最多的那份读数，淘汰后又加载的再算一次。引擎按它估计还要加载的字节，一层完成 3 块之前不估计；' +
+      '粗的层每块比细的大得多时，旧版本开始加载、放大时按粗的估计细的，按估计放宽锁粗（2026-11-12 修）',
+    '',
+    table(
+      ['模型', '层（根是 0）', '完成的次数', '平均（MB）'],
+      richest.levels.map(level => [modelName(level.model), String(level.depth), integer(level.loads), number(level.averageMB, 2)])
+    ),
+    ''
+  ];
+}
+
 const METHOD = `- **都是生产代码：** 真实的 \`MapSession\`、\`MapLibreView\` + \`ThreeSceneRenderer\`，生产模式构建；页面只有底图和模型。按包分块，方便归因，运行的代码相同。
 - **冷启动：** 每遍一个新的浏览器进程和空的配置目录，服务端发 \`Cache-Control: no-store\`。操作系统的文件缓存控制不了。
 - **模型来自本机服务（设了 \`YZT_3DT_PROXY\` 时除外）：** 没有网络延迟，"到稳定"是下限；主线程的解析成本不受影响。
@@ -534,7 +629,7 @@ export function renderReport(results: MeasureResults): string {
       ),
       ''
     );
-    parts.push(...fillLines(perf));
+    parts.push(...fillLines(perf), ...zoomLines(results, scene), ...levelLines(runs.filter(run => run.scene === scene.id)));
     parts.push('**GPU 耗时随上传量（第一遍飞行）：**', '');
     for (const item of perf) {
       const uploads = uploadTable(item.runs, 'flightCold');
@@ -685,6 +780,9 @@ ${pairImages(pair, 'h4', '产品默认值', '产品默认值', '这一档')}`;
   return `<h3>和产品默认值比（同一相机）</h3>\n${body}`;
 }
 
+// 定位后放大一级的截图说明：屏幕误差和锁定
+const zoomCaption = (title: string, step: ZoomStep) => `${title}：屏幕误差 ${number(step.at.errorTarget)}${step.at.locked ? '，锁定' : ''}`;
+
 /** quality.html：每个场景每个跑了画质的方案一节，飞行前后的截图，缓存上限的各档再和产品默认值比 */
 export function renderQualityPage(results: MeasureResults): string {
   const shotsOf = (scene: string, variant: string): ShotsOfRun | undefined => {
@@ -713,6 +811,28 @@ ${versusDefaultPart(own.shots, own.status, fallback, compared?.versusDefault ?? 
       ];
     })
   );
+  // 定位后放大一级：放大后和移开再移回的两张并排，同一个相机
+  const zoomSections = results.scenes.flatMap(scene =>
+    sceneVariants(results, scene).flatMap(({ id, label }) => {
+      const zoom = zoomRunOf(results, scene.id, id)?.zoom;
+      if (!zoom) {
+        return [];
+      }
+      const nudged = zoom.nudged ? figure(zoomCaption('移开再移回', zoom.nudged), zoom.nudged.shot) : '';
+      return [
+        `<section>
+<h2>${scene.title}，${label}：定位后放大一级</h2>
+<div class="pair">${figure(zoomCaption('放大后', zoom.zoomed), zoom.zoomed.shot)}${nudged}</div>
+</section>`
+      ];
+    })
+  );
+  const zoomPart =
+    zoomSections.length > 0
+      ? `<h1>定位后放大一级</h1>
+<p>同一个相机：左边是放大一级后稳定的，右边是移开又移回后稳定的。左边明显更糊，是放大后按估计放宽锁粗了。</p>
+${zoomSections.join('\n')}`
+      : '';
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><title>飞行前后的截图</title>
 <style>
@@ -723,6 +843,7 @@ section{margin-bottom:48px}
 <h1>飞行前后的截图</h1>
 <p>每个场景同一相机的两张截图：稳定后，和飞一圈回来稳定后；比较缓存上限时每一档一节，再拿产品默认值稳定后的那张和这一档的比。清晰度怎样算：每张图先缩小一半（去掉像素级的锯齿），分成 16×9 格，每格算对数亮度的梯度能量，再除以缩小 4 倍后的梯度能量。取对数和比值，亮度、对比度整片的变化就不算糊，糊是高频丢失。比值是飞一圈回来除以飞行前、产品默认值除以这一档，只比模型占到四分之一以上的格子。数字只是提醒哪里可能糊，<b>结论以人看图为准</b>，写进 manual.md。</p>
 ${sections.join('\n') || '<p>还没有结果。</p>'}
+${zoomPart}
 </body></html>
 `;
 }

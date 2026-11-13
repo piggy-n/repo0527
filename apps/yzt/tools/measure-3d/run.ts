@@ -18,9 +18,9 @@ import { type BrowserProcesses, browserProcesses, launchBrowser, type LaunchedBr
 import type { Options } from './options.ts';
 import { type CpuProfile, summarizeProfile } from './profile.ts';
 import type { ProxyStats } from './server.ts';
-import type { QualityResult, RunResult, SettleResult } from './results.ts';
+import type { QualityResult, RunResult, SettleResult, ZoomStep } from './results.ts';
 import { runNotes } from './run-notes.ts';
-import { aerialFlight, type Run } from './scenes.ts';
+import { aerialFlight, nudge, type Run, zoomedIn } from './scenes.ts';
 import type { SplatModel } from './splat-models.ts';
 import { blurEvents, type SharpnessGrid } from './sharpness.ts';
 
@@ -33,6 +33,9 @@ const QUICK = { warmupMs: 300, staticMs: 2000, flightMs: 4000, settleMs: 8000, a
 const MIN_MODEL_COVERAGE_PCT = 0.2;
 const GL_ERROR = /GL_INVALID|GL_OUT_OF_MEMORY|CONTEXT_LOST|too many errors/i;
 const STABLE_STREAK = 5;
+// 定位后放大一级：放大像滚轮放大一级那么快；移开再移回像用户动一下相机
+const ZOOM_MS = 600;
+const NUDGE_MS = 2000;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -115,6 +118,9 @@ function classify(result: RunResult): void {
   }
   if ((result.flightCold?.fenceTimeouts ?? 0) > 0) {
     result.notes.push('有等 GPU 超过 15 秒的帧，帧时间可能失真');
+  }
+  if (result.zoom && !result.zoom.zoomed.settle.stable) {
+    result.notes.push('放大一级以后没等到稳定，没有移开再移回');
   }
   result.notes.push(...invalid);
   if (result.status !== 'failed') {
@@ -201,12 +207,14 @@ const stats = (page: Page) => call<BenchStats>(page, 'window.bench.stats()');
 const flight = (page: Page, keyframes: readonly BenchCamera[], ms: number) =>
   call<PhaseResult>(page, `window.benchProbe.flight(${JSON.stringify(keyframes)}, ${ms})`);
 
-// 飞行的路径：各个方案要相同，所以按场景的相机算；模型只在服务器上时中心是建议相机给的，只能读回来
-async function flightPath(page: Page, { scene }: Run, options: Options): Promise<BenchCamera[]> {
+// 场景的相机：各个方案要相同，所以按场景的写法算；模型只在服务器上时中心是建议相机给的，只能读回来
+async function sceneCamera(page: Page, { scene }: Run): Promise<BenchCamera> {
   const { center } = scene.camera;
-  const camera = center ? { ...scene.camera, center } : await call<BenchCamera>(page, 'window.bench.camera()');
-  return aerialFlight(camera, options.viewport.height);
+  return center ? { ...scene.camera, center } : call<BenchCamera>(page, 'window.bench.camera()');
 }
+
+const flightPath = async (page: Page, run: Run, options: Options): Promise<BenchCamera[]> =>
+  aerialFlight(await sceneCamera(page, run), options.viewport.height);
 
 async function setModelVisible(page: Page, visible: boolean): Promise<void> {
   await call(page, `window.bench.setModelVisible(${visible})`);
@@ -367,6 +375,36 @@ async function runQuality(run: Run, ctx: RunContext, session: Session, result: R
   result.quality = quality;
 }
 
+// 定位后放大一级（用户看到的"勾选模型 → 自动定位 → 放大 → 不请求，动一下相机才恢复"）：加载稳定后放大一级，
+// 再移开又移回同一处。放大后比移回来的粗，就是放大后锁粗了。等稳定的上限用加载的：放大要加载新的一层
+async function runZoom(run: Run, ctx: RunContext, session: Session, result: RunResult): Promise<void> {
+  const times = ctx.options.quick ? QUICK : NORMAL;
+  const { page } = session;
+  const { loadTimeoutMs } = ctx.options;
+  const step = async (keyframes: readonly BenchCamera[], ms: number, suffix: string): Promise<ZoomStep> => {
+    const moved = await flight(page, keyframes, ms);
+    const settle = await waitSettled(page, moved.endedAt, loadTimeoutMs, times.afterSettleMs);
+    const at = await stats(page);
+    const shot = `shots/${fileName(run.id)}${suffix}.png`;
+    writeFileSync(join(ctx.outDir, shot), await screenshot(page));
+    return { settle, at, shot };
+  };
+  ctx.progress('加载');
+  await loadPage(run, ctx, session, result);
+  await call(page, `window.benchProbe.waitBasemap(${times.basemapMs})`);
+  const before = await stats(page);
+  const from = await sceneCamera(page, run);
+  const camera = zoomedIn(from);
+  ctx.progress('放大一级');
+  const zoomed = await step([from, camera], ZOOM_MS, '-zoomed');
+  let nudged: ZoomStep | null = null;
+  if (zoomed.settle.stable) {
+    ctx.progress('移开再移回');
+    nudged = await step(nudge(camera, ctx.options.viewport.height), NUDGE_MS, '-nudged');
+  }
+  result.zoom = { before, camera, zoomed, nudged };
+}
+
 async function runProfile(run: Run, ctx: RunContext, session: Session, result: RunResult): Promise<void> {
   const times = ctx.options.quick ? QUICK : NORMAL;
   const { page, cdp } = session;
@@ -411,7 +449,7 @@ export async function runOnce(run: Run, ctx: RunContext): Promise<RunResult> {
   try {
     session = await open(result, ctx);
     const opened = session;
-    const body = run.kind === 'perf' ? runPerf : run.kind === 'quality' ? runQuality : runProfile;
+    const body = { perf: runPerf, quality: runQuality, profile: runProfile, zoom: runZoom }[run.kind];
     await Promise.race([
       body(run, ctx, opened, result),
       new Promise<never>((_, reject) => {

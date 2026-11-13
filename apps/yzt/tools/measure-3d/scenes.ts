@@ -46,8 +46,8 @@ export const DEFAULT_VARIANT = 'maplibre';
 export const takesQualityRun = (variant: Variant): boolean =>
   !variant.releaseImages && (variant.id === DEFAULT_VARIANT || variant.cacheGB !== undefined);
 
-/** 一遍：perf 量帧时间和加载，quality 拍画面，profile 带 CPU 采样 */
-export type RunKind = 'perf' | 'quality' | 'profile';
+/** 一遍：perf 量帧时间和加载，quality 拍画面，profile 带 CPU 采样，zoom 是定位后放大一级（--zoom-in） */
+export type RunKind = 'perf' | 'quality' | 'profile' | 'zoom';
 
 export interface Run {
   readonly id: string;
@@ -178,10 +178,17 @@ function cullVariant(cullWindow: number | 'auto' | null): Pick<Variant, 'id' | '
 }
 
 /**
- * 要跑的所有遍：每个场景每个方案 repeat 遍 perf；产品的默认值多跑一遍画质和一遍采样，缓存上限的各档多跑一遍画质。
- * 泼溅场景的方案是 splatList：每个预算多跑一遍采样（加载新分块时卡不卡），不跑画质
+ * 要跑的所有遍：每个场景每个方案 repeat 遍 perf；产品的默认值多跑一遍画质和一遍采样，缓存上限的各档多跑一遍画质，
+ * zoomIn 时跑画质的方案再多跑一遍定位后放大一级。泼溅场景的方案是 splatList：每个预算多跑一遍采样（加载新分块时卡不卡），
+ * 不跑画质
  */
-export function buildRuns(scenes: readonly Scene[], list: readonly Variant[], repeat: number, splatList: readonly Variant[] = []): Run[] {
+export function buildRuns(
+  scenes: readonly Scene[],
+  list: readonly Variant[],
+  repeat: number,
+  splatList: readonly Variant[] = [],
+  zoomIn = false
+): Run[] {
   const runs: Run[] = [];
   for (let index = 0; index < repeat; index++) {
     for (const scene of scenes) {
@@ -198,6 +205,9 @@ export function buildRuns(scenes: readonly Scene[], list: readonly Variant[], re
       const splatScene = scene.splats.length > 0;
       if (!splatScene && takesQualityRun(variant)) {
         runs.push({ id: `${scene.id}/${variant.id}/quality`, scene, variant, kind: 'quality', repeat: 0 });
+        if (zoomIn) {
+          runs.push({ id: `${scene.id}/${variant.id}/zoom`, scene, variant, kind: 'zoom', repeat: 0 });
+        }
       }
       if (splatScene || variant.id === DEFAULT_VARIANT) {
         runs.push({ id: `${scene.id}/${variant.id}/profile`, scene, variant, kind: 'profile', repeat: 0 });
@@ -212,9 +222,14 @@ function offset([lng, lat]: readonly [number, number], east: number, north: numb
   return [lng + east / (111320 * Math.cos(lat * radians)), lat + north / 110950];
 }
 
+// 视口的高度在地面上是多少米（按中心的纬度）
+const viewSpan = ({ center, zoom }: BenchCamera, viewportHeight: number) =>
+  (METERS_PER_PIXEL_AT_ZOOM_0 * Math.cos((center[1] * Math.PI) / 180) * viewportHeight) / 2 ** zoom;
+
 /** 飞一圈回到原点：平移、缩放、俯仰都变，方位转满 360° */
-export function aerialFlight({ center, zoom, pitch, bearing }: BenchCamera, viewportHeight: number): BenchCamera[] {
-  const span = (METERS_PER_PIXEL_AT_ZOOM_0 * Math.cos((center[1] * Math.PI) / 180) * viewportHeight) / 2 ** zoom;
+export function aerialFlight(camera: BenchCamera, viewportHeight: number): BenchCamera[] {
+  const { center, zoom, pitch, bearing } = camera;
+  const span = viewSpan(camera, viewportHeight);
   // 俯视时俯仰只往大的方向变：负的俯角没有意义
   const tilt = (delta: number) => Math.max(0, pitch + delta);
   return [
@@ -224,6 +239,17 @@ export function aerialFlight({ center, zoom, pitch, bearing }: BenchCamera, view
     { center: offset(center, -0.2 * span, -0.35 * span), zoom: zoom + 0.3, pitch: tilt(5), bearing: bearing + 270 },
     { center, zoom, pitch, bearing: bearing + 360 }
   ];
+}
+
+/** 定位后放大一级：中心、俯仰、方位不变 */
+export const zoomedIn = (camera: BenchCamera): BenchCamera => ({ ...camera, zoom: camera.zoom + 1 });
+
+/**
+ * 移开再移回同一个相机，像用户动一下相机：往东走一个视口高度（地面上）再回来。相机离地约是它的 1.5 × cos(俯角) 倍，
+ * 走的路远超高度的 25%，锁定一定解开、停下后重新判断（ADR 0147 第 5 节的姿态锁定）
+ */
+export function nudge(camera: BenchCamera, viewportHeight: number): BenchCamera[] {
+  return [camera, { ...camera, center: offset(camera.center, viewSpan(camera, viewportHeight), 0) }, camera];
 }
 
 /** --at：场景换成这个相机，模型和方案不变；id 不变，标题注明（结果的 meta.at 里有相机） */
