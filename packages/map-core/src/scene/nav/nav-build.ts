@@ -1,6 +1,6 @@
 import { abortReason, WorkerHost, type WorkerEndpoint } from '@mx/utils';
 import type { PreparedTileset } from '../prepare-tileset';
-import { type NavOptions, SCAN_NAV_OPTIONS } from './nav-data';
+import { type NavGridData, type NavOptions, SCAN_NAV_OPTIONS } from './nav-data';
 import { type NavFrame, navigationFrame, type Point3 } from './nav-frame';
 import { NavGrid } from './nav-grid';
 import { navigationLeaves, rootTransform } from './nav-leaves';
@@ -135,9 +135,32 @@ export function selectScanMeshes(
   return { meshes: picked, partial: true };
 }
 
+// 出生点附近找主区域的范围（米）：清单的出生点是脚下的地板，贴墙时最近的能站的格子也在这以内
+const SPAWN_SEARCH = 5;
+
+/**
+ * 只留一个区域能站（ADR 0156 第 1 节）：不要求遮盖时屋顶、展柜顶也成了能站的大块地面，点过去会闪切上去，平面图上也盖住屋里。
+ * 留出生点所在的区域，没有出生点（或附近没有能站的）时留最大的；其余的标成站不住
+ */
+export function keepMainRegion(data: NavGridData, near: Point3 | null): NavGridData {
+  const grid = new NavGrid(data);
+  const found = near && grid.nearestWalkable(near[0], near[1], near[2], { maxRadius: SPAWN_SEARCH, tolerance: 1 });
+  let main = found ? grid.componentOf(found.index) : 0;
+  if (!main) {
+    data.sizes.forEach((size, id) => {
+      if (id > 0 && size > data.sizes[main]) {
+        main = id;
+      }
+    });
+  }
+  const labels = data.labels.map(label => (label === main ? label : 0));
+  const sizes = data.sizes.map((size, id) => (id === main ? size : 0));
+  return { ...data, labels, sizes };
+}
+
 /**
  * 由碰撞网格构建扫描模型（LCC2）的导航网格（ADR 0156 第 2 节）：挑网格、主线程下载、Worker 里解析 PLY、构建、算区域，
- * 参数默认 SCAN_NAV_OPTIONS。中止的规则同 buildNavigation
+ * 参数默认 SCAN_NAV_OPTIONS，只留出生点所在的区域（keepMainRegion）。中止的规则同 buildNavigation
  */
 export async function buildScanNavigation(
   { meshes, frame, near }: ScanSource,
@@ -168,7 +191,7 @@ export async function buildScanNavigation(
     { meshes: buffers, options: { ...SCAN_NAV_OPTIONS, ...options } },
     { signal, transfer: buffers }
   );
-  return { grid: new NavGrid(data), frame, partial: selection.partial };
+  return { grid: new NavGrid(keepMainRegion(data, near)), frame, partial: selection.partial };
 }
 
 // 最多同时下载 DOWNLOADS 个，结果和 urls 一一对应；一个失败就停下其余的

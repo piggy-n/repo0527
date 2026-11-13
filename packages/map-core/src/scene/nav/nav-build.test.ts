@@ -2,11 +2,15 @@
 import { abortReason, serveWorker } from '@mx/utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PreparedTileset } from '../prepare-tileset';
-import { buildNavigation, buildScanNavigation, type NavBuildProgress, type ScanMesh } from './nav-build';
-import { splatNavigationFrame, toEcef, translation } from './nav-frame';
+import { buildNavGrid } from './heightfield';
+import { buildNavigation, buildScanNavigation, keepMainRegion, type NavBuildProgress, type ScanMesh } from './nav-build';
+import { SCAN_NAV_OPTIONS } from './nav-data';
+import { type Point3, splatNavigationFrame, toEcef, translation } from './nav-frame';
 import { b3dmOf, floorQuad, plyOf, triangles } from './nav-testing';
 import { navWorkerHandlers } from './nav-worker-handlers';
 import type { NavWorkerProtocol } from './nav-worker-protocol';
+import { NavGrid } from './nav-grid';
+import { labelRegions } from './regions';
 
 // 原点在苏州站附近、局部系是东北天的根节点
 function enuAt(lng: number, lat: number): number[] {
@@ -203,5 +207,30 @@ describe('buildScanNavigation', () => {
       )
     ).rejects.toThrow('模型没有碰撞网格');
     expect(createWorker).not.toHaveBeenCalled();
+  });
+});
+
+describe('keepMainRegion', () => {
+  // 12 × 12 米的地面，旁边一块 8 × 8 米、高 5 米的屋顶：不要求遮盖时两块都能站
+  const data = labelRegions(
+    buildNavGrid([triangles(floorQuad(0, 0, 12, 12, 0), floorQuad(20, 0, 28, 8, 5))], SCAN_NAV_OPTIONS),
+    SCAN_NAV_OPTIONS
+  );
+
+  it('只留出生点所在的区域，其余的站不住；出生点贴墙也找得到', () => {
+    expect(new NavGrid(data).componentAt(24, 4, 5)).toBeGreaterThan(0);
+    const grid = new NavGrid(keepMainRegion(data, [27.95, 4, 5]));
+    expect(grid.componentAt(24, 4, 5)).toBeGreaterThan(0);
+    expect(grid.componentAt(6, 6, 0)).toBe(0);
+    expect(grid.componentArea(grid.componentAt(24, 4, 5))).toBeGreaterThan(50);
+  });
+
+  it('没有出生点、出生点附近没有能站的地方时留最大的', () => {
+    const nowhere: Point3 = [100, 100, 0];
+    for (const near of [null, nowhere]) {
+      const grid = new NavGrid(keepMainRegion(data, near));
+      expect(grid.componentAt(6, 6, 0)).toBeGreaterThan(0);
+      expect(grid.componentAt(24, 4, 5)).toBe(0);
+    }
   });
 });

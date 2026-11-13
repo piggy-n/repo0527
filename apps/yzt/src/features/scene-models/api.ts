@@ -102,3 +102,35 @@ export function fetchSceneManifest(signal?: AbortSignal) {
 export function fetchTilesetJson(url: string, signal: AbortSignal) {
   return http.get(url, { schema: z.unknown(), envelope: false, signal, silent: true });
 }
+
+// LCC2 索引（.lcc2，ADR 0156 第 2 节）只取碰撞网格那部分：节点的包围盒（LCC2 的局部系），带网格的节点在 data.mesh
+// 里写着根节点 meshFiles 的序号和面数；其余字段（泼溅的分块、LOD）由 map-three 的库读
+const vec3Schema = z.tuple([z.number(), z.number(), z.number()]);
+
+interface Lcc2Node {
+  boundingBox: { min: [number, number, number]; max: [number, number, number] };
+  data?: { mesh?: { name: number; face: number } };
+  child?: Record<string, Lcc2Node>;
+}
+
+const meshRefSchema = z.object({ name: z.number().int().nonnegative(), face: z.number().int().nonnegative() });
+
+const lcc2NodeSchema: z.ZodType<Lcc2Node> = z.lazy(() =>
+  z.object({
+    boundingBox: z.object({ min: vec3Schema, max: vec3Schema }),
+    data: z.object({ mesh: meshRefSchema.optional() }).optional(),
+    child: z.record(z.string(), lcc2NodeSchema).optional()
+  })
+);
+
+// 有的导出开头带 BOM（ADR 0149 第 3 节）：浏览器按 UTF-8 解码响应时已经去掉，这里不用再处理（测试里有带 BOM 的）
+const lcc2IndexSchema = z.object({
+  root: z.object({ meshFiles: z.array(nonEmpty).optional() }).and(lcc2NodeSchema)
+});
+
+export type Lcc2Index = z.infer<typeof lcc2IndexSchema>;
+
+/** 读 LCC2 的索引（碰撞网格那部分）；失败由步行操作条显示 */
+export function fetchLcc2Index(url: string, signal: AbortSignal) {
+  return http.get(url, { schema: lcc2IndexSchema, envelope: false, signal, silent: true });
+}

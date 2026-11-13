@@ -20,11 +20,9 @@ import { type NavGridResult, useNavGridBuild } from './useNavGridBuild';
 import { WalkMapPreview } from './WalkMapPreview';
 import styles from './DevNavGridPage.module.scss';
 
-// 导航网格的实测页（ADR 0085 第 6 节）：构建清单里模型的导航网格，按楼层看正北朝上、按区域着色的平面图，叠加预置路线；
+// 导航网格的实测页（ADR 0085 第 6 节）：构建清单里模型（瓦片集和高斯泼溅，ADR 0156）的导航网格，按楼层看正北朝上、按区域着色的平面图，叠加预置路线；
 // 另有步行地图（小地图、完整地图）的组件预览（ADR 0087）
 
-/** 平面图每像素 0.2 米，同网格的格子 */
-const RES = 0.2;
 // 路线的颜色是按数据画的，不走 CSS 令牌
 const ROUTE_COLORS = ['#2278BE', '#16A34A', '#D9437F', '#C79212'];
 const ZOOMS = [
@@ -43,27 +41,32 @@ interface FloorImage {
 const rgb = ([r, g, b]: Rgb) => `rgb(${r} ${g} ${b})`;
 const meters = (value: number) => `${value.toFixed(2)} 米`;
 
-// 这一层画成 0.2 米一像素的图，范围由这一层的地面范围旋转到正北朝上得到
+// 平面图一像素一格：瓦片集 0.2 米，高斯泼溅 0.1 米
+const resOf = (result: NavGridResult) => result.navigation.grid.meta.cellSize;
+
+// 这一层画成一像素一格的图，范围由这一层的地面范围旋转到正北朝上得到
 function floorImage(result: NavGridResult, level: NavLevel): FloorImage | null {
   const { grid, frame } = result.navigation;
+  const res = resOf(result);
   const bounds = levelBounds(grid, level);
   if (!bounds) {
     return null;
   }
   const { left, top, right, bottom } = planeBounds(bounds, frame.north);
-  const image = new ImageData(Math.ceil((right - left) / RES), Math.ceil((top - bottom) / RES));
-  renderFloorMap(grid, result.plan, level, image, { left, top, res: RES, north: frame.north });
+  const image = new ImageData(Math.ceil((right - left) / res), Math.ceil((top - bottom) / res));
+  renderFloorMap(grid, result.plan, level, image, { left, top, res, north: frame.north });
   return { left, top, image };
 }
 
 // 路线在这一层上的几段（像素坐标）：两端都在这一层的高度范围里才画
 function routeRuns(result: NavGridResult, model: SceneModel, level: NavLevel, floor: FloorImage) {
   const { frame } = result.navigation;
+  const res = resOf(result);
   return model.routes.map((route, index) => {
     const points = route.path.map(([lng, lat, height]) => {
       const [x, y, z] = frame.toLocal(lng, lat, height);
       const [east, north] = localToPlane(x, y, frame.north);
-      return { px: (east - floor.left) / RES, py: (floor.top - north) / RES, z };
+      return { px: (east - floor.left) / res, py: (floor.top - north) / res, z };
     });
     const runs: (typeof points)[] = [];
     let run: typeof points = [];
@@ -89,8 +92,7 @@ export const DevNavGridPage = defineComponent({
   name: 'DevNavGridPage',
   setup() {
     const query = useSceneModelsQuery(true);
-    // 只看瓦片集：高斯泼溅（ADR 0149）没有瓦片集
-    const models = computed(() => (query.data.value ?? []).filter(model => model.splat === null));
+    const models = computed(() => query.data.value ?? []);
     const selectedId = ref('');
     const selected = computed(() => models.value.find(model => model.id === selectedId.value) ?? null);
     // 清单已在查询缓存里时立即选上第一个
@@ -145,10 +147,8 @@ export const DevNavGridPage = defineComponent({
     );
 
     const startBuild = () => {
-      const model = selected.value;
-      const effect = model?.effects.find(item => item.id === model.defaultEffect) ?? model?.effects[0];
-      if (model && effect) {
-        void build(model.id, effect.url);
+      if (selected.value) {
+        void build(selected.value);
       }
     };
 
@@ -161,8 +161,8 @@ export const DevNavGridPage = defineComponent({
         return;
       }
       const rect = event.currentTarget.getBoundingClientRect();
-      const east = image.left + ((event.clientX - rect.left) / scale.value) * RES;
-      const north = image.top - ((event.clientY - rect.top) / scale.value) * RES;
+      const east = image.left + ((event.clientX - rect.left) / scale.value) * resOf(current);
+      const north = image.top - ((event.clientY - rect.top) / scale.value) * resOf(current);
       const { grid, frame } = current.navigation;
       const [x, y] = planeToLocal(east, north, frame.north);
       const cell = grid.cellOf(x, y);
@@ -186,7 +186,7 @@ export const DevNavGridPage = defineComponent({
         if (!progress) {
           return '整理索引…';
         }
-        return progress.stage === 'download' ? `下载瓦片 ${progress.done} / ${progress.total}` : '在 Worker 里构建…';
+        return progress.stage === 'download' ? `下载 ${progress.done} / ${progress.total}` : '在 Worker 里构建…';
       }
       if (current.kind === 'failed') {
         return (
@@ -195,11 +195,14 @@ export const DevNavGridPage = defineComponent({
           </span>
         );
       }
-      const { navigation, levels, plan, elapsed, tiles } = current.result;
+      const { navigation, levels, plan, elapsed, files, partial } = current.result;
+      const fileCount = selected.value?.splat
+        ? `${files} 个碰撞网格${partial ? '（只读了出生点附近）' : ''}`
+        : `${files} 个瓦片`;
       const { meta } = navigation.grid;
       const regions = [...plan.regions.values()].filter(region => region.color).length;
       return (
-        `${tiles} 个瓦片，耗时 ${(elapsed / 1000).toFixed(1)} 秒；网格 ${meta.width} × ${meta.height}，` +
+        `${fileCount}，耗时 ${(elapsed / 1000).toFixed(1)} 秒；网格 ${meta.width} × ${meta.height}，` +
         `地板格 ${meta.floorCells}；${levels.length} 层，${plan.regions.size} 个区域（${regions} 个分到颜色）；` +
         `局部 y 轴方位 ${navigation.frame.north.toFixed(2)}°`
       );
@@ -287,7 +290,7 @@ export const DevNavGridPage = defineComponent({
           <div class={styles.marks}>
             <span>北 ↑</span>
             <span class={styles.scaleBar}>
-              <i style={{ width: `${(barMeters / RES) * scale.value}px` }} />
+              <i style={{ width: `${(barMeters / resOf(current)) * scale.value}px` }} />
               {barMeters} 米
             </span>
           </div>
