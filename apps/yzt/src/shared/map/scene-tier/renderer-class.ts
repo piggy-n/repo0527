@@ -1,5 +1,5 @@
-// 按 WebGL 报的渲染器名字分软件渲染、集显：测量工具用它提醒，ADR 0155 第 3 节的 auto 也按这个规则判断（实现时搬进 app 的档位模块，
-// 工具改成导入它）。Windows 上 ANGLE 报的是"ANGLE (厂商, 驱动里的设备名 (0x设备号) Direct3D11 vs_5_0 ps_5_0, D3D11)"，
+// 按 WebGL 报的渲染器名字分软件渲染、集显：ADR 0155 第 3 节的 auto 按它定档，measure:3d 也导入它提醒（所以不导入别的模块）。
+// Windows 上 ANGLE 报的是"ANGLE (厂商, 驱动里的设备名 (0x设备号) Direct3D11 vs_5_0 ps_5_0, D3D11)"，
 // 名单和名字的来源（哪些见过、哪些是推测）见 docs/config/scene-tier.md 的"集显的名字"
 
 /** 软件渲染的标志；硬件名字里不会有这些 */
@@ -19,4 +19,9 @@ const OTHER_INTEGRATED = /adreno|apple m\d|mali/i;
 /** 集显：在名单里的才算 */
 export function isIntegratedRenderer(renderer: string): boolean {
   return INTEL_INTEGRATED.test(renderer) || AMD_INTEGRATED.test(renderer) || OTHER_INTEGRATED.test(renderer);
+}
+
+/** auto 的档位：软件渲染、集显给低，名单以外的（包括读不到型号）给标准，永远不自动给高 */
+export function autoTier(renderer: string): 'low' | 'standard' {
+  return SOFTWARE_RENDERER.test(renderer) || isIntegratedRenderer(renderer) ? 'low' : 'standard';
 }

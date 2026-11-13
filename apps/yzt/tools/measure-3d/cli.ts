@@ -10,7 +10,7 @@ import { launchBrowser, listAdapters, probeRenderer } from './browser.ts';
 import { runLook } from './look.ts';
 import { HELP, type Options, parseOptions, uploadBudgets } from './options.ts';
 import { createRedactor } from './redact.ts';
-import { isIntegratedRenderer, SOFTWARE_RENDERER } from './renderer-class.ts';
+import { isIntegratedRenderer, SOFTWARE_RENDERER } from '../../src/shared/map/scene-tier/renderer-class.ts';
 import { renderManual, renderQualityPage, renderReport } from './report.ts';
 import type { Environment, MeasureResults, SceneQuality, ShotPair } from './results.ts';
 import { runOnce } from './run.ts';
