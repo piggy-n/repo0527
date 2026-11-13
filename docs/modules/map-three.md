@@ -60,7 +60,7 @@ MapLibre 里叠放只由图层顺序决定（6.12 源码）：第一个三维层
 
 ## 预加载（3C.2）
 
-同 ADR 0091 的做法：`MapCanvas` 在二维第一次画面稳定以后，把 `MAPLIBRE_ENGINE.loadRenderer` 交给 app 注入的 `MAP_RUNTIME_PRELOAD`，浏览器空闲时下载 map-three 和 three（约 120 KB + 585 KB，压缩前），省流量模式跳过。等待期间切到三维、画布卸载时作废。
+同 ADR 0091 的做法：`MapCanvas` 在二维第一次画面稳定以后，把注入的三维引擎的 `loadRenderer` 交给 app 注入的 `MAP_RUNTIME_PRELOAD`（app 换成只下载模块、读 `scene-tier.json` 的函数，崩溃检查留到真的打开三维，[config/scene-tier.md](../config/scene-tier.md)），浏览器空闲时下载 map-three 和 three（约 120 KB + 585 KB，压缩前），省流量模式跳过。等待期间切到三维、画布卸载时作废。
 
 ## 渲染
 
@@ -141,7 +141,7 @@ MapLibre 里叠放只由图层顺序决定（6.12 源码）：第一个三维层
 - **挂上、撤下：** 告诉 `shown(true / false)`（切二维、离开地图页、释放渲染器时是 false），app 按它记、删崩溃标记。
 - **丢上下文：** 丢掉瓦片（"上传"）以后调 `contextLost()`，app 降一档、经 `subscribe` 改预算，恢复以后按新的预算加载。
 - **改预算（`setBudget`）：** 缓存的两个上限、放宽判断用的上限、每帧上传、泼溅的总预算一起改，放宽的判断重新来。调小以后库在下一次更新时淘汰到新的大小，在用的淘汰不掉时按"停着估计超过上限 2 倍"放宽。`inspect()` 有现在的 `cacheBytes`、`cacheLimitBytes`、`uploadBytesPerFrame`、`splatBudget`。
-- 不给预算来源时（测量工具、测试）用构造参数，不写的是标准档。
+- 不给预算来源时（测量工具、测试）用构造参数，不写的是标准档；`measure:3d --tier` 按 app 的档位表给构造参数。
 
 ## 上传（3C.4，ADR 0147 第 5 节）
 
