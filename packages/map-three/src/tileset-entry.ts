@@ -150,7 +150,8 @@ export interface TilesetHit {
 
 // 屏幕误差上限的默认值；清单可以按模型改（docs/config/3dt-manifest.md）
 const ERROR_TARGET = 8;
-// 一层完成这么多块瓦片才估计这一层的大小：一块特别大的瓦片不能让需求一下子超过上限，放宽了就收不回来
+// 一层完成这么多块瓦片才估计这一层的大小：一块特别大的瓦片不能让需求一下子超过上限，放宽了就收不回来。
+// 之前不估计，也不借别的层的大小：开始加载时只有粗的几层有样本，粗瓦片大时细的一层按它估计远超实际，停着就放宽锁住
 const MIN_SIZE_SAMPLES = 3;
 // 瓦片还没有请求过：库的常量 UNLOADED，类型声明里没有导出
 const UNLOADED = 0;
@@ -195,7 +196,7 @@ export class TilesetEntry implements Disposable {
   #pinned = false;
   // 每一层完成的瓦片的总字节和块数，估计还要加载的字节用
   readonly #sizeByDepth = new Map<number, { bytes: number; count: number }>();
-  // 样本够了的最深一层：没到过的层按它估计
+  // 样本够了的最深一层：排不进队的瓦片不知道是哪一层，按它估计
   #deepestSized = -1;
   #loaded = 0;
   #unloaded = 0;
@@ -599,14 +600,10 @@ export class TilesetEntry implements Disposable {
     }
   }
 
-  // 这一层一块瓦片的估计大小；样本不够时按样本够了的最深一层，都不够时不估计
+  // 这一层一块瓦片的估计大小；样本不够时不估计
   #sizeAt(depth: number): number {
     const size = this.#sizeByDepth.get(depth);
-    if (size && size.count >= MIN_SIZE_SAMPLES) {
-      return size.bytes / size.count;
-    }
-    const deepest = this.#sizeByDepth.get(this.#deepestSized);
-    return deepest ? deepest.bytes / deepest.count : 0;
+    return size && size.count >= MIN_SIZE_SAMPLES ? size.bytes / size.count : 0;
   }
 
   #errorTarget(): number {

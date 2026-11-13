@@ -115,8 +115,9 @@ type Context = Awaited<ReturnType<typeof setup>>;
 interface BlockSizes {
   readonly blockTexture?: number;
   readonly fineTexture?: number;
-  /** 细的瓦片除了前 3 块，都晚这么久才下载完 */
+  /** 细的瓦片除了前 promptFine 块，都晚这么久才下载完 */
   readonly fineDelayMs?: number;
+  readonly promptFine?: number;
   /** 去掉所有 refine：按规范根节点默认 REPLACE，子节点沿用父节点的 */
   readonly withoutRefine?: boolean;
 }
@@ -134,7 +135,7 @@ function stripRefine(value: unknown): unknown {
 
 async function serveBlocks(
   path: string,
-  { blockTexture = BLOCK_TEXTURE, fineTexture = FINE_TEXTURE, fineDelayMs = 0, withoutRefine = false }: BlockSizes = {}
+  { blockTexture = BLOCK_TEXTURE, fineTexture = FINE_TEXTURE, fineDelayMs = 0, promptFine = 3, withoutRefine = false }: BlockSizes = {}
 ): Promise<string> {
   const [block, fine] = await Promise.all([texturedBoxGlb(20, blockTexture), texturedBoxGlb(10, fineTexture)]);
   const tileset = blockTileset(MODEL_AT, GRID);
@@ -151,7 +152,7 @@ async function serveBlocks(
     window.fetch = async (input, init) => {
       if (String(input instanceof Request ? input.url : input).endsWith(`/${path}/fine.glb`)) {
         fineRequests++;
-        if (fineRequests > 3) {
+        if (fineRequests > promptFine) {
           await new Promise(resolve => setTimeout(resolve, fineDelayMs));
         }
       }
@@ -343,7 +344,36 @@ describe('ThreeSceneRenderer 的缓存预算', () => {
     expect(state.errorScale).toBe(1);
     expect(state.tilesets.blocks?.visible).toBe(64);
   });
+
+  it('第一次加载时细的一层还没有样本：不按粗的一层的大小估计，放得下就不放宽', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup(UNSAMPLED_FITS);
+    showBlocks(ctx, await serveBlocks('unsampled', UNSAMPLED_SIZES));
+    const state = await settle(ctx);
+    expect(state.raisedPredicted).toBe(0);
+    expect(state.errorScale).toBe(1);
+    expect(state.tilesets.blocks?.visible).toBe(64);
+  });
+
+  it('放大到还没有样本的一层：同样不按粗的一层估计', { timeout: TEST_TIMEOUT }, async () => {
+    const ctx = await setup(UNSAMPLED_FITS, { ...CAMERA, zoom: 15 });
+    showBlocks(ctx, await serveBlocks('zoom-in', UNSAMPLED_SIZES));
+    const far = await settle(ctx);
+    expect(far.tilesets.blocks?.visible).toBe(16);
+    ctx.view.flyTo({ center: MODEL_AT, zoom: 17 }, { duration: 0 });
+    await until(() => {
+      const state = inspect(ctx);
+      return state.raisedPredicted > 0 || (state.settled && state.tilesets.blocks?.visible === 64);
+    }, '放宽了或者细的一层到齐');
+    const state = inspect(ctx);
+    expect(state.raisedPredicted).toBe(0);
+    expect(state.errorScale).toBe(1);
+  });
 });
+
+// 粗的一块 256×256（约 340 KB），细的一块 32×32（约 6 KB）：两层共约 6 MB，放得下。细的都晚 1 秒到，这期间
+// 只有粗的一层有样本，按它估计的话细的 64 块约 22 MB，加上粗的超过上限的 2 倍
+const UNSAMPLED_SIZES: BlockSizes = { blockTexture: 256, fineTexture: 32, fineDelayMs: 1000, promptFine: 0 };
+const UNSAMPLED_FITS = { cacheBytes: 8 * 1024 * KB, cacheLimitBytes: 10 * 1024 * KB };
 
 // 在 ms 毫秒内等到条件：等不到时返回 false，由断言报告，不是用例超时
 async function within(accept: () => boolean, ms: number): Promise<boolean> {
