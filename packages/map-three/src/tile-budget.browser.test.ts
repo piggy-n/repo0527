@@ -307,6 +307,42 @@ describe('ThreeSceneRenderer 的缓存预算', () => {
     // 第一个瓦片集的瓦片被淘汰了，给第二个让出地方
     expect(state.tilesets.blocks?.unloaded).toBeGreaterThan(0);
   });
+
+  it('重新请求淘汰过的瓦片：需求不把它们算两遍', { timeout: TEST_TIMEOUT }, async () => {
+    // 同上，第一个瓦片集的瓦片被第二个挤掉，换回来时重新请求，细的除了前 3 块都晚 1.5 秒到。
+    // 库在排队时就把它们原来的字节记进缓存（算在在用的里），还要加载的估计不能再加一遍。
+    // 第二个瓦片集用同一份数据：它只是要挤掉第一个的瓦片（假文件一次只能有一组）
+    const ctx = await setup({ cacheBytes: 1200 * KB, cacheLimitBytes: 1600 * KB });
+    const url = await serveBlocks('requeued', { fineTexture: 64, fineDelayMs: 1500 });
+    const showFirst = (first: boolean) => {
+      ctx.session.scene.set({
+        tilesets: [
+          { id: 'blocks', url, show: first, lighting: 'sun', attempt: 0, ...GRID_SCREEN_ERROR },
+          { id: 'other', url, show: !first, lighting: 'sun', attempt: 0, ...GRID_SCREEN_ERROR }
+        ],
+        underground: null
+      });
+    };
+    showBlocks(ctx, url);
+    const first = await settle(ctx);
+    expect(first.errorScale).toBe(1);
+    showFirst(false);
+    await until(() => {
+      const state = inspect(ctx);
+      return state.settled && state.tilesets.other?.visible === 64 && (state.tilesets.blocks?.unloaded ?? 0) > 0;
+    }, '第一个瓦片集的瓦片被挤掉');
+    showFirst(true);
+    let peak = 0;
+    await until(() => {
+      const state = inspect(ctx);
+      peak = Math.max(peak, state.demandBytes);
+      return state.settled && (state.tilesets.blocks?.visible ?? 0) > 0;
+    }, '第一个瓦片集重新加载完');
+    const state = inspect(ctx);
+    expect(peak).toBeLessThan(first.pinnedBytes * 1.25);
+    expect(state.errorScale).toBe(1);
+    expect(state.tilesets.blocks?.visible).toBe(64);
+  });
 });
 
 // 在 ms 毫秒内等到条件：等不到时返回 false，由断言报告，不是用例超时

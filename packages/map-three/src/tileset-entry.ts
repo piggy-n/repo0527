@@ -381,8 +381,9 @@ export class TilesetEntry implements Disposable {
     // 缓存满的时候排不进队的瓦片不知道是哪些，按最深一层算
     let pendingBytes = stats.refused * this.#sizeAt(this.#deepestSized);
     for (const tile of loadingTiles) {
-      // 已经不要了、但还在下载的不算：它们不占需求，算上的话放宽以后需求也不降，会一直放宽到它们下载完
-      if (tile.internal.hasRenderableContent && usedSet.has(tile)) {
+      // 已经不要了、但还在下载的不算：它们不占需求，算上的话放宽以后需求也不降，会一直放宽到它们下载完。
+      // 淘汰后重新请求的也不算：库排队时就把它原来的字节记进了缓存，已经算在 pinnedBytes 里
+      if (tile.internal.hasRenderableContent && usedSet.has(tile) && this.#cache.getMemoryUsage(tile) === 0) {
         pendingBytes += this.#sizeAt(tile.internal.depth);
       }
     }
