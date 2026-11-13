@@ -24,6 +24,8 @@ export type {
   AnchorMatrices,
   CreateSceneRenderer,
   Matrix4Array,
+  SceneBudget,
+  SceneBudgetSource,
   SceneFrame,
   SceneLift,
   SceneMarker,

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { isIntegratedRenderer, SOFTWARE_RENDERER } from './renderer-class.ts';
+import { autoTier, isIntegratedRenderer, SOFTWARE_RENDERER } from './renderer-class';
 
 // Windows 上 ANGLE 的写法：厂商、驱动里的设备名和设备号、Direct3D11
 const angle = (vendor: string, device: string) => `ANGLE (${vendor}, ${device} (0x00001234) Direct3D11 vs_5_0 ps_5_0, D3D11)`;
@@ -66,5 +66,17 @@ describe('isIntegratedRenderer', () => {
     expect(SOFTWARE_RENDERER.test(angle('Microsoft', 'Microsoft Basic Render Driver'))).toBe(true);
     expect(SOFTWARE_RENDERER.test('ANGLE (Mesa, llvmpipe (LLVM 15.0.7, 256 bits), OpenGL 4.5)')).toBe(true);
     expect(SOFTWARE_RENDERER.test(angle('NVIDIA', 'NVIDIA GeForce RTX 3060 Laptop GPU'))).toBe(false);
+  });
+});
+
+describe('autoTier', () => {
+  it.each([
+    ['软件渲染', angle('Microsoft', 'Microsoft Basic Render Driver'), 'low'],
+    ['集显', angle('Intel', 'Intel(R) UHD Graphics 620'), 'low'],
+    ['独显', angle('NVIDIA', 'NVIDIA GeForce RTX 3060 Laptop GPU'), 'standard'],
+    ['名单以外的', angle('Intel', 'Intel(R) Arc(TM) Pro A60M Graphics'), 'standard'],
+    ['读不到型号', '', 'standard']
+  ])('%s：%s → %s，永远不给高', (_, renderer, tier) => {
+    expect(autoTier(renderer)).toBe(tier);
   });
 });

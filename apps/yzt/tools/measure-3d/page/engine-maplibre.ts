@@ -1,6 +1,7 @@
 import { MapLibreView, type SceneSurface } from '@mx/map-core';
 import type { CullWindow, ThreeSceneRenderer as Renderer } from '@mx/map-three';
 import { setupMapRuntime } from '../../../src/app/map-runtime.ts';
+import { SCENE_TIER_BUDGETS, SCENE_TIERS, type SceneTier } from '../../../src/shared/config/scene-tier-options.ts';
 import { splatReadings, splatsSettled } from '../splat-readings.ts';
 import type { EngineHandle, EngineOptions } from './bench.ts';
 
@@ -21,6 +22,14 @@ const longestWindow = (windows: readonly (number | null)[]): number | null => {
   return values.length > 0 ? Math.max(...values) : null;
 };
 
+function tierOf(value: string): SceneTier {
+  const tier = SCENE_TIERS.find(item => item === value);
+  if (tier === undefined) {
+    throw new Error(`不认识的档位：${value}`);
+  }
+  return tier;
+}
+
 /** MapLibre 引擎：真实的 MapLibreView 和 ThreeSceneRenderer，和产品一样在第一次切到三维时动态导入 */
 export async function startMapLibre({ session, container, params, splatCount, onError }: EngineOptions): Promise<EngineHandle> {
   setupMapRuntime();
@@ -28,6 +37,9 @@ export async function startMapLibre({ session, container, params, splatCount, on
   const cullWindow = params.get('cullWindow');
   const splatBudget = params.get('splatBudget');
   const cacheGB = params.get('cacheGB');
+  const tier = params.get('tier');
+  // 设备档位（ADR 0155）：四个数都按 app 的档位表，和产品按档位创建的渲染器一样
+  const tierBudget = tier === null ? {} : SCENE_TIER_BUDGETS[tierOf(tier)];
   let renderer: Renderer | null = null;
   let surface: SceneSurface | null = null;
   const view = new MapLibreView({
@@ -49,6 +61,7 @@ export async function startMapLibre({ session, container, params, splatCount, on
         }
       }
       const rendererOptions = {
+        ...tierBudget,
         ...(uploadMB === null ? {} : { uploadBytesPerFrame: uploadMB === 'off' ? null : Number(uploadMB) * MB }),
         ...(cullWindow === null ? {} : { requestCullWindow: cullWindowOf(cullWindow) }),
         ...(splatBudget === null ? {} : { splatBudget: Number(splatBudget) }),
@@ -79,6 +92,7 @@ export async function startMapLibre({ session, container, params, splatCount, on
       cullWindow: cullWindow ?? '产品的默认值',
       splatBudget: splatBudget ?? '产品的默认值',
       cacheGB: cacheGB ?? '产品的默认值',
+      tier: tier ?? '产品的默认值',
       keepImages: params.get('keepImages') === '1',
       antialias: params.get('antialias') === '1'
     },

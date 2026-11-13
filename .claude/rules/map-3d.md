@@ -4,6 +4,7 @@ paths:
   - "packages/map-core/src/scene/**"
   - "packages/map-core/src/maplibre/roam/**"
   - "apps/yzt/src/features/scene-models/**"
+  - "apps/yzt/src/shared/map/scene-tier/**"
   - "apps/yzt/src/pages/current-map/**"
   - "apps/yzt/src/pages/dev/{map-3d,nav-grid,splat-watch}/**"
   - "apps/yzt/public/{3dt,roam}/**"
@@ -18,6 +19,7 @@ paths:
 - 模型层叠在页面用 `provideMap` 的 `sceneBelow` 声明的分组下面，以上的分组画在模型上面
 - 地下的模型要抬高（MapLibre 把相机限制在 0 米以上，ADR 0147 第 4 节）：抬高只存在于渲染适配器内部，拾取、相机、漫游状态对外都是真实椭球高。漫游在 map-core 的 `maplibre/roam/`：路线、步行只用真实坐标，经 `RoamHost` 设相机、拾取，抬高只在 `MapLibreRoam` 的相机换算和渲染器里（[map-three.md](../../docs/modules/map-three.md)"漫游"）
 - 缓存放不下时放宽屏幕误差：一放宽就锁在这个姿态，相机离开之前收紧不到放不下的倍数以下，不能写成"低于收回线就收紧"（整级丢掉后又加载回来，来回折腾）；动着的时候离开那个姿态、需求低于上限的 80% 可以收紧，收紧过又放不下，这一路就不再试；新瓦片在算加载完之前按每帧字节数上传；相机在一块瓦片加载完之前走的路达到瓦片直径就不请求这块瓦片（加载时间按动着时请求的瓦片实测，不用固定的秒数：本机和服务器差几倍），相机停下的那一帧起全部放行，这些瓦片要算进需求，有它们时要再画一帧（map-three.md"缓存""上传""动着的时候不请求"）
+- 三维的预算按设备分档（ADR 0155）：数值只在 `shared/config/scene-tier-options.ts`；map-three 不读配置、不判断显卡，只按 app 交给它的预算来源（map-core 的 `SceneBudgetSource`）做；档位、降档、崩溃标记在 `shared/map/scene-tier`，由 app 注入的三维引擎（`app/map-runtime-provider.ts`）交给渲染器（`docs/config/scene-tier.md`）
 - 性能实测要测生产包，不测 PoC：`pnpm --filter yzt measure:3d`，在显卡机器上跑（map-three.md"性能验收"）
 - LCC2 高斯泼溅（ADR 0149）：会话的 `splats`，能力声明 `splats` 为 false 时面板不列出；清单存配准后的 `placement`，运行时不用 proj4、不用数据带的 `offset`；`gaussian-splat-lite` 只由 map-three 动态导入、精确锁版本，它在渲染回调外调 GL，靠每帧两头的 `resetState`，升级时重跑 GL 监听；同一处的倾斜模型（`clippedBySplats`）在泼溅的包围盒里用裁剪平面裁掉、拾取也跳过；每帧都调的拾取（状态栏读数、跟着鼠标的预览）传 `{ hover: true }`，不打泼溅（map-three.md"高斯泼溅"）
 - 二三维切换用上下文的 `map.setDimension(kind)`，上下文的 `view` 等只反映当前种类；切换时要做的业务（如 `basemap.selectForDimension`：三维默认影像、二维默认矢量）由页面在同一处调用。地图的运行时由 app 的 `withMapRuntime` 随地图页加载，不在 `main.ts` 里安装（会把 maplibre-gl 带进入口，ADR 0061、0079 第 2 节）

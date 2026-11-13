@@ -33,7 +33,11 @@
 
 所有部署都一样的产品决定，以后可能会改，所以做成开关。只在代码里改，不进 `.env`。
 
-现在代码里没有这类开关：最后两个都在 2026-11-11 去掉了，`SCENE_OPTIONS` 随 ADR 0153 删除，`STATIC_BASEMAP_OPTIONS.cityColors` 由用户决定取消、全省固定一种陆地色（见 ADR 0134 的状态行）。以后要加时按下面的"新增一个开关时放哪"新建文件，在这里登记成表格（开关、文件、默认、作用、ADR）。
+| 开关 | 文件 | 默认 | 作用 | ADR |
+|---|---|---|---|---|
+| `SCENE_TIER_BUDGETS` | `scene-tier-options.ts` | 低 1 GB、标准 2 GB、高 6 GB（到它不再加载，淘汰到一半），每帧上传 16 MB，泼溅 300 万 | 三维各档的预算；部署方只在 `scene-tier.json` 里选档，数值改代码（[scene-tier.md](scene-tier.md)） | 0155 |
+
+以前的两个在 2026-11-11 去掉了：`SCENE_OPTIONS` 随 ADR 0153 删除，`STATIC_BASEMAP_OPTIONS.cityColors` 由用户决定取消、全省固定一种陆地色（见 ADR 0134 的状态行）。以后要加时按下面的"新增一个开关时放哪"新建文件，在这里登记一行。
 
 这类文件只写类型和常量，不导入别的模块：Node 直接运行的工具要用时也能导入，它们读不了 Vite 专用的写法。
 
@@ -44,7 +48,7 @@
 | 文件 | 发布位置 | 仓库里的来源 | 作用 | ADR |
 |---|---|---|---|---|
 | 三维模型清单 | `dist/3dt/manifest.json` | `apps/yzt/public/3dt/manifest.json` | 三维模型面板列出哪些模型、在哪个市、什么类型；格式由代码里的 zod 校验，逐项说明见 [3dt-manifest.md](3dt-manifest.md) | 0081、0149 |
-| 三维的设备档位（ADR 0155，还没实现） | `dist/scene-tier.json` | `apps/yzt/public/scene-tier.json`（实现时新建） | 瓦片缓存、每帧上传、泼溅预算用哪一档：`auto`、`low`、`standard`、`high`，读不到时按 `auto`；逐项说明见 [scene-tier.md](scene-tier.md) | 0155 |
+| 三维的设备档位 | `dist/scene-tier.json` | `apps/yzt/public/scene-tier.json` | 瓦片缓存、每帧上传、泼溅预算用哪一档：`auto`、`low`、`standard`、`high`，读不到时按 `auto`；逐项说明见 [scene-tier.md](scene-tier.md) | 0155 |
 | 资源的最小显示级别 | `dist/resource-min-zooms.json` | `apps/yzt/src/features/resource-map/resource-min-zooms.json` | 每个资源放大到几级才显示；读不到或格式不对时用构建时带上的，`VITE_RESOURCE_MIN_ZOOM_ENABLED=false` 时不读 | 0132、0137 |
 
 ## 开发和工具用的环境变量

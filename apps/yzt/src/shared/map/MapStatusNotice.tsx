@@ -1,20 +1,31 @@
 import { Loading } from '@element-plus/icons-vue';
 import { ElButton, ElIcon } from 'element-plus';
 import { useMap } from '@mx/map-vue';
-import { computed, defineComponent } from 'vue';
+import { computed, defineComponent, inject } from 'vue';
 import { useDelayedFlag } from '../composables/useDelayedFlag';
 import { SvgIcon } from '../icons/SvgIcon';
 import { describeMapStatus } from './map-status';
 import styles from './MapStatusNotice.module.scss';
+import { SCENE_TIER_NOTICE, type SceneTierNotice } from './scene-tier/scene-tier';
+
+// 崩溃后降档的说明（ADR 0155 第 4 节，用户 2026-11-13 定的文字，见 docs/config/scene-tier.md"自动降档"）：恢复过的页面又崩时不能再恢复
+function tierDetail({ restorable, restoredBefore }: SceneTierNotice): string {
+  if (!restorable) {
+    return '恢复后页面再次发生崩溃。如需恢复，请联系管理员调整配置';
+  }
+  return restoredBefore ? '上次进入三维模式时页面发生崩溃，恢复后再次出现崩溃' : '上次进入三维模式时页面发生崩溃';
+}
 
 /**
  * 地图的加载与失败提示（ADR 0030，设计稿 5D.7）：放在地图区域里，父元素要能作为定位参照。
- * 显示什么由 describeMapStatus 决定，这里只负责显示；加载中延迟出现，很快加载完就不显示
+ * 显示什么由 describeMapStatus 决定，这里只负责显示；加载中延迟出现，很快加载完就不显示。
+ * 三维因为上次崩溃降了档时，三维里在上方提示一次，可以恢复（ADR 0155）；没有 app 提供的提示时不显示
  */
 export const MapStatusNotice = defineComponent({
   name: 'MapStatusNotice',
   setup() {
     const map = useMap();
+    const sceneTier = inject(SCENE_TIER_NOTICE, null);
     const status = computed(() => describeMapStatus(map.viewState.value, map.failure.value));
     const loadingShown = useDelayedFlag(() => status.value.kind === 'loading');
 
@@ -45,17 +56,36 @@ export const MapStatusNotice = defineComponent({
           </div>
         );
       }
-      if (current.kind === 'loading' && loadingShown.value) {
-        return (
-          <div class={styles.loading} data-map-status="loading">
+      const tierNotice = map.dimension.value === '3d' ? sceneTier?.notice.value : null;
+      return [
+        tierNotice && sceneTier && (
+          <div key="scene-tier" class={styles.bar} role="status" data-map-status="scene-tier">
+            <SvgIcon class={styles.barIcon} name="warning" size={16} />
+            <div class={styles.barText}>
+              <strong class={styles.barTitle}>三维画质已自动降低</strong>
+              <p class={styles.detail}>{tierDetail(tierNotice)}</p>
+            </div>
+            <div class={styles.barActions}>
+              {tierNotice.restorable && (
+                <ElButton size="small" type="primary" onClick={() => sceneTier.restore()}>
+                  恢复原来的画质
+                </ElButton>
+              )}
+              <ElButton size="small" onClick={() => sceneTier.dismissNotice()}>
+                知道了
+              </ElButton>
+            </div>
+          </div>
+        ),
+        current.kind === 'loading' && loadingShown.value && (
+          <div key="loading" class={styles.loading} data-map-status="loading">
             <ElIcon class={['is-loading', styles.spinner]}>
               <Loading />
             </ElIcon>
             地图加载中…
           </div>
-        );
-      }
-      return null;
+        )
+      ];
     };
   }
 });

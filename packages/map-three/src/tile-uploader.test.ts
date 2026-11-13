@@ -141,6 +141,23 @@ describe('TileUploader', () => {
     expect(webgl.initTexture).not.toHaveBeenCalled();
   });
 
+  it('改预算（降档、恢复）从下一帧起生效；改成 null 时排着的直接放行', async () => {
+    const uploader = new TileUploader(1, vi.fn<() => void>());
+    uploader.setActive(true);
+    const first = uploader.enqueue(tile(texture(10), texture(10)), new AbortController().signal);
+    uploader.setBytesPerFrame(1024 * 1024);
+    const webgl = fakeRenderer();
+    uploader.run(asRenderer(webgl));
+    expect(webgl.initTexture).toHaveBeenCalledTimes(2);
+    expect(await settled(first)).toBe(true);
+
+    const second = uploader.enqueue(tile(texture(10)), new AbortController().signal);
+    expect(await settled(second)).toBe(false);
+    uploader.setBytesPerFrame(null);
+    expect(await settled(second)).toBe(true);
+    expect(uploader.pending).toBe(0);
+  });
+
   it('释放时放行排着的瓦片', async () => {
     const uploader = new TileUploader(1, vi.fn<() => void>());
     uploader.setActive(true);

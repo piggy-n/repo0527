@@ -13,7 +13,8 @@
 | 文件 | 内容 |
 |---|---|
 | `map-status.ts` | `describeMapStatus(viewState, failure)`：由视图状态和失败原因推导要显示的内容（纯函数） |
-| `MapStatusNotice.tsx` | 加载中与失败的提示：中间的卡片、上方的警告条（设计稿 5D.7） |
+| `MapStatusNotice.tsx` | 加载中与失败的提示：中间的卡片、上方的警告条（设计稿 5D.7）；三维崩溃降档的提示（ADR 0155） |
+| `scene-tier/` | 三维的设备档位：显卡分类、崩溃标记、替页面回答的 Worker、预算来源 `SceneTierSource`（[config/scene-tier.md](../config/scene-tier.md)） |
 | `jiangsu.ts` | 江苏省的范围 `JIANGSU_BOUNDS`、创建地图时的相机 `JIANGSU_CAMERA`、缩放范围 `JIANGSU_ZOOM_RANGE` |
 | `backend-request.ts` | 业务地图画布的选项 `JIANGSU_MAP_OPTIONS`：缩放范围，以及只给发往后端的瓦片请求带 token 的 `transformRequest`；地图错误的报告器 `reportMapError`：瓦片的 401 按登录过期处理 |
 | `useDefaultView.ts` | 默认视角：第一次就绪时按江苏的范围定位，`goToDefaultView()` 回到默认视角（ADR 0033） |
@@ -656,6 +657,7 @@ sides.activate('right');
 | `failed`，引擎失败，其他原因 | 中间的卡片："地图无法显示"，可以重试，技术细节用小字放在浅灰底里 | 处于 `failed` 却没有原因时也按这一种处理 |
 | `failed`，样式失败 | 上方的警告条："地图样式加载失败"，说明改动图层后会自动重新加载，技术细节用小字 | 不提供重试：样式出现新版本时自动恢复 |
 | 其他（`idle`、`ready`、`paused`、`disposed`） | 不显示 | — |
+| 三维因为上次崩溃降了档（ADR 0155） | 上方的警告条："三维画质已自动降低"和原因，"恢复原来的画质""知道了" | 只在三维里、样式没失败时显示；状态由 app 经 `SCENE_TIER_NOTICE` 提供，没有时不显示；文字见 [config/scene-tier.md](../config/scene-tier.md)"自动降档" |
 
 - "重试"调用 `useMap().retry()`，由画布组件在同一个容器里重新创建视图，页面不用管理画布的 `key`
 - 文案集中在 `describeMapStatus`，测试也在它上面；组件只测"点重试会重新创建地图"这一个关键交互

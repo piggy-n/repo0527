@@ -117,8 +117,30 @@ export interface SceneRenderer extends Disposable {
   on<E extends keyof SceneRendererEvents>(event: E, callback: SceneRendererEvents[E]): Unsubscribe;
 }
 
-/** 创建渲染器 */
-export type CreateSceneRenderer = () => SceneRenderer;
+/** 三维的预算（ADR 0155 第 1 节）：瓦片缓存淘汰到、到它不再加载（字节），每帧提前上传（字节，null 不提前上传），泼溅的总预算（高斯个数） */
+export interface SceneBudget {
+  readonly cacheBytes: number;
+  readonly cacheLimitBytes: number;
+  readonly uploadBytesPerFrame: number | null;
+  readonly splatBudget: number;
+}
+
+/**
+ * app 交给渲染器的预算来源（ADR 0155 第 6 节）：档位的判断、降档和崩溃标记都在 app，渲染器只按它给的预算做，不读配置
+ */
+export interface SceneBudgetSource {
+  /** 第一次挂到地图上时调用：按 WebGL 报的显卡名字定下这个会话的档位，给出预算 */
+  resolve(renderer: string): SceneBudget;
+  /** 预算变了（丢上下文降档、用户恢复画质）时通知；返回取消订阅 */
+  subscribe(listener: (budget: SceneBudget) => void): Unsubscribe;
+  /** GL 上下文丢了：降一档，经 subscribe 通知 */
+  contextLost(): void;
+  /** 三维挂上、撤下（切二维、离开地图页）：崩溃标记跟着记、删 */
+  shown(shown: boolean): void;
+}
+
+/** 创建渲染器；不给预算来源时用渲染器自己的默认值（标准档） */
+export type CreateSceneRenderer = (budget?: SceneBudgetSource) => SceneRenderer;
 
 /** 加载三维模块后给出创建渲染器的函数：由 map-vue 动态导入 @mx/map-three（ADR 0147 第 5 节） */
 export type SceneRendererLoader = () => Promise<CreateSceneRenderer>;

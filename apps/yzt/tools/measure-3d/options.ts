@@ -1,3 +1,4 @@
+import { SCENE_TIERS, type SceneTier } from '../../src/shared/config/scene-tier-options.ts';
 import type { BenchCamera } from './bench-api.ts';
 
 // 命令行参数：pnpm --filter yzt measure:3d 后面的参数原样传进来
@@ -27,9 +28,12 @@ export const HELP = `三维（MapLibre 引擎，@mx/map-three）的性能实测�
   --cache-gb <列表>      另外对照的瓦片缓存上限（GB），到它不再加载、淘汰到它的一半，如 4,6；
                          产品默认是 2（1 GB 起淘汰），就是 MapLibre 那个方案，不用再写。每一档多跑一遍画质，
                          截图和产品默认值的比
-  --keep-images          产品默认值和 --cache-gb 的每一档各加一个"上传后保留贴图"的对照（只跑 perf）：
+  --tier <列表>          另外对照的设备档位（ADR 0155）：low、standard、high，如 low,high。缓存的两个上限、每帧上传、
+                         泼溅的总预算都按 app 的档位表（src/shared/config/scene-tier-options.ts）；标准档现在和
+                         产品默认值的 MapLibre 方案一样。和 --cache-gb 一样每一档多跑一遍画质
+  --keep-images          产品默认值和 --cache-gb、--tier 的每一档各加一个"上传后保留贴图"的对照（只跑 perf）：
                          产品默认释放内存里的贴图，比渲染进程和 GPU 进程的内存（ADR 0155 第 5 节）
-  --zoom-in              产品默认值和 --cache-gb 的每一档多跑一遍"定位后放大一级"：加载稳定后放大一级，
+  --zoom-in              产品默认值和 --cache-gb、--tier 的每一档多跑一遍"定位后放大一级"：加载稳定后放大一级，
                          记下屏幕误差、锁定和显示的瓦片，再移开又移回同一处比一次，看放大后有没有锁粗
   --splat-budget <列表>  高斯泼溅场景（--only splat）比较的总预算（高斯个数），默认 3m,6m,10m（ADR 0149 L.3）；
                          写 3m、3e6 或 3000000 都行。模型从清单里读，local/3dt/manifest.json 在时用它
@@ -64,6 +68,8 @@ export interface Options {
   readonly cullWindows: readonly (number | 'auto' | null)[];
   /** 另外对照的瓦片缓存上限（GB） */
   readonly cacheGBs: readonly number[];
+  /** 另外对照的设备档位（ADR 0155） */
+  readonly tiers: readonly SceneTier[];
   /** 加上"上传后保留贴图"的对照 */
   readonly keepImages: boolean;
   /** 跑画质的方案多跑一遍定位后放大一级 */
@@ -84,6 +90,14 @@ export interface Options {
   readonly allowSoftware: boolean;
   readonly quick: boolean;
   readonly help: boolean;
+}
+
+function tierOf(name: string, text: string): SceneTier {
+  const tier = SCENE_TIERS.find(item => item === text);
+  if (tier === undefined) {
+    throw new Error(`参数 ${name} 只能是 ${SCENE_TIERS.join('、')}：${text}`);
+  }
+  return tier;
 }
 
 function positive(name: string, text: string): number {
@@ -142,6 +156,7 @@ export function parseOptions(argv: readonly string[]): Options {
     uploadMBs: null,
     cullWindows: [],
     cacheGBs: [],
+    tiers: [],
     keepImages: false,
     zoomIn: false,
     splatBudgets: [3e6, 6e6, 1e7],
@@ -202,6 +217,9 @@ export function parseOptions(argv: readonly string[]): Options {
         break;
       case '--cache-gb':
         options.cacheGBs = [...new Set(listItems(next()).map(item => positive(name, item)))];
+        break;
+      case '--tier':
+        options.tiers = [...new Set(listItems(next()).map(item => tierOf(name, item)))];
         break;
       case '--keep-images':
         options.keepImages = true;

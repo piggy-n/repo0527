@@ -1,6 +1,6 @@
 # 0155. 三维的缓存按设备分档：部署配置为主，自动判断只往下调
 
-- 状态：已接受（开头的"补充"、第 3、4、8 节和"后果"2026-11-12 按审查在合并入 main 之前修改：集显改成按名单判断、认不出的给标准，崩溃标记改成按页面，恢复以后只有同一个页面里又崩溃才不再提供恢复，细节移到 [config/scene-tier.md](../config/scene-tier.md)；合入 main 以后，高档同日按 1920×1080 的补测改为 6 GB，见 [config/scene-tier.md](../config/scene-tier.md)，正文里的 4 GB 以它为准；第 5 节的上传后释放贴图按同一次补测做进了 map-three、所有档位都释放，见 [modules/map-three.md](../modules/map-three.md)"上传"）
+- 状态：已接受（开头的"补充"、第 3、4、8 节和"后果"2026-11-12 按审查在合并入 main 之前修改：集显改成按名单判断、认不出的给标准，崩溃标记改成按页面，恢复以后只有同一个页面里又崩溃才不再提供恢复，细节移到 [config/scene-tier.md](../config/scene-tier.md)；合入 main 以后，高档同日按 1920×1080 的补测改为 6 GB，见 [config/scene-tier.md](../config/scene-tier.md)，正文里的 4 GB 以它为准；第 5 节的上传后释放贴图按同一次补测做进了 map-three、所有档位都释放，见 [modules/map-three.md](../modules/map-three.md)"上传"；2026-11-13 实现了分档、降档和崩溃标记，做法和这里不同的几处（只用删键后的广播补回标记、预加载时不问别的页面）见 [config/scene-tier.md](../config/scene-tier.md)"崩溃标记"）
 - 日期：2026-11-12
 - 补充：ADR 0147 第 5 节（缓存、上传按预算；预算原来对所有设备一样，现在分档）
 - 补充：ADR 0042（偏好存 IndexedDB；这里加按页面的崩溃标记和这台设备的降档记录，都要同步写入，都不是偏好）

@@ -1,3 +1,4 @@
+import { SCENE_TIER_BUDGETS, type SceneTier } from '../../src/shared/config/scene-tier-options.ts';
 import type { BenchCamera } from './bench-api.ts';
 
 // 场景和方案：同一个场景的各个方案用相同的相机和飞行路径（场景和路径来自 ADR 0147 的 PoC）
@@ -33,6 +34,8 @@ export interface Variant {
   readonly cullWindow?: number | 'auto' | null;
   /** 瓦片缓存的上限（GB）：到它不再加载，淘汰到它的一半；undefined 用产品的默认值（1 GB + 1 GB） */
   readonly cacheGB?: number;
+  /** 设备档位（ADR 0155）：四个数都按 app 的档位表 */
+  readonly tier?: SceneTier;
   /** 上传后保留内存里的贴图（产品默认释放，ADR 0155 第 5 节）：内存的对照 */
   readonly keepImages?: boolean;
   /** 高斯泼溅的总预算（高斯个数）；undefined 用产品的默认值 */
@@ -42,9 +45,19 @@ export interface Variant {
 /** 产品默认设置的方案：采样和检查只看它，画质另外给缓存上限的各档跑（比清晰度），其余方案只跑 perf 对照 */
 export const DEFAULT_VARIANT = 'maplibre';
 
-/** 这个方案也跑画质：产品的默认值，和比较缓存上限的各档（同一相机的截图和默认值比）；保留贴图的画面不变，不跑 */
+/** 这个方案也跑画质：产品的默认值，和比较缓存上限、设备档位的各档（同一相机的截图和默认值比）；保留贴图的画面不变，不跑 */
 export const takesQualityRun = (variant: Variant): boolean =>
-  !variant.keepImages && (variant.id === DEFAULT_VARIANT || variant.cacheGB !== undefined);
+  !variant.keepImages &&
+  (variant.id === DEFAULT_VARIANT || variant.cacheGB !== undefined || variant.tier !== undefined);
+
+const TIER_NAMES: Readonly<Record<SceneTier, string>> = { low: '低档', standard: '标准档', high: '高档' };
+const GIGABYTE = 1024 ** 3;
+
+/** 设备档位的方案：数值都从 app 的档位表取，标签写上缓存上限 */
+function tierVariant(tier: SceneTier): Variant {
+  const limit = SCENE_TIER_BUDGETS[tier].cacheLimitBytes / GIGABYTE;
+  return { id: `maplibre-tier-${tier}`, label: `MapLibre，${TIER_NAMES[tier]}（缓存上限 ${limit} GB）`, tier };
+}
 
 /** 一遍：perf 量帧时间和加载，quality 拍画面，profile 带 CPU 采样，zoom 是定位后放大一级（--zoom-in） */
 export type RunKind = 'perf' | 'quality' | 'profile' | 'zoom';
@@ -142,10 +155,14 @@ export function variants(
   uploadMBs: readonly (number | null)[],
   cullWindows: readonly (number | 'auto' | null)[] = [],
   cacheGBs: readonly number[] = [],
-  keepImages = false
+  keepImages = false,
+  deviceTiers: readonly SceneTier[] = []
 ): Variant[] {
   const defaults: Variant = { id: DEFAULT_VARIANT, label: 'MapLibre' };
-  const tiers = cacheGBs.map((cacheGB): Variant => ({ id: `maplibre-cache${cacheGB}g`, label: `MapLibre，缓存上限 ${cacheGB} GB`, cacheGB }));
+  const tiers = [
+    ...cacheGBs.map((cacheGB): Variant => ({ id: `maplibre-cache${cacheGB}g`, label: `MapLibre，缓存上限 ${cacheGB} GB`, cacheGB })),
+    ...deviceTiers.map(tierVariant)
+  ];
   // 保留贴图：产品的默认值和缓存上限的每一档各一个对照，和释放的比内存
   const kept = keepImages
     ? [defaults, ...tiers].map(

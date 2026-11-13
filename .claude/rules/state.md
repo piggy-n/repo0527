@@ -21,4 +21,5 @@ paths:
 
 - 偏好（资源图层、底图、边界的选择等）用 IndexedDB 持久化，经 `shared/storage` 的键值接口读写，实现用 idb-keyval；会话仍存 localStorage（ADR 0042）
 - 需要持久化的状态由拥有者接收页面提供的偏好范围（`shared/storage`），用共用的流程恢复和写入，不直接调用 idb-keyval 或 localStorage；存下的值读出时用 zod 校验（包括自洽），按拥有者的规则合并，不直接使用（ADR 0042）
+- 设备级、要同步写的小数据（三维的崩溃标记、降档记录）不是偏好：用 `shared/storage` 的 `deviceStore`（localStorage，读出时 zod 校验），不走偏好的开关，也不直接调用 localStorage（ADR 0155 第 4 节，`docs/modules/storage.md`）
 - 每项偏好由 `.env` 的总开关 `VITE_PREFERENCES_ENABLED` 和自己的分项开关 `VITE_PREFERENCE_*` 控制，都为 true 才生效（`.env` 现在只关着底图）；只在 `usePreference` 按 `name` 判断，拥有者和页面不另外判断。关闭时不读不写，用 `restore(null)` 按"没有存过"结束恢复，旧数据保留。新增偏好要先在 `app-config.ts` 的 `preferenceSwitches` 登记开关，否则 `name` 通不过类型检查，步骤见 `docs/modules/storage.md`（ADR 0140）

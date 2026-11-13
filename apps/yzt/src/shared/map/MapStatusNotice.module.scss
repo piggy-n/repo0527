@@ -99,6 +99,18 @@
   color: var(--color-text-title);
 }
 
+// 横条右边的按钮（三维降档的"恢复原来的画质""知道了"）：和文字垂直居中，不换行
+.barActions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-xs);
+  align-self: center;
+
+  :global(.el-button + .el-button) {
+    margin-left: 0;
+  }
+}
+
 // 加载中：不拦截地图上的操作
 .loading {
   position: absolute;

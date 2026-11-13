@@ -10,7 +10,7 @@ import { launchBrowser, listAdapters, probeRenderer } from './browser.ts';
 import { runLook } from './look.ts';
 import { HELP, type Options, parseOptions, uploadBudgets } from './options.ts';
 import { createRedactor } from './redact.ts';
-import { isIntegratedRenderer, SOFTWARE_RENDERER } from './renderer-class.ts';
+import { isIntegratedRenderer, SOFTWARE_RENDERER } from '../../src/shared/map/scene-tier/renderer-class.ts';
 import { renderManual, renderQualityPage, renderReport } from './report.ts';
 import type { Environment, MeasureResults, SceneQuality, ShotPair } from './results.ts';
 import { runOnce } from './run.ts';
@@ -68,7 +68,7 @@ if (options.help) {
 }
 const { at } = options;
 const scenes = selectScenes(options.only).map(scene => (at ? withCamera(scene, at) : scene));
-const list = variants(uploadBudgets(options), options.cullWindows, options.cacheGBs, options.keepImages);
+const list = variants(uploadBudgets(options), options.cullWindows, options.cacheGBs, options.keepImages, options.tiers);
 const splatList = splatVariants(options.splatBudgets);
 if (options.list) {
   for (const scene of SCENES) {
