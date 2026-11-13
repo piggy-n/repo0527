@@ -876,7 +876,7 @@ ${versusDefaultPart(own.shots, own.status, fallback, compared?.versusDefault ?? 
   const zoomPart =
     zoomSections.length > 0
       ? `<h1>定位后放大一级</h1>
-<p>同一个相机：左边是放大一级后稳定的，右边是移开又移回后稳定的。左边明显更糊，是放大后按估计放宽锁粗了。</p>
+<p>同一个相机：左边是放大一级后稳定的，右边是移开又移回后稳定的。左边更糊时看 report.md 的"放大后按估计放宽锁粗了吗"：放大这一步有"估计"的放宽才是按估计锁粗了；只有"装满"的放宽或者没有放宽的，不是估计的问题。</p>
 ${zoomSections.join('\n')}`
       : '';
   return `<!doctype html>

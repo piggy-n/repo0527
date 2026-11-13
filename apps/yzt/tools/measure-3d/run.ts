@@ -120,7 +120,10 @@ function classify(result: RunResult): void {
   if ((result.flightCold?.fenceTimeouts ?? 0) > 0) {
     result.notes.push('有等 GPU 超过 15 秒的帧，帧时间可能失真');
   }
-  if (result.zoom && !result.zoom.zoomed?.settle.stable) {
+  const zoomed = result.zoom?.zoomed;
+  if (result.zoom && !zoomed) {
+    result.notes.push('放大一级那一步没做完（页面崩溃、超时或截图出错），没有放大后的读数');
+  } else if (zoomed && !zoomed.settle.stable) {
     result.notes.push('放大一级以后没等到稳定，没有移开再移回');
   }
   result.notes.push(...invalid);
@@ -408,15 +411,19 @@ async function runZoom(run: Run, ctx: RunContext, session: Session, result: RunR
 
 // 页面还在时读上下文丢失的次数和页面的错误：失败的那一遍（截图超时、evaluate 出错）也要分清是丢了上下文还是变慢
 // （ADR 0155 第 7 节）。页面崩溃、卡住时读不到，最多等 5 秒
+// 读不到（页面崩溃、卡住、还没就绪）时 5 秒内以 null 结束
+const within = <T>(read: Promise<T>): Promise<T | null> => Promise.race([read.catch(() => null), sleep(5000).then(() => null)]);
+
 async function readPageState(page: Page, result: RunResult, redact: RunContext['redact']): Promise<void> {
-  const read = Promise.all([
-    call<ContextEvents>(page, 'window.benchProbe.contextEvents()'),
-    call<string[]>(page, 'window.bench.errors.slice(0, 20)')
-  ]).catch(() => null);
-  const state = await Promise.race([read, sleep(5000).then(() => null)]);
-  if (state) {
-    const [context, errors] = state;
+  // 分开读：页面没就绪时（初始化阶段就丢了上下文）没有 window.bench，探针一开始就在，上下文的计数照样读得到
+  const [context, errors] = await Promise.all([
+    within(call<ContextEvents>(page, 'window.benchProbe.contextEvents()')),
+    within(call<string[]>(page, 'window.bench.errors.slice(0, 20)'))
+  ]);
+  if (context) {
     result.context = context;
+  }
+  if (errors) {
     result.pageErrors = [...(result.pageErrors ?? []), ...errors.map(item => redact(item).slice(0, 300))];
   }
 }

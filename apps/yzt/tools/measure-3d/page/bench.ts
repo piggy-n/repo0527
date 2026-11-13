@@ -194,7 +194,10 @@ const look = params.get('look') === '1' ? new LookControl(container, () => sessi
 
 const loadStartedAt = performance.now();
 session.scene.set(sceneContent(true));
-probe.startLoadWatch();
+// --look 的窗口不测量，不记
+if (!look) {
+  probe.startLoadWatch();
+}
 
 window.bench = {
   config: handle.config,

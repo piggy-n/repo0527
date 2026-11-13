@@ -135,7 +135,7 @@ export function splatVariants(budgets: readonly number[]): Variant[] {
 export const variantsOf = (scene: Scene, list: readonly Variant[], splatList: readonly Variant[]): readonly Variant[] =>
   scene.splats.length > 0 ? splatList : list;
 
-/** 释放贴图的方案 id 带这个后缀：机器状态按去掉它以后的方案分组（verdict.ts），画的一样 */
+/** 释放贴图的方案 id 带这个后缀：判断机器稳不稳时它自己一组（verdict.ts），每一级瓦片的大小不取它（report.ts） */
 export const RELEASE_SUFFIX = '-release';
 
 export function variants(
