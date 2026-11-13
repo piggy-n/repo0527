@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { SceneBudget } from '@mx/map-core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { SCENE_TIER_BUDGETS, type SceneTier, type SceneTierSetting } from '../../config/scene-tier-options';
 import { createDeviceStore, type DeviceStore } from '../../storage/device-store';
@@ -211,6 +211,28 @@ describe('SceneTierSource 的档位', () => {
     const { storage, hub } = setup();
     const { source } = openPage({ storage, hub, id: 'a', setting });
     await expect(open3d(source, renderer)).resolves.toStrictEqual(SCENE_TIER_BUDGETS[tier]);
+  });
+
+  it('检查出错时不抛给三维：按读到的配置照常创建渲染器', async () => {
+    const { storage } = setup();
+    using warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const source = new SceneTierSource({
+      store: createDeviceStore(storage),
+      channel: {
+        postMessage: () => undefined,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined
+      },
+      lifecycle: fakeLifecycle(),
+      startPing: async () => undefined,
+      loadSetting: () => Promise.reject(new Error('读不到')),
+      pageId: 'a'
+    });
+    disposables.push(source);
+
+    await expect(source.prepare()).resolves.toBeUndefined();
+    expect(source.resolve(DGPU)).toStrictEqual(SCENE_TIER_BUDGETS.standard);
+    expect(warn).toHaveBeenCalledOnce();
   });
 
   it('丢上下文：这次会话降一档，连续丢降到低档为止；订阅的渲染器收到新的预算', async () => {

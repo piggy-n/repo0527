@@ -234,3 +234,51 @@ test('三维：二维稳定后预加载三维模块，切到三维还是同一�
     await original.dispose();
   }
 });
+
+// 三维的设备档位（ADR 0155）：发布目录带 scene-tier.json；上次崩溃的页面留下的标记在打开三维时被发现，降档、提示，能恢复。
+// 冒烟的浏览器是软件渲染，auto 本来就是低档：这里只看产物里的检查、Worker、提示和设备上记的降档
+test('三维降档：上次崩溃的页面留下标记，打开三维时提示，能恢复原来的画质', async ({ context, page, request }) => {
+  test.setTimeout(120_000);
+  const file = await request.get('/scene-tier.json');
+  expect(await file.json()).toStrictEqual({ tier: 'auto' });
+  // 崩溃的页面：标准档开着三维时被杀，标记留下，也没有 Worker 替它回答
+  const crashed = JSON.stringify({ tier: 'standard', configured: 'auto', restored: false });
+  await context.addInitScript({
+    content: `localStorage.setItem('yzt.device.scene-tier:page:crashed', ${JSON.stringify(crashed)});`
+  });
+  const stored = async (key: string): Promise<unknown> => {
+    const raw = await page.evaluate<string | null>(`localStorage.getItem(${JSON.stringify(key)})`);
+    return raw === null ? null : JSON.parse(raw);
+  };
+
+  await page.goto('/login');
+  await login(page);
+  await expect(page).toHaveURL(/\/current-map$/);
+  await measured(page, 'login-to-map:settled', 45_000);
+  // 二维时不提示，也不问别的页面：崩溃检查等到真的打开三维
+  await expect(page.locator('[data-map-status="scene-tier"]')).toHaveCount(0);
+  expect(await stored('yzt.device.scene-tier:page:crashed')).not.toBeNull();
+
+  await page.getByRole('button', { name: '三维', exact: true }).click();
+  const notice = page.locator('[data-map-status="scene-tier"]');
+  await expect(notice).toBeVisible({ timeout: 60_000 });
+  await expect(notice).toContainText('三维画质已调低');
+  await expect(notice).toContainText('上次打开三维时页面崩溃了。');
+  // 崩溃页面的键删掉了；按它的档位降一档，记在这台设备上
+  expect(await stored('yzt.device.scene-tier:page:crashed')).toBeNull();
+  expect(await stored('yzt.device.scene-tier:record')).toStrictEqual({
+    configured: 'auto',
+    cap: 'low',
+    restorable: true,
+    restoredBefore: false
+  });
+
+  await notice.getByRole('button', { name: '恢复原来的画质', exact: true }).click();
+  await expect(notice).toHaveCount(0);
+  expect(await stored('yzt.device.scene-tier:record')).toStrictEqual({
+    configured: 'auto',
+    cap: null,
+    restorable: true,
+    restoredBefore: true
+  });
+});

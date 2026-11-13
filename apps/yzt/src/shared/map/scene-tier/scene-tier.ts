@@ -103,9 +103,12 @@ export class SceneTierSource implements SceneBudgetSource, SceneTierNoticeSource
     return this.#setting;
   }
 
-  /** 第一次打开三维、创建渲染器之前：读配置，开回答的 Worker，问留下标记的页面还在不在。只做一次 */
+  /** 第一次打开三维、创建渲染器之前：读配置，开回答的 Worker，问留下标记的页面还在不在。只做一次，不抛错 */
   prepare(): Promise<void> {
-    this.#prepared ??= this.#prepare();
+    // 出错时按已经读到的配置和记的降档：不能让三维因为检查失败打不开，重试也不会再查
+    this.#prepared ??= this.#prepare().catch((error: unknown) => {
+      console.warn('[scene-tier] 检查崩溃标记出错，按配置的档位', error);
+    });
     return this.#prepared;
   }
 
