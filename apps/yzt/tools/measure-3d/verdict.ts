@@ -61,9 +61,9 @@ export function fillSampleAt(trace: readonly SceneSample[], t: number): SceneSam
   return trace.findLast(sample => sample.t <= t) ?? trace[0] ?? null;
 }
 
-// 静止时画的、内存和产品默认值不同的方案：泼溅的预算、缓存上限，不提前上传（也不释放贴图，scenes.ts 的方案 id）；
+// 静止时画的、内存和产品默认值不同的方案：泼溅的预算、缓存上限、设备档位，不提前上传（也不释放贴图，scenes.ts 的方案 id）；
 // 保留贴图的另外按后缀认
-const OWN_WORKLOAD = /^maplibre-(splat|cache|no-budget)/;
+const OWN_WORKLOAD = /^maplibre-(splat|cache|tier|no-budget)/;
 
 /**
  * 同一个场景的静止画面，每帧 JS 最多差几倍：工作量相同，差得多说明运行期间机器被别的事占着，

@@ -90,6 +90,9 @@ export function pageUrl({ scene, variant }: Pick<Run, 'scene' | 'variant'>, { ba
   if (variant.cacheGB !== undefined) {
     params.set('cacheGB', String(variant.cacheGB));
   }
+  if (variant.tier !== undefined) {
+    params.set('tier', variant.tier);
+  }
   if (variant.keepImages) {
     params.set('keepImages', '1');
   }

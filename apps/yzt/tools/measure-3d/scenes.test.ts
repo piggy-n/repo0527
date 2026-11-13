@@ -60,6 +60,26 @@ describe('variants 的对照方案', () => {
     ]);
   });
 
+  it('设备档位：数值从 app 的档位表取，和缓存上限的各档一样跑画质、放大一级，保留贴图也有对照', () => {
+    const list = variants([], [], [], true, ['low', 'high']);
+    expect(list.map(item => [item.id, item.tier, item.keepImages ?? false, item.label])).toEqual([
+      ['maplibre', undefined, false, 'MapLibre'],
+      ['maplibre-tier-low', 'low', false, 'MapLibre，低档（缓存上限 1 GB）'],
+      ['maplibre-tier-high', 'high', false, 'MapLibre，高档（缓存上限 6 GB）'],
+      ['maplibre-keep', undefined, true, 'MapLibre，上传后保留贴图'],
+      ['maplibre-tier-low-keep', 'low', true, 'MapLibre，低档（缓存上限 1 GB），上传后保留贴图'],
+      ['maplibre-tier-high-keep', 'high', true, 'MapLibre，高档（缓存上限 6 GB），上传后保留贴图']
+    ]);
+    const runs = buildRuns(selectScenes(['jkq-z16-tilt']), variants([], [], [], false, ['high']), 1, [], true);
+    expect(runs.filter(run => run.kind !== 'perf').map(run => run.id)).toEqual([
+      'jkq-z16-tilt/maplibre/quality',
+      'jkq-z16-tilt/maplibre/zoom',
+      'jkq-z16-tilt/maplibre/profile',
+      'jkq-z16-tilt/maplibre-tier-high/quality',
+      'jkq-z16-tilt/maplibre-tier-high/zoom'
+    ]);
+  });
+
   it('上传后保留贴图：产品的默认值和每一档各一个对照，只跑 perf', () => {
     const list = variants([], [], [4], true);
     expect(list.map(item => [item.id, item.cacheGB, item.keepImages ?? false, item.label])).toEqual([

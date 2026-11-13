@@ -194,6 +194,11 @@ describe('machineDrift', () => {
     expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-cache6g', 4), staticJs('maplibre-cache6g', 4.4)])).toBeCloseTo(1.1);
   });
 
+  it('设备档位的缓存不同：每一档各算一组，不和默认值比', () => {
+    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-tier-high', 4)])).toBeNull();
+    expect(machineDrift([staticJs('maplibre-tier-high', 4), staticJs('maplibre-tier-high', 4.4)])).toBeCloseTo(1.1);
+  });
+
   it('保留贴图的对照各算一组：内存的压力不同，不和它的方案比', () => {
     expect(machineDrift([staticJs('maplibre-cache6g', 4), staticJs('maplibre-cache6g-keep', 5)])).toBeNull();
     expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-keep', 3)])).toBeNull();
