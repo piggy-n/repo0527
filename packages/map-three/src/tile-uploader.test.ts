@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D, Texture, type WebGLRenderer } from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { TileUploader } from './tile-uploader';
 
 const texture = (size: number) => {
@@ -147,5 +147,70 @@ describe('TileUploader', () => {
     const waiting = uploader.enqueue(tile(texture(4)), new AbortController().signal);
     uploader[Symbol.dispose]();
     expect(await settled(waiting)).toBe(true);
+  });
+});
+
+// 测试里的 ImageBitmap（node 里没有）：close() 以后宽高变成 0，同浏览器
+class FakeBitmap {
+  width: number;
+  height: number;
+
+  constructor(size: number) {
+    this.width = size;
+    this.height = size;
+  }
+
+  close(): void {
+    this.width = 0;
+    this.height = 0;
+  }
+}
+
+const bitmapTexture = (bitmap: FakeBitmap) => {
+  const item = new Texture(bitmap);
+  item.generateMipmaps = false;
+  return item;
+};
+
+describe('TileUploader 释放内存里的贴图（ADR 0155 第 5 节）', () => {
+  it('只释放这个上下文里提前传过的：没提前传的、传进丢掉的上下文的都不释放，要从内存里重新传', async () => {
+    vi.stubGlobal('ImageBitmap', FakeBitmap);
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+    const uploader = new TileUploader(1, vi.fn<() => void>());
+    uploader.setActive(true);
+    const webgl = fakeRenderer();
+    const uploaded = new FakeBitmap(4);
+    const halfway = new FakeBitmap(4);
+    const later = new FakeBitmap(4);
+    const uploadedTile = tile(bitmapTexture(uploaded));
+    const halfwayTile = tile(bitmapTexture(halfway));
+    const done = uploader.enqueue(uploadedTile, new AbortController().signal);
+    const pending = uploader.enqueue(halfwayTile, new AbortController().signal);
+    // 一帧一步：第一块的贴图、几何体，第二块的贴图
+    uploader.run(asRenderer(webgl));
+    uploader.run(asRenderer(webgl));
+    uploader.run(asRenderer(webgl));
+    expect(await settled(done)).toBe(true);
+    expect(await settled(pending)).toBe(false);
+
+    // 传完的那块：瓦片库记完字节以后释放
+    uploader.release(uploadedTile);
+    expect(uploaded.width).toBe(0);
+    expect(uploader.releasedBytes).toBe(4 * 4 * 4);
+
+    // 第二块的贴图刚传进去就丢了上下文：放行以后不释放，恢复后要从内存里重新传
+    uploader.setActive(false);
+    expect(await settled(pending)).toBe(true);
+    uploader.release(halfwayTile);
+    expect(halfway.width).toBe(4);
+
+    // 撤下期间到的、没提前传的：不释放，第一次绘制时从内存里传
+    const laterTile = tile(bitmapTexture(later));
+    expect(await settled(uploader.enqueue(laterTile, new AbortController().signal))).toBe(true);
+    uploader.release(laterTile);
+    expect(later.width).toBe(4);
+    expect(uploader.releasedBytes).toBe(4 * 4 * 4);
   });
 });
