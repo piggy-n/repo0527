@@ -262,8 +262,8 @@ test('三维降档：上次崩溃的页面留下标记，打开三维时提示�
   await page.getByRole('button', { name: '三维', exact: true }).click();
   const notice = page.locator('[data-map-status="scene-tier"]');
   await expect(notice).toBeVisible({ timeout: 60_000 });
-  await expect(notice).toContainText('三维画质已调低');
-  await expect(notice).toContainText('上次打开三维时页面崩溃了。');
+  await expect(notice).toContainText('三维画质已自动降低');
+  await expect(notice).toContainText('上次进入三维模式时页面发生崩溃');
   // 崩溃页面的键删掉了；按它的档位降一档，记在这台设备上
   expect(await stored('yzt.device.scene-tier:page:crashed')).toBeNull();
   expect(await stored('yzt.device.scene-tier:record')).toStrictEqual({

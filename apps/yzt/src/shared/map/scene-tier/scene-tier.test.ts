@@ -134,7 +134,8 @@ interface PageOptions {
   readonly storage: Storage;
   readonly hub: ReturnType<typeof createHub>;
   readonly id: string;
-  readonly setting?: SceneTierSetting;
+  /** null 是没读到 scene-tier.json */
+  readonly setting?: SceneTierSetting | null;
   readonly answerTimeoutMs?: number;
 }
 
@@ -458,5 +459,42 @@ describe('SceneTierSource 的恢复', () => {
     source.dismissNotice();
     expect(source.notice.value).toBeNull();
     expect(record()).toMatchObject({ cap: 'standard' });
+  });
+});
+
+describe('SceneTierSource 读不到配置时（null）', () => {
+  it('按 auto 定档，但不当成改了配置：降档记录（包括不能恢复的）照用，不问、不删别的页面的标记', async () => {
+    const { storage, hub, leaveMarker, marker, record } = setup();
+    leaveMarker('b', 'high', false, 'high');
+    const kept = { configured: 'high', cap: 'low', restorable: false, restoredBefore: true };
+    storage.setItem(`yzt.device.${RECORD}`, JSON.stringify(kept));
+    const { source } = openPage({ storage, hub, id: 'a', setting: null });
+
+    await expect(open3d(source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.low);
+    expect(source.notice.value).toBeNull();
+    expect(record()).toStrictEqual(kept);
+    expect(marker('b')).toBeDefined();
+    expect(hub.sent).toStrictEqual([]);
+  });
+
+  it('没有记的降档时按显卡定：集显低档、独显标准档', async () => {
+    const { storage, hub } = setup();
+    const igpu = openPage({ storage, hub, id: 'a', setting: null });
+    await expect(open3d(igpu.source, IGPU)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.low);
+    const dgpu = openPage({ storage, hub, id: 'b', setting: null });
+    await expect(open3d(dgpu.source, DGPU)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.standard);
+  });
+
+  it('这个页面的标记记成没读到配置，读到配置的页面照样认：它崩了算崩溃', async () => {
+    const { storage, hub, marker } = setup();
+    const blind = openPage({ storage, hub, id: 'b', setting: null });
+    await open3d(blind.source);
+    expect(marker('b')).toStrictEqual({ tier: 'standard', configured: null, restored: false });
+    blind.crash();
+
+    const { source } = openPage({ storage, hub, id: 'a', setting: 'high' });
+    await expect(open3d(source)).resolves.toStrictEqual(SCENE_TIER_BUDGETS.low);
+    expect(source.notice.value).toStrictEqual({ restorable: true, restoredBefore: false });
+    expect(marker('b')).toBeUndefined();
   });
 });

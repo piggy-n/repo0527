@@ -60,8 +60,8 @@ export interface SceneTierOptions {
   readonly lifecycle: PageLifecycle;
   /** 开替页面回答"还在"的 Worker，开始听广播后结束 */
   readonly startPing: (id: string) => Promise<void>;
-  /** 读部署的档位，不抛错 */
-  readonly loadSetting: () => Promise<SceneTierSetting>;
+  /** 读部署的档位，不抛错；读不到时是 null */
+  readonly loadSetting: () => Promise<SceneTierSetting | null>;
   /** 这个页面的 id：每次打开、刷新都新生成 */
   readonly pageId: string;
   /** 等别的页面回答多久，默认 2 秒 */
@@ -74,9 +74,10 @@ export class SceneTierSource implements SceneBudgetSource, SceneTierNoticeSource
   readonly #notice = shallowRef<SceneTierNotice | null>(null);
   readonly #listeners = new Set<(budget: SceneBudget) => void>();
   readonly #stack = new DisposableStack();
-  #setting: Promise<SceneTierSetting> | undefined;
+  #setting: Promise<SceneTierSetting | null> | undefined;
   #prepared: Promise<void> | undefined;
-  #configured: SceneTierSetting = 'auto';
+  // 部署的档位；null 是没读到：按 auto 定档，但不当成配置变了
+  #configured: SceneTierSetting | null = null;
   #record: TierRecord | undefined;
   // 配置或 auto 定下的档位：第一个渲染器挂上时按显卡的名字定
   #base: SceneTier | undefined;
@@ -97,8 +98,8 @@ export class SceneTierSource implements SceneBudgetSource, SceneTierNoticeSource
     return this.#notice;
   }
 
-  /** 读部署的档位：预加载三维模块时就读，只读一次 */
-  loadSetting(): Promise<SceneTierSetting> {
+  /** 读部署的档位：预加载三维模块时就读，只读一次；读不到时是 null */
+  loadSetting(): Promise<SceneTierSetting | null> {
     this.#setting ??= this.#options.loadSetting();
     return this.#setting;
   }
@@ -113,7 +114,8 @@ export class SceneTierSource implements SceneBudgetSource, SceneTierNoticeSource
   }
 
   resolve(renderer: string): SceneBudget {
-    this.#base ??= this.#configured === 'auto' ? autoTier(renderer) : this.#configured;
+    const setting = this.#configured ?? 'auto';
+    this.#base ??= setting === 'auto' ? autoTier(renderer) : setting;
     const tier = this.#tier(this.#base);
     this.#current = tier;
     this.#syncMarker();
@@ -141,10 +143,12 @@ export class SceneTierSource implements SceneBudgetSource, SceneTierNoticeSource
 
   /** 提示里的"恢复原来的画质"：立即生效，清掉上限，记上这个页面恢复过 */
   restore(): void {
-    if (this.#notice.value?.restorable !== true) {
+    const configured = this.#configured;
+    // 有提示就读到了配置：没读到时不检查崩溃
+    if (this.#notice.value?.restorable !== true || configured === null) {
       return;
     }
-    this.#record = { configured: this.#configured, cap: null, restorable: true, restoredBefore: true };
+    this.#record = { configured, cap: null, restorable: true, restoredBefore: true };
     writeRecord(this.#options.store, this.#record);
     this.#restored = true;
     this.#notice.value = null;
@@ -161,12 +165,17 @@ export class SceneTierSource implements SceneBudgetSource, SceneTierNoticeSource
 
   async #prepare(): Promise<void> {
     const { store, channel, pageId, answerTimeoutMs = ANSWER_TIMEOUT_MS } = this.#options;
-    this.#configured = await this.loadSetting();
-    this.#record = readRecord(store, this.#configured);
+    const configured = await this.loadSetting();
+    this.#configured = configured;
+    this.#record = readRecord(store, configured);
     void this.#startPing(pageId);
-    const crashed = await findCrashed(store, channel, pageId, this.#configured, answerTimeoutMs);
+    // 没读到配置：分不出别的页面的标记是不是改配置以前的，不问、不删，留给下一个读到配置的页面
+    if (configured === null) {
+      return;
+    }
+    const crashed = await findCrashed(store, channel, pageId, configured, answerTimeoutMs);
     if (crashed.length > 0) {
-      this.#crashed(crashed);
+      this.#crashed(crashed, configured);
     }
   }
 
@@ -184,14 +193,14 @@ export class SceneTierSource implements SceneBudgetSource, SceneTierNoticeSource
 
   // 降到崩溃页面当时的档位的下一档和已经记的上限里更低的那个：两个页面同时发现同一次崩溃，结果一样
   // 记的降档重新读：同时发现这次崩溃的页面可能刚写过
-  #crashed(markers: readonly CrashMarker[]): void {
-    const record = readRecord(this.#options.store, this.#configured);
+  #crashed(markers: readonly CrashMarker[], configured: SceneTierSetting): void {
+    const record = readRecord(this.#options.store, configured);
     const below = lower(lowest(markers.map(marker => marker.tier)), 1);
     const cap = lowest([below, record?.cap ?? 'high']);
     // 恢复过的页面又崩：恢复了马上又崩，不再给恢复；以后的页面再崩照样给
     const restorable = !markers.some(marker => marker.restored);
     const restoredBefore = !restorable || record?.restoredBefore === true;
-    this.#record = { configured: this.#configured, cap, restorable, restoredBefore };
+    this.#record = { configured, cap, restorable, restoredBefore };
     writeRecord(this.#options.store, this.#record);
     this.#notice.value = { restorable, restoredBefore };
   }

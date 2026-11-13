@@ -754,6 +754,9 @@ function budgetSource(budget: SceneBudget, lower: SceneBudget) {
     renderers: [] as string[],
     shownCalls: [] as boolean[],
     lost: 0,
+    get subscribers(): number {
+      return listeners.size;
+    },
     resolve(renderer: string): SceneBudget {
       source.renderers.push(renderer);
       return budget;
@@ -794,6 +797,8 @@ describe('ThreeSceneRenderer 的预算来源（ADR 0155）', () => {
     expect(source.renderers).toHaveLength(1);
     // 软件渲染时是 SwiftShader 的名字：只要是显卡报的字符串
     expect(source.renderers[0]).toMatch(/\S/);
+    // 读的是瓦片库 LRU 本身的设置：构造参数没给，产品就靠第一次挂上时的预算
+    expect(inspect(ctx).cacheBytes).toBe(ROOMY.cacheBytes);
     expect(inspect(ctx).cacheLimitBytes).toBe(ROOMY.cacheLimitBytes);
     expect(source.shownCalls).toEqual([true]);
     ctx.view.setKind('2d');
@@ -810,16 +815,21 @@ describe('ThreeSceneRenderer 的预算来源（ADR 0155）', () => {
     const roomy = await settle(ctx);
     expect(roomy.tilesets.blocks?.visible).toBe(64);
     expect(roomy.errorScale).toBe(1);
+    // 细的一块（一张 256×256 的贴图带 mipmap 和几何体）：细的一层占了缓存的绝大部分
+    const fineTile = roomy.cachedBytes / 64;
     source.change(budgetOf(BLOCK_LEVEL_FITS));
     await within(() => {
       const state = inspect(ctx);
-      return state.settled && state.tilesets.blocks?.visible === 16;
+      return state.settled && state.tilesets.blocks?.visible === 16 && state.cachedBytes < roomy.cachedBytes / 10;
     }, 30000);
     const lowered = inspect(ctx);
     expect(lowered.cacheLimitBytes).toBe(BLOCK_LEVEL_FITS.cacheLimitBytes);
     expect(lowered.errorScale).toBeGreaterThan(1.5);
     expect(lowered.tilesets.blocks?.visible).toBe(16);
     expect(lowered.pinnedBytes).toBeLessThanOrEqual(BLOCK_LEVEL_FITS.cacheLimitBytes);
+    // 瓦片库真的淘汰了：缓存里的字节回到新的上限加一块细瓦片以内
+    expect(lowered.cachedBytes).toBeLessThan(roomy.cachedBytes / 10);
+    expect(lowered.cachedBytes).toBeLessThanOrEqual(BLOCK_LEVEL_FITS.cacheLimitBytes + fineTile);
   });
 
   it('丢上下文：预算来源降一档，恢复以后按降了的预算', { timeout: TEST_TIMEOUT }, async () => {
@@ -838,5 +848,18 @@ describe('ThreeSceneRenderer 的预算来源（ADR 0155）', () => {
     expect(inspect(ctx).tilesets.blocks?.visible).toBe(16);
     // 恢复以后不再按显卡重新定
     expect(source.renderers).toHaveLength(1);
+  });
+
+  // 离开地图页时 map.remove() 不调用自定义层的 onRemove，detach 到不了：撤下标记、退订只靠释放渲染器
+  it('视图释放（离开地图页）时告诉预算来源撤下，并退订', { timeout: TEST_TIMEOUT }, async () => {
+    const source = budgetSource(budgetOf(ROOMY), budgetOf(BLOCK_LEVEL_FITS));
+    const ctx = await setup({ budgetSource: source });
+    expect(source.shownCalls).toEqual([true]);
+    expect(source.subscribers).toBe(1);
+
+    ctx.view[Symbol.dispose]();
+
+    expect(source.shownCalls).toEqual([true, false]);
+    expect(source.subscribers).toBe(0);
   });
 });

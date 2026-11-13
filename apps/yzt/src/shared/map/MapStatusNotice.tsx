@@ -8,12 +8,12 @@ import { describeMapStatus } from './map-status';
 import styles from './MapStatusNotice.module.scss';
 import { SCENE_TIER_NOTICE, type SceneTierNotice } from './scene-tier/scene-tier';
 
-// 崩溃后降档的说明（ADR 0155 第 4 节）：恢复过的页面又崩时不能再恢复
+// 崩溃后降档的说明（ADR 0155 第 4 节，用户 2026-11-13 定的文字，见 docs/config/scene-tier.md"自动降档"）：恢复过的页面又崩时不能再恢复
 function tierDetail({ restorable, restoredBefore }: SceneTierNotice): string {
   if (!restorable) {
-    return '恢复后又崩溃过。如需恢复，请联系管理员调整配置。';
+    return '恢复后页面再次发生崩溃。如需恢复，请联系管理员调整配置';
   }
-  return restoredBefore ? '上次打开三维时页面崩溃了，恢复后又崩溃过。' : '上次打开三维时页面崩溃了。';
+  return restoredBefore ? '上次进入三维模式时页面发生崩溃，恢复后再次出现崩溃' : '上次进入三维模式时页面发生崩溃';
 }
 
 /**
@@ -62,7 +62,7 @@ export const MapStatusNotice = defineComponent({
           <div key="scene-tier" class={styles.bar} role="status" data-map-status="scene-tier">
             <SvgIcon class={styles.barIcon} name="warning" size={16} />
             <div class={styles.barText}>
-              <strong class={styles.barTitle}>三维画质已调低</strong>
+              <strong class={styles.barTitle}>三维画质已自动降低</strong>
               <p class={styles.detail}>{tierDetail(tierNotice)}</p>
             </div>
             <div class={styles.barActions}>

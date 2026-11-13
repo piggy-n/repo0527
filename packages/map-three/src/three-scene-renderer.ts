@@ -81,7 +81,9 @@ export interface ThreeSceneInspection {
   readonly textures: number;
   readonly cachedBytes: number;
   readonly pinnedBytes: number;
+  /** 瓦片库的 LRU 现在淘汰到的大小：读库本身的设置，不是渲染器记的预算 */
   readonly cacheBytes: number;
+  /** 瓦片库的 LRU 现在到多少不再加载 */
   readonly cacheLimitBytes: number;
   /** 每帧提前上传的字节；null 不提前上传 */
   readonly uploadBytesPerFrame: number | null;
@@ -581,8 +583,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
       textures: info?.memory.textures ?? 0,
       cachedBytes: (this.#cache as unknown as { readonly cachedBytes: number }).cachedBytes,
       pinnedBytes: this.#pinnedBytes,
-      cacheBytes: this.#cacheBytes,
-      cacheLimitBytes: this.#cacheLimitBytes,
+      cacheBytes: this.#cache.minBytesSize,
+      cacheLimitBytes: this.#cache.maxBytesSize,
       uploadBytesPerFrame: this.#uploadBytesPerFrame,
       errorScale: this.#scale.value,
       locked: this.#scale.locked,

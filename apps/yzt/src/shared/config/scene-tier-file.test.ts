@@ -43,11 +43,11 @@ describe('fetchSceneTierSetting', () => {
     ['不认识的档位', () => HttpResponse.json({ tier: 'ultra' })],
     ['没写档位', () => HttpResponse.json({})],
     ['网络失败', () => HttpResponse.error()]
-  ])('%s：按 auto，不抛错', async (_, respond) => {
+  ])('%s：是 null（不是 auto），不抛错', async (_, respond) => {
     server.use(mock.get(FILE_URL, respond));
     using warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    await expect(fetchSceneTierSetting()).resolves.toBe('auto');
+    await expect(fetchSceneTierSetting()).resolves.toBeNull();
     expect(warn).toHaveBeenCalledOnce();
   });
 

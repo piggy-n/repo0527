@@ -80,8 +80,8 @@ describe('MapStatusNotice 的三维降档提示（ADR 0155）', () => {
     setDimension('3d');
     await nextTick();
     const bar = wrapper.get('[data-map-status="scene-tier"]');
-    expect(bar.text()).toContain('三维画质已调低');
-    expect(bar.text()).toContain('上次打开三维时页面崩溃了。');
+    expect(bar.get('strong').text()).toBe('三维画质已自动降低');
+    expect(bar.get('p').text()).toBe('上次进入三维模式时页面发生崩溃');
     const buttons = bar.findAll('button');
     expect(buttons.map(button => button.text())).toStrictEqual(['恢复原来的画质', '知道了']);
 
@@ -97,20 +97,22 @@ describe('MapStatusNotice 的三维降档提示（ADR 0155）', () => {
     await nextTick();
 
     const bar = wrapper.get('[data-map-status="scene-tier"]');
-    expect(bar.text()).toContain('恢复后又崩溃过。如需恢复，请联系管理员调整配置。');
+    expect(bar.get('strong').text()).toBe('三维画质已自动降低');
+    expect(bar.get('p').text()).toBe('恢复后页面再次发生崩溃。如需恢复，请联系管理员调整配置');
     expect(bar.findAll('button').map(button => button.text())).toStrictEqual(['知道了']);
     await bar.get('button').trigger('click');
     expect(dismissNotice).toHaveBeenCalledOnce();
     expect(wrapper.find('[data-map-status="scene-tier"]').exists()).toBe(false);
   });
 
-  it('恢复以后别的页面又崩：照样能恢复，注明恢复后又崩溃过', async () => {
+  it('恢复以后别的页面又崩：照样能恢复，注明恢复后再次出现崩溃', async () => {
     const { wrapper, setDimension } = mountWithTier(fakeTierNotice({ restorable: true, restoredBefore: true }).source);
     setDimension('3d');
     await nextTick();
 
     const bar = wrapper.get('[data-map-status="scene-tier"]');
-    expect(bar.text()).toContain('上次打开三维时页面崩溃了，恢复后又崩溃过。');
+    expect(bar.get('strong').text()).toBe('三维画质已自动降低');
+    expect(bar.get('p').text()).toBe('上次进入三维模式时页面发生崩溃，恢复后再次出现崩溃');
     expect(bar.findAll('button')).toHaveLength(2);
   });
 });

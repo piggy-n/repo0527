@@ -11,8 +11,8 @@ const RECORD_KEY = 'scene-tier:record';
 
 const markerSchema = z.object({
   tier: z.enum(SCENE_TIERS),
-  /** 写标记时 scene-tier.json 里的档位：部署方改了配置以后，改之前的标记不算 */
-  configured: z.enum(SCENE_TIER_SETTINGS),
+  /** 写标记时 scene-tier.json 里的档位：部署方改了配置以后，改之前的标记不算；null 是那个页面没读到配置，照样算 */
+  configured: z.enum(SCENE_TIER_SETTINGS).nullable(),
   /** 这个页面恢复过画质：它再崩，说明恢复了马上又崩 */
   restored: z.boolean()
 });
@@ -72,10 +72,10 @@ export function writeMarker(store: DeviceStore, id: string, marker: CrashMarker 
   }
 }
 
-/** 读这台设备记的降档：配置里的档位变了就清掉，重新从配置开始 */
-export function readRecord(store: DeviceStore, configured: SceneTierSetting): TierRecord | undefined {
+/** 读这台设备记的降档：配置里的档位变了就清掉，重新从配置开始；没读到配置（null）时不当成变了，照用 */
+export function readRecord(store: DeviceStore, configured: SceneTierSetting | null): TierRecord | undefined {
   const record = store.get(RECORD_KEY, recordSchema);
-  if (record !== undefined && record.configured !== configured) {
+  if (record !== undefined && configured !== null && record.configured !== configured) {
     store.remove(RECORD_KEY);
     return undefined;
   }
@@ -116,7 +116,8 @@ function silentPages(channel: PingChannel, ids: ReadonlySet<string>, timeoutMs: 
 
 /**
  * 找出崩溃了的页面：别的页面留下的标记，问一次还在不在，超时没回答的算崩溃，马上删掉它的键并广播一次
- * （它其实还在、只是没答上时收到后补写）。没有别的页面的键时不问、不等。配置里的档位不同的旧标记直接删掉，不算
+ * （它其实还在、只是没答上时收到后补写）。没有别的页面的键时不问、不等。配置里的档位不同的旧标记直接删掉，不算；
+ * 没读到配置的页面写的标记（configured 是 null）照样算
  */
 export async function findCrashed(
   store: DeviceStore,
@@ -129,9 +130,12 @@ export async function findCrashed(
   for (const key of store.keys(MARKER_PREFIX)) {
     const id = key.slice(MARKER_PREFIX.length);
     const marker = id === selfId ? undefined : store.get(key, markerSchema);
-    if (marker?.configured === configured) {
+    if (marker === undefined) {
+      continue;
+    }
+    if (marker.configured === null || marker.configured === configured) {
       others.set(id, marker);
-    } else if (marker !== undefined) {
+    } else {
       store.remove(key);
     }
   }
