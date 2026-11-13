@@ -198,10 +198,10 @@ pnpm add -Dw -E some-tool
 
 **注意事项**：只在有真实显卡的机器上有意义，看到软件渲染直接退出（`--allow-software` 只用来确认脚本能跑）。默认参数实测 30 分钟（2026-11-08，RTX 3060，那时还要跑 Cesium 一个方案，现在应当更短，没有再测），每多一个对照方案多约 8 分钟，期间会弹出浏览器窗口，不要用这台机器。`--cull-window` 对照动着不请求的窗口：产品默认按实测的加载时间，`1` 是固定 1 秒，`off` 是动着也请求。`--cache-gb 4,6` 对照瓦片缓存的上限（到它不再加载、淘汰到一半；产品默认 2），每一档多跑一遍画质，截图和产品默认值比；`--release-images` 再给默认值和每一档各加一个"上传后释放贴图"的对照，比内存（ADR 0155）。`--zoom-in` 给默认值和每一档各加一遍"定位后放大一级"：加载稳定后放大一级，再移开又移回同一处，看放大后有没有按估计放宽锁粗。经代理的请求 30 秒没有动静就放弃，每一遍记下模型的状态、WebGL 上下文丢失的次数。`--at <经,纬,级别,俯角,方位>` 把选中的一个场景换成这个相机；`--look` 不测量、不写结果，第一个场景每个方案开一个窗口、相机同步，左上角是读数和相机（可以直接填进 `--at`）；比较之前停下、在任意窗口按 R，所有窗口去按 R 的那个窗口的视角一起重新稳定，各档之间的数字以 `--at` 的测量为准；`--look` 配 `--at` 时要写 `--only` 选模型。`--only` 写出完整的场景 ID 时只选它。`--only splat` 只跑高斯泼溅的场景：按 `--splat-budget`（默认 `3m,6m,10m`）每个预算一个方案，模型从清单读（`local/3dt/manifest.json` 在时用它，和开发服务器一样），报告开头是"高斯泼溅的预算"一节；彭城广场的样例 2026-11-11 起在入库的清单里（`xz-pc-lcc2`）。步骤和口径见 [modules/map-three.md](modules/map-three.md)"性能验收"和"泼溅的预算"，参数见 `--help`。
 
-**经开区的补测（ADR 0155 的待补测、首次加载误放宽的修复，2026-11-12）**：在显卡机器上一次跑完，两条命令前后接着跑（PowerShell，仓库根目录，先 `git pull`、`pnpm install --frozen-lockfile`；模型服务器的地址不写进仓库，问维护的人）：
+**经开区的补测（ADR 0155 的待补测、首次加载误放宽的修复，2026-11-12）**：在显卡机器上一次跑完，两条命令前后接着跑（PowerShell，仓库根目录，先 `git pull`、`pnpm install --frozen-lockfile`；`YZT_3DT_PROXY` 指向内网的模型服务器，地址见 [config/env.md](config/env.md)）：
 
 ```powershell
-$env:YZT_3DT_PROXY = 'http://<内网的模型服务器>:5173'
+$env:YZT_3DT_PROXY = '<内网的模型服务器，见 config/env.md>'
 pnpm --filter yzt measure:3d --only jkq- --repeat 1 --upload-mb none --cache-gb 4,6 --viewport 1920x1080 --zoom-in --load-timeout 300
 pnpm --filter yzt measure:3d --only jkq-z16-tilt --repeat 1 --upload-mb none --cache-gb 6,8 --release-images --viewport 2560x1440 --load-timeout 300 --skip-build
 ```

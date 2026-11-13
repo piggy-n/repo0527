@@ -397,15 +397,10 @@ function startFillTrace(): void {
 }
 
 // 加载中需求最高的那一刻：只留这一份读数。和飞行中一样隔 250 毫秒读一次，不影响加载的耗时和长任务；
-// 只持续几帧的尖峰可能漏掉。连续 1 秒稳定、取走读数时停下：--look 的窗口不开，失败的那一遍随页面关掉
+// 只持续几帧的尖峰可能漏掉。测量脚本等到稳定（waitStable 的判断）后取走时才停，不自己判断稳定：中途短暂稳定时先停的话，
+// 之后更高的需求记不到。--look 的窗口不开，失败的那一遍随页面关掉
 const LOAD_SAMPLE_MS = FLIGHT_SAMPLE_MS;
-const LOAD_STABLE_SAMPLES = 4;
-const loadWatch: { timer: ReturnType<typeof setInterval> | null; from: number; peak: LoadPeak | null; stableSamples: number } = {
-  timer: null,
-  from: 0,
-  peak: null,
-  stableSamples: 0
-};
+const loadWatch: { timer: ReturnType<typeof setInterval> | null; from: number; peak: LoadPeak | null } = { timer: null, from: 0, peak: null };
 
 function stopLoadWatch(): void {
   if (loadWatch.timer !== null) {
@@ -415,17 +410,9 @@ function stopLoadWatch(): void {
 }
 
 function watchLoadPeak(): void {
-  const bench = window.bench;
-  if (!bench) {
-    return;
-  }
-  const stats = bench.stats();
-  if (!loadWatch.peak || stats.budget.demandMB > loadWatch.peak.stats.budget.demandMB) {
+  const stats = window.bench?.stats();
+  if (stats && (!loadWatch.peak || stats.budget.demandMB > loadWatch.peak.stats.budget.demandMB)) {
     loadWatch.peak = { t: performance.now() - loadWatch.from, stats };
-  }
-  loadWatch.stableSamples = bench.isStable() ? loadWatch.stableSamples + 1 : 0;
-  if (loadWatch.stableSamples >= LOAD_STABLE_SAMPLES) {
-    stopLoadWatch();
   }
 }
 
@@ -620,7 +607,7 @@ export interface Probe {
   releasedMB(): number;
   /** 三维渲染器的 render 开始、结束：只释放这期间上传的贴图 */
   setInsideScene(inside: boolean): void;
-  /** 开始加载模型时开始记加载中需求最高的那一刻（bench.ts），连续 1 秒稳定后自己停下，取的时候也停 */
+  /** 开始加载模型时开始记加载中需求最高的那一刻（bench.ts），测量脚本等到稳定后取走时停 */
   startLoadWatch(): void;
   finishLoadWatch(): LoadPeak | null;
 }
@@ -742,7 +729,6 @@ export const probe: Probe = {
     stopLoadWatch();
     loadWatch.from = performance.now();
     loadWatch.peak = null;
-    loadWatch.stableSamples = 0;
     loadWatch.timer = setInterval(watchLoadPeak, LOAD_SAMPLE_MS);
   },
 

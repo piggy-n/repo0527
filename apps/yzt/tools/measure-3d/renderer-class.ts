@@ -9,7 +9,7 @@ export const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|basic render|sof
 // Intel：HD、UHD，Iris、Iris Xe / Plus / Pro（Iris Xe MAX 是独显，不在里面），不带型号的 Arc(TM) Graphics、Arc(TM) Pro Graphics，
 // Arc 140V / 130V / 140T / 130T，Arc B390 / B370 这类集成的 Arc，不带系列名的 Intel(R) Graphics
 const INTEL_INTEGRATED =
-  /\bu?hd graphics|iris\(r\) ((xe|plus|pro) )?graphics|iris\(tm\) (pro )?graphics|arc\(tm\) (pro )?graphics|arc\(tm\) 1\d0[vt]\b|arc\(tm\) b3\d0\b|intel\(r\) graphics/i;
+  /\bu?hd graphics|iris\(r\) ((xe|plus|pro) )?graphics|iris\(tm\) ((plus|pro) )?graphics|arc\(tm\) (pro )?graphics|arc\(tm\) 1\d0[vt]\b|arc\(tm\) b3\d0\b|intel\(r\) graphics/i;
 // AMD：不带型号的 Radeon(TM) Graphics，780M 这类三位数加 M，8060S 这类四位数加 S，Vega 8 Graphics、RX Vega 11 Graphics
 // （Ryzen 2400G、3400G 等的集显；独立的 RX Vega 56、64 后面不带 Graphics），老的 R7 Graphics
 const AMD_INTEGRATED = /radeon(\(tm\))? (graphics|\d{3}m\b|\d{4}s\b|(rx )?vega \d+ graphics|r[2-7] graphics)/i;
