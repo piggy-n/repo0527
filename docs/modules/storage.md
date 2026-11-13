@@ -12,6 +12,7 @@
 | `idb-store.ts` | IndexedDB 的实现 `createIdbStore(数据库, 仓库)`，用 idb-keyval；整个应用共用的 `preferenceStore`（数据库 `yzt-preferences`、仓库 `preferences`） |
 | `preference-scope.ts` | `usePreferenceScope()`：页面 setup 中按当前会话创建偏好的范围，没有登录时为 `null` |
 | `use-preference.ts` | `usePreference(scope, options)`：一项偏好的恢复与写入，拥有者创建时调用 |
+| `device-store.ts` | 设备级、同步的小存储 `DeviceStore`（`get`、`set`、`remove`、`keys`），见下面"设备级的同步存储"；浏览器的 `deviceStore` |
 
 ## 用法
 
@@ -87,6 +88,15 @@ if (preferences) {
 - **写入**：恢复之后才侦听状态，变化后防抖 `PREFERENCE_WRITE_DEBOUNCE`（300 ms）写入最后一次；恢复本身引起的变化不写回。生命期结束、作用域销毁时立即写入还没写的那一次（落到原用户的键），之后不再写入，还没到的读取结果不再应用
 - **刷新、关闭**：不走 Vue 的卸载流程，在 `visibilitychange`（变为 `hidden`）和 `pagehide` 时尽力提交；IndexedDB 的写入是异步的，浏览器退出前不保证完成，最后一次修改可能丢失（ADR 0042 接受这一点）
 - **失败**：读写失败、`restore` 抛错都交给范围的 `onError`（默认打印到控制台），不弹提示，页面照常可用
+
+## 设备级的同步存储（ADR 0155 第 4 节）
+
+三维的崩溃标记和这台设备的降档记录不是偏好：不分用户，不走 `VITE_PREFERENCE_*` 的开关，也不经偏好的范围。它们要同步写：标签页被杀之前，异步的 IndexedDB 可能还没写完，`pagehide` 里也不能等。所以用 `device-store.ts`，页面和拥有者不直接调用 localStorage。
+
+- 键带存储自己的前缀 `yzt.device.`，和会话（`yzt.session`）等别的数据分开；`keys(prefix)` 列出某个前缀的键，不带这个前缀
+- 值存成 JSON，读出时按调用方给的 zod schema 校验；JSON 坏了、格式不对时当作没有，顺手删掉
+- 浏览器禁用存储、空间满时读写都安静地失败，读出时是没有：这台设备记不住，按没记过处理
+- 使用方：`shared/map/scene-tier`（[config/scene-tier.md](../config/scene-tier.md)"崩溃标记"）
 
 ## idb-keyval 的用法注意
 
