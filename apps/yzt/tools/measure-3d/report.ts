@@ -156,8 +156,12 @@ const METRICS: readonly (readonly [string, (runs: readonly RunResult[]) => strin
   ['恢复后：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块）', runs => detailCell(runs, run => run.atRecovered?.detail)],
   ['恢复后：需求 / 缓存上限（MB），锁定', runs => demandCell(runs, run => run.atRecovered)],
   ['显存：稳定时 / 峰值（MB）', runs => `${integer(pick(runs, run => run.memory?.gpuAtStableMB))} / ${integer(pick(runs, run => run.memory?.gpuPeakMB))}`],
+  ['共享 GPU 内存峰值（MB）：专用显存放不下时涨', runs => integer(pick(runs, run => run.memory?.gpuSharedPeakMB))],
   ['CPU 内存：渲染进程 稳定时 / 峰值，GPU 进程峰值（MB）', memoryCell],
   ['JS 堆峰值（MB）', runs => integer(pick(runs, run => run.memory?.heapPeakMB))],
+  ['上传后释放的贴图（MB，累计到恢复后）', runs => integer(pick(runs, run => (run.atRecovered ?? run.atStable)?.releasedMB))],
+  ['WebGL 上下文 丢失 / 恢复（次，各遍最多）', runs => `${integer(maxOf(runs, run => run.context?.lost))} / ${integer(maxOf(runs, run => run.context?.restored))}`],
+  ['经代理的请求 超时 / 失败（次，各遍最多）', runs => `${integer(maxOf(runs, run => run.proxy?.timeouts))} / ${integer(maxOf(runs, run => run.proxy?.failures))}`],
   ['模型占画面的比例（%）', runs => number(pick(runs, run => run.image?.modelCoveragePct))],
   ['页面错误 / GL 错误', runs => `${integer(pick(runs, run => run.pageErrors?.length ?? 0))} / ${integer(pick(runs, run => run.glErrors ?? 0))}`]
 ];
@@ -421,6 +425,16 @@ const METHOD = `- **都是生产代码：** 真实的 \`MapSession\`、\`MapLibr
 - **CPU 内存：** 渲染进程（页面和它的 Worker，备用的空进程也算，只有几十 MB）、GPU 进程的私有内存（提交的字节，\`Get-Process\` 的 PrivateMemorySize64），和显存同时采样。
 - **高斯泼溅（ADR 0149 L.3）：** 每个预算一个方案，都是产品的设置（\`limit\`、\`maxSh: 0\`、并发 2），只换总预算。"稳定"是每份都读到了索引、当前视角要的细节都到了（库的 \`loadProgress\` 为 1）、没有在加载的分块。"库估计"是库自己报的数（CPU 不含 Worker 的堆和还没放进存储的副本）。库在渲染回调外上传、排序，这部分不在"每帧 GPU"里，上传量记在下一帧。"接近白色"是模型的像素里三个通道都不低于 235 的比例，同一个相机下软件渲染和显卡比，看亮处偏白是不是软件渲染造成的。`;
 
+// 画布实际的像素（各遍读到的）：屏幕放不下视口、有缩放时可能和视口不同，要的缓存跟着像素数变
+function canvasCell({ runs, meta }: MeasureResults): string {
+  const sizes = [...new Set(runs.flatMap(run => (run.setup ? [run.setup.drawingBuffer.join('×')] : [])))];
+  if (sizes.length === 0) {
+    return '—';
+  }
+  const expected = `${meta.viewport.width}×${meta.viewport.height}`;
+  return sizes.every(size => size === expected) ? `${sizes.join('、')}，和视口相同` : `**${sizes.join('、')}，和视口 ${expected} 不同**`;
+}
+
 /** report.md */
 export function renderReport(results: MeasureResults): string {
   const { meta, environment: env, runs } = results;
@@ -478,6 +492,7 @@ export function renderReport(results: MeasureResults): string {
       ['机器状态', drift === null ? '算不出' : `同样的静止画面，每帧 JS 最多差 ${number(drift)} 倍（超过 ${MACHINE_DRIFT_RATIO} 倍算不稳定）`],
       ['底图', meta.basemap === 'arcgis' ? 'ArcGIS 影像' : '无底图'],
       ['视口', `${meta.viewport.width}×${meta.viewport.height}`],
+      ['画布（实际画的像素）', canvasCell(results)],
       ['多重采样', meta.antialias ? '开（--antialias）' : '不开（和产品一样）']
     ]),
     ''

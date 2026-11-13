@@ -1,15 +1,15 @@
 // 探针要最先执行（第一个导入）：它接管 requestAnimationFrame，引擎是动态导入的，一定在它之后
 import { probe } from './probe.ts';
 import { type CameraState, MapSession, type MapView, type SplatLayer, type StyleGroup, type TilesetLayer } from '@mx/map-core';
-import type { BenchCamera, BenchStats } from '../bench-api.ts';
+import type { BenchCamera, BenchStats, ModelState } from '../bench-api.ts';
 import { GRID_COLS, GRID_ROWS, type SharpnessGrid, sharpnessGrid } from '../sharpness.ts';
 import { LookControl, showReadout } from './look.ts';
 import { decodeShot } from './shots.ts';
 
 // 测量页：只有底图和模型，没有面板、定时器和业务图层，不让页面自己的工作混进测量。
 // 走真实的会话、视图和引擎（ADR 0147 第 7 节：性能要测生产代码），这里不写层、场景和缓存算法。
-// 参数都在地址上：models、splats、center、zoom、pitch、bearing、basemap、uploadMB、cullWindow、splatBudget、cacheGB、antialias、pacing、fps，
-// --look 时还有 look、label
+// 参数都在地址上：models、splats、center、zoom、pitch、bearing、basemap、uploadMB、cullWindow、splatBudget、cacheGB、
+// releaseImages、antialias、pacing、fps，--look 时还有 look、label
 
 /** 地址上的 splats（JSON）：清单里的泼溅，地址相对 /3dt/（splat-models.ts） */
 interface SplatParam {
@@ -56,6 +56,8 @@ export interface BenchApi {
   stats(): BenchStats;
   /** 当前相机（模型的建议相机可能换过中心） */
   camera(): CameraState;
+  /** 每个模型的状态（按 ID）：加载中、就绪、失败 */
+  models(): Readonly<Record<string, ModelState>>;
   /** 相机到了场景的位置（没写中心时要等模型就绪后那一跳） */
   placed(): boolean;
   /** --look 的窗口（跟随、用户操作、按 R 重新稳定）；不是 --look 时为 null */
@@ -156,6 +158,14 @@ const keepDrawing = () => {
 
 const setCamera = (camera: BenchCamera) => view.flyTo({ ...camera, center: [camera.center[0], camera.center[1]] }, { duration: 0 });
 
+// 每个模型最近的状态：超时的那一遍要看是卡在加载中（整理索引的请求没回来）还是失败了
+let models: Record<string, ModelState> = {};
+view.onSceneStatusChange?.(status => {
+  models = Object.fromEntries(
+    [...status].map(([id, item]) => [id, { state: item.state, error: item.state === 'failed' ? String(item.error).slice(0, 300) : null }])
+  );
+});
+
 // 相机到了场景的位置：写了中心时一开始就是。没写时（模型只在服务器上、不知道坐标）就绪后跳到模型建议相机的落点
 // （模型在空中时不在它正下方），跳完的下一帧才算：--look 在这之前不同步这个窗口，这一跳不算用户动的
 let placed = centerText !== null;
@@ -206,6 +216,7 @@ window.bench = {
   renders: () => handle.frames(),
   stats: () => handle.stats(),
   camera: () => session.camera.current,
+  models: () => models,
   placed: () => placed,
   look,
   sharpnessOf: async base64 => sharpnessGrid(await decodeShot(base64), GRID_COLS, GRID_ROWS)

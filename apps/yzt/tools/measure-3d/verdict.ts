@@ -1,6 +1,6 @@
 import type { SceneSample } from './bench-api.ts';
 import type { RunResult } from './results.ts';
-import { DEFAULT_VARIANT } from './scenes.ts';
+import { DEFAULT_VARIANT, RELEASE_SUFFIX } from './scenes.ts';
 
 // 每个场景的检查：不和别的引擎比，只看本来就不该出现的情况，看的是产品的默认值。重复跑的取中位数
 
@@ -73,8 +73,10 @@ export function machineDrift(runs: readonly RunResult[]): number | null {
   for (const run of runs) {
     const js = run.kind === 'perf' ? run.static?.js?.p50 : undefined;
     if (js) {
-      // 上传预算、窗口不同的方案静止时画的一样；泼溅的预算、缓存上限不同，画的就不同（缓存大了放宽得少），各算各的
-      const workload = OWN_WORKLOAD.test(run.variant) ? run.variant : DEFAULT_VARIANT;
+      // 上传预算、窗口不同的方案静止时画的一样；泼溅的预算、缓存上限不同，画的就不同（缓存大了放宽得少），各算各的；
+      // 释放贴图的和它对照的方案画的一样，算一组
+      const base = run.variant.endsWith(RELEASE_SUFFIX) ? run.variant.slice(0, -RELEASE_SUFFIX.length) : run.variant;
+      const workload = OWN_WORKLOAD.test(base) ? base : DEFAULT_VARIANT;
       const key = `${run.scene}/${workload}`;
       groups.set(key, (groups.get(key) ?? []).concat(js));
     }

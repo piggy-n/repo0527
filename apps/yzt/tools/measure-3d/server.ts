@@ -25,6 +25,26 @@ export interface Mounts {
   readonly files: Readonly<Record<string, string>>;
   /** 给了时 /3dt/ 转到这个地址（模型只在服务器上时，同应用的 YZT_3DT_PROXY） */
   readonly modelsProxy: string | null;
+  /** 上游这么久没有动静就放弃（毫秒），默认 UPSTREAM_IDLE_MS */
+  readonly upstreamIdleMs?: number;
+}
+
+// 上游这么久没有动静（没回响应头、或者正文停住）就放弃：整理瓦片集时要先下载所有外部索引，
+// 一个卡住的请求会让整个模型永远加不进来（2026-11-12 z16 俯视 6 GB 那一遍）
+export const UPSTREAM_IDLE_MS = 30000;
+
+/** 上游没有动静：代理回 504，响应已经开始发了就断开 */
+export class UpstreamTimeout extends Error {
+  constructor(idleMs: number) {
+    super(`上游 ${idleMs / 1000} 秒没有动静`);
+    this.name = 'UpstreamTimeout';
+  }
+}
+
+/** 经代理的请求里超时、失败（连不上、中途断开）的次数，累计 */
+export interface ProxyStats {
+  readonly timeouts: number;
+  readonly failures: number;
 }
 
 function respond(res: ServerResponse, status: number, text: string): void {
@@ -48,25 +68,42 @@ export function byteRange(header: string | undefined, size: number): ByteRange {
   return start >= size || start > end ? 'unsatisfiable' : { start, end };
 }
 
-async function proxy(target: string, path: string, req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function proxy(target: string, path: string, req: IncomingMessage, res: ServerResponse, idleMs: number): Promise<void> {
   // 浏览器取消了请求（瓦片不要了）上游也不再下载：引擎经常取消，不然连接一直占着，等上游超时断开时没人接这个错，工具就崩了
   const abort = new AbortController();
   res.once('close', () => abort.abort());
-  const { range } = req.headers;
-  const upstream = await fetch(new URL(path, target), { signal: abort.signal, headers: range ? { range } : {} });
-  res.statusCode = upstream.status;
-  res.setHeader('Content-Type', upstream.headers.get('content-type') ?? 'application/octet-stream');
-  res.setHeader('Cache-Control', 'no-store');
-  for (const name of ['content-range', 'accept-ranges']) {
-    const value = upstream.headers.get(name);
-    if (value) {
-      res.setHeader(name, value);
+  // 每收到一点东西（响应头、正文的一块）就重新计时
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const touch = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => abort.abort(new UpstreamTimeout(idleMs)), idleMs);
+  };
+  touch();
+  try {
+    const { range } = req.headers;
+    const upstream = await fetch(new URL(path, target), { signal: abort.signal, headers: range ? { range } : {} });
+    touch();
+    res.statusCode = upstream.status;
+    res.setHeader('Content-Type', upstream.headers.get('content-type') ?? 'application/octet-stream');
+    res.setHeader('Cache-Control', 'no-store');
+    for (const name of ['content-range', 'accept-ranges']) {
+      const value = upstream.headers.get(name);
+      if (value) {
+        res.setHeader(name, value);
+      }
     }
-  }
-  if (upstream.body) {
-    await pipeline(Readable.fromWeb(upstream.body), res);
-  } else {
-    res.end();
+    if (upstream.body) {
+      const body = Readable.fromWeb(upstream.body);
+      body.on('data', touch);
+      await pipeline(body, res);
+    } else {
+      res.end();
+    }
+  } catch (error) {
+    // 超时时 fetch、正文抛的是中止的原因；抛出去让调用方按超时回复
+    throw abort.signal.reason instanceof UpstreamTimeout ? abort.signal.reason : error;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -92,7 +129,7 @@ function serveFile(path: string, req: IncomingMessage, res: ServerResponse): voi
     .pipe(res);
 }
 
-function handle({ files, modelsProxy }: Mounts, req: IncomingMessage, res: ServerResponse): void {
+function handle({ files, modelsProxy, upstreamIdleMs = UPSTREAM_IDLE_MS }: Mounts, stats: { timeouts: number; failures: number }, req: IncomingMessage, res: ServerResponse): void {
   let path: string;
   try {
     path = decodeURIComponent((req.url ?? '/').split('?')[0] ?? '/');
@@ -101,12 +138,19 @@ function handle({ files, modelsProxy }: Mounts, req: IncomingMessage, res: Serve
     return;
   }
   if (modelsProxy && path.startsWith('/3dt/')) {
-    proxy(modelsProxy, path, req, res).catch((error: unknown) => {
+    proxy(modelsProxy, path, req, res, upstreamIdleMs).catch((error: unknown) => {
+      const timeout = error instanceof UpstreamTimeout;
+      // 浏览器自己取消的不算失败
+      if (timeout) {
+        stats.timeouts++;
+      } else if (!res.destroyed) {
+        stats.failures++;
+      }
       // 已经开始发了就只能断开，断开也是告诉浏览器这个瓦片失败了
       if (res.headersSent) {
         res.destroy();
       } else {
-        respond(res, 502, String(error));
+        respond(res, timeout ? 504 : 502, String(error));
       }
     });
     return;
@@ -134,16 +178,20 @@ function handle({ files, modelsProxy }: Mounts, req: IncomingMessage, res: Serve
 
 export interface StaticServer {
   readonly url: string;
+  /** 经代理的请求累计超时、失败了几次：每一遍前后各读一次，差就是这一遍的 */
+  proxyStats(): ProxyStats;
   close(): Promise<void>;
 }
 
 export function startServer(port: number, mounts: Mounts): Promise<StaticServer> {
+  const stats = { timeouts: 0, failures: 0 };
   return new Promise((resolvePromise, reject) => {
-    const server = createServer((req, res) => handle(mounts, req, res));
+    const server = createServer((req, res) => handle(mounts, stats, req, res));
     server.once('error', reject);
     server.listen(port, '127.0.0.1', () => {
       resolvePromise({
         url: `http://127.0.0.1:${port}`,
+        proxyStats: () => ({ ...stats }),
         close: () =>
           new Promise(done => {
             server.closeAllConnections();

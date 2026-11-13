@@ -33,6 +33,8 @@ export interface Variant {
   readonly cullWindow?: number | 'auto' | null;
   /** 瓦片缓存的上限（GB）：到它不再加载，淘汰到它的一半；undefined 用产品的默认值（1 GB + 1 GB） */
   readonly cacheGB?: number;
+  /** 贴图上传以后释放内存里的那份（ADR 0155 第 5 节的对比，只在测量页里做） */
+  readonly releaseImages?: boolean;
   /** 高斯泼溅的总预算（高斯个数）；undefined 用产品的默认值 */
   readonly splatBudget?: number;
 }
@@ -40,8 +42,9 @@ export interface Variant {
 /** 产品默认设置的方案：采样和检查只看它，画质另外给缓存上限的各档跑（比清晰度），其余方案只跑 perf 对照 */
 export const DEFAULT_VARIANT = 'maplibre';
 
-/** 这个方案也跑画质：产品的默认值，和比较缓存上限的各档（同一相机的截图和默认值比） */
-export const takesQualityRun = (variant: Variant): boolean => variant.id === DEFAULT_VARIANT || variant.cacheGB !== undefined;
+/** 这个方案也跑画质：产品的默认值，和比较缓存上限的各档（同一相机的截图和默认值比）；释放贴图的画面不变，不跑 */
+export const takesQualityRun = (variant: Variant): boolean =>
+  !variant.releaseImages && (variant.id === DEFAULT_VARIANT || variant.cacheGB !== undefined);
 
 /** 一遍：perf 量帧时间和加载，quality 拍画面，profile 带 CPU 采样 */
 export type RunKind = 'perf' | 'quality' | 'profile';
@@ -132,13 +135,25 @@ export function splatVariants(budgets: readonly number[]): Variant[] {
 export const variantsOf = (scene: Scene, list: readonly Variant[], splatList: readonly Variant[]): readonly Variant[] =>
   scene.splats.length > 0 ? splatList : list;
 
+/** 释放贴图的方案 id 带这个后缀：机器状态按去掉它以后的方案分组（verdict.ts），画的一样 */
+export const RELEASE_SUFFIX = '-release';
+
 export function variants(
   uploadMBs: readonly (number | null)[],
   cullWindows: readonly (number | 'auto' | null)[] = [],
-  cacheGBs: readonly number[] = []
+  cacheGBs: readonly number[] = [],
+  releaseImages = false
 ): Variant[] {
+  const defaults: Variant = { id: DEFAULT_VARIANT, label: 'MapLibre' };
+  const tiers = cacheGBs.map((cacheGB): Variant => ({ id: `maplibre-cache${cacheGB}g`, label: `MapLibre，缓存上限 ${cacheGB} GB`, cacheGB }));
+  // 释放贴图：产品的默认值和缓存上限的每一档各一个对照，和原来的方案比内存
+  const released = releaseImages
+    ? [defaults, ...tiers].map(
+        (base): Variant => Object.assign({}, base, { id: `${base.id}${RELEASE_SUFFIX}`, label: `${base.label}，上传后释放贴图`, releaseImages: true })
+      )
+    : [];
   return [
-    { id: DEFAULT_VARIANT, label: 'MapLibre' },
+    defaults,
     ...uploadMBs.map(
       (uploadMB): Variant => ({
         id: uploadMB === null ? 'maplibre-no-budget' : `maplibre-up${uploadMB}`,
@@ -147,7 +162,8 @@ export function variants(
       })
     ),
     ...cullWindows.map((cullWindow): Variant => ({ ...cullVariant(cullWindow), cullWindow })),
-    ...cacheGBs.map((cacheGB): Variant => ({ id: `maplibre-cache${cacheGB}g`, label: `MapLibre，缓存上限 ${cacheGB} GB`, cacheGB }))
+    ...tiers,
+    ...released
   ];
 }
 

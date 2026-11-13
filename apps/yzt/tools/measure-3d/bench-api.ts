@@ -72,6 +72,18 @@ export interface SplatReadings {
   readonly peakWasmMB: number;
 }
 
+/** 一个模型（瓦片集、泼溅）的状态：视图报告的，失败时带原因；整理索引卡住时一直是 loading */
+export interface ModelState {
+  readonly state: 'loading' | 'ready' | 'failed';
+  readonly error: string | null;
+}
+
+/** WebGL 上下文丢失、恢复的次数（这一遍累计） */
+export interface ContextEvents {
+  readonly lost: number;
+  readonly restored: number;
+}
+
 /** 引擎的读数（ThreeSceneRenderer.inspect() 整理后的） */
 export interface BenchStats {
   readonly tilesVisible: number;
@@ -91,6 +103,8 @@ export interface BenchStats {
   /** 等待上传的瓦片、累计提前上传的字节（MB） */
   readonly uploadPending: number;
   readonly uploadedMB: number;
+  /** 上传以后释放了内存副本的贴图（MB，累计）：只有"上传后释放贴图"的方案不是 0 */
+  readonly releasedMB: number;
   /** 锁在当前姿态 */
   readonly locked: boolean;
   readonly detail: DetailReadings;

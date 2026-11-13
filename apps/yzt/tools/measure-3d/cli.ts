@@ -66,7 +66,7 @@ if (options.help) {
 }
 const { at } = options;
 const scenes = selectScenes(options.only).map(scene => (at ? withCamera(scene, at) : scene));
-const list = variants(uploadBudgets(options), options.cullWindows, options.cacheGBs);
+const list = variants(uploadBudgets(options), options.cullWindows, options.cacheGBs, options.releaseImages);
 const splatList = splatVariants(options.splatBudgets);
 if (options.list) {
   for (const scene of SCENES) {
@@ -452,7 +452,8 @@ async function main(): Promise<void> {
         baseUrl: server.url,
         outDir,
         redact,
-        progress: phase => console.log(`    ${phase}`)
+        progress: phase => console.log(`    ${phase}`),
+        proxyStats: () => (modelsProxy ? server.proxyStats() : null)
       });
       results.runs.push(result);
       save();

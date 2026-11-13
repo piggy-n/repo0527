@@ -29,6 +29,7 @@ const stats = (splats: SplatReadings | null, refused = 0): BenchStats => ({
   loading: 0,
   uploadPending: 0,
   uploadedMB: 0,
+  releasedMB: 0,
   locked: false,
   detail: { sharp: 0, relaxed: 0, waiting: 0, finest: 0, additive: 0 },
   queues: { downloading: 0, parsing: 0, culled: 0, used: 0, usedOutOfView: 0 },
@@ -125,6 +126,22 @@ const TIER_COMPARED: SceneQuality = {
   }
 };
 const TIER_SCENE = { ...TILESET_SCENE, variants: ['maplibre', TIER] };
+
+// 画布实际画了这么多像素的一遍
+const canvasRun = (width: number, height: number): RunResult => ({
+  ...tilesetRun('maplibre'),
+  setup: {
+    renderer: 'gpu',
+    vendor: 'v',
+    drawingBuffer: [width, height],
+    cssSize: [width, height],
+    devicePixelRatio: 1,
+    samples: 0,
+    gpuTimer: true,
+    pacing: 2,
+    config: {}
+  }
+});
 
 // 某一刻累计放宽的帧（装满、估计）
 const budgetAt = (t: number, raisedFull: number, raisedPredicted: number): SceneSample => ({
@@ -284,6 +301,25 @@ describe('有瓦片集场景的报告', () => {
     const report = renderReport(results([coarse(true), coarse(true), coarse(false)], [TILESET_SCENE]));
     expect(report).toContain('| 恢复后：显示的瓦片 够细 / 放宽了才停在这一级 / 等更细的 / 已是最细（块） | 40 / 12 / 3 / 1 |');
     expect(report).toContain('| 恢复后：需求 / 缓存上限（MB），锁定 | 1,400 / 2,048，锁定 2 / 3 遍 |');
+  });
+
+  it('释放的贴图、上下文丢失、代理出错各一行；丢失和出错取各遍最多的', () => {
+    const quiet: RunResult = { ...tilesetRun('maplibre'), context: { lost: 0, restored: 0 }, proxy: { timeouts: 0, failures: 0 } };
+    const troubled: RunResult = {
+      ...tilesetRun('maplibre'),
+      atRecovered: { ...stats(null), releasedMB: 1234 },
+      context: { lost: 2, restored: 1 },
+      proxy: { timeouts: 3, failures: 1 }
+    };
+    const report = renderReport(results([quiet, troubled], [TILESET_SCENE]));
+    expect(report).toContain('| WebGL 上下文 丢失 / 恢复（次，各遍最多） | 2 / 1 |');
+    expect(report).toContain('| 经代理的请求 超时 / 失败（次，各遍最多） | 3 / 1 |');
+    expect(renderReport(results([troubled], [TILESET_SCENE]))).toContain('| 上传后释放的贴图（MB，累计到恢复后） | 1,234 |');
+  });
+
+  it('画布实际画的像素：和视口不同时标出来', () => {
+    expect(renderReport(results([canvasRun(1600, 900)], [TILESET_SCENE]))).toContain('| 画布（实际画的像素） | 1600×900，和视口相同 |');
+    expect(renderReport(results([canvasRun(1536, 864)], [TILESET_SCENE]))).toContain('| 画布（实际画的像素） | **1536×864，和视口 1600×900 不同** |');
   });
 
   it('ADD 的瓦片不分，有的时候写在后面；加载到稳定放宽的原因单独一行', () => {

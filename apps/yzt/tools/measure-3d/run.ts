@@ -4,6 +4,8 @@ import type { CDPSession, Page } from 'playwright';
 import type {
   BenchCamera,
   BenchStats,
+  ContextEvents,
+  ModelState,
   SceneSample,
   LongTaskStats,
   LongTaskWindow,
@@ -15,7 +17,9 @@ import type {
 import { type BrowserProcesses, browserProcesses, launchBrowser, type LaunchedBrowser, type MemorySample, sampleMemory } from './browser.ts';
 import type { Options } from './options.ts';
 import { type CpuProfile, summarizeProfile } from './profile.ts';
+import type { ProxyStats } from './server.ts';
 import type { QualityResult, RunResult, SettleResult } from './results.ts';
+import { runNotes } from './run-notes.ts';
 import { aerialFlight, type Run } from './scenes.ts';
 import type { SplatModel } from './splat-models.ts';
 import { blurEvents, type SharpnessGrid } from './sharpness.ts';
@@ -43,6 +47,8 @@ export interface RunContext {
   readonly outDir: string;
   readonly redact: (text: string) => string;
   readonly progress: (phase: string) => void;
+  /** 代理累计的超时、失败次数（server.ts）；没有代理时为 null */
+  readonly proxyStats: () => ProxyStats | null;
 }
 
 /** 测量页的地址：场景的相机、模型和方案的参数（--look 也用它） */
@@ -80,6 +86,9 @@ export function pageUrl({ scene, variant }: Pick<Run, 'scene' | 'variant'>, { ba
   if (variant.cacheGB !== undefined) {
     params.set('cacheGB', String(variant.cacheGB));
   }
+  if (variant.releaseImages) {
+    params.set('releaseImages', '1');
+  }
   if (options.fps !== null) {
     params.set('fps', String(options.fps));
   }
@@ -93,6 +102,7 @@ const fileName = (id: string) => id.replaceAll(/[\\/]/g, '__');
 
 // 模型没画出来的场景，帧率再高也没有意义；缓存满了以后队列也是空的，"到稳定"不能直接比
 function classify(result: RunResult): void {
+  result.notes.push(...runNotes(result));
   const invalid: string[] = [];
   if (result.image?.blank) {
     invalid.push('画面空白');
@@ -170,6 +180,7 @@ async function loadPage(run: Run, ctx: RunContext, { page }: Session, result: Ru
   if (!stable.stable) {
     result.notes.push(`等了 ${Math.round(loadTimeoutMs / 1000)} 秒模型还没稳定`);
   }
+  result.models = await call<Record<string, ModelState>>(page, 'window.bench.models()');
   result.atStable = await stats(page);
   return stable;
 }
@@ -214,6 +225,7 @@ async function runPerf(run: Run, ctx: RunContext, session: Session, result: RunR
   const { page, cdp, processes } = session;
   await cdp.send('Performance.enable');
   let peakGpu: number | null = null;
+  let peakShared: number | null = null;
   let gpuUnavailable: string | null = null;
   let heapPeak: number | null = null;
   let rendererPeak: number | null = null;
@@ -231,6 +243,7 @@ async function runPerf(run: Run, ctx: RunContext, session: Session, result: RunR
       gpuUnavailable = memory.gpu.unavailable;
     } else {
       peakGpu = Math.max(peakGpu ?? 0, memory.gpu.dedicatedMB);
+      peakShared = Math.max(peakShared ?? 0, memory.gpu.sharedMB);
     }
     return memory;
   };
@@ -289,6 +302,7 @@ async function runPerf(run: Run, ctx: RunContext, session: Session, result: RunR
     heapPeakMB: heapPeak,
     gpuAtStableMB: atStable && 'dedicatedMB' in atStable.gpu ? atStable.gpu.dedicatedMB : null,
     gpuPeakMB: peakGpu,
+    gpuSharedPeakMB: peakShared,
     gpuUnavailable,
     rendererAtStableMB: atStable?.rendererPrivateMB ?? null,
     rendererPeakMB: rendererPeak,
@@ -392,6 +406,7 @@ export async function runOnce(run: Run, ctx: RunContext): Promise<RunResult> {
     notes: []
   };
   const startedAt = Date.now();
+  const proxyBefore = ctx.proxyStats();
   let session: Session | null = null;
   try {
     session = await open(result, ctx);
@@ -408,6 +423,7 @@ export async function runOnce(run: Run, ctx: RunContext): Promise<RunResult> {
         setTimeout(() => reject(new Error('单遍超过时间上限，已中止')), limit).unref();
       })
     ]);
+    result.context = await call<ContextEvents>(opened.page, 'window.benchProbe.contextEvents()');
     result.pageErrors = [...(result.pageErrors ?? []), ...(await call<string[]>(opened.page, 'window.bench.errors.slice(0, 20)')).map(item => ctx.redact(item).slice(0, 300))];
   } catch (error) {
     result.status = 'failed';
@@ -419,6 +435,10 @@ export async function runOnce(run: Run, ctx: RunContext): Promise<RunResult> {
     }
   }
   result.durationS = (Date.now() - startedAt) / 1000;
+  const proxyAfter = ctx.proxyStats();
+  if (proxyBefore && proxyAfter) {
+    result.proxy = { timeouts: proxyAfter.timeouts - proxyBefore.timeouts, failures: proxyAfter.failures - proxyBefore.failures };
+  }
   classify(result);
   return result;
 }

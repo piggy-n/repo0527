@@ -20,6 +20,7 @@ const STATS: BenchStats = {
   loading: 0,
   uploadPending: 0,
   uploadedMB: 0,
+  releasedMB: 0,
   locked: false,
   detail: DETAIL,
   queues: QUEUES,
@@ -185,6 +186,12 @@ describe('machineDrift', () => {
   it('缓存上限不同，静止时画的就不同（大的放宽得少）：每一档各算一组，不和默认值比', () => {
     expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-cache6g', 4)])).toBeNull();
     expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-cache6g', 4), staticJs('maplibre-cache6g', 4.4)])).toBeCloseTo(1.1);
+  });
+
+  it('释放贴图的对照和它的方案画的一样：算一组', () => {
+    expect(machineDrift([staticJs('maplibre-cache6g', 4), staticJs('maplibre-cache6g-release', 5)])).toBeCloseTo(1.25);
+    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-release', 3)])).toBeCloseTo(1.5);
+    expect(machineDrift([staticJs('maplibre', 2), staticJs('maplibre-cache6g-release', 4)])).toBeNull();
   });
 
   it('取最不稳定的一组', () => {

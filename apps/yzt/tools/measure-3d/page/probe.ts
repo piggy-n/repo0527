@@ -1,5 +1,6 @@
 import type {
   BenchCamera,
+  ContextEvents,
   SceneSample,
   LongTaskStats,
   LongTaskWindow,
@@ -48,6 +49,19 @@ const frames = {
 // 这一帧到目前为止的上传量：回调外的上传也算进这一帧
 const uploads = { texture: 0, buffer: 0, mipmaps: 0 };
 
+// "上传后释放贴图"的方案（ADR 0155 第 5 节的对比）：三维渲染器画的时候上传的 ImageBitmap，上传完就 close()，
+// 内存里不再留一份。只认三维渲染器 render 期间的上传（engine-maplibre.ts 标记），MapLibre 自己的贴图不动
+const releaseImages = new URLSearchParams(location.search).get('releaseImages') === '1';
+const release = { insideScene: false, bytes: 0 };
+
+function releaseUploaded(args: readonly unknown[]): void {
+  const source = args.at(-1);
+  if (releaseImages && release.insideScene && source instanceof ImageBitmap) {
+    release.bytes += source.width * source.height * 4;
+    source.close();
+  }
+}
+
 function sizeFromArgs(args: readonly unknown[], widthIndex: number): number {
   const source = args.at(-1) as { readonly width?: number; readonly height?: number } | null;
   // 最后一个参数是图片时（6、7 个参数的写法）尺寸在它上面，是数组时尺寸在 widthIndex 上
@@ -62,22 +76,33 @@ function sizeFromArgs(args: readonly unknown[], widthIndex: number): number {
 function watchUploads(): void {
   const proto = WebGL2RenderingContext.prototype;
   const methods = proto as unknown as Record<string, (...args: unknown[]) => unknown>;
-  const wrap = (name: string, tally: (args: unknown[]) => void) => {
+  // after 在原来的调用之后：WebGL 在调用期间读完来源，之后才能释放
+  const wrap = (name: string, tally: (args: unknown[]) => void, after?: (args: unknown[]) => void) => {
     const original = methods[name];
     if (!original) {
       throw new Error(`WebGL2 没有 ${name}`);
     }
     methods[name] = function (this: WebGL2RenderingContext, ...args: unknown[]) {
       tally(args);
-      return original.apply(this, args);
+      const result = original.apply(this, args);
+      after?.(args);
+      return result;
     };
   };
-  wrap('texImage2D', args => {
-    uploads.texture += sizeFromArgs(args, 3);
-  });
-  wrap('texSubImage2D', args => {
-    uploads.texture += sizeFromArgs(args, 4);
-  });
+  wrap(
+    'texImage2D',
+    args => {
+      uploads.texture += sizeFromArgs(args, 3);
+    },
+    releaseUploaded
+  );
+  wrap(
+    'texSubImage2D',
+    args => {
+      uploads.texture += sizeFromArgs(args, 4);
+    },
+    releaseUploaded
+  );
   wrap('texImage3D', args => {
     uploads.texture += texture3dBytes(args, 3, 7);
   });
@@ -96,6 +121,8 @@ watchUploads();
 
 // 页面最后创建的 WebGL2 上下文就是引擎用的
 let context: WebGL2RenderingContext | null = null;
+// 引擎的画布丢失、恢复 WebGL 上下文的次数：显存不够时可能丢（ADR 0155 第 7 节的实测）
+const contextEvents = { lost: 0, restored: 0 };
 // 创建 WebGL 上下文的时段：加载期最长的任务常常就是它，和瓦片无关
 const contextWindows: LongTaskWindow[] = [];
 // oxlint-disable-next-line typescript/unbound-method -- 下面用 call 带上 this
@@ -106,8 +133,14 @@ HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type
   if (type.startsWith('webgl')) {
     contextWindows.push({ startTime, duration: performance.now() - startTime });
   }
-  if (type === 'webgl2' && result) {
+  if (type === 'webgl2' && result && result !== context) {
     context = result as WebGL2RenderingContext;
+    this.addEventListener('webglcontextlost', () => {
+      contextEvents.lost++;
+    });
+    this.addEventListener('webglcontextrestored', () => {
+      contextEvents.restored++;
+    });
   }
   return result;
 } as typeof nativeGetContext;
@@ -543,6 +576,12 @@ export interface Probe {
   record(durationMs: number): Promise<PhaseResult>;
   flight(keyframes: readonly BenchCamera[], durationMs: number): Promise<PhaseResult>;
   analyzeShots(withModel: string, withoutModel: string): Promise<ShotCoverage>;
+  /** WebGL 上下文丢失、恢复的次数 */
+  contextEvents(): ContextEvents;
+  /** "上传后释放贴图"释放了多少（MB）；别的方案是 0 */
+  releasedMB(): number;
+  /** 三维渲染器的 render 开始、结束：只释放这期间上传的贴图 */
+  setInsideScene(inside: boolean): void;
 }
 
 export const probe: Probe = {
@@ -648,6 +687,14 @@ export const probe: Probe = {
   async analyzeShots(withModel, withoutModel) {
     const [a, b] = await Promise.all([decodeShot(withModel), decodeShot(withoutModel)]);
     return { blank: blankPixels(a), ...shotCoverage(a, b) };
+  },
+
+  contextEvents: () => ({ ...contextEvents }),
+
+  releasedMB: () => release.bytes / MB,
+
+  setInsideScene(inside) {
+    release.insideScene = inside;
   }
 };
 
