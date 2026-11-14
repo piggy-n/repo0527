@@ -27,6 +27,7 @@ import { FrameMath, toNdc, withDeeperFar } from './frame';
 import type { FogUniform } from './lighting';
 import { TileUploader } from './tile-uploader';
 import type { CullWindow } from './request-cull';
+import { splatShares } from './splat-share';
 import { SplatEntry, type SplatEntryInspection, type SplatLibrary } from './splat-entry';
 import { type ClipBox, TilesetEntry, type TilesetEntryInspection } from './tileset-entry';
 import { WalkMarker } from './walk-marker';
@@ -175,6 +176,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
   #frame: SceneFrame | null = null;
   // 抬高（ADR 0147 第 4 节）：只在这个瓦片集还在时生效
   #lift: SceneLift | null = null;
+  // 隔离一份泼溅从什么时候开始（performance.now()）：等别的放掉数据有上限
+  #isolatedSince: number | null = null;
   #disposed = false;
   // 读数：累计帧数、最近一帧的时刻和这一帧的结果
   #frames = 0;
@@ -340,7 +343,7 @@ export class ThreeSceneRenderer implements SceneRenderer {
       }
     }
     // 泼溅是半透明的、不写深度：在不透明的瓦片、模型之后画，用它们的深度做遮挡
-    // 隔离一份泼溅时，别的每帧按看不见更新、放掉数据；还占着的时候接着画帧，放完以后漫游的那份才拿全部预算
+    // 隔离一份泼溅时，别的每帧按看不见更新、放掉数据；还在等它们放掉的时候接着画帧（splatShares，等待有上限）
     const isolating = lifted !== null && this.#splats.has(lifted.modelId);
     for (const [id, entry] of this.#splats) {
       if (lifted && id !== lifted.modelId) {
@@ -349,11 +352,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
         webgl.render(entry.scene, entry.camera);
       }
     }
-    if (isolating) {
-      this.#shareSplatBudget();
-      if ([...this.#splats].some(([id, entry]) => id !== lifted.modelId && entry.holding)) {
-        surface.requestRepaint();
-      }
+    if (isolating && this.#shareSplatBudget()) {
+      surface.requestRepaint();
     }
     // 光环在瓦片之后画：深度测试用瓦片写下的深度，墙和柱子挡得住
     if (this.#marker.prepare(frame, surface, performance.now())) {
@@ -548,6 +548,8 @@ export class ThreeSceneRenderer implements SceneRenderer {
 
   setLift(lift: SceneLift | null): void {
     this.#lift = lift;
+    // 换了一次抬高或隔离，等别的泼溅放数据的时间重新算
+    this.#isolatedSince = null;
     for (const [id, entry] of this.#tilesets) {
       entry.setLift(lift?.modelId === id ? lift.meters : 0);
     }
@@ -748,21 +750,26 @@ export class ThreeSceneRenderer implements SceneRenderer {
   }
 
   // 总预算按份平分：多加一份不会让总的高斯个数翻倍。隔离一份泼溅时别的不画、预算设成 1、放掉数据（render 里），
-  // 都放掉以后隔离的那份拿全部预算，之前仍按平分：任何时候总数不超过预算（ADR 0156 R.5）
-  #shareSplatBudget(): void {
-    const isolated = this.#activeLift()?.modelId;
-    const alone = isolated !== undefined && this.#splats.has(isolated);
-    const share = Math.max(1, Math.floor(this.#splatBudget / Math.max(1, this.#splats.size)));
-    const released = alone && [...this.#splats].every(([id, entry]) => id === isolated || !entry.holding);
-    for (const [id, entry] of this.#splats) {
-      if (!alone) {
-        entry.setBudget(share);
-      } else if (id === isolated) {
-        entry.setBudget(released ? this.#splatBudget : share);
-      } else {
-        entry.setBudget(1);
-      }
+  // 都放掉（或者等到上限）以后隔离的那份拿全部预算，之前仍按平分（splatShares，ADR 0156 R.5）。返回是否还在等
+  #shareSplatBudget(): boolean {
+    const lifted = this.#activeLift()?.modelId;
+    const isolated = lifted !== undefined && this.#splats.has(lifted) ? lifted : null;
+    if (isolated === null) {
+      this.#isolatedSince = null;
+    } else {
+      this.#isolatedSince ??= performance.now();
     }
+    const { budgets, waiting } = splatShares({
+      total: this.#splatBudget,
+      ids: [...this.#splats.keys()],
+      isolated,
+      holding: new Set(isolated === null ? [] : [...this.#splats].filter(([, entry]) => entry.holding).map(([id]) => id)),
+      waited: this.#isolatedSince === null ? 0 : performance.now() - this.#isolatedSince
+    });
+    for (const [id, entry] of this.#splats) {
+      entry.setBudget(budgets.get(id) ?? 1);
+    }
+    return waiting;
   }
 
   #assertAlive(): void {

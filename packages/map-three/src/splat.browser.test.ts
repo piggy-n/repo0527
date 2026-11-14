@@ -363,7 +363,7 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
     expect(pickedHeight(ctx, { x: MIDDLE.x + 90, y: MIDDLE.y })).toBeCloseTo(5, 0);
   });
 
-  it('隔离一份泼溅（ADR 0156 R.5）：只画它、底色清屏；别的放掉数据以后它才拿全部预算，总数不超过；撤掉后照常画、平分', async () => {
+  it('隔离一份泼溅（ADR 0156 R.5）：只画它、底色清屏；别的放掉数据以后它才拿全部预算；撤掉后照常画、平分，放掉的那份重新加载', async () => {
     const ctx = await setup();
     const glb = await boxGlb(8);
     onTestFinished(serveFixtures({ '/box/tileset.json': boxTileset(MODEL_AT, 8), '/box/box.glb': glb }));
@@ -390,20 +390,23 @@ describe('高斯泼溅（ADR 0149）', { timeout: TEST_TIMEOUT }, () => {
     const before = pixel(ctx.canvas, corner);
 
     ctx.renderer.setLift({ modelId: 'square', meters: 0, backdrop: '#1e2226' });
+    // 隔离的那一刻另一份还占着数据（还没画过一帧，库的冷却也没开始）：隔离的那份仍按平分
+    expect(budgets()).toStrictEqual([total / 2, 1]);
     await until(() => isGreen(pixel(ctx.canvas, MIDDLE)), '只画泼溅');
     // 角上没有模型的地方是底色（30, 34, 38），不是二维
     const [r, g, b] = pixel(ctx.canvas, corner);
     expect([Math.abs(r - 30), Math.abs(g - 34), Math.abs(b - 38)].every(difference => difference <= 2)).toBe(true);
-    // 另一份还占着数据时，隔离的那份仍按平分；它放掉（库的冷却 2 秒）以后才拿全部预算
-    expect(budgets()).toStrictEqual([total / 2, 1]);
+    // 另一份放掉（库的冷却 2 秒）以后才拿全部预算
     await until(() => budgets()[0] === total, '另一份放掉数据后拿全部预算');
     expect(ctx.renderer.inspect().splats.far?.gpuBytes).toBe(0);
     expect(budgets()).toStrictEqual([total, 1]);
 
     ctx.renderer.setLift(null);
+    expect(budgets()).toStrictEqual([total / 2, total / 2]);
     await until(() => isRed(pixel(ctx.canvas, MIDDLE)), '立方体又挡住泼溅');
     expect(pixel(ctx.canvas, corner)).toStrictEqual(before);
-    expect(budgets()).toStrictEqual([total / 2, total / 2]);
+    // 放掉的那份重新加载
+    await until(() => (ctx.renderer.inspect().splats.far?.gpuBytes ?? 0) > 0, '另一份重新加载');
     expect(ctx.errors).toStrictEqual([]);
   });
 
