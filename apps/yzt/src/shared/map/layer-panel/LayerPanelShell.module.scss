@@ -59,6 +59,14 @@
   cursor: pointer;
 }
 
+// 资源目录标题后面的页签（用户 2026-11-15 选的方案一）：同上面的页签，间距收到 8，标题行才放得下工具栏
+.views {
+  flex: none;
+  gap: 8px;
+  margin-left: 4px;
+  overflow: visible;
+}
+
 .currentTab {
   color: var(--color-primary);
   font-weight: var(--font-weight-semibold);
@@ -138,11 +146,10 @@
   }
 }
 
-// 搜索和筛选年份在一行；插槽给的内容可以折行（三维里目录的分页单独一行，ADR 0157）
+// 搜索和筛选年份在一行
 .filter {
   display: flex;
   flex: none;
-  flex-wrap: wrap;
   gap: var(--space-sm);
   padding: 0 var(--space-lg) var(--space-sm);
 }

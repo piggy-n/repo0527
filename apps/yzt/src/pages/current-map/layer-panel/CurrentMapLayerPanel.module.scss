@@ -5,13 +5,8 @@
   min-width: 0;
 }
 
-// 三维里目录的两页：单独一行、占满宽（方案乙，用户 2026-11-15）
-.pages {
-  flex: 1 0 100%;
-}
-
-// 搜索时另一页也有匹配：列表下面一行虚线框，点了切过去
-.otherPage {
+// 只看模型或资源时搜索，另一项也有匹配：列表下面一行虚线框，点了切过去
+.otherView {
   display: block;
   box-sizing: border-box;
   width: 100%;

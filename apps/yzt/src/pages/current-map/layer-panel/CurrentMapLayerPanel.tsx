@@ -1,6 +1,6 @@
 import { Search } from '@element-plus/icons-vue';
 import { useMap } from '@mx/map-vue';
-import { ElButton, ElInput, ElSegmented } from 'element-plus';
+import { ElButton, ElInput } from 'element-plus';
 import { computed, defineComponent, nextTick, onScopeDispose, type PropType, ref, type VNode, watch } from 'vue';
 import { BatchYearSelect } from '@/features/resource-map/components/BatchYearSelect';
 import { hasLegendItems, LayerLegend } from '@/features/resource-map/components/LayerLegend';
@@ -63,15 +63,17 @@ const TABS = [
 const ENTER_MS = 900;
 const FLASH_MS = 1400;
 
-/** 三维里资源目录的两页（用户 2026-11-15 选的方案乙）：三维模型、二维资源 */
-type CatalogPage = 'models' | 'resources';
+/** 资源目录显示的内容（用户 2026-11-15）：全部、只有三维模型、只有二维资源 */
+type CatalogView = 'all' | 'models' | 'resources';
 
-const CATALOG_PAGES: readonly { readonly label: string; readonly value: CatalogPage }[] = [
-  { label: '三维模型', value: 'models' },
-  { label: '二维资源', value: 'resources' }
+// 标题后面的页签：顺序固定，默认项随维度变；标题行只放得下两个字
+const CATALOG_VIEWS: readonly { readonly id: CatalogView; readonly label: string }[] = [
+  { id: 'all', label: '全部' },
+  { id: 'models', label: '模型' },
+  { id: 'resources', label: '资源' }
 ];
 
-const isCatalogPage = (value: unknown): value is CatalogPage => value === 'models' || value === 'resources';
+const catalogViewOf = (id: string): CatalogView | undefined => CATALOG_VIEWS.find(item => item.id === id)?.id;
 
 /** 浮层：透明度或图例（用户 2026-11-14：两个分开，没有页签） */
 type PopoverKind = 'opacity' | 'legend';
@@ -96,8 +98,8 @@ type LoadStatus = 'ready' | 'loading' | 'failed';
  * 现状底图的资源图层面板（ADR 0157），二三维共用：上段"资源目录"找资源和三维模型、加入和移出，下段"当前图层"分"二维图层"
  * "三维模型"两组管地图上的内容，共用工具栏操作选中的一行。把 resource-map、scene-models 的目录、行、图例和 shared 的面板部件
  * 拼在一起；选中、浮层、菜单这些界面状态在这里，图层和模型的状态在各自的拥有者里。二维里模型组变淡、标"仅三维"，模型不能定位、
- * 不能漫游，其余操作照常（用户 2026-11-14 交给会话定）。三维里先体现模型（用户 2026-11-15 选的方案乙）：目录分"三维模型"
- * "二维资源"两页、进入三维时回到"三维模型"页，当前图层里模型组在上
+ * 不能漫游，其余操作照常（用户 2026-11-14 交给会话定）。三维里先体现模型（用户 2026-11-15 选的方案乙，分页按方案一做成
+ * 标题后面的"全部、模型、资源"）：进入三维时目录只显示模型，当前图层里模型组在上
  */
 export const CurrentMapLayerPanel = defineComponent({
   name: 'CurrentMapLayerPanel',
@@ -139,36 +141,43 @@ export const CurrentMapLayerPanel = defineComponent({
     // ---------- 资源目录
     const keyword = ref('');
     const searching = computed(() => keyword.value.trim() !== '');
-    // 三维里的页、"三维模型"页的类型筛选：界面状态，不持久化；进入三维时回到"三维模型"页
-    const page = ref<CatalogPage>('models');
+    // 目录显示的内容、"模型"时的类型筛选：界面状态，不持久化；进入三维是"模型"，进入二维是"全部"（同以前的二维目录）
+    const view = ref<CatalogView>(scene.value ? 'models' : 'all');
     const modelKind = ref<string | null>(null);
-    watch(scene, value => {
-      if (value) {
-        page.value = 'models';
-      }
-    });
-    const modelsPage = computed(() => scene.value && page.value === 'models');
+    watch(scene, value => (view.value = value ? 'models' : 'all'));
+    const modelsView = computed(() => view.value === 'models');
     const resourceNodes = computed(() => resourceCatalogNodes(state.value, keyword.value));
     const cityNodes = computed(() =>
       modelCityNodes(props.models.models.value, props.models.added.value, keyword.value, modelKind.value)
     );
-    const pageNodes = (which: CatalogPage) => (which === 'models' ? cityNodes.value : resourceNodes.value);
-    // 二维里不分页，三维模型是目录最后一个分类；三维里只列当前这一页
-    const nodes = computed(() =>
-      scene.value
-        ? pageNodes(page.value)
-        : [...resourceNodes.value, ...modelCatalogNodes(props.models.models.value, props.models.added.value, keyword.value)]
+    const modelRootNodes = computed(() =>
+      modelCatalogNodes(props.models.models.value, props.models.added.value, keyword.value)
     );
-    // 搜索只搜当前页；另一页也有匹配时在列表下面提示，点了切过去
-    const otherPage = computed((): CatalogPage => (page.value === 'models' ? 'resources' : 'models'));
+    // "模型"直接按市分组；"全部"里三维模型是一个分类，三维里在最上面、二维里在最后
+    const viewNodes = (which: CatalogView) => {
+      if (which === 'models') {
+        return cityNodes.value;
+      }
+      if (which === 'resources') {
+        return resourceNodes.value;
+      }
+      return scene.value
+        ? [...modelRootNodes.value, ...resourceNodes.value]
+        : [...resourceNodes.value, ...modelRootNodes.value];
+    };
+    const nodes = computed(() => viewNodes(view.value));
+    // "模型""资源"只搜这一项；另一项也有匹配时在列表下面提示，点了切过去
+    const otherView = computed((): CatalogView | null =>
+      view.value === 'models' ? 'resources' : view.value === 'resources' ? 'models' : null
+    );
     const otherMatches = computed(() =>
-      scene.value && searching.value ? pageNodes(otherPage.value).flatMap(leavesOf).length : 0
+      otherView.value !== null && searching.value ? viewNodes(otherView.value).flatMap(leavesOf).length : 0
     );
     const expanded = ref<ReadonlySet<string>>(new Set());
-    // 第一次显示"三维模型"页时展开各市，模型一眼能看到；之后不改用户的展开
+    // 第一次显示"模型"时展开各市，模型一眼能看到；之后不改用户的展开
     let citiesOpened = false;
     watch(
-      () => (modelsPage.value ? branchKeys(cityNodes.value) : []),
+      () => (modelsView.value ? branchKeys(cityNodes.value) : []),
       keys => {
         if (!citiesOpened && keys.length > 0) {
           citiesOpened = true;
@@ -741,7 +750,7 @@ export const CurrentMapLayerPanel = defineComponent({
 
     // 目录是空的：三维模型页按清单的状态说明（失败时由下面的提示说明），其余是没有找到
     const renderCatalogEmpty = (): VNode[] => {
-      if (!modelsPage.value) {
+      if (!modelsView.value) {
         return [<div class={styles.empty}>没有找到资源</div>];
       }
       if (props.modelsStatus === 'failed') {
@@ -772,15 +781,20 @@ export const CurrentMapLayerPanel = defineComponent({
     const renderOtherMatches = (): VNode[] =>
       otherMatches.value > 0
         ? [
-            <button type="button" class={styles.otherPage} data-other-page onClick={() => (page.value = otherPage.value)}>
-              {`${otherPage.value === 'models' ? '三维模型' : '二维资源'}里还有 ${otherMatches.value} 项匹配`}
+            <button
+              type="button"
+              class={styles.otherView}
+              data-other-view
+              onClick={() => (view.value = otherView.value ?? view.value)}
+            >
+              {`${otherView.value === 'models' ? '三维模型' : '二维资源'}里还有 ${otherMatches.value} 项匹配`}
             </button>
           ]
         : [];
 
-    // 模型清单读不到时目录里没有三维模型：在目录最后（三维里在"三维模型"页）提示，可以重试
+    // 模型清单读不到时目录里没有三维模型：在目录最后提示，可以重试（只看资源时不提示）
     const renderModelsFailed = (): VNode[] =>
-      props.modelsStatus === 'failed' && (!scene.value || page.value === 'models')
+      props.modelsStatus === 'failed' && view.value !== 'resources'
         ? [
             <div class={styles.modelsFailed} data-models-failed>
               <span>三维模型清单加载失败</span>
@@ -879,36 +893,23 @@ export const CurrentMapLayerPanel = defineComponent({
         onRetry={() => emit('retry')}
         onUpdate:collapsed={(collapsed: boolean) => emit('update:collapsed', collapsed)}
         onUpdate:ratio={(ratio: number) => props.layout.setCheckedRatio(ratio)}
+        views={CATALOG_VIEWS}
+        view={view.value}
+        onUpdate:view={(id: string) => (view.value = catalogViewOf(id) ?? view.value)}
       >
         {{
           catalogTools: () => [<PanelToolbar items={catalogTools.value} label="资源目录的操作" onAction={onCatalogTool} />],
           catalogFilter: () => [
-            ...(scene.value
-              ? [
-                  <ElSegmented
-                    class={styles.pages}
-                    modelValue={page.value}
-                    options={[...CATALOG_PAGES]}
-                    block
-                    ariaLabel="资源目录的分页"
-                    onUpdate:modelValue={(value: unknown) => {
-                      if (isCatalogPage(value)) {
-                        page.value = value;
-                      }
-                    }}
-                  />
-                ]
-              : []),
             <ElInput
               class={styles.search}
               modelValue={keyword.value}
               clearable
               prefixIcon={Search}
-              placeholder={modelsPage.value ? '搜索模型或城市' : '搜索资源'}
-              ariaLabel={modelsPage.value ? '搜索模型或城市' : '搜索资源'}
+              placeholder={modelsView.value ? '搜索模型或城市' : '搜索资源'}
+              ariaLabel={modelsView.value ? '搜索模型或城市' : '搜索资源'}
               onUpdate:modelValue={(value: string) => (keyword.value = value)}
             />,
-            modelsPage.value ? (
+            modelsView.value ? (
               <ModelKindSelect
                 models={props.models.models.value}
                 kind={modelKind.value}

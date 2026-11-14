@@ -43,12 +43,17 @@ export const LayerPanelShell = defineComponent({
     status: { type: String as PropType<'ready' | 'loading' | 'failed'>, default: 'ready' },
     collapsed: { type: Boolean, default: false },
     /** 分割线的位置：当前图层占可用高度的比例 */
-    ratio: { type: Number, required: true }
+    ratio: { type: Number, required: true },
+    /** 资源目录标题后面的文字页签（目录显示什么，ADR 0157）；空的时候没有 */
+    views: { type: Array as PropType<readonly PanelTab[]>, default: () => [] },
+    /** 选中的那个页签的 id */
+    view: { type: String, default: '' }
   },
   emits: {
     retry: () => true,
     'update:collapsed': (collapsed: boolean) => typeof collapsed === 'boolean',
-    'update:ratio': (ratio: number) => ratio >= 0 && ratio <= 1
+    'update:ratio': (ratio: number) => ratio >= 0 && ratio <= 1,
+    'update:view': (view: string) => typeof view === 'string'
   },
   slots: Object as SlotsType<{
     catalogTools: () => VNode[];
@@ -202,6 +207,23 @@ export const LayerPanelShell = defineComponent({
         >
           <div ref={catalogHead} class={styles.sectionHead}>
             {renderSectionTitle('资源目录')}
+            {props.views.length > 0 && (
+              <nav class={[styles.tabs, styles.views]} role="tablist" aria-label="资源目录显示的内容">
+                {props.views.map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    class={[styles.tab, props.view === item.id && styles.currentTab]}
+                    aria-selected={props.view === item.id}
+                    data-catalog-view={item.id}
+                    onClick={() => emit('update:view', item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+            )}
             {slots.catalogTools()}
           </div>
           {props.status === 'ready' && (
